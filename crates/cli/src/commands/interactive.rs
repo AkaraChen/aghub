@@ -316,22 +316,23 @@ fn add_skill(manager: &mut ConfigManager) -> Result<()> {
 }
 
 struct RegistrySearchProvider {
-	rt: std::sync::Arc<tokio::runtime::Runtime>,
+	client: skills_sh::Client,
 }
 
 impl crate::ui::search::SearchProvider for RegistrySearchProvider {
 	type Item = skills_sh::SearchResult;
 
 	fn search(&self, query: &str) -> Vec<Self::Item> {
-		self.rt.block_on(async {
-			match skills_sh::ClientBuilder::new()
-				.timeout(std::time::Duration::from_secs(5))
-				.build()
-			{
-				Ok(client) => client.find(query).await.unwrap_or_default(),
-				Err(_) => vec![],
+		let rt = tokio::runtime::Builder::new_current_thread()
+			.enable_all()
+			.build()
+			.ok();
+		match rt {
+			Some(rt) => {
+				rt.block_on(self.client.find(query)).unwrap_or_default()
 			}
-		})
+			None => vec![],
+		}
 	}
 
 	fn format_item(&self, item: &Self::Item, is_selected: bool) -> String {
@@ -342,7 +343,10 @@ impl crate::ui::search::SearchProvider for RegistrySearchProvider {
 		};
 
 		if is_selected {
-			format!("\x1b[36m>\x1b[0m \x1b[36m{}\x1b[0m \x1b[90m({installs} installs) — {}\x1b[0m", item.name, item.source)
+			format!(
+                "\x1b[36m>\x1b[0m \x1b[36m{}\x1b[0m \x1b[90m({installs} installs) — {}\x1b[0m",
+                item.name, item.source
+            )
 		} else {
 			format!(
 				"  {} \x1b[90m({installs} installs) — {}\x1b[0m",
@@ -353,13 +357,18 @@ impl crate::ui::search::SearchProvider for RegistrySearchProvider {
 }
 
 fn add_skill_from_registry(manager: &mut ConfigManager) -> Result<()> {
+	let client = skills_sh::ClientBuilder::new()
+		.timeout(std::time::Duration::from_secs(5))
+		.build()
+		.map_err(|e| anyhow::anyhow!("Failed to create API client: {}", e))?;
+
+	let provider = RegistrySearchProvider { client };
+
 	let rt = std::sync::Arc::new(
 		tokio::runtime::Builder::new_multi_thread()
 			.enable_all()
 			.build()?,
 	);
-	let provider = RegistrySearchProvider { rt: rt.clone() };
-
 	let search_ui = crate::ui::search::RealtimeSearch::new(
 		"Search skills.sh",
 		provider,

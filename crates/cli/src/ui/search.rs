@@ -46,18 +46,6 @@ impl<P: SearchProvider + 'static> RealtimeSearch<P> {
 		}
 	}
 
-	#[allow(dead_code)]
-	pub fn with_debounce(mut self, debounce_ms: u64) -> Self {
-		self.debounce_ms = debounce_ms;
-		self
-	}
-
-	#[allow(dead_code)]
-	pub fn with_min_query_len(mut self, len: usize) -> Self {
-		self.min_query_len = len;
-		self
-	}
-
 	pub fn prompt(self) -> Result<Option<P::Item>> {
 		let (query_tx, mut query_rx) =
 			tokio::sync::mpsc::unbounded_channel::<String>();
@@ -150,7 +138,7 @@ impl<P: SearchProvider + 'static> RealtimeSearch<P> {
 			}
 
 			let display_count = std::cmp::min(10, results.len());
-			let mut lines_printed = 0;
+			let mut lines_printed: u16 = 0;
 
 			if display_count > 0 {
 				for (i, item) in results.iter().enumerate().take(display_count)
