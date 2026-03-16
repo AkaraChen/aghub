@@ -130,7 +130,6 @@ fn load_skills_from_dir(skills_dir: &Path) -> Vec<Skill> {
         skills.push(Skill {
             name: display_name,
             enabled: true,
-            source: None, // Could be derived from path if needed
             description,
             author: None,
             version: None,
@@ -320,7 +319,6 @@ mod tests {
             skills: vec![Skill {
                 name: "my-skill".to_string(),
                 enabled: true,
-                source: Some("https://example.com".to_string()),
                 description: Some("A test skill".to_string()),
                 author: Some("test".to_string()),
                 version: Some("1.0.0".to_string()),

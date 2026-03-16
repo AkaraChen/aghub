@@ -18,7 +18,6 @@ pub fn execute(
     description: Option<String>,
     author: Option<String>,
     version: Option<String>,
-    source: Option<String>,
     tools: Vec<String>,
     model: Option<String>,
     instructions: Option<String>,
@@ -29,7 +28,6 @@ pub fn execute(
             let skill = Skill {
                 name: name.clone(),
                 enabled: true,
-                source,
                 description,
                 author,
                 version,

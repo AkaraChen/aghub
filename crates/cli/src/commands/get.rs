@@ -7,7 +7,6 @@ use serde::Serialize;
 struct SkillView {
     name: String,
     enabled: bool,
-    source: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -36,7 +35,6 @@ pub fn execute(manager: &ConfigManager, resource: ResourceType) -> Result<()> {
                 .map(|s| SkillView {
                     name: s.name.clone(),
                     enabled: s.enabled,
-                    source: s.source.clone(),
                 })
                 .collect();
             eprintln_verbose!("Found {} skills", views.len());

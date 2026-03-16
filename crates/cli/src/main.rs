@@ -101,10 +101,6 @@ enum Commands {
         #[arg(short, long)]
         version: Option<String>,
 
-        /// For skill: Source URL or path
-        #[arg(short, long)]
-        source: Option<String>,
-
         /// For skill: Comma-separated list of tool names
         #[arg(long, value_delimiter = ',')]
         tools: Vec<String>,
@@ -150,10 +146,6 @@ enum Commands {
         /// For skill: Version
         #[arg(short, long)]
         version: Option<String>,
-
-        /// For skill: Source URL or path
-        #[arg(short, long)]
-        source: Option<String>,
 
         /// For skill: Comma-separated list of tool names
         #[arg(long, value_delimiter = ',')]
@@ -273,7 +265,6 @@ fn main() -> Result<()> {
             description,
             author,
             version,
-            source,
             tools,
             model,
             instructions,
@@ -288,7 +279,6 @@ fn main() -> Result<()> {
             description,
             author,
             version,
-            source,
             tools,
             model,
             instructions,
@@ -303,7 +293,6 @@ fn main() -> Result<()> {
             description,
             author,
             version,
-            source,
             tools,
             model,
             instructions,
@@ -318,7 +307,6 @@ fn main() -> Result<()> {
             description,
             author,
             version,
-            source,
             tools,
             model,
             instructions,

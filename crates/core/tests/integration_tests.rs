@@ -33,7 +33,6 @@ fn create_test_skill(name: &str) -> Skill {
     Skill {
         name: name.to_string(),
         enabled: true,
-        source: Some(format!("https://example.com/{}.json", name)),
         description: Some(format!("Test skill: {}", name)),
         author: Some("test-author".to_string()),
         version: Some("1.0.0".to_string()),

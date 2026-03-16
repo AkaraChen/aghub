@@ -34,8 +34,6 @@ pub struct Skill {
     pub name: String,
     #[serde(default = "default_true")]
     pub enabled: bool,
-    /// URL or file path to skill definition
-    pub source: Option<String>,
     pub description: Option<String>,
     pub author: Option<String>,
     pub version: Option<String>,
@@ -49,7 +47,6 @@ impl Skill {
         Self {
             name: name.into(),
             enabled: true,
-            source: None,
             description: None,
             author: None,
             version: None,
@@ -201,7 +198,6 @@ mod tests {
         let skill = Skill {
             name: "test-skill".to_string(),
             enabled: true,
-            source: Some("https://example.com/skill.json".to_string()),
             description: Some("A test skill".to_string()),
             author: Some("test-author".to_string()),
             version: Some("1.0.0".to_string()),

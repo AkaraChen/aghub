@@ -54,7 +54,6 @@ struct OpenCodeSkill {
     name: String,
     #[serde(default)]
     enabled: bool,
-    source: Option<String>,
     description: Option<String>,
     author: Option<String>,
     version: Option<String>,
@@ -125,7 +124,6 @@ impl AgentAdapter for OpenCodeAdapter {
             config.skills.push(Skill {
                 name: skill.name,
                 enabled: skill.enabled,
-                source: skill.source,
                 description: skill.description,
                 author: skill.author,
                 version: skill.version,
@@ -175,7 +173,6 @@ impl AgentAdapter for OpenCodeAdapter {
             opencode_config.skills.push(OpenCodeSkill {
                 name: skill.name.clone(),
                 enabled: skill.enabled,
-                source: skill.source.clone(),
                 description: skill.description.clone(),
                 author: skill.author.clone(),
                 version: skill.version.clone(),
@@ -234,7 +231,6 @@ mod tests {
                 {
                     "name": "rust-dev",
                     "enabled": true,
-                    "source": "https://example.com/rust.json",
                     "description": "Rust development skills",
                     "author": "test",
                     "version": "1.0.0",
@@ -292,7 +288,6 @@ mod tests {
             skills: vec![Skill {
                 name: "my-skill".to_string(),
                 enabled: true,
-                source: Some("https://example.com".to_string()),
                 description: Some("A test skill".to_string()),
                 author: Some("test".to_string()),
                 version: Some("1.0.0".to_string()),
@@ -328,7 +323,6 @@ mod tests {
             skills: vec![Skill {
                 name: "disabled-skill".to_string(),
                 enabled: false,
-                source: None,
                 description: None,
                 author: None,
                 version: None,
