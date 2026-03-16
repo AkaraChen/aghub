@@ -36,7 +36,6 @@ struct SkillMetadata {
     description: Option<String>,
     author: Option<String>,
     version: Option<String>,
-    source: Option<String>,
 }
 
 /// Parse SKILL.md frontmatter to extract skill metadata
@@ -125,7 +124,6 @@ fn parse_skill_md(content: &str) -> Option<SkillMetadata> {
         description,
         author,
         version,
-        source,
     })
 }
 
@@ -207,16 +205,6 @@ pub struct ClaudeAdapter;
 impl ClaudeAdapter {
     pub fn new() -> Self {
         Self
-    }
-
-    /// Get the global skills directory path
-    fn global_skills_path(&self) -> PathBuf {
-        crate::paths::claude_global_skills_path()
-    }
-
-    /// Get the project skills directory path
-    fn project_skills_path(&self, project_root: &Path) -> PathBuf {
-        project_root.join(".claude/skills")
     }
 }
 
