@@ -72,7 +72,10 @@ enum Commands {
     Add {
         #[arg(value_enum)]
         resource: ResourceType,
-        name: String,
+
+        /// Resource name (required for manual creation, optional when using --from)
+        #[arg(short, long)]
+        name: Option<String>,
 
         /// For skill: Import from file/directory/.skill package path
         #[arg(long, value_name = "PATH")]

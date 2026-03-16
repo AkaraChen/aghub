@@ -3,7 +3,7 @@ use aghub_core::{
     manager::ConfigManager,
     models::{McpServer, McpTransport, Skill, SubAgent},
 };
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
@@ -11,7 +11,7 @@ use std::path::PathBuf;
 pub fn execute(
     manager: &mut ConfigManager,
     resource: ResourceType,
-    name: String,
+    name: Option<String>,
     from: Option<PathBuf>,
     command: Option<String>,
     url: Option<String>,
@@ -30,14 +30,26 @@ pub fn execute(
             if let Some(from_path) = from {
                 // Import skill from path (directory, .skill file, or SKILL.md)
                 eprintln_verbose!("Importing skill from: {}", from_path.display());
-                let skill = manager.add_skill_from_path(&from_path)?;
+                let mut skill = manager.add_skill_from_path(&from_path)?;
+
+                // If explicit name provided, update the skill name
+                if let Some(custom_name) = name {
+                    eprintln_verbose!("Renaming skill from '{}' to '{}'", skill.name, custom_name);
+                    manager.remove_skill(&skill.name)?;
+                    skill.name = custom_name;
+                    manager.add_skill(skill.clone())?;
+                }
+
                 eprintln_verbose!("Skill '{}' added successfully", skill.name);
                 println!("{}", serde_json::to_string_pretty(&skill)?);
             } else {
-                // Manual skill creation
-                eprintln_verbose!("Adding skill: {}", name);
+                // Manual skill creation, name is required
+                let skill_name = name.ok_or_else(|| {
+                    anyhow!("--name is required when not using --from")
+                })?;
+                eprintln_verbose!("Adding skill: {}", skill_name);
                 let skill = Skill {
-                    name: name.clone(),
+                    name: skill_name,
                     enabled: true,
                     description,
                     author,
@@ -50,6 +62,11 @@ pub fn execute(
             }
         }
         ResourceType::Mcps => {
+            // MCP requires name
+            let mcp_name = name.ok_or_else(|| {
+                anyhow!("--name is required for MCP servers")
+            })?;
+
             let transport = if let Some(cmd_str) = command {
                 // Parse command and args
                 let parts: Vec<String> = cmd_str.split_whitespace().map(String::from).collect();
@@ -108,16 +125,21 @@ pub fn execute(
                 bail!("Either --command or --url must be specified for MCP servers");
             };
 
-            eprintln_verbose!("Adding MCP server: {}", name);
-            let mcp = McpServer::new(name.clone(), transport);
+            eprintln_verbose!("Adding MCP server: {}", mcp_name);
+            let mcp = McpServer::new(mcp_name, transport);
             manager.add_mcp(mcp.clone())?;
             eprintln_verbose!("MCP server added successfully");
             println!("{}", serde_json::to_string_pretty(&mcp)?);
         }
         ResourceType::SubAgents => {
-            eprintln_verbose!("Adding sub-agent: {}", name);
+            // Sub-agent requires name
+            let agent_name = name.ok_or_else(|| {
+                anyhow!("--name is required for sub-agents")
+            })?;
+
+            eprintln_verbose!("Adding sub-agent: {}", agent_name);
             let agent = SubAgent {
-                name: name.clone(),
+                name: agent_name,
                 enabled: true,
                 description,
                 model,
