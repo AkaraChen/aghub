@@ -9,19 +9,19 @@ pub fn execute(manager: &mut ConfigManager, resource: ResourceType, name: String
             eprintln_verbose!("Enabling skill: {}", name);
             manager.enable_skill(&name)?;
             eprintln_verbose!("Skill enabled successfully");
-            println!("{}", json!({"enabled": true, "name": name, "type": "skill" }));
+            println!("{}", serde_json::to_string_pretty(&json!({"enabled": true, "name": name, "type": "skill" }))?);
         }
         ResourceType::Mcps => {
             eprintln_verbose!("Enabling MCP server: {}", name);
             manager.enable_mcp(&name)?;
             eprintln_verbose!("MCP server enabled successfully");
-            println!("{}", json!({"enabled": true, "name": name, "type": "mcp" }));
+            println!("{}", serde_json::to_string_pretty(&json!({"enabled": true, "name": name, "type": "mcp" }))?);
         }
         ResourceType::SubAgents => {
             eprintln_verbose!("Enabling sub-agent: {}", name);
             manager.enable_sub_agent(&name)?;
             eprintln_verbose!("Sub-agent enabled successfully");
-            println!("{}", json!({"enabled": true, "name": name, "type": "sub-agent" }));
+            println!("{}", serde_json::to_string_pretty(&json!({"enabled": true, "name": name, "type": "sub-agent" }))?);
         }
     }
 

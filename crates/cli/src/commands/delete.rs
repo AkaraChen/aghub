@@ -9,19 +9,19 @@ pub fn execute(manager: &mut ConfigManager, resource: ResourceType, name: String
             eprintln_verbose!("Deleting skill: {}", name);
             manager.remove_skill(&name)?;
             eprintln_verbose!("Skill deleted successfully");
-            println!("{}", json!({"deleted": true, "name": name, "type": "skill" }));
+            println!("{}", serde_json::to_string_pretty(&json!({"deleted": true, "name": name, "type": "skill" }))?);
         }
         ResourceType::Mcps => {
             eprintln_verbose!("Deleting MCP server: {}", name);
             manager.remove_mcp(&name)?;
             eprintln_verbose!("MCP server deleted successfully");
-            println!("{}", json!({"deleted": true, "name": name, "type": "mcp" }));
+            println!("{}", serde_json::to_string_pretty(&json!({"deleted": true, "name": name, "type": "mcp" }))?);
         }
         ResourceType::SubAgents => {
             eprintln_verbose!("Deleting sub-agent: {}", name);
             manager.remove_sub_agent(&name)?;
             eprintln_verbose!("Sub-agent deleted successfully");
-            println!("{}", json!({"deleted": true, "name": name, "type": "sub-agent" }));
+            println!("{}", serde_json::to_string_pretty(&json!({"deleted": true, "name": name, "type": "sub-agent" }))?);
         }
     }
 

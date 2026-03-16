@@ -37,7 +37,7 @@ pub fn execute(
             };
             manager.add_skill(skill.clone())?;
             eprintln_verbose!("Skill added successfully");
-            println!("{}", serde_json::to_string(&skill)?);
+            println!("{}", serde_json::to_string_pretty(&skill)?);
         }
         ResourceType::Mcps => {
             let transport = if let Some(cmd_str) = command {
@@ -91,7 +91,7 @@ pub fn execute(
             let mcp = McpServer::new(name.clone(), transport);
             manager.add_mcp(mcp.clone())?;
             eprintln_verbose!("MCP server added successfully");
-            println!("{}", serde_json::to_string(&mcp)?);
+            println!("{}", serde_json::to_string_pretty(&mcp)?);
         }
         ResourceType::SubAgents => {
             eprintln_verbose!("Adding sub-agent: {}", name);
@@ -104,7 +104,7 @@ pub fn execute(
             };
             manager.add_sub_agent(agent.clone())?;
             eprintln_verbose!("Sub-agent added successfully");
-            println!("{}", serde_json::to_string(&agent)?);
+            println!("{}", serde_json::to_string_pretty(&agent)?);
         }
     }
 

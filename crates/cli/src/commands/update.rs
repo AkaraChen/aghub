@@ -49,7 +49,7 @@ pub fn execute(
 
             manager.update_skill(&name, skill.clone())?;
             eprintln_verbose!("Skill updated successfully");
-            println!("{}", serde_json::to_string(&skill)?);
+            println!("{}", serde_json::to_string_pretty(&skill)?);
         }
         ResourceType::Mcps => {
             eprintln_verbose!("Updating MCP server: {}", name);
@@ -105,7 +105,7 @@ pub fn execute(
 
             manager.update_mcp(&name, mcp.clone())?;
             eprintln_verbose!("MCP server updated successfully");
-            println!("{}", serde_json::to_string(&mcp)?);
+            println!("{}", serde_json::to_string_pretty(&mcp)?);
         }
         ResourceType::SubAgents => {
             eprintln_verbose!("Updating sub-agent: {}", name);
@@ -128,7 +128,7 @@ pub fn execute(
 
             manager.update_sub_agent(&name, agent.clone())?;
             eprintln_verbose!("Sub-agent updated successfully");
-            println!("{}", serde_json::to_string(&agent)?);
+            println!("{}", serde_json::to_string_pretty(&agent)?);
         }
     }
 

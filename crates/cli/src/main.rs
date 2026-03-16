@@ -351,7 +351,7 @@ mod describe {
                     .find(|s| s.name == name)
                     .with_context(|| format!("Skill '{}' not found", name))?;
                 eprintln_verbose!("Found skill: {}", skill.name);
-                println!("{}", serde_json::to_string(skill)?);
+                println!("{}", serde_json::to_string_pretty(skill)?);
             }
             ResourceType::Mcps => {
                 let mcp = config
@@ -360,7 +360,7 @@ mod describe {
                     .find(|m| m.name == name)
                     .with_context(|| format!("MCP server '{}' not found", name))?;
                 eprintln_verbose!("Found MCP server: {}", mcp.name);
-                println!("{}", serde_json::to_string(mcp)?);
+                println!("{}", serde_json::to_string_pretty(mcp)?);
             }
             ResourceType::SubAgents => {
                 let agent = config
@@ -369,7 +369,7 @@ mod describe {
                     .find(|a| a.name == name)
                     .with_context(|| format!("Sub-agent '{}' not found", name))?;
                 eprintln_verbose!("Found sub-agent: {}", agent.name);
-                println!("{}", serde_json::to_string(agent)?);
+                println!("{}", serde_json::to_string_pretty(agent)?);
             }
         }
 

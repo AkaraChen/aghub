@@ -40,7 +40,7 @@ pub fn execute(manager: &ConfigManager, resource: ResourceType) -> Result<()> {
                 })
                 .collect();
             eprintln_verbose!("Found {} skills", views.len());
-            println!("{}", serde_json::to_string(&views)?);
+            println!("{}", serde_json::to_string_pretty(&views)?);
         }
         ResourceType::Mcps => {
             let views: Vec<McpView> = config
@@ -56,7 +56,7 @@ pub fn execute(manager: &ConfigManager, resource: ResourceType) -> Result<()> {
                 })
                 .collect();
             eprintln_verbose!("Found {} MCP servers", views.len());
-            println!("{}", serde_json::to_string(&views)?);
+            println!("{}", serde_json::to_string_pretty(&views)?);
         }
         ResourceType::SubAgents => {
             let views: Vec<SubAgentView> = config
@@ -69,7 +69,7 @@ pub fn execute(manager: &ConfigManager, resource: ResourceType) -> Result<()> {
                 })
                 .collect();
             eprintln_verbose!("Found {} sub-agents", views.len());
-            println!("{}", serde_json::to_string(&views)?);
+            println!("{}", serde_json::to_string_pretty(&views)?);
         }
     }
 
