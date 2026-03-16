@@ -43,3 +43,7 @@ install: build
 # Run agentctl with --help
 help: dev
     ./target/debug/agentctl --help
+
+# Run with cargo (pass args: just start -- --arg)
+start *args:
+    cargo run -p aghub -- {{args}}
