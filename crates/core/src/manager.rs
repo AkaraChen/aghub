@@ -14,11 +14,7 @@ pub struct ConfigManager {
 
 impl ConfigManager {
     /// Create with default path (production use)
-    pub fn new(
-        adapter: Box<dyn AgentAdapter>,
-        global: bool,
-        project_root: Option<&Path>,
-    ) -> Self {
+    pub fn new(adapter: Box<dyn AgentAdapter>, global: bool, project_root: Option<&Path>) -> Self {
         let config_path = if global {
             adapter.global_config_path()
         } else if let Some(root) = project_root {
@@ -106,9 +102,9 @@ impl ConfigManager {
 
     /// Get mutable reference to loaded configuration
     fn config_mut(&mut self) -> Result<&mut AgentConfig> {
-        self.config.as_mut().ok_or_else(|| {
-            ConfigError::InvalidConfig("No configuration loaded".to_string())
-        })
+        self.config
+            .as_mut()
+            .ok_or_else(|| ConfigError::InvalidConfig("No configuration loaded".to_string()))
     }
 
     // ==================== Skills CRUD ====================
@@ -277,7 +273,11 @@ impl ConfigManager {
 
     /// Get a sub-agent by name
     pub fn get_sub_agent(&self, name: &str) -> Option<&SubAgent> {
-        self.config.as_ref()?.sub_agents.iter().find(|a| a.name == name)
+        self.config
+            .as_ref()?
+            .sub_agents
+            .iter()
+            .find(|a| a.name == name)
     }
 
     /// Update a sub-agent
@@ -405,7 +405,10 @@ mod tests {
         manager.load().unwrap();
 
         // Add
-        let mcp = McpServer::new("test-mcp", McpTransport::command("echo", vec!["hello".to_string()]));
+        let mcp = McpServer::new(
+            "test-mcp",
+            McpTransport::command("echo", vec!["hello".to_string()]),
+        );
         manager.add_mcp(mcp.clone()).unwrap();
         assert!(manager.get_mcp("test-mcp").is_some());
 
@@ -451,6 +454,9 @@ mod tests {
 
         let result = manager.remove_skill("nonexistent");
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Resource not found"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Resource not found"));
     }
 }

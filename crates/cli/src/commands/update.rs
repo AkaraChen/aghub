@@ -1,9 +1,5 @@
 use crate::ResourceType;
-use aghub_core::{
-    errors::ConfigError,
-    manager::ConfigManager,
-    models::McpTransport,
-};
+use aghub_core::{errors::ConfigError, manager::ConfigManager, models::McpTransport};
 use anyhow::{bail, Result};
 use colored::Colorize;
 use std::collections::HashMap;
@@ -52,7 +48,11 @@ pub fn execute(
             }
 
             manager.update_skill(&name, skill)?;
-            println!("{} {}", "✓".green().bold(), format!("Updated skill '{}'", name));
+            println!(
+                "{} {}",
+                "✓".green().bold(),
+                format!("Updated skill '{}'", name)
+            );
         }
         ResourceType::Mcps => {
             // Get existing MCP

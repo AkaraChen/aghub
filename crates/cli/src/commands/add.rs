@@ -36,13 +36,16 @@ pub fn execute(
                 tools,
             };
             manager.add_skill(skill)?;
-            println!("{} {}", "✓".green().bold(), format!("Added skill '{}'", name));
+            println!(
+                "{} {}",
+                "✓".green().bold(),
+                format!("Added skill '{}'", name)
+            );
         }
         ResourceType::Mcps => {
             let transport = if let Some(cmd_str) = command {
                 // Parse command and args
-                let parts: Vec<String> =
-                    cmd_str.split_whitespace().map(String::from).collect();
+                let parts: Vec<String> = cmd_str.split_whitespace().map(String::from).collect();
                 if parts.is_empty() {
                     bail!("Command cannot be empty");
                 }

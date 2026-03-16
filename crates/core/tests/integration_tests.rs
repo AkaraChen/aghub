@@ -15,10 +15,7 @@ use std::collections::HashMap;
 fn create_test_mcp_command(name: &str) -> McpServer {
     McpServer::new(
         name,
-        McpTransport::command(
-            "echo",
-            vec!["test".to_string(), "args".to_string()],
-        ),
+        McpTransport::command("echo", vec!["test".to_string(), "args".to_string()]),
     )
 }
 
@@ -126,7 +123,10 @@ fn test_claude_skill_workflow() {
 
     let saved_skill = &config.skills[0];
     assert_eq!(saved_skill.name, "rust-dev");
-    assert_eq!(saved_skill.source, Some("https://example.com/rust-dev.json".to_string()));
+    assert_eq!(
+        saved_skill.source,
+        Some("https://example.com/rust-dev.json".to_string())
+    );
     assert_eq!(saved_skill.author, Some("test-author".to_string()));
     assert_eq!(saved_skill.tools.len(), 2);
 
@@ -228,7 +228,10 @@ fn test_opencode_full_mcp_workflow() {
         McpTransport::Url { headers, .. } => {
             assert!(headers.is_some());
             let headers = headers.as_ref().unwrap();
-            assert_eq!(headers.get("Authorization"), Some(&"Bearer test-token".to_string()));
+            assert_eq!(
+                headers.get("Authorization"),
+                Some(&"Bearer test-token".to_string())
+            );
         }
         _ => panic!("Expected URL transport"),
     }
@@ -261,7 +264,11 @@ fn test_opencode_sub_agent_workflow() {
 
     manager.load().unwrap();
     let config = manager.config().unwrap();
-    let saved_agent = config.sub_agents.iter().find(|a| a.name == "reviewer").unwrap();
+    let saved_agent = config
+        .sub_agents
+        .iter()
+        .find(|a| a.name == "reviewer")
+        .unwrap();
     assert_eq!(saved_agent.model, Some("claude-opus-4-6".to_string()));
 
     // Disable and enable
@@ -311,8 +318,16 @@ fn test_config_round_trip_preserves_enabled_state() {
     manager.load().unwrap();
 
     let config = manager.config().unwrap();
-    let enabled_ref = config.mcps.iter().find(|m| m.name == "enabled-mcp").unwrap();
-    let disabled_ref = config.mcps.iter().find(|m| m.name == "disabled-mcp").unwrap();
+    let enabled_ref = config
+        .mcps
+        .iter()
+        .find(|m| m.name == "enabled-mcp")
+        .unwrap();
+    let disabled_ref = config
+        .mcps
+        .iter()
+        .find(|m| m.name == "disabled-mcp")
+        .unwrap();
 
     assert!(enabled_ref.enabled);
     assert!(!disabled_ref.enabled);
@@ -469,12 +484,7 @@ fn test_special_characters_in_names() {
     manager.load().unwrap();
 
     // Test names with special characters
-    let names = vec![
-        "my-mcp-server",
-        "my_mcp_server",
-        "mcp.server",
-        "mcp123",
-    ];
+    let names = vec!["my-mcp-server", "my_mcp_server", "mcp.server", "mcp123"];
 
     for name in &names {
         let mcp = create_test_mcp_command(name);
@@ -525,4 +535,3 @@ fn test_concurrent_modifications_preserve_state() {
     assert!(mcp2.enabled);
     assert!(!mcp3.enabled);
 }
-

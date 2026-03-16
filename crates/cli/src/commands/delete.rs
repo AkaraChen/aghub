@@ -7,7 +7,11 @@ pub fn execute(manager: &mut ConfigManager, resource: ResourceType, name: String
     match resource {
         ResourceType::Skills => {
             manager.remove_skill(&name)?;
-            println!("{} {}", "✓".green().bold(), format!("Deleted skill '{}'", name));
+            println!(
+                "{} {}",
+                "✓".green().bold(),
+                format!("Deleted skill '{}'", name)
+            );
         }
         ResourceType::Mcps => {
             manager.remove_mcp(&name)?;

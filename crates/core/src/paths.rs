@@ -88,7 +88,10 @@ mod tests {
     fn test_claude_project_path() {
         let project = PathBuf::from("/home/user/myproject");
         let path = claude_project_path(&project);
-        assert_eq!(path, PathBuf::from("/home/user/myproject/.claude/settings.json"));
+        assert_eq!(
+            path,
+            PathBuf::from("/home/user/myproject/.claude/settings.json")
+        );
     }
 
     #[test]
@@ -133,6 +136,9 @@ mod tests {
         fs::create_dir_all(&claude_dir).unwrap();
         fs::write(claude_dir.join("settings.json"), "{}").unwrap();
 
-        assert!(project_config_exists(super::super::AgentType::Claude, temp_dir.path()));
+        assert!(project_config_exists(
+            super::super::AgentType::Claude,
+            temp_dir.path()
+        ));
     }
 }

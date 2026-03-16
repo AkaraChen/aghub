@@ -34,12 +34,8 @@ impl TestConfig {
 
         // Create minimal valid config for the agent type
         let initial_config = match agent_type {
-            AgentType::Claude => {
-                r#"{"mcpServers": {}, "skills": {}}"#
-            }
-            AgentType::OpenCode => {
-                r#"{"mcp_servers": [], "skills": [], "sub_agents": []}"#
-            }
+            AgentType::Claude => r#"{"mcpServers": {}, "skills": {}}"#,
+            AgentType::OpenCode => r#"{"mcp_servers": [], "skills": [], "sub_agents": []}"#,
         };
 
         fs::write(&config_path, initial_config).map_err(ConfigError::Io)?;
@@ -133,14 +129,14 @@ impl TestConfigBuilder {
         let temp_dir = TempDir::new().map_err(ConfigError::Io)?;
         let config_path = temp_dir.path().join("settings.json");
 
-        let content = self.initial_content.unwrap_or_else(|| match self.agent_type {
-            AgentType::Claude => {
-                r#"{"mcpServers": {}, "skills": {}}"#.to_string()
-            }
-            AgentType::OpenCode => {
-                r#"{"mcp_servers": [], "skills": [], "sub_agents": []}"#.to_string()
-            }
-        });
+        let content = self
+            .initial_content
+            .unwrap_or_else(|| match self.agent_type {
+                AgentType::Claude => r#"{"mcpServers": {}, "skills": {}}"#.to_string(),
+                AgentType::OpenCode => {
+                    r#"{"mcp_servers": [], "skills": [], "sub_agents": []}"#.to_string()
+                }
+            });
 
         fs::write(&config_path, content).map_err(ConfigError::Io)?;
 
@@ -155,19 +151,24 @@ impl TestConfigBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{McpTransport, McpServer, Skill};
+    use crate::models::{McpServer, McpTransport, Skill};
 
     #[test]
     fn test_test_config_creation() {
         let test = TestConfig::new(AgentType::Claude).unwrap();
         assert!(test.config_path().exists());
-        assert!(test.config_path().to_string_lossy().contains("settings.json"));
+        assert!(test
+            .config_path()
+            .to_string_lossy()
+            .contains("settings.json"));
     }
 
     #[test]
     fn test_test_config_builder() {
         let test = TestConfigBuilder::new(AgentType::OpenCode)
-            .with_content(r#"{"mcp_servers": [{"name": "test", "type": "stdio", "command": "echo"}]}"#)
+            .with_content(
+                r#"{"mcp_servers": [{"name": "test", "type": "stdio", "command": "echo"}]}"#,
+            )
             .build()
             .unwrap();
 
@@ -192,7 +193,10 @@ mod tests {
         manager.load().unwrap();
 
         // Add MCP
-        let mcp = McpServer::new("test", McpTransport::command("echo", vec!["hello".to_string()]));
+        let mcp = McpServer::new(
+            "test",
+            McpTransport::command("echo", vec!["hello".to_string()]),
+        );
         manager.add_mcp(mcp).unwrap();
 
         // Verify file was updated
@@ -219,7 +223,12 @@ mod tests {
         // Modify test1
         let mut manager1 = test1.create_manager();
         manager1.load().unwrap();
-        manager1.add_mcp(McpServer::new("mcp1", McpTransport::command("echo", vec!["1".to_string()]))).unwrap();
+        manager1
+            .add_mcp(McpServer::new(
+                "mcp1",
+                McpTransport::command("echo", vec!["1".to_string()]),
+            ))
+            .unwrap();
 
         // test2 should be unaffected
         let content2 = test2.read_config().unwrap();

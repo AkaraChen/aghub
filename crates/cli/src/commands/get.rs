@@ -28,9 +28,7 @@ struct SubAgentRow {
 }
 
 pub fn execute(manager: &ConfigManager, resource: ResourceType) -> Result<()> {
-    let config = manager
-        .config()
-        .context("No configuration loaded")?;
+    let config = manager.config().context("No configuration loaded")?;
 
     match resource {
         ResourceType::Skills => {
@@ -72,9 +70,7 @@ pub fn execute(manager: &ConfigManager, resource: ResourceType) -> Result<()> {
                         "disabled".red().to_string()
                     },
                     transport_type: match &m.transport {
-                        aghub_core::models::McpTransport::Command { .. } => {
-                            "command".to_string()
-                        }
+                        aghub_core::models::McpTransport::Command { .. } => "command".to_string(),
                         aghub_core::models::McpTransport::Url { .. } => "url".to_string(),
                     },
                 })

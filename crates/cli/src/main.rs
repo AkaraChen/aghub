@@ -3,10 +3,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use colored::Colorize;
 
 use aghub_core::{
-    adapters::create_adapter,
-    manager::ConfigManager,
-    models::AgentType,
-    paths::find_project_root,
+    adapters::create_adapter, manager::ConfigManager, models::AgentType, paths::find_project_root,
 };
 
 mod commands;
@@ -296,9 +293,7 @@ fn main() -> Result<()> {
         Commands::Delete { resource, name } => delete::execute(&mut manager, resource, name),
         Commands::Disable { resource, name } => disable::execute(&mut manager, resource, name),
         Commands::Enable { resource, name } => enable::execute(&mut manager, resource, name),
-        Commands::Describe { resource, name } => {
-            describe::execute(&manager, resource, name)
-        }
+        Commands::Describe { resource, name } => describe::execute(&manager, resource, name),
     }
 }
 
@@ -306,14 +301,8 @@ fn main() -> Result<()> {
 mod describe {
     use super::*;
 
-    pub fn execute(
-        manager: &ConfigManager,
-        resource: ResourceType,
-        name: String,
-    ) -> Result<()> {
-        let config = manager
-            .config()
-            .context("No configuration loaded")?;
+    pub fn execute(manager: &ConfigManager, resource: ResourceType, name: String) -> Result<()> {
+        let config = manager.config().context("No configuration loaded")?;
 
         match resource {
             ResourceType::Skills => {
@@ -323,7 +312,14 @@ mod describe {
                     .find(|s| s.name == name)
                     .with_context(|| format!("Skill '{}' not found", name))?;
                 println!("{}", format!("Skill: {}", skill.name).bold().underline());
-                println!("  Enabled: {}", if skill.enabled { "yes".green() } else { "no".red() });
+                println!(
+                    "  Enabled: {}",
+                    if skill.enabled {
+                        "yes".green()
+                    } else {
+                        "no".red()
+                    }
+                );
                 if let Some(ref source) = skill.source {
                     println!("  Source: {}", source);
                 }
@@ -347,7 +343,14 @@ mod describe {
                     .find(|m| m.name == name)
                     .with_context(|| format!("MCP server '{}' not found", name))?;
                 println!("{}", format!("MCP Server: {}", mcp.name).bold().underline());
-                println!("  Enabled: {}", if mcp.enabled { "yes".green() } else { "no".red() });
+                println!(
+                    "  Enabled: {}",
+                    if mcp.enabled {
+                        "yes".green()
+                    } else {
+                        "no".red()
+                    }
+                );
                 match &mcp.transport {
                     aghub_core::models::McpTransport::Command { command, args, env } => {
                         println!("  Type: command (stdio)");
@@ -380,8 +383,18 @@ mod describe {
                     .iter()
                     .find(|a| a.name == name)
                     .with_context(|| format!("Sub-agent '{}' not found", name))?;
-                println!("{}", format!("Sub-agent: {}", agent.name).bold().underline());
-                println!("  Enabled: {}", if agent.enabled { "yes".green() } else { "no".red() });
+                println!(
+                    "{}",
+                    format!("Sub-agent: {}", agent.name).bold().underline()
+                );
+                println!(
+                    "  Enabled: {}",
+                    if agent.enabled {
+                        "yes".green()
+                    } else {
+                        "no".red()
+                    }
+                );
                 if let Some(ref desc) = agent.description {
                     println!("  Description: {}", desc);
                 }

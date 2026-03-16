@@ -111,9 +111,7 @@ impl AgentAdapter for OpenCodeAdapter {
                 OpenCodeMcpTransport::Stdio { command, args, env } => {
                     McpTransport::Command { command, args, env }
                 }
-                OpenCodeMcpTransport::Sse { url, headers } => {
-                    McpTransport::Url { url, headers }
-                }
+                OpenCodeMcpTransport::Sse { url, headers } => McpTransport::Url { url, headers },
             };
             config.mcps.push(McpServer {
                 name: mcp.name,
@@ -155,13 +153,11 @@ impl AgentAdapter for OpenCodeAdapter {
         // Serialize MCP servers
         for mcp in &config.mcps {
             let transport = match &mcp.transport {
-                McpTransport::Command { command, args, env } => {
-                    OpenCodeMcpTransport::Stdio {
-                        command: command.clone(),
-                        args: args.clone(),
-                        env: env.clone(),
-                    }
-                }
+                McpTransport::Command { command, args, env } => OpenCodeMcpTransport::Stdio {
+                    command: command.clone(),
+                    args: args.clone(),
+                    env: env.clone(),
+                },
                 McpTransport::Url { url, headers } => OpenCodeMcpTransport::Sse {
                     url: url.clone(),
                     headers: headers.clone(),
@@ -198,8 +194,7 @@ impl AgentAdapter for OpenCodeAdapter {
             });
         }
 
-        serde_json::to_string_pretty(&opencode_config)
-            .map_err(ConfigError::Json)
+        serde_json::to_string_pretty(&opencode_config).map_err(ConfigError::Json)
     }
 
     fn validate_command(&self, config_path: &Path) -> Command {
@@ -266,10 +261,7 @@ mod tests {
             config.mcps[0].transport,
             McpTransport::Command { .. }
         ));
-        assert!(matches!(
-            config.mcps[1].transport,
-            McpTransport::Url { .. }
-        ));
+        assert!(matches!(config.mcps[1].transport, McpTransport::Url { .. }));
 
         assert_eq!(config.skills.len(), 1);
         assert_eq!(config.skills[0].name, "rust-dev");

@@ -127,10 +127,7 @@ impl McpTransport {
         }
     }
 
-    pub fn url_with_headers(
-        url: impl Into<String>,
-        headers: HashMap<String, String>,
-    ) -> Self {
+    pub fn url_with_headers(url: impl Into<String>, headers: HashMap<String, String>) -> Self {
         Self::Url {
             url: url.into(),
             headers: Some(headers),
@@ -222,7 +219,11 @@ mod tests {
             "filesystem",
             McpTransport::command(
                 "npx",
-                vec!["-y".to_string(), "@modelcontextprotocol/server-filesystem".to_string(), "/tmp".to_string()],
+                vec![
+                    "-y".to_string(),
+                    "@modelcontextprotocol/server-filesystem".to_string(),
+                    "/tmp".to_string(),
+                ],
             ),
         );
 

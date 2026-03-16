@@ -78,16 +78,15 @@ impl AgentAdapter for ClaudeAdapter {
             let skill = if let Some(obj) = value.as_object() {
                 Skill {
                     name,
-                    enabled: obj
-                        .get("enabled")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(true),
+                    enabled: obj.get("enabled").and_then(|v| v.as_bool()).unwrap_or(true),
                     source: obj.get("source").and_then(|v| v.as_str().map(String::from)),
                     description: obj
                         .get("description")
                         .and_then(|v| v.as_str().map(String::from)),
                     author: obj.get("author").and_then(|v| v.as_str().map(String::from)),
-                    version: obj.get("version").and_then(|v| v.as_str().map(String::from)),
+                    version: obj
+                        .get("version")
+                        .and_then(|v| v.as_str().map(String::from)),
                     tools: obj
                         .get("tools")
                         .and_then(|v| v.as_array())
@@ -150,10 +149,7 @@ impl AgentAdapter for ClaudeAdapter {
                     skill_obj.insert("version".to_string(), version.clone().into());
                 }
                 if !skill.tools.is_empty() {
-                    skill_obj.insert(
-                        "tools".to_string(),
-                        skill.tools.clone().into(),
-                    );
+                    skill_obj.insert("tools".to_string(), skill.tools.clone().into());
                 }
 
                 if !skill_obj.is_empty() {
@@ -169,8 +165,7 @@ impl AgentAdapter for ClaudeAdapter {
         // Note: Sub-agents are not serialized for Claude Code
         // This feature is silently disabled
 
-        serde_json::to_string_pretty(&claude_config)
-            .map_err(ConfigError::Json)
+        serde_json::to_string_pretty(&claude_config).map_err(ConfigError::Json)
     }
 
     fn validate_command(&self, config_path: &Path) -> Command {
@@ -210,17 +205,11 @@ mod tests {
 
         // Find filesystem MCP (HashMap iteration order is not deterministic)
         let filesystem = config.mcps.iter().find(|m| m.name == "filesystem").unwrap();
-        assert!(matches!(
-            filesystem.transport,
-            McpTransport::Command { .. }
-        ));
+        assert!(matches!(filesystem.transport, McpTransport::Command { .. }));
 
         // Find github MCP and check env
         let github = config.mcps.iter().find(|m| m.name == "github").unwrap();
-        assert!(matches!(
-            github.transport,
-            McpTransport::Command { .. }
-        ));
+        assert!(matches!(github.transport, McpTransport::Command { .. }));
     }
 
     #[test]
