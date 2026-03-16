@@ -1,11 +1,11 @@
 use std::path::{Path, PathBuf};
 
 /// Get the global configuration path for Claude Code CLI
-/// Uses ~/.claude/settings.json on all platforms (NOT Claude Desktop)
+/// Uses ~/.claude.json on all platforms for MCP server configurations
 pub fn claude_global_path() -> PathBuf {
     dirs::home_dir()
         .expect("Could not determine home directory")
-        .join(".claude/settings.json")
+        .join(".claude.json")
 }
 
 /// Get the global skills directory path for Claude Code CLI
@@ -17,8 +17,9 @@ pub fn claude_global_skills_path() -> PathBuf {
 }
 
 /// Get the project configuration path for Claude Code
+/// Claude Code project-scoped MCP servers are conventionally kept in .mcp.json
 pub fn claude_project_path(project_root: &Path) -> PathBuf {
-    project_root.join(".claude/settings.json")
+    project_root.join(".mcp.json")
 }
 
 /// Get the global configuration path for OpenCode
@@ -58,15 +59,15 @@ pub fn find_project_root(start_dir: &Path) -> Option<PathBuf> {
     let mut current = Some(start_dir);
 
     while let Some(dir) = current {
-        // Check for either .claude or .opencode
-        if dir.join(".claude").is_dir() || dir.join(".opencode").is_dir() {
+        // Check for either .claude, .opencode dirs, or .mcp.json file
+        if dir.join(".claude").is_dir() || dir.join(".opencode").is_dir() || dir.join(".mcp.json").is_file() {
             return Some(dir.to_path_buf());
         }
 
         // Also check for .git as a fallback
         if dir.join(".git").is_dir() {
-            // Check if there's a .claude or .opencode in this git root
-            if dir.join(".claude").is_dir() || dir.join(".opencode").is_dir() {
+            // Check if there's a .claude, .opencode, or .mcp.json in this git root
+            if dir.join(".claude").is_dir() || dir.join(".opencode").is_dir() || dir.join(".mcp.json").is_file() {
                 return Some(dir.to_path_buf());
             }
         }
@@ -87,7 +88,7 @@ mod tests {
     fn test_claude_global_path_format() {
         let path = claude_global_path();
         let path_str = path.to_string_lossy();
-        assert!(path_str.contains(".claude/settings.json"));
+        assert!(path_str.contains(".claude.json"));
         // Should NOT contain Library/Application Support (that's Claude Desktop)
         assert!(!path_str.contains("Library/Application Support"));
     }
@@ -98,7 +99,7 @@ mod tests {
         let path = claude_project_path(&project);
         assert_eq!(
             path,
-            PathBuf::from("/home/user/myproject/.claude/settings.json")
+            PathBuf::from("/home/user/myproject/.mcp.json")
         );
     }
 
@@ -106,8 +107,8 @@ mod tests {
     fn test_find_project_root_with_claude() {
         let temp_dir = TempDir::new().unwrap();
         let project_root = temp_dir.path().join("myproject");
-        let claude_dir = project_root.join(".claude");
-        fs::create_dir_all(&claude_dir).unwrap();
+        fs::create_dir_all(&project_root).unwrap();
+        fs::write(project_root.join(".mcp.json"), "{}").unwrap();
 
         let found = find_project_root(&project_root).unwrap();
         assert_eq!(found, project_root);
@@ -128,9 +129,9 @@ mod tests {
     fn test_find_project_root_nested() {
         let temp_dir = TempDir::new().unwrap();
         let project_root = temp_dir.path().join("myproject");
-        let claude_dir = project_root.join(".claude");
+        fs::create_dir_all(&project_root).unwrap();
+        fs::write(project_root.join(".mcp.json"), "{}").unwrap();
         let nested_dir = project_root.join("src/components");
-        fs::create_dir_all(&claude_dir).unwrap();
         fs::create_dir_all(&nested_dir).unwrap();
 
         let found = find_project_root(&nested_dir).unwrap();
@@ -140,9 +141,7 @@ mod tests {
     #[test]
     fn test_project_config_exists() {
         let temp_dir = TempDir::new().unwrap();
-        let claude_dir = temp_dir.path().join(".claude");
-        fs::create_dir_all(&claude_dir).unwrap();
-        fs::write(claude_dir.join("settings.json"), "{}").unwrap();
+        fs::write(temp_dir.path().join(".mcp.json"), "{}").unwrap();
 
         assert!(project_config_exists(
             super::super::AgentType::Claude,
