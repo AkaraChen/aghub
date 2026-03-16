@@ -17,3 +17,4 @@ tempfile = { workspace = true }
 [features]
 default = []
 agent-validation = []
+testing = []
