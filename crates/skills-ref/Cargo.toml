@@ -19,10 +19,10 @@ clap = { workspace = true, optional = true }
 tempfile = { workspace = true }
 
 [features]
-default = ["cli"]
-cli = ["dep:clap"]
+default = [ "cli" ]
+cli = [ "dep:clap" ]
 
 [[bin]]
 name = "skills-ref"
 path = "src/cli.rs"
-required-features = ["cli"]
+required-features = [ "cli" ]

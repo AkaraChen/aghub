@@ -1,8 +1,8 @@
 use crate::{
-    adapters::{create_adapter, AgentAdapter},
-    errors::{ConfigError, Result},
-    manager::ConfigManager,
-    AgentType,
+	adapters::{create_adapter, AgentAdapter},
+	errors::{ConfigError, Result},
+	manager::ConfigManager,
+	AgentType,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -13,275 +13,289 @@ use tempfile::TempDir;
 /// This struct creates a temporary directory with an isolated configuration
 /// that can be used for testing without polluting the global environment.
 pub struct TestConfig {
-    temp_dir: TempDir,
-    config_path: PathBuf,
-    skills_dir: PathBuf,
-    agent_type: AgentType,
+	temp_dir: TempDir,
+	config_path: PathBuf,
+	skills_dir: PathBuf,
+	agent_type: AgentType,
 }
 
 impl TestConfig {
-    /// Create a new test configuration for the given agent type
-    ///
-    /// # Example
-    /// ```
-    /// use aghub_core::{testing::TestConfig, AgentType};
-    ///
-    /// let test = TestConfig::new(AgentType::Claude).unwrap();
-    /// let config_path = test.config_path();
-    /// ```
-    pub fn new(agent_type: AgentType) -> Result<Self> {
-        let temp_dir = TempDir::new().map_err(ConfigError::Io)?;
-        let config_path = temp_dir.path().join("settings.json");
+	/// Create a new test configuration for the given agent type
+	///
+	/// # Example
+	/// ```
+	/// use aghub_core::{testing::TestConfig, AgentType};
+	///
+	/// let test = TestConfig::new(AgentType::Claude).unwrap();
+	/// let config_path = test.config_path();
+	/// ```
+	pub fn new(agent_type: AgentType) -> Result<Self> {
+		let temp_dir = TempDir::new().map_err(ConfigError::Io)?;
+		let config_path = temp_dir.path().join("settings.json");
 
-        // Create minimal valid config for the agent type
-        let initial_config = match agent_type {
-            AgentType::Claude => r#"{"mcpServers": {}, "skills": {}}"#,
-            AgentType::OpenCode => r#"{"mcp_servers": [], "skills": [], "sub_agents": []}"#,
-        };
+		// Create minimal valid config for the agent type
+		let initial_config = match agent_type {
+			AgentType::Claude => r#"{"mcpServers": {}, "skills": {}}"#,
+			AgentType::OpenCode => {
+				r#"{"mcp_servers": [], "skills": [], "sub_agents": []}"#
+			}
+		};
 
-        fs::write(&config_path, initial_config).map_err(ConfigError::Io)?;
+		fs::write(&config_path, initial_config).map_err(ConfigError::Io)?;
 
-        // Create isolated skills directory for Claude
-        let skills_dir = temp_dir.path().join("skills");
-        if agent_type == AgentType::Claude {
-            fs::create_dir(&skills_dir).map_err(ConfigError::Io)?;
-            // Set thread-local skills path for isolation
-            crate::adapters::claude::set_thread_local_skills_path(Some(skills_dir.clone()));
-        }
+		// Create isolated skills directory for Claude
+		let skills_dir = temp_dir.path().join("skills");
+		if agent_type == AgentType::Claude {
+			fs::create_dir(&skills_dir).map_err(ConfigError::Io)?;
+			// Set thread-local skills path for isolation
+			crate::adapters::claude::set_thread_local_skills_path(Some(
+				skills_dir.clone(),
+			));
+		}
 
-        Ok(Self {
-            temp_dir,
-            config_path,
-            skills_dir,
-            agent_type,
-        })
-    }
+		Ok(Self {
+			temp_dir,
+			config_path,
+			skills_dir,
+			agent_type,
+		})
+	}
 
-    /// Get the path to the temporary configuration file
-    pub fn config_path(&self) -> &Path {
-        &self.config_path
-    }
+	/// Get the path to the temporary configuration file
+	pub fn config_path(&self) -> &Path {
+		&self.config_path
+	}
 
-    /// Get the temporary directory path
-    pub fn temp_dir(&self) -> &Path {
-        self.temp_dir.path()
-    }
+	/// Get the temporary directory path
+	pub fn temp_dir(&self) -> &Path {
+		self.temp_dir.path()
+	}
 
-    /// Get the skills directory path (for Claude tests)
-    pub fn skills_dir(&self) -> &Path {
-        &self.skills_dir
-    }
+	/// Get the skills directory path (for Claude tests)
+	pub fn skills_dir(&self) -> &Path {
+		&self.skills_dir
+	}
 
-    /// Get the agent type
-    pub fn agent_type(&self) -> AgentType {
-        self.agent_type
-    }
+	/// Get the agent type
+	pub fn agent_type(&self) -> AgentType {
+		self.agent_type
+	}
 
-    /// Create a skill directory with SKILL.md for testing
-    pub fn create_test_skill(&self, name: &str, description: Option<&str>) -> Result<()> {
-        if self.agent_type != AgentType::Claude {
-            return Ok(());
-        }
+	/// Create a skill directory with SKILL.md for testing
+	pub fn create_test_skill(
+		&self,
+		name: &str,
+		description: Option<&str>,
+	) -> Result<()> {
+		if self.agent_type != AgentType::Claude {
+			return Ok(());
+		}
 
-        let skill_dir = self.skills_dir.join(name);
-        fs::create_dir(&skill_dir).map_err(ConfigError::Io)?;
+		let skill_dir = self.skills_dir.join(name);
+		fs::create_dir(&skill_dir).map_err(ConfigError::Io)?;
 
-        let skill_md_content = match description {
-            Some(desc) => format!(
-                "---\nname: {}\ndescription: {}\n---\n\n# {}\n",
-                name, desc, name
-            ),
-            None => format!("---\nname: {}\n---\n\n# {}\n", name, name),
-        };
+		let skill_md_content = match description {
+			Some(desc) => format!(
+				"---\nname: {}\ndescription: {}\n---\n\n# {}\n",
+				name, desc, name
+			),
+			None => format!("---\nname: {}\n---\n\n# {}\n", name, name),
+		};
 
-        fs::write(skill_dir.join("SKILL.md"), skill_md_content).map_err(ConfigError::Io)?;
-        Ok(())
-    }
+		fs::write(skill_dir.join("SKILL.md"), skill_md_content)
+			.map_err(ConfigError::Io)?;
+		Ok(())
+	}
 
-    /// Create a ConfigManager using this test configuration
-    pub fn create_manager(&self) -> ConfigManager {
-        let adapter = create_adapter(self.agent_type);
-        ConfigManager::with_path(adapter, self.config_path.clone())
-    }
+	/// Create a ConfigManager using this test configuration
+	pub fn create_manager(&self) -> ConfigManager {
+		let adapter = create_adapter(self.agent_type);
+		ConfigManager::with_path(adapter, self.config_path.clone())
+	}
 
-    /// Create an adapter for this test configuration
-    pub fn create_adapter(&self) -> Box<dyn AgentAdapter> {
-        create_adapter(self.agent_type)
-    }
+	/// Create an adapter for this test configuration
+	pub fn create_adapter(&self) -> Box<dyn AgentAdapter> {
+		create_adapter(self.agent_type)
+	}
 
-    /// Write raw content to the config file
-    pub fn write_config(&self, content: &str) -> Result<()> {
-        fs::write(&self.config_path, content).map_err(ConfigError::Io)
-    }
+	/// Write raw content to the config file
+	pub fn write_config(&self, content: &str) -> Result<()> {
+		fs::write(&self.config_path, content).map_err(ConfigError::Io)
+	}
 
-    /// Read raw content from the config file
-    pub fn read_config(&self) -> Result<String> {
-        fs::read_to_string(&self.config_path).map_err(ConfigError::Io)
-    }
+	/// Read raw content from the config file
+	pub fn read_config(&self) -> Result<String> {
+		fs::read_to_string(&self.config_path).map_err(ConfigError::Io)
+	}
 
-    /// Validate the configuration using the actual agent CLI
-    ///
-    /// This runs the agent with --settings flag to verify the config is valid.
-    /// Requires the agent CLI to be installed.
-    pub fn validate_with_agent(&self) -> Result<()> {
-        let adapter = self.create_adapter();
-        let output = adapter
-            .validate_command(&self.config_path)
-            .output()
-            .map_err(ConfigError::Io)?;
+	/// Validate the configuration using the actual agent CLI
+	///
+	/// This runs the agent with --settings flag to verify the config is valid.
+	/// Requires the agent CLI to be installed.
+	pub fn validate_with_agent(&self) -> Result<()> {
+		let adapter = self.create_adapter();
+		let output = adapter
+			.validate_command(&self.config_path)
+			.output()
+			.map_err(ConfigError::Io)?;
 
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(ConfigError::ValidationFailed(stderr.to_string()));
-        }
+		if !output.status.success() {
+			let stderr = String::from_utf8_lossy(&output.stderr);
+			return Err(ConfigError::ValidationFailed(stderr.to_string()));
+		}
 
-        Ok(())
-    }
+		Ok(())
+	}
 }
 
 impl Drop for TestConfig {
-    fn drop(&mut self) {
-        // Clear thread-local skills path override
-        if self.agent_type == AgentType::Claude {
-            crate::adapters::claude::set_thread_local_skills_path(None);
-        }
-    }
+	fn drop(&mut self) {
+		// Clear thread-local skills path override
+		if self.agent_type == AgentType::Claude {
+			crate::adapters::claude::set_thread_local_skills_path(None);
+		}
+	}
 }
 
 /// Builder pattern for creating test configurations with custom initial state
 pub struct TestConfigBuilder {
-    agent_type: AgentType,
-    initial_content: Option<String>,
+	agent_type: AgentType,
+	initial_content: Option<String>,
 }
 
 impl TestConfigBuilder {
-    /// Create a new builder for the given agent type
-    pub fn new(agent_type: AgentType) -> Self {
-        Self {
-            agent_type,
-            initial_content: None,
-        }
-    }
+	/// Create a new builder for the given agent type
+	pub fn new(agent_type: AgentType) -> Self {
+		Self {
+			agent_type,
+			initial_content: None,
+		}
+	}
 
-    /// Set the initial configuration content
-    pub fn with_content(mut self, content: impl Into<String>) -> Self {
-        self.initial_content = Some(content.into());
-        self
-    }
+	/// Set the initial configuration content
+	pub fn with_content(mut self, content: impl Into<String>) -> Self {
+		self.initial_content = Some(content.into());
+		self
+	}
 
-    /// Build the test configuration
-    pub fn build(self) -> Result<TestConfig> {
-        let temp_dir = TempDir::new().map_err(ConfigError::Io)?;
-        let config_path = temp_dir.path().join("settings.json");
+	/// Build the test configuration
+	pub fn build(self) -> Result<TestConfig> {
+		let temp_dir = TempDir::new().map_err(ConfigError::Io)?;
+		let config_path = temp_dir.path().join("settings.json");
 
-        let content = self
-            .initial_content
-            .unwrap_or_else(|| match self.agent_type {
-                AgentType::Claude => r#"{"mcpServers": {}, "skills": {}}"#.to_string(),
-                AgentType::OpenCode => {
-                    r#"{"mcp_servers": [], "skills": [], "sub_agents": []}"#.to_string()
-                }
-            });
+		let content =
+			self.initial_content
+				.unwrap_or_else(|| match self.agent_type {
+					AgentType::Claude => {
+						r#"{"mcpServers": {}, "skills": {}}"#.to_string()
+					}
+					AgentType::OpenCode => {
+						r#"{"mcp_servers": [], "skills": [], "sub_agents": []}"#
+							.to_string()
+					}
+				});
 
-        fs::write(&config_path, content).map_err(ConfigError::Io)?;
+		fs::write(&config_path, content).map_err(ConfigError::Io)?;
 
-        // Create isolated skills directory for Claude
-        let skills_dir = temp_dir.path().join("skills");
-        if self.agent_type == AgentType::Claude {
-            fs::create_dir(&skills_dir).map_err(ConfigError::Io)?;
-            // Set thread-local skills path for isolation
-            crate::adapters::claude::set_thread_local_skills_path(Some(skills_dir.clone()));
-        }
+		// Create isolated skills directory for Claude
+		let skills_dir = temp_dir.path().join("skills");
+		if self.agent_type == AgentType::Claude {
+			fs::create_dir(&skills_dir).map_err(ConfigError::Io)?;
+			// Set thread-local skills path for isolation
+			crate::adapters::claude::set_thread_local_skills_path(Some(
+				skills_dir.clone(),
+			));
+		}
 
-        Ok(TestConfig {
-            temp_dir,
-            config_path,
-            skills_dir,
-            agent_type: self.agent_type,
-        })
-    }
+		Ok(TestConfig {
+			temp_dir,
+			config_path,
+			skills_dir,
+			agent_type: self.agent_type,
+		})
+	}
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::models::{McpServer, McpTransport};
+	use super::*;
+	use crate::models::{McpServer, McpTransport};
 
-    #[test]
-    fn test_test_config_creation() {
-        let test = TestConfig::new(AgentType::Claude).unwrap();
-        assert!(test.config_path().exists());
-        assert!(test
-            .config_path()
-            .to_string_lossy()
-            .contains("settings.json"));
-    }
+	#[test]
+	fn test_test_config_creation() {
+		let test = TestConfig::new(AgentType::Claude).unwrap();
+		assert!(test.config_path().exists());
+		assert!(test
+			.config_path()
+			.to_string_lossy()
+			.contains("settings.json"));
+	}
 
-    #[test]
-    fn test_test_config_builder() {
-        let test = TestConfigBuilder::new(AgentType::OpenCode)
+	#[test]
+	fn test_test_config_builder() {
+		let test = TestConfigBuilder::new(AgentType::OpenCode)
             .with_content(
                 r#"{"mcp_servers": [{"name": "test", "type": "stdio", "command": "echo"}]}"#,
             )
             .build()
             .unwrap();
 
-        let content = test.read_config().unwrap();
-        assert!(content.contains("test"));
-    }
+		let content = test.read_config().unwrap();
+		assert!(content.contains("test"));
+	}
 
-    #[test]
-    fn test_create_manager() {
-        let test = TestConfig::new(AgentType::Claude).unwrap();
-        let mut manager = test.create_manager();
+	#[test]
+	fn test_create_manager() {
+		let test = TestConfig::new(AgentType::Claude).unwrap();
+		let mut manager = test.create_manager();
 
-        manager.load().unwrap();
-        assert!(manager.config().is_some());
-    }
+		manager.load().unwrap();
+		assert!(manager.config().is_some());
+	}
 
-    #[test]
-    fn test_crud_with_manager() {
-        let test = TestConfig::new(AgentType::Claude).unwrap();
-        let mut manager = test.create_manager();
+	#[test]
+	fn test_crud_with_manager() {
+		let test = TestConfig::new(AgentType::Claude).unwrap();
+		let mut manager = test.create_manager();
 
-        manager.load().unwrap();
+		manager.load().unwrap();
 
-        // Add MCP
-        let mcp = McpServer::new(
-            "test",
-            McpTransport::stdio("echo", vec!["hello".to_string()]),
-        );
-        manager.add_mcp(mcp).unwrap();
+		// Add MCP
+		let mcp = McpServer::new(
+			"test",
+			McpTransport::stdio("echo", vec!["hello".to_string()]),
+		);
+		manager.add_mcp(mcp).unwrap();
 
-        // Verify file was updated
-        let content = test.read_config().unwrap();
-        assert!(content.contains("test"));
-        assert!(content.contains("echo"));
+		// Verify file was updated
+		let content = test.read_config().unwrap();
+		assert!(content.contains("test"));
+		assert!(content.contains("echo"));
 
-        // Note: Skills are loaded from ~/.claude/skills/ directory for Claude
-        // They are not stored in settings.json, so we skip skill save test here
-    }
+		// Note: Skills are loaded from ~/.claude/skills/ directory for Claude
+		// They are not stored in settings.json, so we skip skill save test here
+	}
 
-    #[test]
-    fn test_isolated_configs() {
-        let test1 = TestConfig::new(AgentType::Claude).unwrap();
-        let test2 = TestConfig::new(AgentType::Claude).unwrap();
+	#[test]
+	fn test_isolated_configs() {
+		let test1 = TestConfig::new(AgentType::Claude).unwrap();
+		let test2 = TestConfig::new(AgentType::Claude).unwrap();
 
-        // Ensure they have different paths
-        assert_ne!(test1.config_path(), test2.config_path());
+		// Ensure they have different paths
+		assert_ne!(test1.config_path(), test2.config_path());
 
-        // Modify test1
-        let mut manager1 = test1.create_manager();
-        manager1.load().unwrap();
-        manager1
-            .add_mcp(McpServer::new(
-                "mcp1",
-                McpTransport::stdio("echo", vec!["1".to_string()]),
-            ))
-            .unwrap();
+		// Modify test1
+		let mut manager1 = test1.create_manager();
+		manager1.load().unwrap();
+		manager1
+			.add_mcp(McpServer::new(
+				"mcp1",
+				McpTransport::stdio("echo", vec!["1".to_string()]),
+			))
+			.unwrap();
 
-        // test2 should be unaffected
-        let content2 = test2.read_config().unwrap();
-        assert!(!content2.contains("mcp1"));
-    }
+		// test2 should be unaffected
+		let content2 = test2.read_config().unwrap();
+		assert!(!content2.contains("mcp1"));
+	}
 }

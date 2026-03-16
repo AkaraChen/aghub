@@ -31,9 +31,13 @@ pub mod validator;
 // Re-export commonly used items
 pub use error::SkillError;
 pub use model::{Skill, SkillSource};
-pub use package::{pack, unpack, read_skill_md};
-pub use parser::{parse, parse_skill_dir, parse_skill_file, parse_skill_md, parse_zip};
-pub use validator::{validate, validate_skill_dir, validate_skill_file, validate_zip};
+pub use package::{pack, read_skill_md, unpack};
+pub use parser::{
+	parse, parse_skill_dir, parse_skill_file, parse_skill_md, parse_zip,
+};
+pub use validator::{
+	validate, validate_skill_dir, validate_skill_file, validate_zip,
+};
 
 // Re-export from skills-ref for convenience
-pub use skills_ref::{SkillProperties, validate as validate_skill_properties};
+pub use skills_ref::{validate as validate_skill_properties, SkillProperties};

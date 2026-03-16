@@ -1,29 +1,35 @@
 [workspace]
-members = ["crates/core", "crates/cli", "crates/skills-sh", "crates/skills-ref", "crates/skill"]
+members = [
+	"crates/core",
+	"crates/cli",
+	"crates/skills-sh",
+	"crates/skills-ref",
+	"crates/skill",
+]
 resolver = "2"
 
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-authors = ["Eric Qu <akarachen>"]
+authors = [ "Eric Qu <akarachen>" ]
 license = "MIT"
 repository = "https://github.com/akarachen/aghub"
 
 [workspace.dependencies]
 # Core dependencies
-serde = { version = "1.0", features = ["derive"] }
-serde_json = { version = "1.0", features = ["preserve_order"] }
+serde = { version = "1.0", features = [ "derive" ] }
+serde_json = { version = "1.0", features = [ "preserve_order" ] }
 thiserror = "1.0"
 dirs = "5.0"
 
 # CLI dependencies
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.5", features = [ "derive" ] }
 tabled = "0.15"
 anyhow = "1.0"
 colored = "2.1"
 
 # HTTP dependencies
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = [ "json" ] }
 url = "2.5"
 
 # Testing dependencies

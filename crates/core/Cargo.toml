@@ -17,6 +17,6 @@ skill = { path = "../skill" }
 tempfile = { workspace = true }
 
 [features]
-default = ["testing"]
-agent-validation = []
-testing = ["tempfile"]
+default = [ "testing" ]
+agent-validation = [  ]
+testing = [ "tempfile" ]

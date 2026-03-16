@@ -42,12 +42,14 @@ Run a single test: `cargo test --package aghub-core test_name -- --exact`
 ### Key Design Patterns
 
 **Adapter Pattern**: `AgentAdapter` trait in `crates/core/src/adapters/mod.rs` abstracts differences between Claude Code and OpenCode config formats. Each adapter handles:
+
 - Path resolution (global vs project-scoped configs)
 - Parsing agent-specific JSON into normalized `AgentConfig`
 - Serializing back to agent-specific format
 - Validation commands
 
 **Normalized Model**: `AgentConfig` in `models.rs` provides a unified representation with:
+
 - `Vec<Skill>`: Skills with frontmatter metadata (name, description, author, version, tools)
 - `Vec<McpServer>`: MCP servers with `McpTransport` (Command or URL variant)
 - `Vec<SubAgent>`: Sub-agent configurations
@@ -57,6 +59,7 @@ Run a single test: `cargo test --package aghub-core test_name -- --exact`
 ### Agent-Specific Behavior
 
 **Claude Code** (`adapters/claude.rs`):
+
 - Global config: `~/.claude.json` (MCP servers only)
 - Project config: `.mcp.json` in project root
 - Skills directory: `~/.claude/skills/` (loaded from SKILL.md files with YAML frontmatter)
@@ -65,6 +68,7 @@ Run a single test: `cargo test --package aghub-core test_name -- --exact`
 - URL-based MCPs not supported (silently skipped on serialize)
 
 **OpenCode** (`adapters/opencode.rs`):
+
 - Global config: `~/.config/opencode/opencode.json` (macOS/Linux)
 - Project config: `.opencode/settings.json`
 
@@ -80,9 +84,9 @@ Use `CLAUDE_SKILLS_PATH` env var to override skills directory for testing.
 
 ## Configuration Paths Reference
 
-| Agent | Global Config | Project Config | Skills Path |
-|-------|--------------|----------------|-------------|
-| Claude | `~/.claude.json` | `.mcp.json` | `~/.claude/skills/` |
-| OpenCode | `~/.config/opencode/opencode.json` | `.opencode/settings.json` | - |
+| Agent    | Global Config                      | Project Config            | Skills Path         |
+| -------- | ---------------------------------- | ------------------------- | ------------------- |
+| Claude   | `~/.claude.json`                   | `.mcp.json`               | `~/.claude/skills/` |
+| OpenCode | `~/.config/opencode/opencode.json` | `.opencode/settings.json` | -                   |
 
 Project root is detected by looking for `.claude/`, `.opencode/`, `.mcp.json`, or `.git` (as fallback).
