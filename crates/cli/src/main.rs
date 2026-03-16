@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
+use std::path::PathBuf;
 
 use aghub_core::{
     adapters::create_adapter, manager::ConfigManager, models::AgentType, paths::find_project_root,
@@ -72,6 +73,10 @@ enum Commands {
         #[arg(value_enum)]
         resource: ResourceType,
         name: String,
+
+        /// For skill: Import from file/directory/.skill package path
+        #[arg(long, value_name = "PATH")]
+        from: Option<PathBuf>,
 
         /// For MCP: command to run (e.g., "npx -y @modelcontextprotocol/server-filesystem /path")
         #[arg(short, long, group = "mcp_config")]
@@ -266,6 +271,7 @@ fn main() -> Result<()> {
         Commands::Add {
             resource,
             name,
+            from,
             command,
             url,
             transport,
@@ -281,6 +287,7 @@ fn main() -> Result<()> {
             &mut manager,
             resource,
             name,
+            from,
             command,
             url,
             transport,

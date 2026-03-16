@@ -5,12 +5,14 @@ use aghub_core::{
 };
 use anyhow::{bail, Result};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[allow(clippy::too_many_arguments)]
 pub fn execute(
     manager: &mut ConfigManager,
     resource: ResourceType,
     name: String,
+    from: Option<PathBuf>,
     command: Option<String>,
     url: Option<String>,
     transport: String,
@@ -25,18 +27,27 @@ pub fn execute(
 ) -> Result<()> {
     match resource {
         ResourceType::Skills => {
-            eprintln_verbose!("Adding skill: {}", name);
-            let skill = Skill {
-                name: name.clone(),
-                enabled: true,
-                description,
-                author,
-                version,
-                tools,
-            };
-            manager.add_skill(skill.clone())?;
-            eprintln_verbose!("Skill added successfully");
-            println!("{}", serde_json::to_string_pretty(&skill)?);
+            if let Some(from_path) = from {
+                // Import skill from path (directory, .skill file, or SKILL.md)
+                eprintln_verbose!("Importing skill from: {}", from_path.display());
+                let skill = manager.add_skill_from_path(&from_path)?;
+                eprintln_verbose!("Skill '{}' added successfully", skill.name);
+                println!("{}", serde_json::to_string_pretty(&skill)?);
+            } else {
+                // Manual skill creation
+                eprintln_verbose!("Adding skill: {}", name);
+                let skill = Skill {
+                    name: name.clone(),
+                    enabled: true,
+                    description,
+                    author,
+                    version,
+                    tools,
+                };
+                manager.add_skill(skill.clone())?;
+                eprintln_verbose!("Skill added successfully");
+                println!("{}", serde_json::to_string_pretty(&skill)?);
+            }
         }
         ResourceType::Mcps => {
             let transport = if let Some(cmd_str) = command {

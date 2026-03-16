@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 aghub-core = { path = "../core" }
+skill = { path = "../skill" }
 
 clap = { workspace = true }
 tabled = { workspace = true }

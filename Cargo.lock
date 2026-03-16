@@ -31,6 +31,7 @@ dependencies = [
  "predicates",
  "serde",
  "serde_json",
+ "skill",
  "tabled",
  "tempfile",
 ]
@@ -42,6 +43,7 @@ dependencies = [
  "dirs",
  "serde",
  "serde_json",
+ "skill",
  "tempfile",
  "thiserror 1.0.69",
 ]

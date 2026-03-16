@@ -2,6 +2,7 @@ use crate::{
     adapters::AgentAdapter,
     errors::{ConfigError, Result},
     models::{AgentConfig, McpServer, Skill, SubAgent},
+    convert_skill,
 };
 use std::path::{Path, PathBuf};
 
@@ -180,6 +181,38 @@ impl ConfigManager {
 
         skill.enabled = true;
         self.save_current()
+    }
+
+    /// Parse a skill from a path (directory, .skill file, or SKILL.md) and add it
+    pub fn add_skill_from_path(&mut self, path: &Path) -> Result<Skill> {
+        // Use skill crate to parse
+        let skill_pkg = skill::parser::parse(path)
+            .map_err(|e| ConfigError::InvalidConfig(format!("Failed to parse skill: {}", e)))?;
+
+        // Convert to core Skill
+        let skill = convert_skill(skill_pkg);
+
+        // Add to config
+        self.add_skill(skill.clone())?;
+
+        Ok(skill)
+    }
+
+    /// Validate a skill path and return any validation errors
+    pub fn validate_skill_path(&self, path: &Path) -> Vec<String> {
+        let mut errors = Vec::new();
+
+        if !path.exists() {
+            errors.push(format!("Path does not exist: {}", path.display()));
+            return errors;
+        }
+
+        match skill::parser::parse(path) {
+            Ok(_) => {}
+            Err(e) => errors.push(format!("Parse error: {}", e)),
+        }
+
+        errors
     }
 
     // ==================== MCPs CRUD ====================
