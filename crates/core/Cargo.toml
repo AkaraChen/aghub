@@ -10,11 +10,12 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 dirs = { workspace = true }
+tempfile = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
 
 [features]
-default = []
+default = ["testing"]
 agent-validation = []
-testing = []
+testing = ["tempfile"]

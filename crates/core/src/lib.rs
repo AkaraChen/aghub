@@ -51,3 +51,7 @@ pub use adapters::{create_adapter, AgentAdapter};
 pub use errors::{ConfigError, Result};
 pub use manager::ConfigManager;
 pub use models::AgentType;
+
+// Re-export testing module when feature is enabled
+#[cfg(feature = "testing")]
+pub use testing::{TestConfig, TestConfigBuilder};

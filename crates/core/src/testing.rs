@@ -192,7 +192,7 @@ mod tests {
         manager.load().unwrap();
 
         // Add MCP
-        let mcp = McpServer::new("test", McpTransport::command("echo", vec!["hello"]));
+        let mcp = McpServer::new("test", McpTransport::command("echo", vec!["hello".to_string()]));
         manager.add_mcp(mcp).unwrap();
 
         // Verify file was updated
@@ -219,7 +219,7 @@ mod tests {
         // Modify test1
         let mut manager1 = test1.create_manager();
         manager1.load().unwrap();
-        manager1.add_mcp(McpServer::new("mcp1", McpTransport::command("echo", vec!["1"]))).unwrap();
+        manager1.add_mcp(McpServer::new("mcp1", McpTransport::command("echo", vec!["1".to_string()]))).unwrap();
 
         // test2 should be unaffected
         let content2 = test2.read_config().unwrap();
