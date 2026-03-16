@@ -240,6 +240,7 @@ fn main() -> Result<()> {
         ConfigManager::new(adapter, global, None)
     };
     eprintln_verbose!("Config manager created");
+    eprintln_verbose!("Config file: {}", manager.config_path().display());
 
     // Load existing config (or fail if not found)
     eprintln_verbose!("Loading configuration...");
