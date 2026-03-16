@@ -18,6 +18,9 @@ struct OpenCodeConfig {
     skills: Vec<OpenCodeSkill>,
     #[serde(rename = "sub_agents", default)]
     sub_agents: Vec<OpenCodeSubAgent>,
+    /// Preserve any other fields in the config file
+    #[serde(flatten)]
+    extra: serde_json::Map<String, serde_json::Value>,
 }
 
 /// OpenCode MCP server configuration
@@ -193,8 +196,23 @@ impl AgentAdapter for OpenCodeAdapter {
         Ok(config)
     }
 
-    fn serialize_config(&self, config: &AgentConfig) -> Result<String> {
-        let mut opencode_config = OpenCodeConfig::default();
+    fn serialize_config(&self, config: &AgentConfig, original_content: Option<&str>) -> Result<String> {
+        let mut opencode_config = if let Some(content) = original_content {
+            if content.trim().is_empty() {
+                OpenCodeConfig::default()
+            } else {
+                serde_json::from_str::<OpenCodeConfig>(content).map_err(|e| {
+                    ConfigError::InvalidConfig(format!("Failed to parse existing OpenCode config: {}", e))
+                })?
+            }
+        } else {
+            OpenCodeConfig::default()
+        };
+
+        // Clear existing resources to prevent duplication and respect deletions
+        opencode_config.mcp_servers.clear();
+        opencode_config.skills.clear();
+        opencode_config.sub_agents.clear();
 
         // Serialize MCP servers
         for mcp in &config.mcps {
@@ -361,7 +379,7 @@ mod tests {
         };
 
         let adapter = OpenCodeAdapter::new();
-        let json = adapter.serialize_config(&config).unwrap();
+        let json = adapter.serialize_config(&config, None).unwrap();
 
         assert!(json.contains("mcp_servers"));
         assert!(json.contains("stdio"));
@@ -397,7 +415,7 @@ mod tests {
         };
 
         let adapter = OpenCodeAdapter::new();
-        let json = adapter.serialize_config(&config).unwrap();
+        let json = adapter.serialize_config(&config, None).unwrap();
 
         // Parse back and verify enabled state
         let reparsed = adapter.parse_config(&json).unwrap();
@@ -437,7 +455,7 @@ mod tests {
         };
 
         let adapter = OpenCodeAdapter::new();
-        let json = adapter.serialize_config(&config).unwrap();
+        let json = adapter.serialize_config(&config, None).unwrap();
 
         // Parse back and verify timeout is preserved
         let reparsed = adapter.parse_config(&json).unwrap();
@@ -473,7 +491,7 @@ mod tests {
         };
 
         let adapter = OpenCodeAdapter::new();
-        let json = adapter.serialize_config(&config).unwrap();
+        let json = adapter.serialize_config(&config, None).unwrap();
 
         // Verify serialized JSON contains streamable_http type
         assert!(json.contains("\"type\": \"streamable_http\""));

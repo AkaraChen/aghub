@@ -71,7 +71,10 @@ impl ConfigManager {
             std::fs::create_dir_all(parent)?;
         }
 
-        let content = self.adapter.serialize_config(config)?;
+        // Try to read existing content to preserve unknown fields
+        let original_content = std::fs::read_to_string(&self.config_path).ok();
+        
+        let content = self.adapter.serialize_config(config, original_content.as_deref())?;
         std::fs::write(&self.config_path, content)?;
         Ok(())
     }

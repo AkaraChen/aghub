@@ -23,7 +23,8 @@ pub trait AgentAdapter: Send + Sync {
     fn parse_config(&self, content: &str) -> Result<AgentConfig>;
 
     /// Serialize normalized AgentConfig into agent-specific format
-    fn serialize_config(&self, config: &AgentConfig) -> Result<String>;
+    /// The original_content is provided to allow safe merging that preserves unknown fields
+    fn serialize_config(&self, config: &AgentConfig, original_content: Option<&str>) -> Result<String>;
 
     /// Get the CLI command to validate config (e.g., "claude --settings <path> --version")
     fn validate_command(&self, config_path: &Path) -> Command;

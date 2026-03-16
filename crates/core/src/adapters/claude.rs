@@ -19,6 +19,9 @@ struct ClaudeConfig {
     /// This field is kept for backward compatibility but not used
     #[serde(default)]
     skills: HashMap<String, serde_json::Value>,
+    /// Preserve any other fields in the config file
+    #[serde(flatten)]
+    extra: serde_json::Map<String, serde_json::Value>,
 }
 
 /// Claude MCP server configuration
@@ -306,8 +309,21 @@ impl AgentAdapter for ClaudeAdapter {
         Ok(config)
     }
 
-    fn serialize_config(&self, config: &AgentConfig) -> Result<String> {
-        let mut claude_config = ClaudeConfig::default();
+    fn serialize_config(&self, config: &AgentConfig, original_content: Option<&str>) -> Result<String> {
+        let mut claude_config = if let Some(content) = original_content {
+            if content.trim().is_empty() {
+                ClaudeConfig::default()
+            } else {
+                serde_json::from_str::<ClaudeConfig>(content).map_err(|e| {
+                    ConfigError::InvalidConfig(format!("Failed to parse existing Claude config: {}", e))
+                })?
+            }
+        } else {
+            ClaudeConfig::default()
+        };
+
+        // Clear existing MCP servers so deleted ones are removed during merge
+        claude_config.mcp_servers.clear();
 
         // Serialize MCP servers
         for mcp in &config.mcps {
@@ -527,7 +543,7 @@ mod tests {
         };
 
         let adapter = ClaudeAdapter::new();
-        let json = adapter.serialize_config(&config).unwrap();
+        let json = adapter.serialize_config(&config, None).unwrap();
 
         assert!(json.contains("mcpServers"));
         assert!(json.contains("test"));
@@ -549,7 +565,7 @@ mod tests {
         };
 
         let adapter = ClaudeAdapter::new();
-        let json = adapter.serialize_config(&config).unwrap();
+        let json = adapter.serialize_config(&config, None).unwrap();
 
         assert!(json.contains("mcpServers"));
         assert!(json.contains("remote-server"));
@@ -570,7 +586,7 @@ mod tests {
         };
 
         let adapter = ClaudeAdapter::new();
-        let json = adapter.serialize_config(&config).unwrap();
+        let json = adapter.serialize_config(&config, None).unwrap();
 
         assert!(json.contains("\"type\": \"http\""));
         assert!(json.contains("\"url\": \"http://localhost:3000/mcp\""));
@@ -589,7 +605,7 @@ mod tests {
         };
 
         let adapter = ClaudeAdapter::new();
-        let json = adapter.serialize_config(&config).unwrap();
+        let json = adapter.serialize_config(&config, None).unwrap();
 
         assert!(json.contains("\"type\": \"sse\""));
         assert!(json.contains("\"url\": \"http://localhost:3000/sse\""));
@@ -617,7 +633,7 @@ mod tests {
         };
 
         let adapter = ClaudeAdapter::new();
-        let json = adapter.serialize_config(&config).unwrap();
+        let json = adapter.serialize_config(&config, None).unwrap();
 
         assert!(json.contains("enabled"));
         assert!(!json.contains("disabled"));
