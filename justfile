@@ -26,7 +26,7 @@ test-with-validation:
 
 # Format code
 fmt:
-    cargo fmt
+    fama
 
 # Run clippy linter
 lint:
