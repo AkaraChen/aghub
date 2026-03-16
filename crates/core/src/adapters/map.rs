@@ -10,13 +10,13 @@ use std::process::Command;
 
 use super::AgentAdapter;
 
-/// Claude Code specific configuration structure
+/// Map-based JSON configuration structure
 #[derive(Debug, Default, Serialize, Deserialize)]
-struct ClaudeConfig {
+struct MapConfig {
 	#[serde(rename = "mcpServers", default)]
-	mcp_servers: HashMap<String, ClaudeMcpServer>,
-	/// Note: Skills are now loaded from ~/.claude/skills/ directory
-	/// This field is kept for backward compatibility but not used
+	mcp_servers: HashMap<String, MapMcpServer>,
+	// Skills are loaded from the skills directory, not from settings.json
+	// This field is kept for backward compatibility but not used
 	#[serde(default)]
 	skills: HashMap<String, serde_json::Value>,
 	/// Preserve any other fields in the config file
@@ -24,9 +24,9 @@ struct ClaudeConfig {
 	extra: serde_json::Map<String, serde_json::Value>,
 }
 
-/// Claude MCP server configuration
+/// Map-based MCP server configuration
 #[derive(Debug, Serialize, Deserialize)]
-struct ClaudeMcpServer {
+struct MapMcpServer {
 	#[serde(rename = "type", default)]
 	server_type: Option<String>, // "stdio", "sse", or "http"
 	// For stdio type:
@@ -215,40 +215,60 @@ fn get_skills_path() -> PathBuf {
 		.unwrap_or_else(|_| crate::paths::claude_global_skills_path())
 }
 
-pub struct ClaudeAdapter;
+pub struct MapAdapter {
+	name: &'static str,
+	global_path_fn: fn() -> PathBuf,
+	project_path_fn: fn(&Path) -> PathBuf,
+}
 
-impl ClaudeAdapter {
+impl MapAdapter {
 	pub fn new() -> Self {
-		Self
+		Self {
+			name: "claude",
+			global_path_fn: crate::paths::claude_global_path,
+			project_path_fn: crate::paths::claude_project_path,
+		}
+	}
+
+	pub fn with_paths(
+		name: &'static str,
+		global_path_fn: fn() -> PathBuf,
+		project_path_fn: fn(&Path) -> PathBuf,
+	) -> Self {
+		Self {
+			name,
+			global_path_fn,
+			project_path_fn,
+		}
 	}
 }
 
-impl Default for ClaudeAdapter {
+impl Default for MapAdapter {
 	fn default() -> Self {
 		Self::new()
 	}
 }
 
-impl AgentAdapter for ClaudeAdapter {
+impl AgentAdapter for MapAdapter {
 	fn name(&self) -> &'static str {
-		"claude"
+		self.name
 	}
 
 	fn global_config_path(&self) -> PathBuf {
-		crate::paths::claude_global_path()
+		(self.global_path_fn)()
 	}
 
 	fn project_config_path(&self, project_root: &Path) -> PathBuf {
-		crate::paths::claude_project_path(project_root)
+		(self.project_path_fn)(project_root)
 	}
 
 	fn parse_config(&self, content: &str) -> Result<AgentConfig> {
-		let claude_config: ClaudeConfig = serde_json::from_str(content)?;
+		let map_config: MapConfig = serde_json::from_str(content)?;
 
 		let mut config = AgentConfig::new();
 
 		// Parse MCP servers from settings.json
-		for (name, mcp) in claude_config.mcp_servers {
+		for (name, mcp) in map_config.mcp_servers {
 			let transport = match mcp.server_type.as_deref() {
 				Some("stdio") => McpTransport::Stdio {
 					command: mcp.command.unwrap_or_default(),
@@ -298,7 +318,7 @@ impl AgentAdapter for ClaudeAdapter {
 			};
 			config.mcps.push(McpServer {
 				name,
-				enabled: true, // Claude doesn't have explicit enabled field
+				enabled: true, // Map format doesn't have explicit enabled field
 				transport,
 				timeout: None,
 			});
@@ -310,8 +330,7 @@ impl AgentAdapter for ClaudeAdapter {
 		let skills_dir = get_skills_path();
 		config.skills = load_skills_from_dir(&skills_dir);
 
-		// Note: Claude Code doesn't have sub-agents in the same way
-		// This feature is silently disabled for Claude
+		// Sub-agents are not supported by map-based adapters
 
 		Ok(config)
 	}
@@ -321,11 +340,11 @@ impl AgentAdapter for ClaudeAdapter {
 		config: &AgentConfig,
 		original_content: Option<&str>,
 	) -> Result<String> {
-		let mut claude_config = if let Some(content) = original_content {
+		let mut map_config = if let Some(content) = original_content {
 			if content.trim().is_empty() {
-				ClaudeConfig::default()
+				MapConfig::default()
 			} else {
-				serde_json::from_str::<ClaudeConfig>(content).map_err(|e| {
+				serde_json::from_str::<MapConfig>(content).map_err(|e| {
 					ConfigError::InvalidConfig(format!(
 						"Failed to parse existing Claude config: {}",
 						e
@@ -333,11 +352,11 @@ impl AgentAdapter for ClaudeAdapter {
 				})?
 			}
 		} else {
-			ClaudeConfig::default()
+			MapConfig::default()
 		};
 
 		// Clear existing MCP servers so deleted ones are removed during merge
-		claude_config.mcp_servers.clear();
+		map_config.mcp_servers.clear();
 
 		// Serialize MCP servers
 		for mcp in &config.mcps {
@@ -346,10 +365,10 @@ impl AgentAdapter for ClaudeAdapter {
 				continue;
 			}
 
-			let claude_mcp = match &mcp.transport {
+			let map_mcp = match &mcp.transport {
 				McpTransport::Stdio {
 					command, args, env, ..
-				} => Some(ClaudeMcpServer {
+				} => Some(MapMcpServer {
 					server_type: Some("stdio".to_string()),
 					command: Some(command.clone()),
 					args: args.clone(),
@@ -357,18 +376,16 @@ impl AgentAdapter for ClaudeAdapter {
 					url: None,
 					headers: None,
 				}),
-				McpTransport::Sse { url, headers, .. } => {
-					Some(ClaudeMcpServer {
-						server_type: Some("sse".to_string()),
-						command: None,
-						args: vec![],
-						env: None,
-						url: Some(url.clone()),
-						headers: headers.clone(),
-					})
-				}
+				McpTransport::Sse { url, headers, .. } => Some(MapMcpServer {
+					server_type: Some("sse".to_string()),
+					command: None,
+					args: vec![],
+					env: None,
+					url: Some(url.clone()),
+					headers: headers.clone(),
+				}),
 				McpTransport::StreamableHttp { url, headers, .. } => {
-					Some(ClaudeMcpServer {
+					Some(MapMcpServer {
 						server_type: Some("http".to_string()),
 						command: None,
 						args: vec![],
@@ -379,32 +396,28 @@ impl AgentAdapter for ClaudeAdapter {
 				}
 			};
 
-			if let Some(mcp_server) = claude_mcp {
-				claude_config
-					.mcp_servers
-					.insert(mcp.name.clone(), mcp_server);
+			if let Some(mcp_server) = map_mcp {
+				map_config.mcp_servers.insert(mcp.name.clone(), mcp_server);
 			}
 		}
 
-		// Note: Skills are NOT serialized to settings.json
-		// They are managed in the ~/.claude/skills/ directory
-		// We keep the skills field empty in the JSON output
+		// Skills are NOT serialized to settings.json
+		// They are managed in the skills directory
 
-		// Note: Sub-agents are not serialized for Claude Code
-		// This feature is silently disabled
+		// Sub-agents are not serialized for map-based adapters
 
-		serde_json::to_string_pretty(&claude_config).map_err(ConfigError::Json)
+		serde_json::to_string_pretty(&map_config).map_err(ConfigError::Json)
 	}
 
 	fn validate_command(&self, config_path: &Path) -> Command {
-		let mut cmd = Command::new("claude");
+		let mut cmd = Command::new(self.name);
 		cmd.arg("--settings").arg(config_path);
 		cmd.arg("--version");
 		cmd
 	}
 
 	fn supports_mcp_enable_disable(&self) -> bool {
-		// Claude doesn't preserve MCP enabled state in config
+		// Map format doesn't preserve MCP enabled state in config
 		// Disabled MCPs are simply removed from the config
 		false
 	}
@@ -416,7 +429,7 @@ mod tests {
 	use crate::models::SubAgent;
 
 	#[test]
-	fn test_parse_claude_config_stdio() {
+	fn test_parse_map_config_stdio() {
 		let json = r#"{
             "mcpServers": {
                 "filesystem": {
@@ -435,7 +448,7 @@ mod tests {
             }
         }"#;
 
-		let adapter = ClaudeAdapter::new();
+		let adapter = MapAdapter::new();
 		let config = adapter.parse_config(json).unwrap();
 
 		assert_eq!(config.mcps.len(), 2);
@@ -451,7 +464,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_parse_claude_config_sse() {
+	fn test_parse_map_config_sse() {
 		let json = r#"{
             "mcpServers": {
                 "remote-server": {
@@ -464,7 +477,7 @@ mod tests {
             }
         }"#;
 
-		let adapter = ClaudeAdapter::new();
+		let adapter = MapAdapter::new();
 		let config = adapter.parse_config(json).unwrap();
 
 		assert_eq!(config.mcps.len(), 1);
@@ -474,7 +487,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_parse_claude_config_streamable_http() {
+	fn test_parse_map_config_streamable_http() {
 		let json = r#"{
             "mcpServers": {
                 "http-server": {
@@ -487,7 +500,7 @@ mod tests {
             }
         }"#;
 
-		let adapter = ClaudeAdapter::new();
+		let adapter = MapAdapter::new();
 		let config = adapter.parse_config(json).unwrap();
 
 		assert_eq!(config.mcps.len(), 1);
@@ -497,7 +510,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_parse_claude_config_infers_transport_from_url() {
+	fn test_parse_map_config_infers_transport_from_url() {
 		// Test that URLs without "/sse" or "stream" are inferred as StreamableHttp
 		let json = r#"{
             "mcpServers": {
@@ -513,7 +526,7 @@ mod tests {
             }
         }"#;
 
-		let adapter = ClaudeAdapter::new();
+		let adapter = MapAdapter::new();
 		let config = adapter.parse_config(json).unwrap();
 
 		assert_eq!(config.mcps.len(), 3);
@@ -544,7 +557,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_parse_claude_config_backward_compatible() {
+	fn test_parse_map_config_backward_compatible() {
 		// Test parsing old format without type field (backward compatibility)
 		let json = r#"{
             "mcpServers": {
@@ -555,7 +568,7 @@ mod tests {
             }
         }"#;
 
-		let adapter = ClaudeAdapter::new();
+		let adapter = MapAdapter::new();
 		let config = adapter.parse_config(json).unwrap();
 
 		assert_eq!(config.mcps.len(), 1);
@@ -566,7 +579,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_serialize_claude_config_stdio() {
+	fn test_serialize_map_config_stdio() {
 		let config = AgentConfig {
 			mcps: vec![McpServer::new(
 				"test",
@@ -583,7 +596,7 @@ mod tests {
 			sub_agents: vec![SubAgent::new("agent1")], // Should be ignored
 		};
 
-		let adapter = ClaudeAdapter::new();
+		let adapter = MapAdapter::new();
 		let json = adapter.serialize_config(&config, None).unwrap();
 
 		assert!(json.contains("mcpServers"));
@@ -591,11 +604,11 @@ mod tests {
 		assert!(json.contains("\"type\": \"stdio\""));
 		// Skills should NOT be in the serialized output (they're in directory)
 		assert!(!json.contains("my-skill"));
-		assert!(!json.contains("sub_agents")); // Claude doesn't support this
+		assert!(!json.contains("sub_agents")); // Map format doesn't support this
 	}
 
 	#[test]
-	fn test_serialize_claude_config_sse() {
+	fn test_serialize_map_config_sse() {
 		let config = AgentConfig {
 			mcps: vec![McpServer::new(
 				"remote-server",
@@ -605,7 +618,7 @@ mod tests {
 			sub_agents: vec![],
 		};
 
-		let adapter = ClaudeAdapter::new();
+		let adapter = MapAdapter::new();
 		let json = adapter.serialize_config(&config, None).unwrap();
 
 		assert!(json.contains("mcpServers"));
@@ -615,7 +628,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_serialize_claude_config_streamable_http() {
+	fn test_serialize_map_config_streamable_http() {
 		// Test that StreamableHttp serializes to type "http"
 		let config = AgentConfig {
 			mcps: vec![McpServer::new(
@@ -626,7 +639,7 @@ mod tests {
 			sub_agents: vec![],
 		};
 
-		let adapter = ClaudeAdapter::new();
+		let adapter = MapAdapter::new();
 		let json = adapter.serialize_config(&config, None).unwrap();
 
 		assert!(json.contains("\"type\": \"http\""));
@@ -634,7 +647,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_serialize_claude_config_sse_legacy() {
+	fn test_serialize_map_config_sse_legacy() {
 		// Test that legacy Sse still serializes to type "sse"
 		let config = AgentConfig {
 			mcps: vec![McpServer::new(
@@ -645,7 +658,7 @@ mod tests {
 			sub_agents: vec![],
 		};
 
-		let adapter = ClaudeAdapter::new();
+		let adapter = MapAdapter::new();
 		let json = adapter.serialize_config(&config, None).unwrap();
 
 		assert!(json.contains("\"type\": \"sse\""));
@@ -679,7 +692,7 @@ mod tests {
 			sub_agents: vec![],
 		};
 
-		let adapter = ClaudeAdapter::new();
+		let adapter = MapAdapter::new();
 		let json = adapter.serialize_config(&config, None).unwrap();
 
 		assert!(json.contains("enabled"));

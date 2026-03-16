@@ -45,13 +45,99 @@ pub fn opencode_project_path(project_root: &Path) -> PathBuf {
 	project_root.join(".opencode/settings.json")
 }
 
+// ==== External Agent Paths (Matching Ruler defaults) ==== //
+
+pub fn cursor_global_path() -> PathBuf {
+	dirs::home_dir().unwrap().join(".cursor/mcp.json")
+}
+pub fn cursor_project_path(root: &Path) -> PathBuf {
+	root.join(".cursor/mcp.json")
+}
+
+pub fn codex_global_path() -> PathBuf {
+	dirs::home_dir().unwrap().join(".codex/config.toml")
+}
+pub fn codex_project_path(root: &Path) -> PathBuf {
+	root.join(".codex/config.toml")
+}
+
+pub fn antigravity_global_path() -> PathBuf {
+	dirs::home_dir().unwrap().join(".agent/mcp.json")
+}
+pub fn antigravity_project_path(root: &Path) -> PathBuf {
+	root.join(".agent/mcp.json")
+}
+
+pub fn openclaw_global_path() -> PathBuf {
+	dirs::home_dir().unwrap().join(".openclaw/openclaw.json")
+}
+pub fn openclaw_project_path(root: &Path) -> PathBuf {
+	root.join(".openclaw/openclaw.json")
+}
+
+pub fn windsurf_global_path() -> PathBuf {
+	dirs::home_dir()
+		.unwrap()
+		.join(".codeium/windsurf/mcp_config.json")
+}
+pub fn windsurf_project_path(root: &Path) -> PathBuf {
+	root.join(".windsurf/mcp_config.json")
+}
+
+pub fn roocode_global_path() -> PathBuf {
+	dirs::home_dir().unwrap().join(".roo/mcp.json")
+}
+pub fn roocode_project_path(root: &Path) -> PathBuf {
+	root.join(".roo/mcp.json")
+}
+
+pub fn copilot_global_path() -> PathBuf {
+	dirs::home_dir().unwrap().join(".vscode/mcp.json")
+}
+pub fn copilot_project_path(root: &Path) -> PathBuf {
+	root.join(".vscode/mcp.json")
+}
+
+pub fn aider_global_path() -> PathBuf {
+	dirs::home_dir().unwrap().join(".mcp.json")
+}
+pub fn aider_project_path(root: &Path) -> PathBuf {
+	root.join(".mcp.json")
+}
+
+pub fn cline_global_path() -> PathBuf {
+	dirs::home_dir()
+		.unwrap()
+		.join(".cline/data/settings/cline_mcp_settings.json")
+}
+pub fn cline_project_path(root: &Path) -> PathBuf {
+	root.join(".cline/mcp.json")
+}
+
+pub fn gemini_global_path() -> PathBuf {
+	dirs::home_dir().unwrap().join(".gemini/settings.json")
+}
+pub fn gemini_project_path(root: &Path) -> PathBuf {
+	root.join(".gemini/settings.json")
+}
+
 /// Check if a project config exists for the given agent
 pub fn project_config_exists(
 	agent_type: super::AgentType,
 	project_root: &Path,
 ) -> bool {
 	let path = match agent_type {
+		super::AgentType::Cursor => cursor_project_path(project_root),
+		super::AgentType::Windsurf => windsurf_project_path(project_root),
+		super::AgentType::Copilot => copilot_project_path(project_root),
 		super::AgentType::Claude => claude_project_path(project_root),
+		super::AgentType::RooCode => roocode_project_path(project_root),
+		super::AgentType::Cline => cline_project_path(project_root),
+		super::AgentType::Aider => aider_project_path(project_root),
+		super::AgentType::Gemini => gemini_project_path(project_root),
+		super::AgentType::Codex => codex_project_path(project_root),
+		super::AgentType::Antigravity => antigravity_project_path(project_root),
+		super::AgentType::Openclaw => openclaw_project_path(project_root),
 		super::AgentType::OpenCode => opencode_project_path(project_root),
 	};
 	path.exists()
@@ -62,23 +148,31 @@ pub fn find_project_root(start_dir: &Path) -> Option<PathBuf> {
 	let mut current = Some(start_dir);
 
 	while let Some(dir) = current {
-		// Check for either .claude, .opencode dirs, or .mcp.json file
+		// Check for specific agent configuration directories or files
 		if dir.join(".claude").is_dir()
 			|| dir.join(".opencode").is_dir()
+			|| dir.join(".cursor").is_dir()
+			|| dir.join(".windsurf").is_dir()
+			|| dir.join(".roo").is_dir()
+			|| dir.join(".vscode").is_dir()
+			|| dir.join(".agent").is_dir()
+			|| dir.join(".gemini").is_dir()
+			|| dir.join(".codex").is_dir()
 			|| dir.join(".mcp.json").is_file()
 		{
 			return Some(dir.to_path_buf());
 		}
 
 		// Also check for .git as a fallback
-		if dir.join(".git").is_dir() {
-			// Check if there's a .claude, .opencode, or .mcp.json in this git root
-			if dir.join(".claude").is_dir()
+		if dir.join(".git").is_dir()
+			&& (dir.join(".claude").is_dir()
 				|| dir.join(".opencode").is_dir()
-				|| dir.join(".mcp.json").is_file()
-			{
-				return Some(dir.to_path_buf());
-			}
+				|| dir.join(".cursor").is_dir()
+				|| dir.join(".windsurf").is_dir()
+				|| dir.join(".roo").is_dir()
+				|| dir.join(".mcp.json").is_file())
+		{
+			return Some(dir.to_path_buf());
 		}
 
 		current = dir.parent();
@@ -153,5 +247,50 @@ mod tests {
 			super::super::AgentType::Claude,
 			temp_dir.path()
 		));
+	}
+	#[test]
+	fn test_external_agent_paths_are_correct() {
+		let dir = Path::new("/test_project");
+
+		assert_eq!(
+			cursor_project_path(dir).to_str().unwrap(),
+			"/test_project/.cursor/mcp.json"
+		);
+		assert_eq!(
+			windsurf_project_path(dir).to_str().unwrap(),
+			"/test_project/.windsurf/mcp_config.json"
+		);
+		assert_eq!(
+			copilot_project_path(dir).to_str().unwrap(),
+			"/test_project/.vscode/mcp.json"
+		);
+		assert_eq!(
+			roocode_project_path(dir).to_str().unwrap(),
+			"/test_project/.roo/mcp.json"
+		);
+		assert_eq!(
+			aider_project_path(dir).to_str().unwrap(),
+			"/test_project/.mcp.json"
+		);
+		assert_eq!(
+			gemini_project_path(dir).to_str().unwrap(),
+			"/test_project/.gemini/settings.json"
+		);
+		assert_eq!(
+			codex_project_path(dir).to_str().unwrap(),
+			"/test_project/.codex/config.toml"
+		);
+		assert_eq!(
+			antigravity_project_path(dir).to_str().unwrap(),
+			"/test_project/.agent/mcp.json"
+		);
+		assert_eq!(
+			openclaw_project_path(dir).to_str().unwrap(),
+			"/test_project/.openclaw/openclaw.json"
+		);
+		assert_eq!(
+			cline_project_path(dir).to_str().unwrap(),
+			"/test_project/.cline/mcp.json"
+		);
 	}
 }

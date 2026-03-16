@@ -416,7 +416,7 @@ impl ConfigManager {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::adapters::{ClaudeAdapter, OpenCodeAdapter};
+	use crate::adapters::{ListAdapter, MapAdapter};
 	use crate::models::McpTransport;
 	use std::io::Write;
 	use tempfile::NamedTempFile;
@@ -426,7 +426,7 @@ mod tests {
 		writeln!(temp_file, "{{\"mcpServers\": {{}}, \"skills\": {{}}}}")
 			.unwrap();
 
-		let adapter = Box::new(ClaudeAdapter::new());
+		let adapter = Box::new(MapAdapter::new());
 		let manager =
 			ConfigManager::with_path(adapter, temp_file.path().to_path_buf());
 		(manager, temp_file)
@@ -440,7 +440,7 @@ mod tests {
 		)
 		.unwrap();
 
-		let adapter = Box::new(OpenCodeAdapter::new());
+		let adapter = Box::new(ListAdapter::new());
 		let manager =
 			ConfigManager::with_path(adapter, temp_file.path().to_path_buf());
 		(manager, temp_file)

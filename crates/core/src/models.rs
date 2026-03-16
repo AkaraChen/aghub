@@ -208,16 +208,56 @@ fn default_true() -> bool {
 /// Agent types supported by the system
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentType {
+	Cursor,
+	Windsurf,
+	Copilot,
 	Claude,
+	RooCode,
+	Cline,
+	Aider,
+	Gemini,
+	Codex,
+	Antigravity,
+	Openclaw,
 	OpenCode,
 }
 
 impl AgentType {
+	pub const ALL: &[AgentType] = &[
+		AgentType::Cursor,
+		AgentType::Windsurf,
+		AgentType::Copilot,
+		AgentType::Claude,
+		AgentType::RooCode,
+		AgentType::Cline,
+		AgentType::Aider,
+		AgentType::Gemini,
+		AgentType::Codex,
+		AgentType::Antigravity,
+		AgentType::Openclaw,
+		AgentType::OpenCode,
+	];
+
 	pub fn as_str(&self) -> &'static str {
 		match self {
+			AgentType::Cursor => "cursor",
+			AgentType::Windsurf => "windsurf",
+			AgentType::Copilot => "copilot",
 			AgentType::Claude => "claude",
+			AgentType::RooCode => "roocode",
+			AgentType::Cline => "cline",
+			AgentType::Aider => "aider",
+			AgentType::Gemini => "gemini",
+			AgentType::Codex => "codex",
+			AgentType::Antigravity => "antigravity",
+			AgentType::Openclaw => "openclaw",
 			AgentType::OpenCode => "opencode",
 		}
+	}
+
+	pub fn next(&self) -> AgentType {
+		let idx = Self::ALL.iter().position(|a| a == self).unwrap_or(0);
+		Self::ALL[(idx + 1) % Self::ALL.len()]
 	}
 }
 
@@ -226,7 +266,17 @@ impl std::str::FromStr for AgentType {
 
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		match s.to_lowercase().as_str() {
+			"cursor" => Ok(AgentType::Cursor),
+			"windsurf" => Ok(AgentType::Windsurf),
+			"copilot" => Ok(AgentType::Copilot),
 			"claude" => Ok(AgentType::Claude),
+			"roocode" | "roo" => Ok(AgentType::RooCode),
+			"cline" => Ok(AgentType::Cline),
+			"aider" => Ok(AgentType::Aider),
+			"gemini" => Ok(AgentType::Gemini),
+			"codex" => Ok(AgentType::Codex),
+			"antigravity" => Ok(AgentType::Antigravity),
+			"openclaw" => Ok(AgentType::Openclaw),
 			"opencode" => Ok(AgentType::OpenCode),
 			_ => Err(format!("Unknown agent type: {}", s)),
 		}

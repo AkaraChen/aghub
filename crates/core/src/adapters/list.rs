@@ -9,34 +9,34 @@ use std::process::Command;
 
 use super::AgentAdapter;
 
-/// OpenCode specific configuration structure
+/// List-based JSON configuration structure
 #[derive(Debug, Default, Serialize, Deserialize)]
-struct OpenCodeConfig {
+struct ListConfig {
 	#[serde(rename = "mcp_servers", default)]
-	mcp_servers: Vec<OpenCodeMcpServer>,
+	mcp_servers: Vec<ListMcpServer>,
 	#[serde(default)]
-	skills: Vec<OpenCodeSkill>,
+	skills: Vec<ListSkill>,
 	#[serde(rename = "sub_agents", default)]
-	sub_agents: Vec<OpenCodeSubAgent>,
+	sub_agents: Vec<ListSubAgent>,
 	/// Preserve any other fields in the config file
 	#[serde(flatten)]
 	extra: serde_json::Map<String, serde_json::Value>,
 }
 
-/// OpenCode MCP server configuration
+/// List-based MCP server configuration
 #[derive(Debug, Serialize, Deserialize)]
-struct OpenCodeMcpServer {
+struct ListMcpServer {
 	name: String,
 	#[serde(flatten)]
-	transport: OpenCodeMcpTransport,
+	transport: ListMcpTransport,
 	#[serde(default)]
 	enabled: bool,
 }
 
-/// OpenCode MCP transport (supports stdio, SSE, and Streamable HTTP)
+/// List-based MCP transport (supports stdio, SSE, and Streamable HTTP)
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-enum OpenCodeMcpTransport {
+enum ListMcpTransport {
 	Stdio {
 		command: String,
 		#[serde(default)]
@@ -64,9 +64,9 @@ enum OpenCodeMcpTransport {
 	},
 }
 
-/// OpenCode skill configuration
+/// List-based skill configuration
 #[derive(Debug, Serialize, Deserialize)]
-struct OpenCodeSkill {
+struct ListSkill {
 	name: String,
 	#[serde(default)]
 	enabled: bool,
@@ -77,9 +77,9 @@ struct OpenCodeSkill {
 	tools: Vec<String>,
 }
 
-/// OpenCode sub-agent configuration
+/// List-based sub-agent configuration
 #[derive(Debug, Serialize, Deserialize)]
-struct OpenCodeSubAgent {
+struct ListSubAgent {
 	name: String,
 	#[serde(default)]
 	enabled: bool,
@@ -88,42 +88,62 @@ struct OpenCodeSubAgent {
 	instructions: Option<String>,
 }
 
-pub struct OpenCodeAdapter;
+pub struct ListAdapter {
+	name: &'static str,
+	global_path_fn: fn() -> PathBuf,
+	project_path_fn: fn(&Path) -> PathBuf,
+}
 
-impl OpenCodeAdapter {
+impl ListAdapter {
 	pub fn new() -> Self {
-		Self
+		Self {
+			name: "opencode",
+			global_path_fn: crate::paths::opencode_global_path,
+			project_path_fn: crate::paths::opencode_project_path,
+		}
+	}
+
+	pub fn with_paths(
+		name: &'static str,
+		global_path_fn: fn() -> PathBuf,
+		project_path_fn: fn(&Path) -> PathBuf,
+	) -> Self {
+		Self {
+			name,
+			global_path_fn,
+			project_path_fn,
+		}
 	}
 }
 
-impl Default for OpenCodeAdapter {
+impl Default for ListAdapter {
 	fn default() -> Self {
 		Self::new()
 	}
 }
 
-impl AgentAdapter for OpenCodeAdapter {
+impl AgentAdapter for ListAdapter {
 	fn name(&self) -> &'static str {
-		"opencode"
+		self.name
 	}
 
 	fn global_config_path(&self) -> PathBuf {
-		crate::paths::opencode_global_path()
+		(self.global_path_fn)()
 	}
 
 	fn project_config_path(&self, project_root: &Path) -> PathBuf {
-		crate::paths::opencode_project_path(project_root)
+		(self.project_path_fn)(project_root)
 	}
 
 	fn parse_config(&self, content: &str) -> Result<AgentConfig> {
-		let opencode_config: OpenCodeConfig = serde_json::from_str(content)?;
+		let list_config: ListConfig = serde_json::from_str(content)?;
 
 		let mut config = AgentConfig::new();
 
 		// Parse MCP servers
-		for mcp in opencode_config.mcp_servers {
+		for mcp in list_config.mcp_servers {
 			let (transport, timeout) = match mcp.transport {
-				OpenCodeMcpTransport::Stdio {
+				ListMcpTransport::Stdio {
 					command,
 					args,
 					env,
@@ -137,7 +157,7 @@ impl AgentAdapter for OpenCodeAdapter {
 					},
 					timeout,
 				),
-				OpenCodeMcpTransport::Sse {
+				ListMcpTransport::Sse {
 					url,
 					headers,
 					timeout,
@@ -149,7 +169,7 @@ impl AgentAdapter for OpenCodeAdapter {
 					},
 					timeout,
 				),
-				OpenCodeMcpTransport::StreamableHttp {
+				ListMcpTransport::StreamableHttp {
 					url,
 					headers,
 					timeout,
@@ -171,7 +191,7 @@ impl AgentAdapter for OpenCodeAdapter {
 		}
 
 		// Parse skills
-		for skill in opencode_config.skills {
+		for skill in list_config.skills {
 			config.skills.push(Skill {
 				name: skill.name,
 				enabled: skill.enabled,
@@ -183,7 +203,7 @@ impl AgentAdapter for OpenCodeAdapter {
 		}
 
 		// Parse sub-agents
-		for agent in opencode_config.sub_agents {
+		for agent in list_config.sub_agents {
 			config.sub_agents.push(SubAgent {
 				name: agent.name,
 				enabled: agent.enabled,
@@ -201,27 +221,25 @@ impl AgentAdapter for OpenCodeAdapter {
 		config: &AgentConfig,
 		original_content: Option<&str>,
 	) -> Result<String> {
-		let mut opencode_config = if let Some(content) = original_content {
+		let mut list_config = if let Some(content) = original_content {
 			if content.trim().is_empty() {
-				OpenCodeConfig::default()
+				ListConfig::default()
 			} else {
-				serde_json::from_str::<OpenCodeConfig>(content).map_err(
-					|e| {
-						ConfigError::InvalidConfig(format!(
-							"Failed to parse existing OpenCode config: {}",
-							e
-						))
-					},
-				)?
+				serde_json::from_str::<ListConfig>(content).map_err(|e| {
+					ConfigError::InvalidConfig(format!(
+						"Failed to parse existing config: {}",
+						e
+					))
+				})?
 			}
 		} else {
-			OpenCodeConfig::default()
+			ListConfig::default()
 		};
 
 		// Clear existing resources to prevent duplication and respect deletions
-		opencode_config.mcp_servers.clear();
-		opencode_config.skills.clear();
-		opencode_config.sub_agents.clear();
+		list_config.mcp_servers.clear();
+		list_config.skills.clear();
+		list_config.sub_agents.clear();
 
 		// Serialize MCP servers
 		for mcp in &config.mcps {
@@ -231,7 +249,7 @@ impl AgentAdapter for OpenCodeAdapter {
 					args,
 					env,
 					timeout,
-				} => OpenCodeMcpTransport::Stdio {
+				} => ListMcpTransport::Stdio {
 					command: command.clone(),
 					args: args.clone(),
 					env: env.clone(),
@@ -241,7 +259,7 @@ impl AgentAdapter for OpenCodeAdapter {
 					url,
 					headers,
 					timeout,
-				} => OpenCodeMcpTransport::Sse {
+				} => ListMcpTransport::Sse {
 					url: url.clone(),
 					headers: headers.clone(),
 					timeout: *timeout,
@@ -250,13 +268,13 @@ impl AgentAdapter for OpenCodeAdapter {
 					url,
 					headers,
 					timeout,
-				} => OpenCodeMcpTransport::StreamableHttp {
+				} => ListMcpTransport::StreamableHttp {
 					url: url.clone(),
 					headers: headers.clone(),
 					timeout: *timeout,
 				},
 			};
-			opencode_config.mcp_servers.push(OpenCodeMcpServer {
+			list_config.mcp_servers.push(ListMcpServer {
 				name: mcp.name.clone(),
 				transport,
 				enabled: mcp.enabled,
@@ -265,7 +283,7 @@ impl AgentAdapter for OpenCodeAdapter {
 
 		// Serialize skills
 		for skill in &config.skills {
-			opencode_config.skills.push(OpenCodeSkill {
+			list_config.skills.push(ListSkill {
 				name: skill.name.clone(),
 				enabled: skill.enabled,
 				description: skill.description.clone(),
@@ -277,7 +295,7 @@ impl AgentAdapter for OpenCodeAdapter {
 
 		// Serialize sub-agents
 		for agent in &config.sub_agents {
-			opencode_config.sub_agents.push(OpenCodeSubAgent {
+			list_config.sub_agents.push(ListSubAgent {
 				name: agent.name.clone(),
 				enabled: agent.enabled,
 				description: agent.description.clone(),
@@ -286,12 +304,11 @@ impl AgentAdapter for OpenCodeAdapter {
 			});
 		}
 
-		serde_json::to_string_pretty(&opencode_config)
-			.map_err(ConfigError::Json)
+		serde_json::to_string_pretty(&list_config).map_err(ConfigError::Json)
 	}
 
 	fn validate_command(&self, config_path: &Path) -> Command {
-		let mut cmd = Command::new("opencode");
+		let mut cmd = Command::new(self.name);
 		cmd.arg("--settings").arg(config_path);
 		cmd.arg("--version");
 		cmd
@@ -303,7 +320,7 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn test_parse_opencode_config() {
+	fn test_parse_list_config() {
 		let json = r#"{
             "mcp_servers": [
                 {
@@ -344,7 +361,7 @@ mod tests {
             ]
         }"#;
 
-		let adapter = OpenCodeAdapter::new();
+		let adapter = ListAdapter::new();
 		let config = adapter.parse_config(json).unwrap();
 
 		assert_eq!(config.mcps.len(), 2);
@@ -364,7 +381,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_serialize_opencode_config() {
+	fn test_serialize_list_config() {
 		let config = AgentConfig {
 			mcps: vec![
 				McpServer::new(
@@ -398,7 +415,7 @@ mod tests {
 			}],
 		};
 
-		let adapter = OpenCodeAdapter::new();
+		let adapter = ListAdapter::new();
 		let json = adapter.serialize_config(&config, None).unwrap();
 
 		assert!(json.contains("mcp_servers"));
@@ -437,7 +454,7 @@ mod tests {
 			}],
 		};
 
-		let adapter = OpenCodeAdapter::new();
+		let adapter = ListAdapter::new();
 		let json = adapter.serialize_config(&config, None).unwrap();
 
 		// Parse back and verify enabled state
@@ -477,7 +494,7 @@ mod tests {
 			sub_agents: vec![],
 		};
 
-		let adapter = OpenCodeAdapter::new();
+		let adapter = ListAdapter::new();
 		let json = adapter.serialize_config(&config, None).unwrap();
 
 		// Parse back and verify timeout is preserved
@@ -520,7 +537,7 @@ mod tests {
 			sub_agents: vec![],
 		};
 
-		let adapter = OpenCodeAdapter::new();
+		let adapter = ListAdapter::new();
 		let json = adapter.serialize_config(&config, None).unwrap();
 
 		// Verify serialized JSON contains streamable_http type
@@ -550,7 +567,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_parse_opencode_config_streamable_http() {
+	fn test_parse_list_config_streamable_http() {
 		let json = r#"{
             "mcp_servers": [
                 {
@@ -567,7 +584,7 @@ mod tests {
             "sub_agents": []
         }"#;
 
-		let adapter = OpenCodeAdapter::new();
+		let adapter = ListAdapter::new();
 		let config = adapter.parse_config(json).unwrap();
 
 		assert_eq!(config.mcps.len(), 1);

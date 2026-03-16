@@ -2,11 +2,11 @@ use crate::{errors::Result, models::AgentConfig};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-pub mod claude;
-pub mod opencode;
+pub mod list;
+pub mod map;
 
-pub use claude::ClaudeAdapter;
-pub use opencode::OpenCodeAdapter;
+pub use list::ListAdapter;
+pub use map::MapAdapter;
 
 /// Trait for adapting different agent configuration formats
 pub trait AgentAdapter: Send + Sync {
@@ -30,21 +30,72 @@ pub trait AgentAdapter: Send + Sync {
 		original_content: Option<&str>,
 	) -> Result<String>;
 
-	/// Get the CLI command to validate config (e.g., "claude --settings <path> --version")
+	// Get the CLI command to validate config
 	fn validate_command(&self, config_path: &Path) -> Command;
 
 	/// Whether this agent supports MCP enable/disable operations
-	/// (Claude doesn't preserve enabled state, so it returns false)
+	// Map-based adapters don't preserve enabled state, returns false
 	fn supports_mcp_enable_disable(&self) -> bool {
 		true // Default to true for most agents
 	}
 }
 
-/// Create an adapter for the given agent type
 pub fn create_adapter(agent_type: crate::AgentType) -> Box<dyn AgentAdapter> {
+	use crate::paths;
 	match agent_type {
-		crate::AgentType::Claude => Box::new(ClaudeAdapter::new()),
-		crate::AgentType::OpenCode => Box::new(OpenCodeAdapter::new()),
+		crate::AgentType::Cursor => Box::new(MapAdapter::with_paths(
+			"cursor",
+			paths::cursor_global_path,
+			paths::cursor_project_path,
+		)),
+		crate::AgentType::Windsurf => Box::new(MapAdapter::with_paths(
+			"windsurf",
+			paths::windsurf_global_path,
+			paths::windsurf_project_path,
+		)),
+		crate::AgentType::Copilot => Box::new(MapAdapter::with_paths(
+			"copilot",
+			paths::copilot_global_path,
+			paths::copilot_project_path,
+		)),
+		crate::AgentType::Claude => Box::new(MapAdapter::new()),
+		crate::AgentType::RooCode => Box::new(MapAdapter::with_paths(
+			"roocode",
+			paths::roocode_global_path,
+			paths::roocode_project_path,
+		)),
+		crate::AgentType::Cline => Box::new(MapAdapter::with_paths(
+			"cline",
+			paths::cline_global_path,
+			paths::cline_project_path,
+		)),
+		crate::AgentType::Aider => Box::new(MapAdapter::with_paths(
+			"aider",
+			paths::aider_global_path,
+			paths::aider_project_path,
+		)),
+		crate::AgentType::Gemini => Box::new(MapAdapter::with_paths(
+			"gemini",
+			paths::gemini_global_path,
+			paths::gemini_project_path,
+		)),
+		crate::AgentType::Codex => Box::new(MapAdapter::with_paths(
+			// Need TOML support later
+			"codex",
+			paths::codex_global_path,
+			paths::codex_project_path,
+		)),
+		crate::AgentType::Antigravity => Box::new(MapAdapter::with_paths(
+			"antigravity",
+			paths::antigravity_global_path,
+			paths::antigravity_project_path,
+		)),
+		crate::AgentType::Openclaw => Box::new(MapAdapter::with_paths(
+			"openclaw",
+			paths::openclaw_global_path,
+			paths::openclaw_project_path,
+		)),
+		crate::AgentType::OpenCode => Box::new(ListAdapter::new()),
 	}
 }
 

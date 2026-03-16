@@ -35,20 +35,20 @@ impl TestConfig {
 
 		// Create minimal valid config for the agent type
 		let initial_config = match agent_type {
-			AgentType::Claude => r#"{"mcpServers": {}, "skills": {}}"#,
 			AgentType::OpenCode => {
 				r#"{"mcp_servers": [], "skills": [], "sub_agents": []}"#
 			}
+			_ => r#"{"mcpServers": {}, "skills": {}}"#,
 		};
 
 		fs::write(&config_path, initial_config).map_err(ConfigError::Io)?;
 
 		// Create isolated skills directory for Claude
 		let skills_dir = temp_dir.path().join("skills");
-		if agent_type == AgentType::Claude {
+		if agent_type != AgentType::OpenCode {
 			fs::create_dir(&skills_dir).map_err(ConfigError::Io)?;
 			// Set thread-local skills path for isolation
-			crate::adapters::claude::set_thread_local_skills_path(Some(
+			crate::adapters::map::set_thread_local_skills_path(Some(
 				skills_dir.clone(),
 			));
 		}
@@ -87,7 +87,7 @@ impl TestConfig {
 		name: &str,
 		description: Option<&str>,
 	) -> Result<()> {
-		if self.agent_type != AgentType::Claude {
+		if self.agent_type == AgentType::OpenCode {
 			return Ok(());
 		}
 
@@ -151,8 +151,8 @@ impl TestConfig {
 impl Drop for TestConfig {
 	fn drop(&mut self) {
 		// Clear thread-local skills path override
-		if self.agent_type == AgentType::Claude {
-			crate::adapters::claude::set_thread_local_skills_path(None);
+		if self.agent_type != AgentType::OpenCode {
+			crate::adapters::map::set_thread_local_skills_path(None);
 		}
 	}
 }
@@ -186,23 +186,21 @@ impl TestConfigBuilder {
 		let content =
 			self.initial_content
 				.unwrap_or_else(|| match self.agent_type {
-					AgentType::Claude => {
-						r#"{"mcpServers": {}, "skills": {}}"#.to_string()
-					}
 					AgentType::OpenCode => {
 						r#"{"mcp_servers": [], "skills": [], "sub_agents": []}"#
 							.to_string()
 					}
+					_ => r#"{"mcpServers": {}, "skills": {}}"#.to_string(),
 				});
 
 		fs::write(&config_path, content).map_err(ConfigError::Io)?;
 
 		// Create isolated skills directory for Claude
 		let skills_dir = temp_dir.path().join("skills");
-		if self.agent_type == AgentType::Claude {
+		if self.agent_type != AgentType::OpenCode {
 			fs::create_dir(&skills_dir).map_err(ConfigError::Io)?;
 			// Set thread-local skills path for isolation
-			crate::adapters::claude::set_thread_local_skills_path(Some(
+			crate::adapters::map::set_thread_local_skills_path(Some(
 				skills_dir.clone(),
 			));
 		}

@@ -106,7 +106,7 @@ fn test_claude_full_mcp_workflow() {
 	manager.load().unwrap();
 	let config = manager.config().unwrap();
 	assert_eq!(config.mcps.len(), 1);
-	assert!(config.mcps.iter().find(|m| m.name == "mcp1").is_none());
+	assert!(!config.mcps.iter().any(|m| m.name == "mcp1"));
 }
 
 #[test]
@@ -379,8 +379,9 @@ fn test_claude_config_validation() {
 	manager.add_mcp(mcp).unwrap();
 
 	// Validate with Claude CLI
-	let result = manager.validate();
-	assert!(result.is_ok(), "Claude should accept the configuration");
+	manager
+		.validate()
+		.expect("Claude should accept the configuration");
 }
 
 #[test]
@@ -400,8 +401,9 @@ fn test_opencode_config_validation() {
 	manager.add_sub_agent(agent).unwrap();
 
 	// Validate with OpenCode CLI
-	let result = manager.validate();
-	assert!(result.is_ok(), "OpenCode should accept the configuration");
+	manager
+		.validate()
+		.expect("OpenCode should accept the configuration");
 }
 
 #[test]
@@ -707,4 +709,91 @@ fn test_legacy_sse_backward_compatibility() {
 		}
 		_ => panic!("Expected SSE transport"),
 	}
+}
+
+// ==================== Antigravity Integration Tests ====================
+
+#[test]
+fn test_antigravity_mcp_workflow() {
+	let test = TestConfig::new(AgentType::Antigravity).unwrap();
+	let mut manager = test.create_manager();
+
+	manager.load().unwrap();
+	let config = manager.config().unwrap();
+	assert!(config.mcps.is_empty());
+
+	// Add MCP server
+	let mcp = create_test_mcp_stdio("ag-mcp");
+	manager.add_mcp(mcp).unwrap();
+
+	// Reload and verify
+	manager.load().unwrap();
+	let config = manager.config().unwrap();
+	assert_eq!(config.mcps.len(), 1);
+	assert_eq!(config.mcps[0].name, "ag-mcp");
+
+	// Delete and verify
+	manager.remove_mcp("ag-mcp").unwrap();
+	manager.load().unwrap();
+	let config = manager.config().unwrap();
+	assert!(config.mcps.is_empty());
+}
+
+// ==================== Codex Integration Tests ====================
+
+#[test]
+fn test_codex_mcp_workflow() {
+	let test = TestConfig::new(AgentType::Codex).unwrap();
+	let mut manager = test.create_manager();
+
+	manager.load().unwrap();
+	let config = manager.config().unwrap();
+	assert!(config.mcps.is_empty());
+
+	let mcp = create_test_mcp_stdio("codex-mcp");
+	manager.add_mcp(mcp).unwrap();
+
+	manager.load().unwrap();
+	let config = manager.config().unwrap();
+	assert_eq!(config.mcps.len(), 1);
+	assert_eq!(config.mcps[0].name, "codex-mcp");
+
+	manager.remove_mcp("codex-mcp").unwrap();
+	manager.load().unwrap();
+	let config = manager.config().unwrap();
+	assert!(config.mcps.is_empty());
+}
+
+// ==================== Openclaw Integration Tests ====================
+
+#[test]
+fn test_openclaw_mcp_workflow() {
+	let test = TestConfig::new(AgentType::Openclaw).unwrap();
+	let mut manager = test.create_manager();
+
+	manager.load().unwrap();
+	let config = manager.config().unwrap();
+	assert!(config.mcps.is_empty());
+
+	let mcp = create_test_mcp_stdio("openclaw-mcp");
+	manager.add_mcp(mcp).unwrap();
+
+	manager.load().unwrap();
+	let config = manager.config().unwrap();
+	assert_eq!(config.mcps.len(), 1);
+	assert_eq!(config.mcps[0].name, "openclaw-mcp");
+
+	// Add SSE MCP too
+	let sse_mcp = create_test_mcp_sse("openclaw-sse");
+	manager.add_mcp(sse_mcp).unwrap();
+
+	manager.load().unwrap();
+	let config = manager.config().unwrap();
+	assert_eq!(config.mcps.len(), 2);
+
+	manager.remove_mcp("openclaw-mcp").unwrap();
+	manager.load().unwrap();
+	let config = manager.config().unwrap();
+	assert_eq!(config.mcps.len(), 1);
+	assert_eq!(config.mcps[0].name, "openclaw-sse");
 }

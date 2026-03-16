@@ -138,10 +138,7 @@ fn switch_agent(
 	ctx: &mut InteractiveContext,
 	manager: &mut ConfigManager,
 ) -> Result<()> {
-	ctx.agent_type = match ctx.agent_type {
-		AgentType::Claude => AgentType::OpenCode,
-		AgentType::OpenCode => AgentType::Claude,
-	};
+	ctx.agent_type = ctx.agent_type.next();
 
 	*manager = ctx.create_manager();
 	if manager.load().is_err() {
