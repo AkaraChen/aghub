@@ -1,0 +1,28 @@
+[workspace]
+members = ["crates/core", "crates/cli"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Eric Qu <akarachen>"]
+license = "MIT"
+repository = "https://github.com/akarachen/aghub"
+
+[workspace.dependencies]
+# Core dependencies
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+dirs = "5.0"
+
+# CLI dependencies
+clap = { version = "4.5", features = ["derive"] }
+tabled = "0.15"
+anyhow = "1.0"
+colored = "2.1"
+
+# Testing dependencies
+tempfile = "3.10"
+assert_cmd = "2.0"
+predicates = "3.1"
