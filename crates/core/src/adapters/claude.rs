@@ -31,8 +31,16 @@ struct ClaudeMcpServer {
     env: Option<HashMap<String, String>>,
 }
 
+struct SkillMetadata {
+    name: String,
+    description: Option<String>,
+    author: Option<String>,
+    version: Option<String>,
+    source: Option<String>,
+}
+
 /// Parse SKILL.md frontmatter to extract skill metadata
-fn parse_skill_md(content: &str) -> Option<(String, Option<String>)> {
+fn parse_skill_md(content: &str) -> Option<SkillMetadata> {
     // Look for YAML frontmatter between --- markers
     let lines: Vec<&str> = content.lines().collect();
     if lines.len() < 3 || !lines[0].trim().is_empty() && lines[0] != "---" {
@@ -42,6 +50,9 @@ fn parse_skill_md(content: &str) -> Option<(String, Option<String>)> {
     // Find the end of frontmatter
     let mut name = None;
     let mut description = None;
+    let mut author = None;
+    let mut version = None;
+    let mut source = None;
     let mut in_frontmatter = false;
     let mut current_key: Option<&str> = None;
 
@@ -64,10 +75,26 @@ fn parse_skill_md(content: &str) -> Option<(String, Option<String>)> {
         // Check for key: value pairs
         if let Some(pos) = line.find(':') {
             let key = line[..pos].trim();
-            let value = line[pos + 1..].trim();
+            // Remove surround quotes if any
+            let val = line[pos + 1..].trim();
+            let value = if (val.starts_with('"') && val.ends_with('"')) || (val.starts_with('\'') && val.ends_with('\'')) {
+                &val[1..val.len() - 1]
+            } else {
+                val
+            };
 
             if key == "name" {
                 name = Some(value.to_string());
+                current_key = Some("name");
+            } else if key == "author" {
+                author = Some(value.to_string());
+                current_key = Some("author");
+            } else if key == "version" {
+                version = Some(value.to_string());
+                current_key = Some("version");
+            } else if key == "source" {
+                source = Some(value.to_string());
+                current_key = Some("source");
             } else if key == "description" {
                 // Description might be a folded scalar (>)
                 if value.is_empty() || value == ">" {
@@ -75,7 +102,10 @@ fn parse_skill_md(content: &str) -> Option<(String, Option<String>)> {
                     description = Some(String::new());
                 } else {
                     description = Some(value.to_string());
+                    current_key = Some("description");
                 }
+            } else {
+                current_key = Some(key);
             }
         } else if in_frontmatter && current_key == Some("description") {
             // Continuation of multi-line description
@@ -90,7 +120,13 @@ fn parse_skill_md(content: &str) -> Option<(String, Option<String>)> {
         }
     }
 
-    name.map(|n| (n, description))
+    name.map(|n| SkillMetadata {
+        name: n,
+        description,
+        author,
+        version,
+        source,
+    })
 }
 
 /// Load skills from the skills directory
@@ -118,22 +154,23 @@ fn load_skills_from_dir(skills_dir: &Path) -> Vec<Skill> {
 
         // Try to read SKILL.md for metadata
         let skill_md_path = path.join("SKILL.md");
-        let (display_name, description) = if skill_md_path.exists() {
+        let (display_name, description, author, version, source) = if skill_md_path.exists() {
             fs::read_to_string(&skill_md_path)
                 .ok()
                 .and_then(|content| parse_skill_md(&content))
-                .unwrap_or_else(|| (skill_name.to_string(), None))
+                .map(|meta| (meta.name, meta.description, meta.author, meta.version, meta.source))
+                .unwrap_or_else(|| (skill_name.to_string(), None, None, None, None))
         } else {
-            (skill_name.to_string(), None)
+            (skill_name.to_string(), None, None, None, None)
         };
 
         skills.push(Skill {
             name: display_name,
             enabled: true,
-            source: None, // Could be derived from path if needed
+            source,
             description,
-            author: None,
-            version: None,
+            author,
+            version,
             tools: Vec::new(),
         });
     }
@@ -400,9 +437,9 @@ Some content here.
 
         let result = parse_skill_md(content);
         assert!(result.is_some());
-        let (name, desc) = result.unwrap();
-        assert_eq!(name, "test-skill");
-        assert_eq!(desc, Some("A simple test skill".to_string()));
+        let meta = result.unwrap();
+        assert_eq!(meta.name, "test-skill");
+        assert_eq!(meta.description, Some("A simple test skill".to_string()));
     }
 
     #[test]
@@ -419,9 +456,9 @@ description: >
 
         let result = parse_skill_md(content);
         assert!(result.is_some());
-        let (name, desc) = result.unwrap();
-        assert_eq!(name, "agent-reach");
-        assert!(desc.unwrap().contains("eyes to see"));
+        let meta = result.unwrap();
+        assert_eq!(meta.name, "agent-reach");
+        assert!(meta.description.unwrap().contains("eyes to see"));
     }
 
     #[test]
