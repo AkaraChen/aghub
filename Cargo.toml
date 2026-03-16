@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/core", "crates/cli", "crates/skills-sh"]
+members = ["crates/core", "crates/cli", "crates/skills-sh", "crates/skills-ref"]
 resolver = "2"
 
 [workspace.package]
@@ -30,3 +30,6 @@ url = "2.5"
 tempfile = "3.10"
 assert_cmd = "2.0"
 predicates = "3.1"
+
+# YAML parsing
+serde_yaml = "0.9"
