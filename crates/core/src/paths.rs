@@ -26,17 +26,17 @@ pub fn opencode_global_path() -> PathBuf {
     #[cfg(target_os = "macos")]
     return dirs::home_dir()
         .expect("Could not determine home directory")
-        .join(".config/opencode/settings.json");
+        .join(".config/opencode/opencode.json");
 
     #[cfg(target_os = "linux")]
     return dirs::home_dir()
         .expect("Could not determine home directory")
-        .join(".config/opencode/settings.json");
+        .join(".config/opencode/opencode.json");
 
     #[cfg(target_os = "windows")]
     return dirs::data_dir()
         .expect("Could not determine data directory")
-        .join("opencode/settings.json");
+        .join("opencode/opencode.json");
 }
 
 /// Get the project configuration path for OpenCode
