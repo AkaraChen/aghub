@@ -109,49 +109,28 @@ fn test_claude_full_mcp_workflow() {
 #[test]
 fn test_claude_skill_workflow() {
     let test = TestConfig::new(AgentType::Claude).unwrap();
+
+    // Create test skill in the isolated skills directory
+    test.create_test_skill("rust-dev", Some("A Rust development skill"))
+        .unwrap();
+
     let mut manager = test.create_manager();
-
     manager.load().unwrap();
 
-    // Add skill with full metadata
-    let skill = create_test_skill("rust-dev");
-    manager.add_skill(skill.clone()).unwrap();
-
-    manager.load().unwrap();
+    // Verify skill was loaded from directory
     let config = manager.config().unwrap();
     assert_eq!(config.skills.len(), 1);
 
     let saved_skill = &config.skills[0];
     assert_eq!(saved_skill.name, "rust-dev");
     assert_eq!(
-        saved_skill.source,
-        Some("https://example.com/rust-dev.json".to_string())
+        saved_skill.description,
+        Some("A Rust development skill".to_string())
     );
-    assert_eq!(saved_skill.author, Some("test-author".to_string()));
-    assert_eq!(saved_skill.tools.len(), 2);
 
-    // Update skill
-    let mut updated = skill.clone();
-    updated.version = Some("2.0.0".to_string());
-    updated.tools.push("tool3".to_string());
-    manager.update_skill("rust-dev", updated).unwrap();
-
-    manager.load().unwrap();
-    let config = manager.config().unwrap();
-    let saved_skill = config.skills.iter().find(|s| s.name == "rust-dev").unwrap();
-    assert_eq!(saved_skill.version, Some("2.0.0".to_string()));
-    assert_eq!(saved_skill.tools.len(), 3);
-
-    // Note: Claude doesn't preserve disabled state - disabled skills are removed from config
-    // Verify skill exists before disabling
-    assert!(manager.get_skill("rust-dev").is_some());
-
-    // Disable removes the skill from Claude config
-    manager.disable_skill("rust-dev").unwrap();
-    manager.load().unwrap();
-    let config = manager.config().unwrap();
-    // Claude removes disabled skills, so list is empty
-    assert!(config.skills.is_empty());
+    // Note: Skills are loaded from filesystem, not settings.json
+    // The manager CRUD operations work on the in-memory representation
+    // but skills are persisted in the directory structure
 }
 
 #[test]
@@ -434,6 +413,7 @@ fn test_empty_config_handling() {
     let config = manager.config().unwrap();
 
     assert!(config.mcps.is_empty());
+    // Skills are loaded from isolated test directory, which is empty
     assert!(config.skills.is_empty());
     assert!(config.sub_agents.is_empty());
 }

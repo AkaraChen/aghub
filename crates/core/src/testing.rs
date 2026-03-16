@@ -15,6 +15,7 @@ use tempfile::TempDir;
 pub struct TestConfig {
     temp_dir: TempDir,
     config_path: PathBuf,
+    skills_dir: PathBuf,
     agent_type: AgentType,
 }
 
@@ -40,9 +41,18 @@ impl TestConfig {
 
         fs::write(&config_path, initial_config).map_err(ConfigError::Io)?;
 
+        // Create isolated skills directory for Claude
+        let skills_dir = temp_dir.path().join("skills");
+        if agent_type == AgentType::Claude {
+            fs::create_dir(&skills_dir).map_err(ConfigError::Io)?;
+            // Set thread-local skills path for isolation
+            crate::adapters::claude::set_thread_local_skills_path(Some(skills_dir.clone()));
+        }
+
         Ok(Self {
             temp_dir,
             config_path,
+            skills_dir,
             agent_type,
         })
     }
@@ -57,9 +67,35 @@ impl TestConfig {
         self.temp_dir.path()
     }
 
+    /// Get the skills directory path (for Claude tests)
+    pub fn skills_dir(&self) -> &Path {
+        &self.skills_dir
+    }
+
     /// Get the agent type
     pub fn agent_type(&self) -> AgentType {
         self.agent_type
+    }
+
+    /// Create a skill directory with SKILL.md for testing
+    pub fn create_test_skill(&self, name: &str, description: Option<&str>) -> Result<()> {
+        if self.agent_type != AgentType::Claude {
+            return Ok(());
+        }
+
+        let skill_dir = self.skills_dir.join(name);
+        fs::create_dir(&skill_dir).map_err(ConfigError::Io)?;
+
+        let skill_md_content = match description {
+            Some(desc) => format!(
+                "---\nname: {}\ndescription: {}\n---\n\n# {}\n",
+                name, desc, name
+            ),
+            None => format!("---\nname: {}\n---\n\n# {}\n", name, name),
+        };
+
+        fs::write(skill_dir.join("SKILL.md"), skill_md_content).map_err(ConfigError::Io)?;
+        Ok(())
     }
 
     /// Create a ConfigManager using this test configuration
@@ -103,6 +139,15 @@ impl TestConfig {
     }
 }
 
+impl Drop for TestConfig {
+    fn drop(&mut self) {
+        // Clear thread-local skills path override
+        if self.agent_type == AgentType::Claude {
+            crate::adapters::claude::set_thread_local_skills_path(None);
+        }
+    }
+}
+
 /// Builder pattern for creating test configurations with custom initial state
 pub struct TestConfigBuilder {
     agent_type: AgentType,
@@ -140,9 +185,18 @@ impl TestConfigBuilder {
 
         fs::write(&config_path, content).map_err(ConfigError::Io)?;
 
+        // Create isolated skills directory for Claude
+        let skills_dir = temp_dir.path().join("skills");
+        if self.agent_type == AgentType::Claude {
+            fs::create_dir(&skills_dir).map_err(ConfigError::Io)?;
+            // Set thread-local skills path for isolation
+            crate::adapters::claude::set_thread_local_skills_path(Some(skills_dir.clone()));
+        }
+
         Ok(TestConfig {
             temp_dir,
             config_path,
+            skills_dir,
             agent_type: self.agent_type,
         })
     }
@@ -151,7 +205,7 @@ impl TestConfigBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::{McpServer, McpTransport, Skill};
+    use crate::models::{McpServer, McpTransport};
 
     #[test]
     fn test_test_config_creation() {
@@ -204,12 +258,8 @@ mod tests {
         assert!(content.contains("test"));
         assert!(content.contains("echo"));
 
-        // Add skill
-        let skill = Skill::new("my-skill");
-        manager.add_skill(skill).unwrap();
-
-        let content = test.read_config().unwrap();
-        assert!(content.contains("my-skill"));
+        // Note: Skills are loaded from ~/.claude/skills/ directory for Claude
+        // They are not stored in settings.json, so we skip skill save test here
     }
 
     #[test]

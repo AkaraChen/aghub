@@ -8,6 +8,14 @@ pub fn claude_global_path() -> PathBuf {
         .join(".claude/settings.json")
 }
 
+/// Get the global skills directory path for Claude Code CLI
+/// Uses ~/.claude/skills/ on all platforms
+pub fn claude_global_skills_path() -> PathBuf {
+    dirs::home_dir()
+        .expect("Could not determine home directory")
+        .join(".claude/skills")
+}
+
 /// Get the project configuration path for Claude Code
 pub fn claude_project_path(project_root: &Path) -> PathBuf {
     project_root.join(".claude/settings.json")
