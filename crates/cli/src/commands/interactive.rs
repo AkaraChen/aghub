@@ -47,9 +47,18 @@ impl InteractiveContext {
 pub fn run_interactive(manager: &mut ConfigManager) -> Result<()> {
 	// Detect initial context from the provided manager
 	let current_path = manager.config_path().to_path_buf();
-	let is_global = !current_path
-		.ancestors()
-		.any(|p| p.file_name().is_some_and(|n| n == ".claude" || n == ".opencode" || n == ".codex" || n == ".gemini" || n == ".windsurf" || n == ".cursor" || n == ".roo" || n == ".cline"));
+	let is_global = !current_path.ancestors().any(|p| {
+		p.file_name().is_some_and(|n| {
+			n == ".claude"
+				|| n == ".opencode"
+				|| n == ".codex"
+				|| n == ".gemini"
+				|| n == ".windsurf"
+				|| n == ".cursor"
+				|| n == ".roo"
+				|| n == ".cline"
+		})
+	});
 
 	let agent_type = AgentType::ALL
 		.iter()
@@ -955,11 +964,13 @@ fn toggle_resource(manager: &mut ConfigManager) -> Result<()> {
 		}
 		ResourceType::Mcps => {
 			let mcp = manager.get_mcp(&name).unwrap();
-			let adapter = create_adapter(AgentType::ALL
-				.iter()
-				.find(|t| t.as_str() == manager.agent_name())
-				.copied()
-				.unwrap_or(AgentType::Claude));
+			let adapter = create_adapter(
+				AgentType::ALL
+					.iter()
+					.find(|t| t.as_str() == manager.agent_name())
+					.copied()
+					.unwrap_or(AgentType::Claude),
+			);
 			(mcp.enabled, adapter.supports_mcp_enable_disable())
 		}
 		ResourceType::SubAgents => {

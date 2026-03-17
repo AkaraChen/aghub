@@ -77,13 +77,12 @@ impl AgentAdapter for TomlAdapter {
 	}
 
 	fn parse_config(&self, content: &str) -> Result<AgentConfig> {
-		let toml_config: TomlConfig =
-			toml::from_str(content).map_err(|e| {
-				ConfigError::InvalidConfig(format!(
-					"Failed to parse TOML config: {}",
-					e
-				))
-			})?;
+		let toml_config: TomlConfig = toml::from_str(content).map_err(|e| {
+			ConfigError::InvalidConfig(format!(
+				"Failed to parse TOML config: {}",
+				e
+			))
+		})?;
 
 		let mut config = AgentConfig::new();
 
@@ -262,9 +261,8 @@ trust_level = "trusted"
 			McpTransport::stdio("new-cmd", vec![]),
 		));
 
-		let output = adapter
-			.serialize_config(&updated, Some(original))
-			.unwrap();
+		let output =
+			adapter.serialize_config(&updated, Some(original)).unwrap();
 
 		// Extra fields should be preserved
 		assert!(output.contains("model_provider"));
@@ -283,19 +281,13 @@ trust_level = "trusted"
 				McpServer {
 					name: "enabled".to_string(),
 					enabled: true,
-					transport: McpTransport::stdio(
-						"cmd1",
-						vec![],
-					),
+					transport: McpTransport::stdio("cmd1", vec![]),
 					timeout: None,
 				},
 				McpServer {
 					name: "disabled".to_string(),
 					enabled: false,
-					transport: McpTransport::stdio(
-						"cmd2",
-						vec![],
-					),
+					transport: McpTransport::stdio("cmd2", vec![]),
 					timeout: None,
 				},
 			],

@@ -6,9 +6,9 @@ pub mod list;
 pub mod map;
 pub mod toml;
 
+pub use self::toml::TomlAdapter;
 pub use list::ListAdapter;
 pub use map::MapAdapter;
-pub use self::toml::TomlAdapter;
 
 /// Trait for adapting different agent configuration formats
 pub trait AgentAdapter: Send + Sync {

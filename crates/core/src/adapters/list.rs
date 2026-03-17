@@ -164,10 +164,7 @@ impl AgentAdapter for ListAdapter {
 					let (command, args) = if entry.command.is_empty() {
 						(String::new(), vec![])
 					} else {
-						(
-							entry.command[0].clone(),
-							entry.command[1..].to_vec(),
-						)
+						(entry.command[0].clone(), entry.command[1..].to_vec())
 					};
 					config.mcps.push(McpServer {
 						name,
