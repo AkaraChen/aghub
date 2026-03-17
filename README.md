@@ -17,10 +17,10 @@ Here is a reference list of configuration paths utilized by various AI coding ag
 | **Jules**                  | `AGENTS.md`                                    | -                                   | -                     |
 | **Cursor**                 | `AGENTS.md`                                    | `.cursor/mcp.json`                  | `.cursor/skills/`     |
 | **Windsurf**               | `AGENTS.md`                                    | `.windsurf/mcp_config.json`         | -                     |
-| **Cline**                  | `.clinerules`                                  | -                                   | -                     |
+| **Cline**                  | `.clinerules`                                  | `.cline/mcp.json`                   | -                     |
 | **Crush**                  | `CRUSH.md`                                     | `.crush.json`                       | -                     |
 | **Amp**                    | `AGENTS.md`                                    | -                                   | `.agents/skills/`     |
-| **Antigravity**            | `.agent/rules/ruler.md`                        | -                                   | `.agent/skills/`      |
+| **Antigravity**            | `.agent/rules/ruler.md`                        | `.gemini/antigravity/mcp_config.json` | `.agent/skills/`      |
 | **Amazon Q CLI**           | `.amazonq/rules/ruler_q_rules.md`              | `.amazonq/mcp.json`                 | -                     |
 | **Aider**                  | `AGENTS.md`, `.aider.conf.yml`                 | `.mcp.json`                         | -                     |
 | **Firebase Studio**        | `.idx/airules.md`                              | `.idx/mcp.json`                     | -                     |
