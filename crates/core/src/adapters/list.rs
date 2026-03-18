@@ -122,20 +122,55 @@ impl Default for ListAdapter {
 	}
 }
 
-// OpenCode config: "mcp" is a map, "command" is an array [cmd, ...args]
+// OpenCode config: "mcp" is a map supporting both local (stdio) and remote (url) entries
 #[derive(Debug, Default, Deserialize)]
 struct OpenCodeConfig {
+	#[serde(rename = "$schema", default)]
+	schema: Option<String>,
 	#[serde(default)]
 	mcp: HashMap<String, OpenCodeMcpEntry>,
+	#[serde(flatten)]
+	extra: serde_json::Map<String, serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
 struct OpenCodeMcpEntry {
-	command: Vec<String>,
+	#[serde(rename = "type")]
+	server_type: Option<String>, // "local" or "remote"
+	command: Option<Vec<String>>,
+	url: Option<String>,
 	#[serde(default = "default_true")]
 	enabled: bool,
-	#[serde(default)]
-	env: Option<HashMap<String, String>>,
+	#[serde(alias = "env", default)]
+	environment: Option<HashMap<String, String>>,
+	headers: Option<HashMap<String, String>>,
+	timeout: Option<u64>,
+}
+
+#[derive(Debug, Serialize)]
+struct OpenCodeMcpOutput {
+	#[serde(rename = "type")]
+	server_type: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	command: Option<Vec<String>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	url: Option<String>,
+	enabled: bool,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	environment: Option<HashMap<String, String>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	headers: Option<HashMap<String, String>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	timeout: Option<u64>,
+}
+
+#[derive(Debug, Default, Serialize)]
+struct OpenCodeConfigOutput {
+	#[serde(rename = "$schema", skip_serializing_if = "Option::is_none")]
+	schema: Option<String>,
+	mcp: HashMap<String, OpenCodeMcpOutput>,
+	#[serde(flatten)]
+	extra: serde_json::Map<String, serde_json::Value>,
 }
 
 fn default_true() -> bool {
@@ -156,25 +191,39 @@ impl AgentAdapter for ListAdapter {
 	}
 
 	fn parse_config(&self, content: &str) -> Result<AgentConfig> {
-		// Try OpenCode format first ("mcp" map with command arrays)
+		// Try OpenCode native format first ("mcp" map)
 		if let Ok(oc) = serde_json::from_str::<OpenCodeConfig>(content) {
 			if !oc.mcp.is_empty() {
 				let mut config = AgentConfig::new();
 				for (name, entry) in oc.mcp {
-					let (command, args) = if entry.command.is_empty() {
-						(String::new(), vec![])
+					let is_remote =
+						entry.server_type.as_deref() == Some("remote")
+							|| (entry.server_type.is_none()
+								&& entry.url.is_some());
+					let transport = if is_remote {
+						McpTransport::StreamableHttp {
+							url: entry.url.unwrap_or_default(),
+							headers: entry.headers,
+							timeout: entry.timeout,
+						}
 					} else {
-						(entry.command[0].clone(), entry.command[1..].to_vec())
+						let cmd = entry.command.unwrap_or_default();
+						let (command, args) = if cmd.is_empty() {
+							(String::new(), vec![])
+						} else {
+							(cmd[0].clone(), cmd[1..].to_vec())
+						};
+						McpTransport::Stdio {
+							command,
+							args,
+							env: entry.environment,
+							timeout: entry.timeout,
+						}
 					};
 					config.mcps.push(McpServer {
 						name,
 						enabled: entry.enabled,
-						transport: McpTransport::Stdio {
-							command,
-							args,
-							env: entry.env,
-							timeout: None,
-						},
+						transport,
 						timeout: None,
 					});
 				}
@@ -268,6 +317,79 @@ impl AgentAdapter for ListAdapter {
 		config: &AgentConfig,
 		original_content: Option<&str>,
 	) -> Result<String> {
+		// Detect if original content is OpenCode native format (has "mcp" map key)
+		let is_opencode_native = original_content
+			.and_then(|c| serde_json::from_str::<serde_json::Value>(c).ok())
+			.and_then(|v| v.get("mcp").cloned())
+			.map(|v| v.is_object())
+			.unwrap_or(false);
+
+		if is_opencode_native {
+			// Parse original to preserve schema and extra fields
+			let original: OpenCodeConfig = original_content
+				.filter(|c| !c.trim().is_empty())
+				.and_then(|c| serde_json::from_str(c).ok())
+				.unwrap_or_default();
+
+			let mut out = OpenCodeConfigOutput {
+				schema: original.schema,
+				mcp: HashMap::new(),
+				extra: original.extra,
+			};
+
+			for mcp in &config.mcps {
+				if !mcp.enabled {
+					continue;
+				}
+				let entry = match &mcp.transport {
+					McpTransport::Stdio {
+						command,
+						args,
+						env,
+						timeout,
+						..
+					} => {
+						let mut cmd = vec![command.clone()];
+						cmd.extend(args.iter().cloned());
+						OpenCodeMcpOutput {
+							server_type: "local".to_string(),
+							command: Some(cmd),
+							url: None,
+							enabled: true,
+							environment: env.clone(),
+							headers: None,
+							timeout: *timeout,
+						}
+					}
+					McpTransport::Sse {
+						url,
+						headers,
+						timeout,
+						..
+					}
+					| McpTransport::StreamableHttp {
+						url,
+						headers,
+						timeout,
+						..
+					} => OpenCodeMcpOutput {
+						server_type: "remote".to_string(),
+						command: None,
+						url: Some(url.clone()),
+						enabled: true,
+						environment: None,
+						headers: headers.clone(),
+						timeout: *timeout,
+					},
+				};
+				out.mcp.insert(mcp.name.clone(), entry);
+			}
+
+			return serde_json::to_string_pretty(&out)
+				.map_err(ConfigError::Json);
+		}
+
+		// List-based format
 		let mut list_config = if let Some(content) = original_content {
 			if content.trim().is_empty() {
 				ListConfig::default()
@@ -283,12 +405,10 @@ impl AgentAdapter for ListAdapter {
 			ListConfig::default()
 		};
 
-		// Clear existing resources to prevent duplication and respect deletions
 		list_config.mcp_servers.clear();
 		list_config.skills.clear();
 		list_config.sub_agents.clear();
 
-		// Serialize MCP servers
 		for mcp in &config.mcps {
 			let transport = match &mcp.transport {
 				McpTransport::Stdio {
@@ -328,7 +448,6 @@ impl AgentAdapter for ListAdapter {
 			});
 		}
 
-		// Serialize skills
 		for skill in &config.skills {
 			list_config.skills.push(ListSkill {
 				name: skill.name.clone(),
@@ -340,7 +459,6 @@ impl AgentAdapter for ListAdapter {
 			});
 		}
 
-		// Serialize sub-agents
 		for agent in &config.sub_agents {
 			list_config.sub_agents.push(ListSubAgent {
 				name: agent.name.clone(),
@@ -640,5 +758,122 @@ mod tests {
 			config.mcps[0].transport,
 			McpTransport::StreamableHttp { .. }
 		));
+	}
+
+	#[test]
+	fn test_opencode_native_remote_parse() {
+		let json = r#"{
+            "mcp": {
+                "my-remote": {
+                    "type": "remote",
+                    "url": "https://api.example.com/mcp",
+                    "headers": { "Authorization": "Bearer tok" },
+                    "enabled": true
+                }
+            }
+        }"#;
+
+		let adapter = ListAdapter::new();
+		let config = adapter.parse_config(json).unwrap();
+
+		assert_eq!(config.mcps.len(), 1);
+		assert_eq!(config.mcps[0].name, "my-remote");
+		assert!(matches!(
+			config.mcps[0].transport,
+			McpTransport::StreamableHttp { .. }
+		));
+		match &config.mcps[0].transport {
+			McpTransport::StreamableHttp { url, headers, .. } => {
+				assert_eq!(url, "https://api.example.com/mcp");
+				assert_eq!(
+					headers.as_ref().unwrap().get("Authorization"),
+					Some(&"Bearer tok".to_string())
+				);
+			}
+			_ => panic!("Expected StreamableHttp"),
+		}
+	}
+
+	#[test]
+	fn test_opencode_native_environment_alias() {
+		// "environment" field (not "env") should be accepted
+		let json = r#"{
+            "mcp": {
+                "local-srv": {
+                    "type": "local",
+                    "command": ["my-cmd", "--flag"],
+                    "environment": { "API_KEY": "secret" },
+                    "enabled": true
+                }
+            }
+        }"#;
+
+		let adapter = ListAdapter::new();
+		let config = adapter.parse_config(json).unwrap();
+
+		assert_eq!(config.mcps.len(), 1);
+		match &config.mcps[0].transport {
+			McpTransport::Stdio {
+				command, args, env, ..
+			} => {
+				assert_eq!(command, "my-cmd");
+				assert_eq!(args, &["--flag"]);
+				assert_eq!(
+					env.as_ref().unwrap().get("API_KEY"),
+					Some(&"secret".to_string())
+				);
+			}
+			_ => panic!("Expected Stdio"),
+		}
+	}
+
+	#[test]
+	fn test_opencode_native_roundtrip() {
+		let original = r#"{
+            "$schema": "https://opencode.ai/config.json",
+            "mcp": {
+                "local-srv": {
+                    "type": "local",
+                    "command": ["npx", "-y", "some-mcp"],
+                    "environment": { "TOKEN": "abc" },
+                    "enabled": true
+                },
+                "remote-srv": {
+                    "type": "remote",
+                    "url": "https://api.example.com/mcp",
+                    "headers": { "X-Key": "val" },
+                    "enabled": true
+                }
+            }
+        }"#;
+
+		let adapter = ListAdapter::new();
+		let config = adapter.parse_config(original).unwrap();
+		assert_eq!(config.mcps.len(), 2);
+
+		let out = adapter.serialize_config(&config, Some(original)).unwrap();
+		let val: serde_json::Value = serde_json::from_str(&out).unwrap();
+
+		// Should preserve $schema
+		assert_eq!(
+			val.get("$schema").and_then(|v| v.as_str()),
+			Some("https://opencode.ai/config.json")
+		);
+		// Should use "mcp" key, not "mcp_servers"
+		assert!(val.get("mcp").is_some());
+		assert!(val.get("mcp_servers").is_none());
+
+		let mcp = val.get("mcp").unwrap().as_object().unwrap();
+		let local = mcp.get("local-srv").unwrap();
+		assert_eq!(local.get("type").unwrap(), "local");
+		assert!(local.get("command").is_some());
+
+		let remote = mcp.get("remote-srv").unwrap();
+		assert_eq!(remote.get("type").unwrap(), "remote");
+		assert_eq!(remote.get("url").unwrap(), "https://api.example.com/mcp");
+
+		// Parse the output again — should produce same result
+		let reparsed = adapter.parse_config(&out).unwrap();
+		assert_eq!(reparsed.mcps.len(), 2);
 	}
 }

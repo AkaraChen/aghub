@@ -55,10 +55,11 @@ pub fn create_adapter(agent_type: crate::AgentType) -> Box<dyn AgentAdapter> {
 			paths::windsurf_global_path,
 			paths::windsurf_project_path,
 		)),
-		crate::AgentType::Copilot => Box::new(MapAdapter::with_paths(
+		crate::AgentType::Copilot => Box::new(MapAdapter::with_paths_and_key(
 			"copilot",
 			paths::copilot_global_path,
 			paths::copilot_project_path,
+			"servers",
 		)),
 		crate::AgentType::Claude => Box::new(MapAdapter::with_paths(
 			"claude",

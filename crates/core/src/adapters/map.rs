@@ -10,20 +10,6 @@ use std::process::Command;
 
 use super::AgentAdapter;
 
-/// Map-based JSON configuration structure
-#[derive(Debug, Default, Serialize, Deserialize)]
-struct MapConfig {
-	#[serde(rename = "mcpServers", default)]
-	mcp_servers: HashMap<String, MapMcpServer>,
-	// Skills are loaded from the skills directory, not from settings.json
-	// This field is kept for backward compatibility but not used
-	#[serde(default)]
-	skills: HashMap<String, serde_json::Value>,
-	/// Preserve any other fields in the config file
-	#[serde(flatten)]
-	extra: serde_json::Map<String, serde_json::Value>,
-}
-
 /// Map-based MCP server configuration
 #[derive(Debug, Serialize, Deserialize)]
 struct MapMcpServer {
@@ -137,16 +123,24 @@ fn parse_skill_md(content: &str) -> Option<SkillMetadata> {
 	})
 }
 
-/// Load skills from the skills directory
+/// Load skills from the skills directory, walking recursively.
+/// - A directory containing `SKILL.md` is a skill.
+/// - A directory without `SKILL.md` but with skill subdirectories is a grouping dir.
+/// - Other directories are skipped.
 pub(crate) fn load_skills_from_dir(skills_dir: &Path) -> Vec<Skill> {
 	let mut skills = Vec::new();
+	collect_skills(skills_dir, &mut skills);
+	skills.sort_by(|a, b| a.name.cmp(&b.name));
+	skills
+}
 
-	if !skills_dir.exists() {
-		return skills;
+fn collect_skills(dir: &Path, skills: &mut Vec<Skill>) {
+	if !dir.exists() {
+		return;
 	}
 
-	let Ok(entries) = fs::read_dir(skills_dir) else {
-		return skills;
+	let Ok(entries) = fs::read_dir(dir) else {
+		return;
 	};
 
 	for entry in entries.flatten() {
@@ -155,40 +149,37 @@ pub(crate) fn load_skills_from_dir(skills_dir: &Path) -> Vec<Skill> {
 			continue;
 		}
 
-		let skill_name =
-			path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-		if skill_name.is_empty() {
-			continue;
-		}
-
-		// Try to read SKILL.md for metadata
 		let skill_md_path = path.join("SKILL.md");
-		let (display_name, description, author, version) = if skill_md_path
-			.exists()
-		{
-			fs::read_to_string(&skill_md_path)
-				.ok()
-				.and_then(|content| parse_skill_md(&content))
-				.map(|meta| {
-					(meta.name, meta.description, meta.author, meta.version)
-				})
-				.unwrap_or_else(|| (skill_name.to_string(), None, None, None))
+		if skill_md_path.exists() {
+			// This directory is a skill
+			let dir_name =
+				path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+			if dir_name.is_empty() {
+				continue;
+			}
+			let (display_name, description, author, version) =
+				fs::read_to_string(&skill_md_path)
+					.ok()
+					.and_then(|content| parse_skill_md(&content))
+					.map(|meta| {
+						(meta.name, meta.description, meta.author, meta.version)
+					})
+					.unwrap_or_else(|| {
+						(dir_name.to_string(), None, None, None)
+					});
+			skills.push(Skill {
+				name: display_name,
+				enabled: true,
+				description,
+				author,
+				version,
+				tools: Vec::new(),
+			});
 		} else {
-			(skill_name.to_string(), None, None, None)
-		};
-
-		skills.push(Skill {
-			name: display_name,
-			enabled: true,
-			description,
-			author,
-			version,
-			tools: Vec::new(),
-		});
+			// No SKILL.md — recurse as a potential grouping directory
+			collect_skills(&path, skills);
+		}
 	}
-
-	skills.sort_by(|a, b| a.name.cmp(&b.name));
-	skills
 }
 
 use std::cell::RefCell;
@@ -219,6 +210,7 @@ pub struct MapAdapter {
 	name: &'static str,
 	global_path_fn: fn() -> PathBuf,
 	project_path_fn: fn(&Path) -> PathBuf,
+	server_key: &'static str,
 }
 
 impl MapAdapter {
@@ -227,6 +219,7 @@ impl MapAdapter {
 			name: "claude",
 			global_path_fn: crate::paths::claude_global_path,
 			project_path_fn: crate::paths::claude_project_path,
+			server_key: "mcpServers",
 		}
 	}
 
@@ -239,6 +232,21 @@ impl MapAdapter {
 			name,
 			global_path_fn,
 			project_path_fn,
+			server_key: "mcpServers",
+		}
+	}
+
+	pub fn with_paths_and_key(
+		name: &'static str,
+		global_path_fn: fn() -> PathBuf,
+		project_path_fn: fn(&Path) -> PathBuf,
+		server_key: &'static str,
+	) -> Self {
+		Self {
+			name,
+			global_path_fn,
+			project_path_fn,
+			server_key,
 		}
 	}
 }
@@ -263,12 +271,27 @@ impl AgentAdapter for MapAdapter {
 	}
 
 	fn parse_config(&self, content: &str) -> Result<AgentConfig> {
-		let map_config: MapConfig = serde_json::from_str(content)?;
+		let root: serde_json::Value = serde_json::from_str(content)?;
 
 		let mut config = AgentConfig::new();
 
-		// Parse MCP servers from settings.json
-		for (name, mcp) in map_config.mcp_servers {
+		// Parse MCP servers using the configured key
+		let servers_map = root
+			.get(self.server_key)
+			.and_then(|v| v.as_object())
+			.cloned()
+			.unwrap_or_default();
+
+		for (name, mcp_val) in servers_map {
+			let mcp: MapMcpServer = serde_json::from_value(mcp_val)
+				.unwrap_or_else(|_| MapMcpServer {
+					server_type: None,
+					command: None,
+					args: vec![],
+					env: None,
+					url: None,
+					headers: None,
+				});
 			let transport = match mcp.server_type.as_deref() {
 				Some("stdio") => McpTransport::Stdio {
 					command: mcp.command.unwrap_or_default(),
@@ -297,8 +320,13 @@ impl AgentAdapter for MapAdapter {
 						}
 					} else if let Some(url) = mcp.url {
 						// Infer transport type from URL pattern
-						// URLs containing "/sse" or "stream" are legacy SSE
-						if url.contains("/sse") || url.contains("stream") {
+						// Only match /sse as a path segment (e.g. /sse or /sse/events)
+						let is_sse = {
+							let path = url.split('?').next().unwrap_or(&url);
+							path.split('/')
+								.any(|seg| seg.eq_ignore_ascii_case("sse"))
+						};
+						if is_sse {
 							McpTransport::Sse {
 								url,
 								headers: mcp.headers,
@@ -340,27 +368,27 @@ impl AgentAdapter for MapAdapter {
 		config: &AgentConfig,
 		original_content: Option<&str>,
 	) -> Result<String> {
-		let mut map_config = if let Some(content) = original_content {
-			if content.trim().is_empty() {
-				MapConfig::default()
+		// Parse original content as a generic Value to preserve unknown fields
+		let mut root: serde_json::Value =
+			if let Some(content) = original_content {
+				if content.trim().is_empty() {
+					serde_json::Value::Object(serde_json::Map::new())
+				} else {
+					serde_json::from_str(content).map_err(|e| {
+						ConfigError::InvalidConfig(format!(
+							"Failed to parse existing config: {}",
+							e
+						))
+					})?
+				}
 			} else {
-				serde_json::from_str::<MapConfig>(content).map_err(|e| {
-					ConfigError::InvalidConfig(format!(
-						"Failed to parse existing Claude config: {}",
-						e
-					))
-				})?
-			}
-		} else {
-			MapConfig::default()
-		};
+				serde_json::Value::Object(serde_json::Map::new())
+			};
 
-		// Clear existing MCP servers so deleted ones are removed during merge
-		map_config.mcp_servers.clear();
+		// Build the servers map using the configured key
+		let mut servers_map = serde_json::Map::new();
 
-		// Serialize MCP servers
 		for mcp in &config.mcps {
-			// Skip disabled MCPs
 			if !mcp.enabled {
 				continue;
 			}
@@ -368,45 +396,52 @@ impl AgentAdapter for MapAdapter {
 			let map_mcp = match &mcp.transport {
 				McpTransport::Stdio {
 					command, args, env, ..
-				} => Some(MapMcpServer {
+				} => MapMcpServer {
 					server_type: Some("stdio".to_string()),
 					command: Some(command.clone()),
 					args: args.clone(),
 					env: env.clone(),
 					url: None,
 					headers: None,
-				}),
-				McpTransport::Sse { url, headers, .. } => Some(MapMcpServer {
+				},
+				McpTransport::Sse { url, headers, .. } => MapMcpServer {
 					server_type: Some("sse".to_string()),
 					command: None,
 					args: vec![],
 					env: None,
 					url: Some(url.clone()),
 					headers: headers.clone(),
-				}),
+				},
 				McpTransport::StreamableHttp { url, headers, .. } => {
-					Some(MapMcpServer {
+					MapMcpServer {
 						server_type: Some("http".to_string()),
 						command: None,
 						args: vec![],
 						env: None,
 						url: Some(url.clone()),
 						headers: headers.clone(),
-					})
+					}
 				}
 			};
 
-			if let Some(mcp_server) = map_mcp {
-				map_config.mcp_servers.insert(mcp.name.clone(), mcp_server);
-			}
+			servers_map.insert(
+				mcp.name.clone(),
+				serde_json::to_value(map_mcp).map_err(ConfigError::Json)?,
+			);
+		}
+
+		// Write the servers map under the configured key
+		if let serde_json::Value::Object(ref mut obj) = root {
+			obj.insert(
+				self.server_key.to_string(),
+				serde_json::Value::Object(servers_map),
+			);
 		}
 
 		// Skills are NOT serialized to settings.json
-		// They are managed in the skills directory
-
 		// Sub-agents are not serialized for map-based adapters
 
-		serde_json::to_string_pretty(&map_config).map_err(ConfigError::Json)
+		serde_json::to_string_pretty(&root).map_err(ConfigError::Json)
 	}
 
 	fn validate_command(&self, config_path: &Path) -> Command {
@@ -511,7 +546,6 @@ mod tests {
 
 	#[test]
 	fn test_parse_map_config_infers_transport_from_url() {
-		// Test that URLs without "/sse" or "stream" are inferred as StreamableHttp
 		let json = r#"{
             "mcpServers": {
                 "inferred-http": {
@@ -520,8 +554,11 @@ mod tests {
                 "inferred-sse": {
                     "url": "http://localhost:3001/sse"
                 },
+                "inferred-sse-sub": {
+                    "url": "http://localhost:3002/sse/events"
+                },
                 "inferred-stream": {
-                    "url": "http://localhost:3002/stream/events"
+                    "url": "http://localhost:3003/stream/events"
                 }
             }
         }"#;
@@ -529,7 +566,7 @@ mod tests {
 		let adapter = MapAdapter::new();
 		let config = adapter.parse_config(json).unwrap();
 
-		assert_eq!(config.mcps.len(), 3);
+		assert_eq!(config.mcps.len(), 4);
 
 		let http_mcp = config
 			.mcps
@@ -548,12 +585,23 @@ mod tests {
 			.unwrap();
 		assert!(matches!(sse_mcp.transport, McpTransport::Sse { .. }));
 
+		let sse_sub_mcp = config
+			.mcps
+			.iter()
+			.find(|m| m.name == "inferred-sse-sub")
+			.unwrap();
+		assert!(matches!(sse_sub_mcp.transport, McpTransport::Sse { .. }));
+
+		// "stream" substring no longer triggers SSE — defaults to StreamableHttp
 		let stream_mcp = config
 			.mcps
 			.iter()
 			.find(|m| m.name == "inferred-stream")
 			.unwrap();
-		assert!(matches!(stream_mcp.transport, McpTransport::Sse { .. }));
+		assert!(matches!(
+			stream_mcp.transport,
+			McpTransport::StreamableHttp { .. }
+		));
 	}
 
 	#[test]
@@ -746,5 +794,73 @@ No frontmatter here.
 
 		let result = parse_skill_md(content);
 		assert!(result.is_none());
+	}
+
+	#[test]
+	fn test_copilot_uses_servers_key() {
+		use crate::paths;
+		let adapter = MapAdapter::with_paths_and_key(
+			"copilot",
+			paths::copilot_global_path,
+			paths::copilot_project_path,
+			"servers",
+		);
+
+		// Parse config with "servers" key
+		let json = r#"{
+            "servers": {
+                "my-mcp": {
+                    "type": "stdio",
+                    "command": "npx",
+                    "args": ["-y", "some-mcp"]
+                }
+            }
+        }"#;
+		let config = adapter.parse_config(json).unwrap();
+		assert_eq!(config.mcps.len(), 1);
+		assert_eq!(config.mcps[0].name, "my-mcp");
+
+		// Serialize back — should use "servers" key, not "mcpServers"
+		let out = adapter.serialize_config(&config, Some(json)).unwrap();
+		let val: serde_json::Value = serde_json::from_str(&out).unwrap();
+		assert!(val.get("servers").is_some());
+		assert!(val.get("mcpServers").is_none());
+	}
+
+	#[test]
+	fn test_recursive_skills_discovery() {
+		use std::fs;
+		let tmp = tempfile::tempdir().unwrap();
+		let root = tmp.path();
+
+		// Direct skill
+		let skill_a = root.join("skill-a");
+		fs::create_dir_all(&skill_a).unwrap();
+		fs::write(
+			skill_a.join("SKILL.md"),
+			"---\nname: skill-a\ndescription: Direct skill\n---\n",
+		)
+		.unwrap();
+
+		// Grouping dir containing a skill
+		let group = root.join("group");
+		fs::create_dir_all(&group).unwrap();
+		let skill_b = group.join("skill-b");
+		fs::create_dir_all(&skill_b).unwrap();
+		fs::write(
+			skill_b.join("SKILL.md"),
+			"---\nname: skill-b\ndescription: Nested skill\n---\n",
+		)
+		.unwrap();
+
+		// Stray dir (no SKILL.md, no subdirs with SKILL.md) — should be skipped
+		let stray = root.join("stray");
+		fs::create_dir_all(&stray).unwrap();
+
+		let skills = load_skills_from_dir(root);
+		let names: Vec<&str> = skills.iter().map(|s| s.name.as_str()).collect();
+		assert!(names.contains(&"skill-a"), "skill-a not found: {:?}", names);
+		assert!(names.contains(&"skill-b"), "skill-b not found: {:?}", names);
+		assert_eq!(skills.len(), 2);
 	}
 }

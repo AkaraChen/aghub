@@ -3,11 +3,31 @@ use crate::{
 	models::{AgentConfig, McpServer, McpTransport},
 };
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use super::AgentAdapter;
+
+thread_local! {
+	static CODEX_SKILLS_PATH_OVERRIDE: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+}
+
+pub fn set_thread_local_codex_skills_path(path: Option<PathBuf>) {
+	CODEX_SKILLS_PATH_OVERRIDE.with(|p| *p.borrow_mut() = path);
+}
+
+fn get_codex_skills_path() -> PathBuf {
+	if let Some(path) = CODEX_SKILLS_PATH_OVERRIDE.with(|p| p.borrow().clone())
+	{
+		return path;
+	}
+	dirs::home_dir()
+		.unwrap_or_default()
+		.join(".codex")
+		.join("skills")
+}
 
 // TOML-based configuration structure (used by Codex CLI)
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -100,8 +120,8 @@ impl AgentAdapter for TomlAdapter {
 			});
 		}
 
-		// Load skills from ~/.codex/skills/
-		let skills_dir = dirs::home_dir().unwrap().join(".codex/skills");
+		// Load skills from ~/.codex/skills/ (respects thread-local override for tests)
+		let skills_dir = get_codex_skills_path();
 		config.skills = super::map::load_skills_from_dir(&skills_dir);
 
 		Ok(config)
