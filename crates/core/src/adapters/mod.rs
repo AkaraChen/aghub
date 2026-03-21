@@ -7,17 +7,20 @@ pub trait AgentAdapter: Send + Sync {
 	fn name(&self) -> &'static str;
 	fn global_config_path(&self) -> PathBuf;
 	fn project_config_path(&self, project_root: &Path) -> PathBuf;
-	fn parse_config(&self, content: &str) -> Result<AgentConfig>;
-	/// Parse config with resource scope and project root
-	fn parse_config_with_scope(
+
+	/// Load complete configuration: MCPs from file + Skills from directories
+	/// Adapter handles all I/O internally, including missing config files
+	fn load_config(
 		&self,
-		content: &str,
-		_project_root: Option<&Path>,
-		_scope: ResourceScope,
-	) -> Result<AgentConfig> {
-		// Default implementation ignores scope and uses original parse_config
-		self.parse_config(content)
-	}
+		config_path: &Path,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+	) -> Result<AgentConfig>;
+
+	/// Parse config from content string (legacy, kept for backward compatibility)
+	/// New code should use load_config instead
+	fn parse_config(&self, content: &str) -> Result<AgentConfig>;
+
 	fn serialize_config(
 		&self,
 		config: &AgentConfig,

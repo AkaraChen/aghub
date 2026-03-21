@@ -89,26 +89,12 @@ impl ConfigManager {
 			return self.load_both();
 		}
 
-		// Try to load config file, but allow it to be missing for skill discovery
-		let config = match std::fs::read_to_string(&self.config_path) {
-			Ok(content) => {
-				self.adapter.parse_config_with_scope(
-					&content,
-					self.project_root.as_deref(),
-					self.scope,
-				)?
-			}
-			Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-				// Config file doesn't exist, but we still want to discover skills
-				// Create an empty config and let parse_config_with_scope load skills
-				self.adapter.parse_config_with_scope(
-					"{}",
-					self.project_root.as_deref(),
-					self.scope,
-				)?
-			}
-			Err(e) => return Err(e.into()),
-		};
+		// Delegate to adapter - it handles all I/O internally
+		let config = self.adapter.load_config(
+			&self.config_path,
+			self.project_root.as_deref(),
+			self.scope,
+		)?;
 		self.config = Some(config);
 		Ok(self.config.as_ref().unwrap())
 	}
@@ -121,56 +107,38 @@ impl ConfigManager {
 		// Load project config first (project skills take precedence)
 		if let Some(root) = &self.project_root {
 			let project_path = self.adapter.project_config_path(root);
-			// Allow missing project config, just load skills
-			if let Ok(content) = std::fs::read_to_string(&project_path) {
-				let project_config = self.adapter.parse_config_with_scope(
-					&content,
-					Some(root),
-					ResourceScope::ProjectOnly,
-				)?;
-				// Add project skills
-				for skill in project_config.skills {
-					if !seen_skill_names.contains(&skill.name) {
-						seen_skill_names.insert(skill.name.clone());
-						merged_config.skills.push(skill);
-					}
-				}
-				// Add project MCPs
-				merged_config.mcps.extend(project_config.mcps);
-			} else {
-				// Project config doesn't exist, but still load project skills
-				let empty_config = self.adapter.parse_config_with_scope(
-					"{}",
-					Some(root),
-					ResourceScope::ProjectOnly,
-				)?;
-				for skill in empty_config.skills {
-					if !seen_skill_names.contains(&skill.name) {
-						seen_skill_names.insert(skill.name.clone());
-						merged_config.skills.push(skill);
-					}
-				}
-			}
-		}
-
-		// Load global config
-		let global_path = self.adapter.global_config_path();
-		if let Ok(content) = std::fs::read_to_string(&global_path) {
-			let global_config = self.adapter.parse_config_with_scope(
-				&content,
-				None,
-				ResourceScope::GlobalOnly,
+			let project = self.adapter.load_config(
+				&project_path,
+				Some(root),
+				ResourceScope::ProjectOnly,
 			)?;
-			// Add global skills (only if not already in project)
-			for skill in global_config.skills {
+			// Add project skills
+			for skill in project.skills {
 				if !seen_skill_names.contains(&skill.name) {
 					seen_skill_names.insert(skill.name.clone());
 					merged_config.skills.push(skill);
 				}
 			}
-			// Add global MCPs
-			merged_config.mcps.extend(global_config.mcps);
+			// Add project MCPs
+			merged_config.mcps.extend(project.mcps);
 		}
+
+		// Load global config
+		let global_path = self.adapter.global_config_path();
+		let global = self.adapter.load_config(
+			&global_path,
+			None,
+			ResourceScope::GlobalOnly,
+		)?;
+		// Add global skills (only if not already in project)
+		for skill in global.skills {
+			if !seen_skill_names.contains(&skill.name) {
+				seen_skill_names.insert(skill.name.clone());
+				merged_config.skills.push(skill);
+			}
+		}
+		// Add global MCPs
+		merged_config.mcps.extend(global.mcps);
 
 		self.config = Some(merged_config);
 		Ok(self.config.as_ref().unwrap())

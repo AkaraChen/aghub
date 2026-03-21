@@ -6,6 +6,7 @@ use crate::{
 	skills::discovery::load_skills_from_dirs,
 };
 use std::cell::RefCell;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -99,15 +100,23 @@ impl AgentAdapter for &'static AgentDescriptor {
 		(self.parse_config)(content)
 	}
 
-	fn parse_config_with_scope(
+	fn load_config(
 		&self,
-		content: &str,
+		config_path: &Path,
 		project_root: Option<&Path>,
 		scope: ResourceScope,
 	) -> Result<AgentConfig> {
-		let mut config = (self.parse_config)(content)?;
+		// 1. Try to load MCPs from config file
+		let mut config = match fs::read_to_string(config_path) {
+			Ok(content) => (self.parse_config)(&content)?,
+			Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+				// No config file is fine - start with empty config
+				AgentConfig::new()
+			}
+			Err(e) => return Err(e.into()),
+		};
 
-		// Load skills from the agent's skills directories based on scope
+		// 2. Discover skills from directories based on scope
 		if self.capabilities.skills {
 			let skills_paths = get_skills_paths(self, project_root, scope);
 			if !skills_paths.is_empty() {
