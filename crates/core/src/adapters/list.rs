@@ -149,6 +149,7 @@ mod tests {
 				author: None,
 				version: None,
 				tools: vec![],
+				metadata: None,
 			}],
 			sub_agents: vec![SubAgent {
 				name: "disabled-agent".to_string(),

@@ -1,99 +1,73 @@
 use crate::models::Skill;
+use skills_ref::read_properties;
+use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-pub(crate) struct SkillMetadata {
-	name: String,
-	description: Option<String>,
-	author: Option<String>,
-	version: Option<String>,
-}
-
-pub(crate) fn parse_skill_md(content: &str) -> Option<SkillMetadata> {
-	let lines: Vec<&str> = content.lines().collect();
-	if lines.len() < 3 || !lines[0].trim().is_empty() && lines[0] != "---" {
+/// Convert skills-ref metadata HashMap to serde_json::Map
+fn convert_metadata(metadata: HashMap<String, String>) -> Option<serde_json::Map<String, serde_json::Value>> {
+	if metadata.is_empty() {
 		return None;
 	}
 
-	let mut name = None;
-	let mut description = None;
-	let mut author = None;
-	let mut version = None;
-	let mut in_frontmatter = false;
-	let mut current_key: Option<&str> = None;
+	let map: serde_json::Map<String, serde_json::Value> = metadata
+		.into_iter()
+		.map(|(k, v)| (k, serde_json::Value::String(v)))
+		.collect();
 
-	for line in &lines {
-		let trimmed = line.trim();
-
-		if trimmed == "---" {
-			if !in_frontmatter {
-				in_frontmatter = true;
-				continue;
-			} else {
-				break;
-			}
-		}
-
-		if !in_frontmatter {
-			continue;
-		}
-
-		if let Some(pos) = line.find(':') {
-			let key = line[..pos].trim();
-			let val = line[pos + 1..].trim();
-			let value = if (val.starts_with('"') && val.ends_with('"'))
-				|| (val.starts_with('\'') && val.ends_with('\''))
-			{
-				&val[1..val.len() - 1]
-			} else {
-				val
-			};
-
-			if key == "name" {
-				name = Some(value.to_string());
-				current_key = Some("name");
-			} else if key == "author" {
-				author = Some(value.to_string());
-				current_key = Some("author");
-			} else if key == "version" {
-				version = Some(value.to_string());
-				current_key = Some("version");
-			} else if key == "description" {
-				if value.is_empty() || value == ">" {
-					current_key = Some("description");
-					description = Some(String::new());
-				} else {
-					description = Some(value.to_string());
-					current_key = Some("description");
-				}
-			} else {
-				current_key = Some(key);
-			}
-		} else if in_frontmatter && current_key == Some("description") {
-			if let Some(ref mut desc) = description {
-				if !trimmed.is_empty() {
-					if !desc.is_empty() {
-						desc.push(' ');
-					}
-					desc.push_str(trimmed);
-				}
-			}
-		}
-	}
-
-	name.map(|n| SkillMetadata {
-		name: n,
-		description,
-		author,
-		version,
-	})
+	Some(map)
 }
 
+/// Load skills from a directory using skills-ref parser
 pub fn load_skills_from_dir(skills_dir: &Path) -> Vec<Skill> {
 	let mut skills = Vec::new();
 	collect_skills(skills_dir, &mut skills);
 	skills.sort_by(|a, b| a.name.cmp(&b.name));
 	skills
+}
+
+/// Load skills from multiple directories
+pub fn load_skills_from_dirs(dirs: &[PathBuf]) -> Vec<Skill> {
+	let mut all_skills = Vec::new();
+	let mut seen_names = std::collections::HashSet::new();
+
+	for dir in dirs {
+		let mut skills = Vec::new();
+		collect_skills(dir, &mut skills);
+
+		for skill in skills {
+			if seen_names.insert(skill.name.clone()) {
+				all_skills.push(skill);
+			}
+		}
+	}
+
+	all_skills.sort_by(|a, b| a.name.cmp(&b.name));
+	all_skills
+}
+
+/// Check if a skill is marked as internal
+pub fn is_internal_skill(skill: &Skill) -> bool {
+	skill
+		.metadata
+		.as_ref()
+		.and_then(|m| m.get("internal"))
+		.and_then(|v| v.as_str())
+		.map(|s| s == "true")
+		.unwrap_or(false)
+}
+
+/// Filter out internal skills unless INCLUDE_INTERNAL_SKILLS is set
+pub fn filter_internal_skills(skills: Vec<Skill>) -> Vec<Skill> {
+	let include_internal = std::env::var("INCLUDE_INTERNAL_SKILLS")
+		.map(|v| v == "1" || v == "true")
+		.unwrap_or(false);
+
+	if include_internal {
+		skills
+	} else {
+		skills.into_iter().filter(|s| !is_internal_skill(s)).collect()
+	}
 }
 
 fn collect_skills(dir: &Path, skills: &mut Vec<Skill>) {
@@ -111,32 +85,19 @@ fn collect_skills(dir: &Path, skills: &mut Vec<Skill>) {
 			continue;
 		}
 
-		let skill_md_path = path.join("SKILL.md");
-		if skill_md_path.exists() {
-			let dir_name =
-				path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-			if dir_name.is_empty() {
-				continue;
-			}
-			let (display_name, description, author, version) =
-				fs::read_to_string(&skill_md_path)
-					.ok()
-					.and_then(|content| parse_skill_md(&content))
-					.map(|meta| {
-						(meta.name, meta.description, meta.author, meta.version)
-					})
-					.unwrap_or_else(|| {
-						(dir_name.to_string(), None, None, None)
-					});
+		// Try to read skill using skills-ref parser
+		if let Ok(props) = read_properties(&path) {
 			skills.push(Skill {
-				name: display_name,
+				name: props.name,
 				enabled: true,
-				description,
-				author,
-				version,
+				description: Some(props.description),
+				author: None, // skills-ref doesn't have author field
+				version: None, // skills-ref doesn't have version field
 				tools: Vec::new(),
+				metadata: convert_metadata(props.metadata),
 			});
 		} else {
+			// Recurse into subdirectories if no SKILL.md found at this level
 			collect_skills(&path, skills);
 		}
 	}

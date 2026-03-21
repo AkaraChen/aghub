@@ -13,6 +13,7 @@ dirs = { workspace = true }
 toml = { workspace = true }
 tempfile = { workspace = true, optional = true }
 skill = { path = "../skill" }
+skills-ref = { path = "../skills-ref" }
 
 [dev-dependencies]
 tempfile = { workspace = true }

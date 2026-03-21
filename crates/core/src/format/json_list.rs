@@ -137,6 +137,7 @@ pub fn parse(content: &str) -> Result<AgentConfig> {
 			author: skill.author,
 			version: skill.version,
 			tools: skill.tools,
+			metadata: None,
 		});
 	}
 

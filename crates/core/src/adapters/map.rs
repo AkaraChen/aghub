@@ -227,6 +227,7 @@ mod tests {
 				author: Some("test".to_string()),
 				version: Some("1.0.0".to_string()),
 				tools: vec!["tool1".to_string()],
+				metadata: None,
 			}],
 			sub_agents: vec![SubAgent::new("agent1")],
 		};

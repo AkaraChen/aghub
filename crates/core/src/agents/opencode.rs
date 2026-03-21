@@ -16,8 +16,8 @@ pub fn project_path(root: &Path) -> PathBuf {
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "opencode",
 	display_name: "OpenCode",
-	config_format: ConfigFormat::JsonOpenCode,
-	server_key: "mcp",
+	parse_config: mcp_strategy::PARSE_JSON_OPCODE,
+	serialize_config: mcp_strategy::SERIALIZE_JSON_OPCODE,
 	global_path,
 	project_path,
 	capabilities: Capabilities {
@@ -26,9 +26,11 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 		mcp_enable_disable: true,
 		sub_agents: true,
 		skills: true,
+		universal_skills: true,
 	},
-	skills_dir: Some(".opencode/skills"),
+	skills_dir: Some(".agents/skills"),
 	global_skills_path: None,
+	uses_universal_skills: true,
 	cli_name: "opencode",
 	validate_args: &["--version"],
 	project_markers: &[".opencode"],

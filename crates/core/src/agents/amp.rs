@@ -14,8 +14,8 @@ pub fn global_skills_path() -> PathBuf {
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "amp",
 	display_name: "Amp",
-	config_format: ConfigFormat::JsonMap,
-	server_key: "mcpServers",
+	parse_config: mcp_strategy::parse_json_map_mcp_servers,
+	serialize_config: mcp_strategy::serialize_json_map_mcp_servers,
 	global_path,
 	project_path,
 	capabilities: Capabilities {
@@ -24,9 +24,11 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 		mcp_enable_disable: false,
 		sub_agents: false,
 		skills: true,
+		universal_skills: true,
 	},
 	skills_dir: Some(".agents/skills"),
 	global_skills_path: Some(global_skills_path),
+	uses_universal_skills: true,
 	cli_name: "amp",
 	validate_args: &["--version"],
 	project_markers: &[".amp"],

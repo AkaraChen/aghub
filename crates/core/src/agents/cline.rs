@@ -10,11 +10,15 @@ pub fn project_path(root: &Path) -> PathBuf {
 	root.join(".cline/mcp.json")
 }
 
+pub fn global_skills_path() -> PathBuf {
+	dirs::home_dir().unwrap().join(".cline/skills")
+}
+
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "cline",
 	display_name: "Cline",
-	config_format: ConfigFormat::None,
-	server_key: "",
+	parse_config: mcp_strategy::parse_none,
+	serialize_config: mcp_strategy::serialize_none,
 	global_path,
 	project_path,
 	capabilities: Capabilities {
@@ -22,10 +26,12 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 		mcp_remote: false,
 		mcp_enable_disable: false,
 		sub_agents: false,
-		skills: false,
+		skills: true,
+		universal_skills: true,
 	},
-	skills_dir: None,
-	global_skills_path: None,
+	skills_dir: Some(".agents/skills"),
+	global_skills_path: Some(global_skills_path),
+	uses_universal_skills: true,
 	cli_name: "cline",
 	validate_args: &["--version"],
 	project_markers: &[".cline"],

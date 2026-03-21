@@ -16,8 +16,8 @@ pub fn global_skills_path() -> PathBuf {
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "antigravity",
 	display_name: "Antigravity",
-	config_format: ConfigFormat::None,
-	server_key: "",
+	parse_config: mcp_strategy::parse_none,
+	serialize_config: mcp_strategy::serialize_none,
 	global_path,
 	project_path,
 	capabilities: Capabilities {
@@ -26,9 +26,11 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 		mcp_enable_disable: false,
 		sub_agents: false,
 		skills: true,
+		universal_skills: false,
 	},
 	skills_dir: Some(".agent/skills"),
 	global_skills_path: Some(global_skills_path),
+	uses_universal_skills: false,
 	cli_name: "antigravity",
 	validate_args: &["--version"],
 	project_markers: &[".gemini/antigravity"],

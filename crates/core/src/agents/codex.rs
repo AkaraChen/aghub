@@ -14,8 +14,8 @@ pub fn global_skills_path() -> PathBuf {
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "codex",
 	display_name: "OpenAI Codex",
-	config_format: ConfigFormat::Toml,
-	server_key: "mcp_servers",
+	parse_config: mcp_strategy::PARSE_TOML,
+	serialize_config: mcp_strategy::SERIALIZE_TOML,
 	global_path,
 	project_path,
 	capabilities: Capabilities {
@@ -24,9 +24,11 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 		mcp_enable_disable: false,
 		sub_agents: false,
 		skills: true,
+		universal_skills: true,
 	},
-	skills_dir: Some(".codex/skills"),
+	skills_dir: Some(".agents/skills"),
 	global_skills_path: Some(global_skills_path),
+	uses_universal_skills: true,
 	cli_name: "codex",
 	validate_args: &["--version"],
 	project_markers: &[".codex"],

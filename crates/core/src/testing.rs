@@ -3,7 +3,6 @@ use crate::{
 	errors::{ConfigError, Result},
 	manager::ConfigManager,
 	registry,
-	registry::descriptor::ConfigFormat,
 	AgentType,
 };
 use std::fs;
@@ -32,18 +31,22 @@ impl TestConfig {
 		let descriptor = registry::get(agent_type);
 		let temp_dir = TempDir::new().map_err(ConfigError::Io)?;
 
-		let config_path = match descriptor.config_format {
-			ConfigFormat::Toml => temp_dir.path().join("config.toml"),
-			_ => temp_dir.path().join("settings.json"),
+		// Determine config file format based on agent type
+		let is_toml = matches!(agent_type, AgentType::Codex | AgentType::Mistral);
+		let is_json_list = matches!(agent_type, AgentType::OpenCode);
+
+		let config_path = if is_toml {
+			temp_dir.path().join("config.toml")
+		} else {
+			temp_dir.path().join("settings.json")
 		};
 
-		let initial_config = match descriptor.config_format {
-			ConfigFormat::JsonOpenCode | ConfigFormat::JsonList => {
-				r#"{"mcp_servers": [], "skills": [], "sub_agents": []}"#
-			}
-			ConfigFormat::Toml => "",
-			ConfigFormat::None => r#"{"mcpServers": {}, "skills": {}}"#,
-			ConfigFormat::JsonMap => r#"{"mcpServers": {}, "skills": {}}"#,
+		let initial_config = if is_json_list {
+			r#"{"mcp_servers": [], "skills": [], "sub_agents": []}"#
+		} else if is_toml {
+			""
+		} else {
+			r#"{"mcpServers": {}, "skills": {}}"#
 		};
 
 		fs::write(&config_path, initial_config).map_err(ConfigError::Io)?;
@@ -166,27 +169,31 @@ impl TestConfigBuilder {
 	}
 
 	pub fn build(self) -> Result<TestConfig> {
-		let descriptor = registry::get(self.agent_type);
 		let temp_dir = TempDir::new().map_err(ConfigError::Io)?;
 
-		let config_path = match descriptor.config_format {
-			ConfigFormat::Toml => temp_dir.path().join("config.toml"),
-			_ => temp_dir.path().join("settings.json"),
+		// Determine config file format based on agent type
+		let is_toml = matches!(self.agent_type, AgentType::Codex | AgentType::Mistral);
+		let is_json_list = matches!(self.agent_type, AgentType::OpenCode);
+
+		let config_path = if is_toml {
+			temp_dir.path().join("config.toml")
+		} else {
+			temp_dir.path().join("settings.json")
 		};
 
-		let content = self.initial_content.unwrap_or_else(|| match descriptor
-			.config_format
-		{
-			ConfigFormat::JsonOpenCode | ConfigFormat::JsonList => {
-				r#"{"mcp_servers": [], "skills": [], "sub_agents": []}"#
-					.to_string()
+		let content = self.initial_content.unwrap_or_else(|| {
+			if is_json_list {
+				r#"{"mcp_servers": [], "skills": [], "sub_agents": []}"#.to_string()
+			} else if is_toml {
+				String::new()
+			} else {
+				r#"{"mcpServers": {}, "skills": {}}"#.to_string()
 			}
-			ConfigFormat::Toml => String::new(),
-			_ => r#"{"mcpServers": {}, "skills": {}}"#.to_string(),
 		});
 
 		fs::write(&config_path, content).map_err(ConfigError::Io)?;
 
+		let descriptor = registry::get(self.agent_type);
 		let skills_dir = temp_dir.path().join("skills");
 		if descriptor.capabilities.skills {
 			fs::create_dir(&skills_dir).map_err(ConfigError::Io)?;

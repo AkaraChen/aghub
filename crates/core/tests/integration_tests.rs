@@ -40,6 +40,7 @@ fn create_test_skill(name: &str) -> Skill {
 		author: Some("test-author".to_string()),
 		version: Some("1.0.0".to_string()),
 		tools: vec!["tool1".to_string(), "tool2".to_string()],
+		metadata: None,
 	}
 }
 

@@ -33,6 +33,7 @@ pub fn convert_skill(skill_pkg: skill::Skill) -> models::Skill {
 			.allowed_tools
 			.map(|t| t.split(',').map(|s| s.trim().to_string()).collect())
 			.unwrap_or_default(),
+		metadata: None,
 	}
 }
 

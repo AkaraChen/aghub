@@ -40,6 +40,9 @@ pub struct Skill {
 	/// List of tool names this skill provides
 	#[serde(default)]
 	pub tools: Vec<String>,
+	/// Additional metadata from frontmatter (e.g., internal: true)
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub metadata: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 impl Skill {
@@ -51,6 +54,7 @@ impl Skill {
 			author: None,
 			version: None,
 			tools: Vec::new(),
+			metadata: None,
 		}
 	}
 }
@@ -330,6 +334,12 @@ mod tests {
 
 	#[test]
 	fn test_skill_serialization() {
+		let mut metadata = serde_json::Map::new();
+		metadata.insert(
+			"internal".to_string(),
+			serde_json::Value::String("true".to_string()),
+		);
+
 		let skill = Skill {
 			name: "test-skill".to_string(),
 			enabled: true,
@@ -337,6 +347,7 @@ mod tests {
 			author: Some("test-author".to_string()),
 			version: Some("1.0.0".to_string()),
 			tools: vec!["tool1".to_string(), "tool2".to_string()],
+			metadata: Some(metadata),
 		};
 
 		let json = serde_json::to_string(&skill).unwrap();
