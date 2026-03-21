@@ -14,13 +14,13 @@ pub fn global_skills_path() -> PathBuf {
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "pi",
 	display_name: "Pi",
-	config_format: ConfigFormat::None,
-	server_key: "",
+	config_format: ConfigFormat::JsonMap,
+	server_key: "mcpServers",
 	global_path,
 	project_path,
 	capabilities: Capabilities {
-		mcp_stdio: false,
-		mcp_remote: false,
+		mcp_stdio: true,
+		mcp_remote: true,
 		mcp_enable_disable: false,
 		sub_agents: false,
 		skills: true,
