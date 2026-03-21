@@ -28,6 +28,9 @@ fn global_skills_path() -> PathBuf {
 	let home = dirs::home_dir().unwrap();
 	get_openclaw_skills_dir(&home, |p| p.exists())
 }
+fn project_skills_path(root: &Path) -> PathBuf {
+	root.join(".openclaw/skills")
+}
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "openclaw",
@@ -45,6 +48,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	},
 	skills_dir: Some(".openclaw/skills"),
 	global_skills_path: Some(global_skills_path),
+	project_skills_path: Some(project_skills_path),
 	uses_universal_skills: false,
 	cli_name: "openclaw",
 	validate_args: &["--version"],

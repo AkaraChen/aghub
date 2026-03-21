@@ -15,6 +15,9 @@ fn global_skills_path() -> PathBuf {
 		.unwrap_or_else(|| dirs::home_dir().unwrap().join(".config"))
 		.join("agents/skills")
 }
+fn project_skills_path(root: &Path) -> PathBuf {
+	root.join(".agents/skills")
+}
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "amp",
@@ -32,6 +35,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	},
 	skills_dir: Some(".agents/skills"),
 	global_skills_path: Some(global_skills_path),
+	project_skills_path: Some(project_skills_path),
 	uses_universal_skills: true,
 	cli_name: "amp",
 	validate_args: &["--version"],

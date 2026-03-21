@@ -39,7 +39,7 @@ pub fn sanitize_name(input: &str) -> String {
 	}
 
 	// Remove leading dots and hyphens
-	let trimmed_start = result.trim_start_matches(|c| c == '.' || c == '-');
+	let trimmed_start = result.trim_start_matches(['.', '-']);
 	let mut result = trimmed_start.to_string();
 
 	// Remove trailing dots and hyphens

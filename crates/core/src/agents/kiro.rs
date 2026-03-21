@@ -10,6 +10,9 @@ fn project_path(root: &Path) -> PathBuf {
 fn global_skills_path() -> PathBuf {
 	dirs::home_dir().unwrap().join(".kiro/skills")
 }
+fn project_skills_path(root: &Path) -> PathBuf {
+	root.join(".kiro/skills")
+}
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "kiro",
@@ -27,6 +30,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	},
 	skills_dir: Some(".kiro/skills"),
 	global_skills_path: Some(global_skills_path),
+	project_skills_path: Some(project_skills_path),
 	uses_universal_skills: false,
 	cli_name: "kiro",
 	validate_args: &["--version"],

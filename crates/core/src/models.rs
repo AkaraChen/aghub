@@ -181,6 +181,18 @@ fn default_true() -> bool {
 	true
 }
 
+/// Resource discovery scope
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ResourceScope {
+	/// Show only global resources (default behavior)
+	#[default]
+	GlobalOnly,
+	/// Show only project-level resources
+	ProjectOnly,
+	/// Show both project and global resources
+	Both,
+}
+
 /// Agent types supported by the system
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AgentType {

@@ -13,6 +13,9 @@ fn project_path(root: &Path) -> PathBuf {
 fn global_skills_path() -> PathBuf {
 	dirs::home_dir().unwrap().join(".cline/skills")
 }
+fn project_skills_path(root: &Path) -> PathBuf {
+	root.join(".agents/skills")
+}
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "cline",
@@ -30,6 +33,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	},
 	skills_dir: Some(".agents/skills"),
 	global_skills_path: Some(global_skills_path),
+	project_skills_path: Some(project_skills_path),
 	uses_universal_skills: true,
 	cli_name: "cline",
 	validate_args: &["--version"],

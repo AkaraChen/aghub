@@ -29,6 +29,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	},
 	skills_dir: Some(".agents/skills"),
 	global_skills_path: None,
+	project_skills_path: None,
 	uses_universal_skills: true,
 	cli_name: "opencode",
 	validate_args: &["--version"],

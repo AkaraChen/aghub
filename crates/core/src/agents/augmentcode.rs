@@ -24,6 +24,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	},
 	skills_dir: Some(".augment/skills"),
 	global_skills_path: None,
+	project_skills_path: None,
 	uses_universal_skills: false,
 	cli_name: "augmentcode",
 	validate_args: &["--version"],

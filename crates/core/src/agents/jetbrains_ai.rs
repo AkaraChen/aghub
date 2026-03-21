@@ -24,6 +24,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	},
 	skills_dir: None,
 	global_skills_path: None,
+	project_skills_path: None,
 	uses_universal_skills: false,
 	cli_name: "jetbrains",
 	validate_args: &["--version"],

@@ -1,7 +1,7 @@
 use crate::{
 	adapters::AgentAdapter,
 	errors::Result,
-	models::AgentConfig,
+	models::{AgentConfig, ResourceScope},
 	registry::descriptor::AgentDescriptor,
 	skills::discovery::load_skills_from_dirs,
 };
@@ -30,10 +30,15 @@ fn get_universal_skills_path() -> Option<PathBuf> {
 	Some(config_dir.join("agents/skills"))
 }
 
-fn get_skills_paths(descriptor: &AgentDescriptor) -> Vec<PathBuf> {
+/// Get skills paths based on the resource scope
+fn get_skills_paths(
+	descriptor: &AgentDescriptor,
+	project_root: Option<&Path>,
+	scope: ResourceScope,
+) -> Vec<PathBuf> {
 	let mut paths = Vec::new();
 
-	// Check thread-local override first
+	// Check thread-local override first (for testing)
 	if let Some((id, path)) = SKILLS_PATH_OVERRIDE.with(|p| p.borrow().clone()) {
 		if id == descriptor.id {
 			paths.push(path);
@@ -41,17 +46,35 @@ fn get_skills_paths(descriptor: &AgentDescriptor) -> Vec<PathBuf> {
 		}
 	}
 
-	// Add agent-specific skills path
-	if let Some(path_fn) = descriptor.global_skills_path {
-		paths.push(path_fn());
+	// Add project-level skills path(s) if scope includes project
+	if scope == ResourceScope::ProjectOnly || scope == ResourceScope::Both {
+		if let Some(root) = project_root {
+			// Add agent-specific project skills path
+			if let Some(path_fn) = descriptor.project_skills_path {
+				paths.push(path_fn(root));
+			}
+
+			// Add universal project skills path for agents that support it
+			if descriptor.uses_universal_skills {
+				paths.push(root.join(".agents/skills"));
+			}
+		}
 	}
 
-	// Add universal skills path for agents that support it
-	if descriptor.uses_universal_skills {
-		if let Some(universal_path) = get_universal_skills_path() {
-			// Only add if not already the same as agent-specific path
-			if !paths.contains(&universal_path) {
-				paths.push(universal_path);
+	// Add global skills path(s) if scope includes global
+	if scope == ResourceScope::GlobalOnly || scope == ResourceScope::Both {
+		// Add agent-specific global skills path
+		if let Some(path_fn) = descriptor.global_skills_path {
+			paths.push(path_fn());
+		}
+
+		// Add universal global skills path for agents that support it
+		if descriptor.uses_universal_skills {
+			if let Some(universal_path) = get_universal_skills_path() {
+				// Only add if not already in paths
+				if !paths.contains(&universal_path) {
+					paths.push(universal_path);
+				}
 			}
 		}
 	}
@@ -73,11 +96,20 @@ impl AgentAdapter for &'static AgentDescriptor {
 	}
 
 	fn parse_config(&self, content: &str) -> Result<AgentConfig> {
+		(self.parse_config)(content)
+	}
+
+	fn parse_config_with_scope(
+		&self,
+		content: &str,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+	) -> Result<AgentConfig> {
 		let mut config = (self.parse_config)(content)?;
 
-		// Load skills from the agent's skills directories
+		// Load skills from the agent's skills directories based on scope
 		if self.capabilities.skills {
-			let skills_paths = get_skills_paths(self);
+			let skills_paths = get_skills_paths(self, project_root, scope);
 			if !skills_paths.is_empty() {
 				config.skills = load_skills_from_dirs(&skills_paths);
 			}

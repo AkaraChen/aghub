@@ -12,6 +12,9 @@ fn project_path(root: &Path) -> PathBuf {
 fn global_skills_path() -> PathBuf {
 	dirs::home_dir().unwrap().join(".agent/skills")
 }
+fn project_skills_path(root: &Path) -> PathBuf {
+	root.join(".agent/skills")
+}
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "antigravity",
@@ -29,6 +32,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	},
 	skills_dir: Some(".agent/skills"),
 	global_skills_path: Some(global_skills_path),
+	project_skills_path: Some(project_skills_path),
 	uses_universal_skills: false,
 	cli_name: "antigravity",
 	validate_args: &["--version"],

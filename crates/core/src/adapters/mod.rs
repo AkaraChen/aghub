@@ -1,4 +1,4 @@
-use crate::{errors::Result, models::AgentConfig};
+use crate::{errors::Result, models::{AgentConfig, ResourceScope}};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -8,6 +8,16 @@ pub trait AgentAdapter: Send + Sync {
 	fn global_config_path(&self) -> PathBuf;
 	fn project_config_path(&self, project_root: &Path) -> PathBuf;
 	fn parse_config(&self, content: &str) -> Result<AgentConfig>;
+	/// Parse config with resource scope and project root
+	fn parse_config_with_scope(
+		&self,
+		content: &str,
+		_project_root: Option<&Path>,
+		_scope: ResourceScope,
+	) -> Result<AgentConfig> {
+		// Default implementation ignores scope and uses original parse_config
+		self.parse_config(content)
+	}
 	fn serialize_config(
 		&self,
 		config: &AgentConfig,

@@ -34,6 +34,8 @@ pub struct AgentDescriptor {
 	pub skills_dir: Option<&'static str>,
 	/// Function returning the global skills path (if skills supported)
 	pub global_skills_path: Option<fn() -> PathBuf>,
+	/// Function returning the project skills path (if skills supported)
+	pub project_skills_path: Option<fn(&Path) -> PathBuf>,
 	/// Whether this agent uses the universal .agents/skills directory
 	pub uses_universal_skills: bool,
 	pub cli_name: &'static str,

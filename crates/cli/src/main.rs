@@ -4,7 +4,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use aghub_core::{
-	adapters::create_adapter, manager::ConfigManager, models::AgentType,
+	adapters::create_adapter, manager::ConfigManager, models::{AgentType, ResourceScope},
 	paths::find_project_root,
 };
 
@@ -42,16 +42,20 @@ macro_rules! eprintln_verbose {
 #[command(version)]
 struct Cli {
 	/// Target agent: claude, opencode
-	#[arg(short, long, default_value = "claude")]
+	#[arg(long, default_value = "claude")]
 	agent: String,
 
-	/// Use global config
-	#[arg(short, long, group = "config_scope")]
+	/// Use global config (forces global-only scope)
+	#[arg(short, long)]
 	global: bool,
 
-	/// Use project config (auto-detects .claude/ or .opencode/)
-	#[arg(short, long, group = "config_scope")]
+	/// Show only project resources (project-only scope)
+	#[arg(short, long)]
 	project: bool,
+
+	/// Show both project and global resources
+	#[arg(short, long)]
+	all: bool,
 
 	/// Enable verbose output (to stderr)
 	#[arg(short, long)]
@@ -215,27 +219,52 @@ fn main() -> Result<()> {
 	})?;
 	eprintln_verbose!("Agent type: {}", cli.agent);
 
-	// Determine config scope
-	let (global, project_root) = if cli.project {
+	// Determine resource scope based on flags
+	// -a/--all takes precedence, then -p/--project, then -g/--global, then default (global)
+	let scope = if cli.all {
+		ResourceScope::Both
+	} else if cli.project {
+		ResourceScope::ProjectOnly
+	} else if cli.global {
+		ResourceScope::GlobalOnly
+	} else {
+		// Default: global only (preserves current behavior)
+		ResourceScope::GlobalOnly
+	};
+
+	// Determine project root if needed for scope
+	let project_root = if scope == ResourceScope::ProjectOnly || scope == ResourceScope::Both {
 		let current_dir = std::env::current_dir()?;
-		let root = find_project_root(&current_dir)
-            .or(Some(current_dir))
-            .context("Could not determine project root. Use -g for global config or run from within a project.")?;
-		(false, Some(root))
+		find_project_root(&current_dir)
 	} else {
-		(cli.global || !cli.project, None)
+		None
 	};
 
-	let scope = if global { "global" } else { "project" };
-	eprintln_verbose!("Config scope: {}", scope);
+	// Determine which config file to use for writes (primary scope)
+	let use_global_config = if cli.global {
+		true
+	} else if cli.project {
+		false
+	} else if cli.all {
+		// For --all, use project config as primary if available
+		project_root.is_some()
+	} else {
+		true // default to global
+	};
 
-	// Create adapter and manager
+	eprintln_verbose!("Resource scope: {:?}", scope);
+	if let Some(ref root) = project_root {
+		eprintln_verbose!("Project root: {}", root.display());
+	}
+
+	// Create adapter and manager with scope
 	let adapter = create_adapter(agent_type);
-	let mut manager = if let Some(ref root) = project_root {
-		ConfigManager::new(adapter, false, Some(root))
-	} else {
-		ConfigManager::new(adapter, global, None)
-	};
+	let mut manager = ConfigManager::with_scope(
+		adapter,
+		use_global_config,
+		project_root.as_deref(),
+		scope,
+	);
 	eprintln_verbose!("Config manager created");
 	eprintln_verbose!("Config file: {}", manager.config_path().display());
 

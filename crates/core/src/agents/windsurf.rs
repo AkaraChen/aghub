@@ -12,6 +12,9 @@ fn project_path(root: &Path) -> PathBuf {
 fn global_skills_path() -> PathBuf {
 	dirs::home_dir().unwrap().join(".codeium/windsurf/skills")
 }
+fn project_skills_path(root: &Path) -> PathBuf {
+	root.join(".windsurf/skills")
+}
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "windsurf",
@@ -29,6 +32,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	},
 	skills_dir: Some(".windsurf/skills"),
 	global_skills_path: Some(global_skills_path),
+	project_skills_path: Some(project_skills_path),
 	uses_universal_skills: false,
 	cli_name: "windsurf",
 	validate_args: &["--version"],
