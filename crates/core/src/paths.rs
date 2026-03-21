@@ -67,12 +67,6 @@ pub fn copilot_global_path() -> PathBuf {
 pub fn copilot_project_path(root: &Path) -> PathBuf {
 	root.join(".vscode/mcp.json")
 }
-pub fn aider_global_path() -> PathBuf {
-	dirs::home_dir().unwrap().join(".mcp.json")
-}
-pub fn aider_project_path(root: &Path) -> PathBuf {
-	root.join(".mcp.json")
-}
 pub fn cline_global_path() -> PathBuf {
 	dirs::home_dir()
 		.unwrap()
@@ -210,10 +204,6 @@ mod tests {
 		assert_eq!(
 			roocode_project_path(dir).to_str().unwrap(),
 			"/test_project/.roo/mcp.json"
-		);
-		assert_eq!(
-			aider_project_path(dir).to_str().unwrap(),
-			"/test_project/.mcp.json"
 		);
 		assert_eq!(
 			gemini_project_path(dir).to_str().unwrap(),

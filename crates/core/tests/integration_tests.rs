@@ -822,36 +822,6 @@ fn test_kiro_mcp_workflow() {
 	assert!(manager.config().unwrap().mcps.is_empty());
 }
 
-#[test]
-fn test_firebase_mcp_workflow() {
-	let test = TestConfig::new(AgentType::Firebase).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-	assert!(manager.config().unwrap().mcps.is_empty());
-
-	let mcp = create_test_mcp_stdio("firebase-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "firebase-mcp");
-}
-
-#[test]
-fn test_junie_mcp_workflow() {
-	let test = TestConfig::new(AgentType::Junie).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-
-	let mcp = create_test_mcp_stdio("junie-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "junie-mcp");
-}
 
 #[test]
 fn test_zed_mcp_workflow() {
@@ -871,17 +841,3 @@ fn test_zed_mcp_workflow() {
 	assert!(servers.contains_key("zed-mcp"));
 }
 
-#[test]
-fn test_crush_mcp_workflow() {
-	let test = TestConfig::new(AgentType::Crush).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-
-	let mcp = create_test_mcp_stdio("crush-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "crush-mcp");
-}

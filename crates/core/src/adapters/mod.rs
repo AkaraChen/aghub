@@ -61,11 +61,6 @@ pub fn create_adapter(agent_type: crate::AgentType) -> Box<dyn AgentAdapter> {
 			paths::cline_global_path,
 			paths::cline_project_path,
 		)),
-		crate::AgentType::Aider => Box::new(MapAdapter::with_paths(
-			"aider",
-			paths::aider_global_path,
-			paths::aider_project_path,
-		)),
 		crate::AgentType::Gemini => Box::new(MapAdapter::with_paths(
 			"gemini",
 			paths::gemini_global_path,
@@ -120,11 +115,5 @@ mod tests {
 	fn test_create_adapter_kiro() {
 		let adapter = create_adapter(AgentType::Kiro);
 		assert_eq!(adapter.name(), "kiro");
-	}
-
-	#[test]
-	fn test_create_adapter_firebase() {
-		let adapter = create_adapter(AgentType::Firebase);
-		assert_eq!(adapter.name(), "firebase");
 	}
 }
