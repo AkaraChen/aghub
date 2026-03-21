@@ -17,13 +17,6 @@ struct McpView {
 	transport_type: String,
 }
 
-#[derive(Serialize)]
-struct SubAgentView {
-	name: String,
-	enabled: bool,
-	model: Option<String>,
-}
-
 pub fn execute(manager: &ConfigManager, resource: ResourceType) -> Result<()> {
 	let config = manager.config().context("No configuration loaded")?;
 
@@ -61,19 +54,6 @@ pub fn execute(manager: &ConfigManager, resource: ResourceType) -> Result<()> {
 				})
 				.collect();
 			eprintln_verbose!("Found {} MCP servers", views.len());
-			println!("{}", serde_json::to_string_pretty(&views)?);
-		}
-		ResourceType::SubAgents => {
-			let views: Vec<SubAgentView> = config
-				.sub_agents
-				.iter()
-				.map(|a| SubAgentView {
-					name: a.name.clone(),
-					enabled: a.enabled,
-					model: a.model.clone(),
-				})
-				.collect();
-			eprintln_verbose!("Found {} sub-agents", views.len());
 			println!("{}", serde_json::to_string_pretty(&views)?);
 		}
 	}

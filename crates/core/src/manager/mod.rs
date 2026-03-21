@@ -7,7 +7,6 @@ use std::path::{Path, PathBuf};
 
 pub mod mcp;
 pub mod skill;
-pub mod sub_agent;
 
 /// Manages configuration loading, saving, and CRUD operations
 pub struct ConfigManager {

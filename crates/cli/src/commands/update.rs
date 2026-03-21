@@ -19,8 +19,6 @@ pub fn execute(
 	author: Option<String>,
 	version: Option<String>,
 	tools: Vec<String>,
-	model: Option<String>,
-	instructions: Option<String>,
 ) -> Result<()> {
 	match resource {
 		ResourceType::Skills => {
@@ -142,29 +140,6 @@ pub fn execute(
 			manager.update_mcp(&name, mcp.clone())?;
 			eprintln_verbose!("MCP server updated successfully");
 			println!("{}", serde_json::to_string_pretty(&mcp)?);
-		}
-		ResourceType::SubAgents => {
-			eprintln_verbose!("Updating sub-agent: {}", name);
-			// Get existing sub-agent
-			let existing = manager.get_sub_agent(&name).ok_or_else(|| {
-				ConfigError::resource_not_found("sub-agent", &name)
-			})?;
-
-			let mut agent = existing.clone();
-
-			if let Some(desc) = description {
-				agent.description = Some(desc);
-			}
-			if let Some(mdl) = model {
-				agent.model = Some(mdl);
-			}
-			if let Some(instr) = instructions {
-				agent.instructions = Some(instr);
-			}
-
-			manager.update_sub_agent(&name, agent.clone())?;
-			eprintln_verbose!("Sub-agent updated successfully");
-			println!("{}", serde_json::to_string_pretty(&agent)?);
 		}
 	}
 

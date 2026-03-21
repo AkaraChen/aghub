@@ -1,7 +1,7 @@
 use crate::{eprintln_verbose, ResourceType};
 use aghub_core::{
 	manager::ConfigManager,
-	models::{McpServer, McpTransport, Skill, SubAgent},
+	models::{McpServer, McpTransport, Skill},
 };
 use anyhow::{anyhow, bail, Result};
 use std::collections::HashMap;
@@ -22,8 +22,6 @@ pub fn execute(
 	author: Option<String>,
 	version: Option<String>,
 	tools: Vec<String>,
-	model: Option<String>,
-	instructions: Option<String>,
 ) -> Result<()> {
 	match resource {
 		ResourceType::Skills => {
@@ -62,6 +60,7 @@ pub fn execute(
 					author,
 					version,
 					tools,
+					metadata: None,
 				};
 				manager.add_skill(skill.clone())?;
 				eprintln_verbose!("Skill added successfully");
@@ -148,23 +147,6 @@ pub fn execute(
 			manager.add_mcp(mcp.clone())?;
 			eprintln_verbose!("MCP server added successfully");
 			println!("{}", serde_json::to_string_pretty(&mcp)?);
-		}
-		ResourceType::SubAgents => {
-			// Sub-agent requires name
-			let agent_name = name
-				.ok_or_else(|| anyhow!("--name is required for sub-agents"))?;
-
-			eprintln_verbose!("Adding sub-agent: {}", agent_name);
-			let agent = SubAgent {
-				name: agent_name,
-				enabled: true,
-				description,
-				model,
-				instructions,
-			};
-			manager.add_sub_agent(agent.clone())?;
-			eprintln_verbose!("Sub-agent added successfully");
-			println!("{}", serde_json::to_string_pretty(&agent)?);
 		}
 	}
 

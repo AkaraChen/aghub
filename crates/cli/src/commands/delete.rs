@@ -31,17 +31,6 @@ pub fn execute(
 				)?
 			);
 		}
-		ResourceType::SubAgents => {
-			eprintln_verbose!("Deleting sub-agent: {}", name);
-			manager.remove_sub_agent(&name)?;
-			eprintln_verbose!("Sub-agent deleted successfully");
-			println!(
-				"{}",
-				serde_json::to_string_pretty(
-					&json!({"deleted": true, "name": name, "type": "sub-agent" })
-				)?
-			);
-		}
 	}
 
 	Ok(())

@@ -14,7 +14,6 @@ pub struct Capabilities {
 	pub mcp_stdio: bool,
 	pub mcp_remote: bool,
 	pub mcp_enable_disable: bool,
-	pub sub_agents: bool,
 	pub skills: bool,
 	/// Whether this agent supports the universal .agents/skills directory
 	pub universal_skills: bool,

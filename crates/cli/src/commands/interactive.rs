@@ -2,7 +2,7 @@ use crate::ResourceType;
 use aghub_core::{
 	adapters::create_adapter,
 	manager::ConfigManager,
-	models::{AgentType, McpServer, McpTransport, Skill, SubAgent},
+	models::{AgentType, McpServer, McpTransport, Skill},
 	paths::find_project_root,
 	registry,
 };
@@ -198,7 +198,6 @@ fn select_resource_type() -> Result<ResourceType> {
 	let options = [
 		("Skill", ResourceType::Skills),
 		("MCP Server", ResourceType::Mcps),
-		("Sub-agent", ResourceType::SubAgents),
 	];
 
 	let selected = Select::new(
@@ -259,26 +258,7 @@ fn list_resources(manager: &ConfigManager) -> Result<()> {
 		}
 	}
 
-	// Sub-agents
-	if !config.sub_agents.is_empty() {
-		println!("\n{}", "Sub-agents:".bold());
-		for agent in &config.sub_agents {
-			let status = if agent.enabled {
-				"●".green()
-			} else {
-				"●".red()
-			};
-			println!("  {} {}", status, agent.name);
-			if let Some(model) = &agent.model {
-				println!("     Model: {}", model.dimmed());
-			}
-		}
-	}
-
-	if config.skills.is_empty()
-		&& config.mcps.is_empty()
-		&& config.sub_agents.is_empty()
-	{
+	if config.skills.is_empty() && config.mcps.is_empty() {
 		println!("{}", "No resources configured yet.".dimmed());
 	}
 
@@ -291,7 +271,6 @@ fn add_resource(manager: &mut ConfigManager) -> Result<()> {
 	match resource_type {
 		ResourceType::Skills => add_skill(manager)?,
 		ResourceType::Mcps => add_mcp(manager)?,
-		ResourceType::SubAgents => add_sub_agent(manager)?,
 	}
 
 	Ok(())
@@ -402,6 +381,7 @@ fn add_skill_from_registry(manager: &mut ConfigManager) -> Result<()> {
 		author: Some(skill_result.source.clone()),
 		version: None,
 		tools: Vec::new(),
+		metadata: None,
 	};
 
 	manager.add_skill(skill.clone())?;
@@ -484,6 +464,7 @@ fn add_skill_manually(manager: &mut ConfigManager) -> Result<()> {
 		author,
 		version,
 		tools,
+		metadata: None,
 	};
 
 	manager.add_skill(skill.clone())?;
@@ -621,50 +602,6 @@ fn add_mcp(manager: &mut ConfigManager) -> Result<()> {
 	Ok(())
 }
 
-fn add_sub_agent(manager: &mut ConfigManager) -> Result<()> {
-	println!("\n{}", "═══ Add Sub-agent ═══".bold().cyan());
-
-	let name = Text::new("Sub-agent name:")
-		.with_help_message("e.g., code-reviewer, test-writer")
-		.prompt()?;
-
-	let description = Text::new("Description (optional):").prompt()?;
-	let description = if description.is_empty() {
-		None
-	} else {
-		Some(description)
-	};
-
-	let model = Text::new("Model (optional):")
-		.with_help_message("e.g., claude-sonnet-4-6, gpt-4")
-		.prompt()?;
-	let model = if model.is_empty() { None } else { Some(model) };
-
-	let instructions = Text::new("Instructions/system prompt (optional):")
-		.with_help_message("Describe the sub-agent's role and behavior")
-		.prompt()?;
-	let instructions = if instructions.is_empty() {
-		None
-	} else {
-		Some(instructions)
-	};
-
-	let agent = SubAgent {
-		name,
-		enabled: true,
-		description,
-		model,
-		instructions,
-	};
-
-	manager.add_sub_agent(agent.clone())?;
-
-	println!("\n[OK] Sub-agent added successfully!");
-	println!("{}", serde_json::to_string_pretty(&agent)?);
-
-	Ok(())
-}
-
 fn select_existing_resource(
 	manager: &ConfigManager,
 	resource_type: ResourceType,
@@ -684,9 +621,6 @@ fn select_existing_resource(
 		}
 		ResourceType::Mcps => {
 			config.mcps.iter().map(|m| m.name.clone()).collect()
-		}
-		ResourceType::SubAgents => {
-			config.sub_agents.iter().map(|a| a.name.clone()).collect()
 		}
 	};
 
@@ -717,7 +651,6 @@ fn update_resource(manager: &mut ConfigManager) -> Result<()> {
 	match resource_type {
 		ResourceType::Skills => update_skill(manager, &name)?,
 		ResourceType::Mcps => update_mcp(manager, &name)?,
-		ResourceType::SubAgents => update_sub_agent(manager, &name)?,
 	}
 
 	Ok(())
@@ -861,57 +794,6 @@ fn update_mcp(manager: &mut ConfigManager, name: &str) -> Result<()> {
 	Ok(())
 }
 
-fn update_sub_agent(manager: &mut ConfigManager, name: &str) -> Result<()> {
-	println!(
-		"\n{}",
-		format!("═══ Update Sub-agent: {} ═══", name).bold().cyan()
-	);
-
-	let existing = manager
-		.get_sub_agent(name)
-		.ok_or_else(|| anyhow::anyhow!("Sub-agent not found"))?
-		.clone();
-
-	let mut agent = existing.clone();
-
-	let options = vec!["Description", "Model", "Instructions"];
-	let selected =
-		MultiSelect::new("Select fields to update:", options).prompt()?;
-
-	for field in selected {
-		match field {
-			"Description" => {
-				let current = agent.description.as_deref().unwrap_or("");
-				let value =
-					Text::new("Description:").with_default(current).prompt()?;
-				agent.description =
-					if value.is_empty() { None } else { Some(value) };
-			}
-			"Model" => {
-				let current = agent.model.as_deref().unwrap_or("");
-				let value =
-					Text::new("Model:").with_default(current).prompt()?;
-				agent.model = if value.is_empty() { None } else { Some(value) };
-			}
-			"Instructions" => {
-				let current = agent.instructions.as_deref().unwrap_or("");
-				let value = Text::new("Instructions:")
-					.with_default(current)
-					.prompt()?;
-				agent.instructions =
-					if value.is_empty() { None } else { Some(value) };
-			}
-			_ => {}
-		}
-	}
-
-	manager.update_sub_agent(name, agent.clone())?;
-	println!("\n[OK] Sub-agent updated successfully!");
-	println!("{}", serde_json::to_string_pretty(&agent)?);
-
-	Ok(())
-}
-
 fn delete_resource(manager: &mut ConfigManager) -> Result<()> {
 	let resource_type = select_resource_type()?;
 
@@ -936,7 +818,6 @@ fn delete_resource(manager: &mut ConfigManager) -> Result<()> {
 	match resource_type {
 		ResourceType::Skills => manager.remove_skill(&name)?,
 		ResourceType::Mcps => manager.remove_mcp(&name)?,
-		ResourceType::SubAgents => manager.remove_sub_agent(&name)?,
 	}
 
 	println!("[OK] '{}' has been deleted.", name);
@@ -970,10 +851,6 @@ fn toggle_resource(manager: &mut ConfigManager) -> Result<()> {
 			);
 			(mcp.enabled, adapter.supports_mcp_enable_disable())
 		}
-		ResourceType::SubAgents => {
-			let agent = manager.get_sub_agent(&name).unwrap();
-			(agent.enabled, true)
-		}
 	};
 
 	if !can_toggle {
@@ -1006,13 +883,6 @@ fn toggle_resource(manager: &mut ConfigManager) -> Result<()> {
 				manager.disable_mcp(&name)?
 			} else {
 				manager.enable_mcp(&name)?
-			}
-		}
-		ResourceType::SubAgents => {
-			if is_enabled {
-				manager.disable_sub_agent(&name)?
-			} else {
-				manager.enable_sub_agent(&name)?
 			}
 		}
 	}
@@ -1049,15 +919,6 @@ fn describe_resource(manager: &ConfigManager) -> Result<()> {
 				format!("═══ MCP Server: {} ═══", name).bold().cyan()
 			);
 			println!("{}", serde_json::to_string_pretty(mcp)?);
-		}
-		ResourceType::SubAgents => {
-			let agent =
-				config.sub_agents.iter().find(|a| a.name == name).unwrap();
-			println!(
-				"\n{}",
-				format!("═══ Sub-agent: {} ═══", name).bold().cyan()
-			);
-			println!("{}", serde_json::to_string_pretty(agent)?);
 		}
 	}
 

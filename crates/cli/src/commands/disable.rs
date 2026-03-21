@@ -31,17 +31,6 @@ pub fn execute(
 				)?
 			);
 		}
-		ResourceType::SubAgents => {
-			eprintln_verbose!("Disabling sub-agent: {}", name);
-			manager.disable_sub_agent(&name)?;
-			eprintln_verbose!("Sub-agent disabled successfully");
-			println!(
-				"{}",
-				serde_json::to_string_pretty(
-					&json!({"enabled": false, "name": name, "type": "sub-agent" })
-				)?
-			);
-		}
 	}
 
 	Ok(())

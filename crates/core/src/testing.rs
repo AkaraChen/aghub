@@ -42,7 +42,7 @@ impl TestConfig {
 		};
 
 		let initial_config = if is_json_list {
-			r#"{"mcp_servers": [], "skills": [], "sub_agents": []}"#
+			r#"{"mcp_servers": [], "skills": []}"#
 		} else if is_toml {
 			""
 		} else {
@@ -54,9 +54,10 @@ impl TestConfig {
 		let skills_dir = temp_dir.path().join("skills");
 		if descriptor.capabilities.skills {
 			fs::create_dir(&skills_dir).map_err(ConfigError::Io)?;
-			crate::adapters::map::set_thread_local_skills_path(Some(
-				skills_dir.clone(),
-			));
+			crate::adapter::set_skills_path_override(
+				descriptor.id,
+				Some(skills_dir.clone()),
+			);
 		}
 
 		Ok(Self {
@@ -144,7 +145,7 @@ impl Drop for TestConfig {
 	fn drop(&mut self) {
 		let descriptor = registry::get(self.agent_type);
 		if descriptor.capabilities.skills {
-			crate::adapters::map::set_thread_local_skills_path(None);
+			crate::adapter::set_skills_path_override(descriptor.id, None);
 		}
 	}
 }
@@ -183,7 +184,7 @@ impl TestConfigBuilder {
 
 		let content = self.initial_content.unwrap_or_else(|| {
 			if is_json_list {
-				r#"{"mcp_servers": [], "skills": [], "sub_agents": []}"#.to_string()
+				r#"{"mcp_servers": [], "skills": []}"#.to_string()
 			} else if is_toml {
 				String::new()
 			} else {
@@ -197,9 +198,10 @@ impl TestConfigBuilder {
 		let skills_dir = temp_dir.path().join("skills");
 		if descriptor.capabilities.skills {
 			fs::create_dir(&skills_dir).map_err(ConfigError::Io)?;
-			crate::adapters::map::set_thread_local_skills_path(Some(
-				skills_dir.clone(),
-			));
+			crate::adapter::set_skills_path_override(
+				descriptor.id,
+				Some(skills_dir.clone()),
+			);
 		}
 
 		Ok(TestConfig {

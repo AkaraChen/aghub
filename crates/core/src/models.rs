@@ -8,8 +8,6 @@ pub struct AgentConfig {
 	pub skills: Vec<Skill>,
 	#[serde(default)]
 	pub mcps: Vec<McpServer>,
-	#[serde(default)]
-	pub sub_agents: Vec<SubAgent>,
 }
 
 impl AgentConfig {
@@ -17,7 +15,6 @@ impl AgentConfig {
 		Self {
 			skills: Vec::new(),
 			mcps: Vec::new(),
-			sub_agents: Vec::new(),
 		}
 	}
 }
@@ -176,31 +173,6 @@ impl McpTransport {
 			url: url.into(),
 			headers: Some(headers),
 			timeout: None,
-		}
-	}
-}
-
-/// Sub-agent configuration
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct SubAgent {
-	pub name: String,
-	#[serde(default = "default_true")]
-	pub enabled: bool,
-	pub description: Option<String>,
-	/// Model identifier (e.g., "claude-sonnet-4-6")
-	pub model: Option<String>,
-	/// System instructions for the sub-agent
-	pub instructions: Option<String>,
-}
-
-impl SubAgent {
-	pub fn new(name: impl Into<String>) -> Self {
-		Self {
-			name: name.into(),
-			enabled: true,
-			description: None,
-			model: None,
-			instructions: None,
 		}
 	}
 }
@@ -470,6 +442,5 @@ mod tests {
 		let config = AgentConfig::new();
 		assert!(config.skills.is_empty());
 		assert!(config.mcps.is_empty());
-		assert!(config.sub_agents.is_empty());
 	}
 }

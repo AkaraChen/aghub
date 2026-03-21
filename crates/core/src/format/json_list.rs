@@ -1,6 +1,6 @@
 use crate::{
 	errors::{ConfigError, Result},
-	models::{AgentConfig, McpServer, McpTransport, Skill, SubAgent},
+	models::{AgentConfig, McpServer, McpTransport, Skill},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -11,8 +11,6 @@ struct ListConfig {
 	mcp_servers: Vec<ListMcpServer>,
 	#[serde(default)]
 	skills: Vec<ListSkill>,
-	#[serde(rename = "sub_agents", default)]
-	sub_agents: Vec<ListSubAgent>,
 	#[serde(flatten)]
 	extra: serde_json::Map<String, serde_json::Value>,
 }
@@ -64,16 +62,6 @@ struct ListSkill {
 	version: Option<String>,
 	#[serde(default)]
 	tools: Vec<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct ListSubAgent {
-	name: String,
-	#[serde(default)]
-	enabled: bool,
-	description: Option<String>,
-	model: Option<String>,
-	instructions: Option<String>,
 }
 
 pub fn parse(content: &str) -> Result<AgentConfig> {
@@ -141,16 +129,6 @@ pub fn parse(content: &str) -> Result<AgentConfig> {
 		});
 	}
 
-	for agent in list_config.sub_agents {
-		config.sub_agents.push(SubAgent {
-			name: agent.name,
-			enabled: agent.enabled,
-			description: agent.description,
-			model: agent.model,
-			instructions: agent.instructions,
-		});
-	}
-
 	Ok(config)
 }
 
@@ -175,7 +153,6 @@ pub fn serialize(
 
 	list_config.mcp_servers.clear();
 	list_config.skills.clear();
-	list_config.sub_agents.clear();
 
 	for mcp in &config.mcps {
 		let transport = match &mcp.transport {
@@ -227,15 +204,50 @@ pub fn serialize(
 		});
 	}
 
-	for agent in &config.sub_agents {
-		list_config.sub_agents.push(ListSubAgent {
-			name: agent.name.clone(),
-			enabled: agent.enabled,
-			description: agent.description.clone(),
-			model: agent.model.clone(),
-			instructions: agent.instructions.clone(),
-		});
+	serde_json::to_string_pretty(&list_config).map_err(ConfigError::Json)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::models::{McpServer, McpTransport, Skill};
+
+	#[test]
+	fn test_parse_list_config() {
+		let json = r#"{
+            "mcp_servers": [
+                {"name": "filesystem", "type": "stdio", "command": "npx", "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"], "enabled": true},
+                {"name": "custom-api", "type": "sse", "url": "http://localhost:3000", "headers": {"Authorization": "Bearer token"}, "enabled": true}
+            ],
+            "skills": [{"name": "rust-dev", "enabled": true, "description": "Rust development skills", "author": "test", "version": "1.0.0", "tools": ["cargo", "clippy"]}]
+        }"#;
+		let config = parse(json).unwrap();
+		assert_eq!(config.mcps.len(), 2);
+		assert_eq!(config.skills.len(), 1);
 	}
 
-	serde_json::to_string_pretty(&list_config).map_err(ConfigError::Json)
+	#[test]
+	fn test_preserves_disabled_state() {
+		let config = crate::models::AgentConfig {
+			mcps: vec![McpServer {
+				name: "disabled-mcp".to_string(),
+				enabled: false,
+				transport: McpTransport::stdio("echo", vec![]),
+				timeout: None,
+			}],
+			skills: vec![Skill {
+				name: "disabled-skill".to_string(),
+				enabled: false,
+				description: None,
+				author: None,
+				version: None,
+				tools: vec![],
+				metadata: None,
+			}],
+		};
+		let json = serialize(&config, None).unwrap();
+		let reparsed = parse(&json).unwrap();
+		assert!(!reparsed.mcps[0].enabled);
+		assert!(!reparsed.skills[0].enabled);
+	}
 }

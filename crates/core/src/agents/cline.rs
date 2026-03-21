@@ -25,7 +25,6 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 		mcp_stdio: false,
 		mcp_remote: false,
 		mcp_enable_disable: false,
-		sub_agents: false,
 		skills: true,
 		universal_skills: true,
 	},

@@ -64,7 +64,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-	/// List resources (skills, mcps, sub-agents)
+	/// List resources (skills, mcps)
 	Get {
 		#[arg(value_enum)]
 		resource: ResourceType,
@@ -107,7 +107,7 @@ enum Commands {
 		#[arg(short = 'e', long = "env", value_name = "KEY=VALUE")]
 		env_vars: Vec<String>,
 
-		/// For skill/sub-agent: Description
+		/// For skill: Description
 		#[arg(short, long)]
 		description: Option<String>,
 
@@ -122,14 +122,6 @@ enum Commands {
 		/// For skill: Comma-separated list of tool names
 		#[arg(long, value_delimiter = ',')]
 		tools: Vec<String>,
-
-		/// For sub-agent: Model identifier
-		#[arg(short, long)]
-		model: Option<String>,
-
-		/// For sub-agent: Instructions/system prompt
-		#[arg(short, long)]
-		instructions: Option<String>,
 	},
 	/// Update an existing resource
 	Update {
@@ -162,7 +154,7 @@ enum Commands {
 		#[arg(short = 'e', long = "env", value_name = "KEY=VALUE")]
 		env_vars: Vec<String>,
 
-		/// For skill/sub-agent: Description
+		/// For skill: Description
 		#[arg(short, long)]
 		description: Option<String>,
 
@@ -177,14 +169,6 @@ enum Commands {
 		/// For skill: Comma-separated list of tool names
 		#[arg(long, value_delimiter = ',')]
 		tools: Vec<String>,
-
-		/// For sub-agent: Model identifier
-		#[arg(short, long)]
-		model: Option<String>,
-
-		/// For sub-agent: Instructions/system prompt
-		#[arg(short, long)]
-		instructions: Option<String>,
 	},
 	/// Delete a resource permanently
 	Delete {
@@ -220,9 +204,6 @@ enum ResourceType {
 	Skills,
 	#[value(alias = "mcp")]
 	Mcps,
-	#[value(alias = "sub-agent", alias = "agent")]
-	#[clap(name = "sub-agents")]
-	SubAgents,
 }
 
 fn main() -> Result<()> {
@@ -298,8 +279,6 @@ fn main() -> Result<()> {
 			author,
 			version,
 			tools,
-			model,
-			instructions,
 		} => add::execute(
 			&mut manager,
 			resource,
@@ -314,8 +293,6 @@ fn main() -> Result<()> {
 			author,
 			version,
 			tools,
-			model,
-			instructions,
 		),
 		Commands::Update {
 			resource,
@@ -329,8 +306,6 @@ fn main() -> Result<()> {
 			author,
 			version,
 			tools,
-			model,
-			instructions,
 		} => update::execute(
 			&mut manager,
 			resource,
@@ -344,8 +319,6 @@ fn main() -> Result<()> {
 			author,
 			version,
 			tools,
-			model,
-			instructions,
 		),
 		Commands::Delete { resource, name } => {
 			delete::execute(&mut manager, resource, name)
@@ -377,7 +350,6 @@ mod describe {
 		let resource_type_str = match resource {
 			ResourceType::Skills => "skill",
 			ResourceType::Mcps => "mcp",
-			ResourceType::SubAgents => "sub-agent",
 		};
 		eprintln_verbose!("Describing {}: {}", resource_type_str, name);
 
@@ -398,17 +370,6 @@ mod describe {
 					)?;
 				eprintln_verbose!("Found MCP server: {}", mcp.name);
 				println!("{}", serde_json::to_string_pretty(mcp)?);
-			}
-			ResourceType::SubAgents => {
-				let agent = config
-					.sub_agents
-					.iter()
-					.find(|a| a.name == name)
-					.with_context(|| {
-					format!("Sub-agent '{}' not found", name)
-				})?;
-				eprintln_verbose!("Found sub-agent: {}", agent.name);
-				println!("{}", serde_json::to_string_pretty(agent)?);
 			}
 		}
 

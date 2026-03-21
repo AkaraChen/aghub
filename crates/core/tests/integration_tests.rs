@@ -4,7 +4,7 @@
 //! using temporary configurations to avoid polluting the global environment.
 
 use aghub_core::{
-	models::{AgentType, McpServer, McpTransport, Skill, SubAgent},
+	models::{AgentType, McpServer, McpTransport, Skill},
 	testing::{TestConfig, TestConfigBuilder},
 };
 use std::collections::HashMap;
@@ -41,16 +41,6 @@ fn create_test_skill(name: &str) -> Skill {
 		version: Some("1.0.0".to_string()),
 		tools: vec!["tool1".to_string(), "tool2".to_string()],
 		metadata: None,
-	}
-}
-
-fn create_test_sub_agent(name: &str) -> SubAgent {
-	SubAgent {
-		name: name.to_string(),
-		enabled: true,
-		description: Some(format!("Test sub-agent: {}", name)),
-		model: Some("claude-sonnet-4-6".to_string()),
-		instructions: Some("You are a helpful assistant.".to_string()),
 	}
 }
 
@@ -170,28 +160,6 @@ fn test_claude_sse_mcp_supported() {
 	);
 }
 
-#[test]
-fn test_claude_sub_agents_silently_disabled() {
-	let test = TestConfig::new(AgentType::Claude).unwrap();
-	let mut manager = test.create_manager();
-
-	manager.load().unwrap();
-
-	// Try to add sub-agent (not supported by Claude)
-	let agent = create_test_sub_agent("reviewer");
-	manager.add_sub_agent(agent).unwrap();
-
-	// It should be stored in memory but not serialized
-	let config = manager.config().unwrap();
-	assert_eq!(config.sub_agents.len(), 1);
-
-	// After save and reload, sub-agents should be gone
-	manager.save_current().unwrap();
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert!(config.sub_agents.is_empty());
-}
-
 // ==================== OpenCode Integration Tests ====================
 
 #[test]
@@ -231,58 +199,6 @@ fn test_opencode_full_mcp_workflow() {
 		}
 		_ => panic!("Expected SSE transport"),
 	}
-}
-
-#[test]
-fn test_opencode_sub_agent_workflow() {
-	let test = TestConfig::new(AgentType::OpenCode).unwrap();
-	let mut manager = test.create_manager();
-
-	manager.load().unwrap();
-
-	// Add sub-agent
-	let agent = create_test_sub_agent("reviewer");
-	manager.add_sub_agent(agent.clone()).unwrap();
-
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.sub_agents.len(), 1);
-
-	let saved_agent = &config.sub_agents[0];
-	assert_eq!(saved_agent.name, "reviewer");
-	assert_eq!(saved_agent.model, Some("claude-sonnet-4-6".to_string()));
-	assert!(saved_agent.instructions.is_some());
-
-	// Update
-	let mut updated = agent.clone();
-	updated.model = Some("claude-opus-4-6".to_string());
-	manager.update_sub_agent("reviewer", updated).unwrap();
-
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	let saved_agent = config
-		.sub_agents
-		.iter()
-		.find(|a| a.name == "reviewer")
-		.unwrap();
-	assert_eq!(saved_agent.model, Some("claude-opus-4-6".to_string()));
-
-	// Disable and enable
-	manager.disable_sub_agent("reviewer").unwrap();
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert!(!config.sub_agents[0].enabled);
-
-	manager.enable_sub_agent("reviewer").unwrap();
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert!(config.sub_agents[0].enabled);
-
-	// Delete
-	manager.remove_sub_agent("reviewer").unwrap();
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert!(config.sub_agents.is_empty());
 }
 
 // ==================== Cross-Agent Compatibility Tests ====================
@@ -397,11 +313,9 @@ fn test_opencode_config_validation() {
 	// Add valid resources
 	let mcp = create_test_mcp_stdio("test");
 	let skill = create_test_skill("test-skill");
-	let agent = create_test_sub_agent("test-agent");
 
 	manager.add_mcp(mcp).unwrap();
 	manager.add_skill(skill).unwrap();
-	manager.add_sub_agent(agent).unwrap();
 
 	// Validate with OpenCode CLI
 	manager
@@ -438,7 +352,6 @@ fn test_empty_config_handling() {
 	assert!(config.mcps.is_empty());
 	// Skills are loaded from isolated test directory, which is empty
 	assert!(config.skills.is_empty());
-	assert!(config.sub_agents.is_empty());
 }
 
 #[test]
