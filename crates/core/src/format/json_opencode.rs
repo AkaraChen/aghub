@@ -113,9 +113,6 @@ pub fn serialize(
 	};
 
 	for mcp in &config.mcps {
-		if !mcp.enabled {
-			continue;
-		}
 		let entry = match &mcp.transport {
 			McpTransport::Stdio {
 				command,
@@ -130,7 +127,7 @@ pub fn serialize(
 					server_type: "local".to_string(),
 					command: Some(cmd),
 					url: None,
-					enabled: true,
+					enabled: mcp.enabled,
 					environment: env.clone(),
 					headers: None,
 					timeout: *timeout,
@@ -151,7 +148,7 @@ pub fn serialize(
 				server_type: "remote".to_string(),
 				command: None,
 				url: Some(url.clone()),
-				enabled: true,
+				enabled: mcp.enabled,
 				environment: None,
 				headers: headers.clone(),
 				timeout: *timeout,
@@ -161,4 +158,30 @@ pub fn serialize(
 	}
 
 	serde_json::to_string_pretty(&out).map_err(ConfigError::Json)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_opencode_native_roundtrip() {
+		let original = r#"{
+            "$schema": "https://opencode.ai/config.json",
+            "mcp": {
+                "local-srv": {"type": "local", "command": ["npx", "-y", "some-mcp"], "environment": {"TOKEN": "abc"}, "enabled": true},
+                "remote-srv": {"type": "remote", "url": "https://api.example.com/mcp", "headers": {"X-Key": "val"}, "enabled": true}
+            }
+        }"#;
+		let config = parse(original).unwrap();
+		assert_eq!(config.mcps.len(), 2);
+		let out = serialize(&config, Some(original)).unwrap();
+		let val: serde_json::Value = serde_json::from_str(&out).unwrap();
+		assert_eq!(
+			val.get("$schema").and_then(|v| v.as_str()),
+			Some("https://opencode.ai/config.json")
+		);
+		assert!(val.get("mcp").is_some());
+		assert!(val.get("mcp_servers").is_none());
+	}
 }

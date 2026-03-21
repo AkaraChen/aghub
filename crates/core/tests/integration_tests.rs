@@ -185,11 +185,11 @@ fn test_opencode_full_mcp_workflow() {
 	let url_ref = config.mcps.iter().find(|m| m.name == "url-mcp").unwrap();
 
 	assert!(matches!(cmd_ref.transport, McpTransport::Stdio { .. }));
-	assert!(matches!(url_ref.transport, McpTransport::Sse { .. }));
+	assert!(matches!(url_ref.transport, McpTransport::StreamableHttp { .. }));
 
 	// Verify URL headers preserved
 	match &url_ref.transport {
-		McpTransport::Sse { headers, .. } => {
+		McpTransport::StreamableHttp { headers, .. } => {
 			assert!(headers.is_some());
 			let headers = headers.as_ref().unwrap();
 			assert_eq!(
@@ -197,7 +197,7 @@ fn test_opencode_full_mcp_workflow() {
 				Some(&"Bearer test-token".to_string())
 			);
 		}
-		_ => panic!("Expected SSE transport"),
+		_ => panic!("Expected StreamableHttp transport"),
 	}
 }
 
@@ -574,15 +574,14 @@ fn test_opencode_streamable_http_roundtrip() {
 		McpTransport::StreamableHttp { .. }
 	));
 
-	// Serialize and verify JSON structure
+	// Serialize and verify JSON structure (OpenCode native format uses "mcp" object)
 	let content = test.read_config().unwrap();
 	let json: serde_json::Value = serde_json::from_str(&content).unwrap();
-	let mcp_servers = json.get("mcp_servers").unwrap().as_array().unwrap();
+	let mcp_obj = json.get("mcp").unwrap().as_object().unwrap();
 
-	assert_eq!(mcp_servers.len(), 1);
-	let mcp = &mcp_servers[0];
-	assert_eq!(mcp.get("name").unwrap(), "streamable-mcp");
-	assert_eq!(mcp.get("type").unwrap(), "streamable_http");
+	assert_eq!(mcp_obj.len(), 1);
+	let mcp = mcp_obj.get("streamable-mcp").unwrap();
+	assert_eq!(mcp.get("type").unwrap(), "remote");
 }
 
 #[test]

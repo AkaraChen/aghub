@@ -93,3 +93,57 @@ pub fn serialize(
 	toml::to_string_pretty(&toml_config)
 		.map_err(|e| ConfigError::InvalidConfig(e.to_string()))
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::models::{McpServer, McpTransport};
+
+	#[test]
+	fn test_parse_toml_config() {
+		let content = r#"
+model = "o3"
+
+[mcp_servers.filesystem]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+
+[mcp_servers.chrome]
+command = "/usr/local/bin/chrome-mcp"
+env = { DISPLAY = ":0" }
+"#;
+		let config = parse(content).unwrap();
+		assert_eq!(config.mcps.len(), 2);
+		let fs = config.mcps.iter().find(|m| m.name == "filesystem").unwrap();
+		match &fs.transport {
+			McpTransport::Stdio { command, args, .. } => {
+				assert_eq!(command, "npx");
+				assert_eq!(args.len(), 3);
+			}
+			_ => panic!("Expected Stdio"),
+		}
+	}
+
+	#[test]
+	fn test_roundtrip_preserves_extra_fields() {
+		let original = r#"
+model_provider = "custom"
+model = "gpt-5.4"
+
+[mcp_servers.old]
+command = "old-cmd"
+"#;
+		let config = parse(original).unwrap();
+		let mut updated = config;
+		updated.mcps.clear();
+		updated.mcps.push(McpServer::new(
+			"new-mcp",
+			McpTransport::stdio("new-cmd", vec![]),
+		));
+		let output = serialize(&updated, Some(original)).unwrap();
+		assert!(output.contains("model_provider"));
+		assert!(output.contains("gpt-5.4"));
+		assert!(!output.contains("[mcp_servers.old]"));
+		assert!(output.contains("[mcp_servers.new-mcp]"));
+	}
+}

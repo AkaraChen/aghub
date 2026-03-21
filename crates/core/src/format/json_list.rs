@@ -125,7 +125,6 @@ pub fn parse(content: &str) -> Result<AgentConfig> {
 			author: skill.author,
 			version: skill.version,
 			tools: skill.tools,
-			metadata: None,
 		});
 	}
 
@@ -242,7 +241,6 @@ mod tests {
 				author: None,
 				version: None,
 				tools: vec![],
-				metadata: None,
 			}],
 		};
 		let json = serialize(&config, None).unwrap();

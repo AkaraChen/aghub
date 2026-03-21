@@ -17,13 +17,13 @@ pub fn global_skills_path() -> PathBuf {
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "cline",
 	display_name: "Cline",
-	parse_config: mcp_strategy::parse_none,
-	serialize_config: mcp_strategy::serialize_none,
+	parse_config: mcp_strategy::parse_json_map_mcp_servers,
+	serialize_config: mcp_strategy::serialize_json_map_mcp_servers,
 	global_path,
 	project_path,
 	capabilities: Capabilities {
-		mcp_stdio: false,
-		mcp_remote: false,
+		mcp_stdio: true,
+		mcp_remote: true,
 		mcp_enable_disable: false,
 		skills: true,
 		universal_skills: true,

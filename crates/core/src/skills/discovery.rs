@@ -1,22 +1,7 @@
 use crate::models::Skill;
 use skills_ref::read_properties;
-use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-
-/// Convert skills-ref metadata HashMap to serde_json::Map
-fn convert_metadata(metadata: HashMap<String, String>) -> Option<serde_json::Map<String, serde_json::Value>> {
-	if metadata.is_empty() {
-		return None;
-	}
-
-	let map: serde_json::Map<String, serde_json::Value> = metadata
-		.into_iter()
-		.map(|(k, v)| (k, serde_json::Value::String(v)))
-		.collect();
-
-	Some(map)
-}
 
 /// Load skills from a directory using skills-ref parser
 pub fn load_skills_from_dir(skills_dir: &Path) -> Vec<Skill> {
@@ -46,30 +31,6 @@ pub fn load_skills_from_dirs(dirs: &[PathBuf]) -> Vec<Skill> {
 	all_skills
 }
 
-/// Check if a skill is marked as internal
-pub fn is_internal_skill(skill: &Skill) -> bool {
-	skill
-		.metadata
-		.as_ref()
-		.and_then(|m| m.get("internal"))
-		.and_then(|v| v.as_str())
-		.map(|s| s == "true")
-		.unwrap_or(false)
-}
-
-/// Filter out internal skills unless INCLUDE_INTERNAL_SKILLS is set
-pub fn filter_internal_skills(skills: Vec<Skill>) -> Vec<Skill> {
-	let include_internal = std::env::var("INCLUDE_INTERNAL_SKILLS")
-		.map(|v| v == "1" || v == "true")
-		.unwrap_or(false);
-
-	if include_internal {
-		skills
-	} else {
-		skills.into_iter().filter(|s| !is_internal_skill(s)).collect()
-	}
-}
-
 fn collect_skills(dir: &Path, skills: &mut Vec<Skill>) {
 	if !dir.exists() {
 		return;
@@ -94,11 +55,43 @@ fn collect_skills(dir: &Path, skills: &mut Vec<Skill>) {
 				author: None, // skills-ref doesn't have author field
 				version: None, // skills-ref doesn't have version field
 				tools: Vec::new(),
-				metadata: convert_metadata(props.metadata),
 			});
 		} else {
 			// Recurse into subdirectories if no SKILL.md found at this level
 			collect_skills(&path, skills);
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::fs;
+
+	#[test]
+	fn test_recursive_skills_discovery() {
+		let tmp = tempfile::tempdir().unwrap();
+		let root = tmp.path();
+		let skill_a = root.join("skill-a");
+		fs::create_dir_all(&skill_a).unwrap();
+		fs::write(
+			skill_a.join("SKILL.md"),
+			"---\nname: skill-a\ndescription: Direct skill\n---\n",
+		)
+		.unwrap();
+		let group = root.join("group");
+		fs::create_dir_all(&group).unwrap();
+		let skill_b = group.join("skill-b");
+		fs::create_dir_all(&skill_b).unwrap();
+		fs::write(
+			skill_b.join("SKILL.md"),
+			"---\nname: skill-b\ndescription: Nested skill\n---\n",
+		)
+		.unwrap();
+		let skills = load_skills_from_dir(root);
+		let names: Vec<&str> = skills.iter().map(|s| s.name.as_str()).collect();
+		assert!(names.contains(&"skill-a"));
+		assert!(names.contains(&"skill-b"));
+		assert_eq!(skills.len(), 2);
 	}
 }

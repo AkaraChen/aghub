@@ -171,3 +171,155 @@ pub fn serialize(
 
 	serde_json::to_string_pretty(&root).map_err(ConfigError::Json)
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::models::{McpServer, McpTransport, Skill};
+
+	#[test]
+	fn test_parse_stdio() {
+		let json = r#"{
+            "mcpServers": {
+                "filesystem": {
+                    "type": "stdio",
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"]
+                },
+                "github": {
+                    "type": "stdio",
+                    "command": "npx",
+                    "args": ["-y", "@modelcontextprotocol/server-github"],
+                    "env": {"GITHUB_TOKEN": "secret"}
+                }
+            }
+        }"#;
+		let config = parse(json, "mcpServers").unwrap();
+		assert_eq!(config.mcps.len(), 2);
+		let fs = config.mcps.iter().find(|m| m.name == "filesystem").unwrap();
+		assert!(matches!(fs.transport, McpTransport::Stdio { .. }));
+		let gh = config.mcps.iter().find(|m| m.name == "github").unwrap();
+		assert!(matches!(gh.transport, McpTransport::Stdio { .. }));
+	}
+
+	#[test]
+	fn test_parse_sse() {
+		let json = r#"{"mcpServers": {"remote-server": {"type": "sse", "url": "http://localhost:3000/sse", "headers": {"Authorization": "Bearer token"}}}}"#;
+		let config = parse(json, "mcpServers").unwrap();
+		assert_eq!(config.mcps.len(), 1);
+		assert!(matches!(config.mcps[0].transport, McpTransport::Sse { .. }));
+	}
+
+	#[test]
+	fn test_parse_streamable_http() {
+		let json = r#"{"mcpServers": {"http-server": {"type": "http", "url": "http://localhost:3000/mcp"}}}"#;
+		let config = parse(json, "mcpServers").unwrap();
+		assert_eq!(config.mcps.len(), 1);
+		assert!(matches!(
+			config.mcps[0].transport,
+			McpTransport::StreamableHttp { .. }
+		));
+	}
+
+	#[test]
+	fn test_parse_infers_transport_from_url() {
+		let json = r#"{
+            "mcpServers": {
+                "inferred-http": {"url": "http://localhost:3000/mcp"},
+                "inferred-sse": {"url": "http://localhost:3001/sse"},
+                "inferred-sse-sub": {"url": "http://localhost:3002/sse/events"},
+                "inferred-stream": {"url": "http://localhost:3003/stream/events"}
+            }
+        }"#;
+		let config = parse(json, "mcpServers").unwrap();
+		assert_eq!(config.mcps.len(), 4);
+		let http = config
+			.mcps
+			.iter()
+			.find(|m| m.name == "inferred-http")
+			.unwrap();
+		assert!(matches!(
+			http.transport,
+			McpTransport::StreamableHttp { .. }
+		));
+		let sse = config
+			.mcps
+			.iter()
+			.find(|m| m.name == "inferred-sse")
+			.unwrap();
+		assert!(matches!(sse.transport, McpTransport::Sse { .. }));
+		let sse_sub = config
+			.mcps
+			.iter()
+			.find(|m| m.name == "inferred-sse-sub")
+			.unwrap();
+		assert!(matches!(sse_sub.transport, McpTransport::Sse { .. }));
+		let stream = config
+			.mcps
+			.iter()
+			.find(|m| m.name == "inferred-stream")
+			.unwrap();
+		assert!(matches!(
+			stream.transport,
+			McpTransport::StreamableHttp { .. }
+		));
+	}
+
+	#[test]
+	fn test_serialize_stdio() {
+		let config = crate::models::AgentConfig {
+			mcps: vec![McpServer::new(
+				"test",
+				McpTransport::stdio("echo", vec!["hello".to_string()]),
+			)],
+			skills: vec![Skill {
+				name: "my-skill".to_string(),
+				enabled: true,
+				description: Some("A test skill".to_string()),
+				author: Some("test".to_string()),
+				version: Some("1.0.0".to_string()),
+				tools: vec!["tool1".to_string()],
+			}],
+		};
+		let json = serialize(&config, None, "mcpServers").unwrap();
+		assert!(json.contains("mcpServers"));
+		assert!(json.contains("test"));
+		assert!(json.contains("\"type\": \"stdio\""));
+		assert!(!json.contains("my-skill"));
+	}
+
+	#[test]
+	fn test_disabled_resources_not_serialized() {
+		let config = crate::models::AgentConfig {
+			mcps: vec![
+				McpServer {
+					name: "enabled".to_string(),
+					enabled: true,
+					transport: McpTransport::stdio("echo", vec![]),
+					timeout: None,
+				},
+				McpServer {
+					name: "disabled".to_string(),
+					enabled: false,
+					transport: McpTransport::stdio("echo", vec![]),
+					timeout: None,
+				},
+			],
+			skills: vec![],
+		};
+		let json = serialize(&config, None, "mcpServers").unwrap();
+		assert!(json.contains("enabled"));
+		assert!(!json.contains("disabled"));
+	}
+
+	#[test]
+	fn test_custom_server_key() {
+		let json = r#"{"servers": {"my-mcp": {"type": "stdio", "command": "npx", "args": ["-y", "some-mcp"]}}}"#;
+		let config = parse(json, "servers").unwrap();
+		assert_eq!(config.mcps.len(), 1);
+		let out = serialize(&config, Some(json), "servers").unwrap();
+		let val: serde_json::Value = serde_json::from_str(&out).unwrap();
+		assert!(val.get("servers").is_some());
+		assert!(val.get("mcpServers").is_none());
+	}
+}
