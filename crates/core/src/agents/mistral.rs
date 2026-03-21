@@ -1,13 +1,13 @@
 use crate::registry::descriptor::*;
 use std::path::{Path, PathBuf};
 
-pub fn global_path() -> PathBuf {
+fn global_path() -> PathBuf {
 	dirs::home_dir().unwrap().join(".vibe/mcp.toml")
 }
-pub fn project_path(root: &Path) -> PathBuf {
+fn project_path(root: &Path) -> PathBuf {
 	root.join(".vibe/mcp.toml")
 }
-pub fn global_skills_path() -> PathBuf {
+fn global_skills_path() -> PathBuf {
 	dirs::home_dir().unwrap().join(".vibe/skills")
 }
 

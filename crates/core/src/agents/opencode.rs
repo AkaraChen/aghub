@@ -1,7 +1,7 @@
 use crate::registry::descriptor::*;
 use std::path::{Path, PathBuf};
 
-pub fn global_path() -> PathBuf {
+fn global_path() -> PathBuf {
 	#[cfg(any(target_os = "macos", target_os = "linux"))]
 	return dirs::home_dir()
 		.unwrap()
@@ -9,7 +9,7 @@ pub fn global_path() -> PathBuf {
 	#[cfg(target_os = "windows")]
 	return dirs::data_dir().unwrap().join("opencode/opencode.json");
 }
-pub fn project_path(root: &Path) -> PathBuf {
+fn project_path(root: &Path) -> PathBuf {
 	root.join(".opencode/settings.json")
 }
 

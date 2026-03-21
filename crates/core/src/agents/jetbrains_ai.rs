@@ -1,10 +1,10 @@
 use crate::registry::descriptor::*;
 use std::path::{Path, PathBuf};
 
-pub fn global_path() -> PathBuf {
+fn global_path() -> PathBuf {
 	dirs::home_dir().unwrap().join(".jetbrains-ai/mcp.json")
 }
-pub fn project_path(root: &Path) -> PathBuf {
+fn project_path(root: &Path) -> PathBuf {
 	root.join(".jetbrains-ai/mcp.json")
 }
 

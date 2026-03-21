@@ -1,15 +1,15 @@
 use crate::registry::descriptor::*;
 use std::path::{Path, PathBuf};
 
-pub fn global_path() -> PathBuf {
+fn global_path() -> PathBuf {
 	dirs::home_dir()
 		.unwrap()
 		.join(".codeium/windsurf/mcp_config.json")
 }
-pub fn project_path(root: &Path) -> PathBuf {
+fn project_path(root: &Path) -> PathBuf {
 	root.join(".windsurf/mcp_config.json")
 }
-pub fn global_skills_path() -> PathBuf {
+fn global_skills_path() -> PathBuf {
 	dirs::home_dir().unwrap().join(".codeium/windsurf/skills")
 }
 
