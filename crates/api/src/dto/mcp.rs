@@ -155,13 +155,7 @@ pub struct McpResponse {
 
 impl From<McpServer> for McpResponse {
     fn from(s: McpServer) -> Self {
-        McpResponse {
-            name: s.name,
-            enabled: s.enabled,
-            transport: TransportDto::from(&s.transport),
-            timeout: s.timeout,
-            source: None,
-        }
+        McpResponse::from(&s)
     }
 }
 

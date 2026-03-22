@@ -63,16 +63,7 @@ pub struct SkillResponse {
 
 impl From<Skill> for SkillResponse {
     fn from(s: Skill) -> Self {
-        SkillResponse {
-            name: s.name,
-            enabled: s.enabled,
-            source_path: s.source_path,
-            description: s.description,
-            author: s.author,
-            version: s.version,
-            tools: s.tools,
-            source: None,
-        }
+        SkillResponse::from(&s)
     }
 }
 

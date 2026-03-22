@@ -7,7 +7,7 @@ use aghub_core::{create_adapter, manager::ConfigManager, models::ResourceScope};
 use rocket::http::Status;
 
 use crate::error::ApiError;
-use crate::extractors::{AgentParam, ResolvedScope, ScopeParams};
+use crate::extractors::{AgentParam, ResolvedScope};
 
 pub fn build_manager_from_resolved(
     agent: &AgentParam,
@@ -38,9 +38,4 @@ pub fn require_writable_scope(scope: &ResolvedScope) -> Result<(), ApiError> {
         ));
     }
     Ok(())
-}
-
-pub fn build_manager(agent: &AgentParam, scope: &ScopeParams) -> Result<ConfigManager, ApiError> {
-    let resolved = scope.resolve()?;
-    build_manager_from_resolved(agent, &resolved)
 }
