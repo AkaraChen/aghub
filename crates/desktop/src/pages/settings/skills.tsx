@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react"
-import { PlusIcon, CpuChipIcon } from "@heroicons/react/24/solid"
-import { Button, Card, Description, Header, Label, ListBox, SearchField, type Selection } from "@heroui/react"
+import { PlusIcon } from "@heroicons/react/24/solid"
+import { Button, Description, Header, Label, ListBox, SearchField, type Selection } from "@heroui/react"
 
 interface Skill {
   id: string
@@ -20,20 +20,20 @@ const skills: Skill[] = [
     usage: "@agent-browser",
     instructions: (
       <>
-        <h3 className="text-base font-semibold mb-3">Browser Automation with agent-browser</h3>
-        <h4 className="text-sm font-medium mb-2">Quick start</h4>
-        <pre className="bg-surface-tertiary rounded-md p-3 text-xs font-mono overflow-x-auto mb-4">
+        <h3 className="text-sm font-semibold mb-3">Browser Automation with agent-browser</h3>
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Quick start</h4>
+        <pre className="bg-neutral-900 dark:bg-neutral-950 text-neutral-100 rounded-md p-3 text-xs font-mono overflow-x-auto mb-4">
           <code>{`agent-browser open <url>        # Navigate to page\nagent-browser snapshot -i       # Get interactive elements with refs\nagent-browser click @e1         # Click element by ref\nagent-browser fill @e2 "text"   # Fill input by ref\nagent-browser close             # Close browser`}</code>
         </pre>
-        <h4 className="text-sm font-medium mb-2">Core workflow</h4>
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Core workflow</h4>
         <ol className="list-decimal list-inside space-y-1 text-sm mb-4">
-          <li>Navigate: <code className="bg-surface-tertiary px-1 py-0.5 rounded text-xs">agent-browser open {"<url>"}</code></li>
-          <li>Snapshot: <code className="bg-surface-tertiary px-1 py-0.5 rounded text-xs">agent-browser snapshot -i</code> (returns refs like <code className="bg-surface-tertiary px-1 py-0.5 rounded text-xs">@e1</code>)</li>
+          <li>Navigate: <code className="bg-muted/30 px-1 py-0.5 rounded text-xs font-mono">agent-browser open {"<url>"}</code></li>
+          <li>Snapshot: <code className="bg-muted/30 px-1 py-0.5 rounded text-xs font-mono">agent-browser snapshot -i</code> (returns refs like <code className="bg-muted/30 px-1 py-0.5 rounded text-xs font-mono">@e1</code>)</li>
           <li>Interact using refs from the snapshot</li>
           <li>Re-snapshot after navigation or significant DOM changes</li>
         </ol>
-        <h4 className="text-sm font-medium mb-2">Navigation commands</h4>
-        <pre className="bg-surface-tertiary rounded-md p-3 text-xs font-mono overflow-x-auto">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted mb-2">Navigation commands</h4>
+        <pre className="bg-neutral-900 dark:bg-neutral-950 text-neutral-100 rounded-md p-3 text-xs font-mono overflow-x-auto">
           <code>{`agent-browser open <url>   # Navigate (aliases: goto, navigate)\nagent-browser back         # Go back\nagent-browser forward      # Go forward\nagent-browser reload       # Reload page\nagent-browser close        # Close browser (aliases: quit, exit)`}</code>
         </pre>
       </>
@@ -150,17 +150,12 @@ export default function SkillsPage() {
 
               {/* Instructions */}
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="text-xs font-medium text-muted uppercase tracking-wide">Instructions</h3>
-                  <CpuChipIcon className="size-4 text-muted" aria-hidden="true" />
+                <h3 className="text-xs font-medium text-muted uppercase tracking-wide mb-3">Instructions</h3>
+                <div>
+                  {selectedSkill.instructions ?? (
+                    <p className="text-sm text-muted">No instructions available for this skill.</p>
+                  )}
                 </div>
-                <Card variant="secondary">
-                  <Card.Content>
-                    {selectedSkill.instructions ?? (
-                      <p className="text-sm text-muted">No instructions available for this skill.</p>
-                    )}
-                  </Card.Content>
-                </Card>
               </div>
             </div>
           </div>
