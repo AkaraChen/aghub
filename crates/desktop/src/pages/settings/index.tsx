@@ -17,7 +17,7 @@ export default function SettingsPage() {
       <div className="p-6 max-w-3xl">
         <h2 className="text-xl font-semibold mb-6">{t("settings")}</h2>
 
-        <Tabs variant="secondary" defaultSelectedKey="appearance">
+        <Tabs defaultSelectedKey="appearance">
           <Tabs.ListContainer>
             <Tabs.List aria-label="Settings sections">
               <Tabs.Tab id="appearance">
@@ -60,11 +60,10 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between">
                 <span className="text-sm">{t("language")}</span>
                 <Select
-                  selectedKeys={[i18n.language.startsWith("zh") ? "zh" : "en"]}
-                  onSelectionChange={(keys) => changeLanguage([...keys][0] as string)}
+                  value={i18n.language.startsWith("zh") ? "zh" : "en"}
+                  onChange={(key) => changeLanguage(key as string)}
                   aria-label={t("language")}
                   className="w-40"
-                  size="sm"
                 >
                   <Select.Trigger>
                     <Select.Value />
