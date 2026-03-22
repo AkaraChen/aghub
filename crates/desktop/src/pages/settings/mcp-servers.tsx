@@ -1,7 +1,8 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { PlusIcon, ArrowPathIcon, TrashIcon } from "@heroicons/react/24/solid"
-import { Button, Card, Description, Header, Label, ListBox, SearchField, Table, type Selection } from "@heroui/react"
+import { Button, Card, Chip, Description, Header, Label, ListBox, SearchField, Table, type Selection } from "@heroui/react"
 import { cn } from "../../lib/utils"
+import { Empty, EmptyHeader, EmptyTitle, EmptyDescription } from "../../components/ui/empty"
 
 interface MCPServer {
   id: string
@@ -41,17 +42,28 @@ export default function MCPServersPage() {
 
   const selectedServer = mcpServers.find(s => [...(selected as Set<string>)][0] === s.id) ?? null
 
-  const filteredServers = mcpServers.filter(
-    (server) =>
-      server.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      server.source.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredServers = useMemo(
+    () => mcpServers.filter(
+      (server) =>
+        server.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        server.source.toLowerCase().includes(searchQuery.toLowerCase())
+    ),
+    [searchQuery]
   )
 
-  const groupedServers = filteredServers.reduce((acc, server) => {
-    if (!acc[server.category]) acc[server.category] = []
-    acc[server.category].push(server)
-    return acc
-  }, {} as Record<string, MCPServer[]>)
+  const groupedServers = useMemo(
+    () => filteredServers.reduce((acc, server) => {
+      if (!acc[server.category]) acc[server.category] = []
+      acc[server.category].push(server)
+      return acc
+    }, {} as Record<string, MCPServer[]>),
+    [filteredServers]
+  )
+
+  const hasDetails = selectedServer && (
+    selectedServer.connection ||
+    (selectedServer.toolsList && selectedServer.toolsList.length > 0)
+  )
 
   return (
     <div className="flex h-full">
@@ -72,10 +84,10 @@ export default function MCPServersPage() {
               <SearchField.ClearButton />
             </SearchField.Group>
           </SearchField>
-          <Button isIconOnly variant="ghost" size="sm">
+          <Button isIconOnly variant="ghost" size="sm" aria-label="Add MCP server">
             <PlusIcon className="size-4" />
           </Button>
-          <Button isIconOnly variant="ghost" size="sm">
+          <Button isIconOnly variant="ghost" size="sm" aria-label="Refresh servers">
             <ArrowPathIcon className="size-4" />
           </Button>
         </div>
@@ -89,7 +101,7 @@ export default function MCPServersPage() {
           className="flex-1 overflow-y-auto p-2"
         >
           {Object.entries(groupedServers).map(([category, servers]) => (
-            <ListBox.Section key={category}>
+            <ListBox.Section key={category} aria-label={category}>
               <Header className="px-2 py-1.5 text-xs font-medium text-muted uppercase tracking-wide">
                 {category}
               </Header>
@@ -97,9 +109,18 @@ export default function MCPServersPage() {
                 <ListBox.Item key={server.id} id={server.id} textValue={server.name}>
                   <div className="flex-1 min-w-0">
                     <Label>{server.name}</Label>
-                    <Description>{server.source}</Description>
+                    <Description>
+                      <Chip
+                        size="sm"
+                        variant="flat"
+                        color={server.source === "Global" ? "primary" : "default"}
+                      >
+                        {server.source}
+                      </Chip>
+                    </Description>
                   </div>
                   <span
+                    title={server.status === "online" ? "Online" : "Offline"}
                     className={cn(
                       "size-2 rounded-full shrink-0",
                       server.status === "online" ? "bg-success" : "bg-muted"
@@ -111,6 +132,11 @@ export default function MCPServersPage() {
             </ListBox.Section>
           ))}
         </ListBox>
+        {filteredServers.length === 0 && (
+          <p className="px-3 py-6 text-sm text-muted text-center">
+            No servers match "{searchQuery}"
+          </p>
+        )}
       </div>
 
       {/* Server Detail Panel */}
@@ -120,8 +146,8 @@ export default function MCPServersPage() {
             <div className="p-6 max-w-3xl">
               {/* Header */}
               <div className="flex items-center justify-between mb-1">
-                <h1 className="text-xl font-semibold text-foreground">{selectedServer.name}</h1>
-                <Button isIconOnly variant="ghost" size="sm" className="text-muted hover:text-danger">
+                <h2 className="text-xl font-semibold text-foreground">{selectedServer.name}</h2>
+                <Button isIconOnly variant="ghost" size="sm" className="text-muted hover:text-danger" aria-label="Remove server">
                   <TrashIcon className="size-4" />
                 </Button>
               </div>
@@ -130,7 +156,7 @@ export default function MCPServersPage() {
               {/* Connection */}
               {selectedServer.connection && (
                 <div className="mb-6">
-                  <h2 className="text-sm font-medium text-foreground mb-3">Connection</h2>
+                  <h2 className="text-xs font-medium text-muted uppercase tracking-wide mb-3">Connection</h2>
                   <Table variant="secondary">
                     <Table.ScrollContainer>
                       <Table.Content aria-label="Connection details">
@@ -163,20 +189,32 @@ export default function MCPServersPage() {
               {/* Tools */}
               {selectedServer.toolsList && selectedServer.toolsList.length > 0 && (
                 <div>
-                  <h2 className="text-sm font-medium text-foreground mb-3">
+                  <h2 className="text-xs font-medium text-muted uppercase tracking-wide mb-3">
                     Tools ({selectedServer.toolsList.length})
                   </h2>
                   <div className="space-y-3">
                     {selectedServer.toolsList.map((tool) => (
                       <Card key={tool.name} variant="secondary">
                         <Card.Content>
-                          <h3 className="font-mono text-sm font-semibold mb-2">{tool.name}</h3>
+                          <h3 className="font-mono text-xs font-semibold mb-2">{tool.name}</h3>
                           <p className="text-sm text-muted leading-relaxed">{tool.description}</p>
                         </Card.Content>
                       </Card>
                     ))}
                   </div>
                 </div>
+              )}
+
+              {/* Empty state for servers without detail data */}
+              {!hasDetails && (
+                <Empty className="mt-4">
+                  <EmptyHeader>
+                    <EmptyTitle>No details available</EmptyTitle>
+                    <EmptyDescription>
+                      Connection and tool information will appear here when the server is inspected.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
               )}
             </div>
           </div>
