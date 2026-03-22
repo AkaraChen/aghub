@@ -151,6 +151,8 @@ pub struct McpResponse {
     pub timeout: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<ConfigSource>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
 }
 
 impl From<McpServer> for McpResponse {
@@ -167,6 +169,7 @@ impl From<&McpServer> for McpResponse {
             transport: TransportDto::from(&s.transport),
             timeout: s.timeout,
             source: None,
+            agent: None,
         }
     }
 }

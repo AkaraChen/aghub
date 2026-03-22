@@ -59,6 +59,8 @@ pub struct SkillResponse {
     pub tools: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<ConfigSource>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
 }
 
 impl From<Skill> for SkillResponse {
@@ -78,6 +80,7 @@ impl From<&Skill> for SkillResponse {
             version: s.version.clone(),
             tools: s.tools.clone(),
             source: None,
+            agent: None,
         }
     }
 }

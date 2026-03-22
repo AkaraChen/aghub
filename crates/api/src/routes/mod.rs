@@ -5,6 +5,7 @@ pub mod skills;
 
 use aghub_core::{create_adapter, manager::ConfigManager, models::ResourceScope};
 use rocket::http::Status;
+use std::path::PathBuf;
 
 use crate::error::ApiError;
 use crate::extractors::{AgentParam, ResolvedScope};
@@ -38,4 +39,19 @@ pub fn require_writable_scope(scope: &ResolvedScope) -> Result<(), ApiError> {
         ));
     }
     Ok(())
+}
+
+/// Map a resolved scope to the (ResourceScope, project_root) pair used by load_all_agents.
+pub fn resolved_to_resource_scope(
+    scope: &ResolvedScope,
+) -> (ResourceScope, Option<PathBuf>) {
+    match scope {
+        ResolvedScope::Global => (ResourceScope::GlobalOnly, None),
+        ResolvedScope::Project { root } => {
+            (ResourceScope::ProjectOnly, Some(root.clone()))
+        }
+        ResolvedScope::All { project_root } => {
+            (ResourceScope::Both, project_root.clone())
+        }
+    }
 }
