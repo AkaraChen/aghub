@@ -45,6 +45,7 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+ "tokio",
 ]
 
 [[package]]
@@ -64,11 +65,13 @@ dependencies = [
 name = "aghub-desktop"
 version = "0.1.0"
 dependencies = [
+ "aghub-api",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",
+ "tokio",
 ]
 
 [[package]]
