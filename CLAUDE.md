@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Aghub is a CLI tool (`agentctl`) for managing AI coding agent configurations. It supports 21 agents (Claude, OpenCode, Cursor, Windsurf, Copilot, RooCode, Cline, Gemini, Codex, Zed, Warp, and more), handling MCP servers and skills through a unified interface. Full agent list: `crates/core/src/models.rs` or `agentctl --help`.
+Aghub is a CLI tool (`agentctl`) for managing AI coding agent configurations. It supports 22 agents (Claude, OpenCode, Cursor, Windsurf, Copilot, RooCode, Cline, Gemini, Codex, Zed, Warp, and more), handling MCP servers and skills through a unified interface. Full agent list: `crates/core/src/models.rs` or `agentctl --help`.
 
 ## Common Commands
 
@@ -18,6 +18,7 @@ just build        # Release build
 # Test
 just test         # Run all tests
 just integration-test  # Run integration tests only
+just test-with-validation  # Tests requiring real CLI tools installed (claude, opencode, etc.)
 
 # Lint/Format
 just lint         # Run clippy with warnings as errors
@@ -41,6 +42,7 @@ Run a single test: `cargo test --package aghub-core test_name -- --exact`
 - **`crates/skills-sh`**: HTTP API client for skills.sh registry (`SKILLS_API_URL` env var overrides base URL)
 - **`crates/skills-ref`** (`skills-ref`): Parses SKILL.md files, validates `SkillProperties`, generates XML prompt blocks via `to_prompt()`
 - **`crates/skill`** (`skill`): Extends skills-ref with `.skill` zip format; `parse()` auto-detects directory/zip/SKILL.md. Called by `manager.add_skill_from_path()`
+- **`crates/api`**: Axum-based HTTP API server exposing agent config operations over HTTP
 
 ### Key Design Patterns
 
@@ -85,7 +87,7 @@ Resource type aliases: `skills`/`skill`, `mcps`/`mcp`.
 
 ### Skills Discovery
 
-Skills are loaded from directories containing `SKILL.md` files. The adapter parses YAML frontmatter (between `---` markers) to extract metadata like name, description, author, and version. The `source` field was recently removed from the Skill struct.
+Skills are loaded from directories containing `SKILL.md` files. The adapter parses YAML frontmatter (between `---` markers) to extract metadata like name, description, author, and version. The `source_path: Option<String>` field on `Skill` records the file path where the skill was loaded from.
 
 ### Adding/Removing Agents
 
@@ -100,6 +102,11 @@ Touch all of these when adding or removing an agent:
 Integration tests in `crates/core/tests/integration_tests.rs` use a `TestConfig` helper to create isolated temp directories with `.claude/` or `.opencode/` structures.
 
 For test isolation, `TestConfig` uses `crate::adapter::set_skills_path_override(agent_id, path)` (per-agent thread-local).
+
+Additional test files:
+- `crates/core/tests/mcp_tests.rs`: MCP-specific behavior, transport types, deduplication
+- `crates/core/tests/test_agent_paths.rs`: XDG-compliant skills path configuration per agent
+- `crates/cli/tests/cli_tests.rs`: End-to-end CLI tests via `assert_cmd`
 
 ## Configuration Paths Reference
 
