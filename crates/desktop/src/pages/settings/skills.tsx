@@ -1,29 +1,45 @@
 import { useMemo, useState } from "react"
 import { PlusIcon } from "@heroicons/react/24/solid"
-import { Button, Chip, Description, Header, Label, ListBox, SearchField, type Selection } from "@heroui/react"
+import { Button, Chip, Header, Label, ListBox, SearchField, type Selection } from "@heroui/react"
 import { useSkills } from "../../hooks/use-skills"
 import type { SkillResponse } from "../../lib/api-types"
+
+interface SkillGroup {
+  name: string
+  items: SkillResponse[]
+}
 
 export default function SkillsPage() {
   const { data: skills } = useSkills()
   const [searchQuery, setSearchQuery] = useState("")
+
+  const groupedSkills = useMemo(() => {
+    const map = new Map<string, SkillResponse[]>()
+    for (const skill of skills) {
+      const existing = map.get(skill.name) ?? []
+      map.set(skill.name, [...existing, skill])
+    }
+    return Array.from(map.entries()).map(([name, items]) => ({ name, items }))
+  }, [skills])
+
   const [selected, setSelected] = useState<Selection>(
-    new Set(skills[0] ? [`${skills[0].agent || ""}/${skills[0].name}`] : [])
+    new Set(groupedSkills[0] ? [groupedSkills[0].name] : [])
   )
 
-  const selectedSkill = skills.find(
-    (s) => [...(selected as Set<string>)][0] === `${s.agent || ""}/${s.name}`
-  ) ?? null
-
-  const filteredSkills = useMemo(
+  const filteredGroups = useMemo(
     () =>
-      skills.filter(
-        (skill) =>
-          skill.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (skill.description ?? "").toLowerCase().includes(searchQuery.toLowerCase())
+      groupedSkills.filter(
+        ({ name, items }) =>
+          name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          items.some((s) =>
+            (s.description ?? "").toLowerCase().includes(searchQuery.toLowerCase())
+          )
       ),
-    [skills, searchQuery]
+    [groupedSkills, searchQuery]
   )
+
+  const selectedKey = [...(selected as Set<string>)][0]
+  const selectedGroup = filteredGroups.find((g) => g.name === selectedKey) ?? null
 
   return (
     <div className="flex h-full">
@@ -59,33 +75,20 @@ export default function SkillsPage() {
         >
           <ListBox.Section>
             <Header className="px-2 py-1.5 text-xs font-medium text-muted uppercase tracking-wide">
-              ALL SKILLS ({filteredSkills.length})
+              ALL SKILLS ({filteredGroups.length})
             </Header>
-            {filteredSkills.map((skill) => (
+            {filteredGroups.map((group) => (
               <ListBox.Item
-                key={`${skill.agent || ""}/${skill.name}`}
-                id={`${skill.agent || ""}/${skill.name}`}
-                textValue={skill.name}
+                key={group.name}
+                id={group.name}
+                textValue={group.name}
               >
-                <div className="flex-1 min-w-0 overflow-hidden">
-                  <Label className="truncate">{skill.name}</Label>
-                  <Description className="truncate">
-                    {skill.description ?? "No description"}
-                  </Description>
-                </div>
-                {skill.agent && (
-                  <Chip
-                    size="sm"
-                    className="max-w-20 truncate"
-                  >
-                    {skill.agent}
-                  </Chip>
-                )}
+                <Label className="truncate">{group.name}</Label>
               </ListBox.Item>
             ))}
           </ListBox.Section>
         </ListBox>
-        {filteredSkills.length === 0 && (
+        {filteredGroups.length === 0 && (
           <p className="px-3 py-6 text-sm text-muted text-center">
             No skills match &ldquo;{searchQuery}&rdquo;
           </p>
@@ -94,8 +97,8 @@ export default function SkillsPage() {
 
       {/* Skill Detail Panel */}
       <div className="flex-1 overflow-hidden">
-        {selectedSkill ? (
-          <SkillDetail skill={selectedSkill} />
+        {selectedGroup ? (
+          <SkillDetail group={selectedGroup} />
         ) : (
           <div className="flex items-center justify-center h-full">
             <p className="text-sm text-muted">Select a skill to view details</p>
@@ -106,17 +109,24 @@ export default function SkillsPage() {
   )
 }
 
-function SkillDetail({ skill }: { skill: SkillResponse }) {
+function SkillDetail({ group }: { group: SkillGroup }) {
+  const skill = group.items[0]
+  const agents = group.items.map((s) => s.agent).filter(Boolean) as string[]
+
   return (
     <div className="h-full overflow-y-auto">
       <div className="p-6 max-w-3xl">
         {/* Header */}
-        <div className="flex items-center gap-2 mb-1">
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
           <h2 className="text-xl font-semibold leading-tight text-foreground">{skill.name}</h2>
-          {skill.agent && (
-            <Chip size="sm">
-              {skill.agent}
-            </Chip>
+          {agents.length > 0 && (
+            <div className="flex gap-1 flex-wrap">
+              {agents.map((agent) => (
+                <Chip key={agent} size="sm">
+                  {agent}
+                </Chip>
+              ))}
+            </div>
           )}
         </div>
         {skill.source_path && (
