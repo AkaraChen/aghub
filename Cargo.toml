@@ -5,6 +5,7 @@ members = [
 	"crates/api",
 	"crates/skills-sh",
 	"crates/skill",
+	"crates/desktop/src-tauri"
 ]
 resolver = "2"
 
