@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next"
-import { Tabs, ToggleButton, ToggleButtonGroup, Select, Label, ListBox, Description } from "@heroui/react"
+import { Tabs, ToggleButton, ToggleButtonGroup, Select, ListBox } from "@heroui/react"
 import { ComputerDesktopIcon, SunIcon, MoonIcon } from "@heroicons/react/24/solid"
 import { useTheme } from "../../providers/theme"
 
@@ -68,11 +68,14 @@ export default function SettingsPage() {
                 >
                   <Select.Trigger>
                     <Select.Value />
+                    <Select.Indicator />
                   </Select.Trigger>
-                  <Select.Content>
-                    <Select.Item id="en">{t("english")}</Select.Item>
-                    <Select.Item id="zh">{t("chinese")}</Select.Item>
-                  </Select.Content>
+                  <Select.Popover>
+                    <ListBox>
+                      <ListBox.Item id="en" textValue={t("english")}>{t("english")}</ListBox.Item>
+                      <ListBox.Item id="zh" textValue={t("chinese")}>{t("chinese")}</ListBox.Item>
+                    </ListBox>
+                  </Select.Popover>
                 </Select>
               </div>
             </div>
