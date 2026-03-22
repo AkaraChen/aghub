@@ -76,21 +76,16 @@ export default function SkillsPage() {
           onSelectionChange={setSelected}
           className="flex-1 overflow-y-auto p-2"
         >
-          <ListBox.Section>
-            <Header className="px-2 py-1.5 text-xs font-medium text-muted uppercase tracking-wide">
-              ALL SKILLS ({filteredGroups.length})
-            </Header>
-            {filteredGroups.map((group) => (
-              <ListBox.Item
-                key={group.name}
-                id={group.name}
-                textValue={group.name}
-                className="data-[selected]:bg-accent/10"
-              >
-                <Label className="truncate">{group.name}</Label>
-              </ListBox.Item>
-            ))}
-          </ListBox.Section>
+          {filteredGroups.map((group) => (
+            <ListBox.Item
+              key={group.name}
+              id={group.name}
+              textValue={group.name}
+              className="data-[selected]:bg-accent/10"
+            >
+              <Label className="truncate">{group.name}</Label>
+            </ListBox.Item>
+          ))}
         </ListBox>
         {filteredGroups.length === 0 && (
           <p className="px-3 py-6 text-sm text-muted text-center">
@@ -115,7 +110,6 @@ export default function SkillsPage() {
 
 function SkillDetail({ group }: { group: SkillGroup }) {
   const skill = group.items[0]
-  const agents = group.items.map((s) => s.agent).filter(Boolean) as string[]
 
   return (
     <div className="h-full overflow-y-auto">
@@ -123,15 +117,6 @@ function SkillDetail({ group }: { group: SkillGroup }) {
         {/* Header */}
         <div className="flex items-center gap-2 mb-1 flex-wrap">
           <h2 className="text-xl font-semibold leading-tight text-foreground">{skill.name}</h2>
-          {agents.length > 0 && (
-            <div className="flex gap-1 flex-wrap">
-              {agents.map((agent) => (
-                <Chip key={agent} size="sm">
-                  {agent}
-                </Chip>
-              ))}
-            </div>
-          )}
         </div>
         {skill.source_path && (
           <p className="text-xs text-muted mb-6 font-mono">{skill.source_path}</p>

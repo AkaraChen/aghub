@@ -3,12 +3,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { Router, Route, Switch } from "wouter"
 import { Spinner } from "@heroui/react"
 import { ServerProvider } from "./providers/server"
+import { ThemeProvider } from "./providers/theme"
 import { SettingsLayout } from "./layouts/settings-layout"
 import { ErrorBoundary } from "./components/ui/error-boundary"
 import HomePage from "./pages/home"
 import SkillsPage from "./pages/settings/skills"
 import MCPServersPage from "./pages/settings/mcp-servers"
 import CustomAgentsPage from "./pages/settings/custom-agents"
+import SettingsPage from "./pages/settings"
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,7 +35,8 @@ function SkillsPageSkeleton() {
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ServerProvider>
+      <ThemeProvider>
+        <ServerProvider>
         <Router>
           <Switch>
             <Route path="/" component={HomePage} />
@@ -58,6 +61,9 @@ function App() {
             <Route path="/settings/custom-agents">
               <SettingsLayout><CustomAgentsPage /></SettingsLayout>
             </Route>
+            <Route path="/settings">
+              <SettingsLayout><SettingsPage /></SettingsLayout>
+            </Route>
             <Route>
               <SettingsLayout>
                 <ErrorBoundary>
@@ -69,7 +75,8 @@ function App() {
             </Route>
           </Switch>
         </Router>
-      </ServerProvider>
+        </ServerProvider>
+      </ThemeProvider>
     </QueryClientProvider>
   )
 }

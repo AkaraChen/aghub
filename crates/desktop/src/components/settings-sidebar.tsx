@@ -4,6 +4,7 @@ import { Surface } from "@heroui/react"
 import {
   BookOpenIcon,
   ServerIcon,
+  Cog6ToothIcon,
 } from "@heroicons/react/24/solid"
 import { cn } from "../lib/utils"
 
@@ -19,10 +20,9 @@ export function SettingsSidebar() {
   const [pathname] = useLocation()
 
   return (
-    <Surface variant="default" className="w-60 shrink-0 border-r border-border p-3 rounded-none">
-      <aside>
-        <div className="px-2.5 py-3 text-lg font-semibold tracking-tight">aghub</div>
-        <nav className="flex flex-col gap-0.5">
+    <Surface variant="default" className="w-60 shrink-0 border-r border-border p-3 rounded-none flex flex-col">
+      <aside className="flex flex-col h-full">
+        <nav className="flex flex-col gap-0.5 flex-1">
           {menuItems.map((item) => {
             const Icon = item.icon
             const isActive = pathname === item.href
@@ -43,6 +43,20 @@ export function SettingsSidebar() {
               </Link>
             )
           })}
+        </nav>
+        <nav className="mt-auto">
+          <Link
+            href="/settings"
+            className={cn(
+              "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors",
+              pathname === "/settings"
+                ? "bg-accent/10 text-foreground font-medium"
+                : "text-muted hover:bg-surface-secondary hover:text-foreground"
+            )}
+          >
+            <Cog6ToothIcon className="size-4" />
+            <span>Settings</span>
+          </Link>
         </nav>
       </aside>
     </Surface>

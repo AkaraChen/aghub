@@ -106,11 +106,6 @@ export default function MCPServersPage() {
                   <TrashIcon className="size-4" />
                 </Button>
               </div>
-              <div className="flex items-center gap-2 mb-6">
-                <Chip size="sm">{selectedServer.transport.type}</Chip>
-                {selectedServer.source && <Chip size="sm">{selectedServer.source}</Chip>}
-                {selectedServer.agent && <Chip size="sm">{selectedServer.agent}</Chip>}
-              </div>
 
               {/* Connection / Transport */}
               <div className="mb-6">

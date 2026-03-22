@@ -14,7 +14,9 @@
       {
         "title": "aghub-desktop",
         "width": 1080,
-        "height": 640
+        "height": 640,
+        "titleBarStyle": "overlay",
+        "hiddenTitle": true
       }
     ],
     "security": {
