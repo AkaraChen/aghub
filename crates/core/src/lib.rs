@@ -3,6 +3,7 @@
 //! Core library for managing Code Agent configurations.
 
 pub mod adapter;
+pub mod all_agents;
 pub mod adapters;
 pub mod agents;
 pub mod errors;
@@ -17,6 +18,7 @@ pub mod skills;
 pub mod testing;
 
 pub use adapters::{create_adapter, AgentAdapter};
+pub use all_agents::{load_all_agents, AgentResources};
 pub use errors::{ConfigError, Result};
 pub use manager::ConfigManager;
 pub use models::{AgentType, ConfigSource};

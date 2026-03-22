@@ -4,7 +4,10 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use aghub_core::{
-	adapters::create_adapter, manager::ConfigManager, models::{AgentType, ResourceScope},
+	adapters::create_adapter,
+	load_all_agents,
+	manager::ConfigManager,
+	models::{AgentType, ResourceScope},
 	paths::find_project_root,
 };
 
@@ -213,6 +216,11 @@ fn main() -> Result<()> {
 	// Set global verbose flag
 	set_verbose(cli.verbose);
 
+	// Handle --agent all: iterate all registered agents
+	if cli.agent == "all" {
+		return handle_all_agents(&cli);
+	}
+
 	// Parse agent type
 	let agent_type = cli.agent.parse::<AgentType>().map_err(|e| {
 		anyhow::anyhow!("Unknown agent type: {} (valid: claude, opencode)", e)
@@ -357,6 +365,41 @@ fn main() -> Result<()> {
 			describe::execute(&manager, resource, name)
 		}
 	}
+}
+
+// Handle --agent all: list resources for every registered agent
+fn handle_all_agents(cli: &Cli) -> Result<()> {
+	let resource = match &cli.command {
+		Commands::Get { resource } => *resource,
+		_ => {
+			return Err(anyhow::anyhow!(
+				"--agent all is only supported with the 'get' command"
+			))
+		}
+	};
+
+	let scope = if cli.all {
+		ResourceScope::Both
+	} else if cli.project {
+		ResourceScope::ProjectOnly
+	} else if cli.global {
+		ResourceScope::GlobalOnly
+	} else {
+		ResourceScope::GlobalOnly
+	};
+
+	let project_root = if scope == ResourceScope::ProjectOnly
+		|| scope == ResourceScope::Both
+	{
+		let current_dir = std::env::current_dir()?;
+		find_project_root(&current_dir)
+	} else {
+		None
+	};
+
+	eprintln_verbose!("Loading resources for all agents (scope: {:?})", scope);
+	let resources = load_all_agents(scope, project_root.as_deref());
+	get::execute_all(resources, resource)
 }
 
 // Describe command - outputs JSON
