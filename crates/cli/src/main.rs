@@ -233,8 +233,6 @@ fn main() -> Result<()> {
 		ResourceScope::Both
 	} else if cli.project {
 		ResourceScope::ProjectOnly
-	} else if cli.global {
-		ResourceScope::GlobalOnly
 	} else {
 		// Default: global only (preserves current behavior)
 		ResourceScope::GlobalOnly
@@ -384,8 +382,6 @@ fn handle_all_agents(cli: &Cli) -> Result<()> {
 		ResourceScope::Both
 	} else if cli.project {
 		ResourceScope::ProjectOnly
-	} else if cli.global {
-		ResourceScope::GlobalOnly
 	} else {
 		ResourceScope::GlobalOnly
 	};

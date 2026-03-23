@@ -9,8 +9,9 @@ use std::path::{Path, PathBuf};
 
 #[test]
 fn test_opencode_uses_universal_skills() {
-	assert!(
+	assert_eq!(
 		opencode::DESCRIPTOR.capabilities.universal_skills,
+		true,
 		"OpenCode should use universal skills path (~/.config/agents/skills)"
 	);
 }
@@ -139,8 +140,9 @@ fn test_openclaw_defaults_to_openclaw_when_none_exist() {
 
 #[test]
 fn test_openclaw_skills_enabled() {
-	assert!(
+	assert_eq!(
 		openclaw::DESCRIPTOR.capabilities.skills,
+		true,
 		"OpenClaw should have skills capability enabled"
 	);
 }

@@ -37,7 +37,7 @@ async fn test_find_convenience_method() {
 	let client = Client::new().unwrap();
 	// We can't test actual API call without mocking
 	// This just verifies the method signature works
-	let _ = client.find("test");
+	let _ = client.find("test").await;
 }
 
 #[test]
@@ -61,6 +61,7 @@ fn test_client_from_env_with_var() {
 }
 
 #[tokio::test]
+#[ignore = "Flaky remote API test"]
 async fn test_live_search() {
 	let client = Client::new().unwrap();
 	let results = client.find("github").await.unwrap();

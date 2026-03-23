@@ -8,5 +8,5 @@ pub async fn pick_folder(
 	app.dialog().file().pick_folder(move |folder| {
 		let _ = tx.send(folder.map(|p| p.to_string()));
 	});
-	Ok(rx.recv().map_err(|e| e.to_string())?)
+	rx.recv().map_err(|e| e.to_string())
 }
