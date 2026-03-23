@@ -6,27 +6,42 @@ import {
 import {
 	Button,
 	Chip,
+	Fieldset,
+	Form,
+	Input,
 	Label,
 	ListBox,
 	SearchField,
+	Select,
 	type Selection,
+	TextField,
 } from "@heroui/react";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { dirname } from "pathe";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useSkills } from "../../hooks/use-skills";
-import type { SkillResponse } from "../../lib/api-types";
+import { useCreateSkill, useSkills } from "../../hooks/use-skills";
+import { createApi } from "../../lib/api";
+import type { MarketSkill, SkillResponse } from "../../lib/api-types";
+import { useServer } from "../../providers/server";
+import { useAgentAvailability } from "../../providers/agent-availability";
 
 interface SkillGroup {
 	name: string;
 	items: SkillResponse[];
 }
 
+type RightPanel =
+	| { type: "detail"; group: SkillGroup }
+	| { type: "create" }
+	| { type: "empty" };
+
 export default function SkillsPage() {
 	const { t } = useTranslation();
 	const { data: skills, refetch } = useSkills();
 	const [searchQuery, setSearchQuery] = useState("");
+	const [panel, setPanel] = useState<RightPanel>({ type: "empty" });
 
 	const groupedSkills = useMemo(() => {
 		const map = new Map<string, SkillResponse[]>();
@@ -58,9 +73,19 @@ export default function SkillsPage() {
 		[groupedSkills, searchQuery],
 	);
 
-	const selectedKey = [...(selected as Set<string>)][0];
-	const selectedGroup =
-		filteredGroups.find((g) => g.name === selectedKey) ?? null;
+	const handleSelectionChange = (keys: Selection) => {
+		setSelected(keys);
+		const key = [...(keys as Set<string>)][0];
+		const group = filteredGroups.find((g) => g.name === key);
+		if (group) {
+			setPanel({ type: "detail", group });
+		}
+	};
+
+	const handleCreate = () => {
+		setSelected(new Set());
+		setPanel({ type: "create" });
+	};
 
 	return (
 		<div className="flex h-full">
@@ -89,6 +114,7 @@ export default function SkillsPage() {
 						size="sm"
 						className="shrink-0"
 						aria-label={t("addSkill")}
+						onPress={handleCreate}
 					>
 						<PlusIcon className="size-4" />
 					</Button>
@@ -109,7 +135,7 @@ export default function SkillsPage() {
 					aria-label="Skills"
 					selectionMode="single"
 					selectedKeys={selected}
-					onSelectionChange={setSelected}
+					onSelectionChange={handleSelectionChange}
 					className="flex-1 overflow-y-auto p-2"
 				>
 					{filteredGroups.map((group) => (
@@ -130,11 +156,15 @@ export default function SkillsPage() {
 				)}
 			</div>
 
-			{/* Skill Detail Panel */}
+			{/* Right Panel */}
 			<div className="flex-1 overflow-hidden">
-				{selectedGroup ? (
-					<SkillDetail group={selectedGroup} />
-				) : (
+				{panel.type === "detail" && <SkillDetail group={panel.group} />}
+				{panel.type === "create" && (
+					<CreateSkillPanel
+						onDone={() => setPanel({ type: "empty" })}
+					/>
+				)}
+				{panel.type === "empty" && (
 					<div className="flex items-center justify-center h-full">
 						<p className="text-sm text-muted">{t("selectSkill")}</p>
 					</div>
@@ -249,6 +279,229 @@ function SkillDetail({ group }: { group: SkillGroup }) {
 						<Chip size="sm">{skill.source}</Chip>
 					</div>
 				)}
+			</div>
+		</div>
+	);
+}
+
+function CreateSkillPanel({ onDone }: { onDone: () => void }) {
+	const { t } = useTranslation();
+	const { baseUrl } = useServer();
+	const api = createApi(baseUrl);
+	const createSkill = useCreateSkill();
+	const { availableAgents } = useAgentAvailability();
+
+	const skillAgents = availableAgents.filter(
+		(a) => a.isUsable && a.capabilities.skills_mutable,
+	);
+
+	const [agent, setAgent] = useState(skillAgents[0]?.id ?? "");
+	const [name, setName] = useState("");
+	const [description, setDescription] = useState("");
+	const [author, setAuthor] = useState("");
+	const [version, setVersion] = useState("");
+
+	// Market search
+	const [marketQuery, setMarketQuery] = useState("");
+	const { data: marketResults = [], isFetching: isSearching } = useQuery<
+		MarketSkill[]
+	>({
+		queryKey: ["market", "search", marketQuery],
+		queryFn: () => api.market.search(marketQuery, 10),
+		enabled: marketQuery.length >= 2,
+		staleTime: 60_000,
+	});
+
+	const handleMarketSelect = (skill: MarketSkill) => {
+		setName(skill.name);
+		setDescription(`Source: ${skill.source}`);
+		setMarketQuery("");
+	};
+
+	const handleSave = () => {
+		if (!name.trim() || !agent) return;
+		createSkill.mutate(
+			{
+				agent,
+				data: {
+					name: name.trim(),
+					description: description.trim() || undefined,
+					author: author.trim() || undefined,
+					version: version.trim() || undefined,
+				},
+			},
+			{ onSuccess: onDone },
+		);
+	};
+
+	return (
+		<div className="h-full overflow-y-auto">
+			<div className="p-6 max-w-3xl">
+				<h2 className="text-xl font-semibold text-foreground mb-6">
+					{t("createSkill")}
+				</h2>
+
+				{/* Market Search */}
+				<div className="mb-6">
+					<h3 className="text-xs font-medium text-muted uppercase tracking-wide mb-2">
+						{t("searchMarket")}
+					</h3>
+					<SearchField
+						value={marketQuery}
+						onChange={setMarketQuery}
+						aria-label={t("searchMarket")}
+						variant="secondary"
+						className="w-full"
+					>
+						<SearchField.Group>
+							<SearchField.SearchIcon />
+							<SearchField.Input
+								placeholder={t("searchMarketPlaceholder")}
+							/>
+							<SearchField.ClearButton />
+						</SearchField.Group>
+					</SearchField>
+
+					{/* Search Results */}
+					{marketQuery.length >= 2 && (
+						<div className="mt-2 border border-border rounded-lg overflow-hidden">
+							{isSearching ? (
+								<p className="px-3 py-4 text-sm text-muted text-center">
+									{t("searching")}
+								</p>
+							) : marketResults.length > 0 ? (
+								<div className="max-h-48 overflow-y-auto">
+									{marketResults.map((skill) => (
+										<button
+											key={skill.slug}
+											type="button"
+											className="w-full flex items-center justify-between px-3 py-2 text-left hover:bg-surface-secondary transition-colors"
+											onClick={() =>
+												handleMarketSelect(skill)
+											}
+										>
+											<div className="min-w-0">
+												<p className="text-sm font-medium text-foreground truncate">
+													{skill.name}
+												</p>
+												<p className="text-xs text-muted truncate">
+													{skill.source}
+												</p>
+											</div>
+											<span className="text-xs text-muted shrink-0 ml-2">
+												{skill.installs.toLocaleString()}{" "}
+												installs
+											</span>
+										</button>
+									))}
+								</div>
+							) : (
+								<p className="px-3 py-4 text-sm text-muted text-center">
+									{t("noResults")}
+								</p>
+							)}
+						</div>
+					)}
+				</div>
+
+				{/* Form Fields */}
+				<Form>
+					{/* Target Agent */}
+					<Fieldset>
+						<Fieldset.Group>
+							<Select
+								selectedKey={agent}
+								onSelectionChange={(key) =>
+									setAgent(key as string)
+								}
+								aria-label={t("targetAgent")}
+								className="w-full"
+							>
+								<Label>{t("targetAgent")}</Label>
+								<Select.Trigger>
+									<Select.Value />
+									<Select.Indicator />
+								</Select.Trigger>
+								<Select.Popover>
+									<ListBox>
+										{skillAgents.map((a) => (
+											<ListBox.Item
+												key={a.id}
+												id={a.id}
+												textValue={a.display_name}
+											>
+												{a.display_name}
+											</ListBox.Item>
+										))}
+									</ListBox>
+								</Select.Popover>
+							</Select>
+						</Fieldset.Group>
+					</Fieldset>
+
+					{/* Name & Description */}
+					<Fieldset>
+						<Fieldset.Group>
+							<TextField className="w-full" isRequired>
+								<Label>{t("skillName")}</Label>
+								<Input
+									value={name}
+									onChange={(e) => setName(e.target.value)}
+									placeholder={t("skillName")}
+								/>
+							</TextField>
+							<TextField className="w-full">
+								<Label>{t("description")}</Label>
+								<Input
+									value={description}
+									onChange={(e) =>
+										setDescription(e.target.value)
+									}
+									placeholder={t("description")}
+								/>
+							</TextField>
+						</Fieldset.Group>
+					</Fieldset>
+
+					{/* Author & Version */}
+					<Fieldset>
+						<Fieldset.Group>
+							<TextField className="flex-1">
+								<Label>{t("author")}</Label>
+								<Input
+									value={author}
+									onChange={(e) => setAuthor(e.target.value)}
+									placeholder={t("author")}
+								/>
+							</TextField>
+							<TextField className="flex-1">
+								<Label>{t("version")}</Label>
+								<Input
+									value={version}
+									onChange={(e) => setVersion(e.target.value)}
+									placeholder="1.0.0"
+								/>
+							</TextField>
+						</Fieldset.Group>
+					</Fieldset>
+
+					{/* Actions */}
+					<div className="flex justify-end gap-2 pt-2">
+						<Button variant="secondary" onPress={onDone}>
+							{t("cancel")}
+						</Button>
+						<Button
+							onPress={handleSave}
+							isDisabled={
+								!name.trim() || !agent || createSkill.isPending
+							}
+						>
+							{createSkill.isPending
+								? t("creating")
+								: t("save")}
+						</Button>
+					</div>
+				</Form>
 			</div>
 		</div>
 	);

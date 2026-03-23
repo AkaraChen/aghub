@@ -49,6 +49,13 @@ export default {
 	tools: "Tools",
 	source: "Source",
 	openFolder: "Open folder",
+	createSkill: "Create Skill",
+	skillName: "Skill Name",
+	targetAgent: "Target Agent",
+	searchMarket: "Market Search",
+	searchMarketPlaceholder: "Search skills.sh marketplace...",
+	searching: "Searching...",
+	noResults: "No results",
 
 	// MCP Servers Page
 	searchServers: "Search servers...",

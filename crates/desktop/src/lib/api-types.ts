@@ -39,3 +39,18 @@ export interface McpResponse {
 	source?: "Global" | "Project";
 	agent?: string;
 }
+
+export interface CreateSkillRequest {
+	name: string;
+	description?: string;
+	author?: string;
+	version?: string;
+	tools?: string[];
+}
+
+export interface MarketSkill {
+	name: string;
+	slug: string;
+	source: string;
+	installs: number;
+}

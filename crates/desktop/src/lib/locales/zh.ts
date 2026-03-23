@@ -49,6 +49,13 @@ export default {
 	tools: "工具",
 	source: "来源",
 	openFolder: "打开文件夹",
+	createSkill: "创建技能",
+	skillName: "技能名称",
+	targetAgent: "目标 Agent",
+	searchMarket: "市场搜索",
+	searchMarketPlaceholder: "搜索 skills.sh 市场...",
+	searching: "搜索中...",
+	noResults: "无结果",
 
 	// MCP Servers Page
 	searchServers: "搜索服务器...",

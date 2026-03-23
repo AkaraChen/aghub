@@ -1,5 +1,5 @@
 import ky from "ky";
-import type { McpResponse, SkillResponse, TransportDto } from "./api-types";
+import type { CreateSkillRequest, MarketSkill, McpResponse, SkillResponse, TransportDto } from "./api-types";
 
 export interface UpdateMcpRequest {
 	name?: string;
@@ -16,6 +16,7 @@ export interface AgentInfo {
 		mcp_remote: boolean;
 		mcp_enable_disable: boolean;
 		skills: boolean;
+		skills_mutable: boolean;
 		universal_skills: boolean;
 	};
 }
@@ -45,6 +46,17 @@ export function createApi(baseUrl: string) {
 			): Promise<SkillResponse[]> {
 				return client
 					.get("agents/all/skills", { searchParams: { scope } })
+					.json();
+			},
+			create(
+				agent: string,
+				data: CreateSkillRequest,
+			): Promise<SkillResponse> {
+				return client
+					.post(`agents/${agent}/skills`, {
+						searchParams: { scope: "global" },
+						json: data,
+					})
 					.json();
 			},
 		},
@@ -106,6 +118,15 @@ export function createApi(baseUrl: string) {
 						searchParams: { scope },
 					})
 					.then(() => undefined);
+			},
+		},
+		market: {
+			search(q: string, limit?: number): Promise<MarketSkill[]> {
+				const searchParams: Record<string, string> = { q };
+				if (limit) searchParams.limit = String(limit);
+				return client
+					.get("skills-market/search", { searchParams })
+					.json();
 			},
 		},
 	};
