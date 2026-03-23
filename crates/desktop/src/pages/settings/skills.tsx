@@ -13,6 +13,7 @@ import {
 	TextField,
 } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
+import { homeDir } from "@tauri-apps/api/path";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { dirname } from "pathe";
 import { useMemo, useState } from "react";
@@ -154,13 +155,11 @@ export default function SkillsPage() {
 
 			{/* Right Panel */}
 			<div className="flex-1 overflow-hidden">
-				{panel.type === "detail" && <SkillDetail group={panel.group} />}
-				{panel.type === "create" && (
-					<CreateSkillPanel
-						onDone={() => setPanel({ type: "empty" })}
-					/>
-				)}
-				{panel.type === "empty" && (
+				{isCreating ? (
+					<CreateSkillPanel onDone={() => setIsCreating(false)} />
+				) : activeGroup ? (
+					<SkillDetail group={activeGroup} />
+				) : (
 					<div className="flex items-center justify-center h-full">
 						<p className="text-sm text-muted">{t("selectSkill")}</p>
 					</div>
