@@ -62,7 +62,6 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
                 routes::catchers::default_catcher,
             ],
         )
-        .mount("/", rocket_cors::catch_all_options_routes())
         .launch()
         .await
         .map(|_| ())
