@@ -48,6 +48,9 @@ export default {
   url: "URL",
   timeout: "超时",
   unknown: "未知",
+  deleteMcpServer: "删除 MCP 服务器",
+  deleteMcpServerConfirm: "确定要删除 \"{{name}}\" 吗？此操作无法撤销。",
+  deleting: "删除中...",
 
   // Projects
   addProject: "添加项目",

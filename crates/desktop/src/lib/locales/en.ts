@@ -48,6 +48,9 @@ export default {
   url: "URL",
   timeout: "Timeout",
   unknown: "unknown",
+  deleteMcpServer: "Delete MCP Server",
+  deleteMcpServerConfirm: "Are you sure you want to delete \"{{name}}\"? This action cannot be undone.",
+  deleting: "Deleting...",
 
   // Projects
   addProject: "Add Project",

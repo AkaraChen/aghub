@@ -1,17 +1,25 @@
 import { useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
-import { PlusIcon, ArrowPathIcon, TrashIcon } from "@heroicons/react/24/solid"
-import { Button, Chip, Header, Label, ListBox, SearchField, Table, type Selection } from "@heroui/react"
+import { PlusIcon, ArrowPathIcon, TrashIcon, ExclamationTriangleIcon } from "@heroicons/react/24/solid"
+import { Button, Header, Label, ListBox, Modal, SearchField, Table, type Selection } from "@heroui/react"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useMcps } from "../../hooks/use-mcps"
+import { useServer } from "../../providers/server"
+import { createApi } from "../../lib/api"
 import type { McpResponse } from "../../lib/api-types"
 
 export default function MCPServersPage() {
   const { t } = useTranslation()
+  const { baseUrl } = useServer()
+  const api = createApi(baseUrl)
+  const queryClient = useQueryClient()
   const { data: mcps, refetch } = useMcps()
   const [searchQuery, setSearchQuery] = useState("")
   const [selected, setSelected] = useState<Selection>(
     new Set(mcps.length > 0 ? [`${mcps[0].name}-${mcps[0].agent ?? "default"}`] : [])
   )
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [serverToDelete, setServerToDelete] = useState<McpResponse | null>(null)
 
   const selectedKey = [...(selected as Set<string>)][0]
   const selectedServer = mcps.find(
@@ -37,6 +45,38 @@ export default function MCPServersPage() {
     }, {} as Record<string, McpResponse[]>),
     [filteredServers]
   )
+
+  const deleteMutation = useMutation({
+    mutationFn: (server: McpResponse) => {
+      const scope = server.source === "Project" ? "project" : "global"
+      return api.mcps.delete(server.name, server.agent ?? "default", scope)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["mcps"] })
+      setDeleteDialogOpen(false)
+      setServerToDelete(null)
+      // Clear selection if deleted server was selected
+      if (selectedServer && serverToDelete &&
+          `${selectedServer.name}-${selectedServer.agent ?? "default"}` ===
+          `${serverToDelete.name}-${serverToDelete.agent ?? "default"}`) {
+        setSelected(new Set())
+      }
+    },
+    onError: (error) => {
+      console.error("Failed to delete MCP server:", error)
+    }
+  })
+
+  const handleDeleteClick = (server: McpResponse) => {
+    setServerToDelete(server)
+    setDeleteDialogOpen(true)
+  }
+
+  const handleConfirmDelete = () => {
+    if (serverToDelete) {
+      deleteMutation.mutate(serverToDelete)
+    }
+  }
 
   return (
     <div className="flex h-full">
@@ -104,7 +144,14 @@ export default function MCPServersPage() {
               {/* Header */}
               <div className="flex items-center justify-between gap-3 mb-2">
                 <h2 className="text-xl font-semibold text-foreground truncate">{selectedServer.name}</h2>
-                <Button isIconOnly variant="ghost" size="sm" className="text-muted hover:text-danger shrink-0" aria-label={t("remove")}>
+                <Button
+                  isIconOnly
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted hover:text-danger shrink-0"
+                  aria-label={t("remove")}
+                  onPress={() => handleDeleteClick(selectedServer)}
+                >
                   <TrashIcon className="size-4" />
                 </Button>
               </div>
@@ -169,6 +216,42 @@ export default function MCPServersPage() {
           </div>
         )}
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      <Modal.Backdrop isOpen={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <Modal.Container>
+          <Modal.Dialog>
+            <Modal.CloseTrigger />
+            <Modal.Header>
+              <div className="flex items-center gap-2">
+                <ExclamationTriangleIcon className="size-5 text-warning" />
+                <Modal.Heading>{t("deleteMcpServer")}</Modal.Heading>
+              </div>
+            </Modal.Header>
+            <Modal.Body>
+              <p className="text-sm text-muted">
+                {t("deleteMcpServerConfirm", { name: serverToDelete?.name })}
+              </p>
+            </Modal.Body>
+            <Modal.Footer>
+              <Button
+                slot="close"
+                variant="secondary"
+                onPress={() => setDeleteDialogOpen(false)}
+              >
+                {t("cancel")}
+              </Button>
+              <Button
+                variant="danger"
+                onPress={handleConfirmDelete}
+                isDisabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending ? t("deleting") : t("remove")}
+              </Button>
+            </Modal.Footer>
+          </Modal.Dialog>
+        </Modal.Container>
+      </Modal.Backdrop>
     </div>
   )
 }
