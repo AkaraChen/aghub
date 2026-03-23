@@ -20,15 +20,15 @@ type MenuItem = {
 const menuItems: MenuItem[] = [
 	{
 		type: "link",
-		labelKey: "skills",
-		href: "/settings/skills",
-		icon: BookOpenIcon,
+		labelKey: "mcpServers",
+		href: "/mcp",
+		icon: ServerIcon,
 	},
 	{
 		type: "link",
-		labelKey: "mcpServers",
-		href: "/settings/mcp-servers",
-		icon: ServerIcon,
+		labelKey: "skills",
+		href: "/skills",
+		icon: BookOpenIcon,
 	},
 ];
 

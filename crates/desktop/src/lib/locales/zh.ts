@@ -3,7 +3,7 @@ export default {
 	settings: "设置",
 	skills: "技能",
 	mcpServers: "MCP 服务器",
-	agentManagement: "代理管理",
+	agentManagement: "代理",
 	projects: "项目",
 	search: "搜索",
 	add: "添加",

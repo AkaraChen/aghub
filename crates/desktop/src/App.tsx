@@ -9,12 +9,12 @@ import { AgentAvailabilityProvider } from "./providers/agent-availability";
 import { ServerProvider } from "./providers/server";
 import { ThemeProvider } from "./providers/theme";
 import "./lib/i18n";
-import HomePage from "./pages/home";
 import ProjectDetailPage from "./pages/project/detail";
 import SettingsPage from "./pages/settings";
 import CustomAgentsPage from "./pages/settings/custom-agents";
 import MCPServersPage from "./pages/settings/mcp-servers";
 import SkillsPage from "./pages/settings/skills";
+import { Redirect } from "./components/redirect";
 
 const queryClient = new QueryClient({
 	defaultOptions: {
@@ -62,8 +62,10 @@ function App() {
 					<AgentAvailabilityProvider>
 						<Router>
 							<Switch>
-								<Route path="/" component={HomePage} />
-								<Route path="/settings/skills">
+								<Route path="/">
+									<Redirect to="/mcp" />
+								</Route>
+								<Route path="/skills">
 									<SettingsLayout>
 										<ErrorBoundary>
 											<Suspense
@@ -74,7 +76,7 @@ function App() {
 										</ErrorBoundary>
 									</SettingsLayout>
 								</Route>
-								<Route path="/settings/mcp-servers">
+								<Route path="/mcp">
 									<SettingsLayout>
 										<ErrorBoundary>
 											<Suspense
@@ -85,14 +87,14 @@ function App() {
 										</ErrorBoundary>
 									</SettingsLayout>
 								</Route>
-								<Route path="/settings/custom-agents">
-									<SettingsLayout>
-										<CustomAgentsPage />
-									</SettingsLayout>
-								</Route>
 								<Route path="/settings">
 									<SettingsLayout>
 										<SettingsPage />
+									</SettingsLayout>
+								</Route>
+								<Route path="/settings/custom-agents">
+									<SettingsLayout>
+										<CustomAgentsPage />
 									</SettingsLayout>
 								</Route>
 								<Route path="/projects/:id">
@@ -101,15 +103,7 @@ function App() {
 									</SettingsLayout>
 								</Route>
 								<Route>
-									<SettingsLayout>
-										<ErrorBoundary>
-											<Suspense
-												fallback={<SkillsPageSkeleton />}
-											>
-												<SkillsPage />
-											</Suspense>
-										</ErrorBoundary>
-									</SettingsLayout>
+									<Redirect to="/mcp" />
 								</Route>
 							</Switch>
 						</Router>

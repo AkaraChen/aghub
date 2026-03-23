@@ -23,6 +23,7 @@ export default function SettingsPage() {
 	const { theme, setTheme } = useTheme();
 	const { availableAgents, refetch } = useAgentAvailability();
 	const [updating, setUpdating] = useState<string | null>(null);
+	const [selectedTab, setSelectedTab] = useState<string>("appearance");
 
 	const changeLanguage = (lng: string) => {
 		i18n.changeLanguage(lng);
@@ -49,23 +50,28 @@ export default function SettingsPage() {
 	return (
 		<div className="h-full overflow-y-auto">
 			<div className="p-6 max-w-3xl">
-				<h2 className="text-xl font-semibold mb-6">{t("settings")}</h2>
+				<Tabs
+					selectedKey={selectedTab}
+					onSelectionChange={(key) => setSelectedTab(key as string)}
+				>
+					<div className="flex items-center justify-between mb-2">
+						<h2 className="text-xl font-semibold">{t("settings")}</h2>
 
-				<Tabs defaultSelectedKey="appearance">
-					<Tabs.ListContainer>
-						<Tabs.List aria-label="Settings sections">
-							<Tabs.Tab id="appearance">
-								{t("appearance")}
-								<Tabs.Indicator />
-							</Tabs.Tab>
-							<Tabs.Tab id="agents">
-								{t("agentManagement")}
-								<Tabs.Indicator />
-							</Tabs.Tab>
-						</Tabs.List>
-					</Tabs.ListContainer>
+						<Tabs.ListContainer>
+							<Tabs.List aria-label="Settings sections" className="w-auto inline-flex">
+								<Tabs.Tab id="appearance">
+									{t("appearance")}
+									<Tabs.Indicator />
+								</Tabs.Tab>
+								<Tabs.Tab id="agents">
+									{t("agentManagement")}
+									<Tabs.Indicator />
+								</Tabs.Tab>
+							</Tabs.List>
+						</Tabs.ListContainer>
+					</div>
 
-					<Tabs.Panel id="appearance" className="pt-6">
+					<Tabs.Panel id="appearance">
 						<div className="space-y-8">
 							{/* Theme */}
 							<div className="flex items-center justify-between">
@@ -150,13 +156,7 @@ export default function SettingsPage() {
 						</div>
 					</Tabs.Panel>
 
-					<Tabs.Panel id="agents" className="pt-6">
-						<div className="mb-6">
-							<p className="text-sm text-muted">
-								{t("agentManagementDescription")}
-							</p>
-						</div>
-
+					<Tabs.Panel id="agents">
 						<div className="space-y-2">
 							{availableAgents.map((agent) => {
 								const isUpdating = updating === agent.id;

@@ -3,7 +3,7 @@ export default {
 	settings: "Settings",
 	skills: "Skills",
 	mcpServers: "MCP Servers",
-	agentManagement: "Agent Management",
+	agentManagement: "Agent",
 	projects: "Projects",
 	search: "Search",
 	add: "Add",
