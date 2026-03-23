@@ -1,0 +1,4 @@
+/* form style for hero ui Form and Fieldset components */
+form.react-aria-Form fieldset + fieldset {
+	margin-top: 1rem;
+}

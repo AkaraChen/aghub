@@ -114,4 +114,12 @@ export default {
 	projectPathPlaceholder: "/path/to/your/project",
 	selectProjectFolder: "Select Project Folder",
 	clickToBrowse: "Click to browse your files",
+
+	// Env Editor
+	envEditor: {
+		addKeypair: "Add Keypair",
+		keyPlaceholder: "Key",
+		valuePlaceholder: "Value",
+		supportsEnvPaste: "Supports .env paste",
+	},
 };

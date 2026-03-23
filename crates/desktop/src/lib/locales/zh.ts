@@ -111,4 +111,12 @@ export default {
 	projectPathPlaceholder: "/path/to/your/project",
 	selectProjectFolder: "选择项目文件夹",
 	clickToBrowse: "点击浏览文件",
+
+	// Env Editor
+	envEditor: {
+		addKeypair: "添加键值对",
+		keyPlaceholder: "键",
+		valuePlaceholder: "值",
+		supportsEnvPaste: "支持 .env 粘贴",
+	},
 };
