@@ -225,12 +225,34 @@ pub fn parse_skill_md(content: &str) -> Result<Skill> {
 		.and_then(|v| v.as_str())
 		.map(String::from);
 
+	let author = metadata
+		.get("author")
+		.and_then(|v| v.as_str())
+		.map(String::from);
+
+	let version = metadata.get("version").map(|v| {
+		if let Some(s) = v.as_str() {
+			s.to_string()
+		} else if let Some(n) = v.as_f64() {
+			n.to_string()
+		} else if let Some(n) = v.as_i64() {
+			n.to_string()
+		} else {
+			serde_yaml::to_string(v)
+				.unwrap_or_default()
+				.trim()
+				.to_string()
+		}
+	});
+
 	Ok(Skill {
 		name: name.to_string(),
 		description: description.to_string(),
 		license,
 		compatibility,
 		allowed_tools,
+		author,
+		version,
 		content: body,
 		source: SkillSource::SkillMd(PathBuf::new()),
 		scripts: Vec::new(),
