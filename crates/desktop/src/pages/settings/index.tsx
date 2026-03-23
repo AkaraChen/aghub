@@ -14,9 +14,8 @@ import { useTranslation } from "react-i18next";
 import { useTheme } from "../../providers/theme";
 import { useAgentAvailability } from "../../providers/agent-availability";
 import { disableAgent, enableAgent } from "../../lib/store";
-import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/solid";
-import { Chip, Switch } from "@heroui/react";
 import { useState } from "react";
+import { AgentCard } from "../../components/agent-card";
 
 export default function SettingsPage() {
 	const { t, i18n } = useTranslation();
@@ -157,98 +156,15 @@ export default function SettingsPage() {
 					</Tabs.Panel>
 
 					<Tabs.Panel id="agents">
-						<div className="space-y-2">
-							{availableAgents.map((agent) => {
-								const isUpdating = updating === agent.id;
-								const statusText = agent.availability
-									.is_available
-									? agent.isDisabled
-										? t("disabledByUser")
-										: t("available")
-									: t("notAvailable");
-
-								return (
-									<div
-										key={agent.id}
-										className="flex items-center justify-between p-4 rounded-lg border border-border bg-surface"
-									>
-										<div className="flex items-center gap-4 flex-1 min-w-0">
-											<div className="flex-1 min-w-0">
-												<div className="flex items-center gap-2 mb-1">
-													<span className="font-medium text-foreground">
-														{agent.display_name}
-													</span>
-													<Chip
-														size="sm"
-														variant="soft"
-													>
-														{agent.id}
-													</Chip>
-												</div>
-												<div className="flex items-center gap-3 text-xs text-muted">
-													<span className="flex items-center gap-1">
-														{agent.availability
-															.has_global_directory ? (
-															<CheckCircleIcon className="size-3.5 text-success" />
-														) : (
-															<XCircleIcon className="size-3.5 text-danger" />
-														)}
-														{t("globalConfig")}
-													</span>
-													<span className="flex items-center gap-1">
-														{agent.availability
-															.has_cli ? (
-															<CheckCircleIcon className="size-3.5 text-success" />
-														) : (
-															<XCircleIcon className="size-3.5 text-danger" />
-														)}
-														{t("cli")}
-													</span>
-												</div>
-											</div>
-										</div>
-
-										<div className="flex items-center gap-3">
-											<Chip
-												size="sm"
-												variant="soft"
-												color={
-													agent.isUsable
-														? "success"
-														: agent.availability
-																	.is_available &&
-																agent.isDisabled
-															? "warning"
-															: "danger"
-												}
-											>
-												{statusText}
-											</Chip>
-
-											<Switch
-												isSelected={!agent.isDisabled}
-												onChange={() =>
-													handleToggleAgent(
-														agent.id,
-														agent.isDisabled,
-													)
-												}
-												isDisabled={
-													!agent.availability
-														.is_available ||
-													isUpdating
-												}
-												aria-label={t(
-													"toggleAgent",
-													{
-														name: agent.display_name,
-													},
-												)}
-											/>
-										</div>
-									</div>
-								);
-							})}
+						<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+							{availableAgents.map((agent) => (
+								<AgentCard
+									key={agent.id}
+									agent={agent}
+									isUpdating={updating === agent.id}
+									onToggle={handleToggleAgent}
+								/>
+							))}
 						</div>
 					</Tabs.Panel>
 				</Tabs>
