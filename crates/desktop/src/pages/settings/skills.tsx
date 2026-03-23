@@ -29,16 +29,12 @@ interface SkillGroup {
 	items: SkillResponse[];
 }
 
-type RightPanel =
-	| { type: "detail"; group: SkillGroup }
-	| { type: "create" }
-	| { type: "empty" };
-
 export default function SkillsPage() {
 	const { t } = useTranslation();
 	const { data: skills, refetch } = useSkills();
 	const [searchQuery, setSearchQuery] = useState("");
-	const [panel, setPanel] = useState<RightPanel>({ type: "empty" });
+	const [isCreating, setIsCreating] = useState(false);
+	const [selected, setSelected] = useState<Selection>(new Set());
 
 	const groupedSkills = useMemo(() => {
 		const map = new Map<string, SkillResponse[]>();
@@ -51,10 +47,6 @@ export default function SkillsPage() {
 			items,
 		}));
 	}, [skills]);
-
-	const [selected, setSelected] = useState<Selection>(
-		new Set(groupedSkills[0] ? [groupedSkills[0].name] : []),
-	);
 
 	const filteredGroups = useMemo(
 		() =>
@@ -70,18 +62,36 @@ export default function SkillsPage() {
 		[groupedSkills, searchQuery],
 	);
 
+	const actualSelected = useMemo(() => {
+		if (isCreating) return new Set<string>();
+		if (
+			selected !== "all" &&
+			(selected as Set<string>).size > 0 &&
+			Array.from(selected as Set<string>).some((key) =>
+				filteredGroups.some((g) => g.name === key),
+			)
+		) {
+			return selected as Set<string>;
+		}
+		return new Set<string>(
+			filteredGroups[0] ? [filteredGroups[0].name] : [],
+		);
+	}, [selected, isCreating, filteredGroups]);
+
+	const activeGroup = useMemo(() => {
+		if (actualSelected.size === 0) return null;
+		const key = [...actualSelected][0];
+		return filteredGroups.find((g) => g.name === key) ?? null;
+	}, [actualSelected, filteredGroups]);
+
 	const handleSelectionChange = (keys: Selection) => {
 		setSelected(keys);
-		const key = [...(keys as Set<string>)][0];
-		const group = filteredGroups.find((g) => g.name === key);
-		if (group) {
-			setPanel({ type: "detail", group });
-		}
+		setIsCreating(false);
 	};
 
 	const handleCreate = () => {
 		setSelected(new Set());
-		setPanel({ type: "create" });
+		setIsCreating(true);
 	};
 
 	return (
@@ -131,7 +141,7 @@ export default function SkillsPage() {
 				<ListBox
 					aria-label="Skills"
 					selectionMode="single"
-					selectedKeys={selected}
+					selectedKeys={actualSelected}
 					onSelectionChange={handleSelectionChange}
 					className="flex-1 overflow-y-auto p-2"
 				>
@@ -176,7 +186,13 @@ function SkillDetail({ group }: { group: SkillGroup }) {
 	const handleOpenFolder = async () => {
 		if (skill.source_path) {
 			try {
-				const folderPath = dirname(skill.source_path);
+				let path = skill.source_path;
+				if (path.startsWith("~/")) {
+					const home = await homeDir();
+					// Avoid replacing all characters if malformed, safely append
+					path = `${home}/${path.slice(2)}`;
+				}
+				const folderPath = dirname(path);
 				await openPath(folderPath);
 			} catch (error) {
 				console.error("Failed to open folder:", error);
