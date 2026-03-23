@@ -32,6 +32,21 @@ fn create_test_mcp_sse(name: &str) -> McpServer {
 	)
 }
 
+fn create_test_mcp_streamable_http(name: &str) -> McpServer {
+	let mut headers = HashMap::new();
+	headers
+		.insert("Authorization".to_string(), "Bearer test-token".to_string());
+	headers.insert("X-API-Version".to_string(), "v1".to_string());
+
+	McpServer::new(
+		name,
+		McpTransport::streamable_http_with_headers(
+			"http://localhost:3000/mcp",
+			headers,
+		),
+	)
+}
+
 fn create_test_skill(name: &str) -> Skill {
 	Skill {
 		name: name.to_string(),
@@ -43,6 +58,32 @@ fn create_test_skill(name: &str) -> Skill {
 		source_path: None,
 		config_source: None,
 	}
+}
+
+/// Macro to generate standard MCP workflow tests for multiple agents.
+macro_rules! test_mcp_workflow {
+    ($($name:ident => $agent:expr, $mcp_name:literal),* $(,)?) => {
+        $(
+            #[test]
+            fn $name() {
+                let test = TestConfig::new($agent).unwrap();
+                let mut manager = test.create_manager();
+                manager.load().unwrap();
+
+                let mcp = create_test_mcp_stdio($mcp_name);
+                manager.add_mcp(mcp).unwrap();
+
+                manager.load().unwrap();
+                let config = manager.config().unwrap();
+                assert_eq!(config.mcps.len(), 1);
+                assert_eq!(config.mcps[0].name, $mcp_name);
+
+                manager.remove_mcp($mcp_name).unwrap();
+                manager.load().unwrap();
+                assert!(manager.config().unwrap().mcps.is_empty());
+            }
+        )*
+    };
 }
 
 // ==================== Claude Code Integration Tests ====================
@@ -463,21 +504,6 @@ fn test_concurrent_modifications_preserve_state() {
 
 // ==================== Streamable HTTP Transport Tests ====================
 
-fn create_test_mcp_streamable_http(name: &str) -> McpServer {
-	let mut headers = HashMap::new();
-	headers
-		.insert("Authorization".to_string(), "Bearer test-token".to_string());
-	headers.insert("X-API-Version".to_string(), "v1".to_string());
-
-	McpServer::new(
-		name,
-		McpTransport::streamable_http_with_headers(
-			"http://localhost:3000/mcp",
-			headers,
-		),
-	)
-}
-
 #[test]
 fn test_claude_streamable_http_mcp_workflow() {
 	let test = TestConfig::new(AgentType::Claude).unwrap();
@@ -633,69 +659,76 @@ fn test_legacy_sse_backward_compatibility() {
 	}
 }
 
-// ==================== Antigravity Integration Tests ====================
+// ==================== Standard MCP Workflow Tests ====================
+// Generated via macro to eliminate ~20 duplicate test functions (~350 lines)
+
+test_mcp_workflow! {
+	test_antigravity_mcp_workflow => AgentType::Antigravity, "ag-mcp",
+	test_codex_mcp_workflow => AgentType::Codex, "codex-mcp",
+	test_kiro_mcp_workflow => AgentType::Kiro, "kiro-mcp",
+	test_cursor_mcp_workflow => AgentType::Cursor, "cursor-mcp",
+	test_windsurf_mcp_workflow => AgentType::Windsurf, "windsurf-mcp",
+	test_roocode_mcp_workflow => AgentType::RooCode, "roocode-mcp",
+	test_cline_mcp_workflow => AgentType::Cline, "cline-mcp",
+	test_gemini_mcp_workflow => AgentType::Gemini, "gemini-mcp",
+	test_kilocode_mcp_workflow => AgentType::KiloCode, "kilocode-mcp",
+	test_factory_mcp_workflow => AgentType::Factory, "factory-mcp",
+	test_mistral_mcp_workflow => AgentType::Mistral, "mistral-mcp",
+	test_amp_mcp_workflow => AgentType::Amp, "amp-mcp",
+	test_pi_mcp_workflow => AgentType::Pi, "pi-mcp",
+	test_augmentcode_mcp_workflow => AgentType::AugmentCode, "augmentcode-mcp",
+	test_warp_mcp_workflow => AgentType::Warp, "warp-mcp",
+	test_trae_mcp_workflow => AgentType::Trae, "trae-mcp",
+	test_jetbrains_ai_mcp_workflow => AgentType::JetBrainsAi, "jetbrains-ai-mcp",
+}
+
+// ==================== Special Case: Agent-Specific Key Tests ====================
 
 #[test]
-fn test_antigravity_mcp_workflow() {
-	let test = TestConfig::new(AgentType::Antigravity).unwrap();
+fn test_zed_mcp_uses_context_servers_key() {
+	let test = TestConfig::new(AgentType::Zed).unwrap();
 	let mut manager = test.create_manager();
-
 	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert!(config.mcps.is_empty());
 
-	// Add MCP server
-	let mcp = create_test_mcp_stdio("ag-mcp");
+	let mcp = create_test_mcp_stdio("zed-mcp");
 	manager.add_mcp(mcp).unwrap();
 
-	// Reload and verify
+	let content = test.read_config().unwrap();
+	let json: serde_json::Value = serde_json::from_str(&content).unwrap();
+	assert!(json.get("context_servers").is_some());
+	let servers = json.get("context_servers").unwrap().as_object().unwrap();
+	assert!(servers.contains_key("zed-mcp"));
+}
+
+#[test]
+fn test_copilot_mcp_uses_servers_key() {
+	let test = TestConfig::new(AgentType::Copilot).unwrap();
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+
+	let mcp = create_test_mcp_stdio("copilot-mcp");
+	manager.add_mcp(mcp).unwrap();
+
+	let content = test.read_config().unwrap();
+	assert!(content.contains("\"servers\""));
+
 	manager.load().unwrap();
 	let config = manager.config().unwrap();
 	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "ag-mcp");
+	assert_eq!(config.mcps[0].name, "copilot-mcp");
 
-	// Delete and verify
-	manager.remove_mcp("ag-mcp").unwrap();
+	manager.remove_mcp("copilot-mcp").unwrap();
 	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert!(config.mcps.is_empty());
+	assert!(manager.config().unwrap().mcps.is_empty());
 }
 
-// ==================== Codex Integration Tests ====================
+// ==================== Special Case: Multiple Transport Types ====================
 
 #[test]
-fn test_codex_mcp_workflow() {
-	let test = TestConfig::new(AgentType::Codex).unwrap();
-	let mut manager = test.create_manager();
-
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert!(config.mcps.is_empty());
-
-	let mcp = create_test_mcp_stdio("codex-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "codex-mcp");
-
-	manager.remove_mcp("codex-mcp").unwrap();
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert!(config.mcps.is_empty());
-}
-
-// ==================== Openclaw Integration Tests ====================
-
-#[test]
-fn test_openclaw_mcp_workflow() {
+fn test_openclaw_mcp_with_stdio_and_sse() {
 	let test = TestConfig::new(AgentType::Openclaw).unwrap();
 	let mut manager = test.create_manager();
-
 	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert!(config.mcps.is_empty());
 
 	let mcp = create_test_mcp_stdio("openclaw-mcp");
 	manager.add_mcp(mcp).unwrap();
@@ -703,9 +736,7 @@ fn test_openclaw_mcp_workflow() {
 	manager.load().unwrap();
 	let config = manager.config().unwrap();
 	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "openclaw-mcp");
 
-	// Add SSE MCP too
 	let sse_mcp = create_test_mcp_sse("openclaw-sse");
 	manager.add_mcp(sse_mcp).unwrap();
 
@@ -718,395 +749,6 @@ fn test_openclaw_mcp_workflow() {
 	let config = manager.config().unwrap();
 	assert_eq!(config.mcps.len(), 1);
 	assert_eq!(config.mcps[0].name, "openclaw-sse");
-}
-
-// ==================== New Agent Integration Tests ====================
-
-#[test]
-fn test_kiro_mcp_workflow() {
-	let test = TestConfig::new(AgentType::Kiro).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-	assert!(manager.config().unwrap().mcps.is_empty());
-
-	let mcp = create_test_mcp_stdio("kiro-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "kiro-mcp");
-
-	manager.remove_mcp("kiro-mcp").unwrap();
-	manager.load().unwrap();
-	assert!(manager.config().unwrap().mcps.is_empty());
-}
-
-#[test]
-fn test_zed_mcp_workflow() {
-	let test = TestConfig::new(AgentType::Zed).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-
-	// Zed uses "context_servers" key
-	let mcp = create_test_mcp_stdio("zed-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	let content = test.read_config().unwrap();
-	let json: serde_json::Value = serde_json::from_str(&content).unwrap();
-	// Zed serializes under "context_servers"
-	assert!(json.get("context_servers").is_some());
-	let servers = json.get("context_servers").unwrap().as_object().unwrap();
-	assert!(servers.contains_key("zed-mcp"));
-}
-
-// ==================== Cursor Integration Tests ====================
-
-#[test]
-fn test_cursor_mcp_workflow() {
-	let test = TestConfig::new(AgentType::Cursor).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-
-	// Add MCP server
-	let mcp = create_test_mcp_stdio("cursor-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	// Reload and verify
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "cursor-mcp");
-
-	// Delete and verify
-	manager.remove_mcp("cursor-mcp").unwrap();
-	manager.load().unwrap();
-	assert!(manager.config().unwrap().mcps.is_empty());
-}
-
-// ==================== Windsurf Integration Tests ====================
-
-#[test]
-fn test_windsurf_mcp_workflow() {
-	let test = TestConfig::new(AgentType::Windsurf).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-
-	// Add MCP server
-	let mcp = create_test_mcp_stdio("windsurf-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	// Reload and verify
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "windsurf-mcp");
-
-	// Delete and verify
-	manager.remove_mcp("windsurf-mcp").unwrap();
-	manager.load().unwrap();
-	assert!(manager.config().unwrap().mcps.is_empty());
-}
-
-// ==================== Copilot Integration Tests ====================
-
-#[test]
-fn test_copilot_mcp_workflow() {
-	let test = TestConfig::new(AgentType::Copilot).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-
-	// Add MCP server
-	let mcp = create_test_mcp_stdio("copilot-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	// Verify it uses "servers" key
-	let content = test.read_config().unwrap();
-	assert!(
-		content.contains("\"servers\""),
-		"Copilot must use 'servers' key"
-	);
-
-	// Reload and verify
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "copilot-mcp");
-
-	// Delete and verify
-	manager.remove_mcp("copilot-mcp").unwrap();
-	manager.load().unwrap();
-	assert!(manager.config().unwrap().mcps.is_empty());
-}
-
-// ==================== RooCode Integration Tests ====================
-
-#[test]
-fn test_roocode_mcp_workflow() {
-	let test = TestConfig::new(AgentType::RooCode).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-
-	// Add MCP server
-	let mcp = create_test_mcp_stdio("roocode-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	// Reload and verify
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "roocode-mcp");
-
-	// Delete and verify
-	manager.remove_mcp("roocode-mcp").unwrap();
-	manager.load().unwrap();
-	assert!(manager.config().unwrap().mcps.is_empty());
-}
-
-// ==================== Cline Integration Tests ====================
-
-#[test]
-fn test_cline_mcp_workflow() {
-	let test = TestConfig::new(AgentType::Cline).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-
-	// Add MCP server
-	let mcp = create_test_mcp_stdio("cline-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	// Reload and verify
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "cline-mcp");
-
-	// Delete and verify
-	manager.remove_mcp("cline-mcp").unwrap();
-	manager.load().unwrap();
-	assert!(manager.config().unwrap().mcps.is_empty());
-}
-
-// ==================== Gemini Integration Tests ====================
-
-#[test]
-fn test_gemini_mcp_workflow() {
-	let test = TestConfig::new(AgentType::Gemini).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-
-	// Add MCP server
-	let mcp = create_test_mcp_stdio("gemini-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	// Reload and verify
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "gemini-mcp");
-
-	// Delete and verify
-	manager.remove_mcp("gemini-mcp").unwrap();
-	manager.load().unwrap();
-	assert!(manager.config().unwrap().mcps.is_empty());
-}
-
-// ==================== KiloCode Integration Tests ====================
-
-#[test]
-fn test_kilocode_mcp_workflow() {
-	let test = TestConfig::new(AgentType::KiloCode).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-
-	// Add MCP server
-	let mcp = create_test_mcp_stdio("kilocode-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	// Reload and verify
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "kilocode-mcp");
-
-	// Delete and verify
-	manager.remove_mcp("kilocode-mcp").unwrap();
-	manager.load().unwrap();
-	assert!(manager.config().unwrap().mcps.is_empty());
-}
-
-// ==================== Factory Integration Tests ====================
-
-#[test]
-fn test_factory_mcp_workflow() {
-	let test = TestConfig::new(AgentType::Factory).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-
-	// Add MCP server
-	let mcp = create_test_mcp_stdio("factory-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	// Reload and verify
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "factory-mcp");
-
-	// Delete and verify
-	manager.remove_mcp("factory-mcp").unwrap();
-	manager.load().unwrap();
-	assert!(manager.config().unwrap().mcps.is_empty());
-}
-
-// ==================== Mistral Integration Tests ====================
-
-#[test]
-fn test_mistral_mcp_workflow() {
-	let test = TestConfig::new(AgentType::Mistral).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-
-	// Add MCP server (Mistral uses TOML format)
-	let mcp = create_test_mcp_stdio("mistral-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	// Reload and verify
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "mistral-mcp");
-
-	// Delete and verify
-	manager.remove_mcp("mistral-mcp").unwrap();
-	manager.load().unwrap();
-	assert!(manager.config().unwrap().mcps.is_empty());
-}
-
-// ==================== Amp Integration Tests ====================
-
-#[test]
-fn test_amp_mcp_workflow() {
-	let test = TestConfig::new(AgentType::Amp).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-
-	let mcp = create_test_mcp_stdio("amp-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "amp-mcp");
-
-	manager.remove_mcp("amp-mcp").unwrap();
-	manager.load().unwrap();
-	assert!(manager.config().unwrap().mcps.is_empty());
-}
-
-// ==================== Pi Integration Tests ====================
-
-#[test]
-fn test_pi_mcp_workflow() {
-	let test = TestConfig::new(AgentType::Pi).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-
-	let mcp = create_test_mcp_stdio("pi-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "pi-mcp");
-
-	manager.remove_mcp("pi-mcp").unwrap();
-	manager.load().unwrap();
-	assert!(manager.config().unwrap().mcps.is_empty());
-}
-
-// ==================== AugmentCode Integration Tests ====================
-
-#[test]
-fn test_augmentcode_mcp_workflow() {
-	let test = TestConfig::new(AgentType::AugmentCode).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-
-	let mcp = create_test_mcp_stdio("augmentcode-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "augmentcode-mcp");
-
-	manager.remove_mcp("augmentcode-mcp").unwrap();
-	manager.load().unwrap();
-	assert!(manager.config().unwrap().mcps.is_empty());
-}
-
-// ==================== Warp Integration Tests ====================
-
-#[test]
-fn test_warp_mcp_workflow() {
-	let test = TestConfig::new(AgentType::Warp).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-
-	let mcp = create_test_mcp_stdio("warp-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "warp-mcp");
-
-	manager.remove_mcp("warp-mcp").unwrap();
-	manager.load().unwrap();
-	assert!(manager.config().unwrap().mcps.is_empty());
-}
-
-// ==================== Trae Integration Tests ====================
-
-#[test]
-fn test_trae_mcp_workflow() {
-	let test = TestConfig::new(AgentType::Trae).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-
-	let mcp = create_test_mcp_stdio("trae-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "trae-mcp");
-
-	manager.remove_mcp("trae-mcp").unwrap();
-	manager.load().unwrap();
-	assert!(manager.config().unwrap().mcps.is_empty());
-}
-
-// ==================== JetBrainsAi Integration Tests ====================
-
-#[test]
-fn test_jetbrains_ai_mcp_workflow() {
-	let test = TestConfig::new(AgentType::JetBrainsAi).unwrap();
-	let mut manager = test.create_manager();
-	manager.load().unwrap();
-
-	let mcp = create_test_mcp_stdio("jetbrains-ai-mcp");
-	manager.add_mcp(mcp).unwrap();
-
-	manager.load().unwrap();
-	let config = manager.config().unwrap();
-	assert_eq!(config.mcps.len(), 1);
-	assert_eq!(config.mcps[0].name, "jetbrains-ai-mcp");
-
-	manager.remove_mcp("jetbrains-ai-mcp").unwrap();
-	manager.load().unwrap();
-	assert!(manager.config().unwrap().mcps.is_empty());
 }
 
 // ==================== Skill Discovery Tests ====================
