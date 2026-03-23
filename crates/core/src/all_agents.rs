@@ -26,17 +26,33 @@ pub fn load_all_agents(
 			let adapter: Box<dyn AgentAdapter> = Box::new(descriptor);
 			let mut manager =
 				ConfigManager::with_scope(adapter, true, project_root, scope);
-			match manager.load() {
-				Ok(config) => AgentResources {
-					agent_id: descriptor.id,
-					skills: config.skills.clone(),
-					mcps: config.mcps.clone(),
-				},
-				Err(_) => AgentResources {
-					agent_id: descriptor.id,
-					skills: vec![],
-					mcps: vec![],
-				},
+			// Use load_both_annotated when scope is Both to get config_source
+			if scope == ResourceScope::Both {
+				match manager.load_both_annotated() {
+					Ok((skills, mcps)) => AgentResources {
+						agent_id: descriptor.id,
+						skills,
+						mcps,
+					},
+					Err(_) => AgentResources {
+						agent_id: descriptor.id,
+						skills: vec![],
+						mcps: vec![],
+					},
+				}
+			} else {
+				match manager.load() {
+					Ok(config) => AgentResources {
+						agent_id: descriptor.id,
+						skills: config.skills.clone(),
+						mcps: config.mcps.clone(),
+					},
+					Err(_) => AgentResources {
+						agent_id: descriptor.id,
+						skills: vec![],
+						mcps: vec![],
+					},
+				}
 			}
 		})
 		.collect()
