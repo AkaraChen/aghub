@@ -1,103 +1,66 @@
 import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
 import { Button, Label, Modal, TextField, Input, Select, ListBox, Checkbox } from "@heroui/react"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query"
 import { useServer } from "../providers/server"
-import { createApi, type UpdateMcpRequest } from "../lib/api"
-import type { McpResponse, TransportDto } from "../lib/api-types"
+import { createApi } from "../lib/api"
+import type { TransportDto } from "../lib/api-types"
 
-interface EditMcpDialogProps {
-  server: McpResponse
+interface CreateMcpDialogProps {
   isOpen: boolean
   onClose: () => void
 }
 
-export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
+export function CreateMcpDialog({ isOpen, onClose }: CreateMcpDialogProps) {
   const { t } = useTranslation()
   const { baseUrl } = useServer()
   const api = createApi(baseUrl)
   const queryClient = useQueryClient()
 
-  const [name, setName] = useState(server.name)
-  const [transportType, setTransportType] = useState<"stdio" | "sse" | "streamable_http">(server.transport.type)
-  const [timeout, setTimeoutValue] = useState(server.timeout?.toString() ?? "")
+  // Fetch available agents
+  const { data: agents = [] } = useQuery({
+    queryKey: ["agents"],
+    queryFn: () => api.agents.list(),
+  })
+
+  const [name, setName] = useState("")
+  const [transportType, setTransportType] = useState<"stdio" | "sse" | "streamable_http">("stdio")
+  const [timeout, setTimeoutValue] = useState("")
+  const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set(["default"]))
 
   // stdio fields
-  const [command, setCommand] = useState(
-    server.transport.type === "stdio" ? server.transport.command : ""
-  )
-  const [args, setArgs] = useState(
-    server.transport.type === "stdio" && server.transport.args ? server.transport.args.join(" ") : ""
-  )
-  const [env, setEnv] = useState(() => {
-    if (server.transport.type === "stdio" && server.transport.env) {
-      return Object.entries(server.transport.env)
-        .map(([k, v]) => `${k}=${v}`)
-        .join("\n")
-    }
-    return ""
-  })
+  const [command, setCommand] = useState("")
+  const [args, setArgs] = useState("")
+  const [env, setEnv] = useState("")
 
   // http fields
-  const [url, setUrl] = useState(
-    server.transport.type !== "stdio" ? server.transport.url : ""
-  )
-  const [headers, setHeaders] = useState(() => {
-    if (server.transport.type !== "stdio" && server.transport.headers) {
-      return Object.entries(server.transport.headers)
-        .map(([k, v]) => `${k}: ${v}`)
-        .join("\n")
-    }
-    return ""
-  })
+  const [url, setUrl] = useState("")
+  const [headers, setHeaders] = useState("")
 
-  const [enabled, setEnabled] = useState(server.enabled)
+  const [enabled, setEnabled] = useState(true)
 
-  // Reset form when server changes
+  // Reset form when dialog opens
   useEffect(() => {
-    setName(server.name)
-    setTransportType(server.transport.type)
-    setTimeoutValue(server.timeout?.toString() ?? "")
-    setEnabled(server.enabled)
-
-    if (server.transport.type === "stdio") {
-      setCommand(server.transport.command)
-      setArgs(server.transport.args?.join(" ") ?? "")
-      setEnv(
-        server.transport.env
-          ? Object.entries(server.transport.env)
-              .map(([k, v]) => `${k}=${v}`)
-              .join("\n")
-          : ""
-      )
-      setUrl("")
-      setHeaders("")
-    } else {
-      setUrl(server.transport.url)
-      setHeaders(
-        server.transport.headers
-          ? Object.entries(server.transport.headers)
-              .map(([k, v]) => `${k}: ${v}`)
-              .join("\n")
-          : ""
-      )
+    if (isOpen) {
+      setName("")
+      setTransportType("stdio")
+      setTimeoutValue("")
+      setEnabled(true)
       setCommand("")
       setArgs("")
       setEnv("")
+      setUrl("")
+      setHeaders("")
+      setSelectedAgents(new Set(["default"]))
     }
-  }, [server])
+  }, [isOpen])
 
-  const updateMutation = useMutation({
-    mutationFn: (body: UpdateMcpRequest) => {
-      const scope = server.source === "Project" ? "project" : "global"
-      return api.mcps.update(server.name, server.agent ?? "default", scope, body)
+  const createMutation = useMutation({
+    mutationFn: ({ agent, body }: { agent: string; body: { name: string; transport: TransportDto; timeout?: number } }) => {
+      return api.mcps.create(agent, "global", body)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["mcps"] })
-      onClose()
-    },
-    onError: (error) => {
-      console.error("Failed to update MCP server:", error)
     },
   })
 
@@ -149,21 +112,46 @@ export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
     }
   }
 
-  const handleSave = () => {
+  const handleCreate = async () => {
     if (!name.trim()) return
 
-    const body: UpdateMcpRequest = {
-      name: name.trim() !== server.name ? name.trim() : undefined,
-      enabled: enabled !== server.enabled ? enabled : undefined,
+    const transport = buildTransport()
+    if (!transport) return
+
+    const body = {
+      name: name.trim(),
+      transport,
       timeout: timeout ? parseInt(timeout, 10) : undefined,
     }
 
-    const transport = buildTransport()
-    if (transport) {
-      body.transport = transport
-    }
+    // Create MCP for each selected agent
+    const agentsToCreate = [...selectedAgents]
+    await Promise.all(
+      agentsToCreate.map((agent) =>
+        createMutation.mutateAsync({ agent, body })
+      )
+    )
+    onClose()
+  }
 
-    updateMutation.mutate(body)
+  const isValid = () => {
+    if (!name.trim()) return false
+    if (transportType === "stdio" && !command.trim()) return false
+    if (transportType !== "stdio" && !url.trim()) return false
+    if (selectedAgents.size === 0) return false
+    return true
+  }
+
+  const toggleAgent = (agentId: string) => {
+    setSelectedAgents((prev) => {
+      const next = new Set(prev)
+      if (next.has(agentId)) {
+        next.delete(agentId)
+      } else {
+        next.add(agentId)
+      }
+      return next
+    })
   }
 
   return (
@@ -172,7 +160,7 @@ export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
         <Modal.Dialog className="max-w-lg">
           <Modal.CloseTrigger />
           <Modal.Header>
-            <Modal.Heading>{t("editMcpServer")}</Modal.Heading>
+            <Modal.Heading>{t("createMcpServer")}</Modal.Heading>
           </Modal.Header>
           <Modal.Body>
             <div className="flex flex-col gap-4">
@@ -284,6 +272,30 @@ export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
               >
                 {t("enabled")}
               </Checkbox>
+
+              {/* Agent Selection */}
+              <div className="flex flex-col gap-2">
+                <Label>{t("agents")}</Label>
+                <div className="flex flex-wrap gap-2">
+                  {agents.map((agent) => {
+                    const isSelected = selectedAgents.has(agent.id)
+                    return (
+                      <button
+                        key={agent.id}
+                        type="button"
+                        onClick={() => toggleAgent(agent.id)}
+                        className={`px-2.5 py-1 text-sm rounded-full border transition-colors ${
+                          isSelected
+                            ? "bg-accent text-accent-foreground border-accent"
+                            : "bg-transparent text-muted border-default-200 hover:border-default-300"
+                        }`}
+                      >
+                        {agent.display_name}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
             </div>
           </Modal.Body>
           <Modal.Footer>
@@ -291,10 +303,10 @@ export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
               {t("cancel")}
             </Button>
             <Button
-              onPress={handleSave}
-              isDisabled={!name.trim() || updateMutation.isPending}
+              onPress={handleCreate}
+              isDisabled={!isValid() || createMutation.isPending}
             >
-              {updateMutation.isPending ? t("saving") : t("save")}
+              {createMutation.isPending ? t("creating") : t("create")}
             </Button>
           </Modal.Footer>
         </Modal.Dialog>

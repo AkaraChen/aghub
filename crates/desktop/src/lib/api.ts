@@ -8,10 +8,27 @@ export interface UpdateMcpRequest {
   timeout?: number
 }
 
+export interface AgentInfo {
+  id: string
+  display_name: string
+  capabilities: {
+    mcp_stdio: boolean
+    mcp_remote: boolean
+    mcp_enable_disable: boolean
+    skills: boolean
+    universal_skills: boolean
+  }
+}
+
 export function createApi(baseUrl: string) {
   const client = ky.create({ prefixUrl: baseUrl })
 
   return {
+    agents: {
+      list(): Promise<AgentInfo[]> {
+        return client.get("agents").json()
+      },
+    },
     skills: {
       listAll(scope: "global" | "project" | "all" = "global"): Promise<SkillResponse[]> {
         return client.get("agents/all/skills", { searchParams: { scope } }).json()

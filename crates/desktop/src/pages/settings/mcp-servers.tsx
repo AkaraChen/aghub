@@ -8,6 +8,7 @@ import { useServer } from "../../providers/server"
 import { createApi } from "../../lib/api"
 import type { McpResponse } from "../../lib/api-types"
 import { EditMcpDialog } from "../../components/edit-mcp-dialog"
+import { CreateMcpDialog } from "../../components/create-mcp-dialog"
 
 export default function MCPServersPage() {
   const { t } = useTranslation()
@@ -21,6 +22,7 @@ export default function MCPServersPage() {
   )
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [serverToDelete, setServerToDelete] = useState<McpResponse | null>(null)
 
   const selectedKey = [...(selected as Set<string>)][0]
@@ -106,7 +108,7 @@ export default function MCPServersPage() {
               <SearchField.ClearButton />
             </SearchField.Group>
           </SearchField>
-          <Button isIconOnly variant="ghost" size="sm" className="shrink-0" aria-label={t("addMcpServer")}>
+          <Button isIconOnly variant="ghost" size="sm" className="shrink-0" aria-label={t("addMcpServer")} onPress={() => setCreateDialogOpen(true)}>
             <PlusIcon className="size-4" />
           </Button>
           <Button isIconOnly variant="ghost" size="sm" className="shrink-0" aria-label={t("refreshServers")} onPress={() => refetch()}>
@@ -285,6 +287,12 @@ export default function MCPServersPage() {
           onClose={() => setEditDialogOpen(false)}
         />
       )}
+
+      {/* Create Dialog */}
+      <CreateMcpDialog
+        isOpen={createDialogOpen}
+        onClose={() => setCreateDialogOpen(false)}
+      />
     </div>
   )
 }

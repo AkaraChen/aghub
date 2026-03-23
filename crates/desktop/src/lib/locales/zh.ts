@@ -63,6 +63,9 @@ export default {
   timeoutHelp: "秒数（可选）",
   enabled: "启用",
   saving: "保存中...",
+  createMcpServer: "创建 MCP 服务器",
+  creating: "创建中...",
+  agents: "代理",
 
   // Projects
   addProject: "添加项目",

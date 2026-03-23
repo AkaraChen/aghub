@@ -63,6 +63,9 @@ export default {
   timeoutHelp: "Seconds (optional)",
   enabled: "Enabled",
   saving: "Saving...",
+  createMcpServer: "Create MCP Server",
+  creating: "Creating...",
+  agents: "Agents",
 
   // Projects
   addProject: "Add Project",
