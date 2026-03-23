@@ -229,6 +229,8 @@ mod tests {
 			license: None,
 			compatibility: None,
 			allowed_tools: None,
+			author: None,
+			version: None,
 			content: String::new(),
 			source: crate::model::SkillSource::SkillMd(
 				std::path::PathBuf::new(),
@@ -275,6 +277,8 @@ mod tests {
 			license: None,
 			compatibility: None,
 			allowed_tools: None,
+			author: None,
+			version: None,
 			content: String::new(),
 			source: crate::model::SkillSource::SkillMd(
 				std::path::PathBuf::new(),

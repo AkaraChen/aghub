@@ -55,6 +55,14 @@ pub struct Skill {
 	#[serde(rename = "allowed-tools", skip_serializing_if = "Option::is_none")]
 	pub allowed_tools: Option<String>,
 
+	/// Author from frontmatter (optional).
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub author: Option<String>,
+
+	/// Version from frontmatter (optional).
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub version: Option<String>,
+
 	/// Body content from SKILL.md (markdown instructions).
 	#[serde(skip)]
 	pub content: String,
@@ -88,6 +96,8 @@ impl Skill {
 			license: None,
 			compatibility: None,
 			allowed_tools: None,
+			author: None,
+			version: None,
 			content: String::new(),
 			source: SkillSource::SkillMd(PathBuf::new()),
 			scripts: Vec::new(),
