@@ -94,6 +94,14 @@ export default {
 	agents: "代理",
 	noAgentsAvailable: "没有可用的代理",
 	noAgentsAvailableHelp: "安装或启用至少一个代理以创建 MCP 服务器。",
+	importFromJson: "从 JSON 导入",
+	import: "导入",
+	jsonConfig: "JSON 配置",
+	jsonConfigHelp: "粘贴 MCP 服务器 JSON 配置",
+	invalidJson: "无效的 JSON 格式",
+	parseError: "解析 MCP 配置失败",
+	jsonConfigPlaceholder:
+		'{\n  "mcpServers": {\n    "server-name": {\n      "command": "npx",\n      "args": ["-y", "package-name"]\n    }\n  }\n}',
 
 	// Projects
 	addProject: "添加项目",

@@ -97,6 +97,14 @@ export default {
 	noAgentsAvailable: "No agents available",
 	noAgentsAvailableHelp:
 		"Install or enable at least one agent to create MCP servers.",
+	importFromJson: "Import from JSON",
+	import: "Import",
+	jsonConfig: "JSON Configuration",
+	jsonConfigHelp: "Paste the MCP server JSON configuration",
+	invalidJson: "Invalid JSON format",
+	parseError: "Failed to parse MCP configuration",
+	jsonConfigPlaceholder:
+		'{\n  "mcpServers": {\n    "server-name": {\n      "command": "npx",\n      "args": ["-y", "package-name"]\n    }\n  }\n}',
 
 	// Projects
 	addProject: "Add Project",

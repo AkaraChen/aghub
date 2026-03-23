@@ -24,6 +24,19 @@ interface CreateMcpDialogProps {
 	onClose: () => void;
 }
 
+interface McpServerConfig {
+	command?: string;
+	args?: string[];
+	env?: Record<string, string>;
+	url?: string;
+	headers?: Record<string, string>;
+	timeout?: number;
+}
+
+interface McpConfigJson {
+	mcpServers?: Record<string, McpServerConfig>;
+}
+
 export function CreateMcpDialog({ isOpen, onClose }: CreateMcpDialogProps) {
 	const { t } = useTranslation();
 	const { baseUrl } = useServer();
@@ -51,6 +64,11 @@ export function CreateMcpDialog({ isOpen, onClose }: CreateMcpDialogProps) {
 	// http fields
 	const [url, setUrl] = useState("");
 	const [headers, setHeaders] = useState("");
+
+	// Import dialog state
+	const [showImportDialog, setShowImportDialog] = useState(false);
+	const [jsonText, setJsonText] = useState("");
+	const [parseError, setParseError] = useState("");
 
 	// Reset form when dialog opens
 	useEffect(() => {
@@ -177,6 +195,67 @@ export function CreateMcpDialog({ isOpen, onClose }: CreateMcpDialogProps) {
 			}
 			return next;
 		});
+	};
+
+	const handleImportJson = () => {
+		setParseError("");
+
+		try {
+			const parsed: McpConfigJson = JSON.parse(jsonText);
+
+			if (!parsed.mcpServers || typeof parsed.mcpServers !== "object") {
+				setParseError(t("parseError"));
+				return;
+			}
+
+			// Get the first server configuration
+			const serverNames = Object.keys(parsed.mcpServers);
+			if (serverNames.length === 0) {
+				setParseError(t("parseError"));
+				return;
+			}
+
+			const serverName = serverNames[0];
+			const config = parsed.mcpServers[serverName];
+
+			// Set name
+			setName(serverName);
+
+			// Detect transport type and set fields
+			if (config.command) {
+				setTransportType("stdio");
+				setCommand(config.command);
+				if (config.args && Array.isArray(config.args)) {
+					setArgs(config.args.join(" "));
+				}
+				if (config.env && typeof config.env === "object") {
+					const envLines = Object.entries(config.env).map(
+						([key, value]) => `${key}=${value}`,
+					);
+					setEnv(envLines.join("\n"));
+				}
+			} else if (config.url) {
+				// Determine if SSE or streamable_http based on URL or default to sse
+				setTransportType("sse");
+				setUrl(config.url);
+				if (config.headers && typeof config.headers === "object") {
+					const headerLines = Object.entries(config.headers).map(
+						([key, value]) => `${key}: ${value}`,
+					);
+					setHeaders(headerLines.join("\n"));
+				}
+			}
+
+			if (config.timeout) {
+				setTimeoutValue(config.timeout.toString());
+			}
+
+			// Close import dialog
+			setShowImportDialog(false);
+			setJsonText("");
+		} catch (error) {
+			setParseError(t("invalidJson"));
+		}
 	};
 
 	return (
@@ -398,6 +477,12 @@ export function CreateMcpDialog({ isOpen, onClose }: CreateMcpDialogProps) {
 					</Modal.Body>
 					<Modal.Footer>
 						<Button
+							variant="secondary"
+							onPress={() => setShowImportDialog(true)}
+						>
+							{t("importFromJson")}
+						</Button>
+						<Button
 							slot="close"
 							variant="secondary"
 							onPress={onClose}
@@ -415,6 +500,67 @@ export function CreateMcpDialog({ isOpen, onClose }: CreateMcpDialogProps) {
 					</Modal.Footer>
 				</Modal.Dialog>
 			</Modal.Container>
+
+			{/* Import JSON Dialog */}
+			<Modal.Backdrop
+				isOpen={showImportDialog}
+				onOpenChange={setShowImportDialog}
+			>
+				<Modal.Container>
+					<Modal.Dialog className="max-w-lg">
+						<Modal.CloseTrigger />
+						<Modal.Header>
+							<Modal.Heading>{t("importFromJson")}</Modal.Heading>
+						</Modal.Header>
+						<Modal.Body className="p-2">
+							<Fieldset>
+								<Fieldset.Group>
+									<TextField className="w-full">
+										<Label>{t("jsonConfig")}</Label>
+										<TextArea
+											value={jsonText}
+											onChange={(e) =>
+												setJsonText(e.target.value)
+											}
+											placeholder={t(
+												"jsonConfigPlaceholder",
+											)}
+											className="min-h-[300px] font-mono text-sm"
+										/>
+										<Description>
+											{t("jsonConfigHelp")}
+										</Description>
+									</TextField>
+									{parseError && (
+										<div className="text-sm text-danger">
+											{parseError}
+										</div>
+									)}
+								</Fieldset.Group>
+							</Fieldset>
+						</Modal.Body>
+						<Modal.Footer>
+							<Button
+								slot="close"
+								variant="secondary"
+								onPress={() => {
+									setShowImportDialog(false);
+									setJsonText("");
+									setParseError("");
+								}}
+							>
+								{t("cancel")}
+							</Button>
+							<Button
+								onPress={handleImportJson}
+								isDisabled={!jsonText.trim()}
+							>
+								{t("import")}
+							</Button>
+						</Modal.Footer>
+					</Modal.Dialog>
+				</Modal.Container>
+			</Modal.Backdrop>
 		</Modal.Backdrop>
 	);
 }
