@@ -20,19 +20,19 @@ export function AgentIcon({ id, name }: AgentIconProps) {
 	const fallbackText = name.charAt(0).toUpperCase();
 
 	if (svg) {
-		// Render SVG inside a rounded container
+		// Render SVG inside a square container with border
 		return (
 			<div
-				className="size-12 flex items-center justify-center rounded-full bg-surface-secondary [&_svg]:size-8"
+				className="size-12 flex items-center justify-center rounded-lg bg-surface-secondary border border-border [&_svg]:size-8"
 				dangerouslySetInnerHTML={{ __html: svg.default || svg }}
 			/>
 		);
 	}
 
-	// Fallback: Avatar with first letter
+	// Fallback: Avatar with first letter (square with border)
 	return (
-		<Avatar size="lg" variant="soft">
-			<Avatar.Fallback>{fallbackText}</Avatar.Fallback>
+		<Avatar size="lg" variant="soft" className="rounded-lg border border-border">
+			<Avatar.Fallback className="rounded-lg">{fallbackText}</Avatar.Fallback>
 		</Avatar>
 	);
 }

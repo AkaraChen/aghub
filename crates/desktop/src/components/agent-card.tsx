@@ -29,7 +29,11 @@ export function AgentCard({ agent, isUpdating, onToggle }: AgentCardProps) {
 						onChange={() => onToggle(agent.id, agent.isDisabled)}
 						isDisabled={isUpdating}
 						aria-label={`Toggle ${agent.display_name}`}
-					/>
+					>
+						<Switch.Control>
+							<Switch.Thumb />
+						</Switch.Control>
+					</Switch>
 				</div>
 			</Card.Content>
 		</Card>
