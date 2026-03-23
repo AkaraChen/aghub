@@ -16,7 +16,7 @@ import {
 	type Selection,
 } from "@heroui/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createApi } from "../lib/api";
 import type { McpResponse } from "../lib/api-types";
@@ -55,24 +55,26 @@ export function ManageAgentsDialog({
 	const { availableAgents } = useAgentAvailability();
 
 	const usableAgents = availableAgents.filter((a) => a.isUsable);
-	const currentAgentIds = new Set(
-		group.items.map((item) => item.agent ?? "default"),
-	);
 
 	const [step, setStep] = useState<WizardStep>(1);
+	const initialAgentIdsRef = useRef<Set<string> | null>(null);
 	const [selectedAgents, setSelectedAgents] = useState<Set<string>>(
-		new Set(currentAgentIds),
+		() => initialAgentIdsRef.current ?? new Set(),
 	);
 	const [results, setResults] = useState<AgentResult[]>([]);
 
-	// Reset state when dialog opens or group changes
-	useEffect(() => {
-		if (isOpen) {
-			setStep(1);
-			setSelectedAgents(new Set(currentAgentIds));
-			setResults([]);
-		}
-	}, [isOpen, group]);
+	if (isOpen && initialAgentIdsRef.current === null) {
+		initialAgentIdsRef.current = new Set(
+			group.items.map((item) => item.agent ?? "default"),
+		);
+		setSelectedAgents(new Set(initialAgentIdsRef.current));
+	}
+
+	if (!isOpen && initialAgentIdsRef.current !== null) {
+		initialAgentIdsRef.current = null;
+	}
+
+	const currentAgentIds = initialAgentIdsRef.current ?? new Set<string>();
 
 	const toInstall = [...selectedAgents].filter((id) => !currentAgentIds.has(id));
 	const toUninstall = [...currentAgentIds].filter((id) => !selectedAgents.has(id));

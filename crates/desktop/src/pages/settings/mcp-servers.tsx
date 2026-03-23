@@ -39,7 +39,7 @@ interface McpGroup {
 }
 
 type RightPanel =
-	| { type: "detail"; group: McpGroup }
+	| { type: "detail"; selectedKey: string }
 	| { type: "create" }
 	| { type: "empty" };
 
@@ -48,6 +48,7 @@ export default function MCPServersPage() {
 	const { data: mcps, refetch } = useMcps();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [panel, setPanel] = useState<RightPanel>({ type: "empty" });
+	const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
 	const filteredServers = useMemo(
 		() =>
@@ -82,23 +83,25 @@ export default function MCPServersPage() {
 		}));
 	}, [filteredServers]);
 
-	const [selected, setSelected] = useState<Selection>(
-		new Set(groupedMcps[0] ? [groupedMcps[0].mergeKey] : []),
-	);
-
 	const handleSelectionChange = (keys: Selection) => {
-		setSelected(keys);
 		const key = [...(keys as Set<string>)][0];
-		const group = groupedMcps.find((g) => g.mergeKey === key);
-		if (group) {
-			setPanel({ type: "detail", group });
+		if (key) {
+			setSelectedKey(key);
+			setPanel({ type: "detail", selectedKey: key });
+		} else {
+			setSelectedKey(null);
+			setPanel({ type: "empty" });
 		}
 	};
 
 	const handleCreate = () => {
-		setSelected(new Set());
+		setSelectedKey(null);
 		setPanel({ type: "create" });
 	};
+
+	const selectedGroup = selectedKey
+		? groupedMcps.find((g) => g.mergeKey === selectedKey)
+		: null;
 
 	const getTransportIcon = (transport: McpGroup["transport"]) => {
 		if (transport.type === "stdio") {
@@ -154,7 +157,7 @@ export default function MCPServersPage() {
 				<ListBox
 					aria-label="MCP Servers"
 					selectionMode="single"
-					selectedKeys={selected}
+					selectedKeys={selectedKey ? new Set([selectedKey]) : new Set()}
 					onSelectionChange={handleSelectionChange}
 					className="flex-1 overflow-y-auto p-2"
 				>
@@ -192,11 +195,13 @@ export default function MCPServersPage() {
 
 			{/* Server Detail Panel */}
 			<div className="flex-1 overflow-hidden">
-				{panel.type === "detail" && <McpDetail group={panel.group} />}
+				{panel.type === "detail" && selectedGroup && (
+					<McpDetail group={selectedGroup} />
+				)}
 				{panel.type === "create" && (
 					<CreateMcpPanel onDone={() => setPanel({ type: "empty" })} />
 				)}
-				{panel.type === "empty" && (
+				{(panel.type === "empty" || (panel.type === "detail" && !selectedGroup)) && (
 					<div className="flex items-center justify-center h-full">
 						<p className="text-sm text-muted">{t("selectServer")}</p>
 					</div>
