@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
-import { Button, Label, Modal, TextField, Input } from "@heroui/react"
+import { Button, Fieldset, Label, Modal, TextField, Input } from "@heroui/react"
 import { useUpdateProject, useAddProject } from "../hooks/use-projects"
 import type { Project } from "../lib/store"
 import { FolderIcon } from "@heroicons/react/24/outline"
@@ -38,8 +38,8 @@ export function EditProjectDialog({ project, isOpen, onClose }: EditProjectDialo
           <Modal.Header>
             <Modal.Heading>{t("editProject")}</Modal.Heading>
           </Modal.Header>
-          <Modal.Body className="p-6">
-            <div className="flex flex-col gap-4">
+          <Modal.Body>
+            <Fieldset>
               <TextField className="w-full">
                 <Label>{t("projectName")}</Label>
                 <Input
@@ -52,7 +52,7 @@ export function EditProjectDialog({ project, isOpen, onClose }: EditProjectDialo
                 <Label>{t("projectPath")}</Label>
                 <Input value={project.path} readOnly />
               </TextField>
-            </div>
+            </Fieldset>
           </Modal.Body>
           <Modal.Footer>
             <Button slot="close" variant="secondary">
@@ -126,7 +126,7 @@ export function CreateProjectDialog({ isOpen, onClose }: CreateProjectDialogProp
             <Modal.Heading>{t("addProject")}</Modal.Heading>
           </Modal.Header>
           <Modal.Body>
-            <div className="flex flex-col gap-4">
+            <Fieldset>
               {/* Folder Picker Dropzone */}
               <div className="flex flex-col gap-2">
                 <Label>{t("projectPath")}</Label>
@@ -153,7 +153,7 @@ export function CreateProjectDialog({ isOpen, onClose }: CreateProjectDialogProp
                   placeholder={t("projectName")}
                 />
               </TextField>
-            </div>
+            </Fieldset>
           </Modal.Body>
           <Modal.Footer>
             <Button slot="close" variant="secondary">

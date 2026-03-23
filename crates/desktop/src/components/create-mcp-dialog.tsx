@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
-import { Button, Label, Modal, TextField, Input, Select, ListBox, Checkbox } from "@heroui/react"
+import { Button, Description, Fieldset, Label, Modal, TextField, Input, Select, ListBox, Checkbox } from "@heroui/react"
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query"
 import { useServer } from "../providers/server"
 import { createApi } from "../lib/api"
@@ -163,7 +163,7 @@ export function CreateMcpDialog({ isOpen, onClose }: CreateMcpDialogProps) {
             <Modal.Heading>{t("createMcpServer")}</Modal.Heading>
           </Modal.Header>
           <Modal.Body>
-            <div className="flex flex-col gap-4">
+            <Fieldset>
               {/* Name */}
               <TextField className="w-full">
                 <Label>{t("name")}</Label>
@@ -175,12 +175,11 @@ export function CreateMcpDialog({ isOpen, onClose }: CreateMcpDialogProps) {
               </TextField>
 
               {/* Transport Type */}
-              <div className="flex flex-col gap-1.5">
+              <TextField className="w-full">
                 <Label>{t("transportType")}</Label>
                 <Select
                   selectedKey={transportType}
                   onSelectionChange={(key) => setTransportType(key as "stdio" | "sse" | "streamable_http")}
-                  className="w-full"
                 >
                   <Select.Trigger>
                     <Select.Value />
@@ -194,7 +193,7 @@ export function CreateMcpDialog({ isOpen, onClose }: CreateMcpDialogProps) {
                     </ListBox>
                   </Select.Popover>
                 </Select>
-              </div>
+              </TextField>
 
               {/* Stdio fields */}
               {transportType === "stdio" && (
@@ -214,9 +213,9 @@ export function CreateMcpDialog({ isOpen, onClose }: CreateMcpDialogProps) {
                       onChange={(e) => setArgs(e.target.value)}
                       placeholder="-y @modelcontextprotocol/server-filesystem"
                     />
-                    <span className="text-xs text-muted">{t("argsHelp")}</span>
+                    <Description>{t("argsHelp")}</Description>
                   </TextField>
-                  <div className="flex flex-col gap-1.5">
+                  <TextField className="w-full">
                     <Label>{t("env")}</Label>
                     <textarea
                       value={env}
@@ -224,8 +223,8 @@ export function CreateMcpDialog({ isOpen, onClose }: CreateMcpDialogProps) {
                       placeholder="KEY=value&#10;ANOTHER_KEY=value"
                       className="w-full min-h-[80px] px-3 py-2 text-sm border border-default-200 rounded-md bg-background text-foreground resize-y font-mono"
                     />
-                    <span className="text-xs text-muted">{t("envHelp")}</span>
-                  </div>
+                    <Description>{t("envHelp")}</Description>
+                  </TextField>
                 </>
               )}
 
@@ -240,7 +239,7 @@ export function CreateMcpDialog({ isOpen, onClose }: CreateMcpDialogProps) {
                       placeholder="http://localhost:3000/sse"
                     />
                   </TextField>
-                  <div className="flex flex-col gap-1.5">
+                  <TextField className="w-full">
                     <Label>{t("headers")}</Label>
                     <textarea
                       value={headers}
@@ -248,8 +247,8 @@ export function CreateMcpDialog({ isOpen, onClose }: CreateMcpDialogProps) {
                       placeholder="Authorization: Bearer token&#10;X-Custom-Header: value"
                       className="w-full min-h-[80px] px-3 py-2 text-sm border border-default-200 rounded-md bg-background text-foreground resize-y font-mono"
                     />
-                    <span className="text-xs text-muted">{t("headersHelp")}</span>
-                  </div>
+                    <Description>{t("headersHelp")}</Description>
+                  </TextField>
                 </>
               )}
 
@@ -262,14 +261,11 @@ export function CreateMcpDialog({ isOpen, onClose }: CreateMcpDialogProps) {
                   onChange={(e) => setTimeoutValue(e.target.value)}
                   placeholder="60"
                 />
-                <span className="text-xs text-muted">{t("timeoutHelp")}</span>
+                <Description>{t("timeoutHelp")}</Description>
               </TextField>
 
               {/* Enabled */}
-              <Checkbox
-                isSelected={enabled}
-                onChange={setEnabled}
-              >
+              <Checkbox isSelected={enabled} onChange={setEnabled}>
                 {t("enabled")}
               </Checkbox>
 
@@ -296,7 +292,7 @@ export function CreateMcpDialog({ isOpen, onClose }: CreateMcpDialogProps) {
                   })}
                 </div>
               </div>
-            </div>
+            </Fieldset>
           </Modal.Body>
           <Modal.Footer>
             <Button slot="close" variant="secondary" onPress={onClose}>
