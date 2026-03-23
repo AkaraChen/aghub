@@ -96,3 +96,8 @@
   --warning: oklch(82.03% 0.1392 64.48);
   --warning-foreground: oklch(21.03% 0.0059 64.48);
 }
+
+/* form style */
+form.react-aria-Form fieldset + fieldset {
+  margin-top: 1rem;
+}

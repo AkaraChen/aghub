@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { useTranslation } from "react-i18next"
-import { Button, Description, Fieldset, Label, Modal, TextField, Input, Select, ListBox, Checkbox } from "@heroui/react"
+import { Button, Description, Fieldset, Label, Modal, TextField, Input, TextArea, Select, ListBox, Form } from "@heroui/react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { useServer } from "../providers/server"
 import { createApi, type UpdateMcpRequest } from "../lib/api"
@@ -51,14 +51,11 @@ export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
     return ""
   })
 
-  const [enabled, setEnabled] = useState(server.enabled)
-
   // Reset form when server changes
   useEffect(() => {
     setName(server.name)
     setTransportType(server.transport.type)
     setTimeoutValue(server.timeout?.toString() ?? "")
-    setEnabled(server.enabled)
 
     if (server.transport.type === "stdio") {
       setCommand(server.transport.command)
@@ -154,7 +151,6 @@ export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
 
     const body: UpdateMcpRequest = {
       name: name.trim() !== server.name ? name.trim() : undefined,
-      enabled: enabled !== server.enabled ? enabled : undefined,
       timeout: timeout ? parseInt(timeout, 10) : undefined,
     }
 
@@ -174,8 +170,8 @@ export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
           <Modal.Header>
             <Modal.Heading>{t("editMcpServer")}</Modal.Heading>
           </Modal.Header>
-          <Modal.Body>
-            <div className="flex flex-col gap-4">
+          <Modal.Body className="p-2">
+            <Form>
               {/* Name */}
               <Fieldset>
                 <Fieldset.Group>
@@ -193,25 +189,24 @@ export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
               {/* Transport Type */}
               <Fieldset>
                 <Fieldset.Group>
-                  <TextField className="w-full">
+                  <Select
+                    className="w-full"
+                    selectedKey={transportType}
+                    onSelectionChange={(key) => setTransportType(key as "stdio" | "sse" | "streamable_http")}
+                  >
                     <Label>{t("transportType")}</Label>
-                    <Select
-                      selectedKey={transportType}
-                      onSelectionChange={(key) => setTransportType(key as "stdio" | "sse" | "streamable_http")}
-                    >
-                      <Select.Trigger>
-                        <Select.Value />
-                        <Select.Indicator />
-                      </Select.Trigger>
-                      <Select.Popover>
-                        <ListBox>
-                          <ListBox.Item id="stdio" textValue="stdio">stdio</ListBox.Item>
-                          <ListBox.Item id="sse" textValue="sse">sse</ListBox.Item>
-                          <ListBox.Item id="streamable_http" textValue="streamable_http">streamable_http</ListBox.Item>
-                        </ListBox>
-                      </Select.Popover>
-                    </Select>
-                  </TextField>
+                    <Select.Trigger>
+                      <Select.Value />
+                      <Select.Indicator />
+                    </Select.Trigger>
+                    <Select.Popover>
+                      <ListBox>
+                        <ListBox.Item id="stdio" textValue="stdio">stdio</ListBox.Item>
+                        <ListBox.Item id="sse" textValue="sse">sse</ListBox.Item>
+                        <ListBox.Item id="streamable_http" textValue="streamable_http">streamable_http</ListBox.Item>
+                      </ListBox>
+                    </Select.Popover>
+                  </Select>
                 </Fieldset.Group>
               </Fieldset>
 
@@ -238,11 +233,11 @@ export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
                     </TextField>
                     <TextField className="w-full">
                       <Label>{t("env")}</Label>
-                      <textarea
+                      <TextArea
                         value={env}
                         onChange={(e) => setEnv(e.target.value)}
                         placeholder="KEY=value&#10;ANOTHER_KEY=value"
-                        className="w-full min-h-[80px] px-3 py-2 text-sm border border-default-200 rounded-md bg-background text-foreground resize-y font-mono"
+                        className="min-h-[80px] font-mono"
                       />
                       <Description>{t("envHelp")}</Description>
                     </TextField>
@@ -264,11 +259,11 @@ export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
                     </TextField>
                     <TextField className="w-full">
                       <Label>{t("headers")}</Label>
-                      <textarea
+                      <TextArea
                         value={headers}
                         onChange={(e) => setHeaders(e.target.value)}
                         placeholder="Authorization: Bearer token&#10;X-Custom-Header: value"
-                        className="w-full min-h-[80px] px-3 py-2 text-sm border border-default-200 rounded-md bg-background text-foreground resize-y font-mono"
+                        className="min-h-[80px] font-mono"
                       />
                       <Description>{t("headersHelp")}</Description>
                     </TextField>
@@ -291,22 +286,7 @@ export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
                   </TextField>
                 </Fieldset.Group>
               </Fieldset>
-
-              {/* Enabled */}
-              <Fieldset>
-                <Fieldset.Group>
-                  <Checkbox
-                    isSelected={enabled}
-                    onChange={setEnabled}
-                  >
-                    <Checkbox.Control>
-                      <Checkbox.Indicator />
-                    </Checkbox.Control>
-                    <Label>{t("enabled")}</Label>
-                  </Checkbox>
-                </Fieldset.Group>
-              </Fieldset>
-            </div>
+            </Form>
           </Modal.Body>
           <Modal.Footer>
             <Button slot="close" variant="secondary" onPress={onClose}>

@@ -62,6 +62,7 @@ export default {
   argsHelp: "Space-separated arguments",
   timeoutHelp: "Seconds (optional)",
   enabled: "Enabled",
+  enabledHelp: "Toggle whether this MCP server is active.",
   saving: "Saving...",
   createMcpServer: "Create MCP Server",
   creating: "Creating...",

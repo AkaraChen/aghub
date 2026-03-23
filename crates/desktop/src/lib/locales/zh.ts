@@ -62,6 +62,7 @@ export default {
   argsHelp: "空格分隔的参数",
   timeoutHelp: "秒数（可选）",
   enabled: "启用",
+  enabledHelp: "切换此 MCP 服务器是否处于激活状态。",
   saving: "保存中...",
   createMcpServer: "创建 MCP 服务器",
   creating: "创建中...",
