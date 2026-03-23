@@ -18,7 +18,7 @@ import {
 } from "@heroui/react";
 import { CodeBracketIcon } from "@heroicons/react/24/solid";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createApi } from "../lib/api";
 import type { TransportDto } from "../lib/api-types";
@@ -59,9 +59,10 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 		"stdio" | "sse" | "streamable_http"
 	>("stdio");
 	const [timeout, setTimeoutValue] = useState("");
-	const [selectedAgents, setSelectedAgents] = useState<Set<string>>(
-		new Set(["default"]),
-	);
+	const [selectedAgents, setSelectedAgents] = useState<Set<string>>(() => {
+		// Default to first usable agent instead of "default"
+		return new Set(usableAgents[0] ? [usableAgents[0].id] : []);
+	});
 
 	// stdio fields
 	const [command, setCommand] = useState("");
@@ -76,19 +77,6 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 	const [showImportDialog, setShowImportDialog] = useState(false);
 	const [jsonText, setJsonText] = useState("");
 	const [parseError, setParseError] = useState("");
-
-	// Reset form when component mounts
-	useEffect(() => {
-		setName("");
-		setTransportType("stdio");
-		setTimeoutValue("");
-		setCommand("");
-		setArgs("");
-		setEnvVars([]);
-		setUrl("");
-		setHeaders("");
-		setSelectedAgents(new Set(["default"]));
-	}, []);
 
 	const createMutation = useMutation({
 		mutationFn: ({
