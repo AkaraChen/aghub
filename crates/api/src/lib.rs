@@ -15,7 +15,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
     let config = rocket::Config {
         port: options.port,
         address: std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-        log_level: rocket::config::LogLevel::Off,
+        log_level: rocket::config::LogLevel::Normal,
         ..rocket::Config::default()
     };
     let cors = rocket_cors::CorsOptions {
