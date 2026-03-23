@@ -15,6 +15,7 @@
 		"core:window:allow-start-dragging",
 		"core:window:allow-toggle-maximize",
 		"opener:default",
+		"opener:allow-open-path",
 		"dialog:default",
 		"store:default",
 		"decorum:allow-show-snap-overlay"

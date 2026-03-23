@@ -48,6 +48,7 @@ export default {
 	version: "Version",
 	tools: "Tools",
 	source: "Source",
+	openFolder: "Open folder",
 
 	// MCP Servers Page
 	searchServers: "Search servers...",

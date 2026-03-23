@@ -48,6 +48,7 @@ export default {
 	version: "版本",
 	tools: "工具",
 	source: "来源",
+	openFolder: "打开文件夹",
 
 	// MCP Servers Page
 	searchServers: "搜索服务器...",

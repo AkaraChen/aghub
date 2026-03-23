@@ -1,4 +1,8 @@
-import { ArrowPathIcon, PlusIcon } from "@heroicons/react/24/solid";
+import {
+	ArrowPathIcon,
+	FolderIcon,
+	PlusIcon,
+} from "@heroicons/react/24/solid";
 import {
 	Button,
 	Chip,
@@ -7,6 +11,8 @@ import {
 	SearchField,
 	type Selection,
 } from "@heroui/react";
+import { openPath } from "@tauri-apps/plugin-opener";
+import { dirname } from "pathe";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useSkills } from "../../hooks/use-skills";
@@ -142,14 +148,37 @@ function SkillDetail({ group }: { group: SkillGroup }) {
 	const { t } = useTranslation();
 	const skill = group.items[0];
 
+	const handleOpenFolder = async () => {
+		if (skill.source_path) {
+			try {
+				const folderPath = dirname(skill.source_path);
+				await openPath(folderPath);
+			} catch (error) {
+				console.error("Failed to open folder:", error);
+			}
+		}
+	};
+
 	return (
 		<div className="h-full overflow-y-auto">
 			<div className="p-6 max-w-3xl">
 				{/* Header */}
-				<div className="flex items-center gap-2 mb-1 flex-wrap">
-					<h2 className="text-xl font-semibold leading-tight text-foreground">
+				<div className="flex items-center justify-between gap-3 mb-1">
+					<h2 className="text-xl font-semibold leading-tight text-foreground truncate">
 						{skill.name}
 					</h2>
+					{skill.source_path && (
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							className="text-muted hover:text-foreground shrink-0"
+							aria-label={t("openFolder")}
+							onPress={handleOpenFolder}
+						>
+							<FolderIcon className="size-4" />
+						</Button>
+					)}
 				</div>
 				{skill.source_path && (
 					<p className="text-xs text-muted mb-6 font-mono">
