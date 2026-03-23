@@ -28,6 +28,7 @@ import { EnvEditor, type EnvVar } from "./env-editor";
 
 interface CreateMcpPanelProps {
 	onDone: () => void;
+	projectPath?: string;
 }
 
 interface McpServerConfig {
@@ -43,7 +44,7 @@ interface McpConfigJson {
 	mcpServers?: Record<string, McpServerConfig>;
 }
 
-export function CreateMcpPanel({ onDone }: CreateMcpPanelProps) {
+export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 	const { t } = useTranslation();
 	const { baseUrl } = useServer();
 	const api = createApi(baseUrl);
@@ -97,10 +98,12 @@ export function CreateMcpPanel({ onDone }: CreateMcpPanelProps) {
 			agent: string;
 			body: { name: string; transport: TransportDto; timeout?: number };
 		}) => {
-			return api.mcps.create(agent, "global", body);
+			const scope = projectPath ? "project" : "global";
+			return api.mcps.create(agent, scope, body, projectPath);
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["mcps"] });
+			queryClient.invalidateQueries({ queryKey: ["project-mcps"] });
 		},
 	});
 

@@ -26,9 +26,10 @@ interface EditMcpPanelProps {
 		items: McpResponse[];
 	};
 	onDone: () => void;
+	projectPath?: string;
 }
 
-export function EditMcpPanel({ group, onDone }: EditMcpPanelProps) {
+export function EditMcpPanel({ group, onDone, projectPath }: EditMcpPanelProps) {
 	const { t } = useTranslation();
 	const { baseUrl } = useServer();
 	const api = createApi(baseUrl);
@@ -128,12 +129,14 @@ export function EditMcpPanel({ group, onDone }: EditMcpPanelProps) {
 						item.agent ?? "default",
 						scope,
 						body,
+						projectPath,
 					);
 				}),
 			);
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["mcps"] });
+			queryClient.invalidateQueries({ queryKey: ["project-mcps"] });
 			onDone();
 		},
 		onError: (error) => {

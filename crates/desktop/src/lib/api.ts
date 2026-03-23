@@ -63,10 +63,15 @@ export function createApi(baseUrl: string) {
 			create(
 				agent: string,
 				data: CreateSkillRequest,
+				projectRoot?: string,
 			): Promise<SkillResponse> {
+				const scope = projectRoot ? "project" : "global";
 				return client
 					.post(`agents/${agent}/skills`, {
-						searchParams: { scope: "global" },
+						searchParams: {
+							scope,
+							...(projectRoot ? { project_root: projectRoot } : {}),
+						},
 						json: data,
 					})
 					.json();
@@ -105,10 +110,14 @@ export function createApi(baseUrl: string) {
 					transport: TransportDto;
 					timeout?: number;
 				},
+				projectRoot?: string,
 			): Promise<McpResponse> {
 				return client
 					.post(`agents/${agent}/mcps`, {
-						searchParams: { scope },
+						searchParams: {
+							scope,
+							...(projectRoot ? { project_root: projectRoot } : {}),
+						},
 						json: body,
 					})
 					.json();
@@ -118,10 +127,14 @@ export function createApi(baseUrl: string) {
 				agent: string,
 				scope: "global" | "project",
 				body: UpdateMcpRequest,
+				projectRoot?: string,
 			): Promise<McpResponse> {
 				return client
 					.put(`agents/${agent}/mcps/${name}`, {
-						searchParams: { scope },
+						searchParams: {
+							scope,
+							...(projectRoot ? { project_root: projectRoot } : {}),
+						},
 						json: body,
 					})
 					.json();
@@ -130,10 +143,14 @@ export function createApi(baseUrl: string) {
 				name: string,
 				agent: string,
 				scope: "global" | "project",
+				projectRoot?: string,
 			): Promise<void> {
 				return client
 					.delete(`agents/${agent}/mcps/${name}`, {
-						searchParams: { scope },
+						searchParams: {
+							scope,
+							...(projectRoot ? { project_root: projectRoot } : {}),
+						},
 					})
 					.then(() => undefined);
 			},

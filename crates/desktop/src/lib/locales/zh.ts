@@ -143,6 +143,13 @@ export default {
 	mcps: "MCP",
 	projectStats: "项目统计",
 
+	// Project Resources
+	searchResources: "搜索资源...",
+	refreshResources: "刷新资源",
+	noResourcesMatch: "没有匹配的资源",
+	noProjectResources: "此项目中没有资源",
+	selectResourceToView: "选择一个资源查看详情",
+
 	// Env Editor
 	envEditor: {
 		addKeypair: "添加键值对",

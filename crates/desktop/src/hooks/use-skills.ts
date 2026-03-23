@@ -27,11 +27,15 @@ export function useCreateSkill() {
 		mutationFn: ({
 			agent,
 			data,
+			projectPath,
 		}: {
 			agent: string;
 			data: CreateSkillRequest;
-		}) => api.skills.create(agent, data),
-		onSuccess: () =>
-			queryClient.invalidateQueries({ queryKey: ["skills"] }),
+			projectPath?: string;
+		}) => api.skills.create(agent, data, projectPath),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["skills"] });
+			queryClient.invalidateQueries({ queryKey: ["project-skills"] });
+		},
 	});
 }

@@ -31,6 +31,7 @@ interface ManageAgentsDialogProps {
 	};
 	isOpen: boolean;
 	onClose: () => void;
+	projectPath?: string;
 }
 
 type WizardStep = 1 | 2 | 3;
@@ -47,6 +48,7 @@ export function ManageAgentsDialog({
 	group,
 	isOpen,
 	onClose,
+	projectPath,
 }: ManageAgentsDialogProps) {
 	const { t } = useTranslation();
 	const { baseUrl } = useServer();
@@ -120,11 +122,17 @@ export function ManageAgentsDialog({
 			pendingResults.map(async (result) => {
 				try {
 					if (result.action === "install") {
-						await api.mcps.create(result.agentId, "global", {
-							name: primary.name,
-							transport: primary.transport,
-							timeout: primary.timeout,
-						});
+						const scope = projectPath ? "project" : "global";
+						await api.mcps.create(
+							result.agentId,
+							scope,
+							{
+								name: primary.name,
+								transport: primary.transport,
+								timeout: primary.timeout,
+							},
+							projectPath,
+						);
 					} else {
 						const scope =
 							group.items.find(
@@ -136,6 +144,7 @@ export function ManageAgentsDialog({
 							primary.name,
 							result.agentId,
 							scope,
+							projectPath,
 						);
 					}
 					return { ...result, status: "success" as const };

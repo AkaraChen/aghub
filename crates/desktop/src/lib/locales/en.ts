@@ -146,6 +146,13 @@ export default {
 	mcps: "MCPs",
 	projectStats: "Project Statistics",
 
+	// Project Resources
+	searchResources: "Search resources...",
+	refreshResources: "Refresh resources",
+	noResourcesMatch: "No resources match",
+	noProjectResources: "No resources in this project",
+	selectResourceToView: "Select a resource to view details",
+
 	// Env Editor
 	envEditor: {
 		addKeypair: "Add Keypair",
