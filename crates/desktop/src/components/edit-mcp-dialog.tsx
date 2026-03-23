@@ -174,8 +174,8 @@ export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
           <Modal.Header>
             <Modal.Heading>{t("editMcpServer")}</Modal.Heading>
           </Modal.Header>
-          <Modal.Body className="p-6">
-            <div className="flex flex-col gap-4">
+          <Modal.Body>
+            <div className="flex flex-col gap-4 p-6">
               {/* Name */}
               <TextField className="w-full">
                 <Label>{t("name")}</Label>
