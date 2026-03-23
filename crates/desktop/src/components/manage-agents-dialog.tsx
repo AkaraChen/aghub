@@ -20,6 +20,7 @@ import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createApi } from "../lib/api";
 import type { McpResponse } from "../lib/api-types";
+import { ConfigSource } from "../lib/api-types";
 import { useAgentAvailability } from "../providers/agent-availability";
 import { useServer } from "../providers/server";
 
@@ -137,7 +138,7 @@ export function ManageAgentsDialog({
 						const scope =
 							group.items.find(
 								(i) => (i.agent ?? "default") === result.agentId,
-							)?.source === "Project"
+							)?.source === ConfigSource.Project
 								? "project"
 								: "global";
 						await api.mcps.delete(

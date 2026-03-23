@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createApi, type UpdateMcpRequest } from "../lib/api";
 import type { McpResponse, TransportDto } from "../lib/api-types";
+import { ConfigSource } from "../lib/api-types";
 import { useServer } from "../providers/server";
 
 interface EditMcpDialogProps {
@@ -124,7 +125,7 @@ export function EditMcpDialog({ group, isOpen, onClose }: EditMcpDialogProps) {
 			return Promise.all(
 				group.items.map((item) => {
 					const scope =
-						item.source === "Project" ? "project" : "global";
+						item.source === ConfigSource.Project ? "project" : "global";
 					return api.mcps.update(
 						item.name,
 						item.agent ?? "default",

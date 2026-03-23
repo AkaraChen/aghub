@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createApi } from "../lib/api";
 import type { McpResponse, SkillResponse } from "../lib/api-types";
+import { ConfigSource } from "../lib/api-types";
 import { useServer } from "../providers/server";
 
 interface ProjectStats {
@@ -25,10 +26,10 @@ export function useProjectStats(projectPath: string | undefined) {
 			]);
 
 			const skillsCount = skills.filter(
-				(s: SkillResponse) => s.source === "Project",
+				(s: SkillResponse) => s.source === ConfigSource.Project,
 			).length;
 			const mcpsCount = mcps.filter(
-				(m: McpResponse) => m.source === "Project",
+				(m: McpResponse) => m.source === ConfigSource.Project,
 			).length;
 
 			return { skillsCount, mcpsCount };

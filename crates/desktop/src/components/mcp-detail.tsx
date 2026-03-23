@@ -19,6 +19,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createApi } from "../lib/api";
 import type { McpResponse, TransportDto } from "../lib/api-types";
+import { ConfigSource } from "../lib/api-types";
 import { useServer } from "../providers/server";
 import { ManageAgentsDialog } from "./manage-agents-dialog";
 
@@ -55,7 +56,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 			return Promise.all(
 				g.items.map((item) => {
 					const scope =
-						item.source === "project" ? "project" : "global";
+						item.source === ConfigSource.Project ? "project" : "global";
 					return api.mcps.delete(
 						item.name,
 						item.agent ?? "default",

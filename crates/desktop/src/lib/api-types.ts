@@ -1,3 +1,8 @@
+export enum ConfigSource {
+	Global = "global",
+	Project = "project",
+}
+
 export interface SkillResponse {
 	name: string;
 	enabled: boolean;
@@ -6,7 +11,7 @@ export interface SkillResponse {
 	author?: string;
 	version?: string;
 	tools: string[];
-	source?: "global" | "project";
+	source?: ConfigSource;
 	agent?: string;
 }
 
@@ -36,7 +41,7 @@ export interface McpResponse {
 	enabled: boolean;
 	transport: TransportDto;
 	timeout?: number;
-	source?: "global" | "project";
+	source?: ConfigSource;
 	agent?: string;
 }
 

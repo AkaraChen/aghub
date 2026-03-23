@@ -12,6 +12,7 @@ import { UnifiedResourceList } from "../../components/unified-resource-list";
 import { useProjects } from "../../hooks/use-projects";
 import { createApi } from "../../lib/api";
 import type { McpResponse, SkillResponse } from "../../lib/api-types";
+import { ConfigSource } from "../../lib/api-types";
 import { getMcpMergeKey } from "../../lib/utils";
 import { useServer } from "../../providers/server";
 
@@ -54,11 +55,11 @@ export default function ProjectDetailPage() {
 
 	// Filter to project-scoped only
 	const projectMcps = useMemo(
-		() => mcps.filter((m) => m.source === "project"),
+		() => mcps.filter((m) => m.source === ConfigSource.Project),
 		[mcps],
 	);
 	const projectSkills = useMemo(
-		() => skills.filter((s) => s.source === "project"),
+		() => skills.filter((s) => s.source === ConfigSource.Project),
 		[skills],
 	);
 
