@@ -24,7 +24,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CreateMcpPanel } from "../../components/create-mcp-panel";
-import { EditMcpDialog } from "../../components/edit-mcp-dialog";
+import { EditMcpPanel } from "../../components/edit-mcp-panel";
 import { ManageAgentsDialog } from "../../components/manage-agents-dialog";
 import { useMcps } from "../../hooks/use-mcps";
 import { createApi } from "../../lib/api";
@@ -41,6 +41,7 @@ interface McpGroup {
 type RightPanel =
 	| { type: "detail"; selectedKey: string }
 	| { type: "create" }
+	| { type: "edit"; selectedKey: string }
 	| { type: "empty" };
 
 export default function MCPServersPage() {
@@ -196,11 +197,25 @@ export default function MCPServersPage() {
 			{/* Server Detail Panel */}
 			<div className="flex-1 overflow-hidden">
 				{panel.type === "detail" && selectedGroup && (
-					<McpDetail group={selectedGroup} />
+					<McpDetail
+						group={selectedGroup}
+						onEdit={() =>
+							setPanel({
+								type: "edit",
+								selectedKey: selectedGroup.mergeKey,
+							})
+						}
+					/>
 				)}
-				{panel.type === "create" && (
-					<CreateMcpPanel onDone={() => setPanel({ type: "empty" })} />
-				)}
+			{panel.type === "create" && (
+				<CreateMcpPanel onDone={() => setPanel({ type: "empty" })} />
+			)}
+			{panel.type === "edit" && selectedGroup && (
+				<EditMcpPanel
+					group={selectedGroup}
+					onDone={() => setPanel({ type: "detail", selectedKey: selectedGroup.mergeKey })}
+				/>
+			)}
 				{(panel.type === "empty" || (panel.type === "detail" && !selectedGroup)) && (
 					<div className="flex items-center justify-center h-full">
 						<p className="text-sm text-muted">{t("selectServer")}</p>
@@ -211,9 +226,13 @@ export default function MCPServersPage() {
 	);
 }
 
-function McpDetail({ group }: { group: McpGroup }) {
+interface McpDetailProps {
+	group: McpGroup;
+	onEdit: () => void;
+}
+
+function McpDetail({ group, onEdit }: McpDetailProps) {
 	const { t } = useTranslation();
-	const [editDialogOpen, setEditDialogOpen] = useState(false);
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [manageDialogOpen, setManageDialogOpen] = useState(false);
 	const { baseUrl } = useServer();
@@ -300,7 +319,7 @@ function McpDetail({ group }: { group: McpGroup }) {
 									size="sm"
 									className="text-muted hover:text-foreground shrink-0"
 									aria-label={t("edit")}
-									onPress={() => setEditDialogOpen(true)}
+									onPress={onEdit}
 								>
 									<PencilIcon className="size-4" />
 								</Button>
@@ -491,13 +510,6 @@ function McpDetail({ group }: { group: McpGroup }) {
 					</Modal.Dialog>
 				</Modal.Container>
 			</Modal.Backdrop>
-
-			{/* Edit Dialog */}
-			<EditMcpDialog
-				group={group}
-				isOpen={editDialogOpen}
-				onClose={() => setEditDialogOpen(false)}
-			/>
 
 			{/* Manage Agents Dialog */}
 			<ManageAgentsDialog
