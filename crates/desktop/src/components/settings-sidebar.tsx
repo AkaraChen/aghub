@@ -1,7 +1,6 @@
 import {
 	BookOpenIcon,
 	Cog6ToothIcon,
-	ComputerDesktopIcon,
 	ServerIcon,
 } from "@heroicons/react/24/solid";
 import { Surface } from "@heroui/react";
@@ -30,12 +29,6 @@ const menuItems: MenuItem[] = [
 		labelKey: "mcpServers",
 		href: "/settings/mcp-servers",
 		icon: ServerIcon,
-	},
-	{
-		type: "link",
-		labelKey: "agentManagement",
-		href: "/settings/agents",
-		icon: ComputerDesktopIcon,
 	},
 ];
 

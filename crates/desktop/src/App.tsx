@@ -12,7 +12,6 @@ import "./lib/i18n";
 import HomePage from "./pages/home";
 import ProjectDetailPage from "./pages/project/detail";
 import SettingsPage from "./pages/settings";
-import AgentManagementPage from "./pages/settings/agent-management";
 import CustomAgentsPage from "./pages/settings/custom-agents";
 import MCPServersPage from "./pages/settings/mcp-servers";
 import SkillsPage from "./pages/settings/skills";
@@ -84,11 +83,6 @@ function App() {
 												<MCPServersPage />
 											</Suspense>
 										</ErrorBoundary>
-									</SettingsLayout>
-								</Route>
-								<Route path="/settings/agents">
-									<SettingsLayout>
-										<AgentManagementPage />
 									</SettingsLayout>
 								</Route>
 								<Route path="/settings/custom-agents">
