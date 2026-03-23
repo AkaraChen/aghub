@@ -21,7 +21,7 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { CreateMcpDialog } from "../../components/create-mcp-dialog";
+import { CreateMcpPanel } from "../../components/create-mcp-panel";
 import { EditMcpDialog } from "../../components/edit-mcp-dialog";
 import { useMcps } from "../../hooks/use-mcps";
 import { createApi } from "../../lib/api";
@@ -35,17 +35,16 @@ interface McpGroup {
 	items: McpResponse[];
 }
 
+type RightPanel =
+	| { type: "detail"; group: McpGroup }
+	| { type: "create" }
+	| { type: "empty" };
+
 export default function MCPServersPage() {
 	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = createApi(baseUrl);
-	const queryClient = useQueryClient();
 	const { data: mcps, refetch } = useMcps();
 	const [searchQuery, setSearchQuery] = useState("");
-	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-	const [editDialogOpen, setEditDialogOpen] = useState(false);
-	const [createDialogOpen, setCreateDialogOpen] = useState(false);
-	const [groupToDelete, setGroupToDelete] = useState<McpGroup | null>(null);
+	const [panel, setPanel] = useState<RightPanel>({ type: "empty" });
 
 	const filteredServers = useMemo(
 		() =>
@@ -84,67 +83,25 @@ export default function MCPServersPage() {
 		new Set(groupedMcps[0] ? [groupedMcps[0].mergeKey] : []),
 	);
 
-	const selectedKey = [...(selected as Set<string>)][0];
-	const selectedGroup =
-		groupedMcps.find((g) => g.mergeKey === selectedKey) ?? null;
+	const handleSelectionChange = (keys: Selection) => {
+		setSelected(keys);
+		const key = [...(keys as Set<string>)][0];
+		const group = groupedMcps.find((g) => g.mergeKey === key);
+		if (group) {
+			setPanel({ type: "detail", group });
+		}
+	};
+
+	const handleCreate = () => {
+		setSelected(new Set());
+		setPanel({ type: "create" });
+	};
 
 	const getTransportIcon = (transport: McpGroup["transport"]) => {
 		if (transport.type === "stdio") {
 			return <CommandLineIcon className="size-4 shrink-0" />;
 		}
 		return <WifiIcon className="size-4 shrink-0" />;
-	};
-
-	const deleteMutation = useMutation({
-		mutationFn: (group: McpGroup) => {
-			return Promise.all(
-				group.items.map((item) => {
-					const scope =
-						item.source === "Project" ? "project" : "global";
-					return api.mcps.delete(
-						item.name,
-						item.agent ?? "default",
-						scope,
-					);
-				}),
-			);
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["mcps"] });
-			setDeleteDialogOpen(false);
-			setGroupToDelete(null);
-			if (
-				selectedGroup &&
-				groupToDelete &&
-				selectedGroup.mergeKey === groupToDelete.mergeKey
-			) {
-				setSelected(new Set());
-			}
-		},
-		onError: (error) => {
-			console.error("Failed to delete MCP servers:", error);
-		},
-	});
-
-	const handleDeleteClick = (group: McpGroup) => {
-		setGroupToDelete(group);
-		setDeleteDialogOpen(true);
-	};
-
-	const handleConfirmDelete = () => {
-		if (groupToDelete) {
-			deleteMutation.mutate(groupToDelete);
-		}
-	};
-
-	const handleCopy = (group: McpGroup) => {
-		const primary = group.items[0];
-		const config = {
-			name: primary.name,
-			transport: primary.transport,
-			timeout: primary.timeout,
-		};
-		console.log("Copy config:", JSON.stringify(config, null, 2));
 	};
 
 	return (
@@ -174,7 +131,7 @@ export default function MCPServersPage() {
 						size="sm"
 						className="shrink-0"
 						aria-label={t("addMcpServer")}
-						onPress={() => setCreateDialogOpen(true)}
+						onPress={handleCreate}
 					>
 						<PlusIcon className="size-4" />
 					</Button>
@@ -195,7 +152,7 @@ export default function MCPServersPage() {
 					aria-label="MCP Servers"
 					selectionMode="single"
 					selectedKeys={selected}
-					onSelectionChange={setSelected}
+					onSelectionChange={handleSelectionChange}
 					className="flex-1 overflow-y-auto p-2"
 				>
 					{groupedMcps.map((group) => (
@@ -232,189 +189,206 @@ export default function MCPServersPage() {
 
 			{/* Server Detail Panel */}
 			<div className="flex-1 overflow-hidden">
-				{selectedGroup ? (
-					<div className="h-full overflow-y-auto">
-						<div className="p-6 max-w-3xl">
-							{/* Header */}
-							<div className="flex items-center justify-between gap-3 mb-2">
-								<h2 className="text-xl font-semibold text-foreground truncate">
-									{selectedGroup.items[0].name}
-								</h2>
-								<div className="flex items-center gap-1">
-									<Button
-										isIconOnly
-										variant="ghost"
-										size="sm"
-										className="text-muted hover:text-foreground shrink-0"
-										aria-label={t("copy")}
-										onPress={() =>
-											handleCopy(selectedGroup)
-										}
-									>
-										<DocumentDuplicateIcon className="size-4" />
-									</Button>
-									<Button
-										isIconOnly
-										variant="ghost"
-										size="sm"
-										className="text-muted hover:text-foreground shrink-0"
-										aria-label={t("edit")}
-										onPress={() => setEditDialogOpen(true)}
-									>
-										<PencilIcon className="size-4" />
-									</Button>
-									<Button
-										isIconOnly
-										variant="ghost"
-										size="sm"
-										className="text-muted hover:text-danger shrink-0"
-										aria-label={t("remove")}
-										onPress={() =>
-											handleDeleteClick(selectedGroup)
-										}
-									>
-										<TrashIcon className="size-4" />
-									</Button>
-								</div>
-							</div>
-
-							{/* Agents Section */}
-							<div className="mb-6">
-								<h3 className="text-xs font-medium text-muted uppercase tracking-wide mb-2">
-									{t("agents")} ({selectedGroup.items.length})
-								</h3>
-								<div className="flex flex-wrap gap-1.5">
-									{selectedGroup.items.map((item) => (
-										<div
-											key={item.agent ?? "default"}
-											className="flex items-center gap-1"
-										>
-											<Chip size="sm" variant="secondary">
-												{item.agent
-													? item.agent
-															.charAt(0)
-															.toUpperCase() +
-														item.agent
-															.slice(1)
-															.toLowerCase()
-													: "Default"}
-											</Chip>
-											{!item.enabled && (
-												<Chip
-													size="sm"
-													variant="soft"
-													color="warning"
-												>
-													{t("disabled")}
-												</Chip>
-											)}
-										</div>
-									))}
-								</div>
-							</div>
-
-							{/* Connection / Transport */}
-							<div className="mb-6">
-								<h3 className="text-xs font-medium text-muted uppercase tracking-wide mb-3">
-									{t("transport")}
-								</h3>
-								<Table>
-									<Table.ScrollContainer>
-										<Table.Content aria-label="Transport details">
-											<Table.Header>
-												<Table.Column
-													isRowHeader
-													className="w-24"
-												>
-													{t("type")}
-												</Table.Column>
-												<Table.Column>
-													Value
-												</Table.Column>
-											</Table.Header>
-											<Table.Body>
-												<Table.Row>
-													<Table.Cell>
-														{t("type")}
-													</Table.Cell>
-													<Table.Cell>
-														{
-															selectedGroup
-																.transport.type
-														}
-													</Table.Cell>
-												</Table.Row>
-												{selectedGroup.transport
-													.type === "stdio" && (
-													<>
-														<Table.Row>
-															<Table.Cell>
-																{t("command")}
-															</Table.Cell>
-															<Table.Cell>
-																{
-																	selectedGroup
-																		.transport
-																		.command
-																}
-															</Table.Cell>
-														</Table.Row>
-														{selectedGroup.transport
-															.args &&
-															selectedGroup
-																.transport.args
-																.length > 0 && (
-																<Table.Row>
-																	<Table.Cell>
-																		{t(
-																			"args",
-																		)}
-																	</Table.Cell>
-																	<Table.Cell>
-																		<code className="font-mono text-xs break-all">
-																			{selectedGroup.transport.args.join(
-																				" ",
-																			)}
-																		</code>
-																	</Table.Cell>
-																</Table.Row>
-															)}
-													</>
-												)}
-												{(selectedGroup.transport
-													.type === "sse" ||
-													selectedGroup.transport
-														.type ===
-														"streamable_http") && (
-													<Table.Row>
-														<Table.Cell>
-															{t("url")}
-														</Table.Cell>
-														<Table.Cell>
-															<code className="font-mono text-xs break-all">
-																{
-																	selectedGroup
-																		.transport
-																		.url
-																}
-															</code>
-														</Table.Cell>
-													</Table.Row>
-												)}
-											</Table.Body>
-										</Table.Content>
-									</Table.ScrollContainer>
-								</Table>
-							</div>
-						</div>
-					</div>
-				) : (
+				{panel.type === "detail" && <McpDetail group={panel.group} />}
+				{panel.type === "create" && (
+					<CreateMcpPanel onDone={() => setPanel({ type: "empty" })} />
+				)}
+				{panel.type === "empty" && (
 					<div className="flex items-center justify-center h-full">
-						<p className="text-sm text-muted">
-							{t("selectServer")}
-						</p>
+						<p className="text-sm text-muted">{t("selectServer")}</p>
 					</div>
 				)}
+			</div>
+		</div>
+	);
+}
+
+function McpDetail({ group }: { group: McpGroup }) {
+	const { t } = useTranslation();
+	const [editDialogOpen, setEditDialogOpen] = useState(false);
+	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+	const { baseUrl } = useServer();
+	const api = createApi(baseUrl);
+	const queryClient = useQueryClient();
+
+	const deleteMutation = useMutation({
+		mutationFn: (g: McpGroup) => {
+			return Promise.all(
+				g.items.map((item) => {
+					const scope =
+						item.source === "Project" ? "project" : "global";
+					return api.mcps.delete(
+						item.name,
+						item.agent ?? "default",
+						scope,
+					);
+				}),
+			);
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["mcps"] });
+			setDeleteDialogOpen(false);
+		},
+		onError: (error) => {
+			console.error("Failed to delete MCP servers:", error);
+		},
+	});
+
+	const handleCopy = () => {
+		const primary = group.items[0];
+		const config = {
+			name: primary.name,
+			transport: primary.transport,
+			timeout: primary.timeout,
+		};
+		console.log("Copy config:", JSON.stringify(config, null, 2));
+	};
+
+	return (
+		<>
+			<div className="h-full overflow-y-auto">
+				<div className="p-6 max-w-3xl">
+					{/* Header */}
+					<div className="flex items-center justify-between gap-3 mb-2">
+						<h2 className="text-xl font-semibold text-foreground truncate">
+							{group.items[0].name}
+						</h2>
+						<div className="flex items-center gap-1">
+							<Button
+								isIconOnly
+								variant="ghost"
+								size="sm"
+								className="text-muted hover:text-foreground shrink-0"
+								aria-label={t("copy")}
+								onPress={handleCopy}
+							>
+								<DocumentDuplicateIcon className="size-4" />
+							</Button>
+							<Button
+								isIconOnly
+								variant="ghost"
+								size="sm"
+								className="text-muted hover:text-foreground shrink-0"
+								aria-label={t("edit")}
+								onPress={() => setEditDialogOpen(true)}
+							>
+								<PencilIcon className="size-4" />
+							</Button>
+							<Button
+								isIconOnly
+								variant="ghost"
+								size="sm"
+								className="text-muted hover:text-danger shrink-0"
+								aria-label={t("remove")}
+								onPress={() => setDeleteDialogOpen(true)}
+							>
+								<TrashIcon className="size-4" />
+							</Button>
+						</div>
+					</div>
+
+					{/* Agents Section */}
+					<div className="mb-6">
+						<h3 className="text-xs font-medium text-muted uppercase tracking-wide mb-2">
+							{t("agents")} ({group.items.length})
+						</h3>
+						<div className="flex flex-wrap gap-1.5">
+							{group.items.map((item) => (
+								<div
+									key={item.agent ?? "default"}
+									className="flex items-center gap-1"
+								>
+									<Chip size="sm" variant="secondary">
+										{item.agent
+											? item.agent
+													.charAt(0)
+													.toUpperCase() +
+												item.agent
+													.slice(1)
+													.toLowerCase()
+											: "Default"}
+									</Chip>
+									{!item.enabled && (
+										<Chip
+											size="sm"
+											variant="soft"
+											color="warning"
+										>
+											{t("disabled")}
+										</Chip>
+									)}
+								</div>
+							))}
+						</div>
+					</div>
+
+					{/* Connection / Transport */}
+					<div className="mb-6">
+						<h3 className="text-xs font-medium text-muted uppercase tracking-wide mb-3">
+							{t("transport")}
+						</h3>
+						<Table>
+							<Table.ScrollContainer>
+								<Table.Content aria-label="Transport details">
+									<Table.Header>
+										<Table.Column isRowHeader className="w-24">
+											{t("type")}
+										</Table.Column>
+										<Table.Column>Value</Table.Column>
+									</Table.Header>
+									<Table.Body>
+										<Table.Row>
+											<Table.Cell>{t("type")}</Table.Cell>
+											<Table.Cell>
+												{group.transport.type}
+											</Table.Cell>
+										</Table.Row>
+										{group.transport.type === "stdio" && (
+											<>
+												<Table.Row>
+													<Table.Cell>
+														{t("command")}
+													</Table.Cell>
+													<Table.Cell>
+														{group.transport.command}
+													</Table.Cell>
+												</Table.Row>
+												{group.transport.args &&
+													group.transport.args.length >
+														0 && (
+														<Table.Row>
+															<Table.Cell>
+																{t("args")}
+															</Table.Cell>
+															<Table.Cell>
+																<code className="font-mono text-xs break-all">
+																	{group.transport.args.join(
+																		" ",
+																	)}
+																</code>
+															</Table.Cell>
+														</Table.Row>
+													)}
+											</>
+										)}
+										{(group.transport.type === "sse" ||
+											group.transport.type ===
+												"streamable_http") && (
+											<Table.Row>
+												<Table.Cell>{t("url")}</Table.Cell>
+												<Table.Cell>
+													<code className="font-mono text-xs break-all">
+														{group.transport.url}
+													</code>
+												</Table.Cell>
+											</Table.Row>
+										)}
+									</Table.Body>
+								</Table.Content>
+							</Table.ScrollContainer>
+						</Table>
+					</div>
+				</div>
 			</div>
 
 			{/* Delete Confirmation Dialog */}
@@ -435,11 +409,11 @@ export default function MCPServersPage() {
 						</Modal.Header>
 						<Modal.Body>
 							<p className="text-sm text-muted">
-								{groupToDelete && groupToDelete.items.length > 1
+								{group.items.length > 1
 									? t("deleteMcpMultipleConfirm", {
-											name: groupToDelete.items[0].name,
-											count: groupToDelete.items.length,
-											agents: groupToDelete.items
+											name: group.items[0].name,
+											count: group.items.length,
+											agents: group.items
 												.map((i) =>
 													i.agent
 														? i.agent
@@ -453,7 +427,7 @@ export default function MCPServersPage() {
 												.join(", "),
 										})
 									: t("deleteMcpServerConfirm", {
-											name: groupToDelete?.items[0]?.name,
+											name: group.items[0].name,
 										})}
 							</p>
 						</Modal.Body>
@@ -467,7 +441,7 @@ export default function MCPServersPage() {
 							</Button>
 							<Button
 								variant="danger"
-								onPress={handleConfirmDelete}
+								onPress={() => deleteMutation.mutate(group)}
 								isDisabled={deleteMutation.isPending}
 							>
 								{deleteMutation.isPending
@@ -480,19 +454,11 @@ export default function MCPServersPage() {
 			</Modal.Backdrop>
 
 			{/* Edit Dialog */}
-			{selectedGroup && (
-				<EditMcpDialog
-					group={selectedGroup}
-					isOpen={editDialogOpen}
-					onClose={() => setEditDialogOpen(false)}
-				/>
-			)}
-
-			{/* Create Dialog */}
-			<CreateMcpDialog
-				isOpen={createDialogOpen}
-				onClose={() => setCreateDialogOpen(false)}
+			<EditMcpDialog
+				group={group}
+				isOpen={editDialogOpen}
+				onClose={() => setEditDialogOpen(false)}
 			/>
-		</div>
+		</>
 	);
 }
