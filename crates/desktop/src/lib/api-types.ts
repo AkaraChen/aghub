@@ -6,7 +6,7 @@ export interface SkillResponse {
 	author?: string;
 	version?: string;
 	tools: string[];
-	source?: "Global" | "Project";
+	source?: "global" | "project";
 	agent?: string;
 }
 
@@ -36,7 +36,7 @@ export interface McpResponse {
 	enabled: boolean;
 	transport: TransportDto;
 	timeout?: number;
-	source?: "Global" | "Project";
+	source?: "global" | "project";
 	agent?: string;
 }
 
