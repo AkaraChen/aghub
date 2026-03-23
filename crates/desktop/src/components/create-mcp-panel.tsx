@@ -1,6 +1,7 @@
 import {
 	Button,
 	Description,
+	Disclosure,
 	Fieldset,
 	Form,
 	Input,
@@ -13,7 +14,9 @@ import {
 	TagGroup,
 	TextArea,
 	TextField,
+	Tooltip,
 } from "@heroui/react";
+import { CodeBracketIcon } from "@heroicons/react/24/solid";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -245,9 +248,26 @@ export function CreateMcpPanel({ onDone }: CreateMcpPanelProps) {
 	return (
 		<div className="h-full overflow-y-auto">
 			<div className="p-6 max-w-3xl">
-				<h2 className="text-xl font-semibold text-foreground mb-6">
-					{t("createMcpServer")}
-				</h2>
+				<div className="flex items-center justify-between gap-3 mb-6">
+					<h2 className="text-xl font-semibold text-foreground">
+						{t("createMcpServer")}
+					</h2>
+					<Tooltip delay={0}>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							className="text-muted hover:text-foreground shrink-0"
+							aria-label={t("importFromJson")}
+							onPress={() => setShowImportDialog(true)}
+						>
+							<CodeBracketIcon className="size-4" />
+						</Button>
+						<Tooltip.Content>
+							{t("importFromJsonTooltip")}
+						</Tooltip.Content>
+					</Tooltip>
+				</div>
 
 				<Form>
 					{/* Name */}
@@ -365,25 +385,7 @@ export function CreateMcpPanel({ onDone }: CreateMcpPanelProps) {
 								</TextField>
 							</Fieldset.Group>
 						</Fieldset>
-					)}
-
-					{/* Timeout */}
-					<Fieldset>
-						<Fieldset.Group>
-							<TextField className="w-full">
-								<Label>{t("timeout")}</Label>
-								<Input
-									type="number"
-									value={timeout}
-									onChange={(e) => setTimeoutValue(e.target.value)}
-									placeholder="60"
-
-
-								/>
-								<Description>{t("timeoutHelp")}</Description>
-							</TextField>
-						</Fieldset.Group>
-					</Fieldset>
+                  )}
 
 					{/* Agent Selection */}
 					<Fieldset>
@@ -417,15 +419,32 @@ export function CreateMcpPanel({ onDone }: CreateMcpPanelProps) {
 						</Fieldset.Group>
 					</Fieldset>
 
+					<Disclosure className="pt-4">
+						<Disclosure.Trigger className="flex items-center justify-between w-full">
+							{t("advanced")}
+							<Disclosure.Indicator />
+						</Disclosure.Trigger>
+						<Disclosure.Content>
+							<Fieldset>
+								<Fieldset.Group>
+									<TextField className="w-full">
+										<Label>{t("timeout")}</Label>
+										<Input
+											type="number"
+											value={timeout}
+											onChange={(e) => setTimeoutValue(e.target.value)}
+											placeholder="60"
+										/>
+										<Description>{t("timeoutHelp")}</Description>
+									</TextField>
+								</Fieldset.Group>
+							</Fieldset>
+						</Disclosure.Content>
+					</Disclosure>
+
 					{/* Actions */}
 					<div className="flex justify-end gap-2 pt-2">
-						<Button
-
-							onPress={() => setShowImportDialog(true)}
-						>
-							{t("importFromJson")}
-						</Button>
-						<Button  onPress={onDone}>
+						<Button variant="secondary" onPress={onDone}>
 							{t("cancel")}
 						</Button>
 						<Button
@@ -470,7 +489,7 @@ export function CreateMcpPanel({ onDone }: CreateMcpPanelProps) {
 						</Modal.Body>
 						<Modal.Footer>
 							<Button
-
+								variant="secondary"
 								onPress={() => {
 									setShowImportDialog(false);
 									setJsonText("");

@@ -93,11 +93,13 @@ export default {
 	saving: "Saving...",
 	createMcpServer: "Create MCP Server",
 	creating: "Creating...",
+	advanced: "Advanced",
 	agents: "Agents",
 	noAgentsAvailable: "No agents available",
 	noAgentsAvailableHelp:
 		"Install or enable at least one agent to create MCP servers.",
 	importFromJson: "Import from JSON",
+	importFromJsonTooltip: "Import from JSON",
 	import: "Import",
 	jsonConfig: "JSON Configuration",
 	jsonConfigHelp: "Paste the MCP server JSON configuration",
