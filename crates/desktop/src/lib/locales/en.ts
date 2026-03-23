@@ -13,6 +13,8 @@ export default {
 	save: "Save",
 	cancel: "Cancel",
 	create: "Create",
+	copy: "Copy",
+	disabled: "Disabled",
 
 	// Settings
 	appearance: "Appearance",
@@ -63,6 +65,8 @@ export default {
 	deleteMcpServer: "Delete MCP Server",
 	deleteMcpServerConfirm:
 		'Are you sure you want to delete "{{name}}"? This action cannot be undone.',
+	deleteMcpMultipleConfirm:
+		'This will delete "{{name}}" from {{count}} agents: {{agents}}. This action cannot be undone.',
 	deleting: "Deleting...",
 	editMcpServer: "Edit MCP Server",
 	name: "Name",

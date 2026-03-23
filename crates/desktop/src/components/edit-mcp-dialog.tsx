@@ -19,37 +19,43 @@ import type { McpResponse, TransportDto } from "../lib/api-types";
 import { useServer } from "../providers/server";
 
 interface EditMcpDialogProps {
-	server: McpResponse;
+	group: {
+		mergeKey: string;
+		transport: McpResponse["transport"];
+		items: McpResponse[];
+	};
 	isOpen: boolean;
 	onClose: () => void;
 }
 
-export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
+export function EditMcpDialog({ group, isOpen, onClose }: EditMcpDialogProps) {
 	const { t } = useTranslation();
 	const { baseUrl } = useServer();
 	const api = createApi(baseUrl);
 	const queryClient = useQueryClient();
 
-	const [name, setName] = useState(server.name);
+	const primaryServer = group.items[0];
+
+	const [name, setName] = useState(primaryServer.name);
 	const [transportType, setTransportType] = useState<
 		"stdio" | "sse" | "streamable_http"
-	>(server.transport.type);
+	>(primaryServer.transport.type);
 	const [timeout, setTimeoutValue] = useState(
-		server.timeout?.toString() ?? "",
+		primaryServer.timeout?.toString() ?? "",
 	);
 
 	// stdio fields
 	const [command, setCommand] = useState(
-		server.transport.type === "stdio" ? server.transport.command : "",
+		primaryServer.transport.type === "stdio" ? primaryServer.transport.command : "",
 	);
 	const [args, setArgs] = useState(
-		server.transport.type === "stdio" && server.transport.args
-			? server.transport.args.join(" ")
+		primaryServer.transport.type === "stdio" && primaryServer.transport.args
+			? primaryServer.transport.args.join(" ")
 			: "",
 	);
 	const [env, setEnv] = useState(() => {
-		if (server.transport.type === "stdio" && server.transport.env) {
-			return Object.entries(server.transport.env)
+		if (primaryServer.transport.type === "stdio" && primaryServer.transport.env) {
+			return Object.entries(primaryServer.transport.env)
 				.map(([k, v]) => `${k}=${v}`)
 				.join("\n");
 		}
@@ -58,29 +64,30 @@ export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
 
 	// http fields
 	const [url, setUrl] = useState(
-		server.transport.type !== "stdio" ? server.transport.url : "",
+		primaryServer.transport.type !== "stdio" ? primaryServer.transport.url : "",
 	);
 	const [headers, setHeaders] = useState(() => {
-		if (server.transport.type !== "stdio" && server.transport.headers) {
-			return Object.entries(server.transport.headers)
+		if (primaryServer.transport.type !== "stdio" && primaryServer.transport.headers) {
+			return Object.entries(primaryServer.transport.headers)
 				.map(([k, v]) => `${k}: ${v}`)
 				.join("\n");
 		}
 		return "";
 	});
 
-	// Reset form when server changes
+	// Reset form when group changes
 	useEffect(() => {
-		setName(server.name);
-		setTransportType(server.transport.type);
-		setTimeoutValue(server.timeout?.toString() ?? "");
+		const primary = group.items[0];
+		setName(primary.name);
+		setTransportType(primary.transport.type);
+		setTimeoutValue(primary.timeout?.toString() ?? "");
 
-		if (server.transport.type === "stdio") {
-			setCommand(server.transport.command);
-			setArgs(server.transport.args?.join(" ") ?? "");
+		if (primary.transport.type === "stdio") {
+			setCommand(primary.transport.command);
+			setArgs(primary.transport.args?.join(" ") ?? "");
 			setEnv(
-				server.transport.env
-					? Object.entries(server.transport.env)
+				primary.transport.env
+					? Object.entries(primary.transport.env)
 							.map(([k, v]) => `${k}=${v}`)
 							.join("\n")
 					: "",
@@ -88,10 +95,10 @@ export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
 			setUrl("");
 			setHeaders("");
 		} else {
-			setUrl(server.transport.url);
+			setUrl(primary.transport.url);
 			setHeaders(
-				server.transport.headers
-					? Object.entries(server.transport.headers)
+				primary.transport.headers
+					? Object.entries(primary.transport.headers)
 							.map(([k, v]) => `${k}: ${v}`)
 							.join("\n")
 					: "",
@@ -100,16 +107,20 @@ export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
 			setArgs("");
 			setEnv("");
 		}
-	}, [server]);
+	}, [group]);
 
 	const updateMutation = useMutation({
 		mutationFn: (body: UpdateMcpRequest) => {
-			const scope = server.source === "Project" ? "project" : "global";
-			return api.mcps.update(
-				server.name,
-				server.agent ?? "default",
-				scope,
-				body,
+			return Promise.all(
+				group.items.map((item) => {
+					const scope = item.source === "Project" ? "project" : "global";
+					return api.mcps.update(
+						item.name,
+						item.agent ?? "default",
+						scope,
+						body,
+					);
+				}),
 			);
 		},
 		onSuccess: () => {
@@ -117,7 +128,7 @@ export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
 			onClose();
 		},
 		onError: (error) => {
-			console.error("Failed to update MCP server:", error);
+			console.error("Failed to update MCP servers:", error);
 		},
 	});
 
@@ -179,7 +190,7 @@ export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
 		if (!name.trim()) return;
 
 		const body: UpdateMcpRequest = {
-			name: name.trim() !== server.name ? name.trim() : undefined,
+			name: name.trim() !== primaryServer.name ? name.trim() : undefined,
 			timeout: timeout ? parseInt(timeout, 10) : undefined,
 		};
 
@@ -200,6 +211,16 @@ export function EditMcpDialog({ server, isOpen, onClose }: EditMcpDialogProps) {
 						<Modal.Heading>{t("editMcpServer")}</Modal.Heading>
 					</Modal.Header>
 					<Modal.Body className="p-2">
+						{group.items.length > 1 && (
+							<div className="bg-warning/10 border border-warning/20 rounded-lg p-3 mb-4">
+								<p className="text-sm text-warning">
+									This change will apply to {group.items.length} agents:{" "}
+									{group.items.map(i =>
+										i.agent ? i.agent.charAt(0).toUpperCase() + i.agent.slice(1).toLowerCase() : "Default"
+									).join(", ")}
+								</p>
+							</div>
+						)}
 						<Form>
 							{/* Name */}
 							<Fieldset>

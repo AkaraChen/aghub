@@ -1,6 +1,7 @@
 import {
 	ArrowPathIcon,
 	CommandLineIcon,
+	DocumentDuplicateIcon,
 	ExclamationTriangleIcon,
 	PencilIcon,
 	PlusIcon,
@@ -9,7 +10,7 @@ import {
 } from "@heroicons/react/24/solid";
 import {
 	Button,
-	Header,
+	Chip,
 	Label,
 	ListBox,
 	Modal,
@@ -26,6 +27,13 @@ import { useMcps } from "../../hooks/use-mcps";
 import { createApi } from "../../lib/api";
 import type { McpResponse } from "../../lib/api-types";
 import { useServer } from "../../providers/server";
+import { getMcpMergeKey } from "../../lib/utils";
+
+interface McpGroup {
+	mergeKey: string;
+	transport: McpResponse["transport"];
+	items: McpResponse[];
+}
 
 export default function MCPServersPage() {
 	const { t } = useTranslation();
@@ -34,31 +42,10 @@ export default function MCPServersPage() {
 	const queryClient = useQueryClient();
 	const { data: mcps, refetch } = useMcps();
 	const [searchQuery, setSearchQuery] = useState("");
-	const [selected, setSelected] = useState<Selection>(
-		new Set(
-			mcps.length > 0
-				? [`${mcps[0].name}-${mcps[0].agent ?? "default"}`]
-				: [],
-		),
-	);
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [editDialogOpen, setEditDialogOpen] = useState(false);
 	const [createDialogOpen, setCreateDialogOpen] = useState(false);
-	const [serverToDelete, setServerToDelete] = useState<McpResponse | null>(
-		null,
-	);
-
-	const selectedKey = [...(selected as Set<string>)][0];
-	const selectedServer =
-		mcps.find((s) => `${s.name}-${s.agent ?? "default"}` === selectedKey) ??
-		null;
-
-	const getTransportIcon = (server: McpResponse) => {
-		if (server.transport.type === "stdio") {
-			return <CommandLineIcon className="size-4 shrink-0" />;
-		}
-		return <WifiIcon className="size-4 shrink-0" />;
-	};
+	const [groupToDelete, setGroupToDelete] = useState<McpGroup | null>(null);
 
 	const filteredServers = useMemo(
 		() =>
@@ -77,59 +64,86 @@ export default function MCPServersPage() {
 		[mcps, searchQuery],
 	);
 
-	const groupedServers = useMemo(
-		() =>
-			filteredServers.reduce(
-				(acc, server) => {
-					const category = (
-						server.agent ?? t("unknown")
-					).toUpperCase();
-					if (!acc[category]) acc[category] = [];
-					acc[category].push(server);
-					return acc;
-				},
-				{} as Record<string, McpResponse[]>,
-			),
-		[filteredServers],
+	const groupedMcps = useMemo(() => {
+		const map = new Map<string, McpResponse[]>();
+
+		for (const mcp of filteredServers) {
+			const key = getMcpMergeKey(mcp.transport);
+			const existing = map.get(key) ?? [];
+			map.set(key, [...existing, mcp]);
+		}
+
+		return Array.from(map.entries()).map(([mergeKey, items]) => ({
+			mergeKey,
+			transport: items[0].transport,
+			items,
+		}));
+	}, [filteredServers]);
+
+	const [selected, setSelected] = useState<Selection>(
+		new Set(groupedMcps[0] ? [groupedMcps[0].mergeKey] : []),
 	);
 
+	const selectedKey = [...(selected as Set<string>)][0];
+	const selectedGroup =
+		groupedMcps.find((g) => g.mergeKey === selectedKey) ?? null;
+
+	const getTransportIcon = (transport: McpGroup["transport"]) => {
+		if (transport.type === "stdio") {
+			return <CommandLineIcon className="size-4 shrink-0" />;
+		}
+		return <WifiIcon className="size-4 shrink-0" />;
+	};
+
 	const deleteMutation = useMutation({
-		mutationFn: (server: McpResponse) => {
-			const scope = server.source === "Project" ? "project" : "global";
-			return api.mcps.delete(
-				server.name,
-				server.agent ?? "default",
-				scope,
+		mutationFn: (group: McpGroup) => {
+			return Promise.all(
+				group.items.map((item) => {
+					const scope = item.source === "Project" ? "project" : "global";
+					return api.mcps.delete(
+						item.name,
+						item.agent ?? "default",
+						scope,
+					);
+				}),
 			);
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["mcps"] });
 			setDeleteDialogOpen(false);
-			setServerToDelete(null);
-			// Clear selection if deleted server was selected
+			setGroupToDelete(null);
 			if (
-				selectedServer &&
-				serverToDelete &&
-				`${selectedServer.name}-${selectedServer.agent ?? "default"}` ===
-					`${serverToDelete.name}-${serverToDelete.agent ?? "default"}`
+				selectedGroup &&
+				groupToDelete &&
+				selectedGroup.mergeKey === groupToDelete.mergeKey
 			) {
 				setSelected(new Set());
 			}
 		},
 		onError: (error) => {
-			console.error("Failed to delete MCP server:", error);
+			console.error("Failed to delete MCP servers:", error);
 		},
 	});
 
-	const handleDeleteClick = (server: McpResponse) => {
-		setServerToDelete(server);
+	const handleDeleteClick = (group: McpGroup) => {
+		setGroupToDelete(group);
 		setDeleteDialogOpen(true);
 	};
 
 	const handleConfirmDelete = () => {
-		if (serverToDelete) {
-			deleteMutation.mutate(serverToDelete);
+		if (groupToDelete) {
+			deleteMutation.mutate(groupToDelete);
 		}
+	};
+
+	const handleCopy = (group: McpGroup) => {
+		const primary = group.items[0];
+		const config = {
+			name: primary.name,
+			transport: primary.transport,
+			timeout: primary.timeout,
+		};
+		console.log("Copy config:", JSON.stringify(config, null, 2));
 	};
 
 	return (
@@ -183,38 +197,28 @@ export default function MCPServersPage() {
 					onSelectionChange={setSelected}
 					className="flex-1 overflow-y-auto p-2"
 				>
-					{Object.entries(groupedServers).map(
-						([category, servers]) => (
-							<ListBox.Section
-								key={category}
-								aria-label={category}
-							>
-								<Header className="px-2 py-1.5 text-xs font-medium text-muted uppercase tracking-wide">
-									{category}
-								</Header>
-								{servers.map((server) => {
-									const id = `${server.name}-${server.agent ?? "default"}`;
-									return (
-										<ListBox.Item
-											key={id}
-											id={id}
-											textValue={server.name}
-											className="data-[selected]:bg-accent/10"
-										>
-											<div className="flex items-center gap-2">
-												{getTransportIcon(server)}
-												<Label className="truncate">
-													{server.name}
-												</Label>
-											</div>
-										</ListBox.Item>
-									);
-								})}
-							</ListBox.Section>
-						),
-					)}
+					{groupedMcps.map((group) => (
+						<ListBox.Item
+							key={group.mergeKey}
+							id={group.mergeKey}
+							textValue={group.items[0].name}
+							className="data-[selected]:bg-accent/10"
+						>
+							<div className="flex items-center gap-2 w-full">
+								{getTransportIcon(group.transport)}
+								<Label className="truncate flex-1">
+									{group.items[0].name}
+								</Label>
+								{group.items.length > 1 && (
+									<Chip size="sm" variant="soft" color="accent">
+										{group.items.length}
+									</Chip>
+								)}
+							</div>
+						</ListBox.Item>
+					))}
 				</ListBox>
-				{filteredServers.length === 0 && (
+				{groupedMcps.length === 0 && (
 					<p className="px-3 py-6 text-sm text-muted text-center">
 						{t("noServersMatch")} &ldquo;{searchQuery}&rdquo;
 					</p>
@@ -223,15 +227,25 @@ export default function MCPServersPage() {
 
 			{/* Server Detail Panel */}
 			<div className="flex-1 overflow-hidden">
-				{selectedServer ? (
+				{selectedGroup ? (
 					<div className="h-full overflow-y-auto">
 						<div className="p-6 max-w-3xl">
 							{/* Header */}
 							<div className="flex items-center justify-between gap-3 mb-2">
 								<h2 className="text-xl font-semibold text-foreground truncate">
-									{selectedServer.name}
+									{selectedGroup.items[0].name}
 								</h2>
 								<div className="flex items-center gap-1">
+									<Button
+										isIconOnly
+										variant="ghost"
+										size="sm"
+										className="text-muted hover:text-foreground shrink-0"
+										aria-label={t("copy")}
+										onPress={() => handleCopy(selectedGroup)}
+									>
+										<DocumentDuplicateIcon className="size-4" />
+									</Button>
 									<Button
 										isIconOnly
 										variant="ghost"
@@ -249,11 +263,32 @@ export default function MCPServersPage() {
 										className="text-muted hover:text-danger shrink-0"
 										aria-label={t("remove")}
 										onPress={() =>
-											handleDeleteClick(selectedServer)
+											handleDeleteClick(selectedGroup)
 										}
 									>
 										<TrashIcon className="size-4" />
 									</Button>
+								</div>
+							</div>
+
+							{/* Agents Section */}
+							<div className="mb-6">
+								<h3 className="text-xs font-medium text-muted uppercase tracking-wide mb-2">
+									{t("agents")} ({selectedGroup.items.length})
+								</h3>
+								<div className="flex flex-wrap gap-1.5">
+									{selectedGroup.items.map((item) => (
+										<div key={item.agent ?? "default"} className="flex items-center gap-1">
+											<Chip size="sm" variant="secondary">
+												{item.agent ? item.agent.charAt(0).toUpperCase() + item.agent.slice(1).toLowerCase() : "Default"}
+											</Chip>
+											{!item.enabled && (
+												<Chip size="sm" variant="soft" color="warning">
+													{t("disabled")}
+												</Chip>
+											)}
+										</div>
+									))}
 								</div>
 							</div>
 
@@ -283,12 +318,12 @@ export default function MCPServersPage() {
 													</Table.Cell>
 													<Table.Cell>
 														{
-															selectedServer
+															selectedGroup
 																.transport.type
 														}
 													</Table.Cell>
 												</Table.Row>
-												{selectedServer.transport
+												{selectedGroup.transport
 													.type === "stdio" && (
 													<>
 														<Table.Row>
@@ -297,15 +332,15 @@ export default function MCPServersPage() {
 															</Table.Cell>
 															<Table.Cell>
 																{
-																	selectedServer
+																	selectedGroup
 																		.transport
 																		.command
 																}
 															</Table.Cell>
 														</Table.Row>
-														{selectedServer
+														{selectedGroup
 															.transport.args &&
-															selectedServer
+															selectedGroup
 																.transport.args
 																.length > 0 && (
 																<Table.Row>
@@ -316,7 +351,7 @@ export default function MCPServersPage() {
 																	</Table.Cell>
 																	<Table.Cell>
 																		<code className="font-mono text-xs break-all">
-																			{selectedServer.transport.args.join(
+																			{selectedGroup.transport.args.join(
 																				" ",
 																			)}
 																		</code>
@@ -325,9 +360,9 @@ export default function MCPServersPage() {
 															)}
 													</>
 												)}
-												{(selectedServer.transport
+												{(selectedGroup.transport
 													.type === "sse" ||
-													selectedServer.transport
+													selectedGroup.transport
 														.type ===
 														"streamable_http") && (
 													<Table.Row>
@@ -337,24 +372,11 @@ export default function MCPServersPage() {
 														<Table.Cell>
 															<code className="font-mono text-xs break-all">
 																{
-																	selectedServer
+																	selectedGroup
 																		.transport
 																		.url
 																}
 															</code>
-														</Table.Cell>
-													</Table.Row>
-												)}
-												{selectedServer.timeout && (
-													<Table.Row>
-														<Table.Cell>
-															{t("timeout")}
-														</Table.Cell>
-														<Table.Cell>
-															{
-																selectedServer.timeout
-															}
-															s
 														</Table.Cell>
 													</Table.Row>
 												)}
@@ -392,9 +414,18 @@ export default function MCPServersPage() {
 						</Modal.Header>
 						<Modal.Body>
 							<p className="text-sm text-muted">
-								{t("deleteMcpServerConfirm", {
-									name: serverToDelete?.name,
-								})}
+								{groupToDelete && groupToDelete.items.length > 1
+									? t("deleteMcpMultipleConfirm", {
+											name: groupToDelete.items[0].name,
+											count: groupToDelete.items.length,
+											agents: groupToDelete.items.map(i =>
+												i.agent ? i.agent.charAt(0).toUpperCase() + i.agent.slice(1).toLowerCase() : "Default"
+											).join(", "),
+										})
+									: t("deleteMcpServerConfirm", {
+											name: groupToDelete?.items[0]?.name,
+										})
+								}
 							</p>
 						</Modal.Body>
 						<Modal.Footer>
@@ -420,9 +451,9 @@ export default function MCPServersPage() {
 			</Modal.Backdrop>
 
 			{/* Edit Dialog */}
-			{selectedServer && (
+			{selectedGroup && (
 				<EditMcpDialog
-					server={selectedServer}
+					group={selectedGroup}
 					isOpen={editDialogOpen}
 					onClose={() => setEditDialogOpen(false)}
 				/>
