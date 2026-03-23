@@ -47,3 +47,6 @@ help: dev
 # Run with cargo (pass args: just start -- --arg)
 start *args:
     cargo run -p aghub -- {{args}}
+
+desktop:
+    cd ./crates/desktop && nr start

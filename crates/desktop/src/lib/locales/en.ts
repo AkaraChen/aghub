@@ -54,4 +54,6 @@ export default {
   projectName: "Project Name",
   projectPath: "Project Path",
   projectPathPlaceholder: "/path/to/your/project",
+  selectProjectFolder: "Select Project Folder",
+  clickToBrowse: "Click to browse your files",
 }

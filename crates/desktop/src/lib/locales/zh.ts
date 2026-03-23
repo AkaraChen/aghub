@@ -54,4 +54,6 @@ export default {
   projectName: "项目名称",
   projectPath: "项目路径",
   projectPathPlaceholder: "/path/to/your/project",
+  selectProjectFolder: "选择项目文件夹",
+  clickToBrowse: "点击浏览文件",
 }

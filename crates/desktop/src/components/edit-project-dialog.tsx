@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next"
 import { Button, Label, Modal, TextField, Input } from "@heroui/react"
 import { useUpdateProject, useAddProject } from "../hooks/use-projects"
 import type { Project } from "../lib/store"
+import { FolderIcon } from "@heroicons/react/24/outline"
+import { invoke } from "@tauri-apps/api/core"
 
 interface EditProjectDialogProps {
   project: Project
@@ -84,6 +86,22 @@ export function CreateProjectDialog({ isOpen, onClose }: CreateProjectDialogProp
     }
   }, [isOpen])
 
+  const handleFolderSelect = async () => {
+    try {
+      const selectedPath = await invoke<string | null>("pick_folder")
+      if (selectedPath) {
+        setPath(selectedPath)
+        // Extract folder name from path
+        const folderName = selectedPath.split(/[\\/]/).filter(Boolean).pop() || ""
+        if (folderName && !name) {
+          setName(folderName)
+        }
+      }
+    } catch (error) {
+      console.error("Failed to pick folder:", error)
+    }
+  }
+
   const handleSave = () => {
     if (name.trim() && path.trim()) {
       addProject.mutate(
@@ -101,22 +119,32 @@ export function CreateProjectDialog({ isOpen, onClose }: CreateProjectDialogProp
           <Modal.Header>
             <Modal.Heading>{t("addProject")}</Modal.Heading>
           </Modal.Header>
-          <Modal.Body className="p-6">
+          <Modal.Body>
             <div className="flex flex-col gap-4">
+              {/* Folder Picker Dropzone */}
+              <div className="flex flex-col gap-2">
+                <Label>{t("projectPath")}</Label>
+                <button
+                  type="button"
+                  onClick={handleFolderSelect}
+                  className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-default-200 rounded-lg cursor-pointer hover:bg-default-50 transition-colors"
+                >
+                  <FolderIcon className="w-10 h-10 text-muted mb-2" />
+                  <span className="text-sm font-medium text-foreground">{t("selectProjectFolder")}</span>
+                  <span className="text-xs text-muted">{t("clickToBrowse")}</span>
+                </button>
+                {path && (
+                  <Input value={path} readOnly className="mt-2" />
+                )}
+              </div>
+
+              {/* Name Input */}
               <TextField className="w-full">
                 <Label>{t("projectName")}</Label>
                 <Input
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder={t("projectName")}
-                />
-              </TextField>
-              <TextField className="w-full">
-                <Label>{t("projectPath")}</Label>
-                <Input
-                  value={path}
-                  onChange={(e) => setPath(e.target.value)}
-                  placeholder={t("projectPathPlaceholder")}
                 />
               </TextField>
             </div>

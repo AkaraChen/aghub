@@ -1,28 +1,28 @@
-use aghub_api::{ApiOptions, start};
+use tauri::Manager;
+
+use crate::commands::{pick_folder, start_server};
+
+mod commands;
 
 pub struct AppState {
     pub port: std::sync::Mutex<Option<u16>>,
 }
 
-fn find_available_port() -> Result<u16, String> {
-    let listener = std::net::TcpListener::bind("127.0.0.1:0").map_err(|e| e.to_string())?;
-    let port = listener.local_addr().map_err(|e| e.to_string())?.port();
-    Ok(port)
-}
+unsafe fn setup_window(app: &tauri::App) {
+    #[cfg(target_os = "macos")]
+    {
+        use cocoa::appkit::{NSColor, NSWindow};
+        use cocoa::base::{id, nil, YES};
 
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
+        let window = app.get_webview_window("main").unwrap();
+        let ns_window = window.ns_window().unwrap() as id;
 
-#[tauri::command]
-async fn start_server(state: tauri::State<'_, AppState>) -> Result<u16, String> {
-    let port = find_available_port()?;
-    tokio::spawn(async move {
-        let _ = start(ApiOptions { port }).await;
-    });
-    *state.port.lock().unwrap() = Some(port);
-    Ok(port)
+        // Make titlebar transparent using native API
+        ns_window.setTitlebarAppearsTransparent_(YES);
+        // Set window background color to transparent
+        let clear_color = NSColor::colorWithRed_green_blue_alpha_(nil, 0.0, 0.0, 0.0, 0.0);
+        ns_window.setBackgroundColor_(clear_color);
+    }
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -32,7 +32,12 @@ pub fn run() {
             port: std::sync::Mutex::new(None),
         })
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, start_server])
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![start_server, pick_folder])
+        .setup(|app| {
+            unsafe { setup_window(app) };
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

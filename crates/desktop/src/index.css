@@ -1,6 +1,13 @@
 @import 'tailwindcss';
 @import '@heroui/styles';
 
+/* macOS transparent titlebar support - add top safe area padding for content */
+@media (platform: macos) {
+  #root {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+}
+
 /*
  * HeroUI Theme Customization
  * Add this to your global.css after importing @heroui/styles
