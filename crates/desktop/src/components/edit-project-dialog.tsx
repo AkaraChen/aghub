@@ -28,46 +28,41 @@ export function EditProjectDialog({ project, isOpen, onClose }: EditProjectDialo
     }
   }
 
-  if (!isOpen) return null
-
   return (
-    <Modal>
-      <div className="hidden" />
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog>
-            <Modal.CloseTrigger onPress={onClose} />
-            <Modal.Header>
-              <Modal.Heading>{t("editProject")}</Modal.Heading>
-            </Modal.Header>
-            <Modal.Body className="p-6">
-              <div className="flex flex-col gap-4">
-                <TextField className="w-full">
-                  <Label>{t("projectName")}</Label>
-                  <Input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={t("projectName")}
-                  />
-                </TextField>
-                <TextField className="w-full">
-                  <Label>{t("projectPath")}</Label>
-                  <Input value={project.path} readOnly />
-                </TextField>
-              </div>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button slot="close" variant="secondary" onPress={onClose}>
-                {t("cancel")}
-              </Button>
-              <Button onPress={handleSave} isDisabled={!name.trim()}>
-                {t("save")}
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+    <Modal.Backdrop isOpen={isOpen} onOpenChange={onClose}>
+      <Modal.Container>
+        <Modal.Dialog>
+          <Modal.CloseTrigger />
+          <Modal.Header>
+            <Modal.Heading>{t("editProject")}</Modal.Heading>
+          </Modal.Header>
+          <Modal.Body className="p-6">
+            <div className="flex flex-col gap-4">
+              <TextField className="w-full">
+                <Label>{t("projectName")}</Label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={t("projectName")}
+                />
+              </TextField>
+              <TextField className="w-full">
+                <Label>{t("projectPath")}</Label>
+                <Input value={project.path} readOnly />
+              </TextField>
+            </div>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button slot="close" variant="secondary">
+              {t("cancel")}
+            </Button>
+            <Button onPress={handleSave} isDisabled={!name.trim()}>
+              {t("save")}
+            </Button>
+          </Modal.Footer>
+        </Modal.Dialog>
+      </Modal.Container>
+    </Modal.Backdrop>
   )
 }
 
@@ -98,49 +93,44 @@ export function CreateProjectDialog({ isOpen, onClose }: CreateProjectDialogProp
     }
   }
 
-  if (!isOpen) return null
-
   return (
-    <Modal>
-      <div className="hidden" />
-      <Modal.Backdrop>
-        <Modal.Container>
-          <Modal.Dialog>
-            <Modal.CloseTrigger onPress={onClose} />
-            <Modal.Header>
-              <Modal.Heading>{t("addProject")}</Modal.Heading>
-            </Modal.Header>
-            <Modal.Body className="p-6">
-              <div className="flex flex-col gap-4">
-                <TextField className="w-full">
-                  <Label>{t("projectName")}</Label>
-                  <Input
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={t("projectName")}
-                  />
-                </TextField>
-                <TextField className="w-full">
-                  <Label>{t("projectPath")}</Label>
-                  <Input
-                    value={path}
-                    onChange={(e) => setPath(e.target.value)}
-                    placeholder={t("projectPathPlaceholder")}
-                  />
-                </TextField>
-              </div>
-            </Modal.Body>
-            <Modal.Footer>
-              <Button slot="close" variant="secondary" onPress={onClose}>
-                {t("cancel")}
-              </Button>
-              <Button onPress={handleSave} isDisabled={!name.trim() || !path.trim()}>
-                {t("save")}
-              </Button>
-            </Modal.Footer>
-          </Modal.Dialog>
-        </Modal.Container>
-      </Modal.Backdrop>
-    </Modal>
+    <Modal.Backdrop isOpen={isOpen} onOpenChange={onClose}>
+      <Modal.Container>
+        <Modal.Dialog>
+          <Modal.CloseTrigger />
+          <Modal.Header>
+            <Modal.Heading>{t("addProject")}</Modal.Heading>
+          </Modal.Header>
+          <Modal.Body className="p-6">
+            <div className="flex flex-col gap-4">
+              <TextField className="w-full">
+                <Label>{t("projectName")}</Label>
+                <Input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder={t("projectName")}
+                />
+              </TextField>
+              <TextField className="w-full">
+                <Label>{t("projectPath")}</Label>
+                <Input
+                  value={path}
+                  onChange={(e) => setPath(e.target.value)}
+                  placeholder={t("projectPathPlaceholder")}
+                />
+              </TextField>
+            </div>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button slot="close" variant="secondary">
+              {t("cancel")}
+            </Button>
+            <Button onPress={handleSave} isDisabled={!name.trim() || !path.trim()}>
+              {t("save")}
+            </Button>
+          </Modal.Footer>
+        </Modal.Dialog>
+      </Modal.Container>
+    </Modal.Backdrop>
   )
 }
