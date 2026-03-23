@@ -2,7 +2,6 @@ import { ArrowPathIcon, PlusIcon } from "@heroicons/react/24/solid";
 import {
 	Button,
 	Chip,
-	Header,
 	Label,
 	ListBox,
 	SearchField,

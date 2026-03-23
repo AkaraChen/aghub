@@ -4,7 +4,7 @@ import {
 	ExclamationTriangleIcon,
 	PencilIcon,
 	PlusIcon,
-	SignalIcon,
+	WifiIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import {
@@ -57,7 +57,7 @@ export default function MCPServersPage() {
 		if (server.transport.type === "stdio") {
 			return <CommandLineIcon className="size-4 shrink-0" />;
 		}
-		return <SignalIcon className="size-4 shrink-0" />;
+		return <WifiIcon className="size-4 shrink-0" />;
 	};
 
 	const filteredServers = useMemo(
