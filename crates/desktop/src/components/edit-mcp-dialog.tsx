@@ -214,10 +214,12 @@ export function EditMcpDialog({ group, isOpen, onClose }: EditMcpDialogProps) {
 						{group.items.length > 1 && (
 							<div className="bg-warning/10 border border-warning/20 rounded-lg p-3 mb-4">
 								<p className="text-sm text-warning">
-									This change will apply to {group.items.length} agents:{" "}
-									{group.items.map(i =>
-										i.agent ? i.agent.charAt(0).toUpperCase() + i.agent.slice(1).toLowerCase() : "Default"
-									).join(", ")}
+									{t("changeWillApplyToAgents", {
+										count: group.items.length,
+										agents: group.items.map(i =>
+											i.agent ? i.agent.charAt(0).toUpperCase() + i.agent.slice(1).toLowerCase() : "Default"
+										).join(", ")
+									})}
 								</p>
 							</div>
 						)}
