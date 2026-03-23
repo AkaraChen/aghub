@@ -157,14 +157,16 @@ export default function SettingsPage() {
 
 					<Tabs.Panel id="agents">
 						<div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-							{availableAgents.map((agent) => (
-								<AgentCard
-									key={agent.id}
-									agent={agent}
-									isUpdating={updating === agent.id}
-									onToggle={handleToggleAgent}
-								/>
-							))}
+							{availableAgents
+								.filter((agent) => agent.availability.is_available)
+								.map((agent) => (
+									<AgentCard
+										key={agent.id}
+										agent={agent}
+										isUpdating={updating === agent.id}
+										onToggle={handleToggleAgent}
+									/>
+								))}
 						</div>
 					</Tabs.Panel>
 				</Tabs>

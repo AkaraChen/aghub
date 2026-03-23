@@ -9,10 +9,8 @@ interface AgentCardProps {
 }
 
 export function AgentCard({ agent, isUpdating, onToggle }: AgentCardProps) {
-	const isDisabled = !agent.availability.is_available;
-
 	return (
-		<Card variant="default" className={`${isDisabled ? "opacity-50" : ""}`}>
+		<Card variant="default">
 			<Card.Content className="p-3">
 				<div className="flex items-center gap-3">
 					{/* Icon */}
@@ -29,7 +27,7 @@ export function AgentCard({ agent, isUpdating, onToggle }: AgentCardProps) {
 					<Switch
 						isSelected={!agent.isDisabled}
 						onChange={() => onToggle(agent.id, agent.isDisabled)}
-						isDisabled={isDisabled || isUpdating}
+						isDisabled={isUpdating}
 						aria-label={`Toggle ${agent.display_name}`}
 					/>
 				</div>
