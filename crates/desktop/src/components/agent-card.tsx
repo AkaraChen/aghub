@@ -14,18 +14,18 @@ export function AgentCard({ agent, isUpdating, onToggle }: AgentCardProps) {
 	const { has_global_directory, has_cli } = agent.availability;
 
 	const sources: string[] = [];
-	if (has_global_directory) sources.push(t("globalConfigFound"));
-	if (has_cli) sources.push(t("cliFound"));
+	if (has_global_directory) sources.push(t("globalConfig"));
+	if (has_cli) sources.push(t("cli"));
 
 	return (
 		<Card>
-			<Card.Content className="flex items-center gap-3">
+			<Card.Content className="flex flex-row items-center gap-3">
 				<AgentIcon id={agent.id} name={agent.display_name} />
 				<div className="flex-1 min-w-0">
 					<Card.Title>{agent.display_name}</Card.Title>
 					{sources.length > 0 && (
 						<Card.Description>
-							{sources.join(" / ")} {t("detectionSourceFound")}
+							{t("detectedVia", { sources: sources.join(" / ") })}
 						</Card.Description>
 					)}
 				</div>
