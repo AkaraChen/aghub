@@ -19,7 +19,7 @@ export function AgentCard({ agent, isUpdating, onToggle }: AgentCardProps) {
 	if (has_cli) sources.push(t("cli"));
 
 	return (
-		<Card className={clsx(agent.isDisabled && "opacity-50")}>
+		<Card className={clsx(agent.isDisabled && "opacity-50")} variant="transparent">
 			<Card.Content className="flex flex-row items-center gap-3">
 				<AgentIcon id={agent.id} name={agent.display_name} />
 				<div className="flex-1 min-w-0">
