@@ -14,12 +14,15 @@
       {
         "title": "aghub-desktop",
         "width": 1080,
-        "height": 640
+        "height": 640,
+        "hiddenTitle": true,
+        "titleBarStyle": "Overlay"
       }
     ],
     "security": {
       "csp": null
-    }
+    },
+    "withGlobalTauri": true
   },
   "bundle": {
     "active": true,
