@@ -39,7 +39,9 @@ pub fn list_agents() -> Json<Vec<AgentInfo>> {
 				mcp_enable_disable: d.capabilities.mcp_enable_disable,
 				skills: d.capabilities.skills,
 				skills_mutable: d.capabilities.skills
-					&& d.global_skills_path.is_none(),
+					&& (d.global_skills_path.is_some()
+						|| d.project_skills_path.is_some()
+						|| d.capabilities.universal_skills),
 				universal_skills: d.capabilities.universal_skills,
 			},
 		})

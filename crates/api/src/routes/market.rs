@@ -11,6 +11,7 @@ pub struct MarketSkill {
 	pub slug: String,
 	pub source: String,
 	pub installs: u64,
+	pub author: Option<String>,
 }
 
 /// Search skills from marketplace
@@ -57,11 +58,20 @@ async fn search_skills_sh(
 	Ok(Json(
 		results
 			.into_iter()
-			.map(|r| MarketSkill {
-				name: r.name,
-				slug: r.slug,
-				source: r.source,
-				installs: r.installs,
+			.map(|r| {
+				// Parse author safely from "github/author" or "github/author/repo"
+				let author = if r.source.starts_with("github/") {
+					r.source.split('/').nth(1).map(String::from)
+				} else {
+					None
+				};
+				MarketSkill {
+					name: r.name,
+					slug: r.slug,
+					source: r.source,
+					installs: r.installs,
+					author,
+				}
 			})
 			.collect(),
 	))

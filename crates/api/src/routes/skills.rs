@@ -29,23 +29,6 @@ fn check_skills_supported(agent: &AgentParam) -> Result<(), ApiError> {
 
 fn check_skills_mutable(agent: &AgentParam) -> Result<(), ApiError> {
 	check_skills_supported(agent)?;
-	let descriptor = registry::get(agent.0);
-	// Agents with filesystem-discovered skills cannot be mutated via JSON
-	if descriptor.global_skills_path.is_some() {
-		let skills_path = descriptor
-			.global_skills_path
-			.map(|f| f().to_string_lossy().to_string())
-			.unwrap_or_else(|| "~/.config/agents/skills".to_string());
-		return Err(ApiError::new(
-            Status::UnprocessableEntity,
-            format!(
-                "Agent '{}' manages skills via the filesystem ({}). \
-                 Create/update/delete skills by managing files in that directory.",
-                descriptor.id, skills_path
-            ),
-            "UNSUPPORTED_OPERATION",
-        ));
-	}
 	Ok(())
 }
 
