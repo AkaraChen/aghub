@@ -13,8 +13,8 @@
 		"windows": [
 			{
 				"title": "aghub-desktop",
-				"width": 1080,
-				"height": 640,
+				"width": 1280,
+				"height": 800,
 				"hiddenTitle": true,
 				"titleBarStyle": "Overlay"
 			}
