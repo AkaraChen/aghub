@@ -32,7 +32,7 @@ const menuItems: MenuItem[] = [
 	},
 ];
 
-export function SettingsSidebar() {
+export function AppSidebar() {
 	const { t } = useTranslation();
 	const [pathname] = useLocation();
 

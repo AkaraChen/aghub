@@ -1,7 +1,7 @@
 import { Surface } from "@heroui/react";
-import { SettingsSidebar } from "../components/settings-sidebar";
+import { AppSidebar } from "../components/app-sidebar";
 
-export function SettingsLayout({ children }: { children: React.ReactNode }) {
+export function MainLayout({ children }: { children: React.ReactNode }) {
 	return (
 		<Surface
 			variant="default"
@@ -17,7 +17,7 @@ export function SettingsLayout({ children }: { children: React.ReactNode }) {
 			</div>
 			{/* Main content */}
 			<div className="flex flex-1 overflow-hidden">
-				<SettingsSidebar />
+				<AppSidebar />
 				<main className="flex-1 overflow-hidden">{children}</main>
 			</div>
 		</Surface>

@@ -5,7 +5,7 @@ import { Suspense, useEffect, useState } from "react";
 import { Route, Router, Switch } from "wouter";
 import { Redirect } from "./components/redirect";
 import { ErrorBoundary } from "./components/ui/error-boundary";
-import { SettingsLayout } from "./layouts/settings-layout";
+import { MainLayout } from "./layouts/main-layout";
 import { initStore } from "./lib/store";
 import ProjectDetailPage from "./pages/project/detail";
 import SettingsPage from "./pages/settings";
@@ -70,7 +70,7 @@ function App() {
 										<Redirect to="/mcp" />
 									</Route>
 									<Route path="/skills">
-										<SettingsLayout>
+										<MainLayout>
 											<ErrorBoundary>
 												<Suspense
 													fallback={
@@ -80,10 +80,10 @@ function App() {
 													<SkillsPage />
 												</Suspense>
 											</ErrorBoundary>
-										</SettingsLayout>
+										</MainLayout>
 									</Route>
 									<Route path="/mcp">
-										<SettingsLayout>
+										<MainLayout>
 											<ErrorBoundary>
 												<Suspense
 													fallback={
@@ -93,22 +93,22 @@ function App() {
 													<MCPServersPage />
 												</Suspense>
 											</ErrorBoundary>
-										</SettingsLayout>
+										</MainLayout>
 									</Route>
 									<Route path="/settings">
-										<SettingsLayout>
+										<MainLayout>
 											<SettingsPage />
-										</SettingsLayout>
+										</MainLayout>
 									</Route>
 									<Route path="/settings/custom-agents">
-										<SettingsLayout>
+										<MainLayout>
 											<CustomAgentsPage />
-										</SettingsLayout>
+										</MainLayout>
 									</Route>
 									<Route path="/projects/:id">
-										<SettingsLayout>
+										<MainLayout>
 											<ProjectDetailPage />
-										</SettingsLayout>
+										</MainLayout>
 									</Route>
 									<Route>
 										<Redirect to="/mcp" />
