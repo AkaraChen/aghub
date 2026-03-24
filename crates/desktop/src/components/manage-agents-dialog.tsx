@@ -17,6 +17,7 @@ import { useAgentAvailability } from "../providers/agent-availability";
 import { useServer } from "../providers/server";
 import { ResultStatusItem } from "./result-status-item";
 import { StepIndicator } from "./step-indicator";
+import { ChevronLeftIcon, ChevronRightIcon, MinusIcon, PlusIcon } from "@heroicons/react/24/solid";
 
 interface ManageAgentsDialogProps {
 	group: {
@@ -256,7 +257,7 @@ export function ManageAgentsDialog({
 													<Tag
 														key={id}
 														id={id}
-														className="bg-success/15 text-success border-success/30"
+														className="bg-success-soft text-success border-success/30"
 													>
 														<div className="flex items-center gap-1.5">
 															{getAgentDisplayName(
@@ -281,7 +282,7 @@ export function ManageAgentsDialog({
 													<Tag
 														key={id}
 														id={id}
-														className="bg-danger/15 text-danger border-danger/30"
+														className="bg-danger-soft text-danger border-danger/30"
 													>
 														<div className="flex items-center gap-1.5">
 															{getAgentDisplayName(

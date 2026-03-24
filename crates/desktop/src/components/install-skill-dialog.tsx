@@ -18,6 +18,7 @@ import type { MarketSkill } from "../lib/api-types";
 import { capitalize } from "../lib/mcp-utils";
 import { ResultStatusItem } from "./result-status-item";
 import { StepIndicator } from "./step-indicator";
+import { ChevronLeftIcon, ChevronRightIcon, MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/solid";
 
 interface InstallSkillDialogProps {
 	isOpen: boolean;
@@ -261,7 +262,7 @@ export function InstallSkillDialog({
 								)}
 
 								{selectedSkill && (
-									<div className="p-3 bg-accent/5 border border-accent/20 rounded-lg">
+									<div className="p-3 bg-accent/5 border border-accent-soft-hover rounded-lg">
 										<p className="text-xs text-muted uppercase tracking-wide mb-1">
 											{t("selectedSkill")}
 										</p>
