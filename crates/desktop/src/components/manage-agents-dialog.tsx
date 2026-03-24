@@ -1,13 +1,4 @@
 import {
-	ArrowPathIcon,
-	CheckCircleIcon,
-	ChevronLeftIcon,
-	ChevronRightIcon,
-	MinusIcon,
-	PlusIcon,
-	XCircleIcon,
-} from "@heroicons/react/24/solid";
-import {
 	Button,
 	Modal,
 	type Selection,
@@ -16,13 +7,16 @@ import {
 	TagGroup,
 } from "@heroui/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createApi } from "../lib/api";
 import type { McpResponse } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
+import { capitalize } from "../lib/mcp-utils";
 import { useAgentAvailability } from "../providers/agent-availability";
 import { useServer } from "../providers/server";
+import { ResultStatusItem } from "./result-status-item";
+import { StepIndicator } from "./step-indicator";
 
 interface ManageAgentsDialogProps {
 	group: {
@@ -57,7 +51,10 @@ export function ManageAgentsDialog({
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
 
-	const usableAgents = availableAgents.filter((a) => a.isUsable);
+	const usableAgents = useMemo(
+		() => availableAgents.filter((a) => a.isUsable),
+		[availableAgents],
+	);
 
 	const [step, setStep] = useState<WizardStep>(1);
 	const initialAgentIdsRef = useRef<Set<string> | null>(null);
@@ -87,21 +84,23 @@ export function ManageAgentsDialog({
 	);
 	const hasChanges = toInstall.length > 0 || toUninstall.length > 0;
 
+	const agentNameMap = useMemo(
+		() => new Map(availableAgents.map((a) => [a.id, a.display_name])),
+		[availableAgents],
+	);
+
+	const getAgentDisplayName = useMemo(() => {
+		return (agentId: string) => {
+			return agentNameMap.get(agentId) ?? capitalize(agentId);
+		};
+	}, [agentNameMap]);
+
 	const handleSelectionChange = (keys: Selection) => {
 		const newKeys = keys as Set<string>;
 		if (newKeys.size >= 1) {
 			setSelectedAgents(newKeys);
 		}
 	};
-
-	const getAgentDisplayName = useCallback(
-		(agentId: string) => {
-			const agent = availableAgents.find((a) => a.id === agentId);
-			if (agent) return agent.display_name;
-			return agentId.charAt(0).toUpperCase() + agentId.slice(1);
-		},
-		[availableAgents],
-	);
 
 	const handleApply = async () => {
 		setStep(3);
@@ -186,49 +185,8 @@ export function ManageAgentsDialog({
 					</Modal.Header>
 
 					<Modal.Body className="p-2">
-						{/* Step Indicator */}
-						<div className="flex items-center justify-center gap-2 mb-6">
-							{[1, 2, 3].map((s, idx) => (
-								<div
-									key={s}
-									className="flex items-center gap-2"
-								>
-									<div
-										className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-											s < step
-												? "bg-accent/15 text-accent"
-												: s === step
-													? "bg-accent text-accent-foreground"
-													: "bg-default-100 text-muted"
-										}`}
-									>
-										<span
-											className={`flex items-center justify-center size-4.5 rounded-full text-[10px] font-bold ${
-												s < step
-													? "bg-accent text-accent-foreground"
-													: s === step
-														? "bg-accent-foreground text-accent"
-														: "bg-default-200 text-muted"
-											}`}
-										>
-											{s < step ? "✓" : s}
-										</span>
-										{stepLabels[idx]}
-									</div>
-									{idx < 2 && (
-										<div
-											className={`w-6 h-px ${
-												s < step
-													? "bg-accent"
-													: "bg-default-200"
-											}`}
-										/>
-									)}
-								</div>
-							))}
-						</div>
+						<StepIndicator currentStep={step} labels={stepLabels} />
 
-						{/* Step 1: Agent Selection */}
 						{step === 1 && (
 							<div>
 								<p className="text-sm text-muted mb-3">
@@ -285,7 +243,6 @@ export function ManageAgentsDialog({
 							</div>
 						)}
 
-						{/* Step 2: Diff Preview */}
 						{step === 2 && (
 							<div className="space-y-4">
 								{toInstall.length > 0 && (
@@ -341,7 +298,6 @@ export function ManageAgentsDialog({
 							</div>
 						)}
 
-						{/* Step 3: Result */}
 						{step === 3 && (
 							<div className="space-y-2">
 								{results.length === 0 && (
@@ -357,43 +313,23 @@ export function ManageAgentsDialog({
 									</div>
 								)}
 								{results.map((result) => (
-									<div
+									<ResultStatusItem
 										key={result.agentId}
-										className="flex items-start gap-2 p-2 rounded-lg bg-default-50"
-									>
-										{result.status === "pending" && (
-											<ArrowPathIcon className="size-4 text-muted shrink-0 mt-0.5 animate-spin" />
-										)}
-										{result.status === "success" && (
-											<CheckCircleIcon className="size-4 text-success shrink-0 mt-0.5" />
-										)}
-										{result.status === "error" && (
-											<XCircleIcon className="size-4 text-danger shrink-0 mt-0.5" />
-										)}
-										<div className="min-w-0">
-											<p className="text-sm font-medium">
-												{result.displayName}
-											</p>
-											<p className="text-xs text-muted">
-												{result.status === "pending"
-													? result.action ===
-														"install"
-														? t("installing")
-														: t("uninstalling")
-													: result.status ===
-															"success"
-														? result.action ===
-															"install"
-															? t(
-																	"installSuccess",
-																)
-															: t(
-																	"uninstallSuccess",
-																)
-														: result.error}
-											</p>
-										</div>
-									</div>
+										displayName={result.displayName}
+										status={result.status}
+										statusText={
+											result.status === "pending"
+												? result.action === "install"
+													? t("installing")
+													: t("uninstalling")
+												: result.status === "success"
+													? result.action === "install"
+														? t("installSuccess")
+														: t("uninstallSuccess")
+													: ""
+										}
+										error={result.error}
+									/>
 								))}
 							</div>
 						)}

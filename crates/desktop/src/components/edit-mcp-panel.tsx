@@ -12,11 +12,12 @@ import {
 	TextField,
 } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { createApi, type UpdateMcpRequest } from "../lib/api";
 import type { McpResponse, TransportDto } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
+import { buildTransportFromForm, capitalize } from "../lib/mcp-utils";
 import { useServer } from "../providers/server";
 import { EnvEditor, type EnvVar } from "./env-editor";
 
@@ -115,49 +116,25 @@ export function EditMcpPanel({
 		},
 	});
 
-	const buildTransport = (): TransportDto | undefined => {
-		const timeoutNum = timeout ? parseInt(timeout, 10) : undefined;
-
-		if (transportType === "stdio") {
-			const argsArray = args.trim() ? args.trim().split(/\s+/) : [];
-			const envRecord: Record<string, string> | undefined =
-				envVars.length > 0
-					? Object.fromEntries(
-							envVars.map((pair) => [pair.key, pair.value]),
-						)
-					: undefined;
-
-			return {
-				type: "stdio",
-				command: command.trim(),
-				args: argsArray,
-				env: envRecord,
-				timeout: timeoutNum,
-			};
-		}
-
-		const headersRecord: Record<string, string> | undefined = headers.trim()
-			? Object.fromEntries(
-					headers
-						.trim()
-						.split("\n")
-						.map((line) => {
-							const colonIndex = line.indexOf(":");
-							if (colonIndex === -1) return [line.trim(), ""];
-							return [
-								line.slice(0, colonIndex).trim(),
-								line.slice(colonIndex + 1).trim(),
-							];
-						}),
+	const agentNamesList = useMemo(
+		() =>
+			group.items
+				.map((i) =>
+					i.agent ? capitalize(i.agent) : "Default",
 				)
-			: undefined;
+				.join(", "),
+		[group.items],
+	);
 
-		return {
-			type: transportType,
-			url: url.trim(),
-			headers: headersRecord,
-			timeout: timeoutNum,
-		};
+	const buildTransport = (): TransportDto | undefined => {
+		return buildTransportFromForm(transportType, {
+			command,
+			args,
+			envVars,
+			url,
+			headers,
+			timeout,
+		});
 	};
 
 	const handleSave = () => {
@@ -176,39 +153,31 @@ export function EditMcpPanel({
 		updateMutation.mutate(body);
 	};
 
-	const isValid = () => {
+	const isValid = useMemo(() => {
 		if (!name.trim()) return false;
 		if (transportType === "stdio" && !command.trim()) return false;
 		if (transportType !== "stdio" && !url.trim()) return false;
 		return true;
-	};
+	}, [name, transportType, command, url]);
 
 	return (
-		<div className="h-full overflow-y-auto">
-			<div className="p-6 max-w-3xl">
-				<div className="flex items-center justify-between gap-3 mb-6">
-					<h2 className="text-xl font-semibold text-foreground">
-						{t("editMcpServer")}
-					</h2>
-				</div>
+		<div className="h-full overflow-y-auto p-6 max-w-3xl">
+			<div className="flex items-center justify-between gap-3 mb-6">
+				<h2 className="text-xl font-semibold text-foreground">
+					{t("editMcpServer")}
+				</h2>
+			</div>
 
-				{group.items.length > 1 && (
-					<div className="bg-warning/10 border border-warning/20 rounded-lg p-3 mb-4">
-						<p className="text-sm text-warning">
-							{t("changeWillApplyToAgents", {
-								count: group.items.length,
-								agents: group.items
-									.map((i) =>
-										i.agent
-											? i.agent.charAt(0).toUpperCase() +
-												i.agent.slice(1).toLowerCase()
-											: "Default",
-									)
-									.join(", "),
-							})}
-						</p>
-					</div>
-				)}
+			{group.items.length > 1 && (
+				<div className="bg-warning/10 border border-warning/20 rounded-lg p-3 mb-4">
+					<p className="text-sm text-warning">
+						{t("changeWillApplyToAgents", {
+							count: group.items.length,
+							agents: agentNamesList,
+						})}
+					</p>
+				</div>
+			)}
 
 				<Form>
 					<Fieldset>
@@ -371,7 +340,6 @@ export function EditMcpPanel({
 						</Button>
 					</div>
 				</Form>
-			</div>
 		</div>
 	);
 }

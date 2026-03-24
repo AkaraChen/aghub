@@ -12,12 +12,14 @@ import {
 	TextField,
 } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createApi, type UpdateMcpRequest } from "../lib/api";
 import type { McpResponse, TransportDto } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
+import { buildTransportFromForm, capitalize } from "../lib/mcp-utils";
 import { useServer } from "../providers/server";
+import { EnvEditor, type EnvVar } from "./env-editor";
 
 interface EditMcpDialogProps {
 	group: {
@@ -45,7 +47,6 @@ export function EditMcpDialog({ group, isOpen, onClose }: EditMcpDialogProps) {
 		primaryServer.timeout?.toString() ?? "",
 	);
 
-	// stdio fields
 	const [command, setCommand] = useState(
 		primaryServer.transport.type === "stdio"
 			? primaryServer.transport.command
@@ -56,19 +57,18 @@ export function EditMcpDialog({ group, isOpen, onClose }: EditMcpDialogProps) {
 			? primaryServer.transport.args.join(" ")
 			: "",
 	);
-	const [env, setEnv] = useState(() => {
+	const [envVars, setEnvVars] = useState<EnvVar[]>(() => {
 		if (
 			primaryServer.transport.type === "stdio" &&
 			primaryServer.transport.env
 		) {
-			return Object.entries(primaryServer.transport.env)
-				.map(([k, v]) => `${k}=${v}`)
-				.join("\n");
+			return Object.entries(primaryServer.transport.env).map(
+				([key, value]) => ({ key, value }),
+			);
 		}
-		return "";
+		return [];
 	});
 
-	// http fields
 	const [url, setUrl] = useState(
 		primaryServer.transport.type !== "stdio"
 			? primaryServer.transport.url
@@ -110,58 +110,25 @@ export function EditMcpDialog({ group, isOpen, onClose }: EditMcpDialogProps) {
 		},
 	});
 
-	const buildTransport = (): TransportDto | undefined => {
-		const timeoutNum = timeout ? parseInt(timeout, 10) : undefined;
-
-		if (transportType === "stdio") {
-			const argsArray = args.trim() ? args.trim().split(/\s+/) : [];
-			const envRecord: Record<string, string> | undefined = env.trim()
-				? Object.fromEntries(
-						env
-							.trim()
-							.split("\n")
-							.map((line) => {
-								const eqIndex = line.indexOf("=");
-								if (eqIndex === -1) return [line, ""];
-								return [
-									line.slice(0, eqIndex),
-									line.slice(eqIndex + 1),
-								];
-							}),
-					)
-				: undefined;
-
-			return {
-				type: "stdio",
-				command: command.trim(),
-				args: argsArray,
-				env: envRecord,
-				timeout: timeoutNum,
-			};
-		}
-
-		const headersRecord: Record<string, string> | undefined = headers.trim()
-			? Object.fromEntries(
-					headers
-						.trim()
-						.split("\n")
-						.map((line) => {
-							const colonIndex = line.indexOf(":");
-							if (colonIndex === -1) return [line.trim(), ""];
-							return [
-								line.slice(0, colonIndex).trim(),
-								line.slice(colonIndex + 1).trim(),
-							];
-						}),
+	const agentNamesList = useMemo(
+		() =>
+			group.items
+				.map((i) =>
+					i.agent ? capitalize(i.agent) : "Default",
 				)
-			: undefined;
+				.join(", "),
+		[group.items],
+	);
 
-		return {
-			type: transportType,
-			url: url.trim(),
-			headers: headersRecord,
-			timeout: timeoutNum,
-		};
+	const buildTransport = (): TransportDto | undefined => {
+		return buildTransportFromForm(transportType, {
+			command,
+			args,
+			envVars,
+			url,
+			headers,
+			timeout,
+		});
 	};
 
 	const handleSave = () => {
@@ -190,22 +157,11 @@ export function EditMcpDialog({ group, isOpen, onClose }: EditMcpDialogProps) {
 					</Modal.Header>
 					<Modal.Body className="p-2">
 						{group.items.length > 1 && (
-							<div className="bg-warning/10 border border-warning/20 rounded-lg p-3 mb-4">
+							<div className="bg-warning/10 border border-warning-soft-hover rounded-lg p-3 mb-4">
 								<p className="text-sm text-warning">
 									{t("changeWillApplyToAgents", {
 										count: group.items.length,
-										agents: group.items
-											.map((i) =>
-												i.agent
-													? i.agent
-															.charAt(0)
-															.toUpperCase() +
-														i.agent
-															.slice(1)
-															.toLowerCase()
-													: "Default",
-											)
-											.join(", "),
+										agents: agentNamesList,
 									})}
 								</p>
 							</div>
@@ -300,20 +256,16 @@ export function EditMcpDialog({ group, isOpen, onClose }: EditMcpDialogProps) {
 												{t("argsHelp")}
 											</Description>
 										</TextField>
-										<TextField className="w-full">
+										<div className="flex flex-col gap-2">
 											<Label>{t("env")}</Label>
-											<TextArea
-												value={env}
-												onChange={(e) =>
-													setEnv(e.target.value)
-												}
-												placeholder="KEY=value&#10;ANOTHER_KEY=value"
-												className="min-h-[80px] font-mono"
+											<EnvEditor
+												value={envVars}
+												onChange={setEnvVars}
 											/>
 											<Description>
 												{t("envHelp")}
 											</Description>
-										</TextField>
+										</div>
 									</Fieldset.Group>
 								</Fieldset>
 							)}
@@ -341,7 +293,7 @@ export function EditMcpDialog({ group, isOpen, onClose }: EditMcpDialogProps) {
 													setHeaders(e.target.value)
 												}
 												placeholder="Authorization: Bearer token&#10;X-Custom-Header: value"
-												className="min-h-[80px] font-mono"
+												className="min-h-20 font-mono"
 											/>
 											<Description>
 												{t("headersHelp")}
@@ -351,26 +303,25 @@ export function EditMcpDialog({ group, isOpen, onClose }: EditMcpDialogProps) {
 								</Fieldset>
 							)}
 
-							{/* Timeout */}
-							<Fieldset>
-								<Fieldset.Group>
-									<TextField className="w-full">
-										<Label>{t("timeout")}</Label>
-										<Input
-											type="number"
-											value={timeout}
-											onChange={(e) =>
-												setTimeoutValue(e.target.value)
-											}
-											placeholder="60"
-										/>
-										<Description>
-											{t("timeoutHelp")}
-										</Description>
-									</TextField>
-								</Fieldset.Group>
-							</Fieldset>
-						</Form>
+						<Fieldset>
+							<Fieldset.Group>
+								<TextField className="w-full">
+									<Label>{t("timeout")}</Label>
+									<Input
+										type="number"
+										value={timeout}
+										onChange={(e) =>
+											setTimeoutValue(e.target.value)
+										}
+										placeholder="60"
+									/>
+									<Description>
+										{t("timeoutHelp")}
+									</Description>
+								</TextField>
+							</Fieldset.Group>
+						</Fieldset>
+					</Form>
 					</Modal.Body>
 					<Modal.Footer>
 						<Button

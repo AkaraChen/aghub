@@ -18,10 +18,11 @@ import {
 	Tooltip,
 } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createApi } from "../lib/api";
 import type { TransportDto } from "../lib/api-types";
+import { buildTransportFromForm } from "../lib/mcp-utils";
 import { useAgentAvailability } from "../providers/agent-availability";
 import { useServer } from "../providers/server";
 import { EnvEditor, type EnvVar } from "./env-editor";
@@ -51,8 +52,10 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
 
-	// Get only usable agents (available and not disabled)
-	const usableAgents = availableAgents.filter((a) => a.isUsable);
+	const usableAgents = useMemo(
+		() => availableAgents.filter((a) => a.isUsable),
+		[availableAgents],
+	);
 
 	const [name, setName] = useState("");
 	const [transportType, setTransportType] = useState<
@@ -60,16 +63,13 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 	>("stdio");
 	const [timeout, setTimeoutValue] = useState("");
 	const [selectedAgents, setSelectedAgents] = useState<Set<string>>(() => {
-		// Default to first usable agent instead of "default"
 		return new Set(usableAgents[0] ? [usableAgents[0].id] : []);
 	});
 
-	// stdio fields
 	const [command, setCommand] = useState("");
 	const [args, setArgs] = useState("");
 	const [envVars, setEnvVars] = useState<EnvVar[]>([]);
 
-	// http fields
 	const [url, setUrl] = useState("");
 	const [headers, setHeaders] = useState("");
 
@@ -96,48 +96,14 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 	});
 
 	const buildTransport = (): TransportDto | undefined => {
-		const timeoutNum = timeout ? parseInt(timeout, 10) : undefined;
-
-		if (transportType === "stdio") {
-			const argsArray = args.trim() ? args.trim().split(/\s+/) : [];
-			const envRecord: Record<string, string> | undefined =
-				envVars.length > 0
-					? Object.fromEntries(
-							envVars.map((pair) => [pair.key, pair.value]),
-						)
-					: undefined;
-
-			return {
-				type: "stdio",
-				command: command.trim(),
-				args: argsArray,
-				env: envRecord,
-				timeout: timeoutNum,
-			};
-		}
-
-		const headersRecord: Record<string, string> | undefined = headers.trim()
-			? Object.fromEntries(
-					headers
-						.trim()
-						.split("\n")
-						.map((line) => {
-							const colonIndex = line.indexOf(":");
-							if (colonIndex === -1) return [line.trim(), ""];
-							return [
-								line.slice(0, colonIndex).trim(),
-								line.slice(colonIndex + 1).trim(),
-							];
-						}),
-				)
-			: undefined;
-
-		return {
-			type: transportType,
-			url: url.trim(),
-			headers: headersRecord,
-			timeout: timeoutNum,
-		};
+		return buildTransportFromForm(transportType, {
+			command,
+			args,
+			envVars,
+			url,
+			headers,
+			timeout,
+		});
 	};
 
 	const handleCreate = async () => {
@@ -162,14 +128,14 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 		onDone();
 	};
 
-	const isValid = () => {
+	const isValid = useMemo(() => {
 		if (!name.trim()) return false;
 		if (transportType === "stdio" && !command.trim()) return false;
 		if (transportType !== "stdio" && !url.trim()) return false;
 		if (selectedAgents.size === 0) return false;
 		if (usableAgents.length === 0) return false;
 		return true;
-	};
+	}, [name, transportType, command, url, selectedAgents.size, usableAgents.length]);
 
 	const handleSelectionChange = (keys: Selection) => {
 		setSelectedAgents(keys as Set<string>);
@@ -237,188 +203,182 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 	};
 
 	return (
-		<div className="h-full overflow-y-auto">
-			<div className="p-6 max-w-3xl">
-				<div className="flex items-center justify-between gap-3 mb-6">
-					<h2 className="text-xl font-semibold text-foreground">
-						{t("createMcpServer")}
-					</h2>
-					<Tooltip delay={0}>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							className="text-muted hover:text-foreground shrink-0"
-							aria-label={t("importFromJson")}
-							onPress={() => setShowImportDialog(true)}
-						>
-							<CodeBracketIcon className="size-4" />
-						</Button>
-						<Tooltip.Content>
-							{t("importFromJsonTooltip")}
-						</Tooltip.Content>
-					</Tooltip>
-				</div>
+		<div className="h-full overflow-y-auto p-6 max-w-3xl">
+			<div className="flex items-center justify-between gap-3 mb-6">
+				<h2 className="text-xl font-semibold text-foreground">
+					{t("createMcpServer")}
+				</h2>
+				<Tooltip delay={0}>
+					<Button
+						isIconOnly
+						variant="ghost"
+						size="sm"
+						className="text-muted hover:text-foreground shrink-0"
+						aria-label={t("importFromJson")}
+						onPress={() => setShowImportDialog(true)}
+					>
+						<CodeBracketIcon className="size-4" />
+					</Button>
+					<Tooltip.Content>
+						{t("importFromJsonTooltip")}
+					</Tooltip.Content>
+				</Tooltip>
+			</div>
 
-				<Form>
-					{/* Name */}
+			<Form>
+				<Fieldset>
+					<Fieldset.Group>
+						<TextField className="w-full">
+							<Label>{t("name")}</Label>
+							<Input
+								value={name}
+								onChange={(e) => setName(e.target.value)}
+								placeholder={t("serverName")}
+							/>
+						</TextField>
+					</Fieldset.Group>
+				</Fieldset>
+
+				<Fieldset>
+					<Fieldset.Group>
+						<Select
+							className="w-full"
+							selectedKey={transportType}
+							onSelectionChange={(key) =>
+								setTransportType(
+									key as
+										| "stdio"
+										| "sse"
+										| "streamable_http",
+								)
+							}
+						>
+							<Label>{t("transportType")}</Label>
+							<Select.Trigger>
+								<Select.Value />
+								<Select.Indicator />
+							</Select.Trigger>
+							<Select.Popover>
+								<ListBox>
+									<ListBox.Item
+										id="stdio"
+										textValue="stdio"
+									>
+										stdio
+									</ListBox.Item>
+									<ListBox.Item id="sse" textValue="sse">
+										sse
+									</ListBox.Item>
+									<ListBox.Item
+										id="streamable_http"
+										textValue="streamable_http"
+									>
+										streamable_http
+									</ListBox.Item>
+								</ListBox>
+							</Select.Popover>
+						</Select>
+					</Fieldset.Group>
+				</Fieldset>
+
+				{transportType === "stdio" && (
 					<Fieldset>
 						<Fieldset.Group>
 							<TextField className="w-full">
-								<Label>{t("name")}</Label>
+								<Label>{t("command")}</Label>
 								<Input
-									value={name}
-									onChange={(e) => setName(e.target.value)}
-									placeholder={t("serverName")}
+									value={command}
+									onChange={(e) =>
+										setCommand(e.target.value)
+									}
+									placeholder="npx"
 								/>
+							</TextField>
+							<TextField className="w-full">
+								<Label>{t("args")}</Label>
+								<Input
+									value={args}
+									onChange={(e) =>
+										setArgs(e.target.value)
+									}
+									placeholder="-y @modelcontextprotocol/server-filesystem"
+								/>
+								<Description>{t("argsHelp")}</Description>
+							</TextField>
+							<div className="flex flex-col gap-2">
+								<Label>{t("env")}</Label>
+								<EnvEditor
+									value={envVars}
+									onChange={setEnvVars}
+								/>
+								<Description>{t("envHelp")}</Description>
+							</div>
+						</Fieldset.Group>
+					</Fieldset>
+				)}
+
+				{(transportType === "sse" ||
+					transportType === "streamable_http") && (
+					<Fieldset>
+						<Fieldset.Group>
+							<TextField className="w-full">
+								<Label>URL</Label>
+								<Input
+									value={url}
+									onChange={(e) => setUrl(e.target.value)}
+									placeholder="http://localhost:3000/sse"
+								/>
+							</TextField>
+							<TextField className="w-full">
+								<Label>{t("headers")}</Label>
+								<TextArea
+									value={headers}
+									onChange={(e) =>
+										setHeaders(e.target.value)
+									}
+									placeholder="Authorization: Bearer token&#10;X-Custom-Header: value"
+									className="min-h-[80px] font-mono"
+								/>
+								<Description>
+									{t("headersHelp")}
+								</Description>
 							</TextField>
 						</Fieldset.Group>
 					</Fieldset>
+				)}
 
-					{/* Transport Type */}
-					<Fieldset>
-						<Fieldset.Group>
-							<Select
-								className="w-full"
-								selectedKey={transportType}
-								onSelectionChange={(key) =>
-									setTransportType(
-										key as
-											| "stdio"
-											| "sse"
-											| "streamable_http",
-									)
-								}
+				<Fieldset>
+					<Fieldset.Group>
+						{usableAgents.length === 0 ? (
+							<div className="flex flex-col gap-2">
+								<Label>{t("agents")}</Label>
+								<div className="text-sm text-muted">
+									<p className="font-medium mb-1">
+										{t("noAgentsAvailable")}
+									</p>
+									<p className="text-xs">
+										{t("noAgentsAvailableHelp")}
+									</p>
+								</div>
+							</div>
+						) : (
+							<TagGroup
+								selectionMode="multiple"
+								selectedKeys={selectedAgents}
+								onSelectionChange={handleSelectionChange}
 							>
-								<Label>{t("transportType")}</Label>
-								<Select.Trigger>
-									<Select.Value />
-									<Select.Indicator />
-								</Select.Trigger>
-								<Select.Popover>
-									<ListBox>
-										<ListBox.Item
-											id="stdio"
-											textValue="stdio"
-										>
-											stdio
-										</ListBox.Item>
-										<ListBox.Item id="sse" textValue="sse">
-											sse
-										</ListBox.Item>
-										<ListBox.Item
-											id="streamable_http"
-											textValue="streamable_http"
-										>
-											streamable_http
-										</ListBox.Item>
-									</ListBox>
-								</Select.Popover>
-							</Select>
-						</Fieldset.Group>
-					</Fieldset>
-
-					{/* Stdio fields */}
-					{transportType === "stdio" && (
-						<Fieldset>
-							<Fieldset.Group>
-								<TextField className="w-full">
-									<Label>{t("command")}</Label>
-									<Input
-										value={command}
-										onChange={(e) =>
-											setCommand(e.target.value)
-										}
-										placeholder="npx"
-									/>
-								</TextField>
-								<TextField className="w-full">
-									<Label>{t("args")}</Label>
-									<Input
-										value={args}
-										onChange={(e) =>
-											setArgs(e.target.value)
-										}
-										placeholder="-y @modelcontextprotocol/server-filesystem"
-									/>
-									<Description>{t("argsHelp")}</Description>
-								</TextField>
-								<div className="flex flex-col gap-2">
-									<Label>{t("env")}</Label>
-									<EnvEditor
-										value={envVars}
-										onChange={setEnvVars}
-									/>
-									<Description>{t("envHelp")}</Description>
-								</div>
-							</Fieldset.Group>
-						</Fieldset>
-					)}
-
-					{/* HTTP fields */}
-					{(transportType === "sse" ||
-						transportType === "streamable_http") && (
-						<Fieldset>
-							<Fieldset.Group>
-								<TextField className="w-full">
-									<Label>URL</Label>
-									<Input
-										value={url}
-										onChange={(e) => setUrl(e.target.value)}
-										placeholder="http://localhost:3000/sse"
-									/>
-								</TextField>
-								<TextField className="w-full">
-									<Label>{t("headers")}</Label>
-									<TextArea
-										value={headers}
-										onChange={(e) =>
-											setHeaders(e.target.value)
-										}
-										placeholder="Authorization: Bearer token&#10;X-Custom-Header: value"
-										className="min-h-[80px] font-mono"
-									/>
-									<Description>
-										{t("headersHelp")}
-									</Description>
-								</TextField>
-							</Fieldset.Group>
-						</Fieldset>
-					)}
-
-					{/* Agent Selection */}
-					<Fieldset>
-						<Fieldset.Group>
-							{usableAgents.length === 0 ? (
-								<div className="flex flex-col gap-2">
-									<Label>{t("agents")}</Label>
-									<div className="text-sm text-muted">
-										<p className="font-medium mb-1">
-											{t("noAgentsAvailable")}
-										</p>
-										<p className="text-xs">
-											{t("noAgentsAvailableHelp")}
-										</p>
-									</div>
-								</div>
-							) : (
-								<TagGroup
-									selectionMode="multiple"
-									selectedKeys={selectedAgents}
-									onSelectionChange={handleSelectionChange}
-								>
-									<Label>{t("agents")}</Label>
-									<TagGroup.List className="flex-wrap">
-										{usableAgents.map((agent) => (
-											<Tag key={agent.id} id={agent.id}>
-												{agent.display_name}
-											</Tag>
-										))}
-									</TagGroup.List>
-								</TagGroup>
-							)}
-						</Fieldset.Group>
-					</Fieldset>
+								<Label>{t("agents")}</Label>
+								<TagGroup.List className="flex-wrap">
+									{usableAgents.map((agent) => (
+										<Tag key={agent.id} id={agent.id}>
+											{agent.display_name}
+										</Tag>
+									))}
+								</TagGroup.List>
+							</TagGroup>
+						)}
+					</Fieldset.Group>
+				</Fieldset>
 
 					<Disclosure className="pt-4">
 						<Disclosure.Trigger className="flex items-center justify-between w-full">
@@ -462,7 +422,6 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 						</Button>
 					</div>
 				</Form>
-			</div>
 
 			{/* Import JSON Dialog */}
 			<Modal.Backdrop

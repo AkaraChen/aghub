@@ -1,13 +1,4 @@
 import {
-	ArrowPathIcon,
-	CheckCircleIcon,
-	ChevronLeftIcon,
-	ChevronRightIcon,
-	MagnifyingGlassIcon,
-	PlusIcon,
-	XCircleIcon,
-} from "@heroicons/react/24/solid";
-import {
 	Button,
 	ListBox,
 	Modal,
@@ -18,12 +9,15 @@ import {
 	type Selection,
 } from "@heroui/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../providers/agent-availability";
 import { useServer } from "../providers/server";
 import { createApi } from "../lib/api";
 import type { MarketSkill } from "../lib/api-types";
+import { capitalize } from "../lib/mcp-utils";
+import { ResultStatusItem } from "./result-status-item";
+import { StepIndicator } from "./step-indicator";
 
 interface InstallSkillDialogProps {
 	isOpen: boolean;
@@ -51,8 +45,12 @@ export function InstallSkillDialog({
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
 
-	const skillAgents = availableAgents.filter(
-		(a) => a.isUsable && a.capabilities.skills_mutable,
+	const skillAgents = useMemo(
+		() =>
+			availableAgents.filter(
+				(a) => a.isUsable && a.capabilities.skills_mutable,
+			),
+		[availableAgents],
 	);
 
 	const [step, setStep] = useState<WizardStep>(1);
@@ -60,7 +58,19 @@ export function InstallSkillDialog({
 	const [selectedSkill, setSelectedSkill] = useState<MarketSkill | null>(null);
 	const [selectedAgents, setSelectedAgents] = useState<Set<string>>(new Set());
 	const [results, setResults] = useState<InstallResult[]>([]);
-	const [isInstalling, setIsInstalling] = useState(false);
+
+	const isInstalling = results.some((r) => r.status === "pending");
+
+	const agentNameMap = useMemo(
+		() => new Map(availableAgents.map((a) => [a.id, a.display_name])),
+		[availableAgents],
+	);
+
+	const getAgentDisplayName = useMemo(() => {
+		return (agentId: string) => {
+			return agentNameMap.get(agentId) ?? capitalize(agentId);
+		};
+	}, [agentNameMap]);
 
 	const { data: marketResults = [], isFetching: isSearching } = useQuery<
 		MarketSkill[]
@@ -79,20 +89,10 @@ export function InstallSkillDialog({
 		setSelectedAgents(keys as Set<string>);
 	};
 
-	const getAgentDisplayName = useCallback(
-		(agentId: string) => {
-			const agent = availableAgents.find((a) => a.id === agentId);
-			if (agent) return agent.display_name;
-			return agentId.charAt(0).toUpperCase() + agentId.slice(1);
-		},
-		[availableAgents],
-	);
-
 	const handleInstall = async () => {
 		if (!selectedSkill || selectedAgents.size === 0) return;
 
 		setStep(3);
-		setIsInstalling(true);
 
 		const pendingResults: InstallResult[] = [...selectedAgents].map(
 			(agentId) => ({
@@ -136,7 +136,6 @@ export function InstallSkillDialog({
 			setResults(updatedResults);
 		}
 
-		setIsInstalling(false);
 		queryClient.invalidateQueries({ queryKey: ["skills"] });
 	};
 
@@ -146,7 +145,6 @@ export function InstallSkillDialog({
 		setSelectedSkill(null);
 		setSelectedAgents(new Set());
 		setResults([]);
-		setIsInstalling(false);
 		onClose();
 	};
 
@@ -169,46 +167,7 @@ export function InstallSkillDialog({
 					</Modal.Header>
 
 					<Modal.Body className="p-2">
-						<div className="flex items-center justify-center gap-2 mb-6">
-							{[1, 2, 3].map((s, idx) => (
-								<div
-									key={s}
-									className="flex items-center gap-2"
-								>
-									<div
-										className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-											s < step
-												? "bg-accent/15 text-accent"
-												: s === step
-													? "bg-accent text-accent-foreground"
-													: "bg-default-100 text-muted"
-										}`}
-									>
-										<span
-											className={`flex items-center justify-center size-4.5 rounded-full text-[10px] font-bold ${
-												s < step
-													? "bg-accent text-accent-foreground"
-													: s === step
-														? "bg-accent-foreground text-accent"
-														: "bg-default-200 text-muted"
-											}`}
-										>
-											{s < step ? "✓" : s}
-										</span>
-										{stepLabels[idx]}
-									</div>
-									{idx < 2 && (
-										<div
-											className={`w-6 h-px ${
-												s < step
-													? "bg-accent"
-													: "bg-default-200"
-											}`}
-										/>
-									)}
-								</div>
-							))}
-						</div>
+						<StepIndicator currentStep={step} labels={stepLabels} />
 
 						{step === 1 && (
 							<div className="space-y-4">
@@ -306,10 +265,12 @@ export function InstallSkillDialog({
 										<p className="text-xs text-muted uppercase tracking-wide mb-1">
 											{t("selectedSkill")}
 										</p>
-									<p className="font-medium">{selectedSkill.name}</p>
-																	<p className="text-sm text-muted">
-																		{selectedSkill.source}
-																	</p>
+										<p className="font-medium">
+											{selectedSkill.name}
+										</p>
+										<p className="text-sm text-muted">
+											{selectedSkill.source}
+										</p>
 									</div>
 								)}
 							</div>
@@ -385,35 +346,19 @@ export function InstallSkillDialog({
 											</div>
 										)}
 										{results.map((result) => (
-											<div
+											<ResultStatusItem
 												key={result.agentId}
-												className="flex items-start gap-2 p-3 rounded-lg bg-default-50"
-											>
-												{result.status === "pending" && (
-													<ArrowPathIcon className="size-4 text-muted shrink-0 mt-0.5 animate-spin" />
-												)}
-												{result.status === "success" && (
-													<CheckCircleIcon className="size-4 text-success shrink-0 mt-0.5" />
-												)}
-												{result.status === "error" && (
-													<XCircleIcon className="size-4 text-danger shrink-0 mt-0.5" />
-												)}
-												<div className="min-w-0">
-													<p className="text-sm font-medium">
-														{result.displayName}
-													</p>
-													<p className="text-xs text-muted">
-														{result.status === "pending"
-															? t("installing")
-															: result.status ===
-																	"success"
-																? t(
-																		"installSuccess",
-																	)
-																: result.error}
-													</p>
-												</div>
-											</div>
+												displayName={result.displayName}
+												status={result.status}
+												statusText={
+													result.status === "pending"
+														? t("installing")
+														: result.status === "success"
+															? t("installSuccess")
+															: ""
+												}
+												error={result.error}
+											/>
 										))}
 									</>
 								)}
