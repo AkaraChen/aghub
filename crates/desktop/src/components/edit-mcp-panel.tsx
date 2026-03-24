@@ -72,7 +72,7 @@ export function EditMcpPanel({
 				([key, value]) => ({ key, value }),
 			);
 		}
-		return [];
+		return [{ key: "", value: "" }];
 	});
 
 	const [url, setUrl] = useState(

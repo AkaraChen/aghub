@@ -69,7 +69,7 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 
 	const [command, setCommand] = useState("");
 	const [args, setArgs] = useState("");
-	const [envVars, setEnvVars] = useState<EnvVar[]>([]);
+	const [envVars, setEnvVars] = useState<EnvVar[]>([{ key: "", value: "" }]);
 
 	const [url, setUrl] = useState("");
 	const [headers, setHeaders] = useState("");

@@ -74,10 +74,8 @@ export function EnvEditor({ value, onChange }: EnvEditorProps) {
 	return (
 		<div className="space-y-2">
 			{value.map((pair, index) => (
-				// eslint-disable-next-line react/no-array-index-key
-				<div key={index} className="flex items-start gap-2">
+				<div key={pair.key} className="flex items-start gap-2">
 					<Input
-						variant="secondary"
 						placeholder={t("envEditor.keyPlaceholder")}
 						aria-label={t("envEditor.keyPlaceholder")}
 						value={pair.key}
@@ -87,7 +85,6 @@ export function EnvEditor({ value, onChange }: EnvEditorProps) {
 						className="flex-1"
 					/>
 					<Input
-						variant="secondary"
 						placeholder={t("envEditor.valuePlaceholder")}
 						aria-label={t("envEditor.valuePlaceholder")}
 						value={pair.value}
