@@ -58,17 +58,17 @@ export default function AgentsPanel() {
 			{/* Search and Filter Bar */}
 			<div
 				className="
-           flex flex-col gap-2
-           sm:flex-row sm:items-center sm:justify-between
-         "
+      flex flex-col gap-2
+      sm:flex-row sm:items-center sm:justify-between
+    "
 			>
 				<SearchField
 					value={agentSearch}
 					onChange={setAgentSearch}
 					className="
-             w-full
-             sm:w-64
-           "
+       w-full
+       sm:w-64
+     "
 				>
 					<SearchField.Group>
 						<SearchField.SearchIcon />
@@ -105,9 +105,9 @@ export default function AgentsPanel() {
 			{filteredAgents.length === 0 ? (
 				<div
 					className="
-            flex flex-col items-center justify-center rounded-lg bg-surface
-            py-16 text-center
-          "
+       flex flex-col items-center justify-center rounded-lg bg-surface py-16
+       text-center
+     "
 				>
 					<div className="mb-4 text-muted">
 						<UserGroupIcon className="mx-auto size-12" />
@@ -126,9 +126,9 @@ export default function AgentsPanel() {
 			) : (
 				<div
 					className="
-            grid grid-cols-1 gap-3
-            sm:grid-cols-2
-          "
+       grid grid-cols-1 gap-3
+       sm:grid-cols-2
+     "
 				>
 					{filteredAgents.map((agent) => (
 						<AgentCard

@@ -156,7 +156,6 @@ export default function MCPServersPage() {
 							</p>
 						</div>
 						<Button
-							variant="secondary"
 							onPress={handleCreate}
 						>
 							<PlusIcon className="mr-2 size-4" />

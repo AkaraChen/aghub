@@ -6,7 +6,7 @@ import {
 	TrashIcon,
 	UserGroupIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Chip, Modal, Table, Tooltip } from "@heroui/react";
+import { Button, Card, Chip, Modal, Table, Tooltip } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
@@ -103,25 +103,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 							<Tooltip delay={0}>
 								<Button
 									isIconOnly
-									variant="ghost"
-									size="sm"
-									className="
-           shrink-0 text-muted
-           hover:text-foreground
-         "
-									aria-label={t("manageAgents")}
-									onPress={() => setManageDialogOpen(true)}
-								>
-									<UserGroupIcon className="size-4" />
-								</Button>
-								<Tooltip.Content>
-									{t("manageAgentsTooltip")}
-								</Tooltip.Content>
-							</Tooltip>
-							<Tooltip delay={0}>
-								<Button
-									isIconOnly
-									variant="ghost"
+									variant="tertiary"
 									size="sm"
 									className={copyFeedback ? "text-success" : "text-muted"}
 									aria-label={copyFeedback ? t("copied") : t("copy")}
@@ -140,7 +122,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 							<Tooltip delay={0}>
 								<Button
 									isIconOnly
-									variant="ghost"
+									variant="tertiary"
 									size="sm"
 									className="
            shrink-0 text-muted
@@ -158,7 +140,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 							<Tooltip delay={0}>
 								<Button
 									isIconOnly
-									variant="ghost"
+									variant="tertiary"
 									size="sm"
 									className="
            shrink-0 text-muted
@@ -173,102 +155,122 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 									{t("deleteTooltip")}
 								</Tooltip.Content>
 							</Tooltip>
+														<Tooltip delay={0}>
+								<Button
+									isIconOnly
+									variant="primary"
+									size="sm"
+									className="
+           shrink-0 text-muted
+           hover:text-foreground
+         "
+									aria-label={t("manageAgents")}
+									onPress={() => setManageDialogOpen(true)}
+								>
+									<UserGroupIcon className="size-4 text-surface" />
+								</Button>
+								<Tooltip.Content>
+									{t("manageAgentsTooltip")}
+								</Tooltip.Content>
+							</Tooltip>
 						</div>
 					</div>
 
 					{/* Agents Section */}
-					<div className="mb-6">
-						<h3 className="
-        mb-2 text-xs font-medium tracking-wide text-muted uppercase
-      ">
-							{t("agents")} ({group.items.length})
-						</h3>
-						<div className="flex flex-wrap gap-1.5">
-							{group.items.map((item) => (
-								<div
-									key={item.agent ?? "default"}
-									className="flex items-center gap-1"
-								>
-									<Chip size="sm" variant="secondary">
-										{item.agent
-											? item.agent
-													.charAt(0)
-													.toUpperCase() +
-												item.agent
-													.slice(1)
-													.toLowerCase()
-											: "Default"}
-									</Chip>
-									{!item.enabled && (
-										<Chip
-											size="sm"
-											variant="soft"
-											color="warning"
-										>
-											{t("disabled")}
+					<Card variant="default" className="mb-6">
+						<Card.Header>
+							<Card.Title>
+								{t("agents")} ({group.items.length})
+							</Card.Title>
+						</Card.Header>
+						<Card.Content>
+							<div className="flex flex-wrap gap-1.5">
+								{group.items.map((item) => (
+									<div
+										key={item.agent ?? "default"}
+										className="flex items-center gap-1"
+									>
+										<Chip size="sm" variant="secondary">
+											{item.agent
+												? item.agent
+														.charAt(0)
+														.toUpperCase() +
+													item.agent
+														.slice(1)
+														.toLowerCase()
+												: "Default"}
 										</Chip>
-									)}
-								</div>
-							))}
-						</div>
-					</div>
+										{!item.enabled && (
+											<Chip
+												size="sm"
+												variant="soft"
+												color="warning"
+											>
+												{t("disabled")}
+											</Chip>
+										)}
+									</div>
+								))}
+							</div>
+						</Card.Content>
+					</Card>
 
 					{/* Connection / Transport */}
-					<div className="mb-6">
-						<h3 className="
-        mb-3 text-xs font-medium tracking-wide text-muted uppercase
-      ">
-							{t("transport")}
-						</h3>
-						<Table>
-							<Table.ScrollContainer>
-								<Table.Content aria-label="Transport details">
-									<Table.Header>
-										<Table.Column isRowHeader className="w-24">
-											{t("type")}
-										</Table.Column>
-										<Table.Column>
-											{t("details")}
-										</Table.Column>
-									</Table.Header>
-									<Table.Body>
-										<Table.Row>
-											<Table.Cell>{t("type")}</Table.Cell>
-											<Table.Cell>{group.transport.type}</Table.Cell>
-										</Table.Row>
-										{group.transport.type === "stdio" && (
-											<>
-												<Table.Row>
-													<Table.Cell>{t("command")}</Table.Cell>
-													<Table.Cell>{group.transport.command}</Table.Cell>
-												</Table.Row>
-												{group.transport.args && group.transport.args.length > 0 && (
-													<Table.Row>
-														<Table.Cell>{t("args")}</Table.Cell>
-														<Table.Cell>
-															<code className="font-mono text-xs break-all">
-																{group.transport.args.join(" ")}
-															</code>
-														</Table.Cell>
-													</Table.Row>
-												)}
-											</>
-										)}
-										{(group.transport.type === "sse" || group.transport.type === "streamable_http") && (
+					<Card variant="default" className="mb-6">
+						<Card.Header>
+							<Card.Title>{t("transport")}</Card.Title>
+						</Card.Header>
+						<Card.Content>
+							<Table>
+								<Table.ScrollContainer>
+									<Table.Content aria-label="Transport details">
+										<Table.Header>
+											<Table.Column isRowHeader className="w-24">
+												{t("type")}
+											</Table.Column>
+											<Table.Column>
+												{t("details")}
+											</Table.Column>
+										</Table.Header>
+										<Table.Body>
 											<Table.Row>
-												<Table.Cell>{t("url")}</Table.Cell>
-												<Table.Cell>
-													<code className="font-mono text-xs break-all">
-														{group.transport.url}
-													</code>
-												</Table.Cell>
+												<Table.Cell>{t("type")}</Table.Cell>
+												<Table.Cell>{group.transport.type}</Table.Cell>
 											</Table.Row>
-										)}
-									</Table.Body>
-								</Table.Content>
-							</Table.ScrollContainer>
-						</Table>
-					</div>
+											{group.transport.type === "stdio" && (
+												<>
+													<Table.Row>
+														<Table.Cell>{t("command")}</Table.Cell>
+														<Table.Cell>{group.transport.command}</Table.Cell>
+													</Table.Row>
+													{group.transport.args && group.transport.args.length > 0 && (
+														<Table.Row>
+															<Table.Cell>{t("args")}</Table.Cell>
+															<Table.Cell>
+																<code className="font-mono text-xs break-all">
+																	{group.transport.args.join(" ")}
+																</code>
+															</Table.Cell>
+														</Table.Row>
+													)}
+												</>
+											)}
+											{(group.transport.type === "sse" || group.transport.type === "streamable_http") && (
+												<Table.Row>
+													<Table.Cell>{t("url")}</Table.Cell>
+													<Table.Cell>
+														<code className="font-mono text-xs break-all">
+															{group.transport.url}
+														</code>
+													</Table.Cell>
+												</Table.Row>
+											)}
+										</Table.Body>
+									</Table.Content>
+								</Table.ScrollContainer>
+							</Table>
+						</Card.Content>
+					</Card>
 				</div>
 			</div>
 
