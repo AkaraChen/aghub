@@ -10,6 +10,7 @@ import {
 	ToggleButton,
 	ToggleButtonGroup,
 } from "@heroui/react";
+import { useQueryState } from "nuqs";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentCard } from "../../components/agent-card";
@@ -23,7 +24,9 @@ export default function SettingsPage() {
 	const { theme, setTheme } = useTheme();
 	const { availableAgents, refreshDisabledAgents } = useAgentAvailability();
 	const [updating, setUpdating] = useState<string | null>(null);
-	const [selectedTab, setSelectedTab] = useState<string>("appearance");
+	const [selectedTab, setSelectedTab] = useQueryState("tab", {
+		defaultValue: "appearance",
+	});
 
 	const changeLanguage = (lng: string) => {
 		i18n.changeLanguage(lng);
@@ -52,7 +55,9 @@ export default function SettingsPage() {
 			<div className="p-6 max-w-3xl">
 				<Tabs
 					selectedKey={selectedTab}
-					onSelectionChange={(key) => setSelectedTab(key as string)}
+					onSelectionChange={(key) => {
+						setSelectedTab(key as string);
+					}}
 				>
 					<div className="flex items-center justify-between mb-2">
 						<h2 className="text-xl font-semibold">

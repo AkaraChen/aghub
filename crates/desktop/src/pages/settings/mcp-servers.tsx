@@ -6,6 +6,7 @@ import {
 	Button,
 	SearchField,
 } from "@heroui/react";
+import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CreateMcpPanel } from "../../components/create-mcp-panel";
@@ -26,7 +27,7 @@ export default function MCPServersPage() {
 	const { data: mcps, refetch } = useMcps();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [panel, setPanel] = useState<RightPanel>({ type: "empty" });
-	const [selectedKey, setSelectedKey] = useState<string | null>(null);
+	const [selectedKey, setSelectedKey] = useQueryState("server");
 
 	const groupedMcps = useMemo(() => {
 		const map = new Map<string, McpGroup>();
@@ -58,9 +59,21 @@ export default function MCPServersPage() {
 		setPanel({ type: "create" });
 	};
 
+	const handlePanelDone = () => {
+		setPanel({ type: "empty" });
+	};
+
+	const handleEditDone = (mergeKey: string) => {
+		setPanel({ type: "detail", selectedKey: mergeKey });
+	};
+
 	const selectedGroup = selectedKey
 		? groupedMcps.find((g) => g.mergeKey === selectedKey)
 		: null;
+
+	const effectivePanel: RightPanel = selectedKey
+		? { type: "detail", selectedKey }
+		: panel;
 
 	return (
 		<div className="flex h-full">
@@ -116,7 +129,7 @@ export default function MCPServersPage() {
 
 			{/* Server Detail Panel */}
 			<div className="flex-1 overflow-hidden">
-				{panel.type === "detail" && selectedGroup && (
+				{effectivePanel.type === "detail" && selectedGroup && (
 					<McpDetail
 						group={selectedGroup}
 						onEdit={() =>
@@ -127,25 +140,18 @@ export default function MCPServersPage() {
 						}
 					/>
 				)}
-				{panel.type === "create" && (
-					<CreateMcpPanel
-						onDone={() => setPanel({ type: "empty" })}
-					/>
+				{effectivePanel.type === "create" && (
+					<CreateMcpPanel onDone={handlePanelDone} />
 				)}
-				{panel.type === "edit" && selectedGroup && (
+				{effectivePanel.type === "edit" && selectedGroup && (
 					<EditMcpPanel
 						key={selectedGroup.mergeKey}
 						group={selectedGroup}
-						onDone={() =>
-							setPanel({
-								type: "detail",
-								selectedKey: selectedGroup.mergeKey,
-							})
-						}
+						onDone={() => handleEditDone(selectedGroup.mergeKey)}
 					/>
 				)}
-				{(panel.type === "empty" ||
-					(panel.type === "detail" && !selectedGroup)) && (
+				{(effectivePanel.type === "empty" ||
+					(effectivePanel.type === "detail" && !selectedGroup)) && (
 					<div className="flex items-center justify-center h-full">
 						<p className="text-sm text-muted">
 							{t("selectServer")}

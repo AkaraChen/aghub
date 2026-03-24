@@ -1,5 +1,6 @@
 import { FolderIcon } from "@heroicons/react/24/solid";
 import { useQuery } from "@tanstack/react-query";
+import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "wouter";
@@ -16,12 +17,6 @@ import { ConfigSource } from "../../lib/api-types";
 import { getMcpMergeKey } from "../../lib/utils";
 import { useServer } from "../../providers/server";
 
-type PanelState =
-	| { type: "detail"; selectedKey: string; resourceType: "mcp" | "skill" }
-	| { type: "create-mcp" }
-	| { type: "edit-mcp"; selectedKey: string }
-	| { type: "empty" };
-
 export default function ProjectDetailPage() {
 	const { t } = useTranslation();
 	const { id } = useParams();
@@ -30,9 +25,15 @@ export default function ProjectDetailPage() {
 	const { baseUrl } = useServer();
 	const api = createApi(baseUrl);
 
-	const [panel, setPanel] = useState<PanelState>({ type: "empty" });
+	const [panelMode, setPanelMode] = useState<
+		"create-mcp" | "edit-mcp" | null
+	>(null);
 	const [isInstallSkillOpen, setIsInstallSkillOpen] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
+	const [selectedResource, setSelectedResource] = useQueryState("resource");
+	const [resourceType, setResourceType] = useQueryState("type", {
+		defaultValue: "",
+	});
 
 	// Fetch MCPs and Skills for this project
 	const { data: mcps = [], refetch: refetchMcps } = useQuery({
@@ -86,19 +87,21 @@ export default function ProjectDetailPage() {
 
 	// Selected items
 	const selectedMcpGroup =
-		panel.type === "detail" && panel.resourceType === "mcp"
-			? groupedMcps.find((g) => g.mergeKey === panel.selectedKey)
-			: panel.type === "edit-mcp"
-				? groupedMcps.find((g) => g.mergeKey === panel.selectedKey)
+		resourceType === "mcp" && selectedResource
+			? groupedMcps.find((g) => g.mergeKey === selectedResource)
+			: panelMode === "edit-mcp" && selectedResource
+				? groupedMcps.find((g) => g.mergeKey === selectedResource)
 				: null;
 
 	const selectedSkillGroup =
-		panel.type === "detail" && panel.resourceType === "skill"
-			? groupedSkills.find((g) => g.name === panel.selectedKey)
+		resourceType === "skill" && selectedResource
+			? groupedSkills.find((g) => g.name === selectedResource)
 			: null;
 
 	const handleSelect = (key: string, type: "mcp" | "skill") => {
-		setPanel({ type: "detail", selectedKey: key, resourceType: type });
+		setSelectedResource(key);
+		setResourceType(type);
+		setPanelMode(null);
 	};
 
 	const handleRefresh = () => {
@@ -120,12 +123,10 @@ export default function ProjectDetailPage() {
 			<UnifiedResourceList
 				mcps={projectMcps}
 				skills={projectSkills}
-				selectedKey={panel.type === "detail" ? panel.selectedKey : null}
-				selectedType={
-					panel.type === "detail" ? panel.resourceType : null
-				}
+				selectedKey={selectedResource}
+				selectedType={resourceType as "mcp" | "skill" | null}
 				onSelect={handleSelect}
-				onCreateMcp={() => setPanel({ type: "create-mcp" })}
+				onCreateMcp={() => setPanelMode("create-mcp")}
 				onCreateSkill={() => setIsInstallSkillOpen(true)}
 				onRefresh={handleRefresh}
 				searchQuery={searchQuery}
@@ -135,48 +136,34 @@ export default function ProjectDetailPage() {
 
 			{/* Detail Panel */}
 			<div className="flex-1 overflow-hidden">
-				{panel.type === "detail" && selectedMcpGroup && (
+				{!panelMode && selectedMcpGroup && (
 					<McpDetail
 						group={selectedMcpGroup}
-						onEdit={() =>
-							setPanel({
-								type: "edit-mcp",
-								selectedKey: panel.selectedKey,
-							})
-						}
+						onEdit={() => setPanelMode("edit-mcp")}
 						projectPath={project.path}
 					/>
 				)}
-				{panel.type === "detail" && selectedSkillGroup && (
+				{!panelMode && selectedSkillGroup && (
 					<SkillDetail
 						group={selectedSkillGroup}
 						projectPath={project.path}
 					/>
 				)}
-			{panel.type === "create-mcp" && (
+			{panelMode === "create-mcp" && (
 				<CreateMcpPanel
-					onDone={() => setPanel({ type: "empty" })}
+					onDone={() => setPanelMode(null)}
 					projectPath={project.path}
 				/>
 			)}
-			{panel.type === "edit-mcp" && selectedMcpGroup && (
+			{panelMode === "edit-mcp" && selectedMcpGroup && (
 				<EditMcpPanel
 					key={selectedMcpGroup.mergeKey}
 					group={selectedMcpGroup}
-					onDone={() =>
-						setPanel({
-							type: "detail",
-							selectedKey: panel.selectedKey,
-							resourceType: "mcp",
-						})
-					}
+					onDone={() => setPanelMode(null)}
 					projectPath={project.path}
 				/>
 			)}
-				{(panel.type === "empty" ||
-					(panel.type === "detail" &&
-						!selectedMcpGroup &&
-						!selectedSkillGroup)) && (
+				{(!panelMode && !selectedMcpGroup && !selectedSkillGroup) && (
 					<div className="flex flex-col items-center justify-center h-full gap-3">
 						<div className="flex items-center justify-center w-16 h-16 rounded-full bg-surface-secondary">
 							<FolderIcon className="size-8 text-muted" />

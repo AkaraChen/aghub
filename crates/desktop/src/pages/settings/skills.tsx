@@ -3,6 +3,7 @@ import {
 	Button,
 	SearchField,
 } from "@heroui/react";
+import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { InstallSkillDialog } from "../../components/install-skill-dialog";
@@ -16,7 +17,7 @@ export default function SkillsPage() {
 	const { data: skills, refetch } = useSkills();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isInstallDialogOpen, setIsInstallDialogOpen] = useState(false);
-	const [selectedName, setSelectedName] = useState<string | null>(null);
+	const [selectedName, setSelectedName] = useQueryState("skill");
 
 	const groupedSkills = useMemo(() => {
 		const map = new Map<string, SkillResponse[]>();
