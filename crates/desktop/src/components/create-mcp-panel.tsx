@@ -337,7 +337,7 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 										setHeaders(e.target.value)
 									}
 									placeholder="Authorization: Bearer token&#10;X-Custom-Header: value"
-									className="min-h-[80px] font-mono"
+									className="min-h-20 font-mono"
 								/>
 								<Description>
 									{t("headersHelp")}
@@ -414,7 +414,7 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 						</Button>
 						<Button
 							onPress={handleCreate}
-							isDisabled={!isValid() || createMutation.isPending}
+							isDisabled={!isValid || createMutation.isPending}
 						>
 							{createMutation.isPending
 								? t("creating")
@@ -447,7 +447,7 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 											placeholder={t(
 												"jsonConfigPlaceholder",
 											)}
-											className="min-h-[300px] font-mono text-sm"
+											className="min-h-75 font-mono text-sm"
 										/>
 										<Description>
 											{t("jsonConfigHelp")}

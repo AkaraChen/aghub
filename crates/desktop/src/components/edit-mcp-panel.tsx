@@ -12,7 +12,7 @@ import {
 	TextField,
 } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createApi, type UpdateMcpRequest } from "../lib/api";
 import type { McpResponse, TransportDto } from "../lib/api-types";
@@ -169,7 +169,7 @@ export function EditMcpPanel({
 			</div>
 
 			{group.items.length > 1 && (
-				<div className="bg-warning/10 border border-warning/20 rounded-lg p-3 mb-4">
+				<div className="bg-warning/10 border border-warning-soft-hover rounded-lg p-3 mb-4">
 					<p className="text-sm text-warning">
 						{t("changeWillApplyToAgents", {
 							count: group.items.length,
@@ -291,7 +291,7 @@ export function EditMcpPanel({
 											setHeaders(e.target.value)
 										}
 										placeholder="Authorization: Bearer token&#10;X-Custom-Header: value"
-										className="min-h-[80px] font-mono"
+										className="min-h-20 font-mono"
 									/>
 									<Description>
 										{t("headersHelp")}
@@ -334,7 +334,7 @@ export function EditMcpPanel({
 						</Button>
 						<Button
 							onPress={handleSave}
-							isDisabled={!isValid() || updateMutation.isPending}
+							isDisabled={!isValid || updateMutation.isPending}
 						>
 							{updateMutation.isPending ? t("saving") : t("save")}
 						</Button>
