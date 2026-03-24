@@ -164,6 +164,18 @@ export default {
 	noProjectResources: "此项目中没有资源",
 	selectResourceToView: "选择一个资源查看详情",
 
+	// Skill Detail
+	deleteSkill: "删除技能",
+	deleteSkillWarning:
+		"这将删除 {{count}} 个技能安装。此操作无法撤销。",
+	deleteAll: "全部删除",
+	locations: "位置",
+	globalSkills: "全局技能",
+	projectSkills: "项目技能",
+	metadata: "元数据",
+	installedFrom: "安装来源",
+	default: "默认",
+
 	// Env Editor
 	envEditor: {
 		addKeypair: "添加键值对",

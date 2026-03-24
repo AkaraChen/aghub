@@ -167,6 +167,18 @@ export default {
 	noProjectResources: "No resources in this project",
 	selectResourceToView: "Select a resource to view details",
 
+	// Skill Detail
+	deleteSkill: "Delete Skill",
+	deleteSkillWarning:
+		"This will delete {{count}} skill installation(s). This action cannot be undone.",
+	deleteAll: "Delete All",
+	locations: "Locations",
+	globalSkills: "Global Skills",
+	projectSkills: "Project Skills",
+	metadata: "Metadata",
+	installedFrom: "Installed From",
+	default: "Default",
+
 	// Env Editor
 	envEditor: {
 		addKeypair: "Add Keypair",

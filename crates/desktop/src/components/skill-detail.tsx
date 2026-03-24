@@ -255,7 +255,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 						<div className="mb-6">
 							<h3 className="text-xs font-medium text-muted uppercase tracking-wide mb-3 flex items-center gap-2">
 								<GlobeAltIcon className="size-4" />
-								{t("installedFrom")} ({currentSkillSource.scope})
+								{t("installedFrom")}
 							</h3>
 							<div className="p-3 border border-border rounded-lg bg-surface">
 								<p className="text-sm font-medium text-foreground truncate">
