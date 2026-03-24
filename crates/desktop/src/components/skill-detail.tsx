@@ -18,6 +18,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import * as pathe from "pathe";
 import { useServer } from "../providers/server";
 import { createApi } from "../lib/api";
 import { ConfigSource } from "../lib/api-types";
@@ -48,8 +49,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const api = createApi(baseUrl);
 
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-	const [showAllGlobal, setShowAllGlobal] = useState(false);
-	const [showAllProject, setShowAllProject] = useState(false);
+	const [showAll, setShowAll] = useState(false);
 
 	const skill = group.items[0];
 
@@ -167,27 +167,13 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 							{t("locations")} ({group.items.length})
 						</h3>
 
-					{globalLocationGroups.length > 0 && (
 						<CollapsibleLocations
-							title={t("globalSkills")}
-							locations={globalLocationGroups}
-							showAll={showAllGlobal}
-							onToggle={() => setShowAllGlobal(!showAllGlobal)}
+							locations={[...globalLocationGroups, ...projectLocationGroups]}
+							showAll={showAll}
+							onToggle={() => setShowAll(!showAll)}
 							openFolderMutation={openFolderMutation}
 							editFolderMutation={editFolderMutation}
 						/>
-					)}
-
-					{projectLocationGroups.length > 0 && (
-						<CollapsibleLocations
-							title={t("projectSkills")}
-							locations={projectLocationGroups}
-							showAll={showAllProject}
-							onToggle={() => setShowAllProject(!showAllProject)}
-							openFolderMutation={openFolderMutation}
-							editFolderMutation={editFolderMutation}
-						/>
-					)}
 					</div>
 
 					{(skill.author || skill.version) && (
@@ -266,7 +252,6 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 }
 
 interface CollapsibleLocationsProps {
-	title: string;
 	locations: LocationGroup[];
 	showAll: boolean;
 	onToggle: () => void;
@@ -275,7 +260,6 @@ interface CollapsibleLocationsProps {
 }
 
 function CollapsibleLocations({
-	title,
 	locations,
 	showAll,
 	onToggle,
@@ -290,9 +274,8 @@ function CollapsibleLocations({
 	const hiddenCount = locations.length - 2;
 
 	return (
-		<div className="mb-4">
-			<h4 className="text-xs text-muted mb-2">{title}</h4>
-			<div className="space-y-2">
+		<div>
+			<div className="grid grid-cols-2 gap-2">
 				{displayLocations.map((group) => (
 					<LocationItem
 						key={group.sourcePath}
@@ -348,18 +331,18 @@ function LocationItem({
 }: LocationItemProps) {
 	const { t } = useTranslation();
 
+	const folderPath = useMemo(() => {
+		return pathe.dirname(group.sourcePath);
+	}, [group.sourcePath]);
+
 	return (
-		<div className="flex items-center justify-between gap-3 p-3 bg-default-50 rounded-lg border border-border">
+		<div className="flex items-center justify-between gap-2 p-2.5 bg-default-50 rounded-lg border border-border">
 			<div className="min-w-0 flex-1">
-				<div className="flex flex-wrap items-center gap-2 mb-1">
-					{group.agents.map((agent) => (
-						<Chip key={agent} size="sm" variant="secondary">
-							{formatAgentName(agent)}
-						</Chip>
-					))}
-				</div>
-				<p className="text-xs text-muted font-mono truncate">
-					{group.sourcePath}
+				<p className="text-xs font-medium text-foreground truncate mb-0.5">
+					{group.agents.map(formatAgentName).join(", ")}
+				</p>
+				<p className="text-xs text-muted font-mono truncate" title={group.sourcePath}>
+					{folderPath}
 				</p>
 			</div>
 			<div className="flex items-center gap-1">
