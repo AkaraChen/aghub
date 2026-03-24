@@ -281,6 +281,7 @@ mod tests {
 				version: Some("1.0.0".to_string()),
 				tools: vec!["tool1".to_string()],
 				source_path: None,
+				canonical_path: None,
 				config_source: None,
 			}],
 		};

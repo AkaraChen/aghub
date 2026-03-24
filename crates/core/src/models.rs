@@ -40,6 +40,10 @@ pub struct Skill {
 	/// Source path relative to skills directory with ~ prefix (e.g., "~/.claude/skills/my-skill/SKILL.md")
 	#[serde(skip_serializing_if = "Option::is_none", default)]
 	pub source_path: Option<String>,
+	/// Resolved canonical path when source_path is a symlink.
+	/// None if the skill was not discovered via a symlink.
+	#[serde(skip_serializing_if = "Option::is_none", default)]
+	pub canonical_path: Option<String>,
 	/// Which config scope this skill was loaded from (set at load time, not persisted)
 	#[serde(skip)]
 	pub config_source: Option<ConfigSource>,
@@ -55,6 +59,7 @@ impl Skill {
 			version: None,
 			tools: Vec::new(),
 			source_path: None,
+			canonical_path: None,
 			config_source: None,
 		}
 	}

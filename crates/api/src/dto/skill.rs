@@ -20,6 +20,7 @@ impl From<CreateSkillRequest> for Skill {
 			version: req.version,
 			tools: req.tools.unwrap_or_default(),
 			source_path: None,
+			canonical_path: None,
 			config_source: None,
 		}
 	}
@@ -45,6 +46,7 @@ impl UpdateSkillRequest {
 			version: self.version.or(existing.version),
 			tools: self.tools.unwrap_or(existing.tools),
 			source_path: existing.source_path,
+			canonical_path: existing.canonical_path,
 			config_source: existing.config_source,
 		}
 	}
@@ -55,6 +57,8 @@ pub struct SkillResponse {
 	pub name: String,
 	pub enabled: bool,
 	pub source_path: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub canonical_path: Option<String>,
 	pub description: Option<String>,
 	pub author: Option<String>,
 	pub version: Option<String>,
@@ -77,6 +81,7 @@ impl From<&Skill> for SkillResponse {
 			name: s.name.clone(),
 			enabled: s.enabled,
 			source_path: s.source_path.clone(),
+			canonical_path: s.canonical_path.clone(),
 			description: s.description.clone(),
 			author: s.author.clone(),
 			version: s.version.clone(),

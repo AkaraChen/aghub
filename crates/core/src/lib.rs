@@ -54,12 +54,13 @@ pub fn convert_skill(skill_pkg: skill::Skill) -> models::Skill {
 			.map(|t| t.split(',').map(|s| s.trim().to_string()).collect())
 			.unwrap_or_default(),
 		source_path,
+		canonical_path: None,
 		config_source: None,
 	}
 }
 
 /// Format a skill path with ~ prefix for home directory
-fn format_path_with_tilde(path: &std::path::Path) -> Option<String> {
+pub(crate) fn format_path_with_tilde(path: &std::path::Path) -> Option<String> {
 	let home = dirs::home_dir()?;
 	if path.starts_with(&home) {
 		let relative = path.strip_prefix(&home).ok()?;

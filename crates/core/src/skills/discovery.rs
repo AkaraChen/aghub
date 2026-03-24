@@ -42,7 +42,20 @@ fn collect_skills(dir: &Path, skills: &mut Vec<Skill>) {
 		}
 
 		match skill::parser::parse_skill_dir(&path) {
-			Ok(skill_pkg) => skills.push(crate::convert_skill(skill_pkg)),
+			Ok(skill_pkg) => {
+				let mut skill = crate::convert_skill(skill_pkg);
+				// Detect symlink and record canonical path
+				if let Ok(meta) = path.symlink_metadata() {
+					if meta.file_type().is_symlink() {
+						if let Ok(resolved) = fs::canonicalize(&path) {
+							let canonical = resolved.join("SKILL.md");
+							skill.canonical_path =
+								crate::format_path_with_tilde(&canonical);
+						}
+					}
+				}
+				skills.push(skill);
+			}
 			Err(_) => collect_skills(&path, skills),
 		}
 	}

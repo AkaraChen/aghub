@@ -7,6 +7,7 @@ export interface SkillResponse {
 	name: string;
 	enabled: boolean;
 	source_path?: string;
+	canonical_path?: string;
 	description?: string;
 	author?: string;
 	version?: string;

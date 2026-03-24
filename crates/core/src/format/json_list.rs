@@ -129,6 +129,7 @@ pub fn parse(content: &str) -> Result<AgentConfig> {
 			version: skill.version,
 			tools: skill.tools,
 			source_path: skill.source_path,
+			canonical_path: None,
 			config_source: None,
 		});
 	}
@@ -249,6 +250,7 @@ mod tests {
 				version: None,
 				tools: vec![],
 				source_path: None,
+				canonical_path: None,
 				config_source: None,
 			}],
 		};

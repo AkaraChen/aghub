@@ -65,6 +65,7 @@ impl ConfigManager {
 			let mut fs_skill = skill.clone();
 			fs_skill.source_path =
 				Some(skill_dir.join("SKILL.md").to_string_lossy().to_string());
+			fs_skill.canonical_path = None;
 			config.skills.push(fs_skill);
 		} else {
 			return Err(ConfigError::InvalidConfig(
@@ -92,7 +93,10 @@ impl ConfigManager {
 
 		let existing_skill = &config.skills[index];
 		let safe_old_name = sanitize_name(name);
-		let file_path = if let Some(sp) = &existing_skill.source_path {
+		// Prefer canonical path (real location) for writes
+		let file_path = if let Some(cp) = &existing_skill.canonical_path {
+			Some(resolve_source_path(cp))
+		} else if let Some(sp) = &existing_skill.source_path {
 			Some(resolve_source_path(sp))
 		} else {
 			target_dir.map(|dir| dir.join(&safe_old_name).join("SKILL.md"))
@@ -160,9 +164,11 @@ impl ConfigManager {
 			let mut fs_skill = skill.clone();
 			if final_file_path == path {
 				fs_skill.source_path = existing_skill.source_path.clone();
+				fs_skill.canonical_path = existing_skill.canonical_path.clone();
 			} else {
 				fs_skill.source_path =
 					Some(final_file_path.to_string_lossy().to_string());
+				fs_skill.canonical_path = None;
 			}
 			config.skills[index] = fs_skill;
 		} else {
@@ -192,10 +198,32 @@ impl ConfigManager {
 		} else {
 			target_dir.map(|dir| dir.join(&safe_name).join("SKILL.md"))
 		};
+		let is_symlink = existing_skill.canonical_path.is_some();
 
 		if let Some(path) = file_path {
 			if path.exists() {
-				if let Some(parent) = path.parent() {
+				if is_symlink {
+					// Only remove the symlink, not the target
+					if let Some(parent) = path.parent() {
+						if parent
+							.symlink_metadata()
+							.map(|m| m.file_type().is_symlink())
+							.unwrap_or(false)
+						{
+							std::fs::remove_file(parent).map_err(|e| {
+								ConfigError::Io(std::io::Error::new(
+									e.kind(),
+									format!(
+										"Failed to remove skill \
+											 symlink '{}': {}",
+										parent.display(),
+										e
+									),
+								))
+							})?;
+						}
+					}
+				} else if let Some(parent) = path.parent() {
 					if parent.file_name().and_then(|n| n.to_str())
 						== Some(&safe_name)
 					{
