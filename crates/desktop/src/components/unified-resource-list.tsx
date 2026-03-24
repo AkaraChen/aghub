@@ -8,7 +8,7 @@ import { Button, Dropdown, SearchField } from "@heroui/react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { McpResponse, SkillResponse } from "../lib/api-types";
-import { getMcpMergeKey } from "../lib/utils";
+import { cn, getMcpMergeKey } from "../lib/utils";
 import { McpList } from "./mcp-list";
 import { ResourceSectionHeader } from "./resource-section-header";
 import { SkillList } from "./skill-list";
@@ -37,6 +37,7 @@ export function UnifiedResourceList({
 	onCreateMcp,
 	onCreateSkill,
 	onRefresh,
+	isRefreshing = false,
 	searchQuery,
 	onSearchChange,
 	projectPath,
