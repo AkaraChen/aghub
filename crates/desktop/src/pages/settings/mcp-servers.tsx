@@ -147,10 +147,22 @@ export default function MCPServersPage() {
 				)}
 				{(effectivePanel.type === "empty" ||
 					(effectivePanel.type === "detail" && !selectedGroup)) && (
-					<div className="flex h-full items-center justify-center">
-						<p className="text-sm text-muted">
-							{t("selectServer")}
-						</p>
+					<div className="flex h-full flex-col items-center justify-center gap-4">
+						<div className="text-center">
+							<p className="mb-2 text-sm text-muted">
+								{t("selectServer")}
+							</p>
+							<p className="text-xs text-muted">
+								{t("orCreateNew")}
+							</p>
+						</div>
+						<Button
+							variant="secondary"
+							onPress={handleCreate}
+						>
+							<PlusIcon className="mr-2 size-4" />
+							{t("addMcpServer")}
+						</Button>
 					</div>
 				)}
 			</div>

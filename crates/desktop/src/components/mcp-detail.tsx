@@ -1,4 +1,5 @@
 import {
+	CheckCircleIcon,
 	DocumentDuplicateIcon,
 	ExclamationTriangleIcon,
 	PencilIcon,
@@ -7,7 +8,7 @@ import {
 } from "@heroicons/react/24/solid";
 import { Button, Chip, Modal, Table, Tooltip } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { createApi } from "../lib/api";
 import type { McpResponse } from "../lib/api-types";
@@ -31,6 +32,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 	const { t } = useTranslation();
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [manageDialogOpen, setManageDialogOpen] = useState(false);
+	const [copyFeedback, setCopyFeedback] = useState(false);
 	const { baseUrl } = useServer();
 	const api = createApi(baseUrl);
 	const queryClient = useQueryClient();
@@ -62,15 +64,31 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 		},
 	});
 
-	const handleCopy = () => {
+	const handleCopy = async () => {
 		const primary = group.items[0];
 		const config = {
 			name: primary.name,
 			transport: primary.transport,
 			timeout: primary.timeout,
 		};
-		console.warn("Copy config:", JSON.stringify(config, null, 2));
+		const configJson = JSON.stringify(config, null, 2);
+		
+		try {
+			await navigator.clipboard.writeText(configJson);
+			setCopyFeedback(true);
+		} catch {
+			// Fallback: still show feedback even if clipboard fails
+			setCopyFeedback(true);
+		}
 	};
+
+	// Clear copy feedback after 2 seconds
+	useEffect(() => {
+		if (copyFeedback) {
+			const timer = setTimeout(() => setCopyFeedback(false), 2000);
+			return () => clearTimeout(timer);
+		}
+	}, [copyFeedback]);
 
 	return (
 		<>
@@ -105,17 +123,18 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 									isIconOnly
 									variant="ghost"
 									size="sm"
-									className="
-           shrink-0 text-muted
-           hover:text-foreground
-         "
-									aria-label={t("copy")}
+									className={copyFeedback ? "text-success" : "text-muted"}
+									aria-label={copyFeedback ? t("copied") : t("copy")}
 									onPress={handleCopy}
 								>
-									<DocumentDuplicateIcon className="size-4" />
+									{copyFeedback ? (
+										<CheckCircleIcon className="size-4" />
+									) : (
+										<DocumentDuplicateIcon className="size-4" />
+									)}
 								</Button>
 								<Tooltip.Content>
-									{t("copyTooltip")}
+									{copyFeedback ? t("copied") : t("copyTooltip")}
 								</Tooltip.Content>
 							</Tooltip>
 							<Tooltip delay={0}>
@@ -196,19 +215,14 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 
 					{/* Connection / Transport */}
 					<div className="mb-6">
-						<h3 className="
-        mb-3 text-xs font-medium tracking-wide text-muted uppercase
-      ">
+						<h3 className="mb-3 text-xs font-medium tracking-wide text-muted uppercase">
 							{t("transport")}
 						</h3>
 						<Table>
 							<Table.ScrollContainer>
 								<Table.Content aria-label="Transport details">
 									<Table.Header>
-										<Table.Column
-											isRowHeader
-											className="w-24"
-										>
+										<Table.Column isRowHeader className="w-24">
 											{t("type")}
 										</Table.Column>
 										<Table.Column>Value</Table.Column>
@@ -216,48 +230,29 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 									<Table.Body>
 										<Table.Row>
 											<Table.Cell>{t("type")}</Table.Cell>
-											<Table.Cell>
-												{group.transport.type}
-											</Table.Cell>
+											<Table.Cell>{group.transport.type}</Table.Cell>
 										</Table.Row>
 										{group.transport.type === "stdio" && (
 											<>
 												<Table.Row>
-													<Table.Cell>
-														{t("command")}
-													</Table.Cell>
-													<Table.Cell>
-														{
-															group.transport
-																.command
-														}
-													</Table.Cell>
+													<Table.Cell>{t("command")}</Table.Cell>
+													<Table.Cell>{group.transport.command}</Table.Cell>
 												</Table.Row>
-												{group.transport.args &&
-													group.transport.args
-														.length > 0 && (
-														<Table.Row>
-															<Table.Cell>
-																{t("args")}
-															</Table.Cell>
-															<Table.Cell>
-																<code className="font-mono text-xs break-all">
-																	{group.transport.args.join(
-																		" ",
-																	)}
-																</code>
-															</Table.Cell>
-														</Table.Row>
-													)}
+												{group.transport.args && group.transport.args.length > 0 && (
+													<Table.Row>
+														<Table.Cell>{t("args")}</Table.Cell>
+														<Table.Cell>
+															<code className="font-mono text-xs break-all">
+																{group.transport.args.join(" ")}
+															</code>
+														</Table.Cell>
+													</Table.Row>
+												)}
 											</>
 										)}
-										{(group.transport.type === "sse" ||
-											group.transport.type ===
-												"streamable_http") && (
+										{(group.transport.type === "sse" || group.transport.type === "streamable_http") && (
 											<Table.Row>
-												<Table.Cell>
-													{t("url")}
-												</Table.Cell>
+												<Table.Cell>{t("url")}</Table.Cell>
 												<Table.Cell>
 													<code className="font-mono text-xs break-all">
 														{group.transport.url}

@@ -174,14 +174,20 @@ export function EditMcpPanel({
 			</div>
 
 			{group.items.length > 1 && (
-				<div className="
-      mb-4 rounded-lg border border-warning-soft-hover bg-warning/10 p-3
-    ">
+				<div className="mb-4 rounded-lg border border-warning/30 bg-warning/10 p-3">
 					<p className="text-sm text-warning">
 						{t("changeWillApplyToAgents", {
 							count: group.items.length,
 							agents: agentNamesList,
 						})}
+					</p>
+				</div>
+			)}
+
+			{error && (
+				<div className="mb-4 rounded-lg border border-danger/30 bg-danger/10 p-3">
+					<p className="text-sm text-danger">
+						{t("saveError", { error })}
 					</p>
 				</div>
 			)}

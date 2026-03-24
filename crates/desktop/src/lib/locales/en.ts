@@ -80,6 +80,7 @@ export default {
 	refreshServers: "Refresh servers",
 	noServersMatch: "No servers match",
 	selectServer: "Select a server to view details",
+	orCreateNew: "or create a new one",
 	transport: "Transport",
 	type: "Type",
 	command: "Command",
@@ -160,6 +161,7 @@ export default {
 	selectAgentsForSkill: "Select which agents to install this skill to:",
 	installs: "installs",
 	copyTooltip: "Copy config",
+	copied: "Copied!",
 	editTooltip: "Edit",
 	deleteTooltip: "Delete",
 
