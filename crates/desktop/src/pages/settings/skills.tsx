@@ -32,19 +32,25 @@ export default function SkillsPage() {
 		}));
 	}, [skills]);
 
-	const filteredGroups = useMemo(
-		() =>
-			groupedSkills.filter(
-				({ name, items }) =>
-					name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-					items.some((s) =>
-						(s.description ?? "")
-							.toLowerCase()
-							.includes(searchQuery.toLowerCase()),
-					),
-			),
-		[groupedSkills, searchQuery],
-	);
+	const filteredGroups = useMemo(() => {
+		const query = searchQuery.toLowerCase();
+		if (!query) return groupedSkills;
+
+		const nameMatches: typeof groupedSkills = [];
+		const descMatches: typeof groupedSkills = [];
+		for (const group of groupedSkills) {
+			if (group.name.toLowerCase().includes(query)) {
+				nameMatches.push(group);
+			} else if (
+				group.items.some((s) =>
+					(s.description ?? "").toLowerCase().includes(query),
+				)
+			) {
+				descMatches.push(group);
+			}
+		}
+		return [...nameMatches, ...descMatches];
+	}, [groupedSkills, searchQuery]);
 
 	const actualSelected = useMemo(() => {
 		if (
