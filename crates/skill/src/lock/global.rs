@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 
 use super::{io, types};
 
-pub use types::{DismissedPrompts, SkillLockEntry, SkillLockFile};
 pub use io::{get_skill_lock_path, read_skill_lock, write_skill_lock};
+pub use types::{DismissedPrompts, SkillLockEntry, SkillLockFile};
 
 /// Add or update a skill entry in the lock file.
 pub fn add_skill_to_lock(
@@ -58,7 +58,7 @@ pub fn get_skills_by_source() -> BTreeMap<String, Vec<String>> {
 	for (skill_name, entry) in lock.skills.iter() {
 		by_source
 			.entry(entry.source.clone())
-			.or_insert_with(Vec::new)
+			.or_default()
 			.push(skill_name.clone());
 	}
 
@@ -85,9 +85,8 @@ pub fn dismiss_prompt(prompt_key: &str) -> std::io::Result<()> {
 	}
 
 	if let Some(ref mut dismissed) = lock.dismissed {
-		match prompt_key {
-			"findSkillsPrompt" => dismissed.find_skills_prompt = Some(true),
-			_ => {}
+		if prompt_key == "findSkillsPrompt" {
+			dismissed.find_skills_prompt = Some(true);
 		}
 	}
 
@@ -148,12 +147,8 @@ mod tests {
 		add_skill_to_lock("my-skill", entry1).unwrap();
 
 		let lock1 = read_skill_lock();
-		let original_installed_at = lock1
-			.skills
-			.get("my-skill")
-			.unwrap()
-			.installed_at
-			.clone();
+		let original_installed_at =
+			lock1.skills.get("my-skill").unwrap().installed_at.clone();
 
 		// Update the same skill
 		let mut entry2 = test_entry();

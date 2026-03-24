@@ -11,6 +11,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAddProject } from "../hooks/use-projects";
+import { basename } from "pathe";
 
 interface CreateProjectDialogProps {
 	isOpen: boolean;
@@ -31,8 +32,7 @@ export function CreateProjectDialog({
 			const selectedPath = await invoke<string | null>("pick_folder");
 			if (selectedPath) {
 				setPath(selectedPath);
-				const folderName =
-					selectedPath.split(/[\\/]/).filter(Boolean).pop() || "";
+				const folderName = basename(selectedPath) || "";
 				if (folderName && !name) {
 					setName(folderName);
 				}
@@ -50,7 +50,6 @@ export function CreateProjectDialog({
 					onSuccess: onClose,
 					onError: (error) => {
 						console.error("Failed to create project:", error);
-						alert(`Failed to create project: ${error}`);
 					},
 				},
 			);
@@ -73,10 +72,10 @@ export function CreateProjectDialog({
 									type="button"
 									onClick={handleFolderSelect}
 									className="
-           border-default-200
-           hover:bg-default-50
            flex h-32 w-full cursor-pointer flex-col items-center justify-center
-           rounded-lg border-2 border-dashed transition-colors
+           rounded-lg border-2 border-dashed border-border bg-transparent
+           transition-colors
+           hover:bg-accent-soft
          "
 								>
 									<FolderIcon className="mb-2 size-10 text-muted" />

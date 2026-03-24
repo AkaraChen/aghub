@@ -1,7 +1,7 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { createApi } from "../lib/api";
 import type { McpResponse } from "../lib/api-types";
-import { useServer } from "../providers/server";
+import { useServer } from "./use-server";
 
 export function useMcps() {
 	const { baseUrl } = useServer();

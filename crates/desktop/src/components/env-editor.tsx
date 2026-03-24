@@ -66,7 +66,7 @@ export function EnvEditor({ value, onChange }: EnvEditorProps) {
 			if (pairs.length > 0) {
 				onChange(pairs);
 			}
-		} catch (e) {
+		} catch {
 			// If parsing or clipboard read fails, do nothing
 		}
 	};

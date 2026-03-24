@@ -15,7 +15,7 @@ import { createApi } from "../../lib/api";
 import type { McpResponse, SkillResponse } from "../../lib/api-types";
 import { ConfigSource } from "../../lib/api-types";
 import { getMcpMergeKey } from "../../lib/utils";
-import { useServer } from "../../providers/server";
+import { useServer } from "../../hooks/use-server";
 
 export default function ProjectDetailPage() {
 	const { t } = useTranslation();

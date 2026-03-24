@@ -15,8 +15,8 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentCard } from "../../components/agent-card";
 import { disableAgent, enableAgent } from "../../lib/store";
-import { useAgentAvailability } from "../../providers/agent-availability";
-import { useTheme } from "../../providers/theme";
+import { useAgentAvailability } from "../../hooks/use-agent-availability";
+import { useTheme } from "../../hooks/use-theme";
 import IntegrationsPanel from "./integrations-panel";
 
 export default function SettingsPage() {

@@ -23,8 +23,8 @@ import { useTranslation } from "react-i18next";
 import { createApi } from "../lib/api";
 import type { TransportDto } from "../lib/api-types";
 import { buildTransportFromForm } from "../lib/mcp-utils";
-import { useAgentAvailability } from "../providers/agent-availability";
-import { useServer } from "../providers/server";
+import { useAgentAvailability } from "../hooks/use-agent-availability";
+import { useServer } from "../hooks/use-server";
 import type { EnvVar } from "./env-editor";
 import { EnvEditor } from "./env-editor";
 
@@ -205,7 +205,7 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 			// Close import dialog
 			setShowImportDialog(false);
 			setJsonText("");
-		} catch (error) {
+		} catch {
 			setParseError(t("invalidJson"));
 		}
 	};

@@ -15,8 +15,8 @@ import { useTranslation } from "react-i18next";
 import { createApi } from "../lib/api";
 import type { MarketSkill } from "../lib/api-types";
 import { capitalize } from "../lib/mcp-utils";
-import { useAgentAvailability } from "../providers/agent-availability";
-import { useServer } from "../providers/server";
+import { useAgentAvailability } from "../hooks/use-agent-availability";
+import { useServer } from "../hooks/use-server";
 import { ResultStatusItem } from "./result-status-item";
 import { StepIndicator } from "./step-indicator";
 

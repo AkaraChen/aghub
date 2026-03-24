@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { createApi } from "../lib/api";
 import type { McpResponse, SkillResponse } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
-import { useServer } from "../providers/server";
+import { useServer } from "./use-server";
 
 interface ProjectStats {
 	skillsCount: number;

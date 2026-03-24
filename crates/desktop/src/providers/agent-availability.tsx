@@ -1,45 +1,22 @@
 import { Spinner } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
-import { createContext, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import type {
+	AgentAvailabilityProviderProps,
+	AvailableAgent,
+	AgentAvailabilityContextValue} from "../contexts/agent-availability";
+import {
+	AgentAvailabilityContext
+} from "../contexts/agent-availability";
 import type { AgentAvailability, AgentInfo } from "../lib/api";
 import { createApi } from "../lib/api";
 import { getDisabledAgents } from "../lib/store";
-import { useServer } from "../providers/server";
-
-export interface AvailableAgent extends AgentInfo {
-	availability: AgentAvailability;
-	isDisabled: boolean;
-	isUsable: boolean; // is_available && !isDisabled
-}
-
-interface AgentAvailabilityContext {
-	availableAgents: AvailableAgent[];
-	allAgents: AgentInfo[];
-	isLoading: boolean;
-	refetch: () => void;
-	refreshDisabledAgents: () => Promise<void>;
-}
-
-const AgentAvailabilityContext = createContext<AgentAvailabilityContext | null>(
-	null,
-);
-
-export function useAgentAvailability(): AgentAvailabilityContext {
-	const ctx = use(AgentAvailabilityContext);
-	if (!ctx)
-		throw new Error(
-			"useAgentAvailability must be used within <AgentAvailabilityProvider>",
-		);
-	return ctx;
-}
+import { useServerContext } from "../contexts/server";
 
 export function AgentAvailabilityProvider({
 	children,
-}: {
-	children: ReactNode;
-}) {
-	const { baseUrl } = useServer();
+}: AgentAvailabilityProviderProps) {
+	const { baseUrl } = useServerContext();
 	const api = createApi(baseUrl);
 	const [disabledAgents, setDisabledAgents] = useState<Set<string>>(
 		new Set(),
@@ -119,16 +96,16 @@ export function AgentAvailabilityProvider({
 		);
 	}
 
+	const value: AgentAvailabilityContextValue = {
+		availableAgents,
+		allAgents,
+		isLoading,
+		refetch,
+		refreshDisabledAgents,
+	};
+
 	return (
-		<AgentAvailabilityContext
-			value={{
-				availableAgents,
-				allAgents,
-				isLoading,
-				refetch,
-				refreshDisabledAgents,
-			}}
-		>
+		<AgentAvailabilityContext value={value}>
 			{children}
 		</AgentAvailabilityContext>
 	);

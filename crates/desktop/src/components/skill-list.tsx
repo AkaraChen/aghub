@@ -14,7 +14,7 @@ import type {
 	ProjectSkillLockResponse,
 	SkillResponse,
 } from "../lib/api-types";
-import { useServer } from "../providers/server";
+import { useServer } from "../hooks/use-server";
 
 interface SkillGroup {
 	name: string;

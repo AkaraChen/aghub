@@ -18,7 +18,7 @@ export function StepIndicator({ currentStep, labels }: StepIndicatorProps) {
 									? "bg-accent-soft text-accent"
 									: step === currentStep
 										? "bg-accent text-accent-foreground"
-										: "bg-default-100 text-muted"
+										: "bg-accent-soft text-muted"
 							}
        `}
 						>
@@ -31,7 +31,7 @@ export function StepIndicator({ currentStep, labels }: StepIndicatorProps) {
 										? "bg-accent text-accent-foreground"
 										: step === currentStep
 											? "bg-accent-foreground text-accent"
-											: "bg-default-200 text-muted"
+											: "bg-muted text-muted"
 								}
         `}
 							>
@@ -46,7 +46,7 @@ export function StepIndicator({ currentStep, labels }: StepIndicatorProps) {
           ${
 									step < currentStep
 										? "bg-accent"
-										: "bg-default-200"
+										: "bg-muted"
 								}
         `}
 							/>

@@ -1,29 +1,19 @@
 import {
-	CommandLineIcon,
 	DocumentDuplicateIcon,
 	ExclamationTriangleIcon,
 	PencilIcon,
 	TrashIcon,
 	UserGroupIcon,
-	WifiIcon,
 } from "@heroicons/react/24/solid";
 import { Button, Chip, Modal, Table, Tooltip } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createApi } from "../lib/api";
-import type { McpResponse, TransportDto } from "../lib/api-types";
+import type { McpResponse } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
-import { useServer } from "../providers/server";
+import { useServer } from "../hooks/use-server";
 import { ManageAgentsDialog } from "./manage-agents-dialog";
-
-// Export icon getter for reuse - uses transport-specific icons for visual distinction
-export function getMcpTransportIcon(transport: TransportDto) {
-	if (transport.type === "stdio") {
-		return <CommandLineIcon className="size-4 shrink-0" />;
-	}
-	return <WifiIcon className="size-4 shrink-0" />;
-}
 
 export interface McpGroup {
 	mergeKey: string;
@@ -79,7 +69,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 			transport: primary.transport,
 			timeout: primary.timeout,
 		};
-		console.log("Copy config:", JSON.stringify(config, null, 2));
+		console.warn("Copy config:", JSON.stringify(config, null, 2));
 	};
 
 	return (

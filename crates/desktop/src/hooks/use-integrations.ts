@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createApi } from "../lib/api";
-import { useServer } from "../providers/server";
+import { useServer } from "./use-server";
 
 const CODE_EDITORS_KEY = "code-editors";
 

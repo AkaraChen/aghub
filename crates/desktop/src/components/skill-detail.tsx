@@ -21,7 +21,7 @@ import type {
 	SkillResponse,
 } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
-import { useServer } from "../providers/server";
+import { useServer } from "../hooks/use-server";
 
 interface LocationGroup {
 	sourcePath: string;
@@ -367,8 +367,8 @@ function LocationItem({
 
 	return (
 		<div className="
-    bg-default-50 flex items-center justify-between gap-2 rounded-lg border
-    border-border p-2.5
+    flex items-center justify-between gap-2 rounded-lg border border-border
+    bg-accent-soft p-2.5
   ">
 			<div className="min-w-0 flex-1">
 				<p className="mb-0.5 truncate text-xs font-medium text-foreground">

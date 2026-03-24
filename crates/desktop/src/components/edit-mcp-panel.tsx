@@ -19,7 +19,7 @@ import { createApi } from "../lib/api";
 import type { McpResponse, TransportDto } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
 import { buildTransportFromForm, capitalize } from "../lib/mcp-utils";
-import { useServer } from "../providers/server";
+import { useServer } from "../hooks/use-server";
 import type { EnvVar } from "./env-editor";
 import { EnvEditor } from "./env-editor";
 

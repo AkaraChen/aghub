@@ -18,7 +18,7 @@ export function ResultStatusItem({
 	error,
 }: ResultStatusItemProps) {
 	return (
-		<div className="bg-default-50 flex items-start gap-2 rounded-lg p-3">
+		<div className="flex items-start gap-2 rounded-lg bg-accent-soft p-3">
 			{status === "pending" && (
 				<ArrowPathIcon className="mt-0.5 size-4 shrink-0 animate-spin text-muted" />
 			)}

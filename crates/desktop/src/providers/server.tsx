@@ -1,22 +1,13 @@
 import { Spinner } from "@heroui/react";
 import { invoke } from "@tauri-apps/api/core";
-import type { ReactNode } from "react";
-import { createContext, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import type {
+	ServerProviderProps} from "../contexts/server";
+import {
+	ServerContext
+} from "../contexts/server";
 
-interface ServerContext {
-	port: number;
-	baseUrl: string;
-}
-
-const ServerContext = createContext<ServerContext | null>(null);
-
-export function useServer(): ServerContext {
-	const ctx = use(ServerContext);
-	if (!ctx) throw new Error("useServer must be used within <ServerProvider>");
-	return ctx;
-}
-
-export function ServerProvider({ children }: { children: ReactNode }) {
+export function ServerProvider({ children }: ServerProviderProps) {
 	const [port, setPort] = useState<number | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
@@ -45,9 +36,7 @@ export function ServerProvider({ children }: { children: ReactNode }) {
 	}
 
 	return (
-		<ServerContext
-			value={{ port, baseUrl: `http://localhost:${port}/api/v1` }}
-		>
+		<ServerContext value={{ port, baseUrl: `http://localhost:${port}/api/v1` }}>
 			{children}
 		</ServerContext>
 	);

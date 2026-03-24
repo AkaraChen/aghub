@@ -2,7 +2,7 @@ import { Card, Switch } from "@heroui/react";
 import clsx from "clsx";
 import { useTranslation } from "react-i18next";
 import { AgentIcon } from "../lib/agent-icons";
-import type { AvailableAgent } from "../providers/agent-availability";
+import type { AvailableAgent } from "../contexts/agent-availability";
 
 interface AgentCardProps {
 	agent: AvailableAgent;

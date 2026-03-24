@@ -1,6 +1,9 @@
 import type { EnvVar } from "../components/env-editor";
 import type { TransportDto } from "./api-types";
 
+// Static regex to avoid re-compilation on every call
+const WHITESPACE_REGEX = /\s+/;
+
 export function buildTransportFromForm(
 	transportType: "stdio" | "sse" | "streamable_http",
 	data: {
@@ -18,8 +21,8 @@ export function buildTransportFromForm(
 
 	if (transportType === "stdio") {
 		const argsArray = data.args?.trim()
-			? data.args.trim().split(/\s+/)
-			: [];
+			? data.args.trim().split(WHITESPACE_REGEX)
+				: [];
 		const envRecord: Record<string, string> | undefined =
 			data.envVars && data.envVars.length > 0
 				? Object.fromEntries(
@@ -72,5 +75,5 @@ export function parseTimeout(timeout: string): number | undefined {
 }
 
 export function parseArgsString(args: string): string[] {
-	return args.trim() ? args.trim().split(/\s+/) : [];
+	return args.trim() ? args.trim().split(WHITESPACE_REGEX) : [];
 }
