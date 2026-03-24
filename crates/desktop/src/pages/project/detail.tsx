@@ -126,10 +126,11 @@ export default function ProjectDetailPage() {
 				}
 				onSelect={handleSelect}
 				onCreateMcp={() => setPanel({ type: "create-mcp" })}
-						onCreateSkill={() => setIsInstallSkillOpen(true)}
+				onCreateSkill={() => setIsInstallSkillOpen(true)}
 				onRefresh={handleRefresh}
 				searchQuery={searchQuery}
 				onSearchChange={setSearchQuery}
+				projectPath={project.path}
 			/>
 
 			{/* Detail Panel */}
