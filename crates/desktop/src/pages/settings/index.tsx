@@ -13,6 +13,7 @@ import {
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentCard } from "../../components/agent-card";
+import IntegrationsPanel from "./integrations-panel";
 import { disableAgent, enableAgent } from "../../lib/store";
 import { useAgentAvailability } from "../../providers/agent-availability";
 import { useTheme } from "../../providers/theme";
@@ -63,15 +64,19 @@ export default function SettingsPage() {
 								aria-label="Settings sections"
 								className="w-auto inline-flex"
 							>
-								<Tabs.Tab id="appearance">
-									{t("appearance")}
-									<Tabs.Indicator />
-								</Tabs.Tab>
-								<Tabs.Tab id="agents">
-									{t("agentManagement")}
-									<Tabs.Indicator />
-								</Tabs.Tab>
-							</Tabs.List>
+							<Tabs.Tab id="appearance">
+								{t("appearance")}
+								<Tabs.Indicator />
+							</Tabs.Tab>
+							<Tabs.Tab id="agents">
+								{t("agentManagement")}
+								<Tabs.Indicator />
+							</Tabs.Tab>
+							<Tabs.Tab id="integrations">
+								{t("integrations")}
+								<Tabs.Indicator />
+							</Tabs.Tab>
+						</Tabs.List>
 						</Tabs.ListContainer>
 					</div>
 
@@ -175,6 +180,10 @@ export default function SettingsPage() {
 									/>
 								))}
 						</div>
+					</Tabs.Panel>
+
+					<Tabs.Panel id="integrations">
+						<IntegrationsPanel />
 					</Tabs.Panel>
 				</Tabs>
 			</div>
