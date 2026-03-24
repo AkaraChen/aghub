@@ -38,46 +38,6 @@ interface SkillListProps {
 	projectPath?: string;
 }
 
-interface SkillItemButtonProps {
-	name: string;
-	isSelected: boolean;
-	onSelect: (name: string) => void;
-	variant?: "nested" | "flat";
-}
-
-function SkillItemButton({
-	name,
-	isSelected,
-	onSelect,
-	variant = "flat",
-}: SkillItemButtonProps) {
-	const baseClasses =
-		"flex items-center gap-2 w-full text-left transition-colors";
-	const variantClasses =
-		variant === "nested"
-			? "px-3 py-2"
-			: "px-3 py-2.5 border-b border-border";
-	const stateClasses = isSelected
-		? "bg-surface text-foreground"
-		: "text-muted hover:bg-surface-secondary";
-
-	return (
-		<button
-			type="button"
-			onClick={() => onSelect(name)}
-			className={`
-     ${baseClasses}
-     ${variantClasses}
-     ${stateClasses}
-   `}
-		>
-			<BookOpenIcon className="size-3.5 shrink-0 text-muted" />
-			<span className="flex-1 truncate text-sm font-medium text-foreground">
-				{name}
-			</span>
-		</button>
-	);
-}
 
 export function SkillList({
 	skills,
@@ -256,14 +216,11 @@ export function SkillList({
 		return (
 			<div className="flex-1 overflow-y-auto">
 				{sourceGroups.map((sg) => (
-					<div key={sg.source} className="border-b border-border">
+					<div key={sg.source}>
 						<button
 							type="button"
 							onClick={() => toggleSource(sg.source)}
-							className="
-         flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors
-         hover:bg-surface-secondary
-       "
+							className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-surface-secondary"
 						>
 							{expandedSources.has(sg.source) ? (
 								<ChevronDownIcon className="size-4 shrink-0 text-muted" />
@@ -281,40 +238,66 @@ export function SkillList({
 						</button>
 
 						{expandedSources.has(sg.source) && (
-							<div>
+							<ListBox
+								aria-label={`Skills from ${sg.source}`}
+								selectionMode="single"
+								selectedKeys={
+									selectedKey ? new Set([selectedKey]) : new Set()
+								}
+								onSelectionChange={(keys) => {
+									if (keys === "all") return;
+									const key = [...keys][0] as string;
+									if (key) onSelect(key);
+								}}
+								className="p-2"
+							>
 								{sg.skills.map((skillGroup) => (
-									<SkillItemButton
+									<ListBox.Item
 										key={skillGroup.name}
-										name={skillGroup.name}
-										isSelected={
-											selectedKey === skillGroup.name
-										}
-										onSelect={onSelect}
-										variant="nested"
-									/>
+										id={skillGroup.name}
+										textValue={skillGroup.name}
+										className="data-selected:bg-surface"
+									>
+										<div className="flex w-full items-center gap-2">
+											<BookOpenIcon className="size-3.5 shrink-0 text-muted" />
+											<Label className="flex-1 truncate">
+												{skillGroup.name}
+											</Label>
+										</div>
+									</ListBox.Item>
 								))}
-							</div>
+							</ListBox>
 						)}
 					</div>
 				))}
 
-				{singleItemGroups.map((group) => (
-					<SkillItemButton
-						key={group.name}
-						name={group.name}
-						isSelected={selectedKey === group.name}
-						onSelect={onSelect}
-					/>
-				))}
-
-				{unknownGroups.map((group) => (
-					<SkillItemButton
-						key={group.name}
-						name={group.name}
-						isSelected={selectedKey === group.name}
-						onSelect={onSelect}
-					/>
-				))}
+				{(singleItemGroups.length > 0 || unknownGroups.length > 0) && (
+					<ListBox
+						aria-label="Ungrouped skills"
+						selectionMode="single"
+						selectedKeys={selectedKey ? new Set([selectedKey]) : new Set()}
+						onSelectionChange={(keys) => {
+							if (keys === "all") return;
+							const key = [...keys][0] as string;
+							if (key) onSelect(key);
+						}}
+						className="p-2"
+					>
+						{[...singleItemGroups, ...unknownGroups].map((group) => (
+							<ListBox.Item
+								key={group.name}
+								id={group.name}
+								textValue={group.name}
+								className="data-selected:bg-surface"
+							>
+								<div className="flex w-full items-center gap-2">
+									<BookOpenIcon className="size-3.5 shrink-0 text-muted" />
+									<Label className="flex-1 truncate">{group.name}</Label>
+								</div>
+							</ListBox.Item>
+						))}
+					</ListBox>
+				)}
 			</div>
 		);
 	}
@@ -344,10 +327,10 @@ export function SkillList({
 					key={group.name}
 					id={group.name}
 					textValue={group.name}
-					className="data-selected:bg-accent/10"
+					className="data-selected:bg-surface"
 				>
 					<div className="flex w-full items-center gap-2">
-						<BookOpenIcon className="size-3.5 shrink-0 text-muted" />
+						<BookOpenIcon className="size-4 shrink-0 text-muted" />
 						<Label className="flex-1 truncate">{group.name}</Label>
 					</div>
 				</ListBox.Item>
