@@ -2,25 +2,28 @@ import {
 	CodeBracketIcon,
 	ExclamationTriangleIcon,
 	FolderIcon,
+	GlobeAltIcon,
+	HashtagIcon,
 	TrashIcon,
 	XCircleIcon,
 } from "@heroicons/react/24/solid";
 import {
 	Button,
 	Chip,
-	Fieldset,
-	Label,
 	Modal,
 	Spinner,
-	TextField,
 } from "@heroui/react";
 import { useTranslation } from "react-i18next";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useServer } from "../providers/server";
 import { createApi } from "../lib/api";
 import { ConfigSource } from "../lib/api-types";
 import type { SkillResponse } from "../lib/api-types";
+import type {
+	GlobalSkillLockResponse,
+	ProjectSkillLockResponse,
+} from "../lib/api-types";
 
 interface LocationGroup {
 	sourcePath: string;
@@ -53,6 +56,44 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const editFolderMutation = useMutation({
 		mutationFn: (skillPath: string) => api.skills.editFolder(skillPath),
 	});
+
+	const { data: globalLock } = useQuery<GlobalSkillLockResponse>({
+		queryKey: ["skill-locks", "global"],
+		queryFn: () => api.skills.getGlobalLock(),
+		staleTime: 30_000,
+	});
+
+	const { data: projectLock } = useQuery<ProjectSkillLockResponse>({
+		queryKey: ["skill-locks", "project", projectPath],
+		queryFn: () => api.skills.getProjectLock(projectPath),
+		staleTime: 30_000,
+	});
+
+	const currentSkillSource = useMemo(() => {
+		const skillItem = group.items[0];
+		if (skillItem.source === ConfigSource.Global) {
+			const entry = globalLock?.skills.find((s) => s.name === skill.name);
+			if (entry) {
+				return {
+					source: entry.source,
+					sourceType: entry.sourceType,
+					hash: entry.skillFolderHash,
+					scope: "global",
+				};
+			}
+		} else if (skillItem.source === ConfigSource.Project) {
+			const entry = projectLock?.skills.find((s) => s.name === skill.name);
+			if (entry) {
+				return {
+					source: entry.source,
+					sourceType: entry.sourceType,
+					hash: entry.computedHash,
+					scope: "project",
+				};
+			}
+		}
+		return null;
+	}, [globalLock, projectLock, skill.name, group.items]);
 
 	const globalItems = group.items.filter(
 		(item) => item.source === ConfigSource.Global,
@@ -206,6 +247,26 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 								{skill.tools.map((tool) => (
 									<Chip key={tool} size="sm">{tool}</Chip>
 								))}
+							</div>
+						</div>
+					)}
+
+					{currentSkillSource && (
+						<div className="mb-6">
+							<h3 className="text-xs font-medium text-muted uppercase tracking-wide mb-3 flex items-center gap-2">
+								<GlobeAltIcon className="size-4" />
+								{t("installedFrom")} ({currentSkillSource.scope})
+							</h3>
+							<div className="p-3 border border-border rounded-lg bg-surface">
+								<p className="text-sm font-medium text-foreground truncate">
+									{currentSkillSource.source}
+								</p>
+								<div className="flex items-center gap-2 mt-1">
+									<p className="text-xs text-muted">{currentSkillSource.sourceType}</p>
+									<span className="text-xs text-muted font-mono">
+										<HashtagIcon className="size-3 inline" /> {currentSkillSource.hash.slice(0, 8)}...
+									</span>
+								</div>
 							</div>
 						</div>
 					)}
