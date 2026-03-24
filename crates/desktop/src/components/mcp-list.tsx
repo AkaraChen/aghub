@@ -1,4 +1,4 @@
-import { CommandLineIcon, WifiIcon } from "@heroicons/react/24/solid";
+import { CommandLineIcon, GlobeAltIcon } from "@heroicons/react/24/solid";
 import { Label, ListBox } from "@heroui/react";
 import Fuse from "fuse.js";
 import { useMemo } from "react";
@@ -66,7 +66,7 @@ export function McpList({
 		if (transport.type === "stdio") {
 			return <CommandLineIcon className="size-4 shrink-0" />;
 		}
-		return <WifiIcon className="size-4 shrink-0" />;
+		return <GlobeAltIcon className="size-4 shrink-0" />;
 	};
 
 	if (filteredGroups.length === 0) {

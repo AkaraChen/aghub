@@ -1,14 +1,23 @@
 import {
 	CheckCircleIcon,
+	ClipboardDocumentIcon,
 	DocumentDuplicateIcon,
 	ExclamationTriangleIcon,
 	PencilIcon,
+	PlusIcon,
 	TrashIcon,
-	UserGroupIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Card, Chip, Modal, Table, Tooltip } from "@heroui/react";
+import {
+	Button,
+	Card,
+	Chip,
+	Disclosure,
+	Modal,
+	Separator,
+	Tooltip,
+} from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { createApi } from "../lib/api";
 import type { McpResponse, TransportDto } from "../lib/api-types";
@@ -16,6 +25,7 @@ import { ConfigSource } from "../lib/api-types";
 import { useServer } from "../hooks/use-server";
 import { ManageAgentsDialog } from "./manage-agents-dialog";
 import { AgentIcon } from "../lib/agent-icons";
+import { cn } from "../lib/utils";
 
 export interface McpGroup {
 	mergeKey: string;
@@ -29,13 +39,117 @@ interface McpDetailProps {
 	projectPath?: string;
 }
 
+function CopyButton({ text, label }: { text: string; label?: string }) {
+	const [copied, setCopied] = useState(false);
+	const { t } = useTranslation();
+
+	const handleCopy = async () => {
+		try {
+			await navigator.clipboard.writeText(text);
+			setCopied(true);
+		} catch {
+			setCopied(true);
+		}
+	};
+
+	useEffect(() => {
+		if (copied) {
+			const timer = setTimeout(setCopied, 1500, false);
+			return () => clearTimeout(timer);
+		}
+	}, [copied]);
+
+	return (
+		<Tooltip delay={0}>
+			<Button
+				isIconOnly
+				variant="ghost"
+				size="sm"
+				className={cn("size-7", copied ? "text-success" : "text-muted")}
+				aria-label={label ?? t("copy")}
+				onPress={handleCopy}
+			>
+				{copied ? (
+					<CheckCircleIcon className="size-3.5" />
+				) : (
+					<ClipboardDocumentIcon className="size-3.5" />
+				)}
+			</Button>
+			<Tooltip.Content>
+				{copied ? t("copied") : (label ?? t("copy"))}
+			</Tooltip.Content>
+		</Tooltip>
+	);
+}
+
+function DetailRow({
+	label,
+	value,
+	mono = false,
+	copyable = false,
+}: {
+	label: string;
+	value: string;
+	mono?: boolean;
+	copyable?: boolean;
+}) {
+	return (
+		<div className="flex items-start justify-between gap-4 py-2">
+			<span className="shrink-0 text-sm text-muted">{label}</span>
+			<div className="flex items-center gap-1">
+				<span
+					className={cn(
+						"text-right text-sm break-all",
+						mono && "font-mono text-xs",
+					)}
+				>
+					{value}
+				</span>
+				{copyable && <CopyButton text={value} />}
+			</div>
+		</div>
+	);
+}
+
+function KeyValueSection({
+	data,
+	emptyMessage,
+}: {
+	data: Record<string, string> | undefined;
+	emptyMessage: string;
+}) {
+	const entries = data ? Object.entries(data) : [];
+
+	if (entries.length === 0) {
+		return (
+			<p className="py-2 text-xs text-muted">{emptyMessage}</p>
+		);
+	}
+
+	return (
+		<div className="space-y-1 py-1">
+			{entries.map(([key, value]) => (
+				<div
+					key={key}
+					className="flex items-center justify-between gap-4 rounded-lg bg-surface-secondary px-3 py-1.5"
+				>
+					<span className="shrink-0 font-mono text-xs">{key}</span>
+					<span className="truncate font-mono text-xs text-muted">
+						{value}
+					</span>
+				</div>
+			))}
+		</div>
+	);
+}
+
 export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 	const { t } = useTranslation();
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [manageDialogOpen, setManageDialogOpen] = useState(false);
 	const [copyFeedback, setCopyFeedback] = useState(false);
 	const { baseUrl } = useServer();
-	const api = createApi(baseUrl);
+	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
 	const queryClient = useQueryClient();
 
 	const deleteMutation = useMutation({
@@ -65,7 +179,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 		},
 	});
 
-	const handleCopy = async () => {
+	const handleCopyConfig = async () => {
 		const primary = group.items[0];
 		const config = {
 			name: primary.name,
@@ -78,12 +192,10 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 			await navigator.clipboard.writeText(configJson);
 			setCopyFeedback(true);
 		} catch {
-			// Fallback: still show feedback even if clipboard fails
 			setCopyFeedback(true);
 		}
 	};
 
-	// Clear copy feedback after 2 seconds
 	useEffect(() => {
 		if (copyFeedback) {
 			const timer = setTimeout(setCopyFeedback, 2000, false);
@@ -91,48 +203,69 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 		}
 	}, [copyFeedback]);
 
+	const transport = group.transport;
+	const primarySource = group.items[0].source;
+
+	const getAgentName = useCallback(
+		(item: McpResponse) =>
+			item.agent
+				? item.agent.charAt(0).toUpperCase() +
+					item.agent.slice(1).toLowerCase()
+				: t("default"),
+		[t],
+	);
+
+	// Get headers or env based on transport type
+	const headers =
+		transport.type === "sse" || transport.type === "streamable_http"
+			? transport.headers
+			: undefined;
+	const envVars =
+		transport.type === "stdio" ? transport.env : undefined;
+	const headersCount = headers ? Object.keys(headers).length : 0;
+	const envCount = envVars ? Object.keys(envVars).length : 0;
+
 	return (
 		<>
 			<div className="h-full overflow-y-auto">
-				<div className="max-w-3xl space-y-4 p-6">
-					{/* Header Card */}
-					<Card variant="default">
+				<div className="max-w-2xl space-y-4 p-6">
+					{/* Unified Detail Card */}
+					<Card>
+						{/* Header: Name + Actions */}
 						<Card.Header className="flex flex-row items-start justify-between gap-3">
-							<div className="flex-1">
-								<Card.Title>
-									{group.items[0].name}
-								</Card.Title>
+							<div className="min-w-0 flex-1">
+								<Card.Title>{group.items[0].name}</Card.Title>
+								<Card.Description className="mt-1 flex items-center gap-2">
+									<Chip size="sm" variant="soft">
+										{transport.type}
+									</Chip>
+									{primarySource && (
+										<Chip
+											size="sm"
+											variant="soft"
+											color={
+												primarySource ===
+												ConfigSource.Project
+													? "accent"
+													: "default"
+											}
+										>
+											{primarySource ===
+											ConfigSource.Project
+												? t("project")
+												: t("global")}
+										</Chip>
+									)}
+								</Card.Description>
 							</div>
 							<div className="flex items-center gap-1">
 								<Tooltip delay={0}>
 									<Button
 										isIconOnly
-										variant="tertiary"
+										variant="ghost"
 										size="sm"
-										className={copyFeedback ? "text-success" : "text-muted"}
-										aria-label={copyFeedback ? t("copied") : t("copy")}
-										onPress={handleCopy}
-									>
-										{copyFeedback ? (
-											<CheckCircleIcon className="size-4" />
-										) : (
-											<DocumentDuplicateIcon className="size-4" />
-										)}
-									</Button>
-									<Tooltip.Content>
-										{copyFeedback ? t("copied") : t("copyTooltip")}
-									</Tooltip.Content>
-								</Tooltip>
-								<Tooltip delay={0}>
-									<Button
-										isIconOnly
-										variant="tertiary"
-										size="sm"
-										className="
-            shrink-0 text-muted
-            hover:text-foreground
-          "
-										aria-label={t("edit")}
+										className="text-muted"
+										aria-label={t("editTooltip")}
 										onPress={onEdit}
 									>
 										<PencilIcon className="size-4" />
@@ -144,14 +277,13 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 								<Tooltip delay={0}>
 									<Button
 										isIconOnly
-										variant="tertiary"
+										variant="ghost"
 										size="sm"
-										className="
-            shrink-0 text-muted
-            hover:text-danger
-          "
-										aria-label={t("remove")}
-										onPress={() => setDeleteDialogOpen(true)}
+										className="text-muted hover:text-danger"
+										aria-label={t("deleteTooltip")}
+										onPress={() =>
+											setDeleteDialogOpen(true)
+										}
 									>
 										<TrashIcon className="size-4" />
 									</Button>
@@ -159,122 +291,194 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 										{t("deleteTooltip")}
 									</Tooltip.Content>
 								</Tooltip>
-								<Tooltip delay={0}>
-									<Button
-										isIconOnly
-										variant="primary"
-										size="sm"
-										className="
-            shrink-0 text-muted
-            hover:text-foreground
-          "
-										aria-label={t("manageAgents")}
-										onPress={() => setManageDialogOpen(true)}
-									>
-										<UserGroupIcon className="size-4 text-surface" />
-									</Button>
-									<Tooltip.Content>
-										{t("manageAgentsTooltip")}
-									</Tooltip.Content>
-								</Tooltip>
 							</div>
 						</Card.Header>
 
-						{/* Agents Section in Header Card */}
-						<Card.Content>
-							<div className="flex flex-wrap gap-1.5">
-								{group.items.map((item) => (
-									<div
-										key={item.agent ?? "default"}
-										className="flex items-center gap-1"
-									>
-										<Tooltip>
-											<AgentIcon
-												id={item.agent ?? "default"}
-												name={item.agent ? item.agent.charAt(0).toUpperCase() + item.agent.slice(1).toLowerCase() : "Default"}
-												size="sm"
-												variant="ghost"
-											/>
-											<Tooltip.Content>
-												{item.agent
-													? item.agent
-															.charAt(0)
-															.toUpperCase() +
-														item.agent
-															.slice(1)
-															.toLowerCase()
-													: "Default"}
-											</Tooltip.Content>
-										</Tooltip>
-										{!item.enabled && (
-											<Chip
-												size="sm"
-												variant="soft"
-												color="warning"
-											>
-												{t("disabled")}
-											</Chip>
-										)}
-									</div>
-								))}
+						<Card.Content className="space-y-5">
+							{/* Agents Section */}
+							<div>
+								<p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">
+									{t("agents")}
+								</p>
+								<div className="flex flex-wrap gap-2">
+									{group.items.map((item) => (
+										<Chip
+											key={item.agent ?? "default"}
+											size="sm"
+											variant={
+												item.enabled
+													? "soft"
+													: "tertiary"
+											}
+											color="default"
+											className="pr-3"
+										>
+											<span className="flex items-center gap-1.5">
+												<AgentIcon
+													id={
+														item.agent ?? "default"
+													}
+													name={getAgentName(item)}
+													size="sm"
+													variant="ghost"
+												/>
+												<span>
+													{getAgentName(item)}
+												</span>
+												{!item.enabled && (
+													<span className="text-xs text-warning">
+														({t("disabled")})
+													</span>
+												)}
+											</span>
+										</Chip>
+									))}
+								</div>
 							</div>
-						</Card.Content>
-					</Card>
 
-					{/* Transport Card */}
-					<Card variant="default">
-						<Card.Header>
-							<Card.Title>{t("transport")}</Card.Title>
-						</Card.Header>
-						<Card.Content>
-							<Table>
-								<Table.ScrollContainer>
-									<Table.Content aria-label="Transport details">
-										<Table.Header>
-											<Table.Column isRowHeader className="w-24">
-												{t("type")}
-											</Table.Column>
-											<Table.Column>
-												{t("details")}
-											</Table.Column>
-										</Table.Header>
-										<Table.Body>
-											<Table.Row>
-												<Table.Cell>{t("type")}</Table.Cell>
-												<Table.Cell>{group.transport.type}</Table.Cell>
-											</Table.Row>
-											{group.transport.type === "stdio" && (
-												<>
-													<Table.Row>
-														<Table.Cell>{t("command")}</Table.Cell>
-														<Table.Cell>{group.transport.command}</Table.Cell>
-													</Table.Row>
-													{group.transport.args && group.transport.args.length > 0 && (
-														<Table.Row>
-															<Table.Cell>{t("args")}</Table.Cell>
-															<Table.Cell>
-																<code className="font-mono text-xs break-all">
-																	{group.transport.args.join(" ")}
-																</code>
-															</Table.Cell>
-														</Table.Row>
+							<Separator />
+
+							{/* Connection Details */}
+							<div>
+								<p className="mb-1 text-xs font-medium uppercase tracking-wider text-muted">
+									{t("connection")}
+								</p>
+
+								{/* Type row */}
+								<DetailRow
+									label={t("type")}
+									value={transport.type}
+								/>
+
+								{/* Stdio-specific fields */}
+								{transport.type === "stdio" && (
+									<>
+										<DetailRow
+											label={t("command")}
+											value={transport.command}
+											mono
+											copyable
+										/>
+										{transport.args &&
+											transport.args.length > 0 && (
+												<DetailRow
+													label={t("args")}
+													value={transport.args.join(
+														" ",
 													)}
-												</>
+													mono
+												/>
 											)}
-											{(group.transport.type === "sse" || group.transport.type === "streamable_http") && (
-												<Table.Row>
-													<Table.Cell>{t("url")}</Table.Cell>
-													<Table.Cell>
-														<code className="font-mono text-xs break-all">
-															{group.transport.url}
-														</code>
-													</Table.Cell>
-												</Table.Row>
-											)}
-										</Table.Body>
-									</Table.Content>
-								</Table.ScrollContainer>
-							</Table>
+									</>
+								)}
+
+								{/* HTTP-based transport fields */}
+								{(transport.type === "sse" ||
+									transport.type === "streamable_http") && (
+									<DetailRow
+										label={t("url")}
+										value={transport.url}
+										mono
+										copyable
+									/>
+								)}
+
+								{/* Timeout */}
+								{(group.items[0].timeout ||
+									transport.timeout) && (
+									<DetailRow
+										label={t("timeout")}
+										value={t("timeoutSeconds", {
+											seconds:
+												group.items[0].timeout ??
+												transport.timeout,
+										})}
+									/>
+								)}
+							</div>
+
+							{/* Headers (HTTP transports) */}
+							{(transport.type === "sse" ||
+								transport.type === "streamable_http") && (
+								<Disclosure>
+									<Disclosure.Heading>
+										<Button
+											slot="trigger"
+											variant="ghost"
+											size="sm"
+											className="w-full justify-between text-muted"
+										>
+											{t("headersCount", {
+												count: headersCount,
+											})}
+											<Disclosure.Indicator />
+										</Button>
+									</Disclosure.Heading>
+									<Disclosure.Content>
+										<Disclosure.Body>
+											<KeyValueSection
+												data={headers}
+												emptyMessage={t("noHeaders")}
+											/>
+										</Disclosure.Body>
+									</Disclosure.Content>
+								</Disclosure>
+							)}
+
+							{/* Environment Variables (stdio) */}
+							{transport.type === "stdio" && (
+								<Disclosure>
+									<Disclosure.Heading>
+										<Button
+											slot="trigger"
+											variant="ghost"
+											size="sm"
+											className="w-full justify-between text-muted"
+										>
+											{t("envCount", {
+												count: envCount,
+											})}
+											<Disclosure.Indicator />
+										</Button>
+									</Disclosure.Heading>
+									<Disclosure.Content>
+										<Disclosure.Body>
+											<KeyValueSection
+												data={envVars}
+												emptyMessage={t("noEnvVars")}
+											/>
+										</Disclosure.Body>
+									</Disclosure.Content>
+								</Disclosure>
+							)}
+
+							<Separator />
+
+							{/* Action Buttons */}
+							<div className="flex gap-2">
+								<Button
+									variant="secondary"
+									size="sm"
+									onPress={handleCopyConfig}
+								>
+									{copyFeedback ? (
+										<CheckCircleIcon className="size-4 text-success" />
+									) : (
+										<DocumentDuplicateIcon className="size-4" />
+									)}
+									{copyFeedback
+										? t("copied")
+										: t("copyConfig")}
+								</Button>
+								<Button
+									variant="primary"
+									size="sm"
+									onPress={() => setManageDialogOpen(true)}
+								>
+									<PlusIcon className="size-4" />
+									{t("addToAgent")}
+								</Button>
+							</div>
 						</Card.Content>
 					</Card>
 				</div>
@@ -303,16 +507,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 											name: group.items[0].name,
 											count: group.items.length,
 											agents: group.items
-												.map((i) =>
-													i.agent
-														? i.agent
-																.charAt(0)
-																.toUpperCase() +
-															i.agent
-																.slice(1)
-																.toLowerCase()
-														: "Default",
-												)
+												.map((i) => getAgentName(i))
 												.join(", "),
 										})
 									: t("deleteMcpServerConfirm", {
@@ -335,7 +530,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 							>
 								{deleteMutation.isPending
 									? t("deleting")
-									: t("remove")}
+									: t("deleteMcpServer")}
 							</Button>
 						</Modal.Footer>
 					</Modal.Dialog>

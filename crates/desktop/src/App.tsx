@@ -1,4 +1,4 @@
-import { Spinner } from "@heroui/react";
+import { Spinner, Toast } from "@heroui/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { Suspense, useEffect, useState } from "react";
@@ -60,6 +60,7 @@ function App() {
 
 	return (
 		<QueryClientProvider client={queryClient}>
+			<Toast.Provider placement="bottom end" />
 			<ThemeProvider>
 				<ServerProvider>
 					<AgentAvailabilityProvider>

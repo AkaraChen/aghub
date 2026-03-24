@@ -1,22 +1,27 @@
 import {
-	ChevronLeftIcon,
-	ChevronRightIcon,
-	MinusIcon,
-	PlusIcon,
+	CheckCircleIcon,
+	ArrowPathIcon,
+	XCircleIcon,
 } from "@heroicons/react/24/solid";
-import type { Selection } from "@heroui/react";
-import { Button, Modal, Spinner, Tag, TagGroup } from "@heroui/react";
+import {
+	Button,
+	Checkbox,
+	CheckboxGroup,
+	Description,
+	Label,
+	Modal,
+	toast,
+} from "@heroui/react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { createApi } from "../lib/api";
 import type { McpResponse } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
-import { capitalize } from "../lib/mcp-utils";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useServer } from "../hooks/use-server";
-import { ResultStatusItem } from "./result-status-item";
-import { StepIndicator } from "./step-indicator";
+import { AgentIcon } from "../lib/agent-icons";
+import { cn } from "../lib/utils";
 
 interface ManageAgentsDialogProps {
 	group: {
@@ -29,13 +34,10 @@ interface ManageAgentsDialogProps {
 	projectPath?: string;
 }
 
-type WizardStep = 1 | 2 | 3;
+type AgentStatus = "idle" | "pending" | "success" | "error";
 
-interface AgentResult {
-	agentId: string;
-	displayName: string;
-	action: "install" | "uninstall";
-	status: "pending" | "success" | "error";
+interface AgentState {
+	status: AgentStatus;
 	error?: string;
 }
 
@@ -47,7 +49,7 @@ export function ManageAgentsDialog({
 }: ManageAgentsDialogProps) {
 	const { t } = useTranslation();
 	const { baseUrl } = useServer();
-	const api = createApi(baseUrl);
+	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
 
@@ -56,79 +58,85 @@ export function ManageAgentsDialog({
 		[availableAgents],
 	);
 
-	const [step, setStep] = useState<WizardStep>(1);
-	const initialAgentIdsRef = useRef<Set<string> | null>(null);
-	const [selectedAgents, setSelectedAgents] = useState<Set<string>>(
-		() => initialAgentIdsRef.current ?? new Set(),
-	);
-	const [results, setResults] = useState<AgentResult[]>([]);
+	const initialAgentIdsRef = useRef<Set<string>>(new Set());
+	const prevIsOpenRef = useRef(false);
+	const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
+	const [agentStates, setAgentStates] = useState<
+		Record<string, AgentState>
+	>({});
+	const [isApplying, setIsApplying] = useState(false);
 
-	if (isOpen && initialAgentIdsRef.current === null) {
-		initialAgentIdsRef.current = new Set(
-			group.items.map((item) => item.agent ?? "default"),
-		);
-		setSelectedAgents(new Set(initialAgentIdsRef.current));
+	// Sync initial state when dialog opens/closes — no setState during render
+	if (isOpen && !prevIsOpenRef.current) {
+		const initial = group.items.map((item) => item.agent ?? "default");
+		initialAgentIdsRef.current = new Set(initial);
+		// Use the ref to set initial values; React will batch these with the
+		// open transition since this runs during the commit triggered by isOpen changing
+		queueMicrotask(() => {
+			setSelectedAgents(initial);
+			setAgentStates({});
+		});
 	}
+	prevIsOpenRef.current = isOpen;
 
-	if (!isOpen && initialAgentIdsRef.current !== null) {
-		initialAgentIdsRef.current = null;
-	}
+	const currentAgentIds = initialAgentIdsRef.current;
 
-	const currentAgentIds = initialAgentIdsRef.current ?? new Set<string>();
-
-	const toInstall = [...selectedAgents].filter(
-		(id) => !currentAgentIds.has(id),
+	const selectedSet = useMemo(
+		() => new Set(selectedAgents),
+		[selectedAgents],
 	);
-	const toUninstall = [...currentAgentIds].filter(
-		(id) => !selectedAgents.has(id),
+	const toInstall = useMemo(
+		() => selectedAgents.filter((id) => !currentAgentIds.has(id)),
+		[selectedAgents, currentAgentIds],
+	);
+	const toUninstall = useMemo(
+		() => [...currentAgentIds].filter((id) => !selectedSet.has(id)),
+		[currentAgentIds, selectedSet],
 	);
 	const hasChanges = toInstall.length > 0 || toUninstall.length > 0;
 
-	const agentNameMap = useMemo(
-		() => new Map(availableAgents.map((a) => [a.id, a.display_name])),
-		[availableAgents],
+	const getAgentDiffLabel = useCallback(
+		(agentId: string) => {
+			const isCurrentAgent = currentAgentIds.has(agentId);
+			const isSelected = selectedSet.has(agentId);
+
+			if (isSelected && !isCurrentAgent) return "adding";
+			if (!isSelected && isCurrentAgent) return "removing";
+			if (isSelected && isCurrentAgent) return "installed";
+			return null;
+		},
+		[currentAgentIds, selectedSet],
 	);
 
-	const getAgentDisplayName = useMemo(() => {
-		return (agentId: string) => {
-			return agentNameMap.get(agentId) ?? capitalize(agentId);
-		};
-	}, [agentNameMap]);
-
-	const handleSelectionChange = (keys: Selection) => {
-		const newKeys = keys as Set<string>;
-		if (newKeys.size >= 1) {
-			setSelectedAgents(newKeys);
-		}
-	};
-
 	const handleApply = async () => {
-		setStep(3);
-
+		setIsApplying(true);
 		const primary = group.items[0];
-		const pendingResults: AgentResult[] = [
-			...toInstall.map((id) => ({
-				agentId: id,
-				displayName: getAgentDisplayName(id),
-				action: "install" as const,
-				status: "pending" as const,
-			})),
+
+		// Mark all changing agents as pending
+		const pendingStates: Record<string, AgentState> = {};
+		for (const id of [...toInstall, ...toUninstall]) {
+			pendingStates[id] = { status: "pending" };
+		}
+		setAgentStates(pendingStates);
+
+		let successCount = 0;
+		let errorCount = 0;
+
+		const operations = [
+			...toInstall.map((id) => ({ id, action: "install" as const })),
 			...toUninstall.map((id) => ({
-				agentId: id,
-				displayName: getAgentDisplayName(id),
+				id,
 				action: "uninstall" as const,
-				status: "pending" as const,
 			})),
 		];
-		setResults(pendingResults);
 
-		const updatedResults = await Promise.all(
-			pendingResults.map(async (result) => {
+		await Promise.all(
+			operations.map(async ({ id, action }) => {
 				try {
-					if (result.action === "install") {
+					if (action === "install") {
 						const scope = projectPath ? "project" : "global";
 						await api.mcps.create(
-							result.agentId,
+							id,
 							scope,
 							{
 								name: primary.name,
@@ -140,246 +148,211 @@ export function ManageAgentsDialog({
 					} else {
 						const scope =
 							group.items.find(
-								(i) =>
-									(i.agent ?? "default") === result.agentId,
+								(i) => (i.agent ?? "default") === id,
 							)?.source === ConfigSource.Project
 								? "project"
 								: "global";
 						await api.mcps.delete(
 							primary.name,
-							result.agentId,
+							id,
 							scope,
 							projectPath,
 						);
 					}
-					return { ...result, status: "success" as const };
+					successCount++;
+					setAgentStates((prev) => ({
+						...prev,
+						[id]: { status: "success" },
+					}));
 				} catch (err) {
-					return {
-						...result,
-						status: "error" as const,
-						error: err instanceof Error ? err.message : String(err),
-					};
+					errorCount++;
+					setAgentStates((prev) => ({
+						...prev,
+						[id]: {
+							status: "error",
+							error:
+								err instanceof Error
+									? err.message
+									: String(err),
+						},
+					}));
 				}
 			}),
 		);
 
-		setResults(updatedResults);
-		queryClient.invalidateQueries({ queryKey: ["mcps"] });
+		// Wait for query cache to refresh so the detail panel updates
+		await Promise.all([
+			queryClient.invalidateQueries({ queryKey: ["mcps"] }),
+			queryClient.invalidateQueries({ queryKey: ["project-mcps"] }),
+		]);
+		setIsApplying(false);
+
+		// Show toast with results
+		if (errorCount === 0) {
+			toast.success(
+				t("agentChangesApplied", {
+					count: successCount,
+				}),
+			);
+			// Auto-close on full success — data is already refreshed
+			onCloseAndReset();
+		} else {
+			toast.danger(
+				t("agentChangesFailed", {
+					success: successCount,
+					failed: errorCount,
+				}),
+			);
+		}
 	};
 
-	const handleClose = () => {
-		setStep(1);
-		setSelectedAgents(new Set(currentAgentIds));
-		setResults([]);
+	const onCloseAndReset = () => {
+		setAgentStates({});
+		setIsApplying(false);
 		onClose();
 	};
 
-	const stepLabels = [t("selectAgents"), t("confirmChanges"), t("result")];
-
 	return (
-		<Modal.Backdrop isOpen={isOpen} onOpenChange={handleClose}>
+		<Modal.Backdrop isOpen={isOpen} onOpenChange={onCloseAndReset}>
 			<Modal.Container>
-				<Modal.Dialog className="max-w-xl">
+				<Modal.Dialog className="max-w-md">
 					<Modal.CloseTrigger />
 					<Modal.Header>
 						<Modal.Heading>{t("manageAgents")}</Modal.Heading>
 					</Modal.Header>
 
-					<Modal.Body className="p-2">
-						<StepIndicator currentStep={step} labels={stepLabels} />
-
-						{step === 1 && (
-							<div>
-								<p className="mb-3 text-sm text-muted">
+					<Modal.Body>
+						{usableAgents.length === 0 ? (
+							<p className="text-sm text-muted">
+								{t("noTargetAgents")}
+							</p>
+						) : (
+							<CheckboxGroup
+								value={selectedAgents}
+								onChange={(values) =>
+									setSelectedAgents(values as string[])
+								}
+								isDisabled={isApplying}
+							>
+								<Label className="sr-only">
 									{t("selectAgentsForMcp")}
-								</p>
-								{usableAgents.length === 0 ? (
-									<p className="text-sm text-muted">
-										{t("noTargetAgents")}
-									</p>
-								) : (
-									<TagGroup
-										selectionMode="multiple"
-										selectedKeys={selectedAgents}
-										onSelectionChange={
-											handleSelectionChange
-										}
-										variant="surface"
-									>
-										<TagGroup.List className="flex-wrap">
-											{usableAgents.map((agent) => {
-												const isSelected =
-													selectedAgents.has(
-														agent.id,
-													);
-												const isCurrentAgent =
-													currentAgentIds.has(
-														agent.id,
-													);
-												const isAdding =
-													isSelected &&
-													!isCurrentAgent;
-												const isRemoving =
-													!isSelected &&
-													isCurrentAgent;
-												return (
-													<Tag
-														key={agent.id}
-														id={agent.id}
-													>
-														<div className="flex items-center gap-1.5">
-															{agent.display_name}
-															{isAdding && (
-																<PlusIcon className="size-3" />
-															)}
-															{isRemoving && (
-																<MinusIcon className="size-3" />
-															)}
-														</div>
-													</Tag>
-												);
-											})}
-										</TagGroup.List>
-									</TagGroup>
-								)}
-							</div>
-						)}
+								</Label>
+								<div className="space-y-1">
+									{usableAgents.map((agent) => {
+										const diffLabel = getAgentDiffLabel(
+											agent.id,
+										);
+										const state = agentStates[agent.id];
 
-						{step === 2 && (
-							<div className="space-y-4">
-								{toInstall.length > 0 && (
-									<div>
-										<p className="
-            mb-2 text-xs font-medium tracking-wide text-muted uppercase
-          ">
-											{t("toInstall")}
-										</p>
-										<TagGroup selectionMode="none" variant="surface">
-											<TagGroup.List className="flex-wrap">
-												{toInstall.map((id) => (
-													<Tag
-														key={id}
-														id={id}
-														className="border-success/30 bg-success-soft text-success"
-													>
-														<div className="flex items-center gap-1.5">
-															{getAgentDisplayName(
-																id,
-															)}
-															<PlusIcon className="size-3" />
+										return (
+											<Checkbox
+												key={agent.id}
+												value={agent.id}
+												className={cn(
+													"w-full cursor-pointer rounded-lg border border-transparent px-3 py-2.5 transition-colors",
+													"data-[selected]:border-accent/20 data-[selected]:bg-accent-soft/50",
+													"hover:bg-surface-secondary",
+												)}
+											>
+												<Checkbox.Control>
+													<Checkbox.Indicator />
+												</Checkbox.Control>
+												<Checkbox.Content className="flex-1">
+													<div className="flex items-center justify-between">
+														<div className="flex items-center gap-2">
+															<AgentIcon
+																id={agent.id}
+																name={
+																	agent.display_name
+																}
+																size="sm"
+																variant="ghost"
+															/>
+															<Label>
+																{
+																	agent.display_name
+																}
+															</Label>
 														</div>
-													</Tag>
-												))}
-											</TagGroup.List>
-										</TagGroup>
-									</div>
-								)}
-								{toUninstall.length > 0 && (
-									<div>
-										<p className="
-            mb-2 text-xs font-medium tracking-wide text-muted uppercase
-          ">
-											{t("toUninstall")}
-										</p>
-										<TagGroup selectionMode="none" variant="surface">
-											<TagGroup.List className="flex-wrap">
-												{toUninstall.map((id) => (
-													<Tag
-														key={id}
-														id={id}
-														className="border-danger/30 bg-danger-soft text-danger"
-													>
 														<div className="flex items-center gap-1.5">
-															{getAgentDisplayName(
-																id,
+															{/* Status indicator during apply */}
+															{state?.status ===
+																"pending" && (
+																<ArrowPathIcon className="size-3.5 animate-spin text-muted" />
 															)}
-															<MinusIcon className="size-3" />
-														</div>
-													</Tag>
-												))}
-											</TagGroup.List>
-										</TagGroup>
-									</div>
-								)}
-							</div>
-						)}
+															{state?.status ===
+																"success" && (
+																<CheckCircleIcon className="size-3.5 text-success" />
+															)}
+															{state?.status ===
+																"error" && (
+																<XCircleIcon className="size-3.5 text-danger" />
+															)}
 
-						{step === 3 && (
-							<div className="space-y-2">
-								{results.length === 0 && (
-									<p className="text-sm text-muted">
-										{t("noChanges")}
-									</p>
-								)}
-								{results.some(
-									(r) => r.status === "pending",
-								) && (
-									<div className="flex items-center justify-center py-6">
-										<Spinner size="lg" />
-									</div>
-								)}
-								{results.map((result) => (
-									<ResultStatusItem
-										key={result.agentId}
-										displayName={result.displayName}
-										status={result.status}
-										statusText={
-											result.status === "pending"
-												? result.action === "install"
-													? t("installing")
-													: t("uninstalling")
-												: result.status === "success"
-													? result.action ===
-														"install"
-														? t("installSuccess")
-														: t("uninstallSuccess")
-													: ""
-										}
-										error={result.error}
-									/>
-								))}
-							</div>
+															{/* Diff label */}
+															{!state &&
+																diffLabel ===
+																	"adding" && (
+																	<Description className="text-xs text-success">
+																		+{" "}
+																		{t(
+																			"adding",
+																		)}
+																	</Description>
+																)}
+															{!state &&
+																diffLabel ===
+																	"removing" && (
+																	<Description className="text-xs text-danger">
+																		&minus;{" "}
+																		{t(
+																			"removing",
+																		)}
+																	</Description>
+																)}
+															{!state &&
+																diffLabel ===
+																	"installed" && (
+																	<Description className="text-xs text-muted">
+																		{t(
+																			"alreadyAdded",
+																		)}
+																	</Description>
+																)}
+														</div>
+													</div>
+													{state?.status ===
+														"error" &&
+														state.error && (
+															<Description className="mt-1 text-xs text-danger">
+																{state.error}
+															</Description>
+														)}
+												</Checkbox.Content>
+											</Checkbox>
+										);
+									})}
+								</div>
+							</CheckboxGroup>
 						)}
 					</Modal.Body>
 
 					<Modal.Footer>
-						{step === 1 && (
-							<>
-								<Button slot="close" variant="secondary">
-									{t("cancel")}
-								</Button>
-								<Button
-									onPress={() => setStep(2)}
-									isDisabled={!hasChanges}
-								>
-									{t("next")}
-									<ChevronRightIcon className="size-3.5" />
-								</Button>
-							</>
-						)}
-						{step === 2 && (
-							<>
-								<Button
-									variant="secondary"
-									onPress={() => setStep(1)}
-								>
-									<ChevronLeftIcon className="size-3.5" />
-									{t("back")}
-								</Button>
-								<Button
-									onPress={handleApply}
-									isDisabled={!hasChanges}
-								>
-									{t("apply")}
-									<ChevronRightIcon className="size-3.5" />
-								</Button>
-							</>
-						)}
-						{step === 3 && (
-							<Button slot="close" variant="secondary">
-								{t("done")}
-							</Button>
-						)}
+						<Button
+							slot="close"
+							variant="secondary"
+							isDisabled={isApplying}
+						>
+							{t("cancel")}
+						</Button>
+						<Button
+							onPress={handleApply}
+							isDisabled={!hasChanges || isApplying}
+						>
+							{isApplying
+								? t("applying")
+								: t("applyChanges")}
+						</Button>
 					</Modal.Footer>
 				</Modal.Dialog>
 			</Modal.Container>

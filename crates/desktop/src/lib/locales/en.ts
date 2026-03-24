@@ -85,15 +85,15 @@ export default {
 	type: "Type",
 	details: "Details",
 	command: "Command",
-	args: "Args",
+	args: "Arguments",
 	url: "URL",
 	timeout: "Timeout",
 	unknown: "unknown",
-	deleteMcpServer: "Delete MCP Server",
+	deleteMcpServer: "Delete server",
 	deleteMcpServerConfirm:
-		'Are you sure you want to delete "{{name}}"? This action cannot be undone.',
+		'Delete "{{name}}"? This can\'t be undone.',
 	deleteMcpMultipleConfirm:
-		'This will delete "{{name}}" from {{count}} agents: {{agents}}. This action cannot be undone.',
+		'This removes "{{name}}" from {{count}} agents ({{agents}}). This can\'t be undone.',
 	deleting: "Deleting...",
 	editMcpServer: "Edit MCP Server",
 	changeWillApplyToAgents:
@@ -128,7 +128,13 @@ export default {
 
 	// Manage Agents Dialog
 	manageAgents: "Manage Agents",
-	manageAgentsTooltip: "Manage which agents have this MCP server",
+	manageAgentsTooltip: "Choose which agents use this server",
+	adding: "Adding",
+	removing: "Removing",
+	alreadyAdded: "Added",
+	applyChanges: "Apply changes",
+	agentChangesApplied: "Updated {{count}} agent(s) successfully",
+	agentChangesFailed: "{{success}} succeeded, {{failed}} failed",
 	selectAgents: "Select Agents",
 	confirmChanges: "Confirm Changes",
 	result: "Result",
@@ -161,10 +167,22 @@ export default {
 	installingSkill: "Installing Skill",
 	selectAgentsForSkill: "Select which agents to install this skill to:",
 	installs: "installs",
-	copyTooltip: "Copy config",
-	copied: "Copied!",
-	editTooltip: "Edit",
-	deleteTooltip: "Delete",
+	copyTooltip: "Copy as JSON",
+	copied: "Copied to clipboard",
+	editTooltip: "Edit server",
+	deleteTooltip: "Delete server",
+
+	// MCP Detail
+	connection: "Connection",
+	addToAgent: "Add to Agent",
+	copyConfig: "Copy as JSON",
+	global: "Global",
+	project: "Project",
+	headersCount: "Headers ({{count}})",
+	envCount: "Environment variables ({{count}})",
+	noHeaders: "No headers",
+	noEnvVars: "No environment variables",
+	timeoutSeconds: "{{seconds}}s",
 
 	// Projects
 	addProject: "Add Project",
