@@ -15,6 +15,7 @@ import type { McpResponse, TransportDto } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
 import { useServer } from "../hooks/use-server";
 import { ManageAgentsDialog } from "./manage-agents-dialog";
+import { AgentIcon } from "../lib/agent-icons";
 
 export interface McpGroup {
 	mergeKey: string;
@@ -97,9 +98,11 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 					{/* Header Card */}
 					<Card variant="default">
 						<Card.Header className="flex flex-row items-start justify-between gap-3">
-							<Card.Title className="text-xl">
-								{group.items[0].name}
-							</Card.Title>
+							<div className="flex-1">
+								<Card.Title>
+									{group.items[0].name}
+								</Card.Title>
+							</div>
 							<div className="flex items-center gap-1">
 								<Tooltip delay={0}>
 									<Button
@@ -125,7 +128,10 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 										isIconOnly
 										variant="tertiary"
 										size="sm"
-										className="shrink-0 text-muted hover:text-foreground"
+										className="
+            shrink-0 text-muted
+            hover:text-foreground
+          "
 										aria-label={t("edit")}
 										onPress={onEdit}
 									>
@@ -140,7 +146,10 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 										isIconOnly
 										variant="tertiary"
 										size="sm"
-										className="shrink-0 text-muted hover:text-danger"
+										className="
+            shrink-0 text-muted
+            hover:text-danger
+          "
 										aria-label={t("remove")}
 										onPress={() => setDeleteDialogOpen(true)}
 									>
@@ -155,7 +164,10 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 										isIconOnly
 										variant="primary"
 										size="sm"
-										className="shrink-0 text-muted hover:text-foreground"
+										className="
+            shrink-0 text-muted
+            hover:text-foreground
+          "
 										aria-label={t("manageAgents")}
 										onPress={() => setManageDialogOpen(true)}
 									>
@@ -167,15 +179,8 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 								</Tooltip>
 							</div>
 						</Card.Header>
-					</Card>
 
-					{/* Agents Card */}
-					<Card variant="default">
-						<Card.Header>
-							<Card.Title>
-								{t("agents")} ({group.items.length})
-							</Card.Title>
-						</Card.Header>
+						{/* Agents Section in Header Card */}
 						<Card.Content>
 							<div className="flex flex-wrap gap-1.5">
 								{group.items.map((item) => (
@@ -183,16 +188,12 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 										key={item.agent ?? "default"}
 										className="flex items-center gap-1"
 									>
-										<Chip size="sm" variant="secondary">
-											{item.agent
-												? item.agent
-														.charAt(0)
-														.toUpperCase() +
-													item.agent
-														.slice(1)
-														.toLowerCase()
-												: "Default"}
-										</Chip>
+										<AgentIcon
+											id={item.agent ?? "default"}
+											name={item.agent ? item.agent.charAt(0).toUpperCase() + item.agent.slice(1).toLowerCase() : "Default"}
+											size="sm"
+											variant="ghost"
+										/>
 										{!item.enabled && (
 											<Chip
 												size="sm"

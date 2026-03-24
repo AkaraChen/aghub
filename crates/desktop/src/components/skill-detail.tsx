@@ -136,7 +136,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 					<Card variant="default">
 						<Card.Header className="flex flex-row items-start justify-between gap-3">
 							<div className="flex-1">
-								<Card.Title className="text-xl">{skill.name}</Card.Title>
+								<Card.Title>{skill.name}</Card.Title>
 								{skill.description && (
 									<Card.Description className="mt-2">
 										{skill.description}
@@ -227,9 +227,11 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 					{currentSkillSource && (
 						<Card variant="default">
 							<Card.Header>
-								<Card.Title className="flex items-center gap-2">
-									<GlobeAltIcon className="size-4" />
-									{t("installedFrom")}
+								<Card.Title>
+									<span className="flex items-center gap-2">
+										<GlobeAltIcon className="size-4" />
+										{t("installedFrom")}
+									</span>
 								</Card.Title>
 							</Card.Header>
 							<Card.Content>
