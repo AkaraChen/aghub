@@ -19,16 +19,20 @@ export default {
 	// Settings
 	appearance: "外观",
 	theme: "主题",
+	themeDescription: "选择你喜欢的配色方案",
 	language: "语言",
+	languageDescription: "选择你的首选语言",
 	light: "浅色",
 	dark: "深色",
 	system: "跟随系统",
 	english: "English",
 	chinese: "中文",
+	noAgentsDescription: "安装 AI 编码代理以在此管理它们。",
 
 	// Integrations
 	integrations: "集成",
 	codeEditors: "代码编辑器",
+	codeEditorsDescription: "选择用于打开文件的首选代码编辑器",
 
 	// Agent Management
 	agentManagementDescription:

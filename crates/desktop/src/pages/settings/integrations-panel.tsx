@@ -43,33 +43,43 @@ export default function IntegrationsPanel() {
 	const installedEditors = codeEditors?.filter((e) => e.installed) || [];
 
 	return (
-		<div className="space-y-8">
-			<div className="flex items-center justify-between">
-				<span className="text-sm">{t("codeEditors")}</span>
-				<Select
-					selectedKey={selectedEditor || null}
-					onSelectionChange={handleEditorChange}
-					aria-label={t("codeEditors")}
-					className="w-56"
-				>
-					<Select.Trigger>
-						<Select.Value />
-						<Select.Indicator />
-					</Select.Trigger>
-					<Select.Popover>
-						<ListBox>
-							{installedEditors.map((editor) => (
-								<ListBox.Item
-									key={editor.id}
-									id={editor.id}
-									textValue={editor.name}
-								>
-									{editor.name}
-								</ListBox.Item>
-							))}
-						</ListBox>
-					</Select.Popover>
-				</Select>
+		<div className="space-y-2">
+			{/* Code Editor Setting */}
+			<div className="rounded-lg bg-[var(--surface)] p-4">
+				<div className="flex items-center justify-between">
+					<div className="space-y-0.5">
+						<span className="text-sm font-medium text-[var(--foreground)]">
+							{t("codeEditors")}
+						</span>
+						<span className="block text-xs text-[var(--muted)]">
+							{t("codeEditorsDescription")}
+						</span>
+					</div>
+					<Select
+						selectedKey={selectedEditor || null}
+						onSelectionChange={handleEditorChange}
+						aria-label={t("codeEditors")}
+						className="min-w-[14rem]"
+					>
+						<Select.Trigger>
+							<Select.Value />
+							<Select.Indicator />
+						</Select.Trigger>
+						<Select.Popover>
+							<ListBox>
+								{installedEditors.map((editor) => (
+									<ListBox.Item
+										key={editor.id}
+										id={editor.id}
+										textValue={editor.name}
+									>
+										{editor.name}
+									</ListBox.Item>
+								))}
+							</ListBox>
+						</Select.Popover>
+					</Select>
+				</div>
 			</div>
 		</div>
 	);

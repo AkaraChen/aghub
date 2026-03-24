@@ -2,6 +2,7 @@ import {
 	ComputerDesktopIcon,
 	MoonIcon,
 	SunIcon,
+	UserGroupIcon,
 } from "@heroicons/react/24/solid";
 import {
 	ListBox,
@@ -86,108 +87,143 @@ export default function SettingsPage() {
 					</div>
 
 					<Tabs.Panel id="appearance">
-						<div className="space-y-8">
-							{/* Theme */}
-							<div className="flex items-center justify-between">
-								<span className="text-sm">{t("theme")}</span>
-								<ToggleButtonGroup
-									selectedKeys={[theme]}
-									onSelectionChange={(keys) =>
-										setTheme(
-											[...keys][0] as
-												| "light"
-												| "dark"
-												| "system",
-										)
-									}
-									selectionMode="single"
-									disallowEmptySelection
-									size="sm"
-								>
-									<ToggleButton
-										id="light"
-										aria-label={t("light")}
+						<div className="space-y-2">
+							{/* Theme Setting */}
+							<div className="rounded-lg bg-[var(--surface)] p-4">
+								<div className="flex items-center justify-between">
+									<div className="space-y-0.5">
+										<span className="text-sm font-medium text-[var(--foreground)]">
+											{t("theme")}
+										</span>
+										<span className="block text-xs text-[var(--muted)]">
+											{t("themeDescription")}
+										</span>
+									</div>
+									<ToggleButtonGroup
+										selectedKeys={[theme]}
+										onSelectionChange={(keys) =>
+											setTheme(
+												[...keys][0] as
+													| "light"
+													| "dark"
+													| "system",
+											)
+										}
+										selectionMode="single"
+										disallowEmptySelection
+										size="sm"
 									>
-										<SunIcon className="size-4" />
-										{t("light")}
-									</ToggleButton>
-									<ToggleButton
-										id="dark"
-										aria-label={t("dark")}
-									>
+										<ToggleButton
+											id="light"
+											aria-label={t("light")}
+										>
+											<SunIcon className="size-4" />
+											{t("light")}
+										</ToggleButton>
 										<ToggleButtonGroup.Separator />
-										<MoonIcon className="size-4" />
-										{t("dark")}
-									</ToggleButton>
-									<ToggleButton
-										id="system"
-										aria-label={t("system")}
-									>
+										<ToggleButton
+											id="dark"
+											aria-label={t("dark")}
+										>
+											<MoonIcon className="size-4" />
+											{t("dark")}
+										</ToggleButton>
 										<ToggleButtonGroup.Separator />
-										<ComputerDesktopIcon className="size-4" />
-										{t("system")}
-									</ToggleButton>
-								</ToggleButtonGroup>
+										<ToggleButton
+											id="system"
+											aria-label={t("system")}
+										>
+											<ComputerDesktopIcon className="size-4" />
+											{t("system")}
+										</ToggleButton>
+									</ToggleButtonGroup>
+								</div>
 							</div>
 
-							{/* Language */}
-							<div className="flex items-center justify-between">
-								<span className="text-sm">{t("language")}</span>
-								<Select
-									value={
-										i18n.language.startsWith("zh")
-											? "zh"
-											: "en"
-									}
-									onChange={(key) =>
-										changeLanguage(key as string)
-									}
-									aria-label={t("language")}
-									className="w-40"
-								>
-									<Select.Trigger>
-										<Select.Value />
-										<Select.Indicator />
-									</Select.Trigger>
-									<Select.Popover>
-										<ListBox>
-											<ListBox.Item
-												id="en"
-												textValue={t("english")}
-											>
-												{t("english")}
-											</ListBox.Item>
-											<ListBox.Item
-												id="zh"
-												textValue={t("chinese")}
-											>
-												{t("chinese")}
-											</ListBox.Item>
-										</ListBox>
-									</Select.Popover>
-								</Select>
+							{/* Language Setting */}
+							<div className="rounded-lg bg-[var(--surface)] p-4">
+								<div className="flex items-center justify-between">
+									<div className="space-y-0.5">
+										<span className="text-sm font-medium text-[var(--foreground)]">
+											{t("language")}
+										</span>
+										<span className="block text-xs text-[var(--muted)]">
+											{t("languageDescription")}
+										</span>
+									</div>
+									<Select
+										value={
+											i18n.language.startsWith("zh")
+												? "zh"
+												: "en"
+										}
+										onChange={(key) =>
+											changeLanguage(key as string)
+										}
+										aria-label={t("language")}
+										className="min-w-[10rem]"
+									>
+										<Select.Trigger>
+											<Select.Value />
+											<Select.Indicator />
+										</Select.Trigger>
+										<Select.Popover>
+											<ListBox>
+												<ListBox.Item
+													id="en"
+													textValue={t("english")}
+												>
+													{t("english")}
+												</ListBox.Item>
+												<ListBox.Item
+													id="zh"
+													textValue={t("chinese")}
+												>
+													{t("chinese")}
+												</ListBox.Item>
+											</ListBox>
+										</Select.Popover>
+									</Select>
+								</div>
 							</div>
 						</div>
 					</Tabs.Panel>
 
 					<Tabs.Panel id="agents">
-						<div className="
-        grid grid-cols-1 gap-3
-        md:grid-cols-2
-      ">
-							{availableAgents
-								.filter(
-									(agent) => agent.availability.is_available,
-								)
-								.map((agent) => (
-									<AgentCard
-										key={agent.id}
-										agent={agent}
-										isUpdating={updating === agent.id}
-										onToggle={handleToggleAgent}
-									/>
-								))}
-						</div>
+						{(() => {
+							const filteredAgents = availableAgents.filter(
+								(agent) => agent.availability.is_available,
+							);
+
+							if (filteredAgents.length === 0) {
+								return (
+									<div className="flex flex-col items-center justify-center rounded-lg bg-[var(--surface)] py-16 text-center">
+										<div className="mb-4 text-[var(--muted)]">
+											<UserGroupIcon className="mx-auto size-12" />
+										</div>
+										<p className="text-sm font-medium text-[var(--foreground)]">
+											{t("noAgentsAvailable")}
+										</p>
+										<p className="mt-1 max-w-sm text-xs text-[var(--muted)]">
+											{t("noAgentsDescription")}
+										</p>
+									</div>
+								);
+							}
+
+							return (
+								<div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+									{filteredAgents.map((agent) => (
+										<AgentCard
+											key={agent.id}
+											agent={agent}
+											isUpdating={updating === agent.id}
+											onToggle={handleToggleAgent}
+										/>
+									))}
+								</div>
+							);
+						})()}
 					</Tabs.Panel>
 
 					<Tabs.Panel id="integrations">

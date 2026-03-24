@@ -19,16 +19,20 @@ export default {
 	// Settings
 	appearance: "Appearance",
 	theme: "Theme",
+	themeDescription: "Choose your preferred color scheme",
 	language: "Language",
+	languageDescription: "Select your preferred language",
 	light: "Light",
 	dark: "Dark",
 	system: "System",
 	english: "English",
 	chinese: "中文",
+	noAgentsDescription: "Install AI coding agents to manage them here.",
 
 	// Integrations
 	integrations: "Integrations",
 	codeEditors: "Code Editor",
+	codeEditorsDescription: "Choose your preferred code editor for opening files",
 
 	// Agent Management
 	agentManagementDescription:
