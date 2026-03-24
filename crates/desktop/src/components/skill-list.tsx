@@ -220,7 +220,10 @@ export function SkillList({
 						<button
 							type="button"
 							onClick={() => toggleSource(sg.source)}
-							className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-surface-secondary"
+							className="
+         flex w-full items-center gap-2 px-3 py-2 text-left transition-colors
+         hover:bg-surface-secondary
+       "
 						>
 							{expandedSources.has(sg.source) ? (
 								<ChevronDownIcon className="size-4 shrink-0 text-muted" />

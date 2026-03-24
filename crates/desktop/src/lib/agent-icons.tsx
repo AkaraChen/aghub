@@ -34,9 +34,10 @@ export function AgentIcon({ id, name, size = "lg", variant = "outline" }: AgentI
 		return (
 			<div
 				className={`
-					flex items-center justify-center rounded-lg
-					${sizeClasses} ${variantClasses}
-				`}
+      flex items-center justify-center rounded-lg
+      ${sizeClasses}
+      ${variantClasses}
+    `}
 				// eslint-disable-next-line react-dom/no-dangerously-set-innerhtml
 				dangerouslySetInnerHTML={{ __html: svg.default || svg }}
 			/>

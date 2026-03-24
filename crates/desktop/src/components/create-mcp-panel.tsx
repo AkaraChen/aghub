@@ -27,6 +27,12 @@ import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useServer } from "../hooks/use-server";
 import type { EnvVar } from "./env-editor";
 import { EnvEditor } from "./env-editor";
+import type { HttpHeader } from "./http-header-editor";
+import { HttpHeaderEditor } from "./http-header-editor";
+import {
+	createEmptyKeyPair,
+	objectToKeyPairs,
+} from "../lib/key-pair-utils";
 
 interface CreateMcpPanelProps {
 	onDone: () => void;
@@ -69,10 +75,12 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 
 	const [command, setCommand] = useState("");
 	const [args, setArgs] = useState("");
-	const [envVars, setEnvVars] = useState<EnvVar[]>([{ key: "", value: "" }]);
+	const [envVars, setEnvVars] = useState<EnvVar[]>(() => [createEmptyKeyPair()]);
 
 	const [url, setUrl] = useState("");
-	const [headers, setHeaders] = useState("");
+	const [httpHeaders, setHttpHeaders] = useState<HttpHeader[]>(() => [
+		createEmptyKeyPair(),
+	]);
 
 	// Import dialog state
 	const [showImportDialog, setShowImportDialog] = useState(false);
@@ -107,7 +115,7 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 			args,
 			envVars,
 			url,
-			headers,
+			httpHeaders,
 			timeout: timeoutValue,
 		});
 	};
@@ -190,20 +198,14 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 					setArgs(config.args.join(" "));
 				}
 				if (config.env && typeof config.env === "object") {
-					const envVarArray: EnvVar[] = Object.entries(
-						config.env,
-					).map(([key, value]) => ({ key, value }));
-					setEnvVars(envVarArray);
+					setEnvVars(objectToKeyPairs(config.env));
 				}
 			} else if (config.url) {
 				// Determine if SSE or streamable_http based on URL or default to sse
 				setTransportType("sse");
 				setUrl(config.url);
 				if (config.headers && typeof config.headers === "object") {
-					const headerLines = Object.entries(config.headers).map(
-						([key, value]) => `${key}: ${value}`,
-					);
-					setHeaders(headerLines.join("\n"));
+					setHttpHeaders(objectToKeyPairs(config.headers));
 				}
 			}
 
@@ -346,15 +348,13 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 									placeholder="http://localhost:3000/sse"
 								/>
 							</TextField>
-							<TextField className="w-full">
+							<div className="flex flex-col gap-2">
 								<Label>{t("headers")}</Label>
-								<TextArea
-									value={headers}
-									onChange={(e) => setHeaders(e.target.value)}
-									placeholder="Authorization: Bearer token&#10;X-Custom-Header: value"
-									className="min-h-20 font-mono"
+								<HttpHeaderEditor
+									value={httpHeaders}
+									onChange={setHttpHeaders}
 								/>
-							</TextField>
+							</div>
 						</Fieldset.Group>
 					</Fieldset>
 				)}
@@ -378,6 +378,7 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 								selectionMode="multiple"
 								selectedKeys={selectedAgents}
 								onSelectionChange={handleSelectionChange}
+								variant="surface"
 							>
 								<Label>{t("agents")}</Label>
 								<TagGroup.List className="flex-wrap">

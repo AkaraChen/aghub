@@ -22,6 +22,7 @@ interface UnifiedResourceListProps {
 	onCreateMcp: () => void;
 	onCreateSkill: () => void;
 	onRefresh: () => void;
+	isRefreshing?: boolean;
 	searchQuery: string;
 	onSearchChange: (query: string) => void;
 	projectPath?: string;

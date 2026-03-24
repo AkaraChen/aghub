@@ -1,4 +1,6 @@
 import type { EnvVar } from "../components/env-editor";
+import type { HttpHeader } from "../components/http-header-editor";
+import { keyPairToObject } from "./key-pair-utils";
 import type { TransportDto } from "./api-types";
 
 // Static regex to avoid re-compilation on every call
@@ -11,7 +13,7 @@ export function buildTransportFromForm(
 		args?: string;
 		envVars?: EnvVar[];
 		url?: string;
-		headers?: string;
+		httpHeaders?: HttpHeader[];
 		timeout?: string;
 	},
 ): TransportDto | undefined {
@@ -25,9 +27,7 @@ export function buildTransportFromForm(
 				: [];
 		const envRecord: Record<string, string> | undefined =
 			data.envVars && data.envVars.length > 0
-				? Object.fromEntries(
-						data.envVars.map((pair) => [pair.key, pair.value]),
-					)
+				? keyPairToObject(data.envVars)
 				: undefined;
 
 		return {
@@ -40,7 +40,9 @@ export function buildTransportFromForm(
 	}
 
 	const headersRecord: Record<string, string> | undefined =
-		data.headers?.trim() ? parseHeaderText(data.headers) : undefined;
+		data.httpHeaders && data.httpHeaders.length > 0
+			? keyPairToObject(data.httpHeaders)
+			: undefined;
 
 	return {
 		type: transportType,
@@ -48,22 +50,6 @@ export function buildTransportFromForm(
 		headers: headersRecord,
 		timeout: timeoutNum,
 	};
-}
-
-export function parseHeaderText(text: string): Record<string, string> {
-	return Object.fromEntries(
-		text
-			.trim()
-			.split("\n")
-			.map((line) => {
-				const colonIndex = line.indexOf(":");
-				if (colonIndex === -1) return [line.trim(), ""];
-				return [
-					line.slice(0, colonIndex).trim(),
-					line.slice(colonIndex + 1).trim(),
-				];
-			}),
-	);
 }
 
 export function capitalize(str: string): string {

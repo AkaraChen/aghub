@@ -10,6 +10,7 @@ import { McpDetail } from "../../components/mcp-detail";
 import { McpList } from "../../components/mcp-list";
 import { useMcps } from "../../hooks/use-mcps";
 import { getMcpMergeKey } from "../../lib/utils";
+import { cn } from "../../lib/utils";
 
 type RightPanel =
 	| { type: "detail"; selectedKey: string }
@@ -19,7 +20,7 @@ type RightPanel =
 
 export default function MCPServersPage() {
 	const { t } = useTranslation();
-	const { data: mcps, refetch } = useMcps();
+	const { data: mcps, refetch, isFetching } = useMcps();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [panel, setPanel] = useState<RightPanel>({ type: "empty" });
 	const [selectedKey, setSelectedKey] = useQueryState("server");
@@ -108,7 +109,7 @@ export default function MCPServersPage() {
 						aria-label={t("refreshServers")}
 						onPress={() => refetch()}
 					>
-						<ArrowPathIcon className="size-4" />
+						<ArrowPathIcon className={cn("size-4", isFetching && "animate-spin")} />
 					</Button>
 				</div>
 

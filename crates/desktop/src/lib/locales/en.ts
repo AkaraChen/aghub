@@ -205,4 +205,17 @@ export default {
 		valuePlaceholder: "Value",
 		importFromClipboard: "Import from Clipboard",
 	},
+
+	// Key Pair Editor
+	keyPairEditor: {
+		keyPlaceholder: "Key",
+		valuePlaceholder: "Value",
+		addPair: "Add Pair",
+	},
+
+	// HTTP Header Editor
+	httpHeaderEditor: {
+		keyPlaceholder: "Header Name",
+		valuePlaceholder: "Header Value",
+	},
 };

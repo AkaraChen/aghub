@@ -8,7 +8,6 @@ import {
 	Label,
 	ListBox,
 	Select,
-	TextArea,
 	TextField,
 } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -22,6 +21,12 @@ import { buildTransportFromForm, capitalize } from "../lib/mcp-utils";
 import { useServer } from "../hooks/use-server";
 import type { EnvVar } from "./env-editor";
 import { EnvEditor } from "./env-editor";
+import type { HttpHeader } from "./http-header-editor";
+import { HttpHeaderEditor } from "./http-header-editor";
+import {
+	createEmptyKeyPair,
+	objectToKeyPairs,
+} from "../lib/key-pair-utils";
 
 interface EditMcpPanelProps {
 	group: {
@@ -68,11 +73,9 @@ export function EditMcpPanel({
 			primaryServer.transport.type === "stdio" &&
 			primaryServer.transport.env
 		) {
-			return Object.entries(primaryServer.transport.env).map(
-				([key, value]) => ({ key, value }),
-			);
+			return objectToKeyPairs(primaryServer.transport.env);
 		}
-		return [{ key: "", value: "" }];
+		return [createEmptyKeyPair()];
 	});
 
 	const [url, setUrl] = useState(
@@ -80,16 +83,14 @@ export function EditMcpPanel({
 			? primaryServer.transport.url
 			: "",
 	);
-	const [headers, setHeaders] = useState(() => {
+	const [httpHeaders, setHttpHeaders] = useState<HttpHeader[]>(() => {
 		if (
 			primaryServer.transport.type !== "stdio" &&
 			primaryServer.transport.headers
 		) {
-			return Object.entries(primaryServer.transport.headers)
-				.map(([k, v]) => `${k}: ${v}`)
-				.join("\n");
+			return objectToKeyPairs(primaryServer.transport.headers);
 		}
-		return "";
+		return [createEmptyKeyPair()];
 	});
 	const [error, setError] = useState<string | null>(null);
 
@@ -137,7 +138,7 @@ export function EditMcpPanel({
 			args,
 			envVars,
 			url,
-			headers,
+			httpHeaders,
 			timeout: timeoutValue,
 		});
 	};
@@ -293,15 +294,13 @@ export function EditMcpPanel({
 									placeholder="http://localhost:3000/sse"
 								/>
 							</TextField>
-							<TextField className="w-full">
+							<div className="flex flex-col gap-2">
 								<Label>{t("headers")}</Label>
-								<TextArea
-									value={headers}
-									onChange={(e) => setHeaders(e.target.value)}
-									placeholder="Authorization: Bearer token&#10;X-Custom-Header: value"
-									className="min-h-20 font-mono"
+								<HttpHeaderEditor
+									value={httpHeaders}
+									onChange={setHttpHeaders}
 								/>
-							</TextField>
+							</div>
 						</Fieldset.Group>
 					</Fieldset>
 				)}

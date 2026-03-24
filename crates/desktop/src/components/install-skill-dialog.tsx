@@ -309,6 +309,7 @@ export function InstallSkillDialog({
 											onSelectionChange={
 												handleAgentSelectionChange
 											}
+											variant="surface"
 										>
 											<TagGroup.List className="flex-wrap">
 												{skillAgents.map((agent) => {

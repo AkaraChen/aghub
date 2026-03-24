@@ -147,7 +147,10 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 								isIconOnly
 								variant="ghost"
 								size="sm"
-								className="shrink-0 text-muted hover:text-danger"
+								className="
+          shrink-0 text-muted
+          hover:text-danger
+        "
 								aria-label={t("deleteSkill")}
 								onPress={() => setDeleteDialogOpen(true)}
 							>

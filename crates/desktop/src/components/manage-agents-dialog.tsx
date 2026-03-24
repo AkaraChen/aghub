@@ -204,6 +204,7 @@ export function ManageAgentsDialog({
 										onSelectionChange={
 											handleSelectionChange
 										}
+										variant="surface"
 									>
 										<TagGroup.List className="flex-wrap">
 											{usableAgents.map((agent) => {
@@ -253,7 +254,7 @@ export function ManageAgentsDialog({
           ">
 											{t("toInstall")}
 										</p>
-										<TagGroup selectionMode="none">
+										<TagGroup selectionMode="none" variant="surface">
 											<TagGroup.List className="flex-wrap">
 												{toInstall.map((id) => (
 													<Tag
@@ -280,7 +281,7 @@ export function ManageAgentsDialog({
           ">
 											{t("toUninstall")}
 										</p>
-										<TagGroup selectionMode="none">
+										<TagGroup selectionMode="none" variant="surface">
 											<TagGroup.List className="flex-wrap">
 												{toUninstall.map((id) => (
 													<Tag

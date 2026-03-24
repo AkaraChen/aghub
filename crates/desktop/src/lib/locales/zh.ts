@@ -198,4 +198,17 @@ export default {
 		valuePlaceholder: "值",
 		importFromClipboard: "从剪贴板导入",
 	},
+
+	// Key Pair Editor
+	keyPairEditor: {
+		keyPlaceholder: "键",
+		valuePlaceholder: "值",
+		addPair: "添加键值对",
+	},
+
+	// HTTP Header Editor
+	httpHeaderEditor: {
+		keyPlaceholder: "请求头名称",
+		valuePlaceholder: "请求头值",
+	},
 };

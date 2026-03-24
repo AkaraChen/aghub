@@ -1,17 +1,12 @@
-import {
-	ClipboardDocumentIcon,
-	PlusIcon,
-	XMarkIcon,
-} from "@heroicons/react/24/solid";
-import { Button, Input } from "@heroui/react";
+import { ClipboardDocumentIcon } from "@heroicons/react/24/solid";
+import { Button } from "@heroui/react";
 import * as dotenv from "dotenv";
-import { produce } from "immer";
 import { useTranslation } from "react-i18next";
+import type { KeyPair } from "../lib/key-pair-utils";
+import { objectToKeyPairs } from "../lib/key-pair-utils";
+import { KeyPairEditor } from "./key-pair-editor";
 
-export interface EnvVar {
-	key: string;
-	value: string;
-}
+export type EnvVar = KeyPair;
 
 interface EnvEditorProps {
 	value: EnvVar[];
@@ -21,37 +16,6 @@ interface EnvEditorProps {
 export function EnvEditor({ value, onChange }: EnvEditorProps) {
 	const { t } = useTranslation();
 
-	// Add new empty pair
-	const handleAdd = () => {
-		onChange(
-			produce(value, (draft) => {
-				draft.push({ key: "", value: "" });
-			}),
-		);
-	};
-
-	// Remove pair by index
-	const handleRemove = (index: number) => {
-		onChange(
-			produce(value, (draft) => {
-				draft.splice(index, 1);
-			}),
-		);
-	};
-
-	// Update pair by index
-	const handleChange = (
-		index: number,
-		field: "key" | "value",
-		newValue: string,
-	) => {
-		onChange(
-			produce(value, (draft) => {
-				draft[index][field] = newValue;
-			}),
-		);
-	};
-
 	// Import from clipboard
 	const handleImportFromClipboard = async () => {
 		try {
@@ -59,10 +23,7 @@ export function EnvEditor({ value, onChange }: EnvEditorProps) {
 			if (!clipboardText.trim()) return;
 
 			const parsed = dotenv.parse(clipboardText);
-			const pairs = Object.entries(parsed).map(([key, value]) => ({
-				key,
-				value,
-			}));
+			const pairs = objectToKeyPairs(parsed);
 			if (pairs.length > 0) {
 				onChange(pairs);
 			}
@@ -73,52 +34,20 @@ export function EnvEditor({ value, onChange }: EnvEditorProps) {
 
 	return (
 		<div className="space-y-2">
-			{value.map((pair, index) => (
-				<div key={pair.key} className="flex items-start gap-2">
-					<Input
-						placeholder={t("envEditor.keyPlaceholder")}
-						aria-label={t("envEditor.keyPlaceholder")}
-						value={pair.key}
-						onChange={(e) =>
-							handleChange(index, "key", e.target.value)
-						}
-						className="flex-1"
-					/>
-					<Input
-						placeholder={t("envEditor.valuePlaceholder")}
-						aria-label={t("envEditor.valuePlaceholder")}
-						value={pair.value}
-						onChange={(e) =>
-							handleChange(index, "value", e.target.value)
-						}
-						className="flex-1"
-					/>
-					<Button
-						variant="ghost"
-						size="sm"
-						isIconOnly
-						aria-label={t("remove")}
-						onPress={() => handleRemove(index)}
-						className="mt-1"
-					>
-						<XMarkIcon className="size-4" />
-					</Button>
-				</div>
-			))}
-			<div className="flex items-center gap-2">
-				<Button variant="secondary" size="sm" onPress={handleAdd}>
-					<PlusIcon className="size-4" />
-					{t("envEditor.addKeypair")}
-				</Button>
-				<Button
-					variant="ghost"
-					size="sm"
-					onPress={handleImportFromClipboard}
-				>
-					<ClipboardDocumentIcon className="size-4" />
-					{t("envEditor.importFromClipboard")}
-				</Button>
-			</div>
+			<KeyPairEditor
+				value={value}
+				onChange={onChange}
+				keyPlaceholder={t("envEditor.keyPlaceholder")}
+				valuePlaceholder={t("envEditor.valuePlaceholder")}
+			/>
+			<Button
+				variant="ghost"
+				size="sm"
+				onPress={handleImportFromClipboard}
+			>
+				<ClipboardDocumentIcon className="size-4" />
+				{t("envEditor.importFromClipboard")}
+			</Button>
 		</div>
 	);
 }

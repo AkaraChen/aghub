@@ -100,6 +100,7 @@ From `tauri.conf.json`:
 - NEVER use npm/yarn/pnpm (bun only)
 - NEVER remove the `// @ts-expect-error process is a nodejs global` comment in vite.config.ts
 - NEVER use pure black (#000) or pure white (#fff) — always tint
+- NEVER use string template for className concat, use `cn` util from `@/lib/utils`.
 
 ### Desktop Integration
 

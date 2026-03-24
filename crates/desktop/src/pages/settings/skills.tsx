@@ -8,10 +8,11 @@ import { SkillDetail } from "../../components/skill-detail";
 import { SkillList } from "../../components/skill-list";
 import { useSkills } from "../../hooks/use-skills";
 import type { SkillResponse } from "../../lib/api-types";
+import { cn } from "../../lib/utils";
 
 export default function SkillsPage() {
 	const { t } = useTranslation();
-	const { data: skills, refetch } = useSkills();
+	const { data: skills, refetch, isFetching } = useSkills();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isInstallDialogOpen, setIsInstallDialogOpen] = useState(false);
 	const [selectedName, setSelectedName] = useQueryState("skill");
@@ -82,7 +83,7 @@ export default function SkillsPage() {
 						aria-label={t("refreshSkills")}
 						onPress={() => refetch()}
 					>
-						<ArrowPathIcon className="size-4" />
+						<ArrowPathIcon className={cn("size-4", isFetching && "animate-spin")} />
 					</Button>
 				</div>
 

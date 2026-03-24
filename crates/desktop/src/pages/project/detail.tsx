@@ -36,13 +36,13 @@ export default function ProjectDetailPage() {
 	});
 
 	// Fetch MCPs and Skills for this project
-	const { data: mcps = [], refetch: refetchMcps } = useQuery({
+	const { data: mcps = [], refetch: refetchMcps, isFetching: isFetchingMcps } = useQuery({
 		queryKey: ["project-mcps", project?.path],
 		queryFn: () => api.mcps.listAll("all", project?.path),
 		enabled: !!project?.path,
 	});
 
-	const { data: skills = [], refetch: refetchSkills } = useQuery({
+	const { data: skills = [], refetch: refetchSkills, isFetching: isFetchingSkills } = useQuery({
 		queryKey: ["project-skills", project?.path],
 		queryFn: () => api.skills.listAll("all", project?.path),
 		enabled: !!project?.path,
@@ -109,6 +109,8 @@ export default function ProjectDetailPage() {
 		refetchSkills();
 	};
 
+	const isRefreshing = isFetchingMcps || isFetchingSkills;
+
 	if (!project) {
 		return (
 			<div className="flex h-full items-center justify-center">
@@ -129,6 +131,7 @@ export default function ProjectDetailPage() {
 				onCreateMcp={() => setPanelMode("create-mcp")}
 				onCreateSkill={() => setIsInstallSkillOpen(true)}
 				onRefresh={handleRefresh}
+				isRefreshing={isRefreshing}
 				searchQuery={searchQuery}
 				onSearchChange={setSearchQuery}
 				projectPath={project.path}
