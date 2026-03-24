@@ -72,7 +72,7 @@ export function UnifiedResourceList({
 
 	return (
 		<div className="flex w-80 shrink-0 flex-col border-r border-border">
-			<div className="flex items-center gap-2 border-b border-border p-3">
+			<div className="flex items-center gap-2 p-3">
 				<SearchField
 					value={searchQuery}
 					onChange={onSearchChange}

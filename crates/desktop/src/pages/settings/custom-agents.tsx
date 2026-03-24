@@ -16,7 +16,7 @@ export default function CustomAgentsPage() {
 			{/* Agents List Panel */}
 			<div className="flex w-80 shrink-0 flex-col border-r border-border">
 				{/* Search Header */}
-				<div className="flex items-center gap-2 border-b border-border p-3">
+				<div className="flex items-center gap-2 p-3">
 					<SearchField
 						value={searchQuery}
 						onChange={setSearchQuery}
