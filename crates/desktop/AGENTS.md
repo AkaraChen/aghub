@@ -106,6 +106,10 @@ From `tauri.conf.json`:
 - NEVER modify Tauri capabilities without security review
 - NEVER expose system APIs without explicit permissions in `capabilities/`
 
+### You might not need effect
+
+- NEVER use `useEffect` to sync state, use `useMemo` and `handleXXX` instead.
+
 ## NOTES
 
 - Tauri backend (`src-tauri/src/`) calls into `aghub-core` crate
