@@ -6,10 +6,12 @@ import {
 } from "@heroicons/react/24/solid";
 import { Button, Dropdown, SearchField } from "@heroui/react";
 import { useTranslation } from "react-i18next";
+import { useMemo } from "react";
 import { McpList } from "./mcp-list";
 import { ResourceSectionHeader } from "./resource-section-header";
 import { SkillList } from "./skill-list";
 import type { McpResponse, SkillResponse } from "../lib/api-types";
+import { getMcpMergeKey } from "../lib/utils";
 
 interface UnifiedResourceListProps {
 	mcps: McpResponse[];
@@ -39,6 +41,22 @@ export function UnifiedResourceList({
 	projectPath,
 }: UnifiedResourceListProps) {
 	const { t } = useTranslation();
+
+	const mergedMcpCount = useMemo(() => {
+		const keys = new Set<string>();
+		for (const mcp of mcps) {
+			keys.add(getMcpMergeKey(mcp.transport));
+		}
+		return keys.size;
+	}, [mcps]);
+
+	const mergedSkillCount = useMemo(() => {
+		const names = new Set<string>();
+		for (const skill of skills) {
+			names.add(skill.name);
+		}
+		return names.size;
+	}, [skills]);
 
 	const hasMcps = mcps.length > 0;
 	const hasSkills = skills.length > 0;
@@ -117,7 +135,7 @@ export function UnifiedResourceList({
 					<>
 						<ResourceSectionHeader
 							title={t("mcpServers")}
-							count={mcps.length}
+							count={mergedMcpCount}
 							icon={<ServerIcon className="size-3.5" />}
 						/>
 						<McpList
@@ -135,7 +153,7 @@ export function UnifiedResourceList({
 					<>
 						<ResourceSectionHeader
 							title={t("skills")}
-							count={skills.length}
+							count={mergedSkillCount}
 							icon={<BookOpenIcon className="size-3.5" />}
 						/>
 						<SkillList
