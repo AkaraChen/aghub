@@ -215,6 +215,8 @@ export default {
 	default: "Default",
 	showMore: "Show more ({{count}})",
 	showLess: "Show less",
+	skillContent: "Content",
+	noContent: "No content",
 
 	// Env Editor
 	envEditor: {

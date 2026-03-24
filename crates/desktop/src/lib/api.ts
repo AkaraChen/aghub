@@ -119,6 +119,13 @@ export function createApi(baseUrl: string) {
 					.post("skills/edit", { json: { skill_path: skillPath } })
 					.then(() => undefined);
 			},
+			getContent(skillPath: string): Promise<string> {
+				return client
+					.get("skills/content", {
+						searchParams: { path: skillPath },
+					})
+					.json();
+			},
 			getGlobalLock(): Promise<GlobalSkillLockResponse> {
 				return client.get("skills/lock/global").json();
 			},

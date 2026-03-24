@@ -69,6 +69,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 				routes::integrations::get_preferences,
 				routes::skills::open_skill_folder,
 				routes::skills::edit_skill_folder,
+				routes::skills::get_skill_content,
 				routes::skills::get_global_skill_lock,
 				routes::skills::get_project_skill_lock,
 			],

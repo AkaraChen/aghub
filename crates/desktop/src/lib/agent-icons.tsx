@@ -39,7 +39,7 @@ export function AgentIcon({ id, name, size = "lg", variant = "outline" }: AgentI
       ${variantClasses}
     `}
 				// eslint-disable-next-line react-dom/no-dangerously-set-innerhtml
-				dangerouslySetInnerHTML={{ __html: svg.default || svg }}
+				dangerouslySetInnerHTML={{ __html: (svg.default || svg) as string }}
 			/>
 		);
 	}

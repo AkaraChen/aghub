@@ -331,6 +331,38 @@ pub async fn edit_skill_folder(
 	}
 }
 
+#[derive(Debug, rocket::FromForm)]
+pub struct SkillContentQuery {
+	pub path: String,
+}
+
+#[get("/skills/content?<query..>")]
+pub fn get_skill_content(
+	query: SkillContentQuery,
+) -> ApiResult<String> {
+	let path = expand_tilde_path(&query.path);
+	let content = std::fs::read_to_string(&path).map_err(|e| {
+		ApiError::new(
+			Status::NotFound,
+			format!("Failed to read skill file: {e}"),
+			"SKILL_FILE_NOT_FOUND",
+		)
+	})?;
+
+	// Strip YAML frontmatter (between --- markers) to return only the body
+	let body = if content.starts_with("---") {
+		if let Some(end) = content[3..].find("---") {
+			content[3 + end + 3..].trim_start().to_string()
+		} else {
+			content
+		}
+	} else {
+		content
+	};
+
+	Ok(Json(body))
+}
+
 #[get("/skills/lock/global")]
 pub fn get_global_skill_lock() -> ApiResult<GlobalSkillLockResponse> {
 	let lock = skill::lock::global::read_skill_lock();

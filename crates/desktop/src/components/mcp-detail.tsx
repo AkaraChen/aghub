@@ -234,7 +234,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 						{/* Header: Name + Actions */}
 						<Card.Header className="flex flex-row items-start justify-between gap-3">
 							<div className="min-w-0 flex-1">
-								<Card.Title>{group.items[0].name}</Card.Title>
+								<h2 className="text-xl font-semibold text-foreground">{group.items[0].name}</h2>
 								<Card.Description className="mt-1 flex items-center gap-2">
 									<Chip size="sm" variant="soft">
 										{transport.type}

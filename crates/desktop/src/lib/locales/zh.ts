@@ -208,6 +208,8 @@ export default {
 	default: "默认",
 	showMore: "显示更多 ({{count}})",
 	showLess: "收起",
+	skillContent: "内容",
+	noContent: "暂无内容",
 
 	// Env Editor
 	envEditor: {

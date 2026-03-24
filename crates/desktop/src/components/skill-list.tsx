@@ -252,7 +252,7 @@ export function SkillList({
 									const key = [...keys][0] as string;
 									if (key) onSelect(key);
 								}}
-								className="p-2"
+								className="p-2 pl-6"
 							>
 								{sg.skills.map((skillGroup) => (
 									<ListBox.Item
