@@ -27,4 +27,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	cli_name: "zed",
 	validate_args: &["--version"],
 	project_markers: &[".zed"],
+	skills_cli_name: None,
 };

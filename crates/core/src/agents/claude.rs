@@ -33,4 +33,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	cli_name: "claude",
 	validate_args: &["--version"],
 	project_markers: &[".claude", ".mcp.json"],
+	skills_cli_name: Some("claude-code"),
 };

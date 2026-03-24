@@ -38,6 +38,9 @@ pub struct AgentDescriptor {
 	pub validate_args: &'static [&'static str],
 	/// Directory/file markers that indicate this agent's project root
 	pub project_markers: &'static [&'static str],
+	/// Maps to the `-a, --agent` argument of `npx skills add` CLI
+	/// e.g., "claude-code" becomes `npx skills add <source> -a claude-code`
+	pub skills_cli_name: Option<&'static str>,
 }
 
 /// MCP config strategy functions for common config formats

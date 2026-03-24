@@ -33,4 +33,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	cli_name: "cursor",
 	validate_args: &["--version"],
 	project_markers: &[".cursor"],
+	skills_cli_name: Some("cursor"),
 };

@@ -38,4 +38,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	cli_name: "amp",
 	validate_args: &["--version"],
 	project_markers: &[".amp"],
+	skills_cli_name: Some("amp"),
 };

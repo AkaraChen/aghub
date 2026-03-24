@@ -55,6 +55,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 				routes::skills::delete_skill,
 				routes::skills::enable_skill,
 				routes::skills::disable_skill,
+				routes::skills::install_skill,
 				routes::mcps::list_all_agents_mcps,
 				routes::mcps::list_mcps,
 				routes::mcps::create_mcp,

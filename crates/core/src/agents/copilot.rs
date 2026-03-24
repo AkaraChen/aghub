@@ -33,4 +33,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	cli_name: "code",
 	validate_args: &["--version"],
 	project_markers: &[".vscode"],
+	skills_cli_name: Some("github-copilot"),
 };

@@ -1,6 +1,8 @@
 import ky from "ky";
 import type {
 	CreateSkillRequest,
+	InstallSkillRequest,
+	InstallSkillResponse,
 	MarketSkill,
 	McpResponse,
 	SkillResponse,
@@ -25,6 +27,7 @@ export interface AgentInfo {
 		skills_mutable: boolean;
 		universal_skills: boolean;
 	};
+	skills_cli_name?: string;
 }
 
 export interface AgentAvailability {
@@ -62,25 +65,30 @@ export function createApi(baseUrl: string) {
 					})
 					.json();
 			},
-			create(
-				agent: string,
-				data: CreateSkillRequest,
-				projectRoot?: string,
-			): Promise<SkillResponse> {
-				const scope = projectRoot ? "project" : "global";
-				return client
-					.post(`agents/${agent}/skills`, {
-						searchParams: {
-							scope,
-							...(projectRoot
-								? { project_root: projectRoot }
-								: {}),
-						},
-						json: data,
-					})
-					.json();
-			},
+		create(
+			agent: string,
+			data: CreateSkillRequest,
+			projectRoot?: string,
+		): Promise<SkillResponse> {
+			const scope = projectRoot ? "project" : "global";
+			return client
+				.post(`agents/${agent}/skills`, {
+					searchParams: {
+						scope,
+						...(projectRoot
+							? { project_root: projectRoot }
+							: {}),
+					},
+					json: data,
+				})
+				.json();
 		},
+		install(data: InstallSkillRequest): Promise<InstallSkillResponse> {
+			return client
+				.post("skills/install", { json: data, timeout: 300000 })
+				.json();
+		},
+	},
 		mcps: {
 			listAll(
 				scope: "global" | "project" | "all" = "global",

@@ -95,3 +95,19 @@ impl From<(Skill, &str)> for SkillResponse {
 		}
 	}
 }
+
+#[derive(Debug, Deserialize)]
+pub struct InstallSkillRequest {
+	pub source: String,
+	pub agents: Vec<String>,
+	pub scope: String,
+	pub project_path: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct InstallSkillResponse {
+	pub success: bool,
+	pub stdout: String,
+	pub stderr: String,
+	pub exit_code: i32,
+}

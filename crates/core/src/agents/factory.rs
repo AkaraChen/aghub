@@ -33,4 +33,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	cli_name: "factory",
 	validate_args: &["--version"],
 	project_markers: &[".factory"],
+	skills_cli_name: Some("droid"),
 };

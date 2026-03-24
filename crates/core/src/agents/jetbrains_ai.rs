@@ -27,4 +27,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	cli_name: "jetbrains",
 	validate_args: &["--version"],
 	project_markers: &[".jetbrains-ai"],
+	skills_cli_name: None,
 };

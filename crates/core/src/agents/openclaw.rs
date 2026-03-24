@@ -51,4 +51,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	cli_name: "openclaw",
 	validate_args: &["--version"],
 	project_markers: &[".openclaw"],
+	skills_cli_name: Some("openclaw"),
 };

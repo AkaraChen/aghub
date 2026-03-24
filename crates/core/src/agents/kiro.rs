@@ -33,4 +33,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	cli_name: "kiro",
 	validate_args: &["--version"],
 	project_markers: &[".kiro"],
+	skills_cli_name: Some("kiro-cli"),
 };

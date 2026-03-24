@@ -60,3 +60,17 @@ export interface MarketSkill {
 	installs: number;
 	author?: string;
 }
+
+export interface InstallSkillRequest {
+	source: string;
+	agents: string[];
+	scope: "global" | "project";
+	project_path?: string;
+}
+
+export interface InstallSkillResponse {
+	success: boolean;
+	stdout: string;
+	stderr: string;
+	exit_code: number;
+}

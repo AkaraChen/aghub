@@ -6,7 +6,10 @@ use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
 
 use crate::{
-	dto::skill::{CreateSkillRequest, SkillResponse, UpdateSkillRequest},
+	dto::skill::{
+		CreateSkillRequest, InstallSkillRequest, InstallSkillResponse,
+		SkillResponse, UpdateSkillRequest,
+	},
 	error::{ApiCreated, ApiError, ApiNoContent, ApiResult},
 	extractors::{AgentParam, ScopeParams},
 	routes::{
@@ -14,6 +17,10 @@ use crate::{
 		resolved_to_resource_scope,
 	},
 };
+use std::process::Stdio;
+use std::time::Duration;
+use tokio::process::Command;
+use tokio::time::timeout;
 
 fn check_skills_supported(agent: &AgentParam) -> Result<(), ApiError> {
 	let descriptor = registry::get(agent.0);
@@ -192,4 +199,62 @@ pub fn list_all_agents_skills(
 		})
 		.collect();
 	Ok(Json(items))
+}
+
+#[post("/skills/install", data = "<body>")]
+pub async fn install_skill(
+	body: Json<InstallSkillRequest>,
+) -> ApiResult<InstallSkillResponse> {
+	let req = body.into_inner();
+
+	let mut cmd = Command::new("npx");
+	cmd.arg("skills")
+		.arg("add")
+		.arg(&req.source);
+
+	for agent in &req.agents {
+		cmd.arg("-a").arg(agent);
+	}
+
+	if req.scope == "global" {
+		cmd.arg("-g");
+	}
+
+	cmd.arg("-y");
+
+	if let Some(ref path) = req.project_path {
+		cmd.current_dir(path);
+	}
+
+	cmd.stdout(Stdio::piped())
+		.stderr(Stdio::piped());
+
+	let output = match timeout(Duration::from_secs(300), cmd.output()).await {
+		Ok(Ok(output)) => output,
+		Ok(Err(e)) => {
+			return Err(ApiError::new(
+				Status::InternalServerError,
+				format!("Failed to execute skills CLI: {e}"),
+				"SKILLS_CLI_ERROR",
+			));
+		}
+		Err(_) => {
+			return Err(ApiError::new(
+				Status::RequestTimeout,
+				"Skills installation timed out after 5 minutes".to_string(),
+				"SKILLS_INSTALL_TIMEOUT",
+			));
+		}
+	};
+
+	let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+	let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+	let exit_code = output.status.code().unwrap_or(-1);
+
+	Ok(Json(InstallSkillResponse {
+		success: output.status.success(),
+		stdout,
+		stderr,
+		exit_code,
+	}))
 }

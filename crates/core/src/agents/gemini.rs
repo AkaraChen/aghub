@@ -33,4 +33,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	cli_name: "gemini",
 	validate_args: &["--version"],
 	project_markers: &[".gemini"],
+	skills_cli_name: Some("gemini-cli"),
 };

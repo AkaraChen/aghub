@@ -76,10 +76,7 @@ export function InstallSkillDialog({
 	};
 
 	const handleAgentSelectionChange = (keys: Selection) => {
-		const newKeys = keys as Set<string>;
-		if (newKeys.size >= 1) {
-			setSelectedAgents(newKeys);
-		}
+		setSelectedAgents(keys as Set<string>);
 	};
 
 	const getAgentDisplayName = useCallback(
@@ -106,30 +103,39 @@ export function InstallSkillDialog({
 		);
 		setResults(pendingResults);
 
-		const updatedResults = await Promise.all(
-			pendingResults.map(async (result) => {
-				try {
-					await api.skills.create(
-						result.agentId,
-						{
-							name: selectedSkill.name,
-							description: `Source: ${selectedSkill.source}`,
-							author: selectedSkill.author ?? undefined,
-						},
-						projectPath,
-					);
-					return { ...result, status: "success" as const };
-				} catch (err) {
-					return {
-						...result,
-						status: "error" as const,
-						error: err instanceof Error ? err.message : String(err),
-					};
-				}
-			}),
-		);
+		const skillsCliNames = [...selectedAgents]
+			.map((id) => {
+				const agent = availableAgents.find((a) => a.id === id);
+				return agent?.skills_cli_name;
+			})
+			.filter((name): name is string => !!name);
 
-		setResults(updatedResults);
+		try {
+			const response = await api.skills.install({
+				source: selectedSkill.source,
+				agents: skillsCliNames,
+				scope: projectPath ? "project" : "global",
+				project_path: projectPath,
+			});
+
+			const updatedResults = pendingResults.map((result) => ({
+				...result,
+				status: (response.success ? "success" : "error") as
+					| "success"
+					| "error",
+				error: response.success ? undefined : response.stderr,
+			}));
+
+			setResults(updatedResults);
+		} catch (err) {
+			const updatedResults = pendingResults.map((result) => ({
+				...result,
+				status: "error" as const,
+				error: err instanceof Error ? err.message : String(err),
+			}));
+			setResults(updatedResults);
+		}
+
 		setIsInstalling(false);
 		queryClient.invalidateQueries({ queryKey: ["skills"] });
 	};
