@@ -111,3 +111,54 @@ pub struct InstallSkillResponse {
 	pub stderr: String,
 	pub exit_code: i32,
 }
+
+/// Response for a single global skill lock entry
+#[derive(Debug, Serialize)]
+pub struct SkillLockEntryResponse {
+	pub name: String,
+	pub source: String,
+	#[serde(rename = "sourceType")]
+	pub source_type: String,
+	#[serde(rename = "sourceUrl")]
+	pub source_url: String,
+	#[serde(rename = "skillPath", skip_serializing_if = "Option::is_none")]
+	pub skill_path: Option<String>,
+	#[serde(rename = "skillFolderHash")]
+	pub skill_folder_hash: String,
+	#[serde(rename = "installedAt")]
+	pub installed_at: String,
+	#[serde(rename = "updatedAt")]
+	pub updated_at: String,
+	#[serde(rename = "pluginName", skip_serializing_if = "Option::is_none")]
+	pub plugin_name: Option<String>,
+}
+
+/// Response for the global skill lock file
+#[derive(Debug, Serialize)]
+pub struct GlobalSkillLockResponse {
+	pub version: u32,
+	pub skills: Vec<SkillLockEntryResponse>,
+	#[serde(
+		rename = "lastSelectedAgents",
+		skip_serializing_if = "Option::is_none"
+	)]
+	pub last_selected_agents: Option<Vec<String>>,
+}
+
+/// Response for a single project skill lock entry
+#[derive(Debug, Serialize)]
+pub struct LocalSkillLockEntryResponse {
+	pub name: String,
+	pub source: String,
+	#[serde(rename = "sourceType")]
+	pub source_type: String,
+	#[serde(rename = "computedHash")]
+	pub computed_hash: String,
+}
+
+/// Response for the project skill lock file
+#[derive(Debug, Serialize)]
+pub struct ProjectSkillLockResponse {
+	pub version: u32,
+	pub skills: Vec<LocalSkillLockEntryResponse>,
+}

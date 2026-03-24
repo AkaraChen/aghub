@@ -9,8 +9,10 @@ use which::which;
 use crate::{
 	dto::integrations::{CodeEditorType, EditSkillFolderRequest, OpenSkillFolderRequest},
 	dto::skill::{
-		CreateSkillRequest, InstallSkillRequest, InstallSkillResponse,
-		SkillResponse, UpdateSkillRequest,
+		CreateSkillRequest, GlobalSkillLockResponse, InstallSkillRequest,
+		InstallSkillResponse, LocalSkillLockEntryResponse,
+		ProjectSkillLockResponse, SkillLockEntryResponse, SkillResponse,
+		UpdateSkillRequest,
 	},
 	error::{ApiCreated, ApiError, ApiNoContent, ApiResult},
 	extractors::{AgentParam, ScopeParams},
@@ -327,4 +329,61 @@ pub async fn edit_skill_folder(
 			))
 		}
 	}
+}
+
+#[get("/skills/lock/global")]
+pub fn get_global_skill_lock() -> ApiResult<GlobalSkillLockResponse> {
+	let lock = skill::lock::global::read_skill_lock();
+	let skills: Vec<SkillLockEntryResponse> = lock
+		.skills
+		.into_iter()
+		.map(|(name, entry)| SkillLockEntryResponse {
+			name,
+			source: entry.source,
+			source_type: entry.source_type,
+			source_url: entry.source_url,
+			skill_path: entry.skill_path,
+			skill_folder_hash: entry.skill_folder_hash,
+			installed_at: entry.installed_at,
+			updated_at: entry.updated_at,
+			plugin_name: entry.plugin_name,
+		})
+		.collect();
+
+	Ok(Json(GlobalSkillLockResponse {
+		version: lock.version,
+		skills,
+		last_selected_agents: lock.last_selected_agents,
+	}))
+}
+
+#[derive(Debug, rocket::FromForm)]
+pub struct ProjectLockQuery {
+	pub project_path: Option<String>,
+}
+
+#[get("/skills/lock/project?<query..>")]
+pub fn get_project_skill_lock(
+	query: ProjectLockQuery,
+) -> ApiResult<ProjectSkillLockResponse> {
+	let cwd = query
+		.project_path
+		.as_deref()
+		.map(std::path::Path::new);
+	let lock = skill::lock::local::read_local_lock(cwd);
+	let skills: Vec<LocalSkillLockEntryResponse> = lock
+		.skills
+		.into_iter()
+		.map(|(name, entry)| LocalSkillLockEntryResponse {
+			name,
+			source: entry.source,
+			source_type: entry.source_type,
+			computed_hash: entry.computed_hash,
+		})
+		.collect();
+
+	Ok(Json(ProjectSkillLockResponse {
+		version: lock.version,
+		skills,
+	}))
 }

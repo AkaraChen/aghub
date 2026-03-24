@@ -2,10 +2,12 @@ import ky from "ky";
 import type {
 	CodeEditorType,
 	CreateSkillRequest,
+	GlobalSkillLockResponse,
 	InstallSkillRequest,
 	InstallSkillResponse,
 	MarketSkill,
 	McpResponse,
+	ProjectSkillLockResponse,
 	SkillResponse,
 	ToolInfo,
 	TransportDto,
@@ -114,6 +116,18 @@ export function createApi(baseUrl: string) {
 			return client
 				.post("skills/edit", { json: { skill_path: skillPath } })
 				.then(() => undefined);
+		},
+		getGlobalLock(): Promise<GlobalSkillLockResponse> {
+			return client.get("skills/lock/global").json();
+		},
+		getProjectLock(projectPath?: string): Promise<ProjectSkillLockResponse> {
+			return client
+				.get("skills/lock/project", {
+					searchParams: projectPath
+						? { project_path: projectPath }
+						: {},
+				})
+				.json();
 		},
 	},
 		mcps: {

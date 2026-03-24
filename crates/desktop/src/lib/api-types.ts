@@ -92,3 +92,33 @@ export interface ToolInfo {
 export interface ToolPreferences {
 	code_editor?: CodeEditorType;
 }
+
+export interface SkillLockEntryResponse {
+	name: string;
+	source: string;
+	sourceType: string;
+	sourceUrl: string;
+	skillPath?: string;
+	skillFolderHash: string;
+	installedAt: string;
+	updatedAt: string;
+	pluginName?: string;
+}
+
+export interface GlobalSkillLockResponse {
+	version: number;
+	skills: SkillLockEntryResponse[];
+	lastSelectedAgents?: string[];
+}
+
+export interface LocalSkillLockEntryResponse {
+	name: string;
+	source: string;
+	sourceType: string;
+	computedHash: string;
+}
+
+export interface ProjectSkillLockResponse {
+	version: number;
+	skills: LocalSkillLockEntryResponse[];
+}

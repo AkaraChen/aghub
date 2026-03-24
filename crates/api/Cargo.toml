@@ -17,6 +17,7 @@ crate-type = [ "rlib" ]
 
 [dependencies]
 aghub-core = { path = "../core" }
+skill = { path = "../skill" }
 skills-sh = { path = "../skills-sh" }
 rocket = { version = "0.5", features = [ "json" ] }
 rocket_cors = "0.6.0"
