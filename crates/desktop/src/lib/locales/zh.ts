@@ -175,6 +175,8 @@ export default {
 	metadata: "元数据",
 	installedFrom: "安装来源",
 	default: "默认",
+	showMore: "显示更多 ({{count}})",
+	showLess: "收起",
 
 	// Env Editor
 	envEditor: {

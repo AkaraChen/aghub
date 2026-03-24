@@ -178,6 +178,8 @@ export default {
 	metadata: "Metadata",
 	installedFrom: "Installed From",
 	default: "Default",
+	showMore: "Show more ({{count}})",
+	showLess: "Show less",
 
 	// Env Editor
 	envEditor: {

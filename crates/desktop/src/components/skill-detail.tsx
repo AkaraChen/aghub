@@ -1,4 +1,6 @@
 import {
+	ChevronDownIcon,
+	ChevronUpIcon,
 	CodeBracketIcon,
 	ExclamationTriangleIcon,
 	FolderIcon,
@@ -46,6 +48,8 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const api = createApi(baseUrl);
 
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+	const [showAllGlobal, setShowAllGlobal] = useState(false);
+	const [showAllProject, setShowAllProject] = useState(false);
 
 	const skill = group.items[0];
 
@@ -164,48 +168,26 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 						</h3>
 
 					{globalLocationGroups.length > 0 && (
-						<div className="mb-4">
-							<h4 className="text-xs text-muted mb-2">{t("globalSkills")}</h4>
-							<div className="space-y-2">
-								{globalLocationGroups.map((group) => (
-									<LocationItem
-										key={group.sourcePath}
-										group={group}
-										onOpenFolder={() =>
-											openFolderMutation.mutate(group.sourcePath)
-										}
-										onEditFolder={() =>
-											editFolderMutation.mutate(group.sourcePath)
-										}
-										isOpening={openFolderMutation.isPending}
-										isEditing={editFolderMutation.isPending}
-									/>
-								))}
-							</div>
-						</div>
+						<CollapsibleLocations
+							title={t("globalSkills")}
+							locations={globalLocationGroups}
+							showAll={showAllGlobal}
+							onToggle={() => setShowAllGlobal(!showAllGlobal)}
+							openFolderMutation={openFolderMutation}
+							editFolderMutation={editFolderMutation}
+						/>
 					)}
 
 					{projectLocationGroups.length > 0 && (
-						<div>
-							<h4 className="text-xs text-muted mb-2">{t("projectSkills")}</h4>
-							<div className="space-y-2">
-								{projectLocationGroups.map((group) => (
-									<LocationItem
-										key={group.sourcePath}
-										group={group}
-										onOpenFolder={() =>
-											openFolderMutation.mutate(group.sourcePath)
-										}
-										onEditFolder={() =>
-											editFolderMutation.mutate(group.sourcePath)
-										}
-										isOpening={openFolderMutation.isPending}
-										isEditing={editFolderMutation.isPending}
-									/>
-								))}
-							</div>
-							</div>
-						)}
+						<CollapsibleLocations
+							title={t("projectSkills")}
+							locations={projectLocationGroups}
+							showAll={showAllProject}
+							onToggle={() => setShowAllProject(!showAllProject)}
+							openFolderMutation={openFolderMutation}
+							editFolderMutation={editFolderMutation}
+						/>
+					)}
 					</div>
 
 					{(skill.author || skill.version) && (
@@ -280,6 +262,68 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 				projectPath={projectPath}
 			/>
 		</>
+	);
+}
+
+interface CollapsibleLocationsProps {
+	title: string;
+	locations: LocationGroup[];
+	showAll: boolean;
+	onToggle: () => void;
+	openFolderMutation: { mutate: (path: string) => void; isPending: boolean };
+	editFolderMutation: { mutate: (path: string) => void; isPending: boolean };
+}
+
+function CollapsibleLocations({
+	title,
+	locations,
+	showAll,
+	onToggle,
+	openFolderMutation,
+	editFolderMutation,
+}: CollapsibleLocationsProps) {
+	const { t } = useTranslation();
+	const hasMore = locations.length > 2;
+	const displayLocations = showAll || !hasMore
+		? locations
+		: locations.slice(0, 2);
+	const hiddenCount = locations.length - 2;
+
+	return (
+		<div className="mb-4">
+			<h4 className="text-xs text-muted mb-2">{title}</h4>
+			<div className="space-y-2">
+				{displayLocations.map((group) => (
+					<LocationItem
+						key={group.sourcePath}
+						group={group}
+						onOpenFolder={() => openFolderMutation.mutate(group.sourcePath)}
+						onEditFolder={() => editFolderMutation.mutate(group.sourcePath)}
+						isOpening={openFolderMutation.isPending}
+						isEditing={editFolderMutation.isPending}
+					/>
+				))}
+			</div>
+			{hasMore && (
+				<button
+					type="button"
+					onClick={onToggle}
+					className="flex items-center gap-1 mt-2 text-xs text-muted hover:text-foreground transition-colors"
+				>
+					{showAll ? (
+						<>
+							<ChevronUpIcon className="size-3.5" />
+							<span>{t("showLess")}</span>
+						</>
+					) : (
+						<>
+							<ChevronDownIcon className="size-3.5" />
+							<span>{t("showMore", { count: hiddenCount })}</span>
+						</>
+					)}
+				</button>
+			)}
+		</div>
 	);
 }
 
