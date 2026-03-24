@@ -18,7 +18,7 @@ import type { MarketSkill } from "../lib/api-types";
 import { capitalize } from "../lib/mcp-utils";
 import { ResultStatusItem } from "./result-status-item";
 import { StepIndicator } from "./step-indicator";
-import { ChevronLeftIcon, ChevronRightIcon, MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/solid";
+import { MagnifyingGlassIcon, PlusIcon } from "@heroicons/react/24/solid";
 
 interface InstallSkillDialogProps {
 	isOpen: boolean;
@@ -26,7 +26,7 @@ interface InstallSkillDialogProps {
 	projectPath?: string;
 }
 
-type WizardStep = 1 | 2 | 3;
+type WizardStep = 1 | 2;
 
 interface InstallResult {
 	agentId: string;
@@ -93,7 +93,7 @@ export function InstallSkillDialog({
 	const handleInstall = async () => {
 		if (!selectedSkill || selectedAgents.size === 0) return;
 
-		setStep(3);
+		setStep(2);
 
 		const pendingResults: InstallResult[] = [...selectedAgents].map(
 			(agentId) => ({
@@ -150,13 +150,11 @@ export function InstallSkillDialog({
 	};
 
 	const stepLabels = [
-		t("selectSource"),
-		t("selectAgents"),
+		t("selectSourceAndAgents"),
 		t("installation"),
 	];
 
-	const canProceedStep1 = selectedSkill !== null;
-	const canProceedStep2 = selectedAgents.size > 0;
+	const canInstall = selectedSkill !== null && selectedAgents.size > 0;
 
 	return (
 		<Modal.Backdrop isOpen={isOpen} onOpenChange={handleClose}>
@@ -274,19 +272,8 @@ export function InstallSkillDialog({
 										</p>
 									</div>
 								)}
-							</div>
-						)}
 
-						{step === 2 && selectedSkill && (
-							<div className="space-y-4">
-								<div className="p-3 bg-default-50 border border-border rounded-lg">
-									<p className="text-xs text-muted uppercase tracking-wide mb-1">
-										{t("installingSkill")}
-									</p>
-									<p className="font-medium">{selectedSkill.name}</p>
-									<p className="text-sm text-muted">{selectedSkill.source}</p>
-								</div>
-
+								{/* Agent selection */}
 								<div>
 									<p className="text-sm text-muted mb-3">
 										{t("selectAgentsForSkill")}
@@ -333,7 +320,7 @@ export function InstallSkillDialog({
 							</div>
 						)}
 
-						{step === 3 && (
+						{step === 2 && (
 							<div className="space-y-3">
 								{results.length === 0 ? (
 									<p className="text-sm text-muted text-center py-4">
@@ -374,33 +361,14 @@ export function InstallSkillDialog({
 									{t("cancel")}
 								</Button>
 								<Button
-									onPress={() => setStep(2)}
-									isDisabled={!canProceedStep1}
+									onPress={handleInstall}
+									isDisabled={!canInstall}
 								>
-									{t("next")}
-									<ChevronRightIcon className="size-3.5" />
+									{t("install")}
 								</Button>
 							</>
 						)}
 						{step === 2 && (
-							<>
-								<Button
-									variant="secondary"
-									onPress={() => setStep(1)}
-								>
-									<ChevronLeftIcon className="size-3.5" />
-									{t("back")}
-								</Button>
-								<Button
-									onPress={handleInstall}
-									isDisabled={!canProceedStep2}
-								>
-									{t("install")}
-									<ChevronRightIcon className="size-3.5" />
-								</Button>
-							</>
-						)}
-						{step === 3 && (
 							<Button slot="close" variant="secondary">
 								{t("done")}
 							</Button>

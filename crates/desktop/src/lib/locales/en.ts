@@ -136,7 +136,7 @@ export default {
 
 	// Install Skill Dialog
 	installSkill: "Install Skill",
-	selectSource: "Select Source",
+	selectSourceAndAgents: "Select Source & Agents",
 	installation: "Installation",
 	install: "Install",
 	searchSkillMarketDescription: "Search for a skill in the marketplace to install.",

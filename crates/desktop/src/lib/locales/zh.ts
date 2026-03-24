@@ -136,7 +136,7 @@ export default {
 
 	// Install Skill Dialog
 	installSkill: "安装技能",
-	selectSource: "选择来源",
+	selectSourceAndAgents: "选择来源和代理",
 	installation: "安装",
 	install: "安装",
 	searchSkillMarketDescription: "在市场搜索要安装的技能。",
