@@ -8,10 +8,10 @@ fn project_path(root: &Path) -> PathBuf {
 	root.join(".vscode/mcp.json")
 }
 fn global_skills_path() -> PathBuf {
-	dirs::home_dir().unwrap().join(".claude/skills")
+	dirs::home_dir().unwrap().join(".copilot/skills")
 }
 fn project_skills_path(root: &Path) -> PathBuf {
-	root.join(".claude/skills")
+	root.join(".agents/skills")
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {

@@ -20,11 +20,16 @@ import {
 } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useServer } from "../providers/server";
 import { createApi } from "../lib/api";
 import { ConfigSource } from "../lib/api-types";
 import type { SkillResponse } from "../lib/api-types";
+
+interface LocationGroup {
+	sourcePath: string;
+	agents: string[];
+}
 
 export interface SkillGroup {
 	name: string;
@@ -59,6 +64,31 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	);
 	const projectItems = group.items.filter(
 		(item) => item.source === ConfigSource.Project,
+	);
+
+	const groupBySourcePath = (items: SkillResponse[]): LocationGroup[] => {
+		const map = new Map<string, string[]>();
+		for (const item of items) {
+			const path = item.source_path ?? "";
+			if (!map.has(path)) {
+				map.set(path, []);
+			}
+			if (item.agent) {
+				map.get(path)?.push(item.agent);
+			}
+		}
+		return Array.from(map.entries())
+			.filter(([path]) => path !== "")
+			.map(([sourcePath, agents]) => ({ sourcePath, agents }));
+	};
+
+	const globalLocationGroups = useMemo(
+		() => groupBySourcePath(globalItems),
+		[globalItems],
+	);
+	const projectLocationGroups = useMemo(
+		() => groupBySourcePath(projectItems),
+		[projectItems],
 	);
 
 	return (
@@ -107,51 +137,47 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 							{t("locations")} ({group.items.length})
 						</h3>
 
-						{globalItems.length > 0 && (
-							<div className="mb-4">
-								<h4 className="text-xs text-muted mb-2">{t("globalSkills")}</h4>
-								<div className="space-y-2">
-									{globalItems.map((item) => (
-										<LocationItem
-											key={item.agent}
-											item={item}
-											onOpenFolder={() =>
-												item.source_path &&
-												openFolderMutation.mutate(item.source_path)
-											}
-											onEditFolder={() =>
-												item.source_path &&
-												editFolderMutation.mutate(item.source_path)
-											}
-											isOpening={openFolderMutation.isPending}
-											isEditing={editFolderMutation.isPending}
-										/>
-									))}
-								</div>
+					{globalLocationGroups.length > 0 && (
+						<div className="mb-4">
+							<h4 className="text-xs text-muted mb-2">{t("globalSkills")}</h4>
+							<div className="space-y-2">
+								{globalLocationGroups.map((group) => (
+									<LocationItem
+										key={group.sourcePath}
+										group={group}
+										onOpenFolder={() =>
+											openFolderMutation.mutate(group.sourcePath)
+										}
+										onEditFolder={() =>
+											editFolderMutation.mutate(group.sourcePath)
+										}
+										isOpening={openFolderMutation.isPending}
+										isEditing={editFolderMutation.isPending}
+									/>
+								))}
 							</div>
-						)}
+						</div>
+					)}
 
-						{projectItems.length > 0 && (
-							<div>
-								<h4 className="text-xs text-muted mb-2">{t("projectSkills")}</h4>
-								<div className="space-y-2">
-									{projectItems.map((item) => (
-										<LocationItem
-											key={item.agent}
-											item={item}
-											onOpenFolder={() =>
-												item.source_path &&
-												openFolderMutation.mutate(item.source_path)
-											}
-											onEditFolder={() =>
-												item.source_path &&
-												editFolderMutation.mutate(item.source_path)
-											}
-											isOpening={openFolderMutation.isPending}
-											isEditing={editFolderMutation.isPending}
-										/>
-									))}
-								</div>
+					{projectLocationGroups.length > 0 && (
+						<div>
+							<h4 className="text-xs text-muted mb-2">{t("projectSkills")}</h4>
+							<div className="space-y-2">
+								{projectLocationGroups.map((group) => (
+									<LocationItem
+										key={group.sourcePath}
+										group={group}
+										onOpenFolder={() =>
+											openFolderMutation.mutate(group.sourcePath)
+										}
+										onEditFolder={() =>
+											editFolderMutation.mutate(group.sourcePath)
+										}
+										isOpening={openFolderMutation.isPending}
+										isEditing={editFolderMutation.isPending}
+									/>
+								))}
+							</div>
 							</div>
 						)}
 					</div>
@@ -219,15 +245,19 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 }
 
 interface LocationItemProps {
-	item: SkillResponse;
+	group: LocationGroup;
 	onOpenFolder: () => void;
 	onEditFolder: () => void;
 	isOpening: boolean;
 	isEditing: boolean;
 }
 
+function formatAgentName(agent: string): string {
+	return agent.charAt(0).toUpperCase() + agent.slice(1).toLowerCase();
+}
+
 function LocationItem({
-	item,
+	group,
 	onOpenFolder,
 	onEditFolder,
 	isOpening,
@@ -235,56 +265,52 @@ function LocationItem({
 }: LocationItemProps) {
 	const { t } = useTranslation();
 
-	const agentDisplayName = item.agent
-		? item.agent.charAt(0).toUpperCase() + item.agent.slice(1).toLowerCase()
-		: t("default");
-
 	return (
 		<div className="flex items-center justify-between gap-3 p-3 bg-default-50 rounded-lg border border-border">
 			<div className="min-w-0 flex-1">
-				<div className="flex items-center gap-2 mb-1">
-					<Chip size="sm" variant="secondary">{agentDisplayName}</Chip>
+				<div className="flex flex-wrap items-center gap-2 mb-1">
+					{group.agents.map((agent) => (
+						<Chip key={agent} size="sm" variant="secondary">
+							{formatAgentName(agent)}
+						</Chip>
+					))}
 				</div>
-				{item.source_path && (
-					<p className="text-xs text-muted font-mono truncate">
-						{item.source_path}
-					</p>
-				)}
+				<p className="text-xs text-muted font-mono truncate">
+					{group.sourcePath}
+				</p>
 			</div>
-			{item.source_path && (
-				<div className="flex items-center gap-1">
-					<Button
-						isIconOnly
-						variant="ghost"
-						size="sm"
-						className="text-muted hover:text-foreground shrink-0"
-						aria-label={t("editInEditor")}
-						onPress={onEditFolder}
-						isDisabled={isEditing}
-					>
-						{isEditing ? (
-							<Spinner size="sm" />
-						) : (
-							<CodeBracketIcon className="size-4" />
-						)}
-					</Button>
-					<Button
-						isIconOnly
-						variant="ghost"
-						size="sm"
-						className="text-muted hover:text-foreground shrink-0"
-						aria-label={t("openFolder")}
-						onPress={onOpenFolder}
-						isDisabled={isOpening}
-					>
-						{isOpening ? (
-							<Spinner size="sm" />
-						) : (
-							<FolderIcon className="size-4" />
-						)}
-					</Button>
-				</div>
-			)}
+			<div className="flex items-center gap-1">
+				<Button
+					isIconOnly
+					variant="ghost"
+					size="sm"
+					className="text-muted hover:text-foreground shrink-0"
+					aria-label={t("editInEditor")}
+					onPress={onEditFolder}
+					isDisabled={isEditing}
+				>
+					{isEditing ? (
+						<Spinner size="sm" />
+					) : (
+						<CodeBracketIcon className="size-4" />
+					)}
+				</Button>
+				<Button
+					isIconOnly
+					variant="ghost"
+					size="sm"
+					className="text-muted hover:text-foreground shrink-0"
+					aria-label={t("openFolder")}
+					onPress={onOpenFolder}
+					isDisabled={isOpening}
+				>
+					{isOpening ? (
+						<Spinner size="sm" />
+					) : (
+						<FolderIcon className="size-4" />
+					)}
+				</Button>
+			</div>
 		</div>
 	);
 }

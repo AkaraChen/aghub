@@ -1,7 +1,7 @@
 use crate::{
 	adapters::AgentAdapter,
 	manager::ConfigManager,
-	models::{McpServer, ResourceScope, Skill},
+	models::{ConfigSource, McpServer, ResourceScope, Skill},
 	registry,
 };
 use std::path::Path;
@@ -26,7 +26,6 @@ pub fn load_all_agents(
 			let adapter: Box<dyn AgentAdapter> = Box::new(descriptor);
 			let mut manager =
 				ConfigManager::with_scope(adapter, true, project_root, scope);
-			// Use load_both_annotated when scope is Both to get config_source
 			if scope == ResourceScope::Both {
 				match manager.load_both_annotated() {
 					Ok((skills, mcps)) => AgentResources {
@@ -42,11 +41,31 @@ pub fn load_all_agents(
 				}
 			} else {
 				match manager.load() {
-					Ok(config) => AgentResources {
-						agent_id: descriptor.id,
-						skills: config.skills.clone(),
-						mcps: config.mcps.clone(),
-					},
+					Ok(config) => {
+						let config_source = match scope {
+							ResourceScope::GlobalOnly => {
+								Some(ConfigSource::Global)
+							}
+							ResourceScope::ProjectOnly => {
+								Some(ConfigSource::Project)
+							}
+							_ => None,
+						};
+						let skills: Vec<Skill> = config
+							.skills
+							.iter()
+							.cloned()
+							.map(|mut s| {
+								s.config_source = config_source;
+								s
+							})
+							.collect();
+						AgentResources {
+							agent_id: descriptor.id,
+							skills,
+							mcps: config.mcps.clone(),
+						}
+					}
 					Err(_) => AgentResources {
 						agent_id: descriptor.id,
 						skills: vec![],

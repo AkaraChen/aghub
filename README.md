@@ -10,7 +10,7 @@ Here is a reference list of configuration paths utilized by various AI coding ag
 
 | Agent                      | Rules (Instructions) Path                      | MCP Server Config Path                | Skills Directory Path |
 | -------------------------- | ---------------------------------------------- | ------------------------------------- | --------------------- |
-| **GitHub Copilot**         | `AGENTS.md`                                    | `.vscode/mcp.json`                    | `.claude/skills/`     |
+| **GitHub Copilot**         | `AGENTS.md`                                    | `.vscode/mcp.json`                    | `.agents/skills/` (project)<br>`~/.copilot/skills/` (global) |
 | **Claude Code**            | `CLAUDE.md`                                    | `.mcp.json`                           | `.claude/skills/`     |
 | **OpenAI Codex CLI**       | `AGENTS.md`                                    | `.codex/config.toml`                  | `.codex/skills/`      |
 | **Pi Coding Agent**        | `AGENTS.md`                                    | -                                     | `.pi/skills/`         |
