@@ -4,5 +4,4 @@ export default antfu({
 	react: true,
 	stylistic: false,
 	imports: false,
-})
-	.removePlugins("perfectionist");
+}).removePlugins("perfectionist");

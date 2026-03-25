@@ -275,7 +275,9 @@ export function InstallSkillDialog({
 
 								{selectedSkill && (
 									<div
-										className="rounded-lg border border-accent-soft-hover bg-accent/5 p-3"
+										className="
+           rounded-lg border border-accent-soft-hover bg-accent/5 p-3
+         "
 									>
 										<p className="mb-1 text-xs tracking-wide text-muted uppercase">
 											{t("selectedSkill")}
