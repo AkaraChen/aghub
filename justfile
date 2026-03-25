@@ -51,3 +51,10 @@ start *args:
 
 desktop:
     cd ./crates/desktop && nr start
+
+# Bump version across all manifests
+bump version:
+    sed -i '' 's/^version = .*/version = "{{version}}"/' Cargo.toml
+    sed -i '' 's/"version": ".*"/"version": "{{version}}"/' crates/desktop/package.json
+    sed -i '' 's/"version": ".*"/"version": "{{version}}"/' crates/desktop/src-tauri/tauri.conf.json || true
+

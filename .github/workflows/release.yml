@@ -1,0 +1,164 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  changelog:
+    name: Generate Changelog
+    runs-on: ubuntu-latest
+    outputs:
+      release_body: ${{ steps.git-cliff.outputs.content }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Generate Changelog
+        uses: orhun/git-cliff-action@v4
+        id: git-cliff
+        with:
+          config: cliff.toml
+          args: -vv --latest --strip header
+        env:
+          OUTPUT: CHANGES.md
+          GITHUB_REPO: ${{ github.repository }}
+
+  build-tauri:
+    name: Build Desktop (${{ matrix.target }})
+    needs: changelog
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Linux Dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+          
+      - name: Install frontend dependencies
+        run: |
+          cd crates/desktop
+          bun install
+          
+      - name: Sync Version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "Syncing version across files: $VERSION"
+          if [[ "${{ matrix.os }}" == "macos"* ]]; then
+            sed -i '' "s/^version = .*/version = \"$VERSION\"/" Cargo.toml
+            sed -i '' "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" crates/desktop/package.json
+            sed -i '' "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" crates/desktop/src-tauri/tauri.conf.json || true
+          else
+            sed -i "s/^version = .*/version = \"$VERSION\"/" Cargo.toml
+            sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" crates/desktop/package.json
+            sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" crates/desktop/src-tauri/tauri.conf.json || true
+          fi
+          
+      - name: Build Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # macOS signing placeholders
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "aghub ${{ github.ref_name }}"
+          releaseBody: ${{ needs.changelog.outputs.release_body }}
+          releaseDraft: false
+          prerelease: false
+          args: --target ${{ matrix.target }}
+
+  build-cli:
+    name: Build CLI (${{ matrix.target }})
+    needs: changelog
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+          - os: macos-13
+            target: x86_64-apple-darwin
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+        
+      - name: Sync Version
+        shell: bash
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "${{ matrix.os }}" == "macos"* ]]; then
+            sed -i '' "s/^version = .*/version = \"$VERSION\"/" Cargo.toml
+          else
+            sed -i "s/^version = .*/version = \"$VERSION\"/" Cargo.toml
+          fi
+          
+      - name: Build CLI
+        run: cargo build --release -p aghub --target ${{ matrix.target }}
+        
+      - name: Package CLI (Unix)
+        if: matrix.os != 'windows-latest'
+        run: |
+          tar -czvf agentctl-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release agentctl
+          
+      - name: Package CLI (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          Compress-Archive -Path target/${{ matrix.target }}/release/agentctl.exe -DestinationPath agentctl-${{ matrix.target }}.zip
+          
+      - name: Upload Artifact to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            agentctl-${{ matrix.target }}.tar.gz
+            agentctl-${{ matrix.target }}.zip
