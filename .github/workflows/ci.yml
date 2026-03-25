@@ -8,6 +8,7 @@ on:
 
 env:
     CARGO_TERM_COLOR: always
+    FAMA_VERSION: v0.1.2
 
 jobs:
     check:
@@ -17,6 +18,16 @@ jobs:
             fail-fast: false
             matrix:
                 os: [ubuntu-latest, macos-latest, windows-latest]
+                include:
+                    - os: ubuntu-latest
+                      fama_target: x86_64-unknown-linux-gnu
+                      ext: tar.gz
+                    - os: macos-latest
+                      fama_target: aarch64-apple-darwin
+                      ext: tar.gz
+                    - os: windows-latest
+                      fama_target: x86_64-pc-windows-gnu
+                      ext: zip
         steps:
             - uses: actions/checkout@v4
 
@@ -51,11 +62,13 @@ jobs:
               run: cd crates/desktop && bun install
 
             - name: Install fama
-              if: matrix.os == 'ubuntu-latest'
-              run: curl -fsSL https://raw.githubusercontent.com/AkaraChen/fama/master/install.sh | sh
+              shell: bash
+              run: |
+                  curl -sL "https://github.com/AkaraChen/fama/releases/download/${{ env.FAMA_VERSION }}/fama-${{ env.FAMA_VERSION }}-${{ matrix.fama_target }}.${{ matrix.ext }}" -o fama.tmp
+                  [[ "${{ matrix.ext }}" == "zip" ]] && unzip -q fama.tmp -d ~/.cargo/bin/ || tar -xzf fama.tmp -C ~/.cargo/bin/
+                  chmod +x ~/.cargo/bin/fama* || true
 
             - name: Format Check
-              if: matrix.os == 'ubuntu-latest'
               run: |
                   just fmt
                   git diff --exit-code
