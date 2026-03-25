@@ -10,7 +10,12 @@ fn fixtures_dir() -> PathBuf {
 }
 
 fn agentctl() -> Command {
-	Command::cargo_bin("agentctl").unwrap()
+	let mut cmd = Command::cargo_bin("agentctl").unwrap();
+	let dir = fixtures_dir();
+	cmd.env("HOME", &dir);
+	cmd.env("USERPROFILE", &dir);
+	cmd.env("APPDATA", &dir);
+	cmd
 }
 
 #[test]
