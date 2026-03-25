@@ -349,18 +349,16 @@ pub fn get_skill_content(
 		)
 	})?;
 
-	// Strip YAML frontmatter (between --- markers) to return only the body
-	let body = if content.starts_with("---") {
-		if let Some(end) = content[3..].find("---") {
-			content[3 + end + 3..].trim_start().to_string()
-		} else {
-			content
-		}
-	} else {
-		content
-	};
+	// Use the proper skill parser to extract the body content
+	let skill = skill::parser::parse_skill_md(&content).map_err(|e| {
+		ApiError::new(
+			Status::BadRequest,
+			format!("Invalid skill format: {e}"),
+			"INVALID_SKILL_FORMAT",
+		)
+	})?;
 
-	Ok(Json(body))
+	Ok(Json(skill.content))
 }
 
 #[get("/skills/lock/global")]
