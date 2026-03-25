@@ -65,6 +65,7 @@ export default {
 	tools: "Tools",
 	source: "Source",
 	openFolder: "Open folder",
+	openInBrowser: "View source",
 	editInEditor: "Edit in editor",
 	createSkill: "Create Skill",
 	skillName: "Skill Name",

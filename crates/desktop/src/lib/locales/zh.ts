@@ -63,6 +63,7 @@ export default {
 	tools: "工具",
 	source: "来源",
 	openFolder: "打开文件夹",
+	openInBrowser: "查看来源",
 	editInEditor: "在编辑器中打开",
 	createSkill: "创建技能",
 	skillName: "技能名称",

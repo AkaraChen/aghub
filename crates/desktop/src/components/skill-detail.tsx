@@ -6,6 +6,7 @@ import {
 	FolderIcon,
 	GlobeAltIcon,
 	HashtagIcon,
+	LinkIcon,
 	TrashIcon,
 	XCircleIcon,
 } from "@heroicons/react/24/solid";
@@ -37,6 +38,7 @@ import type {
 } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
 import { useServer } from "../hooks/use-server";
+import { openUrl } from "@tauri-apps/plugin-opener";
 
 interface LocationGroup {
 	sourcePath: string;
@@ -106,6 +108,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 					source: entry.source,
 					sourceType: entry.sourceType,
 					hash: entry.skillFolderHash,
+					sourceUrl: entry.sourceUrl,
 					scope: "global",
 				};
 			}
@@ -124,6 +127,16 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		}
 		return null;
 	}, [globalLock, projectLock, skill.name, group.items]);
+
+	const sourceUrl = useMemo(() => {
+		if (!currentSkillSource) return null;
+		if (currentSkillSource.sourceUrl) return currentSkillSource.sourceUrl;
+		if (currentSkillSource.sourceType === "github" && currentSkillSource.source) {
+			const path = currentSkillSource.source.replace(/^github\//, "");
+			return `https://github.com/${path}`;
+		}
+		return null;
+	}, [currentSkillSource]);
 
 	const primarySource = skill.source;
 
@@ -355,21 +368,37 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 									<p className="mb-2 text-xs font-medium uppercase tracking-wider text-muted">
 										{t("installedFrom")}
 									</p>
-									<div className="flex items-center gap-2 text-sm">
-										<GlobeAltIcon className="size-3.5 shrink-0 text-muted" />
-										<span className="min-w-0 truncate text-foreground">
-											{currentSkillSource.source}
-										</span>
-										<span className="shrink-0 text-xs text-muted">
-											{currentSkillSource.sourceType}
-										</span>
-										<span className="shrink-0 font-mono text-xs text-muted">
-											<HashtagIcon className="inline size-3" />
-											{currentSkillSource.hash.slice(
-												0,
-												8,
-											)}
-										</span>
+									<div className="flex items-center justify-between gap-2 rounded-lg bg-surface-secondary px-3 py-2">
+										<div className="flex min-w-0 items-center gap-2 text-sm">
+											<GlobeAltIcon className="size-3.5 shrink-0 text-muted" />
+											<span className="min-w-0 truncate text-foreground">
+												{currentSkillSource.source}
+											</span>
+											<span className="shrink-0 text-xs text-muted">
+												{currentSkillSource.sourceType}
+											</span>
+											<span className="shrink-0 font-mono text-xs text-muted">
+												<HashtagIcon className="inline size-3" />
+												{currentSkillSource.hash.slice(0, 8)}
+											</span>
+										</div>
+										{sourceUrl && (
+											<div className="flex items-center gap-1">
+												<Tooltip delay={0}>
+													<Button
+														isIconOnly
+														variant="ghost"
+														size="sm"
+														className="text-muted"
+														aria-label={t("openInBrowser")}
+														onPress={() => openUrl(sourceUrl)}
+													>
+														<LinkIcon className="size-3.5" />
+													</Button>
+													<Tooltip.Content>{t("openInBrowser")}</Tooltip.Content>
+												</Tooltip>
+											</div>
+										)}
 									</div>
 								</div>
 							)}
