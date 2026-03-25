@@ -108,6 +108,12 @@ export function ManageAgentsDialog({
 		[currentAgentIds, selectedSet],
 	);
 
+	const onCloseAndReset = () => {
+		setAgentStates({});
+		setIsApplying(false);
+		onClose();
+	};
+
 	const handleApply = async () => {
 		setIsApplying(true);
 		const primary = group.items[0];
@@ -204,12 +210,6 @@ export function ManageAgentsDialog({
 				}),
 			);
 		}
-	};
-
-	const onCloseAndReset = () => {
-		setAgentStates({});
-		setIsApplying(false);
-		onClose();
 	};
 
 	return (
