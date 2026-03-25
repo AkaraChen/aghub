@@ -304,8 +304,8 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 							<div>
 								<p
 									className="
-          mb-2 text-xs font-medium tracking-wider text-muted uppercase
-        "
+           mb-2 text-xs font-medium tracking-wider text-muted uppercase
+         "
 								>
 									{t("agents")}
 								</p>
@@ -349,8 +349,8 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 							<div>
 								<p
 									className="
-          mb-1 text-xs font-medium tracking-wider text-muted uppercase
-        "
+           mb-1 text-xs font-medium tracking-wider text-muted uppercase
+         "
 								>
 									{t("connection")}
 								</p>

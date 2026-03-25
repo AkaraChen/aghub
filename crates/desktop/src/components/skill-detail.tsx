@@ -185,10 +185,10 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 			<div className="h-full overflow-y-auto">
 				<div
 					className="
-      max-w-2xl space-y-4 p-4
-      sm:p-5
-      md:p-6
-    "
+       max-w-2xl space-y-4 p-4
+       sm:p-5
+       md:p-6
+     "
 				>
 					{/* Main Info Card */}
 					<Card>
@@ -205,9 +205,9 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 							</div>
 							<div
 								className="
-         flex items-center gap-1.5
-         sm:gap-2
-       "
+          flex items-center gap-1.5
+          sm:gap-2
+        "
 							>
 								{primarySkillPath && (
 									<>
@@ -301,8 +301,8 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 								<div>
 									<p
 										className="
-           mb-2 text-xs font-medium tracking-wider text-muted uppercase
-         "
+            mb-2 text-xs font-medium tracking-wider text-muted uppercase
+          "
 									>
 										{t("tools")} ({skill.tools.length})
 									</p>
@@ -327,8 +327,8 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 								<div>
 									<p
 										className="
-           mb-2 text-xs font-medium tracking-wider text-muted uppercase
-         "
+            mb-2 text-xs font-medium tracking-wider text-muted uppercase
+          "
 									>
 										{t("locations")} (
 										{allLocationGroups.length})
@@ -389,16 +389,16 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 								<div>
 									<p
 										className="
-           mb-2 text-xs font-medium tracking-wider text-muted uppercase
-         "
+            mb-2 text-xs font-medium tracking-wider text-muted uppercase
+          "
 									>
 										{t("installedFrom")}
 									</p>
 									<div
 										className="
-           flex items-center justify-between gap-2 rounded-lg
-           bg-surface-secondary px-3 py-2
-         "
+            flex items-center justify-between gap-2 rounded-lg
+            bg-surface-secondary px-3 py-2
+          "
 									>
 										<div className="flex min-w-0 items-center gap-2 text-sm">
 											<GlobeAltIcon className="size-3.5 shrink-0 text-muted" />
@@ -467,8 +467,8 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 												role="article"
 												aria-label={t("skillContent")}
 												className="
-              overflow-x-auto whitespace-pre-wrap break-words rounded-md
-              bg-surface-secondary p-3 font-mono text-xs text-foreground
+              overflow-x-auto rounded-md bg-surface-secondary p-3 font-mono
+              text-xs wrap-break-word whitespace-pre-wrap text-foreground
             "
 											>
 												{skillContent}
@@ -510,10 +510,10 @@ function LocationRow({
 	return (
 		<div
 			className="
-    flex items-center justify-between gap-2 rounded-lg bg-surface-secondary px-3
-    py-2
-    sm:gap-3
-  "
+     flex items-center justify-between gap-2 rounded-lg bg-surface-secondary
+     px-3 py-2
+     sm:gap-3
+   "
 		>
 			<div className="min-w-0 flex-1">
 				<p
@@ -532,9 +532,9 @@ function LocationRow({
 			</div>
 			<div
 				className="
-     flex items-center gap-1.5
-     sm:gap-2
-   "
+      flex items-center gap-1.5
+      sm:gap-2
+    "
 			>
 				<Tooltip delay={0}>
 					<Button
@@ -649,8 +649,8 @@ function DeleteSkillDialog({
 								<div>
 									<h4
 										className="
-           mb-2 text-xs font-medium tracking-wide text-muted uppercase
-         "
+            mb-2 text-xs font-medium tracking-wide text-muted uppercase
+          "
 									>
 										{t("globalSkills")}
 									</h4>
@@ -683,8 +683,8 @@ function DeleteSkillDialog({
 								<div>
 									<h4
 										className="
-           mb-2 text-xs font-medium tracking-wide text-muted uppercase
-         "
+            mb-2 text-xs font-medium tracking-wide text-muted uppercase
+          "
 									>
 										{t("projectSkills")}
 									</h4>
