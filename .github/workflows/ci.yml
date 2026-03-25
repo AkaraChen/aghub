@@ -31,7 +31,7 @@ jobs:
               with:
                   components: clippy
 
-            - name: Setup Bun & Node
+            - name: Setup Bun
               uses: oven-sh/setup-bun@v2
               with:
                   bun-version: latest
@@ -47,19 +47,12 @@ jobs:
             - name: Rust Cache
               uses: Swatinem/rust-cache@v2
 
-            - name: Setup Go
-              uses: actions/setup-go@v5
-              with:
-                  go-version: 'stable'
-
-            - name: Setup Zig
-              uses: goto-bus-stop/setup-zig@v2
-
-            - name: Install fama
-              run: cargo install --git https://github.com/AkaraChen/fama
-
             - name: Install frontend dependencies
               run: cd crates/desktop && bun install
+
+            - name: Install fama
+              if: matrix.os == 'ubuntu-latest'
+              run: curl -fsSL https://raw.githubusercontent.com/AkaraChen/fama/master/install.sh | sh
 
             - name: Format Check
               if: matrix.os == 'ubuntu-latest'
@@ -71,9 +64,7 @@ jobs:
               run: just lint
 
             - name: Test
-              run: |
-                  just test
-                  just integration-test || true
+              run: just test
 
             - name: Build
               run: |
