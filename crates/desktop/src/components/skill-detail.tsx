@@ -537,26 +537,34 @@ function DeleteSkillDialog({
 	const skill = group.items[0];
 
 	const deleteMutation = useMutation({
-		mutationFn: async () => {
-			await Promise.all(
-				group.items.map(async (item) => {
-					if (!item.agent) return;
-					const scope =
-						item.source === ConfigSource.Project
-							? "project"
-							: "global";
-					return api.skills.delete(
-						item.agent,
+		mutationFn: () => {
+			const byScope = new Map<string, string>();
+			for (const item of group.items) {
+				if (!item.agent) continue;
+				const scope =
+					item.source === ConfigSource.Project
+						? "project"
+						: "global";
+				if (!byScope.has(scope)) {
+					byScope.set(scope, item.agent);
+				}
+			}
+			return Promise.allSettled(
+				[...byScope].map(([scope, agent]) =>
+					api.skills.delete(
+						agent,
 						skill.name,
-						scope,
+						scope as "global" | "project",
 						projectPath,
-					);
-				}),
+					),
+				),
 			);
 		},
-		onSuccess: () => {
+		onSettled: () => {
 			queryClient.invalidateQueries({ queryKey: ["skills"] });
-			queryClient.invalidateQueries({ queryKey: ["project-skills"] });
+			queryClient.invalidateQueries({
+				queryKey: ["project-skills"],
+			});
 			onClose();
 		},
 	});

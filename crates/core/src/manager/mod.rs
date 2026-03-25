@@ -23,12 +23,12 @@ impl ConfigManager {
 		global: bool,
 		project_root: Option<&Path>,
 	) -> Self {
-		Self::with_scope(
-			adapter,
-			global,
-			project_root,
-			ResourceScope::GlobalOnly,
-		)
+		let scope = if global {
+			ResourceScope::GlobalOnly
+		} else {
+			ResourceScope::ProjectOnly
+		};
+		Self::with_scope(adapter, global, project_root, scope)
 	}
 
 	/// Create a new ConfigManager with resource scope
