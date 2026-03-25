@@ -48,7 +48,7 @@ jobs:
               uses: Swatinem/rust-cache@v2
 
             - name: Install fama
-              run: cargo install fama
+              run: cargo install --git https://github.com/AkaraChen/fama
 
             - name: Install frontend dependencies
               run: cd crates/desktop && bun install
