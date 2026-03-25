@@ -1,5 +1,5 @@
 use skill::{
-	read_local_lock, write_local_lock, LocalSkillLockEntry, LocalSkillLockFile,
+	write_local_lock, LocalSkillLockEntry, LocalSkillLockFile,
 };
 use std::path::Path;
 
@@ -94,7 +94,7 @@ fn test_rust_can_parse_typescript_local_lock() {
 /// Test that Rust can parse TypeScript-generated global lock JSON
 #[test]
 fn test_rust_can_parse_typescript_global_lock() {
-	use skill::{SkillLockEntry, SkillLockFile};
+	use skill::SkillLockFile;
 
 	let fixture_dir = Path::new("tests/fixtures/global-lock-with-timestamps");
 	let ts_json =
