@@ -47,6 +47,14 @@ jobs:
             - name: Rust Cache
               uses: Swatinem/rust-cache@v2
 
+            - name: Setup Go
+              uses: actions/setup-go@v5
+              with:
+                  go-version: 'stable'
+
+            - name: Setup Zig
+              uses: goto-bus-stop/setup-zig@v2
+
             - name: Install fama
               run: cargo install --git https://github.com/AkaraChen/fama
 
