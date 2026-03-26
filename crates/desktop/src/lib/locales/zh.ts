@@ -14,6 +14,8 @@ export default {
 	cancel: "取消",
 	create: "创建",
 	copy: "复制",
+	all: "全部",
+	enabled: "已启用",
 	disabled: "已禁用",
 
 	// Settings
