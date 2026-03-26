@@ -308,7 +308,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 							</div>
 						</Card.Header>
 
-						<Card.Content className="space-y-5">
+						<Card.Content className="flex flex-col gap-5">
 							{/* Agents Section */}
 							<div>
 								<p
