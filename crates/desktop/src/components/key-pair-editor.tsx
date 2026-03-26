@@ -103,7 +103,7 @@ export function KeyPairEditor({
 					</Button>
 				</div>
 			))}
-			<Button variant="surface" size="sm" onPress={handleAdd}>
+			<Button variant="secondary" size="sm" onPress={handleAdd}>
 				<PlusIcon className="size-4" />
 				{t("keyPairEditor.addPair")}
 			</Button>

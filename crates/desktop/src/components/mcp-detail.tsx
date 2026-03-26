@@ -2,22 +2,13 @@ import {
 	CheckCircleIcon,
 	ChevronDownIcon,
 	ChevronUpIcon,
-	ClipboardDocumentIcon,
 	DocumentDuplicateIcon,
 	ExclamationTriangleIcon,
 	PencilIcon,
 	PlusIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
-import {
-	Button,
-	Card,
-	Chip,
-	Disclosure,
-	Modal,
-	Separator,
-	Tooltip,
-} from "@heroui/react";
+import { Button, Card, Chip, Modal, Tooltip } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -41,107 +32,26 @@ interface McpDetailProps {
 	projectPath?: string;
 }
 
-function CopyButton({ text, label }: { text: string; label?: string }) {
-	const [copied, setCopied] = useState(false);
-	const { t } = useTranslation();
-
-	const handleCopy = async () => {
-		try {
-			await navigator.clipboard.writeText(text);
-			setCopied(true);
-		} catch {
-			setCopied(true);
-		}
-	};
-
-	useEffect(() => {
-		if (copied) {
-			const timer = setTimeout(setCopied, 1500, false);
-			return () => clearTimeout(timer);
-		}
-	}, [copied]);
-
-	return (
-		<Tooltip delay={0}>
-			<Button
-				isIconOnly
-				variant="ghost"
-				size="sm"
-				className={cn("size-7", copied ? "text-success" : "text-muted")}
-				aria-label={label ?? t("copy")}
-				onPress={handleCopy}
-			>
-				{copied ? (
-					<CheckCircleIcon className="size-3.5" />
-				) : (
-					<ClipboardDocumentIcon className="size-3.5" />
-				)}
-			</Button>
-			<Tooltip.Content>
-				{copied ? t("copied") : (label ?? t("copy"))}
-			</Tooltip.Content>
-		</Tooltip>
-	);
-}
-
 function DetailRow({
 	label,
 	value,
 	mono = false,
-	copyable = false,
 }: {
 	label: string;
 	value: string;
 	mono?: boolean;
-	copyable?: boolean;
 }) {
 	return (
 		<div className="flex items-start justify-between gap-4 py-2">
 			<span className="shrink-0 text-sm text-muted">{label}</span>
-			<div className="flex items-center gap-1">
-				<span
-					className={cn(
-						"text-right text-sm break-all",
-						mono && "font-mono text-xs",
-					)}
-				>
-					{value}
-				</span>
-				{copyable && <CopyButton text={value} />}
-			</div>
-		</div>
-	);
-}
-
-function KeyValueSection({
-	data,
-	emptyMessage,
-}: {
-	data: Record<string, string> | undefined;
-	emptyMessage: string;
-}) {
-	const entries = data ? Object.entries(data) : [];
-
-	if (entries.length === 0) {
-		return <p className="py-2 text-xs text-muted">{emptyMessage}</p>;
-	}
-
-	return (
-		<div className="space-y-1 py-1">
-			{entries.map(([key, value]) => (
-				<div
-					key={key}
-					className="
-       flex items-center justify-between gap-4 rounded-lg bg-surface-secondary
-       px-3 py-1.5
-     "
-				>
-					<span className="shrink-0 font-mono text-xs">{key}</span>
-					<span className="truncate font-mono text-xs text-muted">
-						{value}
-					</span>
-				</div>
-			))}
+			<span
+				className={cn(
+					"text-right text-sm break-all",
+					mono && "font-mono text-xs",
+				)}
+			>
+				{value}
+			</span>
 		</div>
 	);
 }
@@ -152,6 +62,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 	const [manageDialogOpen, setManageDialogOpen] = useState(false);
 	const [copyFeedback, setCopyFeedback] = useState(false);
 	const [showAllHeaders, setShowAllHeaders] = useState(false);
+	const [showAllEnvVars, setShowAllEnvVars] = useState(false);
 	const { baseUrl } = useServer();
 	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
 	const queryClient = useQueryClient();
@@ -236,6 +147,15 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 			: headerEntries.slice(0, 2);
 	const hasMoreHeaders = headerEntries.length > 2;
 	const hiddenHeaderCount = headerEntries.length - 2;
+
+	// Environment variables display logic
+	const envEntries = envVars ? Object.entries(envVars) : [];
+	const displayedEnvVars =
+		showAllEnvVars || envEntries.length <= 2
+			? envEntries
+			: envEntries.slice(0, 2);
+	const hasMoreEnvVars = envEntries.length > 2;
+	const hiddenEnvVarCount = envEntries.length - 2;
 
 	return (
 		<>
@@ -375,7 +295,6 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 											label={t("command")}
 											value={transport.command}
 											mono
-											copyable
 										/>
 										{transport.args &&
 											transport.args.length > 0 && (
@@ -397,7 +316,6 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 										label={t("url")}
 										value={transport.url}
 										mono
-										copyable
 									/>
 								)}
 
@@ -485,30 +403,68 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 								)}
 
 							{/* Environment Variables (stdio) */}
-							{transport.type === "stdio" && (
-								<Disclosure>
-									<Disclosure.Heading>
-										<Button
-											slot="trigger"
-											variant="ghost"
-											size="sm"
-											className="w-full justify-between text-muted"
+							{transport.type === "stdio" && envCount > 0 && (
+								<div>
+									<p
+										className="
+           mb-2 text-xs font-medium tracking-wider text-muted uppercase
+         "
+									>
+										{t("envCount", {
+											count: envCount,
+										})}
+									</p>
+									<div className="space-y-1">
+										{displayedEnvVars.map(
+											([key, value]) => (
+												<div
+													key={key}
+													className="
+                   flex items-center justify-between gap-4 rounded-lg
+                   bg-surface-secondary px-3 py-1.5
+                 "
+												>
+													<span className="shrink-0 font-mono text-xs">
+														{key}
+													</span>
+													<span className="truncate font-mono text-xs text-muted">
+														{value}
+													</span>
+												</div>
+											),
+										)}
+									</div>
+									{hasMoreEnvVars && (
+										<button
+											type="button"
+											onClick={() =>
+												setShowAllEnvVars(
+													!showAllEnvVars,
+												)
+											}
+											className="
+                 mt-2 flex items-center gap-1 text-xs text-muted transition-colors
+                 hover:text-foreground
+               "
 										>
-											{t("envCount", {
-												count: envCount,
-											})}
-											<Disclosure.Indicator />
-										</Button>
-									</Disclosure.Heading>
-									<Disclosure.Content>
-										<Disclosure.Body>
-											<KeyValueSection
-												data={envVars}
-												emptyMessage={t("noEnvVars")}
-											/>
-										</Disclosure.Body>
-									</Disclosure.Content>
-								</Disclosure>
+											{showAllEnvVars ? (
+												<>
+													<ChevronUpIcon className="size-3.5" />
+													<span>{t("showLess")}</span>
+												</>
+											) : (
+												<>
+													<ChevronDownIcon className="size-3.5" />
+													<span>
+														{t("showMore", {
+															count: hiddenEnvVarCount,
+														})}
+													</span>
+												</>
+											)}
+										</button>
+									)}
+								</div>
 							)}
 
 							{/* Action Buttons */}

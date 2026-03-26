@@ -16,7 +16,6 @@ import {
 	Card,
 	Chip,
 	Modal,
-	Separator,
 	Spinner,
 	Tooltip,
 } from "@heroui/react";
