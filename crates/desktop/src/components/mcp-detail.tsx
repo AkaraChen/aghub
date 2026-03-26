@@ -20,9 +20,9 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useServer } from "../hooks/use-server";
 import { AgentIcon, sortAgentObjects } from "../lib/agent-icons";
-import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { createApi } from "../lib/api";
 import type { McpResponse, TransportDto } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
@@ -253,7 +253,10 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 									{t("agents")}
 								</h3>
 								<div className="flex flex-wrap gap-2">
-									{sortAgentObjects(group.items, allAgents).map((item) => (
+									{sortAgentObjects(
+										group.items,
+										allAgents,
+									).map((item) => (
 										<Chip
 											key={item.agent ?? "default"}
 											size="sm"

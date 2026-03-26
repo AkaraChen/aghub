@@ -8,9 +8,9 @@ import { useQuery } from "@tanstack/react-query";
 import Fuse from "fuse.js";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useServer } from "../hooks/use-server";
 import { AgentIcon, sortAgents } from "../lib/agent-icons";
-import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { createApi } from "../lib/api";
 import type {
 	GlobalSkillLockResponse,

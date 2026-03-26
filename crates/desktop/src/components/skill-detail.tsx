@@ -25,8 +25,8 @@ import * as pathe from "pathe";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { siGithub } from "simple-icons";
-import { useServer } from "../hooks/use-server";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
+import { useServer } from "../hooks/use-server";
 import { sortAgents } from "../lib/agent-icons";
 import { createApi } from "../lib/api";
 import type {
