@@ -18,7 +18,7 @@ import type { UpdateMcpRequest } from "../lib/api";
 import { createApi } from "../lib/api";
 import type { McpResponse, TransportDto } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
-import { createEmptyKeyPair, objectToKeyPairs } from "../lib/key-pair-utils";
+import { objectToKeyPairs } from "../lib/key-pair-utils";
 import { buildTransportFromForm, capitalize } from "../lib/mcp-utils";
 import type { EnvVar } from "./env-editor";
 import { EnvEditor } from "./env-editor";
@@ -68,7 +68,7 @@ export function EditMcpDialog({ group, isOpen, onClose }: EditMcpDialogProps) {
 		) {
 			return objectToKeyPairs(primaryServer.transport.env);
 		}
-		return [createEmptyKeyPair()];
+		return [];
 	});
 
 	const [url, setUrl] = useState(
@@ -83,7 +83,7 @@ export function EditMcpDialog({ group, isOpen, onClose }: EditMcpDialogProps) {
 		) {
 			return objectToKeyPairs(primaryServer.transport.headers);
 		}
-		return [createEmptyKeyPair()];
+		return [];
 	});
 
 	const updateMutation = useMutation({

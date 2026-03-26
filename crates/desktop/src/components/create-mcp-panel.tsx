@@ -24,7 +24,7 @@ import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useServer } from "../hooks/use-server";
 import { createApi } from "../lib/api";
 import type { TransportDto } from "../lib/api-types";
-import { createEmptyKeyPair, objectToKeyPairs } from "../lib/key-pair-utils";
+import { objectToKeyPairs } from "../lib/key-pair-utils";
 import { buildTransportFromForm } from "../lib/mcp-utils";
 import type { EnvVar } from "./env-editor";
 import { EnvEditor } from "./env-editor";
@@ -72,14 +72,10 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 
 	const [command, setCommand] = useState("");
 	const [args, setArgs] = useState("");
-	const [envVars, setEnvVars] = useState<EnvVar[]>(() => [
-		createEmptyKeyPair(),
-	]);
+	const [envVars, setEnvVars] = useState<EnvVar[]>([]);
 
 	const [url, setUrl] = useState("");
-	const [httpHeaders, setHttpHeaders] = useState<HttpHeader[]>(() => [
-		createEmptyKeyPair(),
-	]);
+	const [httpHeaders, setHttpHeaders] = useState<HttpHeader[]>([]);
 
 	// Import dialog state
 	const [showImportDialog, setShowImportDialog] = useState(false);

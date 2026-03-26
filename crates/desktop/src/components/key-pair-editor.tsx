@@ -43,12 +43,20 @@ export function KeyPairEditor({
 		);
 	};
 
-	// Update pair by id
+	// Update pair by id, or add new pair if empty
 	const handleChange = (
 		id: string,
 		field: "key" | "value",
 		newValue: string,
 	) => {
+		// If value array is empty, add a new pair
+		if (value.length === 0) {
+			const newPair = { id: generateId(), key: "", value: "" };
+			newPair[field] = newValue;
+			onChange([newPair]);
+			return;
+		}
+
 		onChange(
 			produce(value, (draft) => {
 				const item = draft.find((item) => item.id === id);
@@ -59,9 +67,13 @@ export function KeyPairEditor({
 		);
 	};
 
+	// Show a default empty row when value is empty
+	const displayPairs =
+		value.length === 0 ? [{ id: "empty", key: "", value: "" }] : value;
+
 	return (
 		<div className="space-y-2">
-			{value.map((pair) => (
+			{displayPairs.map((pair) => (
 				<div key={pair.id} className="flex items-start gap-2">
 					<Input
 						placeholder={
@@ -98,6 +110,7 @@ export function KeyPairEditor({
 						aria-label={t("remove")}
 						onPress={() => handleRemove(pair.id)}
 						className="mt-1"
+						isDisabled={value.length === 0}
 					>
 						<XMarkIcon className="size-4" />
 					</Button>
