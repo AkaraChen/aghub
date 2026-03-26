@@ -3,7 +3,8 @@ import { Button, Dropdown, SearchField } from "@heroui/react";
 import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AddLocalSkillDialog } from "../../components/add-local-skill-dialog";
+import { CreateSkillPanel } from "../../components/create-skill-panel";
+import { ImportSkillPanel } from "../../components/import-skill-panel";
 import { InstallSkillDialog } from "../../components/install-skill-dialog";
 import { SkillDetail } from "../../components/skill-detail";
 import { SkillList } from "../../components/skill-list";
@@ -17,8 +18,9 @@ export default function SkillsPage() {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isInstallDialogOpen, setIsInstallDialogOpen] = useState(false);
 	const [selectedName, setSelectedName] = useQueryState("skill");
-	const [isLocalSkillDialogOpen, setIsLocalSkillDialogOpen] = useState(false);
-
+	const [panelMode, setPanelMode] = useState<"create" | "import" | null>(
+		null,
+	);
 	const groupedSkills = useMemo(() => {
 		const map = new Map<string, SkillResponse[]>();
 		for (const skill of skills) {
@@ -41,14 +43,21 @@ export default function SkillsPage() {
 
 	const handleSelect = (name: string) => {
 		setSelectedName(name);
+		setPanelMode(null);
 	};
 
 	const handleOpenInstallDialog = () => {
 		setIsInstallDialogOpen(true);
 	};
 
-	const handleLocalSkill = () => {
-		setIsLocalSkillDialogOpen(true);
+	const handleCreateSkill = () => {
+		setSelectedName(null);
+		setPanelMode("create");
+	};
+
+	const handleImportSkill = () => {
+		setSelectedName(null);
+		setPanelMode("import");
 	};
 
 	return (
@@ -86,8 +95,10 @@ export default function SkillsPage() {
 								onAction={(key) => {
 									if (key === "market") {
 										handleOpenInstallDialog();
-									} else if (key === "local") {
-										handleLocalSkill();
+									} else if (key === "create") {
+										handleCreateSkill();
+									} else if (key === "import") {
+										handleImportSkill();
 									}
 								}}
 							>
@@ -98,10 +109,16 @@ export default function SkillsPage() {
 									{t("installFromMarket")}
 								</Dropdown.Item>
 								<Dropdown.Item
-									id="local"
-									textValue={t("addLocalSkill")}
+									id="create"
+									textValue={t("createCustomSkill")}
 								>
-									{t("addLocalSkill")}
+									{t("createCustomSkill")}
+								</Dropdown.Item>
+								<Dropdown.Item
+									id="import"
+									textValue={t("importFromFile")}
+								>
+									{t("importFromFile")}
 								</Dropdown.Item>
 							</Dropdown.Menu>
 						</Dropdown.Popover>
@@ -134,11 +151,19 @@ export default function SkillsPage() {
 			</div>
 
 			<div className="flex-1 overflow-hidden">
-				{activeGroup ? (
+				{panelMode === "create" ? (
+					<CreateSkillPanel onDone={() => setPanelMode(null)} />
+				) : panelMode === "import" ? (
+					<ImportSkillPanel onDone={() => setPanelMode(null)} />
+				) : activeGroup ? (
 					<SkillDetail group={activeGroup} />
 				) : (
-					<div className="flex h-full items-center justify-center">
-						<p className="text-sm text-muted">{t("selectSkill")}</p>
+					<div className="flex h-full flex-col items-center justify-center gap-4">
+						<div className="text-center">
+							<p className="mb-2 text-sm text-muted">
+								{t("selectSkill")}
+							</p>
+						</div>
 					</div>
 				)}
 			</div>
@@ -146,10 +171,6 @@ export default function SkillsPage() {
 			<InstallSkillDialog
 				isOpen={isInstallDialogOpen}
 				onClose={() => setIsInstallDialogOpen(false)}
-			/>
-			<AddLocalSkillDialog
-				isOpen={isLocalSkillDialogOpen}
-				onClose={() => setIsLocalSkillDialogOpen(false)}
 			/>
 		</div>
 	);

@@ -4,9 +4,10 @@ import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useParams } from "wouter";
-import { AddLocalSkillDialog } from "../../components/add-local-skill-dialog";
 import { CreateMcpPanel } from "../../components/create-mcp-panel";
+import { CreateSkillPanel } from "../../components/create-skill-panel";
 import { EditMcpPanel } from "../../components/edit-mcp-panel";
+import { ImportSkillPanel } from "../../components/import-skill-panel";
 import { InstallSkillDialog } from "../../components/install-skill-dialog";
 import { McpDetail } from "../../components/mcp-detail";
 import { SkillDetail } from "../../components/skill-detail";
@@ -27,10 +28,9 @@ export default function ProjectDetailPage() {
 	const api = createApi(baseUrl);
 
 	const [panelMode, setPanelMode] = useState<
-		"create-mcp" | "edit-mcp" | "create-skill" | null
+		"create-mcp" | "edit-mcp" | "create-skill" | "import-skill" | null
 	>(null);
 	const [isInstallSkillOpen, setIsInstallSkillOpen] = useState(false);
-	const [isAddLocalSkillOpen, setIsAddLocalSkillOpen] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [selectedResource, setSelectedResource] = useQueryState("resource");
 	const [resourceType, setResourceType] = useQueryState("type", {
@@ -141,7 +141,8 @@ export default function ProjectDetailPage() {
 				onCreateMcp={() => setPanelMode("create-mcp")}
 				onCreateSkill={(type) => {
 					if (type === "market") setIsInstallSkillOpen(true);
-					else if (type === "local") setIsAddLocalSkillOpen(true);
+					else if (type === "local") setPanelMode("create-skill");
+					else if (type === "import") setPanelMode("import-skill");
 				}}
 				onRefresh={handleRefresh}
 				isRefreshing={isRefreshing}
@@ -167,6 +168,18 @@ export default function ProjectDetailPage() {
 				)}
 				{panelMode === "create-mcp" && (
 					<CreateMcpPanel
+						onDone={() => setPanelMode(null)}
+						projectPath={project.path}
+					/>
+				)}
+				{panelMode === "create-skill" && (
+					<CreateSkillPanel
+						onDone={() => setPanelMode(null)}
+						projectPath={project.path}
+					/>
+				)}
+				{panelMode === "import-skill" && (
+					<ImportSkillPanel
 						onDone={() => setPanelMode(null)}
 						projectPath={project.path}
 					/>
@@ -204,11 +217,6 @@ export default function ProjectDetailPage() {
 			<InstallSkillDialog
 				isOpen={isInstallSkillOpen}
 				onClose={() => setIsInstallSkillOpen(false)}
-				projectPath={project?.path}
-			/>
-			<AddLocalSkillDialog
-				isOpen={isAddLocalSkillOpen}
-				onClose={() => setIsAddLocalSkillOpen(false)}
 				projectPath={project?.path}
 			/>
 		</div>
