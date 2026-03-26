@@ -168,8 +168,6 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		}));
 	}, [group.items]);
 
-	// Primary skill path for header actions
-	const primarySkillPath = skill.source_path;
 
 	// Metadata pieces for subtitle
 	const metaParts: string[] = [];
