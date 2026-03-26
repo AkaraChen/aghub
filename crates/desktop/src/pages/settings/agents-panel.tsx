@@ -1,5 +1,5 @@
 import { UserGroupIcon } from "@heroicons/react/24/solid";
-import { Button, SearchField } from "@heroui/react";
+import { SearchField, ToggleButton, ToggleButtonGroup } from "@heroui/react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentCard } from "../../components/agent-card";
@@ -76,33 +76,21 @@ export default function AgentsPanel() {
 						<SearchField.ClearButton />
 					</SearchField.Group>
 				</SearchField>
-				<div className="flex gap-1">
-					<Button
-						size="sm"
-						variant={agentFilter === "all" ? "primary" : "ghost"}
-						onPress={() => setAgentFilter("all")}
-					>
-						{t("all")}
-					</Button>
-					<Button
-						size="sm"
-						variant={
-							agentFilter === "enabled" ? "primary" : "ghost"
-						}
-						onPress={() => setAgentFilter("enabled")}
-					>
-						{t("enabled")}
-					</Button>
-					<Button
-						size="sm"
-						variant={
-							agentFilter === "disabled" ? "primary" : "ghost"
-						}
-						onPress={() => setAgentFilter("disabled")}
-					>
-						{t("disabled")}
-					</Button>
-				</div>
+				<ToggleButtonGroup
+					selectedKeys={[agentFilter]}
+					onSelectionChange={(keys) =>
+						setAgentFilter([...keys][0] as "all" | "enabled" | "disabled")
+					}
+					selectionMode="single"
+					disallowEmptySelection
+					size="sm"
+				>
+					<ToggleButton id="all" variant="ghost" className={'bg-surface'}>{t("all")}</ToggleButton>
+					<ToggleButtonGroup.Separator />
+					<ToggleButton id="enabled" variant="ghost" className={'bg-surface'}>{t("enabled")}</ToggleButton>
+					<ToggleButtonGroup.Separator />
+					<ToggleButton id="disabled" variant="ghost" className={'bg-surface'}>{t("disabled")}</ToggleButton>
+				</ToggleButtonGroup>
 			</div>
 
 			{/* Agents Grid */}
