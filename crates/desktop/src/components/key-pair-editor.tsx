@@ -12,6 +12,7 @@ interface KeyPairEditorProps {
 	onChange: (value: KeyPair[]) => void;
 	keyPlaceholder?: string;
 	valuePlaceholder?: string;
+	variant?: "default" | "secondary";
 }
 
 export function KeyPairEditor({
@@ -19,6 +20,7 @@ export function KeyPairEditor({
 	onChange,
 	keyPlaceholder,
 	valuePlaceholder,
+	variant,
 }: KeyPairEditorProps) {
 	const { t } = useTranslation();
 
@@ -87,6 +89,7 @@ export function KeyPairEditor({
 							handleChange(pair.id, "key", e.target.value)
 						}
 						className="flex-1"
+						variant={variant}
 					/>
 					<Input
 						placeholder={
@@ -102,6 +105,7 @@ export function KeyPairEditor({
 							handleChange(pair.id, "value", e.target.value)
 						}
 						className="flex-1"
+						variant={variant}
 					/>
 					<Button
 						variant="ghost"

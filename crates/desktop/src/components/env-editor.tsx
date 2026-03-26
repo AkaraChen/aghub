@@ -11,9 +11,10 @@ export type EnvVar = KeyPair;
 interface EnvEditorProps {
 	value: EnvVar[];
 	onChange: (value: EnvVar[]) => void;
+	variant?: "default" | "secondary";
 }
 
-export function EnvEditor({ value, onChange }: EnvEditorProps) {
+export function EnvEditor({ value, onChange, variant }: EnvEditorProps) {
 	const { t } = useTranslation();
 
 	// Import from clipboard
@@ -39,6 +40,7 @@ export function EnvEditor({ value, onChange }: EnvEditorProps) {
 				onChange={onChange}
 				keyPlaceholder={t("envEditor.keyPlaceholder")}
 				valuePlaceholder={t("envEditor.valuePlaceholder")}
+				variant={variant}
 			/>
 			<Button
 				variant="ghost"

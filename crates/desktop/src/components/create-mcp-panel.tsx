@@ -1,6 +1,6 @@
-import { CodeBracketIcon } from "@heroicons/react/24/solid";
 import {
 	Button,
+	Card,
 	Description,
 	Disclosure,
 	Fieldset,
@@ -8,11 +8,8 @@ import {
 	Input,
 	Label,
 	ListBox,
-	Modal,
 	Select,
-	TextArea,
 	TextField,
-	Tooltip,
 } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -21,7 +18,6 @@ import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useServer } from "../hooks/use-server";
 import { createApi } from "../lib/api";
 import type { TransportDto } from "../lib/api-types";
-import { objectToKeyPairs } from "../lib/key-pair-utils";
 import { buildTransportFromForm } from "../lib/mcp-utils";
 import { AgentSelector } from "./agent-selector";
 import type { EnvVar } from "./env-editor";
@@ -32,19 +28,6 @@ import { HttpHeaderEditor } from "./http-header-editor";
 interface CreateMcpPanelProps {
 	onDone: () => void;
 	projectPath?: string;
-}
-
-interface McpServerConfig {
-	command?: string;
-	args?: string[];
-	env?: Record<string, string>;
-	url?: string;
-	headers?: Record<string, string>;
-	timeout?: number;
-}
-
-interface McpConfigJson {
-	mcpServers?: Record<string, McpServerConfig>;
 }
 
 export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
@@ -74,11 +57,6 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 
 	const [url, setUrl] = useState("");
 	const [httpHeaders, setHttpHeaders] = useState<HttpHeader[]>([]);
-
-	// Import dialog state
-	const [showImportDialog, setShowImportDialog] = useState(false);
-	const [jsonText, setJsonText] = useState("");
-	const [parseError, setParseError] = useState("");
 	const [error, setError] = useState<string | null>(null);
 
 	const createMutation = useMutation({
@@ -158,87 +136,8 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 		usableAgents.length,
 	]);
 
-	const handleImportJson = () => {
-		setParseError("");
-
-		try {
-			const parsed: McpConfigJson = JSON.parse(jsonText);
-
-			if (!parsed.mcpServers || typeof parsed.mcpServers !== "object") {
-				setParseError(t("parseError"));
-				return;
-			}
-
-			// Get the first server configuration
-			const serverNames = Object.keys(parsed.mcpServers);
-			if (serverNames.length === 0) {
-				setParseError(t("parseError"));
-				return;
-			}
-
-			const serverName = serverNames[0];
-			const config = parsed.mcpServers[serverName];
-
-			// Set name
-			setName(serverName);
-
-			// Detect transport type and set fields
-			if (config.command) {
-				setTransportType("stdio");
-				setCommand(config.command);
-				if (config.args && Array.isArray(config.args)) {
-					setArgs(config.args.join(" "));
-				}
-				if (config.env && typeof config.env === "object") {
-					setEnvVars(objectToKeyPairs(config.env));
-				}
-			} else if (config.url) {
-				// Determine if SSE or streamable_http based on URL or default to sse
-				setTransportType("sse");
-				setUrl(config.url);
-				if (config.headers && typeof config.headers === "object") {
-					setHttpHeaders(objectToKeyPairs(config.headers));
-				}
-			}
-
-			if (config.timeout) {
-				setTimeoutValue(config.timeout.toString());
-			}
-
-			// Close import dialog
-			setShowImportDialog(false);
-			setJsonText("");
-		} catch {
-			setParseError(t("invalidJson"));
-		}
-	};
-
 	return (
 		<div className="h-full max-w-3xl overflow-y-auto p-6">
-			<div className="mb-6 flex items-center justify-between gap-3">
-				<h2 className="text-xl font-semibold text-foreground">
-					{t("createMcpServer")}
-				</h2>
-				<Tooltip delay={0}>
-					<Button
-						isIconOnly
-						variant="ghost"
-						size="sm"
-						className="
-        shrink-0 text-muted
-        hover:text-foreground
-      "
-						aria-label={t("importFromJson")}
-						onPress={() => setShowImportDialog(true)}
-					>
-						<CodeBracketIcon className="size-4" />
-					</Button>
-					<Tooltip.Content>
-						{t("importFromJsonTooltip")}
-					</Tooltip.Content>
-				</Tooltip>
-			</div>
-
 			{error && (
 				<div className="mb-4 rounded-lg border border-danger/30 bg-danger-soft p-3">
 					<p className="text-sm text-danger">
@@ -247,223 +146,222 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 				</div>
 			)}
 
-			<Form>
-				<Fieldset>
-					<Fieldset.Group>
-						<TextField className="w-full">
-							<Label>{t("name")}</Label>
-							<Input
-								value={name}
-								onChange={(e) => setName(e.target.value)}
-								placeholder={t("serverName")}
-							/>
-						</TextField>
-					</Fieldset.Group>
-				</Fieldset>
+			<Card>
+				<Card.Header>
+					<h2 className="text-xl font-semibold text-foreground">
+						{t("createMcpServer")}
+					</h2>
+				</Card.Header>
 
-				<Fieldset>
-					<Fieldset.Group>
-						<Select
-							className="w-full"
-							selectedKey={transportType}
-							onSelectionChange={(key) =>
-								setTransportType(
-									key as "stdio" | "sse" | "streamable_http",
-								)
-							}
-						>
-							<Label>{t("transportType")}</Label>
-							<Select.Trigger>
-								<Select.Value />
-								<Select.Indicator />
-							</Select.Trigger>
-							<Select.Popover>
-								<ListBox>
-									<ListBox.Item id="stdio" textValue="stdio">
-										stdio
-									</ListBox.Item>
-									<ListBox.Item id="sse" textValue="sse">
-										sse
-									</ListBox.Item>
-									<ListBox.Item
-										id="streamable_http"
-										textValue="streamable_http"
-									>
-										streamable_http
-									</ListBox.Item>
-								</ListBox>
-							</Select.Popover>
-						</Select>
-					</Fieldset.Group>
-				</Fieldset>
-
-				{transportType === "stdio" && (
-					<Fieldset>
-						<Fieldset.Group>
-							<TextField className="w-full">
-								<Label>{t("command")}</Label>
-								<Input
-									value={command}
-									onChange={(e) => setCommand(e.target.value)}
-									placeholder="npx"
-								/>
-							</TextField>
-							<TextField className="w-full">
-								<Label>{t("args")}</Label>
-								<Input
-									value={args}
-									onChange={(e) => setArgs(e.target.value)}
-									placeholder="-y @modelcontextprotocol/server-filesystem"
-								/>
-								<Description>{t("argsHelp")}</Description>
-							</TextField>
-							<div className="flex flex-col gap-2">
-								<Label>{t("env")}</Label>
-								<EnvEditor
-									value={envVars}
-									onChange={setEnvVars}
-								/>
-							</div>
-						</Fieldset.Group>
-					</Fieldset>
-				)}
-
-				{(transportType === "sse" ||
-					transportType === "streamable_http") && (
-					<Fieldset>
-						<Fieldset.Group>
-							<TextField className="w-full">
-								<Label>URL</Label>
-								<Input
-									value={url}
-									onChange={(e) => setUrl(e.target.value)}
-									placeholder="http://localhost:3000/sse"
-								/>
-							</TextField>
-							<div className="flex flex-col gap-2">
-								<Label>{t("headers")}</Label>
-								<HttpHeaderEditor
-									value={httpHeaders}
-									onChange={setHttpHeaders}
-								/>
-							</div>
-						</Fieldset.Group>
-					</Fieldset>
-				)}
-
-				<Fieldset>
-					<Fieldset.Group>
-						<AgentSelector
-							agents={usableAgents}
-							selectedKeys={selectedAgents}
-							onSelectionChange={setSelectedAgents}
-							label={t("agents")}
-							emptyMessage={t("noAgentsAvailable")}
-							emptyHelpText={t("noAgentsAvailableHelp")}
-						/>
-					</Fieldset.Group>
-				</Fieldset>
-
-				<Disclosure className="pt-4">
-					<Disclosure.Trigger className="flex w-full items-center justify-between">
-						{t("advanced")}
-						<Disclosure.Indicator />
-					</Disclosure.Trigger>
-					<Disclosure.Content>
-						<Fieldset>
+				<Card.Content>
+					<Form>
+						<Fieldset variant="secondary">
 							<Fieldset.Group>
-								<TextField className="w-full">
-									<Label>{t("timeout")}</Label>
+								<TextField
+									className="w-full"
+									variant="secondary"
+								>
+									<Label>{t("name")}</Label>
 									<Input
-										type="number"
-										value={timeoutValue}
+										value={name}
 										onChange={(e) =>
-											setTimeoutValue(e.target.value)
+											setName(e.target.value)
 										}
-										placeholder="60"
+										placeholder={t("serverName")}
+										variant="secondary"
 									/>
-									<Description>
-										{t("timeoutHelp")}
-									</Description>
 								</TextField>
 							</Fieldset.Group>
 						</Fieldset>
-					</Disclosure.Content>
-				</Disclosure>
 
-				{/* Actions */}
-				<div className="flex justify-end gap-2 pt-2">
-					<Button variant="secondary" onPress={onDone}>
-						{t("cancel")}
-					</Button>
-					<Button
-						onPress={handleCreate}
-						isDisabled={!isValid || createMutation.isPending}
-					>
-						{createMutation.isPending ? t("creating") : t("create")}
-					</Button>
-				</div>
-			</Form>
+						<Fieldset variant="secondary">
+							<Fieldset.Group>
+								<Select
+									className="w-full"
+									selectedKey={transportType}
+									onSelectionChange={(key) =>
+										setTransportType(
+											key as
+												| "stdio"
+												| "sse"
+												| "streamable_http",
+										)
+									}
+									variant="secondary"
+								>
+									<Label>{t("transportType")}</Label>
+									<Select.Trigger variant="secondary">
+										<Select.Value />
+										<Select.Indicator />
+									</Select.Trigger>
+									<Select.Popover>
+										<ListBox>
+											<ListBox.Item
+												id="stdio"
+												textValue="stdio"
+											>
+												stdio
+											</ListBox.Item>
+											<ListBox.Item
+												id="sse"
+												textValue="sse"
+											>
+												sse
+											</ListBox.Item>
+											<ListBox.Item
+												id="streamable_http"
+												textValue="streamable_http"
+											>
+												streamable_http
+											</ListBox.Item>
+										</ListBox>
+									</Select.Popover>
+								</Select>
+							</Fieldset.Group>
+						</Fieldset>
 
-			{/* Import JSON Dialog */}
-			<Modal.Backdrop
-				isOpen={showImportDialog}
-				onOpenChange={setShowImportDialog}
-			>
-				<Modal.Container>
-					<Modal.Dialog className="max-w-lg">
-						<Modal.CloseTrigger />
-						<Modal.Header>
-							<Modal.Heading>{t("importFromJson")}</Modal.Heading>
-						</Modal.Header>
-						<Modal.Body className="p-2">
-							<Fieldset>
+						{transportType === "stdio" && (
+							<Fieldset variant="secondary">
 								<Fieldset.Group>
-									<TextField className="w-full">
-										<Label>{t("jsonConfig")}</Label>
-										<TextArea
-											value={jsonText}
+									<TextField
+										className="w-full"
+										variant="secondary"
+									>
+										<Label>{t("command")}</Label>
+										<Input
+											value={command}
 											onChange={(e) =>
-												setJsonText(e.target.value)
+												setCommand(e.target.value)
 											}
-											placeholder={t(
-												"jsonConfigPlaceholder",
-											)}
-											className="min-h-75 font-mono text-sm"
+											placeholder="npx"
+											variant="secondary"
+										/>
+									</TextField>
+									<TextField
+										className="w-full"
+										variant="secondary"
+									>
+										<Label>{t("args")}</Label>
+										<Input
+											value={args}
+											onChange={(e) =>
+												setArgs(e.target.value)
+											}
+											placeholder="-y @modelcontextprotocol/server-filesystem"
+											variant="secondary"
 										/>
 										<Description>
-											{t("jsonConfigHelp")}
+											{t("argsHelp")}
 										</Description>
 									</TextField>
-									{parseError && (
-										<div className="text-sm text-danger">
-											{parseError}
-										</div>
-									)}
+									<div className="flex flex-col gap-2">
+										<Label>{t("env")}</Label>
+										<EnvEditor
+											value={envVars}
+											onChange={setEnvVars}
+											variant="secondary"
+										/>
+									</div>
 								</Fieldset.Group>
 							</Fieldset>
-						</Modal.Body>
-						<Modal.Footer>
-							<Button
-								variant="secondary"
-								onPress={() => {
-									setShowImportDialog(false);
-									setJsonText("");
-									setParseError("");
-								}}
-							>
+						)}
+
+						{(transportType === "sse" ||
+							transportType === "streamable_http") && (
+							<Fieldset variant="secondary">
+								<Fieldset.Group>
+									<TextField
+										className="w-full"
+										variant="secondary"
+									>
+										<Label>URL</Label>
+										<Input
+											value={url}
+											onChange={(e) =>
+												setUrl(e.target.value)
+											}
+											placeholder="http://localhost:3000/sse"
+											variant="secondary"
+										/>
+									</TextField>
+									<div className="flex flex-col gap-2">
+										<Label>{t("headers")}</Label>
+										<HttpHeaderEditor
+											value={httpHeaders}
+											onChange={setHttpHeaders}
+											variant="secondary"
+										/>
+									</div>
+								</Fieldset.Group>
+							</Fieldset>
+						)}
+
+						<Fieldset variant="secondary">
+							<Fieldset.Group>
+								<AgentSelector
+									agents={usableAgents}
+									selectedKeys={selectedAgents}
+									onSelectionChange={setSelectedAgents}
+									label={t("agents")}
+									emptyMessage={t("noAgentsAvailable")}
+									emptyHelpText={t("noAgentsAvailableHelp")}
+									variant="secondary"
+								/>
+							</Fieldset.Group>
+						</Fieldset>
+
+						<Disclosure className="pt-4">
+							<Disclosure.Trigger className="flex w-full items-center justify-between">
+								{t("advanced")}
+								<Disclosure.Indicator />
+							</Disclosure.Trigger>
+							<Disclosure.Content>
+								<Fieldset variant="secondary">
+									<Fieldset.Group>
+										<TextField
+											className="w-full"
+											variant="secondary"
+										>
+											<Label>{t("timeout")}</Label>
+											<Input
+												type="number"
+												value={timeoutValue}
+												onChange={(e) =>
+													setTimeoutValue(
+														e.target.value,
+													)
+												}
+												placeholder="60"
+												variant="secondary"
+											/>
+											<Description>
+												{t("timeoutHelp")}
+											</Description>
+										</TextField>
+									</Fieldset.Group>
+								</Fieldset>
+							</Disclosure.Content>
+						</Disclosure>
+
+						{/* Actions */}
+						<div className="flex justify-end gap-2 pt-2">
+							<Button variant="secondary" onPress={onDone}>
 								{t("cancel")}
 							</Button>
 							<Button
-								onPress={handleImportJson}
-								isDisabled={!jsonText.trim()}
+								onPress={handleCreate}
+								isDisabled={
+									!isValid || createMutation.isPending
+								}
 							>
-								{t("import")}
+								{createMutation.isPending
+									? t("creating")
+									: t("create")}
 							</Button>
-						</Modal.Footer>
-					</Modal.Dialog>
-				</Modal.Container>
-			</Modal.Backdrop>
+						</div>
+					</Form>
+				</Card.Content>
+			</Card>
 		</div>
 	);
 }

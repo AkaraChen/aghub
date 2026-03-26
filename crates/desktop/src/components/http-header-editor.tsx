@@ -7,9 +7,14 @@ export type HttpHeader = KeyPair;
 interface HttpHeaderEditorProps {
 	value: HttpHeader[];
 	onChange: (value: HttpHeader[]) => void;
+	variant?: "default" | "secondary";
 }
 
-export function HttpHeaderEditor({ value, onChange }: HttpHeaderEditorProps) {
+export function HttpHeaderEditor({
+	value,
+	onChange,
+	variant,
+}: HttpHeaderEditorProps) {
 	const { t } = useTranslation();
 
 	return (
@@ -18,6 +23,7 @@ export function HttpHeaderEditor({ value, onChange }: HttpHeaderEditorProps) {
 			onChange={onChange}
 			keyPlaceholder={t("httpHeaderEditor.keyPlaceholder")}
 			valuePlaceholder={t("httpHeaderEditor.valuePlaceholder")}
+			variant={variant}
 		/>
 	);
 }
