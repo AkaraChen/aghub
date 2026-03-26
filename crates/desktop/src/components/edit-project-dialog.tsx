@@ -78,7 +78,7 @@ export function CreateProjectDialog({
            flex h-32 w-full cursor-pointer flex-col items-center justify-center
            rounded-lg border-2 border-dashed border-border bg-transparent
            transition-colors
-           hover:bg-accent-soft
+           hover:bg-surface-secondary
          "
 								>
 									<FolderIcon className="mb-2 size-10 text-muted" />

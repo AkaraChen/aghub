@@ -94,6 +94,7 @@ From `tauri.conf.json`:
 - NEVER use v2 patterns (Provider, framer-motion)
 - NEVER assume v2 knowledge applies
 - ALWAYS verify component API in v3 docs
+- ALWAYS use secondary varient in Modal/Card for better contrast
 
 ### Frontend
 
