@@ -293,11 +293,6 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 									</Tooltip>
 								</div>
 							</div>
-							{metaParts.length > 0 && (
-								<p className="text-sm text-muted">
-									{metaParts.join(" · ")}
-								</p>
-							)}
 						</Card.Header>
 
 						<Card.Content className="space-y-5">
@@ -331,8 +326,6 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 									</div>
 								</div>
 							) : null}
-
-							<Separator />
 
 							{/* Locations */}
 							{allLocationGroups.length > 0 && (
@@ -520,36 +513,43 @@ function LocationRow({
 	);
 
 	return (
-		<div className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-4 py-3">
+		<div className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2">
 			<div className="min-w-0 flex-1">
 				<div className="flex items-center gap-2">
-					{group.canonicalPath && (
-						<Tooltip delay={0}>
-							<LinkIcon className="size-3.5 shrink-0 text-muted" />
-							<Tooltip.Content>{t("symlink")}</Tooltip.Content>
-						</Tooltip>
-					)}
 					<p
 						tabIndex={0}
-						className="cursor-default truncate rounded-sm font-mono text-sm text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none"
+						className="cursor-default truncate rounded-sm font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none"
 						title={group.sourcePath}
 					>
 						{folderPath}
 					</p>
+					{group.canonicalPath && (
+						<Tooltip delay={0}>
+							<Button
+								isIconOnly
+								variant="ghost"
+								size="sm"
+								className="size-6 text-muted"
+								aria-label={t("symlink")}
+							>
+								<LinkIcon className="size-3" />
+							</Button>
+							<Tooltip.Content>
+								<div className="max-w-xs">
+									<p className="mb-1 font-medium">
+										{t("symlink")}
+									</p>
+									<p className="font-mono text-xs">
+										{pathe.dirname(group.canonicalPath)}
+									</p>
+								</div>
+							</Tooltip.Content>
+						</Tooltip>
+					)}
 				</div>
-				<p className="mt-1 text-xs text-muted">
+				<p className="mt-0.5 text-[11px] text-muted">
 					{group.agents.map(formatAgentName).join(", ")}
 				</p>
-				{group.canonicalPath && (
-					<p
-						className="mt-1 truncate font-mono text-xs text-muted/60"
-						title={group.canonicalPath}
-					>
-						{t("symlinkTarget", {
-							target: pathe.dirname(group.canonicalPath),
-						})}
-					</p>
-				)}
 			</div>
 			<div className="flex shrink-0 items-center gap-1">
 				<Tooltip delay={0}>
