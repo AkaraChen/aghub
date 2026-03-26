@@ -124,7 +124,6 @@ export default {
 	parseAndImport: "解析并导入",
 	parsedServer: "已解析的服务器",
 	confirmImport: "确认导入",
-	serverName: "服务器名称",
 	confirm: "确认",
 	jsonConfig: "JSON 配置",
 	jsonConfigHelp: "粘贴 MCP 服务器 JSON 配置",

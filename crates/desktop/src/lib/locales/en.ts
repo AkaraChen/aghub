@@ -127,7 +127,6 @@ export default {
 	parseAndImport: "Parse & Import",
 	parsedServer: "Parsed Server",
 	confirmImport: "Confirm Import",
-	serverName: "Server Name",
 	confirm: "Confirm",
 	jsonConfig: "JSON Configuration",
 	jsonConfigHelp: "Paste the MCP server JSON configuration",
