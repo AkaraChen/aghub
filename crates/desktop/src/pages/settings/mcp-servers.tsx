@@ -1,10 +1,11 @@
 import { ArrowPathIcon, PlusIcon } from "@heroicons/react/24/solid";
-import { Button, SearchField } from "@heroui/react";
+import { Button, Dropdown, SearchField } from "@heroui/react";
 import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CreateMcpPanel } from "../../components/create-mcp-panel";
 import { EditMcpPanel } from "../../components/edit-mcp-panel";
+import { ImportMcpDialog } from "../../components/import-mcp-dialog";
 import type { McpGroup } from "../../components/mcp-detail";
 import { McpDetail } from "../../components/mcp-detail";
 import { McpList } from "../../components/mcp-list";
@@ -23,6 +24,7 @@ export default function MCPServersPage() {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [panel, setPanel] = useState<RightPanel>({ type: "empty" });
 	const [selectedKey, setSelectedKey] = useQueryState("server");
+	const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
 
 	const groupedMcps = useMemo(() => {
 		const map = new Map<string, McpGroup>();
@@ -93,16 +95,41 @@ export default function MCPServersPage() {
 							<SearchField.ClearButton />
 						</SearchField.Group>
 					</SearchField>
-					<Button
-						isIconOnly
-						variant="ghost"
-						size="sm"
-						className="shrink-0"
-						aria-label={t("addMcpServer")}
-						onPress={handleCreate}
-					>
-						<PlusIcon className="size-4" />
-					</Button>
+					<Dropdown>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							className="shrink-0"
+							aria-label={t("addMcpServer")}
+						>
+							<PlusIcon className="size-4" />
+						</Button>
+						<Dropdown.Popover placement="bottom end">
+							<Dropdown.Menu
+								onAction={(key) => {
+									if (key === "manual") {
+										handleCreate();
+									} else if (key === "import") {
+										setIsImportDialogOpen(true);
+									}
+								}}
+							>
+								<Dropdown.Item
+									id="manual"
+									textValue={t("manualCreation")}
+								>
+									{t("manualCreation")}
+								</Dropdown.Item>
+								<Dropdown.Item
+									id="import"
+									textValue={t("importFromJson")}
+								>
+									{t("importFromJson")}
+								</Dropdown.Item>
+							</Dropdown.Menu>
+						</Dropdown.Popover>
+					</Dropdown>
 					<Button
 						isIconOnly
 						variant="ghost"
@@ -170,6 +197,11 @@ export default function MCPServersPage() {
 					</div>
 				)}
 			</div>
+
+			<ImportMcpDialog
+				isOpen={isImportDialogOpen}
+				onClose={() => setIsImportDialogOpen(false)}
+			/>
 		</div>
 	);
 }
