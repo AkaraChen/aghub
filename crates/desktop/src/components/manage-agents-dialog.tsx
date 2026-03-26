@@ -272,7 +272,7 @@ export function ManageAgentsDialog({
 									<Label className="sr-only">
 										{t("selectAgentsForMcp")}
 									</Label>
-									<div className="space-y-1">
+									<div className="flex flex-col gap-2">
 										{usableAgents.map((agent) => {
 											const diffLabel = getAgentDiffLabel(
 												agent.id,
@@ -283,139 +283,133 @@ export function ManageAgentsDialog({
 												<Checkbox
 													key={agent.id}
 													value={agent.id}
+													variant="secondary"
 													className={cn(
-														"w-full cursor-pointer rounded-lg border border-transparent px-4 py-3 transition-colors sm:px-3 sm:py-2.5",
-														"data-selected:border-accent-soft-hover data-selected:bg-accent-soft/50",
-														"hover:bg-surface-secondary",
+														"group relative flex w-full flex-col gap-4 rounded-3xl bg-surface px-5 py-4 transition-all",
+														"data-[selected=true]:bg-accent/10",
 													)}
 												>
-													<Checkbox.Control>
+													<Checkbox.Control className="absolute top-3 right-4 size-5 rounded-full before:rounded-full">
 														<Checkbox.Indicator />
 													</Checkbox.Control>
-													<Checkbox.Content className="flex-1">
-														<div className="flex min-w-0 items-center justify-between gap-2">
-															<div className="flex min-w-0 items-center gap-2">
-																<AgentIcon
-																	id={
-																		agent.id
-																	}
-																	name={
-																		agent.display_name
-																	}
-																	size="sm"
-																	variant="ghost"
-																/>
-																<Label className="truncate">
-																	{
-																		agent.display_name
-																	}
-																</Label>
-															</div>
-															<div className="flex shrink-0 items-center gap-1.5">
-																{/* Status indicator during apply */}
-																{state?.status ===
-																	"pending" && (
-																	<span
-																		aria-live="polite"
-																		className="flex items-center gap-1"
-																	>
-																		<ArrowPathIcon
-																			className="size-3.5 animate-spin text-muted"
-																			aria-label={t(
-																				"processing",
-																			)}
-																		/>
-																		<span className="sr-only">
-																			{t(
-																				"processing",
-																			)}
-																		</span>
-																	</span>
-																)}
-																{state?.status ===
-																	"success" && (
-																	<span
-																		aria-live="polite"
-																		className="flex items-center gap-1"
-																	>
-																		<CheckCircleIcon
-																			className="size-3.5 text-success"
-																			aria-label={t(
-																				"success",
-																			)}
-																		/>
-																		<span className="sr-only">
-																			{t(
-																				"success",
-																			)}
-																		</span>
-																	</span>
-																)}
-																{state?.status ===
-																	"error" && (
-																	<span
-																		aria-live="assertive"
-																		className="flex items-center gap-1"
-																	>
-																		<XCircleIcon
-																			className="size-3.5 text-danger"
-																			aria-label={t(
-																				"failed",
-																			)}
-																		/>
-																		<span className="sr-only">
-																			{t(
-																				"failed",
-																			)}
-																		</span>
-																	</span>
-																)}
-
-																{/* Diff label */}
-																{!state &&
-																	diffLabel ===
-																		"adding" && (
-																		<Description className="text-xs text-success">
-																			+{" "}
-																			{t(
-																				"adding",
-																			)}
-																		</Description>
-																	)}
-																{!state &&
-																	diffLabel ===
-																		"removing" && (
-																		<Description className="text-xs text-danger">
-																			&minus;{" "}
-																			{t(
-																				"removing",
-																			)}
-																		</Description>
-																	)}
-																{!state &&
-																	diffLabel ===
-																		"installed" && (
-																		<Description className="text-xs text-muted">
-																			{t(
-																				"alreadyAdded",
-																			)}
-																		</Description>
-																	)}
-															</div>
-														</div>
-														{state?.status ===
-															"error" &&
-															state.error && (
-																<Description
-																	className="mt-1 text-xs text-danger"
-																	role="alert"
-																	aria-live="assertive"
+													<Checkbox.Content className="flex flex-row items-start justify-start gap-4">
+														<AgentIcon
+															id={agent.id}
+															name={
+																agent.display_name
+															}
+															size="sm"
+															variant="ghost"
+														/>
+														<div className="flex flex-1 flex-col gap-1">
+															<Label className="truncate">
+																{
+																	agent.display_name
+																}
+															</Label>
+															{/* Status indicator during apply */}
+															{state?.status ===
+																"pending" && (
+																<span
+																	aria-live="polite"
+																	className="flex items-center gap-1"
 																>
-																	{
-																		state.error
-																	}
-																</Description>
+																	<ArrowPathIcon
+																		className="size-3.5 animate-spin text-muted"
+																		aria-label={t(
+																			"processing",
+																		)}
+																	/>
+																	<span className="sr-only">
+																		{t(
+																			"processing",
+																		)}
+																	</span>
+																</span>
 															)}
+															{state?.status ===
+																"success" && (
+																<span
+																	aria-live="polite"
+																	className="flex items-center gap-1"
+																>
+																	<CheckCircleIcon
+																		className="size-3.5 text-success"
+																		aria-label={t(
+																			"success",
+																		)}
+																	/>
+																	<span className="sr-only">
+																		{t(
+																			"success",
+																		)}
+																	</span>
+																</span>
+															)}
+															{state?.status ===
+																"error" && (
+																<span
+																	aria-live="assertive"
+																	className="flex items-center gap-1"
+																>
+																	<XCircleIcon
+																		className="size-3.5 text-danger"
+																		aria-label={t(
+																			"failed",
+																		)}
+																	/>
+																	<span className="sr-only">
+																		{t(
+																			"failed",
+																		)}
+																	</span>
+																</span>
+															)}
+
+															{/* Diff label */}
+															{!state &&
+																diffLabel ===
+																	"adding" && (
+																	<Description className="text-xs text-success">
+																		+{" "}
+																		{t(
+																			"adding",
+																		)}
+																	</Description>
+																)}
+															{!state &&
+																diffLabel ===
+																	"removing" && (
+																	<Description className="text-xs text-danger">
+																		&minus;{" "}
+																		{t(
+																			"removing",
+																		)}
+																	</Description>
+																)}
+															{!state &&
+																diffLabel ===
+																	"installed" && (
+																	<Description className="text-xs text-muted">
+																		{t(
+																			"alreadyAdded",
+																		)}
+																	</Description>
+																)}
+															{state?.status ===
+																"error" &&
+																state.error && (
+																	<Description
+																		className="text-xs text-danger"
+																		role="alert"
+																		aria-live="assertive"
+																	>
+																		{
+																			state.error
+																		}
+																	</Description>
+																)}
+														</div>
 													</Checkbox.Content>
 												</Checkbox>
 											);
