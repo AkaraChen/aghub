@@ -2,7 +2,9 @@ use crate::registry::descriptor::*;
 use std::path::{Path, PathBuf};
 
 fn global_path() -> PathBuf {
-	dirs::home_dir().unwrap().join(".openclaw/openclaw.json")
+	dirs::home_dir()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
+		.join(".openclaw/openclaw.json")
 }
 fn project_path(root: &Path) -> PathBuf {
 	root.join(".openclaw/openclaw.json")
@@ -25,7 +27,7 @@ pub fn get_openclaw_skills_dir(
 }
 
 fn global_skills_path() -> PathBuf {
-	let home = dirs::home_dir().unwrap();
+	let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(""));
 	get_openclaw_skills_dir(&home, |p| p.exists())
 }
 fn project_skills_path(root: &Path) -> PathBuf {

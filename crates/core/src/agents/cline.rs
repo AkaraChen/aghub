@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 fn global_path() -> PathBuf {
 	dirs::home_dir()
-		.unwrap()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
 		.join(".cline/data/settings/cline_mcp_settings.json")
 }
 fn project_path(root: &Path) -> PathBuf {
@@ -11,7 +11,9 @@ fn project_path(root: &Path) -> PathBuf {
 }
 
 fn global_skills_path() -> PathBuf {
-	dirs::home_dir().unwrap().join(".cline/skills")
+	dirs::home_dir()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
+		.join(".cline/skills")
 }
 fn project_skills_path(root: &Path) -> PathBuf {
 	root.join(".agents/skills")

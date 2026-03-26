@@ -2,7 +2,9 @@ use crate::registry::descriptor::*;
 use std::path::{Path, PathBuf};
 
 fn global_path() -> PathBuf {
-	dirs::home_dir().unwrap().join(".augmentcode/mcp.json")
+	dirs::home_dir()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
+		.join(".augmentcode/mcp.json")
 }
 fn project_path(root: &Path) -> PathBuf {
 	root.join(".augmentcode/mcp.json")

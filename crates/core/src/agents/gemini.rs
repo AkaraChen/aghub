@@ -2,13 +2,17 @@ use crate::registry::descriptor::*;
 use std::path::{Path, PathBuf};
 
 fn global_path() -> PathBuf {
-	dirs::home_dir().unwrap().join(".gemini/settings.json")
+	dirs::home_dir()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
+		.join(".gemini/settings.json")
 }
 fn project_path(root: &Path) -> PathBuf {
 	root.join(".gemini/settings.json")
 }
 fn global_skills_path() -> PathBuf {
-	dirs::home_dir().unwrap().join(".gemini/skills")
+	dirs::home_dir()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
+		.join(".gemini/skills")
 }
 fn project_skills_path(root: &Path) -> PathBuf {
 	root.join(".agents/skills")

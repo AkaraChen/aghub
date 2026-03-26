@@ -2,13 +2,17 @@ use crate::registry::descriptor::*;
 use std::path::{Path, PathBuf};
 
 fn global_path() -> PathBuf {
-	dirs::home_dir().unwrap().join(".factory/mcp.json")
+	dirs::home_dir()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
+		.join(".factory/mcp.json")
 }
 fn project_path(root: &Path) -> PathBuf {
 	root.join(".factory/mcp.json")
 }
 fn global_skills_path() -> PathBuf {
-	dirs::home_dir().unwrap().join(".factory/skills")
+	dirs::home_dir()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
+		.join(".factory/skills")
 }
 fn project_skills_path(root: &Path) -> PathBuf {
 	root.join(".factory/skills")

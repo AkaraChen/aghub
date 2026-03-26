@@ -3,14 +3,16 @@ use std::path::{Path, PathBuf};
 
 fn global_path() -> PathBuf {
 	dirs::home_dir()
-		.unwrap()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
 		.join(".codeium/windsurf/mcp_config.json")
 }
 fn project_path(root: &Path) -> PathBuf {
 	root.join(".windsurf/mcp_config.json")
 }
 fn global_skills_path() -> PathBuf {
-	dirs::home_dir().unwrap().join(".codeium/windsurf/skills")
+	dirs::home_dir()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
+		.join(".codeium/windsurf/skills")
 }
 fn project_skills_path(root: &Path) -> PathBuf {
 	root.join(".windsurf/skills")

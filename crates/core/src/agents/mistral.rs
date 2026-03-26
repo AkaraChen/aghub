@@ -2,13 +2,17 @@ use crate::registry::descriptor::*;
 use std::path::{Path, PathBuf};
 
 fn global_path() -> PathBuf {
-	dirs::home_dir().unwrap().join(".vibe/mcp.toml")
+	dirs::home_dir()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
+		.join(".vibe/mcp.toml")
 }
 fn project_path(root: &Path) -> PathBuf {
 	root.join(".vibe/mcp.toml")
 }
 fn global_skills_path() -> PathBuf {
-	dirs::home_dir().unwrap().join(".vibe/skills")
+	dirs::home_dir()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
+		.join(".vibe/skills")
 }
 fn project_skills_path(root: &Path) -> PathBuf {
 	root.join(".vibe/skills")

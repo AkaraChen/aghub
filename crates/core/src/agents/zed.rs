@@ -2,7 +2,9 @@ use crate::registry::descriptor::*;
 use std::path::{Path, PathBuf};
 
 fn global_path() -> PathBuf {
-	dirs::home_dir().unwrap().join(".config/zed/settings.json")
+	dirs::home_dir()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
+		.join(".config/zed/settings.json")
 }
 fn project_path(root: &Path) -> PathBuf {
 	root.join(".zed/settings.json")

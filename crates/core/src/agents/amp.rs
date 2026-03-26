@@ -2,7 +2,9 @@ use crate::registry::descriptor::*;
 use std::path::{Path, PathBuf};
 
 fn global_path() -> PathBuf {
-	dirs::home_dir().unwrap().join(".amp/mcp.json")
+	dirs::home_dir()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
+		.join(".amp/mcp.json")
 }
 fn project_path(root: &Path) -> PathBuf {
 	root.join(".amp/mcp.json")
@@ -12,7 +14,11 @@ fn global_skills_path() -> PathBuf {
 	std::env::var_os("XDG_CONFIG_HOME")
 		.map(std::path::PathBuf::from)
 		.or_else(|| dirs::home_dir().map(|h| h.join(".config")))
-		.unwrap_or_else(|| dirs::home_dir().unwrap().join(".config"))
+		.unwrap_or_else(|| {
+			dirs::home_dir()
+				.unwrap_or_else(|| std::path::PathBuf::from(""))
+				.join(".config")
+		})
 		.join("agents/skills")
 }
 fn project_skills_path(root: &Path) -> PathBuf {

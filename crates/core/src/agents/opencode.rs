@@ -4,10 +4,12 @@ use std::path::{Path, PathBuf};
 fn global_path() -> PathBuf {
 	#[cfg(any(target_os = "macos", target_os = "linux"))]
 	return dirs::home_dir()
-		.unwrap()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
 		.join(".config/opencode/opencode.json");
 	#[cfg(target_os = "windows")]
-	return dirs::data_dir().unwrap().join("opencode/opencode.json");
+	return dirs::data_dir()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
+		.join("opencode/opencode.json");
 }
 fn project_path(root: &Path) -> PathBuf {
 	root.join(".opencode/settings.json")
