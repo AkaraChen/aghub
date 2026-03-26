@@ -473,7 +473,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 							)}
 
 							{/* Action Buttons */}
-							<div className="pt-4 border-t border-default-200 flex flex-col sm:flex-row gap-3">
+							<Card.Footer className="pt-4 border-t border-default-200 flex flex-col sm:flex-row gap-3">
 								<Button
 									variant="secondary"
 									size="sm"
@@ -500,7 +500,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 									<PlusIcon className="size-4" />
 									{t("addToAgent")}
 								</Button>
-							</div>
+							</Card.Footer>
 						</Card.Content>
 					</Card>
 				</div>

@@ -1,5 +1,10 @@
 import { UserGroupIcon } from "@heroicons/react/24/solid";
-import { SearchField, ToggleButton, ToggleButtonGroup } from "@heroui/react";
+import {
+	Card,
+	SearchField,
+	ToggleButton,
+	ToggleButtonGroup,
+} from "@heroui/react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentCard } from "../../components/agent-card";
@@ -113,45 +118,49 @@ export default function AgentsPanel() {
 				</ToggleButtonGroup>
 			</div>
 
-			{/* Agents Grid */}
-			{filteredAgents.length === 0 ? (
-				<div
-					className="
-       flex flex-col items-center justify-center rounded-lg bg-surface py-16
-       text-center
-     "
-				>
-					<div className="mb-4 text-muted">
-						<UserGroupIcon className="mx-auto size-12" />
-					</div>
-					<p className="text-sm font-medium text-(--foreground)">
-						{agentSearch || agentFilter !== "all"
-							? t("noAgentsMatch")
-							: t("noAgentsAvailable")}
-					</p>
-					<p className="mt-1 max-w-sm text-xs text-muted">
-						{agentSearch || agentFilter !== "all"
-							? t("adjustFiltersDescription")
-							: t("noAgentsDescription")}
-					</p>
-				</div>
-			) : (
-				<div
-					className="
-       grid grid-cols-1 gap-3
-       sm:grid-cols-2
-     "
-				>
-					{filteredAgents.map((agent) => (
-						<AgentCard
-							key={agent.id}
-							agent={agent}
-							isUpdating={updating === agent.id}
-							onToggle={handleToggleAgent}
-						/>
-					))}
-				</div>
-			)}
+			{/* Agents Card */}
+			<Card className="bg-surface" variant="transparent">
+				<Card.Content>
+					{filteredAgents.length === 0 ? (
+						<div
+							className="
+              flex flex-col items-center justify-center py-16
+              text-center
+            "
+						>
+							<div className="mb-4 text-muted">
+								<UserGroupIcon className="mx-auto size-12" />
+							</div>
+							<p className="text-sm font-medium text-(--foreground)">
+								{agentSearch || agentFilter !== "all"
+									? t("noAgentsMatch")
+									: t("noAgentsAvailable")}
+							</p>
+							<p className="mt-1 max-w-sm text-xs text-muted">
+								{agentSearch || agentFilter !== "all"
+									? t("adjustFiltersDescription")
+									: t("noAgentsDescription")}
+							</p>
+						</div>
+					) : (
+						<div
+							className="
+              grid grid-cols-1 gap-3
+              sm:grid-cols-2
+            "
+						>
+							{filteredAgents.map((agent) => (
+								<AgentCard
+									key={agent.id}
+									agent={agent}
+									isUpdating={updating === agent.id}
+									onToggle={handleToggleAgent}
+								/>
+							))}
+						</div>
+					)}
+				</Card.Content>
+			</Card>
 		</div>
 	);
 }
