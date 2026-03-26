@@ -1,10 +1,57 @@
 import { CommandLineIcon, GlobeAltIcon } from "@heroicons/react/24/solid";
-import { Label, ListBox } from "@heroui/react";
+import { Label, ListBox, Tooltip } from "@heroui/react";
 import Fuse from "fuse.js";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { McpResponse } from "../lib/api-types";
 import { getMcpMergeKey } from "../lib/utils";
+import { AgentIcon } from "../lib/agent-icons";
+
+function formatAgentName(agent: string): string {
+	return agent.charAt(0).toUpperCase() + agent.slice(1).toLowerCase();
+}
+
+function McpAgentIcons({ items }: { items: McpResponse[] }) {
+	const agents = useMemo(() => {
+		const set = new Set<string>();
+		for (const item of items) {
+			if (item.agent) set.add(item.agent);
+		}
+		return Array.from(set).sort();
+	}, [items]);
+
+	if (agents.length === 0) {
+		return null;
+	}
+
+	return (
+		<div className="flex shrink-0 items-center -space-x-2">
+			{agents.slice(0, 4).map((agentId, idx) => (
+				<Tooltip key={agentId} delay={0}>
+					<div
+						className="relative rounded-full bg-surface ring-1 ring-surface transition-transform hover:scale-110"
+						style={{ zIndex: 4 - idx }}
+					>
+						<AgentIcon
+							id={agentId}
+							name={formatAgentName(agentId)}
+							size="xs"
+							variant="ghost"
+						/>
+					</div>
+					<Tooltip.Content>
+						{formatAgentName(agentId)}
+					</Tooltip.Content>
+				</Tooltip>
+			))}
+			{agents.length > 4 && (
+				<div className="relative z-0 flex size-5 items-center justify-center rounded-full bg-default-100 text-[9px] font-medium text-default-600 ring-1 ring-surface">
+					+{agents.length - 4}
+				</div>
+			)}
+		</div>
+	);
+}
 
 interface McpGroup {
 	mergeKey: string;
@@ -101,6 +148,7 @@ export function McpList({
 						<Label className="flex-1 truncate">
 							{group.items[0].name}
 						</Label>
+						<McpAgentIcons items={group.items} />
 					</div>
 				</ListBox.Item>
 			))}
