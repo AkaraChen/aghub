@@ -66,9 +66,10 @@ export default function MCPServersPage() {
 		? groupedMcps.find((g) => g.mergeKey === selectedKey)
 		: null;
 
-	const effectivePanel: RightPanel = selectedKey
-		? { type: "detail", selectedKey }
-		: panel;
+	const effectivePanel: RightPanel =
+		panel.type !== "empty" ? panel : selectedKey
+			? { type: "detail", selectedKey }
+			: { type: "empty" };
 
 	return (
 		<div className="flex h-full">
