@@ -4,6 +4,7 @@ import {
 	SunIcon,
 } from "@heroicons/react/24/solid";
 import {
+	Card,
 	ListBox,
 	Select,
 	ToggleButton,
@@ -22,9 +23,9 @@ export default function AppearancePanel() {
 	};
 
 	return (
-		<div className="space-y-2">
-			{/* Theme Setting */}
-			<div className="rounded-lg bg-surface p-4">
+		<Card className="p-0">
+			<Card.Content className="space-y-4 p-4">
+				{/* Theme Setting */}
 				<div className="flex items-center justify-between">
 					<div className="space-y-0.5">
 						<span className="text-sm font-medium text-(--foreground)">
@@ -61,10 +62,8 @@ export default function AppearancePanel() {
 						</ToggleButton>
 					</ToggleButtonGroup>
 				</div>
-			</div>
 
-			{/* Language Setting */}
-			<div className="rounded-lg bg-surface p-4">
+				{/* Language Setting */}
 				<div className="flex items-center justify-between">
 					<div className="space-y-0.5">
 						<span className="text-sm font-medium text-(--foreground)">
@@ -97,7 +96,7 @@ export default function AppearancePanel() {
 						</Select.Popover>
 					</Select>
 				</div>
-			</div>
-		</div>
+			</Card.Content>
+		</Card>
 	);
 }

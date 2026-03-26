@@ -1,4 +1,4 @@
-import { ListBox, Select, Spinner } from "@heroui/react";
+import { Card, ListBox, Select, Spinner } from "@heroui/react";
 import { useEffect, useState } from "react";
 import type { Key } from "react-aria-components";
 import { useTranslation } from "react-i18next";
@@ -43,15 +43,15 @@ export default function IntegrationsPanel() {
 	const installedEditors = codeEditors?.filter((e) => e.installed) || [];
 
 	return (
-		<div className="space-y-2">
-			{/* Code Editor Setting */}
-			<div className="rounded-lg bg-(--surface) p-4">
+		<Card className="p-4">
+			<Card.Content className="space-y-4">
+				{/* Code Editor Setting */}
 				<div className="flex items-center justify-between">
 					<div className="space-y-0.5">
 						<span className="text-sm font-medium text-(--foreground)">
 							{t("codeEditors")}
 						</span>
-						<span className="block text-xs text-(--muted)">
+						<span className="block text-xs text-muted">
 							{t("codeEditorsDescription")}
 						</span>
 					</div>
@@ -81,7 +81,7 @@ export default function IntegrationsPanel() {
 						</Select.Popover>
 					</Select>
 				</div>
-			</div>
-		</div>
+			</Card.Content>
+		</Card>
 	);
 }
