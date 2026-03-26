@@ -72,7 +72,7 @@ export default {
 	createSkill: "Create Skill",
 	addLocalSkill: "Add Local Skill",
 	createLocalSkill: "Create New Skill",
-	createFromScratch: "Create from Scratch",
+	createCustomSkill: "Create Custom Skill",
 	importFromFile: "Import from File",
 	selectFileOrFolder: "Select a file or folder containing SKILL.md",
 	skillImported: "Skill imported successfully",
@@ -82,7 +82,8 @@ export default {
 	skillName: "Skill Name",
 	skillCreated: "Skill created successfully",
 	requiredTools: "Required Tools",
-	csvToolsHelp: "Comma separated tool names (e.g. bash, grep)",
+	csvToolsHelp:
+		"List the tools this skill depends on, separated by commas (e.g., bash, jq, git)",
 	skillNamePlaceholder: "e.g., format-code",
 	descriptionPlaceholder: "Enter a brief description for this skill...",
 	authorPlaceholder: "Enter the author's name...",
@@ -133,7 +134,7 @@ export default {
 	agents: "Agents",
 	noAgentsAvailable: "No agents available",
 	noAgentsAvailableHelp:
-		"Install or enable at least one agent to create MCP servers.",
+		"Install or enable at least one agent to create MCP servers or skills.",
 	importFromJson: "Import from JSON",
 	importFromJsonTooltip: "Import from JSON",
 	import: "Import",
