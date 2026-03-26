@@ -94,10 +94,6 @@ export interface ImportSkillRequest {
 	path: string;
 }
 
-export interface ToolPreferences {
-	code_editor?: CodeEditorType;
-}
-
 export interface SkillLockEntryResponse {
 	name: string;
 	source: string;

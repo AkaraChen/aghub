@@ -16,5 +16,3 @@ i18n.use(LanguageDetector)
 			escapeValue: false,
 		},
 	});
-
-export default i18n;

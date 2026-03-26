@@ -55,11 +55,3 @@ export function buildTransportFromForm(
 export function capitalize(str: string): string {
 	return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
 }
-
-export function parseTimeout(timeout: string): number | undefined {
-	return timeout ? Number.parseInt(timeout, 10) : undefined;
-}
-
-export function parseArgsString(args: string): string[] {
-	return args.trim() ? args.trim().split(WHITESPACE_REGEX) : [];
-}

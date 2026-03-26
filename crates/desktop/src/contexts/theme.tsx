@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { createContext, use } from "react";
+import { createContext } from "react";
 
 export type Theme = "light" | "dark" | "system";
 
@@ -9,12 +9,6 @@ export interface ThemeContextValue {
 }
 
 export const ThemeContext = createContext<ThemeContextValue | null>(null);
-
-export function useThemeContext(): ThemeContextValue {
-	const context = use(ThemeContext);
-	if (!context) throw new Error("useTheme must be used within ThemeProvider");
-	return context;
-}
 
 export interface ThemeProviderProps {
 	children: ReactNode;

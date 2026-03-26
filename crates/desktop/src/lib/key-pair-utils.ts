@@ -7,12 +7,6 @@ export interface KeyPair {
 let nextId = 0;
 export const generateId = () => `keypair-${nextId++}`;
 
-export const createEmptyKeyPair = (): KeyPair => ({
-	id: generateId(),
-	key: "",
-	value: "",
-});
-
 export const keyPairToObject = (pairs: KeyPair[]): Record<string, string> => {
 	return Object.fromEntries(pairs.map((pair) => [pair.key, pair.value]));
 };

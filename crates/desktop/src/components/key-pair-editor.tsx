@@ -5,8 +5,6 @@ import { useTranslation } from "react-i18next";
 import type { KeyPair } from "../lib/key-pair-utils";
 import { generateId } from "../lib/key-pair-utils";
 
-export type { KeyPair };
-
 interface KeyPairEditorProps {
 	value: KeyPair[];
 	onChange: (value: KeyPair[]) => void;

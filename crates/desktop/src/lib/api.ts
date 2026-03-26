@@ -272,5 +272,3 @@ export function createApi(baseUrl: string) {
 		},
 	};
 }
-
-export type Api = ReturnType<typeof createApi>;

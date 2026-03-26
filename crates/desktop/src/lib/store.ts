@@ -9,7 +9,7 @@ export interface Project {
 	path: string;
 }
 
-export interface IntegrationPreferences {
+interface IntegrationPreferences {
 	codeEditor?: CodeEditorType;
 }
 
@@ -80,26 +80,13 @@ export async function removeProject(id: string): Promise<void> {
 	await store.save();
 }
 
-export async function updateProject(
-	id: string,
-	updates: Partial<Omit<Project, "id">>,
-): Promise<void> {
-	const store = await getStore();
-	const projects = await getProjects();
-	await store.set(
-		"projects",
-		projects.map((p) => (p.id === id ? { ...p, ...updates } : p)),
-	);
-	await store.save();
-}
-
 // Disabled agents management
 export async function getDisabledAgents(): Promise<string[]> {
 	const store = await getStore();
 	return (await store.get<string[]>("disabledAgents")) ?? [];
 }
 
-export async function setDisabledAgents(agentIds: string[]): Promise<void> {
+async function setDisabledAgents(agentIds: string[]): Promise<void> {
 	const store = await getStore();
 	await store.set("disabledAgents", agentIds);
 	await store.save();

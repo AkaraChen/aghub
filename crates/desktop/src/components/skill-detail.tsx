@@ -42,7 +42,7 @@ interface LocationGroup {
 	canonicalPath?: string;
 }
 
-export interface SkillGroup {
+interface SkillGroup {
 	name: string;
 	items: SkillResponse[];
 }
