@@ -35,12 +35,12 @@ function SkillAgentIcons({ items }: { items: SkillResponse[] }) {
 	}
 
 	return (
-		<div className="flex shrink-0 items-center -space-x-1">
-			{agents.slice(0, 3).map((agentId, idx) => (
+		<div className="flex shrink-0 items-center -space-x-2">
+			{agents.slice(0, 4).map((agentId, idx) => (
 				<Tooltip key={agentId} delay={0}>
 					<div
-						className="relative rounded-lg bg-surface ring-2 ring-surface transition-transform hover:scale-110"
-						style={{ zIndex: 3 - idx }}
+						className="relative rounded-full bg-surface ring-1 ring-surface transition-transform hover:scale-110"
+						style={{ zIndex: 4 - idx }}
 					>
 						<AgentIcon
 							id={agentId}
@@ -54,9 +54,9 @@ function SkillAgentIcons({ items }: { items: SkillResponse[] }) {
 					</Tooltip.Content>
 				</Tooltip>
 			))}
-			{agents.length > 3 && (
-				<div className="relative z-0 flex size-5 items-center justify-center rounded-lg bg-default-100 text-[10px] font-medium text-default-600 ring-2 ring-surface">
-					+{agents.length - 3}
+			{agents.length > 4 && (
+				<div className="relative z-0 flex size-5 items-center justify-center rounded-lg bg-default-100 text-[9px] font-medium text-default-600 ring-1 ring-surface">
+					+{agents.length - 4}
 				</div>
 			)}
 		</div>
