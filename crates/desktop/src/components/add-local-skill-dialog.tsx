@@ -1,3 +1,4 @@
+import { DocumentIcon, FolderOpenIcon } from "@heroicons/react/24/outline";
 import {
 	Button,
 	Description,
@@ -10,7 +11,6 @@ import {
 	TextArea,
 	TextField,
 } from "@heroui/react";
-import { DocumentIcon, FolderOpenIcon } from "@heroicons/react/24/outline";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useMemo, useState } from "react";
@@ -225,11 +225,16 @@ export function AddLocalSkillDialog({
 					<Modal.Body className="p-4 sm:p-6 pb-2">
 						<Tabs
 							selectedKey={mode}
-							onSelectionChange={(k) => setMode(k as "create" | "import")}
+							onSelectionChange={(k) =>
+								setMode(k as "create" | "import")
+							}
 						>
 							<div className="mb-4">
 								<Tabs.ListContainer>
-									<Tabs.List aria-label="Creation Mode" className="inline-flex">
+									<Tabs.List
+										aria-label="Creation Mode"
+										className="inline-flex"
+									>
 										<Tabs.Tab id="create">
 											{t("createFromScratch")}
 											<Tabs.Indicator />
@@ -245,7 +250,9 @@ export function AddLocalSkillDialog({
 							{error && (
 								<div className="mb-4 rounded-lg border border-danger/30 bg-danger-soft p-3">
 									<p className="text-sm text-danger">
-										{mode === "create" ? t("createError", { error }) : t("importError", { error })}
+										{mode === "create"
+											? t("createError", { error })
+											: t("importError", { error })}
 									</p>
 								</div>
 							)}
@@ -253,127 +260,195 @@ export function AddLocalSkillDialog({
 							<Tabs.Panel id="create">
 								<Form className="space-y-4">
 									<Fieldset>
-								<Fieldset.Group>
-									<TextField className="w-full">
-										<Label>{t("skillName")}</Label>
-										<Input
-											value={name}
-											onChange={(e) => setName(e.target.value)}
-											placeholder={t("skillNamePlaceholder")}
-											variant="secondary"
-										/>
-									</TextField>
-									<TextField className="w-full">
-										<Label>{t("description")}</Label>
-										<TextArea
-											value={description}
-											onChange={(e) => setDescription(e.target.value)}
-											placeholder={t("descriptionPlaceholder")}
-											className="min-h-24"
-											variant="secondary"
-										/>
-									</TextField>
-									<TextField className="w-full">
-										<Label>{t("author")}</Label>
-										<Input
-											value={author}
-											onChange={(e) => setAuthor(e.target.value)}
-											placeholder={t("authorPlaceholder")}
-											variant="secondary"
-										/>
-									</TextField>
-									<TextField className="w-full">
-										<Label>{t("requiredTools")}</Label>
-										<Input
-											value={toolsInput}
-											onChange={(e) => setToolsInput(e.target.value)}
-											placeholder={t("toolsPlaceholder")}
-											variant="secondary"
-										/>
-										<Description>{t("csvToolsHelp")}</Description>
-									</TextField>
-								</Fieldset.Group>
-							</Fieldset>
+										<Fieldset.Group>
+											<TextField className="w-full">
+												<Label>{t("skillName")}</Label>
+												<Input
+													value={name}
+													onChange={(e) =>
+														setName(e.target.value)
+													}
+													placeholder={t(
+														"skillNamePlaceholder",
+													)}
+													variant="secondary"
+												/>
+											</TextField>
+											<TextField className="w-full">
+												<Label>
+													{t("description")}
+												</Label>
+												<TextArea
+													value={description}
+													onChange={(e) =>
+														setDescription(
+															e.target.value,
+														)
+													}
+													placeholder={t(
+														"descriptionPlaceholder",
+													)}
+													className="min-h-24"
+													variant="secondary"
+												/>
+											</TextField>
+											<TextField className="w-full">
+												<Label>{t("author")}</Label>
+												<Input
+													value={author}
+													onChange={(e) =>
+														setAuthor(
+															e.target.value,
+														)
+													}
+													placeholder={t(
+														"authorPlaceholder",
+													)}
+													variant="secondary"
+												/>
+											</TextField>
+											<TextField className="w-full">
+												<Label>
+													{t("requiredTools")}
+												</Label>
+												<Input
+													value={toolsInput}
+													onChange={(e) =>
+														setToolsInput(
+															e.target.value,
+														)
+													}
+													placeholder={t(
+														"toolsPlaceholder",
+													)}
+													variant="secondary"
+												/>
+												<Description>
+													{t("csvToolsHelp")}
+												</Description>
+											</TextField>
+										</Fieldset.Group>
+									</Fieldset>
 
-							<Fieldset>
-								<Fieldset.Group>
-									<AgentSelector
-										agents={skillAgents}
-										selectedKeys={createAgents}
-										onSelectionChange={setCreateAgents}
-										label={t("targetAgent")}
-										emptyMessage={t("noAgentsAvailable")}
-										emptyHelpText={t("noAgentsAvailableHelp")}
-									/>
-								</Fieldset.Group>
-							</Fieldset>
-						</Form>
-					</Tabs.Panel>
-					<Tabs.Panel id="import">
-						<Form className="space-y-4">
-							<Fieldset>
-								<Fieldset.Group>
-									<div className="flex w-full flex-col gap-2">
-										<Label>{t("selectFileOrFolder")}</Label>
-										<div className="flex w-full gap-2 items-center">
-											<Input
-												className="flex-1 min-w-0"
-												value={importPath}
-												readOnly
-												placeholder={t("selectedPath")}
-												variant="secondary"
+									<Fieldset>
+										<Fieldset.Group>
+											<AgentSelector
+												agents={skillAgents}
+												selectedKeys={createAgents}
+												onSelectionChange={
+													setCreateAgents
+												}
+												label={t("targetAgent")}
+												emptyMessage={t(
+													"noAgentsAvailable",
+												)}
+												emptyHelpText={t(
+													"noAgentsAvailableHelp",
+												)}
 											/>
-											<div className="flex flex-col sm:flex-row shrink-0 gap-2">
-												<Button variant="secondary" onPress={handleSelectFile}>
-													<DocumentIcon className="size-4" />
-													{t("file", { defaultValue: "File" })}
-												</Button>
-												<Button variant="secondary" onPress={handleSelectFolder}>
-													<FolderOpenIcon className="size-4" />
-													{t("folder", { defaultValue: "Folder" })}
-												</Button>
+										</Fieldset.Group>
+									</Fieldset>
+								</Form>
+							</Tabs.Panel>
+							<Tabs.Panel id="import">
+								<Form className="space-y-4">
+									<Fieldset>
+										<Fieldset.Group>
+											<div className="flex w-full flex-col gap-2">
+												<Label>
+													{t("selectFileOrFolder")}
+												</Label>
+												<div className="flex w-full gap-2 items-center">
+													<Input
+														className="flex-1 min-w-0"
+														value={importPath}
+														readOnly
+														placeholder={t(
+															"selectedPath",
+														)}
+														variant="secondary"
+													/>
+													<div className="flex flex-col sm:flex-row shrink-0 gap-2">
+														<Button
+															variant="secondary"
+															onPress={
+																handleSelectFile
+															}
+														>
+															<DocumentIcon className="size-4" />
+															{t("file", {
+																defaultValue:
+																	"File",
+															})}
+														</Button>
+														<Button
+															variant="secondary"
+															onPress={
+																handleSelectFolder
+															}
+														>
+															<FolderOpenIcon className="size-4" />
+															{t("folder", {
+																defaultValue:
+																	"Folder",
+															})}
+														</Button>
+													</div>
+												</div>
 											</div>
-										</div>
-									</div>
-								</Fieldset.Group>
-							</Fieldset>
+										</Fieldset.Group>
+									</Fieldset>
 
-							<Fieldset>
-								<Fieldset.Group>
-									<AgentSelector
-										agents={skillAgents}
-										selectedKeys={importAgents}
-										onSelectionChange={setImportAgents}
-										label={t("targetAgent")}
-										emptyMessage={t("noAgentsAvailable")}
-										emptyHelpText={t("noAgentsAvailableHelp")}
-									/>
-								</Fieldset.Group>
-							</Fieldset>
-						</Form>
-					</Tabs.Panel>
-					</Tabs>
-				</Modal.Body>
+									<Fieldset>
+										<Fieldset.Group>
+											<AgentSelector
+												agents={skillAgents}
+												selectedKeys={importAgents}
+												onSelectionChange={
+													setImportAgents
+												}
+												label={t("targetAgent")}
+												emptyMessage={t(
+													"noAgentsAvailable",
+												)}
+												emptyHelpText={t(
+													"noAgentsAvailableHelp",
+												)}
+											/>
+										</Fieldset.Group>
+									</Fieldset>
+								</Form>
+							</Tabs.Panel>
+						</Tabs>
+					</Modal.Body>
 
-				<Modal.Footer>
-					<Button variant="outline" onPress={handleClose}>
-						{t("cancel")}
-					</Button>
-					{mode === "create" ? (
-						<Button
-							onPress={handleCreate}
-							isDisabled={!isCreateValid || createMutation.isPending}
-						>
-							{createMutation.isPending ? t("creating") : t("create")}
+					<Modal.Footer>
+						<Button variant="outline" onPress={handleClose}>
+							{t("cancel")}
 						</Button>
-					) : (
-						<Button
-							onPress={handleImportClick}
-							isDisabled={!isImportValid || importMutation.isPending}
-						>
-							{importMutation.isPending ? t("importing") : t("import")}
-						</Button>
-					)}
+						{mode === "create" ? (
+							<Button
+								onPress={handleCreate}
+								isDisabled={
+									!isCreateValid || createMutation.isPending
+								}
+							>
+								{createMutation.isPending
+									? t("creating")
+									: t("create")}
+							</Button>
+						) : (
+							<Button
+								onPress={handleImportClick}
+								isDisabled={
+									!isImportValid || importMutation.isPending
+								}
+							>
+								{importMutation.isPending
+									? t("importing")
+									: t("import")}
+							</Button>
+						)}
 					</Modal.Footer>
 				</Modal.Dialog>
 			</Modal.Container>
