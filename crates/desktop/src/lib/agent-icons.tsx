@@ -12,7 +12,7 @@ const iconModules = import.meta.glob<{ default: string }>(
 interface AgentIconProps {
 	id: string;
 	name: string;
-	size?: "sm" | "lg";
+	size?: "xs" | "sm" | "lg";
 	variant?: "outline" | "ghost";
 }
 
@@ -27,7 +27,11 @@ export function AgentIcon({
 	const fallbackText = name.charAt(0).toUpperCase();
 
 	const sizeClasses =
-		size === "sm" ? "size-8 [&_svg]:size-5" : "size-12 [&_svg]:size-8";
+		size === "xs"
+			? "size-5 [&_svg]:size-3.5"
+			: size === "sm"
+				? "size-8 [&_svg]:size-5"
+				: "size-12 [&_svg]:size-8";
 
 	const variantClasses =
 		variant === "ghost" ? "" : "border border-border bg-surface-secondary";
@@ -52,7 +56,7 @@ export function AgentIcon({
 	// Fallback: Avatar with first letter (square with border)
 	return (
 		<Avatar
-			size={size === "sm" ? "md" : "lg"}
+			size={size === "xs" ? "sm" : size === "sm" ? "md" : "lg"}
 			variant="soft"
 			className={variant === "ghost" ? "" : "border border-border"}
 		>

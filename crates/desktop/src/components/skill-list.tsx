@@ -3,18 +3,65 @@ import {
 	ChevronDownIcon,
 	ChevronRightIcon,
 } from "@heroicons/react/24/solid";
-import { Chip, Label, ListBox } from "@heroui/react";
+import { Chip, Label, ListBox, Tooltip } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import Fuse from "fuse.js";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useServer } from "../hooks/use-server";
+import { AgentIcon } from "../lib/agent-icons";
 import { createApi } from "../lib/api";
 import type {
 	GlobalSkillLockResponse,
 	ProjectSkillLockResponse,
 	SkillResponse,
 } from "../lib/api-types";
+
+function formatAgentName(agent: string): string {
+	return agent.charAt(0).toUpperCase() + agent.slice(1).toLowerCase();
+}
+
+function SkillAgentIcons({ items }: { items: SkillResponse[] }) {
+	const agents = useMemo(() => {
+		const set = new Set<string>();
+		for (const item of items) {
+			if (item.agent) set.add(item.agent);
+		}
+		return Array.from(set).sort();
+	}, [items]);
+
+	if (agents.length === 0) {
+		return null;
+	}
+
+	return (
+		<div className="flex shrink-0 items-center -space-x-1">
+			{agents.slice(0, 3).map((agentId, idx) => (
+				<Tooltip key={agentId} delay={0}>
+					<div
+						className="relative rounded-lg bg-surface ring-2 ring-surface transition-transform hover:scale-110"
+						style={{ zIndex: 3 - idx }}
+					>
+						<AgentIcon
+							id={agentId}
+							name={formatAgentName(agentId)}
+							size="xs"
+							variant="ghost"
+						/>
+					</div>
+					<Tooltip.Content>
+						{formatAgentName(agentId)}
+					</Tooltip.Content>
+				</Tooltip>
+			))}
+			{agents.length > 3 && (
+				<div className="relative z-0 flex size-5 items-center justify-center rounded-lg bg-default-100 text-[10px] font-medium text-default-600 ring-2 ring-surface">
+					+{agents.length - 3}
+				</div>
+			)}
+		</div>
+	);
+}
 
 interface SkillGroup {
 	name: string;
@@ -267,6 +314,9 @@ export function SkillList({
 											<Label className="flex-1 truncate">
 												{skillGroup.name}
 											</Label>
+											<SkillAgentIcons
+												items={skillGroup.items}
+											/>
 										</div>
 									</ListBox.Item>
 								))}
@@ -302,6 +352,7 @@ export function SkillList({
 										<Label className="flex-1 truncate">
 											{group.name}
 										</Label>
+										<SkillAgentIcons items={group.items} />
 									</div>
 								</ListBox.Item>
 							),
@@ -342,6 +393,7 @@ export function SkillList({
 					<div className="flex w-full items-center gap-2">
 						<BookOpenIcon className="size-4 shrink-0 text-muted" />
 						<Label className="flex-1 truncate">{group.name}</Label>
+						<SkillAgentIcons items={group.items} />
 					</div>
 				</ListBox.Item>
 			))}
