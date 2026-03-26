@@ -11,10 +11,10 @@ import {
 	XCircleIcon,
 } from "@heroicons/react/24/solid";
 import {
+	Accordion,
 	Button,
 	Card,
 	Chip,
-	Disclosure,
 	Modal,
 	Separator,
 	Spinner,
@@ -468,37 +468,29 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 
 					{/* Skill Content — collapsed by default */}
 					{skillContent && (
-						<Card>
-							<Card.Content>
-								<Disclosure>
-									<Disclosure.Heading>
-										<Button
-											slot="trigger"
-											variant="ghost"
-											size="sm"
-											className="w-full justify-between"
+						<Accordion variant="surface">
+							<Accordion.Item>
+								<Accordion.Heading>
+									<Accordion.Trigger>
+										{t("skillContent")}
+										<Accordion.Indicator>
+											<ChevronDownIcon className="size-4" />
+										</Accordion.Indicator>
+									</Accordion.Trigger>
+								</Accordion.Heading>
+								<Accordion.Panel>
+									<Accordion.Body>
+										<pre
+											role="article"
+											aria-label={t("skillContent")}
+											className="overflow-x-auto rounded-md bg-surface-secondary p-3 font-mono text-xs whitespace-pre-wrap text-foreground"
 										>
-											{t("skillContent")}
-											<Disclosure.Indicator />
-										</Button>
-									</Disclosure.Heading>
-									<Disclosure.Content>
-										<Disclosure.Body className="mt-2">
-											<pre
-												role="article"
-												aria-label={t("skillContent")}
-												className="
-              overflow-x-auto rounded-md bg-surface-secondary p-3 font-mono
-              text-xs wrap-break-word whitespace-pre-wrap text-foreground
-            "
-											>
-												{skillContent}
-											</pre>
-										</Disclosure.Body>
-									</Disclosure.Content>
-								</Disclosure>
-							</Card.Content>
-						</Card>
+											{skillContent}
+										</pre>
+									</Accordion.Body>
+								</Accordion.Panel>
+							</Accordion.Item>
+						</Accordion>
 					)}
 				</div>
 			</div>
