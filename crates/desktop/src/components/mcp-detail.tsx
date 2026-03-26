@@ -105,7 +105,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 		},
 		onError: (error) => {
 			console.error("Failed to delete MCP servers:", error);
-			toast.error(
+			toast.danger(
 				error instanceof Error ? error.message : t("deleteMcpError"),
 			);
 		},
@@ -126,7 +126,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 			toast.success(t("copyConfigSuccess"));
 		} catch (error) {
 			console.error("Failed to copy config:", error);
-			toast.error(t("copyConfigError"));
+			toast.danger(t("copyConfigError"));
 		}
 	};
 
@@ -538,7 +538,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 								variant="secondary"
 								size="md"
 								onPress={() => setDeleteDialogOpen(false)}
-								disabled={deleteMutation.isPending}
+								isDisabled={deleteMutation.isPending}
 								className="min-h-[44px]"
 							>
 								{t("cancel")}
