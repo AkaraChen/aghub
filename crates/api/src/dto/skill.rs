@@ -10,6 +10,11 @@ pub struct CreateSkillRequest {
 	pub tools: Option<Vec<String>>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ImportSkillRequest {
+	pub path: String,
+}
+
 impl From<CreateSkillRequest> for Skill {
 	fn from(req: CreateSkillRequest) -> Self {
 		Skill {

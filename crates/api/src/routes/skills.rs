@@ -108,6 +108,24 @@ pub fn create_skill(
 	Ok((Status::Created, Json(response)))
 }
 
+#[post("/agents/<agent>/skills/import?<scope..>", data = "<body>")]
+pub fn import_skill(
+	agent: AgentParam,
+	scope: ScopeParams,
+	body: Json<crate::dto::skill::ImportSkillRequest>,
+) -> ApiResult<SkillResponse> {
+	check_skills_mutable(&agent)?;
+	let resolved = scope.resolve()?;
+	require_writable_scope(&resolved)?;
+	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
+
+	let imported = manager
+		.add_skill_from_path(std::path::Path::new(&body.path))
+		.map_err(ApiError::from)?;
+
+	Ok(Json(SkillResponse::from(&imported)))
+}
+
 #[get("/agents/<agent>/skills/<name>?<scope..>")]
 pub fn get_skill(
 	agent: AgentParam,
