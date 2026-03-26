@@ -4,9 +4,9 @@ import Fuse from "fuse.js";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
-import { AgentIcon, sortAgents } from "../lib/agent-icons";
+import { AgentIcon } from "../lib/agent-icons";
 import type { McpResponse } from "../lib/api-types";
-import { getMcpMergeKey } from "../lib/utils";
+import { getMcpMergeKey, sortAgents } from "../lib/utils";
 
 function formatAgentName(agent: string): string {
 	return agent.charAt(0).toUpperCase() + agent.slice(1).toLowerCase();

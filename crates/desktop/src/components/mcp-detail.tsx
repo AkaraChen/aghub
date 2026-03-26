@@ -22,11 +22,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useServer } from "../hooks/use-server";
-import { AgentIcon, sortAgentObjects } from "../lib/agent-icons";
+import { AgentIcon } from "../lib/agent-icons";
 import { createApi } from "../lib/api";
 import type { McpResponse, TransportDto } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
-import { cn } from "../lib/utils";
+import { cn, sortAgentObjects } from "../lib/utils";
 import { ManageAgentsDialog } from "./manage-agents-dialog";
 
 export interface McpGroup {

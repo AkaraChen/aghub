@@ -10,13 +10,14 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useServer } from "../hooks/use-server";
-import { AgentIcon, sortAgents } from "../lib/agent-icons";
+import { AgentIcon } from "../lib/agent-icons";
 import { createApi } from "../lib/api";
 import type {
 	GlobalSkillLockResponse,
 	ProjectSkillLockResponse,
 	SkillResponse,
 } from "../lib/api-types";
+import { sortAgents } from "../lib/utils";
 
 function formatAgentName(agent: string): string {
 	return agent.charAt(0).toUpperCase() + agent.slice(1).toLowerCase();

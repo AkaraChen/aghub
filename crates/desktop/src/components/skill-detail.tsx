@@ -27,7 +27,6 @@ import { useTranslation } from "react-i18next";
 import { siGithub } from "simple-icons";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useServer } from "../hooks/use-server";
-import { sortAgents } from "../lib/agent-icons";
 import { createApi } from "../lib/api";
 import type {
 	GlobalSkillLockResponse,
@@ -35,6 +34,7 @@ import type {
 	SkillResponse,
 } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
+import { sortAgents } from "../lib/utils";
 
 interface LocationGroup {
 	sourcePath: string;
