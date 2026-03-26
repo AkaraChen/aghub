@@ -90,6 +90,10 @@ export interface ToolInfo {
 	path?: string;
 }
 
+export interface ImportSkillRequest {
+	path: string;
+}
+
 export interface ToolPreferences {
 	code_editor?: CodeEditorType;
 }

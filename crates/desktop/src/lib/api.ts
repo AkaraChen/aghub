@@ -3,6 +3,7 @@ import type {
 	CodeEditorType,
 	CreateSkillRequest,
 	GlobalSkillLockResponse,
+	ImportSkillRequest,
 	InstallSkillRequest,
 	InstallSkillResponse,
 	MarketSkill,
@@ -77,6 +78,24 @@ export function createApi(baseUrl: string) {
 				const scope = projectRoot ? "project" : "global";
 				return client
 					.post(`agents/${agent}/skills`, {
+						searchParams: {
+							scope,
+							...(projectRoot
+								? { project_root: projectRoot }
+								: {}),
+						},
+						json: data,
+					})
+					.json();
+			},
+			import(
+				agent: string,
+				data: ImportSkillRequest,
+				projectRoot?: string,
+			): Promise<SkillResponse> {
+				const scope = projectRoot ? "project" : "global";
+				return client
+					.post(`agents/${agent}/skills/import`, {
 						searchParams: {
 							scope,
 							...(projectRoot
