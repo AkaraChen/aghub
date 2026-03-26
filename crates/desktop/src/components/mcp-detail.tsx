@@ -430,28 +430,32 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 											})}
 										</p>
 										<div className="space-y-1">
-											{displayedHeaders.map(([key, value]) => (
-												<div
-													key={key}
-													className="
+											{displayedHeaders.map(
+												([key, value]) => (
+													<div
+														key={key}
+														className="
                    flex items-center justify-between gap-4 rounded-lg
                    bg-surface-secondary px-3 py-1.5
                  "
-												>
-													<span className="shrink-0 font-mono text-xs">
-														{key}
-													</span>
-													<span className="truncate font-mono text-xs text-muted">
-														{value}
-													</span>
-												</div>
-											))}
+													>
+														<span className="shrink-0 font-mono text-xs">
+															{key}
+														</span>
+														<span className="truncate font-mono text-xs text-muted">
+															{value}
+														</span>
+													</div>
+												),
+											)}
 										</div>
 										{hasMoreHeaders && (
 											<button
 												type="button"
 												onClick={() =>
-													setShowAllHeaders(!showAllHeaders)
+													setShowAllHeaders(
+														!showAllHeaders,
+													)
 												}
 												className="
                  mt-2 flex items-center gap-1 text-xs text-muted transition-colors
@@ -461,7 +465,9 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 												{showAllHeaders ? (
 													<>
 														<ChevronUpIcon className="size-3.5" />
-														<span>{t("showLess")}</span>
+														<span>
+															{t("showLess")}
+														</span>
 													</>
 												) : (
 													<>
