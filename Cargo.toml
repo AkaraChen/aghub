@@ -46,3 +46,6 @@ toml = "0.8"
 
 # Interactive CLI
 inquire = "0.7"
+
+# Git hooks
+cargo-husky = { version = "1", default-features = false, features = ["precommit-hooks", "run-cargo-test"] }
