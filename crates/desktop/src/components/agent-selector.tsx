@@ -11,7 +11,7 @@ interface AgentSelectorProps {
 	emptyMessage?: string;
 	emptyHelpText?: string;
 	showSelectedIcon?: boolean;
-	varient?: "default" | "secondary";
+	variant?: "default" | "secondary";
 }
 
 export function AgentSelector({
@@ -22,7 +22,7 @@ export function AgentSelector({
 	emptyMessage,
 	emptyHelpText,
 	showSelectedIcon = false,
-	varient,
+	variant,
 }: AgentSelectorProps) {
 	const { t } = useTranslation();
 
@@ -58,7 +58,7 @@ export function AgentSelector({
 							key={agent.id}
 							id={agent.id}
 							className={cn(
-								varient === "secondary" &&
+								variant === "secondary" &&
 									"bg-surface-secondary",
 							)}
 						>

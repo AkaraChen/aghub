@@ -285,7 +285,7 @@ export function InstallSkillDialog({
 									onSelectionChange={setSelectedAgents}
 									emptyMessage={t("noTargetAgents")}
 									showSelectedIcon
-									varient="secondary"
+									variant="secondary"
 								/>
 							</div>
 						)}
