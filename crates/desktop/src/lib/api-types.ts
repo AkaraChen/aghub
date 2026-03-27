@@ -16,6 +16,15 @@ export interface SkillResponse {
 	agent?: string;
 }
 
+export type SkillTreeNodeKind = "file" | "directory";
+
+export interface SkillTreeNodeResponse {
+	name: string;
+	path: string;
+	kind: SkillTreeNodeKind;
+	children: SkillTreeNodeResponse[];
+}
+
 export type TransportDto =
 	| {
 			type: "stdio";

@@ -10,6 +10,7 @@ import type {
 	McpResponse,
 	ProjectSkillLockResponse,
 	SkillResponse,
+	SkillTreeNodeResponse,
 	ToolInfo,
 	TransportDto,
 } from "./api-types";
@@ -141,6 +142,13 @@ export function createApi(baseUrl: string) {
 			getContent(skillPath: string): Promise<string> {
 				return client
 					.get("skills/content", {
+						searchParams: { path: skillPath },
+					})
+					.json();
+			},
+			getTree(skillPath: string): Promise<SkillTreeNodeResponse> {
+				return client
+					.get("skills/tree", {
 						searchParams: { path: skillPath },
 					})
 					.json();

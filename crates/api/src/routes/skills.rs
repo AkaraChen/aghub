@@ -14,7 +14,7 @@ use crate::{
 		CreateSkillRequest, GlobalSkillLockResponse, InstallSkillRequest,
 		InstallSkillResponse, LocalSkillLockEntryResponse,
 		ProjectSkillLockResponse, SkillLockEntryResponse, SkillResponse,
-		UpdateSkillRequest,
+		SkillTreeNodeKind, SkillTreeNodeResponse, UpdateSkillRequest,
 	},
 	error::{ApiCreated, ApiError, ApiNoContent, ApiResult},
 	extractors::{AgentParam, ScopeParams},
@@ -38,11 +38,82 @@ fn get_parent_folder(path: std::path::PathBuf) -> std::path::PathBuf {
 	path.parent().map(|p| p.to_path_buf()).unwrap_or(path)
 }
 
+fn get_skill_root(path: std::path::PathBuf) -> std::path::PathBuf {
+	if path.is_dir() {
+		path
+	} else {
+		get_parent_folder(path)
+	}
+}
+
 fn detect_available_editor() -> Option<CodeEditorType> {
 	CodeEditorType::all()
 		.iter()
 		.find(|editor| which(editor.cli_command()).is_ok())
 		.cloned()
+}
+
+fn build_skill_tree_node(
+	path: &std::path::Path,
+) -> Result<SkillTreeNodeResponse, ApiError> {
+	let metadata = std::fs::metadata(path).map_err(|e| {
+		ApiError::new(
+			Status::NotFound,
+			format!("Failed to read skill path metadata: {e}"),
+			"SKILL_PATH_NOT_FOUND",
+		)
+	})?;
+
+	let name = path
+		.file_name()
+		.map(|name| name.to_string_lossy().to_string())
+		.unwrap_or_else(|| path.display().to_string());
+
+	if metadata.is_dir() {
+		let mut entries: Vec<_> = std::fs::read_dir(path)
+			.map_err(|e| {
+				ApiError::new(
+					Status::NotFound,
+					format!("Failed to read skill directory: {e}"),
+					"SKILL_DIRECTORY_NOT_FOUND",
+				)
+			})?
+			.filter_map(|entry| entry.ok())
+			.collect();
+
+		entries.sort_by(|a, b| {
+			let a_is_dir =
+				a.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
+			let b_is_dir =
+				b.file_type().map(|kind| kind.is_dir()).unwrap_or(false);
+
+			b_is_dir.cmp(&a_is_dir).then_with(|| {
+				a.file_name()
+					.to_string_lossy()
+					.to_lowercase()
+					.cmp(&b.file_name().to_string_lossy().to_lowercase())
+			})
+		});
+
+		let children = entries
+			.into_iter()
+			.map(|entry| build_skill_tree_node(&entry.path()))
+			.collect::<Result<Vec<_>, _>>()?;
+
+		return Ok(SkillTreeNodeResponse {
+			name,
+			path: path.display().to_string(),
+			kind: SkillTreeNodeKind::Directory,
+			children,
+		});
+	}
+
+	Ok(SkillTreeNodeResponse {
+		name,
+		path: path.display().to_string(),
+		kind: SkillTreeNodeKind::File,
+		children: Vec::new(),
+	})
 }
 use std::process::Stdio;
 use std::time::Duration;
@@ -372,6 +443,21 @@ pub fn get_skill_content(query: SkillContentQuery) -> ApiResult<String> {
 	})?;
 
 	Ok(Json(skill.content))
+}
+
+#[derive(Debug, rocket::FromForm)]
+pub struct SkillTreeQuery {
+	pub path: String,
+}
+
+#[get("/skills/tree?<query..>")]
+pub fn get_skill_tree(
+	query: SkillTreeQuery,
+) -> ApiResult<SkillTreeNodeResponse> {
+	let path = expand_tilde_path(&query.path);
+	let root = get_skill_root(path);
+	let tree = build_skill_tree_node(&root)?;
+	Ok(Json(tree))
 }
 
 #[get("/skills/lock/global")]

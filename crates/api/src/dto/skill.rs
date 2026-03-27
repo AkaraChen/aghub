@@ -78,6 +78,21 @@ pub struct SkillResponse {
 	pub agent: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillTreeNodeKind {
+	File,
+	Directory,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct SkillTreeNodeResponse {
+	pub name: String,
+	pub path: String,
+	pub kind: SkillTreeNodeKind,
+	pub children: Vec<SkillTreeNodeResponse>,
+}
+
 impl From<Skill> for SkillResponse {
 	fn from(s: Skill) -> Self {
 		SkillResponse::from(&s)

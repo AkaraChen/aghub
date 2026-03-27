@@ -75,6 +75,8 @@ export default {
 	openFolder: "Open folder",
 	openInBrowser: "View source",
 	editInEditor: "Edit in editor",
+	skillFiles: "Files",
+	skillFilesDescription: "{{count}} items available in this skill bundle",
 	createSkill: "Create Skill",
 	addLocalSkill: "Add Local Skill",
 	createLocalSkill: "Create New Skill",

@@ -3,6 +3,7 @@ import {
 	ChevronDownIcon,
 	ChevronUpIcon,
 	CodeBracketIcon,
+	DocumentIcon,
 	ExclamationTriangleIcon,
 	FolderIcon,
 	GlobeAltIcon,
@@ -24,19 +25,23 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import * as pathe from "pathe";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { siGithub } from "simple-icons";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useFavorites } from "../hooks/use-favorites";
+import { useCodeEditors } from "../hooks/use-integrations";
 import { useServer } from "../hooks/use-server";
 import { createApi } from "../lib/api";
 import type {
+	CodeEditorType,
 	GlobalSkillLockResponse,
 	ProjectSkillLockResponse,
 	SkillResponse,
+	SkillTreeNodeResponse,
 } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
+import { getIntegrationPreferences } from "../lib/store";
 import { cn, sortAgents } from "../lib/utils";
 
 interface LocationGroup {
@@ -57,6 +62,21 @@ interface SkillDetailProps {
 
 // Module-scoped regex for better performance
 const GITHUB_PREFIX_REGEX = /^github\//;
+const SKILL_MARKDOWN_FILE = "SKILL.md";
+
+function getNodeChildren(node: SkillTreeNodeResponse): SkillTreeNodeResponse[] {
+	return Array.isArray(node.children) ? node.children : [];
+}
+
+function hasSupplementarySkillFiles(node: SkillTreeNodeResponse): boolean {
+	return getNodeChildren(node).some((child) => {
+		if (child.name !== SKILL_MARKDOWN_FILE) {
+			return true;
+		}
+
+		return hasSupplementarySkillFiles(child);
+	});
+}
 
 function formatAgentName(agent: string): string {
 	return agent.charAt(0).toUpperCase() + agent.slice(1).toLowerCase();
@@ -70,9 +90,13 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [showAllLocations, setShowAllLocations] = useState(false);
+	const [preferredEditor, setPreferredEditor] = useState<
+		CodeEditorType | undefined
+	>();
 
 	const { isSkillStarred, toggleSkillStar } = useFavorites();
 	const isStarred = isSkillStarred(group.items[0].name);
+	const { data: codeEditors } = useCodeEditors();
 
 	const skill = group.items[0];
 
@@ -80,8 +104,29 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		mutationFn: (skillPath: string) => api.skills.openFolder(skillPath),
 	});
 
-	const editFolderMutation = useMutation({
-		mutationFn: (skillPath: string) => api.skills.editFolder(skillPath),
+	useEffect(() => {
+		async function loadPreferences() {
+			const prefs = await getIntegrationPreferences();
+			setPreferredEditor(prefs.codeEditor);
+		}
+
+		loadPreferences();
+	}, []);
+
+	const selectedEditor = useMemo(() => {
+		if (preferredEditor) return preferredEditor;
+		return codeEditors?.find((editor) => editor.installed)?.id as
+			| CodeEditorType
+			| undefined;
+	}, [codeEditors, preferredEditor]);
+
+	const openInEditorMutation = useMutation({
+		mutationFn: async (path: string) => {
+			if (!selectedEditor) {
+				throw new Error("No configured code editor");
+			}
+			return api.integrations.openWithEditor(path, selectedEditor);
+		},
 	});
 
 	const { data: globalLock } = useQuery<GlobalSkillLockResponse>({
@@ -100,6 +145,13 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const { data: skillContent } = useQuery<string>({
 		queryKey: ["skill-content", skill.source_path],
 		queryFn: () => api.skills.getContent(skill.source_path!),
+		enabled: !!skill.source_path,
+		staleTime: 60_000,
+	});
+
+	const { data: skillTree } = useQuery<SkillTreeNodeResponse>({
+		queryKey: ["skill-tree", skill.source_path],
+		queryFn: () => api.skills.getTree(skill.source_path!),
 		enabled: !!skill.source_path,
 		staleTime: 60_000,
 	});
@@ -193,6 +245,23 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 			: allLocationGroups.slice(0, 2);
 	const hasMoreLocations = allLocationGroups.length > 3;
 	const hiddenLocationCount = allLocationGroups.length - 2;
+	const resourceCount = useMemo(() => {
+		function countNodes(node: SkillTreeNodeResponse): number {
+			return (
+				getNodeChildren(node).length +
+				getNodeChildren(node).reduce(
+					(total, child) => total + countNodes(child),
+					0,
+				)
+			);
+		}
+
+		return skillTree ? countNodes(skillTree) : 0;
+	}, [skillTree]);
+	const hasSupplementaryFiles = useMemo(
+		() => (skillTree ? hasSupplementarySkillFiles(skillTree) : false),
+		[skillTree],
+	);
 
 	return (
 		<>
@@ -327,7 +396,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 													)
 												}
 												onEditFolder={() =>
-													editFolderMutation.mutate(
+													openInEditorMutation.mutate(
 														loc.sourcePath,
 													)
 												}
@@ -469,6 +538,58 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 							</Accordion.Item>
 						</Accordion>
 					)}
+
+					{skillTree && hasSupplementaryFiles && (
+						<Accordion variant="surface">
+							<Accordion.Item>
+								<Accordion.Heading>
+									<Accordion.Trigger>
+										<div className="flex min-w-0 flex-1 flex-col items-start text-left">
+											<span>{t("skillFiles")}</span>
+											<span className="text-xs font-normal text-muted">
+												{t("skillFilesDescription", {
+													count: resourceCount,
+												})}
+											</span>
+										</div>
+										<Accordion.Indicator>
+											<ChevronDownIcon className="size-4" />
+										</Accordion.Indicator>
+									</Accordion.Trigger>
+								</Accordion.Heading>
+								<Accordion.Panel>
+									<Accordion.Body>
+										<div className="space-y-3">
+											{selectedEditor && (
+												<div className="flex justify-start">
+													<Button
+														variant="ghost"
+														size="sm"
+														onPress={() =>
+															openInEditorMutation.mutate(
+																skillTree.path,
+															)
+														}
+													>
+														<CodeBracketIcon className="size-4" />
+														{t("editInEditor")}
+													</Button>
+												</div>
+											)}
+											<SkillTree
+												root={skillTree}
+												onOpenPath={(path) =>
+													openInEditorMutation.mutate(
+														path,
+													)
+												}
+											/>
+										</div>
+									</Accordion.Body>
+								</Accordion.Panel>
+							</Accordion.Item>
+						</Accordion>
+					)}
 				</div>
 			</div>
 
@@ -479,6 +600,73 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 				projectPath={projectPath}
 			/>
 		</>
+	);
+}
+
+function SkillTree({
+	root,
+	onOpenPath,
+}: {
+	root: SkillTreeNodeResponse;
+	onOpenPath: (path: string) => void;
+}) {
+	const items = flattenTree(root);
+
+	return (
+		<div className="rounded-xl border border-default-200/60 bg-surface-secondary/60 p-2">
+			{items.map((node, index) => (
+				<TreeNodeRow
+					key={`${node.path}-${index}`}
+					node={node}
+					onOpenPath={onOpenPath}
+				/>
+			))}
+		</div>
+	);
+}
+
+function flattenTree(
+	root: SkillTreeNodeResponse,
+): Array<SkillTreeNodeResponse & { depth?: number }> {
+	const items: Array<SkillTreeNodeResponse & { depth?: number }> = [];
+
+	function visit(node: SkillTreeNodeResponse, depth: number): void {
+		for (const child of getNodeChildren(node)) {
+			items.push({ ...child, depth });
+			visit(child, depth + 1);
+		}
+	}
+
+	visit(root, 1);
+
+	return items;
+}
+
+function TreeNodeRow({
+	node,
+	onOpenPath,
+}: {
+	node: SkillTreeNodeResponse & { depth?: number };
+	onOpenPath: (path: string) => void;
+}) {
+	return (
+		<button
+			type="button"
+			onClick={() => onOpenPath(node.path)}
+			className="
+				flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left
+				text-sm text-foreground transition-colors hover:bg-content2
+			"
+			style={{ paddingLeft: `${(node.depth ?? 0) * 16 + 8}px` }}
+			title={node.path}
+		>
+			{node.kind === "directory" ? (
+				<FolderIcon className="size-4 shrink-0 text-primary" />
+			) : (
+				<DocumentIcon className="size-4 shrink-0 text-muted" />
+			)}
+			<span className="min-w-0 flex-1 truncate">{node.name}</span>
+		</button>
 	);
 }
 

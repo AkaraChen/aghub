@@ -74,6 +74,8 @@ export default {
 	openFolder: "打开文件夹",
 	openInBrowser: "查看来源",
 	editInEditor: "在编辑器中打开",
+	skillFiles: "文件",
+	skillFilesDescription: "此技能包中共有 {{count}} 个项目",
 	createSkill: "创建技能",
 	addLocalSkill: "添加本地技能",
 	createLocalSkill: "创建新技能",
