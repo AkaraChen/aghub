@@ -25,23 +25,21 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import * as pathe from "pathe";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { siGithub } from "simple-icons";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useFavorites } from "../hooks/use-favorites";
-import { useCodeEditors } from "../hooks/use-integrations";
+import { useCurrentCodeEditor } from "../hooks/use-integrations";
 import { useServer } from "../hooks/use-server";
 import { createApi } from "../lib/api";
 import type {
-	CodeEditorType,
 	GlobalSkillLockResponse,
 	ProjectSkillLockResponse,
 	SkillResponse,
 	SkillTreeNodeResponse,
 } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
-import { getIntegrationPreferences } from "../lib/store";
 import { cn, sortAgents } from "../lib/utils";
 
 interface LocationGroup {
@@ -90,35 +88,16 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [showAllLocations, setShowAllLocations] = useState(false);
-	const [preferredEditor, setPreferredEditor] = useState<
-		CodeEditorType | undefined
-	>();
 
 	const { isSkillStarred, toggleSkillStar } = useFavorites();
 	const isStarred = isSkillStarred(group.items[0].name);
-	const { data: codeEditors } = useCodeEditors();
+	const { selectedEditor } = useCurrentCodeEditor();
 
 	const skill = group.items[0];
 
 	const openFolderMutation = useMutation({
 		mutationFn: (skillPath: string) => api.skills.openFolder(skillPath),
 	});
-
-	useEffect(() => {
-		async function loadPreferences() {
-			const prefs = await getIntegrationPreferences();
-			setPreferredEditor(prefs.codeEditor);
-		}
-
-		loadPreferences();
-	}, []);
-
-	const selectedEditor = useMemo(() => {
-		if (preferredEditor) return preferredEditor;
-		return codeEditors?.find((editor) => editor.installed)?.id as
-			| CodeEditorType
-			| undefined;
-	}, [codeEditors, preferredEditor]);
 
 	const openInEditorMutation = useMutation({
 		mutationFn: async (path: string) => {

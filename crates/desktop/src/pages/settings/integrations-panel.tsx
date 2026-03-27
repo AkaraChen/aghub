@@ -1,35 +1,18 @@
 import { Card, ListBox, Select, Spinner } from "@heroui/react";
-import { useEffect, useState } from "react";
 import type { Key } from "react-aria-components";
 import { useTranslation } from "react-i18next";
-import { useCodeEditors } from "../../hooks/use-integrations";
+import { useCurrentCodeEditor } from "../../hooks/use-integrations";
 import type { CodeEditorType } from "../../lib/api-types";
-import {
-	getIntegrationPreferences,
-	saveIntegrationPreferences,
-} from "../../lib/store";
 
 export default function IntegrationsPanel() {
 	const { t } = useTranslation();
-	const { data: codeEditors, isLoading } = useCodeEditors();
-
-	const [selectedEditor, setSelectedEditor] = useState<CodeEditorType | "">(
-		"",
-	);
-
-	useEffect(() => {
-		async function loadPreferences() {
-			const prefs = await getIntegrationPreferences();
-			if (prefs.codeEditor) setSelectedEditor(prefs.codeEditor);
-		}
-		loadPreferences();
-	}, []);
+	const { codeEditors, isLoading, selectedEditor, setCurrentEditor } =
+		useCurrentCodeEditor();
 
 	const handleEditorChange = async (value: Key | null) => {
 		if (!value) return;
 		const editor = value as CodeEditorType;
-		setSelectedEditor(editor);
-		await saveIntegrationPreferences({ codeEditor: editor || undefined });
+		await setCurrentEditor(editor || undefined);
 	};
 
 	if (isLoading) {
