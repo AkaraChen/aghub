@@ -20,6 +20,12 @@ import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useServer } from "../hooks/use-server";
 import { createApi } from "../lib/api";
 import type { TransportDto } from "../lib/api-types";
+import {
+	getKeyPairErrorMessage,
+	validateHttpUrl,
+	validateKeyPairs,
+	validatePositiveInteger,
+} from "../lib/form-utils";
 import { buildTransportFromForm } from "../lib/mcp-utils";
 import { AgentSelector } from "./agent-selector";
 import type { EnvVar } from "./env-editor";
@@ -42,55 +48,6 @@ interface CreateMcpFormValues {
 	envVars: EnvVar[];
 	url: string;
 	httpHeaders: HttpHeader[];
-}
-
-function validateKeyPairs(
-	t: ReturnType<typeof useTranslation>["t"],
-	pairs: Array<{ key: string; value: string }>,
-): Array<{ key?: string; value?: string }> {
-	const errors: Array<{ key?: string; value?: string }> = pairs.map(
-		() => ({}),
-	);
-	const seenKeys = new Map<string, number[]>();
-
-	pairs.forEach((pair, index) => {
-		const key = pair.key.trim();
-		const value = pair.value.trim();
-
-		if (!key && !value) return;
-		if (!key) {
-			errors[index].key = t("validationKeyRequired");
-			return;
-		}
-		if (!value) {
-			errors[index].value = t("validationValueRequired");
-			return;
-		}
-
-		const existing = seenKeys.get(key) ?? [];
-		existing.push(index);
-		seenKeys.set(key, existing);
-	});
-
-	for (const indices of seenKeys.values()) {
-		if (indices.length < 2) continue;
-		for (const index of indices) {
-			errors[index].key = t("validationDuplicateKey");
-		}
-	}
-
-	return errors;
-}
-
-function getKeyPairErrorMessage(
-	errors: Array<{ key?: string; value?: string }>,
-): string | undefined {
-	for (const error of errors) {
-		if (error.key) return error.key;
-		if (error.value) return error.value;
-	}
-
-	return undefined;
 }
 
 export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
@@ -441,33 +398,8 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 										name="url"
 										control={control}
 										rules={{
-											validate: (value) => {
-												if (!value.trim()) {
-													return t(
-														"validationUrlRequired",
-													);
-												}
-												try {
-													const parsed = new URL(
-														value,
-													);
-													if (
-														parsed.protocol !==
-															"http:" &&
-														parsed.protocol !==
-															"https:"
-													) {
-														return t(
-															"validationUrlProtocol",
-														);
-													}
-												} catch {
-													return t(
-														"validationUrlInvalid",
-													);
-												}
-												return true;
-											},
+											validate: (value) =>
+												validateHttpUrl(value, t),
 										}}
 										render={({ field, fieldState }) => (
 											<TextField
@@ -577,24 +509,11 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 											name="timeoutValue"
 											control={control}
 											rules={{
-												validate: (value) => {
-													if (!value.trim()) {
-														return true;
-													}
-													if (!/^\d+$/.test(value)) {
-														return t(
-															"validationTimeoutPositiveInteger",
-														);
-													}
-													return Number.parseInt(
+												validate: (value) =>
+													validatePositiveInteger(
 														value,
-														10,
-													) > 0
-														? true
-														: t(
-																"validationTimeoutPositiveInteger",
-															);
-												},
+														t,
+													),
 											}}
 											render={({ field, fieldState }) => (
 												<TextField

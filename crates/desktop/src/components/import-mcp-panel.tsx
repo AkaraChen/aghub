@@ -3,7 +3,9 @@ import {
 	Button,
 	Card,
 	Description,
+	FieldError,
 	Fieldset,
+	Form,
 	Label,
 	Modal,
 	TextArea,
@@ -11,6 +13,7 @@ import {
 } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useServer } from "../hooks/use-server";
@@ -36,6 +39,10 @@ interface McpConfigJson {
 	mcpServers?: Record<string, McpServerConfig>;
 }
 
+interface ImportMcpFormValues {
+	jsonText: string;
+}
+
 export function ImportMcpPanel({ onDone, projectPath }: ImportMcpPanelProps) {
 	const { t } = useTranslation();
 	const { baseUrl } = useServer();
@@ -48,7 +55,6 @@ export function ImportMcpPanel({ onDone, projectPath }: ImportMcpPanelProps) {
 		[availableAgents],
 	);
 
-	const [jsonText, setJsonText] = useState("");
 	const [parseError, setParseError] = useState("");
 	const [error, setError] = useState<string | null>(null);
 
@@ -63,6 +69,20 @@ export function ImportMcpPanel({ onDone, projectPath }: ImportMcpPanelProps) {
 	const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 	const [selectedAgents, setSelectedAgents] = useState<Set<string>>(() => {
 		return new Set(usableAgents[0] ? [usableAgents[0].id] : []);
+	});
+	const [confirmError, setConfirmError] = useState("");
+
+	const {
+		control,
+		handleSubmit,
+		reset,
+		formState: { isSubmitting },
+	} = useForm<ImportMcpFormValues>({
+		mode: "onSubmit",
+		reValidateMode: "onChange",
+		defaultValues: {
+			jsonText: "",
+		},
 	});
 
 	const createMutation = useMutation({
@@ -87,7 +107,7 @@ export function ImportMcpPanel({ onDone, projectPath }: ImportMcpPanelProps) {
 		},
 	});
 
-	const handleParseJson = () => {
+	const handleParseJson = ({ jsonText }: ImportMcpFormValues) => {
 		setParseError("");
 		setError(null);
 		setParsedConfig(null);
@@ -121,6 +141,7 @@ export function ImportMcpPanel({ onDone, projectPath }: ImportMcpPanelProps) {
 			}
 
 			setParsedConfig({ name: serverName, config, transportType });
+			setConfirmError("");
 			// Open confirmation dialog immediately after parsing
 			setShowConfirmDialog(true);
 		} catch {
@@ -129,7 +150,12 @@ export function ImportMcpPanel({ onDone, projectPath }: ImportMcpPanelProps) {
 	};
 
 	const handleConfirmImport = async () => {
-		if (!parsedConfig || selectedAgents.size === 0) return;
+		if (!parsedConfig) return;
+		if (selectedAgents.size === 0) {
+			setConfirmError(t("validationAgentsRequired"));
+			return;
+		}
+		setConfirmError("");
 
 		const { name, config, transportType } = parsedConfig;
 
@@ -163,6 +189,7 @@ export function ImportMcpPanel({ onDone, projectPath }: ImportMcpPanelProps) {
 				),
 			);
 			setShowConfirmDialog(false);
+			reset();
 			onDone();
 		} catch {
 			// Error is handled by onError callback
@@ -190,41 +217,84 @@ export function ImportMcpPanel({ onDone, projectPath }: ImportMcpPanelProps) {
 				</Card.Header>
 
 				<Card.Content>
-					<Fieldset>
-						<Fieldset.Group>
-							<TextField className="w-full" variant="secondary">
-								<Label>{t("jsonConfig")}</Label>
-								<TextArea
-									value={jsonText}
-									onChange={(e) =>
-										setJsonText(e.target.value)
-									}
-									placeholder={t("jsonConfigPlaceholder")}
-									className="min-h-75 font-mono text-sm"
-									variant="secondary"
+					<Form
+						validationBehavior="aria"
+						onSubmit={handleSubmit(handleParseJson)}
+					>
+						<Fieldset>
+							<Fieldset.Group>
+								<Controller
+									name="jsonText"
+									control={control}
+									rules={{
+										required: t("validationJsonRequired"),
+										validate: (value) =>
+											value.trim()
+												? true
+												: t("validationJsonRequired"),
+									}}
+									render={({ field, fieldState }) => (
+										<TextField
+											className="w-full"
+											variant="secondary"
+											isRequired
+											validationBehavior="aria"
+											isInvalid={
+												Boolean(fieldState.error) ||
+												Boolean(parseError)
+											}
+										>
+											<Label>{t("jsonConfig")}</Label>
+											<TextArea
+												value={field.value}
+												onChange={(e) => {
+													field.onChange(
+														e.target.value,
+													);
+													if (parseError) {
+														setParseError("");
+													}
+												}}
+												onBlur={field.onBlur}
+												placeholder={t(
+													"jsonConfigPlaceholder",
+												)}
+												className="min-h-75 font-mono text-sm"
+												variant="secondary"
+											/>
+											<Description>
+												{t("jsonConfigHelp")}
+											</Description>
+											{fieldState.error && (
+												<FieldError>
+													{fieldState.error.message}
+												</FieldError>
+											)}
+											{!fieldState.error &&
+												parseError && (
+													<FieldError>
+														{parseError}
+													</FieldError>
+												)}
+										</TextField>
+									)}
 								/>
-								<Description>{t("jsonConfigHelp")}</Description>
-							</TextField>
-							{parseError && (
-								<div className="text-sm text-danger">
-									{parseError}
-								</div>
-							)}
-						</Fieldset.Group>
-					</Fieldset>
+							</Fieldset.Group>
+						</Fieldset>
 
-					{/* Actions */}
-					<div className="mt-6 flex justify-end gap-2">
-						<Button variant="secondary" onPress={onDone}>
-							{t("cancel")}
-						</Button>
-						<Button
-							onPress={handleParseJson}
-							isDisabled={!jsonText.trim()}
-						>
-							{t("parseAndImport")}
-						</Button>
-					</div>
+						<div className="mt-6 flex justify-end gap-2">
+							<Button
+								type="button"
+								variant="secondary"
+								onPress={onDone}
+							>
+								{t("cancel")}
+							</Button>
+							<Button type="submit" isDisabled={isSubmitting}>
+								{t("parseAndImport")}
+							</Button>
+						</div>
+					</Form>
 				</Card.Content>
 			</Card>
 
@@ -279,12 +349,18 @@ export function ImportMcpPanel({ onDone, projectPath }: ImportMcpPanelProps) {
 										<AgentSelector
 											agents={usableAgents}
 											selectedKeys={selectedAgents}
-											onSelectionChange={
-												setSelectedAgents
-											}
+											onSelectionChange={(keys) => {
+												setSelectedAgents(keys);
+												if (keys.size > 0) {
+													setConfirmError("");
+												}
+											}}
 											label={t("selectAgentsForMcp")}
 											emptyMessage={t("noTargetAgents")}
 											variant="secondary"
+											errorMessage={
+												confirmError || undefined
+											}
 										/>
 									</div>
 								</div>
@@ -292,6 +368,7 @@ export function ImportMcpPanel({ onDone, projectPath }: ImportMcpPanelProps) {
 						</Modal.Body>
 						<Modal.Footer>
 							<Button
+								type="button"
 								variant="secondary"
 								onPress={() => setShowConfirmDialog(false)}
 							>
@@ -299,10 +376,7 @@ export function ImportMcpPanel({ onDone, projectPath }: ImportMcpPanelProps) {
 							</Button>
 							<Button
 								onPress={handleConfirmImport}
-								isDisabled={
-									selectedAgents.size === 0 ||
-									createMutation.isPending
-								}
+								isDisabled={createMutation.isPending}
 							>
 								{createMutation.isPending
 									? t("importing")

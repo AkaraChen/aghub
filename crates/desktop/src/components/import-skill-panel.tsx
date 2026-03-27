@@ -3,14 +3,17 @@ import {
 	Alert,
 	Button,
 	Card,
+	FieldError,
 	Fieldset,
 	Form,
 	Input,
 	Label,
+	TextField,
 } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { open } from "@tauri-apps/plugin-dialog";
 import { useMemo, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useServer } from "../hooks/use-server";
@@ -21,6 +24,11 @@ import { AgentSelector } from "./agent-selector";
 interface ImportSkillPanelProps {
 	onDone: () => void;
 	projectPath?: string;
+}
+
+interface ImportSkillFormValues {
+	importPath: string;
+	selectedAgents: string[];
 }
 
 export function ImportSkillPanel({
@@ -41,12 +49,21 @@ export function ImportSkillPanel({
 		[availableAgents],
 	);
 
-	const [importPath, setImportPath] = useState("");
-	const [importAgents, setImportAgents] = useState<Set<string>>(() => {
-		return new Set(skillAgents[0] ? [skillAgents[0].id] : []);
-	});
-
 	const [error, setError] = useState<string | null>(null);
+
+	const {
+		control,
+		handleSubmit,
+		setValue,
+		formState: { isSubmitting },
+	} = useForm<ImportSkillFormValues>({
+		mode: "onSubmit",
+		reValidateMode: "onChange",
+		defaultValues: {
+			importPath: "",
+			selectedAgents: skillAgents[0] ? [skillAgents[0].id] : [],
+		},
+	});
 
 	const invalidateCache = () => {
 		queryClient.invalidateQueries({ queryKey: ["skills"] });
@@ -72,17 +89,14 @@ export function ImportSkillPanel({
 		onSuccess: invalidateCache,
 	});
 
-	const handleImportClick = async () => {
-		if (!importPath.trim() || importAgents.size === 0) return;
-
+	const handleImportClick = async (values: ImportSkillFormValues) => {
 		const body: ImportSkillRequest = {
-			path: importPath.trim(),
+			path: values.importPath.trim(),
 		};
 
-		const agentsToImport = [...importAgents];
 		try {
 			await Promise.all(
-				agentsToImport.map((agent) =>
+				values.selectedAgents.map((agent) =>
 					importMutation.mutateAsync({ agent, body }),
 				),
 			);
@@ -105,23 +119,22 @@ export function ImportSkillPanel({
 			],
 		});
 		if (selected && !Array.isArray(selected)) {
-			setImportPath(selected);
+			setValue("importPath", selected, {
+				shouldDirty: true,
+				shouldValidate: true,
+			});
 		}
 	};
 
 	const handleSelectFolder = async () => {
 		const selected = await open({ directory: true, multiple: false });
 		if (selected && !Array.isArray(selected)) {
-			setImportPath(selected);
+			setValue("importPath", selected, {
+				shouldDirty: true,
+				shouldValidate: true,
+			});
 		}
 	};
-
-	const isImportValid = useMemo(() => {
-		if (!importPath.trim()) return false;
-		if (importAgents.size === 0) return false;
-		if (skillAgents.length === 0) return false;
-		return true;
-	}, [importPath, importAgents.size, skillAgents.length]);
 
 	return (
 		<div className="h-full max-w-3xl overflow-y-auto p-6">
@@ -144,68 +157,134 @@ export function ImportSkillPanel({
 				</Card.Header>
 
 				<Card.Content>
-					<Form className="space-y-4">
+					<Form
+						className="space-y-4"
+						validationBehavior="aria"
+						onSubmit={handleSubmit(handleImportClick)}
+					>
 						<Fieldset>
 							<Fieldset.Group>
-								<div className="flex w-full flex-col gap-2">
-									<Label>{t("selectFileOrFolder")}</Label>
-									<div className="flex w-full items-center gap-2">
-										<Input
-											className="min-w-0 flex-1"
-											value={importPath}
-											readOnly
-											placeholder={t("selectedPath")}
-											variant="secondary"
-										/>
-										<div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-											<Button
-												variant="secondary"
-												onPress={handleSelectFile}
-											>
-												<DocumentIcon
-													className="size-4"
-													aria-hidden="true"
+								<Controller
+									name="importPath"
+									control={control}
+									rules={{
+										required: t("validationPathRequired"),
+										validate: (value) =>
+											value.trim()
+												? true
+												: t("validationPathRequired"),
+									}}
+									render={({ field, fieldState }) => (
+										<TextField
+											className="w-full"
+											isRequired
+											validationBehavior="aria"
+											isInvalid={Boolean(
+												fieldState.error,
+											)}
+										>
+											<Label>
+												{t("selectFileOrFolder")}
+											</Label>
+											<div className="flex w-full items-center gap-2">
+												<Input
+													className="min-w-0 flex-1"
+													value={field.value}
+													readOnly
+													placeholder={t(
+														"selectedPath",
+													)}
+													variant="secondary"
 												/>
-												{t("file")}
-											</Button>
-											<Button
-												variant="secondary"
-												onPress={handleSelectFolder}
-											>
-												<FolderOpenIcon
-													className="size-4"
-													aria-hidden="true"
-												/>
-												{t("folder")}
-											</Button>
-										</div>
-									</div>
-								</div>
+												<div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+													<Button
+														type="button"
+														variant="secondary"
+														onPress={
+															handleSelectFile
+														}
+													>
+														<DocumentIcon
+															className="size-4"
+															aria-hidden="true"
+														/>
+														{t("file")}
+													</Button>
+													<Button
+														type="button"
+														variant="secondary"
+														onPress={
+															handleSelectFolder
+														}
+													>
+														<FolderOpenIcon
+															className="size-4"
+															aria-hidden="true"
+														/>
+														{t("folder")}
+													</Button>
+												</div>
+											</div>
+											{fieldState.error && (
+												<FieldError>
+													{fieldState.error.message}
+												</FieldError>
+											)}
+										</TextField>
+									)}
+								/>
 							</Fieldset.Group>
 						</Fieldset>
 
 						<Fieldset>
 							<Fieldset.Group>
-								<AgentSelector
-									agents={skillAgents}
-									selectedKeys={importAgents}
-									onSelectionChange={setImportAgents}
-									label={t("targetAgent")}
-									emptyMessage={t("noAgentsAvailable")}
-									emptyHelpText={t("noAgentsAvailableHelp")}
-									variant="secondary"
+								<Controller
+									name="selectedAgents"
+									control={control}
+									rules={{
+										validate: (value) =>
+											value.length > 0
+												? true
+												: t("validationAgentsRequired"),
+									}}
+									render={({ field, fieldState }) => (
+										<AgentSelector
+											agents={skillAgents}
+											selectedKeys={new Set(field.value)}
+											onSelectionChange={(keys) =>
+												field.onChange([...keys])
+											}
+											label={t("targetAgent")}
+											emptyMessage={t(
+												"noAgentsAvailable",
+											)}
+											emptyHelpText={t(
+												"noAgentsAvailableHelp",
+											)}
+											variant="secondary"
+											errorMessage={
+												fieldState.error?.message
+											}
+										/>
+									)}
 								/>
 							</Fieldset.Group>
 						</Fieldset>
 
 						<div className="flex justify-end gap-2 pt-2">
-							<Button variant="secondary" onPress={onDone}>
+							<Button
+								type="button"
+								variant="secondary"
+								onPress={onDone}
+							>
 								{t("cancel")}
 							</Button>
 							<Button
-								onPress={handleImportClick}
+								type="submit"
 								isDisabled={
-									!isImportValid || importMutation.isPending
+									importMutation.isPending ||
+									isSubmitting ||
+									skillAgents.length === 0
 								}
 							>
 								{importMutation.isPending
