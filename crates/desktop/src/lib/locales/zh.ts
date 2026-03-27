@@ -237,9 +237,6 @@ export default {
 	projectNotFound: "项目未找到",
 	mcps: "MCP",
 	projectStats: "项目统计",
-	actions: "操作",
-	downloadConfig: "下载配置",
-	downloadSkills: "下载技能",
 
 	// Project Resources
 	searchResources: "搜索资源...",

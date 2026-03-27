@@ -240,9 +240,6 @@ export default {
 	projectNotFound: "Project not found",
 	mcps: "MCPs",
 	projectStats: "Project Statistics",
-	actions: "Actions",
-	downloadConfig: "Download Config",
-	downloadSkills: "Download Skills",
 
 	// Project Resources
 	searchResources: "Search resources...",
