@@ -7,6 +7,7 @@ pub struct CreateSkillRequest {
 	pub description: Option<String>,
 	pub author: Option<String>,
 	pub version: Option<String>,
+	pub content: Option<String>,
 	pub tools: Option<Vec<String>>,
 }
 
@@ -23,6 +24,7 @@ impl From<CreateSkillRequest> for Skill {
 			description: req.description,
 			author: req.author,
 			version: req.version,
+			content: req.content,
 			tools: req.tools.unwrap_or_default(),
 			source_path: None,
 			canonical_path: None,
@@ -37,6 +39,7 @@ pub struct UpdateSkillRequest {
 	pub description: Option<String>,
 	pub author: Option<String>,
 	pub version: Option<String>,
+	pub content: Option<String>,
 	pub tools: Option<Vec<String>>,
 	pub enabled: Option<bool>,
 }
@@ -49,6 +52,7 @@ impl UpdateSkillRequest {
 			description: self.description.or(existing.description),
 			author: self.author.or(existing.author),
 			version: self.version.or(existing.version),
+			content: self.content.or(existing.content),
 			tools: self.tools.unwrap_or(existing.tools),
 			source_path: existing.source_path,
 			canonical_path: existing.canonical_path,

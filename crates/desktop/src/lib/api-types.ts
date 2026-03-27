@@ -51,6 +51,7 @@ export interface CreateSkillRequest {
 	description?: string;
 	author?: string;
 	version?: string;
+	content?: string;
 	tools?: string[];
 }
 

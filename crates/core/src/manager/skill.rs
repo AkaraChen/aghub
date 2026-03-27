@@ -351,13 +351,14 @@ fn serialize_frontmatter(skill: &Skill) -> String {
 }
 
 /// Format a Skill as a valid SKILL.md, preserving existing body content
+/// unless new body content is explicitly supplied.
 fn format_skill(skill: &Skill, existing_body: Option<&str>) -> String {
 	let yaml = serialize_frontmatter(skill);
 	let mut out = String::from("---\n");
 	out.push_str(&yaml);
 	out.push_str("---\n");
 
-	if let Some(body) = existing_body {
+	if let Some(body) = skill.content.as_deref().or(existing_body) {
 		out.push_str(body);
 	} else {
 		out.push_str(&format!("\n# {}\n\n", skill.name));

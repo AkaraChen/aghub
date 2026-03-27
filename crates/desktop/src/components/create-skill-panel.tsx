@@ -30,6 +30,7 @@ interface CreateSkillFormValues {
 	name: string;
 	description: string;
 	author: string;
+	content: string;
 	toolsInput: string;
 	selectedAgents: string[];
 }
@@ -65,6 +66,7 @@ export function CreateSkillPanel({
 			name: "",
 			description: "",
 			author: "",
+			content: "",
 			toolsInput: "",
 			selectedAgents: skillAgents[0] ? [skillAgents[0].id] : [],
 		},
@@ -102,8 +104,9 @@ export function CreateSkillPanel({
 
 		const body: CreateSkillRequest = {
 			name: values.name.trim(),
-			description: values.description.trim() || undefined,
+			description: values.description.trim(),
 			author: values.author.trim() || undefined,
+			content: values.content.trim(),
 			tools: tools.length > 0 ? tools : undefined,
 		};
 
@@ -195,8 +198,26 @@ export function CreateSkillPanel({
 								<Controller
 									name="description"
 									control={control}
-									render={({ field }) => (
-										<TextField className="w-full">
+									rules={{
+										required: t(
+											"validationDescriptionRequired",
+										),
+										validate: (value) =>
+											value.trim()
+												? true
+												: t(
+														"validationDescriptionRequired",
+													),
+									}}
+									render={({ field, fieldState }) => (
+										<TextField
+											className="w-full"
+											isRequired
+											validationBehavior="aria"
+											isInvalid={Boolean(
+												fieldState.error,
+											)}
+										>
 											<Label>{t("description")}</Label>
 											<TextArea
 												value={field.value}
@@ -212,9 +233,98 @@ export function CreateSkillPanel({
 												className="min-h-24"
 												variant="secondary"
 											/>
+											{fieldState.error && (
+												<FieldError>
+													{fieldState.error.message}
+												</FieldError>
+											)}
 										</TextField>
 									)}
 								/>
+								<Controller
+									name="content"
+									control={control}
+									rules={{
+										required: t(
+											"validationContentRequired",
+										),
+										validate: (value) =>
+											value.trim()
+												? true
+												: t(
+														"validationContentRequired",
+													),
+									}}
+									render={({ field, fieldState }) => (
+										<TextField
+											className="w-full"
+											isRequired
+											validationBehavior="aria"
+											isInvalid={Boolean(
+												fieldState.error,
+											)}
+										>
+											<Label>{t("content")}</Label>
+											<TextArea
+												value={field.value}
+												onChange={(e) =>
+													field.onChange(
+														e.target.value,
+													)
+												}
+												onBlur={field.onBlur}
+												placeholder={t(
+													"skillContentPlaceholder",
+												)}
+												className="min-h-48 font-mono"
+												variant="secondary"
+											/>
+											<Description>
+												{t("skillContentHelp")}
+											</Description>
+											{fieldState.error && (
+												<FieldError>
+													{fieldState.error.message}
+												</FieldError>
+											)}
+										</TextField>
+									)}
+								/>
+								<Controller
+									name="selectedAgents"
+									control={control}
+									rules={{
+										validate: (value) =>
+											value.length > 0
+												? true
+												: t("validationAgentsRequired"),
+									}}
+									render={({ field, fieldState }) => (
+										<AgentSelector
+											agents={skillAgents}
+											selectedKeys={new Set(field.value)}
+											onSelectionChange={(keys) =>
+												field.onChange([...keys])
+											}
+											label={t("targetAgent")}
+											emptyMessage={t(
+												"noAgentsAvailable",
+											)}
+											emptyHelpText={t(
+												"noAgentsAvailableHelp",
+											)}
+											variant="secondary"
+											errorMessage={
+												fieldState.error?.message
+											}
+										/>
+									)}
+								/>
+							</Fieldset.Group>
+						</Fieldset>
+
+						<Fieldset>
+							<Fieldset.Group>
 								<Controller
 									name="author"
 									control={control}
@@ -260,41 +370,6 @@ export function CreateSkillPanel({
 												{t("csvToolsHelp")}
 											</Description>
 										</TextField>
-									)}
-								/>
-							</Fieldset.Group>
-						</Fieldset>
-
-						<Fieldset>
-							<Fieldset.Group>
-								<Controller
-									name="selectedAgents"
-									control={control}
-									rules={{
-										validate: (value) =>
-											value.length > 0
-												? true
-												: t("validationAgentsRequired"),
-									}}
-									render={({ field, fieldState }) => (
-										<AgentSelector
-											agents={skillAgents}
-											selectedKeys={new Set(field.value)}
-											onSelectionChange={(keys) =>
-												field.onChange([...keys])
-											}
-											label={t("targetAgent")}
-											emptyMessage={t(
-												"noAgentsAvailable",
-											)}
-											emptyHelpText={t(
-												"noAgentsAvailableHelp",
-											)}
-											variant="secondary"
-											errorMessage={
-												fieldState.error?.message
-											}
-										/>
 									)}
 								/>
 							</Fieldset.Group>

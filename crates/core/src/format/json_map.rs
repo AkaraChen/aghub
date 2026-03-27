@@ -279,6 +279,7 @@ mod tests {
 				description: Some("A test skill".to_string()),
 				author: Some("test".to_string()),
 				version: Some("1.0.0".to_string()),
+				content: None,
 				tools: vec!["tool1".to_string()],
 				source_path: None,
 				canonical_path: None,

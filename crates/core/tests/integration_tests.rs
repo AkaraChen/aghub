@@ -54,6 +54,7 @@ fn create_test_skill(name: &str) -> Skill {
 		description: Some(format!("Test skill: {}", name)),
 		author: Some("test-author".to_string()),
 		version: Some("1.0.0".to_string()),
+		content: None,
 		tools: vec!["tool1".to_string(), "tool2".to_string()],
 		source_path: None,
 		canonical_path: None,

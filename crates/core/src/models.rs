@@ -34,6 +34,8 @@ pub struct Skill {
 	pub description: Option<String>,
 	pub author: Option<String>,
 	pub version: Option<String>,
+	#[serde(skip)]
+	pub content: Option<String>,
 	/// List of tool names this skill provides
 	#[serde(default)]
 	pub tools: Vec<String>,
@@ -57,6 +59,7 @@ impl Skill {
 			description: None,
 			author: None,
 			version: None,
+			content: None,
 			tools: Vec::new(),
 			source_path: None,
 			canonical_path: None,

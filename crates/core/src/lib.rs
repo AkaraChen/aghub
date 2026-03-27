@@ -49,6 +49,7 @@ pub fn convert_skill(skill_pkg: skill::Skill) -> models::Skill {
 		description: Some(skill_pkg.description),
 		author: skill_pkg.author,
 		version: skill_pkg.version,
+		content: None,
 		tools: skill_pkg
 			.allowed_tools
 			.map(|t| t.split(',').map(|s| s.trim().to_string()).collect())

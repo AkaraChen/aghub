@@ -89,12 +89,17 @@ export default {
 	installFromMarket: "Install from Market",
 	skillName: "Skill Name",
 	skillCreated: "Skill created successfully",
+	content: "Content",
 	requiredTools: "Required Tools",
 	csvToolsHelp:
 		"List the tools this skill depends on, separated by commas (e.g., bash, jq, git)",
 	skillNamePlaceholder: "e.g., format-code",
 	descriptionPlaceholder: "Enter a brief description for this skill...",
 	authorPlaceholder: "Enter the author's name...",
+	skillContentPlaceholder:
+		"Enter the SKILL.md body, such as instructions, examples, and usage notes...",
+	skillContentHelp:
+		"This becomes the body of SKILL.md after the frontmatter.",
 	toolsPlaceholder: "e.g., bash, rg, jq",
 	targetAgent: "Target Agent",
 	searchMarket: "Market Search",
@@ -156,6 +161,8 @@ export default {
 	validationValueRequired: "Enter a value.",
 	validationDuplicateKey: "Each key must be unique.",
 	validationSkillNameRequired: "Enter a skill name.",
+	validationDescriptionRequired: "Enter a description.",
+	validationContentRequired: "Enter skill content.",
 	validationPathRequired: "Select a file or folder first.",
 	validationJsonRequired: "Paste a JSON configuration first.",
 	validationProjectNameRequired: "Enter a project name.",
