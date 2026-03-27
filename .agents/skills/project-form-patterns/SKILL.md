@@ -47,10 +47,14 @@ Follow these rules when building forms in this project.
 </TextField>
 ```
 
+- For non-form or custom composite controls, prefer HeroUI `ErrorMessage` instead of hand-rolled error text.
+- Use `ErrorMessage` for collection-style or custom editors that are not true form fields, including key/value editors, tag selectors, and similar composite controls.
+
 ## Custom Editors
 
 - Custom widgets like `AgentSelector`, `EnvEditor`, `HttpHeaderEditor`, and `KeyPairEditor` should still be registered in RHF through `Controller`.
 - For custom editors that manage arrays or compound values, compute validation from the current field value and surface one aggregated error below the editor when possible.
+- For that aggregated error, prefer HeroUI `ErrorMessage`.
 - Do not inject per-row error UI into tight horizontal layouts unless the design explicitly calls for it.
 
 ## Key/Value Editors
@@ -60,6 +64,7 @@ Follow these rules when building forms in this project.
   - one delete button
   - no extra wrappers that change flex behavior unless necessary
 - Prefer aggregate error text below the whole editor over inline row errors. This avoids breaking spacing and alignment.
+- Implement that aggregate error with HeroUI `ErrorMessage`, not a custom `<p>` block.
 - If you must show row-level issues, redesign the layout first; do not bolt error blocks into a row that was designed as a single-line control.
 
 ## Practical Rules

@@ -1,5 +1,5 @@
 import { PlusIcon, XMarkIcon } from "@heroicons/react/24/solid";
-import { Button, Input } from "@heroui/react";
+import { Button, ErrorMessage, Input } from "@heroui/react";
 import { produce } from "immer";
 import { useTranslation } from "react-i18next";
 import type { KeyPair } from "../lib/key-pair-utils";
@@ -134,9 +134,7 @@ export function KeyPairEditor({
 				<PlusIcon className="size-4" />
 				{t("keyPairEditor.addPair")}
 			</Button>
-			{errorMessage && (
-				<p className="text-sm text-danger">{errorMessage}</p>
-			)}
+			{errorMessage && <ErrorMessage>{errorMessage}</ErrorMessage>}
 		</div>
 	);
 }
