@@ -249,7 +249,7 @@ export function ManageAgentsDialog({
 						<Modal.Heading>{t("manageAgents")}</Modal.Heading>
 					</Modal.Header>
 
-					<Modal.Body>
+					<Modal.Body className="p-4">
 						{!hasValidGroup ? (
 							<p className="text-sm text-muted">
 								{t("invalidConfiguration")}
