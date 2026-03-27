@@ -229,7 +229,7 @@ export default function SkillsShPage() {
 							</div>
 						</div>
 
-						<div className="flex-1 overflow-hidden">
+						<div className="flex-1 overflow-auto px-6">
 							{isSearching ? (
 								<div className="flex h-full items-center justify-center">
 									<Spinner size="lg" />
@@ -241,11 +241,8 @@ export default function SkillsShPage() {
 									</p>
 								</div>
 							) : (
-								<div className="flex h-full flex-col overflow-hidden">
-									<Table
-										variant="secondary"
-										className="flex-1"
-									>
+								<>
+									<Table variant="secondary">
 										<Table.ScrollContainer>
 											<Table.Content
 												aria-label={t("searchResults")}
@@ -373,7 +370,7 @@ export default function SkillsShPage() {
 											</Pagination>
 										</div>
 									)}
-								</div>
+								</>
 							)}
 						</div>
 					</>
