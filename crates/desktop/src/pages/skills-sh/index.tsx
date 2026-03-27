@@ -1,5 +1,5 @@
 import { Button, Modal, SearchField, Spinner, Tooltip } from "@heroui/react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -13,6 +13,8 @@ import { createApi } from "../../lib/api";
 import type { MarketSkill } from "../../lib/api-types";
 
 const BATCH_SIZE = 20;
+const FETCH_SIZE = 100;
+const MAX_TOTAL = 1000;
 const ROW_HEIGHT = 48;
 
 const tableComponents: TableComponents<MarketSkill> = {
@@ -78,14 +80,38 @@ export default function SkillsShPage() {
 	);
 
 	const submittedQuery = urlQuery ?? "";
-	const { data: searchResults = [], isFetching: isSearching } = useQuery<
-		MarketSkill[]
-	>({
-		queryKey: ["market", "search", submittedQuery],
-		queryFn: () => api.market.search(submittedQuery, 1000),
-		enabled: submittedQuery.length >= 2,
-		staleTime: 60_000,
-	});
+	const { data, isFetching, isFetchingNextPage, hasNextPage, fetchNextPage } =
+		useInfiniteQuery({
+			queryKey: ["market", "search", submittedQuery],
+			queryFn: async ({ pageParam }: { pageParam: number }) => {
+				const offset = pageParam;
+				const limit = Math.min(FETCH_SIZE, MAX_TOTAL - offset);
+				const actualLimit = offset + limit;
+				const results = await api.market.search(
+					submittedQuery,
+					actualLimit,
+				);
+				return results.slice(offset, actualLimit);
+			},
+			initialPageParam: 0,
+			getNextPageParam: (
+				lastPage: MarketSkill[],
+				allPages: MarketSkill[][],
+			) => {
+				const totalFetched = allPages.reduce(
+					(sum, page) => sum + page.length,
+					0,
+				);
+				if (lastPage.length < FETCH_SIZE || totalFetched >= MAX_TOTAL) {
+					return undefined;
+				}
+				return totalFetched;
+			},
+			enabled: submittedQuery.length >= 2,
+			staleTime: 60_000,
+		});
+
+	const searchResults = useMemo(() => data?.pages.flat() ?? [], [data]);
 
 	const displayedResults = useMemo(
 		() => searchResults.slice(0, visibleCount),
@@ -95,12 +121,24 @@ export default function SkillsShPage() {
 	const hasMore = visibleCount < searchResults.length;
 
 	const handleEndReached = useCallback(() => {
-		if (hasMore && !isSearching) {
+		if (hasMore && !isFetching) {
 			setVisibleCount((c) =>
 				Math.min(c + BATCH_SIZE, searchResults.length),
 			);
+			const remaining = searchResults.length - visibleCount;
+			if (remaining < FETCH_SIZE && hasNextPage && !isFetchingNextPage) {
+				fetchNextPage();
+			}
 		}
-	}, [hasMore, isSearching, searchResults.length]);
+	}, [
+		hasMore,
+		isFetching,
+		searchResults.length,
+		visibleCount,
+		hasNextPage,
+		isFetchingNextPage,
+		fetchNextPage,
+	]);
 
 	const handleSearch = () => {
 		if (searchQuery.trim().length >= 2) {
@@ -264,7 +302,7 @@ export default function SkillsShPage() {
 						</div>
 					</div>
 
-					{isSearching && searchResults.length === 0 ? (
+					{isFetching && searchResults.length === 0 ? (
 						<div className="flex items-center justify-center py-12">
 							<Spinner size="lg" />
 						</div>
@@ -330,7 +368,7 @@ export default function SkillsShPage() {
 									</tr>
 								</thead>
 								<tfoot>
-									{isSearching && hasMore && (
+									{isFetchingNextPage && (
 										<tr>
 											<td
 												colSpan={4}
