@@ -57,7 +57,7 @@ export default function SkillsShPage() {
 		MarketSkill[]
 	>({
 		queryKey: ["market", "search", submittedQuery],
-		queryFn: () => api.market.search(submittedQuery, 50),
+		queryFn: () => api.market.search(submittedQuery, 1000),
 		enabled: submittedQuery.length >= 2,
 		staleTime: 60_000,
 	});
@@ -311,23 +311,77 @@ export default function SkillsShPage() {
 													<Pagination.PreviousIcon />
 												</Pagination.Previous>
 											</Pagination.Item>
-											{Array.from(
-												{ length: totalPages },
-												(_, i) => i + 1,
-											).map((pageNum) => (
-												<Pagination.Item key={pageNum}>
-													<Pagination.Link
-														isActive={
-															pageNum === page
-														}
-														onPress={() =>
-															setPage(pageNum)
-														}
-													>
-														{pageNum}
-													</Pagination.Link>
-												</Pagination.Item>
-											))}
+											{(() => {
+												const pages: (
+													| number
+													| string
+												)[] = [];
+												const showEllipsis =
+													totalPages > 7;
+												if (!showEllipsis) {
+													for (
+														let i = 1;
+														i <= totalPages;
+														i++
+													) {
+														pages.push(i);
+													}
+												} else {
+													pages.push(1);
+													if (page > 3) {
+														pages.push(
+															"ellipsis-start",
+														);
+													}
+													const start = Math.max(
+														2,
+														page - 1,
+													);
+													const end = Math.min(
+														totalPages - 1,
+														page + 1,
+													);
+													for (
+														let i = start;
+														i <= end;
+														i++
+													) {
+														pages.push(i);
+													}
+													if (page < totalPages - 2) {
+														pages.push(
+															"ellipsis-end",
+														);
+													}
+													pages.push(totalPages);
+												}
+												return pages.map((p) =>
+													typeof p === "string" ? (
+														<Pagination.Item
+															key={p}
+														>
+															<span className="px-2 text-muted">
+																...
+															</span>
+														</Pagination.Item>
+													) : (
+														<Pagination.Item
+															key={p}
+														>
+															<Pagination.Link
+																isActive={
+																	p === page
+																}
+																onPress={() =>
+																	setPage(p)
+																}
+															>
+																{p}
+															</Pagination.Link>
+														</Pagination.Item>
+													),
+												);
+											})()}
 											<Pagination.Item>
 												<Pagination.Next
 													isDisabled={
