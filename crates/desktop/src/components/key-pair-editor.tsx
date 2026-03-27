@@ -11,6 +11,7 @@ interface KeyPairEditorProps {
 	keyPlaceholder?: string;
 	valuePlaceholder?: string;
 	variant?: "primary" | "secondary";
+	errors?: Array<{ key?: string; value?: string }>;
 }
 
 export function KeyPairEditor({
@@ -19,6 +20,7 @@ export function KeyPairEditor({
 	keyPlaceholder,
 	valuePlaceholder,
 	variant,
+	errors = [],
 }: KeyPairEditorProps) {
 	const { t } = useTranslation();
 
@@ -73,52 +75,82 @@ export function KeyPairEditor({
 
 	return (
 		<div className="space-y-2">
-			{displayPairs.map((pair) => (
-				<div key={pair.id} className="flex items-start gap-2">
-					<Input
-						placeholder={
-							keyPlaceholder || t("keyPairEditor.keyPlaceholder")
-						}
-						aria-label={
-							keyPlaceholder || t("keyPairEditor.keyPlaceholder")
-						}
-						value={pair.key}
-						onChange={(e) =>
-							handleChange(pair.id, "key", e.target.value)
-						}
-						className="flex-1"
-						variant={variant}
-					/>
-					<Input
-						placeholder={
-							valuePlaceholder ||
-							t("keyPairEditor.valuePlaceholder")
-						}
-						aria-label={
-							valuePlaceholder ||
-							t("keyPairEditor.valuePlaceholder")
-						}
-						value={pair.value}
-						onChange={(e) =>
-							handleChange(pair.id, "value", e.target.value)
-						}
-						className="flex-1"
-						variant={variant}
-					/>
-					<Button
-						variant="ghost"
-						size="sm"
-						isIconOnly
-						aria-label={t("remove")}
-						onPress={() => handleRemove(pair.id)}
-						className="mt-1"
-						isDisabled={value.length === 0}
-					>
-						<XMarkIcon className="size-4" />
-					</Button>
+			{displayPairs.map((pair, index) => (
+				<div key={pair.id} className="space-y-1">
+					<div className="flex items-start gap-2">
+						<div className="flex-1">
+							<Input
+								placeholder={
+									keyPlaceholder ||
+									t("keyPairEditor.keyPlaceholder")
+								}
+								aria-label={
+									keyPlaceholder ||
+									t("keyPairEditor.keyPlaceholder")
+								}
+								value={pair.key}
+								onChange={(e) =>
+									handleChange(pair.id, "key", e.target.value)
+								}
+								className="flex-1"
+								variant={variant}
+								isInvalid={Boolean(errors[index]?.key)}
+							/>
+							{errors[index]?.key && (
+								<p className="mt-1 text-sm text-danger">
+									{errors[index]?.key}
+								</p>
+							)}
+						</div>
+						<div className="flex-1">
+							<Input
+								placeholder={
+									valuePlaceholder ||
+									t("keyPairEditor.valuePlaceholder")
+								}
+								aria-label={
+									valuePlaceholder ||
+									t("keyPairEditor.valuePlaceholder")
+								}
+								value={pair.value}
+								onChange={(e) =>
+									handleChange(
+										pair.id,
+										"value",
+										e.target.value,
+									)
+								}
+								className="flex-1"
+								variant={variant}
+								isInvalid={Boolean(errors[index]?.value)}
+							/>
+							{errors[index]?.value && (
+								<p className="mt-1 text-sm text-danger">
+									{errors[index]?.value}
+								</p>
+							)}
+						</div>
+						<Button
+							type="button"
+							variant="ghost"
+							size="sm"
+							isIconOnly
+							aria-label={t("remove")}
+							onPress={() => handleRemove(pair.id)}
+							className="mt-1"
+							isDisabled={value.length === 0}
+						>
+							<XMarkIcon className="size-4" />
+						</Button>
+					</div>
 				</div>
 			))}
-			<Button variant="secondary" size="sm" onPress={handleAdd}>
+			<Button
+				type="button"
+				variant="secondary"
+				size="sm"
+				onPress={handleAdd}
+			>
 				<PlusIcon className="size-4" />
 				{t("keyPairEditor.addPair")}
 			</Button>

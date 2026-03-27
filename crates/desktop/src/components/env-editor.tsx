@@ -12,9 +12,15 @@ interface EnvEditorProps {
 	value: EnvVar[];
 	onChange: (value: EnvVar[]) => void;
 	variant?: "primary" | "secondary";
+	errors?: Array<{ key?: string; value?: string }>;
 }
 
-export function EnvEditor({ value, onChange, variant }: EnvEditorProps) {
+export function EnvEditor({
+	value,
+	onChange,
+	variant,
+	errors,
+}: EnvEditorProps) {
 	const { t } = useTranslation();
 
 	// Import from clipboard
@@ -41,8 +47,10 @@ export function EnvEditor({ value, onChange, variant }: EnvEditorProps) {
 				keyPlaceholder={t("envEditor.keyPlaceholder")}
 				valuePlaceholder={t("envEditor.valuePlaceholder")}
 				variant={variant}
+				errors={errors}
 			/>
 			<Button
+				type="button"
 				variant="ghost"
 				size="sm"
 				onPress={handleImportFromClipboard}

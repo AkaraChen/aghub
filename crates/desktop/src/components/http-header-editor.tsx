@@ -8,12 +8,14 @@ interface HttpHeaderEditorProps {
 	value: HttpHeader[];
 	onChange: (value: HttpHeader[]) => void;
 	variant?: "primary" | "secondary";
+	errors?: Array<{ key?: string; value?: string }>;
 }
 
 export function HttpHeaderEditor({
 	value,
 	onChange,
 	variant,
+	errors,
 }: HttpHeaderEditorProps) {
 	const { t } = useTranslation();
 
@@ -24,6 +26,7 @@ export function HttpHeaderEditor({
 			keyPlaceholder={t("httpHeaderEditor.keyPlaceholder")}
 			valuePlaceholder={t("httpHeaderEditor.valuePlaceholder")}
 			variant={variant}
+			errors={errors}
 		/>
 	);
 }

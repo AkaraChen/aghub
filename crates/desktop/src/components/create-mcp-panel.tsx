@@ -4,6 +4,7 @@ import {
 	Card,
 	Description,
 	Disclosure,
+	FieldError,
 	Fieldset,
 	Form,
 	Input,
@@ -13,12 +14,22 @@ import {
 	TextField,
 } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { ChangeEvent, FormEvent, Key } from "react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useServer } from "../hooks/use-server";
 import { createApi } from "../lib/api";
 import type { TransportDto } from "../lib/api-types";
+import {
+	hasMcpFormErrors,
+	type McpFormErrors,
+	validateCommand,
+	validateMcpForm,
+	validateName,
+	validateTimeout,
+	validateUrl,
+} from "../lib/mcp-form-validation";
 import { buildTransportFromForm } from "../lib/mcp-utils";
 import { AgentSelector } from "./agent-selector";
 import type { EnvVar } from "./env-editor";
@@ -59,6 +70,18 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 	const [url, setUrl] = useState("");
 	const [httpHeaders, setHttpHeaders] = useState<HttpHeader[]>([]);
 	const [error, setError] = useState<string | null>(null);
+	const [validationErrors, setValidationErrors] = useState(() =>
+		validateMcpForm(t, {
+			name: "",
+			transportType: "stdio",
+			command: "",
+			url: "",
+			timeoutValue: "",
+			selectedAgents,
+			envVars: [],
+			httpHeaders: [],
+		}),
+	);
 
 	const createMutation = useMutation({
 		onError: (error) => {
@@ -94,7 +117,18 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 	};
 
 	const handleCreate = async () => {
-		if (!name.trim()) return;
+		const nextErrors = validateMcpForm(t, {
+			name,
+			transportType,
+			command,
+			url,
+			timeoutValue,
+			selectedAgents,
+			envVars,
+			httpHeaders,
+		});
+		setValidationErrors(nextErrors);
+		if (hasMcpFormErrors(nextErrors)) return;
 
 		const transport = buildTransport();
 		if (!transport) return;
@@ -122,18 +156,29 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 	};
 
 	const isValid = useMemo(() => {
-		if (!name.trim()) return false;
-		if (transportType === "stdio" && !command.trim()) return false;
-		if (transportType !== "stdio" && !url.trim()) return false;
-		if (selectedAgents.size === 0) return false;
 		if (usableAgents.length === 0) return false;
-		return true;
+		return !hasMcpFormErrors(
+			validateMcpForm(t, {
+				name,
+				transportType,
+				command,
+				url,
+				timeoutValue,
+				selectedAgents,
+				envVars,
+				httpHeaders,
+			}),
+		);
 	}, [
+		t,
 		name,
 		transportType,
 		command,
 		url,
-		selectedAgents.size,
+		timeoutValue,
+		selectedAgents,
+		envVars,
+		httpHeaders,
 		usableAgents.length,
 	]);
 
@@ -158,22 +203,45 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 				</Card.Header>
 
 				<Card.Content>
-					<Form>
+					<Form
+						validationBehavior="aria"
+						onSubmit={(e: FormEvent<HTMLFormElement>) => {
+							e.preventDefault();
+							void handleCreate();
+						}}
+					>
 						<Fieldset>
 							<Fieldset.Group>
 								<TextField
 									className="w-full"
 									variant="secondary"
+									isRequired
+									isInvalid={Boolean(validationErrors.name)}
 								>
 									<Label>{t("name")}</Label>
 									<Input
 										value={name}
-										onChange={(e) =>
-											setName(e.target.value)
-										}
+										onChange={(
+											e: ChangeEvent<HTMLInputElement>,
+										) => {
+											const value = e.target.value;
+											setName(value);
+											setValidationErrors(
+												(current: McpFormErrors) => ({
+													...current,
+													name: validateName(
+														t,
+														value,
+													),
+												}),
+											);
+										}}
 										placeholder={t("serverName")}
 										variant="secondary"
 									/>
+									<FieldError>
+										{validationErrors.name}
+									</FieldError>
 								</TextField>
 							</Fieldset.Group>
 						</Fieldset>
@@ -183,14 +251,28 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 								<Select
 									className="w-full"
 									selectedKey={transportType}
-									onSelectionChange={(key) =>
-										setTransportType(
-											key as
-												| "stdio"
-												| "sse"
-												| "streamable_http",
-										)
-									}
+									onSelectionChange={(key: Key | null) => {
+										const nextType = key as
+											| "stdio"
+											| "sse"
+											| "streamable_http";
+										setTransportType(nextType);
+										setValidationErrors(
+											(current: McpFormErrors) => ({
+												...current,
+												command: validateCommand(
+													t,
+													nextType,
+													command,
+												),
+												url: validateUrl(
+													t,
+													nextType,
+													url,
+												),
+											}),
+										);
+									}}
 									variant="secondary"
 								>
 									<Label>{t("transportType")}</Label>
@@ -230,16 +312,39 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 									<TextField
 										className="w-full"
 										variant="secondary"
+										isRequired
+										isInvalid={Boolean(
+											validationErrors.command,
+										)}
 									>
 										<Label>{t("command")}</Label>
 										<Input
 											value={command}
-											onChange={(e) =>
-												setCommand(e.target.value)
-											}
+											onChange={(
+												e: ChangeEvent<HTMLInputElement>,
+											) => {
+												const value = e.target.value;
+												setCommand(value);
+												setValidationErrors(
+													(
+														current: McpFormErrors,
+													) => ({
+														...current,
+														command:
+															validateCommand(
+																t,
+																transportType,
+																value,
+															),
+													}),
+												);
+											}}
 											placeholder="npx"
 											variant="secondary"
 										/>
+										<FieldError>
+											{validationErrors.command}
+										</FieldError>
 									</TextField>
 									<TextField
 										className="w-full"
@@ -262,8 +367,29 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 										<Label>{t("env")}</Label>
 										<EnvEditor
 											value={envVars}
-											onChange={setEnvVars}
+											onChange={(value) => {
+												setEnvVars(value);
+												setValidationErrors(
+													(
+														current: McpFormErrors,
+													) => ({
+														...current,
+														envVars:
+															validateMcpForm(t, {
+																name,
+																transportType,
+																command,
+																url,
+																timeoutValue,
+																selectedAgents,
+																envVars: value,
+																httpHeaders,
+															}).envVars,
+													}),
+												);
+											}}
 											variant="secondary"
+											errors={validationErrors.envVars}
 										/>
 									</div>
 								</Fieldset.Group>
@@ -277,23 +403,69 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 									<TextField
 										className="w-full"
 										variant="secondary"
+										isRequired
+										isInvalid={Boolean(
+											validationErrors.url,
+										)}
 									>
 										<Label>URL</Label>
 										<Input
 											value={url}
-											onChange={(e) =>
-												setUrl(e.target.value)
-											}
+											onChange={(
+												e: ChangeEvent<HTMLInputElement>,
+											) => {
+												const value = e.target.value;
+												setUrl(value);
+												setValidationErrors(
+													(
+														current: McpFormErrors,
+													) => ({
+														...current,
+														url: validateUrl(
+															t,
+															transportType,
+															value,
+														),
+													}),
+												);
+											}}
 											placeholder="http://localhost:3000/sse"
 											variant="secondary"
 										/>
+										<FieldError>
+											{validationErrors.url}
+										</FieldError>
 									</TextField>
 									<div className="flex flex-col gap-2">
 										<Label>{t("headers")}</Label>
 										<HttpHeaderEditor
 											value={httpHeaders}
-											onChange={setHttpHeaders}
+											onChange={(value) => {
+												setHttpHeaders(value);
+												setValidationErrors(
+													(
+														current: McpFormErrors,
+													) => ({
+														...current,
+														httpHeaders:
+															validateMcpForm(t, {
+																name,
+																transportType,
+																command,
+																url,
+																timeoutValue,
+																selectedAgents,
+																envVars,
+																httpHeaders:
+																	value,
+															}).httpHeaders,
+													}),
+												);
+											}}
 											variant="secondary"
+											errors={
+												validationErrors.httpHeaders
+											}
 										/>
 									</div>
 								</Fieldset.Group>
@@ -305,11 +477,25 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 								<AgentSelector
 									agents={usableAgents}
 									selectedKeys={selectedAgents}
-									onSelectionChange={setSelectedAgents}
+									onSelectionChange={(keys) => {
+										setSelectedAgents(keys);
+										setValidationErrors(
+											(current: McpFormErrors) => ({
+												...current,
+												agents:
+													keys.size === 0
+														? t(
+																"validationAgentsRequired",
+															)
+														: undefined,
+											}),
+										);
+									}}
 									label={t("agents")}
 									emptyMessage={t("noAgentsAvailable")}
 									emptyHelpText={t("noAgentsAvailableHelp")}
 									variant="secondary"
+									errorMessage={validationErrors.agents}
 								/>
 							</Fieldset.Group>
 						</Fieldset>
@@ -325,22 +511,42 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 										<TextField
 											className="w-full"
 											variant="secondary"
+											isInvalid={Boolean(
+												validationErrors.timeout,
+											)}
 										>
 											<Label>{t("timeout")}</Label>
 											<Input
 												type="number"
 												value={timeoutValue}
-												onChange={(e) =>
-													setTimeoutValue(
-														e.target.value,
-													)
-												}
+												onChange={(
+													e: ChangeEvent<HTMLInputElement>,
+												) => {
+													const value =
+														e.target.value;
+													setTimeoutValue(value);
+													setValidationErrors(
+														(
+															current: McpFormErrors,
+														) => ({
+															...current,
+															timeout:
+																validateTimeout(
+																	t,
+																	value,
+																),
+														}),
+													);
+												}}
 												placeholder="60"
 												variant="secondary"
 											/>
 											<Description>
 												{t("timeoutHelp")}
 											</Description>
+											<FieldError>
+												{validationErrors.timeout}
+											</FieldError>
 										</TextField>
 									</Fieldset.Group>
 								</Fieldset>
@@ -349,11 +555,15 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 
 						{/* Actions */}
 						<div className="flex justify-end gap-2 pt-2">
-							<Button variant="secondary" onPress={onDone}>
+							<Button
+								type="button"
+								variant="secondary"
+								onPress={onDone}
+							>
 								{t("cancel")}
 							</Button>
 							<Button
-								onPress={handleCreate}
+								type="submit"
 								isDisabled={
 									!isValid || createMutation.isPending
 								}

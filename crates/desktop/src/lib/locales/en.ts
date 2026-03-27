@@ -144,6 +144,17 @@ export default {
 	noAgentsAvailable: "No agents available",
 	noAgentsAvailableHelp:
 		"Install or enable at least one agent to create MCP servers or skills.",
+	validationNameRequired: "Enter a server name.",
+	validationCommandRequired: "Enter a command.",
+	validationUrlRequired: "Enter a URL.",
+	validationUrlInvalid: "Enter a valid URL.",
+	validationUrlProtocol: "URL must start with http:// or https://.",
+	validationTimeoutPositiveInteger:
+		"Timeout must be a positive whole number.",
+	validationAgentsRequired: "Select at least one agent.",
+	validationKeyRequired: "Enter a key.",
+	validationValueRequired: "Enter a value.",
+	validationDuplicateKey: "Each key must be unique.",
 	importFromJson: "Import from JSON",
 	importFromJsonTooltip: "Import from JSON",
 	import: "Import",
