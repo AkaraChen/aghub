@@ -96,9 +96,14 @@ export function InstallModal({
 								</Button>
 								<Button
 									onPress={onInstall}
-									isDisabled={selectedAgents.size === 0}
+									isDisabled={
+										selectedAgents.size === 0 ||
+										isInstalling
+									}
 								>
-									{t("install")}
+									{isInstalling
+										? t("installing")
+										: t("install")}
 								</Button>
 							</>
 						)}

@@ -75,6 +75,7 @@ export interface MarketSkill {
 export interface InstallSkillRequest {
 	source: string;
 	agents: string[];
+	skills: string[];
 	scope: "global" | "project";
 	project_path?: string;
 }

@@ -75,11 +75,6 @@ export function AgentCard({ agent, isUpdating, onToggle }: AgentCardProps) {
 							{t("supports")}: {capabilityLabels.join(", ")}
 						</p>
 					)}
-					{agent.skills_cli_name && (
-						<p className="text-xs opacity-80">
-							{t("cliName")}: {agent.skills_cli_name}
-						</p>
-					)}
 				</div>
 			</Tooltip.Content>
 		</Tooltip>

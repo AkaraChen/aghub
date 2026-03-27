@@ -129,6 +129,7 @@ impl From<(Skill, &str)> for SkillResponse {
 pub struct InstallSkillRequest {
 	pub source: String,
 	pub agents: Vec<String>,
+	pub skills: Vec<String>,
 	pub scope: String,
 	pub project_path: Option<String>,
 }

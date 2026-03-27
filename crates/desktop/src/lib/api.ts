@@ -33,7 +33,6 @@ export interface AgentInfo {
 		skills_mutable: boolean;
 		universal_skills: boolean;
 	};
-	skills_cli_name?: string;
 }
 
 export interface AgentAvailability {

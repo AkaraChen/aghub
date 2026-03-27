@@ -57,15 +57,11 @@ export function useSkillInstall() {
 		);
 		setInstallResults(pendingResults);
 
-		const skillsCliNames = Array.from(selectedAgents, (id) => {
-			const agent = availableAgents.find((a) => a.id === id);
-			return agent?.skills_cli_name;
-		}).filter((name): name is string => !!name);
-
 		try {
 			const response = await api.skills.install({
 				source: selectedSkill.source,
-				agents: skillsCliNames,
+				agents: Array.from(selectedAgents),
+				skills: [selectedSkill.name],
 				scope: "global",
 			});
 

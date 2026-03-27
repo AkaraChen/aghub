@@ -1,5 +1,8 @@
 use aghub_core::{
-	errors::ConfigError, load_all_agents, models::Skill, registry,
+	errors::ConfigError,
+	load_all_agents,
+	models::{AgentType, Skill},
+	registry,
 };
 use rocket::http::Status;
 use rocket::response::status::NoContent;
@@ -326,8 +329,17 @@ pub async fn install_skill(
 	let mut cmd = Command::new("npx");
 	cmd.arg("skills").arg("add").arg(&req.source);
 
-	for agent in &req.agents {
-		cmd.arg("-a").arg(agent);
+	for skill in &req.skills {
+		cmd.arg("-s").arg(skill);
+	}
+
+	for agent_id in &req.agents {
+		if let Ok(agent_type) = agent_id.parse::<AgentType>() {
+			let descriptor = registry::get(agent_type);
+			if let Some(cli_name) = descriptor.skills_cli_name {
+				cmd.arg("-a").arg(cli_name);
+			}
+		}
 	}
 
 	if req.scope == "global" {
