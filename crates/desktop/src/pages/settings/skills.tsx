@@ -1,11 +1,12 @@
 import { ArrowPathIcon, PlusIcon } from "@heroicons/react/24/solid";
-import { Button, Dropdown, SearchField } from "@heroui/react";
+import { Button, Dropdown } from "@heroui/react";
 import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CreateSkillPanel } from "../../components/create-skill-panel";
 import { ImportSkillPanel } from "../../components/import-skill-panel";
 import { InstallSkillDialog } from "../../components/install-skill-dialog";
+import { ListSearchHeader } from "../../components/list-search-header";
 import { SkillDetail } from "../../components/skill-detail";
 import { SkillList } from "../../components/skill-list";
 import { useSkills } from "../../hooks/use-skills";
@@ -64,22 +65,12 @@ export default function SkillsPage() {
 		<div className="flex h-full">
 			{/* Skills List Panel */}
 			<div className="flex w-80 shrink-0 flex-col border-r border-border">
-				{/* Search Header */}
-				<div className="flex items-center gap-2 p-3">
-					<SearchField
-						value={searchQuery}
-						onChange={setSearchQuery}
-						aria-label={t("searchSkills")}
-						className="min-w-0 flex-1"
-					>
-						<SearchField.Group>
-							<SearchField.SearchIcon />
-							<SearchField.Input
-								placeholder={t("searchSkills")}
-							/>
-							<SearchField.ClearButton />
-						</SearchField.Group>
-					</SearchField>
+				<ListSearchHeader
+					searchValue={searchQuery}
+					onSearchChange={setSearchQuery}
+					placeholder={t("searchSkills")}
+					ariaLabel={t("searchSkills")}
+				>
 					<Dropdown>
 						<Button
 							isIconOnly
@@ -138,7 +129,7 @@ export default function SkillsPage() {
 							)}
 						/>
 					</Button>
-				</div>
+				</ListSearchHeader>
 
 				{/* Skills List */}
 				<SkillList

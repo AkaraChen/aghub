@@ -5,11 +5,12 @@ import {
 	PlusIcon,
 	ServerIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Dropdown, SearchField } from "@heroui/react";
+import { Button, Dropdown } from "@heroui/react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { McpResponse, SkillResponse } from "../lib/api-types";
 import { cn, getMcpMergeKey } from "../lib/utils";
+import { ListSearchHeader } from "./list-search-header";
 import { McpList } from "./mcp-list";
 import { ResourceSectionHeader } from "./resource-section-header";
 import { SkillList } from "./skill-list";
@@ -75,19 +76,12 @@ export function UnifiedResourceList({
 
 	return (
 		<div className="flex w-80 shrink-0 flex-col border-r border-border">
-			<div className="flex items-center gap-2 p-3">
-				<SearchField
-					value={searchQuery}
-					onChange={onSearchChange}
-					aria-label={t("searchResources")}
-					className="min-w-0 flex-1"
-				>
-					<SearchField.Group>
-						<SearchField.SearchIcon />
-						<SearchField.Input placeholder={t("searchResources")} />
-						<SearchField.ClearButton />
-					</SearchField.Group>
-				</SearchField>
+			<ListSearchHeader
+				searchValue={searchQuery}
+				onSearchChange={onSearchChange}
+				placeholder={t("searchResources")}
+				ariaLabel={t("searchResources")}
+			>
 				<Dropdown>
 					<Button
 						isIconOnly
@@ -158,7 +152,7 @@ export function UnifiedResourceList({
 						className={cn("size-4", isRefreshing && "animate-spin")}
 					/>
 				</Button>
-			</div>
+			</ListSearchHeader>
 
 			<div className="flex-1 overflow-y-auto">
 				{hasMcps && (

@@ -9,40 +9,9 @@ interface AgentCardProps {
 	onToggle: (agentId: string, currentlyDisabled: boolean) => void;
 }
 
-const agentAccentColors: Record<string, string> = {
-	claude: "#d97706",
-	copilot: "#7c3aed",
-	cursor: "#0ea5e9",
-	codex: "#10b981",
-	openai: "#10b981",
-	gemini: "#3b82f6",
-	amazon_q: "#f97316",
-	vscode: "#007acc",
-	zed: "#f59e0b",
-	windsurf: "#8b5cf6",
-	aider: "#ef4444",
-	claude_code: "#d97706",
-	opencode: "#06b6d4",
-	cline: "#22c55e",
-	roo: "#f97316",
-};
-
-const NORMALIZE_REGEX = /[_-]/g;
-
-function getAgentAccentColor(agentId: string): string {
-	const normalizedId = agentId.toLowerCase().replace(NORMALIZE_REGEX, "_");
-	for (const [key, color] of Object.entries(agentAccentColors)) {
-		if (normalizedId.includes(key)) {
-			return color;
-		}
-	}
-	return "var(--muted)";
-}
-
 export function AgentCard({ agent, isUpdating, onToggle }: AgentCardProps) {
 	const { t } = useTranslation();
 	const { has_global_directory, has_cli } = agent.availability;
-	const accentColor = getAgentAccentColor(agent.id);
 
 	const sources: string[] = [];
 	if (has_global_directory) sources.push(t("globalConfig"));
@@ -56,8 +25,7 @@ export function AgentCard({ agent, isUpdating, onToggle }: AgentCardProps) {
 	return (
 		<Tooltip delay={500}>
 			<Card
-				className="border-l-2 bg-surface transition-all duration-200"
-				style={{ borderLeftColor: accentColor }}
+				className="bg-surface transition-all duration-200"
 				variant="transparent"
 			>
 				<Card.Content className="flex flex-row items-center gap-3">

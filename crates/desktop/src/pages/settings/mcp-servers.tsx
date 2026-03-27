@@ -1,11 +1,12 @@
 import { ArrowPathIcon, PlusIcon } from "@heroicons/react/24/solid";
-import { Button, Dropdown, SearchField } from "@heroui/react";
+import { Button, Dropdown } from "@heroui/react";
 import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CreateMcpPanel } from "../../components/create-mcp-panel";
 import { EditMcpPanel } from "../../components/edit-mcp-panel";
 import { ImportMcpPanel } from "../../components/import-mcp-panel";
+import { ListSearchHeader } from "../../components/list-search-header";
 import type { McpGroup } from "../../components/mcp-detail";
 import { McpDetail } from "../../components/mcp-detail";
 import { McpList } from "../../components/mcp-list";
@@ -84,22 +85,12 @@ export default function MCPServersPage() {
 		<div className="flex h-full">
 			{/* Servers List Panel */}
 			<div className="flex w-80 shrink-0 flex-col border-r border-border">
-				{/* Search Header */}
-				<div className="flex items-center gap-2 p-3">
-					<SearchField
-						value={searchQuery}
-						onChange={setSearchQuery}
-						aria-label={t("searchServers")}
-						className="min-w-0 flex-1"
-					>
-						<SearchField.Group>
-							<SearchField.SearchIcon />
-							<SearchField.Input
-								placeholder={t("searchServers")}
-							/>
-							<SearchField.ClearButton />
-						</SearchField.Group>
-					</SearchField>
+				<ListSearchHeader
+					searchValue={searchQuery}
+					onSearchChange={setSearchQuery}
+					placeholder={t("searchServers")}
+					ariaLabel={t("searchServers")}
+				>
 					<Dropdown>
 						<Button
 							isIconOnly
@@ -150,7 +141,7 @@ export default function MCPServersPage() {
 							)}
 						/>
 					</Button>
-				</div>
+				</ListSearchHeader>
 
 				{/* Servers List */}
 				<McpList
