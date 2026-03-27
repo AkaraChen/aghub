@@ -148,235 +148,11 @@ export default function SkillsShPage() {
 	};
 
 	return (
-		<div className="flex h-full flex-col">
-			<div className="flex flex-1 flex-col overflow-hidden">
-				{submittedQuery.length >= 2 ? (
-					<>
-						<div className="flex items-center gap-6 py-3 px-6">
-							<div className="flex items-center gap-2">
-								<Tooltip delay={0}>
-									<Tooltip.Trigger>
-										<span className="text-muted hover:text-foreground cursor-default">
-											<svg
-												height="18"
-												viewBox="0 0 16 16"
-												width="18"
-												className="text-current"
-											>
-												<path
-													fillRule="evenodd"
-													clipRule="evenodd"
-													d="M8 1L16 15H0L8 1Z"
-													fill="currentColor"
-												/>
-											</svg>
-										</span>
-									</Tooltip.Trigger>
-									<Tooltip.Content>
-										{t("poweredByVercel")}
-									</Tooltip.Content>
-								</Tooltip>
-								<span className="text-muted">
-									<svg
-										height="16"
-										viewBox="0 0 16 16"
-										width="16"
-										className="text-current"
-									>
-										<path
-											fillRule="evenodd"
-											clipRule="evenodd"
-											d="M4.01526 15.3939L4.3107 14.7046L10.3107 0.704556L10.6061 0.0151978L11.9849 0.606077L11.6894 1.29544L5.68942 15.2954L5.39398 15.9848L4.01526 15.3939Z"
-											fill="currentColor"
-										/>
-									</svg>
-								</span>
-								<Tooltip delay={0}>
-									<Tooltip.Trigger>
-										<span className="font-medium tracking-tight text-lg cursor-default">
-											Skills
-										</span>
-									</Tooltip.Trigger>
-									<Tooltip.Content>
-										{t("dataFromSkillsSh")}
-									</Tooltip.Content>
-								</Tooltip>
-							</div>
-							<div className="flex items-center gap-2">
-								<SearchField
-									value={searchQuery}
-									onChange={setSearchQuery}
-									onKeyDown={handleKeyDown}
-									aria-label={t("searchMarketSkills")}
-									className="w-[400px]"
-								>
-									<SearchField.Group>
-										<SearchField.SearchIcon />
-										<SearchField.Input
-											placeholder={t(
-												"searchMarketSkillsPlaceholder",
-											)}
-										/>
-										<SearchField.ClearButton />
-									</SearchField.Group>
-								</SearchField>
-								<Button
-									onPress={handleSearch}
-									isDisabled={searchQuery.trim().length < 2}
-								>
-									{t("search")}
-								</Button>
-							</div>
-						</div>
-
-						<div className="flex-1 overflow-auto px-6">
-							{isSearching ? (
-								<div className="flex h-full items-center justify-center">
-									<Spinner size="lg" />
-								</div>
-							) : searchResults.length === 0 ? (
-								<div className="flex h-full items-center justify-center">
-									<p className="text-sm text-muted">
-										{t("noResults")}
-									</p>
-								</div>
-							) : (
-								<>
-									<Table variant="secondary">
-										<Table.ScrollContainer>
-											<Table.Content
-												aria-label={t("searchResults")}
-											>
-												<Table.Header>
-													<Table.Column>
-														{t("name")}
-													</Table.Column>
-													<Table.Column>
-														{t("installs")}
-													</Table.Column>
-													<Table.Column>
-														{t("source")}
-													</Table.Column>
-													<Table.Column></Table.Column>
-												</Table.Header>
-												<Table.Body
-													items={paginatedResults}
-												>
-													{(skill) => (
-														<Table.Row
-															id={skill.slug}
-														>
-															<Table.Cell>
-																<span className="font-medium">
-																	{skill.name}
-																</span>
-															</Table.Cell>
-															<Table.Cell>
-																<span className="text-muted">
-																	{skill.installs.toLocaleString()}
-																</span>
-															</Table.Cell>
-															<Table.Cell>
-																<span className="text-muted text-sm">
-																	{
-																		skill.source
-																	}
-																</span>
-															</Table.Cell>
-															<Table.Cell>
-																<Button
-																	size="sm"
-																	variant="secondary"
-																	onPress={() =>
-																		handleInstallClick(
-																			skill,
-																		)
-																	}
-																>
-																	{t(
-																		"install",
-																	)}
-																</Button>
-															</Table.Cell>
-														</Table.Row>
-													)}
-												</Table.Body>
-											</Table.Content>
-										</Table.ScrollContainer>
-									</Table>
-
-									{totalPages > 1 && (
-										<div className="mt-4 flex justify-center">
-											<Pagination>
-												<Pagination.Content>
-													<Pagination.Item>
-														<Pagination.Previous
-															isDisabled={
-																page === 1
-															}
-															onPress={() =>
-																setPage((p) =>
-																	Math.max(
-																		1,
-																		p - 1,
-																	),
-																)
-															}
-														>
-															<Pagination.PreviousIcon />
-														</Pagination.Previous>
-													</Pagination.Item>
-													{Array.from(
-														{ length: totalPages },
-														(_, i) => i + 1,
-													).map((pageNum) => (
-														<Pagination.Item
-															key={pageNum}
-														>
-															<Pagination.Link
-																isActive={
-																	pageNum ===
-																	page
-																}
-																onPress={() =>
-																	setPage(
-																		pageNum,
-																	)
-																}
-															>
-																{pageNum}
-															</Pagination.Link>
-														</Pagination.Item>
-													))}
-													<Pagination.Item>
-														<Pagination.Next
-															isDisabled={
-																page ===
-																totalPages
-															}
-															onPress={() =>
-																setPage((p) =>
-																	Math.min(
-																		totalPages,
-																		p + 1,
-																	),
-																)
-															}
-														>
-															<Pagination.NextIcon />
-														</Pagination.Next>
-													</Pagination.Item>
-												</Pagination.Content>
-											</Pagination>
-										</div>
-									)}
-								</>
-							)}
-						</div>
-					</>
-				) : (
-					<div className="flex h-full flex-col items-center pt-[20vh]">
-						<div className="flex items-center gap-2 mb-4">
+		<div className="h-full overflow-auto p-6">
+			{submittedQuery.length >= 2 ? (
+				<>
+					<div className="flex items-center gap-6 mb-4">
+						<div className="flex items-center gap-2">
 							<Tooltip delay={0}>
 								<Tooltip.Trigger>
 									<span className="text-muted hover:text-foreground cursor-default">
@@ -451,8 +227,209 @@ export default function SkillsShPage() {
 							</Button>
 						</div>
 					</div>
-				)}
-			</div>
+
+					{isSearching ? (
+						<div className="flex items-center justify-center py-12">
+							<Spinner size="lg" />
+						</div>
+					) : searchResults.length === 0 ? (
+						<div className="flex items-center justify-center py-12">
+							<p className="text-sm text-muted">
+								{t("noResults")}
+							</p>
+						</div>
+					) : (
+						<>
+							<Table variant="secondary">
+								<Table.ScrollContainer>
+									<Table.Content
+										aria-label={t("searchResults")}
+									>
+										<Table.Header>
+											<Table.Column>
+												{t("name")}
+											</Table.Column>
+											<Table.Column>
+												{t("installs")}
+											</Table.Column>
+											<Table.Column>
+												{t("source")}
+											</Table.Column>
+											<Table.Column></Table.Column>
+										</Table.Header>
+										<Table.Body items={paginatedResults}>
+											{(skill) => (
+												<Table.Row id={skill.slug}>
+													<Table.Cell>
+														<span className="font-medium">
+															{skill.name}
+														</span>
+													</Table.Cell>
+													<Table.Cell>
+														<span className="text-muted">
+															{skill.installs.toLocaleString()}
+														</span>
+													</Table.Cell>
+													<Table.Cell>
+														<span className="text-muted text-sm">
+															{skill.source}
+														</span>
+													</Table.Cell>
+													<Table.Cell>
+														<Button
+															size="sm"
+															variant="secondary"
+															onPress={() =>
+																handleInstallClick(
+																	skill,
+																)
+															}
+														>
+															{t("install")}
+														</Button>
+													</Table.Cell>
+												</Table.Row>
+											)}
+										</Table.Body>
+									</Table.Content>
+								</Table.ScrollContainer>
+							</Table>
+
+							{totalPages > 1 && (
+								<div className="mt-4 flex justify-center">
+									<Pagination>
+										<Pagination.Content>
+											<Pagination.Item>
+												<Pagination.Previous
+													isDisabled={page === 1}
+													onPress={() =>
+														setPage((p) =>
+															Math.max(1, p - 1),
+														)
+													}
+												>
+													<Pagination.PreviousIcon />
+												</Pagination.Previous>
+											</Pagination.Item>
+											{Array.from(
+												{ length: totalPages },
+												(_, i) => i + 1,
+											).map((pageNum) => (
+												<Pagination.Item key={pageNum}>
+													<Pagination.Link
+														isActive={
+															pageNum === page
+														}
+														onPress={() =>
+															setPage(pageNum)
+														}
+													>
+														{pageNum}
+													</Pagination.Link>
+												</Pagination.Item>
+											))}
+											<Pagination.Item>
+												<Pagination.Next
+													isDisabled={
+														page === totalPages
+													}
+													onPress={() =>
+														setPage((p) =>
+															Math.min(
+																totalPages,
+																p + 1,
+															),
+														)
+													}
+												>
+													<Pagination.NextIcon />
+												</Pagination.Next>
+											</Pagination.Item>
+										</Pagination.Content>
+									</Pagination>
+								</div>
+							)}
+						</>
+					)}
+				</>
+			) : (
+				<div className="flex flex-col items-center pt-[20vh]">
+					<div className="flex items-center gap-2 mb-4">
+						<Tooltip delay={0}>
+							<Tooltip.Trigger>
+								<span className="text-muted hover:text-foreground cursor-default">
+									<svg
+										height="18"
+										viewBox="0 0 16 16"
+										width="18"
+										className="text-current"
+									>
+										<path
+											fillRule="evenodd"
+											clipRule="evenodd"
+											d="M8 1L16 15H0L8 1Z"
+											fill="currentColor"
+										/>
+									</svg>
+								</span>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								{t("poweredByVercel")}
+							</Tooltip.Content>
+						</Tooltip>
+						<span className="text-muted">
+							<svg
+								height="16"
+								viewBox="0 0 16 16"
+								width="16"
+								className="text-current"
+							>
+								<path
+									fillRule="evenodd"
+									clipRule="evenodd"
+									d="M4.01526 15.3939L4.3107 14.7046L10.3107 0.704556L10.6061 0.0151978L11.9849 0.606077L11.6894 1.29544L5.68942 15.2954L5.39398 15.9848L4.01526 15.3939Z"
+									fill="currentColor"
+								/>
+							</svg>
+						</span>
+						<Tooltip delay={0}>
+							<Tooltip.Trigger>
+								<span className="font-medium tracking-tight text-lg cursor-default">
+									Skills
+								</span>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								{t("dataFromSkillsSh")}
+							</Tooltip.Content>
+						</Tooltip>
+					</div>
+					<div className="flex items-center gap-2">
+						<SearchField
+							value={searchQuery}
+							onChange={setSearchQuery}
+							onKeyDown={handleKeyDown}
+							aria-label={t("searchMarketSkills")}
+							className="w-[400px]"
+						>
+							<SearchField.Group>
+								<SearchField.SearchIcon />
+								<SearchField.Input
+									placeholder={t(
+										"searchMarketSkillsPlaceholder",
+									)}
+								/>
+								<SearchField.ClearButton />
+							</SearchField.Group>
+						</SearchField>
+						<Button
+							onPress={handleSearch}
+							isDisabled={searchQuery.trim().length < 2}
+						>
+							{t("search")}
+						</Button>
+					</div>
+				</div>
+			)}
 
 			<Modal.Backdrop
 				isOpen={installModalOpen}
