@@ -22,7 +22,7 @@ interface UnifiedResourceListProps {
 	selectedType: "mcp" | "skill" | null;
 	onSelect: (key: string, type: "mcp" | "skill") => void;
 	onCreateMcp: () => void;
-	onCreateSkill: (type: "market" | "local" | "import") => void;
+	onCreateSkill: (type: "local" | "import") => void;
 	onRefresh: () => void;
 	isRefreshing?: boolean;
 	isLoading?: boolean;
@@ -137,8 +137,6 @@ export function UnifiedResourceList({
 						<Dropdown.Menu
 							onAction={(key) => {
 								if (key === "mcp") onCreateMcp();
-								else if (key === "skill-market")
-									onCreateSkill("market");
 								else if (key === "skill-local")
 									onCreateSkill("local");
 								else if (key === "skill-import")
@@ -149,15 +147,6 @@ export function UnifiedResourceList({
 								<div className="flex items-center gap-2">
 									<ServerIcon className="size-4" />
 									<span>{t("mcpServers")}</span>
-								</div>
-							</Dropdown.Item>
-							<Dropdown.Item
-								id="skill-market"
-								textValue={t("installFromMarket")}
-							>
-								<div className="flex items-center gap-2">
-									<BookOpenIcon className="size-4" />
-									<span>{t("installFromMarket")}</span>
 								</div>
 							</Dropdown.Item>
 							<Dropdown.Item

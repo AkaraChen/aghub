@@ -8,7 +8,6 @@ import { CreateMcpPanel } from "../../components/create-mcp-panel";
 import { CreateSkillPanel } from "../../components/create-skill-panel";
 import { EditMcpPanel } from "../../components/edit-mcp-panel";
 import { ImportSkillPanel } from "../../components/import-skill-panel";
-import { InstallSkillDialog } from "../../components/install-skill-dialog";
 import { McpDetail } from "../../components/mcp-detail";
 import { SkillDetail } from "../../components/skill-detail";
 import { UnifiedResourceList } from "../../components/unified-resource-list";
@@ -30,7 +29,6 @@ export default function ProjectDetailPage() {
 	const [panelMode, setPanelMode] = useState<
 		"create-mcp" | "edit-mcp" | "create-skill" | "import-skill" | null
 	>(null);
-	const [isInstallSkillOpen, setIsInstallSkillOpen] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [selectedResource, setSelectedResource] = useQueryState("resource");
 	const [resourceType, setResourceType] = useQueryState("type", {
@@ -144,8 +142,7 @@ export default function ProjectDetailPage() {
 				onSelect={handleSelect}
 				onCreateMcp={() => setPanelMode("create-mcp")}
 				onCreateSkill={(type) => {
-					if (type === "market") setIsInstallSkillOpen(true);
-					else if (type === "local") setPanelMode("create-skill");
+					if (type === "local") setPanelMode("create-skill");
 					else if (type === "import") setPanelMode("import-skill");
 				}}
 				onRefresh={handleRefresh}
@@ -218,12 +215,6 @@ export default function ProjectDetailPage() {
 					</div>
 				)}
 			</div>
-
-			<InstallSkillDialog
-				isOpen={isInstallSkillOpen}
-				onClose={() => setIsInstallSkillOpen(false)}
-				projectPath={project?.path}
-			/>
 		</div>
 	);
 }

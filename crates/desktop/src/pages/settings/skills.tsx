@@ -5,7 +5,6 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CreateSkillPanel } from "../../components/create-skill-panel";
 import { ImportSkillPanel } from "../../components/import-skill-panel";
-import { InstallSkillDialog } from "../../components/install-skill-dialog";
 import { ListSearchHeader } from "../../components/list-search-header";
 import { SkillDetail } from "../../components/skill-detail";
 import { SkillList } from "../../components/skill-list";
@@ -17,7 +16,6 @@ export default function SkillsPage() {
 	const { t } = useTranslation();
 	const { data: skills, refetch, isFetching } = useSkills();
 	const [searchQuery, setSearchQuery] = useState("");
-	const [isInstallDialogOpen, setIsInstallDialogOpen] = useState(false);
 	const [selectedName, setSelectedName] = useQueryState("skill");
 	const [panelMode, setPanelMode] = useState<"create" | "import" | null>(
 		null,
@@ -45,10 +43,6 @@ export default function SkillsPage() {
 	const handleSelect = (name: string) => {
 		setSelectedName(name);
 		setPanelMode(null);
-	};
-
-	const handleOpenInstallDialog = () => {
-		setIsInstallDialogOpen(true);
 	};
 
 	const handleCreateSkill = () => {
@@ -84,21 +78,13 @@ export default function SkillsPage() {
 						<Dropdown.Popover placement="bottom end">
 							<Dropdown.Menu
 								onAction={(key) => {
-									if (key === "market") {
-										handleOpenInstallDialog();
-									} else if (key === "create") {
+									if (key === "create") {
 										handleCreateSkill();
 									} else if (key === "import") {
 										handleImportSkill();
 									}
 								}}
 							>
-								<Dropdown.Item
-									id="market"
-									textValue={t("installFromMarket")}
-								>
-									{t("installFromMarket")}
-								</Dropdown.Item>
 								<Dropdown.Item
 									id="create"
 									textValue={t("createCustomSkill")}
@@ -158,11 +144,6 @@ export default function SkillsPage() {
 					</div>
 				)}
 			</div>
-
-			<InstallSkillDialog
-				isOpen={isInstallDialogOpen}
-				onClose={() => setIsInstallDialogOpen(false)}
-			/>
 		</div>
 	);
 }
