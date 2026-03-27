@@ -13,6 +13,7 @@ interface EnvEditorProps {
 	onChange: (value: EnvVar[]) => void;
 	variant?: "primary" | "secondary";
 	errors?: Array<{ key?: string; value?: string }>;
+	errorMessage?: string;
 }
 
 export function EnvEditor({
@@ -20,6 +21,7 @@ export function EnvEditor({
 	onChange,
 	variant,
 	errors,
+	errorMessage,
 }: EnvEditorProps) {
 	const { t } = useTranslation();
 
@@ -48,6 +50,7 @@ export function EnvEditor({
 				valuePlaceholder={t("envEditor.valuePlaceholder")}
 				variant={variant}
 				errors={errors}
+				errorMessage={errorMessage}
 			/>
 			<Button
 				type="button"

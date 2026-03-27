@@ -2,7 +2,6 @@ import {
 	Alert,
 	Button,
 	Card,
-	Description,
 	Disclosure,
 	FieldError,
 	Fieldset,
@@ -14,22 +13,13 @@ import {
 	TextField,
 } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { ChangeEvent, FormEvent, Key } from "react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useServer } from "../hooks/use-server";
 import { createApi } from "../lib/api";
 import type { TransportDto } from "../lib/api-types";
-import {
-	hasMcpFormErrors,
-	type McpFormErrors,
-	validateCommand,
-	validateMcpForm,
-	validateName,
-	validateTimeout,
-	validateUrl,
-} from "../lib/mcp-form-validation";
 import { buildTransportFromForm } from "../lib/mcp-utils";
 import { AgentSelector } from "./agent-selector";
 import type { EnvVar } from "./env-editor";
@@ -40,6 +30,67 @@ import { HttpHeaderEditor } from "./http-header-editor";
 interface CreateMcpPanelProps {
 	onDone: () => void;
 	projectPath?: string;
+}
+
+interface CreateMcpFormValues {
+	name: string;
+	transportType: "stdio" | "sse" | "streamable_http";
+	timeoutValue: string;
+	selectedAgents: string[];
+	command: string;
+	args: string;
+	envVars: EnvVar[];
+	url: string;
+	httpHeaders: HttpHeader[];
+}
+
+function validateKeyPairs(
+	t: ReturnType<typeof useTranslation>["t"],
+	pairs: Array<{ key: string; value: string }>,
+): Array<{ key?: string; value?: string }> {
+	const errors: Array<{ key?: string; value?: string }> = pairs.map(
+		() => ({}),
+	);
+	const seenKeys = new Map<string, number[]>();
+
+	pairs.forEach((pair, index) => {
+		const key = pair.key.trim();
+		const value = pair.value.trim();
+
+		if (!key && !value) return;
+		if (!key) {
+			errors[index].key = t("validationKeyRequired");
+			return;
+		}
+		if (!value) {
+			errors[index].value = t("validationValueRequired");
+			return;
+		}
+
+		const existing = seenKeys.get(key) ?? [];
+		existing.push(index);
+		seenKeys.set(key, existing);
+	});
+
+	for (const indices of seenKeys.values()) {
+		if (indices.length < 2) continue;
+		for (const index of indices) {
+			errors[index].key = t("validationDuplicateKey");
+		}
+	}
+
+	return errors;
+}
+
+function getKeyPairErrorMessage(
+	errors: Array<{ key?: string; value?: string }>,
+): string | undefined {
+	for (const error of errors) {
+		if (error.key) return error.key;
+		if (error.value) return error.value;
+	}
+
+	return undefined;
 }
 
 export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
@@ -54,40 +105,56 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 		[availableAgents],
 	);
 
-	const [name, setName] = useState("");
-	const [transportType, setTransportType] = useState<
-		"stdio" | "sse" | "streamable_http"
-	>("stdio");
-	const [timeoutValue, setTimeoutValue] = useState("");
-	const [selectedAgents, setSelectedAgents] = useState<Set<string>>(() => {
-		return new Set(usableAgents[0] ? [usableAgents[0].id] : []);
-	});
+	const defaultAgents = usableAgents[0] ? [usableAgents[0].id] : [];
 
-	const [command, setCommand] = useState("");
-	const [args, setArgs] = useState("");
-	const [envVars, setEnvVars] = useState<EnvVar[]>([]);
-
-	const [url, setUrl] = useState("");
-	const [httpHeaders, setHttpHeaders] = useState<HttpHeader[]>([]);
-	const [error, setError] = useState<string | null>(null);
-	const [validationErrors, setValidationErrors] = useState(() =>
-		validateMcpForm(t, {
+	const {
+		control,
+		handleSubmit,
+		watch,
+		formState: { submitCount, isSubmitting },
+	} = useForm<CreateMcpFormValues>({
+		mode: "onSubmit",
+		reValidateMode: "onChange",
+		defaultValues: {
 			name: "",
 			transportType: "stdio",
-			command: "",
-			url: "",
 			timeoutValue: "",
-			selectedAgents,
+			selectedAgents: defaultAgents,
+			command: "",
+			args: "",
 			envVars: [],
+			url: "",
 			httpHeaders: [],
-		}),
+		},
+	});
+
+	const transportType = watch("transportType");
+	const envVars = watch("envVars");
+	const httpHeaders = watch("httpHeaders");
+
+	const envErrors = useMemo(() => validateKeyPairs(t, envVars), [t, envVars]);
+	const headerErrors = useMemo(
+		() => validateKeyPairs(t, httpHeaders),
+		[t, httpHeaders],
+	);
+	const hasPairErrors = useMemo(
+		() =>
+			envErrors.some((error) => error.key || error.value) ||
+			headerErrors.some((error) => error.key || error.value),
+		[envErrors, headerErrors],
+	);
+	const envErrorMessage = useMemo(
+		() => getKeyPairErrorMessage(envErrors),
+		[envErrors],
+	);
+	const headerErrorMessage = useMemo(
+		() => getKeyPairErrorMessage(headerErrors),
+		[headerErrors],
 	);
 
 	const createMutation = useMutation({
-		onError: (error) => {
-			const errorMessage =
-				error instanceof Error ? error.message : String(error);
-			setError(errorMessage);
+		onError: () => {
+			// handled in submit catch for better message control
 		},
 		mutationFn: ({
 			agent,
@@ -105,91 +172,54 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 		},
 	});
 
-	const buildTransport = (): TransportDto | undefined => {
-		return buildTransportFromForm(transportType, {
-			command,
-			args,
-			envVars,
-			url,
-			httpHeaders,
-			timeout: timeoutValue,
-		});
-	};
+	const onSubmit = async (values: CreateMcpFormValues) => {
+		if (hasPairErrors) return;
 
-	const handleCreate = async () => {
-		const nextErrors = validateMcpForm(t, {
-			name,
-			transportType,
-			command,
-			url,
-			timeoutValue,
-			selectedAgents,
-			envVars,
-			httpHeaders,
+		const transport = buildTransportFromForm(values.transportType, {
+			command: values.command,
+			args: values.args,
+			envVars: values.envVars,
+			url: values.url,
+			httpHeaders: values.httpHeaders,
+			timeout: values.timeoutValue,
 		});
-		setValidationErrors(nextErrors);
-		if (hasMcpFormErrors(nextErrors)) return;
-
-		const transport = buildTransport();
 		if (!transport) return;
 
 		const body = {
-			name: name.trim(),
+			name: values.name.trim(),
 			transport,
-			timeout: timeoutValue
-				? Number.parseInt(timeoutValue, 10)
+			timeout: values.timeoutValue
+				? Number.parseInt(values.timeoutValue, 10)
 				: undefined,
 		};
 
-		// Create MCP for each selected agent
-		const agentsToCreate = [...selectedAgents];
 		try {
 			await Promise.all(
-				agentsToCreate.map((agent) =>
+				values.selectedAgents.map((agent) =>
 					createMutation.mutateAsync({ agent, body }),
 				),
 			);
 			onDone();
-		} catch {
-			// Error is handled by onError callback
+		} catch (error) {
+			const errorMessage =
+				error instanceof Error ? error.message : String(error);
+			throw new Error(errorMessage);
 		}
 	};
 
-	const isValid = useMemo(() => {
-		if (usableAgents.length === 0) return false;
-		return !hasMcpFormErrors(
-			validateMcpForm(t, {
-				name,
-				transportType,
-				command,
-				url,
-				timeoutValue,
-				selectedAgents,
-				envVars,
-				httpHeaders,
-			}),
-		);
-	}, [
-		t,
-		name,
-		transportType,
-		command,
-		url,
-		timeoutValue,
-		selectedAgents,
-		envVars,
-		httpHeaders,
-		usableAgents.length,
-	]);
-
 	return (
 		<div className="h-full max-w-3xl overflow-y-auto p-6">
-			{error && (
+			{createMutation.error && (
 				<Alert className="mb-4" status="danger">
 					<Alert.Indicator />
 					<Alert.Content>
 						<Alert.Description>
-							{t("createError", { error })}
+							{t("createError", {
+								error:
+									createMutation.error instanceof Error
+										? createMutation.error.message
+										: String(createMutation.error),
+							})}
 						</Alert.Description>
 					</Alert.Content>
 				</Alert>
@@ -205,193 +235,200 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 				<Card.Content>
 					<Form
 						validationBehavior="aria"
-						onSubmit={(e: FormEvent<HTMLFormElement>) => {
-							e.preventDefault();
-							void handleCreate();
-						}}
+						onSubmit={handleSubmit(onSubmit)}
 					>
 						<Fieldset>
 							<Fieldset.Group>
-								<TextField
-									className="w-full"
-									variant="secondary"
-									isRequired
-									isInvalid={Boolean(validationErrors.name)}
-								>
-									<Label>{t("name")}</Label>
-									<Input
-										value={name}
-										onChange={(
-											e: ChangeEvent<HTMLInputElement>,
-										) => {
-											const value = e.target.value;
-											setName(value);
-											setValidationErrors(
-												(current: McpFormErrors) => ({
-													...current,
-													name: validateName(
-														t,
-														value,
-													),
-												}),
-											);
-										}}
-										placeholder={t("serverName")}
-										variant="secondary"
-									/>
-									<FieldError>
-										{validationErrors.name}
-									</FieldError>
-								</TextField>
+								<Controller
+									name="name"
+									control={control}
+									rules={{
+										required: t("validationNameRequired"),
+										validate: (value) =>
+											value.trim()
+												? true
+												: t("validationNameRequired"),
+									}}
+									render={({ field, fieldState }) => (
+										<TextField
+											className="w-full"
+											variant="secondary"
+											isRequired
+											validationBehavior="aria"
+											isInvalid={Boolean(
+												fieldState.error,
+											)}
+										>
+											<Label>{t("name")}</Label>
+											<Input
+												value={field.value}
+												onChange={(e) =>
+													field.onChange(
+														e.target.value,
+													)
+												}
+												onBlur={field.onBlur}
+												placeholder={t("serverName")}
+												variant="secondary"
+											/>
+											{fieldState.error && (
+												<FieldError>
+													{fieldState.error.message}
+												</FieldError>
+											)}
+										</TextField>
+									)}
+								/>
 							</Fieldset.Group>
 						</Fieldset>
 
 						<Fieldset>
 							<Fieldset.Group>
-								<Select
-									className="w-full"
-									selectedKey={transportType}
-									onSelectionChange={(key: Key | null) => {
-										const nextType = key as
-											| "stdio"
-											| "sse"
-											| "streamable_http";
-										setTransportType(nextType);
-										setValidationErrors(
-											(current: McpFormErrors) => ({
-												...current,
-												command: validateCommand(
-													t,
-													nextType,
-													command,
-												),
-												url: validateUrl(
-													t,
-													nextType,
-													url,
-												),
-											}),
-										);
-									}}
-									variant="secondary"
-								>
-									<Label>{t("transportType")}</Label>
-									<Select.Trigger>
-										<Select.Value />
-										<Select.Indicator />
-									</Select.Trigger>
-									<Select.Popover>
-										<ListBox>
-											<ListBox.Item
-												id="stdio"
-												textValue="stdio"
-											>
-												stdio
-											</ListBox.Item>
-											<ListBox.Item
-												id="sse"
-												textValue="sse"
-											>
-												sse
-											</ListBox.Item>
-											<ListBox.Item
-												id="streamable_http"
-												textValue="streamable_http"
-											>
-												streamable_http
-											</ListBox.Item>
-										</ListBox>
-									</Select.Popover>
-								</Select>
+								<Controller
+									name="transportType"
+									control={control}
+									render={({ field }) => (
+										<Select
+											className="w-full"
+											selectedKey={field.value}
+											onSelectionChange={(key) =>
+												field.onChange(
+													key as
+														| "stdio"
+														| "sse"
+														| "streamable_http",
+												)
+											}
+											variant="secondary"
+										>
+											<Label>{t("transportType")}</Label>
+											<Select.Trigger>
+												<Select.Value />
+												<Select.Indicator />
+											</Select.Trigger>
+											<Select.Popover>
+												<ListBox>
+													<ListBox.Item
+														id="stdio"
+														textValue="stdio"
+													>
+														stdio
+													</ListBox.Item>
+													<ListBox.Item
+														id="sse"
+														textValue="sse"
+													>
+														sse
+													</ListBox.Item>
+													<ListBox.Item
+														id="streamable_http"
+														textValue="streamable_http"
+													>
+														streamable_http
+													</ListBox.Item>
+												</ListBox>
+											</Select.Popover>
+										</Select>
+									)}
+								/>
 							</Fieldset.Group>
 						</Fieldset>
 
 						{transportType === "stdio" && (
 							<Fieldset>
 								<Fieldset.Group>
-									<TextField
-										className="w-full"
-										variant="secondary"
-										isRequired
-										isInvalid={Boolean(
-											validationErrors.command,
+									<Controller
+										name="command"
+										control={control}
+										rules={{
+											validate: (value) =>
+												transportType !== "stdio" ||
+												value.trim()
+													? true
+													: t(
+															"validationCommandRequired",
+														),
+										}}
+										render={({ field, fieldState }) => (
+											<TextField
+												className="w-full"
+												variant="secondary"
+												isRequired
+												validationBehavior="aria"
+												isInvalid={Boolean(
+													fieldState.error,
+												)}
+											>
+												<Label>{t("command")}</Label>
+												<Input
+													value={field.value}
+													onChange={(e) =>
+														field.onChange(
+															e.target.value,
+														)
+													}
+													onBlur={field.onBlur}
+													placeholder="npx"
+													variant="secondary"
+												/>
+												{fieldState.error && (
+													<FieldError>
+														{
+															fieldState.error
+																.message
+														}
+													</FieldError>
+												)}
+											</TextField>
 										)}
-									>
-										<Label>{t("command")}</Label>
-										<Input
-											value={command}
-											onChange={(
-												e: ChangeEvent<HTMLInputElement>,
-											) => {
-												const value = e.target.value;
-												setCommand(value);
-												setValidationErrors(
-													(
-														current: McpFormErrors,
-													) => ({
-														...current,
-														command:
-															validateCommand(
-																t,
-																transportType,
-																value,
-															),
-													}),
-												);
-											}}
-											placeholder="npx"
-											variant="secondary"
-										/>
-										<FieldError>
-											{validationErrors.command}
-										</FieldError>
-									</TextField>
-									<TextField
-										className="w-full"
-										variant="secondary"
-									>
-										<Label>{t("args")}</Label>
-										<Input
-											value={args}
-											onChange={(e) =>
-												setArgs(e.target.value)
-											}
-											placeholder="-y @modelcontextprotocol/server-filesystem"
-											variant="secondary"
-										/>
-										<Description>
-											{t("argsHelp")}
-										</Description>
-									</TextField>
-									<div className="flex flex-col gap-2">
-										<Label>{t("env")}</Label>
-										<EnvEditor
-											value={envVars}
-											onChange={(value) => {
-												setEnvVars(value);
-												setValidationErrors(
-													(
-														current: McpFormErrors,
-													) => ({
-														...current,
-														envVars:
-															validateMcpForm(t, {
-																name,
-																transportType,
-																command,
-																url,
-																timeoutValue,
-																selectedAgents,
-																envVars: value,
-																httpHeaders,
-															}).envVars,
-													}),
-												);
-											}}
-											variant="secondary"
-											errors={validationErrors.envVars}
-										/>
-									</div>
+									/>
+									<Controller
+										name="args"
+										control={control}
+										render={({ field }) => (
+											<TextField
+												className="w-full"
+												variant="secondary"
+											>
+												<Label>{t("args")}</Label>
+												<Input
+													value={field.value}
+													onChange={(e) =>
+														field.onChange(
+															e.target.value,
+														)
+													}
+													onBlur={field.onBlur}
+													placeholder="-y @modelcontextprotocol/server-filesystem"
+													variant="secondary"
+												/>
+											</TextField>
+										)}
+									/>
+									<Controller
+										name="envVars"
+										control={control}
+										render={({ field }) => (
+											<div className="flex flex-col gap-2">
+												<Label>{t("env")}</Label>
+												<EnvEditor
+													value={field.value}
+													onChange={field.onChange}
+													variant="secondary"
+													errors={
+														submitCount > 0
+															? envErrors
+															: undefined
+													}
+													errorMessage={
+														submitCount > 0
+															? envErrorMessage
+															: undefined
+													}
+												/>
+											</div>
+										)}
+									/>
 								</Fieldset.Group>
 							</Fieldset>
 						)}
@@ -400,102 +437,130 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 							transportType === "streamable_http") && (
 							<Fieldset>
 								<Fieldset.Group>
-									<TextField
-										className="w-full"
-										variant="secondary"
-										isRequired
-										isInvalid={Boolean(
-											validationErrors.url,
+									<Controller
+										name="url"
+										control={control}
+										rules={{
+											validate: (value) => {
+												if (!value.trim()) {
+													return t(
+														"validationUrlRequired",
+													);
+												}
+												try {
+													const parsed = new URL(
+														value,
+													);
+													if (
+														parsed.protocol !==
+															"http:" &&
+														parsed.protocol !==
+															"https:"
+													) {
+														return t(
+															"validationUrlProtocol",
+														);
+													}
+												} catch {
+													return t(
+														"validationUrlInvalid",
+													);
+												}
+												return true;
+											},
+										}}
+										render={({ field, fieldState }) => (
+											<TextField
+												className="w-full"
+												variant="secondary"
+												isRequired
+												validationBehavior="aria"
+												isInvalid={Boolean(
+													fieldState.error,
+												)}
+											>
+												<Label>URL</Label>
+												<Input
+													value={field.value}
+													onChange={(e) =>
+														field.onChange(
+															e.target.value,
+														)
+													}
+													onBlur={field.onBlur}
+													placeholder="http://localhost:3000/sse"
+													variant="secondary"
+												/>
+												{fieldState.error && (
+													<FieldError>
+														{
+															fieldState.error
+																.message
+														}
+													</FieldError>
+												)}
+											</TextField>
 										)}
-									>
-										<Label>URL</Label>
-										<Input
-											value={url}
-											onChange={(
-												e: ChangeEvent<HTMLInputElement>,
-											) => {
-												const value = e.target.value;
-												setUrl(value);
-												setValidationErrors(
-													(
-														current: McpFormErrors,
-													) => ({
-														...current,
-														url: validateUrl(
-															t,
-															transportType,
-															value,
-														),
-													}),
-												);
-											}}
-											placeholder="http://localhost:3000/sse"
-											variant="secondary"
-										/>
-										<FieldError>
-											{validationErrors.url}
-										</FieldError>
-									</TextField>
-									<div className="flex flex-col gap-2">
-										<Label>{t("headers")}</Label>
-										<HttpHeaderEditor
-											value={httpHeaders}
-											onChange={(value) => {
-												setHttpHeaders(value);
-												setValidationErrors(
-													(
-														current: McpFormErrors,
-													) => ({
-														...current,
-														httpHeaders:
-															validateMcpForm(t, {
-																name,
-																transportType,
-																command,
-																url,
-																timeoutValue,
-																selectedAgents,
-																envVars,
-																httpHeaders:
-																	value,
-															}).httpHeaders,
-													}),
-												);
-											}}
-											variant="secondary"
-											errors={
-												validationErrors.httpHeaders
-											}
-										/>
-									</div>
+									/>
+									<Controller
+										name="httpHeaders"
+										control={control}
+										render={({ field }) => (
+											<div className="flex flex-col gap-2">
+												<Label>{t("headers")}</Label>
+												<HttpHeaderEditor
+													value={field.value}
+													onChange={field.onChange}
+													variant="secondary"
+													errors={
+														submitCount > 0
+															? headerErrors
+															: undefined
+													}
+													errorMessage={
+														submitCount > 0
+															? headerErrorMessage
+															: undefined
+													}
+												/>
+											</div>
+										)}
+									/>
 								</Fieldset.Group>
 							</Fieldset>
 						)}
 
 						<Fieldset>
 							<Fieldset.Group>
-								<AgentSelector
-									agents={usableAgents}
-									selectedKeys={selectedAgents}
-									onSelectionChange={(keys) => {
-										setSelectedAgents(keys);
-										setValidationErrors(
-											(current: McpFormErrors) => ({
-												...current,
-												agents:
-													keys.size === 0
-														? t(
-																"validationAgentsRequired",
-															)
-														: undefined,
-											}),
-										);
+								<Controller
+									name="selectedAgents"
+									control={control}
+									rules={{
+										validate: (value) =>
+											value.length > 0
+												? true
+												: t("validationAgentsRequired"),
 									}}
-									label={t("agents")}
-									emptyMessage={t("noAgentsAvailable")}
-									emptyHelpText={t("noAgentsAvailableHelp")}
-									variant="secondary"
-									errorMessage={validationErrors.agents}
+									render={({ field, fieldState }) => (
+										<AgentSelector
+											agents={usableAgents}
+											selectedKeys={new Set(field.value)}
+											onSelectionChange={(keys) =>
+												field.onChange([...keys])
+											}
+											label={t("agents")}
+											emptyMessage={t(
+												"noAgentsAvailable",
+											)}
+											emptyHelpText={t(
+												"noAgentsAvailableHelp",
+											)}
+											variant="secondary"
+											errorMessage={
+												fieldState.error?.message
+											}
+										/>
+									)}
 								/>
 							</Fieldset.Group>
 						</Fieldset>
@@ -508,52 +573,69 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 							<Disclosure.Content>
 								<Fieldset>
 									<Fieldset.Group>
-										<TextField
-											className="w-full"
-											variant="secondary"
-											isInvalid={Boolean(
-												validationErrors.timeout,
+										<Controller
+											name="timeoutValue"
+											control={control}
+											rules={{
+												validate: (value) => {
+													if (!value.trim()) {
+														return true;
+													}
+													if (!/^\d+$/.test(value)) {
+														return t(
+															"validationTimeoutPositiveInteger",
+														);
+													}
+													return Number.parseInt(
+														value,
+														10,
+													) > 0
+														? true
+														: t(
+																"validationTimeoutPositiveInteger",
+															);
+												},
+											}}
+											render={({ field, fieldState }) => (
+												<TextField
+													className="w-full"
+													variant="secondary"
+													validationBehavior="aria"
+													isInvalid={Boolean(
+														fieldState.error,
+													)}
+												>
+													<Label>
+														{t("timeout")}
+													</Label>
+													<Input
+														type="number"
+														value={field.value}
+														onChange={(e) =>
+															field.onChange(
+																e.target.value,
+															)
+														}
+														onBlur={field.onBlur}
+														placeholder="60"
+														variant="secondary"
+													/>
+													{fieldState.error && (
+														<FieldError>
+															{
+																fieldState.error
+																	.message
+															}
+														</FieldError>
+													)}
+												</TextField>
 											)}
-										>
-											<Label>{t("timeout")}</Label>
-											<Input
-												type="number"
-												value={timeoutValue}
-												onChange={(
-													e: ChangeEvent<HTMLInputElement>,
-												) => {
-													const value =
-														e.target.value;
-													setTimeoutValue(value);
-													setValidationErrors(
-														(
-															current: McpFormErrors,
-														) => ({
-															...current,
-															timeout:
-																validateTimeout(
-																	t,
-																	value,
-																),
-														}),
-													);
-												}}
-												placeholder="60"
-												variant="secondary"
-											/>
-											<Description>
-												{t("timeoutHelp")}
-											</Description>
-											<FieldError>
-												{validationErrors.timeout}
-											</FieldError>
-										</TextField>
+										/>
 									</Fieldset.Group>
 								</Fieldset>
 							</Disclosure.Content>
 						</Disclosure>
 
-						{/* Actions */}
 						<div className="flex justify-end gap-2 pt-2">
 							<Button
 								type="button"
@@ -565,7 +647,9 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 							<Button
 								type="submit"
 								isDisabled={
-									!isValid || createMutation.isPending
+									createMutation.isPending ||
+									isSubmitting ||
+									usableAgents.length === 0
 								}
 							>
 								{createMutation.isPending
