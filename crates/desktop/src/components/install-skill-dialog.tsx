@@ -9,6 +9,7 @@ import type { MarketSkill } from "../lib/api-types";
 import { capitalize } from "../lib/mcp-utils";
 import { AgentSelector } from "./agent-selector";
 import { ResultStatusItem } from "./result-status-item";
+import { SkillSourceCard } from "./skill-source-card";
 import { StepIndicator } from "./step-indicator";
 
 interface InstallSkillDialogProps {
@@ -259,20 +260,13 @@ export function InstallSkillDialog({
 								)}
 
 								{selectedSkill && (
-									<div
-										className="
-           rounded-lg border border-accent-soft-hover bg-accent/5 p-3
-         "
-									>
-										<p className="mb-1 text-xs tracking-wide text-muted uppercase">
-											{t("selectedSkill")}
-										</p>
+									<div className="space-y-2">
 										<p className="font-medium">
 											{selectedSkill.name}
 										</p>
-										<p className="text-sm text-muted">
-											{selectedSkill.source}
-										</p>
+										<SkillSourceCard
+											source={selectedSkill.source}
+										/>
 									</div>
 								)}
 

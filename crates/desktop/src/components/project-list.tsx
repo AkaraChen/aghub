@@ -1,6 +1,7 @@
 import {
 	ChevronDownIcon,
 	ChevronUpIcon,
+	EllipsisVerticalIcon,
 	FolderIcon,
 	PlusIcon,
 } from "@heroicons/react/24/solid";
@@ -8,7 +9,7 @@ import { Dropdown, Label } from "@heroui/react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation } from "wouter";
-import { useProjects, useRemoveProject } from "../hooks/use-projects";
+import { useProjects } from "../hooks/use-projects";
 import type { Project } from "../lib/store";
 import { cn } from "../lib/utils";
 import { CreateProjectDialog } from "./edit-project-dialog";
@@ -20,26 +21,21 @@ interface ProjectListItemProps {
 
 function ProjectListItem({ project, isActive }: ProjectListItemProps) {
 	const { t } = useTranslation();
-	const removeProject = useRemoveProject();
 	const [isOpen, setIsOpen] = useState(false);
 
 	const handleAction = (key: React.Key) => {
 		const keyStr = String(key);
-		if (keyStr === "delete") {
-			removeProject.mutate(project.id);
+		if (keyStr === "download-config") {
+			// TODO: Implement download config
+		} else if (keyStr === "download-skills") {
+			// TODO: Implement download skills
 		}
 	};
 
-	const handleContextMenu = (e: React.MouseEvent) => {
-		e.preventDefault();
-		setIsOpen(true);
-	};
-
 	return (
-		<Dropdown isOpen={isOpen} onOpenChange={setIsOpen}>
+		<div className="group relative">
 			<Link
 				href={`/projects/${project.id}`}
-				onContextMenu={handleContextMenu}
 				className={cn(
 					`
        flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm
@@ -56,18 +52,46 @@ function ProjectListItem({ project, isActive }: ProjectListItemProps) {
 				<FolderIcon className="size-4 shrink-0" />
 				<span className="truncate">{project.name}</span>
 			</Link>
-			<Dropdown.Popover placement="bottom start">
-				<Dropdown.Menu onAction={handleAction}>
-					<Dropdown.Item
-						id="delete"
-						textValue={t("remove")}
-						variant="danger"
+			<Dropdown isOpen={isOpen} onOpenChange={setIsOpen}>
+				<Dropdown.Trigger>
+					<button
+						type="button"
+						aria-label={t("actions")}
+						className={cn(
+							`
+           absolute right-1 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted
+           opacity-0 transition-opacity
+           hover:bg-surface-secondary hover:text-foreground
+           group-hover:opacity-100
+         `,
+							isOpen && "opacity-100",
+						)}
+						onClick={(e) => {
+							e.preventDefault();
+							e.stopPropagation();
+						}}
 					>
-						<Label>{t("remove")}</Label>
-					</Dropdown.Item>
-				</Dropdown.Menu>
-			</Dropdown.Popover>
-		</Dropdown>
+						<EllipsisVerticalIcon className="size-4" />
+					</button>
+				</Dropdown.Trigger>
+				<Dropdown.Popover placement="bottom end">
+					<Dropdown.Menu onAction={handleAction}>
+						<Dropdown.Item
+							id="download-config"
+							textValue={t("downloadConfig")}
+						>
+							<Label>{t("downloadConfig")}</Label>
+						</Dropdown.Item>
+						<Dropdown.Item
+							id="download-skills"
+							textValue={t("downloadSkills")}
+						>
+							<Label>{t("downloadSkills")}</Label>
+						</Dropdown.Item>
+					</Dropdown.Menu>
+				</Dropdown.Popover>
+			</Dropdown>
+		</div>
 	);
 }
 

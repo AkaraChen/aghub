@@ -1,3 +1,4 @@
+import { MagnifyingGlassIcon } from "@heroicons/react/24/solid";
 import { Button, Modal, SearchField, Spinner, Tooltip } from "@heroui/react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
@@ -7,6 +8,13 @@ import type { TableComponents } from "react-virtuoso";
 import { TableVirtuoso } from "react-virtuoso";
 import { AgentSelector } from "../../components/agent-selector";
 import { ResultStatusItem } from "../../components/result-status-item";
+import { SkillSourceCard } from "../../components/skill-source-card";
+import {
+	Empty,
+	EmptyHeader,
+	EmptyMedia,
+	EmptyTitle,
+} from "../../components/ui/empty";
 import { useAgentAvailability } from "../../hooks/use-agent-availability";
 import { useServer } from "../../hooks/use-server";
 import { createApi } from "../../lib/api";
@@ -307,10 +315,17 @@ export default function SkillsShPage() {
 							<Spinner size="lg" />
 						</div>
 					) : searchResults.length === 0 ? (
-						<div className="flex items-center justify-center py-12">
-							<p className="text-sm text-muted">
-								{t("noResults")}
-							</p>
+						<div className="flex flex-1 items-center justify-center">
+							<Empty className="border-0">
+								<EmptyHeader>
+									<EmptyMedia>
+										<MagnifyingGlassIcon className="size-8 text-muted" />
+									</EmptyMedia>
+									<EmptyTitle className="text-sm font-normal text-muted">
+										{t("noResults")}
+									</EmptyTitle>
+								</EmptyHeader>
+							</Empty>
 						</div>
 					) : (
 						<div className="flex-1 min-h-0 overflow-hidden">
@@ -475,16 +490,13 @@ export default function SkillsShPage() {
 
 						<Modal.Body className="p-2">
 							{selectedSkill && (
-								<div className="mb-4 rounded-lg border border-accent-soft-hover bg-accent/5 p-3">
-									<p className="mb-1 text-xs tracking-wide text-muted uppercase">
-										{t("selectedSkill")}
-									</p>
+								<div className="mb-4 space-y-2">
 									<p className="font-medium">
 										{selectedSkill.name}
 									</p>
-									<p className="text-sm text-muted">
-										{selectedSkill.source}
-									</p>
+									<SkillSourceCard
+										source={selectedSkill.source}
+									/>
 								</div>
 							)}
 
