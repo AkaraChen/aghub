@@ -51,27 +51,22 @@ export function useSkillInstall() {
 
 	const handleInstall = async () => {
 		if (!selectedSkill) return;
-		if (!installAll && selectedAgents.size === 0) return;
+		if (selectedAgents.size === 0) return;
 		if (installToProject && !selectedProjectId) return;
 
 		setIsInstalling(true);
 
-		const pendingResults: InstallResult[] = installAll
-			? [
-					{
-						agentId: "all",
-						displayName: "All Agents",
-						status: "pending" as const,
-					},
-				]
-			: Array.from(selectedAgents, (agentId) => {
-					const agent = availableAgents.find((a) => a.id === agentId);
-					return {
-						agentId,
-						displayName: agent?.display_name ?? agentId,
-						status: "pending" as const,
-					};
-				});
+		const pendingResults: InstallResult[] = Array.from(
+			selectedAgents,
+			(agentId) => {
+				const agent = availableAgents.find((a) => a.id === agentId);
+				return {
+					agentId,
+					displayName: agent?.display_name ?? agentId,
+					status: "pending" as const,
+				};
+			},
+		);
 		setInstallResults(pendingResults);
 
 		const selectedProject = installToProject
@@ -81,7 +76,7 @@ export function useSkillInstall() {
 		try {
 			const response = await api.skills.install({
 				source: selectedSkill.source,
-				agents: installAll ? [] : Array.from(selectedAgents),
+				agents: Array.from(selectedAgents),
 				skills: installAll ? [] : [selectedSkill.name],
 				scope: installToProject ? "project" : "global",
 				project_path: selectedProject?.path,
