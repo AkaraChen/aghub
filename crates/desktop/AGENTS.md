@@ -84,8 +84,8 @@ bun run tauri build  # Build Tauri app
 From `tauri.conf.json`:
 
 - Product name: `aghub-desktop`
-- Window: 1280x800, overlay titlebar
-- Permissions: window controls, opener, dialog, store, decorum
+- Window: 1280x800, native titlebar
+- Permissions: window controls, opener, dialog, store
 
 ## ANTI-PATTERNS
 
@@ -120,6 +120,5 @@ From `tauri.conf.json`:
 ## NOTES
 
 - Tauri backend (`src-tauri/src/`) calls into `aghub-core` crate
-- Window controls use `decorum` plugin for custom titlebar
 - VS Code extensions recommended: `tauri-apps.tauri-vscode`, `rust-lang.rust-analyzer`
   </content>

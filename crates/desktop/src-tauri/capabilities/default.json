@@ -17,7 +17,6 @@
 		"opener:default",
 		"opener:allow-open-path",
 		"dialog:default",
-		"store:default",
-		"decorum:allow-show-snap-overlay"
+		"store:default"
 	]
 }
