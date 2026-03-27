@@ -50,7 +50,7 @@ function ProjectListItem({ project, isActive }: ProjectListItemProps) {
 					variant="ghost"
 					size="sm"
 					aria-label={t("actions")}
-					className="absolute right-0 top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover:opacity-100 data-[pressed]:opacity-100 data-[open]:opacity-100"
+					className="absolute right-1.5 top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover:opacity-100 data-[pressed]:opacity-100 data-[open]:opacity-100"
 				>
 					<EllipsisVerticalIcon className="size-4" />
 				</Button>
