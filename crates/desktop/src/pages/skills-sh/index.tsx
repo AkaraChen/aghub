@@ -44,11 +44,20 @@ interface InstallResult {
 }
 
 export default function SkillsShPage() {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 	const { baseUrl } = useServer();
 	const api = createApi(baseUrl);
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
+
+	const compactFormatter = useMemo(
+		() =>
+			new Intl.NumberFormat(i18n.language, {
+				notation: "compact",
+				compactDisplay: "short",
+			}),
+		[i18n.language],
+	);
 
 	const [searchQuery, setSearchQuery] = useState("");
 	const [urlQuery, setUrlQuery] = useQueryState("q");
@@ -282,7 +291,9 @@ export default function SkillsShPage() {
 										</td>
 										<td className="p-2 align-middle">
 											<span className="text-muted">
-												{skill.installs.toLocaleString()}
+												{compactFormatter.format(
+													skill.installs,
+												)}
 											</span>
 										</td>
 										<td className="p-2 align-middle">
