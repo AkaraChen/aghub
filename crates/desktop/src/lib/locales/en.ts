@@ -3,7 +3,7 @@ export default {
 	settings: "Settings",
 	skills: "Skills",
 	mcpServers: "MCP Servers",
-	marketplace: "Marketplace",
+	skillsSh: "skills.sh",
 	mcp: "MCP",
 	agentManagement: "Agent",
 	projects: "Projects",
@@ -191,8 +191,7 @@ export default {
 	selectSourceAndAgents: "Select Source & Agents",
 	installation: "Installation",
 	install: "Install",
-	searchSkillMarketDescription:
-		"Search for a skill in the marketplace to install.",
+	searchSkillMarketDescription: "Search skills.sh to install a skill.",
 	searchResults: "Search Results",
 	selectedSkill: "Selected Skill",
 	installingSkill: "Installing Skill",
@@ -203,11 +202,12 @@ export default {
 	editTooltip: "Edit server",
 	deleteTooltip: "Delete server",
 
-	// Marketplace
-	searchMarketSkills: "Search marketplace for skills...",
+	// skills.sh
+	searchMarketSkills: "Search skills.sh...",
 	searchMarketSkillsPlaceholder: "Enter skill name or keyword...",
-	searchToFindSkills: "Search to find skills from the marketplace",
-	mcpMarketplaceComingSoon: "MCP Marketplace coming soon...",
+	searchToFindSkills: "Search to find skills from skills.sh",
+	poweredByVercel: "Powered by Vercel",
+	dataFromSkillsSh: "Data from skills.sh",
 
 	// MCP Detail
 	connection: "Connection",

@@ -3,7 +3,7 @@ export default {
 	settings: "设置",
 	skills: "技能",
 	mcpServers: "MCP 服务器",
-	marketplace: "市场",
+	skillsSh: "skills.sh",
 	mcp: "MCP",
 	agentManagement: "代理",
 	projects: "项目",
@@ -208,18 +208,19 @@ export default {
 	selectSourceAndAgents: "选择来源和代理",
 	installation: "安装",
 	install: "安装",
-	searchSkillMarketDescription: "在市场搜索要安装的技能。",
+	searchSkillMarketDescription: "在 skills.sh 搜索要安装的技能。",
 	searchResults: "搜索结果",
 	selectedSkill: "已选技能",
 	installingSkill: "正在安装技能",
 	selectAgentsForSkill: "选择要安装此技能的代理：",
 	installs: "次安装",
 
-	// Marketplace
-	searchMarketSkills: "在市场搜索技能...",
+	// skills.sh
+	searchMarketSkills: "在 skills.sh 搜索技能...",
 	searchMarketSkillsPlaceholder: "输入技能名称或关键词...",
-	searchToFindSkills: "搜索以从市场查找技能",
-	mcpMarketplaceComingSoon: "MCP 市场即将上线...",
+	searchToFindSkills: "搜索以从 skills.sh 查找技能",
+	poweredByVercel: "由 Vercel 提供支持",
+	dataFromSkillsSh: "数据来自 skills.sh",
 
 	// Projects
 	addProject: "添加项目",

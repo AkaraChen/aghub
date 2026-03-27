@@ -12,6 +12,7 @@ import SettingsPage from "./pages/settings";
 import CustomAgentsPage from "./pages/settings/custom-agents";
 import MCPServersPage from "./pages/settings/mcp-servers";
 import SkillsPage from "./pages/settings/skills";
+import SkillsShPage from "./pages/skills-sh";
 import { AgentAvailabilityProvider } from "./providers/agent-availability";
 import { ServerProvider } from "./providers/server";
 import { ThemeProvider } from "./providers/theme";
@@ -94,6 +95,19 @@ function App() {
 													}
 												>
 													<MCPServersPage />
+												</Suspense>
+											</ErrorBoundary>
+										</MainLayout>
+									</Route>
+									<Route path="/skills-sh">
+										<MainLayout>
+											<ErrorBoundary>
+												<Suspense
+													fallback={
+														<SkillsPageSkeleton />
+													}
+												>
+													<SkillsShPage />
 												</Suspense>
 											</ErrorBoundary>
 										</MainLayout>
