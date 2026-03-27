@@ -5,11 +5,11 @@ import {
 	FolderIcon,
 	PlusIcon,
 } from "@heroicons/react/24/solid";
-import { Dropdown, Label } from "@heroui/react";
+import { Button, Dropdown } from "@heroui/react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation } from "wouter";
-import { useProjects } from "../hooks/use-projects";
+import { useProjects, useRemoveProject } from "../hooks/use-projects";
 import type { Project } from "../lib/store";
 import { cn } from "../lib/utils";
 import { CreateProjectDialog } from "./edit-project-dialog";
@@ -21,14 +21,12 @@ interface ProjectListItemProps {
 
 function ProjectListItem({ project, isActive }: ProjectListItemProps) {
 	const { t } = useTranslation();
+	const removeProject = useRemoveProject();
 	const [isOpen, setIsOpen] = useState(false);
 
 	const handleAction = (key: React.Key) => {
-		const keyStr = String(key);
-		if (keyStr === "download-config") {
-			// TODO: Implement download config
-		} else if (keyStr === "download-skills") {
-			// TODO: Implement download skills
+		if (key === "delete") {
+			removeProject.mutate(project.id);
 		}
 	};
 
@@ -37,56 +35,33 @@ function ProjectListItem({ project, isActive }: ProjectListItemProps) {
 			<Link
 				href={`/projects/${project.id}`}
 				className={cn(
-					`
-       flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm
-       transition-colors select-none
-     `,
+					"flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors select-none",
 					isActive
 						? "bg-surface font-medium text-foreground"
-						: `
-        text-muted
-        hover:bg-surface-secondary hover:text-foreground
-      `,
+						: "text-muted hover:bg-surface-secondary hover:text-foreground",
 				)}
 			>
 				<FolderIcon className="size-4 shrink-0" />
 				<span className="truncate">{project.name}</span>
 			</Link>
 			<Dropdown isOpen={isOpen} onOpenChange={setIsOpen}>
-				<Dropdown.Trigger>
-					<button
-						type="button"
-						aria-label={t("actions")}
-						className={cn(
-							`
-           absolute right-1 top-1/2 -translate-y-1/2 rounded-sm p-1 text-muted
-           opacity-0 transition-opacity
-           hover:bg-surface-secondary hover:text-foreground
-           group-hover:opacity-100
-         `,
-							isOpen && "opacity-100",
-						)}
-						onClick={(e) => {
-							e.preventDefault();
-							e.stopPropagation();
-						}}
-					>
-						<EllipsisVerticalIcon className="size-4" />
-					</button>
-				</Dropdown.Trigger>
+				<Button
+					isIconOnly
+					variant="ghost"
+					size="sm"
+					aria-label={t("actions")}
+					className="absolute right-0 top-1/2 -translate-y-1/2 text-muted opacity-0 group-hover:opacity-100 data-[pressed]:opacity-100 data-[open]:opacity-100"
+				>
+					<EllipsisVerticalIcon className="size-4" />
+				</Button>
 				<Dropdown.Popover placement="bottom end">
 					<Dropdown.Menu onAction={handleAction}>
 						<Dropdown.Item
-							id="download-config"
-							textValue={t("downloadConfig")}
+							id="delete"
+							textValue={t("remove")}
+							variant="danger"
 						>
-							<Label>{t("downloadConfig")}</Label>
-						</Dropdown.Item>
-						<Dropdown.Item
-							id="download-skills"
-							textValue={t("downloadSkills")}
-						>
-							<Label>{t("downloadSkills")}</Label>
+							{t("remove")}
 						</Dropdown.Item>
 					</Dropdown.Menu>
 				</Dropdown.Popover>
