@@ -11,18 +11,14 @@ import { useServer } from "./use-server";
 const CODE_EDITORS_KEY = "code-editors";
 const INTEGRATION_PREFERENCES_KEY = "integration-preferences";
 
-export function useCodeEditors() {
+export function useCurrentCodeEditor() {
+	const queryClient = useQueryClient();
 	const { baseUrl } = useServer();
 	const api = createApi(baseUrl);
-	return useQuery({
+	const { data: codeEditors, isLoading: isLoadingEditors } = useQuery({
 		queryKey: [CODE_EDITORS_KEY],
 		queryFn: () => api.integrations.listCodeEditors(),
 	});
-}
-
-export function useCurrentCodeEditor() {
-	const queryClient = useQueryClient();
-	const { data: codeEditors, isLoading: isLoadingEditors } = useCodeEditors();
 	const { data: preferences, isLoading: isLoadingPreferences } = useQuery({
 		queryKey: [INTEGRATION_PREFERENCES_KEY],
 		queryFn: getIntegrationPreferences,

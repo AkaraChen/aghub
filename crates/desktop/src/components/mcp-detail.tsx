@@ -44,7 +44,7 @@ interface McpDetailProps {
 	projectPath?: string;
 }
 
-function DetailRow({
+function MetaRow({
 	label,
 	value,
 	mono = false,
@@ -58,17 +58,123 @@ function DetailRow({
 		value.length > 200 ? `${value.slice(0, 200)}...` : value;
 
 	return (
-		<div className="flex items-start justify-between gap-4 py-2">
-			<span className="shrink-0 text-sm text-muted">{label}</span>
+		<div className="grid gap-1.5 py-1">
+			<span className="text-[11px] font-medium tracking-wide text-muted uppercase">
+				{label}
+			</span>
 			<span
 				className={cn(
-					"text-right text-sm break-all min-w-0 flex-1",
-					mono && "font-mono text-xs",
+					"min-w-0 text-sm text-foreground",
+					mono &&
+						"overflow-x-auto rounded-md bg-surface-secondary px-3 py-2 font-mono text-xs leading-5 text-foreground",
 				)}
 				title={value.length > 200 ? value : undefined}
 			>
 				{displayValue}
 			</span>
+		</div>
+	);
+}
+
+function CodeBlock({ label, lines }: { label: string; lines: string[] }) {
+	return (
+		<div className="grid gap-1.5">
+			<span className="text-[11px] font-medium tracking-wide text-muted uppercase">
+				{label}
+			</span>
+			<div className="overflow-x-auto rounded-lg border border-default-200 bg-surface-secondary px-3 py-2">
+				<pre className="font-mono text-xs leading-5 text-foreground whitespace-pre-wrap break-words">
+					{lines.join("\n")}
+				</pre>
+			</div>
+		</div>
+	);
+}
+
+function TokenList({ label, items }: { label: string; items: string[] }) {
+	return (
+		<div className="grid gap-1.5">
+			<span className="text-[11px] font-medium tracking-wide text-muted uppercase">
+				{label}
+			</span>
+			<div className="flex flex-wrap gap-2">
+				{items.map((item, index) => (
+					<Chip
+						key={`${label}-${item}-${index}`}
+						size="sm"
+						variant="soft"
+						className="max-w-full font-mono text-xs"
+					>
+						<span className="truncate">{item}</span>
+					</Chip>
+				))}
+			</div>
+		</div>
+	);
+}
+
+function KeyValueList({
+	label,
+	items,
+	collapsedCount = 2,
+	showAll,
+	onToggle,
+	showMoreLabel,
+	showLessLabel,
+}: {
+	label: string;
+	items: Array<[string, string]>;
+	collapsedCount?: number;
+	showAll: boolean;
+	onToggle: () => void;
+	showMoreLabel: (count: number) => string;
+	showLessLabel: string;
+}) {
+	const displayedItems =
+		showAll || items.length <= collapsedCount
+			? items
+			: items.slice(0, collapsedCount);
+	const hiddenCount = Math.max(items.length - collapsedCount, 0);
+
+	return (
+		<div className="grid gap-1.5">
+			<span className="text-[11px] font-medium tracking-wide text-muted uppercase">
+				{label}
+			</span>
+			<div className="space-y-2">
+				{displayedItems.map(([key, value]) => (
+					<div
+						key={key}
+						className="grid gap-1 rounded-lg border border-default-200 bg-surface-secondary px-3 py-2"
+					>
+						<span className="font-mono text-[11px] text-muted">
+							{key}
+						</span>
+						<code className="font-mono text-xs leading-5 text-foreground break-words">
+							{value}
+						</code>
+					</div>
+				))}
+			</div>
+			{hiddenCount > 0 && (
+				<button
+					type="button"
+					onClick={onToggle}
+					className="flex items-center gap-1 text-xs text-muted transition-colors hover:text-foreground"
+				>
+					{showAll ? (
+						<>
+							<ChevronUpIcon className="size-3.5" />
+							<span>{showLessLabel}</span>
+						</>
+					) : (
+						<>
+							<ChevronDownIcon className="size-3.5" />
+							<span>{showMoreLabel(hiddenCount)}</span>
+						</>
+					)}
+				</button>
+			)}
 		</div>
 	);
 }
@@ -147,6 +253,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 
 	const transport = group.transport;
 	const primarySource = group.items[0].source;
+	const primaryItem = group.items[0];
 
 	const getAgentName = useCallback(
 		(item: McpResponse) =>
@@ -165,24 +272,23 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 	const envVars = transport.type === "stdio" ? transport.env : undefined;
 	const headersCount = headers ? Object.keys(headers).length : 0;
 	const envCount = envVars ? Object.keys(envVars).length : 0;
-
-	// Headers display logic
 	const headerEntries = headers ? Object.entries(headers) : [];
-	const displayedHeaders =
-		showAllHeaders || headerEntries.length <= 2
-			? headerEntries
-			: headerEntries.slice(0, 2);
-	const hasMoreHeaders = headerEntries.length > 2;
-	const hiddenHeaderCount = headerEntries.length - 2;
-
-	// Environment variables display logic
 	const envEntries = envVars ? Object.entries(envVars) : [];
-	const displayedEnvVars =
-		showAllEnvVars || envEntries.length <= 2
-			? envEntries
-			: envEntries.slice(0, 2);
-	const hasMoreEnvVars = envEntries.length > 2;
-	const hiddenEnvVarCount = envEntries.length - 2;
+	const transportLabel =
+		transport.type === "streamable_http"
+			? "Streamable HTTP"
+			: transport.type;
+	const transportSummary =
+		transport.type === "stdio"
+			? `${transport.type} via ${transport.command}`
+			: `${transportLabel} endpoint`;
+	const commandLines =
+		transport.type === "stdio"
+			? [
+					transport.command,
+					...(transport.args?.map((arg) => `  ${arg}`) ?? []),
+				]
+			: [];
 
 	return (
 		<>
@@ -194,9 +300,12 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 						<Card.Header className="flex flex-row items-start justify-between gap-3">
 							<div className="min-w-0 flex-1">
 								<h2 className="text-xl font-semibold text-foreground truncate">
-									{group.items[0].name}
+									{primaryItem.name}
 								</h2>
-								<Card.Description className="mt-1 flex items-center gap-2">
+								<Card.Description className="mt-2 flex flex-wrap items-center gap-2">
+									<Chip size="sm" variant="soft">
+										{transportLabel}
+									</Chip>
 									{primarySource && (
 										<Chip
 											size="sm"
@@ -214,6 +323,9 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 												: t("global")}
 										</Chip>
 									)}
+									<span className="min-w-0 truncate font-mono text-xs text-muted">
+										{transportSummary}
+									</span>
 								</Card.Description>
 							</div>
 							<div className="flex items-center gap-2">
@@ -325,60 +437,58 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 								</div>
 							</div>
 
-							{/* Connection Details */}
-							<div className="space-y-3">
+							{/* Transport Details */}
+							<div className="space-y-4">
 								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
-									{t("connection")}
+									{t("transport")}
 								</h3>
 
-								{/* Type row */}
-								<DetailRow
-									label={t("type")}
-									value={transport.type}
-								/>
-
-								{/* Stdio-specific fields */}
-								{transport.type === "stdio" && (
-									<>
-										<DetailRow
+								<div className="grid gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(0,0.8fr)]">
+									{transport.type === "stdio" ? (
+										<CodeBlock
 											label={t("command")}
-											value={transport.command}
+											lines={commandLines}
+										/>
+									) : (
+										<MetaRow
+											label={t("url")}
+											value={transport.url}
 											mono
 										/>
+									)}
+									<div className="grid gap-4">
+										<MetaRow
+											label={t("type")}
+											value={transportLabel}
+										/>
+										{(primaryItem.timeout ||
+											transport.timeout) && (
+											<MetaRow
+												label={t("timeout")}
+												value={t("timeoutSeconds", {
+													seconds:
+														primaryItem.timeout ??
+														transport.timeout,
+												})}
+											/>
+										)}
+									</div>
+								</div>
+
+								{transport.type === "stdio" && (
+									<div className="grid gap-4 md:grid-cols-2">
 										{transport.args &&
 											transport.args.length > 0 && (
-												<DetailRow
+												<TokenList
 													label={t("args")}
-													value={transport.args.join(
-														" ",
-													)}
-													mono
+													items={transport.args}
 												/>
 											)}
-									</>
-								)}
-
-								{/* HTTP-based transport fields */}
-								{(transport.type === "sse" ||
-									transport.type === "streamable_http") && (
-									<DetailRow
-										label={t("url")}
-										value={transport.url}
-										mono
-									/>
-								)}
-
-								{/* Timeout */}
-								{(group.items[0].timeout ||
-									transport.timeout) && (
-									<DetailRow
-										label={t("timeout")}
-										value={t("timeoutSeconds", {
-											seconds:
-												group.items[0].timeout ??
-												transport.timeout,
-										})}
-									/>
+										<MetaRow
+											label={t("connection")}
+											value={transportSummary}
+										/>
+									</div>
 								)}
 							</div>
 
@@ -392,58 +502,20 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 												count: headersCount,
 											})}
 										</h3>
-										<div className="space-y-1">
-											{displayedHeaders.map(
-												([key, value]) => (
-													<div
-														key={key}
-														className="
-                   flex items-center justify-between gap-4 rounded-lg
-                   bg-surface-secondary px-3 py-1.5
-                 "
-													>
-														<span className="shrink-0 font-mono text-xs">
-															{key}
-														</span>
-														<span className="truncate font-mono text-xs text-muted">
-															{value}
-														</span>
-													</div>
-												),
-											)}
-										</div>
-										{hasMoreHeaders && (
-											<button
-												type="button"
-												onClick={() =>
-													setShowAllHeaders(
-														!showAllHeaders,
-													)
-												}
-												className="
-                 mt-2 flex items-center gap-1 text-xs text-muted transition-colors
-                 hover:text-foreground
-               "
-											>
-												{showAllHeaders ? (
-													<>
-														<ChevronUpIcon className="size-3.5" />
-														<span>
-															{t("showLess")}
-														</span>
-													</>
-												) : (
-													<>
-														<ChevronDownIcon className="size-3.5" />
-														<span>
-															{t("showMore", {
-																count: hiddenHeaderCount,
-															})}
-														</span>
-													</>
-												)}
-											</button>
-										)}
+										<KeyValueList
+											label={t("headers")}
+											items={headerEntries}
+											showAll={showAllHeaders}
+											onToggle={() =>
+												setShowAllHeaders(
+													!showAllHeaders,
+												)
+											}
+											showMoreLabel={(count) =>
+												t("showMore", { count })
+											}
+											showLessLabel={t("showLess")}
+										/>
 									</div>
 								)}
 
@@ -455,56 +527,18 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 											count: envCount,
 										})}
 									</h3>
-									<div className="space-y-1">
-										{displayedEnvVars.map(
-											([key, value]) => (
-												<div
-													key={key}
-													className="
-                   flex items-center justify-between gap-4 rounded-lg
-                   bg-surface-secondary px-3 py-1.5
-                 "
-												>
-													<span className="shrink-0 font-mono text-xs">
-														{key}
-													</span>
-													<span className="truncate font-mono text-xs text-muted">
-														{value}
-													</span>
-												</div>
-											),
-										)}
-									</div>
-									{hasMoreEnvVars && (
-										<button
-											type="button"
-											onClick={() =>
-												setShowAllEnvVars(
-													!showAllEnvVars,
-												)
-											}
-											className="
-                 mt-2 flex items-center gap-1 text-xs text-muted transition-colors
-                 hover:text-foreground
-               "
-										>
-											{showAllEnvVars ? (
-												<>
-													<ChevronUpIcon className="size-3.5" />
-													<span>{t("showLess")}</span>
-												</>
-											) : (
-												<>
-													<ChevronDownIcon className="size-3.5" />
-													<span>
-														{t("showMore", {
-															count: hiddenEnvVarCount,
-														})}
-													</span>
-												</>
-											)}
-										</button>
-									)}
+									<KeyValueList
+										label={t("env")}
+										items={envEntries}
+										showAll={showAllEnvVars}
+										onToggle={() =>
+											setShowAllEnvVars(!showAllEnvVars)
+										}
+										showMoreLabel={(count) =>
+											t("showMore", { count })
+										}
+										showLessLabel={t("showLess")}
+									/>
 								</div>
 							)}
 
