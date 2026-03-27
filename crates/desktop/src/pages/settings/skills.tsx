@@ -1,4 +1,9 @@
-import { ArrowPathIcon, PlusIcon } from "@heroicons/react/24/solid";
+import {
+	ArrowDownTrayIcon,
+	ArrowPathIcon,
+	CommandLineIcon,
+	PlusIcon,
+} from "@heroicons/react/24/solid";
 import { Button, Dropdown } from "@heroui/react";
 import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
@@ -89,13 +94,19 @@ export default function SkillsPage() {
 									id="create"
 									textValue={t("createCustomSkill")}
 								>
-									{t("createCustomSkill")}
+									<div className="flex items-center gap-2">
+										<CommandLineIcon className="size-4" />
+										<span>{t("createCustomSkill")}</span>
+									</div>
 								</Dropdown.Item>
 								<Dropdown.Item
 									id="import"
 									textValue={t("importFromFile")}
 								>
-									{t("importFromFile")}
+									<div className="flex items-center gap-2">
+										<ArrowDownTrayIcon className="size-4" />
+										<span>{t("importFromFile")}</span>
+									</div>
 								</Dropdown.Item>
 							</Dropdown.Menu>
 						</Dropdown.Popover>

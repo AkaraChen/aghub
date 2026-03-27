@@ -1,4 +1,9 @@
-import { ArrowPathIcon, PlusIcon } from "@heroicons/react/24/solid";
+import {
+	ArrowDownTrayIcon,
+	ArrowPathIcon,
+	PlusIcon,
+	ServerIcon,
+} from "@heroicons/react/24/solid";
 import { Button, Dropdown } from "@heroui/react";
 import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
@@ -115,13 +120,19 @@ export default function MCPServersPage() {
 									id="manual"
 									textValue={t("manualCreation")}
 								>
-									{t("manualCreation")}
+									<div className="flex items-center gap-2">
+										<ServerIcon className="size-4" />
+										<span>{t("manualCreation")}</span>
+									</div>
 								</Dropdown.Item>
 								<Dropdown.Item
 									id="import"
 									textValue={t("importFromJson")}
 								>
-									{t("importFromJson")}
+									<div className="flex items-center gap-2">
+										<ArrowDownTrayIcon className="size-4" />
+										<span>{t("importFromJson")}</span>
+									</div>
 								</Dropdown.Item>
 							</Dropdown.Menu>
 						</Dropdown.Popover>
