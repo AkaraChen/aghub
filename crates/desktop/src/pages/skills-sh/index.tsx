@@ -8,7 +8,7 @@ import type { TableComponents } from "react-virtuoso";
 import { TableVirtuoso } from "react-virtuoso";
 import { AgentSelector } from "../../components/agent-selector";
 import { ResultStatusItem } from "../../components/result-status-item";
-import { SkillSourceCard } from "../../components/skill-source-card";
+import { SkillInfoCard } from "../../components/skill-info-card";
 import {
 	Empty,
 	EmptyHeader,
@@ -490,14 +490,11 @@ export default function SkillsShPage() {
 
 						<Modal.Body className="p-2">
 							{selectedSkill && (
-								<div className="mb-4 space-y-2">
-									<p className="font-medium">
-										{selectedSkill.name}
-									</p>
-									<SkillSourceCard
-										source={selectedSkill.source}
-									/>
-								</div>
+								<SkillInfoCard
+									name={selectedSkill.name}
+									source={selectedSkill.source}
+									className="mb-4"
+								/>
 							)}
 
 							{installResults.length === 0 && (
