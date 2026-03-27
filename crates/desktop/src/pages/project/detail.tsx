@@ -42,6 +42,7 @@ export default function ProjectDetailPage() {
 		data: mcps = [],
 		refetch: refetchMcps,
 		isFetching: isFetchingMcps,
+		isLoading: isLoadingMcps,
 	} = useQuery({
 		queryKey: ["project-mcps", project?.path],
 		queryFn: () => api.mcps.listAll("all", project?.path),
@@ -52,11 +53,14 @@ export default function ProjectDetailPage() {
 		data: skills = [],
 		refetch: refetchSkills,
 		isFetching: isFetchingSkills,
+		isLoading: isLoadingSkills,
 	} = useQuery({
 		queryKey: ["project-skills", project?.path],
 		queryFn: () => api.skills.listAll("all", project?.path),
 		enabled: !!project?.path,
 	});
+
+	const isLoading = isLoadingMcps || isLoadingSkills;
 
 	// Filter to project-scoped only
 	const projectMcps = useMemo(
@@ -146,6 +150,7 @@ export default function ProjectDetailPage() {
 				}}
 				onRefresh={handleRefresh}
 				isRefreshing={isRefreshing}
+				isLoading={isLoading}
 				searchQuery={searchQuery}
 				onSearchChange={setSearchQuery}
 				projectPath={project.path}
