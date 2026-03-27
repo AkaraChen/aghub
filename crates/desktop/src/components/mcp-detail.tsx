@@ -509,29 +509,23 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 							)}
 
 							{/* Action Buttons */}
-							<Card.Footer className="pt-4 border-t border-default-200 flex flex-col sm:flex-row gap-3">
+							<Card.Footer className="pt-4 border-t border-default-200 flex flex-wrap gap-3">
 								<Button
 									variant="secondary"
-									size="sm"
 									onPress={handleCopyConfig}
-									className="min-h-[44px]"
 								>
 									{copyFeedback ? (
 										<CheckCircleIcon className="size-4 text-success" />
 									) : (
 										<DocumentDuplicateIcon className="size-4" />
 									)}
-									<span aria-live="polite">
-										{copyFeedback
-											? t("copied")
-											: t("copyConfig")}
-									</span>
+									{copyFeedback
+										? t("copied")
+										: t("copyConfig")}
 								</Button>
 								<Button
 									variant="primary"
-									size="sm"
 									onPress={() => setManageDialogOpen(true)}
-									className="min-h-[44px]"
 								>
 									<PlusIcon className="size-4" />
 									{t("addToAgent")}
