@@ -34,6 +34,7 @@
 		"react-dom": "^19.1.0",
 		"react-grab": "^0.1.29",
 		"react-i18next": "^16.6.1",
+		"react-virtuoso": "^4.18.3",
 		"simple-icons": "^16.13.0",
 		"stable-hash": "^0.0.6",
 		"tailwind-merge": "^3.5.0",

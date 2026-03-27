@@ -1,16 +1,10 @@
-import {
-	Button,
-	Modal,
-	Pagination,
-	SearchField,
-	Spinner,
-	Table,
-	Tooltip,
-} from "@heroui/react";
+import { Button, Modal, SearchField, Spinner, Tooltip } from "@heroui/react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
-import { useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { TableComponents } from "react-virtuoso";
+import { TableVirtuoso } from "react-virtuoso";
 import { AgentSelector } from "../../components/agent-selector";
 import { ResultStatusItem } from "../../components/result-status-item";
 import { useAgentAvailability } from "../../hooks/use-agent-availability";
@@ -18,7 +12,29 @@ import { useServer } from "../../hooks/use-server";
 import { createApi } from "../../lib/api";
 import type { MarketSkill } from "../../lib/api-types";
 
-const PAGE_SIZE = 10;
+const BATCH_SIZE = 20;
+const ROW_HEIGHT = 48;
+
+const tableComponents: TableComponents<MarketSkill> = {
+	Table: ({ style, ...props }) => (
+		<table
+			className="w-full table-fixed caption-bottom text-sm"
+			style={style}
+			{...props}
+		/>
+	),
+	TableHead: (props) => (
+		<thead className="border-b border-border" {...props} />
+	),
+	TableBody: (props) => <tbody {...props} />,
+	TableRow: ({ style, ...props }) => (
+		<tr
+			className="border-b border-border transition-colors hover:bg-accent/5"
+			style={{ height: ROW_HEIGHT, ...style }}
+			{...props}
+		/>
+	),
+};
 
 interface InstallResult {
 	agentId: string;
@@ -36,7 +52,7 @@ export default function SkillsShPage() {
 
 	const [searchQuery, setSearchQuery] = useState("");
 	const [urlQuery, setUrlQuery] = useQueryState("q");
-	const [page, setPage] = useState(1);
+	const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
 
 	const [installModalOpen, setInstallModalOpen] = useState(false);
 	const [selectedSkill, setSelectedSkill] = useState<MarketSkill | null>(
@@ -62,16 +78,25 @@ export default function SkillsShPage() {
 		staleTime: 60_000,
 	});
 
-	const totalPages = Math.ceil(searchResults.length / PAGE_SIZE);
-	const paginatedResults = searchResults.slice(
-		(page - 1) * PAGE_SIZE,
-		page * PAGE_SIZE,
+	const displayedResults = useMemo(
+		() => searchResults.slice(0, visibleCount),
+		[searchResults, visibleCount],
 	);
+
+	const hasMore = visibleCount < searchResults.length;
+
+	const handleEndReached = useCallback(() => {
+		if (hasMore && !isSearching) {
+			setVisibleCount((c) =>
+				Math.min(c + BATCH_SIZE, searchResults.length),
+			);
+		}
+	}, [hasMore, isSearching, searchResults.length]);
 
 	const handleSearch = () => {
 		if (searchQuery.trim().length >= 2) {
 			setUrlQuery(searchQuery.trim());
-			setPage(1);
+			setVisibleCount(BATCH_SIZE);
 		}
 	};
 
@@ -148,87 +173,89 @@ export default function SkillsShPage() {
 	};
 
 	return (
-		<div className="h-full overflow-auto p-6">
+		<div className="h-full flex flex-col p-6 overflow-hidden">
 			{submittedQuery.length >= 2 ? (
 				<>
-					<div className="flex items-center gap-6 mb-4">
-						<div className="flex items-center gap-2">
-							<Tooltip delay={0}>
-								<Tooltip.Trigger>
-									<span className="text-muted hover:text-foreground cursor-default">
-										<svg
-											height="18"
-											viewBox="0 0 16 16"
-											width="18"
-											className="text-current"
-										>
-											<path
-												fillRule="evenodd"
-												clipRule="evenodd"
-												d="M8 1L16 15H0L8 1Z"
-												fill="currentColor"
-											/>
-										</svg>
-									</span>
-								</Tooltip.Trigger>
-								<Tooltip.Content>
-									{t("poweredByVercel")}
-								</Tooltip.Content>
-							</Tooltip>
-							<span className="text-muted">
-								<svg
-									height="16"
-									viewBox="0 0 16 16"
-									width="16"
-									className="text-current"
+					<div className="shrink-0 pb-4">
+						<div className="flex items-center gap-6">
+							<div className="flex items-center gap-2">
+								<Tooltip delay={0}>
+									<Tooltip.Trigger>
+										<span className="text-muted hover:text-foreground cursor-default">
+											<svg
+												height="18"
+												viewBox="0 0 16 16"
+												width="18"
+												className="text-current"
+											>
+												<path
+													fillRule="evenodd"
+													clipRule="evenodd"
+													d="M8 1L16 15H0L8 1Z"
+													fill="currentColor"
+												/>
+											</svg>
+										</span>
+									</Tooltip.Trigger>
+									<Tooltip.Content>
+										{t("poweredByVercel")}
+									</Tooltip.Content>
+								</Tooltip>
+								<span className="text-muted">
+									<svg
+										height="16"
+										viewBox="0 0 16 16"
+										width="16"
+										className="text-current"
+									>
+										<path
+											fillRule="evenodd"
+											clipRule="evenodd"
+											d="M4.01526 15.3939L4.3107 14.7046L10.3107 0.704556L10.6061 0.0151978L11.9849 0.606077L11.6894 1.29544L5.68942 15.2954L5.39398 15.9848L4.01526 15.3939Z"
+											fill="currentColor"
+										/>
+									</svg>
+								</span>
+								<Tooltip delay={0}>
+									<Tooltip.Trigger>
+										<span className="font-medium tracking-tight text-lg cursor-default">
+											Skills
+										</span>
+									</Tooltip.Trigger>
+									<Tooltip.Content>
+										{t("dataFromSkillsSh")}
+									</Tooltip.Content>
+								</Tooltip>
+							</div>
+							<div className="flex items-center gap-2">
+								<SearchField
+									value={searchQuery}
+									onChange={setSearchQuery}
+									onKeyDown={handleKeyDown}
+									aria-label={t("searchMarketSkills")}
+									className="w-[400px]"
 								>
-									<path
-										fillRule="evenodd"
-										clipRule="evenodd"
-										d="M4.01526 15.3939L4.3107 14.7046L10.3107 0.704556L10.6061 0.0151978L11.9849 0.606077L11.6894 1.29544L5.68942 15.2954L5.39398 15.9848L4.01526 15.3939Z"
-										fill="currentColor"
-									/>
-								</svg>
-							</span>
-							<Tooltip delay={0}>
-								<Tooltip.Trigger>
-									<span className="font-medium tracking-tight text-lg cursor-default">
-										Skills
-									</span>
-								</Tooltip.Trigger>
-								<Tooltip.Content>
-									{t("dataFromSkillsSh")}
-								</Tooltip.Content>
-							</Tooltip>
-						</div>
-						<div className="flex items-center gap-2">
-							<SearchField
-								value={searchQuery}
-								onChange={setSearchQuery}
-								onKeyDown={handleKeyDown}
-								aria-label={t("searchMarketSkills")}
-								className="w-[400px]"
-							>
-								<SearchField.Group>
-									<SearchField.SearchIcon />
-									<SearchField.Input
-										placeholder={t(
-											"searchMarketSkillsPlaceholder",
-										)}
-									/>
-									<SearchField.ClearButton />
-								</SearchField.Group>
-							</SearchField>
-							<Button
-								onPress={handleSearch}
-								isDisabled={searchQuery.trim().length < 2}
-							>
-								{t("search")}
-							</Button>
+									<SearchField.Group>
+										<SearchField.SearchIcon />
+										<SearchField.Input
+											placeholder={t(
+												"searchMarketSkillsPlaceholder",
+											)}
+										/>
+										<SearchField.ClearButton />
+									</SearchField.Group>
+								</SearchField>
+								<Button
+									onPress={handleSearch}
+									isDisabled={searchQuery.trim().length < 2}
+								>
+									{t("search")}
+								</Button>
+							</div>
 						</div>
 					</div>
 
-					{isSearching ? (
+					{isSearching && searchResults.length === 0 ? (
 						<div className="flex items-center justify-center py-12">
 							<Spinner size="lg" />
 						</div>
@@ -239,171 +266,72 @@ export default function SkillsShPage() {
 							</p>
 						</div>
 					) : (
-						<>
-							<Table variant="secondary">
-								<Table.ScrollContainer>
-									<Table.Content
-										aria-label={t("searchResults")}
-									>
-										<Table.Header>
-											<Table.Column>
-												{t("name")}
-											</Table.Column>
-											<Table.Column>
-												{t("installs")}
-											</Table.Column>
-											<Table.Column>
-												{t("source")}
-											</Table.Column>
-											<Table.Column></Table.Column>
-										</Table.Header>
-										<Table.Body items={paginatedResults}>
-											{(skill) => (
-												<Table.Row id={skill.slug}>
-													<Table.Cell>
-														<span className="font-medium">
-															{skill.name}
-														</span>
-													</Table.Cell>
-													<Table.Cell>
-														<span className="text-muted">
-															{skill.installs.toLocaleString()}
-														</span>
-													</Table.Cell>
-													<Table.Cell>
-														<span className="text-muted text-sm">
-															{skill.source}
-														</span>
-													</Table.Cell>
-													<Table.Cell>
-														<Button
-															size="sm"
-															variant="secondary"
-															onPress={() =>
-																handleInstallClick(
-																	skill,
-																)
-															}
-														>
-															{t("install")}
-														</Button>
-													</Table.Cell>
-												</Table.Row>
-											)}
-										</Table.Body>
-									</Table.Content>
-								</Table.ScrollContainer>
-							</Table>
-
-							{totalPages > 1 && (
-								<div className="mt-4 flex justify-center">
-									<Pagination>
-										<Pagination.Content>
-											<Pagination.Item>
-												<Pagination.Previous
-													isDisabled={page === 1}
-													onPress={() =>
-														setPage((p) =>
-															Math.max(1, p - 1),
-														)
-													}
-												>
-													<Pagination.PreviousIcon />
-												</Pagination.Previous>
-											</Pagination.Item>
-											{(() => {
-												const pages: (
-													| number
-													| string
-												)[] = [];
-												const showEllipsis =
-													totalPages > 7;
-												if (!showEllipsis) {
-													for (
-														let i = 1;
-														i <= totalPages;
-														i++
-													) {
-														pages.push(i);
-													}
-												} else {
-													pages.push(1);
-													if (page > 3) {
-														pages.push(
-															"ellipsis-start",
-														);
-													}
-													const start = Math.max(
-														2,
-														page - 1,
-													);
-													const end = Math.min(
-														totalPages - 1,
-														page + 1,
-													);
-													for (
-														let i = start;
-														i <= end;
-														i++
-													) {
-														pages.push(i);
-													}
-													if (page < totalPages - 2) {
-														pages.push(
-															"ellipsis-end",
-														);
-													}
-													pages.push(totalPages);
+						<div className="flex-1 min-h-0 overflow-hidden">
+							<TableVirtuoso
+								data={displayedResults}
+								endReached={handleEndReached}
+								fixedItemHeight={ROW_HEIGHT}
+								style={{ height: "100%" }}
+								components={tableComponents}
+								itemContent={(_index, skill) => (
+									<>
+										<td className="p-2 align-middle">
+											<span className="font-medium">
+												{skill.name}
+											</span>
+										</td>
+										<td className="p-2 align-middle">
+											<span className="text-muted">
+												{skill.installs.toLocaleString()}
+											</span>
+										</td>
+										<td className="p-2 align-middle">
+											<span className="text-muted text-sm">
+												{skill.source}
+											</span>
+										</td>
+										<td className="p-2 align-middle">
+											<Button
+												size="sm"
+												variant="secondary"
+												onPress={() =>
+													handleInstallClick(skill)
 												}
-												return pages.map((p) =>
-													typeof p === "string" ? (
-														<Pagination.Item
-															key={p}
-														>
-															<span className="px-2 text-muted">
-																...
-															</span>
-														</Pagination.Item>
-													) : (
-														<Pagination.Item
-															key={p}
-														>
-															<Pagination.Link
-																isActive={
-																	p === page
-																}
-																onPress={() =>
-																	setPage(p)
-																}
-															>
-																{p}
-															</Pagination.Link>
-														</Pagination.Item>
-													),
-												);
-											})()}
-											<Pagination.Item>
-												<Pagination.Next
-													isDisabled={
-														page === totalPages
-													}
-													onPress={() =>
-														setPage((p) =>
-															Math.min(
-																totalPages,
-																p + 1,
-															),
-														)
-													}
-												>
-													<Pagination.NextIcon />
-												</Pagination.Next>
-											</Pagination.Item>
-										</Pagination.Content>
-									</Pagination>
-								</div>
-							)}
-						</>
+											>
+												{t("install")}
+											</Button>
+										</td>
+									</>
+								)}
+							>
+								<thead>
+									<tr>
+										<th className="h-12 px-2 text-left align-middle font-medium w-[35%]">
+											{t("name")}
+										</th>
+										<th className="h-12 px-2 text-left align-middle font-medium w-[15%]">
+											{t("installs")}
+										</th>
+										<th className="h-12 px-2 text-left align-middle font-medium w-[35%]">
+											{t("source")}
+										</th>
+										<th className="h-12 px-2 px-4 align-middle w-[15%]" />
+									</tr>
+								</thead>
+								<tfoot>
+									{isSearching && hasMore && (
+										<tr>
+											<td
+												colSpan={4}
+												className="py-3 text-center"
+											>
+												<Spinner size="sm" />
+											</td>
+										</tr>
+									)}
+								</tfoot>
+							</TableVirtuoso>
+						</div>
 					)}
 				</>
 			) : (
