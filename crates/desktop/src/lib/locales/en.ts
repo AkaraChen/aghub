@@ -78,6 +78,8 @@ export default {
 	skillImported: "Skill imported successfully",
 	importError: "Failed to import skill: {{error}}",
 	selectedPath: "Selected Path",
+	file: "File",
+	folder: "Folder",
 	installFromMarket: "Install from Market",
 	skillName: "Skill Name",
 	skillCreated: "Skill created successfully",

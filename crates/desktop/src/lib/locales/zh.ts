@@ -77,6 +77,8 @@ export default {
 	skillImported: "技能导入成功",
 	importError: "技能导入失败: {{error}}",
 	selectedPath: "已选路径",
+	file: "文件",
+	folder: "文件夹",
 	installFromMarket: "从市场安装",
 	skillName: "技能名称",
 	skillCreated: "技能创建成功",
