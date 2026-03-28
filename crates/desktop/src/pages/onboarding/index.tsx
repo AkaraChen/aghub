@@ -24,16 +24,20 @@ const appIconUrl = new URL(
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
 	return (
-		<span className="inline-flex rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs font-medium text-accent">
+		<span className="inline-flex rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs text-accent">
 			{children}
 		</span>
 	);
 }
 
+function SectionDivider() {
+	return <div className="h-px bg-border/70" />;
+}
+
 function StepBullet({ children }: { children: React.ReactNode }) {
 	return (
-		<li className="flex items-start gap-3 text-sm leading-7 text-foreground/80">
-			<span className="mt-1.5 flex size-5 shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
+		<li className="flex items-start gap-3 text-sm leading-6 text-foreground">
+			<span className="mt-1 flex size-5 shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
 				<CheckBadgeIcon className="size-3.5" />
 			</span>
 			<span>{children}</span>
@@ -41,38 +45,186 @@ function StepBullet({ children }: { children: React.ReactNode }) {
 	);
 }
 
+function SectionIntro({
+	eyebrow,
+	title,
+	body,
+	bullets,
+	hero = false,
+}: {
+	eyebrow: string;
+	title: string;
+	body: string;
+	bullets: string[];
+	hero?: boolean;
+}) {
+	return (
+		<div className="space-y-5">
+			<div className="space-y-4">
+				<SectionLabel>{eyebrow}</SectionLabel>
+
+				<div className="space-y-3">
+					{hero ? (
+						<h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-foreground md:text-5xl">
+							{title}
+						</h1>
+					) : (
+						<h2 className="max-w-3xl text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+							{title}
+						</h2>
+					)}
+
+					<p className="max-w-3xl text-base leading-8 text-muted md:text-lg">
+						{body}
+					</p>
+				</div>
+			</div>
+
+			<ul className="space-y-3">
+				{bullets.map((bullet) => (
+					<StepBullet key={bullet}>{bullet}</StepBullet>
+				))}
+			</ul>
+		</div>
+	);
+}
+
+function FeatureRow({
+	icon,
+	title,
+	description,
+}: {
+	icon: React.ReactNode;
+	title: string;
+	description: string;
+}) {
+	return (
+		<div className="flex items-start gap-3 rounded-2xl bg-surface-secondary/90 p-4">
+			<div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent/12 text-accent">
+				{icon}
+			</div>
+			<div className="space-y-1">
+				<p className="text-sm font-semibold text-foreground">{title}</p>
+				<p className="text-sm leading-6 text-muted">{description}</p>
+			</div>
+		</div>
+	);
+}
+
+function FlowStep({
+	index,
+	title,
+	description,
+}: {
+	index: string;
+	title: string;
+	description: string;
+}) {
+	return (
+		<div className="flex items-start gap-3 rounded-2xl bg-surface-secondary/90 p-4">
+			<div className="flex size-9 shrink-0 items-center justify-center rounded-full border border-accent/25 bg-accent/10 text-xs font-semibold text-accent">
+				{index}
+			</div>
+			<div className="space-y-1">
+				<p className="text-sm font-semibold text-foreground">{title}</p>
+				<p className="text-sm leading-6 text-muted">{description}</p>
+			</div>
+		</div>
+	);
+}
+
+function SkillExample({
+	name,
+	description,
+}: {
+	name: string;
+	description: string;
+}) {
+	return (
+		<div className="flex items-center justify-between gap-3 rounded-2xl bg-surface-secondary/90 px-4 py-3">
+			<div className="min-w-0">
+				<p className="text-sm font-semibold text-foreground">{name}</p>
+				<p className="text-sm leading-6 text-muted">{description}</p>
+			</div>
+			<span className="rounded-full border border-border/70 px-2.5 py-1 text-[11px] text-muted">
+				SKILL.md
+			</span>
+		</div>
+	);
+}
+
+function StartAction({
+	icon,
+	title,
+	description,
+	buttonLabel,
+	onPress,
+	isPending,
+}: {
+	icon: React.ReactNode;
+	title: string;
+	description: string;
+	buttonLabel: string;
+	onPress: () => void;
+	isPending: boolean;
+}) {
+	return (
+		<div className="flex h-full flex-col gap-4 rounded-2xl bg-surface-secondary/90 p-4">
+			<div className="flex items-start gap-3">
+				<div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-accent/12 text-accent">
+					{icon}
+				</div>
+				<div className="space-y-1">
+					<p className="text-sm font-semibold text-foreground">
+						{title}
+					</p>
+					<p className="text-sm leading-6 text-muted">
+						{description}
+					</p>
+				</div>
+			</div>
+
+			<Button
+				variant="secondary"
+				className="mt-auto justify-between"
+				isDisabled={isPending}
+				onPress={onPress}
+			>
+				<span>{buttonLabel}</span>
+				<ArrowRightIcon className="size-4" />
+			</Button>
+		</div>
+	);
+}
+
 function WelcomeSection({ agentCount }: { agentCount: number }) {
 	const { t } = useTranslation();
 
 	return (
-		<section className="px-8 py-10">
-			<div className="mb-10 max-w-2xl space-y-5">
-				<SectionLabel>{t("onboardingWelcomeEyebrow")}</SectionLabel>
-				<h1 className="text-4xl font-semibold tracking-tight text-foreground md:text-5xl">
-					{t("onboardingWelcomeTitle")}
-				</h1>
-				<p className="text-lg leading-8 text-muted">
-					{t("onboardingWelcomeBody")}
-				</p>
+		<section className="space-y-6 px-6 py-7 md:px-8 md:py-8">
+			<SectionIntro
+				eyebrow={t("onboardingWelcomeEyebrow")}
+				title={t("onboardingWelcomeTitle")}
+				body={t("onboardingWelcomeBody")}
+				bullets={[
+					t("onboardingWelcomeBulletOne"),
+					t("onboardingWelcomeBulletTwo"),
+				]}
+				hero
+			/>
 
-				<ul className="space-y-2 pt-2">
-					<StepBullet>{t("onboardingWelcomeBulletOne")}</StepBullet>
-					<StepBullet>{t("onboardingWelcomeBulletTwo")}</StepBullet>
-				</ul>
-			</div>
-
-			<div className="rounded-3xl border border-border/50 bg-gradient-to-br from-surface-secondary/80 to-surface-secondary/40 p-6">
-				<div className="mb-6 flex items-center gap-4">
+			<div className="space-y-4 rounded-2xl bg-surface-secondary/90 p-4">
+				<div className="flex items-center gap-4">
 					<img
 						src={appIconUrl}
 						alt=""
-						className="size-14 rounded-2xl border border-border/70 shadow-sm"
+						className="size-12 rounded-[14px] border border-border/70"
 					/>
-					<div>
-						<p className="text-base font-semibold text-foreground">
+					<div className="space-y-1">
+						<p className="text-sm font-semibold text-foreground">
 							{t("onboardingOverviewTitle")}
 						</p>
-						<p className="text-sm text-muted">
+						<p className="text-xs text-muted">
 							{t("onboardingAgentCoverage", {
 								count: agentCount,
 							})}
@@ -80,44 +232,26 @@ function WelcomeSection({ agentCount }: { agentCount: number }) {
 					</div>
 				</div>
 
-				<p className="mb-6 text-sm leading-7 text-muted">
+				<p className="text-sm leading-6 text-muted">
 					{t("onboardingOverviewBody")}
 				</p>
 
-				<div className="grid gap-4 sm:grid-cols-3">
-					<div className="rounded-2xl border border-border/40 bg-surface/60 p-5">
-						<div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-accent/12 text-accent">
-							<ServerStackIcon className="size-5" />
-						</div>
-						<p className="mb-1 text-sm font-semibold text-foreground">
-							{t("onboardingFeatureMcpTitle")}
-						</p>
-						<p className="text-sm leading-6 text-muted">
-							{t("onboardingFeatureMcpDescription")}
-						</p>
-					</div>
-					<div className="rounded-2xl border border-border/40 bg-surface/60 p-5">
-						<div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-accent/12 text-accent">
-							<BookOpenIcon className="size-5" />
-						</div>
-						<p className="mb-1 text-sm font-semibold text-foreground">
-							{t("onboardingFeatureSkillsTitle")}
-						</p>
-						<p className="text-sm leading-6 text-muted">
-							{t("onboardingFeatureSkillsDescription")}
-						</p>
-					</div>
-					<div className="rounded-2xl border border-border/40 bg-surface/60 p-5">
-						<div className="mb-3 flex size-10 items-center justify-center rounded-xl bg-accent/12 text-accent">
-							<FolderIcon className="size-5" />
-						</div>
-						<p className="mb-1 text-sm font-semibold text-foreground">
-							{t("onboardingFeatureScopeTitle")}
-						</p>
-						<p className="text-sm leading-6 text-muted">
-							{t("onboardingFeatureScopeDescription")}
-						</p>
-					</div>
+				<div className="grid gap-3 md:grid-cols-3">
+					<FeatureRow
+						icon={<ServerStackIcon className="size-4" />}
+						title={t("onboardingFeatureMcpTitle")}
+						description={t("onboardingFeatureMcpDescription")}
+					/>
+					<FeatureRow
+						icon={<BookOpenIcon className="size-4" />}
+						title={t("onboardingFeatureSkillsTitle")}
+						description={t("onboardingFeatureSkillsDescription")}
+					/>
+					<FeatureRow
+						icon={<FolderIcon className="size-4" />}
+						title={t("onboardingFeatureScopeTitle")}
+						description={t("onboardingFeatureScopeDescription")}
+					/>
 				</div>
 			</div>
 		</section>
@@ -128,69 +262,42 @@ function McpSection() {
 	const { t } = useTranslation();
 
 	return (
-		<section className="border-t border-border/50 bg-surface-secondary/30 px-8 py-10">
-			<div className="mb-8 max-w-2xl space-y-5">
-				<SectionLabel>{t("onboardingMcpEyebrow")}</SectionLabel>
-				<h2 className="text-3xl font-semibold tracking-tight text-foreground">
-					{t("onboardingMcpTitle")}
-				</h2>
-				<p className="text-base leading-7 text-muted">
-					{t("onboardingMcpBody")}
-				</p>
+		<section className="space-y-6 px-6 py-7 md:px-8 md:py-8">
+			<SectionIntro
+				eyebrow={t("onboardingMcpEyebrow")}
+				title={t("onboardingMcpTitle")}
+				body={t("onboardingMcpBody")}
+				bullets={[
+					t("onboardingMcpBulletOne"),
+					t("onboardingMcpBulletTwo"),
+				]}
+			/>
 
-				<ul className="space-y-2 pt-1">
-					<StepBullet>{t("onboardingMcpBulletOne")}</StepBullet>
-					<StepBullet>{t("onboardingMcpBulletTwo")}</StepBullet>
-				</ul>
-			</div>
+			<div className="space-y-3">
+				<div className="rounded-2xl bg-surface-secondary/90 p-4">
+					<p className="text-xs font-semibold tracking-[0.18em] text-muted uppercase">
+						{t("onboardingMcpVisualTitle")}
+					</p>
+					<p className="mt-1 text-sm leading-6 text-muted">
+						{t("onboardingMcpVisualBody")}
+					</p>
+				</div>
 
-			<div className="mb-5 rounded-2xl border border-accent/20 bg-accent/5 px-5 py-4">
-				<p className="text-xs font-semibold tracking-widest text-accent uppercase">
-					{t("onboardingMcpVisualTitle")}
-				</p>
-				<p className="mt-1 text-sm leading-6 text-muted">
-					{t("onboardingMcpVisualBody")}
-				</p>
-			</div>
-
-			<div className="grid gap-3 sm:grid-cols-3">
-				{[
-					{
-						index: "01",
-						title: t("onboardingMcpFlowOneTitle"),
-						desc: t("onboardingMcpFlowOneBody"),
-					},
-					{
-						index: "02",
-						title: t("onboardingMcpFlowTwoTitle"),
-						desc: t("onboardingMcpFlowTwoBody"),
-					},
-					{
-						index: "03",
-						title: t("onboardingMcpFlowThreeTitle"),
-						desc: t("onboardingMcpFlowThreeBody"),
-					},
-				].map((step, i) => (
-					<div
-						key={step.index}
-						className="relative rounded-2xl border border-border/50 bg-surface/70 p-5"
-					>
-						<div className="mb-3 flex size-9 items-center justify-center rounded-full border border-accent/30 bg-accent/10 text-sm font-semibold text-accent">
-							{step.index}
-						</div>
-						<p className="mb-1 text-sm font-semibold text-foreground">
-							{step.title}
-						</p>
-						<p className="text-sm leading-6 text-muted">
-							{step.desc}
-						</p>
-						{i < 2 && (
-							<div className="pointer-events-none absolute -right-3 top-1/2 hidden text-border/70 sm:block">
-								<ArrowRightIcon className="size-5" />
-							</div>
-						)}
-					</div>
-				))}
+				<FlowStep
+					index="01"
+					title={t("onboardingMcpFlowOneTitle")}
+					description={t("onboardingMcpFlowOneBody")}
+				/>
+				<FlowStep
+					index="02"
+					title={t("onboardingMcpFlowTwoTitle")}
+					description={t("onboardingMcpFlowTwoBody")}
+				/>
+				<FlowStep
+					index="03"
+					title={t("onboardingMcpFlowThreeTitle")}
+					description={t("onboardingMcpFlowThreeBody")}
+				/>
 			</div>
 		</section>
 	);
@@ -200,60 +307,39 @@ function SkillsSection() {
 	const { t } = useTranslation();
 
 	return (
-		<section className="border-t border-border/50 px-8 py-10">
-			<div className="mb-8 max-w-2xl space-y-5">
-				<SectionLabel>{t("onboardingSkillsEyebrow")}</SectionLabel>
-				<h2 className="text-3xl font-semibold tracking-tight text-foreground">
-					{t("onboardingSkillsTitle")}
-				</h2>
-				<p className="text-base leading-7 text-muted">
-					{t("onboardingSkillsBody")}
-				</p>
-
-				<ul className="space-y-2 pt-1">
-					<StepBullet>{t("onboardingSkillsBulletOne")}</StepBullet>
-					<StepBullet>{t("onboardingSkillsBulletTwo")}</StepBullet>
-				</ul>
-			</div>
-
-			<div className="mb-5 rounded-2xl border border-accent/20 bg-accent/5 px-5 py-4">
-				<p className="text-xs font-semibold tracking-widest text-accent uppercase">
-					{t("onboardingSkillsVisualTitle")}
-				</p>
-				<p className="mt-1 text-sm leading-6 text-muted">
-					{t("onboardingSkillsVisualBody")}
-				</p>
-			</div>
+		<section className="space-y-6 px-6 py-7 md:px-8 md:py-8">
+			<SectionIntro
+				eyebrow={t("onboardingSkillsEyebrow")}
+				title={t("onboardingSkillsTitle")}
+				body={t("onboardingSkillsBody")}
+				bullets={[
+					t("onboardingSkillsBulletOne"),
+					t("onboardingSkillsBulletTwo"),
+				]}
+			/>
 
 			<div className="space-y-3">
-				{[
-					{
-						name: "review-pr",
-						desc: t("onboardingSkillExampleReview"),
-					},
-					{ name: "fix-ci", desc: t("onboardingSkillExampleCi") },
-					{
-						name: "ship-feature",
-						desc: t("onboardingSkillExampleShip"),
-					},
-				].map((skill) => (
-					<div
-						key={skill.name}
-						className="flex items-center justify-between gap-4 rounded-2xl border border-border/50 bg-surface/70 px-5 py-4"
-					>
-						<div className="min-w-0">
-							<p className="font-mono text-sm font-medium text-foreground">
-								{skill.name}
-							</p>
-							<p className="mt-0.5 text-sm leading-6 text-muted">
-								{skill.desc}
-							</p>
-						</div>
-						<span className="shrink-0 rounded-full border border-border/70 bg-surface-secondary/80 px-3 py-1 font-mono text-[11px] text-muted">
-							SKILL.md
-						</span>
-					</div>
-				))}
+				<div className="rounded-2xl bg-surface-secondary/90 p-4">
+					<p className="text-xs font-semibold tracking-[0.18em] text-muted uppercase">
+						{t("onboardingSkillsVisualTitle")}
+					</p>
+					<p className="mt-1 text-sm leading-6 text-muted">
+						{t("onboardingSkillsVisualBody")}
+					</p>
+				</div>
+
+				<SkillExample
+					name="review-pr"
+					description={t("onboardingSkillExampleReview")}
+				/>
+				<SkillExample
+					name="fix-ci"
+					description={t("onboardingSkillExampleCi")}
+				/>
+				<SkillExample
+					name="ship-feature"
+					description={t("onboardingSkillExampleShip")}
+				/>
 			</div>
 		</section>
 	);
@@ -269,23 +355,18 @@ function StartSection({
 	const { t } = useTranslation();
 
 	return (
-		<section className="border-t border-border/50 bg-gradient-to-b from-surface-secondary/50 to-transparent px-8 py-10">
-			<div className="mb-8 max-w-2xl space-y-5">
-				<SectionLabel>{t("onboardingStartEyebrow")}</SectionLabel>
-				<h2 className="text-3xl font-semibold tracking-tight text-foreground">
-					{t("onboardingStartTitle")}
-				</h2>
-				<p className="text-base leading-7 text-muted">
-					{t("onboardingStartBody")}
-				</p>
+		<section className="space-y-6 px-6 py-7 md:px-8 md:py-8">
+			<SectionIntro
+				eyebrow={t("onboardingStartEyebrow")}
+				title={t("onboardingStartTitle")}
+				body={t("onboardingStartBody")}
+				bullets={[
+					t("onboardingStartBulletOne"),
+					t("onboardingStartBulletTwo"),
+				]}
+			/>
 
-				<ul className="space-y-2 pt-1">
-					<StepBullet>{t("onboardingStartBulletOne")}</StepBullet>
-					<StepBullet>{t("onboardingStartBulletTwo")}</StepBullet>
-				</ul>
-			</div>
-
-			<div className="mb-6 rounded-2xl border border-border/50 bg-surface/70 p-5">
+			<div className="rounded-2xl bg-surface-secondary/90 p-4">
 				<p className="text-sm font-semibold text-foreground">
 					{t("onboardingNextStepTitle")}
 				</p>
@@ -294,73 +375,31 @@ function StartSection({
 				</p>
 			</div>
 
-			<div className="grid gap-4 sm:grid-cols-3">
-				<div className="flex flex-col gap-4 rounded-2xl border border-border/50 bg-surface/70 p-5">
-					<div className="flex size-10 items-center justify-center rounded-xl bg-accent/12 text-accent">
-						<ServerStackIcon className="size-5" />
-					</div>
-					<div>
-						<p className="text-sm font-semibold text-foreground">
-							{t("onboardingStartMcpTitle")}
-						</p>
-						<p className="mt-1 text-sm leading-6 text-muted">
-							{t("onboardingStartMcpBody")}
-						</p>
-					</div>
-					<Button
-						variant="secondary"
-						className="mt-auto justify-between"
-						isDisabled={isPending}
-						onPress={() => onNavigate("/mcp")}
-					>
-						<span>{t("onboardingStartMcpCta")}</span>
-						<ArrowRightIcon className="size-4" />
-					</Button>
-				</div>
-				<div className="flex flex-col gap-4 rounded-2xl border border-border/50 bg-surface/70 p-5">
-					<div className="flex size-10 items-center justify-center rounded-xl bg-accent/12 text-accent">
-						<BookOpenIcon className="size-5" />
-					</div>
-					<div>
-						<p className="text-sm font-semibold text-foreground">
-							{t("onboardingStartSkillsTitle")}
-						</p>
-						<p className="mt-1 text-sm leading-6 text-muted">
-							{t("onboardingStartSkillsBody")}
-						</p>
-					</div>
-					<Button
-						variant="secondary"
-						className="mt-auto justify-between"
-						isDisabled={isPending}
-						onPress={() => onNavigate("/skills")}
-					>
-						<span>{t("onboardingStartSkillsCta")}</span>
-						<ArrowRightIcon className="size-4" />
-					</Button>
-				</div>
-				<div className="flex flex-col gap-4 rounded-2xl border border-border/50 bg-surface/70 p-5">
-					<div className="flex size-10 items-center justify-center rounded-xl bg-accent/12 text-accent">
-						<SquaresPlusIcon className="size-5" />
-					</div>
-					<div>
-						<p className="text-sm font-semibold text-foreground">
-							{t("onboardingStartMarketTitle")}
-						</p>
-						<p className="mt-1 text-sm leading-6 text-muted">
-							{t("onboardingStartMarketBody")}
-						</p>
-					</div>
-					<Button
-						variant="secondary"
-						className="mt-auto justify-between"
-						isDisabled={isPending}
-						onPress={() => onNavigate("/skills-sh")}
-					>
-						<span>{t("onboardingStartMarketCta")}</span>
-						<ArrowRightIcon className="size-4" />
-					</Button>
-				</div>
+			<div className="grid gap-3 md:grid-cols-3">
+				<StartAction
+					icon={<ServerStackIcon className="size-4" />}
+					title={t("onboardingStartMcpTitle")}
+					description={t("onboardingStartMcpBody")}
+					buttonLabel={t("onboardingStartMcpCta")}
+					isPending={isPending}
+					onPress={() => onNavigate("/mcp")}
+				/>
+				<StartAction
+					icon={<BookOpenIcon className="size-4" />}
+					title={t("onboardingStartSkillsTitle")}
+					description={t("onboardingStartSkillsBody")}
+					buttonLabel={t("onboardingStartSkillsCta")}
+					isPending={isPending}
+					onPress={() => onNavigate("/skills")}
+				/>
+				<StartAction
+					icon={<SquaresPlusIcon className="size-4" />}
+					title={t("onboardingStartMarketTitle")}
+					description={t("onboardingStartMarketBody")}
+					buttonLabel={t("onboardingStartMarketCta")}
+					isPending={isPending}
+					onPress={() => onNavigate("/skills-sh")}
+				/>
 			</div>
 		</section>
 	);
@@ -404,30 +443,29 @@ export default function OnboardingPage() {
 			className="flex min-h-screen flex-col overflow-hidden"
 			data-onboarding-shell=""
 		>
-			<div data-tauri-drag-region className="h-7 shrink-0" />
+			<div data-tauri-drag-region className="h-6 shrink-0" />
 
-			<div className="relative flex-1 overflow-auto px-4 pb-6 pt-4 md:px-6">
+			<div className="relative flex-1 overflow-auto p-4 md:p-6">
 				<div
 					className="pointer-events-none"
 					data-onboarding-backdrop=""
 				/>
 
-				<div className="relative mx-auto flex w-full max-w-4xl flex-col gap-5">
-					<header className="flex items-center justify-between rounded-2xl border border-border/40 bg-surface/60 px-5 py-3">
+				<div className="relative mx-auto flex w-full max-w-4xl flex-col gap-4">
+					<header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 						<div className="flex items-center gap-3">
 							<img
 								src={appIconUrl}
 								alt=""
-								className="size-10 rounded-xl border border-border/60"
+								className="size-11 rounded-2xl border border-border/70"
 							/>
-							<p className="text-sm font-medium text-foreground">
+							<p className="text-base font-semibold text-foreground">
 								{t("onboardingHeaderSubtitle")}
 							</p>
 						</div>
 
 						<Button
 							variant="tertiary"
-							size="sm"
 							onPress={() => void finishOnboarding()}
 							isDisabled={setOnboardingCompleted.isPending}
 						>
@@ -435,11 +473,14 @@ export default function OnboardingPage() {
 						</Button>
 					</header>
 
-					<Card className="overflow-hidden border border-border/50 bg-surface/90">
+					<Card className="overflow-hidden border border-border/70 bg-surface/88 p-0">
 						<Card.Content className="p-0">
 							<WelcomeSection agentCount={agentCount} />
+							<SectionDivider />
 							<McpSection />
+							<SectionDivider />
 							<SkillsSection />
+							<SectionDivider />
 							<StartSection
 								onNavigate={navigateMainWindow}
 								isPending={setOnboardingCompleted.isPending}
@@ -447,8 +488,18 @@ export default function OnboardingPage() {
 						</Card.Content>
 					</Card>
 
+					<div className="flex justify-end">
+						<Button
+							variant="tertiary"
+							onPress={() => void finishOnboarding()}
+							isDisabled={setOnboardingCompleted.isPending}
+						>
+							{t("onboardingMaybeLater")}
+						</Button>
+					</div>
+
 					{setOnboardingCompleted.isPending && (
-						<p className="text-center text-sm text-muted">
+						<p className="text-sm text-muted">
 							{t("onboardingSavingProgress")}
 						</p>
 					)}
