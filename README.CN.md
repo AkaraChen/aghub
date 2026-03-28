@@ -1,4 +1,5 @@
 # aghub
+
 **你的AI智能体配置中心**
 
 [![Version](https://img.shields.io/github/v/release/akarachen/aghub?include_prereleases&label=release)](https://github.com/akarachen/aghub/releases)
@@ -16,9 +17,10 @@
 ## 安装
 
 ### 系统要求
-* Windows: Windows 10 及以上
-* macOS: macOS 12 (Monterey) 及以上
-* Linux: Ubuntu 22.04+ / Debian 11+ / Fedora 34+ 及其他主流发行版
+
+- Windows: Windows 10 及以上
+- macOS: macOS 12 (Monterey) 及以上
+- Linux: Ubuntu 22.04+ / Debian 11+ / Fedora 34+ 及其他主流发行版
 
 从 [Releases](https://github.com/akarachen/aghub/releases) 下载最新版本就可以开始使用！
 

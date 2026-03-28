@@ -154,16 +154,22 @@ mod tests {
 		let expanded = expand_env_var_placeholders(
 			"%LOCALAPPDATA%\\Programs\\Code\\Code.exe",
 			|name| match name {
-				"LOCALAPPDATA" => Some("C:\\Users\\test\\AppData\\Local".to_string()),
+				"LOCALAPPDATA" => {
+					Some("C:\\Users\\test\\AppData\\Local".to_string())
+				}
 				_ => None,
 			},
 		);
-		assert_eq!(expanded, "C:\\Users\\test\\AppData\\Local\\Programs\\Code\\Code.exe");
+		assert_eq!(
+			expanded,
+			"C:\\Users\\test\\AppData\\Local\\Programs\\Code\\Code.exe"
+		);
 	}
 
 	#[test]
 	fn test_expand_unknown_var_left_as_is() {
-		let expanded = expand_env_var_placeholders("%UNKNOWN%\\something", |_| None);
+		let expanded =
+			expand_env_var_placeholders("%UNKNOWN%\\something", |_| None);
 		assert_eq!(expanded, "%UNKNOWN%\\something");
 	}
 }

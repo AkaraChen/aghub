@@ -8,8 +8,10 @@ use crate::dto::integrations::{
 
 #[get("/integrations/code-editors")]
 pub fn list_code_editors() -> Json<Vec<ToolInfoDto>> {
-	let editors: Vec<ToolInfoDto> =
-		CodeEditorType::all().iter().map(ToolInfoDto::from).collect();
+	let editors: Vec<ToolInfoDto> = CodeEditorType::all()
+		.iter()
+		.map(ToolInfoDto::from)
+		.collect();
 	Json(editors)
 }
 

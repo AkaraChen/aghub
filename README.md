@@ -1,4 +1,5 @@
 # aghub
+
 **One hub for every AI coding agent.**
 
 [![Version](https://img.shields.io/github/v/release/akarachen/aghub?include_prereleases&label=release)](https://github.com/akarachen/aghub/releases)
@@ -16,9 +17,10 @@
 ## Installation
 
 ### System Requirements
-* Windows: Windows 10 and above
-* macOS: macOS 12 (Monterey) and above
-* Linux: Ubuntu 22.04+ / Debian 11+ / Fedora 34+ and other mainstream distributions
+
+- Windows: Windows 10 and above
+- macOS: macOS 12 (Monterey) and above
+- Linux: Ubuntu 22.04+ / Debian 11+ / Fedora 34+ and other mainstream distributions
 
 Download the latest release from [Releases](https://github.com/akarachen/aghub/releases). And you're good to go!
 
