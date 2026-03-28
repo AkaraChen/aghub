@@ -30,7 +30,7 @@ export default {
 	dark: "深色",
 	system: "跟隨系統",
 	english: "English",
-	chineseSimplified: "简体中文",
+	chineseSimplified: "簡體中文",
 	chineseTraditional: "繁體中文",
 	noAgentsDescription: "安裝 AI 程式碼代理以在此管理它們。",
 	searchAgents: "搜尋代理...",

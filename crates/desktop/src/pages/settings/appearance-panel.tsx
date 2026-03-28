@@ -18,8 +18,7 @@ export default function AppearancePanel() {
 	const { theme, setTheme } = useTheme();
 
 	const changeLanguage = (lng: string) => {
-		i18n.changeLanguage(lng);
-		localStorage.setItem("language", lng);
+		void i18n.changeLanguage(lng);
 	};
 
 	return (
@@ -75,7 +74,7 @@ export default function AppearancePanel() {
 					</div>
 					<Select
 						variant="secondary"
-						value={i18n.language}
+						value={i18n.resolvedLanguage ?? i18n.language}
 						onChange={(key) => changeLanguage(key as string)}
 						aria-label={t("language")}
 						className="min-w-40"
@@ -90,13 +89,13 @@ export default function AppearancePanel() {
 									{t("english")}
 								</ListBox.Item>
 								<ListBox.Item
-									id="zh-CN"
+									id="zh-Hans"
 									textValue={t("chineseSimplified")}
 								>
 									{t("chineseSimplified")}
 								</ListBox.Item>
 								<ListBox.Item
-									id="zh-TW"
+									id="zh-Hant"
 									textValue={t("chineseTraditional")}
 								>
 									{t("chineseTraditional")}
