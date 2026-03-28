@@ -5,7 +5,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
 	return (
 		<Surface
 			variant="secondary"
-			className="flex h-screen flex-col overflow-hidden pb-6"
+			className="flex h-screen flex-col overflow-hidden"
 		>
 			<div data-tauri-drag-region className="h-6 shrink-0" />
 			<div className="flex min-h-0 flex-1 overflow-hidden">
