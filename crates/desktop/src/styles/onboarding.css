@@ -48,6 +48,13 @@
 	animation-name: onboarding-enter-backward;
 }
 
+@media (prefers-reduced-motion: reduce) {
+	[data-onboarding-stage] {
+		animation-duration: 1ms;
+		animation-name: none;
+	}
+}
+
 @keyframes onboarding-enter-forward {
 	from {
 		opacity: 0;

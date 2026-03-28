@@ -63,35 +63,39 @@ export default {
 		"Review the getting-started guide again whenever you need it",
 	previewOnboarding: "View Tour",
 	onboardingOpenError: "Could not open the guide",
-	onboardingHeaderSubtitle:
-		"See how aghub helps you set up tools and workflows faster",
+	onboardingHeaderSubtitle: "Get started with aghub",
+	onboardingStepCounter: "Step {{current}} of {{total}}",
 	onboardingSkip: "Skip for now",
+	onboardingMaybeLater: "Maybe later",
 	onboardingFooterHint:
-		"Four short screens. You can reopen this tour from Settings later.",
+		"About a minute. You can reopen this from Settings later.",
 	onboardingPrimaryAction: "Open MCP Servers",
 	onboardingSavingProgress: "Saving your onboarding progress...",
-	onboardingWelcomeEyebrow: "What aghub does",
-	onboardingWelcomeTitle: "One hub for every AI coding agent.",
+	onboardingWelcomeEyebrow: "Start here",
+	onboardingWelcomeTitle: "Keep your AI agent setup in one place.",
 	onboardingWelcomeBody:
-		"aghub helps you manage MCP servers, skills, and project-specific setup without losing track of what each agent is actually using.",
+		"aghub keeps your usual MCP servers and skills in one place, so you can reuse them and quickly see what a repo still needs.",
 	onboardingWelcomeBulletOne:
-		"Configure shared tooling once, then carry it across your supported agents.",
+		"Add MCP servers once instead of editing each agent's config by hand.",
 	onboardingWelcomeBulletTwo:
-		"Review the real config surface instead of guessing through opaque app state.",
-	onboardingWelcomeBulletThree:
-		"Keep changes explicit so global defaults stay separate from project overrides.",
+		"Reuse skills instead of rewriting the same instructions and prompts.",
+	onboardingWelcomeBulletThree: "",
 	onboardingHeroBadge: "First-run tour",
 	onboardingAgentCoverage: "{{count}} agents supported",
+	onboardingOverviewTitle:
+		"You do not need to memorize where every agent stores its setup.",
+	onboardingOverviewBody:
+		"aghub gives you one place to manage the pieces that shape how your agents work.",
 	onboardingWelcomeVisualIntro: "The core workflow is simple:",
-	onboardingFeatureMcpTitle: "Unify MCP servers",
+	onboardingFeatureMcpTitle: "Add tools once",
 	onboardingFeatureMcpDescription:
-		"Define a server once, then reuse it across the agents that can run it.",
-	onboardingFeatureSkillsTitle: "Ship portable skills",
+		"Set up MCP servers once and send them to the agents that support them.",
+	onboardingFeatureSkillsTitle: "Reuse good workflows",
 	onboardingFeatureSkillsDescription:
-		"Turn repeatable workflows into reusable SKILL.md-based bundles.",
-	onboardingFeatureScopeTitle: "Keep setup organized",
+		"Save repeatable instructions as skills instead of rebuilding them each time.",
+	onboardingFeatureScopeTitle: "Separate by repo",
 	onboardingFeatureScopeDescription:
-		"Use your everyday setup everywhere, and keep repo-specific additions only where they help.",
+		"Reuse your default MCPs and skills everywhere, then add repo-only ones where needed.",
 	onboardingMoreAgents: "+ more",
 	onboardingStatConfigure: "Configure Once",
 	onboardingStatConfigureValue: "MCP + Skills",
@@ -106,18 +110,26 @@ export default {
 	onboardingStatScopeDescription:
 		"Aghub helps you change agent config deliberately instead of hiding it behind sync magic.",
 	onboardingMcpEyebrow: "MCP servers",
-	onboardingMcpTitle: "MCPs connect agents to real tools.",
+	onboardingMcpTitle: "Give your agents real tools to work with.",
 	onboardingMcpBody:
-		"In aghub, MCP servers are external capabilities you attach to coding agents, from local command-based tools to remote HTTP services.",
+		"MCP servers connect an agent to things like local commands, APIs, and data sources. aghub helps you add them once and use them in the right places.",
 	onboardingMcpBulletOne:
-		"Add a server once and apply it to the agents that support it.",
+		"Connect local or remote tools without hunting through multiple config files.",
 	onboardingMcpBulletTwo:
-		"Use stdio, SSE, or Streamable HTTP transport depending on how the tool runs.",
-	onboardingMcpBulletThree:
-		"Enable or disable a server without deleting the definition you may need later.",
-	onboardingMcpVisualTitle: "One server definition, multiple agents",
+		"Choose which agents should get a tool before you save the change.",
+	onboardingMcpBulletThree: "",
+	onboardingMcpVisualTitle: "A simple MCP flow",
 	onboardingMcpVisualBody:
-		"Aghub treats MCP as a reusable connection layer instead of a one-off agent setting.",
+		"You should be able to add a tool in a few clear steps and know where it will be available.",
+	onboardingMcpFlowOneTitle: "Add a server",
+	onboardingMcpFlowOneBody:
+		"Bring in a local command or remote service that you want your agents to use.",
+	onboardingMcpFlowTwoTitle: "Choose the agents",
+	onboardingMcpFlowTwoBody:
+		"Apply it only to the agents that support it and matter to your workflow.",
+	onboardingMcpFlowThreeTitle: "Use it with confidence",
+	onboardingMcpFlowThreeBody:
+		"See what is available before you edit, disable, or remove anything.",
 	onboardingMcpTransportStdio:
 		"Launch a local command and let the agent talk over stdio.",
 	onboardingMcpTransportSse:
@@ -126,18 +138,17 @@ export default {
 		"Use modern streamable HTTP endpoints with headers and timeouts when needed.",
 	onboardingMcpAppliesLabel: "Typical rollout",
 	onboardingSkillsEyebrow: "Skills",
-	onboardingSkillsTitle: "Skills make instructions portable.",
+	onboardingSkillsTitle: "Turn repeatable prompts into reusable workflows.",
 	onboardingSkillsBody:
-		"Aghub treats skills as reusable instruction bundles, usually built around a SKILL.md file plus optional supporting files, so the same workflow can travel between agents.",
+		"Skills bundle instructions and supporting files so a workflow can be reused instead of rewritten from scratch.",
 	onboardingSkillsBulletOne:
-		"Author custom skills locally when your team has repeatable tasks.",
+		"Create your own skills for the tasks your team repeats all the time.",
 	onboardingSkillsBulletTwo:
-		"Import packaged skills or local folders instead of copy-pasting prompts.",
-	onboardingSkillsBulletThree:
-		"Keep author, version, tools, and file contents visible before you install.",
-	onboardingSkillsVisualTitle: "Skills are bundles, not loose prompts",
+		"Import local or packaged skills instead of copy-pasting prompts between tools.",
+	onboardingSkillsBulletThree: "",
+	onboardingSkillsVisualTitle: "A few good skills go a long way",
 	onboardingSkillsVisualBody:
-		"They can describe a workflow, include helper files, and declare the tools they rely on.",
+		"Start with a couple of high-value workflows and expand from there.",
 	onboardingSkillExampleReview:
 		"Review pull requests with the same checklist across agents.",
 	onboardingSkillExampleCi:
@@ -189,17 +200,19 @@ export default {
 		"Stop guessing what your agent will be able to use in this project.",
 	onboardingNextStepTitle: "Choose your starting point",
 	onboardingNextStepBody:
-		"Most teams get value fastest by adding one MCP, one skill, or one project-specific override.",
+		"Most teams get value fastest by adding one MCP server or one skill.",
 	onboardingReplayHint: "Replay from Settings > About",
 	onboardingStartMcpTitle: "Add an MCP Server",
 	onboardingStartMcpBody:
-		"Connect a tool or data source and make it available across supported agents.",
+		"Connect one useful tool and make it available where you need it.",
 	onboardingStartSkillsTitle: "Open Skills",
 	onboardingStartSkillsBody:
 		"Create or import a reusable workflow for your personal or team setup.",
 	onboardingStartMarketTitle: "Browse skills.sh",
 	onboardingStartMarketBody:
 		"Explore installable skills from the marketplace and add them to selected agents.",
+	onboardingMarketNote:
+		"You can browse more installable workflows any time in skills.sh.",
 
 	// Agent Management
 	agentManagementDescription:

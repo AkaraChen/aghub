@@ -61,33 +61,36 @@ export default {
 	onboardingDescription: "随时重新查看入门引导",
 	previewOnboarding: "查看引导",
 	onboardingOpenError: "无法打开引导",
-	onboardingHeaderSubtitle: "快速了解 aghub 如何帮你更快配置工具和工作流",
+	onboardingHeaderSubtitle: "开始使用 aghub",
+	onboardingStepCounter: "第 {{current}} 步，共 {{total}} 步",
 	onboardingSkip: "暂时跳过",
-	onboardingFooterHint: "共 4 个简短页面，之后也可以在设置里重新打开。",
+	onboardingMaybeLater: "稍后再说",
+	onboardingFooterHint: "大约 1 分钟，之后也可以在设置里重新打开。",
 	onboardingPrimaryAction: "打开 MCP 服务器",
 	onboardingSavingProgress: "正在保存引导进度...",
-	onboardingWelcomeEyebrow: "aghub 能做什么",
-	onboardingWelcomeTitle: "一个应用，管理所有 AI 编码代理。",
+	onboardingWelcomeEyebrow: "先了解一下",
+	onboardingWelcomeTitle: "把 AI 代理的关键配置放到一个地方管理。",
 	onboardingWelcomeBody:
-		"aghub 用来统一管理 MCP 服务器、技能和项目级配置，同时让你随时看清每个代理实际加载了什么。",
+		"aghub 帮你把常用的 MCP 和技能整理到一个地方，需要为当前仓库补什么也能很快看清。",
 	onboardingWelcomeBulletOne:
-		"共享工具配置一次，就能复用到多个受支持的代理中。",
-	onboardingWelcomeBulletTwo:
-		"直接查看真实配置来源，而不是猜测应用内部状态。",
-	onboardingWelcomeBulletThree:
-		"让改动保持显式：全局默认和项目覆盖互不混淆。",
+		"MCP 服务器配置一次，不用再手动改每个代理的配置文件。",
+	onboardingWelcomeBulletTwo: "把常用提示和流程存成技能，不用每次从头重写。",
+	onboardingWelcomeBulletThree: "",
 	onboardingHeroBadge: "首次启动引导",
 	onboardingAgentCoverage: "支持 {{count}} 个代理",
+	onboardingOverviewTitle: "你不需要记住每个代理把配置藏在哪里。",
+	onboardingOverviewBody:
+		"aghub 把真正影响代理行为的关键内容集中到一个地方管理。",
 	onboardingWelcomeVisualIntro: "核心流程很简单：",
-	onboardingFeatureMcpTitle: "统一管理 MCP",
+	onboardingFeatureMcpTitle: "工具一次接入",
 	onboardingFeatureMcpDescription:
-		"定义一次服务器，然后复用到所有支持它的代理。",
-	onboardingFeatureSkillsTitle: "复用技能",
+		"把 MCP 服务器配置好，再分发到支持它的代理。",
+	onboardingFeatureSkillsTitle: "好用流程反复复用",
 	onboardingFeatureSkillsDescription:
-		"把重复工作整理成基于 SKILL.md 的可移植技能包。",
-	onboardingFeatureScopeTitle: "让配置更有条理",
+		"把重复工作沉淀成技能，而不是每次重新组织提示词。",
+	onboardingFeatureScopeTitle: "按仓库分开放",
 	onboardingFeatureScopeDescription:
-		"常用配置到处可用，项目专属内容只留在真正需要它的仓库里。",
+		"常用的 MCP 和技能全局复用，当前仓库需要额外加什么再单独补上。",
 	onboardingMoreAgents: "+ 更多",
 	onboardingStatConfigure: "配置一次",
 	onboardingStatConfigureValue: "MCP + 技能",
@@ -102,33 +105,41 @@ export default {
 	onboardingStatScopeDescription:
 		"aghub 强调明确变更，而不是用看不见的同步逻辑掩盖细节。",
 	onboardingMcpEyebrow: "MCP 服务器",
-	onboardingMcpTitle: "MCP 让代理连接真实工具。",
+	onboardingMcpTitle: "让代理真正用上工具和数据源。",
 	onboardingMcpBody:
-		"在 aghub 里，MCP 服务器代表可挂载到编码代理上的外部能力，既可以是本地命令，也可以是远程 HTTP 服务。",
-	onboardingMcpBulletOne: "添加一次服务器定义，再分发给支持它的代理。",
-	onboardingMcpBulletTwo:
-		"根据工具运行方式选择 stdio、SSE 或 Streamable HTTP。",
-	onboardingMcpBulletThree: "可以先停用服务器，而不必立刻删除它的定义。",
-	onboardingMcpVisualTitle: "一个定义，多处复用",
+		"MCP 服务器可以把本地命令、API 或数据源接到代理身上。aghub 帮你配置一次，再用到合适的地方。",
+	onboardingMcpBulletOne:
+		"本地工具和远程服务都能接进来，不用到处翻配置文件。",
+	onboardingMcpBulletTwo: "保存之前先选好哪些代理应该拿到这项能力。",
+	onboardingMcpBulletThree: "",
+	onboardingMcpVisualTitle: "MCP 的流程应该很简单",
 	onboardingMcpVisualBody:
-		"aghub 把 MCP 当作可复用的连接层，而不是某个代理里的孤立设置。",
+		"你应该能用几个清楚的步骤接入工具，并知道它会在哪些地方生效。",
+	onboardingMcpFlowOneTitle: "添加一个服务器",
+	onboardingMcpFlowOneBody: "把你想让代理使用的本地命令或远程服务接进来。",
+	onboardingMcpFlowTwoTitle: "选择适用的代理",
+	onboardingMcpFlowTwoBody:
+		"只分发给支持它、而且对你当前工作真的有用的代理。",
+	onboardingMcpFlowThreeTitle: "放心使用和调整",
+	onboardingMcpFlowThreeBody:
+		"修改、停用或删除之前，先看清当前到底能用什么。",
 	onboardingMcpTransportStdio: "启动本地命令，让代理通过 stdio 与工具通信。",
 	onboardingMcpTransportSse: "通过 Server-Sent Events 连接远程 MCP 端点。",
 	onboardingMcpTransportHttp:
 		"在需要请求头或超时设置时使用现代 Streamable HTTP 端点。",
 	onboardingMcpAppliesLabel: "常见分发方式",
 	onboardingSkillsEyebrow: "技能",
-	onboardingSkillsTitle: "技能让提示和流程可移植。",
+	onboardingSkillsTitle: "把重复提示整理成可复用工作流。",
 	onboardingSkillsBody:
-		"aghub 把技能视为可复用的指令包，通常由一个 SKILL.md 和若干辅助文件组成，因此同一套工作流可以在不同代理之间迁移。",
+		"技能会把说明和辅助文件打包起来，让同一套工作流不用每次重新写。",
 	onboardingSkillsBulletOne:
-		"团队有重复任务时，可以在本地直接编写自定义技能。",
+		"团队里会反复出现的任务，可以直接做成技能沉淀下来。",
 	onboardingSkillsBulletTwo:
-		"导入技能包或本地文件夹，而不是反复复制粘贴提示词。",
-	onboardingSkillsBulletThree: "安装前先看到作者、版本、依赖工具和文件内容。",
-	onboardingSkillsVisualTitle: "技能是“包”，不是散落的提示词",
+		"可以导入本地或打包好的技能，不用再来回复制粘贴提示词。",
+	onboardingSkillsBulletThree: "",
+	onboardingSkillsVisualTitle: "少量高价值技能就很够用",
 	onboardingSkillsVisualBody:
-		"它可以描述完整流程，携带辅助文件，并声明依赖的工具。",
+		"先把最常用的几个流程整理好，收益通常就已经很明显。",
 	onboardingSkillExampleReview: "用同一套检查清单在不同代理里做 PR Review。",
 	onboardingSkillExampleCi: "统一处理 CI 失败、查看日志并提出修复建议。",
 	onboardingSkillExampleShip: "把发布流程打包一次，再分享给整个团队。",
@@ -165,15 +176,15 @@ export default {
 	onboardingScopeMergedItemTwo: "不用再猜代理进到这个项目后到底能做什么。",
 	onboardingNextStepTitle: "选择一个起点",
 	onboardingNextStepBody:
-		"多数团队最快获得价值的方式，是先添加一个 MCP、一个技能，或一个项目级覆盖。",
+		"多数团队最快获得价值的方式，是先加一个 MCP 服务器，或先整理一个技能。",
 	onboardingReplayHint: "可在 设置 > 关于 中重新打开",
 	onboardingStartMcpTitle: "添加 MCP 服务器",
-	onboardingStartMcpBody:
-		"连接一个工具或数据源，并让它在多个受支持代理间可用。",
+	onboardingStartMcpBody: "先接入一个真正有用的工具，让代理马上能用起来。",
 	onboardingStartSkillsTitle: "打开技能页",
 	onboardingStartSkillsBody: "为个人或团队配置创建、导入可复用的工作流。",
 	onboardingStartMarketTitle: "浏览 skills.sh",
 	onboardingStartMarketBody: "从市场发现可安装技能，并分发到选定代理。",
+	onboardingMarketNote: "想找更多现成工作流，可以随时去 skills.sh 浏览。",
 
 	// Agent Management
 	agentManagementDescription:
