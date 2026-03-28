@@ -7,7 +7,6 @@ use aghub_core::{
 use rocket::http::Status;
 use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
-use which::which;
 
 use crate::{
 	dto::integrations::{
@@ -50,14 +49,7 @@ fn get_skill_root(path: std::path::PathBuf) -> std::path::PathBuf {
 }
 
 fn detect_available_editor() -> Option<CodeEditorType> {
-	CodeEditorType::all()
-		.iter()
-		.find(|editor| {
-			let app_path = std::path::Path::new("/Applications")
-				.join(editor.macos_app_name());
-			app_path.exists() || which(editor.cli_command()).is_ok()
-		})
-		.cloned()
+	crate::editor_detection::detect_any_installed_editor()
 }
 
 fn build_skill_tree_node(

@@ -2,6 +2,7 @@
 extern crate rocket;
 
 pub mod dto;
+pub mod editor_detection;
 pub mod error;
 pub mod extractors;
 pub mod routes;
