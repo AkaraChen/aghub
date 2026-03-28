@@ -1,8 +1,46 @@
-import { Card, ListBox, Select, Spinner } from "@heroui/react";
+import { Avatar, Card, ListBox, Select, Spinner } from "@heroui/react";
 import type { Key } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { useCurrentCodeEditor } from "../../hooks/use-integrations";
 import type { CodeEditorType } from "../../lib/api-types";
+
+const iconModules = import.meta.glob<{ default: string }>(
+	"../../assets/agent/*.svg",
+	{ eager: true, query: "?raw" },
+);
+
+const ICON_ALIASES: Record<string, string> = {
+	vs_code_insiders: "vs_code",
+	fleet: "rust_rover",
+};
+
+function EditorIcon({ id, name }: { id: string; name: string }) {
+	const resolvedId = ICON_ALIASES[id] ?? id;
+	const path =
+		iconModules[`../../assets/agent/${resolvedId}.svg`] ??
+		iconModules[`../../assets/agent/${resolvedId.replace(/_/g, "")}.svg`];
+	const svg = path;
+
+	if (svg) {
+		return (
+			<div
+				className="flex size-5 shrink-0 items-center justify-center [&_svg]:size-4"
+				// eslint-disable-next-line react-dom/no-dangerously-set-innerhtml
+				dangerouslySetInnerHTML={{
+					__html: (svg.default || svg) as string,
+				}}
+			/>
+		);
+	}
+
+	return (
+		<Avatar size="sm" variant="soft" className="size-5">
+			<Avatar.Fallback className="text-[10px]">
+				{name.charAt(0).toUpperCase()}
+			</Avatar.Fallback>
+		</Avatar>
+	);
+}
 
 export default function IntegrationsPanel() {
 	const { t } = useTranslation();
@@ -28,7 +66,6 @@ export default function IntegrationsPanel() {
 	return (
 		<Card className="p-4">
 			<Card.Content className="space-y-4">
-				{/* Code Editor Setting */}
 				<div className="flex items-center justify-between">
 					<div className="space-y-0.5">
 						<span className="text-sm font-medium text-(--foreground)">
@@ -57,7 +94,13 @@ export default function IntegrationsPanel() {
 										id={editor.id}
 										textValue={editor.name}
 									>
-										{editor.name}
+										<div className="flex items-center gap-2">
+											<EditorIcon
+												id={editor.id}
+												name={editor.name}
+											/>
+											{editor.name}
+										</div>
 									</ListBox.Item>
 								))}
 							</ListBox>
