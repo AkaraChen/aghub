@@ -75,7 +75,7 @@ export default function AppearancePanel() {
 					</div>
 					<Select
 						variant="secondary"
-						value={i18n.language.startsWith("zh") ? "zh" : "en"}
+						value={i18n.language}
 						onChange={(key) => changeLanguage(key as string)}
 						aria-label={t("language")}
 						className="min-w-40"
@@ -89,8 +89,17 @@ export default function AppearancePanel() {
 								<ListBox.Item id="en" textValue={t("english")}>
 									{t("english")}
 								</ListBox.Item>
-								<ListBox.Item id="zh" textValue={t("chinese")}>
-									{t("chinese")}
+								<ListBox.Item
+									id="zh-CN"
+									textValue={t("chineseSimplified")}
+								>
+									{t("chineseSimplified")}
+								</ListBox.Item>
+								<ListBox.Item
+									id="zh-TW"
+									textValue={t("chineseTraditional")}
+								>
+									{t("chineseTraditional")}
 								</ListBox.Item>
 							</ListBox>
 						</Select.Popover>
