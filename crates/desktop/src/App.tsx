@@ -5,10 +5,12 @@ import { NuqsAdapter } from "nuqs/adapters/react";
 import { Suspense, useEffect, useState } from "react";
 import { useKeyBindings } from "rooks";
 import { Route, Router, Switch, useLocation } from "wouter";
+import { OnboardingGate } from "./components/onboarding/onboarding-gate";
 import { Redirect } from "./components/redirect";
 import { ErrorBoundary } from "./components/ui/error-boundary";
 import { MainLayout } from "./layouts/main-layout";
 import { initStore } from "./lib/store";
+import OnboardingPage from "./pages/onboarding";
 import ProjectDetailPage from "./pages/project/detail";
 import SettingsPage from "./pages/settings";
 import CustomAgentsPage from "./pages/settings/custom-agents";
@@ -91,7 +93,11 @@ function App() {
 					<AgentAvailabilityProvider>
 						<NuqsAdapter>
 							<Router>
+								<OnboardingGate />
 								<Switch>
+									<Route path="/onboarding">
+										<OnboardingPage />
+									</Route>
 									<Route path="/">
 										<Redirect to="/mcp" />
 									</Route>

@@ -5,6 +5,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { useTranslation } from "react-i18next";
+import { openOnboardingWindow } from "../../lib/onboarding-window";
 
 export default function ApplicationPanel() {
 	const { t } = useTranslation();
@@ -59,6 +60,16 @@ export default function ApplicationPanel() {
 
 	const handleDownloadAndInstall = () => {
 		downloadMutation.mutate();
+	};
+
+	const handleOpenOnboarding = async () => {
+		try {
+			await openOnboardingWindow();
+		} catch (error) {
+			toast.danger(
+				`${t("onboardingOpenError")}: ${error instanceof Error ? error.message : t("unknown")}`,
+			);
+		}
 	};
 
 	const updateCheckResult = checkMutation.data;
@@ -178,6 +189,24 @@ export default function ApplicationPanel() {
 								</Button>
 							)}
 						</div>
+					</div>
+
+					<div className="flex items-center justify-between">
+						<div className="space-y-0.5">
+							<span className="text-sm font-medium text-(--foreground)">
+								{t("onboarding")}
+							</span>
+							<span className="block text-xs text-muted">
+								{t("onboardingDescription")}
+							</span>
+						</div>
+						<Button
+							variant="secondary"
+							size="sm"
+							onPress={() => void handleOpenOnboarding()}
+						>
+							{t("previewOnboarding")}
+						</Button>
 					</div>
 				</Card.Content>
 			</Card>

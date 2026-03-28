@@ -58,6 +58,148 @@ export default {
 	downloadAndInstall: "Download and Install",
 	updateInstalledSuccess: "Update installed successfully",
 	restartToUpdate: "Restart to Update",
+	onboarding: "Onboarding",
+	onboardingDescription:
+		"Review the getting-started guide again whenever you need it",
+	previewOnboarding: "View Tour",
+	onboardingOpenError: "Could not open the guide",
+	onboardingHeaderSubtitle:
+		"See how aghub helps you set up tools and workflows faster",
+	onboardingSkip: "Skip for now",
+	onboardingFooterHint:
+		"Four short screens. You can reopen this tour from Settings later.",
+	onboardingPrimaryAction: "Open MCP Servers",
+	onboardingSavingProgress: "Saving your onboarding progress...",
+	onboardingWelcomeEyebrow: "What aghub does",
+	onboardingWelcomeTitle: "One hub for every AI coding agent.",
+	onboardingWelcomeBody:
+		"aghub helps you manage MCP servers, skills, and project-specific setup without losing track of what each agent is actually using.",
+	onboardingWelcomeBulletOne:
+		"Configure shared tooling once, then carry it across your supported agents.",
+	onboardingWelcomeBulletTwo:
+		"Review the real config surface instead of guessing through opaque app state.",
+	onboardingWelcomeBulletThree:
+		"Keep changes explicit so global defaults stay separate from project overrides.",
+	onboardingHeroBadge: "First-run tour",
+	onboardingAgentCoverage: "{{count}} agents supported",
+	onboardingWelcomeVisualIntro: "The core workflow is simple:",
+	onboardingFeatureMcpTitle: "Unify MCP servers",
+	onboardingFeatureMcpDescription:
+		"Define a server once, then reuse it across the agents that can run it.",
+	onboardingFeatureSkillsTitle: "Ship portable skills",
+	onboardingFeatureSkillsDescription:
+		"Turn repeatable workflows into reusable SKILL.md-based bundles.",
+	onboardingFeatureScopeTitle: "Keep setup organized",
+	onboardingFeatureScopeDescription:
+		"Use your everyday setup everywhere, and keep repo-specific additions only where they help.",
+	onboardingMoreAgents: "+ more",
+	onboardingStatConfigure: "Configure Once",
+	onboardingStatConfigureValue: "MCP + Skills",
+	onboardingStatConfigureDescription:
+		"Use the same setup across multiple agents without manually editing every config file.",
+	onboardingStatReview: "See Source",
+	onboardingStatReviewValue: "Global / Project",
+	onboardingStatReviewDescription:
+		"Know whether a server or skill came from a global default or a repo-specific setup.",
+	onboardingStatScope: "Stay Precise",
+	onboardingStatScopeValue: "Explicit Opt-In",
+	onboardingStatScopeDescription:
+		"Aghub helps you change agent config deliberately instead of hiding it behind sync magic.",
+	onboardingMcpEyebrow: "MCP servers",
+	onboardingMcpTitle: "MCPs connect agents to real tools.",
+	onboardingMcpBody:
+		"In aghub, MCP servers are external capabilities you attach to coding agents, from local command-based tools to remote HTTP services.",
+	onboardingMcpBulletOne:
+		"Add a server once and apply it to the agents that support it.",
+	onboardingMcpBulletTwo:
+		"Use stdio, SSE, or Streamable HTTP transport depending on how the tool runs.",
+	onboardingMcpBulletThree:
+		"Enable or disable a server without deleting the definition you may need later.",
+	onboardingMcpVisualTitle: "One server definition, multiple agents",
+	onboardingMcpVisualBody:
+		"Aghub treats MCP as a reusable connection layer instead of a one-off agent setting.",
+	onboardingMcpTransportStdio:
+		"Launch a local command and let the agent talk over stdio.",
+	onboardingMcpTransportSse:
+		"Connect to a remote MCP endpoint using server-sent events.",
+	onboardingMcpTransportHttp:
+		"Use modern streamable HTTP endpoints with headers and timeouts when needed.",
+	onboardingMcpAppliesLabel: "Typical rollout",
+	onboardingSkillsEyebrow: "Skills",
+	onboardingSkillsTitle: "Skills make instructions portable.",
+	onboardingSkillsBody:
+		"Aghub treats skills as reusable instruction bundles, usually built around a SKILL.md file plus optional supporting files, so the same workflow can travel between agents.",
+	onboardingSkillsBulletOne:
+		"Author custom skills locally when your team has repeatable tasks.",
+	onboardingSkillsBulletTwo:
+		"Import packaged skills or local folders instead of copy-pasting prompts.",
+	onboardingSkillsBulletThree:
+		"Keep author, version, tools, and file contents visible before you install.",
+	onboardingSkillsVisualTitle: "Skills are bundles, not loose prompts",
+	onboardingSkillsVisualBody:
+		"They can describe a workflow, include helper files, and declare the tools they rely on.",
+	onboardingSkillExampleReview:
+		"Review pull requests with the same checklist across agents.",
+	onboardingSkillExampleCi:
+		"Check failing CI, inspect logs, and propose fixes consistently.",
+	onboardingSkillExampleShip:
+		"Package a release workflow once, then share it with the whole team.",
+	onboardingSkillExampleMarket:
+		"Install community workflows from the skills.sh marketplace.",
+	onboardingSkillsSignalsLabel: "Why this matters",
+	onboardingSignalMarketTitle: "Marketplace + local",
+	onboardingSignalMarketBody:
+		"Mix community skills from skills.sh with private team skills.",
+	onboardingSignalProvenanceTitle: "Provenance visible",
+	onboardingSignalProvenanceBody:
+		"Track source, author, version, and file contents before trusting a skill.",
+	onboardingSignalToolsTitle: "Tool expectations",
+	onboardingSignalToolsBody:
+		"See which tools a skill expects so agent behavior stays predictable.",
+	onboardingScopeEyebrow: "Personal + project setup",
+	onboardingScopeTitle:
+		"Keep your everyday setup separate from repo-specific work.",
+	onboardingScopeBody:
+		"Set up the tools and workflows you use all the time once, then add project-only context where it matters. Aghub helps you see what a project has available without digging through config files.",
+	onboardingScopeBulletOne:
+		"Open a project and quickly see what is unique to that repo.",
+	onboardingScopeBulletTwo: "See the full setup before you change anything.",
+	onboardingScopeBulletThree:
+		"Jump straight into adding tools, reusable workflows, or project-specific setup.",
+	onboardingScopeGlobalTitle: "Use across all projects",
+	onboardingScopeGlobalBody:
+		"Set up your usual tools and workflows once, then reuse them everywhere.",
+	onboardingScopeGlobalItemOne:
+		"The tools you expect to have ready in every codebase.",
+	onboardingScopeGlobalItemTwo:
+		"Shared workflows that belong in your day-to-day setup.",
+	onboardingScopeProjectTitle: "Add what this repo needs",
+	onboardingScopeProjectBody:
+		"Keep customer, domain, or repo-specific setup in the place where you need it.",
+	onboardingScopeProjectItemOne:
+		"Special workflows that only make sense for this codebase.",
+	onboardingScopeProjectItemTwo:
+		"Extra tools that should not follow you into unrelated projects.",
+	onboardingScopeMergedTitle: "See everything available here",
+	onboardingScopeMergedBody:
+		"Get the full picture at a glance so you can move with confidence.",
+	onboardingScopeMergedItemOne:
+		"Understand what is available before you edit or remove it.",
+	onboardingScopeMergedItemTwo:
+		"Stop guessing what your agent will be able to use in this project.",
+	onboardingNextStepTitle: "Choose your starting point",
+	onboardingNextStepBody:
+		"Most teams get value fastest by adding one MCP, one skill, or one project-specific override.",
+	onboardingReplayHint: "Replay from Settings > About",
+	onboardingStartMcpTitle: "Add an MCP Server",
+	onboardingStartMcpBody:
+		"Connect a tool or data source and make it available across supported agents.",
+	onboardingStartSkillsTitle: "Open Skills",
+	onboardingStartSkillsBody:
+		"Create or import a reusable workflow for your personal or team setup.",
+	onboardingStartMarketTitle: "Browse skills.sh",
+	onboardingStartMarketBody:
+		"Explore installable skills from the marketplace and add them to selected agents.",
 
 	// Agent Management
 	agentManagementDescription:

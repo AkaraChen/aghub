@@ -1,7 +1,7 @@
 import { Store } from "@tauri-apps/plugin-store";
 import type { CodeEditorType } from "./api-types";
 
-const CURRENT_VERSION = 4;
+const CURRENT_VERSION = 5;
 
 export interface Project {
 	id: string;
@@ -46,6 +46,11 @@ async function migrate(store: Store): Promise<void> {
 	if (version < 4) {
 		await store.set("starredSkills", []);
 		await store.set("starredMcps", []);
+	}
+
+	// Migration v4 -> v5: track onboarding completion
+	if (version < 5) {
+		await store.set("onboardingCompleted", false);
 	}
 
 	await store.set("version", CURRENT_VERSION);
@@ -145,5 +150,18 @@ export async function getStarredMcps(): Promise<string[]> {
 export async function setStarredMcps(mcps: string[]): Promise<void> {
 	const store = await getStore();
 	await store.set("starredMcps", mcps);
+	await store.save();
+}
+
+export async function getOnboardingCompleted(): Promise<boolean> {
+	const store = await getStore();
+	return (await store.get<boolean>("onboardingCompleted")) ?? false;
+}
+
+export async function setOnboardingCompleted(
+	completed: boolean,
+): Promise<void> {
+	const store = await getStore();
+	await store.set("onboardingCompleted", completed);
 	await store.save();
 }
