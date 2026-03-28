@@ -23,16 +23,15 @@ dependencies = [
 name = "aghub"
 version = "0.1.0"
 dependencies = [
- "aghub-core",
- "anyhow",
- "assert_cmd",
- "clap",
- "predicates",
+ "aghub-api",
  "serde",
  "serde_json",
- "skill",
- "tabled",
- "tempfile",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-opener",
+ "tauri-plugin-store",
+ "tokio",
 ]
 
 [[package]]
@@ -54,6 +53,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "aghub-cli"
+version = "0.1.0"
+dependencies = [
+ "aghub-core",
+ "anyhow",
+ "assert_cmd",
+ "clap",
+ "predicates",
+ "serde",
+ "serde_json",
+ "skill",
+ "tabled",
+ "tempfile",
+]
+
+[[package]]
 name = "aghub-core"
 version = "0.1.0"
 dependencies = [
@@ -65,21 +80,6 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "toml 0.8.2",
-]
-
-[[package]]
-name = "aghub-desktop"
-version = "0.1.0"
-dependencies = [
- "aghub-api",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-opener",
- "tauri-plugin-store",
- "tokio",
 ]
 
 [[package]]
