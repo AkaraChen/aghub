@@ -1,19 +1,15 @@
 # aghub
-
-!['Title'](/docs/assets/gh_baner_cn.png)
-
-### 你所有 AI 编程助手的统管。
-
-> 本项目正在积极开发中。
-
-!['Title'](/docs/assets/app_screenshot.jpg)
-
-
-[English Version](./README.md)
+**你的AI智能体配置中心**
 
 [![Version](https://img.shields.io/github/v/release/akarachen/aghub?include_prereleases&label=release)](https://github.com/akarachen/aghub/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/akarachen/aghub/releases)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-orange.svg)](https://tauri.app/)
+
+[English Version](./README.md)
+
+!['aghub banner'](/docs/assets/gh_baner_cn.png)
+
+!['aghub screenshot'](/docs/assets/app_screenshot.jpg)
 
 ---
 
@@ -33,7 +29,7 @@
 **统一 MCP 管理**
 
 - 一次配置，部署到 22+ 支持的助手
-- 支持 Stdio、SSE 和 StreamableHttp 传输方式
+- 支持本地 Stdio 和远程（SSE 和 StreamableHttp） 连线方式
 - 无需删除即可启用或禁用服务器
 - 单条命令查看和审计所有助手的服务器
 

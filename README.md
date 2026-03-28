@@ -1,19 +1,15 @@
 # aghub
-
-!['Title'](/docs/assets/gh_banner.png)
-
-### One hub for every AI coding agent.
-
-> This project is under heavy construction.
-
-!['Title'](/docs/assets/app_screenshot.jpg)
-
-
-[中文版本](./README.CN.md)
+**One hub for every AI coding agent.**
 
 [![Version](https://img.shields.io/github/v/release/akarachen/aghub?include_prereleases&label=release)](https://github.com/akarachen/aghub/releases)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/akarachen/aghub/releases)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-orange.svg)](https://tauri.app/)
+
+[中文版本](./README.CN.md)
+
+!['aghub banner'](/docs/assets/gh_banner.png)
+
+!['aghub screenshot'](/docs/assets/app_screenshot.jpg)
 
 ---
 
