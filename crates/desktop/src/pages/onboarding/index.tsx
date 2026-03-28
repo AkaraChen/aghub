@@ -70,7 +70,7 @@ const ONBOARDING_STEPS: StepDefinition[] = [
 
 function StepBullet({ children }: { children: React.ReactNode }) {
 	return (
-		<li className="flex items-start gap-2.5 text-sm leading-6 text-foreground">
+		<li className="flex items-start gap-3 text-sm leading-6 text-foreground">
 			<span className="mt-1 flex size-5 shrink-0 items-center justify-center rounded-full bg-success/15 text-success">
 				<CheckBadgeIcon className="size-3.5" />
 			</span>
@@ -122,7 +122,7 @@ function PreviewHeader({
 	description: string;
 }) {
 	return (
-		<div className="flex items-start gap-2.5">
+		<div className="flex items-start gap-3">
 			<div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-accent/12 text-accent">
 				{icon}
 			</div>
@@ -144,7 +144,7 @@ function OverviewRow({
 	description: string;
 }) {
 	return (
-		<div className="flex items-start gap-2.5 rounded-2xl border border-border/70 bg-surface-secondary/90 p-3.5">
+		<div className="flex items-start gap-3 rounded-2xl border border-border/70 bg-surface-secondary/90 p-4">
 			<div className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-accent/12 text-accent">
 				{icon}
 			</div>
@@ -166,7 +166,7 @@ function FlowStep({
 	description: string;
 }) {
 	return (
-		<div className="flex items-start gap-2.5 rounded-2xl border border-border/70 bg-surface-secondary/90 p-3.5">
+		<div className="flex items-start gap-3 rounded-2xl border border-border/70 bg-surface-secondary/90 p-4">
 			<div className="flex size-9 shrink-0 items-center justify-center rounded-full border border-accent/25 bg-accent/10 text-xs font-semibold text-accent">
 				{index}
 			</div>
@@ -186,7 +186,7 @@ function SkillExample({
 	description: string;
 }) {
 	return (
-		<div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-surface-secondary/90 px-3.5 py-3">
+		<div className="flex items-center justify-between gap-3 rounded-2xl border border-border/70 bg-surface-secondary/90 px-4 py-3">
 			<div className="min-w-0">
 				<p className="text-sm font-semibold text-foreground">{name}</p>
 				<p className="text-sm leading-6 text-muted">{description}</p>
@@ -214,8 +214,8 @@ function StartAction({
 	isPending: boolean;
 }) {
 	return (
-		<div className="flex flex-col gap-3 rounded-2xl border border-border/70 bg-surface-secondary/90 p-3.5">
-			<div className="flex items-start gap-2.5">
+		<div className="flex flex-col gap-4 rounded-2xl border border-border/70 bg-surface-secondary/90 p-4">
+			<div className="flex items-start gap-3">
 				<div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-accent/12 text-accent">
 					{icon}
 				</div>
@@ -246,8 +246,8 @@ function WelcomePreview({ agentCount }: { agentCount: number }) {
 
 	return (
 		<Card className="border border-border/70 bg-surface/88 p-0">
-			<Card.Content className="space-y-5 p-5">
-				<div className="flex items-center gap-3">
+			<Card.Content className="space-y-6 p-6">
+				<div className="flex items-center gap-4">
 					<img
 						src={appIconUrl}
 						alt=""
@@ -269,7 +269,7 @@ function WelcomePreview({ agentCount }: { agentCount: number }) {
 					{t("onboardingOverviewBody")}
 				</p>
 
-				<div className="space-y-2.5">
+				<div className="space-y-3">
 					<OverviewRow
 						icon={<ServerStackIcon className="size-4" />}
 						title={t("onboardingFeatureMcpTitle")}
@@ -296,14 +296,14 @@ function McpPreview() {
 
 	return (
 		<Card className="border border-border/70 bg-surface/88 p-0">
-			<Card.Content className="space-y-5 p-5">
+			<Card.Content className="space-y-6 p-6">
 				<PreviewHeader
 					icon={<ServerStackIcon className="size-5" />}
 					title={t("onboardingMcpVisualTitle")}
 					description={t("onboardingMcpVisualBody")}
 				/>
 
-				<div className="space-y-2.5">
+				<div className="space-y-3">
 					<FlowStep
 						index="01"
 						title={t("onboardingMcpFlowOneTitle")}
@@ -330,14 +330,14 @@ function SkillsPreview() {
 
 	return (
 		<Card className="border border-border/70 bg-surface/88 p-0">
-			<Card.Content className="space-y-5 p-5">
+			<Card.Content className="space-y-6 p-6">
 				<PreviewHeader
 					icon={<BookOpenIcon className="size-5" />}
 					title={t("onboardingSkillsVisualTitle")}
 					description={t("onboardingSkillsVisualBody")}
 				/>
 
-				<div className="space-y-2.5">
+				<div className="space-y-3">
 					<SkillExample
 						name="review-pr"
 						description={t("onboardingSkillExampleReview")}
@@ -367,14 +367,14 @@ function StartPreview({
 
 	return (
 		<Card className="border border-border/70 bg-surface/88 p-0">
-			<Card.Content className="space-y-5 p-5">
+			<Card.Content className="space-y-6 p-6">
 				<PreviewHeader
 					icon={<ArrowRightIcon className="size-5" />}
 					title={t("onboardingNextStepTitle")}
 					description={t("onboardingNextStepBody")}
 				/>
 
-				<div className="space-y-2.5">
+				<div className="space-y-3">
 					<StartAction
 						icon={<ServerStackIcon className="size-4" />}
 						title={t("onboardingStartMcpTitle")}
@@ -464,7 +464,7 @@ export default function OnboardingPage() {
 		>
 			<div data-tauri-drag-region className="h-6 shrink-0" />
 
-			<div className="relative flex-1 overflow-auto p-3.5 md:p-5">
+			<div className="relative flex-1 overflow-auto p-4 md:p-6">
 				<div
 					className="pointer-events-none"
 					data-onboarding-backdrop=""
@@ -495,19 +495,25 @@ export default function OnboardingPage() {
 						</div>
 					</header>
 
-					<div className="grid flex-1 gap-4 xl:grid-cols-[minmax(0,0.94fr)_minmax(420px,0.86fr)]">
+					<div
+						className="
+							grid flex-1 gap-4
+							lg:grid-cols-[minmax(0,1.04fr)_minmax(320px,0.96fr)]
+							xl:grid-cols-[minmax(0,0.94fr)_minmax(420px,0.86fr)]
+						"
+					>
 						<Card className="border border-border/70 bg-surface/88 p-0">
-							<Card.Content className="flex h-full flex-col gap-6 p-5 md:p-6">
-								<div className="space-y-3">
+							<Card.Content className="flex flex-col gap-6 p-6 md:p-7">
+								<div className="space-y-4">
 									<span className="inline-flex rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs text-accent">
 										{t(step.eyebrowKey)}
 									</span>
 
-									<div className="space-y-2">
+									<div className="space-y-3">
 										<h1 className="max-w-xl text-4xl font-semibold tracking-tight text-foreground md:text-5xl">
 											{t(step.titleKey)}
 										</h1>
-										<p className="max-w-xl text-base leading-7 text-muted md:text-[1.0625rem]">
+										<p className="max-w-xl text-base leading-8 text-muted md:text-lg">
 											{t(step.bodyKey, {
 												count: agentCount,
 											})}
@@ -515,7 +521,7 @@ export default function OnboardingPage() {
 									</div>
 								</div>
 
-								<ul className="space-y-2.5">
+								<ul className="space-y-3">
 									{step.bulletKeys.map((bulletKey) => (
 										<StepBullet key={bulletKey}>
 											{t(bulletKey)}
@@ -523,7 +529,7 @@ export default function OnboardingPage() {
 									))}
 								</ul>
 
-								<div className="mt-auto flex flex-wrap items-center justify-end gap-2.5 border-t border-separator pt-5">
+								<div className="flex flex-wrap items-center justify-end gap-2.5 pt-2">
 									<div className="flex items-center gap-2.5">
 										{canGoBack && (
 											<Button
@@ -569,7 +575,7 @@ export default function OnboardingPage() {
 
 						<div
 							key={step.id}
-							className="min-h-[420px]"
+							className="min-h-[360px] lg:min-h-0"
 							data-onboarding-stage={direction}
 						>
 							{step.id === "welcome" && (
