@@ -6,6 +6,8 @@ import { useTranslation } from "react-i18next";
 import type { KeyPair } from "../lib/key-pair-utils";
 import { generateId } from "../lib/key-pair-utils";
 
+const EMPTY_ERRORS: Array<{ key?: string; value?: string }> = [];
+
 interface KeyPairEditorProps {
 	value: KeyPair[];
 	onChange: (value: KeyPair[]) => void;
@@ -22,7 +24,7 @@ export function KeyPairEditor({
 	keyPlaceholder,
 	valuePlaceholder,
 	variant,
-	errors = [],
+	errors = EMPTY_ERRORS,
 	errorMessage,
 }: KeyPairEditorProps) {
 	const { t } = useTranslation();

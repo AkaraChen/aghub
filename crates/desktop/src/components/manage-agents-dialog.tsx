@@ -26,6 +26,8 @@ import { cn } from "../lib/utils";
 
 type AgentCapabilityRequirement = keyof AvailableAgent["capabilities"] | "mcp";
 
+const EMPTY_CAPABILITIES: AgentCapabilityRequirement[] = [];
+
 interface ManageAgentsDialogProps {
 	group: {
 		mergeKey: string;
@@ -50,7 +52,7 @@ export function ManageAgentsDialog({
 	isOpen,
 	onClose,
 	projectPath,
-	requiredCapabilities = [],
+	requiredCapabilities = EMPTY_CAPABILITIES,
 }: ManageAgentsDialogProps) {
 	const { t } = useTranslation();
 	const { baseUrl } = useServer();
