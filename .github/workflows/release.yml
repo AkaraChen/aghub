@@ -36,6 +36,8 @@ jobs:
     build-tauri:
         name: Build Desktop (${{ matrix.target }})
         runs-on: ${{ matrix.os }}
+        permissions:
+            contents: write
         strategy:
             fail-fast: false
             matrix:
@@ -172,9 +174,8 @@ jobs:
               run: |
                   Compress-Archive -Path target/${{ matrix.target }}/release/agentctl.exe -DestinationPath agentctl-${{ matrix.target }}.zip
 
-            - name: Upload Artifact to GitHub Release
+            - name: Upload CLI to Release
               uses: softprops/action-gh-release@v2
               with:
                   tag_name: ${{ github.event.inputs.version || github.ref_name }}
-                  draft: ${{ github.event_name == 'workflow_dispatch' }}
                   files: agentctl-*
