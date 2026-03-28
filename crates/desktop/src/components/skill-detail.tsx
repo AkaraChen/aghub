@@ -735,26 +735,33 @@ function DeleteSkillDialog({
 	const skill = group.items[0];
 
 	const deleteMutation = useMutation({
-		mutationFn: () => {
-			const byScope = new Map<string, string>();
-			for (const item of group.items) {
-				if (!item.agent) continue;
-				const scope =
-					item.source === ConfigSource.Project ? "project" : "global";
-				if (!byScope.has(scope)) {
-					byScope.set(scope, item.agent);
-				}
-			}
-			return Promise.allSettled(
-				Array.from(byScope, ([scope, agent]) =>
-					api.skills.delete(
-						agent,
-						skill.name,
-						scope as "global" | "project",
-						projectPath,
-					),
+		mutationFn: async () => {
+			const deletions = group.items
+				.filter((item) => item.agent)
+				.map((item) => ({
+					agent: item.agent!,
+					scope:
+						item.source === ConfigSource.Project
+							? ("project" as const)
+							: ("global" as const),
+				}));
+			const results = await Promise.allSettled(
+				deletions.map(({ agent, scope }) =>
+					api.skills.delete(agent, skill.name, scope, projectPath),
 				),
 			);
+			const failures = results
+				.map((result, index) => ({
+					result,
+					deletion: deletions[index],
+				}))
+				.filter(({ result }) => result.status === "rejected");
+			if (failures.length > 0) {
+				console.error("Skill delete failures:", failures);
+				throw new Error(
+					`${failures.length} of ${deletions.length} deletions failed`,
+				);
+			}
 		},
 		onSettled: () => {
 			queryClient.invalidateQueries({ queryKey: ["skills"] });
