@@ -10,6 +10,11 @@ on:
                 description: "Version tag (e.g., v1.0.0)"
                 required: true
                 type: string
+            prerelease:
+                description: "Create as pre-release"
+                required: false
+                type: boolean
+                default: true
 
 jobs:
     changelog:
@@ -115,7 +120,7 @@ jobs:
                   releaseName: "aghub ${{ github.event.inputs.version || github.ref_name }}"
                   releaseBody: ${{ needs.changelog.outputs.release_body || 'Manual build' }}
                   releaseDraft: false
-                  prerelease: false
+                  prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
                   args: --target ${{ matrix.target }}
                   updaterJson: true
 
@@ -181,4 +186,5 @@ jobs:
               uses: softprops/action-gh-release@v2
               with:
                   tag_name: ${{ github.event.inputs.version || github.ref_name }}
+                  prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
                   files: agentctl-*
