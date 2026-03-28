@@ -1,6 +1,7 @@
 import { Avatar, Button, Card, toast } from "@heroui/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { getName, getVersion } from "@tauri-apps/api/app";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { useTranslation } from "react-i18next";
@@ -72,16 +73,19 @@ export default function ApplicationPanel() {
 			name: "AkaraChen",
 			role: t("headDev"),
 			avatar: "https://avatars.githubusercontent.com/u/85140972?v=4",
+			githubUrl: "https://github.com/AkaraChen",
 		},
 		{
 			name: "Flacier",
 			role: t("developer"),
-			avatar: "https://avatars.githubusercontent.com/u/48140241?v=4",
+			avatar: "https://avatars.githubusercontent.com/u/48170241?v=4",
+			githubUrl: "https://github.com/Fldicoahkiin",
 		},
 		{
 			name: "danielchim",
 			role: t("designer"),
 			avatar: "https://avatars.githubusercontent.com/u/12156547?v=4",
+			githubUrl: "https://github.com/danielchim",
 		},
 	];
 
@@ -185,9 +189,11 @@ export default function ApplicationPanel() {
 					</span>
 					<div className="mt-4 grid grid-cols-3 gap-4">
 						{teamMembers.map((member) => (
-							<div
+							<button
 								key={member.name}
-								className="flex flex-col items-center text-center"
+								type="button"
+								className="flex flex-col items-center text-center cursor-pointer"
+								onClick={() => openUrl(member.githubUrl)}
 							>
 								<Avatar size="lg">
 									<Avatar.Image
@@ -201,7 +207,7 @@ export default function ApplicationPanel() {
 								<span className="text-xs text-muted">
 									{member.role}
 								</span>
-							</div>
+							</button>
 						))}
 					</div>
 				</Card.Content>
