@@ -53,17 +53,11 @@ pub fn execute(
 					anyhow!("--name is required when not using --from")
 				})?;
 				eprintln_verbose!("Adding skill: {}", skill_name);
-				let skill = Skill {
-					name: skill_name,
-					enabled: true,
-					description,
-					author,
-					version,
-					tools,
-					source_path: None,
-					canonical_path: None,
-					config_source: None,
-				};
+				let mut skill = Skill::new(skill_name);
+				skill.description = description;
+				skill.author = author;
+				skill.version = version;
+				skill.tools = tools;
 				manager.add_skill(skill.clone())?;
 				eprintln_verbose!("Skill added successfully");
 				println!("{}", serde_json::to_string_pretty(&skill)?);
