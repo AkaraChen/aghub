@@ -74,7 +74,7 @@ export default {
 	onboardingWelcomeEyebrow: "Start here",
 	onboardingWelcomeTitle: "Keep your AI agent setup in one place.",
 	onboardingWelcomeBody:
-		"aghub keeps your usual MCP servers and skills in one place, so you can reuse them and quickly see what a repo still needs.",
+		"aghub keeps your usual MCP servers and skills in one place.",
 	onboardingWelcomeBulletOne:
 		"Add MCP servers once instead of editing each agent's config by hand.",
 	onboardingWelcomeBulletTwo:
@@ -146,6 +146,14 @@ export default {
 	onboardingSkillsBulletTwo:
 		"Import local or packaged skills instead of copy-pasting prompts between tools.",
 	onboardingSkillsBulletThree: "",
+	onboardingStartEyebrow: "Start from here",
+	onboardingStartTitle: "Open the page that fits what you want to do first.",
+	onboardingStartBody:
+		"You do not need to set up everything at once. Start with one page now and fill in the rest later.",
+	onboardingStartBulletOne:
+		"If you want agents to use tools first, start with MCP Servers.",
+	onboardingStartBulletTwo:
+		"If you want to organize workflows or install existing ones, go to Skills or skills.sh.",
 	onboardingSkillsVisualTitle: "A few good skills go a long way",
 	onboardingSkillsVisualBody:
 		"Start with a couple of high-value workflows and expand from there.",
@@ -198,19 +206,22 @@ export default {
 		"Understand what is available before you edit or remove it.",
 	onboardingScopeMergedItemTwo:
 		"Stop guessing what your agent will be able to use in this project.",
-	onboardingNextStepTitle: "Choose your starting point",
+	onboardingNextStepTitle: "Choose a page to start with",
 	onboardingNextStepBody:
-		"Most teams get value fastest by adding one MCP server or one skill.",
+		"Open one page and start there. You can fill in the rest later.",
 	onboardingReplayHint: "Replay from Settings > About",
 	onboardingStartMcpTitle: "Add an MCP Server",
 	onboardingStartMcpBody:
 		"Connect one useful tool and make it available where you need it.",
+	onboardingStartMcpCta: "Open MCP Servers",
 	onboardingStartSkillsTitle: "Open Skills",
 	onboardingStartSkillsBody:
 		"Create or import a reusable workflow for your personal or team setup.",
+	onboardingStartSkillsCta: "Open Skills",
 	onboardingStartMarketTitle: "Browse skills.sh",
 	onboardingStartMarketBody:
 		"Explore installable skills from the marketplace and add them to selected agents.",
+	onboardingStartMarketCta: "Open skills.sh",
 	onboardingMarketNote:
 		"You can browse more installable workflows any time in skills.sh.",
 

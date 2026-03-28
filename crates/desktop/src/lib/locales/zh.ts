@@ -70,8 +70,7 @@ export default {
 	onboardingSavingProgress: "正在保存引导进度...",
 	onboardingWelcomeEyebrow: "先了解一下",
 	onboardingWelcomeTitle: "把 AI 代理的关键配置放到一个地方管理。",
-	onboardingWelcomeBody:
-		"aghub 帮你把常用的 MCP 和技能整理到一个地方，需要为当前仓库补什么也能很快看清。",
+	onboardingWelcomeBody: "aghub 帮你把常用的 MCP 和技能整理到一个地方。",
 	onboardingWelcomeBulletOne:
 		"MCP 服务器配置一次，不用再手动改每个代理的配置文件。",
 	onboardingWelcomeBulletTwo: "把常用提示和流程存成技能，不用每次从头重写。",
@@ -137,6 +136,13 @@ export default {
 	onboardingSkillsBulletTwo:
 		"可以导入本地或打包好的技能，不用再来回复制粘贴提示词。",
 	onboardingSkillsBulletThree: "",
+	onboardingStartEyebrow: "从这里开始",
+	onboardingStartTitle: "先打开最适合你当前任务的页面。",
+	onboardingStartBody:
+		"不需要一次把所有东西都配完。先从一个入口开始，后面再慢慢补齐也完全没问题。",
+	onboardingStartBulletOne: "想让代理先用上工具，就先去 MCP 服务器页面。",
+	onboardingStartBulletTwo:
+		"想整理流程、导入现成能力，去技能页或 skills.sh 就行。",
 	onboardingSkillsVisualTitle: "少量高价值技能就很够用",
 	onboardingSkillsVisualBody:
 		"先把最常用的几个流程整理好，收益通常就已经很明显。",
@@ -174,16 +180,18 @@ export default {
 	onboardingScopeMergedBody: "先看全，再决定改什么，心里更有底。",
 	onboardingScopeMergedItemOne: "在编辑或删除前，先确认当前有哪些能力可用。",
 	onboardingScopeMergedItemTwo: "不用再猜代理进到这个项目后到底能做什么。",
-	onboardingNextStepTitle: "选择一个起点",
-	onboardingNextStepBody:
-		"多数团队最快获得价值的方式，是先加一个 MCP 服务器，或先整理一个技能。",
+	onboardingNextStepTitle: "选择一个入口",
+	onboardingNextStepBody: "先打开一个页面开始动手，剩下的后面再补。",
 	onboardingReplayHint: "可在 设置 > 关于 中重新打开",
 	onboardingStartMcpTitle: "添加 MCP 服务器",
 	onboardingStartMcpBody: "先接入一个真正有用的工具，让代理马上能用起来。",
+	onboardingStartMcpCta: "打开 MCP 页面",
 	onboardingStartSkillsTitle: "打开技能页",
 	onboardingStartSkillsBody: "为个人或团队配置创建、导入可复用的工作流。",
+	onboardingStartSkillsCta: "打开技能页",
 	onboardingStartMarketTitle: "浏览 skills.sh",
 	onboardingStartMarketBody: "从市场发现可安装技能，并分发到选定代理。",
+	onboardingStartMarketCta: "打开 skills.sh",
 	onboardingMarketNote: "想找更多现成工作流，可以随时去 skills.sh 浏览。",
 
 	// Agent Management
