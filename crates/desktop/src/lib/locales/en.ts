@@ -56,6 +56,8 @@ export default {
 	updateError: "Update error",
 	clickToCheckUpdates: "Click to check for updates",
 	downloadAndInstall: "Download and Install",
+	updateInstalledSuccess: "Update installed successfully",
+	restartToUpdate: "Restart to Update",
 
 	// Agent Management
 	agentManagementDescription:

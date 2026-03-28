@@ -1,6 +1,7 @@
-import { Button, Card } from "@heroui/react";
+import { Button, Card, toast } from "@heroui/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { getName, getVersion } from "@tauri-apps/api/app";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { useTranslation } from "react-i18next";
 
@@ -35,9 +36,19 @@ export default function ApplicationPanel() {
 			const update = await check();
 			if (!update) throw new Error("No update available");
 
-			await update.downloadAndInstall(() => {
-				// Progress events handled internally
+			await update.downloadAndInstall(() => {});
+		},
+		onSuccess: () => {
+			toast.success(t("updateInstalledSuccess"), {
+				timeout: 0,
+				actionProps: {
+					children: t("restartToUpdate"),
+					onPress: () => relaunch(),
+				},
 			});
+		},
+		onError: (error) => {
+			toast.danger(`${t("updateError")}: ${error.message}`);
 		},
 	});
 

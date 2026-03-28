@@ -55,6 +55,8 @@ export default {
 	updateError: "更新错误",
 	clickToCheckUpdates: "点击检查更新",
 	downloadAndInstall: "下载并安装",
+	updateInstalledSuccess: "更新已安装成功",
+	restartToUpdate: "重启更新",
 
 	// Agent Management
 	agentManagementDescription:
