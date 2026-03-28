@@ -1,75 +1,71 @@
 # aghub
 
+!['Title'](/docs/assets/gh_banner.png)
+
+### One hub for every AI coding agent.
+
 > This project is under heavy construction.
 
-**One hub for every AI coding agent.**
+!['Title'](/docs/assets/app_screenshot.jpg)
+
 
 [中文版本](./README.CN.md)
 
----
-
-## Why aghub?
-
-You use Claude Code. Your teammate uses Cursor. Another swears by Windsurf. Each has its own config format, its own file locations, its own way of doing things.
-
-Adding an MCP server means editing three different JSON files in three different places. Sharing a skill requires copying folders across three different directories. You don't even know what capabilities you've configured where.
-
-**aghub is built on a simple idea: your AI tooling should work for you, not against you.**
-
-## The Philosophy
-
-### Stateless by Design
-
-No database. No sync issues. Your files are the source of truth. Uninstall aghub tomorrow and all your configurations remain perfectly intact—nothing locked in, nothing lost.
-
-### Explicit Opt-In
-
-Every change requires your confirmation. No silent modifications. No background syncs. You stay in control of your tooling.
-
-### Universal Compatibility
-
-22+ AI coding agents supported out of the box. Each agent described by data, not hard-coded logic, making it trivial to add new ones.
-
-### Scope Awareness
-
-Know exactly what's configured globally versus per-project. Merge both views when you need the complete picture. Track where every capability came from.
-
-## What You Can Do
-
-**Manage MCP Servers**
-
-- Add servers once, deploy across multiple agents
-- Support for Stdio, SSE, and StreamableHttp transports
-- Enable/disable servers without deletion
-- View all servers across all agents with a single command
-
-**Organize Skills**
-
-- Import skill packages from `.skill` archives
-- Create skills locally with SKILL.md frontmatter
-- Track provenance—know exactly where each skill came from
-- Content integrity via SHA-256 verification
-
-**Stay in Control**
-
-- List capabilities across all agents or filter by one
-- Scope queries: global, project, or merged view
-- Audit trail of every configured resource
-- Marketplace integration for discovering new capabilities
-
-## Who It's For
-
-aghub is for power users of AI coding tools who:
-
-- Use two or more AI assistants regularly
-- Want unified tool management without vendor lock-in
-- Need to share MCP servers and skills across team members
-- Build or distribute MCP servers to multiple platforms
-
-## The Vision
-
-A world where switching AI coding assistants doesn't mean starting over. Where your accumulated knowledge—your skills, your MCP servers, your configurations—travels with you. Where tool choice is driven by capability, not by the friction of reconfiguration.
+[![Version](https://img.shields.io/github/v/release/akarachen/aghub?include_prereleases&label=release)](https://github.com/akarachen/aghub/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/akarachen/aghub/releases)
+[![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-orange.svg)](https://tauri.app/)
 
 ---
 
-_Works with: Claude Code, OpenCode, OpenAI Codex, Gemini CLI, GitHub Copilot, Cursor, Windsurf, Cline, RooCode, Zed, Mistral Vibe, and 11 more._
+## Installation
+
+### System Requirements
+* Windows: Windows 10 and above
+* macOS: macOS 12 (Monterey) and above
+* Linux: Ubuntu 22.04+ / Debian 11+ / Fedora 34+ and other mainstream distributions
+
+Download the latest release from [Releases](https://github.com/akarachen/aghub/releases). And you're good to go!
+
+---
+
+## Features
+
+**Unified MCP Management**
+
+- Configure once, deploy to any of 22+ supported agents
+- Stdio, SSE, and StreamableHttp transports
+- Enable or disable servers without removing them
+- View and audit servers across all agents in one command
+
+**Portable Skills**
+
+- Import `.skill` packages or author skills with SKILL.md frontmatter
+- Share skills across agents via the universal skills directory
+- SHA-256 content verification and source provenance tracking
+- Browse and install from the skills.sh marketplace
+
+**Flexible Scoping**
+
+- Global, project, or merged config views per agent
+- Filter by agent or list everything at once
+- Full audit trail of every configured resource
+
+---
+
+## Contributing
+
+Contributions are welcome! To get started:
+
+```bash
+git clone https://github.com/akarachen/aghub.git
+cd aghub
+just desktop    # Debug build
+just test       # Run tests
+just lint       # Run clippy
+```
+
+Please ensure `just test` and `just lint` pass before submitting a pull request.
+
+## License
+
+MIT

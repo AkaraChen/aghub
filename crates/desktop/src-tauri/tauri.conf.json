@@ -1,8 +1,8 @@
 {
 	"$schema": "https://schema.tauri.app/config/2",
-	"productName": "aghub-desktop",
+	"productName": "aghub",
 	"version": "0.1.0",
-	"identifier": "com.akrc.aghub-desktop",
+	"identifier": "com.akrc.aghub",
 	"build": {
 		"beforeDevCommand": "bun run dev",
 		"devUrl": "http://localhost:1420",
@@ -12,13 +12,16 @@
 	"app": {
 		"windows": [
 			{
-				"title": "aghub-desktop",
+				"title": "aghub",
 				"width": 1280,
 				"height": 800,
 				"decorations": true,
 				"hiddenTitle": true,
 				"titleBarStyle": "Overlay",
-				"trafficLightPosition": { "x": 16, "y": 18 }
+				"trafficLightPosition": {
+					"x": 16,
+					"y": 18
+				}
 			}
 		],
 		"security": {
@@ -35,6 +38,23 @@
 			"icons/128x128@2x.png",
 			"icons/icon.icns",
 			"icons/icon.ico"
-		]
+		],
+		"macOS": {
+			"dmg": {
+				"background": "icons/dmg/install.png",
+				"windowSize": {
+					"width": 650,
+					"height": 650
+				},
+				"appPosition": {
+					"x": 180,
+					"y": 385
+				},
+				"applicationFolderPosition": {
+					"x": 480,
+					"y": 385
+				}
+			}
+		}
 	}
 }

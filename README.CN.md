@@ -1,75 +1,71 @@
 # aghub
 
+!['Title'](/docs/assets/gh_baner_cn.png)
+
+### 你所有 AI 编程助手的统管。
+
 > 本项目正在积极开发中。
 
-**一个中心，统管所有AI编程助手。**
+!['Title'](/docs/assets/app_screenshot.jpg)
+
 
 [English Version](./README.md)
 
+[![Version](https://img.shields.io/github/v/release/akarachen/aghub?include_prereleases&label=release)](https://github.com/akarachen/aghub/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/akarachen/aghub/releases)
+[![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-orange.svg)](https://tauri.app/)
+
 ---
 
-## 为什么需要 aghub？
+## 安装
 
-你在用 Claude Code。你的队友在用 Cursor。还有人只信赖 Windsurf。每个工具有自己的配置格式、自己的文件位置、自己的做事方式。
+### 系统要求
+* Windows: Windows 10 及以上
+* macOS: macOS 12 (Monterey) 及以上
+* Linux: Ubuntu 22.04+ / Debian 11+ / Fedora 34+ 及其他主流发行版
 
-添加一个 MCP 服务器意味着要在三个不同的地方编辑三个不同的 JSON 文件。分享一个技能需要在三个不同的目录之间复制文件夹。你甚至不知道自己在哪里配置了什么能力。
+从 [Releases](https://github.com/akarachen/aghub/releases) 下载最新版本就可以开始使用！
 
-**aghub 建立在一个简单的理念之上：你的AI工具应该为你服务，而不是给你添麻烦。**
+---
 
-## 设计哲学
+## 功能
 
-### 无状态设计
+**统一 MCP 管理**
 
-没有数据库。没有同步问题。你的文件就是唯一真相。明天卸载 aghub，所有配置依然完好无损——没有锁定，没有丢失。
-
-### 显式确认
-
-每次修改都需要你明确确认。没有静默修改。没有后台同步。你始终掌控着自己的工具。
-
-### 通用兼容
-
-开箱即用支持 22+ AI 编程助手。每个助手由数据描述，而非硬编码逻辑，添加新助手轻而易举。
-
-### 范围感知
-
-精确知道哪些配置是全局的，哪些是项目级的。需要全局视图时可以合并两者。追踪每个能力的来源。
-
-## 你可以做什么
-
-**管理 MCP 服务器**
-
-- 一次添加，跨多个助手部署
+- 一次配置，部署到 22+ 支持的助手
 - 支持 Stdio、SSE 和 StreamableHttp 传输方式
-- 无需删除即可启用/禁用服务器
-- 单条命令查看所有助手的服务器
+- 无需删除即可启用或禁用服务器
+- 单条命令查看和审计所有助手的服务器
 
-**组织技能**
+**便携技能**
 
-- 从 `.skill` 归档导入技能包
-- 用 SKILL.md 前言创建本地技能
-- 追踪来源——知道每个技能从哪里来
-- 通过 SHA-256 验证内容完整性
+- 导入 `.skill` 包或使用 SKILL.md 前言编写技能
+- 通过通用技能目录跨助手共享技能
+- SHA-256 内容验证与来源追踪
+- 浏览并安装 skills.sh 市场中的技能
 
-**保持掌控**
+**灵活的作用域**
 
-- 列出所有助手的能力或按单个筛选
-- 范围查询：全局、项目或合并视图
-- 每个配置资源的审计轨迹
-- 市场集成，发现新能力
-
-## 为谁而设计
-
-aghub 为 AI 编程工具的深度用户而设计：
-
-- 经常使用两个或更多 AI 助手
-- 想要统一的工具管理而不被供应商锁定
-- 需要在团队成员间分享 MCP 服务器和技能
-- 构建或分发 MCP 服务器到多个平台
-
-## 愿景
-
-一个切换AI编程助手不需要从头开始的世界。你积累的知识——你的技能、你的 MCP 服务器、你的配置——随你而行。工具选择由能力驱动，而非重新配置的摩擦。
+- 按助手查看全局、项目或合并配置
+- 按单个助手筛选或一次列出全部
+- 每个配置资源的完整审计轨迹
 
 ---
 
-_支持：Claude Code、OpenCode、OpenAI Codex、Gemini CLI、GitHub Copilot、Cursor、Windsurf、Cline、RooCode、Zed、Mistral Vibe，以及更多 11 个。_
+## 贡献
+
+欢迎贡献！开始方式：
+
+```bash
+git clone https://github.com/akarachen/aghub.git
+cd aghub
+just desktop    # 调试构建
+just test       # 运行测试
+just lint       # 运行 clippy
+```
+
+提交 Pull Request 前，请确保 `just test` 和 `just lint` 通过。
+
+## 许可证
+
+MIT
