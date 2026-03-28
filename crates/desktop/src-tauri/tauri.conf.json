@@ -43,7 +43,7 @@
 		],
 		"macOS": {
 			"dmg": {
-				"background": "icons/dmg/install.png",
+				"background": "icons/dmg/background.tiff",
 				"windowSize": {
 					"width": 650,
 					"height": 650
