@@ -14,11 +14,15 @@ const ICON_ALIASES: Record<string, string> = {
 	fleet: "rust_rover",
 };
 
+const UNDERSCORE_REGEX = /_/g;
+
 function EditorIcon({ id, name }: { id: string; name: string }) {
 	const resolvedId = ICON_ALIASES[id] ?? id;
 	const path =
 		iconModules[`../../assets/agent/${resolvedId}.svg`] ??
-		iconModules[`../../assets/agent/${resolvedId.replace(/_/g, "")}.svg`];
+		iconModules[
+			`../../assets/agent/${resolvedId.replace(UNDERSCORE_REGEX, "")}.svg`
+		];
 	const svg = path;
 
 	if (svg) {

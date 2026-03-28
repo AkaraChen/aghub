@@ -66,11 +66,13 @@ export function validateHttpUrl(value: string, t: TFunction) {
 	return true;
 }
 
+const POSITIVE_INTEGER_REGEX = /^\d+$/;
+
 export function validatePositiveInteger(value: string, t: TFunction) {
 	if (!value.trim()) {
 		return true;
 	}
-	if (!/^\d+$/.test(value)) {
+	if (!POSITIVE_INTEGER_REGEX.test(value)) {
 		return t("validationTimeoutPositiveInteger");
 	}
 
