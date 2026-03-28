@@ -15,6 +15,8 @@
 				"title": "aghub",
 				"width": 1280,
 				"height": 800,
+				"minWidth": 1024,
+				"minHeight": 600,
 				"decorations": true,
 				"hiddenTitle": true,
 				"titleBarStyle": "Overlay",
