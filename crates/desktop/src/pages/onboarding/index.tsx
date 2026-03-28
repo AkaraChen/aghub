@@ -12,61 +12,15 @@ import {
 	getCurrentWebviewWindow,
 	WebviewWindow,
 } from "@tauri-apps/api/webviewWindow";
-import { startTransition, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../../hooks/use-agent-availability";
 import { useSetOnboardingCompleted } from "../../hooks/use-onboarding";
-import { cn } from "../../lib/utils";
 import "../../styles/onboarding.css";
-
-type StepId = "welcome" | "mcp" | "skills" | "start";
 
 const appIconUrl = new URL(
 	"../../../src-tauri/icons/128x128.png",
 	import.meta.url,
 ).href;
-
-interface StepDefinition {
-	id: StepId;
-	eyebrowKey: string;
-	titleKey: string;
-	bodyKey: string;
-	bulletKeys: string[];
-}
-
-const ONBOARDING_STEPS: StepDefinition[] = [
-	{
-		id: "welcome",
-		eyebrowKey: "onboardingWelcomeEyebrow",
-		titleKey: "onboardingWelcomeTitle",
-		bodyKey: "onboardingWelcomeBody",
-		bulletKeys: [
-			"onboardingWelcomeBulletOne",
-			"onboardingWelcomeBulletTwo",
-		],
-	},
-	{
-		id: "mcp",
-		eyebrowKey: "onboardingMcpEyebrow",
-		titleKey: "onboardingMcpTitle",
-		bodyKey: "onboardingMcpBody",
-		bulletKeys: ["onboardingMcpBulletOne", "onboardingMcpBulletTwo"],
-	},
-	{
-		id: "skills",
-		eyebrowKey: "onboardingSkillsEyebrow",
-		titleKey: "onboardingSkillsTitle",
-		bodyKey: "onboardingSkillsBody",
-		bulletKeys: ["onboardingSkillsBulletOne", "onboardingSkillsBulletTwo"],
-	},
-	{
-		id: "start",
-		eyebrowKey: "onboardingStartEyebrow",
-		titleKey: "onboardingStartTitle",
-		bodyKey: "onboardingStartBody",
-		bulletKeys: ["onboardingStartBulletOne", "onboardingStartBulletTwo"],
-	},
-];
 
 function StepBullet({ children }: { children: React.ReactNode }) {
 	return (
@@ -76,61 +30,6 @@ function StepBullet({ children }: { children: React.ReactNode }) {
 			</span>
 			<span>{children}</span>
 		</li>
-	);
-}
-
-function StepProgress({ currentStep }: { currentStep: number }) {
-	const { t } = useTranslation();
-	const current = currentStep + 1;
-	const total = ONBOARDING_STEPS.length;
-	const progressLabel = t("onboardingStepCounter", { current, total });
-
-	return (
-		<div className="flex flex-col gap-2 md:items-end">
-			<p className="text-xs font-medium tracking-[0.12em] text-muted uppercase">
-				{progressLabel}
-			</p>
-			<div
-				className="flex items-center gap-2"
-				role="progressbar"
-				aria-label={progressLabel}
-				aria-valuemin={1}
-				aria-valuemax={total}
-				aria-valuenow={current}
-			>
-				{ONBOARDING_STEPS.map((step, index) => (
-					<div
-						key={step.id}
-						className={cn(
-							"h-1.5 w-10 rounded-full transition-colors",
-							index <= currentStep ? "bg-accent" : "bg-border",
-						)}
-					/>
-				))}
-			</div>
-		</div>
-	);
-}
-
-function PreviewHeader({
-	icon,
-	title,
-	description,
-}: {
-	icon: React.ReactNode;
-	title: string;
-	description: string;
-}) {
-	return (
-		<div className="flex items-start gap-3">
-			<div className="flex size-11 shrink-0 items-center justify-center rounded-2xl bg-accent/12 text-accent">
-				{icon}
-			</div>
-			<div className="space-y-1">
-				<p className="text-sm font-semibold text-foreground">{title}</p>
-				<p className="text-sm leading-6 text-muted">{description}</p>
-			</div>
-		</div>
 	);
 }
 
@@ -214,7 +113,7 @@ function StartAction({
 	isPending: boolean;
 }) {
 	return (
-		<div className="flex flex-col gap-4 rounded-2xl border border-border/70 bg-surface-secondary/90 p-4">
+		<div className="flex h-full flex-col gap-4 rounded-2xl border border-border/70 bg-surface-secondary/90 p-4">
 			<div className="flex items-start gap-3">
 				<div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-accent/12 text-accent">
 					{icon}
@@ -230,7 +129,7 @@ function StartAction({
 			</div>
 			<Button
 				variant="secondary"
-				className="justify-between"
+				className="mt-auto justify-between"
 				isDisabled={isPending}
 				onPress={onPress}
 			>
@@ -241,140 +140,226 @@ function StartAction({
 	);
 }
 
-function WelcomePreview({ agentCount }: { agentCount: number }) {
+function GuideSection({
+	eyebrowKey,
+	titleKey,
+	bodyKey,
+	bulletKeys,
+	children,
+	bodyValues,
+	hero = false,
+}: {
+	eyebrowKey: string;
+	titleKey: string;
+	bodyKey: string;
+	bulletKeys: string[];
+	children: React.ReactNode;
+	bodyValues?: Record<string, string | number>;
+	hero?: boolean;
+}) {
 	const { t } = useTranslation();
 
 	return (
 		<Card className="border border-border/70 bg-surface/88 p-0">
-			<Card.Content className="space-y-6 p-6">
-				<div className="flex items-center gap-4">
-					<img
-						src={appIconUrl}
-						alt=""
-						className="size-12 rounded-[14px] border border-border/70"
-					/>
-					<div className="space-y-1">
-						<p className="text-sm font-semibold text-foreground">
-							{t("onboardingOverviewTitle")}
-						</p>
-						<p className="text-xs text-muted">
-							{t("onboardingAgentCoverage", {
-								count: agentCount,
-							})}
-						</p>
+			<Card.Content className="grid gap-6 p-6 md:p-7 lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)] lg:items-start">
+				<div className="space-y-5">
+					<div className="space-y-4">
+						<span className="inline-flex rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs text-accent">
+							{t(eyebrowKey)}
+						</span>
+
+						<div className="space-y-3">
+							{hero ? (
+								<h1 className="max-w-2xl text-4xl font-semibold tracking-tight text-foreground md:text-5xl">
+									{t(titleKey)}
+								</h1>
+							) : (
+								<h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+									{t(titleKey)}
+								</h2>
+							)}
+							<p className="max-w-2xl text-base leading-8 text-muted md:text-lg">
+								{t(bodyKey, bodyValues)}
+							</p>
+						</div>
 					</div>
+
+					<ul className="space-y-3">
+						{bulletKeys.map((bulletKey) => (
+							<StepBullet key={bulletKey}>
+								{t(bulletKey)}
+							</StepBullet>
+						))}
+					</ul>
 				</div>
 
-				<p className="text-sm leading-6 text-muted">
-					{t("onboardingOverviewBody")}
+				<div className="space-y-3 lg:pt-1">{children}</div>
+			</Card.Content>
+		</Card>
+	);
+}
+
+function WelcomeAside({ agentCount }: { agentCount: number }) {
+	const { t } = useTranslation();
+
+	return (
+		<div className="space-y-4">
+			<div className="flex items-center gap-4 rounded-2xl border border-border/70 bg-surface-secondary/90 p-4">
+				<img
+					src={appIconUrl}
+					alt=""
+					className="size-12 rounded-[14px] border border-border/70"
+				/>
+				<div className="space-y-1">
+					<p className="text-sm font-semibold text-foreground">
+						{t("onboardingOverviewTitle")}
+					</p>
+					<p className="text-xs text-muted">
+						{t("onboardingAgentCoverage", {
+							count: agentCount,
+						})}
+					</p>
+				</div>
+			</div>
+
+			<p className="text-sm leading-6 text-muted">
+				{t("onboardingOverviewBody")}
+			</p>
+
+			<OverviewRow
+				icon={<ServerStackIcon className="size-4" />}
+				title={t("onboardingFeatureMcpTitle")}
+				description={t("onboardingFeatureMcpDescription")}
+			/>
+			<OverviewRow
+				icon={<BookOpenIcon className="size-4" />}
+				title={t("onboardingFeatureSkillsTitle")}
+				description={t("onboardingFeatureSkillsDescription")}
+			/>
+			<OverviewRow
+				icon={<FolderIcon className="size-4" />}
+				title={t("onboardingFeatureScopeTitle")}
+				description={t("onboardingFeatureScopeDescription")}
+			/>
+		</div>
+	);
+}
+
+function McpAside() {
+	const { t } = useTranslation();
+
+	return (
+		<div className="space-y-3">
+			<div className="rounded-2xl border border-border/70 bg-surface-secondary/90 p-4">
+				<p className="text-xs font-semibold tracking-[0.18em] text-muted uppercase">
+					{t("onboardingMcpVisualTitle")}
 				</p>
+				<p className="mt-1 text-sm leading-6 text-muted">
+					{t("onboardingMcpVisualBody")}
+				</p>
+			</div>
 
-				<div className="space-y-3">
-					<OverviewRow
-						icon={<ServerStackIcon className="size-4" />}
-						title={t("onboardingFeatureMcpTitle")}
-						description={t("onboardingFeatureMcpDescription")}
-					/>
-					<OverviewRow
-						icon={<BookOpenIcon className="size-4" />}
-						title={t("onboardingFeatureSkillsTitle")}
-						description={t("onboardingFeatureSkillsDescription")}
-					/>
-					<OverviewRow
-						icon={<FolderIcon className="size-4" />}
-						title={t("onboardingFeatureScopeTitle")}
-						description={t("onboardingFeatureScopeDescription")}
-					/>
-				</div>
-			</Card.Content>
-		</Card>
+			<FlowStep
+				index="01"
+				title={t("onboardingMcpFlowOneTitle")}
+				description={t("onboardingMcpFlowOneBody")}
+			/>
+			<FlowStep
+				index="02"
+				title={t("onboardingMcpFlowTwoTitle")}
+				description={t("onboardingMcpFlowTwoBody")}
+			/>
+			<FlowStep
+				index="03"
+				title={t("onboardingMcpFlowThreeTitle")}
+				description={t("onboardingMcpFlowThreeBody")}
+			/>
+		</div>
 	);
 }
 
-function McpPreview() {
+function SkillsAside() {
 	const { t } = useTranslation();
 
 	return (
-		<Card className="border border-border/70 bg-surface/88 p-0">
-			<Card.Content className="space-y-6 p-6">
-				<PreviewHeader
-					icon={<ServerStackIcon className="size-5" />}
-					title={t("onboardingMcpVisualTitle")}
-					description={t("onboardingMcpVisualBody")}
-				/>
+		<div className="space-y-3">
+			<div className="rounded-2xl border border-border/70 bg-surface-secondary/90 p-4">
+				<p className="text-xs font-semibold tracking-[0.18em] text-muted uppercase">
+					{t("onboardingSkillsVisualTitle")}
+				</p>
+				<p className="mt-1 text-sm leading-6 text-muted">
+					{t("onboardingSkillsVisualBody")}
+				</p>
+			</div>
 
-				<div className="space-y-3">
-					<FlowStep
-						index="01"
-						title={t("onboardingMcpFlowOneTitle")}
-						description={t("onboardingMcpFlowOneBody")}
-					/>
-					<FlowStep
-						index="02"
-						title={t("onboardingMcpFlowTwoTitle")}
-						description={t("onboardingMcpFlowTwoBody")}
-					/>
-					<FlowStep
-						index="03"
-						title={t("onboardingMcpFlowThreeTitle")}
-						description={t("onboardingMcpFlowThreeBody")}
-					/>
-				</div>
-			</Card.Content>
-		</Card>
+			<SkillExample
+				name="review-pr"
+				description={t("onboardingSkillExampleReview")}
+			/>
+			<SkillExample
+				name="fix-ci"
+				description={t("onboardingSkillExampleCi")}
+			/>
+			<SkillExample
+				name="ship-feature"
+				description={t("onboardingSkillExampleShip")}
+			/>
+		</div>
 	);
 }
 
-function SkillsPreview() {
-	const { t } = useTranslation();
-
-	return (
-		<Card className="border border-border/70 bg-surface/88 p-0">
-			<Card.Content className="space-y-6 p-6">
-				<PreviewHeader
-					icon={<BookOpenIcon className="size-5" />}
-					title={t("onboardingSkillsVisualTitle")}
-					description={t("onboardingSkillsVisualBody")}
-				/>
-
-				<div className="space-y-3">
-					<SkillExample
-						name="review-pr"
-						description={t("onboardingSkillExampleReview")}
-					/>
-					<SkillExample
-						name="fix-ci"
-						description={t("onboardingSkillExampleCi")}
-					/>
-					<SkillExample
-						name="ship-feature"
-						description={t("onboardingSkillExampleShip")}
-					/>
-				</div>
-			</Card.Content>
-		</Card>
-	);
-}
-
-function StartPreview({
+function StartSection({
 	onNavigate,
+	onClose,
 	isPending,
 }: {
 	onNavigate: (path: string) => void;
+	onClose: () => void;
 	isPending: boolean;
 }) {
 	const { t } = useTranslation();
 
 	return (
 		<Card className="border border-border/70 bg-surface/88 p-0">
-			<Card.Content className="space-y-6 p-6">
-				<PreviewHeader
-					icon={<ArrowRightIcon className="size-5" />}
-					title={t("onboardingNextStepTitle")}
-					description={t("onboardingNextStepBody")}
-				/>
+			<Card.Content className="space-y-6 p-6 md:p-7">
+				<div className="grid gap-6 lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)] lg:items-start">
+					<div className="space-y-5">
+						<div className="space-y-4">
+							<span className="inline-flex rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs text-accent">
+								{t("onboardingStartEyebrow")}
+							</span>
 
-				<div className="space-y-3">
+							<div className="space-y-3">
+								<h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
+									{t("onboardingStartTitle")}
+								</h2>
+								<p className="max-w-2xl text-base leading-8 text-muted md:text-lg">
+									{t("onboardingStartBody")}
+								</p>
+							</div>
+						</div>
+
+						<ul className="space-y-3">
+							<StepBullet>
+								{t("onboardingStartBulletOne")}
+							</StepBullet>
+							<StepBullet>
+								{t("onboardingStartBulletTwo")}
+							</StepBullet>
+						</ul>
+					</div>
+
+					<div className="rounded-2xl border border-border/70 bg-surface-secondary/90 p-4">
+						<p className="text-sm font-semibold text-foreground">
+							{t("onboardingNextStepTitle")}
+						</p>
+						<p className="mt-1 text-sm leading-6 text-muted">
+							{t("onboardingNextStepBody")}
+						</p>
+					</div>
+				</div>
+
+				<div className="grid gap-3 md:grid-cols-3">
 					<StartAction
 						icon={<ServerStackIcon className="size-4" />}
 						title={t("onboardingStartMcpTitle")}
@@ -400,6 +385,16 @@ function StartPreview({
 						onPress={() => onNavigate("/skills-sh")}
 					/>
 				</div>
+
+				<div className="flex justify-end">
+					<Button
+						variant="tertiary"
+						onPress={onClose}
+						isDisabled={isPending}
+					>
+						{t("onboardingMaybeLater")}
+					</Button>
+				</div>
 			</Card.Content>
 		</Card>
 	);
@@ -409,26 +404,7 @@ export default function OnboardingPage() {
 	const { t } = useTranslation();
 	const { allAgents } = useAgentAvailability();
 	const setOnboardingCompleted = useSetOnboardingCompleted();
-	const [stepIndex, setStepIndex] = useState(0);
-	const [direction, setDirection] = useState<"forward" | "backward">(
-		"forward",
-	);
-
-	const step = ONBOARDING_STEPS[stepIndex];
-	const canGoBack = stepIndex > 0;
-	const isLastStep = stepIndex === ONBOARDING_STEPS.length - 1;
 	const agentCount = allAgents.length || 25;
-
-	const handleStepChange = (nextIndex: number) => {
-		if (nextIndex === stepIndex) {
-			return;
-		}
-
-		setDirection(nextIndex > stepIndex ? "forward" : "backward");
-		startTransition(() => {
-			setStepIndex(nextIndex);
-		});
-	};
 
 	const closeWindow = async () => {
 		await getCurrentWebviewWindow().close();
@@ -470,7 +446,7 @@ export default function OnboardingPage() {
 					data-onboarding-backdrop=""
 				/>
 
-				<div className="relative mx-auto flex min-h-full w-full max-w-6xl flex-col gap-4">
+				<div className="relative mx-auto flex w-full max-w-6xl flex-col gap-4">
 					<header className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
 						<div className="flex items-center gap-3">
 							<img
@@ -483,114 +459,57 @@ export default function OnboardingPage() {
 							</p>
 						</div>
 
-						<div className="flex items-center justify-between gap-3">
-							<StepProgress currentStep={stepIndex} />
-							<Button
-								variant="tertiary"
-								onPress={() => void finishOnboarding()}
-								isDisabled={setOnboardingCompleted.isPending}
-							>
-								{t("onboardingSkip")}
-							</Button>
-						</div>
+						<Button
+							variant="tertiary"
+							onPress={() => void finishOnboarding()}
+							isDisabled={setOnboardingCompleted.isPending}
+						>
+							{t("onboardingSkip")}
+						</Button>
 					</header>
 
-					<div
-						className="
-							grid flex-1 gap-4
-							lg:grid-cols-[minmax(0,1.04fr)_minmax(320px,0.96fr)]
-							xl:grid-cols-[minmax(0,0.94fr)_minmax(420px,0.86fr)]
-						"
+					<GuideSection
+						eyebrowKey="onboardingWelcomeEyebrow"
+						titleKey="onboardingWelcomeTitle"
+						bodyKey="onboardingWelcomeBody"
+						bulletKeys={[
+							"onboardingWelcomeBulletOne",
+							"onboardingWelcomeBulletTwo",
+						]}
+						hero
 					>
-						<Card className="border border-border/70 bg-surface/88 p-0">
-							<Card.Content className="flex flex-col gap-6 p-6 md:p-7">
-								<div className="space-y-4">
-									<span className="inline-flex rounded-full border border-accent/30 bg-accent/10 px-3 py-1 text-xs text-accent">
-										{t(step.eyebrowKey)}
-									</span>
+						<WelcomeAside agentCount={agentCount} />
+					</GuideSection>
 
-									<div className="space-y-3">
-										<h1 className="max-w-xl text-4xl font-semibold tracking-tight text-foreground md:text-5xl">
-											{t(step.titleKey)}
-										</h1>
-										<p className="max-w-xl text-base leading-8 text-muted md:text-lg">
-											{t(step.bodyKey, {
-												count: agentCount,
-											})}
-										</p>
-									</div>
-								</div>
+					<GuideSection
+						eyebrowKey="onboardingMcpEyebrow"
+						titleKey="onboardingMcpTitle"
+						bodyKey="onboardingMcpBody"
+						bulletKeys={[
+							"onboardingMcpBulletOne",
+							"onboardingMcpBulletTwo",
+						]}
+					>
+						<McpAside />
+					</GuideSection>
 
-								<ul className="space-y-3">
-									{step.bulletKeys.map((bulletKey) => (
-										<StepBullet key={bulletKey}>
-											{t(bulletKey)}
-										</StepBullet>
-									))}
-								</ul>
+					<GuideSection
+						eyebrowKey="onboardingSkillsEyebrow"
+						titleKey="onboardingSkillsTitle"
+						bodyKey="onboardingSkillsBody"
+						bulletKeys={[
+							"onboardingSkillsBulletOne",
+							"onboardingSkillsBulletTwo",
+						]}
+					>
+						<SkillsAside />
+					</GuideSection>
 
-								<div className="flex flex-wrap items-center justify-end gap-2.5 pt-2">
-									<div className="flex items-center gap-2.5">
-										{canGoBack && (
-											<Button
-												variant="secondary"
-												onPress={() =>
-													handleStepChange(
-														stepIndex - 1,
-													)
-												}
-											>
-												{t("back")}
-											</Button>
-										)}
-
-										{isLastStep ? (
-											<Button
-												variant="secondary"
-												onPress={() =>
-													void finishOnboarding()
-												}
-												isPending={
-													setOnboardingCompleted.isPending
-												}
-											>
-												{t("onboardingMaybeLater")}
-											</Button>
-										) : (
-											<Button
-												variant="primary"
-												onPress={() =>
-													handleStepChange(
-														stepIndex + 1,
-													)
-												}
-											>
-												{t("next")}
-											</Button>
-										)}
-									</div>
-								</div>
-							</Card.Content>
-						</Card>
-
-						<div
-							key={step.id}
-							className="min-h-[360px] lg:min-h-0"
-							data-onboarding-stage={direction}
-						>
-							{step.id === "welcome" && (
-								<WelcomePreview agentCount={agentCount} />
-							)}
-							{step.id === "mcp" && <McpPreview />}
-							{step.id === "skills" && <SkillsPreview />}
-							{step.id === "start" && (
-								<StartPreview
-									onNavigate={navigateMainWindow}
-									isPending={setOnboardingCompleted.isPending}
-								/>
-							)}
-						</div>
-					</div>
+					<StartSection
+						onNavigate={navigateMainWindow}
+						onClose={() => void finishOnboarding()}
+						isPending={setOnboardingCompleted.isPending}
+					/>
 
 					{setOnboardingCompleted.isPending && (
 						<p className="text-sm text-muted">
