@@ -4,11 +4,18 @@ on:
     push:
         tags:
             - "v*"
+    workflow_dispatch:
+        inputs:
+            version:
+                description: "Version tag (e.g., v1.0.0)"
+                required: true
+                type: string
 
 jobs:
     changelog:
         name: Generate Changelog
         runs-on: ubuntu-latest
+        if: github.event_name == 'push'
         outputs:
             release_body: ${{ steps.git-cliff.outputs.content }}
         steps:
@@ -75,8 +82,10 @@ jobs:
 
             - name: Sync Version
               shell: bash
+              env:
+                  VERSION: ${{ github.event.inputs.version || github.ref_name }}
               run: |
-                  VERSION="${GITHUB_REF_NAME#v}"
+                  VERSION="${VERSION#v}"
                   echo "Syncing version across files: $VERSION"
                   if [[ "${{ matrix.os }}" == "macos"* ]]; then
                     sed -i '' "s/^version = .*/version = \"$VERSION\"/" Cargo.toml
@@ -92,7 +101,6 @@ jobs:
               uses: tauri-apps/tauri-action@v0
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-                  # macOS signing placeholders
                   APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
                   APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
                   APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -100,9 +108,9 @@ jobs:
                   APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
                   APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
               with:
-                  tagName: ${{ github.ref_name }}
-                  releaseName: "aghub ${{ github.ref_name }}"
-                  releaseBody: ${{ needs.changelog.outputs.release_body }}
+                  tagName: ${{ github.event.inputs.version || github.ref_name }}
+                  releaseName: "aghub ${{ github.event.inputs.version || github.ref_name }}"
+                  releaseBody: ${{ needs.changelog.outputs.release_body || 'Manual build' }}
                   releaseDraft: false
                   prerelease: false
                   args: --target ${{ matrix.target }}
@@ -140,8 +148,10 @@ jobs:
 
             - name: Sync Version
               shell: bash
+              env:
+                  VERSION: ${{ github.event.inputs.version || github.ref_name }}
               run: |
-                  VERSION="${GITHUB_REF_NAME#v}"
+                  VERSION="${VERSION#v}"
                   if [[ "${{ matrix.os }}" == "macos"* ]]; then
                     sed -i '' "s/^version = .*/version = \"$VERSION\"/" Cargo.toml
                   else
