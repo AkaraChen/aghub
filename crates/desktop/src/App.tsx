@@ -1,5 +1,6 @@
 import { Spinner, Toast } from "@heroui/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { listen } from "@tauri-apps/api/event";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { Suspense, useEffect, useState } from "react";
 import { useKeyBindings } from "rooks";
@@ -55,6 +56,15 @@ function App() {
 				console.error("Failed to initialize store:", err);
 			});
 	}, []);
+
+	useEffect(() => {
+		const unlisten = listen<string>("navigate", (event) => {
+			setLocation(event.payload);
+		});
+		return () => {
+			unlisten.then((fn) => fn());
+		};
+	}, [setLocation]);
 
 	useKeyBindings({
 		",": (event) => {
