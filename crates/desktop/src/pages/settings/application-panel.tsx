@@ -1,4 +1,4 @@
-import { Button, Card, toast } from "@heroui/react";
+import { Avatar, Button, Card, toast } from "@heroui/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { getName, getVersion } from "@tauri-apps/api/app";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -67,94 +67,145 @@ export default function ApplicationPanel() {
 	const errorMessage =
 		checkMutation.error?.message || downloadMutation.error?.message;
 
+	const teamMembers = [
+		{
+			name: "AkaraChen",
+			role: t("headDev"),
+			avatar: "https://avatars.githubusercontent.com/u/85140972?v=4",
+		},
+		{
+			name: "Flacier",
+			role: t("developer"),
+			avatar: "https://avatars.githubusercontent.com/u/48140241?v=4",
+		},
+		{
+			name: "danielchim",
+			role: t("designer"),
+			avatar: "https://avatars.githubusercontent.com/u/12156547?v=4",
+		},
+	];
+
 	return (
-		<Card className="p-0">
-			<Card.Content className="space-y-4 p-4">
-				<div className="flex items-center justify-between">
-					<div className="space-y-0.5">
-						<span className="text-sm font-medium text-(--foreground)">
-							{t("appName")}
-						</span>
-						<span className="block text-xs text-muted">
-							{appInfo?.name ?? "aghub"}
-						</span>
+		<div className="space-y-4">
+			<Card className="p-0">
+				<Card.Content className="space-y-4 p-4">
+					<div className="flex items-center justify-between">
+						<div className="space-y-0.5">
+							<span className="text-sm font-medium text-(--foreground)">
+								{t("appName")}
+							</span>
+							<span className="block text-xs text-muted">
+								{appInfo?.name ?? "aghub"}
+							</span>
+						</div>
 					</div>
-				</div>
 
-				<div className="flex items-center justify-between">
-					<div className="space-y-0.5">
-						<span className="text-sm font-medium text-(--foreground)">
-							{t("version")}
-						</span>
-						<span className="block text-xs text-muted">
-							{appInfo?.version ?? "0.1.0"}
-						</span>
+					<div className="flex items-center justify-between">
+						<div className="space-y-0.5">
+							<span className="text-sm font-medium text-(--foreground)">
+								{t("version")}
+							</span>
+							<span className="block text-xs text-muted">
+								{appInfo?.version ?? "0.1.0"}
+							</span>
+						</div>
 					</div>
-				</div>
 
-				<div className="flex items-center justify-between">
-					<div className="space-y-0.5">
-						<span className="text-sm font-medium text-(--foreground)">
-							{t("updates")}
-						</span>
-						<span className="block text-xs text-muted">
-							{hasError && `${t("updateError")}: ${errorMessage}`}
-							{isChecking && t("checkingForUpdates")}
-							{isDownloading && t("downloadingUpdate")}
-							{!isChecking &&
-								!isDownloading &&
-								!hasError &&
-								updateCheckResult?.available &&
-								t("updateAvailable", {
-									version: updateCheckResult.version,
-								})}
-							{!isChecking &&
-								!isDownloading &&
-								!hasError &&
-								updateCheckResult &&
-								!updateCheckResult.available &&
-								t("noUpdatesAvailable")}
-							{!isChecking &&
-								!isDownloading &&
-								!hasError &&
-								!updateCheckResult &&
-								t("clickToCheckUpdates")}
-						</span>
+					<div className="flex items-center justify-between">
+						<div className="space-y-0.5">
+							<span className="text-sm font-medium text-(--foreground)">
+								{t("updates")}
+							</span>
+							<span className="block text-xs text-muted">
+								{hasError &&
+									`${t("updateError")}: ${errorMessage}`}
+								{isChecking && t("checkingForUpdates")}
+								{isDownloading && t("downloadingUpdate")}
+								{!isChecking &&
+									!isDownloading &&
+									!hasError &&
+									updateCheckResult?.available &&
+									t("updateAvailable", {
+										version: updateCheckResult.version,
+									})}
+								{!isChecking &&
+									!isDownloading &&
+									!hasError &&
+									updateCheckResult &&
+									!updateCheckResult.available &&
+									t("noUpdatesAvailable")}
+								{!isChecking &&
+									!isDownloading &&
+									!hasError &&
+									!updateCheckResult &&
+									t("clickToCheckUpdates")}
+							</span>
+						</div>
+						<div className="flex gap-2">
+							{!updateCheckResult && (
+								<Button
+									variant="secondary"
+									size="sm"
+									onPress={handleCheckUpdates}
+									isDisabled={isChecking || isDownloading}
+								>
+									{t("checkForUpdates")}
+								</Button>
+							)}
+							{updateCheckResult &&
+								!updateCheckResult.available && (
+									<Button
+										variant="secondary"
+										size="sm"
+										onPress={handleCheckUpdates}
+										isDisabled={isChecking || isDownloading}
+									>
+										{t("checkAgain")}
+									</Button>
+								)}
+							{updateCheckResult?.available && (
+								<Button
+									variant="primary"
+									size="sm"
+									onPress={handleDownloadAndInstall}
+									isDisabled={isDownloading}
+								>
+									{t("downloadAndInstall")}
+								</Button>
+							)}
+						</div>
 					</div>
-					<div className="flex gap-2">
-						{!updateCheckResult && (
-							<Button
-								variant="secondary"
-								size="sm"
-								onPress={handleCheckUpdates}
-								isDisabled={isChecking || isDownloading}
+				</Card.Content>
+			</Card>
+
+			<Card className="p-0">
+				<Card.Content className="p-4">
+					<span className="text-sm font-medium text-(--foreground)">
+						{t("team")}
+					</span>
+					<div className="mt-4 grid grid-cols-3 gap-4">
+						{teamMembers.map((member) => (
+							<div
+								key={member.name}
+								className="flex flex-col items-center text-center"
 							>
-								{t("checkForUpdates")}
-							</Button>
-						)}
-						{updateCheckResult && !updateCheckResult.available && (
-							<Button
-								variant="secondary"
-								size="sm"
-								onPress={handleCheckUpdates}
-								isDisabled={isChecking || isDownloading}
-							>
-								{t("checkAgain")}
-							</Button>
-						)}
-						{updateCheckResult?.available && (
-							<Button
-								variant="primary"
-								size="sm"
-								onPress={handleDownloadAndInstall}
-								isDisabled={isDownloading}
-							>
-								{t("downloadAndInstall")}
-							</Button>
-						)}
+								<Avatar size="lg">
+									<Avatar.Image
+										src={member.avatar}
+										alt={member.name}
+									/>
+								</Avatar>
+								<span className="mt-2 text-sm font-medium">
+									{member.name}
+								</span>
+								<span className="text-xs text-muted">
+									{member.role}
+								</span>
+							</div>
+						))}
 					</div>
-				</div>
-			</Card.Content>
-		</Card>
+				</Card.Content>
+			</Card>
+		</div>
 	);
 }

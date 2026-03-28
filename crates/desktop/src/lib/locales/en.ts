@@ -349,4 +349,10 @@ export default {
 		keyPlaceholder: "Header Name",
 		valuePlaceholder: "Header Value",
 	},
+
+	// Team
+	team: "Team",
+	headDev: "Head Dev",
+	developer: "Developer",
+	designer: "Designer",
 };

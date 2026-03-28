@@ -342,4 +342,10 @@ export default {
 		keyPlaceholder: "请求头名称",
 		valuePlaceholder: "请求头值",
 	},
+
+	// Team
+	team: "团队",
+	headDev: "首席开发者",
+	developer: "开发者",
+	designer: "设计师",
 };
