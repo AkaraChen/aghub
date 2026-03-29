@@ -169,4 +169,3 @@ export async function setupAppMenu(t: TFunction) {
 		console.error("Failed to set app menu", e);
 	}
 }
-
