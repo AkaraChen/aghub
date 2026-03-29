@@ -3,30 +3,16 @@ import {
 	ChevronDownIcon,
 	ChevronUpIcon,
 	CodeBracketIcon,
-	DocumentIcon,
-	ExclamationTriangleIcon,
-	FolderIcon,
 	GlobeAltIcon,
 	HashtagIcon,
 	LinkIcon,
 	MagnifyingGlassIcon,
 	StarIcon as StarIconSolid,
 	TrashIcon,
-	XCircleIcon,
 } from "@heroicons/react/24/solid";
-import {
-	Accordion,
-	AlertDialog,
-	Button,
-	Card,
-	Chip,
-	Modal,
-	Spinner,
-	Tooltip,
-} from "@heroui/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Accordion, Button, Card, Chip, Tooltip } from "@heroui/react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import * as pathe from "pathe";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { siGithub } from "simple-icons";
@@ -39,54 +25,29 @@ import { createApi } from "../lib/api";
 import type {
 	GlobalSkillLockResponse,
 	ProjectSkillLockResponse,
-	SkillResponse,
 	SkillTreeNodeResponse,
 } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
-import { cn, sortAgents } from "../lib/utils";
-
-interface LocationGroup {
-	key: string;
-	sourcePath: string;
-	installations: Array<{
-		id: string;
-		agent: string;
-		source: ConfigSource;
-	}>;
-	canonicalPath?: string;
-}
-
-interface SkillGroup {
-	name: string;
-	items: SkillResponse[];
-}
+import { cn } from "../lib/utils";
+import {
+	DeleteSkillDialog,
+	DeleteSkillLocationDialog,
+} from "./skill-detail-dialogs";
+import {
+	buildLocationGroups,
+	countTreeNodes,
+	hasSupplementarySkillFiles,
+	type LocationGroup,
+	type SkillGroup,
+} from "./skill-detail-helpers";
+import { LocationRow, SkillTree } from "./skill-detail-views";
 
 interface SkillDetailProps {
 	group: SkillGroup;
 	projectPath?: string;
 }
 
-// Module-scoped regex for better performance
 const GITHUB_PREFIX_REGEX = /^github\//;
-const SKILL_MARKDOWN_FILE = "SKILL.md";
-
-function getNodeChildren(node: SkillTreeNodeResponse): SkillTreeNodeResponse[] {
-	return Array.isArray(node.children) ? node.children : [];
-}
-
-function hasSupplementarySkillFiles(node: SkillTreeNodeResponse): boolean {
-	return getNodeChildren(node).some((child) => {
-		if (child.name !== SKILL_MARKDOWN_FILE) {
-			return true;
-		}
-
-		return hasSupplementarySkillFiles(child);
-	});
-}
-
-function formatAgentName(agent: string): string {
-	return agent.charAt(0).toUpperCase() + agent.slice(1).toLowerCase();
-}
 
 export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const { t } = useTranslation();
@@ -109,7 +70,10 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const canSearchSkillsSh = trimmedSkillName.length >= 2;
 
 	const handleSearchSkillsSh = () => {
-		if (!canSearchSkillsSh) return;
+		if (!canSearchSkillsSh) {
+			return;
+		}
+
 		setLocation(
 			`/skills-sh/search?q=${encodeURIComponent(trimmedSkillName)}`,
 		);
@@ -124,6 +88,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 			if (!selectedEditor) {
 				throw new Error("No configured code editor");
 			}
+
 			return api.integrations.openWithEditor(path, selectedEditor);
 		},
 	});
@@ -140,7 +105,6 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		staleTime: 30_000,
 	});
 
-	// Fetch skill content (SKILL.md body)
 	const { data: skillContent } = useQuery<string>({
 		queryKey: ["skill-content", skill.source_path],
 		queryFn: () => api.skills.getContent(skill.source_path!),
@@ -165,7 +129,6 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 					sourceType: entry.sourceType,
 					hash: entry.skillFolderHash,
 					sourceUrl: entry.sourceUrl,
-					scope: "global",
 				};
 			}
 		} else if (skillItem.source === ConfigSource.Project) {
@@ -177,16 +140,22 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 					source: entry.source,
 					sourceType: entry.sourceType,
 					hash: entry.computedHash,
-					scope: "project",
 				};
 			}
 		}
+
 		return null;
-	}, [globalLock, projectLock, skill.name, group.items]);
+	}, [globalLock, group.items, projectLock, skill.name]);
 
 	const sourceUrl = useMemo(() => {
-		if (!currentSkillSource) return null;
-		if (currentSkillSource.sourceUrl) return currentSkillSource.sourceUrl;
+		if (!currentSkillSource) {
+			return null;
+		}
+
+		if (currentSkillSource.sourceUrl) {
+			return currentSkillSource.sourceUrl;
+		}
+
 		if (
 			currentSkillSource.sourceType === "github" &&
 			currentSkillSource.source
@@ -197,80 +166,14 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 			);
 			return `https://github.com/${path}`;
 		}
+
 		return null;
 	}, [currentSkillSource]);
 
-	const primarySource = skill.source;
-
-	// Group locations across all items
-	const allLocationGroups = useMemo(() => {
-		const sortedAgents = sortAgents(
-			group.items.flatMap((item) => (item.agent ? [item.agent] : [])),
-			allAgents,
-		);
-		const agentOrder = new Map(
-			sortedAgents.map((agent, index) => [agent, index]),
-		);
-
-		const map = new Map<
-			string,
-			{
-				installations: LocationGroup["installations"];
-				canonicalPath?: string;
-			}
-		>();
-
-		for (const item of group.items) {
-			if (!item.source_path || !item.agent || !item.source) {
-				continue;
-			}
-
-			const existing = map.get(item.source_path);
-			const installation = {
-				id: `${item.agent}:${item.source}`,
-				agent: item.agent,
-				source: item.source,
-			};
-
-			if (existing) {
-				existing.installations.push(installation);
-				continue;
-			}
-
-			map.set(item.source_path, {
-				installations: [installation],
-				canonicalPath: item.canonical_path,
-			});
-		}
-
-		return Array.from(map.entries())
-			.map(([sourcePath, data]) => ({
-				key: sourcePath,
-				sourcePath,
-				installations: data.installations.sort((a, b) => {
-					const agentDelta =
-						(agentOrder.get(a.agent) ?? Number.MAX_SAFE_INTEGER) -
-						(agentOrder.get(b.agent) ?? Number.MAX_SAFE_INTEGER);
-					if (agentDelta !== 0) {
-						return agentDelta;
-					}
-
-					return a.source.localeCompare(b.source);
-				}),
-				canonicalPath: data.canonicalPath,
-			}))
-			.sort((a, b) => a.sourcePath.localeCompare(b.sourcePath));
-	}, [group.items, allAgents]);
-
-	// Metadata pieces for subtitle
-	const metaParts: string[] = [];
-	if (skill.author) metaParts.push(skill.author);
-	if (skill.version) metaParts.push(`v${skill.version}`);
-	if (primarySource) {
-		metaParts.push(
-			primarySource === ConfigSource.Project ? t("project") : t("global"),
-		);
-	}
+	const allLocationGroups = useMemo(
+		() => buildLocationGroups(group.items, allAgents),
+		[group.items, allAgents],
+	);
 
 	const displayedLocations =
 		showAllLocations || allLocationGroups.length <= 3
@@ -278,19 +181,10 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 			: allLocationGroups.slice(0, 2);
 	const hasMoreLocations = allLocationGroups.length > 3;
 	const hiddenLocationCount = allLocationGroups.length - 2;
-	const resourceCount = useMemo(() => {
-		function countNodes(node: SkillTreeNodeResponse): number {
-			return (
-				getNodeChildren(node).length +
-				getNodeChildren(node).reduce(
-					(total, child) => total + countNodes(child),
-					0,
-				)
-			);
-		}
-
-		return skillTree ? countNodes(skillTree) : 0;
-	}, [skillTree]);
+	const resourceCount = useMemo(
+		() => (skillTree ? countTreeNodes(skillTree) : 0),
+		[skillTree],
+	);
 	const hasSupplementaryFiles = useMemo(
 		() => (skillTree ? hasSupplementarySkillFiles(skillTree) : false),
 		[skillTree],
@@ -301,12 +195,11 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 			<div className="h-full overflow-y-auto">
 				<div
 					className="
-       max-w-2xl space-y-4 p-4
-       sm:p-5
-       md:p-6
-     "
+						max-w-2xl space-y-4 p-4
+						sm:p-5
+						md:p-6
+					"
 				>
-					{/* Main Info Card */}
 					<Card>
 						<Card.Header className="flex flex-col items-start gap-3">
 							<div className="flex w-full flex-row items-start justify-between gap-3">
@@ -317,9 +210,9 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 								</div>
 								<div
 									className="
-          flex items-center gap-1.5
-          sm:gap-2
-        "
+										flex items-center gap-1.5
+										sm:gap-2
+									"
 								>
 									<Tooltip delay={0}>
 										<Button
@@ -327,9 +220,9 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 											variant="ghost"
 											size="md"
 											className="
-            min-h-11 min-w-11 text-muted
-            hover:text-foreground
-          "
+												min-h-11 min-w-11 text-muted
+												hover:text-foreground
+											"
 											aria-label={t("searchOnSkillsSh")}
 											isDisabled={!canSearchSkillsSh}
 											onPress={handleSearchSkillsSh}
@@ -376,9 +269,9 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 											variant="ghost"
 											size="md"
 											className="
-            min-h-11 min-w-11 text-muted
-            hover:text-danger
-          "
+												min-h-11 min-w-11 text-muted
+												hover:text-danger
+											"
 											aria-label={t("deleteSkill")}
 											onPress={() =>
 												setDeleteDialogOpen(true)
@@ -395,20 +288,19 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 						</Card.Header>
 
 						<Card.Content className="space-y-5">
-							{/* Description */}
 							{skill.description && (
 								<p className="text-sm/relaxed text-foreground">
 									{skill.description}
 								</p>
 							)}
 
-							{/* Tools */}
-							{skill.tools.length > 0 ? (
+							{skill.tools.length > 0 && (
 								<div>
 									<p
 										className="
-            mb-2 text-xs font-medium tracking-wider text-muted uppercase
-          "
+											mb-2 text-xs font-medium tracking-wider text-muted
+											uppercase
+										"
 									>
 										{t("tools")} ({skill.tools.length})
 									</p>
@@ -424,39 +316,43 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 										))}
 									</div>
 								</div>
-							) : null}
+							)}
 
-							{/* Locations */}
 							{allLocationGroups.length > 0 && (
 								<div>
 									<p
 										className="
-            mb-2 text-xs font-medium tracking-wider text-muted uppercase
-          "
+											mb-2 text-xs font-medium tracking-wider text-muted
+											uppercase
+										"
 									>
 										{t("locations")} (
 										{allLocationGroups.length})
 									</p>
 									<div className="space-y-1.5">
-										{displayedLocations.map((loc) => (
-											<LocationRow
-												key={loc.key}
-												group={loc}
-												onDelete={() =>
-													setLocationToDelete(loc)
-												}
-												onOpenFolder={() =>
-													openFolderMutation.mutate(
-														loc.sourcePath,
-													)
-												}
-												onEditFolder={() =>
-													openInEditorMutation.mutate(
-														loc.sourcePath,
-													)
-												}
-											/>
-										))}
+										{displayedLocations.map(
+											(locationGroup) => (
+												<LocationRow
+													key={locationGroup.key}
+													group={locationGroup}
+													onDelete={() =>
+														setLocationToDelete(
+															locationGroup,
+														)
+													}
+													onEditFolder={() =>
+														openInEditorMutation.mutate(
+															locationGroup.sourcePath,
+														)
+													}
+													onOpenFolder={() =>
+														openFolderMutation.mutate(
+															locationGroup.sourcePath,
+														)
+													}
+												/>
+											),
+										)}
 									</div>
 									{hasMoreLocations && (
 										<button
@@ -467,9 +363,9 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 												)
 											}
 											className="
-             mt-2 flex items-center gap-1 text-xs text-muted transition-colors
-             hover:text-foreground
-           "
+												mt-2 flex items-center gap-1 text-xs text-muted
+												transition-colors hover:text-foreground
+											"
 										>
 											{showAllLocations ? (
 												<>
@@ -491,21 +387,21 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 								</div>
 							)}
 
-							{/* Installation Source */}
 							{currentSkillSource && (
 								<div>
 									<p
 										className="
-            mb-2 text-xs font-medium tracking-wider text-muted uppercase
-          "
+											mb-2 text-xs font-medium tracking-wider text-muted
+											uppercase
+										"
 									>
 										{t("installedFrom")}
 									</p>
 									<div
 										className="
-            flex items-center justify-between gap-3 rounded-lg
-            bg-surface-secondary px-3 py-2
-          "
+											flex items-center justify-between gap-3 rounded-lg
+											bg-surface-secondary px-3 py-2
+										"
 									>
 										<div className="min-w-0 flex-1">
 											<div className="flex items-center gap-1.5">
@@ -567,7 +463,6 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 						</Card.Content>
 					</Card>
 
-					{/* Skill Content — collapsed by default */}
 					{skillContent && (
 						<Accordion variant="surface">
 							<Accordion.Item>
@@ -660,543 +555,5 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 				skillName={skill.name}
 			/>
 		</>
-	);
-}
-
-function SkillTree({ root }: { root: SkillTreeNodeResponse }) {
-	const items = flattenTree(root);
-
-	return (
-		<div className="rounded-xl border border-separator/60 bg-surface-secondary/60 p-2">
-			{items.map((node) => (
-				<TreeNodeRow key={node.path} node={node} />
-			))}
-		</div>
-	);
-}
-
-function flattenTree(
-	root: SkillTreeNodeResponse,
-): Array<SkillTreeNodeResponse & { depth?: number }> {
-	const items: Array<SkillTreeNodeResponse & { depth?: number }> = [];
-
-	function visit(node: SkillTreeNodeResponse, depth: number): void {
-		for (const child of getNodeChildren(node)) {
-			items.push({ ...child, depth });
-			visit(child, depth + 1);
-		}
-	}
-
-	visit(root, 1);
-
-	return items;
-}
-
-function TreeNodeRow({
-	node,
-}: {
-	node: SkillTreeNodeResponse & { depth?: number };
-}) {
-	return (
-		<div
-			className="
-				flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm
-				text-foreground
-			"
-			style={{ paddingLeft: `${(node.depth ?? 0) * 16 + 8}px` }}
-			title={node.path}
-		>
-			{node.kind === "directory" ? (
-				<FolderIcon className="size-4 shrink-0 text-accent" />
-			) : (
-				<DocumentIcon className="size-4 shrink-0 text-muted" />
-			)}
-			<span className="min-w-0 flex-1 truncate">{node.name}</span>
-		</div>
-	);
-}
-
-function LocationRow({
-	group,
-	onDelete,
-	onOpenFolder,
-	onEditFolder,
-}: {
-	group: LocationGroup;
-	onDelete: () => void;
-	onOpenFolder: () => void;
-	onEditFolder: () => void;
-}) {
-	const { t } = useTranslation();
-	const folderPath = useMemo(
-		() => pathe.dirname(group.sourcePath),
-		[group.sourcePath],
-	);
-
-	return (
-		<div className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2">
-			<div className="min-w-0 flex-1">
-				<div className="flex items-center gap-2">
-					<p
-						tabIndex={0}
-						className="cursor-default truncate rounded-sm font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none"
-						title={group.sourcePath}
-					>
-						{folderPath}
-					</p>
-					{group.canonicalPath && (
-						<Tooltip delay={0}>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								className="size-6 text-muted"
-								aria-label={t("symlink")}
-							>
-								<LinkIcon className="size-3" />
-							</Button>
-							<Tooltip.Content>
-								<div className="max-w-xs">
-									<p className="mb-1 font-medium">
-										{t("symlink")}
-									</p>
-									<p className="font-mono text-xs">
-										{pathe.dirname(group.canonicalPath)}
-									</p>
-								</div>
-							</Tooltip.Content>
-						</Tooltip>
-					)}
-				</div>
-				<p className="mt-0.5 text-[11px] text-muted">
-					{Array.from(
-						new Set(
-							group.installations.map((installation) =>
-								formatAgentName(installation.agent),
-							),
-						),
-					).join(", ")}
-				</p>
-			</div>
-			<div className="flex shrink-0 items-center gap-1">
-				<Tooltip delay={0}>
-					<Button
-						isIconOnly
-						variant="ghost"
-						size="sm"
-						className="size-8 text-muted hover:text-danger"
-						aria-label={t("delete")}
-						onPress={onDelete}
-					>
-						<TrashIcon className="size-4" />
-					</Button>
-					<Tooltip.Content>{t("delete")}</Tooltip.Content>
-				</Tooltip>
-				<Tooltip delay={0}>
-					<Button
-						isIconOnly
-						variant="ghost"
-						size="sm"
-						className="size-8 text-muted"
-						aria-label={t("editInEditor")}
-						onPress={onEditFolder}
-					>
-						<CodeBracketIcon className="size-4" />
-					</Button>
-					<Tooltip.Content>{t("editInEditor")}</Tooltip.Content>
-				</Tooltip>
-				<Tooltip delay={0}>
-					<Button
-						isIconOnly
-						variant="ghost"
-						size="sm"
-						className="size-8 text-muted"
-						aria-label={t("openFolder")}
-						onPress={onOpenFolder}
-					>
-						<FolderIcon className="size-4" />
-					</Button>
-					<Tooltip.Content>{t("openFolder")}</Tooltip.Content>
-				</Tooltip>
-			</div>
-		</div>
-	);
-}
-
-interface DeleteSkillLocationDialogProps {
-	item: LocationGroup | null;
-	isOpen: boolean;
-	onClose: () => void;
-	projectPath?: string;
-	skillName: string;
-}
-
-function DeleteSkillLocationDialog({
-	item,
-	isOpen,
-	onClose,
-	projectPath,
-	skillName,
-}: DeleteSkillLocationDialogProps) {
-	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
-	const queryClient = useQueryClient();
-	const [selectedInstallationId, setSelectedInstallationId] = useState<
-		string | null
-	>(() => item?.installations[0]?.id ?? null);
-
-	const selectedInstallation = useMemo(() => {
-		if (!item) {
-			return null;
-		}
-
-		return (
-			item.installations.find(
-				(installation) => installation.id === selectedInstallationId,
-			) ??
-			item.installations[0] ??
-			null
-		);
-	}, [item, selectedInstallationId]);
-
-	const deleteMutation = useMutation({
-		mutationFn: async () => {
-			if (!selectedInstallation) {
-				return;
-			}
-
-			const scope =
-				selectedInstallation.source === ConfigSource.Project
-					? ("project" as const)
-					: ("global" as const);
-			const projectRoot = scope === "project" ? projectPath : undefined;
-
-			await api.skills.delete(
-				selectedInstallation.agent,
-				skillName,
-				scope,
-				projectRoot,
-			);
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["skills"] });
-			queryClient.invalidateQueries({
-				queryKey: ["project-skills"],
-			});
-			queryClient.invalidateQueries({
-				queryKey: ["skill-locks"],
-			});
-			onClose();
-		},
-		onError: (error) => {
-			console.error("Skill location delete mutation error:", error);
-		},
-	});
-
-	const folderPath = item ? pathe.dirname(item.sourcePath) : "";
-	const scopeLabel =
-		selectedInstallation?.source === ConfigSource.Project
-			? t("project")
-			: t("global");
-	const agentName = selectedInstallation
-		? formatAgentName(selectedInstallation.agent)
-		: "";
-
-	return (
-		<AlertDialog.Backdrop isOpen={isOpen} onOpenChange={onClose}>
-			<AlertDialog.Container>
-				<AlertDialog.Dialog className="sm:max-w-[420px]">
-					<AlertDialog.CloseTrigger />
-					<AlertDialog.Header>
-						<AlertDialog.Icon status="danger" />
-						<AlertDialog.Heading>
-							{t("deleteSkillForAgentTitle", {
-								agent: agentName,
-							})}
-						</AlertDialog.Heading>
-					</AlertDialog.Header>
-					<AlertDialog.Body>
-						{(item?.installations.length ?? 0) > 1 && (
-							<div className="mb-4 space-y-2">
-								<p className="text-sm text-muted">
-									{t("deleteSharedLocationWarning")}
-								</p>
-								<div>
-									<p
-										className="
-											mb-2 text-xs font-medium tracking-wide text-muted
-											uppercase
-										"
-									>
-										{t("selectAgentToDelete")}
-									</p>
-									<div className="flex flex-wrap gap-2">
-										{item?.installations.map(
-											(installation) => (
-												<Button
-													key={installation.id}
-													size="sm"
-													variant={
-														installation.id ===
-														selectedInstallation?.id
-															? "secondary"
-															: "ghost"
-													}
-													onPress={() =>
-														setSelectedInstallationId(
-															installation.id,
-														)
-													}
-												>
-													{formatAgentName(
-														installation.agent,
-													)}
-													<span className="text-xs text-muted">
-														{" · "}
-														{installation.source ===
-														ConfigSource.Project
-															? t("project")
-															: t("global")}
-													</span>
-												</Button>
-											),
-										)}
-									</div>
-								</div>
-							</div>
-						)}
-						<p className="text-sm text-muted">
-							{t("deleteSkillForAgentWarning", {
-								name: skillName,
-								agent: agentName,
-							})}
-						</p>
-						{item && (
-							<div className="mt-4 rounded-lg bg-surface-secondary px-3 py-2">
-								<p className="text-[11px] text-muted">
-									{scopeLabel}
-								</p>
-								<p className="mt-1 font-mono text-xs text-foreground">
-									{folderPath}
-								</p>
-							</div>
-						)}
-					</AlertDialog.Body>
-					<AlertDialog.Footer>
-						<Button
-							slot="close"
-							variant="tertiary"
-							onPress={onClose}
-							isDisabled={deleteMutation.isPending}
-						>
-							{t("cancel")}
-						</Button>
-						<Button
-							variant="danger"
-							onPress={() => deleteMutation.mutate()}
-							isDisabled={
-								deleteMutation.isPending ||
-								selectedInstallation === null
-							}
-						>
-							{deleteMutation.isPending ? (
-								<>
-									<Spinner size="sm" className="mr-2" />
-									{t("deleting")}
-								</>
-							) : (
-								t("delete")
-							)}
-						</Button>
-					</AlertDialog.Footer>
-				</AlertDialog.Dialog>
-			</AlertDialog.Container>
-		</AlertDialog.Backdrop>
-	);
-}
-
-interface DeleteSkillDialogProps {
-	group: SkillGroup;
-	isOpen: boolean;
-	onClose: () => void;
-	projectPath?: string;
-}
-
-function DeleteSkillDialog({
-	group,
-	isOpen,
-	onClose,
-	projectPath,
-}: DeleteSkillDialogProps) {
-	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
-	const queryClient = useQueryClient();
-
-	const skill = group.items[0];
-
-	const deleteMutation = useMutation({
-		mutationFn: async () => {
-			const deletions = group.items
-				.filter((item) => item.agent)
-				.map((item) => ({
-					agent: item.agent!,
-					scope:
-						item.source === ConfigSource.Project
-							? ("project" as const)
-							: ("global" as const),
-				}));
-			const results = await Promise.allSettled(
-				deletions.map(({ agent, scope }) =>
-					api.skills.delete(agent, skill.name, scope, projectPath),
-				),
-			);
-			const failures = results
-				.map((result, index) => ({
-					result,
-					deletion: deletions[index],
-				}))
-				.filter(({ result }) => result.status === "rejected");
-			if (failures.length > 0) {
-				console.error("Skill delete failures:", failures);
-				throw new Error(
-					`${failures.length} of ${deletions.length} deletions failed`,
-				);
-			}
-		},
-		onSettled: () => {
-			queryClient.invalidateQueries({ queryKey: ["skills"] });
-			queryClient.invalidateQueries({
-				queryKey: ["project-skills"],
-			});
-			onClose();
-		},
-	});
-
-	const globalItems = group.items.filter(
-		(item) => item.source === ConfigSource.Global,
-	);
-	const projectItems = group.items.filter(
-		(item) => item.source === ConfigSource.Project,
-	);
-
-	return (
-		<Modal.Backdrop isOpen={isOpen} onOpenChange={onClose}>
-			<Modal.Container>
-				<Modal.Dialog>
-					<Modal.CloseTrigger />
-					<Modal.Header>
-						<div className="flex items-center gap-2">
-							<ExclamationTriangleIcon className="size-5 text-warning" />
-							<Modal.Heading>{t("deleteSkill")}</Modal.Heading>
-						</div>
-					</Modal.Header>
-
-					<Modal.Body className="p-2">
-						<p className="mb-4 text-sm text-muted">
-							{t("deleteSkillWarning", {
-								count: group.items.length,
-							})}
-						</p>
-
-						<div className="space-y-4">
-							{globalItems.length > 0 && (
-								<div>
-									<h4
-										className="
-            mb-2 text-xs font-medium tracking-wide text-muted uppercase
-          "
-									>
-										{t("globalSkills")}
-									</h4>
-									<div className="space-y-2">
-										{globalItems.map((item) => (
-											<div
-												key={item.agent}
-												className="flex items-center gap-2 text-sm"
-											>
-												<XCircleIcon className="size-4 shrink-0 text-danger" />
-												<span className="text-foreground">
-													{item.agent
-														? formatAgentName(
-																item.agent,
-															)
-														: t("default")}
-												</span>
-												{item.source_path && (
-													<span className="flex-1 truncate text-xs text-muted">
-														{item.source_path}
-													</span>
-												)}
-											</div>
-										))}
-									</div>
-								</div>
-							)}
-
-							{projectItems.length > 0 && (
-								<div>
-									<h4
-										className="
-            mb-2 text-xs font-medium tracking-wide text-muted uppercase
-          "
-									>
-										{t("projectSkills")}
-									</h4>
-									<div className="space-y-2">
-										{projectItems.map((item) => (
-											<div
-												key={item.agent}
-												className="flex items-center gap-2 text-sm"
-											>
-												<XCircleIcon className="size-4 shrink-0 text-danger" />
-												<span className="text-foreground">
-													{item.agent
-														? formatAgentName(
-																item.agent,
-															)
-														: t("default")}
-												</span>
-												{item.source_path && (
-													<span className="flex-1 truncate text-xs text-muted">
-														{item.source_path}
-													</span>
-												)}
-											</div>
-										))}
-									</div>
-								</div>
-							)}
-						</div>
-					</Modal.Body>
-
-					<Modal.Footer>
-						<Button
-							slot="close"
-							variant="secondary"
-							onPress={onClose}
-							isDisabled={deleteMutation.isPending}
-						>
-							{t("cancel")}
-						</Button>
-						<Button
-							variant="danger"
-							onPress={() => deleteMutation.mutate()}
-							isDisabled={deleteMutation.isPending}
-						>
-							{deleteMutation.isPending ? (
-								<>
-									<Spinner size="sm" className="mr-2" />
-									{t("deleting")}
-								</>
-							) : (
-								t("deleteAll")
-							)}
-						</Button>
-					</Modal.Footer>
-				</Modal.Dialog>
-			</Modal.Container>
-		</Modal.Backdrop>
 	);
 }
