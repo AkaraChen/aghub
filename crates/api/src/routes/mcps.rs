@@ -1,10 +1,15 @@
-use aghub_core::{errors::ConfigError, load_all_agents, models::McpServer};
+use aghub_core::{
+	errors::ConfigError, load_all_agents, models::McpServer, transfer,
+};
 use rocket::http::Status;
 use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
 
 use crate::{
 	dto::mcp::{CreateMcpRequest, McpResponse, UpdateMcpRequest},
+	dto::transfer::{
+		OperationBatchResponse, ReconcileRequest, TransferRequest,
+	},
 	error::{ApiCreated, ApiError, ApiNoContent, ApiResult},
 	extractors::{AgentParam, ScopeParams},
 	routes::{
@@ -31,6 +36,38 @@ pub fn list_mcps(
 	let config = manager.load().map_err(ApiError::from)?;
 	let mcps = config.mcps.iter().map(McpResponse::from).collect();
 	Ok(Json(mcps))
+}
+
+#[post("/mcps/transfer", data = "<body>")]
+pub fn transfer_mcp_route(
+	body: Json<TransferRequest>,
+) -> ApiResult<OperationBatchResponse> {
+	let req = body.into_inner();
+	let source = req.source.to_core()?;
+	let destinations = req
+		.destinations
+		.iter()
+		.map(|target| target.to_core())
+		.collect::<Result<Vec<_>, _>>()?;
+	let result =
+		transfer::transfer_mcp(source, destinations).map_err(ApiError::from)?;
+	Ok(Json(result.into()))
+}
+
+#[post("/mcps/reconcile", data = "<body>")]
+pub fn reconcile_mcp_route(
+	body: Json<ReconcileRequest>,
+) -> ApiResult<OperationBatchResponse> {
+	let req = body.into_inner();
+	let source = req.source.to_core()?;
+	let targets = req
+		.targets
+		.iter()
+		.map(|target| target.to_core())
+		.collect::<Result<Vec<_>, _>>()?;
+	let result =
+		transfer::reconcile_mcp(source, targets).map_err(ApiError::from)?;
+	Ok(Json(result.into()))
 }
 
 #[post("/agents/<agent>/mcps?<scope..>", data = "<body>")]

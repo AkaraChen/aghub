@@ -14,6 +14,7 @@ pub mod models;
 pub mod paths;
 pub mod registry;
 pub mod skills;
+pub mod transfer;
 
 #[cfg(feature = "testing")]
 pub mod testing;
@@ -23,6 +24,10 @@ pub use all_agents::{load_all_agents, AgentResources};
 pub use errors::{ConfigError, Result};
 pub use manager::ConfigManager;
 pub use models::{AgentType, ConfigSource};
+pub use transfer::{
+	InstallScope, InstallTarget, OperationAction, OperationBatchResult,
+	OperationResult, ReconcileTarget, ResourceLocator,
+};
 
 /// Convert a skill::Skill to core::models::Skill
 pub fn convert_skill(skill_pkg: skill::Skill) -> models::Skill {

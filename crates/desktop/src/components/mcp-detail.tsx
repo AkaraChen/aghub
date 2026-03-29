@@ -30,7 +30,7 @@ import { createApi } from "../lib/api";
 import type { McpResponse, TransportDto } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
 import { cn, sortAgentObjects } from "../lib/utils";
-import { ManageAgentsDialog } from "./manage-agents-dialog";
+import { ResourceInstallDialog } from "./resource-install-dialog";
 
 export interface McpGroup {
 	mergeKey: string;
@@ -166,6 +166,7 @@ function KeyValueList({
 interface McpDetailUiState {
 	deleteDialogOpen: boolean;
 	manageDialogOpen: boolean;
+	transferDialogOpen: boolean;
 	copyFeedback: boolean;
 	showAllHeaders: boolean;
 	showAllEnvVars: boolean;
@@ -174,6 +175,7 @@ interface McpDetailUiState {
 type McpDetailUiAction =
 	| { type: "set_delete_dialog"; value: boolean }
 	| { type: "set_manage_dialog"; value: boolean }
+	| { type: "set_transfer_dialog"; value: boolean }
 	| { type: "show_copy_feedback" }
 	| { type: "hide_copy_feedback" }
 	| { type: "toggle_headers" }
@@ -188,6 +190,8 @@ function mcpDetailUiReducer(
 			return { ...state, deleteDialogOpen: action.value };
 		case "set_manage_dialog":
 			return { ...state, manageDialogOpen: action.value };
+		case "set_transfer_dialog":
+			return { ...state, transferDialogOpen: action.value };
 		case "show_copy_feedback":
 			return { ...state, copyFeedback: true };
 		case "hide_copy_feedback":
@@ -205,6 +209,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 	const [uiState, dispatch] = useReducer(mcpDetailUiReducer, {
 		deleteDialogOpen: false,
 		manageDialogOpen: false,
+		transferDialogOpen: false,
 		copyFeedback: false,
 		showAllHeaders: false,
 		showAllEnvVars: false,
@@ -272,6 +277,8 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 	const transport = group.transport;
 	const primarySource = group.items[0].source;
 	const primaryItem = group.items[0];
+	const primaryScope =
+		primarySource === ConfigSource.Project ? "project" : "global";
 
 	const getAgentName = useCallback(
 		(item: McpResponse) =>
@@ -546,6 +553,18 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 										: t("copyConfig")}
 								</Button>
 								<Button
+									variant="secondary"
+									onPress={() =>
+										dispatch({
+											type: "set_transfer_dialog",
+											value: true,
+										})
+									}
+								>
+									<PlusIcon className="size-4" />
+									{t("transfer")}
+								</Button>
+								<Button
 									variant="primary"
 									onPress={() =>
 										dispatch({
@@ -634,8 +653,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 			</Modal.Backdrop>
 
 			{/* Manage Agents Dialog */}
-			<ManageAgentsDialog
-				group={group}
+			<ResourceInstallDialog
 				isOpen={uiState.manageDialogOpen}
 				onClose={() =>
 					dispatch({
@@ -643,8 +661,29 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 						value: false,
 					})
 				}
-				projectPath={projectPath}
-				requiredCapabilities={["mcp"]}
+				mode="manage"
+				resourceType="mcp"
+				name={primaryItem.name}
+				sourceAgent={primaryItem.agent ?? "claude"}
+				sourceScope={primaryScope}
+				sourceProjectRoot={projectPath}
+				transport={primaryItem.transport}
+			/>
+			<ResourceInstallDialog
+				isOpen={uiState.transferDialogOpen}
+				onClose={() =>
+					dispatch({
+						type: "set_transfer_dialog",
+						value: false,
+					})
+				}
+				mode="transfer"
+				resourceType="mcp"
+				name={primaryItem.name}
+				sourceAgent={primaryItem.agent ?? "claude"}
+				sourceScope={primaryScope}
+				sourceProjectRoot={projectPath}
+				transport={primaryItem.transport}
 			/>
 		</>
 	);

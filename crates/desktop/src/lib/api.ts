@@ -6,9 +6,12 @@ import type {
 	ImportSkillRequest,
 	InstallSkillRequest,
 	InstallSkillResponse,
+	InstallTarget,
 	MarketSkill,
 	McpResponse,
+	OperationBatchResponse,
 	ProjectSkillLockResponse,
+	ReconcileTarget,
 	SkillResponse,
 	SkillTreeNodeResponse,
 	ToolInfo,
@@ -166,6 +169,18 @@ export function createApi(baseUrl: string) {
 					})
 					.json();
 			},
+			transfer(body: {
+				source: InstallTarget & { name: string };
+				destinations: InstallTarget[];
+			}): Promise<OperationBatchResponse> {
+				return client.post("skills/transfer", { json: body }).json();
+			},
+			reconcile(body: {
+				source: InstallTarget & { name: string };
+				targets: ReconcileTarget[];
+			}): Promise<OperationBatchResponse> {
+				return client.post("skills/reconcile", { json: body }).json();
+			},
 		},
 		mcps: {
 			listAll(
@@ -251,6 +266,18 @@ export function createApi(baseUrl: string) {
 						},
 					})
 					.then(() => undefined);
+			},
+			transfer(body: {
+				source: InstallTarget & { name: string };
+				destinations: InstallTarget[];
+			}): Promise<OperationBatchResponse> {
+				return client.post("mcps/transfer", { json: body }).json();
+			},
+			reconcile(body: {
+				source: InstallTarget & { name: string };
+				targets: ReconcileTarget[];
+			}): Promise<OperationBatchResponse> {
+				return client.post("mcps/reconcile", { json: body }).json();
 			},
 		},
 		market: {

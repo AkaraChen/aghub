@@ -7,6 +7,7 @@ import {
 	HashtagIcon,
 	LinkIcon,
 	MagnifyingGlassIcon,
+	PlusIcon,
 	StarIcon as StarIconSolid,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
@@ -29,6 +30,7 @@ import type {
 } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
 import { cn } from "../lib/utils";
+import { ResourceInstallDialog } from "./resource-install-dialog";
 import {
 	DeleteSkillDialog,
 	DeleteSkillLocationDialog,
@@ -60,12 +62,16 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const [locationToDelete, setLocationToDelete] =
 		useState<LocationGroup | null>(null);
 	const [showAllLocations, setShowAllLocations] = useState(false);
+	const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+	const [manageDialogOpen, setManageDialogOpen] = useState(false);
 
 	const { isSkillStarred, toggleSkillStar } = useFavorites();
 	const isStarred = isSkillStarred(group.items[0].name);
 	const { selectedEditor } = useCurrentCodeEditor();
 
 	const skill = group.items[0];
+	const primaryScope =
+		skill.source === ConfigSource.Project ? "project" : "global";
 	const trimmedSkillName = skill.name.trim();
 	const canSearchSkillsSh = trimmedSkillName.length >= 2;
 
@@ -214,6 +220,40 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 										sm:gap-2
 									"
 								>
+									<Tooltip delay={0}>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="md"
+											className="min-h-11 min-w-11 text-muted hover:text-foreground"
+											aria-label={t("transfer")}
+											onPress={() =>
+												setTransferDialogOpen(true)
+											}
+										>
+											<PlusIcon className="size-5" />
+										</Button>
+										<Tooltip.Content>
+											{t("transfer")}
+										</Tooltip.Content>
+									</Tooltip>
+									<Tooltip delay={0}>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="md"
+											className="min-h-11 min-w-11 text-muted hover:text-foreground"
+											aria-label={t("addToAgent")}
+											onPress={() =>
+												setManageDialogOpen(true)
+											}
+										>
+											<PlusIcon className="size-5" />
+										</Button>
+										<Tooltip.Content>
+											{t("addToAgent")}
+										</Tooltip.Content>
+									</Tooltip>
 									<Tooltip delay={0}>
 										<Button
 											isIconOnly
@@ -553,6 +593,26 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 				onClose={() => setLocationToDelete(null)}
 				projectPath={projectPath}
 				skillName={skill.name}
+			/>
+			<ResourceInstallDialog
+				isOpen={transferDialogOpen}
+				onClose={() => setTransferDialogOpen(false)}
+				mode="transfer"
+				resourceType="skill"
+				name={skill.name}
+				sourceAgent={skill.agent ?? "claude"}
+				sourceScope={primaryScope}
+				sourceProjectRoot={projectPath}
+			/>
+			<ResourceInstallDialog
+				isOpen={manageDialogOpen}
+				onClose={() => setManageDialogOpen(false)}
+				mode="manage"
+				resourceType="skill"
+				name={skill.name}
+				sourceAgent={skill.agent ?? "claude"}
+				sourceScope={primaryScope}
+				sourceProjectRoot={projectPath}
 			/>
 		</>
 	);
