@@ -64,69 +64,39 @@ export default {
 	restartToUpdate: "重新啟動以更新",
 	onboardingDescription: "隨時重新開啟歡迎頁或任一導覽流程。",
 
-	// Onboarding
-	onboardingEyebrow: "首次開啟",
-	onboardingWelcomeTitle: "先了解全貌，再動手修改",
-	onboardingWelcomeDescription:
-		"Aghub 用來管理 Agent 設定、MCP 服務和技能，同時不會隱藏底層檔案。這兩段簡短導覽會先告訴你該去哪裡，再帶你完成一次真實的專案級流程。",
-	onboardingValueGlobalTitle: "全域 MCP 管理",
-	onboardingValueGlobalDescription: "檢視所有 Agent 共用的 MCP 服務。",
-	onboardingValueSkillsTitle: "本機技能與技能市集",
-	onboardingValueSkillsDescription:
-		"檢查已安裝技能，或從 skills.sh 取得新的能力。",
-	onboardingValueProjectTitle: "專案級隔離設定",
-	onboardingValueProjectDescription:
-		"讓儲存庫專屬的 MCP 和技能只作用在正確的程式碼庫裡。",
-	onboardingFlowTitle: "導覽會帶你完成什麼",
-	onboardingFlowDescription:
-		"先用一段很短的全域導覽建立方向感，再在接入儲存庫後完成一次專案工作流程示範。",
-	onboardingFlowStepOneTitle: "認識應用程式地圖",
-	onboardingFlowStepOneDescription:
-		"知道 MCP、技能、市集、專案和設定分別應該去哪個頁面處理。",
-	onboardingFlowStepTwoTitle: "接入或開啟一個專案",
-	onboardingFlowStepTwoDescription:
-		"把儲存庫接進來後，Aghub 就能在專案作用域管理 MCP 和技能，而不會誤改其他設定。",
-	onboardingFlowStepThreeTitle: "走完專案工作流程",
-	onboardingFlowStepThreeDescription:
-		"在真實頁面裡搜尋、新增資源、檢視詳情，並體驗批次操作。",
-	onboardingTimeEstimate: "大約 90 秒，可隨時跳過。",
-	onboardingOptionalHint: "之後也可以在「設定 -> 關於」裡重新開啟。",
-	onboardingSkip: "暫時跳過",
-	onboardingAddProject: "新增專案",
-	onboardingOpenProject: "開啟專案",
-	onboardingStart: "開始導覽",
-	onboardingLater: "稍後",
-	onboardingShowMe: "帶我過去",
+	// Onboarding — Wizard
+	onboardingWizardTitle: "歡迎使用 Aghub",
+	onboardingWizardSubtitle: "在一個地方管理 AI Agent 設定、MCP 服務和技能。",
+	onboardingStepMcpTitle: "MCP 服務",
+	onboardingStepMcpDescription:
+		"跨所有 AI Agent 管理共用 MCP 服務定義。新增、匯入並保持工具鏈一致。",
+	onboardingStepSkillsTitle: "技能",
+	onboardingStepSkillsDescription:
+		"檢視已安裝技能，從 skills.sh 市集取得新技能，讓你的 Agent 始終具備合適的能力。",
+	onboardingStepProjectsTitle: "專案",
+	onboardingStepProjectsDescription:
+		"將 MCP 服務和技能限定到單一儲存庫。專案設定與全域設定完全隔離。",
+	onboardingSkip: "跳過",
+	onboardingBack: "返回",
+	onboardingNext: "下一步",
+	onboardingGetStarted: "開始使用",
 	onboardingContinue: "繼續",
 	onboardingFinish: "開始使用",
 	onboardingProgressText: "第 {{current}} 步，共 {{total}} 步",
+
+	// Onboarding — Driver.js tours
 	onboardingSidebarTitle: "所有入口都從側邊欄開始",
 	onboardingSidebarDescription:
 		"左側導覽負責在全域設定、技能市集、專案級工作區和應用程式設定之間切換。",
 	onboardingMcpTitle: "全域 MCP 服務",
 	onboardingMcpDescription:
 		"這裡管理的是共用型 MCP 服務定義，你可以把它們分配給一到多個 Agent。",
-	onboardingMcpActionTitle: "新增或匯入共用服務",
-	onboardingMcpActionDescription:
-		"可以手動建立，也可以在已有設定片段時直接匯入 JSON。",
 	onboardingSkillsTitle: "已安裝技能",
 	onboardingSkillsDescription:
 		"在這裡檢查本機技能內容，並管理目前 Agent 已經具備的能力。",
-	onboardingMarketTitle: "skills.sh 市集",
-	onboardingMarketDescription:
-		"當你需要新能力時，可以直接搜尋社群技能並在應用程式內完成安裝。",
-	onboardingProjectsTitle: "專案讓變更保持隔離",
-	onboardingProjectsDescription:
-		"專案頁讓你只為單一儲存庫管理 MCP 和技能，而不是把變更擴散到所有 Agent 設定。",
-	onboardingProjectAddShortcutTitle: "從這裡接入儲存庫",
-	onboardingProjectAddShortcutDescription:
-		"當你想使用專案專屬的 MCP 和技能時，從這裡選擇儲存庫根目錄會是最快獲得價值的方式。",
 	onboardingSettingsTitle: "設定入口始終在這裡",
 	onboardingSettingsDescription:
 		"外觀、Agent 可用性、編輯器整合，以及這些導覽控制都集中在這裡。",
-	onboardingProjectNextTitle: "下一步：接入一個專案",
-	onboardingProjectNextDescription:
-		"第二段工作流程導覽會在專案頁面內進行。新增或開啟一個儲存庫後，我會繼續帶你走完整個 MCP 與技能流程。",
 	onboardingProjectSetupTitle: "新增你的第一個專案",
 	onboardingProjectSetupDescription:
 		"從這裡選擇儲存庫根目錄。專案一出現，我就會自動開啟它並繼續專案工作流程導覽。",

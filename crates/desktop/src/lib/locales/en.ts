@@ -66,74 +66,43 @@ export default {
 	onboardingDescription:
 		"Replay the welcome screen or either guided tour any time.",
 
-	// Onboarding
-	onboardingEyebrow: "First Run",
-	onboardingWelcomeTitle: "Get oriented before you change anything",
-	onboardingWelcomeDescription:
-		"Aghub helps you manage agent configs, MCP servers, and skills without hiding the files underneath. These two short tours show where to go, then how to set up a project safely.",
-	onboardingValueGlobalTitle: "Global MCP control",
-	onboardingValueGlobalDescription:
-		"Review shared servers used across your agents.",
-	onboardingValueSkillsTitle: "Local and market skills",
-	onboardingValueSkillsDescription:
-		"Inspect installed skills or pull new ones from skills.sh.",
-	onboardingValueProjectTitle: "Project-scoped setup",
-	onboardingValueProjectDescription:
-		"Keep repo-specific MCPs and skills isolated to the right codebase.",
-	onboardingFlowTitle: "What onboarding covers",
-	onboardingFlowDescription:
-		"A short map first, then a hands-on project workflow once you have a repo attached.",
-	onboardingFlowStepOneTitle: "Learn the app map",
-	onboardingFlowStepOneDescription:
-		"Understand which page to use for MCP servers, skills, marketplace installs, projects, and settings.",
-	onboardingFlowStepTwoTitle: "Connect or open a project",
-	onboardingFlowStepTwoDescription:
-		"Attach a repository so Aghub can manage MCPs and skills at project scope without touching unrelated setups.",
-	onboardingFlowStepThreeTitle: "Follow the workflow tour",
-	onboardingFlowStepThreeDescription:
-		"Use search, add resources, inspect details, and batch actions where real project work happens.",
-	onboardingTimeEstimate: "About 90 seconds, entirely skippable.",
-	onboardingOptionalHint:
-		"You can replay any part later from Settings -> About.",
-	onboardingSkip: "Skip for Now",
-	onboardingAddProject: "Add a Project",
-	onboardingOpenProject: "Open a Project",
-	onboardingStart: "Start Onboarding",
-	onboardingLater: "Later",
-	onboardingShowMe: "Show Me",
+	// Onboarding — Wizard
+	onboardingWizardTitle: "Welcome to Aghub",
+	onboardingWizardSubtitle:
+		"Manage AI agent configs, MCP servers, and skills from one place.",
+	onboardingStepMcpTitle: "MCP Servers",
+	onboardingStepMcpDescription:
+		"Manage shared MCP server definitions across all your AI agents. Add, import, and keep your tooling consistent.",
+	onboardingStepSkillsTitle: "Skills",
+	onboardingStepSkillsDescription:
+		"Inspect installed skills, pull new ones from the skills.sh marketplace, and keep your agents equipped.",
+	onboardingStepProjectsTitle: "Projects",
+	onboardingStepProjectsDescription:
+		"Scope MCP servers and skills to individual repositories. Keep project configs isolated from your global setup.",
+	onboardingSkip: "Skip",
+	onboardingBack: "Back",
+	onboardingNext: "Next",
+	onboardingGetStarted: "Get Started",
 	onboardingContinue: "Continue",
 	onboardingFinish: "Start Working",
 	onboardingProgressText: "Step {{current}} of {{total}}",
+
+	// Onboarding — Driver.js tours
 	onboardingSidebarTitle: "Everything starts in the sidebar",
 	onboardingSidebarDescription:
 		"Use this left rail to move between global configuration, marketplace discovery, project-specific work, and app settings.",
 	onboardingMcpTitle: "Global MCP servers",
 	onboardingMcpDescription:
 		"This page is for shared MCP server definitions you want available to one or more agents across your machine.",
-	onboardingMcpActionTitle: "Add or import shared servers",
-	onboardingMcpActionDescription:
-		"Create a server manually or import JSON when you already have a config snippet to reuse.",
 	onboardingSkillsTitle: "Installed skills",
 	onboardingSkillsDescription:
 		"Review local skills, inspect their contents, and manage what is already available to your agents.",
-	onboardingMarketTitle: "skills.sh marketplace",
-	onboardingMarketDescription:
-		"Search community skills and install them without leaving the app when you need a new capability.",
-	onboardingProjectsTitle: "Projects keep changes scoped",
-	onboardingProjectsDescription:
-		"Projects let you manage MCPs and skills for one repository without changing every agent config globally.",
-	onboardingProjectAddShortcutTitle: "Attach a repository here",
-	onboardingProjectAddShortcutDescription:
-		"Pick a repo root when you want project-only MCP servers and skills. That is the fastest route to real value in Aghub.",
 	onboardingSettingsTitle: "Settings stay close by",
 	onboardingSettingsDescription:
 		"Appearance, agent availability, editor integrations, and these onboarding controls all live here.",
-	onboardingProjectNextTitle: "Next step: attach a project",
-	onboardingProjectNextDescription:
-		"The workflow tour happens inside a project. Add or open a repository and I’ll continue with the hands-on MCP and skills flow.",
 	onboardingProjectSetupTitle: "Add your first project",
 	onboardingProjectSetupDescription:
-		"Choose a repository root here. As soon as the project appears, I’ll open it and continue with the project workflow tour.",
+		"Choose a repository root here. As soon as the project appears, I'll open it and continue with the project workflow tour.",
 	onboardingProjectResourcesTitle: "Project resources live here",
 	onboardingProjectResourcesDescription:
 		"This panel lists project-scoped MCP servers and skills, so you can keep experiments local to one repo.",
