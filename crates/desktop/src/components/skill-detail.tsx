@@ -9,6 +9,7 @@ import {
 	GlobeAltIcon,
 	HashtagIcon,
 	LinkIcon,
+	MagnifyingGlassIcon,
 	StarIcon as StarIconSolid,
 	TrashIcon,
 	XCircleIcon,
@@ -28,6 +29,7 @@ import * as pathe from "pathe";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { siGithub } from "simple-icons";
+import { useLocation } from "wouter";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useFavorites } from "../hooks/use-favorites";
 import { useCurrentCodeEditor } from "../hooks/use-integrations";
@@ -82,6 +84,7 @@ function formatAgentName(agent: string): string {
 
 export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const { t } = useTranslation();
+	const [, setLocation] = useLocation();
 	const { allAgents } = useAgentAvailability();
 	const { baseUrl } = useServer();
 	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
@@ -94,6 +97,15 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const { selectedEditor } = useCurrentCodeEditor();
 
 	const skill = group.items[0];
+	const trimmedSkillName = skill.name.trim();
+	const canSearchSkillsSh = trimmedSkillName.length >= 2;
+
+	const handleSearchSkillsSh = () => {
+		if (!canSearchSkillsSh) return;
+		setLocation(
+			`/skills-sh/search?q=${encodeURIComponent(trimmedSkillName)}`,
+		);
+	};
 
 	const openFolderMutation = useMutation({
 		mutationFn: (skillPath: string) => api.skills.openFolder(skillPath),
@@ -267,6 +279,25 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
           sm:gap-2
         "
 								>
+									<Tooltip delay={0}>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="md"
+											className="
+            min-h-11 min-w-11 text-muted
+            hover:text-foreground
+          "
+											aria-label={t("searchOnSkillsSh")}
+											isDisabled={!canSearchSkillsSh}
+											onPress={handleSearchSkillsSh}
+										>
+											<MagnifyingGlassIcon className="size-5" />
+										</Button>
+										<Tooltip.Content>
+											{t("searchOnSkillsSh")}
+										</Tooltip.Content>
+									</Tooltip>
 									<Tooltip delay={0}>
 										<Button
 											isIconOnly

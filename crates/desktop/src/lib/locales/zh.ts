@@ -393,6 +393,7 @@ export default {
 	selectResourceToView: "选择一个资源查看详情",
 
 	// Skill Detail
+	searchOnSkillsSh: "在 skills.sh 中搜索",
 	deleteSkill: "删除技能",
 	deleteSkillWarning: "这将删除 {{count}} 个技能安装。此操作无法撤销。",
 	deleteAll: "全部删除",

@@ -402,6 +402,7 @@ export default {
 	selectResourceToView: "Select a resource to view details",
 
 	// Skill Detail
+	searchOnSkillsSh: "Search on skills.sh",
 	deleteSkill: "Delete Skill",
 	deleteSkillWarning:
 		"This will delete {{count}} skill installation(s). This action cannot be undone.",
