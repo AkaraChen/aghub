@@ -363,10 +363,16 @@ export default {
 	installAllSkillsDescription:
 		"安装此来源中的所有技能，而不是选中的单个技能。",
 	installToProject: "安装到项目",
-	installToProjectDescription: "将技能安装到特定项目，而不是全局范围。",
+	installToProjectDescription: "安装到指定项目，而不是全局范围。",
 	selectProject: "选择项目",
-	noProjects: "没有可用项目",
-	noProjectsHelp: "请先添加项目以安装技能。",
+	noProjects: "暂无项目",
+	noProjectsHelp: "请先添加项目，才能安装到项目范围。",
+	reviewImport: "确认导入",
+	deepLinkInvalidUrl: "该深链不是有效的 URL。",
+	deepLinkUnsupported: "aghub 暂不支持该深链。",
+	deepLinkUnsupportedType: "该深链类型暂不支持。",
+	deepLinkInvalidSkill: "该技能链接缺少必要字段。",
+	deepLinkInvalidMcp: "该 MCP 链接载荷无效。",
 
 	// skills.sh
 	searchMarketSkills: "在 skills.sh 搜索技能...",

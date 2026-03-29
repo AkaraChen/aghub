@@ -64,6 +64,7 @@ export default function SkillsSearchPage() {
 		setInstallAll,
 		installToProject,
 		setInstallToProject,
+		canInstallToProject,
 		selectedProjectId,
 		setSelectedProjectId,
 		projects,
@@ -267,6 +268,7 @@ export default function SkillsSearchPage() {
 				installAll={installAll}
 				onInstallAllChange={setInstallAll}
 				installToProject={installToProject}
+				canInstallToProject={canInstallToProject}
 				onInstallToProjectChange={setInstallToProject}
 				selectedProjectId={selectedProjectId}
 				onSelectedProjectIdChange={setSelectedProjectId}

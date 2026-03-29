@@ -1,7 +1,7 @@
 import { Button, Checkbox, Label, Modal } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import { AgentSelector } from "../../../components/agent-selector";
-import { ProjectSelector } from "../../../components/project-selector";
+import { InstallTargetSelector } from "../../../components/install-target-selector";
 import { ResultStatusItem } from "../../../components/result-status-item";
 import { SkillInfoCard } from "../../../components/skill-info-card";
 import type { MarketSkill } from "../../../lib/api-types";
@@ -21,6 +21,7 @@ interface InstallModalProps {
 	installAll: boolean;
 	onInstallAllChange: (value: boolean) => void;
 	installToProject: boolean;
+	canInstallToProject: boolean;
 	onInstallToProjectChange: (value: boolean) => void;
 	selectedProjectId: string | null;
 	onSelectedProjectIdChange: (id: string | null) => void;
@@ -40,6 +41,7 @@ export function InstallModal({
 	installAll,
 	onInstallAllChange,
 	installToProject,
+	canInstallToProject,
 	onInstallToProjectChange,
 	selectedProjectId,
 	onSelectedProjectIdChange,
@@ -104,36 +106,18 @@ export function InstallModal({
 									</Checkbox.Content>
 								</Checkbox>
 
-								<Checkbox
-									value="installToProject"
-									isSelected={installToProject}
-									onChange={(isSelected) =>
-										onInstallToProjectChange(isSelected)
+								<InstallTargetSelector
+									installToProject={installToProject}
+									onInstallToProjectChange={
+										onInstallToProjectChange
 									}
-									variant="secondary"
-								>
-									<Checkbox.Control>
-										<Checkbox.Indicator />
-									</Checkbox.Control>
-									<Checkbox.Content className="flex flex-col items-start gap-0.5">
-										<Label className="text-sm font-medium">
-											{t("installToProject")}
-										</Label>
-										<span className="text-xs text-muted">
-											{t("installToProjectDescription")}
-										</span>
-									</Checkbox.Content>
-								</Checkbox>
-
-								{installToProject && (
-									<ProjectSelector
-										projects={projects}
-										selectedKey={selectedProjectId}
-										onSelectionChange={
-											onSelectedProjectIdChange
-										}
-									/>
-								)}
+									selectedProjectId={selectedProjectId}
+									onSelectedProjectIdChange={
+										onSelectedProjectIdChange
+									}
+									projects={projects}
+									canInstallToProject={canInstallToProject}
+								/>
 							</div>
 						)}
 
