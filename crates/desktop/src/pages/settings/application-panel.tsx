@@ -1,4 +1,4 @@
-import { Avatar, Button, Card, toast } from "@heroui/react";
+import { Avatar, Button, ButtonGroup, Card, toast } from "@heroui/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { getName, getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -190,10 +190,12 @@ export default function ApplicationPanel() {
 								{t("onboardingDescription")}
 							</span>
 						</div>
-						<div className="flex flex-wrap justify-end gap-2">
+						<ButtonGroup
+							variant="secondary"
+							size="sm"
+							className="flex-wrap justify-end"
+						>
 							<Button
-								variant="secondary"
-								size="sm"
 								onPress={() =>
 									dispatchOnboardingCommand({
 										type: "show-welcome",
@@ -203,8 +205,6 @@ export default function ApplicationPanel() {
 								{t("showWelcome")}
 							</Button>
 							<Button
-								variant="secondary"
-								size="sm"
 								onPress={() =>
 									dispatchOnboardingCommand({
 										type: "start-tour",
@@ -215,8 +215,6 @@ export default function ApplicationPanel() {
 								{t("replayAppTour")}
 							</Button>
 							<Button
-								variant="secondary"
-								size="sm"
 								onPress={() =>
 									dispatchOnboardingCommand({
 										type: "start-tour",
@@ -226,7 +224,7 @@ export default function ApplicationPanel() {
 							>
 								{t("replayProjectTour")}
 							</Button>
-						</div>
+						</ButtonGroup>
 					</div>
 				</Card.Content>
 			</Card>
