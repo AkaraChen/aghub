@@ -478,21 +478,6 @@ export function OnboardingController() {
 					</Modal.Header>
 
 					<Modal.Body className="space-y-5 px-6 pb-2 pt-0">
-						{/* Step indicator dots */}
-						<div className="flex justify-center gap-2">
-							{WIZARD_STEPS.map((_, index) => (
-								<div
-									key={index}
-									className={cn(
-										"size-2 rounded-full transition-colors",
-										index === currentStep
-											? "bg-foreground"
-											: "bg-border",
-									)}
-								/>
-							))}
-						</div>
-
 						{/* Two-column layout */}
 						<div className="grid gap-5 sm:grid-cols-2">
 							{/* Left: Feature list */}
@@ -505,7 +490,7 @@ export function OnboardingController() {
 											"flex gap-3 rounded-xl p-3 text-left transition-colors",
 											index === currentStep
 												? "bg-surface-secondary"
-												: "bg-transparent hover:bg-surface-secondary/50",
+												: "bg-transparent hover:bg-surface-secondary/30",
 										)}
 										onClick={() => setCurrentStep(index)}
 									>
@@ -514,7 +499,7 @@ export function OnboardingController() {
 												"flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors",
 												index === currentStep
 													? "bg-foreground text-background"
-													: "bg-surface text-muted",
+													: "bg-surface/40 text-muted/30",
 											)}
 										>
 											{step.icon}
@@ -525,7 +510,7 @@ export function OnboardingController() {
 													"text-sm font-semibold transition-colors",
 													index === currentStep
 														? "text-foreground"
-														: "text-muted",
+														: "text-muted/40",
 												)}
 											>
 												{t(step.titleKey)}

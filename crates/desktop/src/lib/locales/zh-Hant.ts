@@ -221,7 +221,7 @@ export default {
 	serverName: "伺服器名稱",
 	transportType: "傳輸類型",
 	env: "環境變數",
-	headers: "標頭",
+	headers: "Header",
 	argsHelp: "以空格分隔的參數",
 	timeoutHelp: "秒數（選填）",
 	enabledHelp: "切換此 MCP 伺服器是否處於啟用狀態。",
@@ -310,9 +310,9 @@ export default {
 	copyConfigError: "複製到剪貼簿失敗",
 	global: "全域",
 	project: "專案",
-	headersCount: "標頭 ({{count}})",
+	headersCount: "Header ({{count}})",
 	envCount: "環境變數 ({{count}})",
-	noHeaders: "無標頭",
+	noHeaders: "無Header",
 	noEnvVars: "無環境變數",
 	timeoutSeconds: "{{seconds}}秒",
 	deleteMcpSuccess: "MCP 伺服器刪除成功",
@@ -405,8 +405,8 @@ export default {
 
 	// HTTP Header Editor
 	httpHeaderEditor: {
-		keyPlaceholder: "標頭名稱",
-		valuePlaceholder: "標頭值",
+		keyPlaceholder: "Header名稱",
+		valuePlaceholder: "Header值",
 	},
 
 	// Team
