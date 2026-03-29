@@ -13,7 +13,7 @@ import {
 } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useServer } from "../hooks/use-server";
 import type { UpdateMcpRequest } from "../lib/api";
@@ -69,7 +69,6 @@ export function EditMcpPanel({
 	const {
 		control,
 		handleSubmit,
-		watch,
 		formState: { submitCount, isSubmitting },
 	} = useForm<EditMcpFormValues>({
 		mode: "onSubmit",
@@ -104,9 +103,9 @@ export function EditMcpPanel({
 		},
 	});
 
-	const transportType = watch("transportType");
-	const envVars = watch("envVars");
-	const httpHeaders = watch("httpHeaders");
+	const transportType = useWatch({ control, name: "transportType" });
+	const envVars = useWatch({ control, name: "envVars" });
+	const httpHeaders = useWatch({ control, name: "httpHeaders" });
 	const urlPlaceholder =
 		transportType === "sse"
 			? "http://localhost:3000/sse"
