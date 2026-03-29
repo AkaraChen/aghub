@@ -3,12 +3,14 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { listen } from "@tauri-apps/api/event";
 import { NuqsAdapter } from "nuqs/adapters/react";
 import { Suspense, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useKeyBindings } from "rooks";
 import { Route, Router, Switch, useLocation } from "wouter";
 import { OnboardingController } from "./components/onboarding-controller";
 import { Redirect } from "./components/redirect";
 import { ErrorBoundary } from "./components/ui/error-boundary";
 import { MainLayout } from "./layouts/main-layout";
+import { setupAppMenu } from "./lib/menu";
 import { initStore } from "./lib/store";
 import ProjectDetailPage from "./pages/project/detail";
 import SettingsPage from "./pages/settings";
@@ -49,6 +51,11 @@ function SkillsPageSkeleton() {
 function App() {
 	const [isStoreReady, setIsStoreReady] = useState(false);
 	const [, setLocation] = useLocation();
+	const { t, i18n } = useTranslation();
+
+	useEffect(() => {
+		setupAppMenu(t);
+	}, [t, i18n.language]);
 
 	useEffect(() => {
 		initStore()
