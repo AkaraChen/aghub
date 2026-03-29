@@ -6,11 +6,11 @@ default: build
 
 # Build the CLI binary (agentctl)
 build:
-    cargo build --release -p aghub
+    cargo build --release -p aghub-cli
 
 # Build for development
 dev:
-    cargo build -p aghub
+    cargo build -p aghub-cli
 
 # Run all tests
 test:
@@ -47,7 +47,7 @@ help: dev
 
 # Run with cargo (pass args: just start -- --arg)
 start *args:
-    cargo run -p aghub -- {{args}}
+    cargo run -p aghub-cli -- {{args}}
 
 desktop:
     cd ./crates/desktop && nr start

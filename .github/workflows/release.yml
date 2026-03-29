@@ -122,7 +122,8 @@ jobs:
                   releaseDraft: false
                   prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
                   args: --target ${{ matrix.target }}
-                  updaterJson: true
+                  includeUpdaterJson: true
+                  projectPath: crates/desktop
 
     build-cli:
         name: Build CLI (${{ matrix.target }})
@@ -169,7 +170,7 @@ jobs:
                   fi
 
             - name: Build CLI
-              run: cargo build --release -p aghub --target ${{ matrix.target }}
+              run: cargo build --release -p aghub-cli --target ${{ matrix.target }}
 
             - name: Package CLI (Unix)
               if: matrix.os != 'windows-latest'
