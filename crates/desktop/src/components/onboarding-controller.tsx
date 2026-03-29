@@ -2,9 +2,8 @@ import {
 	BookOpenIcon,
 	FolderIcon,
 	ServerIcon,
-	SquaresPlusIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Card } from "@heroui/react";
+import { Button, Modal } from "@heroui/react";
 import { type Driver, type DriveStep, driver } from "driver.js";
 import "driver.js/dist/driver.css";
 import {
@@ -20,11 +19,33 @@ import { useLocation } from "wouter";
 import { useProjects } from "../hooks/use-projects";
 import { ONBOARDING_EVENT, type OnboardingCommand } from "../lib/onboarding";
 import { getOnboardingProgress, updateOnboardingProgress } from "../lib/store";
+import { cn } from "../lib/utils";
 
-type OverlayMode = "welcome" | "project-next-step" | null;
+type OverlayMode = "welcome" | null;
 
 const TOUR_CLASS = "aghub-tour-popover";
 const TOUR_WAIT_MS = 5000;
+
+const WIZARD_STEPS = [
+	{
+		id: "mcp",
+		icon: <ServerIcon className="size-5" />,
+		titleKey: "onboardingStepMcpTitle",
+		descriptionKey: "onboardingStepMcpDescription",
+	},
+	{
+		id: "skills",
+		icon: <BookOpenIcon className="size-5" />,
+		titleKey: "onboardingStepSkillsTitle",
+		descriptionKey: "onboardingStepSkillsDescription",
+	},
+	{
+		id: "projects",
+		icon: <FolderIcon className="size-5" />,
+		titleKey: "onboardingStepProjectsTitle",
+		descriptionKey: "onboardingStepProjectsDescription",
+	},
+] as const;
 
 function waitForElement(selector: string, timeoutMs = TOUR_WAIT_MS) {
 	return new Promise<HTMLElement | null>((resolve) => {
@@ -55,6 +76,7 @@ export function OnboardingController() {
 	const { data: projects = [] } = useProjects();
 	const [isReady, setIsReady] = useState(false);
 	const [overlayMode, setOverlayMode] = useState<OverlayMode>(null);
+	const [currentStep, setCurrentStep] = useState(0);
 	const [pendingProjectTour, setPendingProjectTour] = useState(false);
 	const activeDriverRef = useRef<Driver | null>(null);
 	const previousProjectIdsRef = useRef<string[]>([]);
@@ -87,7 +109,7 @@ export function OnboardingController() {
 	const startProjectWorkflowTour = async (projectId?: string) => {
 		const targetProjectId = projectId ?? projects[0]?.id;
 		if (!targetProjectId) {
-			setOverlayMode("project-next-step");
+			void startProjectSetupGuide();
 			return;
 		}
 
@@ -274,7 +296,7 @@ export function OnboardingController() {
 				return;
 			}
 
-			setOverlayMode("project-next-step");
+			void startProjectSetupGuide();
 		};
 
 		const steps: DriveStep[] = [
@@ -297,46 +319,10 @@ export function OnboardingController() {
 				},
 			},
 			{
-				element: '[data-tour="mcp-add"]',
-				popover: {
-					title: t("onboardingMcpActionTitle"),
-					description: t("onboardingMcpActionDescription"),
-					side: "bottom",
-					align: "end",
-				},
-			},
-			{
 				element: '[data-tour="nav-skills"]',
 				popover: {
 					title: t("onboardingSkillsTitle"),
 					description: t("onboardingSkillsDescription"),
-					side: "right",
-					align: "center",
-				},
-			},
-			{
-				element: '[data-tour="nav-market"]',
-				popover: {
-					title: t("onboardingMarketTitle"),
-					description: t("onboardingMarketDescription"),
-					side: "right",
-					align: "center",
-				},
-			},
-			{
-				element: '[data-tour="project-section"]',
-				popover: {
-					title: t("onboardingProjectsTitle"),
-					description: t("onboardingProjectsDescription"),
-					side: "right",
-					align: "start",
-				},
-			},
-			{
-				element: '[data-tour="project-add"]',
-				popover: {
-					title: t("onboardingProjectAddShortcutTitle"),
-					description: t("onboardingProjectAddShortcutDescription"),
 					side: "right",
 					align: "center",
 				},
@@ -387,6 +373,7 @@ export function OnboardingController() {
 
 	const dismissWelcome = async () => {
 		setOverlayMode(null);
+		setCurrentStep(0);
 		await saveProgress({
 			hasSeenWelcome: true,
 		});
@@ -399,6 +386,7 @@ export function OnboardingController() {
 	const handleCommand = useEffectEvent((command: OnboardingCommand) => {
 		if (command.type === "show-welcome") {
 			destroyActiveDriver();
+			setCurrentStep(0);
 			setOverlayMode("welcome");
 			return;
 		}
@@ -467,288 +455,149 @@ export function OnboardingController() {
 	}
 
 	return (
-		<>
-			{overlayMode === "welcome" && (
-				<div
-					className="
-						fixed inset-0 z-50 flex items-start justify-center bg-background/76
-						p-6 backdrop-blur-sm
-					"
-				>
-					<Card
-						className="
-							mt-12 w-full max-w-4xl border border-border bg-surface/96
-							shadow-2xl shadow-foreground/6
-						"
-					>
-						<Card.Content className="space-y-6 p-6">
-							<div
-								className="
-									grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.8fr)]
-								"
-							>
-								<div className="space-y-5">
-									<div className="space-y-3">
-										<p
-											className="
-												text-[11px] font-semibold tracking-[0.18em]
-												text-muted uppercase
-											"
+		<Modal.Backdrop
+			isOpen={overlayMode === "welcome"}
+			onOpenChange={(isOpen) => {
+				if (!isOpen) {
+					void dismissWelcome();
+				}
+			}}
+		>
+			<Modal.Container>
+				<Modal.Dialog className="w-[calc(100vw-3rem)] max-w-2xl">
+					<Modal.CloseTrigger />
+					<Modal.Header>
+						<div className="space-y-1">
+							<Modal.Heading>
+								{t("onboardingWizardTitle")}
+							</Modal.Heading>
+							<p className="text-sm text-muted">
+								{t("onboardingWizardSubtitle")}
+							</p>
+						</div>
+					</Modal.Header>
+
+					<Modal.Body className="space-y-5 px-6 pb-2 pt-0">
+						{/* Two-column layout */}
+						<div className="grid gap-5 sm:grid-cols-2">
+							{/* Left: Feature list */}
+							<div className="flex flex-col gap-1.5">
+								{WIZARD_STEPS.map((step, index) => (
+									<button
+										key={step.id}
+										type="button"
+										className={cn(
+											"flex gap-3 rounded-xl p-3 text-left transition-colors",
+											index === currentStep
+												? "bg-surface-secondary"
+												: "bg-transparent hover:bg-surface-secondary/30",
+										)}
+										onClick={() => setCurrentStep(index)}
+									>
+										<div
+											className={cn(
+												"flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors",
+												index === currentStep
+													? "bg-foreground text-background"
+													: "bg-surface/40 text-muted/30",
+											)}
 										>
-											{t("onboardingEyebrow")}
-										</p>
-										<div className="space-y-2">
-											<h2
-												className="
-													text-2xl font-semibold tracking-tight
-													text-foreground
-												"
+											{step.icon}
+										</div>
+										<div className="min-w-0 space-y-1">
+											<p
+												className={cn(
+													"text-sm font-semibold transition-colors",
+													index === currentStep
+														? "text-foreground"
+														: "text-muted/40",
+												)}
 											>
-												{t("onboardingWelcomeTitle")}
-											</h2>
-											<p className="max-w-2xl text-sm leading-6 text-muted">
-												{t(
-													"onboardingWelcomeDescription",
-												)}
+												{t(step.titleKey)}
 											</p>
+											{index === currentStep && (
+												<p className="text-xs leading-5 text-muted">
+													{t(step.descriptionKey)}
+												</p>
+											)}
 										</div>
-									</div>
-
-									<div className="grid gap-3 sm:grid-cols-3">
-										<OnboardingValueCard
-											icon={
-												<ServerIcon className="size-4" />
-											}
-											title={t(
-												"onboardingValueGlobalTitle",
-											)}
-											description={t(
-												"onboardingValueGlobalDescription",
-											)}
-										/>
-										<OnboardingValueCard
-											icon={
-												<BookOpenIcon className="size-4" />
-											}
-											title={t(
-												"onboardingValueSkillsTitle",
-											)}
-											description={t(
-												"onboardingValueSkillsDescription",
-											)}
-										/>
-										<OnboardingValueCard
-											icon={
-												<FolderIcon className="size-4" />
-											}
-											title={t(
-												"onboardingValueProjectTitle",
-											)}
-											description={t(
-												"onboardingValueProjectDescription",
-											)}
-										/>
-									</div>
-								</div>
-
-								<div
-									className="
-										rounded-2xl border border-border bg-surface-secondary/80
-										p-4
-									"
-								>
-									<div className="space-y-4">
-										<div className="space-y-1.5">
-											<h3 className="text-sm font-semibold text-foreground">
-												{t("onboardingFlowTitle")}
-											</h3>
-											<p className="text-xs leading-5 text-muted">
-												{t("onboardingFlowDescription")}
-											</p>
-										</div>
-
-										<div className="space-y-3">
-											<OnboardingFlowStep
-												index="01"
-												title={t(
-													"onboardingFlowStepOneTitle",
-												)}
-												description={t(
-													"onboardingFlowStepOneDescription",
-												)}
-											/>
-											<OnboardingFlowStep
-												index="02"
-												title={t(
-													"onboardingFlowStepTwoTitle",
-												)}
-												description={t(
-													"onboardingFlowStepTwoDescription",
-												)}
-											/>
-											<OnboardingFlowStep
-												index="03"
-												title={t(
-													"onboardingFlowStepThreeTitle",
-												)}
-												description={t(
-													"onboardingFlowStepThreeDescription",
-												)}
-											/>
-										</div>
-									</div>
-								</div>
+									</button>
+								))}
 							</div>
 
-							<div
-								className="
-									flex flex-col gap-4 border-t border-border pt-5
-									sm:flex-row sm:items-center sm:justify-between
-								"
+							{/* Right: Illustration */}
+							<WizardIllustration
+								stepId={WIZARD_STEPS[currentStep].id}
+								icon={WIZARD_STEPS[currentStep].icon}
+							/>
+						</div>
+					</Modal.Body>
+
+					<Modal.Footer>
+						<Button
+							variant="outline"
+							className="flex-1"
+							isDisabled={currentStep === 0}
+							onPress={() =>
+								setCurrentStep((s) => Math.max(0, s - 1))
+							}
+						>
+							{t("onboardingBack")}
+						</Button>
+
+						{currentStep < WIZARD_STEPS.length - 1 ? (
+							<Button
+								variant="primary"
+								className="flex-1"
+								onPress={() =>
+									setCurrentStep((s) => s + 1)
+								}
 							>
-								<div className="space-y-1">
-									<p className="text-sm font-medium text-foreground">
-										{t("onboardingTimeEstimate")}
-									</p>
-									<p className="text-xs text-muted">
-										{t("onboardingOptionalHint")}
-									</p>
-								</div>
-
-								<div className="flex flex-wrap justify-end gap-2">
-									<Button
-										variant="tertiary"
-										onPress={() => {
-											void dismissWelcome();
-										}}
-									>
-										{t("onboardingSkip")}
-									</Button>
-									<Button
-										variant="secondary"
-										onPress={() => {
-											void dismissWelcome();
-											void startProjectSetupGuide();
-										}}
-									>
-										{projects.length > 0
-											? t("onboardingOpenProject")
-											: t("onboardingAddProject")}
-									</Button>
-									<Button
-										variant="primary"
-										onPress={() => {
-											void dismissWelcome();
-											void startProductTour();
-										}}
-									>
-										{t("onboardingStart")}
-									</Button>
-								</div>
-							</div>
-						</Card.Content>
-					</Card>
-				</div>
-			)}
-
-			{overlayMode === "project-next-step" && (
-				<div className="fixed bottom-6 right-6 z-40 w-full max-w-sm">
-					<Card className="border border-border bg-surface/96">
-						<Card.Content className="space-y-4 p-4">
-							<div className="flex items-start gap-3">
-								<div
-									className="
-										mt-0.5 flex size-8 shrink-0 items-center justify-center
-										rounded-xl bg-surface-secondary text-foreground
-									"
-								>
-									<SquaresPlusIcon className="size-4" />
-								</div>
-								<div className="space-y-1">
-									<h3 className="text-sm font-semibold text-foreground">
-										{t("onboardingProjectNextTitle")}
-									</h3>
-									<p className="text-xs leading-5 text-muted">
-										{t("onboardingProjectNextDescription")}
-									</p>
-								</div>
-							</div>
-
-							<div className="flex justify-end gap-2">
-								<Button
-									variant="tertiary"
-									onPress={() => setOverlayMode(null)}
-								>
-									{t("onboardingLater")}
-								</Button>
-								<Button
-									variant="primary"
-									onPress={() => {
-										void startProjectSetupGuide();
-									}}
-								>
-									{t("onboardingShowMe")}
-								</Button>
-							</div>
-						</Card.Content>
-					</Card>
-				</div>
-			)}
-		</>
+								{t("onboardingNext")}
+							</Button>
+						) : (
+							<Button
+								variant="primary"
+								className="flex-1"
+								onPress={() => {
+									void dismissWelcome();
+									void startProductTour();
+								}}
+							>
+								{t("onboardingGetStarted")}
+							</Button>
+						)}
+					</Modal.Footer>
+				</Modal.Dialog>
+			</Modal.Container>
+		</Modal.Backdrop>
 	);
 }
 
-function OnboardingValueCard({
+function WizardIllustration({
+	stepId,
 	icon,
-	title,
-	description,
 }: {
+	stepId: string;
 	icon: ReactNode;
-	title: string;
-	description: string;
 }) {
 	return (
-		<div
-			className="
-				rounded-2xl border border-border bg-surface-secondary/70 p-4
-				shadow-sm shadow-foreground/3
-			"
-		>
-			<div className="mb-3 flex size-8 items-center justify-center rounded-xl bg-surface text-foreground">
+		<div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-border bg-surface-secondary/60 p-8">
+			<div className="flex size-16 items-center justify-center rounded-2xl bg-surface text-foreground shadow-sm shadow-foreground/5">
 				{icon}
 			</div>
-			<div className="space-y-1">
-				<h3 className="text-sm font-semibold text-foreground">
-					{title}
-				</h3>
-				<p className="text-xs leading-5 text-muted">{description}</p>
-			</div>
-		</div>
-	);
-}
-
-function OnboardingFlowStep({
-	index,
-	title,
-	description,
-}: {
-	index: string;
-	title: string;
-	description: string;
-}) {
-	return (
-		<div className="flex gap-3">
-			<div
-				className="
-					flex h-7 w-9 shrink-0 items-center justify-center rounded-full
-					bg-surface text-[11px] font-semibold tracking-wide text-muted
-				"
-			>
-				{index}
-			</div>
-			<div className="space-y-1">
-				<p className="text-sm font-medium text-foreground">{title}</p>
-				<p className="text-xs leading-5 text-muted">{description}</p>
+			<div className="flex gap-2">
+				{[0, 1, 2].map((i) => (
+					<div
+						key={i}
+						className={cn(
+							"rounded-lg bg-surface transition-all",
+							stepId === "mcp" && "h-8 w-14",
+							stepId === "skills" && "h-10 w-12",
+							stepId === "projects" && "h-6 w-16",
+						)}
+					/>
+				))}
 			</div>
 		</div>
 	);
