@@ -7,9 +7,12 @@ import {
 } from "@tauri-apps/api/menu";
 import type { TFunction } from "i18next";
 
+let activeAppMenu: Menu | null = null;
+
 export async function setupAppMenu(t: TFunction) {
 	try {
 		const aboutMenuItem = await MenuItem.new({
+			id: "about",
 			text: t("menu.about"),
 			action: () => {
 				emit("navigate", "/settings?tab=application");
@@ -17,6 +20,7 @@ export async function setupAppMenu(t: TFunction) {
 		});
 
 		const settingsMenuItem = await MenuItem.new({
+			id: "settings",
 			text: t("menu.settings"),
 			accelerator: "CmdOrControl+,",
 			action: () => {
@@ -57,18 +61,21 @@ export async function setupAppMenu(t: TFunction) {
 		});
 
 		const discoverSkillsMenuItem = await MenuItem.new({
+			id: "discover-skills",
 			text: t("menu.discoverSkills"),
 			accelerator: "CmdOrControl+D",
 			action: () => emit("navigate", "/skills-sh"),
 		});
 
 		const manageMcpMenuItem = await MenuItem.new({
+			id: "manage-mcp",
 			text: t("menu.manageMcp"),
 			accelerator: "CmdOrControl+M",
 			action: () => emit("navigate", "/mcp"),
 		});
 
 		const newAgentMenuItem = await MenuItem.new({
+			id: "new-agent",
 			text: t("menu.newAgent"),
 			accelerator: "CmdOrControl+N",
 			action: () => emit("navigate", "/settings/custom-agents"),
@@ -85,10 +92,10 @@ export async function setupAppMenu(t: TFunction) {
 		});
 
 		const searchMenuItem = await MenuItem.new({
+			id: "search",
 			text: t("menu.search"),
 			accelerator: "CmdOrControl+F",
 			action: () => {
-				// Focus search or emit event to components
 				emit("window-search-requested");
 			},
 		});
@@ -127,6 +134,7 @@ export async function setupAppMenu(t: TFunction) {
 		});
 
 		const reloadMenuItem = await MenuItem.new({
+			id: "reload",
 			text: t("menu.reload"),
 			accelerator: "CmdOrControl+R",
 			action: () => window.location.reload(),
@@ -152,12 +160,13 @@ export async function setupAppMenu(t: TFunction) {
 			],
 		});
 
-		const menu = await Menu.new({
+		activeAppMenu = await Menu.new({
 			items: [appSubmenu, agentSubmenu, editSubmenu, controlSubmenu],
 		});
 
-		await menu.setAsAppMenu();
+		await activeAppMenu.setAsAppMenu();
 	} catch (e) {
 		console.error("Failed to set app menu", e);
 	}
 }
+
