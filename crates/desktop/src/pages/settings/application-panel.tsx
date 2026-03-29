@@ -5,6 +5,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { useTranslation } from "react-i18next";
+import { dispatchOnboardingCommand } from "../../lib/onboarding";
 
 export default function ApplicationPanel() {
 	const { t } = useTranslation();
@@ -177,6 +178,54 @@ export default function ApplicationPanel() {
 									{t("downloadAndInstall")}
 								</Button>
 							)}
+						</div>
+					</div>
+
+					<div className="flex items-start justify-between gap-4">
+						<div className="space-y-0.5">
+							<span className="text-sm font-medium text-(--foreground)">
+								{t("onboarding")}
+							</span>
+							<span className="block max-w-md text-xs text-muted">
+								{t("onboardingDescription")}
+							</span>
+						</div>
+						<div className="flex flex-wrap justify-end gap-2">
+							<Button
+								variant="secondary"
+								size="sm"
+								onPress={() =>
+									dispatchOnboardingCommand({
+										type: "show-welcome",
+									})
+								}
+							>
+								{t("showWelcome")}
+							</Button>
+							<Button
+								variant="secondary"
+								size="sm"
+								onPress={() =>
+									dispatchOnboardingCommand({
+										type: "start-tour",
+										tour: "product-map",
+									})
+								}
+							>
+								{t("replayAppTour")}
+							</Button>
+							<Button
+								variant="secondary"
+								size="sm"
+								onPress={() =>
+									dispatchOnboardingCommand({
+										type: "start-tour",
+										tour: "project-workflow",
+									})
+								}
+							>
+								{t("replayProjectTour")}
+							</Button>
 						</div>
 					</div>
 				</Card.Content>

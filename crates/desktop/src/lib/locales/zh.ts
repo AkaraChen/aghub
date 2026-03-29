@@ -19,6 +19,10 @@ export default {
 	all: "全部",
 	enabled: "已启用",
 	disabled: "已禁用",
+	onboarding: "新手引导",
+	showWelcome: "显示欢迎页",
+	replayAppTour: "重播应用导览",
+	replayProjectTour: "重播项目导览",
 
 	// Settings
 	appearance: "外观",
@@ -57,6 +61,89 @@ export default {
 	downloadAndInstall: "下载并安装",
 	updateInstalledSuccess: "更新已安装成功",
 	restartToUpdate: "重启更新",
+	onboardingDescription: "随时重新打开欢迎页或任一引导流程。",
+
+	// Onboarding
+	onboardingEyebrow: "首次打开",
+	onboardingWelcomeTitle: "先看清全局，再动手修改",
+	onboardingWelcomeDescription:
+		"Aghub 用来管理 Agent 配置、MCP 服务和技能，同时不会隐藏底层文件。这两个简短引导会先告诉你该去哪里，再带你完成一次真实的项目级流程。",
+	onboardingValueGlobalTitle: "全局 MCP 管理",
+	onboardingValueGlobalDescription: "查看所有 Agent 共享的 MCP 服务。",
+	onboardingValueSkillsTitle: "本地技能与技能市场",
+	onboardingValueSkillsDescription:
+		"检查已安装技能，或从 skills.sh 拉取新的能力。",
+	onboardingValueProjectTitle: "项目级隔离配置",
+	onboardingValueProjectDescription:
+		"让仓库专属的 MCP 和技能只作用在正确的代码库里。",
+	onboardingFlowTitle: "引导会带你完成什么",
+	onboardingFlowDescription:
+		"先用一段很短的全局导览建立方向感，再在接入仓库后完成一次项目工作流演示。",
+	onboardingFlowStepOneTitle: "认识应用地图",
+	onboardingFlowStepOneDescription:
+		"知道 MCP、技能、市场、项目和设置分别应该去哪个页面处理。",
+	onboardingFlowStepTwoTitle: "接入或打开一个项目",
+	onboardingFlowStepTwoDescription:
+		"把仓库接进来后，Aghub 就能在项目作用域管理 MCP 和技能，而不会误改其他配置。",
+	onboardingFlowStepThreeTitle: "走完项目工作流",
+	onboardingFlowStepThreeDescription:
+		"在真实页面里搜索、添加资源、查看详情，并体验批量操作。",
+	onboardingTimeEstimate: "大约 90 秒，可随时跳过。",
+	onboardingOptionalHint: "之后也可以在「设置 -> 关于」里重新打开。",
+	onboardingSkip: "暂时跳过",
+	onboardingAddProject: "添加项目",
+	onboardingOpenProject: "打开项目",
+	onboardingStart: "开始引导",
+	onboardingLater: "稍后",
+	onboardingShowMe: "带我过去",
+	onboardingContinue: "继续",
+	onboardingFinish: "开始使用",
+	onboardingProgressText: "第 {{current}} 步，共 {{total}} 步",
+	onboardingSidebarTitle: "所有入口都从侧边栏开始",
+	onboardingSidebarDescription:
+		"左侧导航负责在全局配置、技能市场、项目级工作区和应用设置之间切换。",
+	onboardingMcpTitle: "全局 MCP 服务",
+	onboardingMcpDescription:
+		"这里管理的是共享型 MCP 服务定义，你可以把它们分配给一到多个 Agent。",
+	onboardingMcpActionTitle: "新增或导入共享服务",
+	onboardingMcpActionDescription:
+		"可以手动创建，也可以在已有配置片段时直接导入 JSON。",
+	onboardingSkillsTitle: "已安装技能",
+	onboardingSkillsDescription:
+		"在这里检查本地技能内容，并管理当前 Agent 已经具备的能力。",
+	onboardingMarketTitle: "skills.sh 市场",
+	onboardingMarketDescription:
+		"当你需要新能力时，可以直接搜索社区技能并在应用内完成安装。",
+	onboardingProjectsTitle: "项目让改动保持隔离",
+	onboardingProjectsDescription:
+		"项目页让你只为单个仓库管理 MCP 和技能，而不是把改动扩散到所有 Agent 配置。",
+	onboardingProjectAddShortcutTitle: "从这里接入仓库",
+	onboardingProjectAddShortcutDescription:
+		"当你想使用项目专属的 MCP 和技能时，从这里选择仓库根目录会是最快获得价值的方式。",
+	onboardingSettingsTitle: "设置入口始终在这里",
+	onboardingSettingsDescription:
+		"外观、Agent 可用性、编辑器集成，以及这些引导控制都集中在这里。",
+	onboardingProjectNextTitle: "下一步：接入一个项目",
+	onboardingProjectNextDescription:
+		"第二段工作流导览会在项目页面内进行。添加或打开一个仓库后，我会继续带你走完整个 MCP 与技能流程。",
+	onboardingProjectSetupTitle: "添加你的第一个项目",
+	onboardingProjectSetupDescription:
+		"从这里选择仓库根目录。项目一出现，我就会自动打开它并继续项目工作流导览。",
+	onboardingProjectResourcesTitle: "项目资源都在这里",
+	onboardingProjectResourcesDescription:
+		"这个列表展示当前项目作用域下的 MCP 服务和技能，方便你把实验严格限制在单个仓库内。",
+	onboardingProjectSearchTitle: "先找到需要的资源",
+	onboardingProjectSearchDescription:
+		"搜索会同时过滤 MCP 和技能。当一个项目积累了多种集成后，这会非常关键。",
+	onboardingProjectAddTitle: "只添加这个仓库真正需要的东西",
+	onboardingProjectAddDescription:
+		"用这个菜单可以直接把 MCP 服务或技能创建/导入到当前项目里。",
+	onboardingProjectDetailTitle: "带着上下文查看与编辑",
+	onboardingProjectDetailDescription:
+		"右侧面板会跟随选择变化。打开一个资源后，你可以检查合并后的配置、编辑细节，或确认实际会发生什么改动。",
+	onboardingProjectBulkTitle: "批量清理已经内建好了",
+	onboardingProjectBulkDescription:
+		"当你需要一次删除多个项目资源时，打开多选模式会比逐个清理高效得多。",
 
 	// Agent Management
 	agentManagementDescription:

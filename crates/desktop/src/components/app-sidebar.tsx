@@ -46,6 +46,7 @@ export function AppSidebar() {
 	return (
 		<Surface
 			variant="secondary"
+			data-tour="sidebar"
 			className="flex w-60 shrink-0 flex-col border-r border-border p-3"
 		>
 			<aside className="flex h-full flex-col">
@@ -58,6 +59,13 @@ export function AppSidebar() {
 							<Link
 								key={item.href}
 								href={item.href}
+								data-tour={
+									item.href === "/mcp"
+										? "nav-mcp"
+										: item.href === "/skills"
+											? "nav-skills"
+											: "nav-market"
+								}
 								className={cn(
 									`
            flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm
@@ -77,12 +85,14 @@ export function AppSidebar() {
 						);
 					})}
 				</nav>
-				{/* Project List */}
-				<ProjectList />
+				<div data-tour="project-section">
+					<ProjectList />
+				</div>
 
 				<nav className="mt-auto">
 					<Link
 						href="/settings"
+						data-tour="nav-settings"
 						className={cn(
 							`
          flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm

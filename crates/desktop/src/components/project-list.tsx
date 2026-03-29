@@ -98,6 +98,7 @@ export function ProjectList() {
         flex size-5 min-w-0 items-center justify-center rounded-sm text-muted
         hover:bg-surface-secondary hover:text-foreground
       "
+						data-tour="project-add"
 						aria-label={t("addProject")}
 						onClick={(e) => {
 							e.stopPropagation();

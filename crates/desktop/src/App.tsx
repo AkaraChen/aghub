@@ -5,6 +5,7 @@ import { NuqsAdapter } from "nuqs/adapters/react";
 import { Suspense, useEffect, useState } from "react";
 import { useKeyBindings } from "rooks";
 import { Route, Router, Switch, useLocation } from "wouter";
+import { OnboardingController } from "./components/onboarding-controller";
 import { Redirect } from "./components/redirect";
 import { ErrorBoundary } from "./components/ui/error-boundary";
 import { MainLayout } from "./layouts/main-layout";
@@ -91,6 +92,7 @@ function App() {
 					<AgentAvailabilityProvider>
 						<NuqsAdapter>
 							<Router>
+								<OnboardingController />
 								<Switch>
 									<Route path="/">
 										<Redirect to="/mcp" />
