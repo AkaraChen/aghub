@@ -27,7 +27,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import * as pathe from "pathe";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { siGithub } from "simple-icons";
 import { useLocation } from "wouter";
@@ -648,6 +648,11 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 				projectPath={projectPath}
 			/>
 			<DeleteSkillLocationDialog
+				key={
+					locationToDelete
+						? `${skill.name}:${locationToDelete.key}`
+						: "delete-skill-location-dialog"
+				}
 				item={locationToDelete}
 				isOpen={locationToDelete !== null}
 				onClose={() => setLocationToDelete(null)}
@@ -839,15 +844,7 @@ function DeleteSkillLocationDialog({
 	const queryClient = useQueryClient();
 	const [selectedInstallationId, setSelectedInstallationId] = useState<
 		string | null
-	>(null);
-
-	useEffect(() => {
-		if (!isOpen) {
-			return;
-		}
-
-		setSelectedInstallationId(item?.installations[0]?.id ?? null);
-	}, [isOpen, item]);
+	>(() => item?.installations[0]?.id ?? null);
 
 	const selectedInstallation = useMemo(() => {
 		if (!item) {
