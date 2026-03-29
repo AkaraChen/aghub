@@ -143,154 +143,171 @@ export function UnifiedResourceList({
 	};
 
 	return (
-		<div className="relative flex w-80 shrink-0 flex-col border-r border-border">
-			<ListSearchHeader
-				searchValue={searchQuery}
-				onSearchChange={onSearchChange}
-				placeholder={t("searchResources")}
-				ariaLabel={t("searchResources")}
-			>
-				{onMultiSelectModeChange && (
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<div
-								role="button"
-								tabIndex={0}
-								className={cn(
-									"flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-default hover:text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40",
-									isMultiSelectMode &&
-										"bg-accent/10 text-accent",
-								)}
-								aria-label={
-									isMultiSelectMode
-										? t("doneSelecting")
-										: t("multiSelect")
-								}
-								onClick={() => {
-									onMultiSelectModeChange(!isMultiSelectMode);
-								}}
-								onKeyDown={(event) => {
-									if (
-										event.key !== "Enter" &&
-										event.key !== " "
-									) {
-										return;
+		<div
+			data-tour="project-resources"
+			className="relative flex w-80 shrink-0 flex-col border-r border-border"
+		>
+			<div data-tour="project-search">
+				<ListSearchHeader
+					searchValue={searchQuery}
+					onSearchChange={onSearchChange}
+					placeholder={t("searchResources")}
+					ariaLabel={t("searchResources")}
+				>
+					{onMultiSelectModeChange && (
+						<Tooltip delay={0}>
+							<Tooltip.Trigger>
+								<div
+									role="button"
+									tabIndex={0}
+									data-tour="project-multi-select"
+									className={cn(
+										"flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-default hover:text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40",
+										isMultiSelectMode &&
+											"bg-accent/10 text-accent",
+									)}
+									aria-label={
+										isMultiSelectMode
+											? t("doneSelecting")
+											: t("multiSelect")
 									}
-									event.preventDefault();
-									onMultiSelectModeChange(!isMultiSelectMode);
+									onClick={() => {
+										onMultiSelectModeChange(
+											!isMultiSelectMode,
+										);
+									}}
+									onKeyDown={(event) => {
+										if (
+											event.key !== "Enter" &&
+											event.key !== " "
+										) {
+											return;
+										}
+										event.preventDefault();
+										onMultiSelectModeChange(
+											!isMultiSelectMode,
+										);
+									}}
+								>
+									{isMultiSelectMode ? (
+										<CheckCircleIcon className="size-4" />
+									) : (
+										<RectangleStackIcon className="size-4" />
+									)}
+								</div>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								{isMultiSelectMode
+									? t("doneSelecting")
+									: t("multiSelect")}
+							</Tooltip.Content>
+						</Tooltip>
+					)}
+					<Dropdown>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							data-tour="project-add-resource"
+							className="shrink-0"
+							aria-label={t("add")}
+						>
+							<PlusIcon className="size-4" />
+						</Button>
+						<Dropdown.Popover placement="bottom end">
+							<Dropdown.Menu
+								onAction={(key) => {
+									if (key === "mcp-manual")
+										onCreateMcp("manual");
+									else if (key === "mcp-import")
+										onCreateMcp("import");
+									else if (key === "skill-local")
+										onCreateSkill("local");
+									else if (key === "skill-import")
+										onCreateSkill("import");
 								}}
 							>
-								{isMultiSelectMode ? (
-									<CheckCircleIcon className="size-4" />
-								) : (
-									<RectangleStackIcon className="size-4" />
-								)}
-							</div>
-						</Tooltip.Trigger>
-						<Tooltip.Content>
-							{isMultiSelectMode
-								? t("doneSelecting")
-								: t("multiSelect")}
-						</Tooltip.Content>
-					</Tooltip>
-				)}
-				<Dropdown>
+								<Dropdown.Section>
+									<Header>
+										<div className="flex items-center gap-2 px-2 py-1.5">
+											<ServerIcon className="size-4 text-muted" />
+											<Label className="text-xs font-medium text-muted uppercase tracking-wider">
+												{t("mcpServers")}
+											</Label>
+										</div>
+									</Header>
+									<Dropdown.Item
+										id="mcp-manual"
+										textValue={t("manualCreation")}
+									>
+										<div className="flex items-center gap-2 pl-6">
+											<PlusIcon className="size-4" />
+											<span>{t("manualCreation")}</span>
+										</div>
+									</Dropdown.Item>
+									<Dropdown.Item
+										id="mcp-import"
+										textValue={t("importFromJson")}
+									>
+										<div className="flex items-center gap-2 pl-6">
+											<ArrowDownTrayIcon className="size-4" />
+											<span>{t("importFromJson")}</span>
+										</div>
+									</Dropdown.Item>
+								</Dropdown.Section>
+
+								<Separator />
+
+								<Dropdown.Section>
+									<Header>
+										<div className="flex items-center gap-2 px-2 py-1.5">
+											<BookOpenIcon className="size-4 text-muted" />
+											<Label className="text-xs font-medium text-muted uppercase tracking-wider">
+												{t("skills")}
+											</Label>
+										</div>
+									</Header>
+									<Dropdown.Item
+										id="skill-local"
+										textValue={t("createCustomSkill")}
+									>
+										<div className="flex items-center gap-2 pl-6">
+											<CommandLineIcon className="size-4" />
+											<span>
+												{t("createCustomSkill")}
+											</span>
+										</div>
+									</Dropdown.Item>
+									<Dropdown.Item
+										id="skill-import"
+										textValue={t("importFromFile")}
+									>
+										<div className="flex items-center gap-2 pl-6">
+											<ArrowDownTrayIcon className="size-4" />
+											<span>{t("importFromFile")}</span>
+										</div>
+									</Dropdown.Item>
+								</Dropdown.Section>
+							</Dropdown.Menu>
+						</Dropdown.Popover>
+					</Dropdown>
 					<Button
 						isIconOnly
 						variant="ghost"
 						size="sm"
 						className="shrink-0"
-						aria-label={t("add")}
+						aria-label={t("refreshResources")}
+						onPress={onRefresh}
 					>
-						<PlusIcon className="size-4" />
+						<ArrowPathIcon
+							className={cn(
+								"size-4",
+								isRefreshing && "animate-spin",
+							)}
+						/>
 					</Button>
-					<Dropdown.Popover placement="bottom end">
-						<Dropdown.Menu
-							onAction={(key) => {
-								if (key === "mcp-manual") onCreateMcp("manual");
-								else if (key === "mcp-import")
-									onCreateMcp("import");
-								else if (key === "skill-local")
-									onCreateSkill("local");
-								else if (key === "skill-import")
-									onCreateSkill("import");
-							}}
-						>
-							<Dropdown.Section>
-								<Header>
-									<div className="flex items-center gap-2 px-2 py-1.5">
-										<ServerIcon className="size-4 text-muted" />
-										<Label className="text-xs font-medium text-muted uppercase tracking-wider">
-											{t("mcpServers")}
-										</Label>
-									</div>
-								</Header>
-								<Dropdown.Item
-									id="mcp-manual"
-									textValue={t("manualCreation")}
-								>
-									<div className="flex items-center gap-2 pl-6">
-										<PlusIcon className="size-4" />
-										<span>{t("manualCreation")}</span>
-									</div>
-								</Dropdown.Item>
-								<Dropdown.Item
-									id="mcp-import"
-									textValue={t("importFromJson")}
-								>
-									<div className="flex items-center gap-2 pl-6">
-										<ArrowDownTrayIcon className="size-4" />
-										<span>{t("importFromJson")}</span>
-									</div>
-								</Dropdown.Item>
-							</Dropdown.Section>
-
-							<Separator />
-
-							<Dropdown.Section>
-								<Header>
-									<div className="flex items-center gap-2 px-2 py-1.5">
-										<BookOpenIcon className="size-4 text-muted" />
-										<Label className="text-xs font-medium text-muted uppercase tracking-wider">
-											{t("skills")}
-										</Label>
-									</div>
-								</Header>
-								<Dropdown.Item
-									id="skill-local"
-									textValue={t("createCustomSkill")}
-								>
-									<div className="flex items-center gap-2 pl-6">
-										<CommandLineIcon className="size-4" />
-										<span>{t("createCustomSkill")}</span>
-									</div>
-								</Dropdown.Item>
-								<Dropdown.Item
-									id="skill-import"
-									textValue={t("importFromFile")}
-								>
-									<div className="flex items-center gap-2 pl-6">
-										<ArrowDownTrayIcon className="size-4" />
-										<span>{t("importFromFile")}</span>
-									</div>
-								</Dropdown.Item>
-							</Dropdown.Section>
-						</Dropdown.Menu>
-					</Dropdown.Popover>
-				</Dropdown>
-				<Button
-					isIconOnly
-					variant="ghost"
-					size="sm"
-					className="shrink-0"
-					aria-label={t("refreshResources")}
-					onPress={onRefresh}
-				>
-					<ArrowPathIcon
-						className={cn("size-4", isRefreshing && "animate-spin")}
-					/>
-				</Button>
-			</ListSearchHeader>
+				</ListSearchHeader>
+			</div>
 
 			<div className="flex-1 overflow-y-auto">
 				{isLoading ? (

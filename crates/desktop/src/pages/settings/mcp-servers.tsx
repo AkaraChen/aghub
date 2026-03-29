@@ -198,6 +198,7 @@ export default function MCPServersPage() {
 							isIconOnly
 							variant="ghost"
 							size="sm"
+							data-tour="mcp-add"
 							className="shrink-0"
 							aria-label={t("addMcpServer")}
 							isDisabled={!hasMcpCapableAgents}

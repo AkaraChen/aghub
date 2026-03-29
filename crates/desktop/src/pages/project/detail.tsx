@@ -234,7 +234,10 @@ export default function ProjectDetailPage() {
 			/>
 
 			{/* Detail Panel */}
-			<div className="flex-1 overflow-hidden">
+			<div
+				data-tour="project-detail-panel"
+				className="flex-1 overflow-hidden"
+			>
 				{!panelMode && selectedMcpGroup && (
 					<McpDetail
 						group={selectedMcpGroup}

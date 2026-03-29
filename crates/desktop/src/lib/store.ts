@@ -1,7 +1,15 @@
 import { Store } from "@tauri-apps/plugin-store";
 import type { CodeEditorType } from "./api-types";
 
-const CURRENT_VERSION = 4;
+const CURRENT_VERSION = 5;
+
+export interface OnboardingProgress {
+	hasSeenWelcome: boolean;
+	completedTours: {
+		productMap: boolean;
+		projectWorkflow: boolean;
+	};
+}
 
 export interface Project {
 	id: string;
@@ -13,7 +21,31 @@ interface IntegrationPreferences {
 	codeEditor?: CodeEditorType;
 }
 
+const DEFAULT_ONBOARDING_PROGRESS: OnboardingProgress = {
+	hasSeenWelcome: false,
+	completedTours: {
+		productMap: false,
+		projectWorkflow: false,
+	},
+};
+
 let store: Store | null = null;
+
+function normalizeOnboardingProgress(
+	value: Partial<OnboardingProgress> | null | undefined,
+): OnboardingProgress {
+	return {
+		hasSeenWelcome: value?.hasSeenWelcome ?? false,
+		completedTours: {
+			productMap:
+				value?.completedTours?.productMap ??
+				DEFAULT_ONBOARDING_PROGRESS.completedTours.productMap,
+			projectWorkflow:
+				value?.completedTours?.projectWorkflow ??
+				DEFAULT_ONBOARDING_PROGRESS.completedTours.projectWorkflow,
+		},
+	};
+}
 
 async function getStore(): Promise<Store> {
 	if (!store) {
@@ -46,6 +78,11 @@ async function migrate(store: Store): Promise<void> {
 	if (version < 4) {
 		await store.set("starredSkills", []);
 		await store.set("starredMcps", []);
+	}
+
+	// Migration v4 -> v5: add onboarding progress
+	if (version < 5) {
+		await store.set("onboardingProgress", DEFAULT_ONBOARDING_PROGRESS);
 	}
 
 	await store.set("version", CURRENT_VERSION);
@@ -146,4 +183,39 @@ export async function setStarredMcps(mcps: string[]): Promise<void> {
 	const store = await getStore();
 	await store.set("starredMcps", mcps);
 	await store.save();
+}
+
+export async function getOnboardingProgress(): Promise<OnboardingProgress> {
+	const store = await getStore();
+	const progress = await store.get<OnboardingProgress>("onboardingProgress");
+
+	return normalizeOnboardingProgress(progress);
+}
+
+export async function saveOnboardingProgress(
+	progress: Partial<OnboardingProgress>,
+): Promise<OnboardingProgress> {
+	const store = await getStore();
+	const nextProgress = normalizeOnboardingProgress(progress);
+
+	await store.set("onboardingProgress", nextProgress);
+	await store.save();
+
+	return nextProgress;
+}
+
+export async function updateOnboardingProgress(updates: {
+	hasSeenWelcome?: boolean;
+	completedTours?: Partial<OnboardingProgress["completedTours"]>;
+}): Promise<OnboardingProgress> {
+	const current = await getOnboardingProgress();
+
+	return saveOnboardingProgress({
+		...current,
+		...updates,
+		completedTours: {
+			...current.completedTours,
+			...updates.completedTours,
+		},
+	});
 }

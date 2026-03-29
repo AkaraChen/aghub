@@ -7,7 +7,10 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
 			variant="secondary"
 			className="flex h-screen flex-col overflow-hidden"
 		>
-			<div data-tauri-drag-region className="h-6 shrink-0" />
+			<div
+				data-tauri-drag-region
+				className="h-8 shrink-0 border-b border-border"
+			/>
 			<div className="flex min-h-0 flex-1 overflow-hidden">
 				<AppSidebar />
 				<main className="flex-1 overflow-hidden">{children}</main>
