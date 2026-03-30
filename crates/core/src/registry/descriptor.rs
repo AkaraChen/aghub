@@ -1,5 +1,5 @@
 use crate::errors::Result;
-use crate::models::AgentConfig;
+use crate::models::{AgentConfig, ResourceScope};
 use std::path::{Path, PathBuf};
 
 /// Parse function type for agent configuration
@@ -43,11 +43,83 @@ pub struct AgentDescriptor {
 	pub skills_cli_name: Option<&'static str>,
 }
 
+impl AgentDescriptor {
+	/// Get the target skills directory for writing, based on scope
+	pub fn target_skills_dir(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+	) -> Option<PathBuf> {
+		match scope {
+			ResourceScope::GlobalOnly => self.global_skills_dir(),
+			ResourceScope::ProjectOnly | ResourceScope::Both => {
+				if let Some(root) = project_root {
+					self.project_skills_dir(root)
+				} else {
+					self.global_skills_dir()
+				}
+			}
+		}
+	}
+
+	/// Get global skills directory path
+	pub fn global_skills_dir(&self) -> Option<PathBuf> {
+		if let Some(path_fn) = self.global_skills_path {
+			Some(path_fn())
+		} else if self.capabilities.universal_skills {
+			Some(get_universal_skills_path())
+		} else {
+			None
+		}
+	}
+
+	/// Get project skills directory path relative to project root
+	pub fn project_skills_dir(&self, project_root: &Path) -> Option<PathBuf> {
+		if let Some(path_fn) = self.project_skills_path {
+			Some(path_fn(project_root))
+		} else if self.capabilities.universal_skills {
+			Some(project_root.join(".agents/skills"))
+		} else {
+			None
+		}
+	}
+
+	/// Get all skills paths for reading (may include universal path)
+	pub fn get_skills_paths(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+	) -> Vec<PathBuf> {
+		let mut paths = Vec::new();
+
+		if scope == ResourceScope::ProjectOnly || scope == ResourceScope::Both {
+			if let Some(root) = project_root {
+				if let Some(path) = self.project_skills_dir(root) {
+					paths.push(path);
+				}
+			}
+		}
+
+		if scope == ResourceScope::GlobalOnly || scope == ResourceScope::Both {
+			if let Some(path) = self.global_skills_dir() {
+				paths.push(path);
+			}
+		}
+
+		paths
+	}
+}
+
+/// Get the universal skills directory path following XDG config spec
+pub fn get_universal_skills_path() -> PathBuf {
+	std::env::var_os("XDG_CONFIG_HOME")
+		.map(PathBuf::from)
+		.or_else(|| dirs::home_dir().map(|h| h.join(".config")))
+		.unwrap_or_else(|| PathBuf::from(".config"))
+		.join("agents/skills")
+}
+
 /// MCP config strategy functions for common config formats
-///
-/// These are pre-defined function pointers that can be used directly in
-/// const DESCRIPTOR definitions. For JsonMap with custom keys, each
-/// agent defines its own wrapper functions.
 pub mod mcp_strategy {
 	use super::*;
 	use crate::format::{json_list, json_map, json_opencode, toml_format};

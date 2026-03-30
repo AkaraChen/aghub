@@ -36,6 +36,10 @@ export interface AgentInfo {
 		skills_mutable: boolean;
 		universal_skills: boolean;
 	};
+	skills_paths: {
+		project: string | null;
+		global: string | null;
+	};
 }
 
 export interface AgentAvailability {

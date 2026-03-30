@@ -6,7 +6,7 @@ use crate::{
 	registry,
 };
 use skill::sanitize::sanitize_name;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -371,33 +371,57 @@ pub fn reconcile_skill(
 	let target_scope = source.scope;
 	let target_project_root = source.project_root.clone();
 
-	for agent in added {
+	// Group agents by target directory to avoid redundant copies
+	let mut dir_to_agents: HashMap<PathBuf, Vec<AgentType>> = HashMap::new();
+	for agent in &added {
 		let target = InstallTarget {
-			agent,
+			agent: *agent,
 			scope: target_scope,
 			project_root: target_project_root.clone(),
 		};
-		let outcome = (|| -> Result<()> {
-			validate_target(&target)?;
-			let target_dir = skill_target_dir(&target)?;
-			let mut manager = build_manager(&target);
-			ensure_loaded(&mut manager)?;
-			if manager.get_skill(&source.name).is_some() {
-				return Err(ConfigError::resource_exists("skill", &skill.name));
-			}
-			let dest_root = target_dir.join(&safe_name);
-			if dest_root.exists() {
-				return Err(ConfigError::resource_exists("skill", &skill.name));
-			}
-			copy_dir_recursive(&source_root, &dest_root)
-		})();
+		if let Ok(target_dir) = skill_target_dir(&target) {
+			dir_to_agents.entry(target_dir).or_default().push(*agent);
+		}
+	}
 
-		results.push(OperationResult {
-			target,
-			action: OperationAction::Copy,
-			success: outcome.is_ok(),
-			error: outcome.err().map(|err| err.to_string()),
-		});
+	// Process each unique directory
+	for (target_dir, agents) in dir_to_agents {
+		let dest_root = target_dir.join(&safe_name);
+		let already_exists = dest_root.exists();
+
+		// Copy once per directory (if doesn't exist)
+		if !already_exists {
+			if let Err(e) = copy_dir_recursive(&source_root, &dest_root) {
+				// If copy fails, all agents in this group fail
+				for agent in agents {
+					results.push(OperationResult {
+						target: InstallTarget {
+							agent,
+							scope: target_scope,
+							project_root: target_project_root.clone(),
+						},
+						action: OperationAction::Copy,
+						success: false,
+						error: Some(e.to_string()),
+					});
+				}
+				continue;
+			}
+		}
+
+		// All agents in this group succeed (skill is auto-discovered from dir)
+		for agent in agents {
+			results.push(OperationResult {
+				target: InstallTarget {
+					agent,
+					scope: target_scope,
+					project_root: target_project_root.clone(),
+				},
+				action: OperationAction::Copy,
+				success: true,
+				error: None,
+			});
+		}
 	}
 
 	for agent in removed {

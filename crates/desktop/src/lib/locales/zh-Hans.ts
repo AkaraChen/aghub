@@ -338,6 +338,9 @@ export default {
 	installed: "已安装",
 	globalScope: "全局范围",
 	unknownError: "发生了未知错误",
+	universalSkills: "通用",
+	universalSkillsTooltip: "共享给: {{agents}}",
+	universalSkillsDescription: "{{count}} 个代理共享此技能路径",
 	copyTooltip: "复制为 JSON",
 	copied: "已复制到剪贴板",
 	editTooltip: "编辑服务器",
@@ -408,11 +411,15 @@ export default {
 	searchOnSkillsSh: "在 skills.sh 中搜索",
 	delete: "删除",
 	deleteSkill: "删除技能",
+	deleteSkillTitle: "删除技能",
 	deleteSkillForAgentTitle: "从 {{agent}} 删除技能",
 	deleteSkillForAgentWarning:
-		"这只会删除 {{agent}} 上的“{{name}}”，其他 Agent 的安装不会受影响。",
+		'这只会删除 {{agent}} 上的 "{{name}}"，其他 Agent 的安装不会受影响。',
+	deleteSkillForAgentsWarning:
+		'这将从所有 Agent 中删除 "{{name}}"：{{agents}}。',
 	deleteSharedLocationWarning:
 		"这个位置被多个 Agent 共用。请选择要删除的那个 Agent。",
+	sharedLocation: "共享位置",
 	selectAgentToDelete: "要删除的 Agent",
 	deleteSkillWarning: "这将删除 {{count}} 个技能安装。此操作无法撤销。",
 	deleteAll: "全部删除",

@@ -1,7 +1,7 @@
 import { ArrowPathIcon } from "@heroicons/react/24/solid";
 import { Button, Label, ListBox, Modal, Select, toast } from "@heroui/react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useProjects } from "../hooks/use-projects";
@@ -9,7 +9,7 @@ import { useServer } from "../hooks/use-server";
 import { createApi } from "../lib/api";
 import type { InstallTarget, TransportDto } from "../lib/api-types";
 import { cn } from "../lib/utils";
-import { AgentList, type AgentState } from "./agent-list";
+import { type AgentDiffLabel, AgentList, type AgentState } from "./agent-list";
 
 type ResourceKind = "mcp" | "skill";
 type DestinationScope =
@@ -67,6 +67,8 @@ export function TransferDialog({
 		{},
 	);
 	const [isApplying, setIsApplying] = useState(false);
+	const prevIsOpenRef = useRef(false);
+	const prevDestinationKeyRef = useRef<string | null>(null);
 
 	const usableAgents = useMemo(
 		() =>
@@ -97,6 +99,50 @@ export function TransferDialog({
 		return result;
 	}, [sourceScope, sourceProjectRoot, projects]);
 
+	const destinationQueries = useQueries({
+		queries: availableDestinations.map((dest) => ({
+			queryKey: [
+				resourceType === "mcp" ? "dest-mcps" : "dest-skills",
+				dest.type,
+				dest.type === "project" ? dest.path : "global",
+			],
+			queryFn: () =>
+				resourceType === "mcp"
+					? api.mcps.listAll(
+							dest.type,
+							dest.type === "project" ? dest.path : undefined,
+						)
+					: api.skills.listAll(
+							dest.type,
+							dest.type === "project" ? dest.path : undefined,
+						),
+			enabled: isOpen,
+			staleTime: 30_000,
+		})),
+	});
+
+	const installedAgentsByDestination = useMemo(() => {
+		const map = new Map<string, Set<string>>();
+		availableDestinations.forEach((dest, index) => {
+			const data = destinationQueries[index]?.data;
+			if (!data) {
+				map.set(
+					dest.type === "global" ? "global" : dest.path,
+					new Set(),
+				);
+				return;
+			}
+			const agentSet = new Set<string>();
+			for (const item of data) {
+				if (item.name === name && item.agent) {
+					agentSet.add(item.agent);
+				}
+			}
+			map.set(dest.type === "global" ? "global" : dest.path, agentSet);
+		});
+		return map;
+	}, [availableDestinations, destinationQueries, name]);
+
 	const selectedScope = useMemo<DestinationScope | null>(() => {
 		if (!selectedScopeKey) return null;
 		if (selectedScopeKey === "global") {
@@ -108,6 +154,33 @@ export function TransferDialog({
 		}
 		return null;
 	}, [selectedScopeKey, projects]);
+
+	const destinationKey = selectedScope
+		? selectedScope.type === "global"
+			? "global"
+			: selectedScope.path
+		: null;
+
+	const installedInDestination = useMemo(() => {
+		if (!destinationKey) return new Set<string>();
+		return installedAgentsByDestination.get(destinationKey) ?? new Set();
+	}, [destinationKey, installedAgentsByDestination]);
+
+	const diffLabels = useMemo((): Record<string, AgentDiffLabel> => {
+		const labels: Record<string, AgentDiffLabel> = {};
+		for (const agent of usableAgents) {
+			const isInstalled = installedInDestination.has(agent.id);
+			const isSelected = selectedAgents.includes(agent.id);
+			if (isInstalled) {
+				labels[agent.id] = "installed";
+			} else if (isSelected) {
+				labels[agent.id] = "adding";
+			} else {
+				labels[agent.id] = "unconfigured";
+			}
+		}
+		return labels;
+	}, [usableAgents, installedInDestination, selectedAgents]);
 
 	const destinationLabel = useMemo(() => {
 		if (!selectedScope) return "";
@@ -123,15 +196,38 @@ export function TransferDialog({
 			: (projects.find((p) => p.path === sourceProjectRoot)?.name ??
 				sourceProjectRoot);
 
+	const isLoadingDestinations = destinationQueries.some((q) => q.isFetching);
+
 	useEffect(() => {
-		if (isOpen) {
+		if (isOpen && !prevIsOpenRef.current) {
 			queueMicrotask(() => {
 				setSelectedScopeKey(null);
 				setSelectedAgents([]);
 				setAgentStates({});
+				prevDestinationKeyRef.current = null;
 			});
 		}
+		prevIsOpenRef.current = isOpen;
 	}, [isOpen]);
+
+	useEffect(() => {
+		if (
+			selectedScope &&
+			installedInDestination.size > 0 &&
+			destinationKey !== prevDestinationKeyRef.current
+		) {
+			prevDestinationKeyRef.current = destinationKey;
+			const installed = usableAgents
+				.filter((a) => installedInDestination.has(a.id))
+				.map((a) => a.id);
+			queueMicrotask(() => {
+				setSelectedAgents((prev) => {
+					const merged = new Set([...prev, ...installed]);
+					return Array.from(merged);
+				});
+			});
+		}
+	}, [selectedScope, installedInDestination, usableAgents, destinationKey]);
 
 	const handleAgentSelectionChange = useCallback((values: string[]) => {
 		setSelectedAgents(values);
@@ -202,6 +298,12 @@ export function TransferDialog({
 				queryClient.invalidateQueries({ queryKey: ["skills"] }),
 				queryClient.invalidateQueries({ queryKey: ["project-skills"] }),
 				queryClient.invalidateQueries({ queryKey: ["skill-locks"] }),
+				queryClient.invalidateQueries({
+					queryKey: ["dest-mcps"],
+				}),
+				queryClient.invalidateQueries({
+					queryKey: ["dest-skills"],
+				}),
 			]);
 
 			if (result.failed_count === 0) {
@@ -318,18 +420,27 @@ export function TransferDialog({
 												isApplying && "opacity-50",
 											)}
 										>
-											<AgentList
-												agents={usableAgents}
-												selectedKeys={selectedAgents}
-												onSelectionChange={
-													handleAgentSelectionChange
-												}
-												agentStates={agentStates}
-												disabled={isApplying}
-												emptyMessage={t(
-													"noTargetAgents",
-												)}
-											/>
+											{isLoadingDestinations ? (
+												<div className="flex items-center justify-center py-8">
+													<ArrowPathIcon className="size-5 animate-spin text-muted" />
+												</div>
+											) : (
+												<AgentList
+													agents={usableAgents}
+													selectedKeys={
+														selectedAgents
+													}
+													onSelectionChange={
+														handleAgentSelectionChange
+													}
+													agentStates={agentStates}
+													diffLabels={diffLabels}
+													disabled={isApplying}
+													emptyMessage={t(
+														"noTargetAgents",
+													)}
+												/>
+											)}
 										</div>
 									</div>
 								)}
@@ -346,7 +457,11 @@ export function TransferDialog({
 							isDisabled={
 								!selectedScope ||
 								selectedAgents.length === 0 ||
-								isApplying
+								isApplying ||
+								isLoadingDestinations ||
+								selectedAgents.every((id) =>
+									installedInDestination.has(id),
+								)
 							}
 						>
 							{isApplying && (

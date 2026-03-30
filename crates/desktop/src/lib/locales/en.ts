@@ -346,6 +346,9 @@ export default {
 	installed: "Installed",
 	globalScope: "Global Scope",
 	unknownError: "Something went wrong",
+	universalSkills: "Universal",
+	universalSkillsTooltip: "Shared with: {{agents}}",
+	universalSkillsDescription: "{{count}} agents share this skills path",
 
 	// Install Skill Dialog
 	installSkill: "Install Skill",
@@ -417,11 +420,15 @@ export default {
 	searchOnSkillsSh: "Search on skills.sh",
 	delete: "Delete",
 	deleteSkill: "Delete Skill",
+	deleteSkillTitle: "Delete Skill",
 	deleteSkillForAgentTitle: "Delete Skill from {{agent}}",
 	deleteSkillForAgentWarning:
 		'This will delete "{{name}}" only for {{agent}}. Other agent installations will remain unchanged.',
+	deleteSkillForAgentsWarning:
+		'This will delete "{{name}}" from all agents: {{agents}}.',
 	deleteSharedLocationWarning:
 		"This location is shared by multiple agents. Choose which agent to remove.",
+	sharedLocation: "Shared Location",
 	selectAgentToDelete: "Agent to delete",
 	deleteSkillWarning:
 		"This will delete {{count}} skill installation(s). This action cannot be undone.",
