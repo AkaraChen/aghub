@@ -18,13 +18,22 @@
 
 ## Installation
 
+### Download
+
+| Platform              | Download                                                                                           |
+| --------------------- | -------------------------------------------------------------------------------------------------- |
+| Windows               | [setup.exe](https://github.com/akarachen/aghub/releases/latest/download/aghub_1.0.0_x64-setup.exe) |
+| macOS (Intel)         | [dmg](https://github.com/akarachen/aghub/releases/latest/download/aghub_1.0.0_x64.dmg)             |
+| macOS (Apple Silicon) | [dmg](https://github.com/akarachen/aghub/releases/latest/download/aghub_1.0.0_aarch64.dmg)         |
+| Linux                 | [AppImage](https://github.com/akarachen/aghub/releases/latest/download/aghub_1.0.0_amd64.AppImage) |
+
+Or visit [Releases](https://github.com/akarachen/aghub/releases) for all available downloads.
+
 ### System Requirements
 
 - Windows: Windows 10 and above
 - macOS: macOS 12 (Monterey) and above
 - Linux: Ubuntu 22.04+ / Debian 11+ / Fedora 34+ and other mainstream distributions
-
-Download the latest release from [Releases](https://github.com/akarachen/aghub/releases). And you're good to go!
 
 ---
 

@@ -18,13 +18,22 @@
 
 ## 安装
 
+### 下载
+
+| 平台                  | 下载                                                                                               |
+| --------------------- | -------------------------------------------------------------------------------------------------- |
+| Windows               | [setup.exe](https://github.com/akarachen/aghub/releases/latest/download/aghub_1.0.0_x64-setup.exe) |
+| macOS (Intel)         | [dmg](https://github.com/akarachen/aghub/releases/latest/download/aghub_1.0.0_x64.dmg)             |
+| macOS (Apple Silicon) | [dmg](https://github.com/akarachen/aghub/releases/latest/download/aghub_1.0.0_aarch64.dmg)         |
+| Linux                 | [AppImage](https://github.com/akarachen/aghub/releases/latest/download/aghub_1.0.0_amd64.AppImage) |
+
+或访问 [Releases](https://github.com/akarachen/aghub/releases) 查看所有可用下载。
+
 ### 系统要求
 
 - Windows: Windows 10 及以上
 - macOS: macOS 12 (Monterey) 及以上
 - Linux: Ubuntu 22.04+ / Debian 11+ / Fedora 34+ 及其他主流发行版
-
-从 [Releases](https://github.com/akarachen/aghub/releases) 下载最新版本就可以开始使用！
 
 ---
 
