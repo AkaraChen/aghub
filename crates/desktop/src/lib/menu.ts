@@ -155,7 +155,10 @@ export async function setupAppMenu(t: TFunction) {
 			items: [appSubmenu, agentSubmenu, editSubmenu, controlSubmenu],
 		});
 
-		await activeAppMenu.setAsAppMenu();
+		const isMac = navigator.userAgent.toLowerCase().includes("mac");
+		if (isMac) {
+			await activeAppMenu.setAsAppMenu();
+		}
 	} catch (e) {
 		console.error("Failed to set app menu", e);
 	}
