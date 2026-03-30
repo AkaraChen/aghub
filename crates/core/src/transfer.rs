@@ -424,31 +424,44 @@ pub fn reconcile_skill(
 		}
 	}
 
-	for agent in removed {
+	// Group removed agents by target directory to avoid redundant deletes
+	let mut removed_dir_to_agents: HashMap<PathBuf, Vec<AgentType>> =
+		HashMap::new();
+	for agent in &removed {
 		let target = InstallTarget {
-			agent,
+			agent: *agent,
 			scope: target_scope,
 			project_root: target_project_root.clone(),
 		};
-		let outcome = (|| -> Result<()> {
-			validate_target(&target)?;
-			let mut manager = build_manager(&target);
-			ensure_loaded(&mut manager)?;
-			if manager.get_skill(&source.name).is_none() {
-				return Err(ConfigError::resource_not_found(
-					"skill",
-					&source.name,
-				));
-			}
-			manager.remove_skill(&source.name)
-		})();
+		if let Ok(target_dir) = skill_target_dir(&target) {
+			removed_dir_to_agents
+				.entry(target_dir)
+				.or_default()
+				.push(*agent);
+		}
+	}
 
-		results.push(OperationResult {
-			target,
-			action: OperationAction::Delete,
-			success: outcome.is_ok(),
-			error: outcome.err().map(|err| err.to_string()),
-		});
+	// Process each unique directory for deletion
+	for (target_dir, agents) in removed_dir_to_agents {
+		let skill_path = target_dir.join(&safe_name);
+		let delete_error = if skill_path.exists() {
+			fs::remove_dir_all(&skill_path).err()
+		} else {
+			None
+		};
+
+		for agent in agents {
+			results.push(OperationResult {
+				target: InstallTarget {
+					agent,
+					scope: target_scope,
+					project_root: target_project_root.clone(),
+				},
+				action: OperationAction::Delete,
+				success: delete_error.is_none(),
+				error: delete_error.as_ref().map(|e| e.to_string()),
+			});
+		}
 	}
 
 	Ok(OperationBatchResult { results })
