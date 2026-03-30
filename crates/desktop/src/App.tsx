@@ -88,8 +88,7 @@ function App() {
 		let unlistenDeepLink: (() => void) | null = null;
 
 		const handleUrls = (urls: string[] | null) => {
-			const nextUrl =
-				urls && urls.length > 0 ? urls[urls.length - 1] : null;
+			const nextUrl = urls && urls.length > 0 ? urls.at(-1) : null;
 			if (!isMounted || !nextUrl) {
 				return;
 			}

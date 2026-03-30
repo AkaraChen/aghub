@@ -1,5 +1,10 @@
 import type { TransportDto } from "./api-types";
 
+// Static regex patterns to avoid re-compilation on every call
+const BASE64URL_DASH_REGEX = /-/g;
+const BASE64URL_UNDERSCORE_REGEX = /_/g;
+const LEADING_SLASH_REGEX = /^\//;
+
 export type DeepLinkImportIntent =
 	| {
 			kind: "skill-market-install";
@@ -22,14 +27,16 @@ export type ParseDeepLinkResult =
 	| { ok: true; intent: DeepLinkImportIntent }
 	| { ok: false; error: string };
 
-type ParsedMcpPayload = {
+interface ParsedMcpPayload {
 	name: string;
 	transport: TransportDto;
 	timeout?: number;
-};
+}
 
 function decodeBase64Url(value: string): string {
-	const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+	const normalized = value
+		.replace(BASE64URL_DASH_REGEX, "+")
+		.replace(BASE64URL_UNDERSCORE_REGEX, "/");
 	const paddingLength = (4 - (normalized.length % 4)) % 4;
 	const padded = normalized.padEnd(normalized.length + paddingLength, "=");
 	const binary = atob(padded);
@@ -103,7 +110,7 @@ export function parseDeepLink(rawUrl: string): ParseDeepLinkResult {
 		return { ok: false, error: "deepLinkInvalidUrl" };
 	}
 
-	const route = url.hostname || url.pathname.replace(/^\//, "");
+	const route = url.hostname || url.pathname.replace(LEADING_SLASH_REGEX, "");
 	if (url.protocol !== "aghub:" || route !== "import") {
 		return { ok: false, error: "deepLinkUnsupported" };
 	}
