@@ -23,6 +23,14 @@ pub fn run() {
 				app.handle().plugin(tauri_plugin_process::init())?;
 			}
 
+			#[cfg(not(target_os = "macos"))]
+			{
+				use tauri::Manager;
+				if let Some(window) = app.handle().get_webview_window("main") {
+					let _ = window.set_decorations(false);
+				}
+			}
+
 			Ok(())
 		})
 		.invoke_handler(tauri::generate_handler![start_server])
