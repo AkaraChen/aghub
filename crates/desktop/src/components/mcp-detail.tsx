@@ -317,25 +317,6 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 								<h2 className="text-xl font-semibold text-foreground truncate">
 									{primaryItem.name}
 								</h2>
-								<Card.Description className="mt-2 flex flex-wrap items-center gap-2">
-									{primarySource && (
-										<Chip
-											size="sm"
-											variant="soft"
-											color={
-												primarySource ===
-												ConfigSource.Project
-													? "accent"
-													: "default"
-											}
-										>
-											{primarySource ===
-											ConfigSource.Project
-												? t("project")
-												: t("global")}
-										</Chip>
-									)}
-								</Card.Description>
 							</div>
 							<div className="flex items-center gap-2">
 								<Tooltip delay={0}>
