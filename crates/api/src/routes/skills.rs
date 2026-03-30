@@ -61,13 +61,39 @@ pub fn reconcile_skill_route(
 ) -> ApiResult<OperationBatchResponse> {
 	let req = body.into_inner();
 	let source = req.source.to_core()?;
-	let targets = req
-		.targets
+
+	let added: Vec<_> = req
+		.added
+		.unwrap_or_default()
 		.iter()
-		.map(|target| target.to_core())
+		.map(|agent_str| {
+			agent_str.parse().map_err(|_| {
+				ApiError::new(
+					rocket::http::Status::BadRequest,
+					format!("Unknown agent '{}'", agent_str),
+					"INVALID_PARAM",
+				)
+			})
+		})
 		.collect::<Result<Vec<_>, _>>()?;
-	let result =
-		transfer::reconcile_skill(source, targets).map_err(ApiError::from)?;
+
+	let removed: Vec<_> = req
+		.removed
+		.unwrap_or_default()
+		.iter()
+		.map(|agent_str| {
+			agent_str.parse().map_err(|_| {
+				ApiError::new(
+					rocket::http::Status::BadRequest,
+					format!("Unknown agent '{}'", agent_str),
+					"INVALID_PARAM",
+				)
+			})
+		})
+		.collect::<Result<Vec<_>, _>>()?;
+
+	let result = transfer::reconcile_skill(source, added, removed)
+		.map_err(ApiError::from)?;
 	Ok(Json(result.into()))
 }
 

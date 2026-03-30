@@ -11,11 +11,18 @@ export interface InstallTarget {
 	project_root?: string;
 }
 
-export interface ReconcileTarget extends InstallTarget {
-	selected: boolean;
+export interface ReconcileRequest {
+	source: {
+		agent: string;
+		scope: InstallScope;
+		project_root?: string;
+		name: string;
+	};
+	added?: string[];
+	removed?: string[];
 }
 
-export type OperationAction = "copy" | "delete" | "noop";
+export type OperationAction = "copy" | "delete";
 
 export interface OperationResult {
 	agent: string;
@@ -29,7 +36,6 @@ export interface OperationResult {
 export interface OperationBatchResponse {
 	success_count: number;
 	failed_count: number;
-	noop_count: number;
 	results: OperationResult[];
 }
 

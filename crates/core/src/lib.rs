@@ -26,7 +26,7 @@ pub use manager::ConfigManager;
 pub use models::{AgentType, ConfigSource};
 pub use transfer::{
 	InstallScope, InstallTarget, OperationAction, OperationBatchResult,
-	OperationResult, ReconcileTarget, ResourceLocator,
+	OperationResult, ResourceLocator,
 };
 
 /// Convert a skill::Skill to core::models::Skill

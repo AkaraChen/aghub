@@ -6,7 +6,7 @@ use crate::{
 	registry,
 };
 use skill::sanitize::sanitize_name;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -35,7 +35,6 @@ pub struct ResourceLocator {
 pub enum OperationAction {
 	Copy,
 	Delete,
-	Noop,
 }
 
 #[derive(Debug, Clone)]
@@ -59,19 +58,6 @@ impl OperationBatchResult {
 	pub fn failed_count(&self) -> usize {
 		self.results.iter().filter(|r| !r.success).count()
 	}
-
-	pub fn noop_count(&self) -> usize {
-		self.results
-			.iter()
-			.filter(|r| r.action == OperationAction::Noop)
-			.count()
-	}
-}
-
-#[derive(Debug, Clone)]
-pub struct ReconcileTarget {
-	pub target: InstallTarget,
-	pub selected: bool,
 }
 
 fn build_manager(target: &InstallTarget) -> ConfigManager {
@@ -279,54 +265,56 @@ pub fn transfer_mcp(
 
 pub fn reconcile_mcp(
 	source: ResourceLocator,
-	targets: Vec<ReconcileTarget>,
+	added: Vec<AgentType>,
+	removed: Vec<AgentType>,
 ) -> Result<OperationBatchResult> {
 	let mcp = load_source_mcp(&source)?;
 	let mut results = Vec::new();
 
-	for reconcile in targets {
-		let target = reconcile.target;
-		let outcome = (|| -> Result<(OperationAction, bool)> {
+	let target_scope = source.scope;
+	let target_project_root = source.project_root.clone();
+
+	for agent in added {
+		let target = InstallTarget {
+			agent,
+			scope: target_scope,
+			project_root: target_project_root.clone(),
+		};
+		let outcome = (|| -> Result<()> {
 			validate_target(&target)?;
 			mcp_supported_for_target(&target, &mcp)?;
 			let mut manager = build_manager(&target);
 			ensure_loaded(&mut manager)?;
-			let exists = manager.get_mcp(&source.name).is_some();
-
-			if reconcile.selected {
-				if exists {
-					return Ok((OperationAction::Noop, true));
-				}
-				manager.add_mcp(mcp.clone())?;
-				return Ok((OperationAction::Copy, true));
-			}
-
-			if !exists {
-				return Ok((OperationAction::Noop, true));
-			}
-
-			manager.remove_mcp(&source.name)?;
-			Ok((OperationAction::Delete, true))
+			manager.add_mcp(mcp.clone())
 		})();
 
-		match outcome {
-			Ok((action, success)) => results.push(OperationResult {
-				target,
-				action,
-				success,
-				error: None,
-			}),
-			Err(err) => results.push(OperationResult {
-				target,
-				action: if reconcile.selected {
-					OperationAction::Copy
-				} else {
-					OperationAction::Delete
-				},
-				success: false,
-				error: Some(err.to_string()),
-			}),
-		}
+		results.push(OperationResult {
+			target,
+			action: OperationAction::Copy,
+			success: outcome.is_ok(),
+			error: outcome.err().map(|err| err.to_string()),
+		});
+	}
+
+	for agent in removed {
+		let target = InstallTarget {
+			agent,
+			scope: target_scope,
+			project_root: target_project_root.clone(),
+		};
+		let outcome = (|| -> Result<()> {
+			validate_target(&target)?;
+			let mut manager = build_manager(&target);
+			ensure_loaded(&mut manager)?;
+			manager.remove_mcp(&source.name)
+		})();
+
+		results.push(OperationResult {
+			target,
+			action: OperationAction::Delete,
+			success: outcome.is_ok(),
+			error: outcome.err().map(|err| err.to_string()),
+		});
 	}
 
 	Ok(OperationBatchResult { results })
@@ -372,77 +360,71 @@ pub fn transfer_skill(
 
 pub fn reconcile_skill(
 	source: ResourceLocator,
-	targets: Vec<ReconcileTarget>,
+	added: Vec<AgentType>,
+	removed: Vec<AgentType>,
 ) -> Result<OperationBatchResult> {
 	let skill = load_source_skill(&source)?;
 	let source_root = resolve_skill_root(&skill)?;
 	let safe_name = sanitize_name(&skill.name);
 	let mut results = Vec::new();
-	let mut path_owners: HashMap<PathBuf, usize> = HashMap::new();
 
-	for target in targets.iter().filter(|t| !t.selected) {
-		if let Ok(dir) = skill_target_dir(&target.target) {
-			*path_owners.entry(dir.join(&safe_name)).or_insert(0) += 1;
-		}
-	}
+	let target_scope = source.scope;
+	let target_project_root = source.project_root.clone();
 
-	for reconcile in targets {
-		let target = reconcile.target;
-		let outcome = (|| -> Result<(OperationAction, bool)> {
+	for agent in added {
+		let target = InstallTarget {
+			agent,
+			scope: target_scope,
+			project_root: target_project_root.clone(),
+		};
+		let outcome = (|| -> Result<()> {
 			validate_target(&target)?;
 			let target_dir = skill_target_dir(&target)?;
 			let mut manager = build_manager(&target);
 			ensure_loaded(&mut manager)?;
-			let exists = manager.get_skill(&source.name).is_some();
-
-			if reconcile.selected {
-				if exists {
-					return Ok((OperationAction::Noop, true));
-				}
-				let dest_root = target_dir.join(&safe_name);
-				if dest_root.exists() {
-					return Err(ConfigError::resource_exists(
-						"skill",
-						&skill.name,
-					));
-				}
-				copy_dir_recursive(&source_root, &dest_root)?;
-				Ok((OperationAction::Copy, true))
-			} else {
-				if !exists {
-					return Ok((OperationAction::Noop, true));
-				}
-
-				let shared_path = target_dir.join(&safe_name);
-				if path_owners.get(&shared_path).copied().unwrap_or(0) > 1 {
-					return Err(ConfigError::InvalidConfig(format!(
-						"Skill '{}' is installed in a shared location and cannot be removed from only one target",
-						skill.name
-					)));
-				}
-				manager.remove_skill(&source.name)?;
-				Ok((OperationAction::Delete, true))
+			if manager.get_skill(&source.name).is_some() {
+				return Err(ConfigError::resource_exists("skill", &skill.name));
 			}
+			let dest_root = target_dir.join(&safe_name);
+			if dest_root.exists() {
+				return Err(ConfigError::resource_exists("skill", &skill.name));
+			}
+			copy_dir_recursive(&source_root, &dest_root)
 		})();
 
-		match outcome {
-			Ok((action, success)) => results.push(OperationResult {
-				target,
-				action,
-				success,
-				error: None,
-			}),
-			Err(err) => results.push(OperationResult {
-				target,
-				action: if reconcile.selected {
-					OperationAction::Copy
-				} else {
-					OperationAction::Delete
-				},
-				success: false,
-				error: Some(err.to_string()),
-			}),
-		}
+		results.push(OperationResult {
+			target,
+			action: OperationAction::Copy,
+			success: outcome.is_ok(),
+			error: outcome.err().map(|err| err.to_string()),
+		});
+	}
+
+	for agent in removed {
+		let target = InstallTarget {
+			agent,
+			scope: target_scope,
+			project_root: target_project_root.clone(),
+		};
+		let outcome = (|| -> Result<()> {
+			validate_target(&target)?;
+			let mut manager = build_manager(&target);
+			ensure_loaded(&mut manager)?;
+			if manager.get_skill(&source.name).is_none() {
+				return Err(ConfigError::resource_not_found(
+					"skill",
+					&source.name,
+				));
+			}
+			manager.remove_skill(&source.name)
+		})();
+
+		results.push(OperationResult {
+			target,
+			action: OperationAction::Delete,
+			success: outcome.is_ok(),
+			error: outcome.err().map(|err| err.to_string()),
+		});
 	}
 
 	Ok(OperationBatchResult { results })
@@ -509,7 +491,7 @@ mod tests {
 	}
 
 	#[test]
-	fn reconcile_mcp_deletes_when_deselected() {
+	fn reconcile_mcp_deletes_when_removed() {
 		let _guard = env_lock().lock().unwrap();
 		let temp = tempdir().unwrap();
 		let root = temp.path().join("project");
@@ -535,17 +517,12 @@ mod tests {
 				project_root: Some(root.clone()),
 				name: "filesystem".to_string(),
 			},
-			vec![ReconcileTarget {
-				target: InstallTarget {
-					agent: AgentType::Claude,
-					scope: InstallScope::Project,
-					project_root: Some(root.clone()),
-				},
-				selected: false,
-			}],
+			vec![],                  // added
+			vec![AgentType::Claude], // removed
 		)
 		.unwrap();
 
+		assert_eq!(result.results.len(), 1);
 		assert_eq!(result.results[0].action, OperationAction::Delete);
 
 		let mut manager = ConfigManager::new(
@@ -601,7 +578,7 @@ mod tests {
 	}
 
 	#[test]
-	fn reconcile_skill_deletes_when_deselected() {
+	fn reconcile_skill_deletes_when_removed() {
 		let _guard = env_lock().lock().unwrap();
 		let temp = tempdir().unwrap();
 		let root = temp.path().join("project");
@@ -624,17 +601,12 @@ mod tests {
 				project_root: Some(root.clone()),
 				name: "repo-helper".to_string(),
 			},
-			vec![ReconcileTarget {
-				target: InstallTarget {
-					agent: AgentType::Claude,
-					scope: InstallScope::Project,
-					project_root: Some(root.clone()),
-				},
-				selected: false,
-			}],
+			vec![],                  // added
+			vec![AgentType::Claude], // removed
 		)
 		.unwrap();
 
+		assert_eq!(result.results.len(), 1);
 		assert_eq!(result.results[0].action, OperationAction::Delete);
 
 		let mut manager = ConfigManager::new(

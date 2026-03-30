@@ -30,7 +30,8 @@ import { createApi } from "../lib/api";
 import type { McpResponse, TransportDto } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
 import { cn, sortAgentObjects } from "../lib/utils";
-import { ResourceInstallDialog } from "./resource-install-dialog";
+import { ManageAgentsDialog } from "./manage-agents-dialog";
+import { TransferDialog } from "./transfer-dialog";
 
 export interface McpGroup {
 	mergeKey: string;
@@ -653,7 +654,8 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 			</Modal.Backdrop>
 
 			{/* Manage Agents Dialog */}
-			<ResourceInstallDialog
+			<ManageAgentsDialog
+				group={group}
 				isOpen={uiState.manageDialogOpen}
 				onClose={() =>
 					dispatch({
@@ -661,15 +663,11 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 						value: false,
 					})
 				}
-				mode="manage"
-				resourceType="mcp"
-				name={primaryItem.name}
-				sourceAgent={primaryItem.agent ?? "claude"}
-				sourceScope={primaryScope}
-				sourceProjectRoot={projectPath}
-				transport={primaryItem.transport}
+				projectPath={projectPath}
+				requiredCapabilities={["mcp"]}
 			/>
-			<ResourceInstallDialog
+			{/* Transfer Dialog */}
+			<TransferDialog
 				isOpen={uiState.transferDialogOpen}
 				onClose={() =>
 					dispatch({
@@ -677,7 +675,6 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 						value: false,
 					})
 				}
-				mode="transfer"
 				resourceType="mcp"
 				name={primaryItem.name}
 				sourceAgent={primaryItem.agent ?? "claude"}

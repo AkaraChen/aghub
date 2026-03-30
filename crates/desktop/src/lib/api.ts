@@ -11,7 +11,7 @@ import type {
 	McpResponse,
 	OperationBatchResponse,
 	ProjectSkillLockResponse,
-	ReconcileTarget,
+	ReconcileRequest,
 	SkillResponse,
 	SkillTreeNodeResponse,
 	ToolInfo,
@@ -175,10 +175,7 @@ export function createApi(baseUrl: string) {
 			}): Promise<OperationBatchResponse> {
 				return client.post("skills/transfer", { json: body }).json();
 			},
-			reconcile(body: {
-				source: InstallTarget & { name: string };
-				targets: ReconcileTarget[];
-			}): Promise<OperationBatchResponse> {
+			reconcile(body: ReconcileRequest): Promise<OperationBatchResponse> {
 				return client.post("skills/reconcile", { json: body }).json();
 			},
 		},
@@ -273,10 +270,7 @@ export function createApi(baseUrl: string) {
 			}): Promise<OperationBatchResponse> {
 				return client.post("mcps/transfer", { json: body }).json();
 			},
-			reconcile(body: {
-				source: InstallTarget & { name: string };
-				targets: ReconcileTarget[];
-			}): Promise<OperationBatchResponse> {
+			reconcile(body: ReconcileRequest): Promise<OperationBatchResponse> {
 				return client.post("mcps/reconcile", { json: body }).json();
 			},
 		},

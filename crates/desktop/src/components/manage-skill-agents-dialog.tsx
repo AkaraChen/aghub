@@ -2,64 +2,39 @@ import { Button, Modal, toast } from "@heroui/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { AvailableAgent } from "../contexts/agent-availability";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useServer } from "../hooks/use-server";
 import { createApi } from "../lib/api";
-import type { McpResponse } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
 import { cn } from "../lib/utils";
 import { type AgentDiffLabel, AgentList, type AgentState } from "./agent-list";
+import type { SkillGroup } from "./skill-detail-helpers";
 
-type AgentCapabilityRequirement = keyof AvailableAgent["capabilities"] | "mcp";
-
-const EMPTY_CAPABILITIES: AgentCapabilityRequirement[] = [];
-
-interface ManageAgentsDialogProps {
-	group: {
-		mergeKey: string;
-		transport: McpResponse["transport"];
-		items: McpResponse[];
-	};
+interface ManageSkillAgentsDialogProps {
+	group: SkillGroup;
 	isOpen: boolean;
 	onClose: () => void;
 	projectPath?: string;
-	requiredCapabilities?: AgentCapabilityRequirement[];
 }
 
-export function ManageAgentsDialog({
+export function ManageSkillAgentsDialog({
 	group,
 	isOpen,
 	onClose,
 	projectPath,
-	requiredCapabilities = EMPTY_CAPABILITIES,
-}: ManageAgentsDialogProps) {
+}: ManageSkillAgentsDialogProps) {
 	const { t } = useTranslation();
 	const { baseUrl } = useServer();
 	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
 
-	const supportsRequirements = useCallback(
-		(agent: AvailableAgent) =>
-			requiredCapabilities.every((capability) => {
-				if (capability === "mcp") {
-					return (
-						agent.capabilities.mcp_stdio ||
-						agent.capabilities.mcp_remote
-					);
-				}
-				return Boolean(agent.capabilities[capability]);
-			}),
-		[requiredCapabilities],
-	);
-
 	const usableAgents = useMemo(
 		() =>
 			(availableAgents ?? []).filter(
-				(a) => a?.isUsable && supportsRequirements(a),
+				(a) => a?.isUsable && a.capabilities.skills,
 			),
-		[availableAgents, supportsRequirements],
+		[availableAgents],
 	);
 
 	const hasValidGroup = group?.items && Array.isArray(group.items);
@@ -73,7 +48,9 @@ export function ManageAgentsDialog({
 	const [isApplying, setIsApplying] = useState(false);
 
 	if (isOpen && !prevIsOpenRef.current) {
-		const initial = group.items.map((item) => item.agent ?? "default");
+		const initial = group.items
+			.map((item) => item.agent)
+			.filter((agent): agent is string => agent != null);
 		initialAgentIdsRef.current = new Set(initial);
 		queueMicrotask(() => {
 			setSelectedAgents(initial);
@@ -124,15 +101,15 @@ export function ManageAgentsDialog({
 		return toInstall.length > 0 || toUninstall.length > 0;
 	}, [selectedAgents, currentAgentIds, selectedSet]);
 
+	const handleSelectionChange = useCallback((keys: string[]) => {
+		setSelectedAgents(keys);
+	}, []);
+
 	const onCloseAndReset = () => {
 		setAgentStates({});
 		setIsApplying(false);
 		onClose();
 	};
-
-	const handleSelectionChange = useCallback((keys: string[]) => {
-		setSelectedAgents(keys);
-	}, []);
 
 	const handleApply = async () => {
 		if (!hasValidGroup || group.items.length === 0) {
@@ -143,17 +120,15 @@ export function ManageAgentsDialog({
 		setIsApplying(true);
 		const primary = group.items[0];
 
-		if (!primary?.name || !primary.transport) {
-			toast.danger(t("invalidMcpConfiguration"));
+		if (!primary?.name) {
+			toast.danger(t("invalidSkillConfiguration"));
 			setIsApplying(false);
 			return;
 		}
 
 		const primaryAgent = primary.agent ?? "claude";
 		const sourceAgentItem =
-			group.items.find(
-				(item) => (item.agent ?? "default") === primaryAgent,
-			) ?? primary;
+			group.items.find((item) => item.agent === primaryAgent) ?? primary;
 
 		const toInstall = selectedAgents.filter(
 			(id) => !currentAgentIds.has(id),
@@ -169,7 +144,7 @@ export function ManageAgentsDialog({
 		setAgentStates(pendingStates);
 
 		try {
-			const result = await api.mcps.reconcile({
+			const result = await api.skills.reconcile({
 				source: {
 					agent: sourceAgentItem.agent ?? "claude",
 					scope:
@@ -193,8 +168,9 @@ export function ManageAgentsDialog({
 			setAgentStates(newAgentStates);
 
 			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: ["mcps"] }),
-				queryClient.invalidateQueries({ queryKey: ["project-mcps"] }),
+				queryClient.invalidateQueries({ queryKey: ["skills"] }),
+				queryClient.invalidateQueries({ queryKey: ["project-skills"] }),
+				queryClient.invalidateQueries({ queryKey: ["skill-locks"] }),
 			]);
 
 			if (result.failed_count === 0) {
@@ -253,7 +229,7 @@ export function ManageAgentsDialog({
 									agentStates={agentStates}
 									diffLabels={diffLabels}
 									disabled={isApplying}
-									label={t("selectAgentsForMcp")}
+									label={t("selectAgentsForSkill")}
 									emptyMessage={t("noTargetAgents")}
 								/>
 							</div>

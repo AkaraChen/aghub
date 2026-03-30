@@ -30,7 +30,7 @@ import type {
 } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
 import { cn } from "../lib/utils";
-import { ResourceInstallDialog } from "./resource-install-dialog";
+import { ManageSkillAgentsDialog } from "./manage-skill-agents-dialog";
 import {
 	DeleteSkillDialog,
 	DeleteSkillLocationDialog,
@@ -43,6 +43,7 @@ import {
 	type SkillGroup,
 } from "./skill-detail-helpers";
 import { LocationRow, SkillTree } from "./skill-detail-views";
+import { TransferDialog } from "./transfer-dialog";
 
 interface SkillDetailProps {
 	group: SkillGroup;
@@ -199,151 +200,92 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	return (
 		<>
 			<div className="h-full overflow-y-auto">
-				<div
-					className="
-						max-w-2xl space-y-4 p-4
-						sm:p-5
-						md:p-6
-					"
-				>
+				<div className="w-full max-w-2xl space-y-4 p-4 sm:p-6">
 					<Card>
-						<Card.Header className="flex flex-col items-start gap-3">
-							<div className="flex w-full flex-row items-start justify-between gap-3">
-								<div className="min-w-0 flex-1">
-									<h2 className="text-xl font-semibold text-foreground">
-										{skill.name}
-									</h2>
-								</div>
-								<div
-									className="
-										flex items-center gap-1.5
-										sm:gap-2
-									"
-								>
-									<Tooltip delay={0}>
-										<Button
-											isIconOnly
-											variant="ghost"
-											size="md"
-											className="min-h-11 min-w-11 text-muted hover:text-foreground"
-											aria-label={t("transfer")}
-											onPress={() =>
-												setTransferDialogOpen(true)
-											}
-										>
-											<PlusIcon className="size-5" />
-										</Button>
-										<Tooltip.Content>
-											{t("transfer")}
-										</Tooltip.Content>
-									</Tooltip>
-									<Tooltip delay={0}>
-										<Button
-											isIconOnly
-											variant="ghost"
-											size="md"
-											className="min-h-11 min-w-11 text-muted hover:text-foreground"
-											aria-label={t("addToAgent")}
-											onPress={() =>
-												setManageDialogOpen(true)
-											}
-										>
-											<PlusIcon className="size-5" />
-										</Button>
-										<Tooltip.Content>
-											{t("addToAgent")}
-										</Tooltip.Content>
-									</Tooltip>
-									<Tooltip delay={0}>
-										<Button
-											isIconOnly
-											variant="ghost"
-											size="md"
-											className="
-												min-h-11 min-w-11 text-muted
-												hover:text-foreground
-											"
-											aria-label={t("searchOnSkillsSh")}
-											isDisabled={!canSearchSkillsSh}
-											onPress={handleSearchSkillsSh}
-										>
-											<MagnifyingGlassIcon className="size-5" />
-										</Button>
-										<Tooltip.Content>
-											{t("searchOnSkillsSh")}
-										</Tooltip.Content>
-									</Tooltip>
-									<Tooltip delay={0}>
-										<Button
-											isIconOnly
-											variant="ghost"
-											size="md"
-											className={cn(
-												"min-h-11 min-w-11 text-muted hover:text-warning",
-												isStarred && "text-warning",
-											)}
-											aria-label={
-												isStarred
-													? t("unstarSkill")
-													: t("starSkill")
-											}
-											onPress={() =>
-												toggleSkillStar(skill.name)
-											}
-										>
-											{isStarred ? (
-												<StarIconSolid className="size-5" />
-											) : (
-												<StarIconOutline className="size-5" />
-											)}
-										</Button>
-										<Tooltip.Content>
-											{isStarred
+						<Card.Header className="flex flex-row items-start justify-between gap-3">
+							<div className="min-w-0 flex-1">
+								<h2 className="text-xl font-semibold text-foreground truncate">
+									{skill.name}
+								</h2>
+								{skill.description && (
+									<Card.Description className="mt-2">
+										{skill.description}
+									</Card.Description>
+								)}
+							</div>
+							<div className="flex items-center gap-2">
+								<Tooltip delay={0}>
+									<Button
+										isIconOnly
+										variant="ghost"
+										size="md"
+										className="text-muted min-w-[44px] min-h-[44px] hover:text-foreground"
+										aria-label={t("searchOnSkillsSh")}
+										isDisabled={!canSearchSkillsSh}
+										onPress={handleSearchSkillsSh}
+									>
+										<MagnifyingGlassIcon className="size-5" />
+									</Button>
+									<Tooltip.Content>
+										{t("searchOnSkillsSh")}
+									</Tooltip.Content>
+								</Tooltip>
+								<Tooltip delay={0}>
+									<Button
+										isIconOnly
+										variant="ghost"
+										size="md"
+										className={cn(
+											"text-muted min-w-[44px] min-h-[44px] hover:text-warning",
+											isStarred && "text-warning",
+										)}
+										aria-label={
+											isStarred
 												? t("unstarSkill")
-												: t("starSkill")}
-										</Tooltip.Content>
-									</Tooltip>
-									<Tooltip delay={0}>
-										<Button
-											isIconOnly
-											variant="ghost"
-											size="md"
-											className="
-												min-h-11 min-w-11 text-muted
-												hover:text-danger
-											"
-											aria-label={t("deleteSkill")}
-											onPress={() =>
-												setDeleteDialogOpen(true)
-											}
-										>
-											<TrashIcon className="size-5" />
-										</Button>
-										<Tooltip.Content>
-											{t("deleteSkill")}
-										</Tooltip.Content>
-									</Tooltip>
-								</div>
+												: t("starSkill")
+										}
+										onPress={() =>
+											toggleSkillStar(skill.name)
+										}
+									>
+										{isStarred ? (
+											<StarIconSolid className="size-5" />
+										) : (
+											<StarIconOutline className="size-5" />
+										)}
+									</Button>
+									<Tooltip.Content>
+										{isStarred
+											? t("unstarSkill")
+											: t("starSkill")}
+									</Tooltip.Content>
+								</Tooltip>
+								<Tooltip delay={0}>
+									<Button
+										isIconOnly
+										variant="ghost"
+										size="md"
+										className="text-muted hover:text-danger min-w-[44px] min-h-[44px]"
+										aria-label={t("deleteSkill")}
+										onPress={() =>
+											setDeleteDialogOpen(true)
+										}
+									>
+										<TrashIcon className="size-4" />
+									</Button>
+									<Tooltip.Content>
+										{t("deleteSkill")}
+									</Tooltip.Content>
+								</Tooltip>
 							</div>
 						</Card.Header>
 
-						<Card.Content className="space-y-5">
-							{skill.description && (
-								<p className="text-sm/relaxed text-foreground">
-									{skill.description}
-								</p>
-							)}
-
+						<Card.Content className="flex flex-col gap-6">
 							{skill.tools.length > 0 && (
-								<div>
-									<p
-										className="
-											mb-2 text-xs font-medium tracking-wider text-muted
-											uppercase
-										"
-									>
+								<div className="space-y-3">
+									<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
 										{t("tools")} ({skill.tools.length})
-									</p>
+									</h3>
 									<div className="flex flex-wrap gap-1.5">
 										{skill.tools.map((tool) => (
 											<Chip
@@ -359,16 +301,11 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 							)}
 
 							{allLocationGroups.length > 0 && (
-								<div>
-									<p
-										className="
-											mb-2 text-xs font-medium tracking-wider text-muted
-											uppercase
-										"
-									>
+								<div className="space-y-3">
+									<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
 										{t("locations")} (
 										{allLocationGroups.length})
-									</p>
+									</h3>
 									<div className="space-y-1.5">
 										{displayedLocations.map(
 											(locationGroup) => (
@@ -428,21 +365,11 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 							)}
 
 							{currentSkillSource && (
-								<div>
-									<p
-										className="
-											mb-2 text-xs font-medium tracking-wider text-muted
-											uppercase
-										"
-									>
+								<div className="space-y-3">
+									<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
 										{t("installedFrom")}
-									</p>
-									<div
-										className="
-											flex items-center justify-between gap-3 rounded-lg
-											bg-surface-secondary px-3 py-2
-										"
-									>
+									</h3>
+									<div className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2">
 										<div className="min-w-0 flex-1">
 											<div className="flex items-center gap-1.5">
 												{currentSkillSource.sourceType.toLowerCase() ===
@@ -500,6 +427,23 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 									</div>
 								</div>
 							)}
+
+							<Card.Footer className="pt-4 border-t border-separator flex flex-wrap gap-3">
+								<Button
+									variant="secondary"
+									onPress={() => setTransferDialogOpen(true)}
+								>
+									<PlusIcon className="size-4" />
+									{t("transfer")}
+								</Button>
+								<Button
+									variant="primary"
+									onPress={() => setManageDialogOpen(true)}
+								>
+									<PlusIcon className="size-4" />
+									{t("addToAgent")}
+								</Button>
+							</Card.Footer>
 						</Card.Content>
 					</Card>
 
@@ -594,25 +538,20 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 				projectPath={projectPath}
 				skillName={skill.name}
 			/>
-			<ResourceInstallDialog
+			<TransferDialog
 				isOpen={transferDialogOpen}
 				onClose={() => setTransferDialogOpen(false)}
-				mode="transfer"
 				resourceType="skill"
 				name={skill.name}
 				sourceAgent={skill.agent ?? "claude"}
 				sourceScope={primaryScope}
 				sourceProjectRoot={projectPath}
 			/>
-			<ResourceInstallDialog
+			<ManageSkillAgentsDialog
+				group={group}
 				isOpen={manageDialogOpen}
 				onClose={() => setManageDialogOpen(false)}
-				mode="manage"
-				resourceType="skill"
-				name={skill.name}
-				sourceAgent={skill.agent ?? "claude"}
-				sourceScope={primaryScope}
-				sourceProjectRoot={projectPath}
+				projectPath={projectPath}
 			/>
 		</>
 	);

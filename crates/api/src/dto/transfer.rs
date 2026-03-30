@@ -1,6 +1,6 @@
 use aghub_core::transfer::{
 	InstallScope, InstallTarget, OperationAction, OperationBatchResult,
-	OperationResult, ReconcileTarget, ResourceLocator,
+	OperationResult, ResourceLocator,
 };
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -58,28 +58,6 @@ impl TargetDto {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct ReconcileTargetDto {
-	pub agent: String,
-	pub scope: InstallScopeDto,
-	pub project_root: Option<String>,
-	pub selected: bool,
-}
-
-impl ReconcileTargetDto {
-	pub fn to_core(&self) -> Result<ReconcileTarget, ApiError> {
-		Ok(ReconcileTarget {
-			target: TargetDto {
-				agent: self.agent.clone(),
-				scope: self.scope,
-				project_root: self.project_root.clone(),
-			}
-			.to_core()?,
-			selected: self.selected,
-		})
-	}
-}
-
-#[derive(Debug, Clone, Deserialize)]
 pub struct ResourceLocatorDto {
 	pub agent: String,
 	pub scope: InstallScopeDto,
@@ -115,7 +93,8 @@ pub struct TransferRequest {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ReconcileRequest {
 	pub source: ResourceLocatorDto,
-	pub targets: Vec<ReconcileTargetDto>,
+	pub added: Option<Vec<String>>,
+	pub removed: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -123,7 +102,6 @@ pub struct ReconcileRequest {
 pub enum OperationActionDto {
 	Copy,
 	Delete,
-	Noop,
 }
 
 impl From<OperationAction> for OperationActionDto {
@@ -131,7 +109,6 @@ impl From<OperationAction> for OperationActionDto {
 		match value {
 			OperationAction::Copy => OperationActionDto::Copy,
 			OperationAction::Delete => OperationActionDto::Delete,
-			OperationAction::Noop => OperationActionDto::Noop,
 		}
 	}
 }
@@ -168,7 +145,6 @@ impl From<OperationResult> for OperationResultDto {
 pub struct OperationBatchResponse {
 	pub success_count: usize,
 	pub failed_count: usize,
-	pub noop_count: usize,
 	pub results: Vec<OperationResultDto>,
 }
 
@@ -177,7 +153,6 @@ impl From<OperationBatchResult> for OperationBatchResponse {
 		OperationBatchResponse {
 			success_count: value.success_count(),
 			failed_count: value.failed_count(),
-			noop_count: value.noop_count(),
 			results: value.results.into_iter().map(Into::into).collect(),
 		}
 	}
