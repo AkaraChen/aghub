@@ -2,7 +2,7 @@ import {
 	ExclamationTriangleIcon,
 	XCircleIcon,
 } from "@heroicons/react/24/solid";
-import { AlertDialog, Button, Modal, Spinner } from "@heroui/react";
+import { AlertDialog, Button, Modal, Spinner, toast } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as pathe from "pathe";
 import { useMemo } from "react";
@@ -45,30 +45,34 @@ export function DeleteSkillLocationDialog({
 
 	const deleteMutation = useMutation({
 		mutationFn: async () => {
-			if (!item) {
+			if (!item || item.installations.length === 0) {
 				return;
 			}
 
-			const results = await Promise.allSettled(
-				item.installations.map((installation) => {
-					const scope =
-						installation.source === ConfigSource.Project
-							? ("project" as const)
-							: ("global" as const);
-					const projectRoot =
-						scope === "project" ? projectPath : undefined;
-					return api.skills.delete(
-						installation.agent,
-						skillName,
-						scope,
-						projectRoot,
-					);
-				}),
+			const firstInstallation = item.installations[0];
+			const scope =
+				firstInstallation.source === ConfigSource.Project
+					? ("project" as const)
+					: ("global" as const);
+			const projectRoot = scope === "project" ? projectPath : undefined;
+
+			const removedAgents = item.installations.map(
+				(installation) => installation.agent,
 			);
-			const failures = results.filter((r) => r.status === "rejected");
-			if (failures.length > 0) {
+
+			const result = await api.skills.reconcile({
+				source: {
+					agent: firstInstallation.agent,
+					scope,
+					project_root: projectRoot,
+					name: skillName,
+				},
+				removed: removedAgents,
+			});
+
+			if (result.failed_count > 0) {
 				throw new Error(
-					`${failures.length} of ${item.installations.length} deletions failed`,
+					`${result.failed_count} of ${result.results.length} deletions failed`,
 				);
 			}
 		},
@@ -84,6 +88,7 @@ export function DeleteSkillLocationDialog({
 		},
 		onError: (error) => {
 			console.error("Skill location delete mutation error:", error);
+			toast.danger(t("failedToDeleteSkill"));
 		},
 	});
 
@@ -184,30 +189,54 @@ export function DeleteSkillDialog({
 
 	const deleteMutation = useMutation({
 		mutationFn: async () => {
-			const deletions = group.items
-				.filter((item) => item.agent)
-				.map((item) => ({
-					agent: item.agent!,
-					scope:
-						item.source === ConfigSource.Project
-							? ("project" as const)
-							: ("global" as const),
-				}));
-			const results = await Promise.allSettled(
-				deletions.map(({ agent, scope }) =>
-					api.skills.delete(agent, skill.name, scope, projectPath),
-				),
+			const itemsWithAgent = group.items.filter((item) => item.agent);
+
+			const globalItems = itemsWithAgent.filter(
+				(item) => item.source === ConfigSource.Global,
 			);
-			const failures = results
-				.map((result, index) => ({
-					result,
-					deletion: deletions[index],
-				}))
-				.filter(({ result }) => result.status === "rejected");
-			if (failures.length > 0) {
-				console.error("Skill delete failures:", failures);
+			const projectItems = itemsWithAgent.filter(
+				(item) => item.source === ConfigSource.Project,
+			);
+
+			const results = [];
+
+			if (globalItems.length > 0) {
+				const result = await api.skills.reconcile({
+					source: {
+						agent: globalItems[0].agent!,
+						scope: "global",
+						name: skill.name,
+					},
+					removed: globalItems.map((item) => item.agent!),
+				});
+				results.push(result);
+			}
+
+			if (projectItems.length > 0) {
+				const result = await api.skills.reconcile({
+					source: {
+						agent: projectItems[0].agent!,
+						scope: "project",
+						project_root: projectPath,
+						name: skill.name,
+					},
+					removed: projectItems.map((item) => item.agent!),
+				});
+				results.push(result);
+			}
+
+			const totalFailed = results.reduce(
+				(sum, r) => sum + r.failed_count,
+				0,
+			);
+			const totalResults = results.reduce(
+				(sum, r) => sum + r.results.length,
+				0,
+			);
+
+			if (totalFailed > 0) {
 				throw new Error(
-					`${failures.length} of ${deletions.length} deletions failed`,
+					`${totalFailed} of ${totalResults} deletions failed`,
 				);
 			}
 		},

@@ -215,6 +215,25 @@ fn skill_target_dir(target: &InstallTarget) -> Result<PathBuf> {
 	})
 }
 
+fn group_agents_by_target_dir(
+	agents: &[AgentType],
+	scope: InstallScope,
+	project_root: Option<&PathBuf>,
+) -> HashMap<PathBuf, Vec<AgentType>> {
+	let mut dir_to_agents: HashMap<PathBuf, Vec<AgentType>> = HashMap::new();
+	for agent in agents {
+		let target = InstallTarget {
+			agent: *agent,
+			scope,
+			project_root: project_root.cloned(),
+		};
+		if let Ok(target_dir) = skill_target_dir(&target) {
+			dir_to_agents.entry(target_dir).or_default().push(*agent);
+		}
+	}
+	dir_to_agents
+}
+
 fn unique_targets(targets: Vec<InstallTarget>) -> Vec<InstallTarget> {
 	let mut seen = HashSet::new();
 	let mut unique = Vec::new();
@@ -372,17 +391,11 @@ pub fn reconcile_skill(
 	let target_project_root = source.project_root.clone();
 
 	// Group agents by target directory to avoid redundant copies
-	let mut dir_to_agents: HashMap<PathBuf, Vec<AgentType>> = HashMap::new();
-	for agent in &added {
-		let target = InstallTarget {
-			agent: *agent,
-			scope: target_scope,
-			project_root: target_project_root.clone(),
-		};
-		if let Ok(target_dir) = skill_target_dir(&target) {
-			dir_to_agents.entry(target_dir).or_default().push(*agent);
-		}
-	}
+	let dir_to_agents = group_agents_by_target_dir(
+		&added,
+		target_scope,
+		target_project_root.as_ref(),
+	);
 
 	// Process each unique directory
 	for (target_dir, agents) in dir_to_agents {
@@ -425,21 +438,11 @@ pub fn reconcile_skill(
 	}
 
 	// Group removed agents by target directory to avoid redundant deletes
-	let mut removed_dir_to_agents: HashMap<PathBuf, Vec<AgentType>> =
-		HashMap::new();
-	for agent in &removed {
-		let target = InstallTarget {
-			agent: *agent,
-			scope: target_scope,
-			project_root: target_project_root.clone(),
-		};
-		if let Ok(target_dir) = skill_target_dir(&target) {
-			removed_dir_to_agents
-				.entry(target_dir)
-				.or_default()
-				.push(*agent);
-		}
-	}
+	let removed_dir_to_agents = group_agents_by_target_dir(
+		&removed,
+		target_scope,
+		target_project_root.as_ref(),
+	);
 
 	// Process each unique directory for deletion
 	for (target_dir, agents) in removed_dir_to_agents {
