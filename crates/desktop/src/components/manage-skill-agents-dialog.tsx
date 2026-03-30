@@ -44,10 +44,10 @@ export function ManageSkillAgentsDialog({
 
 	const usableAgents = useMemo(
 		() =>
-			(availableAgents ?? []).filter(
-				(a) => a?.isUsable && a.capabilities.skills,
-			),
-		[availableAgents],
+			(availableAgents ?? [])
+				.filter((a) => a?.isUsable && a.capabilities.skills)
+				.filter((a) => !installedAgentIds.has(a.id)),
+		[availableAgents, installedAgentIds],
 	);
 
 	const scope: Scope = useMemo(() => {
@@ -65,7 +65,7 @@ export function ManageSkillAgentsDialog({
 
 	if (isOpen && !prevIsOpenRef.current) {
 		queueMicrotask(() => {
-			setSelectedAgents(Array.from(installedAgentIds));
+			setSelectedAgents([]);
 			setAgentStates({});
 		});
 	}
@@ -76,39 +76,17 @@ export function ManageSkillAgentsDialog({
 		[selectedAgents],
 	);
 
-	const getAgentDiffLabel = useCallback(
-		(agentId: string): AgentDiffLabel | null => {
-			const isCurrentAgent = installedAgentIds.has(agentId);
-			const isSelected = selectedSet.has(agentId);
-
-			if (isSelected && !isCurrentAgent) return "adding";
-			if (!isSelected && isCurrentAgent) return "removing";
-			if (isSelected && isCurrentAgent) return "installed";
-			return "unconfigured";
-		},
-		[installedAgentIds, selectedSet],
-	);
-
-	const diffLabels = useMemo(() => {
+	const diffLabels = useMemo((): Record<string, AgentDiffLabel> => {
 		const labels: Record<string, AgentDiffLabel> = {};
 		for (const agent of usableAgents) {
-			const label = getAgentDiffLabel(agent.id);
-			if (label) {
-				labels[agent.id] = label;
+			if (selectedSet.has(agent.id)) {
+				labels[agent.id] = "adding";
 			}
 		}
 		return labels;
-	}, [usableAgents, getAgentDiffLabel]);
+	}, [usableAgents, selectedSet]);
 
-	const hasChanges = useMemo(() => {
-		const toInstall = selectedAgents.filter(
-			(id) => !installedAgentIds.has(id),
-		);
-		const toUninstall = Array.from(installedAgentIds).filter(
-			(id) => !selectedSet.has(id),
-		);
-		return toInstall.length > 0 || toUninstall.length > 0;
-	}, [selectedAgents, installedAgentIds, selectedSet]);
+	const hasChanges = selectedAgents.length > 0;
 
 	const handleSelectionChange = useCallback((keys: string[]) => {
 		setSelectedAgents(keys);
@@ -139,15 +117,10 @@ export function ManageSkillAgentsDialog({
 		const sourceAgentItem =
 			group.items.find((item) => item.agent === primaryAgent) ?? primary;
 
-		const toInstall = selectedAgents.filter(
-			(id) => !installedAgentIds.has(id),
-		);
-		const toUninstall = Array.from(installedAgentIds).filter(
-			(id) => !selectedSet.has(id),
-		);
+		const toInstall = selectedAgents;
 
 		const pendingStates: Record<string, AgentState> = {};
-		for (const id of [...toInstall, ...toUninstall]) {
+		for (const id of toInstall) {
 			pendingStates[id] = { status: "pending" };
 		}
 		setAgentStates(pendingStates);
@@ -164,7 +137,6 @@ export function ManageSkillAgentsDialog({
 					name: primary.name,
 				},
 				added: toInstall.length > 0 ? toInstall : undefined,
-				removed: toUninstall.length > 0 ? toUninstall : undefined,
 			});
 
 			const newAgentStates: Record<string, AgentState> = {};
@@ -201,7 +173,7 @@ export function ManageSkillAgentsDialog({
 			toast.danger(errorMessage);
 
 			const errorStates: Record<string, AgentState> = {};
-			for (const id of [...toInstall, ...toUninstall]) {
+			for (const id of toInstall) {
 				errorStates[id] = { status: "error", error: errorMessage };
 			}
 			setAgentStates(errorStates);

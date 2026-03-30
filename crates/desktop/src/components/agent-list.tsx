@@ -26,6 +26,7 @@ interface AgentListProps {
 	disabled?: boolean;
 	disabledAgents?: Set<string>;
 	label?: string;
+	labelledBy?: string;
 	emptyMessage?: string;
 }
 
@@ -72,6 +73,7 @@ export function AgentList({
 	disabled = false,
 	disabledAgents = new Set(),
 	label,
+	labelledBy,
 	emptyMessage,
 }: AgentListProps) {
 	if (agents.length === 0) {
@@ -88,6 +90,7 @@ export function AgentList({
 			onChange={(values) => onSelectionChange(values as string[])}
 			isDisabled={disabled}
 			className="items-stretch"
+			aria-labelledby={labelledBy}
 		>
 			{label && <Label className="sr-only">{label}</Label>}
 			<div className="flex flex-col gap-0.5">

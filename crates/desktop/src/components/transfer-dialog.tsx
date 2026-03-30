@@ -190,12 +190,6 @@ export function TransferDialog({
 		return selectedScope.name;
 	}, [selectedScope, t]);
 
-	const sourceLabel =
-		sourceScope === "global"
-			? t("globalScope")
-			: (projects.find((p) => p.path === sourceProjectRoot)?.name ??
-				sourceProjectRoot);
-
 	const isLoadingDestinations = destinationQueries.some((q) => q.isFetching);
 
 	useEffect(() => {
@@ -338,11 +332,11 @@ export function TransferDialog({
 					</Modal.Header>
 
 					<Modal.Body className="p-4 space-y-4">
-						<p className="text-sm text-muted">
-							{t("transferDescription", {
-								name,
-								source: sourceLabel,
-							})}
+						<p
+							className="text-sm text-muted"
+							id="transfer-description"
+						>
+							{t("transferDescription", { name })}
 						</p>
 
 						{availableDestinations.length === 0 ? (
@@ -352,7 +346,10 @@ export function TransferDialog({
 						) : (
 							<>
 								<div className="space-y-2">
-									<Label className="text-sm font-medium">
+									<Label
+										className="text-sm font-medium"
+										id="destination-label"
+									>
 										{t("selectDestinationScope")}
 									</Label>
 									<Select
@@ -371,6 +368,9 @@ export function TransferDialog({
 											"selectScopePlaceholder",
 										)}
 										className="w-full"
+										aria-labelledby="destination-label"
+										aria-describedby="transfer-description"
+										autoFocus
 									>
 										<Select.Trigger>
 											<Select.Value />
@@ -410,8 +410,11 @@ export function TransferDialog({
 
 								{selectedScope && (
 									<div className="space-y-2">
-										<Label className="text-sm font-medium">
-											{t("selectAgentsForTransfer", {
+										<Label
+											className="text-sm font-medium"
+											id="agents-label"
+										>
+											{t("selectAgentsForCopy", {
 												destination: destinationLabel,
 											})}
 										</Label>
@@ -422,7 +425,13 @@ export function TransferDialog({
 											)}
 										>
 											{isLoadingDestinations ? (
-												<div className="flex items-center justify-center py-8">
+												<div
+													className="flex items-center justify-center py-8"
+													aria-busy="true"
+													aria-label={t(
+														"loadingDestinations",
+													)}
+												>
 													<ArrowPathIcon className="size-5 animate-spin text-muted" />
 												</div>
 											) : (
@@ -440,6 +449,7 @@ export function TransferDialog({
 													emptyMessage={t(
 														"noTargetAgents",
 													)}
+													labelledBy="agents-label"
 												/>
 											)}
 										</div>
@@ -449,11 +459,22 @@ export function TransferDialog({
 						)}
 					</Modal.Body>
 
+					{isApplying && (
+						<div className="px-4 pb-2">
+							<p className="text-sm text-muted">
+								{t("copyingToTargets", {
+									count: selectedAgents.length,
+								})}
+							</p>
+						</div>
+					)}
+
 					<Modal.Footer>
 						<Button variant="secondary" onPress={onCloseAndReset}>
 							{t("cancel")}
 						</Button>
 						<Button
+							variant="primary"
 							onPress={handleTransfer}
 							isDisabled={
 								!selectedScope ||
