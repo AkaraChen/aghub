@@ -54,6 +54,13 @@ export function ManageAgentsDialog({
 		[requiredCapabilities],
 	);
 
+	const hasValidGroup = group?.items && Array.isArray(group.items);
+
+	const installedAgentIds = useMemo(() => {
+		if (!hasValidGroup) return new Set<string>();
+		return new Set(group.items.map((item) => item.agent ?? "default"));
+	}, [hasValidGroup, group]);
+
 	const usableAgents = useMemo(
 		() =>
 			(availableAgents ?? []).filter(
@@ -62,9 +69,6 @@ export function ManageAgentsDialog({
 		[availableAgents, supportsRequirements],
 	);
 
-	const hasValidGroup = group?.items && Array.isArray(group.items);
-
-	const initialAgentIdsRef = useRef<Set<string>>(new Set());
 	const prevIsOpenRef = useRef(false);
 	const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
 	const [agentStates, setAgentStates] = useState<Record<string, AgentState>>(
@@ -73,16 +77,12 @@ export function ManageAgentsDialog({
 	const [isApplying, setIsApplying] = useState(false);
 
 	if (isOpen && !prevIsOpenRef.current) {
-		const initial = group.items.map((item) => item.agent ?? "default");
-		initialAgentIdsRef.current = new Set(initial);
 		queueMicrotask(() => {
-			setSelectedAgents(initial);
+			setSelectedAgents(Array.from(installedAgentIds));
 			setAgentStates({});
 		});
 	}
 	prevIsOpenRef.current = isOpen;
-
-	const currentAgentIds = initialAgentIdsRef.current;
 
 	const selectedSet = useMemo(
 		() => new Set(selectedAgents),
@@ -91,16 +91,15 @@ export function ManageAgentsDialog({
 
 	const getAgentDiffLabel = useCallback(
 		(agentId: string): AgentDiffLabel | null => {
-			const isCurrentAgent = currentAgentIds.has(agentId);
+			const isCurrentAgent = installedAgentIds.has(agentId);
 			const isSelected = selectedSet.has(agentId);
 
 			if (isSelected && !isCurrentAgent) return "adding";
 			if (!isSelected && isCurrentAgent) return "removing";
 			if (isSelected && isCurrentAgent) return "installed";
-			if (!isSelected && !isCurrentAgent) return "unconfigured";
-			return null;
+			return "unconfigured";
 		},
-		[currentAgentIds, selectedSet],
+		[installedAgentIds, selectedSet],
 	);
 
 	const diffLabels = useMemo(() => {
@@ -116,13 +115,13 @@ export function ManageAgentsDialog({
 
 	const hasChanges = useMemo(() => {
 		const toInstall = selectedAgents.filter(
-			(id) => !currentAgentIds.has(id),
+			(id) => !installedAgentIds.has(id),
 		);
-		const toUninstall = [...currentAgentIds].filter(
+		const toUninstall = Array.from(installedAgentIds).filter(
 			(id) => !selectedSet.has(id),
 		);
 		return toInstall.length > 0 || toUninstall.length > 0;
-	}, [selectedAgents, currentAgentIds, selectedSet]);
+	}, [selectedAgents, installedAgentIds, selectedSet]);
 
 	const onCloseAndReset = () => {
 		setAgentStates({});
@@ -156,9 +155,9 @@ export function ManageAgentsDialog({
 			) ?? primary;
 
 		const toInstall = selectedAgents.filter(
-			(id) => !currentAgentIds.has(id),
+			(id) => !installedAgentIds.has(id),
 		);
-		const toUninstall = [...currentAgentIds].filter(
+		const toUninstall = Array.from(installedAgentIds).filter(
 			(id) => !selectedSet.has(id),
 		);
 

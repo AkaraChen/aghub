@@ -356,6 +356,7 @@ export function TransferDialog({
 										{t("selectDestinationScope")}
 									</Label>
 									<Select
+										variant="secondary"
 										selectedKey={selectedScopeKey}
 										onSelectionChange={(key) => {
 											if (key) {

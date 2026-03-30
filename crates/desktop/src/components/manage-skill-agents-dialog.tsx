@@ -6,11 +6,7 @@ import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useServer } from "../hooks/use-server";
 import { createApi } from "../lib/api";
 import { ConfigSource } from "../lib/api-types";
-import {
-	expandUniversalSelection,
-	getSkillsPathGroups,
-	type Scope,
-} from "../lib/skills-path-group";
+import type { Scope } from "../lib/skills-path-group";
 import { cn } from "../lib/utils";
 import type { AgentDiffLabel, AgentState } from "./agent-list";
 import type { SkillGroup } from "./skill-detail-helpers";
@@ -33,7 +29,18 @@ export function ManageSkillAgentsDialog({
 	const { baseUrl } = useServer();
 	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
 	const queryClient = useQueryClient();
-	const { availableAgents, allAgents } = useAgentAvailability();
+	const { availableAgents } = useAgentAvailability();
+
+	const hasValidGroup = group?.items && Array.isArray(group.items);
+
+	const installedAgentIds = useMemo(() => {
+		if (!hasValidGroup) return new Set<string>();
+		return new Set(
+			group.items
+				.map((item) => item.agent)
+				.filter((agent): agent is string => agent != null),
+		);
+	}, [hasValidGroup, group]);
 
 	const usableAgents = useMemo(
 		() =>
@@ -43,20 +50,12 @@ export function ManageSkillAgentsDialog({
 		[availableAgents],
 	);
 
-	const hasValidGroup = group?.items && Array.isArray(group.items);
-
 	const scope: Scope = useMemo(() => {
 		if (!hasValidGroup || group.items.length === 0) return "global";
 		const primary = group.items[0];
 		return primary?.source === ConfigSource.Project ? "project" : "global";
 	}, [hasValidGroup, group]);
 
-	const groups = useMemo(
-		() => getSkillsPathGroups(allAgents ?? [], scope),
-		[allAgents, scope],
-	);
-
-	const initialAgentIdsRef = useRef<Set<string>>(new Set());
 	const prevIsOpenRef = useRef(false);
 	const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
 	const [agentStates, setAgentStates] = useState<Record<string, AgentState>>(
@@ -65,18 +64,12 @@ export function ManageSkillAgentsDialog({
 	const [isApplying, setIsApplying] = useState(false);
 
 	if (isOpen && !prevIsOpenRef.current) {
-		const initial = group.items
-			.map((item) => item.agent)
-			.filter((agent): agent is string => agent != null);
-		initialAgentIdsRef.current = new Set(initial);
 		queueMicrotask(() => {
-			setSelectedAgents(initial);
+			setSelectedAgents(Array.from(installedAgentIds));
 			setAgentStates({});
 		});
 	}
 	prevIsOpenRef.current = isOpen;
-
-	const currentAgentIds = initialAgentIdsRef.current;
 
 	const selectedSet = useMemo(
 		() => new Set(selectedAgents),
@@ -85,16 +78,15 @@ export function ManageSkillAgentsDialog({
 
 	const getAgentDiffLabel = useCallback(
 		(agentId: string): AgentDiffLabel | null => {
-			const isCurrentAgent = currentAgentIds.has(agentId);
+			const isCurrentAgent = installedAgentIds.has(agentId);
 			const isSelected = selectedSet.has(agentId);
 
 			if (isSelected && !isCurrentAgent) return "adding";
 			if (!isSelected && isCurrentAgent) return "removing";
 			if (isSelected && isCurrentAgent) return "installed";
-			if (!isSelected && !isCurrentAgent) return "unconfigured";
-			return null;
+			return "unconfigured";
 		},
-		[currentAgentIds, selectedSet],
+		[installedAgentIds, selectedSet],
 	);
 
 	const diffLabels = useMemo(() => {
@@ -110,13 +102,13 @@ export function ManageSkillAgentsDialog({
 
 	const hasChanges = useMemo(() => {
 		const toInstall = selectedAgents.filter(
-			(id) => !currentAgentIds.has(id),
+			(id) => !installedAgentIds.has(id),
 		);
-		const toUninstall = [...currentAgentIds].filter(
+		const toUninstall = Array.from(installedAgentIds).filter(
 			(id) => !selectedSet.has(id),
 		);
 		return toInstall.length > 0 || toUninstall.length > 0;
-	}, [selectedAgents, currentAgentIds, selectedSet]);
+	}, [selectedAgents, installedAgentIds, selectedSet]);
 
 	const handleSelectionChange = useCallback((keys: string[]) => {
 		setSelectedAgents(keys);
@@ -143,22 +135,15 @@ export function ManageSkillAgentsDialog({
 			return;
 		}
 
-		// Expand Universal selection to actual agents
-		const expandedSelection = expandUniversalSelection(
-			selectedAgents,
-			groups,
-		);
-		const expandedSet = new Set(expandedSelection);
-
 		const primaryAgent = primary.agent ?? "claude";
 		const sourceAgentItem =
 			group.items.find((item) => item.agent === primaryAgent) ?? primary;
 
-		const toInstall = expandedSelection.filter(
-			(id) => !currentAgentIds.has(id),
+		const toInstall = selectedAgents.filter(
+			(id) => !installedAgentIds.has(id),
 		);
-		const toUninstall = [...currentAgentIds].filter(
-			(id) => !expandedSet.has(id),
+		const toUninstall = Array.from(installedAgentIds).filter(
+			(id) => !selectedSet.has(id),
 		);
 
 		const pendingStates: Record<string, AgentState> = {};
@@ -258,7 +243,6 @@ export function ManageSkillAgentsDialog({
 							>
 								<SkillsAgentList
 									agents={usableAgents}
-									agentInfos={allAgents ?? []}
 									selectedKeys={selectedAgents}
 									onSelectionChange={handleSelectionChange}
 									scope={scope}

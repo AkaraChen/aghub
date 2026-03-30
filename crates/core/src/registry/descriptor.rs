@@ -30,10 +30,18 @@ pub struct AgentDescriptor {
 	pub global_path: fn() -> PathBuf,
 	pub project_path: fn(&Path) -> PathBuf,
 	pub capabilities: Capabilities,
-	/// Function returning the global skills path (if skills supported)
-	pub global_skills_path: Option<fn() -> PathBuf>,
-	/// Function returning the project skills path (if skills supported)
-	pub project_skills_path: Option<fn(&Path) -> PathBuf>,
+	/// Function returning global skills directories.
+	///
+	/// **Convention**: The first path in the Vec is agent-specific and
+	/// should not overlap with other agents' paths. Subsequent paths may
+	/// include fallback/compatibility locations shared with other agents.
+	pub global_skills_paths: Option<fn() -> Vec<PathBuf>>,
+	/// Function returning project skills directories.
+	///
+	/// **Convention**: The first path in the Vec is agent-specific and
+	/// should not overlap with other agents' paths. Subsequent paths may
+	/// include fallback/compatibility locations shared with other agents.
+	pub project_skills_paths: Option<fn(&Path) -> Vec<PathBuf>>,
 	pub cli_name: &'static str,
 	pub validate_args: &'static [&'static str],
 	/// Directory/file markers that indicate this agent's project root
@@ -44,44 +52,63 @@ pub struct AgentDescriptor {
 }
 
 impl AgentDescriptor {
-	/// Get the target skills directory for writing, based on scope
+	/// Get the target skills directory for writing, based on scope.
+	///
+	/// Returns the first element from the skills directories Vec,
+	/// per the convention that the first path is agent-specific.
 	pub fn target_skills_dir(
 		&self,
 		project_root: Option<&Path>,
 		scope: ResourceScope,
 	) -> Option<PathBuf> {
 		match scope {
-			ResourceScope::GlobalOnly => self.global_skills_dir(),
+			ResourceScope::GlobalOnly => {
+				self.global_skills_dirs().first().cloned()
+			}
 			ResourceScope::ProjectOnly | ResourceScope::Both => {
 				if let Some(root) = project_root {
-					self.project_skills_dir(root)
+					self.project_skills_dirs(root).first().cloned()
 				} else {
-					self.global_skills_dir()
+					self.global_skills_dirs().first().cloned()
 				}
 			}
 		}
 	}
 
-	/// Get global skills directory path
-	pub fn global_skills_dir(&self) -> Option<PathBuf> {
-		if let Some(path_fn) = self.global_skills_path {
-			Some(path_fn())
-		} else if self.capabilities.universal_skills {
-			Some(get_universal_skills_path())
-		} else {
-			None
+	/// Get all global skills directories for this agent.
+	///
+	/// Returns agent-specific paths first, then fallback/compatibility paths.
+	/// Also includes universal skills path if `universal_skills` capability is set.
+	pub fn global_skills_dirs(&self) -> Vec<PathBuf> {
+		let mut dirs = Vec::new();
+
+		if let Some(paths_fn) = self.global_skills_paths {
+			dirs.extend(paths_fn());
 		}
+
+		if self.capabilities.universal_skills {
+			dirs.push(get_universal_skills_path());
+		}
+
+		dirs
 	}
 
-	/// Get project skills directory path relative to project root
-	pub fn project_skills_dir(&self, project_root: &Path) -> Option<PathBuf> {
-		if let Some(path_fn) = self.project_skills_path {
-			Some(path_fn(project_root))
-		} else if self.capabilities.universal_skills {
-			Some(project_root.join(".agents/skills"))
-		} else {
-			None
+	/// Get all project skills directories for this agent.
+	///
+	/// Returns agent-specific paths first, then fallback/compatibility paths.
+	/// Also includes universal project skills path if `universal_skills` capability is set.
+	pub fn project_skills_dirs(&self, project_root: &Path) -> Vec<PathBuf> {
+		let mut dirs = Vec::new();
+
+		if let Some(paths_fn) = self.project_skills_paths {
+			dirs.extend(paths_fn(project_root));
 		}
+
+		if self.capabilities.universal_skills {
+			dirs.push(project_root.join(".agents/skills"));
+		}
+
+		dirs
 	}
 
 	/// Get all skills paths for reading (may include universal path)
@@ -94,16 +121,12 @@ impl AgentDescriptor {
 
 		if scope == ResourceScope::ProjectOnly || scope == ResourceScope::Both {
 			if let Some(root) = project_root {
-				if let Some(path) = self.project_skills_dir(root) {
-					paths.push(path);
-				}
+				paths.extend(self.project_skills_dirs(root));
 			}
 		}
 
 		if scope == ResourceScope::GlobalOnly || scope == ResourceScope::Both {
-			if let Some(path) = self.global_skills_dir() {
-				paths.push(path);
-			}
+			paths.extend(self.global_skills_dirs());
 		}
 
 		paths

@@ -21,16 +21,6 @@ pub fn set_skills_path_override(agent_id: &str, path: Option<PathBuf>) {
 	});
 }
 
-/// Get the universal skills directory path following XDG config spec
-fn get_universal_skills_path() -> Option<PathBuf> {
-	// Check XDG_CONFIG_HOME first, then fall back to ~/.config
-	let config_dir = std::env::var_os("XDG_CONFIG_HOME")
-		.map(PathBuf::from)
-		.or_else(|| dirs::home_dir().map(|h| h.join(".config")))?;
-
-	Some(config_dir.join("agents/skills"))
-}
-
 // Function removed because it is now a method on the AgentAdapter trait
 impl AgentAdapter for &'static AgentDescriptor {
 	fn name(&self) -> &'static str {
@@ -66,37 +56,16 @@ impl AgentAdapter for &'static AgentDescriptor {
 			}
 		}
 
-		// Add project-level skills path(s) if scope includes project
+		// Add project-level skills directories if scope includes project
 		if scope == ResourceScope::ProjectOnly || scope == ResourceScope::Both {
 			if let Some(root) = project_root {
-				// Add agent-specific project skills path
-				if let Some(path_fn) = self.project_skills_path {
-					paths.push(path_fn(root));
-				}
-
-				// Add universal project skills path for agents that support it
-				if self.capabilities.universal_skills {
-					paths.push(root.join(".agents/skills"));
-				}
+				paths.extend(self.project_skills_dirs(root));
 			}
 		}
 
-		// Add global skills path(s) if scope includes global
+		// Add global skills directories if scope includes global
 		if scope == ResourceScope::GlobalOnly || scope == ResourceScope::Both {
-			// Add agent-specific global skills path
-			if let Some(path_fn) = self.global_skills_path {
-				paths.push(path_fn());
-			}
-
-			// Add universal global skills path for agents that support it
-			if self.capabilities.universal_skills {
-				if let Some(universal_path) = get_universal_skills_path() {
-					// Only add if not already in paths
-					if !paths.contains(&universal_path) {
-						paths.push(universal_path);
-					}
-				}
-			}
+			paths.extend(self.global_skills_dirs());
 		}
 
 		paths
@@ -116,29 +85,15 @@ impl AgentAdapter for &'static AgentDescriptor {
 			}
 		}
 
-		let global_fallback = || {
-			self.global_skills_path.map(|f| f()).or_else(|| {
-				if self.capabilities.universal_skills {
-					get_universal_skills_path()
-				} else {
-					None
-				}
-			})
-		};
-
 		match scope {
-			ResourceScope::GlobalOnly => global_fallback(),
+			ResourceScope::GlobalOnly => {
+				self.global_skills_dirs().first().cloned()
+			}
 			ResourceScope::ProjectOnly | ResourceScope::Both => {
 				if let Some(root) = project_root {
-					if let Some(f) = self.project_skills_path {
-						Some(f(root))
-					} else if self.capabilities.universal_skills {
-						Some(root.join(".agents/skills"))
-					} else {
-						None
-					}
+					self.project_skills_dirs(root).first().cloned()
 				} else {
-					global_fallback()
+					self.global_skills_dirs().first().cloned()
 				}
 			}
 		}

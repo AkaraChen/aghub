@@ -8,17 +8,6 @@ use std::path::{Path, PathBuf};
 // ─── XDG config path tests (xdg-config-paths.test.ts) ───────────────────────
 
 #[test]
-fn test_opencode_uses_universal_skills() {
-	let descriptor = aghub_core::registry::iter_all()
-		.find(|d| d.id == "opencode")
-		.unwrap();
-	assert!(
-		descriptor.capabilities.universal_skills,
-		"OpenCode should use universal skills path (~/.config/agents/skills)"
-	);
-}
-
-#[test]
 fn test_opencode_global_config_path_not_platform_specific() {
 	let path = (opencode::DESCRIPTOR.global_path)();
 	let path_str = path.to_string_lossy();
@@ -41,10 +30,11 @@ fn test_opencode_global_config_path_not_platform_specific() {
 
 #[test]
 fn test_amp_global_skills_uses_xdg() {
-	let path_fn = amp::DESCRIPTOR
-		.global_skills_path
-		.expect("Amp should have a global_skills_path");
-	let path = path_fn();
+	let paths_fn = amp::DESCRIPTOR
+		.global_skills_paths
+		.expect("Amp should have a global_skills_paths");
+	let paths = paths_fn();
+	let path = paths.first().expect("Should have at least one path");
 	let path_str = path.to_string_lossy();
 	assert!(
 		path_str.contains(".config"),
@@ -55,10 +45,11 @@ fn test_amp_global_skills_uses_xdg() {
 
 #[test]
 fn test_amp_global_skills_not_platform_specific() {
-	let path_fn = amp::DESCRIPTOR
-		.global_skills_path
-		.expect("Amp should have a global_skills_path");
-	let path = path_fn();
+	let paths_fn = amp::DESCRIPTOR
+		.global_skills_paths
+		.expect("Amp should have a global_skills_paths");
+	let paths = paths_fn();
+	let path = paths.first().expect("Should have at least one path");
 	let path_str = path.to_string_lossy();
 	assert!(
 		!path_str.contains("Library"),
@@ -79,10 +70,11 @@ fn test_amp_global_skills_not_platform_specific() {
 
 #[test]
 fn test_cursor_global_skills_path() {
-	let path_fn = cursor::DESCRIPTOR
-		.global_skills_path
-		.expect("Cursor should have a global_skills_path");
-	let path = path_fn();
+	let paths_fn = cursor::DESCRIPTOR
+		.global_skills_paths
+		.expect("Cursor should have a global_skills_paths");
+	let paths = paths_fn();
+	let path = paths.first().expect("Should have at least one path");
 	assert!(
 		path.to_string_lossy().contains(".cursor"),
 		"Cursor global skills should be under ~/.cursor, got: {}",
@@ -106,22 +98,12 @@ fn test_kimi_global_mcp_path() {
 }
 
 #[test]
-fn test_kimi_uses_universal_skills() {
-	let descriptor = aghub_core::registry::iter_all()
-		.find(|d| d.id == "kimi")
-		.unwrap();
-	assert!(
-		descriptor.capabilities.universal_skills,
-		"Kimi should use the universal .agents/skills directories"
-	);
-}
-
-#[test]
 fn test_pi_global_skills_path_uses_agent_dir() {
-	let path_fn = pi::DESCRIPTOR
-		.global_skills_path
-		.expect("Pi should have a global_skills_path");
-	let path = path_fn();
+	let paths_fn = pi::DESCRIPTOR
+		.global_skills_paths
+		.expect("Pi should have a global_skills_paths");
+	let paths = paths_fn();
+	let path = paths.first().expect("Should have at least one path");
 	assert!(
 		path.to_string_lossy().contains(".pi/agent/skills"),
 		"Pi global skills should be under ~/.pi/agent/skills, got: {}",
@@ -150,8 +132,8 @@ fn test_openclaw_prefers_openclaw_dir() {
 			|| s.ends_with(".clawdbot")
 			|| s.ends_with(".moltbot")
 	};
-	let result = openclaw::get_openclaw_skills_dir(&home, exists);
-	assert_eq!(result, home.join(".openclaw/skills"));
+	let result = openclaw::get_openclaw_skills_dirs(&home, exists);
+	assert_eq!(result, vec![home.join(".openclaw/skills")]);
 }
 
 #[test]
@@ -162,8 +144,8 @@ fn test_openclaw_falls_back_to_clawdbot() {
 		let s = p.to_string_lossy();
 		s.ends_with(".clawdbot") || s.ends_with(".moltbot")
 	};
-	let result = openclaw::get_openclaw_skills_dir(&home, exists);
-	assert_eq!(result, home.join(".clawdbot/skills"));
+	let result = openclaw::get_openclaw_skills_dirs(&home, exists);
+	assert_eq!(result, vec![home.join(".clawdbot/skills")]);
 }
 
 #[test]
@@ -172,15 +154,15 @@ fn test_openclaw_falls_back_to_moltbot() {
 	// Only .moltbot exists
 	let exists =
 		|p: &Path| -> bool { p.to_string_lossy().ends_with(".moltbot") };
-	let result = openclaw::get_openclaw_skills_dir(&home, exists);
-	assert_eq!(result, home.join(".moltbot/skills"));
+	let result = openclaw::get_openclaw_skills_dirs(&home, exists);
+	assert_eq!(result, vec![home.join(".moltbot/skills")]);
 }
 
 #[test]
 fn test_openclaw_defaults_to_openclaw_when_none_exist() {
 	let home = PathBuf::from("/tmp/home");
-	let result = openclaw::get_openclaw_skills_dir(&home, |_| false);
-	assert_eq!(result, home.join(".openclaw/skills"));
+	let result = openclaw::get_openclaw_skills_dirs(&home, |_| false);
+	assert_eq!(result, vec![home.join(".openclaw/skills")]);
 }
 
 #[test]
@@ -198,11 +180,8 @@ fn test_openclaw_skills_enabled() {
 
 #[test]
 fn test_opencode_global_creation_persists() {
-	let temp = tempfile::tempdir().unwrap();
-	std::env::set_var("XDG_CONFIG_HOME", temp.path());
-
 	// TestConfig Builder sets an override by default, we must CLEAR it
-	// to allow real path logic to execute the fallback to XDG_CONFIG_HOME.
+	// to allow real path logic to execute.
 	let test =
 		aghub_core::testing::TestConfig::new(aghub_core::AgentType::OpenCode)
 			.unwrap();
@@ -211,29 +190,26 @@ fn test_opencode_global_creation_persists() {
 	let mut manager = test.create_manager();
 	manager.load().unwrap();
 
-	let mut skill = aghub_core::models::Skill::new("test-skill-opencode");
+	// Use unique skill name with timestamp to avoid conflicts
+	let skill_name = format!(
+		"test-skill-opencode-{}",
+		std::time::SystemTime::now()
+			.duration_since(std::time::UNIX_EPOCH)
+			.unwrap()
+			.as_millis()
+	);
+	let mut skill = aghub_core::models::Skill::new(&skill_name);
 	skill.description = Some("desc".to_string());
 
 	manager.add_skill(skill).unwrap();
-
-	// Verify the file was created in XDG_CONFIG_HOME/agents/skills/test-skill-opencode/SKILL.md
-	let expected_path = temp
-		.path()
-		.join("agents/skills/test-skill-opencode/SKILL.md");
-	assert!(
-		expected_path.exists(),
-		"Skill should be written to universal skills path"
-	);
 
 	// Reload and check it persists
 	let mut manager2 = test.create_manager();
 	manager2.load().unwrap();
 	assert!(
-		manager2.get_skill("test-skill-opencode").is_some(),
+		manager2.get_skill(&skill_name).is_some(),
 		"Skill should survive reload"
 	);
-
-	std::env::remove_var("XDG_CONFIG_HOME");
 }
 
 #[test]

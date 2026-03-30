@@ -34,11 +34,10 @@ export interface AgentInfo {
 		mcp_enable_disable: boolean;
 		skills: boolean;
 		skills_mutable: boolean;
-		universal_skills: boolean;
 	};
 	skills_paths: {
-		project: string | null;
-		global: string | null;
+		project: string[];
+		global: string[];
 	};
 }
 

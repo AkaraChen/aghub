@@ -613,7 +613,7 @@ mod tests {
 
 		assert_eq!(result.success_count(), 1);
 		assert!(dest_root
-			.join(".agents/skills/repo-helper/assets/notes.txt")
+			.join(".cursor/skills/repo-helper/assets/notes.txt")
 			.exists());
 	}
 

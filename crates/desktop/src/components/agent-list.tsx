@@ -90,7 +90,7 @@ export function AgentList({
 			className="items-stretch"
 		>
 			{label && <Label className="sr-only">{label}</Label>}
-			<div className="flex flex-col gap-1">
+			<div className="flex flex-col gap-0.5">
 				{agents.map((agent) => {
 					const state = agentStates[agent.id];
 					const diffLabel = diffLabels[agent.id];
@@ -104,7 +104,7 @@ export function AgentList({
 							variant="secondary"
 							className={cn(
 								"group relative flex w-full flex-col items-stretch gap-2 rounded-2xl bg-surface px-3 py-2.5 transition-all",
-								"data-[selected=true]:bg-accent/10",
+								"data-[selected=true]:bg-surface-secondary",
 							)}
 						>
 							<Checkbox.Control className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full before:rounded-full">
