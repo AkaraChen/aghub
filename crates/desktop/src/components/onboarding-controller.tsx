@@ -581,23 +581,20 @@ const WIZARD_VIDEOS: Record<string, string> = {
 function WizardIllustration({ stepId }: { stepId: string }) {
 	const videoSrc = WIZARD_VIDEOS[stepId];
 	const [isLoading, setIsLoading] = useState(true);
-	const containerRef = useRef<HTMLDivElement>(null);
+	const videoRef = useRef<HTMLVideoElement>(null);
 
 	const handleFullscreen = () => {
-		const el = containerRef.current;
-		if (!el) return;
+		const video = videoRef.current;
+		if (!video) return;
 		if (document.fullscreenElement) {
 			void document.exitFullscreen();
 		} else {
-			void el.requestFullscreen();
+			void video.requestFullscreen();
 		}
 	};
 
 	return (
-		<div
-			ref={containerRef}
-			className="group relative flex min-h-80 items-center justify-center overflow-hidden rounded-2xl border border-border bg-surface-secondary/60"
-		>
+		<div className="group relative flex min-h-80 items-center justify-center overflow-hidden rounded-2xl border border-border bg-surface-secondary/60">
 			{isLoading && (
 				<div className="absolute inset-0 flex items-center justify-center">
 					<Spinner size="lg" />
@@ -605,6 +602,7 @@ function WizardIllustration({ stepId }: { stepId: string }) {
 			)}
 			{videoSrc && (
 				<video
+					ref={videoRef}
 					key={stepId}
 					className={cn(
 						"size-full object-cover transition-opacity",
