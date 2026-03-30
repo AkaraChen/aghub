@@ -9,6 +9,14 @@ fn global_path() -> PathBuf {
 fn project_path(root: &Path) -> PathBuf {
 	root.join(".kimi/mcp.json")
 }
+fn global_skills_paths() -> Vec<PathBuf> {
+	vec![dirs::home_dir()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
+		.join(".config/agents/skills")]
+}
+fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
+	vec![root.join(".agents/skills")]
+}
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "kimi",
@@ -24,8 +32,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 		skills: true,
 		universal_skills: true,
 	},
-	global_skills_path: None,
-	project_skills_path: None,
+	global_skills_paths: Some(global_skills_paths),
+	project_skills_paths: Some(project_skills_paths),
 	cli_name: "kimi",
 	validate_args: &["--version"],
 	project_markers: &[".kimi"],

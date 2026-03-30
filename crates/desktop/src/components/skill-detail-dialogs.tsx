@@ -2,10 +2,10 @@ import {
 	ExclamationTriangleIcon,
 	XCircleIcon,
 } from "@heroicons/react/24/solid";
-import { AlertDialog, Button, Modal, Spinner } from "@heroui/react";
+import { AlertDialog, Button, Modal, Spinner, toast } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as pathe from "pathe";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useServer } from "../hooks/use-server";
 import { createApi } from "../lib/api";
@@ -42,42 +42,39 @@ export function DeleteSkillLocationDialog({
 	const { baseUrl } = useServer();
 	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
 	const queryClient = useQueryClient();
-	const [selectedInstallationId, setSelectedInstallationId] = useState<
-		string | null
-	>(() => item?.installations[0]?.id ?? null);
-
-	const selectedInstallation = useMemo(() => {
-		if (!item) {
-			return null;
-		}
-
-		return (
-			item.installations.find(
-				(installation) => installation.id === selectedInstallationId,
-			) ??
-			item.installations[0] ??
-			null
-		);
-	}, [item, selectedInstallationId]);
 
 	const deleteMutation = useMutation({
 		mutationFn: async () => {
-			if (!selectedInstallation) {
+			if (!item || item.installations.length === 0) {
 				return;
 			}
 
+			const firstInstallation = item.installations[0];
 			const scope =
-				selectedInstallation.source === ConfigSource.Project
+				firstInstallation.source === ConfigSource.Project
 					? ("project" as const)
 					: ("global" as const);
 			const projectRoot = scope === "project" ? projectPath : undefined;
 
-			await api.skills.delete(
-				selectedInstallation.agent,
-				skillName,
-				scope,
-				projectRoot,
+			const removedAgents = item.installations.map(
+				(installation) => installation.agent,
 			);
+
+			const result = await api.skills.reconcile({
+				source: {
+					agent: firstInstallation.agent,
+					scope,
+					project_root: projectRoot,
+					name: skillName,
+				},
+				removed: removedAgents,
+			});
+
+			if (result.failed_count > 0) {
+				throw new Error(
+					`${result.failed_count} of ${result.results.length} deletions failed`,
+				);
+			}
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["skills"] });
@@ -91,17 +88,18 @@ export function DeleteSkillLocationDialog({
 		},
 		onError: (error) => {
 			console.error("Skill location delete mutation error:", error);
+			toast.danger(t("failedToDeleteSkill"));
 		},
 	});
 
 	const folderPath = item ? pathe.dirname(item.sourcePath) : "";
-	const scopeLabel =
-		selectedInstallation?.source === ConfigSource.Project
-			? t("project")
-			: t("global");
-	const agentName = selectedInstallation
-		? formatAgentName(selectedInstallation.agent)
-		: "";
+	const agentNames =
+		item?.installations.length === 1
+			? formatAgentName(item.installations[0].agent)
+			: (item?.installations
+					.map((i) => formatAgentName(i.agent))
+					.join(", ") ?? "");
+	const isMultiAgent = (item?.installations.length ?? 0) > 1;
 
 	return (
 		<AlertDialog.Backdrop isOpen={isOpen} onOpenChange={onClose}>
@@ -111,71 +109,34 @@ export function DeleteSkillLocationDialog({
 					<AlertDialog.Header>
 						<AlertDialog.Icon status="danger" />
 						<AlertDialog.Heading>
-							{t("deleteSkillForAgentTitle", {
-								agent: agentName,
-							})}
+							{isMultiAgent
+								? t("deleteSkillTitle")
+								: t("deleteSkillForAgentTitle", {
+										agent: agentNames,
+									})}
 						</AlertDialog.Heading>
 					</AlertDialog.Header>
 					<AlertDialog.Body>
-						{(item?.installations.length ?? 0) > 1 && (
-							<div className="mb-4 space-y-2">
-								<p className="text-sm text-muted">
-									{t("deleteSharedLocationWarning")}
-								</p>
-								<div>
-									<p
-										className="
-											mb-2 text-xs font-medium tracking-wide text-muted
-											uppercase
-										"
-									>
-										{t("selectAgentToDelete")}
-									</p>
-									<div className="flex flex-wrap gap-2">
-										{item?.installations.map(
-											(installation) => (
-												<Button
-													key={installation.id}
-													size="sm"
-													variant={
-														installation.id ===
-														selectedInstallation?.id
-															? "secondary"
-															: "ghost"
-													}
-													onPress={() =>
-														setSelectedInstallationId(
-															installation.id,
-														)
-													}
-												>
-													{formatAgentName(
-														installation.agent,
-													)}
-													<span className="text-xs text-muted">
-														{" · "}
-														{installation.source ===
-														ConfigSource.Project
-															? t("project")
-															: t("global")}
-													</span>
-												</Button>
-											),
-										)}
-									</div>
-								</div>
-							</div>
-						)}
 						<p className="text-sm text-muted">
-							{t("deleteSkillForAgentWarning", {
-								name: skillName,
-								agent: agentName,
-							})}
+							{isMultiAgent
+								? t("deleteSkillForAgentsWarning", {
+										name: skillName,
+										agents: agentNames,
+									})
+								: t("deleteSkillForAgentWarning", {
+										name: skillName,
+										agent: agentNames,
+									})}
 						</p>
 						{item && (
 							<div className="mt-4 rounded-lg bg-surface-secondary px-3 py-2">
 								<p className="text-[11px] text-muted">
-									{scopeLabel}
+									{isMultiAgent
+										? t("sharedLocation")
+										: item.installations[0].source ===
+												ConfigSource.Project
+											? t("project")
+											: t("global")}
 								</p>
 								<p className="mt-1 font-mono text-xs text-foreground">
 									{folderPath}
@@ -195,10 +156,7 @@ export function DeleteSkillLocationDialog({
 						<Button
 							variant="danger"
 							onPress={() => deleteMutation.mutate()}
-							isDisabled={
-								deleteMutation.isPending ||
-								selectedInstallation === null
-							}
+							isDisabled={deleteMutation.isPending}
 						>
 							{deleteMutation.isPending ? (
 								<>
@@ -231,30 +189,54 @@ export function DeleteSkillDialog({
 
 	const deleteMutation = useMutation({
 		mutationFn: async () => {
-			const deletions = group.items
-				.filter((item) => item.agent)
-				.map((item) => ({
-					agent: item.agent!,
-					scope:
-						item.source === ConfigSource.Project
-							? ("project" as const)
-							: ("global" as const),
-				}));
-			const results = await Promise.allSettled(
-				deletions.map(({ agent, scope }) =>
-					api.skills.delete(agent, skill.name, scope, projectPath),
-				),
+			const itemsWithAgent = group.items.filter((item) => item.agent);
+
+			const globalItems = itemsWithAgent.filter(
+				(item) => item.source === ConfigSource.Global,
 			);
-			const failures = results
-				.map((result, index) => ({
-					result,
-					deletion: deletions[index],
-				}))
-				.filter(({ result }) => result.status === "rejected");
-			if (failures.length > 0) {
-				console.error("Skill delete failures:", failures);
+			const projectItems = itemsWithAgent.filter(
+				(item) => item.source === ConfigSource.Project,
+			);
+
+			const results = [];
+
+			if (globalItems.length > 0) {
+				const result = await api.skills.reconcile({
+					source: {
+						agent: globalItems[0].agent!,
+						scope: "global",
+						name: skill.name,
+					},
+					removed: globalItems.map((item) => item.agent!),
+				});
+				results.push(result);
+			}
+
+			if (projectItems.length > 0) {
+				const result = await api.skills.reconcile({
+					source: {
+						agent: projectItems[0].agent!,
+						scope: "project",
+						project_root: projectPath,
+						name: skill.name,
+					},
+					removed: projectItems.map((item) => item.agent!),
+				});
+				results.push(result);
+			}
+
+			const totalFailed = results.reduce(
+				(sum, r) => sum + r.failed_count,
+				0,
+			);
+			const totalResults = results.reduce(
+				(sum, r) => sum + r.results.length,
+				0,
+			);
+
+			if (totalFailed > 0) {
 				throw new Error(
-					`${failures.length} of ${deletions.length} deletions failed`,
+					`${totalFailed} of ${totalResults} deletions failed`,
 				);
 			}
 		},

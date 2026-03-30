@@ -3,6 +3,42 @@ export enum ConfigSource {
 	Project = "project",
 }
 
+export type InstallScope = "global" | "project";
+
+export interface InstallTarget {
+	agent: string;
+	scope: InstallScope;
+	project_root?: string;
+}
+
+export interface ReconcileRequest {
+	source: {
+		agent: string;
+		scope: InstallScope;
+		project_root?: string;
+		name: string;
+	};
+	added?: string[];
+	removed?: string[];
+}
+
+export type OperationAction = "copy" | "delete";
+
+export interface OperationResult {
+	agent: string;
+	scope: InstallScope;
+	project_root?: string;
+	action: OperationAction;
+	success: boolean;
+	error?: string;
+}
+
+export interface OperationBatchResponse {
+	success_count: number;
+	failed_count: number;
+	results: OperationResult[];
+}
+
 export interface SkillResponse {
 	name: string;
 	enabled: boolean;

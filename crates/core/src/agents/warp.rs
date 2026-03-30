@@ -10,13 +10,13 @@ fn project_path(root: &Path) -> PathBuf {
 	root.join(".warp/mcp.json")
 }
 
-fn global_skills_path() -> PathBuf {
-	dirs::home_dir()
+fn global_skills_paths() -> Vec<PathBuf> {
+	vec![dirs::home_dir()
 		.unwrap_or_else(|| std::path::PathBuf::from(""))
-		.join(".config/agents/skills")
+		.join(".agents/skills")]
 }
-fn project_skills_path(root: &Path) -> PathBuf {
-	root.join(".agents/skills")
+fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
+	vec![root.join(".agents/skills")]
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
@@ -31,10 +31,10 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 		mcp_remote: true,
 		mcp_enable_disable: false,
 		skills: true,
-		universal_skills: true,
+		universal_skills: false,
 	},
-	global_skills_path: Some(global_skills_path),
-	project_skills_path: Some(project_skills_path),
+	global_skills_paths: Some(global_skills_paths),
+	project_skills_paths: Some(project_skills_paths),
 	cli_name: "warp",
 	validate_args: &["--version"],
 	project_markers: &[".warp"],

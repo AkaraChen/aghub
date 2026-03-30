@@ -2,7 +2,7 @@ use aghub_core::{
 	errors::ConfigError,
 	load_all_agents,
 	models::{AgentType, Skill},
-	registry,
+	registry, transfer,
 };
 use rocket::http::Status;
 use rocket::response::status::NoContent;
@@ -17,6 +17,9 @@ use crate::{
 		InstallSkillResponse, LocalSkillLockEntryResponse,
 		ProjectSkillLockResponse, SkillLockEntryResponse, SkillResponse,
 		SkillTreeNodeKind, SkillTreeNodeResponse, UpdateSkillRequest,
+	},
+	dto::transfer::{
+		OperationBatchResponse, ReconcileRequest, TransferRequest,
 	},
 	error::{ApiCreated, ApiError, ApiNoContent, ApiResult},
 	extractors::{AgentParam, ScopeParams},
@@ -34,6 +37,64 @@ fn expand_tilde_path(path: &str) -> std::path::PathBuf {
 	} else {
 		path.into()
 	}
+}
+
+#[post("/skills/transfer", data = "<body>")]
+pub fn transfer_skill_route(
+	body: Json<TransferRequest>,
+) -> ApiResult<OperationBatchResponse> {
+	let req = body.into_inner();
+	let source = req.source.to_core()?;
+	let destinations = req
+		.destinations
+		.iter()
+		.map(|target| target.to_core())
+		.collect::<Result<Vec<_>, _>>()?;
+	let result = transfer::transfer_skill(source, destinations)
+		.map_err(ApiError::from)?;
+	Ok(Json(result.into()))
+}
+
+#[post("/skills/reconcile", data = "<body>")]
+pub fn reconcile_skill_route(
+	body: Json<ReconcileRequest>,
+) -> ApiResult<OperationBatchResponse> {
+	let req = body.into_inner();
+	let source = req.source.to_core()?;
+
+	let added: Vec<_> = req
+		.added
+		.unwrap_or_default()
+		.iter()
+		.map(|agent_str| {
+			agent_str.parse().map_err(|_| {
+				ApiError::new(
+					rocket::http::Status::BadRequest,
+					format!("Unknown agent '{}'", agent_str),
+					"INVALID_PARAM",
+				)
+			})
+		})
+		.collect::<Result<Vec<_>, _>>()?;
+
+	let removed: Vec<_> = req
+		.removed
+		.unwrap_or_default()
+		.iter()
+		.map(|agent_str| {
+			agent_str.parse().map_err(|_| {
+				ApiError::new(
+					rocket::http::Status::BadRequest,
+					format!("Unknown agent '{}'", agent_str),
+					"INVALID_PARAM",
+				)
+			})
+		})
+		.collect::<Result<Vec<_>, _>>()?;
+
+	let result = transfer::reconcile_skill(source, added, removed)
+		.map_err(ApiError::from)?;
+	Ok(Json(result.into()))
 }
 
 fn get_parent_folder(path: std::path::PathBuf) -> std::path::PathBuf {

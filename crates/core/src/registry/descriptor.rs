@@ -1,5 +1,5 @@
 use crate::errors::Result;
-use crate::models::AgentConfig;
+use crate::models::{AgentConfig, ResourceScope};
 use std::path::{Path, PathBuf};
 
 /// Parse function type for agent configuration
@@ -30,10 +30,18 @@ pub struct AgentDescriptor {
 	pub global_path: fn() -> PathBuf,
 	pub project_path: fn(&Path) -> PathBuf,
 	pub capabilities: Capabilities,
-	/// Function returning the global skills path (if skills supported)
-	pub global_skills_path: Option<fn() -> PathBuf>,
-	/// Function returning the project skills path (if skills supported)
-	pub project_skills_path: Option<fn(&Path) -> PathBuf>,
+	/// Function returning global skills directories.
+	///
+	/// **Convention**: The first path in the Vec is agent-specific and
+	/// should not overlap with other agents' paths. Subsequent paths may
+	/// include fallback/compatibility locations shared with other agents.
+	pub global_skills_paths: Option<fn() -> Vec<PathBuf>>,
+	/// Function returning project skills directories.
+	///
+	/// **Convention**: The first path in the Vec is agent-specific and
+	/// should not overlap with other agents' paths. Subsequent paths may
+	/// include fallback/compatibility locations shared with other agents.
+	pub project_skills_paths: Option<fn(&Path) -> Vec<PathBuf>>,
 	pub cli_name: &'static str,
 	pub validate_args: &'static [&'static str],
 	/// Directory/file markers that indicate this agent's project root
@@ -43,11 +51,98 @@ pub struct AgentDescriptor {
 	pub skills_cli_name: Option<&'static str>,
 }
 
+impl AgentDescriptor {
+	/// Get the target skills directory for writing, based on scope.
+	///
+	/// Returns the first element from the skills directories Vec,
+	/// per the convention that the first path is agent-specific.
+	pub fn target_skills_dir(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+	) -> Option<PathBuf> {
+		match scope {
+			ResourceScope::GlobalOnly => {
+				self.global_skills_dirs().first().cloned()
+			}
+			ResourceScope::ProjectOnly | ResourceScope::Both => {
+				if let Some(root) = project_root {
+					self.project_skills_dirs(root).first().cloned()
+				} else {
+					self.global_skills_dirs().first().cloned()
+				}
+			}
+		}
+	}
+
+	/// Get all global skills directories for this agent.
+	///
+	/// Returns agent-specific paths first, then fallback/compatibility paths.
+	/// Also includes universal skills path if `universal_skills` capability is set.
+	pub fn global_skills_dirs(&self) -> Vec<PathBuf> {
+		let mut dirs = Vec::new();
+
+		if let Some(paths_fn) = self.global_skills_paths {
+			dirs.extend(paths_fn());
+		}
+
+		if self.capabilities.universal_skills {
+			dirs.push(get_universal_skills_path());
+		}
+
+		dirs
+	}
+
+	/// Get all project skills directories for this agent.
+	///
+	/// Returns agent-specific paths first, then fallback/compatibility paths.
+	/// Also includes universal project skills path if `universal_skills` capability is set.
+	pub fn project_skills_dirs(&self, project_root: &Path) -> Vec<PathBuf> {
+		let mut dirs = Vec::new();
+
+		if let Some(paths_fn) = self.project_skills_paths {
+			dirs.extend(paths_fn(project_root));
+		}
+
+		if self.capabilities.universal_skills {
+			dirs.push(project_root.join(".agents/skills"));
+		}
+
+		dirs
+	}
+
+	/// Get all skills paths for reading (may include universal path)
+	pub fn get_skills_paths(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+	) -> Vec<PathBuf> {
+		let mut paths = Vec::new();
+
+		if scope == ResourceScope::ProjectOnly || scope == ResourceScope::Both {
+			if let Some(root) = project_root {
+				paths.extend(self.project_skills_dirs(root));
+			}
+		}
+
+		if scope == ResourceScope::GlobalOnly || scope == ResourceScope::Both {
+			paths.extend(self.global_skills_dirs());
+		}
+
+		paths
+	}
+}
+
+/// Get the universal skills directory path following XDG config spec
+pub fn get_universal_skills_path() -> PathBuf {
+	std::env::var_os("XDG_CONFIG_HOME")
+		.map(PathBuf::from)
+		.or_else(|| dirs::home_dir().map(|h| h.join(".config")))
+		.unwrap_or_else(|| PathBuf::from(".config"))
+		.join("agents/skills")
+}
+
 /// MCP config strategy functions for common config formats
-///
-/// These are pre-defined function pointers that can be used directly in
-/// const DESCRIPTOR definitions. For JsonMap with custom keys, each
-/// agent defines its own wrapper functions.
 pub mod mcp_strategy {
 	use super::*;
 	use crate::format::{json_list, json_map, json_opencode, toml_format};
