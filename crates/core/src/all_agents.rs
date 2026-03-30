@@ -24,8 +24,14 @@ pub fn load_all_agents(
 	registry::iter_all()
 		.map(|descriptor| {
 			let adapter: Box<dyn AgentAdapter> = Box::new(descriptor);
-			let mut manager =
-				ConfigManager::with_scope(adapter, true, project_root, scope);
+			let is_global = scope == ResourceScope::GlobalOnly
+				|| scope == ResourceScope::Both;
+			let mut manager = ConfigManager::with_scope(
+				adapter,
+				is_global,
+				project_root,
+				scope,
+			);
 			if scope == ResourceScope::Both {
 				match manager.load_both_annotated() {
 					Ok((skills, mcps)) => AgentResources {

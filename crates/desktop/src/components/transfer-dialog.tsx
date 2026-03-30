@@ -68,7 +68,6 @@ export function TransferDialog({
 	);
 	const [isApplying, setIsApplying] = useState(false);
 	const prevIsOpenRef = useRef(false);
-	const prevDestinationKeyRef = useRef<string | null>(null);
 
 	const usableAgents = useMemo(
 		() =>
@@ -198,30 +197,10 @@ export function TransferDialog({
 				setSelectedScopeKey(null);
 				setSelectedAgents([]);
 				setAgentStates({});
-				prevDestinationKeyRef.current = null;
 			});
 		}
 		prevIsOpenRef.current = isOpen;
 	}, [isOpen]);
-
-	useEffect(() => {
-		if (
-			selectedScope &&
-			installedInDestination.size > 0 &&
-			destinationKey !== prevDestinationKeyRef.current
-		) {
-			prevDestinationKeyRef.current = destinationKey;
-			const installed = usableAgents
-				.filter((a) => installedInDestination.has(a.id))
-				.map((a) => a.id);
-			queueMicrotask(() => {
-				setSelectedAgents((prev) => {
-					const merged = new Set([...prev, ...installed]);
-					return Array.from(merged);
-				});
-			});
-		}
-	}, [selectedScope, installedInDestination, usableAgents, destinationKey]);
 
 	const handleAgentSelectionChange = useCallback((values: string[]) => {
 		setSelectedAgents(values);
