@@ -383,7 +383,7 @@ pub async fn install_skill(
 ) -> ApiResult<InstallSkillResponse> {
 	let req = body.into_inner();
 
-	let mut cmd = Command::new("bunx");
+	let mut cmd = Command::new("npx");
 	cmd.arg("skills").arg("add").arg(&req.source);
 
 	// When install_all is true, omit -s flag to install all skills from source
