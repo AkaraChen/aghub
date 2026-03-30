@@ -30,7 +30,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 		mcp_remote: true,
 		mcp_enable_disable: false,
 		skills: true,
-		universal_skills: true,
+		universal_skills: false,
 	},
 	global_skills_path: Some(global_skills_path),
 	project_skills_path: Some(project_skills_path),

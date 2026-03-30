@@ -12,7 +12,7 @@ fn project_path(root: &Path) -> PathBuf {
 fn global_skills_path() -> PathBuf {
 	dirs::home_dir()
 		.unwrap_or_else(|| std::path::PathBuf::from(""))
-		.join(".agents/skills")
+		.join(".codex/skills")
 }
 fn project_skills_path(root: &Path) -> PathBuf {
 	root.join(".agents/skills")

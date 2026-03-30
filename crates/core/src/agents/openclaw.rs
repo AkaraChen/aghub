@@ -31,7 +31,7 @@ fn global_skills_path() -> PathBuf {
 	get_openclaw_skills_dir(&home, |p| p.exists())
 }
 fn project_skills_path(root: &Path) -> PathBuf {
-	root.join(".openclaw/skills")
+	root.join("skills")
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {

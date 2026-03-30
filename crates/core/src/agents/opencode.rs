@@ -9,6 +9,14 @@ fn global_path() -> PathBuf {
 fn project_path(root: &Path) -> PathBuf {
 	root.join(".opencode/settings.json")
 }
+fn global_skills_path() -> PathBuf {
+	dirs::home_dir()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
+		.join(".config/opencode/skills")
+}
+fn project_skills_path(root: &Path) -> PathBuf {
+	root.join(".agents/skills")
+}
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "opencode",
@@ -22,10 +30,10 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 		mcp_remote: true,
 		mcp_enable_disable: true,
 		skills: true,
-		universal_skills: true,
+		universal_skills: false,
 	},
-	global_skills_path: None,
-	project_skills_path: None,
+	global_skills_path: Some(global_skills_path),
+	project_skills_path: Some(project_skills_path),
 	cli_name: "opencode",
 	validate_args: &["--version"],
 	project_markers: &[".opencode"],

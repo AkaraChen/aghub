@@ -12,10 +12,10 @@ fn project_path(root: &Path) -> PathBuf {
 fn global_skills_path() -> PathBuf {
 	dirs::home_dir()
 		.unwrap_or_else(|| std::path::PathBuf::from(""))
-		.join(".agent/skills")
+		.join(".gemini/antigravity/skills")
 }
 fn project_skills_path(root: &Path) -> PathBuf {
-	root.join(".agent/skills")
+	root.join(".agents/skills")
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
