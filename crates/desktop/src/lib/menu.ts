@@ -133,18 +133,9 @@ export async function setupAppMenu(t: TFunction) {
 			],
 		});
 
-		const reloadMenuItem = await MenuItem.new({
-			id: "reload",
-			text: t("menu.reload"),
-			accelerator: "CmdOrControl+R",
-			action: () => window.location.reload(),
-		});
-
 		const controlSubmenu = await Submenu.new({
 			text: t("menu.control"),
 			items: [
-				reloadMenuItem,
-				await PredefinedMenuItem.new({ item: "Separator" }),
 				await PredefinedMenuItem.new({
 					item: "Minimize",
 					text: t("menu.minimize"),
