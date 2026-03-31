@@ -11,6 +11,7 @@ description = "Git clone with credential injection from environment variables"
 gix = { version = "0.70", default-features = false, features = [
 	"blocking-network-client",
 	"worktree-mutation",
+	"blocking-http-transport-curl",
 ] }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
