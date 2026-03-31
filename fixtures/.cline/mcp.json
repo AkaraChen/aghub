@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "test-mcp": {
-      "command": "echo",
-      "args": ["hello"]
-    }
-  }
-}
