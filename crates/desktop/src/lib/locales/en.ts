@@ -474,5 +474,6 @@ export default {
 		minimize: "Minimize",
 		zoom: "Zoom",
 		toggleFullscreen: "Toggle Fullscreen",
+		close: "Close",
 	},
 };

@@ -137,6 +137,11 @@ export async function setupAppMenu(t: TFunction) {
 			text: t("menu.control"),
 			items: [
 				await PredefinedMenuItem.new({
+					item: "CloseWindow",
+					text: t("menu.close"),
+				}),
+				await PredefinedMenuItem.new({ item: "Separator" }),
+				await PredefinedMenuItem.new({
 					item: "Minimize",
 					text: t("menu.minimize"),
 				}),

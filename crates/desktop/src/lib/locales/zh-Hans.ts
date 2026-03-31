@@ -465,5 +465,6 @@ export default {
 		minimize: "最小化",
 		zoom: "缩放",
 		toggleFullscreen: "进入全屏",
+		close: "关闭",
 	},
 };
