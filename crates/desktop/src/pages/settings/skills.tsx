@@ -250,7 +250,10 @@ export default function SkillsPage() {
 						key: g.name,
 						items: g.items,
 					}))}
-					onSuccess={() => handleSelectionChange(new Set())}
+					onSuccess={() => {
+						handleSelectionChange(new Set());
+						refetch();
+					}}
 					resourceType="skill"
 				/>
 			</div>

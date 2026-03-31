@@ -323,7 +323,10 @@ export default function MCPServersPage() {
 						key: g.mergeKey,
 						items: g.items,
 					}))}
-					onSuccess={() => handleSelectionChange(new Set())}
+					onSuccess={() => {
+						handleSelectionChange(new Set());
+						refetch();
+					}}
 					resourceType="mcp"
 				/>
 			</div>
