@@ -208,6 +208,49 @@ pub struct ValidationError {
 	pub reason: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct GitScanRequest {
+	pub url: String,
+	pub credential_id: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GitScanSkillEntry {
+	pub name: String,
+	pub description: String,
+	pub author: Option<String>,
+	pub version: Option<String>,
+	pub path: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GitScanResponse {
+	pub session_id: String,
+	pub skills: Vec<GitScanSkillEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GitInstallRequest {
+	pub session_id: String,
+	pub skill_paths: Vec<String>,
+	pub agents: Vec<String>,
+	pub scope: String,
+	pub project_root: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GitInstallResultEntry {
+	pub name: String,
+	pub agent: String,
+	pub success: bool,
+	pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct GitInstallResponse {
+	pub results: Vec<GitInstallResultEntry>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct DeleteSkillByPathResponse {
 	pub success: bool,

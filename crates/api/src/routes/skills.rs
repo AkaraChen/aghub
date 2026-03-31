@@ -1,7 +1,9 @@
 use aghub_core::{
+	create_adapter,
 	errors::ConfigError,
 	load_all_agents,
-	models::{AgentType, Skill},
+	manager::ConfigManager,
+	models::{AgentType, ResourceScope, Skill},
 	registry, transfer,
 };
 use rocket::http::Status;
@@ -14,8 +16,10 @@ use crate::{
 	},
 	dto::skill::{
 		CreateSkillRequest, DeleteSkillByPathRequest,
-		DeleteSkillByPathResponse, GlobalSkillLockResponse,
-		InstallSkillRequest, InstallSkillResponse, LocalSkillLockEntryResponse,
+		DeleteSkillByPathResponse, GitInstallRequest, GitInstallResponse,
+		GitInstallResultEntry, GitScanRequest, GitScanResponse,
+		GitScanSkillEntry, GlobalSkillLockResponse, InstallSkillRequest,
+		InstallSkillResponse, LocalSkillLockEntryResponse,
 		ProjectSkillLockResponse, SkillLockEntryResponse, SkillResponse,
 		SkillTreeNodeKind, SkillTreeNodeResponse, UpdateSkillRequest,
 		ValidationError,
@@ -29,6 +33,7 @@ use crate::{
 		build_manager_from_resolved, require_writable_scope,
 		resolved_to_resource_scope,
 	},
+	state::{GitCloneSession, GitCloneSessions},
 };
 
 fn expand_tilde_path(path: &str) -> std::path::PathBuf {
@@ -708,4 +713,219 @@ pub fn get_project_skill_lock(
 		version: lock.version,
 		skills,
 	}))
+}
+
+#[post("/skills/git/scan", data = "<body>")]
+pub async fn git_scan_skills(
+	body: Json<GitScanRequest>,
+	sessions: &rocket::State<GitCloneSessions>,
+) -> ApiResult<GitScanResponse> {
+	let req = body.into_inner();
+
+	// Look up credential token if provided
+	let credential_token: Option<String> =
+		if let Some(ref cred_id) = req.credential_id {
+			let creds = crate::routes::credentials::load_credentials()
+				.map_err(|e| {
+					ApiError::new(
+						Status::InternalServerError,
+						format!("Failed to read credentials: {e}"),
+						"KEYCHAIN_ERROR",
+					)
+				})?;
+			let cred =
+				creds.iter().find(|c| c.id == *cred_id).ok_or_else(|| {
+					ApiError::new(
+						Status::NotFound,
+						"Credential not found",
+						"CREDENTIAL_NOT_FOUND",
+					)
+				})?;
+			Some(cred.token.clone())
+		} else {
+			None
+		};
+
+	let url = req.url.clone();
+
+	// Clone repo in a blocking thread (gix is synchronous)
+	let temp_dir = tokio::task::spawn_blocking(move || {
+		if let Some(token) = credential_token {
+			aghub_git::clone_with_credentials(&url, "x-access-token", &token)
+		} else {
+			aghub_git::clone_to_temp(&url)
+		}
+	})
+	.await
+	.map_err(|e| {
+		ApiError::new(
+			Status::InternalServerError,
+			format!("Clone task panicked: {e}"),
+			"CLONE_ERROR",
+		)
+	})?
+	.map_err(|e| {
+		ApiError::new(
+			Status::BadRequest,
+			format!("Failed to clone repository: {e}"),
+			"CLONE_FAILED",
+		)
+	})?;
+
+	// Scan the cloned repo for skills
+	let scan_options = skill::scan::ScanOptions {
+		max_depth: 10,
+		full_depth: true,
+		respect_gitignore: true,
+	};
+	let temp_path = temp_dir.path().to_path_buf();
+	let skill_paths =
+		skill::scan::scan_skills(&temp_path, scan_options, vec![]).map_err(
+			|e| {
+				ApiError::new(
+					Status::InternalServerError,
+					format!("Failed to scan repository for skills: {e:?}"),
+					"SCAN_ERROR",
+				)
+			},
+		)?;
+
+	// Parse each skill to extract metadata
+	let mut skills = Vec::new();
+	for path in &skill_paths {
+		match skill::parser::parse(path) {
+			Ok(parsed) => {
+				let relative = path
+					.strip_prefix(&temp_path)
+					.unwrap_or(path)
+					.to_string_lossy()
+					.to_string();
+				skills.push(GitScanSkillEntry {
+					name: parsed.name,
+					description: parsed.description,
+					author: parsed.author,
+					version: parsed.version,
+					path: relative,
+				});
+			}
+			Err(_) => {
+				// Skip unparseable skill directories
+			}
+		}
+	}
+
+	// Store the temp dir in session map so it persists until install
+	let session_id = uuid::Uuid::new_v4().to_string();
+	{
+		let mut map = sessions.sessions.lock().unwrap();
+		// Purge sessions older than 30 minutes
+		let cutoff = std::time::Duration::from_secs(30 * 60);
+		map.retain(|_, s| s.created_at.elapsed() < cutoff);
+		map.insert(
+			session_id.clone(),
+			GitCloneSession {
+				temp_dir,
+				created_at: std::time::Instant::now(),
+			},
+		);
+	}
+
+	Ok(Json(GitScanResponse { session_id, skills }))
+}
+
+#[post("/skills/git/install", data = "<body>")]
+pub async fn git_install_skills(
+	body: Json<GitInstallRequest>,
+	sessions: &rocket::State<GitCloneSessions>,
+) -> ApiResult<GitInstallResponse> {
+	let req = body.into_inner();
+
+	// Extract temp dir path from session
+	let temp_path = {
+		let map = sessions.sessions.lock().unwrap();
+		let session = map.get(&req.session_id).ok_or_else(|| {
+			ApiError::new(
+				Status::NotFound,
+				"Session not found or expired",
+				"SESSION_NOT_FOUND",
+			)
+		})?;
+		session.temp_dir.path().to_path_buf()
+	};
+
+	let resource_scope = match req.scope.as_str() {
+		"global" => ResourceScope::GlobalOnly,
+		"project" => ResourceScope::ProjectOnly,
+		other => {
+			return Err(ApiError::new(
+				Status::BadRequest,
+				format!("Invalid scope '{other}'. Use 'global' or 'project'"),
+				"INVALID_PARAM",
+			));
+		}
+	};
+
+	let project_root: Option<std::path::PathBuf> =
+		req.project_root.as_ref().map(std::path::PathBuf::from);
+
+	let mut results = Vec::new();
+
+	for agent_str in &req.agents {
+		let agent_type: AgentType = match agent_str.parse() {
+			Ok(a) => a,
+			Err(_) => {
+				for skill_path in &req.skill_paths {
+					results.push(GitInstallResultEntry {
+						name: skill_path.clone(),
+						agent: agent_str.clone(),
+						success: false,
+						error: Some(format!("Unknown agent '{}'", agent_str)),
+					});
+				}
+				continue;
+			}
+		};
+
+		for skill_path in &req.skill_paths {
+			let full_path = temp_path.join(skill_path);
+			let mut manager = match resource_scope {
+				ResourceScope::GlobalOnly => {
+					ConfigManager::new(create_adapter(agent_type), true, None)
+				}
+				ResourceScope::ProjectOnly => ConfigManager::new(
+					create_adapter(agent_type),
+					false,
+					project_root.as_deref(),
+				),
+				_ => ConfigManager::new(create_adapter(agent_type), true, None),
+			};
+
+			match manager.add_skill_from_path(&full_path) {
+				Ok(skill) => {
+					results.push(GitInstallResultEntry {
+						name: skill.name,
+						agent: agent_str.clone(),
+						success: true,
+						error: None,
+					});
+				}
+				Err(e) => {
+					results.push(GitInstallResultEntry {
+						name: skill_path.clone(),
+						agent: agent_str.clone(),
+						success: false,
+						error: Some(format!("{e}")),
+					});
+				}
+			}
+		}
+	}
+
+	// Remove session (drops TempDir, cleans up disk)
+	{
+		let mut map = sessions.sessions.lock().unwrap();
+		map.remove(&req.session_id);
+	}
+
+	Ok(Json(GitInstallResponse { results }))
 }

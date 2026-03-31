@@ -4,6 +4,10 @@ import type {
 	CreateSkillRequest,
 	DeleteSkillByPathRequest,
 	DeleteSkillByPathResponse,
+	GitInstallRequest,
+	GitInstallResponse,
+	GitScanRequest,
+	GitScanResponse,
 	GlobalSkillLockResponse,
 	ImportSkillRequest,
 	InstallSkillRequest,
@@ -187,6 +191,14 @@ export function createApi(baseUrl: string) {
 				body: DeleteSkillByPathRequest,
 			): Promise<DeleteSkillByPathResponse> {
 				return client.delete("skills/by-path", { json: body }).json();
+			},
+			gitScan(data: GitScanRequest): Promise<GitScanResponse> {
+				return client
+					.post("skills/git/scan", { json: data, timeout: 120000 })
+					.json();
+			},
+			gitInstall(data: GitInstallRequest): Promise<GitInstallResponse> {
+				return client.post("skills/git/install", { json: data }).json();
 			},
 		},
 		mcps: {

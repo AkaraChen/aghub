@@ -8,6 +8,7 @@ import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
 import { CreateMcpPanel } from "../../components/create-mcp-panel";
 import { CreateSkillPanel } from "../../components/create-skill-panel";
 import { EditMcpPanel } from "../../components/edit-mcp-panel";
+import { ImportGithubSkillPanel } from "../../components/import-github-skill-panel";
 import { ImportMcpPanel } from "../../components/import-mcp-panel";
 import { ImportSkillPanel } from "../../components/import-skill-panel";
 import { McpDetail } from "../../components/mcp-detail";
@@ -34,6 +35,7 @@ export default function ProjectDetailPage() {
 		| "edit-mcp"
 		| "create-skill"
 		| "import-skill"
+		| "import-github-skill"
 		| null
 	>(null);
 	const [searchQuery, setSearchQuery] = useState("");
@@ -221,6 +223,8 @@ export default function ProjectDetailPage() {
 				onCreateSkill={(type) => {
 					if (type === "local") setPanelMode("create-skill");
 					else if (type === "import") setPanelMode("import-skill");
+					else if (type === "github")
+						setPanelMode("import-github-skill");
 				}}
 				onRefresh={handleRefresh}
 				isRefreshing={isRefreshing}
@@ -271,6 +275,12 @@ export default function ProjectDetailPage() {
 				)}
 				{panelMode === "import-skill" && (
 					<ImportSkillPanel
+						onDone={() => setPanelMode(null)}
+						projectPath={project.path}
+					/>
+				)}
+				{panelMode === "import-github-skill" && (
+					<ImportGithubSkillPanel
 						onDone={() => setPanelMode(null)}
 						projectPath={project.path}
 					/>

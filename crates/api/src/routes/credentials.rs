@@ -9,17 +9,17 @@ const SERVICE: &str = "aghub";
 const USER: &str = "github_credentials";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct StoredCredential {
-	id: String,
-	name: String,
-	token: String,
+pub(crate) struct StoredCredential {
+	pub(crate) id: String,
+	pub(crate) name: String,
+	pub(crate) token: String,
 }
 
 fn get_entry() -> Result<keyring::Entry, String> {
 	keyring::Entry::new(SERVICE, USER).map_err(|e| e.to_string())
 }
 
-fn load_credentials() -> Result<Vec<StoredCredential>, String> {
+pub(crate) fn load_credentials() -> Result<Vec<StoredCredential>, String> {
 	let entry = get_entry()?;
 	match entry.get_password() {
 		Ok(json) => serde_json::from_str(&json).map_err(|e| e.to_string()),

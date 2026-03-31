@@ -54,6 +54,7 @@ name = "aghub-api"
 version = "0.1.2"
 dependencies = [
  "aghub-core",
+ "aghub-git",
  "dirs 5.0.1",
  "keyring",
  "open",
@@ -63,6 +64,7 @@ dependencies = [
  "serde_json",
  "skill",
  "skills-sh",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "uuid",

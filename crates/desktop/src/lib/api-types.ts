@@ -185,3 +185,40 @@ export interface DeleteSkillByPathResponse {
 	error?: string;
 	validation_errors?: ValidationError[];
 }
+
+export interface GitScanRequest {
+	url: string;
+	credential_id?: string;
+}
+
+export interface GitScanSkillEntry {
+	name: string;
+	description: string;
+	author?: string;
+	version?: string;
+	path: string;
+}
+
+export interface GitScanResponse {
+	session_id: string;
+	skills: GitScanSkillEntry[];
+}
+
+export interface GitInstallRequest {
+	session_id: string;
+	skill_paths: string[];
+	agents: string[];
+	scope: string;
+	project_root?: string;
+}
+
+export interface GitInstallResultEntry {
+	name: string;
+	agent: string;
+	success: boolean;
+	error?: string;
+}
+
+export interface GitInstallResponse {
+	results: GitInstallResultEntry[];
+}

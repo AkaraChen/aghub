@@ -10,6 +10,7 @@ import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
 import { CreateSkillPanel } from "../../components/create-skill-panel";
+import { ImportGithubSkillPanel } from "../../components/import-github-skill-panel";
 import { ImportSkillPanel } from "../../components/import-skill-panel";
 import { ListSearchHeader } from "../../components/list-search-header";
 import { MultiSelectFloatingBar } from "../../components/multi-select-floating-bar";
@@ -30,9 +31,9 @@ export default function SkillsPage() {
 	const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
 	const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
 
-	const [panelMode, setPanelMode] = useState<"create" | "import" | null>(
-		null,
-	);
+	const [panelMode, setPanelMode] = useState<
+		"create" | "import" | "import-github" | null
+	>(null);
 
 	const groupedSkills = useMemo(() => {
 		const map = new Map<string, SkillResponse[]>();
@@ -171,6 +172,10 @@ export default function SkillsPage() {
 										handleCreateSkill();
 									} else if (key === "import") {
 										handleImportSkill();
+									} else if (key === "import-github") {
+										setSelectedKeys(new Set());
+										setSelectedName(null);
+										setPanelMode("import-github");
 									}
 								}}
 							>
@@ -185,6 +190,12 @@ export default function SkillsPage() {
 									textValue={t("importFromFile")}
 								>
 									{t("importFromFile")}
+								</Dropdown.Item>
+								<Dropdown.Item
+									id="import-github"
+									textValue={t("importFromGithub")}
+								>
+									{t("importFromGithub")}
 								</Dropdown.Item>
 							</Dropdown.Menu>
 						</Dropdown.Popover>
@@ -231,6 +242,8 @@ export default function SkillsPage() {
 					<CreateSkillPanel onDone={() => setPanelMode(null)} />
 				) : panelMode === "import" ? (
 					<ImportSkillPanel onDone={() => setPanelMode(null)} />
+				) : panelMode === "import-github" ? (
+					<ImportGithubSkillPanel onDone={() => setPanelMode(null)} />
 				) : activeGroup ? (
 					<SkillDetail group={activeGroup} />
 				) : (

@@ -42,6 +42,9 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 	.unwrap();
 	rocket::custom(config)
 		.attach(cors)
+		.manage(crate::state::GitCloneSessions {
+			sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
+		})
 		.mount(
 			"/api/v1",
 			routes![
@@ -83,6 +86,8 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 				routes::skills::get_global_skill_lock,
 				routes::skills::get_project_skill_lock,
 				routes::skills::delete_skill_by_path,
+				routes::skills::git_scan_skills,
+				routes::skills::git_install_skills,
 			],
 		)
 		.register(
