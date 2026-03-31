@@ -11,18 +11,12 @@ export {
 } from "./store/onboarding";
 export { addProject, getProjects, removeProject } from "./store/projects";
 export {
-	getGitHubCredential,
-	removeGitHubCredential,
-	saveGitHubCredential,
-} from "./store/secret";
-export {
 	getStarredMcps,
 	getStarredSkills,
 	setStarredMcps,
 	setStarredSkills,
 } from "./store/stars";
 export type {
-	GitHubCredential,
 	IntegrationPreferences,
 	OnboardingProgress,
 	Project,

@@ -18,12 +18,6 @@ export interface IntegrationPreferences {
 	codeEditor?: CodeEditorType;
 }
 
-export interface GitHubCredential {
-	name: string;
-	email: string;
-	token: string;
-}
-
 export const CURRENT_VERSION = 5;
 
 export const DEFAULT_ONBOARDING_PROGRESS: OnboardingProgress = {
