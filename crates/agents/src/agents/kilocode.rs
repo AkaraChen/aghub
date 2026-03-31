@@ -1,27 +1,26 @@
-use crate::registry::descriptor::*;
+use crate::descriptor::*;
 use std::path::{Path, PathBuf};
 
 fn global_path() -> PathBuf {
 	dirs::home_dir()
 		.unwrap_or_else(|| std::path::PathBuf::from(""))
-		.join(".trae/mcp.json")
+		.join(".kilocode/mcp.json")
 }
 fn project_path(root: &Path) -> PathBuf {
-	root.join(".trae/mcp.json")
+	root.join(".kilocode/mcp.json")
 }
-
 fn global_skills_paths() -> Vec<PathBuf> {
 	vec![dirs::home_dir()
 		.unwrap_or_else(|| std::path::PathBuf::from(""))
-		.join(".trae/skills")]
+		.join(".kilocode/skills")]
 }
 fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
-	vec![root.join(".trae/skills")]
+	vec![root.join(".kilocode/skills")]
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
-	id: "trae",
-	display_name: "Trae",
+	id: "kilocode",
+	display_name: "KiloCode",
 	parse_config: mcp_strategy::parse_json_map_mcp_servers,
 	serialize_config: mcp_strategy::serialize_json_map_mcp_servers,
 	global_path,
@@ -35,8 +34,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	},
 	global_skills_paths: Some(global_skills_paths),
 	project_skills_paths: Some(project_skills_paths),
-	cli_name: "trae",
+	cli_name: "kilocode",
 	validate_args: &["--version"],
-	project_markers: &[".trae"],
-	skills_cli_name: Some("trae"),
+	project_markers: &[".kilocode"],
+	skills_cli_name: Some("kilo"),
 };

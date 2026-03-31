@@ -2,7 +2,7 @@
 //!
 //! Ported from xdg-config-paths.test.ts and openclaw-paths.test.ts.
 
-use aghub_core::agents::{amp, cursor, kimi, openclaw, opencode, pi};
+use aghub_agents::agents::{amp, cursor, kimi, openclaw, opencode, pi};
 use std::path::{Path, PathBuf};
 
 // ─── XDG config path tests (xdg-config-paths.test.ts) ───────────────────────

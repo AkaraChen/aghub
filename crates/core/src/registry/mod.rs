@@ -1,8 +1,4 @@
-pub mod descriptor;
-
-use crate::agents;
-use crate::models::AgentType;
-use descriptor::AgentDescriptor;
+use aghub_agents::{agents, AgentDescriptor, AgentType};
 
 pub static ALL_AGENTS: &[&AgentDescriptor] = &[
 	&agents::claude::DESCRIPTOR,

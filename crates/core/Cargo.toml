@@ -6,6 +6,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
+aghub-agents = { path = "../agents" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
@@ -16,6 +17,7 @@ tempfile = { workspace = true, optional = true }
 skill = { path = "../skill" }
 
 [dev-dependencies]
+aghub-agents = { path = "../agents" }
 tempfile = { workspace = true }
 
 [features]

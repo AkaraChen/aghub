@@ -1,20 +1,20 @@
-use crate::registry::descriptor::*;
+use crate::descriptor::*;
 use std::path::{Path, PathBuf};
 
 fn global_path() -> PathBuf {
 	dirs::home_dir()
 		.unwrap_or_else(|| std::path::PathBuf::from(""))
-		.join(".config/zed/settings.json")
+		.join(".jetbrains-ai/mcp.json")
 }
 fn project_path(root: &Path) -> PathBuf {
-	root.join(".zed/settings.json")
+	root.join(".jetbrains-ai/mcp.json")
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
-	id: "zed",
-	display_name: "Zed",
-	parse_config: mcp_strategy::parse_json_map_context_servers,
-	serialize_config: mcp_strategy::serialize_json_map_context_servers,
+	id: "jetbrains-ai",
+	display_name: "JetBrains AI",
+	parse_config: mcp_strategy::parse_json_map_mcp_servers,
+	serialize_config: mcp_strategy::serialize_json_map_mcp_servers,
 	global_path,
 	project_path,
 	capabilities: Capabilities {
@@ -26,8 +26,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	},
 	global_skills_paths: None,
 	project_skills_paths: None,
-	cli_name: "zed",
+	cli_name: "jetbrains",
 	validate_args: &["--version"],
-	project_markers: &[".zed"],
+	project_markers: &[".jetbrains-ai"],
 	skills_cli_name: None,
 };

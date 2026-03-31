@@ -1,4 +1,4 @@
-use crate::registry::descriptor::AgentDescriptor;
+use crate::AgentDescriptor;
 use std::path::PathBuf;
 use std::process::Command;
 

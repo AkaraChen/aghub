@@ -2,8 +2,8 @@ use crate::{
 	adapters::AgentAdapter,
 	errors::Result,
 	models::{AgentConfig, ResourceScope},
-	registry::descriptor::AgentDescriptor,
 	skills::discovery::load_skills_from_dirs,
+	AgentDescriptor,
 };
 use std::cell::RefCell;
 use std::fs;

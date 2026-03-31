@@ -1,18 +1,18 @@
-use crate::registry::descriptor::*;
+use crate::descriptor::*;
 use std::path::{Path, PathBuf};
 
 fn global_path() -> PathBuf {
 	dirs::home_dir()
 		.unwrap_or_else(|| std::path::PathBuf::from(""))
-		.join(".jetbrains-ai/mcp.json")
+		.join(".augmentcode/mcp.json")
 }
 fn project_path(root: &Path) -> PathBuf {
-	root.join(".jetbrains-ai/mcp.json")
+	root.join(".augmentcode/mcp.json")
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
-	id: "jetbrains-ai",
-	display_name: "JetBrains AI",
+	id: "augmentcode",
+	display_name: "AugmentCode",
 	parse_config: mcp_strategy::parse_json_map_mcp_servers,
 	serialize_config: mcp_strategy::serialize_json_map_mcp_servers,
 	global_path,
@@ -21,13 +21,13 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 		mcp_stdio: true,
 		mcp_remote: true,
 		mcp_enable_disable: false,
-		skills: false,
+		skills: true,
 		universal_skills: false,
 	},
 	global_skills_paths: None,
 	project_skills_paths: None,
-	cli_name: "jetbrains",
+	cli_name: "augmentcode",
 	validate_args: &["--version"],
-	project_markers: &[".jetbrains-ai"],
-	skills_cli_name: None,
+	project_markers: &[".augmentcode"],
+	skills_cli_name: Some("augment"),
 };

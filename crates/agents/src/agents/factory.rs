@@ -1,34 +1,26 @@
-use crate::registry::descriptor::*;
+use crate::descriptor::*;
 use std::path::{Path, PathBuf};
 
 fn global_path() -> PathBuf {
 	dirs::home_dir()
 		.unwrap_or_else(|| std::path::PathBuf::from(""))
-		.join(".cursor/mcp.json")
+		.join(".factory/mcp.json")
 }
 fn project_path(root: &Path) -> PathBuf {
-	root.join(".cursor/mcp.json")
+	root.join(".factory/mcp.json")
 }
 fn global_skills_paths() -> Vec<PathBuf> {
-	let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(""));
-	vec![
-		home.join(".cursor/skills"),
-		home.join(".claude/skills"),
-		home.join(".codex/skills"),
-	]
+	vec![dirs::home_dir()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
+		.join(".factory/skills")]
 }
 fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
-	vec![
-		root.join(".cursor/skills"),
-		root.join(".agents/skills"),
-		root.join(".claude/skills"),
-		root.join(".codex/skills"),
-	]
+	vec![root.join(".factory/skills")]
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
-	id: "cursor",
-	display_name: "Cursor",
+	id: "factory",
+	display_name: "Factory",
 	parse_config: mcp_strategy::parse_json_map_mcp_servers,
 	serialize_config: mcp_strategy::serialize_json_map_mcp_servers,
 	global_path,
@@ -42,8 +34,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	},
 	global_skills_paths: Some(global_skills_paths),
 	project_skills_paths: Some(project_skills_paths),
-	cli_name: "cursor",
+	cli_name: "factory",
 	validate_args: &["--version"],
-	project_markers: &[".cursor"],
-	skills_cli_name: Some("cursor"),
+	project_markers: &[".factory"],
+	skills_cli_name: Some("droid"),
 };

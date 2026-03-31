@@ -38,6 +38,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "aghub-agents"
+version = "0.1.2"
+dependencies = [
+ "dirs 5.0.1",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "thiserror 1.0.69",
+ "toml 0.8.2",
+]
+
+[[package]]
 name = "aghub-api"
 version = "0.1.2"
 dependencies = [
@@ -75,6 +87,7 @@ dependencies = [
 name = "aghub-core"
 version = "0.1.2"
 dependencies = [
+ "aghub-agents",
  "dirs 5.0.1",
  "serde",
  "serde_json",

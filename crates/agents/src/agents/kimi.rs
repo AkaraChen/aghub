@@ -1,4 +1,4 @@
-use crate::registry::descriptor::*;
+use crate::descriptor::*;
 use std::path::{Path, PathBuf};
 
 fn global_path() -> PathBuf {

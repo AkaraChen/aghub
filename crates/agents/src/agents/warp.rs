@@ -1,26 +1,27 @@
-use crate::registry::descriptor::*;
+use crate::descriptor::*;
 use std::path::{Path, PathBuf};
 
 fn global_path() -> PathBuf {
 	dirs::home_dir()
 		.unwrap_or_else(|| std::path::PathBuf::from(""))
-		.join(".gemini/settings.json")
+		.join(".warp/mcp.json")
 }
 fn project_path(root: &Path) -> PathBuf {
-	root.join(".gemini/settings.json")
+	root.join(".warp/mcp.json")
 }
+
 fn global_skills_paths() -> Vec<PathBuf> {
 	vec![dirs::home_dir()
 		.unwrap_or_else(|| std::path::PathBuf::from(""))
-		.join(".gemini/skills")]
+		.join(".agents/skills")]
 }
 fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
 	vec![root.join(".agents/skills")]
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
-	id: "gemini",
-	display_name: "Gemini CLI",
+	id: "warp",
+	display_name: "Warp",
 	parse_config: mcp_strategy::parse_json_map_mcp_servers,
 	serialize_config: mcp_strategy::serialize_json_map_mcp_servers,
 	global_path,
@@ -34,8 +35,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	},
 	global_skills_paths: Some(global_skills_paths),
 	project_skills_paths: Some(project_skills_paths),
-	cli_name: "gemini",
+	cli_name: "warp",
 	validate_args: &["--version"],
-	project_markers: &[".gemini"],
-	skills_cli_name: Some("gemini-cli"),
+	project_markers: &[".warp"],
+	skills_cli_name: Some("warp"),
 };

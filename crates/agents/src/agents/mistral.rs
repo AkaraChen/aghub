@@ -1,28 +1,28 @@
-use crate::registry::descriptor::*;
+use crate::descriptor::*;
 use std::path::{Path, PathBuf};
 
 fn global_path() -> PathBuf {
 	dirs::home_dir()
 		.unwrap_or_else(|| std::path::PathBuf::from(""))
-		.join(".codeium/windsurf/mcp_config.json")
+		.join(".vibe/mcp.toml")
 }
 fn project_path(root: &Path) -> PathBuf {
-	root.join(".windsurf/mcp_config.json")
+	root.join(".vibe/mcp.toml")
 }
 fn global_skills_paths() -> Vec<PathBuf> {
 	vec![dirs::home_dir()
 		.unwrap_or_else(|| std::path::PathBuf::from(""))
-		.join(".codeium/windsurf/skills")]
+		.join(".vibe/skills")]
 }
 fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
-	vec![root.join(".windsurf/skills")]
+	vec![root.join(".vibe/skills")]
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
-	id: "windsurf",
-	display_name: "Windsurf",
-	parse_config: mcp_strategy::parse_json_map_mcp_servers,
-	serialize_config: mcp_strategy::serialize_json_map_mcp_servers,
+	id: "mistral",
+	display_name: "Mistral Le Chat",
+	parse_config: mcp_strategy::PARSE_TOML,
+	serialize_config: mcp_strategy::SERIALIZE_TOML,
 	global_path,
 	project_path,
 	capabilities: Capabilities {
@@ -34,8 +34,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	},
 	global_skills_paths: Some(global_skills_paths),
 	project_skills_paths: Some(project_skills_paths),
-	cli_name: "windsurf",
+	cli_name: "mistral",
 	validate_args: &["--version"],
-	project_markers: &[".windsurf"],
-	skills_cli_name: Some("windsurf"),
+	project_markers: &[".vibe"],
+	skills_cli_name: Some("mistral-vibe"),
 };
