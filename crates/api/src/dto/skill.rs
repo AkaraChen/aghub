@@ -193,3 +193,28 @@ pub struct ProjectSkillLockResponse {
 	pub version: u32,
 	pub skills: Vec<LocalSkillLockEntryResponse>,
 }
+
+#[derive(Debug, Deserialize)]
+pub struct DeleteSkillByPathRequest {
+	pub source_path: String,
+	pub agents: Vec<String>,
+	pub scope: String,
+	pub project_root: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ValidationError {
+	pub agent: String,
+	pub reason: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DeleteSkillByPathResponse {
+	pub success: bool,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub deleted_path: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub error: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub validation_errors: Option<Vec<ValidationError>>,
+}

@@ -49,31 +49,24 @@ export function DeleteSkillLocationDialog({
 				return;
 			}
 
-			const firstInstallation = item.installations[0];
 			const scope =
-				firstInstallation.source === ConfigSource.Project
+				item.installations[0].source === ConfigSource.Project
 					? ("project" as const)
 					: ("global" as const);
-			const projectRoot = scope === "project" ? projectPath : undefined;
 
-			const removedAgents = item.installations.map(
+			const agents = item.installations.map(
 				(installation) => installation.agent,
 			);
 
-			const result = await api.skills.reconcile({
-				source: {
-					agent: firstInstallation.agent,
-					scope,
-					project_root: projectRoot,
-					name: skillName,
-				},
-				removed: removedAgents,
+			const result = await api.skills.deleteByPath({
+				source_path: item.sourcePath,
+				agents,
+				scope,
+				project_root: scope === "project" ? projectPath : undefined,
 			});
 
-			if (result.failed_count > 0) {
-				throw new Error(
-					`${result.failed_count} of ${result.results.length} deletions failed`,
-				);
+			if (!result.success) {
+				throw new Error(result.error || "Failed to delete skill");
 			}
 		},
 		onSuccess: () => {

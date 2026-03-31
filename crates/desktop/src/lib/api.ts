@@ -2,6 +2,8 @@ import ky from "ky";
 import type {
 	CodeEditorType,
 	CreateSkillRequest,
+	DeleteSkillByPathRequest,
+	DeleteSkillByPathResponse,
 	GlobalSkillLockResponse,
 	ImportSkillRequest,
 	InstallSkillRequest,
@@ -180,6 +182,11 @@ export function createApi(baseUrl: string) {
 			},
 			reconcile(body: ReconcileRequest): Promise<OperationBatchResponse> {
 				return client.post("skills/reconcile", { json: body }).json();
+			},
+			deleteByPath(
+				body: DeleteSkillByPathRequest,
+			): Promise<DeleteSkillByPathResponse> {
+				return client.delete("skills/by-path", { json: body }).json();
 			},
 		},
 		mcps: {

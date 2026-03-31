@@ -13,10 +13,12 @@ use crate::{
 		CodeEditorType, EditSkillFolderRequest, OpenSkillFolderRequest,
 	},
 	dto::skill::{
-		CreateSkillRequest, GlobalSkillLockResponse, InstallSkillRequest,
-		InstallSkillResponse, LocalSkillLockEntryResponse,
+		CreateSkillRequest, DeleteSkillByPathRequest,
+		DeleteSkillByPathResponse, GlobalSkillLockResponse,
+		InstallSkillRequest, InstallSkillResponse, LocalSkillLockEntryResponse,
 		ProjectSkillLockResponse, SkillLockEntryResponse, SkillResponse,
 		SkillTreeNodeKind, SkillTreeNodeResponse, UpdateSkillRequest,
+		ValidationError,
 	},
 	dto::transfer::{
 		OperationBatchResponse, ReconcileRequest, TransferRequest,
@@ -96,6 +98,122 @@ pub fn reconcile_skill_route(
 		.map_err(ApiError::from)?;
 
 	Ok(Json(result.into()))
+}
+
+#[delete("/skills/by-path", data = "<body>")]
+pub fn delete_skill_by_path(
+	body: Json<DeleteSkillByPathRequest>,
+) -> ApiResult<DeleteSkillByPathResponse> {
+	let req = body.into_inner();
+
+	let skill_path = expand_tilde_path(&req.source_path);
+	let skill_dir = if skill_path.is_dir() {
+		skill_path
+	} else {
+		skill_path
+			.parent()
+			.map(|p| p.to_path_buf())
+			.unwrap_or(skill_path)
+	};
+
+	let resource_scope = match req.scope.as_str() {
+		"global" => aghub_core::models::ResourceScope::GlobalOnly,
+		"project" => aghub_core::models::ResourceScope::ProjectOnly,
+		_ => {
+			return Ok(Json(DeleteSkillByPathResponse {
+				success: false,
+				deleted_path: None,
+				error: Some(format!("Invalid scope: {}", req.scope)),
+				validation_errors: None,
+			}));
+		}
+	};
+
+	if resource_scope == aghub_core::models::ResourceScope::ProjectOnly
+		&& req.project_root.is_none()
+	{
+		return Ok(Json(DeleteSkillByPathResponse {
+			success: false,
+			deleted_path: None,
+			error: Some(
+				"project_root is required when scope is 'project'".to_string(),
+			),
+			validation_errors: None,
+		}));
+	}
+
+	let project_root = req.project_root.as_ref().map(std::path::PathBuf::from);
+
+	let mut validation_errors = Vec::new();
+
+	for agent_str in &req.agents {
+		let agent: AgentType = match agent_str.parse() {
+			Ok(a) => a,
+			Err(_) => {
+				validation_errors.push(ValidationError {
+					agent: agent_str.clone(),
+					reason: format!("Unknown agent: {}", agent_str),
+				});
+				continue;
+			}
+		};
+
+		let adapter = aghub_core::create_adapter(agent);
+		let skills_paths =
+			adapter.get_skills_paths(project_root.as_deref(), resource_scope);
+
+		let is_valid = skills_paths
+			.iter()
+			.any(|sp| skill_dir.starts_with(sp) || skill_dir == *sp);
+
+		if !is_valid {
+			let valid_paths: Vec<String> = skills_paths
+				.iter()
+				.map(|p| p.display().to_string())
+				.collect();
+			validation_errors.push(ValidationError {
+				agent: agent_str.clone(),
+				reason: format!(
+					"Path '{}' is not in agent's skills directories: {}",
+					skill_dir.display(),
+					valid_paths.join(", ")
+				),
+			});
+		}
+	}
+
+	if !validation_errors.is_empty() {
+		return Ok(Json(DeleteSkillByPathResponse {
+			success: false,
+			deleted_path: None,
+			error: Some("Validation failed for one or more agents".to_string()),
+			validation_errors: Some(validation_errors),
+		}));
+	}
+
+	if !skill_dir.exists() {
+		return Ok(Json(DeleteSkillByPathResponse {
+			success: true,
+			deleted_path: Some(skill_dir.display().to_string()),
+			error: None,
+			validation_errors: None,
+		}));
+	}
+
+	match std::fs::remove_dir_all(&skill_dir) {
+		Ok(_) => Ok(Json(DeleteSkillByPathResponse {
+			success: true,
+			deleted_path: Some(skill_dir.display().to_string()),
+			error: None,
+			validation_errors: None,
+		})),
+		Err(e) => Ok(Json(DeleteSkillByPathResponse {
+			success: false,
+			deleted_path: None,
+			error: Some(format!("Failed to delete: {}", e)),
+			validation_errors: None,
+		})),
+	}
 }
 
 fn get_parent_folder(path: std::path::PathBuf) -> std::path::PathBuf {

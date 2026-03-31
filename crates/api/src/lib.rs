@@ -79,6 +79,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 				routes::skills::get_skill_tree,
 				routes::skills::get_global_skill_lock,
 				routes::skills::get_project_skill_lock,
+				routes::skills::delete_skill_by_path,
 			],
 		)
 		.register(

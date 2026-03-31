@@ -166,3 +166,22 @@ export interface ProjectSkillLockResponse {
 	version: number;
 	skills: LocalSkillLockEntryResponse[];
 }
+
+export interface DeleteSkillByPathRequest {
+	source_path: string;
+	agents: string[];
+	scope: "global" | "project";
+	project_root?: string;
+}
+
+export interface ValidationError {
+	agent: string;
+	reason: string;
+}
+
+export interface DeleteSkillByPathResponse {
+	success: boolean;
+	deleted_path?: string;
+	error?: string;
+	validation_errors?: ValidationError[];
+}
