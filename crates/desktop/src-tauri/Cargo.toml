@@ -28,3 +28,4 @@ serde_json = "1"
 aghub-api = { path = "../../api" }
 tokio = { version = "1", features = [ "rt" ] }
 fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs", rev = "c4c45d503ea115a839aae718d02f79e7c7f0f673" }
+tauri-plugin-stronghold = "2.3.1"

@@ -18,6 +18,7 @@
 		"opener:allow-open-path",
 		"dialog:default",
 		"store:default",
+		"stronghold:default",
 		"updater:default",
 		"process:default"
 	]

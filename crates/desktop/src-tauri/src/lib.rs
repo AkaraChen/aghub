@@ -17,6 +17,18 @@ pub fn run() {
 		.plugin(tauri_plugin_dialog::init())
 		.plugin(tauri_plugin_store::Builder::default().build())
 		.setup(|app| {
+			use tauri::Manager;
+
+			let salt_path = app
+				.path()
+				.app_local_data_dir()
+				.expect("could not resolve app local data path")
+				.join("salt.txt");
+			app.handle().plugin(
+				tauri_plugin_stronghold::Builder::with_argon2(&salt_path)
+					.build(),
+			)?;
+
 			#[cfg(desktop)]
 			{
 				app.handle()
@@ -26,7 +38,6 @@ pub fn run() {
 
 			#[cfg(not(target_os = "macos"))]
 			{
-				use tauri::Manager;
 				if let Some(window) = app.handle().get_webview_window("main") {
 					let _ = window.set_decorations(false);
 				}

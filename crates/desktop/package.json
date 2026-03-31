@@ -20,6 +20,7 @@
 		"@tauri-apps/plugin-opener": "^2",
 		"@tauri-apps/plugin-process": "^2.3.1",
 		"@tauri-apps/plugin-store": "^2.4.2",
+		"@tauri-apps/plugin-stronghold": "^2.3.1",
 		"@tauri-apps/plugin-updater": "^2",
 		"clsx": "^2.1.1",
 		"dotenv": "^17.3.1",
