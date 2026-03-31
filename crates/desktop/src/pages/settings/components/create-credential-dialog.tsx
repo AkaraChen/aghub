@@ -10,7 +10,7 @@ import {
 	TextField,
 } from "@heroui/react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useState } from "react";
+import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useServer } from "../../../hooks/use-server";
 import { createApi } from "../../../lib/api";
@@ -24,6 +24,11 @@ interface CreateCredentialDialogProps {
 	onSuccess: () => void;
 }
 
+interface FormValues {
+	name: string;
+	token: string;
+}
+
 export function CreateCredentialDialog({
 	isOpen,
 	onClose,
@@ -31,39 +36,47 @@ export function CreateCredentialDialog({
 }: CreateCredentialDialogProps) {
 	const { t } = useTranslation();
 	const { baseUrl } = useServer();
-	const [isSubmitting, setIsSubmitting] = useState(false);
+	const {
+		control,
+		handleSubmit,
+		reset,
+		formState: { isSubmitting },
+	} = useForm<FormValues>({
+		mode: "onSubmit",
+		reValidateMode: "onChange",
+		defaultValues: { name: "", token: "" },
+	});
 
-	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-		e.preventDefault();
-		const data = Object.fromEntries(new FormData(e.currentTarget)) as {
-			name: string;
-			token: string;
-		};
-		setIsSubmitting(true);
-		try {
-			const api = createApi(baseUrl);
-			await api.credentials.create({
-				name: data.name.trim(),
-				token: data.token.trim(),
-			});
-			onSuccess();
-			onClose();
-		} finally {
-			setIsSubmitting(false);
-		}
+	const handleClose = () => {
+		reset();
+		onClose();
+	};
+
+	const handleSave = async (values: FormValues) => {
+		const api = createApi(baseUrl);
+		await api.credentials.create({
+			name: values.name.trim(),
+			token: values.token.trim(),
+		});
+		reset();
+		onSuccess();
+		onClose();
 	};
 
 	return (
 		<Modal.Backdrop
 			isOpen={isOpen}
 			onOpenChange={(open) => {
-				if (!open) onClose();
+				if (!open) handleClose();
 			}}
 		>
 			<Modal.Container>
 				<Modal.Dialog>
 					<Modal.CloseTrigger />
-					<Form validationBehavior="aria" onSubmit={handleSubmit}>
+					<Form
+						validationBehavior="aria"
+						onSubmit={handleSubmit(handleSave)}
+					>
 						<Modal.Header>
 							<Modal.Heading>
 								{t("createCredential")}
@@ -71,62 +84,122 @@ export function CreateCredentialDialog({
 						</Modal.Header>
 						<Modal.Body className="p-2">
 							<Fieldset>
-								<TextField
+								<Controller
 									name="name"
-									className="w-full"
-									variant="secondary"
-									isRequired
-									validate={(v) =>
-										v.trim()
-											? null
-											: t(
-													"validationCredentialNameRequired",
-												)
-									}
-								>
-									<Label>{t("credentialName")}</Label>
-									<Input
-										placeholder={t(
-											"credentialNamePlaceholder",
-										)}
-										variant="secondary"
-									/>
-									<FieldError />
-								</TextField>
-
-								<TextField
-									name="token"
-									className="w-full"
-									variant="secondary"
-									isRequired
-									type="password"
-									validate={(v) =>
-										v.trim()
-											? null
-											: t(
-													"validationCredentialTokenRequired",
-												)
-									}
-								>
-									<div className="flex items-center justify-between">
-										<Label>{t("credentialToken")}</Label>
-										<Link
-											className="text-xs"
-											onPress={() =>
-												openUrl(GITHUB_TOKEN_URL)
-											}
+									control={control}
+									rules={{
+										required: t(
+											"validationCredentialNameRequired",
+										),
+										validate: (v) =>
+											v.trim()
+												? true
+												: t(
+														"validationCredentialNameRequired",
+													),
+									}}
+									render={({ field, fieldState }) => (
+										<TextField
+											className="w-full"
+											variant="secondary"
+											isRequired
+											validationBehavior="aria"
+											isInvalid={Boolean(
+												fieldState.error,
+											)}
 										>
-											{t("credentialTokenGenerate")}
-										</Link>
-									</div>
-									<Input
-										placeholder={t(
-											"credentialTokenPlaceholder",
-										)}
-										variant="secondary"
-									/>
-									<FieldError />
-								</TextField>
+											<Label>{t("credentialName")}</Label>
+											<Input
+												value={field.value}
+												onChange={(e) =>
+													field.onChange(
+														e.target.value,
+													)
+												}
+												onBlur={field.onBlur}
+												placeholder={t(
+													"credentialNamePlaceholder",
+												)}
+												variant="secondary"
+											/>
+											{fieldState.error && (
+												<FieldError>
+													{fieldState.error.message}
+												</FieldError>
+											)}
+										</TextField>
+									)}
+								/>
+
+								<Controller
+									name="token"
+									control={control}
+									rules={{
+										required: t(
+											"validationCredentialTokenRequired",
+										),
+										validate: (v) =>
+											v.trim()
+												? true
+												: t(
+														"validationCredentialTokenRequired",
+													),
+									}}
+									render={({ field, fieldState }) => (
+										<TextField
+											className="w-full"
+											variant="secondary"
+											isRequired
+											validationBehavior="aria"
+											isInvalid={Boolean(
+												fieldState.error,
+											)}
+										>
+											<Label className="flex w-full items-center justify-between after:content-none">
+												<span>
+													{t("credentialToken")}
+													<span
+														className="ml-0.5 text-danger"
+														aria-hidden="true"
+													>
+														*
+													</span>
+												</span>
+												<Link
+													className="text-xs font-normal"
+													onPress={() =>
+														openUrl(
+															GITHUB_TOKEN_URL,
+														)
+													}
+												>
+													{t(
+														"credentialTokenGenerate",
+													)}
+												</Link>
+											</Label>
+											<Input
+												type="password"
+												value={field.value}
+												onChange={(e) =>
+													field.onChange(
+														e.target.value,
+													)
+												}
+												onBlur={field.onBlur}
+												placeholder={t(
+													"credentialTokenPlaceholder",
+												)}
+												variant="secondary"
+											/>
+											{fieldState.error && (
+												<FieldError>
+													{fieldState.error.message}
+												</FieldError>
+											)}
+										</TextField>
+									)}
+								/>
 							</Fieldset>
 						</Modal.Body>
 						<Modal.Footer>
@@ -134,6 +207,7 @@ export function CreateCredentialDialog({
 								type="button"
 								slot="close"
 								variant="secondary"
+								onPress={handleClose}
 							>
 								{t("cancel")}
 							</Button>
