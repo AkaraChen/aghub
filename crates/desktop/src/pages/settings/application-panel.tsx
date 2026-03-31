@@ -46,6 +46,7 @@ export default function ApplicationPanel() {
 				actionProps: {
 					onPress: () => relaunch(),
 					variant: "tertiary",
+					children: t("restartNow"),
 				},
 				description: t("restartToUpdate"),
 			});

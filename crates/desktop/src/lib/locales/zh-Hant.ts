@@ -62,6 +62,7 @@ export default {
 	downloadAndInstall: "下載並安裝",
 	updateInstalledSuccess: "更新已安裝成功",
 	restartToUpdate: "重新啟動以更新",
+	restartNow: "立即重新啟動",
 	onboardingDescription: "隨時重新開啟歡迎頁或任一導覽流程。",
 
 	// Onboarding — Wizard

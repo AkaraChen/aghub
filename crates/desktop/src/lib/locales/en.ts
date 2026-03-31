@@ -63,6 +63,7 @@ export default {
 	downloadAndInstall: "Download and Install",
 	updateInstalledSuccess: "Update installed successfully",
 	restartToUpdate: "Restart to Update",
+	restartNow: "Restart Now",
 	onboardingDescription:
 		"Replay the welcome screen or either guided tour any time.",
 
