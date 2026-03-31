@@ -24,6 +24,26 @@ export default {
 	replayAppTour: "重播应用导览",
 	replayProjectTour: "重播项目导览",
 
+	// Credentials
+	credentials: "凭据",
+	credentialsDescription: "管理存储的凭据，例如 GitHub 访问令牌。",
+	credentialName: "名称",
+	credentialType: "类型",
+	credentialToken: "令牌",
+	githubCredential: "GitHub",
+	createCredential: "添加凭据",
+	credentialCreated: "凭据添加成功",
+	credentialDeleted: "凭据已删除",
+	credentialDeleteFailed: "删除凭据失败",
+	noCredentials: "暂无凭据，点击添加开始使用。",
+	deleteCredential: "删除凭据",
+	deleteCredentialConfirm: "确定要删除此凭据吗？此操作不可撤销。",
+	credentialNamePlaceholder: "例如：personal",
+	credentialTokenPlaceholder: "ghp_...",
+	validationCredentialNameRequired: "请输入凭据名称。",
+	validationCredentialTokenRequired: "请输入 GitHub 令牌。",
+	credentialTokenGenerate: "在 GitHub 生成 →",
+
 	// Settings
 	appearance: "外观",
 	theme: "主题",

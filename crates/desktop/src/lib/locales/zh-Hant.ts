@@ -24,6 +24,26 @@ export default {
 	replayAppTour: "重播應用程式導覽",
 	replayProjectTour: "重播專案導覽",
 
+	// Credentials
+	credentials: "憑證",
+	credentialsDescription: "管理儲存的憑證，例如 GitHub 存取權杖。",
+	credentialName: "名稱",
+	credentialType: "類型",
+	credentialToken: "權杖",
+	githubCredential: "GitHub",
+	createCredential: "新增憑證",
+	credentialCreated: "憑證新增成功",
+	credentialDeleted: "憑證已刪除",
+	credentialDeleteFailed: "刪除憑證失敗",
+	noCredentials: "尚無憑證，點擊新增以開始使用。",
+	deleteCredential: "刪除憑證",
+	deleteCredentialConfirm: "確定要刪除此憑證嗎？此操作無法復原。",
+	credentialNamePlaceholder: "例如：personal",
+	credentialTokenPlaceholder: "ghp_...",
+	validationCredentialNameRequired: "請輸入憑證名稱。",
+	validationCredentialTokenRequired: "請輸入 GitHub 權杖。",
+	credentialTokenGenerate: "在 GitHub 生成 →",
+
 	// Settings
 	appearance: "外觀",
 	theme: "佈景主題",

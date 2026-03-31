@@ -11,6 +11,7 @@ import { Redirect } from "./components/redirect";
 import { ErrorBoundary } from "./components/ui/error-boundary";
 import { MainLayout } from "./layouts/main-layout";
 import { setupAppMenu } from "./lib/menu";
+import { initSecrets } from "./lib/secrets";
 import { initStore } from "./lib/store";
 import ProjectDetailPage from "./pages/project/detail";
 import SettingsPage from "./pages/settings";
@@ -58,7 +59,7 @@ function App() {
 	}, [t, i18n.language]);
 
 	useEffect(() => {
-		initStore()
+		Promise.all([initStore(), initSecrets("aghub-vault-v1")])
 			.then(() => setIsStoreReady(true))
 			.catch((err) => {
 				console.error("Failed to initialize store:", err);

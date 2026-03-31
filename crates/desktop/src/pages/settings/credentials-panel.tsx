@@ -1,30 +1,11 @@
 import { TrashIcon } from "@heroicons/react/24/outline";
-import {
-	AlertDialog,
-	Button,
-	Card,
-	CardContent,
-	CardHeader,
-	Table,
-	TableBody,
-	TableCell,
-	TableColumn,
-	TableHeader,
-	TableRow,
-	toast,
-} from "@heroui/react";
+import { AlertDialog, Button, Card, Table, toast } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { GitHubCredential } from "../../lib/secrets";
-import { removeCredential } from "../../lib/secrets";
+import { getCredentials, removeCredential } from "../../lib/secrets";
 import { CreateCredentialDialog } from "./components/create-credential-dialog";
-
-// TODO: 实现从 SecretStore 读取凭证的 API
-async function getCredentials(_password: string): Promise<GitHubCredential[]> {
-	// 临时返回空数组，等待后端 API 实现
-	return [];
-}
 
 export default function CredentialsPanel() {
 	const { t } = useTranslation();
@@ -34,17 +15,14 @@ export default function CredentialsPanel() {
 		null,
 	);
 
-	// TODO: 从用户获取或使用默认密码
-	const password = "default-password";
-
 	const { data: credentials = [], isLoading } = useQuery({
 		queryKey: ["credentials"],
-		queryFn: () => getCredentials(password),
+		queryFn: () => getCredentials(""),
 	});
 
 	const deleteMutation = useMutation({
 		mutationFn: async (id: string) => {
-			await removeCredential(password, id);
+			await removeCredential("", id);
 		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["credentials"] });
@@ -57,77 +35,72 @@ export default function CredentialsPanel() {
 		},
 	});
 
-	const columns = useMemo(
-		() => [
-			{ key: "name", label: t("credentialName") },
-			{ key: "type", label: t("credentialType") },
-			{ key: "email", label: t("credentialEmail") },
-			{ key: "actions", label: "" },
-		],
-		[t],
-	);
-
-	const handleDelete = () => {
-		if (deleteTarget) {
-			deleteMutation.mutate(deleteTarget.id);
-		}
-	};
-
 	return (
 		<div className="space-y-4">
-			<Card variant="secondary">
-				<CardHeader className="flex items-center justify-between">
+			<Card className="p-0">
+				<Card.Header className="flex flex-row items-start justify-between p-4">
 					<div>
-						<h3 className="text-lg font-semibold">
-							{t("credentials")}
-						</h3>
-						<p className="text-sm text-muted">
+						<Card.Title>{t("credentials")}</Card.Title>
+						<Card.Description>
 							{t("credentialsDescription")}
-						</p>
+						</Card.Description>
 					</div>
 					<Button onPress={() => setIsCreateOpen(true)}>
 						{t("createCredential")}
 					</Button>
-				</CardHeader>
-				<CardContent>
-					<Table aria-label={t("credentials")}>
-						<TableHeader columns={columns}>
-							{(column) => (
-								<TableColumn key={column.key}>
-									{column.label}
-								</TableColumn>
-							)}
-						</TableHeader>
-						<TableBody items={credentials}>
-							{(credential) => (
-								<TableRow key={credential.id}>
-									<TableCell>{credential.name}</TableCell>
-									<TableCell>
-										{t("githubCredential")}
-									</TableCell>
-									<TableCell>{credential.email}</TableCell>
-									<TableCell>
-										<Button
-											isIconOnly
-											variant="tertiary"
-											size="sm"
-											onPress={() =>
-												setDeleteTarget(credential)
-											}
-										>
-											<TrashIcon className="size-4" />
-										</Button>
-									</TableCell>
-								</TableRow>
-							)}
-						</TableBody>
+				</Card.Header>
+				<Card.Content className="p-4 pt-0">
+					<Table>
+						<Table.ScrollContainer>
+							<Table.Content aria-label={t("credentials")}>
+								<Table.Header>
+									<Table.Column isRowHeader>
+										{t("credentialName")}
+									</Table.Column>
+									<Table.Column>
+										{t("credentialType")}
+									</Table.Column>
+									<Table.Column>{""}</Table.Column>
+								</Table.Header>
+								<Table.Body
+									items={credentials}
+									renderEmptyState={() =>
+										!isLoading && (
+											<div className="py-8 text-center text-sm text-muted">
+												{t("noCredentials")}
+											</div>
+										)
+									}
+								>
+									{(credential) => (
+										<Table.Row id={credential.id}>
+											<Table.Cell>
+												{credential.name}
+											</Table.Cell>
+											<Table.Cell>
+												{t("githubCredential")}
+											</Table.Cell>
+											<Table.Cell>
+												<Button
+													isIconOnly
+													variant="tertiary"
+													size="sm"
+													onPress={() =>
+														setDeleteTarget(
+															credential,
+														)
+													}
+												>
+													<TrashIcon className="size-4" />
+												</Button>
+											</Table.Cell>
+										</Table.Row>
+									)}
+								</Table.Body>
+							</Table.Content>
+						</Table.ScrollContainer>
 					</Table>
-					{credentials.length === 0 && !isLoading && (
-						<div className="py-8 text-center text-muted">
-							{t("noCredentials")}
-						</div>
-					)}
-				</CardContent>
+				</Card.Content>
 			</Card>
 
 			<CreateCredentialDialog
@@ -167,7 +140,10 @@ export default function CredentialsPanel() {
 							<Button
 								variant="danger"
 								isDisabled={deleteMutation.isPending}
-								onPress={handleDelete}
+								onPress={() => {
+									if (deleteTarget)
+										deleteMutation.mutate(deleteTarget.id);
+								}}
 							>
 								{deleteMutation.isPending
 									? t("deleting")

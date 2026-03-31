@@ -3,7 +3,6 @@ export type CredentialType = "github";
 export interface GitHubCredential {
 	id: string;
 	name: string;
-	email: string;
 	token: string;
 }
 

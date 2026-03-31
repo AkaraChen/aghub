@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import AgentsPanel from "./agents-panel";
 import AppearancePanel from "./appearance-panel";
 import ApplicationPanel from "./application-panel";
+import CredentialsPanel from "./credentials-panel";
 import IntegrationsPanel from "./integrations-panel";
 
 export default function SettingsPage() {
@@ -47,6 +48,10 @@ export default function SettingsPage() {
 									{t("application")}
 									<Tabs.Indicator />
 								</Tabs.Tab>
+								<Tabs.Tab id="credentials">
+									{t("credentials")}
+									<Tabs.Indicator />
+								</Tabs.Tab>
 							</Tabs.List>
 						</Tabs.ListContainer>
 					</div>
@@ -65,6 +70,10 @@ export default function SettingsPage() {
 
 					<Tabs.Panel id="application">
 						<ApplicationPanel />
+					</Tabs.Panel>
+
+					<Tabs.Panel id="credentials">
+						<CredentialsPanel />
 					</Tabs.Panel>
 				</Tabs>
 			</div>

@@ -24,6 +24,28 @@ export default {
 	replayAppTour: "Replay App Tour",
 	replayProjectTour: "Replay Project Tour",
 
+	// Credentials
+	credentials: "Credentials",
+	credentialsDescription:
+		"Manage stored credentials for integrations like GitHub.",
+	credentialName: "Name",
+	credentialType: "Type",
+	credentialToken: "Token",
+	githubCredential: "GitHub",
+	createCredential: "Add Credential",
+	credentialCreated: "Credential added successfully",
+	credentialDeleted: "Credential deleted",
+	credentialDeleteFailed: "Failed to delete credential",
+	noCredentials: "No credentials yet. Add one to get started.",
+	deleteCredential: "Delete Credential",
+	deleteCredentialConfirm:
+		"Are you sure you want to delete this credential? This action cannot be undone.",
+	credentialNamePlaceholder: "e.g., personal",
+	credentialTokenPlaceholder: "ghp_...",
+	validationCredentialNameRequired: "Enter a credential name.",
+	validationCredentialTokenRequired: "Enter a GitHub token.",
+	credentialTokenGenerate: "Generate on GitHub →",
+
 	// Settings
 	appearance: "Appearance",
 	theme: "Theme",
