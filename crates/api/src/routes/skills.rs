@@ -62,7 +62,7 @@ pub fn reconcile_skill_route(
 	let req = body.into_inner();
 	let source = req.source.to_core()?;
 
-	let added: Vec<_> = req
+	let added: Vec<AgentType> = req
 		.added
 		.unwrap_or_default()
 		.iter()
@@ -75,9 +75,9 @@ pub fn reconcile_skill_route(
 				)
 			})
 		})
-		.collect::<Result<Vec<_>, _>>()?;
+		.collect::<Result<Vec<AgentType>, _>>()?;
 
-	let removed: Vec<_> = req
+	let removed: Vec<AgentType> = req
 		.removed
 		.unwrap_or_default()
 		.iter()
@@ -90,10 +90,11 @@ pub fn reconcile_skill_route(
 				)
 			})
 		})
-		.collect::<Result<Vec<_>, _>>()?;
+		.collect::<Result<Vec<AgentType>, _>>()?;
 
 	let result = transfer::reconcile_skill(source, added, removed)
 		.map_err(ApiError::from)?;
+
 	Ok(Json(result.into()))
 }
 

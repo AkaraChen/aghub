@@ -215,6 +215,39 @@ fn skill_target_dir(target: &InstallTarget) -> Result<PathBuf> {
 	})
 }
 
+/// Find where a skill actually exists in each agent's skills directories.
+/// Returns (skill_path, agent) pairs for locations where the skill exists.
+fn find_skill_locations_in_agents(
+	skill_name: &str,
+	agents: &[AgentType],
+	scope: InstallScope,
+	project_root: Option<&PathBuf>,
+) -> Vec<(PathBuf, AgentType)> {
+	let safe_name = sanitize_name(skill_name);
+	let mut locations = Vec::new();
+
+	for agent in agents {
+		let adapter = create_adapter(*agent);
+		let resource_scope = match scope {
+			InstallScope::Global => crate::models::ResourceScope::GlobalOnly,
+			InstallScope::Project => crate::models::ResourceScope::ProjectOnly,
+		};
+		let skills_dirs = adapter.get_skills_paths(
+			project_root.map(|p| p.as_path()),
+			resource_scope,
+		);
+
+		for dir in skills_dirs {
+			let skill_path = dir.join(&safe_name);
+			if skill_path.exists() {
+				locations.push((skill_path, *agent));
+			}
+		}
+	}
+
+	locations
+}
+
 fn group_agents_by_target_dir(
 	agents: &[AgentType],
 	scope: InstallScope,
@@ -437,34 +470,28 @@ pub fn reconcile_skill(
 		}
 	}
 
-	// Group removed agents by target directory to avoid redundant deletes
-	let removed_dir_to_agents = group_agents_by_target_dir(
+	// Find actual locations of the skill in removed agents' directories
+	let skill_locations = find_skill_locations_in_agents(
+		&skill.name,
 		&removed,
 		target_scope,
 		target_project_root.as_ref(),
 	);
 
-	// Process each unique directory for deletion
-	for (target_dir, agents) in removed_dir_to_agents {
-		let skill_path = target_dir.join(&safe_name);
-		let delete_error = if skill_path.exists() {
-			fs::remove_dir_all(&skill_path).err()
-		} else {
-			None
-		};
+	// Process each actual location for deletion
+	for (skill_path, agent) in skill_locations {
+		let delete_error = fs::remove_dir_all(&skill_path).err();
 
-		for agent in agents {
-			results.push(OperationResult {
-				target: InstallTarget {
-					agent,
-					scope: target_scope,
-					project_root: target_project_root.clone(),
-				},
-				action: OperationAction::Delete,
-				success: delete_error.is_none(),
-				error: delete_error.as_ref().map(|e| e.to_string()),
-			});
-		}
+		results.push(OperationResult {
+			target: InstallTarget {
+				agent,
+				scope: target_scope,
+				project_root: target_project_root.clone(),
+			},
+			action: OperationAction::Delete,
+			success: delete_error.is_none(),
+			error: delete_error.as_ref().map(|e| e.to_string()),
+		});
 	}
 
 	Ok(OperationBatchResult { results })
