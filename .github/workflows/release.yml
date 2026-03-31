@@ -175,17 +175,17 @@ jobs:
             - name: Package CLI (Unix)
               if: matrix.os != 'windows-latest'
               run: |
-                  tar -czvf agentctl-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release agentctl
+                  tar -czvf aghub-cli-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release aghub-cli
 
             - name: Package CLI (Windows)
               if: matrix.os == 'windows-latest'
               shell: pwsh
               run: |
-                  Compress-Archive -Path target/${{ matrix.target }}/release/agentctl.exe -DestinationPath agentctl-${{ matrix.target }}.zip
+                  Compress-Archive -Path target/${{ matrix.target }}/release/aghub-cli.exe -DestinationPath aghub-cli-${{ matrix.target }}.zip
 
             - name: Upload CLI to Release
               uses: softprops/action-gh-release@v2
               with:
                   tag_name: ${{ github.event.inputs.version || github.ref_name }}
                   prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
-                  files: agentctl-*
+                  files: aghub-cli-*

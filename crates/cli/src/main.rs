@@ -40,7 +40,7 @@ macro_rules! eprintln_verbose {
 
 /// CLI tool for managing Code Agent configurations (Claude Code, OpenCode)
 #[derive(Parser)]
-#[command(name = "agentctl")]
+#[command(name = "aghub-cli")]
 #[command(about = "Manage Code Agent configurations")]
 #[command(version)]
 struct Cli {

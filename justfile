@@ -6,7 +6,7 @@ set windows-shell := ["cmd.exe", "/c"]
 # Default recipe - build the CLI
 default: build
 
-# Build the CLI binary (agentctl)
+# Build the CLI binary (aghub-cli)
 build:
     cargo build --release -p aghub-cli
 
@@ -39,13 +39,13 @@ lint:
 clean:
     cargo clean
 
-# Install agentctl to ~/.cargo/bin
+# Install aghub-cli to ~/.cargo/bin
 install: build
-    cp target/release/agentctl ~/.cargo/bin/
+    cp target/release/aghub-cli ~/.cargo/bin/
 
-# Run agentctl with --help
+# Run aghub-cli with --help
 help: dev
-    ./target/debug/agentctl --help
+    ./target/debug/aghub-cli --help
 
 # Run with cargo (pass args: just start -- --arg)
 start *args:

@@ -6,7 +6,7 @@
 
 ## OVERVIEW
 
-Aghub manages AGENTS.md, MCP configs, and skills for 25+ AI assistants through a unified CLI (`agentctl`) and desktop app. Stateless design—reads actual config files, tracks capability sources, enforces explicit opt-in for changes.
+Aghub manages AGENTS.md, MCP configs, and skills for 25+ AI assistants through a unified CLI (`aghub-cli`) and desktop app. Stateless design—reads actual config files, tracks capability sources, enforces explicit opt-in for changes.
 
 ## STRUCTURE
 
@@ -14,7 +14,7 @@ Aghub manages AGENTS.md, MCP configs, and skills for 25+ AI assistants through a
 .
 ├── crates/
 │   ├── core/         # Core library: adapters, models, registry (44 files)
-│   ├── cli/          # CLI binary: agentctl
+│   ├── cli/          # CLI binary: aghub-cli
 │   ├── api/          # REST API: Rocket HTTP server
 │   ├── skill/        # Skill packaging: .skill/.zip format
 │   ├── skills-sh/    # skills.sh registry client
@@ -82,7 +82,7 @@ cd crates/desktop && bun run start    # Tauri dev
 just desktop                           # Convenience alias
 
 # Install
-just install            # Copy agentctl to ~/.cargo/bin
+just install            # Copy aghub-cli to ~/.cargo/bin
 ```
 
 ## ANTI-PATTERNS

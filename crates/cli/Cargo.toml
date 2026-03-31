@@ -7,7 +7,7 @@ license.workspace = true
 description = "CLI tool for managing Code Agent configurations"
 
 [[bin]]
-name = "agentctl"
+name = "aghub-cli"
 path = "src/main.rs"
 
 [dependencies]

@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Aghub is a CLI tool (`agentctl`) for managing AI coding agent configurations. It supports 22 agents (Claude, OpenCode, Cursor, Windsurf, Copilot, RooCode, Cline, Gemini, Codex, Zed, Warp, and more), handling MCP servers and skills through a unified interface. Full agent list: `crates/core/src/models.rs` or `agentctl --help`.
+Aghub is a CLI tool (`aghub-cli`) for managing AI coding agent configurations. It supports 22 agents (Claude, OpenCode, Cursor, Windsurf, Copilot, RooCode, Cline, Gemini, Codex, Zed, Warp, and more), handling MCP servers and skills through a unified interface. Full agent list: `crates/core/src/models.rs` or `aghub-cli --help`.
 
 ## Common Commands
 
@@ -38,7 +38,7 @@ Run a single test: `cargo test --package aghub-core test_name -- --exact`
 ### Workspace Structure
 
 - **`crates/core`** (`aghub-core`): Core library with models, config management, and agent adapters
-- **`crates/cli`** (`aghub`): CLI binary (`agentctl`) with clap-based commands
+- **`crates/cli`** (`aghub`): CLI binary (`aghub-cli`) with clap-based commands
 - **`crates/skills-sh`**: HTTP API client for skills.sh registry (`SKILLS_API_URL` env var overrides base URL)
 - **`crates/skills-ref`** (`skills-ref`): Parses SKILL.md files, validates `SkillProperties`, generates XML prompt blocks via `to_prompt()`
 - **`crates/skill`** (`skill`): Extends skills-ref with `.skill` zip format; `parse()` auto-detects directory/zip/SKILL.md. Called by `manager.add_skill_from_path()`
@@ -69,7 +69,7 @@ Agent behavior is defined entirely in `crates/core/src/agents/<name>.rs` descrip
 ### CLI Command Surface
 
 ```
-agentctl [-a <agent>] [-g|--global] [-p|--project] [-v|--verbose] <command>
+aghub-cli [-a <agent>] [-g|--global] [-p|--project] [-v|--verbose] <command>
 
 Commands:
   get    <skills|mcps>               # list resources
