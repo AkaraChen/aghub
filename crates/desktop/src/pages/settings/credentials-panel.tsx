@@ -1,29 +1,30 @@
 import { TrashIcon } from "@heroicons/react/24/outline";
 import { AlertDialog, Button, Card, Table, toast } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { GitHubCredential } from "../../lib/secrets";
-import { getCredentials, removeCredential } from "../../lib/secrets";
+import { useServer } from "../../hooks/use-server";
+import type { CredentialResponse } from "../../lib/api";
+import { createApi } from "../../lib/api";
 import { CreateCredentialDialog } from "./components/create-credential-dialog";
 
 export default function CredentialsPanel() {
 	const { t } = useTranslation();
+	const { baseUrl } = useServer();
+	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
 	const queryClient = useQueryClient();
 	const [isCreateOpen, setIsCreateOpen] = useState(false);
-	const [deleteTarget, setDeleteTarget] = useState<GitHubCredential | null>(
+	const [deleteTarget, setDeleteTarget] = useState<CredentialResponse | null>(
 		null,
 	);
 
 	const { data: credentials = [], isLoading } = useQuery({
 		queryKey: ["credentials"],
-		queryFn: () => getCredentials(""),
+		queryFn: () => api.credentials.list(),
 	});
 
 	const deleteMutation = useMutation({
-		mutationFn: async (id: string) => {
-			await removeCredential("", id);
-		},
+		mutationFn: (id: string) => api.credentials.delete(id),
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["credentials"] });
 			toast.success(t("credentialDeleted"));

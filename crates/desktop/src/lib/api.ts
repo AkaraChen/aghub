@@ -308,5 +308,24 @@ export function createApi(baseUrl: string) {
 					.then(() => undefined);
 			},
 		},
+		credentials: {
+			list(): Promise<CredentialResponse[]> {
+				return client.get("credentials").json();
+			},
+			create(body: {
+				name: string;
+				token: string;
+			}): Promise<CredentialResponse> {
+				return client.post("credentials", { json: body }).json();
+			},
+			delete(id: string): Promise<void> {
+				return client.delete(`credentials/${id}`).then(() => undefined);
+			},
+		},
 	};
+}
+
+export interface CredentialResponse {
+	id: string;
+	name: string;
 }

@@ -1,5 +1,6 @@
 pub mod agents;
 pub mod catchers;
+pub mod credentials;
 pub mod integrations;
 pub mod market;
 pub mod mcps;

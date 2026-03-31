@@ -12,7 +12,8 @@ import {
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { saveCredential } from "../../../lib/secrets";
+import { useServer } from "../../../hooks/use-server";
+import { createApi } from "../../../lib/api";
 
 const GITHUB_TOKEN_URL =
 	"https://github.com/settings/tokens/new?scopes=repo,read:org&description=aghub";
@@ -29,6 +30,7 @@ export function CreateCredentialDialog({
 	onSuccess,
 }: CreateCredentialDialogProps) {
 	const { t } = useTranslation();
+	const { baseUrl } = useServer();
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -39,7 +41,8 @@ export function CreateCredentialDialog({
 		};
 		setIsSubmitting(true);
 		try {
-			await saveCredential("", {
+			const api = createApi(baseUrl);
+			await api.credentials.create({
 				name: data.name.trim(),
 				token: data.token.trim(),
 			});
