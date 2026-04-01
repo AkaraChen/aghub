@@ -99,10 +99,9 @@ impl TestConfig {
 
 		let skill_md_content = match description {
 			Some(desc) => format!(
-				"---\nname: {}\ndescription: {}\n---\n\n# {}\n",
-				name, desc, name
+				"---\nname: {name}\ndescription: {desc}\n---\n\n# {name}\n"
 			),
-			None => format!("---\nname: {}\n---\n\n# {}\n", name, name),
+			None => format!("---\nname: {name}\n---\n\n# {name}\n"),
 		};
 
 		fs::write(skill_dir.join("SKILL.md"), skill_md_content)

@@ -72,7 +72,7 @@ pub fn reconcile_skill_route(
 			agent_str.parse().map_err(|_| {
 				ApiError::new(
 					rocket::http::Status::BadRequest,
-					format!("Unknown agent '{}'", agent_str),
+					format!("Unknown agent '{agent_str}'"),
 					"INVALID_PARAM",
 				)
 			})
@@ -87,7 +87,7 @@ pub fn reconcile_skill_route(
 			agent_str.parse().map_err(|_| {
 				ApiError::new(
 					rocket::http::Status::BadRequest,
-					format!("Unknown agent '{}'", agent_str),
+					format!("Unknown agent '{agent_str}'"),
 					"INVALID_PARAM",
 				)
 			})
@@ -152,7 +152,7 @@ pub fn delete_skill_by_path(
 			Err(_) => {
 				validation_errors.push(ValidationError {
 					agent: agent_str.clone(),
-					reason: format!("Unknown agent: {}", agent_str),
+					reason: format!("Unknown agent: {agent_str}"),
 				});
 				continue;
 			}
@@ -210,7 +210,7 @@ pub fn delete_skill_by_path(
 		Err(e) => Ok(Json(DeleteSkillByPathResponse {
 			success: false,
 			deleted_path: None,
-			error: Some(format!("Failed to delete: {}", e)),
+			error: Some(format!("Failed to delete: {e}")),
 			validation_errors: None,
 		})),
 	}
@@ -578,7 +578,7 @@ pub async fn open_skill_folder(
 
 	match open::that(&folder) {
 		Ok(_) => Ok(()),
-		Err(e) => Err(format!("Failed to open folder: {}", e)),
+		Err(e) => Err(format!("Failed to open folder: {e}")),
 	}
 }
 
@@ -597,7 +597,7 @@ pub async fn edit_skill_folder(
 				.spawn()
 			{
 				Ok(_) => Ok(()),
-				Err(e) => Err(format!("Failed to open editor: {}", e)),
+				Err(e) => Err(format!("Failed to open editor: {e}")),
 			}
 		}
 		None => {

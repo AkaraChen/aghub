@@ -123,12 +123,12 @@ fn do_clone(url: &str) -> Result<TempDir> {
 			gix::progress::Discard,
 			&gix::interrupt::IS_INTERRUPTED,
 		)
-		.map_err(|e| GitError::clone_failed(format!("Fetch failed: {}", e)))?;
+		.map_err(|e| GitError::clone_failed(format!("Fetch failed: {e}")))?;
 
 	checkout
 		.main_worktree(gix::progress::Discard, &gix::interrupt::IS_INTERRUPTED)
 		.map_err(|e| {
-			GitError::clone_failed(format!("Checkout failed: {}", e))
+			GitError::clone_failed(format!("Checkout failed: {e}"))
 		})?;
 
 	Ok(temp_dir)
@@ -179,12 +179,12 @@ pub fn clone_to_path(url: &str, dest: &Path) -> Result<()> {
 			gix::progress::Discard,
 			&gix::interrupt::IS_INTERRUPTED,
 		)
-		.map_err(|e| GitError::clone_failed(format!("Fetch failed: {}", e)))?;
+		.map_err(|e| GitError::clone_failed(format!("Fetch failed: {e}")))?;
 
 	checkout
 		.main_worktree(gix::progress::Discard, &gix::interrupt::IS_INTERRUPTED)
 		.map_err(|e| {
-			GitError::clone_failed(format!("Checkout failed: {}", e))
+			GitError::clone_failed(format!("Checkout failed: {e}"))
 		})?;
 
 	Ok(())

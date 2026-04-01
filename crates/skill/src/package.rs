@@ -155,7 +155,7 @@ pub fn pack(skill_dir: &Path, output_path: &Path) -> Result<()> {
 			let dir_name = if name.ends_with('/') {
 				name
 			} else {
-				format!("{}/", name)
+				format!("{name}/")
 			};
 			zip.add_directory(dir_name, options)?;
 		}

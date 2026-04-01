@@ -69,7 +69,7 @@ pub fn reconcile_mcp_route(
 			agent_str.parse().map_err(|_| {
 				ApiError::new(
 					rocket::http::Status::BadRequest,
-					format!("Unknown agent '{}'", agent_str),
+					format!("Unknown agent '{agent_str}'"),
 					"INVALID_PARAM",
 				)
 			})
@@ -84,7 +84,7 @@ pub fn reconcile_mcp_route(
 			agent_str.parse().map_err(|_| {
 				ApiError::new(
 					rocket::http::Status::BadRequest,
-					format!("Unknown agent '{}'", agent_str),
+					format!("Unknown agent '{agent_str}'"),
 					"INVALID_PARAM",
 				)
 			})
