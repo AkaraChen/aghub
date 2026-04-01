@@ -36,12 +36,12 @@ brew install aghub-cli
 
 ### Download
 
-| Platform               | Download                                                                                           |
-| ---------------------- | -------------------------------------------------------------------------------------------------- |
-| Windows (experimental) | [setup.exe](https://github.com/akarachen/aghub/releases/latest/download/aghub-windows-setup.exe)   |
-| macOS (Intel)          | [dmg](https://github.com/akarachen/aghub/releases/latest/download/aghub_mac_intel.dmg)             |
-| macOS (Apple Silicon)  | [dmg](https://github.com/akarachen/aghub/releases/latest/download/aghub_mac_arm.dmg)               |
-| Linux                  | [AppImage](https://github.com/akarachen/aghub/releases/latest/download/aghub-linux.AppImage)       |
+| Platform               | Download                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------ |
+| Windows (experimental) | [setup.exe](https://github.com/akarachen/aghub/releases/latest/download/aghub-windows-setup.exe) |
+| macOS (Intel)          | [dmg](https://github.com/akarachen/aghub/releases/latest/download/aghub_mac_intel.dmg)           |
+| macOS (Apple Silicon)  | [dmg](https://github.com/akarachen/aghub/releases/latest/download/aghub_mac_arm.dmg)             |
+| Linux                  | [AppImage](https://github.com/akarachen/aghub/releases/latest/download/aghub-linux.AppImage)     |
 
 Or visit [Releases](https://github.com/akarachen/aghub/releases) for all available downloads.
 
