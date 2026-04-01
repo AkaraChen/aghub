@@ -19,7 +19,7 @@ import { SkillInfoCard } from "./skill-info-card";
 
 interface DeepLinkImportModalProps {
 	intent: DeepLinkImportIntent | null;
-	onClose: () => void;
+	onComplete: () => void;
 }
 
 interface InstallResult {
@@ -60,7 +60,7 @@ function buildPendingResults(
 
 export function DeepLinkImportModal({
 	intent,
-	onClose,
+	onComplete,
 }: DeepLinkImportModalProps) {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
@@ -189,7 +189,7 @@ export function DeepLinkImportModal({
 		setSelectedAgents(new Set());
 		installMutation.reset();
 		resetInstallTarget();
-		onClose();
+		onComplete();
 	};
 
 	const handleModalOpenChange = (isOpen: boolean) => {

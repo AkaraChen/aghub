@@ -57,10 +57,17 @@ function SkillsPageSkeleton() {
 
 function App() {
 	const [isStoreReady, setIsStoreReady] = useState(false);
-	const [pendingDeepLinkIntent, setPendingDeepLinkIntent] =
-		useState<DeepLinkImportIntent | null>(null);
+	const [pendingIntents, setPendingIntents] = useState<
+		DeepLinkImportIntent[]
+	>([]);
 	const [, setLocation] = useLocation();
 	const { t, i18n } = useTranslation();
+
+	const currentIntent = pendingIntents[0] ?? null;
+
+	const processNextIntent = () => {
+		setPendingIntents((prev) => prev.slice(1));
+	};
 
 	useEffect(() => {
 		setupAppMenu(t);
@@ -88,18 +95,23 @@ function App() {
 		let unlistenDeepLink: (() => void) | null = null;
 
 		const handleUrls = (urls: string[] | null) => {
-			const nextUrl = urls && urls.length > 0 ? urls.at(-1) : null;
-			if (!isMounted || !nextUrl) {
+			if (!isMounted || !urls || urls.length === 0) {
 				return;
 			}
 
-			const result = parseDeepLink(nextUrl);
-			if (!result.ok) {
-				toast.danger(t(result.error));
-				return;
+			const newIntents: DeepLinkImportIntent[] = [];
+			for (const url of urls) {
+				const result = parseDeepLink(url);
+				if (!result.ok) {
+					toast.danger(t(result.error));
+				} else {
+					newIntents.push(result.intent);
+				}
 			}
 
-			setPendingDeepLinkIntent(result.intent);
+			if (newIntents.length > 0) {
+				setPendingIntents((prev) => [...prev, ...newIntents]);
+			}
 		};
 
 		void getCurrentDeepLinks()
@@ -226,10 +238,8 @@ function App() {
 									</Route>
 								</Switch>
 								<DeepLinkImportModal
-									intent={pendingDeepLinkIntent}
-									onClose={() =>
-										setPendingDeepLinkIntent(null)
-									}
+									intent={currentIntent}
+									onComplete={processNextIntent}
 								/>
 							</Router>
 						</NuqsAdapter>
