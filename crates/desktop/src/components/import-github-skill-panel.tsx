@@ -869,62 +869,48 @@ export function ImportGithubSkillPanel({
 													);
 													return acc;
 												}, {}),
-											).map(([skillName, results]) => (
-												<div
-													key={skillName}
-													className="rounded-lg border border-border p-3"
-												>
-													<div className="mb-2 flex items-center gap-2">
-														{results.every(
-															(r) => r.success,
-														) ? (
-															<CheckCircleIcon className="size-4 shrink-0 text-success" />
-														) : results.some(
-																(r) =>
-																	r.success,
-															) ? (
-															<div className="flex size-4 shrink-0 items-center justify-center">
-																<div className="size-2 rounded-full bg-warning" />
-															</div>
-														) : (
-															<XCircleIcon className="size-4 shrink-0 text-danger" />
-														)}
-														<span className="font-medium text-foreground">
-															{skillName}
-														</span>
+											).map(([skillName, results]) => {
+												const allSuccess =
+													results.every(
+														(r) => r.success,
+													);
+												const hasError = results.some(
+													(r) => !r.success,
+												);
+												const errorMsg = results.find(
+													(r) => r.error,
+												)?.error;
+												return (
+													<div
+														key={skillName}
+														className="flex items-start gap-2 rounded-lg px-2 py-1.5"
+													>
+														{allSuccess ? (
+															<CheckCircleIcon className="mt-0.5 size-4 shrink-0 text-success" />
+														) : hasError ? (
+															<XCircleIcon className="mt-0.5 size-4 shrink-0 text-danger" />
+														) : null}
+														<div className="min-w-0">
+															<p className="text-sm font-medium text-foreground">
+																{skillName}
+															</p>
+															<p className="text-xs text-muted">
+																{results
+																	.map(
+																		(r) =>
+																			r.agent,
+																	)
+																	.join(", ")}
+															</p>
+															{errorMsg && (
+																<p className="text-xs text-danger">
+																	{errorMsg}
+																</p>
+															)}
+														</div>
 													</div>
-													<div className="space-y-1 pl-6">
-														{results.map(
-															(result, idx) => (
-																<div
-																	key={`${result.agent}-${idx}`}
-																	className="flex items-center gap-2 text-sm"
-																>
-																	{result.success ? (
-																		<CheckCircleIcon className="size-3 shrink-0 text-success" />
-																	) : (
-																		<XCircleIcon className="size-3 shrink-0 text-danger" />
-																	)}
-																	<span className="text-muted">
-																		{
-																			result.agent
-																		}
-																	</span>
-																	{result.error && (
-																		<span className="text-xs text-danger">
-																			(
-																			{
-																				result.error
-																			}
-																			)
-																		</span>
-																	)}
-																</div>
-															),
-														)}
-													</div>
-												</div>
-											))}
+												);
+											})}
 										</div>
 
 										<div className="mt-4 flex items-center justify-between">
