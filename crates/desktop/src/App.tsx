@@ -6,7 +6,7 @@ import {
 	onOpenUrl,
 } from "@tauri-apps/plugin-deep-link";
 import { NuqsAdapter } from "nuqs/adapters/react";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useKeyBindings } from "rooks";
 import { Route, Router, Switch, useLocation } from "wouter";
@@ -65,9 +65,9 @@ function App() {
 
 	const currentIntent = pendingIntents[0] ?? null;
 
-	const processNextIntent = () => {
+	const processNextIntent = useCallback(() => {
 		setPendingIntents((prev) => prev.slice(1));
-	};
+	}, []);
 
 	useEffect(() => {
 		setupAppMenu(t);
@@ -99,18 +99,18 @@ function App() {
 				return;
 			}
 
-			const newIntents: DeepLinkImportIntent[] = [];
-			for (const url of urls) {
-				const result = parseDeepLink(url);
-				if (!result.ok) {
-					toast.danger(t(result.error));
-				} else {
-					newIntents.push(result.intent);
-				}
-			}
+			const newIntents = urls
+				.map(parseDeepLink)
+				.filter((result) => {
+					if (!result.ok) {
+						toast.danger(t(result.error));
+					}
+					return result.ok;
+				})
+				.map((result) => result.intent);
 
 			if (newIntents.length > 0) {
-				setPendingIntents((prev) => [...prev, ...newIntents]);
+				setPendingIntents((prev) => prev.concat(newIntents));
 			}
 		};
 

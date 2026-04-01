@@ -5,8 +5,8 @@ import { InstallTargetSelector } from "../../../components/install-target-select
 import { ResultStatusItem } from "../../../components/result-status-item";
 import { SkillInfoCard } from "../../../components/skill-info-card";
 import type { MarketSkill } from "../../../lib/api-types";
+import type { InstallResult } from "../../../lib/install-utils";
 import type { Project } from "../../../lib/store";
-import type { InstallResult } from "../hooks/use-skill-install";
 
 interface InstallModalProps {
 	isOpen: boolean;

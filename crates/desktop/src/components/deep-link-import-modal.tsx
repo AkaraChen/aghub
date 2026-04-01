@@ -12,6 +12,7 @@ import {
 	type DeepLinkImportIntent,
 	formatTransportSummary,
 } from "../lib/deep-link";
+import { buildPendingResults, type InstallResult } from "../lib/install-utils";
 import { AgentSelector } from "./agent-selector";
 import { InstallTargetSelector } from "./install-target-selector";
 import { ResultStatusItem } from "./result-status-item";
@@ -20,13 +21,6 @@ import { SkillInfoCard } from "./skill-info-card";
 interface DeepLinkImportModalProps {
 	intent: DeepLinkImportIntent | null;
 	onComplete: () => void;
-}
-
-interface InstallResult {
-	agentId: string;
-	displayName: string;
-	status: "pending" | "success" | "error";
-	error?: string;
 }
 
 interface InstallVariables {
@@ -42,20 +36,6 @@ function transportLabel(transport: TransportDto): string {
 	}
 
 	return transport.type.toUpperCase();
-}
-
-function buildPendingResults(
-	selectedAgents: Set<string>,
-	compatibleAgents: Array<{ id: string; display_name: string }>,
-): InstallResult[] {
-	return Array.from(selectedAgents, (agentId) => {
-		const agent = compatibleAgents.find((item) => item.id === agentId);
-		return {
-			agentId,
-			displayName: agent?.display_name ?? agentId,
-			status: "pending" as const,
-		};
-	});
 }
 
 export function DeepLinkImportModal({
@@ -186,6 +166,10 @@ export function DeepLinkImportModal({
 	};
 
 	const handleClose = () => {
+		if (!intent) {
+			onComplete();
+			return;
+		}
 		setSelectedAgents(new Set());
 		installMutation.reset();
 		resetInstallTarget();

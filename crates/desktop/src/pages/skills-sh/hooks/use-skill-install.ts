@@ -5,13 +5,10 @@ import { useInstallTarget } from "../../../hooks/use-install-target";
 import { useServer } from "../../../hooks/use-server";
 import { createApi } from "../../../lib/api";
 import type { MarketSkill } from "../../../lib/api-types";
-
-export interface InstallResult {
-	agentId: string;
-	displayName: string;
-	status: "pending" | "success" | "error";
-	error?: string;
-}
+import {
+	buildPendingResults,
+	type InstallResult,
+} from "../../../lib/install-utils";
 
 export function useSkillInstall() {
 	const { baseUrl } = useServer();
@@ -60,16 +57,9 @@ export function useSkillInstall() {
 
 		setIsInstalling(true);
 
-		const pendingResults: InstallResult[] = Array.from(
+		const pendingResults = buildPendingResults(
 			selectedAgents,
-			(agentId) => {
-				const agent = availableAgents.find((a) => a.id === agentId);
-				return {
-					agentId,
-					displayName: agent?.display_name ?? agentId,
-					status: "pending" as const,
-				};
-			},
+			availableAgents,
 		);
 		setInstallResults(pendingResults);
 
