@@ -195,8 +195,8 @@ impl ConfigManager {
 					} else if path.file_name().and_then(|n| n.to_str())
 						== Some(&format!("{safe_old_name}.md"))
 					{
-						let new_path = path
-							.with_file_name(format!("{safe_new_name}.md"));
+						let new_path =
+							path.with_file_name(format!("{safe_new_name}.md"));
 						std::fs::rename(&path, &new_path).map_err(|e| {
 							ConfigError::Io(std::io::Error::new(
 								e.kind(),

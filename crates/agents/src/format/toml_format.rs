@@ -24,9 +24,7 @@ struct TomlMcpServer {
 
 pub fn parse(content: &str) -> Result<AgentConfig> {
 	let toml_config: TomlConfig = toml::from_str(content).map_err(|e| {
-		ConfigError::InvalidConfig(format!(
-			"Failed to parse TOML config: {e}"
-		))
+		ConfigError::InvalidConfig(format!("Failed to parse TOML config: {e}"))
 	})?;
 
 	let mut config = AgentConfig::new();
