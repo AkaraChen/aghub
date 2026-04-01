@@ -43,7 +43,6 @@ interface ImportGithubSkillPanelProps {
 }
 
 const ADD_TOKEN_SENTINEL = "__add_token__";
-const NO_CREDENTIAL_SENTINEL = "__none__";
 
 interface InputFormValues {
 	url: string;
@@ -430,7 +429,7 @@ export function ImportGithubSkillPanel({
 															variant="secondary"
 															selectedKey={
 																field.value ||
-																NO_CREDENTIAL_SENTINEL
+																undefined
 															}
 															onSelectionChange={(
 																key,
@@ -445,12 +444,7 @@ export function ImportGithubSkillPanel({
 																	return;
 																}
 																field.onChange(
-																	key ===
-																		NO_CREDENTIAL_SENTINEL
-																		? ""
-																		: String(
-																				key,
-																			),
+																	String(key),
 																);
 															}}
 														>
@@ -465,19 +459,6 @@ export function ImportGithubSkillPanel({
 															</Select.Trigger>
 															<Select.Popover>
 																<ListBox>
-																	<ListBox.Item
-																		id={
-																			NO_CREDENTIAL_SENTINEL
-																		}
-																		textValue={t(
-																			"publicRepoNoCredential",
-																		)}
-																	>
-																		{t(
-																			"publicRepoNoCredential",
-																		)}
-																		<ListBox.ItemIndicator />
-																	</ListBox.Item>
 																	{credentials.map(
 																		(
 																			cred,
