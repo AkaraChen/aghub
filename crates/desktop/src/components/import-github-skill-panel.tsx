@@ -308,9 +308,7 @@ export function ImportGithubSkillPanel({
 					<div
 						className={cn(
 							"grid transition-[grid-template-rows] duration-300 ease-out",
-							card1Open
-								? "grid-rows-[1fr]"
-								: "grid-rows-[0fr]",
+							card1Open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
 						)}
 					>
 						<div className="overflow-hidden px-0.5">
@@ -607,9 +605,7 @@ export function ImportGithubSkillPanel({
 					<div
 						className={cn(
 							"grid transition-[grid-template-rows] duration-300 ease-out",
-							card2Open
-								? "grid-rows-[1fr]"
-								: "grid-rows-[0fr]",
+							card2Open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
 						)}
 					>
 						<div className="overflow-hidden px-0.5">
@@ -821,9 +817,7 @@ export function ImportGithubSkillPanel({
 					<div
 						className={cn(
 							"grid transition-[grid-template-rows] duration-300 ease-out",
-							card3Open
-								? "grid-rows-[1fr]"
-								: "grid-rows-[0fr]",
+							card3Open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
 						)}
 					>
 						<div className="overflow-hidden px-0.5">
