@@ -21,7 +21,7 @@ const GITHUB_TOKEN_URL =
 interface CreateCredentialDialogProps {
 	isOpen: boolean;
 	onClose: () => void;
-	onSuccess: () => void;
+	onSuccess: (newId: string) => void;
 }
 
 interface FormValues {
@@ -54,12 +54,12 @@ export function CreateCredentialDialog({
 
 	const handleSave = async (values: FormValues) => {
 		const api = createApi(baseUrl);
-		await api.credentials.create({
+		const result = await api.credentials.create({
 			name: values.name.trim(),
 			token: values.token.trim(),
 		});
 		reset();
-		onSuccess();
+		onSuccess(result.id);
 		onClose();
 	};
 
