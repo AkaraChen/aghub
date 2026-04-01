@@ -65,8 +65,7 @@ impl ScopeParams {
 			other => Err(ApiError::new(
 				Status::BadRequest,
 				format!(
-					"Unknown scope '{}'. Use 'global', 'project', or 'all'",
-					other
+					"Unknown scope '{other}'. Use 'global', 'project', or 'all'"
 				),
 				"INVALID_PARAM",
 			)),

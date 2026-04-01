@@ -1,6 +1,5 @@
 use crate::AgentDescriptor;
 use std::path::PathBuf;
-use std::process::Command;
 
 /// Information about agent availability
 #[derive(Debug, Clone)]
@@ -11,13 +10,9 @@ pub struct AvailabilityInfo {
 	pub is_available: bool,
 }
 
-/// Check if a CLI binary exists using the `which` command
+/// Check if a CLI binary exists using the `which` crate (cross-platform support)
 fn check_cli_exists(cli_name: &str) -> bool {
-	Command::new("which")
-		.arg(cli_name)
-		.output()
-		.map(|output| output.status.success())
-		.unwrap_or(false)
+	which::which(cli_name).is_ok()
 }
 
 /// Check if a global directory exists

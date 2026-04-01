@@ -94,6 +94,14 @@ pub fn inject_credentials(url: &str, creds: &Credentials) -> Result<String> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::sync::Mutex;
+	use std::sync::OnceLock;
+
+	// Mutex to serialize tests that manipulate environment variables
+	fn env_lock() -> &'static Mutex<()> {
+		static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+		LOCK.get_or_init(|| Mutex::new(()))
+	}
 
 	#[test]
 	fn test_inject_credentials() {
@@ -124,6 +132,8 @@ mod tests {
 
 	#[test]
 	fn test_read_credentials_missing() {
+		let _guard = env_lock().lock().unwrap();
+
 		env::remove_var(GIT_USERNAME_ENV);
 		env::remove_var(GIT_PASSWORD_ENV);
 
@@ -133,11 +143,21 @@ mod tests {
 
 	#[test]
 	fn test_read_credentials_present() {
+		let _guard = env_lock().lock().unwrap();
+
+		env::remove_var(GIT_USERNAME_ENV);
+		env::remove_var(GIT_PASSWORD_ENV);
+
 		env::set_var(GIT_USERNAME_ENV, "testuser");
 		env::set_var(GIT_PASSWORD_ENV, "testpass");
 
 		let creds = read_credentials();
-		assert!(creds.is_some());
+		assert!(
+			creds.is_some(),
+			"Expected Some(creds), got None. ENV vars: {:?}, {:?}",
+			env::var(GIT_USERNAME_ENV),
+			env::var(GIT_PASSWORD_ENV)
+		);
 		assert_eq!(creds.unwrap().username, "testuser");
 
 		env::remove_var(GIT_USERNAME_ENV);

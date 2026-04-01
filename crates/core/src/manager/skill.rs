@@ -193,10 +193,10 @@ impl ConfigManager {
 						final_file_path =
 							new_parent.join(path.file_name().unwrap());
 					} else if path.file_name().and_then(|n| n.to_str())
-						== Some(&format!("{}.md", safe_old_name))
+						== Some(&format!("{safe_old_name}.md"))
 					{
-						let new_path = path
-							.with_file_name(format!("{}.md", safe_new_name));
+						let new_path =
+							path.with_file_name(format!("{safe_new_name}.md"));
 						std::fs::rename(&path, &new_path).map_err(|e| {
 							ConfigError::Io(std::io::Error::new(
 								e.kind(),
@@ -293,7 +293,7 @@ impl ConfigManager {
 
 	pub fn add_skill_from_path(&mut self, path: &Path) -> Result<Skill> {
 		let skill_pkg = skill::parser::parse(path).map_err(|e| {
-			ConfigError::InvalidConfig(format!("Failed to parse skill: {}", e))
+			ConfigError::InvalidConfig(format!("Failed to parse skill: {e}"))
 		})?;
 		let skill = convert_skill(skill_pkg);
 		self.add_skill(skill.clone())?;
@@ -304,7 +304,7 @@ impl ConfigManager {
 		let mut errors = Vec::new();
 		match skill::parser::parse(path) {
 			Ok(_) => {}
-			Err(e) => errors.push(format!("Parse error: {}", e)),
+			Err(e) => errors.push(format!("Parse error: {e}")),
 		}
 		errors
 	}

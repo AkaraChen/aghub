@@ -335,7 +335,7 @@ impl std::str::FromStr for AgentType {
 			"mistral" => Ok(AgentType::Mistral),
 			"pi" => Ok(AgentType::Pi),
 			"jetbrains-ai" | "jetbrains" | "jb" => Ok(AgentType::JetBrainsAi),
-			_ => Err(format!("Unknown agent type: {}", s)),
+			_ => Err(format!("Unknown agent type: {s}")),
 		}
 	}
 }

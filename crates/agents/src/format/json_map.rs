@@ -146,8 +146,7 @@ pub fn serialize(
 		} else {
 			serde_json::from_str(content).map_err(|e| {
 				ConfigError::InvalidConfig(format!(
-					"Failed to parse existing config: {}",
-					e
+					"Failed to parse existing config: {e}"
 				))
 			})?
 		}

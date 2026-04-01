@@ -83,7 +83,7 @@ fn scan_archive_structure(
 	let root_prefix = if root.is_empty() {
 		String::new()
 	} else {
-		format!("{}/", root)
+		format!("{root}/")
 	};
 
 	for i in 0..archive.len() {
