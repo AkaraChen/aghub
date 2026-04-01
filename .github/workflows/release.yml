@@ -58,7 +58,7 @@ jobs:
                 include:
                     - os: macos-latest
                       target: aarch64-apple-darwin
-                    - os: macos-13
+                    - os: macos-latest
                       target: x86_64-apple-darwin
                     - os: ubuntu-22.04
                       target: x86_64-unknown-linux-gnu
@@ -67,6 +67,12 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
+
+            - name: Install x86_64 OpenSSL (macOS cross-compile)
+              if: matrix.os == 'macos-latest' && matrix.target == 'x86_64-apple-darwin'
+              run: |
+                  arch -x86_64 brew install openssl@3
+                  echo "OPENSSL_DIR=$(arch -x86_64 brew --prefix openssl@3)" >> $GITHUB_ENV
 
             - name: Install Linux Dependencies
               if: matrix.os == 'ubuntu-22.04'
@@ -167,7 +173,7 @@ jobs:
                 include:
                     - os: macos-latest
                       target: aarch64-apple-darwin
-                    - os: macos-13
+                    - os: macos-latest
                       target: x86_64-apple-darwin
                     - os: ubuntu-22.04
                       target: x86_64-unknown-linux-gnu
@@ -176,6 +182,12 @@ jobs:
 
         steps:
             - uses: actions/checkout@v4
+
+            - name: Install x86_64 OpenSSL (macOS cross-compile)
+              if: matrix.os == 'macos-latest' && matrix.target == 'x86_64-apple-darwin'
+              run: |
+                  arch -x86_64 brew install openssl@3
+                  echo "OPENSSL_DIR=$(arch -x86_64 brew --prefix openssl@3)" >> $GITHUB_ENV
 
             - name: Install Rust toolchain
               uses: dtolnay/rust-toolchain@stable
