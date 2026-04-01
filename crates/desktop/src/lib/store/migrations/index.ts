@@ -1,4 +1,4 @@
-import { Store } from "@tauri-apps/plugin-store";
+import type { Store } from "@tauri-apps/plugin-store";
 import { CURRENT_VERSION } from "../types";
 import { migrateV0ToV1 } from "./v0-to-v1";
 import { migrateV1ToV2 } from "./v1-to-v2";

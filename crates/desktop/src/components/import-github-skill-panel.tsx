@@ -277,7 +277,7 @@ export function ImportGithubSkillPanel({
 				>
 					<button
 						type="button"
-						className="flex w-full items-center justify-between px-4 py-3 text-left"
+						className="flex w-full items-center justify-between text-left"
 						onClick={handleCard1Toggle}
 						aria-expanded={card1Open}
 					>
@@ -568,7 +568,7 @@ export function ImportGithubSkillPanel({
 					<button
 						type="button"
 						className={cn(
-							"flex w-full items-center justify-between px-4 py-3 text-left",
+							"flex w-full items-center justify-between text-left",
 							!card2Reached && "cursor-not-allowed",
 						)}
 						onClick={handleCard2Toggle}
@@ -802,7 +802,7 @@ export function ImportGithubSkillPanel({
 					<button
 						type="button"
 						className={cn(
-							"flex w-full items-center justify-between px-4 py-3 text-left",
+							"flex w-full items-center justify-between text-left",
 							!card3Reached && "cursor-not-allowed",
 						)}
 						onClick={handleCard3Toggle}
@@ -853,36 +853,78 @@ export function ImportGithubSkillPanel({
 									</div>
 								) : (
 									<>
-										<div className="space-y-2">
-											{installResults.map(
-												(result, idx) => (
-													<div
-														key={`${result.agent}-${result.name}-${idx}`}
-														className="flex items-start gap-2 rounded-lg px-2 py-1.5"
+										<div className="space-y-4">
+											{Object.entries(
+												installResults.reduce<
+													Record<
+														string,
+														GitInstallResultEntry[]
 													>
-														{result.success ? (
-															<CheckCircleIcon className="mt-0.5 size-4 shrink-0 text-success" />
+												>((acc, result) => {
+													if (!acc[result.name]) {
+														acc[result.name] = [];
+													}
+													acc[result.name].push(
+														result,
+													);
+													return acc;
+												}, {}),
+											).map(([skillName, results]) => (
+												<div
+													key={skillName}
+													className="rounded-lg border border-border p-3"
+												>
+													<div className="mb-2 flex items-center gap-2">
+														{results.every(
+															(r) => r.success,
+														) ? (
+															<CheckCircleIcon className="size-4 shrink-0 text-success" />
+														) : results.some(
+																(r) =>
+																	r.success,
+															) ? (
+															<div className="flex size-4 shrink-0 items-center justify-center">
+																<div className="size-2 rounded-full bg-warning" />
+															</div>
 														) : (
-															<XCircleIcon className="mt-0.5 size-4 shrink-0 text-danger" />
+															<XCircleIcon className="size-4 shrink-0 text-danger" />
 														)}
-														<div className="min-w-0">
-															<p className="text-sm font-medium text-foreground">
-																{result.name}
-															</p>
-															<p className="text-xs text-muted">
-																{result.agent}
-															</p>
-															{result.error && (
-																<p className="text-xs text-danger">
-																	{
-																		result.error
-																	}
-																</p>
-															)}
-														</div>
+														<span className="font-medium text-foreground">
+															{skillName}
+														</span>
 													</div>
-												),
-											)}
+													<div className="space-y-1 pl-6">
+														{results.map(
+															(result, idx) => (
+																<div
+																	key={`${result.agent}-${idx}`}
+																	className="flex items-center gap-2 text-sm"
+																>
+																	{result.success ? (
+																		<CheckCircleIcon className="size-3 shrink-0 text-success" />
+																	) : (
+																		<XCircleIcon className="size-3 shrink-0 text-danger" />
+																	)}
+																	<span className="text-muted">
+																		{
+																			result.agent
+																		}
+																	</span>
+																	{result.error && (
+																		<span className="text-xs text-danger">
+																			(
+																			{
+																				result.error
+																			}
+																			)
+																		</span>
+																	)}
+																</div>
+															),
+														)}
+													</div>
+												</div>
+											))}
 										</div>
 
 										<div className="mt-4 flex items-center justify-between">
