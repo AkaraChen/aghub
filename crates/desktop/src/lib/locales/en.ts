@@ -205,6 +205,9 @@ export default {
 	addToken: "Add token…",
 	scanRepo: "Scan",
 	scanningRepo: "Scanning...",
+	scanFailed: "Failed to scan repository",
+	scanFailedHint:
+		"Please check you are using the correct token or that SSO is configured correctly.",
 	noSkillsFoundInRepo: "No skills found in this repository.",
 	selectSkillsToInstall: "Select skills to install",
 	selectAll: "Select All",

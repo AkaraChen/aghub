@@ -21,6 +21,7 @@ import {
 	Select,
 	Spinner,
 	TextField,
+	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -139,9 +140,12 @@ export function ImportGithubSkillPanel({
 			setPhase("selecting");
 		},
 		onError: (error) => {
-			setScanError(
-				error instanceof Error ? error.message : String(error),
-			);
+			const message =
+				error instanceof Error ? error.message : String(error);
+			setScanError(message);
+			toast.danger(t("scanFailed"), {
+				description: t("scanFailedHint"),
+			});
 		},
 	});
 

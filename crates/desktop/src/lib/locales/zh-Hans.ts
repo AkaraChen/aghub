@@ -200,6 +200,8 @@ export default {
 	addToken: "添加 Token…",
 	scanRepo: "扫描",
 	scanningRepo: "扫描中...",
+	scanFailed: "扫描仓库失败",
+	scanFailedHint: "请检查您使用的令牌是否正确，或 SSO 是否已正确配置。",
 	noSkillsFoundInRepo: "此仓库中未找到任何技能。",
 	selectSkillsToInstall: "选择要安装的技能",
 	selectAll: "全选",
