@@ -11,13 +11,24 @@ pub struct AvailabilityInfo {
 	pub is_available: bool,
 }
 
-/// Check if a CLI binary exists using the `which` command
+/// Check if a CLI binary exists using the `which` command (Unix) or `where` (Windows)
 fn check_cli_exists(cli_name: &str) -> bool {
-	Command::new("which")
-		.arg(cli_name)
-		.output()
-		.map(|output| output.status.success())
-		.unwrap_or(false)
+	#[cfg(windows)]
+	{
+		Command::new("where")
+			.arg(cli_name)
+			.output()
+			.map(|output| output.status.success())
+			.unwrap_or(false)
+	}
+	#[cfg(not(windows))]
+	{
+		Command::new("which")
+			.arg(cli_name)
+			.output()
+			.map(|output| output.status.success())
+			.unwrap_or(false)
+	}
 }
 
 /// Check if a global directory exists
