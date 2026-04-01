@@ -76,12 +76,11 @@ export default function IntegrationsPanel() {
 		null,
 	);
 
-	const { data: credentials = [], isLoading: isCredentialsLoading } = useQuery(
-		{
+	const { data: credentials = [], isLoading: isCredentialsLoading } =
+		useQuery({
 			queryKey: ["credentials"],
 			queryFn: () => api.credentials.list(),
-		},
-	);
+		});
 
 	const deleteMutation = useMutation({
 		mutationFn: (id: string) => api.credentials.delete(id),

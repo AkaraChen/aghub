@@ -47,7 +47,6 @@ export default function SettingsPage() {
 									{t("application")}
 									<Tabs.Indicator />
 								</Tabs.Tab>
-
 							</Tabs.List>
 						</Tabs.ListContainer>
 					</div>
@@ -67,7 +66,6 @@ export default function SettingsPage() {
 					<Tabs.Panel id="application">
 						<ApplicationPanel />
 					</Tabs.Panel>
-
 				</Tabs>
 			</div>
 		</div>

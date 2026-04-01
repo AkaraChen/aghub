@@ -23,7 +23,6 @@ import {
 	TextField,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { cn } from "../lib/utils";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
@@ -34,8 +33,9 @@ import type {
 	GitInstallResultEntry,
 	GitScanSkillEntry,
 } from "../lib/api-types";
-import { AgentSelector } from "./agent-selector";
+import { cn } from "../lib/utils";
 import { CreateCredentialDialog } from "../pages/settings/components/create-credential-dialog";
+import { AgentSelector } from "./agent-selector";
 
 interface ImportGithubSkillPanelProps {
 	onDone: () => void;
@@ -96,8 +96,9 @@ export function ImportGithubSkillPanel({
 	>([]);
 	const [scanError, setScanError] = useState<string | null>(null);
 	const [installError, setInstallError] = useState<string | null>(null);
-	const [previewSkill, setPreviewSkill] =
-		useState<GitScanSkillEntry | null>(null);
+	const [previewSkill, setPreviewSkill] = useState<GitScanSkillEntry | null>(
+		null,
+	);
 
 	const { data: credentials = [] } = useQuery({
 		queryKey: ["credentials"],
@@ -294,9 +295,7 @@ export function ImportGithubSkillPanel({
 							<ChevronDownIcon
 								className={cn(
 									"size-4 transition-transform duration-300",
-									card1Open
-										? "rotate-0"
-										: "-rotate-90",
+									card1Open ? "rotate-0" : "-rotate-90",
 								)}
 							/>
 						</span>
@@ -311,242 +310,250 @@ export function ImportGithubSkillPanel({
 						)}
 					>
 						<div className="overflow-hidden px-0.5">
-						<Card.Content className="pt-0">
-							{scanError && (
-								<Alert className="mb-4" status="danger">
-									<Alert.Indicator />
-									<Alert.Content>
-										<Alert.Description>
-											{scanError}
-										</Alert.Description>
-									</Alert.Content>
-								</Alert>
-							)}
+							<Card.Content className="pt-0">
+								{scanError && (
+									<Alert className="mb-4" status="danger">
+										<Alert.Indicator />
+										<Alert.Content>
+											<Alert.Description>
+												{scanError}
+											</Alert.Description>
+										</Alert.Content>
+									</Alert>
+								)}
 
-							<Form
-								className="space-y-4"
-								validationBehavior="aria"
-								onSubmit={handleSubmit(handleScan)}
-							>
-								<Fieldset>
-									<Fieldset.Group>
-										<Controller
-											name="url"
-											control={control}
-										rules={{
-											required: t(
-												"validationUrlRequired",
-											),
-											validate: (value) => {
-												if (!value.trim())
-													return t(
-														"validationUrlRequired",
-													);
-													try {
-														const u = new URL(
-															value.trim(),
-														);
-														if (
-															u.protocol !==
-															"https:"
-														)
-															return "Only HTTPS URLs are supported";
-													} catch {
-														return "Please enter a valid URL";
-													}
-													return true;
-												},
-											}}
-											render={({
-												field,
-												fieldState,
-											}) => (
-												<TextField
-													className="w-full"
-													isRequired
-													validationBehavior="aria"
-													isInvalid={Boolean(
-														fieldState.error,
-													)}
-												>
-													<Label>
-														{t("githubRepoUrl")}
-													</Label>
-													<Input
-														value={field.value}
-														onChange={
-															field.onChange
-														}
-														onBlur={field.onBlur}
-														placeholder={t(
-															"githubRepoUrlPlaceholder",
-														)}
-														variant="secondary"
-													/>
-													{fieldState.error && (
-														<FieldError>
-															{
-																fieldState.error
-																	.message
-															}
-														</FieldError>
-													)}
-												</TextField>
-											)}
-										/>
-									</Fieldset.Group>
-								</Fieldset>
-
-								{/* Private repo checkbox */}
-								<Checkbox
-									variant="secondary"
-									isSelected={isPrivateRepo}
-									onChange={(checked) => {
-										setIsPrivateRepo(checked);
-										if (!checked)
-											setValue("credentialId", "");
-									}}
+								<Form
+									className="space-y-4"
+									validationBehavior="aria"
+									onSubmit={handleSubmit(handleScan)}
 								>
-									<Checkbox.Control>
-										<Checkbox.Indicator />
-									</Checkbox.Control>
-									<Checkbox.Content>
-										<Label>{t("privateRepo")}</Label>
-									</Checkbox.Content>
-								</Checkbox>
-
-								{/* Credential dropdown */}
-								{isPrivateRepo && (
 									<Fieldset>
 										<Fieldset.Group>
 											<Controller
-												name="credentialId"
+												name="url"
 												control={control}
-												render={({ field }) => (
-													<Select
-														className="w-full"
-														variant="secondary"
-														selectedKey={
-															field.value ||
-															NO_CREDENTIAL_SENTINEL
-														}
-														onSelectionChange={(
-															key,
-														) => {
-															if (
-																key ===
-																ADD_TOKEN_SENTINEL
-															) {
-																setIsAddTokenOpen(
-																	true,
-																);
-																return;
-															}
-															field.onChange(
-																key ===
-																	NO_CREDENTIAL_SENTINEL
-																	? ""
-																	: String(
-																			key,
-																		),
+												rules={{
+													required: t(
+														"validationUrlRequired",
+													),
+													validate: (value) => {
+														if (!value.trim())
+															return t(
+																"validationUrlRequired",
 															);
-														}}
+														try {
+															const u = new URL(
+																value.trim(),
+															);
+															if (
+																u.protocol !==
+																"https:"
+															)
+																return "Only HTTPS URLs are supported";
+														} catch {
+															return "Please enter a valid URL";
+														}
+														return true;
+													},
+												}}
+												render={({
+													field,
+													fieldState,
+												}) => (
+													<TextField
+														className="w-full"
+														isRequired
+														validationBehavior="aria"
+														isInvalid={Boolean(
+															fieldState.error,
+														)}
 													>
 														<Label>
-															{t(
-																"selectCredential",
-															)}
+															{t("githubRepoUrl")}
 														</Label>
-														<Select.Trigger>
-															<Select.Value />
-															<Select.Indicator />
-														</Select.Trigger>
-														<Select.Popover>
-															<ListBox>
-																<ListBox.Item
-																	id={
-																		NO_CREDENTIAL_SENTINEL
-																	}
-																	textValue={t(
-																		"publicRepoNoCredential",
-																	)}
-																>
-																	{t(
-																		"publicRepoNoCredential",
-																	)}
-																	<ListBox.ItemIndicator />
-																</ListBox.Item>
-																{credentials.map(
-																	(cred) => (
-																		<ListBox.Item
-																			key={
-																				cred.id
-																			}
-																			id={
-																				cred.id
-																			}
-																			textValue={
-																				cred.name
-																			}
-																		>
-																			{
-																				cred.name
-																			}
-																			<ListBox.ItemIndicator />
-																		</ListBox.Item>
-																	),
-																)}
-																<ListBox.Section className="mt-1 border-t border-border pt-1">
-																	<ListBox.Item
-																		id={
-																			ADD_TOKEN_SENTINEL
-																		}
-																		textValue={t(
-																			"addToken",
-																		)}
-																	>
-																		{t(
-																			"addToken",
-																		)}
-																	</ListBox.Item>
-																</ListBox.Section>
-															</ListBox>
-														</Select.Popover>
-													</Select>
+														<Input
+															value={field.value}
+															onChange={
+																field.onChange
+															}
+															onBlur={
+																field.onBlur
+															}
+															placeholder={t(
+																"githubRepoUrlPlaceholder",
+															)}
+															variant="secondary"
+														/>
+														{fieldState.error && (
+															<FieldError>
+																{
+																	fieldState
+																		.error
+																		.message
+																}
+															</FieldError>
+														)}
+													</TextField>
 												)}
 											/>
 										</Fieldset.Group>
 									</Fieldset>
-								)}
 
-								<div className="flex justify-end gap-2 pt-2">
-									<Button
-										type="button"
+									{/* Private repo checkbox */}
+									<Checkbox
 										variant="secondary"
-										onPress={onDone}
+										isSelected={isPrivateRepo}
+										onChange={(checked) => {
+											setIsPrivateRepo(checked);
+											if (!checked)
+												setValue("credentialId", "");
+										}}
 									>
-										{t("cancel")}
-									</Button>
-									<Button
-										type="submit"
-										isDisabled={
-											scanMutation.isPending ||
-											isSubmitting ||
-											skillAgents.length === 0
-										}
-									>
-										{scanMutation.isPending ? (
-											<span className="flex items-center gap-2">
-												<Spinner size="sm" color="current" />
-												{t("scanningRepo")}
-											</span>
-										) : (
-											t("scanRepo")
-										)}
-									</Button>
-								</div>
-							</Form>
-						</Card.Content>
+										<Checkbox.Control>
+											<Checkbox.Indicator />
+										</Checkbox.Control>
+										<Checkbox.Content>
+											<Label>{t("privateRepo")}</Label>
+										</Checkbox.Content>
+									</Checkbox>
+
+									{/* Credential dropdown */}
+									{isPrivateRepo && (
+										<Fieldset>
+											<Fieldset.Group>
+												<Controller
+													name="credentialId"
+													control={control}
+													render={({ field }) => (
+														<Select
+															className="w-full"
+															variant="secondary"
+															selectedKey={
+																field.value ||
+																NO_CREDENTIAL_SENTINEL
+															}
+															onSelectionChange={(
+																key,
+															) => {
+																if (
+																	key ===
+																	ADD_TOKEN_SENTINEL
+																) {
+																	setIsAddTokenOpen(
+																		true,
+																	);
+																	return;
+																}
+																field.onChange(
+																	key ===
+																		NO_CREDENTIAL_SENTINEL
+																		? ""
+																		: String(
+																				key,
+																			),
+																);
+															}}
+														>
+															<Label>
+																{t(
+																	"selectCredential",
+																)}
+															</Label>
+															<Select.Trigger>
+																<Select.Value />
+																<Select.Indicator />
+															</Select.Trigger>
+															<Select.Popover>
+																<ListBox>
+																	<ListBox.Item
+																		id={
+																			NO_CREDENTIAL_SENTINEL
+																		}
+																		textValue={t(
+																			"publicRepoNoCredential",
+																		)}
+																	>
+																		{t(
+																			"publicRepoNoCredential",
+																		)}
+																		<ListBox.ItemIndicator />
+																	</ListBox.Item>
+																	{credentials.map(
+																		(
+																			cred,
+																		) => (
+																			<ListBox.Item
+																				key={
+																					cred.id
+																				}
+																				id={
+																					cred.id
+																				}
+																				textValue={
+																					cred.name
+																				}
+																			>
+																				{
+																					cred.name
+																				}
+																				<ListBox.ItemIndicator />
+																			</ListBox.Item>
+																		),
+																	)}
+																	<ListBox.Section className="mt-1 border-t border-border pt-1">
+																		<ListBox.Item
+																			id={
+																				ADD_TOKEN_SENTINEL
+																			}
+																			textValue={t(
+																				"addToken",
+																			)}
+																		>
+																			{t(
+																				"addToken",
+																			)}
+																		</ListBox.Item>
+																	</ListBox.Section>
+																</ListBox>
+															</Select.Popover>
+														</Select>
+													)}
+												/>
+											</Fieldset.Group>
+										</Fieldset>
+									)}
+
+									<div className="flex justify-end gap-2 pt-2">
+										<Button
+											type="button"
+											variant="secondary"
+											onPress={onDone}
+										>
+											{t("cancel")}
+										</Button>
+										<Button
+											type="submit"
+											isDisabled={
+												scanMutation.isPending ||
+												isSubmitting ||
+												skillAgents.length === 0
+											}
+										>
+											{scanMutation.isPending ? (
+												<span className="flex items-center gap-2">
+													<Spinner
+														size="sm"
+														color="current"
+													/>
+													{t("scanningRepo")}
+												</span>
+											) : (
+												t("scanRepo")
+											)}
+										</Button>
+									</div>
+								</Form>
+							</Card.Content>
 						</div>
 					</div>
 				</Card>
@@ -562,8 +569,7 @@ export function ImportGithubSkillPanel({
 						type="button"
 						className={cn(
 							"flex w-full items-center justify-between px-4 py-3 text-left",
-							!card2Reached &&
-								"cursor-not-allowed",
+							!card2Reached && "cursor-not-allowed",
 						)}
 						onClick={handleCard2Toggle}
 						aria-expanded={card2Open}
@@ -575,8 +581,7 @@ export function ImportGithubSkillPanel({
 							</h2>
 							{!card2Open && card2Reached && (
 								<p className="mt-0.5 text-xs text-muted">
-									{selectedPaths.size}{" "}
-									{t("skillsSelected")}
+									{selectedPaths.size} {t("skillsSelected")}
 								</p>
 							)}
 						</div>
@@ -585,9 +590,7 @@ export function ImportGithubSkillPanel({
 								// eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions
 								<div
 									className="flex gap-1"
-									onClick={(e) =>
-										e.stopPropagation()
-									}
+									onClick={(e) => e.stopPropagation()}
 								>
 									<Button
 										variant="ghost"
@@ -609,9 +612,7 @@ export function ImportGithubSkillPanel({
 								<ChevronDownIcon
 									className={cn(
 										"size-4 transition-transform duration-300",
-										card2Open
-											? "rotate-0"
-											: "-rotate-90",
+										card2Open ? "rotate-0" : "-rotate-90",
 									)}
 								/>
 							</span>
@@ -627,158 +628,166 @@ export function ImportGithubSkillPanel({
 						)}
 					>
 						<div className="overflow-hidden px-0.5">
-						<Card.Content className="space-y-4 pt-0">
-							{installError && (
-								<Alert status="danger">
-									<Alert.Indicator />
-									<Alert.Content>
-										<Alert.Description>
-											{installError}
-										</Alert.Description>
-									</Alert.Content>
-								</Alert>
-							)}
+							<Card.Content className="space-y-4 pt-0">
+								{installError && (
+									<Alert status="danger">
+										<Alert.Indicator />
+										<Alert.Content>
+											<Alert.Description>
+												{installError}
+											</Alert.Description>
+										</Alert.Content>
+									</Alert>
+								)}
 
-							{scannedSkills.length === 0 ? (
-								<p className="py-6 text-center text-sm text-muted">
-									{t("noSkillsFoundInRepo")}
-								</p>
-							) : (
-								<div className="space-y-2">
-									{scannedSkills.map((skill) => (
-										<button
-											key={skill.path}
-											type="button"
-											onClick={() => {
-												if (phase === "selecting")
-													togglePath(skill.path);
-											}}
-											disabled={phase !== "selecting"}
-											className="flex w-full items-start gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-60 data-[selected=true]:border-accent/30 data-[selected=true]:bg-accent/5"
-											data-selected={selectedPaths.has(
-												skill.path,
-											)}
-										>
-											<Checkbox
-												isSelected={selectedPaths.has(
+								{scannedSkills.length === 0 ? (
+									<p className="py-6 text-center text-sm text-muted">
+										{t("noSkillsFoundInRepo")}
+									</p>
+								) : (
+									<div className="space-y-2">
+										{scannedSkills.map((skill) => (
+											<button
+												key={skill.path}
+												type="button"
+												onClick={() => {
+													if (phase === "selecting")
+														togglePath(skill.path);
+												}}
+												disabled={phase !== "selecting"}
+												className="flex w-full items-start gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-60 data-[selected=true]:border-accent/30 data-[selected=true]:bg-accent/5"
+												data-selected={selectedPaths.has(
 													skill.path,
 												)}
-												isDisabled={
-													phase !== "selecting"
-												}
-												onChange={() =>
-													togglePath(skill.path)
-												}
-												aria-label={skill.name}
 											>
-												<Checkbox.Control>
-													<Checkbox.Indicator />
-												</Checkbox.Control>
-											</Checkbox>
-											<div className="min-w-0 flex-1">
-												<div className="flex flex-wrap items-center gap-2">
-													<BookOpenIcon className="size-4 shrink-0 text-muted" />
-													<span className="font-medium text-foreground">
-														{skill.name}
-													</span>
-													{skill.version && (
-														<Chip
-															size="sm"
-															variant="secondary"
-														>
-															v{skill.version}
-														</Chip>
+												<Checkbox
+													isSelected={selectedPaths.has(
+														skill.path,
 													)}
-													{skill.author && (
-														<Chip
-															size="sm"
-															variant="secondary"
-														>
-															{skill.author}
-														</Chip>
+													isDisabled={
+														phase !== "selecting"
+													}
+													onChange={() =>
+														togglePath(skill.path)
+													}
+													aria-label={skill.name}
+												>
+													<Checkbox.Control>
+														<Checkbox.Indicator />
+													</Checkbox.Control>
+												</Checkbox>
+												<div className="min-w-0 flex-1">
+													<div className="flex flex-wrap items-center gap-2">
+														<BookOpenIcon className="size-4 shrink-0 text-muted" />
+														<span className="font-medium text-foreground">
+															{skill.name}
+														</span>
+														{skill.version && (
+															<Chip
+																size="sm"
+																variant="secondary"
+															>
+																v{skill.version}
+															</Chip>
+														)}
+														{skill.author && (
+															<Chip
+																size="sm"
+																variant="secondary"
+															>
+																{skill.author}
+															</Chip>
+														)}
+													</div>
+													{skill.description && (
+														<p className="mt-1 text-sm text-muted">
+															{skill.description}
+														</p>
 													)}
 												</div>
-												{skill.description && (
-													<p className="mt-1 text-sm text-muted">
-														{skill.description}
-													</p>
-												)}
-											</div>
-											{/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-											<div
-												onClick={(e) =>
-													e.stopPropagation()
-												}
-											>
-												<Button
-													variant="ghost"
-													size="sm"
-													isIconOnly
-													aria-label={t("description")}
-													onPress={() =>
-														setPreviewSkill(skill)
+												{/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
+												<div
+													onClick={(e) =>
+														e.stopPropagation()
 													}
 												>
-													<EyeIcon className="size-4" />
-												</Button>
-											</div>
-										</button>
-									))}
-								</div>
-							)}
-
-							<Controller
-								name="selectedAgents"
-								control={control}
-								rules={{
-									validate: (value) =>
-										value.length > 0
-											? true
-											: t("validationAgentsRequired"),
-								}}
-								render={({ field, fieldState }) => (
-									<AgentSelector
-										agents={skillAgents}
-										selectedKeys={new Set(field.value)}
-										onSelectionChange={(keys) =>
-											field.onChange([...keys])
-										}
-										label={t("targetAgent")}
-										emptyMessage={t("noAgentsAvailable")}
-										emptyHelpText={t(
-											"noAgentsAvailableHelp",
-										)}
-										variant="secondary"
-										errorMessage={
-											fieldState.error?.message
-										}
-									/>
+													<Button
+														variant="ghost"
+														size="sm"
+														isIconOnly
+														aria-label={t(
+															"description",
+														)}
+														onPress={() =>
+															setPreviewSkill(
+																skill,
+															)
+														}
+													>
+														<EyeIcon className="size-4" />
+													</Button>
+												</div>
+											</button>
+										))}
+									</div>
 								)}
-							/>
 
-							{phase === "selecting" && (
-								<div className="flex justify-end gap-2 pt-2">
-									<Button
-										variant="secondary"
-										onPress={handleCard1Toggle}
-									>
-										{t("back")}
-									</Button>
-									<Button
-										isDisabled={selectedPaths.size === 0}
-										onPress={() => {
-											handleSubmit((values) => {
-												handleInstall(
-													values.selectedAgents,
-												);
-											})();
-										}}
-									>
-										{t("installSelected")}
-									</Button>
-								</div>
-							)}
-						</Card.Content>
+								<Controller
+									name="selectedAgents"
+									control={control}
+									rules={{
+										validate: (value) =>
+											value.length > 0
+												? true
+												: t("validationAgentsRequired"),
+									}}
+									render={({ field, fieldState }) => (
+										<AgentSelector
+											agents={skillAgents}
+											selectedKeys={new Set(field.value)}
+											onSelectionChange={(keys) =>
+												field.onChange([...keys])
+											}
+											label={t("targetAgent")}
+											emptyMessage={t(
+												"noAgentsAvailable",
+											)}
+											emptyHelpText={t(
+												"noAgentsAvailableHelp",
+											)}
+											variant="secondary"
+											errorMessage={
+												fieldState.error?.message
+											}
+										/>
+									)}
+								/>
+
+								{phase === "selecting" && (
+									<div className="flex justify-end gap-2 pt-2">
+										<Button
+											variant="secondary"
+											onPress={handleCard1Toggle}
+										>
+											{t("back")}
+										</Button>
+										<Button
+											isDisabled={
+												selectedPaths.size === 0
+											}
+											onPress={() => {
+												handleSubmit((values) => {
+													handleInstall(
+														values.selectedAgents,
+													);
+												})();
+											}}
+										>
+											{t("installSelected")}
+										</Button>
+									</div>
+								)}
+							</Card.Content>
 						</div>
 					</div>
 				</Card>
@@ -806,23 +815,20 @@ export function ImportGithubSkillPanel({
 									? t("installComplete")
 									: t("installingSkills")}
 							</h2>
-							{!card3Open &&
-								phase === "done" && (
-									<p className="mt-0.5 text-xs text-muted">
-										{successCount}{" "}
-										{t("installed").toLowerCase()}
-										{failCount > 0 &&
-											`, ${failCount} ${t("skillsFailed")}`}
-									</p>
-								)}
+							{!card3Open && phase === "done" && (
+								<p className="mt-0.5 text-xs text-muted">
+									{successCount}{" "}
+									{t("installed").toLowerCase()}
+									{failCount > 0 &&
+										`, ${failCount} ${t("skillsFailed")}`}
+								</p>
+							)}
 						</div>
 						<span className="ml-3 shrink-0 text-muted">
 							<ChevronDownIcon
 								className={cn(
 									"size-4 transition-transform duration-300",
-									card3Open
-										? "rotate-0"
-										: "-rotate-90",
+									card3Open ? "rotate-0" : "-rotate-90",
 								)}
 							/>
 						</span>
@@ -837,143 +843,147 @@ export function ImportGithubSkillPanel({
 						)}
 					>
 						<div className="overflow-hidden px-0.5">
-						<Card.Content className="pt-0">
-							{phase === "installing" ? (
-								<div className="flex flex-col items-center gap-3 py-6">
-									<Spinner size="lg" />
-									<p className="text-sm text-muted">
-										{t("installingSkills")}
-									</p>
-								</div>
-							) : (
-								<>
-									<div className="space-y-2">
-										{installResults.map(
-											(result, idx) => (
-												<div
-													key={`${result.agent}-${result.name}-${idx}`}
-													className="flex items-start gap-2 rounded-lg px-2 py-1.5"
-												>
-													{result.success ? (
-														<CheckCircleIcon className="mt-0.5 size-4 shrink-0 text-success" />
-													) : (
-														<XCircleIcon className="mt-0.5 size-4 shrink-0 text-danger" />
-													)}
-													<div className="min-w-0">
-														<p className="text-sm font-medium text-foreground">
-															{result.name}
-														</p>
-														<p className="text-xs text-muted">
-															{result.agent}
-														</p>
-														{result.error && (
-															<p className="text-xs text-danger">
-																{result.error}
-															</p>
-														)}
-													</div>
-												</div>
-											),
-										)}
-									</div>
-
-									<div className="mt-4 flex items-center justify-between">
+							<Card.Content className="pt-0">
+								{phase === "installing" ? (
+									<div className="flex flex-col items-center gap-3 py-6">
+										<Spinner size="lg" />
 										<p className="text-sm text-muted">
-											{successCount}{" "}
-											{t("installed").toLowerCase()}
-											{failCount > 0 &&
-												`, ${failCount} ${t("skillsFailed")}`}
+											{t("installingSkills")}
 										</p>
-										<div className="flex gap-2">
-											<Button
-												variant="secondary"
-												onPress={handleImportAnother}
-											>
-												{t("importAnother")}
-											</Button>
-											<Button onPress={onDone}>
-												{t("done")}
-											</Button>
-										</div>
 									</div>
-								</>
-							)}
-						</Card.Content>
+								) : (
+									<>
+										<div className="space-y-2">
+											{installResults.map(
+												(result, idx) => (
+													<div
+														key={`${result.agent}-${result.name}-${idx}`}
+														className="flex items-start gap-2 rounded-lg px-2 py-1.5"
+													>
+														{result.success ? (
+															<CheckCircleIcon className="mt-0.5 size-4 shrink-0 text-success" />
+														) : (
+															<XCircleIcon className="mt-0.5 size-4 shrink-0 text-danger" />
+														)}
+														<div className="min-w-0">
+															<p className="text-sm font-medium text-foreground">
+																{result.name}
+															</p>
+															<p className="text-xs text-muted">
+																{result.agent}
+															</p>
+															{result.error && (
+																<p className="text-xs text-danger">
+																	{
+																		result.error
+																	}
+																</p>
+															)}
+														</div>
+													</div>
+												),
+											)}
+										</div>
+
+										<div className="mt-4 flex items-center justify-between">
+											<p className="text-sm text-muted">
+												{successCount}{" "}
+												{t("installed").toLowerCase()}
+												{failCount > 0 &&
+													`, ${failCount} ${t("skillsFailed")}`}
+											</p>
+											<div className="flex gap-2">
+												<Button
+													variant="secondary"
+													onPress={
+														handleImportAnother
+													}
+												>
+													{t("importAnother")}
+												</Button>
+												<Button onPress={onDone}>
+													{t("done")}
+												</Button>
+											</div>
+										</div>
+									</>
+								)}
+							</Card.Content>
 						</div>
 					</div>
 				</Card>
 			</div>
 
 			{/* ── Skill Preview Modal ── */}
-		<Modal.Backdrop
-			isOpen={previewSkill !== null}
-			onOpenChange={(open) => {
-				if (!open) setPreviewSkill(null);
-			}}
-		>
-			<Modal.Container>
-				<Modal.Dialog className="w-[calc(100vw-2rem)] max-w-md">
-					<Modal.CloseTrigger />
-					<Modal.Header>
-						<Modal.Heading>
-							{previewSkill?.name ?? ""}
-						</Modal.Heading>
-					</Modal.Header>
-					<Modal.Body className="space-y-3 p-4">
-						{previewSkill?.description && (
-							<div>
-								<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
-									{t("description")}
-								</p>
-								<p className="text-sm text-foreground">
-									{previewSkill.description}
-								</p>
-							</div>
-						)}
-						{previewSkill?.version && (
-							<div>
-								<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
-									{t("version")}
-								</p>
-								<p className="text-sm text-foreground">
-									{previewSkill.version}
-								</p>
-							</div>
-						)}
-						{previewSkill?.author && (
-							<div>
-								<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
-									{t("author")}
-								</p>
-								<p className="text-sm text-foreground">
-									{previewSkill.author}
-								</p>
-							</div>
-						)}
-						{previewSkill?.path && (
-							<div>
-								<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
-									{t("source")}
-								</p>
-								<p className="break-all font-mono text-xs text-muted">
-									{previewSkill.path}
-								</p>
-							</div>
-						)}
-					</Modal.Body>
-					<Modal.Footer>
-						<Button
-							variant="secondary"
-							onPress={() => setPreviewSkill(null)}
-						>
-							{t("cancel")}
-						</Button>
-					</Modal.Footer>
-				</Modal.Dialog>
-			</Modal.Container>
-		</Modal.Backdrop>
+			<Modal.Backdrop
+				isOpen={previewSkill !== null}
+				onOpenChange={(open) => {
+					if (!open) setPreviewSkill(null);
+				}}
+			>
+				<Modal.Container>
+					<Modal.Dialog className="w-[calc(100vw-2rem)] max-w-md">
+						<Modal.CloseTrigger />
+						<Modal.Header>
+							<Modal.Heading>
+								{previewSkill?.name ?? ""}
+							</Modal.Heading>
+						</Modal.Header>
+						<Modal.Body className="space-y-3 p-4">
+							{previewSkill?.description && (
+								<div>
+									<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
+										{t("description")}
+									</p>
+									<p className="text-sm text-foreground">
+										{previewSkill.description}
+									</p>
+								</div>
+							)}
+							{previewSkill?.version && (
+								<div>
+									<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
+										{t("version")}
+									</p>
+									<p className="text-sm text-foreground">
+										{previewSkill.version}
+									</p>
+								</div>
+							)}
+							{previewSkill?.author && (
+								<div>
+									<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
+										{t("author")}
+									</p>
+									<p className="text-sm text-foreground">
+										{previewSkill.author}
+									</p>
+								</div>
+							)}
+							{previewSkill?.path && (
+								<div>
+									<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
+										{t("source")}
+									</p>
+									<p className="break-all font-mono text-xs text-muted">
+										{previewSkill.path}
+									</p>
+								</div>
+							)}
+						</Modal.Body>
+						<Modal.Footer>
+							<Button
+								variant="secondary"
+								onPress={() => setPreviewSkill(null)}
+							>
+								{t("cancel")}
+							</Button>
+						</Modal.Footer>
+					</Modal.Dialog>
+				</Modal.Container>
+			</Modal.Backdrop>
 
-		<CreateCredentialDialog
+			<CreateCredentialDialog
 				isOpen={isAddTokenOpen}
 				onClose={() => setIsAddTokenOpen(false)}
 				onSuccess={(newId) => {

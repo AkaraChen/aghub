@@ -191,12 +191,12 @@ export default function SkillsPage() {
 								>
 									{t("importFromFile")}
 								</Dropdown.Item>
-							<Dropdown.Item
-								id="import-github"
-								textValue={t("importRemoteSource")}
-							>
-								{t("importRemoteSource")}
-							</Dropdown.Item>
+								<Dropdown.Item
+									id="import-github"
+									textValue={t("importRemoteSource")}
+								>
+									{t("importRemoteSource")}
+								</Dropdown.Item>
 							</Dropdown.Menu>
 						</Dropdown.Popover>
 					</Dropdown>

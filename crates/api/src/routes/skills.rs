@@ -374,6 +374,9 @@ pub fn import_skill(
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 
+	// Load configuration before adding skill
+	manager.load().map_err(ApiError::from)?;
+
 	let imported = manager
 		.add_skill_from_path(std::path::Path::new(&body.path))
 		.map_err(ApiError::from)?;
@@ -899,6 +902,17 @@ pub async fn git_install_skills(
 				),
 				_ => ConfigManager::new(create_adapter(agent_type), true, None),
 			};
+
+			// Load configuration before adding skill
+			if let Err(e) = manager.load() {
+				results.push(GitInstallResultEntry {
+					name: skill_path.clone(),
+					agent: agent_str.clone(),
+					success: false,
+					error: Some(format!("Failed to load config: {e}")),
+				});
+				continue;
+			}
 
 			match manager.add_skill_from_path(&full_path) {
 				Ok(skill) => {
