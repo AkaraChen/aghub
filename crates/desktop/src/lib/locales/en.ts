@@ -28,6 +28,11 @@ export default {
 	subAgentDescriptionPlaceholder: "What does this sub-agent do?",
 	subAgentInstructionPlaceholder:
 		"System prompt / instruction for this sub-agent...",
+	plugins: "Plugins",
+	pluginsDescription: "Manage Claude Code plugins — enable or disable installed plugins.",
+	noPluginsInstalled: "No plugins installed.",
+	enablePlugin: "Enable plugin",
+	disablePlugin: "Disable plugin",
 	agentManagement: "Agent",
 	projects: "Projects",
 	search: "Search",
