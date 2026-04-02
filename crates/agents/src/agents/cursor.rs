@@ -56,11 +56,11 @@ fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
 }
 
 fn global_skill_write_path() -> Option<PathBuf> {
-	global_skills_paths().into_iter().next()
+	home_dir().map(|home| home.join(".cursor/skills"))
 }
 
 fn project_skill_write_path(root: &Path) -> Option<PathBuf> {
-	project_skills_paths(root).into_iter().next()
+	Some(root.join(".cursor/skills"))
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
