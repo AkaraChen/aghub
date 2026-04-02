@@ -93,6 +93,8 @@ export function ImportGithubSkillPanel({
 		() => new Set(),
 	);
 	const [sessionId, setSessionId] = useState<string>("");
+	const [branches, setBranches] = useState<string[]>([]);
+	const [currentBranch, setCurrentBranch] = useState<string>("");
 	const [installResults, setInstallResults] = useState<
 		GitInstallResultEntry[]
 	>([]);
@@ -134,6 +136,8 @@ export function ImportGithubSkillPanel({
 			setScanError(null);
 			setScannedSkills(data.skills);
 			setSessionId(data.session_id);
+			setBranches(data.branches);
+			setCurrentBranch(data.current_branch);
 			setSelectedPaths(new Set(data.skills.map((s) => s.path)));
 			setCard1Open(false);
 			setCard2Open(true);
@@ -145,6 +149,30 @@ export function ImportGithubSkillPanel({
 			setScanError(message);
 			toast.danger(t("scanFailed"), {
 				description: t("scanFailedHint"),
+			});
+		},
+	});
+
+	const branchScanMutation = useMutation({
+		mutationFn: (branch: string) =>
+			api.skills.gitScan({
+				url: urlValue.trim(),
+				credential_id: undefined,
+				branch,
+				session_id: sessionId,
+			}),
+		onSuccess: (data) => {
+			setScannedSkills(data.skills);
+			setSessionId(data.session_id);
+			setCurrentBranch(data.current_branch);
+			setSelectedPaths(new Set(data.skills.map((s) => s.path)));
+			// Keep existing branches list (cached from initial scan)
+		},
+		onError: (error) => {
+			const message =
+				error instanceof Error ? error.message : String(error);
+			toast.danger(t("scanFailed"), {
+				description: message,
 			});
 		},
 	});
@@ -198,6 +226,8 @@ export function ImportGithubSkillPanel({
 		setScannedSkills([]);
 		setSelectedPaths(new Set());
 		setSessionId("");
+		setBranches([]);
+		setCurrentBranch("");
 		setInstallResults([]);
 		setScanError(null);
 		setInstallError(null);
@@ -206,6 +236,7 @@ export function ImportGithubSkillPanel({
 		setCard3Open(false);
 		setPhase("scanning");
 		scanMutation.reset();
+		branchScanMutation.reset();
 		installMutation.reset();
 	};
 
@@ -216,6 +247,8 @@ export function ImportGithubSkillPanel({
 			setScannedSkills([]);
 			setSelectedPaths(new Set());
 			setSessionId("");
+			setBranches([]);
+			setCurrentBranch("");
 			setInstallResults([]);
 			setScanError(null);
 			setInstallError(null);
@@ -223,6 +256,7 @@ export function ImportGithubSkillPanel({
 			setCard3Open(false);
 			setPhase("scanning");
 			scanMutation.reset();
+			branchScanMutation.reset();
 			installMutation.reset();
 		}
 		setCard1Open((v) => !v);
@@ -260,6 +294,7 @@ export function ImportGithubSkillPanel({
 	const card1Active = phase === "scanning";
 	const card2Active = phase === "selecting";
 	const card3Active = phase === "installing" || phase === "done";
+	const isBranchSwitching = branchScanMutation.isPending;
 
 	const card2Reached = cardReached(2, phase);
 	const card3Reached = cardReached(3, phase);
@@ -580,6 +615,7 @@ export function ImportGithubSkillPanel({
 									<Button
 										variant="ghost"
 										size="sm"
+										isDisabled={isBranchSwitching}
 										onPress={selectAll}
 									>
 										{t("selectAll")}
@@ -587,6 +623,7 @@ export function ImportGithubSkillPanel({
 									<Button
 										variant="ghost"
 										size="sm"
+										isDisabled={isBranchSwitching}
 										onPress={deselectAll}
 									>
 										{t("deselectAll")}
@@ -623,6 +660,52 @@ export function ImportGithubSkillPanel({
 									</Alert>
 								)}
 
+								{/* Branch selector */}
+								{branches.length > 0 && (
+									<Select
+										className="w-full"
+										variant="secondary"
+										selectedKey={currentBranch}
+										isDisabled={isBranchSwitching}
+										onSelectionChange={(key) => {
+											const branch = String(key);
+											if (branch === currentBranch)
+												return;
+											branchScanMutation.mutate(branch);
+										}}
+									>
+										<Label>{t("branch")}</Label>
+										<Select.Trigger>
+											{isBranchSwitching ? (
+												<span className="flex items-center gap-2">
+													<Spinner
+														size="sm"
+														color="current"
+													/>
+													{t("switchingBranch")}
+												</span>
+											) : (
+												<Select.Value />
+											)}
+											<Select.Indicator />
+										</Select.Trigger>
+										<Select.Popover>
+											<ListBox>
+												{branches.map((branch) => (
+													<ListBox.Item
+														key={branch}
+														id={branch}
+														textValue={branch}
+													>
+														{branch}
+														<ListBox.ItemIndicator />
+													</ListBox.Item>
+												))}
+											</ListBox>
+										</Select.Popover>
+									</Select>
+								)}
+
 								{scannedSkills.length === 0 ? (
 									<p className="py-6 text-center text-sm text-muted">
 										{t("noSkillsFoundInRepo")}
@@ -634,10 +717,17 @@ export function ImportGithubSkillPanel({
 												key={skill.path}
 												type="button"
 												onClick={() => {
-													if (phase === "selecting")
+													if (
+														phase ===
+															"selecting" &&
+														!isBranchSwitching
+													)
 														togglePath(skill.path);
 												}}
-												disabled={phase !== "selecting"}
+												disabled={
+													phase !== "selecting" ||
+													isBranchSwitching
+												}
 												className="flex w-full items-start gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-60 data-[selected=true]:border-accent/30 data-[selected=true]:bg-accent/5"
 												data-selected={selectedPaths.has(
 													skill.path,
@@ -648,7 +738,8 @@ export function ImportGithubSkillPanel({
 														skill.path,
 													)}
 													isDisabled={
-														phase !== "selecting"
+														phase !== "selecting" ||
+														isBranchSwitching
 													}
 													onChange={() =>
 														togglePath(skill.path)
@@ -755,7 +846,8 @@ export function ImportGithubSkillPanel({
 										</Button>
 										<Button
 											isDisabled={
-												selectedPaths.size === 0
+												selectedPaths.size === 0 ||
+												isBranchSwitching
 											}
 											onPress={() => {
 												handleSubmit((values) => {

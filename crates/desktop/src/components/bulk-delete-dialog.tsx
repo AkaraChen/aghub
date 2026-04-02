@@ -163,7 +163,7 @@ export function BulkDeleteDialog({
 							className="min-h-[44px] min-w-[120px]"
 						>
 							{deleteMutation.isPending ? (
-								<Spinner size="sm" />
+								<Spinner size="sm" color="current" />
 							) : (
 								t("deleteSelected")
 							)}

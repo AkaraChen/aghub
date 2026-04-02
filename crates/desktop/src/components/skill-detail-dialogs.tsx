@@ -147,8 +147,8 @@ export function DeleteSkillLocationDialog({
 						>
 							{deleteMutation.isPending ? (
 								<>
-									<Spinner size="sm" className="mr-2" />
-									{t("deleting")}
+								<Spinner size="sm" color="current" className="mr-2" />
+								{t("deleting")}
 								</>
 							) : (
 								t("delete")
@@ -348,8 +348,8 @@ export function DeleteSkillDialog({
 						>
 							{deleteMutation.isPending ? (
 								<>
-									<Spinner size="sm" className="mr-2" />
-									{t("deleting")}
+								<Spinner size="sm" color="current" className="mr-2" />
+								{t("deleting")}
 								</>
 							) : (
 								t("deleteAll")

@@ -132,6 +132,161 @@ fn do_clone(url: &str) -> Result<TempDir> {
 	Ok(temp_dir)
 }
 
+/// Clone a git repository into a temporary directory, checking out a
+/// specific branch.
+///
+/// If `branch` is provided, that branch will be checked out instead
+/// of the default branch (HEAD).
+///
+/// # Arguments
+///
+/// * `url` - HTTPS URL of the git repository to clone
+/// * `branch` - Branch name to check out (e.g. "main", "develop")
+///
+/// # Returns
+///
+/// A `TempDir` containing the cloned repository.
+pub fn clone_to_temp_branch(url: &str, branch: &str) -> Result<TempDir> {
+	let creds = read_credentials();
+
+	let clone_url = if let Some(c) = creds {
+		inject_credentials(url, &c)?
+	} else {
+		validate_https_url(url)?;
+		url.to_string()
+	};
+
+	do_clone_branch(&clone_url, branch)
+}
+
+/// Clone a git repository with explicit credentials, checking out a
+/// specific branch.
+///
+/// # Arguments
+///
+/// * `url` - HTTPS URL of the git repository
+/// * `username` - Git username
+/// * `password` - Git password or personal access token
+/// * `branch` - Branch name to check out
+pub fn clone_with_credentials_branch(
+	url: &str,
+	username: &str,
+	password: &str,
+	branch: &str,
+) -> Result<TempDir> {
+	let creds = Credentials {
+		username: username.to_string(),
+		password: password.to_string(),
+	};
+
+	let clone_url = inject_credentials(url, &creds)?;
+	do_clone_branch(&clone_url, branch)
+}
+
+/// Internal clone implementation that checks out a specific branch.
+fn do_clone_branch(url: &str, branch: &str) -> Result<TempDir> {
+	let temp_dir =
+		TempDir::new().map_err(|e| GitError::TempDirFailed(e.to_string()))?;
+
+	let dest_path = temp_dir.path();
+
+	let mut prep = PrepareFetch::new(
+		url,
+		dest_path,
+		Kind::WithWorktree,
+		Default::default(),
+		Default::default(),
+	)
+	.map_err(|e| GitError::clone_failed(e.to_string()))?
+	.with_ref_name(Some(branch))
+	.map_err(|e: gix::refs::name::Error| {
+		GitError::clone_failed(format!("Invalid branch name '{branch}': {e}"))
+	})?;
+
+	let (mut checkout, _) = prep
+		.fetch_then_checkout(
+			gix::progress::Discard,
+			&gix::interrupt::IS_INTERRUPTED,
+		)
+		.map_err(|e| GitError::clone_failed(format!("Fetch failed: {e}")))?;
+
+	checkout
+		.main_worktree(gix::progress::Discard, &gix::interrupt::IS_INTERRUPTED)
+		.map_err(|e| GitError::clone_failed(format!("Checkout failed: {e}")))?;
+
+	Ok(temp_dir)
+}
+
+/// List remote branch names for a repository URL.
+///
+/// Uses `git ls-remote --heads` to fetch branch names without
+/// cloning the entire repository.
+///
+/// # Arguments
+///
+/// * `url` - HTTPS URL of the git repository
+///
+/// # Returns
+///
+/// A sorted list of branch names (e.g. `["develop", "main"]`).
+pub fn list_remote_branches(url: &str) -> Result<Vec<String>> {
+	validate_https_url(url)?;
+	do_list_remote_branches(url)
+}
+
+/// List remote branches with explicit credentials.
+///
+/// # Arguments
+///
+/// * `url` - HTTPS URL of the git repository
+/// * `username` - Git username
+/// * `password` - Git password or personal access token
+///
+/// # Returns
+///
+/// A sorted list of branch names.
+pub fn list_remote_branches_with_credentials(
+	url: &str,
+	username: &str,
+	password: &str,
+) -> Result<Vec<String>> {
+	let creds = Credentials {
+		username: username.to_string(),
+		password: password.to_string(),
+	};
+	let auth_url = inject_credentials(url, &creds)?;
+	do_list_remote_branches(&auth_url)
+}
+
+/// Internal implementation using `git ls-remote --heads`.
+fn do_list_remote_branches(url: &str) -> Result<Vec<String>> {
+	let output = std::process::Command::new("git")
+		.args(["ls-remote", "--heads", url])
+		.output()
+		.map_err(|e| {
+			GitError::clone_failed(format!("Failed to run git ls-remote: {e}"))
+		})?;
+
+	if !output.status.success() {
+		let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+		return Err(GitError::clone_failed(format!(
+			"git ls-remote failed: {stderr}"
+		)));
+	}
+
+	let stdout = String::from_utf8_lossy(&output.stdout);
+	let mut branches: Vec<String> = stdout
+		.lines()
+		.filter_map(|line| {
+			let refname = line.split_whitespace().nth(1)?;
+			refname.strip_prefix("refs/heads/").map(String::from)
+		})
+		.collect();
+
+	branches.sort();
+	Ok(branches)
+}
+
 /// Clone a repository to a specific path (not temporary).
 ///
 /// Use this when you need the clone to persist beyond the current

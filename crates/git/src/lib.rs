@@ -44,6 +44,10 @@ pub mod credentials;
 pub mod error;
 
 // Re-export commonly used items
-pub use clone::{clone_to_path, clone_to_temp, clone_with_credentials};
+pub use clone::{
+	clone_to_path, clone_to_temp, clone_to_temp_branch, clone_with_credentials,
+	clone_with_credentials_branch, list_remote_branches,
+	list_remote_branches_with_credentials,
+};
 pub use credentials::{inject_credentials, read_credentials, Credentials};
 pub use error::{GitError, Result};

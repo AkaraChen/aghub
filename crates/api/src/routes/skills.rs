@@ -819,7 +819,7 @@ pub async fn git_scan_skills(
 ) -> ApiResult<GitScanResponse> {
 	let req = body.into_inner();
 
-	// Look up credential token if provided
+	// Resolve credential token — either from session or from request
 	let credential_token: Option<String> =
 		if let Some(ref cred_id) = req.credential_id {
 			let creds = crate::routes::credentials::load_credentials()
@@ -839,18 +839,47 @@ pub async fn git_scan_skills(
 					)
 				})?;
 			Some(cred.token.clone())
+		} else if let Some(ref sid) = req.session_id {
+			// Reuse credential from existing session
+			let map = sessions.sessions.lock().unwrap();
+			map.get(sid).and_then(|s| s.credential_token.clone())
+		} else {
+			None
+		};
+
+	// Retrieve cached branches from existing session if re-scanning
+	let cached_branches: Option<Vec<String>> =
+		if let Some(ref sid) = req.session_id {
+			let map = sessions.sessions.lock().unwrap();
+			map.get(sid).map(|s| s.branches.clone())
 		} else {
 			None
 		};
 
 	let url = req.url.clone();
+	let branch = req.branch.clone();
+	let token_for_clone = credential_token.clone();
 
 	// Clone repo in a blocking thread (gix is synchronous)
 	let temp_dir = tokio::task::spawn_blocking(move || {
-		if let Some(token) = credential_token {
-			aghub_git::clone_with_credentials(&url, "x-access-token", &token)
-		} else {
-			aghub_git::clone_to_temp(&url)
+		match (token_for_clone, branch) {
+			(Some(token), Some(ref b)) => {
+				aghub_git::clone_with_credentials_branch(
+					&url,
+					"x-access-token",
+					&token,
+					b,
+				)
+			}
+			(Some(token), None) => {
+				aghub_git::clone_with_credentials(
+					&url, "x-access-token", &token,
+				)
+			}
+			(None, Some(ref b)) => {
+				aghub_git::clone_to_temp_branch(&url, b)
+			}
+			(None, None) => aghub_git::clone_to_temp(&url),
 		}
 	})
 	.await
@@ -869,6 +898,52 @@ pub async fn git_scan_skills(
 		)
 	})?;
 
+	// List remote branches (use cache from previous session if
+	// available to avoid an extra network call on branch switch)
+	let branches = if let Some(cached) = cached_branches {
+		cached
+	} else {
+		let branch_url = req.url.clone();
+		let token_for_branches = credential_token.clone();
+		tokio::task::spawn_blocking(move || {
+			match token_for_branches {
+				Some(token) => {
+					aghub_git::list_remote_branches_with_credentials(
+						&branch_url,
+						"x-access-token",
+						&token,
+					)
+				}
+				None => {
+					aghub_git::list_remote_branches(&branch_url)
+				}
+			}
+		})
+		.await
+		.map_err(|e| {
+			ApiError::new(
+				Status::InternalServerError,
+				format!("Branch listing task panicked: {e}"),
+				"BRANCHES_ERROR",
+			)
+		})?
+		.unwrap_or_default()
+	};
+
+	// Determine current branch name from the checked-out HEAD
+	let current_branch = detect_current_branch(temp_dir.path())
+		.unwrap_or_else(|| {
+			req.branch.clone().unwrap_or_else(|| {
+				// Guess from the branches list — first one
+				// alphabetically that looks like a default
+				["main", "master"]
+					.iter()
+					.find(|b| branches.contains(&b.to_string()))
+					.map(|b| b.to_string())
+					.unwrap_or_default()
+			})
+		});
+
 	// Scan the cloned repo for skills
 	let scan_options = skill::scan::ScanOptions {
 		max_depth: 10,
@@ -881,7 +956,9 @@ pub async fn git_scan_skills(
 			|e| {
 				ApiError::new(
 					Status::InternalServerError,
-					format!("Failed to scan repository for skills: {e:?}"),
+					format!(
+						"Failed to scan repository for skills: {e:?}"
+					),
 					"SCAN_ERROR",
 				)
 			},
@@ -911,6 +988,12 @@ pub async fn git_scan_skills(
 		}
 	}
 
+	// Remove old session if re-scanning
+	if let Some(ref old_sid) = req.session_id {
+		let mut map = sessions.sessions.lock().unwrap();
+		map.remove(old_sid);
+	}
+
 	// Store the temp dir in session map so it persists until install
 	let session_id = uuid::Uuid::new_v4().to_string();
 	{
@@ -923,11 +1006,44 @@ pub async fn git_scan_skills(
 			GitCloneSession {
 				temp_dir,
 				created_at: std::time::Instant::now(),
+				url: req.url,
+				credential_token,
+				branches: branches.clone(),
+				current_branch: current_branch.clone(),
 			},
 		);
 	}
 
-	Ok(Json(GitScanResponse { session_id, skills }))
+	Ok(Json(GitScanResponse {
+		session_id,
+		skills,
+		branches,
+		current_branch,
+	}))
+}
+
+/// Try to detect the checked-out branch from the cloned repo.
+fn detect_current_branch(
+	repo_path: &std::path::Path,
+) -> Option<String> {
+	let output = std::process::Command::new("git")
+		.args(["rev-parse", "--abbrev-ref", "HEAD"])
+		.current_dir(repo_path)
+		.output()
+		.ok()?;
+
+	if !output.status.success() {
+		return None;
+	}
+
+	let name = String::from_utf8_lossy(&output.stdout)
+		.trim()
+		.to_string();
+	if name.is_empty() || name == "HEAD" {
+		None
+	} else {
+		Some(name)
+	}
 }
 
 #[post("/skills/git/install", data = "<body>")]
