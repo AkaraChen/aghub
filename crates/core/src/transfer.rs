@@ -2,7 +2,7 @@ use crate::{
 	create_adapter,
 	errors::{ConfigError, Result},
 	manager::ConfigManager,
-	models::{AgentType, McpServer, McpTransport, Skill},
+	models::{AgentType, McpServer, Skill},
 	registry,
 };
 use skill::sanitize::sanitize_name;
@@ -83,13 +83,9 @@ fn mcp_supported_for_target(
 	target: &InstallTarget,
 	mcp: &McpServer,
 ) -> Result<()> {
+	let adapter = create_adapter(target.agent);
 	let descriptor = registry::get(target.agent);
-	let supported = match &mcp.transport {
-		McpTransport::Stdio { .. } => descriptor.capabilities.mcp_stdio,
-		McpTransport::Sse { .. } | McpTransport::StreamableHttp { .. } => {
-			descriptor.capabilities.mcp_remote
-		}
-	};
+	let supported = adapter.mcp_supports_transport(&mcp.transport);
 
 	if supported {
 		return Ok(());

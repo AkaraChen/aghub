@@ -1,13 +1,44 @@
 use crate::descriptor::*;
 use std::path::{Path, PathBuf};
 
-fn global_path() -> PathBuf {
+fn mcp_global_path() -> PathBuf {
 	dirs::home_dir()
 		.unwrap_or_else(|| std::path::PathBuf::from(""))
 		.join(".config/opencode/opencode.json")
 }
-fn project_path(root: &Path) -> PathBuf {
+fn mcp_project_path(root: &Path) -> PathBuf {
 	root.join(".opencode/settings.json")
+}
+fn global_data_dir() -> PathBuf {
+	dirs::home_dir()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
+		.join(".config/opencode")
+}
+fn load_mcps(
+	project_root: Option<&Path>,
+	scope: crate::ResourceScope,
+) -> crate::Result<Vec<crate::McpServer>> {
+	load_scoped_mcps(
+		project_root,
+		scope,
+		mcp_global_path,
+		mcp_project_path,
+		mcp_strategy::PARSE_JSON_OPCODE,
+	)
+}
+fn save_mcps(
+	project_root: Option<&Path>,
+	scope: crate::ResourceScope,
+	mcps: &[crate::McpServer],
+) -> crate::Result<()> {
+	save_scoped_mcps(
+		project_root,
+		scope,
+		mcps,
+		mcp_global_path,
+		mcp_project_path,
+		mcp_strategy::SERIALIZE_JSON_OPCODE,
+	)
 }
 fn global_skills_paths() -> Vec<PathBuf> {
 	let home = dirs::home_dir().unwrap_or_else(|| std::path::PathBuf::from(""));
@@ -28,10 +59,13 @@ fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "opencode",
 	display_name: "OpenCode",
-	parse_config: mcp_strategy::PARSE_JSON_OPCODE,
-	serialize_config: mcp_strategy::SERIALIZE_JSON_OPCODE,
-	global_path,
-	project_path,
+	mcp_parse_config: Some(mcp_strategy::PARSE_JSON_OPCODE),
+	mcp_serialize_config: Some(mcp_strategy::SERIALIZE_JSON_OPCODE),
+	load_mcps,
+	save_mcps,
+	mcp_global_path,
+	mcp_project_path,
+	global_data_dir,
 	capabilities: Capabilities {
 		mcp_stdio: true,
 		mcp_remote: true,

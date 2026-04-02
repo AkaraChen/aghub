@@ -48,11 +48,13 @@ All agents implement `AgentAdapter` trait. No hand-wired structs — behavior de
 pub struct AgentDescriptor {
     pub id: AgentType,
     pub name: &'static str,
-    pub global_config_path: fn() -> PathBuf,
-    pub project_config_path: fn(&Path) -> PathBuf,
-    pub file_format: FileFormat,
+    pub mcp_global_path: fn() -> PathBuf,
+    pub mcp_project_path: fn(&Path) -> PathBuf,
+    pub global_data_dir: fn() -> PathBuf,
+    pub load_mcps: LoadMcpsFn,
+    pub save_mcps: SaveMcpsFn,
     pub capabilities: Capabilities,
-    // ... function pointers for load/serialize/validate
+    // ... MCP/skills function pointers and validation metadata
 }
 ```
 
@@ -67,7 +69,7 @@ pub struct AgentDescriptor {
 
 Central abstraction coordinating adapter operations:
 
-- `load()` / `save()` — config I/O
+- `load()` / `save()` — MCP persistence + skills aggregation
 - `load_both()` — merge project + global configs
 - `scope: ResourceScope` — GlobalOnly, ProjectOnly, Both
 

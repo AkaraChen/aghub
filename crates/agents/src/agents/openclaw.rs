@@ -1,13 +1,44 @@
 use crate::descriptor::*;
 use std::path::{Path, PathBuf};
 
-fn global_path() -> PathBuf {
+fn mcp_global_path() -> PathBuf {
 	dirs::home_dir()
 		.unwrap_or_else(|| std::path::PathBuf::from(""))
 		.join(".openclaw/openclaw.json")
 }
-fn project_path(root: &Path) -> PathBuf {
+fn mcp_project_path(root: &Path) -> PathBuf {
 	root.join(".openclaw/openclaw.json")
+}
+fn global_data_dir() -> PathBuf {
+	dirs::home_dir()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
+		.join(".openclaw")
+}
+fn load_mcps(
+	project_root: Option<&Path>,
+	scope: crate::ResourceScope,
+) -> crate::Result<Vec<crate::McpServer>> {
+	load_scoped_mcps(
+		project_root,
+		scope,
+		mcp_global_path,
+		mcp_project_path,
+		mcp_strategy::parse_json_map_mcp_servers,
+	)
+}
+fn save_mcps(
+	project_root: Option<&Path>,
+	scope: crate::ResourceScope,
+	mcps: &[crate::McpServer],
+) -> crate::Result<()> {
+	save_scoped_mcps(
+		project_root,
+		scope,
+		mcps,
+		mcp_global_path,
+		mcp_project_path,
+		mcp_strategy::serialize_json_map_mcp_servers,
+	)
 }
 
 /// Return the global skills directories for OpenClaw, checking fallback dirs.
@@ -37,10 +68,13 @@ fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "openclaw",
 	display_name: "OpenClaw",
-	parse_config: mcp_strategy::parse_json_map_mcp_servers,
-	serialize_config: mcp_strategy::serialize_json_map_mcp_servers,
-	global_path,
-	project_path,
+	mcp_parse_config: Some(mcp_strategy::parse_json_map_mcp_servers),
+	mcp_serialize_config: Some(mcp_strategy::serialize_json_map_mcp_servers),
+	load_mcps,
+	save_mcps,
+	mcp_global_path,
+	mcp_project_path,
+	global_data_dir,
 	capabilities: Capabilities {
 		mcp_stdio: true,
 		mcp_remote: true,

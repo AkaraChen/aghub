@@ -50,6 +50,10 @@ impl TestConfig {
 		};
 
 		fs::write(&config_path, initial_config).map_err(ConfigError::Io)?;
+		crate::adapter::set_mcp_path_override(
+			descriptor.id,
+			Some(config_path.clone()),
+		);
 
 		let skills_dir = temp_dir.path().join("skills");
 		if descriptor.capabilities.skills {
@@ -110,8 +114,13 @@ impl TestConfig {
 	}
 
 	pub fn create_manager(&self) -> ConfigManager {
+		let descriptor = registry::get(self.agent_type);
+		crate::adapter::set_mcp_path_override(
+			descriptor.id,
+			Some(self.config_path.clone()),
+		);
 		let adapter = create_adapter(self.agent_type);
-		ConfigManager::with_path(adapter, self.config_path.clone())
+		ConfigManager::new(adapter, true, None)
 	}
 
 	pub fn create_adapter(&self) -> Box<dyn AgentAdapter> {
@@ -129,7 +138,7 @@ impl TestConfig {
 	pub fn validate_with_agent(&self) -> Result<()> {
 		let adapter = self.create_adapter();
 		let output = adapter
-			.validate_command(&self.config_path)
+			.validate_command(Some(&self.config_path))
 			.output()
 			.map_err(ConfigError::Io)?;
 		if !output.status.success() {
@@ -143,6 +152,7 @@ impl TestConfig {
 impl Drop for TestConfig {
 	fn drop(&mut self) {
 		let descriptor = registry::get(self.agent_type);
+		crate::adapter::set_mcp_path_override(descriptor.id, None);
 		if descriptor.capabilities.skills {
 			crate::adapter::set_skills_path_override(descriptor.id, None);
 		}
@@ -195,6 +205,10 @@ impl TestConfigBuilder {
 		fs::write(&config_path, content).map_err(ConfigError::Io)?;
 
 		let descriptor = registry::get(self.agent_type);
+		crate::adapter::set_mcp_path_override(
+			descriptor.id,
+			Some(config_path.clone()),
+		);
 		let skills_dir = temp_dir.path().join("skills");
 		if descriptor.capabilities.skills {
 			fs::create_dir(&skills_dir).map_err(ConfigError::Io)?;
