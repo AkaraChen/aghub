@@ -230,6 +230,10 @@ pub struct ValidationError {
 pub struct GitScanRequest {
 	pub url: String,
 	pub credential_id: Option<String>,
+	pub branch: Option<String>,
+	/// When re-scanning (e.g. branch switch), pass the existing
+	/// session ID so the old clone is replaced.
+	pub session_id: Option<String>,
 }
 
 #[derive(Debug, Serialize, TS)]
@@ -247,6 +251,8 @@ pub struct GitScanSkillEntry {
 pub struct GitScanResponse {
 	pub session_id: String,
 	pub skills: Vec<GitScanSkillEntry>,
+	pub branches: Vec<String>,
+	pub current_branch: String,
 }
 
 #[derive(Debug, Deserialize, TS)]

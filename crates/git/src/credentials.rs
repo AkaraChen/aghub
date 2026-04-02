@@ -17,6 +17,19 @@ pub struct Credentials {
 	pub password: String,
 }
 
+impl Credentials {
+	/// Create credentials from owned username/password values.
+	pub fn new(
+		username: impl Into<String>,
+		password: impl Into<String>,
+	) -> Self {
+		Self {
+			username: username.into(),
+			password: password.into(),
+		}
+	}
+}
+
 /// Read git credentials from environment variables.
 ///
 /// Returns `None` if either `GIT_USERNAME` or `GIT_PASSWORD` is not set.
@@ -41,7 +54,7 @@ pub fn read_credentials() -> Option<Credentials> {
 		return None;
 	}
 
-	Some(Credentials { username, password })
+	Some(Credentials::new(username, password))
 }
 
 /// Inject credentials into an HTTPS URL.

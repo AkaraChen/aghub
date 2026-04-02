@@ -1,4 +1,4 @@
-//! Git clone operations with credential support.
+//! Git clone and remote inspection operations.
 
 use std::path::Path;
 
@@ -6,172 +6,113 @@ use gix::clone::PrepareFetch;
 use gix::create::Kind;
 use tempfile::TempDir;
 
-use crate::credentials::{inject_credentials, read_credentials, Credentials};
+use crate::credentials::Credentials;
 use crate::error::{GitError, Result};
+use crate::remote::{resolve_remote_url, RemoteOptions};
 
-/// Clone a git repository into a temporary directory.
-///
-/// Reads credentials from `GIT_USERNAME` and `GIT_PASSWORD` environment
-/// variables. If credentials are not set, attempts clone without
-/// authentication (public repos only).
-///
-/// The returned `TempDir` will be automatically deleted when it goes
-/// out of scope. To keep the directory, use `TempDir::into_path()`.
-///
-/// # Arguments
-///
-/// * `url` - HTTPS URL of the git repository to clone
-///
-/// # Returns
-///
-/// A `TempDir` containing the cloned repository.
-///
-/// # Errors
-///
-/// Returns `GitError::CloneFailed` if the clone operation fails.
-/// Returns `GitError::NotHttps` if the URL is not HTTPS.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use aghub_git::clone_to_temp;
-///
-/// let temp_dir = clone_to_temp("https://github.com/user/repo.git").unwrap();
-/// println!("Cloned to: {}", temp_dir.path().display());
-/// // temp_dir is automatically cleaned up when dropped
-/// ```
-pub fn clone_to_temp(url: &str) -> Result<TempDir> {
-	let creds = read_credentials();
-
-	let clone_url = if let Some(c) = creds {
-		inject_credentials(url, &c)?
-	} else {
-		validate_https_url(url)?;
-		url.to_string()
-	};
-
-	do_clone(&clone_url)
+/// Options for clone operations.
+#[derive(Debug, Clone)]
+pub struct CloneOptions<'a> {
+	/// Shared remote options.
+	pub remote: RemoteOptions<'a>,
+	/// Optional branch to check out.
+	pub branch: Option<&'a str>,
 }
 
-/// Clone a git repository with explicit credentials.
-///
-/// Bypasses environment variables and uses the provided credentials
-/// directly. Useful for one-off clones with different credentials.
-///
-/// # Arguments
-///
-/// * `url` - HTTPS URL of the git repository
-/// * `username` - Git username
-/// * `password` - Git password or personal access token
-///
-/// # Returns
-///
-/// A `TempDir` containing the cloned repository.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use aghub_git::clone_with_credentials;
-///
-/// let temp_dir = clone_with_credentials(
-///     "https://github.com/user/repo.git",
-///     "myuser",
-///     "mytoken"
-/// ).unwrap();
-/// ```
-pub fn clone_with_credentials(
-	url: &str,
-	username: &str,
-	password: &str,
-) -> Result<TempDir> {
-	let creds = Credentials {
-		username: username.to_string(),
-		password: password.to_string(),
-	};
-
-	let clone_url = inject_credentials(url, &creds)?;
-	do_clone(&clone_url)
-}
-
-/// Validate that the URL is HTTPS.
-fn validate_https_url(url: &str) -> Result<()> {
-	let parsed = url::Url::parse(url).map_err(GitError::from)?;
-	if parsed.scheme() != "https" {
-		return Err(GitError::not_https(url));
+impl<'a> CloneOptions<'a> {
+	/// Create clone options for a repository URL.
+	pub fn new(url: &'a str) -> Self {
+		Self {
+			remote: RemoteOptions::new(url),
+			branch: None,
+		}
 	}
-	Ok(())
+
+	/// Check out a specific branch after cloning.
+	pub fn with_branch(mut self, branch: &'a str) -> Self {
+		self.branch = Some(branch);
+		self
+	}
+
+	/// Attach explicit credentials to the clone.
+	pub fn with_credentials(
+		mut self,
+		username: impl Into<String>,
+		password: impl Into<String>,
+	) -> Self {
+		self.remote = self.remote.with_credentials(username, password);
+		self
+	}
+
+	/// Attach an existing credentials value to the clone.
+	pub fn with_auth(mut self, credentials: Credentials) -> Self {
+		self.remote = self.remote.with_auth(credentials);
+		self
+	}
 }
 
-/// Internal clone implementation using gix.
-fn do_clone(url: &str) -> Result<TempDir> {
+/// Clone a repository into a temporary directory.
+///
+/// Uses explicit credentials from [`CloneOptions`] when present,
+/// otherwise falls back to `GIT_USERNAME` and `GIT_PASSWORD`.
+///
+/// ```rust,no_run
+/// use aghub_git::{clone_to_temp, CloneOptions};
+///
+/// let temp_dir = clone_to_temp(
+///     CloneOptions::new("https://github.com/user/repo.git")
+///         .with_branch("main")
+/// ).unwrap();
+///
+/// println!("Cloned to: {}", temp_dir.path().display());
+/// ```
+pub fn clone_to_temp(options: CloneOptions<'_>) -> Result<TempDir> {
+	let url = resolve_remote_url(&options.remote, true)?;
 	let temp_dir =
 		TempDir::new().map_err(|e| GitError::TempDirFailed(e.to_string()))?;
+	clone_into(url.as_str(), temp_dir.path(), options.branch)?;
+	Ok(temp_dir)
+}
 
-	let dest_path = temp_dir.path();
+/// Clone a repository to a specific path.
+pub fn clone_to_path(dest: &Path, options: CloneOptions<'_>) -> Result<()> {
+	let url = resolve_remote_url(&options.remote, true)?;
+	clone_into(url.as_str(), dest, options.branch)
+}
 
-	let mut prep = PrepareFetch::new(
+fn clone_into(url: &str, dest: &Path, branch: Option<&str>) -> Result<()> {
+	let prep = prepare_fetch(url, dest, branch)
+		.map_err(|e| GitError::destination_error(dest, e.to_string()))?;
+	run_checkout(prep)
+}
+
+fn prepare_fetch(
+	url: &str,
+	dest: &Path,
+	branch: Option<&str>,
+) -> Result<PrepareFetch> {
+	let prep = PrepareFetch::new(
 		url,
-		dest_path,
+		dest,
 		Kind::WithWorktree,
 		Default::default(),
 		Default::default(),
 	)
 	.map_err(|e| GitError::clone_failed(e.to_string()))?;
 
-	let (mut checkout, _) = prep
-		.fetch_then_checkout(
-			gix::progress::Discard,
-			&gix::interrupt::IS_INTERRUPTED,
-		)
-		.map_err(|e| GitError::clone_failed(format!("Fetch failed: {e}")))?;
-
-	checkout
-		.main_worktree(gix::progress::Discard, &gix::interrupt::IS_INTERRUPTED)
-		.map_err(|e| GitError::clone_failed(format!("Checkout failed: {e}")))?;
-
-	Ok(temp_dir)
+	match branch {
+		Some(branch) => prep.with_ref_name(Some(branch)).map_err(
+			|e: gix::refs::name::Error| {
+				GitError::clone_failed(format!(
+					"Invalid branch name '{branch}': {e}"
+				))
+			},
+		),
+		None => Ok(prep),
+	}
 }
 
-/// Clone a repository to a specific path (not temporary).
-///
-/// Use this when you need the clone to persist beyond the current
-/// function scope.
-///
-/// # Arguments
-///
-/// * `url` - HTTPS URL of the git repository
-/// * `dest` - Destination path for the clone
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use aghub_git::clone_to_path;
-/// use std::path::Path;
-///
-/// clone_to_path(
-///     "https://github.com/user/repo.git",
-///     Path::new("/tmp/my-repo")
-/// ).unwrap();
-/// ```
-pub fn clone_to_path(url: &str, dest: &Path) -> Result<()> {
-	let creds = read_credentials();
-
-	let clone_url = if let Some(c) = creds {
-		inject_credentials(url, &c)?
-	} else {
-		validate_https_url(url)?;
-		url.to_string()
-	};
-
-	let mut prep = PrepareFetch::new(
-		clone_url.as_str(),
-		dest,
-		Kind::WithWorktree,
-		Default::default(),
-		Default::default(),
-	)
-	.map_err(|e| GitError::destination_error(dest, e.to_string()))?;
-
+fn run_checkout(mut prep: PrepareFetch) -> Result<()> {
 	let (mut checkout, _) = prep
 		.fetch_then_checkout(
 			gix::progress::Discard,
@@ -189,16 +130,46 @@ pub fn clone_to_path(url: &str, dest: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::process::Command;
+	use std::sync::{Mutex, OnceLock};
+
+	fn env_lock() -> &'static Mutex<()> {
+		static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+		LOCK.get_or_init(|| Mutex::new(()))
+	}
 
 	#[test]
 	fn test_clone_public_repo() {
-		let result =
-			clone_to_temp("https://github.com/octocat/Hello-World.git");
+		let _guard = env_lock().lock().unwrap_or_else(|e| e.into_inner());
+		let result = clone_to_temp(CloneOptions::new(
+			"https://github.com/octocat/Hello-World.git",
+		));
 		if let Ok(temp_dir) = result {
 			assert!(temp_dir.path().exists());
 			assert!(
 				temp_dir.path().join(".git").exists()
 					|| temp_dir.path().join("README").exists()
+			);
+		}
+	}
+
+	#[test]
+	fn test_clone_public_repo_branch() {
+		let _guard = env_lock().lock().unwrap_or_else(|e| e.into_inner());
+		let result = clone_to_temp(
+			CloneOptions::new("https://github.com/octocat/Hello-World.git")
+				.with_branch("master"),
+		);
+		if let Ok(temp_dir) = result {
+			let output = Command::new("git")
+				.args(["rev-parse", "--abbrev-ref", "HEAD"])
+				.current_dir(temp_dir.path())
+				.output()
+				.unwrap();
+			assert!(output.status.success());
+			assert_eq!(
+				String::from_utf8_lossy(&output.stdout).trim(),
+				"master",
 			);
 		}
 	}
