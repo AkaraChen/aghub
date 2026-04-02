@@ -63,6 +63,7 @@ version = "0.1.2"
 dependencies = [
  "aghub-core",
  "aghub-git",
+ "aghub-plugins",
  "dirs 5.0.1",
  "keyring",
  "log",

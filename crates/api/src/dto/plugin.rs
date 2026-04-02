@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct PluginResponse {
     pub id: String,
     pub name: String,
@@ -14,7 +16,8 @@ pub struct PluginResponse {
     pub has_mcp: bool,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct PluginListResponse {
     pub plugins: Vec<PluginResponse>,
 }

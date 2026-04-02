@@ -18,6 +18,7 @@ use aghub_api::dto::{
 	},
 	market::MarketSkill,
 	mcp::{CreateMcpRequest, McpResponse, TransportDto, UpdateMcpRequest},
+	plugin::{PluginListResponse, PluginResponse},
 	skill::{
 		CreateSkillRequest, DeleteSkillByPathRequest,
 		DeleteSkillByPathResponse, GitInstallRequest, GitInstallResponse,
@@ -156,11 +157,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<OperationActionDto>(&cfg)?;
 	export_type::<OperationResultDto>(&cfg)?;
 	export_type::<OperationBatchResponse>(&cfg)?;
-	export_type::<GitSyncRequest>(&cfg)?;
-	export_type::<GitSyncResponse>(&cfg)?;
-	export_type::<CreateSubAgentRequest>(&cfg)?;
-	export_type::<UpdateSubAgentRequest>(&cfg)?;
-	export_type::<SubAgentResponse>(&cfg)?;
+        export_type::<GitSyncRequest>(&cfg)?;
+        export_type::<GitSyncResponse>(&cfg)?;
+        export_type::<CreateSubAgentRequest>(&cfg)?;
+        export_type::<UpdateSubAgentRequest>(&cfg)?;
+        export_type::<SubAgentResponse>(&cfg)?;
+        export_type::<PluginResponse>(&cfg)?;
+        export_type::<PluginListResponse>(&cfg)?;
 
 	write_index_file(&out_dir)?;
 

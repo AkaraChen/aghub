@@ -3,14 +3,12 @@
 /**
  * Request to sync (update in-place) an existing skill from a git session.
  */
-export type GitSyncRequest = {
-	session_id: string;
-	/**
-	 * Relative path of the skill within the cloned repo (from scan result).
-	 */
-	skill_path: string;
-	/**
-	 * Tilde-prefixed `source_path` values of every installation to replace.
-	 */
-	source_paths: Array<string>;
-};
+export type GitSyncRequest = { session_id: string, 
+/**
+ * Relative path of the skill within the cloned repo (from scan result).
+ */
+skill_path: string, 
+/**
+ * Tilde-prefixed `source_path` values of every installation to replace.
+ */
+source_paths: Array<string>, };

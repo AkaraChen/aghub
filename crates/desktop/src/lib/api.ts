@@ -24,6 +24,8 @@ import type {
 	MarketSkill,
 	McpResponse,
 	OperationBatchResponse,
+	PluginListResponse,
+	PluginResponse,
 	ProjectSkillLockResponse,
 	ReconcileRequest,
 	SkillResponse,
@@ -440,6 +442,17 @@ export function createApi(baseUrl: string) {
 			},
 			delete(id: string): Promise<void> {
 				return client.delete(`credentials/${id}`).then(() => undefined);
+			},
+		},
+		plugins: {
+			list(): Promise<PluginListResponse> {
+				return client.get("plugins").json();
+			},
+			enable(pluginId: string): Promise<PluginResponse> {
+				return client.post(`plugins/${pluginId}/enable`).json();
+			},
+			disable(pluginId: string): Promise<PluginResponse> {
+				return client.post(`plugins/${pluginId}/disable`).json();
 			},
 		},
 	};
