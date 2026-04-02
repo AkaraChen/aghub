@@ -3,6 +3,7 @@ use crate::{
 	errors::{ConfigError, Result},
 	models::{AgentConfig, ConfigSource, McpServer, ResourceScope, Skill},
 };
+use log::{debug, info, warn};
 use std::path::{Path, PathBuf};
 
 pub mod mcp;
@@ -61,6 +62,11 @@ impl ConfigManager {
 	}
 
 	pub fn load(&mut self) -> Result<&AgentConfig> {
+		debug!(
+			"loading config for agent '{}' with scope {:?}",
+			self.adapter.name(),
+			self.scope
+		);
 		// For Both scope, we need to merge project and global configs
 		if self.scope == ResourceScope::Both {
 			return self.load_both();
@@ -71,6 +77,14 @@ impl ConfigManager {
 			.adapter
 			.load_config(self.project_root.as_deref(), self.scope)?;
 		self.config = Some(config);
+		if let Some(config) = self.config.as_ref() {
+			info!(
+				"loaded config for agent '{}' with {} skills and {} mcps",
+				self.adapter.name(),
+				config.skills.len(),
+				config.mcps.len()
+			);
+		}
 		Ok(self.config.as_ref().unwrap())
 	}
 
@@ -80,6 +94,10 @@ impl ConfigManager {
 	pub fn load_both_annotated(
 		&mut self,
 	) -> Result<(Vec<Skill>, Vec<McpServer>)> {
+		debug!(
+			"loading both-scope annotated config for agent '{}'",
+			self.adapter.name()
+		);
 		let mut skills: Vec<Skill> = Vec::new();
 		let mut mcps: Vec<McpServer> = Vec::new();
 		let mut seen = std::collections::HashSet::new();
@@ -128,11 +146,21 @@ impl ConfigManager {
 			}
 		}
 
+		info!(
+			"loaded annotated resources for agent '{}': {} skills, {} mcps",
+			self.adapter.name(),
+			skills.len(),
+			mcps.len()
+		);
 		Ok((skills, mcps))
 	}
 
 	/// Load and merge configs from both project and global
 	fn load_both(&mut self) -> Result<&AgentConfig> {
+		debug!(
+			"loading merged config for agent '{}' across scopes",
+			self.adapter.name()
+		);
 		let mut merged_config = AgentConfig::new();
 		let mut seen_skill_names = std::collections::HashSet::new();
 
@@ -176,12 +204,29 @@ impl ConfigManager {
 		}
 
 		self.config = Some(merged_config);
+		if let Some(config) = self.config.as_ref() {
+			info!(
+				"merged config for agent '{}' with {} skills and {} mcps",
+				self.adapter.name(),
+				config.skills.len(),
+				config.mcps.len()
+			);
+		}
 		Ok(self.config.as_ref().unwrap())
 	}
 
 	pub fn save(&self, config: &AgentConfig) -> Result<()> {
+		debug!(
+			"saving config for agent '{}' to scope {:?}",
+			self.adapter.name(),
+			self.write_scope
+		);
 		if !self.adapter.supports_mcp_operations() {
 			if config.mcps.is_empty() {
+				debug!(
+					"skipping config save for agent '{}' because there are no MCPs",
+					self.adapter.name()
+				);
 				return Ok(());
 			}
 			return Err(ConfigError::unsupported_operation(
@@ -194,7 +239,14 @@ impl ConfigManager {
 			self.project_root.as_deref(),
 			self.write_scope,
 			&config.mcps,
-		)
+		)?;
+		info!(
+			"saved {} MCPs for agent '{}' in scope {:?}",
+			config.mcps.len(),
+			self.adapter.name(),
+			self.write_scope
+		);
+		Ok(())
 	}
 
 	pub fn save_current(&self) -> Result<()> {
@@ -208,14 +260,25 @@ impl ConfigManager {
 
 	pub fn validate(&self) -> Result<()> {
 		let config_path = self.config_path();
+		debug!(
+			"validating config for agent '{}' at {:?}",
+			self.adapter.name(),
+			config_path
+		);
 		let output = self
 			.adapter
 			.validate_command(config_path.as_deref())
 			.output()?;
 		if !output.status.success() {
 			let stderr = String::from_utf8_lossy(&output.stderr);
+			warn!(
+				"validation failed for agent '{}': {}",
+				self.adapter.name(),
+				stderr.trim()
+			);
 			return Err(ConfigError::ValidationFailed(stderr.to_string()));
 		}
+		info!("validated config for agent '{}'", self.adapter.name());
 		Ok(())
 	}
 
@@ -226,6 +289,10 @@ impl ConfigManager {
 	pub fn init_empty_config(&mut self) {
 		if self.config.is_none() {
 			self.config = Some(AgentConfig::new());
+			info!(
+				"initialized empty config for agent '{}'",
+				self.adapter.name()
+			);
 		}
 	}
 

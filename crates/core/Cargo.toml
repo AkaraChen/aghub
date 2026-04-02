@@ -16,6 +16,7 @@ toml = { workspace = true }
 tempfile = { workspace = true, optional = true }
 skill = { path = "../skill" }
 which = "7"
+log = "0.4.29"
 
 [dev-dependencies]
 aghub-agents = { path = "../agents" }

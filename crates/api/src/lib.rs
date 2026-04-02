@@ -1,6 +1,12 @@
 #[macro_use]
 extern crate rocket;
 
+use log::{debug, error, info, warn};
+use rocket::{
+	fairing::{Fairing, Info, Kind},
+	Data, Request, Response,
+};
+
 pub mod dto;
 pub mod editor_detection;
 pub mod error;
@@ -12,7 +18,58 @@ pub struct ApiOptions {
 	pub port: u16,
 }
 
+struct ApiLogFairing;
+
+#[rocket::async_trait]
+impl Fairing for ApiLogFairing {
+	fn info(&self) -> Info {
+		Info {
+			name: "aghub-api request logger",
+			kind: Kind::Request | Kind::Response,
+		}
+	}
+
+	async fn on_request(&self, request: &mut Request<'_>, _: &mut Data<'_>) {
+		info!(
+			"api request started: {} {}",
+			request.method(),
+			request.uri()
+		);
+	}
+
+	async fn on_response<'r>(
+		&self,
+		request: &'r Request<'_>,
+		response: &mut Response<'r>,
+	) {
+		let status = response.status();
+		if status.code >= 500 {
+			error!(
+				"api request failed: {} {} -> {}",
+				request.method(),
+				request.uri(),
+				status
+			);
+		} else if status.code >= 400 {
+			warn!(
+				"api request returned client error: {} {} -> {}",
+				request.method(),
+				request.uri(),
+				status
+			);
+		} else {
+			debug!(
+				"api request completed: {} {} -> {}",
+				request.method(),
+				request.uri(),
+				status
+			);
+		}
+	}
+}
+
 pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
+	info!("starting aghub API server on 127.0.0.1:{}", options.port);
 	let config = rocket::Config {
 		port: options.port,
 		address: std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
@@ -41,6 +98,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 	.to_cors()
 	.unwrap();
 	rocket::custom(config)
+		.attach(ApiLogFairing)
 		.attach(cors)
 		.manage(crate::state::GitCloneSessions {
 			sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
@@ -101,5 +159,11 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 		)
 		.launch()
 		.await
-		.map(|_| ())
+		.map(|_| {
+			info!("aghub API server stopped cleanly");
+		})
+		.map_err(|error| {
+			error!("aghub API server exited with error: {error}");
+			error
+		})
 }

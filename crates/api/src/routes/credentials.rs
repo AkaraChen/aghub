@@ -1,3 +1,4 @@
+use log::{debug, info};
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use serde::{Deserialize, Serialize};
@@ -52,6 +53,7 @@ fn internal_err(msg: impl Into<String>) -> crate::error::ApiError {
 #[get("/credentials")]
 pub fn list_credentials() -> ApiResult<Vec<CredentialResponse>> {
 	let creds = load_credentials().map_err(internal_err)?;
+	debug!("loaded {} stored credentials", creds.len());
 	Ok(Json(
 		creds
 			.into_iter()
@@ -68,6 +70,7 @@ pub fn create_credential(
 	body: Json<CreateCredentialRequest>,
 ) -> ApiCreated<CredentialResponse> {
 	let mut creds = load_credentials().map_err(internal_err)?;
+	info!("creating credential '{}'", body.name);
 	let new = StoredCredential {
 		id: uuid::Uuid::new_v4().to_string(),
 		name: body.name.clone(),
@@ -87,7 +90,12 @@ pub fn create_credential(
 #[delete("/credentials/<id>")]
 pub fn delete_credential(id: &str) -> ApiNoContent {
 	let mut creds = load_credentials().map_err(internal_err)?;
+	let original_len = creds.len();
 	creds.retain(|c| c.id != id);
+	info!(
+		"deleting credential '{id}', removed={}",
+		original_len != creds.len()
+	);
 	store_credentials(&creds).map_err(internal_err)?;
 	Ok(rocket::response::status::NoContent)
 }

@@ -37,3 +37,4 @@ keyring = { version = "3", features = [
 	"linux-native",
 ] }
 uuid = { version = "1", features = [ "v4" ] }
+log = "0.4.29"

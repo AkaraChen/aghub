@@ -4,6 +4,7 @@ use crate::{
 	models::{ConfigSource, McpServer, ResourceScope, Skill},
 	registry,
 };
+use log::{debug, warn};
 use std::path::Path;
 
 /// Resources loaded for a single agent
@@ -21,6 +22,7 @@ pub fn load_all_agents(
 	scope: ResourceScope,
 	project_root: Option<&Path>,
 ) -> Vec<AgentResources> {
+	debug!("loading resources for all agents in scope {:?}", scope);
 	registry::iter_all()
 		.map(|descriptor| {
 			let adapter: Box<dyn AgentAdapter> = Box::new(descriptor);
@@ -39,11 +41,18 @@ pub fn load_all_agents(
 						skills,
 						mcps,
 					},
-					Err(_) => AgentResources {
-						agent_id: descriptor.id,
-						skills: vec![],
-						mcps: vec![],
-					},
+					Err(error) => {
+						warn!(
+							"failed to load both-scope resources for agent '{}': {}",
+							descriptor.id,
+							error
+						);
+						AgentResources {
+							agent_id: descriptor.id,
+							skills: vec![],
+							mcps: vec![],
+						}
+					}
 				}
 			} else {
 				match manager.load() {
@@ -72,11 +81,17 @@ pub fn load_all_agents(
 							mcps: config.mcps.clone(),
 						}
 					}
-					Err(_) => AgentResources {
-						agent_id: descriptor.id,
-						skills: vec![],
-						mcps: vec![],
-					},
+					Err(error) => {
+						warn!(
+							"failed to load resources for agent '{}': {}",
+							descriptor.id, error
+						);
+						AgentResources {
+							agent_id: descriptor.id,
+							skills: vec![],
+							mcps: vec![],
+						}
+					}
 				}
 			}
 		})

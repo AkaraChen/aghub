@@ -4,6 +4,7 @@ use crate::{
 	errors::{ConfigError, Result},
 	models::Skill,
 };
+use log::{debug, info, warn};
 use skill::sanitize::sanitize_name;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -86,10 +87,12 @@ fn remove_skill_path(
 impl ConfigManager {
 	pub fn add_skill(&mut self, skill: Skill) -> Result<()> {
 		let target_dir = self.target_skills_dir();
+		let agent_name = self.adapter.name().to_string();
 		let config = self.config_mut()?;
 		if config.skills.iter().any(|s| s.name == skill.name) {
 			return Err(ConfigError::resource_exists("skill", &skill.name));
 		}
+		info!("adding skill '{}' for agent '{}'", skill.name, agent_name);
 
 		if let Some(dir) = target_dir {
 			let safe_name = sanitize_name(&skill.name);
@@ -119,6 +122,7 @@ impl ConfigManager {
 
 	pub fn update_skill(&mut self, name: &str, skill: Skill) -> Result<()> {
 		let target_dir = self.target_skills_dir();
+		let agent_name = self.adapter.name().to_string();
 		let config = self.config_mut()?;
 		let index = config
 			.skills
@@ -127,6 +131,10 @@ impl ConfigManager {
 			.ok_or_else(|| ConfigError::resource_not_found("skill", name))?;
 
 		let existing_skill = &config.skills[index];
+		info!(
+			"updating skill '{}' -> '{}' for agent '{}'",
+			name, skill.name, agent_name
+		);
 		let safe_old_name = sanitize_name(name);
 		// Prefer canonical path (real location) for writes
 		let file_path = if let Some(cp) = &existing_skill.canonical_path {
@@ -228,6 +236,7 @@ impl ConfigManager {
 
 	pub fn remove_skill(&mut self, name: &str) -> Result<()> {
 		let target_dir = self.target_skills_dir();
+		let agent_name = self.adapter.name().to_string();
 		let config = self.config_mut()?;
 		let index = config
 			.skills
@@ -236,6 +245,7 @@ impl ConfigManager {
 			.ok_or_else(|| ConfigError::resource_not_found("skill", name))?;
 
 		let existing_skill = &config.skills[index];
+		info!("removing skill '{}' for agent '{}'", name, agent_name);
 		let safe_name = sanitize_name(name);
 		let file_path = if let Some(sp) = &existing_skill.source_path {
 			Some(resolve_source_path(sp))
@@ -255,12 +265,17 @@ impl ConfigManager {
 	}
 
 	fn set_skill_enabled(&mut self, name: &str, enabled: bool) -> Result<()> {
+		let agent_name = self.adapter.name().to_string();
 		let config = self.config_mut()?;
 		let skill = config
 			.skills
 			.iter_mut()
 			.find(|s| s.name == name)
 			.ok_or_else(|| ConfigError::resource_not_found("skill", name))?;
+		info!(
+			"setting skill '{}' enabled={} for agent '{}'",
+			name, enabled, agent_name
+		);
 		skill.enabled = enabled;
 		self.save_current()
 	}
@@ -274,6 +289,11 @@ impl ConfigManager {
 	}
 
 	pub fn add_skill_from_path(&mut self, path: &Path) -> Result<Skill> {
+		debug!(
+			"adding skill from path '{}' for agent '{}'",
+			path.display(),
+			self.adapter.name()
+		);
 		let skill_pkg = skill::parser::parse(path).map_err(|e| {
 			ConfigError::InvalidConfig(format!("Failed to parse skill: {e}"))
 		})?;
@@ -286,7 +306,10 @@ impl ConfigManager {
 		let mut errors = Vec::new();
 		match skill::parser::parse(path) {
 			Ok(_) => {}
-			Err(e) => errors.push(format!("Parse error: {e}")),
+			Err(e) => {
+				warn!("skill validation failed for '{}': {e}", path.display());
+				errors.push(format!("Parse error: {e}"));
+			}
 		}
 		errors
 	}

@@ -18,6 +18,7 @@
 		"opener:default",
 		"opener:allow-open-path",
 		"dialog:default",
+		"log:default",
 		"store:default",
 		"updater:default",
 		"process:default"

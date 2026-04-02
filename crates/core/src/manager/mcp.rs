@@ -3,6 +3,7 @@ use crate::{
 	errors::{ConfigError, Result},
 	models::McpServer,
 };
+use log::info;
 
 impl ConfigManager {
 	pub fn add_mcp(&mut self, mcp: McpServer) -> Result<()> {
@@ -13,10 +14,12 @@ impl ConfigManager {
 				self.adapter.name(),
 			));
 		}
+		let agent_name = self.adapter.name().to_string();
 		let config = self.config_mut()?;
 		if config.mcps.iter().any(|m| m.name == mcp.name) {
 			return Err(ConfigError::resource_exists("MCP server", &mcp.name));
 		}
+		info!("adding MCP '{}' for agent '{}'", mcp.name, agent_name);
 		config.mcps.push(mcp);
 		self.save_current()
 	}
@@ -33,11 +36,13 @@ impl ConfigManager {
 				self.adapter.name(),
 			));
 		}
+		let agent_name = self.adapter.name().to_string();
 		let config = self.config_mut()?;
 		let index =
 			config.mcps.iter().position(|m| m.name == name).ok_or_else(
 				|| ConfigError::resource_not_found("MCP server", name),
 			)?;
+		info!("updating MCP '{}' for agent '{}'", name, agent_name);
 		config.mcps[index] = mcp;
 		self.save_current()
 	}
@@ -50,11 +55,13 @@ impl ConfigManager {
 				self.adapter.name(),
 			));
 		}
+		let agent_name = self.adapter.name().to_string();
 		let config = self.config_mut()?;
 		let index =
 			config.mcps.iter().position(|m| m.name == name).ok_or_else(
 				|| ConfigError::resource_not_found("MCP server", name),
 			)?;
+		info!("removing MCP '{}' for agent '{}'", name, agent_name);
 		config.mcps.remove(index);
 		self.save_current()
 	}
@@ -67,10 +74,15 @@ impl ConfigManager {
 				self.adapter.name(),
 			));
 		}
+		let agent_name = self.adapter.name().to_string();
 		let config = self.config_mut()?;
 		let mcp = config.mcps.iter_mut().find(|m| m.name == name).ok_or_else(
 			|| ConfigError::resource_not_found("MCP server", name),
 		)?;
+		info!(
+			"setting MCP '{}' enabled={} for agent '{}'",
+			name, enabled, agent_name
+		);
 		mcp.enabled = enabled;
 		self.save_current()
 	}

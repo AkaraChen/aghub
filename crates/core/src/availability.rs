@@ -1,4 +1,5 @@
 use crate::AgentDescriptor;
+use log::{debug, info};
 /// Information about agent availability
 #[derive(Debug, Clone)]
 pub struct AvailabilityInfo {
@@ -27,6 +28,10 @@ pub fn check_agent_availability(
 	let has_global_directory =
 		check_global_directory_exists((descriptor.global_data_dir)());
 	let has_cli = check_cli_exists(descriptor.cli_name);
+	debug!(
+		"availability for agent '{}': has_global_directory={}, has_cli={}",
+		descriptor.id, has_global_directory, has_cli
+	);
 
 	AvailabilityInfo {
 		agent_id: descriptor.id,
@@ -42,6 +47,7 @@ pub fn check_all_agents_availability() -> Vec<AvailabilityInfo> {
 
 	let descriptors: Vec<&AgentDescriptor> =
 		crate::registry::iter_all().collect();
+	info!("checking availability for {} agents", descriptors.len());
 
 	// Spawn threads for each agent check
 	let handles: Vec<_> = descriptors
@@ -52,12 +58,14 @@ pub fn check_all_agents_availability() -> Vec<AvailabilityInfo> {
 		.collect();
 
 	// Collect results
-	handles
+	let results = handles
 		.into_iter()
 		.map(|handle: thread::JoinHandle<AvailabilityInfo>| {
 			handle.join().expect("Thread panicked")
 		})
-		.collect()
+		.collect::<Vec<_>>();
+	info!("completed availability checks for {} agents", results.len());
+	results
 }
 
 #[cfg(test)]

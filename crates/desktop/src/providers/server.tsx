@@ -1,5 +1,6 @@
 import { Spinner } from "@heroui/react";
 import { invoke } from "@tauri-apps/api/core";
+import { info } from "@tauri-apps/plugin-log";
 import { useEffect, useState } from "react";
 import type { ServerProviderProps } from "../contexts/server";
 import { ServerContext } from "../contexts/server";
@@ -10,8 +11,14 @@ export function ServerProvider({ children }: ServerProviderProps) {
 
 	useEffect(() => {
 		invoke<number>("start_server")
-			.then(setPort)
-			.catch((e) => setError(String(e)));
+			.then((value) => {
+				void info(`Desktop API server started on port ${value}`);
+				setPort(value);
+			})
+			.catch((e) => {
+				console.error("Failed to start desktop API server:", e);
+				setError(String(e));
+			});
 	}, []);
 
 	if (error) {

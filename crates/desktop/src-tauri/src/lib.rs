@@ -1,7 +1,9 @@
 use crate::commands::start_server;
+use log::{debug, info, warn};
 use tauri::{Manager, WebviewWindow};
 #[cfg(any(windows, target_os = "linux"))]
 use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_log::{Target, TargetKind};
 
 mod commands;
 
@@ -19,6 +21,19 @@ fn focus_main_window(window: &WebviewWindow) {
 pub fn run() {
 	let _ = fix_path_env::fix();
 	tauri::Builder::default()
+		.plugin(
+			tauri_plugin_log::Builder::new()
+				.clear_targets()
+				.targets([
+					Target::new(TargetKind::Stdout),
+					Target::new(TargetKind::LogDir {
+						file_name: Some("aghub".into()),
+					}),
+					Target::new(TargetKind::Webview),
+				])
+				.level(log::LevelFilter::Info)
+				.build(),
+		)
 		.manage(AppState {
 			port: std::sync::Mutex::new(None),
 		})
@@ -32,16 +47,19 @@ pub fn run() {
 		.plugin(tauri_plugin_dialog::init())
 		.plugin(tauri_plugin_store::Builder::default().build())
 		.setup(|app| {
-			let _ = app;
+			info!("setting up aghub desktop application");
 			#[cfg(desktop)]
 			{
 				app.handle()
 					.plugin(tauri_plugin_updater::Builder::new().build())?;
 				app.handle().plugin(tauri_plugin_process::init())?;
+				info!("desktop updater and process plugins initialized");
 
 				#[cfg(any(windows, target_os = "linux"))]
 				if let Err(error) = app.deep_link().register_all() {
-					eprintln!("Failed to register deep-link schemes: {error}");
+					warn!("failed to register deep-link schemes: {error}");
+				} else {
+					debug!("registered desktop deep-link schemes");
 				}
 			}
 
@@ -53,6 +71,7 @@ pub fn run() {
 				}
 			}
 
+			info!("aghub desktop setup completed");
 			Ok(())
 		})
 		.invoke_handler(tauri::generate_handler![start_server])
