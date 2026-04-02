@@ -366,4 +366,68 @@ mod tests {
 		assert!(val.get("servers").is_some());
 		assert!(val.get("mcpServers").is_none());
 	}
+
+	#[test]
+	fn test_serialize_preserves_non_mcp_fields() {
+		let original = r#"{
+			"$schema": "https://example.com/settings.schema.json",
+			"theme": "night",
+			"features": {
+				"autocomplete": true
+			},
+			"mcpServers": {
+				"old": {
+					"type": "stdio",
+					"command": "old-cmd"
+				}
+			}
+		}"#;
+		let mut config = parse(original, "mcpServers").unwrap();
+		config.mcps = vec![McpServer::new(
+			"new",
+			McpTransport::stdio("new-cmd", vec!["--flag".to_string()]),
+		)];
+
+		let out = serialize(&config, Some(original), "mcpServers").unwrap();
+		let val: serde_json::Value = serde_json::from_str(&out).unwrap();
+
+		assert_eq!(val["$schema"], "https://example.com/settings.schema.json");
+		assert_eq!(val["theme"], "night");
+		assert_eq!(val["features"]["autocomplete"], true);
+		assert!(val["mcpServers"].get("new").is_some());
+		assert!(val["mcpServers"].get("old").is_none());
+	}
+
+	#[test]
+	fn test_serialize_preserves_nested_non_mcp_fields() {
+		let original = r#"{
+			"amp": {
+				"mode": "strict",
+				"telemetry": {
+					"enabled": false
+				},
+				"mcpServers": {
+					"old": {
+						"type": "stdio",
+						"command": "old-cmd"
+					}
+				}
+			},
+			"otherSetting": 42
+		}"#;
+		let mut config = parse(original, "amp.mcpServers").unwrap();
+		config.mcps = vec![McpServer::new(
+			"new",
+			McpTransport::stdio("new-cmd", vec![]),
+		)];
+
+		let out = serialize(&config, Some(original), "amp.mcpServers").unwrap();
+		let val: serde_json::Value = serde_json::from_str(&out).unwrap();
+
+		assert_eq!(val["amp"]["mode"], "strict");
+		assert_eq!(val["amp"]["telemetry"]["enabled"], false);
+		assert_eq!(val["otherSetting"], 42);
+		assert!(val["amp"]["mcpServers"].get("new").is_some());
+		assert!(val["amp"]["mcpServers"].get("old").is_none());
+	}
 }

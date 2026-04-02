@@ -181,4 +181,39 @@ mod tests {
 		assert!(val.get("mcp").is_some());
 		assert!(val.get("mcp_servers").is_none());
 	}
+
+	#[test]
+	fn test_opencode_preserves_non_mcp_options_on_serialize() {
+		let original = r#"{
+			"$schema": "https://opencode.ai/config.json",
+			"theme": "system",
+			"sandbox": "workspace-write",
+			"model": {
+				"default": "gpt-5.4-mini"
+			},
+			"mcp": {
+				"old-srv": {
+					"type": "local",
+					"command": ["old-cmd"],
+					"enabled": true
+				}
+			}
+		}"#;
+
+		let mut config = parse(original).unwrap();
+		config.mcps = vec![McpServer::new(
+			"new-srv",
+			McpTransport::stdio("npx", vec!["-y".to_string()]),
+		)];
+
+		let out = serialize(&config, Some(original)).unwrap();
+		let val: serde_json::Value = serde_json::from_str(&out).unwrap();
+
+		assert_eq!(val["$schema"], "https://opencode.ai/config.json");
+		assert_eq!(val["theme"], "system");
+		assert_eq!(val["sandbox"], "workspace-write");
+		assert_eq!(val["model"]["default"], "gpt-5.4-mini");
+		assert!(val["mcp"].get("new-srv").is_some());
+		assert!(val["mcp"].get("old-srv").is_none());
+	}
 }

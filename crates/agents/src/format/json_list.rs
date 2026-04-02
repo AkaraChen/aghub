@@ -260,4 +260,44 @@ mod tests {
 		assert!(!reparsed.mcps[0].enabled);
 		assert!(!reparsed.skills[0].enabled);
 	}
+
+	#[test]
+	fn test_roundtrip_preserves_extra_fields_and_skills() {
+		let original = r#"{
+			"$schema": "https://example.com/opencode-list.schema.json",
+			"theme": "dark",
+			"mcp_servers": [
+				{"name": "old", "type": "stdio", "command": "old-cmd", "enabled": true}
+			],
+			"skills": [
+				{"name": "kept-skill", "enabled": true, "description": "Keep me", "tools": ["bun"]}
+			]
+		}"#;
+		let mut config = parse(original).unwrap();
+		config.mcps = vec![McpServer::new(
+			"new",
+			McpTransport::stdio("new-cmd", vec!["--watch".to_string()]),
+		)];
+
+		let out = serialize(&config, Some(original)).unwrap();
+		let val: serde_json::Value = serde_json::from_str(&out).unwrap();
+
+		assert_eq!(
+			val["$schema"],
+			"https://example.com/opencode-list.schema.json"
+		);
+		assert_eq!(val["theme"], "dark");
+		assert_eq!(val["skills"][0]["name"], "kept-skill");
+		assert_eq!(val["skills"][0]["description"], "Keep me");
+		assert!(val["mcp_servers"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.any(|m| { m["name"] == "new" && m["command"] == "new-cmd" }));
+		assert!(!val["mcp_servers"]
+			.as_array()
+			.unwrap()
+			.iter()
+			.any(|m| m["name"] == "old"));
+	}
 }
