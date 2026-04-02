@@ -442,6 +442,26 @@ mod tests {
 	}
 
 	#[test]
+	fn test_read_existing_body_crlf_no_garbage() {
+		let tmp = tempfile::tempdir().unwrap();
+		let path = tmp.path().join("SKILL.md");
+		// Write CRLF bytes directly to avoid any platform conversion.
+		let crlf =
+			b"---\r\nname: test\r\ndescription: desc\r\n---\r\n\r\n# Test\r\n\r\nBody content.\r\n";
+		std::fs::write(&path, crlf).unwrap();
+		let body = read_existing_body(&path).unwrap().unwrap();
+		// Body must not contain leftover '---' chars from the closing frontmatter marker.
+		// With the CRLF bug, byte_offset lands inside the closing '---\r\n' line,
+		// producing a body like "--\r\n\r\n# Test..." instead of "\r\n\r\n# Test...".
+		assert!(
+			!body.starts_with('-'),
+			"body starts with '-' — CRLF offset bug, got: {body:?}"
+		);
+		assert!(body.contains("# Test"));
+		assert!(body.contains("Body content."));
+	}
+
+	#[test]
 	fn test_read_existing_body_missing_file_returns_none() {
 		let tmp = tempfile::tempdir().unwrap();
 		let path = tmp.path().join("nonexistent.md");
