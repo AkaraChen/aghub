@@ -1,14 +1,15 @@
 use aghub_core::{
-	create_adapter,
+	convert_skill, create_adapter,
 	errors::ConfigError,
 	load_all_agents,
-	manager::ConfigManager,
 	models::{AgentType, ResourceScope, Skill},
 	registry, transfer,
 };
 use rocket::http::Status;
 use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
+use skill::sanitize::sanitize_name;
+use std::collections::HashMap;
 
 use crate::{
 	dto::integrations::{
@@ -231,6 +232,114 @@ fn get_skill_root(path: std::path::PathBuf) -> std::path::PathBuf {
 	} else {
 		get_parent_folder(path)
 	}
+}
+
+fn copy_dir_recursive(
+	from: &std::path::Path,
+	to: &std::path::Path,
+) -> Result<(), ApiError> {
+	std::fs::create_dir_all(to)
+		.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
+	for entry in std::fs::read_dir(from)
+		.map_err(|e| ApiError::from(ConfigError::Io(e)))?
+	{
+		let entry = entry.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
+		let from_path = entry.path();
+		let to_path = to.join(entry.file_name());
+		let file_type = entry
+			.file_type()
+			.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
+		if file_type.is_dir() {
+			copy_dir_recursive(&from_path, &to_path)?;
+		} else {
+			std::fs::copy(&from_path, &to_path)
+				.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
+		}
+	}
+	Ok(())
+}
+
+fn resolve_git_install_target_dir(
+	agent_type: AgentType,
+	resource_scope: ResourceScope,
+	project_root: Option<&std::path::PathBuf>,
+) -> Option<std::path::PathBuf> {
+	create_adapter(agent_type)
+		.target_skills_dir(project_root.map(|p| p.as_path()), resource_scope)
+}
+
+fn install_git_skill_to_dir(
+	full_path: &std::path::Path,
+	target_dir: &std::path::Path,
+) -> Result<String, ApiError> {
+	let parsed = skill::parser::parse(full_path).map_err(|e| {
+		ApiError::new(
+			Status::BadRequest,
+			format!("Failed to parse skill: {e}"),
+			"SKILL_PARSE_FAILED",
+		)
+	})?;
+	let skill = convert_skill(parsed);
+	let safe_name = sanitize_name(&skill.name);
+	let dest_root = target_dir.join(&safe_name);
+
+	if !dest_root.exists() {
+		let source_root = get_skill_root(full_path.to_path_buf());
+		copy_dir_recursive(&source_root, &dest_root)?;
+	}
+
+	Ok(skill.name)
+}
+
+type GitInstallAgentGroup = Vec<(String, AgentType)>;
+type GitInstallGroups = HashMap<std::path::PathBuf, GitInstallAgentGroup>;
+type GitInstallInvalidAgent = (String, Option<AgentType>, String);
+
+fn build_git_install_groups(
+	agents: &[String],
+	resource_scope: ResourceScope,
+	project_root: Option<&std::path::PathBuf>,
+) -> (GitInstallGroups, Vec<GitInstallInvalidAgent>) {
+	let mut groups = HashMap::new();
+	let mut invalid = Vec::new();
+
+	for agent_str in agents {
+		let agent_type: AgentType = match agent_str.parse() {
+			Ok(agent) => agent,
+			Err(_) => {
+				invalid.push((
+					agent_str.clone(),
+					None,
+					format!("Unknown agent '{agent_str}'"),
+				));
+				continue;
+			}
+		};
+
+		let Some(target_dir) = resolve_git_install_target_dir(
+			agent_type,
+			resource_scope,
+			project_root,
+		) else {
+			invalid.push((
+				agent_str.clone(),
+				Some(agent_type),
+				format!(
+					"Agent '{}' does not support persistent skill creation \
+					 in this scope",
+					agent_str
+				),
+			));
+			continue;
+		};
+
+		groups
+			.entry(target_dir)
+			.or_insert_with(Vec::new)
+			.push((agent_str.clone(), agent_type));
+	}
+
+	(groups, invalid)
 }
 
 fn detect_available_editor() -> Option<CodeEditorType> {
@@ -858,63 +967,47 @@ pub async fn git_install_skills(
 
 	let mut results = Vec::new();
 
-	for agent_str in &req.agents {
-		let agent_type: AgentType = match agent_str.parse() {
-			Ok(a) => a,
-			Err(_) => {
-				for skill_path in &req.skill_paths {
-					results.push(GitInstallResultEntry {
-						name: skill_path.clone(),
-						agent: agent_str.clone(),
-						success: false,
-						error: Some(format!("Unknown agent '{}'", agent_str)),
-					});
-				}
-				continue;
-			}
-		};
+	let (dir_groups, invalid_agents) = build_git_install_groups(
+		&req.agents,
+		resource_scope,
+		project_root.as_ref(),
+	);
 
+	for (agent_str, _, error) in invalid_agents {
 		for skill_path in &req.skill_paths {
-			let full_path = temp_path.join(skill_path);
-			let mut manager = match resource_scope {
-				ResourceScope::GlobalOnly => {
-					ConfigManager::new(create_adapter(agent_type), true, None)
-				}
-				ResourceScope::ProjectOnly => ConfigManager::new(
-					create_adapter(agent_type),
-					false,
-					project_root.as_deref(),
-				),
-				_ => ConfigManager::new(create_adapter(agent_type), true, None),
-			};
+			results.push(GitInstallResultEntry {
+				name: skill_path.clone(),
+				agent: agent_str.clone(),
+				success: false,
+				error: Some(error.clone()),
+			});
+		}
+	}
 
-			// Load configuration before adding skill
-			if let Err(e) = manager.load() {
-				results.push(GitInstallResultEntry {
-					name: skill_path.clone(),
-					agent: agent_str.clone(),
-					success: false,
-					error: Some(format!("Failed to load config: {e}")),
-				});
-				continue;
-			}
+	for skill_path in &req.skill_paths {
+		let full_path = temp_path.join(skill_path);
 
-			match manager.add_skill_from_path(&full_path) {
-				Ok(skill) => {
-					results.push(GitInstallResultEntry {
-						name: skill.name,
-						agent: agent_str.clone(),
-						success: true,
-						error: None,
-					});
+		for (target_dir, agents) in &dir_groups {
+			match install_git_skill_to_dir(&full_path, target_dir) {
+				Ok(skill_name) => {
+					for (agent_str, _) in agents {
+						results.push(GitInstallResultEntry {
+							name: skill_name.clone(),
+							agent: agent_str.clone(),
+							success: true,
+							error: None,
+						});
+					}
 				}
 				Err(e) => {
-					results.push(GitInstallResultEntry {
-						name: skill_path.clone(),
-						agent: agent_str.clone(),
-						success: false,
-						error: Some(format!("{e}")),
-					});
+					for (agent_str, _) in agents {
+						results.push(GitInstallResultEntry {
+							name: skill_path.clone(),
+							agent: agent_str.clone(),
+							success: false,
+							error: Some(e.body.error.clone()),
+						});
+					}
 				}
 			}
 		}
@@ -927,4 +1020,100 @@ pub async fn git_install_skills(
 	}
 
 	Ok(Json(GitInstallResponse { results }))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use aghub_core::transfer::{
+		reconcile_skill, InstallScope, ResourceLocator,
+	};
+	use std::sync::{Mutex, OnceLock};
+	use tempfile::tempdir;
+
+	fn env_lock() -> &'static Mutex<()> {
+		static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+		LOCK.get_or_init(|| Mutex::new(()))
+	}
+
+	#[test]
+	fn git_install_groups_agents_by_primary_target_dir() {
+		let project_root = std::path::PathBuf::from("/tmp/demo");
+		let (groups, invalid) = build_git_install_groups(
+			&vec!["claude".into(), "opencode".into(), "codex".into()],
+			ResourceScope::ProjectOnly,
+			Some(&project_root),
+		);
+
+		assert!(invalid.is_empty());
+		assert_eq!(groups.len(), 3);
+		assert!(groups.contains_key(&project_root.join(".claude/skills")));
+		assert!(groups.contains_key(&project_root.join(".opencode/skills")));
+		assert!(groups.contains_key(&project_root.join(".agents/skills")));
+	}
+
+	#[test]
+	fn git_install_marks_same_primary_dir_agents_success() {
+		let _guard = env_lock().lock().unwrap();
+		let temp = tempdir().unwrap();
+		let target_dir = temp.path().join("shared");
+		let source_dir = temp.path().join("source/hello-skill");
+		std::fs::create_dir_all(&source_dir).unwrap();
+		std::fs::write(
+			source_dir.join("SKILL.md"),
+			"---\nname: hello-skill\ndescription: hi\n---\n\n# Hello\n",
+		)
+		.unwrap();
+
+		let result =
+			install_git_skill_to_dir(&source_dir.join("SKILL.md"), &target_dir)
+				.unwrap_or_else(|e| panic!("{}", e.body.error));
+		assert_eq!(result, "hello-skill");
+		assert!(target_dir.join("hello-skill/SKILL.md").exists());
+
+		let second =
+			install_git_skill_to_dir(&source_dir.join("SKILL.md"), &target_dir)
+				.unwrap_or_else(|e| panic!("{}", e.body.error));
+		assert_eq!(second, "hello-skill");
+		assert!(target_dir.join("hello-skill/SKILL.md").exists());
+	}
+
+	#[test]
+	fn reconcile_skill_prefers_primary_path_for_opencode() {
+		let _guard = env_lock().lock().unwrap();
+		let temp = tempdir().unwrap();
+		let project_root = temp.path().join("project");
+		std::fs::create_dir_all(&project_root).unwrap();
+
+		let mut source_manager = aghub_core::ConfigManager::new(
+			create_adapter(AgentType::Claude),
+			false,
+			Some(&project_root),
+		);
+		source_manager.load().unwrap();
+		let mut skill = Skill::new("repo-helper");
+		skill.description = Some("Copies files".to_string());
+		source_manager.add_skill(skill).unwrap();
+		let asset_dir = project_root.join(".claude/skills/repo-helper/assets");
+		std::fs::create_dir_all(&asset_dir).unwrap();
+		std::fs::write(asset_dir.join("notes.txt"), "hello").unwrap();
+
+		let result = reconcile_skill(
+			ResourceLocator {
+				agent: AgentType::Claude,
+				scope: InstallScope::Project,
+				project_root: Some(project_root.clone()),
+				name: "repo-helper".to_string(),
+			},
+			vec![AgentType::OpenCode],
+			vec![],
+		)
+		.unwrap();
+
+		assert_eq!(result.success_count(), 1);
+		assert!(project_root
+			.join(".opencode/skills/repo-helper/assets/notes.txt")
+			.exists());
+		assert!(!project_root.join(".agents/skills/repo-helper").exists());
+	}
 }
