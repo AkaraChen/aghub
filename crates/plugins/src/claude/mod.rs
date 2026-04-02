@@ -137,11 +137,17 @@ impl ClaudePluginManager {
             };
 
             let id = PluginId::parse(&id_str)?;
-            let source = PluginSource::parse(&info.source)?;
+
+            // Extract source from plugin ID (part after @)
+            let source_str = id_str.split('@').nth(1).unwrap_or("unknown");
+            let source = PluginSource::parse(source_str)?;
+
+            // Extract display name from plugin ID (part before @)
+            let display_name = id_str.split('@').next().unwrap_or(&id_str).to_string();
 
             plugins.push(ClaudePluginInfo {
                 id: id.clone(),
-                display_name: info.name.clone(),
+                display_name,
                 version: info.version.clone(),
                 description: None, // Could read from .claude-plugin/plugin.json
                 source,

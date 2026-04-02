@@ -16,18 +16,16 @@ pub struct InstalledPluginsManifest {
 /// Information about an installed plugin
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstalledPluginInfo {
-    pub name: String,
-    pub version: String,
-    pub source: String,
+    pub scope: String,
     #[serde(rename = "installPath")]
     pub install_path: String,
+    pub version: String,
     #[serde(rename = "installedAt")]
     pub installed_at: String,
     #[serde(rename = "lastUpdated")]
     pub last_updated: String,
     #[serde(rename = "gitCommitSha")]
     pub git_commit_sha: String,
-    pub scope: String,
 }
 
 /// Plugin source types
