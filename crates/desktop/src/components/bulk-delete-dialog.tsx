@@ -52,17 +52,15 @@ export function BulkDeleteDialog({
 				const groupResourceType = group.resourceType ?? resourceType;
 				for (const item of group.items) {
 					if (!item.agent) continue;
-					const scope =
-						item.source === "project" ? "project" : "global";
-					const typedScope = scope as "global" | "project";
+					const scope: "global" | "project" = item.source ?? "global";
 					const projectRoot =
-						typedScope === "project" ? projectPath : undefined;
+						scope === "project" ? projectPath : undefined;
 					if (groupResourceType === "mcp") {
 						promises.push(
 							api.mcps.delete(
 								item.name,
 								item.agent,
-								typedScope,
+								scope,
 								projectRoot,
 							),
 						);
@@ -71,7 +69,7 @@ export function BulkDeleteDialog({
 							api.skills.delete(
 								item.agent,
 								group.key,
-								typedScope,
+								scope,
 								projectRoot,
 							),
 						);

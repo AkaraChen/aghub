@@ -132,8 +132,7 @@ export function EditMcpPanel({
 		mutationFn: async (body: UpdateMcpRequest) => {
 			return Promise.all(
 				group.items.map((item) => {
-					const scope =
-						item.source === "project" ? "project" : "global";
+					const scope = item.source ?? "global";
 					return api.mcps.update(
 						item.name,
 						item.agent ?? "default",

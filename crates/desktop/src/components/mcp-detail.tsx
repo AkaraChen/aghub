@@ -221,8 +221,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 		mutationFn: (g: McpGroup) => {
 			return Promise.all(
 				g.items.map((item) => {
-					const scope =
-						item.source === "project" ? "project" : "global";
+					const scope = item.source ?? "global";
 					return api.mcps.delete(
 						item.name,
 						item.agent ?? "default",
@@ -273,7 +272,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 	const transport = group.transport;
 	const primarySource = group.items[0].source;
 	const primaryItem = group.items[0];
-	const primaryScope = primarySource === "project" ? "project" : "global";
+	const primaryScope = primarySource ?? "global";
 
 	const getAgentName = useCallback(
 		(item: McpResponse) =>

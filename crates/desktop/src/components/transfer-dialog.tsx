@@ -246,7 +246,7 @@ export function TransferDialog({
 		const destinationTargets: TargetDto[] = selectedAgents.map(
 			(agentId) => ({
 				agent: agentId,
-				scope: selectedScope.type === "global" ? "global" : "project",
+				scope: selectedScope.type,
 				project_root:
 					selectedScope.type === "project"
 						? selectedScope.path

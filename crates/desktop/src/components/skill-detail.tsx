@@ -71,7 +71,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const { selectedEditor } = useCurrentCodeEditor();
 
 	const skill = group.items[0];
-	const primaryScope = skill.source === "project" ? "project" : "global";
+	const primaryScope = skill.source ?? "global";
 	const trimmedSkillName = skill.name.trim();
 	const canSearchSkillsSh = trimmedSkillName.length >= 2;
 

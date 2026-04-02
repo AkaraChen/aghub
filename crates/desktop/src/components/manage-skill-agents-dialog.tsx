@@ -57,7 +57,7 @@ export function ManageSkillAgentsDialog({
 	const scope: Scope = useMemo(() => {
 		if (!hasValidGroup || group.items.length === 0) return "global";
 		const primary = group.items[0];
-		return primary?.source === "project" ? "project" : "global";
+		return primary?.source ?? "global";
 	}, [hasValidGroup, group]);
 
 	const prevIsOpenRef = useRef(false);
