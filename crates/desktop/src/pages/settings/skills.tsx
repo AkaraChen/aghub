@@ -17,8 +17,8 @@ import { ListSearchHeader } from "../../components/list-search-header";
 import { MultiSelectFloatingBar } from "../../components/multi-select-floating-bar";
 import { SkillDetail } from "../../components/skill-detail";
 import { SkillList } from "../../components/skill-list";
+import type { SkillResponse } from "../../generated/dto/SkillResponse";
 import { useApi } from "../../hooks/use-api";
-import type { SkillResponse } from "../../lib/api-types";
 import { cn } from "../../lib/utils";
 import { skillListQueryOptions } from "../../requests/skills";
 

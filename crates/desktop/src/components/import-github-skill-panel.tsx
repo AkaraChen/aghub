@@ -27,19 +27,14 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import type { GitInstallResultEntry } from "../generated/dto/GitInstallResultEntry";
+import type { GitScanSkillEntry } from "../generated/dto/GitScanSkillEntry";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
-import type {
-	GitInstallResultEntry,
-	GitScanSkillEntry,
-} from "../lib/api-types";
 import { cn } from "../lib/utils";
 import { CreateCredentialDialog } from "../pages/settings/components/create-credential-dialog";
 import { credentialsListQueryOptions } from "../requests/credentials";
-import {
-	gitInstallSkillsMutationOptions,
-	gitScanSkillsMutationOptions,
-} from "../requests/skills";
+import { gitInstallSkillsMutationOptions } from "../requests/skills";
 import { AgentSelector } from "./agent-selector";
 
 interface ImportGithubSkillPanelProps {
@@ -128,11 +123,10 @@ export function ImportGithubSkillPanel({
 	const urlValue = useWatch({ control, name: "url" });
 
 	const scanMutation = useMutation({
-		...gitScanSkillsMutationOptions({ api }),
 		mutationFn: (values: InputFormValues) =>
 			api.skills.gitScan({
 				url: values.url.trim(),
-				credential_id: values.credentialId || undefined,
+				credential_id: values.credentialId || null,
 			}),
 		onSuccess: (data) => {
 			setScanError(null);
@@ -183,7 +177,7 @@ export function ImportGithubSkillPanel({
 				skill_paths: Array.from(selectedPaths),
 				agents,
 				scope: projectPath ? "project" : "global",
-				project_root: projectPath,
+				project_root: projectPath ?? null,
 			},
 			{
 				onError: (error) => {

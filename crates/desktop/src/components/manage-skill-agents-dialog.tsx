@@ -4,7 +4,6 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
-import { ConfigSource } from "../lib/api-types";
 import type { Scope } from "../lib/skills-path-group";
 import { cn } from "../lib/utils";
 import { reconcileSkillsMutationOptions } from "../requests/skills";
@@ -58,7 +57,7 @@ export function ManageSkillAgentsDialog({
 	const scope: Scope = useMemo(() => {
 		if (!hasValidGroup || group.items.length === 0) return "global";
 		const primary = group.items[0];
-		return primary?.source === ConfigSource.Project ? "project" : "global";
+		return primary?.source === "project" ? "project" : "global";
 	}, [hasValidGroup, group]);
 
 	const prevIsOpenRef = useRef(false);
@@ -135,13 +134,14 @@ export function ManageSkillAgentsDialog({
 				source: {
 					agent: sourceAgentItem.agent ?? "claude",
 					scope:
-						sourceAgentItem.source === ConfigSource.Project
+						sourceAgentItem.source === "project"
 							? "project"
 							: "global",
-					project_root: projectPath,
+					project_root: projectPath ?? null,
 					name: primary.name,
 				},
-				added: toInstall.length > 0 ? toInstall : undefined,
+				added: toInstall.length > 0 ? toInstall : null,
+				removed: null,
 			});
 
 			const newAgentStates: Record<string, AgentState> = {};

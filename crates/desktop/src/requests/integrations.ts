@@ -1,5 +1,5 @@
 import { mutationOptions, queryOptions } from "@tanstack/react-query";
-import type { CodeEditorType } from "../lib/api-types";
+import type { CodeEditorType } from "../generated/dto/CodeEditorType";
 import type { ApiClient } from "./client";
 import { queryKeys } from "./keys";
 

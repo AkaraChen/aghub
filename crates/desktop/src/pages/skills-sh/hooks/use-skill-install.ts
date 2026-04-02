@@ -1,9 +1,9 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import type { MarketSkill } from "../../../generated/dto/MarketSkill";
 import { useAgentAvailability } from "../../../hooks/use-agent-availability";
 import { useApi } from "../../../hooks/use-api";
 import { useProjects } from "../../../hooks/use-projects";
-import type { MarketSkill } from "../../../lib/api-types";
 import { installSkillMutationOptions } from "../../../requests/skills";
 
 export interface InstallResult {
@@ -84,7 +84,7 @@ export function useSkillInstall() {
 				agents: Array.from(selectedAgents),
 				skills: installAll ? [] : [selectedSkill.name],
 				scope: installToProject ? "project" : "global",
-				project_path: selectedProject?.path,
+				project_path: selectedProject?.path ?? null,
 				install_all: installAll,
 			});
 

@@ -1,9 +1,7 @@
-import type {
-	ConfigSource,
-	SkillResponse,
-	SkillTreeNodeResponse,
-} from "../generated/dto";
-import type { AgentInfo } from "../lib/api";
+import type { AgentInfo } from "../generated/dto/AgentInfo";
+import type { ConfigSource } from "../generated/dto/ConfigSource";
+import type { SkillResponse } from "../generated/dto/SkillResponse";
+import type { SkillTreeNodeResponse } from "../generated/dto/SkillTreeNodeResponse";
 import { sortAgents } from "../lib/utils";
 
 export interface LocationInstallation {

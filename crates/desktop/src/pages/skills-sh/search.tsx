@@ -13,8 +13,8 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "../../components/ui/empty";
+import type { MarketSkill } from "../../generated/dto/MarketSkill";
 import { useApi } from "../../hooks/use-api";
-import type { MarketSkill } from "../../lib/api-types";
 import { marketSearchInfiniteQueryOptions } from "../../requests/market";
 import { InstallModal } from "./components/install-modal";
 import { SkillsHeader } from "./components/skills-header";

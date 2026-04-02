@@ -1,6 +1,6 @@
 import type { EnvVar } from "../components/env-editor";
 import type { HttpHeader } from "../components/http-header-editor";
-import type { TransportDto } from "../generated/dto";
+import type { TransportDto } from "../generated/dto/TransportDto";
 import { keyPairToObject } from "./key-pair-utils";
 
 // Static regex to avoid re-compilation on every call

@@ -3,13 +3,12 @@ import {
 	type QueryClient,
 	queryOptions,
 } from "@tanstack/react-query";
-import type { UpdateMcpRequest } from "../lib/api";
-import type {
-	InstallTarget,
-	McpResponse,
-	OperationBatchResponse,
-	TransportDto,
-} from "../lib/api-types";
+import type { CreateMcpRequest } from "../generated/dto/CreateMcpRequest";
+import type { McpResponse } from "../generated/dto/McpResponse";
+import type { OperationBatchResponse } from "../generated/dto/OperationBatchResponse";
+import type { ReconcileRequest } from "../generated/dto/ReconcileRequest";
+import type { TransferRequest } from "../generated/dto/TransferRequest";
+import type { UpdateMcpRequest } from "../generated/dto/UpdateMcpRequest";
 import type { ApiClient } from "./client";
 import { queryKeys } from "./keys";
 
@@ -45,11 +44,7 @@ export async function invalidateMcpQueries(queryClient: QueryClient) {
 interface CreateMcpVariables {
 	agent: string;
 	scope: "global" | "project";
-	body: {
-		name: string;
-		transport: TransportDto;
-		timeout?: number;
-	};
+	body: CreateMcpRequest;
 	projectRoot?: string;
 }
 
@@ -155,11 +150,7 @@ export function reconcileMcpsMutationOptions({
 	onSuccess,
 }: ReconcileMcpsMutationParams) {
 	return mutationOptions({
-		mutationFn: (body: {
-			source: InstallTarget & { name: string };
-			added?: string[];
-			removed?: string[];
-		}) => api.mcps.reconcile(body),
+		mutationFn: (body: ReconcileRequest) => api.mcps.reconcile(body),
 		onSuccess: async (data) => {
 			await invalidateMcpQueries(queryClient);
 			await onSuccess?.(data);
@@ -179,10 +170,7 @@ export function transferMcpsMutationOptions({
 	onSuccess,
 }: TransferMcpsMutationParams) {
 	return mutationOptions({
-		mutationFn: (body: {
-			source: InstallTarget & { name: string };
-			destinations: InstallTarget[];
-		}) => api.mcps.transfer(body),
+		mutationFn: (body: TransferRequest) => api.mcps.transfer(body),
 		onSuccess: async (data) => {
 			await invalidateMcpQueries(queryClient);
 			await onSuccess?.(data);

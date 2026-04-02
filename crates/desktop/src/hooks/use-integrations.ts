@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
-import type { CodeEditorType } from "../lib/api-types";
+import type { CodeEditorType } from "../generated/dto/CodeEditorType";
 import {
 	getIntegrationPreferences,
 	saveIntegrationPreferences,

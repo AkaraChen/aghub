@@ -15,9 +15,9 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import type { ImportSkillRequest } from "../generated/dto/ImportSkillRequest";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
-import type { ImportSkillRequest } from "../lib/api-types";
 import { importSkillMutationOptions } from "../requests/skills";
 import { AgentSelector } from "./agent-selector";
 

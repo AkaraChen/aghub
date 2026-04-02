@@ -3,19 +3,18 @@ import {
 	type QueryClient,
 	queryOptions,
 } from "@tanstack/react-query";
-import type {
-	CreateSkillRequest,
-	DeleteSkillByPathRequest,
-	GitInstallRequest,
-	GitInstallResponse,
-	GitScanRequest,
-	ImportSkillRequest,
-	InstallSkillRequest,
-	InstallSkillResponse,
-	OperationBatchResponse,
-	ReconcileRequest,
-	SkillResponse,
-} from "../lib/api-types";
+import type { CreateSkillRequest } from "../generated/dto/CreateSkillRequest";
+import type { DeleteSkillByPathRequest } from "../generated/dto/DeleteSkillByPathRequest";
+import type { GitInstallRequest } from "../generated/dto/GitInstallRequest";
+import type { GitInstallResponse } from "../generated/dto/GitInstallResponse";
+import type { GitScanRequest } from "../generated/dto/GitScanRequest";
+import type { ImportSkillRequest } from "../generated/dto/ImportSkillRequest";
+import type { InstallSkillRequest } from "../generated/dto/InstallSkillRequest";
+import type { InstallSkillResponse } from "../generated/dto/InstallSkillResponse";
+import type { OperationBatchResponse } from "../generated/dto/OperationBatchResponse";
+import type { ReconcileRequest } from "../generated/dto/ReconcileRequest";
+import type { SkillResponse } from "../generated/dto/SkillResponse";
+import type { TransferRequest } from "../generated/dto/TransferRequest";
 import type { ApiClient } from "./client";
 import { queryKeys } from "./keys";
 
@@ -263,19 +262,7 @@ export function transferSkillsMutationOptions({
 	onSuccess,
 }: TransferSkillsMutationParams) {
 	return mutationOptions({
-		mutationFn: (body: {
-			source: {
-				agent: string;
-				scope: "global" | "project";
-				project_root?: string;
-				name: string;
-			};
-			destinations: {
-				agent: string;
-				scope: "global" | "project";
-				project_root?: string;
-			}[];
-		}) => api.skills.transfer(body),
+		mutationFn: (body: TransferRequest) => api.skills.transfer(body),
 		onSuccess: async (data) => {
 			await invalidateSkillQueries(queryClient);
 			await onSuccess?.(data);

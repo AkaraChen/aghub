@@ -7,7 +7,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as pathe from "pathe";
 import { useTranslation } from "react-i18next";
 import { useApi } from "../hooks/use-api";
-import { ConfigSource } from "../lib/api-types";
 import { invalidateSkillQueries } from "../requests/skills";
 import {
 	formatAgentName,
@@ -48,13 +47,13 @@ export function DeleteSkillLocationDialog({
 						(installation) => installation.agent,
 					),
 					scope:
-						item.installations[0].source === ConfigSource.Project
+						item.installations[0].source === "project"
 							? ("project" as const)
 							: ("global" as const),
 					project_root:
-						item.installations[0].source === ConfigSource.Project
-							? projectPath
-							: undefined,
+						item.installations[0].source === "project"
+							? (projectPath ?? null)
+							: null,
 				}
 			: null;
 
@@ -122,7 +121,7 @@ export function DeleteSkillLocationDialog({
 									{isMultiAgent
 										? t("sharedLocation")
 										: item.installations[0].source ===
-												ConfigSource.Project
+												"project"
 											? t("project")
 											: t("global")}
 								</p>
@@ -179,10 +178,10 @@ export function DeleteSkillDialog({
 			const itemsWithAgent = group.items.filter((item) => item.agent);
 
 			const globalItems = itemsWithAgent.filter(
-				(item) => item.source === ConfigSource.Global,
+				(item) => item.source === "global",
 			);
 			const projectItems = itemsWithAgent.filter(
-				(item) => item.source === ConfigSource.Project,
+				(item) => item.source === "project",
 			);
 
 			const results = [];
@@ -192,8 +191,10 @@ export function DeleteSkillDialog({
 					source: {
 						agent: globalItems[0].agent!,
 						scope: "global",
+						project_root: null,
 						name: skill.name,
 					},
+					added: null,
 					removed: globalItems.map((item) => item.agent!),
 				});
 				results.push(result);
@@ -204,9 +205,10 @@ export function DeleteSkillDialog({
 					source: {
 						agent: projectItems[0].agent!,
 						scope: "project",
-						project_root: projectPath,
+						project_root: projectPath ?? null,
 						name: skill.name,
 					},
+					added: null,
 					removed: projectItems.map((item) => item.agent!),
 				});
 				results.push(result);
@@ -233,11 +235,9 @@ export function DeleteSkillDialog({
 		},
 	});
 
-	const globalItems = group.items.filter(
-		(item) => item.source === ConfigSource.Global,
-	);
+	const globalItems = group.items.filter((item) => item.source === "global");
 	const projectItems = group.items.filter(
-		(item) => item.source === ConfigSource.Project,
+		(item) => item.source === "project",
 	);
 
 	return (

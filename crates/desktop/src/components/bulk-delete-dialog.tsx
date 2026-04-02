@@ -2,8 +2,8 @@ import { ExclamationTriangleIcon } from "@heroicons/react/24/solid";
 import { Button, Modal, Spinner } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import type { ConfigSource } from "../generated/dto/ConfigSource";
 import { useApi } from "../hooks/use-api";
-import { ConfigSource } from "../lib/api-types";
 import { invalidateMcpQueries } from "../requests/mcps";
 import { invalidateSkillQueries } from "../requests/skills";
 
@@ -53,9 +53,7 @@ export function BulkDeleteDialog({
 				for (const item of group.items) {
 					if (!item.agent) continue;
 					const scope =
-						item.source === ConfigSource.Project
-							? "project"
-							: "global";
+						item.source === "project" ? "project" : "global";
 					const typedScope = scope as "global" | "project";
 					const projectRoot =
 						typedScope === "project" ? projectPath : undefined;

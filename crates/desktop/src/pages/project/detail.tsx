@@ -14,10 +14,10 @@ import { ImportSkillPanel } from "../../components/import-skill-panel";
 import { McpDetail } from "../../components/mcp-detail";
 import { SkillDetail } from "../../components/skill-detail";
 import { UnifiedResourceList } from "../../components/unified-resource-list";
+import type { McpResponse } from "../../generated/dto/McpResponse";
+import type { SkillResponse } from "../../generated/dto/SkillResponse";
 import { useApi } from "../../hooks/use-api";
 import { useProjects } from "../../hooks/use-projects";
-import type { McpResponse, SkillResponse } from "../../lib/api-types";
-import { ConfigSource } from "../../lib/api-types";
 import { getMcpMergeKey } from "../../lib/utils";
 import { mcpListQueryOptions } from "../../requests/mcps";
 import { skillListQueryOptions } from "../../requests/skills";
@@ -85,11 +85,11 @@ export default function ProjectDetailPage() {
 
 	// Filter to project-scoped only
 	const projectMcps = useMemo(
-		() => mcps.filter((m) => m.source === ConfigSource.Project),
+		() => mcps.filter((m) => m.source === "project"),
 		[mcps],
 	);
 	const projectSkills = useMemo(
-		() => skills.filter((s) => s.source === ConfigSource.Project),
+		() => skills.filter((s) => s.source === "project"),
 		[skills],
 	);
 

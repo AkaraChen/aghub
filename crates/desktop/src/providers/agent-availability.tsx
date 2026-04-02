@@ -7,8 +7,9 @@ import type {
 	AvailableAgent,
 } from "../contexts/agent-availability";
 import { AgentAvailabilityContext } from "../contexts/agent-availability";
+import type { AgentAvailabilityDto } from "../generated/dto/AgentAvailabilityDto";
+import type { AgentInfo } from "../generated/dto/AgentInfo";
 import { useApi } from "../hooks/use-api";
-import type { AgentAvailability, AgentInfo } from "../lib/api";
 import { getDisabledAgents } from "../lib/store";
 import {
 	agentAvailabilityQueryOptions,
@@ -57,16 +58,16 @@ export function AgentAvailabilityProvider({
 	// Combine data
 	const availableAgents: AvailableAgent[] = allAgents.map(
 		(agent: AgentInfo) => {
-			const availability: AgentAvailability =
+			const availability: AgentAvailabilityDto =
 				availabilityData.find(
-					(a: AgentAvailability) => a.id === agent.id,
+					(a: AgentAvailabilityDto) => a.id === agent.id,
 				) ??
 				({
 					id: agent.id,
 					has_global_directory: false,
 					has_cli: false,
 					is_available: false,
-				} as AgentAvailability);
+				} as AgentAvailabilityDto);
 
 			const isDisabled = disabledAgents.has(agent.id);
 			const isUsable = availability.is_available && !isDisabled;

@@ -15,10 +15,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import type { McpResponse } from "../generated/dto/McpResponse";
+import type { UpdateMcpRequest } from "../generated/dto/UpdateMcpRequest";
 import { useApi } from "../hooks/use-api";
-import type { UpdateMcpRequest } from "../lib/api";
-import type { McpResponse } from "../lib/api-types";
-import { ConfigSource } from "../lib/api-types";
 import {
 	getKeyPairErrorMessage,
 	validateHttpUrl,
@@ -135,9 +134,7 @@ export function EditMcpPanel({
 			return Promise.all(
 				group.items.map((item) => {
 					const scope =
-						item.source === ConfigSource.Project
-							? "project"
-							: "global";
+						item.source === "project" ? "project" : "global";
 					return api.mcps.update(
 						item.name,
 						item.agent ?? "default",
@@ -172,10 +169,12 @@ export function EditMcpPanel({
 			name:
 				values.name.trim() !== primaryServer.name
 					? values.name.trim()
-					: undefined,
+					: null,
+			transport: null,
+			enabled: null,
 			timeout: values.timeoutValue
 				? Number.parseInt(values.timeoutValue, 10)
-				: undefined,
+				: null,
 		};
 
 		const transport = buildTransportFromForm(values.transportType, {

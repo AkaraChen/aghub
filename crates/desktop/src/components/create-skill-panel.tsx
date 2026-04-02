@@ -15,9 +15,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import type { CreateSkillRequest } from "../generated/dto/CreateSkillRequest";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
-import type { CreateSkillRequest } from "../lib/api-types";
 import { createSkillMutationOptions } from "../requests/skills";
 import { AgentSelector } from "./agent-selector";
 
@@ -91,10 +91,11 @@ export function CreateSkillPanel({
 
 		const body: CreateSkillRequest = {
 			name: values.name.trim(),
-			description: values.description.trim(),
-			author: values.author.trim() || undefined,
-			content: values.content.trim(),
-			tools: tools.length > 0 ? tools : undefined,
+			description: values.description.trim() || null,
+			author: values.author.trim() || null,
+			version: null,
+			content: values.content.trim() || null,
+			tools: tools.length > 0 ? tools : null,
 		};
 
 		try {

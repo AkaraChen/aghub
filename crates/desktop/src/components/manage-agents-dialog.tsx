@@ -3,10 +3,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { AvailableAgent } from "../contexts/agent-availability";
+import type { McpResponse } from "../generated/dto/McpResponse";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
-import type { McpResponse } from "../lib/api-types";
-import { ConfigSource } from "../lib/api-types";
 import { cn } from "../lib/utils";
 import { reconcileMcpsMutationOptions } from "../requests/mcps";
 import { type AgentDiffLabel, AgentList, type AgentState } from "./agent-list";
@@ -178,14 +177,14 @@ export function ManageAgentsDialog({
 				source: {
 					agent: sourceAgentItem.agent ?? "claude",
 					scope:
-						sourceAgentItem.source === ConfigSource.Project
+						sourceAgentItem.source === "project"
 							? "project"
 							: "global",
-					project_root: projectPath,
+					project_root: projectPath ?? null,
 					name: primary.name,
 				},
-				added: toInstall.length > 0 ? toInstall : undefined,
-				removed: toUninstall.length > 0 ? toUninstall : undefined,
+				added: toInstall.length > 0 ? toInstall : null,
+				removed: toUninstall.length > 0 ? toUninstall : null,
 			});
 
 			const newAgentStates: Record<string, AgentState> = {};

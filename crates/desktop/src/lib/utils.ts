@@ -2,7 +2,8 @@ import type { ClassValue } from "clsx";
 import { clsx } from "clsx";
 import stableHash from "stable-hash";
 import { twMerge } from "tailwind-merge";
-import type { TransportDto } from "../generated/dto";
+import type { AgentInfo } from "../generated/dto/AgentInfo";
+import type { TransportDto } from "../generated/dto/TransportDto";
 
 export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs));
@@ -46,8 +47,6 @@ export function getMcpMergeKey(transport: TransportDto): string {
 
 	return stableHash(key);
 }
-
-import type { AgentInfo } from "./api";
 
 export function sortAgents(agents: string[], allAgents: AgentInfo[]): string[] {
 	const orderMap = new Map(allAgents.map((a, i) => [a.id, i]));

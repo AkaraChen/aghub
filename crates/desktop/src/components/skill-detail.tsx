@@ -22,7 +22,6 @@ import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useFavorites } from "../hooks/use-favorites";
 import { useCurrentCodeEditor } from "../hooks/use-integrations";
-import { ConfigSource } from "../lib/api-types";
 import { cn } from "../lib/utils";
 import { openWithEditorMutationOptions } from "../requests/integrations";
 import {
@@ -72,8 +71,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const { selectedEditor } = useCurrentCodeEditor();
 
 	const skill = group.items[0];
-	const primaryScope =
-		skill.source === ConfigSource.Project ? "project" : "global";
+	const primaryScope = skill.source === "project" ? "project" : "global";
 	const trimmedSkillName = skill.name.trim();
 	const canSearchSkillsSh = trimmedSkillName.length >= 2;
 
@@ -119,7 +117,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 
 	const currentSkillSource = useMemo(() => {
 		const skillItem = group.items[0];
-		if (skillItem.source === ConfigSource.Global) {
+		if (skillItem.source === "global") {
 			const entry = globalLock?.skills.find((s) => s.name === skill.name);
 			if (entry) {
 				return {
@@ -129,7 +127,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 					sourceUrl: entry.sourceUrl,
 				};
 			}
-		} else if (skillItem.source === ConfigSource.Project) {
+		} else if (skillItem.source === "project") {
 			const entry = projectLock?.skills.find(
 				(s) => s.name === skill.name,
 			);

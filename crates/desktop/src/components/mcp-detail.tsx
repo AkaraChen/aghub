@@ -22,12 +22,12 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useReducer } from "react";
 import { useTranslation } from "react-i18next";
+import type { McpResponse } from "../generated/dto/McpResponse";
+import type { TransportDto } from "../generated/dto/TransportDto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useFavorites } from "../hooks/use-favorites";
 import { AgentIcon } from "../lib/agent-icons";
-import type { McpResponse, TransportDto } from "../lib/api-types";
-import { ConfigSource } from "../lib/api-types";
 import { cn, sortAgentObjects } from "../lib/utils";
 import { invalidateMcpQueries } from "../requests/mcps";
 import { ManageAgentsDialog } from "./manage-agents-dialog";
@@ -223,9 +223,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 			return Promise.all(
 				g.items.map((item) => {
 					const scope =
-						item.source === ConfigSource.Project
-							? "project"
-							: "global";
+						item.source === "project" ? "project" : "global";
 					return api.mcps.delete(
 						item.name,
 						item.agent ?? "default",
@@ -276,8 +274,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 	const transport = group.transport;
 	const primarySource = group.items[0].source;
 	const primaryItem = group.items[0];
-	const primaryScope =
-		primarySource === ConfigSource.Project ? "project" : "global";
+	const primaryScope = primarySource === "project" ? "project" : "global";
 
 	const getAgentName = useCallback(
 		(item: McpResponse) =>

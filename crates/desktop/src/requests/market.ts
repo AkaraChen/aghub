@@ -1,5 +1,5 @@
 import { infiniteQueryOptions } from "@tanstack/react-query";
-import type { MarketSkill } from "../lib/api-types";
+import type { MarketSkill } from "../generated/dto/MarketSkill";
 import type { ApiClient } from "./client";
 import { queryKeys } from "./keys";
 

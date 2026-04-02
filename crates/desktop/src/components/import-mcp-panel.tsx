@@ -15,10 +15,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useReducer, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import type { TransportDto } from "../generated/dto/TransportDto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { supportsMcp } from "../lib/agent-capabilities";
-import type { TransportDto } from "../lib/api-types";
 import { createMcpMutationOptions } from "../requests/mcps";
 import { AgentSelector } from "./agent-selector";
 
@@ -252,7 +252,7 @@ export function ImportMcpPanel({ onDone, projectPath }: ImportMcpPanelProps) {
 		const body = {
 			name,
 			transport,
-			timeout: config.timeout,
+			timeout: config.timeout ?? null,
 		};
 
 		try {

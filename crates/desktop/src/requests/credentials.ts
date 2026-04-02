@@ -3,7 +3,8 @@ import {
 	type QueryClient,
 	queryOptions,
 } from "@tanstack/react-query";
-import type { CredentialResponse } from "../lib/api";
+import type { CreateCredentialRequest } from "../generated/dto/CreateCredentialRequest";
+import type { CredentialResponse } from "../generated/dto/CredentialResponse";
 import type { ApiClient } from "./client";
 import { queryKeys } from "./keys";
 
@@ -36,7 +37,7 @@ export function createCredentialMutationOptions({
 	onSuccess,
 }: CreateCredentialMutationParams) {
 	return mutationOptions({
-		mutationFn: (body: { name: string; token: string }) =>
+		mutationFn: (body: CreateCredentialRequest) =>
 			api.credentials.create(body),
 		onSuccess: async (data) => {
 			await invalidateCredentialQueries(queryClient);

@@ -3,10 +3,11 @@ import { Button, Label, ListBox, Modal, Select, toast } from "@heroui/react";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { TargetDto } from "../generated/dto/TargetDto";
+import type { TransportDto } from "../generated/dto/TransportDto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useProjects } from "../hooks/use-projects";
-import type { InstallTarget, TransportDto } from "../lib/api-types";
 import { cn } from "../lib/utils";
 import {
 	invalidateMcpQueries,
@@ -243,14 +244,14 @@ export function TransferDialog({
 		}
 		setAgentStates(pendingStates);
 
-		const destinationTargets: InstallTarget[] = selectedAgents.map(
+		const destinationTargets: TargetDto[] = selectedAgents.map(
 			(agentId) => ({
 				agent: agentId,
 				scope: selectedScope.type === "global" ? "global" : "project",
 				project_root:
 					selectedScope.type === "project"
 						? selectedScope.path
-						: undefined,
+						: null,
 			}),
 		);
 
@@ -261,7 +262,7 @@ export function TransferDialog({
 							source: {
 								agent: sourceAgent,
 								scope: sourceScope,
-								project_root: sourceProjectRoot,
+								project_root: sourceProjectRoot ?? null,
 								name,
 							},
 							destinations: destinationTargets,
@@ -270,7 +271,7 @@ export function TransferDialog({
 							source: {
 								agent: sourceAgent,
 								scope: sourceScope,
-								project_root: sourceProjectRoot,
+								project_root: sourceProjectRoot ?? null,
 								name,
 							},
 							destinations: destinationTargets,
