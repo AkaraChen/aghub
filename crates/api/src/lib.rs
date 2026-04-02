@@ -43,14 +43,14 @@ impl Fairing for ApiLogFairing {
 		response: &mut Response<'r>,
 	) {
 		let status = response.status();
-		if status.code >= 500 {
+		if status.class().is_server_error() {
 			error!(
 				"api request failed: {} {} -> {}",
 				request.method(),
 				request.uri(),
 				status
 			);
-		} else if status.code >= 400 {
+		} else if status.class().is_client_error() {
 			warn!(
 				"api request returned client error: {} {} -> {}",
 				request.method(),
@@ -159,9 +159,10 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 		)
 		.launch()
 		.await
-		.map(|_| {
+		.inspect(|_rocket| {
 			info!("aghub API server stopped cleanly");
 		})
+		.map(|_| ())
 		.map_err(|error| {
 			error!("aghub API server exited with error: {error}");
 			error

@@ -7,8 +7,8 @@ import "./index.css";
 async function bootstrap() {
 	try {
 		await attachConsole();
-		await info("Attached Tauri log stream to frontend console");
-	} catch (error) {
+		await info("Tauri log stream attached to frontend console");
+	} catch (error: unknown) {
 		console.error("Failed to attach Tauri log stream:", error);
 	}
 
@@ -19,4 +19,6 @@ async function bootstrap() {
 	);
 }
 
-void bootstrap();
+bootstrap().catch((error: unknown) => {
+	console.error("Failed to bootstrap desktop app:", error);
+});

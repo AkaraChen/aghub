@@ -2,7 +2,7 @@
 import type { McpCapabilitiesDto } from "./McpCapabilitiesDto";
 import type { SkillCapabilitiesDto } from "./SkillCapabilitiesDto";
 
-export type CapabilitiesDto = {
+export interface CapabilitiesDto {
 	skills: SkillCapabilitiesDto;
 	mcp: McpCapabilitiesDto;
-};
+}

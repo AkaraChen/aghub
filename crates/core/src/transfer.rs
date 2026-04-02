@@ -38,6 +38,15 @@ pub enum OperationAction {
 	Delete,
 }
 
+impl std::fmt::Display for OperationAction {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Copy => write!(f, "copy"),
+			Self::Delete => write!(f, "delete"),
+		}
+	}
+}
+
 #[derive(Debug, Clone)]
 pub struct OperationResult {
 	pub target: InstallTarget,
@@ -298,14 +307,18 @@ fn log_operation_outcome(
 	outcome: &Result<()>,
 ) {
 	let target_agent = registry::get(target.agent).id;
+	let target_scope = match target.scope {
+		InstallScope::Global => "global",
+		InstallScope::Project => "project",
+	};
 	match outcome {
 		Ok(()) => info!(
-			"{:?} {} '{}' for agent '{}' in {:?} scope succeeded",
-			action, resource, name, target_agent, target.scope
+			"{} {} '{}' for agent '{}' in {} scope succeeded",
+			action, resource, name, target_agent, target_scope
 		),
 		Err(error) => warn!(
-			"{:?} {} '{}' for agent '{}' in {:?} scope failed: {}",
-			action, resource, name, target_agent, target.scope, error
+			"{} {} '{}' for agent '{}' in {} scope failed: {}",
+			action, resource, name, target_agent, target_scope, error
 		),
 	}
 }
@@ -315,6 +328,7 @@ pub fn transfer_mcp(
 	destinations: Vec<InstallTarget>,
 ) -> Result<OperationBatchResult> {
 	let mcp = load_source_mcp(&source)?;
+	let destinations = unique_targets(destinations);
 	info!(
 		"transferring MCP '{}' to {} destination(s)",
 		mcp.name,
@@ -322,7 +336,7 @@ pub fn transfer_mcp(
 	);
 	let mut results = Vec::new();
 
-	for target in unique_targets(destinations) {
+	for target in destinations {
 		let outcome = (|| -> Result<()> {
 			validate_target(&target)?;
 			mcp_supported_for_target(&target, &mcp)?;
@@ -433,6 +447,7 @@ pub fn transfer_skill(
 	let skill = load_source_skill(&source)?;
 	let source_root = resolve_skill_root(&skill)?;
 	let safe_name = sanitize_name(&skill.name);
+	let destinations = unique_targets(destinations);
 	info!(
 		"transferring skill '{}' from '{}' to {} destination(s)",
 		skill.name,
@@ -441,7 +456,7 @@ pub fn transfer_skill(
 	);
 	let mut results = Vec::new();
 
-	for target in unique_targets(destinations) {
+	for target in destinations {
 		let outcome = (|| -> Result<()> {
 			validate_target(&target)?;
 			let target_dir = skill_target_dir(&target)?;

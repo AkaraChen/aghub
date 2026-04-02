@@ -47,7 +47,7 @@ pub fn run() {
 		.plugin(tauri_plugin_dialog::init())
 		.plugin(tauri_plugin_store::Builder::default().build())
 		.setup(|app| {
-			info!("setting up aghub desktop application");
+			info!("aghub desktop application setup started");
 			#[cfg(desktop)]
 			{
 				app.handle()

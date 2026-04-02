@@ -3,7 +3,7 @@
 /**
  * Response for a single global skill lock entry
  */
-export type SkillLockEntryResponse = {
+export interface SkillLockEntryResponse {
 	name: string;
 	source: string;
 	sourceType: string;
@@ -13,4 +13,4 @@ export type SkillLockEntryResponse = {
 	installedAt: string;
 	updatedAt: string;
 	pluginName: string | null;
-};
+}
