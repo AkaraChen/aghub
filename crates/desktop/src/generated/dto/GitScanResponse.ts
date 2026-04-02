@@ -4,4 +4,6 @@ import type { GitScanSkillEntry } from "./GitScanSkillEntry";
 export type GitScanResponse = {
 	session_id: string;
 	skills: Array<GitScanSkillEntry>;
+	branches: Array<string>;
+	current_branch: string;
 };

@@ -131,6 +131,8 @@ export function ImportGithubSkillPanel({
 			api.skills.gitScan({
 				url: values.url.trim(),
 				credential_id: values.credentialId || null,
+				branch: null,
+				session_id: null,
 			}),
 		onSuccess: (data) => {
 			setScanError(null);
@@ -157,7 +159,7 @@ export function ImportGithubSkillPanel({
 		mutationFn: (branch: string) =>
 			api.skills.gitScan({
 				url: urlValue.trim(),
-				credential_id: undefined,
+				credential_id: null,
 				branch,
 				session_id: sessionId,
 			}),
