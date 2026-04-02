@@ -1,28 +1,15 @@
-import {
-	ArrowPathIcon,
-	CheckCircleIcon,
-	XCircleIcon,
-} from "@heroicons/react/24/solid";
-import {
-	Button,
-	Checkbox,
-	CheckboxGroup,
-	Description,
-	Label,
-	Modal,
-	toast,
-} from "@heroui/react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { Button, Modal, toast } from "@heroui/react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { AvailableAgent } from "../contexts/agent-availability";
+import type { McpResponse } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
-import { useServer } from "../hooks/use-server";
-import { AgentIcon } from "../lib/agent-icons";
-import { createApi } from "../lib/api";
-import type { McpResponse } from "../lib/api-types";
-import { ConfigSource } from "../lib/api-types";
+import { useApi } from "../hooks/use-api";
+import { supportsMcp, supportsMcpScope } from "../lib/agent-capabilities";
 import { cn } from "../lib/utils";
+import { reconcileMcpsMutationOptions } from "../requests/mcps";
+import { type AgentDiffLabel, AgentList, type AgentState } from "./agent-list";
 
 type AgentCapabilityRequirement = keyof AvailableAgent["capabilities"] | "mcp";
 
@@ -40,13 +27,6 @@ interface ManageAgentsDialogProps {
 	requiredCapabilities?: AgentCapabilityRequirement[];
 }
 
-type AgentStatus = "idle" | "pending" | "success" | "error";
-
-interface AgentState {
-	status: AgentStatus;
-	error?: string;
-}
-
 export function ManageAgentsDialog({
 	group,
 	isOpen,
@@ -55,91 +35,99 @@ export function ManageAgentsDialog({
 	requiredCapabilities = EMPTY_CAPABILITIES,
 }: ManageAgentsDialogProps) {
 	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
+	const api = useApi();
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
+	const reconcileMutation = useMutation(
+		reconcileMcpsMutationOptions({
+			api,
+			queryClient,
+		}),
+	);
 
-	// Safely handle undefined/null data
 	const supportsRequirements = useCallback(
 		(agent: AvailableAgent) =>
 			requiredCapabilities.every((capability) => {
 				if (capability === "mcp") {
-					return (
-						agent.capabilities.mcp_stdio ||
-						agent.capabilities.mcp_remote
-					);
+					return supportsMcp(agent);
 				}
 				return Boolean(agent.capabilities[capability]);
 			}),
 		[requiredCapabilities],
 	);
 
+	const hasValidGroup = group?.items && Array.isArray(group.items);
+
+	const installedAgentIds = useMemo(() => {
+		if (!hasValidGroup) return new Set<string>();
+		return new Set(group.items.map((item) => item.agent ?? "default"));
+	}, [hasValidGroup, group]);
+
 	const usableAgents = useMemo(
 		() =>
 			(availableAgents ?? []).filter(
-				(a) => a?.isUsable && supportsRequirements(a),
+				(a) =>
+					a?.isUsable &&
+					supportsRequirements(a) &&
+					supportsMcpScope(a, projectPath ? "project" : "global"),
 			),
-		[availableAgents, supportsRequirements],
+		[availableAgents, projectPath, supportsRequirements],
 	);
 
-	// Validate group data
-	const hasValidGroup = group?.items && Array.isArray(group.items);
-
-	const initialAgentIdsRef = useRef<Set<string>>(new Set());
-	const prevIsOpenRef = useRef(false);
+	const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
 	const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
 	const [agentStates, setAgentStates] = useState<Record<string, AgentState>>(
 		{},
 	);
 	const [isApplying, setIsApplying] = useState(false);
 
-	// Sync initial state when dialog opens/closes — no setState during render
-	if (isOpen && !prevIsOpenRef.current) {
-		const initial = group.items.map((item) => item.agent ?? "default");
-		initialAgentIdsRef.current = new Set(initial);
-		// Use the ref to set initial values; React will batch these with the
-		// open transition since this runs during the commit triggered by isOpen changing
-		queueMicrotask(() => {
-			setSelectedAgents(initial);
+	if (isOpen !== prevIsOpen) {
+		setPrevIsOpen(isOpen);
+		if (isOpen) {
+			setSelectedAgents(Array.from(installedAgentIds));
 			setAgentStates({});
-		});
+			setIsApplying(false);
+		}
 	}
-	prevIsOpenRef.current = isOpen;
-
-	const currentAgentIds = initialAgentIdsRef.current;
 
 	const selectedSet = useMemo(
 		() => new Set(selectedAgents),
 		[selectedAgents],
 	);
-	const toInstall = useMemo(
-		() => selectedAgents.filter((id) => !currentAgentIds.has(id)),
-		[selectedAgents, currentAgentIds],
-	);
-	const toUninstall = useMemo(
-		() => [...currentAgentIds].filter((id) => !selectedSet.has(id)),
-		[currentAgentIds, selectedSet],
-	);
-	const hasChanges = toInstall.length > 0 || toUninstall.length > 0;
 
 	const getAgentDiffLabel = useCallback(
-		(agentId: string) => {
-			const isCurrentAgent = currentAgentIds.has(agentId);
+		(agentId: string): AgentDiffLabel | null => {
+			const isCurrentAgent = installedAgentIds.has(agentId);
 			const isSelected = selectedSet.has(agentId);
 
 			if (isSelected && !isCurrentAgent) return "adding";
 			if (!isSelected && isCurrentAgent) return "removing";
 			if (isSelected && isCurrentAgent) return "installed";
-			if (!isSelected && !isCurrentAgent) return "unconfigured";
-			return null;
+			return "unconfigured";
 		},
-		[currentAgentIds, selectedSet],
+		[installedAgentIds, selectedSet],
 	);
 
-	const handleSelectionChange = useCallback((values: (string | number)[]) => {
-		setSelectedAgents(values as string[]);
-	}, []);
+	const diffLabels = useMemo(() => {
+		const labels: Record<string, AgentDiffLabel> = {};
+		for (const agent of usableAgents) {
+			const label = getAgentDiffLabel(agent.id);
+			if (label) {
+				labels[agent.id] = label;
+			}
+		}
+		return labels;
+	}, [usableAgents, getAgentDiffLabel]);
+
+	const hasChanges = useMemo(() => {
+		const toInstall = selectedAgents.filter(
+			(id) => !installedAgentIds.has(id),
+		);
+		const toUninstall = Array.from(installedAgentIds).filter(
+			(id) => !selectedSet.has(id),
+		);
+		return toInstall.length > 0 || toUninstall.length > 0;
+	}, [selectedAgents, installedAgentIds, selectedSet]);
 
 	const onCloseAndReset = () => {
 		setAgentStates({});
@@ -147,8 +135,11 @@ export function ManageAgentsDialog({
 		onClose();
 	};
 
+	const handleSelectionChange = useCallback((keys: string[]) => {
+		setSelectedAgents(keys);
+	}, []);
+
 	const handleApply = async () => {
-		// Guard against missing data
 		if (!hasValidGroup || group.items.length === 0) {
 			toast.danger(t("invalidConfiguration"));
 			return;
@@ -157,110 +148,80 @@ export function ManageAgentsDialog({
 		setIsApplying(true);
 		const primary = group.items[0];
 
-		// Validate primary item
 		if (!primary?.name || !primary.transport) {
 			toast.danger(t("invalidMcpConfiguration"));
 			setIsApplying(false);
 			return;
 		}
 
-		// Mark all changing agents as pending
+		const primaryAgent = primary.agent ?? "claude";
+		const sourceAgentItem =
+			group.items.find(
+				(item) => (item.agent ?? "default") === primaryAgent,
+			) ?? primary;
+
+		const toInstall = selectedAgents.filter(
+			(id) => !installedAgentIds.has(id),
+		);
+		const toUninstall = Array.from(installedAgentIds).filter(
+			(id) => !selectedSet.has(id),
+		);
+
 		const pendingStates: Record<string, AgentState> = {};
 		for (const id of [...toInstall, ...toUninstall]) {
 			pendingStates[id] = { status: "pending" };
 		}
 		setAgentStates(pendingStates);
 
-		let successCount = 0;
-		let errorCount = 0;
+		try {
+			const result = await reconcileMutation.mutateAsync({
+				source: {
+					agent: sourceAgentItem.agent ?? "claude",
+					scope:
+						sourceAgentItem.source === "project"
+							? "project"
+							: "global",
+					project_root: projectPath ?? null,
+					name: primary.name,
+				},
+				added: toInstall.length > 0 ? toInstall : null,
+				removed: toUninstall.length > 0 ? toUninstall : null,
+			});
 
-		const operations = [
-			...toInstall.map((id) => ({ id, action: "install" as const })),
-			...toUninstall.map((id) => ({
-				id,
-				action: "uninstall" as const,
-			})),
-		];
-
-		// Execute all operations and collect results
-		const results = await Promise.all(
-			operations.map(async ({ id, action }) => {
-				try {
-					if (action === "install") {
-						const scope = projectPath ? "project" : "global";
-						await api.mcps.create(
-							id,
-							scope,
-							{
-								name: primary.name,
-								transport: primary.transport,
-								timeout: primary.timeout,
-							},
-							projectPath,
-						);
-					} else {
-						const scope =
-							group.items.find(
-								(i) => (i.agent ?? "default") === id,
-							)?.source === ConfigSource.Project
-								? "project"
-								: "global";
-						await api.mcps.delete(
-							primary.name,
-							id,
-							scope,
-							projectPath,
-						);
-					}
-					return { id, status: "success" as const, error: undefined };
-				} catch (err) {
-					return {
-						id,
-						status: "error" as const,
-						error: err instanceof Error ? err.message : String(err),
-					};
-				}
-			}),
-		);
-
-		// Count successes and errors
-		results.forEach((result) => {
-			if (result.status === "success") {
-				successCount++;
-			} else {
-				errorCount++;
+			const newAgentStates: Record<string, AgentState> = {};
+			for (const item of result.results) {
+				newAgentStates[item.agent] = {
+					status: item.success ? "success" : "error",
+					error: item.error ?? undefined,
+				};
 			}
-		});
+			setAgentStates(newAgentStates);
 
-		// Batch update all agent states at once
-		const newAgentStates = Object.fromEntries(
-			results.map((r) => [r.id, { status: r.status, error: r.error }]),
-		);
-		setAgentStates(newAgentStates);
+			if (result.failed_count === 0) {
+				toast.success(
+					t("agentChangesApplied", { count: result.success_count }),
+				);
+				onCloseAndReset();
+			} else {
+				toast.danger(
+					t("agentChangesFailed", {
+						success: result.success_count,
+						failed: result.failed_count,
+					}),
+				);
+			}
+		} catch (err) {
+			const errorMessage =
+				err instanceof Error ? err.message : t("unknownError");
+			toast.danger(errorMessage);
 
-		// Wait for query cache to refresh so the detail panel updates
-		await Promise.all([
-			queryClient.invalidateQueries({ queryKey: ["mcps"] }),
-			queryClient.invalidateQueries({ queryKey: ["project-mcps"] }),
-		]);
-		setIsApplying(false);
-
-		// Show toast with results
-		if (errorCount === 0) {
-			toast.success(
-				t("agentChangesApplied", {
-					count: successCount,
-				}),
-			);
-			// Auto-close on full success — data is already refreshed
-			onCloseAndReset();
-		} else {
-			toast.danger(
-				t("agentChangesFailed", {
-					success: successCount,
-					failed: errorCount,
-				}),
-			);
+			const errorStates: Record<string, AgentState> = {};
+			for (const id of [...toInstall, ...toUninstall]) {
+				errorStates[id] = { status: "error", error: errorMessage };
+			}
+			setAgentStates(errorStates);
+		} finally {
+			setIsApplying(false);
 		}
 	};
 
@@ -278,10 +239,6 @@ export function ManageAgentsDialog({
 							<p className="text-sm text-muted">
 								{t("invalidConfiguration")}
 							</p>
-						) : usableAgents.length === 0 ? (
-							<p className="text-sm text-muted">
-								{t("noTargetAgents")}
-							</p>
 						) : (
 							<div
 								className={cn(
@@ -289,168 +246,16 @@ export function ManageAgentsDialog({
 									isApplying && "opacity-50",
 								)}
 							>
-								<CheckboxGroup
-									value={selectedAgents}
-									onChange={handleSelectionChange}
-									isDisabled={isApplying}
-									className="items-stretch"
-								>
-									<Label className="sr-only">
-										{t("selectAgentsForMcp")}
-									</Label>
-									<div className="flex flex-col gap-1">
-										{usableAgents.map((agent) => {
-											const diffLabel = getAgentDiffLabel(
-												agent.id,
-											);
-											const state = agentStates[agent.id];
-
-											return (
-												<Checkbox
-													key={agent.id}
-													value={agent.id}
-													variant="secondary"
-													className={cn(
-														"group relative flex w-full flex-col items-stretch gap-2 rounded-2xl bg-surface px-3 py-2.5 transition-all",
-														"data-[selected=true]:bg-accent/10",
-													)}
-												>
-													<Checkbox.Control className="absolute top-1/2 right-3 -translate-y-1/2 rounded-full before:rounded-full">
-														<Checkbox.Indicator />
-													</Checkbox.Control>
-													<Checkbox.Content className="flex flex-row items-start justify-start gap-3">
-														<AgentIcon
-															id={agent.id}
-															name={
-																agent.display_name
-															}
-															size="sm"
-															variant="ghost"
-														/>
-														<div className="flex flex-1 flex-col gap-0.5">
-															<Label className="truncate text-sm">
-																{
-																	agent.display_name
-																}
-															</Label>
-															{/* Status indicator during apply */}
-															{state?.status ===
-																"pending" && (
-																<span
-																	aria-live="polite"
-																	className="flex items-center gap-1"
-																>
-																	<ArrowPathIcon
-																		className="size-3.5 animate-spin text-muted"
-																		aria-label={t(
-																			"processing",
-																		)}
-																	/>
-																	<span className="sr-only">
-																		{t(
-																			"processing",
-																		)}
-																	</span>
-																</span>
-															)}
-															{state?.status ===
-																"success" && (
-																<span
-																	aria-live="polite"
-																	className="flex items-center gap-1"
-																>
-																	<CheckCircleIcon
-																		className="size-3.5 text-success"
-																		aria-label={t(
-																			"success",
-																		)}
-																	/>
-																	<span className="sr-only">
-																		{t(
-																			"success",
-																		)}
-																	</span>
-																</span>
-															)}
-															{state?.status ===
-																"error" && (
-																<span
-																	aria-live="assertive"
-																	className="flex items-center gap-1"
-																>
-																	<XCircleIcon
-																		className="size-3.5 text-danger"
-																		aria-label={t(
-																			"failed",
-																		)}
-																	/>
-																	<span className="sr-only">
-																		{t(
-																			"failed",
-																		)}
-																	</span>
-																</span>
-															)}
-
-															{/* Diff label */}
-															{!state &&
-																diffLabel ===
-																	"adding" && (
-																	<Description className="text-xs text-success">
-																		+{" "}
-																		{t(
-																			"adding",
-																		)}
-																	</Description>
-																)}
-															{!state &&
-																diffLabel ===
-																	"removing" && (
-																	<Description className="text-xs text-danger">
-																		&minus;{" "}
-																		{t(
-																			"removing",
-																		)}
-																	</Description>
-																)}
-															{!state &&
-																diffLabel ===
-																	"installed" && (
-																	<Description className="text-xs text-muted">
-																		{t(
-																			"alreadyAdded",
-																		)}
-																	</Description>
-																)}
-															{!state &&
-																diffLabel ===
-																	"unconfigured" && (
-																	<Description className="text-xs text-muted">
-																		{t(
-																			"unconfigured",
-																		)}
-																	</Description>
-																)}
-															{state?.status ===
-																"error" &&
-																state.error && (
-																	<Description
-																		className="text-xs text-danger"
-																		role="alert"
-																		aria-live="assertive"
-																	>
-																		{
-																			state.error
-																		}
-																	</Description>
-																)}
-														</div>
-													</Checkbox.Content>
-												</Checkbox>
-											);
-										})}
-									</div>
-								</CheckboxGroup>
+								<AgentList
+									agents={usableAgents}
+									selectedKeys={selectedAgents}
+									onSelectionChange={handleSelectionChange}
+									agentStates={agentStates}
+									diffLabels={diffLabels}
+									disabled={isApplying}
+									label={t("selectAgentsForMcp")}
+									emptyMessage={t("noTargetAgents")}
+								/>
 							</div>
 						)}
 					</Modal.Body>

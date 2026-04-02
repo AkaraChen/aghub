@@ -20,17 +20,17 @@ import {
 	toast,
 } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo, useReducer } from "react";
+import { useCallback, useReducer } from "react";
 import { useTranslation } from "react-i18next";
+import type { McpResponse, TransportDto } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
+import { useApi } from "../hooks/use-api";
 import { useFavorites } from "../hooks/use-favorites";
-import { useServer } from "../hooks/use-server";
 import { AgentIcon } from "../lib/agent-icons";
-import { createApi } from "../lib/api";
-import type { McpResponse, TransportDto } from "../lib/api-types";
-import { ConfigSource } from "../lib/api-types";
 import { cn, sortAgentObjects } from "../lib/utils";
+import { invalidateMcpQueries } from "../requests/mcps";
 import { ManageAgentsDialog } from "./manage-agents-dialog";
+import { TransferDialog } from "./transfer-dialog";
 
 export interface McpGroup {
 	mergeKey: string;
@@ -166,6 +166,7 @@ function KeyValueList({
 interface McpDetailUiState {
 	deleteDialogOpen: boolean;
 	manageDialogOpen: boolean;
+	transferDialogOpen: boolean;
 	copyFeedback: boolean;
 	showAllHeaders: boolean;
 	showAllEnvVars: boolean;
@@ -174,6 +175,7 @@ interface McpDetailUiState {
 type McpDetailUiAction =
 	| { type: "set_delete_dialog"; value: boolean }
 	| { type: "set_manage_dialog"; value: boolean }
+	| { type: "set_transfer_dialog"; value: boolean }
 	| { type: "show_copy_feedback" }
 	| { type: "hide_copy_feedback" }
 	| { type: "toggle_headers" }
@@ -188,6 +190,8 @@ function mcpDetailUiReducer(
 			return { ...state, deleteDialogOpen: action.value };
 		case "set_manage_dialog":
 			return { ...state, manageDialogOpen: action.value };
+		case "set_transfer_dialog":
+			return { ...state, transferDialogOpen: action.value };
 		case "show_copy_feedback":
 			return { ...state, copyFeedback: true };
 		case "hide_copy_feedback":
@@ -205,22 +209,19 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 	const [uiState, dispatch] = useReducer(mcpDetailUiReducer, {
 		deleteDialogOpen: false,
 		manageDialogOpen: false,
+		transferDialogOpen: false,
 		copyFeedback: false,
 		showAllHeaders: false,
 		showAllEnvVars: false,
 	});
-	const { baseUrl } = useServer();
-	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
+	const api = useApi();
 	const queryClient = useQueryClient();
 
 	const deleteMutation = useMutation({
 		mutationFn: (g: McpGroup) => {
 			return Promise.all(
 				g.items.map((item) => {
-					const scope =
-						item.source === ConfigSource.Project
-							? "project"
-							: "global";
+					const scope = item.source ?? "global";
 					return api.mcps.delete(
 						item.name,
 						item.agent ?? "default",
@@ -231,8 +232,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 			);
 		},
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["mcps"] });
-			queryClient.invalidateQueries({ queryKey: ["project-mcps"] });
+			void invalidateMcpQueries(queryClient);
 			dispatch({ type: "set_delete_dialog", value: false });
 			toast.success(t("deleteMcpSuccess"));
 		},
@@ -272,6 +272,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 	const transport = group.transport;
 	const primarySource = group.items[0].source;
 	const primaryItem = group.items[0];
+	const primaryScope = primarySource ?? "global";
 
 	const getAgentName = useCallback(
 		(item: McpResponse) =>
@@ -300,7 +301,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 	return (
 		<>
 			<div className="h-full overflow-y-auto">
-				<div className="w-full max-w-2xl space-y-4 p-4 sm:p-6">
+				<div className="w-full space-y-4 p-4 sm:p-6">
 					{/* Unified Detail Card */}
 					<Card>
 						{/* Header: Name + Actions */}
@@ -309,25 +310,6 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 								<h2 className="text-xl font-semibold text-foreground truncate">
 									{primaryItem.name}
 								</h2>
-								<Card.Description className="mt-2 flex flex-wrap items-center gap-2">
-									{primarySource && (
-										<Chip
-											size="sm"
-											variant="soft"
-											color={
-												primarySource ===
-												ConfigSource.Project
-													? "accent"
-													: "default"
-											}
-										>
-											{primarySource ===
-											ConfigSource.Project
-												? t("project")
-												: t("global")}
-										</Chip>
-									)}
-								</Card.Description>
 							</div>
 							<div className="flex items-center gap-2">
 								<Tooltip delay={0}>
@@ -546,6 +528,18 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 										: t("copyConfig")}
 								</Button>
 								<Button
+									variant="secondary"
+									onPress={() =>
+										dispatch({
+											type: "set_transfer_dialog",
+											value: true,
+										})
+									}
+								>
+									<PlusIcon className="size-4" />
+									{t("transfer")}
+								</Button>
+								<Button
 									variant="primary"
 									onPress={() =>
 										dispatch({
@@ -645,6 +639,22 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 				}
 				projectPath={projectPath}
 				requiredCapabilities={["mcp"]}
+			/>
+			{/* Transfer Dialog */}
+			<TransferDialog
+				isOpen={uiState.transferDialogOpen}
+				onClose={() =>
+					dispatch({
+						type: "set_transfer_dialog",
+						value: false,
+					})
+				}
+				resourceType="mcp"
+				name={primaryItem.name}
+				sourceAgent={primaryItem.agent ?? "claude"}
+				sourceScope={primaryScope}
+				sourceProjectRoot={projectPath}
+				transport={primaryItem.transport}
 			/>
 		</>
 	);

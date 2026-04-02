@@ -1,23 +1,20 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
-import { createApi } from "../lib/api";
-import type { CodeEditorType } from "../lib/api-types";
+import type { CodeEditorType } from "../generated/dto";
 import {
 	getIntegrationPreferences,
 	saveIntegrationPreferences,
 } from "../lib/store";
-import { useServer } from "./use-server";
+import { codeEditorsQueryOptions } from "../requests/integrations";
+import { useApi } from "./use-api";
 
-const CODE_EDITORS_KEY = "code-editors";
 const INTEGRATION_PREFERENCES_KEY = "integration-preferences";
 
 export function useCurrentCodeEditor() {
 	const queryClient = useQueryClient();
-	const { baseUrl } = useServer();
-	const api = createApi(baseUrl);
+	const api = useApi();
 	const { data: codeEditors, isLoading: isLoadingEditors } = useQuery({
-		queryKey: [CODE_EDITORS_KEY],
-		queryFn: () => api.integrations.listCodeEditors(),
+		...codeEditorsQueryOptions({ api }),
 	});
 	const { data: preferences, isLoading: isLoadingPreferences } = useQuery({
 		queryKey: [INTEGRATION_PREFERENCES_KEY],

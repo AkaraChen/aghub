@@ -15,11 +15,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { useServer } from "../hooks/use-server";
-import type { UpdateMcpRequest } from "../lib/api";
-import { createApi } from "../lib/api";
-import type { McpResponse } from "../lib/api-types";
-import { ConfigSource } from "../lib/api-types";
+import type { McpResponse, UpdateMcpRequest } from "../generated/dto";
+import { useApi } from "../hooks/use-api";
 import {
 	getKeyPairErrorMessage,
 	validateHttpUrl,
@@ -29,6 +26,7 @@ import {
 import { objectToKeyPairs } from "../lib/key-pair-utils";
 import { buildTransportFromForm, capitalize } from "../lib/mcp-utils";
 import { getMcpMergeKey } from "../lib/utils";
+import { invalidateMcpQueries } from "../requests/mcps";
 import type { EnvVar } from "./env-editor";
 import { EnvEditor } from "./env-editor";
 import type { HttpHeader } from "./http-header-editor";
@@ -61,8 +59,7 @@ export function EditMcpPanel({
 	projectPath,
 }: EditMcpPanelProps) {
 	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = createApi(baseUrl);
+	const api = useApi();
 	const queryClient = useQueryClient();
 	const primaryServer = group.items[0];
 
@@ -132,13 +129,10 @@ export function EditMcpPanel({
 	);
 
 	const updateMutation = useMutation({
-		mutationFn: (body: UpdateMcpRequest) => {
+		mutationFn: async (body: UpdateMcpRequest) => {
 			return Promise.all(
 				group.items.map((item) => {
-					const scope =
-						item.source === ConfigSource.Project
-							? "project"
-							: "global";
+					const scope = item.source ?? "global";
 					return api.mcps.update(
 						item.name,
 						item.agent ?? "default",
@@ -149,9 +143,8 @@ export function EditMcpPanel({
 				}),
 			);
 		},
-		onSuccess: (_data, body) => {
-			queryClient.invalidateQueries({ queryKey: ["mcps"] });
-			queryClient.invalidateQueries({ queryKey: ["project-mcps"] });
+		onSuccess: async (_data, body) => {
+			await invalidateMcpQueries(queryClient);
 			onDone(getMcpMergeKey(body.transport ?? primaryServer.transport));
 		},
 		onError: () => {
@@ -174,10 +167,12 @@ export function EditMcpPanel({
 			name:
 				values.name.trim() !== primaryServer.name
 					? values.name.trim()
-					: undefined,
+					: null,
+			transport: null,
+			enabled: null,
 			timeout: values.timeoutValue
 				? Number.parseInt(values.timeoutValue, 10)
-				: undefined,
+				: null,
 		};
 
 		const transport = buildTransportFromForm(values.transportType, {
@@ -196,7 +191,7 @@ export function EditMcpPanel({
 	};
 
 	return (
-		<div className="h-full max-w-3xl overflow-y-auto p-6">
+		<div className="h-full w-full overflow-y-auto p-4 sm:p-6">
 			<div className="mb-6 flex items-center justify-between gap-3">
 				<h2 className="text-xl font-semibold text-foreground">
 					{t("editMcpServer")}

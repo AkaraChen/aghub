@@ -7,6 +7,7 @@ import {
 	HashtagIcon,
 	LinkIcon,
 	MagnifyingGlassIcon,
+	PlusIcon,
 	StarIcon as StarIconSolid,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
@@ -18,17 +19,19 @@ import { useTranslation } from "react-i18next";
 import { siGithub } from "simple-icons";
 import { useLocation } from "wouter";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
+import { useApi } from "../hooks/use-api";
 import { useFavorites } from "../hooks/use-favorites";
 import { useCurrentCodeEditor } from "../hooks/use-integrations";
-import { useServer } from "../hooks/use-server";
-import { createApi } from "../lib/api";
-import type {
-	GlobalSkillLockResponse,
-	ProjectSkillLockResponse,
-	SkillTreeNodeResponse,
-} from "../lib/api-types";
-import { ConfigSource } from "../lib/api-types";
 import { cn } from "../lib/utils";
+import { openWithEditorMutationOptions } from "../requests/integrations";
+import {
+	globalSkillLockQueryOptions,
+	openSkillFolderMutationOptions,
+	projectSkillLockQueryOptions,
+	skillContentQueryOptions,
+	skillTreeQueryOptions,
+} from "../requests/skills";
+import { ManageSkillAgentsDialog } from "./manage-skill-agents-dialog";
 import {
 	DeleteSkillDialog,
 	DeleteSkillLocationDialog,
@@ -41,6 +44,7 @@ import {
 	type SkillGroup,
 } from "./skill-detail-helpers";
 import { LocationRow, SkillTree } from "./skill-detail-views";
+import { TransferDialog } from "./transfer-dialog";
 
 interface SkillDetailProps {
 	group: SkillGroup;
@@ -53,19 +57,21 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const { t } = useTranslation();
 	const [, setLocation] = useLocation();
 	const { allAgents } = useAgentAvailability();
-	const { baseUrl } = useServer();
-	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
+	const api = useApi();
 
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [locationToDelete, setLocationToDelete] =
 		useState<LocationGroup | null>(null);
 	const [showAllLocations, setShowAllLocations] = useState(false);
+	const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+	const [manageDialogOpen, setManageDialogOpen] = useState(false);
 
 	const { isSkillStarred, toggleSkillStar } = useFavorites();
 	const isStarred = isSkillStarred(group.items[0].name);
 	const { selectedEditor } = useCurrentCodeEditor();
 
 	const skill = group.items[0];
+	const primaryScope = skill.source ?? "global";
 	const trimmedSkillName = skill.name.trim();
 	const canSearchSkillsSh = trimmedSkillName.length >= 2;
 
@@ -79,49 +85,39 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		);
 	};
 
-	const openFolderMutation = useMutation({
-		mutationFn: (skillPath: string) => api.skills.openFolder(skillPath),
+	const openFolderMutation = useMutation(
+		openSkillFolderMutationOptions({ api }),
+	);
+
+	const openInEditorMutation = useMutation(
+		openWithEditorMutationOptions({ api }),
+	);
+
+	const { data: globalLock } = useQuery({
+		...globalSkillLockQueryOptions({ api }),
 	});
 
-	const openInEditorMutation = useMutation({
-		mutationFn: async (path: string) => {
-			if (!selectedEditor) {
-				throw new Error("No configured code editor");
-			}
-
-			return api.integrations.openWithEditor(path, selectedEditor);
-		},
+	const { data: projectLock } = useQuery({
+		...projectSkillLockQueryOptions({ api, projectPath }),
 	});
 
-	const { data: globalLock } = useQuery<GlobalSkillLockResponse>({
-		queryKey: ["skill-locks", "global"],
-		queryFn: () => api.skills.getGlobalLock(),
-		staleTime: 30_000,
+	const { data: skillContent } = useQuery({
+		...skillContentQueryOptions({
+			api,
+			path: skill.source_path ?? undefined,
+		}),
 	});
 
-	const { data: projectLock } = useQuery<ProjectSkillLockResponse>({
-		queryKey: ["skill-locks", "project", projectPath],
-		queryFn: () => api.skills.getProjectLock(projectPath),
-		staleTime: 30_000,
-	});
-
-	const { data: skillContent } = useQuery<string>({
-		queryKey: ["skill-content", skill.source_path],
-		queryFn: () => api.skills.getContent(skill.source_path!),
-		enabled: !!skill.source_path,
-		staleTime: 60_000,
-	});
-
-	const { data: skillTree } = useQuery<SkillTreeNodeResponse>({
-		queryKey: ["skill-tree", skill.source_path],
-		queryFn: () => api.skills.getTree(skill.source_path!),
-		enabled: !!skill.source_path,
-		staleTime: 60_000,
+	const { data: skillTree } = useQuery({
+		...skillTreeQueryOptions({
+			api,
+			path: skill.source_path ?? undefined,
+		}),
 	});
 
 	const currentSkillSource = useMemo(() => {
 		const skillItem = group.items[0];
-		if (skillItem.source === ConfigSource.Global) {
+		if (skillItem.source === "global") {
 			const entry = globalLock?.skills.find((s) => s.name === skill.name);
 			if (entry) {
 				return {
@@ -131,7 +127,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 					sourceUrl: entry.sourceUrl,
 				};
 			}
-		} else if (skillItem.source === ConfigSource.Project) {
+		} else if (skillItem.source === "project") {
 			const entry = projectLock?.skills.find(
 				(s) => s.name === skill.name,
 			);
@@ -193,117 +189,92 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	return (
 		<>
 			<div className="h-full overflow-y-auto">
-				<div
-					className="
-						max-w-2xl space-y-4 p-4
-						sm:p-5
-						md:p-6
-					"
-				>
+				<div className="w-full space-y-4 p-4 sm:p-6">
 					<Card>
-						<Card.Header className="flex flex-col items-start gap-3">
-							<div className="flex w-full flex-row items-start justify-between gap-3">
-								<div className="min-w-0 flex-1">
-									<h2 className="text-xl font-semibold text-foreground">
-										{skill.name}
-									</h2>
-								</div>
-								<div
-									className="
-										flex items-center gap-1.5
-										sm:gap-2
-									"
-								>
-									<Tooltip delay={0}>
-										<Button
-											isIconOnly
-											variant="ghost"
-											size="md"
-											className="
-												min-h-11 min-w-11 text-muted
-												hover:text-foreground
-											"
-											aria-label={t("searchOnSkillsSh")}
-											isDisabled={!canSearchSkillsSh}
-											onPress={handleSearchSkillsSh}
-										>
-											<MagnifyingGlassIcon className="size-5" />
-										</Button>
-										<Tooltip.Content>
-											{t("searchOnSkillsSh")}
-										</Tooltip.Content>
-									</Tooltip>
-									<Tooltip delay={0}>
-										<Button
-											isIconOnly
-											variant="ghost"
-											size="md"
-											className={cn(
-												"min-h-11 min-w-11 text-muted hover:text-warning",
-												isStarred && "text-warning",
-											)}
-											aria-label={
-												isStarred
-													? t("unstarSkill")
-													: t("starSkill")
-											}
-											onPress={() =>
-												toggleSkillStar(skill.name)
-											}
-										>
-											{isStarred ? (
-												<StarIconSolid className="size-5" />
-											) : (
-												<StarIconOutline className="size-5" />
-											)}
-										</Button>
-										<Tooltip.Content>
-											{isStarred
+						<Card.Header className="flex flex-row items-start justify-between gap-3">
+							<div className="min-w-0 flex-1">
+								<h2 className="text-xl font-semibold text-foreground truncate">
+									{skill.name}
+								</h2>
+								{skill.description && (
+									<Card.Description className="mt-2">
+										{skill.description}
+									</Card.Description>
+								)}
+							</div>
+							<div className="flex items-center gap-2">
+								<Tooltip delay={0}>
+									<Button
+										isIconOnly
+										variant="ghost"
+										size="md"
+										className="text-muted min-w-[44px] min-h-[44px] hover:text-foreground"
+										aria-label={t("searchOnSkillsSh")}
+										isDisabled={!canSearchSkillsSh}
+										onPress={handleSearchSkillsSh}
+									>
+										<MagnifyingGlassIcon className="size-5" />
+									</Button>
+									<Tooltip.Content>
+										{t("searchOnSkillsSh")}
+									</Tooltip.Content>
+								</Tooltip>
+								<Tooltip delay={0}>
+									<Button
+										isIconOnly
+										variant="ghost"
+										size="md"
+										className={cn(
+											"text-muted min-w-[44px] min-h-[44px] hover:text-warning",
+											isStarred && "text-warning",
+										)}
+										aria-label={
+											isStarred
 												? t("unstarSkill")
-												: t("starSkill")}
-										</Tooltip.Content>
-									</Tooltip>
-									<Tooltip delay={0}>
-										<Button
-											isIconOnly
-											variant="ghost"
-											size="md"
-											className="
-												min-h-11 min-w-11 text-muted
-												hover:text-danger
-											"
-											aria-label={t("deleteSkill")}
-											onPress={() =>
-												setDeleteDialogOpen(true)
-											}
-										>
-											<TrashIcon className="size-5" />
-										</Button>
-										<Tooltip.Content>
-											{t("deleteSkill")}
-										</Tooltip.Content>
-									</Tooltip>
-								</div>
+												: t("starSkill")
+										}
+										onPress={() =>
+											toggleSkillStar(skill.name)
+										}
+									>
+										{isStarred ? (
+											<StarIconSolid className="size-5" />
+										) : (
+											<StarIconOutline className="size-5" />
+										)}
+									</Button>
+									<Tooltip.Content>
+										{isStarred
+											? t("unstarSkill")
+											: t("starSkill")}
+									</Tooltip.Content>
+								</Tooltip>
+								<Tooltip delay={0}>
+									<Button
+										isIconOnly
+										variant="ghost"
+										size="md"
+										className="text-muted hover:text-danger min-w-[44px] min-h-[44px]"
+										aria-label={t("deleteSkill")}
+										onPress={() =>
+											setDeleteDialogOpen(true)
+										}
+									>
+										<TrashIcon className="size-4" />
+									</Button>
+									<Tooltip.Content>
+										{t("deleteSkill")}
+									</Tooltip.Content>
+								</Tooltip>
 							</div>
 						</Card.Header>
 
-						<Card.Content className="space-y-5">
-							{skill.description && (
-								<p className="text-sm/relaxed text-foreground">
-									{skill.description}
-								</p>
-							)}
-
+						<Card.Content className="flex flex-col gap-6">
 							{skill.tools.length > 0 && (
-								<div>
-									<p
-										className="
-											mb-2 text-xs font-medium tracking-wider text-muted
-											uppercase
-										"
-									>
+								<div className="space-y-3">
+									<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
 										{t("tools")} ({skill.tools.length})
-									</p>
+									</h3>
 									<div className="flex flex-wrap gap-1.5">
 										{skill.tools.map((tool) => (
 											<Chip
@@ -319,16 +290,11 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 							)}
 
 							{allLocationGroups.length > 0 && (
-								<div>
-									<p
-										className="
-											mb-2 text-xs font-medium tracking-wider text-muted
-											uppercase
-										"
-									>
+								<div className="space-y-3">
+									<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
 										{t("locations")} (
 										{allLocationGroups.length})
-									</p>
+									</h3>
 									<div className="space-y-1.5">
 										{displayedLocations.map(
 											(locationGroup) => (
@@ -342,7 +308,10 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 													}
 													onEditFolder={() =>
 														openInEditorMutation.mutate(
-															locationGroup.sourcePath,
+															{
+																path: locationGroup.sourcePath,
+																editor: selectedEditor!,
+															},
 														)
 													}
 													onOpenFolder={() =>
@@ -388,21 +357,11 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 							)}
 
 							{currentSkillSource && (
-								<div>
-									<p
-										className="
-											mb-2 text-xs font-medium tracking-wider text-muted
-											uppercase
-										"
-									>
+								<div className="space-y-3">
+									<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
 										{t("installedFrom")}
-									</p>
-									<div
-										className="
-											flex items-center justify-between gap-3 rounded-lg
-											bg-surface-secondary px-3 py-2
-										"
-									>
+									</h3>
+									<div className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2">
 										<div className="min-w-0 flex-1">
 											<div className="flex items-center gap-1.5">
 												{currentSkillSource.sourceType.toLowerCase() ===
@@ -460,6 +419,23 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 									</div>
 								</div>
 							)}
+
+							<Card.Footer className="pt-4 border-t border-separator flex flex-wrap gap-3">
+								<Button
+									variant="secondary"
+									onPress={() => setTransferDialogOpen(true)}
+								>
+									<PlusIcon className="size-4" />
+									{t("transfer")}
+								</Button>
+								<Button
+									variant="primary"
+									onPress={() => setManageDialogOpen(true)}
+								>
+									<PlusIcon className="size-4" />
+									{t("addToAgent")}
+								</Button>
+							</Card.Footer>
 						</Card.Content>
 					</Card>
 
@@ -517,7 +493,10 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 														size="sm"
 														onPress={() =>
 															openInEditorMutation.mutate(
-																skillTree.path,
+																{
+																	path: skillTree.path,
+																	editor: selectedEditor!,
+																},
 															)
 														}
 													>
@@ -553,6 +532,21 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 				onClose={() => setLocationToDelete(null)}
 				projectPath={projectPath}
 				skillName={skill.name}
+			/>
+			<TransferDialog
+				isOpen={transferDialogOpen}
+				onClose={() => setTransferDialogOpen(false)}
+				resourceType="skill"
+				name={skill.name}
+				sourceAgent={skill.agent ?? "claude"}
+				sourceScope={primaryScope}
+				sourceProjectRoot={projectPath}
+			/>
+			<ManageSkillAgentsDialog
+				group={group}
+				isOpen={manageDialogOpen}
+				onClose={() => setManageDialogOpen(false)}
+				projectPath={projectPath}
 			/>
 		</>
 	);

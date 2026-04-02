@@ -38,15 +38,17 @@ export default function ApplicationPanel() {
 			const update = await check();
 			if (!update) throw new Error("No update available");
 
-			await update.downloadAndInstall(() => {});
+			await update.downloadAndInstall();
 		},
 		onSuccess: () => {
 			toast.success(t("updateInstalledSuccess"), {
 				timeout: 0,
 				actionProps: {
-					children: t("restartToUpdate"),
 					onPress: () => relaunch(),
+					variant: "tertiary",
+					children: t("restartNow"),
 				},
+				description: t("restartToUpdate"),
 			});
 		},
 		onError: (error) => {
@@ -181,16 +183,16 @@ export default function ApplicationPanel() {
 						</div>
 					</div>
 
-					<div className="flex items-start justify-between gap-4">
+					<div className="flex items-center justify-between">
 						<div className="space-y-0.5">
 							<span className="text-sm font-medium text-(--foreground)">
 								{t("onboarding")}
 							</span>
-							<span className="block max-w-md text-xs text-muted">
+							<span className="block text-xs text-muted">
 								{t("onboardingDescription")}
 							</span>
 						</div>
-						<div className="flex flex-wrap justify-end gap-2">
+						<div className="flex gap-2">
 							<Button
 								variant="secondary"
 								size="sm"

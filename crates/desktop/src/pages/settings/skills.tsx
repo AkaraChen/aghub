@@ -5,23 +5,33 @@ import {
 	RectangleStackIcon,
 } from "@heroicons/react/24/solid";
 import { Button, Dropdown, Tooltip } from "@heroui/react";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
 import { CreateSkillPanel } from "../../components/create-skill-panel";
+import { ImportGithubSkillPanel } from "../../components/import-github-skill-panel";
 import { ImportSkillPanel } from "../../components/import-skill-panel";
 import { ListSearchHeader } from "../../components/list-search-header";
 import { MultiSelectFloatingBar } from "../../components/multi-select-floating-bar";
 import { SkillDetail } from "../../components/skill-detail";
 import { SkillList } from "../../components/skill-list";
-import { useSkills } from "../../hooks/use-skills";
-import type { SkillResponse } from "../../lib/api-types";
+import type { SkillResponse } from "../../generated/dto";
+import { useApi } from "../../hooks/use-api";
 import { cn } from "../../lib/utils";
+import { skillListQueryOptions } from "../../requests/skills";
 
 export default function SkillsPage() {
 	const { t } = useTranslation();
-	const { data: skills, refetch, isFetching } = useSkills();
+	const api = useApi();
+	const {
+		data: skills,
+		refetch,
+		isFetching,
+	} = useSuspenseQuery({
+		...skillListQueryOptions({ api, scope: "global" }),
+	});
 	const [searchQuery, setSearchQuery] = useState("");
 	const [selectedName, setSelectedName] = useQueryState("skill");
 	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
@@ -30,9 +40,9 @@ export default function SkillsPage() {
 	const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
 	const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
 
-	const [panelMode, setPanelMode] = useState<"create" | "import" | null>(
-		null,
-	);
+	const [panelMode, setPanelMode] = useState<
+		"create" | "import" | "import-github" | null
+	>(null);
 
 	const groupedSkills = useMemo(() => {
 		const map = new Map<string, SkillResponse[]>();
@@ -171,6 +181,10 @@ export default function SkillsPage() {
 										handleCreateSkill();
 									} else if (key === "import") {
 										handleImportSkill();
+									} else if (key === "import-github") {
+										setSelectedKeys(new Set());
+										setSelectedName(null);
+										setPanelMode("import-github");
 									}
 								}}
 							>
@@ -185,6 +199,12 @@ export default function SkillsPage() {
 									textValue={t("importFromFile")}
 								>
 									{t("importFromFile")}
+								</Dropdown.Item>
+								<Dropdown.Item
+									id="import-github"
+									textValue={t("importRemoteSource")}
+								>
+									{t("importRemoteSource")}
 								</Dropdown.Item>
 							</Dropdown.Menu>
 						</Dropdown.Popover>
@@ -231,6 +251,8 @@ export default function SkillsPage() {
 					<CreateSkillPanel onDone={() => setPanelMode(null)} />
 				) : panelMode === "import" ? (
 					<ImportSkillPanel onDone={() => setPanelMode(null)} />
+				) : panelMode === "import-github" ? (
+					<ImportGithubSkillPanel onDone={() => setPanelMode(null)} />
 				) : activeGroup ? (
 					<SkillDetail group={activeGroup} />
 				) : (
@@ -250,7 +272,10 @@ export default function SkillsPage() {
 						key: g.name,
 						items: g.items,
 					}))}
-					onSuccess={() => handleSelectionChange(new Set())}
+					onSuccess={() => {
+						handleSelectionChange(new Set());
+						refetch();
+					}}
 					resourceType="skill"
 				/>
 			</div>

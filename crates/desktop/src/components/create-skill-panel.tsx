@@ -15,10 +15,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import type { CreateSkillRequest } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
-import { useServer } from "../hooks/use-server";
-import { createApi } from "../lib/api";
-import type { CreateSkillRequest } from "../lib/api-types";
+import { useApi } from "../hooks/use-api";
+import { supportsSkillMutation } from "../lib/agent-capabilities";
+import { createSkillMutationOptions } from "../requests/skills";
 import { AgentSelector } from "./agent-selector";
 
 interface CreateSkillPanelProps {
@@ -40,17 +41,21 @@ export function CreateSkillPanel({
 	projectPath,
 }: CreateSkillPanelProps) {
 	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = createApi(baseUrl);
+	const api = useApi();
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
 
 	const skillAgents = useMemo(
 		() =>
 			availableAgents.filter(
-				(a) => a.isUsable && a.capabilities.skills_mutable,
+				(a) =>
+					a.isUsable &&
+					supportsSkillMutation(
+						a,
+						projectPath ? "project" : "global",
+					),
 			),
-		[availableAgents],
+		[availableAgents, projectPath],
 	);
 
 	const [error, setError] = useState<string | null>(null);
@@ -72,28 +77,16 @@ export function CreateSkillPanel({
 		},
 	});
 
-	const invalidateCache = () => {
-		queryClient.invalidateQueries({ queryKey: ["skills"] });
-		queryClient.invalidateQueries({ queryKey: ["project-skills"] });
-		queryClient.invalidateQueries({ queryKey: ["skill-locks"] });
-	};
-
 	const createMutation = useMutation({
+		...createSkillMutationOptions({
+			api,
+			queryClient,
+		}),
 		onError: (error) => {
 			const errorMessage =
 				error instanceof Error ? error.message : String(error);
 			setError(errorMessage);
 		},
-		mutationFn: ({
-			agent,
-			body,
-		}: {
-			agent: string;
-			body: CreateSkillRequest;
-		}) => {
-			return api.skills.create(agent, body, projectPath);
-		},
-		onSuccess: invalidateCache,
 	});
 
 	const handleCreate = async (values: CreateSkillFormValues) => {
@@ -104,16 +97,21 @@ export function CreateSkillPanel({
 
 		const body: CreateSkillRequest = {
 			name: values.name.trim(),
-			description: values.description.trim(),
-			author: values.author.trim() || undefined,
-			content: values.content.trim(),
-			tools: tools.length > 0 ? tools : undefined,
+			description: values.description.trim() || null,
+			author: values.author.trim() || null,
+			version: null,
+			content: values.content.trim() || null,
+			tools: tools.length > 0 ? tools : null,
 		};
 
 		try {
 			await Promise.all(
 				values.selectedAgents.map((agent) =>
-					createMutation.mutateAsync({ agent, body }),
+					createMutation.mutateAsync({
+						agent,
+						body,
+						projectPath,
+					}),
 				),
 			);
 			onDone();
@@ -123,7 +121,7 @@ export function CreateSkillPanel({
 	};
 
 	return (
-		<div className="h-full max-w-3xl overflow-y-auto p-6">
+		<div className="h-full w-full overflow-y-auto p-4 sm:p-6">
 			{error && (
 				<Alert className="mb-4" status="danger">
 					<Alert.Indicator />

@@ -1,6 +1,6 @@
 # CLI CRATE
 
-**Crate**: `aghub` — Binary providing the `agentctl` CLI tool.
+**Crate**: `aghub` — Binary providing the `aghub-cli` CLI tool.
 
 ## OVERVIEW
 

@@ -9,12 +9,15 @@ body = """
 {% else %}\
     ## [unreleased]
 {% endif %}\
+
 {% for group, commits in commits | group_by(attribute="group") %}
-    ### {{ group | upper_first }}
-    {% for commit in commits %}
-        - {% if commit.breaking %}[**breaking**] {% endif %}{{ commit.message | upper_first }}\
-    {% endfor %}
-{% endfor %}\n
+<details open><summary><strong>{{ group | upper_first }}</strong></summary>
+
+{% for commit in commits %}
+- {% if commit.breaking %}[**breaking**] {% endif %}{{ commit.message | upper_first }}\
+{% endfor %}
+</details>
+{% endfor %}
 """
 trim = true
 footer = """

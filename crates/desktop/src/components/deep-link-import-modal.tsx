@@ -2,17 +2,17 @@ import { Alert, Button, Card, Modal } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { TransportDto } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
+import { useApi } from "../hooks/use-api";
 import { useInstallTarget } from "../hooks/use-install-target";
-import { useServer } from "../hooks/use-server";
-import { supportsMcp } from "../lib/agent-capabilities";
-import { createApi } from "../lib/api";
-import type { TransportDto } from "../lib/api-types";
+import { supportsMcp, supportsSkillMutation } from "../lib/agent-capabilities";
 import {
 	type DeepLinkImportIntent,
 	formatTransportSummary,
 } from "../lib/deep-link";
 import { buildPendingResults, type InstallResult } from "../lib/install-utils";
+import { queryKeys } from "../requests/keys";
 import { AgentSelector } from "./agent-selector";
 import { InstallTargetSelector } from "./install-target-selector";
 import { ResultStatusItem } from "./result-status-item";
@@ -44,8 +44,7 @@ export function DeepLinkImportModal({
 }: DeepLinkImportModalProps) {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
-	const { baseUrl } = useServer();
-	const api = createApi(baseUrl);
+	const api = useApi();
 	const { availableAgents } = useAgentAvailability();
 	const {
 		projects,
@@ -69,14 +68,19 @@ export function DeepLinkImportModal({
 
 		if (intent.kind === "skill-market-install") {
 			return availableAgents.filter(
-				(agent) => agent.isUsable && agent.capabilities.skills_mutable,
+				(agent) =>
+					agent.isUsable &&
+					supportsSkillMutation(
+						agent,
+						installToProject ? "project" : "global",
+					),
 			);
 		}
 
 		return availableAgents.filter(
 			(agent) => agent.isUsable && supportsMcp(agent),
 		);
-	}, [availableAgents, intent]);
+	}, [availableAgents, installToProject, intent]);
 
 	const defaultSelectedAgents = useMemo<Set<string>>(() => {
 		return compatibleAgents[0]
@@ -102,7 +106,8 @@ export function DeepLinkImportModal({
 					agents: Array.from(variables.selectedAgents),
 					skills: [variables.intent.name],
 					scope: variables.installToProject ? "project" : "global",
-					project_path: variables.selectedProject?.path,
+					project_path: variables.selectedProject?.path ?? null,
+					install_all: false,
 				});
 
 				return pendingResults.map((result) => ({
@@ -119,7 +124,7 @@ export function DeepLinkImportModal({
 			const body = {
 				name: variables.intent.name,
 				transport: variables.intent.transport,
-				timeout: variables.intent.timeout,
+				timeout: variables.intent.timeout ?? null,
 			};
 
 			await Promise.all(
@@ -142,12 +147,13 @@ export function DeepLinkImportModal({
 		},
 		onSuccess: () => {
 			if (intent?.kind === "skill-market-install") {
-				queryClient.invalidateQueries({ queryKey: ["skills"] });
-				queryClient.invalidateQueries({ queryKey: ["project-skills"] });
-				queryClient.invalidateQueries({ queryKey: ["skill-locks"] });
+				queryClient.invalidateQueries({
+					queryKey: queryKeys.skills.all(),
+				});
 			} else {
-				queryClient.invalidateQueries({ queryKey: ["mcps"] });
-				queryClient.invalidateQueries({ queryKey: ["project-mcps"] });
+				queryClient.invalidateQueries({
+					queryKey: queryKeys.mcps.all(),
+				});
 			}
 		},
 	});

@@ -14,12 +14,12 @@ import {
 	Header,
 	Label,
 	Separator,
-	Skeleton,
+	Spinner,
 	Tooltip,
 } from "@heroui/react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import type { McpResponse, SkillResponse } from "../lib/api-types";
+import type { McpResponse, SkillResponse } from "../generated/dto";
 import { cn, getMcpMergeKey } from "../lib/utils";
 import { ListSearchHeader } from "./list-search-header";
 import { McpList } from "./mcp-list";
@@ -34,7 +34,7 @@ interface UnifiedResourceListProps {
 	selectedSkillKeys: Set<string>;
 	onSelectionChange: (keys: Set<string>, type: "mcp" | "skill") => void;
 	onCreateMcp: (type: "manual" | "import") => void;
-	onCreateSkill: (type: "local" | "import") => void;
+	onCreateSkill: (type: "local" | "import" | "github") => void;
 	onRefresh: () => void;
 	isRefreshing?: boolean;
 	isLoading?: boolean;
@@ -44,52 +44,6 @@ interface UnifiedResourceListProps {
 	isMultiSelectMode?: boolean;
 	onMultiSelectModeChange?: (value: boolean) => void;
 	onDeleteSelected?: () => void;
-}
-
-const RESOURCE_SKELETON_KEYS = ["resource-1", "resource-2", "resource-3"];
-const SECONDARY_SKELETON_KEYS = ["secondary-1", "secondary-2"];
-
-function ResourceListSkeleton() {
-	return (
-		<>
-			<ResourceSectionHeader
-				title=""
-				count={0}
-				icon={
-					<Skeleton className="size-3.5 rounded bg-surface-secondary" />
-				}
-			/>
-			<div className="p-2 space-y-1">
-				{RESOURCE_SKELETON_KEYS.map((key) => (
-					<div
-						key={key}
-						className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
-					>
-						<Skeleton className="size-4 rounded bg-surface-secondary" />
-						<Skeleton className="h-3 flex-1 rounded bg-surface-secondary" />
-					</div>
-				))}
-			</div>
-			<ResourceSectionHeader
-				title=""
-				count={0}
-				icon={
-					<Skeleton className="size-3.5 rounded bg-surface-secondary" />
-				}
-			/>
-			<div className="p-2 space-y-1">
-				{SECONDARY_SKELETON_KEYS.map((key) => (
-					<div
-						key={key}
-						className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
-					>
-						<Skeleton className="size-4 rounded bg-surface-secondary" />
-						<Skeleton className="h-3 flex-1 rounded bg-surface-secondary" />
-					</div>
-				))}
-			</div>
-		</>
-	);
 }
 
 export function UnifiedResourceList({
@@ -225,6 +179,8 @@ export function UnifiedResourceList({
 										onCreateSkill("local");
 									else if (key === "skill-import")
 										onCreateSkill("import");
+									else if (key === "skill-github")
+										onCreateSkill("github");
 								}}
 							>
 								<Dropdown.Section>
@@ -287,6 +243,25 @@ export function UnifiedResourceList({
 											<span>{t("importFromFile")}</span>
 										</div>
 									</Dropdown.Item>
+									<Dropdown.Item
+										id="skill-github"
+										textValue={t("importRemoteSource")}
+									>
+										<div className="flex items-center gap-2 pl-6">
+											<svg
+												role="img"
+												className="size-4"
+												viewBox="0 0 24 24"
+												fill="currentColor"
+												aria-hidden="true"
+											>
+												<path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+											</svg>
+											<span>
+												{t("importRemoteSource")}
+											</span>
+										</div>
+									</Dropdown.Item>
 								</Dropdown.Section>
 							</Dropdown.Menu>
 						</Dropdown.Popover>
@@ -311,7 +286,9 @@ export function UnifiedResourceList({
 
 			<div className="flex-1 overflow-y-auto">
 				{isLoading ? (
-					<ResourceListSkeleton />
+					<div className="flex h-full items-center justify-center">
+						<Spinner size="lg" />
+					</div>
 				) : (
 					<>
 						{hasMcps && (

@@ -4,22 +4,21 @@ import {
 	ChevronRightIcon,
 	StarIcon as StarIconSolid,
 } from "@heroicons/react/24/solid";
-import { Chip, Label, ListBox, Tooltip } from "@heroui/react";
+import { Chip, Label, ListBox, Spinner, Tooltip } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import Fuse from "fuse.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { SkillResponse } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
+import { useApi } from "../hooks/use-api";
 import { useFavorites } from "../hooks/use-favorites";
-import { useServer } from "../hooks/use-server";
 import { AgentIcon } from "../lib/agent-icons";
-import { createApi } from "../lib/api";
-import type {
-	GlobalSkillLockResponse,
-	ProjectSkillLockResponse,
-	SkillResponse,
-} from "../lib/api-types";
 import { sortAgents } from "../lib/utils";
+import {
+	globalSkillLockQueryOptions,
+	projectSkillLockQueryOptions,
+} from "../requests/skills";
 
 function formatAgentName(agent: string): string {
 	return agent.charAt(0).toUpperCase() + agent.slice(1).toLowerCase();
@@ -104,22 +103,32 @@ export function SkillList({
 	isMultiSelectMode = false,
 }: SkillListProps) {
 	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = createApi(baseUrl);
+	const api = useApi();
+	const effectiveScope = groupBySource
+		? projectPath
+			? "project"
+			: "global"
+		: null;
 
-	const { data: globalLock } = useQuery<GlobalSkillLockResponse>({
-		queryKey: ["skill-locks", "global"],
-		queryFn: () => api.skills.getGlobalLock(),
-		staleTime: 30_000,
-		enabled: groupBySource,
+	const { data: globalLock, isLoading: isLoadingGlobalLock } = useQuery({
+		...globalSkillLockQueryOptions({
+			api,
+			enabled: effectiveScope === "global",
+		}),
 	});
 
-	const { data: projectLock } = useQuery<ProjectSkillLockResponse>({
-		queryKey: ["skill-locks", "project", projectPath],
-		queryFn: () => api.skills.getProjectLock(projectPath),
-		staleTime: 30_000,
-		enabled: groupBySource,
+	const { data: projectLock, isLoading: isLoadingProjectLock } = useQuery({
+		...projectSkillLockQueryOptions({
+			api,
+			projectPath,
+			enabled: effectiveScope === "project" && Boolean(projectPath),
+		}),
 	});
+
+	const isGroupingLoading =
+		groupBySource &&
+		((effectiveScope === "global" && isLoadingGlobalLock) ||
+			(effectiveScope === "project" && isLoadingProjectLock));
 
 	const groupedByName = useMemo(() => {
 		const map = new Map<string, SkillResponse[]>();
@@ -167,22 +176,15 @@ export function SkillList({
 		const findSkillSource = (
 			skillName: string,
 		): { source: string; sourceType: string } | null => {
-			const globalEntry = globalLock?.skills.find(
-				(s) => s.name === skillName,
-			);
-			if (globalEntry) {
+			const relevantEntries =
+				effectiveScope === "project"
+					? projectLock?.skills
+					: globalLock?.skills;
+			const entry = relevantEntries?.find((s) => s.name === skillName);
+			if (entry) {
 				return {
-					source: globalEntry.source,
-					sourceType: globalEntry.sourceType,
-				};
-			}
-			const projectEntry = projectLock?.skills.find(
-				(s) => s.name === skillName,
-			);
-			if (projectEntry) {
-				return {
-					source: projectEntry.source,
-					sourceType: projectEntry.sourceType,
+					source: entry.source,
+					sourceType: entry.sourceType,
 				};
 			}
 			return null;
@@ -272,6 +274,7 @@ export function SkillList({
 		filteredByName,
 		groupBySource,
 		globalLock,
+		effectiveScope,
 		projectLock,
 		isSkillStarred,
 	]);
@@ -379,6 +382,14 @@ export function SkillList({
 	);
 
 	if (groupBySource) {
+		if (isGroupingLoading) {
+			return (
+				<div className="flex flex-1 items-center justify-center overflow-y-auto">
+					<Spinner size="lg" />
+				</div>
+			);
+		}
+
 		const hasItems =
 			sourceGroups.length > 0 ||
 			singleItemGroups.length > 0 ||

@@ -1,9 +1,9 @@
-import type { AgentInfo } from "../lib/api";
 import type {
+	AgentInfo,
 	ConfigSource,
 	SkillResponse,
 	SkillTreeNodeResponse,
-} from "../lib/api-types";
+} from "../generated/dto";
 import { sortAgents } from "../lib/utils";
 
 export interface LocationInstallation {
@@ -16,7 +16,7 @@ export interface LocationGroup {
 	key: string;
 	sourcePath: string;
 	installations: LocationInstallation[];
-	canonicalPath?: string;
+	canonicalPath?: string | null;
 }
 
 export interface SkillGroup {
@@ -97,7 +97,7 @@ export function buildLocationGroups(
 
 		map.set(item.source_path, {
 			installations: [installation],
-			canonicalPath: item.canonical_path,
+			canonicalPath: item.canonical_path ?? undefined,
 		});
 	}
 

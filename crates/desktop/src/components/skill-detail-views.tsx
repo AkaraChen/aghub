@@ -9,7 +9,7 @@ import { Button, Tooltip } from "@heroui/react";
 import * as pathe from "pathe";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import type { SkillTreeNodeResponse } from "../lib/api-types";
+import type { SkillTreeNodeResponse } from "../generated/dto";
 import {
 	formatAgentName,
 	getNodeChildren,
@@ -51,7 +51,7 @@ export function LocationRow({
 				<div className="flex items-center gap-2">
 					<p
 						tabIndex={0}
-						className="cursor-default truncate rounded-sm font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none"
+						className="cursor-default break-all rounded-sm font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none"
 						title={group.sourcePath}
 					>
 						{folderPath}
@@ -68,7 +68,7 @@ export function LocationRow({
 								<LinkIcon className="size-3" />
 							</Button>
 							<Tooltip.Content>
-								<div className="max-w-xs">
+								<div className="max-w-[80vw]">
 									<p className="mb-1 font-medium">
 										{t("symlink")}
 									</p>

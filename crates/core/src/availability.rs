@@ -1,7 +1,4 @@
-use crate::registry::descriptor::AgentDescriptor;
-use std::path::PathBuf;
-use std::process::Command;
-
+use crate::AgentDescriptor;
 /// Information about agent availability
 #[derive(Debug, Clone)]
 pub struct AvailabilityInfo {
@@ -11,18 +8,16 @@ pub struct AvailabilityInfo {
 	pub is_available: bool,
 }
 
-/// Check if a CLI binary exists using the `which` command
+/// Check if a CLI binary exists using the `which` crate (cross-platform support)
 fn check_cli_exists(cli_name: &str) -> bool {
-	Command::new("which")
-		.arg(cli_name)
-		.output()
-		.map(|output| output.status.success())
-		.unwrap_or(false)
+	which::which(cli_name).is_ok()
 }
 
 /// Check if a global directory exists
-fn check_global_directory_exists(global_path: PathBuf) -> bool {
-	global_path.exists()
+fn check_global_directory_exists(
+	global_path: Option<std::path::PathBuf>,
+) -> bool {
+	global_path.is_some_and(|path| path.exists())
 }
 
 /// Check availability for a single agent
@@ -30,7 +25,7 @@ pub fn check_agent_availability(
 	descriptor: &AgentDescriptor,
 ) -> AvailabilityInfo {
 	let has_global_directory =
-		check_global_directory_exists((descriptor.global_path)());
+		check_global_directory_exists((descriptor.global_data_dir)());
 	let has_cli = check_cli_exists(descriptor.cli_name);
 
 	AvailabilityInfo {
@@ -68,6 +63,7 @@ pub fn check_all_agents_availability() -> Vec<AvailabilityInfo> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::path::PathBuf;
 
 	#[test]
 	fn test_check_cli_exists_for_common_commands() {
@@ -87,7 +83,7 @@ mod tests {
 	fn test_check_global_directory_exists() {
 		// Test with a path that definitely doesn't exist
 		let nonexistent = PathBuf::from("/this/path/definitely/does/not/exist");
-		assert!(!check_global_directory_exists(nonexistent));
+		assert!(!check_global_directory_exists(Some(nonexistent)));
 	}
 
 	#[test]

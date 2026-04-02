@@ -24,6 +24,28 @@ export default {
 	replayAppTour: "Replay App Tour",
 	replayProjectTour: "Replay Project Tour",
 
+	// Credentials
+	credentials: "Credentials",
+	credentialsDescription:
+		"Manage stored credentials for integrations like GitHub.",
+	credentialName: "Name",
+	credentialType: "Type",
+	credentialToken: "Token",
+	githubCredential: "GitHub",
+	createCredential: "Add Credential",
+	credentialCreated: "Credential added successfully",
+	credentialDeleted: "Credential deleted",
+	credentialDeleteFailed: "Failed to delete credential",
+	noCredentials: "No credentials yet. Add one to get started.",
+	deleteCredential: "Delete Credential",
+	deleteCredentialConfirm:
+		"Are you sure you want to delete this credential? This action cannot be undone.",
+	credentialNamePlaceholder: "e.g., personal",
+	credentialTokenPlaceholder: "ghp_...",
+	validationCredentialNameRequired: "Enter a credential name.",
+	validationCredentialTokenRequired: "Enter a GitHub token.",
+	credentialTokenGenerate: "Generate on GitHub →",
+
 	// Settings
 	appearance: "Appearance",
 	theme: "Theme",
@@ -63,77 +85,47 @@ export default {
 	downloadAndInstall: "Download and Install",
 	updateInstalledSuccess: "Update installed successfully",
 	restartToUpdate: "Restart to Update",
+	restartNow: "Restart Now",
 	onboardingDescription:
 		"Replay the welcome screen or either guided tour any time.",
 
-	// Onboarding
-	onboardingEyebrow: "First Run",
-	onboardingWelcomeTitle: "Get oriented before you change anything",
-	onboardingWelcomeDescription:
-		"Aghub helps you manage agent configs, MCP servers, and skills without hiding the files underneath. These two short tours show where to go, then how to set up a project safely.",
-	onboardingValueGlobalTitle: "Global MCP control",
-	onboardingValueGlobalDescription:
-		"Review shared servers used across your agents.",
-	onboardingValueSkillsTitle: "Local and market skills",
-	onboardingValueSkillsDescription:
-		"Inspect installed skills or pull new ones from skills.sh.",
-	onboardingValueProjectTitle: "Project-scoped setup",
-	onboardingValueProjectDescription:
-		"Keep repo-specific MCPs and skills isolated to the right codebase.",
-	onboardingFlowTitle: "What onboarding covers",
-	onboardingFlowDescription:
-		"A short map first, then a hands-on project workflow once you have a repo attached.",
-	onboardingFlowStepOneTitle: "Learn the app map",
-	onboardingFlowStepOneDescription:
-		"Understand which page to use for MCP servers, skills, marketplace installs, projects, and settings.",
-	onboardingFlowStepTwoTitle: "Connect or open a project",
-	onboardingFlowStepTwoDescription:
-		"Attach a repository so Aghub can manage MCPs and skills at project scope without touching unrelated setups.",
-	onboardingFlowStepThreeTitle: "Follow the workflow tour",
-	onboardingFlowStepThreeDescription:
-		"Use search, add resources, inspect details, and batch actions where real project work happens.",
-	onboardingTimeEstimate: "About 90 seconds, entirely skippable.",
-	onboardingOptionalHint:
-		"You can replay any part later from Settings -> About.",
-	onboardingSkip: "Skip for Now",
-	onboardingAddProject: "Add a Project",
-	onboardingOpenProject: "Open a Project",
-	onboardingStart: "Start Onboarding",
-	onboardingLater: "Later",
-	onboardingShowMe: "Show Me",
+	// Onboarding — Wizard
+	onboardingWizardTitle: "Welcome to Aghub",
+	onboardingWizardSubtitle:
+		"Manage AI agent configs, MCP servers, and skills from one place.",
+	onboardingStepMcpTitle: "MCP Servers",
+	onboardingStepMcpDescription:
+		"Manage shared MCP server definitions across all your AI agents. Add, import, and keep your tooling consistent.",
+	onboardingStepSkillsTitle: "Skills",
+	onboardingStepSkillsDescription:
+		"Inspect installed skills, pull new ones from the skills.sh marketplace, and keep your agents equipped.",
+	onboardingStepProjectsTitle: "Projects",
+	onboardingStepProjectsDescription:
+		"Scope MCP servers and skills to individual repositories. Keep project configs isolated from your global setup.",
+	onboardingSkip: "Skip",
+	onboardingBack: "Back",
+	onboardingNext: "Next",
+	onboardingGetStarted: "Get Started",
 	onboardingContinue: "Continue",
 	onboardingFinish: "Start Working",
 	onboardingProgressText: "Step {{current}} of {{total}}",
+
+	// Onboarding — Driver.js tours
 	onboardingSidebarTitle: "Everything starts in the sidebar",
 	onboardingSidebarDescription:
 		"Use this left rail to move between global configuration, marketplace discovery, project-specific work, and app settings.",
 	onboardingMcpTitle: "Global MCP servers",
 	onboardingMcpDescription:
 		"This page is for shared MCP server definitions you want available to one or more agents across your machine.",
-	onboardingMcpActionTitle: "Add or import shared servers",
-	onboardingMcpActionDescription:
-		"Create a server manually or import JSON when you already have a config snippet to reuse.",
 	onboardingSkillsTitle: "Installed skills",
 	onboardingSkillsDescription:
 		"Review local skills, inspect their contents, and manage what is already available to your agents.",
-	onboardingMarketTitle: "skills.sh marketplace",
-	onboardingMarketDescription:
-		"Search community skills and install them without leaving the app when you need a new capability.",
-	onboardingProjectsTitle: "Projects keep changes scoped",
-	onboardingProjectsDescription:
-		"Projects let you manage MCPs and skills for one repository without changing every agent config globally.",
-	onboardingProjectAddShortcutTitle: "Attach a repository here",
-	onboardingProjectAddShortcutDescription:
-		"Pick a repo root when you want project-only MCP servers and skills. That is the fastest route to real value in Aghub.",
 	onboardingSettingsTitle: "Settings stay close by",
 	onboardingSettingsDescription:
 		"Appearance, agent availability, editor integrations, and these onboarding controls all live here.",
-	onboardingProjectNextTitle: "Next step: attach a project",
-	onboardingProjectNextDescription:
-		"The workflow tour happens inside a project. Add or open a repository and I’ll continue with the hands-on MCP and skills flow.",
 	onboardingProjectSetupTitle: "Add your first project",
 	onboardingProjectSetupDescription:
-		"Choose a repository root here. As soon as the project appears, I’ll open it and continue with the project workflow tour.",
+		"Choose a repository root here. As soon as the project appears, I'll open it and continue with the project workflow tour.",
 	onboardingProjectResourcesTitle: "Project resources live here",
 	onboardingProjectResourcesDescription:
 		"This panel lists project-scoped MCP servers and skills, so you can keep experiments local to one repo.",
@@ -201,7 +193,34 @@ export default {
 	addLocalSkill: "Add Local Skill",
 	createLocalSkill: "Create New Skill",
 	createCustomSkill: "Create Custom Skill",
+	importRemoteSource: "Import Remote Source",
+	repositoryAndCredentials: "Repository & Credentials",
 	importFromFile: "Import from File",
+	importFromGitRepository: "Import Remote Source",
+	githubRepoUrl: "Repository URL",
+	githubRepoUrlPlaceholder: "https://github.com/owner/repo",
+	selectCredential: "Credentials",
+	publicRepoNoCredential: "None (public repository)",
+	privateRepo: "Private repo?",
+	addToken: "Add token…",
+	scanRepo: "Scan",
+	scanningRepo: "Scanning...",
+	scanFailed: "Failed to scan repository",
+	scanFailedHint:
+		"Please check you are using the correct token or that SSO is configured correctly.",
+	noSkillsFoundInRepo: "No skills found in this repository.",
+	selectSkillsToInstall: "Select skills to install",
+	branch: "Branch",
+	switchingBranch: "Switching branch...",
+	defaultBranch: "Default",
+	selectAll: "Select All",
+	deselectAll: "Deselect All",
+	skillsSelected: "skills selected",
+	installSelected: "Install Selected",
+	installingSkills: "Installing...",
+	installComplete: "Installation complete",
+	importAnother: "Import Another",
+	skillsFailed: "failed",
 	selectFileOrFolder: "Select a file or folder containing SKILL.md",
 	skillImported: "Skill imported successfully",
 	importError: "Failed to import skill: {{error}}",
@@ -316,12 +335,22 @@ export default {
 	applyChanges: "Apply changes",
 	agentChangesApplied: "Updated {{count}} agent(s) successfully",
 	agentChangesFailed: "{{success}} succeeded, {{failed}} failed",
-	selectAgents: "Select Agents",
+	transferApplied: "Copied to {{count}} target(s)",
+	transferDescription: "Copy {{name}} to:",
+	noTransferDestinations: "No destinations available.",
+	selectDestinationScope: "Select destination",
+	selectScopePlaceholder: "Choose a destination...",
+	selectAgentsForCopy: "Copy to {{destination}}:",
+	loadingDestinations: "Loading destinations...",
+	copyingToTargets: "Copying to {{count}} target(s)...",
+	copiedCount: "{{success}} of {{total}} copied",
+	invalidSkillConfiguration: "Invalid skill configuration",
 	confirmChanges: "Confirm Changes",
 	result: "Result",
 	next: "Next",
 	back: "Back",
 	apply: "Apply",
+	transfer: "Copy",
 	applying: "Applying...",
 	done: "Done",
 	toInstall: "To install",
@@ -335,6 +364,13 @@ export default {
 	uninstallFailed: "Failed to uninstall",
 	selectAgentsForMcp: "Select which agents should have this MCP server:",
 	noTargetAgents: "No available agents.",
+	alreadyInstalled: "Already installed",
+	installed: "Installed",
+	globalScope: "Global Scope",
+	unknownError: "Something went wrong",
+	universalSkills: "Universal",
+	universalSkillsTooltip: "Shared with: {{agents}}",
+	universalSkillsDescription: "{{count}} agents share this skills path",
 
 	// Install Skill Dialog
 	installSkill: "Install Skill",
@@ -412,11 +448,15 @@ export default {
 	searchOnSkillsSh: "Search on skills.sh",
 	delete: "Delete",
 	deleteSkill: "Delete Skill",
+	deleteSkillTitle: "Delete Skill",
 	deleteSkillForAgentTitle: "Delete Skill from {{agent}}",
 	deleteSkillForAgentWarning:
 		'This will delete "{{name}}" only for {{agent}}. Other agent installations will remain unchanged.',
+	deleteSkillForAgentsWarning:
+		'This will delete "{{name}}" from all agents: {{agents}}.',
 	deleteSharedLocationWarning:
 		"This location is shared by multiple agents. Choose which agent to remove.",
+	sharedLocation: "Shared Location",
 	selectAgentToDelete: "Agent to delete",
 	deleteSkillWarning:
 		"This will delete {{count}} skill installation(s). This action cannot be undone.",
@@ -490,5 +530,6 @@ export default {
 		minimize: "Minimize",
 		zoom: "Zoom",
 		toggleFullscreen: "Toggle Fullscreen",
+		close: "Close",
 	},
 };

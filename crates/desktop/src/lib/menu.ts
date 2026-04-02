@@ -133,17 +133,13 @@ export async function setupAppMenu(t: TFunction) {
 			],
 		});
 
-		const reloadMenuItem = await MenuItem.new({
-			id: "reload",
-			text: t("menu.reload"),
-			accelerator: "CmdOrControl+R",
-			action: () => window.location.reload(),
-		});
-
 		const controlSubmenu = await Submenu.new({
 			text: t("menu.control"),
 			items: [
-				reloadMenuItem,
+				await PredefinedMenuItem.new({
+					item: "CloseWindow",
+					text: t("menu.close"),
+				}),
 				await PredefinedMenuItem.new({ item: "Separator" }),
 				await PredefinedMenuItem.new({
 					item: "Minimize",
@@ -164,7 +160,10 @@ export async function setupAppMenu(t: TFunction) {
 			items: [appSubmenu, agentSubmenu, editSubmenu, controlSubmenu],
 		});
 
-		await activeAppMenu.setAsAppMenu();
+		const isMac = navigator.userAgent.toLowerCase().includes("mac");
+		if (isMac) {
+			await activeAppMenu.setAsAppMenu();
+		}
 	} catch (e) {
 		console.error("Failed to set app menu", e);
 	}

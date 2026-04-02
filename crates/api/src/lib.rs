@@ -42,6 +42,9 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 	.unwrap();
 	rocket::custom(config)
 		.attach(cors)
+		.manage(crate::state::GitCloneSessions {
+			sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
+		})
 		.mount(
 			"/api/v1",
 			routes![
@@ -58,6 +61,8 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 				routes::skills::enable_skill,
 				routes::skills::disable_skill,
 				routes::skills::install_skill,
+				routes::skills::transfer_skill_route,
+				routes::skills::reconcile_skill_route,
 				routes::mcps::list_all_agents_mcps,
 				routes::mcps::list_mcps,
 				routes::mcps::create_mcp,
@@ -66,15 +71,23 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 				routes::mcps::delete_mcp,
 				routes::mcps::enable_mcp,
 				routes::mcps::disable_mcp,
+				routes::mcps::transfer_mcp_route,
+				routes::mcps::reconcile_mcp_route,
 				routes::integrations::list_code_editors,
 				routes::integrations::open_with_editor,
 				routes::integrations::get_preferences,
+				routes::credentials::list_credentials,
+				routes::credentials::create_credential,
+				routes::credentials::delete_credential,
 				routes::skills::open_skill_folder,
 				routes::skills::edit_skill_folder,
 				routes::skills::get_skill_content,
 				routes::skills::get_skill_tree,
 				routes::skills::get_global_skill_lock,
 				routes::skills::get_project_skill_lock,
+				routes::skills::delete_skill_by_path,
+				routes::skills::git_scan_skills,
+				routes::skills::git_install_skills,
 			],
 		)
 		.register(

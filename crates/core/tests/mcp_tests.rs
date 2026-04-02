@@ -16,10 +16,87 @@
 //! - `tests/mcp-invalid-fields.test.ts`
 
 use aghub_core::{
+	adapters::AgentAdapter,
+	descriptor::{
+		load_scoped_mcps, mcp_strategy, save_scoped_mcps, Capabilities,
+		McpCapabilities, ScopeSupport, SkillCapabilities,
+	},
 	models::{AgentType, McpServer, McpTransport},
 	testing::{TestConfig, TestConfigBuilder},
+	AgentDescriptor, ConfigError, ResourceScope,
 };
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+
+fn adapter_test_load_mcps(
+	_: Option<&Path>,
+	scope: ResourceScope,
+) -> aghub_core::Result<Vec<McpServer>> {
+	match scope {
+		ResourceScope::GlobalOnly => Ok(vec![mcp_stdio("global-server")]),
+		ResourceScope::ProjectOnly => Ok(vec![mcp_stdio("project-server")]),
+		ResourceScope::Both => Err(ConfigError::InvalidConfig(
+			"adapter test descriptor should not receive Both".to_string(),
+		)),
+	}
+}
+
+fn adapter_test_save_mcps(
+	_: Option<&Path>,
+	scope: ResourceScope,
+	_: &[McpServer],
+) -> aghub_core::Result<()> {
+	match scope {
+		ResourceScope::GlobalOnly | ResourceScope::ProjectOnly => Ok(()),
+		ResourceScope::Both => Err(ConfigError::InvalidConfig(
+			"adapter test descriptor should not receive Both".to_string(),
+		)),
+	}
+}
+
+fn no_path() -> Option<PathBuf> {
+	None
+}
+
+fn no_project_path(_: &Path) -> Option<PathBuf> {
+	None
+}
+
+static ADAPTER_TEST_DESCRIPTOR: AgentDescriptor = AgentDescriptor {
+	id: "adapter-test",
+	display_name: "Adapter Test",
+	mcp_parse_config: None,
+	mcp_serialize_config: None,
+	load_mcps: adapter_test_load_mcps,
+	save_mcps: adapter_test_save_mcps,
+	mcp_global_path: Some(no_path),
+	mcp_project_path: Some(no_project_path),
+	global_data_dir: no_path,
+	capabilities: Capabilities {
+		skills: SkillCapabilities {
+			scopes: ScopeSupport {
+				global: false,
+				project: false,
+			},
+			universal: false,
+		},
+		mcp: McpCapabilities {
+			scopes: ScopeSupport {
+				global: true,
+				project: true,
+			},
+			stdio: true,
+			remote: true,
+			enable_disable: false,
+		},
+	},
+	global_skill_paths: None,
+	project_skill_paths: None,
+	cli_name: "adapter-test",
+	validate_args: &[],
+	project_markers: &[],
+	skills_cli_name: None,
+};
 
 // ==================== Helpers ====================
 
@@ -1532,4 +1609,110 @@ fn test_no_empty_string_mcp_key_produced() {
 			agent
 		);
 	}
+}
+
+#[test]
+fn test_load_scoped_mcps_without_path_returns_empty_for_concrete_scopes() {
+	let global = load_scoped_mcps(
+		None,
+		ResourceScope::GlobalOnly,
+		Some(no_path),
+		Some(no_project_path),
+		mcp_strategy::parse_none,
+	)
+	.unwrap();
+	assert!(global.is_empty());
+
+	let project = load_scoped_mcps(
+		None,
+		ResourceScope::ProjectOnly,
+		Some(no_path),
+		Some(no_project_path),
+		mcp_strategy::parse_none,
+	)
+	.unwrap();
+	assert!(project.is_empty());
+}
+
+#[test]
+fn test_load_scoped_mcps_rejects_both_scope() {
+	let err = load_scoped_mcps(
+		None,
+		ResourceScope::Both,
+		Some(no_path),
+		Some(no_project_path),
+		mcp_strategy::parse_none,
+	)
+	.unwrap_err();
+
+	assert!(
+		matches!(err, ConfigError::InvalidConfig(message) if message.contains("Both"))
+	);
+}
+
+#[test]
+fn test_save_scoped_mcps_rejects_both_scope() {
+	let err = save_scoped_mcps(
+		None,
+		ResourceScope::Both,
+		&[],
+		Some(no_path),
+		Some(no_project_path),
+		mcp_strategy::serialize_none,
+	)
+	.unwrap_err();
+
+	assert!(
+		matches!(err, ConfigError::InvalidConfig(message) if message.contains("Both"))
+	);
+}
+
+#[test]
+fn test_adapter_load_mcps_both_merges_project_then_global() {
+	let adapter: &'static AgentDescriptor = &ADAPTER_TEST_DESCRIPTOR;
+	let temp = tempfile::TempDir::new().unwrap();
+	let mcps = adapter
+		.load_mcps(Some(temp.path()), ResourceScope::Both)
+		.unwrap();
+
+	assert_eq!(mcps.len(), 2);
+	assert_eq!(mcps[0].name, "project-server");
+	assert_eq!(mcps[1].name, "global-server");
+}
+
+#[test]
+fn test_adapter_load_config_both_works_without_combined_path() {
+	let adapter: &'static AgentDescriptor = &ADAPTER_TEST_DESCRIPTOR;
+	let temp = tempfile::TempDir::new().unwrap();
+	let config = adapter
+		.load_config(Some(temp.path()), ResourceScope::Both)
+		.unwrap();
+
+	assert_eq!(config.mcps.len(), 2);
+	assert_eq!(config.mcps[0].name, "project-server");
+	assert_eq!(config.mcps[1].name, "global-server");
+}
+
+#[test]
+fn test_adapter_save_mcps_rejects_both_scope() {
+	let adapter: &'static AgentDescriptor = &ADAPTER_TEST_DESCRIPTOR;
+	let temp = tempfile::TempDir::new().unwrap();
+	let err = adapter
+		.save_mcps(Some(temp.path()), ResourceScope::Both, &[])
+		.unwrap_err();
+
+	assert!(
+		matches!(err, ConfigError::UnsupportedOperation(message) if message.contains("persist"))
+	);
+}
+
+#[test]
+fn test_adapter_mcp_config_path_hides_both_scope() {
+	let adapter: &'static AgentDescriptor = &ADAPTER_TEST_DESCRIPTOR;
+	let temp = tempfile::TempDir::new().unwrap();
+
+	assert_eq!(
+		adapter.mcp_config_path(Some(temp.path()), ResourceScope::Both),
+		None
+	);
 }

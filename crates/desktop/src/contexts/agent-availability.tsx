@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 import { createContext } from "react";
-import type { AgentAvailability, AgentInfo } from "../lib/api";
+import type { AgentAvailabilityDto, AgentInfo } from "../generated/dto";
 
 export interface AvailableAgent extends AgentInfo {
-	availability: AgentAvailability;
+	availability: AgentAvailabilityDto;
 	isDisabled: boolean;
 	isUsable: boolean;
 }

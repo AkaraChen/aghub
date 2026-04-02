@@ -4,25 +4,31 @@
 
 pub mod adapter;
 pub mod adapters;
-pub mod agents;
 pub mod all_agents;
 pub mod availability;
-pub mod errors;
-pub mod format;
 pub mod manager;
-pub mod models;
 pub mod paths;
 pub mod registry;
 pub mod skills;
+pub mod transfer;
+
+pub use aghub_agents::{descriptor, errors, format, models};
+pub use aghub_agents::{
+	AgentConfig, AgentDescriptor, AgentType, Capabilities, ConfigError,
+	ConfigSource, LoadMcpsFn, McpParseFn, McpSerializeFn, McpServer,
+	McpTransport, ResourceScope, Result, SaveMcpsFn, Skill,
+};
 
 #[cfg(feature = "testing")]
 pub mod testing;
 
 pub use adapters::{create_adapter, AgentAdapter};
 pub use all_agents::{load_all_agents, AgentResources};
-pub use errors::{ConfigError, Result};
 pub use manager::ConfigManager;
-pub use models::{AgentType, ConfigSource};
+pub use transfer::{
+	InstallScope, InstallTarget, OperationAction, OperationBatchResult,
+	OperationResult, ResourceLocator,
+};
 
 /// Convert a skill::Skill to core::models::Skill
 pub fn convert_skill(skill_pkg: skill::Skill) -> models::Skill {

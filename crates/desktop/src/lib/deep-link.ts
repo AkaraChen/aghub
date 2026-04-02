@@ -1,4 +1,4 @@
-import type { TransportDto } from "./api-types";
+import type { TransportDto } from "../generated/dto";
 
 // Static regex patterns to avoid re-compilation on every call
 const BASE64URL_DASH_REGEX = /-/g;

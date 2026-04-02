@@ -13,16 +13,15 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "../../components/ui/empty";
-import { useServer } from "../../hooks/use-server";
-import { createApi } from "../../lib/api";
-import type { MarketSkill } from "../../lib/api-types";
+import type { MarketSkill } from "../../generated/dto";
+import { useApi } from "../../hooks/use-api";
+import { marketSearchInfiniteQueryOptions } from "../../requests/market";
 import { InstallModal } from "./components/install-modal";
 import { SkillsHeader } from "./components/skills-header";
 import { useSkillInstall } from "./hooks/use-skill-install";
 
 const BATCH_SIZE = 20;
 const FETCH_SIZE = 100;
-const MAX_TOTAL = 1000;
 const ROW_HEIGHT = 48;
 
 const tableComponents: TableComponents<MarketSkill> = {
@@ -48,8 +47,7 @@ const tableComponents: TableComponents<MarketSkill> = {
 
 export default function SkillsSearchPage() {
 	const { t, i18n } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = createApi(baseUrl);
+	const api = useApi();
 	const [, setLocation] = useLocation();
 
 	const {
@@ -89,33 +87,11 @@ export default function SkillsSearchPage() {
 
 	const { data, isFetching, isFetchingNextPage, hasNextPage, fetchNextPage } =
 		useInfiniteQuery({
-			queryKey: ["market", "search", submittedQuery],
-			queryFn: async ({ pageParam }: { pageParam: number }) => {
-				const offset = pageParam;
-				const limit = Math.min(FETCH_SIZE, MAX_TOTAL - offset);
-				const actualLimit = offset + limit;
-				const results = await api.market.search(
-					submittedQuery,
-					actualLimit,
-				);
-				return results.slice(offset, actualLimit);
-			},
-			initialPageParam: 0,
-			getNextPageParam: (
-				lastPage: MarketSkill[],
-				allPages: MarketSkill[][],
-			) => {
-				const totalFetched = allPages.reduce(
-					(sum, page) => sum + page.length,
-					0,
-				);
-				if (lastPage.length < FETCH_SIZE || totalFetched >= MAX_TOTAL) {
-					return undefined;
-				}
-				return totalFetched;
-			},
-			enabled: submittedQuery.length >= 2,
-			staleTime: 60_000,
+			...marketSearchInfiniteQueryOptions({
+				api,
+				query: submittedQuery,
+				enabled: submittedQuery.length >= 2,
+			}),
 		});
 
 	const searchResults = useMemo(() => data?.pages.flat() ?? [], [data]);

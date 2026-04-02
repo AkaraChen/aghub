@@ -186,16 +186,19 @@ mod tests {
 	#[test]
 	fn test_read_local_lock_corrupted_json_merge_conflict() {
 		let dir = TempDir::new().unwrap();
-		let conflicted = r#"{
-  "version": 1,
-  "skills": {
-<<<<<<< HEAD
-    "skill-a": { "source": "org/repo-a", "sourceType": "github", "computedHash": "aaa" }
-=======
-    "skill-b": { "source": "org/repo-b", "sourceType": "github", "computedHash": "bbb" }
->>>>>>> feature-branch
-  }
-}"#;
+		let conflicted = [
+			r#"{"#,
+			r#"  "version": 1,"#,
+			r#"  "skills": {"#,
+			"<<<<<<< HEAD",
+			r#"    "skill-a": { "source": "org/repo-a", "sourceType": "github", "computedHash": "aaa" }"#,
+			"=======",
+			r#"    "skill-b": { "source": "org/repo-b", "sourceType": "github", "computedHash": "bbb" }"#,
+			">>>>>>> feature-branch",
+			r#"  }"#,
+			r#"}"#,
+		]
+		.join("\n");
 		fs::write(dir.path().join("skills-lock.json"), conflicted).unwrap();
 
 		let lock = read_local_lock(Some(dir.path()));

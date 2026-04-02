@@ -1,16 +1,16 @@
 import { ExclamationTriangleIcon } from "@heroicons/react/24/solid";
 import { Button, Modal, Spinner } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { useServer } from "../hooks/use-server";
-import { createApi } from "../lib/api";
-import { ConfigSource } from "../lib/api-types";
+import type { ConfigSource } from "../generated/dto";
+import { useApi } from "../hooks/use-api";
+import { invalidateMcpQueries } from "../requests/mcps";
+import { invalidateSkillQueries } from "../requests/skills";
 
 interface BulkDeleteItem {
 	name: string;
-	agent?: string;
-	source?: ConfigSource;
+	agent?: string | null;
+	source?: ConfigSource | null;
 }
 
 interface BulkDeleteGroup {
@@ -37,8 +37,7 @@ export function BulkDeleteDialog({
 	projectPath,
 }: BulkDeleteDialogProps) {
 	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
+	const api = useApi();
 	const queryClient = useQueryClient();
 
 	const deleteMutation = useMutation({
@@ -53,19 +52,15 @@ export function BulkDeleteDialog({
 				const groupResourceType = group.resourceType ?? resourceType;
 				for (const item of group.items) {
 					if (!item.agent) continue;
-					const scope =
-						item.source === ConfigSource.Project
-							? "project"
-							: "global";
-					const typedScope = scope as "global" | "project";
+					const scope: "global" | "project" = item.source ?? "global";
 					const projectRoot =
-						typedScope === "project" ? projectPath : undefined;
+						scope === "project" ? projectPath : undefined;
 					if (groupResourceType === "mcp") {
 						promises.push(
 							api.mcps.delete(
 								item.name,
 								item.agent,
-								typedScope,
+								scope,
 								projectRoot,
 							),
 						);
@@ -74,7 +69,7 @@ export function BulkDeleteDialog({
 							api.skills.delete(
 								item.agent,
 								group.key,
-								typedScope,
+								scope,
 								projectRoot,
 							),
 						);
@@ -107,16 +102,10 @@ export function BulkDeleteDialog({
 		},
 		onSuccess: () => {
 			if (resourceType === "mcp" || resourceType === "mixed") {
-				queryClient.invalidateQueries({ queryKey: ["mcps"] });
-				queryClient.invalidateQueries({
-					queryKey: ["project-mcps"],
-				});
+				void invalidateMcpQueries(queryClient);
 			}
 			if (resourceType === "skill" || resourceType === "mixed") {
-				queryClient.invalidateQueries({ queryKey: ["skills"] });
-				queryClient.invalidateQueries({
-					queryKey: ["project-skills"],
-				});
+				void invalidateSkillQueries(queryClient);
 			}
 		},
 		onError: (error) => {
@@ -174,7 +163,7 @@ export function BulkDeleteDialog({
 							className="min-h-[44px] min-w-[120px]"
 						>
 							{deleteMutation.isPending ? (
-								<Spinner size="sm" />
+								<Spinner size="sm" color="current" />
 							) : (
 								t("deleteSelected")
 							)}

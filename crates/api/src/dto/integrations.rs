@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum CodeEditorType {
 	VsCode,
@@ -269,7 +271,8 @@ impl CodeEditorType {
 	}
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct ToolInfoDto {
 	pub id: String,
 	pub name: String,
@@ -277,24 +280,28 @@ pub struct ToolInfoDto {
 	pub path: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, TS)]
+#[ts(export)]
 pub struct ToolPreferencesDto {
 	pub code_editor: Option<CodeEditorType>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct OpenWithEditorRequest {
 	pub path: String,
 	pub editor: CodeEditorType,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct OpenSkillFolderRequest {
 	pub skill_path: String,
 	pub editor: Option<CodeEditorType>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct EditSkillFolderRequest {
 	pub skill_path: String,
 }

@@ -18,6 +18,7 @@ skills-ref = { git = "https://github.com/AkaraChen/skills-ref" }
 walkdir = "2.5"
 chrono = { version = "0.4", features = [ "serde" ] }
 dirs = { workspace = true }
+ignore = "0.4"
 
 [dev-dependencies]
 tempfile = { workspace = true }

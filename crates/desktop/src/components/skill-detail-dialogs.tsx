@@ -2,14 +2,12 @@ import {
 	ExclamationTriangleIcon,
 	XCircleIcon,
 } from "@heroicons/react/24/solid";
-import { AlertDialog, Button, Modal, Spinner } from "@heroui/react";
+import { AlertDialog, Button, Modal, Spinner, toast } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as pathe from "pathe";
-import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useServer } from "../hooks/use-server";
-import { createApi } from "../lib/api";
-import { ConfigSource } from "../lib/api-types";
+import { useApi } from "../hooks/use-api";
+import { invalidateSkillQueries } from "../requests/skills";
 import {
 	formatAgentName,
 	type LocationGroup,
@@ -39,69 +37,56 @@ export function DeleteSkillLocationDialog({
 	skillName,
 }: DeleteSkillLocationDialogProps) {
 	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
+	const api = useApi();
 	const queryClient = useQueryClient();
-	const [selectedInstallationId, setSelectedInstallationId] = useState<
-		string | null
-	>(() => item?.installations[0]?.id ?? null);
-
-	const selectedInstallation = useMemo(() => {
-		if (!item) {
-			return null;
-		}
-
-		return (
-			item.installations.find(
-				(installation) => installation.id === selectedInstallationId,
-			) ??
-			item.installations[0] ??
-			null
-		);
-	}, [item, selectedInstallationId]);
+	const deleteRequest =
+		item && item.installations.length > 0
+			? {
+					source_path: item.sourcePath,
+					agents: item.installations.map(
+						(installation) => installation.agent,
+					),
+					scope:
+						item.installations[0].source === "project"
+							? ("project" as const)
+							: ("global" as const),
+					project_root:
+						item.installations[0].source === "project"
+							? (projectPath ?? null)
+							: null,
+				}
+			: null;
 
 	const deleteMutation = useMutation({
 		mutationFn: async () => {
-			if (!selectedInstallation) {
+			if (!deleteRequest) {
 				return;
 			}
 
-			const scope =
-				selectedInstallation.source === ConfigSource.Project
-					? ("project" as const)
-					: ("global" as const);
-			const projectRoot = scope === "project" ? projectPath : undefined;
+			const result = await api.skills.deleteByPath(deleteRequest);
 
-			await api.skills.delete(
-				selectedInstallation.agent,
-				skillName,
-				scope,
-				projectRoot,
-			);
+			if (!result.success) {
+				throw new Error(result.error || "Failed to delete skill");
+			}
 		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["skills"] });
-			queryClient.invalidateQueries({
-				queryKey: ["project-skills"],
-			});
-			queryClient.invalidateQueries({
-				queryKey: ["skill-locks"],
-			});
+		onSuccess: async () => {
+			await invalidateSkillQueries(queryClient);
 			onClose();
 		},
 		onError: (error) => {
 			console.error("Skill location delete mutation error:", error);
+			toast.danger(t("failedToDeleteSkill"));
 		},
 	});
 
 	const folderPath = item ? pathe.dirname(item.sourcePath) : "";
-	const scopeLabel =
-		selectedInstallation?.source === ConfigSource.Project
-			? t("project")
-			: t("global");
-	const agentName = selectedInstallation
-		? formatAgentName(selectedInstallation.agent)
-		: "";
+	const agentNames =
+		item?.installations.length === 1
+			? formatAgentName(item.installations[0].agent)
+			: (item?.installations
+					.map((i) => formatAgentName(i.agent))
+					.join(", ") ?? "");
+	const isMultiAgent = (item?.installations.length ?? 0) > 1;
 
 	return (
 		<AlertDialog.Backdrop isOpen={isOpen} onOpenChange={onClose}>
@@ -111,71 +96,34 @@ export function DeleteSkillLocationDialog({
 					<AlertDialog.Header>
 						<AlertDialog.Icon status="danger" />
 						<AlertDialog.Heading>
-							{t("deleteSkillForAgentTitle", {
-								agent: agentName,
-							})}
+							{isMultiAgent
+								? t("deleteSkillTitle")
+								: t("deleteSkillForAgentTitle", {
+										agent: agentNames,
+									})}
 						</AlertDialog.Heading>
 					</AlertDialog.Header>
 					<AlertDialog.Body>
-						{(item?.installations.length ?? 0) > 1 && (
-							<div className="mb-4 space-y-2">
-								<p className="text-sm text-muted">
-									{t("deleteSharedLocationWarning")}
-								</p>
-								<div>
-									<p
-										className="
-											mb-2 text-xs font-medium tracking-wide text-muted
-											uppercase
-										"
-									>
-										{t("selectAgentToDelete")}
-									</p>
-									<div className="flex flex-wrap gap-2">
-										{item?.installations.map(
-											(installation) => (
-												<Button
-													key={installation.id}
-													size="sm"
-													variant={
-														installation.id ===
-														selectedInstallation?.id
-															? "secondary"
-															: "ghost"
-													}
-													onPress={() =>
-														setSelectedInstallationId(
-															installation.id,
-														)
-													}
-												>
-													{formatAgentName(
-														installation.agent,
-													)}
-													<span className="text-xs text-muted">
-														{" · "}
-														{installation.source ===
-														ConfigSource.Project
-															? t("project")
-															: t("global")}
-													</span>
-												</Button>
-											),
-										)}
-									</div>
-								</div>
-							</div>
-						)}
 						<p className="text-sm text-muted">
-							{t("deleteSkillForAgentWarning", {
-								name: skillName,
-								agent: agentName,
-							})}
+							{isMultiAgent
+								? t("deleteSkillForAgentsWarning", {
+										name: skillName,
+										agents: agentNames,
+									})
+								: t("deleteSkillForAgentWarning", {
+										name: skillName,
+										agent: agentNames,
+									})}
 						</p>
 						{item && (
 							<div className="mt-4 rounded-lg bg-surface-secondary px-3 py-2">
 								<p className="text-[11px] text-muted">
-									{scopeLabel}
+									{isMultiAgent
+										? t("sharedLocation")
+										: item.installations[0].source ===
+												"project"
+											? t("project")
+											: t("global")}
 								</p>
 								<p className="mt-1 font-mono text-xs text-foreground">
 									{folderPath}
@@ -195,14 +143,15 @@ export function DeleteSkillLocationDialog({
 						<Button
 							variant="danger"
 							onPress={() => deleteMutation.mutate()}
-							isDisabled={
-								deleteMutation.isPending ||
-								selectedInstallation === null
-							}
+							isDisabled={deleteMutation.isPending}
 						>
 							{deleteMutation.isPending ? (
 								<>
-									<Spinner size="sm" className="mr-2" />
+									<Spinner
+										size="sm"
+										color="current"
+										className="mr-2"
+									/>
 									{t("deleting")}
 								</>
 							) : (
@@ -223,55 +172,76 @@ export function DeleteSkillDialog({
 	projectPath,
 }: DeleteSkillDialogProps) {
 	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
+	const api = useApi();
 	const queryClient = useQueryClient();
 
 	const skill = group.items[0];
 
 	const deleteMutation = useMutation({
 		mutationFn: async () => {
-			const deletions = group.items
-				.filter((item) => item.agent)
-				.map((item) => ({
-					agent: item.agent!,
-					scope:
-						item.source === ConfigSource.Project
-							? ("project" as const)
-							: ("global" as const),
-				}));
-			const results = await Promise.allSettled(
-				deletions.map(({ agent, scope }) =>
-					api.skills.delete(agent, skill.name, scope, projectPath),
-				),
+			const itemsWithAgent = group.items.filter((item) => item.agent);
+
+			const globalItems = itemsWithAgent.filter(
+				(item) => item.source === "global",
 			);
-			const failures = results
-				.map((result, index) => ({
-					result,
-					deletion: deletions[index],
-				}))
-				.filter(({ result }) => result.status === "rejected");
-			if (failures.length > 0) {
-				console.error("Skill delete failures:", failures);
+			const projectItems = itemsWithAgent.filter(
+				(item) => item.source === "project",
+			);
+
+			const results = [];
+
+			if (globalItems.length > 0) {
+				const result = await api.skills.reconcile({
+					source: {
+						agent: globalItems[0].agent!,
+						scope: "global",
+						project_root: null,
+						name: skill.name,
+					},
+					added: null,
+					removed: globalItems.map((item) => item.agent!),
+				});
+				results.push(result);
+			}
+
+			if (projectItems.length > 0) {
+				const result = await api.skills.reconcile({
+					source: {
+						agent: projectItems[0].agent!,
+						scope: "project",
+						project_root: projectPath ?? null,
+						name: skill.name,
+					},
+					added: null,
+					removed: projectItems.map((item) => item.agent!),
+				});
+				results.push(result);
+			}
+
+			const totalFailed = results.reduce(
+				(sum, r) => sum + r.failed_count,
+				0,
+			);
+			const totalResults = results.reduce(
+				(sum, r) => sum + r.results.length,
+				0,
+			);
+
+			if (totalFailed > 0) {
 				throw new Error(
-					`${failures.length} of ${deletions.length} deletions failed`,
+					`${totalFailed} of ${totalResults} deletions failed`,
 				);
 			}
 		},
-		onSettled: () => {
-			queryClient.invalidateQueries({ queryKey: ["skills"] });
-			queryClient.invalidateQueries({
-				queryKey: ["project-skills"],
-			});
+		onSettled: async () => {
+			await invalidateSkillQueries(queryClient);
 			onClose();
 		},
 	});
 
-	const globalItems = group.items.filter(
-		(item) => item.source === ConfigSource.Global,
-	);
+	const globalItems = group.items.filter((item) => item.source === "global");
 	const projectItems = group.items.filter(
-		(item) => item.source === ConfigSource.Project,
+		(item) => item.source === "project",
 	);
 
 	return (
@@ -382,7 +352,11 @@ export function DeleteSkillDialog({
 						>
 							{deleteMutation.isPending ? (
 								<>
-									<Spinner size="sm" className="mr-2" />
+									<Spinner
+										size="sm"
+										color="current"
+										className="mr-2"
+									/>
 									{t("deleting")}
 								</>
 							) : (

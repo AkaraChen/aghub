@@ -1,46 +1,33 @@
 import ky from "ky";
 import type {
+	AgentAvailabilityDto,
+	AgentInfo,
 	CodeEditorType,
+	CreateCredentialRequest,
+	CreateMcpRequest,
 	CreateSkillRequest,
+	CredentialResponse,
+	DeleteSkillByPathRequest,
+	DeleteSkillByPathResponse,
+	GitInstallRequest,
+	GitInstallResponse,
+	GitScanRequest,
+	GitScanResponse,
 	GlobalSkillLockResponse,
 	ImportSkillRequest,
 	InstallSkillRequest,
 	InstallSkillResponse,
 	MarketSkill,
 	McpResponse,
+	OperationBatchResponse,
 	ProjectSkillLockResponse,
+	ReconcileRequest,
 	SkillResponse,
 	SkillTreeNodeResponse,
-	ToolInfo,
-	TransportDto,
-} from "./api-types";
-
-export interface UpdateMcpRequest {
-	name?: string;
-	transport?: TransportDto;
-	enabled?: boolean;
-	timeout?: number;
-}
-
-export interface AgentInfo {
-	id: string;
-	display_name: string;
-	capabilities: {
-		mcp_stdio: boolean;
-		mcp_remote: boolean;
-		mcp_enable_disable: boolean;
-		skills: boolean;
-		skills_mutable: boolean;
-		universal_skills: boolean;
-	};
-}
-
-export interface AgentAvailability {
-	id: string;
-	has_global_directory: boolean;
-	has_cli: boolean;
-	is_available: boolean;
-}
+	ToolInfoDto,
+	TransferRequest,
+	UpdateMcpRequest,
+} from "../generated/dto";
 
 export function createApi(baseUrl: string) {
 	const client = ky.create({ prefixUrl: baseUrl });
@@ -50,7 +37,7 @@ export function createApi(baseUrl: string) {
 			list(): Promise<AgentInfo[]> {
 				return client.get("agents").json();
 			},
-			availability(): Promise<AgentAvailability[]> {
+			availability(): Promise<AgentAvailabilityDto[]> {
 				return client.get("agents/availability").json();
 			},
 		},
@@ -166,6 +153,25 @@ export function createApi(baseUrl: string) {
 					})
 					.json();
 			},
+			transfer(body: TransferRequest): Promise<OperationBatchResponse> {
+				return client.post("skills/transfer", { json: body }).json();
+			},
+			reconcile(body: ReconcileRequest): Promise<OperationBatchResponse> {
+				return client.post("skills/reconcile", { json: body }).json();
+			},
+			deleteByPath(
+				body: DeleteSkillByPathRequest,
+			): Promise<DeleteSkillByPathResponse> {
+				return client.delete("skills/by-path", { json: body }).json();
+			},
+			gitScan(data: GitScanRequest): Promise<GitScanResponse> {
+				return client
+					.post("skills/git/scan", { json: data, timeout: 120000 })
+					.json();
+			},
+			gitInstall(data: GitInstallRequest): Promise<GitInstallResponse> {
+				return client.post("skills/git/install", { json: data }).json();
+			},
 		},
 		mcps: {
 			listAll(
@@ -197,11 +203,7 @@ export function createApi(baseUrl: string) {
 			create(
 				agent: string,
 				scope: "global" | "project",
-				body: {
-					name: string;
-					transport: TransportDto;
-					timeout?: number;
-				},
+				body: CreateMcpRequest,
 				projectRoot?: string,
 			): Promise<McpResponse> {
 				return client
@@ -252,6 +254,12 @@ export function createApi(baseUrl: string) {
 					})
 					.then(() => undefined);
 			},
+			transfer(body: TransferRequest): Promise<OperationBatchResponse> {
+				return client.post("mcps/transfer", { json: body }).json();
+			},
+			reconcile(body: ReconcileRequest): Promise<OperationBatchResponse> {
+				return client.post("mcps/reconcile", { json: body }).json();
+			},
 		},
 		market: {
 			search(q: string, limit?: number): Promise<MarketSkill[]> {
@@ -263,7 +271,7 @@ export function createApi(baseUrl: string) {
 			},
 		},
 		integrations: {
-			listCodeEditors(): Promise<ToolInfo[]> {
+			listCodeEditors(): Promise<ToolInfoDto[]> {
 				return client.get("integrations/code-editors").json();
 			},
 			openWithEditor(
@@ -275,6 +283,17 @@ export function createApi(baseUrl: string) {
 						json: { path, editor },
 					})
 					.then(() => undefined);
+			},
+		},
+		credentials: {
+			list(): Promise<CredentialResponse[]> {
+				return client.get("credentials").json();
+			},
+			create(body: CreateCredentialRequest): Promise<CredentialResponse> {
+				return client.post("credentials", { json: body }).json();
+			},
+			delete(id: string): Promise<void> {
+				return client.delete(`credentials/${id}`).then(() => undefined);
 			},
 		},
 	};

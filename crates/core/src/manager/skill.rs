@@ -11,41 +11,14 @@ use std::path::{Path, PathBuf};
 /// Resolve a source_path string (potentially with `~/` prefix) to an absolute PathBuf
 fn resolve_source_path(sp: &str) -> PathBuf {
 	if let Some(stripped) = sp.strip_prefix("~/") {
-		dirs::home_dir().unwrap().join(stripped)
+		if let Some(home) = dirs::home_dir() {
+			home.join(stripped)
+		} else {
+			PathBuf::from(sp)
+		}
 	} else {
 		PathBuf::from(sp)
 	}
-}
-
-/// Read the body (everything after the closing `---`) from an existing SKILL.md.
-/// Returns Err on I/O failure, Ok(None) if file doesn't exist or has no body.
-fn read_existing_body(path: &Path) -> Result<Option<String>> {
-	let content = match std::fs::read_to_string(path) {
-		Ok(c) => c,
-		Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-			return Ok(None);
-		}
-		Err(e) => return Err(e.into()),
-	};
-
-	let mut in_frontmatter = false;
-	let mut body_start = None;
-
-	for (i, line) in content.lines().enumerate() {
-		if line.trim() == "---" {
-			if !in_frontmatter {
-				in_frontmatter = true;
-			} else {
-				// Found closing ---, body starts after this line
-				let byte_offset: usize =
-					content.lines().take(i + 1).map(|l| l.len() + 1).sum();
-				body_start = Some(byte_offset.min(content.len()));
-				break;
-			}
-		}
-	}
-
-	Ok(body_start.map(|start| content[start..].to_string()))
 }
 
 /// Remove a skill's file or directory from disk.
@@ -166,7 +139,16 @@ impl ConfigManager {
 
 		if let Some(path) = file_path {
 			// Read existing body before any filesystem changes
-			let existing_body = read_existing_body(&path)?;
+			let existing_body = match skill::parser::parse(&path) {
+				Ok(existing) => Some(existing.content),
+				Err(skill::SkillError::NotFound(_)) => None,
+				Err(e) => {
+					return Err(ConfigError::InvalidConfig(format!(
+						"Failed to parse existing skill '{}': {e}",
+						path.display()
+					)));
+				}
+			};
 
 			let mut final_file_path = path.clone();
 
@@ -193,10 +175,10 @@ impl ConfigManager {
 						final_file_path =
 							new_parent.join(path.file_name().unwrap());
 					} else if path.file_name().and_then(|n| n.to_str())
-						== Some(&format!("{}.md", safe_old_name))
+						== Some(&format!("{safe_old_name}.md"))
 					{
-						let new_path = path
-							.with_file_name(format!("{}.md", safe_new_name));
+						let new_path =
+							path.with_file_name(format!("{safe_new_name}.md"));
 						std::fs::rename(&path, &new_path).map_err(|e| {
 							ConfigError::Io(std::io::Error::new(
 								e.kind(),
@@ -293,7 +275,7 @@ impl ConfigManager {
 
 	pub fn add_skill_from_path(&mut self, path: &Path) -> Result<Skill> {
 		let skill_pkg = skill::parser::parse(path).map_err(|e| {
-			ConfigError::InvalidConfig(format!("Failed to parse skill: {}", e))
+			ConfigError::InvalidConfig(format!("Failed to parse skill: {e}"))
 		})?;
 		let skill = convert_skill(skill_pkg);
 		self.add_skill(skill.clone())?;
@@ -304,7 +286,7 @@ impl ConfigManager {
 		let mut errors = Vec::new();
 		match skill::parser::parse(path) {
 			Ok(_) => {}
-			Err(e) => errors.push(format!("Parse error: {}", e)),
+			Err(e) => errors.push(format!("Parse error: {e}")),
 		}
 		errors
 	}
@@ -322,13 +304,15 @@ fn serialize_frontmatter(skill: &Skill) -> String {
 		"name".to_string(),
 		serde_yaml::Value::String(skill.name.clone()),
 	);
-	if let Some(desc) = &skill.description {
-		let single_line = desc.replace('\n', " ");
-		map.insert(
-			"description".to_string(),
-			serde_yaml::Value::String(single_line),
-		);
-	}
+	let description = skill
+		.description
+		.as_deref()
+		.unwrap_or("")
+		.replace('\n', " ");
+	map.insert(
+		"description".to_string(),
+		serde_yaml::Value::String(description),
+	);
 	if let Some(author) = &skill.author {
 		map.insert(
 			"author".to_string(),
@@ -392,6 +376,15 @@ mod tests {
 	}
 
 	#[test]
+	fn test_format_skill_stays_parseable_by_skill_crate() {
+		let skill = Skill::new("test-skill");
+		let output = format_skill(&skill, None);
+		let parsed = skill::parser::parse_skill_md(&output).unwrap();
+		assert_eq!(parsed.name, "test-skill");
+		assert_eq!(parsed.description, "");
+	}
+
+	#[test]
 	fn test_format_skill_quotes_colon_in_description() {
 		let mut skill = Skill::new("test");
 		skill.description = Some("Source: https://example.com".to_string());
@@ -424,28 +417,5 @@ mod tests {
 		.expect("Should produce valid YAML");
 		assert_eq!(reparsed["version"], "123");
 		assert_eq!(reparsed["author"], "true");
-	}
-
-	#[test]
-	fn test_read_existing_body_extracts_correctly() {
-		let tmp = tempfile::tempdir().unwrap();
-		let path = tmp.path().join("SKILL.md");
-		std::fs::write(
-			&path,
-			"---\nname: test\ndescription: desc\n---\n\n\
-			 # Test\n\nBody content here.\n",
-		)
-		.unwrap();
-		let body = read_existing_body(&path).unwrap().unwrap();
-		assert!(body.contains("# Test"));
-		assert!(body.contains("Body content here."));
-	}
-
-	#[test]
-	fn test_read_existing_body_missing_file_returns_none() {
-		let tmp = tempfile::tempdir().unwrap();
-		let path = tmp.path().join("nonexistent.md");
-		let result = read_existing_body(&path).unwrap();
-		assert!(result.is_none());
 	}
 }

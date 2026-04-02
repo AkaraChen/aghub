@@ -20,9 +20,8 @@ jobs:
     changelog:
         name: Generate Changelog
         runs-on: ubuntu-latest
-        if: github.event_name == 'push'
-        outputs:
-            release_body: ${{ steps.git-cliff.outputs.content }}
+        permissions:
+            contents: write
         steps:
             - name: Checkout
               uses: actions/checkout@v4
@@ -38,7 +37,17 @@ jobs:
                   OUTPUT: CHANGES.md
                   GITHUB_REPO: ${{ github.repository }}
 
+            - name: Create GitHub Release
+              uses: softprops/action-gh-release@v2
+              with:
+                  tag_name: ${{ github.event.inputs.version || github.ref_name }}
+                  name: "aghub ${{ github.event.inputs.version || github.ref_name }}"
+                  body_path: CHANGES.md
+                  draft: false
+                  prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
+
     build-tauri:
+        needs: changelog
         name: Build Desktop (${{ matrix.target }})
         runs-on: ${{ matrix.os }}
         permissions:
@@ -118,12 +127,34 @@ jobs:
               with:
                   tagName: ${{ github.event.inputs.version || github.ref_name }}
                   releaseName: "aghub ${{ github.event.inputs.version || github.ref_name }}"
-                  releaseBody: ${{ needs.changelog.outputs.release_body || 'Manual build' }}
                   releaseDraft: false
                   prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
                   args: --target ${{ matrix.target }}
                   includeUpdaterJson: true
                   projectPath: crates/desktop
+
+            - name: Prepare Generic Artifact
+              shell: bash
+              run: |
+                  if [ "${{ matrix.target }}" = "x86_64-pc-windows-msvc" ]; then
+                      find target -type f -name "*setup.exe" -exec cp {} aghub-windows-setup.exe \;
+                      echo "GENERIC_ASSET=aghub-windows-setup.exe" >> $GITHUB_ENV
+                  elif [ "${{ matrix.target }}" = "x86_64-unknown-linux-gnu" ]; then
+                      find target -type f -name "*.AppImage" -exec cp {} aghub-linux.AppImage \;
+                      echo "GENERIC_ASSET=aghub-linux.AppImage" >> $GITHUB_ENV
+                  elif [ "${{ matrix.target }}" = "x86_64-apple-darwin" ]; then
+                      find target -type f -name "*.dmg" -exec cp {} aghub_mac_intel.dmg \;
+                      echo "GENERIC_ASSET=aghub_mac_intel.dmg" >> $GITHUB_ENV
+                  elif [ "${{ matrix.target }}" = "aarch64-apple-darwin" ]; then
+                      find target -type f -name "*.dmg" -exec cp {} aghub_mac_arm.dmg \;
+                      echo "GENERIC_ASSET=aghub_mac_arm.dmg" >> $GITHUB_ENV
+                  fi
+
+            - name: Upload Generic Release Asset
+              uses: softprops/action-gh-release@v2
+              with:
+                  tag_name: ${{ github.event.inputs.version || github.ref_name }}
+                  files: ${{ env.GENERIC_ASSET }}
 
     build-cli:
         name: Build CLI (${{ matrix.target }})
@@ -175,17 +206,121 @@ jobs:
             - name: Package CLI (Unix)
               if: matrix.os != 'windows-latest'
               run: |
-                  tar -czvf agentctl-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release agentctl
+                  tar -czvf aghub-cli-${{ matrix.target }}.tar.gz -C target/${{ matrix.target }}/release aghub-cli
 
             - name: Package CLI (Windows)
               if: matrix.os == 'windows-latest'
               shell: pwsh
               run: |
-                  Compress-Archive -Path target/${{ matrix.target }}/release/agentctl.exe -DestinationPath agentctl-${{ matrix.target }}.zip
+                  Compress-Archive -Path target/${{ matrix.target }}/release/aghub-cli.exe -DestinationPath aghub-cli-${{ matrix.target }}.zip
 
             - name: Upload CLI to Release
               uses: softprops/action-gh-release@v2
               with:
                   tag_name: ${{ github.event.inputs.version || github.ref_name }}
                   prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
-                  files: agentctl-*
+                  files: aghub-cli-*
+
+    publish-homebrew:
+        name: Update Homebrew Tap
+        needs: [build-tauri, build-cli]
+        runs-on: ubuntu-latest
+        steps:
+            - name: Checkout Homebrew Tap
+              uses: actions/checkout@v4
+              with:
+                  repository: "Fldicoahkiin/homebrew-tap"
+                  token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+                  path: tap
+
+            - name: Update Formula and Cask
+              env:
+                  VERSION: ${{ github.event.inputs.version || github.ref_name }}
+              run: |
+                  VERSION="${VERSION#v}"
+                  echo "Updating for version: ${VERSION}"
+
+                  # Download CLI assets to compute checksums
+                  echo "Downloading CLI assets..."
+                  wget -q "https://github.com/AkaraChen/aghub/releases/download/v${VERSION}/aghub-cli-x86_64-apple-darwin.tar.gz" -O aghub-cli_mac_intel.tar.gz || echo "Failed to download x86_64 CLI"
+                  wget -q "https://github.com/AkaraChen/aghub/releases/download/v${VERSION}/aghub-cli-aarch64-apple-darwin.tar.gz" -O aghub-cli_mac_arm.tar.gz || echo "Failed to download aarch64 CLI"
+                  wget -q "https://github.com/AkaraChen/aghub/releases/download/v${VERSION}/aghub-cli-x86_64-unknown-linux-gnu.tar.gz" -O aghub-cli_linux.tar.gz || echo "Failed to download linux CLI"
+
+                  AGENT_MAC_INTEL_SHA=$(sha256sum aghub-cli_mac_intel.tar.gz | awk '{print $1}')
+                  AGENT_MAC_ARM_SHA=$(sha256sum aghub-cli_mac_arm.tar.gz | awk '{print $1}')
+                  AGENT_LINUX_SHA=$(sha256sum aghub-cli_linux.tar.gz | awk '{print $1}')
+
+                  cat << INNEREOF > tap/aghub-cli.rb
+                  class AghubCli < Formula
+                    desc "AI coding agent configuration management tool (CLI)"
+                    homepage "https://github.com/AkaraChen/aghub"
+                    version "${VERSION}"
+                    license "MIT"
+
+                    on_macos do
+                      if Hardware::CPU.arm?
+                        url "https://github.com/AkaraChen/aghub/releases/download/v#{version}/aghub-cli-aarch64-apple-darwin.tar.gz"
+                        sha256 "${AGENT_MAC_ARM_SHA}"
+                      else
+                        url "https://github.com/AkaraChen/aghub/releases/download/v#{version}/aghub-cli-x86_64-apple-darwin.tar.gz"
+                        sha256 "${AGENT_MAC_INTEL_SHA}"
+                      end
+                    end
+
+                    on_linux do
+                      if Hardware::CPU.intel?
+                        url "https://github.com/AkaraChen/aghub/releases/download/v#{version}/aghub-cli-x86_64-unknown-linux-gnu.tar.gz"
+                        sha256 "${AGENT_LINUX_SHA}"
+                      end
+                    end
+
+                    def install
+                      bin.install "aghub-cli"
+                    end
+
+                    test do
+                      system "#{bin}/aghub-cli", "--version"
+                    end
+                  end
+                  INNEREOF
+
+                  # Download Desktop assets to compute checksums
+                  echo "Downloading Desktop App assets..."
+                  wget -q "https://github.com/AkaraChen/aghub/releases/download/v${VERSION}/aghub_${VERSION}_x64.dmg" -O aghub_mac_intel.dmg || echo "Failed to download x64 dmg"
+                  wget -q "https://github.com/AkaraChen/aghub/releases/download/v${VERSION}/aghub_${VERSION}_aarch64.dmg" -O aghub_mac_arm.dmg || echo "Failed to download aarch64 dmg"
+
+                  AGHUB_MAC_INTEL_SHA=$(sha256sum aghub_mac_intel.dmg | awk '{print $1}')
+                  AGHUB_MAC_ARM_SHA=$(sha256sum aghub_mac_arm.dmg | awk '{print $1}')
+
+                  mkdir -p tap/Casks
+                  cat << INNEREOF > tap/Casks/aghub.rb
+                  cask "aghub" do
+                    arch arm: "aarch64", intel: "x64"
+
+                    version "${VERSION}"
+                    sha256 arm:   "${AGHUB_MAC_ARM_SHA}",
+                           intel: "${AGHUB_MAC_INTEL_SHA}"
+
+                    url "https://github.com/AkaraChen/aghub/releases/download/v#{version}/aghub_#{version}_#{arch}.dmg"
+                    name "aghub"
+                    desc "AI coding agent configuration management tool (Desktop App)"
+                    homepage "https://github.com/AkaraChen/aghub"
+
+                    app "aghub.app"
+
+                    zap trash: [
+                      "~/Library/Application Support/com.akrc.aghub",
+                      "~/Library/Preferences/com.akrc.aghub.plist",
+                      "~/Library/Saved Application State/com.akrc.aghub.savedState"
+                    ]
+                  end
+                  INNEREOF
+
+            - name: Commit and Push
+              run: |
+                  cd tap
+                  git config user.name "github-actions[bot]"
+                  git config user.email "github-actions[bot]@users.noreply.github.com"
+                  git add aghub-cli.rb Casks/aghub.rb
+                  git commit -m "Update Homebrew formula and cask for aghub v${{ github.event.inputs.version || github.ref_name }}" || echo "No changes to commit"
+                  git push

@@ -136,26 +136,22 @@ fn validate_skill_structure(skill: &crate::model::Skill) -> Vec<String> {
 	// Validate resource paths are valid
 	for script in &skill.scripts {
 		if script.contains("..") {
-			errors.push(format!(
-				"Invalid script path (contains '..'): {}",
-				script
-			));
+			errors
+				.push(format!("Invalid script path (contains '..'): {script}"));
 		}
 	}
 
 	for reference in &skill.references {
 		if reference.contains("..") {
 			errors.push(format!(
-				"Invalid reference path (contains '..'): {}",
-				reference
+				"Invalid reference path (contains '..'): {reference}"
 			));
 		}
 	}
 
 	for asset in &skill.assets {
 		if asset.contains("..") {
-			errors
-				.push(format!("Invalid asset path (contains '..'): {}", asset));
+			errors.push(format!("Invalid asset path (contains '..'): {asset}"));
 		}
 	}
 

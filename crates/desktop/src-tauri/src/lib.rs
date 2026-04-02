@@ -17,6 +17,7 @@ fn focus_main_window(window: &WebviewWindow) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+	let _ = fix_path_env::fix();
 	tauri::Builder::default()
 		.manage(AppState {
 			port: std::sync::Mutex::new(None),
@@ -31,6 +32,7 @@ pub fn run() {
 		.plugin(tauri_plugin_dialog::init())
 		.plugin(tauri_plugin_store::Builder::default().build())
 		.setup(|app| {
+			let _ = app;
 			#[cfg(desktop)]
 			{
 				app.handle()
@@ -40,6 +42,14 @@ pub fn run() {
 				#[cfg(any(windows, target_os = "linux"))]
 				if let Err(error) = app.deep_link().register_all() {
 					eprintln!("Failed to register deep-link schemes: {error}");
+				}
+			}
+
+			#[cfg(not(target_os = "macos"))]
+			{
+				use tauri::Manager;
+				if let Some(window) = app.handle().get_webview_window("main") {
+					let _ = window.set_decorations(false);
 				}
 			}
 

@@ -1,18 +1,18 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import type { MarketSkill } from "../../../generated/dto";
 import { useAgentAvailability } from "../../../hooks/use-agent-availability";
+import { useApi } from "../../../hooks/use-api";
 import { useInstallTarget } from "../../../hooks/use-install-target";
-import { useServer } from "../../../hooks/use-server";
-import { createApi } from "../../../lib/api";
-import type { MarketSkill } from "../../../lib/api-types";
+import { supportsSkillMutation } from "../../../lib/agent-capabilities";
 import {
 	buildPendingResults,
 	type InstallResult,
 } from "../../../lib/install-utils";
+import { installSkillMutationOptions } from "../../../requests/skills";
 
 export function useSkillInstall() {
-	const { baseUrl } = useServer();
-	const api = createApi(baseUrl);
+	const api = useApi();
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
 	const {
@@ -25,6 +25,12 @@ export function useSkillInstall() {
 		setSelectedProjectId,
 		resetInstallTarget,
 	} = useInstallTarget();
+	const installMutation = useMutation(
+		installSkillMutationOptions({
+			api,
+			queryClient,
+		}),
+	);
 
 	const [installModalOpen, setInstallModalOpen] = useState(false);
 	const [selectedSkill, setSelectedSkill] = useState<MarketSkill | null>(
@@ -38,7 +44,9 @@ export function useSkillInstall() {
 	const [installAll, setInstallAll] = useState(false);
 
 	const skillAgents = availableAgents.filter(
-		(a) => a.isUsable && a.capabilities.skills_mutable,
+		(a) =>
+			a.isUsable &&
+			supportsSkillMutation(a, installToProject ? "project" : "global"),
 	);
 
 	const handleInstallClick = (skill: MarketSkill) => {
@@ -64,12 +72,12 @@ export function useSkillInstall() {
 		setInstallResults(pendingResults);
 
 		try {
-			const response = await api.skills.install({
+			const response = await installMutation.mutateAsync({
 				source: selectedSkill.source,
 				agents: Array.from(selectedAgents),
 				skills: installAll ? [] : [selectedSkill.name],
 				scope: installToProject ? "project" : "global",
-				project_path: selectedProject?.path,
+				project_path: selectedProject?.path ?? null,
 				install_all: installAll,
 			});
 
@@ -92,7 +100,6 @@ export function useSkillInstall() {
 		}
 
 		setIsInstalling(false);
-		queryClient.invalidateQueries({ queryKey: ["skills"] });
 	};
 
 	const handleCloseInstallModal = () => {

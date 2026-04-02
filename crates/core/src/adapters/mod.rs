@@ -1,6 +1,6 @@
 use crate::{
 	errors::Result,
-	models::{AgentConfig, ResourceScope},
+	models::{AgentConfig, McpServer, McpTransport, ResourceScope},
 };
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -8,21 +8,32 @@ use std::process::Command;
 /// Trait for adapting different agent configuration formats
 pub trait AgentAdapter: Send + Sync {
 	fn name(&self) -> &'static str;
-	fn global_config_path(&self) -> PathBuf;
-	fn project_config_path(&self, project_root: &Path) -> PathBuf;
+	fn supports_skill_scope(&self, scope: ResourceScope) -> bool;
+	fn supports_mcp_scope(&self, scope: ResourceScope) -> bool;
+	fn mcp_config_path(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+	) -> Option<PathBuf>;
+	fn load_mcps(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+	) -> Result<Vec<McpServer>>;
+	fn save_mcps(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+		mcps: &[McpServer],
+	) -> Result<()>;
 
 	/// Load complete configuration: MCPs from file + Skills from directories
-	/// Adapter handles all I/O internally, including missing config files
+	/// Adapter handles all I/O internally, including missing MCP config files
 	fn load_config(
 		&self,
-		config_path: &Path,
 		project_root: Option<&Path>,
 		scope: ResourceScope,
 	) -> Result<AgentConfig>;
-
-	/// Parse config from content string (legacy, kept for backward compatibility)
-	/// New code should use load_config instead
-	fn parse_config(&self, content: &str) -> Result<AgentConfig>;
 
 	/// Get all valid skill paths for the given scope (used for loading)
 	fn get_skills_paths(
@@ -37,16 +48,11 @@ pub trait AgentAdapter: Send + Sync {
 		project_root: Option<&Path>,
 		scope: ResourceScope,
 	) -> Option<PathBuf>;
-
-	fn serialize_config(
-		&self,
-		config: &AgentConfig,
-		original_content: Option<&str>,
-	) -> Result<String>;
 	fn supports_mcp_operations(&self) -> bool {
 		true
 	}
-	fn validate_command(&self, config_path: &Path) -> Command;
+	fn mcp_supports_transport(&self, transport: &McpTransport) -> bool;
+	fn validate_command(&self, config_path: Option<&Path>) -> Command;
 	fn supports_mcp_enable_disable(&self) -> bool {
 		true
 	}

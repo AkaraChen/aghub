@@ -9,8 +9,8 @@ fn fixtures_dir() -> PathBuf {
 		.unwrap()
 }
 
-fn agentctl() -> Command {
-	let mut cmd = Command::cargo_bin("agentctl").unwrap();
+fn aghub_cli() -> Command {
+	let mut cmd = Command::cargo_bin("aghub-cli").unwrap();
 	let dir = fixtures_dir();
 	cmd.env("HOME", &dir);
 	cmd.env("USERPROFILE", &dir);
@@ -21,7 +21,7 @@ fn agentctl() -> Command {
 #[test]
 fn test_agent_all_get_skills_is_valid_json_array() {
 	let dir = fixtures_dir();
-	let out = agentctl()
+	let out = aghub_cli()
 		.current_dir(&dir)
 		.args(["--agent", "all", "--all", "get", "skills"])
 		.output()
@@ -57,7 +57,7 @@ fn test_agent_all_get_skills_is_valid_json_array() {
 #[test]
 fn test_agent_all_get_mcps_is_valid_json_array() {
 	let dir = fixtures_dir();
-	let out = agentctl()
+	let out = aghub_cli()
 		.current_dir(&dir)
 		.args(["--agent", "all", "--all", "get", "mcps"])
 		.output()
@@ -84,7 +84,7 @@ fn test_agent_all_get_mcps_is_valid_json_array() {
 
 #[test]
 fn test_agent_all_non_get_command_fails() {
-	let out = agentctl()
+	let out = aghub_cli()
 		.args(["--agent", "all", "add", "skills", "--name", "foo"])
 		.output()
 		.unwrap();
@@ -100,7 +100,7 @@ fn test_agent_all_non_get_command_fails() {
 
 #[test]
 fn test_pi_add_mcp_fails_for_unsupported_agent() {
-	let out = agentctl()
+	let out = aghub_cli()
 		.args([
 			"--agent",
 			"pi",

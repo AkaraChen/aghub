@@ -1,22 +1,32 @@
 use aghub_core::{
+	convert_skill, create_adapter,
 	errors::ConfigError,
 	load_all_agents,
-	models::{AgentType, Skill},
-	registry,
+	models::{AgentType, ResourceScope, Skill},
+	registry, transfer,
 };
 use rocket::http::Status;
 use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
+use skill::sanitize::sanitize_name;
+use std::collections::HashMap;
 
 use crate::{
 	dto::integrations::{
 		CodeEditorType, EditSkillFolderRequest, OpenSkillFolderRequest,
 	},
 	dto::skill::{
-		CreateSkillRequest, GlobalSkillLockResponse, InstallSkillRequest,
-		InstallSkillResponse, LocalSkillLockEntryResponse,
-		ProjectSkillLockResponse, SkillLockEntryResponse, SkillResponse,
-		SkillTreeNodeKind, SkillTreeNodeResponse, UpdateSkillRequest,
+		CreateSkillRequest, DeleteSkillByPathRequest,
+		DeleteSkillByPathResponse, GitInstallRequest, GitInstallResponse,
+		GitInstallResultEntry, GitScanRequest, GitScanResponse,
+		GitScanSkillEntry, GlobalSkillLockResponse, InstallSkillRequest,
+		InstallSkillResponse, LocalSkillLockEntryResponse, ProjectLockQuery,
+		ProjectSkillLockResponse, SkillContentQuery, SkillLockEntryResponse,
+		SkillResponse, SkillTreeNodeKind, SkillTreeNodeResponse,
+		SkillTreeQuery, UpdateSkillRequest, ValidationError,
+	},
+	dto::transfer::{
+		OperationBatchResponse, ReconcileRequest, TransferRequest,
 	},
 	error::{ApiCreated, ApiError, ApiNoContent, ApiResult},
 	extractors::{AgentParam, ScopeParams},
@@ -24,6 +34,7 @@ use crate::{
 		build_manager_from_resolved, require_writable_scope,
 		resolved_to_resource_scope,
 	},
+	state::{GitCloneSession, GitCloneSessions},
 };
 
 fn expand_tilde_path(path: &str) -> std::path::PathBuf {
@@ -33,6 +44,210 @@ fn expand_tilde_path(path: &str) -> std::path::PathBuf {
 			.unwrap_or_else(|| path.into())
 	} else {
 		path.into()
+	}
+}
+
+async fn list_branches_for_scan<F>(
+	cached_branches: Option<Vec<String>>,
+	fetcher: F,
+) -> Result<Vec<String>, ApiError>
+where
+	F: FnOnce() -> aghub_git::Result<Vec<String>> + Send + 'static,
+{
+	if let Some(cached) = cached_branches {
+		return Ok(cached);
+	}
+
+	tokio::task::spawn_blocking(fetcher)
+		.await
+		.map_err(|e| {
+			ApiError::new(
+				Status::InternalServerError,
+				format!("Branch listing task panicked: {e}"),
+				"BRANCHES_ERROR",
+			)
+		})?
+		.map_err(|e| {
+			ApiError::new(
+				Status::BadRequest,
+				format!("Failed to list remote branches: {e}"),
+				"BRANCHES_ERROR",
+			)
+		})
+}
+
+#[post("/skills/transfer", data = "<body>")]
+pub fn transfer_skill_route(
+	body: Json<TransferRequest>,
+) -> ApiResult<OperationBatchResponse> {
+	let req = body.into_inner();
+	let source = req.source.to_core()?;
+	let destinations = req
+		.destinations
+		.iter()
+		.map(|target| target.to_core())
+		.collect::<Result<Vec<_>, _>>()?;
+	let result = transfer::transfer_skill(source, destinations)
+		.map_err(ApiError::from)?;
+	Ok(Json(result.into()))
+}
+
+#[post("/skills/reconcile", data = "<body>")]
+pub fn reconcile_skill_route(
+	body: Json<ReconcileRequest>,
+) -> ApiResult<OperationBatchResponse> {
+	let req = body.into_inner();
+	let source = req.source.to_core()?;
+
+	let added: Vec<AgentType> = req
+		.added
+		.unwrap_or_default()
+		.iter()
+		.map(|agent_str| {
+			agent_str.parse().map_err(|_| {
+				ApiError::new(
+					rocket::http::Status::BadRequest,
+					format!("Unknown agent '{agent_str}'"),
+					"INVALID_PARAM",
+				)
+			})
+		})
+		.collect::<Result<Vec<AgentType>, _>>()?;
+
+	let removed: Vec<AgentType> = req
+		.removed
+		.unwrap_or_default()
+		.iter()
+		.map(|agent_str| {
+			agent_str.parse().map_err(|_| {
+				ApiError::new(
+					rocket::http::Status::BadRequest,
+					format!("Unknown agent '{agent_str}'"),
+					"INVALID_PARAM",
+				)
+			})
+		})
+		.collect::<Result<Vec<AgentType>, _>>()?;
+
+	let result = transfer::reconcile_skill(source, added, removed)
+		.map_err(ApiError::from)?;
+
+	Ok(Json(result.into()))
+}
+
+#[delete("/skills/by-path", data = "<body>")]
+pub fn delete_skill_by_path(
+	body: Json<DeleteSkillByPathRequest>,
+) -> ApiResult<DeleteSkillByPathResponse> {
+	let req = body.into_inner();
+
+	let skill_path = expand_tilde_path(&req.source_path);
+	let skill_dir = if skill_path.is_dir() {
+		skill_path
+	} else {
+		skill_path
+			.parent()
+			.map(|p| p.to_path_buf())
+			.unwrap_or(skill_path)
+	};
+
+	let resource_scope = match req.scope.as_str() {
+		"global" => aghub_core::models::ResourceScope::GlobalOnly,
+		"project" => aghub_core::models::ResourceScope::ProjectOnly,
+		_ => {
+			return Ok(Json(DeleteSkillByPathResponse {
+				success: false,
+				deleted_path: None,
+				error: Some(format!("Invalid scope: {}", req.scope)),
+				validation_errors: None,
+			}));
+		}
+	};
+
+	if resource_scope == aghub_core::models::ResourceScope::ProjectOnly
+		&& req.project_root.is_none()
+	{
+		return Ok(Json(DeleteSkillByPathResponse {
+			success: false,
+			deleted_path: None,
+			error: Some(
+				"project_root is required when scope is 'project'".to_string(),
+			),
+			validation_errors: None,
+		}));
+	}
+
+	let project_root = req.project_root.as_ref().map(std::path::PathBuf::from);
+
+	let mut validation_errors = Vec::new();
+
+	for agent_str in &req.agents {
+		let agent: AgentType = match agent_str.parse() {
+			Ok(a) => a,
+			Err(_) => {
+				validation_errors.push(ValidationError {
+					agent: agent_str.clone(),
+					reason: format!("Unknown agent: {agent_str}"),
+				});
+				continue;
+			}
+		};
+
+		let adapter = aghub_core::create_adapter(agent);
+		let skills_paths =
+			adapter.get_skills_paths(project_root.as_deref(), resource_scope);
+
+		let is_valid = skills_paths
+			.iter()
+			.any(|sp| skill_dir.starts_with(sp) || skill_dir == *sp);
+
+		if !is_valid {
+			let valid_paths: Vec<String> = skills_paths
+				.iter()
+				.map(|p| p.display().to_string())
+				.collect();
+			validation_errors.push(ValidationError {
+				agent: agent_str.clone(),
+				reason: format!(
+					"Path '{}' is not in agent's skills directories: {}",
+					skill_dir.display(),
+					valid_paths.join(", ")
+				),
+			});
+		}
+	}
+
+	if !validation_errors.is_empty() {
+		return Ok(Json(DeleteSkillByPathResponse {
+			success: false,
+			deleted_path: None,
+			error: Some("Validation failed for one or more agents".to_string()),
+			validation_errors: Some(validation_errors),
+		}));
+	}
+
+	if !skill_dir.exists() {
+		return Ok(Json(DeleteSkillByPathResponse {
+			success: true,
+			deleted_path: Some(skill_dir.display().to_string()),
+			error: None,
+			validation_errors: None,
+		}));
+	}
+
+	match std::fs::remove_dir_all(&skill_dir) {
+		Ok(_) => Ok(Json(DeleteSkillByPathResponse {
+			success: true,
+			deleted_path: Some(skill_dir.display().to_string()),
+			error: None,
+			validation_errors: None,
+		})),
+		Err(e) => Ok(Json(DeleteSkillByPathResponse {
+			success: false,
+			deleted_path: None,
+			error: Some(format!("Failed to delete: {e}")),
+			validation_errors: None,
+		})),
 	}
 }
 
@@ -46,6 +261,114 @@ fn get_skill_root(path: std::path::PathBuf) -> std::path::PathBuf {
 	} else {
 		get_parent_folder(path)
 	}
+}
+
+fn copy_dir_recursive(
+	from: &std::path::Path,
+	to: &std::path::Path,
+) -> Result<(), ApiError> {
+	std::fs::create_dir_all(to)
+		.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
+	for entry in std::fs::read_dir(from)
+		.map_err(|e| ApiError::from(ConfigError::Io(e)))?
+	{
+		let entry = entry.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
+		let from_path = entry.path();
+		let to_path = to.join(entry.file_name());
+		let file_type = entry
+			.file_type()
+			.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
+		if file_type.is_dir() {
+			copy_dir_recursive(&from_path, &to_path)?;
+		} else {
+			std::fs::copy(&from_path, &to_path)
+				.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
+		}
+	}
+	Ok(())
+}
+
+fn resolve_git_install_target_dir(
+	agent_type: AgentType,
+	resource_scope: ResourceScope,
+	project_root: Option<&std::path::PathBuf>,
+) -> Option<std::path::PathBuf> {
+	create_adapter(agent_type)
+		.target_skills_dir(project_root.map(|p| p.as_path()), resource_scope)
+}
+
+fn install_git_skill_to_dir(
+	full_path: &std::path::Path,
+	target_dir: &std::path::Path,
+) -> Result<String, ApiError> {
+	let parsed = skill::parser::parse(full_path).map_err(|e| {
+		ApiError::new(
+			Status::BadRequest,
+			format!("Failed to parse skill: {e}"),
+			"SKILL_PARSE_FAILED",
+		)
+	})?;
+	let skill = convert_skill(parsed);
+	let safe_name = sanitize_name(&skill.name);
+	let dest_root = target_dir.join(&safe_name);
+
+	if !dest_root.exists() {
+		let source_root = get_skill_root(full_path.to_path_buf());
+		copy_dir_recursive(&source_root, &dest_root)?;
+	}
+
+	Ok(skill.name)
+}
+
+type GitInstallAgentGroup = Vec<(String, AgentType)>;
+type GitInstallGroups = HashMap<std::path::PathBuf, GitInstallAgentGroup>;
+type GitInstallInvalidAgent = (String, Option<AgentType>, String);
+
+fn build_git_install_groups(
+	agents: &[String],
+	resource_scope: ResourceScope,
+	project_root: Option<&std::path::PathBuf>,
+) -> (GitInstallGroups, Vec<GitInstallInvalidAgent>) {
+	let mut groups = HashMap::new();
+	let mut invalid = Vec::new();
+
+	for agent_str in agents {
+		let agent_type: AgentType = match agent_str.parse() {
+			Ok(agent) => agent,
+			Err(_) => {
+				invalid.push((
+					agent_str.clone(),
+					None,
+					format!("Unknown agent '{agent_str}'"),
+				));
+				continue;
+			}
+		};
+
+		let Some(target_dir) = resolve_git_install_target_dir(
+			agent_type,
+			resource_scope,
+			project_root,
+		) else {
+			invalid.push((
+				agent_str.clone(),
+				Some(agent_type),
+				format!(
+					"Agent '{}' does not support persistent skill creation \
+					 in this scope",
+					agent_str
+				),
+			));
+			continue;
+		};
+
+		groups
+			.entry(target_dir)
+			.or_insert_with(Vec::new)
+			.push((agent_str.clone(), agent_type));
+	}
+
+	(groups, invalid)
 }
 
 fn detect_available_editor() -> Option<CodeEditorType> {
@@ -119,20 +442,29 @@ use std::time::Duration;
 use tokio::process::Command;
 use tokio::time::timeout;
 
-fn check_skills_supported(agent: &AgentParam) -> Result<(), ApiError> {
+fn check_skills_supported(
+	agent: &AgentParam,
+	scope: ResourceScope,
+) -> Result<(), ApiError> {
 	let descriptor = registry::get(agent.0);
-	if !descriptor.capabilities.skills {
+	if !descriptor.supports_skill_scope(scope) {
 		return Err(ApiError::new(
 			Status::UnprocessableEntity,
-			format!("Agent '{}' does not support skills", descriptor.id),
+			format!(
+				"Agent '{}' does not support skills in {:?} scope",
+				descriptor.id, scope
+			),
 			"UNSUPPORTED_OPERATION",
 		));
 	}
 	Ok(())
 }
 
-fn check_skills_mutable(agent: &AgentParam) -> Result<(), ApiError> {
-	check_skills_supported(agent)?;
+fn check_skills_mutable(
+	agent: &AgentParam,
+	scope: ResourceScope,
+) -> Result<(), ApiError> {
+	check_skills_supported(agent, scope)?;
 	Ok(())
 }
 
@@ -141,8 +473,9 @@ pub fn list_skills(
 	agent: AgentParam,
 	scope: ScopeParams,
 ) -> ApiResult<Vec<SkillResponse>> {
-	check_skills_supported(&agent)?;
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_skills_supported(&agent, resource_scope)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 
 	if resolved.is_all() {
@@ -163,8 +496,9 @@ pub fn create_skill(
 	scope: ScopeParams,
 	body: Json<CreateSkillRequest>,
 ) -> ApiCreated<SkillResponse> {
-	check_skills_mutable(&agent)?;
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_skills_mutable(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	match manager.load() {
@@ -184,10 +518,14 @@ pub fn import_skill(
 	scope: ScopeParams,
 	body: Json<crate::dto::skill::ImportSkillRequest>,
 ) -> ApiResult<SkillResponse> {
-	check_skills_mutable(&agent)?;
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_skills_mutable(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
+
+	// Load configuration before adding skill
+	manager.load().map_err(ApiError::from)?;
 
 	let imported = manager
 		.add_skill_from_path(std::path::Path::new(&body.path))
@@ -202,8 +540,9 @@ pub fn get_skill(
 	name: &str,
 	scope: ScopeParams,
 ) -> ApiResult<SkillResponse> {
-	check_skills_supported(&agent)?;
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_skills_supported(&agent, resource_scope)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 
 	if resolved.is_all() {
@@ -230,8 +569,9 @@ pub fn update_skill(
 	scope: ScopeParams,
 	body: Json<UpdateSkillRequest>,
 ) -> ApiResult<SkillResponse> {
-	check_skills_mutable(&agent)?;
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_skills_mutable(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
@@ -255,8 +595,9 @@ pub fn delete_skill(
 	name: &str,
 	scope: ScopeParams,
 ) -> ApiNoContent {
-	check_skills_mutable(&agent)?;
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_skills_mutable(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
@@ -270,8 +611,9 @@ pub fn enable_skill(
 	name: &str,
 	scope: ScopeParams,
 ) -> ApiResult<SkillResponse> {
-	check_skills_supported(&agent)?;
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_skills_supported(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
@@ -286,8 +628,9 @@ pub fn disable_skill(
 	name: &str,
 	scope: ScopeParams,
 ) -> ApiResult<SkillResponse> {
-	check_skills_supported(&agent)?;
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_skills_supported(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
@@ -322,7 +665,12 @@ pub async fn install_skill(
 ) -> ApiResult<InstallSkillResponse> {
 	let req = body.into_inner();
 
-	let mut cmd = Command::new("npx");
+	#[cfg(target_os = "windows")]
+	let npx_cmd = "npx.cmd";
+	#[cfg(not(target_os = "windows"))]
+	let npx_cmd = "npx";
+
+	let mut cmd = Command::new(npx_cmd);
 	cmd.arg("skills").arg("add").arg(&req.source);
 
 	// When install_all is true, omit -s flag to install all skills from source
@@ -393,7 +741,7 @@ pub async fn open_skill_folder(
 
 	match open::that(&folder) {
 		Ok(_) => Ok(()),
-		Err(e) => Err(format!("Failed to open folder: {}", e)),
+		Err(e) => Err(format!("Failed to open folder: {e}")),
 	}
 }
 
@@ -412,7 +760,7 @@ pub async fn edit_skill_folder(
 				.spawn()
 			{
 				Ok(_) => Ok(()),
-				Err(e) => Err(format!("Failed to open editor: {}", e)),
+				Err(e) => Err(format!("Failed to open editor: {e}")),
 			}
 		}
 		None => {
@@ -426,11 +774,6 @@ pub async fn edit_skill_folder(
 			))
 		}
 	}
-}
-
-#[derive(Debug, rocket::FromForm)]
-pub struct SkillContentQuery {
-	pub path: String,
 }
 
 #[get("/skills/content?<query..>")]
@@ -454,11 +797,6 @@ pub fn get_skill_content(query: SkillContentQuery) -> ApiResult<String> {
 	})?;
 
 	Ok(Json(skill.content))
-}
-
-#[derive(Debug, rocket::FromForm)]
-pub struct SkillTreeQuery {
-	pub path: String,
 }
 
 #[get("/skills/tree?<query..>")]
@@ -497,11 +835,6 @@ pub fn get_global_skill_lock() -> ApiResult<GlobalSkillLockResponse> {
 	}))
 }
 
-#[derive(Debug, rocket::FromForm)]
-pub struct ProjectLockQuery {
-	pub project_path: Option<String>,
-}
-
 #[get("/skills/lock/project?<query..>")]
 pub fn get_project_skill_lock(
 	query: ProjectLockQuery,
@@ -523,4 +856,416 @@ pub fn get_project_skill_lock(
 		version: lock.version,
 		skills,
 	}))
+}
+
+#[post("/skills/git/scan", data = "<body>")]
+pub async fn git_scan_skills(
+	body: Json<GitScanRequest>,
+	sessions: &rocket::State<GitCloneSessions>,
+) -> ApiResult<GitScanResponse> {
+	let req = body.into_inner();
+
+	// Resolve credential token — either from session or from request
+	let credential_token: Option<String> =
+		if let Some(ref cred_id) = req.credential_id {
+			let creds = crate::routes::credentials::load_credentials()
+				.map_err(|e| {
+					ApiError::new(
+						Status::InternalServerError,
+						format!("Failed to read credentials: {e}"),
+						"KEYCHAIN_ERROR",
+					)
+				})?;
+			let cred =
+				creds.iter().find(|c| c.id == *cred_id).ok_or_else(|| {
+					ApiError::new(
+						Status::NotFound,
+						"Credential not found",
+						"CREDENTIAL_NOT_FOUND",
+					)
+				})?;
+			Some(cred.token.clone())
+		} else if let Some(ref sid) = req.session_id {
+			// Reuse credential from existing session
+			let map = sessions.sessions.lock().unwrap();
+			map.get(sid).and_then(|s| s.credential_token.clone())
+		} else {
+			None
+		};
+
+	// Retrieve cached branches from existing session if re-scanning
+	let cached_branches: Option<Vec<String>> =
+		if let Some(ref sid) = req.session_id {
+			let map = sessions.sessions.lock().unwrap();
+			map.get(sid).map(|s| s.branches.clone())
+		} else {
+			None
+		};
+
+	let url = req.url.clone();
+	let branch = req.branch.clone();
+	let token_for_clone = credential_token.clone();
+
+	// Clone repo in a blocking thread (gix is synchronous)
+	let temp_dir = tokio::task::spawn_blocking(move || {
+		let mut options = aghub_git::CloneOptions::new(&url);
+		if let Some(token) = token_for_clone {
+			options = options.with_credentials("x-access-token", token);
+		}
+		if let Some(ref branch) = branch {
+			options = options.with_branch(branch);
+		}
+		aghub_git::clone_to_temp(options)
+	})
+	.await
+	.map_err(|e| {
+		ApiError::new(
+			Status::InternalServerError,
+			format!("Clone task panicked: {e}"),
+			"CLONE_ERROR",
+		)
+	})?
+	.map_err(|e| {
+		ApiError::new(
+			Status::BadRequest,
+			format!("Failed to clone repository: {e}"),
+			"CLONE_FAILED",
+		)
+	})?;
+
+	// List remote branches (use cache from previous session if
+	// available to avoid an extra network call on branch switch)
+	let branch_url = req.url.clone();
+	let credential_token_for_branches = credential_token.clone();
+	let branches = list_branches_for_scan(cached_branches, move || {
+		let options = match credential_token_for_branches {
+			Some(token) => aghub_git::RemoteOptions::new(&branch_url)
+				.with_credentials("x-access-token", token),
+			None => aghub_git::RemoteOptions::new(&branch_url),
+		};
+		aghub_git::list_remote_branches(options)
+	})
+	.await?;
+
+	// Determine current branch name from the checked-out HEAD
+	let current_branch =
+		detect_current_branch(temp_dir.path()).unwrap_or_else(|| {
+			req.branch.clone().unwrap_or_else(|| {
+				// Guess from the branches list — first one
+				// alphabetically that looks like a default
+				["main", "master"]
+					.iter()
+					.find(|b| branches.contains(&b.to_string()))
+					.map(|b| b.to_string())
+					.unwrap_or_default()
+			})
+		});
+
+	// Scan the cloned repo for skills
+	let scan_options = skill::scan::ScanOptions {
+		max_depth: 10,
+		full_depth: true,
+		respect_gitignore: true,
+	};
+	let temp_path = temp_dir.path().to_path_buf();
+	let skill_paths =
+		skill::scan::scan_skills(&temp_path, scan_options, vec![]).map_err(
+			|e| {
+				ApiError::new(
+					Status::InternalServerError,
+					format!("Failed to scan repository for skills: {e:?}"),
+					"SCAN_ERROR",
+				)
+			},
+		)?;
+
+	// Parse each skill to extract metadata
+	let mut skills = Vec::new();
+	for path in &skill_paths {
+		match skill::parser::parse(path) {
+			Ok(parsed) => {
+				let relative = path
+					.strip_prefix(&temp_path)
+					.unwrap_or(path)
+					.to_string_lossy()
+					.to_string();
+				skills.push(GitScanSkillEntry {
+					name: parsed.name,
+					description: parsed.description,
+					author: parsed.author,
+					version: parsed.version,
+					path: relative,
+				});
+			}
+			Err(_) => {
+				// Skip unparseable skill directories
+			}
+		}
+	}
+
+	// Remove old session if re-scanning
+	if let Some(ref old_sid) = req.session_id {
+		let mut map = sessions.sessions.lock().unwrap();
+		map.remove(old_sid);
+	}
+
+	// Store the temp dir in session map so it persists until install
+	let session_id = uuid::Uuid::new_v4().to_string();
+	{
+		let mut map = sessions.sessions.lock().unwrap();
+		// Purge sessions older than 30 minutes
+		let cutoff = std::time::Duration::from_secs(30 * 60);
+		map.retain(|_, s| s.created_at.elapsed() < cutoff);
+		map.insert(
+			session_id.clone(),
+			GitCloneSession {
+				temp_dir,
+				created_at: std::time::Instant::now(),
+				url: req.url,
+				credential_token,
+				branches: branches.clone(),
+				current_branch: current_branch.clone(),
+			},
+		);
+	}
+
+	Ok(Json(GitScanResponse {
+		session_id,
+		skills,
+		branches,
+		current_branch,
+	}))
+}
+
+/// Try to detect the checked-out branch from the cloned repo.
+fn detect_current_branch(repo_path: &std::path::Path) -> Option<String> {
+	let output = std::process::Command::new("git")
+		.args(["rev-parse", "--abbrev-ref", "HEAD"])
+		.current_dir(repo_path)
+		.output()
+		.ok()?;
+
+	if !output.status.success() {
+		return None;
+	}
+
+	let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+	if name.is_empty() || name == "HEAD" {
+		None
+	} else {
+		Some(name)
+	}
+}
+
+#[post("/skills/git/install", data = "<body>")]
+pub async fn git_install_skills(
+	body: Json<GitInstallRequest>,
+	sessions: &rocket::State<GitCloneSessions>,
+) -> ApiResult<GitInstallResponse> {
+	let req = body.into_inner();
+
+	// Extract temp dir path from session
+	let temp_path = {
+		let map = sessions.sessions.lock().unwrap();
+		let session = map.get(&req.session_id).ok_or_else(|| {
+			ApiError::new(
+				Status::NotFound,
+				"Session not found or expired",
+				"SESSION_NOT_FOUND",
+			)
+		})?;
+		session.temp_dir.path().to_path_buf()
+	};
+
+	let resource_scope = match req.scope.as_str() {
+		"global" => ResourceScope::GlobalOnly,
+		"project" => ResourceScope::ProjectOnly,
+		other => {
+			return Err(ApiError::new(
+				Status::BadRequest,
+				format!("Invalid scope '{other}'. Use 'global' or 'project'"),
+				"INVALID_PARAM",
+			));
+		}
+	};
+
+	let project_root: Option<std::path::PathBuf> =
+		req.project_root.as_ref().map(std::path::PathBuf::from);
+
+	let mut results = Vec::new();
+
+	let (dir_groups, invalid_agents) = build_git_install_groups(
+		&req.agents,
+		resource_scope,
+		project_root.as_ref(),
+	);
+
+	for (agent_str, _, error) in invalid_agents {
+		for skill_path in &req.skill_paths {
+			results.push(GitInstallResultEntry {
+				name: skill_path.clone(),
+				agent: agent_str.clone(),
+				success: false,
+				error: Some(error.clone()),
+			});
+		}
+	}
+
+	for skill_path in &req.skill_paths {
+		let full_path = temp_path.join(skill_path);
+
+		for (target_dir, agents) in &dir_groups {
+			match install_git_skill_to_dir(&full_path, target_dir) {
+				Ok(skill_name) => {
+					for (agent_str, _) in agents {
+						results.push(GitInstallResultEntry {
+							name: skill_name.clone(),
+							agent: agent_str.clone(),
+							success: true,
+							error: None,
+						});
+					}
+				}
+				Err(e) => {
+					for (agent_str, _) in agents {
+						results.push(GitInstallResultEntry {
+							name: skill_path.clone(),
+							agent: agent_str.clone(),
+							success: false,
+							error: Some(e.body.error.clone()),
+						});
+					}
+				}
+			}
+		}
+	}
+
+	// Remove session (drops TempDir, cleans up disk)
+	{
+		let mut map = sessions.sessions.lock().unwrap();
+		map.remove(&req.session_id);
+	}
+
+	Ok(Json(GitInstallResponse { results }))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use aghub_core::transfer::{
+		reconcile_skill, InstallScope, ResourceLocator,
+	};
+	use std::sync::{Mutex, OnceLock};
+	use tempfile::tempdir;
+
+	fn env_lock() -> &'static Mutex<()> {
+		static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+		LOCK.get_or_init(|| Mutex::new(()))
+	}
+
+	#[test]
+	fn git_install_groups_agents_by_primary_target_dir() {
+		let project_root = std::path::PathBuf::from("/tmp/demo");
+		let (groups, invalid) = build_git_install_groups(
+			&vec!["claude".into(), "opencode".into(), "codex".into()],
+			ResourceScope::ProjectOnly,
+			Some(&project_root),
+		);
+
+		assert!(invalid.is_empty());
+		assert_eq!(groups.len(), 3);
+		assert!(groups.contains_key(&project_root.join(".claude/skills")));
+		assert!(groups.contains_key(&project_root.join(".opencode/skills")));
+		assert!(groups.contains_key(&project_root.join(".agents/skills")));
+	}
+
+	#[test]
+	fn git_install_marks_same_primary_dir_agents_success() {
+		let _guard = env_lock().lock().unwrap();
+		let temp = tempdir().unwrap();
+		let target_dir = temp.path().join("shared");
+		let source_dir = temp.path().join("source/hello-skill");
+		std::fs::create_dir_all(&source_dir).unwrap();
+		std::fs::write(
+			source_dir.join("SKILL.md"),
+			"---\nname: hello-skill\ndescription: hi\n---\n\n# Hello\n",
+		)
+		.unwrap();
+
+		let result =
+			install_git_skill_to_dir(&source_dir.join("SKILL.md"), &target_dir)
+				.unwrap_or_else(|e| panic!("{}", e.body.error));
+		assert_eq!(result, "hello-skill");
+		assert!(target_dir.join("hello-skill/SKILL.md").exists());
+
+		let second =
+			install_git_skill_to_dir(&source_dir.join("SKILL.md"), &target_dir)
+				.unwrap_or_else(|e| panic!("{}", e.body.error));
+		assert_eq!(second, "hello-skill");
+		assert!(target_dir.join("hello-skill/SKILL.md").exists());
+	}
+
+	#[test]
+	fn reconcile_skill_prefers_primary_path_for_opencode() {
+		let _guard = env_lock().lock().unwrap();
+		let temp = tempdir().unwrap();
+		let project_root = temp.path().join("project");
+		std::fs::create_dir_all(&project_root).unwrap();
+
+		let mut source_manager = aghub_core::ConfigManager::new(
+			create_adapter(AgentType::Claude),
+			false,
+			Some(&project_root),
+		);
+		source_manager.load().unwrap();
+		let mut skill = Skill::new("repo-helper");
+		skill.description = Some("Copies files".to_string());
+		source_manager.add_skill(skill).unwrap();
+		let asset_dir = project_root.join(".claude/skills/repo-helper/assets");
+		std::fs::create_dir_all(&asset_dir).unwrap();
+		std::fs::write(asset_dir.join("notes.txt"), "hello").unwrap();
+
+		let result = reconcile_skill(
+			ResourceLocator {
+				agent: AgentType::Claude,
+				scope: InstallScope::Project,
+				project_root: Some(project_root.clone()),
+				name: "repo-helper".to_string(),
+			},
+			vec![AgentType::OpenCode],
+			vec![],
+		)
+		.unwrap();
+
+		assert_eq!(result.success_count(), 1);
+		assert!(project_root
+			.join(".opencode/skills/repo-helper/assets/notes.txt")
+			.exists());
+		assert!(!project_root.join(".agents/skills/repo-helper").exists());
+	}
+
+	#[test]
+	fn list_branches_for_scan_returns_cached_without_fetching() {
+		let runtime = tokio::runtime::Runtime::new().unwrap();
+		let branches = runtime
+			.block_on(list_branches_for_scan(
+				Some(vec!["main".to_string()]),
+				|| panic!("fetcher should not be called"),
+			))
+			.unwrap_or_else(|e| panic!("{}", e.body.error));
+		assert_eq!(branches, vec!["main".to_string()]);
+	}
+
+	#[test]
+	fn list_branches_for_scan_propagates_fetch_errors() {
+		let runtime = tokio::runtime::Runtime::new().unwrap();
+		let error = runtime
+			.block_on(list_branches_for_scan(None, || {
+				Err(aghub_git::GitError::clone_failed("boom"))
+			}))
+			.unwrap_err();
+		assert_eq!(error.status, Status::BadRequest);
+		assert_eq!(error.body.code, "BRANCHES_ERROR");
+		assert!(error.body.error.contains("Failed to list remote branches"));
+	}
 }

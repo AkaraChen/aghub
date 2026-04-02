@@ -14,7 +14,7 @@ export default function SettingsPage() {
 
 	return (
 		<div className="h-full overflow-y-auto">
-			<div className="max-w-3xl p-6">
+			<div className="w-full p-4 sm:p-6">
 				<Tabs
 					selectedKey={selectedTab}
 					onSelectionChange={(key) => {

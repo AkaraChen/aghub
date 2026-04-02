@@ -11,10 +11,10 @@ pub mod skill;
 /// Manages configuration loading, saving, and CRUD operations
 pub struct ConfigManager {
 	pub(crate) adapter: Box<dyn AgentAdapter>,
-	pub(crate) config_path: PathBuf,
 	pub(crate) project_root: Option<PathBuf>,
 	pub(crate) config: Option<AgentConfig>,
 	pub(crate) scope: ResourceScope,
+	pub(crate) write_scope: ResourceScope,
 }
 
 impl ConfigManager {
@@ -38,37 +38,22 @@ impl ConfigManager {
 		project_root: Option<&Path>,
 		scope: ResourceScope,
 	) -> Self {
-		let config_path = if global {
-			adapter.global_config_path()
-		} else if let Some(root) = project_root {
-			adapter.project_config_path(root)
-		} else {
-			adapter.global_config_path()
-		};
 		Self {
 			adapter,
-			config_path,
 			project_root: project_root.map(|p| p.to_path_buf()),
 			config: None,
 			scope,
+			write_scope: if global {
+				ResourceScope::GlobalOnly
+			} else {
+				ResourceScope::ProjectOnly
+			},
 		}
 	}
 
-	pub fn with_path(
-		adapter: Box<dyn AgentAdapter>,
-		config_path: PathBuf,
-	) -> Self {
-		Self {
-			adapter,
-			config_path,
-			project_root: None,
-			config: None,
-			scope: ResourceScope::GlobalOnly,
-		}
-	}
-
-	pub fn config_path(&self) -> &Path {
-		&self.config_path
+	pub fn config_path(&self) -> Option<PathBuf> {
+		self.adapter
+			.mcp_config_path(self.project_root.as_deref(), self.write_scope)
 	}
 
 	pub fn agent_name(&self) -> &str {
@@ -82,11 +67,9 @@ impl ConfigManager {
 		}
 
 		// Delegate to adapter - it handles all I/O internally
-		let config = self.adapter.load_config(
-			&self.config_path,
-			self.project_root.as_deref(),
-			self.scope,
-		)?;
+		let config = self
+			.adapter
+			.load_config(self.project_root.as_deref(), self.scope)?;
 		self.config = Some(config);
 		Ok(self.config.as_ref().unwrap())
 	}
@@ -103,40 +86,45 @@ impl ConfigManager {
 
 		// Project first (takes precedence for skills)
 		if let Some(root) = self.project_root.clone() {
-			let project_path = self.adapter.project_config_path(&root);
-			if let Ok(project) = self.adapter.load_config(
-				&project_path,
-				Some(&root),
-				ResourceScope::ProjectOnly,
-			) {
-				for mut skill in project.skills {
-					seen.insert(skill.name.clone());
-					skill.config_source = Some(ConfigSource::Project);
-					skills.push(skill);
-				}
-				for mut mcp in project.mcps {
-					mcp.config_source = Some(ConfigSource::Project);
-					mcps.push(mcp);
+			if self
+				.adapter
+				.supports_skill_scope(ResourceScope::ProjectOnly)
+				|| self.adapter.supports_mcp_scope(ResourceScope::ProjectOnly)
+			{
+				if let Ok(project) = self
+					.adapter
+					.load_config(Some(&root), ResourceScope::ProjectOnly)
+				{
+					for mut skill in project.skills {
+						seen.insert(skill.name.clone());
+						skill.config_source = Some(ConfigSource::Project);
+						skills.push(skill);
+					}
+					for mut mcp in project.mcps {
+						mcp.config_source = Some(ConfigSource::Project);
+						mcps.push(mcp);
+					}
 				}
 			}
 		}
 
 		// Global second
-		let global_path = self.adapter.global_config_path();
-		if let Ok(global) = self.adapter.load_config(
-			&global_path,
-			None,
-			ResourceScope::GlobalOnly,
-		) {
-			for mut skill in global.skills {
-				if !seen.contains(&skill.name) {
-					skill.config_source = Some(ConfigSource::Global);
-					skills.push(skill);
+		if self.adapter.supports_skill_scope(ResourceScope::GlobalOnly)
+			|| self.adapter.supports_mcp_scope(ResourceScope::GlobalOnly)
+		{
+			if let Ok(global) =
+				self.adapter.load_config(None, ResourceScope::GlobalOnly)
+			{
+				for mut skill in global.skills {
+					if !seen.contains(&skill.name) {
+						skill.config_source = Some(ConfigSource::Global);
+						skills.push(skill);
+					}
 				}
-			}
-			for mut mcp in global.mcps {
-				mcp.config_source = Some(ConfigSource::Global);
-				mcps.push(mcp);
+				for mut mcp in global.mcps {
+					mcp.config_source = Some(ConfigSource::Global);
+					mcps.push(mcp);
+				}
 			}
 		}
 
@@ -150,39 +138,42 @@ impl ConfigManager {
 
 		// Load project config first (project skills take precedence)
 		if let Some(root) = &self.project_root {
-			let project_path = self.adapter.project_config_path(root);
-			let project = self.adapter.load_config(
-				&project_path,
-				Some(root),
-				ResourceScope::ProjectOnly,
-			)?;
-			// Add project skills
-			for skill in project.skills {
+			if self
+				.adapter
+				.supports_skill_scope(ResourceScope::ProjectOnly)
+				|| self.adapter.supports_mcp_scope(ResourceScope::ProjectOnly)
+			{
+				let project = self
+					.adapter
+					.load_config(Some(root), ResourceScope::ProjectOnly)?;
+				// Add project skills
+				for skill in project.skills {
+					if !seen_skill_names.contains(&skill.name) {
+						seen_skill_names.insert(skill.name.clone());
+						merged_config.skills.push(skill);
+					}
+				}
+				// Add project MCPs
+				merged_config.mcps.extend(project.mcps);
+			}
+		}
+
+		// Load global config
+		if self.adapter.supports_skill_scope(ResourceScope::GlobalOnly)
+			|| self.adapter.supports_mcp_scope(ResourceScope::GlobalOnly)
+		{
+			let global =
+				self.adapter.load_config(None, ResourceScope::GlobalOnly)?;
+			// Add global skills (only if not already in project)
+			for skill in global.skills {
 				if !seen_skill_names.contains(&skill.name) {
 					seen_skill_names.insert(skill.name.clone());
 					merged_config.skills.push(skill);
 				}
 			}
-			// Add project MCPs
-			merged_config.mcps.extend(project.mcps);
+			// Add global MCPs
+			merged_config.mcps.extend(global.mcps);
 		}
-
-		// Load global config
-		let global_path = self.adapter.global_config_path();
-		let global = self.adapter.load_config(
-			&global_path,
-			None,
-			ResourceScope::GlobalOnly,
-		)?;
-		// Add global skills (only if not already in project)
-		for skill in global.skills {
-			if !seen_skill_names.contains(&skill.name) {
-				seen_skill_names.insert(skill.name.clone());
-				merged_config.skills.push(skill);
-			}
-		}
-		// Add global MCPs
-		merged_config.mcps.extend(global.mcps);
 
 		self.config = Some(merged_config);
 		Ok(self.config.as_ref().unwrap())
@@ -199,16 +190,11 @@ impl ConfigManager {
 				self.adapter.name(),
 			));
 		}
-
-		if let Some(parent) = self.config_path.parent() {
-			std::fs::create_dir_all(parent)?;
-		}
-		let original_content = std::fs::read_to_string(&self.config_path).ok();
-		let content = self
-			.adapter
-			.serialize_config(config, original_content.as_deref())?;
-		std::fs::write(&self.config_path, content)?;
-		Ok(())
+		self.adapter.save_mcps(
+			self.project_root.as_deref(),
+			self.write_scope,
+			&config.mcps,
+		)
 	}
 
 	pub fn save_current(&self) -> Result<()> {
@@ -221,8 +207,11 @@ impl ConfigManager {
 	}
 
 	pub fn validate(&self) -> Result<()> {
-		let output =
-			self.adapter.validate_command(&self.config_path).output()?;
+		let config_path = self.config_path();
+		let output = self
+			.adapter
+			.validate_command(config_path.as_deref())
+			.output()?;
 		if !output.status.success() {
 			let stderr = String::from_utf8_lossy(&output.stderr);
 			return Err(ConfigError::ValidationFailed(stderr.to_string()));

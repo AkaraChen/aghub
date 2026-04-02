@@ -9,6 +9,7 @@
 		"tauri": "tauri",
 		"start": "tauri dev",
 		"lint": "eslint --fix .",
+		"generate:dto": "cargo run --manifest-path ../api/Cargo.toml --bin export-dto",
 		"typecheck": "tsc"
 	},
 	"dependencies": {

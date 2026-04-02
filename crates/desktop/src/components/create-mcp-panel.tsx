@@ -16,11 +16,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import type { CreateMcpRequest } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
-import { useServer } from "../hooks/use-server";
+import { useApi } from "../hooks/use-api";
 import { supportsMcp } from "../lib/agent-capabilities";
-import { createApi } from "../lib/api";
-import type { TransportDto } from "../lib/api-types";
 import {
 	getKeyPairErrorMessage,
 	validateHttpUrl,
@@ -28,6 +27,7 @@ import {
 	validatePositiveInteger,
 } from "../lib/form-utils";
 import { buildTransportFromForm } from "../lib/mcp-utils";
+import { createMcpMutationOptions } from "../requests/mcps";
 import { AgentSelector } from "./agent-selector";
 import type { EnvVar } from "./env-editor";
 import { EnvEditor } from "./env-editor";
@@ -53,8 +53,7 @@ interface CreateMcpFormValues {
 
 export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = createApi(baseUrl);
+	const api = useApi();
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
 
@@ -114,22 +113,12 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 	);
 
 	const createMutation = useMutation({
+		...createMcpMutationOptions({
+			api,
+			queryClient,
+		}),
 		onError: () => {
 			// handled in submit catch for better message control
-		},
-		mutationFn: ({
-			agent,
-			body,
-		}: {
-			agent: string;
-			body: { name: string; transport: TransportDto; timeout?: number };
-		}) => {
-			const scope = projectPath ? "project" : "global";
-			return api.mcps.create(agent, scope, body, projectPath);
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["mcps"] });
-			queryClient.invalidateQueries({ queryKey: ["project-mcps"] });
 		},
 	});
 
@@ -146,18 +135,23 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 		});
 		if (!transport) return;
 
-		const body = {
+		const body: CreateMcpRequest = {
 			name: values.name.trim(),
 			transport,
 			timeout: values.timeoutValue
 				? Number.parseInt(values.timeoutValue, 10)
-				: undefined,
+				: null,
 		};
 
 		try {
 			await Promise.all(
 				values.selectedAgents.map((agent) =>
-					createMutation.mutateAsync({ agent, body }),
+					createMutation.mutateAsync({
+						agent,
+						scope: projectPath ? "project" : "global",
+						body,
+						projectRoot: projectPath,
+					}),
 				),
 			);
 			onDone();
@@ -169,7 +163,7 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 	};
 
 	return (
-		<div className="h-full max-w-3xl overflow-y-auto p-6">
+		<div className="h-full w-full overflow-y-auto p-4 sm:p-6">
 			{createMutation.error && (
 				<Alert className="mb-4" status="danger">
 					<Alert.Indicator />

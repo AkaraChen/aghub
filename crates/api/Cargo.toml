@@ -17,6 +17,7 @@ crate-type = [ "rlib" ]
 
 [dependencies]
 aghub-core = { path = "../core" }
+aghub-git = { path = "../git" }
 skill = { path = "../skill" }
 skills-sh = { path = "../skills-sh" }
 rocket = { version = "0.5", features = [ "json" ] }
@@ -26,5 +27,13 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 dirs = { workspace = true }
+ts-rs = { workspace = true }
 which = "7"
 open = "5"
+tempfile = "3"
+keyring = { version = "3", features = [
+	"apple-native",
+	"windows-native",
+	"linux-native",
+] }
+uuid = { version = "1", features = [ "v4" ] }

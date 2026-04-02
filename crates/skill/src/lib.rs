@@ -28,6 +28,7 @@ pub mod model;
 pub mod package;
 pub mod parser;
 pub mod sanitize;
+pub mod scan;
 pub mod validator;
 
 // Re-export commonly used items
@@ -48,6 +49,7 @@ pub use parser::{
 	parse, parse_skill_dir, parse_skill_file, parse_skill_md, parse_zip,
 };
 pub use sanitize::sanitize_name;
+pub use scan::{scan_skills, ScanError, ScanOptions};
 pub use validator::{
 	validate, validate_skill_dir, validate_skill_file, validate_zip,
 };

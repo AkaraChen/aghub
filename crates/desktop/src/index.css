@@ -3,3 +3,12 @@
 @import "./styles/theme.css";
 @import "./styles/form.css";
 @import "./styles/onboarding.css";
+
+@layer utilities {
+	.grid-rows-expand {
+		grid-template-rows: 1fr;
+	}
+	.grid-rows-collapse {
+		grid-template-rows: 0fr;
+	}
+}

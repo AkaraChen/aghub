@@ -26,7 +26,7 @@ pub async fn open_with_editor(
 		.spawn()
 	{
 		Ok(_) => Ok(()),
-		Err(e) => Err(format!("Failed to open editor: {}", e)),
+		Err(e) => Err(format!("Failed to open editor: {e}")),
 	}
 }
 
