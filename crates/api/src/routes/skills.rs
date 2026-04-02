@@ -47,6 +47,35 @@ fn expand_tilde_path(path: &str) -> std::path::PathBuf {
 	}
 }
 
+async fn list_branches_for_scan<F>(
+	cached_branches: Option<Vec<String>>,
+	fetcher: F,
+) -> Result<Vec<String>, ApiError>
+where
+	F: FnOnce() -> aghub_git::Result<Vec<String>> + Send + 'static,
+{
+	if let Some(cached) = cached_branches {
+		return Ok(cached);
+	}
+
+	tokio::task::spawn_blocking(fetcher)
+		.await
+		.map_err(|e| {
+			ApiError::new(
+				Status::InternalServerError,
+				format!("Branch listing task panicked: {e}"),
+				"BRANCHES_ERROR",
+			)
+		})?
+		.map_err(|e| {
+			ApiError::new(
+				Status::BadRequest,
+				format!("Failed to list remote branches: {e}"),
+				"BRANCHES_ERROR",
+			)
+		})
+}
+
 #[post("/skills/transfer", data = "<body>")]
 pub fn transfer_skill_route(
 	body: Json<TransferRequest>,
@@ -861,8 +890,8 @@ pub async fn git_scan_skills(
 	let token_for_clone = credential_token.clone();
 
 	// Clone repo in a blocking thread (gix is synchronous)
-	let temp_dir = tokio::task::spawn_blocking(move || {
-		match (token_for_clone, branch) {
+	let temp_dir =
+		tokio::task::spawn_blocking(move || match (token_for_clone, branch) {
 			(Some(token), Some(ref b)) => {
 				aghub_git::clone_with_credentials_branch(
 					&url,
@@ -871,68 +900,49 @@ pub async fn git_scan_skills(
 					b,
 				)
 			}
-			(Some(token), None) => {
-				aghub_git::clone_with_credentials(
-					&url, "x-access-token", &token,
-				)
-			}
-			(None, Some(ref b)) => {
-				aghub_git::clone_to_temp_branch(&url, b)
-			}
+			(Some(token), None) => aghub_git::clone_with_credentials(
+				&url,
+				"x-access-token",
+				&token,
+			),
+			(None, Some(ref b)) => aghub_git::clone_to_temp_branch(&url, b),
 			(None, None) => aghub_git::clone_to_temp(&url),
-		}
-	})
-	.await
-	.map_err(|e| {
-		ApiError::new(
-			Status::InternalServerError,
-			format!("Clone task panicked: {e}"),
-			"CLONE_ERROR",
-		)
-	})?
-	.map_err(|e| {
-		ApiError::new(
-			Status::BadRequest,
-			format!("Failed to clone repository: {e}"),
-			"CLONE_FAILED",
-		)
-	})?;
-
-	// List remote branches (use cache from previous session if
-	// available to avoid an extra network call on branch switch)
-	let branches = if let Some(cached) = cached_branches {
-		cached
-	} else {
-		let branch_url = req.url.clone();
-		let token_for_branches = credential_token.clone();
-		tokio::task::spawn_blocking(move || {
-			match token_for_branches {
-				Some(token) => {
-					aghub_git::list_remote_branches_with_credentials(
-						&branch_url,
-						"x-access-token",
-						&token,
-					)
-				}
-				None => {
-					aghub_git::list_remote_branches(&branch_url)
-				}
-			}
 		})
 		.await
 		.map_err(|e| {
 			ApiError::new(
 				Status::InternalServerError,
-				format!("Branch listing task panicked: {e}"),
-				"BRANCHES_ERROR",
+				format!("Clone task panicked: {e}"),
+				"CLONE_ERROR",
 			)
 		})?
-		.unwrap_or_default()
-	};
+		.map_err(|e| {
+			ApiError::new(
+				Status::BadRequest,
+				format!("Failed to clone repository: {e}"),
+				"CLONE_FAILED",
+			)
+		})?;
+
+	// List remote branches (use cache from previous session if
+	// available to avoid an extra network call on branch switch)
+	let branch_url = req.url.clone();
+	let credential_token_for_branches = credential_token.clone();
+	let branches = list_branches_for_scan(cached_branches, move || {
+		match credential_token_for_branches {
+			Some(token) => aghub_git::list_remote_branches_with_credentials(
+				&branch_url,
+				"x-access-token",
+				&token,
+			),
+			None => aghub_git::list_remote_branches(&branch_url),
+		}
+	})
+	.await?;
 
 	// Determine current branch name from the checked-out HEAD
-	let current_branch = detect_current_branch(temp_dir.path())
-		.unwrap_or_else(|| {
+	let current_branch =
+		detect_current_branch(temp_dir.path()).unwrap_or_else(|| {
 			req.branch.clone().unwrap_or_else(|| {
 				// Guess from the branches list — first one
 				// alphabetically that looks like a default
@@ -956,9 +966,7 @@ pub async fn git_scan_skills(
 			|e| {
 				ApiError::new(
 					Status::InternalServerError,
-					format!(
-						"Failed to scan repository for skills: {e:?}"
-					),
+					format!("Failed to scan repository for skills: {e:?}"),
 					"SCAN_ERROR",
 				)
 			},
@@ -1023,9 +1031,7 @@ pub async fn git_scan_skills(
 }
 
 /// Try to detect the checked-out branch from the cloned repo.
-fn detect_current_branch(
-	repo_path: &std::path::Path,
-) -> Option<String> {
+fn detect_current_branch(repo_path: &std::path::Path) -> Option<String> {
 	let output = std::process::Command::new("git")
 		.args(["rev-parse", "--abbrev-ref", "HEAD"])
 		.current_dir(repo_path)
@@ -1036,9 +1042,7 @@ fn detect_current_branch(
 		return None;
 	}
 
-	let name = String::from_utf8_lossy(&output.stdout)
-		.trim()
-		.to_string();
+	let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
 	if name.is_empty() || name == "HEAD" {
 		None
 	} else {
@@ -1231,5 +1235,30 @@ mod tests {
 			.join(".opencode/skills/repo-helper/assets/notes.txt")
 			.exists());
 		assert!(!project_root.join(".agents/skills/repo-helper").exists());
+	}
+
+	#[test]
+	fn list_branches_for_scan_returns_cached_without_fetching() {
+		let runtime = tokio::runtime::Runtime::new().unwrap();
+		let branches = runtime
+			.block_on(list_branches_for_scan(
+				Some(vec!["main".to_string()]),
+				|| panic!("fetcher should not be called"),
+			))
+			.unwrap_or_else(|e| panic!("{}", e.body.error));
+		assert_eq!(branches, vec!["main".to_string()]);
+	}
+
+	#[test]
+	fn list_branches_for_scan_propagates_fetch_errors() {
+		let runtime = tokio::runtime::Runtime::new().unwrap();
+		let error = runtime
+			.block_on(list_branches_for_scan(None, || {
+				Err(aghub_git::GitError::clone_failed("boom"))
+			}))
+			.unwrap_err();
+		assert_eq!(error.status, Status::BadRequest);
+		assert_eq!(error.body.code, "BRANCHES_ERROR");
+		assert!(error.body.error.contains("Failed to list remote branches"));
 	}
 }

@@ -219,7 +219,7 @@ fn do_clone_branch(url: &str, branch: &str) -> Result<TempDir> {
 
 /// List remote branch names for a repository URL.
 ///
-/// Uses `git ls-remote --heads` to fetch branch names without
+/// Uses `gix` remote ref discovery to fetch branch names without
 /// cloning the entire repository.
 ///
 /// # Arguments
@@ -258,33 +258,57 @@ pub fn list_remote_branches_with_credentials(
 	do_list_remote_branches(&auth_url)
 }
 
-/// Internal implementation using `git ls-remote --heads`.
+/// Internal implementation using `gix` ref discovery.
 fn do_list_remote_branches(url: &str) -> Result<Vec<String>> {
-	let output = std::process::Command::new("git")
-		.args(["ls-remote", "--heads", url])
-		.output()
-		.map_err(|e| {
-			GitError::clone_failed(format!("Failed to run git ls-remote: {e}"))
-		})?;
+	let temp_dir =
+		TempDir::new().map_err(|e| GitError::TempDirFailed(e.to_string()))?;
+	let repo = gix::init(temp_dir.path())
+		.map_err(|e| GitError::clone_failed(e.to_string()))?;
+	let remote = repo
+		.remote_at(url)
+		.map_err(|e| GitError::clone_failed(e.to_string()))?;
+	let remote = remote
+		.with_refspecs(
+			Some("+refs/heads/*:refs/remotes/origin/*"),
+			gix::remote::Direction::Fetch,
+		)
+		.map_err(|e| GitError::clone_failed(e.to_string()))?;
+	let connection = remote
+		.connect(gix::remote::Direction::Fetch)
+		.map_err(|e| GitError::clone_failed(e.to_string()))?;
+	let (ref_map, _) = connection
+		.ref_map(
+			gix::progress::Discard,
+			gix::remote::ref_map::Options::default(),
+		)
+		.map_err(|e| GitError::clone_failed(e.to_string()))?;
 
-	if !output.status.success() {
-		let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-		return Err(GitError::clone_failed(format!(
-			"git ls-remote failed: {stderr}"
-		)));
-	}
+	Ok(branches_from_remote_refs(&ref_map.remote_refs))
+}
 
-	let stdout = String::from_utf8_lossy(&output.stdout);
-	let mut branches: Vec<String> = stdout
-		.lines()
-		.filter_map(|line| {
-			let refname = line.split_whitespace().nth(1)?;
-			refname.strip_prefix("refs/heads/").map(String::from)
+fn branches_from_remote_refs(
+	remote_refs: &[gix::protocol::handshake::Ref],
+) -> Vec<String> {
+	use gix::bstr::ByteSlice;
+
+	let mut branches: Vec<String> = remote_refs
+		.iter()
+		.filter_map(|remote_ref| match remote_ref {
+			gix::protocol::handshake::Ref::Direct { full_ref_name, .. }
+			| gix::protocol::handshake::Ref::Peeled { full_ref_name, .. } => {
+				full_ref_name
+					.strip_prefix(b"refs/heads/" as &[u8])
+					.map(|name| name.to_str_lossy().to_string())
+			}
+			gix::protocol::handshake::Ref::Symbolic { target, .. }
+			| gix::protocol::handshake::Ref::Unborn { target, .. } => target
+				.strip_prefix(b"refs/heads/" as &[u8])
+				.map(|name| name.to_str_lossy().to_string()),
 		})
 		.collect();
-
 	branches.sort();
-	Ok(branches)
+	branches.dedup();
+	branches
 }
 
 /// Clone a repository to a specific path (not temporary).
@@ -344,9 +368,17 @@ pub fn clone_to_path(url: &str, dest: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::process::Command;
+	use std::sync::{Mutex, OnceLock};
+
+	fn env_lock() -> &'static Mutex<()> {
+		static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+		LOCK.get_or_init(|| Mutex::new(()))
+	}
 
 	#[test]
 	fn test_clone_public_repo() {
+		let _guard = env_lock().lock().unwrap_or_else(|e| e.into_inner());
 		let result =
 			clone_to_temp("https://github.com/octocat/Hello-World.git");
 		if let Ok(temp_dir) = result {
@@ -356,5 +388,73 @@ mod tests {
 					|| temp_dir.path().join("README").exists()
 			);
 		}
+	}
+
+	#[test]
+	fn test_clone_public_repo_branch() {
+		let _guard = env_lock().lock().unwrap_or_else(|e| e.into_inner());
+		let result = clone_to_temp_branch(
+			"https://github.com/octocat/Hello-World.git",
+			"master",
+		);
+		if let Ok(temp_dir) = result {
+			let output = Command::new("git")
+				.args(["rev-parse", "--abbrev-ref", "HEAD"])
+				.current_dir(temp_dir.path())
+				.output()
+				.unwrap();
+			assert!(output.status.success());
+			assert_eq!(
+				String::from_utf8_lossy(&output.stdout).trim(),
+				"master",
+			);
+		}
+	}
+
+	#[test]
+	fn test_list_remote_branches_public_repo() {
+		let _guard = env_lock().lock().unwrap_or_else(|e| e.into_inner());
+		let branches =
+			list_remote_branches("https://github.com/octocat/Hello-World.git")
+				.unwrap();
+		assert!(!branches.is_empty());
+		assert!(branches.contains(&"master".to_string()));
+	}
+
+	#[test]
+	fn test_branches_from_remote_refs() {
+		use gix::protocol::handshake::Ref;
+
+		let null_id = gix::hash::ObjectId::null(gix::hash::Kind::Sha1);
+		let branches = branches_from_remote_refs(&[
+			Ref::Direct {
+				full_ref_name: "refs/heads/main".into(),
+				object: null_id,
+			},
+			Ref::Symbolic {
+				full_ref_name: "HEAD".into(),
+				target: "refs/heads/main".into(),
+				tag: None,
+				object: gix::hash::ObjectId::null(gix::hash::Kind::Sha1),
+			},
+			Ref::Unborn {
+				full_ref_name: "HEAD".into(),
+				target: "refs/heads/develop".into(),
+			},
+			Ref::Peeled {
+				full_ref_name: "refs/heads/release".into(),
+				tag: gix::hash::ObjectId::null(gix::hash::Kind::Sha1),
+				object: gix::hash::ObjectId::null(gix::hash::Kind::Sha1),
+			},
+		]);
+
+		assert_eq!(
+			branches,
+			vec![
+				"develop".to_string(),
+				"main".to_string(),
+				"release".to_string(),
+			],
+		);
 	}
 }
