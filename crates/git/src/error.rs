@@ -13,10 +13,6 @@ pub enum GitError {
 	#[error("Git clone failed: {0}")]
 	CloneFailed(String),
 
-	/// Missing credentials.
-	#[error("Missing credentials: GIT_USERNAME or GIT_PASSWORD not set")]
-	MissingCredentials,
-
 	/// Invalid URL format.
 	#[error("Invalid URL: {0}")]
 	InvalidUrl(String),

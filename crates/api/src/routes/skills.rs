@@ -890,53 +890,43 @@ pub async fn git_scan_skills(
 	let token_for_clone = credential_token.clone();
 
 	// Clone repo in a blocking thread (gix is synchronous)
-	let temp_dir =
-		tokio::task::spawn_blocking(move || match (token_for_clone, branch) {
-			(Some(token), Some(ref b)) => {
-				aghub_git::clone_with_credentials_branch(
-					&url,
-					"x-access-token",
-					&token,
-					b,
-				)
-			}
-			(Some(token), None) => aghub_git::clone_with_credentials(
-				&url,
-				"x-access-token",
-				&token,
-			),
-			(None, Some(ref b)) => aghub_git::clone_to_temp_branch(&url, b),
-			(None, None) => aghub_git::clone_to_temp(&url),
-		})
-		.await
-		.map_err(|e| {
-			ApiError::new(
-				Status::InternalServerError,
-				format!("Clone task panicked: {e}"),
-				"CLONE_ERROR",
-			)
-		})?
-		.map_err(|e| {
-			ApiError::new(
-				Status::BadRequest,
-				format!("Failed to clone repository: {e}"),
-				"CLONE_FAILED",
-			)
-		})?;
+	let temp_dir = tokio::task::spawn_blocking(move || {
+		let mut options = aghub_git::CloneOptions::new(&url);
+		if let Some(token) = token_for_clone {
+			options = options.with_credentials("x-access-token", token);
+		}
+		if let Some(ref branch) = branch {
+			options = options.with_branch(branch);
+		}
+		aghub_git::clone_to_temp(options)
+	})
+	.await
+	.map_err(|e| {
+		ApiError::new(
+			Status::InternalServerError,
+			format!("Clone task panicked: {e}"),
+			"CLONE_ERROR",
+		)
+	})?
+	.map_err(|e| {
+		ApiError::new(
+			Status::BadRequest,
+			format!("Failed to clone repository: {e}"),
+			"CLONE_FAILED",
+		)
+	})?;
 
 	// List remote branches (use cache from previous session if
 	// available to avoid an extra network call on branch switch)
 	let branch_url = req.url.clone();
 	let credential_token_for_branches = credential_token.clone();
 	let branches = list_branches_for_scan(cached_branches, move || {
-		match credential_token_for_branches {
-			Some(token) => aghub_git::list_remote_branches_with_credentials(
-				&branch_url,
-				"x-access-token",
-				&token,
-			),
-			None => aghub_git::list_remote_branches(&branch_url),
-		}
+		let options = match credential_token_for_branches {
+			Some(token) => aghub_git::RemoteOptions::new(&branch_url)
+				.with_credentials("x-access-token", token),
+			None => aghub_git::RemoteOptions::new(&branch_url),
+		};
+		aghub_git::list_remote_branches(options)
 	})
 	.await?;
 
