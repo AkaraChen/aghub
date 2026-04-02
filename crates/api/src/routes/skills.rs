@@ -291,14 +291,15 @@ fn install_git_skill_to_dir(
 	Ok(skill.name)
 }
 
+type GitInstallAgentGroup = Vec<(String, AgentType)>;
+type GitInstallGroups = HashMap<std::path::PathBuf, GitInstallAgentGroup>;
+type GitInstallInvalidAgent = (String, Option<AgentType>, String);
+
 fn build_git_install_groups(
 	agents: &[String],
 	resource_scope: ResourceScope,
 	project_root: Option<&std::path::PathBuf>,
-) -> (
-	HashMap<std::path::PathBuf, Vec<(String, AgentType)>>,
-	Vec<(String, Option<AgentType>, String)>,
-) {
+) -> (GitInstallGroups, Vec<GitInstallInvalidAgent>) {
 	let mut groups = HashMap::new();
 	let mut invalid = Vec::new();
 
