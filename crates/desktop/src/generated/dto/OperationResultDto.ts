@@ -2,11 +2,11 @@
 import type { InstallScopeDto } from "./InstallScopeDto";
 import type { OperationActionDto } from "./OperationActionDto";
 
-export interface OperationResultDto {
+export type OperationResultDto = {
 	agent: string;
 	scope: InstallScopeDto;
 	project_root: string | null;
 	action: OperationActionDto;
 	success: boolean;
 	error: string | null;
-}
+};

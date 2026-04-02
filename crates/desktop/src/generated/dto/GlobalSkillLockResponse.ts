@@ -4,8 +4,8 @@ import type { SkillLockEntryResponse } from "./SkillLockEntryResponse";
 /**
  * Response for the global skill lock file
  */
-export interface GlobalSkillLockResponse {
+export type GlobalSkillLockResponse = {
 	version: number;
 	skills: Array<SkillLockEntryResponse>;
 	lastSelectedAgents: Array<string> | null;
-}
+};

@@ -2,7 +2,7 @@
 import type { ResourceLocatorDto } from "./ResourceLocatorDto";
 import type { TargetDto } from "./TargetDto";
 
-export interface TransferRequest {
+export type TransferRequest = {
 	source: ResourceLocatorDto;
 	destinations: Array<TargetDto>;
-}
+};
