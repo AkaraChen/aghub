@@ -130,7 +130,12 @@ impl ClaudePluginManager {
 
         let mut plugins = Vec::new();
 
-        for (id_str, info) in manifest.plugins {
+        for (id_str, installations) in manifest.plugins {
+            // Take the first installation (user scope is typically first)
+            let Some(info) = installations.first() else {
+                continue;
+            };
+
             let id = PluginId::parse(&id_str)?;
             let source = PluginSource::parse(&info.source)?;
 

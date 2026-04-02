@@ -9,7 +9,8 @@ use std::collections::HashMap;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InstalledPluginsManifest {
     pub version: i32,
-    pub plugins: HashMap<String, InstalledPluginInfo>,
+    /// Plugin ID -> list of installations (different scopes)
+    pub plugins: HashMap<String, Vec<InstalledPluginInfo>>,
 }
 
 /// Information about an installed plugin
