@@ -1,28 +1,69 @@
 import ky from "ky";
 import type {
+	AgentAvailabilityDto,
+	AgentInfo,
 	CodeEditorType,
-	CreateSkillRequest,
-	DeleteSkillByPathRequest,
+	CreateCredentialRequest as CreateCredentialDto,
+	CreateMcpRequest as CreateMcpDto,
+	CreateSkillRequest as CreateSkillDto,
+	CredentialResponse,
+	DeleteSkillByPathRequest as DeleteSkillByPathDto,
 	DeleteSkillByPathResponse,
-	GitInstallRequest,
+	GitInstallRequest as GitInstallDto,
 	GitInstallResponse,
-	GitScanRequest,
+	GitInstallResultEntry,
+	GitScanRequest as GitScanDto,
 	GitScanResponse,
+	GitScanSkillEntry,
 	GlobalSkillLockResponse,
-	ImportSkillRequest,
-	InstallSkillRequest,
+	ImportSkillRequest as ImportSkillDto,
+	InstallSkillRequest as InstallSkillDto,
 	InstallSkillResponse,
-	InstallTarget,
 	MarketSkill,
 	McpResponse,
 	OperationBatchResponse,
 	ProjectSkillLockResponse,
-	ReconcileRequest,
 	SkillResponse,
 	SkillTreeNodeResponse,
-	ToolInfo,
+	TargetDto,
+	ToolInfoDto,
+	TransferRequest as TransferDto,
 	TransportDto,
-} from "./api-types";
+	UpdateMcpRequest as UpdateMcpDto,
+} from "../generated/dto";
+
+export interface CreateCredentialRequest {
+	name: string;
+	token: string;
+}
+
+export interface CreateSkillRequest {
+	name: string;
+	description?: string;
+	author?: string;
+	version?: string;
+	content?: string;
+	tools?: string[];
+}
+
+export interface ImportSkillRequest {
+	path: string;
+}
+
+export interface InstallSkillRequest {
+	source: string;
+	agents: string[];
+	skills: string[];
+	scope: "global" | "project";
+	project_path?: string;
+	install_all?: boolean;
+}
+
+export interface CreateMcpRequest {
+	name: string;
+	transport: TransportDto;
+	timeout?: number;
+}
 
 export interface UpdateMcpRequest {
 	name?: string;
@@ -31,27 +72,153 @@ export interface UpdateMcpRequest {
 	timeout?: number;
 }
 
-export interface AgentInfo {
-	id: string;
-	display_name: string;
-	capabilities: {
-		mcp_stdio: boolean;
-		mcp_remote: boolean;
-		mcp_enable_disable: boolean;
-		skills: boolean;
-		skills_mutable: boolean;
-	};
-	skills_paths: {
-		project: string[];
-		global: string[];
+export interface InstallTarget {
+	agent: string;
+	scope: "global" | "project";
+	project_root?: string;
+}
+
+export interface TransferRequest {
+	source: InstallTarget & { name: string };
+	destinations: InstallTarget[];
+}
+
+export interface ReconcileRequest {
+	source: InstallTarget & { name: string };
+	added?: string[];
+	removed?: string[];
+}
+
+export interface DeleteSkillByPathRequest {
+	source_path: string;
+	agents: string[];
+	scope: "global" | "project";
+	project_root?: string;
+}
+
+export interface GitScanRequest {
+	url: string;
+	credential_id?: string;
+}
+
+export interface GitInstallRequest {
+	session_id: string;
+	skill_paths: string[];
+	agents: string[];
+	scope: string;
+	project_root?: string;
+}
+
+function toNullable<T>(value: T | undefined): T | null {
+	return value ?? null;
+}
+
+function toTargetDto(target: InstallTarget): TargetDto {
+	return {
+		agent: target.agent,
+		scope: target.scope,
+		project_root: toNullable(target.project_root),
 	};
 }
 
-export interface AgentAvailability {
-	id: string;
-	has_global_directory: boolean;
-	has_cli: boolean;
-	is_available: boolean;
+function toTransferDto(body: TransferRequest): TransferDto {
+	return {
+		source: {
+			...toTargetDto(body.source),
+			name: body.source.name,
+		},
+		destinations: body.destinations.map(toTargetDto),
+	};
+}
+
+function toReconcileDto(
+	body: ReconcileRequest,
+): import("../generated/dto").ReconcileRequest {
+	return {
+		source: {
+			...toTargetDto(body.source),
+			name: body.source.name,
+		},
+		added: toNullable(body.added),
+		removed: toNullable(body.removed),
+	};
+}
+
+function toCreateSkillDto(data: CreateSkillRequest): CreateSkillDto {
+	return {
+		name: data.name,
+		description: toNullable(data.description),
+		author: toNullable(data.author),
+		version: toNullable(data.version),
+		content: toNullable(data.content),
+		tools: toNullable(data.tools),
+	};
+}
+
+function toImportSkillDto(data: ImportSkillRequest): ImportSkillDto {
+	return { path: data.path };
+}
+
+function toInstallSkillDto(data: InstallSkillRequest): InstallSkillDto {
+	return {
+		source: data.source,
+		agents: data.agents,
+		skills: data.skills,
+		scope: data.scope,
+		project_path: toNullable(data.project_path),
+		install_all: toNullable(data.install_all),
+	};
+}
+
+function toCreateMcpDto(body: CreateMcpRequest): CreateMcpDto {
+	return {
+		name: body.name,
+		transport: body.transport,
+		timeout: toNullable(body.timeout),
+	};
+}
+
+function toUpdateMcpDto(body: UpdateMcpRequest): UpdateMcpDto {
+	return {
+		name: toNullable(body.name),
+		transport: toNullable(body.transport),
+		enabled: toNullable(body.enabled),
+		timeout: toNullable(body.timeout),
+	};
+}
+
+function toCreateCredentialDto(
+	body: CreateCredentialRequest,
+): CreateCredentialDto {
+	return body;
+}
+
+function toDeleteSkillByPathDto(
+	body: DeleteSkillByPathRequest,
+): DeleteSkillByPathDto {
+	return {
+		source_path: body.source_path,
+		agents: body.agents,
+		scope: body.scope,
+		project_root: toNullable(body.project_root),
+	};
+}
+
+function toGitScanDto(body: GitScanRequest): GitScanDto {
+	return {
+		url: body.url,
+		credential_id: toNullable(body.credential_id),
+	};
+}
+
+function toGitInstallDto(body: GitInstallRequest): GitInstallDto {
+	return {
+		session_id: body.session_id,
+		skill_paths: body.skill_paths,
+		agents: body.agents,
+		scope: body.scope,
+		project_root: toNullable(body.project_root),
+	};
 }
 
 export function createApi(baseUrl: string) {
@@ -62,7 +229,7 @@ export function createApi(baseUrl: string) {
 			list(): Promise<AgentInfo[]> {
 				return client.get("agents").json();
 			},
-			availability(): Promise<AgentAvailability[]> {
+			availability(): Promise<AgentAvailabilityDto[]> {
 				return client.get("agents/availability").json();
 			},
 		},
@@ -96,7 +263,7 @@ export function createApi(baseUrl: string) {
 								? { project_root: projectRoot }
 								: {}),
 						},
-						json: data,
+						json: toCreateSkillDto(data),
 					})
 					.json();
 			},
@@ -114,13 +281,16 @@ export function createApi(baseUrl: string) {
 								? { project_root: projectRoot }
 								: {}),
 						},
-						json: data,
+						json: toImportSkillDto(data),
 					})
 					.json();
 			},
 			install(data: InstallSkillRequest): Promise<InstallSkillResponse> {
 				return client
-					.post("skills/install", { json: data, timeout: 300000 })
+					.post("skills/install", {
+						json: toInstallSkillDto(data),
+						timeout: 300000,
+					})
 					.json();
 			},
 			delete(
@@ -178,27 +348,39 @@ export function createApi(baseUrl: string) {
 					})
 					.json();
 			},
-			transfer(body: {
-				source: InstallTarget & { name: string };
-				destinations: InstallTarget[];
-			}): Promise<OperationBatchResponse> {
-				return client.post("skills/transfer", { json: body }).json();
+			transfer(body: TransferRequest): Promise<OperationBatchResponse> {
+				return client
+					.post("skills/transfer", { json: toTransferDto(body) })
+					.json();
 			},
 			reconcile(body: ReconcileRequest): Promise<OperationBatchResponse> {
-				return client.post("skills/reconcile", { json: body }).json();
+				return client
+					.post("skills/reconcile", { json: toReconcileDto(body) })
+					.json();
 			},
 			deleteByPath(
 				body: DeleteSkillByPathRequest,
 			): Promise<DeleteSkillByPathResponse> {
-				return client.delete("skills/by-path", { json: body }).json();
+				return client
+					.delete("skills/by-path", {
+						json: toDeleteSkillByPathDto(body),
+					})
+					.json();
 			},
 			gitScan(data: GitScanRequest): Promise<GitScanResponse> {
 				return client
-					.post("skills/git/scan", { json: data, timeout: 120000 })
+					.post("skills/git/scan", {
+						json: toGitScanDto(data),
+						timeout: 120000,
+					})
 					.json();
 			},
 			gitInstall(data: GitInstallRequest): Promise<GitInstallResponse> {
-				return client.post("skills/git/install", { json: data }).json();
+				return client
+					.post("skills/git/install", {
+						json: toGitInstallDto(data),
+					})
+					.json();
 			},
 		},
 		mcps: {
@@ -231,11 +413,7 @@ export function createApi(baseUrl: string) {
 			create(
 				agent: string,
 				scope: "global" | "project",
-				body: {
-					name: string;
-					transport: TransportDto;
-					timeout?: number;
-				},
+				body: CreateMcpRequest,
 				projectRoot?: string,
 			): Promise<McpResponse> {
 				return client
@@ -246,7 +424,7 @@ export function createApi(baseUrl: string) {
 								? { project_root: projectRoot }
 								: {}),
 						},
-						json: body,
+						json: toCreateMcpDto(body),
 					})
 					.json();
 			},
@@ -265,7 +443,7 @@ export function createApi(baseUrl: string) {
 								? { project_root: projectRoot }
 								: {}),
 						},
-						json: body,
+						json: toUpdateMcpDto(body),
 					})
 					.json();
 			},
@@ -286,14 +464,15 @@ export function createApi(baseUrl: string) {
 					})
 					.then(() => undefined);
 			},
-			transfer(body: {
-				source: InstallTarget & { name: string };
-				destinations: InstallTarget[];
-			}): Promise<OperationBatchResponse> {
-				return client.post("mcps/transfer", { json: body }).json();
+			transfer(body: TransferRequest): Promise<OperationBatchResponse> {
+				return client
+					.post("mcps/transfer", { json: toTransferDto(body) })
+					.json();
 			},
 			reconcile(body: ReconcileRequest): Promise<OperationBatchResponse> {
-				return client.post("mcps/reconcile", { json: body }).json();
+				return client
+					.post("mcps/reconcile", { json: toReconcileDto(body) })
+					.json();
 			},
 		},
 		market: {
@@ -306,7 +485,7 @@ export function createApi(baseUrl: string) {
 			},
 		},
 		integrations: {
-			listCodeEditors(): Promise<ToolInfo[]> {
+			listCodeEditors(): Promise<ToolInfoDto[]> {
 				return client.get("integrations/code-editors").json();
 			},
 			openWithEditor(
@@ -324,11 +503,10 @@ export function createApi(baseUrl: string) {
 			list(): Promise<CredentialResponse[]> {
 				return client.get("credentials").json();
 			},
-			create(body: {
-				name: string;
-				token: string;
-			}): Promise<CredentialResponse> {
-				return client.post("credentials", { json: body }).json();
+			create(body: CreateCredentialRequest): Promise<CredentialResponse> {
+				return client
+					.post("credentials", { json: toCreateCredentialDto(body) })
+					.json();
 			},
 			delete(id: string): Promise<void> {
 				return client.delete(`credentials/${id}`).then(() => undefined);
@@ -337,7 +515,24 @@ export function createApi(baseUrl: string) {
 	};
 }
 
-export interface CredentialResponse {
-	id: string;
-	name: string;
-}
+export type {
+	AgentAvailabilityDto as AgentAvailability,
+	AgentInfo,
+	CodeEditorType,
+	CredentialResponse,
+	DeleteSkillByPathResponse,
+	GitInstallResponse,
+	GitInstallResultEntry,
+	GitScanResponse,
+	GitScanSkillEntry,
+	GlobalSkillLockResponse,
+	InstallSkillResponse,
+	MarketSkill,
+	McpResponse,
+	OperationBatchResponse,
+	ProjectSkillLockResponse,
+	SkillResponse,
+	SkillTreeNodeResponse,
+	ToolInfoDto as ToolInfo,
+	TransportDto,
+};

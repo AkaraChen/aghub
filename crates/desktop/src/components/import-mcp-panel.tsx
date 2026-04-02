@@ -236,14 +236,16 @@ export function ImportMcpPanel({ onDone, projectPath }: ImportMcpPanelProps) {
 			transport = {
 				type: "stdio",
 				command: config.command || "",
-				args: config.args,
-				env: config.env,
+				args: config.args ?? [],
+				env: config.env ?? null,
+				timeout: config.timeout ?? null,
 			};
 		} else {
 			transport = {
 				type: transportType,
 				url: config.url || "",
-				headers: config.headers,
+				headers: config.headers ?? null,
+				timeout: config.timeout ?? null,
 			};
 		}
 

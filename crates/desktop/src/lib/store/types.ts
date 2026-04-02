@@ -1,4 +1,4 @@
-import type { CodeEditorType } from "../api-types";
+import type { CodeEditorType } from "../../generated/dto";
 
 export interface OnboardingProgress {
 	hasSeenWelcome: boolean;

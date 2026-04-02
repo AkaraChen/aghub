@@ -1,18 +1,9 @@
 use rocket::http::Status;
 use rocket::serde::json::Json;
-use serde::Serialize;
 use skills_sh::{Client, SearchParams};
 
+use crate::dto::market::MarketSkill;
 use crate::error::ApiError;
-
-#[derive(Debug, Serialize)]
-pub struct MarketSkill {
-	pub name: String,
-	pub slug: String,
-	pub source: String,
-	pub installs: u64,
-	pub author: Option<String>,
-}
 
 /// Search skills from marketplace
 /// `source` defaults to "skills-sh", extensible for future providers

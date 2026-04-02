@@ -106,14 +106,14 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const { data: skillContent } = useQuery({
 		...skillContentQueryOptions({
 			api,
-			path: skill.source_path,
+			path: skill.source_path ?? undefined,
 		}),
 	});
 
 	const { data: skillTree } = useQuery({
 		...skillTreeQueryOptions({
 			api,
-			path: skill.source_path,
+			path: skill.source_path ?? undefined,
 		}),
 	});
 

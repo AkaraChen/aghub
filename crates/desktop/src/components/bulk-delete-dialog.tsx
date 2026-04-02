@@ -9,8 +9,8 @@ import { invalidateSkillQueries } from "../requests/skills";
 
 interface BulkDeleteItem {
 	name: string;
-	agent?: string;
-	source?: ConfigSource;
+	agent?: string | null;
+	source?: ConfigSource | null;
 }
 
 interface BulkDeleteGroup {

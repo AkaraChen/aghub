@@ -8,6 +8,7 @@
 		"preview": "vite preview",
 		"tauri": "tauri",
 		"start": "tauri dev",
+		"generate:dto": "cargo run --manifest-path ../api/Cargo.toml --bin export-dto",
 		"lint": "eslint --fix ."
 	},
 	"dependencies": {

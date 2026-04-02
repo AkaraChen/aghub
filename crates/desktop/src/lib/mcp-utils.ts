@@ -1,6 +1,6 @@
 import type { EnvVar } from "../components/env-editor";
 import type { HttpHeader } from "../components/http-header-editor";
-import type { TransportDto } from "./api-types";
+import type { TransportDto } from "../generated/dto";
 import { keyPairToObject } from "./key-pair-utils";
 
 // Static regex to avoid re-compilation on every call
@@ -17,18 +17,16 @@ export function buildTransportFromForm(
 		timeout?: string;
 	},
 ): TransportDto | undefined {
-	const timeoutNum = data.timeout
-		? Number.parseInt(data.timeout, 10)
-		: undefined;
+	const timeoutNum = data.timeout ? Number.parseInt(data.timeout, 10) : null;
 
 	if (transportType === "stdio") {
 		const argsArray = data.args?.trim()
 			? data.args.trim().split(WHITESPACE_REGEX)
 			: [];
-		const envRecord: Record<string, string> | undefined =
+		const envRecord: Record<string, string> | null =
 			data.envVars && data.envVars.length > 0
 				? keyPairToObject(data.envVars)
-				: undefined;
+				: null;
 
 		return {
 			type: "stdio",
@@ -39,10 +37,10 @@ export function buildTransportFromForm(
 		};
 	}
 
-	const headersRecord: Record<string, string> | undefined =
+	const headersRecord: Record<string, string> | null =
 		data.httpHeaders && data.httpHeaders.length > 0
 			? keyPairToObject(data.httpHeaders)
-			: undefined;
+			: null;
 
 	return {
 		type: transportType,

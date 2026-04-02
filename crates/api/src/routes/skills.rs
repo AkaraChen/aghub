@@ -19,10 +19,10 @@ use crate::{
 		DeleteSkillByPathResponse, GitInstallRequest, GitInstallResponse,
 		GitInstallResultEntry, GitScanRequest, GitScanResponse,
 		GitScanSkillEntry, GlobalSkillLockResponse, InstallSkillRequest,
-		InstallSkillResponse, LocalSkillLockEntryResponse,
-		ProjectSkillLockResponse, SkillLockEntryResponse, SkillResponse,
-		SkillTreeNodeKind, SkillTreeNodeResponse, UpdateSkillRequest,
-		ValidationError,
+		InstallSkillResponse, LocalSkillLockEntryResponse, ProjectLockQuery,
+		ProjectSkillLockResponse, SkillContentQuery, SkillLockEntryResponse,
+		SkillResponse, SkillTreeNodeKind, SkillTreeNodeResponse,
+		SkillTreeQuery, UpdateSkillRequest, ValidationError,
 	},
 	dto::transfer::{
 		OperationBatchResponse, ReconcileRequest, TransferRequest,
@@ -621,11 +621,6 @@ pub async fn edit_skill_folder(
 	}
 }
 
-#[derive(Debug, rocket::FromForm)]
-pub struct SkillContentQuery {
-	pub path: String,
-}
-
 #[get("/skills/content?<query..>")]
 pub fn get_skill_content(query: SkillContentQuery) -> ApiResult<String> {
 	let path = expand_tilde_path(&query.path);
@@ -647,11 +642,6 @@ pub fn get_skill_content(query: SkillContentQuery) -> ApiResult<String> {
 	})?;
 
 	Ok(Json(skill.content))
-}
-
-#[derive(Debug, rocket::FromForm)]
-pub struct SkillTreeQuery {
-	pub path: String,
 }
 
 #[get("/skills/tree?<query..>")]
@@ -688,11 +678,6 @@ pub fn get_global_skill_lock() -> ApiResult<GlobalSkillLockResponse> {
 		skills,
 		last_selected_agents: lock.last_selected_agents,
 	}))
-}
-
-#[derive(Debug, rocket::FromForm)]
-pub struct ProjectLockQuery {
-	pub project_path: Option<String>,
 }
 
 #[get("/skills/lock/project?<query..>")]

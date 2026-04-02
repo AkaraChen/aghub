@@ -1,7 +1,11 @@
-use aghub_core::models::{ConfigSource, Skill};
+use aghub_core::models::Skill;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
-#[derive(Debug, Deserialize)]
+use crate::dto::common::ConfigSource;
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
 pub struct CreateSkillRequest {
 	pub name: String,
 	pub description: Option<String>,
@@ -11,7 +15,8 @@ pub struct CreateSkillRequest {
 	pub tools: Option<Vec<String>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
 pub struct ImportSkillRequest {
 	pub path: String,
 }
@@ -33,7 +38,8 @@ impl From<CreateSkillRequest> for Skill {
 	}
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
 pub struct UpdateSkillRequest {
 	pub name: Option<String>,
 	pub description: Option<String>,
@@ -61,7 +67,8 @@ impl UpdateSkillRequest {
 	}
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct SkillResponse {
 	pub name: String,
 	pub enabled: bool,
@@ -78,14 +85,16 @@ pub struct SkillResponse {
 	pub agent: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum SkillTreeNodeKind {
 	File,
 	Directory,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
 pub struct SkillTreeNodeResponse {
 	pub name: String,
 	pub path: String,
@@ -110,7 +119,7 @@ impl From<&Skill> for SkillResponse {
 			author: s.author.clone(),
 			version: s.version.clone(),
 			tools: s.tools.clone(),
-			source: s.config_source,
+			source: s.config_source.map(Into::into),
 			agent: None,
 		}
 	}
@@ -125,7 +134,8 @@ impl From<(Skill, &str)> for SkillResponse {
 	}
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
 pub struct InstallSkillRequest {
 	pub source: String,
 	pub agents: Vec<String>,
@@ -135,7 +145,8 @@ pub struct InstallSkillRequest {
 	pub install_all: Option<bool>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct InstallSkillResponse {
 	pub success: bool,
 	pub stdout: String,
@@ -144,7 +155,8 @@ pub struct InstallSkillResponse {
 }
 
 /// Response for a single global skill lock entry
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct SkillLockEntryResponse {
 	pub name: String,
 	pub source: String,
@@ -165,7 +177,8 @@ pub struct SkillLockEntryResponse {
 }
 
 /// Response for the global skill lock file
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct GlobalSkillLockResponse {
 	pub version: u32,
 	pub skills: Vec<SkillLockEntryResponse>,
@@ -177,7 +190,8 @@ pub struct GlobalSkillLockResponse {
 }
 
 /// Response for a single project skill lock entry
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct LocalSkillLockEntryResponse {
 	pub name: String,
 	pub source: String,
@@ -188,13 +202,15 @@ pub struct LocalSkillLockEntryResponse {
 }
 
 /// Response for the project skill lock file
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct ProjectSkillLockResponse {
 	pub version: u32,
 	pub skills: Vec<LocalSkillLockEntryResponse>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
 pub struct DeleteSkillByPathRequest {
 	pub source_path: String,
 	pub agents: Vec<String>,
@@ -202,19 +218,22 @@ pub struct DeleteSkillByPathRequest {
 	pub project_root: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct ValidationError {
 	pub agent: String,
 	pub reason: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
 pub struct GitScanRequest {
 	pub url: String,
 	pub credential_id: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct GitScanSkillEntry {
 	pub name: String,
 	pub description: String,
@@ -223,13 +242,15 @@ pub struct GitScanSkillEntry {
 	pub path: String,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct GitScanResponse {
 	pub session_id: String,
 	pub skills: Vec<GitScanSkillEntry>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
 pub struct GitInstallRequest {
 	pub session_id: String,
 	pub skill_paths: Vec<String>,
@@ -238,7 +259,8 @@ pub struct GitInstallRequest {
 	pub project_root: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct GitInstallResultEntry {
 	pub name: String,
 	pub agent: String,
@@ -246,12 +268,14 @@ pub struct GitInstallResultEntry {
 	pub error: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct GitInstallResponse {
 	pub results: Vec<GitInstallResultEntry>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct DeleteSkillByPathResponse {
 	pub success: bool,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -260,4 +284,22 @@ pub struct DeleteSkillByPathResponse {
 	pub error: Option<String>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub validation_errors: Option<Vec<ValidationError>>,
+}
+
+#[derive(Debug, TS, rocket::FromForm)]
+#[ts(export)]
+pub struct SkillContentQuery {
+	pub path: String,
+}
+
+#[derive(Debug, TS, rocket::FromForm)]
+#[ts(export)]
+pub struct SkillTreeQuery {
+	pub path: String,
+}
+
+#[derive(Debug, TS, rocket::FromForm)]
+#[ts(export)]
+pub struct ProjectLockQuery {
+	pub project_path: Option<String>,
 }

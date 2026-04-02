@@ -1,37 +1,9 @@
 use aghub_core::{availability, registry};
 use rocket::serde::json::Json;
-use serde::Serialize;
 
-#[derive(Debug, Serialize)]
-pub struct CapabilitiesDto {
-	pub mcp_stdio: bool,
-	pub mcp_remote: bool,
-	pub mcp_enable_disable: bool,
-	pub skills: bool,
-	pub skills_mutable: bool,
-}
-
-#[derive(Debug, Serialize)]
-pub struct SkillsPathsDto {
-	pub project: Vec<String>,
-	pub global: Vec<String>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct AgentInfo {
-	pub id: &'static str,
-	pub display_name: &'static str,
-	pub capabilities: CapabilitiesDto,
-	pub skills_paths: SkillsPathsDto,
-}
-
-#[derive(Debug, Serialize)]
-pub struct AgentAvailabilityDto {
-	pub id: &'static str,
-	pub has_global_directory: bool,
-	pub has_cli: bool,
-	pub is_available: bool,
-}
+use crate::dto::agents::{
+	AgentAvailabilityDto, AgentInfo, CapabilitiesDto, SkillsPathsDto,
+};
 
 #[get("/agents")]
 pub fn list_agents() -> Json<Vec<AgentInfo>> {
@@ -69,8 +41,8 @@ pub fn list_agents() -> Json<Vec<AgentInfo>> {
 				.unwrap_or_default();
 
 			AgentInfo {
-				id: d.id,
-				display_name: d.display_name,
+				id: d.id.to_string(),
+				display_name: d.display_name.to_string(),
 				capabilities: CapabilitiesDto {
 					mcp_stdio: d.capabilities.mcp_stdio,
 					mcp_remote: d.capabilities.mcp_remote,
@@ -97,7 +69,7 @@ pub fn check_availability() -> Json<Vec<AgentAvailabilityDto>> {
 	let dtos: Vec<AgentAvailabilityDto> = availability_info
 		.into_iter()
 		.map(|info| AgentAvailabilityDto {
-			id: info.agent_id,
+			id: info.agent_id.to_string(),
 			has_global_directory: info.has_global_directory,
 			has_cli: info.has_cli,
 			is_available: info.is_available,

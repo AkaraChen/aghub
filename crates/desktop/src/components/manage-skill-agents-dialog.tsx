@@ -148,7 +148,7 @@ export function ManageSkillAgentsDialog({
 			for (const item of result.results) {
 				newAgentStates[item.agent] = {
 					status: item.success ? "success" : "error",
-					error: item.error,
+					error: item.error ?? undefined,
 				};
 			}
 			setAgentStates(newAgentStates);

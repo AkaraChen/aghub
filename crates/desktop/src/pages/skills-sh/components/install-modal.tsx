@@ -4,7 +4,7 @@ import { AgentSelector } from "../../../components/agent-selector";
 import { ProjectSelector } from "../../../components/project-selector";
 import { ResultStatusItem } from "../../../components/result-status-item";
 import { SkillInfoCard } from "../../../components/skill-info-card";
-import type { MarketSkill } from "../../../lib/api-types";
+import type { MarketSkill } from "../../../generated/dto";
 import type { Project } from "../../../lib/store";
 import type { InstallResult } from "../hooks/use-skill-install";
 

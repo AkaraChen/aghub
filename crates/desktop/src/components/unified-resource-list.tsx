@@ -19,7 +19,7 @@ import {
 } from "@heroui/react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import type { McpResponse, SkillResponse } from "../lib/api-types";
+import type { McpResponse, SkillResponse } from "../generated/dto";
 import { cn, getMcpMergeKey } from "../lib/utils";
 import { ListSearchHeader } from "./list-search-header";
 import { McpList } from "./mcp-list";

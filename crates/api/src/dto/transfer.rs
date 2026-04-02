@@ -4,10 +4,12 @@ use aghub_core::transfer::{
 };
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use ts_rs::TS;
 
 use crate::error::ApiError;
 
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, TS)]
+#[ts(export)]
 #[serde(rename_all = "lowercase")]
 pub enum InstallScopeDto {
 	Global,
@@ -32,7 +34,8 @@ impl From<InstallScope> for InstallScopeDto {
 	}
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export)]
 pub struct TargetDto {
 	pub agent: String,
 	pub scope: InstallScopeDto,
@@ -57,7 +60,8 @@ impl TargetDto {
 	}
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export)]
 pub struct ResourceLocatorDto {
 	pub agent: String,
 	pub scope: InstallScopeDto,
@@ -84,20 +88,23 @@ impl ResourceLocatorDto {
 	}
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export)]
 pub struct TransferRequest {
 	pub source: ResourceLocatorDto,
 	pub destinations: Vec<TargetDto>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, TS)]
+#[ts(export)]
 pub struct ReconcileRequest {
 	pub source: ResourceLocatorDto,
 	pub added: Option<Vec<String>>,
 	pub removed: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub enum OperationActionDto {
 	Copy,
@@ -113,7 +120,8 @@ impl From<OperationAction> for OperationActionDto {
 	}
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
 pub struct OperationResultDto {
 	pub agent: String,
 	pub scope: InstallScopeDto,
@@ -141,7 +149,8 @@ impl From<OperationResult> for OperationResultDto {
 	}
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
 pub struct OperationBatchResponse {
 	pub success_count: usize,
 	pub failed_count: usize,

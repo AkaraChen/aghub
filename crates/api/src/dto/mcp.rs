@@ -1,8 +1,12 @@
-use aghub_core::models::{ConfigSource, McpServer, McpTransport};
+use aghub_core::models::{McpServer, McpTransport};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use ts_rs::TS;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+use crate::dto::common::ConfigSource;
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TransportDto {
 	Stdio {
@@ -102,7 +106,8 @@ impl From<TransportDto> for McpTransport {
 	}
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
 pub struct CreateMcpRequest {
 	pub name: String,
 	pub transport: TransportDto,
@@ -121,7 +126,8 @@ impl From<CreateMcpRequest> for McpServer {
 	}
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
 pub struct UpdateMcpRequest {
 	pub name: Option<String>,
 	pub transport: Option<TransportDto>,
@@ -144,7 +150,8 @@ impl UpdateMcpRequest {
 	}
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct McpResponse {
 	pub name: String,
 	pub enabled: bool,
@@ -170,7 +177,7 @@ impl From<&McpServer> for McpResponse {
 			enabled: s.enabled,
 			transport: TransportDto::from(&s.transport),
 			timeout: s.timeout,
-			source: s.config_source,
+			source: s.config_source.map(Into::into),
 			agent: None,
 		}
 	}

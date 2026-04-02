@@ -9,7 +9,7 @@ import { Button, Tooltip } from "@heroui/react";
 import * as pathe from "pathe";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import type { SkillTreeNodeResponse } from "../lib/api-types";
+import type { SkillTreeNodeResponse } from "../generated/dto";
 import {
 	formatAgentName,
 	getNodeChildren,
