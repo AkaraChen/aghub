@@ -14,6 +14,11 @@ thiserror = { workspace = true }
 dirs = { workspace = true }
 which = "7"
 aghub-markdown = { path = "../markdown" }
+aghub-plugins = { path = "../plugins", optional = true }
+
+[features]
+default = []
+claude-plugins = ["aghub-plugins"]
 
 [dev-dependencies]
 tempfile = { workspace = true }

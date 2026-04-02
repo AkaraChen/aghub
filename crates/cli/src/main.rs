@@ -200,6 +200,11 @@ enum Commands {
 		resource: ResourceType,
 		name: String,
 	},
+	/// Manage Claude Code plugins
+	Plugin {
+		#[command(subcommand)]
+		action: PluginAction,
+	},
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug)]
@@ -208,6 +213,26 @@ enum ResourceType {
 	Skills,
 	#[value(alias = "mcp")]
 	Mcps,
+}
+
+#[derive(Subcommand)]
+enum PluginAction {
+	/// List installed plugins
+	List {
+		/// Output as JSON
+		#[arg(long)]
+		json: bool,
+	},
+	/// Enable a plugin
+	Enable {
+		/// Plugin ID (e.g., "frontend-design@claude-plugins-official")
+		plugin_id: String,
+	},
+	/// Disable a plugin
+	Disable {
+		/// Plugin ID (e.g., "frontend-design@claude-plugins-official")
+		plugin_id: String,
+	},
 }
 
 fn main() -> Result<()> {
@@ -366,6 +391,15 @@ fn main() -> Result<()> {
 		Commands::Describe { resource, name } => {
 			describe::execute(&manager, resource, name)
 		}
+		Commands::Plugin { action } => {
+			// Plugin management is Claude-specific
+			if agent_type != AgentType::Claude {
+				return Err(anyhow::anyhow!(
+					"Plugin management is only supported for Claude Code. Use -a claude"
+				));
+			}
+			handle_plugin_action(action)
+		}
 	}
 }
 
@@ -441,4 +475,91 @@ mod describe {
 
 		Ok(())
 	}
+}
+
+// Handle plugin management commands
+#[cfg(feature = "claude-plugins")]
+fn handle_plugin_action(action: PluginAction) -> Result<()> {
+	use aghub_plugins::claude::ClaudePluginManager;
+	use aghub_plugins::PluginId;
+
+	match action {
+		PluginAction::List { json } => {
+			let manager = ClaudePluginManager::new()
+				.context("Failed to initialize plugin manager. Is Claude Code installed?")?;
+
+			let plugins = manager.list_plugins();
+
+			if plugins.is_empty() {
+				println!("No plugins installed.");
+				return Ok(());
+			}
+
+			if json {
+				// JSON output
+				let plugins_json: Vec<_> = plugins
+					.iter()
+					.map(|p| {
+						serde_json::json!({
+							"id": p.id.to_string(),
+							"name": p.display_name,
+							"version": p.version,
+							"enabled": p.enabled,
+							"source": p.source.to_string(),
+							"install_path": p.install_path,
+							"has_skills": p.has_skills(),
+						})
+					})
+					.collect();
+				println!("{}", serde_json::to_string_pretty(&plugins_json)?);
+			} else {
+				// Table output
+				println!("{:<50} {:<12} {:<10} Name", "ID", "Version", "Status");
+				for plugin in plugins {
+					let status = if plugin.enabled {
+						"✓ enabled"
+					} else {
+						"✗ disabled"
+					};
+					println!(
+						"{:<50} {:<12} {:<10} {}",
+						plugin.id.to_string(),
+						plugin.version,
+						status,
+						plugin.display_name
+					);
+				}
+			}
+			Ok(())
+		}
+		PluginAction::Enable { plugin_id } => {
+			let id = PluginId::parse(&plugin_id)
+				.with_context(|| format!("Invalid plugin ID: {}", plugin_id))?;
+
+			let mut manager = ClaudePluginManager::new()
+				.context("Failed to initialize plugin manager")?;
+
+			manager.enable(&id)?;
+			println!("Plugin '{}' enabled successfully.", plugin_id);
+			Ok(())
+		}
+		PluginAction::Disable { plugin_id } => {
+			let id = PluginId::parse(&plugin_id)
+				.with_context(|| format!("Invalid plugin ID: {}", plugin_id))?;
+
+			let mut manager = ClaudePluginManager::new()
+				.context("Failed to initialize plugin manager")?;
+
+			manager.disable(&id)?;
+			println!("Plugin '{}' disabled successfully.", plugin_id);
+			Ok(())
+		}
+	}
+}
+
+#[cfg(not(feature = "claude-plugins"))]
+fn handle_plugin_action(_action: PluginAction) -> Result<()> {
+	Err(anyhow::anyhow!(
+		"Plugin support is not compiled. Rebuild with --features claude-plugins"
+	))
 }
