@@ -179,12 +179,19 @@ impl ClaudePluginManager {
 	}
 
 	/// Get plugin user configuration
-	pub fn get_plugin_config(&self, id: &PluginId) -> Option<&serde_json::Value> {
+	pub fn get_plugin_config(
+		&self,
+		id: &PluginId,
+	) -> Option<&serde_json::Value> {
 		self.settings.get_plugin_config(id)
 	}
 
 	/// Set plugin user configuration
-	pub fn set_plugin_config(&mut self, id: &PluginId, config: serde_json::Value) -> Result<()> {
+	pub fn set_plugin_config(
+		&mut self,
+		id: &PluginId,
+		config: serde_json::Value,
+	) -> Result<()> {
 		self.settings.set_plugin_config(id, config);
 		self.settings.save()
 	}
@@ -232,7 +239,8 @@ impl ClaudePluginManager {
 
 			// Try to read description from plugin.json
 			let install_path = PathBuf::from(&info.install_path);
-			let description = Self::read_description_from_manifest(&install_path);
+			let description =
+				Self::read_description_from_manifest(&install_path);
 
 			plugins.push(ClaudePluginInfo {
 				id: id.clone(),
@@ -272,7 +280,9 @@ impl ClaudePluginManager {
 		for path in &possible_paths {
 			if path.exists() {
 				if let Ok(content) = std::fs::read_to_string(path) {
-					if let Ok(manifest) = serde_json::from_str::<types::PluginManifest>(&content) {
+					if let Ok(manifest) =
+						serde_json::from_str::<types::PluginManifest>(&content)
+					{
 						return Some(manifest.description);
 					}
 				}

@@ -106,12 +106,19 @@ impl ClaudeSettings {
 	}
 
 	/// Get plugin configuration
-	pub fn get_plugin_config(&self, id: &PluginId) -> Option<&serde_json::Value> {
+	pub fn get_plugin_config(
+		&self,
+		id: &PluginId,
+	) -> Option<&serde_json::Value> {
 		self.plugin_config.get(&id.to_string())
 	}
 
 	/// Set plugin configuration
-	pub fn set_plugin_config(&mut self, id: &PluginId, config: serde_json::Value) {
+	pub fn set_plugin_config(
+		&mut self,
+		id: &PluginId,
+		config: serde_json::Value,
+	) {
 		self.plugin_config.insert(id.to_string(), config);
 	}
 

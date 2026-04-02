@@ -545,21 +545,22 @@ pub async fn reinstall_plugin(
 
 	uninstall_cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
-	let uninstall_output = match timeout(Duration::from_secs(60), uninstall_cmd.output()).await {
-		Ok(Ok(output)) => output,
-		Ok(Err(e)) => {
-			return Err(ApiError::internal(format!(
-				"Failed to execute Claude CLI uninstall: {e}"
-			)));
-		}
-		Err(_) => {
-			return Err(ApiError::new(
-				Status::RequestTimeout,
-				"Plugin uninstallation timed out after 1 minute",
-				"PLUGIN_UNINSTALL_TIMEOUT",
-			));
-		}
-	};
+	let uninstall_output =
+		match timeout(Duration::from_secs(60), uninstall_cmd.output()).await {
+			Ok(Ok(output)) => output,
+			Ok(Err(e)) => {
+				return Err(ApiError::internal(format!(
+					"Failed to execute Claude CLI uninstall: {e}"
+				)));
+			}
+			Err(_) => {
+				return Err(ApiError::new(
+					Status::RequestTimeout,
+					"Plugin uninstallation timed out after 1 minute",
+					"PLUGIN_UNINSTALL_TIMEOUT",
+				));
+			}
+		};
 
 	// Step 2: Install the plugin
 	let mut install_cmd = Command::new(&claude_path);
@@ -572,21 +573,22 @@ pub async fn reinstall_plugin(
 		.stdout(Stdio::piped())
 		.stderr(Stdio::piped());
 
-	let install_output = match timeout(Duration::from_secs(120), install_cmd.output()).await {
-		Ok(Ok(output)) => output,
-		Ok(Err(e)) => {
-			return Err(ApiError::internal(format!(
-				"Failed to execute Claude CLI install: {e}"
-			)));
-		}
-		Err(_) => {
-			return Err(ApiError::new(
-				Status::RequestTimeout,
-				"Plugin installation timed out after 2 minutes",
-				"PLUGIN_INSTALL_TIMEOUT",
-			));
-		}
-	};
+	let install_output =
+		match timeout(Duration::from_secs(120), install_cmd.output()).await {
+			Ok(Ok(output)) => output,
+			Ok(Err(e)) => {
+				return Err(ApiError::internal(format!(
+					"Failed to execute Claude CLI install: {e}"
+				)));
+			}
+			Err(_) => {
+				return Err(ApiError::new(
+					Status::RequestTimeout,
+					"Plugin installation timed out after 2 minutes",
+					"PLUGIN_INSTALL_TIMEOUT",
+				));
+			}
+		};
 
 	let install_stdout = String::from_utf8_lossy(&install_output.stdout);
 	let install_stderr = String::from_utf8_lossy(&install_output.stderr);
@@ -724,9 +726,12 @@ pub fn update_plugin_config(
 	let req = body.into_inner();
 
 	// Parse config from string
-	let config: serde_json::Value = serde_json::from_str(&req.config).map_err(|e| {
-		crate::error::ApiError::bad_request(format!("Invalid JSON config: {e}"))
-	})?;
+	let config: serde_json::Value =
+		serde_json::from_str(&req.config).map_err(|e| {
+			crate::error::ApiError::bad_request(format!(
+				"Invalid JSON config: {e}"
+			))
+		})?;
 
 	// Validate that config is a valid JSON object
 	if !config.is_object() {
@@ -756,7 +761,9 @@ pub fn update_plugin_config(
 
 /// Delete plugin user configuration
 #[delete("/plugins/<plugin_id>/config")]
-pub fn delete_plugin_config(plugin_id: String) -> ApiResult<PluginConfigResponse> {
+pub fn delete_plugin_config(
+	plugin_id: String,
+) -> ApiResult<PluginConfigResponse> {
 	use aghub_plugins::PluginId;
 
 	let id = PluginId::parse(&plugin_id).map_err(|e| {
