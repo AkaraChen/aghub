@@ -213,3 +213,21 @@ pub struct CheckUpdateResponse {
 	#[ts(optional)]
 	pub changelog: Option<String>,
 }
+
+/// Reinstall plugin request/response
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ReinstallPluginRequest {
+	pub plugin_id: String,
+	#[serde(default = "default_scope")]
+	pub scope: String,
+	#[serde(default)]
+	pub keep_data: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ReinstallPluginResponse {
+	pub success: bool,
+	pub message: String,
+}

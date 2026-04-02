@@ -33,6 +33,8 @@ import type {
 	PluginResponse,
 	ProjectSkillLockResponse,
 	ReconcileRequest,
+	ReinstallPluginRequest,
+	ReinstallPluginResponse,
 	SkillResponse,
 	SkillTreeNodeResponse,
 	SubAgentResponse,
@@ -490,6 +492,13 @@ export function createApi(baseUrl: string) {
 			): Promise<CheckUpdateResponse> {
 				return client
 					.post("plugins/check-update", { json: body })
+					.json();
+			},
+			reinstall(
+				body: ReinstallPluginRequest,
+			): Promise<ReinstallPluginResponse> {
+				return client
+					.post("plugins/reinstall", { json: body, timeout: 180000 })
 					.json();
 			},
 		},

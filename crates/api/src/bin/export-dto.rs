@@ -24,8 +24,8 @@ use aghub_api::dto::{
 		InstallPluginRequest, InstallPluginResponse, McpConfigResponse,
 		McpServerResponse, PluginAuthorResponse, PluginDetailResponse,
 		PluginListResponse, PluginManifestResponse, PluginResponse,
-		UninstallPluginRequest, UninstallPluginResponse, UpdatePluginRequest,
-		UpdatePluginResponse,
+		ReinstallPluginRequest, ReinstallPluginResponse, UninstallPluginRequest,
+		UninstallPluginResponse, UpdatePluginRequest, UpdatePluginResponse,
 	},
 	skill::{
 		CreateSkillRequest, DeleteSkillByPathRequest,
@@ -189,6 +189,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<UpdatePluginResponse>(&cfg)?;
 	export_type::<CheckUpdateRequest>(&cfg)?;
 	export_type::<CheckUpdateResponse>(&cfg)?;
+	export_type::<ReinstallPluginRequest>(&cfg)?;
+	export_type::<ReinstallPluginResponse>(&cfg)?;
 
 	write_index_file(&out_dir)?;
 

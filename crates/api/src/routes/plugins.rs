@@ -4,6 +4,7 @@ use crate::dto::plugin::{
 	InstallPluginRequest, InstallPluginResponse, McpConfigResponse,
 	McpServerResponse, PluginAuthorResponse, PluginDetailResponse,
 	PluginListResponse, PluginManifestResponse, PluginResponse,
+	ReinstallPluginRequest, ReinstallPluginResponse,
 	UninstallPluginRequest, UninstallPluginResponse, UpdatePluginRequest,
 	UpdatePluginResponse,
 };
@@ -24,6 +25,7 @@ pub fn routes() -> Vec<Route> {
 		disable_plugin,
 		install_plugin,
 		uninstall_plugin,
+		reinstall_plugin,
 		update_plugin,
 		check_plugin_update,
 	]
@@ -499,6 +501,109 @@ pub fn get_plugin_detail(plugin_id: String) -> ApiResult<PluginDetailResponse> {
 		update_available: false, // TODO: implement update check
 		latest_version: None,
 	}))
+}
+
+/// Reinstall a plugin (uninstall then install)
+#[post("/plugins/reinstall", data = "<body>")]
+pub async fn reinstall_plugin(
+	body: Json<ReinstallPluginRequest>,
+) -> ApiResult<ReinstallPluginResponse> {
+	let req = body.into_inner();
+
+	// Validate scope
+	if !matches!(req.scope.as_str(), "user" | "project" | "local") {
+		return Err(ApiError::bad_request(format!(
+			"Invalid scope '{}'. Use 'user', 'project', or 'local'",
+			req.scope
+		)));
+	}
+
+	// Check if claude CLI is available
+	let claude_path = which::which("claude").map_err(|_| {
+		ApiError::new(
+			Status::ServiceUnavailable,
+			"Claude CLI not found. Please install Claude Code first.",
+			"CLAUDE_CLI_NOT_FOUND",
+		)
+	})?;
+
+	// Step 1: Uninstall the plugin
+	let mut uninstall_cmd = Command::new(&claude_path);
+	uninstall_cmd
+		.arg("plugin")
+		.arg("uninstall")
+		.arg(&req.plugin_id)
+		.arg("--scope")
+		.arg(&req.scope);
+
+	if req.keep_data {
+		uninstall_cmd.arg("--keep-data");
+	}
+
+	uninstall_cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+
+	let uninstall_output = match timeout(Duration::from_secs(60), uninstall_cmd.output()).await {
+		Ok(Ok(output)) => output,
+		Ok(Err(e)) => {
+			return Err(ApiError::internal(format!(
+				"Failed to execute Claude CLI uninstall: {e}"
+			)));
+		}
+		Err(_) => {
+			return Err(ApiError::new(
+				Status::RequestTimeout,
+				"Plugin uninstallation timed out after 1 minute",
+				"PLUGIN_UNINSTALL_TIMEOUT",
+			));
+		}
+	};
+
+	// Step 2: Install the plugin
+	let mut install_cmd = Command::new(&claude_path);
+	install_cmd
+		.arg("plugin")
+		.arg("install")
+		.arg(&req.plugin_id)
+		.arg("--scope")
+		.arg(&req.scope)
+		.stdout(Stdio::piped())
+		.stderr(Stdio::piped());
+
+	let install_output = match timeout(Duration::from_secs(120), install_cmd.output()).await {
+		Ok(Ok(output)) => output,
+		Ok(Err(e)) => {
+			return Err(ApiError::internal(format!(
+				"Failed to execute Claude CLI install: {e}"
+			)));
+		}
+		Err(_) => {
+			return Err(ApiError::new(
+				Status::RequestTimeout,
+				"Plugin installation timed out after 2 minutes",
+				"PLUGIN_INSTALL_TIMEOUT",
+			));
+		}
+	};
+
+	let install_stdout = String::from_utf8_lossy(&install_output.stdout);
+	let install_stderr = String::from_utf8_lossy(&install_output.stderr);
+
+	if install_output.status.success() {
+		Ok(Json(ReinstallPluginResponse {
+			success: true,
+			message: format!(
+				"Plugin reinstalled successfully. Uninstall: {}, Install: {}",
+				String::from_utf8_lossy(&uninstall_output.stdout).trim(),
+				install_stdout.trim()
+			),
+		}))
+	} else {
+		Err(ApiError::new(
+			Status::BadRequest,
+			format!("Failed to reinstall plugin: {}", install_stderr.trim()),
+			"PLUGIN_REINSTALL_FAILED",
+		))
+	}
 }
 
 /// Check for plugin updates

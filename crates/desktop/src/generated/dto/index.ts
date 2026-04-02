@@ -51,6 +51,8 @@ export type { PluginResponse } from "./PluginResponse";
 export type { ProjectLockQuery } from "./ProjectLockQuery";
 export type { ProjectSkillLockResponse } from "./ProjectSkillLockResponse";
 export type { ReconcileRequest } from "./ReconcileRequest";
+export type { ReinstallPluginRequest } from "./ReinstallPluginRequest";
+export type { ReinstallPluginResponse } from "./ReinstallPluginResponse";
 export type { ResourceLocatorDto } from "./ResourceLocatorDto";
 export type { ScopeSupportDto } from "./ScopeSupportDto";
 export type { SkillCapabilitiesDto } from "./SkillCapabilitiesDto";
