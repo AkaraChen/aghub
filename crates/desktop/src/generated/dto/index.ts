@@ -33,6 +33,7 @@ export type { InstallScopeDto } from "./InstallScopeDto";
 export type { InstallSkillRequest } from "./InstallSkillRequest";
 export type { InstallSkillResponse } from "./InstallSkillResponse";
 export type { LocalSkillLockEntryResponse } from "./LocalSkillLockEntryResponse";
+export type { MarketPluginResponse } from "./MarketPluginResponse";
 export type { MarketSkill } from "./MarketSkill";
 export type { McpCapabilitiesDto } from "./McpCapabilitiesDto";
 export type { McpConfigResponse } from "./McpConfigResponse";
@@ -64,8 +65,11 @@ export type { SkillTreeNodeKind } from "./SkillTreeNodeKind";
 export type { SkillTreeNodeResponse } from "./SkillTreeNodeResponse";
 export type { SkillTreeQuery } from "./SkillTreeQuery";
 export type { SkillsPathsDto } from "./SkillsPathsDto";
+<<<<<<< HEAD
 export type { SubAgentCapabilitiesDto } from "./SubAgentCapabilitiesDto";
 export type { SubAgentResponse } from "./SubAgentResponse";
+=======
+>>>>>>> b30c215 (feat(plugins): add plugin marketplace support)
 export type { TargetDto } from "./TargetDto";
 export type { ToolInfoDto } from "./ToolInfoDto";
 export type { ToolPreferencesDto } from "./ToolPreferencesDto";

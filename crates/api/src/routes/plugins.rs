@@ -1,8 +1,8 @@
 use crate::dto::plugin::{
 	CheckUpdateRequest, CheckUpdateResponse, HookActionResponse,
 	HookEventResponse, HookMatcherResponse, HooksManifestResponse,
-	InstallPluginRequest, InstallPluginResponse, McpConfigResponse,
-	McpServerResponse, PluginAuthorResponse, PluginConfigResponse,
+	InstallPluginRequest, InstallPluginResponse, MarketPluginResponse,
+	McpConfigResponse, McpServerResponse, PluginAuthorResponse, PluginConfigResponse,
 	PluginDetailResponse, PluginListResponse, PluginManifestResponse,
 	PluginResponse, ReinstallPluginRequest, ReinstallPluginResponse,
 	UninstallPluginRequest, UninstallPluginResponse, UpdatePluginConfigRequest,
@@ -31,6 +31,7 @@ pub fn routes() -> Vec<Route> {
 		get_plugin_config,
 		update_plugin_config,
 		delete_plugin_config,
+		list_plugin_market,
 	]
 }
 
@@ -803,4 +804,82 @@ pub fn delete_plugin_config(
 		config: None,
 		schema,
 	}))
+}
+
+/// GitHub repository info for marketplace plugins
+#[derive(Debug, serde::Deserialize)]
+struct GithubRepo {
+	name: String,
+	#[serde(rename = "full_name")]
+	full_name: String,
+	description: Option<String>,
+	#[serde(rename = "html_url")]
+	html_url: String,
+	#[serde(rename = "stargazers_count")]
+	stargazers_count: i64,
+}
+
+/// List available plugins from the official marketplace (GitHub organization)
+#[get("/plugins-market")]
+pub async fn list_plugin_market() -> ApiResult<Vec<MarketPluginResponse>> {
+	// Fetch repositories from claude-plugins-official organization
+	let url = "https://api.github.com/orgs/claude-plugins-official/repos?type=sources&sort=updated&per_page=100";
+
+	let client = reqwest::Client::new();
+	let response = client
+		.get(url)
+		.header("User-Agent", "aghub-api")
+		.send()
+		.await
+		.map_err(|e| {
+			ApiError::new(
+				Status::BadGateway,
+				format!("Failed to fetch marketplace plugins: {e}"),
+				"MARKET_FETCH_ERROR",
+			)
+		})?;
+
+	let repos: Vec<GithubRepo> = response.json().await.map_err(|e| {
+		ApiError::new(
+			Status::BadGateway,
+			format!("Failed to parse marketplace response: {e}"),
+			"MARKET_PARSE_ERROR",
+		)
+	})?;
+
+	// Get currently installed plugins to mark them
+	let installed_plugins: std::collections::HashMap<String, bool> =
+		ClaudePluginManager::new()
+			.ok()
+			.map(|m| {
+				m.list_plugins()
+					.iter()
+					.map(|p| (p.id.name.clone(), p.enabled))
+					.collect()
+				})
+			.unwrap_or_default();
+
+	let plugins: Vec<MarketPluginResponse> = repos
+		.into_iter()
+		.filter(|repo| !repo.name.starts_with('.')) // Filter out hidden repos
+		.map(|repo| {
+			let name = repo.name.clone();
+			let installed = installed_plugins.contains_key(&name);
+			let enabled = installed_plugins.get(&name).copied();
+
+			MarketPluginResponse {
+				id: format!("{}@claude-plugins-official", name),
+				name: name.clone(),
+				description: repo.description.unwrap_or_default(),
+				version: "latest".to_string(), // Will be resolved during install
+				author: "claude-plugins-official".to_string(),
+				github_url: repo.html_url,
+				installs: repo.stargazers_count, // Using stars as proxy for popularity
+				installed,
+				enabled,
+			}
+		})
+		.collect();
+
+	Ok(Json(plugins))
 }

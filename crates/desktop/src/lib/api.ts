@@ -25,6 +25,7 @@ import type {
 	InstallPluginResponse,
 	InstallSkillRequest,
 	InstallSkillResponse,
+	MarketPluginResponse,
 	MarketSkill,
 	McpResponse,
 	OperationBatchResponse,
@@ -515,6 +516,9 @@ export function createApi(baseUrl: string) {
 			},
 			deleteConfig(pluginId: string): Promise<PluginConfigResponse> {
 				return client.delete(`plugins/${pluginId}/config`).json();
+			},
+			listMarket(): Promise<MarketPluginResponse[]> {
+				return client.get("plugins-market").json();
 			},
 		},
 	};

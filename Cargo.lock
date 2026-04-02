@@ -68,6 +68,7 @@ dependencies = [
  "keyring",
  "log",
  "open",
+ "reqwest 0.12.28",
  "rocket",
  "rocket_cors",
  "serde",

@@ -21,8 +21,8 @@ use aghub_api::dto::{
 	plugin::{
 		CheckUpdateRequest, CheckUpdateResponse, HookActionResponse,
 		HookEventResponse, HookMatcherResponse, HooksManifestResponse,
-		InstallPluginRequest, InstallPluginResponse, McpConfigResponse,
-		McpServerResponse, PluginAuthorResponse, PluginConfigResponse,
+		InstallPluginRequest, InstallPluginResponse, MarketPluginResponse,
+		McpConfigResponse, McpServerResponse, PluginAuthorResponse, PluginConfigResponse,
 		PluginDetailResponse, PluginListResponse, PluginManifestResponse,
 		PluginResponse, ReinstallPluginRequest, ReinstallPluginResponse,
 		UninstallPluginRequest, UninstallPluginResponse,
@@ -194,6 +194,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<ReinstallPluginResponse>(&cfg)?;
 	export_type::<PluginConfigResponse>(&cfg)?;
 	export_type::<UpdatePluginConfigRequest>(&cfg)?;
+	export_type::<MarketPluginResponse>(&cfg)?;
 
 	write_index_file(&out_dir)?;
 

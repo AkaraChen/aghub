@@ -15,6 +15,7 @@ import { ListSearchHeader } from "../../components/list-search-header";
 import { MultiSelectFloatingBar } from "../../components/multi-select-floating-bar";
 import { PluginDetail } from "../../components/plugin-detail";
 import { PluginList } from "../../components/plugin-list";
+import { PluginMarketDialog } from "../../components/plugin-market-dialog";
 import type { PluginResponse } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
 import { cn } from "../../lib/utils";
@@ -208,6 +209,11 @@ export default function PluginsPage() {
 					</div>
 				)}
 			</div>
+
+			<PluginMarketDialog
+				isOpen={isMarketDialogOpen}
+				onClose={() => setIsMarketDialogOpen(false)}
+			/>
 		</div>
 	);
 }

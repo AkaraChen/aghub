@@ -258,3 +258,19 @@ pub struct UpdatePluginConfigRequest {
 	/// Config as JSON string (must be a valid JSON object)
 	pub config: String,
 }
+
+/// Marketplace plugin item (from GitHub organization)
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct MarketPluginResponse {
+	pub id: String,
+	pub name: String,
+	pub description: String,
+	pub version: String,
+	pub author: String,
+	pub github_url: String,
+	pub installs: i64,
+	pub installed: bool,
+	#[ts(optional)]
+	pub enabled: Option<bool>,
+}
