@@ -108,11 +108,11 @@ export function PluginList({ onPluginClick }: PluginListProps) {
 							</div>
 							<Switch
 								isSelected={plugin.enabled}
-								onValueChange={(isSelected) => {
-									if (isSelected) {
-										enableMutation.mutate(plugin.id);
-									} else {
+								onChange={() => {
+									if (plugin.enabled) {
 										disableMutation.mutate(plugin.id);
+									} else {
+										enableMutation.mutate(plugin.id);
 									}
 								}}
 								aria-label={
@@ -120,7 +120,11 @@ export function PluginList({ onPluginClick }: PluginListProps) {
 										? t("disablePlugin")
 										: t("enablePlugin")
 								}
-							/>
+							>
+								<Switch.Control>
+									<Switch.Thumb />
+								</Switch.Control>
+							</Switch>
 						</div>
 					</Card>
 				))}
