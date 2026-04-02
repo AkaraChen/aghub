@@ -4,6 +4,7 @@ pub mod credentials;
 pub mod integrations;
 pub mod market;
 pub mod mcps;
+pub mod plugins;
 pub mod skills;
 pub mod sub_agents;
 
