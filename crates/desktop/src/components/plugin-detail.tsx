@@ -1,17 +1,17 @@
 "use client";
 
-import { Button, Card, Chip, Switch, Tooltip } from "@heroui/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
 import {
-	FolderOpenIcon,
-	WrenchIcon,
 	BoltIcon,
 	CpuChipIcon,
+	FolderOpenIcon,
+	WrenchIcon,
 } from "@heroicons/react/24/solid";
+import { Button, Card, Chip, Switch, Tooltip } from "@heroui/react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useApi } from "../hooks/use-api";
+import { useTranslation } from "react-i18next";
 import type { PluginResponse } from "../generated/dto";
+import { useApi } from "../hooks/use-api";
 import { skillListQueryOptions } from "../requests/skills";
 
 interface PluginDetailProps {
@@ -214,15 +214,16 @@ export function PluginDetail({ plugin }: PluginDetailProps) {
 																	{tool}
 																</Chip>
 															))}
-														{skill.tools.length > 3 && (
-																<Chip
-																	size="sm"
-																	variant="soft"
-																>
-																	+
-																	{skill.tools.length -
-																		3}
-																</Chip>
+														{skill.tools.length >
+															3 && (
+															<Chip
+																size="sm"
+																variant="soft"
+															>
+																+
+																{skill.tools
+																	.length - 3}
+															</Chip>
 														)}
 													</div>
 												)}
@@ -240,8 +241,12 @@ export function PluginDetail({ plugin }: PluginDetailProps) {
 							</h3>
 							<div className="space-y-2">
 								<div className="flex items-center justify-between text-sm">
-									<span className="text-muted">{t("source")}</span>
-									<span className="font-medium">{plugin.source}</span>
+									<span className="text-muted">
+										{t("source")}
+									</span>
+									<span className="font-medium">
+										{plugin.source}
+									</span>
 								</div>
 								<div className="flex items-center gap-2">
 									<code className="flex-1 text-xs bg-surface-secondary px-2 py-1.5 rounded font-mono truncate">

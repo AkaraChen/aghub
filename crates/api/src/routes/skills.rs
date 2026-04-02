@@ -684,12 +684,10 @@ pub fn list_all_agents_skills(
 		.into_iter()
 		.flat_map(|ar| {
 			let id = ar.agent_id;
-			ar.skills
-				.into_iter()
-				.map(move |mut s| {
-					detect_plugin_for_skill(&mut s);
-					SkillResponse::from((s, id))
-				})
+			ar.skills.into_iter().map(move |mut s| {
+				detect_plugin_for_skill(&mut s);
+				SkillResponse::from((s, id))
+			})
 		})
 		.collect();
 	Ok(Json(items))

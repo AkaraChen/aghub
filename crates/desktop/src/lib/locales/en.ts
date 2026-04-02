@@ -29,14 +29,16 @@ export default {
 	subAgentInstructionPlaceholder:
 		"System prompt / instruction for this sub-agent...",
 	plugins: "Plugins",
-	pluginsDescription: "Manage Claude Code plugins — enable or disable installed plugins.",
+	pluginsDescription:
+		"Manage Claude Code plugins — enable or disable installed plugins.",
 	noPluginsInstalled: "No plugins installed.",
 	enablePlugin: "Enable plugin",
 	disablePlugin: "Disable plugin",
 	pluginEnabled: "Enabled",
 	pluginDisabled: "Disabled",
 	pluginEnabledDescription: "Plugin is active and providing capabilities",
-	pluginDisabledDescription: "Plugin is inactive and not providing capabilities",
+	pluginDisabledDescription:
+		"Plugin is inactive and not providing capabilities",
 	capabilities: "Capabilities",
 	noCapabilities: "No capabilities provided",
 	providedSkills: "Provided Skills",

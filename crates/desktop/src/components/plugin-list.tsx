@@ -1,5 +1,3 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
 import {
 	Card,
 	Chip,
@@ -8,8 +6,10 @@ import {
 	Skeleton,
 	Switch,
 } from "@heroui/react";
-import { useApi } from "../hooks/use-api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import type { PluginResponse } from "../generated/dto";
+import { useApi } from "../hooks/use-api";
 
 interface PluginListProps {
 	onPluginClick?: (plugin: PluginResponse) => void;
@@ -56,7 +56,9 @@ export function PluginList({ onPluginClick }: PluginListProps) {
 	if (plugins.length === 0) {
 		return (
 			<Card className="p-4">
-				<p className="text-muted-foreground text-sm">{t("noPluginsInstalled")}</p>
+				<p className="text-muted-foreground text-sm">
+					{t("noPluginsInstalled")}
+				</p>
 			</Card>
 		);
 	}

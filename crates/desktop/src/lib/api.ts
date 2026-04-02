@@ -466,17 +466,31 @@ export function createApi(baseUrl: string) {
 			disable(pluginId: string): Promise<PluginResponse> {
 				return client.post(`plugins/${pluginId}/disable`).json();
 			},
-			install(body: InstallPluginRequest): Promise<InstallPluginResponse> {
-				return client.post("plugins/install", { json: body, timeout: 180000 }).json();
+			install(
+				body: InstallPluginRequest,
+			): Promise<InstallPluginResponse> {
+				return client
+					.post("plugins/install", { json: body, timeout: 180000 })
+					.json();
 			},
-			uninstall(body: UninstallPluginRequest): Promise<UninstallPluginResponse> {
-				return client.post("plugins/uninstall", { json: body, timeout: 60000 }).json();
+			uninstall(
+				body: UninstallPluginRequest,
+			): Promise<UninstallPluginResponse> {
+				return client
+					.post("plugins/uninstall", { json: body, timeout: 60000 })
+					.json();
 			},
 			update(body: UpdatePluginRequest): Promise<UpdatePluginResponse> {
-				return client.post("plugins/update", { json: body, timeout: 180000 }).json();
+				return client
+					.post("plugins/update", { json: body, timeout: 180000 })
+					.json();
 			},
-			checkUpdate(body: CheckUpdateRequest): Promise<CheckUpdateResponse> {
-				return client.post("plugins/check-update", { json: body }).json();
+			checkUpdate(
+				body: CheckUpdateRequest,
+			): Promise<CheckUpdateResponse> {
+				return client
+					.post("plugins/check-update", { json: body })
+					.json();
 			},
 		},
 	};

@@ -1,8 +1,8 @@
 "use client";
 
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useSuspenseQuery } from "@tanstack/react-query";
 import { PluginDetail } from "../../components/plugin-detail";
 import type { PluginResponse } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
@@ -79,7 +79,9 @@ export default function PluginsPage() {
 			<div className="flex w-80 shrink-0 flex-col border-r border-border">
 				<div className="flex items-center justify-between p-4 border-b border-border">
 					<div>
-						<h1 className="text-lg font-semibold">{t("plugins")}</h1>
+						<h1 className="text-lg font-semibold">
+							{t("plugins")}
+						</h1>
 						<p className="text-xs text-muted-foreground">
 							{plugins.length} {t("installed")}
 						</p>

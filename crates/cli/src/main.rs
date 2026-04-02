@@ -514,7 +514,10 @@ fn handle_plugin_action(action: PluginAction) -> Result<()> {
 				println!("{}", serde_json::to_string_pretty(&plugins_json)?);
 			} else {
 				// Table output
-				println!("{:<50} {:<12} {:<10} Name", "ID", "Version", "Status");
+				println!(
+					"{:<50} {:<12} {:<10} Name",
+					"ID", "Version", "Status"
+				);
 				for plugin in plugins {
 					let status = if plugin.enabled {
 						"✓ enabled"
