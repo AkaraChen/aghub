@@ -120,13 +120,21 @@ impl AgentDescriptor {
 	) -> Option<PathBuf> {
 		match scope {
 			ResourceScope::GlobalOnly => {
+				if !self.capabilities.skills.scopes.global {
+					return None;
+				}
 				self.global_skill_paths.and_then(|paths| (paths.write)())
 			}
-			ResourceScope::ProjectOnly => project_root
-				.and_then(|root| {
-					self.project_skill_paths.map(|p| (p.write)(root))
-				})
-				.flatten(),
+			ResourceScope::ProjectOnly => {
+				if !self.capabilities.skills.scopes.project {
+					return None;
+				}
+				project_root
+					.and_then(|root| {
+						self.project_skill_paths.map(|p| (p.write)(root))
+					})
+					.flatten()
+			}
 			ResourceScope::Both => None,
 		}
 	}
@@ -257,19 +265,25 @@ pub fn load_scoped_mcps(
 	project_path: Option<OptionalProjectPathFn>,
 	parse: McpParseFn,
 ) -> Result<Vec<McpServer>> {
-	let path = match scope {
-		ResourceScope::GlobalOnly => global_path.and_then(|path| path()),
-		ResourceScope::ProjectOnly => project_root
-			.and_then(|root| project_path.and_then(|path| path(root))),
-		ResourceScope::Both => None,
+	match scope {
+		ResourceScope::GlobalOnly => {
+			let Some(path) = global_path.and_then(|path| path()) else {
+				return Ok(Vec::new());
+			};
+			load_mcps_from_file(&path, parse)
+		}
+		ResourceScope::ProjectOnly => {
+			let Some(path) = project_root
+				.and_then(|root| project_path.and_then(|path| path(root)))
+			else {
+				return Ok(Vec::new());
+			};
+			load_mcps_from_file(&path, parse)
+		}
+		ResourceScope::Both => Err(ConfigError::InvalidConfig(
+			"MCP path unavailable for Both scope".to_string(),
+		)),
 	}
-	.ok_or_else(|| {
-		ConfigError::InvalidConfig(format!(
-			"MCP path unavailable for {:?} scope",
-			scope
-		))
-	})?;
-	load_mcps_from_file(&path, parse)
 }
 
 pub fn save_scoped_mcps(
@@ -284,7 +298,11 @@ pub fn save_scoped_mcps(
 		ResourceScope::GlobalOnly => global_path.and_then(|path| path()),
 		ResourceScope::ProjectOnly => project_root
 			.and_then(|root| project_path.and_then(|path| path(root))),
-		ResourceScope::Both => None,
+		ResourceScope::Both => {
+			return Err(ConfigError::InvalidConfig(
+				"MCP path unavailable for Both scope".to_string(),
+			))
+		}
 	}
 	.ok_or_else(|| {
 		ConfigError::InvalidConfig(format!(

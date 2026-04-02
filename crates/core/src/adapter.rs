@@ -47,6 +47,10 @@ impl AgentAdapter for &'static AgentDescriptor {
 		project_root: Option<&Path>,
 		scope: ResourceScope,
 	) -> Option<PathBuf> {
+		if scope == ResourceScope::Both {
+			return None;
+		}
+
 		if let Some((id, path)) = MCP_PATH_OVERRIDE.with(|p| p.borrow().clone())
 		{
 			if id == self.id {
@@ -62,6 +66,24 @@ impl AgentAdapter for &'static AgentDescriptor {
 		project_root: Option<&Path>,
 		scope: ResourceScope,
 	) -> Result<Vec<McpServer>> {
+		if scope == ResourceScope::Both {
+			let mut mcps = Vec::new();
+
+			if let Some(root) = project_root {
+				if self.supports_mcp_scope(ResourceScope::ProjectOnly) {
+					mcps.extend(
+						self.load_mcps(Some(root), ResourceScope::ProjectOnly)?,
+					);
+				}
+			}
+
+			if self.supports_mcp_scope(ResourceScope::GlobalOnly) {
+				mcps.extend(self.load_mcps(None, ResourceScope::GlobalOnly)?);
+			}
+
+			return Ok(mcps);
+		}
+
 		if !self.supports_mcp_scope(scope) {
 			return Err(crate::errors::ConfigError::unsupported_operation(
 				"read",
@@ -142,6 +164,14 @@ impl AgentAdapter for &'static AgentDescriptor {
 		scope: ResourceScope,
 		mcps: &[McpServer],
 	) -> Result<()> {
+		if scope == ResourceScope::Both {
+			return Err(crate::errors::ConfigError::unsupported_operation(
+				"persist",
+				"MCP server",
+				self.id,
+			));
+		}
+
 		if !self.supports_mcp_scope(scope) {
 			return Err(crate::errors::ConfigError::unsupported_operation(
 				"persist",
