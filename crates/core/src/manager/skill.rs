@@ -11,7 +11,11 @@ use std::path::{Path, PathBuf};
 /// Resolve a source_path string (potentially with `~/` prefix) to an absolute PathBuf
 fn resolve_source_path(sp: &str) -> PathBuf {
 	if let Some(stripped) = sp.strip_prefix("~/") {
-		dirs::home_dir().unwrap().join(stripped)
+		if let Some(home) = dirs::home_dir() {
+			home.join(stripped)
+		} else {
+			PathBuf::from(sp)
+		}
 	} else {
 		PathBuf::from(sp)
 	}

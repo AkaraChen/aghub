@@ -4,6 +4,7 @@ import type { MarketSkill } from "../../../generated/dto";
 import { useAgentAvailability } from "../../../hooks/use-agent-availability";
 import { useApi } from "../../../hooks/use-api";
 import { useProjects } from "../../../hooks/use-projects";
+import { supportsSkillMutation } from "../../../lib/agent-capabilities";
 import { installSkillMutationOptions } from "../../../requests/skills";
 
 export interface InstallResult {
@@ -41,7 +42,9 @@ export function useSkillInstall() {
 	);
 
 	const skillAgents = availableAgents.filter(
-		(a) => a.isUsable && a.capabilities.skills_mutable,
+		(a) =>
+			a.isUsable &&
+			supportsSkillMutation(a, installToProject ? "project" : "global"),
 	);
 
 	const handleInstallClick = (skill: MarketSkill) => {

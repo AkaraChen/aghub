@@ -6,7 +6,8 @@ use std::{
 
 use aghub_api::dto::{
 	agents::{
-		AgentAvailabilityDto, AgentInfo, CapabilitiesDto, SkillsPathsDto,
+		AgentAvailabilityDto, AgentInfo, CapabilitiesDto, McpCapabilitiesDto,
+		ScopeSupportDto, SkillCapabilitiesDto, SkillsPathsDto,
 	},
 	common::ConfigSource,
 	credential::{CreateCredentialRequest, CredentialResponse},
@@ -47,10 +48,14 @@ fn output_dir() -> PathBuf {
 	workspace_root().join("crates/desktop/src/generated/dto")
 }
 
+fn disallowed_output_dir() -> PathBuf {
+	workspace_root().join("crates/api/bindings")
+}
+
 fn export_type<T: TS + 'static>(
 	cfg: &Config,
 ) -> Result<(), ts_rs::ExportError> {
-	T::export_all(cfg)
+	T::export(cfg)
 }
 
 fn write_index_file(dir: &Path) -> io::Result<()> {
@@ -79,15 +84,23 @@ fn write_index_file(dir: &Path) -> io::Result<()> {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
 	let out_dir = output_dir();
+	let disallowed_dir = disallowed_output_dir();
+
 	if out_dir.exists() {
 		fs::remove_dir_all(&out_dir)?;
 	}
 	fs::create_dir_all(&out_dir)?;
+	if disallowed_dir.exists() {
+		fs::remove_dir_all(&disallowed_dir)?;
+	}
 
 	let cfg = Config::new()
 		.with_out_dir(&out_dir)
 		.with_large_int("number");
 
+	export_type::<ScopeSupportDto>(&cfg)?;
+	export_type::<SkillCapabilitiesDto>(&cfg)?;
+	export_type::<McpCapabilitiesDto>(&cfg)?;
 	export_type::<CapabilitiesDto>(&cfg)?;
 	export_type::<SkillsPathsDto>(&cfg)?;
 	export_type::<AgentInfo>(&cfg)?;
@@ -140,6 +153,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<OperationBatchResponse>(&cfg)?;
 
 	write_index_file(&out_dir)?;
+
+	if disallowed_dir.exists() {
+		return Err(format!(
+			"DTO generation attempted to write outside the allowed output dir: {}",
+			disallowed_dir.display()
+		)
+		.into());
+	}
 
 	Ok(())
 }

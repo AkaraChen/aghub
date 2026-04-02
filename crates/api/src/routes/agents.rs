@@ -1,60 +1,88 @@
 use aghub_core::{availability, registry};
 use rocket::serde::json::Json;
+use std::path::Path;
 
 use crate::dto::agents::{
-	AgentAvailabilityDto, AgentInfo, CapabilitiesDto, SkillsPathsDto,
+	AgentAvailabilityDto, AgentInfo, CapabilitiesDto, McpCapabilitiesDto,
+	ScopeSupportDto, SkillCapabilitiesDto, SkillsPathsDto,
 };
+
+fn format_path(path: std::path::PathBuf) -> String {
+	let s = path.to_string_lossy();
+	let Some(home) = dirs::home_dir().map(|h| h.to_string_lossy().into_owned())
+	else {
+		return s.into_owned();
+	};
+	if s.starts_with(&home) {
+		format!("~{}", &s[home.len()..])
+	} else {
+		s.into_owned()
+	}
+}
 
 #[get("/agents")]
 pub fn list_agents() -> Json<Vec<AgentInfo>> {
 	let agents = registry::iter_all()
 		.map(|d| {
-			let project_skills_paths = d
-				.project_skills_paths
-				.as_ref()
-				.map(|f| {
-					f(std::path::Path::new(""))
+			let project_root = Path::new("");
+			let project_read = d
+				.project_skill_paths
+				.map(|paths| {
+					(paths.read)(project_root)
 						.into_iter()
-						.map(|p| p.to_string_lossy().into_owned())
+						.map(format_path)
 						.collect()
 				})
 				.unwrap_or_default();
-
-			let global_skills_paths = d
-				.global_skills_paths
-				.as_ref()
-				.map(|f| {
-					f().into_iter()
-						.map(|path| {
-							let s = path.to_string_lossy();
-							let home = dirs::home_dir()
-								.map(|h| h.to_string_lossy().into_owned())
-								.unwrap_or_default();
-							if s.starts_with(&home) {
-								format!("~{}", &s[home.len()..])
-							} else {
-								s.into_owned()
-							}
-						})
-						.collect()
-				})
-				.unwrap_or_default();
+			let project_write = d
+				.project_skill_paths
+				.and_then(|paths| (paths.write)(project_root))
+				.map(format_path);
+			let global_read = d
+				.global_skill_read_paths()
+				.into_iter()
+				.map(format_path)
+				.collect();
+			let global_write = d
+				.skill_write_path(
+					None,
+					aghub_core::models::ResourceScope::GlobalOnly,
+				)
+				.map(format_path);
 
 			AgentInfo {
 				id: d.id.to_string(),
 				display_name: d.display_name.to_string(),
 				capabilities: CapabilitiesDto {
-					mcp_stdio: d.capabilities.mcp_stdio,
-					mcp_remote: d.capabilities.mcp_remote,
-					mcp_enable_disable: d.capabilities.mcp_enable_disable,
-					skills: d.capabilities.skills,
-					skills_mutable: d.capabilities.skills
-						&& d.global_skills_paths.is_some()
-						|| d.project_skills_paths.is_some(),
+					skills: SkillCapabilitiesDto {
+						scopes: ScopeSupportDto {
+							global: d.capabilities.skills.scopes.global,
+							project: d.capabilities.skills.scopes.project,
+						},
+						universal: d.capabilities.skills.universal,
+						mutable_global: d
+							.skill_write_path(
+								None,
+								aghub_core::models::ResourceScope::GlobalOnly,
+							)
+							.is_some(),
+						mutable_project: d.project_skill_paths.is_some(),
+					},
+					mcp: McpCapabilitiesDto {
+						scopes: ScopeSupportDto {
+							global: d.capabilities.mcp.scopes.global,
+							project: d.capabilities.mcp.scopes.project,
+						},
+						stdio: d.capabilities.mcp.stdio,
+						remote: d.capabilities.mcp.remote,
+						enable_disable: d.capabilities.mcp.enable_disable,
+					},
 				},
 				skills_paths: SkillsPathsDto {
-					project: project_skills_paths,
-					global: global_skills_paths,
+					global_read,
+					global_write,
+					project_read,
+					project_write,
 				},
 			}
 		})
@@ -91,8 +119,8 @@ mod tests {
 			.find(|agent| agent.id == "pi")
 			.expect("pi agent should be listed");
 
-		assert!(!pi.capabilities.mcp_stdio);
-		assert!(!pi.capabilities.mcp_remote);
-		assert!(pi.capabilities.skills);
+		assert!(!pi.capabilities.mcp.stdio);
+		assert!(!pi.capabilities.mcp.remote);
+		assert!(pi.capabilities.skills.scopes.global);
 	}
 }

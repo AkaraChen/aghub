@@ -4,6 +4,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
+import { supportsSkillMutation } from "../lib/agent-capabilities";
 import type { Scope } from "../lib/skills-path-group";
 import { cn } from "../lib/utils";
 import { reconcileSkillsMutationOptions } from "../requests/skills";
@@ -46,19 +47,19 @@ export function ManageSkillAgentsDialog({
 		);
 	}, [hasValidGroup, group]);
 
-	const usableAgents = useMemo(
-		() =>
-			(availableAgents ?? [])
-				.filter((a) => a?.isUsable && a.capabilities.skills)
-				.filter((a) => !installedAgentIds.has(a.id)),
-		[availableAgents, installedAgentIds],
-	);
-
 	const scope: Scope = useMemo(() => {
 		if (!hasValidGroup || group.items.length === 0) return "global";
 		const primary = group.items[0];
 		return primary?.source ?? "global";
 	}, [hasValidGroup, group]);
+
+	const usableAgents = useMemo(
+		() =>
+			(availableAgents ?? [])
+				.filter((a) => a?.isUsable && supportsSkillMutation(a, scope))
+				.filter((a) => !installedAgentIds.has(a.id)),
+		[availableAgents, installedAgentIds, scope],
+	);
 
 	const prevIsOpenRef = useRef(false);
 	const [selectedAgents, setSelectedAgents] = useState<string[]>([]);

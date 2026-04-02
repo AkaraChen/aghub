@@ -34,6 +34,14 @@ impl AgentAdapter for &'static AgentDescriptor {
 		self.id
 	}
 
+	fn supports_skill_scope(&self, scope: ResourceScope) -> bool {
+		AgentDescriptor::supports_skill_scope(self, scope)
+	}
+
+	fn supports_mcp_scope(&self, scope: ResourceScope) -> bool {
+		AgentDescriptor::supports_mcp_scope(self, scope)
+	}
+
 	fn mcp_config_path(
 		&self,
 		project_root: Option<&Path>,
@@ -46,13 +54,7 @@ impl AgentAdapter for &'static AgentDescriptor {
 			}
 		}
 
-		match scope {
-			ResourceScope::GlobalOnly => Some((self.mcp_global_path)()),
-			ResourceScope::ProjectOnly => {
-				project_root.map(|root| (self.mcp_project_path)(root))
-			}
-			ResourceScope::Both => None,
-		}
+		self.mcp_path(project_root, scope)
 	}
 
 	fn load_mcps(
@@ -60,6 +62,14 @@ impl AgentAdapter for &'static AgentDescriptor {
 		project_root: Option<&Path>,
 		scope: ResourceScope,
 	) -> Result<Vec<McpServer>> {
+		if !self.supports_mcp_scope(scope) {
+			return Err(crate::errors::ConfigError::unsupported_operation(
+				"read",
+				"MCP server",
+				self.id,
+			));
+		}
+
 		if let Some(path) = self.mcp_config_path(project_root, scope) {
 			if let Some(parse) = self.mcp_parse_config {
 				return crate::descriptor::load_mcps_from_file(&path, parse);
@@ -86,19 +96,7 @@ impl AgentAdapter for &'static AgentDescriptor {
 			}
 		}
 
-		// Add project-level skills directories if scope includes project
-		if scope == ResourceScope::ProjectOnly || scope == ResourceScope::Both {
-			if let Some(root) = project_root {
-				paths.extend(self.project_skills_dirs(root));
-			}
-		}
-
-		// Add global skills directories if scope includes global
-		if scope == ResourceScope::GlobalOnly || scope == ResourceScope::Both {
-			paths.extend(self.global_skills_dirs());
-		}
-
-		paths
+		self.skill_read_paths(project_root, scope)
 	}
 
 	fn target_skills_dir(
@@ -115,18 +113,7 @@ impl AgentAdapter for &'static AgentDescriptor {
 			}
 		}
 
-		match scope {
-			ResourceScope::GlobalOnly => {
-				self.global_skills_dirs().first().cloned()
-			}
-			ResourceScope::ProjectOnly | ResourceScope::Both => {
-				if let Some(root) = project_root {
-					self.project_skills_dirs(root).first().cloned()
-				} else {
-					self.global_skills_dirs().first().cloned()
-				}
-			}
-		}
+		self.skill_write_path(project_root, scope)
 	}
 
 	fn load_config(
@@ -135,9 +122,11 @@ impl AgentAdapter for &'static AgentDescriptor {
 		scope: ResourceScope,
 	) -> Result<AgentConfig> {
 		let mut config = AgentConfig::new();
-		config.mcps = self.load_mcps(project_root, scope)?;
+		if self.supports_mcp_scope(scope) {
+			config.mcps = self.load_mcps(project_root, scope)?;
+		}
 
-		if self.capabilities.skills {
+		if self.supports_skill_scope(scope) {
 			let skills_paths = self.get_skills_paths(project_root, scope);
 			if !skills_paths.is_empty() {
 				config.skills = load_skills_from_dirs(&skills_paths);
@@ -153,6 +142,14 @@ impl AgentAdapter for &'static AgentDescriptor {
 		scope: ResourceScope,
 		mcps: &[McpServer],
 	) -> Result<()> {
+		if !self.supports_mcp_scope(scope) {
+			return Err(crate::errors::ConfigError::unsupported_operation(
+				"persist",
+				"MCP server",
+				self.id,
+			));
+		}
+
 		if let Some((id, path)) = MCP_PATH_OVERRIDE.with(|p| p.borrow().clone())
 		{
 			if id == self.id {
@@ -161,6 +158,14 @@ impl AgentAdapter for &'static AgentDescriptor {
 						&path, mcps, serialize,
 					);
 				}
+			}
+		}
+
+		if let Some(path) = self.mcp_config_path(project_root, scope) {
+			if let Some(serialize) = self.mcp_serialize_config {
+				return crate::descriptor::save_mcps_to_file(
+					&path, mcps, serialize,
+				);
 			}
 		}
 
@@ -179,7 +184,8 @@ impl AgentAdapter for &'static AgentDescriptor {
 	}
 
 	fn supports_mcp_operations(&self) -> bool {
-		self.capabilities.mcp_stdio || self.capabilities.mcp_remote
+		self.capabilities.mcp.scopes.global
+			|| self.capabilities.mcp.scopes.project
 	}
 
 	fn mcp_supports_transport(&self, transport: &McpTransport) -> bool {
@@ -187,6 +193,6 @@ impl AgentAdapter for &'static AgentDescriptor {
 	}
 
 	fn supports_mcp_enable_disable(&self) -> bool {
-		self.capabilities.mcp_enable_disable
+		self.capabilities.mcp.enable_disable
 	}
 }
