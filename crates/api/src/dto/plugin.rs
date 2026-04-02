@@ -231,3 +231,30 @@ pub struct ReinstallPluginResponse {
 	pub success: bool,
 	pub message: String,
 }
+
+/// Plugin configuration request/response
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct PluginConfigRequest {
+	pub plugin_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct PluginConfigResponse {
+	pub plugin_id: String,
+	/// Config as JSON string (use serde_json to parse)
+	#[ts(optional)]
+	pub config: Option<String>,
+	/// Schema as JSON string (use serde_json to parse)
+	#[ts(optional)]
+	pub schema: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct UpdatePluginConfigRequest {
+	pub plugin_id: String,
+	/// Config as JSON string (must be a valid JSON object)
+	pub config: String,
+}

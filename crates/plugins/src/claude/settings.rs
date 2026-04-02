@@ -15,6 +15,9 @@ use std::path::PathBuf;
 pub struct ClaudeSettings {
 	#[serde(rename = "enabledPlugins", default)]
 	pub enabled_plugins: HashMap<String, bool>,
+	/// Per-plugin user configuration
+	#[serde(rename = "pluginConfig", default)]
+	pub plugin_config: HashMap<String, serde_json::Value>,
 }
 
 impl ClaudeSettings {
@@ -41,7 +44,16 @@ impl ClaudeSettings {
 			.and_then(|v| serde_json::from_value(v.clone()).ok())
 			.unwrap_or_default();
 
-		Ok(Self { enabled_plugins })
+		// Extract pluginConfig field
+		let plugin_config = full_settings
+			.get("pluginConfig")
+			.and_then(|v| serde_json::from_value(v.clone()).ok())
+			.unwrap_or_default();
+
+		Ok(Self {
+			enabled_plugins,
+			plugin_config,
+		})
 	}
 
 	/// Save settings back to ~/.claude/settings.json
@@ -67,6 +79,10 @@ impl ClaudeSettings {
 		full_settings["enabledPlugins"] =
 			serde_json::to_value(&self.enabled_plugins)?;
 
+		// Update pluginConfig
+		full_settings["pluginConfig"] =
+			serde_json::to_value(&self.plugin_config)?;
+
 		// Write back
 		fs::write(&path, serde_json::to_string_pretty(&full_settings)?)
 			.with_context(|| {
@@ -87,6 +103,21 @@ impl ClaudeSettings {
 	/// Set plugin enabled status
 	pub fn set_enabled(&mut self, id: &PluginId, enabled: bool) {
 		self.enabled_plugins.insert(id.to_string(), enabled);
+	}
+
+	/// Get plugin configuration
+	pub fn get_plugin_config(&self, id: &PluginId) -> Option<&serde_json::Value> {
+		self.plugin_config.get(&id.to_string())
+	}
+
+	/// Set plugin configuration
+	pub fn set_plugin_config(&mut self, id: &PluginId, config: serde_json::Value) {
+		self.plugin_config.insert(id.to_string(), config);
+	}
+
+	/// Remove plugin configuration
+	pub fn remove_plugin_config(&mut self, id: &PluginId) {
+		self.plugin_config.remove(&id.to_string());
 	}
 
 	fn settings_path() -> Result<PathBuf> {

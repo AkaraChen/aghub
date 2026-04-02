@@ -178,6 +178,23 @@ impl ClaudePluginManager {
 			.map(|p| p.install_path.join("skills"))
 	}
 
+	/// Get plugin user configuration
+	pub fn get_plugin_config(&self, id: &PluginId) -> Option<&serde_json::Value> {
+		self.settings.get_plugin_config(id)
+	}
+
+	/// Set plugin user configuration
+	pub fn set_plugin_config(&mut self, id: &PluginId, config: serde_json::Value) -> Result<()> {
+		self.settings.set_plugin_config(id, config);
+		self.settings.save()
+	}
+
+	/// Remove plugin user configuration
+	pub fn remove_plugin_config(&mut self, id: &PluginId) -> Result<()> {
+		self.settings.remove_plugin_config(id);
+		self.settings.save()
+	}
+
 	fn load_installed_plugins(
 		settings: &settings::ClaudeSettings,
 	) -> Result<Vec<ClaudePluginInfo>> {
@@ -213,13 +230,17 @@ impl ClaudePluginManager {
 			let display_name =
 				id_str.split('@').next().unwrap_or(&id_str).to_string();
 
+			// Try to read description from plugin.json
+			let install_path = PathBuf::from(&info.install_path);
+			let description = Self::read_description_from_manifest(&install_path);
+
 			plugins.push(ClaudePluginInfo {
 				id: id.clone(),
 				display_name,
 				version: info.version.clone(),
-				description: None, // Could read from .claude-plugin/plugin.json
+				description,
 				source,
-				install_path: PathBuf::from(&info.install_path),
+				install_path,
 				enabled: settings.is_enabled(&id),
 			});
 		}
@@ -238,6 +259,27 @@ impl ClaudePluginManager {
 
 		// Not a plugin skill, always include
 		true
+	}
+
+	/// Read description from plugin manifest
+	fn read_description_from_manifest(install_path: &Path) -> Option<String> {
+		let possible_paths = [
+			install_path.join(".claude-plugin/plugin.json"),
+			install_path.join(".plugin/plugin.json"),
+			install_path.join("plugin.json"),
+		];
+
+		for path in &possible_paths {
+			if path.exists() {
+				if let Ok(content) = std::fs::read_to_string(path) {
+					if let Ok(manifest) = serde_json::from_str::<types::PluginManifest>(&content) {
+						return Some(manifest.description);
+					}
+				}
+			}
+		}
+
+		None
 	}
 }
 

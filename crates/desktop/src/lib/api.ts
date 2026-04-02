@@ -28,6 +28,7 @@ import type {
 	MarketSkill,
 	McpResponse,
 	OperationBatchResponse,
+	PluginConfigResponse,
 	PluginDetailResponse,
 	PluginListResponse,
 	PluginResponse,
@@ -44,6 +45,7 @@ import type {
 	UninstallPluginResponse,
 	UpdateMcpRequest,
         UpdateSubAgentRequest,
+        UpdatePluginConfigRequest,
         UpdatePluginRequest,
         UpdatePluginResponse,
 } from "../generated/dto";
@@ -500,6 +502,19 @@ export function createApi(baseUrl: string) {
 				return client
 					.post("plugins/reinstall", { json: body, timeout: 180000 })
 					.json();
+			},
+			getConfig(pluginId: string): Promise<PluginConfigResponse> {
+				return client.get(`plugins/${pluginId}/config`).json();
+			},
+			updateConfig(
+				body: UpdatePluginConfigRequest,
+			): Promise<PluginConfigResponse> {
+				return client
+					.post(`plugins/${body.plugin_id}/config`, { json: body })
+					.json();
+			},
+			deleteConfig(pluginId: string): Promise<PluginConfigResponse> {
+				return client.delete(`plugins/${pluginId}/config`).json();
 			},
 		},
 	};

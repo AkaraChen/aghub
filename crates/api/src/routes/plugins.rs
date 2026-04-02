@@ -2,11 +2,11 @@ use crate::dto::plugin::{
 	CheckUpdateRequest, CheckUpdateResponse, HookActionResponse,
 	HookEventResponse, HookMatcherResponse, HooksManifestResponse,
 	InstallPluginRequest, InstallPluginResponse, McpConfigResponse,
-	McpServerResponse, PluginAuthorResponse, PluginDetailResponse,
-	PluginListResponse, PluginManifestResponse, PluginResponse,
-	ReinstallPluginRequest, ReinstallPluginResponse,
-	UninstallPluginRequest, UninstallPluginResponse, UpdatePluginRequest,
-	UpdatePluginResponse,
+	McpServerResponse, PluginAuthorResponse, PluginConfigResponse,
+	PluginDetailResponse, PluginListResponse, PluginManifestResponse,
+	PluginResponse, ReinstallPluginRequest, ReinstallPluginResponse,
+	UninstallPluginRequest, UninstallPluginResponse, UpdatePluginConfigRequest,
+	UpdatePluginRequest, UpdatePluginResponse,
 };
 use crate::error::{ApiError, ApiResult};
 use aghub_plugins::claude::ClaudePluginManager;
@@ -28,6 +28,9 @@ pub fn routes() -> Vec<Route> {
 		reinstall_plugin,
 		update_plugin,
 		check_plugin_update,
+		get_plugin_config,
+		update_plugin_config,
+		delete_plugin_config,
 	]
 }
 
@@ -640,5 +643,157 @@ pub async fn check_plugin_update(
 		current_version: plugin.version.clone(),
 		latest_version: None,
 		changelog: None,
+	}))
+}
+
+/// Get plugin user configuration
+#[get("/plugins/<plugin_id>/config")]
+pub fn get_plugin_config(plugin_id: String) -> ApiResult<PluginConfigResponse> {
+	use aghub_plugins::PluginId;
+
+	let id = PluginId::parse(&plugin_id).map_err(|e| {
+		crate::error::ApiError::bad_request(format!("Invalid plugin ID: {e}"))
+	})?;
+
+	let manager = ClaudePluginManager::new().map_err(|e| {
+		crate::error::ApiError::internal(format!(
+			"Failed to load plugin manager: {e}"
+		))
+	})?;
+
+	let plugin = manager.get_plugin(&id).ok_or_else(|| {
+		crate::error::ApiError::not_found(format!(
+			"Plugin '{}' not found",
+			plugin_id
+		))
+	})?;
+
+	// Get user config from settings and serialize to string
+	let config = manager
+		.get_plugin_config(&id)
+		.and_then(|v| serde_json::to_string(v).ok());
+
+	// Get config schema from manifest
+	let schema = plugin
+		.read_manifest()
+		.ok()
+		.flatten()
+		.and_then(|m| m.user_config)
+		.and_then(|s| serde_json::to_string(&s).ok());
+
+	Ok(Json(PluginConfigResponse {
+		plugin_id,
+		config,
+		schema,
+	}))
+}
+
+/// Update plugin user configuration
+#[post("/plugins/<plugin_id>/config", data = "<body>")]
+pub fn update_plugin_config(
+	plugin_id: String,
+	body: Json<UpdatePluginConfigRequest>,
+) -> ApiResult<PluginConfigResponse> {
+	use aghub_plugins::PluginId;
+
+	let id = PluginId::parse(&plugin_id).map_err(|e| {
+		crate::error::ApiError::bad_request(format!("Invalid plugin ID: {e}"))
+	})?;
+
+	let mut manager = ClaudePluginManager::new().map_err(|e| {
+		crate::error::ApiError::internal(format!(
+			"Failed to load plugin manager: {e}"
+		))
+	})?;
+
+	let plugin = manager.get_plugin(&id).ok_or_else(|| {
+		crate::error::ApiError::not_found(format!(
+			"Plugin '{}' not found",
+			plugin_id
+		))
+	})?;
+
+	// Get schema before mutable borrow
+	let schema = plugin
+		.read_manifest()
+		.ok()
+		.flatten()
+		.and_then(|m| m.user_config)
+		.and_then(|s| serde_json::to_string(&s).ok());
+
+	let req = body.into_inner();
+
+	// Parse config from string
+	let config: serde_json::Value = serde_json::from_str(&req.config).map_err(|e| {
+		crate::error::ApiError::bad_request(format!("Invalid JSON config: {e}"))
+	})?;
+
+	// Validate that config is a valid JSON object
+	if !config.is_object() {
+		return Err(crate::error::ApiError::bad_request(
+			"Config must be a JSON object".to_string(),
+		));
+	}
+
+	// Save config
+	manager.set_plugin_config(&id, config).map_err(|e| {
+		crate::error::ApiError::internal(format!(
+			"Failed to save plugin config: {e}"
+		))
+	})?;
+
+	// Get updated config as string
+	let config = manager
+		.get_plugin_config(&id)
+		.and_then(|v| serde_json::to_string(v).ok());
+
+	Ok(Json(PluginConfigResponse {
+		plugin_id,
+		config,
+		schema,
+	}))
+}
+
+/// Delete plugin user configuration
+#[delete("/plugins/<plugin_id>/config")]
+pub fn delete_plugin_config(plugin_id: String) -> ApiResult<PluginConfigResponse> {
+	use aghub_plugins::PluginId;
+
+	let id = PluginId::parse(&plugin_id).map_err(|e| {
+		crate::error::ApiError::bad_request(format!("Invalid plugin ID: {e}"))
+	})?;
+
+	let mut manager = ClaudePluginManager::new().map_err(|e| {
+		crate::error::ApiError::internal(format!(
+			"Failed to load plugin manager: {e}"
+		))
+	})?;
+
+	let plugin = manager.get_plugin(&id).ok_or_else(|| {
+		crate::error::ApiError::not_found(format!(
+			"Plugin '{}' not found",
+			plugin_id
+		))
+	})?;
+
+	// Get schema before mutable borrow
+	let schema = plugin
+		.read_manifest()
+		.ok()
+		.flatten()
+		.and_then(|m| m.user_config)
+		.and_then(|s| serde_json::to_string(&s).ok());
+
+	// Remove config
+	manager.remove_plugin_config(&id).map_err(|e| {
+		crate::error::ApiError::internal(format!(
+			"Failed to remove plugin config: {e}"
+		))
+	})?;
+
+	Ok(Json(PluginConfigResponse {
+		plugin_id,
+		config: None,
+		schema,
 	}))
 }
