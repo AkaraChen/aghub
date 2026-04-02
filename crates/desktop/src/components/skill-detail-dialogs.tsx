@@ -5,11 +5,10 @@ import {
 import { AlertDialog, Button, Modal, Spinner, toast } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as pathe from "pathe";
-import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { useServer } from "../hooks/use-server";
-import { createApi } from "../lib/api";
+import { useApi } from "../hooks/use-api";
 import { ConfigSource } from "../lib/api-types";
+import { invalidateSkillQueries } from "../requests/skills";
 import {
 	formatAgentName,
 	type LocationGroup,
@@ -39,44 +38,40 @@ export function DeleteSkillLocationDialog({
 	skillName,
 }: DeleteSkillLocationDialogProps) {
 	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
+	const api = useApi();
 	const queryClient = useQueryClient();
+	const deleteRequest =
+		item && item.installations.length > 0
+			? {
+					source_path: item.sourcePath,
+					agents: item.installations.map(
+						(installation) => installation.agent,
+					),
+					scope:
+						item.installations[0].source === ConfigSource.Project
+							? ("project" as const)
+							: ("global" as const),
+					project_root:
+						item.installations[0].source === ConfigSource.Project
+							? projectPath
+							: undefined,
+				}
+			: null;
 
 	const deleteMutation = useMutation({
 		mutationFn: async () => {
-			if (!item || item.installations.length === 0) {
+			if (!deleteRequest) {
 				return;
 			}
 
-			const scope =
-				item.installations[0].source === ConfigSource.Project
-					? ("project" as const)
-					: ("global" as const);
-
-			const agents = item.installations.map(
-				(installation) => installation.agent,
-			);
-
-			const result = await api.skills.deleteByPath({
-				source_path: item.sourcePath,
-				agents,
-				scope,
-				project_root: scope === "project" ? projectPath : undefined,
-			});
+			const result = await api.skills.deleteByPath(deleteRequest);
 
 			if (!result.success) {
 				throw new Error(result.error || "Failed to delete skill");
 			}
 		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["skills"] });
-			queryClient.invalidateQueries({
-				queryKey: ["project-skills"],
-			});
-			queryClient.invalidateQueries({
-				queryKey: ["skill-locks"],
-			});
+		onSuccess: async () => {
+			await invalidateSkillQueries(queryClient);
 			onClose();
 		},
 		onError: (error) => {
@@ -174,8 +169,7 @@ export function DeleteSkillDialog({
 	projectPath,
 }: DeleteSkillDialogProps) {
 	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
+	const api = useApi();
 	const queryClient = useQueryClient();
 
 	const skill = group.items[0];
@@ -233,11 +227,8 @@ export function DeleteSkillDialog({
 				);
 			}
 		},
-		onSettled: () => {
-			queryClient.invalidateQueries({ queryKey: ["skills"] });
-			queryClient.invalidateQueries({
-				queryKey: ["project-skills"],
-			});
+		onSettled: async () => {
+			await invalidateSkillQueries(queryClient);
 			onClose();
 		},
 	});

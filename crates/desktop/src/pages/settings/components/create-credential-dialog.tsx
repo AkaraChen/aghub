@@ -9,11 +9,12 @@ import {
 	Modal,
 	TextField,
 } from "@heroui/react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { useServer } from "../../../hooks/use-server";
-import { createApi } from "../../../lib/api";
+import { useApi } from "../../../hooks/use-api";
+import { createCredentialMutationOptions } from "../../../requests/credentials";
 
 const GITHUB_TOKEN_URL =
 	"https://github.com/settings/tokens/new?scopes=repo,read:org&description=aghub";
@@ -35,7 +36,8 @@ export function CreateCredentialDialog({
 	onSuccess,
 }: CreateCredentialDialogProps) {
 	const { t } = useTranslation();
-	const { baseUrl } = useServer();
+	const api = useApi();
+	const queryClient = useQueryClient();
 	const {
 		control,
 		handleSubmit,
@@ -46,6 +48,12 @@ export function CreateCredentialDialog({
 		reValidateMode: "onChange",
 		defaultValues: { name: "", token: "" },
 	});
+	const createMutation = useMutation(
+		createCredentialMutationOptions({
+			api,
+			queryClient,
+		}),
+	);
 
 	const handleClose = () => {
 		reset();
@@ -53,8 +61,7 @@ export function CreateCredentialDialog({
 	};
 
 	const handleSave = async (values: FormValues) => {
-		const api = createApi(baseUrl);
-		const result = await api.credentials.create({
+		const result = await createMutation.mutateAsync({
 			name: values.name.trim(),
 			token: values.token.trim(),
 		});

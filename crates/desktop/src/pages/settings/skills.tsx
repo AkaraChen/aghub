@@ -5,6 +5,7 @@ import {
 	RectangleStackIcon,
 } from "@heroicons/react/24/solid";
 import { Button, Dropdown, Tooltip } from "@heroui/react";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -16,13 +17,21 @@ import { ListSearchHeader } from "../../components/list-search-header";
 import { MultiSelectFloatingBar } from "../../components/multi-select-floating-bar";
 import { SkillDetail } from "../../components/skill-detail";
 import { SkillList } from "../../components/skill-list";
-import { useSkills } from "../../hooks/use-skills";
+import { useApi } from "../../hooks/use-api";
 import type { SkillResponse } from "../../lib/api-types";
 import { cn } from "../../lib/utils";
+import { skillListQueryOptions } from "../../requests/skills";
 
 export default function SkillsPage() {
 	const { t } = useTranslation();
-	const { data: skills, refetch, isFetching } = useSkills();
+	const api = useApi();
+	const {
+		data: skills,
+		refetch,
+		isFetching,
+	} = useSuspenseQuery({
+		...skillListQueryOptions({ api, scope: "global" }),
+	});
 	const [searchQuery, setSearchQuery] = useState("");
 	const [selectedName, setSelectedName] = useQueryState("skill");
 	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(

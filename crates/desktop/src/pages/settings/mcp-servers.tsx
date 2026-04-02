@@ -5,6 +5,7 @@ import {
 	RectangleStackIcon,
 } from "@heroicons/react/24/solid";
 import { Button, Dropdown, Tooltip } from "@heroui/react";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -18,9 +19,10 @@ import { McpDetail } from "../../components/mcp-detail";
 import { McpList } from "../../components/mcp-list";
 import { MultiSelectFloatingBar } from "../../components/multi-select-floating-bar";
 import { useAgentAvailability } from "../../hooks/use-agent-availability";
-import { useMcps } from "../../hooks/use-mcps";
+import { useApi } from "../../hooks/use-api";
 import { supportsMcp } from "../../lib/agent-capabilities";
 import { cn, getMcpMergeKey } from "../../lib/utils";
+import { mcpListQueryOptions } from "../../requests/mcps";
 
 type RightPanel =
 	| { type: "detail"; selectedKey: string }
@@ -31,7 +33,14 @@ type RightPanel =
 
 export default function MCPServersPage() {
 	const { t } = useTranslation();
-	const { data: mcps, refetch, isFetching } = useMcps();
+	const api = useApi();
+	const {
+		data: mcps,
+		refetch,
+		isFetching,
+	} = useSuspenseQuery({
+		...mcpListQueryOptions({ api, scope: "global" }),
+	});
 	const { availableAgents } = useAgentAvailability();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [panel, setPanel] = useState<RightPanel>({ type: "empty" });

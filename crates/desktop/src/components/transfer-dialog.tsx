@@ -1,14 +1,23 @@
 import { ArrowPathIcon } from "@heroicons/react/24/solid";
 import { Button, Label, ListBox, Modal, Select, toast } from "@heroui/react";
-import { useQueries, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
+import { useApi } from "../hooks/use-api";
 import { useProjects } from "../hooks/use-projects";
-import { useServer } from "../hooks/use-server";
-import { createApi } from "../lib/api";
 import type { InstallTarget, TransportDto } from "../lib/api-types";
 import { cn } from "../lib/utils";
+import {
+	invalidateMcpQueries,
+	mcpListQueryOptions,
+	transferMcpsMutationOptions,
+} from "../requests/mcps";
+import {
+	invalidateSkillQueries,
+	skillListQueryOptions,
+	transferSkillsMutationOptions,
+} from "../requests/skills";
 import { type AgentDiffLabel, AgentList, type AgentState } from "./agent-list";
 
 type ResourceKind = "mcp" | "skill";
@@ -53,11 +62,22 @@ export function TransferDialog({
 	transport,
 }: TransferDialogProps) {
 	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
+	const api = useApi();
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
 	const { data: projects = [] } = useProjects();
+	const transferMcpsMutation = useMutation(
+		transferMcpsMutationOptions({
+			api,
+			queryClient,
+		}),
+	);
+	const transferSkillsMutation = useMutation(
+		transferSkillsMutationOptions({
+			api,
+			queryClient,
+		}),
+	);
 
 	const [selectedScopeKey, setSelectedScopeKey] = useState<string | null>(
 		null,
@@ -99,25 +119,23 @@ export function TransferDialog({
 	}, [sourceScope, sourceProjectRoot, projects]);
 
 	const destinationQueries = useQueries({
-		queries: availableDestinations.map((dest) => ({
-			queryKey: [
-				resourceType === "mcp" ? "dest-mcps" : "dest-skills",
-				dest.type,
-				dest.type === "project" ? dest.path : "global",
-			],
-			queryFn: () =>
-				resourceType === "mcp"
-					? api.mcps.listAll(
-							dest.type,
+		queries: availableDestinations.map((dest) =>
+			resourceType === "mcp"
+				? mcpListQueryOptions({
+						api,
+						scope: dest.type,
+						projectRoot:
 							dest.type === "project" ? dest.path : undefined,
-						)
-					: api.skills.listAll(
-							dest.type,
+						enabled: isOpen,
+					})
+				: skillListQueryOptions({
+						api,
+						scope: dest.type,
+						projectRoot:
 							dest.type === "project" ? dest.path : undefined,
-						),
-			enabled: isOpen,
-			staleTime: 30_000,
-		})),
+						enabled: isOpen,
+					}),
+		),
 	});
 
 	const installedAgentsByDestination = useMemo(() => {
@@ -239,7 +257,7 @@ export function TransferDialog({
 		try {
 			const result =
 				resourceType === "mcp"
-					? await api.mcps.transfer({
+					? await transferMcpsMutation.mutateAsync({
 							source: {
 								agent: sourceAgent,
 								scope: sourceScope,
@@ -248,7 +266,7 @@ export function TransferDialog({
 							},
 							destinations: destinationTargets,
 						})
-					: await api.skills.transfer({
+					: await transferSkillsMutation.mutateAsync({
 							source: {
 								agent: sourceAgent,
 								scope: sourceScope,
@@ -268,17 +286,8 @@ export function TransferDialog({
 			setAgentStates(newAgentStates);
 
 			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: ["mcps"] }),
-				queryClient.invalidateQueries({ queryKey: ["project-mcps"] }),
-				queryClient.invalidateQueries({ queryKey: ["skills"] }),
-				queryClient.invalidateQueries({ queryKey: ["project-skills"] }),
-				queryClient.invalidateQueries({ queryKey: ["skill-locks"] }),
-				queryClient.invalidateQueries({
-					queryKey: ["dest-mcps"],
-				}),
-				queryClient.invalidateQueries({
-					queryKey: ["dest-skills"],
-				}),
+				invalidateMcpQueries(queryClient),
+				invalidateSkillQueries(queryClient),
 			]);
 
 			if (result.failed_count === 0) {

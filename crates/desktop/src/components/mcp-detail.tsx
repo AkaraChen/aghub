@@ -20,16 +20,16 @@ import {
 	toast,
 } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo, useReducer } from "react";
+import { useCallback, useReducer } from "react";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
+import { useApi } from "../hooks/use-api";
 import { useFavorites } from "../hooks/use-favorites";
-import { useServer } from "../hooks/use-server";
 import { AgentIcon } from "../lib/agent-icons";
-import { createApi } from "../lib/api";
 import type { McpResponse, TransportDto } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
 import { cn, sortAgentObjects } from "../lib/utils";
+import { invalidateMcpQueries } from "../requests/mcps";
 import { ManageAgentsDialog } from "./manage-agents-dialog";
 import { TransferDialog } from "./transfer-dialog";
 
@@ -215,8 +215,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 		showAllHeaders: false,
 		showAllEnvVars: false,
 	});
-	const { baseUrl } = useServer();
-	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
+	const api = useApi();
 	const queryClient = useQueryClient();
 
 	const deleteMutation = useMutation({
@@ -237,8 +236,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 			);
 		},
 		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["mcps"] });
-			queryClient.invalidateQueries({ queryKey: ["project-mcps"] });
+			void invalidateMcpQueries(queryClient);
 			dispatch({ type: "set_delete_dialog", value: false });
 			toast.success(t("deleteMcpSuccess"));
 		},

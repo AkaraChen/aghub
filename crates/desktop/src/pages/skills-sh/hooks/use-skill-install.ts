@@ -1,10 +1,10 @@
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useAgentAvailability } from "../../../hooks/use-agent-availability";
+import { useApi } from "../../../hooks/use-api";
 import { useProjects } from "../../../hooks/use-projects";
-import { useServer } from "../../../hooks/use-server";
-import { createApi } from "../../../lib/api";
 import type { MarketSkill } from "../../../lib/api-types";
+import { installSkillMutationOptions } from "../../../requests/skills";
 
 export interface InstallResult {
 	agentId: string;
@@ -14,11 +14,16 @@ export interface InstallResult {
 }
 
 export function useSkillInstall() {
-	const { baseUrl } = useServer();
-	const api = createApi(baseUrl);
+	const api = useApi();
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
 	const { data: projects = [] } = useProjects();
+	const installMutation = useMutation(
+		installSkillMutationOptions({
+			api,
+			queryClient,
+		}),
+	);
 
 	const [installModalOpen, setInstallModalOpen] = useState(false);
 	const [selectedSkill, setSelectedSkill] = useState<MarketSkill | null>(
@@ -74,7 +79,7 @@ export function useSkillInstall() {
 			: null;
 
 		try {
-			const response = await api.skills.install({
+			const response = await installMutation.mutateAsync({
 				source: selectedSkill.source,
 				agents: Array.from(selectedAgents),
 				skills: installAll ? [] : [selectedSkill.name],
@@ -102,7 +107,6 @@ export function useSkillInstall() {
 		}
 
 		setIsInstalling(false);
-		queryClient.invalidateQueries({ queryKey: ["skills"] });
 	};
 
 	const handleCloseInstallModal = () => {

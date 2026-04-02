@@ -1,11 +1,11 @@
 import { ExclamationTriangleIcon } from "@heroicons/react/24/solid";
 import { Button, Modal, Spinner } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { useServer } from "../hooks/use-server";
-import { createApi } from "../lib/api";
+import { useApi } from "../hooks/use-api";
 import { ConfigSource } from "../lib/api-types";
+import { invalidateMcpQueries } from "../requests/mcps";
+import { invalidateSkillQueries } from "../requests/skills";
 
 interface BulkDeleteItem {
 	name: string;
@@ -37,8 +37,7 @@ export function BulkDeleteDialog({
 	projectPath,
 }: BulkDeleteDialogProps) {
 	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
+	const api = useApi();
 	const queryClient = useQueryClient();
 
 	const deleteMutation = useMutation({
@@ -107,16 +106,10 @@ export function BulkDeleteDialog({
 		},
 		onSuccess: () => {
 			if (resourceType === "mcp" || resourceType === "mixed") {
-				queryClient.invalidateQueries({ queryKey: ["mcps"] });
-				queryClient.invalidateQueries({
-					queryKey: ["project-mcps"],
-				});
+				void invalidateMcpQueries(queryClient);
 			}
 			if (resourceType === "skill" || resourceType === "mixed") {
-				queryClient.invalidateQueries({ queryKey: ["skills"] });
-				queryClient.invalidateQueries({
-					queryKey: ["project-skills"],
-				});
+				void invalidateSkillQueries(queryClient);
 			}
 		},
 		onError: (error) => {

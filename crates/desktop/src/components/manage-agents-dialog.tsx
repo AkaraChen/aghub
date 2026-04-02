@@ -1,14 +1,14 @@
 import { Button, Modal, toast } from "@heroui/react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { AvailableAgent } from "../contexts/agent-availability";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
-import { useServer } from "../hooks/use-server";
-import { createApi } from "../lib/api";
+import { useApi } from "../hooks/use-api";
 import type { McpResponse } from "../lib/api-types";
 import { ConfigSource } from "../lib/api-types";
 import { cn } from "../lib/utils";
+import { reconcileMcpsMutationOptions } from "../requests/mcps";
 import { type AgentDiffLabel, AgentList, type AgentState } from "./agent-list";
 
 type AgentCapabilityRequirement = keyof AvailableAgent["capabilities"] | "mcp";
@@ -35,10 +35,15 @@ export function ManageAgentsDialog({
 	requiredCapabilities = EMPTY_CAPABILITIES,
 }: ManageAgentsDialogProps) {
 	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
+	const api = useApi();
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
+	const reconcileMutation = useMutation(
+		reconcileMcpsMutationOptions({
+			api,
+			queryClient,
+		}),
+	);
 
 	const supportsRequirements = useCallback(
 		(agent: AvailableAgent) =>
@@ -169,7 +174,7 @@ export function ManageAgentsDialog({
 		setAgentStates(pendingStates);
 
 		try {
-			const result = await api.mcps.reconcile({
+			const result = await reconcileMutation.mutateAsync({
 				source: {
 					agent: sourceAgentItem.agent ?? "claude",
 					scope:
@@ -191,11 +196,6 @@ export function ManageAgentsDialog({
 				};
 			}
 			setAgentStates(newAgentStates);
-
-			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: ["mcps"] }),
-				queryClient.invalidateQueries({ queryKey: ["project-mcps"] }),
-			]);
 
 			if (result.failed_count === 0) {
 				toast.success(

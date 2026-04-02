@@ -7,16 +7,18 @@ import type {
 	AvailableAgent,
 } from "../contexts/agent-availability";
 import { AgentAvailabilityContext } from "../contexts/agent-availability";
-import { useServerContext } from "../contexts/server";
+import { useApi } from "../hooks/use-api";
 import type { AgentAvailability, AgentInfo } from "../lib/api";
-import { createApi } from "../lib/api";
 import { getDisabledAgents } from "../lib/store";
+import {
+	agentAvailabilityQueryOptions,
+	agentsListQueryOptions,
+} from "../requests/agents";
 
 export function AgentAvailabilityProvider({
 	children,
 }: AgentAvailabilityProviderProps) {
-	const { baseUrl } = useServerContext();
-	const api = createApi(baseUrl);
+	const api = useApi();
 	const [disabledAgents, setDisabledAgents] = useState<Set<string>>(
 		() => new Set(),
 	);
@@ -27,8 +29,7 @@ export function AgentAvailabilityProvider({
 		isLoading: isLoadingAgents,
 		refetch: refetchAgents,
 	} = useQuery({
-		queryKey: ["agents"],
-		queryFn: () => api.agents.list(),
+		...agentsListQueryOptions({ api }),
 	});
 
 	// Fetch availability
@@ -37,8 +38,7 @@ export function AgentAvailabilityProvider({
 		isLoading: isLoadingAvailability,
 		refetch: refetchAvailability,
 	} = useQuery({
-		queryKey: ["agents-availability"],
-		queryFn: () => api.agents.availability(),
+		...agentAvailabilityQueryOptions({ api }),
 	});
 
 	// Load disabled agents from store

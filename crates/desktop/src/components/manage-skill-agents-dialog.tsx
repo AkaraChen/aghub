@@ -1,13 +1,13 @@
 import { Button, Modal, toast } from "@heroui/react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
-import { useServer } from "../hooks/use-server";
-import { createApi } from "../lib/api";
+import { useApi } from "../hooks/use-api";
 import { ConfigSource } from "../lib/api-types";
 import type { Scope } from "../lib/skills-path-group";
 import { cn } from "../lib/utils";
+import { reconcileSkillsMutationOptions } from "../requests/skills";
 import type { AgentDiffLabel, AgentState } from "./agent-list";
 import type { SkillGroup } from "./skill-detail-helpers";
 import { SkillsAgentList } from "./skills-agent-list";
@@ -26,10 +26,15 @@ export function ManageSkillAgentsDialog({
 	projectPath,
 }: ManageSkillAgentsDialogProps) {
 	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
+	const api = useApi();
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
+	const reconcileMutation = useMutation(
+		reconcileSkillsMutationOptions({
+			api,
+			queryClient,
+		}),
+	);
 
 	const hasValidGroup = group?.items && Array.isArray(group.items);
 
@@ -126,7 +131,7 @@ export function ManageSkillAgentsDialog({
 		setAgentStates(pendingStates);
 
 		try {
-			const result = await api.skills.reconcile({
+			const result = await reconcileMutation.mutateAsync({
 				source: {
 					agent: sourceAgentItem.agent ?? "claude",
 					scope:
@@ -147,12 +152,6 @@ export function ManageSkillAgentsDialog({
 				};
 			}
 			setAgentStates(newAgentStates);
-
-			await Promise.all([
-				queryClient.invalidateQueries({ queryKey: ["skills"] }),
-				queryClient.invalidateQueries({ queryKey: ["project-skills"] }),
-				queryClient.invalidateQueries({ queryKey: ["skill-locks"] }),
-			]);
 
 			if (result.failed_count === 0) {
 				toast.success(

@@ -11,14 +11,17 @@ import {
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { Key } from "react-aria-components";
 import { useTranslation } from "react-i18next";
+import { useApi } from "../../hooks/use-api";
 import { useCurrentCodeEditor } from "../../hooks/use-integrations";
-import { useServer } from "../../hooks/use-server";
 import type { CredentialResponse } from "../../lib/api";
-import { createApi } from "../../lib/api";
 import type { CodeEditorType } from "../../lib/api-types";
+import {
+	credentialsListQueryOptions,
+	deleteCredentialMutationOptions,
+} from "../../requests/credentials";
 import { CreateCredentialDialog } from "./components/create-credential-dialog";
 
 const iconModules = import.meta.glob<{ default: string }>(
@@ -68,8 +71,7 @@ export default function IntegrationsPanel() {
 	const { codeEditors, isLoading, selectedEditor, setCurrentEditor } =
 		useCurrentCodeEditor();
 
-	const { baseUrl } = useServer();
-	const api = useMemo(() => createApi(baseUrl), [baseUrl]);
+	const api = useApi();
 	const queryClient = useQueryClient();
 	const [isCreateOpen, setIsCreateOpen] = useState(false);
 	const [deleteTarget, setDeleteTarget] = useState<CredentialResponse | null>(
@@ -78,17 +80,19 @@ export default function IntegrationsPanel() {
 
 	const { data: credentials = [], isLoading: isCredentialsLoading } =
 		useQuery({
-			queryKey: ["credentials"],
-			queryFn: () => api.credentials.list(),
+			...credentialsListQueryOptions({ api }),
 		});
 
 	const deleteMutation = useMutation({
-		mutationFn: (id: string) => api.credentials.delete(id),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["credentials"] });
-			toast.success(t("credentialDeleted"));
-			setDeleteTarget(null);
-		},
+		...deleteCredentialMutationOptions({
+			api,
+			queryClient,
+			onSuccess: async () => {
+				toast.success(t("credentialDeleted"));
+				setDeleteTarget(null);
+			},
+		}),
+		onSuccess: () => {},
 		onError: (error) => {
 			console.error("Failed to delete credential:", error);
 			toast.danger(t("credentialDeleteFailed"));
@@ -229,9 +233,6 @@ export default function IntegrationsPanel() {
 				isOpen={isCreateOpen}
 				onClose={() => setIsCreateOpen(false)}
 				onSuccess={(_newId) => {
-					queryClient.invalidateQueries({
-						queryKey: ["credentials"],
-					});
 					toast.success(t("credentialCreated"));
 				}}
 			/>

@@ -16,10 +16,10 @@ import { useMemo, useReducer, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
-import { useServer } from "../hooks/use-server";
+import { useApi } from "../hooks/use-api";
 import { supportsMcp } from "../lib/agent-capabilities";
-import { createApi } from "../lib/api";
 import type { TransportDto } from "../lib/api-types";
+import { createMcpMutationOptions } from "../requests/mcps";
 import { AgentSelector } from "./agent-selector";
 
 interface ImportMcpPanelProps {
@@ -119,8 +119,7 @@ function importUiReducer(
 
 export function ImportMcpPanel({ onDone, projectPath }: ImportMcpPanelProps) {
 	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = createApi(baseUrl);
+	const api = useApi();
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
 
@@ -154,24 +153,14 @@ export function ImportMcpPanel({ onDone, projectPath }: ImportMcpPanelProps) {
 	});
 
 	const createMutation = useMutation({
+		...createMcpMutationOptions({
+			api,
+			queryClient,
+		}),
 		onError: (error) => {
 			const errorMessage =
 				error instanceof Error ? error.message : String(error);
 			setError(errorMessage);
-		},
-		mutationFn: ({
-			agent,
-			body,
-		}: {
-			agent: string;
-			body: { name: string; transport: TransportDto; timeout?: number };
-		}) => {
-			const scope = projectPath ? "project" : "global";
-			return api.mcps.create(agent, scope, body, projectPath);
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["mcps"] });
-			queryClient.invalidateQueries({ queryKey: ["project-mcps"] });
 		},
 	});
 
@@ -267,7 +256,12 @@ export function ImportMcpPanel({ onDone, projectPath }: ImportMcpPanelProps) {
 		try {
 			await Promise.all(
 				Array.from(uiState.selectedAgents).map((agent) =>
-					createMutation.mutateAsync({ agent, body }),
+					createMutation.mutateAsync({
+						agent,
+						scope: projectPath ? "project" : "global",
+						body,
+						projectRoot: projectPath,
+					}),
 				),
 			);
 			dispatch({ type: "set_confirm_open", value: false });

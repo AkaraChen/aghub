@@ -10,16 +10,15 @@ import Fuse from "fuse.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
+import { useApi } from "../hooks/use-api";
 import { useFavorites } from "../hooks/use-favorites";
-import { useServer } from "../hooks/use-server";
 import { AgentIcon } from "../lib/agent-icons";
-import { createApi } from "../lib/api";
-import type {
-	GlobalSkillLockResponse,
-	ProjectSkillLockResponse,
-	SkillResponse,
-} from "../lib/api-types";
+import type { SkillResponse } from "../lib/api-types";
 import { sortAgents } from "../lib/utils";
+import {
+	globalSkillLockQueryOptions,
+	projectSkillLockQueryOptions,
+} from "../requests/skills";
 
 function formatAgentName(agent: string): string {
 	return agent.charAt(0).toUpperCase() + agent.slice(1).toLowerCase();
@@ -104,21 +103,21 @@ export function SkillList({
 	isMultiSelectMode = false,
 }: SkillListProps) {
 	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = createApi(baseUrl);
+	const api = useApi();
 
-	const { data: globalLock } = useQuery<GlobalSkillLockResponse>({
-		queryKey: ["skill-locks", "global"],
-		queryFn: () => api.skills.getGlobalLock(),
-		staleTime: 30_000,
-		enabled: groupBySource,
+	const { data: globalLock } = useQuery({
+		...globalSkillLockQueryOptions({
+			api,
+			enabled: groupBySource,
+		}),
 	});
 
-	const { data: projectLock } = useQuery<ProjectSkillLockResponse>({
-		queryKey: ["skill-locks", "project", projectPath],
-		queryFn: () => api.skills.getProjectLock(projectPath),
-		staleTime: 30_000,
-		enabled: groupBySource,
+	const { data: projectLock } = useQuery({
+		...projectSkillLockQueryOptions({
+			api,
+			projectPath,
+			enabled: groupBySource,
+		}),
 	});
 
 	const groupedByName = useMemo(() => {

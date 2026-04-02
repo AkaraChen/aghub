@@ -16,9 +16,9 @@ import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
-import { useServer } from "../hooks/use-server";
-import { createApi } from "../lib/api";
+import { useApi } from "../hooks/use-api";
 import type { CreateSkillRequest } from "../lib/api-types";
+import { createSkillMutationOptions } from "../requests/skills";
 import { AgentSelector } from "./agent-selector";
 
 interface CreateSkillPanelProps {
@@ -40,8 +40,7 @@ export function CreateSkillPanel({
 	projectPath,
 }: CreateSkillPanelProps) {
 	const { t } = useTranslation();
-	const { baseUrl } = useServer();
-	const api = createApi(baseUrl);
+	const api = useApi();
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
 
@@ -72,28 +71,16 @@ export function CreateSkillPanel({
 		},
 	});
 
-	const invalidateCache = () => {
-		queryClient.invalidateQueries({ queryKey: ["skills"] });
-		queryClient.invalidateQueries({ queryKey: ["project-skills"] });
-		queryClient.invalidateQueries({ queryKey: ["skill-locks"] });
-	};
-
 	const createMutation = useMutation({
+		...createSkillMutationOptions({
+			api,
+			queryClient,
+		}),
 		onError: (error) => {
 			const errorMessage =
 				error instanceof Error ? error.message : String(error);
 			setError(errorMessage);
 		},
-		mutationFn: ({
-			agent,
-			body,
-		}: {
-			agent: string;
-			body: CreateSkillRequest;
-		}) => {
-			return api.skills.create(agent, body, projectPath);
-		},
-		onSuccess: invalidateCache,
 	});
 
 	const handleCreate = async (values: CreateSkillFormValues) => {
@@ -113,7 +100,11 @@ export function CreateSkillPanel({
 		try {
 			await Promise.all(
 				values.selectedAgents.map((agent) =>
-					createMutation.mutateAsync({ agent, body }),
+					createMutation.mutateAsync({
+						agent,
+						body,
+						projectPath,
+					}),
 				),
 			);
 			onDone();
