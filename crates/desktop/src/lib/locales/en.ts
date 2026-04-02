@@ -292,6 +292,7 @@ export default {
 	// MCP Servers Page
 	searchPlugins: "Search plugins...",
 	refreshPlugins: "Refresh plugins",
+	installFromMarket: "Install from Market",
 	selectedItems: "Selected Items",
 	searchServers: "Search servers...",
 	addMcpServer: "Add MCP server",

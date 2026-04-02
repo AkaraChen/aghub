@@ -3,6 +3,7 @@
 import {
 	ArrowPathIcon,
 	CheckCircleIcon,
+	PlusIcon,
 	PuzzlePieceIcon,
 	RectangleStackIcon,
 } from "@heroicons/react/24/solid";
@@ -35,6 +36,7 @@ export default function PluginsPage() {
 		() => new Set(),
 	);
 	const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+	const [isMarketDialogOpen, setIsMarketDialogOpen] = useState(false);
 
 	const filteredPlugins = useMemo(() => {
 		if (!searchQuery) return plugins;
@@ -86,6 +88,21 @@ export default function PluginsPage() {
 					placeholder={t("searchPlugins")}
 					ariaLabel={t("searchPlugins")}
 				>
+					<Tooltip delay={0}>
+						<Tooltip.Trigger>
+							<Button
+								isIconOnly
+								variant="ghost"
+								size="sm"
+								className="shrink-0"
+								onPress={() => setIsMarketDialogOpen(true)}
+								aria-label={t("installFromMarket")}
+							>
+								<PlusIcon className="size-4" />
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>{t("installFromMarket")}</Tooltip.Content>
+					</Tooltip>
 					<Tooltip delay={0}>
 						<Tooltip.Trigger>
 							<div

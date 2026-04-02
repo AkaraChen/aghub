@@ -23,12 +23,6 @@ interface MenuItem {
 const menuItems: MenuItem[] = [
 	{
 		type: "link",
-		labelKey: "claudeCodePlugins",
-		href: "/plugins",
-		icon: PuzzlePieceIcon,
-	},
-	{
-		type: "link",
 		labelKey: "mcpServers",
 		href: "/mcp",
 		icon: ServerIcon,
@@ -47,9 +41,15 @@ const menuItems: MenuItem[] = [
 	},
 	{
 		type: "link",
-		labelKey: "subAgents",
-		href: "/sub-agents",
-		icon: CpuChipIcon,
+        labelKey: "subAgents",
+        href: "/sub-agents",
+        icon: CpuChipIcon,
+    },
+    {
+        type: "link",
+        labelKey: "claudeCodePlugins",
+        href: "/plugins",
+        icon: PuzzlePieceIcon,
 	},
 ];
 

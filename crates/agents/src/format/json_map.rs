@@ -321,6 +321,8 @@ mod tests {
 				source_path: None,
 				canonical_path: None,
 				config_source: None,
+				plugin_id: None,
+				plugin_name: None,
 			}],
 			sub_agents: vec![],
 		};

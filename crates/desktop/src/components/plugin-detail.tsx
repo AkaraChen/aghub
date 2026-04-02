@@ -158,7 +158,7 @@ export function PluginDetail({
 		<div className="h-full overflow-y-auto">
 			<div className="w-full space-y-4 p-4 sm:p-6">
 				<Card>
-					{/* Header: Name + Version */}
+					{/* Header: Name + Version + Enable Switch */}
 					<Card.Header className="flex flex-row items-start justify-between gap-3">
 						<div className="min-w-0 flex-1">
 							<div className="flex items-center gap-2">
@@ -173,53 +173,51 @@ export function PluginDetail({
 								{plugin.id}
 							</p>
 						</div>
+						<Switch
+							isSelected={plugin.enabled}
+							onChange={() => {
+								if (plugin.enabled) {
+									disableMutation.mutate(plugin.id);
+								} else {
+									enableMutation.mutate(plugin.id);
+								}
+							}}
+							aria-label={
+								plugin.enabled
+									? t("disablePlugin")
+									: t("enablePlugin")
+							}
+						>
+							<Switch.Control>
+								<Switch.Thumb />
+							</Switch.Control>
+						</Switch>
 					</Card.Header>
 
 					<Card.Content className="flex flex-col gap-6">
-						{/* Enable/Disable Section */}
-						<div className="flex items-center justify-between rounded-lg bg-surface-secondary px-4 py-3">
-							<div className="flex items-center gap-3">
-								<div
-									className={`size-10 rounded-full flex items-center justify-center ${
-										plugin.enabled
-											? "bg-success/10 text-success"
-											: "bg-muted/10 text-muted"
-									}`}
-								>
-									<CpuChipIcon className="size-5" />
-								</div>
-								<div>
-									<p className="font-medium text-foreground">
-										{plugin.enabled
-											? t("pluginEnabled")
-											: t("pluginDisabled")}
-									</p>
-									<p className="text-xs text-muted">
-										{plugin.enabled
-											? t("pluginEnabledDescription")
-											: t("pluginDisabledDescription")}
-									</p>
-								</div>
-							</div>
-							<Switch
-								isSelected={plugin.enabled}
-								onChange={() => {
-									if (plugin.enabled) {
-										disableMutation.mutate(plugin.id);
-									} else {
-										enableMutation.mutate(plugin.id);
-									}
-								}}
-								aria-label={
+						{/* Status Section */}
+						<div className="flex items-center gap-3 rounded-lg bg-surface-secondary px-4 py-3">
+							<div
+								className={`size-10 rounded-full flex items-center justify-center ${
 									plugin.enabled
-										? t("disablePlugin")
-										: t("enablePlugin")
-								}
+										? "bg-success/10 text-success"
+										: "bg-muted/10 text-muted"
+								}`}
 							>
-								<Switch.Control>
-									<Switch.Thumb />
-								</Switch.Control>
-							</Switch>
+								<CpuChipIcon className="size-5" />
+							</div>
+							<div>
+								<p className="font-medium text-foreground">
+									{plugin.enabled
+										? t("pluginEnabled")
+										: t("pluginDisabled")}
+								</p>
+								<p className="text-xs text-muted">
+									{plugin.enabled
+										? t("pluginEnabledDescription")
+										: t("pluginDisabledDescription")}
+								</p>
+							</div>
 						</div>
 
 						{/* Description */}
