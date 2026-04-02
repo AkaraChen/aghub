@@ -15,8 +15,8 @@ pub mod transfer;
 pub use aghub_agents::{descriptor, errors, format, models};
 pub use aghub_agents::{
 	AgentConfig, AgentDescriptor, AgentType, Capabilities, ConfigError,
-	ConfigSource, McpServer, McpTransport, ParseFn, ResourceScope, Result,
-	SerializeFn, Skill,
+	ConfigSource, LoadMcpsFn, McpParseFn, McpSerializeFn, McpServer,
+	McpTransport, ResourceScope, Result, SaveMcpsFn, Skill,
 };
 
 #[cfg(feature = "testing")]

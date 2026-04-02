@@ -25,7 +25,7 @@ pub fn check_agent_availability(
 	descriptor: &AgentDescriptor,
 ) -> AvailabilityInfo {
 	let has_global_directory =
-		check_global_directory_exists((descriptor.global_path)());
+		check_global_directory_exists((descriptor.global_data_dir)());
 	let has_cli = check_cli_exists(descriptor.cli_name);
 
 	AvailabilityInfo {

@@ -1,13 +1,36 @@
 use crate::descriptor::*;
+use crate::errors::ConfigError;
 use std::path::{Path, PathBuf};
 
-fn global_path() -> PathBuf {
+fn mcp_global_path() -> PathBuf {
 	dirs::home_dir()
 		.unwrap_or_else(|| std::path::PathBuf::from(""))
 		.join(".pi/agent/config.json")
 }
-fn project_path(root: &Path) -> PathBuf {
+fn mcp_project_path(root: &Path) -> PathBuf {
 	root.join(".pi/agent/config.json")
+}
+fn global_data_dir() -> PathBuf {
+	dirs::home_dir()
+		.unwrap_or_else(|| std::path::PathBuf::from(""))
+		.join(".pi/agent")
+}
+fn load_mcps(
+	_: Option<&Path>,
+	_: crate::ResourceScope,
+) -> crate::Result<Vec<crate::McpServer>> {
+	Ok(Vec::new())
+}
+fn save_mcps(
+	_: Option<&Path>,
+	_: crate::ResourceScope,
+	_: &[crate::McpServer],
+) -> crate::Result<()> {
+	Err(ConfigError::unsupported_operation(
+		"persist",
+		"MCP server",
+		"pi",
+	))
 }
 fn global_skills_paths() -> Vec<PathBuf> {
 	vec![dirs::home_dir()
@@ -21,10 +44,13 @@ fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "pi",
 	display_name: "Pi Coding Agent",
-	parse_config: mcp_strategy::parse_none,
-	serialize_config: mcp_strategy::serialize_none,
-	global_path,
-	project_path,
+	mcp_parse_config: None,
+	mcp_serialize_config: None,
+	load_mcps,
+	save_mcps,
+	mcp_global_path,
+	mcp_project_path,
+	global_data_dir,
 	capabilities: Capabilities {
 		mcp_stdio: false,
 		mcp_remote: false,

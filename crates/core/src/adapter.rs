@@ -1,22 +1,29 @@
 use crate::{
 	adapters::AgentAdapter,
 	errors::Result,
-	models::{AgentConfig, ResourceScope},
+	models::{AgentConfig, McpServer, McpTransport, ResourceScope},
 	skills::discovery::load_skills_from_dirs,
 	AgentDescriptor,
 };
 use std::cell::RefCell;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 thread_local! {
 	static SKILLS_PATH_OVERRIDE: RefCell<Option<(String, PathBuf)>> = const { RefCell::new(None) };
+	static MCP_PATH_OVERRIDE: RefCell<Option<(String, PathBuf)>> = const { RefCell::new(None) };
 }
 
 /// Override the skills path for a specific agent (for testing)
 pub fn set_skills_path_override(agent_id: &str, path: Option<PathBuf>) {
 	SKILLS_PATH_OVERRIDE.with(|p| {
+		*p.borrow_mut() = path.map(|path| (agent_id.to_string(), path));
+	});
+}
+
+/// Override the MCP config path for a specific agent (for testing)
+pub fn set_mcp_path_override(agent_id: &str, path: Option<PathBuf>) {
+	MCP_PATH_OVERRIDE.with(|p| {
 		*p.borrow_mut() = path.map(|path| (agent_id.to_string(), path));
 	});
 }
@@ -27,16 +34,39 @@ impl AgentAdapter for &'static AgentDescriptor {
 		self.id
 	}
 
-	fn global_config_path(&self) -> PathBuf {
-		(self.global_path)()
+	fn mcp_config_path(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+	) -> Option<PathBuf> {
+		if let Some((id, path)) = MCP_PATH_OVERRIDE.with(|p| p.borrow().clone())
+		{
+			if id == self.id {
+				return Some(path);
+			}
+		}
+
+		match scope {
+			ResourceScope::GlobalOnly => Some((self.mcp_global_path)()),
+			ResourceScope::ProjectOnly => {
+				project_root.map(|root| (self.mcp_project_path)(root))
+			}
+			ResourceScope::Both => None,
+		}
 	}
 
-	fn project_config_path(&self, project_root: &Path) -> PathBuf {
-		(self.project_path)(project_root)
-	}
+	fn load_mcps(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+	) -> Result<Vec<McpServer>> {
+		if let Some(path) = self.mcp_config_path(project_root, scope) {
+			if let Some(parse) = self.mcp_parse_config {
+				return crate::descriptor::load_mcps_from_file(&path, parse);
+			}
+		}
 
-	fn parse_config(&self, content: &str) -> Result<AgentConfig> {
-		(self.parse_config)(content)
+		(self.load_mcps)(project_root, scope)
 	}
 
 	fn get_skills_paths(
@@ -101,21 +131,12 @@ impl AgentAdapter for &'static AgentDescriptor {
 
 	fn load_config(
 		&self,
-		config_path: &Path,
 		project_root: Option<&Path>,
 		scope: ResourceScope,
 	) -> Result<AgentConfig> {
-		// 1. Try to load MCPs from config file
-		let mut config = match fs::read_to_string(config_path) {
-			Ok(content) => (self.parse_config)(&content)?,
-			Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-				// No config file is fine - start with empty config
-				AgentConfig::new()
-			}
-			Err(e) => return Err(e.into()),
-		};
+		let mut config = AgentConfig::new();
+		config.mcps = self.load_mcps(project_root, scope)?;
 
-		// 2. Discover skills from directories based on scope
 		if self.capabilities.skills {
 			let skills_paths = self.get_skills_paths(project_root, scope);
 			if !skills_paths.is_empty() {
@@ -126,25 +147,43 @@ impl AgentAdapter for &'static AgentDescriptor {
 		Ok(config)
 	}
 
-	fn serialize_config(
+	fn save_mcps(
 		&self,
-		config: &AgentConfig,
-		original_content: Option<&str>,
-	) -> Result<String> {
-		(self.serialize_config)(config, original_content)
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+		mcps: &[McpServer],
+	) -> Result<()> {
+		if let Some((id, path)) = MCP_PATH_OVERRIDE.with(|p| p.borrow().clone())
+		{
+			if id == self.id {
+				if let Some(serialize) = self.mcp_serialize_config {
+					return crate::descriptor::save_mcps_to_file(
+						&path, mcps, serialize,
+					);
+				}
+			}
+		}
+
+		(self.save_mcps)(project_root, scope, mcps)
 	}
 
-	fn validate_command(&self, config_path: &Path) -> Command {
+	fn validate_command(&self, config_path: Option<&Path>) -> Command {
 		let mut cmd = Command::new(self.cli_name);
 		for arg in self.validate_args {
 			cmd.arg(arg);
 		}
-		cmd.arg(config_path);
+		if let Some(config_path) = config_path {
+			cmd.arg(config_path);
+		}
 		cmd
 	}
 
 	fn supports_mcp_operations(&self) -> bool {
 		self.capabilities.mcp_stdio || self.capabilities.mcp_remote
+	}
+
+	fn mcp_supports_transport(&self, transport: &McpTransport) -> bool {
+		crate::descriptor::supports_mcp_transport(self.capabilities, transport)
 	}
 
 	fn supports_mcp_enable_disable(&self) -> bool {

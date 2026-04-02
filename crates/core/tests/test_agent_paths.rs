@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 #[test]
 fn test_opencode_global_config_path_not_platform_specific() {
-	let path = (opencode::DESCRIPTOR.global_path)();
+	let path = (opencode::DESCRIPTOR.mcp_global_path)();
 	let path_str = path.to_string_lossy();
 	assert!(
 		!path_str.contains("Library"),
@@ -89,7 +89,7 @@ fn test_cursor_global_skills_path() {
 
 #[test]
 fn test_kimi_global_mcp_path() {
-	let path = (kimi::DESCRIPTOR.global_path)();
+	let path = (kimi::DESCRIPTOR.mcp_global_path)();
 	assert!(
 		path.to_string_lossy().contains(".kimi/mcp.json"),
 		"Kimi global MCP path should be ~/.kimi/mcp.json, got: {}",

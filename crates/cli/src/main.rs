@@ -274,7 +274,9 @@ fn main() -> Result<()> {
 		scope,
 	);
 	eprintln_verbose!("Config manager created");
-	eprintln_verbose!("Config file: {}", manager.config_path().display());
+	if let Some(config_path) = manager.config_path() {
+		eprintln_verbose!("Config file: {}", config_path.display());
+	}
 
 	// Load existing config (or fail if not found)
 	eprintln_verbose!("Loading configuration...");

@@ -1,12 +1,21 @@
-use crate::errors::Result;
-use crate::models::{AgentConfig, ResourceScope};
+use crate::errors::{ConfigError, Result};
+use crate::models::{AgentConfig, McpServer, McpTransport, ResourceScope};
+use std::fs;
 use std::path::{Path, PathBuf};
 
-/// Parse function type for agent configuration
-pub type ParseFn = fn(&str) -> Result<AgentConfig>;
+/// Parse function type for MCP-backed agent configuration content
+pub type McpParseFn = fn(&str) -> Result<AgentConfig>;
 
-/// Serialize function type for agent configuration
-pub type SerializeFn = fn(&AgentConfig, Option<&str>) -> Result<String>;
+/// Serialize function type for MCP-backed agent configuration content
+pub type McpSerializeFn = fn(&AgentConfig, Option<&str>) -> Result<String>;
+
+/// Load function type for agent MCP configuration
+pub type LoadMcpsFn =
+	fn(Option<&Path>, ResourceScope) -> Result<Vec<McpServer>>;
+
+/// Save function type for agent MCP configuration
+pub type SaveMcpsFn =
+	fn(Option<&Path>, ResourceScope, &[McpServer]) -> Result<()>;
 
 /// Agent capabilities
 #[derive(Debug, Clone, Copy)]
@@ -23,12 +32,20 @@ pub struct Capabilities {
 pub struct AgentDescriptor {
 	pub id: &'static str,
 	pub display_name: &'static str,
-	/// Parse raw config content into AgentConfig
-	pub parse_config: ParseFn,
-	/// Serialize AgentConfig back to raw content
-	pub serialize_config: SerializeFn,
-	pub global_path: fn() -> PathBuf,
-	pub project_path: fn(&Path) -> PathBuf,
+	/// Parse raw MCP config content into AgentConfig.
+	pub mcp_parse_config: Option<McpParseFn>,
+	/// Serialize MCP config content back to raw text.
+	pub mcp_serialize_config: Option<McpSerializeFn>,
+	/// Load MCPs for the requested scope. The descriptor owns all I/O.
+	pub load_mcps: LoadMcpsFn,
+	/// Persist MCPs for the requested scope. The descriptor owns all I/O.
+	pub save_mcps: SaveMcpsFn,
+	/// Global MCP config path for display, validation, and discovery.
+	pub mcp_global_path: fn() -> PathBuf,
+	/// Project MCP config path for display, validation, and discovery.
+	pub mcp_project_path: fn(&Path) -> PathBuf,
+	/// Agent-specific global data directory used for availability checks.
+	pub global_data_dir: fn() -> PathBuf,
 	pub capabilities: Capabilities,
 	/// Function returning global skills directories.
 	///
@@ -142,6 +159,97 @@ pub fn get_universal_skills_path() -> PathBuf {
 		.join("agents/skills")
 }
 
+pub fn load_mcps_from_file(
+	path: &Path,
+	parse: McpParseFn,
+) -> Result<Vec<McpServer>> {
+	match fs::read_to_string(path) {
+		Ok(content) => Ok(parse(&content)?.mcps),
+		Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+		Err(e) => Err(e.into()),
+	}
+}
+
+pub fn save_mcps_to_file(
+	path: &Path,
+	mcps: &[McpServer],
+	serialize: McpSerializeFn,
+) -> Result<()> {
+	if let Some(parent) = path.parent() {
+		fs::create_dir_all(parent)?;
+	}
+
+	let original_content = fs::read_to_string(path).ok();
+	let mut config = AgentConfig::new();
+	config.mcps = mcps.to_vec();
+
+	let content = serialize(&config, original_content.as_deref())?;
+	fs::write(path, content)?;
+	Ok(())
+}
+
+pub fn load_scoped_mcps(
+	project_root: Option<&Path>,
+	scope: ResourceScope,
+	global_path: fn() -> PathBuf,
+	project_path: fn(&Path) -> PathBuf,
+	parse: McpParseFn,
+) -> Result<Vec<McpServer>> {
+	let path =
+		mcp_path_for_scope(project_root, scope, global_path, project_path)
+			.ok_or_else(|| {
+				ConfigError::InvalidConfig(format!(
+					"project_root is required for {:?} MCP config",
+					scope
+				))
+			})?;
+	load_mcps_from_file(&path, parse)
+}
+
+pub fn save_scoped_mcps(
+	project_root: Option<&Path>,
+	scope: ResourceScope,
+	mcps: &[McpServer],
+	global_path: fn() -> PathBuf,
+	project_path: fn(&Path) -> PathBuf,
+	serialize: McpSerializeFn,
+) -> Result<()> {
+	let path =
+		mcp_path_for_scope(project_root, scope, global_path, project_path)
+			.ok_or_else(|| {
+				ConfigError::InvalidConfig(format!(
+					"project_root is required for {:?} MCP config",
+					scope
+				))
+			})?;
+	save_mcps_to_file(&path, mcps, serialize)
+}
+
+pub fn mcp_path_for_scope(
+	project_root: Option<&Path>,
+	scope: ResourceScope,
+	global_path: fn() -> PathBuf,
+	project_path: fn(&Path) -> PathBuf,
+) -> Option<PathBuf> {
+	match scope {
+		ResourceScope::GlobalOnly => Some(global_path()),
+		ResourceScope::ProjectOnly => project_root.map(project_path),
+		ResourceScope::Both => None,
+	}
+}
+
+pub fn supports_mcp_transport(
+	capabilities: Capabilities,
+	transport: &McpTransport,
+) -> bool {
+	match transport {
+		McpTransport::Stdio { .. } => capabilities.mcp_stdio,
+		McpTransport::Sse { .. } | McpTransport::StreamableHttp { .. } => {
+			capabilities.mcp_remote
+		}
+	}
+}
+
 /// MCP config strategy functions for common config formats
 pub mod mcp_strategy {
 	use super::*;
@@ -196,16 +304,16 @@ pub mod mcp_strategy {
 	}
 
 	// JsonOpenCode format
-	pub const PARSE_JSON_OPCODE: ParseFn = json_opencode::parse;
-	pub const SERIALIZE_JSON_OPCODE: SerializeFn = json_opencode::serialize;
+	pub const PARSE_JSON_OPCODE: McpParseFn = json_opencode::parse;
+	pub const SERIALIZE_JSON_OPCODE: McpSerializeFn = json_opencode::serialize;
 
 	// JsonList format
-	pub const PARSE_JSON_LIST: ParseFn = json_list::parse;
-	pub const SERIALIZE_JSON_LIST: SerializeFn = json_list::serialize;
+	pub const PARSE_JSON_LIST: McpParseFn = json_list::parse;
+	pub const SERIALIZE_JSON_LIST: McpSerializeFn = json_list::serialize;
 
 	// TOML format
-	pub const PARSE_TOML: ParseFn = toml_format::parse;
-	pub const SERIALIZE_TOML: SerializeFn = toml_format::serialize;
+	pub const PARSE_TOML: McpParseFn = toml_format::parse;
+	pub const SERIALIZE_TOML: McpSerializeFn = toml_format::serialize;
 
 	// No config
 	pub fn parse_none(_: &str) -> Result<AgentConfig> {
