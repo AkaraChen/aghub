@@ -16,9 +16,14 @@ import { skillListQueryOptions } from "../requests/skills";
 
 interface PluginDetailProps {
 	plugin: PluginResponse;
+	selectedCount?: number;
+	selectedPlugins?: PluginResponse[];
 }
 
-function pluginDetailQueryOptions(api: ReturnType<typeof useApi>, pluginId: string) {
+function pluginDetailQueryOptions(
+	api: ReturnType<typeof useApi>,
+	pluginId: string,
+) {
 	return {
 		queryKey: ["plugin-detail", pluginId],
 		queryFn: () => api.plugins.detail(pluginId),
@@ -26,7 +31,41 @@ function pluginDetailQueryOptions(api: ReturnType<typeof useApi>, pluginId: stri
 	};
 }
 
-export function PluginDetail({ plugin }: PluginDetailProps) {
+function MetaRow({
+	label,
+	value,
+	mono = false,
+}: {
+	label: string;
+	value: string;
+	mono?: boolean;
+}) {
+	const displayValue =
+		value.length > 200 ? `${value.slice(0, 200)}...` : value;
+
+	return (
+		<div className="grid gap-1.5 py-1">
+			<span className="text-[11px] font-medium tracking-wide text-muted uppercase">
+				{label}
+			</span>
+			<span
+				className={`
+					min-w-0 text-sm text-foreground
+					${mono && "overflow-x-auto rounded-md bg-surface-secondary px-3 py-2 font-mono text-xs leading-5 text-foreground"}
+				`}
+				title={value.length > 200 ? value : undefined}
+			>
+				{displayValue}
+			</span>
+		</div>
+	);
+}
+
+export function PluginDetail({
+	plugin,
+	selectedCount = 0,
+	selectedPlugins = [],
+}: PluginDetailProps) {
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
@@ -44,6 +83,7 @@ export function PluginDetail({ plugin }: PluginDetailProps) {
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["plugins"] });
 			queryClient.invalidateQueries({ queryKey: ["skills"] });
+			queryClient.invalidateQueries({ queryKey: ["plugin-detail"] });
 		},
 	});
 
@@ -56,7 +96,6 @@ export function PluginDetail({ plugin }: PluginDetailProps) {
 		},
 	});
 
-	// Filter skills that belong to this plugin
 	const pluginSkills =
 		allSkills?.filter((skill) => skill.plugin_id === plugin.id) ?? [];
 
@@ -71,28 +110,68 @@ export function PluginDetail({ plugin }: PluginDetailProps) {
 		}
 	};
 
+	// Multi-select mode shows summary
+	if (selectedCount > 1) {
+		return (
+			<div className="h-full overflow-y-auto">
+				<div className="w-full space-y-4 p-4 sm:p-6">
+					<Card>
+						<Card.Header>
+							<h2 className="text-xl font-semibold text-foreground">
+								{t("itemsSelected", { count: selectedCount })}
+							</h2>
+						</Card.Header>
+						<Card.Content className="flex flex-col gap-6">
+							<div className="space-y-3">
+								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+									{t("selectedItems")}
+								</h3>
+								<div className="space-y-2">
+									{selectedPlugins.map((p) => (
+										<div
+											key={p.id}
+											className="flex items-center justify-between rounded-lg border border-separator bg-surface-secondary px-3 py-2"
+										>
+											<div className="flex items-center gap-2">
+												<div
+													className={`size-2 rounded-full ${p.enabled ? "bg-success" : "bg-muted"}`}
+												/>
+												<span className="font-medium">
+													{p.name}
+												</span>
+												<span className="text-xs text-muted">
+													v{p.version}
+												</span>
+											</div>
+										</div>
+									))}
+								</div>
+							</div>
+						</Card.Content>
+					</Card>
+				</div>
+			</div>
+		);
+	}
+
 	return (
 		<div className="h-full overflow-y-auto">
 			<div className="w-full space-y-4 p-4 sm:p-6">
 				<Card>
+					{/* Header: Name + Version */}
 					<Card.Header className="flex flex-row items-start justify-between gap-3">
 						<div className="min-w-0 flex-1">
 							<div className="flex items-center gap-2">
 								<h2 className="text-xl font-semibold text-foreground truncate">
 									{plugin.name}
 								</h2>
-								<span className="text-sm text-muted-foreground">
+								<span className="text-sm text-muted">
 									v{plugin.version}
 								</span>
 							</div>
-							<p className="text-xs text-muted-foreground mt-1">
+							<p className="text-xs text-muted mt-1">
 								{plugin.id}
 							</p>
-							{plugin.description && (
-								<Card.Description className="mt-2">
-									{plugin.description}
-								</Card.Description>
-							)}
 						</div>
 					</Card.Header>
 
@@ -115,7 +194,7 @@ export function PluginDetail({ plugin }: PluginDetailProps) {
 											? t("pluginEnabled")
 											: t("pluginDisabled")}
 									</p>
-									<p className="text-xs text-muted-foreground">
+									<p className="text-xs text-muted">
 										{plugin.enabled
 											? t("pluginEnabledDescription")
 											: t("pluginDisabledDescription")}
@@ -142,6 +221,18 @@ export function PluginDetail({ plugin }: PluginDetailProps) {
 								</Switch.Control>
 							</Switch>
 						</div>
+
+						{/* Description */}
+						{plugin.description && (
+							<div className="space-y-3">
+								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+									{t("description")}
+								</h3>
+								<p className="text-sm text-foreground">
+									{plugin.description}
+								</p>
+							</div>
+						)}
 
 						{/* Capabilities */}
 						<div className="space-y-3">
@@ -200,11 +291,11 @@ export function PluginDetail({ plugin }: PluginDetailProps) {
 								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
 									{t("providedSkills")}
 								</h3>
-								<div className="space-y-1.5">
+								<div className="space-y-2">
 									{pluginSkills.map((skill) => (
-										<Card
+										<div
 											key={skill.name}
-											className="p-3 bg-surface-secondary"
+											className="rounded-lg border border-separator bg-surface-secondary px-3 py-2"
 										>
 											<div className="flex items-center justify-between">
 												<div className="min-w-0">
@@ -212,7 +303,7 @@ export function PluginDetail({ plugin }: PluginDetailProps) {
 														{skill.name}
 													</p>
 													{skill.description && (
-														<p className="text-xs text-muted-foreground truncate">
+														<p className="text-xs text-muted truncate">
 															{skill.description}
 														</p>
 													)}
@@ -244,45 +335,39 @@ export function PluginDetail({ plugin }: PluginDetailProps) {
 													</div>
 												)}
 											</div>
-										</Card>
+										</div>
 									))}
 								</div>
 							</div>
 						)}
 
-						{/* Source & Installation */}
+						{/* Installation Info */}
 						<div className="space-y-3">
 							<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
 								{t("installationInfo")}
 							</h3>
-							<div className="space-y-2">
-								<div className="flex items-center justify-between text-sm">
-									<span className="text-muted">
-										{t("source")}
-									</span>
-									<span className="font-medium">
-										{plugin.source}
-									</span>
-								</div>
-								<div className="flex items-center gap-2">
-									<code className="flex-1 text-xs bg-surface-secondary px-2 py-1.5 rounded font-mono truncate">
-										{plugin.install_path}
-									</code>
-									<Tooltip delay={0}>
-										<Button
-											isIconOnly
-											variant="ghost"
-											size="sm"
-											onPress={handleOpenInstallPath}
-											aria-label={t("openInstallFolder")}
-										>
-											<FolderOpenIcon className="size-4" />
-										</Button>
-										<Tooltip.Content>
-											{t("openInstallFolder")}
-										</Tooltip.Content>
-									</Tooltip>
-								</div>
+							<MetaRow
+								label={t("source")}
+								value={plugin.source}
+							/>
+							<div className="flex items-center gap-2">
+								<code className="flex-1 text-xs bg-surface-secondary px-3 py-2 rounded font-mono truncate">
+									{plugin.install_path}
+								</code>
+								<Tooltip delay={0}>
+									<Button
+										isIconOnly
+										variant="ghost"
+										size="sm"
+										onPress={handleOpenInstallPath}
+										aria-label={t("openInstallFolder")}
+									>
+										<FolderOpenIcon className="size-4" />
+									</Button>
+									<Tooltip.Content>
+										{t("openInstallFolder")}
+									</Tooltip.Content>
+								</Tooltip>
 							</div>
 						</div>
 
@@ -294,28 +379,48 @@ export function PluginDetail({ plugin }: PluginDetailProps) {
 								</h3>
 								<div className="space-y-2">
 									{hooks.hooks.map((event) => (
-										<Card key={event.event} className="p-3 bg-surface-secondary">
+										<div
+											key={event.event}
+											className="rounded-lg border border-separator bg-surface-secondary px-3 py-2"
+										>
 											<div className="flex items-center gap-2 mb-2">
 												<BoltIcon className="size-4 text-warning" />
-												<span className="font-medium text-sm">{event.event}</span>
+												<span className="font-medium text-sm">
+													{event.event}
+												</span>
 											</div>
 											<div className="space-y-1">
-												{event.matchers.map((matcher, idx) => (
-													<div key={idx} className="text-xs text-muted-foreground">
-														{matcher.matcher ? (
-															<code className="bg-surface px-1 py-0.5 rounded">
-																Matcher: {matcher.matcher}
-															</code>
-														) : (
-															<span>All events</span>
-														)}
-														<span className="ml-2">
-															{matcher.hooks.length} hook(s)
-														</span>
-													</div>
-												))}
+												{event.matchers.map(
+													(matcher, idx) => (
+														<div
+															key={idx}
+															className="text-xs text-muted"
+														>
+															{matcher.matcher ? (
+																<code className="bg-surface px-1 py-0.5 rounded">
+																	Matcher:{" "}
+																	{
+																		matcher.matcher
+																	}
+																</code>
+															) : (
+																<span>
+																	All events
+																</span>
+															)}
+															<span className="ml-2">
+																{
+																	matcher
+																		.hooks
+																		.length
+																}{" "}
+																hook(s)
+															</span>
+														</div>
+													),
+												)}
 											</div>
-										</Card>
+										</div>
 									))}
 								</div>
 							</div>
@@ -329,27 +434,32 @@ export function PluginDetail({ plugin }: PluginDetailProps) {
 								</h3>
 								<div className="space-y-2">
 									{mcpConfig.servers.map((server) => (
-										<Card key={server.name} className="p-3 bg-surface-secondary">
+										<div
+											key={server.name}
+											className="rounded-lg border border-separator bg-surface-secondary px-3 py-2"
+										>
 											<div className="flex items-center justify-between">
 												<div className="flex items-center gap-2">
-													<CpuChipIcon className="size-4 text-info" />
-													<span className="font-medium text-sm">{server.name}</span>
+													<CpuChipIcon className="size-4 text-accent" />
+													<span className="font-medium text-sm">
+														{server.name}
+													</span>
 												</div>
 												<Chip size="sm" variant="soft">
 													{server.transport_type}
 												</Chip>
 											</div>
 											{server.url && (
-												<p className="text-xs text-muted-foreground mt-2 truncate">
+												<p className="text-xs text-muted mt-2 truncate">
 													{server.url}
 												</p>
 											)}
 											{server.note && (
-												<p className="text-xs text-muted-foreground mt-1">
+												<p className="text-xs text-muted mt-1">
 													{server.note}
 												</p>
 											)}
-										</Card>
+										</div>
 									))}
 								</div>
 							</div>

@@ -27,6 +27,7 @@ export default {
 	subAgentNamePlaceholder: "例如：code-reviewer",
 	subAgentDescriptionPlaceholder: "這個子代理的作用是什麼？",
 	subAgentInstructionPlaceholder: "子代理的系統提示詞/指令...",
+	claudeCodePlugins: "Claude Code 外掛",
 	plugins: "外掛",
 	pluginsDescription: "管理 Claude Code 外掛 — 啟用或停用已安裝的外掛。",
 	noPluginsInstalled: "暫無已安裝的外掛。",
@@ -277,6 +278,9 @@ export default {
 	noResults: "無結果",
 
 	// MCP Servers Page
+	searchPlugins: "搜尋外掛...",
+	refreshPlugins: "重新整理外掛",
+	selectedItems: "已選項",
 	searchServers: "搜尋伺服器...",
 	addMcpServer: "新增 MCP 伺服器",
 	refreshServers: "重新整理伺服器",

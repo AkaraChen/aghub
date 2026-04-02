@@ -28,6 +28,7 @@ export default {
 	subAgentDescriptionPlaceholder: "What does this sub-agent do?",
 	subAgentInstructionPlaceholder:
 		"System prompt / instruction for this sub-agent...",
+	claudeCodePlugins: "Claude Code Plugins",
 	plugins: "Plugins",
 	pluginsDescription:
 		"Manage Claude Code plugins — enable or disable installed plugins.",
@@ -289,6 +290,9 @@ export default {
 	noResults: "No results",
 
 	// MCP Servers Page
+	searchPlugins: "Search plugins...",
+	refreshPlugins: "Refresh plugins",
+	selectedItems: "Selected Items",
 	searchServers: "Search servers...",
 	addMcpServer: "Add MCP server",
 	refreshServers: "Refresh servers",

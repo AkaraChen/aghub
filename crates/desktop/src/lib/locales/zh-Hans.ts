@@ -27,6 +27,7 @@ export default {
 	subAgentNamePlaceholder: "例如：code-reviewer",
 	subAgentDescriptionPlaceholder: "这个子代理的作用是什么？",
 	subAgentInstructionPlaceholder: "子代理的系统提示词/指令...",
+	claudeCodePlugins: "Claude Code 插件",
 	plugins: "插件",
 	pluginsDescription: "管理 Claude Code 插件 — 启用或禁用已安装的插件。",
 	noPluginsInstalled: "暂无已安装的插件。",
@@ -277,6 +278,9 @@ export default {
 	noResults: "无结果",
 
 	// MCP Servers Page
+	searchPlugins: "搜索插件...",
+	refreshPlugins: "刷新插件",
+	selectedItems: "已选项",
 	searchServers: "搜索服务器...",
 	addMcpServer: "添加 MCP 服务器",
 	refreshServers: "刷新服务器",
