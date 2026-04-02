@@ -29,23 +29,23 @@ fn read_existing_body(path: &Path) -> Result<Option<String>> {
 	};
 
 	let mut in_frontmatter = false;
-	let mut body_start = None;
+	let mut byte_pos: usize = 0;
 
-	for (i, line) in content.lines().enumerate() {
-		if line.trim() == "---" {
+	for segment in content.split('\n') {
+		// segment may end with '\r' on CRLF files; strip it only for comparison.
+		let segment_byte_len = segment.len() + 1; // +1 for the '\n' we split on
+		if segment.trim_end_matches('\r').trim() == "---" {
 			if !in_frontmatter {
 				in_frontmatter = true;
 			} else {
-				// Found closing ---, body starts after this line
-				let byte_offset: usize =
-					content.lines().take(i + 1).map(|l| l.len() + 1).sum();
-				body_start = Some(byte_offset.min(content.len()));
-				break;
+				let offset = (byte_pos + segment_byte_len).min(content.len());
+				return Ok(Some(content[offset..].to_string()));
 			}
 		}
+		byte_pos += segment_byte_len;
 	}
 
-	Ok(body_start.map(|start| content[start..].to_string()))
+	Ok(None)
 }
 
 /// Remove a skill's file or directory from disk.
