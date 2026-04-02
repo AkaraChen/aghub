@@ -14,8 +14,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { Key } from "react-aria-components";
 import { useTranslation } from "react-i18next";
-import type { CodeEditorType } from "../../generated/dto/CodeEditorType";
-import type { CredentialResponse } from "../../generated/dto/CredentialResponse";
+import type { CodeEditorType, CredentialResponse } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
 import { useCurrentCodeEditor } from "../../hooks/use-integrations";
 import {

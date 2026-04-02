@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import type { MarketSkill } from "../../../generated/dto/MarketSkill";
+import type { MarketSkill } from "../../../generated/dto";
 import { useAgentAvailability } from "../../../hooks/use-agent-availability";
 import { useApi } from "../../../hooks/use-api";
 import { useProjects } from "../../../hooks/use-projects";

@@ -22,8 +22,7 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useReducer } from "react";
 import { useTranslation } from "react-i18next";
-import type { McpResponse } from "../generated/dto/McpResponse";
-import type { TransportDto } from "../generated/dto/TransportDto";
+import type { McpResponse, TransportDto } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useFavorites } from "../hooks/use-favorites";

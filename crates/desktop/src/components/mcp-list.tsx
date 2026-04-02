@@ -7,7 +7,7 @@ import { Label, ListBox, Tooltip } from "@heroui/react";
 import Fuse from "fuse.js";
 import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import type { McpResponse } from "../generated/dto/McpResponse";
+import type { McpResponse } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useFavorites } from "../hooks/use-favorites";
 import { AgentIcon } from "../lib/agent-icons";

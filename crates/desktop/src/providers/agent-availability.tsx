@@ -7,8 +7,7 @@ import type {
 	AvailableAgent,
 } from "../contexts/agent-availability";
 import { AgentAvailabilityContext } from "../contexts/agent-availability";
-import type { AgentAvailabilityDto } from "../generated/dto/AgentAvailabilityDto";
-import type { AgentInfo } from "../generated/dto/AgentInfo";
+import type { AgentAvailabilityDto, AgentInfo } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
 import { getDisabledAgents } from "../lib/store";
 import {

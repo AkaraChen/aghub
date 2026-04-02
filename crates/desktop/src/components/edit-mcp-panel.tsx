@@ -15,8 +15,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import type { McpResponse } from "../generated/dto/McpResponse";
-import type { UpdateMcpRequest } from "../generated/dto/UpdateMcpRequest";
+import type { McpResponse, UpdateMcpRequest } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
 import {
 	getKeyPairErrorMessage,

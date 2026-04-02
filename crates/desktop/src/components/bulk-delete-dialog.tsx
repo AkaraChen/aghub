@@ -2,7 +2,7 @@ import { ExclamationTriangleIcon } from "@heroicons/react/24/solid";
 import { Button, Modal, Spinner } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import type { ConfigSource } from "../generated/dto/ConfigSource";
+import type { ConfigSource } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
 import { invalidateMcpQueries } from "../requests/mcps";
 import { invalidateSkillQueries } from "../requests/skills";

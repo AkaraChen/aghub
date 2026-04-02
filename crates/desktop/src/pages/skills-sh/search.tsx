@@ -13,7 +13,7 @@ import {
 	EmptyMedia,
 	EmptyTitle,
 } from "../../components/ui/empty";
-import type { MarketSkill } from "../../generated/dto/MarketSkill";
+import type { MarketSkill } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
 import { marketSearchInfiniteQueryOptions } from "../../requests/market";
 import { InstallModal } from "./components/install-modal";

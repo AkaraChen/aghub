@@ -2,8 +2,7 @@ import type { ClassValue } from "clsx";
 import { clsx } from "clsx";
 import stableHash from "stable-hash";
 import { twMerge } from "tailwind-merge";
-import type { AgentInfo } from "../generated/dto/AgentInfo";
-import type { TransportDto } from "../generated/dto/TransportDto";
+import type { AgentInfo, TransportDto } from "../generated/dto";
 
 export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs));

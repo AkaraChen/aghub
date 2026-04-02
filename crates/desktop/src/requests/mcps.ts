@@ -3,12 +3,14 @@ import {
 	type QueryClient,
 	queryOptions,
 } from "@tanstack/react-query";
-import type { CreateMcpRequest } from "../generated/dto/CreateMcpRequest";
-import type { McpResponse } from "../generated/dto/McpResponse";
-import type { OperationBatchResponse } from "../generated/dto/OperationBatchResponse";
-import type { ReconcileRequest } from "../generated/dto/ReconcileRequest";
-import type { TransferRequest } from "../generated/dto/TransferRequest";
-import type { UpdateMcpRequest } from "../generated/dto/UpdateMcpRequest";
+import type {
+	CreateMcpRequest,
+	McpResponse,
+	OperationBatchResponse,
+	ReconcileRequest,
+	TransferRequest,
+	UpdateMcpRequest,
+} from "../generated/dto";
 import type { ApiClient } from "./client";
 import { queryKeys } from "./keys";
 

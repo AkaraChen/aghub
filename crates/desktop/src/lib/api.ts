@@ -1,31 +1,33 @@
 import ky from "ky";
-import type { AgentAvailabilityDto } from "../generated/dto/AgentAvailabilityDto";
-import type { AgentInfo } from "../generated/dto/AgentInfo";
-import type { CodeEditorType } from "../generated/dto/CodeEditorType";
-import type { CreateCredentialRequest } from "../generated/dto/CreateCredentialRequest";
-import type { CreateMcpRequest } from "../generated/dto/CreateMcpRequest";
-import type { CreateSkillRequest } from "../generated/dto/CreateSkillRequest";
-import type { CredentialResponse } from "../generated/dto/CredentialResponse";
-import type { DeleteSkillByPathRequest } from "../generated/dto/DeleteSkillByPathRequest";
-import type { DeleteSkillByPathResponse } from "../generated/dto/DeleteSkillByPathResponse";
-import type { GitInstallRequest } from "../generated/dto/GitInstallRequest";
-import type { GitInstallResponse } from "../generated/dto/GitInstallResponse";
-import type { GitScanRequest } from "../generated/dto/GitScanRequest";
-import type { GitScanResponse } from "../generated/dto/GitScanResponse";
-import type { GlobalSkillLockResponse } from "../generated/dto/GlobalSkillLockResponse";
-import type { ImportSkillRequest } from "../generated/dto/ImportSkillRequest";
-import type { InstallSkillRequest } from "../generated/dto/InstallSkillRequest";
-import type { InstallSkillResponse } from "../generated/dto/InstallSkillResponse";
-import type { MarketSkill } from "../generated/dto/MarketSkill";
-import type { McpResponse } from "../generated/dto/McpResponse";
-import type { OperationBatchResponse } from "../generated/dto/OperationBatchResponse";
-import type { ProjectSkillLockResponse } from "../generated/dto/ProjectSkillLockResponse";
-import type { ReconcileRequest } from "../generated/dto/ReconcileRequest";
-import type { SkillResponse } from "../generated/dto/SkillResponse";
-import type { SkillTreeNodeResponse } from "../generated/dto/SkillTreeNodeResponse";
-import type { ToolInfoDto } from "../generated/dto/ToolInfoDto";
-import type { TransferRequest } from "../generated/dto/TransferRequest";
-import type { UpdateMcpRequest } from "../generated/dto/UpdateMcpRequest";
+import type {
+	AgentAvailabilityDto,
+	AgentInfo,
+	CodeEditorType,
+	CreateCredentialRequest,
+	CreateMcpRequest,
+	CreateSkillRequest,
+	CredentialResponse,
+	DeleteSkillByPathRequest,
+	DeleteSkillByPathResponse,
+	GitInstallRequest,
+	GitInstallResponse,
+	GitScanRequest,
+	GitScanResponse,
+	GlobalSkillLockResponse,
+	ImportSkillRequest,
+	InstallSkillRequest,
+	InstallSkillResponse,
+	MarketSkill,
+	McpResponse,
+	OperationBatchResponse,
+	ProjectSkillLockResponse,
+	ReconcileRequest,
+	SkillResponse,
+	SkillTreeNodeResponse,
+	ToolInfoDto,
+	TransferRequest,
+	UpdateMcpRequest,
+} from "../generated/dto";
 
 export function createApi(baseUrl: string) {
 	const client = ky.create({ prefixUrl: baseUrl });

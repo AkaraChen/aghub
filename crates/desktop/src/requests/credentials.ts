@@ -3,8 +3,10 @@ import {
 	type QueryClient,
 	queryOptions,
 } from "@tanstack/react-query";
-import type { CreateCredentialRequest } from "../generated/dto/CreateCredentialRequest";
-import type { CredentialResponse } from "../generated/dto/CredentialResponse";
+import type {
+	CreateCredentialRequest,
+	CredentialResponse,
+} from "../generated/dto";
 import type { ApiClient } from "./client";
 import { queryKeys } from "./keys";
 

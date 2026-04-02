@@ -27,8 +27,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import type { GitInstallResultEntry } from "../generated/dto/GitInstallResultEntry";
-import type { GitScanSkillEntry } from "../generated/dto/GitScanSkillEntry";
+import type {
+	GitInstallResultEntry,
+	GitScanSkillEntry,
+} from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { cn } from "../lib/utils";
