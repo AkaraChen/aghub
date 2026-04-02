@@ -13,6 +13,8 @@ import type {
 	GitInstallResponse,
 	GitScanRequest,
 	GitScanResponse,
+	GitSyncRequest,
+	GitSyncResponse,
 	GlobalSkillLockResponse,
 	ImportSkillRequest,
 	InstallSkillRequest,
@@ -171,6 +173,11 @@ export function createApi(baseUrl: string) {
 			},
 			gitInstall(data: GitInstallRequest): Promise<GitInstallResponse> {
 				return client.post("skills/git/install", { json: data }).json();
+			},
+			gitSync(data: GitSyncRequest): Promise<GitSyncResponse> {
+				return client
+					.post("skills/git/sync", { json: data, timeout: 60000 })
+					.json();
 			},
 		},
 		mcps: {

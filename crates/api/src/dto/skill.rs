@@ -265,6 +265,28 @@ pub struct GitInstallRequest {
 	pub project_root: Option<String>,
 }
 
+/// Request to sync (update in-place) an existing skill from a git session.
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct GitSyncRequest {
+	pub session_id: String,
+	/// Relative path of the skill within the cloned repo (from scan result).
+	pub skill_path: String,
+	/// Tilde-prefixed `source_path` values of every installation to replace.
+	pub source_paths: Vec<String>,
+}
+
+/// Response for a git sync operation.
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct GitSyncResponse {
+	pub success: bool,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub name: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub error: Option<String>,
+}
+
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
 pub struct GitInstallResultEntry {

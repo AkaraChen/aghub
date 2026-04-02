@@ -9,6 +9,8 @@ import type {
 	GitInstallRequest,
 	GitInstallResponse,
 	GitScanRequest,
+	GitSyncRequest,
+	GitSyncResponse,
 	ImportSkillRequest,
 	InstallSkillRequest,
 	InstallSkillResponse,
@@ -301,5 +303,25 @@ export function gitInstallSkillsMutationOptions({
 export function openSkillFolderMutationOptions({ api }: { api: ApiClient }) {
 	return mutationOptions({
 		mutationFn: (skillPath: string) => api.skills.openFolder(skillPath),
+	});
+}
+
+interface GitSyncSkillMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (data: GitSyncResponse) => void | Promise<void>;
+}
+
+export function gitSyncSkillMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: GitSyncSkillMutationParams) {
+	return mutationOptions({
+		mutationFn: (body: GitSyncRequest) => api.skills.gitSync(body),
+		onSuccess: async (data) => {
+			await invalidateSkillQueries(queryClient);
+			await onSuccess?.(data);
+		},
 	});
 }

@@ -1,5 +1,6 @@
 import { StarIcon as StarIconOutline } from "@heroicons/react/24/outline";
 import {
+	ArrowPathIcon,
 	ChevronDownIcon,
 	ChevronUpIcon,
 	CodeBracketIcon,
@@ -44,6 +45,7 @@ import {
 	type SkillGroup,
 } from "./skill-detail-helpers";
 import { LocationRow, SkillTree } from "./skill-detail-views";
+import { SyncGithubSkillDialog } from "./sync-github-skill-dialog";
 import { TransferDialog } from "./transfer-dialog";
 
 interface SkillDetailProps {
@@ -65,6 +67,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const [showAllLocations, setShowAllLocations] = useState(false);
 	const [transferDialogOpen, setTransferDialogOpen] = useState(false);
 	const [manageDialogOpen, setManageDialogOpen] = useState(false);
+	const [syncDialogOpen, setSyncDialogOpen] = useState(false);
 
 	const { isSkillStarred, toggleSkillStar } = useFavorites();
 	const isStarred = isSkillStarred(group.items[0].name);
@@ -125,6 +128,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 					sourceType: entry.sourceType,
 					hash: entry.skillFolderHash,
 					sourceUrl: entry.sourceUrl,
+					skillPath: entry.skillPath ?? null,
 				};
 			}
 		} else if (skillItem.source === "project") {
@@ -394,7 +398,26 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 											</div>
 										</div>
 										{sourceUrl && (
-											<div className="flex shrink-0 items-center">
+											<div className="flex shrink-0 items-center gap-1">
+												<Tooltip delay={0}>
+													<Button
+														isIconOnly
+														variant="ghost"
+														size="sm"
+														className="size-8 text-muted"
+														aria-label={t(
+															"syncFromSource",
+														)}
+														onPress={() =>
+															setSyncDialogOpen(true)
+														}
+													>
+														<ArrowPathIcon className="size-4" />
+													</Button>
+													<Tooltip.Content>
+														{t("syncFromSource")}
+													</Tooltip.Content>
+												</Tooltip>
 												<Tooltip delay={0}>
 													<Button
 														isIconOnly
@@ -548,6 +571,22 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 				onClose={() => setManageDialogOpen(false)}
 				projectPath={projectPath}
 			/>
+			{sourceUrl && (
+				<SyncGithubSkillDialog
+					group={group}
+					sourceUrl={sourceUrl}
+					skillPath={
+						(currentSkillSource &&
+							"skillPath" in
+								currentSkillSource &&
+							currentSkillSource.skillPath) ||
+						null
+					}
+					isOpen={syncDialogOpen}
+					onClose={() => setSyncDialogOpen(false)}
+					projectPath={projectPath}
+				/>
+			)}
 		</>
 	);
 }

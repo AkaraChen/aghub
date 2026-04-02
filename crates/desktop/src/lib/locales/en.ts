@@ -460,6 +460,13 @@ export default {
 	projectSkills: "Project Skills",
 	metadata: "Metadata",
 	installedFrom: "Installed From",
+	syncFromSource: "Sync from source",
+	syncSkill: "Sync Skill",
+	syncingSkill: "Syncing...",
+	skillSyncedSuccessfully: "Skill synced successfully",
+	skillNotFoundInRepo:
+		"This skill was not found in the repository on this branch.",
+	skillFoundInRepo: "Skill found in repository",
 	default: "Default",
 	showMore: "Show more ({{count}})",
 	showLess: "Show less",

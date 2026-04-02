@@ -88,6 +88,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 				routes::skills::delete_skill_by_path,
 				routes::skills::git_scan_skills,
 				routes::skills::git_install_skills,
+				routes::skills::git_sync_skill,
 			],
 		)
 		.register(

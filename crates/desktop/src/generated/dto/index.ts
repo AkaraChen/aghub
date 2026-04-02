@@ -16,6 +16,8 @@ export type { GitInstallResultEntry } from "./GitInstallResultEntry";
 export type { GitScanRequest } from "./GitScanRequest";
 export type { GitScanResponse } from "./GitScanResponse";
 export type { GitScanSkillEntry } from "./GitScanSkillEntry";
+export type { GitSyncRequest } from "./GitSyncRequest";
+export type { GitSyncResponse } from "./GitSyncResponse";
 export type { GlobalSkillLockResponse } from "./GlobalSkillLockResponse";
 export type { ImportSkillRequest } from "./ImportSkillRequest";
 export type { InstallScopeDto } from "./InstallScopeDto";
