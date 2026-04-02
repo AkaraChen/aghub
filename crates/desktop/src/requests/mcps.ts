@@ -1,7 +1,7 @@
 import {
 	mutationOptions,
-	queryOptions,
 	type QueryClient,
+	queryOptions,
 } from "@tanstack/react-query";
 import type { UpdateMcpRequest } from "../lib/api";
 import type {
