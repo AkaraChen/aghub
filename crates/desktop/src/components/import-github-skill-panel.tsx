@@ -718,8 +718,7 @@ export function ImportGithubSkillPanel({
 												type="button"
 												onClick={() => {
 													if (
-														phase ===
-															"selecting" &&
+														phase === "selecting" &&
 														!isBranchSwitching
 													)
 														togglePath(skill.path);
