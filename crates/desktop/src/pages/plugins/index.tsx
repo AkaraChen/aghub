@@ -102,7 +102,9 @@ export default function PluginsPage() {
 								<PlusIcon className="size-4" />
 							</Button>
 						</Tooltip.Trigger>
-						<Tooltip.Content>{t("installFromMarket")}</Tooltip.Content>
+						<Tooltip.Content>
+							{t("installFromMarket")}
+						</Tooltip.Content>
 					</Tooltip>
 					<Tooltip delay={0}>
 						<Tooltip.Trigger>

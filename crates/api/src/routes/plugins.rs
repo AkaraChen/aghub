@@ -2,11 +2,11 @@ use crate::dto::plugin::{
 	CheckUpdateRequest, CheckUpdateResponse, HookActionResponse,
 	HookEventResponse, HookMatcherResponse, HooksManifestResponse,
 	InstallPluginRequest, InstallPluginResponse, MarketPluginResponse,
-	McpConfigResponse, McpServerResponse, PluginAuthorResponse, PluginConfigResponse,
-	PluginDetailResponse, PluginListResponse, PluginManifestResponse,
-	PluginResponse, ReinstallPluginRequest, ReinstallPluginResponse,
-	UninstallPluginRequest, UninstallPluginResponse, UpdatePluginConfigRequest,
-	UpdatePluginRequest, UpdatePluginResponse,
+	McpConfigResponse, McpServerResponse, PluginAuthorResponse,
+	PluginConfigResponse, PluginDetailResponse, PluginListResponse,
+	PluginManifestResponse, PluginResponse, ReinstallPluginRequest,
+	ReinstallPluginResponse, UninstallPluginRequest, UninstallPluginResponse,
+	UpdatePluginConfigRequest, UpdatePluginRequest, UpdatePluginResponse,
 };
 use crate::error::{ApiError, ApiResult};
 use aghub_plugins::claude::ClaudePluginManager;
@@ -811,6 +811,7 @@ pub fn delete_plugin_config(
 struct GithubRepo {
 	name: String,
 	#[serde(rename = "full_name")]
+	#[allow(dead_code)]
 	full_name: String,
 	description: Option<String>,
 	#[serde(rename = "html_url")]
@@ -856,7 +857,7 @@ pub async fn list_plugin_market() -> ApiResult<Vec<MarketPluginResponse>> {
 					.iter()
 					.map(|p| (p.id.name.clone(), p.enabled))
 					.collect()
-				})
+			})
 			.unwrap_or_default();
 
 	let plugins: Vec<MarketPluginResponse> = repos

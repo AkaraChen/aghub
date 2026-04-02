@@ -65,11 +65,8 @@ export type { SkillTreeNodeKind } from "./SkillTreeNodeKind";
 export type { SkillTreeNodeResponse } from "./SkillTreeNodeResponse";
 export type { SkillTreeQuery } from "./SkillTreeQuery";
 export type { SkillsPathsDto } from "./SkillsPathsDto";
-<<<<<<< HEAD
 export type { SubAgentCapabilitiesDto } from "./SubAgentCapabilitiesDto";
 export type { SubAgentResponse } from "./SubAgentResponse";
-=======
->>>>>>> b30c215 (feat(plugins): add plugin marketplace support)
 export type { TargetDto } from "./TargetDto";
 export type { ToolInfoDto } from "./ToolInfoDto";
 export type { ToolPreferencesDto } from "./ToolPreferencesDto";

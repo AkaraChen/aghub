@@ -3,8 +3,4 @@ import type { McpCapabilitiesDto } from "./McpCapabilitiesDto";
 import type { SkillCapabilitiesDto } from "./SkillCapabilitiesDto";
 import type { SubAgentCapabilitiesDto } from "./SubAgentCapabilitiesDto";
 
-<<<<<<< HEAD
 export type CapabilitiesDto = { skills: SkillCapabilitiesDto, mcp: McpCapabilitiesDto, sub_agents: SubAgentCapabilitiesDto, };
-=======
-export type CapabilitiesDto = { skills: SkillCapabilitiesDto, mcp: McpCapabilitiesDto, };
->>>>>>> b30c215 (feat(plugins): add plugin marketplace support)

@@ -6,13 +6,7 @@ import {
 	CloudArrowDownIcon,
 	StarIcon,
 } from "@heroicons/react/24/solid";
-import {
-	Button,
-	Chip,
-	Input,
-	Modal,
-	toast,
-} from "@heroui/react";
+import { Button, Chip, Input, Modal, toast } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -54,7 +48,8 @@ export function PluginMarketDialog({
 			queryClient.invalidateQueries({ queryKey: ["plugins-market"] });
 		},
 		onError: (err) => {
-			const message = err instanceof Error ? err.message : t("unknownError");
+			const message =
+				err instanceof Error ? err.message : t("unknownError");
 			toast.danger(message);
 		},
 	});
@@ -122,10 +117,13 @@ export function PluginMarketDialog({
 									<PluginMarketItem
 										key={plugin.id}
 										plugin={plugin}
-										onInstall={() => installMutation.mutate(plugin.id)}
+										onInstall={() =>
+											installMutation.mutate(plugin.id)
+										}
 										isInstalling={
 											installMutation.isPending &&
-											installMutation.variables === plugin.id
+											installMutation.variables ===
+												plugin.id
 										}
 									/>
 								))
@@ -202,7 +200,9 @@ function PluginMarketItem({
 				isDisabled={plugin.installed || isInstalling}
 				isPending={isInstalling}
 				aria-label={
-					plugin.installed ? t("alreadyInstalled") : t("installPlugin")
+					plugin.installed
+						? t("alreadyInstalled")
+						: t("installPlugin")
 				}
 			>
 				{!isInstalling && <CloudArrowDownIcon className="size-4" />}
