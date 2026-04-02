@@ -18,6 +18,14 @@ interface PluginDetailProps {
 	plugin: PluginResponse;
 }
 
+function pluginDetailQueryOptions(api: ReturnType<typeof useApi>, pluginId: string) {
+	return {
+		queryKey: ["plugin-detail", pluginId],
+		queryFn: () => api.plugins.detail(pluginId),
+		enabled: !!pluginId,
+	};
+}
+
 export function PluginDetail({ plugin }: PluginDetailProps) {
 	const { t } = useTranslation();
 	const api = useApi();
@@ -25,6 +33,10 @@ export function PluginDetail({ plugin }: PluginDetailProps) {
 
 	const { data: allSkills } = useQuery({
 		...skillListQueryOptions({ api, scope: "global" }),
+	});
+
+	const { data: pluginDetail } = useQuery({
+		...pluginDetailQueryOptions(api, plugin.id),
 	});
 
 	const enableMutation = useMutation({
@@ -40,12 +52,16 @@ export function PluginDetail({ plugin }: PluginDetailProps) {
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["plugins"] });
 			queryClient.invalidateQueries({ queryKey: ["skills"] });
+			queryClient.invalidateQueries({ queryKey: ["plugin-detail"] });
 		},
 	});
 
 	// Filter skills that belong to this plugin
 	const pluginSkills =
 		allSkills?.filter((skill) => skill.plugin_id === plugin.id) ?? [];
+
+	const hooks = pluginDetail?.hooks;
+	const mcpConfig = pluginDetail?.mcp_config;
 
 	const handleOpenInstallPath = async () => {
 		try {
@@ -269,6 +285,75 @@ export function PluginDetail({ plugin }: PluginDetailProps) {
 								</div>
 							</div>
 						</div>
+
+						{/* Hooks Configuration */}
+						{hooks && hooks.hooks.length > 0 && (
+							<div className="space-y-3">
+								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+									Hooks
+								</h3>
+								<div className="space-y-2">
+									{hooks.hooks.map((event) => (
+										<Card key={event.event} className="p-3 bg-surface-secondary">
+											<div className="flex items-center gap-2 mb-2">
+												<BoltIcon className="size-4 text-warning" />
+												<span className="font-medium text-sm">{event.event}</span>
+											</div>
+											<div className="space-y-1">
+												{event.matchers.map((matcher, idx) => (
+													<div key={idx} className="text-xs text-muted-foreground">
+														{matcher.matcher ? (
+															<code className="bg-surface px-1 py-0.5 rounded">
+																Matcher: {matcher.matcher}
+															</code>
+														) : (
+															<span>All events</span>
+														)}
+														<span className="ml-2">
+															{matcher.hooks.length} hook(s)
+														</span>
+													</div>
+												))}
+											</div>
+										</Card>
+									))}
+								</div>
+							</div>
+						)}
+
+						{/* MCP Servers */}
+						{mcpConfig && mcpConfig.servers.length > 0 && (
+							<div className="space-y-3">
+								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+									MCP Servers
+								</h3>
+								<div className="space-y-2">
+									{mcpConfig.servers.map((server) => (
+										<Card key={server.name} className="p-3 bg-surface-secondary">
+											<div className="flex items-center justify-between">
+												<div className="flex items-center gap-2">
+													<CpuChipIcon className="size-4 text-info" />
+													<span className="font-medium text-sm">{server.name}</span>
+												</div>
+												<Chip size="sm" variant="soft">
+													{server.transport_type}
+												</Chip>
+											</div>
+											{server.url && (
+												<p className="text-xs text-muted-foreground mt-2 truncate">
+													{server.url}
+												</p>
+											)}
+											{server.note && (
+												<p className="text-xs text-muted-foreground mt-1">
+													{server.note}
+												</p>
+											)}
+										</Card>
+									))}
+								</div>
+							</div>
+						)}
 					</Card.Content>
 				</Card>
 			</div>
