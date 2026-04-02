@@ -7,6 +7,11 @@ import type { TargetDto, TransportDto } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useProjects } from "../hooks/use-projects";
+import {
+	supportsMcpScope,
+	supportsMcpTransport,
+	supportsSkillMutation,
+} from "../lib/agent-capabilities";
 import { cn } from "../lib/utils";
 import {
 	invalidateMcpQueries,
@@ -34,21 +39,6 @@ interface TransferDialogProps {
 	sourceScope: "global" | "project";
 	sourceProjectRoot?: string;
 	transport?: TransportDto;
-}
-
-function supportsMcpTransport(
-	transport: TransportDto | undefined,
-	agent: {
-		capabilities: {
-			mcp_stdio: boolean;
-			mcp_remote: boolean;
-			skills: boolean;
-		};
-	},
-): boolean {
-	if (!transport) return false;
-	if (transport.type === "stdio") return agent.capabilities.mcp_stdio;
-	return agent.capabilities.mcp_remote;
 }
 
 export function TransferDialog({
@@ -88,18 +78,6 @@ export function TransferDialog({
 	);
 	const [isApplying, setIsApplying] = useState(false);
 	const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
-
-	const usableAgents = useMemo(
-		() =>
-			(availableAgents ?? []).filter((agent) => {
-				if (!agent?.isUsable) return false;
-				if (resourceType === "mcp") {
-					return supportsMcpTransport(transport, agent);
-				}
-				return agent.capabilities.skills;
-			}),
-		[availableAgents, resourceType, transport],
-	);
 
 	const availableDestinations = useMemo((): DestinationScope[] => {
 		if (sourceScope === "global") {
@@ -171,6 +149,32 @@ export function TransferDialog({
 		}
 		return null;
 	}, [selectedScopeKey, projects]);
+
+	const usableAgents = useMemo(
+		() =>
+			(availableAgents ?? []).filter((agent) => {
+				if (!agent?.isUsable) return false;
+				if (!selectedScope) {
+					if (resourceType === "mcp") {
+						return supportsMcpTransport(agent, transport);
+					}
+					return (
+						supportsSkillMutation(agent, "global") ||
+						supportsSkillMutation(agent, "project")
+					);
+				}
+
+				if (resourceType === "mcp") {
+					return (
+						supportsMcpScope(agent, selectedScope.type) &&
+						supportsMcpTransport(agent, transport)
+					);
+				}
+
+				return supportsSkillMutation(agent, selectedScope.type);
+			}),
+		[availableAgents, resourceType, selectedScope, transport],
+	);
 
 	const destinationKey = selectedScope
 		? selectedScope.type === "global"

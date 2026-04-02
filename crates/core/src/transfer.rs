@@ -136,7 +136,11 @@ fn ensure_loaded(manager: &mut ConfigManager) -> Result<()> {
 
 fn resolve_skill_file(path: &str) -> PathBuf {
 	if let Some(stripped) = path.strip_prefix("~/") {
-		dirs::home_dir().unwrap().join(stripped)
+		if let Some(home) = dirs::home_dir() {
+			home.join(stripped)
+		} else {
+			PathBuf::from(path)
+		}
 	} else {
 		PathBuf::from(path)
 	}

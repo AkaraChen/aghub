@@ -9,7 +9,10 @@ use std::path::{Path, PathBuf};
 
 #[test]
 fn test_opencode_global_config_path_not_platform_specific() {
-	let path = (opencode::DESCRIPTOR.mcp_global_path)();
+	let path = opencode::DESCRIPTOR
+		.mcp_global_path
+		.and_then(|path| path())
+		.expect("OpenCode should have a global MCP path");
 	let path_str = path.to_string_lossy();
 	assert!(
 		!path_str.contains("Library"),
@@ -30,10 +33,7 @@ fn test_opencode_global_config_path_not_platform_specific() {
 
 #[test]
 fn test_amp_global_skills_uses_xdg() {
-	let paths_fn = amp::DESCRIPTOR
-		.global_skills_paths
-		.expect("Amp should have a global_skills_paths");
-	let paths = paths_fn();
+	let paths = amp::DESCRIPTOR.global_skill_read_paths();
 	let path = paths.first().expect("Should have at least one path");
 	let path_str = path.to_string_lossy();
 	assert!(
@@ -45,10 +45,7 @@ fn test_amp_global_skills_uses_xdg() {
 
 #[test]
 fn test_amp_global_skills_not_platform_specific() {
-	let paths_fn = amp::DESCRIPTOR
-		.global_skills_paths
-		.expect("Amp should have a global_skills_paths");
-	let paths = paths_fn();
+	let paths = amp::DESCRIPTOR.global_skill_read_paths();
 	let path = paths.first().expect("Should have at least one path");
 	let path_str = path.to_string_lossy();
 	assert!(
@@ -70,10 +67,7 @@ fn test_amp_global_skills_not_platform_specific() {
 
 #[test]
 fn test_cursor_global_skills_path() {
-	let paths_fn = cursor::DESCRIPTOR
-		.global_skills_paths
-		.expect("Cursor should have a global_skills_paths");
-	let paths = paths_fn();
+	let paths = cursor::DESCRIPTOR.global_skill_read_paths();
 	let path = paths.first().expect("Should have at least one path");
 	assert!(
 		path.to_string_lossy().contains(".cursor"),
@@ -89,7 +83,10 @@ fn test_cursor_global_skills_path() {
 
 #[test]
 fn test_kimi_global_mcp_path() {
-	let path = (kimi::DESCRIPTOR.mcp_global_path)();
+	let path = kimi::DESCRIPTOR
+		.mcp_global_path
+		.and_then(|path| path())
+		.expect("Kimi should have a global MCP path");
 	assert!(
 		path.to_string_lossy().contains(".kimi/mcp.json"),
 		"Kimi global MCP path should be ~/.kimi/mcp.json, got: {}",
@@ -99,10 +96,7 @@ fn test_kimi_global_mcp_path() {
 
 #[test]
 fn test_pi_global_skills_path_uses_agent_dir() {
-	let paths_fn = pi::DESCRIPTOR
-		.global_skills_paths
-		.expect("Pi should have a global_skills_paths");
-	let paths = paths_fn();
+	let paths = pi::DESCRIPTOR.global_skill_read_paths();
 	let path = paths.first().expect("Should have at least one path");
 	assert!(
 		path.to_string_lossy().contains(".pi/agent/skills"),
@@ -116,8 +110,8 @@ fn test_pi_has_no_mcp_capabilities() {
 	let descriptor = aghub_core::registry::iter_all()
 		.find(|d| d.id == "pi")
 		.unwrap();
-	assert!(!descriptor.capabilities.mcp_stdio);
-	assert!(!descriptor.capabilities.mcp_remote);
+	assert!(!descriptor.capabilities.mcp.stdio);
+	assert!(!descriptor.capabilities.mcp.remote);
 }
 
 // ─── OpenClaw fallback path tests (openclaw-paths.test.ts) ──────────────────
@@ -171,7 +165,7 @@ fn test_openclaw_skills_enabled() {
 		.find(|d| d.id == "openclaw")
 		.unwrap();
 	assert!(
-		descriptor.capabilities.skills,
+		descriptor.capabilities.skills.scopes.global,
 		"OpenClaw should have skills capability enabled"
 	);
 }

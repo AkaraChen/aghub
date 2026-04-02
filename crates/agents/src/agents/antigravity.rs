@@ -1,18 +1,14 @@
 use crate::descriptor::*;
 use std::path::{Path, PathBuf};
 
-fn mcp_global_path() -> PathBuf {
-	dirs::home_dir()
-		.unwrap_or_else(|| std::path::PathBuf::from(""))
-		.join(".gemini/antigravity/mcp_config.json")
+fn mcp_global_path() -> Option<PathBuf> {
+	home_dir().map(|home| home.join(".gemini/antigravity/mcp_config.json"))
 }
-fn mcp_project_path(root: &Path) -> PathBuf {
-	root.join(".gemini/antigravity/mcp_config.json")
+fn mcp_project_path(root: &Path) -> Option<PathBuf> {
+	Some(root.join(".gemini/antigravity/mcp_config.json"))
 }
-fn global_data_dir() -> PathBuf {
-	dirs::home_dir()
-		.unwrap_or_else(|| std::path::PathBuf::from(""))
-		.join(".gemini/antigravity")
+fn global_data_dir() -> Option<PathBuf> {
+	home_dir().map(|home| home.join(".gemini/antigravity"))
 }
 fn load_mcps(
 	project_root: Option<&Path>,
@@ -21,8 +17,8 @@ fn load_mcps(
 	load_scoped_mcps(
 		project_root,
 		scope,
-		mcp_global_path,
-		mcp_project_path,
+		Some(mcp_global_path),
+		Some(mcp_project_path),
 		mcp_strategy::parse_json_map_mcp_servers,
 	)
 }
@@ -35,18 +31,27 @@ fn save_mcps(
 		project_root,
 		scope,
 		mcps,
-		mcp_global_path,
-		mcp_project_path,
+		Some(mcp_global_path),
+		Some(mcp_project_path),
 		mcp_strategy::serialize_json_map_mcp_servers,
 	)
 }
 fn global_skills_paths() -> Vec<PathBuf> {
-	vec![dirs::home_dir()
-		.unwrap_or_else(|| std::path::PathBuf::from(""))
-		.join(".gemini/antigravity/skills")]
+	match home_dir() {
+		Some(home) => vec![home.join(".gemini/antigravity/skills")],
+		None => Vec::new(),
+	}
 }
 fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
 	vec![root.join(".agents/skills")]
+}
+
+fn global_skill_write_path() -> Option<PathBuf> {
+	home_dir().map(|home| home.join(".gemini/antigravity/skills"))
+}
+
+fn project_skill_write_path(root: &Path) -> Option<PathBuf> {
+	Some(root.join(".agents/skills"))
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
@@ -56,18 +61,35 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	mcp_serialize_config: Some(mcp_strategy::serialize_json_map_mcp_servers),
 	load_mcps,
 	save_mcps,
-	mcp_global_path,
-	mcp_project_path,
+	mcp_global_path: Some(mcp_global_path),
+	mcp_project_path: Some(mcp_project_path),
 	global_data_dir,
 	capabilities: Capabilities {
-		mcp_stdio: true,
-		mcp_remote: false,
-		mcp_enable_disable: false,
-		skills: true,
-		universal_skills: false,
+		skills: SkillCapabilities {
+			scopes: ScopeSupport {
+				global: true,
+				project: true,
+			},
+			universal: false,
+		},
+		mcp: McpCapabilities {
+			scopes: ScopeSupport {
+				global: true,
+				project: true,
+			},
+			stdio: true,
+			remote: false,
+			enable_disable: false,
+		},
 	},
-	global_skills_paths: Some(global_skills_paths),
-	project_skills_paths: Some(project_skills_paths),
+	global_skill_paths: Some(GlobalSkillPaths {
+		read: global_skills_paths,
+		write: global_skill_write_path,
+	}),
+	project_skill_paths: Some(ProjectSkillPaths {
+		read: project_skills_paths,
+		write: project_skill_write_path,
+	}),
 	cli_name: "antigravity",
 	validate_args: &["--version"],
 	project_markers: &[".gemini/antigravity"],

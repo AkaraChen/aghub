@@ -4,7 +4,7 @@ import {
 	ChevronRightIcon,
 	StarIcon as StarIconSolid,
 } from "@heroicons/react/24/solid";
-import { Chip, Label, ListBox, Tooltip } from "@heroui/react";
+import { Chip, Label, ListBox, Spinner, Tooltip } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import Fuse from "fuse.js";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -104,21 +104,31 @@ export function SkillList({
 }: SkillListProps) {
 	const { t } = useTranslation();
 	const api = useApi();
+	const effectiveScope = groupBySource
+		? projectPath
+			? "project"
+			: "global"
+		: null;
 
-	const { data: globalLock } = useQuery({
+	const { data: globalLock, isLoading: isLoadingGlobalLock } = useQuery({
 		...globalSkillLockQueryOptions({
 			api,
-			enabled: groupBySource,
+			enabled: effectiveScope === "global",
 		}),
 	});
 
-	const { data: projectLock } = useQuery({
+	const { data: projectLock, isLoading: isLoadingProjectLock } = useQuery({
 		...projectSkillLockQueryOptions({
 			api,
 			projectPath,
-			enabled: groupBySource,
+			enabled: effectiveScope === "project" && Boolean(projectPath),
 		}),
 	});
+
+	const isGroupingLoading =
+		groupBySource &&
+		((effectiveScope === "global" && isLoadingGlobalLock) ||
+			(effectiveScope === "project" && isLoadingProjectLock));
 
 	const groupedByName = useMemo(() => {
 		const map = new Map<string, SkillResponse[]>();
@@ -166,22 +176,15 @@ export function SkillList({
 		const findSkillSource = (
 			skillName: string,
 		): { source: string; sourceType: string } | null => {
-			const globalEntry = globalLock?.skills.find(
-				(s) => s.name === skillName,
-			);
-			if (globalEntry) {
+			const relevantEntries =
+				effectiveScope === "project"
+					? projectLock?.skills
+					: globalLock?.skills;
+			const entry = relevantEntries?.find((s) => s.name === skillName);
+			if (entry) {
 				return {
-					source: globalEntry.source,
-					sourceType: globalEntry.sourceType,
-				};
-			}
-			const projectEntry = projectLock?.skills.find(
-				(s) => s.name === skillName,
-			);
-			if (projectEntry) {
-				return {
-					source: projectEntry.source,
-					sourceType: projectEntry.sourceType,
+					source: entry.source,
+					sourceType: entry.sourceType,
 				};
 			}
 			return null;
@@ -271,6 +274,7 @@ export function SkillList({
 		filteredByName,
 		groupBySource,
 		globalLock,
+		effectiveScope,
 		projectLock,
 		isSkillStarred,
 	]);
@@ -378,6 +382,14 @@ export function SkillList({
 	);
 
 	if (groupBySource) {
+		if (isGroupingLoading) {
+			return (
+				<div className="flex flex-1 items-center justify-center overflow-y-auto">
+					<Spinner size="lg" />
+				</div>
+			);
+		}
+
 		const hasItems =
 			sourceGroups.length > 0 ||
 			singleItemGroups.length > 0 ||

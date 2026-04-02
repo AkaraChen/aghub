@@ -18,6 +18,7 @@ import { useTranslation } from "react-i18next";
 import type { CreateSkillRequest } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
+import { supportsSkillMutation } from "../lib/agent-capabilities";
 import { createSkillMutationOptions } from "../requests/skills";
 import { AgentSelector } from "./agent-selector";
 
@@ -47,9 +48,14 @@ export function CreateSkillPanel({
 	const skillAgents = useMemo(
 		() =>
 			availableAgents.filter(
-				(a) => a.isUsable && a.capabilities.skills_mutable,
+				(a) =>
+					a.isUsable &&
+					supportsSkillMutation(
+						a,
+						projectPath ? "project" : "global",
+					),
 			),
-		[availableAgents],
+		[availableAgents, projectPath],
 	);
 
 	const [error, setError] = useState<string | null>(null);

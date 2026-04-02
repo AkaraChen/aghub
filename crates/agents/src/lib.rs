@@ -5,8 +5,9 @@ pub mod format;
 pub mod models;
 
 pub use descriptor::{
-	AgentDescriptor, Capabilities, LoadMcpsFn, McpParseFn, McpSerializeFn,
-	SaveMcpsFn,
+	AgentDescriptor, Capabilities, GlobalSkillPaths, LoadMcpsFn,
+	McpCapabilities, McpParseFn, McpSerializeFn, ProjectSkillPaths, SaveMcpsFn,
+	ScopeSupport, SkillCapabilities,
 };
 pub use errors::{ConfigError, Result};
 pub use models::{

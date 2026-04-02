@@ -14,7 +14,7 @@ import {
 	Header,
 	Label,
 	Separator,
-	Skeleton,
+	Spinner,
 	Tooltip,
 } from "@heroui/react";
 import { useMemo } from "react";
@@ -44,52 +44,6 @@ interface UnifiedResourceListProps {
 	isMultiSelectMode?: boolean;
 	onMultiSelectModeChange?: (value: boolean) => void;
 	onDeleteSelected?: () => void;
-}
-
-const RESOURCE_SKELETON_KEYS = ["resource-1", "resource-2", "resource-3"];
-const SECONDARY_SKELETON_KEYS = ["secondary-1", "secondary-2"];
-
-function ResourceListSkeleton() {
-	return (
-		<>
-			<ResourceSectionHeader
-				title=""
-				count={0}
-				icon={
-					<Skeleton className="size-3.5 rounded bg-surface-secondary" />
-				}
-			/>
-			<div className="p-2 space-y-1">
-				{RESOURCE_SKELETON_KEYS.map((key) => (
-					<div
-						key={key}
-						className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
-					>
-						<Skeleton className="size-4 rounded bg-surface-secondary" />
-						<Skeleton className="h-3 flex-1 rounded bg-surface-secondary" />
-					</div>
-				))}
-			</div>
-			<ResourceSectionHeader
-				title=""
-				count={0}
-				icon={
-					<Skeleton className="size-3.5 rounded bg-surface-secondary" />
-				}
-			/>
-			<div className="p-2 space-y-1">
-				{SECONDARY_SKELETON_KEYS.map((key) => (
-					<div
-						key={key}
-						className="flex items-center gap-2 px-2 py-1.5 rounded-lg"
-					>
-						<Skeleton className="size-4 rounded bg-surface-secondary" />
-						<Skeleton className="h-3 flex-1 rounded bg-surface-secondary" />
-					</div>
-				))}
-			</div>
-		</>
-	);
 }
 
 export function UnifiedResourceList({
@@ -332,7 +286,9 @@ export function UnifiedResourceList({
 
 			<div className="flex-1 overflow-y-auto">
 				{isLoading ? (
-					<ResourceListSkeleton />
+					<div className="flex h-full items-center justify-center">
+						<Spinner size="lg" />
+					</div>
 				) : (
 					<>
 						{hasMcps && (

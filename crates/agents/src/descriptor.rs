@@ -17,15 +17,45 @@ pub type LoadMcpsFn =
 pub type SaveMcpsFn =
 	fn(Option<&Path>, ResourceScope, &[McpServer]) -> Result<()>;
 
-/// Agent capabilities
+pub type OptionalPathFn = fn() -> Option<PathBuf>;
+pub type OptionalProjectPathFn = fn(&Path) -> Option<PathBuf>;
+
+#[derive(Debug, Clone, Copy)]
+pub struct ScopeSupport {
+	pub global: bool,
+	pub project: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct SkillCapabilities {
+	pub scopes: ScopeSupport,
+	pub universal: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct McpCapabilities {
+	pub scopes: ScopeSupport,
+	pub stdio: bool,
+	pub remote: bool,
+	pub enable_disable: bool,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Capabilities {
-	pub mcp_stdio: bool,
-	pub mcp_remote: bool,
-	pub mcp_enable_disable: bool,
-	pub skills: bool,
-	/// Whether this agent reads from the universal .agents/skills directory
-	pub universal_skills: bool,
+	pub skills: SkillCapabilities,
+	pub mcp: McpCapabilities,
+}
+
+#[derive(Clone, Copy)]
+pub struct GlobalSkillPaths {
+	pub read: fn() -> Vec<PathBuf>,
+	pub write: fn() -> Option<PathBuf>,
+}
+
+#[derive(Clone, Copy)]
+pub struct ProjectSkillPaths {
+	pub read: fn(&Path) -> Vec<PathBuf>,
+	pub write: fn(&Path) -> Option<PathBuf>,
 }
 
 /// Static descriptor for an agent — one per agent, declared in agents/*.rs
@@ -41,24 +71,14 @@ pub struct AgentDescriptor {
 	/// Persist MCPs for the requested scope. The descriptor owns all I/O.
 	pub save_mcps: SaveMcpsFn,
 	/// Global MCP config path for display, validation, and discovery.
-	pub mcp_global_path: fn() -> PathBuf,
+	pub mcp_global_path: Option<OptionalPathFn>,
 	/// Project MCP config path for display, validation, and discovery.
-	pub mcp_project_path: fn(&Path) -> PathBuf,
+	pub mcp_project_path: Option<OptionalProjectPathFn>,
 	/// Agent-specific global data directory used for availability checks.
-	pub global_data_dir: fn() -> PathBuf,
+	pub global_data_dir: fn() -> Option<PathBuf>,
 	pub capabilities: Capabilities,
-	/// Function returning global skills directories.
-	///
-	/// **Convention**: The first path in the Vec is agent-specific and
-	/// should not overlap with other agents' paths. Subsequent paths may
-	/// include fallback/compatibility locations shared with other agents.
-	pub global_skills_paths: Option<fn() -> Vec<PathBuf>>,
-	/// Function returning project skills directories.
-	///
-	/// **Convention**: The first path in the Vec is agent-specific and
-	/// should not overlap with other agents' paths. Subsequent paths may
-	/// include fallback/compatibility locations shared with other agents.
-	pub project_skills_paths: Option<fn(&Path) -> Vec<PathBuf>>,
+	pub global_skill_paths: Option<GlobalSkillPaths>,
+	pub project_skill_paths: Option<ProjectSkillPaths>,
 	pub cli_name: &'static str,
 	pub validate_args: &'static [&'static str],
 	/// Directory/file markers that indicate this agent's project root
@@ -69,94 +89,144 @@ pub struct AgentDescriptor {
 }
 
 impl AgentDescriptor {
-	/// Get the target skills directory for writing, based on scope.
-	///
-	/// Returns the first element from the skills directories Vec,
-	/// per the convention that the first path is agent-specific.
-	pub fn target_skills_dir(
+	pub fn supports_skill_scope(&self, scope: ResourceScope) -> bool {
+		match scope {
+			ResourceScope::GlobalOnly => self.capabilities.skills.scopes.global,
+			ResourceScope::ProjectOnly => {
+				self.capabilities.skills.scopes.project
+			}
+			ResourceScope::Both => {
+				self.capabilities.skills.scopes.global
+					|| self.capabilities.skills.scopes.project
+			}
+		}
+	}
+
+	pub fn supports_mcp_scope(&self, scope: ResourceScope) -> bool {
+		match scope {
+			ResourceScope::GlobalOnly => self.capabilities.mcp.scopes.global,
+			ResourceScope::ProjectOnly => self.capabilities.mcp.scopes.project,
+			ResourceScope::Both => {
+				self.capabilities.mcp.scopes.global
+					|| self.capabilities.mcp.scopes.project
+			}
+		}
+	}
+
+	pub fn skill_write_path(
 		&self,
 		project_root: Option<&Path>,
 		scope: ResourceScope,
 	) -> Option<PathBuf> {
 		match scope {
 			ResourceScope::GlobalOnly => {
-				self.global_skills_dirs().first().cloned()
-			}
-			ResourceScope::ProjectOnly | ResourceScope::Both => {
-				if let Some(root) = project_root {
-					self.project_skills_dirs(root).first().cloned()
-				} else {
-					self.global_skills_dirs().first().cloned()
+				if !self.capabilities.skills.scopes.global {
+					return None;
 				}
+				self.global_skill_paths.and_then(|paths| (paths.write)())
 			}
+			ResourceScope::ProjectOnly => {
+				if !self.capabilities.skills.scopes.project {
+					return None;
+				}
+				project_root
+					.and_then(|root| {
+						self.project_skill_paths.map(|p| (p.write)(root))
+					})
+					.flatten()
+			}
+			ResourceScope::Both => None,
 		}
 	}
 
-	/// Get all global skills directories for this agent.
-	///
-	/// Returns agent-specific paths first, then fallback/compatibility paths.
-	/// Also includes universal skills path if `universal_skills` capability is set.
-	pub fn global_skills_dirs(&self) -> Vec<PathBuf> {
+	pub fn global_skill_read_paths(&self) -> Vec<PathBuf> {
 		let mut dirs = Vec::new();
 
-		if let Some(paths_fn) = self.global_skills_paths {
-			dirs.extend(paths_fn());
+		if let Some(paths) = self.global_skill_paths {
+			dirs.extend((paths.read)());
 		}
 
-		if self.capabilities.universal_skills {
-			dirs.push(get_universal_skills_path());
+		if self.capabilities.skills.universal {
+			if let Some(path) = get_universal_skills_path() {
+				dirs.push(path);
+			}
 		}
 
 		dirs
 	}
 
-	/// Get all project skills directories for this agent.
-	///
-	/// Returns agent-specific paths first, then fallback/compatibility paths.
-	/// Also includes universal project skills path if `universal_skills` capability is set.
-	pub fn project_skills_dirs(&self, project_root: &Path) -> Vec<PathBuf> {
+	pub fn project_skill_read_paths(
+		&self,
+		project_root: &Path,
+	) -> Vec<PathBuf> {
 		let mut dirs = Vec::new();
 
-		if let Some(paths_fn) = self.project_skills_paths {
-			dirs.extend(paths_fn(project_root));
+		if let Some(paths) = self.project_skill_paths {
+			dirs.extend((paths.read)(project_root));
 		}
 
-		if self.capabilities.universal_skills {
+		if self.capabilities.skills.universal {
 			dirs.push(project_root.join(".agents/skills"));
 		}
 
 		dirs
 	}
 
-	/// Get all skills paths for reading (may include universal path)
-	pub fn get_skills_paths(
+	pub fn skill_read_paths(
 		&self,
 		project_root: Option<&Path>,
 		scope: ResourceScope,
 	) -> Vec<PathBuf> {
 		let mut paths = Vec::new();
 
-		if scope == ResourceScope::ProjectOnly || scope == ResourceScope::Both {
+		if (scope == ResourceScope::ProjectOnly || scope == ResourceScope::Both)
+			&& self.capabilities.skills.scopes.project
+		{
 			if let Some(root) = project_root {
-				paths.extend(self.project_skills_dirs(root));
+				paths.extend(self.project_skill_read_paths(root));
 			}
 		}
 
-		if scope == ResourceScope::GlobalOnly || scope == ResourceScope::Both {
-			paths.extend(self.global_skills_dirs());
+		if (scope == ResourceScope::GlobalOnly || scope == ResourceScope::Both)
+			&& self.capabilities.skills.scopes.global
+		{
+			paths.extend(self.global_skill_read_paths());
 		}
 
 		paths
 	}
+
+	pub fn mcp_path(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+	) -> Option<PathBuf> {
+		match scope {
+			ResourceScope::GlobalOnly => {
+				if !self.capabilities.mcp.scopes.global {
+					return None;
+				}
+				self.mcp_global_path.and_then(|path| path())
+			}
+			ResourceScope::ProjectOnly => {
+				if !self.capabilities.mcp.scopes.project {
+					return None;
+				}
+				project_root.and_then(|root| {
+					self.mcp_project_path.and_then(|p| p(root))
+				})
+			}
+			ResourceScope::Both => None,
+		}
+	}
 }
 
 /// Get the universal skills directory path following XDG config spec
-pub fn get_universal_skills_path() -> PathBuf {
+pub fn get_universal_skills_path() -> Option<PathBuf> {
 	std::env::var_os("XDG_CONFIG_HOME")
 		.map(PathBuf::from)
 		.or_else(|| dirs::home_dir().map(|h| h.join(".config")))
-		.unwrap_or_else(|| PathBuf::from(".config"))
-		.join("agents/skills")
+		.map(|path| path.join("agents/skills"))
 }
 
 pub fn load_mcps_from_file(
@@ -191,51 +261,56 @@ pub fn save_mcps_to_file(
 pub fn load_scoped_mcps(
 	project_root: Option<&Path>,
 	scope: ResourceScope,
-	global_path: fn() -> PathBuf,
-	project_path: fn(&Path) -> PathBuf,
+	global_path: Option<OptionalPathFn>,
+	project_path: Option<OptionalProjectPathFn>,
 	parse: McpParseFn,
 ) -> Result<Vec<McpServer>> {
-	let path =
-		mcp_path_for_scope(project_root, scope, global_path, project_path)
-			.ok_or_else(|| {
-				ConfigError::InvalidConfig(format!(
-					"project_root is required for {:?} MCP config",
-					scope
-				))
-			})?;
-	load_mcps_from_file(&path, parse)
+	match scope {
+		ResourceScope::GlobalOnly => {
+			let Some(path) = global_path.and_then(|path| path()) else {
+				return Ok(Vec::new());
+			};
+			load_mcps_from_file(&path, parse)
+		}
+		ResourceScope::ProjectOnly => {
+			let Some(path) = project_root
+				.and_then(|root| project_path.and_then(|path| path(root)))
+			else {
+				return Ok(Vec::new());
+			};
+			load_mcps_from_file(&path, parse)
+		}
+		ResourceScope::Both => Err(ConfigError::InvalidConfig(
+			"MCP path unavailable for Both scope".to_string(),
+		)),
+	}
 }
 
 pub fn save_scoped_mcps(
 	project_root: Option<&Path>,
 	scope: ResourceScope,
 	mcps: &[McpServer],
-	global_path: fn() -> PathBuf,
-	project_path: fn(&Path) -> PathBuf,
+	global_path: Option<OptionalPathFn>,
+	project_path: Option<OptionalProjectPathFn>,
 	serialize: McpSerializeFn,
 ) -> Result<()> {
-	let path =
-		mcp_path_for_scope(project_root, scope, global_path, project_path)
-			.ok_or_else(|| {
-				ConfigError::InvalidConfig(format!(
-					"project_root is required for {:?} MCP config",
-					scope
-				))
-			})?;
-	save_mcps_to_file(&path, mcps, serialize)
-}
-
-pub fn mcp_path_for_scope(
-	project_root: Option<&Path>,
-	scope: ResourceScope,
-	global_path: fn() -> PathBuf,
-	project_path: fn(&Path) -> PathBuf,
-) -> Option<PathBuf> {
-	match scope {
-		ResourceScope::GlobalOnly => Some(global_path()),
-		ResourceScope::ProjectOnly => project_root.map(project_path),
-		ResourceScope::Both => None,
+	let path = match scope {
+		ResourceScope::GlobalOnly => global_path.and_then(|path| path()),
+		ResourceScope::ProjectOnly => project_root
+			.and_then(|root| project_path.and_then(|path| path(root))),
+		ResourceScope::Both => {
+			return Err(ConfigError::InvalidConfig(
+				"MCP path unavailable for Both scope".to_string(),
+			))
+		}
 	}
+	.ok_or_else(|| {
+		ConfigError::InvalidConfig(format!(
+			"MCP path unavailable for {:?} scope",
+			scope
+		))
+	})?;
+	save_mcps_to_file(&path, mcps, serialize)
 }
 
 pub fn supports_mcp_transport(
@@ -243,11 +318,15 @@ pub fn supports_mcp_transport(
 	transport: &McpTransport,
 ) -> bool {
 	match transport {
-		McpTransport::Stdio { .. } => capabilities.mcp_stdio,
+		McpTransport::Stdio { .. } => capabilities.mcp.stdio,
 		McpTransport::Sse { .. } | McpTransport::StreamableHttp { .. } => {
-			capabilities.mcp_remote
+			capabilities.mcp.remote
 		}
 	}
+}
+
+pub fn home_dir() -> Option<PathBuf> {
+	dirs::home_dir()
 }
 
 /// MCP config strategy functions for common config formats

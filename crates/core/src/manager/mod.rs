@@ -86,35 +86,45 @@ impl ConfigManager {
 
 		// Project first (takes precedence for skills)
 		if let Some(root) = self.project_root.clone() {
-			if let Ok(project) = self
+			if self
 				.adapter
-				.load_config(Some(&root), ResourceScope::ProjectOnly)
+				.supports_skill_scope(ResourceScope::ProjectOnly)
+				|| self.adapter.supports_mcp_scope(ResourceScope::ProjectOnly)
 			{
-				for mut skill in project.skills {
-					seen.insert(skill.name.clone());
-					skill.config_source = Some(ConfigSource::Project);
-					skills.push(skill);
-				}
-				for mut mcp in project.mcps {
-					mcp.config_source = Some(ConfigSource::Project);
-					mcps.push(mcp);
+				if let Ok(project) = self
+					.adapter
+					.load_config(Some(&root), ResourceScope::ProjectOnly)
+				{
+					for mut skill in project.skills {
+						seen.insert(skill.name.clone());
+						skill.config_source = Some(ConfigSource::Project);
+						skills.push(skill);
+					}
+					for mut mcp in project.mcps {
+						mcp.config_source = Some(ConfigSource::Project);
+						mcps.push(mcp);
+					}
 				}
 			}
 		}
 
 		// Global second
-		if let Ok(global) =
-			self.adapter.load_config(None, ResourceScope::GlobalOnly)
+		if self.adapter.supports_skill_scope(ResourceScope::GlobalOnly)
+			|| self.adapter.supports_mcp_scope(ResourceScope::GlobalOnly)
 		{
-			for mut skill in global.skills {
-				if !seen.contains(&skill.name) {
-					skill.config_source = Some(ConfigSource::Global);
-					skills.push(skill);
+			if let Ok(global) =
+				self.adapter.load_config(None, ResourceScope::GlobalOnly)
+			{
+				for mut skill in global.skills {
+					if !seen.contains(&skill.name) {
+						skill.config_source = Some(ConfigSource::Global);
+						skills.push(skill);
+					}
 				}
-			}
-			for mut mcp in global.mcps {
-				mcp.config_source = Some(ConfigSource::Global);
-				mcps.push(mcp);
+				for mut mcp in global.mcps {
+					mcp.config_source = Some(ConfigSource::Global);
+					mcps.push(mcp);
+				}
 			}
 		}
 
@@ -128,32 +138,42 @@ impl ConfigManager {
 
 		// Load project config first (project skills take precedence)
 		if let Some(root) = &self.project_root {
-			let project = self
+			if self
 				.adapter
-				.load_config(Some(root), ResourceScope::ProjectOnly)?;
-			// Add project skills
-			for skill in project.skills {
+				.supports_skill_scope(ResourceScope::ProjectOnly)
+				|| self.adapter.supports_mcp_scope(ResourceScope::ProjectOnly)
+			{
+				let project = self
+					.adapter
+					.load_config(Some(root), ResourceScope::ProjectOnly)?;
+				// Add project skills
+				for skill in project.skills {
+					if !seen_skill_names.contains(&skill.name) {
+						seen_skill_names.insert(skill.name.clone());
+						merged_config.skills.push(skill);
+					}
+				}
+				// Add project MCPs
+				merged_config.mcps.extend(project.mcps);
+			}
+		}
+
+		// Load global config
+		if self.adapter.supports_skill_scope(ResourceScope::GlobalOnly)
+			|| self.adapter.supports_mcp_scope(ResourceScope::GlobalOnly)
+		{
+			let global =
+				self.adapter.load_config(None, ResourceScope::GlobalOnly)?;
+			// Add global skills (only if not already in project)
+			for skill in global.skills {
 				if !seen_skill_names.contains(&skill.name) {
 					seen_skill_names.insert(skill.name.clone());
 					merged_config.skills.push(skill);
 				}
 			}
-			// Add project MCPs
-			merged_config.mcps.extend(project.mcps);
+			// Add global MCPs
+			merged_config.mcps.extend(global.mcps);
 		}
-
-		// Load global config
-		let global =
-			self.adapter.load_config(None, ResourceScope::GlobalOnly)?;
-		// Add global skills (only if not already in project)
-		for skill in global.skills {
-			if !seen_skill_names.contains(&skill.name) {
-				seen_skill_names.insert(skill.name.clone());
-				merged_config.skills.push(skill);
-			}
-		}
-		// Add global MCPs
-		merged_config.mcps.extend(global.mcps);
 
 		self.config = Some(merged_config);
 		Ok(self.config.as_ref().unwrap())

@@ -6,6 +6,7 @@ import type { AvailableAgent } from "../contexts/agent-availability";
 import type { McpResponse } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
+import { supportsMcp, supportsMcpScope } from "../lib/agent-capabilities";
 import { cn } from "../lib/utils";
 import { reconcileMcpsMutationOptions } from "../requests/mcps";
 import { type AgentDiffLabel, AgentList, type AgentState } from "./agent-list";
@@ -48,10 +49,7 @@ export function ManageAgentsDialog({
 		(agent: AvailableAgent) =>
 			requiredCapabilities.every((capability) => {
 				if (capability === "mcp") {
-					return (
-						agent.capabilities.mcp_stdio ||
-						agent.capabilities.mcp_remote
-					);
+					return supportsMcp(agent);
 				}
 				return Boolean(agent.capabilities[capability]);
 			}),
@@ -68,9 +66,12 @@ export function ManageAgentsDialog({
 	const usableAgents = useMemo(
 		() =>
 			(availableAgents ?? []).filter(
-				(a) => a?.isUsable && supportsRequirements(a),
+				(a) =>
+					a?.isUsable &&
+					supportsRequirements(a) &&
+					supportsMcpScope(a, projectPath ? "project" : "global"),
 			),
-		[availableAgents, supportsRequirements],
+		[availableAgents, projectPath, supportsRequirements],
 	);
 
 	const [prevIsOpen, setPrevIsOpen] = useState(isOpen);

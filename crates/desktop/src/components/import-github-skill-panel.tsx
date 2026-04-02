@@ -33,6 +33,7 @@ import type {
 } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
+import { supportsSkillMutation } from "../lib/agent-capabilities";
 import { cn } from "../lib/utils";
 import { CreateCredentialDialog } from "../pages/settings/components/create-credential-dialog";
 import { credentialsListQueryOptions } from "../requests/credentials";
@@ -77,9 +78,14 @@ export function ImportGithubSkillPanel({
 	const skillAgents = useMemo(
 		() =>
 			availableAgents.filter(
-				(a) => a.isUsable && a.capabilities.skills_mutable,
+				(a) =>
+					a.isUsable &&
+					supportsSkillMutation(
+						a,
+						projectPath ? "project" : "global",
+					),
 			),
-		[availableAgents],
+		[availableAgents, projectPath],
 	);
 
 	const [phase, setPhase] = useState<Phase>("scanning");

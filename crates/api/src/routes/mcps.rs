@@ -18,12 +18,32 @@ use crate::{
 	},
 };
 
+fn check_mcp_supported(
+	agent: &AgentParam,
+	scope: aghub_core::models::ResourceScope,
+) -> Result<(), ApiError> {
+	let descriptor = aghub_core::registry::get(agent.0);
+	if !descriptor.supports_mcp_scope(scope) {
+		return Err(ApiError::new(
+			Status::UnprocessableEntity,
+			format!(
+				"Agent '{}' does not support MCP servers in {:?} scope",
+				descriptor.id, scope
+			),
+			"UNSUPPORTED_OPERATION",
+		));
+	}
+	Ok(())
+}
+
 #[get("/agents/<agent>/mcps?<scope..>")]
 pub fn list_mcps(
 	agent: AgentParam,
 	scope: ScopeParams,
 ) -> ApiResult<Vec<McpResponse>> {
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_mcp_supported(&agent, resource_scope)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 
 	if resolved.is_all() {
@@ -103,6 +123,8 @@ pub fn create_mcp(
 	body: Json<CreateMcpRequest>,
 ) -> ApiCreated<McpResponse> {
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_mcp_supported(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	match manager.load() {
@@ -123,6 +145,8 @@ pub fn get_mcp(
 	scope: ScopeParams,
 ) -> ApiResult<McpResponse> {
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_mcp_supported(&agent, resource_scope)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 
 	if resolved.is_all() {
@@ -149,6 +173,8 @@ pub fn update_mcp(
 	body: Json<UpdateMcpRequest>,
 ) -> ApiResult<McpResponse> {
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_mcp_supported(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
@@ -171,6 +197,8 @@ pub fn delete_mcp(
 	scope: ScopeParams,
 ) -> ApiNoContent {
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_mcp_supported(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
@@ -185,6 +213,8 @@ pub fn enable_mcp(
 	scope: ScopeParams,
 ) -> ApiResult<McpResponse> {
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_mcp_supported(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
@@ -200,6 +230,8 @@ pub fn disable_mcp(
 	scope: ScopeParams,
 ) -> ApiResult<McpResponse> {
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_mcp_supported(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
@@ -256,7 +288,7 @@ mod tests {
 		let err = result.expect_err("pi should reject MCP creation");
 		assert_eq!(err.status, Status::UnprocessableEntity);
 		assert_eq!(err.body.code, "UNSUPPORTED_OPERATION");
-		assert!(err.body.error.contains("Cannot add MCP server"));
+		assert!(err.body.error.contains("does not support MCP servers"));
 		assert!(err.body.error.contains("pi"));
 	}
 }

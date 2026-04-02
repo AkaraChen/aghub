@@ -2,18 +2,8 @@ use crate::descriptor::*;
 use crate::errors::ConfigError;
 use std::path::{Path, PathBuf};
 
-fn mcp_global_path() -> PathBuf {
-	dirs::home_dir()
-		.unwrap_or_else(|| std::path::PathBuf::from(""))
-		.join(".pi/agent/config.json")
-}
-fn mcp_project_path(root: &Path) -> PathBuf {
-	root.join(".pi/agent/config.json")
-}
-fn global_data_dir() -> PathBuf {
-	dirs::home_dir()
-		.unwrap_or_else(|| std::path::PathBuf::from(""))
-		.join(".pi/agent")
+fn global_data_dir() -> Option<PathBuf> {
+	home_dir().map(|home| home.join(".pi/agent"))
 }
 fn load_mcps(
 	_: Option<&Path>,
@@ -33,12 +23,21 @@ fn save_mcps(
 	))
 }
 fn global_skills_paths() -> Vec<PathBuf> {
-	vec![dirs::home_dir()
-		.unwrap_or_else(|| std::path::PathBuf::from(""))
-		.join(".pi/agent/skills")]
+	match home_dir() {
+		Some(home) => vec![home.join(".pi/agent/skills")],
+		None => Vec::new(),
+	}
 }
 fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
 	vec![root.join(".pi/skills")]
+}
+
+fn global_skill_write_path() -> Option<PathBuf> {
+	home_dir().map(|home| home.join(".pi/agent/skills"))
+}
+
+fn project_skill_write_path(root: &Path) -> Option<PathBuf> {
+	Some(root.join(".pi/skills"))
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
@@ -48,18 +47,35 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	mcp_serialize_config: None,
 	load_mcps,
 	save_mcps,
-	mcp_global_path,
-	mcp_project_path,
+	mcp_global_path: None,
+	mcp_project_path: None,
 	global_data_dir,
 	capabilities: Capabilities {
-		mcp_stdio: false,
-		mcp_remote: false,
-		mcp_enable_disable: false,
-		skills: true,
-		universal_skills: false,
+		skills: SkillCapabilities {
+			scopes: ScopeSupport {
+				global: true,
+				project: true,
+			},
+			universal: false,
+		},
+		mcp: McpCapabilities {
+			scopes: ScopeSupport {
+				global: false,
+				project: false,
+			},
+			stdio: false,
+			remote: false,
+			enable_disable: false,
+		},
 	},
-	global_skills_paths: Some(global_skills_paths),
-	project_skills_paths: Some(project_skills_paths),
+	global_skill_paths: Some(GlobalSkillPaths {
+		read: global_skills_paths,
+		write: global_skill_write_path,
+	}),
+	project_skill_paths: Some(ProjectSkillPaths {
+		read: project_skills_paths,
+		write: project_skill_write_path,
+	}),
 	cli_name: "pi",
 	validate_args: &["--version"],
 	project_markers: &[".pi"],

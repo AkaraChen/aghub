@@ -442,20 +442,29 @@ use std::time::Duration;
 use tokio::process::Command;
 use tokio::time::timeout;
 
-fn check_skills_supported(agent: &AgentParam) -> Result<(), ApiError> {
+fn check_skills_supported(
+	agent: &AgentParam,
+	scope: ResourceScope,
+) -> Result<(), ApiError> {
 	let descriptor = registry::get(agent.0);
-	if !descriptor.capabilities.skills {
+	if !descriptor.supports_skill_scope(scope) {
 		return Err(ApiError::new(
 			Status::UnprocessableEntity,
-			format!("Agent '{}' does not support skills", descriptor.id),
+			format!(
+				"Agent '{}' does not support skills in {:?} scope",
+				descriptor.id, scope
+			),
 			"UNSUPPORTED_OPERATION",
 		));
 	}
 	Ok(())
 }
 
-fn check_skills_mutable(agent: &AgentParam) -> Result<(), ApiError> {
-	check_skills_supported(agent)?;
+fn check_skills_mutable(
+	agent: &AgentParam,
+	scope: ResourceScope,
+) -> Result<(), ApiError> {
+	check_skills_supported(agent, scope)?;
 	Ok(())
 }
 
@@ -464,8 +473,9 @@ pub fn list_skills(
 	agent: AgentParam,
 	scope: ScopeParams,
 ) -> ApiResult<Vec<SkillResponse>> {
-	check_skills_supported(&agent)?;
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_skills_supported(&agent, resource_scope)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 
 	if resolved.is_all() {
@@ -486,8 +496,9 @@ pub fn create_skill(
 	scope: ScopeParams,
 	body: Json<CreateSkillRequest>,
 ) -> ApiCreated<SkillResponse> {
-	check_skills_mutable(&agent)?;
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_skills_mutable(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	match manager.load() {
@@ -507,8 +518,9 @@ pub fn import_skill(
 	scope: ScopeParams,
 	body: Json<crate::dto::skill::ImportSkillRequest>,
 ) -> ApiResult<SkillResponse> {
-	check_skills_mutable(&agent)?;
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_skills_mutable(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 
@@ -528,8 +540,9 @@ pub fn get_skill(
 	name: &str,
 	scope: ScopeParams,
 ) -> ApiResult<SkillResponse> {
-	check_skills_supported(&agent)?;
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_skills_supported(&agent, resource_scope)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 
 	if resolved.is_all() {
@@ -556,8 +569,9 @@ pub fn update_skill(
 	scope: ScopeParams,
 	body: Json<UpdateSkillRequest>,
 ) -> ApiResult<SkillResponse> {
-	check_skills_mutable(&agent)?;
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_skills_mutable(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
@@ -581,8 +595,9 @@ pub fn delete_skill(
 	name: &str,
 	scope: ScopeParams,
 ) -> ApiNoContent {
-	check_skills_mutable(&agent)?;
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_skills_mutable(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
@@ -596,8 +611,9 @@ pub fn enable_skill(
 	name: &str,
 	scope: ScopeParams,
 ) -> ApiResult<SkillResponse> {
-	check_skills_supported(&agent)?;
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_skills_supported(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
@@ -612,8 +628,9 @@ pub fn disable_skill(
 	name: &str,
 	scope: ScopeParams,
 ) -> ApiResult<SkillResponse> {
-	check_skills_supported(&agent)?;
 	let resolved = scope.resolve()?;
+	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	check_skills_supported(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;

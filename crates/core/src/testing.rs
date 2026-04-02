@@ -2,6 +2,7 @@ use crate::{
 	adapters::{create_adapter, AgentAdapter},
 	errors::{ConfigError, Result},
 	manager::ConfigManager,
+	models::ResourceScope,
 	registry, AgentType,
 };
 use std::fs;
@@ -56,7 +57,7 @@ impl TestConfig {
 		);
 
 		let skills_dir = temp_dir.path().join("skills");
-		if descriptor.capabilities.skills {
+		if descriptor.supports_skill_scope(ResourceScope::GlobalOnly) {
 			fs::create_dir(&skills_dir).map_err(ConfigError::Io)?;
 			crate::adapter::set_skills_path_override(
 				descriptor.id,
@@ -94,7 +95,7 @@ impl TestConfig {
 		description: Option<&str>,
 	) -> Result<()> {
 		let descriptor = registry::get(self.agent_type);
-		if !descriptor.capabilities.skills {
+		if !descriptor.supports_skill_scope(ResourceScope::GlobalOnly) {
 			return Ok(());
 		}
 
@@ -153,7 +154,7 @@ impl Drop for TestConfig {
 	fn drop(&mut self) {
 		let descriptor = registry::get(self.agent_type);
 		crate::adapter::set_mcp_path_override(descriptor.id, None);
-		if descriptor.capabilities.skills {
+		if descriptor.supports_skill_scope(ResourceScope::GlobalOnly) {
 			crate::adapter::set_skills_path_override(descriptor.id, None);
 		}
 	}
@@ -210,7 +211,7 @@ impl TestConfigBuilder {
 			Some(config_path.clone()),
 		);
 		let skills_dir = temp_dir.path().join("skills");
-		if descriptor.capabilities.skills {
+		if descriptor.supports_skill_scope(ResourceScope::GlobalOnly) {
 			fs::create_dir(&skills_dir).map_err(ConfigError::Io)?;
 			crate::adapter::set_skills_path_override(
 				descriptor.id,

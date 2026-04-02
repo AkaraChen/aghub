@@ -3,19 +3,43 @@ use ts_rs::TS;
 
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
+pub struct ScopeSupportDto {
+	pub global: bool,
+	pub project: bool,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct SkillCapabilitiesDto {
+	pub scopes: ScopeSupportDto,
+	pub universal: bool,
+	pub mutable_global: bool,
+	pub mutable_project: bool,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct McpCapabilitiesDto {
+	pub scopes: ScopeSupportDto,
+	pub stdio: bool,
+	pub remote: bool,
+	pub enable_disable: bool,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct CapabilitiesDto {
-	pub mcp_stdio: bool,
-	pub mcp_remote: bool,
-	pub mcp_enable_disable: bool,
-	pub skills: bool,
-	pub skills_mutable: bool,
+	pub skills: SkillCapabilitiesDto,
+	pub mcp: McpCapabilitiesDto,
 }
 
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
 pub struct SkillsPathsDto {
-	pub project: Vec<String>,
-	pub global: Vec<String>,
+	pub global_read: Vec<String>,
+	pub global_write: Option<String>,
+	pub project_read: Vec<String>,
+	pub project_write: Option<String>,
 }
 
 #[derive(Debug, Serialize, TS)]
