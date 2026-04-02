@@ -34,6 +34,8 @@ impl From<CreateSkillRequest> for Skill {
 			source_path: None,
 			canonical_path: None,
 			config_source: None,
+			plugin_id: None,
+			plugin_name: None,
 		}
 	}
 }
@@ -63,6 +65,8 @@ impl UpdateSkillRequest {
 			source_path: existing.source_path,
 			canonical_path: existing.canonical_path,
 			config_source: existing.config_source,
+			plugin_id: existing.plugin_id,
+			plugin_name: existing.plugin_name,
 		}
 	}
 }
@@ -83,6 +87,10 @@ pub struct SkillResponse {
 	pub source: Option<ConfigSource>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub agent: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub plugin_id: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub plugin_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -121,6 +129,8 @@ impl From<&Skill> for SkillResponse {
 			tools: s.tools.clone(),
 			source: s.config_source.map(Into::into),
 			agent: None,
+			plugin_id: s.plugin_id.clone(),
+			plugin_name: s.plugin_name.clone(),
 		}
 	}
 }

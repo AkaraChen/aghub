@@ -52,6 +52,12 @@ pub struct Skill {
 	/// Which config scope this skill was loaded from (set at load time, not persisted)
 	#[serde(skip)]
 	pub config_source: Option<ConfigSource>,
+	/// Plugin ID if this skill comes from a Claude Code plugin (e.g., "frontend-design@claude-plugins-official")
+	#[serde(skip_serializing_if = "Option::is_none", default)]
+	pub plugin_id: Option<String>,
+	/// Plugin display name if this skill comes from a Claude Code plugin
+	#[serde(skip_serializing_if = "Option::is_none", default)]
+	pub plugin_name: Option<String>,
 }
 
 impl Skill {
@@ -67,6 +73,8 @@ impl Skill {
 			source_path: None,
 			canonical_path: None,
 			config_source: None,
+			plugin_id: None,
+			plugin_name: None,
 		}
 	}
 }

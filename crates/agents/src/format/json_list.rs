@@ -132,6 +132,8 @@ pub fn parse(content: &str) -> Result<AgentConfig> {
 			source_path: skill.source_path,
 			canonical_path: None,
 			config_source: None,
+			plugin_id: None,
+			plugin_name: None,
 		});
 	}
 

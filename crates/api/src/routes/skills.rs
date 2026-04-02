@@ -5,6 +5,7 @@ use aghub_core::{
 	models::{AgentType, ResourceScope, Skill},
 	registry, transfer,
 };
+use aghub_plugins::claude::ClaudePluginManager;
 use rocket::http::Status;
 use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
@@ -642,6 +643,37 @@ pub fn disable_skill(
 	Ok(Json(SkillResponse::from(skill)))
 }
 
+/// Detect plugin info for a skill based on its source path
+fn detect_plugin_for_skill(skill: &mut Skill) {
+	let Some(source_path) = &skill.source_path else {
+		return;
+	};
+
+	// Only detect plugins for Claude agent skills
+	let Ok(manager) = ClaudePluginManager::new() else {
+		return;
+	};
+
+	// Expand tilde to full path for comparison
+	let full_path: std::path::PathBuf = if source_path.starts_with("~/") {
+		dirs::home_dir()
+			.map(|home| home.join(&source_path[2..]))
+			.unwrap_or_else(|| source_path.into())
+	} else {
+		source_path.into()
+	};
+
+	// Check if skill path is within any plugin's install path
+	for plugin in manager.list_plugins() {
+		let plugin_skills_path = plugin.skills_path();
+		if full_path.starts_with(&plugin_skills_path) {
+			skill.plugin_id = Some(plugin.id.to_string());
+			skill.plugin_name = Some(plugin.display_name.clone());
+			return;
+		}
+	}
+}
+
 #[get("/agents/all/skills?<scope..>")]
 pub fn list_all_agents_skills(
 	scope: ScopeParams,
@@ -654,7 +686,10 @@ pub fn list_all_agents_skills(
 			let id = ar.agent_id;
 			ar.skills
 				.into_iter()
-				.map(move |s| SkillResponse::from((s, id)))
+				.map(move |mut s| {
+					detect_plugin_for_skill(&mut s);
+					SkillResponse::from((s, id))
+				})
 		})
 		.collect();
 	Ok(Json(items))
