@@ -18,7 +18,15 @@ use aghub_api::dto::{
 	},
 	market::MarketSkill,
 	mcp::{CreateMcpRequest, McpResponse, TransportDto, UpdateMcpRequest},
-	plugin::{PluginListResponse, PluginResponse},
+	plugin::{
+		CheckUpdateRequest, CheckUpdateResponse, HookActionResponse,
+		HookEventResponse, HookMatcherResponse, HooksManifestResponse,
+		InstallPluginRequest, InstallPluginResponse, McpConfigResponse,
+		McpServerResponse, PluginAuthorResponse, PluginDetailResponse,
+		PluginListResponse, PluginManifestResponse, PluginResponse,
+		UninstallPluginRequest, UninstallPluginResponse, UpdatePluginRequest,
+		UpdatePluginResponse,
+	},
 	skill::{
 		CreateSkillRequest, DeleteSkillByPathRequest,
 		DeleteSkillByPathResponse, GitInstallRequest, GitInstallResponse,
@@ -162,8 +170,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         export_type::<CreateSubAgentRequest>(&cfg)?;
         export_type::<UpdateSubAgentRequest>(&cfg)?;
         export_type::<SubAgentResponse>(&cfg)?;
-        export_type::<PluginResponse>(&cfg)?;
-        export_type::<PluginListResponse>(&cfg)?;
+	export_type::<PluginResponse>(&cfg)?;
+	export_type::<PluginListResponse>(&cfg)?;
+	export_type::<PluginDetailResponse>(&cfg)?;
+	export_type::<PluginManifestResponse>(&cfg)?;
+	export_type::<PluginAuthorResponse>(&cfg)?;
+	export_type::<HooksManifestResponse>(&cfg)?;
+	export_type::<HookEventResponse>(&cfg)?;
+	export_type::<HookMatcherResponse>(&cfg)?;
+	export_type::<HookActionResponse>(&cfg)?;
+	export_type::<McpConfigResponse>(&cfg)?;
+	export_type::<McpServerResponse>(&cfg)?;
+	export_type::<InstallPluginRequest>(&cfg)?;
+	export_type::<InstallPluginResponse>(&cfg)?;
+	export_type::<UninstallPluginRequest>(&cfg)?;
+	export_type::<UninstallPluginResponse>(&cfg)?;
+	export_type::<UpdatePluginRequest>(&cfg)?;
+	export_type::<UpdatePluginResponse>(&cfg)?;
+	export_type::<CheckUpdateRequest>(&cfg)?;
+	export_type::<CheckUpdateResponse>(&cfg)?;
 
 	write_index_file(&out_dir)?;
 

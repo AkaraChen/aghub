@@ -40,6 +40,70 @@ impl ClaudePluginInfo {
     pub fn has_skills(&self) -> bool {
         self.skills_path().exists()
     }
+
+    /// Check if this plugin has hooks directory
+    pub fn has_hooks(&self) -> bool {
+        self.install_path.join("hooks").exists()
+    }
+
+    /// Check if this plugin has MCP configuration
+    pub fn has_mcp(&self) -> bool {
+        self.install_path.join(".mcp.json").exists()
+    }
+
+    /// Get the hooks directory path
+    pub fn hooks_path(&self) -> PathBuf {
+        self.install_path.join("hooks")
+    }
+
+    /// Get the MCP config path
+    pub fn mcp_path(&self) -> PathBuf {
+        self.install_path.join(".mcp.json")
+    }
+
+    /// Read plugin manifest (plugin.json)
+    pub fn read_manifest(&self) -> Result<Option<types::PluginManifest>> {
+        // Try multiple locations for plugin.json
+        let possible_paths = [
+            self.install_path.join(".claude-plugin/plugin.json"),
+            self.install_path.join(".plugin/plugin.json"),
+            self.install_path.join("plugin.json"),
+        ];
+
+        for path in &possible_paths {
+            if path.exists() {
+                let content = std::fs::read_to_string(path)?;
+                let manifest = serde_json::from_str(&content)?;
+                return Ok(Some(manifest));
+            }
+        }
+
+        Ok(None)
+    }
+
+    /// Read hooks configuration (hooks/hooks.json)
+    pub fn read_hooks(&self) -> Result<Option<types::HooksManifest>> {
+        let hooks_path = self.hooks_path().join("hooks.json");
+        if !hooks_path.exists() {
+            return Ok(None);
+        }
+
+        let content = std::fs::read_to_string(hooks_path)?;
+        let manifest = serde_json::from_str(&content)?;
+        Ok(Some(manifest))
+    }
+
+    /// Read MCP configuration (.mcp.json)
+    pub fn read_mcp_config(&self) -> Result<Option<types::McpConfig>> {
+        let mcp_path = self.mcp_path();
+        if !mcp_path.exists() {
+            return Ok(None);
+        }
+
+        let content = std::fs::read_to_string(mcp_path)?;
+        let config = serde_json::from_str(&content)?;
+        Ok(Some(config))
+    }
 }
 
 impl ClaudePluginManager {
@@ -52,6 +116,11 @@ impl ClaudePluginManager {
             settings,
             installed,
         })
+    }
+
+    /// Get a specific plugin by ID
+    pub fn get_plugin(&self, id: &PluginId) -> Option<&ClaudePluginInfo> {
+        self.installed.iter().find(|p| p.id == *id)
     }
 
     /// Check if Claude plugin system is available

@@ -3,6 +3,8 @@ import ky from "ky";
 import type {
 	AgentAvailabilityDto,
 	AgentInfo,
+	CheckUpdateRequest,
+	CheckUpdateResponse,
 	CodeEditorType,
 	CreateCredentialRequest,
 	CreateMcpRequest,
@@ -19,11 +21,14 @@ import type {
 	GitSyncResponse,
 	GlobalSkillLockResponse,
 	ImportSkillRequest,
+	InstallPluginRequest,
+	InstallPluginResponse,
 	InstallSkillRequest,
 	InstallSkillResponse,
 	MarketSkill,
 	McpResponse,
 	OperationBatchResponse,
+	PluginDetailResponse,
 	PluginListResponse,
 	PluginResponse,
 	ProjectSkillLockResponse,
@@ -33,8 +38,12 @@ import type {
 	SubAgentResponse,
 	ToolInfoDto,
 	TransferRequest,
+	UninstallPluginRequest,
+	UninstallPluginResponse,
 	UpdateMcpRequest,
-	UpdateSubAgentRequest,
+        UpdateSubAgentRequest,
+        UpdatePluginRequest,
+        UpdatePluginResponse,
 } from "../generated/dto";
 
 interface ApiErrorBody {
@@ -448,11 +457,26 @@ export function createApi(baseUrl: string) {
 			list(): Promise<PluginListResponse> {
 				return client.get("plugins").json();
 			},
+			detail(pluginId: string): Promise<PluginDetailResponse> {
+				return client.get(`plugins/${pluginId}`).json();
+			},
 			enable(pluginId: string): Promise<PluginResponse> {
 				return client.post(`plugins/${pluginId}/enable`).json();
 			},
 			disable(pluginId: string): Promise<PluginResponse> {
 				return client.post(`plugins/${pluginId}/disable`).json();
+			},
+			install(body: InstallPluginRequest): Promise<InstallPluginResponse> {
+				return client.post("plugins/install", { json: body, timeout: 180000 }).json();
+			},
+			uninstall(body: UninstallPluginRequest): Promise<UninstallPluginResponse> {
+				return client.post("plugins/uninstall", { json: body, timeout: 60000 }).json();
+			},
+			update(body: UpdatePluginRequest): Promise<UpdatePluginResponse> {
+				return client.post("plugins/update", { json: body, timeout: 180000 }).json();
+			},
+			checkUpdate(body: CheckUpdateRequest): Promise<CheckUpdateResponse> {
+				return client.post("plugins/check-update", { json: body }).json();
 			},
 		},
 	};
