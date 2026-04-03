@@ -143,8 +143,7 @@ export function ManageSubAgentAgentsDialog({
 			const result = await reconcileMutation.mutateAsync({
 				source: {
 					agent: primary.agent,
-					scope:
-						primary.source === "project" ? "project" : "global",
+					scope: primary.source === "project" ? "project" : "global",
 					project_root: projectPath ?? null,
 					name: primary.name,
 				},

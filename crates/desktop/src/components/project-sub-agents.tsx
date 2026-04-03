@@ -310,7 +310,9 @@ function SubAgentInlineDetail({
 					</div>
 				</div>
 				{agent.description && (
-					<p className="mt-1 text-xs text-muted">{agent.description}</p>
+					<p className="mt-1 text-xs text-muted">
+						{agent.description}
+					</p>
 				)}
 				{agent.instruction && (
 					<div className="mt-2 overflow-x-auto rounded-md border border-separator bg-surface-secondary px-2 py-1.5">
@@ -354,7 +356,12 @@ function SubAgentInlineDetail({
 			)}
 
 			<ManageSubAgentAgentsDialog
-				group={{ mergeKey: getSubAgentMergeKey(agent), items: [agent] } satisfies SubAgentGroup}
+				group={
+					{
+						mergeKey: getSubAgentMergeKey(agent),
+						items: [agent],
+					} satisfies SubAgentGroup
+				}
 				isOpen={manageDialogOpen}
 				onClose={() => setManageDialogOpen(false)}
 				projectPath={projectPath}

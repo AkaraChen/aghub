@@ -21,7 +21,11 @@ import {
 } from "@heroui/react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import type { McpResponse, SkillResponse, SubAgentResponse } from "../generated/dto";
+import type {
+	McpResponse,
+	SkillResponse,
+	SubAgentResponse,
+} from "../generated/dto";
 import { cn, getMcpMergeKey, getSubAgentMergeKey } from "../lib/utils";
 import { ListSearchHeader } from "./list-search-header";
 import { McpList } from "./mcp-list";
@@ -405,9 +409,7 @@ export function UnifiedResourceList({
 								<ResourceSectionHeader
 									title={t("subAgents")}
 									count={mergedSubAgentCount}
-									icon={
-										<CpuChipIcon className="size-3.5" />
-									}
+									icon={<CpuChipIcon className="size-3.5" />}
 								/>
 								<ListBox
 									aria-label={t("subAgents")}
@@ -416,9 +418,9 @@ export function UnifiedResourceList({
 									selectedKeys={selectedSubAgentKeys}
 									onSelectionChange={(keys) => {
 										if (keys === "all") return;
-										const key = [
-											...keys,
-										][0] as string | undefined;
+										const key = [...keys][0] as
+											| string
+											| undefined;
 										if (key)
 											onSubAgentSelectionChange?.(key);
 									}}

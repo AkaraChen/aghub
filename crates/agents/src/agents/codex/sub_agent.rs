@@ -60,21 +60,18 @@ fn parse_file(path: &Path) -> Option<SubAgent> {
 /// When `original_content` is provided its unmanaged keys are preserved so
 /// that fields like `model`, `sandbox_mode`, etc. survive a round-trip.
 fn format(agent: &SubAgent, original_content: Option<&str>) -> Result<String> {
-	let mut table: toml::map::Map<String, toml::Value> =
-		match original_content {
-			Some(s) if !s.trim().is_empty() => {
-				match toml::from_str::<toml::Value>(s) {
-					Ok(toml::Value::Table(t)) => t,
-					_ => toml::map::Map::new(),
-				}
+	let mut table: toml::map::Map<String, toml::Value> = match original_content
+	{
+		Some(s) if !s.trim().is_empty() => {
+			match toml::from_str::<toml::Value>(s) {
+				Ok(toml::Value::Table(t)) => t,
+				_ => toml::map::Map::new(),
 			}
-			_ => toml::map::Map::new(),
-		};
+		}
+		_ => toml::map::Map::new(),
+	};
 
-	table.insert(
-		"name".to_string(),
-		toml::Value::String(agent.name.clone()),
-	);
+	table.insert("name".to_string(), toml::Value::String(agent.name.clone()));
 
 	match &agent.description {
 		Some(desc) => {
@@ -154,8 +151,7 @@ fn save_to_dir(dir: &Path, agent: &SubAgent) -> Result<()> {
 // ── Scoped load / save (called from mod.rs) ──────────────────────────────────
 
 pub(super) fn global_dir() -> Option<std::path::PathBuf> {
-	crate::descriptor::home_dir()
-		.map(|home| home.join(".codex/agents"))
+	crate::descriptor::home_dir().map(|home| home.join(".codex/agents"))
 }
 
 pub(super) fn project_dir(root: &Path) -> Option<std::path::PathBuf> {
@@ -192,9 +188,7 @@ pub(super) fn save(
 ) -> Result<()> {
 	let dir = match scope {
 		ResourceScope::GlobalOnly => global_dir(),
-		ResourceScope::ProjectOnly => {
-			project_root.and_then(project_dir)
-		}
+		ResourceScope::ProjectOnly => project_root.and_then(project_dir),
 		ResourceScope::Both => {
 			return Err(ConfigError::InvalidConfig(
 				"Sub-agent save unavailable for Both scope".to_string(),
@@ -246,11 +240,8 @@ mod tests {
 	fn parse_toml_uses_file_stem_when_no_name() {
 		let dir = TempDir::new().unwrap();
 		let path = dir.path().join("my-agent.toml");
-		fs::write(
-			&path,
-			"developer_instructions = \"Do something.\"\n",
-		)
-		.unwrap();
+		fs::write(&path, "developer_instructions = \"Do something.\"\n")
+			.unwrap();
 
 		let agent = parse_file(&path).unwrap();
 		assert_eq!(agent.name, "my-agent");

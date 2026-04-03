@@ -1,7 +1,4 @@
-import {
-	CpuChipIcon,
-	PlusIcon,
-} from "@heroicons/react/24/solid";
+import { CpuChipIcon, PlusIcon } from "@heroicons/react/24/solid";
 import {
 	Button,
 	Card,
@@ -26,17 +23,17 @@ import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { ListSearchHeader } from "../../components/list-search-header";
-import { SubAgentDetail } from "../../components/sub-agent-detail";
 import type { SubAgentGroup } from "../../components/sub-agent-detail";
-import type { SubAgentResponse, UpdateSubAgentRequest } from "../../generated/dto";
+import { SubAgentDetail } from "../../components/sub-agent-detail";
+import type {
+	SubAgentResponse,
+	UpdateSubAgentRequest,
+} from "../../generated/dto";
 import { useAgentAvailability } from "../../hooks/use-agent-availability";
 import { useApi } from "../../hooks/use-api";
 import { supportsSubAgent } from "../../lib/agent-capabilities";
 import { AgentIcon } from "../../lib/agent-icons";
-import {
-	getSubAgentMergeKey,
-	sortAgents,
-} from "../../lib/utils";
+import { getSubAgentMergeKey, sortAgents } from "../../lib/utils";
 import {
 	createSubAgentMutationOptions,
 	invalidateSubAgentQueries,
@@ -279,9 +276,7 @@ export default function SubAgentsPage() {
 							selectedKeys={selectedListKey}
 							onSelectionChange={(keys) => {
 								if (keys === "all") return;
-								const key = [
-									...keys,
-								][0] as string | undefined;
+								const key = [...keys][0] as string | undefined;
 								if (!key) return;
 								setPanel({
 									type: "detail",
@@ -903,4 +898,3 @@ function SubAgentEditForm({
 		</div>
 	);
 }
-

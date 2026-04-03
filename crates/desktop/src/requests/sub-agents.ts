@@ -162,8 +162,7 @@ export function transferSubAgentsMutationOptions({
 	onSuccess,
 }: TransferSubAgentsMutationParams) {
 	return mutationOptions({
-		mutationFn: (body: TransferRequest) =>
-			api.subAgents.transfer(body),
+		mutationFn: (body: TransferRequest) => api.subAgents.transfer(body),
 		onSuccess: async (data) => {
 			await invalidateSubAgentQueries(queryClient);
 			await onSuccess?.(data);
@@ -183,8 +182,7 @@ export function reconcileSubAgentsMutationOptions({
 	onSuccess,
 }: ReconcileSubAgentsMutationParams) {
 	return mutationOptions({
-		mutationFn: (body: ReconcileRequest) =>
-			api.subAgents.reconcile(body),
+		mutationFn: (body: ReconcileRequest) => api.subAgents.reconcile(body),
 		onSuccess: async (data) => {
 			await invalidateSubAgentQueries(queryClient);
 			await onSuccess?.(data);

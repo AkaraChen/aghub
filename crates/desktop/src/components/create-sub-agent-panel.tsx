@@ -21,9 +21,7 @@ import {
 	supportsSubAgent,
 	supportsSubAgentScope,
 } from "../lib/agent-capabilities";
-import {
-	createSubAgentMutationOptions,
-} from "../requests/sub-agents";
+import { createSubAgentMutationOptions } from "../requests/sub-agents";
 
 interface CreateSubAgentPanelProps {
 	onDone: () => void;

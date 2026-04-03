@@ -17,13 +17,13 @@ import {
 } from "@heroui/react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { SubAgentGroup } from "./manage-sub-agent-agents-dialog";
-import { ManageSubAgentAgentsDialog } from "./manage-sub-agent-agents-dialog";
-import { TransferDialog } from "./transfer-dialog";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { AgentIcon } from "../lib/agent-icons";
-import { formatAgentName } from "./skill-detail-helpers";
 import { sortAgentObjects } from "../lib/utils";
+import type { SubAgentGroup } from "./manage-sub-agent-agents-dialog";
+import { ManageSubAgentAgentsDialog } from "./manage-sub-agent-agents-dialog";
+import { formatAgentName } from "./skill-detail-helpers";
+import { TransferDialog } from "./transfer-dialog";
 
 export type { SubAgentGroup };
 

@@ -1,4 +1,6 @@
-use aghub_core::{errors::ConfigError, load_all_agents, models::SubAgent, transfer};
+use aghub_core::{
+	errors::ConfigError, load_all_agents, models::SubAgent, transfer,
+};
 use rocket::http::Status;
 use rocket::response::status::NoContent;
 use rocket::serde::json::Json;

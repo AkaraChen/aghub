@@ -111,8 +111,7 @@ export function TransferDialog({
 	const destinationQueries = useQueries({
 		queries: availableDestinations.map((dest) => {
 			const scope = dest.type;
-			const projectRoot =
-				dest.type === "project" ? dest.path : undefined;
+			const projectRoot = dest.type === "project" ? dest.path : undefined;
 			if (resourceType === "mcp") {
 				return mcpListQueryOptions({
 					api,

@@ -243,12 +243,14 @@ export default function ProjectDetailPage() {
 		refetchSubAgents();
 	};
 
-	const isRefreshing = isFetchingMcps || isFetchingSkills || isFetchingSubAgents;
+	const isRefreshing =
+		isFetchingMcps || isFetchingSkills || isFetchingSubAgents;
 
 	// Sub-agent delete handler (removes all items in a group)
-	const handleDeleteSubAgentGroup = async (
-		group: { mergeKey: string; items: (typeof projectSubAgents)[number][] },
-	) => {
+	const handleDeleteSubAgentGroup = async (group: {
+		mergeKey: string;
+		items: (typeof projectSubAgents)[number][];
+	}) => {
 		await Promise.all(
 			group.items.map((item) => {
 				if (!item.agent) return Promise.resolve(null);
@@ -438,4 +440,3 @@ export default function ProjectDetailPage() {
 		</div>
 	);
 }
-

@@ -447,12 +447,9 @@ fn load_source_sub_agent(source: &ResourceLocator) -> Result<SubAgent> {
 		project_root: source.project_root.clone(),
 	});
 	manager.load()?;
-	manager
-		.get_sub_agent(&source.name)
-		.cloned()
-		.ok_or_else(|| {
-			ConfigError::resource_not_found("sub-agent", &source.name)
-		})
+	manager.get_sub_agent(&source.name).cloned().ok_or_else(|| {
+		ConfigError::resource_not_found("sub-agent", &source.name)
+	})
 }
 
 pub fn transfer_sub_agent(
