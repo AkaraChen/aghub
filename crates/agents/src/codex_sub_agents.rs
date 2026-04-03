@@ -109,7 +109,7 @@ pub fn format_codex_sub_agent(
 }
 
 fn sanitize_filename(name: &str) -> String {
-	let mut out = name
+	let mapped: String = name
 		.to_lowercase()
 		.chars()
 		.map(|c| {
@@ -119,11 +119,14 @@ fn sanitize_filename(name: &str) -> String {
 				'-'
 			}
 		})
-		.collect::<String>();
-	while out.contains("--") {
-		out = out.replace("--", "-");
-	}
-	out.trim_matches('-').to_string()
+		.collect();
+	// Split on '-', drop empty segments (handles consecutive hyphens and
+	// leading/trailing hyphens) then rejoin — single pass, no reallocations.
+	mapped
+		.split('-')
+		.filter(|s| !s.is_empty())
+		.collect::<Vec<_>>()
+		.join("-")
 }
 
 // ── Directory-level I/O ──────────────────────────────────────────────────────
@@ -310,5 +313,16 @@ mod tests {
 		assert_eq!(loaded[0].name, "Test Agent");
 		assert_eq!(loaded[0].description, Some("A test agent".to_string()));
 		assert_eq!(loaded[0].instruction, Some("Do X.".to_string()));
+	}
+
+	#[test]
+	fn sanitize_filename_basic() {
+		assert_eq!(sanitize_filename("My Agent!"), "my-agent");
+		assert_eq!(sanitize_filename("hello  world"), "hello-world");
+		assert_eq!(sanitize_filename("--leading"), "leading");
+		assert_eq!(sanitize_filename("trailing--"), "trailing");
+		assert_eq!(sanitize_filename("a---b"), "a-b");
+		let result = sanitize_filename("hello world");
+		assert!(!result.contains(' '));
 	}
 }
