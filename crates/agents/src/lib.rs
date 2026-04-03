@@ -6,11 +6,12 @@ pub mod models;
 
 pub use descriptor::{
 	AgentDescriptor, Capabilities, GlobalSkillPaths, LoadMcpsFn,
-	McpCapabilities, McpParseFn, McpSerializeFn, ProjectSkillPaths, SaveMcpsFn,
-	ScopeSupport, SkillCapabilities,
+	LoadSubAgentsFn, McpCapabilities, McpParseFn, McpSerializeFn,
+	ProjectSkillPaths, SaveMcpsFn, SaveSubAgentsFn, ScopeSupport,
+	SkillCapabilities, SubAgentCapabilities,
 };
 pub use errors::{ConfigError, Result};
 pub use models::{
 	AgentConfig, AgentType, ConfigSource, McpServer, McpTransport,
-	ResourceScope, Skill,
+	ResourceScope, Skill, SubAgent,
 };

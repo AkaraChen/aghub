@@ -480,7 +480,7 @@ pub fn list_skills(
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 
 	if resolved.is_all() {
-		let (skills, _) =
+		let (skills, _, _) =
 			manager.load_both_annotated().map_err(ApiError::from)?;
 		let items = skills.iter().map(SkillResponse::from).collect();
 		return Ok(Json(items));
@@ -547,7 +547,7 @@ pub fn get_skill(
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 
 	if resolved.is_all() {
-		let (skills, _) =
+		let (skills, _, _) =
 			manager.load_both_annotated().map_err(ApiError::from)?;
 		let skill =
 			skills.iter().find(|s| s.name == name).ok_or_else(|| {

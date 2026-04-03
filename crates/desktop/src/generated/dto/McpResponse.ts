@@ -2,11 +2,4 @@
 import type { ConfigSource } from "./ConfigSource";
 import type { TransportDto } from "./TransportDto";
 
-export interface McpResponse {
-	name: string;
-	enabled: boolean;
-	transport: TransportDto;
-	timeout: number | null;
-	source: ConfigSource | null;
-	agent: string | null;
-}
+export type McpResponse = { name: string, enabled: boolean, transport: TransportDto, timeout: number | null, source: ConfigSource | null, agent: string | null, };

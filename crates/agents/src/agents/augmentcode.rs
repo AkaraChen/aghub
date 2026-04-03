@@ -64,9 +64,17 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 			remote: true,
 			enable_disable: false,
 		},
+		sub_agents: SubAgentCapabilities {
+			scopes: ScopeSupport {
+				global: false,
+				project: false,
+			},
+		},
 	},
 	global_skill_paths: None,
 	project_skill_paths: None,
+	load_sub_agents: load_sub_agents_noop,
+	save_sub_agents: save_sub_agents_noop,
 	cli_name: "augmentcode",
 	validate_args: &["--version"],
 	project_markers: &[".augmentcode"],

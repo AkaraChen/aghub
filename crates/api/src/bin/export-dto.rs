@@ -8,6 +8,7 @@ use aghub_api::dto::{
 	agents::{
 		AgentAvailabilityDto, AgentInfo, CapabilitiesDto, McpCapabilitiesDto,
 		ScopeSupportDto, SkillCapabilitiesDto, SkillsPathsDto,
+		SubAgentCapabilitiesDto,
 	},
 	common::ConfigSource,
 	credential::{CreateCredentialRequest, CredentialResponse},
@@ -27,6 +28,9 @@ use aghub_api::dto::{
 		ProjectSkillLockResponse, SkillContentQuery, SkillLockEntryResponse,
 		SkillResponse, SkillTreeNodeKind, SkillTreeNodeResponse,
 		SkillTreeQuery, UpdateSkillRequest, ValidationError,
+	},
+	sub_agent::{
+		CreateSubAgentRequest, SubAgentResponse, UpdateSubAgentRequest,
 	},
 	transfer::{
 		InstallScopeDto, OperationActionDto, OperationBatchResponse,
@@ -101,6 +105,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<ScopeSupportDto>(&cfg)?;
 	export_type::<SkillCapabilitiesDto>(&cfg)?;
 	export_type::<McpCapabilitiesDto>(&cfg)?;
+	export_type::<SubAgentCapabilitiesDto>(&cfg)?;
 	export_type::<CapabilitiesDto>(&cfg)?;
 	export_type::<SkillsPathsDto>(&cfg)?;
 	export_type::<AgentInfo>(&cfg)?;
@@ -153,6 +158,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<OperationBatchResponse>(&cfg)?;
 	export_type::<GitSyncRequest>(&cfg)?;
 	export_type::<GitSyncResponse>(&cfg)?;
+	export_type::<CreateSubAgentRequest>(&cfg)?;
+	export_type::<UpdateSubAgentRequest>(&cfg)?;
+	export_type::<SubAgentResponse>(&cfg)?;
 
 	write_index_file(&out_dir)?;
 

@@ -28,9 +28,16 @@ pub struct McpCapabilitiesDto {
 
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
+pub struct SubAgentCapabilitiesDto {
+	pub scopes: ScopeSupportDto,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct CapabilitiesDto {
 	pub skills: SkillCapabilitiesDto,
 	pub mcp: McpCapabilitiesDto,
+	pub sub_agents: SubAgentCapabilitiesDto,
 }
 
 #[derive(Debug, Serialize, TS)]

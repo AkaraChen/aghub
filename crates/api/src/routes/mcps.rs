@@ -47,7 +47,7 @@ pub fn list_mcps(
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 
 	if resolved.is_all() {
-		let (_, mcps) =
+		let (_, mcps, _) =
 			manager.load_both_annotated().map_err(ApiError::from)?;
 		let items = mcps.iter().map(McpResponse::from).collect();
 		return Ok(Json(items));
@@ -150,7 +150,7 @@ pub fn get_mcp(
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 
 	if resolved.is_all() {
-		let (_, mcps) =
+		let (_, mcps, _) =
 			manager.load_both_annotated().map_err(ApiError::from)?;
 		let mcp = mcps.iter().find(|m| m.name == name).ok_or_else(|| {
 			ApiError::from(ConfigError::resource_not_found("mcp", name))

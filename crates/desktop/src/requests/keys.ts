@@ -31,6 +31,18 @@ export const queryKeys = {
 			scope: "global" | "project" | "all",
 		) => ["mcps", "detail", name, agent, scope] as const,
 	},
+	subAgents: {
+		all: () => ["sub-agents"] as const,
+		list: (
+			scope: "global" | "project" | "all" = "global",
+			projectRoot?: string,
+		) => ["sub-agents", "list", scope, projectRoot ?? null] as const,
+		detail: (
+			name: string,
+			agent: string,
+			scope: "global" | "project" | "all",
+		) => ["sub-agents", "detail", name, agent, scope] as const,
+	},
 	credentials: {
 		all: () => ["credentials"] as const,
 		list: () => ["credentials", "list"] as const,

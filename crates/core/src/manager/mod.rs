@@ -1,13 +1,14 @@
 use crate::{
 	adapters::AgentAdapter,
 	errors::{ConfigError, Result},
-	models::{AgentConfig, ConfigSource, McpServer, ResourceScope, Skill},
+	models::{AgentConfig, ConfigSource, McpServer, ResourceScope, Skill, SubAgent},
 };
 use log::{debug, info, warn};
 use std::path::{Path, PathBuf};
 
 pub mod mcp;
 pub mod skill;
+pub mod sub_agent;
 
 /// Manages configuration loading, saving, and CRUD operations
 pub struct ConfigManager {
@@ -79,48 +80,62 @@ impl ConfigManager {
 		self.config = Some(config);
 		if let Some(config) = self.config.as_ref() {
 			info!(
-				"loaded config for agent '{}' with {} skills and {} mcps",
+				"loaded config for agent '{}' with {} skills, {} mcps, \
+				 {} sub-agents",
 				self.adapter.name(),
 				config.skills.len(),
-				config.mcps.len()
+				config.mcps.len(),
+				config.sub_agents.len(),
 			);
 		}
 		Ok(self.config.as_ref().unwrap())
 	}
 
-	/// Load and merge configs from both project and global, tracking provenance.
+	/// Load and merge configs from both project and global, tracking
+	/// provenance.
 	/// Skills are deduplicated by name (project takes precedence).
+	/// Sub-agents are deduplicated by name (project takes precedence).
 	/// MCPs are not deduplicated — same name can appear from both scopes.
 	pub fn load_both_annotated(
 		&mut self,
-	) -> Result<(Vec<Skill>, Vec<McpServer>)> {
+	) -> Result<(Vec<Skill>, Vec<McpServer>, Vec<SubAgent>)> {
 		debug!(
 			"loading both-scope annotated config for agent '{}'",
 			self.adapter.name()
 		);
 		let mut skills: Vec<Skill> = Vec::new();
 		let mut mcps: Vec<McpServer> = Vec::new();
-		let mut seen = std::collections::HashSet::new();
+		let mut sub_agents: Vec<SubAgent> = Vec::new();
+		let mut seen_skills = std::collections::HashSet::new();
+		let mut seen_sub_agents = std::collections::HashSet::new();
 
-		// Project first (takes precedence for skills)
+		// Project first (takes precedence)
 		if let Some(root) = self.project_root.clone() {
 			if self
 				.adapter
 				.supports_skill_scope(ResourceScope::ProjectOnly)
 				|| self.adapter.supports_mcp_scope(ResourceScope::ProjectOnly)
+				|| self
+					.adapter
+					.supports_sub_agent_scope(ResourceScope::ProjectOnly)
 			{
 				if let Ok(project) = self
 					.adapter
 					.load_config(Some(&root), ResourceScope::ProjectOnly)
 				{
 					for mut skill in project.skills {
-						seen.insert(skill.name.clone());
+						seen_skills.insert(skill.name.clone());
 						skill.config_source = Some(ConfigSource::Project);
 						skills.push(skill);
 					}
 					for mut mcp in project.mcps {
 						mcp.config_source = Some(ConfigSource::Project);
 						mcps.push(mcp);
+					}
+					for mut agent in project.sub_agents {
+						seen_sub_agents.insert(agent.name.clone());
+						agent.config_source = Some(ConfigSource::Project);
+						sub_agents.push(agent);
 					}
 				}
 			}
@@ -129,12 +144,15 @@ impl ConfigManager {
 		// Global second
 		if self.adapter.supports_skill_scope(ResourceScope::GlobalOnly)
 			|| self.adapter.supports_mcp_scope(ResourceScope::GlobalOnly)
+			|| self
+				.adapter
+				.supports_sub_agent_scope(ResourceScope::GlobalOnly)
 		{
 			if let Ok(global) =
 				self.adapter.load_config(None, ResourceScope::GlobalOnly)
 			{
 				for mut skill in global.skills {
-					if !seen.contains(&skill.name) {
+					if !seen_skills.contains(&skill.name) {
 						skill.config_source = Some(ConfigSource::Global);
 						skills.push(skill);
 					}
@@ -143,16 +161,24 @@ impl ConfigManager {
 					mcp.config_source = Some(ConfigSource::Global);
 					mcps.push(mcp);
 				}
+				for mut agent in global.sub_agents {
+					if !seen_sub_agents.contains(&agent.name) {
+						agent.config_source = Some(ConfigSource::Global);
+						sub_agents.push(agent);
+					}
+				}
 			}
 		}
 
 		info!(
-			"loaded annotated resources for agent '{}': {} skills, {} mcps",
+			"loaded annotated resources for agent '{}': {} skills, {} mcps, \
+			 {} sub-agents",
 			self.adapter.name(),
 			skills.len(),
-			mcps.len()
+			mcps.len(),
+			sub_agents.len(),
 		);
-		Ok((skills, mcps))
+		Ok((skills, mcps, sub_agents))
 	}
 
 	/// Load and merge configs from both project and global
@@ -163,53 +189,70 @@ impl ConfigManager {
 		);
 		let mut merged_config = AgentConfig::new();
 		let mut seen_skill_names = std::collections::HashSet::new();
+		let mut seen_sub_agent_names = std::collections::HashSet::new();
 
-		// Load project config first (project skills take precedence)
+		// Load project config first (project entries take precedence)
 		if let Some(root) = &self.project_root {
 			if self
 				.adapter
 				.supports_skill_scope(ResourceScope::ProjectOnly)
 				|| self.adapter.supports_mcp_scope(ResourceScope::ProjectOnly)
+				|| self
+					.adapter
+					.supports_sub_agent_scope(ResourceScope::ProjectOnly)
 			{
 				let project = self
 					.adapter
 					.load_config(Some(root), ResourceScope::ProjectOnly)?;
-				// Add project skills
 				for skill in project.skills {
 					if !seen_skill_names.contains(&skill.name) {
 						seen_skill_names.insert(skill.name.clone());
 						merged_config.skills.push(skill);
 					}
 				}
-				// Add project MCPs
 				merged_config.mcps.extend(project.mcps);
+				for agent in project.sub_agents {
+					if !seen_sub_agent_names.contains(&agent.name) {
+						seen_sub_agent_names.insert(agent.name.clone());
+						merged_config.sub_agents.push(agent);
+					}
+				}
 			}
 		}
 
 		// Load global config
 		if self.adapter.supports_skill_scope(ResourceScope::GlobalOnly)
 			|| self.adapter.supports_mcp_scope(ResourceScope::GlobalOnly)
+			|| self
+				.adapter
+				.supports_sub_agent_scope(ResourceScope::GlobalOnly)
 		{
 			let global =
 				self.adapter.load_config(None, ResourceScope::GlobalOnly)?;
-			// Add global skills (only if not already in project)
 			for skill in global.skills {
 				if !seen_skill_names.contains(&skill.name) {
 					seen_skill_names.insert(skill.name.clone());
 					merged_config.skills.push(skill);
 				}
 			}
-			// Add global MCPs
 			merged_config.mcps.extend(global.mcps);
+			for agent in global.sub_agents {
+				if !seen_sub_agent_names.contains(&agent.name) {
+					seen_sub_agent_names.insert(agent.name.clone());
+					merged_config.sub_agents.push(agent);
+				}
+			}
 		}
 
 		self.config = Some(merged_config);
 		if let Some(config) = self.config.as_ref() {
 			info!(
-				"merged config for agent '{}' with {} skills and {} mcps",
+				"merged config for agent '{}' with {} skills, {} mcps, \
+				 {} sub-agents",
 				self.adapter.name(),
 				config.skills.len(),
-				config.mcps.len()
+				config.mcps.len(),
+				config.sub_agents.len(),
 			);
 		}
 		Ok(self.config.as_ref().unwrap())
@@ -256,6 +299,25 @@ impl ConfigManager {
 				"No configuration loaded".to_string(),
 			)),
 		}
+	}
+
+	/// Persist the current sub-agents list via the adapter.
+	pub(crate) fn save_sub_agents_current(&self) -> Result<()> {
+		let config = self.config.as_ref().ok_or_else(|| {
+			ConfigError::InvalidConfig("No configuration loaded".to_string())
+		})?;
+		self.adapter.save_sub_agents(
+			self.project_root.as_deref(),
+			self.write_scope,
+			&config.sub_agents,
+		)?;
+		info!(
+			"saved {} sub-agents for agent '{}' in scope {:?}",
+			config.sub_agents.len(),
+			self.adapter.name(),
+			self.write_scope,
+		);
+		Ok(())
 	}
 
 	pub fn validate(&self) -> Result<()> {

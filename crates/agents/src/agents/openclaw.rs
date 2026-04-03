@@ -109,12 +109,20 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 			remote: true,
 			enable_disable: false,
 		},
+		sub_agents: SubAgentCapabilities {
+			scopes: ScopeSupport {
+				global: false,
+				project: false,
+			},
+		},
 	},
 	global_skill_paths: Some(GlobalSkillPaths {
 		read: global_skills_paths,
 		write: global_skill_write_path,
 	}),
 	project_skill_paths: None,
+	load_sub_agents: load_sub_agents_noop,
+	save_sub_agents: save_sub_agents_noop,
 	cli_name: "openclaw",
 	validate_args: &["--version"],
 	project_markers: &[".openclaw"],

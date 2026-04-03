@@ -1,6 +1,7 @@
 import {
 	BookOpenIcon,
 	Cog6ToothIcon,
+	CpuChipIcon,
 	ServerIcon,
 	SquaresPlusIcon,
 } from "@heroicons/react/24/solid";
@@ -36,6 +37,12 @@ const menuItems: MenuItem[] = [
 		labelKey: "skillsSh",
 		href: "/skills-sh",
 		icon: SquaresPlusIcon,
+	},
+	{
+		type: "link",
+		labelKey: "subAgents",
+		href: "/sub-agents",
+		icon: CpuChipIcon,
 	},
 ];
 

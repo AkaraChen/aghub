@@ -8,6 +8,8 @@ pub struct AgentConfig {
 	pub skills: Vec<Skill>,
 	#[serde(default)]
 	pub mcps: Vec<McpServer>,
+	#[serde(default)]
+	pub sub_agents: Vec<SubAgent>,
 }
 
 impl AgentConfig {
@@ -15,6 +17,7 @@ impl AgentConfig {
 		Self {
 			skills: Vec::new(),
 			mcps: Vec::new(),
+			sub_agents: Vec::new(),
 		}
 	}
 }
@@ -195,6 +198,34 @@ impl McpTransport {
 
 pub(crate) fn default_true() -> bool {
 	true
+}
+
+/// A sub-agent entry with name, description, and system prompt instruction
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SubAgent {
+	pub name: String,
+	pub description: Option<String>,
+	/// The system-prompt / instruction body
+	#[serde(skip)]
+	pub instruction: Option<String>,
+	/// Absolute path to the source `.md` file
+	#[serde(skip_serializing_if = "Option::is_none", default)]
+	pub source_path: Option<String>,
+	/// Which config scope this sub-agent was loaded from
+	#[serde(skip)]
+	pub config_source: Option<ConfigSource>,
+}
+
+impl SubAgent {
+	pub fn new(name: impl Into<String>) -> Self {
+		Self {
+			name: name.into(),
+			description: None,
+			instruction: None,
+			source_path: None,
+			config_source: None,
+		}
+	}
 }
 
 /// Source of a resource (project-level vs global)

@@ -1,7 +1,7 @@
 use crate::{
 	adapters::AgentAdapter,
 	manager::ConfigManager,
-	models::{ConfigSource, McpServer, ResourceScope, Skill},
+	models::{ConfigSource, McpServer, ResourceScope, Skill, SubAgent},
 	registry,
 };
 use log::{debug, warn};
@@ -12,6 +12,7 @@ pub struct AgentResources {
 	pub agent_id: &'static str,
 	pub skills: Vec<Skill>,
 	pub mcps: Vec<McpServer>,
+	pub sub_agents: Vec<SubAgent>,
 }
 
 /// Load resources for all registered agents.
@@ -36,10 +37,11 @@ pub fn load_all_agents(
 			);
 			if scope == ResourceScope::Both {
 				match manager.load_both_annotated() {
-					Ok((skills, mcps)) => AgentResources {
+					Ok((skills, mcps, sub_agents)) => AgentResources {
 						agent_id: descriptor.id,
 						skills,
 						mcps,
+						sub_agents,
 					},
 					Err(error) => {
 						warn!(
@@ -51,6 +53,7 @@ pub fn load_all_agents(
 							agent_id: descriptor.id,
 							skills: vec![],
 							mcps: vec![],
+							sub_agents: vec![],
 						}
 					}
 				}
@@ -75,10 +78,20 @@ pub fn load_all_agents(
 								s
 							})
 							.collect();
+						let sub_agents: Vec<SubAgent> = config
+							.sub_agents
+							.iter()
+							.cloned()
+							.map(|mut a| {
+								a.config_source = config_source;
+								a
+							})
+							.collect();
 						AgentResources {
 							agent_id: descriptor.id,
 							skills,
 							mcps: config.mcps.clone(),
+							sub_agents,
 						}
 					}
 					Err(error) => {
@@ -90,6 +103,7 @@ pub fn load_all_agents(
 							agent_id: descriptor.id,
 							skills: vec![],
 							mcps: vec![],
+							sub_agents: vec![],
 						}
 					}
 				}

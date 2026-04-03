@@ -83,6 +83,12 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 			remote: true,
 			enable_disable: false,
 		},
+		sub_agents: SubAgentCapabilities {
+			scopes: ScopeSupport {
+				global: false,
+				project: false,
+			},
+		},
 	},
 	global_skill_paths: Some(GlobalSkillPaths {
 		read: global_skills_paths,
@@ -92,6 +98,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 		read: project_skills_paths,
 		write: project_skill_write_path,
 	}),
+	load_sub_agents: load_sub_agents_noop,
+	save_sub_agents: save_sub_agents_noop,
 	cli_name: "amp",
 	validate_args: &["--version"],
 	project_markers: &[".amp"],

@@ -24,6 +24,7 @@ import SettingsPage from "./pages/settings";
 import CustomAgentsPage from "./pages/settings/custom-agents";
 import MCPServersPage from "./pages/settings/mcp-servers";
 import SkillsPage from "./pages/settings/skills";
+import SubAgentsPage from "./pages/settings/sub-agents";
 import SkillsShPage from "./pages/skills-sh";
 import SkillsSearchPage from "./pages/skills-sh/search";
 import { AgentAvailabilityProvider } from "./providers/agent-availability";
@@ -226,6 +227,17 @@ function App() {
 									<Route path="/settings/custom-agents">
 										<MainLayout>
 											<CustomAgentsPage />
+										</MainLayout>
+									</Route>
+									<Route path="/sub-agents">
+										<MainLayout>
+											<ErrorBoundary>
+												<Suspense
+													fallback={<SkillsPageSkeleton />}
+												>
+													<SubAgentsPage />
+												</Suspense>
+											</ErrorBoundary>
 										</MainLayout>
 									</Route>
 									<Route path="/projects/:id">

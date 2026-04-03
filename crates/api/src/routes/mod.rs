@@ -5,6 +5,7 @@ pub mod integrations;
 pub mod market;
 pub mod mcps;
 pub mod skills;
+pub mod sub_agents;
 
 use aghub_core::{
 	create_adapter, manager::ConfigManager, models::ResourceScope,

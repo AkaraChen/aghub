@@ -1,6 +1,6 @@
 use crate::{
 	errors::Result,
-	models::{AgentConfig, McpServer, McpTransport, ResourceScope},
+	models::{AgentConfig, McpServer, McpTransport, ResourceScope, SubAgent},
 };
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -10,6 +10,7 @@ pub trait AgentAdapter: Send + Sync {
 	fn name(&self) -> &'static str;
 	fn supports_skill_scope(&self, scope: ResourceScope) -> bool;
 	fn supports_mcp_scope(&self, scope: ResourceScope) -> bool;
+	fn supports_sub_agent_scope(&self, scope: ResourceScope) -> bool;
 	fn mcp_config_path(
 		&self,
 		project_root: Option<&Path>,
@@ -26,8 +27,20 @@ pub trait AgentAdapter: Send + Sync {
 		scope: ResourceScope,
 		mcps: &[McpServer],
 	) -> Result<()>;
+	fn load_sub_agents(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+	) -> Result<Vec<SubAgent>>;
+	fn save_sub_agents(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+		agents: &[SubAgent],
+	) -> Result<()>;
 
 	/// Load complete configuration: MCPs from file + Skills from directories
+	/// + Sub-agents via the descriptor's own loader.
 	/// Adapter handles all I/O internally, including missing MCP config files
 	fn load_config(
 		&self,

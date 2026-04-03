@@ -5,4 +5,5 @@ pub mod integrations;
 pub mod market;
 pub mod mcp;
 pub mod skill;
+pub mod sub_agent;
 pub mod transfer;

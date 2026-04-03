@@ -6,6 +6,7 @@ import type {
 	CreateCredentialRequest,
 	CreateMcpRequest,
 	CreateSkillRequest,
+	CreateSubAgentRequest,
 	CredentialResponse,
 	DeleteSkillByPathRequest,
 	DeleteSkillByPathResponse,
@@ -26,9 +27,11 @@ import type {
 	ReconcileRequest,
 	SkillResponse,
 	SkillTreeNodeResponse,
+	SubAgentResponse,
 	ToolInfoDto,
 	TransferRequest,
 	UpdateMcpRequest,
+	UpdateSubAgentRequest,
 } from "../generated/dto";
 
 export function createApi(baseUrl: string) {
@@ -264,6 +267,110 @@ export function createApi(baseUrl: string) {
 			},
 			reconcile(body: ReconcileRequest): Promise<OperationBatchResponse> {
 				return client.post("mcps/reconcile", { json: body }).json();
+			},
+		},
+		subAgents: {
+			listAll(
+				scope: "global" | "project" | "all" = "global",
+				projectRoot?: string,
+			): Promise<SubAgentResponse[]> {
+				return client
+					.get("agents/all/sub-agents", {
+						searchParams: {
+							scope,
+							...(projectRoot
+								? { project_root: projectRoot }
+								: {}),
+						},
+					})
+					.json();
+			},
+			list(
+				agent: string,
+				scope: "global" | "project" | "all" = "global",
+				projectRoot?: string,
+			): Promise<SubAgentResponse[]> {
+				return client
+					.get(`agents/${agent}/sub-agents`, {
+						searchParams: {
+							scope,
+							...(projectRoot
+								? { project_root: projectRoot }
+								: {}),
+						},
+					})
+					.json();
+			},
+			get(
+				name: string,
+				agent: string,
+				scope: "global" | "project" | "all",
+				projectRoot?: string,
+			): Promise<SubAgentResponse> {
+				return client
+					.get(`agents/${agent}/sub-agents/${name}`, {
+						searchParams: {
+							scope,
+							...(projectRoot
+								? { project_root: projectRoot }
+								: {}),
+						},
+					})
+					.json();
+			},
+			create(
+				agent: string,
+				scope: "global" | "project",
+				body: CreateSubAgentRequest,
+				projectRoot?: string,
+			): Promise<SubAgentResponse> {
+				return client
+					.post(`agents/${agent}/sub-agents`, {
+						searchParams: {
+							scope,
+							...(projectRoot
+								? { project_root: projectRoot }
+								: {}),
+						},
+						json: body,
+					})
+					.json();
+			},
+			update(
+				name: string,
+				agent: string,
+				scope: "global" | "project",
+				body: UpdateSubAgentRequest,
+				projectRoot?: string,
+			): Promise<SubAgentResponse> {
+				return client
+					.put(`agents/${agent}/sub-agents/${name}`, {
+						searchParams: {
+							scope,
+							...(projectRoot
+								? { project_root: projectRoot }
+								: {}),
+						},
+						json: body,
+					})
+					.json();
+			},
+			delete(
+				name: string,
+				agent: string,
+				scope: "global" | "project",
+				projectRoot?: string,
+			): Promise<void> {
+				return client
+					.delete(`agents/${agent}/sub-agents/${name}`, {
+						searchParams: {
+							scope,
+							...(projectRoot
+								? { project_root: projectRoot }
+								: {}),
+						},
+					})
+					.then(() => undefined);
 			},
 		},
 		market: {

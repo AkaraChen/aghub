@@ -1,7 +1,7 @@
 use crate::{
 	adapters::AgentAdapter,
 	errors::Result,
-	models::{AgentConfig, McpServer, McpTransport, ResourceScope},
+	models::{AgentConfig, McpServer, McpTransport, ResourceScope, SubAgent},
 	skills::discovery::load_skills_from_dirs,
 	AgentDescriptor,
 };
@@ -40,6 +40,10 @@ impl AgentAdapter for &'static AgentDescriptor {
 
 	fn supports_mcp_scope(&self, scope: ResourceScope) -> bool {
 		AgentDescriptor::supports_mcp_scope(self, scope)
+	}
+
+	fn supports_sub_agent_scope(&self, scope: ResourceScope) -> bool {
+		AgentDescriptor::supports_sub_agent_scope(self, scope)
 	}
 
 	fn mcp_config_path(
@@ -155,6 +159,11 @@ impl AgentAdapter for &'static AgentDescriptor {
 			}
 		}
 
+		if self.supports_sub_agent_scope(scope) {
+			config.sub_agents =
+				(self.load_sub_agents)(project_root, scope)?;
+		}
+
 		Ok(config)
 	}
 
@@ -200,6 +209,23 @@ impl AgentAdapter for &'static AgentDescriptor {
 		}
 
 		(self.save_mcps)(project_root, scope, mcps)
+	}
+
+	fn load_sub_agents(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+	) -> Result<Vec<SubAgent>> {
+		(self.load_sub_agents)(project_root, scope)
+	}
+
+	fn save_sub_agents(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+		agents: &[SubAgent],
+	) -> Result<()> {
+		(self.save_sub_agents)(project_root, scope, agents)
 	}
 
 	fn validate_command(&self, config_path: Option<&Path>) -> Command {

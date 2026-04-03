@@ -47,3 +47,20 @@ export function supportsSkillMutation(
 		? agent.capabilities.skills.mutable_global
 		: agent.capabilities.skills.mutable_project;
 }
+
+export function supportsSubAgent(
+	agent: Pick<AgentInfo, "capabilities">,
+): boolean {
+	return (
+		agent.capabilities.sub_agents.scopes.global ||
+		agent.capabilities.sub_agents.scopes.project
+	);
+}
+
+export function supportsSubAgentScope(
+	agent: Pick<AgentInfo, "capabilities">,
+	scope: AgentScope,
+): boolean {
+	return agent.capabilities.sub_agents.scopes[scope];
+}
+

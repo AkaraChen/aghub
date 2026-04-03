@@ -12,6 +12,7 @@ import { ImportGithubSkillPanel } from "../../components/import-github-skill-pan
 import { ImportMcpPanel } from "../../components/import-mcp-panel";
 import { ImportSkillPanel } from "../../components/import-skill-panel";
 import { McpDetail } from "../../components/mcp-detail";
+import { ProjectSubAgents } from "../../components/project-sub-agents";
 import { SkillDetail } from "../../components/skill-detail";
 import { UnifiedResourceList } from "../../components/unified-resource-list";
 import type { McpResponse, SkillResponse } from "../../generated/dto";
@@ -20,6 +21,7 @@ import { useProjects } from "../../hooks/use-projects";
 import { getMcpMergeKey } from "../../lib/utils";
 import { mcpListQueryOptions } from "../../requests/mcps";
 import { skillListQueryOptions } from "../../requests/skills";
+import { subAgentListQueryOptions } from "../../requests/sub-agents";
 
 export default function ProjectDetailPage() {
 	const { t } = useTranslation();
@@ -81,6 +83,24 @@ export default function ProjectDetailPage() {
 	});
 
 	const isLoading = isLoadingMcps || isLoadingSkills;
+
+	const {
+		data: subAgents = [],
+		refetch: refetchSubAgents,
+		isFetching: isFetchingSubAgents,
+	} = useQuery({
+		...subAgentListQueryOptions({
+			api,
+			scope: "all",
+			projectRoot: project?.path,
+			enabled: !!project?.path,
+		}),
+	});
+
+	const projectSubAgents = useMemo(
+		() => subAgents.filter((a) => a.source === "project"),
+		[subAgents],
+	);
 
 	// Filter to project-scoped only
 	const projectMcps = useMemo(
@@ -319,6 +339,12 @@ export default function ProjectDetailPage() {
 					</div>
 				)}
 
+				<ProjectSubAgents
+					subAgents={projectSubAgents}
+					projectPath={project.path}
+					onRefresh={refetchSubAgents}
+					isRefreshing={isFetchingSubAgents}
+				/>
 				<BulkDeleteDialog
 					isOpen={isBulkDeleteDialogOpen}
 					onClose={() => setIsBulkDeleteDialogOpen(false)}
