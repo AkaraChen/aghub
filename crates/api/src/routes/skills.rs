@@ -30,7 +30,7 @@ use crate::{
 		OperationBatchResponse, ReconcileRequest, TransferRequest,
 	},
 	error::{ApiCreated, ApiError, ApiNoContent, ApiResult},
-	extractors::{AgentParam, ScopeParams},
+	extractors::{AgentParam, JsonBody, ScopeParams},
 	routes::{
 		build_manager_from_resolved, require_writable_scope,
 		resolved_to_resource_scope,
@@ -79,7 +79,7 @@ where
 
 #[post("/skills/transfer", data = "<body>")]
 pub fn transfer_skill_route(
-	body: Json<TransferRequest>,
+	body: JsonBody<TransferRequest>,
 ) -> ApiResult<OperationBatchResponse> {
 	let req = body.into_inner();
 	let source = req.source.to_core()?;
@@ -95,7 +95,7 @@ pub fn transfer_skill_route(
 
 #[post("/skills/reconcile", data = "<body>")]
 pub fn reconcile_skill_route(
-	body: Json<ReconcileRequest>,
+	body: JsonBody<ReconcileRequest>,
 ) -> ApiResult<OperationBatchResponse> {
 	let req = body.into_inner();
 	let source = req.source.to_core()?;
@@ -138,7 +138,7 @@ pub fn reconcile_skill_route(
 
 #[delete("/skills/by-path", data = "<body>")]
 pub fn delete_skill_by_path(
-	body: Json<DeleteSkillByPathRequest>,
+	body: JsonBody<DeleteSkillByPathRequest>,
 ) -> ApiResult<DeleteSkillByPathResponse> {
 	let req = body.into_inner();
 
@@ -495,7 +495,7 @@ pub fn list_skills(
 pub fn create_skill(
 	agent: AgentParam,
 	scope: ScopeParams,
-	body: Json<CreateSkillRequest>,
+	body: JsonBody<CreateSkillRequest>,
 ) -> ApiCreated<SkillResponse> {
 	let resolved = scope.resolve()?;
 	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
@@ -517,7 +517,7 @@ pub fn create_skill(
 pub fn import_skill(
 	agent: AgentParam,
 	scope: ScopeParams,
-	body: Json<crate::dto::skill::ImportSkillRequest>,
+	body: JsonBody<crate::dto::skill::ImportSkillRequest>,
 ) -> ApiResult<SkillResponse> {
 	let resolved = scope.resolve()?;
 	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
@@ -568,7 +568,7 @@ pub fn update_skill(
 	agent: AgentParam,
 	name: &str,
 	scope: ScopeParams,
-	body: Json<UpdateSkillRequest>,
+	body: JsonBody<UpdateSkillRequest>,
 ) -> ApiResult<SkillResponse> {
 	let resolved = scope.resolve()?;
 	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
@@ -662,7 +662,7 @@ pub fn list_all_agents_skills(
 
 #[post("/skills/install", data = "<body>")]
 pub async fn install_skill(
-	body: Json<InstallSkillRequest>,
+	body: JsonBody<InstallSkillRequest>,
 ) -> ApiResult<InstallSkillResponse> {
 	let req = body.into_inner();
 
@@ -734,7 +734,7 @@ pub async fn install_skill(
 
 #[post("/skills/open", format = "json", data = "<request>")]
 pub async fn open_skill_folder(
-	request: Json<OpenSkillFolderRequest>,
+	request: JsonBody<OpenSkillFolderRequest>,
 ) -> Result<(), String> {
 	let req = request.into_inner();
 	let path = expand_tilde_path(&req.skill_path);
@@ -748,7 +748,7 @@ pub async fn open_skill_folder(
 
 #[post("/skills/edit", format = "json", data = "<request>")]
 pub async fn edit_skill_folder(
-	request: Json<EditSkillFolderRequest>,
+	request: JsonBody<EditSkillFolderRequest>,
 ) -> Result<(), String> {
 	let req = request.into_inner();
 	let path = expand_tilde_path(&req.skill_path);
@@ -861,7 +861,7 @@ pub fn get_project_skill_lock(
 
 #[post("/skills/git/scan", data = "<body>")]
 pub async fn git_scan_skills(
-	body: Json<GitScanRequest>,
+	body: JsonBody<GitScanRequest>,
 	sessions: &rocket::State<GitCloneSessions>,
 ) -> ApiResult<GitScanResponse> {
 	let req = body.into_inner();
@@ -1060,7 +1060,7 @@ fn detect_current_branch(repo_path: &std::path::Path) -> Option<String> {
 
 #[post("/skills/git/install", data = "<body>")]
 pub async fn git_install_skills(
-	body: Json<GitInstallRequest>,
+	body: JsonBody<GitInstallRequest>,
 	sessions: &rocket::State<GitCloneSessions>,
 ) -> ApiResult<GitInstallResponse> {
 	let req = body.into_inner();
@@ -1157,7 +1157,7 @@ pub async fn git_install_skills(
 /// agent identifiers.
 #[post("/skills/git/sync", data = "<body>")]
 pub async fn git_sync_skill(
-	body: Json<GitSyncRequest>,
+	body: JsonBody<GitSyncRequest>,
 	sessions: &rocket::State<GitCloneSessions>,
 ) -> ApiResult<GitSyncResponse> {
 	let req = body.into_inner();

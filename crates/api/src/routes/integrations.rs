@@ -5,6 +5,7 @@ use rocket::serde::json::Json;
 use crate::dto::integrations::{
 	CodeEditorType, OpenWithEditorRequest, ToolInfoDto, ToolPreferencesDto,
 };
+use crate::extractors::JsonBody;
 
 #[get("/integrations/code-editors")]
 pub fn list_code_editors() -> Json<Vec<ToolInfoDto>> {
@@ -17,7 +18,7 @@ pub fn list_code_editors() -> Json<Vec<ToolInfoDto>> {
 
 #[post("/integrations/open-with-editor", format = "json", data = "<request>")]
 pub async fn open_with_editor(
-	request: Json<OpenWithEditorRequest>,
+	request: JsonBody<OpenWithEditorRequest>,
 ) -> Result<(), String> {
 	let req = request.into_inner();
 

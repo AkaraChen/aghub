@@ -2,6 +2,7 @@ use rocket::serde::json::Json;
 use rocket::Request;
 
 use crate::error::ErrorBody;
+use crate::extractors::JsonParseError;
 
 #[catch(404)]
 pub fn not_found(req: &Request) -> Json<ErrorBody> {
@@ -12,10 +13,19 @@ pub fn not_found(req: &Request) -> Json<ErrorBody> {
 }
 
 #[catch(422)]
-pub fn unprocessable_entity(_: &Request) -> Json<ErrorBody> {
+pub fn unprocessable_entity(req: &Request) -> Json<ErrorBody> {
+	let cached = req.local_cache(|| JsonParseError(None));
+	let error = match &cached.0 {
+		Some(detail) => {
+			format!("Unprocessable entity: {detail}")
+		}
+		None => {
+			"Unprocessable entity — check your request body and parameters"
+				.to_string()
+		}
+	};
 	Json(ErrorBody {
-		error: "Unprocessable entity — check your request body and parameters"
-			.to_string(),
+		error,
 		code: "UNPROCESSABLE_ENTITY",
 	})
 }
@@ -34,7 +44,11 @@ pub fn default_catcher(
 	_: &Request,
 ) -> Json<ErrorBody> {
 	Json(ErrorBody {
-		error: format!("HTTP {}", status.code),
+		error: format!(
+			"{} {}",
+			status.code,
+			status.reason().unwrap_or("Unknown Error")
+		),
 		code: "UNKNOWN_ERROR",
 	})
 }

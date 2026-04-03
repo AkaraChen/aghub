@@ -11,7 +11,7 @@ use crate::{
 		OperationBatchResponse, ReconcileRequest, TransferRequest,
 	},
 	error::{ApiCreated, ApiError, ApiNoContent, ApiResult},
-	extractors::{AgentParam, ScopeParams},
+	extractors::{AgentParam, JsonBody, ScopeParams},
 	routes::{
 		build_manager_from_resolved, require_writable_scope,
 		resolved_to_resource_scope,
@@ -60,7 +60,7 @@ pub fn list_mcps(
 
 #[post("/mcps/transfer", data = "<body>")]
 pub fn transfer_mcp_route(
-	body: Json<TransferRequest>,
+	body: JsonBody<TransferRequest>,
 ) -> ApiResult<OperationBatchResponse> {
 	let req = body.into_inner();
 	let source = req.source.to_core()?;
@@ -76,7 +76,7 @@ pub fn transfer_mcp_route(
 
 #[post("/mcps/reconcile", data = "<body>")]
 pub fn reconcile_mcp_route(
-	body: Json<ReconcileRequest>,
+	body: JsonBody<ReconcileRequest>,
 ) -> ApiResult<OperationBatchResponse> {
 	let req = body.into_inner();
 	let source = req.source.to_core()?;
@@ -120,7 +120,7 @@ pub fn reconcile_mcp_route(
 pub fn create_mcp(
 	agent: AgentParam,
 	scope: ScopeParams,
-	body: Json<CreateMcpRequest>,
+	body: JsonBody<CreateMcpRequest>,
 ) -> ApiCreated<McpResponse> {
 	let resolved = scope.resolve()?;
 	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
@@ -170,7 +170,7 @@ pub fn update_mcp(
 	agent: AgentParam,
 	name: &str,
 	scope: ScopeParams,
-	body: Json<UpdateMcpRequest>,
+	body: JsonBody<UpdateMcpRequest>,
 ) -> ApiResult<McpResponse> {
 	let resolved = scope.resolve()?;
 	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
@@ -258,11 +258,10 @@ pub fn list_all_agents_mcps(scope: ScopeParams) -> ApiResult<Vec<McpResponse>> {
 mod tests {
 	use super::*;
 	use aghub_core::models::AgentType;
-	use rocket::serde::json::Json;
 
 	use crate::{
 		dto::mcp::{CreateMcpRequest, TransportDto},
-		extractors::AgentParam,
+		extractors::{AgentParam, JsonBody},
 	};
 
 	#[test]
@@ -273,7 +272,7 @@ mod tests {
 				scope: Some("global".to_string()),
 				project_root: None,
 			},
-			Json(CreateMcpRequest {
+			JsonBody(CreateMcpRequest {
 				name: "pi-mcp".to_string(),
 				transport: TransportDto::Stdio {
 					command: "echo".to_string(),
