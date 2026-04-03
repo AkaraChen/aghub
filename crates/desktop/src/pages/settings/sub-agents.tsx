@@ -201,21 +201,12 @@ export default function SubAgentsPage() {
 										textValue={agent.name}
 										className="data-selected:bg-surface"
 									>
-										<div className="flex items-center justify-between gap-2">
-											<span className="truncate font-medium">
+										<div className="flex w-full items-center gap-2">
+											<CpuChipIcon className="size-4 shrink-0 text-muted" />
+											<Label className="flex-1 truncate">
 												{agent.name}
-											</span>
-											{agent.agent && (
-												<span className="shrink-0 rounded-full bg-surface-secondary px-1.5 py-0.5 text-xs text-muted">
-													{agent.agent}
-												</span>
-											)}
+											</Label>
 										</div>
-										{agent.description && (
-											<p className="mt-0.5 truncate text-xs text-muted">
-												{agent.description}
-											</p>
-										)}
 									</ListBox.Item>
 								);
 							})}
