@@ -1,8 +1,6 @@
 use crate::commands::start_server;
 use log::info;
 use tauri::{Manager, WebviewWindow};
-#[cfg(any(windows, target_os = "linux"))]
-use tauri_plugin_deep_link::DeepLinkExt;
 use tauri_plugin_log::fern::colors::{Color, ColoredLevelConfig};
 use tauri_plugin_log::{Target, TargetKind};
 
@@ -101,10 +99,14 @@ pub fn run() {
 				info!("desktop updater and process plugins initialized");
 
 				#[cfg(any(windows, target_os = "linux"))]
-				if let Err(error) = app.deep_link().register_all() {
-					warn!("failed to register deep-link schemes: {error}");
-				} else {
-					debug!("registered desktop deep-link schemes");
+				{
+					use log::{debug, warn};
+					use tauri_plugin_deep_link::DeepLinkExt;
+					if let Err(error) = app.deep_link().register_all() {
+						warn!("failed to register deep-link schemes: {error}");
+					} else {
+						debug!("registered desktop deep-link schemes");
+					}
 				}
 			}
 
