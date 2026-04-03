@@ -44,7 +44,8 @@ export function createApi(baseUrl: string) {
 			beforeError: [
 				async (error: HTTPError) => {
 					try {
-						const body = (await error.response.json()) as ApiErrorBody;
+						const body =
+							(await error.response.json()) as ApiErrorBody;
 						if (body.error) {
 							error.message = body.error;
 						}
