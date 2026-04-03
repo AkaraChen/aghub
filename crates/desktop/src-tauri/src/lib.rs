@@ -32,6 +32,14 @@ pub fn run() {
 					Target::new(TargetKind::Webview),
 				])
 				.level(log::LevelFilter::Info)
+				.format(|out, message, record| {
+					out.finish(format_args!(
+						"[{} {}] {}",
+						record.level(),
+						record.target(),
+						message
+					))
+				})
 				.build(),
 		)
 		.manage(AppState {
