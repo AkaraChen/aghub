@@ -1241,7 +1241,7 @@ mod tests {
 	fn git_install_groups_agents_by_primary_target_dir() {
 		let project_root = std::path::PathBuf::from("/tmp/demo");
 		let (groups, invalid) = build_git_install_groups(
-			&vec!["claude".into(), "opencode".into(), "codex".into()],
+			&["claude".into(), "opencode".into(), "codex".into()],
 			ResourceScope::ProjectOnly,
 			Some(&project_root),
 		);

@@ -25,8 +25,8 @@ impl TestLockGuard {
 
 impl Drop for TestLockGuard {
 	fn drop(&mut self) {
-		if self.old_xdg.is_some() {
-			std::env::set_var("XDG_STATE_HOME", self.old_xdg.as_ref().unwrap());
+		if let Some(old_xdg) = &self.old_xdg {
+			std::env::set_var("XDG_STATE_HOME", old_xdg);
 		} else {
 			std::env::remove_var("XDG_STATE_HOME");
 		}
