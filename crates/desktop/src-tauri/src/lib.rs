@@ -3,6 +3,7 @@ use log::{debug, info, warn};
 use tauri::{Manager, WebviewWindow};
 #[cfg(any(windows, target_os = "linux"))]
 use tauri_plugin_deep_link::DeepLinkExt;
+use tauri_plugin_log::fern::colors::{Color, ColoredLevelConfig};
 use tauri_plugin_log::{Target, TargetKind};
 
 mod commands;
@@ -20,26 +21,57 @@ fn focus_main_window(window: &WebviewWindow) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
 	let _ = fix_path_env::fix();
+	let colors_line = ColoredLevelConfig::new()
+		.error(Color::Red)
+		.warn(Color::Yellow)
+		.info(Color::White)
+		.debug(Color::White)
+		.trace(Color::BrightBlack);
+	let colors_level = colors_line.info(Color::Green);
 	tauri::Builder::default()
 		.plugin(
 			tauri_plugin_log::Builder::new()
 				.clear_targets()
 				.targets([
-					Target::new(TargetKind::Stdout),
+					Target::new(TargetKind::Stdout).format(
+						move |out, message, record| {
+							out.finish(format_args!(
+								"{color_line}[{level} {target}] {message}\x1B[0m",
+								color_line = format_args!(
+									"\x1B[{}m",
+									colors_line
+										.get_color(&record.level())
+										.to_fg_str()
+								),
+								level = colors_level.color(record.level()),
+								target = record.target(),
+								message = message,
+							));
+						},
+					),
 					Target::new(TargetKind::LogDir {
 						file_name: Some("aghub".into()),
+					})
+					.format(|out, message, record| {
+						out.finish(format_args!(
+							"[{} {}] {}",
+							record.level(),
+							record.target(),
+							message
+						))
 					}),
-					Target::new(TargetKind::Webview),
+					Target::new(TargetKind::Webview).format(
+						|out, message, record| {
+							out.finish(format_args!(
+								"[{} {}] {}",
+								record.level(),
+								record.target(),
+								message
+							))
+						},
+					),
 				])
 				.level(log::LevelFilter::Info)
-				.format(|out, message, record| {
-					out.finish(format_args!(
-						"[{} {}] {}",
-						record.level(),
-						record.target(),
-						message
-					))
-				})
 				.build(),
 		)
 		.manage(AppState {
