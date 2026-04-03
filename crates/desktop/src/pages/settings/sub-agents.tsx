@@ -59,8 +59,7 @@ export default function SubAgentsPage() {
 	const [panel, setPanel] = useState<PanelState>({ type: "empty" });
 
 	const subAgentCapableAgents = useMemo(
-		() =>
-			availableAgents.filter((a) => a.isUsable && supportsSubAgent(a)),
+		() => availableAgents.filter((a) => a.isUsable && supportsSubAgent(a)),
 		[availableAgents],
 	);
 
@@ -169,9 +168,7 @@ export default function SubAgentsPage() {
 									panel.agent.name === agent.name &&
 									panel.agent.agent === agent.agent;
 								return (
-									<li
-										key={`${agent.agent}:${agent.name}`}
-									>
+									<li key={`${agent.agent}:${agent.name}`}>
 										<button
 											type="button"
 											onClick={() =>
@@ -377,7 +374,9 @@ function SubAgentCreateForm({
 											variant="secondary"
 											isDisabled={agents.length === 0}
 										>
-											<Label>{t("agentManagement")}</Label>
+											<Label>
+												{t("agentManagement")}
+											</Label>
 											<Select.Trigger>
 												<Select.Value />
 												<Select.Indicator />
@@ -419,13 +418,17 @@ function SubAgentCreateForm({
 											variant="secondary"
 											isRequired
 											validationBehavior="aria"
-											isInvalid={Boolean(fieldState.error)}
+											isInvalid={Boolean(
+												fieldState.error,
+											)}
 										>
 											<Label>{t("subAgentName")}</Label>
 											<Input
 												value={field.value}
 												onChange={(e) =>
-													field.onChange(e.target.value)
+													field.onChange(
+														e.target.value,
+													)
 												}
 												onBlur={field.onBlur}
 												placeholder={t(
@@ -449,11 +452,15 @@ function SubAgentCreateForm({
 											className="w-full"
 											variant="secondary"
 										>
-											<Label>{t("subAgentDescription")}</Label>
+											<Label>
+												{t("subAgentDescription")}
+											</Label>
 											<Input
 												value={field.value}
 												onChange={(e) =>
-													field.onChange(e.target.value)
+													field.onChange(
+														e.target.value,
+													)
 												}
 												onBlur={field.onBlur}
 												placeholder={t(
@@ -477,11 +484,15 @@ function SubAgentCreateForm({
 											className="w-full"
 											variant="secondary"
 										>
-											<Label>{t("subAgentInstruction")}</Label>
+											<Label>
+												{t("subAgentInstruction")}
+											</Label>
 											<TextArea
 												value={field.value}
 												onChange={(e) =>
-													field.onChange(e.target.value)
+													field.onChange(
+														e.target.value,
+													)
 												}
 												onBlur={field.onBlur}
 												placeholder={t(
@@ -577,10 +588,7 @@ function SubAgentEditForm({
 				</h2>
 			</div>
 
-			<Form
-				validationBehavior="aria"
-				onSubmit={handleSubmit(onSubmit)}
-			>
+			<Form validationBehavior="aria" onSubmit={handleSubmit(onSubmit)}>
 				<Fieldset>
 					<Fieldset.Group>
 						<Controller
@@ -746,7 +754,9 @@ function SubAgentDetail({
 										size="md"
 										className="min-h-[44px] min-w-[44px] text-muted hover:text-danger"
 										aria-label={t("deleteSubAgent")}
-										onPress={() => setDeleteDialogOpen(true)}
+										onPress={() =>
+											setDeleteDialogOpen(true)
+										}
 									>
 										<TrashIcon className="size-4" />
 									</Button>
@@ -763,7 +773,11 @@ function SubAgentDetail({
 									<h3 className="text-xs font-medium uppercase tracking-wider text-muted">
 										{t("agentManagement")}
 									</h3>
-									<Chip size="sm" variant="soft" color="default">
+									<Chip
+										size="sm"
+										variant="soft"
+										color="default"
+									>
 										{agent.agent}
 									</Chip>
 								</div>

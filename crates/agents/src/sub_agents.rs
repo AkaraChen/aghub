@@ -38,7 +38,11 @@ pub fn parse_sub_agent_file(path: &Path) -> Option<SubAgent> {
 
 	match aghub_markdown::parse_opt::<SubAgentFrontmatter>(&content) {
 		Ok((Some(front), body)) => Some(SubAgent {
-			name: if front.name.is_empty() { stem } else { front.name },
+			name: if front.name.is_empty() {
+				stem
+			} else {
+				front.name
+			},
 			description: front.description,
 			instruction: Some(body.to_string()),
 			source_path: Some(path.to_string_lossy().into_owned()),
@@ -105,9 +109,7 @@ pub fn load_sub_agents_from_dir(dir: &Path) -> Vec<SubAgent> {
 	};
 	let mut agents: Vec<SubAgent> = entries
 		.flatten()
-		.filter(|e| {
-			e.path().extension().and_then(|x| x.to_str()) == Some("md")
-		})
+		.filter(|e| e.path().extension().and_then(|x| x.to_str()) == Some("md"))
 		.filter_map(|e| parse_sub_agent_file(&e.path()))
 		.collect();
 	agents.sort_by(|a, b| a.name.cmp(&b.name));
@@ -142,8 +144,8 @@ pub fn load_scoped_sub_agents(
 			Ok(load_sub_agents_from_dir(&dir))
 		}
 		ResourceScope::ProjectOnly => {
-			let Some(dir) = project_root
-				.and_then(|root| project_dir.and_then(|f| f(root)))
+			let Some(dir) =
+				project_root.and_then(|root| project_dir.and_then(|f| f(root)))
 			else {
 				return Ok(Vec::new());
 			};
@@ -170,8 +172,7 @@ pub fn save_scoped_sub_agents(
 	let dir = match scope {
 		ResourceScope::GlobalOnly => global_dir.and_then(|f| f()),
 		ResourceScope::ProjectOnly => {
-			project_root
-				.and_then(|root| project_dir.and_then(|f| f(root)))
+			project_root.and_then(|root| project_dir.and_then(|f| f(root)))
 		}
 		ResourceScope::Both => {
 			return Err(ConfigError::InvalidConfig(
@@ -208,14 +209,8 @@ mod tests {
 
 		let agent = parse_sub_agent_file(&path).unwrap();
 		assert_eq!(agent.name, "My Agent");
-		assert_eq!(
-			agent.description,
-			Some("does stuff".to_string())
-		);
-		assert_eq!(
-			agent.instruction,
-			Some("Do the thing.".to_string())
-		);
+		assert_eq!(agent.description, Some("does stuff".to_string()));
+		assert_eq!(agent.instruction, Some("Do the thing.".to_string()));
 	}
 
 	#[test]
@@ -244,10 +239,7 @@ mod tests {
 		let loaded = load_sub_agents_from_dir(dir.path());
 		assert_eq!(loaded.len(), 1);
 		assert_eq!(loaded[0].name, "Test Agent");
-		assert_eq!(
-			loaded[0].description,
-			Some("desc: with colon".to_string())
-		);
+		assert_eq!(loaded[0].description, Some("desc: with colon".to_string()));
 		assert_eq!(loaded[0].instruction, Some("Do X.".to_string()));
 	}
 

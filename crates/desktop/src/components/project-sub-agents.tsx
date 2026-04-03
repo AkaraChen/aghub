@@ -425,7 +425,9 @@ function SubAgentInlineForm({
 											field.onChange(e.target.value)
 										}
 										onBlur={field.onBlur}
-										placeholder={t("subAgentNamePlaceholder")}
+										placeholder={t(
+											"subAgentNamePlaceholder",
+										)}
 										variant="secondary"
 									/>
 									{fieldState.error && (
@@ -496,7 +498,9 @@ function SubAgentInlineForm({
 					</Button>
 					<Button
 						type="submit"
-						isDisabled={isLoading || isSubmitting || agents.length === 0}
+						isDisabled={
+							isLoading || isSubmitting || agents.length === 0
+						}
 					>
 						{isLoading ? t("creating") : t("createSubAgent")}
 					</Button>

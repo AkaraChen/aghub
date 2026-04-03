@@ -128,8 +128,7 @@ mod tests {
 
 	#[test]
 	fn parse_basic() {
-		let (m, body) =
-			parse::<Meta>("---\nname: foo\n---\nHello").unwrap();
+		let (m, body) = parse::<Meta>("---\nname: foo\n---\nHello").unwrap();
 		assert_eq!(m.name, "foo");
 		assert_eq!(m.description, None);
 		assert_eq!(body, "Hello");
@@ -155,16 +154,14 @@ mod tests {
 
 	#[test]
 	fn parse_opt_no_frontmatter() {
-		let (fm, body) =
-			parse_opt::<Meta>("No frontmatter here").unwrap();
+		let (fm, body) = parse_opt::<Meta>("No frontmatter here").unwrap();
 		assert!(fm.is_none());
 		assert_eq!(body, "No frontmatter here");
 	}
 
 	#[test]
 	fn parse_opt_with_frontmatter() {
-		let (fm, body) =
-			parse_opt::<Meta>("---\nname: x\n---\nbody").unwrap();
+		let (fm, body) = parse_opt::<Meta>("---\nname: x\n---\nbody").unwrap();
 		assert!(fm.is_some());
 		assert_eq!(body, "body");
 	}
