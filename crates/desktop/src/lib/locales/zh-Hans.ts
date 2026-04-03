@@ -40,6 +40,8 @@ export default {
 	providedSkills: "提供的技能",
 	installationInfo: "安装信息",
 	openInstallFolder: "打开安装文件夹",
+	capabilities: "功能",
+	noCapabilities: "未提供功能",
 	selectPlugin: "选择一个插件查看详情",
 	agentManagement: "代理",
 	projects: "项目",

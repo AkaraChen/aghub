@@ -391,10 +391,11 @@ export function PluginDetail({
 												</span>
 											</div>
 											<div className="space-y-1">
+												{ }
 												{event.matchers.map(
 													(matcher, idx) => (
 														<div
-															key={idx}
+															key={`${event.event}-${matcher.matcher ?? "all"}-${idx}`}
 															className="text-xs text-muted"
 														>
 															{matcher.matcher ? (

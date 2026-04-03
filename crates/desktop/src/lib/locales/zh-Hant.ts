@@ -40,6 +40,8 @@ export default {
 	providedSkills: "提供的技能",
 	installationInfo: "安裝資訊",
 	openInstallFolder: "開啟安裝資料夾",
+	capabilities: "功能",
+	noCapabilities: "未提供功能",
 	selectPlugin: "選擇一個外掛檢視詳情",
 	agentManagement: "代理",
 	projects: "專案",
