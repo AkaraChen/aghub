@@ -14,4 +14,7 @@ export default antfu({
 			},
 		},
 	})
+	.append({
+		ignores: ["./src/generated/**"],
+	})
 	.removePlugins("perfectionist");

@@ -1,4 +1,7 @@
 import { BookOpenIcon, EyeIcon, XCircleIcon } from "@heroicons/react/24/solid";
+
+const BACKSLASH_RE = /\\/g;
+
 import {
 	Alert,
 	Button,
@@ -69,16 +72,16 @@ export function SyncGithubSkillDialog({
 	// Match the current skill in the scanned results by the known skillPath.
 	// Falls back to matching by skill name.
 	const normalizedSkillPath = skillPath
-		? skillPath.replace(/\\/g, "/")
+		? skillPath.replace(BACKSLASH_RE, "/")
 		: null;
 	const matchedSkill =
 		scannedSkills.find((s) => {
 			if (normalizedSkillPath) {
-				const normPath = s.path.replace(/\\/g, "/");
+				const normPath = s.path.replace(BACKSLASH_RE, "/");
 				return (
 					normPath === normalizedSkillPath ||
-					normPath.startsWith(normalizedSkillPath + "/") ||
-					normalizedSkillPath.startsWith(normPath + "/")
+					normPath.startsWith(`${normalizedSkillPath}/`) ||
+					normalizedSkillPath.startsWith(`${normPath}/`)
 				);
 			}
 			return s.name === group.items[0].name;
