@@ -72,8 +72,23 @@ pub fn run() {
 						},
 					),
 				])
-				.format(|out, message, _record| {
-					out.finish(format_args!("{message}"))
+				.format(|out, message, record| {
+					let level = record.level().to_string();
+					let message = message.to_string();
+					let target = record.target();
+					let has_metadata =
+						message.contains(target) && message.contains(&level);
+
+					if has_metadata {
+						out.finish(format_args!("{message}"))
+					} else {
+						out.finish(format_args!(
+							"[{} {}] {}",
+							record.level(),
+							target,
+							message
+						))
+					}
 				})
 				.level(log::LevelFilter::Info)
 				.build(),
