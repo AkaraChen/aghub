@@ -1,4 +1,5 @@
 import {
+	ChevronDownIcon,
 	CpuChipIcon,
 	ExclamationTriangleIcon,
 	PencilIcon,
@@ -6,6 +7,7 @@ import {
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import {
+	Accordion,
 	Button,
 	Card,
 	Chip,
@@ -885,25 +887,40 @@ function SubAgentDetail({
 									</Chip>
 								</div>
 							)}
-
-							<div className="space-y-3">
-								<h3 className="text-xs font-medium uppercase tracking-wider text-muted">
-									{t("subAgentInstruction")}
-								</h3>
-								{agent.instruction ? (
-									<div className="overflow-x-auto rounded-lg border border-separator bg-surface-secondary px-3 py-2">
-										<code className="block whitespace-pre-wrap break-words font-mono text-xs leading-5 text-foreground">
-											{agent.instruction}
-										</code>
-									</div>
-								) : (
-									<p className="text-sm text-muted">
-										{t("subAgentNoInstruction")}
-									</p>
-								)}
-							</div>
 						</Card.Content>
 					</Card>
+
+					<Accordion variant="surface">
+						<Accordion.Item>
+							<Accordion.Heading>
+								<Accordion.Trigger>
+									{t("subAgentInstruction")}
+									<Accordion.Indicator>
+										<ChevronDownIcon className="size-4" />
+									</Accordion.Indicator>
+								</Accordion.Trigger>
+							</Accordion.Heading>
+							<Accordion.Panel>
+								<Accordion.Body>
+									{agent.instruction ? (
+										<pre
+											role="article"
+											aria-label={t(
+												"subAgentInstruction",
+											)}
+											className="overflow-x-auto rounded-md bg-surface-secondary p-3 font-mono text-xs whitespace-pre-wrap text-foreground"
+										>
+											{agent.instruction}
+										</pre>
+									) : (
+										<p className="text-sm text-muted">
+											{t("subAgentNoInstruction")}
+										</p>
+									)}
+								</Accordion.Body>
+							</Accordion.Panel>
+						</Accordion.Item>
+					</Accordion>
 				</div>
 			</div>
 
