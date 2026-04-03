@@ -8,16 +8,16 @@ use crate::dto::common::ConfigSource;
 #[ts(export)]
 pub struct CreateSubAgentRequest {
 	pub name: String,
-	pub description: Option<String>,
-	pub instruction: Option<String>,
+	pub description: String,
+	pub instruction: String,
 }
 
 impl From<CreateSubAgentRequest> for SubAgent {
 	fn from(req: CreateSubAgentRequest) -> Self {
 		SubAgent {
 			name: req.name,
-			description: req.description,
-			instruction: req.instruction,
+			description: Some(req.description),
+			instruction: Some(req.instruction),
 			source_path: None,
 			config_source: None,
 		}
@@ -28,8 +28,8 @@ impl From<CreateSubAgentRequest> for SubAgent {
 #[ts(export)]
 pub struct UpdateSubAgentRequest {
 	pub name: Option<String>,
-	pub description: Option<String>,
-	pub instruction: Option<String>,
+	pub description: String,
+	pub instruction: String,
 }
 
 impl From<UpdateSubAgentRequest>
@@ -38,8 +38,8 @@ impl From<UpdateSubAgentRequest>
 	fn from(req: UpdateSubAgentRequest) -> Self {
 		Self {
 			name: req.name,
-			description: req.description,
-			instruction: req.instruction,
+			description: Some(req.description),
+			instruction: Some(req.instruction),
 		}
 	}
 }

@@ -226,8 +226,8 @@ export function ProjectSubAgents({
 								projectRoot: projectPath,
 								body: {
 									name,
-									description: description || null,
-									instruction: instruction || null,
+									description,
+									instruction,
 								},
 							})
 						}
@@ -441,10 +441,20 @@ function SubAgentInlineForm({
 						<Controller
 							name="description"
 							control={control}
-							render={({ field }) => (
+							rules={{
+								required: t("validationDescriptionRequired"),
+								validate: (v) =>
+									v.trim()
+										? true
+										: t("validationDescriptionRequired"),
+							}}
+							render={({ field, fieldState }) => (
 								<TextField
 									className="w-full"
 									variant="secondary"
+									isRequired
+									validationBehavior="aria"
+									isInvalid={Boolean(fieldState.error)}
 								>
 									<Label>{t("subAgentDescription")}</Label>
 									<Input
@@ -458,16 +468,31 @@ function SubAgentInlineForm({
 										)}
 										variant="secondary"
 									/>
+									{fieldState.error && (
+										<FieldError>
+											{fieldState.error.message}
+										</FieldError>
+									)}
 								</TextField>
 							)}
 						/>
 						<Controller
 							name="instruction"
 							control={control}
-							render={({ field }) => (
+							rules={{
+								required: t("validationInstructionRequired"),
+								validate: (v) =>
+									v.trim()
+										? true
+										: t("validationInstructionRequired"),
+							}}
+							render={({ field, fieldState }) => (
 								<TextField
 									className="w-full"
 									variant="secondary"
+									isRequired
+									validationBehavior="aria"
+									isInvalid={Boolean(fieldState.error)}
 								>
 									<Label>{t("subAgentInstruction")}</Label>
 									<TextArea
@@ -482,6 +507,11 @@ function SubAgentInlineForm({
 										className="min-h-24"
 										variant="secondary"
 									/>
+									{fieldState.error && (
+										<FieldError>
+											{fieldState.error.message}
+										</FieldError>
+									)}
 								</TextField>
 							)}
 						/>
@@ -525,8 +555,8 @@ function SubAgentInlineEditForm({
 	agent: SubAgentResponse;
 	onSubmit: (v: {
 		name: string | null;
-		description: string | null;
-		instruction: string | null;
+		description: string;
+		instruction: string;
 	}) => void;
 	isLoading: boolean;
 	onCancel: () => void;
@@ -549,9 +579,9 @@ function SubAgentInlineEditForm({
 
 	const onFormSubmit = (values: InlineEditValues) => {
 		onSubmit({
-			name: values.name || null,
-			description: values.description || null,
-			instruction: values.instruction || null,
+			name: values.name.trim() || null,
+			description: values.description.trim(),
+			instruction: values.instruction.trim(),
 		});
 	};
 
@@ -603,10 +633,20 @@ function SubAgentInlineEditForm({
 						<Controller
 							name="description"
 							control={control}
-							render={({ field }) => (
+							rules={{
+								required: t("validationDescriptionRequired"),
+								validate: (v) =>
+									v.trim()
+										? true
+										: t("validationDescriptionRequired"),
+							}}
+							render={({ field, fieldState }) => (
 								<TextField
 									className="w-full"
 									variant="secondary"
+									isRequired
+									validationBehavior="aria"
+									isInvalid={Boolean(fieldState.error)}
 								>
 									<Label>{t("subAgentDescription")}</Label>
 									<Input
@@ -620,16 +660,31 @@ function SubAgentInlineEditForm({
 										)}
 										variant="secondary"
 									/>
+									{fieldState.error && (
+										<FieldError>
+											{fieldState.error.message}
+										</FieldError>
+									)}
 								</TextField>
 							)}
 						/>
 						<Controller
 							name="instruction"
 							control={control}
-							render={({ field }) => (
+							rules={{
+								required: t("validationInstructionRequired"),
+								validate: (v) =>
+									v.trim()
+										? true
+										: t("validationInstructionRequired"),
+							}}
+							render={({ field, fieldState }) => (
 								<TextField
 									className="w-full"
 									variant="secondary"
+									isRequired
+									validationBehavior="aria"
+									isInvalid={Boolean(fieldState.error)}
 								>
 									<Label>{t("subAgentInstruction")}</Label>
 									<TextArea
@@ -644,6 +699,11 @@ function SubAgentInlineEditForm({
 										className="min-h-24"
 										variant="secondary"
 									/>
+									{fieldState.error && (
+										<FieldError>
+											{fieldState.error.message}
+										</FieldError>
+									)}
 								</TextField>
 							)}
 						/>

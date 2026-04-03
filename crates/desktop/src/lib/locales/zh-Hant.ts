@@ -315,6 +315,7 @@ export default {
 	validationDuplicateKey: "每個鍵必須是唯一的。",
 	validationSkillNameRequired: "請輸入技能名稱。",
 	validationDescriptionRequired: "請輸入技能描述。",
+	validationInstructionRequired: "請輸入指令。",
 	validationContentRequired: "請輸入技能內容。",
 	validationPathRequired: "請先選擇檔案或資料夾。",
 	validationJsonRequired: "請先貼上 JSON 設定。",

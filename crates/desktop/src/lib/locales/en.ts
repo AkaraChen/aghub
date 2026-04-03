@@ -326,6 +326,7 @@ export default {
 	validationDuplicateKey: "Each key must be unique.",
 	validationSkillNameRequired: "Enter a skill name.",
 	validationDescriptionRequired: "Enter a description.",
+	validationInstructionRequired: "Enter an instruction.",
 	validationContentRequired: "Enter skill content.",
 	validationPathRequired: "Select a file or folder first.",
 	validationJsonRequired: "Paste a JSON configuration first.",
