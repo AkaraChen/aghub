@@ -72,6 +72,7 @@ pub fn run() {
 						},
 					),
 				])
+				// Target-specific formatters already build the final line.
 				.format(|out, message, _record| {
 					out.finish(format_args!("{message}"))
 				})
