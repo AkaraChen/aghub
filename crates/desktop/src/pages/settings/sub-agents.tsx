@@ -76,9 +76,7 @@ export default function SubAgentsPage() {
 
 	const selectedListKey = useMemo(() => {
 		if (panel.type === "detail" || panel.type === "edit") {
-			return new Set([
-				`${panel.agent.agent}:${panel.agent.name}`,
-			]);
+			return new Set([`${panel.agent.agent}:${panel.agent.name}`]);
 		}
 		return new Set<string>();
 	}, [panel]);
@@ -175,14 +173,10 @@ export default function SubAgentsPage() {
 							selectedKeys={selectedListKey}
 							onSelectionChange={(keys) => {
 								if (keys === "all") return;
-								const key = [
-									...keys,
-								][0] as string | undefined;
+								const key = [...keys][0] as string | undefined;
 								if (!key) return;
 								const agent = filteredAgents.find(
-									(a) =>
-										`${a.agent}:${a.name}` ===
-										key,
+									(a) => `${a.agent}:${a.name}` === key,
 								);
 								if (agent)
 									setPanel({
@@ -455,11 +449,15 @@ function SubAgentCreateForm({
 									name="description"
 									control={control}
 									rules={{
-										required: t("validationDescriptionRequired"),
+										required: t(
+											"validationDescriptionRequired",
+										),
 										validate: (v) =>
 											v.trim()
 												? true
-												: t("validationDescriptionRequired"),
+												: t(
+														"validationDescriptionRequired",
+													),
 									}}
 									render={({ field, fieldState }) => (
 										<TextField
@@ -467,7 +465,9 @@ function SubAgentCreateForm({
 											variant="secondary"
 											isRequired
 											validationBehavior="aria"
-											isInvalid={Boolean(fieldState.error)}
+											isInvalid={Boolean(
+												fieldState.error,
+											)}
 										>
 											<Label>
 												{t("subAgentDescription")}
@@ -502,11 +502,15 @@ function SubAgentCreateForm({
 									name="instruction"
 									control={control}
 									rules={{
-										required: t("validationInstructionRequired"),
+										required: t(
+											"validationInstructionRequired",
+										),
 										validate: (v) =>
 											v.trim()
 												? true
-												: t("validationInstructionRequired"),
+												: t(
+														"validationInstructionRequired",
+													),
 									}}
 									render={({ field, fieldState }) => (
 										<TextField
@@ -514,7 +518,9 @@ function SubAgentCreateForm({
 											variant="secondary"
 											isRequired
 											validationBehavior="aria"
-											isInvalid={Boolean(fieldState.error)}
+											isInvalid={Boolean(
+												fieldState.error,
+											)}
 										>
 											<Label>
 												{t("subAgentInstruction")}
@@ -675,11 +681,15 @@ function SubAgentEditForm({
 									name="description"
 									control={control}
 									rules={{
-										required: t("validationDescriptionRequired"),
+										required: t(
+											"validationDescriptionRequired",
+										),
 										validate: (v) =>
 											v.trim()
 												? true
-												: t("validationDescriptionRequired"),
+												: t(
+														"validationDescriptionRequired",
+													),
 									}}
 									render={({ field, fieldState }) => (
 										<TextField
@@ -687,7 +697,9 @@ function SubAgentEditForm({
 											variant="secondary"
 											isRequired
 											validationBehavior="aria"
-											isInvalid={Boolean(fieldState.error)}
+											isInvalid={Boolean(
+												fieldState.error,
+											)}
 										>
 											<Label>
 												{t("subAgentDescription")}
@@ -722,11 +734,15 @@ function SubAgentEditForm({
 									name="instruction"
 									control={control}
 									rules={{
-										required: t("validationInstructionRequired"),
+										required: t(
+											"validationInstructionRequired",
+										),
 										validate: (v) =>
 											v.trim()
 												? true
-												: t("validationInstructionRequired"),
+												: t(
+														"validationInstructionRequired",
+													),
 									}}
 									render={({ field, fieldState }) => (
 										<TextField
@@ -734,7 +750,9 @@ function SubAgentEditForm({
 											variant="secondary"
 											isRequired
 											validationBehavior="aria"
-											isInvalid={Boolean(fieldState.error)}
+											isInvalid={Boolean(
+												fieldState.error,
+											)}
 										>
 											<Label>
 												{t("subAgentInstruction")}

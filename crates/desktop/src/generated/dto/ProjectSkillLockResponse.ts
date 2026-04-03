@@ -4,4 +4,7 @@ import type { LocalSkillLockEntryResponse } from "./LocalSkillLockEntryResponse"
 /**
  * Response for the project skill lock file
  */
-export type ProjectSkillLockResponse = { version: number, skills: Array<LocalSkillLockEntryResponse>, };
+export type ProjectSkillLockResponse = {
+	version: number;
+	skills: Array<LocalSkillLockEntryResponse>;
+};

@@ -3,4 +3,9 @@
 /**
  * Response for a single project skill lock entry
  */
-export type LocalSkillLockEntryResponse = { name: string, source: string, sourceType: string, computedHash: string, };
+export type LocalSkillLockEntryResponse = {
+	name: string;
+	source: string;
+	sourceType: string;
+	computedHash: string;
+};
