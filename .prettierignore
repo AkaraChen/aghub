@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+target/
+dist/
+
+# Lock files
+*.lock
+Cargo.lock
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Generated files
+*.min.js
+*.min.css
+coverage/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Tauri
+crates/desktop/src-tauri/gen/
+crates/desktop/src-tauri/target/
+
+# Logs
+*.log

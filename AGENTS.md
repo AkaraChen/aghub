@@ -46,7 +46,7 @@ Aghub manages AGENTS.md, MCP configs, and skills for 25+ AI assistants through a
 
 - **Indentation**: Hard tabs (width 4) — NOT spaces
 - **Line width**: 80 characters max
-- **Formatter**: `fama` (via `just fmt`)
+- **Formatter**: `rustfmt` for Rust, `prettier` for JS/TS (via `just fmt`)
 - **Linter**: `cargo clippy -- -D warnings` (warnings = errors)
 
 ### TypeScript/Frontend
@@ -76,7 +76,7 @@ just integration-test   # Core integration tests only
 just test-with-validation  # Requires claude/opencode CLIs
 
 # Code Quality
-just fmt                # Format with fama
+just fmt                # Format with rustfmt (Rust) and prettier (JS/TS)
 just lint               # Clippy (denies warnings)
 
 # Desktop App

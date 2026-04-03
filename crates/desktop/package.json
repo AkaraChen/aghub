@@ -9,6 +9,8 @@
 		"tauri": "tauri",
 		"start": "tauri dev",
 		"lint": "eslint --fix .",
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
 		"generate:dto": "cargo run --manifest-path ../api/Cargo.toml --bin export-dto",
 		"typecheck": "tsc"
 	},
@@ -63,11 +65,20 @@
 		"eslint-plugin-react-hooks": "^7.0.1",
 		"eslint-plugin-react-refresh": "^0.5.2",
 		"knip": "^6.0.6",
+		"nano-staged": "^0.9.0",
+		"prettier": "^3.4.2",
 		"tailwindcss": "^4.2.2",
 		"typescript": "~5.8.3",
 		"vite": "^7.0.4"
 	},
 	"knip": {
-		"ignoreDependencies": ["react-grab"]
+		"ignoreDependencies": [
+			"react-grab",
+			"nano-staged",
+			"prettier"
+		]
+	},
+	"nano-staged": {
+		"*.{js,ts,jsx,tsx,json,md,css,html}": "prettier --write"
 	}
 }

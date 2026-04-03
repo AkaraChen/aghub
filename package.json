@@ -3,11 +3,23 @@
 	"module": "index.ts",
 	"type": "module",
 	"private": true,
+	"scripts": {
+		"format": "prettier --write .",
+		"format:check": "prettier --check .",
+		"prepare": "husky"
+	},
 	"devDependencies": {
 		"@types/bun": "latest",
+		"husky": "^9.1.7",
+		"nano-staged": "^0.9.0",
+		"prettier": "^3.4.2",
 		"semver": "^7.7.4"
 	},
 	"peerDependencies": {
 		"typescript": "^5"
+	},
+	"nano-staged": {
+		"*.rs": "rustfmt",
+		"*.{js,ts,jsx,tsx,json,md,yml,yaml,css,html}": "prettier --write"
 	}
 }

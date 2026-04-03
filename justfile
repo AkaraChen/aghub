@@ -28,7 +28,8 @@ test-with-validation:
 
 # Format code
 fmt:
-    fama
+	cargo fmt --all
+	prettier --write .
 
 # Run clippy linter
 lint:
