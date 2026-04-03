@@ -1,11 +1,10 @@
-//! TOML-based sub-agent I/O helpers for Codex.
+//! TOML-based sub-agent I/O for Codex.
 //!
 //! Codex stores sub-agents as individual `*.toml` files inside a directory
 //! (e.g. `~/.codex/agents/` or `.codex/agents/`).  Only `name`,
 //! `description`, and `developer_instructions` (mapped to `instruction`)
 //! are managed by aghub; all other TOML keys are preserved on round-trip.
 
-use crate::descriptor::{OptionalPathFn, OptionalProjectPathFn};
 use crate::errors::{ConfigError, Result};
 use crate::models::{ResourceScope, SubAgent};
 use std::fs;
@@ -17,7 +16,7 @@ use std::path::Path;
 ///
 /// Reads `name`, `description`, and `developer_instructions` from the TOML
 /// document.  When `name` is absent or empty the file stem is used instead.
-pub fn parse_codex_sub_agent_file(path: &Path) -> Option<SubAgent> {
+fn parse_file(path: &Path) -> Option<SubAgent> {
 	let content = fs::read_to_string(path).ok()?;
 	let stem = path
 		.file_stem()
@@ -60,10 +59,7 @@ pub fn parse_codex_sub_agent_file(path: &Path) -> Option<SubAgent> {
 ///
 /// When `original_content` is provided its unmanaged keys are preserved so
 /// that fields like `model`, `sandbox_mode`, etc. survive a round-trip.
-pub fn format_codex_sub_agent(
-	agent: &SubAgent,
-	original_content: Option<&str>,
-) -> Result<String> {
+fn format(agent: &SubAgent, original_content: Option<&str>) -> Result<String> {
 	let mut table: toml::map::Map<String, toml::Value> =
 		match original_content {
 			Some(s) if !s.trim().is_empty() => {
@@ -131,8 +127,7 @@ fn sanitize_filename(name: &str) -> String {
 
 // ── Directory-level I/O ──────────────────────────────────────────────────────
 
-/// Load Codex sub-agents from a directory of `*.toml` files.
-pub fn load_codex_sub_agents_from_dir(dir: &Path) -> Vec<SubAgent> {
+fn load_from_dir(dir: &Path) -> Vec<SubAgent> {
 	let Ok(entries) = fs::read_dir(dir) else {
 		return Vec::new();
 	};
@@ -141,51 +136,48 @@ pub fn load_codex_sub_agents_from_dir(dir: &Path) -> Vec<SubAgent> {
 		.filter(|e| {
 			e.path().extension().and_then(|x| x.to_str()) == Some("toml")
 		})
-		.filter_map(|e| parse_codex_sub_agent_file(&e.path()))
+		.filter_map(|e| parse_file(&e.path()))
 		.collect();
 	agents.sort_by(|a, b| a.name.cmp(&b.name));
 	agents
 }
 
-/// Write a single Codex sub-agent to `dir` as a `*.toml` file.
-///
-/// The directory is created if absent. If a file for the agent already exists
-/// its unmanaged keys are preserved.
-pub fn save_codex_sub_agent_to_dir(
-	dir: &Path,
-	agent: &SubAgent,
-) -> Result<()> {
+fn save_to_dir(dir: &Path, agent: &SubAgent) -> Result<()> {
 	fs::create_dir_all(dir)?;
 	let safe = sanitize_filename(&agent.name);
 	let file = dir.join(format!("{safe}.toml"));
 	let original = fs::read_to_string(&file).ok();
-	fs::write(&file, format_codex_sub_agent(agent, original.as_deref())?)?;
+	fs::write(&file, format(agent, original.as_deref())?)?;
 	Ok(())
 }
 
-// ── Scoped load / save ───────────────────────────────────────────────────────
+// ── Scoped load / save (called from mod.rs) ──────────────────────────────────
 
-/// Load Codex sub-agents from the directory determined by `scope`.
-pub fn load_scoped_codex_sub_agents(
+pub(super) fn global_dir() -> Option<std::path::PathBuf> {
+	crate::descriptor::home_dir()
+		.map(|home| home.join(".codex/agents"))
+}
+
+pub(super) fn project_dir(root: &Path) -> Option<std::path::PathBuf> {
+	Some(root.join(".codex/agents"))
+}
+
+pub(super) fn load(
 	project_root: Option<&Path>,
 	scope: ResourceScope,
-	global_dir: Option<OptionalPathFn>,
-	project_dir: Option<OptionalProjectPathFn>,
 ) -> Result<Vec<SubAgent>> {
 	match scope {
 		ResourceScope::GlobalOnly => {
-			let Some(dir) = global_dir.and_then(|f| f()) else {
+			let Some(dir) = global_dir() else {
 				return Ok(Vec::new());
 			};
-			Ok(load_codex_sub_agents_from_dir(&dir))
+			Ok(load_from_dir(&dir))
 		}
 		ResourceScope::ProjectOnly => {
-			let Some(dir) =
-				project_root.and_then(|root| project_dir.and_then(|f| f(root)))
-			else {
+			let Some(dir) = project_root.and_then(project_dir) else {
 				return Ok(Vec::new());
 			};
-			Ok(load_codex_sub_agents_from_dir(&dir))
+			Ok(load_from_dir(&dir))
 		}
 		ResourceScope::Both => Err(ConfigError::InvalidConfig(
 			"Sub-agent load unavailable for Both scope".to_string(),
@@ -193,22 +185,15 @@ pub fn load_scoped_codex_sub_agents(
 	}
 }
 
-/// Persist a list of Codex sub-agents to the scoped directory.
-///
-/// The directory is created if absent. Files for removed entries are
-/// **not** deleted here — that is handled by `remove_sub_agent` in the
-/// manager.
-pub fn save_scoped_codex_sub_agents(
+pub(super) fn save(
 	project_root: Option<&Path>,
 	scope: ResourceScope,
 	agents: &[SubAgent],
-	global_dir: Option<OptionalPathFn>,
-	project_dir: Option<OptionalProjectPathFn>,
 ) -> Result<()> {
 	let dir = match scope {
-		ResourceScope::GlobalOnly => global_dir.and_then(|f| f()),
+		ResourceScope::GlobalOnly => global_dir(),
 		ResourceScope::ProjectOnly => {
-			project_root.and_then(|root| project_dir.and_then(|f| f(root)))
+			project_root.and_then(project_dir)
 		}
 		ResourceScope::Both => {
 			return Err(ConfigError::InvalidConfig(
@@ -223,7 +208,7 @@ pub fn save_scoped_codex_sub_agents(
 		))
 	})?;
 	for agent in agents {
-		save_codex_sub_agent_to_dir(&dir, agent)?;
+		save_to_dir(&dir, agent)?;
 	}
 	Ok(())
 }
@@ -248,7 +233,7 @@ mod tests {
 		)
 		.unwrap();
 
-		let agent = parse_codex_sub_agent_file(&path).unwrap();
+		let agent = parse_file(&path).unwrap();
 		assert_eq!(agent.name, "reviewer");
 		assert_eq!(agent.description, Some("PR reviewer".to_string()));
 		assert_eq!(
@@ -267,7 +252,7 @@ mod tests {
 		)
 		.unwrap();
 
-		let agent = parse_codex_sub_agent_file(&path).unwrap();
+		let agent = parse_file(&path).unwrap();
 		assert_eq!(agent.name, "my-agent");
 		assert_eq!(agent.instruction, Some("Do something.".to_string()));
 	}
@@ -289,7 +274,7 @@ mod tests {
 			config_source: None,
 		};
 
-		let out = format_codex_sub_agent(&updated, Some(original)).unwrap();
+		let out = format(&updated, Some(original)).unwrap();
 		assert!(out.contains("Updated desc"));
 		assert!(out.contains("New instructions."));
 		assert!(out.contains("gpt-5.4"));
@@ -306,9 +291,9 @@ mod tests {
 			source_path: None,
 			config_source: None,
 		};
-		save_codex_sub_agent_to_dir(dir.path(), &agent).unwrap();
+		save_to_dir(dir.path(), &agent).unwrap();
 
-		let loaded = load_codex_sub_agents_from_dir(dir.path());
+		let loaded = load_from_dir(dir.path());
 		assert_eq!(loaded.len(), 1);
 		assert_eq!(loaded[0].name, "Test Agent");
 		assert_eq!(loaded[0].description, Some("A test agent".to_string()));
