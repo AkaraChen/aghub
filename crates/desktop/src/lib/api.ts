@@ -175,9 +175,7 @@ export function createApi(baseUrl: string) {
 				return client.post("skills/git/install", { json: data }).json();
 			},
 			gitSync(data: GitSyncRequest): Promise<GitSyncResponse> {
-				return client
-					.post("skills/git/sync", { json: data, timeout: 60000 })
-					.json();
+				return client.post("skills/git/sync", { json: data }).json();
 			},
 		},
 		mcps: {
