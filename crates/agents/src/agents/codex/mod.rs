@@ -1,41 +1,13 @@
+mod mcp;
+mod sub_agent;
+
 use crate::descriptor::*;
 use std::path::{Path, PathBuf};
 
-fn mcp_global_path() -> Option<PathBuf> {
-	home_dir().map(|home| home.join(".codex/config.toml"))
-}
-fn mcp_project_path(root: &Path) -> Option<PathBuf> {
-	Some(root.join(".codex/config.toml"))
-}
 fn global_data_dir() -> Option<PathBuf> {
 	home_dir().map(|home| home.join(".codex"))
 }
-fn load_mcps(
-	project_root: Option<&Path>,
-	scope: crate::ResourceScope,
-) -> crate::Result<Vec<crate::McpServer>> {
-	load_scoped_mcps(
-		project_root,
-		scope,
-		Some(mcp_global_path),
-		Some(mcp_project_path),
-		mcp_strategy::PARSE_TOML,
-	)
-}
-fn save_mcps(
-	project_root: Option<&Path>,
-	scope: crate::ResourceScope,
-	mcps: &[crate::McpServer],
-) -> crate::Result<()> {
-	save_scoped_mcps(
-		project_root,
-		scope,
-		mcps,
-		Some(mcp_global_path),
-		Some(mcp_project_path),
-		mcp_strategy::SERIALIZE_TOML,
-	)
-}
+
 fn global_skills_paths() -> Vec<PathBuf> {
 	let Some(home) = home_dir() else {
 		return Vec::new();
@@ -46,6 +18,7 @@ fn global_skills_paths() -> Vec<PathBuf> {
 		PathBuf::from("/etc/codex/skills"),
 	]
 }
+
 fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
 	vec![root.join(".agents/skills")]
 }
@@ -63,10 +36,10 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	display_name: "OpenAI Codex",
 	mcp_parse_config: Some(mcp_strategy::PARSE_TOML),
 	mcp_serialize_config: Some(mcp_strategy::SERIALIZE_TOML),
-	load_mcps,
-	save_mcps,
-	mcp_global_path: Some(mcp_global_path),
-	mcp_project_path: Some(mcp_project_path),
+	load_mcps: mcp::load,
+	save_mcps: mcp::save,
+	mcp_global_path: Some(mcp::global_path),
+	mcp_project_path: Some(mcp::project_path),
 	global_data_dir,
 	capabilities: Capabilities {
 		skills: SkillCapabilities {
@@ -87,8 +60,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 		},
 		sub_agents: SubAgentCapabilities {
 			scopes: ScopeSupport {
-				global: false,
-				project: false,
+				global: true,
+				project: true,
 			},
 		},
 	},
@@ -100,8 +73,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 		read: project_skills_paths,
 		write: project_skill_write_path,
 	}),
-	load_sub_agents: load_sub_agents_noop,
-	save_sub_agents: save_sub_agents_noop,
+	load_sub_agents: sub_agent::load,
+	save_sub_agents: sub_agent::save,
 	cli_name: "codex",
 	validate_args: &["--version"],
 	project_markers: &[".codex"],

@@ -406,6 +406,7 @@ export default {
 	selectedSkill: "Selected Skill",
 	installingSkill: "Installing Skill",
 	selectAgentsForSkill: "Select which agents to install this skill to:",
+	selectAgentsForSubAgent: "Select which agents should use this sub-agent:",
 	installs: "installs",
 	installAllSkills: "Install All Skills",
 	installAllSkillsDescription:

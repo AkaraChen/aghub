@@ -2,7 +2,7 @@ use crate::{
 	create_adapter,
 	errors::{ConfigError, Result},
 	manager::ConfigManager,
-	models::{AgentType, McpServer, Skill},
+	models::{AgentType, McpServer, Skill, SubAgent},
 	registry,
 };
 use log::{info, warn};
@@ -423,6 +423,165 @@ pub fn reconcile_mcp(
 		})();
 		log_operation_outcome(
 			"MCP",
+			&source.name,
+			OperationAction::Delete,
+			&target,
+			&outcome,
+		);
+
+		results.push(OperationResult {
+			target,
+			action: OperationAction::Delete,
+			success: outcome.is_ok(),
+			error: outcome.err().map(|err| err.to_string()),
+		});
+	}
+
+	Ok(OperationBatchResult { results })
+}
+
+fn load_source_sub_agent(source: &ResourceLocator) -> Result<SubAgent> {
+	let mut manager = build_manager(&InstallTarget {
+		agent: source.agent,
+		scope: source.scope,
+		project_root: source.project_root.clone(),
+	});
+	manager.load()?;
+	manager.get_sub_agent(&source.name).cloned().ok_or_else(|| {
+		ConfigError::resource_not_found("sub-agent", &source.name)
+	})
+}
+
+pub fn transfer_sub_agent(
+	source: ResourceLocator,
+	destinations: Vec<InstallTarget>,
+) -> Result<OperationBatchResult> {
+	let sub_agent = load_source_sub_agent(&source)?;
+	let destinations = unique_targets(destinations);
+	info!(
+		"transferring sub-agent '{}' to {} destination(s)",
+		sub_agent.name,
+		destinations.len()
+	);
+	let mut results = Vec::new();
+
+	for target in destinations {
+		let outcome = (|| -> Result<()> {
+			validate_target(&target)?;
+			let descriptor = registry::get(target.agent);
+			let scope = match target.scope {
+				InstallScope::Global => {
+					crate::models::ResourceScope::GlobalOnly
+				}
+				InstallScope::Project => {
+					crate::models::ResourceScope::ProjectOnly
+				}
+			};
+			if !descriptor.supports_sub_agent_scope(scope) {
+				return Err(ConfigError::unsupported_operation(
+					"copy",
+					"sub-agent",
+					descriptor.id,
+				));
+			}
+			let mut manager = build_manager(&target);
+			ensure_loaded(&mut manager)?;
+			manager.add_sub_agent(sub_agent.clone())
+		})();
+		log_operation_outcome(
+			"sub-agent",
+			&sub_agent.name,
+			OperationAction::Copy,
+			&target,
+			&outcome,
+		);
+
+		results.push(OperationResult {
+			target,
+			action: OperationAction::Copy,
+			success: outcome.is_ok(),
+			error: outcome.err().map(|err| err.to_string()),
+		});
+	}
+
+	Ok(OperationBatchResult { results })
+}
+
+pub fn reconcile_sub_agent(
+	source: ResourceLocator,
+	added: Vec<AgentType>,
+	removed: Vec<AgentType>,
+) -> Result<OperationBatchResult> {
+	let sub_agent = load_source_sub_agent(&source)?;
+	info!(
+		"reconciling sub-agent '{}' with {} added and {} removed agent(s)",
+		sub_agent.name,
+		added.len(),
+		removed.len()
+	);
+	let mut results = Vec::new();
+
+	let target_scope = source.scope;
+	let target_project_root = source.project_root.clone();
+
+	for agent in added {
+		let target = InstallTarget {
+			agent,
+			scope: target_scope,
+			project_root: target_project_root.clone(),
+		};
+		let outcome = (|| -> Result<()> {
+			validate_target(&target)?;
+			let descriptor = registry::get(target.agent);
+			let scope = match target.scope {
+				InstallScope::Global => {
+					crate::models::ResourceScope::GlobalOnly
+				}
+				InstallScope::Project => {
+					crate::models::ResourceScope::ProjectOnly
+				}
+			};
+			if !descriptor.supports_sub_agent_scope(scope) {
+				return Err(ConfigError::unsupported_operation(
+					"copy",
+					"sub-agent",
+					descriptor.id,
+				));
+			}
+			let mut manager = build_manager(&target);
+			ensure_loaded(&mut manager)?;
+			manager.add_sub_agent(sub_agent.clone())
+		})();
+		log_operation_outcome(
+			"sub-agent",
+			&sub_agent.name,
+			OperationAction::Copy,
+			&target,
+			&outcome,
+		);
+
+		results.push(OperationResult {
+			target,
+			action: OperationAction::Copy,
+			success: outcome.is_ok(),
+			error: outcome.err().map(|err| err.to_string()),
+		});
+	}
+
+	for agent in removed {
+		let target = InstallTarget {
+			agent,
+			scope: target_scope,
+			project_root: target_project_root.clone(),
+		};
+		let outcome = (|| -> Result<()> {
+			validate_target(&target)?;
+			let mut manager = build_manager(&target);
+			ensure_loaded(&mut manager)?;
+			manager.remove_sub_agent(&source.name)
+		})();
+		log_operation_outcome(
+			"sub-agent",
 			&source.name,
 			OperationAction::Delete,
 			&target,

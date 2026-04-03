@@ -137,6 +137,8 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 				routes::sub_agents::create_sub_agent,
 				routes::sub_agents::update_sub_agent,
 				routes::sub_agents::delete_sub_agent,
+				routes::sub_agents::transfer_sub_agent_route,
+				routes::sub_agents::reconcile_sub_agent_route,
 				routes::integrations::list_code_editors,
 				routes::integrations::open_with_editor,
 				routes::integrations::get_preferences,
