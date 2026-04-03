@@ -72,6 +72,9 @@ pub fn run() {
 						},
 					),
 				])
+				.format(|out, message, _record| {
+					out.finish(format_args!("{message}"))
+				})
 				.level(log::LevelFilter::Info)
 				.build(),
 		)
