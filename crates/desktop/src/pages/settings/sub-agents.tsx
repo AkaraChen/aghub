@@ -582,121 +582,139 @@ function SubAgentEditForm({
 
 	return (
 		<div className="h-full w-full overflow-y-auto p-4 sm:p-6">
-			<div className="mb-6 flex items-center justify-between gap-3">
-				<h2 className="text-xl font-semibold text-foreground">
-					{t("editSubAgent")}
-				</h2>
-			</div>
-
-			<Form validationBehavior="aria" onSubmit={handleSubmit(onSubmit)}>
-				<Fieldset>
-					<Fieldset.Group>
-						<Controller
-							name="name"
-							control={control}
-							rules={{
-								required: t("validationNameRequired"),
-								validate: (v) =>
-									v.trim()
-										? true
-										: t("validationNameRequired"),
-							}}
-							render={({ field, fieldState }) => (
-								<TextField
-									className="w-full"
-									variant="secondary"
-									isRequired
-									validationBehavior="aria"
-									isInvalid={Boolean(fieldState.error)}
-								>
-									<Label>{t("subAgentName")}</Label>
-									<Input
-										value={field.value}
-										onChange={(e) =>
-											field.onChange(e.target.value)
-										}
-										onBlur={field.onBlur}
-										variant="secondary"
-									/>
-									{fieldState.error && (
-										<FieldError>
-											{fieldState.error.message}
-										</FieldError>
+			<Card>
+				<Card.Header>
+					<h2 className="text-xl font-semibold text-foreground">
+						{t("editSubAgent")}
+					</h2>
+				</Card.Header>
+				<Card.Content>
+					<Form
+						validationBehavior="aria"
+						onSubmit={handleSubmit(onSubmit)}
+					>
+						<Fieldset>
+							<Fieldset.Group>
+								<Controller
+									name="name"
+									control={control}
+									rules={{
+										required: t("validationNameRequired"),
+										validate: (v) =>
+											v.trim()
+												? true
+												: t("validationNameRequired"),
+									}}
+									render={({ field, fieldState }) => (
+										<TextField
+											className="w-full"
+											variant="secondary"
+											isRequired
+											validationBehavior="aria"
+											isInvalid={Boolean(
+												fieldState.error,
+											)}
+										>
+											<Label>{t("subAgentName")}</Label>
+											<Input
+												value={field.value}
+												onChange={(e) =>
+													field.onChange(
+														e.target.value,
+													)
+												}
+												onBlur={field.onBlur}
+												variant="secondary"
+											/>
+											{fieldState.error && (
+												<FieldError>
+													{fieldState.error.message}
+												</FieldError>
+											)}
+										</TextField>
 									)}
-								</TextField>
-							)}
-						/>
-						<Controller
-							name="description"
-							control={control}
-							render={({ field }) => (
-								<TextField
-									className="w-full"
-									variant="secondary"
-								>
-									<Label>{t("subAgentDescription")}</Label>
-									<Input
-										value={field.value}
-										onChange={(e) =>
-											field.onChange(e.target.value)
-										}
-										onBlur={field.onBlur}
-										placeholder={t(
-											"subAgentDescriptionPlaceholder",
-										)}
-										variant="secondary"
-									/>
-								</TextField>
-							)}
-						/>
-					</Fieldset.Group>
-				</Fieldset>
+								/>
+								<Controller
+									name="description"
+									control={control}
+									render={({ field }) => (
+										<TextField
+											className="w-full"
+											variant="secondary"
+										>
+											<Label>
+												{t("subAgentDescription")}
+											</Label>
+											<Input
+												value={field.value}
+												onChange={(e) =>
+													field.onChange(
+														e.target.value,
+													)
+												}
+												onBlur={field.onBlur}
+												placeholder={t(
+													"subAgentDescriptionPlaceholder",
+												)}
+												variant="secondary"
+											/>
+										</TextField>
+									)}
+								/>
+							</Fieldset.Group>
+						</Fieldset>
 
-				<Fieldset>
-					<Fieldset.Group>
-						<Controller
-							name="instruction"
-							control={control}
-							render={({ field }) => (
-								<TextField
-									className="w-full"
-									variant="secondary"
-								>
-									<Label>{t("subAgentInstruction")}</Label>
-									<TextArea
-										value={field.value}
-										onChange={(e) =>
-											field.onChange(e.target.value)
-										}
-										onBlur={field.onBlur}
-										placeholder={t(
-											"subAgentInstructionPlaceholder",
-										)}
-										variant="secondary"
-										className="min-h-48"
-									/>
-								</TextField>
-							)}
-						/>
-					</Fieldset.Group>
-				</Fieldset>
+						<Fieldset>
+							<Fieldset.Group>
+								<Controller
+									name="instruction"
+									control={control}
+									render={({ field }) => (
+										<TextField
+											className="w-full"
+											variant="secondary"
+										>
+											<Label>
+												{t("subAgentInstruction")}
+											</Label>
+											<TextArea
+												value={field.value}
+												onChange={(e) =>
+													field.onChange(
+														e.target.value,
+													)
+												}
+												onBlur={field.onBlur}
+												placeholder={t(
+													"subAgentInstructionPlaceholder",
+												)}
+												variant="secondary"
+												className="min-h-48"
+											/>
+										</TextField>
+									)}
+								/>
+							</Fieldset.Group>
+						</Fieldset>
 
-				<div className="flex justify-end gap-2 pt-2">
-					<Button
-						type="button"
-						variant="secondary"
-						onPress={onCancel}
-					>
-						{t("cancel")}
-					</Button>
-					<Button
-						type="submit"
-						isDisabled={isLoading || isSubmitting}
-					>
-						{isLoading ? t("saving") : t("save")}
-					</Button>
-				</div>
-			</Form>
+						<div className="flex justify-end gap-2 pt-2">
+							<Button
+								type="button"
+								variant="secondary"
+								onPress={onCancel}
+							>
+								{t("cancel")}
+							</Button>
+							<Button
+								type="submit"
+								isDisabled={isLoading || isSubmitting}
+							>
+								{isLoading ? t("saving") : t("save")}
+							</Button>
+						</div>
+					</Form>
+				</Card.Content>
+			</Card>
 		</div>
 	);
 }
