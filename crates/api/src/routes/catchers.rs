@@ -1,8 +1,7 @@
 use rocket::serde::json::Json;
 use rocket::Request;
 
-use crate::error::ErrorBody;
-use crate::extractors::JsonParseError;
+use crate::error::{ErrorBody, JsonParseError};
 
 #[catch(404)]
 pub fn not_found(req: &Request) -> Json<ErrorBody> {

@@ -5,7 +5,7 @@ use rocket::http::Status;
 use rocket::request::{FromParam, Request};
 use std::path::PathBuf;
 
-use crate::error::ApiError;
+use crate::error::{ApiError, JsonParseError};
 
 pub struct AgentParam(pub AgentType);
 
@@ -73,11 +73,6 @@ impl ScopeParams {
 		}
 	}
 }
-
-/// Cached JSON parse error stored in request-local cache by [`JsonBody`].
-/// The [`crate::routes::catchers::unprocessable_entity`] catcher reads this
-/// to include the actual parse failure reason in the error response body.
-pub struct JsonParseError(pub Option<String>);
 
 /// A request body extractor for JSON that stores the deserialization error in
 /// the request-local cache so the 422 catcher can surface the real message.
