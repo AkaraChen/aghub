@@ -3,4 +3,7 @@
 /**
  * Token is intentionally omitted from responses — write-only secret.
  */
-export type CredentialResponse = { id: string; name: string };
+export interface CredentialResponse {
+	id: string;
+	name: string;
+}

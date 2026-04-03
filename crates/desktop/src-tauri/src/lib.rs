@@ -1,5 +1,5 @@
 use crate::commands::start_server;
-use log::{debug, info, warn};
+use log::info;
 use tauri::{Manager, WebviewWindow};
 #[cfg(any(windows, target_os = "linux"))]
 use tauri_plugin_deep_link::DeepLinkExt;
