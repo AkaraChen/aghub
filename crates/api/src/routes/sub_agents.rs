@@ -148,7 +148,12 @@ pub fn update_sub_agent(
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
 
-	let patch = body.into_inner().into();
+	let body = body.into_inner();
+	// Capture the effective name after the patch so we can look it up
+	// after a potential rename (patch.name takes precedence over route name).
+	let effective_name =
+		body.name.clone().unwrap_or_else(|| name.clone());
+	let patch = body.into();
 	manager
 		.update_sub_agent(&name, patch)
 		.map_err(ApiError::from)?;
@@ -157,10 +162,13 @@ pub fn update_sub_agent(
 	let updated = config
 		.sub_agents
 		.iter()
-		.find(|a| a.name == name)
+		.find(|a| a.name == effective_name)
 		.map(SubAgentResponse::from)
 		.ok_or_else(|| {
-			ApiError::from(ConfigError::resource_not_found("sub_agent", &name))
+			ApiError::from(ConfigError::resource_not_found(
+				"sub_agent",
+				&effective_name,
+			))
 		})?;
 	Ok(Json(updated))
 }

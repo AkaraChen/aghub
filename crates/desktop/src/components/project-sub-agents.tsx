@@ -67,39 +67,54 @@ supportsSubAgentScope(a, "project"),
 [availableAgents],
 );
 
-const createMutation = useMutation(
-createSubAgentMutationOptions({
-api,
-queryClient,
-onSuccess: () => {
-toast.success(t("subAgentCreated"));
-setPanelMode(null);
-},
-}),
-);
+const createMutation = useMutation({
+	...createSubAgentMutationOptions({
+		api,
+		queryClient,
+		onSuccess: () => {
+			toast.success(t("subAgentCreated"));
+			setPanelMode(null);
+		},
+	}),
+	onError: (error) => {
+		toast.danger(
+			error instanceof Error ? error.message : t("createSubAgentError"),
+		);
+	},
+});
 
-const updateMutation = useMutation(
-updateSubAgentMutationOptions({
-api,
-queryClient,
-onSuccess: (data) => {
-toast.success(t("subAgentUpdated"));
-setSelected(data);
-setPanelMode(null);
-},
-}),
-);
+const updateMutation = useMutation({
+	...updateSubAgentMutationOptions({
+		api,
+		queryClient,
+		onSuccess: (data) => {
+			toast.success(t("subAgentUpdated"));
+			setSelected(data);
+			setPanelMode(null);
+		},
+	}),
+	onError: (error) => {
+		toast.danger(
+			error instanceof Error ? error.message : t("updateSubAgentError"),
+		);
+	},
+});
 
-const deleteMutation = useMutation(
-deleteSubAgentMutationOptions({
-api,
-queryClient,
-onSuccess: () => {
-toast.success(t("subAgentDeleted"));
-setSelected(null);
-},
-}),
-);
+const deleteMutation = useMutation({
+	...deleteSubAgentMutationOptions({
+		api,
+		queryClient,
+		onSuccess: () => {
+			toast.success(t("subAgentDeleted"));
+			setSelected(null);
+		},
+	}),
+	onError: (error) => {
+		toast.danger(
+			error instanceof Error ? error.message : t("deleteSubAgentError"),
+		);
+	},
+});
 
 if (subAgents.length === 0 && !panelMode) {
 return null;

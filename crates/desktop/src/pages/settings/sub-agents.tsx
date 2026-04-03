@@ -70,38 +70,53 @@ a.name.toLowerCase().includes(searchQuery.toLowerCase()),
 [subAgents, searchQuery],
 );
 
-const createMutation = useMutation(
-createSubAgentMutationOptions({
-api,
-queryClient,
-onSuccess: (data) => {
-toast.success(t("subAgentCreated"));
-setPanel({ type: "detail", agent: data });
-},
-}),
-);
+const createMutation = useMutation({
+	...createSubAgentMutationOptions({
+		api,
+		queryClient,
+		onSuccess: (data) => {
+			toast.success(t("subAgentCreated"));
+			setPanel({ type: "detail", agent: data });
+		},
+	}),
+	onError: (error) => {
+		toast.danger(
+			error instanceof Error ? error.message : t("createSubAgentError"),
+		);
+	},
+});
 
-const updateMutation = useMutation(
-updateSubAgentMutationOptions({
-api,
-queryClient,
-onSuccess: (data) => {
-toast.success(t("subAgentUpdated"));
-setPanel({ type: "detail", agent: data });
-},
-}),
-);
+const updateMutation = useMutation({
+	...updateSubAgentMutationOptions({
+		api,
+		queryClient,
+		onSuccess: (data) => {
+			toast.success(t("subAgentUpdated"));
+			setPanel({ type: "detail", agent: data });
+		},
+	}),
+	onError: (error) => {
+		toast.danger(
+			error instanceof Error ? error.message : t("updateSubAgentError"),
+		);
+	},
+});
 
-const deleteMutation = useMutation(
-deleteSubAgentMutationOptions({
-api,
-queryClient,
-onSuccess: () => {
-toast.success(t("subAgentDeleted"));
-setPanel({ type: "empty" });
-},
-}),
-);
+const deleteMutation = useMutation({
+	...deleteSubAgentMutationOptions({
+		api,
+		queryClient,
+		onSuccess: () => {
+			toast.success(t("subAgentDeleted"));
+			setPanel({ type: "empty" });
+		},
+	}),
+	onError: (error) => {
+		toast.danger(
+			error instanceof Error ? error.message : t("deleteSubAgentError"),
+		);
+	},
+});
 
 return (
 <div className="flex h-full">
