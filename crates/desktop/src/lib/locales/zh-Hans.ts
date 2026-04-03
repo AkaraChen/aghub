@@ -46,6 +46,12 @@ export default {
 	replayAppTour: "重播应用导览",
 	replayProjectTour: "重播项目导览",
 
+	// Sidebar
+	hide: "隐藏",
+	show: "显示",
+	hidden: "已隐藏",
+	dragToHide: "拖拽项目到此处隐藏",
+
 	// Credentials
 	credentials: "凭据",
 	credentialsDescription: "管理存储的凭据，例如 GitHub 访问令牌。",

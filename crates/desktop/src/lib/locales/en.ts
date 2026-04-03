@@ -47,6 +47,12 @@ export default {
 	replayAppTour: "Replay App Tour",
 	replayProjectTour: "Replay Project Tour",
 
+	// Sidebar
+	hide: "Hide",
+	show: "Show",
+	hidden: "Hidden",
+	dragToHide: "Drag items here to hide",
+
 	// Credentials
 	credentials: "Credentials",
 	credentialsDescription:
