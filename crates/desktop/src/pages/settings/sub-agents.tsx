@@ -36,7 +36,6 @@ import type { SubAgentResponse } from "../../generated/dto";
 import { useAgentAvailability } from "../../hooks/use-agent-availability";
 import { useApi } from "../../hooks/use-api";
 import { supportsSubAgent } from "../../lib/agent-capabilities";
-import { cn } from "../../lib/utils";
 import {
 	createSubAgentMutationOptions,
 	deleteSubAgentMutationOptions,
@@ -74,6 +73,15 @@ export default function SubAgentsPage() {
 			),
 		[subAgents, searchQuery],
 	);
+
+	const selectedListKey = useMemo(() => {
+		if (panel.type === "detail" || panel.type === "edit") {
+			return new Set([
+				`${panel.agent.agent}:${panel.agent.name}`,
+			]);
+		}
+		return new Set<string>();
+	}, [panel]);
 
 	const createMutation = useMutation({
 		...createSubAgentMutationOptions({
@@ -160,50 +168,58 @@ export default function SubAgentsPage() {
 							</p>
 						</div>
 					) : (
-						<ul className="flex flex-col gap-0.5 p-2">
+						<ListBox
+							aria-label={t("subAgents")}
+							selectionMode="single"
+							selectionBehavior="replace"
+							selectedKeys={selectedListKey}
+							onSelectionChange={(keys) => {
+								if (keys === "all") return;
+								const key = [
+									...keys,
+								][0] as string | undefined;
+								if (!key) return;
+								const agent = filteredAgents.find(
+									(a) =>
+										`${a.agent}:${a.name}` ===
+										key,
+								);
+								if (agent)
+									setPanel({
+										type: "detail",
+										agent,
+									});
+							}}
+							className="p-2"
+						>
 							{filteredAgents.map((agent) => {
-								const isSelected =
-									(panel.type === "detail" ||
-										panel.type === "edit") &&
-									panel.agent.name === agent.name &&
-									panel.agent.agent === agent.agent;
+								const key = `${agent.agent}:${agent.name}`;
 								return (
-									<li key={`${agent.agent}:${agent.name}`}>
-										<button
-											type="button"
-											onClick={() =>
-												setPanel({
-													type: "detail",
-													agent,
-												})
-											}
-											className={cn(
-												"w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
-												isSelected
-													? "bg-surface font-medium text-foreground"
-													: "text-foreground hover:bg-surface-secondary",
-											)}
-										>
-											<div className="flex items-center justify-between gap-2">
-												<span className="truncate font-medium">
-													{agent.name}
+									<ListBox.Item
+										key={key}
+										id={key}
+										textValue={agent.name}
+										className="data-selected:bg-surface"
+									>
+										<div className="flex items-center justify-between gap-2">
+											<span className="truncate font-medium">
+												{agent.name}
+											</span>
+											{agent.agent && (
+												<span className="shrink-0 rounded-full bg-surface-secondary px-1.5 py-0.5 text-xs text-muted">
+													{agent.agent}
 												</span>
-												{agent.agent && (
-													<span className="shrink-0 rounded-full bg-surface-secondary px-1.5 py-0.5 text-xs text-muted">
-														{agent.agent}
-													</span>
-												)}
-											</div>
-											{agent.description && (
-												<p className="mt-0.5 truncate text-xs text-muted">
-													{agent.description}
-												</p>
 											)}
-										</button>
-									</li>
+										</div>
+										{agent.description && (
+											<p className="mt-0.5 truncate text-xs text-muted">
+												{agent.description}
+											</p>
+										)}
+									</ListBox.Item>
 								);
 							})}
-						</ul>
+						</ListBox>
 					)}
 				</div>
 			</div>
