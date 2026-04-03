@@ -1,17 +1,26 @@
 import {
 	CpuChipIcon,
+	ExclamationTriangleIcon,
 	PencilIcon,
 	PlusIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import {
 	Button,
+	Card,
+	Chip,
+	FieldError,
+	Fieldset,
+	Form,
 	Input,
 	Label,
-	SearchField,
-	Surface,
+	ListBox,
+	Modal,
+	Select,
+	Spinner,
 	TextArea,
 	TextField,
+	Tooltip,
 	toast,
 } from "@heroui/react";
 import {
@@ -20,17 +29,14 @@ import {
 	useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import {
-	Empty,
-	EmptyHeader,
-	EmptyMedia,
-	EmptyTitle,
-} from "../../components/ui/empty";
+import { ListSearchHeader } from "../../components/list-search-header";
 import type { SubAgentResponse } from "../../generated/dto";
 import { useAgentAvailability } from "../../hooks/use-agent-availability";
 import { useApi } from "../../hooks/use-api";
 import { supportsSubAgent } from "../../lib/agent-capabilities";
+import { cn } from "../../lib/utils";
 import {
 	createSubAgentMutationOptions,
 	deleteSubAgentMutationOptions,
@@ -53,7 +59,8 @@ export default function SubAgentsPage() {
 	const [panel, setPanel] = useState<PanelState>({ type: "empty" });
 
 	const subAgentCapableAgents = useMemo(
-		() => availableAgents.filter((a) => a.isUsable && supportsSubAgent(a)),
+		() =>
+			availableAgents.filter((a) => a.isUsable && supportsSubAgent(a)),
 		[availableAgents],
 	);
 
@@ -126,55 +133,32 @@ export default function SubAgentsPage() {
 	return (
 		<div className="flex h-full">
 			{/* List panel */}
-			<div className="flex w-80 shrink-0 flex-col border-r border-border">
-				<div className="flex items-center gap-2 p-3">
-					<SearchField
-						value={searchQuery}
-						onChange={setSearchQuery}
-						aria-label={t("searchSubAgents")}
-						variant="secondary"
-						className="flex-1"
-					>
-						<SearchField.Group>
-							<SearchField.SearchIcon />
-							<SearchField.Input
-								placeholder={t("searchSubAgents")}
-							/>
-							<SearchField.ClearButton />
-						</SearchField.Group>
-					</SearchField>
+			<div className="relative flex w-80 shrink-0 flex-col border-r border-border">
+				<ListSearchHeader
+					searchValue={searchQuery}
+					onSearchChange={setSearchQuery}
+					placeholder={t("searchSubAgents")}
+					ariaLabel={t("searchSubAgents")}
+				>
 					<Button
 						isIconOnly
 						variant="ghost"
 						size="sm"
+						className="shrink-0"
 						onPress={() => setPanel({ type: "create" })}
 						aria-label={t("createSubAgent")}
 					>
 						<PlusIcon className="size-4" />
 					</Button>
-				</div>
+				</ListSearchHeader>
 
 				<div className="flex-1 overflow-y-auto">
 					{filteredAgents.length === 0 ? (
-						<div className="flex h-full items-center justify-center p-6">
-							<Empty className="border-0">
-								<EmptyHeader>
-									<EmptyMedia>
-										<CpuChipIcon className="size-8 text-muted" />
-									</EmptyMedia>
-									<EmptyTitle className="text-sm font-normal text-muted">
-										{t("noSubAgents")}
-									</EmptyTitle>
-								</EmptyHeader>
-								<Button
-									variant="outline"
-									size="sm"
-									onPress={() => setPanel({ type: "create" })}
-								>
-									<PlusIcon className="mr-1 size-4" />
-									{t("createSubAgent")}
-								</Button>
-							</Empty>
+						<div className="flex h-full flex-col items-center justify-center gap-3 p-6">
+							<CpuChipIcon className="size-8 text-muted" />
+							<p className="text-center text-sm text-muted">
+								{t("noSubAgents")}
+							</p>
 						</div>
 					) : (
 						<ul className="flex flex-col gap-0.5 p-2">
@@ -185,7 +169,9 @@ export default function SubAgentsPage() {
 									panel.agent.name === agent.name &&
 									panel.agent.agent === agent.agent;
 								return (
-									<li key={`${agent.agent}:${agent.name}`}>
+									<li
+										key={`${agent.agent}:${agent.name}`}
+									>
 										<button
 											type="button"
 											onClick={() =>
@@ -194,15 +180,12 @@ export default function SubAgentsPage() {
 													agent,
 												})
 											}
-											className={`
-w-full rounded-md px-3 py-2
-text-left text-sm transition-colors
-${
-	isSelected
-		? "bg-surface font-medium text-foreground"
-		: "text-foreground hover:bg-surface-secondary"
-}
-`}
+											className={cn(
+												"w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
+												isSelected
+													? "bg-surface font-medium text-foreground"
+													: "text-foreground hover:bg-surface-secondary",
+											)}
 										>
 											<div className="flex items-center justify-between gap-2">
 												<span className="truncate font-medium">
@@ -229,27 +212,18 @@ ${
 			</div>
 
 			{/* Detail / form panel */}
-			<div className="flex flex-1 overflow-hidden">
+			<div className="relative flex-1 overflow-hidden">
 				{panel.type === "empty" && (
-					<div className="flex flex-1 items-center justify-center">
-						<Empty className="border-0">
-							<EmptyHeader>
-								<EmptyMedia>
-									<CpuChipIcon className="size-8 text-muted" />
-								</EmptyMedia>
-								<EmptyTitle className="text-sm font-normal text-muted">
-									{t("noSubAgentsDescription")}
-								</EmptyTitle>
-							</EmptyHeader>
-							<Button
-								variant="outline"
-								size="sm"
-								onPress={() => setPanel({ type: "create" })}
-							>
-								<PlusIcon className="mr-1 size-4" />
-								{t("createSubAgent")}
-							</Button>
-						</Empty>
+					<div className="flex h-full flex-col items-center justify-center gap-4">
+						<div className="text-center">
+							<p className="mb-2 text-sm text-muted">
+								{t("noSubAgentsDescription")}
+							</p>
+						</div>
+						<Button onPress={() => setPanel({ type: "create" })}>
+							<PlusIcon className="mr-2 size-4" />
+							{t("createSubAgent")}
+						</Button>
 					</div>
 				)}
 
@@ -259,7 +233,7 @@ ${
 							id: a.id,
 							name: a.display_name,
 						}))}
-						onSubmit={({
+						onCreate={({
 							agentId,
 							name,
 							description,
@@ -301,7 +275,7 @@ ${
 				{panel.type === "edit" && (
 					<SubAgentEditForm
 						agent={panel.agent}
-						onSubmit={(body) => {
+						onSave={(body) => {
 							if (!panel.agent.agent) return;
 							updateMutation.mutate({
 								name: panel.agent.name,
@@ -329,124 +303,241 @@ interface AgentOption {
 interface CreateFormValues {
 	agentId: string;
 	name: string;
-	description?: string;
-	instruction?: string;
+	description: string;
+	instruction: string;
 }
 
 function SubAgentCreateForm({
 	agents,
-	onSubmit,
+	onCreate,
 	isLoading,
 	onCancel,
 }: {
 	agents: AgentOption[];
-	onSubmit: (v: CreateFormValues) => void;
+	onCreate: (v: {
+		agentId: string;
+		name: string;
+		description: string;
+		instruction: string;
+	}) => void;
 	isLoading: boolean;
 	onCancel: () => void;
 }) {
 	const { t } = useTranslation();
-	const [agentId, setAgentId] = useState(agents[0]?.id ?? "");
-	const [name, setName] = useState("");
-	const [description, setDescription] = useState("");
-	const [instruction, setInstruction] = useState("");
 
-	const canSubmit = agentId && name.trim().length > 0;
+	const {
+		control,
+		handleSubmit,
+		formState: { isSubmitting },
+	} = useForm<CreateFormValues>({
+		mode: "onSubmit",
+		reValidateMode: "onChange",
+		defaultValues: {
+			agentId: agents[0]?.id ?? "",
+			name: "",
+			description: "",
+			instruction: "",
+		},
+	});
+
+	const onSubmit = (values: CreateFormValues) => {
+		onCreate({
+			agentId: values.agentId,
+			name: values.name.trim(),
+			description: values.description.trim(),
+			instruction: values.instruction.trim(),
+		});
+	};
 
 	return (
-		<div className="flex flex-1 flex-col overflow-y-auto p-6">
-			<h2 className="mb-6 text-lg font-semibold">
-				{t("createSubAgent")}
-			</h2>
-			<div className="flex max-w-lg flex-col gap-4">
-				<div className="flex flex-col gap-1.5">
-					<span className="text-sm font-medium">
-						{t("agentManagement")}
-					</span>
-					{agents.length === 0 ? (
-						<p className="text-sm text-muted">
-							No agents with sub-agent support found.
-						</p>
-					) : (
-						<select
-							value={agentId}
-							onChange={(e) => setAgentId(e.target.value)}
-							className="
-rounded-md border border-border bg-background
-px-3 py-2 text-sm outline-none
-focus:outline-none
-"
-						>
-							{agents.map((a) => (
-								<option key={a.id} value={a.id}>
-									{a.name}
-								</option>
-							))}
-						</select>
-					)}
-				</div>
-
-				<TextField variant="secondary" isRequired>
-					<Label>{t("subAgentName")}</Label>
-					<Input
-						value={name}
-						onChange={(e) => setName(e.target.value)}
-						placeholder={t("subAgentNamePlaceholder")}
-						variant="secondary"
-					/>
-				</TextField>
-
-				<TextField variant="secondary">
-					<Label>{t("subAgentDescription")}</Label>
-					<Input
-						value={description}
-						onChange={(e) => setDescription(e.target.value)}
-						placeholder={t("subAgentDescriptionPlaceholder")}
-						variant="secondary"
-					/>
-				</TextField>
-
-				<TextField variant="secondary">
-					<Label>{t("subAgentInstruction")}</Label>
-					<TextArea
-						value={instruction}
-						onChange={(e) => setInstruction(e.target.value)}
-						placeholder={t("subAgentInstructionPlaceholder")}
-						className="min-h-48"
-						variant="secondary"
-					/>
-				</TextField>
-
-				<div className="flex gap-2 pt-2">
-					<Button
-						isDisabled={!canSubmit || isLoading}
-						onPress={() =>
-							onSubmit({
-								agentId,
-								name: name.trim(),
-								description: description.trim() || undefined,
-								instruction: instruction.trim() || undefined,
-							})
-						}
-					>
+		<div className="h-full w-full overflow-y-auto p-4 sm:p-6">
+			<Card>
+				<Card.Header>
+					<h2 className="text-xl font-semibold text-foreground">
 						{t("createSubAgent")}
-					</Button>
-					<Button variant="ghost" onPress={onCancel}>
-						{t("cancel")}
-					</Button>
-				</div>
-			</div>
+					</h2>
+				</Card.Header>
+				<Card.Content>
+					<Form
+						validationBehavior="aria"
+						onSubmit={handleSubmit(onSubmit)}
+					>
+						<Fieldset>
+							<Fieldset.Group>
+								<Controller
+									name="agentId"
+									control={control}
+									render={({ field }) => (
+										<Select
+											className="w-full"
+											selectedKey={field.value}
+											onSelectionChange={(key) =>
+												field.onChange(key)
+											}
+											variant="secondary"
+											isDisabled={agents.length === 0}
+										>
+											<Label>{t("agentManagement")}</Label>
+											<Select.Trigger>
+												<Select.Value />
+												<Select.Indicator />
+											</Select.Trigger>
+											<Select.Popover>
+												<ListBox>
+													{agents.map((a) => (
+														<ListBox.Item
+															key={a.id}
+															id={a.id}
+															textValue={a.name}
+														>
+															{a.name}
+														</ListBox.Item>
+													))}
+												</ListBox>
+											</Select.Popover>
+										</Select>
+									)}
+								/>
+							</Fieldset.Group>
+						</Fieldset>
+
+						<Fieldset>
+							<Fieldset.Group>
+								<Controller
+									name="name"
+									control={control}
+									rules={{
+										required: t("validationNameRequired"),
+										validate: (v) =>
+											v.trim()
+												? true
+												: t("validationNameRequired"),
+									}}
+									render={({ field, fieldState }) => (
+										<TextField
+											className="w-full"
+											variant="secondary"
+											isRequired
+											validationBehavior="aria"
+											isInvalid={Boolean(fieldState.error)}
+										>
+											<Label>{t("subAgentName")}</Label>
+											<Input
+												value={field.value}
+												onChange={(e) =>
+													field.onChange(e.target.value)
+												}
+												onBlur={field.onBlur}
+												placeholder={t(
+													"subAgentNamePlaceholder",
+												)}
+												variant="secondary"
+											/>
+											{fieldState.error && (
+												<FieldError>
+													{fieldState.error.message}
+												</FieldError>
+											)}
+										</TextField>
+									)}
+								/>
+								<Controller
+									name="description"
+									control={control}
+									render={({ field }) => (
+										<TextField
+											className="w-full"
+											variant="secondary"
+										>
+											<Label>{t("subAgentDescription")}</Label>
+											<Input
+												value={field.value}
+												onChange={(e) =>
+													field.onChange(e.target.value)
+												}
+												onBlur={field.onBlur}
+												placeholder={t(
+													"subAgentDescriptionPlaceholder",
+												)}
+												variant="secondary"
+											/>
+										</TextField>
+									)}
+								/>
+							</Fieldset.Group>
+						</Fieldset>
+
+						<Fieldset>
+							<Fieldset.Group>
+								<Controller
+									name="instruction"
+									control={control}
+									render={({ field }) => (
+										<TextField
+											className="w-full"
+											variant="secondary"
+										>
+											<Label>{t("subAgentInstruction")}</Label>
+											<TextArea
+												value={field.value}
+												onChange={(e) =>
+													field.onChange(e.target.value)
+												}
+												onBlur={field.onBlur}
+												placeholder={t(
+													"subAgentInstructionPlaceholder",
+												)}
+												variant="secondary"
+												className="min-h-48"
+											/>
+										</TextField>
+									)}
+								/>
+							</Fieldset.Group>
+						</Fieldset>
+
+						<div className="flex justify-end gap-2 pt-2">
+							<Button
+								type="button"
+								variant="secondary"
+								onPress={onCancel}
+							>
+								{t("cancel")}
+							</Button>
+							<Button
+								type="submit"
+								isDisabled={
+									isLoading ||
+									isSubmitting ||
+									agents.length === 0
+								}
+							>
+								{isLoading
+									? t("creating")
+									: t("createSubAgent")}
+							</Button>
+						</div>
+					</Form>
+				</Card.Content>
+			</Card>
 		</div>
 	);
 }
 
+interface EditFormValues {
+	name: string;
+	description: string;
+	instruction: string;
+}
+
 function SubAgentEditForm({
 	agent: initial,
-	onSubmit,
+	onSave,
 	isLoading,
 	onCancel,
 }: {
 	agent: SubAgentResponse;
-	onSubmit: (v: {
+	onSave: (v: {
 		name: string | null;
 		description: string | null;
 		instruction: string | null;
@@ -455,62 +546,149 @@ function SubAgentEditForm({
 	onCancel: () => void;
 }) {
 	const { t } = useTranslation();
-	const [name, setName] = useState(initial.name);
-	const [description, setDescription] = useState(initial.description ?? "");
-	const [instruction, setInstruction] = useState(initial.instruction ?? "");
+
+	const {
+		control,
+		handleSubmit,
+		formState: { isSubmitting },
+	} = useForm<EditFormValues>({
+		mode: "onSubmit",
+		reValidateMode: "onChange",
+		defaultValues: {
+			name: initial.name,
+			description: initial.description ?? "",
+			instruction: initial.instruction ?? "",
+		},
+	});
+
+	const onSubmit = (values: EditFormValues) => {
+		onSave({
+			name: values.name || null,
+			description: values.description || null,
+			instruction: values.instruction || null,
+		});
+	};
 
 	return (
-		<div className="flex flex-1 flex-col overflow-y-auto p-6">
-			<h2 className="mb-6 text-lg font-semibold">{t("editSubAgent")}</h2>
-			<div className="flex max-w-lg flex-col gap-4">
-				<TextField variant="secondary" isRequired>
-					<Label>{t("subAgentName")}</Label>
-					<Input
-						value={name}
-						onChange={(e) => setName(e.target.value)}
-						variant="secondary"
-					/>
-				</TextField>
+		<div className="h-full w-full overflow-y-auto p-4 sm:p-6">
+			<div className="mb-6 flex items-center justify-between gap-3">
+				<h2 className="text-xl font-semibold text-foreground">
+					{t("editSubAgent")}
+				</h2>
+			</div>
 
-				<TextField variant="secondary">
-					<Label>{t("subAgentDescription")}</Label>
-					<Input
-						value={description}
-						onChange={(e) => setDescription(e.target.value)}
-						placeholder={t("subAgentDescriptionPlaceholder")}
-						variant="secondary"
-					/>
-				</TextField>
+			<Form
+				validationBehavior="aria"
+				onSubmit={handleSubmit(onSubmit)}
+			>
+				<Fieldset>
+					<Fieldset.Group>
+						<Controller
+							name="name"
+							control={control}
+							rules={{
+								required: t("validationNameRequired"),
+								validate: (v) =>
+									v.trim()
+										? true
+										: t("validationNameRequired"),
+							}}
+							render={({ field, fieldState }) => (
+								<TextField
+									className="w-full"
+									variant="secondary"
+									isRequired
+									validationBehavior="aria"
+									isInvalid={Boolean(fieldState.error)}
+								>
+									<Label>{t("subAgentName")}</Label>
+									<Input
+										value={field.value}
+										onChange={(e) =>
+											field.onChange(e.target.value)
+										}
+										onBlur={field.onBlur}
+										variant="secondary"
+									/>
+									{fieldState.error && (
+										<FieldError>
+											{fieldState.error.message}
+										</FieldError>
+									)}
+								</TextField>
+							)}
+						/>
+						<Controller
+							name="description"
+							control={control}
+							render={({ field }) => (
+								<TextField
+									className="w-full"
+									variant="secondary"
+								>
+									<Label>{t("subAgentDescription")}</Label>
+									<Input
+										value={field.value}
+										onChange={(e) =>
+											field.onChange(e.target.value)
+										}
+										onBlur={field.onBlur}
+										placeholder={t(
+											"subAgentDescriptionPlaceholder",
+										)}
+										variant="secondary"
+									/>
+								</TextField>
+							)}
+						/>
+					</Fieldset.Group>
+				</Fieldset>
 
-				<TextField variant="secondary">
-					<Label>{t("subAgentInstruction")}</Label>
-					<TextArea
-						value={instruction}
-						onChange={(e) => setInstruction(e.target.value)}
-						placeholder={t("subAgentInstructionPlaceholder")}
-						className="min-h-48"
-						variant="secondary"
-					/>
-				</TextField>
+				<Fieldset>
+					<Fieldset.Group>
+						<Controller
+							name="instruction"
+							control={control}
+							render={({ field }) => (
+								<TextField
+									className="w-full"
+									variant="secondary"
+								>
+									<Label>{t("subAgentInstruction")}</Label>
+									<TextArea
+										value={field.value}
+										onChange={(e) =>
+											field.onChange(e.target.value)
+										}
+										onBlur={field.onBlur}
+										placeholder={t(
+											"subAgentInstructionPlaceholder",
+										)}
+										variant="secondary"
+										className="min-h-48"
+									/>
+								</TextField>
+							)}
+						/>
+					</Fieldset.Group>
+				</Fieldset>
 
-				<div className="flex gap-2 pt-2">
+				<div className="flex justify-end gap-2 pt-2">
 					<Button
-						isDisabled={isLoading}
-						onPress={() =>
-							onSubmit({
-								name: name || null,
-								description: description || null,
-								instruction: instruction || null,
-							})
-						}
+						type="button"
+						variant="secondary"
+						onPress={onCancel}
 					>
-						{t("save")}
-					</Button>
-					<Button variant="ghost" onPress={onCancel}>
 						{t("cancel")}
 					</Button>
+					<Button
+						type="submit"
+						isDisabled={isLoading || isSubmitting}
+					>
+						{isLoading ? t("saving") : t("save")}
+					</Button>
 				</div>
-			</div>
+			</Form>
 		</div>
 	);
 }
@@ -527,78 +705,144 @@ function SubAgentDetail({
 	isDeleting: boolean;
 }) {
 	const { t } = useTranslation();
+	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
 	return (
-		<div className="flex flex-1 flex-col overflow-y-auto p-6">
-			<div className="flex items-start justify-between gap-4">
-				<h2 className="text-lg font-semibold">{agent.name}</h2>
-				<div className="flex gap-2">
-					<Button
-						isIconOnly
-						variant="ghost"
-						size="sm"
-						onPress={onEdit}
-						aria-label={t("editSubAgent")}
-					>
-						<PencilIcon className="size-4" />
-					</Button>
-					<Button
-						isIconOnly
-						variant="ghost"
-						size="sm"
-						isDisabled={isDeleting}
-						onPress={onDelete}
-						aria-label={t("deleteSubAgent")}
-					>
-						<TrashIcon className="size-4 text-danger" />
-					</Button>
+		<>
+			<div className="h-full overflow-y-auto">
+				<div className="w-full space-y-4 p-4 sm:p-6">
+					<Card>
+						<Card.Header className="flex flex-row items-start justify-between gap-3">
+							<div className="min-w-0 flex-1">
+								<h2 className="truncate text-xl font-semibold text-foreground">
+									{agent.name}
+								</h2>
+								{agent.description && (
+									<p className="mt-1 text-sm text-muted">
+										{agent.description}
+									</p>
+								)}
+							</div>
+							<div className="flex items-center gap-2">
+								<Tooltip delay={0}>
+									<Button
+										isIconOnly
+										variant="ghost"
+										size="md"
+										className="min-h-[44px] min-w-[44px] text-muted"
+										aria-label={t("editSubAgent")}
+										onPress={onEdit}
+									>
+										<PencilIcon className="size-4" />
+									</Button>
+									<Tooltip.Content>
+										{t("editSubAgent")}
+									</Tooltip.Content>
+								</Tooltip>
+								<Tooltip delay={0}>
+									<Button
+										isIconOnly
+										variant="ghost"
+										size="md"
+										className="min-h-[44px] min-w-[44px] text-muted hover:text-danger"
+										aria-label={t("deleteSubAgent")}
+										onPress={() => setDeleteDialogOpen(true)}
+									>
+										<TrashIcon className="size-4" />
+									</Button>
+									<Tooltip.Content>
+										{t("deleteSubAgent")}
+									</Tooltip.Content>
+								</Tooltip>
+							</div>
+						</Card.Header>
+
+						<Card.Content className="flex flex-col gap-6">
+							{agent.agent && (
+								<div className="space-y-3">
+									<h3 className="text-xs font-medium uppercase tracking-wider text-muted">
+										{t("agentManagement")}
+									</h3>
+									<Chip size="sm" variant="soft" color="default">
+										{agent.agent}
+									</Chip>
+								</div>
+							)}
+
+							<div className="space-y-3">
+								<h3 className="text-xs font-medium uppercase tracking-wider text-muted">
+									{t("subAgentInstruction")}
+								</h3>
+								{agent.instruction ? (
+									<div className="overflow-x-auto rounded-lg border border-separator bg-surface-secondary px-3 py-2">
+										<code className="block whitespace-pre-wrap break-words font-mono text-xs leading-5 text-foreground">
+											{agent.instruction}
+										</code>
+									</div>
+								) : (
+									<p className="text-sm text-muted">
+										{t("subAgentNoInstruction")}
+									</p>
+								)}
+							</div>
+						</Card.Content>
+					</Card>
 				</div>
 			</div>
 
-			{agent.description && (
-				<p className="mt-2 text-sm text-muted">{agent.description}</p>
-			)}
-
-			<div className="mt-4 flex flex-wrap gap-3">
-				{agent.agent && (
-					<div className="flex items-center gap-1.5">
-						<span className="text-xs text-muted">Agent:</span>
-						<Surface
-							variant="secondary"
-							className="rounded-full px-2 py-0.5 text-xs"
-						>
-							{agent.agent}
-						</Surface>
-					</div>
-				)}
-				{agent.source && (
-					<div className="flex items-center gap-1.5">
-						<span className="text-xs text-muted">Source:</span>
-						<span className="rounded-full bg-surface-secondary px-2 py-0.5 text-xs">
-							{agent.source}
-						</span>
-					</div>
-				)}
-			</div>
-
-			{agent.instruction ? (
-				<div className="mt-6">
-					<h3 className="mb-2 text-sm font-medium">
-						{t("subAgentInstruction")}
-					</h3>
-					<Surface
-						variant="secondary"
-						className="rounded-lg p-4 font-mono text-sm whitespace-pre-wrap"
-					>
-						{agent.instruction}
-					</Surface>
-				</div>
-			) : (
-				<div className="mt-6 rounded-lg border border-dashed border-border p-6 text-center">
-					<p className="text-sm text-muted">
-						No instruction set. Click edit to add one.
-					</p>
-				</div>
-			)}
-		</div>
+			<Modal.Backdrop
+				isOpen={deleteDialogOpen}
+				onOpenChange={setDeleteDialogOpen}
+			>
+				<Modal.Container>
+					<Modal.Dialog>
+						<Modal.CloseTrigger />
+						<Modal.Header>
+							<div className="flex items-center gap-2">
+								<ExclamationTriangleIcon className="size-5 text-warning" />
+								<Modal.Heading>
+									{t("deleteSubAgent")}
+								</Modal.Heading>
+							</div>
+						</Modal.Header>
+						<Modal.Body>
+							<p className="text-sm text-muted">
+								{t("deleteSubAgentConfirm", {
+									name: agent.name,
+								})}
+							</p>
+						</Modal.Body>
+						<Modal.Footer>
+							<Button
+								slot="close"
+								variant="secondary"
+								size="md"
+								isDisabled={isDeleting}
+								className="min-h-[44px]"
+								onPress={() => setDeleteDialogOpen(false)}
+							>
+								{t("cancel")}
+							</Button>
+							<Button
+								variant="danger"
+								size="md"
+								isDisabled={isDeleting}
+								className="min-h-[44px] min-w-[120px]"
+								onPress={() => {
+									onDelete();
+									setDeleteDialogOpen(false);
+								}}
+							>
+								{isDeleting ? (
+									<Spinner size="sm" />
+								) : (
+									t("deleteSubAgent")
+								)}
+							</Button>
+						</Modal.Footer>
+					</Modal.Dialog>
+				</Modal.Container>
+			</Modal.Backdrop>
+		</>
 	);
 }

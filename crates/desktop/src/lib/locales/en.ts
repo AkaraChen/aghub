@@ -20,6 +20,8 @@ export default {
 	subAgentUpdated: "Sub-agent updated",
 	subAgentDeleted: "Sub-agent deleted",
 	createSubAgentError: "Failed to create sub-agent",
+	subAgentNoInstruction: "No instruction set.",
+	deleteSubAgentConfirm: 'Delete "{{name}}"? This can\'t be undone.',
 	updateSubAgentError: "Failed to update sub-agent",
 	deleteSubAgentError: "Failed to delete sub-agent",
 	subAgentNamePlaceholder: "e.g. code-reviewer",

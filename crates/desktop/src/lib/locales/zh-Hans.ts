@@ -20,6 +20,8 @@ export default {
 	subAgentUpdated: "子代理已更新",
 	subAgentDeleted: "子代理已删除",
 	createSubAgentError: "创建子代理失败",
+	subAgentNoInstruction: "未设置指令。",
+	deleteSubAgentConfirm: '确定要删除"{{name}}"吗？此操作无法撤销。',
 	updateSubAgentError: "更新子代理失败",
 	deleteSubAgentError: "删除子代理失败",
 	subAgentNamePlaceholder: "例如：code-reviewer",

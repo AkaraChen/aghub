@@ -8,7 +8,8 @@ import {
 	Button,
 	Input,
 	Label,
-	Surface,
+	ListBox,
+	Select,
 	TextArea,
 	TextField,
 	toast,
@@ -23,6 +24,7 @@ import {
 	supportsSubAgent,
 	supportsSubAgentScope,
 } from "../lib/agent-capabilities";
+import { cn } from "../lib/utils";
 import {
 	createSubAgentMutationOptions,
 	deleteSubAgentMutationOptions,
@@ -149,15 +151,13 @@ export function ProjectSubAgents({
 									setSelected(agent);
 									setPanelMode(null);
 								}}
-								className={`
-w-full rounded-md px-3 py-2 text-left
-text-sm transition-colors
-${
-	selected?.name === agent.name && selected?.agent === agent.agent
-		? "bg-surface font-medium"
-		: "text-foreground hover:bg-surface-secondary"
-}
-`}
+								className={cn(
+									"w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
+									selected?.name === agent.name &&
+										selected?.agent === agent.agent
+										? "bg-surface font-medium text-foreground"
+										: "text-foreground hover:bg-surface-secondary",
+								)}
 							>
 								<div className="flex items-center justify-between gap-2">
 									<div className="flex items-center gap-2">
@@ -295,14 +295,13 @@ function SubAgentInlineDetail({
 				<p className="mt-1 text-xs text-muted">{agent.description}</p>
 			)}
 			{agent.instruction && (
-				<Surface
-					variant="secondary"
-					className="mt-2 rounded p-2 font-mono text-xs whitespace-pre-wrap"
-				>
-					{agent.instruction.length > 200
-						? `${agent.instruction.slice(0, 200)}…`
-						: agent.instruction}
-				</Surface>
+				<div className="mt-2 overflow-x-auto rounded-md border border-separator bg-surface-secondary px-2 py-1.5">
+					<code className="block whitespace-pre-wrap break-words font-mono text-xs leading-5 text-foreground">
+						{agent.instruction.length > 200
+							? `${agent.instruction.slice(0, 200)}…`
+							: agent.instruction}
+					</code>
+				</div>
 			)}
 		</div>
 	);
@@ -339,26 +338,31 @@ function SubAgentInlineForm({
 			<h4 className="text-sm font-medium">{t("createSubAgent")}</h4>
 
 			{agents.length > 0 && (
-				<div className="flex flex-col gap-1">
-					<span className="text-xs font-medium text-muted">
-						Agent
-					</span>
-					<select
-						value={agentId}
-						onChange={(e) => setAgentId(e.target.value)}
-						className="
-rounded border border-border bg-background
-px-2 py-1.5 text-sm outline-none
-focus:outline-none
-"
-					>
-						{agents.map((a) => (
-							<option key={a.id} value={a.id}>
-								{a.name}
-							</option>
-						))}
-					</select>
-				</div>
+				<Select
+					className="w-full"
+					selectedKey={agentId}
+					onSelectionChange={(key) => setAgentId(String(key))}
+					variant="secondary"
+				>
+					<Label>{t("agentManagement")}</Label>
+					<Select.Trigger>
+						<Select.Value />
+						<Select.Indicator />
+					</Select.Trigger>
+					<Select.Popover>
+						<ListBox>
+							{agents.map((a) => (
+								<ListBox.Item
+									key={a.id}
+									id={a.id}
+									textValue={a.name}
+								>
+									{a.name}
+								</ListBox.Item>
+							))}
+						</ListBox>
+					</Select.Popover>
+				</Select>
 			)}
 
 			<TextField variant="secondary" isRequired>
@@ -407,7 +411,7 @@ focus:outline-none
 				>
 					{t("createSubAgent")}
 				</Button>
-				<Button variant="ghost" size="sm" onPress={onCancel}>
+				<Button variant="secondary" size="sm" onPress={onCancel}>
 					{t("cancel")}
 				</Button>
 			</div>
@@ -483,7 +487,7 @@ function SubAgentInlineEditForm({
 				>
 					{t("save")}
 				</Button>
-				<Button variant="ghost" size="sm" onPress={onCancel}>
+				<Button variant="secondary" size="sm" onPress={onCancel}>
 					{t("cancel")}
 				</Button>
 			</div>
