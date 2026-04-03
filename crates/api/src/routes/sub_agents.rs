@@ -1,6 +1,4 @@
-use aghub_core::{
-	errors::ConfigError, load_all_agents, models::SubAgent,
-};
+use aghub_core::{errors::ConfigError, load_all_agents, models::SubAgent};
 use rocket::http::Status;
 use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
@@ -53,7 +51,11 @@ pub fn list_sub_agents(
 	}
 
 	let config = manager.load().map_err(ApiError::from)?;
-	let items = config.sub_agents.iter().map(SubAgentResponse::from).collect();
+	let items = config
+		.sub_agents
+		.iter()
+		.map(SubAgentResponse::from)
+		.collect();
 	Ok(Json(items))
 }
 
@@ -151,8 +153,7 @@ pub fn update_sub_agent(
 	let body = body.into_inner();
 	// Capture the effective name after the patch so we can look it up
 	// after a potential rename (patch.name takes precedence over route name).
-	let effective_name =
-		body.name.clone().unwrap_or_else(|| name.clone());
+	let effective_name = body.name.clone().unwrap_or_else(|| name.clone());
 	let patch = body.into();
 	manager
 		.update_sub_agent(&name, patch)

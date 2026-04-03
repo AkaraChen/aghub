@@ -24,7 +24,8 @@ export default {
 	deleteSubAgentError: "Failed to delete sub-agent",
 	subAgentNamePlaceholder: "e.g. code-reviewer",
 	subAgentDescriptionPlaceholder: "What does this sub-agent do?",
-	subAgentInstructionPlaceholder: "System prompt / instruction for this sub-agent...",
+	subAgentInstructionPlaceholder:
+		"System prompt / instruction for this sub-agent...",
 	agentManagement: "Agent",
 	projects: "Projects",
 	search: "Search",

@@ -63,4 +63,3 @@ export function supportsSubAgentScope(
 ): boolean {
 	return agent.capabilities.sub_agents.scopes[scope];
 }
-

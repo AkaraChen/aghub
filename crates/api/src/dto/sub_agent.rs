@@ -32,7 +32,9 @@ pub struct UpdateSubAgentRequest {
 	pub instruction: Option<String>,
 }
 
-impl From<UpdateSubAgentRequest> for aghub_core::manager::sub_agent::SubAgentPatch {
+impl From<UpdateSubAgentRequest>
+	for aghub_core::manager::sub_agent::SubAgentPatch
+{
 	fn from(req: UpdateSubAgentRequest) -> Self {
 		Self {
 			name: req.name,

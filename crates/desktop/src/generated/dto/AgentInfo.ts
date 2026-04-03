@@ -2,4 +2,9 @@
 import type { CapabilitiesDto } from "./CapabilitiesDto";
 import type { SkillsPathsDto } from "./SkillsPathsDto";
 
-export type AgentInfo = { id: string, display_name: string, capabilities: CapabilitiesDto, skills_paths: SkillsPathsDto, };
+export type AgentInfo = {
+	id: string;
+	display_name: string;
+	capabilities: CapabilitiesDto;
+	skills_paths: SkillsPathsDto;
+};

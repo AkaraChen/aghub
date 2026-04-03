@@ -233,7 +233,9 @@ function App() {
 										<MainLayout>
 											<ErrorBoundary>
 												<Suspense
-													fallback={<SkillsPageSkeleton />}
+													fallback={
+														<SkillsPageSkeleton />
+													}
 												>
 													<SubAgentsPage />
 												</Suspense>

@@ -16,8 +16,8 @@ pub use aghub_agents::{descriptor, errors, format, models};
 pub use aghub_agents::{
 	AgentConfig, AgentDescriptor, AgentType, Capabilities, ConfigError,
 	ConfigSource, LoadMcpsFn, LoadSubAgentsFn, McpParseFn, McpSerializeFn,
-	McpServer, McpTransport, ResourceScope, Result, SaveMcpsFn, SaveSubAgentsFn,
-	Skill, SubAgent,
+	McpServer, McpTransport, ResourceScope, Result, SaveMcpsFn,
+	SaveSubAgentsFn, Skill, SubAgent,
 };
 
 #[cfg(feature = "testing")]

@@ -160,8 +160,7 @@ impl AgentAdapter for &'static AgentDescriptor {
 		}
 
 		if self.supports_sub_agent_scope(scope) {
-			config.sub_agents =
-				(self.load_sub_agents)(project_root, scope)?;
+			config.sub_agents = (self.load_sub_agents)(project_root, scope)?;
 		}
 
 		Ok(config)
