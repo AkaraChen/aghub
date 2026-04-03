@@ -111,7 +111,7 @@ export function ImportGithubSkillPanel({
 	);
 
 	const { data: credentials = [] } = useQuery({
-		...credentialsListQueryOptions({ api, enabled: true }),
+		...credentialsListQueryOptions({ api, enabled: isPrivateRepo }),
 	});
 
 	const {
