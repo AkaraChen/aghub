@@ -415,6 +415,7 @@ export default {
 	selectedSkill: "已选技能",
 	installingSkill: "正在安装技能",
 	selectAgentsForSkill: "选择要安装此技能的代理：",
+	selectAgentsForSubAgent: "选择应使用此子代理的代理：",
 	installs: "次安装",
 	installAllSkills: "安装所有技能",
 	installAllSkillsDescription:

@@ -33,6 +33,7 @@ import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { ListSearchHeader } from "../../components/list-search-header";
+import { ManageSubAgentAgentsDialog } from "../../components/manage-sub-agent-agents-dialog";
 import { TransferDialog } from "../../components/transfer-dialog";
 import type { SubAgentResponse } from "../../generated/dto";
 import { useAgentAvailability } from "../../hooks/use-agent-availability";
@@ -820,6 +821,7 @@ function SubAgentDetail({
 	const { t } = useTranslation();
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+	const [manageDialogOpen, setManageDialogOpen] = useState(false);
 
 	return (
 		<>
@@ -838,23 +840,6 @@ function SubAgentDetail({
 								)}
 							</div>
 							<div className="flex items-center gap-2">
-								<Tooltip delay={0}>
-									<Button
-										isIconOnly
-										variant="ghost"
-										size="md"
-										className="min-h-[44px] min-w-[44px] text-muted"
-										aria-label={t("transfer")}
-										onPress={() =>
-											setTransferDialogOpen(true)
-										}
-									>
-										<DocumentDuplicateIcon className="size-4" />
-									</Button>
-									<Tooltip.Content>
-										{t("transfer")}
-									</Tooltip.Content>
-								</Tooltip>
 								<Tooltip delay={0}>
 									<Button
 										isIconOnly
@@ -923,6 +908,23 @@ function SubAgentDetail({
 								)}
 							</div>
 						</Card.Content>
+
+						<Card.Footer className="pt-4 border-t border-separator flex flex-wrap gap-3">
+							<Button
+								variant="secondary"
+								onPress={() => setTransferDialogOpen(true)}
+							>
+								<DocumentDuplicateIcon className="size-4" />
+								{t("transfer")}
+							</Button>
+							<Button
+								variant="primary"
+								onPress={() => setManageDialogOpen(true)}
+							>
+								<PlusIcon className="size-4" />
+								{t("addToAgent")}
+							</Button>
+						</Card.Footer>
 					</Card>
 				</div>
 			</div>
@@ -993,6 +995,12 @@ function SubAgentDetail({
 					}
 				/>
 			)}
+
+			<ManageSubAgentAgentsDialog
+				agent={agent}
+				isOpen={manageDialogOpen}
+				onClose={() => setManageDialogOpen(false)}
+			/>
 		</>
 	);
 }

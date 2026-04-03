@@ -22,6 +22,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import { ManageSubAgentAgentsDialog } from "../components/manage-sub-agent-agents-dialog";
 import { TransferDialog } from "../components/transfer-dialog";
 import type { SubAgentResponse } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
@@ -278,6 +279,7 @@ function SubAgentInlineDetail({
 }) {
 	const { t } = useTranslation();
 	const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+	const [manageDialogOpen, setManageDialogOpen] = useState(false);
 
 	return (
 		<>
@@ -285,15 +287,6 @@ function SubAgentInlineDetail({
 				<div className="flex items-center justify-between gap-2">
 					<span className="text-sm font-medium">{agent.name}</span>
 					<div className="flex gap-1">
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							aria-label={t("transfer")}
-							onPress={() => setTransferDialogOpen(true)}
-						>
-							<DocumentDuplicateIcon className="size-3.5" />
-						</Button>
 						<Button
 							isIconOnly
 							variant="ghost"
@@ -325,6 +318,24 @@ function SubAgentInlineDetail({
 						</code>
 					</div>
 				)}
+				<div className="mt-3 flex flex-wrap gap-2 border-t border-separator pt-3">
+					<Button
+						variant="secondary"
+						size="sm"
+						onPress={() => setTransferDialogOpen(true)}
+					>
+						<DocumentDuplicateIcon className="size-3.5" />
+						{t("transfer")}
+					</Button>
+					<Button
+						variant="primary"
+						size="sm"
+						onPress={() => setManageDialogOpen(true)}
+					>
+						<PlusIcon className="size-3.5" />
+						{t("addToAgent")}
+					</Button>
+				</div>
 			</div>
 
 			{agent.agent && (
@@ -338,6 +349,13 @@ function SubAgentInlineDetail({
 					sourceProjectRoot={projectPath}
 				/>
 			)}
+
+			<ManageSubAgentAgentsDialog
+				agent={agent}
+				isOpen={manageDialogOpen}
+				onClose={() => setManageDialogOpen(false)}
+				projectPath={projectPath}
+			/>
 		</>
 	);
 }
