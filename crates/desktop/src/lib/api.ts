@@ -1,3 +1,4 @@
+import type { HTTPError } from "ky";
 import ky from "ky";
 import type {
 	AgentAvailabilityDto,
@@ -31,8 +32,30 @@ import type {
 	UpdateMcpRequest,
 } from "../generated/dto";
 
+interface ApiErrorBody {
+	error?: string;
+	code?: string;
+}
+
 export function createApi(baseUrl: string) {
-	const client = ky.create({ prefixUrl: baseUrl });
+	const client = ky.create({
+		prefixUrl: baseUrl,
+		hooks: {
+			beforeError: [
+				async (error: HTTPError) => {
+					try {
+						const body = (await error.response.json()) as ApiErrorBody;
+						if (body.error) {
+							error.message = body.error;
+						}
+					} catch {
+						// ignore JSON parse failures — keep the original message
+					}
+					return error;
+				},
+			],
+		},
+	});
 
 	return {
 		agents: {

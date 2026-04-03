@@ -94,7 +94,11 @@ export default function IntegrationsPanel() {
 		onSuccess: () => {},
 		onError: (error) => {
 			console.error("Failed to delete credential:", error);
-			toast.danger(t("credentialDeleteFailed"));
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: t("credentialDeleteFailed"),
+			);
 		},
 	});
 

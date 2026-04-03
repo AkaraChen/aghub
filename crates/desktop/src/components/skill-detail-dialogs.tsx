@@ -75,7 +75,11 @@ export function DeleteSkillLocationDialog({
 		},
 		onError: (error) => {
 			console.error("Skill location delete mutation error:", error);
-			toast.danger(t("failedToDeleteSkill"));
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: t("failedToDeleteSkill"),
+			);
 		},
 	});
 
