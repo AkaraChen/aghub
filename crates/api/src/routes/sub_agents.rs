@@ -1,4 +1,4 @@
-use aghub_core::{errors::ConfigError, load_all_agents, models::SubAgent};
+use aghub_core::{errors::ConfigError, load_all_agents, models::SubAgent, transfer};
 use rocket::http::Status;
 use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
@@ -6,6 +6,9 @@ use rocket::serde::json::Json;
 use crate::{
 	dto::sub_agent::{
 		CreateSubAgentRequest, SubAgentResponse, UpdateSubAgentRequest,
+	},
+	dto::transfer::{
+		OperationBatchResponse, ReconcileRequest, TransferRequest,
 	},
 	error::{ApiCreated, ApiError, ApiNoContent, ApiResult},
 	extractors::{AgentParam, ScopeParams},
@@ -31,6 +34,64 @@ fn check_sub_agent_supported(
 		));
 	}
 	Ok(())
+}
+
+#[post("/sub-agents/transfer", data = "<body>")]
+pub fn transfer_sub_agent_route(
+	body: Json<TransferRequest>,
+) -> ApiResult<OperationBatchResponse> {
+	let req = body.into_inner();
+	let source = req.source.to_core()?;
+	let destinations = req
+		.destinations
+		.iter()
+		.map(|target| target.to_core())
+		.collect::<Result<Vec<_>, _>>()?;
+	let result = transfer::transfer_sub_agent(source, destinations)
+		.map_err(ApiError::from)?;
+	Ok(Json(result.into()))
+}
+
+#[post("/sub-agents/reconcile", data = "<body>")]
+pub fn reconcile_sub_agent_route(
+	body: Json<ReconcileRequest>,
+) -> ApiResult<OperationBatchResponse> {
+	let req = body.into_inner();
+	let source = req.source.to_core()?;
+
+	let added: Vec<_> = req
+		.added
+		.unwrap_or_default()
+		.iter()
+		.map(|agent_str| {
+			agent_str.parse().map_err(|_| {
+				ApiError::new(
+					rocket::http::Status::BadRequest,
+					format!("Unknown agent '{agent_str}'"),
+					"INVALID_PARAM",
+				)
+			})
+		})
+		.collect::<Result<Vec<_>, _>>()?;
+
+	let removed: Vec<_> = req
+		.removed
+		.unwrap_or_default()
+		.iter()
+		.map(|agent_str| {
+			agent_str.parse().map_err(|_| {
+				ApiError::new(
+					rocket::http::Status::BadRequest,
+					format!("Unknown agent '{agent_str}'"),
+					"INVALID_PARAM",
+				)
+			})
+		})
+		.collect::<Result<Vec<_>, _>>()?;
+
+	let result = transfer::reconcile_sub_agent(source, added, removed)
+		.map_err(ApiError::from)?;
+	Ok(Json(result.into()))
 }
 
 #[get("/agents/<agent>/sub-agents?<scope..>")]

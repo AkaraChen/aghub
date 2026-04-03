@@ -11,6 +11,7 @@ import {
 	supportsMcpScope,
 	supportsMcpTransport,
 	supportsSkillMutation,
+	supportsSubAgentScope,
 } from "../lib/agent-capabilities";
 import { cn } from "../lib/utils";
 import {
@@ -23,9 +24,14 @@ import {
 	skillListQueryOptions,
 	transferSkillsMutationOptions,
 } from "../requests/skills";
+import {
+	invalidateSubAgentQueries,
+	subAgentListQueryOptions,
+	transferSubAgentsMutationOptions,
+} from "../requests/sub-agents";
 import { type AgentDiffLabel, AgentList, type AgentState } from "./agent-list";
 
-type ResourceKind = "mcp" | "skill";
+type ResourceKind = "mcp" | "skill" | "sub_agent";
 type DestinationScope =
 	| { type: "global" }
 	| { type: "project"; path: string; name: string };
@@ -68,6 +74,12 @@ export function TransferDialog({
 			queryClient,
 		}),
 	);
+	const transferSubAgentsMutation = useMutation(
+		transferSubAgentsMutationOptions({
+			api,
+			queryClient,
+		}),
+	);
 
 	const [selectedScopeKey, setSelectedScopeKey] = useState<string | null>(
 		null,
@@ -97,23 +109,33 @@ export function TransferDialog({
 	}, [sourceScope, sourceProjectRoot, projects]);
 
 	const destinationQueries = useQueries({
-		queries: availableDestinations.map((dest) =>
-			resourceType === "mcp"
-				? mcpListQueryOptions({
-						api,
-						scope: dest.type,
-						projectRoot:
-							dest.type === "project" ? dest.path : undefined,
-						enabled: isOpen,
-					})
-				: skillListQueryOptions({
-						api,
-						scope: dest.type,
-						projectRoot:
-							dest.type === "project" ? dest.path : undefined,
-						enabled: isOpen,
-					}),
-		),
+		queries: availableDestinations.map((dest) => {
+			const scope = dest.type;
+			const projectRoot =
+				dest.type === "project" ? dest.path : undefined;
+			if (resourceType === "mcp") {
+				return mcpListQueryOptions({
+					api,
+					scope,
+					projectRoot,
+					enabled: isOpen,
+				});
+			}
+			if (resourceType === "sub_agent") {
+				return subAgentListQueryOptions({
+					api,
+					scope,
+					projectRoot,
+					enabled: isOpen,
+				});
+			}
+			return skillListQueryOptions({
+				api,
+				scope,
+				projectRoot,
+				enabled: isOpen,
+			});
+		}),
 	});
 
 	const installedAgentsByDestination = useMemo(() => {
@@ -158,6 +180,12 @@ export function TransferDialog({
 					if (resourceType === "mcp") {
 						return supportsMcpTransport(agent, transport);
 					}
+					if (resourceType === "sub_agent") {
+						return (
+							supportsSubAgentScope(agent, "global") ||
+							supportsSubAgentScope(agent, "project")
+						);
+					}
 					return (
 						supportsSkillMutation(agent, "global") ||
 						supportsSkillMutation(agent, "project")
@@ -169,6 +197,10 @@ export function TransferDialog({
 						supportsMcpScope(agent, selectedScope.type) &&
 						supportsMcpTransport(agent, transport)
 					);
+				}
+
+				if (resourceType === "sub_agent") {
+					return supportsSubAgentScope(agent, selectedScope.type);
 				}
 
 				return supportsSkillMutation(agent, selectedScope.type);
@@ -258,27 +290,31 @@ export function TransferDialog({
 			}),
 		);
 
+		const transferSource = {
+			agent: sourceAgent,
+			scope: sourceScope,
+			project_root: sourceProjectRoot ?? null,
+			name,
+		};
+
 		try {
-			const result =
-				resourceType === "mcp"
-					? await transferMcpsMutation.mutateAsync({
-							source: {
-								agent: sourceAgent,
-								scope: sourceScope,
-								project_root: sourceProjectRoot ?? null,
-								name,
-							},
-							destinations: destinationTargets,
-						})
-					: await transferSkillsMutation.mutateAsync({
-							source: {
-								agent: sourceAgent,
-								scope: sourceScope,
-								project_root: sourceProjectRoot ?? null,
-								name,
-							},
-							destinations: destinationTargets,
-						});
+			let result;
+			if (resourceType === "mcp") {
+				result = await transferMcpsMutation.mutateAsync({
+					source: transferSource,
+					destinations: destinationTargets,
+				});
+			} else if (resourceType === "sub_agent") {
+				result = await transferSubAgentsMutation.mutateAsync({
+					source: transferSource,
+					destinations: destinationTargets,
+				});
+			} else {
+				result = await transferSkillsMutation.mutateAsync({
+					source: transferSource,
+					destinations: destinationTargets,
+				});
+			}
 
 			const newAgentStates: Record<string, AgentState> = {};
 			for (const item of result.results) {
@@ -292,6 +328,7 @@ export function TransferDialog({
 			await Promise.all([
 				invalidateMcpQueries(queryClient),
 				invalidateSkillQueries(queryClient),
+				invalidateSubAgentQueries(queryClient),
 			]);
 
 			if (result.failed_count === 0) {

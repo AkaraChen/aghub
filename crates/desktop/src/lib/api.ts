@@ -396,6 +396,16 @@ export function createApi(baseUrl: string) {
 					})
 					.then(() => undefined);
 			},
+			transfer(body: TransferRequest): Promise<OperationBatchResponse> {
+				return client
+					.post("sub-agents/transfer", { json: body })
+					.json();
+			},
+			reconcile(body: ReconcileRequest): Promise<OperationBatchResponse> {
+				return client
+					.post("sub-agents/reconcile", { json: body })
+					.json();
+			},
 		},
 		market: {
 			search(q: string, limit?: number): Promise<MarketSkill[]> {

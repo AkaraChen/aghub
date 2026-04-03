@@ -32,6 +32,7 @@ import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { ListSearchHeader } from "../../components/list-search-header";
+import { TransferDialog } from "../../components/transfer-dialog";
 import type { SubAgentResponse } from "../../generated/dto";
 import { useAgentAvailability } from "../../hooks/use-agent-availability";
 import { useApi } from "../../hooks/use-api";
@@ -817,6 +818,7 @@ function SubAgentDetail({
 }) {
 	const { t } = useTranslation();
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+	const [transferDialogOpen, setTransferDialogOpen] = useState(false);
 
 	return (
 		<>
@@ -835,6 +837,23 @@ function SubAgentDetail({
 								)}
 							</div>
 							<div className="flex items-center gap-2">
+								<Tooltip delay={0}>
+									<Button
+										isIconOnly
+										variant="ghost"
+										size="md"
+										className="min-h-[44px] min-w-[44px] text-muted"
+										aria-label={t("transfer")}
+										onPress={() =>
+											setTransferDialogOpen(true)
+										}
+									>
+										<PlusIcon className="size-4" />
+									</Button>
+									<Tooltip.Content>
+										{t("transfer")}
+									</Tooltip.Content>
+								</Tooltip>
 								<Tooltip delay={0}>
 									<Button
 										isIconOnly
@@ -960,6 +979,19 @@ function SubAgentDetail({
 					</Modal.Dialog>
 				</Modal.Container>
 			</Modal.Backdrop>
+
+			{agent.agent && (
+				<TransferDialog
+					isOpen={transferDialogOpen}
+					onClose={() => setTransferDialogOpen(false)}
+					resourceType="sub_agent"
+					name={agent.name}
+					sourceAgent={agent.agent}
+					sourceScope={
+						agent.source === "project" ? "project" : "global"
+					}
+				/>
+			)}
 		</>
 	);
 }

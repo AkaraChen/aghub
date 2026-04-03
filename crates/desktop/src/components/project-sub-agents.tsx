@@ -21,6 +21,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import { TransferDialog } from "../components/transfer-dialog";
 import type { SubAgentResponse } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
@@ -204,6 +205,7 @@ export function ProjectSubAgents({
 						});
 					}}
 					isDeleting={deleteMutation.isPending}
+					projectPath={projectPath}
 				/>
 			)}
 
@@ -265,49 +267,77 @@ function SubAgentInlineDetail({
 	onEdit,
 	onDelete,
 	isDeleting,
+	projectPath,
 }: {
 	agent: SubAgentResponse;
 	onEdit: () => void;
 	onDelete: () => void;
 	isDeleting: boolean;
+	projectPath: string;
 }) {
+	const { t } = useTranslation();
+	const [transferDialogOpen, setTransferDialogOpen] = useState(false);
+
 	return (
-		<div className="mx-2 mb-3 rounded-lg border border-border p-3">
-			<div className="flex items-center justify-between gap-2">
-				<span className="text-sm font-medium">{agent.name}</span>
-				<div className="flex gap-1">
-					<Button
-						isIconOnly
-						variant="ghost"
-						size="sm"
-						onPress={onEdit}
-					>
-						<PencilIcon className="size-3.5" />
-					</Button>
-					<Button
-						isIconOnly
-						variant="ghost"
-						size="sm"
-						isDisabled={isDeleting}
-						onPress={onDelete}
-					>
-						<TrashIcon className="size-3.5 text-danger" />
-					</Button>
+		<>
+			<div className="mx-2 mb-3 rounded-lg border border-border p-3">
+				<div className="flex items-center justify-between gap-2">
+					<span className="text-sm font-medium">{agent.name}</span>
+					<div className="flex gap-1">
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							aria-label={t("transfer")}
+							onPress={() => setTransferDialogOpen(true)}
+						>
+							<PlusIcon className="size-3.5" />
+						</Button>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							onPress={onEdit}
+						>
+							<PencilIcon className="size-3.5" />
+						</Button>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							isDisabled={isDeleting}
+							onPress={onDelete}
+						>
+							<TrashIcon className="size-3.5 text-danger" />
+						</Button>
+					</div>
 				</div>
+				{agent.description && (
+					<p className="mt-1 text-xs text-muted">{agent.description}</p>
+				)}
+				{agent.instruction && (
+					<div className="mt-2 overflow-x-auto rounded-md border border-separator bg-surface-secondary px-2 py-1.5">
+						<code className="block whitespace-pre-wrap break-words font-mono text-xs leading-5 text-foreground">
+							{agent.instruction.length > 200
+								? `${agent.instruction.slice(0, 200)}…`
+								: agent.instruction}
+						</code>
+					</div>
+				)}
 			</div>
-			{agent.description && (
-				<p className="mt-1 text-xs text-muted">{agent.description}</p>
+
+			{agent.agent && (
+				<TransferDialog
+					isOpen={transferDialogOpen}
+					onClose={() => setTransferDialogOpen(false)}
+					resourceType="sub_agent"
+					name={agent.name}
+					sourceAgent={agent.agent}
+					sourceScope="project"
+					sourceProjectRoot={projectPath}
+				/>
 			)}
-			{agent.instruction && (
-				<div className="mt-2 overflow-x-auto rounded-md border border-separator bg-surface-secondary px-2 py-1.5">
-					<code className="block whitespace-pre-wrap break-words font-mono text-xs leading-5 text-foreground">
-						{agent.instruction.length > 200
-							? `${agent.instruction.slice(0, 200)}…`
-							: agent.instruction}
-					</code>
-				</div>
-			)}
-		</div>
+		</>
 	);
 }
 

@@ -5,7 +5,10 @@ import {
 } from "@tanstack/react-query";
 import type {
 	CreateSubAgentRequest,
+	OperationBatchResponse,
+	ReconcileRequest,
 	SubAgentResponse,
+	TransferRequest,
 	UpdateSubAgentRequest,
 } from "../generated/dto";
 import type { ApiClient } from "./client";
@@ -143,6 +146,48 @@ export function deleteSubAgentMutationOptions({
 		onSuccess: async () => {
 			await invalidateSubAgentQueries(queryClient);
 			await onSuccess?.();
+		},
+	});
+}
+
+interface TransferSubAgentsMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (data: OperationBatchResponse) => void | Promise<void>;
+}
+
+export function transferSubAgentsMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: TransferSubAgentsMutationParams) {
+	return mutationOptions({
+		mutationFn: (body: TransferRequest) =>
+			api.subAgents.transfer(body),
+		onSuccess: async (data) => {
+			await invalidateSubAgentQueries(queryClient);
+			await onSuccess?.(data);
+		},
+	});
+}
+
+interface ReconcileSubAgentsMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (data: OperationBatchResponse) => void | Promise<void>;
+}
+
+export function reconcileSubAgentsMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: ReconcileSubAgentsMutationParams) {
+	return mutationOptions({
+		mutationFn: (body: ReconcileRequest) =>
+			api.subAgents.reconcile(body),
+		onSuccess: async (data) => {
+			await invalidateSubAgentQueries(queryClient);
+			await onSuccess?.(data);
 		},
 	});
 }
