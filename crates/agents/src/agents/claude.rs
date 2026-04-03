@@ -1,4 +1,5 @@
 use crate::descriptor::*;
+use crate::sub_agents::{load_scoped_sub_agents, save_scoped_sub_agents};
 use std::path::{Path, PathBuf};
 
 fn mcp_global_path() -> Option<PathBuf> {

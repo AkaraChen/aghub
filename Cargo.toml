@@ -7,6 +7,7 @@ members = [
 	"crates/skills-sh",
 	"crates/skill",
 	"crates/git",
+	"crates/markdown",
 	"crates/desktop/src-tauri",
 ]
 resolver = "2"

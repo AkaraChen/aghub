@@ -45,10 +45,12 @@ dependencies = [
 name = "aghub-agents"
 version = "0.1.2"
 dependencies = [
+ "aghub-markdown",
  "dirs 5.0.1",
  "serde",
  "serde_json",
  "serde_yaml",
+ "tempfile",
  "thiserror 1.0.69",
  "toml 0.8.2",
  "which",
@@ -119,6 +121,15 @@ dependencies = [
  "tempfile",
  "thiserror 1.0.69",
  "url",
+]
+
+[[package]]
+name = "aghub-markdown"
+version = "0.1.2"
+dependencies = [
+ "serde",
+ "serde_yaml",
+ "thiserror 1.0.69",
 ]
 
 [[package]]

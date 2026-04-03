@@ -3,6 +3,7 @@ pub mod descriptor;
 pub mod errors;
 pub mod format;
 pub mod models;
+pub mod sub_agents;
 
 pub use descriptor::{
 	AgentDescriptor, Capabilities, GlobalSkillPaths, LoadMcpsFn,
