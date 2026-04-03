@@ -183,6 +183,7 @@ pub struct McpServerResponse {
 #[ts(export)]
 pub struct PluginDetailResponse {
 	#[ts(flatten)]
+	#[serde(flatten)]
 	pub plugin: PluginResponse,
 	#[ts(optional)]
 	pub manifest: Option<PluginManifestResponse>,
@@ -193,6 +194,7 @@ pub struct PluginDetailResponse {
 	pub update_available: bool,
 	#[ts(optional)]
 	pub latest_version: Option<String>,
+	pub provided_skills: Vec<String>,
 }
 
 /// Check for updates request/response

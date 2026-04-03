@@ -332,6 +332,7 @@ export default function ProjectDetailPage() {
 			>
 				{!panelMode && selectedMcpGroup && (
 					<McpDetail
+						key={`mcp-${selectedMcpGroup.mergeKey}`}
 						group={selectedMcpGroup}
 						onEdit={() => setPanelMode("edit-mcp")}
 						projectPath={project.path}
@@ -339,6 +340,7 @@ export default function ProjectDetailPage() {
 				)}
 				{!panelMode && selectedSkillGroup && (
 					<SkillDetail
+						key={`skill-${selectedSkillGroup.name}`}
 						group={selectedSkillGroup}
 						projectPath={project.path}
 					/>

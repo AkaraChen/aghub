@@ -16,7 +16,8 @@ import { MultiSelectFloatingBar } from "../../components/multi-select-floating-b
 import { PluginDetail } from "../../components/plugin-detail";
 import { PluginList } from "../../components/plugin-list";
 import { PluginMarketDialog } from "../../components/plugin-market-dialog";
-import type { PluginResponse } from "../../generated/dto";
+import { ResourceSectionHeader } from "../../components/resource-section-header";
+
 import { useApi } from "../../hooks/use-api";
 import { cn } from "../../lib/utils";
 
@@ -30,14 +31,18 @@ export default function PluginsPage() {
 
 	const plugins = useMemo(() => data?.plugins ?? [], [data]);
 	const [searchQuery, setSearchQuery] = useState("");
-	const [selectedPlugin, setSelectedPlugin] = useState<PluginResponse | null>(
-		plugins[0] ?? null,
+	const [selectedPluginId, setSelectedPluginId] = useState<string | null>(
+		plugins[0]?.id ?? null,
 	);
 	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
 		() => new Set(),
 	);
 	const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
 	const [isMarketDialogOpen, setIsMarketDialogOpen] = useState(false);
+
+	const selectedPlugin = useMemo(() => {
+		return plugins.find((p) => p.id === selectedPluginId) ?? null;
+	}, [plugins, selectedPluginId]);
 
 	const filteredPlugins = useMemo(() => {
 		if (!searchQuery) return plugins;
@@ -50,21 +55,28 @@ export default function PluginsPage() {
 	}, [plugins, searchQuery]);
 
 	const effectiveSelectedKeys = useMemo(() => {
-		if (selectedKeys.size > 0) return selectedKeys;
-		if (selectedPlugin && !isMultiSelectMode) {
-			return new Set([selectedPlugin.id]);
+		if (selectedKeys.size > 0 && isMultiSelectMode) return selectedKeys;
+		if (selectedPluginId) {
+			return new Set([selectedPluginId]);
 		}
 		return new Set<string>();
-	}, [selectedKeys, selectedPlugin, isMultiSelectMode]);
+	}, [selectedKeys, selectedPluginId, isMultiSelectMode]);
 
 	const handleSelectionChange = (keys: Set<string>, clickedKey?: string) => {
 		setSelectedKeys(keys);
 
-		if (clickedKey && !isMultiSelectMode) {
-			const plugin = plugins.find((p) => p.id === clickedKey);
-			if (plugin) {
-				setSelectedPlugin(plugin);
-			}
+		let nextSelectedId = selectedPluginId;
+
+		if (clickedKey) {
+			nextSelectedId = clickedKey;
+		} else if (keys.size === 1) {
+			nextSelectedId = [...keys][0];
+		} else if (keys.size === 0 && !isMultiSelectMode) {
+			nextSelectedId = null;
+		}
+
+		if (nextSelectedId !== selectedPluginId) {
+			setSelectedPluginId(nextSelectedId);
 		}
 
 		if (keys.size > 1 && !isMultiSelectMode) {
@@ -171,15 +183,21 @@ export default function PluginsPage() {
 					</Button>
 				</ListSearchHeader>
 
-				{/* Plugin List */}
-				<PluginList
-					plugins={filteredPlugins}
-					selectedKeys={effectiveSelectedKeys}
-					searchQuery={searchQuery}
-					onSelectionChange={handleSelectionChange}
-					selectionMode="multiple"
-					isMultiSelectMode={isMultiSelectMode}
-				/>
+				<div className="flex-1 overflow-y-auto">
+					<ResourceSectionHeader
+						title={t("plugins")}
+						count={0}
+						icon={<PuzzlePieceIcon className="size-3.5" />}
+					/>
+					<PluginList
+						plugins={filteredPlugins}
+						selectedKeys={effectiveSelectedKeys}
+						searchQuery={searchQuery}
+						onSelectionChange={handleSelectionChange}
+						selectionMode="multiple"
+						isMultiSelectMode={isMultiSelectMode}
+					/>
+				</div>
 
 				{isMultiSelectMode && selectedKeys.size > 0 && (
 					<MultiSelectFloatingBar
@@ -194,6 +212,7 @@ export default function PluginsPage() {
 			<div className="flex-1 overflow-hidden">
 				{selectedPlugin ? (
 					<PluginDetail
+						key={selectedPlugin.id}
 						plugin={selectedPlugin}
 						selectedCount={
 							isMultiSelectMode ? selectedKeys.size : 0
@@ -201,10 +220,15 @@ export default function PluginsPage() {
 						selectedPlugins={selectedPlugins}
 					/>
 				) : (
-					<div className="flex h-full flex-col items-center justify-center gap-4">
+					<div className="flex h-full flex-col items-center justify-center gap-3">
+						<div className="flex size-16 items-center justify-center rounded-full bg-surface-secondary">
+							<PuzzlePieceIcon className="size-8 text-muted" />
+						</div>
 						<div className="text-center">
-							<PuzzlePieceIcon className="mx-auto size-12 text-muted/30 mb-3" />
-							<p className="mb-2 text-sm text-muted">
+							<h3 className="mb-1 text-lg font-semibold">
+								{t("plugins")}
+							</h3>
+							<p className="max-w-sm text-sm text-muted">
 								{t("selectPlugin")}
 							</p>
 						</div>

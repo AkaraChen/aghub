@@ -1,16 +1,11 @@
 "use client";
 
-import {
-	BoltIcon,
-	CpuChipIcon,
-	PuzzlePieceIcon,
-	WrenchIcon,
-} from "@heroicons/react/24/solid";
-import { Label, ListBox, Tooltip } from "@heroui/react";
+import { Label, ListBox } from "@heroui/react";
 import Fuse from "fuse.js";
 import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { PluginResponse } from "../generated/dto";
+import { cn } from "../lib/utils";
 
 interface PluginListProps {
 	plugins: PluginResponse[];
@@ -22,40 +17,7 @@ interface PluginListProps {
 	isMultiSelectMode?: boolean;
 }
 
-function PluginCapabilityIcons({ plugin }: { plugin: PluginResponse }) {
-	const icons = [];
-	if (plugin.has_skills) {
-		icons.push(
-			<Tooltip key="skills" delay={0}>
-				<div className="flex items-center justify-center rounded-full bg-surface-secondary p-1">
-					<WrenchIcon className="size-3 text-muted" />
-				</div>
-				<Tooltip.Content>Skills</Tooltip.Content>
-			</Tooltip>,
-		);
-	}
-	if (plugin.has_hooks) {
-		icons.push(
-			<Tooltip key="hooks" delay={0}>
-				<div className="flex items-center justify-center rounded-full bg-surface-secondary p-1">
-					<BoltIcon className="size-3 text-muted" />
-				</div>
-				<Tooltip.Content>Hooks</Tooltip.Content>
-			</Tooltip>,
-		);
-	}
-	if (plugin.has_mcp) {
-		icons.push(
-			<Tooltip key="mcp" delay={0}>
-				<div className="flex items-center justify-center rounded-full bg-surface-secondary p-1">
-					<CpuChipIcon className="size-3 text-muted" />
-				</div>
-				<Tooltip.Content>MCP</Tooltip.Content>
-			</Tooltip>,
-		);
-	}
-	return <div className="flex items-center gap-1">{icons}</div>;
-}
+// No longer rendering capability icons in list
 
 export function PluginList({
 	plugins,
@@ -149,7 +111,10 @@ export function PluginList({
 	const getStatusIndicator = (enabled: boolean) => {
 		return (
 			<div
-				className={`size-2 rounded-full ${enabled ? "bg-success" : "bg-muted"}`}
+				className={cn(
+					"size-2.5 rounded-full transition-colors duration-300",
+					enabled ? "bg-success" : "bg-default-300 shadow-inner",
+				)}
 				title={enabled ? t("enabled") : t("disabled")}
 			/>
 		);
@@ -157,11 +122,15 @@ export function PluginList({
 
 	if (filteredPlugins.length === 0) {
 		return (
-			<div className="flex h-full flex-col items-center justify-center gap-3 p-6">
-				<PuzzlePieceIcon className="size-12 text-muted/30" />
+			<div className="px-3 py-6 text-center">
 				<p className="text-sm text-muted">
-					{emptyMessage ?? t("noPluginsInstalled")}
+					{emptyMessage ?? (searchQuery ? t("noPluginsMatch") : t("noPluginsInstalled"))}
 				</p>
+				{searchQuery && (
+					<p className="mt-1 text-xs text-muted">
+						&ldquo;{searchQuery}&rdquo;
+					</p>
+				)}
 			</div>
 		);
 	}
@@ -181,10 +150,9 @@ export function PluginList({
 						key={plugin.id}
 						id={plugin.id}
 						textValue={plugin.name}
-						className="data-selected:bg-surface"
+						className="transition-colors duration-200 data-selected:bg-surface"
 					>
 						<div className="flex w-full items-center gap-2">
-							{getStatusIndicator(plugin.enabled)}
 							<div className="flex min-w-0 flex-1 flex-col">
 								<div className="flex items-center gap-2">
 									<Label className="truncate font-medium">
@@ -198,7 +166,9 @@ export function PluginList({
 									{plugin.id}
 								</span>
 							</div>
-							<PluginCapabilityIcons plugin={plugin} />
+							<div className="shrink-0 pl-1">
+								{getStatusIndicator(plugin.enabled)}
+							</div>
 						</div>
 					</ListBox.Item>
 				))}

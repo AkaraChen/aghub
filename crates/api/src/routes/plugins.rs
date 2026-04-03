@@ -403,11 +403,10 @@ pub fn get_plugin_detail(plugin_id: String) -> ApiResult<PluginDetailResponse> {
 	})?;
 
 	// Read manifest
-	let manifest = plugin.read_manifest().map_err(|e| {
-		crate::error::ApiError::internal(format!(
-			"Failed to read manifest: {e}"
-		))
-	})?;
+	let manifest = plugin.read_manifest().unwrap_or_else(|e| {
+		eprintln!("Failed to read manifest for {}: {}", plugin.id, e);
+		None
+	});
 
 	let manifest_response = manifest.map(|m| PluginManifestResponse {
 		name: m.name,
@@ -429,9 +428,10 @@ pub fn get_plugin_detail(plugin_id: String) -> ApiResult<PluginDetailResponse> {
 	});
 
 	// Read hooks
-	let hooks = plugin.read_hooks().map_err(|e| {
-		crate::error::ApiError::internal(format!("Failed to read hooks: {e}"))
-	})?;
+	let hooks = plugin.read_hooks().unwrap_or_else(|e| {
+		eprintln!("Failed to read hooks for {}: {}", plugin.id, e);
+		None
+	});
 
 	let hooks_response = hooks.map(|h| {
 		let events: Vec<HookEventResponse> = h
@@ -460,11 +460,10 @@ pub fn get_plugin_detail(plugin_id: String) -> ApiResult<PluginDetailResponse> {
 	});
 
 	// Read MCP config
-	let mcp_config = plugin.read_mcp_config().map_err(|e| {
-		crate::error::ApiError::internal(format!(
-			"Failed to read MCP config: {e}"
-		))
-	})?;
+	let mcp_config = plugin.read_mcp_config().unwrap_or_else(|e| {
+		eprintln!("Failed to read MCP config for {}: {}", plugin.id, e);
+		None
+	});
 
 	let mcp_response = mcp_config.map(|c| {
 		let servers: Vec<McpServerResponse> = c
@@ -497,6 +496,20 @@ pub fn get_plugin_detail(plugin_id: String) -> ApiResult<PluginDetailResponse> {
 		has_mcp: plugin.has_mcp(),
 	};
 
+	let mut provided_skills = Vec::new();
+	let skills_dir = plugin.install_path.join("skills");
+	if skills_dir.exists() && skills_dir.is_dir() {
+		if let Ok(entries) = std::fs::read_dir(skills_dir) {
+			for entry in entries.flatten() {
+				if entry.path().is_dir() {
+					if let Ok(name) = entry.file_name().into_string() {
+						provided_skills.push(name);
+					}
+				}
+			}
+		}
+	}
+
 	Ok(Json(PluginDetailResponse {
 		plugin: base_response,
 		manifest: manifest_response,
@@ -504,6 +517,7 @@ pub fn get_plugin_detail(plugin_id: String) -> ApiResult<PluginDetailResponse> {
 		mcp_config: mcp_response,
 		update_available: false, // TODO: implement update check
 		latest_version: None,
+		provided_skills,
 	}))
 }
 
@@ -839,6 +853,11 @@ pub async fn list_plugin_market() -> ApiResult<Vec<MarketPluginResponse>> {
 				"MARKET_FETCH_ERROR",
 			)
 		})?;
+
+	if !response.status().is_success() {
+		eprintln!("Marketplace API returned non-success status: {}", response.status());
+		return Ok(Json(vec![]));
+	}
 
 	let repos: Vec<GithubRepo> = response.json().await.map_err(|e| {
 		ApiError::new(

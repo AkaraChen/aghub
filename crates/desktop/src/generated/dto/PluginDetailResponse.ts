@@ -6,4 +6,4 @@ import type { PluginManifestResponse } from "./PluginManifestResponse";
 /**
  * Plugin detail response (combined)
  */
-export type PluginDetailResponse = { manifest?: PluginManifestResponse, hooks?: HooksManifestResponse, mcp_config?: McpConfigResponse, update_available: boolean, latest_version?: string, id: string, name: string, version: string, description: string | null, enabled: boolean, source: string, install_path: string, has_skills: boolean, has_hooks: boolean, has_mcp: boolean, };
+export type PluginDetailResponse = { manifest?: PluginManifestResponse, hooks?: HooksManifestResponse, mcp_config?: McpConfigResponse, update_available: boolean, latest_version?: string, provided_skills: Array<string>, id: string, name: string, version: string, description: string | null, enabled: boolean, source: string, install_path: string, has_skills: boolean, has_hooks: boolean, has_mcp: boolean, };
