@@ -1,7 +1,9 @@
 use crate::{
 	adapters::AgentAdapter,
 	errors::{ConfigError, Result},
-	models::{AgentConfig, ConfigSource, McpServer, ResourceScope, Skill, SubAgent},
+	models::{
+		AgentConfig, ConfigSource, McpServer, ResourceScope, Skill, SubAgent,
+	},
 };
 use log::{debug, info, warn};
 use std::path::{Path, PathBuf};
