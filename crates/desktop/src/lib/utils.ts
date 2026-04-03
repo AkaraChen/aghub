@@ -2,7 +2,7 @@ import type { ClassValue } from "clsx";
 import { clsx } from "clsx";
 import stableHash from "stable-hash";
 import { twMerge } from "tailwind-merge";
-import type { AgentInfo, TransportDto } from "../generated/dto";
+import type { AgentInfo, SubAgentResponse, TransportDto } from "../generated/dto";
 
 export function cn(...inputs: ClassValue[]) {
 	return twMerge(clsx(inputs));
@@ -73,5 +73,13 @@ export function sortAgentObjects<T extends { agent?: string | null }>(
 		if (indexA === -1) return 1;
 		if (indexB === -1) return -1;
 		return indexA - indexB;
+	});
+}
+
+export function getSubAgentMergeKey(agent: SubAgentResponse): string {
+	return stableHash({
+		name: agent.name,
+		description: agent.description ?? null,
+		instruction: agent.instruction ?? null,
 	});
 }

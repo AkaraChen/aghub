@@ -22,7 +22,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { ManageSubAgentAgentsDialog } from "../components/manage-sub-agent-agents-dialog";
+import {
+	ManageSubAgentAgentsDialog,
+	type SubAgentGroup,
+} from "../components/manage-sub-agent-agents-dialog";
 import { TransferDialog } from "../components/transfer-dialog";
 import type { SubAgentResponse } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
@@ -31,7 +34,7 @@ import {
 	supportsSubAgent,
 	supportsSubAgentScope,
 } from "../lib/agent-capabilities";
-import { cn } from "../lib/utils";
+import { cn, getSubAgentMergeKey } from "../lib/utils";
 import {
 	createSubAgentMutationOptions,
 	deleteSubAgentMutationOptions,
@@ -351,7 +354,7 @@ function SubAgentInlineDetail({
 			)}
 
 			<ManageSubAgentAgentsDialog
-				agent={agent}
+				group={{ mergeKey: getSubAgentMergeKey(agent), items: [agent] } satisfies SubAgentGroup}
 				isOpen={manageDialogOpen}
 				onClose={() => setManageDialogOpen(false)}
 				projectPath={projectPath}

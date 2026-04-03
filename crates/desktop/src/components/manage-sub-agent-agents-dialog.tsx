@@ -10,15 +10,20 @@ import { cn } from "../lib/utils";
 import { reconcileSubAgentsMutationOptions } from "../requests/sub-agents";
 import { type AgentDiffLabel, AgentList, type AgentState } from "./agent-list";
 
+export interface SubAgentGroup {
+	mergeKey: string;
+	items: SubAgentResponse[];
+}
+
 interface ManageSubAgentAgentsDialogProps {
-	agent: SubAgentResponse;
+	group: SubAgentGroup;
 	isOpen: boolean;
 	onClose: () => void;
 	projectPath?: string;
 }
 
 export function ManageSubAgentAgentsDialog({
-	agent,
+	group,
 	isOpen,
 	onClose,
 	projectPath,
@@ -38,9 +43,11 @@ export function ManageSubAgentAgentsDialog({
 
 	const installedAgentIds = useMemo(() => {
 		const ids = new Set<string>();
-		if (agent.agent) ids.add(agent.agent);
+		for (const item of group.items) {
+			if (item.agent) ids.add(item.agent);
+		}
 		return ids;
-	}, [agent.agent]);
+	}, [group.items]);
 
 	const usableAgents = useMemo(
 		() =>
@@ -114,7 +121,8 @@ export function ManageSubAgentAgentsDialog({
 	}, []);
 
 	const handleApply = async () => {
-		if (!agent.agent) return;
+		const primary = group.items[0];
+		if (!primary?.agent) return;
 
 		setIsApplying(true);
 
@@ -134,11 +142,11 @@ export function ManageSubAgentAgentsDialog({
 		try {
 			const result = await reconcileMutation.mutateAsync({
 				source: {
-					agent: agent.agent,
+					agent: primary.agent,
 					scope:
-						agent.source === "project" ? "project" : "global",
+						primary.source === "project" ? "project" : "global",
 					project_root: projectPath ?? null,
-					name: agent.name,
+					name: primary.name,
 				},
 				added: toInstall.length > 0 ? toInstall : null,
 				removed: toUninstall.length > 0 ? toUninstall : null,
