@@ -21,13 +21,13 @@ fn focus_main_window(window: &WebviewWindow) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
 	let _ = fix_path_env::fix();
-	let colors_line = ColoredLevelConfig::new()
+	let prefix_colors = ColoredLevelConfig::new()
 		.error(Color::Red)
 		.warn(Color::Yellow)
 		.info(Color::White)
 		.debug(Color::White)
 		.trace(Color::BrightBlack);
-	let colors_level = colors_line.info(Color::Green);
+	let level_label_colors = prefix_colors.info(Color::Green);
 	tauri::Builder::default()
 		.plugin(
 			tauri_plugin_log::Builder::new()
@@ -39,11 +39,12 @@ pub fn run() {
 								"{color_line}[{level} {target}] {message}\x1B[0m",
 								color_line = format_args!(
 									"\x1B[{}m",
-									colors_line
+									prefix_colors
 										.get_color(&record.level())
 										.to_fg_str()
 								),
-								level = colors_level.color(record.level()),
+								level =
+									level_label_colors.color(record.level()),
 								target = record.target(),
 								message = message,
 							));
