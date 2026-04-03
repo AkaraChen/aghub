@@ -245,7 +245,7 @@ mod tests {
 
 	#[test]
 	fn sanitize_filename_basic() {
-		assert_eq!(sanitize_filename("My Agent!"), "my-agent-");
+		assert_eq!(sanitize_filename("My Agent!"), "my-agent");
 		let result = sanitize_filename("hello world");
 		assert!(!result.contains(' '));
 	}

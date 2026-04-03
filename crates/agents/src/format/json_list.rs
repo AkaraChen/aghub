@@ -254,6 +254,7 @@ mod tests {
 				canonical_path: None,
 				config_source: None,
 			}],
+			sub_agents: vec![],
 		};
 		let json = serialize(&config, None).unwrap();
 		let reparsed = parse(&json).unwrap();

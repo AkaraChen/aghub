@@ -322,6 +322,7 @@ mod tests {
 				canonical_path: None,
 				config_source: None,
 			}],
+			sub_agents: vec![],
 		};
 		let json = serialize(&config, None, "mcpServers").unwrap();
 		assert!(json.contains("mcpServers"));
@@ -350,6 +351,7 @@ mod tests {
 				},
 			],
 			skills: vec![],
+			sub_agents: vec![],
 		};
 		let json = serialize(&config, None, "mcpServers").unwrap();
 		assert!(json.contains("enabled"));
