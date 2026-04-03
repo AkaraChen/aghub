@@ -11,7 +11,7 @@ use crate::{
 		OperationBatchResponse, ReconcileRequest, TransferRequest,
 	},
 	error::{ApiCreated, ApiError, ApiNoContent, ApiResult},
-	extractors::{AgentParam, JsonBody, ScopeParams},
+	extractors::{AgentParam, ScopeParams},
 	routes::{
 		build_manager_from_resolved, require_writable_scope,
 		resolved_to_resource_scope,
@@ -60,7 +60,7 @@ pub fn list_mcps(
 
 #[post("/mcps/transfer", data = "<body>")]
 pub fn transfer_mcp_route(
-	body: JsonBody<TransferRequest>,
+	body: Json<TransferRequest>,
 ) -> ApiResult<OperationBatchResponse> {
 	let req = body.into_inner();
 	let source = req.source.to_core()?;
@@ -76,7 +76,7 @@ pub fn transfer_mcp_route(
 
 #[post("/mcps/reconcile", data = "<body>")]
 pub fn reconcile_mcp_route(
-	body: JsonBody<ReconcileRequest>,
+	body: Json<ReconcileRequest>,
 ) -> ApiResult<OperationBatchResponse> {
 	let req = body.into_inner();
 	let source = req.source.to_core()?;
@@ -120,7 +120,7 @@ pub fn reconcile_mcp_route(
 pub fn create_mcp(
 	agent: AgentParam,
 	scope: ScopeParams,
-	body: JsonBody<CreateMcpRequest>,
+	body: Json<CreateMcpRequest>,
 ) -> ApiCreated<McpResponse> {
 	let resolved = scope.resolve()?;
 	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
@@ -170,7 +170,7 @@ pub fn update_mcp(
 	agent: AgentParam,
 	name: &str,
 	scope: ScopeParams,
-	body: JsonBody<UpdateMcpRequest>,
+	body: Json<UpdateMcpRequest>,
 ) -> ApiResult<McpResponse> {
 	let resolved = scope.resolve()?;
 	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
@@ -261,7 +261,7 @@ mod tests {
 
 	use crate::{
 		dto::mcp::{CreateMcpRequest, TransportDto},
-		extractors::{AgentParam, JsonBody},
+		extractors::AgentParam,
 	};
 
 	#[test]
@@ -272,7 +272,7 @@ mod tests {
 				scope: Some("global".to_string()),
 				project_root: None,
 			},
-			JsonBody(CreateMcpRequest {
+			Json(CreateMcpRequest {
 				name: "pi-mcp".to_string(),
 				transport: TransportDto::Stdio {
 					command: "echo".to_string(),

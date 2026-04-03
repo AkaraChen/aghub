@@ -5,7 +5,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::dto::credential::{CreateCredentialRequest, CredentialResponse};
 use crate::error::{ApiCreated, ApiNoContent, ApiResult};
-use crate::extractors::JsonBody;
 
 const SERVICE: &str = "aghub";
 const USER: &str = "github_credentials";
@@ -68,7 +67,7 @@ pub fn list_credentials() -> ApiResult<Vec<CredentialResponse>> {
 
 #[post("/credentials", data = "<body>")]
 pub fn create_credential(
-	body: JsonBody<CreateCredentialRequest>,
+	body: Json<CreateCredentialRequest>,
 ) -> ApiCreated<CredentialResponse> {
 	let mut creds = load_credentials().map_err(internal_err)?;
 	info!("creating credential '{}'", body.name);

@@ -102,9 +102,3 @@ pub type ApiResult<T> = Result<rocket::serde::json::Json<T>, ApiError>;
 pub type ApiCreated<T> =
 	Result<(Status, rocket::serde::json::Json<T>), ApiError>;
 pub type ApiNoContent = Result<rocket::response::status::NoContent, ApiError>;
-
-/// Cached JSON parse error stored in request-local cache by
-/// [`crate::extractors::JsonBody`]. The
-/// [`crate::routes::catchers::unprocessable_entity`] catcher reads this to
-/// include the actual parse failure reason in the error response body.
-pub struct JsonParseError(pub Option<String>);
