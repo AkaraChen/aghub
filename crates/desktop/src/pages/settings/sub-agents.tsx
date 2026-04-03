@@ -1,5 +1,6 @@
 import {
 	CpuChipIcon,
+	DocumentDuplicateIcon,
 	ExclamationTriangleIcon,
 	PencilIcon,
 	PlusIcon,
@@ -848,7 +849,7 @@ function SubAgentDetail({
 											setTransferDialogOpen(true)
 										}
 									>
-										<PlusIcon className="size-4" />
+										<DocumentDuplicateIcon className="size-4" />
 									</Button>
 									<Tooltip.Content>
 										{t("transfer")}

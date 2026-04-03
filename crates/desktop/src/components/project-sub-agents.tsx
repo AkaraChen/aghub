@@ -1,5 +1,6 @@
 import {
 	CpuChipIcon,
+	DocumentDuplicateIcon,
 	PencilIcon,
 	PlusIcon,
 	TrashIcon,
@@ -291,7 +292,7 @@ function SubAgentInlineDetail({
 							aria-label={t("transfer")}
 							onPress={() => setTransferDialogOpen(true)}
 						>
-							<PlusIcon className="size-3.5" />
+							<DocumentDuplicateIcon className="size-3.5" />
 						</Button>
 						<Button
 							isIconOnly
