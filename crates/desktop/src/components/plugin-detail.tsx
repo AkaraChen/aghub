@@ -83,7 +83,7 @@ export function PluginDetail({
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["plugins"] });
 			queryClient.invalidateQueries({ queryKey: ["skills"] });
-			queryClient.invalidateQueries({ queryKey: ["plugin-detail"] });
+			queryClient.invalidateQueries({ queryKey: ["plugin-detail", plugin.id] });
 		},
 	});
 
@@ -92,9 +92,11 @@ export function PluginDetail({
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["plugins"] });
 			queryClient.invalidateQueries({ queryKey: ["skills"] });
-			queryClient.invalidateQueries({ queryKey: ["plugin-detail"] });
+			queryClient.invalidateQueries({ queryKey: ["plugin-detail", plugin.id] });
 		},
 	});
+
+	const isToggling = enableMutation.isPending || disableMutation.isPending;
 
 	const pluginSkills =
 		allSkills?.filter((skill) => skill.plugin_id === plugin.id) ?? [];
@@ -175,6 +177,7 @@ export function PluginDetail({
 						</div>
 						<Switch
 							isSelected={plugin.enabled}
+							isDisabled={isToggling}
 							onChange={() => {
 								if (plugin.enabled) {
 									disableMutation.mutate(plugin.id);
