@@ -31,36 +31,6 @@ function pluginDetailQueryOptions(
 	};
 }
 
-function MetaRow({
-	label,
-	value,
-	mono = false,
-}: {
-	label: string;
-	value: string;
-	mono?: boolean;
-}) {
-	const displayValue =
-		value.length > 200 ? `${value.slice(0, 200)}...` : value;
-
-	return (
-		<div className="grid gap-1.5 py-1">
-			<span className="text-[11px] font-medium tracking-wide text-muted uppercase">
-				{label}
-			</span>
-			<span
-				className={`
-					min-w-0 text-sm text-foreground
-					${mono && "overflow-x-auto rounded-md bg-surface-secondary px-3 py-2 font-mono text-xs leading-5 text-foreground"}
-				`}
-				title={value.length > 200 ? value : undefined}
-			>
-				{displayValue}
-			</span>
-		</div>
-	);
-}
-
 export function PluginDetail({
 	plugin,
 	selectedCount = 0,
@@ -77,6 +47,9 @@ export function PluginDetail({
 	const { data: pluginDetail } = useQuery({
 		...pluginDetailQueryOptions(api, plugin.id),
 	});
+
+	// Use latest data from API if available, otherwise fallback to props
+	const currentPlugin = pluginDetail ?? plugin;
 
 	const enableMutation = useMutation({
 		mutationFn: (id: string) => api.plugins.enable(id),
@@ -99,7 +72,7 @@ export function PluginDetail({
 	const isToggling = enableMutation.isPending || disableMutation.isPending;
 
 	const pluginSkills =
-		allSkills?.filter((skill) => skill.plugin_id === plugin.id) ?? [];
+		allSkills?.filter((skill) => skill.plugin_id === currentPlugin.id) ?? [];
 
 	const hooks = pluginDetail?.hooks;
 	const mcpConfig = pluginDetail?.mcp_config;
@@ -176,17 +149,17 @@ export function PluginDetail({
 							</p>
 						</div>
 						<Switch
-							isSelected={plugin.enabled}
+							isSelected={currentPlugin.enabled}
 							isDisabled={isToggling}
 							onChange={() => {
-								if (plugin.enabled) {
-									disableMutation.mutate(plugin.id);
+								if (currentPlugin.enabled) {
+									disableMutation.mutate(currentPlugin.id);
 								} else {
-									enableMutation.mutate(plugin.id);
+									enableMutation.mutate(currentPlugin.id);
 								}
 							}}
 							aria-label={
-								plugin.enabled
+								currentPlugin.enabled
 									? t("disablePlugin")
 									: t("enablePlugin")
 							}
@@ -198,39 +171,14 @@ export function PluginDetail({
 					</Card.Header>
 
 					<Card.Content className="flex flex-col gap-6">
-						{/* Status Section */}
-						<div className="flex items-center gap-3 rounded-lg bg-surface-secondary px-4 py-3">
-							<div
-								className={`size-10 rounded-full flex items-center justify-center ${
-									plugin.enabled
-										? "bg-success/10 text-success"
-										: "bg-muted/10 text-muted"
-								}`}
-							>
-								<CpuChipIcon className="size-5" />
-							</div>
-							<div>
-								<p className="font-medium text-foreground">
-									{plugin.enabled
-										? t("pluginEnabled")
-										: t("pluginDisabled")}
-								</p>
-								<p className="text-xs text-muted">
-									{plugin.enabled
-										? t("pluginEnabledDescription")
-										: t("pluginDisabledDescription")}
-								</p>
-							</div>
-						</div>
-
 						{/* Description */}
-						{plugin.description && (
+						{currentPlugin.description && (
 							<div className="space-y-3">
 								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
 									{t("description")}
 								</h3>
 								<p className="text-sm text-foreground">
-									{plugin.description}
+									{currentPlugin.description}
 								</p>
 							</div>
 						)}
@@ -241,7 +189,7 @@ export function PluginDetail({
 								{t("capabilities")}
 							</h3>
 							<div className="flex flex-wrap gap-2">
-								{plugin.has_skills && (
+								{currentPlugin.has_skills && (
 									<Chip
 										size="md"
 										variant="soft"
@@ -256,7 +204,7 @@ export function PluginDetail({
 										)}
 									</Chip>
 								)}
-								{plugin.has_hooks && (
+								{currentPlugin.has_hooks && (
 									<Chip
 										size="md"
 										variant="soft"
@@ -276,9 +224,9 @@ export function PluginDetail({
 										MCP
 									</Chip>
 								)}
-								{!plugin.has_skills &&
-									!plugin.has_hooks &&
-									!plugin.has_mcp && (
+								{!currentPlugin.has_skills &&
+									!currentPlugin.has_hooks &&
+									!currentPlugin.has_mcp && (
 										<p className="text-sm text-muted">
 											{t("noCapabilities")}
 										</p>
@@ -347,28 +295,41 @@ export function PluginDetail({
 							<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
 								{t("installationInfo")}
 							</h3>
-							<MetaRow
-								label={t("source")}
-								value={plugin.source}
-							/>
-							<div className="flex items-center gap-2">
-								<code className="flex-1 text-xs bg-surface-secondary px-3 py-2 rounded font-mono truncate">
-									{plugin.install_path}
-								</code>
-								<Tooltip delay={0}>
-									<Button
-										isIconOnly
-										variant="ghost"
-										size="sm"
-										onPress={handleOpenInstallPath}
-										aria-label={t("openInstallFolder")}
-									>
-										<FolderOpenIcon className="size-4" />
-									</Button>
-									<Tooltip.Content>
-										{t("openInstallFolder")}
-									</Tooltip.Content>
-								</Tooltip>
+							<div className="space-y-2">
+								<div className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2">
+									<div className="min-w-0 flex-1">
+										<p className="text-[11px] font-medium tracking-wide text-muted uppercase">
+											{t("source")}
+										</p>
+										<p className="text-sm text-foreground truncate">
+											{currentPlugin.source}
+										</p>
+									</div>
+								</div>
+								<div className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2">
+									<div className="min-w-0 flex-1">
+										<p className="text-[11px] font-medium tracking-wide text-muted uppercase">
+											{t("installPath")}
+										</p>
+										<code className="block text-xs font-mono text-foreground truncate">
+											{currentPlugin.install_path}
+										</code>
+									</div>
+									<Tooltip delay={0}>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="sm"
+											onPress={handleOpenInstallPath}
+											aria-label={t("openInstallFolder")}
+										>
+											<FolderOpenIcon className="size-4" />
+										</Button>
+										<Tooltip.Content>
+											{t("openInstallFolder")}
+										</Tooltip.Content>
+									</Tooltip>
+								</div>
 							</div>
 						</div>
 

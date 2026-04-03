@@ -39,6 +39,7 @@ export default {
 	pluginDisabledDescription: "外掛未運行，不提供功能",
 	providedSkills: "提供的技能",
 	installationInfo: "安裝資訊",
+	installPath: "安裝路徑",
 	openInstallFolder: "開啟安裝資料夾",
 	capabilities: "功能",
 	noCapabilities: "未提供功能",

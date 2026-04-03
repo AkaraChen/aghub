@@ -44,6 +44,7 @@ export default {
 	noCapabilities: "No capabilities provided",
 	providedSkills: "Provided Skills",
 	installationInfo: "Installation Info",
+	installPath: "Install Path",
 	openInstallFolder: "Open Install Folder",
 	selectPlugin: "Select a plugin to view details",
 	agentManagement: "Agent",
