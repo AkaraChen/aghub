@@ -1,3 +1,6 @@
+use crate::codex_sub_agents::{
+	load_scoped_codex_sub_agents, save_scoped_codex_sub_agents,
+};
 use crate::descriptor::*;
 use std::path::{Path, PathBuf};
 
@@ -58,6 +61,40 @@ fn project_skill_write_path(root: &Path) -> Option<PathBuf> {
 	Some(root.join(".agents/skills"))
 }
 
+fn sub_agent_global_dir() -> Option<PathBuf> {
+	home_dir().map(|home| home.join(".codex/agents"))
+}
+
+fn sub_agent_project_dir(root: &Path) -> Option<PathBuf> {
+	Some(root.join(".codex/agents"))
+}
+
+fn load_sub_agents(
+	project_root: Option<&Path>,
+	scope: crate::ResourceScope,
+) -> crate::Result<Vec<crate::SubAgent>> {
+	load_scoped_codex_sub_agents(
+		project_root,
+		scope,
+		Some(sub_agent_global_dir),
+		Some(sub_agent_project_dir),
+	)
+}
+
+fn save_sub_agents(
+	project_root: Option<&Path>,
+	scope: crate::ResourceScope,
+	agents: &[crate::SubAgent],
+) -> crate::Result<()> {
+	save_scoped_codex_sub_agents(
+		project_root,
+		scope,
+		agents,
+		Some(sub_agent_global_dir),
+		Some(sub_agent_project_dir),
+	)
+}
+
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "codex",
 	display_name: "OpenAI Codex",
@@ -87,8 +124,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 		},
 		sub_agents: SubAgentCapabilities {
 			scopes: ScopeSupport {
-				global: false,
-				project: false,
+				global: true,
+				project: true,
 			},
 		},
 	},
@@ -100,8 +137,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 		read: project_skills_paths,
 		write: project_skill_write_path,
 	}),
-	load_sub_agents: load_sub_agents_noop,
-	save_sub_agents: save_sub_agents_noop,
+	load_sub_agents,
+	save_sub_agents,
 	cli_name: "codex",
 	validate_args: &["--version"],
 	project_markers: &[".codex"],

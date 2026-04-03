@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod codex_sub_agents;
 pub mod descriptor;
 pub mod errors;
 pub mod format;
