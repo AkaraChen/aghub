@@ -79,7 +79,7 @@ export default function IntegrationsPanel() {
 
 	const { data: credentials = [], isLoading: isCredentialsLoading } =
 		useQuery({
-			...credentialsListQueryOptions({ api }),
+			...credentialsListQueryOptions({ api, enabled: true }),
 		});
 
 	const deleteMutation = useMutation({

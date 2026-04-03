@@ -66,7 +66,7 @@ export function SyncGithubSkillDialog({
 	);
 
 	const { data: credentials = [] } = useQuery({
-		...credentialsListQueryOptions({ api }),
+		...credentialsListQueryOptions({ api, enabled: isOpen }),
 	});
 
 	// Match the current skill in the scanned results by the known skillPath.

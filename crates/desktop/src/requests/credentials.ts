@@ -12,12 +12,17 @@ import { queryKeys } from "./keys";
 
 interface CredentialsQueryParams {
 	api: ApiClient;
+	enabled: boolean;
 }
 
-export function credentialsListQueryOptions({ api }: CredentialsQueryParams) {
+export function credentialsListQueryOptions({
+	api,
+	enabled,
+}: CredentialsQueryParams) {
 	return queryOptions({
 		queryKey: queryKeys.credentials.list(),
 		queryFn: () => api.credentials.list(),
+		enabled,
 	});
 }
 
