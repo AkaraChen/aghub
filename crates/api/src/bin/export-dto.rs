@@ -21,12 +21,12 @@ use aghub_api::dto::{
 		CreateSkillRequest, DeleteSkillByPathRequest,
 		DeleteSkillByPathResponse, GitInstallRequest, GitInstallResponse,
 		GitInstallResultEntry, GitScanRequest, GitScanResponse,
-		GitScanSkillEntry, GlobalSkillLockResponse, ImportSkillRequest,
-		InstallSkillRequest, InstallSkillResponse, LocalSkillLockEntryResponse,
-		ProjectLockQuery, ProjectSkillLockResponse, SkillContentQuery,
-		SkillLockEntryResponse, SkillResponse, SkillTreeNodeKind,
-		SkillTreeNodeResponse, SkillTreeQuery, UpdateSkillRequest,
-		ValidationError,
+		GitScanSkillEntry, GitSyncRequest, GitSyncResponse,
+		GlobalSkillLockResponse, ImportSkillRequest, InstallSkillRequest,
+		InstallSkillResponse, LocalSkillLockEntryResponse, ProjectLockQuery,
+		ProjectSkillLockResponse, SkillContentQuery, SkillLockEntryResponse,
+		SkillResponse, SkillTreeNodeKind, SkillTreeNodeResponse,
+		SkillTreeQuery, UpdateSkillRequest, ValidationError,
 	},
 	transfer::{
 		InstallScopeDto, OperationActionDto, OperationBatchResponse,
@@ -151,6 +151,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<OperationActionDto>(&cfg)?;
 	export_type::<OperationResultDto>(&cfg)?;
 	export_type::<OperationBatchResponse>(&cfg)?;
+	export_type::<GitSyncRequest>(&cfg)?;
+	export_type::<GitSyncResponse>(&cfg)?;
 
 	write_index_file(&out_dir)?;
 

@@ -1,8 +1,4 @@
-import {
-	BookOpenIcon,
-	EyeIcon,
-	XCircleIcon,
-} from "@heroicons/react/24/solid";
+import { BookOpenIcon, EyeIcon, XCircleIcon } from "@heroicons/react/24/solid";
 import {
 	Alert,
 	Button,
@@ -176,8 +172,7 @@ export function SyncGithubSkillDialog({
 		onClose();
 	};
 
-	const isBranchSwitching =
-		scanMutation.isPending && phase === "scanned";
+	const isBranchSwitching = scanMutation.isPending && phase === "scanned";
 	const isSyncing = phase === "syncing";
 
 	return (
@@ -192,10 +187,7 @@ export function SyncGithubSkillDialog({
 
 						<Modal.Body className="space-y-4 p-4">
 							{/* ── Source URL (read-only display) ── */}
-							<TextField
-								className="w-full"
-								isReadOnly
-							>
+							<TextField className="w-full" isReadOnly>
 								<Label>{t("githubRepoUrl")}</Label>
 								<Input
 									value={sourceUrl}
@@ -299,7 +291,9 @@ export function SyncGithubSkillDialog({
 										className="w-full"
 										variant="secondary"
 										selectedKey={currentBranch}
-										isDisabled={isBranchSwitching || isSyncing}
+										isDisabled={
+											isBranchSwitching || isSyncing
+										}
 										onSelectionChange={(key) =>
 											handleBranchChange(String(key))
 										}

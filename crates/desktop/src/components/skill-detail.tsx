@@ -409,7 +409,9 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 															"syncFromSource",
 														)}
 														onPress={() =>
-															setSyncDialogOpen(true)
+															setSyncDialogOpen(
+																true,
+															)
 														}
 													>
 														<ArrowPathIcon className="size-4" />
@@ -577,8 +579,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 					sourceUrl={sourceUrl}
 					skillPath={
 						(currentSkillSource &&
-							"skillPath" in
-								currentSkillSource &&
+							"skillPath" in currentSkillSource &&
 							currentSkillSource.skillPath) ||
 						null
 					}
