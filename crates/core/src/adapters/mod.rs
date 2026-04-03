@@ -41,6 +41,7 @@ pub trait AgentAdapter: Send + Sync {
 
 	/// Load complete configuration: MCPs from file + Skills from directories
 	/// + Sub-agents via the descriptor's own loader.
+	///
 	/// Adapter handles all I/O internally, including missing MCP config files
 	fn load_config(
 		&self,

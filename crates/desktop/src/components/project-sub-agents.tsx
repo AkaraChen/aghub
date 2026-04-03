@@ -6,6 +6,9 @@ import {
 } from "@heroicons/react/24/solid";
 import {
 	Button,
+	FieldError,
+	Fieldset,
+	Form,
 	Input,
 	Label,
 	ListBox,
@@ -16,6 +19,7 @@ import {
 } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import type { SubAgentResponse } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
@@ -310,8 +314,8 @@ function SubAgentInlineDetail({
 interface InlineCreateValues {
 	agentId: string;
 	name: string;
-	description?: string;
-	instruction?: string;
+	description: string;
+	instruction: string;
 }
 
 function SubAgentInlineForm({
@@ -326,97 +330,186 @@ function SubAgentInlineForm({
 	onCancel: () => void;
 }) {
 	const { t } = useTranslation();
-	const [agentId, setAgentId] = useState(agents[0]?.id ?? "");
-	const [name, setName] = useState("");
-	const [description, setDescription] = useState("");
-	const [instruction, setInstruction] = useState("");
 
-	const canSubmit = agentId && name.trim().length > 0;
+	const {
+		control,
+		handleSubmit,
+		formState: { isSubmitting },
+	} = useForm<InlineCreateValues>({
+		mode: "onSubmit",
+		reValidateMode: "onChange",
+		defaultValues: {
+			agentId: agents[0]?.id ?? "",
+			name: "",
+			description: "",
+			instruction: "",
+		},
+	});
+
+	const onFormSubmit = (values: InlineCreateValues) => {
+		onSubmit({
+			agentId: values.agentId,
+			name: values.name.trim(),
+			description: values.description.trim(),
+			instruction: values.instruction.trim(),
+		});
+	};
 
 	return (
 		<div className="flex flex-col gap-3 rounded-lg border border-border p-3">
 			<h4 className="text-sm font-medium">{t("createSubAgent")}</h4>
 
-			{agents.length > 0 && (
-				<Select
-					className="w-full"
-					selectedKey={agentId}
-					onSelectionChange={(key) => setAgentId(String(key))}
-					variant="secondary"
-				>
-					<Label>{t("agentManagement")}</Label>
-					<Select.Trigger>
-						<Select.Value />
-						<Select.Indicator />
-					</Select.Trigger>
-					<Select.Popover>
-						<ListBox>
-							{agents.map((a) => (
-								<ListBox.Item
-									key={a.id}
-									id={a.id}
-									textValue={a.name}
+			<Form
+				validationBehavior="aria"
+				onSubmit={handleSubmit(onFormSubmit)}
+			>
+				<Fieldset>
+					<Fieldset.Group>
+						{agents.length > 0 && (
+							<Controller
+								name="agentId"
+								control={control}
+								render={({ field }) => (
+									<Select
+										className="w-full"
+										selectedKey={field.value}
+										onSelectionChange={(key) =>
+											field.onChange(String(key))
+										}
+										variant="secondary"
+									>
+										<Label>{t("agentManagement")}</Label>
+										<Select.Trigger>
+											<Select.Value />
+											<Select.Indicator />
+										</Select.Trigger>
+										<Select.Popover>
+											<ListBox>
+												{agents.map((a) => (
+													<ListBox.Item
+														key={a.id}
+														id={a.id}
+														textValue={a.name}
+													>
+														{a.name}
+													</ListBox.Item>
+												))}
+											</ListBox>
+										</Select.Popover>
+									</Select>
+								)}
+							/>
+						)}
+						<Controller
+							name="name"
+							control={control}
+							rules={{
+								required: t("validationNameRequired"),
+								validate: (v) =>
+									v.trim()
+										? true
+										: t("validationNameRequired"),
+							}}
+							render={({ field, fieldState }) => (
+								<TextField
+									className="w-full"
+									variant="secondary"
+									isRequired
+									validationBehavior="aria"
+									isInvalid={Boolean(fieldState.error)}
 								>
-									{a.name}
-								</ListBox.Item>
-							))}
-						</ListBox>
-					</Select.Popover>
-				</Select>
-			)}
+									<Label>{t("subAgentName")}</Label>
+									<Input
+										value={field.value}
+										onChange={(e) =>
+											field.onChange(e.target.value)
+										}
+										onBlur={field.onBlur}
+										placeholder={t("subAgentNamePlaceholder")}
+										variant="secondary"
+									/>
+									{fieldState.error && (
+										<FieldError>
+											{fieldState.error.message}
+										</FieldError>
+									)}
+								</TextField>
+							)}
+						/>
+						<Controller
+							name="description"
+							control={control}
+							render={({ field }) => (
+								<TextField
+									className="w-full"
+									variant="secondary"
+								>
+									<Label>{t("subAgentDescription")}</Label>
+									<Input
+										value={field.value}
+										onChange={(e) =>
+											field.onChange(e.target.value)
+										}
+										onBlur={field.onBlur}
+										placeholder={t(
+											"subAgentDescriptionPlaceholder",
+										)}
+										variant="secondary"
+									/>
+								</TextField>
+							)}
+						/>
+						<Controller
+							name="instruction"
+							control={control}
+							render={({ field }) => (
+								<TextField
+									className="w-full"
+									variant="secondary"
+								>
+									<Label>{t("subAgentInstruction")}</Label>
+									<TextArea
+										value={field.value}
+										onChange={(e) =>
+											field.onChange(e.target.value)
+										}
+										onBlur={field.onBlur}
+										placeholder={t(
+											"subAgentInstructionPlaceholder",
+										)}
+										className="min-h-24"
+										variant="secondary"
+									/>
+								</TextField>
+							)}
+						/>
+					</Fieldset.Group>
+				</Fieldset>
 
-			<TextField variant="secondary" isRequired>
-				<Label>{t("subAgentName")}</Label>
-				<Input
-					value={name}
-					onChange={(e) => setName(e.target.value)}
-					placeholder={t("subAgentNamePlaceholder")}
-					variant="secondary"
-				/>
-			</TextField>
-
-			<TextField variant="secondary">
-				<Label>{t("subAgentDescription")}</Label>
-				<Input
-					value={description}
-					onChange={(e) => setDescription(e.target.value)}
-					placeholder={t("subAgentDescriptionPlaceholder")}
-					variant="secondary"
-				/>
-			</TextField>
-
-			<TextField variant="secondary">
-				<Label>{t("subAgentInstruction")}</Label>
-				<TextArea
-					value={instruction}
-					onChange={(e) => setInstruction(e.target.value)}
-					placeholder={t("subAgentInstructionPlaceholder")}
-					className="min-h-24"
-					variant="secondary"
-				/>
-			</TextField>
-
-			<div className="flex gap-2">
-				<Button
-					size="sm"
-					isDisabled={!canSubmit || isLoading}
-					onPress={() =>
-						onSubmit({
-							agentId,
-							name: name.trim(),
-							description: description.trim() || undefined,
-							instruction: instruction.trim() || undefined,
-						})
-					}
-				>
-					{t("createSubAgent")}
-				</Button>
-				<Button variant="secondary" size="sm" onPress={onCancel}>
-					{t("cancel")}
-				</Button>
-			</div>
+				<div className="flex justify-end gap-2 pt-2">
+					<Button
+						type="button"
+						variant="secondary"
+						onPress={onCancel}
+					>
+						{t("cancel")}
+					</Button>
+					<Button
+						type="submit"
+						isDisabled={isLoading || isSubmitting || agents.length === 0}
+					>
+						{isLoading ? t("creating") : t("createSubAgent")}
+					</Button>
+				</div>
+			</Form>
 		</div>
 	);
+}
+
+interface InlineEditValues {
+	name: string;
+	description: string;
+	instruction: string;
 }
 
 function SubAgentInlineEditForm({
@@ -435,62 +528,140 @@ function SubAgentInlineEditForm({
 	onCancel: () => void;
 }) {
 	const { t } = useTranslation();
-	const [name, setName] = useState(initial.name);
-	const [description, setDescription] = useState(initial.description ?? "");
-	const [instruction, setInstruction] = useState(initial.instruction ?? "");
+
+	const {
+		control,
+		handleSubmit,
+		formState: { isSubmitting },
+	} = useForm<InlineEditValues>({
+		mode: "onSubmit",
+		reValidateMode: "onChange",
+		defaultValues: {
+			name: initial.name,
+			description: initial.description ?? "",
+			instruction: initial.instruction ?? "",
+		},
+	});
+
+	const onFormSubmit = (values: InlineEditValues) => {
+		onSubmit({
+			name: values.name || null,
+			description: values.description || null,
+			instruction: values.instruction || null,
+		});
+	};
 
 	return (
 		<div className="flex flex-col gap-3 rounded-lg border border-border p-3">
 			<h4 className="text-sm font-medium">{t("editSubAgent")}</h4>
 
-			<TextField variant="secondary" isRequired>
-				<Label>{t("subAgentName")}</Label>
-				<Input
-					value={name}
-					onChange={(e) => setName(e.target.value)}
-					variant="secondary"
-				/>
-			</TextField>
+			<Form
+				validationBehavior="aria"
+				onSubmit={handleSubmit(onFormSubmit)}
+			>
+				<Fieldset>
+					<Fieldset.Group>
+						<Controller
+							name="name"
+							control={control}
+							rules={{
+								required: t("validationNameRequired"),
+								validate: (v) =>
+									v.trim()
+										? true
+										: t("validationNameRequired"),
+							}}
+							render={({ field, fieldState }) => (
+								<TextField
+									className="w-full"
+									variant="secondary"
+									isRequired
+									validationBehavior="aria"
+									isInvalid={Boolean(fieldState.error)}
+								>
+									<Label>{t("subAgentName")}</Label>
+									<Input
+										value={field.value}
+										onChange={(e) =>
+											field.onChange(e.target.value)
+										}
+										onBlur={field.onBlur}
+										variant="secondary"
+									/>
+									{fieldState.error && (
+										<FieldError>
+											{fieldState.error.message}
+										</FieldError>
+									)}
+								</TextField>
+							)}
+						/>
+						<Controller
+							name="description"
+							control={control}
+							render={({ field }) => (
+								<TextField
+									className="w-full"
+									variant="secondary"
+								>
+									<Label>{t("subAgentDescription")}</Label>
+									<Input
+										value={field.value}
+										onChange={(e) =>
+											field.onChange(e.target.value)
+										}
+										onBlur={field.onBlur}
+										placeholder={t(
+											"subAgentDescriptionPlaceholder",
+										)}
+										variant="secondary"
+									/>
+								</TextField>
+							)}
+						/>
+						<Controller
+							name="instruction"
+							control={control}
+							render={({ field }) => (
+								<TextField
+									className="w-full"
+									variant="secondary"
+								>
+									<Label>{t("subAgentInstruction")}</Label>
+									<TextArea
+										value={field.value}
+										onChange={(e) =>
+											field.onChange(e.target.value)
+										}
+										onBlur={field.onBlur}
+										placeholder={t(
+											"subAgentInstructionPlaceholder",
+										)}
+										className="min-h-24"
+										variant="secondary"
+									/>
+								</TextField>
+							)}
+						/>
+					</Fieldset.Group>
+				</Fieldset>
 
-			<TextField variant="secondary">
-				<Label>{t("subAgentDescription")}</Label>
-				<Input
-					value={description}
-					onChange={(e) => setDescription(e.target.value)}
-					placeholder={t("subAgentDescriptionPlaceholder")}
-					variant="secondary"
-				/>
-			</TextField>
-
-			<TextField variant="secondary">
-				<Label>{t("subAgentInstruction")}</Label>
-				<TextArea
-					value={instruction}
-					onChange={(e) => setInstruction(e.target.value)}
-					placeholder={t("subAgentInstructionPlaceholder")}
-					className="min-h-24"
-					variant="secondary"
-				/>
-			</TextField>
-
-			<div className="flex gap-2">
-				<Button
-					size="sm"
-					isDisabled={isLoading}
-					onPress={() =>
-						onSubmit({
-							name: name || null,
-							description: description || null,
-							instruction: instruction || null,
-						})
-					}
-				>
-					{t("save")}
-				</Button>
-				<Button variant="secondary" size="sm" onPress={onCancel}>
-					{t("cancel")}
-				</Button>
-			</div>
+				<div className="flex justify-end gap-2 pt-2">
+					<Button
+						type="button"
+						variant="secondary"
+						onPress={onCancel}
+					>
+						{t("cancel")}
+					</Button>
+					<Button
+						type="submit"
+						isDisabled={isLoading || isSubmitting}
+					>
+						{isLoading ? t("saving") : t("save")}
+					</Button>
+				</div>
+			</Form>
 		</div>
 	);
 }
