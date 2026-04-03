@@ -4,6 +4,7 @@ import {
 	BookOpenIcon,
 	CheckCircleIcon,
 	CommandLineIcon,
+	CpuChipIcon,
 	PlusIcon,
 	RectangleStackIcon,
 	ServerIcon,
@@ -13,14 +14,15 @@ import {
 	Dropdown,
 	Header,
 	Label,
+	ListBox,
 	Separator,
 	Spinner,
 	Tooltip,
 } from "@heroui/react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import type { McpResponse, SkillResponse } from "../generated/dto";
-import { cn, getMcpMergeKey } from "../lib/utils";
+import type { McpResponse, SkillResponse, SubAgentResponse } from "../generated/dto";
+import { cn, getMcpMergeKey, getSubAgentMergeKey } from "../lib/utils";
 import { ListSearchHeader } from "./list-search-header";
 import { McpList } from "./mcp-list";
 import { MultiSelectFloatingBar } from "./multi-select-floating-bar";
@@ -30,11 +32,15 @@ import { SkillList } from "./skill-list";
 interface UnifiedResourceListProps {
 	mcps: McpResponse[];
 	skills: SkillResponse[];
+	subAgents?: SubAgentResponse[];
 	selectedMcpKeys: Set<string>;
 	selectedSkillKeys: Set<string>;
+	selectedSubAgentKeys?: Set<string>;
 	onSelectionChange: (keys: Set<string>, type: "mcp" | "skill") => void;
+	onSubAgentSelectionChange?: (key: string) => void;
 	onCreateMcp: (type: "manual" | "import") => void;
 	onCreateSkill: (type: "local" | "import" | "github") => void;
+	onCreateSubAgent?: () => void;
 	onRefresh: () => void;
 	isRefreshing?: boolean;
 	isLoading?: boolean;
@@ -49,11 +55,15 @@ interface UnifiedResourceListProps {
 export function UnifiedResourceList({
 	mcps,
 	skills,
+	subAgents = [],
 	selectedMcpKeys,
 	selectedSkillKeys,
+	selectedSubAgentKeys = new Set(),
 	onSelectionChange,
+	onSubAgentSelectionChange,
 	onCreateMcp,
 	onCreateSkill,
+	onCreateSubAgent,
 	onRefresh,
 	isRefreshing = false,
 	isLoading = false,
@@ -82,9 +92,39 @@ export function UnifiedResourceList({
 		return names.size;
 	}, [skills]);
 
+	const mergedSubAgentCount = useMemo(() => {
+		const keys = new Set<string>();
+		for (const agent of subAgents) {
+			keys.add(getSubAgentMergeKey(agent));
+		}
+		return keys.size;
+	}, [subAgents]);
+
+	const groupedSubAgents = useMemo(() => {
+		const map = new Map<string, SubAgentResponse[]>();
+		for (const agent of subAgents) {
+			const key = getSubAgentMergeKey(agent);
+			const existing = map.get(key) ?? [];
+			map.set(key, [...existing, agent]);
+		}
+		return Array.from(map.entries()).map(([mergeKey, items]) => ({
+			mergeKey,
+			items,
+		}));
+	}, [subAgents]);
+
+	const filteredSubAgentGroups = useMemo(() => {
+		if (!searchQuery) return groupedSubAgents;
+		const q = searchQuery.toLowerCase();
+		return groupedSubAgents.filter((g) =>
+			g.items[0].name.toLowerCase().includes(q),
+		);
+	}, [groupedSubAgents, searchQuery]);
+
 	const hasMcps = mcps.length > 0;
 	const hasSkills = skills.length > 0;
-	const hasAny = hasMcps || hasSkills;
+	const hasSubAgents = subAgents.length > 0;
+	const hasAny = hasMcps || hasSkills || hasSubAgents;
 	const totalCount = mergedMcpCount + mergedSkillCount;
 	const selectedCount = selectedMcpKeys.size + selectedSkillKeys.size;
 
@@ -181,6 +221,8 @@ export function UnifiedResourceList({
 										onCreateSkill("import");
 									else if (key === "skill-github")
 										onCreateSkill("github");
+									else if (key === "sub-agent-create")
+										onCreateSubAgent?.();
 								}}
 							>
 								<Dropdown.Section>
@@ -263,6 +305,33 @@ export function UnifiedResourceList({
 										</div>
 									</Dropdown.Item>
 								</Dropdown.Section>
+
+								{onCreateSubAgent && (
+									<>
+										<Separator />
+										<Dropdown.Section>
+											<Header>
+												<div className="flex items-center gap-2 px-2 py-1.5">
+													<CpuChipIcon className="size-4 text-muted" />
+													<Label className="text-xs font-medium text-muted uppercase tracking-wider">
+														{t("subAgents")}
+													</Label>
+												</div>
+											</Header>
+											<Dropdown.Item
+												id="sub-agent-create"
+												textValue={t("createSubAgent")}
+											>
+												<div className="flex items-center gap-2 pl-6">
+													<PlusIcon className="size-4" />
+													<span>
+														{t("createSubAgent")}
+													</span>
+												</div>
+											</Dropdown.Item>
+										</Dropdown.Section>
+									</>
+								)}
 							</Dropdown.Menu>
 						</Dropdown.Popover>
 					</Dropdown>
@@ -328,6 +397,49 @@ export function UnifiedResourceList({
 									selectionMode="multiple"
 									isMultiSelectMode={isMultiSelectMode}
 								/>
+							</>
+						)}
+
+						{hasSubAgents && (
+							<>
+								<ResourceSectionHeader
+									title={t("subAgents")}
+									count={mergedSubAgentCount}
+									icon={
+										<CpuChipIcon className="size-3.5" />
+									}
+								/>
+								<ListBox
+									aria-label={t("subAgents")}
+									selectionMode="single"
+									selectionBehavior="replace"
+									selectedKeys={selectedSubAgentKeys}
+									onSelectionChange={(keys) => {
+										if (keys === "all") return;
+										const key = [
+											...keys,
+										][0] as string | undefined;
+										if (key)
+											onSubAgentSelectionChange?.(key);
+									}}
+									className="p-2"
+								>
+									{filteredSubAgentGroups.map((group) => (
+										<ListBox.Item
+											key={group.mergeKey}
+											id={group.mergeKey}
+											textValue={group.items[0].name}
+											className="data-selected:bg-surface"
+										>
+											<div className="flex w-full items-center gap-2">
+												<CpuChipIcon className="size-4 shrink-0 text-muted" />
+												<Label className="flex-1 truncate">
+													{group.items[0].name}
+												</Label>
+											</div>
+										</ListBox.Item>
+									))}
+								</ListBox>
 							</>
 						)}
 

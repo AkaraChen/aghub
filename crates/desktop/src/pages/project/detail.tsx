@@ -1,5 +1,5 @@
 import { FolderIcon } from "@heroicons/react/24/solid";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -7,21 +7,25 @@ import { useParams } from "wouter";
 import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
 import { CreateMcpPanel } from "../../components/create-mcp-panel";
 import { CreateSkillPanel } from "../../components/create-skill-panel";
+import { CreateSubAgentPanel } from "../../components/create-sub-agent-panel";
 import { EditMcpPanel } from "../../components/edit-mcp-panel";
 import { ImportGithubSkillPanel } from "../../components/import-github-skill-panel";
 import { ImportMcpPanel } from "../../components/import-mcp-panel";
 import { ImportSkillPanel } from "../../components/import-skill-panel";
 import { McpDetail } from "../../components/mcp-detail";
-import { ProjectSubAgents } from "../../components/project-sub-agents";
 import { SkillDetail } from "../../components/skill-detail";
+import { SubAgentDetail } from "../../components/sub-agent-detail";
 import { UnifiedResourceList } from "../../components/unified-resource-list";
 import type { McpResponse, SkillResponse } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
 import { useProjects } from "../../hooks/use-projects";
-import { getMcpMergeKey } from "../../lib/utils";
+import { getMcpMergeKey, getSubAgentMergeKey } from "../../lib/utils";
 import { mcpListQueryOptions } from "../../requests/mcps";
 import { skillListQueryOptions } from "../../requests/skills";
-import { subAgentListQueryOptions } from "../../requests/sub-agents";
+import {
+	invalidateSubAgentQueries,
+	subAgentListQueryOptions,
+} from "../../requests/sub-agents";
 
 export default function ProjectDetailPage() {
 	const { t } = useTranslation();
@@ -29,6 +33,7 @@ export default function ProjectDetailPage() {
 	const { data: projects = [] } = useProjects();
 	const project = projects.find((p) => p.id === id);
 	const api = useApi();
+	const queryClient = useQueryClient();
 
 	const [panelMode, setPanelMode] = useState<
 		| "create-mcp"
@@ -37,6 +42,7 @@ export default function ProjectDetailPage() {
 		| "create-skill"
 		| "import-skill"
 		| "import-github-skill"
+		| "create-sub-agent"
 		| null
 	>(null);
 	const [searchQuery, setSearchQuery] = useState("");
@@ -139,6 +145,19 @@ export default function ProjectDetailPage() {
 		}));
 	}, [projectSkills]);
 
+	const groupedSubAgents = useMemo(() => {
+		const map = new Map<string, typeof projectSubAgents>();
+		for (const agent of projectSubAgents) {
+			const key = getSubAgentMergeKey(agent);
+			const existing = map.get(key) ?? [];
+			map.set(key, [...existing, agent]);
+		}
+		return Array.from(map.entries()).map(([mergeKey, items]) => ({
+			mergeKey,
+			items,
+		}));
+	}, [projectSubAgents]);
+
 	// Selected items
 	const selectedMcpGroup =
 		resourceType === "mcp" && selectedResource
@@ -150,6 +169,11 @@ export default function ProjectDetailPage() {
 	const selectedSkillGroup =
 		resourceType === "skill" && selectedResource
 			? groupedSkills.find((g) => g.name === selectedResource)
+			: null;
+
+	const selectedSubAgentGroup =
+		resourceType === "sub-agent" && selectedResource
+			? groupedSubAgents.find((g) => g.mergeKey === selectedResource)
 			: null;
 
 	const handleSelectionChange = (
@@ -173,6 +197,14 @@ export default function ProjectDetailPage() {
 		const key = keys.size === 1 ? [...keys][0] : null;
 		setSelectedResource(key);
 		setResourceType(key ? type : "");
+		setPanelMode(null);
+	};
+
+	const handleSubAgentSelectionChange = (key: string) => {
+		setSelectedResource(key);
+		setResourceType("sub-agent");
+		setSelectedMcpKeys(new Set());
+		setSelectedSkillKeys(new Set());
 		setPanelMode(null);
 	};
 
@@ -208,9 +240,30 @@ export default function ProjectDetailPage() {
 	const handleRefresh = () => {
 		refetchMcps();
 		refetchSkills();
+		refetchSubAgents();
 	};
 
-	const isRefreshing = isFetchingMcps || isFetchingSkills;
+	const isRefreshing = isFetchingMcps || isFetchingSkills || isFetchingSubAgents;
+
+	// Sub-agent delete handler (removes all items in a group)
+	const handleDeleteSubAgentGroup = async (
+		group: { mergeKey: string; items: (typeof projectSubAgents)[number][] },
+	) => {
+		await Promise.all(
+			group.items.map((item) => {
+				if (!item.agent) return Promise.resolve(null);
+				return api.subAgents.delete(
+					item.name,
+					item.agent,
+					"project",
+					project?.path,
+				);
+			}),
+		);
+		await invalidateSubAgentQueries(queryClient);
+		setSelectedResource(null);
+		setResourceType("");
+	};
 
 	if (!project) {
 		return (
@@ -226,6 +279,7 @@ export default function ProjectDetailPage() {
 			<UnifiedResourceList
 				mcps={projectMcps}
 				skills={projectSkills}
+				subAgents={projectSubAgents}
 				selectedMcpKeys={
 					isMultiSelectMode
 						? selectedMcpKeys
@@ -240,7 +294,13 @@ export default function ProjectDetailPage() {
 							? new Set([selectedResource])
 							: new Set()
 				}
+				selectedSubAgentKeys={
+					resourceType === "sub-agent" && selectedResource
+						? new Set([selectedResource])
+						: new Set()
+				}
 				onSelectionChange={handleSelectionChange}
+				onSubAgentSelectionChange={handleSubAgentSelectionChange}
 				onCreateMcp={(type) => {
 					if (type === "manual") setPanelMode("create-mcp");
 					else if (type === "import") setPanelMode("import-mcp");
@@ -251,6 +311,7 @@ export default function ProjectDetailPage() {
 					else if (type === "github")
 						setPanelMode("import-github-skill");
 				}}
+				onCreateSubAgent={() => setPanelMode("create-sub-agent")}
 				onRefresh={handleRefresh}
 				isRefreshing={isRefreshing}
 				isLoading={isLoading}
@@ -277,6 +338,17 @@ export default function ProjectDetailPage() {
 				{!panelMode && selectedSkillGroup && (
 					<SkillDetail
 						group={selectedSkillGroup}
+						projectPath={project.path}
+					/>
+				)}
+				{!panelMode && selectedSubAgentGroup && (
+					<SubAgentDetail
+						group={selectedSubAgentGroup}
+						onEdit={() => {}}
+						onDelete={() =>
+							handleDeleteSubAgentGroup(selectedSubAgentGroup)
+						}
+						isDeleting={false}
 						projectPath={project.path}
 					/>
 				)}
@@ -318,33 +390,36 @@ export default function ProjectDetailPage() {
 						projectPath={project.path}
 					/>
 				)}
-				{!panelMode && !selectedMcpGroup && !selectedSkillGroup && (
-					<div className="flex h-full flex-col items-center justify-center gap-3">
-						<div
-							className="
+				{panelMode === "create-sub-agent" && (
+					<CreateSubAgentPanel
+						onDone={() => setPanelMode(null)}
+						projectPath={project.path}
+					/>
+				)}
+				{!panelMode &&
+					!selectedMcpGroup &&
+					!selectedSkillGroup &&
+					!selectedSubAgentGroup && (
+						<div className="flex h-full flex-col items-center justify-center gap-3">
+							<div
+								className="
          flex size-16 items-center justify-center rounded-full
          bg-surface-secondary
        "
-						>
-							<FolderIcon className="size-8 text-muted" />
+							>
+								<FolderIcon className="size-8 text-muted" />
+							</div>
+							<div className="text-center">
+								<h3 className="mb-1 text-lg font-semibold">
+									{project.name}
+								</h3>
+								<p className="max-w-sm text-sm text-muted">
+									{t("selectResourceToView")}
+								</p>
+							</div>
 						</div>
-						<div className="text-center">
-							<h3 className="mb-1 text-lg font-semibold">
-								{project.name}
-							</h3>
-							<p className="max-w-sm text-sm text-muted">
-								{t("selectResourceToView")}
-							</p>
-						</div>
-					</div>
-				)}
+					)}
 
-				<ProjectSubAgents
-					subAgents={projectSubAgents}
-					projectPath={project.path}
-					onRefresh={refetchSubAgents}
-					isRefreshing={isFetchingSubAgents}
-				/>
 				<BulkDeleteDialog
 					isOpen={isBulkDeleteDialogOpen}
 					onClose={() => setIsBulkDeleteDialogOpen(false)}
@@ -363,3 +438,4 @@ export default function ProjectDetailPage() {
 		</div>
 	);
 }
+
