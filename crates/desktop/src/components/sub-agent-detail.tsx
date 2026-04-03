@@ -1,4 +1,5 @@
 import {
+	ChevronDownIcon,
 	DocumentDuplicateIcon,
 	ExclamationTriangleIcon,
 	PencilIcon,
@@ -6,6 +7,7 @@ import {
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import {
+	Accordion,
 	Button,
 	Card,
 	Chip,
@@ -136,23 +138,6 @@ export function SubAgentDetail({
 									))}
 								</div>
 							</div>
-
-							<div className="space-y-3">
-								<h3 className="text-xs font-medium uppercase tracking-wider text-muted">
-									{t("subAgentInstruction")}
-								</h3>
-								{primary.instruction ? (
-									<div className="overflow-x-auto rounded-lg border border-separator bg-surface-secondary px-3 py-2">
-										<code className="block whitespace-pre-wrap break-words font-mono text-xs leading-5 text-foreground">
-											{primary.instruction}
-										</code>
-									</div>
-								) : (
-									<p className="text-sm text-muted">
-										{t("subAgentNoInstruction")}
-									</p>
-								)}
-							</div>
 						</Card.Content>
 
 						<Card.Footer className="pt-4 border-t border-separator flex flex-wrap gap-3">
@@ -172,6 +157,34 @@ export function SubAgentDetail({
 							</Button>
 						</Card.Footer>
 					</Card>
+
+					{primary.instruction && (
+						<Accordion variant="surface">
+							<Accordion.Item>
+								<Accordion.Heading>
+									<Accordion.Trigger>
+										{t("subAgentInstruction")}
+										<Accordion.Indicator>
+											<ChevronDownIcon className="size-4" />
+										</Accordion.Indicator>
+									</Accordion.Trigger>
+								</Accordion.Heading>
+								<Accordion.Panel>
+									<Accordion.Body>
+										<pre
+											role="article"
+											aria-label={t(
+												"subAgentInstruction",
+											)}
+											className="overflow-x-auto rounded-md bg-surface-secondary p-3 font-mono text-xs whitespace-pre-wrap text-foreground"
+										>
+											{primary.instruction}
+										</pre>
+									</Accordion.Body>
+								</Accordion.Panel>
+							</Accordion.Item>
+						</Accordion>
+					)}
 				</div>
 			</div>
 
