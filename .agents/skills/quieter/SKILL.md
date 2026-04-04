@@ -18,18 +18,18 @@ Invoke /frontend-design — it contains design principles, anti-patterns, and th
 Analyze what makes the design feel too intense:
 
 1. **Identify intensity sources**:
-   - **Color saturation**: Overly bright or saturated colors
-   - **Contrast extremes**: Too much high-contrast juxtaposition
-   - **Visual weight**: Too many bold, heavy elements competing
-   - **Animation excess**: Too much motion or overly dramatic effects
-   - **Complexity**: Too many visual elements, patterns, or decorations
-   - **Scale**: Everything is large and loud with no hierarchy
+    - **Color saturation**: Overly bright or saturated colors
+    - **Contrast extremes**: Too much high-contrast juxtaposition
+    - **Visual weight**: Too many bold, heavy elements competing
+    - **Animation excess**: Too much motion or overly dramatic effects
+    - **Complexity**: Too many visual elements, patterns, or decorations
+    - **Scale**: Everything is large and loud with no hierarchy
 
 2. **Understand the context**:
-   - What's the purpose? (Marketing vs tool vs reading experience)
-   - Who's the audience? (Some contexts need energy)
-   - What's working? (Don't throw away good ideas)
-   - What's the core message? (Preserve what matters)
+    - What's the purpose? (Marketing vs tool vs reading experience)
+    - Who's the audience? (Some contexts need energy)
+    - What's working? (Don't throw away good ideas)
+    - What's the core message? (Preserve what matters)
 
 If any of these are unclear from the codebase, ask the user directly to clarify what you cannot infer.
 

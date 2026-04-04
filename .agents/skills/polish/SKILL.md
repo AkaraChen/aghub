@@ -18,18 +18,18 @@ Perform a meticulous final pass to catch all the small details that separate goo
 Understand the current state and goals:
 
 1. **Review completeness**:
-   - Is it functionally complete?
-   - Are there known issues to preserve (mark with TODOs)?
-   - What's the quality bar? (MVP vs flagship feature?)
-   - When does it ship? (How much time for polish?)
+    - Is it functionally complete?
+    - Are there known issues to preserve (mark with TODOs)?
+    - What's the quality bar? (MVP vs flagship feature?)
+    - When does it ship? (How much time for polish?)
 
 2. **Identify polish areas**:
-   - Visual inconsistencies
-   - Spacing and alignment issues
-   - Interaction state gaps
-   - Copy inconsistencies
-   - Edge cases and error states
-   - Loading and transition smoothness
+    - Visual inconsistencies
+    - Spacing and alignment issues
+    - Interaction state gaps
+    - Copy inconsistencies
+    - Edge cases and error states
+    - Loading and transition smoothness
 
 **CRITICAL**: Polish is the last step, not the first. Don't polish work that's not functionally complete.
 

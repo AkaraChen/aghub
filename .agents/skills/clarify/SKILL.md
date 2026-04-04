@@ -18,19 +18,19 @@ Invoke /frontend-design — it contains design principles, anti-patterns, and th
 Identify what makes the text unclear or ineffective:
 
 1. **Find clarity problems**:
-   - **Jargon**: Technical terms users won't understand
-   - **Ambiguity**: Multiple interpretations possible
-   - **Passive voice**: "Your file has been uploaded" vs "We uploaded your file"
-   - **Length**: Too wordy or too terse
-   - **Assumptions**: Assuming user knowledge they don't have
-   - **Missing context**: Users don't know what to do or why
-   - **Tone mismatch**: Too formal, too casual, or inappropriate for situation
+    - **Jargon**: Technical terms users won't understand
+    - **Ambiguity**: Multiple interpretations possible
+    - **Passive voice**: "Your file has been uploaded" vs "We uploaded your file"
+    - **Length**: Too wordy or too terse
+    - **Assumptions**: Assuming user knowledge they don't have
+    - **Missing context**: Users don't know what to do or why
+    - **Tone mismatch**: Too formal, too casual, or inappropriate for situation
 
 2. **Understand the context**:
-   - Who's the audience? (Technical? General? First-time users?)
-   - What's the user's mental state? (Stressed during error? Confident during success?)
-   - What's the action? (What do we want users to do?)
-   - What's the constraint? (Character limits? Space limitations?)
+    - Who's the audience? (Technical? General? First-time users?)
+    - What's the user's mental state? (Stressed during error? Confident during success?)
+    - What's the action? (What do we want users to do?)
+    - What's the constraint? (Character limits? Space limitations?)
 
 **CRITICAL**: Clear copy helps users succeed. Unclear copy creates frustration, errors, and support tickets.
 

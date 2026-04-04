@@ -125,7 +125,7 @@ export function DeleteSkillLocationDialog({
 									{isMultiAgent
 										? t("sharedLocation")
 										: item.installations[0].source ===
-												"project"
+											  "project"
 											? t("project")
 											: t("global")}
 								</p>

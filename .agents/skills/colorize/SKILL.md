@@ -18,18 +18,18 @@ Invoke /frontend-design — it contains design principles, anti-patterns, and th
 Analyze the current state and identify opportunities:
 
 1. **Understand current state**:
-   - **Color absence**: Pure grayscale? Limited neutrals? One timid accent?
-   - **Missed opportunities**: Where could color add meaning, hierarchy, or delight?
-   - **Context**: What's appropriate for this domain and audience?
-   - **Brand**: Are there existing brand colors we should use?
+    - **Color absence**: Pure grayscale? Limited neutrals? One timid accent?
+    - **Missed opportunities**: Where could color add meaning, hierarchy, or delight?
+    - **Context**: What's appropriate for this domain and audience?
+    - **Brand**: Are there existing brand colors we should use?
 
 2. **Identify where color adds value**:
-   - **Semantic meaning**: Success (green), error (red), warning (yellow/orange), info (blue)
-   - **Hierarchy**: Drawing attention to important elements
-   - **Categorization**: Different sections, types, or states
-   - **Emotional tone**: Warmth, energy, trust, creativity
-   - **Wayfinding**: Helping users navigate and understand structure
-   - **Delight**: Moments of visual interest and personality
+    - **Semantic meaning**: Success (green), error (red), warning (yellow/orange), info (blue)
+    - **Hierarchy**: Drawing attention to important elements
+    - **Categorization**: Different sections, types, or states
+    - **Emotional tone**: Warmth, energy, trust, creativity
+    - **Wayfinding**: Helping users navigate and understand structure
+    - **Delight**: Moments of visual interest and personality
 
 If any of these are unclear from the codebase, ask the user directly to clarify what you cannot infer.
 
@@ -53,11 +53,11 @@ Add color systematically across these dimensions:
 ### Semantic Color
 
 - **State indicators**:
-  - Success: Green tones (emerald, forest, mint)
-  - Error: Red/pink tones (rose, crimson, coral)
-  - Warning: Orange/amber tones
-  - Info: Blue tones (sky, ocean, indigo)
-  - Neutral: Gray/slate for inactive states
+    - Success: Green tones (emerald, forest, mint)
+    - Error: Red/pink tones (rose, crimson, coral)
+    - Warning: Orange/amber tones
+    - Info: Blue tones (sky, ocean, indigo)
+    - Neutral: Gray/slate for inactive states
 
 - **Status badges**: Colored backgrounds or borders for states (active, pending, completed, etc.)
 - **Progress indicators**: Colored bars, rings, or charts showing completion or health

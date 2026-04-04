@@ -18,22 +18,22 @@ Invoke /frontend-design — it contains design principles, anti-patterns, and th
 Understand what needs adaptation and why:
 
 1. **Identify the source context**:
-   - What was it designed for originally? (Desktop web? Mobile app?)
-   - What assumptions were made? (Large screen? Mouse input? Fast connection?)
-   - What works well in current context?
+    - What was it designed for originally? (Desktop web? Mobile app?)
+    - What assumptions were made? (Large screen? Mouse input? Fast connection?)
+    - What works well in current context?
 
 2. **Understand target context**:
-   - **Device**: Mobile, tablet, desktop, TV, watch, print?
-   - **Input method**: Touch, mouse, keyboard, voice, gamepad?
-   - **Screen constraints**: Size, resolution, orientation?
-   - **Connection**: Fast wifi, slow 3G, offline?
-   - **Usage context**: On-the-go vs desk, quick glance vs focused reading?
-   - **User expectations**: What do users expect on this platform?
+    - **Device**: Mobile, tablet, desktop, TV, watch, print?
+    - **Input method**: Touch, mouse, keyboard, voice, gamepad?
+    - **Screen constraints**: Size, resolution, orientation?
+    - **Connection**: Fast wifi, slow 3G, offline?
+    - **Usage context**: On-the-go vs desk, quick glance vs focused reading?
+    - **User expectations**: What do users expect on this platform?
 
 3. **Identify adaptation challenges**:
-   - What won't fit? (Content, navigation, features)
-   - What won't work? (Hover states on touch, tiny touch targets)
-   - What's inappropriate? (Desktop patterns on mobile, mobile patterns on desktop)
+    - What won't fit? (Content, navigation, features)
+    - What won't work? (Hover states on touch, tiny touch targets)
+    - What's inappropriate? (Desktop patterns on mobile, mobile patterns on desktop)
 
 **CRITICAL**: Adaptation is not just scaling - it's rethinking the experience for the new context.
 

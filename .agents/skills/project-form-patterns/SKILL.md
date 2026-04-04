@@ -11,10 +11,10 @@ Follow these rules when building forms in this project.
 
 - Check the official docs first, not memory and not bundled/local docs, when form behavior is in question.
 - For HeroUI, prefer the official site:
-  - `https://v3.heroui.com/docs/react/components/form`
-  - `https://v3.heroui.com/docs/react/components/text-field`
-  - `https://v3.heroui.com/docs/react/components/field-error`
-  - `https://v3.heroui.com/docs/react/components/select`
+    - `https://v3.heroui.com/docs/react/components/form`
+    - `https://v3.heroui.com/docs/react/components/text-field`
+    - `https://v3.heroui.com/docs/react/components/field-error`
+    - `https://v3.heroui.com/docs/react/components/select`
 - Use local skill docs only as a convenience after confirming the official API.
 
 ## Default Stack
@@ -32,8 +32,8 @@ Follow these rules when building forms in this project.
 ## Error Rendering
 
 - For HeroUI text fields, use:
-  - `isInvalid={Boolean(fieldState.error)}`
-  - Conditionally render `<FieldError>{fieldState.error.message}</FieldError>` inside the same `TextField`.
+    - `isInvalid={Boolean(fieldState.error)}`
+    - Conditionally render `<FieldError>{fieldState.error.message}</FieldError>` inside the same `TextField`.
 - Do not invent unsupported props. In particular, do not assume `TextField` supports an `errorMessage` prop.
 - Keep the official anatomy:
 
@@ -41,9 +41,7 @@ Follow these rules when building forms in this project.
 <TextField isInvalid={Boolean(fieldState.error)} validationBehavior="aria">
 	<Label>Name</Label>
 	<Input {...inputProps} />
-	{fieldState.error && (
-		<FieldError>{fieldState.error.message}</FieldError>
-	)}
+	{fieldState.error && <FieldError>{fieldState.error.message}</FieldError>}
 </TextField>
 ```
 
@@ -60,9 +58,9 @@ Follow these rules when building forms in this project.
 ## Key/Value Editors
 
 - Keep row layout simple:
-  - two inputs
-  - one delete button
-  - no extra wrappers that change flex behavior unless necessary
+    - two inputs
+    - one delete button
+    - no extra wrappers that change flex behavior unless necessary
 - Prefer aggregate error text below the whole editor over inline row errors. This avoids breaking spacing and alignment.
 - Implement that aggregate error with HeroUI `ErrorMessage`, not a custom `<p>` block.
 - If you must show row-level issues, redesign the layout first; do not bolt error blocks into a row that was designed as a single-line control.

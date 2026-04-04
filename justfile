@@ -29,7 +29,7 @@ test-with-validation:
 # Format code
 fmt:
 	cargo fmt --all
-	prettier --write .
+	bun run format
 
 # Run clippy linter
 lint:
@@ -60,4 +60,3 @@ bump version:
     sed -i '' 's/^version = .*/version = "{{version}}"/' Cargo.toml
     sed -i '' 's/"version": ".*"/"version": "{{version}}"/' crates/desktop/package.json
     sed -i '' 's/"version": ".*"/"version": "{{version}}"/' crates/desktop/src-tauri/tauri.conf.json || true
-

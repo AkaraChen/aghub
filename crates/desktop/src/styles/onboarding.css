@@ -7,11 +7,7 @@
 	background: color-mix(in oklch, var(--surface) 96%, var(--background));
 	color: var(--foreground);
 	box-shadow: 0 1.5rem 4rem
-		color-mix(
-			in oklch,
-			var(--foreground) 12%,
-			transparent
-		);
+		color-mix(in oklch, var(--foreground) 12%, transparent);
 }
 
 .aghub-tour-popover * {
@@ -19,11 +15,7 @@
 }
 
 .aghub-tour-popover .driver-popover-arrow {
-	border-color: color-mix(
-		in oklch,
-		var(--surface) 96%,
-		var(--background)
-	);
+	border-color: color-mix(in oklch, var(--surface) 96%, var(--background));
 }
 
 .aghub-tour-popover .driver-popover-title {

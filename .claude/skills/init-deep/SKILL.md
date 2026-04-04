@@ -20,8 +20,8 @@ Generate hierarchical AGENTS.md files. Ensure every AGENTS.md has a paired CLAUD
 ## Workflow (High-Level)
 
 1. **Discovery + Analysis** (concurrent)
-   - Fire background explore agents immediately
-   - Main session: bash structure + LSP codemap + read existing AGENTS.md and CLAUDE.md
+    - Fire background explore agents immediately
+    - Main session: bash structure + LSP codemap + read existing AGENTS.md and CLAUDE.md
 2. **Score & Decide** - Determine AGENTS.md/CLAUDE.md locations from merged findings
 3. **Generate** - Root first, then subdirs in parallel
 4. **Review** - Deduplicate, trim, validate, ensure pairs
@@ -241,10 +241,10 @@ For every location in `AGENTS_LOCATIONS`:
 
 1. **Generate AGENTS.md** content using the templates below.
 2. **Ensure CLAUDE.md exists** in the same directory:
-   - If **neither exists**: Write AGENTS.md, then `ln -s AGENTS.md CLAUDE.md`
-   - If **only AGENTS.md exists**: `ln -s AGENTS.md CLAUDE.md`
-   - If **only CLAUDE.md exists**: `mv CLAUDE.md AGENTS.md`, then `ln -s AGENTS.md CLAUDE.md`
-   - If **both exist as regular files**: Merge content from both, then use `Edit` to update both to the merged content.
+    - If **neither exists**: Write AGENTS.md, then `ln -s AGENTS.md CLAUDE.md`
+    - If **only AGENTS.md exists**: `ln -s AGENTS.md CLAUDE.md`
+    - If **only CLAUDE.md exists**: `mv CLAUDE.md AGENTS.md`, then `ln -s AGENTS.md CLAUDE.md`
+    - If **both exist as regular files**: Merge content from both, then use `Edit` to update both to the merged content.
 
 **Preferred approach**: Write AGENTS.md as the canonical file, then `ln -s AGENTS.md CLAUDE.md` in all cases where no conflict exists.
 

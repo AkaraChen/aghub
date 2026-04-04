@@ -12,28 +12,28 @@ Strengthen interfaces against edge cases, errors, internationalization issues, a
 Identify weaknesses and edge cases:
 
 1. **Test with extreme inputs**:
-   - Very long text (names, descriptions, titles)
-   - Very short text (empty, single character)
-   - Special characters (emoji, RTL text, accents)
-   - Large numbers (millions, billions)
-   - Many items (1000+ list items, 50+ options)
-   - No data (empty states)
+    - Very long text (names, descriptions, titles)
+    - Very short text (empty, single character)
+    - Special characters (emoji, RTL text, accents)
+    - Large numbers (millions, billions)
+    - Many items (1000+ list items, 50+ options)
+    - No data (empty states)
 
 2. **Test error scenarios**:
-   - Network failures (offline, slow, timeout)
-   - API errors (400, 401, 403, 404, 500)
-   - Validation errors
-   - Permission errors
-   - Rate limiting
-   - Concurrent operations
+    - Network failures (offline, slow, timeout)
+    - API errors (400, 401, 403, 404, 500)
+    - Validation errors
+    - Permission errors
+    - Rate limiting
+    - Concurrent operations
 
 3. **Test internationalization**:
-   - Long translations (German is often 30% longer than English)
-   - RTL languages (Arabic, Hebrew)
-   - Character sets (Chinese, Japanese, Korean, emoji)
-   - Date/time formats
-   - Number formats (1,000 vs 1.000)
-   - Currency symbols
+    - Long translations (German is often 30% longer than English)
+    - RTL languages (Arabic, Hebrew)
+    - Character sets (Chinese, Japanese, Korean, emoji)
+    - Date/time formats
+    - Number formats (1,000 vs 1.000)
+    - Currency symbols
 
 **CRITICAL**: Designs that only work with perfect data aren't production-ready. Harden against reality.
 
@@ -48,24 +48,24 @@ Systematically improve resilience:
 ```css
 /* Single line with ellipsis */
 .truncate {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 /* Multi-line with clamp */
 .line-clamp {
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+	display: -webkit-box;
+	-webkit-line-clamp: 3;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
 }
 
 /* Allow wrapping */
 .wrap {
-  word-wrap: break-word;
-  overflow-wrap: break-word;
-  hyphens: auto;
+	word-wrap: break-word;
+	overflow-wrap: break-word;
+	hyphens: auto;
 }
 ```
 
@@ -74,14 +74,14 @@ Systematically improve resilience:
 ```css
 /* Prevent flex items from overflowing */
 .flex-item {
-  min-width: 0; /* Allow shrinking below content size */
-  overflow: hidden;
+	min-width: 0; /* Allow shrinking below content size */
+	overflow: hidden;
 }
 
 /* Prevent grid items from overflowing */
 .grid-item {
-  min-width: 0;
-  min-height: 0;
+	min-width: 0;
+	min-height: 0;
 }
 ```
 
@@ -118,7 +118,9 @@ padding-inline: 1rem; /* Not padding-left/right */
 border-inline-end: 1px solid; /* Not border-right */
 
 /* Or use dir attribute */
-[dir="rtl"] .arrow { transform: scaleX(-1); }
+[dir="rtl"] .arrow {
+	transform: scaleX(-1);
+}
 ```
 
 **Character set support**:
@@ -132,12 +134,12 @@ border-inline-end: 1px solid; /* Not border-right */
 
 ```javascript
 // ✅ Use Intl API for proper formatting
-new Intl.DateTimeFormat('en-US').format(date); // 1/15/2024
-new Intl.DateTimeFormat('de-DE').format(date); // 15.1.2024
+new Intl.DateTimeFormat("en-US").format(date); // 1/15/2024
+new Intl.DateTimeFormat("de-DE").format(date); // 15.1.2024
 
-new Intl.NumberFormat('en-US', { 
-  style: 'currency', 
-  currency: 'USD' 
+new Intl.NumberFormat("en-US", {
+	style: "currency",
+	currency: "USD",
 }).format(1234.56); // $1,234.56
 ```
 
@@ -145,10 +147,10 @@ new Intl.NumberFormat('en-US', {
 
 ```javascript
 // ❌ Bad: Assumes English pluralization
-`${count} item${count !== 1 ? 's' : ''}`
+`${count} item${count !== 1 ? "s" : ""}`;
 
 // ✅ Good: Use proper i18n library
-t('items', { count }) // Handles complex plural rules
+t("items", { count }); // Handles complex plural rules
 ```
 
 ### Error Handling
@@ -163,12 +165,14 @@ t('items', { count }) // Handles complex plural rules
 
 ```jsx
 // Error states with recovery
-{error && (
-  <ErrorMessage>
-    <p>Failed to load data. {error.message}</p>
-    <button onClick={retry}>Try again</button>
-  </ErrorMessage>
-)}
+{
+	error && (
+		<ErrorMessage>
+			<p>Failed to load data. {error.message}</p>
+			<button onClick={retry}>Try again</button>
+		</ErrorMessage>
+	);
+}
 ```
 
 **Form validation errors**:
@@ -182,12 +186,12 @@ t('items', { count }) // Handles complex plural rules
 **API errors**:
 
 - Handle each status code appropriately
-  - 400: Show validation errors
-  - 401: Redirect to login
-  - 403: Show permission error
-  - 404: Show not found state
-  - 429: Show rate limit message
-  - 500: Show generic error, offer support
+    - 400: Show validation errors
+    - 401: Redirect to login
+    - 403: Show permission error
+    - 404: Show not found state
+    - 429: Show rate limit message
+    - 500: Show generic error, offer support
 
 **Graceful degradation**:
 
@@ -263,15 +267,15 @@ t('items', { count }) // Handles complex plural rules
 
 ```html
 <!-- Set clear constraints -->
-<input 
-  type="text"
-  maxlength="100"
-  pattern="[A-Za-z0-9]+"
-  required
-  aria-describedby="username-hint"
+<input
+	type="text"
+	maxlength="100"
+	pattern="[A-Za-z0-9]+"
+	required
+	aria-describedby="username-hint"
 />
 <small id="username-hint">
-  Letters and numbers only, up to 100 characters
+	Letters and numbers only, up to 100 characters
 </small>
 ```
 
@@ -295,11 +299,11 @@ t('items', { count }) // Handles complex plural rules
 
 ```css
 @media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
+	* {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
 }
 ```
 

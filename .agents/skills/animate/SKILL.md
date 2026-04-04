@@ -18,17 +18,17 @@ Invoke /frontend-design — it contains design principles, anti-patterns, and th
 Analyze where motion would improve the experience:
 
 1. **Identify static areas**:
-   - **Missing feedback**: Actions without visual acknowledgment (button clicks, form submission, etc.)
-   - **Jarring transitions**: Instant state changes that feel abrupt (show/hide, page loads, route changes)
-   - **Unclear relationships**: Spatial or hierarchical relationships that aren't obvious
-   - **Lack of delight**: Functional but joyless interactions
-   - **Missed guidance**: Opportunities to direct attention or explain behavior
+    - **Missing feedback**: Actions without visual acknowledgment (button clicks, form submission, etc.)
+    - **Jarring transitions**: Instant state changes that feel abrupt (show/hide, page loads, route changes)
+    - **Unclear relationships**: Spatial or hierarchical relationships that aren't obvious
+    - **Lack of delight**: Functional but joyless interactions
+    - **Missed guidance**: Opportunities to direct attention or explain behavior
 
 2. **Understand the context**:
-   - What's the personality? (Playful vs serious, energetic vs calm)
-   - What's the performance budget? (Mobile-first? Complex page?)
-   - Who's the audience? (Motion-sensitive users? Power users who want speed?)
-   - What matters most? (One hero animation vs many micro-interactions?)
+    - What's the personality? (Playful vs serious, energetic vs calm)
+    - What's the performance budget? (Mobile-first? Complex page?)
+    - Who's the audience? (Motion-sensitive users? Power users who want speed?)
+    - What matters most? (One hero animation vs many micro-interactions?)
 
 If any of these are unclear from the codebase, ask the user directly to clarify what you cannot infer.
 
@@ -59,12 +59,12 @@ Add motion systematically across these categories:
 ### Micro-interactions
 
 - **Button feedback**:
-  - Hover: Subtle scale (1.02-1.05), color shift, shadow increase
-  - Click: Quick scale down then up (0.95 → 1), ripple effect
-  - Loading: Spinner or pulse state
+    - Hover: Subtle scale (1.02-1.05), color shift, shadow increase
+    - Click: Quick scale down then up (0.95 → 1), ripple effect
+    - Loading: Spinner or pulse state
 - **Form interactions**:
-  - Input focus: Border color transition, slight scale or glow
-  - Validation: Shake on error, check mark on success, smooth color transitions
+    - Input focus: Border color transition, slight scale or glow
+    - Validation: Shake on error, check mark on success, smooth color transitions
 - **Toggle switches**: Smooth slide + color transition (200-300ms)
 - **Checkboxes/radio**: Check mark animation, ripple effect
 - **Like/favorite**: Scale + rotation, particle effects, color transition
@@ -115,9 +115,9 @@ Use appropriate techniques for each animation:
 
 ```css
 /* Recommended - natural deceleration */
---ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);    /* Smooth, refined */
---ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);   /* Slightly snappier */
---ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);     /* Confident, decisive */
+--ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1); /* Smooth, refined */
+--ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1); /* Slightly snappier */
+--ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1); /* Confident, decisive */
 
 /* AVOID - feel dated and tacky */
 /* bounce: cubic-bezier(0.34, 1.56, 0.64, 1); */
@@ -155,11 +155,11 @@ Use appropriate techniques for each animation:
 
 ```css
 @media (prefers-reduced-motion: reduce) {
-  * {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
+	* {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+	}
 }
 ```
 

@@ -6,9 +6,9 @@
 
 ```css
 /* OKLCH: lightness (0-100%), chroma (0-0.4+), hue (0-360) */
---color-primary: oklch(60% 0.15 250);      /* Blue */
+--color-primary: oklch(60% 0.15 250); /* Blue */
 --color-primary-light: oklch(85% 0.08 250); /* Same hue, lighter */
---color-primary-dark: oklch(35% 0.12 250);  /* Same hue, darker */
+--color-primary-dark: oklch(35% 0.12 250); /* Same hue, darker */
 ```
 
 **Key insight**: As you move toward white or black, reduce chroma (saturation). High chroma at extreme lightness looks garish. A light blue at 85% lightness needs ~0.08 chroma, not the 0.15 of your base color.
@@ -21,11 +21,11 @@
 
 ```css
 /* Dead grays */
---gray-100: oklch(95% 0 0);     /* No personality */
+--gray-100: oklch(95% 0 0); /* No personality */
 --gray-900: oklch(15% 0 0);
 
 /* Warm-tinted grays (add brand warmth) */
---gray-100: oklch(95% 0.01 60);  /* Hint of warmth */
+--gray-100: oklch(95% 0.01 60); /* Hint of warmth */
 --gray-900: oklch(15% 0.01 60);
 
 /* Cool-tinted grays (tech, professional) */
@@ -110,12 +110,12 @@ You can't just swap colors. Dark mode requires different design decisions:
 ```css
 /* Dark mode depth via surface color, not shadow */
 :root[data-theme="dark"] {
-  --surface-1: oklch(15% 0.01 250);
-  --surface-2: oklch(20% 0.01 250);  /* "Higher" = lighter */
-  --surface-3: oklch(25% 0.01 250);
+	--surface-1: oklch(15% 0.01 250);
+	--surface-2: oklch(20% 0.01 250); /* "Higher" = lighter */
+	--surface-3: oklch(25% 0.01 250);
 
-  /* Reduce text weight slightly */
-  --body-weight: 350;  /* Instead of 400 */
+	/* Reduce text weight slightly */
+	--body-weight: 350; /* Instead of 400 */
 }
 ```
 

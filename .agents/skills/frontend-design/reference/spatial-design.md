@@ -52,19 +52,19 @@ Viewport queries are for page layouts. **Container queries are for components**:
 
 ```css
 .card-container {
-  container-type: inline-size;
+	container-type: inline-size;
 }
 
 .card {
-  display: grid;
-  gap: var(--space-md);
+	display: grid;
+	gap: var(--space-md);
 }
 
 /* Card layout changes based on its container, not viewport */
 @container (min-width: 400px) {
-  .card {
-    grid-template-columns: 120px 1fr;
-  }
+	.card {
+		grid-template-columns: 120px 1fr;
+	}
 }
 ```
 
@@ -80,15 +80,15 @@ Buttons can look small but need large touch targets (44px minimum). Use padding 
 
 ```css
 .icon-button {
-  width: 24px;  /* Visual size */
-  height: 24px;
-  position: relative;
+	width: 24px; /* Visual size */
+	height: 24px;
+	position: relative;
 }
 
 .icon-button::before {
-  content: '';
-  position: absolute;
-  inset: -10px;  /* Expand tap target to 44px */
+	content: "";
+	position: absolute;
+	inset: -10px; /* Expand tap target to 44px */
 }
 ```
 

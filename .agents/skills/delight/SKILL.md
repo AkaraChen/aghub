@@ -18,25 +18,25 @@ Invoke /frontend-design — it contains design principles, anti-patterns, and th
 Identify where delight would enhance (not distract from) the experience:
 
 1. **Find natural delight moments**:
-   - **Success states**: Completed actions (save, send, publish)
-   - **Empty states**: First-time experiences, onboarding
-   - **Loading states**: Waiting periods that could be entertaining
-   - **Achievements**: Milestones, streaks, completions
-   - **Interactions**: Hover states, clicks, drags
-   - **Errors**: Softening frustrating moments
-   - **Easter eggs**: Hidden discoveries for curious users
+    - **Success states**: Completed actions (save, send, publish)
+    - **Empty states**: First-time experiences, onboarding
+    - **Loading states**: Waiting periods that could be entertaining
+    - **Achievements**: Milestones, streaks, completions
+    - **Interactions**: Hover states, clicks, drags
+    - **Errors**: Softening frustrating moments
+    - **Easter eggs**: Hidden discoveries for curious users
 
 2. **Understand the context**:
-   - What's the brand personality? (Playful? Professional? Quirky? Elegant?)
-   - Who's the audience? (Tech-savvy? Creative? Corporate?)
-   - What's the emotional context? (Accomplishment? Exploration? Frustration?)
-   - What's appropriate? (Banking app ≠ gaming app)
+    - What's the brand personality? (Playful? Professional? Quirky? Elegant?)
+    - Who's the audience? (Tech-savvy? Creative? Corporate?)
+    - What's the emotional context? (Accomplishment? Exploration? Frustration?)
+    - What's appropriate? (Banking app ≠ gaming app)
 
 3. **Define delight strategy**:
-   - **Subtle sophistication**: Refined micro-interactions (luxury brands)
-   - **Playful personality**: Whimsical illustrations and copy (consumer apps)
-   - **Helpful surprises**: Anticipating needs before users ask (productivity tools)
-   - **Sensory richness**: Satisfying sounds, smooth animations (creative tools)
+    - **Subtle sophistication**: Refined micro-interactions (luxury brands)
+    - **Playful personality**: Whimsical illustrations and copy (consumer apps)
+    - **Helpful surprises**: Anticipating needs before users ask (productivity tools)
+    - **Sensory richness**: Satisfying sounds, smooth animations (creative tools)
 
 If any of these are unclear from the codebase, ask the user directly to clarify what you cannot infer.
 
@@ -85,18 +85,20 @@ Add personality and joy through these methods:
 ```css
 /* Satisfying button press */
 .button {
-  transition: transform 0.1s, box-shadow 0.1s;
+	transition:
+		transform 0.1s,
+		box-shadow 0.1s;
 }
 .button:active {
-  transform: translateY(2px);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+	transform: translateY(2px);
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* Ripple effect on click */
 /* Smooth lift on hover */
 .button:hover {
-  transform: translateY(-2px);
-  transition: transform 0.2s cubic-bezier(0.25, 1, 0.5, 1); /* ease-out-quart */
+	transform: translateY(-2px);
+	transition: transform 0.2s cubic-bezier(0.25, 1, 0.5, 1); /* ease-out-quart */
 }
 ```
 

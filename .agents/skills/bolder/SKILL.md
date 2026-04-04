@@ -18,18 +18,18 @@ Invoke /frontend-design — it contains design principles, anti-patterns, and th
 Analyze what makes the design feel too safe or boring:
 
 1. **Identify weakness sources**:
-   - **Generic choices**: System fonts, basic colors, standard layouts
-   - **Timid scale**: Everything is medium-sized with no drama
-   - **Low contrast**: Everything has similar visual weight
-   - **Static**: No motion, no energy, no life
-   - **Predictable**: Standard patterns with no surprises
-   - **Flat hierarchy**: Nothing stands out or commands attention
+    - **Generic choices**: System fonts, basic colors, standard layouts
+    - **Timid scale**: Everything is medium-sized with no drama
+    - **Low contrast**: Everything has similar visual weight
+    - **Static**: No motion, no energy, no life
+    - **Predictable**: Standard patterns with no surprises
+    - **Flat hierarchy**: Nothing stands out or commands attention
 
 2. **Understand the context**:
-   - What's the brand personality? (How far can we push?)
-   - What's the purpose? (Marketing can be bolder than financial dashboards)
-   - Who's the audience? (What will resonate?)
-   - What are the constraints? (Brand guidelines, accessibility, performance)
+    - What's the brand personality? (How far can we push?)
+    - What's the purpose? (Marketing can be bolder than financial dashboards)
+    - Who's the audience? (What will resonate?)
+    - What are the constraints? (Brand guidelines, accessibility, performance)
 
 If any of these are unclear from the codebase, ask the user directly to clarify what you cannot infer.
 
