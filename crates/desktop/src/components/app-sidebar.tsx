@@ -1,8 +1,8 @@
 import {
 	BookOpenIcon,
 	Cog6ToothIcon,
-        CpuChipIcon,
-        PuzzlePieceIcon,
+	CpuChipIcon,
+	PuzzlePieceIcon,
 	ServerIcon,
 	SquaresPlusIcon,
 } from "@heroicons/react/24/solid";
@@ -41,15 +41,15 @@ const menuItems: MenuItem[] = [
 	},
 	{
 		type: "link",
-        labelKey: "subAgents",
-        href: "/sub-agents",
-        icon: CpuChipIcon,
-    },
-    {
-        type: "link",
-        labelKey: "claudeCodePlugins",
-        href: "/plugins",
-        icon: PuzzlePieceIcon,
+		labelKey: "subAgents",
+		href: "/sub-agents",
+		icon: CpuChipIcon,
+	},
+	{
+		type: "link",
+		labelKey: "claudeCodePlugins",
+		href: "/plugins",
+		icon: PuzzlePieceIcon,
 	},
 ];
 

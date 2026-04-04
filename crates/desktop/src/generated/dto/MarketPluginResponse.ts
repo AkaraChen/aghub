@@ -3,4 +3,14 @@
 /**
  * Marketplace plugin item (from GitHub organization)
  */
-export type MarketPluginResponse = { id: string, name: string, description: string, version: string, author: string, github_url: string, installs: number, installed: boolean, enabled?: boolean, };
+export type MarketPluginResponse = {
+	id: string;
+	name: string;
+	description: string;
+	version: string;
+	author: string;
+	github_url: string;
+	installs: number;
+	installed: boolean;
+	enabled?: boolean;
+};

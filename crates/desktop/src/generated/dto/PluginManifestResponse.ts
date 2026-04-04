@@ -4,4 +4,17 @@ import type { PluginAuthorResponse } from "./PluginAuthorResponse";
 /**
  * Plugin manifest (detailed plugin info)
  */
-export type PluginManifestResponse = { name: string, version?: string, description: string, author: PluginAuthorResponse, homepage?: string, repository?: string, license?: string, keywords?: Array<string>, logo?: string, skills?: string, agents?: string, commands?: string, };
+export type PluginManifestResponse = {
+	name: string;
+	version?: string;
+	description: string;
+	author: PluginAuthorResponse;
+	homepage?: string;
+	repository?: string;
+	license?: string;
+	keywords?: Array<string>;
+	logo?: string;
+	skills?: string;
+	agents?: string;
+	commands?: string;
+};

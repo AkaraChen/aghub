@@ -4,4 +4,4 @@ import type { HookEventResponse } from "./HookEventResponse";
 /**
  * Hooks configuration
  */
-export type HooksManifestResponse = { hooks: Array<HookEventResponse>, };
+export type HooksManifestResponse = { hooks: Array<HookEventResponse> };

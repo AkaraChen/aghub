@@ -3,4 +3,8 @@
 /**
  * Response for a git sync operation.
  */
-export type GitSyncResponse = { success: boolean, name: string | null, error: string | null, };
+export type GitSyncResponse = {
+	success: boolean;
+	name: string | null;
+	error: string | null;
+};

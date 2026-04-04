@@ -3,4 +3,8 @@
 /**
  * Reinstall plugin request/response
  */
-export type ReinstallPluginRequest = { plugin_id: string, scope: string, keep_data: boolean, };
+export type ReinstallPluginRequest = {
+	plugin_id: string;
+	scope: string;
+	keep_data: boolean;
+};

@@ -4,4 +4,4 @@ import type { McpServerResponse } from "./McpServerResponse";
 /**
  * MCP Server configuration
  */
-export type McpConfigResponse = { servers: Array<McpServerResponse>, };
+export type McpConfigResponse = { servers: Array<McpServerResponse> };

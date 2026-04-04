@@ -3,4 +3,8 @@ import type { McpCapabilitiesDto } from "./McpCapabilitiesDto";
 import type { SkillCapabilitiesDto } from "./SkillCapabilitiesDto";
 import type { SubAgentCapabilitiesDto } from "./SubAgentCapabilitiesDto";
 
-export type CapabilitiesDto = { skills: SkillCapabilitiesDto, mcp: McpCapabilitiesDto, sub_agents: SubAgentCapabilitiesDto, };
+export type CapabilitiesDto = {
+	skills: SkillCapabilitiesDto;
+	mcp: McpCapabilitiesDto;
+	sub_agents: SubAgentCapabilitiesDto;
+};

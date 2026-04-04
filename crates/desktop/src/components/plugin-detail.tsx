@@ -1,9 +1,6 @@
 "use client";
 
-import {
-	BoltIcon,
-	FolderOpenIcon,
-} from "@heroicons/react/24/solid";
+import { BoltIcon, FolderOpenIcon } from "@heroicons/react/24/solid";
 import { Button, Card, Chip, Switch, Tooltip } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -54,7 +51,9 @@ export function PluginDetail({
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["plugins"] });
 			queryClient.invalidateQueries({ queryKey: ["skills"] });
-			queryClient.invalidateQueries({ queryKey: ["plugin-detail", plugin.id] });
+			queryClient.invalidateQueries({
+				queryKey: ["plugin-detail", plugin.id],
+			});
 		},
 	});
 
@@ -63,14 +62,18 @@ export function PluginDetail({
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["plugins"] });
 			queryClient.invalidateQueries({ queryKey: ["skills"] });
-			queryClient.invalidateQueries({ queryKey: ["plugin-detail", plugin.id] });
+			queryClient.invalidateQueries({
+				queryKey: ["plugin-detail", plugin.id],
+			});
 		},
 	});
 
 	const isToggling = enableMutation.isPending || disableMutation.isPending;
 
 	const pluginSkills =
-		allSkills?.filter((skill) => skill.plugin_id && skill.plugin_id === currentPlugin?.id) ?? [];
+		allSkills?.filter(
+			(skill) => skill.plugin_id && skill.plugin_id === currentPlugin?.id,
+		) ?? [];
 
 	const hooks = pluginDetail?.hooks;
 	const mcpConfig = pluginDetail?.mcp_config;
@@ -139,9 +142,7 @@ export function PluginDetail({
 								v{plugin.version}
 							</span>
 						</div>
-						<p className="text-xs text-muted mt-1">
-							{plugin.id}
-						</p>
+						<p className="text-xs text-muted mt-1">{plugin.id}</p>
 					</div>
 					<div className="flex shrink-0 items-center justify-end">
 						<Switch
@@ -170,48 +171,110 @@ export function PluginDetail({
 
 			<Card.Content className="flex-1 overflow-y-auto p-0 scrollbar-thin">
 				<div className="flex flex-col gap-6 p-5 sm:p-6">
-						{/* Description */}
-						{currentPlugin.description && (
-							<div className="space-y-3">
-								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
-									{t("description")}
-								</h3>
-								<p className="text-sm text-foreground">
-									{currentPlugin.description}
-								</p>
-							</div>
-						)}
+					{/* Description */}
+					{currentPlugin.description && (
+						<div className="space-y-3">
+							<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+								{t("description")}
+							</h3>
+							<p className="text-sm text-foreground">
+								{currentPlugin.description}
+							</p>
+						</div>
+					)}
 
-
-						{/* Plugin Skills */}
-						{(pluginSkills.length > 0 ||
-							(pluginDetail?.provided_skills?.length ?? 0) >
-								0) && (
-							<div className="space-y-3">
-								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
-									{t("providedSkills")}
-								</h3>
-								<div className="space-y-2">
-									{pluginSkills.length > 0
-										? pluginSkills.map((skill) => {
-												const skillPath = `${currentPlugin.install_path}/skills/${skill.name}`;
+					{/* Plugin Skills */}
+					{(pluginSkills.length > 0 ||
+						(pluginDetail?.provided_skills?.length ?? 0) > 0) && (
+						<div className="space-y-3">
+							<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+								{t("providedSkills")}
+							</h3>
+							<div className="space-y-2">
+								{pluginSkills.length > 0
+									? pluginSkills.map((skill) => {
+											const skillPath = `${currentPlugin.install_path}/skills/${skill.name}`;
+											return (
+												<div
+													key={skill.name}
+													className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2"
+												>
+													<div className="min-w-0 flex-1">
+														<div className="flex items-center gap-2">
+															<p
+																tabIndex={0}
+																className="cursor-default break-all rounded-sm font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none"
+																title={
+																	skillPath
+																}
+															>
+																{skillPath}
+															</p>
+														</div>
+														<p className="mt-0.5 text-[11px] text-muted truncate">
+															{skill.name}{" "}
+															{skill.description &&
+																`- ${skill.description}`}
+														</p>
+													</div>
+													<div className="flex shrink-0 items-center gap-1">
+														<Tooltip delay={0}>
+															<Button
+																isIconOnly
+																variant="ghost"
+																size="sm"
+																className="size-8 text-muted"
+																aria-label={t(
+																	"openFolder",
+																)}
+																onPress={() =>
+																	api.skills
+																		.openFolder(
+																			skillPath,
+																		)
+																		.catch(
+																			console.error,
+																		)
+																}
+															>
+																<FolderOpenIcon className="size-4" />
+															</Button>
+															<Tooltip.Content>
+																{t(
+																	"openFolder",
+																)}
+															</Tooltip.Content>
+														</Tooltip>
+													</div>
+												</div>
+											);
+										})
+									: pluginDetail?.provided_skills?.map(
+											(skillName) => {
+												const skillPath = `${currentPlugin.install_path}/skills/${skillName}`;
 												return (
 													<div
-														key={skill.name}
-														className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2"
+														key={skillName}
+														className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2 opacity-60"
 													>
 														<div className="min-w-0 flex-1">
 															<div className="flex items-center gap-2">
 																<p
 																	tabIndex={0}
 																	className="cursor-default break-all rounded-sm font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none"
-																	title={skillPath}
+																	title={
+																		skillPath
+																	}
 																>
 																	{skillPath}
 																</p>
 															</div>
 															<p className="mt-0.5 text-[11px] text-muted truncate">
-																{skill.name} {skill.description && `- ${skill.description}`}
+																{skillName} -{" "}
+																{t(
+																	"pluginDisabledDescription",
+																) ??
+																	"Enable plugin to load metadata"}
 															</p>
 														</div>
 														<div className="flex shrink-0 items-center gap-1">
@@ -221,195 +284,206 @@ export function PluginDetail({
 																	variant="ghost"
 																	size="sm"
 																	className="size-8 text-muted"
-																	aria-label={t("openFolder")}
-																	onPress={() => api.skills.openFolder(skillPath).catch(console.error)}
+																	aria-label={t(
+																		"openFolder",
+																	)}
+																	onPress={() =>
+																		api.skills
+																			.openFolder(
+																				skillPath,
+																			)
+																			.catch(
+																				console.error,
+																			)
+																	}
 																>
 																	<FolderOpenIcon className="size-4" />
 																</Button>
-																<Tooltip.Content>{t("openFolder")}</Tooltip.Content>
+																<Tooltip.Content>
+																	{t(
+																		"openFolder",
+																	)}
+																</Tooltip.Content>
 															</Tooltip>
 														</div>
 													</div>
 												);
-										  })
-										: pluginDetail?.provided_skills?.map(
-												(skillName) => {
-													const skillPath = `${currentPlugin.install_path}/skills/${skillName}`;
-													return (
-														<div
-															key={skillName}
-															className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2 opacity-60"
-														>
-															<div className="min-w-0 flex-1">
-																<div className="flex items-center gap-2">
-																	<p
-																		tabIndex={0}
-																		className="cursor-default break-all rounded-sm font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none"
-																		title={skillPath}
-																	>
-																		{skillPath}
-																	</p>
-																</div>
-																<p className="mt-0.5 text-[11px] text-muted truncate">
-																	{skillName} - {t("pluginDisabledDescription") ?? "Enable plugin to load metadata"}
-																</p>
-															</div>
-															<div className="flex shrink-0 items-center gap-1">
-																<Tooltip delay={0}>
-																	<Button
-																		isIconOnly
-																		variant="ghost"
-																		size="sm"
-																		className="size-8 text-muted"
-																		aria-label={t("openFolder")}
-																		onPress={() => api.skills.openFolder(skillPath).catch(console.error)}
-																	>
-																		<FolderOpenIcon className="size-4" />
-																	</Button>
-																	<Tooltip.Content>{t("openFolder")}</Tooltip.Content>
-																</Tooltip>
-															</div>
-														</div>
-													);
-												},
-										  )}
-								</div>
+											},
+										)}
 							</div>
-						)}
+						</div>
+					)}
 
-						{/* Installation Info */}
-						<div className="space-y-3">
-							<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
-								{t("installationInfo")}
-							</h3>
-							<div className="space-y-2">
-								<div className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2">
-									<div className="min-w-0 flex-1">
-										<div className="flex items-center gap-2">
-											<p
-												tabIndex={0}
-												className="cursor-default break-all rounded-sm font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none"
-												title={currentPlugin.install_path}
-											>
-												{currentPlugin.install_path}
-											</p>
-										</div>
-										<p className="mt-0.5 text-[11px] text-muted">
-											{t("installPath")} &bull; {t("source")}: {currentPlugin.source}
+					{/* Installation Info */}
+					<div className="space-y-3">
+						<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+							{t("installationInfo")}
+						</h3>
+						<div className="space-y-2">
+							<div className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2">
+								<div className="min-w-0 flex-1">
+									<div className="flex items-center gap-2">
+										<p
+											tabIndex={0}
+											className="cursor-default break-all rounded-sm font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none"
+											title={currentPlugin.install_path}
+										>
+											{currentPlugin.install_path}
 										</p>
 									</div>
-									<div className="flex shrink-0 items-center gap-1">
-										<Tooltip delay={0}>
-											<Button
-												isIconOnly
-												variant="ghost"
-												size="sm"
-												className="size-8 text-muted"
-												onPress={handleOpenInstallPath}
-												aria-label={t("openInstallFolder")}
-											>
-												<FolderOpenIcon className="size-4" />
-											</Button>
-											<Tooltip.Content>
-												{t("openInstallFolder")}
-											</Tooltip.Content>
-										</Tooltip>
-									</div>
+									<p className="mt-0.5 text-[11px] text-muted">
+										{t("installPath")} &bull; {t("source")}:{" "}
+										{currentPlugin.source}
+									</p>
+								</div>
+								<div className="flex shrink-0 items-center gap-1">
+									<Tooltip delay={0}>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="sm"
+											className="size-8 text-muted"
+											onPress={handleOpenInstallPath}
+											aria-label={t("openInstallFolder")}
+										>
+											<FolderOpenIcon className="size-4" />
+										</Button>
+										<Tooltip.Content>
+											{t("openInstallFolder")}
+										</Tooltip.Content>
+									</Tooltip>
 								</div>
 							</div>
 						</div>
+					</div>
 
-						{/* Hooks Configuration */}
-						{hooks && hooks.hooks.length > 0 && (
-							<div className="space-y-3">
-								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
-									Hooks
-								</h3>
-								<div className="space-y-2">
-									{hooks.hooks.map((event) => (
+					{/* Hooks Configuration */}
+					{hooks && hooks.hooks.length > 0 && (
+						<div className="space-y-3">
+							<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+								Hooks
+							</h3>
+							<div className="space-y-2">
+								{hooks.hooks.map((event) => (
+									<div
+										key={event.event}
+										className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2"
+									>
+										<div className="min-w-0 flex-1">
+											<div className="flex items-center gap-2">
+												<p
+													tabIndex={0}
+													className="cursor-default break-all rounded-sm font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none flex items-center gap-1.5"
+												>
+													<BoltIcon className="size-3.5 text-warning" />
+													{event.event}
+												</p>
+											</div>
+											<div className="mt-0.5 text-[11px] text-muted truncate">
+												{event.matchers.map(
+													(matcher, idx) => (
+														<span
+															key={`${event.event}-${matcher.matcher ?? "all"}-${idx}`}
+														>
+															{matcher.matcher
+																? `Matcher: ${matcher.matcher}`
+																: "All events"}{" "}
+															(
+															{
+																matcher.hooks
+																	.length
+															}{" "}
+															hook(s))
+															{idx <
+															event.matchers
+																.length -
+																1
+																? ", "
+																: ""}
+														</span>
+													),
+												)}
+											</div>
+										</div>
+									</div>
+								))}
+							</div>
+						</div>
+					)}
+
+					{/* MCP Servers */}
+					{mcpConfig && mcpConfig.servers.length > 0 && (
+						<div className="space-y-3">
+							<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+								MCP Servers
+							</h3>
+							<div className="space-y-2">
+								{mcpConfig.servers.map((server) => {
+									const serverPath =
+										currentPlugin.install_path;
+									return (
 										<div
-											key={event.event}
+											key={server.name}
 											className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2"
 										>
 											<div className="min-w-0 flex-1">
 												<div className="flex items-center gap-2">
 													<p
 														tabIndex={0}
-														className="cursor-default break-all rounded-sm font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none flex items-center gap-1.5"
+														className="cursor-default break-all rounded-sm font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none"
+														title={serverPath}
 													>
-														<BoltIcon className="size-3.5 text-warning" />
-														{event.event}
+														{serverPath}
 													</p>
 												</div>
-												<div className="mt-0.5 text-[11px] text-muted truncate">
-													{event.matchers.map((matcher, idx) => (
-														<span key={`${event.event}-${matcher.matcher ?? "all"}-${idx}`}>
-															{matcher.matcher ? `Matcher: ${matcher.matcher}` : "All events"} ({matcher.hooks.length} hook(s))
-															{idx < event.matchers.length - 1 ? ", " : ""}
-														</span>
-													))}
+												<div className="mt-0.5 flex items-center gap-2">
+													<p className="text-[11px] text-muted truncate">
+														{server.name}{" "}
+														{server.note &&
+															`- ${server.note}`}
+													</p>
+													<Chip
+														size="sm"
+														variant="soft"
+														className="h-[14px] px-1 text-[9px]"
+													>
+														{server.transport_type}
+													</Chip>
 												</div>
+											</div>
+											<div className="flex shrink-0 items-center gap-1">
+												<Tooltip delay={0}>
+													<Button
+														isIconOnly
+														variant="ghost"
+														size="sm"
+														className="size-8 text-muted"
+														onPress={() =>
+															api.skills
+																.openFolder(
+																	serverPath,
+																)
+																.catch(
+																	console.error,
+																)
+														}
+														aria-label={t(
+															"openFolder",
+														)}
+													>
+														<FolderOpenIcon className="size-4" />
+													</Button>
+													<Tooltip.Content>
+														{t("openFolder")}
+													</Tooltip.Content>
+												</Tooltip>
 											</div>
 										</div>
-									))}
-								</div>
+									);
+								})}
 							</div>
-						)}
-
-						{/* MCP Servers */}
-						{mcpConfig && mcpConfig.servers.length > 0 && (
-							<div className="space-y-3">
-								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
-									MCP Servers
-								</h3>
-								<div className="space-y-2">
-									{mcpConfig.servers.map((server) => {
-										const serverPath = currentPlugin.install_path;
-										return (
-											<div
-												key={server.name}
-												className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2"
-											>
-												<div className="min-w-0 flex-1">
-													<div className="flex items-center gap-2">
-														<p
-															tabIndex={0}
-															className="cursor-default break-all rounded-sm font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none"
-															title={serverPath}
-														>
-															{serverPath}
-														</p>
-													</div>
-													<div className="mt-0.5 flex items-center gap-2">
-														<p className="text-[11px] text-muted truncate">
-															{server.name} {server.note && `- ${server.note}`}
-														</p>
-														<Chip size="sm" variant="soft" className="h-[14px] px-1 text-[9px]">
-															{server.transport_type}
-														</Chip>
-													</div>
-												</div>
-												<div className="flex shrink-0 items-center gap-1">
-													<Tooltip delay={0}>
-														<Button
-															isIconOnly
-															variant="ghost"
-															size="sm"
-															className="size-8 text-muted"
-															onPress={() => api.skills.openFolder(serverPath).catch(console.error)}
-															aria-label={t("openFolder")}
-														>
-															<FolderOpenIcon className="size-4" />
-														</Button>
-														<Tooltip.Content>{t("openFolder")}</Tooltip.Content>
-													</Tooltip>
-												</div>
-											</div>
-										);
-									})}
-								</div>
-							</div>
-						)}
+						</div>
+					)}
 				</div>
 			</Card.Content>
 		</Card>

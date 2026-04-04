@@ -855,7 +855,10 @@ pub async fn list_plugin_market() -> ApiResult<Vec<MarketPluginResponse>> {
 		})?;
 
 	if !response.status().is_success() {
-		eprintln!("Marketplace API returned non-success status: {}", response.status());
+		eprintln!(
+			"Marketplace API returned non-success status: {}",
+			response.status()
+		);
 		return Ok(Json(vec![]));
 	}
 

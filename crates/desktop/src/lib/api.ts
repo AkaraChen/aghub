@@ -45,10 +45,10 @@ import type {
 	UninstallPluginRequest,
 	UninstallPluginResponse,
 	UpdateMcpRequest,
-        UpdateSubAgentRequest,
-        UpdatePluginConfigRequest,
-        UpdatePluginRequest,
-        UpdatePluginResponse,
+	UpdatePluginConfigRequest,
+	UpdatePluginRequest,
+	UpdatePluginResponse,
+	UpdateSubAgentRequest,
 } from "../generated/dto";
 
 interface ApiErrorBody {

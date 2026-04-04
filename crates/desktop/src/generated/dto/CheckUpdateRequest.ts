@@ -3,4 +3,4 @@
 /**
  * Check for updates request/response
  */
-export type CheckUpdateRequest = { plugin_id: string, };
+export type CheckUpdateRequest = { plugin_id: string };

@@ -124,7 +124,10 @@ export function PluginList({
 		return (
 			<div className="px-3 py-6 text-center">
 				<p className="text-sm text-muted">
-					{emptyMessage ?? (searchQuery ? t("noPluginsMatch") : t("noPluginsInstalled"))}
+					{emptyMessage ??
+						(searchQuery
+							? t("noPluginsMatch")
+							: t("noPluginsInstalled"))}
 				</p>
 				{searchQuery && (
 					<p className="mt-1 text-xs text-muted">
