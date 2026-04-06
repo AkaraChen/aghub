@@ -742,6 +742,25 @@ pub fn delete_plugin_config(
 	}))
 }
 
+/// Update marketplace (pull latest from git)
+#[post("/plugins-market/update")]
+pub async fn update_marketplace() -> ApiResult<serde_json::Value> {
+	use aghub_plugins::installer::registry::MarketplaceRegistry;
+
+	let registry = MarketplaceRegistry::new_official().map_err(|e| {
+		ApiError::internal(format!("Failed to create marketplace registry: {e}"))
+	})?;
+
+	registry.update().await.map_err(|e| {
+		ApiError::internal(format!("Failed to update marketplace: {e}"))
+	})?;
+
+	Ok(Json(serde_json::json!({
+		"success": true,
+		"message": "Marketplace updated successfully"
+	})))
+}
+
 /// List available plugins from all marketplaces
 #[get("/plugins-market")]
 pub async fn list_plugin_market() -> ApiResult<Vec<MarketPluginResponse>> {

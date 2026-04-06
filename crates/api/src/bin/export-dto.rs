@@ -24,8 +24,8 @@ use aghub_api::dto::{
 		InstallPluginRequest, InstallPluginResponse, MarketPluginResponse,
 		McpConfigResponse, McpServerResponse, PluginAuthorResponse,
 		PluginConfigResponse, PluginDetailResponse, PluginListResponse,
-		PluginManifestResponse, PluginResponse, ReinstallPluginRequest,
-		ReinstallPluginResponse, UninstallPluginRequest,
+		PluginManifestResponse, PluginResponse, PluginScopeResponse,
+		ReinstallPluginRequest, ReinstallPluginResponse, UninstallPluginRequest,
 		UninstallPluginResponse, UpdatePluginConfigRequest,
 		UpdatePluginRequest, UpdatePluginResponse,
 	},
@@ -173,8 +173,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<UpdateSubAgentRequest>(&cfg)?;
 	export_type::<SubAgentResponse>(&cfg)?;
 	export_type::<PluginResponse>(&cfg)?;
+	export_type::<PluginScopeResponse>(&cfg)?;
 	export_type::<PluginListResponse>(&cfg)?;
 	export_type::<PluginDetailResponse>(&cfg)?;
+	export_type::<PluginScopeResponse>(&cfg)?;
 	export_type::<PluginManifestResponse>(&cfg)?;
 	export_type::<PluginAuthorResponse>(&cfg)?;
 	export_type::<HooksManifestResponse>(&cfg)?;

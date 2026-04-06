@@ -540,6 +540,17 @@ export default {
 		valuePlaceholder: "Header Value",
 	},
 
+	// Plugin Market
+	pluginMarket: "Plugin Market",
+	searchPlugins: "Search plugins...",
+	noPluginsAvailable: "No plugins available",
+	noPluginsFound: "No plugins found",
+	discoverPlugins: "Discover {{count}} plugins",
+	showingPluginsCount: "Showing {{filtered}} of {{total}} plugins",
+	updateMarketplace: "Update Marketplace",
+	marketplaceUpdated: "Marketplace updated",
+	marketplaceUpdateFailed: "Failed to update marketplace",
+
 	// Team
 	team: "Team",
 	headDev: "Head Dev",

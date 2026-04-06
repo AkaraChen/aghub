@@ -161,12 +161,14 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 				routes::plugins::disable_plugin,
 				routes::plugins::install_plugin,
 				routes::plugins::uninstall_plugin,
+				routes::plugins::reinstall_plugin,
 				routes::plugins::update_plugin,
 				routes::plugins::check_plugin_update,
 				routes::plugins::get_plugin_config,
 				routes::plugins::update_plugin_config,
 				routes::plugins::delete_plugin_config,
 				routes::plugins::list_plugin_market,
+				routes::plugins::update_marketplace,
 			],
 		)
 		.register(

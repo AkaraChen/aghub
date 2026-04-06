@@ -3,6 +3,8 @@ import ky from "ky";
 import type {
 	AgentAvailabilityDto,
 	AgentInfo,
+	CheckUpdateRequest,
+	CheckUpdateResponse,
 	CodeEditorType,
 	CreateCredentialRequest,
 	CreateMcpRequest,
@@ -19,19 +21,33 @@ import type {
 	GitSyncResponse,
 	GlobalSkillLockResponse,
 	ImportSkillRequest,
+	InstallPluginRequest,
+	InstallPluginResponse,
 	InstallSkillRequest,
 	InstallSkillResponse,
+	MarketPluginResponse,
 	MarketSkill,
 	McpResponse,
 	OperationBatchResponse,
+	PluginConfigResponse,
+	PluginDetailResponse,
+	PluginListResponse,
+	PluginResponse,
 	ProjectSkillLockResponse,
 	ReconcileRequest,
+	ReinstallPluginRequest,
+	ReinstallPluginResponse,
 	SkillResponse,
 	SkillTreeNodeResponse,
 	SubAgentResponse,
 	ToolInfoDto,
 	TransferRequest,
+	UninstallPluginRequest,
+	UninstallPluginResponse,
 	UpdateMcpRequest,
+	UpdatePluginConfigRequest,
+	UpdatePluginRequest,
+	UpdatePluginResponse,
 	UpdateSubAgentRequest,
 } from "../generated/dto";
 
@@ -440,6 +456,72 @@ export function createApi(baseUrl: string) {
 			},
 			delete(id: string): Promise<void> {
 				return client.delete(`credentials/${id}`).then(() => undefined);
+			},
+		},
+		plugins: {
+			list(): Promise<PluginListResponse> {
+				return client.get("plugins").json();
+			},
+			detail(pluginId: string): Promise<PluginDetailResponse> {
+				return client.get(`plugins/${pluginId}`).json();
+			},
+			enable(pluginId: string): Promise<PluginResponse> {
+				return client.post(`plugins/${pluginId}/enable`).json();
+			},
+			disable(pluginId: string): Promise<PluginResponse> {
+				return client.post(`plugins/${pluginId}/disable`).json();
+			},
+			install(
+				body: InstallPluginRequest,
+			): Promise<InstallPluginResponse> {
+				return client
+					.post("plugins/install", { json: body, timeout: 180000 })
+					.json();
+			},
+			uninstall(
+				body: UninstallPluginRequest,
+			): Promise<UninstallPluginResponse> {
+				return client
+					.post("plugins/uninstall", { json: body, timeout: 60000 })
+					.json();
+			},
+			update(body: UpdatePluginRequest): Promise<UpdatePluginResponse> {
+				return client
+					.post("plugins/update", { json: body, timeout: 180000 })
+					.json();
+			},
+			checkUpdate(
+				body: CheckUpdateRequest,
+			): Promise<CheckUpdateResponse> {
+				return client
+					.post("plugins/check-update", { json: body })
+					.json();
+			},
+			reinstall(
+				body: ReinstallPluginRequest,
+			): Promise<ReinstallPluginResponse> {
+				return client
+					.post("plugins/reinstall", { json: body, timeout: 180000 })
+					.json();
+			},
+			getConfig(pluginId: string): Promise<PluginConfigResponse> {
+				return client.get(`plugins/${pluginId}/config`).json();
+			},
+			updateConfig(
+				body: UpdatePluginConfigRequest,
+			): Promise<PluginConfigResponse> {
+				return client
+					.post(`plugins/${body.plugin_id}/config`, { json: body })
+					.json();
+			},
+			deleteConfig(pluginId: string): Promise<PluginConfigResponse> {
+				return client.delete(`plugins/${pluginId}/config`).json();
+			},
+			listMarket(): Promise<MarketPluginResponse[]> {
+				return client.get("plugins-market").json();
+			},
+			updateMarketplace(): Promise<{ success: boolean; message: string }> {
+				return client.post("plugins-market/update").json();
 			},
 		},
 	};

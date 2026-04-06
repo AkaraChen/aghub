@@ -12,4 +12,6 @@ export type SkillResponse = {
 	tools: Array<string>;
 	source: ConfigSource | null;
 	agent: string | null;
+	plugin_id: string | null;
+	plugin_name: string | null;
 };

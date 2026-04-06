@@ -15,5 +15,8 @@ dirs = { workspace = true }
 which = "7"
 aghub-markdown = { path = "../markdown" }
 
+[features]
+claude-plugins = []
+
 [dev-dependencies]
 tempfile = { workspace = true }
