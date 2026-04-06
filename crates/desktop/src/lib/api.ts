@@ -520,7 +520,10 @@ export function createApi(baseUrl: string) {
 			listMarket(): Promise<MarketPluginResponse[]> {
 				return client.get("plugins-market").json();
 			},
-			updateMarketplace(): Promise<{ success: boolean; message: string }> {
+			updateMarketplace(): Promise<{
+				success: boolean;
+				message: string;
+			}> {
 				return client.post("plugins-market/update").json();
 			},
 		},

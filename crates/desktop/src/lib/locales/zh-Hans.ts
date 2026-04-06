@@ -584,8 +584,25 @@ export default {
 	marketplaceNotFound: "市场未找到。请先克隆市场。",
 	pluginManifestNotFound: "插件清单未找到: {{name}}",
 	failedToLoadRegistry: "初始化插件注册表失败: {{error}}",
-	failedToCreateDiscovery: "创建插件发现失败: {{error}}",
+	failedToCreateDiscovery: "创建发现实例失败: {{error}}",
 	retry: "重试",
+
+	pluginCategories: {
+		automation: "自动化",
+		database: "数据库",
+		deployment: "部署",
+		design: "设计",
+		development: "开发",
+		learning: "学习",
+		location: "位置",
+		math: "数学",
+		migration: "迁移",
+		monitoring: "监控",
+		productivity: "生产力",
+		search: "搜索",
+		utility: "实用工具",
+		writing: "写作",
+	},
 
 	// Menu
 	menu: {

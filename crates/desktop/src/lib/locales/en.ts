@@ -558,6 +558,11 @@ export default {
 	pluginInstalled: "Plugin '{{id}}' installed successfully",
 	noPluginsFound: "No plugins found",
 	noPluginsAvailable: "No plugins available from marketplace",
+	searchPlugins: "Search plugins...",
+	showingPluginsCount: "Showing {{filtered}} of {{total}} plugins",
+	updateMarketplace: "Update Marketplace",
+	marketplaceUpdated: "Marketplace updated",
+	marketplaceUpdateFailed: "Failed to update marketplace",
 	refreshing: "Refreshing...",
 	browseMarketplace: "Browse Marketplace",
 	discoverPlugins: "Discover {{count}} plugins",
@@ -588,29 +593,22 @@ export default {
 	failedToCreateDiscovery: "Failed to create plugin discovery: {{error}}",
 	retry: "Retry",
 
-	// Key Pair Editor
-	keyPairEditor: {
-		keyPlaceholder: "Key",
-		valuePlaceholder: "Value",
-		addPair: "Add Pair",
+	pluginCategories: {
+		automation: "Automation",
+		database: "Database",
+		deployment: "Deployment",
+		design: "Design",
+		development: "Development",
+		learning: "Learning",
+		location: "Location",
+		math: "Math",
+		migration: "Migration",
+		monitoring: "Monitoring",
+		productivity: "Productivity",
+		search: "Search",
+		utility: "Utility",
+		writing: "Writing",
 	},
-
-	// HTTP Header Editor
-	httpHeaderEditor: {
-		keyPlaceholder: "Header Name",
-		valuePlaceholder: "Header Value",
-	},
-
-	// Plugin Market
-	pluginMarket: "Plugin Market",
-	searchPlugins: "Search plugins...",
-	noPluginsAvailable: "No plugins available",
-	noPluginsFound: "No plugins found",
-	discoverPlugins: "Discover {{count}} plugins",
-	showingPluginsCount: "Showing {{filtered}} of {{total}} plugins",
-	updateMarketplace: "Update Marketplace",
-	marketplaceUpdated: "Marketplace updated",
-	marketplaceUpdateFailed: "Failed to update marketplace",
 
 	// Team
 	team: "Team",

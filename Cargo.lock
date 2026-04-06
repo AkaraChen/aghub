@@ -46,6 +46,7 @@ name = "aghub-agents"
 version = "0.1.2"
 dependencies = [
  "aghub-markdown",
+ "aghub-plugins",
  "dirs 5.0.1",
  "serde",
  "serde_json",
@@ -86,7 +87,9 @@ dependencies = [
 name = "aghub-cli"
 version = "0.1.2"
 dependencies = [
+ "aghub-agents",
  "aghub-core",
+ "aghub-plugins",
  "anyhow",
  "assert_cmd",
  "clap",

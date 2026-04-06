@@ -575,8 +575,25 @@ export default {
 	marketplaceNotFound: "市場未找到。請先複製市場。",
 	pluginManifestNotFound: "插件清單未找到: {{name}}",
 	failedToLoadRegistry: "初始化插件註冊表失敗: {{error}}",
-	failedToCreateDiscovery: "創建插件發現失敗: {{error}}",
+	failedToCreateDiscovery: "創建發現實例失敗: {{error}}",
 	retry: "重試",
+
+	pluginCategories: {
+		automation: "自動化",
+		database: "資料庫",
+		deployment: "部署",
+		design: "設計",
+		development: "開發",
+		learning: "學習",
+		location: "位置",
+		math: "數學",
+		migration: "遷移",
+		monitoring: "監控",
+		productivity: "生產力",
+		search: "搜尋",
+		utility: "實用工具",
+		writing: "寫作",
+	},
 
 	// Menu
 	menu: {

@@ -353,82 +353,95 @@ export function PluginDetail({
 							</p>
 						</div>
 						<div className="flex items-center gap-1">
-							{/* Check update */}
-							<Tooltip delay={0}>
-								<Button
-									isIconOnly
-									variant="ghost"
-									size="sm"
-									className="size-8 text-muted"
-									onPress={() =>
-										checkUpdateMutation.mutate(
-											currentPlugin.id,
-										)
-									}
-									isDisabled={checkUpdateMutation.isPending}
-									aria-label={t("checkForUpdates")}
-								>
-									<ArrowPathIcon
-										className={`size-4 ${checkUpdateMutation.isPending ? "animate-spin" : ""}`}
-									/>
-								</Button>
-								<Tooltip.Content>
-									{t("checkForUpdates")}
-								</Tooltip.Content>
-							</Tooltip>
-							{/* Update button (shown when update available) */}
-							{updateAvailable && (
-								<Tooltip delay={0}>
-									<Button
-										isIconOnly
-										variant="ghost"
-										size="sm"
-										className="size-8 text-success"
-										onPress={() =>
-											updateMutation.mutate(
-												currentPlugin.id,
-											)
-										}
-										isDisabled={updateMutation.isPending}
-										aria-label={t("updatePlugin")}
-									>
-										<ArrowDownTrayIcon
-											className={`size-4 ${updateMutation.isPending ? "animate-bounce" : ""}`}
-										/>
-									</Button>
-									<Tooltip.Content>
-										{latestVersion
-											? t("updateToVersion", {
-													version: latestVersion,
+							{(currentPlugin.source ===
+								"claude-plugins-official" ||
+								currentPlugin.source.startsWith("http")) && (
+								<>
+									{/* Check update */}
+									<Tooltip delay={0}>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="sm"
+											className="size-8 text-muted"
+											onPress={() =>
+												checkUpdateMutation.mutate(
+													currentPlugin.id,
+												)
+											}
+											isDisabled={
+												checkUpdateMutation.isPending
+											}
+											aria-label={t("checkForUpdates")}
+										>
+											<ArrowPathIcon
+												className={`size-4 ${checkUpdateMutation.isPending ? "animate-spin" : ""}`}
+											/>
+										</Button>
+										<Tooltip.Content>
+											{t("checkForUpdates")}
+										</Tooltip.Content>
+									</Tooltip>
+									{/* Update button (shown when update available) */}
+									{updateAvailable && (
+										<Tooltip delay={0}>
+											<Button
+												isIconOnly
+												variant="ghost"
+												size="sm"
+												className="size-8 text-success"
+												onPress={() =>
+													updateMutation.mutate(
+														currentPlugin.id,
+													)
+												}
+												isDisabled={
+													updateMutation.isPending
+												}
+												aria-label={t("updatePlugin")}
+											>
+												<ArrowDownTrayIcon
+													className={`size-4 ${updateMutation.isPending ? "animate-bounce" : ""}`}
+												/>
+											</Button>
+											<Tooltip.Content>
+												{latestVersion
+													? t("updateToVersion", {
+															version:
+																latestVersion,
+														})
+													: t("updatePlugin")}
+											</Tooltip.Content>
+										</Tooltip>
+									)}
+									{/* Reinstall */}
+									<Tooltip delay={0}>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="sm"
+											className="size-8 text-muted"
+											onPress={() =>
+												dispatch({
+													type: "set_reinstall_dialog",
+													value: true,
 												})
-											: t("updatePlugin")}
-									</Tooltip.Content>
-								</Tooltip>
+											}
+											isDisabled={
+												reinstallMutation.isPending
+											}
+											aria-label={t("reinstall")}
+										>
+											<WrenchIcon
+												className={`size-4 ${reinstallMutation.isPending ? "animate-spin" : ""}`}
+											/>
+										</Button>
+										<Tooltip.Content>
+											{t("reinstall")}
+										</Tooltip.Content>
+									</Tooltip>
+								</>
 							)}
-							{/* Reinstall */}
-							<Tooltip delay={0}>
-								<Button
-									isIconOnly
-									variant="ghost"
-									size="sm"
-									className="size-8 text-muted"
-									onPress={() =>
-										dispatch({
-											type: "set_reinstall_dialog",
-											value: true,
-										})
-									}
-									isDisabled={reinstallMutation.isPending}
-									aria-label={t("reinstall")}
-								>
-									<WrenchIcon
-										className={`size-4 ${reinstallMutation.isPending ? "animate-spin" : ""}`}
-									/>
-								</Button>
-								<Tooltip.Content>
-									{t("reinstall")}
-								</Tooltip.Content>
-							</Tooltip>
 							{/* Uninstall */}
 							<Tooltip delay={0}>
 								<Button

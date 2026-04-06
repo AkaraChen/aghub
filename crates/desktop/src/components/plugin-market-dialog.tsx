@@ -7,13 +7,7 @@ import {
 	StarIcon,
 	MagnifyingGlassIcon,
 } from "@heroicons/react/24/solid";
-import {
-	Button,
-	SearchField,
-	Modal,
-	Spinner,
-	toast,
-} from "@heroui/react";
+import { Button, SearchField, Modal, Spinner, toast } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -107,7 +101,9 @@ export function PluginMarketDialog({
 		onError: (err) => {
 			const message =
 				err instanceof Error ? err.message : t("unknownError");
-			toast.danger(t("marketplaceUpdateFailed"), { description: message });
+			toast.danger(t("marketplaceUpdateFailed"), {
+				description: message,
+			});
 		},
 	});
 	// Get unique categories
@@ -160,14 +156,14 @@ export function PluginMarketDialog({
 						<Modal.Heading>{t("pluginMarket")}</Modal.Heading>
 					</Modal.Header>
 
-					<Modal.Body className="flex min-h-0 flex-col space-y-4 p-4">
+					<Modal.Body className="flex min-h-0 flex-col space-y-4 p-4 overflow-hidden">
 						{/* Search and filter bar */}
 						<div className="flex shrink-0 gap-2">
 							<SearchField
+								className="flex-1"
 								value={searchQuery}
 								onChange={setSearchQuery}
 								aria-label={t("searchPlugins")}
-								className="flex-1"
 							>
 								<SearchField.Group>
 									<SearchField.SearchIcon />
@@ -194,14 +190,17 @@ export function PluginMarketDialog({
 							<Button
 								isIconOnly
 								variant="ghost"
-								onPress={() => updateMarketplaceMutation.mutate()}
+								onPress={() =>
+									updateMarketplaceMutation.mutate()
+								}
 								isPending={updateMarketplaceMutation.isPending}
 								aria-label={t("updateMarketplace")}
 							>
 								<ArrowPathIcon
 									className={cn(
 										"size-4",
-										updateMarketplaceMutation.isPending && "animate-spin",
+										updateMarketplaceMutation.isPending &&
+											"animate-spin",
 									)}
 								/>
 							</Button>
@@ -214,7 +213,7 @@ export function PluginMarketDialog({
 									type="button"
 									onClick={() => setSelectedCategory(null)}
 									className={cn(
-										"px-2.5 py-1 text-[11px] uppercase tracking-wider font-medium rounded-full transition-colors cursor-pointer",
+										"px-2.5 py-1 text-[11px] tracking-wider font-medium rounded-full transition-colors cursor-pointer",
 										selectedCategory === null
 											? "bg-success text-success-foreground"
 											: "bg-surface-secondary hover:bg-surface-tertiary text-muted hover:text-foreground",
@@ -228,13 +227,22 @@ export function PluginMarketDialog({
 										type="button"
 										onClick={() => setSelectedCategory(cat)}
 										className={cn(
-											"px-2.5 py-1 text-[11px] uppercase tracking-wider font-medium rounded-full transition-colors cursor-pointer",
+											"px-2.5 py-1 text-[11px] tracking-wider font-medium rounded-full transition-colors cursor-pointer",
 											selectedCategory === cat
 												? "bg-success text-success-foreground"
 												: "bg-surface-secondary hover:bg-surface-tertiary text-muted hover:text-foreground",
 										)}
 									>
-										{cat}
+										{t(
+											`pluginCategories.${cat.toLowerCase()}`,
+											{
+												defaultValue:
+													cat
+														.charAt(0)
+														.toUpperCase() +
+													cat.slice(1).toLowerCase(),
+											},
+										)}
 									</button>
 								))}
 							</div>
