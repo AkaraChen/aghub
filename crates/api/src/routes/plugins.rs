@@ -748,7 +748,9 @@ pub async fn update_marketplace() -> ApiResult<serde_json::Value> {
 	use aghub_plugins::installer::registry::MarketplaceRegistry;
 
 	let registry = MarketplaceRegistry::new_official().map_err(|e| {
-		ApiError::internal(format!("Failed to create marketplace registry: {e}"))
+		ApiError::internal(format!(
+			"Failed to create marketplace registry: {e}"
+		))
 	})?;
 
 	registry.update().await.map_err(|e| {
@@ -800,6 +802,9 @@ pub async fn list_plugin_market() -> ApiResult<Vec<MarketPluginResponse>> {
 			installed: p.installed,
 			enabled: p.enabled,
 			category: p.category.clone(),
+			has_mcp: p.has_mcp,
+			has_skills: p.has_skills,
+			has_hooks: p.has_hooks,
 		})
 		.collect();
 

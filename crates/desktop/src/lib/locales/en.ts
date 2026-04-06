@@ -558,8 +558,6 @@ export default {
 	pluginInstalled: "Plugin '{{id}}' installed successfully",
 	noPluginsFound: "No plugins found",
 	noPluginsAvailable: "No plugins available from marketplace",
-	searchPlugins: "Search plugins...",
-	showingPluginsCount: "Showing {{filtered}} of {{total}} plugins",
 	updateMarketplace: "Update Marketplace",
 	marketplaceUpdated: "Marketplace updated",
 	marketplaceUpdateFailed: "Failed to update marketplace",
@@ -647,5 +645,4 @@ export default {
 		toggleFullscreen: "Toggle Fullscreen",
 		close: "Close",
 	},
-	showingPluginsCount: "Showing {{filtered}} / {{total}} plugins",
 };

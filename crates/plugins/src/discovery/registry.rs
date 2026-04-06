@@ -162,6 +162,9 @@ impl UnifiedPluginRegistry {
 					repository: None, // Will be derived from source
 					keywords: Vec::new(),
 					git_sha,
+					has_mcp: false,
+					has_skills: false,
+					has_hooks: false,
 				};
 
 				// Check if local plugin exists
@@ -173,7 +176,15 @@ impl UnifiedPluginRegistry {
 				) {
 					if local_path.exists() {
 						let mut info = plugin_info;
-						info.local_path = Some(local_path);
+						info.local_path = Some(local_path.clone());
+
+						// Try to extract capabilities from local clone
+						let (has_mcp, has_skills, has_hooks) =
+							Self::extract_capabilities(&local_path);
+						info.has_mcp = has_mcp;
+						info.has_skills = has_skills;
+						info.has_hooks = has_hooks;
+
 						self.plugins.insert(plugin_id, info);
 					} else {
 						self.plugins.insert(plugin_id, plugin_info);
@@ -203,6 +214,38 @@ impl UnifiedPluginRegistry {
 		}
 	}
 
+	/// Try to extract capabilities from plugin.json if it exists
+	fn extract_capabilities(
+		plugin_dir: &std::path::Path,
+	) -> (bool, bool, bool) {
+		let possible_paths = [
+			plugin_dir.join(".claude-plugin/plugin.json"),
+			plugin_dir.join(".plugin/plugin.json"),
+			plugin_dir.join("plugin.json"),
+		];
+
+		for path in &possible_paths {
+			if path.exists() {
+				if let Ok(content) = std::fs::read_to_string(path) {
+					if let Ok(json) =
+						serde_json::from_str::<serde_json::Value>(&content)
+					{
+						let has_mcp = json.get("mcpServers").is_some()
+							|| json.get("mcp_servers").is_some();
+						let has_skills = json.get("skills").is_some()
+							&& !json["skills"].is_null();
+						let has_hooks = json.get("hooks").is_some()
+							|| plugin_dir.join("hooks").exists()
+							|| plugin_dir.join("hooks.json").exists();
+						return (has_mcp, has_skills, has_hooks);
+					}
+				}
+			}
+		}
+
+		(false, false, false)
+	}
+
 	/// Scan locally installed plugins
 	async fn scan_local_installs(&mut self) -> Result<()> {
 		// Use ClaudePluginManager to get installed plugins
@@ -228,6 +271,11 @@ impl UnifiedPluginRegistry {
 						existing.installed = true;
 						existing.enabled = Some(plugin.enabled);
 						existing.local_path = Some(plugin.install_path.clone());
+						existing.has_mcp = existing.has_mcp || plugin.has_mcp();
+						existing.has_skills =
+							existing.has_skills || plugin.has_skills();
+						existing.has_hooks =
+							existing.has_hooks || plugin.has_hooks();
 						// Use version from manifest if available
 						if existing.version.is_none()
 							&& !plugin.version.is_empty()
@@ -269,6 +317,9 @@ impl UnifiedPluginRegistry {
 							} else {
 								Some(plugin.commit_hash.clone())
 							},
+							has_mcp: plugin.has_mcp(),
+							has_skills: plugin.has_skills(),
+							has_hooks: plugin.has_hooks(),
 						};
 
 						self.plugins.insert(plugin_id, plugin_info);

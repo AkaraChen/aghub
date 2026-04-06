@@ -152,6 +152,12 @@ pub struct PluginInfo {
 	pub keywords: Vec<String>,
 	/// Git commit SHA if available
 	pub git_sha: Option<String>,
+	/// Does the plugin provide MCP servers?
+	pub has_mcp: bool,
+	/// Does the plugin provide skills?
+	pub has_skills: bool,
+	/// Does the plugin provide hooks?
+	pub has_hooks: bool,
 }
 
 impl PluginInfo {

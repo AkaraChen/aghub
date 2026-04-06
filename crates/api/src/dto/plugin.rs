@@ -280,4 +280,7 @@ pub struct MarketPluginResponse {
 	pub enabled: Option<bool>,
 	#[ts(optional)]
 	pub category: Option<String>,
+	pub has_mcp: bool,
+	pub has_skills: bool,
+	pub has_hooks: bool,
 }

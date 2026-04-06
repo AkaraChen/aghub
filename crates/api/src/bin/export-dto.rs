@@ -25,9 +25,9 @@ use aghub_api::dto::{
 		McpConfigResponse, McpServerResponse, PluginAuthorResponse,
 		PluginConfigResponse, PluginDetailResponse, PluginListResponse,
 		PluginManifestResponse, PluginResponse, PluginScopeResponse,
-		ReinstallPluginRequest, ReinstallPluginResponse, UninstallPluginRequest,
-		UninstallPluginResponse, UpdatePluginConfigRequest,
-		UpdatePluginRequest, UpdatePluginResponse,
+		ReinstallPluginRequest, ReinstallPluginResponse,
+		UninstallPluginRequest, UninstallPluginResponse,
+		UpdatePluginConfigRequest, UpdatePluginRequest, UpdatePluginResponse,
 	},
 	skill::{
 		CreateSkillRequest, DeleteSkillByPathRequest,

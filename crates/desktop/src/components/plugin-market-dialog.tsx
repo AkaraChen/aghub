@@ -301,13 +301,29 @@ export function PluginMarketDialog({
 															<span className="truncate font-medium text-foreground">
 																{plugin.name}
 															</span>
-															{plugin.category && (
-																<span className="rounded-sm bg-surface-secondary px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted">
-																	{
-																		plugin.category
-																	}
-																</span>
-															)}
+															<div className="flex items-center gap-1.5">
+																{plugin.category && (
+																	<span className="rounded-sm bg-surface-secondary px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted">
+																		{t(
+																			`pluginCategories.${plugin.category.toLowerCase()}`,
+																			{
+																				defaultValue:
+																					plugin.category,
+																			},
+																		)}
+																	</span>
+																)}
+																{plugin.has_mcp && (
+																	<span className="rounded-sm bg-blue-500/10 dark:bg-blue-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400">
+																		MCP
+																	</span>
+																)}
+																{plugin.has_skills && (
+																	<span className="rounded-sm bg-purple-500/10 dark:bg-purple-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-purple-600 dark:text-purple-400">
+																		SKILL
+																	</span>
+																)}
+															</div>
 														</div>
 														<p className="truncate text-sm text-muted">
 															{plugin.description ||

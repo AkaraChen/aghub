@@ -14,4 +14,7 @@ export type MarketPluginResponse = {
 	installed: boolean;
 	enabled?: boolean;
 	category?: string;
+	has_mcp: boolean;
+	has_skills: boolean;
+	has_hooks: boolean;
 };
