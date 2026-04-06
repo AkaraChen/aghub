@@ -46,6 +46,7 @@ name = "aghub-agents"
 version = "0.1.2"
 dependencies = [
  "aghub-markdown",
+ "aghub-plugins",
  "dirs 5.0.1",
  "serde",
  "serde_json",
@@ -62,10 +63,12 @@ version = "0.1.2"
 dependencies = [
  "aghub-core",
  "aghub-git",
+ "aghub-plugins",
  "dirs 5.0.1",
  "keyring",
  "log",
  "open",
+ "reqwest 0.12.28",
  "rocket",
  "rocket_cors",
  "serde",
@@ -84,7 +87,9 @@ dependencies = [
 name = "aghub-cli"
 version = "0.1.2"
 dependencies = [
+ "aghub-agents",
  "aghub-core",
+ "aghub-plugins",
  "anyhow",
  "assert_cmd",
  "clap",
@@ -130,6 +135,25 @@ dependencies = [
  "serde",
  "serde_yaml",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "aghub-plugins"
+version = "0.1.2"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "chrono",
+ "dirs 5.0.1",
+ "flate2",
+ "log",
+ "md5",
+ "reqwest 0.12.28",
+ "semver",
+ "serde",
+ "serde_json",
+ "tar",
+ "tokio",
 ]
 
 [[package]]
@@ -946,7 +970,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "117725a109d387c937a1533ce01b450cbde6b88abceea8473c4d7a85853cda3c"
 dependencies = [
  "lazy_static",
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4000,6 +4024,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "md5"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "490cc448043f947bae3cbee9c203358d62dbee0db12107a74be5c30ccfd09771"
+
+[[package]]
 name = "memchr"
 version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5821,9 +5851,9 @@ dependencies = [
 
 [[package]]
 name = "semver"
-version = "1.0.27"
+version = "1.0.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d767eb0aabc880b29956c35734170f26ed551a859dbd361d140cdbeca61ab1e2"
+checksum = "8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd"
 dependencies = [
  "serde",
  "serde_core",

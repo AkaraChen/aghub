@@ -6,7 +6,7 @@ authors.workspace = true
 license.workspace = true
 
 [dependencies]
-aghub-agents = { path = "../agents" }
+aghub-agents = { path = "../agents", features = [ "claude-plugins" ] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
