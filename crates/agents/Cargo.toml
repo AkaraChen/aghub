@@ -20,8 +20,6 @@ aghub-plugins = { path = "../plugins", optional = true }
 default = [  ]
 claude-plugins = [ "aghub-plugins" ]
 
-[features]
-claude-plugins = []
 
 [dev-dependencies]
 tempfile = { workspace = true }
