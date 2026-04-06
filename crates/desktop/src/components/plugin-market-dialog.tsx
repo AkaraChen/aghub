@@ -7,7 +7,13 @@ import {
 	StarIcon,
 	MagnifyingGlassIcon,
 } from "@heroicons/react/24/solid";
-import { Button, SearchField, Modal, Spinner, toast } from "@heroui/react";
+import {
+	Button,
+	SearchField,
+	Modal,
+	Spinner,
+	toast,
+} from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -104,7 +110,6 @@ export function PluginMarketDialog({
 			toast.danger(t("marketplaceUpdateFailed"), { description: message });
 		},
 	});
-
 	// Get unique categories
 	const categories = useMemo(() => {
 		const cats = new Set<string>();

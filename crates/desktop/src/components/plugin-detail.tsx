@@ -1,0 +1,754 @@
+"use client";
+
+import {
+	ArrowDownTrayIcon,
+	ArrowPathIcon,
+	CodeBracketIcon,
+	FolderIcon,
+	TrashIcon,
+	WrenchIcon,
+} from "@heroicons/react/24/solid";
+import {
+	AlertDialog,
+	Button,
+	Card,
+	Chip,
+	Switch,
+	Tooltip,
+	toast,
+} from "@heroui/react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import * as pathe from "pathe";
+import { useMemo, useReducer } from "react";
+import { useTranslation } from "react-i18next";
+import { siGithub } from "simple-icons";
+import type { PluginResponse } from "../generated/dto";
+import { useApi } from "../hooks/use-api";
+import { cn } from "../lib/utils";
+import { skillListQueryOptions } from "../requests/skills";
+
+interface PluginDetailProps {
+	plugin: PluginResponse;
+	selectedCount?: number;
+	selectedPlugins?: PluginResponse[];
+}
+
+function MetaRow({
+	label,
+	value,
+	mono = false,
+}: {
+	label: string;
+	value: string;
+	mono?: boolean;
+}) {
+	const displayValue =
+		value.length > 200 ? `${value.slice(0, 200)}...` : value;
+
+	return (
+		<div className="grid gap-1.5 py-1">
+			<span className="text-[11px] font-medium tracking-wide text-muted uppercase">
+				{label}
+			</span>
+			<span
+				className={cn(
+					"min-w-0 text-sm text-foreground",
+					mono &&
+						"overflow-x-auto rounded-md bg-surface-secondary px-3 py-2 font-mono text-xs leading-5 text-foreground",
+				)}
+				title={value.length > 200 ? value : undefined}
+			>
+				{displayValue}
+			</span>
+		</div>
+	);
+}
+
+function CodeBlock({
+	label,
+	command,
+	args,
+}: {
+	label: string;
+	command: string;
+	args?: string[];
+}) {
+	const commandLine =
+		args && args.length > 0 ? `${command} ${args.join(" ")}` : command;
+
+	return (
+		<div className="grid gap-1.5">
+			<span className="text-[11px] font-medium tracking-wide text-muted uppercase">
+				{label}
+			</span>
+			<div className="overflow-x-auto rounded-lg border border-separator bg-surface-secondary px-3 py-2">
+				<code className="block font-mono text-xs leading-5 text-foreground whitespace-pre-wrap break-words">
+					{commandLine}
+				</code>
+			</div>
+		</div>
+	);
+}
+
+interface PluginDetailUiState {
+	showUninstallConfirm: boolean;
+	showReinstallConfirm: boolean;
+}
+
+type PluginDetailUiAction =
+	| { type: "set_uninstall_dialog"; value: boolean }
+	| { type: "set_reinstall_dialog"; value: boolean };
+
+function pluginDetailUiReducer(
+	state: PluginDetailUiState,
+	action: PluginDetailUiAction,
+): PluginDetailUiState {
+	switch (action.type) {
+		case "set_uninstall_dialog":
+			return { ...state, showUninstallConfirm: action.value };
+		case "set_reinstall_dialog":
+			return { ...state, showReinstallConfirm: action.value };
+	}
+}
+
+function pluginDetailQueryOptions(
+	api: ReturnType<typeof useApi>,
+	pluginId: string,
+) {
+	return {
+		queryKey: ["plugin-detail", pluginId],
+		queryFn: () => api.plugins.detail(pluginId),
+		enabled: !!pluginId,
+	};
+}
+
+export function PluginDetail({
+	plugin,
+	selectedCount = 0,
+	selectedPlugins = [],
+}: PluginDetailProps) {
+	const { t } = useTranslation();
+	const api = useApi();
+	const queryClient = useQueryClient();
+	const [uiState, dispatch] = useReducer(pluginDetailUiReducer, {
+		showUninstallConfirm: false,
+		showReinstallConfirm: false,
+	});
+
+	const { data: allSkills } = useQuery({
+		...skillListQueryOptions({ api, scope: "global" }),
+	});
+
+	const { data: pluginDetail } = useQuery({
+		...pluginDetailQueryOptions(api, plugin.id),
+	});
+
+	const currentPlugin = pluginDetail ?? plugin;
+	const mcpConfig = pluginDetail?.mcp_config;
+	const updateAvailable = pluginDetail?.update_available ?? false;
+	const latestVersion = pluginDetail?.latest_version ?? null;
+	const providedSkills = useMemo(
+		() => pluginDetail?.provided_skills ?? [],
+		[pluginDetail?.provided_skills],
+	);
+
+	const enableMutation = useMutation({
+		mutationFn: (id: string) => api.plugins.enable(id),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["plugins"] });
+			queryClient.invalidateQueries({ queryKey: ["skills"] });
+			queryClient.invalidateQueries({
+				queryKey: ["plugin-detail", plugin.id],
+			});
+		},
+	});
+
+	const disableMutation = useMutation({
+		mutationFn: (id: string) => api.plugins.disable(id),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["plugins"] });
+			queryClient.invalidateQueries({ queryKey: ["skills"] });
+			queryClient.invalidateQueries({
+				queryKey: ["plugin-detail", plugin.id],
+			});
+		},
+	});
+
+	const isToggling = enableMutation.isPending || disableMutation.isPending;
+
+	const updateMutation = useMutation({
+		mutationFn: (pluginId: string) =>
+			api.plugins.update({
+				plugin_id: pluginId,
+				scope: "user",
+			}),
+		onSuccess: () => {
+			toast.success(t("pluginUpdated"));
+			queryClient.invalidateQueries({ queryKey: ["plugins"] });
+			queryClient.invalidateQueries({
+				queryKey: ["plugin-detail", plugin.id],
+			});
+		},
+		onError: (error) => {
+			toast.danger(error.message || t("updateFailed"));
+		},
+	});
+
+	const checkUpdateMutation = useMutation({
+		mutationFn: (pluginId: string) =>
+			api.plugins.checkUpdate({ plugin_id: pluginId }),
+		onSuccess: (data) => {
+			queryClient.invalidateQueries({
+				queryKey: ["plugin-detail", plugin.id],
+			});
+			if (data.update_available) {
+				toast.success(
+					t("updateAvailable", {
+						version: data.latest_version || "",
+					}),
+				);
+			} else {
+				toast.success(t("noUpdateAvailable"));
+			}
+		},
+		onError: (error) => {
+			toast.danger(error.message || t("updateCheckFailed"));
+		},
+	});
+
+	const reinstallMutation = useMutation({
+		mutationFn: (pluginId: string) =>
+			api.plugins.reinstall({
+				plugin_id: pluginId,
+				scope: "user",
+				keep_data: true,
+			}),
+		onSuccess: () => {
+			toast.success(t("pluginReinstalled"));
+			queryClient.invalidateQueries({ queryKey: ["plugins"] });
+			queryClient.invalidateQueries({
+				queryKey: ["plugin-detail", plugin.id],
+			});
+		},
+		onError: (error) => {
+			toast.danger(error.message || t("reinstallFailed"));
+		},
+	});
+
+	const uninstallMutation = useMutation({
+		mutationFn: (pluginId: string) =>
+			api.plugins.uninstall({
+				plugin_id: pluginId,
+				scope: "user",
+				keep_data: false,
+			}),
+		onSuccess: () => {
+			toast.success(t("pluginUninstalled"));
+			queryClient.invalidateQueries({ queryKey: ["plugins"] });
+		},
+		onError: (error) => {
+			toast.danger(error.message || t("uninstallFailed"));
+		},
+	});
+
+	const handleUninstall = () => {
+		dispatch({ type: "set_uninstall_dialog", value: false });
+		uninstallMutation.mutate(currentPlugin.id);
+	};
+
+	const handleReinstall = () => {
+		dispatch({ type: "set_reinstall_dialog", value: false });
+		reinstallMutation.mutate(currentPlugin.id);
+	};
+
+	const handleOpenUrl = (url: string | undefined) => {
+		if (url) {
+			openUrl(url).catch(console.error);
+		}
+	};
+
+	const handleOpenInstallPath = () => {
+		// Use API to open folder (same as skill folder opening)
+		api.skills.openFolder(currentPlugin.install_path).catch(console.error);
+	};
+
+	// Merge plugin skills from allSkills with provided_skills from API
+	// Use Set to deduplicate by skill name
+	const allPluginSkills = useMemo(() => {
+		const pluginSkills =
+			allSkills?.filter(
+				(skill) =>
+					skill.plugin_id && skill.plugin_id === currentPlugin?.id,
+			) ?? [];
+		const skillNames = new Set(pluginSkills.map((s) => s.name));
+		const merged = [...pluginSkills];
+		for (const name of providedSkills) {
+			if (!skillNames.has(name)) {
+				merged.push({
+					name,
+					description: undefined,
+				} as unknown as (typeof pluginSkills)[0]);
+			}
+		}
+		return merged;
+	}, [allSkills, currentPlugin.id, providedSkills]);
+
+	// Multi-select mode shows summary
+	if (selectedCount > 1) {
+		return (
+			<div className="h-full overflow-y-auto">
+				<div className="w-full space-y-4 p-4 sm:p-6">
+					<Card>
+						<Card.Header className="flex-col items-stretch gap-4 border-b border-separator">
+							<h2 className="text-xl font-semibold text-foreground">
+								{t("itemsSelected", { count: selectedCount })}
+							</h2>
+						</Card.Header>
+						<Card.Content className="flex flex-col gap-6">
+							<div className="space-y-3">
+								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+									{t("selectedItems")}
+								</h3>
+								<div className="space-y-2">
+									{selectedPlugins.map((p) => (
+										<div
+											key={p.id}
+											className="flex items-center justify-between rounded-lg border border-separator bg-surface-secondary px-3 py-2"
+										>
+											<div className="flex items-center gap-2">
+												<div
+													className={`size-2.5 rounded-full shadow-inner ${p.enabled ? "bg-success" : "bg-muted"}`}
+												/>
+												<span className="font-medium">
+													{p.name}
+												</span>
+												<span className="text-xs text-muted">
+													v{p.version}
+												</span>
+											</div>
+										</div>
+									))}
+								</div>
+							</div>
+						</Card.Content>
+					</Card>
+				</div>
+			</div>
+		);
+	}
+
+	return (
+		<div className="h-full overflow-y-auto">
+			<div className="w-full space-y-4 p-4 sm:p-6">
+				<Card>
+					{/* Header: Name + Version + Actions */}
+					<Card.Header className="flex flex-row items-start justify-between gap-3">
+						<div className="min-w-0 flex-1">
+							<h2 className="text-xl font-semibold text-foreground truncate">
+								{currentPlugin.name}
+							</h2>
+							<p className="text-xs text-muted mt-1">
+								{currentPlugin.id}
+							</p>
+						</div>
+						<div className="flex items-center gap-1">
+							{/* Check update */}
+							<Tooltip delay={0}>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									className="size-8 text-muted"
+									onPress={() =>
+										checkUpdateMutation.mutate(
+											currentPlugin.id,
+										)
+									}
+									isDisabled={checkUpdateMutation.isPending}
+									aria-label={t("checkForUpdates")}
+								>
+									<ArrowPathIcon
+										className={`size-4 ${checkUpdateMutation.isPending ? "animate-spin" : ""}`}
+									/>
+								</Button>
+								<Tooltip.Content>
+									{t("checkForUpdates")}
+								</Tooltip.Content>
+							</Tooltip>
+							{/* Update button (shown when update available) */}
+							{updateAvailable && (
+								<Tooltip delay={0}>
+									<Button
+										isIconOnly
+										variant="ghost"
+										size="sm"
+										className="size-8 text-success"
+										onPress={() =>
+											updateMutation.mutate(
+												currentPlugin.id,
+											)
+										}
+										isDisabled={updateMutation.isPending}
+										aria-label={t("updatePlugin")}
+									>
+										<ArrowDownTrayIcon
+											className={`size-4 ${updateMutation.isPending ? "animate-bounce" : ""}`}
+										/>
+									</Button>
+									<Tooltip.Content>
+										{latestVersion
+											? t("updateToVersion", {
+													version: latestVersion,
+												})
+											: t("updatePlugin")}
+									</Tooltip.Content>
+								</Tooltip>
+							)}
+							{/* Reinstall */}
+							<Tooltip delay={0}>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									className="size-8 text-muted"
+									onPress={() =>
+										dispatch({
+											type: "set_reinstall_dialog",
+											value: true,
+										})
+									}
+									isDisabled={reinstallMutation.isPending}
+									aria-label={t("reinstall")}
+								>
+									<WrenchIcon
+										className={`size-4 ${reinstallMutation.isPending ? "animate-spin" : ""}`}
+									/>
+								</Button>
+								<Tooltip.Content>
+									{t("reinstall")}
+								</Tooltip.Content>
+							</Tooltip>
+							{/* Uninstall */}
+							<Tooltip delay={0}>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									className="size-8 text-danger"
+									onPress={() =>
+										dispatch({
+											type: "set_uninstall_dialog",
+											value: true,
+										})
+									}
+									isDisabled={uninstallMutation.isPending}
+									aria-label={t("uninstall")}
+								>
+									<TrashIcon
+										className={`size-4 ${uninstallMutation.isPending ? "animate-spin" : ""}`}
+									/>
+								</Button>
+								<Tooltip.Content>
+									{t("uninstall")}
+								</Tooltip.Content>
+							</Tooltip>
+							<Switch
+								isSelected={currentPlugin.enabled}
+								isDisabled={isToggling}
+								onChange={() => {
+									if (currentPlugin.enabled) {
+										disableMutation.mutate(
+											currentPlugin.id,
+										);
+									} else {
+										enableMutation.mutate(currentPlugin.id);
+									}
+								}}
+								aria-label={
+									currentPlugin.enabled
+										? t("disablePlugin")
+										: t("enablePlugin")
+								}
+							>
+								<Switch.Control>
+									<Switch.Thumb />
+								</Switch.Control>
+							</Switch>
+						</div>
+					</Card.Header>
+
+					<Card.Content className="flex flex-col gap-6">
+						{/* Description */}
+						{currentPlugin.description && (
+							<div className="space-y-2">
+								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+									{t("description")}
+								</h3>
+								<p className="text-sm text-foreground">
+									{currentPlugin.description}
+								</p>
+							</div>
+						)}
+
+						{/* Plugin Source */}
+						<div className="space-y-3">
+							<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+								{t("installedFrom")}
+							</h3>
+							<div className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2">
+								<div className="min-w-0 flex-1">
+									<div className="flex items-center gap-1.5">
+										<svg
+											role="img"
+											className="size-3.5 shrink-0 text-muted"
+											viewBox="0 0 24 24"
+											fill="currentColor"
+										>
+											<path d={siGithub.path} />
+										</svg>
+										<span className="min-w-0 truncate text-sm text-foreground">
+											{currentPlugin.source}
+										</span>
+									</div>
+								</div>
+								<div className="flex shrink-0 items-center gap-1">
+									<Tooltip delay={0}>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="sm"
+											className="size-8 text-muted"
+											aria-label={t("openRepository")}
+											isDisabled={
+												!currentPlugin.repository
+											}
+											onPress={() =>
+												handleOpenUrl(
+													currentPlugin.repository,
+												)
+											}
+										>
+											<CodeBracketIcon className="size-4" />
+										</Button>
+										<Tooltip.Content>
+											{t("openRepository")}
+										</Tooltip.Content>
+									</Tooltip>
+								</div>
+							</div>
+						</div>
+
+						{/* Plugin Info */}
+						<div className="space-y-4">
+							<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+								{t("pluginInfo")}
+							</h3>
+							{/* Install Path with open button */}
+							<div className="space-y-1.5">
+								<span className="text-[11px] font-medium tracking-wide text-muted uppercase">
+									{t("installPath")}
+								</span>
+								<div className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2">
+									<div className="min-w-0 flex-1">
+										<p
+											tabIndex={0}
+											className="cursor-default break-all rounded-sm font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none"
+											title={currentPlugin.install_path}
+										>
+											{pathe.dirname(
+												currentPlugin.install_path,
+											)}
+										</p>
+									</div>
+									<div className="flex shrink-0 items-center gap-1">
+										<Tooltip delay={0}>
+											<Button
+												isIconOnly
+												variant="ghost"
+												size="sm"
+												className="size-8 text-muted"
+												onPress={handleOpenInstallPath}
+												aria-label={t("openFolder")}
+											>
+												<FolderIcon className="size-4" />
+											</Button>
+											<Tooltip.Content>
+												{t("openFolder")}
+											</Tooltip.Content>
+										</Tooltip>
+									</div>
+								</div>
+							</div>
+						</div>
+
+						{/* Provided Skills - show all skills from plugin */}
+						{allPluginSkills.length > 0 && (
+							<div className="space-y-3">
+								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+									{t("providedSkills")}
+								</h3>
+								<div className="space-y-2">
+									{allPluginSkills.map((skill) => (
+										<div
+											key={skill.name}
+											className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2"
+										>
+											<div className="min-w-0 flex-1">
+												<p className="font-mono text-xs text-foreground truncate">
+													{skill.name}
+												</p>
+												{skill.description && (
+													<p className="text-[11px] text-muted truncate">
+														{skill.description}
+													</p>
+												)}
+											</div>
+										</div>
+									))}
+								</div>
+							</div>
+						)}
+
+						{/* MCP Servers */}
+						{mcpConfig && mcpConfig.servers.length > 0 && (
+							<div className="space-y-3">
+								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+									MCP Servers
+								</h3>
+								<div className="space-y-3">
+									{mcpConfig.servers.map((server) => (
+										<div
+											key={server.name}
+											className="rounded-lg bg-surface-secondary px-3 py-3 space-y-2"
+										>
+											<div className="flex items-center gap-2">
+												<span className="font-medium text-sm">
+													{server.name}
+												</span>
+												<Chip
+													size="sm"
+													variant="soft"
+													className="h-[18px] px-1.5 text-[10px]"
+												>
+													{server.transport_type}
+												</Chip>
+											</div>
+											{server.note && (
+												<p className="text-[11px] text-muted">
+													{server.note}
+												</p>
+											)}
+											{server.command && (
+												<CodeBlock
+													label={t("command")}
+													command={server.command}
+													args={server.args}
+												/>
+											)}
+											{server.url && (
+												<MetaRow
+													label="URL"
+													value={server.url}
+													mono
+												/>
+											)}
+										</div>
+									))}
+								</div>
+							</div>
+						)}
+					</Card.Content>
+				</Card>
+
+				{/* Uninstall Confirm Dialog */}
+				<AlertDialog.Backdrop
+					isOpen={uiState.showUninstallConfirm}
+					onOpenChange={(open) =>
+						dispatch({ type: "set_uninstall_dialog", value: open })
+					}
+				>
+					<AlertDialog.Container>
+						<AlertDialog.Dialog className="sm:max-w-[420px]">
+							<AlertDialog.Header>
+								<AlertDialog.Icon status="danger" />
+								<AlertDialog.Heading>
+									{t("confirmUninstallTitle")}
+								</AlertDialog.Heading>
+							</AlertDialog.Header>
+							<AlertDialog.Body>
+								<p className="text-sm text-muted">
+									{t("confirmUninstallDescription", {
+										name: currentPlugin.name,
+									})}
+								</p>
+							</AlertDialog.Body>
+							<AlertDialog.Footer>
+								<Button
+									variant="tertiary"
+									onPress={() =>
+										dispatch({
+											type: "set_uninstall_dialog",
+											value: false,
+										})
+									}
+								>
+									{t("cancel")}
+								</Button>
+								<Button
+									variant="primary"
+									className="bg-danger text-danger-foreground hover:bg-danger/90"
+									onPress={handleUninstall}
+								>
+									{t("uninstall")}
+								</Button>
+							</AlertDialog.Footer>
+						</AlertDialog.Dialog>
+					</AlertDialog.Container>
+				</AlertDialog.Backdrop>
+
+				{/* Reinstall Confirm Dialog */}
+				<AlertDialog.Backdrop
+					isOpen={uiState.showReinstallConfirm}
+					onOpenChange={(open) =>
+						dispatch({ type: "set_reinstall_dialog", value: open })
+					}
+				>
+					<AlertDialog.Container>
+						<AlertDialog.Dialog className="sm:max-w-[420px]">
+							<AlertDialog.Header>
+								<AlertDialog.Icon status="warning" />
+								<AlertDialog.Heading>
+									{t("confirmReinstallTitle")}
+								</AlertDialog.Heading>
+							</AlertDialog.Header>
+							<AlertDialog.Body>
+								<p className="text-sm text-muted">
+									{t("confirmReinstallDescription", {
+										name: currentPlugin.name,
+									})}
+								</p>
+							</AlertDialog.Body>
+							<AlertDialog.Footer>
+								<Button
+									variant="tertiary"
+									onPress={() =>
+										dispatch({
+											type: "set_reinstall_dialog",
+											value: false,
+										})
+									}
+								>
+									{t("cancel")}
+								</Button>
+								<Button onPress={handleReinstall}>
+									{t("reinstall")}
+								</Button>
+							</AlertDialog.Footer>
+						</AlertDialog.Dialog>
+					</AlertDialog.Container>
+				</AlertDialog.Backdrop>
+			</div>
+		</div>
+	);
+}

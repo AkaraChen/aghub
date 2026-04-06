@@ -28,6 +28,25 @@ export default {
 	subAgentDescriptionPlaceholder: "What does this sub-agent do?",
 	subAgentInstructionPlaceholder:
 		"System prompt / instruction for this sub-agent...",
+	claudeCodePlugins: "Claude Code Plugins",
+	plugins: "Plugins",
+	pluginsDescription:
+		"Manage Claude Code plugins — enable or disable installed plugins.",
+	noPluginsInstalled: "No plugins installed.",
+	enablePlugin: "Enable plugin",
+	disablePlugin: "Disable plugin",
+	pluginEnabled: "Enabled",
+	pluginDisabled: "Disabled",
+	pluginEnabledDescription: "Plugin is active and providing capabilities",
+	pluginDisabledDescription:
+		"Plugin is inactive and not providing capabilities",
+	capabilities: "Capabilities",
+	noCapabilities: "No capabilities provided",
+	providedSkills: "Provided Skills",
+	installationInfo: "Installation Info",
+	installPath: "Install Path",
+	openInstallFolder: "Open Install Folder",
+	selectPlugin: "Select a plugin to view details",
 	agentManagement: "Agent",
 	projects: "Projects",
 	search: "Search",
@@ -285,6 +304,9 @@ export default {
 	noResults: "No results",
 
 	// MCP Servers Page
+	searchPlugins: "Search plugins...",
+	refreshPlugins: "Refresh plugins",
+	selectedItems: "Selected Items",
 	searchServers: "Search servers...",
 	addMcpServer: "Add MCP server",
 	refreshServers: "Refresh servers",
@@ -527,6 +549,45 @@ export default {
 		importFromClipboard: "Import from Clipboard",
 	},
 
+	// Plugin Market
+	pluginMarket: "Plugin Market",
+	pluginMarketDescription:
+		"Discover and install plugins from the official marketplace",
+	pluginInfo: "Plugin Info",
+	installPlugin: "Install Plugin",
+	pluginInstalled: "Plugin '{{id}}' installed successfully",
+	noPluginsFound: "No plugins found",
+	noPluginsAvailable: "No plugins available from marketplace",
+	refreshing: "Refreshing...",
+	browseMarketplace: "Browse Marketplace",
+	discoverPlugins: "Discover {{count}} plugins",
+	uninstallPlugin: "Uninstall Plugin",
+	uninstall: "Uninstall",
+	reinstallPlugin: "Reinstall Plugin",
+	reinstall: "Reinstall",
+	confirmUninstallTitle: "Confirm Uninstall",
+	confirmUninstallDescription:
+		"Are you sure you want to uninstall '{{name}}'? This action cannot be undone.",
+	confirmReinstallTitle: "Confirm Reinstall",
+	confirmReinstallDescription:
+		"This will reinstall '{{name}}' and preserve your configuration.",
+	pluginUninstalled: "Plugin uninstalled successfully",
+	pluginReinstalled: "Plugin reinstalled successfully",
+	reinstallFailed: "Failed to reinstall plugin: {{error}}",
+	noUpdateAvailable: "No updates available",
+	updateCheckFailed: "Failed to check for updates: {{error}}",
+	updatePlugin: "Update Plugin",
+	updating: "Updating...",
+	pluginUpdated: "Plugin updated to v{{version}}",
+	updateToVersion: "Update to v{{version}}",
+	updateFailed: "Failed to update plugin: {{error}}",
+	pluginNotFound: "Plugin not found",
+	marketplaceNotFound: "Marketplace not found. Please clone it first.",
+	pluginManifestNotFound: "Plugin manifest not found: {{name}}",
+	failedToLoadRegistry: "Failed to initialize plugin registry: {{error}}",
+	failedToCreateDiscovery: "Failed to create plugin discovery: {{error}}",
+	retry: "Retry",
+
 	// Key Pair Editor
 	keyPairEditor: {
 		keyPlaceholder: "Key",
@@ -588,4 +649,5 @@ export default {
 		toggleFullscreen: "Toggle Fullscreen",
 		close: "Close",
 	},
+	showingPluginsCount: "Showing {{filtered}} / {{total}} plugins",
 };
