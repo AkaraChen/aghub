@@ -52,10 +52,10 @@ pub struct Skill {
 	/// Which config scope this skill was loaded from (set at load time, not persisted)
 	#[serde(skip)]
 	pub config_source: Option<ConfigSource>,
-	/// Plugin ID if this skill is from a plugin
+	/// Plugin ID if this skill comes from a Claude Code plugin
 	#[serde(skip_serializing_if = "Option::is_none", default)]
 	pub plugin_id: Option<String>,
-	/// Plugin name if this skill is from a plugin
+	/// Plugin display name if this skill comes from a Claude Code plugin
 	#[serde(skip_serializing_if = "Option::is_none", default)]
 	pub plugin_name: Option<String>,
 }
