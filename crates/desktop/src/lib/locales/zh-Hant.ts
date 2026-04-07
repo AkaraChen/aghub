@@ -310,6 +310,7 @@ export default {
 	url: "URL",
 	timeout: "逾時",
 	unknown: "未知",
+	latest: "最新",
 	deleteMcpServer: "刪除伺服器",
 	deleteMcpServerConfirm: "刪除「{{name}}」？此操作無法復原。",
 	deleteMcpMultipleConfirm:

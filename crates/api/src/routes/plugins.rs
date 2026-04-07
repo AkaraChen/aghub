@@ -878,11 +878,7 @@ pub async fn list_plugin_market() -> ApiResult<Vec<MarketPluginResponse>> {
 				name: p.name.clone(),
 				description: p.description.clone(),
 				version: p.display_version(),
-				author: p
-					.author
-					.as_ref()
-					.map(|a| a.name.clone())
-					.unwrap_or_default(),
+				author: p.display_author().unwrap_or_default(),
 				github_url: p.github_url().unwrap_or_default(),
 				installs: p.install_count.unwrap_or(0) as i64,
 				installed: p.installed,

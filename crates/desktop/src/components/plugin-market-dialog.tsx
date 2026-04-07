@@ -2,10 +2,8 @@
 
 import {
 	ArrowPathIcon,
-	CheckIcon,
 	ExclamationCircleIcon,
 	MagnifyingGlassIcon,
-	StarIcon,
 } from "@heroicons/react/24/solid";
 import {
 	Button,
@@ -13,6 +11,8 @@ import {
 	Modal,
 	SearchField,
 	Spinner,
+	Table,
+	Tooltip,
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -21,6 +21,8 @@ import { useTranslation } from "react-i18next";
 import { useApi } from "../hooks/use-api";
 import { cn } from "../lib/utils";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
+
+const SEMANTIC_VERSION_REGEX = /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
 
 interface PluginMarketDialogProps {
 	isOpen: boolean;
@@ -91,18 +93,31 @@ export function PluginMarketDialog({
 			});
 		},
 	});
+
+	const installedPluginsCount = useMemo(() => {
+		return plugins.filter((plugin) =>
+			plugin.installed_scopes?.includes(installScope),
+		).length;
+	}, [plugins, installScope]);
+
+	const marketPlugins = useMemo(() => {
+		return plugins.filter(
+			(plugin) => !plugin.installed_scopes?.includes(installScope),
+		);
+	}, [plugins, installScope]);
+
 	// Get unique categories
 	const categories = useMemo(() => {
 		const cats = new Set<string>();
-		for (const plugin of plugins) {
+		for (const plugin of marketPlugins) {
 			if (plugin.category) cats.add(plugin.category);
 		}
 		return Array.from(cats).sort();
-	}, [plugins]);
+	}, [marketPlugins]);
 
 	// Filter and sort plugins
 	const filteredPlugins = useMemo(() => {
-		let filtered = plugins;
+		let filtered = marketPlugins;
 
 		// Apply search filter
 		if (searchQuery) {
@@ -124,13 +139,7 @@ export function PluginMarketDialog({
 
 		// Sort by install count (descending)
 		return [...filtered].sort((a, b) => b.installs - a.installs);
-	}, [plugins, searchQuery, selectedCategory]);
-
-	const installedPluginsCount = useMemo(() => {
-		return plugins.filter((plugin) => plugin.installed).length;
-	}, [plugins]);
-
-	const activeFilterKey = `${selectedCategory ?? "all"}:${searchQuery}`;
+	}, [marketPlugins, searchQuery, selectedCategory]);
 
 	const handleClose = () => {
 		setSearchQuery("");
@@ -143,11 +152,19 @@ export function PluginMarketDialog({
 			return t("unknown");
 		}
 
-		if (version === "latest" || version.startsWith("v")) {
+		if (version === "latest") {
+			return t("latest");
+		}
+
+		if (version.startsWith("v")) {
 			return version;
 		}
 
-		return `v${version}`;
+		if (SEMANTIC_VERSION_REGEX.test(version)) {
+			return `v${version}`;
+		}
+
+		return version;
 	};
 
 	return (
@@ -181,27 +198,32 @@ export function PluginMarketDialog({
 									<SearchField.ClearButton />
 								</SearchField.Group>
 							</SearchField>
-							<Button
-								variant="secondary"
-								size="sm"
-								onPress={() =>
-									updateMarketplaceMutation.mutate()
-								}
-								isPending={updateMarketplaceMutation.isPending}
-								aria-label={t("updateMarketplace")}
-								className="shrink-0 gap-1.5"
-							>
-								<ArrowPathIcon
-									className={cn(
-										"size-4",
-										updateMarketplaceMutation.isPending &&
-											"animate-spin",
-									)}
-								/>
-								<span className="text-xs">
+							<Tooltip delay={0}>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									onPress={() =>
+										updateMarketplaceMutation.mutate()
+									}
+									isDisabled={
+										updateMarketplaceMutation.isPending
+									}
+									aria-label={t("updateMarketplace")}
+									className="size-9 shrink-0 text-accent"
+								>
+									<ArrowPathIcon
+										className={cn(
+											"size-4",
+											updateMarketplaceMutation.isPending &&
+												"animate-spin",
+										)}
+									/>
+								</Button>
+								<Tooltip.Content>
 									{t("updateMarketplace")}
-								</span>
-							</Button>
+								</Tooltip.Content>
+							</Tooltip>
 						</div>
 
 						{/* Category filter chips */}
@@ -216,7 +238,7 @@ export function PluginMarketDialog({
 										className={cn(
 											"shrink-0 rounded-full px-3 py-1.5 text-[11px] font-medium tracking-wide transition-colors cursor-pointer",
 											selectedCategory === null
-												? "bg-success text-success-foreground"
+												? "bg-accent/10 text-accent"
 												: "bg-surface-secondary hover:bg-surface-tertiary text-muted hover:text-foreground",
 										)}
 									>
@@ -232,7 +254,7 @@ export function PluginMarketDialog({
 											className={cn(
 												"shrink-0 rounded-full px-3 py-1.5 text-[11px] font-medium tracking-wide transition-colors cursor-pointer",
 												selectedCategory === cat
-													? "bg-success text-success-foreground"
+													? "bg-accent/10 text-accent"
 													: "bg-surface-secondary hover:bg-surface-tertiary text-muted hover:text-foreground",
 											)}
 										>
@@ -293,134 +315,162 @@ export function PluginMarketDialog({
 									</Empty>
 								</div>
 							) : (
-								<div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-									<div className="grid shrink-0 grid-cols-[minmax(0,1.9fr)_120px_160px_120px] gap-4 border-b border-separator px-4 py-3 text-[11px] font-medium tracking-wide text-muted uppercase">
-										<span>{t("name")}</span>
-										<span>{t("installs")}</span>
-										<span>{t("author")}</span>
-										<span className="text-right">
-											{t("installation")}
-										</span>
-									</div>
-									<div
-										key={activeFilterKey}
-										className="min-h-0 flex-1 overflow-y-auto"
-									>
-										{filteredPlugins.map((plugin) => (
-											<div
-												key={plugin.id}
-												className="grid grid-cols-[minmax(0,1.9fr)_120px_160px_120px] gap-4 border-b border-separator px-4 py-4 transition-colors hover:bg-surface-secondary"
+								<div className="min-h-0 flex-1 overflow-hidden">
+									<Table className="h-full">
+										<Table.ScrollContainer className="h-full [scrollbar-gutter:stable]">
+											<Table.Content
+												aria-label={t("pluginMarket")}
+												className={cn(
+													"table-fixed border-separate border-spacing-0",
+													"[&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10 [&_thead]:bg-surface",
+													"[&_thead_th]:h-11 [&_thead_th]:border-b [&_thead_th]:border-separator/70 [&_thead_th]:bg-surface-secondary/70 [&_thead_th]:px-4 [&_thead_th]:text-[11px] [&_thead_th]:font-semibold [&_thead_th]:tracking-[0.08em] [&_thead_th]:text-muted",
+													"[&_tbody_td]:px-4 [&_tbody_td]:py-3 [&_tbody_td]:align-top",
+													"[&_tbody_tr]:border-b [&_tbody_tr]:border-separator/60 [&_tbody_tr]:transition-colors",
+													"[&_tbody_tr:hover]:bg-surface-secondary/30",
+													"[&_tbody_tr:last-child]:border-b-0",
+												)}
 											>
-												<div className="min-w-0 space-y-2">
-													<div className="flex min-w-0 items-center gap-2">
-														<span className="truncate text-base font-semibold text-foreground">
-															{plugin.name}
-														</span>
-														<div className="flex shrink-0 items-center gap-1.5">
-															{plugin.category && (
-																<Chip
-																	size="sm"
-																	variant="secondary"
-																	className="h-6 px-2 text-[10px] font-semibold uppercase"
-																>
-																	{t(
-																		`pluginCategories.${plugin.category.toLowerCase()}`,
-																		{
-																			defaultValue:
-																				plugin.category,
-																		},
-																	)}
-																</Chip>
-															)}
-															{plugin.has_mcp && (
-																<Chip
-																	size="sm"
-																	variant="secondary"
-																	className="h-6 px-2 text-[10px] font-semibold text-blue-400"
-																>
-																	MCP
-																</Chip>
-															)}
-															{plugin.has_skills && (
-																<Chip
-																	size="sm"
-																	variant="secondary"
-																	className="h-6 px-2 text-[10px] font-semibold text-violet-400"
-																>
-																	SKILL
-																</Chip>
-															)}
-														</div>
-													</div>
-													{plugin.description && (
-														<p className="line-clamp-1 text-sm text-muted">
-															{plugin.description}
-														</p>
-													)}
-												</div>
-
-												<div className="flex items-center">
-													{plugin.installs > 0 ? (
-														<div className="flex items-center gap-1.5 text-sm text-muted">
-															<StarIcon className="size-4 text-warning" />
-															<span>
-																{compactFormatter.format(
-																	plugin.installs,
-																)}
-															</span>
-														</div>
-													) : (
-														<span className="text-sm text-muted">
-															—
-														</span>
-													)}
-												</div>
-
-												<div className="flex flex-col justify-center gap-1">
-													<span className="truncate text-sm font-medium text-foreground">
-														{plugin.author ||
-															t("unknown")}
-													</span>
-													<span className="text-xs text-muted">
-														{formatPluginVersion(
-															plugin.version,
-														)}
-													</span>
-												</div>
-
-												<div className="flex items-center justify-end">
-													{plugin.installed_scopes?.includes(
-														installScope,
-													) ? (
-														<div className="flex min-w-[96px] items-center justify-center gap-1.5 rounded-full bg-success/10 px-3 py-2 text-sm font-medium text-success">
-															<CheckIcon className="size-4" />
-															<span>
-																{t("installed")}
-															</span>
-														</div>
-													) : (
-														<Button
-															size="sm"
-															variant="tertiary"
-															className="min-w-[96px]"
-															onPress={() =>
-																installMutation.mutate(
-																	plugin.id,
-																)
-															}
-															isPending={
-																installMutation.isPending &&
-																installMutation.variables ===
-																	plugin.id
-															}
+												<Table.Header>
+													<Table.Column
+														isRowHeader
+														className="w-[58%]"
+													>
+														{t("name")}
+													</Table.Column>
+													<Table.Column className="w-[120px] text-right">
+														{t("installs")}
+													</Table.Column>
+													<Table.Column className="w-[180px]">
+														{t("author")}
+													</Table.Column>
+													<Table.Column className="w-[140px] text-right">
+														{t("installation")}
+													</Table.Column>
+												</Table.Header>
+												<Table.Body
+													items={filteredPlugins}
+												>
+													{(plugin) => (
+														<Table.Row
+															id={plugin.id}
+															className="align-top"
 														>
-															{t("install")}
-														</Button>
+															<Table.Cell className="align-top">
+																<div className="min-w-0 space-y-2 py-1.5">
+																	<div className="flex min-w-0 items-center gap-2">
+																		<span className="truncate text-base font-semibold text-foreground">
+																			{
+																				plugin.name
+																			}
+																		</span>
+																		<div className="flex shrink-0 items-center gap-1.5">
+																			{plugin.category && (
+																				<Chip
+																					size="sm"
+																					variant="secondary"
+																					className="h-6 px-2 text-[10px] font-semibold uppercase"
+																				>
+																					{t(
+																						`pluginCategories.${plugin.category.toLowerCase()}`,
+																						{
+																							defaultValue:
+																								plugin.category,
+																						},
+																					)}
+																				</Chip>
+																			)}
+																			{plugin.has_mcp && (
+																				<Chip
+																					size="sm"
+																					variant="secondary"
+																					className="h-6 px-2 text-[10px] font-semibold text-blue-400"
+																				>
+																					MCP
+																				</Chip>
+																			)}
+																			{plugin.has_skills && (
+																				<Chip
+																					size="sm"
+																					variant="secondary"
+																					className="h-6 px-2 text-[10px] font-semibold text-violet-400"
+																				>
+																					SKILL
+																				</Chip>
+																			)}
+																		</div>
+																	</div>
+																	{plugin.description && (
+																		<p className="line-clamp-2 text-sm leading-6 text-muted">
+																			{
+																				plugin.description
+																			}
+																		</p>
+																	)}
+																</div>
+															</Table.Cell>
+															<Table.Cell className="align-top">
+																<div className="flex justify-end py-1.5">
+																	<span className="text-sm tabular-nums text-muted">
+																		{plugin.installs >
+																		0
+																			? compactFormatter.format(
+																					plugin.installs,
+																				)
+																			: "—"}
+																	</span>
+																</div>
+															</Table.Cell>
+															<Table.Cell className="align-top">
+																<div className="flex flex-col gap-1 py-1.5">
+																	<span
+																		className={cn(
+																			"truncate text-sm font-medium",
+																			plugin.author
+																				? "text-foreground"
+																				: "text-muted",
+																		)}
+																	>
+																		{plugin.author ||
+																			t(
+																				"unknown",
+																			)}
+																	</span>
+																	<span className="text-xs text-muted">
+																		{formatPluginVersion(
+																			plugin.version,
+																		)}
+																	</span>
+																</div>
+															</Table.Cell>
+															<Table.Cell className="align-top">
+																<div className="flex justify-end py-1">
+																	<Button
+																		size="sm"
+																		variant="tertiary"
+																		className="min-w-[104px]"
+																		onPress={() =>
+																			installMutation.mutate(
+																				plugin.id,
+																			)
+																		}
+																		isPending={
+																			installMutation.isPending &&
+																			installMutation.variables ===
+																				plugin.id
+																		}
+																	>
+																		{t(
+																			"install",
+																		)}
+																	</Button>
+																</div>
+															</Table.Cell>
+														</Table.Row>
 													)}
-												</div>
-											</div>
-										))}
-									</div>
+												</Table.Body>
+											</Table.Content>
+										</Table.ScrollContainer>
+									</Table>
 								</div>
 							)}
 						</div>
@@ -429,13 +479,13 @@ export function PluginMarketDialog({
 					<Modal.Footer>
 						<div className="flex items-center gap-2 text-xs text-muted">
 							<span>
-								{filteredPlugins.length === plugins.length
+								{filteredPlugins.length === marketPlugins.length
 									? t("availablePluginsCount", {
-											count: plugins.length,
+											count: marketPlugins.length,
 										})
 									: t("showingPluginsCount", {
 											filtered: filteredPlugins.length,
-											total: plugins.length,
+											total: marketPlugins.length,
 										})}
 							</span>
 							<span aria-hidden="true">·</span>

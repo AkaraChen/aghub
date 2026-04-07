@@ -321,6 +321,7 @@ export default {
 	url: "URL",
 	timeout: "Timeout",
 	unknown: "unknown",
+	latest: "Latest",
 	deleteMcpServer: "Delete server",
 	deleteMcpServerConfirm: 'Delete "{{name}}"? This can\'t be undone.',
 	deleteMcpMultipleConfirm:

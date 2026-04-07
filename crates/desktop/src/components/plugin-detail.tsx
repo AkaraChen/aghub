@@ -1,10 +1,9 @@
 "use client";
 
 import {
-	ArrowDownTrayIcon,
 	ArrowPathIcon,
-	CodeBracketIcon,
 	FolderIcon,
+	LinkIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import {
@@ -31,6 +30,14 @@ import type {
 import { useApi } from "../hooks/use-api";
 import { cn } from "../lib/utils";
 import { skillListQueryOptions } from "../requests/skills";
+
+const SEMANTIC_VERSION_REGEX = /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
+const GIT_HASH_REGEX = /^[0-9a-f]{7,40}$/i;
+const TRAILING_SLASH_REGEX = /\/$/;
+const TRAILING_GIT_SUFFIX_REGEX = /\.git$/;
+const WWW_PREFIX_REGEX = /^www\./;
+const OFFICIAL_MARKETPLACE_URL =
+	"https://github.com/anthropics/claude-plugins-official";
 
 interface PluginDetailProps {
 	plugin: PluginResponse;
@@ -174,6 +181,90 @@ export function PluginDetail({
 		() => pluginDetail?.provided_skills ?? [],
 		[pluginDetail?.provided_skills],
 	);
+
+	const sourceUrl = useMemo(() => {
+		const reference = currentPlugin.repository?.trim() || "";
+		if (!reference) {
+			if (currentPlugin.source === "claude-plugins-official") {
+				return OFFICIAL_MARKETPLACE_URL;
+			}
+
+			return currentPlugin.source.startsWith("http")
+				? currentPlugin.source
+				: null;
+		}
+
+		const normalized = reference
+			.replace(TRAILING_SLASH_REGEX, "")
+			.replace(TRAILING_GIT_SUFFIX_REGEX, "");
+
+		if (
+			normalized.startsWith("https://") ||
+			normalized.startsWith("http://")
+		) {
+			return normalized;
+		}
+
+		if (normalized.startsWith("git@github.com:")) {
+			return normalized.replace("git@github.com:", "https://github.com/");
+		}
+
+		if (normalized.includes("/") && !normalized.includes("://")) {
+			return `https://github.com/${normalized}`;
+		}
+
+		return null;
+	}, [currentPlugin.repository, currentPlugin.source]);
+
+	const isGitHubSource = useMemo(
+		() => sourceUrl?.includes("github.com") ?? false,
+		[sourceUrl],
+	);
+
+	const sourceLabel = useMemo(() => {
+		if (!sourceUrl) {
+			return currentPlugin.source;
+		}
+
+		try {
+			const url = new URL(sourceUrl);
+			if (url.hostname === "github.com") {
+				const [owner, repo] = url.pathname.split("/").filter(Boolean);
+				if (owner && repo) {
+					return `${owner}/${repo}`;
+				}
+			}
+
+			return url.hostname.replace(WWW_PREFIX_REGEX, "");
+		} catch {
+			return currentPlugin.source;
+		}
+	}, [currentPlugin.source, sourceUrl]);
+
+	const sourceVersion = useMemo(() => {
+		const version = currentPlugin.version?.trim();
+		if (!version) {
+			return null;
+		}
+
+		if (version === "latest") {
+			return t("latest");
+		}
+
+		if (version.startsWith("v")) {
+			return version;
+		}
+
+		if (GIT_HASH_REGEX.test(version)) {
+			return `#${version}`;
+		}
+
+		if (SEMANTIC_VERSION_REGEX.test(version)) {
+			return `v${version}`;
+		}
+
+		return version;
+	}, [currentPlugin.version, t]);
 
 	const updatePluginCaches = (
 		updater: (entry: PluginResponse) => PluginResponse,
@@ -344,6 +435,45 @@ export function PluginDetail({
 		},
 	});
 
+	const checkUpdateMutation = useMutation({
+		mutationFn: (pluginId: string) =>
+			api.plugins.checkUpdate({ plugin_id: pluginId }),
+		onSuccess: (data) => {
+			queryClient.setQueryData<PluginDetailResponse | undefined>(
+				["plugin-detail", plugin.id],
+				(existing) =>
+					existing
+						? {
+								...existing,
+								update_available: data.update_available,
+								latest_version:
+									data.latest_version ??
+									existing.latest_version,
+							}
+						: existing,
+			);
+
+			queryClient.invalidateQueries({ queryKey: ["plugins"] });
+
+			if (data.update_available) {
+				toast.success(
+					t("updateAvailable", {
+						version: data.latest_version ?? t("latest"),
+					}),
+				);
+			} else {
+				toast.success(t("noUpdateAvailable"));
+			}
+		},
+		onError: (error) => {
+			toast.danger(
+				t("updateCheckFailed", {
+					error: error.message || t("unknownError"),
+				}),
+			);
+		},
+	});
+
 	const reinstallMutation = useMutation({
 		mutationFn: (pluginId: string) =>
 			api.plugins.reinstall({
@@ -389,6 +519,15 @@ export function PluginDetail({
 		reinstallMutation.mutate(currentPlugin.id);
 	};
 
+	const handleSourceRefresh = () => {
+		if (updateAvailable) {
+			updateMutation.mutate(currentPlugin.id);
+			return;
+		}
+
+		checkUpdateMutation.mutate(currentPlugin.id);
+	};
+
 	const handleOpenUrl = (url: string | undefined) => {
 		if (url) {
 			openUrl(url).catch(console.error);
@@ -432,7 +571,7 @@ export function PluginDetail({
 								{currentPlugin.name}
 								{currentPlugin.scopes.length > 1 && (
 									<select
-										className="bg-default-100 text-foreground text-xs rounded px-2 py-1 outline-none font-normal border border-default-200 ml-2"
+										className="ml-2 rounded border border-separator bg-surface-secondary px-2 py-1 text-xs font-normal text-foreground outline-none"
 										value={currentScope}
 										onChange={(e) =>
 											onScopeChange?.(
@@ -462,66 +601,29 @@ export function PluginDetail({
 							{(currentPlugin.source ===
 								"claude-plugins-official" ||
 								currentPlugin.source.startsWith("http")) && (
-								<>
-									{/* Update button (shown when update available) */}
-									{updateAvailable && (
-										<Tooltip delay={0}>
-											<Button
-												isIconOnly
-												variant="ghost"
-												size="sm"
-												className="size-8 text-success"
-												onPress={() =>
-													updateMutation.mutate(
-														currentPlugin.id,
-													)
-												}
-												isDisabled={
-													updateMutation.isPending
-												}
-												aria-label={t("updatePlugin")}
-											>
-												<ArrowDownTrayIcon
-													className={`size-4 ${updateMutation.isPending ? "animate-bounce" : ""}`}
-												/>
-											</Button>
-											<Tooltip.Content>
-												{latestVersion
-													? t("updateToVersion", {
-															version:
-																latestVersion,
-														})
-													: t("updatePlugin")}
-											</Tooltip.Content>
-										</Tooltip>
-									)}
-									{/* Reinstall */}
-									<Tooltip delay={0}>
-										<Button
-											isIconOnly
-											variant="ghost"
-											size="sm"
-											className="size-8 text-muted"
-											onPress={() =>
-												dispatch({
-													type: "set_reinstall_dialog",
-													value: true,
-												})
-											}
-											isDisabled={
-												reinstallMutation.isPending
-											}
-											aria-label={t("reinstallPlugin")}
-										>
-											<ArrowPathIcon
-												className={`size-4 ${reinstallMutation.isPending ? "animate-spin" : ""}`}
-											/>
-										</Button>
-										<Tooltip.Content>
-											{t("reinstallPlugin")}
-										</Tooltip.Content>
-									</Tooltip>
-								</>
+								<Tooltip delay={0}>
+									<Button
+										isIconOnly
+										variant="ghost"
+										size="sm"
+										className="size-8 text-muted"
+										onPress={() =>
+											dispatch({
+												type: "set_reinstall_dialog",
+												value: true,
+											})
+										}
+										isDisabled={reinstallMutation.isPending}
+										aria-label={t("reinstallPlugin")}
+									>
+										<ArrowPathIcon
+											className={`size-4 ${reinstallMutation.isPending ? "animate-spin" : ""}`}
+										/>
+									</Button>
+									<Tooltip.Content>
+										{t("reinstallPlugin")}
+									</Tooltip.Content>
+								</Tooltip>
 							)}
 							{/* Uninstall */}
 							<Tooltip delay={0}>
@@ -599,20 +701,29 @@ export function PluginDetail({
 							<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
 								{t("installedFrom")}
 							</h3>
-							<div className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2">
-								<div className="min-w-0 flex-1">
-									<div className="flex items-center gap-1.5">
+							<div className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-4 py-3">
+								<div className="min-w-0 flex flex-1 items-center gap-3">
+									{isGitHubSource ? (
 										<svg
 											role="img"
-											className="size-3.5 shrink-0 text-muted"
+											className="size-4 shrink-0 text-muted"
 											viewBox="0 0 24 24"
 											fill="currentColor"
 										>
 											<path d={siGithub.path} />
 										</svg>
-										<span className="min-w-0 truncate text-sm text-foreground">
-											{currentPlugin.source}
-										</span>
+									) : (
+										<LinkIcon className="size-4 shrink-0 text-muted" />
+									)}
+									<div className="min-w-0 space-y-1">
+										<p className="truncate text-sm font-medium text-foreground">
+											{sourceLabel}
+										</p>
+										{sourceVersion && (
+											<p className="text-xs text-muted">
+												{sourceVersion}
+											</p>
+										)}
 									</div>
 								</div>
 								<div className="flex shrink-0 items-center gap-1">
@@ -621,18 +732,54 @@ export function PluginDetail({
 											isIconOnly
 											variant="ghost"
 											size="sm"
+											className={cn(
+												"size-8 text-muted",
+												updateAvailable &&
+													"text-success",
+											)}
+											aria-label={
+												updateAvailable
+													? t("updatePlugin")
+													: t("checkForUpdates")
+											}
+											onPress={handleSourceRefresh}
+											isDisabled={
+												updateMutation.isPending ||
+												checkUpdateMutation.isPending
+											}
+										>
+											<ArrowPathIcon
+												className={cn(
+													"size-4",
+													(updateMutation.isPending ||
+														checkUpdateMutation.isPending) &&
+														"animate-spin",
+												)}
+											/>
+										</Button>
+										<Tooltip.Content>
+											{updateAvailable && latestVersion
+												? t("updateToVersion", {
+														version: latestVersion,
+													})
+												: t("checkForUpdates")}
+										</Tooltip.Content>
+									</Tooltip>
+									<Tooltip delay={0}>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="sm"
 											className="size-8 text-muted"
 											aria-label={t("openRepository")}
-											isDisabled={
-												!currentPlugin.repository
-											}
+											isDisabled={!sourceUrl}
 											onPress={() =>
 												handleOpenUrl(
-													currentPlugin.repository,
+													sourceUrl ?? undefined,
 												)
 											}
 										>
-											<CodeBracketIcon className="size-4" />
+											<LinkIcon className="size-4" />
 										</Button>
 										<Tooltip.Content>
 											{t("openRepository")}

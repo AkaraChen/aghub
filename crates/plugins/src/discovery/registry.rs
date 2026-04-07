@@ -5,6 +5,7 @@
 //! - L2: Marketplace definitions (marketplace.json)
 //! - L3: Remote install statistics
 
+use crate::claude::types::PluginManifest as ClaudePluginManifest;
 use crate::claude::ClaudePluginManager;
 use crate::discovery::marketplace::{scan_marketplaces, SourceDef};
 use crate::discovery::{
@@ -12,7 +13,18 @@ use crate::discovery::{
 };
 use anyhow::Result;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+
+struct LocalPluginMetadata {
+	version: Option<String>,
+	author: Option<PluginAuthor>,
+	homepage: Option<String>,
+	repository: Option<String>,
+	keywords: Vec<String>,
+	has_mcp: bool,
+	has_skills: bool,
+	has_hooks: bool,
+}
 
 /// Unified plugin registry combining all data sources
 pub struct UnifiedPluginRegistry {
@@ -178,12 +190,28 @@ impl UnifiedPluginRegistry {
 						let mut info = plugin_info;
 						info.local_path = Some(local_path.clone());
 
-						// Try to extract capabilities from local clone
-						let (has_mcp, has_skills, has_hooks) =
-							Self::extract_capabilities(&local_path);
-						info.has_mcp = has_mcp;
-						info.has_skills = has_skills;
-						info.has_hooks = has_hooks;
+						if let Some(metadata) =
+							Self::extract_local_metadata(&local_path)
+						{
+							if info.version.is_none() {
+								info.version = metadata.version;
+							}
+							if info.author.is_none() {
+								info.author = metadata.author;
+							}
+							if info.homepage.is_none() {
+								info.homepage = metadata.homepage;
+							}
+							if info.repository.is_none() {
+								info.repository = metadata.repository;
+							}
+							if info.keywords.is_empty() {
+								info.keywords = metadata.keywords;
+							}
+							info.has_mcp = metadata.has_mcp;
+							info.has_skills = metadata.has_skills;
+							info.has_hooks = metadata.has_hooks;
+						}
 
 						self.plugins.insert(plugin_id, info);
 					} else {
@@ -214,10 +242,7 @@ impl UnifiedPluginRegistry {
 		}
 	}
 
-	/// Try to extract capabilities from plugin.json if it exists
-	fn extract_capabilities(
-		plugin_dir: &std::path::Path,
-	) -> (bool, bool, bool) {
+	fn find_manifest_path(plugin_dir: &Path) -> Option<PathBuf> {
 		let possible_paths = [
 			plugin_dir.join(".claude-plugin/plugin.json"),
 			plugin_dir.join(".plugin/plugin.json"),
@@ -226,24 +251,40 @@ impl UnifiedPluginRegistry {
 
 		for path in &possible_paths {
 			if path.exists() {
-				if let Ok(content) = std::fs::read_to_string(path) {
-					if let Ok(json) =
-						serde_json::from_str::<serde_json::Value>(&content)
-					{
-						let has_mcp = json.get("mcpServers").is_some()
-							|| json.get("mcp_servers").is_some();
-						let has_skills = json.get("skills").is_some()
-							&& !json["skills"].is_null();
-						let has_hooks = json.get("hooks").is_some()
-							|| plugin_dir.join("hooks").exists()
-							|| plugin_dir.join("hooks.json").exists();
-						return (has_mcp, has_skills, has_hooks);
-					}
-				}
+				return Some(path.clone());
 			}
 		}
 
-		(false, false, false)
+		None
+	}
+
+	/// Read local manifest metadata if plugin.json exists
+	fn extract_local_metadata(
+		plugin_dir: &Path,
+	) -> Option<LocalPluginMetadata> {
+		let manifest_path = Self::find_manifest_path(plugin_dir)?;
+		let content = std::fs::read_to_string(manifest_path).ok()?;
+		let json = serde_json::from_str::<serde_json::Value>(&content).ok()?;
+		let manifest =
+			serde_json::from_str::<ClaudePluginManifest>(&content).ok();
+
+		Some(LocalPluginMetadata {
+			version: manifest.as_ref().and_then(|m| m.version.clone()),
+			author: manifest.as_ref().map(|m| PluginAuthor {
+				name: m.author.name.clone(),
+				email: m.author.email.clone(),
+			}),
+			homepage: manifest.as_ref().and_then(|m| m.homepage.clone()),
+			repository: manifest.as_ref().and_then(|m| m.repository.clone()),
+			keywords: manifest.and_then(|m| m.keywords).unwrap_or_default(),
+			has_mcp: json.get("mcpServers").is_some()
+				|| json.get("mcp_servers").is_some(),
+			has_skills: json.get("skills").is_some()
+				&& !json["skills"].is_null(),
+			has_hooks: json.get("hooks").is_some()
+				|| plugin_dir.join("hooks").exists()
+				|| plugin_dir.join("hooks.json").exists(),
+		})
 	}
 
 	/// Scan locally installed plugins
@@ -389,6 +430,8 @@ impl UnifiedPluginRegistry {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::fs;
+	use tempfile::tempdir;
 
 	#[test]
 	fn test_registry_with_existing_plugins_dir() {
@@ -412,5 +455,45 @@ mod tests {
 			println!("Discovered {} plugins", registry.count());
 			println!("Installed: {} plugins", registry.installed_count());
 		});
+	}
+
+	#[test]
+	fn extract_local_metadata_reads_manifest_fields() {
+		let temp_dir = tempdir().unwrap();
+		let plugin_dir = temp_dir.path().join("superpowers");
+		fs::create_dir_all(plugin_dir.join(".claude-plugin")).unwrap();
+		fs::write(
+			plugin_dir.join(".claude-plugin/plugin.json"),
+			r#"{
+				"name":"superpowers",
+				"version":"5.0.7",
+				"description":"test plugin",
+				"author":{"name":"Anthropic","email":"team@example.com"},
+				"homepage":"https://example.com",
+				"repository":"https://github.com/example/superpowers",
+				"keywords":["testing","debugging"],
+				"skills":"skills",
+				"mcpServers":{"docs":{"command":"node"}}
+			}"#,
+		)
+		.unwrap();
+
+		let metadata =
+			UnifiedPluginRegistry::extract_local_metadata(&plugin_dir).unwrap();
+
+		assert_eq!(metadata.version.as_deref(), Some("5.0.7"));
+		assert_eq!(
+			metadata.author.as_ref().map(|author| author.name.as_str()),
+			Some("Anthropic")
+		);
+		assert_eq!(metadata.homepage.as_deref(), Some("https://example.com"));
+		assert_eq!(
+			metadata.repository.as_deref(),
+			Some("https://github.com/example/superpowers")
+		);
+		assert_eq!(metadata.keywords, vec!["testing", "debugging"]);
+		assert!(metadata.has_skills);
+		assert!(metadata.has_mcp);
+		assert!(!metadata.has_hooks);
 	}
 }

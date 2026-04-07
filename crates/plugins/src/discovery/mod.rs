@@ -173,14 +173,37 @@ impl PluginInfo {
 			.unwrap_or_else(|| "latest".to_string())
 	}
 
+	/// Get the effective author string for display
+	pub fn display_author(&self) -> Option<String> {
+		if let Some(author) = self.author.as_ref().map(|a| a.name.trim()) {
+			if !author.is_empty() {
+				return Some(author.to_string());
+			}
+		}
+
+		match &self.source {
+			PluginSource::GitHub { repo, .. } => extract_github_owner(repo),
+			PluginSource::GitUrl { url, .. }
+			| PluginSource::GitSubdir { url, .. } => extract_github_owner(url),
+			PluginSource::Npm { package, .. } => package
+				.strip_prefix('@')
+				.and_then(|value| value.split('/').next())
+				.filter(|scope| !scope.is_empty())
+				.map(str::to_string),
+			PluginSource::LocalRelative { .. } => None,
+		}
+	}
+
 	/// Get GitHub URL for the plugin
 	pub fn github_url(&self) -> Option<String> {
 		match &self.source {
 			PluginSource::GitHub { repo, .. } => {
 				Some(format!("https://github.com/{}", repo))
 			}
-			PluginSource::GitUrl { url, .. } => Some(url.clone()),
-			PluginSource::GitSubdir { url, .. } => Some(url.clone()),
+			PluginSource::GitUrl { url, .. }
+			| PluginSource::GitSubdir { url, .. } => {
+				normalize_github_url(url).or_else(|| Some(url.clone()))
+			}
 			PluginSource::LocalRelative { path } => {
 				// For local plugins in official marketplace
 				if self.marketplace == "claude-plugins-official" {
@@ -195,6 +218,43 @@ impl PluginInfo {
 			_ => None,
 		}
 	}
+}
+
+fn extract_github_owner(reference: &str) -> Option<String> {
+	let repo = github_repo_path(reference)?;
+	repo.split('/')
+		.next()
+		.filter(|owner| !owner.is_empty())
+		.map(str::to_string)
+}
+
+fn normalize_github_url(reference: &str) -> Option<String> {
+	let repo = github_repo_path(reference)?;
+	Some(format!("https://github.com/{repo}"))
+}
+
+fn github_repo_path(reference: &str) -> Option<String> {
+	let trimmed = reference.trim_end_matches('/').trim_end_matches(".git");
+	let path = if let Some(path) = trimmed.strip_prefix("https://github.com/") {
+		path
+	} else if let Some(path) = trimmed.strip_prefix("http://github.com/") {
+		path
+	} else if let Some(path) = trimmed.strip_prefix("git@github.com:") {
+		path
+	} else if trimmed.contains('/') && !trimmed.contains("://") {
+		trimmed
+	} else {
+		return None;
+	};
+
+	let mut segments = path.split('/');
+	let owner = segments.next()?;
+	let repo = segments.next()?;
+	if owner.is_empty() || repo.is_empty() {
+		return None;
+	}
+
+	Some(format!("{owner}/{repo}"))
 }
 
 /// Install count entry from install-counts-cache.json
@@ -349,5 +409,111 @@ impl PluginDiscovery {
 impl Default for PluginDiscovery {
 	fn default() -> Self {
 		Self::new().expect("Failed to create PluginDiscovery")
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn display_author_prefers_manifest_author() {
+		let plugin = PluginInfo {
+			id: "frontend-design@claude-plugins-official".to_string(),
+			name: "frontend-design".to_string(),
+			description: String::new(),
+			version: None,
+			author: Some(PluginAuthor {
+				name: "Anthropic".to_string(),
+				email: None,
+			}),
+			category: None,
+			source: PluginSource::GitHub {
+				repo: "obra/superpowers".to_string(),
+				git_ref: None,
+				sha: None,
+			},
+			marketplace: "claude-plugins-official".to_string(),
+			local_path: None,
+			installed: false,
+			enabled: None,
+			install_count: None,
+			homepage: None,
+			repository: None,
+			keywords: Vec::new(),
+			git_sha: None,
+			has_mcp: false,
+			has_skills: false,
+			has_hooks: false,
+		};
+
+		assert_eq!(plugin.display_author().as_deref(), Some("Anthropic"));
+	}
+
+	#[test]
+	fn display_author_falls_back_to_github_owner() {
+		let plugin = PluginInfo {
+			id: "superpowers@claude-plugins-official".to_string(),
+			name: "superpowers".to_string(),
+			description: String::new(),
+			version: None,
+			author: None,
+			category: None,
+			source: PluginSource::GitUrl {
+				url: "https://github.com/obra/superpowers.git".to_string(),
+				git_ref: None,
+				sha: None,
+			},
+			marketplace: "claude-plugins-official".to_string(),
+			local_path: None,
+			installed: false,
+			enabled: None,
+			install_count: None,
+			homepage: None,
+			repository: None,
+			keywords: Vec::new(),
+			git_sha: None,
+			has_mcp: false,
+			has_skills: false,
+			has_hooks: false,
+		};
+
+		assert_eq!(plugin.display_author().as_deref(), Some("obra"));
+	}
+
+	#[test]
+	fn display_author_and_url_support_repo_shorthand() {
+		let plugin = PluginInfo {
+			id: "ui5@claude-plugins-official".to_string(),
+			name: "ui5".to_string(),
+			description: String::new(),
+			version: None,
+			author: None,
+			category: None,
+			source: PluginSource::GitSubdir {
+				url: "UI5/plugins-claude".to_string(),
+				path: "plugins/ui5".to_string(),
+				git_ref: None,
+				sha: None,
+			},
+			marketplace: "claude-plugins-official".to_string(),
+			local_path: None,
+			installed: false,
+			enabled: None,
+			install_count: None,
+			homepage: None,
+			repository: None,
+			keywords: Vec::new(),
+			git_sha: None,
+			has_mcp: false,
+			has_skills: false,
+			has_hooks: false,
+		};
+
+		assert_eq!(plugin.display_author().as_deref(), Some("UI5"));
+		assert_eq!(
+			plugin.github_url().as_deref(),
+			Some("https://github.com/UI5/plugins-claude")
+		);
 	}
 }
