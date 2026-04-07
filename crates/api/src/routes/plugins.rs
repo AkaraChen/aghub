@@ -5,9 +5,9 @@ use crate::dto::plugin::{
 	McpConfigResponse, McpServerResponse, PluginAuthorResponse,
 	PluginConfigResponse, PluginDetailResponse, PluginListResponse,
 	PluginManifestResponse, PluginResponse, PluginScopeResponse,
-	ReinstallPluginRequest, ReinstallPluginResponse, UninstallPluginRequest,
-	UninstallPluginResponse, UpdatePluginConfigRequest, UpdatePluginRequest,
-	UpdatePluginResponse,
+	PluginSkillInfo, ReinstallPluginRequest, ReinstallPluginResponse,
+	UninstallPluginRequest, UninstallPluginResponse, UpdatePluginConfigRequest,
+	UpdatePluginRequest, UpdatePluginResponse,
 };
 use crate::error::{ApiError, ApiResult};
 use aghub_plugins::claude::ClaudePluginManager;
@@ -90,10 +90,10 @@ pub fn list_plugins() -> ApiResult<PluginListResponse> {
 }
 
 #[post("/plugins/<plugin_id>/enable")]
-pub fn enable_plugin(plugin_id: String) -> ApiResult<PluginResponse> {
+pub fn enable_plugin(plugin_id: &str) -> ApiResult<PluginResponse> {
 	use aghub_plugins::PluginId;
 
-	let id = PluginId::parse(&plugin_id).map_err(|e| {
+	let id = PluginId::parse(plugin_id).map_err(|e| {
 		crate::error::ApiError::bad_request(format!("Invalid plugin ID: {e}"))
 	})?;
 
@@ -126,10 +126,10 @@ pub fn enable_plugin(plugin_id: String) -> ApiResult<PluginResponse> {
 }
 
 #[post("/plugins/<plugin_id>/disable")]
-pub fn disable_plugin(plugin_id: String) -> ApiResult<PluginResponse> {
+pub fn disable_plugin(plugin_id: &str) -> ApiResult<PluginResponse> {
 	use aghub_plugins::PluginId;
 
-	let id = PluginId::parse(&plugin_id).map_err(|e| {
+	let id = PluginId::parse(plugin_id).map_err(|e| {
 		crate::error::ApiError::bad_request(format!("Invalid plugin ID: {e}"))
 	})?;
 
@@ -320,7 +320,10 @@ pub async fn update_plugin(
 
 /// Get detailed plugin information including manifest, hooks, and MCP config
 #[get("/plugins/<plugin_id>")]
-pub fn get_plugin_detail(plugin_id: &str) -> ApiResult<PluginDetailResponse> {
+pub async fn get_plugin_detail(
+	plugin_id: &str,
+) -> ApiResult<PluginDetailResponse> {
+	use aghub_plugins::installer::PluginInstaller;
 	use aghub_plugins::PluginId;
 
 	let id = PluginId::parse(plugin_id).map_err(|e| {
@@ -423,39 +426,96 @@ pub fn get_plugin_detail(plugin_id: &str) -> ApiResult<PluginDetailResponse> {
 
 	let base_response = PluginResponse::from(plugin);
 
-	let mut provided_skills = Vec::new();
-	// Check skills/ directories from ALL scopes (all versions), not just primary
-	for scope in &plugin.scopes {
-		let install_path = std::path::PathBuf::from(&scope.install_path);
-		let skill_dirs = [
-			install_path.join("skills"),
-			install_path.join(".claude/skills"),
-		];
-		for skills_dir in &skill_dirs {
-			if skills_dir.exists() && skills_dir.is_dir() {
-				if let Ok(entries) = std::fs::read_dir(skills_dir) {
-					for entry in entries.flatten() {
-						if entry.path().is_dir() {
-							if let Ok(name) = entry.file_name().into_string() {
-								if !provided_skills.contains(&name) {
-									provided_skills.push(name);
-								}
+	let mut provided_skills: Vec<PluginSkillInfo> = Vec::new();
+	// Collect skill dirs from all install paths (includes sibling directories)
+	let mut all_skill_dirs = Vec::new();
+
+	// Use all_install_paths to find skills in sibling version directories
+	for install_path in plugin.all_install_paths() {
+		all_skill_dirs.push(install_path.join("skills"));
+		all_skill_dirs.push(install_path.join(".claude/skills"));
+	}
+
+	// If plugin specifies custom skills dir, add it for all install paths
+	if let Ok(Some(manifest)) = plugin.read_manifest() {
+		if let Some(ref skills_path) = manifest.skills {
+			for install_path in plugin.all_install_paths() {
+				all_skill_dirs.push(install_path.join(skills_path));
+			}
+		}
+	}
+
+	// Collect skills from all directories, keeping the first non-empty description
+	let mut skill_descriptions: std::collections::HashMap<
+		String,
+		Option<String>,
+	> = std::collections::HashMap::new();
+
+	for skills_dir in &all_skill_dirs {
+		if !skills_dir.is_dir() {
+			continue;
+		}
+		if let Ok(entries) = std::fs::read_dir(skills_dir) {
+			for entry in entries.flatten() {
+				if !entry.path().is_dir() {
+					continue;
+				}
+				if let Ok(name) = entry.file_name().into_string() {
+					let description = extract_skill_description(&entry.path());
+					// Only update if we don't have this skill yet, or if current description is None and new one is Some
+					skill_descriptions
+						.entry(name)
+						.and_modify(|existing| {
+							if existing.is_none() && description.is_some() {
+								*existing = description.clone();
 							}
-						}
-					}
+						})
+						.or_insert(description);
 				}
 			}
 		}
 	}
-	provided_skills.sort();
+
+	// Convert to response format
+	for (name, description) in skill_descriptions {
+		provided_skills.push(PluginSkillInfo { name, description });
+	}
+
+	provided_skills.sort_by(|a, b| a.name.cmp(&b.name));
+
+	let (update_available, latest_version) = if id.source
+		== "claude-plugins-official"
+		|| id.source.starts_with("http")
+	{
+		match PluginInstaller::new() {
+			Ok(installer) => match installer.check_update(&id).await {
+				Ok(Some((latest_version, _))) => (true, Some(latest_version)),
+				Ok(None) => (false, None),
+				Err(error) => {
+					log::warn!("Failed to check updates for {}: {}", id, error);
+					(false, None)
+				}
+			},
+			Err(error) => {
+				log::warn!(
+					"Failed to create plugin installer for {}: {}",
+					id,
+					error
+				);
+				(false, None)
+			}
+		}
+	} else {
+		(false, None)
+	};
 
 	Ok(Json(PluginDetailResponse {
 		plugin: base_response,
 		manifest: manifest_response,
 		hooks: hooks_response,
 		mcp_config: mcp_response,
-		update_available: false, // TODO: implement update check
-		latest_version: None,
+		update_available,
+		latest_version,
 		provided_skills,
 	}))
 }
@@ -784,29 +844,62 @@ pub async fn list_plugin_market() -> ApiResult<Vec<MarketPluginResponse>> {
 
 	log::info!("Plugin market: discovered {} plugins", plugins.len());
 
+	// Get installed plugins for scopes checking
+	let installed_manager =
+		aghub_plugins::claude::ClaudePluginManager::new().ok();
+
 	// Convert to response format
 	let response: Vec<MarketPluginResponse> = plugins
 		.into_iter()
-		.map(|p| MarketPluginResponse {
-			id: p.id.clone(),
-			name: p.name.clone(),
-			description: p.description.clone(),
-			version: p.display_version(),
-			author: p
-				.author
-				.as_ref()
-				.map(|a| a.name.clone())
-				.unwrap_or_default(),
-			github_url: p.github_url().unwrap_or_default(),
-			installs: p.install_count.unwrap_or(0) as i64,
-			installed: p.installed,
-			enabled: p.enabled,
-			category: p.category.clone(),
-			has_mcp: p.has_mcp,
-			has_skills: p.has_skills,
-			has_hooks: p.has_hooks,
+		.map(|p| {
+			let installed_scopes = if p.installed {
+				let plugin_id = aghub_plugins::PluginId::parse(&p.id).ok();
+				if let (Some(manager), Some(id)) =
+					(&installed_manager, &plugin_id)
+				{
+					manager
+						.get_plugin(id)
+						.map(|cp| {
+							cp.scopes
+								.iter()
+								.map(|s| s.scope.to_string())
+								.collect()
+						})
+						.unwrap_or_default()
+				} else {
+					vec![]
+				}
+			} else {
+				vec![]
+			};
+
+			MarketPluginResponse {
+				id: p.id.clone(),
+				name: p.name.clone(),
+				description: p.description.clone(),
+				version: p.display_version(),
+				author: p
+					.author
+					.as_ref()
+					.map(|a| a.name.clone())
+					.unwrap_or_default(),
+				github_url: p.github_url().unwrap_or_default(),
+				installs: p.install_count.unwrap_or(0) as i64,
+				installed: p.installed,
+				installed_scopes,
+				enabled: p.enabled,
+				category: p.category.clone(),
+				has_mcp: p.has_mcp,
+				has_skills: p.has_skills,
+				has_hooks: p.has_hooks,
+			}
 		})
 		.collect();
 
 	Ok(Json(response))
+}
+
+/// Extract skill description from SKILL.md frontmatter
+fn extract_skill_description(skill_dir: &std::path::Path) -> Option<String> {
+	skill::parser::parse(skill_dir).ok().map(|s| s.description)
 }

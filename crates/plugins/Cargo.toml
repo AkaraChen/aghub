@@ -35,3 +35,6 @@ semver = "1.0.28"
 
 # Logging
 log = "0.4"
+
+[dev-dependencies]
+tempfile = { workspace = true }

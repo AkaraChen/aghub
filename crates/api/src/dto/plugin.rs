@@ -204,7 +204,16 @@ pub struct PluginDetailResponse {
 	pub update_available: bool,
 	#[ts(optional)]
 	pub latest_version: Option<String>,
-	pub provided_skills: Vec<String>,
+	pub provided_skills: Vec<PluginSkillInfo>,
+}
+
+/// Skill discovered from a plugin directory
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct PluginSkillInfo {
+	pub name: String,
+	#[ts(optional)]
+	pub description: Option<String>,
 }
 
 /// Check for updates request/response
@@ -276,6 +285,7 @@ pub struct MarketPluginResponse {
 	pub github_url: String,
 	pub installs: i64,
 	pub installed: bool,
+	pub installed_scopes: Vec<String>,
 	#[ts(optional)]
 	pub enabled: Option<bool>,
 	#[ts(optional)]

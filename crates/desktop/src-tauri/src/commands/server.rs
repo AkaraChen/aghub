@@ -13,6 +13,11 @@ fn find_available_port() -> Result<u16, String> {
 pub async fn start_server(
 	state: tauri::State<'_, AppState>,
 ) -> Result<u16, String> {
+	if let Some(port) = *state.port.lock().unwrap() {
+		debug!("reusing embedded API server port {port}");
+		return Ok(port);
+	}
+
 	let port = find_available_port()?;
 	info!("received request to start embedded API server on port {port}");
 	tokio::spawn(async move {

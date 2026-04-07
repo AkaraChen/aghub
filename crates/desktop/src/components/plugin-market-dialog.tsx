@@ -4,48 +4,34 @@ import {
 	ArrowPathIcon,
 	CheckIcon,
 	ExclamationCircleIcon,
-	StarIcon,
 	MagnifyingGlassIcon,
+	StarIcon,
 } from "@heroicons/react/24/solid";
-import { Button, SearchField, Modal, Spinner, toast } from "@heroui/react";
+import {
+	Button,
+	Chip,
+	Modal,
+	SearchField,
+	Spinner,
+	toast,
+} from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { TableComponents } from "react-virtuoso";
-import { TableVirtuoso } from "react-virtuoso";
-import type { MarketPluginResponse } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
 import { cn } from "../lib/utils";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
 
-const ROW_HEIGHT = 56;
-
 interface PluginMarketDialogProps {
 	isOpen: boolean;
 	onClose: () => void;
+	installScope?: "user" | "project" | "local";
 }
-
-const tableComponents: TableComponents<MarketPluginResponse> = {
-	Table: ({ style, ...props }) => (
-		<table
-			className="w-full table-fixed caption-bottom text-sm"
-			style={style}
-			{...props}
-		/>
-	),
-	TableBody: (props) => <tbody {...props} />,
-	TableRow: ({ style, ...props }) => (
-		<tr
-			className="border-b border-border transition-colors hover:bg-surface-secondary"
-			style={{ height: ROW_HEIGHT, ...style }}
-			{...props}
-		/>
-	),
-};
 
 export function PluginMarketDialog({
 	isOpen,
 	onClose,
+	installScope = "user",
 }: PluginMarketDialogProps) {
 	const { t, i18n } = useTranslation();
 	const api = useApi();
@@ -67,7 +53,6 @@ export function PluginMarketDialog({
 	const {
 		data: plugins = [],
 		isLoading,
-		isFetching,
 		refetch,
 		isError,
 		error,
@@ -79,7 +64,7 @@ export function PluginMarketDialog({
 
 	const installMutation = useMutation({
 		mutationFn: (pluginId: string) =>
-			api.plugins.install({ plugin_id: pluginId, scope: "user" }),
+			api.plugins.install({ plugin_id: pluginId, scope: installScope }),
 		onSuccess: (_, pluginId) => {
 			toast.success(t("pluginInstalled", { id: pluginId }));
 			queryClient.invalidateQueries({ queryKey: ["plugins"] });
@@ -141,10 +126,28 @@ export function PluginMarketDialog({
 		return [...filtered].sort((a, b) => b.installs - a.installs);
 	}, [plugins, searchQuery, selectedCategory]);
 
+	const installedPluginsCount = useMemo(() => {
+		return plugins.filter((plugin) => plugin.installed).length;
+	}, [plugins]);
+
+	const activeFilterKey = `${selectedCategory ?? "all"}:${searchQuery}`;
+
 	const handleClose = () => {
 		setSearchQuery("");
 		setSelectedCategory(null);
 		onClose();
+	};
+
+	const formatPluginVersion = (version: string) => {
+		if (!version) {
+			return t("unknown");
+		}
+
+		if (version === "latest" || version.startsWith("v")) {
+			return version;
+		}
+
+		return `v${version}`;
 	};
 
 	return (
@@ -152,13 +155,18 @@ export function PluginMarketDialog({
 			<Modal.Container>
 				<Modal.Dialog className="max-h-[85vh] w-[calc(100vw-2rem)] max-w-4xl">
 					<Modal.CloseTrigger />
-					<Modal.Header>
-						<Modal.Heading>{t("pluginMarket")}</Modal.Heading>
+					<Modal.Header className="items-start">
+						<div className="space-y-1">
+							<Modal.Heading>{t("pluginMarket")}</Modal.Heading>
+							<p className="text-sm text-muted">
+								{t("pluginMarketDescription")}
+							</p>
+						</div>
 					</Modal.Header>
 
 					<Modal.Body className="flex min-h-0 flex-col space-y-4 p-4 overflow-hidden">
 						{/* Search and filter bar */}
-						<div className="flex shrink-0 gap-2">
+						<div className="flex shrink-0 items-center gap-3">
 							<SearchField
 								className="flex-1"
 								value={searchQuery}
@@ -174,27 +182,14 @@ export function PluginMarketDialog({
 								</SearchField.Group>
 							</SearchField>
 							<Button
-								isIconOnly
-								variant="ghost"
-								onPress={() => refetch()}
-								isDisabled={isFetching}
-								aria-label={t("refresh")}
-							>
-								<ArrowPathIcon
-									className={cn(
-										"size-4",
-										isFetching && "animate-spin",
-									)}
-								/>
-							</Button>
-							<Button
-								isIconOnly
-								variant="ghost"
+								variant="secondary"
+								size="sm"
 								onPress={() =>
 									updateMarketplaceMutation.mutate()
 								}
 								isPending={updateMarketplaceMutation.isPending}
 								aria-label={t("updateMarketplace")}
+								className="shrink-0 gap-1.5"
 							>
 								<ArrowPathIcon
 									className={cn(
@@ -203,48 +198,59 @@ export function PluginMarketDialog({
 											"animate-spin",
 									)}
 								/>
+								<span className="text-xs">
+									{t("updateMarketplace")}
+								</span>
 							</Button>
 						</div>
 
 						{/* Category filter chips */}
 						{categories.length > 0 && (
-							<div className="flex shrink-0 flex-wrap gap-1.5">
-								<button
-									type="button"
-									onClick={() => setSelectedCategory(null)}
-									className={cn(
-										"px-2.5 py-1 text-[11px] tracking-wider font-medium rounded-full transition-colors cursor-pointer",
-										selectedCategory === null
-											? "bg-success text-success-foreground"
-											: "bg-surface-secondary hover:bg-surface-tertiary text-muted hover:text-foreground",
-									)}
-								>
-									{t("all")}
-								</button>
-								{categories.map((cat) => (
+							<div className="shrink-0 overflow-x-auto pb-1">
+								<div className="flex min-w-max gap-1.5">
 									<button
-										key={cat}
 										type="button"
-										onClick={() => setSelectedCategory(cat)}
+										onClick={() =>
+											setSelectedCategory(null)
+										}
 										className={cn(
-											"px-2.5 py-1 text-[11px] tracking-wider font-medium rounded-full transition-colors cursor-pointer",
-											selectedCategory === cat
+											"shrink-0 rounded-full px-3 py-1.5 text-[11px] font-medium tracking-wide transition-colors cursor-pointer",
+											selectedCategory === null
 												? "bg-success text-success-foreground"
 												: "bg-surface-secondary hover:bg-surface-tertiary text-muted hover:text-foreground",
 										)}
 									>
-										{t(
-											`pluginCategories.${cat.toLowerCase()}`,
-											{
-												defaultValue:
-													cat
-														.charAt(0)
-														.toUpperCase() +
-													cat.slice(1).toLowerCase(),
-											},
-										)}
+										{t("all")}
 									</button>
-								))}
+									{categories.map((cat) => (
+										<button
+											key={cat}
+											type="button"
+											onClick={() =>
+												setSelectedCategory(cat)
+											}
+											className={cn(
+												"shrink-0 rounded-full px-3 py-1.5 text-[11px] font-medium tracking-wide transition-colors cursor-pointer",
+												selectedCategory === cat
+													? "bg-success text-success-foreground"
+													: "bg-surface-secondary hover:bg-surface-tertiary text-muted hover:text-foreground",
+											)}
+										>
+											{t(
+												`pluginCategories.${cat.toLowerCase()}`,
+												{
+													defaultValue:
+														cat
+															.charAt(0)
+															.toUpperCase() +
+														cat
+															.slice(1)
+															.toLowerCase(),
+												},
+											)}
+										</button>
+									))}
+								</div>
 							</div>
 						)}
 
@@ -287,56 +293,76 @@ export function PluginMarketDialog({
 									</Empty>
 								</div>
 							) : (
-								<div className="flex-1 min-h-0 h-full">
-									<TableVirtuoso
-										data={filteredPlugins}
-										fixedItemHeight={ROW_HEIGHT}
-										style={{ height: "100%" }}
-										components={tableComponents}
-										itemContent={(_index, plugin) => (
-											<>
-												<td className="w-1/2 max-w-0 p-3 align-middle">
-													<div className="flex flex-col gap-1">
-														<div className="flex flex-wrap items-center gap-2">
-															<span className="truncate font-medium text-foreground">
-																{plugin.name}
-															</span>
-															<div className="flex items-center gap-1.5">
-																{plugin.category && (
-																	<span className="rounded-sm bg-surface-secondary px-1.5 py-0.5 text-[10px] font-semibold uppercase text-muted">
-																		{t(
-																			`pluginCategories.${plugin.category.toLowerCase()}`,
-																			{
-																				defaultValue:
-																					plugin.category,
-																			},
-																		)}
-																	</span>
-																)}
-																{plugin.has_mcp && (
-																	<span className="rounded-sm bg-blue-500/10 dark:bg-blue-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400">
-																		MCP
-																	</span>
-																)}
-																{plugin.has_skills && (
-																	<span className="rounded-sm bg-purple-500/10 dark:bg-purple-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-purple-600 dark:text-purple-400">
-																		SKILL
-																	</span>
-																)}
-															</div>
+								<div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+									<div className="grid shrink-0 grid-cols-[minmax(0,1.9fr)_120px_160px_120px] gap-4 border-b border-separator px-4 py-3 text-[11px] font-medium tracking-wide text-muted uppercase">
+										<span>{t("name")}</span>
+										<span>{t("installs")}</span>
+										<span>{t("author")}</span>
+										<span className="text-right">
+											{t("installation")}
+										</span>
+									</div>
+									<div
+										key={activeFilterKey}
+										className="min-h-0 flex-1 overflow-y-auto"
+									>
+										{filteredPlugins.map((plugin) => (
+											<div
+												key={plugin.id}
+												className="grid grid-cols-[minmax(0,1.9fr)_120px_160px_120px] gap-4 border-b border-separator px-4 py-4 transition-colors hover:bg-surface-secondary"
+											>
+												<div className="min-w-0 space-y-2">
+													<div className="flex min-w-0 items-center gap-2">
+														<span className="truncate text-base font-semibold text-foreground">
+															{plugin.name}
+														</span>
+														<div className="flex shrink-0 items-center gap-1.5">
+															{plugin.category && (
+																<Chip
+																	size="sm"
+																	variant="secondary"
+																	className="h-6 px-2 text-[10px] font-semibold uppercase"
+																>
+																	{t(
+																		`pluginCategories.${plugin.category.toLowerCase()}`,
+																		{
+																			defaultValue:
+																				plugin.category,
+																		},
+																	)}
+																</Chip>
+															)}
+															{plugin.has_mcp && (
+																<Chip
+																	size="sm"
+																	variant="secondary"
+																	className="h-6 px-2 text-[10px] font-semibold text-blue-400"
+																>
+																	MCP
+																</Chip>
+															)}
+															{plugin.has_skills && (
+																<Chip
+																	size="sm"
+																	variant="secondary"
+																	className="h-6 px-2 text-[10px] font-semibold text-violet-400"
+																>
+																	SKILL
+																</Chip>
+															)}
 														</div>
-														<p className="truncate text-sm text-muted">
-															{plugin.description ||
-																t(
-																	"noDescription",
-																)}
-														</p>
 													</div>
-												</td>
-												<td className="w-1/6 p-3 align-middle">
+													{plugin.description && (
+														<p className="line-clamp-1 text-sm text-muted">
+															{plugin.description}
+														</p>
+													)}
+												</div>
+
+												<div className="flex items-center">
 													{plugin.installs > 0 ? (
-														<div className="flex items-center gap-1 text-xs text-muted">
-															<StarIcon className="size-3 text-warning" />
+														<div className="flex items-center gap-1.5 text-sm text-muted">
+															<StarIcon className="size-4 text-warning" />
 															<span>
 																{compactFormatter.format(
 																	plugin.installs,
@@ -344,27 +370,31 @@ export function PluginMarketDialog({
 															</span>
 														</div>
 													) : (
-														<span className="text-xs text-muted">
-															-
+														<span className="text-sm text-muted">
+															—
 														</span>
 													)}
-												</td>
-												<td className="w-1/6 p-3 align-middle">
-													<div className="flex flex-col gap-0.5">
-														<span className="truncate text-xs text-foreground">
-															{plugin.author ||
-																"-"}
-														</span>
-														<span className="text-[10px] text-muted">
-															v{plugin.version}
-														</span>
-													</div>
-												</td>
-												<td className="w-[100px] p-3 text-right align-middle">
-													{plugin.installed ? (
-														<div className="flex min-w-[70px] items-center justify-end gap-1.5">
-															<CheckIcon className="size-4 text-success" />
-															<span className="text-sm font-medium text-success">
+												</div>
+
+												<div className="flex flex-col justify-center gap-1">
+													<span className="truncate text-sm font-medium text-foreground">
+														{plugin.author ||
+															t("unknown")}
+													</span>
+													<span className="text-xs text-muted">
+														{formatPluginVersion(
+															plugin.version,
+														)}
+													</span>
+												</div>
+
+												<div className="flex items-center justify-end">
+													{plugin.installed_scopes?.includes(
+														installScope,
+													) ? (
+														<div className="flex min-w-[96px] items-center justify-center gap-1.5 rounded-full bg-success/10 px-3 py-2 text-sm font-medium text-success">
+															<CheckIcon className="size-4" />
+															<span>
 																{t("installed")}
 															</span>
 														</div>
@@ -372,7 +402,7 @@ export function PluginMarketDialog({
 														<Button
 															size="sm"
 															variant="tertiary"
-															className="min-w-[70px]"
+															className="min-w-[96px]"
 															onPress={() =>
 																installMutation.mutate(
 																	plugin.id,
@@ -387,10 +417,10 @@ export function PluginMarketDialog({
 															{t("install")}
 														</Button>
 													)}
-												</td>
-											</>
-										)}
-									/>
+												</div>
+											</div>
+										))}
+									</div>
 								</div>
 							)}
 						</div>
@@ -400,13 +430,19 @@ export function PluginMarketDialog({
 						<div className="flex items-center gap-2 text-xs text-muted">
 							<span>
 								{filteredPlugins.length === plugins.length
-									? t("discoverPlugins", {
+									? t("availablePluginsCount", {
 											count: plugins.length,
 										})
 									: t("showingPluginsCount", {
 											filtered: filteredPlugins.length,
 											total: plugins.length,
 										})}
+							</span>
+							<span aria-hidden="true">·</span>
+							<span>
+								{t("installedPluginsCount", {
+									count: installedPluginsCount,
+								})}
 							</span>
 						</div>
 						<Button variant="secondary" onPress={handleClose}>

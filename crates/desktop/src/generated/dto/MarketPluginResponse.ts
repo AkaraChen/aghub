@@ -12,6 +12,7 @@ export type MarketPluginResponse = {
 	github_url: string;
 	installs: number;
 	installed: boolean;
+	installed_scopes: Array<string>;
 	enabled?: boolean;
 	category?: string;
 	has_mcp: boolean;

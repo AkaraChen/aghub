@@ -25,7 +25,7 @@ use aghub_api::dto::{
 		McpConfigResponse, McpServerResponse, PluginAuthorResponse,
 		PluginConfigResponse, PluginDetailResponse, PluginListResponse,
 		PluginManifestResponse, PluginResponse, PluginScopeResponse,
-		ReinstallPluginRequest, ReinstallPluginResponse,
+		PluginSkillInfo, ReinstallPluginRequest, ReinstallPluginResponse,
 		UninstallPluginRequest, UninstallPluginResponse,
 		UpdatePluginConfigRequest, UpdatePluginRequest, UpdatePluginResponse,
 	},
@@ -177,6 +177,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<PluginListResponse>(&cfg)?;
 	export_type::<PluginDetailResponse>(&cfg)?;
 	export_type::<PluginScopeResponse>(&cfg)?;
+	export_type::<PluginSkillInfo>(&cfg)?;
 	export_type::<PluginManifestResponse>(&cfg)?;
 	export_type::<PluginAuthorResponse>(&cfg)?;
 	export_type::<HooksManifestResponse>(&cfg)?;

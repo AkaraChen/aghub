@@ -6,7 +6,6 @@ import {
 	CodeBracketIcon,
 	FolderIcon,
 	TrashIcon,
-	WrenchIcon,
 } from "@heroicons/react/24/solid";
 import {
 	AlertDialog,
@@ -23,15 +22,20 @@ import * as pathe from "pathe";
 import { useMemo, useReducer } from "react";
 import { useTranslation } from "react-i18next";
 import { siGithub } from "simple-icons";
-import type { PluginResponse } from "../generated/dto";
+import type {
+	MarketPluginResponse,
+	PluginDetailResponse,
+	PluginListResponse,
+	PluginResponse,
+} from "../generated/dto";
 import { useApi } from "../hooks/use-api";
 import { cn } from "../lib/utils";
 import { skillListQueryOptions } from "../requests/skills";
 
 interface PluginDetailProps {
 	plugin: PluginResponse;
-	selectedCount?: number;
-	selectedPlugins?: PluginResponse[];
+	selectedScope?: "user" | "project" | "local" | null;
+	onScopeChange?: (scope: "user" | "project" | "local") => void;
 }
 
 function MetaRow({
@@ -125,8 +129,8 @@ function pluginDetailQueryOptions(
 
 export function PluginDetail({
 	plugin,
-	selectedCount = 0,
-	selectedPlugins = [],
+	selectedScope = null,
+	onScopeChange,
 }: PluginDetailProps) {
 	const { t } = useTranslation();
 	const api = useApi();
@@ -148,30 +152,175 @@ export function PluginDetail({
 	const mcpConfig = pluginDetail?.mcp_config;
 	const updateAvailable = pluginDetail?.update_available ?? false;
 	const latestVersion = pluginDetail?.latest_version ?? null;
+
+	const currentScope = useMemo(() => {
+		if (
+			selectedScope &&
+			currentPlugin.scopes.some((scope) => scope.scope === selectedScope)
+		) {
+			return selectedScope;
+		}
+
+		return (
+			currentPlugin.scopes.find(
+				(scope) => scope.install_path === currentPlugin.install_path,
+			)?.scope ??
+			currentPlugin.scopes[0]?.scope ??
+			"user"
+		);
+	}, [selectedScope, currentPlugin.install_path, currentPlugin.scopes]);
+
 	const providedSkills = useMemo(
 		() => pluginDetail?.provided_skills ?? [],
 		[pluginDetail?.provided_skills],
 	);
 
+	const updatePluginCaches = (
+		updater: (entry: PluginResponse) => PluginResponse,
+	) => {
+		queryClient.setQueryData<PluginListResponse | undefined>(
+			["plugins"],
+			(existing) =>
+				existing
+					? {
+							...existing,
+							plugins: existing.plugins.map((entry) =>
+								entry.id === plugin.id ? updater(entry) : entry,
+							),
+						}
+					: existing,
+		);
+		queryClient.setQueryData<PluginDetailResponse | undefined>(
+			["plugin-detail", plugin.id],
+			(existing) =>
+				existing
+					? {
+							...existing,
+							...updater(existing),
+						}
+					: existing,
+		);
+		queryClient.setQueryData<MarketPluginResponse[] | undefined>(
+			["plugins-market"],
+			(existing) =>
+				existing?.map((entry) =>
+					entry.id === plugin.id
+						? { ...entry, enabled: updater(currentPlugin).enabled }
+						: entry,
+				) ?? existing,
+		);
+	};
+
+	const markSkillQueriesStale = () =>
+		queryClient.invalidateQueries({
+			queryKey: ["skills"],
+			refetchType: "none",
+		});
+
+	const applyPluginEnabledState = (enabled: boolean) => {
+		updatePluginCaches((entry) => ({
+			...entry,
+			enabled,
+		}));
+	};
+
 	const enableMutation = useMutation({
 		mutationFn: (id: string) => api.plugins.enable(id),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["plugins"] });
-			queryClient.invalidateQueries({ queryKey: ["skills"] });
-			queryClient.invalidateQueries({
-				queryKey: ["plugin-detail", plugin.id],
-			});
+		onMutate: async () => {
+			await Promise.all([
+				queryClient.cancelQueries({ queryKey: ["plugins"] }),
+				queryClient.cancelQueries({
+					queryKey: ["plugin-detail", plugin.id],
+				}),
+				queryClient.cancelQueries({ queryKey: ["plugins-market"] }),
+			]);
+
+			const previousPlugins =
+				queryClient.getQueryData<PluginListResponse>(["plugins"]);
+			const previousDetail =
+				queryClient.getQueryData<PluginDetailResponse>([
+					"plugin-detail",
+					plugin.id,
+				]);
+			const previousMarket = queryClient.getQueryData<
+				MarketPluginResponse[]
+			>(["plugins-market"]);
+
+			applyPluginEnabledState(true);
+
+			return {
+				previousPlugins,
+				previousDetail,
+				previousMarket,
+			};
+		},
+		onSuccess: (data) => {
+			updatePluginCaches((entry) => ({
+				...entry,
+				...data,
+			}));
+			void markSkillQueriesStale();
+		},
+		onError: (_error, _variables, context) => {
+			queryClient.setQueryData(["plugins"], context?.previousPlugins);
+			queryClient.setQueryData(
+				["plugin-detail", plugin.id],
+				context?.previousDetail,
+			);
+			queryClient.setQueryData(
+				["plugins-market"],
+				context?.previousMarket,
+			);
 		},
 	});
 
 	const disableMutation = useMutation({
 		mutationFn: (id: string) => api.plugins.disable(id),
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["plugins"] });
-			queryClient.invalidateQueries({ queryKey: ["skills"] });
-			queryClient.invalidateQueries({
-				queryKey: ["plugin-detail", plugin.id],
-			});
+		onMutate: async () => {
+			await Promise.all([
+				queryClient.cancelQueries({ queryKey: ["plugins"] }),
+				queryClient.cancelQueries({
+					queryKey: ["plugin-detail", plugin.id],
+				}),
+				queryClient.cancelQueries({ queryKey: ["plugins-market"] }),
+			]);
+
+			const previousPlugins =
+				queryClient.getQueryData<PluginListResponse>(["plugins"]);
+			const previousDetail =
+				queryClient.getQueryData<PluginDetailResponse>([
+					"plugin-detail",
+					plugin.id,
+				]);
+			const previousMarket = queryClient.getQueryData<
+				MarketPluginResponse[]
+			>(["plugins-market"]);
+
+			applyPluginEnabledState(false);
+
+			return {
+				previousPlugins,
+				previousDetail,
+				previousMarket,
+			};
+		},
+		onSuccess: (data) => {
+			updatePluginCaches((entry) => ({
+				...entry,
+				...data,
+			}));
+			void markSkillQueriesStale();
+		},
+		onError: (_error, _variables, context) => {
+			queryClient.setQueryData(["plugins"], context?.previousPlugins);
+			queryClient.setQueryData(
+				["plugin-detail", plugin.id],
+				context?.previousDetail,
+			);
+			queryClient.setQueryData(
+				["plugins-market"],
+				context?.previousMarket,
+			);
 		},
 	});
 
@@ -181,7 +330,7 @@ export function PluginDetail({
 		mutationFn: (pluginId: string) =>
 			api.plugins.update({
 				plugin_id: pluginId,
-				scope: "user",
+				scope: currentScope,
 			}),
 		onSuccess: () => {
 			toast.success(t("pluginUpdated"));
@@ -195,33 +344,11 @@ export function PluginDetail({
 		},
 	});
 
-	const checkUpdateMutation = useMutation({
-		mutationFn: (pluginId: string) =>
-			api.plugins.checkUpdate({ plugin_id: pluginId }),
-		onSuccess: (data) => {
-			queryClient.invalidateQueries({
-				queryKey: ["plugin-detail", plugin.id],
-			});
-			if (data.update_available) {
-				toast.success(
-					t("updateAvailable", {
-						version: data.latest_version || "",
-					}),
-				);
-			} else {
-				toast.success(t("noUpdateAvailable"));
-			}
-		},
-		onError: (error) => {
-			toast.danger(error.message || t("updateCheckFailed"));
-		},
-	});
-
 	const reinstallMutation = useMutation({
 		mutationFn: (pluginId: string) =>
 			api.plugins.reinstall({
 				plugin_id: pluginId,
-				scope: "user",
+				scope: currentScope,
 				keep_data: true,
 			}),
 		onSuccess: () => {
@@ -240,7 +367,7 @@ export function PluginDetail({
 		mutationFn: (pluginId: string) =>
 			api.plugins.uninstall({
 				plugin_id: pluginId,
-				scope: "user",
+				scope: currentScope,
 				keep_data: false,
 			}),
 		onSuccess: () => {
@@ -283,60 +410,16 @@ export function PluginDetail({
 			) ?? [];
 		const skillNames = new Set(pluginSkills.map((s) => s.name));
 		const merged = [...pluginSkills];
-		for (const name of providedSkills) {
-			if (!skillNames.has(name)) {
+		for (const skill of providedSkills) {
+			if (!skillNames.has(skill.name)) {
 				merged.push({
-					name,
-					description: undefined,
+					name: skill.name,
+					description: skill.description,
 				} as unknown as (typeof pluginSkills)[0]);
 			}
 		}
 		return merged;
 	}, [allSkills, currentPlugin.id, providedSkills]);
-
-	// Multi-select mode shows summary
-	if (selectedCount > 1) {
-		return (
-			<div className="h-full overflow-y-auto">
-				<div className="w-full space-y-4 p-4 sm:p-6">
-					<Card>
-						<Card.Header className="flex-col items-stretch gap-4 border-b border-separator">
-							<h2 className="text-xl font-semibold text-foreground">
-								{t("itemsSelected", { count: selectedCount })}
-							</h2>
-						</Card.Header>
-						<Card.Content className="flex flex-col gap-6">
-							<div className="space-y-3">
-								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
-									{t("selectedItems")}
-								</h3>
-								<div className="space-y-2">
-									{selectedPlugins.map((p) => (
-										<div
-											key={p.id}
-											className="flex items-center justify-between rounded-lg border border-separator bg-surface-secondary px-3 py-2"
-										>
-											<div className="flex items-center gap-2">
-												<div
-													className={`size-2.5 rounded-full shadow-inner ${p.enabled ? "bg-success" : "bg-muted"}`}
-												/>
-												<span className="font-medium">
-													{p.name}
-												</span>
-												<span className="text-xs text-muted">
-													v{p.version}
-												</span>
-											</div>
-										</div>
-									))}
-								</div>
-							</div>
-						</Card.Content>
-					</Card>
-				</div>
-			</div>
-		);
-	}
 
 	return (
 		<div className="h-full overflow-y-auto">
@@ -345,8 +428,31 @@ export function PluginDetail({
 					{/* Header: Name + Version + Actions */}
 					<Card.Header className="flex flex-row items-start justify-between gap-3">
 						<div className="min-w-0 flex-1">
-							<h2 className="text-xl font-semibold text-foreground truncate">
+							<h2 className="text-xl font-semibold text-foreground truncate flex items-center gap-2">
 								{currentPlugin.name}
+								{currentPlugin.scopes.length > 1 && (
+									<select
+										className="bg-default-100 text-foreground text-xs rounded px-2 py-1 outline-none font-normal border border-default-200 ml-2"
+										value={currentScope}
+										onChange={(e) =>
+											onScopeChange?.(
+												e.target.value as
+													| "user"
+													| "project"
+													| "local",
+											)
+										}
+									>
+										{currentPlugin.scopes.map((s) => (
+											<option
+												key={s.scope}
+												value={s.scope}
+											>
+												{s.scope}
+											</option>
+										))}
+									</select>
+								)}
 							</h2>
 							<p className="text-xs text-muted mt-1">
 								{currentPlugin.id}
@@ -357,31 +463,6 @@ export function PluginDetail({
 								"claude-plugins-official" ||
 								currentPlugin.source.startsWith("http")) && (
 								<>
-									{/* Check update */}
-									<Tooltip delay={0}>
-										<Button
-											isIconOnly
-											variant="ghost"
-											size="sm"
-											className="size-8 text-muted"
-											onPress={() =>
-												checkUpdateMutation.mutate(
-													currentPlugin.id,
-												)
-											}
-											isDisabled={
-												checkUpdateMutation.isPending
-											}
-											aria-label={t("checkForUpdates")}
-										>
-											<ArrowPathIcon
-												className={`size-4 ${checkUpdateMutation.isPending ? "animate-spin" : ""}`}
-											/>
-										</Button>
-										<Tooltip.Content>
-											{t("checkForUpdates")}
-										</Tooltip.Content>
-									</Tooltip>
 									{/* Update button (shown when update available) */}
 									{updateAvailable && (
 										<Tooltip delay={0}>
@@ -430,14 +511,14 @@ export function PluginDetail({
 											isDisabled={
 												reinstallMutation.isPending
 											}
-											aria-label={t("reinstall")}
+											aria-label={t("reinstallPlugin")}
 										>
-											<WrenchIcon
+											<ArrowPathIcon
 												className={`size-4 ${reinstallMutation.isPending ? "animate-spin" : ""}`}
 											/>
 										</Button>
 										<Tooltip.Content>
-											{t("reinstall")}
+											{t("reinstallPlugin")}
 										</Tooltip.Content>
 									</Tooltip>
 								</>
@@ -448,7 +529,7 @@ export function PluginDetail({
 									isIconOnly
 									variant="ghost"
 									size="sm"
-									className="size-8 text-danger"
+									className="size-8 text-muted"
 									onPress={() =>
 										dispatch({
 											type: "set_uninstall_dialog",
@@ -456,38 +537,47 @@ export function PluginDetail({
 										})
 									}
 									isDisabled={uninstallMutation.isPending}
-									aria-label={t("uninstall")}
+									aria-label={t("uninstallPlugin")}
 								>
 									<TrashIcon
 										className={`size-4 ${uninstallMutation.isPending ? "animate-spin" : ""}`}
 									/>
 								</Button>
 								<Tooltip.Content>
-									{t("uninstall")}
+									{t("uninstallPlugin")}
 								</Tooltip.Content>
 							</Tooltip>
-							<Switch
-								isSelected={currentPlugin.enabled}
-								isDisabled={isToggling}
-								onChange={() => {
-									if (currentPlugin.enabled) {
-										disableMutation.mutate(
-											currentPlugin.id,
-										);
-									} else {
-										enableMutation.mutate(currentPlugin.id);
+							<Tooltip delay={0}>
+								<Switch
+									isSelected={currentPlugin.enabled}
+									isDisabled={isToggling}
+									onChange={() => {
+										if (currentPlugin.enabled) {
+											disableMutation.mutate(
+												currentPlugin.id,
+											);
+										} else {
+											enableMutation.mutate(
+												currentPlugin.id,
+											);
+										}
+									}}
+									aria-label={
+										currentPlugin.enabled
+											? t("disablePlugin")
+											: t("enablePlugin")
 									}
-								}}
-								aria-label={
-									currentPlugin.enabled
+								>
+									<Switch.Control>
+										<Switch.Thumb />
+									</Switch.Control>
+								</Switch>
+								<Tooltip.Content>
+									{currentPlugin.enabled
 										? t("disablePlugin")
-										: t("enablePlugin")
-								}
-							>
-								<Switch.Control>
-									<Switch.Thumb />
-								</Switch.Control>
-							</Switch>
+										: t("enablePlugin")}
+								</Tooltip.Content>
+							</Tooltip>
 						</div>
 					</Card.Header>
 
@@ -659,6 +749,46 @@ export function PluginDetail({
 													args={server.args}
 												/>
 											)}
+											{server.env &&
+												Object.keys(server.env).length >
+													0 && (
+													<div className="grid gap-1.5 pt-1">
+														<span className="text-[11px] font-medium tracking-wide text-muted uppercase">
+															{t(
+																"environmentVariables",
+															) ||
+																"Environment Variables"}
+														</span>
+														<div className="space-y-2">
+															{Object.entries(
+																server.env,
+															).map(
+																([
+																	key,
+																	value,
+																]) => (
+																	<div
+																		key={
+																			key
+																		}
+																		className="grid gap-1 rounded-lg border border-separator bg-surface-secondary px-3 py-2"
+																	>
+																		<span className="font-mono text-[11px] text-muted">
+																			{
+																				key
+																			}
+																		</span>
+																		<code className="font-mono text-xs leading-5 text-foreground break-words">
+																			{
+																				value as string
+																			}
+																		</code>
+																	</div>
+																),
+															)}
+														</div>
+													</div>
+												)}
 											{server.url && (
 												<MetaRow
 													label="URL"
@@ -710,7 +840,6 @@ export function PluginDetail({
 								</Button>
 								<Button
 									variant="primary"
-									className="bg-danger text-danger-foreground hover:bg-danger/90"
 									onPress={handleUninstall}
 								>
 									{t("uninstall")}

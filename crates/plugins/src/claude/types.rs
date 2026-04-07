@@ -128,7 +128,12 @@ pub struct McpConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpServerConfig {
-	#[serde(rename = "type")]
+	/// Transport type: "stdio", "http", "sse", etc.
+	/// Defaults to "stdio" when omitted (common in legacy .mcp.json)
+	#[serde(
+		rename = "type",
+		default = "McpServerConfig::default_transport_type"
+	)]
 	pub transport_type: String,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub command: Option<String>,
@@ -142,4 +147,10 @@ pub struct McpServerConfig {
 	pub headers: Option<HashMap<String, String>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub note: Option<String>,
+}
+
+impl McpServerConfig {
+	fn default_transport_type() -> String {
+		"stdio".to_string()
+	}
 }

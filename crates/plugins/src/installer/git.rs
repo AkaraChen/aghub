@@ -47,11 +47,20 @@ impl GitBasedInstaller {
 		let subdir = subdir.to_string();
 
 		// Extract tarball in blocking task (tar::Archive is not Send)
+		let url_for_error = url.to_string();
 		let result = tokio::task::spawn_blocking(move || {
 			Self::extract_tarball(&bytes, &subdir, &target_dir)
 		})
 		.await
 		.context("Failed to spawn extraction task")?;
+
+		let result = result.map_err(|e| {
+			anyhow::anyhow!(
+				"Failed to extract tarball from {}: {}",
+				url_for_error,
+				e
+			)
+		});
 
 		result
 	}
@@ -62,21 +71,49 @@ impl GitBasedInstaller {
 		subdir: &str,
 		target_dir: &Path,
 	) -> Result<String> {
+		// Check if tarball is too small (likely an error page)
+		if bytes.len() < 100 {
+			anyhow::bail!(
+				"Downloaded content is too small ({} bytes), possibly an error response",
+				bytes.len()
+			);
+		}
+
 		// First pass: find common prefix
 		let cursor = Cursor::new(bytes);
 		let tar = flate2::read::GzDecoder::new(cursor);
 		let mut archive = tar::Archive::new(tar);
 
+		let mut entry_errors = Vec::new();
 		let entries: Vec<_> = archive
 			.entries()
-			.context("Failed to read tarball entries")?
-			.filter_map(|e| e.ok())
+			.context("Failed to read tarball entries - archive may be corrupted or not a valid gzip file")?
+			.filter_map(|e| {
+				match e {
+					Ok(entry) => Some(entry),
+					Err(err) => {
+						entry_errors.push(format!("{:?}", err));
+						None
+					}
+				}
+			})
 			.map(|e| e.path().map(|p| p.to_string_lossy().to_string()))
 			.filter_map(|p| p.ok())
+			.filter(|p| !p.contains("pax_global_header"))
 			.collect();
 
 		if entries.is_empty() {
-			anyhow::bail!("Empty tarball");
+			let error_detail = if entry_errors.is_empty() {
+				"No entries found in tarball".to_string()
+			} else {
+				format!("Entry errors: {}", entry_errors.join(", "))
+			};
+			anyhow::bail!(
+				"Empty tarball ({} bytes, {} entry errors). {}",
+				bytes.len(),
+				entry_errors.len(),
+				error_detail
+			);
 		}
 
 		let prefix = Self::find_common_prefix_static(&entries);
@@ -86,17 +123,21 @@ impl GitBasedInstaller {
 		let tar = flate2::read::GzDecoder::new(cursor);
 		let mut archive = tar::Archive::new(tar);
 
-		let subdir_prefix =
-			format!("{}{}/", prefix, subdir.trim_end_matches('/'));
+		let subdir = subdir.trim_matches('/');
+		let extract_prefix = if subdir.is_empty() {
+			prefix.clone()
+		} else {
+			format!("{}{subdir}/", prefix)
+		};
 
 		for entry in archive.entries()? {
 			let mut entry = entry?;
 			let path = entry.path()?;
 			let path_str = path.to_string_lossy();
 
-			if path_str.starts_with(&subdir_prefix) {
+			if path_str.starts_with(&extract_prefix) {
 				let relative_path = path_str
-					.strip_prefix(&subdir_prefix)
+					.strip_prefix(&extract_prefix)
 					.ok_or_else(|| anyhow::anyhow!("Failed to strip prefix"))?;
 
 				if relative_path.is_empty() {
@@ -199,5 +240,53 @@ mod tests {
 
 		let prefix = GitBasedInstaller::find_common_prefix_static(&entries);
 		assert_eq!(prefix, "anthropics-claude-plugins-abc123/plugins/vercel/");
+	}
+
+	#[test]
+	fn test_extract_tarball_from_repo_root() {
+		use flate2::write::GzEncoder;
+		use flate2::Compression;
+		use tar::Builder;
+
+		let temp_dir = std::env::temp_dir()
+			.join(format!("aghub-git-installer-test-{}", std::process::id()));
+
+		if temp_dir.exists() {
+			std::fs::remove_dir_all(&temp_dir).unwrap();
+		}
+
+		std::fs::create_dir_all(&temp_dir).unwrap();
+
+		let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+		{
+			let mut tar = Builder::new(&mut encoder);
+			let files = [
+				(
+					"repo-root-abc123/.claude-plugin/plugin.json",
+					br#"{"name":"repo-root","description":"test","author":{"name":"A"}}"#
+						.as_slice(),
+				),
+				("repo-root-abc123/README.md", b"# Test".as_slice()),
+			];
+
+			for (path, content) in files {
+				let mut header = tar::Header::new_gnu();
+				header.set_size(content.len() as u64);
+				header.set_mode(0o644);
+				header.set_cksum();
+				tar.append_data(&mut header, path, content).unwrap();
+			}
+			tar.finish().unwrap();
+		}
+
+		let bytes = encoder.finish().unwrap();
+		let commit =
+			GitBasedInstaller::extract_tarball(&bytes, "", &temp_dir).unwrap();
+
+		assert_eq!(commit, "abc123");
+		assert!(temp_dir.join(".claude-plugin/plugin.json").exists());
+		assert!(temp_dir.join("README.md").exists());
+
+		std::fs::remove_dir_all(&temp_dir).unwrap();
 	}
 }

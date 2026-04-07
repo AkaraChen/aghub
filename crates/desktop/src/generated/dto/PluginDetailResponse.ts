@@ -4,6 +4,7 @@ import type { McpConfigResponse } from "./McpConfigResponse";
 import type { PluginAuthorResponse } from "./PluginAuthorResponse";
 import type { PluginManifestResponse } from "./PluginManifestResponse";
 import type { PluginScopeResponse } from "./PluginScopeResponse";
+import type { PluginSkillInfo } from "./PluginSkillInfo";
 
 /**
  * Plugin detail response (combined)
@@ -14,7 +15,7 @@ export type PluginDetailResponse = {
 	mcp_config?: McpConfigResponse;
 	update_available: boolean;
 	latest_version?: string;
-	provided_skills: Array<string>;
+	provided_skills: Array<PluginSkillInfo>;
 	id: string;
 	name: string;
 	version: string;

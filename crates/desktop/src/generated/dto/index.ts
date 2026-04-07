@@ -51,6 +51,7 @@ export type { PluginListResponse } from "./PluginListResponse";
 export type { PluginManifestResponse } from "./PluginManifestResponse";
 export type { PluginResponse } from "./PluginResponse";
 export type { PluginScopeResponse } from "./PluginScopeResponse";
+export type { PluginSkillInfo } from "./PluginSkillInfo";
 export type { ProjectLockQuery } from "./ProjectLockQuery";
 export type { ProjectSkillLockResponse } from "./ProjectSkillLockResponse";
 export type { ReconcileRequest } from "./ReconcileRequest";

@@ -782,8 +782,7 @@ fn detect_plugin_for_skill(skill: &mut Skill) {
 
 	// Check if skill path is within any plugin's install path
 	for plugin in manager.list_plugins() {
-		let plugin_skills_path = plugin.skills_path();
-		if full_path.starts_with(&plugin_skills_path) {
+		if plugin.owns_path(&full_path) {
 			skill.plugin_id = Some(plugin.id.to_string());
 			skill.plugin_name = Some(plugin.display_name.clone());
 			return;

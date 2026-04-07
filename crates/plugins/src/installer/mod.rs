@@ -20,6 +20,8 @@ use crate::discovery::{MarketplaceConfig, MarketplaceSource};
 pub struct PluginInstaller {
 	/// Cache root directory (~/.claude/plugins/cache)
 	cache_root: PathBuf,
+	/// Marketplace root directory
+	marketplace_root: PathBuf,
 	/// HTTP client for downloads
 	client: reqwest::Client,
 }
@@ -27,24 +29,36 @@ pub struct PluginInstaller {
 impl PluginInstaller {
 	/// Create a new plugin installer
 	pub fn new() -> Result<Self> {
-		let cache_root = dirs::home_dir()
-			.context("Cannot find home directory")?
-			.join(".claude/plugins/cache");
+		let home = dirs::home_dir().context("Cannot find home directory")?;
+		let cache_root = home.join(".claude/plugins/cache");
+		let marketplace_root =
+			home.join(".claude/plugins/marketplaces/claude-plugins-official");
 
 		let client = reqwest::Client::builder()
 			.timeout(std::time::Duration::from_secs(60))
 			.build()?;
 
-		Ok(Self { cache_root, client })
+		Ok(Self {
+			cache_root,
+			marketplace_root,
+			client,
+		})
 	}
 
 	/// Create installer with custom cache root (for testing)
-	pub fn with_cache_root(cache_root: PathBuf) -> Result<Self> {
+	pub fn with_roots(
+		cache_root: PathBuf,
+		marketplace_root: PathBuf,
+	) -> Result<Self> {
 		let client = reqwest::Client::builder()
 			.timeout(std::time::Duration::from_secs(60))
 			.build()?;
 
-		Ok(Self { cache_root, client })
+		Ok(Self {
+			cache_root,
+			marketplace_root,
+			client,
+		})
 	}
 
 	/// Check if a plugin is installed for the given scope
@@ -88,16 +102,21 @@ impl PluginInstaller {
 			}
 		}
 
-		// Resolve the actual source for marketplace plugins
-		let (resolved_source, is_remote) =
-			if id.source == "claude-plugins-official" {
-				self.resolve_marketplace_source(&id.name).await?
-			} else {
-				(id.source.clone(), id.source.starts_with("http"))
-			};
-
-		// Get registry for the resolved source
-		let registry = self.get_registry(&resolved_source)?;
+		// Resolve the actual source for marketplace plugins and get appropriate registry
+		let (registry, resolved_source, is_remote) = if id.source
+			== "claude-plugins-official"
+		{
+			let (source, remote) =
+				self.resolve_marketplace_source(&id.name).await?;
+			// Always use MarketplaceRegistry for marketplace plugins
+			// to properly handle both local and remote sources
+			let reg = registry::MarketplaceRegistry::new_official()
+					.context("Official marketplace not found. Please clone it first: git clone https://github.com/anthropics/claude-plugins-official ~/.claude/plugins/marketplaces/claude-plugins-official")?;
+			(Box::new(reg) as Box<dyn PluginRegistry>, source, remote)
+		} else {
+			let reg = self.get_registry(&id.source)?;
+			(reg, id.source.clone(), id.source.starts_with("http"))
+		};
 
 		// Fetch manifest first to verify plugin exists
 		let manifest = registry.fetch_manifest(&id.name).await?;
@@ -145,9 +164,9 @@ impl PluginInstaller {
 		Self::update_installed_manifest(id, install_info.clone())?;
 
 		// Auto-enable plugin (default behavior)
-		let mut settings = ClaudeSettings::load()?;
-		settings.set_enabled(id, true);
-		settings.save()?;
+		ClaudeSettings::update(|settings| {
+			settings.set_enabled(id, true);
+		})?;
 
 		Ok(install_info)
 	}
@@ -201,9 +220,9 @@ impl PluginInstaller {
 			.collect();
 
 		if remaining_scopes.is_empty() {
-			let mut settings = ClaudeSettings::load()?;
-			settings.set_enabled(id, false);
-			settings.save()?;
+			ClaudeSettings::update(|settings| {
+				settings.set_enabled(id, false);
+			})?;
 		}
 
 		Ok(())
@@ -314,9 +333,7 @@ impl PluginInstaller {
 		&self,
 		plugin_name: &str,
 	) -> anyhow::Result<(String, bool)> {
-		let marketplace_path = dirs::home_dir()
-			.context("Cannot find home directory")?
-			.join(".claude/plugins/marketplaces/claude-plugins-official");
+		let marketplace_path = &self.marketplace_root;
 
 		let marketplace_json =
 			marketplace_path.join(".claude-plugin/marketplace.json");
@@ -580,5 +597,97 @@ mod tests {
 		assert!(PluginInstaller::is_semantic_version("2.1.0-beta"));
 		assert!(!PluginInstaller::is_semantic_version("abc123"));
 		assert!(!PluginInstaller::is_semantic_version("latest"));
+	}
+
+	#[tokio::test]
+	async fn test_resolve_marketplace_source_local() {
+		let temp_dir = std::env::temp_dir()
+			.join(format!("aghub-mod-test-{}", std::process::id()));
+		if temp_dir.exists() {
+			std::fs::remove_dir_all(&temp_dir).unwrap();
+		}
+		std::fs::create_dir_all(&temp_dir).unwrap();
+
+		let plugin_dir = temp_dir.join("plugins/test-plugin");
+		std::fs::create_dir_all(&plugin_dir).unwrap();
+		std::fs::create_dir_all(temp_dir.join(".claude-plugin")).unwrap();
+
+		std::fs::write(
+			temp_dir.join(".claude-plugin/marketplace.json"),
+			r#"{
+				"name": "test-marketplace",
+				"description": "test",
+				"owner": { "name": "owner" },
+				"plugins": [
+					{
+						"name": "test-plugin",
+						"description": "desc",
+						"source": "./plugins/test-plugin"
+					}
+				]
+			}"#,
+		)
+		.unwrap();
+
+		let installer =
+			PluginInstaller::with_roots(temp_dir.clone(), temp_dir.clone())
+				.unwrap();
+
+		let (source, is_remote) = installer
+			.resolve_marketplace_source("test-plugin")
+			.await
+			.unwrap();
+
+		assert_eq!(
+			source,
+			temp_dir
+				.join("plugins/test-plugin")
+				.to_string_lossy()
+				.to_string()
+		);
+		assert!(!is_remote);
+
+		std::fs::remove_dir_all(&temp_dir).unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_resolve_marketplace_source_github() {
+		let temp_dir = std::env::temp_dir()
+			.join(format!("aghub-mod-test-git-{}", std::process::id()));
+		std::fs::create_dir_all(temp_dir.join(".claude-plugin")).unwrap();
+
+		std::fs::write(
+			temp_dir.join(".claude-plugin/marketplace.json"),
+			r#"{
+				"name": "test-marketplace",
+				"description": "test",
+				"owner": { "name": "owner" },
+				"plugins": [
+					{
+						"name": "test-github",
+						"description": "desc",
+						"source": {
+							"source": "github",
+							"repo": "owner/repo"
+						}
+					}
+				]
+			}"#,
+		)
+		.unwrap();
+
+		let installer =
+			PluginInstaller::with_roots(temp_dir.clone(), temp_dir.clone())
+				.unwrap();
+
+		let (source, is_remote) = installer
+			.resolve_marketplace_source("test-github")
+			.await
+			.unwrap();
+
+		assert_eq!(source, "https://github.com/owner/repo");
+		assert!(is_remote);
+
+		std::fs::remove_dir_all(&temp_dir).unwrap();
 	}
 }

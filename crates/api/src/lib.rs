@@ -99,7 +99,8 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 	.unwrap();
 	rocket::custom(config)
 		.attach(ApiLogFairing)
-		.attach(cors)
+		.attach(cors.clone())
+		.manage(cors)
 		.manage(crate::state::GitCloneSessions {
 			sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
 		})
@@ -171,6 +172,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 				routes::plugins::update_marketplace,
 			],
 		)
+		.mount("/", rocket_cors::catch_all_options_routes())
 		.register(
 			"/",
 			catchers![

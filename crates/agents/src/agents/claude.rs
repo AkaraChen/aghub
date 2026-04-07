@@ -63,7 +63,7 @@ fn global_skills_paths() -> Vec<PathBuf> {
 					.list_plugins()
 					.iter()
 					.filter(|p| p.enabled)
-					.map(|p| p.skills_path())
+					.flat_map(|p| p.all_skills_dirs())
 					.filter(|p| p.exists())
 					.collect();
 				paths.extend(plugin_paths);

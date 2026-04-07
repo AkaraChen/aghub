@@ -563,7 +563,9 @@ export default {
 	marketplaceUpdateFailed: "Failed to update marketplace",
 	refreshing: "Refreshing...",
 	browseMarketplace: "Browse Marketplace",
+	availablePluginsCount: "{{count}} available",
 	discoverPlugins: "Discover {{count}} plugins",
+	installedPluginsCount: "{{count}} installed",
 	uninstallPlugin: "Uninstall Plugin",
 	uninstall: "Uninstall",
 	reinstallPlugin: "Reinstall Plugin",
@@ -575,8 +577,13 @@ export default {
 	confirmReinstallDescription:
 		"This will reinstall '{{name}}' and preserve your configuration.",
 	pluginUninstalled: "Plugin uninstalled successfully",
+	pluginsUninstalled: "Uninstalled {{count}} plugins",
 	pluginReinstalled: "Plugin reinstalled successfully",
 	reinstallFailed: "Failed to reinstall plugin: {{error}}",
+	bulkUninstallPluginsConfirm:
+		"Are you sure you want to uninstall the {{count}} selected plugins? This removes every installed scope for each plugin.",
+	bulkUninstallPluginsFailed:
+		"Failed to uninstall selected plugins: {{error}}",
 	noUpdateAvailable: "No updates available",
 	updateCheckFailed: "Failed to check for updates: {{error}}",
 	updatePlugin: "Update Plugin",
@@ -604,6 +611,8 @@ export default {
 		monitoring: "Monitoring",
 		productivity: "Productivity",
 		search: "Search",
+		security: "Security",
+		testing: "Testing",
 		utility: "Utility",
 		writing: "Writing",
 	},
@@ -645,4 +654,5 @@ export default {
 		toggleFullscreen: "Toggle Fullscreen",
 		close: "Close",
 	},
+	showingPluginsCount: "Showing {{filtered}} / {{total}} plugins",
 };
