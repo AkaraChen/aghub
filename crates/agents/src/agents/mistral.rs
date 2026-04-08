@@ -14,7 +14,7 @@ define_skill_paths! {
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "mistral",
-	display_name: "Mistral",
+	display_name: "Mistral Le Chat",
 	mcp_parse_config: Some(mcp_strategy::PARSE_TOML),
 	mcp_serialize_config: Some(mcp_strategy::SERIALIZE_TOML),
 	load_mcps,
@@ -59,5 +59,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	cli_name: "mistral",
 	validate_args: &["--version"],
 	project_markers: &[".vibe"],
-	skills_cli_name: Some("mistral"),
+	skills_cli_name: Some("mistral-vibe"),
 };

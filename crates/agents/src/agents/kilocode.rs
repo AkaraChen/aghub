@@ -14,7 +14,7 @@ define_skill_paths! {
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "kilocode",
-	display_name: "Kilocode",
+	display_name: "KiloCode",
 	mcp_parse_config: Some(mcp_strategy::parse_json_map_mcp_servers),
 	mcp_serialize_config: Some(mcp_strategy::serialize_json_map_mcp_servers),
 	load_mcps,
@@ -56,8 +56,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	}),
 	load_sub_agents: load_sub_agents_noop,
 	save_sub_agents: save_sub_agents_noop,
-	cli_name: "kilo",
+	cli_name: "kilocode",
 	validate_args: &["--version"],
 	project_markers: &[".kilocode"],
-	skills_cli_name: Some("kilocode"),
+	skills_cli_name: Some("kilo"),
 };
