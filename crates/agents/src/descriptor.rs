@@ -460,3 +460,150 @@ pub mod mcp_strategy {
 		Ok(String::new())
 	}
 }
+
+// ── Macro for generating agent path helpers ──────────────────────────────────
+
+/// Macro to generate all path helper functions for an agent descriptor.
+///
+/// This macro generates the following functions:
+/// - `mcp_global_path()` - returns global MCP config path
+/// - `mcp_project_path(root)` - returns project MCP config path
+/// - `global_data_dir()` - returns global data directory
+/// - `load_mcps(project_root, scope)` - loads MCPs for scope
+/// - `save_mcps(project_root, scope, mcps)` - saves MCPs for scope
+/// - `global_skills_paths()` - returns global skills read paths
+/// - `project_skills_paths(root)` - returns project skills read paths
+/// - `global_skill_write_path()` - returns global skills write path
+/// - `project_skill_write_path(root)` - returns project skills write path
+///
+/// # Arguments
+/// - `$mcp_global_rel` - path relative to home for global MCP config
+/// - `$mcp_project_rel` - path relative to project root for project MCP config
+/// - `$parse_fn` - MCP parse function (full path)
+/// - `$serialize_fn` - MCP serialize function (full path)
+/// - `$skills_global_rel` - path relative to home for global skills (optional)
+/// - `$skills_project_rel` - path relative to project root for project skills (optional)
+///
+/// # Example
+/// ```rust,ignore
+/// define_agent_paths! {
+///     mcp_global: ".claude/settings.json",
+///     mcp_project: ".claude/settings.local.json",
+///     mcp_strategy: mcp_strategy::parse_json_map_mcp_servers,
+///                   mcp_strategy::serialize_json_map_mcp_servers,
+///     skills_global: ".claude/skills",
+///     skills_project: ".claude/skills",
+/// }
+/// ```
+#[macro_export]
+macro_rules! define_agent_paths {
+	// Full variant with skills paths
+	(
+		mcp_global: $mcp_global_rel:literal,
+		mcp_project: $mcp_project_rel:literal,
+		mcp_strategy: $parse_fn:path, $serialize_fn:path,
+		skills_global: $skills_global_rel:literal,
+		skills_project: $skills_project_rel:literal,
+	) => {
+		fn mcp_global_path() -> Option<PathBuf> {
+			$crate::descriptor::home_dir()
+				.map(|home| home.join($mcp_global_rel))
+		}
+		fn mcp_project_path(root: &Path) -> Option<PathBuf> {
+			Some(root.join($mcp_project_rel))
+		}
+		fn global_data_dir() -> Option<PathBuf> {
+			$crate::descriptor::home_dir().map(|home| {
+				home.join($mcp_global_rel).parent().unwrap().to_path_buf()
+			})
+		}
+		fn load_mcps(
+			project_root: Option<&Path>,
+			scope: $crate::ResourceScope,
+		) -> $crate::Result<Vec<$crate::McpServer>> {
+			$crate::descriptor::load_scoped_mcps(
+				project_root,
+				scope,
+				Some(mcp_global_path),
+				Some(mcp_project_path),
+				$parse_fn,
+			)
+		}
+		fn save_mcps(
+			project_root: Option<&Path>,
+			scope: $crate::ResourceScope,
+			mcps: &[$crate::McpServer],
+		) -> $crate::Result<()> {
+			$crate::descriptor::save_scoped_mcps(
+				project_root,
+				scope,
+				mcps,
+				Some(mcp_global_path),
+				Some(mcp_project_path),
+				$serialize_fn,
+			)
+		}
+		fn global_skills_paths() -> Vec<PathBuf> {
+			match $crate::descriptor::home_dir() {
+				Some(home) => vec![home.join($skills_global_rel)],
+				None => Vec::new(),
+			}
+		}
+		fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
+			vec![root.join($skills_project_rel)]
+		}
+		fn global_skill_write_path() -> Option<PathBuf> {
+			$crate::descriptor::home_dir()
+				.map(|home| home.join($skills_global_rel))
+		}
+		fn project_skill_write_path(root: &Path) -> Option<PathBuf> {
+			Some(root.join($skills_project_rel))
+		}
+	};
+
+	// Variant without skills (for agents that don't support skills)
+	(
+		mcp_global: $mcp_global_rel:literal,
+		mcp_project: $mcp_project_rel:literal,
+		mcp_strategy: $parse_fn:path, $serialize_fn:path,
+	) => {
+		fn mcp_global_path() -> Option<PathBuf> {
+			$crate::descriptor::home_dir()
+				.map(|home| home.join($mcp_global_rel))
+		}
+		fn mcp_project_path(root: &Path) -> Option<PathBuf> {
+			Some(root.join($mcp_project_rel))
+		}
+		fn global_data_dir() -> Option<PathBuf> {
+			$crate::descriptor::home_dir().map(|home| {
+				home.join($mcp_global_rel).parent().unwrap().to_path_buf()
+			})
+		}
+		fn load_mcps(
+			project_root: Option<&Path>,
+			scope: $crate::ResourceScope,
+		) -> $crate::Result<Vec<$crate::McpServer>> {
+			$crate::descriptor::load_scoped_mcps(
+				project_root,
+				scope,
+				Some(mcp_global_path),
+				Some(mcp_project_path),
+				$parse_fn,
+			)
+		}
+		fn save_mcps(
+			project_root: Option<&Path>,
+			scope: $crate::ResourceScope,
+			mcps: &[$crate::McpServer],
+		) -> $crate::Result<()> {
+			$crate::descriptor::save_scoped_mcps(
+				project_root,
+				scope,
+				mcps,
+				Some(mcp_global_path),
+				Some(mcp_project_path),
+				$serialize_fn,
+			)
+		}
+	};
+}
