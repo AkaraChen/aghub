@@ -4,77 +4,21 @@ import {
 	ChevronRightIcon,
 	StarIcon as StarIconSolid,
 } from "@heroicons/react/24/solid";
-import { Chip, Label, ListBox, Spinner, Tooltip } from "@heroui/react";
+import { Chip, Label, ListBox, Spinner } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import Fuse from "fuse.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { SkillResponse } from "../generated/dto";
+import { AgentIcons } from "./agent-icons";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useFavorites } from "../hooks/use-favorites";
-import { AgentIcon } from "../lib/agent-icons";
-import { filterItemsByAgentIds, sortAgents } from "../lib/utils";
+import { filterItemsByAgentIds } from "../lib/utils";
 import {
 	globalSkillLockQueryOptions,
 	projectSkillLockQueryOptions,
 } from "../requests/skills";
-
-function formatAgentName(agent: string): string {
-	return agent.charAt(0).toUpperCase() + agent.slice(1).toLowerCase();
-}
-
-function SkillAgentIcons({ items }: { items: SkillResponse[] }) {
-	const { allAgents, availableAgents } = useAgentAvailability();
-	const enabledAgentIds = useMemo(
-		() =>
-			new Set(
-				availableAgents
-					.filter((agent) => !agent.isDisabled)
-					.map((agent) => agent.id),
-			),
-		[availableAgents],
-	);
-	const agents = useMemo(() => {
-		const set = new Set<string>();
-		for (const item of filterItemsByAgentIds(items, enabledAgentIds)) {
-			if (item.agent) set.add(item.agent);
-		}
-		return sortAgents(Array.from(set), allAgents);
-	}, [items, enabledAgentIds, allAgents]);
-
-	if (agents.length === 0) {
-		return null;
-	}
-
-	return (
-		<div className="flex shrink-0 items-center -space-x-1">
-			{agents.slice(0, 3).map((agentId, idx) => (
-				<Tooltip key={agentId} delay={0}>
-					<div
-						className="relative rounded-full bg-surface ring-1 ring-surface transition-transform hover:scale-110"
-						style={{ zIndex: 3 - idx }}
-					>
-						<AgentIcon
-							id={agentId}
-							name={formatAgentName(agentId)}
-							size="xs"
-							variant="ghost"
-						/>
-					</div>
-					<Tooltip.Content>
-						{formatAgentName(agentId)}
-					</Tooltip.Content>
-				</Tooltip>
-			))}
-			{agents.length > 3 && (
-				<div className="relative z-0 flex size-5 items-center justify-center rounded-lg bg-default text-[10px] font-medium text-muted ring-1 ring-surface">
-					+{agents.length - 3}
-				</div>
-			)}
-		</div>
-	);
-}
 
 interface SkillGroup {
 	name: string;
@@ -399,7 +343,7 @@ export function SkillList({
 					)}
 				</div>
 				<Label className="flex-1 truncate">{skillGroup.name}</Label>
-				<SkillAgentIcons items={skillGroup.items} />
+				<AgentIcons items={skillGroup.items} overflowVariant="square" />
 			</div>
 		</ListBox.Item>
 	);
