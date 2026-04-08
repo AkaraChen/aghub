@@ -64,8 +64,6 @@ pub fn convert_skill(skill_pkg: skill::Skill) -> models::Skill {
 		source_path,
 		canonical_path: None,
 		config_source: None,
-		plugin_id: None,
-		plugin_name: None,
 	}
 }
 

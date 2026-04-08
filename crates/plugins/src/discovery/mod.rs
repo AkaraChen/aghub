@@ -350,7 +350,7 @@ impl PluginDiscovery {
 
 	/// Refresh the registry by re-scanning all sources
 	pub async fn refresh(&mut self) -> Result<()> {
-		self.registry = UnifiedPluginRegistry::new(&self.config)?;
+		self.registry = UnifiedPluginRegistry::new_async(&self.config).await?;
 		Ok(())
 	}
 

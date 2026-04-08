@@ -25,8 +25,9 @@ use crate::{
 		GlobalSkillLockResponse, InstallSkillRequest, InstallSkillResponse,
 		LocalSkillLockEntryResponse, ProjectLockQuery,
 		ProjectSkillLockResponse, SkillContentQuery, SkillLockEntryResponse,
-		SkillResponse, SkillTreeNodeKind, SkillTreeNodeResponse,
-		SkillTreeQuery, UpdateSkillRequest, ValidationError,
+		SkillPluginMetadata, SkillResponse, SkillTreeNodeKind,
+		SkillTreeNodeResponse, SkillTreeQuery, UpdateSkillRequest,
+		ValidationError,
 	},
 	dto::transfer::{
 		OperationBatchResponse, ReconcileRequest, TransferRequest,
@@ -760,18 +761,13 @@ pub fn disable_skill(
 	Ok(Json(SkillResponse::from(skill)))
 }
 
-/// Detect plugin info for a skill based on its source path
-fn detect_plugin_for_skill(skill: &mut Skill) {
-	let Some(source_path) = &skill.source_path else {
-		return;
-	};
+// Detect plugin info for a skill based on its source path
+fn detect_plugin_for_skill(
+	skill: &Skill,
+	plugins: &[aghub_plugins::claude::ClaudePluginInfo],
+) -> Option<SkillPluginMetadata> {
+	let source_path = skill.source_path.as_deref()?;
 
-	// Only detect plugins for Claude agent skills
-	let Ok(manager) = ClaudePluginManager::new() else {
-		return;
-	};
-
-	// Expand tilde to full path for comparison
 	let full_path: std::path::PathBuf = if source_path.starts_with("~/") {
 		dirs::home_dir()
 			.map(|home| home.join(&source_path[2..]))
@@ -780,14 +776,12 @@ fn detect_plugin_for_skill(skill: &mut Skill) {
 		source_path.into()
 	};
 
-	// Check if skill path is within any plugin's install path
-	for plugin in manager.list_plugins() {
-		if plugin.owns_path(&full_path) {
-			skill.plugin_id = Some(plugin.id.to_string());
-			skill.plugin_name = Some(plugin.display_name.clone());
-			return;
-		}
-	}
+	plugins.iter().find_map(|plugin| {
+		plugin.owns_path(&full_path).then(|| SkillPluginMetadata {
+			plugin_id: plugin.id.to_string(),
+			plugin_name: plugin.display_name.clone(),
+		})
+	})
 }
 
 #[get("/agents/all/skills?<scope..>")]
@@ -796,13 +790,17 @@ pub fn list_all_agents_skills(
 ) -> ApiResult<Vec<SkillResponse>> {
 	let resolved = scope.resolve()?;
 	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
+	let detected_plugins = ClaudePluginManager::new()
+		.map(|manager| manager.list_plugins().to_vec())
+		.unwrap_or_default();
 	let items = load_all_agents(resource_scope, project_root.as_deref())
 		.into_iter()
 		.flat_map(|ar| {
-			let id = ar.agent_id;
-			ar.skills.into_iter().map(move |mut s| {
-				detect_plugin_for_skill(&mut s);
-				SkillResponse::from((s, id))
+			let agent_id = ar.agent_id;
+			let plugins = &detected_plugins;
+			ar.skills.into_iter().map(move |skill| {
+				let plugin = detect_plugin_for_skill(&skill, plugins);
+				SkillResponse::from_agent_skill(skill, agent_id, plugin)
 			})
 		})
 		.collect();

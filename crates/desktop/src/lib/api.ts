@@ -3,8 +3,8 @@ import ky from "ky";
 import type {
 	AgentAvailabilityDto,
 	AgentInfo,
-	CheckUpdateRequest,
-	CheckUpdateResponse,
+	CCPluginCheckUpdateRequest,
+	CCPluginCheckUpdateResponse,
 	CodeEditorType,
 	CreateCredentialRequest,
 	CreateMcpRequest,
@@ -21,33 +21,33 @@ import type {
 	GitSyncResponse,
 	GlobalSkillLockResponse,
 	ImportSkillRequest,
-	InstallPluginRequest,
-	InstallPluginResponse,
+	CCPluginInstallRequest,
+	CCPluginInstallResponse,
 	InstallSkillRequest,
 	InstallSkillResponse,
-	MarketPluginResponse,
+	CCPluginMarketResponse,
 	MarketSkill,
 	McpResponse,
 	OperationBatchResponse,
-	PluginConfigResponse,
-	PluginDetailResponse,
-	PluginListResponse,
-	PluginResponse,
+	CCPluginConfigResponse,
+	CCPluginDetailResponse,
+	CCPluginListResponse,
+	CCPluginResponse,
 	ProjectSkillLockResponse,
 	ReconcileRequest,
-	ReinstallPluginRequest,
-	ReinstallPluginResponse,
+	CCPluginReinstallRequest,
+	CCPluginReinstallResponse,
 	SkillResponse,
 	SkillTreeNodeResponse,
 	SubAgentResponse,
 	ToolInfoDto,
 	TransferRequest,
-	UninstallPluginRequest,
-	UninstallPluginResponse,
+	CCPluginUninstallRequest,
+	CCPluginUninstallResponse,
 	UpdateMcpRequest,
-	UpdatePluginConfigRequest,
-	UpdatePluginRequest,
-	UpdatePluginResponse,
+	CCPluginUpdateConfigRequest,
+	CCPluginUpdateRequest,
+	CCPluginUpdateResponse,
 	UpdateSubAgentRequest,
 } from "../generated/dto";
 
@@ -459,65 +459,67 @@ export function createApi(baseUrl: string) {
 			},
 		},
 		plugins: {
-			list(): Promise<PluginListResponse> {
+			list(): Promise<CCPluginListResponse> {
 				return client.get("plugins").json();
 			},
-			detail(pluginId: string): Promise<PluginDetailResponse> {
+			detail(pluginId: string): Promise<CCPluginDetailResponse> {
 				return client.get(`plugins/${pluginId}`).json();
 			},
-			enable(pluginId: string): Promise<PluginResponse> {
+			enable(pluginId: string): Promise<CCPluginResponse> {
 				return client.post(`plugins/${pluginId}/enable`).json();
 			},
-			disable(pluginId: string): Promise<PluginResponse> {
+			disable(pluginId: string): Promise<CCPluginResponse> {
 				return client.post(`plugins/${pluginId}/disable`).json();
 			},
 			install(
-				body: InstallPluginRequest,
-			): Promise<InstallPluginResponse> {
+				body: CCPluginInstallRequest,
+			): Promise<CCPluginInstallResponse> {
 				return client
 					.post("plugins/install", { json: body, timeout: 180000 })
 					.json();
 			},
 			uninstall(
-				body: UninstallPluginRequest,
-			): Promise<UninstallPluginResponse> {
+				body: CCPluginUninstallRequest,
+			): Promise<CCPluginUninstallResponse> {
 				return client
 					.post("plugins/uninstall", { json: body, timeout: 60000 })
 					.json();
 			},
-			update(body: UpdatePluginRequest): Promise<UpdatePluginResponse> {
+			update(
+				body: CCPluginUpdateRequest,
+			): Promise<CCPluginUpdateResponse> {
 				return client
 					.post("plugins/update", { json: body, timeout: 180000 })
 					.json();
 			},
 			checkUpdate(
-				body: CheckUpdateRequest,
-			): Promise<CheckUpdateResponse> {
+				body: CCPluginCheckUpdateRequest,
+			): Promise<CCPluginCheckUpdateResponse> {
 				return client
 					.post("plugins/check-update", { json: body })
 					.json();
 			},
 			reinstall(
-				body: ReinstallPluginRequest,
-			): Promise<ReinstallPluginResponse> {
+				body: CCPluginReinstallRequest,
+			): Promise<CCPluginReinstallResponse> {
 				return client
 					.post("plugins/reinstall", { json: body, timeout: 180000 })
 					.json();
 			},
-			getConfig(pluginId: string): Promise<PluginConfigResponse> {
+			getConfig(pluginId: string): Promise<CCPluginConfigResponse> {
 				return client.get(`plugins/${pluginId}/config`).json();
 			},
 			updateConfig(
-				body: UpdatePluginConfigRequest,
-			): Promise<PluginConfigResponse> {
+				body: CCPluginUpdateConfigRequest,
+			): Promise<CCPluginConfigResponse> {
 				return client
 					.post(`plugins/${body.plugin_id}/config`, { json: body })
 					.json();
 			},
-			deleteConfig(pluginId: string): Promise<PluginConfigResponse> {
+			deleteConfig(pluginId: string): Promise<CCPluginConfigResponse> {
 				return client.delete(`plugins/${pluginId}/config`).json();
 			},
-			listMarket(): Promise<MarketPluginResponse[]> {
+			listMarket(): Promise<CCPluginMarketResponse[]> {
 				return client.get("plugins-market").json();
 			},
 			updateMarketplace(): Promise<{

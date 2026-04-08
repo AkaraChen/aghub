@@ -8,16 +8,31 @@ use crate::claude::{
 	types::InstalledPluginInfo,
 	ClaudePluginManager,
 };
-use crate::PluginId;
+use crate::{lockfile::LockedPlugin, PluginId, PluginSource};
 use anyhow::{Context, Result};
 use chrono::Utc;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
+use self::git::GitBasedInstaller;
 use self::registry::{
-	local_source_remote_fallback, normalize_repository_url, GitHubRegistry,
-	PluginRegistry,
+	copy_dir_all, local_source_remote_fallback, normalize_repository_url,
+	remote_plugin_candidates, resolve_plugin_dir_with_wrappers, unique_suffix,
+	GitHubRegistry, PluginRegistry,
 };
 use crate::discovery::{MarketplaceConfig, MarketplaceSource};
+
+struct ResolvedRegistry {
+	registry: Box<dyn PluginRegistry>,
+	storage_key: String,
+}
+
+struct PreparedInstall {
+	registry: Box<dyn PluginRegistry>,
+	target_dir: PathBuf,
+	staging_dir: PathBuf,
+	version_label: String,
+	registry_commit_sha: Option<String>,
+}
 
 /// Plugin installer that manages installation without Claude CLI
 pub struct PluginInstaller {
@@ -30,6 +45,26 @@ pub struct PluginInstaller {
 }
 
 impl PluginInstaller {
+	fn storage_key_for_source(&self, source: &str) -> String {
+		if self.is_marketplace_source(source) {
+			return source.to_string();
+		}
+
+		match PluginSource::parse(source) {
+			Ok(PluginSource::OfficialRegistry) => source.to_string(),
+			Ok(PluginSource::ThirdParty { url }) => {
+				format!("{:x}", md5::compute(url))
+			}
+			Ok(PluginSource::Local { path }) => {
+				format!(
+					"local-{:x}",
+					md5::compute(path.to_string_lossy().as_bytes())
+				)
+			}
+			Err(_) => format!("{:x}", md5::compute(source.as_bytes())),
+		}
+	}
+
 	fn marketplace_path_for(&self, marketplace: &str) -> PathBuf {
 		self.marketplace_root
 			.parent()
@@ -77,9 +112,7 @@ impl PluginInstaller {
 		let marketplace_root =
 			home.join(".claude/plugins/marketplaces/claude-plugins-official");
 
-		let client = reqwest::Client::builder()
-			.timeout(std::time::Duration::from_secs(60))
-			.build()?;
+		let client = Self::build_client()?;
 
 		Ok(Self {
 			cache_root,
@@ -93,15 +126,370 @@ impl PluginInstaller {
 		cache_root: PathBuf,
 		marketplace_root: PathBuf,
 	) -> Result<Self> {
-		let client = reqwest::Client::builder()
-			.timeout(std::time::Duration::from_secs(60))
-			.build()?;
+		let client = Self::build_client()?;
 
 		Ok(Self {
 			cache_root,
 			marketplace_root,
 			client,
 		})
+	}
+
+	fn build_client() -> Result<reqwest::Client> {
+		reqwest::Client::builder()
+			.user_agent("aghub-plugin-installer")
+			.timeout(std::time::Duration::from_secs(60))
+			.build()
+			.context("Failed to create plugin installer HTTP client")
+	}
+
+	fn manifest_path() -> Result<PathBuf> {
+		Ok(dirs::home_dir()
+			.context("Cannot find home directory")?
+			.join(".claude/plugins/installed_plugins.json"))
+	}
+
+	fn scope_root(
+		&self,
+		storage_key: &str,
+		name: &str,
+		scope: InstallScope,
+	) -> PathBuf {
+		self.cache_root
+			.join(storage_key)
+			.join(name)
+			.join("scopes")
+			.join(scope.to_string())
+	}
+
+	fn staging_dir_for(target_dir: &Path) -> Result<PathBuf> {
+		let parent = target_dir.parent().ok_or_else(|| {
+			anyhow::anyhow!(
+				"Invalid install target without parent: {}",
+				target_dir.display()
+			)
+		})?;
+		let unique = Utc::now().timestamp_nanos_opt().unwrap_or_default();
+		Ok(parent.join(format!(".staging-{unique}")))
+	}
+
+	async fn resolve_registry(
+		&self,
+		id: &PluginId,
+	) -> Result<ResolvedRegistry> {
+		if self.is_marketplace_source(&id.source) {
+			let (resolved_source, is_remote) = self
+				.resolve_marketplace_source(&id.source, &id.name)
+				.await?;
+			let storage_key = if is_remote {
+				format!("{:x}", md5::compute(&resolved_source))
+			} else {
+				id.source.clone()
+			};
+			let registry = Box::new(self.marketplace_registry(&id.source)?)
+				as Box<dyn PluginRegistry>;
+			return Ok(ResolvedRegistry {
+				registry,
+				storage_key,
+			});
+		}
+
+		let storage_key = self.storage_key_for_source(&id.source);
+		let registry = self.get_registry(&id.source)?;
+		Ok(ResolvedRegistry {
+			registry,
+			storage_key,
+		})
+	}
+
+	async fn prepare_install(
+		&self,
+		id: &PluginId,
+		scope: InstallScope,
+	) -> Result<PreparedInstall> {
+		let ResolvedRegistry {
+			registry,
+			storage_key,
+		} = self.resolve_registry(id).await?;
+		let manifest = registry.fetch_manifest(&id.name).await?;
+		let version_info = registry.get_latest_version(&id.name).await?;
+		let (version_dir, registry_commit_sha) = match version_info {
+			Some((version, commit_sha)) => (version, commit_sha),
+			None => ("latest".to_string(), None),
+		};
+		let target_dir = self
+			.scope_root(&storage_key, &id.name, scope)
+			.join(&version_dir);
+		let staging_dir = Self::staging_dir_for(&target_dir)?;
+
+		Ok(PreparedInstall {
+			registry,
+			target_dir,
+			staging_dir,
+			version_label: manifest.version.clone().unwrap_or(version_dir),
+			registry_commit_sha,
+		})
+	}
+
+	async fn install_into_scope(
+		&self,
+		id: &PluginId,
+		scope: InstallScope,
+		replaced_path: Option<PathBuf>,
+	) -> Result<InstalledPluginInfo> {
+		let PreparedInstall {
+			registry,
+			target_dir,
+			staging_dir,
+			version_label,
+			registry_commit_sha,
+		} = self.prepare_install(id, scope).await?;
+
+		if staging_dir.exists() {
+			tokio::fs::remove_dir_all(&staging_dir).await.ok();
+		}
+
+		let actual_commit = match registry.install(&id.name, &staging_dir).await
+		{
+			Ok(commit) => commit,
+			Err(error) => {
+				tokio::fs::remove_dir_all(&staging_dir).await.ok();
+				return Err(error);
+			}
+		};
+
+		if target_dir.exists() {
+			tokio::fs::remove_dir_all(&target_dir).await?;
+		}
+		if let Some(parent) = target_dir.parent() {
+			tokio::fs::create_dir_all(parent).await?;
+		}
+		tokio::fs::rename(&staging_dir, &target_dir).await?;
+
+		let now = Utc::now().to_rfc3339();
+		let install_info = InstalledPluginInfo {
+			scope: scope.to_string(),
+			install_path: target_dir.to_string_lossy().to_string(),
+			version: version_label,
+			installed_at: now.clone(),
+			last_updated: now,
+			git_commit_sha: actual_commit.or(registry_commit_sha),
+		};
+
+		let previous =
+			Self::update_installed_manifest(id, install_info.clone())?;
+
+		ClaudeSettings::update(|settings| {
+			settings.set_enabled(id, true);
+		})?;
+
+		if let Some(path) = replaced_path
+			.or_else(|| previous.map(|info| PathBuf::from(info.install_path)))
+		{
+			self.cleanup_installation_path_if_unused(&path).await?;
+		}
+
+		Ok(install_info)
+	}
+
+	async fn install_locked_artifact(
+		&self,
+		id: &PluginId,
+		locked: &LockedPlugin,
+		target_dir: &Path,
+	) -> Result<Option<String>> {
+		let resolved = locked.resolved.trim();
+		if resolved.is_empty() {
+			anyhow::bail!(
+				"Locked plugin '{}' has no resolved source",
+				locked.id
+			);
+		}
+
+		let resolved_path = PathBuf::from(resolved);
+		if resolved_path.exists() {
+			copy_dir_all(&resolved_path, target_dir).await?;
+			return Ok(locked.commit_sha.clone());
+		}
+
+		let (repository, subdir) = resolved
+			.split_once('#')
+			.map(|(repo, path)| (repo, Some(path.trim_matches('/'))))
+			.unwrap_or((resolved, None));
+		let normalized_repository = normalize_repository_url(repository);
+
+		let temp_dir = std::env::temp_dir()
+			.join(format!("aghub-plugin-restore-{}", unique_suffix()));
+		if temp_dir.exists() {
+			tokio::fs::remove_dir_all(&temp_dir).await.ok();
+		}
+
+		let tarball_urls =
+			if let Some(commit_sha) = locked.commit_sha.as_deref() {
+				if normalized_repository.contains("github.com") {
+					vec![format!(
+						"{}/tarball/{}",
+						normalized_repository.trim_end_matches('/'),
+						commit_sha
+					)]
+				} else {
+					vec![normalized_repository.clone()]
+				}
+			} else if normalized_repository.contains("github.com") {
+				vec![
+					format!(
+						"{}/tarball/refs/heads/main",
+						normalized_repository.trim_end_matches('/')
+					),
+					format!(
+						"{}/tarball/refs/heads/master",
+						normalized_repository.trim_end_matches('/')
+					),
+				]
+			} else {
+				vec![normalized_repository.clone()]
+			};
+
+		let git_installer = GitBasedInstaller::new();
+		let mut last_error = None;
+		for tarball_url in tarball_urls {
+			match git_installer
+				.download_and_extract(&tarball_url, "", &temp_dir)
+				.await
+			{
+				Ok(_) => {
+					let candidates = match subdir {
+						Some(path) if !path.is_empty() => {
+							vec![PathBuf::from(path)]
+						}
+						_ => remote_plugin_candidates(&id.name),
+					};
+					let source_dir = resolve_plugin_dir_with_wrappers(
+						&temp_dir,
+						&candidates,
+					)
+					.ok_or_else(|| {
+						anyhow::anyhow!(
+							"Plugin root not found while restoring locked plugin '{}'",
+							locked.id
+						)
+					})?;
+					let copy_result =
+						copy_dir_all(&source_dir, target_dir).await;
+					tokio::fs::remove_dir_all(&temp_dir).await.ok();
+					copy_result?;
+					return Ok(locked.commit_sha.clone());
+				}
+				Err(error) => last_error = Some(error),
+			}
+		}
+
+		tokio::fs::remove_dir_all(&temp_dir).await.ok();
+		if let Some(error) = last_error {
+			return Err(error).context(format!(
+				"Failed to restore locked plugin '{}'",
+				locked.id
+			));
+		}
+
+		anyhow::bail!(
+			"No archive URL available for locked plugin '{}'",
+			locked.id
+		)
+	}
+
+	pub async fn install_locked(
+		&self,
+		id: &PluginId,
+		scope: InstallScope,
+		locked: &LockedPlugin,
+	) -> Result<InstalledPluginInfo> {
+		let manager = ClaudePluginManager::new()?;
+		let scope_str = scope.to_string();
+		if manager.get_plugin(id).is_some_and(|plugin| {
+			plugin.scopes.iter().any(|item| item.scope == scope_str)
+		}) {
+			anyhow::bail!(
+				"Plugin '{}' is already installed for scope '{}'",
+				id,
+				scope
+			);
+		}
+
+		let storage_key = self.storage_key_for_source(&locked.source);
+		let version_dir = if locked.version.trim().is_empty() {
+			"latest"
+		} else {
+			locked.version.as_str()
+		};
+		let target_dir = self
+			.scope_root(&storage_key, &id.name, scope)
+			.join(version_dir);
+		let staging_dir = Self::staging_dir_for(&target_dir)?;
+
+		if staging_dir.exists() {
+			tokio::fs::remove_dir_all(&staging_dir).await.ok();
+		}
+
+		if let Err(error) =
+			self.install_locked_artifact(id, locked, &staging_dir).await
+		{
+			tokio::fs::remove_dir_all(&staging_dir).await.ok();
+			return Err(error);
+		}
+
+		if target_dir.exists() {
+			tokio::fs::remove_dir_all(&target_dir).await?;
+		}
+		if let Some(parent) = target_dir.parent() {
+			tokio::fs::create_dir_all(parent).await?;
+		}
+		tokio::fs::rename(&staging_dir, &target_dir).await?;
+
+		let now = Utc::now().to_rfc3339();
+		let install_info = InstalledPluginInfo {
+			scope: scope_str.clone(),
+			install_path: target_dir.to_string_lossy().to_string(),
+			version: version_dir.to_string(),
+			installed_at: now.clone(),
+			last_updated: now,
+			git_commit_sha: locked.commit_sha.clone(),
+		};
+
+		let previous =
+			Self::update_installed_manifest(id, install_info.clone())?;
+
+		ClaudeSettings::update(|settings| {
+			settings.set_enabled(id, true);
+		})?;
+
+		if let Some(path) =
+			previous.map(|info| PathBuf::from(info.install_path))
+		{
+			self.cleanup_installation_path_if_unused(&path).await?;
+		}
+
+		Ok(install_info)
+	}
+
+	async fn cleanup_installation_path_if_unused(
+		&self,
+		install_path: &Path,
+	) -> Result<()> {
+		let manifest_path = Self::manifest_path()?;
+		let install_path_string = install_path.to_string_lossy().to_string();
+		let is_referenced =
+			crate::claude::types::InstalledPluginsManifest::load(
+				&manifest_path,
+			)?
+			.has_install_path_reference(&install_path_string);
+
+		if is_referenced || !install_path.exists() {
+			return Ok(());
+		}
+
+		tokio::fs::remove_dir_all(install_path).await?;
+		self.cleanup_empty_dirs(install_path).await
 	}
 
 	/// Check if a plugin is installed for the given scope
@@ -129,86 +517,19 @@ impl PluginInstaller {
 		id: &PluginId,
 		scope: InstallScope,
 	) -> Result<InstalledPluginInfo> {
-		// Check if already installed for this scope
 		let manager = ClaudePluginManager::new()?;
-		let existing = manager.get_plugin(id);
-
-		if let Some(plugin) = existing {
-			// Check if this scope is already installed
-			let scope_str = scope.to_string();
-			if plugin.scopes.iter().any(|s| s.scope == scope_str) {
-				anyhow::bail!(
-					"Plugin '{}' is already installed for scope '{}'",
-					id,
-					scope
-				);
-			}
+		let scope_str = scope.to_string();
+		if manager.get_plugin(id).is_some_and(|plugin| {
+			plugin.scopes.iter().any(|item| item.scope == scope_str)
+		}) {
+			anyhow::bail!(
+				"Plugin '{}' is already installed for scope '{}'",
+				id,
+				scope
+			);
 		}
 
-		// Resolve the actual source for marketplace plugins and get appropriate registry
-		let (registry, resolved_source, is_remote) =
-			if self.is_marketplace_source(&id.source) {
-				let (source, remote) = self
-					.resolve_marketplace_source(&id.source, &id.name)
-					.await?;
-				let reg = self.marketplace_registry(&id.source)?;
-				(Box::new(reg) as Box<dyn PluginRegistry>, source, remote)
-			} else {
-				let reg = self.get_registry(&id.source)?;
-				(reg, id.source.clone(), id.source.starts_with("http"))
-			};
-
-		// Fetch manifest first to verify plugin exists
-		let manifest = registry.fetch_manifest(&id.name).await?;
-
-		// Determine target directory
-		let source_dir = if is_remote {
-			// Hash the URL for directory name
-			format!("{:x}", md5::compute(&resolved_source))
-		} else {
-			// Local source - use the source name
-			id.source.clone()
-		};
-
-		// Get latest version/commit
-		let version_info = registry.get_latest_version(&id.name).await?;
-		let (version, commit_sha) = match version_info {
-			Some((ver, sha)) => (ver, sha),
-			None => ("latest".to_string(), None),
-		};
-
-		// Target directory: ~/.claude/plugins/cache/<source>/<name>/<version>/
-		let target_dir = self
-			.cache_root
-			.join(&source_dir)
-			.join(&id.name)
-			.join(&version);
-
-		// Download and install
-		let actual_commit = registry.install(&id.name, &target_dir).await?;
-
-		// Build the install info
-		let install_info = InstalledPluginInfo {
-			scope: scope.to_string(),
-			install_path: target_dir.to_string_lossy().to_string(),
-			version: manifest
-				.version
-				.clone()
-				.unwrap_or_else(|| version.clone()),
-			installed_at: Utc::now().to_rfc3339(),
-			last_updated: Utc::now().to_rfc3339(),
-			git_commit_sha: actual_commit.or(commit_sha),
-		};
-
-		// Update installed_plugins.json
-		Self::update_installed_manifest(id, install_info.clone())?;
-
-		// Auto-enable plugin (default behavior)
-		ClaudeSettings::update(|settings| {
-			settings.set_enabled(id, true);
-		})?;
-
-		Ok(install_info)
+		self.install_into_scope(id, scope, None).await
 	}
 
 	/// Uninstall a plugin
@@ -238,18 +559,16 @@ impl PluginInstaller {
 				)
 			})?;
 
-		// Remove from installed_plugins.json
-		Self::remove_from_manifest(id, &scope_str)?;
+		let removed = Self::remove_from_manifest(id, &scope_str)?;
+		let removed_path = removed
+			.as_ref()
+			.map(|info| PathBuf::from(&info.install_path))
+			.unwrap_or_else(|| scope_info.install_path.clone());
 
 		// Remove files unless keep_data
 		if !keep_data {
-			let install_path = PathBuf::from(&scope_info.install_path);
-			if install_path.exists() {
-				tokio::fs::remove_dir_all(&install_path).await?;
-			}
-
-			// Clean up empty parent directories
-			self.cleanup_empty_dirs(&install_path).await?;
+			self.cleanup_installation_path_if_unused(&removed_path)
+				.await?;
 		}
 
 		// Check if this was the last scope - if so, disable plugin
@@ -281,11 +600,27 @@ impl PluginInstaller {
 			anyhow::bail!("Plugin '{}' is already up to date", id);
 		}
 
-		// Uninstall old version (keeping config data)
-		self.uninstall(id, scope, true).await?;
+		let manager = ClaudePluginManager::new()?;
+		let scope_str = scope.to_string();
+		let existing_path = manager
+			.get_plugin(id)
+			.and_then(|plugin| {
+				plugin
+					.scopes
+					.iter()
+					.find(|item| item.scope == scope_str)
+					.map(|item| item.install_path.clone())
+			})
+			.ok_or_else(|| {
+				anyhow::anyhow!(
+					"Plugin '{}' is not installed for scope '{}'",
+					id,
+					scope
+				)
+			})?;
 
-		// Install new version
-		self.install(id, scope).await
+		self.install_into_scope(id, scope, Some(existing_path))
+			.await
 	}
 
 	/// Check if update is available
@@ -437,43 +772,32 @@ impl PluginInstaller {
 	fn update_installed_manifest(
 		id: &PluginId,
 		info: InstalledPluginInfo,
-	) -> Result<()> {
+	) -> Result<Option<InstalledPluginInfo>> {
 		use crate::claude::types::InstalledPluginsManifest;
 
-		let manifest_path = dirs::home_dir()
-			.context("Cannot find home directory")?
-			.join(".claude/plugins/installed_plugins.json");
-
 		let plugin_id_str = id.to_string();
+		let manifest_path = Self::manifest_path()?;
+		let mut replaced = None;
 		InstalledPluginsManifest::update(&manifest_path, |manifest| {
-			manifest
-				.plugins
-				.entry(plugin_id_str)
-				.or_default()
-				.push(info);
-		})
+			replaced = manifest.upsert_installation(plugin_id_str, info);
+		})?;
+		Ok(replaced)
 	}
 
 	/// Remove installation from manifest
-	fn remove_from_manifest(id: &PluginId, scope: &str) -> Result<()> {
+	fn remove_from_manifest(
+		id: &PluginId,
+		scope: &str,
+	) -> Result<Option<InstalledPluginInfo>> {
 		use crate::claude::types::InstalledPluginsManifest;
 
-		let manifest_path = dirs::home_dir()
-			.context("Cannot find home directory")?
-			.join(".claude/plugins/installed_plugins.json");
-
 		let plugin_id_str = id.to_string();
+		let manifest_path = Self::manifest_path()?;
+		let mut removed = None;
 		InstalledPluginsManifest::update(&manifest_path, |manifest| {
-			if let Some(installations) =
-				manifest.plugins.get_mut(&plugin_id_str)
-			{
-				installations.retain(|i| i.scope != scope);
-
-				if installations.is_empty() {
-					manifest.plugins.remove(&plugin_id_str);
-				}
-			}
-		})
+			removed = manifest.remove_installation(&plugin_id_str, scope);
+		})?;
+		Ok(removed)
 	}
 
 	/// Clean up empty parent directories after uninstall

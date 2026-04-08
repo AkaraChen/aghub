@@ -4,11 +4,11 @@ import { Label, ListBox } from "@heroui/react";
 import Fuse from "fuse.js";
 import { useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import type { PluginResponse } from "../generated/dto";
+import type { CCPluginResponse } from "../generated/dto";
 import { cn } from "../lib/utils";
 
 interface PluginListProps {
-	plugins: PluginResponse[];
+	plugins: CCPluginResponse[];
 	selectedKeys: Set<string>;
 	searchQuery: string;
 	onSelectionChange: (keys: Set<string>, clickedKey?: string) => void;
@@ -65,6 +65,13 @@ export function PluginList({
 		window.addEventListener("pointerdown", handler, true);
 		return () => window.removeEventListener("pointerdown", handler, true);
 	}, []);
+
+	useEffect(() => {
+		const visibleIds = new Set(filteredPlugins.map((plugin) => plugin.id));
+		if (lastClickedRef.current && !visibleIds.has(lastClickedRef.current)) {
+			lastClickedRef.current = null;
+		}
+	}, [filteredPlugins]);
 
 	const handleSelectionChange = (keys: "all" | Set<React.Key>) => {
 		if (keys === "all") return;

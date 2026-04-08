@@ -47,6 +47,10 @@ pub struct LockedPlugin {
 }
 
 impl PluginLockfile {
+	fn entry_key(id: &str, scope: &str) -> String {
+		format!("{id}#{scope}")
+	}
+
 	/// Load lockfile from disk
 	pub fn load() -> Result<Self> {
 		let path = Self::lockfile_path()?;
@@ -91,22 +95,30 @@ impl PluginLockfile {
 
 	/// Get locked plugin by ID
 	pub fn get(&self, id: &str) -> Option<&LockedPlugin> {
-		self.plugins.get(id)
+		self.plugins
+			.get(id)
+			.or_else(|| self.plugins.values().find(|plugin| plugin.id == id))
 	}
 
 	/// Add or update a locked plugin
 	pub fn insert(&mut self, plugin: LockedPlugin) {
-		self.plugins.insert(plugin.id.clone(), plugin);
+		let key = Self::entry_key(&plugin.id, &plugin.scope);
+		self.plugins.insert(key, plugin);
 	}
 
 	/// Remove a plugin from lockfile
 	pub fn remove(&mut self, id: &str) {
-		self.plugins.remove(id);
+		if self.plugins.remove(id).is_some() {
+			return;
+		}
+
+		self.plugins.retain(|_, plugin| plugin.id != id);
 	}
 
 	/// Check if a plugin is locked
 	pub fn is_locked(&self, id: &str) -> bool {
 		self.plugins.contains_key(id)
+			|| self.plugins.values().any(|plugin| plugin.id == id)
 	}
 
 	/// Get all locked plugins
@@ -128,24 +140,25 @@ impl PluginLockfile {
 		let mut new_plugins = HashMap::new();
 
 		for plugin in installed {
-			// Use primary scope for lockfile
-			if let Some(primary) = plugin.scopes.first() {
+			for scope in &plugin.scopes {
+				let resolved = plugin
+					.effective_repository()
+					.unwrap_or_else(|| plugin.source.to_string());
 				let locked = LockedPlugin {
-                    id: plugin.id.to_string(),
-                    name: plugin.display_name.clone(),
-                    version: plugin.version.clone(),
-                    commit_sha: Some(plugin.commit_hash.clone()),
-                    source: plugin.id.source.clone(),
-                    resolved: format!(
-                        "https://github.com/anthropics/claude-plugins-official/tree/main/plugins/{}",
-                        plugin.id.name
-                    ),
-                    integrity: None, // Would need to compute from tarball
-                    scope: primary.scope.clone(),
-                    installed_at: primary.installed_at.clone(),
-                    dependencies: Vec::new(),
-                };
-				new_plugins.insert(locked.id.clone(), locked);
+					id: plugin.id.to_string(),
+					name: plugin.display_name.clone(),
+					version: scope.version.clone(),
+					commit_sha: (!plugin.commit_hash.is_empty())
+						.then(|| plugin.commit_hash.clone()),
+					source: plugin.id.source.clone(),
+					resolved,
+					integrity: None,
+					scope: scope.scope.clone(),
+					installed_at: scope.installed_at.clone(),
+					dependencies: Vec::new(),
+				};
+				new_plugins
+					.insert(Self::entry_key(&locked.id, &locked.scope), locked);
 			}
 		}
 
@@ -165,13 +178,17 @@ impl PluginLockfile {
 		let installed: std::collections::HashSet<String> = manager
 			.list_plugins()
 			.iter()
-			.map(|p| p.id.to_string())
+			.flat_map(|plugin| {
+				plugin.scopes.iter().map(move |scope| {
+					Self::entry_key(&plugin.id.to_string(), &scope.scope)
+				})
+			})
 			.collect();
 
 		let mut missing = Vec::new();
-		for id in self.plugins.keys() {
-			if !installed.contains(id) {
-				missing.push(id.clone());
+		for (key, locked) in &self.plugins {
+			if !installed.contains(key) {
+				missing.push(Self::entry_key(&locked.id, &locked.scope));
 			}
 		}
 
@@ -203,7 +220,7 @@ impl PluginLockfile {
 			}
 
 			// Install from lockfile
-			match installer.install(&plugin_id, scope).await {
+			match installer.install_locked(&plugin_id, scope, locked).await {
 				Ok(_) => results.push(RestoreResult {
 					id: locked.id.clone(),
 					success: true,
@@ -259,10 +276,12 @@ mod tests {
 			installed_at: "2024-01-01T00:00:00Z".to_string(),
 			dependencies: vec![],
 		};
+		let plugin_key = PluginLockfile::entry_key(&plugin.id, &plugin.scope);
 
 		// Test insert
 		lockfile.insert(plugin.clone());
 		assert!(lockfile.is_locked(&plugin.id));
+		assert!(lockfile.get(&plugin_key).is_some());
 
 		// Test get
 		let retrieved = lockfile.get(&plugin.id);

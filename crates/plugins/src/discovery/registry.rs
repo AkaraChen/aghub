@@ -39,15 +39,11 @@ pub struct UnifiedPluginRegistry {
 impl UnifiedPluginRegistry {
 	/// Create a new registry by scanning all sources
 	pub fn new(config: &DiscoveryConfig) -> Result<Self> {
-		let rt = tokio::runtime::Handle::try_current();
-
-		match rt {
-			Ok(handle) => {
-				// We're in an async context, block on the async init
-				handle.block_on(Self::new_async(config))
-			}
+		match tokio::runtime::Handle::try_current() {
+			Ok(_) => Err(anyhow::anyhow!(
+				"UnifiedPluginRegistry::new() cannot run inside an active Tokio runtime; use new_async() instead"
+			)),
 			Err(_) => {
-				// No runtime, create a new one
 				let rt = tokio::runtime::Runtime::new()?;
 				rt.block_on(Self::new_async(config))
 			}
@@ -447,25 +443,27 @@ mod tests {
 
 	#[test]
 	fn test_registry_with_existing_plugins_dir() {
-		// This test verifies the registry can be created with the default config
-		// which points to ~/.claude/plugins
+		let temp_dir = tempdir().unwrap();
+		let plugins_dir = temp_dir.path().join("plugins");
+		fs::create_dir_all(plugins_dir.join("marketplaces")).unwrap();
+
+		let config = DiscoveryConfig {
+			plugins_dir,
+			marketplaces_subdir: "marketplaces".to_string(),
+			known_marketplaces: vec!["claude-plugins-official".to_string()],
+		};
+
 		let rt = tokio::runtime::Builder::new_current_thread()
 			.enable_all()
 			.build()
 			.unwrap();
 
 		rt.block_on(async {
-			let config = DiscoveryConfig::default();
 			let registry = UnifiedPluginRegistry::new_async(&config).await;
-
-			// Registry should initialize successfully
 			assert!(registry.is_ok());
 			let registry = registry.unwrap();
-
-			// If user has claude plugins installed, we should find them
-			// The count depends on local environment
-			println!("Discovered {} plugins", registry.count());
-			println!("Installed: {} plugins", registry.installed_count());
+			assert_eq!(registry.count(), 0);
+			assert_eq!(registry.installed_count(), 0);
 		});
 	}
 

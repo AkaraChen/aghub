@@ -1,13 +1,15 @@
 use crate::dto::plugin::{
-	CheckUpdateRequest, CheckUpdateResponse, HookActionResponse,
-	HookEventResponse, HookMatcherResponse, HooksManifestResponse,
-	InstallPluginRequest, InstallPluginResponse, MarketPluginResponse,
-	McpConfigResponse, McpServerResponse, PluginAuthorResponse,
-	PluginConfigResponse, PluginDetailResponse, PluginListResponse,
-	PluginManifestResponse, PluginResponse, PluginScopeResponse,
-	PluginSkillInfo, ReinstallPluginRequest, ReinstallPluginResponse,
-	UninstallPluginRequest, UninstallPluginResponse, UpdatePluginConfigRequest,
-	UpdatePluginRequest, UpdatePluginResponse,
+	CCPluginAuthorResponse, CCPluginCheckUpdateRequest,
+	CCPluginCheckUpdateResponse, CCPluginConfigResponse,
+	CCPluginDetailResponse, CCPluginHookActionResponse,
+	CCPluginHookEventResponse, CCPluginHookMatcherResponse,
+	CCPluginHooksManifestResponse, CCPluginInstallRequest,
+	CCPluginInstallResponse, CCPluginListResponse, CCPluginManifestResponse,
+	CCPluginMarketResponse, CCPluginMcpConfigResponse,
+	CCPluginMcpServerResponse, CCPluginReinstallRequest,
+	CCPluginReinstallResponse, CCPluginResponse, CCPluginScopeResponse,
+	CCPluginSkillInfo, CCPluginUninstallRequest, CCPluginUninstallResponse,
+	CCPluginUpdateConfigRequest, CCPluginUpdateRequest, CCPluginUpdateResponse,
 };
 use crate::error::{ApiError, ApiResult};
 use aghub_plugins::claude::ClaudePluginManager;
@@ -15,7 +17,7 @@ use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::Route;
 
-impl From<&aghub_plugins::claude::ClaudePluginInfo> for PluginResponse {
+impl From<&aghub_plugins::claude::ClaudePluginInfo> for CCPluginResponse {
 	fn from(p: &aghub_plugins::claude::ClaudePluginInfo) -> Self {
 		Self {
 			id: p.id.to_string(),
@@ -28,7 +30,7 @@ impl From<&aghub_plugins::claude::ClaudePluginInfo> for PluginResponse {
 			has_skills: p.has_skills(),
 			has_hooks: p.has_hooks(),
 			has_mcp: p.has_mcp(),
-			author: p.author.as_ref().map(|a| PluginAuthorResponse {
+			author: p.author.as_ref().map(|a| CCPluginAuthorResponse {
 				name: a.name.clone(),
 				email: a.email.clone(),
 				url: a.url.clone(),
@@ -39,7 +41,7 @@ impl From<&aghub_plugins::claude::ClaudePluginInfo> for PluginResponse {
 			scopes: p
 				.scopes
 				.iter()
-				.map(|s| PluginScopeResponse {
+				.map(|s| CCPluginScopeResponse {
 					scope: s.scope.clone(),
 					install_path: s.install_path.display().to_string(),
 					version: s.version.clone(),
@@ -70,27 +72,27 @@ pub fn routes() -> Vec<Route> {
 }
 
 #[get("/plugins")]
-pub fn list_plugins() -> ApiResult<PluginListResponse> {
+pub fn list_plugins() -> ApiResult<CCPluginListResponse> {
 	let manager = ClaudePluginManager::new().map_err(|e| {
 		crate::error::ApiError::internal(format!(
 			"Failed to load plugin manager: {e}"
 		))
 	})?;
 
-	let mut plugins: Vec<PluginResponse> = manager
+	let mut plugins: Vec<CCPluginResponse> = manager
 		.list_plugins()
 		.iter()
-		.map(PluginResponse::from)
+		.map(CCPluginResponse::from)
 		.collect();
 
 	// Sort by name for stable ordering
 	plugins.sort_by(|a, b| a.name.cmp(&b.name));
 
-	Ok(Json(PluginListResponse { plugins }))
+	Ok(Json(CCPluginListResponse { plugins }))
 }
 
 #[post("/plugins/<plugin_id>/enable")]
-pub fn enable_plugin(plugin_id: &str) -> ApiResult<PluginResponse> {
+pub fn enable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
 	use aghub_plugins::PluginId;
 
 	let id = PluginId::parse(plugin_id).map_err(|e| {
@@ -122,11 +124,11 @@ pub fn enable_plugin(plugin_id: &str) -> ApiResult<PluginResponse> {
 			))
 		})?;
 
-	Ok(Json(PluginResponse::from(&plugin)))
+	Ok(Json(CCPluginResponse::from(&plugin)))
 }
 
 #[post("/plugins/<plugin_id>/disable")]
-pub fn disable_plugin(plugin_id: &str) -> ApiResult<PluginResponse> {
+pub fn disable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
 	use aghub_plugins::PluginId;
 
 	let id = PluginId::parse(plugin_id).map_err(|e| {
@@ -158,13 +160,13 @@ pub fn disable_plugin(plugin_id: &str) -> ApiResult<PluginResponse> {
 			))
 		})?;
 
-	Ok(Json(PluginResponse::from(&plugin)))
+	Ok(Json(CCPluginResponse::from(&plugin)))
 }
 
 #[post("/plugins/install", data = "<body>")]
 pub async fn install_plugin(
-	body: Json<InstallPluginRequest>,
-) -> ApiResult<InstallPluginResponse> {
+	body: Json<CCPluginInstallRequest>,
+) -> ApiResult<CCPluginInstallResponse> {
 	use aghub_plugins::claude::settings::InstallScope;
 	use aghub_plugins::installer::PluginInstaller;
 	use aghub_plugins::PluginId;
@@ -192,7 +194,7 @@ pub async fn install_plugin(
 	})?;
 
 	match installer.install(&plugin_id, scope).await {
-		Ok(info) => Ok(Json(InstallPluginResponse {
+		Ok(info) => Ok(Json(CCPluginInstallResponse {
 			success: true,
 			message: format!(
 				"Plugin '{}' installed successfully (version: {})",
@@ -203,7 +205,7 @@ pub async fn install_plugin(
 			// Check if already installed
 			let error_str = e.to_string();
 			if error_str.contains("already installed") {
-				return Ok(Json(InstallPluginResponse {
+				return Ok(Json(CCPluginInstallResponse {
 					success: true,
 					message: "Plugin is already installed".to_string(),
 				}));
@@ -219,8 +221,8 @@ pub async fn install_plugin(
 
 #[post("/plugins/uninstall", data = "<body>")]
 pub async fn uninstall_plugin(
-	body: Json<UninstallPluginRequest>,
-) -> ApiResult<UninstallPluginResponse> {
+	body: Json<CCPluginUninstallRequest>,
+) -> ApiResult<CCPluginUninstallResponse> {
 	use aghub_plugins::claude::settings::InstallScope;
 	use aghub_plugins::installer::PluginInstaller;
 	use aghub_plugins::PluginId;
@@ -248,7 +250,7 @@ pub async fn uninstall_plugin(
 	})?;
 
 	match installer.uninstall(&plugin_id, scope, req.keep_data).await {
-		Ok(()) => Ok(Json(UninstallPluginResponse {
+		Ok(()) => Ok(Json(CCPluginUninstallResponse {
 			success: true,
 			message: format!(
 				"Plugin '{}' uninstalled successfully",
@@ -265,8 +267,8 @@ pub async fn uninstall_plugin(
 
 #[post("/plugins/update", data = "<body>")]
 pub async fn update_plugin(
-	body: Json<UpdatePluginRequest>,
-) -> ApiResult<UpdatePluginResponse> {
+	body: Json<CCPluginUpdateRequest>,
+) -> ApiResult<CCPluginUpdateResponse> {
 	use aghub_plugins::claude::settings::InstallScope;
 	use aghub_plugins::installer::PluginInstaller;
 	use aghub_plugins::PluginId;
@@ -294,7 +296,7 @@ pub async fn update_plugin(
 	})?;
 
 	match installer.update(&plugin_id, scope).await {
-		Ok(info) => Ok(Json(UpdatePluginResponse {
+		Ok(info) => Ok(Json(CCPluginUpdateResponse {
 			success: true,
 			message: format!(
 				"Plugin '{}' updated successfully (version: {})",
@@ -304,7 +306,7 @@ pub async fn update_plugin(
 		Err(e) => {
 			let error_str = e.to_string();
 			if error_str.contains("already up to date") {
-				return Ok(Json(UpdatePluginResponse {
+				return Ok(Json(CCPluginUpdateResponse {
 					success: true,
 					message: "Plugin is already up to date".to_string(),
 				}));
@@ -322,7 +324,7 @@ pub async fn update_plugin(
 #[get("/plugins/<plugin_id>")]
 pub async fn get_plugin_detail(
 	plugin_id: &str,
-) -> ApiResult<PluginDetailResponse> {
+) -> ApiResult<CCPluginDetailResponse> {
 	use aghub_plugins::installer::PluginInstaller;
 	use aghub_plugins::PluginId;
 
@@ -349,11 +351,11 @@ pub async fn get_plugin_detail(
 		None
 	});
 
-	let manifest_response = manifest.map(|m| PluginManifestResponse {
+	let manifest_response = manifest.map(|m| CCPluginManifestResponse {
 		name: m.name,
 		version: m.version,
 		description: m.description,
-		author: (!m.author.is_empty()).then_some(PluginAuthorResponse {
+		author: (!m.author.is_empty()).then_some(CCPluginAuthorResponse {
 			name: m.author.name,
 			email: m.author.email,
 			url: m.author.url,
@@ -375,19 +377,19 @@ pub async fn get_plugin_detail(
 	});
 
 	let hooks_response = hooks.map(|h| {
-		let events: Vec<HookEventResponse> = h
+		let events: Vec<CCPluginHookEventResponse> = h
 			.hooks
 			.into_iter()
-			.map(|(event, matchers)| HookEventResponse {
+			.map(|(event, matchers)| CCPluginHookEventResponse {
 				event,
 				matchers: matchers
 					.into_iter()
-					.map(|m| HookMatcherResponse {
+					.map(|m| CCPluginHookMatcherResponse {
 						matcher: m.matcher,
 						hooks: m
 							.hooks
 							.into_iter()
-							.map(|h| HookActionResponse {
+							.map(|h| CCPluginHookActionResponse {
 								action_type: h.action_type,
 								command: h.command,
 								timeout: h.timeout,
@@ -397,7 +399,7 @@ pub async fn get_plugin_detail(
 					.collect(),
 			})
 			.collect();
-		HooksManifestResponse { hooks: events }
+		CCPluginHooksManifestResponse { hooks: events }
 	});
 
 	// Read MCP config
@@ -407,10 +409,10 @@ pub async fn get_plugin_detail(
 	});
 
 	let mcp_response = mcp_config.map(|c| {
-		let servers: Vec<McpServerResponse> = c
+		let servers: Vec<CCPluginMcpServerResponse> = c
 			.mcp_servers
 			.into_iter()
-			.map(|(name, s)| McpServerResponse {
+			.map(|(name, s)| CCPluginMcpServerResponse {
 				name,
 				transport_type: s.transport_type,
 				command: s.command,
@@ -421,12 +423,12 @@ pub async fn get_plugin_detail(
 				note: s.note,
 			})
 			.collect();
-		McpConfigResponse { servers }
+		CCPluginMcpConfigResponse { servers }
 	});
 
-	let base_response = PluginResponse::from(plugin);
+	let base_response = CCPluginResponse::from(plugin);
 
-	let mut provided_skills: Vec<PluginSkillInfo> = Vec::new();
+	let mut provided_skills: Vec<CCPluginSkillInfo> = Vec::new();
 	// Collect skill dirs from all install paths (includes sibling directories)
 	let mut all_skill_dirs = Vec::new();
 
@@ -480,7 +482,7 @@ pub async fn get_plugin_detail(
 
 	// Convert to response format
 	for (name, description) in skill_descriptions {
-		provided_skills.push(PluginSkillInfo { name, description });
+		provided_skills.push(CCPluginSkillInfo { name, description });
 	}
 
 	provided_skills.sort_by(|a, b| a.name.cmp(&b.name));
@@ -511,7 +513,7 @@ pub async fn get_plugin_detail(
 		(false, None)
 	};
 
-	Ok(Json(PluginDetailResponse {
+	Ok(Json(CCPluginDetailResponse {
 		plugin: base_response,
 		manifest: manifest_response,
 		hooks: hooks_response,
@@ -525,8 +527,8 @@ pub async fn get_plugin_detail(
 /// Reinstall a plugin (uninstall then install)
 #[post("/plugins/reinstall", data = "<body>")]
 pub async fn reinstall_plugin(
-	body: Json<ReinstallPluginRequest>,
-) -> ApiResult<ReinstallPluginResponse> {
+	body: Json<CCPluginReinstallRequest>,
+) -> ApiResult<CCPluginReinstallResponse> {
 	use aghub_plugins::claude::settings::InstallScope;
 	use aghub_plugins::installer::PluginInstaller;
 	use aghub_plugins::PluginId;
@@ -569,7 +571,7 @@ pub async fn reinstall_plugin(
 
 	// Step 2: Install the plugin
 	match installer.install(&plugin_id, scope).await {
-		Ok(info) => Ok(Json(ReinstallPluginResponse {
+		Ok(info) => Ok(Json(CCPluginReinstallResponse {
 			success: true,
 			message: format!(
 				"Plugin '{}' reinstalled successfully (version: {})",
@@ -587,8 +589,8 @@ pub async fn reinstall_plugin(
 /// Check for plugin updates
 #[post("/plugins/check-update", data = "<body>")]
 pub async fn check_plugin_update(
-	body: Json<CheckUpdateRequest>,
-) -> ApiResult<CheckUpdateResponse> {
+	body: Json<CCPluginCheckUpdateRequest>,
+) -> ApiResult<CCPluginCheckUpdateResponse> {
 	use aghub_plugins::installer::PluginInstaller;
 	use aghub_plugins::PluginId;
 
@@ -619,14 +621,16 @@ pub async fn check_plugin_update(
 	})?;
 
 	match installer.check_update(&id).await {
-		Ok(Some((latest_version, _))) => Ok(Json(CheckUpdateResponse {
-			plugin_id: req.plugin_id,
-			update_available: true,
-			current_version: plugin.version.clone(),
-			latest_version: Some(latest_version),
-			changelog: None,
-		})),
-		Ok(None) => Ok(Json(CheckUpdateResponse {
+		Ok(Some((latest_version, _))) => {
+			Ok(Json(CCPluginCheckUpdateResponse {
+				plugin_id: req.plugin_id,
+				update_available: true,
+				current_version: plugin.version.clone(),
+				latest_version: Some(latest_version),
+				changelog: None,
+			}))
+		}
+		Ok(None) => Ok(Json(CCPluginCheckUpdateResponse {
 			plugin_id: req.plugin_id,
 			update_available: false,
 			current_version: plugin.version.clone(),
@@ -636,7 +640,7 @@ pub async fn check_plugin_update(
 		Err(e) => {
 			// If we can't check, return current state without error
 			eprintln!("Failed to check for updates: {}", e);
-			Ok(Json(CheckUpdateResponse {
+			Ok(Json(CCPluginCheckUpdateResponse {
 				plugin_id: req.plugin_id,
 				update_available: false,
 				current_version: plugin.version.clone(),
@@ -649,7 +653,9 @@ pub async fn check_plugin_update(
 
 /// Get plugin user configuration
 #[get("/plugins/<plugin_id>/config")]
-pub fn get_plugin_config(plugin_id: String) -> ApiResult<PluginConfigResponse> {
+pub fn get_plugin_config(
+	plugin_id: String,
+) -> ApiResult<CCPluginConfigResponse> {
 	use aghub_plugins::PluginId;
 
 	let id = PluginId::parse(&plugin_id).map_err(|e| {
@@ -682,7 +688,7 @@ pub fn get_plugin_config(plugin_id: String) -> ApiResult<PluginConfigResponse> {
 		.and_then(|m| m.user_config)
 		.and_then(|s| serde_json::to_string(&s).ok());
 
-	Ok(Json(PluginConfigResponse {
+	Ok(Json(CCPluginConfigResponse {
 		plugin_id,
 		config,
 		schema,
@@ -693,8 +699,8 @@ pub fn get_plugin_config(plugin_id: String) -> ApiResult<PluginConfigResponse> {
 #[post("/plugins/<plugin_id>/config", data = "<body>")]
 pub fn update_plugin_config(
 	plugin_id: String,
-	body: Json<UpdatePluginConfigRequest>,
-) -> ApiResult<PluginConfigResponse> {
+	body: Json<CCPluginUpdateConfigRequest>,
+) -> ApiResult<CCPluginConfigResponse> {
 	use aghub_plugins::PluginId;
 
 	let id = PluginId::parse(&plugin_id).map_err(|e| {
@@ -751,7 +757,7 @@ pub fn update_plugin_config(
 		.get_plugin_config(&id)
 		.and_then(|v| serde_json::to_string(v).ok());
 
-	Ok(Json(PluginConfigResponse {
+	Ok(Json(CCPluginConfigResponse {
 		plugin_id,
 		config,
 		schema,
@@ -762,7 +768,7 @@ pub fn update_plugin_config(
 #[delete("/plugins/<plugin_id>/config")]
 pub fn delete_plugin_config(
 	plugin_id: String,
-) -> ApiResult<PluginConfigResponse> {
+) -> ApiResult<CCPluginConfigResponse> {
 	use aghub_plugins::PluginId;
 
 	let id = PluginId::parse(&plugin_id).map_err(|e| {
@@ -797,7 +803,7 @@ pub fn delete_plugin_config(
 		))
 	})?;
 
-	Ok(Json(PluginConfigResponse {
+	Ok(Json(CCPluginConfigResponse {
 		plugin_id,
 		config: None,
 		schema,
@@ -827,7 +833,7 @@ pub async fn update_marketplace() -> ApiResult<serde_json::Value> {
 
 /// List available plugins from all marketplaces
 #[get("/plugins-market")]
-pub async fn list_plugin_market() -> ApiResult<Vec<MarketPluginResponse>> {
+pub async fn list_plugin_market() -> ApiResult<Vec<CCPluginMarketResponse>> {
 	use aghub_plugins::discovery::{DiscoveryConfig, UnifiedPluginRegistry};
 
 	// Create registry directly using async method (avoids runtime nesting)
@@ -851,7 +857,7 @@ pub async fn list_plugin_market() -> ApiResult<Vec<MarketPluginResponse>> {
 		aghub_plugins::claude::ClaudePluginManager::new().ok();
 
 	// Convert to response format
-	let response: Vec<MarketPluginResponse> = plugins
+	let response: Vec<CCPluginMarketResponse> = plugins
 		.into_iter()
 		.map(|p| {
 			let installed_scopes = if p.installed {
@@ -875,7 +881,7 @@ pub async fn list_plugin_market() -> ApiResult<Vec<MarketPluginResponse>> {
 				vec![]
 			};
 
-			MarketPluginResponse {
+			CCPluginMarketResponse {
 				id: p.id.clone(),
 				name: p.name.clone(),
 				description: p.description.clone(),

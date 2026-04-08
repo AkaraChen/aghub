@@ -20,9 +20,15 @@ import { MultiSelectFloatingBar } from "../../components/multi-select-floating-b
 import { PluginDetail } from "../../components/plugin-detail";
 import { PluginList } from "../../components/plugin-list";
 import { PluginMarketDialog } from "../../components/plugin-market-dialog";
-import type { PluginResponse } from "../../generated/dto";
+import type { CCPluginResponse } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
 import { cn } from "../../lib/utils";
+import { queryKeys } from "../../requests/keys";
+import {
+	invalidatePluginQueries,
+	invalidatePluginSkillQueries,
+	pluginListQueryOptions,
+} from "../../requests/plugins";
 
 type PluginScopeValue = "user" | "project" | "local";
 
@@ -30,10 +36,9 @@ export default function PluginsPage() {
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
-	const { data, refetch, isFetching } = useSuspenseQuery({
-		queryKey: ["plugins"],
-		queryFn: () => api.plugins.list(),
-	});
+	const { data, refetch, isFetching } = useSuspenseQuery(
+		pluginListQueryOptions({ api }),
+	);
 
 	const plugins = useMemo(() => data?.plugins ?? [], [data]);
 	const [searchQuery, setSearchQuery] = useState("");
@@ -51,10 +56,18 @@ export default function PluginsPage() {
 		pluginId: string;
 		scope: PluginScopeValue;
 	} | null>(null);
+	const validPluginIds = useMemo(
+		() => new Set(plugins.map((plugin) => plugin.id)),
+		[plugins],
+	);
+	const activeSelectedPluginId =
+		selectedPluginId && validPluginIds.has(selectedPluginId)
+			? selectedPluginId
+			: (plugins[0]?.id ?? null);
 
 	const selectedPlugin = useMemo(() => {
-		return plugins.find((p) => p.id === selectedPluginId) ?? null;
-	}, [plugins, selectedPluginId]);
+		return plugins.find((p) => p.id === activeSelectedPluginId) ?? null;
+	}, [activeSelectedPluginId, plugins]);
 
 	const marketInstallScope = useMemo(() => {
 		if (!selectedPlugin) {
@@ -93,13 +106,25 @@ export default function PluginsPage() {
 		);
 	}, [sortedPlugins, searchQuery]);
 
+	const selectedKeysInPlugins = useMemo(
+		() =>
+			new Set(
+				[...selectedKeys].filter((pluginId) =>
+					validPluginIds.has(pluginId),
+				),
+			),
+		[selectedKeys, validPluginIds],
+	);
+
 	const effectiveSelectedKeys = useMemo(() => {
-		if (selectedKeys.size > 0 && isMultiSelectMode) return selectedKeys;
-		if (selectedPluginId) {
-			return new Set([selectedPluginId]);
+		if (selectedKeysInPlugins.size > 0 && isMultiSelectMode) {
+			return selectedKeysInPlugins;
+		}
+		if (activeSelectedPluginId) {
+			return new Set([activeSelectedPluginId]);
 		}
 		return new Set<string>();
-	}, [selectedKeys, selectedPluginId, isMultiSelectMode]);
+	}, [activeSelectedPluginId, isMultiSelectMode, selectedKeysInPlugins]);
 
 	const handleSelectionChange = (keys: Set<string>, clickedKey?: string) => {
 		setSelectedKeys(keys);
@@ -121,13 +146,22 @@ export default function PluginsPage() {
 	};
 
 	const selectedPlugins = useMemo(() => {
-		return plugins.filter((p) => selectedKeys.has(p.id));
-	}, [selectedKeys, plugins]);
+		return plugins.filter((p) => selectedKeysInPlugins.has(p.id));
+	}, [plugins, selectedKeysInPlugins]);
 
 	const bulkUninstallMutation = useMutation({
-		mutationFn: async (pluginsToUninstall: PluginResponse[]) => {
-			const requests = pluginsToUninstall.flatMap((plugin) =>
-				plugin.scopes.map((scopeInfo) => ({
+		mutationFn: async (pluginsToUninstall: CCPluginResponse[]) => {
+			const requests = pluginsToUninstall.flatMap((plugin) => {
+				const uniqueScopes = Array.from(
+					new Map(
+						plugin.scopes.map((scopeInfo) => [
+							scopeInfo.scope,
+							scopeInfo,
+						]),
+					).values(),
+				);
+
+				return uniqueScopes.map((scopeInfo) => ({
 					pluginId: plugin.id,
 					scope: scopeInfo.scope,
 					request: api.plugins.uninstall({
@@ -135,8 +169,8 @@ export default function PluginsPage() {
 						scope: scopeInfo.scope,
 						keep_data: false,
 					}),
-				})),
-			);
+				}));
+			});
 			const results = await Promise.allSettled(
 				requests.map((entry) => entry.request),
 			);
@@ -173,7 +207,7 @@ export default function PluginsPage() {
 
 			return new Set(pluginsToUninstall.map((plugin) => plugin.id));
 		},
-		onSuccess: (removedPluginIds) => {
+		onSuccess: async (removedPluginIds) => {
 			toast.success(
 				t("pluginsUninstalled", {
 					count: removedPluginIds.size,
@@ -196,30 +230,18 @@ export default function PluginsPage() {
 						?.id ?? null
 				);
 			});
-			void queryClient.invalidateQueries({ queryKey: ["plugins"] });
-			void queryClient.invalidateQueries({
-				queryKey: ["plugin-detail"],
-			});
-			void queryClient.invalidateQueries({
-				queryKey: ["plugins-market"],
-			});
-			void queryClient.invalidateQueries({ queryKey: ["skills"] });
+			await invalidatePluginQueries(queryClient);
+			await invalidatePluginSkillQueries(queryClient);
 		},
-		onError: (error) => {
+		onError: async (error) => {
 			toast.danger(
 				t("bulkUninstallPluginsFailed", {
 					error:
 						error instanceof Error ? error.message : String(error),
 				}),
 			);
-			void queryClient.invalidateQueries({ queryKey: ["plugins"] });
-			void queryClient.invalidateQueries({
-				queryKey: ["plugin-detail"],
-			});
-			void queryClient.invalidateQueries({
-				queryKey: ["plugins-market"],
-			});
-			void queryClient.invalidateQueries({ queryKey: ["skills"] });
+			await invalidatePluginQueries(queryClient);
+			await invalidatePluginSkillQueries(queryClient);
 		},
 	});
 
@@ -227,19 +249,19 @@ export default function PluginsPage() {
 		const refreshes: Array<Promise<unknown>> = [
 			refetch(),
 			queryClient.refetchQueries({
-				queryKey: ["skills"],
+				queryKey: queryKeys.skills.all(),
 				type: "active",
 			}),
 			queryClient.refetchQueries({
-				queryKey: ["plugins-market"],
+				queryKey: queryKeys.plugins.market(),
 				type: "active",
 			}),
 		];
 
-		if (selectedPluginId) {
+		if (activeSelectedPluginId) {
 			refreshes.push(
 				queryClient.refetchQueries({
-					queryKey: ["plugin-detail", selectedPluginId],
+					queryKey: queryKeys.plugins.detail(activeSelectedPluginId),
 					type: "active",
 				}),
 			);

@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 /// Marketplace configuration from marketplace.json
@@ -36,6 +37,8 @@ pub struct MarketplacePlugin {
 	pub category: Option<String>,
 	#[serde(default)]
 	pub homepage: Option<String>,
+	#[serde(default, flatten)]
+	pub extra: HashMap<String, serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, Clone)]

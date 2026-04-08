@@ -82,14 +82,20 @@ impl MarketCache {
 	pub fn save(&self) -> Result<()> {
 		let path = Self::cache_path()?;
 
-		// Ensure parent directory exists
 		if let Some(parent) = path.parent() {
 			std::fs::create_dir_all(parent)?;
 		}
 
 		let content = serde_json::to_string_pretty(self)?;
-		std::fs::write(&path, content).with_context(|| {
-			format!("Failed to write cache to {}", path.display())
+		let temp_path = path.with_extension("tmp");
+		std::fs::write(&temp_path, content).with_context(|| {
+			format!(
+				"Failed to write temporary cache to {}",
+				temp_path.display()
+			)
+		})?;
+		std::fs::rename(&temp_path, &path).with_context(|| {
+			format!("Failed to replace cache file at {}", path.display())
 		})?;
 
 		Ok(())

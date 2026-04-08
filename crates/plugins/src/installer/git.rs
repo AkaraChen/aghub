@@ -13,6 +13,7 @@ impl GitBasedInstaller {
 	pub fn new() -> Self {
 		Self {
 			client: reqwest::Client::builder()
+				.user_agent("aghub-plugin-installer")
 				.timeout(std::time::Duration::from_secs(120))
 				.build()
 				.expect("Failed to create HTTP client"),

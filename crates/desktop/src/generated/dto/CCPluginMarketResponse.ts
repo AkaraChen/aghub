@@ -3,7 +3,7 @@
 /**
  * Marketplace plugin item (from GitHub organization)
  */
-export type MarketPluginResponse = {
+export type CCPluginMarketResponse = {
 	id: string;
 	name: string;
 	description: string;

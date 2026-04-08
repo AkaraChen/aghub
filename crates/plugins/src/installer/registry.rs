@@ -13,7 +13,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const OFFICIAL_MARKETPLACE_REPO: &str =
 	"https://github.com/anthropics/claude-plugins-official.git";
 
-fn find_plugin_manifest_path(plugin_dir: &Path) -> Option<PathBuf> {
+pub(crate) fn find_plugin_manifest_path(plugin_dir: &Path) -> Option<PathBuf> {
 	let possible_paths = [
 		plugin_dir.join(".claude-plugin/plugin.json"),
 		plugin_dir.join(".plugin/plugin.json"),
@@ -29,7 +29,7 @@ fn find_plugin_manifest_path(plugin_dir: &Path) -> Option<PathBuf> {
 	None
 }
 
-fn resolve_plugin_dir(
+pub(crate) fn resolve_plugin_dir(
 	workspace_dir: &Path,
 	candidates: &[PathBuf],
 ) -> Option<PathBuf> {
@@ -48,7 +48,7 @@ fn resolve_plugin_dir(
 	None
 }
 
-fn resolve_plugin_dir_with_wrappers(
+pub(crate) fn resolve_plugin_dir_with_wrappers(
 	workspace_dir: &Path,
 	candidates: &[PathBuf],
 ) -> Option<PathBuf> {
@@ -71,15 +71,15 @@ fn resolve_plugin_dir_with_wrappers(
 	None
 }
 
-fn local_plugin_candidates(name: &str) -> Vec<PathBuf> {
+pub(crate) fn local_plugin_candidates(name: &str) -> Vec<PathBuf> {
 	vec![PathBuf::from(name), PathBuf::new()]
 }
 
-fn remote_plugin_candidates(name: &str) -> Vec<PathBuf> {
+pub(crate) fn remote_plugin_candidates(name: &str) -> Vec<PathBuf> {
 	vec![PathBuf::new(), PathBuf::from(name)]
 }
 
-fn unique_suffix() -> String {
+pub(crate) fn unique_suffix() -> String {
 	let nanos = SystemTime::now()
 		.duration_since(UNIX_EPOCH)
 		.unwrap_or_default()
@@ -105,6 +105,14 @@ fn repository_tarball_urls(url: &str) -> Vec<String> {
 	}
 
 	vec![normalized_url]
+}
+
+fn build_http_client(timeout_secs: u64) -> reqwest::Client {
+	reqwest::Client::builder()
+		.user_agent("aghub-plugin-installer")
+		.timeout(std::time::Duration::from_secs(timeout_secs))
+		.build()
+		.unwrap_or_default()
 }
 
 pub(crate) fn normalize_repository_url(url: &str) -> String {
@@ -174,6 +182,12 @@ pub(crate) fn local_source_remote_fallback(
 fn manifest_from_marketplace_plugin(
 	plugin: &MarketplacePlugin,
 ) -> PluginManifest {
+	let keywords = plugin
+		.extra
+		.get("keywords")
+		.and_then(json_string_list)
+		.or_else(|| plugin.extra.get("tags").and_then(json_string_list));
+
 	PluginManifest {
 		name: plugin.name.clone(),
 		version: plugin.version.clone(),
@@ -188,18 +202,136 @@ fn manifest_from_marketplace_plugin(
 				.author
 				.as_ref()
 				.and_then(|author| author.email.clone()),
-			url: None,
+			url: plugin.homepage.clone(),
 		},
 		homepage: plugin.homepage.clone(),
-		repository: None,
+		repository: marketplace_plugin_repository(plugin),
 		license: None,
-		keywords: None,
+		keywords,
 		logo: None,
 		skills: None,
 		agents: None,
 		commands: None,
 		user_config: None,
 	}
+}
+
+fn marketplace_plugin_repository(plugin: &MarketplacePlugin) -> Option<String> {
+	match &plugin.source {
+		MarketplaceSource::GitHub { repo, .. } => {
+			Some(normalize_repository_url(repo))
+		}
+		MarketplaceSource::Url { url, .. }
+		| MarketplaceSource::GitSubdir { url, .. } => {
+			Some(normalize_repository_url(url))
+		}
+		MarketplaceSource::Local(_) => plugin
+			.homepage
+			.as_deref()
+			.and_then(|url| parse_github_tree_url(url).map(|(repo, _)| repo))
+			.or_else(|| plugin.homepage.clone()),
+		MarketplaceSource::Npm { .. } => plugin.homepage.clone(),
+	}
+}
+
+fn json_string_list(value: &serde_json::Value) -> Option<Vec<String>> {
+	match value {
+		serde_json::Value::Array(items) => {
+			let values: Vec<_> = items
+				.iter()
+				.filter_map(|item| item.as_str().map(str::trim))
+				.filter(|item| !item.is_empty())
+				.map(str::to_string)
+				.collect();
+			(!values.is_empty()).then_some(values)
+		}
+		serde_json::Value::String(item) => {
+			let trimmed = item.trim();
+			(!trimmed.is_empty()).then_some(vec![trimmed.to_string()])
+		}
+		_ => None,
+	}
+}
+
+fn build_materialized_manifest(
+	plugin: &MarketplacePlugin,
+) -> serde_json::Value {
+	let mut manifest = serde_json::Map::new();
+
+	manifest.insert(
+		"name".to_string(),
+		serde_json::Value::String(plugin.name.clone()),
+	);
+	manifest.insert(
+		"description".to_string(),
+		serde_json::Value::String(plugin.description.clone()),
+	);
+
+	if let Some(version) = plugin.version.clone() {
+		manifest
+			.insert("version".to_string(), serde_json::Value::String(version));
+	}
+
+	if let Some(author) = &plugin.author {
+		let mut author_value = serde_json::Map::new();
+		author_value.insert(
+			"name".to_string(),
+			serde_json::Value::String(author.name.clone()),
+		);
+		if let Some(email) = &author.email {
+			author_value.insert(
+				"email".to_string(),
+				serde_json::Value::String(email.clone()),
+			);
+		}
+		manifest.insert(
+			"author".to_string(),
+			serde_json::Value::Object(author_value),
+		);
+	}
+
+	if let Some(homepage) = &plugin.homepage {
+		manifest.insert(
+			"homepage".to_string(),
+			serde_json::Value::String(homepage.clone()),
+		);
+	}
+
+	if let Some(repository) = marketplace_plugin_repository(plugin) {
+		manifest.insert(
+			"repository".to_string(),
+			serde_json::Value::String(repository),
+		);
+	}
+
+	for (key, value) in &plugin.extra {
+		if matches!(key.as_str(), "source" | "category" | "tags") {
+			continue;
+		}
+		manifest.insert(key.clone(), value.clone());
+	}
+
+	serde_json::Value::Object(manifest)
+}
+
+async fn materialize_marketplace_plugin(
+	plugin: &MarketplacePlugin,
+	source_dir: Option<&Path>,
+	target_dir: &Path,
+) -> Result<()> {
+	if let Some(path) = source_dir {
+		copy_dir_all(path, target_dir).await?;
+	} else {
+		tokio::fs::create_dir_all(target_dir).await?;
+	}
+
+	let manifest_dir = target_dir.join(".claude-plugin");
+	tokio::fs::create_dir_all(&manifest_dir).await?;
+	let manifest_path = manifest_dir.join("plugin.json");
+	let manifest =
+		serde_json::to_string_pretty(&build_materialized_manifest(plugin))?;
+	tokio::fs::write(&manifest_path, manifest).await?;
+	Ok(())
 }
 
 fn manifest_candidate_paths(candidates: &[PathBuf]) -> Vec<String> {
@@ -550,10 +682,7 @@ impl MarketplaceRegistry {
 		plugins_subdirs: Vec<String>,
 		upstream_repo: Option<String>,
 	) -> Self {
-		let client = reqwest::Client::builder()
-			.timeout(std::time::Duration::from_secs(60))
-			.build()
-			.unwrap_or_default();
+		let client = build_http_client(60);
 
 		Self {
 			marketplace_path,
@@ -570,9 +699,7 @@ impl MarketplaceRegistry {
 			.ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))?
 			.join(".claude/plugins/marketplaces/claude-plugins-official");
 
-		let client = reqwest::Client::builder()
-			.timeout(std::time::Duration::from_secs(60))
-			.build()?;
+		let client = build_http_client(60);
 
 		Ok(Self {
 			marketplace_path,
@@ -911,7 +1038,16 @@ impl PluginRegistry for MarketplaceRegistry {
 						.marketplace_path
 						.join(path.trim_start_matches("./"));
 					if source_dir.exists() {
-						copy_dir_all(&source_dir, target_dir).await?;
+						if find_plugin_manifest_path(&source_dir).is_some() {
+							copy_dir_all(&source_dir, target_dir).await?;
+						} else {
+							materialize_marketplace_plugin(
+								&plugin_def,
+								Some(&source_dir),
+								target_dir,
+							)
+							.await?;
+						}
 						let commit =
 							self.get_marketplace_commit().await.ok().flatten();
 						return Ok(commit);
@@ -1445,7 +1581,7 @@ impl MarketplaceRegistry {
 }
 
 /// Copy directory recursively
-async fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
+pub(crate) async fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
 	tokio::fs::create_dir_all(dst).await?;
 
 	let mut entries = tokio::fs::read_dir(src).await?;
@@ -1599,6 +1735,7 @@ mod tests {
 				"https://github.com/anthropics/claude-plugins-public/tree/main/external_plugins/autofix-bot"
 					.to_string(),
 			),
+			extra: std::collections::HashMap::new(),
 		};
 
 		assert_eq!(
@@ -1651,6 +1788,63 @@ mod tests {
 		assert_eq!(manifest.name, "php-lsp");
 		assert_eq!(manifest.version.as_deref(), Some("1.0.0"));
 		assert_eq!(manifest.author.name, "Anthropic");
+
+		std::fs::remove_dir_all(&temp_dir).unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_install_materializes_manifestless_marketplace_plugin() {
+		let temp_dir = make_temp_dir("aghub-marketplace-materialized");
+		let plugins_dir = temp_dir.join("plugins/php-lsp");
+		let config_dir = temp_dir.join(".claude-plugin");
+		let install_dir = temp_dir.join("installed/php-lsp");
+		std::fs::create_dir_all(&plugins_dir).unwrap();
+		std::fs::create_dir_all(&config_dir).unwrap();
+		std::fs::write(plugins_dir.join("README.md"), "placeholder").unwrap();
+		std::fs::write(
+			config_dir.join("marketplace.json"),
+			r#"{
+				"name": "test-marketplace",
+				"description": "test",
+				"owner": { "name": "owner" },
+				"plugins": [
+					{
+						"name": "php-lsp",
+						"description": "PHP language server",
+						"version": "1.0.0",
+						"author": { "name": "Anthropic" },
+						"source": "./plugins/php-lsp",
+						"lspServers": {
+							"intelephense": {
+								"command": "intelephense",
+								"args": ["--stdio"]
+							}
+						}
+					}
+				]
+			}"#,
+		)
+		.unwrap();
+
+		let registry = MarketplaceRegistry::new(
+			temp_dir.clone(),
+			vec!["plugins/".to_string()],
+		);
+		registry.install("php-lsp", &install_dir).await.unwrap();
+
+		let manifest = std::fs::read_to_string(
+			install_dir.join(".claude-plugin/plugin.json"),
+		)
+		.unwrap();
+		let value: serde_json::Value = serde_json::from_str(&manifest).unwrap();
+		assert_eq!(
+			value.get("name").and_then(|item| item.as_str()),
+			Some("php-lsp")
+		);
+		assert!(value
+			.get("lspServers")
+			.and_then(|item| item.get("intelephense"))
+			.is_some());
 
 		std::fs::remove_dir_all(&temp_dir).unwrap();
 	}

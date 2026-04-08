@@ -631,7 +631,18 @@ fn collect_cache_install_candidates(
 	plugin_root: &Path,
 	candidates: &mut Vec<CacheInstallCandidate>,
 ) {
+	collect_cache_install_candidates_with_depth(plugin_root, candidates, 0);
+}
+
+fn collect_cache_install_candidates_with_depth(
+	plugin_root: &Path,
+	candidates: &mut Vec<CacheInstallCandidate>,
+	depth: usize,
+) {
 	if !plugin_root.is_dir() {
+		return;
+	}
+	if depth > 4 {
 		return;
 	}
 
@@ -642,6 +653,15 @@ fn collect_cache_install_candidates(
 	for entry in entries.flatten() {
 		let path = entry.path();
 		if !path.is_dir() {
+			continue;
+		}
+
+		if read_manifest(&path).ok().flatten().is_none() {
+			collect_cache_install_candidates_with_depth(
+				&path,
+				candidates,
+				depth + 1,
+			);
 			continue;
 		}
 
@@ -962,6 +982,64 @@ mod tests {
 					"superpowers@claude-plugins-official",
 				)?)
 				.is_none());
+			Ok(())
+		})();
+
+		match previous_home {
+			Some(value) => std::env::set_var("HOME", value),
+			None => std::env::remove_var("HOME"),
+		}
+		std::fs::remove_dir_all(&temp_home).unwrap();
+
+		result.unwrap();
+	}
+
+	#[test]
+	fn manager_discovers_scope_partitioned_cache_installations() {
+		let _guard = env_lock().lock().unwrap();
+		let temp_home = make_temp_dir("aghub-claude-home-scoped");
+		let previous_home = std::env::var_os("HOME");
+
+		std::env::set_var("HOME", &temp_home);
+
+		let result = (|| -> Result<()> {
+			let settings_dir = temp_home.join(".claude");
+			let plugins_dir = settings_dir.join("plugins");
+			let cache_dir = plugins_dir
+				.join("cache")
+				.join("claude-plugins-official")
+				.join("context7")
+				.join("scopes")
+				.join("project")
+				.join("1.2.3")
+				.join(".claude-plugin");
+
+			std::fs::create_dir_all(&cache_dir)?;
+			std::fs::write(
+				settings_dir.join("settings.json"),
+				r#"{"enabledPlugins":{"context7@claude-plugins-official":true}}"#,
+			)?;
+			std::fs::create_dir_all(&plugins_dir)?;
+			std::fs::write(
+				plugins_dir.join("installed_plugins.json"),
+				r#"{"version":2,"plugins":{}}"#,
+			)?;
+			std::fs::write(
+				cache_dir.join("plugin.json"),
+				r#"{"name":"context7","version":"1.2.3","description":"test","author":{"name":"A"}}"#,
+			)?;
+
+			let manager = ClaudePluginManager::new()?;
+			let plugin = manager
+				.get_plugin(&PluginId::parse(
+					"context7@claude-plugins-official",
+				)?)
+				.ok_or_else(|| {
+					anyhow::anyhow!("context7 plugin not discovered")
+				})?;
+
+			assert_eq!(plugin.version, "1.2.3");
+			assert_eq!(plugin.install_path, cache_dir.parent().unwrap());
 			Ok(())
 		})();
 

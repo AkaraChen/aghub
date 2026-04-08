@@ -414,9 +414,3 @@ impl PluginMarket {
 		&self.registry
 	}
 }
-
-impl Default for PluginMarket {
-	fn default() -> Self {
-		Self::new().expect("Failed to create PluginMarket")
-	}
-}

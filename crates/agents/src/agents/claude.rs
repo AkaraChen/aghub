@@ -38,63 +38,9 @@ fn save_mcps(
 	)
 }
 fn global_skills_paths() -> Vec<PathBuf> {
-	let Some(home) = home_dir() else {
-		return Vec::new();
-	};
-	let mut paths = vec![home.join(".claude/skills")];
-
-	// Scan marketplaces directory
-	let marketplaces = home.join(".claude/plugins/marketplaces");
-	if marketplaces.is_dir() {
-		collect_skills_dirs(&marketplaces, &mut paths);
-	}
-
-	// Scan plugins cache directory with filtering
-	let cache = home.join(".claude/plugins/cache");
-	if cache.is_dir() {
-		// If claude-plugins feature is enabled, use plugin manager for filtering
-		#[cfg(feature = "claude-plugins")]
-		{
-			if let Ok(manager) =
-				aghub_plugins::claude::ClaudePluginManager::new()
-			{
-				// Get only enabled plugin skill paths
-				let plugin_paths: Vec<_> = manager
-					.list_plugins()
-					.iter()
-					.filter(|p| p.enabled)
-					.flat_map(|p| p.all_skills_dirs())
-					.filter(|p| p.exists())
-					.collect();
-				paths.extend(plugin_paths);
-			} else {
-				// Fallback: scan all (backward compatibility)
-				collect_skills_dirs(&cache, &mut paths);
-			}
-		}
-
-		#[cfg(not(feature = "claude-plugins"))]
-		{
-			collect_skills_dirs(&cache, &mut paths);
-		}
-	}
-
-	paths
-}
-
-fn collect_skills_dirs(dir: &Path, paths: &mut Vec<PathBuf>) {
-	if let Ok(entries) = std::fs::read_dir(dir) {
-		for entry in entries.filter_map(|e| e.ok()) {
-			let path = entry.path();
-			if path.is_dir() {
-				if path.file_name() == Some(std::ffi::OsStr::new("skills")) {
-					paths.push(path);
-				} else {
-					collect_skills_dirs(&path, paths);
-				}
-			}
-		}
-	}
+	home_dir()
+		.map(|home| vec![home.join(".claude/skills")])
+		.unwrap_or_default()
 }
 
 fn project_skills_paths(root: &Path) -> Vec<PathBuf> {

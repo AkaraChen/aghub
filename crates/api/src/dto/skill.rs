@@ -4,6 +4,12 @@ use ts_rs::TS;
 
 use crate::dto::common::ConfigSource;
 
+#[derive(Debug, Clone)]
+pub struct SkillPluginMetadata {
+	pub plugin_id: String,
+	pub plugin_name: String,
+}
+
 #[derive(Debug, Deserialize, TS)]
 #[ts(export)]
 pub struct CreateSkillRequest {
@@ -34,8 +40,6 @@ impl From<CreateSkillRequest> for Skill {
 			source_path: None,
 			canonical_path: None,
 			config_source: None,
-			plugin_id: None,
-			plugin_name: None,
 		}
 	}
 }
@@ -65,8 +69,6 @@ impl UpdateSkillRequest {
 			source_path: existing.source_path,
 			canonical_path: existing.canonical_path,
 			config_source: existing.config_source,
-			plugin_id: existing.plugin_id,
-			plugin_name: existing.plugin_name,
 		}
 	}
 }
@@ -116,6 +118,24 @@ impl From<Skill> for SkillResponse {
 	}
 }
 
+impl SkillResponse {
+	pub fn from_agent_skill(
+		skill: Skill,
+		agent_id: &str,
+		plugin: Option<SkillPluginMetadata>,
+	) -> Self {
+		let mut response = Self::from(&skill);
+		response.agent = Some(agent_id.to_string());
+
+		if let Some(plugin) = plugin {
+			response.plugin_id = Some(plugin.plugin_id);
+			response.plugin_name = Some(plugin.plugin_name);
+		}
+
+		response
+	}
+}
+
 impl From<&Skill> for SkillResponse {
 	fn from(s: &Skill) -> Self {
 		SkillResponse {
@@ -129,17 +149,8 @@ impl From<&Skill> for SkillResponse {
 			tools: s.tools.clone(),
 			source: s.config_source.map(Into::into),
 			agent: None,
-			plugin_id: s.plugin_id.clone(),
-			plugin_name: s.plugin_name.clone(),
-		}
-	}
-}
-
-impl From<(Skill, &str)> for SkillResponse {
-	fn from((s, agent_id): (Skill, &str)) -> Self {
-		SkillResponse {
-			agent: Some(agent_id.to_string()),
-			..SkillResponse::from(s)
+			plugin_id: None,
+			plugin_name: None,
 		}
 	}
 }

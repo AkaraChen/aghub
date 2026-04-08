@@ -19,15 +19,18 @@ use aghub_api::dto::{
 	market::MarketSkill,
 	mcp::{CreateMcpRequest, McpResponse, TransportDto, UpdateMcpRequest},
 	plugin::{
-		CheckUpdateRequest, CheckUpdateResponse, HookActionResponse,
-		HookEventResponse, HookMatcherResponse, HooksManifestResponse,
-		InstallPluginRequest, InstallPluginResponse, MarketPluginResponse,
-		McpConfigResponse, McpServerResponse, PluginAuthorResponse,
-		PluginConfigResponse, PluginDetailResponse, PluginListResponse,
-		PluginManifestResponse, PluginResponse, PluginScopeResponse,
-		PluginSkillInfo, ReinstallPluginRequest, ReinstallPluginResponse,
-		UninstallPluginRequest, UninstallPluginResponse,
-		UpdatePluginConfigRequest, UpdatePluginRequest, UpdatePluginResponse,
+		CCPluginAuthorResponse, CCPluginCheckUpdateRequest,
+		CCPluginCheckUpdateResponse, CCPluginConfigResponse,
+		CCPluginDetailResponse, CCPluginHookActionResponse,
+		CCPluginHookEventResponse, CCPluginHookMatcherResponse,
+		CCPluginHooksManifestResponse, CCPluginInstallRequest,
+		CCPluginInstallResponse, CCPluginListResponse,
+		CCPluginManifestResponse, CCPluginMarketResponse,
+		CCPluginMcpConfigResponse, CCPluginMcpServerResponse,
+		CCPluginReinstallRequest, CCPluginReinstallResponse, CCPluginResponse,
+		CCPluginScopeResponse, CCPluginSkillInfo, CCPluginUninstallRequest,
+		CCPluginUninstallResponse, CCPluginUpdateConfigRequest,
+		CCPluginUpdateRequest, CCPluginUpdateResponse,
 	},
 	skill::{
 		CreateSkillRequest, DeleteSkillByPathRequest,
@@ -172,33 +175,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<CreateSubAgentRequest>(&cfg)?;
 	export_type::<UpdateSubAgentRequest>(&cfg)?;
 	export_type::<SubAgentResponse>(&cfg)?;
-	export_type::<PluginResponse>(&cfg)?;
-	export_type::<PluginScopeResponse>(&cfg)?;
-	export_type::<PluginListResponse>(&cfg)?;
-	export_type::<PluginDetailResponse>(&cfg)?;
-	export_type::<PluginScopeResponse>(&cfg)?;
-	export_type::<PluginSkillInfo>(&cfg)?;
-	export_type::<PluginManifestResponse>(&cfg)?;
-	export_type::<PluginAuthorResponse>(&cfg)?;
-	export_type::<HooksManifestResponse>(&cfg)?;
-	export_type::<HookEventResponse>(&cfg)?;
-	export_type::<HookMatcherResponse>(&cfg)?;
-	export_type::<HookActionResponse>(&cfg)?;
-	export_type::<McpConfigResponse>(&cfg)?;
-	export_type::<McpServerResponse>(&cfg)?;
-	export_type::<InstallPluginRequest>(&cfg)?;
-	export_type::<InstallPluginResponse>(&cfg)?;
-	export_type::<UninstallPluginRequest>(&cfg)?;
-	export_type::<UninstallPluginResponse>(&cfg)?;
-	export_type::<UpdatePluginRequest>(&cfg)?;
-	export_type::<UpdatePluginResponse>(&cfg)?;
-	export_type::<CheckUpdateRequest>(&cfg)?;
-	export_type::<CheckUpdateResponse>(&cfg)?;
-	export_type::<ReinstallPluginRequest>(&cfg)?;
-	export_type::<ReinstallPluginResponse>(&cfg)?;
-	export_type::<PluginConfigResponse>(&cfg)?;
-	export_type::<UpdatePluginConfigRequest>(&cfg)?;
-	export_type::<MarketPluginResponse>(&cfg)?;
+	export_type::<CCPluginResponse>(&cfg)?;
+	export_type::<CCPluginScopeResponse>(&cfg)?;
+	export_type::<CCPluginListResponse>(&cfg)?;
+	export_type::<CCPluginDetailResponse>(&cfg)?;
+	export_type::<CCPluginSkillInfo>(&cfg)?;
+	export_type::<CCPluginManifestResponse>(&cfg)?;
+	export_type::<CCPluginAuthorResponse>(&cfg)?;
+	export_type::<CCPluginHooksManifestResponse>(&cfg)?;
+	export_type::<CCPluginHookEventResponse>(&cfg)?;
+	export_type::<CCPluginHookMatcherResponse>(&cfg)?;
+	export_type::<CCPluginHookActionResponse>(&cfg)?;
+	export_type::<CCPluginMcpConfigResponse>(&cfg)?;
+	export_type::<CCPluginMcpServerResponse>(&cfg)?;
+	export_type::<CCPluginInstallRequest>(&cfg)?;
+	export_type::<CCPluginInstallResponse>(&cfg)?;
+	export_type::<CCPluginUninstallRequest>(&cfg)?;
+	export_type::<CCPluginUninstallResponse>(&cfg)?;
+	export_type::<CCPluginUpdateRequest>(&cfg)?;
+	export_type::<CCPluginUpdateResponse>(&cfg)?;
+	export_type::<CCPluginCheckUpdateRequest>(&cfg)?;
+	export_type::<CCPluginCheckUpdateResponse>(&cfg)?;
+	export_type::<CCPluginReinstallRequest>(&cfg)?;
+	export_type::<CCPluginReinstallResponse>(&cfg)?;
+	export_type::<CCPluginConfigResponse>(&cfg)?;
+	export_type::<CCPluginUpdateConfigRequest>(&cfg)?;
+	export_type::<CCPluginMarketResponse>(&cfg)?;
 
 	write_index_file(&out_dir)?;
 

@@ -3,7 +3,7 @@ use ts_rs::TS;
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct PluginScopeResponse {
+pub struct CCPluginScopeResponse {
 	pub scope: String,
 	pub install_path: String,
 	pub version: String,
@@ -13,7 +13,7 @@ pub struct PluginScopeResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct PluginResponse {
+pub struct CCPluginResponse {
 	pub id: String,
 	pub name: String,
 	pub version: String,
@@ -25,7 +25,7 @@ pub struct PluginResponse {
 	pub has_hooks: bool,
 	pub has_mcp: bool,
 	#[ts(optional)]
-	pub author: Option<PluginAuthorResponse>,
+	pub author: Option<CCPluginAuthorResponse>,
 	#[ts(optional)]
 	pub repository: Option<String>,
 	#[ts(optional)]
@@ -33,18 +33,18 @@ pub struct PluginResponse {
 	#[ts(optional)]
 	pub keywords: Option<Vec<String>>,
 	/// All scopes where this plugin is installed
-	pub scopes: Vec<PluginScopeResponse>,
+	pub scopes: Vec<CCPluginScopeResponse>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct PluginListResponse {
-	pub plugins: Vec<PluginResponse>,
+pub struct CCPluginListResponse {
+	pub plugins: Vec<CCPluginResponse>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct InstallPluginRequest {
+pub struct CCPluginInstallRequest {
 	pub plugin_id: String,
 	#[serde(default = "default_scope")]
 	pub scope: String,
@@ -56,14 +56,14 @@ fn default_scope() -> String {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct InstallPluginResponse {
+pub struct CCPluginInstallResponse {
 	pub success: bool,
 	pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct UninstallPluginRequest {
+pub struct CCPluginUninstallRequest {
 	pub plugin_id: String,
 	#[serde(default = "default_scope")]
 	pub scope: String,
@@ -73,14 +73,14 @@ pub struct UninstallPluginRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct UninstallPluginResponse {
+pub struct CCPluginUninstallResponse {
 	pub success: bool,
 	pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct UpdatePluginRequest {
+pub struct CCPluginUpdateRequest {
 	pub plugin_id: String,
 	#[serde(default = "default_scope")]
 	pub scope: String,
@@ -88,7 +88,7 @@ pub struct UpdatePluginRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct UpdatePluginResponse {
+pub struct CCPluginUpdateResponse {
 	pub success: bool,
 	pub message: String,
 }
@@ -96,13 +96,13 @@ pub struct UpdatePluginResponse {
 /// Plugin manifest (detailed plugin info)
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct PluginManifestResponse {
+pub struct CCPluginManifestResponse {
 	pub name: String,
 	#[ts(optional)]
 	pub version: Option<String>,
 	pub description: String,
 	#[ts(optional)]
-	pub author: Option<PluginAuthorResponse>,
+	pub author: Option<CCPluginAuthorResponse>,
 	#[ts(optional)]
 	pub homepage: Option<String>,
 	#[ts(optional)]
@@ -123,7 +123,7 @@ pub struct PluginManifestResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct PluginAuthorResponse {
+pub struct CCPluginAuthorResponse {
 	pub name: String,
 	#[ts(optional)]
 	pub email: Option<String>,
@@ -134,28 +134,28 @@ pub struct PluginAuthorResponse {
 /// Hooks configuration
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct HooksManifestResponse {
-	pub hooks: Vec<HookEventResponse>,
+pub struct CCPluginHooksManifestResponse {
+	pub hooks: Vec<CCPluginHookEventResponse>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct HookEventResponse {
+pub struct CCPluginHookEventResponse {
 	pub event: String,
-	pub matchers: Vec<HookMatcherResponse>,
+	pub matchers: Vec<CCPluginHookMatcherResponse>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct HookMatcherResponse {
+pub struct CCPluginHookMatcherResponse {
 	#[ts(optional)]
 	pub matcher: Option<String>,
-	pub hooks: Vec<HookActionResponse>,
+	pub hooks: Vec<CCPluginHookActionResponse>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct HookActionResponse {
+pub struct CCPluginHookActionResponse {
 	pub action_type: String,
 	#[ts(optional)]
 	pub command: Option<String>,
@@ -166,13 +166,13 @@ pub struct HookActionResponse {
 /// MCP Server configuration
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct McpConfigResponse {
-	pub servers: Vec<McpServerResponse>,
+pub struct CCPluginMcpConfigResponse {
+	pub servers: Vec<CCPluginMcpServerResponse>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct McpServerResponse {
+pub struct CCPluginMcpServerResponse {
 	pub name: String,
 	pub transport_type: String,
 	#[ts(optional)]
@@ -192,26 +192,26 @@ pub struct McpServerResponse {
 /// Plugin detail response (combined)
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct PluginDetailResponse {
+pub struct CCPluginDetailResponse {
 	#[ts(flatten)]
 	#[serde(flatten)]
-	pub plugin: PluginResponse,
+	pub plugin: CCPluginResponse,
 	#[ts(optional)]
-	pub manifest: Option<PluginManifestResponse>,
+	pub manifest: Option<CCPluginManifestResponse>,
 	#[ts(optional)]
-	pub hooks: Option<HooksManifestResponse>,
+	pub hooks: Option<CCPluginHooksManifestResponse>,
 	#[ts(optional)]
-	pub mcp_config: Option<McpConfigResponse>,
+	pub mcp_config: Option<CCPluginMcpConfigResponse>,
 	pub update_available: bool,
 	#[ts(optional)]
 	pub latest_version: Option<String>,
-	pub provided_skills: Vec<PluginSkillInfo>,
+	pub provided_skills: Vec<CCPluginSkillInfo>,
 }
 
 /// Skill discovered from a plugin directory
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct PluginSkillInfo {
+pub struct CCPluginSkillInfo {
 	pub name: String,
 	#[ts(optional)]
 	pub description: Option<String>,
@@ -220,13 +220,13 @@ pub struct PluginSkillInfo {
 /// Check for updates request/response
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct CheckUpdateRequest {
+pub struct CCPluginCheckUpdateRequest {
 	pub plugin_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct CheckUpdateResponse {
+pub struct CCPluginCheckUpdateResponse {
 	pub plugin_id: String,
 	pub update_available: bool,
 	pub current_version: String,
@@ -239,7 +239,7 @@ pub struct CheckUpdateResponse {
 /// Reinstall plugin request/response
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct ReinstallPluginRequest {
+pub struct CCPluginReinstallRequest {
 	pub plugin_id: String,
 	#[serde(default = "default_scope")]
 	pub scope: String,
@@ -249,14 +249,14 @@ pub struct ReinstallPluginRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct ReinstallPluginResponse {
+pub struct CCPluginReinstallResponse {
 	pub success: bool,
 	pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct PluginConfigResponse {
+pub struct CCPluginConfigResponse {
 	pub plugin_id: String,
 	/// Config as JSON string (use serde_json to parse)
 	#[ts(optional)]
@@ -268,7 +268,7 @@ pub struct PluginConfigResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct UpdatePluginConfigRequest {
+pub struct CCPluginUpdateConfigRequest {
 	pub plugin_id: String,
 	/// Config as JSON string (must be a valid JSON object)
 	pub config: String,
@@ -277,7 +277,7 @@ pub struct UpdatePluginConfigRequest {
 /// Marketplace plugin item (from GitHub organization)
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct MarketPluginResponse {
+pub struct CCPluginMarketResponse {
 	pub id: String,
 	pub name: String,
 	pub description: String,

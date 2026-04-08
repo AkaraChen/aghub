@@ -1,4 +1,10 @@
 export const queryKeys = {
+	plugins: {
+		all: () => ["plugins"] as const,
+		list: () => ["plugins", "list"] as const,
+		detail: (pluginId: string) => ["plugins", "detail", pluginId] as const,
+		market: () => ["plugins", "market"] as const,
+	},
 	agents: {
 		all: () => ["agents"] as const,
 		list: () => ["agents", "list"] as const,
