@@ -2,8 +2,9 @@ use crate::{eprintln_verbose, ResourceType};
 use aghub_core::{
 	errors::ConfigError, manager::ConfigManager, models::McpTransport,
 };
-use anyhow::{bail, Result};
-use std::collections::HashMap;
+use anyhow::Result;
+
+use super::parse_mcp_transport;
 
 #[allow(clippy::too_many_arguments)]
 pub fn execute(
@@ -57,84 +58,23 @@ pub fn execute(
 
 			let mut mcp = existing.clone();
 
+			// Preserve existing timeout
+			let existing_timeout = match &mcp.transport {
+				McpTransport::Stdio { timeout, .. } => *timeout,
+				McpTransport::Sse { timeout, .. } => *timeout,
+				McpTransport::StreamableHttp { timeout, .. } => *timeout,
+			};
+
 			// Update transport if command or URL provided
-			if let Some(cmd_str) = command {
-				let parts: Vec<String> =
-					cmd_str.split_whitespace().map(String::from).collect();
-				if parts.is_empty() {
-					bail!("Command cannot be empty");
-				}
-				let command = parts[0].clone();
-				let args = parts.into_iter().skip(1).collect();
-
-				let env = if env_vars.is_empty() {
-					None
-				} else {
-					let mut env_map = HashMap::new();
-					for env_var in env_vars {
-						let parts: Vec<_> = env_var.splitn(2, '=').collect();
-						if parts.len() == 2 {
-							env_map.insert(
-								parts[0].to_string(),
-								parts[1].to_string(),
-							);
-						}
-					}
-					Some(env_map)
-				};
-
-				// Preserve existing timeout or use None
-				let timeout = match &mcp.transport {
-					McpTransport::Stdio { timeout, .. } => *timeout,
-					McpTransport::Sse { timeout, .. } => *timeout,
-					McpTransport::StreamableHttp { timeout, .. } => *timeout,
-				};
-
-				mcp.transport = McpTransport::Stdio {
-					command,
-					args,
-					env,
-					timeout,
-				};
-			} else if let Some(url_str) = url {
-				let headers_map = if headers.is_empty() {
-					None
-				} else {
-					let mut map = HashMap::new();
-					for header in headers {
-						let parts: Vec<_> = header.splitn(2, ':').collect();
-						if parts.len() == 2 {
-							map.insert(
-								parts[0].trim().to_string(),
-								parts[1].trim().to_string(),
-							);
-						}
-					}
-					Some(map)
-				};
-
-				// Preserve existing timeout or use None
-				let timeout = match &mcp.transport {
-					McpTransport::Stdio { timeout, .. } => *timeout,
-					McpTransport::Sse { timeout, .. } => *timeout,
-					McpTransport::StreamableHttp { timeout, .. } => *timeout,
-				};
-
-				// Determine transport type based on the transport argument
-				mcp.transport = if transport == "sse" {
-					McpTransport::Sse {
-						url: url_str,
-						headers: headers_map,
-						timeout,
-					}
-				} else {
-					// Default to streamable-http
-					McpTransport::StreamableHttp {
-						url: url_str,
-						headers: headers_map,
-						timeout,
-					}
-				};
+			if let Some(new_transport) = parse_mcp_transport(
+				command,
+				url,
+				&transport,
+				headers,
+				env_vars,
+				existing_timeout,
+			)? {
+				mcp.transport = new_transport;
 			}
 
 			manager.update_mcp(&name, mcp.clone())?;
