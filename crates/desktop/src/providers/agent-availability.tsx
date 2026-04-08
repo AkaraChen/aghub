@@ -1,6 +1,5 @@
 import { Spinner } from "@heroui/react";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
 	AgentAvailabilityContextValue,
 	AgentAvailabilityProviderProps,
@@ -9,19 +8,17 @@ import type {
 import { AgentAvailabilityContext } from "../contexts/agent-availability";
 import type { AgentAvailabilityDto, AgentInfo } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
-import { getDisabledAgents } from "../lib/store";
 import {
 	agentAvailabilityQueryOptions,
 	agentsListQueryOptions,
+	disabledAgentsQueryOptions,
 } from "../requests/agents";
 
 export function AgentAvailabilityProvider({
 	children,
 }: AgentAvailabilityProviderProps) {
 	const api = useApi();
-	const [disabledAgents, setDisabledAgents] = useState<Set<string>>(
-		() => new Set(),
-	);
+	const queryClient = useQueryClient();
 
 	// Fetch all agents
 	const {
@@ -41,17 +38,18 @@ export function AgentAvailabilityProvider({
 		...agentAvailabilityQueryOptions({ api }),
 	});
 
-	// Load disabled agents from store
-	useEffect(() => {
-		getDisabledAgents().then((disabled: string[]) => {
-			setDisabledAgents(new Set(disabled));
-		});
-	}, []);
+	// Load disabled agents from store via React Query
+	const { data: disabledAgentsData = [] } = useQuery({
+		...disabledAgentsQueryOptions(),
+	});
+
+	const disabledAgents = new Set(disabledAgentsData);
 
 	// Function to refresh disabled agents from store
 	const refreshDisabledAgents = async () => {
-		const disabled = await getDisabledAgents();
-		setDisabledAgents(new Set(disabled));
+		await queryClient.invalidateQueries({
+			queryKey: disabledAgentsQueryOptions().queryKey,
+		});
 	};
 
 	// Combine data
