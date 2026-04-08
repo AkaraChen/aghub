@@ -70,7 +70,9 @@ impl ClaudePluginInfo {
 	pub fn effective_author(&self) -> String {
 		self.author
 			.as_ref()
-			.map(|a| a.name.clone())
+			.map(|author| author.name.trim())
+			.filter(|name| !name.is_empty())
+			.map(str::to_string)
 			.unwrap_or_else(|| self.source.to_string())
 	}
 
@@ -262,9 +264,11 @@ impl ClaudePluginInfo {
 
 		// Also check manifest for custom skills dir
 		if let Ok(Some(manifest)) = self.read_manifest() {
-			if let Some(ref skills_path) = manifest.skills {
-				for install_path in self.all_install_paths() {
-					paths.push(install_path.join(skills_path));
+			if let Some(ref skills_paths) = manifest.skills {
+				for skills_path in skills_paths.iter() {
+					for install_path in self.all_install_paths() {
+						paths.push(install_path.join(skills_path));
+					}
 				}
 			}
 		}
@@ -394,17 +398,12 @@ impl ClaudePluginManager {
 	fn load_installed_plugins(
 		settings: &settings::ClaudeSettings,
 	) -> Result<Vec<ClaudePluginInfo>> {
-		use std::fs;
-
 		let manifest_path = dirs::home_dir()
 			.ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))?
 			.join(".claude/plugins/installed_plugins.json");
 
 		let mut manifest_plugins = if manifest_path.exists() {
-			let content = fs::read_to_string(&manifest_path)?;
-			let manifest: types::InstalledPluginsManifest =
-				serde_json::from_str(&content)?;
-			manifest.plugins
+			types::InstalledPluginsManifest::load(&manifest_path)?.plugins
 		} else {
 			HashMap::new()
 		};
@@ -458,7 +457,9 @@ impl ClaudePluginManager {
 				.or_else(|| find_latest_manifest_in_siblings(&install_path));
 
 			let description = manifest.as_ref().map(|m| m.description.clone());
-			let author = manifest.as_ref().map(|m| m.author.clone());
+			let author = manifest.as_ref().and_then(|manifest| {
+				(!manifest.author.is_empty()).then_some(manifest.author.clone())
+			});
 			let repository =
 				manifest.as_ref().and_then(|m| m.repository.clone());
 			let license = manifest.as_ref().and_then(|m| m.license.clone());

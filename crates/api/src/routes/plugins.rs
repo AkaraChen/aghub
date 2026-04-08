@@ -353,19 +353,19 @@ pub async fn get_plugin_detail(
 		name: m.name,
 		version: m.version,
 		description: m.description,
-		author: PluginAuthorResponse {
+		author: (!m.author.is_empty()).then_some(PluginAuthorResponse {
 			name: m.author.name,
 			email: m.author.email,
 			url: m.author.url,
-		},
+		}),
 		homepage: m.homepage,
 		repository: m.repository,
 		license: m.license,
 		keywords: m.keywords,
 		logo: m.logo,
-		skills: m.skills,
-		agents: m.agents,
-		commands: m.commands,
+		skills: m.skills.map(|paths| paths.into_vec()),
+		agents: m.agents.map(|paths| paths.into_vec()),
+		commands: m.commands.map(|paths| paths.into_vec()),
 	});
 
 	// Read hooks
@@ -438,9 +438,11 @@ pub async fn get_plugin_detail(
 
 	// If plugin specifies custom skills dir, add it for all install paths
 	if let Ok(Some(manifest)) = plugin.read_manifest() {
-		if let Some(ref skills_path) = manifest.skills {
-			for install_path in plugin.all_install_paths() {
-				all_skill_dirs.push(install_path.join(skills_path));
+		if let Some(ref skills_paths) = manifest.skills {
+			for skills_path in skills_paths.iter() {
+				for install_path in plugin.all_install_paths() {
+					all_skill_dirs.push(install_path.join(skills_path));
+				}
 			}
 		}
 	}

@@ -10,6 +10,7 @@ pub struct MarketplaceConfig {
 	#[serde(rename = "$schema")]
 	pub schema: Option<String>,
 	pub name: String,
+	#[serde(default)]
 	pub description: String,
 	pub owner: MarketplaceOwner,
 	pub plugins: Vec<MarketplacePlugin>,
@@ -25,6 +26,7 @@ pub struct MarketplaceOwner {
 #[derive(Debug, Deserialize)]
 pub struct MarketplacePlugin {
 	pub name: String,
+	#[serde(default)]
 	pub description: String,
 	#[serde(default)]
 	pub version: Option<String>,

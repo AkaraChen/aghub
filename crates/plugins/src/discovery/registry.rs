@@ -129,6 +129,8 @@ impl UnifiedPluginRegistry {
 				marketplace_name,
 				config.plugins.len()
 			);
+			let owner_name = config.owner.name.clone();
+			let owner_email = config.owner.email.clone();
 
 			for plugin_def in config.plugins {
 				let plugin_id =
@@ -151,10 +153,18 @@ impl UnifiedPluginRegistry {
 					self.install_counts.get(&plugin_id).copied();
 
 				// Convert author
-				let author = plugin_def.author.map(|a| PluginAuthor {
-					name: a.name,
-					email: a.email,
-				});
+				let author = plugin_def
+					.author
+					.map(|author| PluginAuthor {
+						name: author.name,
+						email: author.email,
+					})
+					.or_else(|| {
+						Some(PluginAuthor {
+							name: owner_name.clone(),
+							email: owner_email.clone(),
+						})
+					});
 
 				// Create plugin info
 				let plugin_info = PluginInfo {
@@ -270,9 +280,11 @@ impl UnifiedPluginRegistry {
 
 		Some(LocalPluginMetadata {
 			version: manifest.as_ref().and_then(|m| m.version.clone()),
-			author: manifest.as_ref().map(|m| PluginAuthor {
-				name: m.author.name.clone(),
-				email: m.author.email.clone(),
+			author: manifest.as_ref().and_then(|manifest| {
+				(!manifest.author.is_empty()).then_some(PluginAuthor {
+					name: manifest.author.name.clone(),
+					email: manifest.author.email.clone(),
+				})
 			}),
 			homepage: manifest.as_ref().and_then(|m| m.homepage.clone()),
 			repository: manifest.as_ref().and_then(|m| m.repository.clone()),

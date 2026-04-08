@@ -13,7 +13,10 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use std::path::PathBuf;
 
-use self::registry::{GitHubRegistry, PluginRegistry};
+use self::registry::{
+	local_source_remote_fallback, normalize_repository_url, GitHubRegistry,
+	PluginRegistry,
+};
 use crate::discovery::{MarketplaceConfig, MarketplaceSource};
 
 /// Plugin installer that manages installation without Claude CLI
@@ -27,6 +30,46 @@ pub struct PluginInstaller {
 }
 
 impl PluginInstaller {
+	fn marketplace_path_for(&self, marketplace: &str) -> PathBuf {
+		self.marketplace_root
+			.parent()
+			.unwrap_or(&self.marketplace_root)
+			.join(marketplace)
+	}
+
+	fn common_marketplace_subdirs() -> Vec<String> {
+		vec!["plugins/".to_string(), "external_plugins/".to_string()]
+	}
+
+	fn marketplace_registry(
+		&self,
+		marketplace: &str,
+	) -> Result<registry::MarketplaceRegistry> {
+		if marketplace == "claude-plugins-official" {
+			return registry::MarketplaceRegistry::new_official().context(
+				"Official marketplace not found. Please clone it first: git clone https://github.com/anthropics/claude-plugins-official ~/.claude/plugins/marketplaces/claude-plugins-official",
+			);
+		}
+
+		let marketplace_path = self.marketplace_path_for(marketplace);
+		let marketplace_json =
+			marketplace_path.join(".claude-plugin/marketplace.json");
+		if !marketplace_json.exists() {
+			anyhow::bail!("Marketplace '{}' not found", marketplace);
+		}
+
+		Ok(registry::MarketplaceRegistry::new(
+			marketplace_path,
+			Self::common_marketplace_subdirs(),
+		))
+	}
+
+	fn is_marketplace_source(&self, source: &str) -> bool {
+		self.marketplace_path_for(source)
+			.join(".claude-plugin/marketplace.json")
+			.exists()
+	}
+
 	/// Create a new plugin installer
 	pub fn new() -> Result<Self> {
 		let home = dirs::home_dir().context("Cannot find home directory")?;
@@ -103,20 +146,17 @@ impl PluginInstaller {
 		}
 
 		// Resolve the actual source for marketplace plugins and get appropriate registry
-		let (registry, resolved_source, is_remote) = if id.source
-			== "claude-plugins-official"
-		{
-			let (source, remote) =
-				self.resolve_marketplace_source(&id.name).await?;
-			// Always use MarketplaceRegistry for marketplace plugins
-			// to properly handle both local and remote sources
-			let reg = registry::MarketplaceRegistry::new_official()
-					.context("Official marketplace not found. Please clone it first: git clone https://github.com/anthropics/claude-plugins-official ~/.claude/plugins/marketplaces/claude-plugins-official")?;
-			(Box::new(reg) as Box<dyn PluginRegistry>, source, remote)
-		} else {
-			let reg = self.get_registry(&id.source)?;
-			(reg, id.source.clone(), id.source.starts_with("http"))
-		};
+		let (registry, resolved_source, is_remote) =
+			if self.is_marketplace_source(&id.source) {
+				let (source, remote) = self
+					.resolve_marketplace_source(&id.source, &id.name)
+					.await?;
+				let reg = self.marketplace_registry(&id.source)?;
+				(Box::new(reg) as Box<dyn PluginRegistry>, source, remote)
+			} else {
+				let reg = self.get_registry(&id.source)?;
+				(reg, id.source.clone(), id.source.starts_with("http"))
+			};
 
 		// Fetch manifest first to verify plugin exists
 		let manifest = registry.fetch_manifest(&id.name).await?;
@@ -296,12 +336,8 @@ impl PluginInstaller {
 		source: &str,
 	) -> anyhow::Result<Box<dyn PluginRegistry>> {
 		match source {
-			"claude-plugins-official" => {
-				// For official marketplace, we need to read marketplace.json to get actual source
-				// The MarketplaceRegistry handles both local and remote sources
-				let registry = registry::MarketplaceRegistry::new_official()
-					.context("Official marketplace not found. Please clone it first: git clone https://github.com/anthropics/claude-plugins-official ~/.claude/plugins/marketplaces/claude-plugins-official")?;
-				Ok(Box::new(registry))
+			source if self.is_marketplace_source(source) => {
+				Ok(Box::new(self.marketplace_registry(source)?))
 			}
 			url if url.starts_with("http") => {
 				// Parse GitHub URL: https://github.com/owner/repo
@@ -331,9 +367,10 @@ impl PluginInstaller {
 	/// and is_remote indicates if it needs to be fetched from remote
 	async fn resolve_marketplace_source(
 		&self,
+		marketplace: &str,
 		plugin_name: &str,
 	) -> anyhow::Result<(String, bool)> {
-		let marketplace_path = &self.marketplace_root;
+		let marketplace_path = self.marketplace_path_for(marketplace);
 
 		let marketplace_json =
 			marketplace_path.join(".claude-plugin/marketplace.json");
@@ -355,6 +392,10 @@ impl PluginInstaller {
 							.join(path.trim_start_matches("./"));
 						if full_path.exists() {
 							Ok((full_path.to_string_lossy().to_string(), false))
+						} else if let Some((repo_url, subdir)) =
+							local_source_remote_fallback(&plugin, path)
+						{
+							Ok((format!("{repo_url}#{subdir}"), true))
 						} else {
 							// Local path doesn't exist, treat as needing download
 							// This shouldn't happen for local sources, but handle gracefully
@@ -366,20 +407,17 @@ impl PluginInstaller {
 					}
 					// Remote URL source - return the URL
 					MarketplaceSource::Url { url, .. } => {
-						Ok((url.clone(), true))
+						Ok((normalize_repository_url(url), true))
 					}
 					// GitHub source - construct GitHub URL
 					MarketplaceSource::GitHub { repo, .. } => {
-						let url = if repo.starts_with("https://") {
-							repo.clone()
-						} else {
-							format!("https://github.com/{}", repo)
-						};
-						Ok((url, true))
+						Ok((normalize_repository_url(repo), true))
 					}
 					// Git subdirectory - return the URL
-					MarketplaceSource::GitSubdir { url, .. } => {
-						Ok((url.clone(), true))
+					MarketplaceSource::GitSubdir { url, path, .. } => {
+						let url = normalize_repository_url(url);
+						let subdir = path.trim_matches('/');
+						Ok((format!("{url}#{subdir}"), true))
 					}
 					// NPM source - not supported yet
 					MarketplaceSource::Npm { package, .. } => {
@@ -401,42 +439,19 @@ impl PluginInstaller {
 		info: InstalledPluginInfo,
 	) -> Result<()> {
 		use crate::claude::types::InstalledPluginsManifest;
-		use std::collections::HashMap;
 
 		let manifest_path = dirs::home_dir()
 			.context("Cannot find home directory")?
 			.join(".claude/plugins/installed_plugins.json");
 
-		// Read existing or create new
-		let mut manifest: InstalledPluginsManifest =
-			if let Ok(content) = std::fs::read_to_string(&manifest_path) {
-				serde_json::from_str(&content)?
-			} else {
-				InstalledPluginsManifest {
-					version: 1,
-					plugins: HashMap::new(),
-				}
-			};
-
 		let plugin_id_str = id.to_string();
-
-		// Add to existing or create new entry
-		manifest
-			.plugins
-			.entry(plugin_id_str)
-			.or_default()
-			.push(info);
-
-		// Ensure directory exists
-		if let Some(parent) = manifest_path.parent() {
-			std::fs::create_dir_all(parent)?;
-		}
-
-		// Write back
-		let content = serde_json::to_string_pretty(&manifest)?;
-		std::fs::write(&manifest_path, content)?;
-
-		Ok(())
+		InstalledPluginsManifest::update(&manifest_path, |manifest| {
+			manifest
+				.plugins
+				.entry(plugin_id_str)
+				.or_default()
+				.push(info);
+		})
 	}
 
 	/// Remove installation from manifest
@@ -447,25 +462,18 @@ impl PluginInstaller {
 			.context("Cannot find home directory")?
 			.join(".claude/plugins/installed_plugins.json");
 
-		let content = std::fs::read_to_string(&manifest_path)?;
-		let mut manifest: InstalledPluginsManifest =
-			serde_json::from_str(&content)?;
-
 		let plugin_id_str = id.to_string();
+		InstalledPluginsManifest::update(&manifest_path, |manifest| {
+			if let Some(installations) =
+				manifest.plugins.get_mut(&plugin_id_str)
+			{
+				installations.retain(|i| i.scope != scope);
 
-		if let Some(installations) = manifest.plugins.get_mut(&plugin_id_str) {
-			installations.retain(|i| i.scope != scope);
-
-			// Remove entry if no installations left
-			if installations.is_empty() {
-				manifest.plugins.remove(&plugin_id_str);
+				if installations.is_empty() {
+					manifest.plugins.remove(&plugin_id_str);
+				}
 			}
-		}
-
-		let content = serde_json::to_string_pretty(&manifest)?;
-		std::fs::write(&manifest_path, content)?;
-
-		Ok(())
+		})
 	}
 
 	/// Clean up empty parent directories after uninstall
@@ -601,19 +609,21 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_resolve_marketplace_source_local() {
-		let temp_dir = std::env::temp_dir()
+		let temp_root = std::env::temp_dir()
 			.join(format!("aghub-mod-test-{}", std::process::id()));
-		if temp_dir.exists() {
-			std::fs::remove_dir_all(&temp_dir).unwrap();
+		if temp_root.exists() {
+			std::fs::remove_dir_all(&temp_root).unwrap();
 		}
-		std::fs::create_dir_all(&temp_dir).unwrap();
+		std::fs::create_dir_all(&temp_root).unwrap();
+		let marketplace_dir = temp_root.join("claude-plugins-official");
 
-		let plugin_dir = temp_dir.join("plugins/test-plugin");
+		let plugin_dir = marketplace_dir.join("plugins/test-plugin");
 		std::fs::create_dir_all(&plugin_dir).unwrap();
-		std::fs::create_dir_all(temp_dir.join(".claude-plugin")).unwrap();
+		std::fs::create_dir_all(marketplace_dir.join(".claude-plugin"))
+			.unwrap();
 
 		std::fs::write(
-			temp_dir.join(".claude-plugin/marketplace.json"),
+			marketplace_dir.join(".claude-plugin/marketplace.json"),
 			r#"{
 				"name": "test-marketplace",
 				"description": "test",
@@ -629,35 +639,42 @@ mod tests {
 		)
 		.unwrap();
 
-		let installer =
-			PluginInstaller::with_roots(temp_dir.clone(), temp_dir.clone())
-				.unwrap();
+		let installer = PluginInstaller::with_roots(
+			temp_root.join("cache"),
+			marketplace_dir.clone(),
+		)
+		.unwrap();
 
 		let (source, is_remote) = installer
-			.resolve_marketplace_source("test-plugin")
+			.resolve_marketplace_source(
+				"claude-plugins-official",
+				"test-plugin",
+			)
 			.await
 			.unwrap();
 
 		assert_eq!(
 			source,
-			temp_dir
+			marketplace_dir
 				.join("plugins/test-plugin")
 				.to_string_lossy()
 				.to_string()
 		);
 		assert!(!is_remote);
 
-		std::fs::remove_dir_all(&temp_dir).unwrap();
+		std::fs::remove_dir_all(&temp_root).unwrap();
 	}
 
 	#[tokio::test]
 	async fn test_resolve_marketplace_source_github() {
-		let temp_dir = std::env::temp_dir()
+		let temp_root = std::env::temp_dir()
 			.join(format!("aghub-mod-test-git-{}", std::process::id()));
-		std::fs::create_dir_all(temp_dir.join(".claude-plugin")).unwrap();
+		let marketplace_dir = temp_root.join("claude-plugins-official");
+		std::fs::create_dir_all(marketplace_dir.join(".claude-plugin"))
+			.unwrap();
 
 		std::fs::write(
-			temp_dir.join(".claude-plugin/marketplace.json"),
+			marketplace_dir.join(".claude-plugin/marketplace.json"),
 			r#"{
 				"name": "test-marketplace",
 				"description": "test",
@@ -676,18 +693,127 @@ mod tests {
 		)
 		.unwrap();
 
-		let installer =
-			PluginInstaller::with_roots(temp_dir.clone(), temp_dir.clone())
-				.unwrap();
+		let installer = PluginInstaller::with_roots(
+			temp_root.join("cache"),
+			marketplace_dir,
+		)
+		.unwrap();
 
 		let (source, is_remote) = installer
-			.resolve_marketplace_source("test-github")
+			.resolve_marketplace_source(
+				"claude-plugins-official",
+				"test-github",
+			)
 			.await
 			.unwrap();
 
 		assert_eq!(source, "https://github.com/owner/repo");
 		assert!(is_remote);
 
-		std::fs::remove_dir_all(&temp_dir).unwrap();
+		std::fs::remove_dir_all(&temp_root).unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_resolve_marketplace_source_local_fallback_remote() {
+		let temp_root = std::env::temp_dir().join(format!(
+			"aghub-mod-test-local-fallback-{}",
+			std::process::id()
+		));
+		let marketplace_dir = temp_root.join("claude-plugins-official");
+		std::fs::create_dir_all(marketplace_dir.join(".claude-plugin"))
+			.unwrap();
+
+		std::fs::write(
+			marketplace_dir.join(".claude-plugin/marketplace.json"),
+			r#"{
+				"name": "test-marketplace",
+				"description": "test",
+				"owner": { "name": "owner" },
+				"plugins": [
+					{
+						"name": "autofix-bot",
+						"description": "desc",
+						"homepage": "https://github.com/anthropics/claude-plugins-public/tree/main/external_plugins/autofix-bot",
+						"source": "./external_plugins/autofix-bot"
+					}
+				]
+			}"#,
+		)
+		.unwrap();
+
+		let installer = PluginInstaller::with_roots(
+			temp_root.join("cache"),
+			marketplace_dir,
+		)
+		.unwrap();
+
+		let (source, is_remote) = installer
+			.resolve_marketplace_source(
+				"claude-plugins-official",
+				"autofix-bot",
+			)
+			.await
+			.unwrap();
+
+		assert_eq!(
+			source,
+			"https://github.com/anthropics/claude-plugins-public#external_plugins/autofix-bot"
+		);
+		assert!(is_remote);
+
+		std::fs::remove_dir_all(&temp_root).unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_resolve_marketplace_source_for_custom_marketplace_root() {
+		let temp_root = std::env::temp_dir().join(format!(
+			"aghub-mod-test-custom-marketplace-{}",
+			std::process::id()
+		));
+		let marketplaces_dir = temp_root.join("marketplaces");
+		let marketplace_dir = marketplaces_dir.join("impeccable");
+		std::fs::create_dir_all(marketplace_dir.join(".claude-plugin"))
+			.unwrap();
+
+		std::fs::write(
+			marketplace_dir.join(".claude-plugin/marketplace.json"),
+			r#"{
+				"name": "impeccable",
+				"description": "test",
+				"owner": { "name": "owner" },
+				"plugins": [
+					{
+						"name": "impeccable",
+						"description": "desc",
+						"version": "1.5.1",
+						"source": "./"
+					}
+				]
+			}"#,
+		)
+		.unwrap();
+		std::fs::write(
+			marketplace_dir.join(".claude-plugin/plugin.json"),
+			r#"{"name":"impeccable","description":"test","author":{"name":"A"}}"#,
+		)
+		.unwrap();
+
+		let installer = PluginInstaller::with_roots(
+			temp_root.join("cache"),
+			marketplaces_dir.join("claude-plugins-official"),
+		)
+		.unwrap();
+
+		assert!(installer.is_marketplace_source("impeccable"));
+
+		let (source, is_remote) = installer
+			.resolve_marketplace_source("impeccable", "impeccable")
+			.await
+			.unwrap();
+
+		assert_eq!(PathBuf::from(source), marketplace_dir);
+		assert!(!is_remote);
+
+		std::fs::remove_dir_all(&temp_root).unwrap();
 	}
 }

@@ -8,13 +8,13 @@ export type PluginManifestResponse = {
 	name: string;
 	version?: string;
 	description: string;
-	author: PluginAuthorResponse;
+	author?: PluginAuthorResponse;
 	homepage?: string;
 	repository?: string;
 	license?: string;
 	keywords?: Array<string>;
 	logo?: string;
-	skills?: string;
-	agents?: string;
-	commands?: string;
+	skills?: Array<string>;
+	agents?: Array<string>;
+	commands?: Array<string>;
 };

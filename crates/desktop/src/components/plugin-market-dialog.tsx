@@ -23,6 +23,7 @@ import { cn } from "../lib/utils";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "./ui/empty";
 
 const SEMANTIC_VERSION_REGEX = /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
+const GIT_HASH_REGEX = /^[0-9a-f]{7,40}$/i;
 
 interface PluginMarketDialogProps {
 	isOpen: boolean;
@@ -158,6 +159,14 @@ export function PluginMarketDialog({
 
 		if (version.startsWith("v")) {
 			return version;
+		}
+
+		if (version.startsWith("#")) {
+			return version;
+		}
+
+		if (GIT_HASH_REGEX.test(version)) {
+			return `#${version}`;
 		}
 
 		if (SEMANTIC_VERSION_REGEX.test(version)) {

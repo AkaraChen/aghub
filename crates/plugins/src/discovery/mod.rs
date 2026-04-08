@@ -181,7 +181,7 @@ impl PluginInfo {
 			}
 		}
 
-		match &self.source {
+		let source_author = match &self.source {
 			PluginSource::GitHub { repo, .. } => extract_github_owner(repo),
 			PluginSource::GitUrl { url, .. }
 			| PluginSource::GitSubdir { url, .. } => extract_github_owner(url),
@@ -191,7 +191,10 @@ impl PluginInfo {
 				.filter(|scope| !scope.is_empty())
 				.map(str::to_string),
 			PluginSource::LocalRelative { .. } => None,
-		}
+		};
+
+		source_author
+			.or_else(|| self.homepage.as_deref().and_then(extract_github_owner))
 	}
 
 	/// Get GitHub URL for the plugin
@@ -205,6 +208,17 @@ impl PluginInfo {
 				normalize_github_url(url).or_else(|| Some(url.clone()))
 			}
 			PluginSource::LocalRelative { path } => {
+				if let Some(homepage) = self.homepage.as_deref() {
+					if homepage.contains("github.com") {
+						return Some(
+							homepage
+								.trim_end_matches('/')
+								.trim_end_matches(".git")
+								.to_string(),
+						);
+					}
+				}
+
 				// For local plugins in official marketplace
 				if self.marketplace == "claude-plugins-official" {
 					Some(format!(
@@ -514,6 +528,44 @@ mod tests {
 		assert_eq!(
 			plugin.github_url().as_deref(),
 			Some("https://github.com/UI5/plugins-claude")
+		);
+	}
+
+	#[test]
+	fn display_author_and_url_fall_back_to_homepage_for_local_sources() {
+		let plugin = PluginInfo {
+			id: "autofix-bot@claude-plugins-official".to_string(),
+			name: "autofix-bot".to_string(),
+			description: String::new(),
+			version: None,
+			author: None,
+			category: None,
+			source: PluginSource::LocalRelative {
+				path: "./external_plugins/autofix-bot".to_string(),
+			},
+			marketplace: "claude-plugins-official".to_string(),
+			local_path: None,
+			installed: false,
+			enabled: None,
+			install_count: None,
+			homepage: Some(
+				"https://github.com/anthropics/claude-plugins-public/tree/main/external_plugins/autofix-bot"
+					.to_string(),
+			),
+			repository: None,
+			keywords: Vec::new(),
+			git_sha: None,
+			has_mcp: false,
+			has_skills: false,
+			has_hooks: false,
+		};
+
+		assert_eq!(plugin.display_author().as_deref(), Some("anthropics"));
+		assert_eq!(
+			plugin.github_url().as_deref(),
+			Some(
+				"https://github.com/anthropics/claude-plugins-public/tree/main/external_plugins/autofix-bot"
+			)
 		);
 	}
 }

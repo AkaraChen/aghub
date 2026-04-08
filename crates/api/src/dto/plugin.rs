@@ -101,7 +101,8 @@ pub struct PluginManifestResponse {
 	#[ts(optional)]
 	pub version: Option<String>,
 	pub description: String,
-	pub author: PluginAuthorResponse,
+	#[ts(optional)]
+	pub author: Option<PluginAuthorResponse>,
 	#[ts(optional)]
 	pub homepage: Option<String>,
 	#[ts(optional)]
@@ -113,11 +114,11 @@ pub struct PluginManifestResponse {
 	#[ts(optional)]
 	pub logo: Option<String>,
 	#[ts(optional)]
-	pub skills: Option<String>,
+	pub skills: Option<Vec<String>>,
 	#[ts(optional)]
-	pub agents: Option<String>,
+	pub agents: Option<Vec<String>>,
 	#[ts(optional)]
-	pub commands: Option<String>,
+	pub commands: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

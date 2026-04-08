@@ -1,7 +1,7 @@
 //! Plugin registry abstraction for different plugin sources
 
 use super::git::GitBasedInstaller;
-use crate::claude::types::PluginManifest;
+use crate::claude::types::{PluginAuthor, PluginManifest};
 use crate::discovery::{
 	MarketplaceConfig, MarketplacePlugin, MarketplaceSource,
 };
@@ -48,6 +48,29 @@ fn resolve_plugin_dir(
 	None
 }
 
+fn resolve_plugin_dir_with_wrappers(
+	workspace_dir: &Path,
+	candidates: &[PathBuf],
+) -> Option<PathBuf> {
+	if let Some(path) = resolve_plugin_dir(workspace_dir, candidates) {
+		return Some(path);
+	}
+
+	let entries = std::fs::read_dir(workspace_dir).ok()?;
+	for entry in entries.flatten() {
+		let path = entry.path();
+		if !path.is_dir() {
+			continue;
+		}
+
+		if let Some(candidate) = resolve_plugin_dir(&path, candidates) {
+			return Some(candidate);
+		}
+	}
+
+	None
+}
+
 fn local_plugin_candidates(name: &str) -> Vec<PathBuf> {
 	vec![PathBuf::from(name), PathBuf::new()]
 }
@@ -69,15 +92,134 @@ fn is_git_repository(path: &Path) -> bool {
 }
 
 fn repository_tarball_urls(url: &str) -> Vec<String> {
-	if url.contains("github.com") {
-		let clean_url = url.trim_end_matches('/').trim_end_matches(".git");
+	let normalized_url = normalize_repository_url(url);
+
+	if normalized_url.contains("github.com") {
+		let clean_url = normalized_url
+			.trim_end_matches('/')
+			.trim_end_matches(".git");
 		return vec![
 			format!("{clean_url}/tarball/refs/heads/main"),
 			format!("{clean_url}/tarball/refs/heads/master"),
 		];
 	}
 
-	vec![url.to_string()]
+	vec![normalized_url]
+}
+
+pub(crate) fn normalize_repository_url(url: &str) -> String {
+	let trimmed = url.trim_end_matches('/').trim_end_matches(".git");
+
+	if trimmed.starts_with("https://") || trimmed.starts_with("http://") {
+		return trimmed.to_string();
+	}
+
+	if let Some(path) = trimmed.strip_prefix("git@github.com:") {
+		return format!("https://github.com/{path}");
+	}
+
+	if trimmed.contains('/') && !trimmed.contains("://") {
+		return format!("https://github.com/{trimmed}");
+	}
+
+	trimmed.to_string()
+}
+
+fn github_owner_repo(url: &str) -> Option<(String, String)> {
+	let mut normalized = normalize_repository_url(url);
+	if let Some((repo_url, _)) = parse_github_tree_url(&normalized) {
+		normalized = repo_url;
+	}
+
+	let path = normalized
+		.strip_prefix("https://github.com/")
+		.or_else(|| normalized.strip_prefix("http://github.com/"))?;
+	let mut segments = path.split('/');
+	let owner = segments.next()?.trim();
+	let repo = segments.next()?.trim();
+	if owner.is_empty() || repo.is_empty() {
+		return None;
+	}
+
+	Some((owner.to_string(), repo.to_string()))
+}
+
+pub(crate) fn parse_github_tree_url(url: &str) -> Option<(String, String)> {
+	let normalized = normalize_repository_url(url);
+	let marker = "/tree/";
+	let (repo_url, rest) = normalized.split_once(marker)?;
+	let mut parts = rest.split('/');
+	let branch = parts.next()?;
+	let subdir = parts.collect::<Vec<_>>().join("/");
+	if branch.is_empty() || subdir.is_empty() {
+		return None;
+	}
+
+	Some((repo_url.to_string(), subdir))
+}
+
+pub(crate) fn local_source_remote_fallback(
+	plugin: &MarketplacePlugin,
+	local_path: &str,
+) -> Option<(String, String)> {
+	let homepage = plugin.homepage.as_deref()?;
+	let (repo_url, subdir) = parse_github_tree_url(homepage)?;
+	if subdir == local_path.trim_start_matches("./") {
+		return Some((repo_url, subdir));
+	}
+
+	None
+}
+
+fn manifest_from_marketplace_plugin(
+	plugin: &MarketplacePlugin,
+) -> PluginManifest {
+	PluginManifest {
+		name: plugin.name.clone(),
+		version: plugin.version.clone(),
+		description: plugin.description.clone(),
+		author: PluginAuthor {
+			name: plugin
+				.author
+				.as_ref()
+				.map(|author| author.name.clone())
+				.unwrap_or_else(|| "Unknown".to_string()),
+			email: plugin
+				.author
+				.as_ref()
+				.and_then(|author| author.email.clone()),
+			url: None,
+		},
+		homepage: plugin.homepage.clone(),
+		repository: None,
+		license: None,
+		keywords: None,
+		logo: None,
+		skills: None,
+		agents: None,
+		commands: None,
+		user_config: None,
+	}
+}
+
+fn manifest_candidate_paths(candidates: &[PathBuf]) -> Vec<String> {
+	let mut paths = Vec::new();
+
+	for candidate in candidates {
+		let prefix = candidate.to_string_lossy();
+		if prefix.is_empty() {
+			paths.push(".claude-plugin/plugin.json".to_string());
+			paths.push(".plugin/plugin.json".to_string());
+			paths.push("plugin.json".to_string());
+			continue;
+		}
+
+		paths.push(format!("{prefix}/.claude-plugin/plugin.json"));
+		paths.push(format!("{prefix}/.plugin/plugin.json"));
+		paths.push(format!("{prefix}/plugin.json"));
+	}
+
+	paths
 }
 
 async fn extract_repository_archive(
@@ -247,7 +389,7 @@ impl PluginRegistry for GitHubRegistry {
 			}
 		};
 
-		let source_dir = match resolve_plugin_dir(
+		let source_dir = match resolve_plugin_dir_with_wrappers(
 			&temp_dir,
 			&self.plugin_candidates(name),
 		) {
@@ -676,18 +818,38 @@ impl PluginRegistry for MarketplaceRegistry {
 					let plugin_dir = self
 						.marketplace_path
 						.join(path.trim_start_matches("./"));
-					let manifest_path = find_plugin_manifest_path(&plugin_dir)
-						.ok_or_else(|| {
-							anyhow::anyhow!(
-								"plugin.json not found for local plugin: {}",
-								name
+					if plugin_dir.exists() {
+						if let Some(manifest_path) =
+							find_plugin_manifest_path(&plugin_dir)
+						{
+							let content =
+								tokio::fs::read_to_string(&manifest_path)
+									.await?;
+							let manifest: PluginManifest =
+								serde_json::from_str(&content)?;
+							return Ok(manifest);
+						}
+
+						return Ok(manifest_from_marketplace_plugin(
+							&plugin_def,
+						));
+					}
+
+					if let Some((repo_url, subdir)) =
+						local_source_remote_fallback(&plugin_def, path)
+					{
+						return self
+							.fetch_remote_manifest_with_candidates(
+								&repo_url,
+								&[PathBuf::from(subdir)],
 							)
-						})?;
-					let content =
-						tokio::fs::read_to_string(&manifest_path).await?;
-					let manifest: PluginManifest =
-						serde_json::from_str(&content)?;
-					return Ok(manifest);
+							.await;
+					}
+
+					anyhow::bail!(
+						"plugin.json not found for local plugin: {}",
+						name
+					);
 				}
 				// Remote URL - fetch from git repository
 				MarketplaceSource::Url { url, .. } => {
@@ -703,8 +865,13 @@ impl PluginRegistry for MarketplaceRegistry {
 					return self.fetch_remote_manifest(&url, name).await;
 				}
 				// Git subdirectory - treat as URL
-				MarketplaceSource::GitSubdir { url, .. } => {
-					return self.fetch_remote_manifest(url, name).await;
+				MarketplaceSource::GitSubdir { url, path, .. } => {
+					return self
+						.fetch_remote_manifest_with_candidates(
+							url,
+							&[PathBuf::from(path.trim_matches('/'))],
+						)
+						.await;
 				}
 				// NPM - not supported
 				MarketplaceSource::Npm { package, .. } => {
@@ -743,16 +910,27 @@ impl PluginRegistry for MarketplaceRegistry {
 					let source_dir = self
 						.marketplace_path
 						.join(path.trim_start_matches("./"));
-					if !source_dir.exists() {
-						anyhow::bail!(
-							"Local plugin directory not found: {}",
-							source_dir.display()
-						);
+					if source_dir.exists() {
+						copy_dir_all(&source_dir, target_dir).await?;
+						let commit =
+							self.get_marketplace_commit().await.ok().flatten();
+						return Ok(commit);
 					}
-					copy_dir_all(&source_dir, target_dir).await?;
-					let commit =
-						self.get_marketplace_commit().await.ok().flatten();
-					return Ok(commit);
+
+					if let Some((repo_url, subdir)) =
+						local_source_remote_fallback(&plugin_def, path)
+					{
+						return self
+							.install_remote_subdir(
+								&repo_url, &subdir, target_dir,
+							)
+							.await;
+					}
+
+					anyhow::bail!(
+						"Local plugin directory not found: {}",
+						source_dir.display()
+					);
 				}
 				// Remote URL - download from git
 				MarketplaceSource::Url { url, .. } => {
@@ -819,6 +997,45 @@ impl PluginRegistry for MarketplaceRegistry {
 			} else {
 				// For remote plugins, fetch manifest to get version
 				match &plugin_def.source {
+					MarketplaceSource::Local(path) => {
+						let plugin_dir = self
+							.marketplace_path
+							.join(path.trim_start_matches("./"));
+						if let Some(manifest_path) =
+							find_plugin_manifest_path(&plugin_dir)
+						{
+							let content =
+								tokio::fs::read_to_string(&manifest_path)
+									.await?;
+							if let Ok(manifest) =
+								serde_json::from_str::<PluginManifest>(&content)
+							{
+								manifest
+									.version
+									.unwrap_or_else(|| "latest".to_string())
+							} else {
+								"latest".to_string()
+							}
+						} else if let Some((repo_url, subdir)) =
+							local_source_remote_fallback(&plugin_def, path)
+						{
+							if let Ok(manifest) = self
+								.fetch_remote_manifest_with_candidates(
+									&repo_url,
+									&[PathBuf::from(subdir)],
+								)
+								.await
+							{
+								manifest
+									.version
+									.unwrap_or_else(|| "latest".to_string())
+							} else {
+								"latest".to_string()
+							}
+						} else {
+							"latest".to_string()
+						}
+					}
 					MarketplaceSource::Url { url, .. } => {
 						if let Ok(manifest) =
 							self.fetch_remote_manifest(url, name).await
@@ -846,9 +1063,13 @@ impl PluginRegistry for MarketplaceRegistry {
 							"latest".to_string()
 						}
 					}
-					MarketplaceSource::GitSubdir { url, .. } => {
-						if let Ok(manifest) =
-							self.fetch_remote_manifest(url, name).await
+					MarketplaceSource::GitSubdir { url, path, .. } => {
+						if let Ok(manifest) = self
+							.fetch_remote_manifest_with_candidates(
+								url,
+								&[PathBuf::from(path.trim_matches('/'))],
+							)
+							.await
 						{
 							manifest
 								.version
@@ -857,7 +1078,7 @@ impl PluginRegistry for MarketplaceRegistry {
 							"latest".to_string()
 						}
 					}
-					_ => "latest".to_string(),
+					MarketplaceSource::Npm { .. } => "latest".to_string(),
 				}
 			};
 
@@ -885,42 +1106,38 @@ impl MarketplaceRegistry {
 		url: &str,
 		name: &str,
 	) -> Result<PluginManifest> {
+		self.fetch_remote_manifest_with_candidates(
+			url,
+			&remote_plugin_candidates(name),
+		)
+		.await
+	}
+
+	async fn fetch_remote_manifest_with_candidates(
+		&self,
+		url: &str,
+		candidates: &[PathBuf],
+	) -> Result<PluginManifest> {
 		// Try to fetch from raw GitHub content first
 		if let Some(manifest) =
-			self.try_fetch_github_raw_manifest(url, name).await
+			self.try_fetch_github_raw_manifest(url, candidates).await
 		{
 			return Ok(manifest);
 		}
 
 		// Fallback: download tarball and extract manifest
-		self.fetch_manifest_from_tarball(url, name).await
+		self.fetch_manifest_from_tarball(url, candidates).await
 	}
 
 	/// Try to fetch manifest from raw.githubusercontent.com
 	async fn try_fetch_github_raw_manifest(
 		&self,
 		url: &str,
-		name: &str,
+		candidates: &[PathBuf],
 	) -> Option<PluginManifest> {
-		if !url.contains("github.com") {
-			return None;
-		}
+		let (owner, repo) = github_owner_repo(url)?;
 
-		let parts: Vec<_> = url.trim_end_matches('/').split('/').collect();
-		let owner = parts.get(parts.len().checked_sub(2)?)?;
-		let repo = parts.last()?.trim_end_matches(".git");
-
-		// Try common manifest locations
-		let paths = [
-			".claude-plugin/plugin.json",
-			".plugin/plugin.json",
-			"plugin.json",
-			&format!("{}/.claude-plugin/plugin.json", name),
-			&format!("{}/.plugin/plugin.json", name),
-			&format!("{}/plugin.json", name),
-		];
-
-		for path in &paths {
+		for path in manifest_candidate_paths(candidates) {
 			// Try main branch
 			let raw_url = format!(
 				"https://raw.githubusercontent.com/{}/{}/main/{}",
@@ -961,11 +1178,11 @@ impl MarketplaceRegistry {
 	async fn fetch_manifest_from_tarball(
 		&self,
 		url: &str,
-		name: &str,
+		candidates: &[PathBuf],
 	) -> Result<PluginManifest> {
 		let temp_dir = std::env::temp_dir().join(format!(
 			"aghub-plugin-manifest-{}-{}",
-			name,
+			unique_suffix(),
 			std::process::id()
 		));
 
@@ -983,7 +1200,7 @@ impl MarketplaceRegistry {
 		}
 
 		let plugin_dir =
-			resolve_plugin_dir(&temp_dir, &remote_plugin_candidates(name))
+			resolve_plugin_dir_with_wrappers(&temp_dir, candidates)
 				.ok_or_else(|| {
 					anyhow::anyhow!(
 						"plugin root not found in remote repository"
@@ -998,8 +1215,8 @@ impl MarketplaceRegistry {
 
 		manifest.map_err(|e| {
 			anyhow::anyhow!(
-				"plugin.json not found in remote plugin '{}': {}",
-				name,
+				"plugin.json not found in remote plugin from '{}': {}",
+				url,
 				e
 			)
 		})
@@ -1053,7 +1270,7 @@ impl MarketplaceRegistry {
 			}
 		};
 
-		let source_dir = match resolve_plugin_dir(
+		let source_dir = match resolve_plugin_dir_with_wrappers(
 			&temp_dir,
 			&remote_plugin_candidates(name),
 		) {
@@ -1157,16 +1374,17 @@ impl MarketplaceRegistry {
 
 		// Find the subdirectory in the extracted content
 		let candidates = vec![PathBuf::from(subdir.trim_matches('/'))];
-		let source_dir = match resolve_plugin_dir(&temp_dir, &candidates) {
-			Some(path) => path,
-			None => {
-				tokio::fs::remove_dir_all(&temp_dir).await.ok();
-				anyhow::bail!(
-					"Subdirectory '{}' not found in remote repository",
-					subdir
-				);
-			}
-		};
+		let source_dir =
+			match resolve_plugin_dir_with_wrappers(&temp_dir, &candidates) {
+				Some(path) => path,
+				None => {
+					tokio::fs::remove_dir_all(&temp_dir).await.ok();
+					anyhow::bail!(
+						"Subdirectory '{}' not found in remote repository",
+						subdir
+					);
+				}
+			};
 		if !source_dir.exists() {
 			tokio::fs::remove_dir_all(&temp_dir).await.ok();
 			anyhow::bail!(
@@ -1331,6 +1549,108 @@ mod tests {
 		)
 		.unwrap();
 		assert_eq!(resolved, plugin_dir);
+
+		std::fs::remove_dir_all(&temp_dir).unwrap();
+	}
+
+	#[test]
+	fn test_resolve_plugin_dir_with_wrappers_finds_nested_manifest() {
+		let temp_dir = make_temp_dir("aghub-remote-registry-wrapper");
+		let wrapper_dir = temp_dir.join("repo-wrapper");
+		let plugin_dir = wrapper_dir.join("plugins/demo-plugin");
+		let manifest_dir = plugin_dir.join(".claude-plugin");
+		std::fs::create_dir_all(&manifest_dir).unwrap();
+		std::fs::write(
+			manifest_dir.join("plugin.json"),
+			r#"{"name":"demo-plugin","description":"test","author":{"name":"A"}}"#,
+		)
+		.unwrap();
+
+		let resolved = resolve_plugin_dir_with_wrappers(
+			&temp_dir,
+			&[PathBuf::from("plugins/demo-plugin")],
+		)
+		.unwrap();
+		assert_eq!(resolved, plugin_dir);
+
+		std::fs::remove_dir_all(&temp_dir).unwrap();
+	}
+
+	#[test]
+	fn test_normalize_repository_url_supports_repo_shorthand() {
+		assert_eq!(
+			normalize_repository_url("railwayapp/railway-skills"),
+			"https://github.com/railwayapp/railway-skills"
+		);
+	}
+
+	#[test]
+	fn test_local_source_remote_fallback_uses_homepage_tree() {
+		let plugin = MarketplacePlugin {
+			name: "autofix-bot".to_string(),
+			description: String::new(),
+			version: None,
+			author: None,
+			source: MarketplaceSource::Local(
+				"./external_plugins/autofix-bot".to_string(),
+			),
+			category: None,
+			homepage: Some(
+				"https://github.com/anthropics/claude-plugins-public/tree/main/external_plugins/autofix-bot"
+					.to_string(),
+			),
+		};
+
+		assert_eq!(
+			local_source_remote_fallback(
+				&plugin,
+				"./external_plugins/autofix-bot",
+			),
+			Some((
+				"https://github.com/anthropics/claude-plugins-public"
+					.to_string(),
+				"external_plugins/autofix-bot".to_string(),
+			))
+		);
+	}
+
+	#[tokio::test]
+	async fn test_fetch_manifest_falls_back_to_marketplace_entry_for_local_plugin(
+	) {
+		let temp_dir = make_temp_dir("aghub-marketplace-local-manifestless");
+		let plugins_dir = temp_dir.join("plugins/php-lsp");
+		let config_dir = temp_dir.join(".claude-plugin");
+		std::fs::create_dir_all(&plugins_dir).unwrap();
+		std::fs::create_dir_all(&config_dir).unwrap();
+		std::fs::write(plugins_dir.join("README.md"), "placeholder").unwrap();
+		std::fs::write(
+			config_dir.join("marketplace.json"),
+			r#"{
+				"name": "test-marketplace",
+				"description": "test",
+				"owner": { "name": "owner" },
+				"plugins": [
+					{
+						"name": "php-lsp",
+						"description": "PHP language server",
+						"version": "1.0.0",
+						"author": { "name": "Anthropic" },
+						"source": "./plugins/php-lsp"
+					}
+				]
+			}"#,
+		)
+		.unwrap();
+
+		let registry = MarketplaceRegistry::new(
+			temp_dir.clone(),
+			vec!["plugins/".to_string()],
+		);
+		let manifest = registry.fetch_manifest("php-lsp").await.unwrap();
+
+		assert_eq!(manifest.name, "php-lsp");
+		assert_eq!(manifest.version.as_deref(), Some("1.0.0"));
+		assert_eq!(manifest.author.name, "Anthropic");
 
 		std::fs::remove_dir_all(&temp_dir).unwrap();
 	}

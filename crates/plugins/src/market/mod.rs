@@ -5,6 +5,7 @@
 
 pub mod cache;
 
+use crate::claude::types::PluginAuthor;
 use crate::claude::ClaudePluginManager;
 use anyhow::{Context, Result};
 use cache::{CachedPlugin, MarketCache};
@@ -245,15 +246,10 @@ pub struct PluginManifestFromFile {
 	pub name: String,
 	pub version: Option<String>,
 	pub description: String,
+	#[serde(default)]
 	pub author: PluginAuthor,
 	pub homepage: Option<String>,
 	pub repository: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct PluginAuthor {
-	pub name: String,
-	pub email: Option<String>,
 }
 
 impl PluginMarket {
@@ -327,7 +323,11 @@ impl PluginMarket {
 						version: manifest
 							.version
 							.unwrap_or_else(|| "latest".to_string()),
-						author: manifest.author.name,
+						author: if manifest.author.is_empty() {
+							"Unknown".to_string()
+						} else {
+							manifest.author.name
+						},
 						github_url: manifest.repository.unwrap_or(github_url),
 						installs: 0,
 						last_commit: commit.clone(),
