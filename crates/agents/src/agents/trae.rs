@@ -1,58 +1,13 @@
 use crate::descriptor::*;
 use std::path::{Path, PathBuf};
 
-fn mcp_global_path() -> Option<PathBuf> {
-	home_dir().map(|home| home.join(".trae/mcp.json"))
-}
-fn mcp_project_path(root: &Path) -> Option<PathBuf> {
-	Some(root.join(".trae/mcp.json"))
-}
-fn global_data_dir() -> Option<PathBuf> {
-	home_dir().map(|home| home.join(".trae"))
-}
-fn load_mcps(
-	project_root: Option<&Path>,
-	scope: crate::ResourceScope,
-) -> crate::Result<Vec<crate::McpServer>> {
-	load_scoped_mcps(
-		project_root,
-		scope,
-		Some(mcp_global_path),
-		Some(mcp_project_path),
-		mcp_strategy::parse_json_map_mcp_servers,
-	)
-}
-fn save_mcps(
-	project_root: Option<&Path>,
-	scope: crate::ResourceScope,
-	mcps: &[crate::McpServer],
-) -> crate::Result<()> {
-	save_scoped_mcps(
-		project_root,
-		scope,
-		mcps,
-		Some(mcp_global_path),
-		Some(mcp_project_path),
-		mcp_strategy::serialize_json_map_mcp_servers,
-	)
-}
-
-fn global_skills_paths() -> Vec<PathBuf> {
-	match home_dir() {
-		Some(home) => vec![home.join(".trae/skills")],
-		None => Vec::new(),
-	}
-}
-fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
-	vec![root.join(".trae/skills")]
-}
-
-fn global_skill_write_path() -> Option<PathBuf> {
-	home_dir().map(|home| home.join(".trae/skills"))
-}
-
-fn project_skill_write_path(root: &Path) -> Option<PathBuf> {
-	Some(root.join(".trae/skills"))
+crate::define_agent_paths! {
+	mcp_global: ".trae/mcp.json",
+	mcp_project: ".trae/mcp.json",
+	mcp_strategy: mcp_strategy::parse_json_map_mcp_servers,
+				  mcp_strategy::serialize_json_map_mcp_servers,
+	skills_global: ".trae/skills",
+	skills_project: ".trae/skills",
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
