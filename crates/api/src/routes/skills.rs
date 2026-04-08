@@ -102,7 +102,10 @@ fn compute_skill_folder_hash(
 			continue;
 		}
 
-		hasher.update(relative.to_string_lossy().as_bytes());
+		let path_bytes = relative.to_string_lossy();
+		let path_bytes = path_bytes.as_bytes();
+		hasher.update((path_bytes.len() as u64).to_le_bytes());
+		hasher.update(path_bytes);
 
 		if entry.file_type().is_file() {
 			let mut file = std::fs::File::open(entry_path).map_err(|e| {
@@ -144,7 +147,6 @@ fn persist_remote_git_lock_entry(
 	session_url: &str,
 	skill_name: &str,
 	installed_skill_path: &std::path::Path,
-	relative_skill_path: &str,
 ) -> Result<(), ApiError> {
 	let (source, source_type) = normalize_git_source(session_url);
 	let folder_hash = compute_skill_folder_hash(installed_skill_path)?;
@@ -162,18 +164,13 @@ fn persist_remote_git_lock_entry(
 			)
 			.map_err(|e| ApiError::from(ConfigError::Io(e)))
 		}
-		ResourceScope::GlobalOnly => skill::lock::global::add_skill_to_lock(
-			skill_name,
-			skill::lock::global::SkillLockEntry::new(
-				source,
-				source_type,
-				session_url.to_string(),
-				Some(relative_skill_path.to_string()),
-				folder_hash,
-				None,
-			),
-		)
-		.map_err(|e| ApiError::from(ConfigError::Io(e))),
+		ResourceScope::GlobalOnly => Err(ApiError::new(
+			Status::BadRequest,
+			"Remote git install with global scope is not supported \
+			 because the global lock requires a telemetry-provided tree \
+			 SHA, not a locally computed folder hash".to_string(),
+			"INVALID_PARAM",
+		)),
 		ResourceScope::Both => Err(ApiError::new(
 			Status::BadRequest,
 			"Remote git install requires a concrete scope".to_string(),
@@ -1295,29 +1292,26 @@ pub async fn git_install_skills(
 
 		for (target_dir, agents) in &dir_groups {
 			match install_git_skill_to_dir(&full_path, target_dir) {
-				Ok((skill_name, did_write)) => {
-					if did_write {
-						let installed_skill_path = target_dir
-							.join(sanitize_name(&skill_name))
-							.join("SKILL.md");
-						if let Err(e) = persist_remote_git_lock_entry(
-							resource_scope,
-							project_root.as_ref(),
-							&session_url,
-							&skill_name,
-							&installed_skill_path,
-							skill_path,
-						) {
-							for (agent_str, _) in agents {
-								results.push(GitInstallResultEntry {
-									name: skill_name.clone(),
-									agent: agent_str.clone(),
-									success: false,
-									error: Some(e.body.error.clone()),
-								});
-							}
-							continue;
+				Ok((skill_name, _did_write)) => {
+					let installed_skill_path = target_dir
+						.join(sanitize_name(&skill_name))
+						.join("SKILL.md");
+					if let Err(e) = persist_remote_git_lock_entry(
+						resource_scope,
+						project_root.as_ref(),
+						&session_url,
+						&skill_name,
+						&installed_skill_path,
+					) {
+						for (agent_str, _) in agents {
+							results.push(GitInstallResultEntry {
+								name: skill_name.clone(),
+								agent: agent_str.clone(),
+								success: false,
+								error: Some(e.body.error.clone()),
+							});
 						}
+						continue;
 					}
 
 					for (agent_str, _) in agents {
@@ -1512,7 +1506,6 @@ mod tests {
 			"https://github.com/example/repo",
 			"hello-skill",
 			&installed_skill_path,
-			"skills/hello-skill/SKILL.md",
 		)
 		.unwrap_or_else(|e| panic!("{}", e.body.error));
 
