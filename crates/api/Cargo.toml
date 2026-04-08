@@ -38,3 +38,5 @@ keyring = { version = "3", features = [
 ] }
 uuid = { version = "1", features = [ "v4" ] }
 log = "0.4.29"
+sha2 = "0.10"
+walkdir = "2.5"

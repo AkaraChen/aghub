@@ -70,6 +70,7 @@ dependencies = [
  "rocket_cors",
  "serde",
  "serde_json",
+ "sha2",
  "skill",
  "skills-sh",
  "tempfile",
@@ -77,6 +78,7 @@ dependencies = [
  "tokio",
  "ts-rs",
  "uuid",
+ "walkdir",
  "which",
 ]
 

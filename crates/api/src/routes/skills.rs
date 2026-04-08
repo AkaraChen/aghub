@@ -8,8 +8,10 @@ use aghub_core::{
 use rocket::http::Status;
 use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
+use sha2::{Digest, Sha256};
 use skill::sanitize::sanitize_name;
 use std::collections::HashMap;
+use std::io::Read;
 
 use crate::{
 	dto::integrations::{
@@ -45,6 +47,161 @@ fn expand_tilde_path(path: &str) -> std::path::PathBuf {
 			.unwrap_or_else(|| path.into())
 	} else {
 		path.into()
+	}
+}
+
+fn normalize_git_source(url: &str) -> (String, String) {
+	let trimmed = url.trim().trim_end_matches('/');
+	let normalized = trimmed.strip_suffix(".git").unwrap_or(trimmed);
+
+	let github_path = normalized
+		.strip_prefix("https://github.com/")
+		.or_else(|| normalized.strip_prefix("http://github.com/"))
+		.or_else(|| normalized.strip_prefix("git@github.com:"));
+
+	if let Some(path) = github_path {
+		return (path.to_string(), "github".to_string());
+	}
+
+	(normalized.to_string(), "git".to_string())
+}
+
+fn compute_skill_folder_hash(
+	path: &std::path::Path,
+) -> Result<String, ApiError> {
+	let root = get_skill_root(path.to_path_buf());
+	let mut entries = walkdir::WalkDir::new(&root)
+		.follow_links(false)
+		.into_iter()
+		.collect::<Result<Vec<_>, _>>()
+		.map_err(|e| {
+			ApiError::new(
+				Status::InternalServerError,
+				format!("Failed to walk skill directory: {e}"),
+				"SKILL_HASH_ERROR",
+			)
+		})?;
+
+	entries.sort_by(|a, b| a.path().cmp(b.path()));
+
+	let mut hasher = Sha256::new();
+	for entry in entries {
+		let entry_path = entry.path();
+		let relative = entry_path.strip_prefix(&root).map_err(|e| {
+			ApiError::new(
+				Status::InternalServerError,
+				format!(
+					"Failed to hash skill path '{}': {e}",
+					entry_path.display()
+				),
+				"SKILL_HASH_ERROR",
+			)
+		})?;
+
+		if relative.as_os_str().is_empty() {
+			continue;
+		}
+
+		hasher.update(relative.to_string_lossy().as_bytes());
+
+		if entry.file_type().is_file() {
+			let mut file = std::fs::File::open(entry_path).map_err(|e| {
+				ApiError::new(
+					Status::InternalServerError,
+					format!(
+						"Failed to open skill file '{}' for hashing: {e}",
+						entry_path.display()
+					),
+					"SKILL_HASH_ERROR",
+				)
+			})?;
+			let mut buffer = [0_u8; 8192];
+			loop {
+				let bytes_read = file.read(&mut buffer).map_err(|e| {
+					ApiError::new(
+						Status::InternalServerError,
+						format!(
+							"Failed to read skill file '{}' for hashing: {e}",
+							entry_path.display()
+						),
+						"SKILL_HASH_ERROR",
+					)
+				})?;
+				if bytes_read == 0 {
+					break;
+				}
+				hasher.update(&buffer[..bytes_read]);
+			}
+		}
+	}
+
+	Ok(format!("{:x}", hasher.finalize()))
+}
+
+fn persist_remote_git_lock_entry(
+	scope: ResourceScope,
+	project_root: Option<&std::path::PathBuf>,
+	session_url: &str,
+	skill_name: &str,
+	installed_skill_path: &std::path::Path,
+	relative_skill_path: &str,
+) -> Result<(), ApiError> {
+	let (source, source_type) = normalize_git_source(session_url);
+	let folder_hash = compute_skill_folder_hash(installed_skill_path)?;
+
+	match scope {
+		ResourceScope::ProjectOnly => {
+			skill::lock::local::add_skill_to_local_lock(
+				skill_name,
+				skill::lock::local::LocalSkillLockEntry {
+					source,
+					source_type,
+					computed_hash: folder_hash,
+				},
+				project_root.map(|p| p.as_path()),
+			)
+			.map_err(|e| ApiError::from(ConfigError::Io(e)))
+		}
+		ResourceScope::GlobalOnly => skill::lock::global::add_skill_to_lock(
+			skill_name,
+			skill::lock::global::SkillLockEntry::new(
+				source,
+				source_type,
+				session_url.to_string(),
+				Some(relative_skill_path.to_string()),
+				folder_hash,
+				None,
+			),
+		)
+		.map_err(|e| ApiError::from(ConfigError::Io(e))),
+		ResourceScope::Both => Err(ApiError::new(
+			Status::BadRequest,
+			"Remote git install requires a concrete scope".to_string(),
+			"INVALID_PARAM",
+		)),
+	}
+}
+
+fn remove_skill_from_scope_lock(
+	scope: ResourceScope,
+	project_root: Option<&std::path::PathBuf>,
+	skill_name: &str,
+) -> Result<(), ApiError> {
+	match scope {
+		ResourceScope::ProjectOnly => {
+			skill::lock::local::remove_skill_from_local_lock(
+				skill_name,
+				project_root.map(|p| p.as_path()),
+			)
+			.map(|_| ())
+			.map_err(|e| ApiError::from(ConfigError::Io(e)))
+		}
+		ResourceScope::GlobalOnly => {
+			skill::lock::global::remove_skill_from_lock(skill_name)
+				.map(|_| ())
+				.map_err(|e| ApiError::from(ConfigError::Io(e)))
+		}
+		ResourceScope::Both => Ok(()),
 	}
 }
 
@@ -143,6 +300,8 @@ pub fn delete_skill_by_path(
 	let req = body.into_inner();
 
 	let skill_path = expand_tilde_path(&req.source_path);
+	let parsed_skill_name =
+		skill::parser::parse(&skill_path).ok().map(|s| s.name);
 	let skill_dir = if skill_path.is_dir() {
 		skill_path
 	} else {
@@ -237,12 +396,29 @@ pub fn delete_skill_by_path(
 	}
 
 	match std::fs::remove_dir_all(&skill_dir) {
-		Ok(_) => Ok(Json(DeleteSkillByPathResponse {
-			success: true,
-			deleted_path: Some(skill_dir.display().to_string()),
-			error: None,
-			validation_errors: None,
-		})),
+		Ok(_) => {
+			if let Some(skill_name) = parsed_skill_name {
+				if let Err(e) = remove_skill_from_scope_lock(
+					resource_scope,
+					project_root.as_ref(),
+					&skill_name,
+				) {
+					log::warn!(
+						"Deleted skill directory '{}' but failed to clean up lock entry for '{}': {}",
+						skill_dir.display(),
+						skill_name,
+						e.body.error
+					);
+				}
+			}
+
+			Ok(Json(DeleteSkillByPathResponse {
+				success: true,
+				deleted_path: Some(skill_dir.display().to_string()),
+				error: None,
+				validation_errors: None,
+			}))
+		}
 		Err(e) => Ok(Json(DeleteSkillByPathResponse {
 			success: false,
 			deleted_path: None,
@@ -301,7 +477,7 @@ fn resolve_git_install_target_dir(
 fn install_git_skill_to_dir(
 	full_path: &std::path::Path,
 	target_dir: &std::path::Path,
-) -> Result<String, ApiError> {
+) -> Result<(String, bool), ApiError> {
 	let parsed = skill::parser::parse(full_path).map_err(|e| {
 		ApiError::new(
 			Status::BadRequest,
@@ -312,13 +488,15 @@ fn install_git_skill_to_dir(
 	let skill = convert_skill(parsed);
 	let safe_name = sanitize_name(&skill.name);
 	let dest_root = target_dir.join(&safe_name);
+	let mut did_write = false;
 
 	if !dest_root.exists() {
 		let source_root = get_skill_root(full_path.to_path_buf());
 		copy_dir_recursive(&source_root, &dest_root)?;
+		did_write = true;
 	}
 
-	Ok(skill.name)
+	Ok((skill.name, did_write))
 }
 
 type GitInstallAgentGroup = Vec<(String, AgentType)>;
@@ -1065,8 +1243,8 @@ pub async fn git_install_skills(
 ) -> ApiResult<GitInstallResponse> {
 	let req = body.into_inner();
 
-	// Extract temp dir path from session
-	let temp_path = {
+	// Extract temp dir path and source url from session
+	let (temp_path, session_url) = {
 		let map = sessions.sessions.lock().unwrap();
 		let session = map.get(&req.session_id).ok_or_else(|| {
 			ApiError::new(
@@ -1075,7 +1253,7 @@ pub async fn git_install_skills(
 				"SESSION_NOT_FOUND",
 			)
 		})?;
-		session.temp_dir.path().to_path_buf()
+		(session.temp_dir.path().to_path_buf(), session.url.clone())
 	};
 
 	let resource_scope = match req.scope.as_str() {
@@ -1117,7 +1295,31 @@ pub async fn git_install_skills(
 
 		for (target_dir, agents) in &dir_groups {
 			match install_git_skill_to_dir(&full_path, target_dir) {
-				Ok(skill_name) => {
+				Ok((skill_name, did_write)) => {
+					if did_write {
+						let installed_skill_path = target_dir
+							.join(sanitize_name(&skill_name))
+							.join("SKILL.md");
+						if let Err(e) = persist_remote_git_lock_entry(
+							resource_scope,
+							project_root.as_ref(),
+							&session_url,
+							&skill_name,
+							&installed_skill_path,
+							skill_path,
+						) {
+							for (agent_str, _) in agents {
+								results.push(GitInstallResultEntry {
+									name: skill_name.clone(),
+									agent: agent_str.clone(),
+									success: false,
+									error: Some(e.body.error.clone()),
+								});
+							}
+							continue;
+						}
+					}
+
 					for (agent_str, _) in agents {
 						results.push(GitInstallResultEntry {
 							name: skill_name.clone(),
@@ -1269,14 +1471,90 @@ mod tests {
 		let result =
 			install_git_skill_to_dir(&source_dir.join("SKILL.md"), &target_dir)
 				.unwrap_or_else(|e| panic!("{}", e.body.error));
-		assert_eq!(result, "hello-skill");
+		assert_eq!(result, ("hello-skill".to_string(), true));
 		assert!(target_dir.join("hello-skill/SKILL.md").exists());
 
 		let second =
 			install_git_skill_to_dir(&source_dir.join("SKILL.md"), &target_dir)
 				.unwrap_or_else(|e| panic!("{}", e.body.error));
-		assert_eq!(second, "hello-skill");
+		assert_eq!(second, ("hello-skill".to_string(), false));
 		assert!(target_dir.join("hello-skill/SKILL.md").exists());
+	}
+
+	#[test]
+	fn persist_remote_git_lock_entry_uses_existing_disk_content() {
+		let _guard = env_lock().lock().unwrap();
+		let temp = tempdir().unwrap();
+		let project_root = temp.path().join("project");
+		let target_dir = project_root.join(".claude/skills");
+		let source_dir = temp.path().join("source/hello-skill");
+		std::fs::create_dir_all(&target_dir).unwrap();
+		std::fs::create_dir_all(&source_dir).unwrap();
+		std::fs::write(
+			source_dir.join("SKILL.md"),
+			"---\nname: hello-skill\ndescription: hi\n---\n\n# Hello\n",
+		)
+		.unwrap();
+
+		let installed_skill_path =
+			target_dir.join("hello-skill").join("SKILL.md");
+		std::fs::create_dir_all(installed_skill_path.parent().unwrap())
+			.unwrap();
+		std::fs::write(
+			&installed_skill_path,
+			"---\nname: hello-skill\ndescription: existing\n---\n\n# Existing\n",
+		)
+		.unwrap();
+
+		persist_remote_git_lock_entry(
+			ResourceScope::ProjectOnly,
+			Some(&project_root),
+			"https://github.com/example/repo",
+			"hello-skill",
+			&installed_skill_path,
+			"skills/hello-skill/SKILL.md",
+		)
+		.unwrap_or_else(|e| panic!("{}", e.body.error));
+
+		let lock = skill::lock::local::read_local_lock(Some(&project_root));
+		let entry = lock.skills.get("hello-skill").unwrap();
+		let expected_hash = compute_skill_folder_hash(&installed_skill_path)
+			.unwrap_or_else(|e| panic!("{}", e.body.error));
+		assert_eq!(entry.source, "example/repo");
+		assert_eq!(entry.source_type, "github");
+		assert_eq!(entry.computed_hash, expected_hash);
+	}
+
+	#[test]
+	fn install_git_skill_to_dir_reports_when_nothing_changed() {
+		let _guard = env_lock().lock().unwrap();
+		let temp = tempdir().unwrap();
+		let target_dir = temp.path().join("shared");
+		let source_dir = temp.path().join("source/hello-skill");
+		std::fs::create_dir_all(&source_dir).unwrap();
+		std::fs::write(
+			source_dir.join("SKILL.md"),
+			"---\nname: hello-skill\ndescription: hi\n---\n\n# Hello\n",
+		)
+		.unwrap();
+
+		std::fs::create_dir_all(target_dir.join("hello-skill")).unwrap();
+		std::fs::write(
+			target_dir.join("hello-skill").join("SKILL.md"),
+			"---\nname: hello-skill\ndescription: existing\n---\n\n# Existing\n",
+		)
+		.unwrap();
+
+		let result =
+			install_git_skill_to_dir(&source_dir.join("SKILL.md"), &target_dir)
+				.unwrap_or_else(|e| panic!("{}", e.body.error));
+
+		assert_eq!(result, ("hello-skill".to_string(), false));
+		let installed = std::fs::read_to_string(
+			target_dir.join("hello-skill").join("SKILL.md"),
+		)
+		.unwrap();
+		assert!(installed.contains("existing"));
 	}
 
 	#[test]
