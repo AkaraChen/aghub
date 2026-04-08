@@ -149,8 +149,6 @@ pub struct InstallSkillRequest {
 #[ts(export)]
 pub struct InstallSkillResponse {
 	pub success: bool,
-	pub stdout: String,
-	pub stderr: String,
 }
 
 /// Response for a single global skill lock entry

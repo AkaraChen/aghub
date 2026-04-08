@@ -115,7 +115,9 @@ export function DeepLinkImportModal({
 					status: (response.success ? "success" : "error") as
 						| "success"
 						| "error",
-					error: response.success ? undefined : response.stderr,
+					error: response.success
+						? undefined
+						: t("skillInstallFailed"),
 				}));
 			}
 

@@ -845,10 +845,7 @@ pub async fn install_skill(
 		project_root.as_ref(),
 	);
 
-	let mut stderr_lines = invalid_agents
-		.into_iter()
-		.map(|(agent, _, error)| format!("{agent}: {error}"))
-		.collect::<Vec<_>>();
+	let mut has_errors = !invalid_agents.is_empty();
 	let mut installed_skill_names = std::collections::HashSet::new();
 
 	for skill in &selected_skills {
@@ -858,12 +855,7 @@ pub async fn install_skill(
 					installed_skill_names.insert(skill_name);
 					let _ = agents;
 				}
-				Err(e) => {
-					for (agent_str, _) in agents {
-						stderr_lines
-							.push(format!("{}: {}", agent_str, e.body.error));
-					}
-				}
+				Err(_) => has_errors = true,
 			}
 		}
 	}
@@ -882,19 +874,9 @@ pub async fn install_skill(
 		)?;
 	}
 
-	let stdout = format!(
-		"Installed {} skill(s) from {}",
-		installed_skill_names.len(),
-		source.source
-	);
-	let stderr = stderr_lines.join("\n");
-	let success = stderr.is_empty() && !installed_skill_names.is_empty();
+	let success = !has_errors && !installed_skill_names.is_empty();
 
-	Ok(Json(InstallSkillResponse {
-		success,
-		stdout,
-		stderr,
-	}))
+	Ok(Json(InstallSkillResponse { success }))
 }
 
 #[post("/skills/open", format = "json", data = "<request>")]

@@ -194,6 +194,7 @@ export default {
 	refreshSkills: "刷新技能",
 	noSkillsMatch: "没有匹配的技能",
 	selectSkill: "选择一个技能查看详情",
+	skillInstallFailed: "安装技能失败。",
 	deleteSelected: "删除所选",
 	itemsSelected: "已选择 {{count}} 项",
 	bulkDeleteConfirmTitle: "批量删除",

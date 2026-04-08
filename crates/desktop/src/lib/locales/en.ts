@@ -201,6 +201,7 @@ export default {
 	refreshSkills: "Refresh skills",
 	noSkillsMatch: "No skills match",
 	selectSkill: "Select a skill to view details",
+	skillInstallFailed: "Failed to install skill.",
 	deleteSelected: "Delete Selected",
 	itemsSelected: "{{count}} items selected",
 	bulkDeleteConfirmTitle: "Bulk Delete",

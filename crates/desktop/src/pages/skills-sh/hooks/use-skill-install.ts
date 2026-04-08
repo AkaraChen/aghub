@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { MarketSkill } from "../../../generated/dto";
 import { useAgentAvailability } from "../../../hooks/use-agent-availability";
 import { useApi } from "../../../hooks/use-api";
@@ -12,6 +13,7 @@ import {
 import { installSkillMutationOptions } from "../../../requests/skills";
 
 export function useSkillInstall() {
+	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
@@ -86,7 +88,7 @@ export function useSkillInstall() {
 				status: (response.success ? "success" : "error") as
 					| "success"
 					| "error",
-				error: response.success ? undefined : response.stderr,
+				error: response.success ? undefined : t("skillInstallFailed"),
 			}));
 
 			setInstallResults(updatedResults);
