@@ -24,7 +24,7 @@ export async function getOnboardingProgress(): Promise<OnboardingProgress> {
 	return normalizeOnboardingProgress(progress);
 }
 
-export async function saveOnboardingProgress(
+async function saveOnboardingProgress(
 	progress: Partial<OnboardingProgress>,
 ): Promise<OnboardingProgress> {
 	const store = await getStore();
