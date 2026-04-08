@@ -16,6 +16,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { useProjects } from "../hooks/use-projects";
 import { ONBOARDING_EVENT, type OnboardingCommand } from "../lib/onboarding";
 import { getOnboardingProgress, updateOnboardingProgress } from "../lib/store";
@@ -74,12 +75,16 @@ export function OnboardingController() {
 	const { t } = useTranslation();
 	const [location, setLocation] = useLocation();
 	const { data: projects = [] } = useProjects();
-	const [isReady, setIsReady] = useState(false);
 	const [overlayMode, setOverlayMode] = useState<OverlayMode>(null);
 	const [currentStep, setCurrentStep] = useState(0);
 	const [pendingProjectTour, setPendingProjectTour] = useState(false);
 	const activeDriverRef = useRef<Driver | null>(null);
 	const previousProjectIdsRef = useRef<string[]>([]);
+
+	const { data: progress, isLoading: isProgressLoading } = useQuery({
+		queryKey: ["onboarding", "progress"],
+		queryFn: getOnboardingProgress,
+	});
 
 	const destroyActiveDriver = () => {
 		activeDriverRef.current?.destroy();
@@ -411,22 +416,16 @@ export function OnboardingController() {
 		void startProjectSetupGuide();
 	});
 
+	// Show welcome modal if user hasn't seen it
 	useEffect(() => {
-		let isMounted = true;
+		if (progress && !progress.hasSeenWelcome) {
+			setOverlayMode("welcome");
+		}
+	}, [progress]);
 
-		void getOnboardingProgress().then((progress) => {
-			if (!isMounted) {
-				return;
-			}
-
-			setIsReady(true);
-			if (!progress.hasSeenWelcome) {
-				setOverlayMode("welcome");
-			}
-		});
-
+	// Cleanup driver on unmount
+	useEffect(() => {
 		return () => {
-			isMounted = false;
 			activeDriverRef.current?.destroy();
 			activeDriverRef.current = null;
 		};
@@ -457,7 +456,7 @@ export function OnboardingController() {
 		previousProjectIdsRef.current = projects.map((project) => project.id);
 	}, [pendingProjectTour, projects]);
 
-	if (!isReady) {
+	if (isProgressLoading) {
 		return null;
 	}
 
