@@ -14,6 +14,9 @@ const CURRENT_VERSION: u32 = 1;
 pub struct LocalSkillLockEntry {
 	/// Where the skill came from: npm package name, owner/repo, local path, etc.
 	pub source: String,
+	/// Branch or tag ref used for installation, when known.
+	#[serde(rename = "ref", skip_serializing_if = "Option::is_none")]
+	pub ref_name: Option<String>,
 	/// The provider/source type (e.g., "github", "node_modules", "local")
 	#[serde(rename = "sourceType")]
 	pub source_type: String,
@@ -225,6 +228,7 @@ mod tests {
 			"zebra-skill".to_string(),
 			LocalSkillLockEntry {
 				source: "org/z".to_string(),
+				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "zzz".to_string(),
 			},
@@ -233,6 +237,7 @@ mod tests {
 			"alpha-skill".to_string(),
 			LocalSkillLockEntry {
 				source: "org/a".to_string(),
+				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "aaa".to_string(),
 			},
@@ -241,6 +246,7 @@ mod tests {
 			"middle-skill".to_string(),
 			LocalSkillLockEntry {
 				source: "org/m".to_string(),
+				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "mmm".to_string(),
 			},
@@ -265,6 +271,7 @@ mod tests {
 			"new-skill",
 			LocalSkillLockEntry {
 				source: "org/repo".to_string(),
+				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "hash123".to_string(),
 			},
@@ -285,6 +292,7 @@ mod tests {
 			"my-skill",
 			LocalSkillLockEntry {
 				source: "org/repo".to_string(),
+				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "old-hash".to_string(),
 			},
@@ -296,6 +304,7 @@ mod tests {
 			"my-skill",
 			LocalSkillLockEntry {
 				source: "org/repo".to_string(),
+				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "new-hash".to_string(),
 			},
@@ -317,6 +326,7 @@ mod tests {
 			"skill-a",
 			LocalSkillLockEntry {
 				source: "org/a".to_string(),
+				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "aaa".to_string(),
 			},
@@ -328,6 +338,7 @@ mod tests {
 			"skill-b",
 			LocalSkillLockEntry {
 				source: "org/b".to_string(),
+				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "bbb".to_string(),
 			},
@@ -348,6 +359,7 @@ mod tests {
 			"my-skill",
 			LocalSkillLockEntry {
 				source: "org/repo".to_string(),
+				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "hash".to_string(),
 			},
@@ -381,6 +393,7 @@ mod tests {
 			"skill-a",
 			LocalSkillLockEntry {
 				source: "org/a".to_string(),
+				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "aaa".to_string(),
 			},
@@ -398,6 +411,7 @@ mod tests {
 			"skill-b",
 			LocalSkillLockEntry {
 				source: "org/b".to_string(),
+				ref_name: None,
 				source_type: "github".to_string(),
 				computed_hash: "bbb".to_string(),
 			},

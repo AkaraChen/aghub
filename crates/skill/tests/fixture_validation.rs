@@ -16,6 +16,7 @@ fn test_local_lock_json_matches_typescript_simple() {
 		"my-skill".to_string(),
 		LocalSkillLockEntry {
 			source: "npm-package".to_string(),
+			ref_name: None,
 			source_type: "node_modules".to_string(),
 			computed_hash: "abc123".to_string(),
 		},
@@ -51,6 +52,7 @@ fn test_local_lock_json_matches_typescript_sorted() {
 		"zebra-skill".to_string(),
 		LocalSkillLockEntry {
 			source: "z".to_string(),
+			ref_name: None,
 			source_type: "github".to_string(),
 			computed_hash: "z".to_string(),
 		},
@@ -59,6 +61,7 @@ fn test_local_lock_json_matches_typescript_sorted() {
 		"alpha-skill".to_string(),
 		LocalSkillLockEntry {
 			source: "a".to_string(),
+			ref_name: None,
 			source_type: "github".to_string(),
 			computed_hash: "a".to_string(),
 		},

@@ -116,6 +116,7 @@ mod tests {
 			source: "owner/repo".to_string(),
 			source_type: "github".to_string(),
 			source_url: "https://github.com/owner/repo".to_string(),
+			ref_name: None,
 			skill_path: None,
 			skill_folder_hash: "hash".to_string(),
 			installed_at: "2024-01-01T00:00:00Z".to_string(),

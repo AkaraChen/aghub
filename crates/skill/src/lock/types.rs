@@ -15,6 +15,9 @@ pub struct SkillLockEntry {
 	/// The original URL used to install the skill (for re-fetching updates)
 	#[serde(rename = "sourceUrl")]
 	pub source_url: String,
+	/// Branch or tag ref used for installation, when known.
+	#[serde(rename = "ref", skip_serializing_if = "Option::is_none")]
+	pub ref_name: Option<String>,
 	/// Subpath within the source repo, if applicable
 	#[serde(rename = "skillPath", skip_serializing_if = "Option::is_none")]
 	pub skill_path: Option<String>,
@@ -92,6 +95,7 @@ impl SkillLockEntry {
 		source: String,
 		source_type: String,
 		source_url: String,
+		ref_name: Option<String>,
 		skill_path: Option<String>,
 		skill_folder_hash: String,
 		plugin_name: Option<String>,
@@ -101,6 +105,7 @@ impl SkillLockEntry {
 			source,
 			source_type,
 			source_url,
+			ref_name,
 			skill_path,
 			skill_folder_hash,
 			installed_at: now.clone(),

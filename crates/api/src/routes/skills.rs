@@ -9,7 +9,8 @@ use rocket::http::Status;
 use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
 use skill::sanitize::sanitize_name;
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
+use tokio::time::timeout;
 
 use crate::{
 	dto::integrations::{
@@ -324,6 +325,8 @@ fn install_git_skill_to_dir(
 type GitInstallAgentGroup = Vec<(String, AgentType)>;
 type GitInstallGroups = HashMap<std::path::PathBuf, GitInstallAgentGroup>;
 type GitInstallInvalidAgent = (String, Option<AgentType>, String);
+const EMPTY_SKILLS_LOCK_DIGEST: &str =
+	"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
 fn build_git_install_groups(
 	agents: &[String],
@@ -370,6 +373,111 @@ fn build_git_install_groups(
 	}
 
 	(groups, invalid)
+}
+
+fn parse_install_scope(scope: &str) -> Result<ResourceScope, ApiError> {
+	match scope {
+		"global" => Ok(ResourceScope::GlobalOnly),
+		"project" => Ok(ResourceScope::ProjectOnly),
+		other => Err(ApiError::new(
+			Status::BadRequest,
+			format!("Invalid scope '{other}'. Use 'global' or 'project'"),
+			"INVALID_PARAM",
+		)),
+	}
+}
+
+fn map_remote_source_error(error: aghub_git::SourceError) -> ApiError {
+	ApiError::new(
+		Status::BadRequest,
+		error.to_string(),
+		"INVALID_SKILL_SOURCE",
+	)
+}
+
+fn map_repo_discovery_error(error: skill::RepoDiscoveryError) -> ApiError {
+	match error {
+		skill::RepoDiscoveryError::NoSkillsFound
+		| skill::RepoDiscoveryError::SkillsNotFound { .. } => ApiError::new(
+			Status::NotFound,
+			error.to_string(),
+			"SKILLS_NOT_FOUND",
+		),
+		skill::RepoDiscoveryError::Scan(_) => ApiError::new(
+			Status::InternalServerError,
+			error.to_string(),
+			"SCAN_ERROR",
+		),
+		skill::RepoDiscoveryError::RelativePath { .. } => ApiError::new(
+			Status::InternalServerError,
+			error.to_string(),
+			"SKILL_PATH_ERROR",
+		),
+	}
+}
+
+fn install_lock_source_from_resolved(
+	source: &aghub_git::ResolvedRemoteSource,
+	ref_name: Option<String>,
+) -> skill::InstallLockSource {
+	skill::InstallLockSource {
+		source: source.lock_source(),
+		source_type: source.source_type.as_str().to_string(),
+		source_url: source.source_url.clone(),
+		ref_name,
+	}
+}
+
+fn write_skill_install_lock(
+	skill_name: &str,
+	resource_scope: ResourceScope,
+	project_root: Option<&std::path::Path>,
+	source: &skill::InstallLockSource,
+	lock_skill_path: Option<String>,
+) -> Result<(), ApiError> {
+	match resource_scope {
+		ResourceScope::GlobalOnly => {
+			skill::write_global_install_lock(
+				skill_name,
+				source,
+				lock_skill_path,
+				Some(EMPTY_SKILLS_LOCK_DIGEST.to_string()),
+			)
+			.map_err(|e| {
+				ApiError::new(
+					Status::InternalServerError,
+					format!("Failed to update global skill lock: {e}"),
+					"SKILL_LOCK_ERROR",
+				)
+			})?;
+		}
+		ResourceScope::ProjectOnly => {
+			let cwd = project_root.ok_or_else(|| {
+				ApiError::new(
+					Status::BadRequest,
+					"project_path is required for project skill installs",
+					"INVALID_PARAM",
+				)
+			})?;
+			skill::write_project_install_lock(skill_name, source, cwd)
+				.map_err(|e| {
+					ApiError::new(
+						Status::InternalServerError,
+						format!("Failed to update project skill lock: {e}"),
+						"SKILL_LOCK_ERROR",
+					)
+				})?;
+		}
+		ResourceScope::Both => {
+			return Err(ApiError::new(
+				Status::BadRequest,
+				"Combined skill scope is not supported for installs",
+				"INVALID_PARAM",
+			));
+		}
+	}
+
+	Ok(())
 }
 
 fn detect_available_editor() -> Option<CodeEditorType> {
@@ -438,10 +546,6 @@ fn build_skill_tree_node(
 		children: Vec::new(),
 	})
 }
-use std::process::Stdio;
-use std::time::Duration;
-use tokio::process::Command;
-use tokio::time::timeout;
 
 fn check_skills_supported(
 	agent: &AgentParam,
@@ -520,17 +624,30 @@ pub fn import_skill(
 	body: Json<crate::dto::skill::ImportSkillRequest>,
 ) -> ApiResult<SkillResponse> {
 	let resolved = scope.resolve()?;
-	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
+	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
 	check_skills_mutable(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
+	let request = body.into_inner();
 
 	// Load configuration before adding skill
 	manager.load().map_err(ApiError::from)?;
 
 	let imported = manager
-		.add_skill_from_path(std::path::Path::new(&body.path))
+		.add_skill_from_path(std::path::Path::new(&request.path))
 		.map_err(ApiError::from)?;
+	write_skill_install_lock(
+		&imported.name,
+		resource_scope,
+		project_root.as_deref(),
+		&skill::InstallLockSource {
+			source: request.path.clone(),
+			source_type: "local".to_string(),
+			source_url: request.path,
+			ref_name: None,
+		},
+		None,
+	)?;
 
 	Ok(Json(SkillResponse::from(&imported)))
 }
@@ -665,50 +782,46 @@ pub async fn install_skill(
 	body: Json<InstallSkillRequest>,
 ) -> ApiResult<InstallSkillResponse> {
 	let req = body.into_inner();
+	let resource_scope = parse_install_scope(&req.scope)?;
 
-	#[cfg(target_os = "windows")]
-	let npx_cmd = "npx.cmd";
-	#[cfg(not(target_os = "windows"))]
-	let npx_cmd = "npx";
+	let project_root = req.project_path.as_ref().map(std::path::PathBuf::from);
+	if resource_scope == ResourceScope::ProjectOnly && project_root.is_none() {
+		return Err(ApiError::new(
+			Status::BadRequest,
+			"project_path is required for project skill installs",
+			"INVALID_PARAM",
+		));
+	}
 
-	let mut cmd = Command::new(npx_cmd);
-	cmd.arg("skills").arg("add").arg(&req.source);
+	let source = aghub_git::resolve_remote_source(&req.source)
+		.map_err(map_remote_source_error)?;
+	let clone_url = source.clone_url.clone();
+	let lock_source = install_lock_source_from_resolved(&source, None);
 
-	// When install_all is true, omit -s flag to install all skills from source
-	if !req.install_all.unwrap_or(false) {
-		for skill in &req.skills {
-			cmd.arg("-s").arg(skill);
+	let clone_url_for_task = clone_url.clone();
+	let temp_dir = match timeout(
+		Duration::from_secs(300),
+		tokio::task::spawn_blocking(move || {
+			aghub_git::clone_to_temp(aghub_git::CloneOptions::new(
+				&clone_url_for_task,
+			))
+		}),
+	)
+	.await
+	{
+		Ok(Ok(Ok(temp_dir))) => temp_dir,
+		Ok(Ok(Err(e))) => {
+			return Err(ApiError::new(
+				Status::BadRequest,
+				format!("Failed to clone skill source: {e}"),
+				"CLONE_FAILED",
+			));
 		}
-	}
-
-	for agent_id in &req.agents {
-		if let Ok(agent_type) = agent_id.parse::<AgentType>() {
-			let descriptor = registry::get(agent_type);
-			if let Some(cli_name) = descriptor.skills_cli_name {
-				cmd.arg("-a").arg(cli_name);
-			}
-		}
-	}
-
-	if req.scope == "global" {
-		cmd.arg("-g");
-	}
-
-	cmd.arg("-y");
-
-	if let Some(ref path) = req.project_path {
-		cmd.current_dir(path);
-	}
-
-	cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
-
-	let output = match timeout(Duration::from_secs(300), cmd.output()).await {
-		Ok(Ok(output)) => output,
 		Ok(Err(e)) => {
 			return Err(ApiError::new(
 				Status::InternalServerError,
-				format!("Failed to execute skills CLI: {e}"),
-				"SKILLS_CLI_ERROR",
+				format!("Clone task panicked: {e}"),
+				"CLONE_ERROR",
 			));
 		}
 		Err(_) => {
@@ -720,15 +833,67 @@ pub async fn install_skill(
 		}
 	};
 
-	let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-	let stderr = String::from_utf8_lossy(&output.stderr).to_string();
-	let exit_code = output.status.code().unwrap_or(-1);
+	let selected_skills = skill::discover_repo_skills(
+		temp_dir.path(),
+		&req.skills,
+		req.install_all.unwrap_or(false),
+	)
+	.map_err(map_repo_discovery_error)?;
+	let (dir_groups, invalid_agents) = build_git_install_groups(
+		&req.agents,
+		resource_scope,
+		project_root.as_ref(),
+	);
+
+	let mut stderr_lines = invalid_agents
+		.into_iter()
+		.map(|(agent, _, error)| format!("{agent}: {error}"))
+		.collect::<Vec<_>>();
+	let mut installed_skill_names = std::collections::HashSet::new();
+
+	for skill in &selected_skills {
+		for (target_dir, agents) in &dir_groups {
+			match install_git_skill_to_dir(&skill.full_path, target_dir) {
+				Ok(skill_name) => {
+					installed_skill_names.insert(skill_name);
+					let _ = agents;
+				}
+				Err(e) => {
+					for (agent_str, _) in agents {
+						stderr_lines
+							.push(format!("{}: {}", agent_str, e.body.error));
+					}
+				}
+			}
+		}
+	}
+
+	for skill in &selected_skills {
+		if !installed_skill_names.contains(&skill.name) {
+			continue;
+		}
+
+		write_skill_install_lock(
+			&skill.name,
+			resource_scope,
+			project_root.as_deref(),
+			&lock_source,
+			Some(skill::lock_skill_file_path(&skill.relative_dir)),
+		)?;
+	}
+
+	let stdout = format!(
+		"Installed {} skill(s) from {}",
+		installed_skill_names.len(),
+		source.source
+	);
+	let stderr = stderr_lines.join("\n");
+	let success = stderr.is_empty() && !installed_skill_names.is_empty();
 
 	Ok(Json(InstallSkillResponse {
-		success: output.status.success(),
+		success,
 		stdout,
 		stderr,
-		exit_code,
 	}))
 }
 
@@ -1065,8 +1230,8 @@ pub async fn git_install_skills(
 ) -> ApiResult<GitInstallResponse> {
 	let req = body.into_inner();
 
-	// Extract temp dir path from session
-	let temp_path = {
+	// Extract temp dir path and source metadata from session
+	let (temp_path, source) = {
 		let map = sessions.sessions.lock().unwrap();
 		let session = map.get(&req.session_id).ok_or_else(|| {
 			ApiError::new(
@@ -1075,20 +1240,20 @@ pub async fn git_install_skills(
 				"SESSION_NOT_FOUND",
 			)
 		})?;
-		session.temp_dir.path().to_path_buf()
+		let ref_name = if session.current_branch.is_empty() {
+			None
+		} else {
+			Some(session.current_branch.clone())
+		};
+		let resolved = aghub_git::resolve_remote_source(&session.url)
+			.map_err(map_remote_source_error)?;
+		(
+			session.temp_dir.path().to_path_buf(),
+			install_lock_source_from_resolved(&resolved, ref_name),
+		)
 	};
 
-	let resource_scope = match req.scope.as_str() {
-		"global" => ResourceScope::GlobalOnly,
-		"project" => ResourceScope::ProjectOnly,
-		other => {
-			return Err(ApiError::new(
-				Status::BadRequest,
-				format!("Invalid scope '{other}'. Use 'global' or 'project'"),
-				"INVALID_PARAM",
-			));
-		}
-	};
+	let resource_scope = parse_install_scope(&req.scope)?;
 
 	let project_root: Option<std::path::PathBuf> =
 		req.project_root.as_ref().map(std::path::PathBuf::from);
@@ -1114,10 +1279,12 @@ pub async fn git_install_skills(
 
 	for skill_path in &req.skill_paths {
 		let full_path = temp_path.join(skill_path);
+		let mut installed = false;
 
 		for (target_dir, agents) in &dir_groups {
 			match install_git_skill_to_dir(&full_path, target_dir) {
 				Ok(skill_name) => {
+					installed = true;
 					for (agent_str, _) in agents {
 						results.push(GitInstallResultEntry {
 							name: skill_name.clone(),
@@ -1137,6 +1304,22 @@ pub async fn git_install_skills(
 						});
 					}
 				}
+			}
+		}
+
+		if installed {
+			let relative_dir = skill_path.replace('\\', "/");
+			let parsed_name = skill::parser::parse(&full_path)
+				.ok()
+				.map(|skill| skill.name);
+			if let Some(skill_name) = parsed_name {
+				write_skill_install_lock(
+					&skill_name,
+					resource_scope,
+					project_root.as_deref(),
+					&source,
+					Some(skill::lock_skill_file_path(&relative_dir)),
+				)?;
 			}
 		}
 	}

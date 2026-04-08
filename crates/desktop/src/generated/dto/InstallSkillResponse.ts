@@ -4,5 +4,4 @@ export type InstallSkillResponse = {
 	success: boolean;
 	stdout: string;
 	stderr: string;
-	exit_code: number;
 };

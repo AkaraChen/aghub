@@ -151,7 +151,6 @@ pub struct InstallSkillResponse {
 	pub success: bool,
 	pub stdout: String,
 	pub stderr: String,
-	pub exit_code: i32,
 }
 
 /// Response for a single global skill lock entry
