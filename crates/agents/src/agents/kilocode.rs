@@ -1,13 +1,15 @@
+use crate::define_mcp_paths;
+use crate::define_skill_paths;
 use crate::descriptor::*;
-use std::path::{Path, PathBuf};
 
-crate::define_agent_paths! {
-	mcp_global: ".kilocode/mcp.json",
-	mcp_project: ".kilocode/mcp.json",
-	mcp_strategy: mcp_strategy::parse_json_map_mcp_servers,
-				  mcp_strategy::serialize_json_map_mcp_servers,
-	skills_global: ".kilocode/skills",
-	skills_project: ".kilocode/skills",
+define_mcp_paths! {
+	symmetric: ".kilocode/mcp.json",
+	strategy: mcp_strategy::parse_json_map_mcp_servers,
+			  mcp_strategy::serialize_json_map_mcp_servers,
+}
+
+define_skill_paths! {
+	symmetric: ".kilocode/skills",
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
@@ -54,7 +56,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	}),
 	load_sub_agents: load_sub_agents_noop,
 	save_sub_agents: save_sub_agents_noop,
-	cli_name: "kilocode",
+	cli_name: "kilo",
 	validate_args: &["--version"],
 	project_markers: &[".kilocode"],
 	skills_cli_name: Some("kilocode"),

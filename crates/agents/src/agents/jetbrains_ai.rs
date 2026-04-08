@@ -1,11 +1,10 @@
+use crate::define_mcp_paths;
 use crate::descriptor::*;
-use std::path::{Path, PathBuf};
 
-crate::define_agent_paths! {
-	mcp_global: ".jetbrains-ai/mcp.json",
-	mcp_project: ".jetbrains-ai/mcp.json",
-	mcp_strategy: mcp_strategy::parse_json_map_mcp_servers,
-				  mcp_strategy::serialize_json_map_mcp_servers,
+define_mcp_paths! {
+	symmetric: ".jetbrains-ai/mcp.json",
+	strategy: mcp_strategy::parse_json_map_mcp_servers,
+			  mcp_strategy::serialize_json_map_mcp_servers,
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {

@@ -1,11 +1,10 @@
+use crate::define_mcp_paths;
 use crate::descriptor::*;
-use std::path::{Path, PathBuf};
 
-crate::define_agent_paths! {
-	mcp_global: ".augmentcode/mcp.json",
-	mcp_project: ".augmentcode/mcp.json",
-	mcp_strategy: mcp_strategy::parse_json_map_mcp_servers,
-				  mcp_strategy::serialize_json_map_mcp_servers,
+define_mcp_paths! {
+	symmetric: ".augmentcode/mcp.json",
+	strategy: mcp_strategy::parse_json_map_mcp_servers,
+			  mcp_strategy::serialize_json_map_mcp_servers,
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
@@ -49,5 +48,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	cli_name: "augmentcode",
 	validate_args: &["--version"],
 	project_markers: &[".augmentcode"],
-	skills_cli_name: Some("augment"),
+	skills_cli_name: None,
 };

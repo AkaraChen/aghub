@@ -1,18 +1,20 @@
+use crate::define_mcp_paths;
+use crate::define_skill_paths;
 use crate::descriptor::*;
-use std::path::{Path, PathBuf};
 
-crate::define_agent_paths! {
-	mcp_global: ".vibe/mcp.toml",
-	mcp_project: ".vibe/mcp.toml",
-	mcp_strategy: mcp_strategy::PARSE_TOML,
-				  mcp_strategy::SERIALIZE_TOML,
-	skills_global: ".vibe/skills",
-	skills_project: ".vibe/skills",
+define_mcp_paths! {
+	symmetric: ".vibe/mcp.toml",
+	strategy: mcp_strategy::PARSE_TOML,
+			  mcp_strategy::SERIALIZE_TOML,
+}
+
+define_skill_paths! {
+	symmetric: ".vibe/skills",
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "mistral",
-	display_name: "Mistral Le Chat",
+	display_name: "Mistral",
 	mcp_parse_config: Some(mcp_strategy::PARSE_TOML),
 	mcp_serialize_config: Some(mcp_strategy::SERIALIZE_TOML),
 	load_mcps,
@@ -57,5 +59,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	cli_name: "mistral",
 	validate_args: &["--version"],
 	project_markers: &[".vibe"],
-	skills_cli_name: Some("mistral-vibe"),
+	skills_cli_name: Some("mistral"),
 };

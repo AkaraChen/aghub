@@ -1,13 +1,15 @@
+use crate::define_mcp_paths;
+use crate::define_skill_paths;
 use crate::descriptor::*;
-use std::path::{Path, PathBuf};
 
-crate::define_agent_paths! {
-	mcp_global: ".roo/mcp.json",
-	mcp_project: ".roo/mcp.json",
-	mcp_strategy: mcp_strategy::parse_json_map_mcp_servers,
-				  mcp_strategy::serialize_json_map_mcp_servers,
-	skills_global: ".roo/skills",
-	skills_project: ".roo/skills",
+define_mcp_paths! {
+	symmetric: ".roo/mcp.json",
+	strategy: mcp_strategy::parse_json_map_mcp_servers,
+			  mcp_strategy::serialize_json_map_mcp_servers,
+}
+
+define_skill_paths! {
+	symmetric: ".roo/skills",
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {

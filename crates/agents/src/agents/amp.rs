@@ -1,14 +1,20 @@
+use crate::define_mcp_paths;
+use crate::define_skill_paths;
 use crate::descriptor::*;
-use std::path::{Path, PathBuf};
 
-crate::define_agent_paths! {
-	mcp_global: ".config/amp/settings.json",
-	mcp_project: ".amp/mcp.json",
-	mcp_strategy: mcp_strategy::parse_json_map_nested_amp_mcp_servers,
-				  mcp_strategy::serialize_json_map_nested_amp_mcp_servers,
-	skills_global: ".config/agents/skills",
-	skills_project: ".agents/skills",
+define_mcp_paths! {
+	global: ".config/amp/settings.json",
+	project: ".amp/mcp.json",
+	data_dir: ".config/amp",
+	strategy: mcp_strategy::parse_json_map_nested_amp_mcp_servers,
+			  mcp_strategy::serialize_json_map_nested_amp_mcp_servers,
 }
+
+define_skill_paths! {
+	global: ".config/agents/skills",
+	project: ".agents/skills",
+}
+
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "amp",
 	display_name: "Amp",

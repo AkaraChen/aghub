@@ -1,13 +1,15 @@
+use crate::define_mcp_paths;
+use crate::define_skill_paths;
 use crate::descriptor::*;
-use std::path::{Path, PathBuf};
 
-crate::define_agent_paths! {
-	mcp_global: ".factory/mcp.json",
-	mcp_project: ".factory/mcp.json",
-	mcp_strategy: mcp_strategy::parse_json_map_mcp_servers,
-				  mcp_strategy::serialize_json_map_mcp_servers,
-	skills_global: ".factory/skills",
-	skills_project: ".factory/skills",
+define_mcp_paths! {
+	symmetric: ".factory/mcp.json",
+	strategy: mcp_strategy::parse_json_map_mcp_servers,
+			  mcp_strategy::serialize_json_map_mcp_servers,
+}
+
+define_skill_paths! {
+	symmetric: ".factory/skills",
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
@@ -57,5 +59,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	cli_name: "factory",
 	validate_args: &["--version"],
 	project_markers: &[".factory"],
-	skills_cli_name: Some("droid"),
+	skills_cli_name: Some("factory"),
 };
