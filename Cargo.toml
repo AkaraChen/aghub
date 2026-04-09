@@ -34,7 +34,7 @@ anyhow = "1.0"
 colored = "3.0"
 
 # HTTP dependencies
-reqwest = { version = "0.12", features = [ "json" ] }
+reqwest = { version = "0.13", features = [ "json" ] }
 url = "2.5"
 
 # Testing dependencies
