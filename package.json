@@ -11,7 +11,7 @@
 	"devDependencies": {
 		"@types/bun": "latest",
 		"husky": "^9.1.7",
-		"nano-staged": "^0.9.0",
+		"nano-staged": "^1.0.0",
 		"prettier": "^3.4.2",
 		"semver": "^7.7.4"
 	},
