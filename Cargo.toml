@@ -46,7 +46,7 @@ predicates = "3.1"
 serde_yaml = "0.9"
 
 # TOML parsing
-toml = "0.8"
+toml = "1.0"
 
 # Interactive CLI
 inquire = "0.7"
