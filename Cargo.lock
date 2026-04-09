@@ -52,7 +52,7 @@ dependencies = [
  "serde_yaml",
  "tempfile",
  "thiserror 1.0.69",
- "toml 0.8.2",
+ "toml 0.9.12+spec-1.1.0",
  "which",
 ]
 
@@ -109,7 +109,7 @@ dependencies = [
  "skill",
  "tempfile",
  "thiserror 1.0.69",
- "toml 0.8.2",
+ "toml 0.9.12+spec-1.1.0",
  "which",
 ]
 
