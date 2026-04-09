@@ -42,7 +42,7 @@
 		"react-dom": "^19.1.0",
 		"react-grab": "^0.1.29",
 		"react-hook-form": "^7.72.0",
-		"react-i18next": "^16.6.1",
+		"react-i18next": "^17.0.0",
 		"react-virtuoso": "^4.18.3",
 		"rooks": "^9.8.0",
 		"simple-icons": "^16.13.0",
