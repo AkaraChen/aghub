@@ -34,7 +34,7 @@
 		"i18next": "^26.0.0",
 		"i18next-browser-languagedetector": "^8.2.1",
 		"immer": "^11.1.4",
-		"ky": "^1.14.3",
+		"ky": "^2.0.0",
 		"nuqs": "^2.8.9",
 		"pathe": "^2.0.3",
 		"react": "^19.1.0",
