@@ -31,7 +31,7 @@ ts-rs = "12.0.1"
 clap = { version = "4.5", features = [ "derive" ] }
 tabled = "0.15"
 anyhow = "1.0"
-colored = "2.1"
+colored = "3.0"
 
 # HTTP dependencies
 reqwest = { version = "0.12", features = [ "json" ] }
