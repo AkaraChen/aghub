@@ -48,7 +48,7 @@ function EditorIcon({ id, name }: { id: string; name: string }) {
 		return (
 			<div
 				className="flex size-5 shrink-0 items-center justify-center [&_svg]:size-4"
-				// eslint-disable-next-line react-dom/no-dangerously-set-innerhtml
+				// eslint-disable-next-line react/dom-no-dangerously-set-innerhtml
 				dangerouslySetInnerHTML={{
 					__html: (svg.default || svg) as string,
 				}}
