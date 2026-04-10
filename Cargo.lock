@@ -51,7 +51,7 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "toml 1.1.2+spec-1.1.0",
  "which",
 ]
@@ -73,7 +73,7 @@ dependencies = [
  "skill",
  "skills-sh",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
  "ts-rs",
  "uuid",
@@ -108,7 +108,7 @@ dependencies = [
  "serde_yaml",
  "skill",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "toml 1.1.2+spec-1.1.0",
  "which",
 ]
@@ -119,7 +119,7 @@ version = "0.1.2"
 dependencies = [
  "gix",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "url",
 ]
 
@@ -129,7 +129,7 @@ version = "0.1.2"
 dependencies = [
  "serde",
  "serde_yaml",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -6216,7 +6216,7 @@ dependencies = [
  "serde_yaml",
  "skills-ref",
  "tempfile",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "walkdir",
  "zip 8.5.1",
 ]
@@ -6241,7 +6241,7 @@ dependencies = [
  "reqwest 0.13.2",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror 2.0.18",
  "tokio",
  "tokio-test",
  "url",
