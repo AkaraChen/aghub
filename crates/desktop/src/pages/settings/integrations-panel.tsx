@@ -91,7 +91,6 @@ export default function IntegrationsPanel() {
 				setDeleteTarget(null);
 			},
 		}),
-		onSuccess: () => {},
 		onError: (error) => {
 			console.error("Failed to delete credential:", error);
 			toast.danger(
