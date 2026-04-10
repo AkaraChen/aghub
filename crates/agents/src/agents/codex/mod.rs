@@ -1,3 +1,4 @@
+mod credentials;
 mod mcp;
 mod sub_agent;
 
@@ -78,6 +79,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	}),
 	load_sub_agents: sub_agent::load,
 	save_sub_agents: sub_agent::save,
+	import_credientials: credentials::import_credientials,
 	cli_name: "codex",
 	validate_args: &["--version"],
 	project_markers: &[".codex"],

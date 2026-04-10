@@ -156,6 +156,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	}),
 	load_sub_agents,
 	save_sub_agents,
+	import_credientials: import_credientials_noop,
 	cli_name: "claude",
 	validate_args: &["--version"],
 	project_markers: &[".claude", ".mcp.json"],

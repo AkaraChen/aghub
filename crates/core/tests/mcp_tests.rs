@@ -18,9 +18,9 @@
 use aghub_core::{
 	adapters::AgentAdapter,
 	descriptor::{
-		load_scoped_mcps, load_sub_agents_noop, mcp_strategy, save_scoped_mcps,
-		save_sub_agents_noop, Capabilities, McpCapabilities, ScopeSupport,
-		SkillCapabilities, SubAgentCapabilities,
+		import_credientials_noop, load_scoped_mcps, load_sub_agents_noop,
+		mcp_strategy, save_scoped_mcps, save_sub_agents_noop, Capabilities,
+		McpCapabilities, ScopeSupport, SkillCapabilities, SubAgentCapabilities,
 	},
 	models::{AgentType, McpServer, McpTransport},
 	testing::{TestConfig, TestConfigBuilder},
@@ -101,6 +101,7 @@ static ADAPTER_TEST_DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	project_skill_paths: None,
 	load_sub_agents: load_sub_agents_noop,
 	save_sub_agents: save_sub_agents_noop,
+	import_credientials: import_credientials_noop,
 	cli_name: "adapter-test",
 	validate_args: &[],
 	project_markers: &[],

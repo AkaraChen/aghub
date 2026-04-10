@@ -196,6 +196,35 @@ impl McpTransport {
 	}
 }
 
+/// Credential request format
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CredentialType {
+	Openai,
+	Anthropic,
+}
+
+/// Provider credential imported from an agent config
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Credential {
+	pub name: String,
+	#[serde(rename = "type")]
+	pub r#type: CredentialType,
+	pub base: Option<String>,
+	pub key: Option<String>,
+}
+
+impl Credential {
+	pub fn new(name: impl Into<String>, r#type: CredentialType) -> Self {
+		Self {
+			name: name.into(),
+			r#type,
+			base: None,
+			key: None,
+		}
+	}
+}
+
 pub(crate) fn default_true() -> bool {
 	true
 }

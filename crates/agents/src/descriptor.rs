@@ -1,6 +1,6 @@
 use crate::errors::{ConfigError, Result};
 use crate::models::{
-	AgentConfig, McpServer, McpTransport, ResourceScope, SubAgent,
+	AgentConfig, Credential, McpServer, McpTransport, ResourceScope, SubAgent,
 };
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -28,6 +28,10 @@ pub type LoadSubAgentsFn =
 /// The implementation fully owns all I/O; no path is exposed.
 pub type SaveSubAgentsFn =
 	fn(Option<&Path>, ResourceScope, &[SubAgent]) -> Result<()>;
+
+/// Import function type for agent credentials.
+pub type ImportCredientialsFn =
+	fn(Option<&Path>, ResourceScope) -> Result<Vec<Credential>>;
 
 pub type OptionalPathFn = fn() -> Option<PathBuf>;
 pub type OptionalProjectPathFn = fn(&Path) -> Option<PathBuf>;
@@ -103,6 +107,8 @@ pub struct AgentDescriptor {
 	/// Persist sub-agents for the requested scope.
 	/// Implementation is fully internal — no path information is exposed.
 	pub save_sub_agents: SaveSubAgentsFn,
+	/// Import credentials for the requested scope.
+	pub import_credientials: ImportCredientialsFn,
 	pub cli_name: &'static str,
 	pub validate_args: &'static [&'static str],
 	/// Directory/file markers that indicate this agent's project root
@@ -258,6 +264,14 @@ impl AgentDescriptor {
 			ResourceScope::Both => None,
 		}
 	}
+
+	pub fn import_credientials(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+	) -> Result<Vec<Credential>> {
+		(self.import_credientials)(project_root, scope)
+	}
 }
 
 /// Get the universal skills directory path following XDG config spec
@@ -385,6 +399,14 @@ pub fn save_sub_agents_noop(
 	_: &[SubAgent],
 ) -> Result<()> {
 	Ok(())
+}
+
+/// No-op credentials importer for agents that do not support credentials.
+pub fn import_credientials_noop(
+	_: Option<&Path>,
+	_: ResourceScope,
+) -> Result<Vec<Credential>> {
+	Ok(Vec::new())
 }
 
 /// MCP config strategy functions for common config formats

@@ -57,6 +57,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	}),
 	load_sub_agents: load_sub_agents_noop,
 	save_sub_agents: save_sub_agents_noop,
+	import_credientials: import_credientials_noop,
 	cli_name: "gemini",
 	validate_args: &["--version"],
 	project_markers: &[".gemini"],
