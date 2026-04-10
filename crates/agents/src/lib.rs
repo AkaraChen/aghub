@@ -8,9 +8,9 @@ pub mod sub_agents;
 
 pub use descriptor::{
 	AgentDescriptor, Capabilities, GlobalSkillPaths, ImportCredientialsFn,
-	LoadMcpsFn, LoadSubAgentsFn, McpCapabilities, McpParseFn, McpSerializeFn,
-	ProjectSkillPaths, SaveMcpsFn, SaveSubAgentsFn, ScopeSupport,
-	SkillCapabilities, SubAgentCapabilities,
+	InferenceCapabilities, LoadMcpsFn, LoadSubAgentsFn, McpCapabilities,
+	McpParseFn, McpSerializeFn, ProjectSkillPaths, SaveMcpsFn, SaveSubAgentsFn,
+	ScopeSupport, SkillCapabilities, SubAgentCapabilities,
 };
 pub use errors::{ConfigError, Result};
 pub use models::{

@@ -1,6 +1,9 @@
 use crate::{
 	errors::Result,
-	models::{AgentConfig, McpServer, McpTransport, ResourceScope, SubAgent},
+	models::{
+		AgentConfig, Credential, McpServer, McpTransport, ResourceScope,
+		SubAgent,
+	},
 };
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -38,6 +41,11 @@ pub trait AgentAdapter: Send + Sync {
 		scope: ResourceScope,
 		agents: &[SubAgent],
 	) -> Result<()>;
+	fn import_credientials(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+	) -> Result<Vec<Credential>>;
 
 	/// Load complete configuration: MCPs from file + Skills from directories
 	/// + Sub-agents via the descriptor's own loader.

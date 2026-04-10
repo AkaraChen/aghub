@@ -40,6 +40,10 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 				project: false,
 			},
 		},
+		inference: InferenceCapabilities {
+			openai: false,
+			anthropic: false,
+		},
 	},
 	global_skill_paths: None,
 	project_skill_paths: None,

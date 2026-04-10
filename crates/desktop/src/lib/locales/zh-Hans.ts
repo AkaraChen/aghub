@@ -278,6 +278,17 @@ export default {
 	// MCP Servers Page
 	searchServers: "搜索服务器...",
 	addMcpServer: "添加 MCP 服务器",
+	providerTransferTitle: "同步 Provider 到 Codex",
+	providerTransferDescription:
+		"从 OpenCode 导入自定义 Provider，并写入 Codex 的全局配置。",
+	providerTransferNoProviders:
+		"在全局范围未发现可导入的 OpenCode 自定义 Provider。",
+	providerTransferAction: "同步到 Codex",
+	providerTransferSuccess:
+		"Provider 同步完成：导入 {{imported}}，跳过 {{skipped}}。",
+	providerTransferFailed: "Provider 同步失败。",
+	providerHasKey: "已发现 key",
+	providerNoKey: "无 key",
 	refreshServers: "刷新服务器",
 	noServersMatch: "没有匹配的服务器",
 	selectServer: "选择一个服务器查看详情",

@@ -62,10 +62,17 @@ pub struct SubAgentCapabilities {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub struct InferenceCapabilities {
+	pub openai: bool,
+	pub anthropic: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct Capabilities {
 	pub skills: SkillCapabilities,
 	pub mcp: McpCapabilities,
 	pub sub_agents: SubAgentCapabilities,
+	pub inference: InferenceCapabilities,
 }
 
 #[derive(Clone, Copy)]

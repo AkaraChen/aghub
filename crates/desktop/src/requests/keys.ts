@@ -49,6 +49,11 @@ export const queryKeys = {
 		all: () => ["credentials"] as const,
 		list: () => ["credentials", "list"] as const,
 	},
+	inference: {
+		all: () => ["inference"] as const,
+		openCodeProviders: () =>
+			["inference", "providers", "opencode"] as const,
+	},
 	integrations: {
 		all: () => ["integrations"] as const,
 		codeEditors: () => ["integrations", "code-editors"] as const,

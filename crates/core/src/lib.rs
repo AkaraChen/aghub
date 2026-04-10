@@ -25,6 +25,10 @@ pub mod testing;
 
 pub use adapters::{create_adapter, AgentAdapter};
 pub use all_agents::{load_all_agents, AgentResources};
+pub use manager::inference::{
+	transfer_opencode_providers_to_codex, ProviderTransferItem,
+	ProviderTransferResult, ProviderTransferStatus,
+};
 pub use manager::ConfigManager;
 pub use transfer::{
 	InstallScope, InstallTarget, OperationAction, OperationBatchResult,

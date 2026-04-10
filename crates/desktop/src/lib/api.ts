@@ -17,12 +17,14 @@ import type {
 	GitSyncRequest,
 	GitSyncResponse,
 	GlobalSkillLockResponse,
+	InferenceCredentialDto,
 	ImportSkillRequest,
 	InstallSkillRequest,
 	InstallSkillResponse,
 	MarketSkill,
 	McpResponse,
 	OperationBatchResponse,
+	ProviderTransferResponseDto,
 	ProjectSkillLockResponse,
 	ReconcileRequest,
 	SkillResponse,
@@ -436,6 +438,16 @@ export function createApi(baseUrl: string) {
 			},
 			delete(id: string): Promise<void> {
 				return client.delete(`credentials/${id}`).then(() => undefined);
+			},
+		},
+		inference: {
+			listOpenCodeProviders(): Promise<InferenceCredentialDto[]> {
+				return client.get("inference/providers/opencode").json();
+			},
+			transferOpenCodeToCodex(): Promise<ProviderTransferResponseDto> {
+				return client
+					.post("inference/providers/transfer/opencode-to-codex")
+					.json();
 			},
 		},
 	};

@@ -287,6 +287,17 @@ export default {
 	// MCP Servers Page
 	searchServers: "Search servers...",
 	addMcpServer: "Add MCP server",
+	providerTransferTitle: "Transfer providers to Codex",
+	providerTransferDescription:
+		"Import custom providers from OpenCode and write them into Codex global config.",
+	providerTransferNoProviders:
+		"No custom OpenCode providers found in global scope.",
+	providerTransferAction: "Transfer to Codex",
+	providerTransferSuccess:
+		"Provider transfer complete: imported {{imported}}, skipped {{skipped}}.",
+	providerTransferFailed: "Provider transfer failed.",
+	providerHasKey: "key found",
+	providerNoKey: "no key",
 	refreshServers: "Refresh servers",
 	noServersMatch: "No servers match",
 	selectServer: "Select a server to view details",

@@ -20,7 +20,8 @@ use aghub_core::{
 	descriptor::{
 		import_credientials_noop, load_scoped_mcps, load_sub_agents_noop,
 		mcp_strategy, save_scoped_mcps, save_sub_agents_noop, Capabilities,
-		McpCapabilities, ScopeSupport, SkillCapabilities, SubAgentCapabilities,
+		InferenceCapabilities, McpCapabilities, ScopeSupport,
+		SkillCapabilities, SubAgentCapabilities,
 	},
 	models::{AgentType, McpServer, McpTransport},
 	testing::{TestConfig, TestConfigBuilder},
@@ -95,6 +96,10 @@ static ADAPTER_TEST_DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 				global: false,
 				project: false,
 			},
+		},
+		inference: InferenceCapabilities {
+			openai: false,
+			anthropic: false,
 		},
 	},
 	global_skill_paths: None,

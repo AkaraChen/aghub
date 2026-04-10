@@ -73,6 +73,10 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 				project: false,
 			},
 		},
+		inference: InferenceCapabilities {
+			openai: false,
+			anthropic: false,
+		},
 	},
 	global_skill_paths: Some(GlobalSkillPaths {
 		read: global_skills_paths,

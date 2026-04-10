@@ -6,8 +6,6 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const BUILTIN_PROVIDER_IDS: [&str; 3] = ["openai", "ollama", "lmstudio"];
-
 #[derive(Debug, Default, Deserialize)]
 struct CodexConfig {
 	profile: Option<String>,
@@ -28,6 +26,7 @@ struct CodexProvider {
 	name: Option<String>,
 	base_url: Option<String>,
 	env_key: Option<String>,
+	experimental_bearer_token: Option<String>,
 }
 
 impl CodexProvider {
@@ -40,6 +39,10 @@ impl CodexProvider {
 		}
 		if other.env_key.is_some() {
 			self.env_key = other.env_key.clone();
+		}
+		if other.experimental_bearer_token.is_some() {
+			self.experimental_bearer_token =
+				other.experimental_bearer_token.clone();
 		}
 	}
 }
@@ -67,22 +70,17 @@ pub(super) fn import_credientials(
 	})?;
 
 	let mut credentials = Vec::new();
-	for (id, provider) in merged_providers(config) {
-		if BUILTIN_PROVIDER_IDS.contains(&id.as_str()) {
+	for (id, provider) in profile_override_providers(&config) {
+		let Some(base) = clean_string(provider.base_url.clone()) else {
 			continue;
-		}
-
-		let base = clean_string(provider.base_url);
-		if base.is_none() {
-			continue;
-		}
+		};
 
 		let mut credential = Credential::new(
-			clean_string(provider.name).unwrap_or(id),
-			CredentialType::Openai,
+			clean_string(provider.name.clone()).unwrap_or(id.clone()),
+			infer_provider_type(&id, &provider),
 		);
-		credential.base = base;
-		credential.key = resolve_env_key(provider.env_key);
+		credential.base = Some(base);
+		credential.key = resolve_provider_key(&provider);
 		credentials.push(credential);
 	}
 
@@ -96,29 +94,59 @@ fn config_path(
 ) -> Result<Option<PathBuf>> {
 	match scope {
 		ResourceScope::GlobalOnly => Ok(mcp::global_path()),
-		ResourceScope::ProjectOnly => {
-			Ok(project_root.and_then(mcp::project_path))
+		ResourceScope::ProjectOnly | ResourceScope::Both => {
+			let _ = project_root;
+			Err(ConfigError::unsupported_operation(
+				"import",
+				"credentials in non-global scope",
+				"codex",
+			))
 		}
-		ResourceScope::Both => Err(ConfigError::InvalidConfig(
-			"Credential path unavailable for Both scope".to_string(),
-		)),
 	}
 }
 
-fn merged_providers(config: CodexConfig) -> HashMap<String, CodexProvider> {
-	let mut providers = config.model_providers;
+fn profile_override_providers(
+	config: &CodexConfig,
+) -> HashMap<String, CodexProvider> {
+	let mut providers = HashMap::new();
 
-	if let Some(profile_name) = config.profile.as_deref() {
-		if let Some(profile) = config.profiles.get(profile_name) {
-			for (provider_id, profile_provider) in &profile.model_providers {
-				let provider =
-					providers.entry(provider_id.clone()).or_default();
-				provider.merge_from(profile_provider);
-			}
+	let Some(active_profile) = clean_string(config.profile.clone()) else {
+		return providers;
+	};
+	let Some(profile) = config.profiles.get(&active_profile) else {
+		return providers;
+	};
+
+	for (provider_id, profile_provider) in &profile.model_providers {
+		if clean_string(profile_provider.base_url.clone()).is_none() {
+			continue;
 		}
+
+		let mut merged = config
+			.model_providers
+			.get(provider_id)
+			.cloned()
+			.unwrap_or_default();
+		merged.merge_from(profile_provider);
+		providers.insert(provider_id.clone(), merged);
 	}
 
 	providers
+}
+
+fn infer_provider_type(id: &str, provider: &CodexProvider) -> CredentialType {
+	if id.to_ascii_lowercase().contains("anthropic")
+		|| provider
+			.name
+			.as_deref()
+			.unwrap_or_default()
+			.to_ascii_lowercase()
+			.contains("anthropic")
+	{
+		return CredentialType::Anthropic;
+	}
+
+	CredentialType::Openai
 }
 
 fn clean_string(value: Option<String>) -> Option<String> {
@@ -130,6 +158,11 @@ fn clean_string(value: Option<String>) -> Option<String> {
 			Some(trimmed.to_string())
 		}
 	})
+}
+
+fn resolve_provider_key(provider: &CodexProvider) -> Option<String> {
+	clean_string(provider.experimental_bearer_token.clone())
+		.or_else(|| resolve_env_key(provider.env_key.clone()))
 }
 
 fn resolve_env_key(env_key: Option<String>) -> Option<String> {

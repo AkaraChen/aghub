@@ -1,7 +1,10 @@
 use crate::{
 	adapters::AgentAdapter,
 	errors::Result,
-	models::{AgentConfig, McpServer, McpTransport, ResourceScope, SubAgent},
+	models::{
+		AgentConfig, Credential, McpServer, McpTransport, ResourceScope,
+		SubAgent,
+	},
 	skills::discovery::load_skills_from_dirs,
 	AgentDescriptor,
 };
@@ -225,6 +228,14 @@ impl AgentAdapter for &'static AgentDescriptor {
 		agents: &[SubAgent],
 	) -> Result<()> {
 		(self.save_sub_agents)(project_root, scope, agents)
+	}
+
+	fn import_credientials(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+	) -> Result<Vec<Credential>> {
+		AgentDescriptor::import_credientials(self, project_root, scope)
 	}
 
 	fn validate_command(&self, config_path: Option<&Path>) -> Command {

@@ -63,3 +63,15 @@ export function supportsSubAgentScope(
 ): boolean {
 	return agent.capabilities.sub_agents.scopes[scope];
 }
+
+export function supportsInferenceOpenai(
+	agent: Pick<AgentInfo, "capabilities">,
+): boolean {
+	return agent.capabilities.inference.openai;
+}
+
+export function supportsInferenceAnthropic(
+	agent: Pick<AgentInfo, "capabilities">,
+): boolean {
+	return agent.capabilities.inference.anthropic;
+}

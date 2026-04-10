@@ -126,6 +126,14 @@ fn import_credientials(
 	project_root: Option<&Path>,
 	scope: crate::ResourceScope,
 ) -> crate::Result<Vec<Credential>> {
+	if scope != crate::ResourceScope::GlobalOnly {
+		return Err(ConfigError::unsupported_operation(
+			"import",
+			"credentials in non-global scope",
+			"opencode",
+		));
+	}
+
 	let providers = load_provider_config(project_root, scope)?;
 	let auth_entries = load_auth_keys()?;
 
@@ -138,7 +146,10 @@ fn import_credientials(
 		);
 		credential.base = provider_base(provider);
 		credential.key = provider_config_key(provider);
-		if credential.base.is_some() || credential.key.is_some() {
+		if credential.base.is_some()
+			|| (!is_official_provider_id(provider_id)
+				&& credential.key.is_some())
+		{
 			credentials.insert(provider_id.clone(), credential);
 		}
 	}
@@ -156,7 +167,10 @@ fn import_credientials(
 			credential.base = provider.and_then(provider_base);
 		}
 		credential.key = Some(key);
-		credentials.insert(provider_id, credential);
+
+		if credential.base.is_some() || !is_official_provider_id(&provider_id) {
+			credentials.insert(provider_id, credential);
+		}
 	}
 
 	let mut result: Vec<Credential> = credentials.into_values().collect();
@@ -350,6 +364,13 @@ fn clean_string(value: Option<String>) -> Option<String> {
 	})
 }
 
+fn is_official_provider_id(provider_id: &str) -> bool {
+	matches!(
+		provider_id.to_ascii_lowercase().as_str(),
+		"openai" | "anthropic" | "ollama" | "lmstudio"
+	)
+}
+
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "opencode",
 	display_name: "OpenCode",
@@ -382,6 +403,10 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 				global: true,
 				project: true,
 			},
+		},
+		inference: InferenceCapabilities {
+			openai: true,
+			anthropic: true,
 		},
 	},
 	global_skill_paths: Some(GlobalSkillPaths {

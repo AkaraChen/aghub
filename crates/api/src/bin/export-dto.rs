@@ -6,12 +6,16 @@ use std::{
 
 use aghub_api::dto::{
 	agents::{
-		AgentAvailabilityDto, AgentInfo, CapabilitiesDto, McpCapabilitiesDto,
-		ScopeSupportDto, SkillCapabilitiesDto, SkillsPathsDto,
-		SubAgentCapabilitiesDto,
+		AgentAvailabilityDto, AgentInfo, CapabilitiesDto,
+		InferenceCapabilitiesDto, McpCapabilitiesDto, ScopeSupportDto,
+		SkillCapabilitiesDto, SkillsPathsDto, SubAgentCapabilitiesDto,
 	},
 	common::ConfigSource,
 	credential::{CreateCredentialRequest, CredentialResponse},
+	inference::{
+		CredentialTypeDto, InferenceCredentialDto, ProviderTransferItemDto,
+		ProviderTransferResponseDto, ProviderTransferStatusDto,
+	},
 	integrations::{
 		CodeEditorType, EditSkillFolderRequest, OpenSkillFolderRequest,
 		OpenWithEditorRequest, ToolInfoDto, ToolPreferencesDto,
@@ -106,6 +110,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<SkillCapabilitiesDto>(&cfg)?;
 	export_type::<McpCapabilitiesDto>(&cfg)?;
 	export_type::<SubAgentCapabilitiesDto>(&cfg)?;
+	export_type::<InferenceCapabilitiesDto>(&cfg)?;
 	export_type::<CapabilitiesDto>(&cfg)?;
 	export_type::<SkillsPathsDto>(&cfg)?;
 	export_type::<AgentInfo>(&cfg)?;
@@ -113,6 +118,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<ConfigSource>(&cfg)?;
 	export_type::<CreateCredentialRequest>(&cfg)?;
 	export_type::<CredentialResponse>(&cfg)?;
+	export_type::<CredentialTypeDto>(&cfg)?;
+	export_type::<InferenceCredentialDto>(&cfg)?;
+	export_type::<ProviderTransferStatusDto>(&cfg)?;
+	export_type::<ProviderTransferItemDto>(&cfg)?;
+	export_type::<ProviderTransferResponseDto>(&cfg)?;
 	export_type::<CodeEditorType>(&cfg)?;
 	export_type::<ToolInfoDto>(&cfg)?;
 	export_type::<ToolPreferencesDto>(&cfg)?;

@@ -34,10 +34,18 @@ pub struct SubAgentCapabilitiesDto {
 
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
+pub struct InferenceCapabilitiesDto {
+	pub openai: bool,
+	pub anthropic: bool,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct CapabilitiesDto {
 	pub skills: SkillCapabilitiesDto,
 	pub mcp: McpCapabilitiesDto,
 	pub sub_agents: SubAgentCapabilitiesDto,
+	pub inference: InferenceCapabilitiesDto,
 }
 
 #[derive(Debug, Serialize, TS)]

@@ -3,8 +3,8 @@ use rocket::serde::json::Json;
 use std::path::Path;
 
 use crate::dto::agents::{
-	AgentAvailabilityDto, AgentInfo, CapabilitiesDto, McpCapabilitiesDto,
-	ScopeSupportDto, SkillCapabilitiesDto, SkillsPathsDto,
+	AgentAvailabilityDto, AgentInfo, CapabilitiesDto, InferenceCapabilitiesDto,
+	McpCapabilitiesDto, ScopeSupportDto, SkillCapabilitiesDto, SkillsPathsDto,
 	SubAgentCapabilitiesDto,
 };
 
@@ -83,6 +83,10 @@ pub fn list_agents() -> Json<Vec<AgentInfo>> {
 							global: d.capabilities.sub_agents.scopes.global,
 							project: d.capabilities.sub_agents.scopes.project,
 						},
+					},
+					inference: InferenceCapabilitiesDto {
+						openai: d.capabilities.inference.openai,
+						anthropic: d.capabilities.inference.anthropic,
 					},
 				},
 				skills_paths: SkillsPathsDto {
