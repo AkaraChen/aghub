@@ -1,5 +1,4 @@
-import type { HTTPError } from "ky";
-import ky from "ky";
+import ky, { isHTTPError } from "ky";
 import type {
 	AgentAvailabilityDto,
 	AgentInfo,
@@ -42,18 +41,15 @@ interface ApiErrorBody {
 
 export function createApi(baseUrl: string) {
 	const client = ky.create({
-		prefixUrl: baseUrl,
+		prefix: baseUrl,
 		hooks: {
 			beforeError: [
-				async (error: HTTPError) => {
-					try {
-						const body =
-							(await error.response.json()) as ApiErrorBody;
-						if (body.error) {
+				({ error }) => {
+					if (isHTTPError(error)) {
+						const body = error.data as ApiErrorBody | undefined;
+						if (body?.error) {
 							error.message = body.error;
 						}
-					} catch {
-						// ignore JSON parse failures — keep the original message
 					}
 					return error;
 				},
