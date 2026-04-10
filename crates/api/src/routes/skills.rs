@@ -767,14 +767,7 @@ fn detect_plugin_for_skill(
 	plugins: &[aghub_plugins::claude::ClaudePluginInfo],
 ) -> Option<SkillPluginMetadata> {
 	let source_path = skill.source_path.as_deref()?;
-
-	let full_path: std::path::PathBuf = if source_path.starts_with("~/") {
-		dirs::home_dir()
-			.map(|home| home.join(&source_path[2..]))
-			.unwrap_or_else(|| source_path.into())
-	} else {
-		source_path.into()
-	};
+	let full_path = expand_tilde_path(source_path);
 
 	plugins.iter().find_map(|plugin| {
 		plugin.owns_path(&full_path).then(|| SkillPluginMetadata {

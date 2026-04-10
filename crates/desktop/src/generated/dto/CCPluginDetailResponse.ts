@@ -13,8 +13,6 @@ export type CCPluginDetailResponse = {
 	manifest?: CCPluginManifestResponse;
 	hooks?: CCPluginHooksManifestResponse;
 	mcp_config?: CCPluginMcpConfigResponse;
-	update_available: boolean;
-	latest_version?: string;
 	provided_skills: Array<CCPluginSkillInfo>;
 	id: string;
 	name: string;
@@ -22,6 +20,9 @@ export type CCPluginDetailResponse = {
 	description: string | null;
 	enabled: boolean;
 	source: string;
+	/**
+	 * Sanitized install folder path for display in the desktop UI
+	 */
 	install_path: string;
 	has_skills: boolean;
 	has_hooks: boolean;

@@ -1,7 +1,7 @@
 //! Marketplace scanner for reading marketplace.json definitions
 
 use anyhow::Result;
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -49,42 +49,120 @@ pub struct MarketplaceAuthor {
 
 /// Source definition in marketplace.json
 /// This uses a tagged enum structure based on the "source" field
-#[derive(Debug, Deserialize, Clone)]
-#[serde(untagged)]
+#[derive(Debug, Clone)]
 pub enum MarketplaceSource {
 	/// Simple string path like "./plugins/xxx"
 	Local(String),
 	/// Object with source type
-	#[serde(rename_all = "kebab-case")]
 	GitHub {
 		source: String,
 		repo: String,
-		#[serde(rename = "ref")]
 		git_ref: Option<String>,
 		sha: Option<String>,
 	},
-	#[serde(rename_all = "kebab-case")]
 	Url {
 		source: String,
 		url: String,
 		sha: Option<String>,
 	},
-	#[serde(rename_all = "kebab-case")]
 	GitSubdir {
 		source: String,
 		url: String,
 		path: String,
-		#[serde(rename = "ref")]
 		git_ref: Option<String>,
 		sha: Option<String>,
 	},
-	#[serde(rename_all = "kebab-case")]
 	Npm {
 		source: String,
 		package: String,
 		version: Option<String>,
 		registry: Option<String>,
 	},
+}
+
+impl<'de> Deserialize<'de> for MarketplaceSource {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let value = serde_json::Value::deserialize(deserializer)?;
+
+		match value {
+			serde_json::Value::String(path) => Ok(Self::Local(path)),
+			serde_json::Value::Object(mut map) => {
+				let source = take_required_string(&mut map, "source")?;
+
+				match source.as_str() {
+					"github" => Ok(Self::GitHub {
+						source,
+						repo: take_required_string(&mut map, "repo")?,
+						git_ref: take_optional_string(&mut map, "ref")?,
+						sha: take_optional_string(&mut map, "sha")?,
+					}),
+					"url" => Ok(Self::Url {
+						source,
+						url: take_required_string(&mut map, "url")?,
+						sha: take_optional_string(&mut map, "sha")?,
+					}),
+					"git-subdir" => Ok(Self::GitSubdir {
+						source,
+						url: take_required_string(&mut map, "url")?,
+						path: take_required_string(&mut map, "path")?,
+						git_ref: take_optional_string(&mut map, "ref")?,
+						sha: take_optional_string(&mut map, "sha")?,
+					}),
+					"npm" => Ok(Self::Npm {
+						source,
+						package: take_required_string(&mut map, "package")?,
+						version: take_optional_string(&mut map, "version")?,
+						registry: take_optional_string(&mut map, "registry")?,
+					}),
+					other => Err(serde::de::Error::custom(format!(
+						"Unsupported marketplace source type: {other}"
+					))),
+				}
+			}
+			_ => Err(serde::de::Error::custom(
+				"Marketplace source must be a string path or object",
+			)),
+		}
+	}
+}
+
+fn take_required_string<E>(
+	map: &mut serde_json::Map<String, serde_json::Value>,
+	key: &str,
+) -> Result<String, E>
+where
+	E: serde::de::Error,
+{
+	match map.remove(key) {
+		Some(serde_json::Value::String(value)) if !value.is_empty() => {
+			Ok(value)
+		}
+		Some(_) => Err(E::custom(format!(
+			"Marketplace source field '{key}' must be a string"
+		))),
+		None => Err(E::custom(format!(
+			"Marketplace source field '{key}' is required"
+		))),
+	}
+}
+
+fn take_optional_string<E>(
+	map: &mut serde_json::Map<String, serde_json::Value>,
+	key: &str,
+) -> Result<Option<String>, E>
+where
+	E: serde::de::Error,
+{
+	match map.remove(key) {
+		Some(serde_json::Value::String(value)) => Ok(Some(value)),
+		Some(serde_json::Value::Null) | None => Ok(None),
+		Some(_) => Err(E::custom(format!(
+			"Marketplace source field '{key}' must be a string"
+		))),
+	}
 }
 
 /// Plugin source type enum
@@ -176,7 +254,7 @@ impl MarketplaceScanner {
 			.join(".claude-plugin")
 			.join("marketplace.json");
 
-		if !manifest_path.exists() {
+		if !tokio::fs::try_exists(&manifest_path).await.unwrap_or(false) {
 			anyhow::bail!(
 				"Marketplace manifest not found: {}",
 				manifest_path.display()
@@ -233,7 +311,7 @@ impl MarketplaceScanner {
 			];
 
 			for path in &possible_paths {
-				if path.exists() {
+				if tokio::fs::try_exists(path).await.unwrap_or(false) {
 					return Some(path.clone());
 				}
 			}
@@ -260,7 +338,10 @@ pub async fn scan_marketplaces(
 ) -> Result<Vec<(String, MarketplaceConfig)>> {
 	let mut results = Vec::new();
 
-	if !marketplaces_dir.exists() {
+	if !tokio::fs::try_exists(marketplaces_dir)
+		.await
+		.unwrap_or(false)
+	{
 		log::warn!(
 			"Marketplaces directory does not exist: {}",
 			marketplaces_dir.display()
@@ -273,13 +354,13 @@ pub async fn scan_marketplaces(
 	while let Some(entry) = entries.next_entry().await? {
 		let path = entry.path();
 
-		if !path.is_dir() {
+		if !entry.file_type().await?.is_dir() {
 			continue;
 		}
 
 		let manifest_path = path.join(".claude-plugin/marketplace.json");
 
-		if manifest_path.exists() {
+		if tokio::fs::try_exists(&manifest_path).await.unwrap_or(false) {
 			match tokio::fs::read_to_string(&manifest_path).await {
 				Ok(content) => {
 					match serde_json::from_str::<MarketplaceConfig>(&content) {

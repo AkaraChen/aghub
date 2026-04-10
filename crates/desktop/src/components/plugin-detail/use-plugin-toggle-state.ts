@@ -18,6 +18,12 @@ interface UsePluginToggleStateParams {
 	onSkillsChanged: () => void | Promise<void>;
 }
 
+interface PluginToggleSnapshot {
+	previousPlugins?: CCPluginListResponse;
+	previousDetail?: CCPluginDetailResponse;
+	previousMarket?: CCPluginMarketResponse[];
+}
+
 export function usePluginToggleState({
 	api,
 	queryClient,
@@ -68,9 +74,12 @@ export function usePluginToggleState({
 		}));
 	};
 
-	const enableMutation = useMutation({
-		mutationFn: (id: string) => api.plugins.enable(id),
-		onMutate: async () => {
+	const createPluginToggleOptions = (
+		mutationFn: (id: string) => Promise<CCPluginResponse>,
+		enabled: boolean,
+	) => ({
+		mutationFn,
+		onMutate: async (): Promise<PluginToggleSnapshot> => {
 			await Promise.all([
 				queryClient.cancelQueries({
 					queryKey: queryKeys.plugins.list(),
@@ -95,7 +104,7 @@ export function usePluginToggleState({
 				CCPluginMarketResponse[]
 			>(queryKeys.plugins.market());
 
-			applyPluginEnabledState(true);
+			applyPluginEnabledState(enabled);
 
 			return {
 				previousPlugins,
@@ -103,14 +112,18 @@ export function usePluginToggleState({
 				previousMarket,
 			};
 		},
-		onSuccess: async (data) => {
+		onSuccess: async (data: CCPluginResponse) => {
 			updatePluginCaches((entry) => ({
 				...entry,
 				...data,
 			}));
 			await onSkillsChanged();
 		},
-		onError: (_error, _variables, context) => {
+		onError: (
+			_error: Error,
+			_variables: string,
+			context: PluginToggleSnapshot | undefined,
+		) => {
 			queryClient.setQueryData(
 				queryKeys.plugins.list(),
 				context?.previousPlugins,
@@ -126,63 +139,19 @@ export function usePluginToggleState({
 		},
 	});
 
-	const disableMutation = useMutation({
-		mutationFn: (id: string) => api.plugins.disable(id),
-		onMutate: async () => {
-			await Promise.all([
-				queryClient.cancelQueries({
-					queryKey: queryKeys.plugins.list(),
-				}),
-				queryClient.cancelQueries({
-					queryKey: queryKeys.plugins.detail(pluginId),
-				}),
-				queryClient.cancelQueries({
-					queryKey: queryKeys.plugins.market(),
-				}),
-			]);
+	const enableMutation = useMutation<
+		CCPluginResponse,
+		Error,
+		string,
+		PluginToggleSnapshot
+	>(createPluginToggleOptions((id) => api.plugins.enable(id), true));
 
-			const previousPlugins =
-				queryClient.getQueryData<CCPluginListResponse>(
-					queryKeys.plugins.list(),
-				);
-			const previousDetail =
-				queryClient.getQueryData<CCPluginDetailResponse>(
-					queryKeys.plugins.detail(pluginId),
-				);
-			const previousMarket = queryClient.getQueryData<
-				CCPluginMarketResponse[]
-			>(queryKeys.plugins.market());
-
-			applyPluginEnabledState(false);
-
-			return {
-				previousPlugins,
-				previousDetail,
-				previousMarket,
-			};
-		},
-		onSuccess: async (data) => {
-			updatePluginCaches((entry) => ({
-				...entry,
-				...data,
-			}));
-			await onSkillsChanged();
-		},
-		onError: (_error, _variables, context) => {
-			queryClient.setQueryData(
-				queryKeys.plugins.list(),
-				context?.previousPlugins,
-			);
-			queryClient.setQueryData(
-				queryKeys.plugins.detail(pluginId),
-				context?.previousDetail,
-			);
-			queryClient.setQueryData(
-				queryKeys.plugins.market(),
-				context?.previousMarket,
-			);
-		},
-	});
+	const disableMutation = useMutation<
+		CCPluginResponse,
+		Error,
+		string,
+		PluginToggleSnapshot
+	>(createPluginToggleOptions((id) => api.plugins.disable(id), false));
 
 	return {
 		enableMutation,

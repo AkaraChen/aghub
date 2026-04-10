@@ -58,15 +58,17 @@ export function LocationRow({
 					</p>
 					{group.canonicalPath && (
 						<Tooltip delay={0}>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								className="size-6 text-muted"
-								aria-label={t("symlink")}
-							>
-								<LinkIcon className="size-3" />
-							</Button>
+							<Tooltip.Trigger>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									className="size-6 text-muted"
+									aria-label={t("symlink")}
+								>
+									<LinkIcon className="size-3" />
+								</Button>
+							</Tooltip.Trigger>
 							<Tooltip.Content>
 								<div className="max-w-[80vw]">
 									<p className="mb-1 font-medium">
@@ -92,42 +94,48 @@ export function LocationRow({
 			</div>
 			<div className="flex shrink-0 items-center gap-1">
 				<Tooltip delay={0}>
-					<Button
-						isIconOnly
-						variant="ghost"
-						size="sm"
-						className="size-8 text-muted hover:text-danger"
-						aria-label={t("delete")}
-						onPress={onDelete}
-					>
-						<TrashIcon className="size-4" />
-					</Button>
+					<Tooltip.Trigger>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							className="size-8 text-muted hover:text-danger"
+							aria-label={t("delete")}
+							onPress={onDelete}
+						>
+							<TrashIcon className="size-4" />
+						</Button>
+					</Tooltip.Trigger>
 					<Tooltip.Content>{t("delete")}</Tooltip.Content>
 				</Tooltip>
 				<Tooltip delay={0}>
-					<Button
-						isIconOnly
-						variant="ghost"
-						size="sm"
-						className="size-8 text-muted"
-						aria-label={t("editInEditor")}
-						onPress={onEditFolder}
-					>
-						<CodeBracketIcon className="size-4" />
-					</Button>
+					<Tooltip.Trigger>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							className="size-8 text-muted"
+							aria-label={t("editInEditor")}
+							onPress={onEditFolder}
+						>
+							<CodeBracketIcon className="size-4" />
+						</Button>
+					</Tooltip.Trigger>
 					<Tooltip.Content>{t("editInEditor")}</Tooltip.Content>
 				</Tooltip>
 				<Tooltip delay={0}>
-					<Button
-						isIconOnly
-						variant="ghost"
-						size="sm"
-						className="size-8 text-muted"
-						aria-label={t("openFolder")}
-						onPress={onOpenFolder}
-					>
-						<FolderIcon className="size-4" />
-					</Button>
+					<Tooltip.Trigger>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							className="size-8 text-muted"
+							aria-label={t("openFolder")}
+							onPress={onOpenFolder}
+						>
+							<FolderIcon className="size-4" />
+						</Button>
+					</Tooltip.Trigger>
 					<Tooltip.Content>{t("openFolder")}</Tooltip.Content>
 				</Tooltip>
 			</div>

@@ -2,8 +2,17 @@
 
 export type CCPluginScopeResponse = {
 	scope: string;
-	install_path: string;
+	/**
+	 * Installed folder path for this specific scope entry
+	 */
+	folder_path: string;
 	version: string;
+	/**
+	 * Timestamp when this scope entry was first installed
+	 */
 	installed_at: string;
-	last_updated: string;
+	/**
+	 * Timestamp when this scope entry was last updated
+	 */
+	updated_at: string;
 };

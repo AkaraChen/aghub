@@ -325,29 +325,31 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 							</div>
 							<div className="flex items-center gap-2">
 								<Tooltip delay={0}>
-									<Button
-										isIconOnly
-										variant="ghost"
-										size="md"
-										className={cn(
-											"text-muted min-w-[44px] min-h-[44px] hover:text-warning",
-											isStarred && "text-warning",
-										)}
-										aria-label={
-											isStarred
-												? t("unstarServer")
-												: t("starServer")
-										}
-										onPress={() =>
-											toggleMcpStar(group.mergeKey)
-										}
-									>
-										{isStarred ? (
-											<StarIconSolid className="size-5" />
-										) : (
-											<StarIconOutline className="size-5" />
-										)}
-									</Button>
+									<Tooltip.Trigger>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="md"
+											className={cn(
+												"text-muted min-w-[44px] min-h-[44px] hover:text-warning",
+												isStarred && "text-warning",
+											)}
+											aria-label={
+												isStarred
+													? t("unstarServer")
+													: t("starServer")
+											}
+											onPress={() =>
+												toggleMcpStar(group.mergeKey)
+											}
+										>
+											{isStarred ? (
+												<StarIconSolid className="size-5" />
+											) : (
+												<StarIconOutline className="size-5" />
+											)}
+										</Button>
+									</Tooltip.Trigger>
 									<Tooltip.Content>
 										{isStarred
 											? t("unstarServer")
@@ -355,36 +357,40 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 									</Tooltip.Content>
 								</Tooltip>
 								<Tooltip delay={0}>
-									<Button
-										isIconOnly
-										variant="ghost"
-										size="md"
-										className="text-muted min-w-[44px] min-h-[44px]"
-										aria-label={t("editTooltip")}
-										onPress={onEdit}
-									>
-										<PencilIcon className="size-4" />
-									</Button>
+									<Tooltip.Trigger>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="md"
+											className="text-muted min-w-[44px] min-h-[44px]"
+											aria-label={t("editTooltip")}
+											onPress={onEdit}
+										>
+											<PencilIcon className="size-4" />
+										</Button>
+									</Tooltip.Trigger>
 									<Tooltip.Content>
 										{t("editTooltip")}
 									</Tooltip.Content>
 								</Tooltip>
 								<Tooltip delay={0}>
-									<Button
-										isIconOnly
-										variant="ghost"
-										size="md"
-										className="text-muted hover:text-danger min-w-[44px] min-h-[44px]"
-										aria-label={t("deleteTooltip")}
-										onPress={() =>
-											dispatch({
-												type: "set_delete_dialog",
-												value: true,
-											})
-										}
-									>
-										<TrashIcon className="size-4" />
-									</Button>
+									<Tooltip.Trigger>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="md"
+											className="text-muted hover:text-danger min-w-[44px] min-h-[44px]"
+											aria-label={t("deleteTooltip")}
+											onPress={() =>
+												dispatch({
+													type: "set_delete_dialog",
+													value: true,
+												})
+											}
+										>
+											<TrashIcon className="size-4" />
+										</Button>
+									</Tooltip.Trigger>
 									<Tooltip.Content>
 										{t("deleteTooltip")}
 									</Tooltip.Content>

@@ -125,7 +125,7 @@ impl ClaudeSettings {
 		SETTINGS_FILE_LOCK.get_or_init(|| Mutex::new(()))
 	}
 
-	fn load_from_path(path: &Path) -> Result<Self> {
+	pub(crate) fn load_from_path(path: &Path) -> Result<Self> {
 		if !path.exists() {
 			return Ok(Self::default());
 		}

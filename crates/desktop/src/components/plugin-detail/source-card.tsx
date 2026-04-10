@@ -63,29 +63,31 @@ export function PluginSourceCard({
 				</div>
 				<div className="flex shrink-0 items-center gap-1">
 					<Tooltip delay={0}>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							className={cn(
-								"size-8 text-muted",
-								updateAvailable && "text-success",
-							)}
-							aria-label={
-								updateAvailable
-									? t("updatePlugin")
-									: t("checkForUpdates")
-							}
-							onPress={onRefresh}
-							isDisabled={isUpdating}
-						>
-							<ArrowPathIcon
+						<Tooltip.Trigger>
+							<Button
+								isIconOnly
+								variant="ghost"
+								size="sm"
 								className={cn(
-									"size-4",
-									isUpdating && "animate-spin",
+									"size-8 text-muted",
+									updateAvailable && "text-success",
 								)}
-							/>
-						</Button>
+								aria-label={
+									updateAvailable
+										? t("updatePlugin")
+										: t("checkForUpdates")
+								}
+								onPress={onRefresh}
+								isDisabled={isUpdating}
+							>
+								<ArrowPathIcon
+									className={cn(
+										"size-4",
+										isUpdating && "animate-spin",
+									)}
+								/>
+							</Button>
+						</Tooltip.Trigger>
 						<Tooltip.Content>
 							{updateAvailable && latestVersion
 								? t("updateToVersion", {
@@ -95,17 +97,21 @@ export function PluginSourceCard({
 						</Tooltip.Content>
 					</Tooltip>
 					<Tooltip delay={0}>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							className="size-8 text-muted"
-							aria-label={t("openRepository")}
-							isDisabled={!sourceUrl}
-							onPress={() => onOpenUrl(sourceUrl ?? undefined)}
-						>
-							<LinkIcon className="size-4" />
-						</Button>
+						<Tooltip.Trigger>
+							<Button
+								isIconOnly
+								variant="ghost"
+								size="sm"
+								className="size-8 text-muted"
+								aria-label={t("openRepository")}
+								isDisabled={!sourceUrl}
+								onPress={() =>
+									onOpenUrl(sourceUrl ?? undefined)
+								}
+							>
+								<LinkIcon className="size-4" />
+							</Button>
+						</Tooltip.Trigger>
 						<Tooltip.Content>{t("openRepository")}</Tooltip.Content>
 					</Tooltip>
 				</div>

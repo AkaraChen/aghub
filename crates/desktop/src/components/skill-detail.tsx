@@ -222,45 +222,49 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 							</div>
 							<div className="flex items-center gap-2">
 								<Tooltip delay={0}>
-									<Button
-										isIconOnly
-										variant="ghost"
-										size="md"
-										className="text-muted min-w-[44px] min-h-[44px] hover:text-foreground"
-										aria-label={t("searchOnSkillsSh")}
-										isDisabled={!canSearchSkillsSh}
-										onPress={handleSearchSkillsSh}
-									>
-										<MagnifyingGlassIcon className="size-5" />
-									</Button>
+									<Tooltip.Trigger>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="md"
+											className="text-muted min-w-[44px] min-h-[44px] hover:text-foreground"
+											aria-label={t("searchOnSkillsSh")}
+											isDisabled={!canSearchSkillsSh}
+											onPress={handleSearchSkillsSh}
+										>
+											<MagnifyingGlassIcon className="size-5" />
+										</Button>
+									</Tooltip.Trigger>
 									<Tooltip.Content>
 										{t("searchOnSkillsSh")}
 									</Tooltip.Content>
 								</Tooltip>
 								<Tooltip delay={0}>
-									<Button
-										isIconOnly
-										variant="ghost"
-										size="md"
-										className={cn(
-											"text-muted min-w-[44px] min-h-[44px] hover:text-warning",
-											isStarred && "text-warning",
-										)}
-										aria-label={
-											isStarred
-												? t("unstarSkill")
-												: t("starSkill")
-										}
-										onPress={() =>
-											toggleSkillStar(skill.name)
-										}
-									>
-										{isStarred ? (
-											<StarIconSolid className="size-5" />
-										) : (
-											<StarIconOutline className="size-5" />
-										)}
-									</Button>
+									<Tooltip.Trigger>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="md"
+											className={cn(
+												"text-muted min-w-[44px] min-h-[44px] hover:text-warning",
+												isStarred && "text-warning",
+											)}
+											aria-label={
+												isStarred
+													? t("unstarSkill")
+													: t("starSkill")
+											}
+											onPress={() =>
+												toggleSkillStar(skill.name)
+											}
+										>
+											{isStarred ? (
+												<StarIconSolid className="size-5" />
+											) : (
+												<StarIconOutline className="size-5" />
+											)}
+										</Button>
+									</Tooltip.Trigger>
 									<Tooltip.Content>
 										{isStarred
 											? t("unstarSkill")
@@ -268,18 +272,20 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 									</Tooltip.Content>
 								</Tooltip>
 								<Tooltip delay={0}>
-									<Button
-										isIconOnly
-										variant="ghost"
-										size="md"
-										className="text-muted hover:text-danger min-w-[44px] min-h-[44px]"
-										aria-label={t("deleteSkill")}
-										onPress={() =>
-											setDeleteDialogOpen(true)
-										}
-									>
-										<TrashIcon className="size-4" />
-									</Button>
+									<Tooltip.Trigger>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="md"
+											className="text-muted hover:text-danger min-w-[44px] min-h-[44px]"
+											aria-label={t("deleteSkill")}
+											onPress={() =>
+												setDeleteDialogOpen(true)
+											}
+										>
+											<TrashIcon className="size-4" />
+										</Button>
+									</Tooltip.Trigger>
 									<Tooltip.Content>
 										{t("deleteSkill")}
 									</Tooltip.Content>
@@ -414,41 +420,47 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 										{sourceUrl && (
 											<div className="flex shrink-0 items-center gap-1">
 												<Tooltip delay={0}>
-													<Button
-														isIconOnly
-														variant="ghost"
-														size="sm"
-														className="size-8 text-muted"
-														aria-label={t(
-															"syncFromSource",
-														)}
-														onPress={() =>
-															setSyncDialogOpen(
-																true,
-															)
-														}
-													>
-														<ArrowPathIcon className="size-4" />
-													</Button>
+													<Tooltip.Trigger>
+														<Button
+															isIconOnly
+															variant="ghost"
+															size="sm"
+															className="size-8 text-muted"
+															aria-label={t(
+																"syncFromSource",
+															)}
+															onPress={() =>
+																setSyncDialogOpen(
+																	true,
+																)
+															}
+														>
+															<ArrowPathIcon className="size-4" />
+														</Button>
+													</Tooltip.Trigger>
 													<Tooltip.Content>
 														{t("syncFromSource")}
 													</Tooltip.Content>
 												</Tooltip>
 												<Tooltip delay={0}>
-													<Button
-														isIconOnly
-														variant="ghost"
-														size="sm"
-														className="size-8 text-muted"
-														aria-label={t(
-															"openInBrowser",
-														)}
-														onPress={() =>
-															openUrl(sourceUrl)
-														}
-													>
-														<LinkIcon className="size-4" />
-													</Button>
+													<Tooltip.Trigger>
+														<Button
+															isIconOnly
+															variant="ghost"
+															size="sm"
+															className="size-8 text-muted"
+															aria-label={t(
+																"openInBrowser",
+															)}
+															onPress={() =>
+																openUrl(
+																	sourceUrl,
+																)
+															}
+														>
+															<LinkIcon className="size-4" />
+														</Button>
+													</Tooltip.Trigger>
 													<Tooltip.Content>
 														{t("openInBrowser")}
 													</Tooltip.Content>

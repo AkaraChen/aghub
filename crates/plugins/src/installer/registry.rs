@@ -1,6 +1,6 @@
 //! Plugin registry abstraction for different plugin sources
 
-use super::git::GitBasedInstaller;
+use super::git::{build_http_client, GitBasedInstaller};
 use crate::claude::types::{PluginAuthor, PluginManifest};
 use crate::discovery::{
 	MarketplaceConfig, MarketplacePlugin, MarketplaceSource,
@@ -105,14 +105,6 @@ fn repository_tarball_urls(url: &str) -> Vec<String> {
 	}
 
 	vec![normalized_url]
-}
-
-fn build_http_client(timeout_secs: u64) -> reqwest::Client {
-	reqwest::Client::builder()
-		.user_agent("aghub-plugin-installer")
-		.timeout(std::time::Duration::from_secs(timeout_secs))
-		.build()
-		.unwrap_or_default()
 }
 
 pub(crate) fn normalize_repository_url(url: &str) -> String {
@@ -420,14 +412,14 @@ impl GitHubRegistry {
 		owner: &str,
 		repo: &str,
 		subdir: Option<String>,
-	) -> Self {
-		Self {
+	) -> Result<Self> {
+		Ok(Self {
 			client,
 			owner: owner.to_string(),
 			repo: repo.to_string(),
 			subdir,
-			git_installer: GitBasedInstaller::new(),
-		}
+			git_installer: GitBasedInstaller::new()?,
+		})
 	}
 
 	fn plugin_candidates(&self, name: &str) -> Vec<PathBuf> {
@@ -673,7 +665,7 @@ impl MarketplaceRegistry {
 	pub fn new(
 		marketplace_path: PathBuf,
 		plugins_subdirs: Vec<String>,
-	) -> Self {
+	) -> Result<Self> {
 		Self::new_with_upstream(marketplace_path, plugins_subdirs, None)
 	}
 
@@ -681,16 +673,16 @@ impl MarketplaceRegistry {
 		marketplace_path: PathBuf,
 		plugins_subdirs: Vec<String>,
 		upstream_repo: Option<String>,
-	) -> Self {
-		let client = build_http_client(60);
+	) -> Result<Self> {
+		let client = build_http_client(60)?;
 
-		Self {
+		Ok(Self {
 			marketplace_path,
 			plugins_subdirs,
 			upstream_repo,
 			client,
-			git_installer: GitBasedInstaller::new(),
-		}
+			git_installer: GitBasedInstaller::new()?,
+		})
 	}
 
 	/// Create with default official marketplace directories
@@ -699,7 +691,7 @@ impl MarketplaceRegistry {
 			.ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))?
 			.join(".claude/plugins/marketplaces/claude-plugins-official");
 
-		let client = build_http_client(60);
+		let client = build_http_client(60)?;
 
 		Ok(Self {
 			marketplace_path,
@@ -709,7 +701,7 @@ impl MarketplaceRegistry {
 			],
 			upstream_repo: Some(OFFICIAL_MARKETPLACE_REPO.to_string()),
 			client,
-			git_installer: GitBasedInstaller::new(),
+			git_installer: GitBasedInstaller::new()?,
 		})
 	}
 
@@ -1782,7 +1774,8 @@ mod tests {
 		let registry = MarketplaceRegistry::new(
 			temp_dir.clone(),
 			vec!["plugins/".to_string()],
-		);
+		)
+		.unwrap();
 		let manifest = registry.fetch_manifest("php-lsp").await.unwrap();
 
 		assert_eq!(manifest.name, "php-lsp");
@@ -1829,7 +1822,8 @@ mod tests {
 		let registry = MarketplaceRegistry::new(
 			temp_dir.clone(),
 			vec!["plugins/".to_string()],
-		);
+		)
+		.unwrap();
 		registry.install("php-lsp", &install_dir).await.unwrap();
 
 		let manifest = std::fs::read_to_string(
@@ -1903,7 +1897,8 @@ mod tests {
 			snapshot_dir.clone(),
 			vec!["plugins/".to_string()],
 			Some(source_dir.display().to_string()),
-		);
+		)
+		.unwrap();
 
 		registry.update().await.unwrap();
 

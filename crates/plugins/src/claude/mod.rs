@@ -38,6 +38,7 @@ pub struct PluginScopeInfo {
 	pub version: String,
 	pub installed_at: String,
 	pub last_updated: String,
+	pub git_commit_sha: Option<String>,
 }
 
 /// Claude-specific plugin metadata
@@ -280,8 +281,24 @@ impl ClaudePluginInfo {
 impl ClaudePluginManager {
 	/// Create a new plugin manager
 	pub fn new() -> Result<Self> {
-		let settings = settings::ClaudeSettings::load()?;
-		let installed = Self::load_installed_plugins(&settings)?;
+		let plugins_dir = default_plugins_dir()?;
+		Self::new_with_plugins_dir(&plugins_dir)
+	}
+
+	pub(crate) fn new_with_plugins_dir(plugins_dir: &Path) -> Result<Self> {
+		let settings_path = plugins_dir
+			.parent()
+			.ok_or_else(|| {
+				anyhow::anyhow!(
+					"Plugins directory has no parent: {}",
+					plugins_dir.display()
+				)
+			})?
+			.join("settings.json");
+		let settings =
+			settings::ClaudeSettings::load_from_path(&settings_path)?;
+		let installed =
+			Self::load_installed_plugins_from_dir(&settings, plugins_dir)?;
 
 		Ok(Self {
 			settings,
@@ -395,12 +412,11 @@ impl ClaudePluginManager {
 		Ok(())
 	}
 
-	fn load_installed_plugins(
+	fn load_installed_plugins_from_dir(
 		settings: &settings::ClaudeSettings,
+		plugins_dir: &Path,
 	) -> Result<Vec<ClaudePluginInfo>> {
-		let manifest_path = dirs::home_dir()
-			.ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))?
-			.join(".claude/plugins/installed_plugins.json");
+		let manifest_path = plugins_dir.join("installed_plugins.json");
 
 		let mut manifest_plugins = if manifest_path.exists() {
 			types::InstalledPluginsManifest::load(&manifest_path)?.plugins
@@ -411,6 +427,7 @@ impl ClaudePluginManager {
 		Self::supplement_missing_installations(
 			settings,
 			&mut manifest_plugins,
+			plugins_dir,
 		)?;
 
 		if manifest_plugins.is_empty() {
@@ -443,6 +460,7 @@ impl ClaudePluginManager {
 					version: info.version.clone(),
 					installed_at: info.installed_at.clone(),
 					last_updated: info.last_updated.clone(),
+					git_commit_sha: info.git_commit_sha.clone(),
 				});
 			}
 
@@ -518,6 +536,7 @@ impl ClaudePluginManager {
 	fn supplement_missing_installations(
 		settings: &settings::ClaudeSettings,
 		manifest_plugins: &mut HashMap<String, Vec<types::InstalledPluginInfo>>,
+		plugins_dir: &Path,
 	) -> Result<()> {
 		let mut plugin_ids = BTreeSet::new();
 		plugin_ids.extend(
@@ -539,7 +558,9 @@ impl ClaudePluginManager {
 				continue;
 			};
 
-			if let Some(installation) = discover_cache_installation(&id)? {
+			if let Some(installation) =
+				discover_cache_installation(&id, plugins_dir)?
+			{
 				manifest_plugins.insert(id_str, vec![installation]);
 			}
 		}
@@ -581,12 +602,17 @@ fn read_manifest(install_path: &Path) -> Result<Option<types::PluginManifest>> {
 	Ok(None)
 }
 
+fn default_plugins_dir() -> Result<PathBuf> {
+	Ok(dirs::home_dir()
+		.ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))?
+		.join(".claude/plugins"))
+}
+
 fn discover_cache_installation(
 	id: &PluginId,
+	plugins_dir: &Path,
 ) -> Result<Option<types::InstalledPluginInfo>> {
-	let cache_root = dirs::home_dir()
-		.ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))?
-		.join(".claude/plugins/cache");
+	let cache_root = plugins_dir.join("cache");
 
 	if !cache_root.exists() {
 		return Ok(None);
@@ -656,7 +682,8 @@ fn collect_cache_install_candidates_with_depth(
 			continue;
 		}
 
-		if read_manifest(&path).ok().flatten().is_none() {
+		let manifest = read_manifest(&path).ok().flatten();
+		if manifest.is_none() {
 			collect_cache_install_candidates_with_depth(
 				&path,
 				candidates,
@@ -664,8 +691,6 @@ fn collect_cache_install_candidates_with_depth(
 			);
 			continue;
 		}
-
-		let manifest = read_manifest(&path).ok().flatten();
 
 		let version = manifest
 			.as_ref()

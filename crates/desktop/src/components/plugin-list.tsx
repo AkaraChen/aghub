@@ -3,6 +3,7 @@
 import { Label, ListBox } from "@heroui/react";
 import Fuse from "fuse.js";
 import { useEffect, useMemo, useRef } from "react";
+import type { KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { CCPluginResponse } from "../generated/dto";
 import { cn } from "../lib/utils";
@@ -49,22 +50,12 @@ export function PluginList({
 		return fuse.search(searchQuery).map((result) => result.item);
 	}, [fuse, plugins, searchQuery]);
 
-	const modifiersRef = useRef({
+	// ListBox onSelectionChange does not include the triggering event.
+	const pendingSelectionModifiersRef = useRef({
 		shift: false,
 		meta: false,
 	});
 	const lastClickedRef = useRef<string | null>(null);
-
-	useEffect(() => {
-		const handler = (e: PointerEvent) => {
-			modifiersRef.current = {
-				shift: e.shiftKey,
-				meta: e.metaKey || e.ctrlKey,
-			};
-		};
-		window.addEventListener("pointerdown", handler, true);
-		return () => window.removeEventListener("pointerdown", handler, true);
-	}, []);
 
 	useEffect(() => {
 		const visibleIds = new Set(filteredPlugins.map((plugin) => plugin.id));
@@ -72,6 +63,16 @@ export function PluginList({
 			lastClickedRef.current = null;
 		}
 	}, [filteredPlugins]);
+
+	const rememberSelectionModifiers = (
+		shiftKey: boolean,
+		metaKey: boolean,
+	) => {
+		pendingSelectionModifiersRef.current = {
+			shift: shiftKey,
+			meta: metaKey,
+		};
+	};
 
 	const handleSelectionChange = (keys: "all" | Set<React.Key>) => {
 		if (keys === "all") return;
@@ -87,7 +88,10 @@ export function PluginList({
 
 		let finalKeys: Set<string>;
 
-		if (modifiersRef.current.shift && lastClickedRef.current) {
+		if (
+			pendingSelectionModifiersRef.current.shift &&
+			lastClickedRef.current
+		) {
 			const allKeys = filteredPlugins.map((p) => p.id);
 			const start = allKeys.indexOf(lastClickedRef.current);
 			const end = allKeys.indexOf(clicked);
@@ -97,7 +101,10 @@ export function PluginList({
 			} else {
 				finalKeys = new Set([...selectedKeys, clicked]);
 			}
-		} else if (!isMultiSelectMode && !modifiersRef.current.meta) {
+		} else if (
+			!isMultiSelectMode &&
+			!pendingSelectionModifiersRef.current.meta
+		) {
 			finalKeys = new Set([clicked]);
 		} else {
 			finalKeys = new Set(selectedKeys);
@@ -108,7 +115,7 @@ export function PluginList({
 			}
 		}
 
-		if (!modifiersRef.current.shift) {
+		if (!pendingSelectionModifiersRef.current.shift) {
 			lastClickedRef.current = clicked;
 		}
 
@@ -146,7 +153,15 @@ export function PluginList({
 	}
 
 	return (
-		<div className="flex-1 overflow-y-auto">
+		<div
+			className="flex-1 overflow-y-auto"
+			onKeyDownCapture={(event: KeyboardEvent<HTMLDivElement>) => {
+				rememberSelectionModifiers(
+					event.shiftKey,
+					event.metaKey || event.ctrlKey,
+				);
+			}}
+		>
 			<ListBox
 				aria-label="Claude Code Plugins"
 				selectionMode={selectionMode}
@@ -161,6 +176,12 @@ export function PluginList({
 						id={plugin.id}
 						textValue={plugin.name}
 						className="transition-colors duration-200 data-selected:bg-surface"
+						onPointerDown={(event) => {
+							rememberSelectionModifiers(
+								event.shiftKey,
+								event.metaKey || event.ctrlKey,
+							);
+						}}
 					>
 						<div className="flex w-full items-center gap-2">
 							<div className="flex min-w-0 flex-1 flex-col">

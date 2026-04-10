@@ -165,6 +165,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 				routes::plugins::reinstall_plugin,
 				routes::plugins::update_plugin,
 				routes::plugins::check_plugin_update,
+				routes::plugins::open_plugin_folder,
 				routes::plugins::get_plugin_config,
 				routes::plugins::update_plugin_config,
 				routes::plugins::delete_plugin_config,

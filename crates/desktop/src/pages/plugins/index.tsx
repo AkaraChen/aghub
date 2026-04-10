@@ -84,11 +84,7 @@ export default function PluginsPage() {
 			return selectedPluginScope.scope;
 		}
 
-		return (selectedPlugin.scopes.find(
-			(scope) => scope.install_path === selectedPlugin.install_path,
-		)?.scope ??
-			selectedPlugin.scopes[0]?.scope ??
-			"user") as PluginScopeValue;
+		return (selectedPlugin.scopes[0]?.scope ?? "user") as PluginScopeValue;
 	}, [selectedPlugin, selectedPluginScope]);
 
 	// Sort plugins by name for stable ordering

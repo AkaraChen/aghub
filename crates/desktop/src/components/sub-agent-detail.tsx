@@ -81,33 +81,37 @@ export function SubAgentDetail({
 							</div>
 							<div className="flex items-center gap-2">
 								<Tooltip delay={0}>
-									<Button
-										isIconOnly
-										variant="ghost"
-										size="md"
-										className="min-h-[44px] min-w-[44px] text-muted"
-										aria-label={t("editSubAgent")}
-										onPress={onEdit}
-									>
-										<PencilIcon className="size-4" />
-									</Button>
+									<Tooltip.Trigger>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="md"
+											className="min-h-[44px] min-w-[44px] text-muted"
+											aria-label={t("editSubAgent")}
+											onPress={onEdit}
+										>
+											<PencilIcon className="size-4" />
+										</Button>
+									</Tooltip.Trigger>
 									<Tooltip.Content>
 										{t("editSubAgent")}
 									</Tooltip.Content>
 								</Tooltip>
 								<Tooltip delay={0}>
-									<Button
-										isIconOnly
-										variant="ghost"
-										size="md"
-										className="min-h-[44px] min-w-[44px] text-muted hover:text-danger"
-										aria-label={t("deleteSubAgent")}
-										onPress={() =>
-											setDeleteDialogOpen(true)
-										}
-									>
-										<TrashIcon className="size-4" />
-									</Button>
+									<Tooltip.Trigger>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="md"
+											className="min-h-[44px] min-w-[44px] text-muted hover:text-danger"
+											aria-label={t("deleteSubAgent")}
+											onPress={() =>
+												setDeleteDialogOpen(true)
+											}
+										>
+											<TrashIcon className="size-4" />
+										</Button>
+									</Tooltip.Trigger>
 									<Tooltip.Content>
 										{t("deleteSubAgent")}
 									</Tooltip.Content>

@@ -3,4 +3,4 @@
 /**
  * Check for updates request/response
  */
-export type CCPluginCheckUpdateRequest = { plugin_id: string };
+export type CCPluginCheckUpdateRequest = { plugin_id: string; scope?: string };

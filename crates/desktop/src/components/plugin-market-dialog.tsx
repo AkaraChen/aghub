@@ -158,7 +158,7 @@ export function PluginMarketDialog({
 	return (
 		<Modal.Backdrop isOpen={isOpen} onOpenChange={handleClose}>
 			<Modal.Container>
-				<Modal.Dialog className="max-h-[85vh] w-[calc(100vw-2rem)] max-w-4xl">
+				<Modal.Dialog className="max-h-[85vh] w-[calc(100vw-2rem)] max-w-4xl bg-surface-secondary">
 					<Modal.CloseTrigger />
 					<Modal.Header className="items-start">
 						<div className="space-y-1">
@@ -187,25 +187,27 @@ export function PluginMarketDialog({
 								</SearchField.Group>
 							</SearchField>
 							<Tooltip delay={0}>
-								<Button
-									isIconOnly
-									variant="ghost"
-									size="sm"
-									onPress={handleUpdateMarketplace}
-									isDisabled={
-										updateMarketplaceMutation.isPending
-									}
-									aria-label={t("updateMarketplace")}
-									className="size-9 shrink-0 text-accent"
-								>
-									<ArrowPathIcon
-										className={cn(
-											"size-4",
-											updateMarketplaceMutation.isPending &&
-												"animate-spin",
-										)}
-									/>
-								</Button>
+								<Tooltip.Trigger>
+									<Button
+										isIconOnly
+										variant="ghost"
+										size="sm"
+										onPress={handleUpdateMarketplace}
+										isDisabled={
+											updateMarketplaceMutation.isPending
+										}
+										aria-label={t("updateMarketplace")}
+										className="size-9 shrink-0 text-accent"
+									>
+										<ArrowPathIcon
+											className={cn(
+												"size-4",
+												updateMarketplaceMutation.isPending &&
+													"animate-spin",
+											)}
+										/>
+									</Button>
+								</Tooltip.Trigger>
 								<Tooltip.Content>
 									{t("updateMarketplace")}
 								</Tooltip.Content>

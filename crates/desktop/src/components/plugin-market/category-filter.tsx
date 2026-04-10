@@ -1,6 +1,6 @@
 "use client";
 
-import { cn } from "../../lib/utils";
+import { ToggleButton, ToggleButtonGroup } from "@heroui/react";
 
 interface CategoryFilterProps {
 	categories: string[];
@@ -23,35 +23,35 @@ export function CategoryFilter({
 
 	return (
 		<div className="shrink-0 overflow-x-auto pb-1">
-			<div className="flex min-w-max gap-1.5">
-				<button
-					type="button"
-					onClick={() => onSelect(null)}
-					className={cn(
-						"shrink-0 rounded-full px-3 py-1.5 text-[11px] font-medium tracking-wide transition-colors cursor-pointer",
-						selectedCategory === null
-							? "bg-accent/10 text-accent"
-							: "bg-surface-secondary hover:bg-surface-tertiary text-muted hover:text-foreground",
-					)}
+			<ToggleButtonGroup
+				className="min-w-max"
+				size="sm"
+				selectionMode="single"
+				disallowEmptySelection
+				selectedKeys={[selectedCategory ?? "__all__"]}
+				onSelectionChange={(keys) => {
+					const nextKey = [...keys][0] as string | undefined;
+					onSelect(nextKey && nextKey !== "__all__" ? nextKey : null);
+				}}
+			>
+				<ToggleButton
+					id="__all__"
+					variant="ghost"
+					className="bg-surface-secondary text-muted data-[selected=true]:bg-accent/10 data-[selected=true]:text-accent"
 				>
 					{allLabel}
-				</button>
+				</ToggleButton>
 				{categories.map((category) => (
-					<button
+					<ToggleButton
 						key={category}
-						type="button"
-						onClick={() => onSelect(category)}
-						className={cn(
-							"shrink-0 rounded-full px-3 py-1.5 text-[11px] font-medium tracking-wide transition-colors cursor-pointer",
-							selectedCategory === category
-								? "bg-accent/10 text-accent"
-								: "bg-surface-secondary hover:bg-surface-tertiary text-muted hover:text-foreground",
-						)}
+						id={category}
+						variant="ghost"
+						className="bg-surface-secondary text-muted data-[selected=true]:bg-accent/10 data-[selected=true]:text-accent"
 					>
 						{getCategoryLabel(category)}
-					</button>
+					</ToggleButton>
 				))}
-			</div>
+			</ToggleButtonGroup>
 		</div>
 	);
 }

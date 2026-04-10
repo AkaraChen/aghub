@@ -499,6 +499,17 @@ export function createApi(baseUrl: string) {
 					.post("plugins/check-update", { json: body })
 					.json();
 			},
+			openFolder(pluginId: string, scope?: string): Promise<void> {
+				const search = new URLSearchParams();
+				if (scope) {
+					search.set("scope", scope);
+				}
+				const query = search.toString();
+				const path = query
+					? `plugins/${pluginId}/open-folder?${query}`
+					: `plugins/${pluginId}/open-folder`;
+				return client.post(path).then(() => undefined);
+			},
 			reinstall(
 				body: CCPluginReinstallRequest,
 			): Promise<CCPluginReinstallResponse> {

@@ -13,7 +13,7 @@ use anyhow::{Context, Result};
 use chrono::Utc;
 use std::path::{Path, PathBuf};
 
-use self::git::GitBasedInstaller;
+use self::git::{build_http_client, GitBasedInstaller};
 use self::registry::{
 	copy_dir_all, local_source_remote_fallback, normalize_repository_url,
 	remote_plugin_candidates, resolve_plugin_dir_with_wrappers, unique_suffix,
@@ -93,10 +93,10 @@ impl PluginInstaller {
 			anyhow::bail!("Marketplace '{}' not found", marketplace);
 		}
 
-		Ok(registry::MarketplaceRegistry::new(
+		registry::MarketplaceRegistry::new(
 			marketplace_path,
 			Self::common_marketplace_subdirs(),
-		))
+		)
 	}
 
 	fn is_marketplace_source(&self, source: &str) -> bool {
@@ -136,10 +136,7 @@ impl PluginInstaller {
 	}
 
 	fn build_client() -> Result<reqwest::Client> {
-		reqwest::Client::builder()
-			.user_agent("aghub-plugin-installer")
-			.timeout(std::time::Duration::from_secs(60))
-			.build()
+		build_http_client(60)
 			.context("Failed to create plugin installer HTTP client")
 	}
 
@@ -350,7 +347,7 @@ impl PluginInstaller {
 				vec![normalized_repository.clone()]
 			};
 
-		let git_installer = GitBasedInstaller::new();
+		let git_installer = GitBasedInstaller::new()?;
 		let mut last_error = None;
 		for tarball_url in tarball_urls {
 			match git_installer
@@ -593,24 +590,15 @@ impl PluginInstaller {
 		id: &PluginId,
 		scope: InstallScope,
 	) -> Result<InstalledPluginInfo> {
-		// Check if update is available
-		let update_info = self.check_update(id).await?;
-
-		if update_info.is_none() {
-			anyhow::bail!("Plugin '{}' is already up to date", id);
-		}
-
 		let manager = ClaudePluginManager::new()?;
 		let scope_str = scope.to_string();
-		let existing_path = manager
+		let plugin = manager
 			.get_plugin(id)
-			.and_then(|plugin| {
-				plugin
-					.scopes
-					.iter()
-					.find(|item| item.scope == scope_str)
-					.map(|item| item.install_path.clone())
-			})
+			.ok_or_else(|| anyhow::anyhow!("Plugin '{}' not found", id))?;
+		let scope_info = plugin
+			.scopes
+			.iter()
+			.find(|item| item.scope == scope_str)
 			.ok_or_else(|| {
 				anyhow::anyhow!(
 					"Plugin '{}' is not installed for scope '{}'",
@@ -618,30 +606,35 @@ impl PluginInstaller {
 					scope
 				)
 			})?;
+		let update_info = self
+			.check_update_against(
+				id,
+				&scope_info.version,
+				scope_info.git_commit_sha.as_deref(),
+			)
+			.await?;
+
+		if update_info.is_none() {
+			anyhow::bail!("Plugin '{}' is already up to date", id);
+		}
+		let existing_path = scope_info.install_path.clone();
 
 		self.install_into_scope(id, scope, Some(existing_path))
 			.await
 	}
 
-	/// Check if update is available
-	pub async fn check_update(
+	pub async fn check_update_against(
 		&self,
 		id: &PluginId,
+		current_ver: &str,
+		current_commit: Option<&str>,
 	) -> Result<Option<(String, Option<String>)>> {
-		let manager = ClaudePluginManager::new()?;
-
-		let plugin = manager
-			.get_plugin(id)
-			.ok_or_else(|| anyhow::anyhow!("Plugin '{}' not found", id))?;
-
 		let registry = self.get_registry(&id.source)?;
 
 		// Get latest version from registry
 		let latest = registry.get_latest_version(&id.name).await?;
 
 		if let Some((latest_ver, latest_sha)) = latest {
-			let current_ver = &plugin.version;
-
 			// Compare versions
 			// If versions are semantic, compare them properly
 			// Otherwise compare commit SHAs
@@ -651,8 +644,8 @@ impl PluginInstaller {
 				Self::compare_versions(&latest_ver, current_ver) > 0
 			} else {
 				// Compare commit SHAs
-				match &latest_sha {
-					Some(new) => new != &plugin.commit_hash,
+				match latest_sha.as_deref() {
+					Some(new) => Some(new) != current_commit,
 					None => latest_ver != *current_ver,
 				}
 			};
@@ -686,7 +679,7 @@ impl PluginInstaller {
 						owner,
 						repo,
 						None,
-					)))
+					)?))
 				} else {
 					anyhow::bail!("Invalid GitHub URL: {}", url)
 				}
@@ -881,12 +874,6 @@ impl PluginInstaller {
 				a_parts.len().cmp(&b_parts.len()) as i32
 			}
 		}
-	}
-}
-
-impl Default for PluginInstaller {
-	fn default() -> Self {
-		Self::new().expect("Failed to create PluginInstaller")
 	}
 }
 

@@ -6,7 +6,7 @@
 use crate::PluginId;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 /// Plugin lockfile structure
@@ -17,7 +17,7 @@ pub struct PluginLockfile {
 	/// When the lockfile was generated
 	pub generated_at: String,
 	/// Installed plugins with exact versions
-	pub plugins: HashMap<String, LockedPlugin>,
+	pub plugins: BTreeMap<String, LockedPlugin>,
 }
 
 /// A locked plugin entry with exact version information
@@ -78,8 +78,15 @@ impl PluginLockfile {
 			std::fs::create_dir_all(parent)?;
 		}
 
-		let content = serde_json::to_string_pretty(self)?;
-		std::fs::write(&path, content).with_context(|| {
+		let content = serde_json::to_string_pretty(self)? + "\n";
+		let temp_path = path.with_extension("json.tmp");
+		std::fs::write(&temp_path, content).with_context(|| {
+			format!(
+				"Failed to write lockfile temp file to {}",
+				temp_path.display()
+			)
+		})?;
+		std::fs::rename(&temp_path, &path).with_context(|| {
 			format!("Failed to write lockfile to {}", path.display())
 		})?;
 
@@ -93,37 +100,10 @@ impl PluginLockfile {
 			.join(".claude/plugins/plugin-lock.json"))
 	}
 
-	/// Get locked plugin by ID
-	pub fn get(&self, id: &str) -> Option<&LockedPlugin> {
-		self.plugins
-			.get(id)
-			.or_else(|| self.plugins.values().find(|plugin| plugin.id == id))
-	}
-
 	/// Add or update a locked plugin
 	pub fn insert(&mut self, plugin: LockedPlugin) {
 		let key = Self::entry_key(&plugin.id, &plugin.scope);
 		self.plugins.insert(key, plugin);
-	}
-
-	/// Remove a plugin from lockfile
-	pub fn remove(&mut self, id: &str) {
-		if self.plugins.remove(id).is_some() {
-			return;
-		}
-
-		self.plugins.retain(|_, plugin| plugin.id != id);
-	}
-
-	/// Check if a plugin is locked
-	pub fn is_locked(&self, id: &str) -> bool {
-		self.plugins.contains_key(id)
-			|| self.plugins.values().any(|plugin| plugin.id == id)
-	}
-
-	/// Get all locked plugins
-	pub fn list(&self) -> Vec<&LockedPlugin> {
-		self.plugins.values().collect()
 	}
 
 	/// Update timestamp
@@ -137,7 +117,7 @@ impl PluginLockfile {
 		&mut self,
 		installed: &[crate::claude::ClaudePluginInfo],
 	) -> Result<()> {
-		let mut new_plugins = HashMap::new();
+		let mut new_plugins = BTreeMap::new();
 
 		for plugin in installed {
 			for scope in &plugin.scopes {
@@ -148,8 +128,10 @@ impl PluginLockfile {
 					id: plugin.id.to_string(),
 					name: plugin.display_name.clone(),
 					version: scope.version.clone(),
-					commit_sha: (!plugin.commit_hash.is_empty())
-						.then(|| plugin.commit_hash.clone()),
+					commit_sha: scope.git_commit_sha.clone().or_else(|| {
+						(!plugin.commit_hash.is_empty())
+							.then(|| plugin.commit_hash.clone())
+					}),
 					source: plugin.id.source.clone(),
 					resolved,
 					integrity: None,
@@ -243,7 +225,7 @@ impl Default for PluginLockfile {
 		Self {
 			lockfile_version: 1,
 			generated_at: chrono::Utc::now().to_rfc3339(),
-			plugins: HashMap::new(),
+			plugins: BTreeMap::new(),
 		}
 	}
 }
@@ -278,18 +260,8 @@ mod tests {
 		};
 		let plugin_key = PluginLockfile::entry_key(&plugin.id, &plugin.scope);
 
-		// Test insert
 		lockfile.insert(plugin.clone());
-		assert!(lockfile.is_locked(&plugin.id));
-		assert!(lockfile.get(&plugin_key).is_some());
-
-		// Test get
-		let retrieved = lockfile.get(&plugin.id);
-		assert!(retrieved.is_some());
-		assert_eq!(retrieved.unwrap().version, "1.0.0");
-
-		// Test remove
-		lockfile.remove(&plugin.id);
-		assert!(!lockfile.is_locked(&plugin.id));
+		assert_eq!(lockfile.plugins.len(), 1);
+		assert_eq!(lockfile.plugins.get(&plugin_key).unwrap().version, "1.0.0");
 	}
 }

@@ -9,6 +9,9 @@ export type CCPluginResponse = {
 	description: string | null;
 	enabled: boolean;
 	source: string;
+	/**
+	 * Sanitized install folder path for display in the desktop UI
+	 */
 	install_path: string;
 	has_skills: boolean;
 	has_hooks: boolean;

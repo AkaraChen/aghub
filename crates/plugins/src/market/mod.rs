@@ -308,13 +308,21 @@ impl PluginMarket {
 		let commit = self.registry.get_commit().ok().flatten();
 
 		// Read each plugin manifest
-		for (name, _path) in plugins {
+		for (name, path) in plugins {
 			match self.registry.read_manifest(&name) {
 				Ok(Some(manifest)) => {
+					let plugins_subdir = if path.components().any(|component| {
+						component.as_os_str() == "external_plugins"
+					}) {
+						"external_plugins"
+					} else {
+						"plugins"
+					};
 					let github_url = format!(
-                        "https://github.com/anthropics/claude-plugins-official/tree/main/plugins/{}",
-                        name
-                    );
+						"https://github.com/anthropics/claude-plugins-official/tree/main/{}/{}",
+						plugins_subdir,
+						name
+					);
 
 					let cached = CachedPlugin {
 						id: format!("{}@{}", name, DEFAULT_MARKETPLACE),

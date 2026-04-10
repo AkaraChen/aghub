@@ -8,7 +8,7 @@ import * as pathe from "pathe";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
-	CCPluginDetailResponse,
+	CCPluginCheckUpdateResponse,
 	CCPluginResponse,
 } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
@@ -16,6 +16,7 @@ import { queryKeys } from "../requests/keys";
 import {
 	checkPluginUpdateMutationOptions,
 	pluginDetailQueryOptions,
+	pluginUpdateStatusQueryOptions,
 	reinstallPluginMutationOptions,
 	uninstallPluginMutationOptions,
 	updatePluginMutationOptions,
@@ -68,8 +69,6 @@ export function PluginDetail({
 
 	const currentPlugin = pluginDetail ?? plugin;
 	const mcpConfig = pluginDetail?.mcp_config;
-	const updateAvailable = pluginDetail?.update_available ?? false;
-	const latestVersion = pluginDetail?.latest_version ?? null;
 
 	const currentScope = useMemo(() => {
 		if (
@@ -79,12 +78,37 @@ export function PluginDetail({
 			return selectedScope;
 		}
 
-		return (currentPlugin.scopes.find(
-			(scope) => scope.install_path === currentPlugin.install_path,
-		)?.scope ??
-			currentPlugin.scopes[0]?.scope ??
-			"user") as PluginScopeValue;
-	}, [selectedScope, currentPlugin.install_path, currentPlugin.scopes]);
+		return (currentPlugin.scopes[0]?.scope ?? "user") as PluginScopeValue;
+	}, [selectedScope, currentPlugin.scopes]);
+
+	const currentScopeInfo = useMemo(
+		() =>
+			currentPlugin.scopes.find(
+				(scope) => scope.scope === currentScope,
+			) ??
+			currentPlugin.scopes[0] ??
+			null,
+		[currentPlugin.scopes, currentScope],
+	);
+
+	const canCheckUpdates = useMemo(
+		() =>
+			currentPlugin.source === "claude-plugins-official" ||
+			currentPlugin.source.startsWith("http"),
+		[currentPlugin.source],
+	);
+
+	const { data: updateStatus } = useQuery(
+		pluginUpdateStatusQueryOptions({
+			api,
+			pluginId: currentPlugin.id,
+			scope: currentScope,
+			enabled: canCheckUpdates,
+		}),
+	);
+
+	const updateAvailable = updateStatus?.update_available ?? false;
+	const latestVersion = updateStatus?.latest_version ?? null;
 
 	const providedSkills = useMemo(
 		() => pluginDetail?.provided_skills ?? [],
@@ -151,7 +175,8 @@ export function PluginDetail({
 	}, [currentPlugin.source, sourceUrl]);
 
 	const sourceVersion = useMemo(() => {
-		const version = currentPlugin.version?.trim();
+		const version =
+			currentScopeInfo?.version?.trim() || currentPlugin.version?.trim();
 		if (!version) {
 			return null;
 		}
@@ -173,7 +198,7 @@ export function PluginDetail({
 		}
 
 		return version;
-	}, [currentPlugin.version]);
+	}, [currentPlugin.version, currentScopeInfo?.version]);
 
 	const markSkillQueriesStale = () =>
 		queryClient.invalidateQueries({
@@ -206,18 +231,9 @@ export function PluginDetail({
 	const checkUpdateMutation = useMutation({
 		...checkPluginUpdateMutationOptions({ api }),
 		onSuccess: (data) => {
-			queryClient.setQueryData<CCPluginDetailResponse | undefined>(
-				queryKeys.plugins.detail(plugin.id),
-				(existing) =>
-					existing
-						? {
-								...existing,
-								update_available: data.update_available,
-								latest_version:
-									data.latest_version ??
-									existing.latest_version,
-							}
-						: existing,
+			queryClient.setQueryData<CCPluginCheckUpdateResponse>(
+				queryKeys.plugins.updateStatus(plugin.id, currentScope),
+				data,
 			);
 
 			void queryClient.invalidateQueries({
@@ -296,7 +312,10 @@ export function PluginDetail({
 			return;
 		}
 
-		checkUpdateMutation.mutate({ plugin_id: currentPlugin.id });
+		checkUpdateMutation.mutate({
+			plugin_id: currentPlugin.id,
+			scope: currentScope,
+		});
 	};
 
 	const handleOpenUrl = (url: string | undefined) => {
@@ -306,7 +325,9 @@ export function PluginDetail({
 	};
 
 	const handleOpenInstallPath = () => {
-		api.skills.openFolder(currentPlugin.install_path).catch(console.error);
+		api.plugins
+			.openFolder(currentPlugin.id, currentScope)
+			.catch(console.error);
 	};
 
 	const allPluginSkills = useMemo(() => {
@@ -333,7 +354,7 @@ export function PluginDetail({
 	return (
 		<div className="h-full overflow-y-auto">
 			<div className="w-full space-y-4 p-4 sm:p-6">
-				<Card>
+				<Card variant="secondary">
 					<PluginDetailHeader
 						plugin={currentPlugin}
 						currentScope={currentScope}
@@ -402,16 +423,20 @@ export function PluginDetail({
 									</div>
 									<div className="flex shrink-0 items-center gap-1">
 										<Tooltip delay={0}>
-											<Button
-												isIconOnly
-												variant="ghost"
-												size="sm"
-												className="size-8 text-muted"
-												onPress={handleOpenInstallPath}
-												aria-label={t("openFolder")}
-											>
-												<FolderIcon className="size-4" />
-											</Button>
+											<Tooltip.Trigger>
+												<Button
+													isIconOnly
+													variant="ghost"
+													size="sm"
+													className="size-8 text-muted"
+													onPress={
+														handleOpenInstallPath
+													}
+													aria-label={t("openFolder")}
+												>
+													<FolderIcon className="size-4" />
+												</Button>
+											</Tooltip.Trigger>
 											<Tooltip.Content>
 												{t("openFolder")}
 											</Tooltip.Content>

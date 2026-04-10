@@ -37,19 +37,6 @@ pub struct UnifiedPluginRegistry {
 }
 
 impl UnifiedPluginRegistry {
-	/// Create a new registry by scanning all sources
-	pub fn new(config: &DiscoveryConfig) -> Result<Self> {
-		match tokio::runtime::Handle::try_current() {
-			Ok(_) => Err(anyhow::anyhow!(
-				"UnifiedPluginRegistry::new() cannot run inside an active Tokio runtime; use new_async() instead"
-			)),
-			Err(_) => {
-				let rt = tokio::runtime::Runtime::new()?;
-				rt.block_on(Self::new_async(config))
-			}
-		}
-	}
-
 	/// Async initialization
 	pub async fn new_async(config: &DiscoveryConfig) -> Result<Self> {
 		let mut registry = Self {
@@ -192,12 +179,13 @@ impl UnifiedPluginRegistry {
 					&plugin_def.name,
 					&plugin_def.source,
 				) {
-					if local_path.exists() {
+					if tokio::fs::try_exists(&local_path).await.unwrap_or(false)
+					{
 						let mut info = plugin_info;
 						info.local_path = Some(local_path.clone());
 
 						if let Some(metadata) =
-							Self::extract_local_metadata(&local_path)
+							Self::extract_local_metadata(&local_path).await
 						{
 							if info.version.is_none() {
 								info.version = metadata.version;
@@ -248,7 +236,7 @@ impl UnifiedPluginRegistry {
 		}
 	}
 
-	fn find_manifest_path(plugin_dir: &Path) -> Option<PathBuf> {
+	async fn find_manifest_path(plugin_dir: &Path) -> Option<PathBuf> {
 		let possible_paths = [
 			plugin_dir.join(".claude-plugin/plugin.json"),
 			plugin_dir.join(".plugin/plugin.json"),
@@ -256,7 +244,7 @@ impl UnifiedPluginRegistry {
 		];
 
 		for path in &possible_paths {
-			if path.exists() {
+			if tokio::fs::try_exists(path).await.ok()? {
 				return Some(path.clone());
 			}
 		}
@@ -265,14 +253,20 @@ impl UnifiedPluginRegistry {
 	}
 
 	/// Read local manifest metadata if plugin.json exists
-	fn extract_local_metadata(
+	async fn extract_local_metadata(
 		plugin_dir: &Path,
 	) -> Option<LocalPluginMetadata> {
-		let manifest_path = Self::find_manifest_path(plugin_dir)?;
-		let content = std::fs::read_to_string(manifest_path).ok()?;
+		let manifest_path = Self::find_manifest_path(plugin_dir).await?;
+		let content = tokio::fs::read_to_string(manifest_path).await.ok()?;
 		let json = serde_json::from_str::<serde_json::Value>(&content).ok()?;
 		let manifest =
 			serde_json::from_str::<ClaudePluginManifest>(&content).ok();
+		let has_hooks = tokio::fs::try_exists(plugin_dir.join("hooks"))
+			.await
+			.unwrap_or(false)
+			|| tokio::fs::try_exists(plugin_dir.join("hooks.json"))
+				.await
+				.unwrap_or(false);
 
 		Some(LocalPluginMetadata {
 			version: manifest.as_ref().and_then(|m| m.version.clone()),
@@ -289,16 +283,16 @@ impl UnifiedPluginRegistry {
 				|| json.get("mcp_servers").is_some(),
 			has_skills: json.get("skills").is_some()
 				&& !json["skills"].is_null(),
-			has_hooks: json.get("hooks").is_some()
-				|| plugin_dir.join("hooks").exists()
-				|| plugin_dir.join("hooks.json").exists(),
+			has_hooks: json.get("hooks").is_some() || has_hooks,
 		})
 	}
 
 	/// Scan locally installed plugins
 	async fn scan_local_installs(&mut self) -> Result<()> {
 		// Use ClaudePluginManager to get installed plugins
-		match ClaudePluginManager::new() {
+		match ClaudePluginManager::new_with_plugins_dir(
+			&self.config.plugins_dir,
+		) {
 			Ok(manager) => {
 				let installed = manager.list_plugins();
 				log::debug!("Found {} installed plugins", installed.len());
@@ -467,8 +461,8 @@ mod tests {
 		});
 	}
 
-	#[test]
-	fn extract_local_metadata_reads_manifest_fields() {
+	#[tokio::test]
+	async fn extract_local_metadata_reads_manifest_fields() {
 		let temp_dir = tempdir().unwrap();
 		let plugin_dir = temp_dir.path().join("superpowers");
 		fs::create_dir_all(plugin_dir.join(".claude-plugin")).unwrap();
@@ -489,7 +483,9 @@ mod tests {
 		.unwrap();
 
 		let metadata =
-			UnifiedPluginRegistry::extract_local_metadata(&plugin_dir).unwrap();
+			UnifiedPluginRegistry::extract_local_metadata(&plugin_dir)
+				.await
+				.unwrap();
 
 		assert_eq!(metadata.version.as_deref(), Some("5.0.7"));
 		assert_eq!(

@@ -9,15 +9,19 @@ pub struct GitBasedInstaller {
 	client: reqwest::Client,
 }
 
+pub(crate) fn build_http_client(timeout_secs: u64) -> Result<reqwest::Client> {
+	reqwest::Client::builder()
+		.user_agent("aghub-plugin-installer")
+		.timeout(std::time::Duration::from_secs(timeout_secs))
+		.build()
+		.context("Failed to create HTTP client")
+}
+
 impl GitBasedInstaller {
-	pub fn new() -> Self {
-		Self {
-			client: reqwest::Client::builder()
-				.user_agent("aghub-plugin-installer")
-				.timeout(std::time::Duration::from_secs(120))
-				.build()
-				.expect("Failed to create HTTP client"),
-		}
+	pub fn new() -> Result<Self> {
+		Ok(Self {
+			client: build_http_client(120)?,
+		})
 	}
 
 	/// Download and extract tarball from URL
@@ -215,12 +219,6 @@ impl GitBasedInstaller {
 		}
 
 		Ok(None)
-	}
-}
-
-impl Default for GitBasedInstaller {
-	fn default() -> Self {
-		Self::new()
 	}
 }
 

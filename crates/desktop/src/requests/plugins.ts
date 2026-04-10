@@ -53,10 +53,43 @@ export function pluginDetailQueryOptions({
 	enabled = true,
 	staleTime = 30_000,
 }: PluginDetailQueryParams) {
+	const isEnabled = enabled && Boolean(pluginId);
 	return queryOptions({
-		queryKey: queryKeys.plugins.detail(pluginId ?? ""),
+		queryKey: pluginId
+			? queryKeys.plugins.detail(pluginId)
+			: queryKeys.plugins.detailDisabled(),
 		queryFn: () => api.plugins.detail(pluginId!),
-		enabled: enabled && Boolean(pluginId),
+		enabled: isEnabled,
+		staleTime,
+	});
+}
+
+interface PluginUpdateStatusQueryParams {
+	api: ApiClient;
+	pluginId?: string;
+	scope?: string | null;
+	enabled?: boolean;
+	staleTime?: number;
+}
+
+export function pluginUpdateStatusQueryOptions({
+	api,
+	pluginId,
+	scope,
+	enabled = true,
+	staleTime = 30_000,
+}: PluginUpdateStatusQueryParams) {
+	const isEnabled = enabled && Boolean(pluginId);
+	return queryOptions({
+		queryKey: pluginId
+			? queryKeys.plugins.updateStatus(pluginId, scope)
+			: queryKeys.plugins.updateStatusDisabled(),
+		queryFn: () =>
+			api.plugins.checkUpdate({
+				plugin_id: pluginId!,
+				scope: scope ?? undefined,
+			}),
+		enabled: isEnabled,
 		staleTime,
 	});
 }
@@ -86,6 +119,9 @@ export async function invalidatePluginQueries(
 ) {
 	await queryClient.invalidateQueries({
 		queryKey: queryKeys.plugins.all(),
+	});
+	await queryClient.invalidateQueries({
+		queryKey: queryKeys.plugins.market(),
 	});
 
 	if (pluginId) {
