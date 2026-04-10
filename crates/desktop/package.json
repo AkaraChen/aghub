@@ -52,7 +52,7 @@
 	},
 	"devDependencies": {
 		"@antfu/eslint-config": "^7.7.3",
-		"@eslint-react/eslint-plugin": "^2.13.0",
+		"@eslint-react/eslint-plugin": "^4.0.0",
 		"@tailwindcss/vite": "^4.2.2",
 		"@tauri-apps/cli": "^2",
 		"@types/node": "^25.5.0",
