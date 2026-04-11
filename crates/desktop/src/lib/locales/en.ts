@@ -3,6 +3,7 @@ export default {
 	settings: "Settings",
 	skills: "Skills",
 	mcpServers: "MCP Servers",
+	inferenceProviders: "Inference Providers",
 	skillsSh: "skills.sh",
 	mcp: "MCP",
 	subAgents: "Sub-agents",
@@ -290,9 +291,18 @@ export default {
 	providerTransferTitle: "Transfer providers to Codex",
 	providerTransferDescription:
 		"Import custom providers from OpenCode and write them into Codex global config.",
+	providerTransferNotReady: "Provider transfer is not available.",
+	providerTransferNotReadyDesc:
+		"Enable and configure both OpenCode and Codex agents to use this page.",
 	providerTransferNoProviders:
 		"No custom OpenCode providers found in global scope.",
+	providerSourceList: "OpenCode providers",
+	providerMissingBase: "Missing base URL; this provider will be skipped.",
 	providerTransferAction: "Transfer to Codex",
+	providerTransferTarget: "Target: Codex global model_providers",
+	providerTransferTargetDesc:
+		"Only providers with base URL can be imported to Codex.",
+	providerTransferResult: "Latest transfer result",
 	providerTransferSuccess:
 		"Provider transfer complete: imported {{imported}}, skipped {{skipped}}.",
 	providerTransferFailed: "Provider transfer failed.",

@@ -1,6 +1,5 @@
 import {
 	ArrowPathIcon,
-	ArrowRightCircleIcon,
 	CheckCircleIcon,
 	PlusIcon,
 	RectangleStackIcon,
@@ -19,7 +18,6 @@ import type { McpGroup } from "../../components/mcp-detail";
 import { McpDetail } from "../../components/mcp-detail";
 import { McpList } from "../../components/mcp-list";
 import { MultiSelectFloatingBar } from "../../components/multi-select-floating-bar";
-import { ProviderTransferDialog } from "../../components/provider-transfer-dialog";
 import { useAgentAvailability } from "../../hooks/use-agent-availability";
 import { useApi } from "../../hooks/use-api";
 import { supportsMcp } from "../../lib/agent-capabilities";
@@ -52,7 +50,6 @@ export default function MCPServersPage() {
 	);
 	const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
 	const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
-	const [isProviderTransferOpen, setIsProviderTransferOpen] = useState(false);
 
 	const hasMcpCapableAgents = useMemo(
 		() =>
@@ -61,22 +58,6 @@ export default function MCPServersPage() {
 			),
 		[availableAgents],
 	);
-	const canTransferProviders = useMemo(() => {
-		const hasOpenCode = availableAgents.some(
-			(agent) =>
-				agent.id === "opencode" &&
-				agent.isUsable &&
-				agent.capabilities.inference.openai,
-		);
-		const hasCodex = availableAgents.some(
-			(agent) =>
-				agent.id === "codex" &&
-				agent.isUsable &&
-				agent.capabilities.inference.openai,
-		);
-		return hasOpenCode && hasCodex;
-	}, [availableAgents]);
-
 	const groupedMcps = useMemo(() => {
 		const map = new Map<string, McpGroup>();
 
@@ -262,17 +243,6 @@ export default function MCPServersPage() {
 						variant="ghost"
 						size="sm"
 						className="shrink-0"
-						aria-label={t("providerTransferTitle")}
-						isDisabled={!canTransferProviders}
-						onPress={() => setIsProviderTransferOpen(true)}
-					>
-						<ArrowRightCircleIcon className="size-4" />
-					</Button>
-					<Button
-						isIconOnly
-						variant="ghost"
-						size="sm"
-						className="shrink-0"
 						aria-label={t("refreshServers")}
 						onPress={() => refetch()}
 					>
@@ -366,10 +336,6 @@ export default function MCPServersPage() {
 						refetch();
 					}}
 					resourceType="mcp"
-				/>
-				<ProviderTransferDialog
-					isOpen={isProviderTransferOpen}
-					onClose={() => setIsProviderTransferOpen(false)}
 				/>
 			</div>
 		</div>

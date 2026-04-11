@@ -21,6 +21,7 @@ import { parseDeepLink } from "./lib/deep-link";
 import { setupAppMenu } from "./lib/menu";
 import { initStore } from "./lib/store";
 import ProjectDetailPage from "./pages/project/detail";
+import InferenceProvidersPage from "./pages/inference-providers";
 import SettingsPage from "./pages/settings";
 import CustomAgentsPage from "./pages/settings/custom-agents";
 import MCPServersPage from "./pages/settings/mcp-servers";
@@ -200,6 +201,19 @@ function App() {
 													}
 												>
 													<MCPServersPage />
+												</Suspense>
+											</ErrorBoundary>
+										</MainLayout>
+									</Route>
+									<Route path="/inference-providers">
+										<MainLayout>
+											<ErrorBoundary>
+												<Suspense
+													fallback={
+														<SkillsPageSkeleton />
+													}
+												>
+													<InferenceProvidersPage />
 												</Suspense>
 											</ErrorBoundary>
 										</MainLayout>

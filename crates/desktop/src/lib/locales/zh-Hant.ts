@@ -3,6 +3,7 @@ export default {
 	settings: "設定",
 	skills: "技能",
 	mcpServers: "MCP 伺服器",
+	inferenceProviders: "推理 Provider",
 	skillsSh: "skills.sh",
 	mcp: "MCP",
 	subAgents: "子代理",
@@ -281,9 +282,18 @@ export default {
 	providerTransferTitle: "同步 Provider 到 Codex",
 	providerTransferDescription:
 		"從 OpenCode 匯入自訂 Provider，並寫入 Codex 的全域設定。",
+	providerTransferNotReady: "目前無法執行 Provider 同步。",
+	providerTransferNotReadyDesc:
+		"請先啟用並正確設定 OpenCode 與 Codex 兩個 Agent。",
 	providerTransferNoProviders:
 		"在全域範圍未找到可匯入的 OpenCode 自訂 Provider。",
+	providerSourceList: "OpenCode Provider 清單",
+	providerMissingBase: "缺少 base URL，該 Provider 將被略過。",
 	providerTransferAction: "同步到 Codex",
+	providerTransferTarget: "目標：Codex 全域 model_providers",
+	providerTransferTargetDesc:
+		"只有設定了 base URL 的 Provider 才會寫入 Codex。",
+	providerTransferResult: "最近一次同步結果",
 	providerTransferSuccess:
 		"Provider 同步完成：匯入 {{imported}}，略過 {{skipped}}。",
 	providerTransferFailed: "Provider 同步失敗。",
