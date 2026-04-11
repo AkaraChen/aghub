@@ -45,7 +45,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	project_skill_paths: None,
 	load_sub_agents: load_sub_agents_noop,
 	save_sub_agents: save_sub_agents_noop,
-	import_credientials: import_credientials_noop,
+	import_credentials: import_credentials_noop,
 	cli_name: "augmentcode",
 	validate_args: &["--version"],
 	project_markers: &[".augmentcode"],

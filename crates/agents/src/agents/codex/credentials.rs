@@ -44,7 +44,7 @@ impl CodexProvider {
 	}
 }
 
-pub(super) fn import_credientials(
+pub(super) fn import_credentials(
 	project_root: Option<&Path>,
 	scope: ResourceScope,
 ) -> Result<Vec<Credential>> {

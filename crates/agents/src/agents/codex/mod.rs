@@ -79,7 +79,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	}),
 	load_sub_agents: sub_agent::load,
 	save_sub_agents: sub_agent::save,
-	import_credientials: credentials::import_credientials,
+	import_credentials: credentials::import_credentials,
 	cli_name: "codex",
 	validate_args: &["--version"],
 	project_markers: &[".codex"],

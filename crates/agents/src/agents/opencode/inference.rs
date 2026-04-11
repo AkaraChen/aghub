@@ -1,130 +1,34 @@
-use crate::descriptor::*;
+use crate::descriptor::home_dir;
 use crate::errors::ConfigError;
-use crate::models::{Credential, CredentialType};
-use crate::sub_agents::{load_scoped_sub_agents, save_scoped_sub_agents};
+use crate::models::{Credential, CredentialType, ResourceScope};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Default, serde::Deserialize)]
-struct OpenCodeConfig {
+pub(super) struct OpenCodeConfig {
 	#[serde(default)]
-	provider: HashMap<String, OpenCodeProvider>,
+	pub(super) provider: HashMap<String, OpenCodeProvider>,
 }
 
 #[derive(Debug, Default, serde::Deserialize)]
-struct OpenCodeProvider {
-	npm: Option<String>,
-	options: Option<OpenCodeProviderOptions>,
+pub(super) struct OpenCodeProvider {
+	pub(super) npm: Option<String>,
+	pub(super) options: Option<OpenCodeProviderOptions>,
 }
 
 #[derive(Debug, Default, serde::Deserialize)]
-struct OpenCodeProviderOptions {
+pub(super) struct OpenCodeProviderOptions {
 	#[serde(rename = "baseURL")]
-	base_url: Option<String>,
-	endpoint: Option<String>,
+	pub(super) base_url: Option<String>,
+	pub(super) endpoint: Option<String>,
 	#[serde(rename = "apiKey")]
-	api_key: Option<String>,
+	pub(super) api_key: Option<String>,
 }
 
-fn mcp_global_path() -> Option<PathBuf> {
-	home_dir().map(|home| home.join(".config/opencode/opencode.json"))
-}
-fn mcp_project_path(root: &Path) -> Option<PathBuf> {
-	Some(root.join(".opencode/settings.json"))
-}
-fn global_data_dir() -> Option<PathBuf> {
-	home_dir().map(|home| home.join(".config/opencode"))
-}
-fn load_mcps(
+pub(super) fn import_credentials(
 	project_root: Option<&Path>,
-	scope: crate::ResourceScope,
-) -> crate::Result<Vec<crate::McpServer>> {
-	load_scoped_mcps(
-		project_root,
-		scope,
-		Some(mcp_global_path),
-		Some(mcp_project_path),
-		mcp_strategy::PARSE_JSON_OPCODE,
-	)
-}
-fn save_mcps(
-	project_root: Option<&Path>,
-	scope: crate::ResourceScope,
-	mcps: &[crate::McpServer],
-) -> crate::Result<()> {
-	save_scoped_mcps(
-		project_root,
-		scope,
-		mcps,
-		Some(mcp_global_path),
-		Some(mcp_project_path),
-		mcp_strategy::SERIALIZE_JSON_OPCODE,
-	)
-}
-fn global_skills_paths() -> Vec<PathBuf> {
-	let Some(home) = home_dir() else {
-		return Vec::new();
-	};
-	vec![
-		home.join(".config/opencode/skills"),
-		home.join(".claude/skills"),
-		home.join(".agents/skills"),
-	]
-}
-fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
-	vec![
-		root.join(".opencode/skills"),
-		root.join(".claude/skills"),
-		root.join(".agents/skills"),
-	]
-}
-
-fn global_skill_write_path() -> Option<PathBuf> {
-	home_dir().map(|home| home.join(".config/opencode/skills"))
-}
-
-fn project_skill_write_path(root: &Path) -> Option<PathBuf> {
-	Some(root.join(".opencode/skills"))
-}
-
-fn sub_agent_global_dir() -> Option<PathBuf> {
-	home_dir().map(|home| home.join(".config/opencode/agents"))
-}
-
-fn sub_agent_project_dir(root: &Path) -> Option<PathBuf> {
-	Some(root.join(".opencode/agents"))
-}
-
-fn load_sub_agents(
-	project_root: Option<&Path>,
-	scope: crate::ResourceScope,
-) -> crate::Result<Vec<crate::SubAgent>> {
-	load_scoped_sub_agents(
-		project_root,
-		scope,
-		Some(sub_agent_global_dir),
-		Some(sub_agent_project_dir),
-	)
-}
-
-fn save_sub_agents(
-	project_root: Option<&Path>,
-	scope: crate::ResourceScope,
-	agents: &[crate::SubAgent],
-) -> crate::Result<()> {
-	save_scoped_sub_agents(
-		project_root,
-		scope,
-		agents,
-		Some(sub_agent_global_dir),
-		Some(sub_agent_project_dir),
-	)
-}
-
-fn import_credientials(
-	project_root: Option<&Path>,
-	scope: crate::ResourceScope,
+	scope: ResourceScope,
 ) -> crate::Result<Vec<Credential>> {
 	let providers = load_provider_config(project_root, scope)?;
 	let auth_entries = load_auth_keys()?;
@@ -166,7 +70,7 @@ fn import_credientials(
 
 fn load_provider_config(
 	project_root: Option<&Path>,
-	scope: crate::ResourceScope,
+	scope: ResourceScope,
 ) -> crate::Result<HashMap<String, OpenCodeProvider>> {
 	let mut providers = HashMap::new();
 
@@ -191,24 +95,24 @@ fn load_provider_config(
 
 fn provider_config_paths(
 	project_root: Option<&Path>,
-	scope: crate::ResourceScope,
+	scope: ResourceScope,
 ) -> crate::Result<Vec<PathBuf>> {
 	match scope {
-		crate::ResourceScope::GlobalOnly => {
-			Ok(mcp_global_path().into_iter().collect())
+		ResourceScope::GlobalOnly => {
+			Ok(super::mcp::global_path().into_iter().collect())
 		}
-		crate::ResourceScope::ProjectOnly => {
+		ResourceScope::ProjectOnly => {
 			let Some(root) = project_root else {
 				return Ok(Vec::new());
 			};
 			let mut paths = Vec::new();
-			if let Some(path) = mcp_project_path(root) {
+			if let Some(path) = super::mcp::project_path(root) {
 				paths.push(path);
 			}
 			paths.push(root.join("opencode.json"));
 			Ok(paths)
 		}
-		crate::ResourceScope::Both => Err(ConfigError::InvalidConfig(
+		ResourceScope::Both => Err(ConfigError::InvalidConfig(
 			"Credential path unavailable for Both scope".to_string(),
 		)),
 	}
@@ -284,7 +188,7 @@ fn infer_provider_type(
 	CredentialType::Openai
 }
 
-fn provider_base(provider: &OpenCodeProvider) -> Option<String> {
+pub(super) fn provider_base(provider: &OpenCodeProvider) -> Option<String> {
 	let options = provider.options.as_ref()?;
 	clean_string(
 		options
@@ -294,7 +198,9 @@ fn provider_base(provider: &OpenCodeProvider) -> Option<String> {
 	)
 }
 
-fn provider_config_key(provider: &OpenCodeProvider) -> Option<String> {
+pub(super) fn provider_config_key(
+	provider: &OpenCodeProvider,
+) -> Option<String> {
 	let raw_key = provider
 		.options
 		.as_ref()
@@ -349,54 +255,3 @@ fn clean_string(value: Option<String>) -> Option<String> {
 		}
 	})
 }
-
-pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
-	id: "opencode",
-	display_name: "OpenCode",
-	mcp_parse_config: Some(mcp_strategy::PARSE_JSON_OPCODE),
-	mcp_serialize_config: Some(mcp_strategy::SERIALIZE_JSON_OPCODE),
-	load_mcps,
-	save_mcps,
-	mcp_global_path: Some(mcp_global_path),
-	mcp_project_path: Some(mcp_project_path),
-	global_data_dir,
-	capabilities: Capabilities {
-		skills: SkillCapabilities {
-			scopes: ScopeSupport {
-				global: true,
-				project: true,
-			},
-			universal: false,
-		},
-		mcp: McpCapabilities {
-			scopes: ScopeSupport {
-				global: true,
-				project: true,
-			},
-			stdio: true,
-			remote: true,
-			enable_disable: true,
-		},
-		sub_agents: SubAgentCapabilities {
-			scopes: ScopeSupport {
-				global: true,
-				project: true,
-			},
-		},
-	},
-	global_skill_paths: Some(GlobalSkillPaths {
-		read: global_skills_paths,
-		write: global_skill_write_path,
-	}),
-	project_skill_paths: Some(ProjectSkillPaths {
-		read: project_skills_paths,
-		write: project_skill_write_path,
-	}),
-	load_sub_agents,
-	save_sub_agents,
-	import_credientials,
-	cli_name: "opencode",
-	validate_args: &["--version"],
-	project_markers: &[".opencode"],
-	skills_cli_name: Some("opencode"),
-};

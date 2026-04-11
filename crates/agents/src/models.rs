@@ -205,13 +205,24 @@ pub enum CredentialType {
 }
 
 /// Provider credential imported from an agent config
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Credential {
 	pub name: String,
 	#[serde(rename = "type")]
 	pub r#type: CredentialType,
 	pub base: Option<String>,
 	pub key: Option<String>,
+}
+
+impl std::fmt::Debug for Credential {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Credential")
+			.field("name", &self.name)
+			.field("type", &self.r#type)
+			.field("base", &self.base)
+			.field("key", &self.key.as_ref().map(|_| "<redacted>"))
+			.finish()
+	}
 }
 
 impl Credential {

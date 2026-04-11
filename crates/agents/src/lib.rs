@@ -7,7 +7,7 @@ pub mod models;
 pub mod sub_agents;
 
 pub use descriptor::{
-	AgentDescriptor, Capabilities, GlobalSkillPaths, ImportCredientialsFn,
+	AgentDescriptor, Capabilities, GlobalSkillPaths, ImportCredentialsFn,
 	LoadMcpsFn, LoadSubAgentsFn, McpCapabilities, McpParseFn, McpSerializeFn,
 	ProjectSkillPaths, SaveMcpsFn, SaveSubAgentsFn, ScopeSupport,
 	SkillCapabilities, SubAgentCapabilities,

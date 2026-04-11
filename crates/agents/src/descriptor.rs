@@ -30,7 +30,7 @@ pub type SaveSubAgentsFn =
 	fn(Option<&Path>, ResourceScope, &[SubAgent]) -> Result<()>;
 
 /// Import function type for agent credentials.
-pub type ImportCredientialsFn =
+pub type ImportCredentialsFn =
 	fn(Option<&Path>, ResourceScope) -> Result<Vec<Credential>>;
 
 pub type OptionalPathFn = fn() -> Option<PathBuf>;
@@ -108,7 +108,7 @@ pub struct AgentDescriptor {
 	/// Implementation is fully internal — no path information is exposed.
 	pub save_sub_agents: SaveSubAgentsFn,
 	/// Import credentials for the requested scope.
-	pub import_credientials: ImportCredientialsFn,
+	pub import_credentials: ImportCredentialsFn,
 	pub cli_name: &'static str,
 	pub validate_args: &'static [&'static str],
 	/// Directory/file markers that indicate this agent's project root
@@ -265,12 +265,12 @@ impl AgentDescriptor {
 		}
 	}
 
-	pub fn import_credientials(
+	pub fn import_credentials(
 		&self,
 		project_root: Option<&Path>,
 		scope: ResourceScope,
 	) -> Result<Vec<Credential>> {
-		(self.import_credientials)(project_root, scope)
+		(self.import_credentials)(project_root, scope)
 	}
 }
 
@@ -402,7 +402,7 @@ pub fn save_sub_agents_noop(
 }
 
 /// No-op credentials importer for agents that do not support credentials.
-pub fn import_credientials_noop(
+pub fn import_credentials_noop(
 	_: Option<&Path>,
 	_: ResourceScope,
 ) -> Result<Vec<Credential>> {

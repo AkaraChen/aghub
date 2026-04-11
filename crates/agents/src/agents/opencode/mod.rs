@@ -1,11 +1,12 @@
-use crate::define_mcp_paths;
+mod inference;
+mod mcp;
+mod sub_agent;
+
 use crate::descriptor::*;
 use std::path::{Path, PathBuf};
 
-define_mcp_paths! {
-	symmetric: ".cursor/mcp.json",
-	strategy: mcp_strategy::parse_json_map_mcp_servers,
-			  mcp_strategy::serialize_json_map_mcp_servers,
+fn global_data_dir() -> Option<PathBuf> {
+	home_dir().map(|home| home.join(".config/opencode"))
 }
 
 fn global_skills_paths() -> Vec<PathBuf> {
@@ -13,37 +14,37 @@ fn global_skills_paths() -> Vec<PathBuf> {
 		return Vec::new();
 	};
 	vec![
-		home.join(".cursor/skills"),
+		home.join(".config/opencode/skills"),
 		home.join(".claude/skills"),
-		home.join(".codex/skills"),
+		home.join(".agents/skills"),
 	]
 }
+
 fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
 	vec![
-		root.join(".cursor/skills"),
-		root.join(".agents/skills"),
+		root.join(".opencode/skills"),
 		root.join(".claude/skills"),
-		root.join(".codex/skills"),
+		root.join(".agents/skills"),
 	]
 }
 
 fn global_skill_write_path() -> Option<PathBuf> {
-	home_dir().map(|home| home.join(".cursor/skills"))
+	home_dir().map(|home| home.join(".config/opencode/skills"))
 }
 
 fn project_skill_write_path(root: &Path) -> Option<PathBuf> {
-	Some(root.join(".cursor/skills"))
+	Some(root.join(".opencode/skills"))
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
-	id: "cursor",
-	display_name: "Cursor",
-	mcp_parse_config: Some(mcp_strategy::parse_json_map_mcp_servers),
-	mcp_serialize_config: Some(mcp_strategy::serialize_json_map_mcp_servers),
-	load_mcps,
-	save_mcps,
-	mcp_global_path: Some(mcp_global_path),
-	mcp_project_path: Some(mcp_project_path),
+	id: "opencode",
+	display_name: "OpenCode",
+	mcp_parse_config: Some(mcp_strategy::PARSE_JSON_OPCODE),
+	mcp_serialize_config: Some(mcp_strategy::SERIALIZE_JSON_OPCODE),
+	load_mcps: mcp::load,
+	save_mcps: mcp::save,
+	mcp_global_path: Some(mcp::global_path),
+	mcp_project_path: Some(mcp::project_path),
 	global_data_dir,
 	capabilities: Capabilities {
 		skills: SkillCapabilities {
@@ -60,12 +61,12 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 			},
 			stdio: true,
 			remote: true,
-			enable_disable: false,
+			enable_disable: true,
 		},
 		sub_agents: SubAgentCapabilities {
 			scopes: ScopeSupport {
-				global: false,
-				project: false,
+				global: true,
+				project: true,
 			},
 		},
 	},
@@ -77,11 +78,11 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 		read: project_skills_paths,
 		write: project_skill_write_path,
 	}),
-	load_sub_agents: load_sub_agents_noop,
-	save_sub_agents: save_sub_agents_noop,
-	import_credentials: import_credentials_noop,
-	cli_name: "cursor",
+	load_sub_agents: sub_agent::load,
+	save_sub_agents: sub_agent::save,
+	import_credentials: inference::import_credentials,
+	cli_name: "opencode",
 	validate_args: &["--version"],
-	project_markers: &[".cursor"],
-	skills_cli_name: Some("cursor"),
+	project_markers: &[".opencode"],
+	skills_cli_name: Some("opencode"),
 };
