@@ -3,6 +3,7 @@ export default {
 	settings: "设置",
 	skills: "技能",
 	mcpServers: "MCP 服务器",
+	inferenceProviders: "推理 Provider",
 	skillsSh: "skills.sh",
 	mcp: "MCP",
 	subAgents: "子代理",
@@ -278,6 +279,32 @@ export default {
 	// MCP Servers Page
 	searchServers: "搜索服务器...",
 	addMcpServer: "添加 MCP 服务器",
+	providerTransferTitle: "同步 Provider 到 Codex",
+	providerTransferDescription:
+		"从 OpenCode 导入自定义 Provider，并写入 Codex 的全局配置。",
+	providerTransferNotReady: "暂时无法执行 Provider 同步。",
+	providerTransferNotReadyDesc:
+		"请先启用并正确配置 OpenCode 与 Codex 两个 Agent。",
+	providerTransferNoProviders:
+		"在全局范围未发现可导入的 OpenCode 自定义 Provider。",
+	providerSourceList: "OpenCode Provider 列表",
+	searchProviders: "搜索 Provider...",
+	noProvidersMatch: "没有匹配的 Provider",
+	providerMissingBase: "缺少 base URL，该 Provider 将被跳过。",
+	providerDetails: "Provider 详情",
+	providerReadyToImport: "可导入",
+	providerWillBeSkipped: "将被跳过",
+	providerTransferAction: "同步到 Codex",
+	providerTransferTarget: "目标：Codex 全局 model_providers",
+	providerTransferTargetDesc:
+		"只有配置了 base URL 的 Provider 才会写入 Codex。",
+	providerTransferResult: "最近一次同步结果",
+	providerTransferSuccess:
+		"Provider 同步完成：导入 {{imported}}，跳过 {{skipped}}。",
+	providerTransferFailed: "Provider 同步失败。",
+	providerHasKey: "已发现 key",
+	providerNoKey: "无 key",
+	selectProvider: "选择一个 Provider 查看详情",
 	refreshServers: "刷新服务器",
 	noServersMatch: "没有匹配的服务器",
 	selectServer: "选择一个服务器查看详情",

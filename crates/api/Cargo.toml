@@ -36,5 +36,6 @@ keyring = { version = "3", features = [
 	"windows-native",
 	"linux-native",
 ] }
+iota_stronghold = "2.1"
 uuid = { version = "1", features = [ "v4" ] }
 log = "0.4.29"

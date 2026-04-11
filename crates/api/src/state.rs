@@ -3,6 +3,8 @@ use std::sync::Mutex;
 use std::time::Instant;
 use tempfile::TempDir;
 
+use crate::provider_store::ProviderStoreHandle;
+
 pub struct GitCloneSession {
 	pub temp_dir: TempDir,
 	pub created_at: Instant,
@@ -18,4 +20,16 @@ pub struct GitCloneSession {
 
 pub struct GitCloneSessions {
 	pub sessions: Mutex<HashMap<String, GitCloneSession>>,
+}
+
+pub struct InferenceProviderStoreState {
+	pub(crate) store: Mutex<ProviderStoreHandle>,
+}
+
+impl InferenceProviderStoreState {
+	pub fn new() -> Self {
+		Self {
+			store: Mutex::new(ProviderStoreHandle::new()),
+		}
+	}
 }

@@ -4,6 +4,7 @@ import type {
 	AgentInfo,
 	CodeEditorType,
 	CreateCredentialRequest,
+	CreateInferenceProviderRequest,
 	CreateMcpRequest,
 	CreateSkillRequest,
 	CreateSubAgentRequest,
@@ -17,12 +18,15 @@ import type {
 	GitSyncRequest,
 	GitSyncResponse,
 	GlobalSkillLockResponse,
+	InferenceCredentialDto,
+	InferenceProviderResponseDto,
 	ImportSkillRequest,
 	InstallSkillRequest,
 	InstallSkillResponse,
 	MarketSkill,
 	McpResponse,
 	OperationBatchResponse,
+	ProviderTransferResponseDto,
 	ProjectSkillLockResponse,
 	ReconcileRequest,
 	SkillResponse,
@@ -30,6 +34,7 @@ import type {
 	SubAgentResponse,
 	ToolInfoDto,
 	TransferRequest,
+	UpdateInferenceProviderRequest,
 	UpdateMcpRequest,
 	UpdateSubAgentRequest,
 } from "../generated/dto";
@@ -436,6 +441,44 @@ export function createApi(baseUrl: string) {
 			},
 			delete(id: string): Promise<void> {
 				return client.delete(`credentials/${id}`).then(() => undefined);
+			},
+		},
+		inference: {
+			listManagedProviders(): Promise<InferenceProviderResponseDto[]> {
+				return client.get("inference/providers/managed").json();
+			},
+			getManagedProvider(
+				id: string,
+			): Promise<InferenceProviderResponseDto> {
+				return client.get(`inference/providers/managed/${id}`).json();
+			},
+			createManagedProvider(
+				body: CreateInferenceProviderRequest,
+			): Promise<InferenceProviderResponseDto> {
+				return client
+					.post("inference/providers/managed", { json: body })
+					.json();
+			},
+			updateManagedProvider(
+				id: string,
+				body: UpdateInferenceProviderRequest,
+			): Promise<InferenceProviderResponseDto> {
+				return client
+					.put(`inference/providers/managed/${id}`, { json: body })
+					.json();
+			},
+			deleteManagedProvider(id: string): Promise<void> {
+				return client
+					.delete(`inference/providers/managed/${id}`)
+					.then(() => undefined);
+			},
+			listOpenCodeProviders(): Promise<InferenceCredentialDto[]> {
+				return client.get("inference/providers/opencode").json();
+			},
+			transferOpenCodeToCodex(): Promise<ProviderTransferResponseDto> {
+				return client
+					.post("inference/providers/transfer/opencode-to-codex")
+					.json();
 			},
 		},
 	};

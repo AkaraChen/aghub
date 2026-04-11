@@ -11,6 +11,7 @@ pub mod dto;
 pub mod editor_detection;
 pub mod error;
 pub mod extractors;
+mod provider_store;
 pub mod routes;
 pub mod state;
 
@@ -103,6 +104,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 		.manage(crate::state::GitCloneSessions {
 			sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
 		})
+		.manage(crate::state::InferenceProviderStoreState::new())
 		.mount(
 			"/api/v1",
 			routes![
@@ -145,6 +147,13 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 				routes::credentials::list_credentials,
 				routes::credentials::create_credential,
 				routes::credentials::delete_credential,
+				routes::inference::list_managed_providers,
+				routes::inference::get_managed_provider,
+				routes::inference::create_managed_provider,
+				routes::inference::update_managed_provider,
+				routes::inference::delete_managed_provider,
+				routes::inference::list_opencode_providers,
+				routes::inference::transfer_opencode_to_codex_route,
 				routes::skills::open_skill_folder,
 				routes::skills::edit_skill_folder,
 				routes::skills::get_skill_content,

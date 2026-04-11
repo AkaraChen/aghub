@@ -8,6 +8,7 @@ use crate::{
 use log::{debug, info, warn};
 use std::path::{Path, PathBuf};
 
+pub mod inference;
 pub mod mcp;
 pub mod skill;
 pub mod sub_agent;

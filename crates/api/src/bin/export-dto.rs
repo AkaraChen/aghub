@@ -12,6 +12,12 @@ use aghub_api::dto::{
 	},
 	common::ConfigSource,
 	credential::{CreateCredentialRequest, CredentialResponse},
+	inference::{
+		CreateInferenceProviderRequest, CredentialTypeDto,
+		InferenceCredentialDto, InferenceProviderResponseDto,
+		ProviderTransferItemDto, ProviderTransferResponseDto,
+		ProviderTransferStatusDto, UpdateInferenceProviderRequest,
+	},
 	integrations::{
 		CodeEditorType, EditSkillFolderRequest, OpenSkillFolderRequest,
 		OpenWithEditorRequest, ToolInfoDto, ToolPreferencesDto,
@@ -113,6 +119,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<ConfigSource>(&cfg)?;
 	export_type::<CreateCredentialRequest>(&cfg)?;
 	export_type::<CredentialResponse>(&cfg)?;
+	export_type::<CredentialTypeDto>(&cfg)?;
+	export_type::<CreateInferenceProviderRequest>(&cfg)?;
+	export_type::<UpdateInferenceProviderRequest>(&cfg)?;
+	export_type::<InferenceCredentialDto>(&cfg)?;
+	export_type::<InferenceProviderResponseDto>(&cfg)?;
+	export_type::<ProviderTransferStatusDto>(&cfg)?;
+	export_type::<ProviderTransferItemDto>(&cfg)?;
+	export_type::<ProviderTransferResponseDto>(&cfg)?;
 	export_type::<CodeEditorType>(&cfg)?;
 	export_type::<ToolInfoDto>(&cfg)?;
 	export_type::<ToolPreferencesDto>(&cfg)?;

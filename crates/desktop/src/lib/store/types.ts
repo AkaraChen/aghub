@@ -20,6 +20,7 @@ export interface IntegrationPreferences {
 
 export const SIDEBAR_ITEM_IDS = [
 	"mcp",
+	"inferenceProviders",
 	"skills",
 	"skillsSh",
 	"subAgents",
