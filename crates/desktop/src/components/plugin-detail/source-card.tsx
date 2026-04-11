@@ -1,9 +1,9 @@
 "use client";
 
 import { ArrowPathIcon, LinkIcon } from "@heroicons/react/24/solid";
-import { Button, Tooltip } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import { siGithub } from "simple-icons";
+import { TooltipIconButton } from "../ui/tooltip-icon-button";
 import { cn } from "../../lib/utils";
 
 interface PluginSourceCardProps {
@@ -11,6 +11,7 @@ interface PluginSourceCardProps {
 	sourceVersion: string | null;
 	sourceUrl: string | null;
 	isGitHubSource: boolean;
+	canCheckUpdates: boolean;
 	updateAvailable: boolean;
 	latestVersion: string | null;
 	isUpdating: boolean;
@@ -23,6 +24,7 @@ export function PluginSourceCard({
 	sourceVersion,
 	sourceUrl,
 	isGitHubSource,
+	canCheckUpdates,
 	updateAvailable,
 	latestVersion,
 	isUpdating,
@@ -62,58 +64,47 @@ export function PluginSourceCard({
 					</div>
 				</div>
 				<div className="flex shrink-0 items-center gap-1">
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
+					{canCheckUpdates && (
+						<TooltipIconButton
+							variant="ghost"
+							size="sm"
+							className={cn(
+								"size-8 text-muted",
+								updateAvailable && "text-success",
+							)}
+							label={
+								updateAvailable
+									? t("updatePlugin")
+									: t("checkForUpdates")
+							}
+							tooltip={
+								updateAvailable && latestVersion
+									? t("updateToVersion", {
+											version: latestVersion,
+										})
+									: t("checkForUpdates")
+							}
+							onPress={onRefresh}
+							isDisabled={isUpdating}
+						>
+							<ArrowPathIcon
 								className={cn(
-									"size-8 text-muted",
-									updateAvailable && "text-success",
+									"size-4",
+									isUpdating && "animate-spin",
 								)}
-								aria-label={
-									updateAvailable
-										? t("updatePlugin")
-										: t("checkForUpdates")
-								}
-								onPress={onRefresh}
-								isDisabled={isUpdating}
-							>
-								<ArrowPathIcon
-									className={cn(
-										"size-4",
-										isUpdating && "animate-spin",
-									)}
-								/>
-							</Button>
-						</Tooltip.Trigger>
-						<Tooltip.Content>
-							{updateAvailable && latestVersion
-								? t("updateToVersion", {
-										version: latestVersion,
-									})
-								: t("checkForUpdates")}
-						</Tooltip.Content>
-					</Tooltip>
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								className="size-8 text-muted"
-								aria-label={t("openRepository")}
-								isDisabled={!sourceUrl}
-								onPress={() =>
-									onOpenUrl(sourceUrl ?? undefined)
-								}
-							>
-								<LinkIcon className="size-4" />
-							</Button>
-						</Tooltip.Trigger>
-						<Tooltip.Content>{t("openRepository")}</Tooltip.Content>
-					</Tooltip>
+							/>
+						</TooltipIconButton>
+					)}
+					<TooltipIconButton
+						variant="ghost"
+						size="sm"
+						className="size-8 text-muted"
+						label={t("openRepository")}
+						onPress={() => onOpenUrl(sourceUrl ?? undefined)}
+						isDisabled={!sourceUrl}
+					>
+						<LinkIcon className="size-4" />
+					</TooltipIconButton>
 				</div>
 			</div>
 		</div>

@@ -20,6 +20,7 @@ import { MultiSelectFloatingBar } from "../../components/multi-select-floating-b
 import { PluginDetail } from "../../components/plugin-detail";
 import { PluginList } from "../../components/plugin-list";
 import { PluginMarketDialog } from "../../components/plugin-market-dialog";
+import { TooltipIconButton } from "../../components/ui/tooltip-icon-button";
 import type { CCPluginResponse } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
 import { cn } from "../../lib/utils";
@@ -276,23 +277,15 @@ export default function PluginsPage() {
 					placeholder={t("searchPlugins")}
 					ariaLabel={t("searchPlugins")}
 				>
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								className="shrink-0"
-								onPress={() => setIsMarketDialogOpen(true)}
-								aria-label={t("installFromMarket")}
-							>
-								<PlusIcon className="size-4" />
-							</Button>
-						</Tooltip.Trigger>
-						<Tooltip.Content>
-							{t("installFromMarket")}
-						</Tooltip.Content>
-					</Tooltip>
+					<TooltipIconButton
+						variant="ghost"
+						size="sm"
+						className="shrink-0"
+						onPress={() => setIsMarketDialogOpen(true)}
+						label={t("installFromMarket")}
+					>
+						<PlusIcon className="size-4" />
+					</TooltipIconButton>
 					<Tooltip delay={0}>
 						<Tooltip.Trigger>
 							<div
@@ -341,27 +334,21 @@ export default function PluginsPage() {
 								: t("multiSelect")}
 						</Tooltip.Content>
 					</Tooltip>
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								className="shrink-0"
-								aria-label={t("refreshPlugins")}
-								onPress={() => void handleRefresh()}
-								isDisabled={isFetching}
-							>
-								<ArrowPathIcon
-									className={cn(
-										"size-4",
-										isFetching && "animate-spin",
-									)}
-								/>
-							</Button>
-						</Tooltip.Trigger>
-						<Tooltip.Content>{t("refreshPlugins")}</Tooltip.Content>
-					</Tooltip>
+					<TooltipIconButton
+						variant="ghost"
+						size="sm"
+						className="shrink-0"
+						label={t("refreshPlugins")}
+						onPress={() => void handleRefresh()}
+						isDisabled={isFetching}
+					>
+						<ArrowPathIcon
+							className={cn(
+								"size-4",
+								isFetching && "animate-spin",
+							)}
+						/>
+					</TooltipIconButton>
 				</ListSearchHeader>
 
 				<div className="flex-1 overflow-y-auto">

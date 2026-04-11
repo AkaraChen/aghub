@@ -21,6 +21,7 @@ export type { CCPluginReinstallResponse } from "./CCPluginReinstallResponse";
 export type { CCPluginResponse } from "./CCPluginResponse";
 export type { CCPluginScopeResponse } from "./CCPluginScopeResponse";
 export type { CCPluginSkillInfo } from "./CCPluginSkillInfo";
+export type { CCPluginSourceInfoResponse } from "./CCPluginSourceInfoResponse";
 export type { CCPluginUninstallRequest } from "./CCPluginUninstallRequest";
 export type { CCPluginUninstallResponse } from "./CCPluginUninstallResponse";
 export type { CCPluginUpdateConfigRequest } from "./CCPluginUpdateConfigRequest";

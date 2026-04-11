@@ -1,10 +1,9 @@
 "use client";
 
 import { FolderIcon } from "@heroicons/react/24/solid";
-import { Button, Card, Tooltip, toast } from "@heroui/react";
+import { Card, toast } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import * as pathe from "pathe";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
@@ -28,14 +27,10 @@ import { PluginDetailHeader } from "./plugin-detail/detail-header";
 import { ProvidedSkillsSection } from "./plugin-detail/provided-skills-section";
 import { PluginSourceCard } from "./plugin-detail/source-card";
 import { usePluginToggleState } from "./plugin-detail/use-plugin-toggle-state";
+import { TooltipIconButton } from "./ui/tooltip-icon-button";
 
 const SEMANTIC_VERSION_REGEX = /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
 const GIT_HASH_REGEX = /^[0-9a-f]{7,40}$/i;
-const TRAILING_SLASH_REGEX = /\/$/;
-const TRAILING_GIT_SUFFIX_REGEX = /\.git$/;
-const WWW_PREFIX_REGEX = /^www\./;
-const OFFICIAL_MARKETPLACE_URL =
-	"https://github.com/anthropics/claude-plugins-official";
 
 type PluginScopeValue = "user" | "project" | "local";
 
@@ -91,12 +86,7 @@ export function PluginDetail({
 		[currentPlugin.scopes, currentScope],
 	);
 
-	const canCheckUpdates = useMemo(
-		() =>
-			currentPlugin.source === "claude-plugins-official" ||
-			currentPlugin.source.startsWith("http"),
-		[currentPlugin.source],
-	);
+	const canCheckUpdates = currentPlugin.source_info.can_check_updates;
 
 	const { data: updateStatus } = useQuery(
 		pluginUpdateStatusQueryOptions({
@@ -114,65 +104,6 @@ export function PluginDetail({
 		() => pluginDetail?.provided_skills ?? [],
 		[pluginDetail?.provided_skills],
 	);
-
-	const sourceUrl = useMemo(() => {
-		const reference = currentPlugin.repository?.trim() || "";
-		if (!reference) {
-			if (currentPlugin.source === "claude-plugins-official") {
-				return OFFICIAL_MARKETPLACE_URL;
-			}
-
-			return currentPlugin.source.startsWith("http")
-				? currentPlugin.source
-				: null;
-		}
-
-		const normalized = reference
-			.replace(TRAILING_SLASH_REGEX, "")
-			.replace(TRAILING_GIT_SUFFIX_REGEX, "");
-
-		if (
-			normalized.startsWith("https://") ||
-			normalized.startsWith("http://")
-		) {
-			return normalized;
-		}
-
-		if (normalized.startsWith("git@github.com:")) {
-			return normalized.replace("git@github.com:", "https://github.com/");
-		}
-
-		if (normalized.includes("/") && !normalized.includes("://")) {
-			return `https://github.com/${normalized}`;
-		}
-
-		return null;
-	}, [currentPlugin.repository, currentPlugin.source]);
-
-	const isGitHubSource = useMemo(
-		() => sourceUrl?.includes("github.com") ?? false,
-		[sourceUrl],
-	);
-
-	const sourceLabel = useMemo(() => {
-		if (!sourceUrl) {
-			return currentPlugin.source;
-		}
-
-		try {
-			const url = new URL(sourceUrl);
-			if (url.hostname === "github.com") {
-				const [owner, repo] = url.pathname.split("/").filter(Boolean);
-				if (owner && repo) {
-					return `${owner}/${repo}`;
-				}
-			}
-
-			return url.hostname.replace(WWW_PREFIX_REGEX, "");
-		} catch {
-			return currentPlugin.source;
-		}
-	}, [currentPlugin.source, sourceUrl]);
 
 	const sourceVersion = useMemo(() => {
 		const version =
@@ -387,10 +318,13 @@ export function PluginDetail({
 						)}
 
 						<PluginSourceCard
-							sourceLabel={sourceLabel}
+							sourceLabel={currentPlugin.source_info.label}
 							sourceVersion={sourceVersion}
-							sourceUrl={sourceUrl}
-							isGitHubSource={isGitHubSource}
+							sourceUrl={currentPlugin.source_info.url ?? null}
+							isGitHubSource={currentPlugin.source_info.is_github}
+							canCheckUpdates={
+								currentPlugin.source_info.can_check_updates
+							}
 							updateAvailable={updateAvailable}
 							latestVersion={latestVersion}
 							isUpdating={
@@ -414,33 +348,25 @@ export function PluginDetail({
 										<p
 											tabIndex={0}
 											className="cursor-default break-all rounded-sm font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none"
-											title={currentPlugin.install_path}
+											title={
+												currentScopeInfo?.folder_path ??
+												currentPlugin.install_path
+											}
 										>
-											{pathe.dirname(
-												currentPlugin.install_path,
-											)}
+											{currentScopeInfo?.folder_path ??
+												currentPlugin.install_path}
 										</p>
 									</div>
 									<div className="flex shrink-0 items-center gap-1">
-										<Tooltip delay={0}>
-											<Tooltip.Trigger>
-												<Button
-													isIconOnly
-													variant="ghost"
-													size="sm"
-													className="size-8 text-muted"
-													onPress={
-														handleOpenInstallPath
-													}
-													aria-label={t("openFolder")}
-												>
-													<FolderIcon className="size-4" />
-												</Button>
-											</Tooltip.Trigger>
-											<Tooltip.Content>
-												{t("openFolder")}
-											</Tooltip.Content>
-										</Tooltip>
+										<TooltipIconButton
+											variant="ghost"
+											size="sm"
+											className="size-8 text-muted"
+											onPress={handleOpenInstallPath}
+											label={t("openFolder")}
+										>
+											<FolderIcon className="size-4" />
+										</TooltipIconButton>
 									</div>
 								</div>
 							</div>

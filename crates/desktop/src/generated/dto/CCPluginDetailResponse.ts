@@ -5,6 +5,7 @@ import type { CCPluginManifestResponse } from "./CCPluginManifestResponse";
 import type { CCPluginMcpConfigResponse } from "./CCPluginMcpConfigResponse";
 import type { CCPluginScopeResponse } from "./CCPluginScopeResponse";
 import type { CCPluginSkillInfo } from "./CCPluginSkillInfo";
+import type { CCPluginSourceInfoResponse } from "./CCPluginSourceInfoResponse";
 
 /**
  * Plugin detail response (combined)
@@ -31,6 +32,7 @@ export type CCPluginDetailResponse = {
 	repository?: string;
 	license?: string;
 	keywords?: Array<string>;
+	source_info: CCPluginSourceInfoResponse;
 	/**
 	 * All scopes where this plugin is installed
 	 */

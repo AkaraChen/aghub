@@ -11,19 +11,20 @@ use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
 
 use super::shared::{
-	build_check_update_response, get_plugin, load_manager_and_plugin,
-	load_plugin_installer, load_plugin_manager, parse_install_scope,
-	parse_plugin_id, resolve_plugin_folder, resolve_plugin_scope,
-	resolve_plugin_update,
+	build_check_update_response, build_plugin_response, get_plugin,
+	load_manager_and_plugin, load_plugin_installer, load_plugin_manager,
+	parse_install_scope, parse_plugin_id, resolve_plugin_folder,
+	resolve_plugin_scope, resolve_plugin_update, try_load_plugin_installer,
 };
 
 #[get("/plugins")]
 pub fn list_plugins() -> ApiResult<CCPluginListResponse> {
 	let manager = load_plugin_manager()?;
+	let installer = try_load_plugin_installer();
 	let mut plugins: Vec<CCPluginResponse> = manager
 		.list_plugins()
 		.iter()
-		.map(CCPluginResponse::from)
+		.map(|plugin| build_plugin_response(plugin, installer.as_ref()))
 		.collect();
 
 	plugins.sort_by(|a, b| a.name.cmp(&b.name));
@@ -34,22 +35,24 @@ pub fn list_plugins() -> ApiResult<CCPluginListResponse> {
 pub fn enable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
 	let id = parse_plugin_id(plugin_id)?;
 	let mut manager = load_plugin_manager()?;
+	let installer = try_load_plugin_installer();
 	manager.enable(&id).map_err(|e| {
 		ApiError::internal(format!("Failed to enable plugin: {e}"))
 	})?;
 	let plugin = get_plugin(&manager, &id)?;
-	Ok(Json(CCPluginResponse::from(&plugin)))
+	Ok(Json(build_plugin_response(&plugin, installer.as_ref())))
 }
 
 #[post("/plugins/<plugin_id>/disable")]
 pub fn disable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
 	let id = parse_plugin_id(plugin_id)?;
 	let mut manager = load_plugin_manager()?;
+	let installer = try_load_plugin_installer();
 	manager.disable(&id).map_err(|e| {
 		ApiError::internal(format!("Failed to disable plugin: {e}"))
 	})?;
 	let plugin = get_plugin(&manager, &id)?;
-	Ok(Json(CCPluginResponse::from(&plugin)))
+	Ok(Json(build_plugin_response(&plugin, installer.as_ref())))
 }
 
 #[post("/plugins/install", data = "<body>")]
@@ -153,19 +156,16 @@ pub async fn reinstall_plugin(
 	let scope = parse_install_scope(&req.scope)?;
 	let plugin_id = parse_plugin_id(&req.plugin_id)?;
 	let installer = load_plugin_installer()?;
-
-	let uninstall_result =
-		installer.uninstall(&plugin_id, scope, req.keep_data).await;
-	if let Err(ref e) = uninstall_result {
-		let error_str = e.to_string();
-		if !error_str.contains("not found") && !error_str.contains("Plugin") {
-			return Err(ApiError::new(
+	installer
+		.uninstall(&plugin_id, scope, req.keep_data)
+		.await
+		.map_err(|error| {
+			ApiError::new(
 				Status::BadRequest,
-				format!("Failed to uninstall plugin: {error_str}"),
+				format!("Failed to uninstall plugin: {error}"),
 				"PLUGIN_UNINSTALL_FAILED",
-			));
-		}
-	}
+			)
+		})?;
 
 	match installer.install(&plugin_id, scope).await {
 		Ok(info) => Ok(Json(CCPluginReinstallResponse {
@@ -218,12 +218,8 @@ pub fn open_plugin_folder(
 	let id = parse_plugin_id(plugin_id)?;
 	let (_, plugin) = load_manager_and_plugin(&id)?;
 	let install_path = resolve_plugin_folder(&plugin, scope)?;
-	let folder = install_path
-		.parent()
-		.map(std::path::Path::to_path_buf)
-		.unwrap_or(install_path);
 
-	open::that(folder).map_err(|error| {
+	open::that(install_path).map_err(|error| {
 		ApiError::internal(format!("Failed to open plugin folder: {error}"))
 	})?;
 

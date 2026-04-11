@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowPathIcon } from "@heroicons/react/24/solid";
-import { Button, Modal, SearchField, Tooltip, toast } from "@heroui/react";
+import { Button, Modal, SearchField, toast } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -14,6 +14,7 @@ import {
 } from "../requests/plugins";
 import { CategoryFilter } from "./plugin-market/category-filter";
 import { PluginMarketTable } from "./plugin-market/market-table";
+import { TooltipIconButton } from "./ui/tooltip-icon-button";
 
 interface PluginMarketDialogProps {
 	isOpen: boolean;
@@ -186,32 +187,22 @@ export function PluginMarketDialog({
 									<SearchField.ClearButton />
 								</SearchField.Group>
 							</SearchField>
-							<Tooltip delay={0}>
-								<Tooltip.Trigger>
-									<Button
-										isIconOnly
-										variant="ghost"
-										size="sm"
-										onPress={handleUpdateMarketplace}
-										isDisabled={
-											updateMarketplaceMutation.isPending
-										}
-										aria-label={t("updateMarketplace")}
-										className="size-9 shrink-0 text-accent"
-									>
-										<ArrowPathIcon
-											className={cn(
-												"size-4",
-												updateMarketplaceMutation.isPending &&
-													"animate-spin",
-											)}
-										/>
-									</Button>
-								</Tooltip.Trigger>
-								<Tooltip.Content>
-									{t("updateMarketplace")}
-								</Tooltip.Content>
-							</Tooltip>
+							<TooltipIconButton
+								variant="ghost"
+								size="sm"
+								onPress={handleUpdateMarketplace}
+								isDisabled={updateMarketplaceMutation.isPending}
+								label={t("updateMarketplace")}
+								className="size-9 shrink-0 text-accent"
+							>
+								<ArrowPathIcon
+									className={cn(
+										"size-4",
+										updateMarketplaceMutation.isPending &&
+											"animate-spin",
+									)}
+								/>
+							</TooltipIconButton>
 						</div>
 
 						<CategoryFilter

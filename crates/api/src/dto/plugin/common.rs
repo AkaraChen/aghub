@@ -26,6 +26,17 @@ pub struct CCPluginAuthorResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
+pub struct CCPluginSourceInfoResponse {
+	pub label: String,
+	#[ts(optional)]
+	pub url: Option<String>,
+	pub is_github: bool,
+	pub can_reinstall: bool,
+	pub can_check_updates: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct CCPluginResponse {
 	pub id: String,
 	pub name: String,
@@ -46,6 +57,7 @@ pub struct CCPluginResponse {
 	pub license: Option<String>,
 	#[ts(optional)]
 	pub keywords: Option<Vec<String>>,
+	pub source_info: CCPluginSourceInfoResponse,
 	/// All scopes where this plugin is installed
 	pub scopes: Vec<CCPluginScopeResponse>,
 }

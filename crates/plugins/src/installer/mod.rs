@@ -105,6 +105,33 @@ impl PluginInstaller {
 			.exists()
 	}
 
+	pub fn can_reinstall(&self, id: &PluginId) -> bool {
+		if self.is_marketplace_source(&id.source) {
+			return true;
+		}
+
+		match PluginSource::parse(&id.source) {
+			Ok(PluginSource::OfficialRegistry) => {
+				self.marketplace_registry("claude-plugins-official").is_ok()
+			}
+			Ok(PluginSource::ThirdParty { .. }) => true,
+			Ok(PluginSource::Local { path }) => path.exists(),
+			Err(_) => false,
+		}
+	}
+
+	pub fn can_check_updates(&self, id: &PluginId) -> bool {
+		if self.is_marketplace_source(&id.source) {
+			return true;
+		}
+
+		matches!(
+			PluginSource::parse(&id.source),
+			Ok(PluginSource::OfficialRegistry)
+				| Ok(PluginSource::ThirdParty { .. })
+		)
+	}
+
 	/// Create a new plugin installer
 	pub fn new() -> Result<Self> {
 		let home = dirs::home_dir().context("Cannot find home directory")?;

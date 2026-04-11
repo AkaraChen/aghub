@@ -9,7 +9,10 @@ use log::warn;
 use rocket::serde::json::Json;
 use std::collections::HashMap;
 
-use super::shared::{load_manager_and_plugin, parse_plugin_id};
+use super::shared::{
+	build_plugin_response, load_manager_and_plugin, parse_plugin_id,
+	try_load_plugin_installer,
+};
 
 #[get("/plugins/<plugin_id>")]
 pub async fn get_plugin_detail(
@@ -97,7 +100,8 @@ pub async fn get_plugin_detail(
 		CCPluginMcpConfigResponse { servers }
 	});
 
-	let base_response = crate::dto::plugin::CCPluginResponse::from(&plugin);
+	let installer = try_load_plugin_installer();
+	let base_response = build_plugin_response(&plugin, installer.as_ref());
 	let mut all_skill_dirs = Vec::new();
 	for install_path in plugin.all_install_paths() {
 		all_skill_dirs.push(install_path.join("skills"));

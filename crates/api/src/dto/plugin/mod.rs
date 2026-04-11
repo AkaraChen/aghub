@@ -6,7 +6,7 @@ mod market;
 pub use common::{
 	CCPluginAuthorResponse, CCPluginConfigResponse, CCPluginMcpConfigResponse,
 	CCPluginMcpServerResponse, CCPluginResponse, CCPluginScopeResponse,
-	CCPluginSkillInfo,
+	CCPluginSkillInfo, CCPluginSourceInfoResponse,
 };
 pub use detail::{
 	CCPluginDetailResponse, CCPluginHookActionResponse,

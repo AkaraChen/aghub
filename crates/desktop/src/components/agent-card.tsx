@@ -42,22 +42,20 @@ export function AgentCard({ agent, isUpdating, onToggle }: AgentCardProps) {
 							)}
 						</div>
 						<Tooltip>
-							<Tooltip.Trigger>
-								<Switch
-									isSelected={!agent.isDisabled}
-									onChange={() =>
-										onToggle(agent.id, agent.isDisabled)
-									}
-									isDisabled={isUpdating}
-									aria-label={t("toggleAgent", {
-										name: agent.display_name,
-									})}
-								>
-									<Switch.Control>
-										<Switch.Thumb />
-									</Switch.Control>
-								</Switch>
-							</Tooltip.Trigger>
+							<Switch
+								isSelected={!agent.isDisabled}
+								onChange={() =>
+									onToggle(agent.id, agent.isDisabled)
+								}
+								isDisabled={isUpdating}
+								aria-label={t("toggleAgent", {
+									name: agent.display_name,
+								})}
+							>
+								<Switch.Control>
+									<Switch.Thumb />
+								</Switch.Control>
+							</Switch>
 							<Tooltip.Content>
 								{agent.isDisabled
 									? t("enableAgentTooltip", {

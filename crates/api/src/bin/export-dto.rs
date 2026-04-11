@@ -28,9 +28,10 @@ use aghub_api::dto::{
 		CCPluginManifestResponse, CCPluginMarketResponse,
 		CCPluginMcpConfigResponse, CCPluginMcpServerResponse,
 		CCPluginReinstallRequest, CCPluginReinstallResponse, CCPluginResponse,
-		CCPluginScopeResponse, CCPluginSkillInfo, CCPluginUninstallRequest,
-		CCPluginUninstallResponse, CCPluginUpdateConfigRequest,
-		CCPluginUpdateRequest, CCPluginUpdateResponse,
+		CCPluginScopeResponse, CCPluginSkillInfo, CCPluginSourceInfoResponse,
+		CCPluginUninstallRequest, CCPluginUninstallResponse,
+		CCPluginUpdateConfigRequest, CCPluginUpdateRequest,
+		CCPluginUpdateResponse,
 	},
 	skill::{
 		CreateSkillRequest, DeleteSkillByPathRequest,
@@ -177,6 +178,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<SubAgentResponse>(&cfg)?;
 	export_type::<CCPluginResponse>(&cfg)?;
 	export_type::<CCPluginScopeResponse>(&cfg)?;
+	export_type::<CCPluginSourceInfoResponse>(&cfg)?;
 	export_type::<CCPluginListResponse>(&cfg)?;
 	export_type::<CCPluginDetailResponse>(&cfg)?;
 	export_type::<CCPluginSkillInfo>(&cfg)?;
