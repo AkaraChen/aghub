@@ -44,6 +44,7 @@ predicates = "3.1"
 
 # YAML parsing
 serde_yaml = "0.9"
+json5 = "0.4"
 
 # TOML parsing
 toml = "1.0"

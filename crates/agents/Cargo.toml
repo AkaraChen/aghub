@@ -9,6 +9,7 @@ license.workspace = true
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
+json5 = { workspace = true }
 toml = { workspace = true }
 thiserror = { workspace = true }
 dirs = { workspace = true }

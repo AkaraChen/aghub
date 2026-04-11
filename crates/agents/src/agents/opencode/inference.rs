@@ -1,7 +1,7 @@
 use crate::descriptor::home_dir;
 use crate::errors::ConfigError;
 use crate::models::{Credential, CredentialType, ResourceScope};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -80,17 +80,27 @@ fn load_provider_config(
 			Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
 			Err(e) => return Err(e.into()),
 		};
-		let config: OpenCodeConfig =
-			serde_json::from_str(&content).map_err(|e| {
-				ConfigError::InvalidConfig(format!(
-					"Failed to parse OpenCode config {}: {e}",
-					path.display()
-				))
-			})?;
+		let config = parse_provider_config(&content, &path)?;
 		providers.extend(config.provider);
 	}
 
 	Ok(providers)
+}
+
+fn parse_provider_config(
+	content: &str,
+	path: &Path,
+) -> crate::Result<OpenCodeConfig> {
+	if let Ok(config) = serde_json::from_str(content) {
+		return Ok(config);
+	}
+
+	json5::from_str(content).map_err(|e| {
+		ConfigError::InvalidConfig(format!(
+			"Failed to parse OpenCode config {}: {e}",
+			path.display()
+		))
+	})
 }
 
 fn provider_config_paths(
@@ -99,23 +109,82 @@ fn provider_config_paths(
 ) -> crate::Result<Vec<PathBuf>> {
 	match scope {
 		ResourceScope::GlobalOnly => {
-			Ok(super::mcp::global_path().into_iter().collect())
+			Ok(dedup_paths(global_provider_config_paths()))
 		}
 		ResourceScope::ProjectOnly => {
 			let Some(root) = project_root else {
 				return Ok(Vec::new());
 			};
-			let mut paths = Vec::new();
+			let mut paths =
+				vec![root.join("opencode.json"), root.join("opencode.jsonc")];
 			if let Some(path) = super::mcp::project_path(root) {
 				paths.push(path);
 			}
-			paths.push(root.join("opencode.json"));
-			Ok(paths)
+			Ok(dedup_paths(paths))
 		}
 		ResourceScope::Both => Err(ConfigError::InvalidConfig(
 			"Credential path unavailable for Both scope".to_string(),
 		)),
 	}
+}
+
+fn global_provider_config_paths() -> Vec<PathBuf> {
+	let mut paths = Vec::new();
+
+	if let Some(home) = home_dir() {
+		let config_dir = home.join(".config/opencode");
+		paths.push(config_dir.join("opencode.json"));
+		paths.push(config_dir.join("opencode.jsonc"));
+	}
+
+	if let Some(custom_path) = std::env::var_os("OPENCODE_CONFIG") {
+		paths.push(PathBuf::from(custom_path));
+	}
+
+	paths.extend(managed_provider_config_paths());
+	paths
+}
+
+fn managed_provider_config_paths() -> Vec<PathBuf> {
+	let mut paths = Vec::new();
+
+	#[cfg(target_os = "macos")]
+	{
+		let base = PathBuf::from("/Library/Application Support/opencode");
+		paths.push(base.join("opencode.json"));
+		paths.push(base.join("opencode.jsonc"));
+	}
+
+	#[cfg(target_os = "linux")]
+	{
+		let base = PathBuf::from("/etc/opencode");
+		paths.push(base.join("opencode.json"));
+		paths.push(base.join("opencode.jsonc"));
+	}
+
+	#[cfg(target_os = "windows")]
+	{
+		if let Some(program_data) = std::env::var_os("ProgramData") {
+			let base = PathBuf::from(program_data).join("opencode");
+			paths.push(base.join("opencode.json"));
+			paths.push(base.join("opencode.jsonc"));
+		}
+	}
+
+	paths
+}
+
+fn dedup_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
+	let mut seen = HashSet::new();
+	let mut deduped = Vec::new();
+
+	for path in paths {
+		if seen.insert(path.clone()) {
+			deduped.push(path);
+		}
+	}
+
+	deduped
 }
 
 fn load_auth_keys() -> crate::Result<HashMap<String, String>> {
@@ -254,4 +323,159 @@ fn clean_string(value: Option<String>) -> Option<String> {
 			Some(trimmed.to_string())
 		}
 	})
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::ffi::OsString;
+	use std::sync::Mutex;
+	use tempfile::TempDir;
+
+	static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+	struct EnvVarGuard {
+		key: &'static str,
+		previous: Option<OsString>,
+	}
+
+	impl EnvVarGuard {
+		fn set(key: &'static str, value: Option<OsString>) -> Self {
+			let previous = std::env::var_os(key);
+			match value {
+				Some(value) => std::env::set_var(key, value),
+				None => std::env::remove_var(key),
+			}
+			Self { key, previous }
+		}
+	}
+
+	impl Drop for EnvVarGuard {
+		fn drop(&mut self) {
+			match self.previous.take() {
+				Some(value) => std::env::set_var(self.key, value),
+				None => std::env::remove_var(self.key),
+			}
+		}
+	}
+
+	fn write_file(path: &Path, content: &str) {
+		if let Some(parent) = path.parent() {
+			fs::create_dir_all(parent).unwrap();
+		}
+		fs::write(path, content).unwrap();
+	}
+
+	#[test]
+	fn import_credentials_reads_base_from_jsonc_and_key_from_auth() {
+		let _lock = ENV_LOCK.lock().unwrap();
+		let temp = TempDir::new().unwrap();
+		let home = temp.path().join("home");
+		let xdg_data_home = temp.path().join("xdg-data");
+
+		let _home_guard =
+			EnvVarGuard::set("HOME", Some(home.clone().into_os_string()));
+		let _xdg_data_guard = EnvVarGuard::set(
+			"XDG_DATA_HOME",
+			Some(xdg_data_home.clone().into_os_string()),
+		);
+		let _custom_guard = EnvVarGuard::set("OPENCODE_CONFIG", None);
+
+		write_file(
+			&home.join(".config/opencode/opencode.jsonc"),
+			r#"{
+	// base lives in config
+	"provider": {
+		"custom-provider": {
+			"options": {
+				"baseURL": "https://api.example.com/v1",
+			},
+		},
+	},
+}"#,
+		);
+		write_file(
+			&xdg_data_home.join("opencode/auth.json"),
+			r#"{
+	"custom-provider": {
+		"type": "api",
+		"key": "sk-test"
+	}
+}"#,
+		);
+
+		let credentials =
+			import_credentials(None, ResourceScope::GlobalOnly).unwrap();
+
+		assert_eq!(credentials.len(), 1);
+		assert_eq!(credentials[0].name, "custom-provider");
+		assert_eq!(
+			credentials[0].base.as_deref(),
+			Some("https://api.example.com/v1")
+		);
+		assert_eq!(credentials[0].key.as_deref(), Some("sk-test"));
+	}
+
+	#[test]
+	fn import_credentials_prefers_opencode_config_env_file() {
+		let _lock = ENV_LOCK.lock().unwrap();
+		let temp = TempDir::new().unwrap();
+		let home = temp.path().join("home");
+		let xdg_data_home = temp.path().join("xdg-data");
+		let custom_config = temp.path().join("custom/opencode.json");
+
+		let _home_guard =
+			EnvVarGuard::set("HOME", Some(home.clone().into_os_string()));
+		let _xdg_data_guard = EnvVarGuard::set(
+			"XDG_DATA_HOME",
+			Some(xdg_data_home.clone().into_os_string()),
+		);
+		let _custom_guard = EnvVarGuard::set(
+			"OPENCODE_CONFIG",
+			Some(custom_config.clone().into_os_string()),
+		);
+
+		write_file(
+			&home.join(".config/opencode/opencode.json"),
+			r#"{
+	"provider": {
+		"custom-provider": {
+			"options": {
+				"baseURL": "https://global.example.com/v1"
+			}
+		}
+	}
+}"#,
+		);
+		write_file(
+			&custom_config,
+			r#"{
+	"provider": {
+		"custom-provider": {
+			"options": {
+				"baseURL": "https://custom.example.com/v1"
+			}
+		}
+	}
+}"#,
+		);
+		write_file(
+			&xdg_data_home.join("opencode/auth.json"),
+			r#"{
+	"custom-provider": {
+		"type": "api",
+		"key": "sk-test"
+	}
+}"#,
+		);
+
+		let credentials =
+			import_credentials(None, ResourceScope::GlobalOnly).unwrap();
+
+		assert_eq!(credentials.len(), 1);
+		assert_eq!(
+			credentials[0].base.as_deref(),
+			Some("https://custom.example.com/v1")
+		);
+	}
 }
