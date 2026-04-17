@@ -6,7 +6,6 @@ export {
 } from "./store/integrations";
 export {
 	getOnboardingProgress,
-	saveOnboardingProgress,
 	updateOnboardingProgress,
 } from "./store/onboarding";
 export { addProject, getProjects, removeProject } from "./store/projects";

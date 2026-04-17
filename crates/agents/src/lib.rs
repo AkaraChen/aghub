@@ -2,6 +2,7 @@ pub mod agents;
 pub mod descriptor;
 pub mod errors;
 pub mod format;
+pub mod macros;
 pub mod models;
 pub mod sub_agents;
 

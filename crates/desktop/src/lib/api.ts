@@ -1,4 +1,3 @@
-import type { HTTPError } from "ky";
 import ky from "ky";
 import type {
 	AgentAvailabilityDto,
@@ -61,7 +60,7 @@ export function createApi(baseUrl: string) {
 		prefixUrl: baseUrl,
 		hooks: {
 			beforeError: [
-				async (error: HTTPError) => {
+				async (error) => {
 					try {
 						const body =
 							(await error.response.json()) as ApiErrorBody;

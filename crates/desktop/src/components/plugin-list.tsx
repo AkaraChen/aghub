@@ -8,11 +8,11 @@ import {
 } from "@heroicons/react/24/solid";
 import { Button, Label, ListBox, Tooltip } from "@heroui/react";
 import Fuse from "fuse.js";
-import { useEffect, useMemo, useRef } from "react";
-import type { KeyboardEvent } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { CCPluginResponse } from "../generated/dto";
 import { cn } from "../lib/utils";
+import { useMultiSelect } from "../hooks/use-multi-select";
 import { ListSearchHeader } from "./list-search-header";
 import { MultiSelectFloatingBar } from "./multi-select-floating-bar";
 
@@ -68,76 +68,14 @@ export function PluginList({
 		return fuse.search(searchQuery).map((result) => result.item);
 	}, [fuse, plugins, searchQuery]);
 
-	const pendingSelectionModifiersRef = useRef({
-		shift: false,
-		meta: false,
+	const { createSelectionHandler } = useMultiSelect({
+		selectedKeys,
+		onSelectionChange,
+		isMultiSelectMode,
 	});
-	const lastClickedRef = useRef<string | null>(null);
-
-	useEffect(() => {
-		const visibleIds = new Set(filteredPlugins.map((plugin) => plugin.id));
-		if (lastClickedRef.current && !visibleIds.has(lastClickedRef.current)) {
-			lastClickedRef.current = null;
-		}
-	}, [filteredPlugins]);
-
-	const rememberSelectionModifiers = (
-		shiftKey: boolean,
-		metaKey: boolean,
-	) => {
-		pendingSelectionModifiersRef.current = {
-			shift: shiftKey,
-			meta: metaKey,
-		};
-	};
-
-	const handleSelectionChange = (keys: "all" | Set<React.Key>) => {
-		if (keys === "all") return;
-		const newKeys = new Set(Array.from(keys).map(String));
-		const added = [...newKeys].find((k) => !selectedKeys.has(k));
-		const removed = [...selectedKeys].find((k) => !newKeys.has(k));
-		const clicked = added ?? removed;
-
-		if (!clicked) {
-			onSelectionChange(newKeys);
-			return;
-		}
-
-		let finalKeys: Set<string>;
-
-		if (
-			pendingSelectionModifiersRef.current.shift &&
-			lastClickedRef.current
-		) {
-			const allKeys = filteredPlugins.map((p) => p.id);
-			const start = allKeys.indexOf(lastClickedRef.current);
-			const end = allKeys.indexOf(clicked);
-			if (start !== -1 && end !== -1) {
-				const [from, to] = [Math.min(start, end), Math.max(start, end)];
-				finalKeys = new Set(allKeys.slice(from, to + 1));
-			} else {
-				finalKeys = new Set([...selectedKeys, clicked]);
-			}
-		} else if (
-			!isMultiSelectMode &&
-			!pendingSelectionModifiersRef.current.meta
-		) {
-			finalKeys = new Set([clicked]);
-		} else {
-			finalKeys = new Set(selectedKeys);
-			if (finalKeys.has(clicked)) {
-				finalKeys.delete(clicked);
-			} else {
-				finalKeys.add(clicked);
-			}
-		}
-
-		if (!pendingSelectionModifiersRef.current.shift) {
-			lastClickedRef.current = clicked;
-		}
-
-		onSelectionChange(finalKeys, clicked);
-	};
+	const handleSelectionChange = createSelectionHandler(
+		filteredPlugins.map((plugin) => plugin.id),
+	);
 
 	return (
 		<div className="relative flex h-full flex-col">
@@ -222,17 +160,7 @@ export function PluginList({
 					)}
 				</div>
 			) : (
-				<div
-					className="flex-1 overflow-y-auto"
-					onKeyDownCapture={(
-						event: KeyboardEvent<HTMLDivElement>,
-					) => {
-						rememberSelectionModifiers(
-							event.shiftKey,
-							event.metaKey || event.ctrlKey,
-						);
-					}}
-				>
+				<div className="flex-1 overflow-y-auto">
 					<ListBox
 						aria-label="Claude Code Plugins"
 						selectionMode="multiple"
@@ -247,12 +175,6 @@ export function PluginList({
 								id={plugin.id}
 								textValue={plugin.name}
 								className="transition-colors duration-200 data-selected:bg-surface"
-								onPointerDown={(event) => {
-									rememberSelectionModifiers(
-										event.shiftKey,
-										event.metaKey || event.ctrlKey,
-									);
-								}}
 							>
 								<div className="flex w-full items-center gap-2">
 									<div className="flex min-w-0 flex-1 flex-col">

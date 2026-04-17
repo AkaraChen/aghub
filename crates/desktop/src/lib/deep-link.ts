@@ -23,7 +23,7 @@ export type DeepLinkImportIntent =
 			timeout?: number;
 	  };
 
-export type ParseDeepLinkResult =
+type ParseDeepLinkResult =
 	| { ok: true; intent: DeepLinkImportIntent }
 	| { ok: false; error: string };
 

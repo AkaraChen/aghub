@@ -1,40 +1,10 @@
+use crate::define_mcp_paths;
 use crate::descriptor::*;
-use std::path::{Path, PathBuf};
 
-fn mcp_global_path() -> Option<PathBuf> {
-	home_dir().map(|home| home.join(".augmentcode/mcp.json"))
-}
-fn mcp_project_path(root: &Path) -> Option<PathBuf> {
-	Some(root.join(".augmentcode/mcp.json"))
-}
-fn global_data_dir() -> Option<PathBuf> {
-	home_dir().map(|home| home.join(".augmentcode"))
-}
-fn load_mcps(
-	project_root: Option<&Path>,
-	scope: crate::ResourceScope,
-) -> crate::Result<Vec<crate::McpServer>> {
-	load_scoped_mcps(
-		project_root,
-		scope,
-		Some(mcp_global_path),
-		Some(mcp_project_path),
-		mcp_strategy::parse_json_map_mcp_servers,
-	)
-}
-fn save_mcps(
-	project_root: Option<&Path>,
-	scope: crate::ResourceScope,
-	mcps: &[crate::McpServer],
-) -> crate::Result<()> {
-	save_scoped_mcps(
-		project_root,
-		scope,
-		mcps,
-		Some(mcp_global_path),
-		Some(mcp_project_path),
-		mcp_strategy::serialize_json_map_mcp_servers,
-	)
+define_mcp_paths! {
+	symmetric: ".augmentcode/mcp.json",
+	strategy: mcp_strategy::parse_json_map_mcp_servers,
+			  mcp_strategy::serialize_json_map_mcp_servers,
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {

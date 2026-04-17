@@ -45,7 +45,7 @@ export function AgentIcon({
       ${sizeClasses}
       ${variantClasses}
     `}
-				// eslint-disable-next-line react-dom/no-dangerously-set-innerhtml
+				// eslint-disable-next-line react/dom-no-dangerously-set-innerhtml
 				dangerouslySetInnerHTML={{
 					__html: (svg.default || svg) as string,
 				}}

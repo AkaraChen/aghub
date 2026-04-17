@@ -100,3 +100,7 @@ export function getSubAgentMergeKey(agent: SubAgentResponse): string {
 		instruction: agent.instruction ?? null,
 	});
 }
+
+export function formatAgentName(agent: string): string {
+	return agent.charAt(0).toUpperCase() + agent.slice(1).toLowerCase();
+}
