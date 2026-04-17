@@ -48,6 +48,17 @@ export function PluginDetail({
 
 	const currentPlugin = pluginDetail ?? plugin;
 	const mcpConfig = pluginDetail?.mcp_config;
+	const displayScopeInfo = useMemo(
+		() =>
+			(currentPlugin.display_scope
+				? currentPlugin.scopes.find(
+						(scope) => scope.scope === currentPlugin.display_scope,
+					)
+				: null) ??
+			currentPlugin.scopes[0] ??
+			null,
+		[currentPlugin.display_scope, currentPlugin.scopes],
+	);
 
 	const currentScope = useMemo(() => {
 		if (
@@ -57,17 +68,15 @@ export function PluginDetail({
 			return selectedScope;
 		}
 
-		return (currentPlugin.scopes[0]?.scope ?? "user") as PluginScopeValue;
-	}, [selectedScope, currentPlugin.scopes]);
+		return (displayScopeInfo?.scope ?? "user") as PluginScopeValue;
+	}, [selectedScope, currentPlugin.scopes, displayScopeInfo]);
 
 	const currentScopeInfo = useMemo(
 		() =>
 			currentPlugin.scopes.find(
 				(scope) => scope.scope === currentScope,
-			) ??
-			currentPlugin.scopes[0] ??
-			null,
-		[currentPlugin.scopes, currentScope],
+			) ?? displayScopeInfo,
+		[currentPlugin.scopes, currentScope, displayScopeInfo],
 	);
 
 	const canCheckUpdates = currentPlugin.source_info.can_check_updates;
@@ -112,9 +121,7 @@ export function PluginDetail({
 		return version;
 	}, [currentPlugin.version, currentScopeInfo?.version]);
 	const installPath =
-		currentScopeInfo?.folder_path ??
-		currentPlugin.scopes[0]?.folder_path ??
-		"—";
+		currentScopeInfo?.folder_path ?? displayScopeInfo?.folder_path ?? "—";
 	const {
 		enableMutation,
 		disableMutation,

@@ -13,7 +13,7 @@ pub async fn update_marketplace() -> ApiResult<serde_json::Value> {
 		error!("Failed to update plugin marketplaces: {}", error);
 		ApiError::new(
 			Status::BadGateway,
-			error.to_string(),
+			"Failed to update plugin marketplaces",
 			"PLUGIN_MARKET_UPDATE_FAILED",
 		)
 	})?;

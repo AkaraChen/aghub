@@ -11,6 +11,17 @@ pub mod market;
 use std::fmt::Display;
 use std::path::PathBuf;
 
+#[cfg(test)]
+pub(crate) mod test_support {
+	use std::sync::OnceLock;
+	use tokio::sync::Mutex;
+
+	pub(crate) fn env_lock() -> &'static Mutex<()> {
+		static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+		LOCK.get_or_init(|| Mutex::new(()))
+	}
+}
+
 /// Plugin source location
 #[derive(Debug, Clone)]
 pub enum PluginSource {
@@ -70,5 +81,33 @@ impl PluginId {
 impl Display for PluginId {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}@{}", self.name, self.source)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::PluginId;
+
+	#[test]
+	fn parse_plugin_id_keeps_http_source_segments() {
+		let id = PluginId::parse("demo@https://github.com/org/repo")
+			.expect("plugin id");
+
+		assert_eq!(id.name, "demo");
+		assert_eq!(id.source, "https://github.com/org/repo");
+	}
+
+	#[test]
+	fn parse_plugin_id_keeps_local_path_segments() {
+		let id =
+			PluginId::parse("demo@plugins/custom/demo").expect("plugin id");
+
+		assert_eq!(id.name, "demo");
+		assert_eq!(id.source, "plugins/custom/demo");
+	}
+
+	#[test]
+	fn parse_plugin_id_requires_name_and_source() {
+		assert!(PluginId::parse("demo").is_err());
 	}
 }

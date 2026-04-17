@@ -145,7 +145,8 @@ export function usePluginsPageState(plugins: CCPluginResponse[]) {
 			(scope) => scope.scope === state.selectedPluginScope?.scope,
 		)
 			? state.selectedPluginScope.scope
-			: ((selectedPlugin?.scopes[0]?.scope ??
+			: ((selectedPlugin?.display_scope ??
+					selectedPlugin?.scopes[0]?.scope ??
 					"user") as PluginScopeValue);
 	const sortedPlugins = [...plugins].sort((a, b) =>
 		a.name.localeCompare(b.name),

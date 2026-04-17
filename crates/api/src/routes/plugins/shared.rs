@@ -247,10 +247,15 @@ pub(super) fn build_plugin_response(
 	plugin: &ClaudePluginInfo,
 	installer: Option<&PluginInstaller>,
 ) -> CCPluginResponse {
+	let display_scope = plugin.scopes.first();
+	let version = display_scope
+		.map(|scope| scope.version.clone())
+		.unwrap_or_else(|| plugin.version.clone());
 	CCPluginResponse {
 		id: plugin.id.to_string(),
 		name: plugin.display_name.clone(),
-		version: plugin.version.clone(),
+		version,
+		display_scope: display_scope.map(|scope| scope.scope.clone()),
 		description: plugin.description.clone(),
 		enabled: plugin.enabled,
 		source: plugin.source.to_string(),

@@ -870,13 +870,8 @@ fn parse_mcp_from_manifest(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::sync::{Mutex, OnceLock};
+	use crate::test_support::env_lock;
 	use std::time::{SystemTime, UNIX_EPOCH};
-
-	fn env_lock() -> &'static Mutex<()> {
-		static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-		LOCK.get_or_init(|| Mutex::new(()))
-	}
 
 	fn make_temp_dir(prefix: &str) -> PathBuf {
 		let unique = SystemTime::now()
@@ -890,7 +885,7 @@ mod tests {
 
 	#[test]
 	fn manager_discovers_plugins_missing_from_manifest_via_cache() {
-		let _guard = env_lock().lock().unwrap();
+		let _guard = env_lock().blocking_lock();
 		let temp_home = make_temp_dir("aghub-claude-home");
 		let previous_home = std::env::var_os("HOME");
 
@@ -945,7 +940,7 @@ mod tests {
 
 	#[test]
 	fn manager_does_not_treat_disabled_cache_plugin_as_installed() {
-		let _guard = env_lock().lock().unwrap();
+		let _guard = env_lock().blocking_lock();
 		let temp_home = make_temp_dir("aghub-claude-home-disabled");
 		let previous_home = std::env::var_os("HOME");
 
@@ -996,7 +991,7 @@ mod tests {
 
 	#[test]
 	fn manager_discovers_scope_partitioned_cache_installations() {
-		let _guard = env_lock().lock().unwrap();
+		let _guard = env_lock().blocking_lock();
 		let temp_home = make_temp_dir("aghub-claude-home-scoped");
 		let previous_home = std::env::var_os("HOME");
 

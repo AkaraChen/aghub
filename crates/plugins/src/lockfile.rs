@@ -1,19 +1,21 @@
 //! Plugin lockfile management
 //!
-//! Provides deterministic plugin version tracking similar to package-lock.json
-//! Ensures reproducible installations across different machines and times.
+//! Stores the aghub-owned plugin lock schema in
+//! `~/.claude/plugins/plugin-lock.json`.
+//!
+//! The file uses deterministic key ordering via `BTreeMap`, pretty-printed
+//! JSON for review, and atomic replace-on-write semantics.
 
 use crate::PluginId;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Plugin lockfile structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginLockfile {
-	/// Lockfile version for migration
-	pub lockfile_version: u32,
 	/// When the lockfile was generated
 	pub generated_at: String,
 	/// Installed plugins with exact versions
@@ -54,39 +56,43 @@ impl PluginLockfile {
 	/// Load lockfile from disk
 	pub fn load() -> Result<Self> {
 		let path = Self::lockfile_path()?;
-
-		if !path.exists() {
-			return Ok(Self::default());
-		}
-
-		let content = std::fs::read_to_string(&path).with_context(|| {
-			format!("Failed to read lockfile from {}", path.display())
-		})?;
-
-		let lockfile: PluginLockfile = serde_json::from_str(&content)
-			.with_context(|| "Failed to parse plugin lockfile")?;
-
-		Ok(lockfile)
+		Self::load_from_path(&path)
 	}
 
 	/// Save lockfile to disk
 	pub fn save(&self) -> Result<()> {
 		let path = Self::lockfile_path()?;
+		self.save_to_path(&path)
+	}
 
+	fn load_from_path(path: &Path) -> Result<Self> {
+		if !path.exists() {
+			return Ok(Self::default());
+		}
+
+		let content = std::fs::read_to_string(path).with_context(|| {
+			format!("Failed to read lockfile from {}", path.display())
+		})?;
+
+		serde_json::from_str(&content)
+			.with_context(|| "Failed to parse plugin lockfile")
+	}
+
+	fn save_to_path(&self, path: &Path) -> Result<()> {
 		// Ensure parent directory exists
 		if let Some(parent) = path.parent() {
 			std::fs::create_dir_all(parent)?;
 		}
 
 		let content = serde_json::to_string_pretty(self)? + "\n";
-		let temp_path = path.with_extension("json.tmp");
+		let temp_path = Self::temp_path_for(path);
 		std::fs::write(&temp_path, content).with_context(|| {
 			format!(
 				"Failed to write lockfile temp file to {}",
 				temp_path.display()
 			)
 		})?;
-		std::fs::rename(&temp_path, &path).with_context(|| {
+		std::fs::rename(&temp_path, path).with_context(|| {
 			format!("Failed to write lockfile to {}", path.display())
 		})?;
 
@@ -98,6 +104,23 @@ impl PluginLockfile {
 		Ok(dirs::home_dir()
 			.ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))?
 			.join(".claude/plugins/plugin-lock.json"))
+	}
+
+	fn temp_path_for(path: &Path) -> PathBuf {
+		let timestamp = SystemTime::now()
+			.duration_since(UNIX_EPOCH)
+			.map(|duration| duration.as_nanos())
+			.unwrap_or(0);
+		let file_name = path
+			.file_name()
+			.and_then(|value| value.to_str())
+			.unwrap_or("plugin-lock.json");
+		path.with_file_name(format!(
+			".{}.{}.{}.tmp",
+			file_name,
+			std::process::id(),
+			timestamp
+		))
 	}
 
 	/// Add or update a locked plugin
@@ -223,7 +246,6 @@ impl PluginLockfile {
 impl Default for PluginLockfile {
 	fn default() -> Self {
 		Self {
-			lockfile_version: 1,
 			generated_at: chrono::Utc::now().to_rfc3339(),
 			plugins: BTreeMap::new(),
 		}
@@ -241,6 +263,7 @@ pub struct RestoreResult {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use tempfile::tempdir;
 
 	#[test]
 	fn test_lockfile_operations() {
@@ -263,5 +286,44 @@ mod tests {
 		lockfile.insert(plugin.clone());
 		assert_eq!(lockfile.plugins.len(), 1);
 		assert_eq!(lockfile.plugins.get(&plugin_key).unwrap().version, "1.0.0");
+	}
+
+	#[test]
+	fn test_lockfile_roundtrip_preserves_schema() {
+		let temp = tempdir().expect("tempdir");
+		let path = temp.path().join("plugin-lock.json");
+		let lockfile = PluginLockfile {
+			generated_at: "2024-01-01T00:00:00Z".to_string(),
+			..PluginLockfile::default()
+		};
+
+		lockfile.save_to_path(&path).expect("save lockfile");
+		let loaded =
+			PluginLockfile::load_from_path(&path).expect("load lockfile");
+
+		assert_eq!(loaded.generated_at, "2024-01-01T00:00:00Z");
+		assert!(loaded.plugins.is_empty());
+	}
+
+	#[test]
+	fn test_lockfile_ignores_unknown_fields() {
+		let temp = tempdir().expect("tempdir");
+		let path = temp.path().join("plugin-lock.json");
+
+		std::fs::write(
+			&path,
+			r#"{
+  "lockfile_version": 999,
+  "generated_at": "2024-01-01T00:00:00Z",
+  "plugins": {}
+}
+"#,
+		)
+		.expect("write lockfile");
+
+		let loaded =
+			PluginLockfile::load_from_path(&path).expect("load lockfile");
+		assert_eq!(loaded.generated_at, "2024-01-01T00:00:00Z");
+		assert!(loaded.plugins.is_empty());
 	}
 }

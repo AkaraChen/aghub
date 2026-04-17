@@ -43,7 +43,12 @@ pub struct CCPluginSourceInfoResponse {
 pub struct CCPluginResponse {
 	pub id: String,
 	pub name: String,
+	/// Display version derived from the default display scope installation.
 	pub version: String,
+	/// Scope that provides the top-level display version and default selection.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub display_scope: Option<String>,
 	pub description: Option<String>,
 	pub enabled: bool,
 	pub source: String,
