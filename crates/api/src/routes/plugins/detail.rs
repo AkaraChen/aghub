@@ -14,8 +14,7 @@ use super::shared::{
 	try_load_plugin_installer,
 };
 
-#[get("/plugins/<plugin_id>")]
-pub async fn get_plugin_detail(
+async fn get_plugin_detail_inner(
 	plugin_id: &str,
 ) -> ApiResult<CCPluginDetailResponse> {
 	let id = parse_plugin_id(plugin_id)?;
@@ -92,8 +91,8 @@ pub async fn get_plugin_detail(
 				command: s.command,
 				args: s.args,
 				url: s.url,
-				env: s.env,
-				headers: s.headers,
+				env: sorted_keys(s.env),
+				headers: sorted_keys(s.headers),
 				note: s.note,
 			})
 			.collect();
@@ -102,21 +101,7 @@ pub async fn get_plugin_detail(
 
 	let installer = try_load_plugin_installer();
 	let base_response = build_plugin_response(&plugin, installer.as_ref());
-	let mut all_skill_dirs = Vec::new();
-	for install_path in plugin.all_install_paths() {
-		all_skill_dirs.push(install_path.join("skills"));
-		all_skill_dirs.push(install_path.join(".claude/skills"));
-	}
-
-	if let Some(manifest) = manifest.as_ref() {
-		if let Some(ref skills_paths) = manifest.skills {
-			for skills_path in skills_paths.iter() {
-				for install_path in plugin.all_install_paths() {
-					all_skill_dirs.push(install_path.join(skills_path));
-				}
-			}
-		}
-	}
+	let all_skill_dirs = plugin.all_skills_dirs();
 
 	let mut skill_descriptions: HashMap<String, Option<String>> =
 		HashMap::new();
@@ -159,6 +144,26 @@ pub async fn get_plugin_detail(
 	}))
 }
 
+#[get("/plugins/detail?<plugin_id>")]
+pub async fn get_plugin_detail(
+	plugin_id: &str,
+) -> ApiResult<CCPluginDetailResponse> {
+	get_plugin_detail_inner(plugin_id).await
+}
+
+#[get("/plugins/<plugin_id>")]
+pub async fn get_plugin_detail_legacy(
+	plugin_id: &str,
+) -> ApiResult<CCPluginDetailResponse> {
+	get_plugin_detail_inner(plugin_id).await
+}
+
 fn extract_skill_description(skill_dir: &std::path::Path) -> Option<String> {
 	skill::parser::parse(skill_dir).ok().map(|s| s.description)
+}
+
+fn sorted_keys(values: Option<HashMap<String, String>>) -> Option<Vec<String>> {
+	let mut keys = values?.into_keys().collect::<Vec<_>>();
+	keys.sort();
+	Some(keys)
 }

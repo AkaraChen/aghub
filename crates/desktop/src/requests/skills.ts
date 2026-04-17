@@ -39,11 +39,7 @@ export function skillListQueryOptions({
 }: SkillListQueryParams) {
 	return queryOptions({
 		queryKey: queryKeys.skills.list(scope, projectRoot),
-		queryFn: async () => {
-			const skills = await api.skills.listAll(scope, projectRoot);
-			// Filter out skills from Claude Code plugins (shown in Plugins tab instead)
-			return skills.filter((skill) => !skill.plugin_id);
-		},
+		queryFn: () => api.skills.listAll(scope, projectRoot),
 		enabled,
 		staleTime,
 	});

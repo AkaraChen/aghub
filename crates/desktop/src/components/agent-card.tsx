@@ -24,51 +24,53 @@ export function AgentCard({ agent, isUpdating, onToggle }: AgentCardProps) {
 
 	return (
 		<Tooltip delay={500}>
-			<Tooltip.Trigger>
-				<Card
-					className="bg-surface transition-all duration-200"
-					variant="transparent"
-				>
-					<Card.Content className="flex flex-row items-center gap-3">
-						<AgentIcon id={agent.id} name={agent.display_name} />
-						<div className="min-w-0 flex-1">
-							<Card.Title>{agent.display_name}</Card.Title>
-							{sources.length > 0 && (
-								<Card.Description>
-									{t("detectedVia", {
-										sources: sources.join(" / "),
-									})}
-								</Card.Description>
-							)}
-						</div>
-						<Tooltip>
-							<Switch
-								isSelected={!agent.isDisabled}
-								onChange={() =>
-									onToggle(agent.id, agent.isDisabled)
-								}
-								isDisabled={isUpdating}
-								aria-label={t("toggleAgent", {
-									name: agent.display_name,
+			<Card
+				className="bg-surface transition-all duration-200"
+				variant="secondary"
+			>
+				<Card.Content className="flex flex-row items-center gap-3">
+					<AgentIcon id={agent.id} name={agent.display_name} />
+					<div className="min-w-0 flex-1">
+						<Card.Title>{agent.display_name}</Card.Title>
+						{sources.length > 0 && (
+							<Card.Description>
+								{t("detectedVia", {
+									sources: sources.join(" / "),
 								})}
-							>
-								<Switch.Control>
-									<Switch.Thumb />
-								</Switch.Control>
-							</Switch>
-							<Tooltip.Content>
-								{agent.isDisabled
-									? t("enableAgentTooltip", {
-											name: agent.display_name,
-										})
-									: t("disableAgentTooltip", {
-											name: agent.display_name,
-										})}
-							</Tooltip.Content>
-						</Tooltip>
-					</Card.Content>
-				</Card>
-			</Tooltip.Trigger>
+							</Card.Description>
+						)}
+					</div>
+					<Tooltip>
+						<Tooltip.Trigger>
+							<span className="inline-flex">
+								<Switch
+									isSelected={!agent.isDisabled}
+									onChange={() =>
+										onToggle(agent.id, agent.isDisabled)
+									}
+									isDisabled={isUpdating}
+									aria-label={t("toggleAgent", {
+										name: agent.display_name,
+									})}
+								>
+									<Switch.Control>
+										<Switch.Thumb />
+									</Switch.Control>
+								</Switch>
+							</span>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							{agent.isDisabled
+								? t("enableAgentTooltip", {
+										name: agent.display_name,
+									})
+								: t("disableAgentTooltip", {
+										name: agent.display_name,
+									})}
+						</Tooltip.Content>
+					</Tooltip>
+				</Card.Content>
+			</Card>
 			<Tooltip.Content>
 				<div className="space-y-1 py-1">
 					<p className="font-medium">{agent.display_name}</p>

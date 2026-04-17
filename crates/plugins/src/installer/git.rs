@@ -225,6 +225,7 @@ impl GitBasedInstaller {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use tempfile::tempdir;
 
 	#[test]
 	fn test_find_common_prefix() {
@@ -247,14 +248,7 @@ mod tests {
 		use flate2::Compression;
 		use tar::Builder;
 
-		let temp_dir = std::env::temp_dir()
-			.join(format!("aghub-git-installer-test-{}", std::process::id()));
-
-		if temp_dir.exists() {
-			std::fs::remove_dir_all(&temp_dir).unwrap();
-		}
-
-		std::fs::create_dir_all(&temp_dir).unwrap();
+		let temp_dir = tempdir().unwrap();
 
 		let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
 		{
@@ -280,12 +274,11 @@ mod tests {
 
 		let bytes = encoder.finish().unwrap();
 		let commit =
-			GitBasedInstaller::extract_tarball(&bytes, "", &temp_dir).unwrap();
+			GitBasedInstaller::extract_tarball(&bytes, "", temp_dir.path())
+				.unwrap();
 
 		assert_eq!(commit, "abc123");
-		assert!(temp_dir.join(".claude-plugin/plugin.json").exists());
-		assert!(temp_dir.join("README.md").exists());
-
-		std::fs::remove_dir_all(&temp_dir).unwrap();
+		assert!(temp_dir.path().join(".claude-plugin/plugin.json").exists());
+		assert!(temp_dir.path().join("README.md").exists());
 	}
 }

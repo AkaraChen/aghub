@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertDialog, Button } from "@heroui/react";
+import { AlertDialog, Button, Spinner } from "@heroui/react";
 
 interface PluginConfirmDialogProps {
 	isOpen: boolean;
@@ -9,6 +9,8 @@ interface PluginConfirmDialogProps {
 	confirmLabel: string;
 	cancelLabel: string;
 	status: "danger" | "warning";
+	isPending?: boolean;
+	isConfirmDisabled?: boolean;
 	onOpenChange: (open: boolean) => void;
 	onConfirm: () => void;
 }
@@ -20,6 +22,8 @@ export function PluginConfirmDialog({
 	confirmLabel,
 	cancelLabel,
 	status,
+	isPending = false,
+	isConfirmDisabled = false,
 	onOpenChange,
 	onConfirm,
 }: PluginConfirmDialogProps) {
@@ -38,6 +42,7 @@ export function PluginConfirmDialog({
 						<Button
 							variant="tertiary"
 							onPress={() => onOpenChange(false)}
+							isDisabled={isPending}
 						>
 							{cancelLabel}
 						</Button>
@@ -46,8 +51,13 @@ export function PluginConfirmDialog({
 								status === "danger" ? "primary" : undefined
 							}
 							onPress={onConfirm}
+							isDisabled={isPending || isConfirmDisabled}
 						>
-							{confirmLabel}
+							{isPending ? (
+								<Spinner size="sm" color="current" />
+							) : (
+								confirmLabel
+							)}
 						</Button>
 					</AlertDialog.Footer>
 				</AlertDialog.Dialog>

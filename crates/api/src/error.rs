@@ -72,6 +72,18 @@ impl From<ConfigError> for ApiError {
 				msg,
 				"UNSUPPORTED_OPERATION",
 			),
+			ConfigError::ManagedResource {
+				resource_type,
+				name,
+				owner,
+				action,
+			} => ApiError::new(
+				Status::BadRequest,
+				format!(
+					"Cannot {action} {resource_type} '{name}' managed by {owner}"
+				),
+				"MANAGED_RESOURCE",
+			),
 			ConfigError::ValidationFailed(msg) => ApiError::new(
 				Status::UnprocessableEntity,
 				msg,

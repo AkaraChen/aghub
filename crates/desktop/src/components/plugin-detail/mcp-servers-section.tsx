@@ -1,17 +1,9 @@
 "use client";
 
-import { EyeIcon, EyeSlashIcon } from "@heroicons/react/24/outline";
-import { Button, Chip } from "@heroui/react";
-import { useState } from "react";
+import { Chip } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import type { CCPluginDetailResponse } from "../../generated/dto";
 import { CodeBlock, MetaRow } from "./meta-blocks";
-
-const MASKED_ENV_VALUE = "••••••••";
-
-function maskEnvironmentValue(value: string) {
-	return value.length > 0 ? MASKED_ENV_VALUE : "";
-}
 
 interface McpServersSectionProps {
 	config?: CCPluginDetailResponse["mcp_config"];
@@ -19,9 +11,6 @@ interface McpServersSectionProps {
 
 export function McpServersSection({ config }: McpServersSectionProps) {
 	const { t } = useTranslation();
-	const [revealedValues, setRevealedValues] = useState<
-		Record<string, boolean>
-	>({});
 
 	if (!config || config.servers.length === 0) {
 		return null;
@@ -36,7 +25,7 @@ export function McpServersSection({ config }: McpServersSectionProps) {
 				{config.servers.map((server) => (
 					<div
 						key={server.name}
-						className="rounded-lg bg-surface-secondary px-3 py-3 space-y-2"
+						className="space-y-2 rounded-lg border border-separator bg-surface-secondary px-3 py-3"
 					>
 						<div className="flex items-center gap-2">
 							<span className="font-medium text-sm">
@@ -62,85 +51,20 @@ export function McpServersSection({ config }: McpServersSectionProps) {
 								args={server.args}
 							/>
 						)}
-						{server.env && Object.keys(server.env).length > 0 && (
-							<div className="grid gap-1.5 pt-1">
-								<span className="text-[11px] font-medium tracking-wide text-muted uppercase">
-									{t("environmentVariables") ||
-										"Environment Variables"}
-								</span>
-								<div className="space-y-2">
-									{Object.entries(server.env).map(
-										([key, value]) => {
-											const entryId = `${server.name}:${key}`;
-											const isRevealed =
-												revealedValues[entryId] ??
-												false;
-
-											return (
-												<div
-													key={key}
-													className="grid gap-1 rounded-lg border border-separator bg-surface-secondary px-3 py-2"
-												>
-													<div className="flex items-center justify-between gap-2">
-														<span className="font-mono text-[11px] text-muted">
-															{key}
-														</span>
-														<Button
-															isIconOnly
-															size="sm"
-															variant="ghost"
-															className="h-6 w-6 min-w-6 text-muted"
-															aria-label={
-																isRevealed
-																	? t(
-																			"hide",
-																			{
-																				defaultValue:
-																					"Hide",
-																			},
-																		)
-																	: t(
-																			"show",
-																			{
-																				defaultValue:
-																					"Show",
-																			},
-																		)
-															}
-															onPress={() => {
-																setRevealedValues(
-																	(
-																		current,
-																	) => ({
-																		...current,
-																		[entryId]:
-																			!isRevealed,
-																	}),
-																);
-															}}
-														>
-															{isRevealed ? (
-																<EyeSlashIcon className="size-4" />
-															) : (
-																<EyeIcon className="size-4" />
-															)}
-														</Button>
-													</div>
-													<code className="font-mono text-xs leading-5 text-foreground break-words">
-														{isRevealed
-															? String(value)
-															: maskEnvironmentValue(
-																	String(
-																		value,
-																	),
-																)}
-													</code>
-												</div>
-											);
-										},
-									)}
-								</div>
-							</div>
+						{server.env && server.env.length > 0 && (
+							<CodeBlock
+								label={
+									t("environmentVariables") ||
+									"Environment Variables"
+								}
+								command={server.env.join("\n")}
+							/>
+						)}
+						{server.headers && server.headers.length > 0 && (
+							<CodeBlock
+								label={t("headers")}
+								command={server.headers.join("\n")}
+							/>
 						)}
 						{server.url && (
 							<MetaRow label="URL" value={server.url} mono />

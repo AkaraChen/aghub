@@ -6,16 +6,41 @@ use crate::dto::plugin::{
 	CCPluginUpdateResponse,
 };
 use crate::error::{ApiError, ApiNoContent, ApiResult};
+use log::error;
 use rocket::http::Status;
 use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
+use std::fmt::Display;
 
 use super::shared::{
-	build_check_update_response, build_plugin_response, get_plugin,
-	load_manager_and_plugin, load_plugin_installer, load_plugin_manager,
-	parse_install_scope, parse_plugin_id, resolve_plugin_folder,
-	resolve_plugin_scope, resolve_plugin_update, try_load_plugin_installer,
+	build_plugin_response, get_plugin, load_manager_and_plugin,
+	load_plugin_installer, load_plugin_manager, parse_install_scope,
+	parse_plugin_id, resolve_plugin_scope, resolve_plugin_update,
+	try_load_plugin_installer,
 };
+
+fn internal_plugin_error(
+	action: &str,
+	plugin_id: &str,
+	error: &impl Display,
+) -> ApiError {
+	error!("Failed to {action} plugin {plugin_id}: {error}");
+	ApiError::internal(format!("Failed to {action} plugin"))
+}
+
+fn bad_request_plugin_error(
+	action: &str,
+	plugin_id: &str,
+	code: &'static str,
+	error: &impl Display,
+) -> ApiError {
+	error!("Failed to {action} plugin {plugin_id}: {error}");
+	ApiError::new(
+		Status::BadRequest,
+		format!("Failed to {action} plugin"),
+		code,
+	)
+}
 
 #[get("/plugins")]
 pub fn list_plugins() -> ApiResult<CCPluginListResponse> {
@@ -31,28 +56,46 @@ pub fn list_plugins() -> ApiResult<CCPluginListResponse> {
 	Ok(Json(CCPluginListResponse { plugins }))
 }
 
-#[post("/plugins/<plugin_id>/enable")]
-pub fn enable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
+fn enable_plugin_inner(plugin_id: &str) -> ApiResult<CCPluginResponse> {
 	let id = parse_plugin_id(plugin_id)?;
 	let mut manager = load_plugin_manager()?;
 	let installer = try_load_plugin_installer();
-	manager.enable(&id).map_err(|e| {
-		ApiError::internal(format!("Failed to enable plugin: {e}"))
-	})?;
+	manager
+		.enable(&id)
+		.map_err(|error| internal_plugin_error("enable", plugin_id, &error))?;
 	let plugin = get_plugin(&manager, &id)?;
 	Ok(Json(build_plugin_response(&plugin, installer.as_ref())))
 }
 
-#[post("/plugins/<plugin_id>/disable")]
-pub fn disable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
+#[post("/plugins/enable?<plugin_id>")]
+pub fn enable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
+	enable_plugin_inner(plugin_id)
+}
+
+#[post("/plugins/<plugin_id>/enable")]
+pub fn enable_plugin_legacy(plugin_id: &str) -> ApiResult<CCPluginResponse> {
+	enable_plugin_inner(plugin_id)
+}
+
+fn disable_plugin_inner(plugin_id: &str) -> ApiResult<CCPluginResponse> {
 	let id = parse_plugin_id(plugin_id)?;
 	let mut manager = load_plugin_manager()?;
 	let installer = try_load_plugin_installer();
-	manager.disable(&id).map_err(|e| {
-		ApiError::internal(format!("Failed to disable plugin: {e}"))
-	})?;
+	manager
+		.disable(&id)
+		.map_err(|error| internal_plugin_error("disable", plugin_id, &error))?;
 	let plugin = get_plugin(&manager, &id)?;
 	Ok(Json(build_plugin_response(&plugin, installer.as_ref())))
+}
+
+#[post("/plugins/disable?<plugin_id>")]
+pub fn disable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
+	disable_plugin_inner(plugin_id)
+}
+
+#[post("/plugins/<plugin_id>/disable")]
+pub fn disable_plugin_legacy(plugin_id: &str) -> ApiResult<CCPluginResponse> {
+	disable_plugin_inner(plugin_id)
 }
 
 #[post("/plugins/install", data = "<body>")]
@@ -80,10 +123,11 @@ pub async fn install_plugin(
 					message: "Plugin is already installed".to_string(),
 				}));
 			}
-			Err(ApiError::new(
-				Status::BadRequest,
-				format!("Failed to install plugin: {error_str}"),
+			Err(bad_request_plugin_error(
+				"install",
+				&req.plugin_id,
 				"PLUGIN_INSTALL_FAILED",
+				&e,
 			))
 		}
 	}
@@ -106,10 +150,11 @@ pub async fn uninstall_plugin(
 				req.plugin_id
 			),
 		})),
-		Err(e) => Err(ApiError::new(
-			Status::BadRequest,
-			format!("Failed to uninstall plugin: {e}"),
+		Err(error) => Err(bad_request_plugin_error(
+			"uninstall",
+			&req.plugin_id,
 			"PLUGIN_UNINSTALL_FAILED",
+			&error,
 		)),
 	}
 }
@@ -139,10 +184,11 @@ pub async fn update_plugin(
 					message: "Plugin is already up to date".to_string(),
 				}));
 			}
-			Err(ApiError::new(
-				Status::BadRequest,
-				format!("Failed to update plugin: {error_str}"),
+			Err(bad_request_plugin_error(
+				"update",
+				&req.plugin_id,
 				"PLUGIN_UPDATE_FAILED",
+				&e,
 			))
 		}
 	}
@@ -160,10 +206,11 @@ pub async fn reinstall_plugin(
 		.uninstall(&plugin_id, scope, req.keep_data)
 		.await
 		.map_err(|error| {
-			ApiError::new(
-				Status::BadRequest,
-				format!("Failed to uninstall plugin: {error}"),
+			bad_request_plugin_error(
+				"uninstall",
+				&req.plugin_id,
 				"PLUGIN_UNINSTALL_FAILED",
+				&error,
 			)
 		})?;
 
@@ -175,10 +222,11 @@ pub async fn reinstall_plugin(
 				req.plugin_id, info.version
 			),
 		})),
-		Err(e) => Err(ApiError::new(
-			Status::BadRequest,
-			format!("Failed to reinstall plugin: {e}"),
+		Err(error) => Err(bad_request_plugin_error(
+			"reinstall",
+			&req.plugin_id,
 			"PLUGIN_REINSTALL_FAILED",
+			&error,
 		)),
 	}
 }
@@ -200,28 +248,48 @@ pub async fn check_plugin_update(
 			(!plugin.commit_hash.is_empty())
 				.then_some(plugin.commit_hash.as_str())
 		});
-	let (_, latest_version) =
-		resolve_plugin_update(&id, current_version, current_commit).await;
+	let latest_version =
+		resolve_plugin_update(&id, current_version, current_commit).await?;
 
-	Ok(Json(build_check_update_response(
-		req.plugin_id,
-		current_version.to_string(),
+	Ok(Json(CCPluginCheckUpdateResponse {
+		plugin_id: req.plugin_id,
+		update_available: latest_version.is_some(),
+		current_version: current_version.to_string(),
 		latest_version,
-	)))
+		changelog: None,
+	}))
 }
 
-#[post("/plugins/<plugin_id>/open-folder?<scope>")]
-pub fn open_plugin_folder(
+fn open_plugin_folder_inner(
 	plugin_id: &str,
 	scope: Option<&str>,
 ) -> ApiNoContent {
 	let id = parse_plugin_id(plugin_id)?;
 	let (_, plugin) = load_manager_and_plugin(&id)?;
-	let install_path = resolve_plugin_folder(&plugin, scope)?;
+	let install_path = resolve_plugin_scope(&plugin, scope)?
+		.map(|item| item.install_path.clone())
+		.unwrap_or_else(|| plugin.install_path.clone());
 
 	open::that(install_path).map_err(|error| {
-		ApiError::internal(format!("Failed to open plugin folder: {error}"))
+		error!("Failed to open plugin folder {plugin_id}: {error}");
+		ApiError::internal("Failed to open plugin folder")
 	})?;
 
 	Ok(NoContent)
+}
+
+#[post("/plugins/open-folder?<plugin_id>&<scope>")]
+pub fn open_plugin_folder(
+	plugin_id: &str,
+	scope: Option<&str>,
+) -> ApiNoContent {
+	open_plugin_folder_inner(plugin_id, scope)
+}
+
+#[post("/plugins/<plugin_id>/open-folder?<scope>")]
+pub fn open_plugin_folder_legacy(
+	plugin_id: &str,
+	scope: Option<&str>,
+) -> ApiNoContent {
+	open_plugin_folder_inner(plugin_id, scope)
 }

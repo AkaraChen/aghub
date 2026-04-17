@@ -27,7 +27,7 @@ export function ProvidedSkillsSection({ skills }: ProvidedSkillsSectionProps) {
 				{skills.map((skill) => (
 					<div
 						key={skill.name}
-						className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2"
+						className="flex items-center justify-between gap-3 rounded-lg border border-separator bg-surface-secondary px-3 py-2"
 					>
 						<div className="min-w-0 flex-1">
 							<p className="font-mono text-xs text-foreground truncate">

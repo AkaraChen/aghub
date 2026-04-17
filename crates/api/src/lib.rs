@@ -99,8 +99,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 	.unwrap();
 	rocket::custom(config)
 		.attach(ApiLogFairing)
-		.attach(cors.clone())
-		.manage(cors)
+		.attach(cors)
 		.manage(crate::state::GitCloneSessions {
 			sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
 		})
@@ -158,17 +157,24 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 				routes::skills::git_sync_skill,
 				routes::plugins::list_plugins,
 				routes::plugins::get_plugin_detail,
+				routes::plugins::get_plugin_detail_legacy,
 				routes::plugins::enable_plugin,
+				routes::plugins::enable_plugin_legacy,
 				routes::plugins::disable_plugin,
+				routes::plugins::disable_plugin_legacy,
 				routes::plugins::install_plugin,
 				routes::plugins::uninstall_plugin,
 				routes::plugins::reinstall_plugin,
 				routes::plugins::update_plugin,
 				routes::plugins::check_plugin_update,
 				routes::plugins::open_plugin_folder,
+				routes::plugins::open_plugin_folder_legacy,
 				routes::plugins::get_plugin_config,
+				routes::plugins::get_plugin_config_legacy,
 				routes::plugins::update_plugin_config,
+				routes::plugins::update_plugin_config_legacy,
 				routes::plugins::delete_plugin_config,
+				routes::plugins::delete_plugin_config_legacy,
 				routes::plugins::list_plugin_market,
 				routes::plugins::update_marketplace,
 			],

@@ -14,8 +14,10 @@ pub struct CCPluginMarketResponse {
 	pub installs: i64,
 	pub installed: bool,
 	pub installed_scopes: Vec<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub enabled: Option<bool>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub category: Option<String>,
 	pub has_mcp: bool,

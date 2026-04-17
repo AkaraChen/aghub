@@ -18,8 +18,10 @@ pub struct CCPluginScopeResponse {
 #[ts(export)]
 pub struct CCPluginAuthorResponse {
 	pub name: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub email: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub url: Option<String>,
 }
@@ -28,6 +30,7 @@ pub struct CCPluginAuthorResponse {
 #[ts(export)]
 pub struct CCPluginSourceInfoResponse {
 	pub label: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub url: Option<String>,
 	pub is_github: bool,
@@ -44,17 +47,19 @@ pub struct CCPluginResponse {
 	pub description: Option<String>,
 	pub enabled: bool,
 	pub source: String,
-	/// Sanitized install folder path for display in the desktop UI
-	pub install_path: String,
 	pub has_skills: bool,
 	pub has_hooks: bool,
 	pub has_mcp: bool,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub author: Option<CCPluginAuthorResponse>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub repository: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub license: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub keywords: Option<Vec<String>>,
 	pub source_info: CCPluginSourceInfoResponse,
@@ -67,9 +72,11 @@ pub struct CCPluginResponse {
 pub struct CCPluginConfigResponse {
 	pub plugin_id: String,
 	/// Config as JSON string (use serde_json to parse)
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub config: Option<String>,
 	/// Schema as JSON string (use serde_json to parse)
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub schema: Option<String>,
 }
@@ -85,16 +92,22 @@ pub struct CCPluginMcpConfigResponse {
 pub struct CCPluginMcpServerResponse {
 	pub name: String,
 	pub transport_type: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub command: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub args: Option<Vec<String>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub url: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
-	pub env: Option<std::collections::HashMap<String, String>>,
+	pub env: Option<Vec<String>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
-	pub headers: Option<std::collections::HashMap<String, String>>,
+	pub headers: Option<Vec<String>>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub note: Option<String>,
 }
@@ -104,6 +117,7 @@ pub struct CCPluginMcpServerResponse {
 #[ts(export)]
 pub struct CCPluginSkillInfo {
 	pub name: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub description: Option<String>,
 }

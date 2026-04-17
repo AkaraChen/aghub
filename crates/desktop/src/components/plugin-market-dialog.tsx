@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowPathIcon } from "@heroicons/react/24/solid";
-import { Button, Modal, SearchField, toast } from "@heroui/react";
+import { Button, Modal, SearchField, Tooltip, toast } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -14,7 +14,6 @@ import {
 } from "../requests/plugins";
 import { CategoryFilter } from "./plugin-market/category-filter";
 import { PluginMarketTable } from "./plugin-market/market-table";
-import { TooltipIconButton } from "./ui/tooltip-icon-button";
 
 interface PluginMarketDialogProps {
 	isOpen: boolean;
@@ -115,7 +114,6 @@ export function PluginMarketDialog({
 		);
 	}, [plugins, installScope]);
 
-	// Get unique categories
 	const categories = useMemo(() => {
 		const cats = new Set<string>();
 		for (const plugin of marketPlugins) {
@@ -124,11 +122,9 @@ export function PluginMarketDialog({
 		return Array.from(cats).sort();
 	}, [marketPlugins]);
 
-	// Filter and sort plugins
 	const filteredPlugins = useMemo(() => {
 		let filtered = marketPlugins;
 
-		// Apply search filter
 		if (searchQuery) {
 			const query = searchQuery.toLowerCase();
 			filtered = filtered.filter(
@@ -139,14 +135,12 @@ export function PluginMarketDialog({
 			);
 		}
 
-		// Apply category filter
 		if (selectedCategory) {
 			filtered = filtered.filter(
 				(p) => (p.category || "other") === selectedCategory,
 			);
 		}
 
-		// Sort by install count (descending)
 		return [...filtered].sort((a, b) => b.installs - a.installs);
 	}, [marketPlugins, searchQuery, selectedCategory]);
 
@@ -159,9 +153,9 @@ export function PluginMarketDialog({
 	return (
 		<Modal.Backdrop isOpen={isOpen} onOpenChange={handleClose}>
 			<Modal.Container>
-				<Modal.Dialog className="max-h-[85vh] w-[calc(100vw-2rem)] max-w-4xl bg-surface-secondary">
+				<Modal.Dialog className="max-h-[85vh] w-[calc(100vw-2rem)] max-w-4xl border border-separator bg-surface-secondary">
 					<Modal.CloseTrigger />
-					<Modal.Header className="items-start">
+					<Modal.Header className="items-start border-b border-separator/70 pb-4">
 						<div className="space-y-1">
 							<Modal.Heading>{t("pluginMarket")}</Modal.Heading>
 							<p className="text-sm text-muted">
@@ -170,8 +164,7 @@ export function PluginMarketDialog({
 						</div>
 					</Modal.Header>
 
-					<Modal.Body className="flex min-h-0 flex-col space-y-4 p-4 overflow-hidden">
-						{/* Search and filter bar */}
+					<Modal.Body className="flex min-h-0 flex-col space-y-4 overflow-hidden p-4 pt-4">
 						<div className="flex shrink-0 items-center gap-3">
 							<SearchField
 								className="flex-1"
@@ -187,22 +180,30 @@ export function PluginMarketDialog({
 									<SearchField.ClearButton />
 								</SearchField.Group>
 							</SearchField>
-							<TooltipIconButton
-								variant="ghost"
-								size="sm"
-								onPress={handleUpdateMarketplace}
-								isDisabled={updateMarketplaceMutation.isPending}
-								label={t("updateMarketplace")}
-								className="size-9 shrink-0 text-accent"
-							>
-								<ArrowPathIcon
-									className={cn(
-										"size-4",
-										updateMarketplaceMutation.isPending &&
-											"animate-spin",
-									)}
-								/>
-							</TooltipIconButton>
+							<Tooltip delay={0}>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									onPress={handleUpdateMarketplace}
+									isDisabled={
+										updateMarketplaceMutation.isPending
+									}
+									aria-label={t("updateMarketplace")}
+									className="size-9 shrink-0 text-accent"
+								>
+									<ArrowPathIcon
+										className={cn(
+											"size-4",
+											updateMarketplaceMutation.isPending &&
+												"animate-spin",
+										)}
+									/>
+								</Button>
+								<Tooltip.Content>
+									{t("updateMarketplace")}
+								</Tooltip.Content>
+							</Tooltip>
 						</div>
 
 						<CategoryFilter
@@ -229,7 +230,7 @@ export function PluginMarketDialog({
 						/>
 					</Modal.Body>
 
-					<Modal.Footer>
+					<Modal.Footer className="border-t border-separator/70">
 						<div className="flex items-center gap-2 text-xs text-muted">
 							<span>
 								{filteredPlugins.length === marketPlugins.length

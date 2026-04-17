@@ -62,6 +62,9 @@ pub trait AgentAdapter: Send + Sync {
 		project_root: Option<&Path>,
 		scope: ResourceScope,
 	) -> Option<PathBuf>;
+	fn managed_skill_path(&self, _path: &Path) -> Option<String> {
+		None
+	}
 	fn supports_mcp_operations(&self) -> bool {
 		true
 	}

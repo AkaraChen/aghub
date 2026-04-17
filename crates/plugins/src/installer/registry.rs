@@ -1,17 +1,15 @@
-//! Plugin registry abstraction for different plugin sources
-
-use super::git::{build_http_client, GitBasedInstaller};
-use crate::claude::types::{PluginAuthor, PluginManifest};
-use crate::discovery::{
-	MarketplaceConfig, MarketplacePlugin, MarketplaceSource,
-};
+use super::git::GitBasedInstaller;
+use crate::claude::types::PluginManifest;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::Duration;
+use tempfile::{Builder, TempDir};
+use tokio::process::Command;
 
-const OFFICIAL_MARKETPLACE_REPO: &str =
-	"https://github.com/anthropics/claude-plugins-official.git";
+const GITHUB_BRANCHES: [&str; 2] = ["main", "master"];
+// External git commands should fail fast instead of hanging plugin flows.
+const GIT_COMMAND_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub(crate) fn find_plugin_manifest_path(plugin_dir: &Path) -> Option<PathBuf> {
 	let possible_paths = [
@@ -79,20 +77,90 @@ pub(crate) fn remote_plugin_candidates(name: &str) -> Vec<PathBuf> {
 	vec![PathBuf::new(), PathBuf::from(name)]
 }
 
-pub(crate) fn unique_suffix() -> String {
-	let nanos = SystemTime::now()
-		.duration_since(UNIX_EPOCH)
-		.unwrap_or_default()
-		.as_nanos();
-	format!("{}-{nanos}", std::process::id())
+pub(crate) fn temp_dir(prefix: &str) -> Result<TempDir> {
+	Builder::new()
+		.prefix(prefix)
+		.tempdir()
+		.context("Failed to create temporary directory")
 }
 
-fn is_git_repository(path: &Path) -> bool {
+pub(crate) async fn git_output(
+	args: &[&str],
+	current_dir: Option<&Path>,
+	context: &str,
+) -> Result<std::process::Output> {
+	let context = context.to_string();
+	let mut command = Command::new("git");
+	command.args(args);
+	if let Some(path) = current_dir {
+		command.current_dir(path);
+	}
+
+	tokio::time::timeout(GIT_COMMAND_TIMEOUT, command.output())
+		.await
+		.with_context(|| format!("{context} timed out"))?
+		.context(context)
+}
+
+pub(crate) async fn git_ok(
+	args: &[&str],
+	current_dir: Option<&Path>,
+	context: &str,
+	failure: &str,
+) -> Result<std::process::Output> {
+	let output = git_output(args, current_dir, context).await?;
+	if !output.status.success() {
+		let stderr = String::from_utf8_lossy(&output.stderr);
+		anyhow::bail!("{failure}: {}", stderr);
+	}
+
+	Ok(output)
+}
+
+pub(crate) async fn git_clone(
+	source: &str,
+	target: &Path,
+	context: &str,
+) -> Result<()> {
+	let context = context.to_string();
+	let output = tokio::time::timeout(
+		GIT_COMMAND_TIMEOUT,
+		Command::new("git")
+			.args(["clone", "--depth", "1", source])
+			.arg(target)
+			.output(),
+	)
+	.await
+	.with_context(|| format!("{context} timed out"))?
+	.context(context)?;
+	if !output.status.success() {
+		let stderr = String::from_utf8_lossy(&output.stderr);
+		anyhow::bail!("Git clone failed: {}", stderr);
+	}
+
+	Ok(())
+}
+
+pub(crate) fn is_git_repository(path: &Path) -> bool {
 	path.join(".git").exists()
 }
 
-fn repository_tarball_urls(url: &str) -> Vec<String> {
+pub(crate) fn repository_archive_urls(
+	url: &str,
+	revision: Option<&str>,
+) -> Vec<String> {
 	let normalized_url = normalize_repository_url(url);
+
+	if let Some(revision) = revision.filter(|value| !value.is_empty()) {
+		if normalized_url.contains("github.com") {
+			let clean_url = normalized_url
+				.trim_end_matches('/')
+				.trim_end_matches(".git");
+			return vec![format!("{clean_url}/tarball/{revision}")];
+		}
+
+		return vec![normalized_url];
+	}
 
 	if normalized_url.contains("github.com") {
 		let clean_url = normalized_url
@@ -125,208 +193,75 @@ pub(crate) fn normalize_repository_url(url: &str) -> String {
 	trimmed.to_string()
 }
 
-fn github_owner_repo(url: &str) -> Option<(String, String)> {
-	let mut normalized = normalize_repository_url(url);
-	if let Some((repo_url, _)) = parse_github_tree_url(&normalized) {
-		normalized = repo_url;
-	}
-
-	let path = normalized
-		.strip_prefix("https://github.com/")
-		.or_else(|| normalized.strip_prefix("http://github.com/"))?;
-	let mut segments = path.split('/');
-	let owner = segments.next()?.trim();
-	let repo = segments.next()?.trim();
-	if owner.is_empty() || repo.is_empty() {
+async fn fetch_manifest_from_url(
+	client: &reqwest::Client,
+	url: &str,
+) -> Option<PluginManifest> {
+	let response = client.get(url).send().await.ok()?;
+	if !response.status().is_success() {
 		return None;
 	}
-
-	Some((owner.to_string(), repo.to_string()))
+	response.json::<PluginManifest>().await.ok()
 }
 
-pub(crate) fn parse_github_tree_url(url: &str) -> Option<(String, String)> {
-	let normalized = normalize_repository_url(url);
-	let marker = "/tree/";
-	let (repo_url, rest) = normalized.split_once(marker)?;
-	let mut parts = rest.split('/');
-	let branch = parts.next()?;
-	let subdir = parts.collect::<Vec<_>>().join("/");
-	if branch.is_empty() || subdir.is_empty() {
-		return None;
-	}
-
-	Some((repo_url.to_string(), subdir))
-}
-
-pub(crate) fn local_source_remote_fallback(
-	plugin: &MarketplacePlugin,
-	local_path: &str,
-) -> Option<(String, String)> {
-	let homepage = plugin.homepage.as_deref()?;
-	let (repo_url, subdir) = parse_github_tree_url(homepage)?;
-	if subdir == local_path.trim_start_matches("./") {
-		return Some((repo_url, subdir));
+pub(crate) async fn fetch_github_raw_manifest(
+	client: &reqwest::Client,
+	owner: &str,
+	repo: &str,
+	paths: &[String],
+) -> Option<PluginManifest> {
+	for branch in GITHUB_BRANCHES {
+		for path in paths {
+			let raw_url = format!(
+				"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path}"
+			);
+			if let Some(manifest) =
+				fetch_manifest_from_url(client, &raw_url).await
+			{
+				return Some(manifest);
+			}
+		}
 	}
 
 	None
 }
 
-fn manifest_from_marketplace_plugin(
-	plugin: &MarketplacePlugin,
-) -> PluginManifest {
-	let keywords = plugin
-		.extra
-		.get("keywords")
-		.and_then(json_string_list)
-		.or_else(|| plugin.extra.get("tags").and_then(json_string_list));
-
-	PluginManifest {
-		name: plugin.name.clone(),
-		version: plugin.version.clone(),
-		description: plugin.description.clone(),
-		author: PluginAuthor {
-			name: plugin
-				.author
-				.as_ref()
-				.map(|author| author.name.clone())
-				.unwrap_or_else(|| "Unknown".to_string()),
-			email: plugin
-				.author
-				.as_ref()
-				.and_then(|author| author.email.clone()),
-			url: plugin.homepage.clone(),
-		},
-		homepage: plugin.homepage.clone(),
-		repository: marketplace_plugin_repository(plugin),
-		license: None,
-		keywords,
-		logo: None,
-		skills: None,
-		agents: None,
-		commands: None,
-		user_config: None,
-	}
-}
-
-fn marketplace_plugin_repository(plugin: &MarketplacePlugin) -> Option<String> {
-	match &plugin.source {
-		MarketplaceSource::GitHub { repo, .. } => {
-			Some(normalize_repository_url(repo))
-		}
-		MarketplaceSource::Url { url, .. }
-		| MarketplaceSource::GitSubdir { url, .. } => {
-			Some(normalize_repository_url(url))
-		}
-		MarketplaceSource::Local(_) => plugin
-			.homepage
-			.as_deref()
-			.and_then(|url| parse_github_tree_url(url).map(|(repo, _)| repo))
-			.or_else(|| plugin.homepage.clone()),
-		MarketplaceSource::Npm { .. } => plugin.homepage.clone(),
-	}
-}
-
-fn json_string_list(value: &serde_json::Value) -> Option<Vec<String>> {
-	match value {
-		serde_json::Value::Array(items) => {
-			let values: Vec<_> = items
-				.iter()
-				.filter_map(|item| item.as_str().map(str::trim))
-				.filter(|item| !item.is_empty())
-				.map(str::to_string)
-				.collect();
-			(!values.is_empty()).then_some(values)
-		}
-		serde_json::Value::String(item) => {
-			let trimmed = item.trim();
-			(!trimmed.is_empty()).then_some(vec![trimmed.to_string()])
-		}
-		_ => None,
-	}
-}
-
-fn build_materialized_manifest(
-	plugin: &MarketplacePlugin,
-) -> serde_json::Value {
-	let mut manifest = serde_json::Map::new();
-
-	manifest.insert(
-		"name".to_string(),
-		serde_json::Value::String(plugin.name.clone()),
-	);
-	manifest.insert(
-		"description".to_string(),
-		serde_json::Value::String(plugin.description.clone()),
-	);
-
-	if let Some(version) = plugin.version.clone() {
-		manifest
-			.insert("version".to_string(), serde_json::Value::String(version));
-	}
-
-	if let Some(author) = &plugin.author {
-		let mut author_value = serde_json::Map::new();
-		author_value.insert(
-			"name".to_string(),
-			serde_json::Value::String(author.name.clone()),
+async fn fetch_github_commit(
+	client: &reqwest::Client,
+	owner: &str,
+	repo: &str,
+) -> Result<Option<(String, Option<String>)>> {
+	for branch in GITHUB_BRANCHES {
+		let url = format!(
+			"https://api.github.com/repos/{owner}/{repo}/commits/{branch}"
 		);
-		if let Some(email) = &author.email {
-			author_value.insert(
-				"email".to_string(),
-				serde_json::Value::String(email.clone()),
-			);
-		}
-		manifest.insert(
-			"author".to_string(),
-			serde_json::Value::Object(author_value),
-		);
-	}
-
-	if let Some(homepage) = &plugin.homepage {
-		manifest.insert(
-			"homepage".to_string(),
-			serde_json::Value::String(homepage.clone()),
-		);
-	}
-
-	if let Some(repository) = marketplace_plugin_repository(plugin) {
-		manifest.insert(
-			"repository".to_string(),
-			serde_json::Value::String(repository),
-		);
-	}
-
-	for (key, value) in &plugin.extra {
-		if matches!(key.as_str(), "source" | "category" | "tags") {
+		let response = client.get(&url).send().await?;
+		if !response.status().is_success() {
 			continue;
 		}
-		manifest.insert(key.clone(), value.clone());
+
+		let json: serde_json::Value = response.json().await?;
+		if let Some(sha) = json.get("sha").and_then(|value| value.as_str()) {
+			return Ok(Some((
+				sha[..8.min(sha.len())].to_string(),
+				Some(sha.to_string()),
+			)));
+		}
 	}
 
-	serde_json::Value::Object(manifest)
+	Ok(None)
 }
 
-async fn materialize_marketplace_plugin(
-	plugin: &MarketplacePlugin,
-	source_dir: Option<&Path>,
-	target_dir: &Path,
-) -> Result<()> {
-	if let Some(path) = source_dir {
-		copy_dir_all(path, target_dir).await?;
-	} else {
-		tokio::fs::create_dir_all(target_dir).await?;
-	}
-
-	let manifest_dir = target_dir.join(".claude-plugin");
-	tokio::fs::create_dir_all(&manifest_dir).await?;
-	let manifest_path = manifest_dir.join("plugin.json");
-	let manifest =
-		serde_json::to_string_pretty(&build_materialized_manifest(plugin))?;
-	tokio::fs::write(&manifest_path, manifest).await?;
-	Ok(())
+pub(crate) async fn read_plugin_manifest(dir: &Path) -> Result<PluginManifest> {
+	let path = find_plugin_manifest_path(dir)
+		.ok_or_else(|| anyhow::anyhow!("plugin.json not found in {:?}", dir))?;
+	let content = tokio::fs::read_to_string(path).await?;
+	serde_json::from_str(&content).map_err(|error| {
+		anyhow::anyhow!("Failed to parse plugin.json: {error}")
+	})
 }
 
-fn manifest_candidate_paths(candidates: &[PathBuf]) -> Vec<String> {
+pub(crate) fn manifest_candidate_paths(candidates: &[PathBuf]) -> Vec<String> {
 	let mut paths = Vec::new();
 
 	for candidate in candidates {
@@ -346,14 +281,21 @@ fn manifest_candidate_paths(candidates: &[PathBuf]) -> Vec<String> {
 	paths
 }
 
-async fn extract_repository_archive(
+pub(crate) fn first_manifest_dir(root: &Path) -> Option<PathBuf> {
+	std::fs::read_dir(root)
+		.ok()?
+		.filter_map(|entry| entry.ok().map(|value| value.path()))
+		.find(|path| path.is_dir() && find_plugin_manifest_path(path).is_some())
+}
+
+pub(crate) async fn extract_repository_archive(
 	git_installer: &GitBasedInstaller,
 	url: &str,
 	target_dir: &Path,
 ) -> Result<String> {
 	let mut last_error = None;
 
-	for tarball_url in repository_tarball_urls(url) {
+	for tarball_url in repository_archive_urls(url, None) {
 		match git_installer
 			.download_and_extract(&tarball_url, "", target_dir)
 			.await
@@ -374,35 +316,29 @@ async fn extract_repository_archive(
 	anyhow::bail!("No repository archive URL available for {}", url);
 }
 
-/// Registry for fetching plugins
+pub use super::marketplace::MarketplaceRegistry;
+
 #[async_trait]
 pub trait PluginRegistry: Send + Sync {
-	/// Fetch plugin manifest
 	async fn fetch_manifest(&self, name: &str) -> Result<PluginManifest>;
 
-	/// Install plugin to target directory
-	/// Returns the actual commit SHA of what was installed
 	async fn install(
 		&self,
 		name: &str,
 		target_dir: &Path,
 	) -> Result<Option<String>>;
 
-	/// Get latest version info (version string, optional commit SHA)
 	async fn get_latest_version(
 		&self,
 		name: &str,
 	) -> Result<Option<(String, Option<String>)>>;
 }
 
-/// GitHub-based registry (for claude-plugins-official and third-party)
 pub struct GitHubRegistry {
 	client: reqwest::Client,
 	owner: String,
 	repo: String,
-	/// Optional subdirectory within the repo (e.g., "plugins/" for official)
 	subdir: Option<String>,
-	/// Git-based installer for downloads
 	git_installer: GitBasedInstaller,
 }
 
@@ -433,48 +369,15 @@ impl GitHubRegistry {
 #[async_trait]
 impl PluginRegistry for GitHubRegistry {
 	async fn fetch_manifest(&self, name: &str) -> Result<PluginManifest> {
-		let mut paths_to_try = Vec::new();
-
-		if let Some(sub) = &self.subdir {
-			paths_to_try.push(format!("{}{}/plugin.json", sub, name));
-		} else {
-			// Standalone repo: try common paths and the name subdir
-			paths_to_try.push(".claude-plugin/plugin.json".to_string());
-			paths_to_try.push(".plugin/plugin.json".to_string());
-			paths_to_try.push("plugin.json".to_string());
-			paths_to_try.push(format!("{}/.claude-plugin/plugin.json", name));
-			paths_to_try.push(format!("{}/.plugin/plugin.json", name));
-			paths_to_try.push(format!("{}/plugin.json", name));
-		}
-
-		for path in &paths_to_try {
-			// Try main branch first
-			let url = format!(
-				"https://raw.githubusercontent.com/{}/{}/main/{}",
-				self.owner, self.repo, path
-			);
-
-			if let Ok(response) = self.client.get(&url).send().await {
-				if response.status().is_success() {
-					if let Ok(manifest) = response.json().await {
-						return Ok(manifest);
-					}
-				}
-			}
-
-			// Try master branch
-			let url = format!(
-				"https://raw.githubusercontent.com/{}/{}/master/{}",
-				self.owner, self.repo, path
-			);
-
-			if let Ok(response) = self.client.get(&url).send().await {
-				if response.status().is_success() {
-					if let Ok(manifest) = response.json().await {
-						return Ok(manifest);
-					}
-				}
-			}
+		if let Some(manifest) = fetch_github_raw_manifest(
+			&self.client,
+			&self.owner,
+			&self.repo,
+			&manifest_candidate_paths(&self.plugin_candidates(name)),
+		)
+		.await
+		{
+			return Ok(manifest);
 		}
 
 		anyhow::bail!(
@@ -489,101 +392,39 @@ impl PluginRegistry for GitHubRegistry {
 		target_dir: &Path,
 	) -> Result<Option<String>> {
 		let url = format!("https://github.com/{}/{}", self.owner, self.repo);
-		let temp_dir = std::env::temp_dir().join(format!(
-			"aghub-plugin-install-{}-{}",
-			self.repo,
-			std::process::id()
-		));
+		let temp_dir =
+			temp_dir(&format!("aghub-plugin-install-{}-", self.repo))?;
 
-		if temp_dir.exists() {
-			tokio::fs::remove_dir_all(&temp_dir).await.ok();
-		}
-
-		let commit = match extract_repository_archive(
+		let commit = extract_repository_archive(
 			&self.git_installer,
 			&url,
-			&temp_dir,
+			temp_dir.path(),
 		)
-		.await
-		{
-			Ok(commit) => commit,
-			Err(error) => {
-				tokio::fs::remove_dir_all(&temp_dir).await.ok();
-				return Err(error);
-			}
-		};
+		.await?;
 
 		let source_dir = match resolve_plugin_dir_with_wrappers(
-			&temp_dir,
+			temp_dir.path(),
 			&self.plugin_candidates(name),
 		) {
 			Some(path) => path,
-			None => {
-				tokio::fs::remove_dir_all(&temp_dir).await.ok();
-				anyhow::bail!(
-					"Plugin directory not found in repository for '{}'",
-					name
-				);
-			}
+			None => anyhow::bail!(
+				"Plugin directory not found in repository for '{}'",
+				name
+			),
 		};
 
-		let copy_result = copy_dir_all(&source_dir, target_dir).await;
-		tokio::fs::remove_dir_all(&temp_dir).await.ok();
-		copy_result.map(|_| Some(commit))
+		copy_dir_all(&source_dir, target_dir).await?;
+		Ok(Some(commit))
 	}
 
 	async fn get_latest_version(
 		&self,
 		_name: &str,
 	) -> Result<Option<(String, Option<String>)>> {
-		// For GitHub-based plugins, we fetch the latest commit SHA
-		// This could be optimized by caching
-		let url = format!(
-			"https://api.github.com/repos/{}/{}/commits/main",
-			self.owner, self.repo
-		);
-
-		let response = self.client.get(&url).send().await;
-
-		if let Ok(resp) = response {
-			if resp.status().is_success() {
-				if let Ok(json) = resp.json::<serde_json::Value>().await {
-					if let Some(sha) = json.get("sha").and_then(|s| s.as_str())
-					{
-						let short_sha = &sha[..8.min(sha.len())];
-						return Ok(Some((
-							short_sha.to_string(),
-							Some(sha.to_string()),
-						)));
-					}
-				}
-			}
-		}
-
-		// Try master
-		let url = format!(
-			"https://api.github.com/repos/{}/{}/commits/master",
-			self.owner, self.repo
-		);
-
-		let response = self.client.get(&url).send().await?;
-
-		if response.status().is_success() {
-			let json: serde_json::Value = response.json().await?;
-			if let Some(sha) = json.get("sha").and_then(|s| s.as_str()) {
-				let short_sha = &sha[..8.min(sha.len())];
-				return Ok(Some((
-					short_sha.to_string(),
-					Some(sha.to_string()),
-				)));
-			}
-		}
-
-		Ok(None)
+		fetch_github_commit(&self.client, &self.owner, &self.repo).await
 	}
 }
 
-/// Local filesystem registry (for local development)
 pub struct LocalRegistry {
 	base_path: std::path::PathBuf,
 }
@@ -605,16 +446,7 @@ impl PluginRegistry for LocalRegistry {
 						name
 					)
 				})?;
-		let manifest_path =
-			find_plugin_manifest_path(&plugin_dir).ok_or_else(|| {
-				anyhow::anyhow!(
-					"plugin.json not found in local plugin: {}",
-					name
-				)
-			})?;
-		let content = tokio::fs::read_to_string(&manifest_path).await?;
-		let manifest: PluginManifest = serde_json::from_str(&content)?;
-		Ok(manifest)
+		read_plugin_manifest(&plugin_dir).await
 	}
 
 	async fn install(
@@ -631,10 +463,7 @@ impl PluginRegistry for LocalRegistry {
 					)
 				})?;
 
-		// Copy directory recursively
 		copy_dir_all(&source_dir, target_dir).await?;
-
-		// Local plugins don't have a commit SHA
 		Ok(None)
 	}
 
@@ -642,937 +471,10 @@ impl PluginRegistry for LocalRegistry {
 		&self,
 		_name: &str,
 	) -> Result<Option<(String, Option<String>)>> {
-		// Local plugins are always "local" version
 		Ok(Some(("local".to_string(), None)))
 	}
 }
 
-/// Marketplace registry that reads from local git clone and supports remote plugins
-pub struct MarketplaceRegistry {
-	/// Path to the local marketplace clone (e.g., ~/.claude/plugins/marketplaces/claude-plugins-official)
-	marketplace_path: PathBuf,
-	/// Subdirectories containing plugins (e.g., ["plugins/", "external_plugins/"])
-	plugins_subdirs: Vec<String>,
-	/// Upstream repository used to refresh snapshot-style marketplaces
-	upstream_repo: Option<String>,
-	/// HTTP client for fetching remote plugins
-	client: reqwest::Client,
-	/// Git-based installer for remote plugins
-	git_installer: GitBasedInstaller,
-}
-
-impl MarketplaceRegistry {
-	pub fn new(
-		marketplace_path: PathBuf,
-		plugins_subdirs: Vec<String>,
-	) -> Result<Self> {
-		Self::new_with_upstream(marketplace_path, plugins_subdirs, None)
-	}
-
-	pub fn new_with_upstream(
-		marketplace_path: PathBuf,
-		plugins_subdirs: Vec<String>,
-		upstream_repo: Option<String>,
-	) -> Result<Self> {
-		let client = build_http_client(60)?;
-
-		Ok(Self {
-			marketplace_path,
-			plugins_subdirs,
-			upstream_repo,
-			client,
-			git_installer: GitBasedInstaller::new()?,
-		})
-	}
-
-	/// Create with default official marketplace directories
-	pub fn new_official() -> anyhow::Result<Self> {
-		let marketplace_path = dirs::home_dir()
-			.ok_or_else(|| anyhow::anyhow!("Cannot find home directory"))?
-			.join(".claude/plugins/marketplaces/claude-plugins-official");
-
-		let client = build_http_client(60)?;
-
-		Ok(Self {
-			marketplace_path,
-			plugins_subdirs: vec![
-				"plugins/".to_string(),
-				"external_plugins/".to_string(),
-			],
-			upstream_repo: Some(OFFICIAL_MARKETPLACE_REPO.to_string()),
-			client,
-			git_installer: GitBasedInstaller::new()?,
-		})
-	}
-
-	/// Load marketplace configuration from marketplace.json
-	async fn load_marketplace_config(&self) -> Result<MarketplaceConfig> {
-		let marketplace_json = self
-			.marketplace_path
-			.join(".claude-plugin/marketplace.json");
-
-		if !marketplace_json.exists() {
-			anyhow::bail!(
-				"Marketplace configuration not found at {:?}",
-				marketplace_json
-			);
-		}
-
-		let content = tokio::fs::read_to_string(&marketplace_json).await?;
-		let config: MarketplaceConfig = serde_json::from_str(&content)?;
-		Ok(config)
-	}
-
-	/// Find plugin definition in marketplace.json
-	async fn find_plugin_def(
-		&self,
-		name: &str,
-	) -> Result<Option<MarketplacePlugin>> {
-		let config = self.load_marketplace_config().await?;
-		Ok(config.plugins.into_iter().find(|p| p.name == name))
-	}
-
-	/// Get the plugin source directory (searches all subdirs)
-	fn plugin_source_dir(&self, name: &str) -> Option<PathBuf> {
-		for subdir in &self.plugins_subdirs {
-			let path = self.marketplace_path.join(subdir).join(name);
-			if path.exists() {
-				return Some(path);
-			}
-		}
-		None
-	}
-
-	/// List all available plugins from the local marketplace
-	pub fn list_plugins(&self) -> Result<Vec<(String, PathBuf)>> {
-		let mut plugins = Vec::new();
-
-		for subdir in &self.plugins_subdirs {
-			let plugins_dir = self.marketplace_path.join(subdir);
-
-			if !plugins_dir.exists() {
-				continue;
-			}
-
-			let entries = std::fs::read_dir(&plugins_dir)?;
-
-			for entry in entries {
-				let entry = entry?;
-				let path = entry.path();
-
-				if path.is_dir() {
-					// Check if it has a valid plugin.json
-					if find_plugin_manifest_path(&path).is_some() {
-						if let Some(name) =
-							path.file_name().and_then(|n| n.to_str())
-						{
-							plugins.push((name.to_string(), path));
-						}
-					}
-				}
-			}
-		}
-
-		plugins.sort_by(|a, b| a.0.cmp(&b.0));
-		Ok(plugins)
-	}
-
-	/// Update the marketplace by pulling latest changes
-	pub async fn update(&self) -> Result<()> {
-		use tokio::process::Command;
-
-		if !self.marketplace_path.exists() {
-			return self.clone_marketplace().await;
-		}
-
-		if is_git_repository(&self.marketplace_path) {
-			let output = Command::new("git")
-				.args(["pull"])
-				.current_dir(&self.marketplace_path)
-				.output()
-				.await
-				.context("Failed to execute git pull")?;
-
-			if !output.status.success() {
-				let stderr = String::from_utf8_lossy(&output.stderr);
-				anyhow::bail!("Git pull failed: {}", stderr);
-			}
-
-			log::info!("Marketplace updated successfully");
-			return Ok(());
-		}
-
-		log::info!(
-			"Marketplace at {:?} is a snapshot, refreshing from upstream clone",
-			self.marketplace_path
-		);
-		self.replace_snapshot_from_upstream().await?;
-
-		log::info!("Marketplace updated successfully");
-		Ok(())
-	}
-
-	async fn clone_marketplace(&self) -> Result<()> {
-		use tokio::process::Command;
-
-		let upstream_repo = self.upstream_repo.as_deref().ok_or_else(|| {
-			anyhow::anyhow!(
-				"Marketplace directory not found and no upstream repo is configured: {:?}",
-				self.marketplace_path
-			)
-		})?;
-
-		let parent_dir = self.marketplace_path.parent().ok_or_else(|| {
-			anyhow::anyhow!(
-				"Invalid marketplace path: {:?}",
-				self.marketplace_path
-			)
-		})?;
-
-		tokio::fs::create_dir_all(parent_dir).await?;
-
-		let output = Command::new("git")
-			.args(["clone", "--depth", "1", upstream_repo])
-			.arg(&self.marketplace_path)
-			.output()
-			.await
-			.context("Failed to execute git clone")?;
-
-		if !output.status.success() {
-			let stderr = String::from_utf8_lossy(&output.stderr);
-			anyhow::bail!("Git clone failed: {}", stderr);
-		}
-
-		Ok(())
-	}
-
-	async fn replace_snapshot_from_upstream(&self) -> Result<()> {
-		use tokio::process::Command;
-
-		let upstream_repo = self.upstream_repo.as_deref().ok_or_else(|| {
-			anyhow::anyhow!(
-				"Marketplace snapshot cannot be refreshed without an upstream repo"
-			)
-		})?;
-
-		let parent_dir = self.marketplace_path.parent().ok_or_else(|| {
-			anyhow::anyhow!(
-				"Invalid marketplace path: {:?}",
-				self.marketplace_path
-			)
-		})?;
-		tokio::fs::create_dir_all(parent_dir).await?;
-
-		let name = self
-			.marketplace_path
-			.file_name()
-			.and_then(|value| value.to_str())
-			.unwrap_or("marketplace");
-		let suffix = unique_suffix();
-		let clone_path = parent_dir.join(format!(".{name}-clone-{suffix}"));
-		let backup_path = parent_dir.join(format!(".{name}-backup-{suffix}"));
-
-		if clone_path.exists() {
-			tokio::fs::remove_dir_all(&clone_path).await.ok();
-		}
-		if backup_path.exists() {
-			tokio::fs::remove_dir_all(&backup_path).await.ok();
-		}
-
-		let clone_output = Command::new("git")
-			.args(["clone", "--depth", "1", upstream_repo])
-			.arg(&clone_path)
-			.output()
-			.await
-			.context("Failed to execute git clone for marketplace refresh")?;
-
-		if !clone_output.status.success() {
-			let stderr = String::from_utf8_lossy(&clone_output.stderr);
-			tokio::fs::remove_dir_all(&clone_path).await.ok();
-			anyhow::bail!("Git clone failed: {}", stderr);
-		}
-
-		tokio::fs::rename(&self.marketplace_path, &backup_path)
-			.await
-			.with_context(|| {
-				format!(
-					"Failed to move existing marketplace out of the way: {:?}",
-					self.marketplace_path
-				)
-			})?;
-
-		if let Err(error) =
-			tokio::fs::rename(&clone_path, &self.marketplace_path).await
-		{
-			let restore_result =
-				tokio::fs::rename(&backup_path, &self.marketplace_path).await;
-			tokio::fs::remove_dir_all(&clone_path).await.ok();
-			match restore_result {
-				Ok(_) => {
-					return Err(error).with_context(|| {
-						"Failed to replace marketplace snapshot".to_string()
-					});
-				}
-				Err(restore_error) => {
-					return Err(error).context(format!(
-						"Failed to replace marketplace snapshot, and restore also failed: {restore_error}"
-					));
-				}
-			}
-		}
-
-		tokio::fs::remove_dir_all(&backup_path).await.ok();
-		Ok(())
-	}
-}
-
-#[async_trait]
-impl PluginRegistry for MarketplaceRegistry {
-	async fn fetch_manifest(&self, name: &str) -> Result<PluginManifest> {
-		// First, try to find the plugin in marketplace.json
-		if let Some(plugin_def) = self.find_plugin_def(name).await? {
-			match &plugin_def.source {
-				// Local source - read from filesystem
-				MarketplaceSource::Local(path) => {
-					let plugin_dir = self
-						.marketplace_path
-						.join(path.trim_start_matches("./"));
-					if plugin_dir.exists() {
-						if let Some(manifest_path) =
-							find_plugin_manifest_path(&plugin_dir)
-						{
-							let content =
-								tokio::fs::read_to_string(&manifest_path)
-									.await?;
-							let manifest: PluginManifest =
-								serde_json::from_str(&content)?;
-							return Ok(manifest);
-						}
-
-						return Ok(manifest_from_marketplace_plugin(
-							&plugin_def,
-						));
-					}
-
-					if let Some((repo_url, subdir)) =
-						local_source_remote_fallback(&plugin_def, path)
-					{
-						return self
-							.fetch_remote_manifest_with_candidates(
-								&repo_url,
-								&[PathBuf::from(subdir)],
-							)
-							.await;
-					}
-
-					anyhow::bail!(
-						"plugin.json not found for local plugin: {}",
-						name
-					);
-				}
-				// Remote URL - fetch from git repository
-				MarketplaceSource::Url { url, .. } => {
-					return self.fetch_remote_manifest(url, name).await;
-				}
-				// GitHub source - fetch from GitHub
-				MarketplaceSource::GitHub { repo, .. } => {
-					let url = if repo.starts_with("https://") {
-						repo.clone()
-					} else {
-						format!("https://github.com/{}", repo)
-					};
-					return self.fetch_remote_manifest(&url, name).await;
-				}
-				// Git subdirectory - treat as URL
-				MarketplaceSource::GitSubdir { url, path, .. } => {
-					return self
-						.fetch_remote_manifest_with_candidates(
-							url,
-							&[PathBuf::from(path.trim_matches('/'))],
-						)
-						.await;
-				}
-				// NPM - not supported
-				MarketplaceSource::Npm { package, .. } => {
-					anyhow::bail!(
-						"NPM package source not yet supported: {}",
-						package
-					);
-				}
-			}
-		}
-
-		// Fallback: try to find in local plugins directories (for backward compatibility)
-		if let Some(plugin_dir) = self.plugin_source_dir(name) {
-			let manifest_path = find_plugin_manifest_path(&plugin_dir)
-				.ok_or_else(|| {
-					anyhow::anyhow!("plugin.json not found for: {}", name)
-				})?;
-			let content = tokio::fs::read_to_string(&manifest_path).await?;
-			let manifest: PluginManifest = serde_json::from_str(&content)?;
-			return Ok(manifest);
-		}
-
-		anyhow::bail!("Plugin not found in marketplace: {}", name)
-	}
-
-	async fn install(
-		&self,
-		name: &str,
-		target_dir: &Path,
-	) -> Result<Option<String>> {
-		// First, try to find the plugin in marketplace.json
-		if let Some(plugin_def) = self.find_plugin_def(name).await? {
-			match &plugin_def.source {
-				// Local source - copy from filesystem
-				MarketplaceSource::Local(path) => {
-					let source_dir = self
-						.marketplace_path
-						.join(path.trim_start_matches("./"));
-					if source_dir.exists() {
-						if find_plugin_manifest_path(&source_dir).is_some() {
-							copy_dir_all(&source_dir, target_dir).await?;
-						} else {
-							materialize_marketplace_plugin(
-								&plugin_def,
-								Some(&source_dir),
-								target_dir,
-							)
-							.await?;
-						}
-						let commit =
-							self.get_marketplace_commit().await.ok().flatten();
-						return Ok(commit);
-					}
-
-					if let Some((repo_url, subdir)) =
-						local_source_remote_fallback(&plugin_def, path)
-					{
-						return self
-							.install_remote_subdir(
-								&repo_url, &subdir, target_dir,
-							)
-							.await;
-					}
-
-					anyhow::bail!(
-						"Local plugin directory not found: {}",
-						source_dir.display()
-					);
-				}
-				// Remote URL - download from git
-				MarketplaceSource::Url { url, .. } => {
-					return self.install_remote(url, name, target_dir).await;
-				}
-				// GitHub source - download from GitHub
-				MarketplaceSource::GitHub { repo, .. } => {
-					let url = if repo.starts_with("https://") {
-						repo.clone()
-					} else {
-						format!("https://github.com/{}", repo)
-					};
-					return self.install_remote(&url, name, target_dir).await;
-				}
-				// Git subdirectory
-				MarketplaceSource::GitSubdir {
-					url, path: subdir, ..
-				} => {
-					return self
-						.install_remote_subdir(url, subdir, target_dir)
-						.await;
-				}
-				// NPM - not supported
-				MarketplaceSource::Npm { package, .. } => {
-					anyhow::bail!(
-						"NPM package source not yet supported: {}",
-						package
-					);
-				}
-			}
-		}
-
-		// Fallback: try to find in local plugins directories
-		if let Some(source_dir) = self.plugin_source_dir(name) {
-			copy_dir_all(&source_dir, target_dir).await?;
-			let commit = self.get_marketplace_commit().await.ok().flatten();
-			return Ok(commit);
-		}
-
-		anyhow::bail!("Plugin not found in marketplace: {}", name)
-	}
-
-	async fn get_latest_version(
-		&self,
-		name: &str,
-	) -> Result<Option<(String, Option<String>)>> {
-		// First, try to find the plugin in marketplace.json
-		if let Some(plugin_def) = self.find_plugin_def(name).await? {
-			// Get commit SHA based on source type first
-			let commit = match &plugin_def.source {
-				MarketplaceSource::Local(_) => {
-					self.get_marketplace_commit().await.ok().flatten()
-				}
-				MarketplaceSource::Url { sha, .. } => sha.clone(),
-				MarketplaceSource::GitHub { sha, .. } => sha.clone(),
-				MarketplaceSource::GitSubdir { sha, .. } => sha.clone(),
-				MarketplaceSource::Npm { .. } => None,
-			};
-
-			// Use version from marketplace.json if available
-			// Otherwise try to fetch from remote manifest for remote plugins
-			let version = if let Some(v) = plugin_def.version {
-				v
-			} else {
-				// For remote plugins, fetch manifest to get version
-				match &plugin_def.source {
-					MarketplaceSource::Local(path) => {
-						let plugin_dir = self
-							.marketplace_path
-							.join(path.trim_start_matches("./"));
-						if let Some(manifest_path) =
-							find_plugin_manifest_path(&plugin_dir)
-						{
-							let content =
-								tokio::fs::read_to_string(&manifest_path)
-									.await?;
-							if let Ok(manifest) =
-								serde_json::from_str::<PluginManifest>(&content)
-							{
-								manifest
-									.version
-									.unwrap_or_else(|| "latest".to_string())
-							} else {
-								"latest".to_string()
-							}
-						} else if let Some((repo_url, subdir)) =
-							local_source_remote_fallback(&plugin_def, path)
-						{
-							if let Ok(manifest) = self
-								.fetch_remote_manifest_with_candidates(
-									&repo_url,
-									&[PathBuf::from(subdir)],
-								)
-								.await
-							{
-								manifest
-									.version
-									.unwrap_or_else(|| "latest".to_string())
-							} else {
-								"latest".to_string()
-							}
-						} else {
-							"latest".to_string()
-						}
-					}
-					MarketplaceSource::Url { url, .. } => {
-						if let Ok(manifest) =
-							self.fetch_remote_manifest(url, name).await
-						{
-							manifest
-								.version
-								.unwrap_or_else(|| "latest".to_string())
-						} else {
-							"latest".to_string()
-						}
-					}
-					MarketplaceSource::GitHub { repo, .. } => {
-						let url = if repo.starts_with("https://") {
-							repo.clone()
-						} else {
-							format!("https://github.com/{}", repo)
-						};
-						if let Ok(manifest) =
-							self.fetch_remote_manifest(&url, name).await
-						{
-							manifest
-								.version
-								.unwrap_or_else(|| "latest".to_string())
-						} else {
-							"latest".to_string()
-						}
-					}
-					MarketplaceSource::GitSubdir { url, path, .. } => {
-						if let Ok(manifest) = self
-							.fetch_remote_manifest_with_candidates(
-								url,
-								&[PathBuf::from(path.trim_matches('/'))],
-							)
-							.await
-						{
-							manifest
-								.version
-								.unwrap_or_else(|| "latest".to_string())
-						} else {
-							"latest".to_string()
-						}
-					}
-					MarketplaceSource::Npm { .. } => "latest".to_string(),
-				}
-			};
-
-			return Ok(Some((version, commit)));
-		}
-
-		// Fallback: try to find in local plugins directories
-		if self.plugin_source_dir(name).is_some() {
-			let manifest = self.read_manifest(name).await?;
-			let version = manifest
-				.and_then(|m| m.version)
-				.unwrap_or_else(|| "latest".to_string());
-			let commit = self.get_marketplace_commit().await.ok().flatten();
-			return Ok(Some((version, commit)));
-		}
-
-		Ok(None)
-	}
-}
-
-impl MarketplaceRegistry {
-	/// Fetch manifest from remote git repository
-	async fn fetch_remote_manifest(
-		&self,
-		url: &str,
-		name: &str,
-	) -> Result<PluginManifest> {
-		self.fetch_remote_manifest_with_candidates(
-			url,
-			&remote_plugin_candidates(name),
-		)
-		.await
-	}
-
-	async fn fetch_remote_manifest_with_candidates(
-		&self,
-		url: &str,
-		candidates: &[PathBuf],
-	) -> Result<PluginManifest> {
-		// Try to fetch from raw GitHub content first
-		if let Some(manifest) =
-			self.try_fetch_github_raw_manifest(url, candidates).await
-		{
-			return Ok(manifest);
-		}
-
-		// Fallback: download tarball and extract manifest
-		self.fetch_manifest_from_tarball(url, candidates).await
-	}
-
-	/// Try to fetch manifest from raw.githubusercontent.com
-	async fn try_fetch_github_raw_manifest(
-		&self,
-		url: &str,
-		candidates: &[PathBuf],
-	) -> Option<PluginManifest> {
-		let (owner, repo) = github_owner_repo(url)?;
-
-		for path in manifest_candidate_paths(candidates) {
-			// Try main branch
-			let raw_url = format!(
-				"https://raw.githubusercontent.com/{}/{}/main/{}",
-				owner, repo, path
-			);
-			if let Some(manifest) = self.fetch_manifest_from_url(&raw_url).await
-			{
-				return Some(manifest);
-			}
-
-			// Try master branch
-			let raw_url = format!(
-				"https://raw.githubusercontent.com/{}/{}/master/{}",
-				owner, repo, path
-			);
-			if let Some(manifest) = self.fetch_manifest_from_url(&raw_url).await
-			{
-				return Some(manifest);
-			}
-		}
-
-		None
-	}
-
-	/// Fetch manifest from a specific URL
-	async fn fetch_manifest_from_url(
-		&self,
-		url: &str,
-	) -> Option<PluginManifest> {
-		let response = self.client.get(url).send().await.ok()?;
-		if !response.status().is_success() {
-			return None;
-		}
-		response.json::<PluginManifest>().await.ok()
-	}
-
-	/// Download tarball and extract manifest
-	async fn fetch_manifest_from_tarball(
-		&self,
-		url: &str,
-		candidates: &[PathBuf],
-	) -> Result<PluginManifest> {
-		let temp_dir = std::env::temp_dir().join(format!(
-			"aghub-plugin-manifest-{}-{}",
-			unique_suffix(),
-			std::process::id()
-		));
-
-		// Clean up temp dir if it exists
-		if temp_dir.exists() {
-			tokio::fs::remove_dir_all(&temp_dir).await.ok();
-		}
-
-		if let Err(e) =
-			extract_repository_archive(&self.git_installer, url, &temp_dir)
-				.await
-		{
-			tokio::fs::remove_dir_all(&temp_dir).await.ok();
-			anyhow::bail!("Failed to download remote plugin manifest: {}", e);
-		}
-
-		let plugin_dir =
-			resolve_plugin_dir_with_wrappers(&temp_dir, candidates)
-				.ok_or_else(|| {
-					anyhow::anyhow!(
-						"plugin root not found in remote repository"
-					)
-				})?;
-
-		// Find and read manifest
-		let manifest = self.find_manifest_in_dir(&plugin_dir).await;
-
-		// Clean up temp dir
-		tokio::fs::remove_dir_all(&temp_dir).await.ok();
-
-		manifest.map_err(|e| {
-			anyhow::anyhow!(
-				"plugin.json not found in remote plugin from '{}': {}",
-				url,
-				e
-			)
-		})
-	}
-
-	/// Find manifest in a directory by trying common paths
-	async fn find_manifest_in_dir(&self, dir: &Path) -> Result<PluginManifest> {
-		if let Some(path) = find_plugin_manifest_path(dir) {
-			let content = tokio::fs::read_to_string(path).await?;
-			return serde_json::from_str(&content).map_err(|e| {
-				anyhow::anyhow!("Failed to parse plugin.json: {}", e)
-			});
-		}
-
-		anyhow::bail!("plugin.json not found in directory: {:?}", dir)
-	}
-
-	/// Install plugin from remote git repository
-	async fn install_remote(
-		&self,
-		url: &str,
-		name: &str,
-		target_dir: &Path,
-	) -> Result<Option<String>> {
-		log::info!("Installing remote plugin from {} to {:?}", url, target_dir);
-		let temp_dir = std::env::temp_dir().join(format!(
-			"aghub-plugin-install-{}-{}",
-			name,
-			std::process::id()
-		));
-
-		if temp_dir.exists() {
-			tokio::fs::remove_dir_all(&temp_dir).await.ok();
-		}
-
-		let commit = match extract_repository_archive(
-			&self.git_installer,
-			url,
-			&temp_dir,
-		)
-		.await
-		{
-			Ok(commit) => commit,
-			Err(error) => {
-				tokio::fs::remove_dir_all(&temp_dir).await.ok();
-				return Err(anyhow::anyhow!(
-					"Failed to install remote plugin '{}': {}",
-					name,
-					error
-				));
-			}
-		};
-
-		let source_dir = match resolve_plugin_dir_with_wrappers(
-			&temp_dir,
-			&remote_plugin_candidates(name),
-		) {
-			Some(path) => path,
-			None => {
-				// Fallback: scan immediate subdirectories for a manifest.
-				// Some repos extract with an extra prefix directory that
-				// `remote_plugin_candidates` doesn't anticipate.
-				let mut found = None;
-				if let Ok(mut entries) = tokio::fs::read_dir(&temp_dir).await {
-					while let Ok(Some(entry)) = entries.next_entry().await {
-						let p = entry.path();
-						if p.is_dir() && find_plugin_manifest_path(&p).is_some()
-						{
-							log::info!(
-								"Fallback found plugin manifest in {:?}",
-								p
-							);
-							found = Some(p);
-							break;
-						}
-					}
-				}
-				match found {
-					Some(path) => path,
-					None => {
-						// Log directory contents for diagnostics
-						let contents: Vec<_> = std::fs::read_dir(&temp_dir)
-							.map(|rd| {
-								rd.filter_map(|e| e.ok())
-									.map(|e| format!("{:?}", e.file_name()))
-									.collect()
-							})
-							.unwrap_or_default();
-						log::error!(
-							"Plugin manifest not found for '{}'. \
-							 temp_dir={:?}, contents={:?}",
-							name,
-							temp_dir,
-							contents
-						);
-						tokio::fs::remove_dir_all(&temp_dir).await.ok();
-						anyhow::bail!(
-							"Plugin directory not found in remote \
-							 repository for '{}'",
-							name
-						);
-					}
-				}
-			}
-		};
-
-		let copy_result = copy_dir_all(&source_dir, target_dir).await;
-		tokio::fs::remove_dir_all(&temp_dir).await.ok();
-		copy_result.map(|_| Some(commit))
-	}
-
-	/// Install plugin from remote git repository subdirectory
-	async fn install_remote_subdir(
-		&self,
-		url: &str,
-		subdir: &str,
-		target_dir: &Path,
-	) -> Result<Option<String>> {
-		log::info!(
-			"Installing remote plugin from {}/{} to {:?}",
-			url,
-			subdir,
-			target_dir
-		);
-
-		// Download entire repo to temp dir, then copy subdirectory
-		let temp_dir = std::env::temp_dir().join(format!(
-			"aghub-plugin-temp-{}-{}",
-			subdir.replace('/', "_"),
-			std::process::id()
-		));
-
-		// Clean up temp dir if it exists
-		if temp_dir.exists() {
-			tokio::fs::remove_dir_all(&temp_dir).await.ok();
-		}
-
-		// Download and extract entire repo
-		let commit = match extract_repository_archive(
-			&self.git_installer,
-			url,
-			&temp_dir,
-		)
-		.await
-		{
-			Ok(c) => c,
-			Err(e) => {
-				tokio::fs::remove_dir_all(&temp_dir).await.ok();
-				anyhow::bail!(
-					"Failed to install remote plugin subdirectory: {}",
-					e
-				);
-			}
-		};
-
-		// Find the subdirectory in the extracted content
-		let candidates = vec![PathBuf::from(subdir.trim_matches('/'))];
-		let source_dir =
-			match resolve_plugin_dir_with_wrappers(&temp_dir, &candidates) {
-				Some(path) => path,
-				None => {
-					tokio::fs::remove_dir_all(&temp_dir).await.ok();
-					anyhow::bail!(
-						"Subdirectory '{}' not found in remote repository",
-						subdir
-					);
-				}
-			};
-		if !source_dir.exists() {
-			tokio::fs::remove_dir_all(&temp_dir).await.ok();
-			anyhow::bail!(
-				"Subdirectory '{}' not found in remote repository",
-				subdir
-			);
-		}
-
-		// Copy subdirectory to target
-		let copy_result = copy_dir_all(&source_dir, target_dir).await;
-
-		// Clean up temp dir
-		tokio::fs::remove_dir_all(&temp_dir).await.ok();
-
-		copy_result.map(|_| Some(commit))
-	}
-
-	/// Read plugin manifest from local marketplace
-	async fn read_manifest(
-		&self,
-		name: &str,
-	) -> Result<Option<PluginManifest>> {
-		let plugin_dir = match self.plugin_source_dir(name) {
-			Some(p) => p,
-			None => return Ok(None),
-		};
-
-		let manifest_path = match find_plugin_manifest_path(&plugin_dir) {
-			Some(p) => p,
-			None => return Ok(None),
-		};
-
-		let content = tokio::fs::read_to_string(&manifest_path).await?;
-		let manifest: PluginManifest = serde_json::from_str(&content)?;
-
-		Ok(Some(manifest))
-	}
-
-	/// Get the current commit SHA of the marketplace repo
-	async fn get_marketplace_commit(&self) -> Result<Option<String>> {
-		use tokio::process::Command;
-
-		let output = Command::new("git")
-			.args(["rev-parse", "HEAD"])
-			.current_dir(&self.marketplace_path)
-			.output()
-			.await
-			.context("Failed to get marketplace commit")?;
-
-		if output.status.success() {
-			let commit =
-				String::from_utf8_lossy(&output.stdout).trim().to_string();
-			return Ok(Some(commit));
-		}
-
-		Ok(None)
-	}
-}
-
-/// Copy directory recursively
 pub(crate) async fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
 	tokio::fs::create_dir_all(dst).await?;
 
@@ -1582,7 +484,6 @@ pub(crate) async fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
 		let src_path = entry.path();
 		let dst_path = dst.join(entry.file_name());
 
-		// Skip .git directory
 		if src_path.is_dir()
 			&& src_path.file_name() == Some(std::ffi::OsStr::new(".git"))
 		{
@@ -1602,23 +503,27 @@ pub(crate) async fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::time::{SystemTime, UNIX_EPOCH};
+	use serde_json::json;
 
-	fn make_temp_dir(prefix: &str) -> PathBuf {
-		let unique = SystemTime::now()
-			.duration_since(UNIX_EPOCH)
-			.unwrap()
-			.as_nanos();
-		let path = std::env::temp_dir().join(format!("{prefix}-{unique}"));
-		std::fs::create_dir_all(&path).unwrap();
-		path
+	fn write_manifest(path: &Path, value: serde_json::Value) {
+		std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+		std::fs::write(path, serde_json::to_string_pretty(&value).unwrap())
+			.unwrap();
+	}
+
+	fn demo_manifest(name: &str) -> serde_json::Value {
+		json!({
+			"name": name,
+			"description": "test",
+			"author": { "name": "A" },
+		})
 	}
 
 	#[tokio::test]
 	async fn test_local_registry_supports_plugin_root_base_path() {
-		let temp_dir = make_temp_dir("aghub-local-registry");
-		let plugin_dir = temp_dir.join("demo-plugin");
-		let install_dir = temp_dir.join("installed");
+		let temp_dir = temp_dir("aghub-local-registry-").unwrap();
+		let plugin_dir = temp_dir.path().join("demo-plugin");
+		let install_dir = temp_dir.path().join("installed");
 		let manifest_dir = plugin_dir.join(".claude-plugin");
 
 		std::fs::create_dir_all(&manifest_dir).unwrap();
@@ -1634,74 +539,48 @@ mod tests {
 
 		registry.install("demo-plugin", &install_dir).await.unwrap();
 		assert!(install_dir.join(".claude-plugin/plugin.json").exists());
-
-		std::fs::remove_dir_all(&temp_dir).unwrap();
 	}
 
 	#[test]
-	fn test_resolve_plugin_dir_finds_repo_root_manifest() {
-		let temp_dir = make_temp_dir("aghub-remote-registry-root");
-		let manifest_dir = temp_dir.join(".claude-plugin");
-		std::fs::create_dir_all(&manifest_dir).unwrap();
-		std::fs::write(
-			manifest_dir.join("plugin.json"),
-			r#"{"name":"demo-plugin","description":"test","author":{"name":"A"}}"#,
-		)
-		.unwrap();
+	fn test_resolve_plugin_dir_variants() {
+		let cases = [
+			(
+				"root",
+				PathBuf::new(),
+				vec![PathBuf::from("demo-plugin"), PathBuf::new()],
+				false,
+			),
+			(
+				"subdir",
+				PathBuf::from("demo-plugin"),
+				vec![PathBuf::from("demo-plugin"), PathBuf::new()],
+				false,
+			),
+			(
+				"wrapper",
+				PathBuf::from("repo-wrapper/plugins/demo-plugin"),
+				vec![PathBuf::from("plugins/demo-plugin")],
+				true,
+			),
+		];
 
-		let resolved = resolve_plugin_dir(
-			&temp_dir,
-			&remote_plugin_candidates("demo-plugin"),
-		)
-		.unwrap();
-		assert_eq!(resolved, temp_dir);
+		for (name, manifest_dir, candidates, use_wrappers) in cases {
+			let temp_dir =
+				temp_dir(&format!("aghub-remote-registry-{name}-")).unwrap();
+			let plugin_dir = temp_dir.path().join(manifest_dir);
+			write_manifest(
+				&plugin_dir.join(".claude-plugin/plugin.json"),
+				demo_manifest("demo-plugin"),
+			);
 
-		std::fs::remove_dir_all(&resolved).unwrap();
-	}
-
-	#[test]
-	fn test_resolve_plugin_dir_finds_named_subdirectory_manifest() {
-		let temp_dir = make_temp_dir("aghub-remote-registry-subdir");
-		let plugin_dir = temp_dir.join("demo-plugin");
-		let manifest_dir = plugin_dir.join(".claude-plugin");
-		std::fs::create_dir_all(&manifest_dir).unwrap();
-		std::fs::write(
-			manifest_dir.join("plugin.json"),
-			r#"{"name":"demo-plugin","description":"test","author":{"name":"A"}}"#,
-		)
-		.unwrap();
-
-		let resolved = resolve_plugin_dir(
-			&temp_dir,
-			&remote_plugin_candidates("demo-plugin"),
-		)
-		.unwrap();
-		assert_eq!(resolved, plugin_dir);
-
-		std::fs::remove_dir_all(&temp_dir).unwrap();
-	}
-
-	#[test]
-	fn test_resolve_plugin_dir_with_wrappers_finds_nested_manifest() {
-		let temp_dir = make_temp_dir("aghub-remote-registry-wrapper");
-		let wrapper_dir = temp_dir.join("repo-wrapper");
-		let plugin_dir = wrapper_dir.join("plugins/demo-plugin");
-		let manifest_dir = plugin_dir.join(".claude-plugin");
-		std::fs::create_dir_all(&manifest_dir).unwrap();
-		std::fs::write(
-			manifest_dir.join("plugin.json"),
-			r#"{"name":"demo-plugin","description":"test","author":{"name":"A"}}"#,
-		)
-		.unwrap();
-
-		let resolved = resolve_plugin_dir_with_wrappers(
-			&temp_dir,
-			&[PathBuf::from("plugins/demo-plugin")],
-		)
-		.unwrap();
-		assert_eq!(resolved, plugin_dir);
-
-		std::fs::remove_dir_all(&temp_dir).unwrap();
+			let resolved = if use_wrappers {
+				resolve_plugin_dir_with_wrappers(temp_dir.path(), &candidates)
+			} else {
+				resolve_plugin_dir(temp_dir.path(), &candidates)
+			}
+			.unwrap();
+			assert_eq!(resolved, plugin_dir);
+		}
 	}
 
 	#[test]
@@ -1710,205 +589,5 @@ mod tests {
 			normalize_repository_url("railwayapp/railway-skills"),
 			"https://github.com/railwayapp/railway-skills"
 		);
-	}
-
-	#[test]
-	fn test_local_source_remote_fallback_uses_homepage_tree() {
-		let plugin = MarketplacePlugin {
-			name: "autofix-bot".to_string(),
-			description: String::new(),
-			version: None,
-			author: None,
-			source: MarketplaceSource::Local(
-				"./external_plugins/autofix-bot".to_string(),
-			),
-			category: None,
-			homepage: Some(
-				"https://github.com/anthropics/claude-plugins-public/tree/main/external_plugins/autofix-bot"
-					.to_string(),
-			),
-			extra: std::collections::HashMap::new(),
-		};
-
-		assert_eq!(
-			local_source_remote_fallback(
-				&plugin,
-				"./external_plugins/autofix-bot",
-			),
-			Some((
-				"https://github.com/anthropics/claude-plugins-public"
-					.to_string(),
-				"external_plugins/autofix-bot".to_string(),
-			))
-		);
-	}
-
-	#[tokio::test]
-	async fn test_fetch_manifest_falls_back_to_marketplace_entry_for_local_plugin(
-	) {
-		let temp_dir = make_temp_dir("aghub-marketplace-local-manifestless");
-		let plugins_dir = temp_dir.join("plugins/php-lsp");
-		let config_dir = temp_dir.join(".claude-plugin");
-		std::fs::create_dir_all(&plugins_dir).unwrap();
-		std::fs::create_dir_all(&config_dir).unwrap();
-		std::fs::write(plugins_dir.join("README.md"), "placeholder").unwrap();
-		std::fs::write(
-			config_dir.join("marketplace.json"),
-			r#"{
-				"name": "test-marketplace",
-				"description": "test",
-				"owner": { "name": "owner" },
-				"plugins": [
-					{
-						"name": "php-lsp",
-						"description": "PHP language server",
-						"version": "1.0.0",
-						"author": { "name": "Anthropic" },
-						"source": "./plugins/php-lsp"
-					}
-				]
-			}"#,
-		)
-		.unwrap();
-
-		let registry = MarketplaceRegistry::new(
-			temp_dir.clone(),
-			vec!["plugins/".to_string()],
-		)
-		.unwrap();
-		let manifest = registry.fetch_manifest("php-lsp").await.unwrap();
-
-		assert_eq!(manifest.name, "php-lsp");
-		assert_eq!(manifest.version.as_deref(), Some("1.0.0"));
-		assert_eq!(manifest.author.name, "Anthropic");
-
-		std::fs::remove_dir_all(&temp_dir).unwrap();
-	}
-
-	#[tokio::test]
-	async fn test_install_materializes_manifestless_marketplace_plugin() {
-		let temp_dir = make_temp_dir("aghub-marketplace-materialized");
-		let plugins_dir = temp_dir.join("plugins/php-lsp");
-		let config_dir = temp_dir.join(".claude-plugin");
-		let install_dir = temp_dir.join("installed/php-lsp");
-		std::fs::create_dir_all(&plugins_dir).unwrap();
-		std::fs::create_dir_all(&config_dir).unwrap();
-		std::fs::write(plugins_dir.join("README.md"), "placeholder").unwrap();
-		std::fs::write(
-			config_dir.join("marketplace.json"),
-			r#"{
-				"name": "test-marketplace",
-				"description": "test",
-				"owner": { "name": "owner" },
-				"plugins": [
-					{
-						"name": "php-lsp",
-						"description": "PHP language server",
-						"version": "1.0.0",
-						"author": { "name": "Anthropic" },
-						"source": "./plugins/php-lsp",
-						"lspServers": {
-							"intelephense": {
-								"command": "intelephense",
-								"args": ["--stdio"]
-							}
-						}
-					}
-				]
-			}"#,
-		)
-		.unwrap();
-
-		let registry = MarketplaceRegistry::new(
-			temp_dir.clone(),
-			vec!["plugins/".to_string()],
-		)
-		.unwrap();
-		registry.install("php-lsp", &install_dir).await.unwrap();
-
-		let manifest = std::fs::read_to_string(
-			install_dir.join(".claude-plugin/plugin.json"),
-		)
-		.unwrap();
-		let value: serde_json::Value = serde_json::from_str(&manifest).unwrap();
-		assert_eq!(
-			value.get("name").and_then(|item| item.as_str()),
-			Some("php-lsp")
-		);
-		assert!(value
-			.get("lspServers")
-			.and_then(|item| item.get("intelephense"))
-			.is_some());
-
-		std::fs::remove_dir_all(&temp_dir).unwrap();
-	}
-
-	#[tokio::test]
-	async fn test_update_replaces_snapshot_marketplace_from_upstream_repo() {
-		let source_dir = make_temp_dir("aghub-marketplace-source");
-		std::fs::create_dir_all(source_dir.join(".claude-plugin")).unwrap();
-		std::fs::create_dir_all(source_dir.join("plugins/demo")).unwrap();
-		std::fs::write(
-			source_dir.join(".claude-plugin/marketplace.json"),
-			r#"{"name":"claude-plugins-official","description":"test","owner":{"name":"A"},"plugins":[]}"#,
-		)
-		.unwrap();
-		std::fs::write(source_dir.join("README.md"), "fresh").unwrap();
-
-		let init_status = std::process::Command::new("git")
-			.args(["init"])
-			.current_dir(&source_dir)
-			.status()
-			.unwrap();
-		assert!(init_status.success());
-
-		let add_status = std::process::Command::new("git")
-			.args(["add", "."])
-			.current_dir(&source_dir)
-			.status()
-			.unwrap();
-		assert!(add_status.success());
-
-		let commit_status = std::process::Command::new("git")
-			.args([
-				"-c",
-				"user.name=Test",
-				"-c",
-				"user.email=test@example.com",
-				"commit",
-				"-m",
-				"init",
-			])
-			.current_dir(&source_dir)
-			.status()
-			.unwrap();
-		assert!(commit_status.success());
-
-		let snapshot_dir = make_temp_dir("aghub-marketplace-snapshot");
-		std::fs::create_dir_all(snapshot_dir.join(".claude-plugin")).unwrap();
-		std::fs::write(
-			snapshot_dir.join(".claude-plugin/marketplace.json"),
-			r#"{"name":"claude-plugins-official","description":"old","owner":{"name":"A"},"plugins":[]}"#,
-		)
-		.unwrap();
-		std::fs::write(snapshot_dir.join("README.md"), "stale").unwrap();
-
-		let registry = MarketplaceRegistry::new_with_upstream(
-			snapshot_dir.clone(),
-			vec!["plugins/".to_string()],
-			Some(source_dir.display().to_string()),
-		)
-		.unwrap();
-
-		registry.update().await.unwrap();
-
-		assert!(snapshot_dir.join(".git").exists());
-		assert_eq!(
-			std::fs::read_to_string(snapshot_dir.join("README.md")).unwrap(),
-			"fresh"
-		);
-
-		std::fs::remove_dir_all(&source_dir).unwrap();
-		std::fs::remove_dir_all(&snapshot_dir).unwrap();
 	}
 }

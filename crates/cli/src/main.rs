@@ -478,7 +478,6 @@ mod describe {
 }
 
 // Handle plugin management commands
-#[cfg(feature = "claude-plugins")]
 fn handle_plugin_action(action: PluginAction) -> Result<()> {
 	use aghub_plugins::claude::ClaudePluginManager;
 	use aghub_plugins::PluginId;
@@ -558,11 +557,4 @@ fn handle_plugin_action(action: PluginAction) -> Result<()> {
 			Ok(())
 		}
 	}
-}
-
-#[cfg(not(feature = "claude-plugins"))]
-fn handle_plugin_action(_action: PluginAction) -> Result<()> {
-	Err(anyhow::anyhow!(
-		"Plugin support is not compiled. Rebuild with --features claude-plugins"
-	))
 }

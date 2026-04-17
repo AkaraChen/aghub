@@ -31,6 +31,7 @@ pub type SaveSubAgentsFn =
 
 pub type OptionalPathFn = fn() -> Option<PathBuf>;
 pub type OptionalProjectPathFn = fn(&Path) -> Option<PathBuf>;
+pub type ManagedSkillPathFn = fn(&Path) -> Option<String>;
 
 #[derive(Debug, Clone, Copy)]
 pub struct ScopeSupport {
@@ -95,6 +96,9 @@ pub struct AgentDescriptor {
 	/// Agent-specific global data directory used for availability checks.
 	pub global_data_dir: fn() -> Option<PathBuf>,
 	pub capabilities: Capabilities,
+	/// Return the external owner for read paths that must not be mutated by
+	/// generic skill CRUD.
+	pub managed_skill_path: Option<ManagedSkillPathFn>,
 	pub global_skill_paths: Option<GlobalSkillPaths>,
 	pub project_skill_paths: Option<ProjectSkillPaths>,
 	/// Load sub-agents for the requested scope.
@@ -176,6 +180,10 @@ impl AgentDescriptor {
 			}
 			ResourceScope::Both => None,
 		}
+	}
+
+	pub fn managed_skill_path(&self, path: &Path) -> Option<String> {
+		self.managed_skill_path.and_then(|check| check(path))
 	}
 
 	pub fn global_skill_read_paths(&self) -> Vec<PathBuf> {

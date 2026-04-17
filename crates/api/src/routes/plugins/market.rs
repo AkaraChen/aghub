@@ -1,25 +1,26 @@
 use crate::dto::plugin::CCPluginMarketResponse;
 use crate::error::{ApiError, ApiResult};
-use aghub_plugins::installer::registry::MarketplaceRegistry;
+use log::error;
+use rocket::http::Status;
 use rocket::serde::json::Json;
 
-use super::shared::load_plugin_manager;
+use super::shared::{load_plugin_installer, load_plugin_manager};
 
 #[post("/plugins-market/update")]
 pub async fn update_marketplace() -> ApiResult<serde_json::Value> {
-	let registry = MarketplaceRegistry::new_official().map_err(|e| {
-		ApiError::internal(format!(
-			"Failed to create marketplace registry: {e}"
-		))
-	})?;
-
-	registry.update().await.map_err(|e| {
-		ApiError::internal(format!("Failed to update marketplace: {e}"))
+	let installer = load_plugin_installer()?;
+	let updated = installer.update_marketplaces().await.map_err(|error| {
+		error!("Failed to update plugin marketplaces: {}", error);
+		ApiError::new(
+			Status::BadGateway,
+			error.to_string(),
+			"PLUGIN_MARKET_UPDATE_FAILED",
+		)
 	})?;
 
 	Ok(Json(serde_json::json!({
 		"success": true,
-		"message": "Marketplace updated successfully"
+		"message": format!("Updated {} marketplace(s)", updated.len())
 	})))
 }
 
@@ -32,9 +33,8 @@ pub async fn list_plugin_market() -> ApiResult<Vec<CCPluginMarketResponse>> {
 		UnifiedPluginRegistry::new_async(&config)
 			.await
 			.map_err(|e| {
-				ApiError::internal(format!(
-					"Failed to create plugin registry: {e}"
-				))
+				error!("Failed to create plugin registry: {}", e);
+				ApiError::internal("Failed to create plugin registry")
 			})?;
 	let plugins = registry.all_plugins();
 	log::info!("Plugin market: discovered {} plugins", plugins.len());

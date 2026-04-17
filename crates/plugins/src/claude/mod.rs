@@ -323,6 +323,10 @@ impl ClaudePluginManager {
 		&self.installed
 	}
 
+	pub fn plugin_owning_path(&self, path: &Path) -> Option<&ClaudePluginInfo> {
+		self.installed.iter().find(|plugin| plugin.owns_path(path))
+	}
+
 	/// Check if a plugin is enabled
 	pub fn is_enabled(&self, id: &PluginId) -> bool {
 		self.settings.is_enabled(id)
@@ -364,22 +368,6 @@ impl ClaudePluginManager {
 		plugin.enabled = false;
 
 		Ok(())
-	}
-
-	/// Filter skill paths based on plugin enabled status
-	pub fn filter_skills(&self, paths: Vec<PathBuf>) -> Vec<PathBuf> {
-		paths
-			.into_iter()
-			.filter(|path| self.should_include_skill(path))
-			.collect()
-	}
-
-	/// Get plugin skills directory
-	pub fn get_plugin_skills_path(&self, id: &PluginId) -> Option<PathBuf> {
-		self.installed
-			.iter()
-			.find(|p| p.id == *id)
-			.map(|p| p.install_path.join("skills"))
 	}
 
 	/// Get plugin user configuration
@@ -566,19 +554,6 @@ impl ClaudePluginManager {
 		}
 
 		Ok(())
-	}
-
-	fn should_include_skill(&self, skill_path: &Path) -> bool {
-		// Check if skill is in any plugin's directory
-		for plugin in &self.installed {
-			if plugin.owns_path(skill_path) {
-				// It's a plugin skill, only include if enabled
-				return plugin.enabled;
-			}
-		}
-
-		// Not a plugin skill, always include
-		true
 	}
 }
 

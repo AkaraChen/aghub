@@ -309,6 +309,90 @@ export function uninstallPluginMutationOptions({
 	});
 }
 
+interface BulkUninstallPluginsMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (removedPluginIds: Set<string>) => void | Promise<void>;
+	onError?: (error: Error) => void | Promise<void>;
+}
+
+export function bulkUninstallPluginsMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+	onError,
+}: BulkUninstallPluginsMutationParams) {
+	return mutationOptions({
+		mutationFn: async (plugins: CCPluginResponse[]) => {
+			const requests = plugins.flatMap((plugin) =>
+				Array.from(
+					new Map(
+						plugin.scopes.map((scopeInfo) => [
+							scopeInfo.scope,
+							scopeInfo,
+						]),
+					).keys(),
+				).map((scope) => ({
+					pluginId: plugin.id,
+					scope,
+					request: api.plugins.uninstall({
+						plugin_id: plugin.id,
+						scope,
+						keep_data: false,
+					}),
+				})),
+			);
+			const results = await Promise.allSettled(
+				requests.map((entry) => entry.request),
+			);
+			const failures = results
+				.map((result, index) => ({
+					result,
+					pluginId: requests[index]?.pluginId,
+					scope: requests[index]?.scope,
+				}))
+				.filter(
+					(
+						entry,
+					): entry is {
+						result: PromiseRejectedResult;
+						pluginId: string;
+						scope: string;
+					} => entry.result.status === "rejected",
+				);
+
+			if (failures.length > 0) {
+				throw new Error(
+					failures
+						.map(({ pluginId, scope, result }) => {
+							const reason =
+								result.reason instanceof Error
+									? result.reason.message
+									: String(result.reason);
+
+							return `${pluginId} (${scope}): ${reason}`;
+						})
+						.join("; "),
+				);
+			}
+
+			return new Set(plugins.map((plugin) => plugin.id));
+		},
+		onSuccess: async (removedPluginIds) => {
+			await invalidatePluginQueries(queryClient);
+			await invalidatePluginSkillQueries(queryClient);
+			await onSuccess?.(removedPluginIds);
+		},
+		onError: async (error) => {
+			await invalidatePluginQueries(queryClient);
+			await invalidatePluginSkillQueries(queryClient);
+			await onError?.(
+				error instanceof Error ? error : new Error(String(error)),
+			);
+		},
+	});
+}
+
 interface UpdatePluginConfigMutationParams {
 	api: ApiClient;
 	onSuccess?: (

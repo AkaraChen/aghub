@@ -1,33 +1,22 @@
 "use client";
 
 import { FolderIcon } from "@heroicons/react/24/solid";
-import { Card, toast } from "@heroui/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { Button, Card, Tooltip } from "@heroui/react";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type {
-	CCPluginCheckUpdateResponse,
-	CCPluginResponse,
-} from "../generated/dto";
+import type { CCPluginResponse } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
-import { queryKeys } from "../requests/keys";
 import {
-	checkPluginUpdateMutationOptions,
 	pluginDetailQueryOptions,
 	pluginUpdateStatusQueryOptions,
-	reinstallPluginMutationOptions,
-	uninstallPluginMutationOptions,
-	updatePluginMutationOptions,
 } from "../requests/plugins";
-import { skillListQueryOptions } from "../requests/skills";
 import { McpServersSection } from "./plugin-detail/mcp-servers-section";
 import { PluginConfirmDialog } from "./plugin-detail/confirm-dialog";
 import { PluginDetailHeader } from "./plugin-detail/detail-header";
 import { ProvidedSkillsSection } from "./plugin-detail/provided-skills-section";
 import { PluginSourceCard } from "./plugin-detail/source-card";
-import { usePluginToggleState } from "./plugin-detail/use-plugin-toggle-state";
-import { TooltipIconButton } from "./ui/tooltip-icon-button";
+import { usePluginDetailActions } from "./plugin-detail/use-plugin-detail-actions";
 
 const SEMANTIC_VERSION_REGEX = /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
 const GIT_HASH_REGEX = /^[0-9a-f]{7,40}$/i;
@@ -47,13 +36,8 @@ export function PluginDetail({
 }: PluginDetailProps) {
 	const { t } = useTranslation();
 	const api = useApi();
-	const queryClient = useQueryClient();
 	const [showUninstallConfirm, setShowUninstallConfirm] = useState(false);
 	const [showReinstallConfirm, setShowReinstallConfirm] = useState(false);
-
-	const { data: allSkills } = useQuery(
-		skillListQueryOptions({ api, scope: "global" }),
-	);
 
 	const { data: pluginDetail } = useQuery(
 		pluginDetailQueryOptions({
@@ -100,10 +84,7 @@ export function PluginDetail({
 	const updateAvailable = updateStatus?.update_available ?? false;
 	const latestVersion = updateStatus?.latest_version ?? null;
 
-	const providedSkills = useMemo(
-		() => pluginDetail?.provided_skills ?? [],
-		[pluginDetail?.provided_skills],
-	);
+	const providedSkills = pluginDetail?.provided_skills ?? [];
 
 	const sourceVersion = useMemo(() => {
 		const version =
@@ -130,157 +111,39 @@ export function PluginDetail({
 
 		return version;
 	}, [currentPlugin.version, currentScopeInfo?.version]);
-
-	const markSkillQueriesStale = () =>
-		queryClient.invalidateQueries({
-			queryKey: queryKeys.skills.all(),
-			refetchType: "none",
-		});
-
-	const { enableMutation, disableMutation, isToggling } =
-		usePluginToggleState({
-			api,
-			queryClient,
-			pluginId: plugin.id,
-			currentPlugin,
-			onSkillsChanged: markSkillQueriesStale,
-		});
-
-	const updateMutation = useMutation({
-		...updatePluginMutationOptions({
-			api,
-			queryClient,
-			onSuccess: async () => {
-				toast.success(t("pluginUpdated"));
-			},
-		}),
-		onError: (error) => {
-			toast.danger(error.message || t("updateFailed"));
-		},
+	const installPath =
+		currentScopeInfo?.folder_path ??
+		currentPlugin.scopes[0]?.folder_path ??
+		"—";
+	const {
+		enableMutation,
+		disableMutation,
+		isToggling,
+		updateMutation,
+		checkUpdateMutation,
+		reinstallMutation,
+		uninstallMutation,
+		handleSourceRefresh,
+		handleReinstall,
+		handleUninstall,
+		handleOpenUrl,
+		handleOpenInstallPath,
+	} = usePluginDetailActions({
+		pluginId: plugin.id,
+		currentPlugin,
+		currentScope,
+		currentScopeInfo,
+		updateAvailable,
+		latestVersion,
 	});
-
-	const checkUpdateMutation = useMutation({
-		...checkPluginUpdateMutationOptions({ api }),
-		onSuccess: (data) => {
-			queryClient.setQueryData<CCPluginCheckUpdateResponse>(
-				queryKeys.plugins.updateStatus(plugin.id, currentScope),
-				data,
-			);
-
-			void queryClient.invalidateQueries({
-				queryKey: queryKeys.plugins.list(),
-			});
-
-			if (data.update_available) {
-				toast.success(
-					t("updateAvailable", {
-						version: data.latest_version ?? "latest",
-					}),
-				);
-			} else {
-				toast.success(t("noUpdateAvailable"));
-			}
-		},
-		onError: (error) => {
-			toast.danger(
-				t("updateCheckFailed", {
-					error: error.message || t("unknownError"),
-				}),
-			);
-		},
-	});
-
-	const reinstallMutation = useMutation({
-		...reinstallPluginMutationOptions({
-			api,
-			queryClient,
-			onSuccess: async () => {
-				toast.success(t("pluginReinstalled"));
-			},
-		}),
-		onError: (error) => {
-			toast.danger(error.message || t("reinstallFailed"));
-		},
-	});
-
-	const uninstallMutation = useMutation({
-		...uninstallPluginMutationOptions({
-			api,
-			queryClient,
-			onSuccess: async () => {
-				toast.success(t("pluginUninstalled"));
-			},
-		}),
-		onError: (error) => {
-			toast.danger(error.message || t("uninstallFailed"));
-		},
-	});
-
-	const handleUninstall = () => {
+	const confirmUninstall = () => {
 		setShowUninstallConfirm(false);
-		uninstallMutation.mutate({
-			plugin_id: currentPlugin.id,
-			scope: currentScope,
-			keep_data: false,
-		});
+		handleUninstall();
 	};
-
-	const handleReinstall = () => {
+	const confirmReinstall = () => {
 		setShowReinstallConfirm(false);
-		reinstallMutation.mutate({
-			plugin_id: currentPlugin.id,
-			scope: currentScope,
-			keep_data: true,
-		});
+		handleReinstall();
 	};
-
-	const handleSourceRefresh = () => {
-		if (updateAvailable) {
-			updateMutation.mutate({
-				plugin_id: currentPlugin.id,
-				scope: currentScope,
-			});
-			return;
-		}
-
-		checkUpdateMutation.mutate({
-			plugin_id: currentPlugin.id,
-			scope: currentScope,
-		});
-	};
-
-	const handleOpenUrl = (url: string | undefined) => {
-		if (url) {
-			openUrl(url).catch(console.error);
-		}
-	};
-
-	const handleOpenInstallPath = () => {
-		api.plugins
-			.openFolder(currentPlugin.id, currentScope)
-			.catch(console.error);
-	};
-
-	const allPluginSkills = useMemo(() => {
-		const pluginSkills =
-			allSkills?.filter(
-				(skill) =>
-					skill.plugin_id && skill.plugin_id === currentPlugin.id,
-			) ?? [];
-		const skillNames = new Set(pluginSkills.map((skill) => skill.name));
-		const merged = [...pluginSkills];
-
-		for (const skill of providedSkills) {
-			if (!skillNames.has(skill.name)) {
-				merged.push({
-					name: skill.name,
-					description: skill.description,
-				} as (typeof merged)[number]);
-			}
-		}
-
-		return merged;
-	}, [allSkills, currentPlugin.id, providedSkills]);
 
 	return (
 		<div className="h-full overflow-y-auto">
@@ -343,36 +206,38 @@ export function PluginDetail({
 								<span className="text-[11px] font-medium tracking-wide text-muted uppercase">
 									{t("installPath")}
 								</span>
-								<div className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2">
+								<div className="flex items-center justify-between gap-3 rounded-lg border border-separator bg-surface-secondary px-3 py-2">
 									<div className="min-w-0 flex-1">
 										<p
 											tabIndex={0}
 											className="cursor-default break-all rounded-sm font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none"
-											title={
-												currentScopeInfo?.folder_path ??
-												currentPlugin.install_path
-											}
+											title={installPath}
 										>
-											{currentScopeInfo?.folder_path ??
-												currentPlugin.install_path}
+											{installPath}
 										</p>
 									</div>
 									<div className="flex shrink-0 items-center gap-1">
-										<TooltipIconButton
-											variant="ghost"
-											size="sm"
-											className="size-8 text-muted"
-											onPress={handleOpenInstallPath}
-											label={t("openFolder")}
-										>
-											<FolderIcon className="size-4" />
-										</TooltipIconButton>
+										<Tooltip delay={0}>
+											<Button
+												isIconOnly
+												variant="ghost"
+												size="sm"
+												className="size-8 text-muted"
+												aria-label={t("openFolder")}
+												onPress={handleOpenInstallPath}
+											>
+												<FolderIcon className="size-4" />
+											</Button>
+											<Tooltip.Content>
+												{t("openFolder")}
+											</Tooltip.Content>
+										</Tooltip>
 									</div>
 								</div>
 							</div>
 						</div>
 
-						<ProvidedSkillsSection skills={allPluginSkills} />
+						<ProvidedSkillsSection skills={providedSkills} />
 						<McpServersSection config={mcpConfig} />
 					</Card.Content>
 				</Card>
@@ -387,7 +252,7 @@ export function PluginDetail({
 					cancelLabel={t("cancel")}
 					status="danger"
 					onOpenChange={setShowUninstallConfirm}
-					onConfirm={handleUninstall}
+					onConfirm={confirmUninstall}
 				/>
 				<PluginConfirmDialog
 					isOpen={showReinstallConfirm}
@@ -399,7 +264,7 @@ export function PluginDetail({
 					cancelLabel={t("cancel")}
 					status="warning"
 					onOpenChange={setShowReinstallConfirm}
-					onConfirm={handleReinstall}
+					onConfirm={confirmReinstall}
 				/>
 			</div>
 		</div>

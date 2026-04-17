@@ -1,11 +1,10 @@
 "use client";
 
 import { ArrowPathIcon, TrashIcon } from "@heroicons/react/24/solid";
-import { Card, ListBox, Select, Switch, Tooltip } from "@heroui/react";
+import { Button, Card, ListBox, Select, Switch, Tooltip } from "@heroui/react";
 import type { Key } from "react";
 import { useTranslation } from "react-i18next";
 import type { CCPluginResponse } from "../../generated/dto";
-import { TooltipIconButton } from "../ui/tooltip-icon-button";
 
 interface PluginDetailHeaderProps {
 	plugin: CCPluginResponse;
@@ -75,46 +74,60 @@ export function PluginDetailHeader({
 			</div>
 			<div className="flex items-center gap-1">
 				{plugin.source_info.can_reinstall && (
-					<TooltipIconButton
+					<Tooltip delay={0}>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							className="size-8 text-muted"
+							onPress={onReinstall}
+							isDisabled={isReinstalling}
+							aria-label={t("reinstallPlugin")}
+						>
+							<ArrowPathIcon
+								className={`size-4 ${isReinstalling ? "animate-spin" : ""}`}
+							/>
+						</Button>
+						<Tooltip.Content>
+							{t("reinstallPlugin")}
+						</Tooltip.Content>
+					</Tooltip>
+				)}
+				<Tooltip delay={0}>
+					<Button
+						isIconOnly
 						variant="ghost"
 						size="sm"
 						className="size-8 text-muted"
-						onPress={onReinstall}
-						isDisabled={isReinstalling}
-						label={t("reinstallPlugin")}
+						onPress={onUninstall}
+						isDisabled={isUninstalling}
+						aria-label={t("uninstallPlugin")}
 					>
-						<ArrowPathIcon
-							className={`size-4 ${isReinstalling ? "animate-spin" : ""}`}
+						<TrashIcon
+							className={`size-4 ${isUninstalling ? "animate-spin" : ""}`}
 						/>
-					</TooltipIconButton>
-				)}
-				<TooltipIconButton
-					variant="ghost"
-					size="sm"
-					className="size-8 text-muted"
-					onPress={onUninstall}
-					isDisabled={isUninstalling}
-					label={t("uninstallPlugin")}
-				>
-					<TrashIcon
-						className={`size-4 ${isUninstalling ? "animate-spin" : ""}`}
-					/>
-				</TooltipIconButton>
+					</Button>
+					<Tooltip.Content>{t("uninstallPlugin")}</Tooltip.Content>
+				</Tooltip>
 				<Tooltip delay={0}>
-					<Switch
-						isSelected={plugin.enabled}
-						isDisabled={isToggling}
-						onChange={onToggle}
-						aria-label={
-							plugin.enabled
-								? t("disablePlugin")
-								: t("enablePlugin")
-						}
-					>
-						<Switch.Control>
-							<Switch.Thumb />
-						</Switch.Control>
-					</Switch>
+					<Tooltip.Trigger>
+						<span className="inline-flex">
+							<Switch
+								isSelected={plugin.enabled}
+								isDisabled={isToggling}
+								onChange={onToggle}
+								aria-label={
+									plugin.enabled
+										? t("disablePlugin")
+										: t("enablePlugin")
+								}
+							>
+								<Switch.Control>
+									<Switch.Thumb />
+								</Switch.Control>
+							</Switch>
+						</span>
+					</Tooltip.Trigger>
 					<Tooltip.Content>
 						{plugin.enabled
 							? t("disablePlugin")

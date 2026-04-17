@@ -64,6 +64,7 @@ pub struct CCPluginUpdateResponse {
 #[ts(export)]
 pub struct CCPluginCheckUpdateRequest {
 	pub plugin_id: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub scope: Option<String>,
 }
@@ -74,8 +75,10 @@ pub struct CCPluginCheckUpdateResponse {
 	pub plugin_id: String,
 	pub update_available: bool,
 	pub current_version: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub latest_version: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub changelog: Option<String>,
 }

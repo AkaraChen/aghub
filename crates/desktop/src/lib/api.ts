@@ -90,11 +90,13 @@ export function createApi(baseUrl: string) {
 			listAll(
 				scope: "global" | "project" | "all" = "global",
 				projectRoot?: string,
+				includeManaged = false,
 			): Promise<SkillResponse[]> {
 				return client
 					.get("agents/all/skills", {
 						searchParams: {
 							scope,
+							include_managed: includeManaged.toString(),
 							...(projectRoot
 								? { project_root: projectRoot }
 								: {}),
@@ -463,13 +465,25 @@ export function createApi(baseUrl: string) {
 				return client.get("plugins").json();
 			},
 			detail(pluginId: string): Promise<CCPluginDetailResponse> {
-				return client.get(`plugins/${pluginId}`).json();
+				return client
+					.get("plugins/detail", {
+						searchParams: { plugin_id: pluginId },
+					})
+					.json();
 			},
 			enable(pluginId: string): Promise<CCPluginResponse> {
-				return client.post(`plugins/${pluginId}/enable`).json();
+				return client
+					.post("plugins/enable", {
+						searchParams: { plugin_id: pluginId },
+					})
+					.json();
 			},
 			disable(pluginId: string): Promise<CCPluginResponse> {
-				return client.post(`plugins/${pluginId}/disable`).json();
+				return client
+					.post("plugins/disable", {
+						searchParams: { plugin_id: pluginId },
+					})
+					.json();
 			},
 			install(
 				body: CCPluginInstallRequest,
@@ -500,15 +514,15 @@ export function createApi(baseUrl: string) {
 					.json();
 			},
 			openFolder(pluginId: string, scope?: string): Promise<void> {
-				const search = new URLSearchParams();
+				const search = new URLSearchParams({ plugin_id: pluginId });
 				if (scope) {
 					search.set("scope", scope);
 				}
-				const query = search.toString();
-				const path = query
-					? `plugins/${pluginId}/open-folder?${query}`
-					: `plugins/${pluginId}/open-folder`;
-				return client.post(path).then(() => undefined);
+				return client
+					.post("plugins/open-folder", {
+						searchParams: search,
+					})
+					.then(() => undefined);
 			},
 			reinstall(
 				body: CCPluginReinstallRequest,
@@ -518,17 +532,23 @@ export function createApi(baseUrl: string) {
 					.json();
 			},
 			getConfig(pluginId: string): Promise<CCPluginConfigResponse> {
-				return client.get(`plugins/${pluginId}/config`).json();
+				return client
+					.get("plugins/config", {
+						searchParams: { plugin_id: pluginId },
+					})
+					.json();
 			},
 			updateConfig(
 				body: CCPluginUpdateConfigRequest,
 			): Promise<CCPluginConfigResponse> {
-				return client
-					.post(`plugins/${body.plugin_id}/config`, { json: body })
-					.json();
+				return client.post("plugins/config", { json: body }).json();
 			},
 			deleteConfig(pluginId: string): Promise<CCPluginConfigResponse> {
-				return client.delete(`plugins/${pluginId}/config`).json();
+				return client
+					.delete("plugins/config", {
+						searchParams: { plugin_id: pluginId },
+					})
+					.json();
 			},
 			listMarket(): Promise<CCPluginMarketResponse[]> {
 				return client.get("plugins-market").json();

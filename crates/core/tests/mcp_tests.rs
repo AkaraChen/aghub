@@ -97,6 +97,7 @@ static ADAPTER_TEST_DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 			},
 		},
 	},
+	managed_skill_path: None,
 	global_skill_paths: None,
 	project_skill_paths: None,
 	load_sub_agents: load_sub_agents_noop,

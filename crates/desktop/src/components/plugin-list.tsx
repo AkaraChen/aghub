@@ -1,32 +1,50 @@
 "use client";
 
-import { Label, ListBox } from "@heroui/react";
+import {
+	ArrowPathIcon,
+	CheckCircleIcon,
+	PlusIcon,
+	RectangleStackIcon,
+} from "@heroicons/react/24/solid";
+import { Button, Label, ListBox, Tooltip } from "@heroui/react";
 import Fuse from "fuse.js";
 import { useEffect, useMemo, useRef } from "react";
 import type { KeyboardEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type { CCPluginResponse } from "../generated/dto";
 import { cn } from "../lib/utils";
+import { ListSearchHeader } from "./list-search-header";
+import { MultiSelectFloatingBar } from "./multi-select-floating-bar";
 
 interface PluginListProps {
 	plugins: CCPluginResponse[];
 	selectedKeys: Set<string>;
 	searchQuery: string;
+	onSearchChange: (value: string) => void;
 	onSelectionChange: (keys: Set<string>, clickedKey?: string) => void;
-	emptyMessage?: string;
-	selectionMode?: "none" | "single" | "multiple";
+	onOpenMarket: () => void;
+	onToggleMultiSelect: () => void;
+	onRefresh: () => void;
+	onDeleteSelection: () => void;
+	selectedCount: number;
+	totalCount: number;
+	isRefreshing?: boolean;
 	isMultiSelectMode?: boolean;
 }
-
-// No longer rendering capability icons in list
 
 export function PluginList({
 	plugins,
 	selectedKeys,
 	searchQuery,
+	onSearchChange,
 	onSelectionChange,
-	emptyMessage,
-	selectionMode = "single",
+	onOpenMarket,
+	onToggleMultiSelect,
+	onRefresh,
+	onDeleteSelection,
+	selectedCount,
+	totalCount,
+	isRefreshing = false,
 	isMultiSelectMode = false,
 }: PluginListProps) {
 	const { t } = useTranslation();
@@ -50,7 +68,6 @@ export function PluginList({
 		return fuse.search(searchQuery).map((result) => result.item);
 	}, [fuse, plugins, searchQuery]);
 
-	// ListBox onSelectionChange does not include the triggering event.
 	const pendingSelectionModifiersRef = useRef({
 		shift: false,
 		meta: false,
@@ -122,83 +139,159 @@ export function PluginList({
 		onSelectionChange(finalKeys, clicked);
 	};
 
-	const getStatusIndicator = (enabled: boolean) => {
-		return (
-			<div
-				className={cn(
-					"size-2.5 rounded-full transition-colors duration-300",
-					enabled ? "bg-success" : "bg-muted shadow-inner",
-				)}
-				title={enabled ? t("enabled") : t("disabled")}
-			/>
-		);
-	};
-
-	if (filteredPlugins.length === 0) {
-		return (
-			<div className="px-3 py-6 text-center">
-				<p className="text-sm text-muted">
-					{emptyMessage ??
-						(searchQuery
-							? t("noPluginsMatch")
-							: t("noPluginsInstalled"))}
-				</p>
-				{searchQuery && (
-					<p className="mt-1 text-xs text-muted">
-						&ldquo;{searchQuery}&rdquo;
-					</p>
-				)}
-			</div>
-		);
-	}
-
 	return (
-		<div
-			className="flex-1 overflow-y-auto"
-			onKeyDownCapture={(event: KeyboardEvent<HTMLDivElement>) => {
-				rememberSelectionModifiers(
-					event.shiftKey,
-					event.metaKey || event.ctrlKey,
-				);
-			}}
-		>
-			<ListBox
-				aria-label="Claude Code Plugins"
-				selectionMode={selectionMode}
-				selectionBehavior="toggle"
-				selectedKeys={selectedKeys}
-				onSelectionChange={handleSelectionChange}
-				className="p-2"
+		<div className="relative flex h-full flex-col">
+			<ListSearchHeader
+				searchValue={searchQuery}
+				onSearchChange={onSearchChange}
+				placeholder={t("searchPlugins")}
+				ariaLabel={t("searchPlugins")}
 			>
-				{filteredPlugins.map((plugin) => (
-					<ListBox.Item
-						key={plugin.id}
-						id={plugin.id}
-						textValue={plugin.name}
-						className="transition-colors duration-200 data-selected:bg-surface"
-						onPointerDown={(event) => {
-							rememberSelectionModifiers(
-								event.shiftKey,
-								event.metaKey || event.ctrlKey,
-							);
-						}}
+				<Tooltip delay={0}>
+					<Button
+						isIconOnly
+						variant="ghost"
+						size="sm"
+						className="shrink-0"
+						onPress={onOpenMarket}
+						aria-label={t("installFromMarket")}
 					>
-						<div className="flex w-full items-center gap-2">
-							<div className="flex min-w-0 flex-1 flex-col">
-								<Label className="truncate font-medium">
-									{plugin.name}
-								</Label>
-								<span className="truncate text-xs text-muted">
-									{plugin.id}
-								</span>
-							</div>
-							<div className="shrink-0 pl-1">
-								{getStatusIndicator(plugin.enabled)}
-							</div>
-						</div>
-					</ListBox.Item>
-				))}
-			</ListBox>
+						<PlusIcon className="size-4" />
+					</Button>
+					<Tooltip.Content>{t("installFromMarket")}</Tooltip.Content>
+				</Tooltip>
+				<Tooltip delay={0}>
+					<Button
+						isIconOnly
+						variant="ghost"
+						size="sm"
+						className={cn(
+							"shrink-0 text-muted",
+							isMultiSelectMode && "bg-accent/10 text-accent",
+						)}
+						aria-label={
+							isMultiSelectMode
+								? t("doneSelecting")
+								: t("multiSelect")
+						}
+						onPress={onToggleMultiSelect}
+					>
+						{isMultiSelectMode ? (
+							<CheckCircleIcon className="size-4" />
+						) : (
+							<RectangleStackIcon className="size-4" />
+						)}
+					</Button>
+					<Tooltip.Content>
+						{isMultiSelectMode
+							? t("doneSelecting")
+							: t("multiSelect")}
+					</Tooltip.Content>
+				</Tooltip>
+				<Tooltip delay={0}>
+					<Button
+						isIconOnly
+						variant="ghost"
+						size="sm"
+						className="shrink-0"
+						aria-label={t("refreshPlugins")}
+						onPress={onRefresh}
+						isDisabled={isRefreshing}
+					>
+						<ArrowPathIcon
+							className={cn(
+								"size-4",
+								isRefreshing && "animate-spin",
+							)}
+						/>
+					</Button>
+					<Tooltip.Content>{t("refreshPlugins")}</Tooltip.Content>
+				</Tooltip>
+			</ListSearchHeader>
+			{filteredPlugins.length === 0 ? (
+				<div className="px-3 py-6 text-center">
+					<p className="text-sm text-muted">
+						{searchQuery
+							? t("noPluginsMatch")
+							: t("noPluginsInstalled")}
+					</p>
+					{searchQuery && (
+						<p className="mt-1 text-xs text-muted">
+							&ldquo;{searchQuery}&rdquo;
+						</p>
+					)}
+				</div>
+			) : (
+				<div
+					className="flex-1 overflow-y-auto"
+					onKeyDownCapture={(
+						event: KeyboardEvent<HTMLDivElement>,
+					) => {
+						rememberSelectionModifiers(
+							event.shiftKey,
+							event.metaKey || event.ctrlKey,
+						);
+					}}
+				>
+					<ListBox
+						aria-label="Claude Code Plugins"
+						selectionMode="multiple"
+						selectionBehavior="toggle"
+						selectedKeys={selectedKeys}
+						onSelectionChange={handleSelectionChange}
+						className="p-2"
+					>
+						{filteredPlugins.map((plugin) => (
+							<ListBox.Item
+								key={plugin.id}
+								id={plugin.id}
+								textValue={plugin.name}
+								className="transition-colors duration-200 data-selected:bg-surface"
+								onPointerDown={(event) => {
+									rememberSelectionModifiers(
+										event.shiftKey,
+										event.metaKey || event.ctrlKey,
+									);
+								}}
+							>
+								<div className="flex w-full items-center gap-2">
+									<div className="flex min-w-0 flex-1 flex-col">
+										<Label className="truncate font-medium">
+											{plugin.name}
+										</Label>
+										<span className="truncate text-xs text-muted">
+											{plugin.id}
+										</span>
+									</div>
+									<div className="shrink-0 pl-1">
+										<div
+											className={cn(
+												"size-2.5 rounded-full transition-colors duration-300",
+												plugin.enabled
+													? "bg-success"
+													: "bg-muted shadow-inner",
+											)}
+											title={
+												plugin.enabled
+													? t("enabled")
+													: t("disabled")
+											}
+										/>
+									</div>
+								</div>
+							</ListBox.Item>
+						))}
+					</ListBox>
+				</div>
+			)}
+
+			{isMultiSelectMode && selectedCount > 0 && (
+				<MultiSelectFloatingBar
+					selectedCount={selectedCount}
+					totalCount={totalCount}
+					onDelete={onDeleteSelection}
+				/>
+			)}
 		</div>
 	);
 }

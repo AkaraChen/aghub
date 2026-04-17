@@ -1,6 +1,7 @@
 "use client";
 
 import {
+	ArrowDownTrayIcon,
 	ExclamationCircleIcon,
 	MagnifyingGlassIcon,
 } from "@heroicons/react/24/solid";
@@ -136,107 +137,135 @@ export function PluginMarketTable({
 									</Table.Column>
 								</Table.Header>
 								<Table.Body items={plugins}>
-									{(plugin) => (
-										<Table.Row
-											id={plugin.id}
-											className="align-top"
-										>
-											<Table.Cell className="align-top">
-												<div className="min-w-0 space-y-2 py-1.5">
-													<div className="flex min-w-0 items-center gap-2">
-														<span className="truncate text-base font-semibold text-foreground">
-															{plugin.name}
-														</span>
-														<div className="flex shrink-0 items-center gap-1.5">
-															{plugin.category && (
-																<Chip
-																	size="sm"
-																	variant="secondary"
-																	className="h-6 px-2 text-[10px] font-semibold uppercase"
-																>
-																	{getCategoryLabel(
-																		plugin.category,
-																	)}
-																</Chip>
-															)}
-															{plugin.has_mcp && (
-																<Chip
-																	size="sm"
-																	variant="secondary"
-																	className="h-6 px-2 text-[10px] font-semibold text-blue-400"
-																>
-																	MCP
-																</Chip>
-															)}
-															{plugin.has_skills && (
-																<Chip
-																	size="sm"
-																	variant="secondary"
-																	className="h-6 px-2 text-[10px] font-semibold text-violet-400"
-																>
-																	SKILL
-																</Chip>
-															)}
+									{(plugin) => {
+										const isInstalling =
+											installingPluginId === plugin.id;
+
+										return (
+											<Table.Row
+												id={plugin.id}
+												className={cn(
+													"align-top",
+													isInstalling &&
+														"bg-accent/5",
+												)}
+											>
+												<Table.Cell className="align-top">
+													<div className="min-w-0 space-y-2 py-1.5">
+														<div className="flex min-w-0 items-center gap-2">
+															<span className="truncate text-base font-semibold text-foreground">
+																{plugin.name}
+															</span>
+															<div className="flex shrink-0 items-center gap-1.5">
+																{plugin.category && (
+																	<Chip
+																		size="sm"
+																		variant="secondary"
+																		className="h-6 px-2 text-[10px] font-semibold uppercase"
+																	>
+																		{getCategoryLabel(
+																			plugin.category,
+																		)}
+																	</Chip>
+																)}
+																{plugin.has_mcp && (
+																	<Chip
+																		size="sm"
+																		variant="secondary"
+																		className="h-6 px-2 text-[10px] font-semibold text-blue-400"
+																	>
+																		MCP
+																	</Chip>
+																)}
+																{plugin.has_skills && (
+																	<Chip
+																		size="sm"
+																		variant="secondary"
+																		className="h-6 px-2 text-[10px] font-semibold text-violet-400"
+																	>
+																		SKILL
+																	</Chip>
+																)}
+															</div>
 														</div>
+														{plugin.description && (
+															<p className="line-clamp-2 text-sm leading-6 text-muted">
+																{
+																	plugin.description
+																}
+															</p>
+														)}
 													</div>
-													{plugin.description && (
-														<p className="line-clamp-2 text-sm leading-6 text-muted">
-															{plugin.description}
-														</p>
-													)}
-												</div>
-											</Table.Cell>
-											<Table.Cell className="align-top">
-												<div className="flex justify-end py-1.5">
-													<span className="text-sm tabular-nums text-muted">
-														{plugin.installs > 0
-															? compactFormatter.format(
-																	plugin.installs,
+												</Table.Cell>
+												<Table.Cell className="align-top">
+													<div className="flex justify-end py-1.5">
+														<span className="text-sm tabular-nums text-muted">
+															{plugin.installs > 0
+																? compactFormatter.format(
+																		plugin.installs,
+																	)
+																: "—"}
+														</span>
+													</div>
+												</Table.Cell>
+												<Table.Cell className="align-top">
+													<div className="flex flex-col gap-1 py-1.5">
+														<span
+															className={cn(
+																"truncate text-sm font-medium",
+																plugin.author
+																	? "text-foreground"
+																	: "text-muted",
+															)}
+														>
+															{plugin.author ||
+																t("unknown")}
+														</span>
+														<span className="text-xs text-muted">
+															{formatPluginVersion(
+																plugin.version,
+															)}
+														</span>
+													</div>
+												</Table.Cell>
+												<Table.Cell className="align-top">
+													<div className="flex justify-end py-1">
+														<Button
+															size="sm"
+															variant="tertiary"
+															className={cn(
+																"group min-w-[112px] transition-[transform,box-shadow,background-color,color] duration-200 ease-out motion-reduce:transition-none",
+																!isInstalling &&
+																	"hover:-translate-y-px hover:shadow-sm active:translate-y-0",
+																isInstalling &&
+																	"shadow-sm shadow-accent/15 ring-1 ring-accent/20",
+															)}
+															onPress={() =>
+																onInstall(
+																	plugin.id,
 																)
-															: "—"}
-													</span>
-												</div>
-											</Table.Cell>
-											<Table.Cell className="align-top">
-												<div className="flex flex-col gap-1 py-1.5">
-													<span
-														className={cn(
-															"truncate text-sm font-medium",
-															plugin.author
-																? "text-foreground"
-																: "text-muted",
-														)}
-													>
-														{plugin.author ||
-															t("unknown")}
-													</span>
-													<span className="text-xs text-muted">
-														{formatPluginVersion(
-															plugin.version,
-														)}
-													</span>
-												</div>
-											</Table.Cell>
-											<Table.Cell className="align-top">
-												<div className="flex justify-end py-1">
-													<Button
-														size="sm"
-														variant="tertiary"
-														className="min-w-[104px]"
-														onPress={() =>
-															onInstall(plugin.id)
-														}
-														isPending={
-															installingPluginId ===
-															plugin.id
-														}
-													>
-														{t("install")}
-													</Button>
-												</div>
-											</Table.Cell>
-										</Table.Row>
-									)}
+															}
+															isPending={
+																isInstalling
+															}
+															isDisabled={
+																isInstalling
+															}
+														>
+															{!isInstalling && (
+																<ArrowDownTrayIcon className="size-4 transition-transform duration-200 group-hover:-translate-y-0.5 motion-reduce:transition-none" />
+															)}
+															{isInstalling
+																? t(
+																		"installing",
+																	)
+																: t("install")}
+														</Button>
+													</div>
+												</Table.Cell>
+											</Table.Row>
+										);
+									}}
 								</Table.Body>
 							</Table.Content>
 						</Table.ScrollContainer>

@@ -1,14 +1,16 @@
 use crate::dto::plugin::{
-	CCPluginAuthorResponse, CCPluginCheckUpdateResponse, CCPluginResponse,
-	CCPluginScopeResponse, CCPluginSourceInfoResponse,
+	CCPluginAuthorResponse, CCPluginResponse, CCPluginScopeResponse,
+	CCPluginSourceInfoResponse,
 };
 use crate::error::ApiError;
 use aghub_plugins::claude::settings::InstallScope;
 use aghub_plugins::claude::{ClaudePluginInfo, ClaudePluginManager};
 use aghub_plugins::installer::PluginInstaller;
 use aghub_plugins::PluginId;
-use log::warn;
+use log::{error, warn};
 use reqwest::Url;
+use rocket::http::Status;
+use std::fmt::Display;
 use std::path::{Component, Path, PathBuf};
 
 const OFFICIAL_MARKETPLACE_URL: &str =
@@ -30,16 +32,19 @@ pub(super) fn parse_install_scope(
 	}
 }
 
+fn init_error(component: &str, error: &impl Display) -> ApiError {
+	error!("Failed to initialize {component}: {error}");
+	ApiError::internal(format!("Failed to initialize {component}"))
+}
+
 pub(super) fn load_plugin_manager() -> Result<ClaudePluginManager, ApiError> {
-	ClaudePluginManager::new().map_err(|e| {
-		ApiError::internal(format!("Failed to load plugin manager: {e}"))
-	})
+	ClaudePluginManager::new()
+		.map_err(|error| init_error("plugin manager", &error))
 }
 
 pub(super) fn load_plugin_installer() -> Result<PluginInstaller, ApiError> {
-	PluginInstaller::new().map_err(|e| {
-		ApiError::internal(format!("Failed to create plugin installer: {e}"))
-	})
+	PluginInstaller::new()
+		.map_err(|error| init_error("plugin installer", &error))
 }
 
 pub(super) fn try_load_plugin_installer() -> Option<PluginInstaller> {
@@ -52,18 +57,13 @@ pub(super) fn try_load_plugin_installer() -> Option<PluginInstaller> {
 	}
 }
 
-fn plugin_not_found(id: &PluginId) -> ApiError {
-	ApiError::not_found(format!("Plugin '{}' not found", id))
-}
-
 pub(super) fn get_plugin(
 	manager: &ClaudePluginManager,
 	id: &PluginId,
 ) -> Result<ClaudePluginInfo, ApiError> {
-	manager
-		.get_plugin(id)
-		.cloned()
-		.ok_or_else(|| plugin_not_found(id))
+	manager.get_plugin(id).cloned().ok_or_else(|| {
+		ApiError::not_found(format!("Plugin '{}' not found", id))
+	})
 }
 
 pub(super) fn load_manager_and_plugin(
@@ -81,7 +81,7 @@ pub(super) fn sanitize_path_home(path: &Path) -> String {
 		}
 	}
 
-	let tail: Vec<String> = path
+	let parts: Vec<String> = path
 		.components()
 		.filter_map(|component| match component {
 			Component::Normal(part) => {
@@ -89,12 +89,9 @@ pub(super) fn sanitize_path_home(path: &Path) -> String {
 			}
 			_ => None,
 		})
-		.rev()
-		.take(3)
-		.collect::<Vec<_>>()
-		.into_iter()
-		.rev()
 		.collect();
+	let start = parts.len().saturating_sub(3);
+	let tail = &parts[start..];
 
 	if tail.is_empty() {
 		return "…".to_string();
@@ -104,15 +101,15 @@ pub(super) fn sanitize_path_home(path: &Path) -> String {
 }
 
 fn normalize_source_url(plugin: &ClaudePluginInfo) -> Option<String> {
-	let reference = plugin.effective_repository()?.trim().to_string();
-	if reference.is_empty() {
-		return None;
-	}
-
-	let normalized = reference
+	let normalized = plugin
+		.effective_repository()?
+		.trim()
 		.trim_end_matches('/')
 		.trim_end_matches(".git")
 		.to_string();
+	if normalized.is_empty() {
+		return None;
+	}
 
 	if normalized.starts_with("https://") || normalized.starts_with("http://") {
 		return Some(normalized);
@@ -135,8 +132,15 @@ fn build_source_info(
 	plugin: &ClaudePluginInfo,
 	installer: Option<&PluginInstaller>,
 ) -> CCPluginSourceInfoResponse {
-	let url = normalize_source_url(plugin).or_else(|| {
-		match plugin.id.source.as_str() {
+	let repository_url = normalize_source_url(plugin);
+	let marketplace_url = installer
+		.and_then(|value| value.marketplace_repository_url(&plugin.id));
+	let keep_source_label =
+		repository_url.is_none() && marketplace_url.is_some();
+	let url = repository_url
+		.clone()
+		.or_else(|| marketplace_url.clone())
+		.or_else(|| match plugin.id.source.as_str() {
 			"claude-plugins-official" => {
 				Some(OFFICIAL_MARKETPLACE_URL.to_string())
 			}
@@ -147,15 +151,16 @@ fn build_source_info(
 				Some(source.to_string())
 			}
 			_ => None,
-		}
-	});
+		});
 
 	let (label, is_github) = url
 		.as_deref()
 		.and_then(|value| Url::parse(value).ok())
 		.map(|url| {
 			let is_github = url.host_str() == Some("github.com");
-			let label = if is_github {
+			let label = if keep_source_label {
+				plugin.source.to_string()
+			} else if is_github {
 				let mut segments = url.path_segments().into_iter().flatten();
 				match (segments.next(), segments.next()) {
 					(Some(owner), Some(repo))
@@ -210,41 +215,30 @@ pub(super) fn resolve_plugin_scope<'a>(
 	}
 }
 
-pub(super) fn resolve_plugin_folder(
-	plugin: &ClaudePluginInfo,
-	scope: Option<&str>,
-) -> Result<PathBuf, ApiError> {
-	Ok(resolve_plugin_scope(plugin, scope)?
-		.map(|item| item.install_path.clone())
-		.unwrap_or_else(|| plugin.install_path.clone()))
-}
-
 pub(super) async fn resolve_plugin_update(
 	id: &PluginId,
 	current_version: &str,
 	current_commit: Option<&str>,
-) -> (bool, Option<String>) {
-	let installer = match load_plugin_installer() {
-		Ok(installer) => installer,
-		Err(_) => {
-			warn!("Failed to create plugin installer for {}", id);
-			return (false, None);
-		}
-	};
+) -> Result<Option<String>, ApiError> {
+	let installer = load_plugin_installer()?;
 
 	if !installer.can_check_updates(id) {
-		return (false, None);
+		return Ok(None);
 	}
 
 	match installer
 		.check_update_against(id, current_version, current_commit)
 		.await
 	{
-		Ok(Some((latest_version, _))) => (true, Some(latest_version)),
-		Ok(None) => (false, None),
+		Ok(Some((latest_version, _))) => Ok(Some(latest_version)),
+		Ok(None) => Ok(None),
 		Err(error) => {
-			warn!("Failed to check updates for {}: {}", id, error);
-			(false, None)
+			error!("Failed to check updates for {}: {}", id, error);
+			Err(ApiError::new(
+				Status::BadGateway,
+				"Failed to check plugin updates",
+				"PLUGIN_UPDATE_CHECK_FAILED",
+			))
 		}
 	}
 }
@@ -260,7 +254,6 @@ pub(super) fn build_plugin_response(
 		description: plugin.description.clone(),
 		enabled: plugin.enabled,
 		source: plugin.source.to_string(),
-		install_path: sanitize_path_home(&plugin.install_path),
 		has_skills: plugin.has_skills(),
 		has_hooks: plugin.has_hooks(),
 		has_mcp: plugin.has_mcp(),
@@ -284,19 +277,5 @@ pub(super) fn build_plugin_response(
 				updated_at: scope.last_updated.clone(),
 			})
 			.collect(),
-	}
-}
-
-pub(super) fn build_check_update_response(
-	plugin_id: String,
-	current_version: String,
-	latest_version: Option<String>,
-) -> CCPluginCheckUpdateResponse {
-	CCPluginCheckUpdateResponse {
-		plugin_id,
-		update_available: latest_version.is_some(),
-		current_version,
-		latest_version,
-		changelog: None,
 	}
 }
