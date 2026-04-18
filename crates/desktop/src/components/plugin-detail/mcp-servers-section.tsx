@@ -1,6 +1,5 @@
 "use client";
 
-import { Chip } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import type { CCPluginDetailResponse } from "../../generated/dto";
 import { CodeBlock, MetaRow } from "./meta-blocks";
@@ -25,24 +24,18 @@ export function McpServersSection({ config }: McpServersSectionProps) {
 				{config.servers.map((server) => (
 					<div
 						key={server.name}
-						className="space-y-2 rounded-lg border border-separator bg-surface-secondary px-3 py-3"
+						className="space-y-3 rounded-lg bg-surface-secondary px-3 py-2"
 					>
 						<div className="flex items-center gap-2">
-							<span className="font-medium text-sm">
+							<span className="text-sm font-medium">
 								{server.name}
 							</span>
-							<Chip
-								size="sm"
-								variant="soft"
-								className="h-[18px] px-1.5 text-[10px]"
-							>
+							<span className="text-[11px] font-medium tracking-wide text-muted uppercase">
 								{server.transport_type}
-							</Chip>
+							</span>
 						</div>
 						{server.note && (
-							<p className="text-[11px] text-muted">
-								{server.note}
-							</p>
+							<p className="text-sm text-muted">{server.note}</p>
 						)}
 						{server.command && (
 							<CodeBlock

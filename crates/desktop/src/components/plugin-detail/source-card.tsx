@@ -1,10 +1,13 @@
 "use client";
 
-import { ArrowPathIcon, LinkIcon } from "@heroicons/react/24/solid";
+import {
+	ArrowPathIcon,
+	GlobeAltIcon,
+	LinkIcon,
+} from "@heroicons/react/24/solid";
 import { Button, Tooltip } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import { siGithub } from "simple-icons";
-import { cn } from "../../lib/utils";
 
 interface PluginSourceCardProps {
 	sourceLabel: string;
@@ -38,30 +41,30 @@ export function PluginSourceCard({
 			<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
 				{t("installedFrom")}
 			</h3>
-			<div className="flex items-center justify-between gap-3 rounded-lg border border-separator bg-surface-secondary px-4 py-3">
-				<div className="min-w-0 flex flex-1 items-center gap-3">
-					{isGitHubSource ? (
-						<svg
-							role="img"
-							className="size-4 shrink-0 text-muted"
-							viewBox="0 0 24 24"
-							fill="currentColor"
-						>
-							<path d={siGithub.path} />
-						</svg>
-					) : (
-						<LinkIcon className="size-4 shrink-0 text-muted" />
-					)}
-					<div className="min-w-0 space-y-1">
-						<p className="truncate text-sm font-medium text-foreground">
-							{sourceLabel}
-						</p>
-						{sourceVersion && (
-							<p className="text-xs text-muted">
-								{sourceVersion}
-							</p>
+			<div className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2">
+				<div className="min-w-0 flex-1">
+					<div className="flex items-center gap-1.5">
+						{isGitHubSource ? (
+							<svg
+								role="img"
+								className="size-3.5 shrink-0 text-muted"
+								viewBox="0 0 24 24"
+								fill="currentColor"
+							>
+								<path d={siGithub.path} />
+							</svg>
+						) : (
+							<GlobeAltIcon className="size-3.5 shrink-0 text-muted" />
 						)}
+						<span className="min-w-0 truncate text-sm text-foreground">
+							{sourceLabel}
+						</span>
 					</div>
+					{sourceVersion && (
+						<div className="mt-1 flex items-center text-xs text-muted">
+							<span className="font-mono">{sourceVersion}</span>
+						</div>
+					)}
 				</div>
 				<div className="flex shrink-0 items-center gap-1">
 					{canCheckUpdates && (
@@ -70,10 +73,7 @@ export function PluginSourceCard({
 								isIconOnly
 								variant="ghost"
 								size="sm"
-								className={cn(
-									"size-8 text-muted",
-									updateAvailable && "text-success",
-								)}
+								className="size-8 text-muted"
 								aria-label={
 									updateAvailable
 										? t("updatePlugin")
@@ -83,10 +83,7 @@ export function PluginSourceCard({
 								isDisabled={isUpdating}
 							>
 								<ArrowPathIcon
-									className={cn(
-										"size-4",
-										isUpdating && "animate-spin",
-									)}
+									className={`size-4 ${isUpdating ? "animate-spin" : ""}`}
 								/>
 							</Button>
 							<Tooltip.Content>

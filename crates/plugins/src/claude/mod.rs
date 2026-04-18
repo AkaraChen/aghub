@@ -777,7 +777,7 @@ fn find_latest_manifest_in_siblings(
 	}
 
 	// Sort by modification time (newest first) and return the manifest
-	candidates.sort_by(|a, b| b.0.cmp(&a.0));
+	candidates.sort_by_key(|entry| std::cmp::Reverse(entry.0));
 	candidates.into_iter().next().map(|(_, manifest)| manifest)
 }
 

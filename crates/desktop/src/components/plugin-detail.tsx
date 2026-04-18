@@ -155,7 +155,7 @@ export function PluginDetail({
 	return (
 		<div className="h-full overflow-y-auto">
 			<div className="w-full space-y-4 p-4 sm:p-6">
-				<Card variant="secondary">
+				<Card>
 					<PluginDetailHeader
 						plugin={currentPlugin}
 						currentScope={currentScope}
@@ -205,41 +205,42 @@ export function PluginDetail({
 							onOpenUrl={handleOpenUrl}
 						/>
 
-						<div className="space-y-4">
+						<div className="space-y-3">
 							<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
 								{t("pluginInfo")}
 							</h3>
-							<div className="space-y-1.5">
-								<span className="text-[11px] font-medium tracking-wide text-muted uppercase">
-									{t("installPath")}
-								</span>
-								<div className="flex items-center justify-between gap-3 rounded-lg border border-separator bg-surface-secondary px-3 py-2">
+							<div className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2">
+								<div className="min-w-0 flex flex-1 items-center gap-3">
+									<FolderIcon className="size-3.5 shrink-0 text-muted" />
 									<div className="min-w-0 flex-1">
+										<p className="text-[11px] font-medium tracking-wide text-muted uppercase">
+											{t("installPath")}
+										</p>
 										<p
 											tabIndex={0}
-											className="cursor-default break-all rounded-sm font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none"
+											className="mt-1 cursor-default break-all font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none"
 											title={installPath}
 										>
 											{installPath}
 										</p>
 									</div>
-									<div className="flex shrink-0 items-center gap-1">
-										<Tooltip delay={0}>
-											<Button
-												isIconOnly
-												variant="ghost"
-												size="sm"
-												className="size-8 text-muted"
-												aria-label={t("openFolder")}
-												onPress={handleOpenInstallPath}
-											>
-												<FolderIcon className="size-4" />
-											</Button>
-											<Tooltip.Content>
-												{t("openFolder")}
-											</Tooltip.Content>
-										</Tooltip>
-									</div>
+								</div>
+								<div className="flex shrink-0 items-center gap-1">
+									<Tooltip delay={0}>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="sm"
+											className="size-8 text-muted"
+											aria-label={t("openFolder")}
+											onPress={handleOpenInstallPath}
+										>
+											<FolderIcon className="size-4" />
+										</Button>
+										<Tooltip.Content>
+											{t("openFolder")}
+										</Tooltip.Content>
+									</Tooltip>
 								</div>
 							</div>
 						</div>
