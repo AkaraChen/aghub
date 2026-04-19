@@ -75,25 +75,21 @@ export function PluginMarketDialog({
 		error,
 	} = useQuery(pluginMarketQueryOptions({ api, enabled: isOpen }));
 
-	const clearInstallFeedbackTimeout = (pluginId?: string) => {
-		if (pluginId) {
-			const timeout = installFeedbackTimeoutsRef.current.get(pluginId);
-			if (timeout) {
-				clearTimeout(timeout);
-				installFeedbackTimeoutsRef.current.delete(pluginId);
-			}
-			return;
-		}
-
-		for (const timeout of installFeedbackTimeoutsRef.current.values()) {
+	const clearInstallFeedbackTimeout = (pluginId: string) => {
+		const timeout = installFeedbackTimeoutsRef.current.get(pluginId);
+		if (timeout) {
 			clearTimeout(timeout);
+			installFeedbackTimeoutsRef.current.delete(pluginId);
 		}
-		installFeedbackTimeoutsRef.current.clear();
 	};
 
 	useEffect(() => {
+		const timeouts = installFeedbackTimeoutsRef.current;
 		return () => {
-			clearInstallFeedbackTimeout();
+			for (const timeout of timeouts.values()) {
+				clearTimeout(timeout);
+			}
+			timeouts.clear();
 		};
 	}, []);
 
