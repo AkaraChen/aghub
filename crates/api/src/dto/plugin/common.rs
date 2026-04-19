@@ -108,10 +108,10 @@ pub struct CCPluginMcpServerResponse {
 	pub url: Option<String>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
-	pub env: Option<Vec<String>>,
+	pub env: Option<std::collections::BTreeMap<String, String>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
-	pub headers: Option<Vec<String>>,
+	pub headers: Option<std::collections::BTreeMap<String, String>>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub note: Option<String>,

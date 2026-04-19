@@ -1,10 +1,18 @@
 "use client";
 
 import { ArrowPathIcon } from "@heroicons/react/24/solid";
-import { Button, Modal, SearchField, Tooltip, toast } from "@heroui/react";
+import {
+	Button,
+	ListBox,
+	Modal,
+	SearchField,
+	Select,
+	toast,
+} from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { CCPluginMarketResponse } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
 import { cn } from "../lib/utils";
 import {
@@ -12,7 +20,6 @@ import {
 	pluginMarketQueryOptions,
 	updateMarketplaceMutationOptions,
 } from "../requests/plugins";
-import { CategoryFilter } from "./plugin-market/category-filter";
 import { PluginMarketTable } from "./plugin-market/market-table";
 
 interface PluginMarketDialogProps {
@@ -20,6 +27,12 @@ interface PluginMarketDialogProps {
 	onClose: () => void;
 	installScope?: "user" | "project" | "local";
 }
+
+const OTHER_CATEGORY = "other";
+const MIN_INSTALLING_DURATION_MS = 800;
+const INSTALLED_FEEDBACK_DURATION_MS = 1200;
+
+type InstallState = "installing" | "installed";
 
 export function PluginMarketDialog({
 	isOpen,
@@ -33,6 +46,17 @@ export function PluginMarketDialog({
 	const [selectedCategory, setSelectedCategory] = useState<string | null>(
 		null,
 	);
+	const [installStateById, setInstallStateById] = useState<
+		Record<string, InstallState>
+	>({});
+	const [transientPluginsById, setTransientPluginsById] = useState<
+		Record<string, CCPluginMarketResponse>
+	>({});
+	const deferredSearchQuery = useDeferredValue(searchQuery);
+	const installFeedbackTimeoutsRef = useRef<
+		Map<string, ReturnType<typeof setTimeout>>
+	>(new Map());
+	const installStartedAtRef = useRef<Map<string, number>>(new Map());
 
 	const compactFormatter = useMemo(
 		() =>
@@ -51,22 +75,96 @@ export function PluginMarketDialog({
 		error,
 	} = useQuery(pluginMarketQueryOptions({ api, enabled: isOpen }));
 
+	const clearInstallFeedbackTimeout = (pluginId?: string) => {
+		if (pluginId) {
+			const timeout = installFeedbackTimeoutsRef.current.get(pluginId);
+			if (timeout) {
+				clearTimeout(timeout);
+				installFeedbackTimeoutsRef.current.delete(pluginId);
+			}
+			return;
+		}
+
+		for (const timeout of installFeedbackTimeoutsRef.current.values()) {
+			clearTimeout(timeout);
+		}
+		installFeedbackTimeoutsRef.current.clear();
+	};
+
+	useEffect(() => {
+		return () => {
+			clearInstallFeedbackTimeout();
+		};
+	}, []);
+
+	const errorMessage = (value: unknown) =>
+		value instanceof Error ? value.message : t("unknownError");
+
 	const installMutation = useMutation({
 		...installPluginMutationOptions({
 			api,
 			queryClient,
 			onSuccess: async (_data, variables) => {
+				const pluginId = variables.plugin_id;
+				const startedAt =
+					installStartedAtRef.current.get(pluginId) ?? Date.now();
+				const elapsed = Date.now() - startedAt;
+				const installDelay = Math.max(
+					0,
+					MIN_INSTALLING_DURATION_MS - elapsed,
+				);
+
 				toast.success(
 					t("pluginInstalled", {
 						id: variables.plugin_id,
 					}),
 				);
+				clearInstallFeedbackTimeout(pluginId);
+				const installingTimeout = setTimeout(() => {
+					setInstallStateById((current) => ({
+						...current,
+						[pluginId]: "installed",
+					}));
+					const installedTimeout = setTimeout(() => {
+						setInstallStateById((current) => {
+							const next = { ...current };
+							delete next[pluginId];
+							return next;
+						});
+						setTransientPluginsById((current) => {
+							const next = { ...current };
+							delete next[pluginId];
+							return next;
+						});
+						installStartedAtRef.current.delete(pluginId);
+						installFeedbackTimeoutsRef.current.delete(pluginId);
+					}, INSTALLED_FEEDBACK_DURATION_MS);
+					installFeedbackTimeoutsRef.current.set(
+						pluginId,
+						installedTimeout,
+					);
+				}, installDelay);
+				installFeedbackTimeoutsRef.current.set(
+					pluginId,
+					installingTimeout,
+				);
 			},
 		}),
-		onError: (error) => {
-			const message =
-				error instanceof Error ? error.message : t("unknownError");
-			toast.danger(message);
+		onError: (mutationError, variables) => {
+			const pluginId = variables.plugin_id;
+			clearInstallFeedbackTimeout(pluginId);
+			installStartedAtRef.current.delete(pluginId);
+			setInstallStateById((current) => {
+				const next = { ...current };
+				delete next[pluginId];
+				return next;
+			});
+			setTransientPluginsById((current) => {
+				const next = { ...current };
+				delete next[pluginId];
+				return next;
+			});
+			toast.danger(errorMessage(mutationError));
 		},
 	});
 
@@ -74,15 +172,17 @@ export function PluginMarketDialog({
 		...updateMarketplaceMutationOptions({
 			api,
 			queryClient,
-			onSuccess: async () => {
-				toast.success(t("marketplaceUpdated"));
+			onSuccess: async (data) => {
+				toast.success(t("marketplaceUpdated"), {
+					description: t("marketplaceUpdatedCount", {
+						count: data.updated_count,
+					}),
+				});
 			},
 		}),
-		onError: (error) => {
-			const message =
-				error instanceof Error ? error.message : t("unknownError");
+		onError: (mutationError) => {
 			toast.danger(t("marketplaceUpdateFailed"), {
-				description: message,
+				description: errorMessage(mutationError),
 			});
 		},
 	});
@@ -94,125 +194,208 @@ export function PluginMarketDialog({
 				category.slice(1).toLowerCase(),
 		});
 
+	const installedPluginsCount = useMemo(
+		() =>
+			plugins.filter((plugin) =>
+				plugin.installed_scopes?.includes(installScope),
+			).length,
+		[plugins, installScope],
+	);
+
+	const marketPlugins = useMemo(
+		() =>
+			plugins.filter(
+				(plugin) => !plugin.installed_scopes?.includes(installScope),
+			),
+		[plugins, installScope],
+	);
+
+	const categories = useMemo(() => {
+		const values = new Set<string>();
+		for (const plugin of marketPlugins) {
+			values.add(plugin.category || OTHER_CATEGORY);
+		}
+		return Array.from(values).sort((a, b) => {
+			if (a === OTHER_CATEGORY) {
+				return 1;
+			}
+			if (b === OTHER_CATEGORY) {
+				return -1;
+			}
+			return a.localeCompare(b);
+		});
+	}, [marketPlugins]);
+
+	const filteredPlugins = useMemo(() => {
+		let filtered = marketPlugins;
+		const normalizedQuery = deferredSearchQuery.trim().toLowerCase();
+
+		if (normalizedQuery) {
+			filtered = filtered.filter(
+				(plugin) =>
+					plugin.name.toLowerCase().includes(normalizedQuery) ||
+					(plugin.description &&
+						plugin.description
+							.toLowerCase()
+							.includes(normalizedQuery)),
+			);
+		}
+
+		if (selectedCategory) {
+			filtered = filtered.filter(
+				(plugin) =>
+					(plugin.category || OTHER_CATEGORY) === selectedCategory,
+			);
+		}
+
+		for (const plugin of Object.values(transientPluginsById)) {
+			const matchesSearch =
+				!normalizedQuery ||
+				plugin.name.toLowerCase().includes(normalizedQuery) ||
+				(plugin.description &&
+					plugin.description.toLowerCase().includes(normalizedQuery));
+			const matchesCategory =
+				!selectedCategory ||
+				(plugin.category || OTHER_CATEGORY) === selectedCategory;
+
+			if (
+				matchesSearch &&
+				matchesCategory &&
+				!filtered.some((entry) => entry.id === plugin.id)
+			) {
+				filtered = [...filtered, plugin];
+			}
+		}
+
+		return [...filtered].sort((a, b) => b.installs - a.installs);
+	}, [
+		marketPlugins,
+		deferredSearchQuery,
+		selectedCategory,
+		transientPluginsById,
+	]);
+
 	const handleInstall = (pluginId: string) => {
-		installMutation.mutate({ plugin_id: pluginId, scope: installScope });
+		const plugin = marketPlugins.find((entry) => entry.id === pluginId);
+		if (!plugin || installStateById[pluginId]) {
+			return;
+		}
+
+		clearInstallFeedbackTimeout(pluginId);
+		installStartedAtRef.current.set(pluginId, Date.now());
+		setInstallStateById((current) => ({
+			...current,
+			[pluginId]: "installing",
+		}));
+		setTransientPluginsById((current) => ({
+			...current,
+			[pluginId]: plugin,
+		}));
+		installMutation.mutate({
+			plugin_id: pluginId,
+			scope: installScope,
+		});
 	};
 
 	const handleUpdateMarketplace = () => {
 		updateMarketplaceMutation.mutate();
 	};
 
-	const installedPluginsCount = useMemo(() => {
-		return plugins.filter((plugin) =>
-			plugin.installed_scopes?.includes(installScope),
-		).length;
-	}, [plugins, installScope]);
-
-	const marketPlugins = useMemo(() => {
-		return plugins.filter(
-			(plugin) => !plugin.installed_scopes?.includes(installScope),
-		);
-	}, [plugins, installScope]);
-
-	const categories = useMemo(() => {
-		const cats = new Set<string>();
-		for (const plugin of marketPlugins) {
-			if (plugin.category) cats.add(plugin.category);
-		}
-		return Array.from(cats).sort();
-	}, [marketPlugins]);
-
-	const filteredPlugins = useMemo(() => {
-		let filtered = marketPlugins;
-
-		if (searchQuery) {
-			const query = searchQuery.toLowerCase();
-			filtered = filtered.filter(
-				(p) =>
-					p.name.toLowerCase().includes(query) ||
-					(p.description &&
-						p.description.toLowerCase().includes(query)),
-			);
-		}
-
-		if (selectedCategory) {
-			filtered = filtered.filter(
-				(p) => (p.category || "other") === selectedCategory,
-			);
-		}
-
-		return [...filtered].sort((a, b) => b.installs - a.installs);
-	}, [marketPlugins, searchQuery, selectedCategory]);
-
-	const handleClose = () => {
+	const resetFilters = () => {
 		setSearchQuery("");
 		setSelectedCategory(null);
+	};
+
+	const handleClose = () => {
+		resetFilters();
 		onClose();
 	};
 
+	const selectedCategoryKey = selectedCategory ?? "__all__";
+	const isRefreshingMarketplace = updateMarketplaceMutation.isPending;
 	return (
 		<Modal.Backdrop isOpen={isOpen} onOpenChange={handleClose}>
 			<Modal.Container>
-				<Modal.Dialog className="max-h-[85vh] w-[calc(100vw-2rem)] max-w-4xl border border-separator bg-surface-secondary">
+				<Modal.Dialog className="max-h-[80vh] w-[calc(100vw-2rem)] max-w-5xl overflow-hidden">
 					<Modal.CloseTrigger />
-					<Modal.Header className="items-start border-b border-separator/70 pb-4">
-						<div className="space-y-1">
-							<Modal.Heading>{t("pluginMarket")}</Modal.Heading>
-							<p className="text-sm text-muted">
-								{t("pluginMarketDescription")}
-							</p>
-						</div>
-					</Modal.Header>
-
-					<Modal.Body className="flex min-h-0 flex-col space-y-4 overflow-hidden p-4 pt-4">
-						<div className="flex shrink-0 items-center gap-3">
-							<SearchField
-								className="flex-1"
-								value={searchQuery}
-								onChange={setSearchQuery}
-								aria-label={t("searchPlugins")}
-							>
-								<SearchField.Group>
-									<SearchField.SearchIcon />
-									<SearchField.Input
-										placeholder={t("searchPlugins")}
-									/>
-									<SearchField.ClearButton />
-								</SearchField.Group>
-							</SearchField>
-							<Tooltip delay={0}>
-								<Button
-									isIconOnly
-									variant="ghost"
-									size="sm"
-									onPress={handleUpdateMarketplace}
-									isDisabled={
-										updateMarketplaceMutation.isPending
-									}
-									aria-label={t("updateMarketplace")}
-									className="size-9 shrink-0 text-accent"
+					<Modal.Body className="flex min-h-0 flex-col gap-2.5 overflow-hidden px-4 pb-2.5 pt-3.5">
+						<div className="shrink-0">
+							<div className="flex items-center gap-2">
+								<SearchField
+									value={searchQuery}
+									onChange={setSearchQuery}
+									aria-label={t("searchPlugins")}
+									className="min-w-0 flex-1 [&_[data-slot=group]]:bg-surface-secondary/55 [&_[data-slot=group]]:shadow-none"
 								>
-									<ArrowPathIcon
-										className={cn(
-											"size-4",
-											updateMarketplaceMutation.isPending &&
-												"animate-spin",
-										)}
-									/>
+									<SearchField.Group>
+										<SearchField.SearchIcon />
+										<SearchField.Input
+											placeholder={t("searchPlugins")}
+										/>
+										<SearchField.ClearButton />
+									</SearchField.Group>
+								</SearchField>
+								<Select
+									variant="secondary"
+									aria-label={t("pluginMarketCategory")}
+									selectedKey={selectedCategoryKey}
+									onSelectionChange={(key) =>
+										setSelectedCategory(
+											key === "__all__"
+												? null
+												: (key as string),
+										)
+									}
+									className="min-w-32 max-w-40 shrink-0"
+								>
+									<Select.Trigger>
+										<Select.Value />
+										<Select.Indicator />
+									</Select.Trigger>
+									<Select.Popover>
+										<ListBox>
+											<ListBox.Item
+												id="__all__"
+												textValue={t("all")}
+											>
+												{t("all")}
+											</ListBox.Item>
+											{categories.map((category) => (
+												<ListBox.Item
+													key={category}
+													id={category}
+													textValue={getCategoryLabel(
+														category,
+													)}
+												>
+													{getCategoryLabel(category)}
+												</ListBox.Item>
+											))}
+										</ListBox>
+									</Select.Popover>
+								</Select>
+								<Button
+									variant="secondary"
+									size="sm"
+									className="shrink-0"
+									onPress={handleUpdateMarketplace}
+									isDisabled={isRefreshingMarketplace}
+								>
+									<span className="flex items-center gap-1.5">
+										<ArrowPathIcon
+											className={cn(
+												"size-4",
+												isRefreshingMarketplace &&
+													"animate-spin",
+											)}
+										/>
+										{isRefreshingMarketplace
+											? t("refreshing")
+											: t("updateMarketplace")}
+									</span>
 								</Button>
-								<Tooltip.Content>
-									{t("updateMarketplace")}
-								</Tooltip.Content>
-							</Tooltip>
+							</div>
 						</div>
-
-						<CategoryFilter
-							categories={categories}
-							selectedCategory={selectedCategory}
-							onSelect={setSelectedCategory}
-							getCategoryLabel={getCategoryLabel}
-							allLabel={t("all")}
-						/>
 
 						<PluginMarketTable
 							plugins={filteredPlugins}
@@ -221,38 +404,45 @@ export function PluginMarketDialog({
 							error={error}
 							searchQuery={searchQuery}
 							compactFormatter={compactFormatter}
-							getCategoryLabel={getCategoryLabel}
 							onRetry={refetch}
 							onInstall={handleInstall}
-							installingPluginId={
-								installMutation.variables?.plugin_id ?? null
-							}
+							installStates={installStateById}
 						/>
 					</Modal.Body>
 
-					<Modal.Footer className="border-t border-separator/70">
-						<div className="flex items-center gap-2 text-xs text-muted">
-							<span>
-								{filteredPlugins.length === marketPlugins.length
-									? t("availablePluginsCount", {
-											count: marketPlugins.length,
-										})
-									: t("showingPluginsCount", {
-											filtered: filteredPlugins.length,
-											total: marketPlugins.length,
-										})}
-							</span>
-							<span aria-hidden="true">·</span>
-							<span>
-								{t("installedPluginsCount", {
-									count: installedPluginsCount,
-								})}
-							</span>
+					<div className="shrink-0 border-t border-separator/70 px-4 py-2">
+						<div className="flex items-center justify-between gap-3">
+							<div className="flex items-center gap-2 text-xs text-muted">
+								<span>
+									{filteredPlugins.length ===
+									marketPlugins.length
+										? t("availablePluginsCount", {
+												count: marketPlugins.length,
+											})
+										: t("showingPluginsCount", {
+												filtered:
+													filteredPlugins.length,
+												total: marketPlugins.length,
+											})}
+								</span>
+								<span aria-hidden="true">·</span>
+								<span>
+									{t("installedPluginsCount", {
+										count: installedPluginsCount,
+									})}
+								</span>
+							</div>
+							<div className="flex items-center">
+								<Button
+									variant="secondary"
+									size="sm"
+									onPress={handleClose}
+								>
+									{t("menu.close")}
+								</Button>
+							</div>
 						</div>
-						<Button variant="secondary" onPress={handleClose}>
-							{t("menu.close")}
-						</Button>
-					</Modal.Footer>
+					</div>
 				</Modal.Dialog>
 			</Modal.Container>
 		</Modal.Backdrop>

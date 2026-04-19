@@ -6,7 +6,7 @@ export type CCPluginMcpServerResponse = {
 	command?: string;
 	args?: Array<string>;
 	url?: string;
-	env?: Array<string>;
-	headers?: Array<string>;
+	env?: { [key in string]: string };
+	headers?: { [key in string]: string };
 	note?: string;
 };

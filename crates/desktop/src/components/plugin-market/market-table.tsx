@@ -1,11 +1,13 @@
 "use client";
 
 import {
-	ArrowDownTrayIcon,
+	ArrowPathIcon,
+	CheckCircleIcon,
 	ExclamationCircleIcon,
 	MagnifyingGlassIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Chip, Spinner, Table } from "@heroui/react";
+import { Button, Spinner, Table } from "@heroui/react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { CCPluginMarketResponse } from "../../generated/dto";
 import { cn } from "../../lib/utils";
@@ -21,10 +23,17 @@ interface PluginMarketTableProps {
 	error: unknown;
 	searchQuery: string;
 	compactFormatter: Intl.NumberFormat;
-	getCategoryLabel: (category: string) => string;
 	onRetry: () => void;
 	onInstall: (pluginId: string) => void;
-	installingPluginId?: string | null;
+	installStates: Record<string, "installing" | "installed">;
+}
+
+type TableInstallState = "idle" | "installing" | "installed";
+
+interface PluginMarketRow {
+	id: string;
+	plugin: CCPluginMarketResponse;
+	installState: TableInstallState;
 }
 
 function formatPluginVersion(version: string) {
@@ -51,6 +60,25 @@ function formatPluginVersion(version: string) {
 	return version;
 }
 
+function buildPluginMeta(
+	plugin: CCPluginMarketResponse,
+	t: (key: string) => string,
+) {
+	const values: string[] = [];
+
+	if (plugin.has_mcp) {
+		values.push(t("pluginCapabilityMcp"));
+	}
+	if (plugin.has_skills) {
+		values.push(t("pluginCapabilitySkills"));
+	}
+	if (plugin.has_hooks) {
+		values.push(t("pluginCapabilityHooks"));
+	}
+
+	return values.join(" · ");
+}
+
 export function PluginMarketTable({
 	plugins,
 	isLoading,
@@ -58,15 +86,23 @@ export function PluginMarketTable({
 	error,
 	searchQuery,
 	compactFormatter,
-	getCategoryLabel,
 	onRetry,
 	onInstall,
-	installingPluginId,
+	installStates,
 }: PluginMarketTableProps) {
 	const { t } = useTranslation();
+	const tableRows = useMemo<PluginMarketRow[]>(
+		() =>
+			plugins.map((plugin) => ({
+				id: `${plugin.id}:${installStates[plugin.id] ?? "idle"}`,
+				plugin,
+				installState: installStates[plugin.id] ?? "idle",
+			})),
+		[plugins, installStates],
+	);
 
 	return (
-		<div className="flex min-h-[50vh] flex-1 flex-col overflow-hidden rounded-lg border border-separator bg-surface">
+		<div className="flex min-h-[16rem] max-h-[52vh] flex-col overflow-hidden rounded-lg border border-separator/80 bg-surface">
 			{isLoading ? (
 				<div className="flex flex-1 items-center justify-center">
 					<Spinner size="lg" />
@@ -80,7 +116,7 @@ export function PluginMarketTable({
 							: t("unknownError")}
 					</p>
 					<Button
-						variant="ghost"
+						variant="secondary"
 						size="sm"
 						onPress={onRetry}
 						className="mt-4"
@@ -106,16 +142,16 @@ export function PluginMarketTable({
 			) : (
 				<div className="min-h-0 flex-1 overflow-hidden">
 					<Table className="h-full">
-						<Table.ScrollContainer className="h-full [scrollbar-gutter:stable]">
+						<Table.ScrollContainer className="h-full overflow-auto rounded-[inherit] [scrollbar-gutter:stable]">
 							<Table.Content
 								aria-label={t("pluginMarket")}
 								className={cn(
 									"table-fixed border-separate border-spacing-0",
 									"[&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10 [&_thead]:bg-surface",
-									"[&_thead_th]:h-11 [&_thead_th]:border-b [&_thead_th]:border-separator/70 [&_thead_th]:bg-surface-secondary/70 [&_thead_th]:px-4 [&_thead_th]:text-[11px] [&_thead_th]:font-semibold [&_thead_th]:tracking-[0.08em] [&_thead_th]:text-muted",
-									"[&_tbody_td]:px-4 [&_tbody_td]:py-3 [&_tbody_td]:align-top",
+									"[&_thead_th]:h-10 [&_thead_th]:border-b [&_thead_th]:border-separator/70 [&_thead_th]:bg-surface-secondary/40 [&_thead_th]:px-3.5 [&_thead_th]:text-left [&_thead_th]:text-sm [&_thead_th]:font-medium [&_thead_th]:text-muted",
+									"[&_tbody_td]:px-3.5 [&_tbody_td]:py-1.5 [&_tbody_td]:align-top",
 									"[&_tbody_tr]:border-b [&_tbody_tr]:border-separator/60 [&_tbody_tr]:transition-colors",
-									"[&_tbody_tr:hover]:bg-surface-secondary/30",
+									"[&_tbody_tr:hover]:bg-surface-secondary/18",
 									"[&_tbody_tr:last-child]:border-b-0",
 								)}
 							>
@@ -126,79 +162,62 @@ export function PluginMarketTable({
 									>
 										{t("name")}
 									</Table.Column>
-									<Table.Column className="w-[120px] text-right">
+									<Table.Column className="w-[88px] text-right">
 										{t("installs")}
 									</Table.Column>
-									<Table.Column className="w-[180px]">
+									<Table.Column className="w-[136px]">
 										{t("author")}
 									</Table.Column>
-									<Table.Column className="w-[140px] text-right">
-										{t("installation")}
+									<Table.Column className="w-[104px] text-right">
+										<span className="sr-only">
+											{t("install")}
+										</span>
 									</Table.Column>
 								</Table.Header>
-								<Table.Body items={plugins}>
-									{(plugin) => {
+								<Table.Body items={tableRows}>
+									{({ id, plugin, installState }) => {
 										const isInstalling =
-											installingPluginId === plugin.id;
+											installState === "installing";
+										const isInstalled =
+											installState === "installed";
+										const pluginMeta = buildPluginMeta(
+											plugin,
+											t,
+										);
 
 										return (
 											<Table.Row
-												id={plugin.id}
+												id={id}
 												className={cn(
 													"align-top",
-													isInstalling &&
-														"bg-accent/5",
+													(isInstalling ||
+														isInstalled) &&
+														"bg-surface-secondary/32",
 												)}
 											>
 												<Table.Cell className="align-top">
-													<div className="min-w-0 space-y-2 py-1.5">
+													<div className="min-w-0 space-y-1 py-0.5">
 														<div className="flex min-w-0 items-center gap-2">
-															<span className="truncate text-base font-semibold text-foreground">
+															<span className="truncate text-sm font-semibold text-foreground">
 																{plugin.name}
 															</span>
-															<div className="flex shrink-0 items-center gap-1.5">
-																{plugin.category && (
-																	<Chip
-																		size="sm"
-																		variant="secondary"
-																		className="h-6 px-2 text-[10px] font-semibold uppercase"
-																	>
-																		{getCategoryLabel(
-																			plugin.category,
-																		)}
-																	</Chip>
-																)}
-																{plugin.has_mcp && (
-																	<Chip
-																		size="sm"
-																		variant="secondary"
-																		className="h-6 px-2 text-[10px] font-semibold text-blue-400"
-																	>
-																		MCP
-																	</Chip>
-																)}
-																{plugin.has_skills && (
-																	<Chip
-																		size="sm"
-																		variant="secondary"
-																		className="h-6 px-2 text-[10px] font-semibold text-violet-400"
-																	>
-																		SKILL
-																	</Chip>
-																)}
-															</div>
 														</div>
 														{plugin.description && (
-															<p className="line-clamp-2 text-sm leading-6 text-muted">
+															<p className="line-clamp-2 text-xs leading-5 text-muted">
 																{
 																	plugin.description
 																}
 															</p>
 														)}
+														{pluginMeta && (
+															<p className="line-clamp-1 text-[11px] text-muted">
+																{pluginMeta}
+															</p>
+														)}
 													</div>
 												</Table.Cell>
 												<Table.Cell className="align-top">
-													<div className="flex justify-end py-1.5">
+													<div className="flex justify-end py-0.5">
 														<span className="text-sm tabular-nums text-muted">
 															{plugin.installs > 0
 																? compactFormatter.format(
@@ -209,7 +228,7 @@ export function PluginMarketTable({
 													</div>
 												</Table.Cell>
 												<Table.Cell className="align-top">
-													<div className="flex flex-col gap-1 py-1.5">
+													<div className="flex flex-col gap-1 py-0.5">
 														<span
 															className={cn(
 																"truncate text-sm font-medium",
@@ -221,7 +240,7 @@ export function PluginMarketTable({
 															{plugin.author ||
 																t("unknown")}
 														</span>
-														<span className="text-xs text-muted">
+														<span className="font-mono text-xs text-muted">
 															{formatPluginVersion(
 																plugin.version,
 															)}
@@ -229,37 +248,44 @@ export function PluginMarketTable({
 													</div>
 												</Table.Cell>
 												<Table.Cell className="align-top">
-													<div className="flex justify-end py-1">
+													<div className="flex justify-end py-0.5">
 														<Button
 															size="sm"
-															variant="tertiary"
-															className={cn(
-																"group min-w-[112px] transition-[transform,box-shadow,background-color,color] duration-200 ease-out motion-reduce:transition-none",
-																!isInstalling &&
-																	"hover:-translate-y-px hover:shadow-sm active:translate-y-0",
-																isInstalling &&
-																	"shadow-sm shadow-accent/15 ring-1 ring-accent/20",
-															)}
+															variant={
+																isInstalled
+																	? "secondary"
+																	: "tertiary"
+															}
+															className="h-8 min-w-[92px] justify-center gap-1.5 whitespace-nowrap px-3 transition-colors duration-200"
 															onPress={() =>
 																onInstall(
 																	plugin.id,
 																)
 															}
-															isPending={
-																isInstalling
-															}
 															isDisabled={
-																isInstalling
+																isInstalling ||
+																isInstalled
 															}
 														>
-															{!isInstalling && (
-																<ArrowDownTrayIcon className="size-4 transition-transform duration-200 group-hover:-translate-y-0.5 motion-reduce:transition-none" />
-															)}
-															{isInstalling
-																? t(
-																		"installing",
-																	)
-																: t("install")}
+															<span className="flex items-center gap-1.5">
+																{isInstalling && (
+																	<ArrowPathIcon className="size-3.5 animate-spin text-foreground" />
+																)}
+																{isInstalled && (
+																	<CheckCircleIcon className="size-3.5 text-success" />
+																)}
+																{isInstalling
+																	? t(
+																			"installing",
+																		)
+																	: isInstalled
+																		? t(
+																				"installSuccess",
+																			)
+																		: t(
+																				"install",
+																			)}
+															</span>
 														</Button>
 													</div>
 												</Table.Cell>

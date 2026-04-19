@@ -91,8 +91,8 @@ async fn get_plugin_detail_inner(
 				command: s.command,
 				args: s.args,
 				url: s.url,
-				env: sorted_keys(s.env),
-				headers: sorted_keys(s.headers),
+				env: sorted_entries(s.env),
+				headers: sorted_entries(s.headers),
 				note: s.note,
 			})
 			.collect();
@@ -162,8 +162,8 @@ fn extract_skill_description(skill_dir: &std::path::Path) -> Option<String> {
 	skill::parser::parse(skill_dir).ok().map(|s| s.description)
 }
 
-fn sorted_keys(values: Option<HashMap<String, String>>) -> Option<Vec<String>> {
-	let mut keys = values?.into_keys().collect::<Vec<_>>();
-	keys.sort();
-	Some(keys)
+fn sorted_entries(
+	values: Option<HashMap<String, String>>,
+) -> Option<std::collections::BTreeMap<String, String>> {
+	values.map(|entries| entries.into_iter().collect())
 }

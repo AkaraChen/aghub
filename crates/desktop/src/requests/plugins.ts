@@ -163,7 +163,9 @@ export function installPluginMutationOptions({
 interface UpdateMarketplaceMutationParams {
 	api: ApiClient;
 	queryClient: QueryClient;
-	onSuccess?: () => void | Promise<void>;
+	onSuccess?: (
+		data: Awaited<ReturnType<ApiClient["plugins"]["updateMarketplace"]>>,
+	) => void | Promise<void>;
 }
 
 export function updateMarketplaceMutationOptions({
@@ -173,11 +175,11 @@ export function updateMarketplaceMutationOptions({
 }: UpdateMarketplaceMutationParams) {
 	return mutationOptions({
 		mutationFn: () => api.plugins.updateMarketplace(),
-		onSuccess: async () => {
+		onSuccess: async (data) => {
 			await queryClient.invalidateQueries({
 				queryKey: queryKeys.plugins.market(),
 			});
-			await onSuccess?.();
+			await onSuccess?.(data);
 		},
 	});
 }

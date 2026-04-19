@@ -556,9 +556,13 @@ export function createApi(baseUrl: string) {
 			},
 			updateMarketplace(): Promise<{
 				success: boolean;
-				message: string;
+				updated_count: number;
 			}> {
-				return client.post("plugins-market/update").json();
+				return client
+					.post("plugins-market/update", {
+						timeout: 300000,
+					})
+					.json();
 			},
 		},
 	};

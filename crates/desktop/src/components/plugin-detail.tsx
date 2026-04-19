@@ -210,20 +210,14 @@ export function PluginDetail({
 								{t("pluginInfo")}
 							</h3>
 							<div className="flex items-center justify-between gap-3 rounded-lg bg-surface-secondary px-3 py-2">
-								<div className="min-w-0 flex flex-1 items-center gap-3">
-									<FolderIcon className="size-3.5 shrink-0 text-muted" />
-									<div className="min-w-0 flex-1">
-										<p className="text-[11px] font-medium tracking-wide text-muted uppercase">
-											{t("installPath")}
-										</p>
-										<p
-											tabIndex={0}
-											className="mt-1 cursor-default break-all font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none"
-											title={installPath}
-										>
-											{installPath}
-										</p>
-									</div>
+								<div className="min-w-0 flex-1">
+									<p
+										tabIndex={0}
+										className="cursor-default break-all rounded-sm font-mono text-xs text-foreground focus:ring-2 focus:ring-offset-2 focus:outline-none"
+										title={installPath}
+									>
+										{installPath}
+									</p>
 								</div>
 								<div className="flex shrink-0 items-center gap-1">
 									<Tooltip delay={0}>

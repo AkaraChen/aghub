@@ -3,13 +3,29 @@ use crate::error::{ApiError, ApiResult};
 use log::error;
 use rocket::http::Status;
 use rocket::serde::json::Json;
+use std::time::Duration;
 
 use super::shared::{load_plugin_installer, load_plugin_manager};
+
+const PLUGIN_MARKET_UPDATE_TIMEOUT: Duration = Duration::from_secs(300);
 
 #[post("/plugins-market/update")]
 pub async fn update_marketplace() -> ApiResult<serde_json::Value> {
 	let installer = load_plugin_installer()?;
-	let updated = installer.update_marketplaces().await.map_err(|error| {
+	let updated = tokio::time::timeout(
+		PLUGIN_MARKET_UPDATE_TIMEOUT,
+		installer.update_marketplaces(),
+	)
+	.await
+	.map_err(|_| {
+		error!("Timed out while updating plugin marketplaces");
+		ApiError::new(
+			Status::GatewayTimeout,
+			"Timed out while updating plugin marketplaces",
+			"PLUGIN_MARKET_UPDATE_TIMEOUT",
+		)
+	})?
+	.map_err(|error| {
 		error!("Failed to update plugin marketplaces: {}", error);
 		ApiError::new(
 			Status::BadGateway,
@@ -20,7 +36,7 @@ pub async fn update_marketplace() -> ApiResult<serde_json::Value> {
 
 	Ok(Json(serde_json::json!({
 		"success": true,
-		"message": format!("Updated {} marketplace(s)", updated.len())
+		"updated_count": updated.len()
 	})))
 }
 
