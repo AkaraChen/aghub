@@ -916,7 +916,8 @@ mod tests {
 				r#"{"name":"figma","version":"2.0.7","description":"test","author":{"name":"A"}}"#,
 			)?;
 
-			let manager = ClaudePluginManager::new()?;
+			let manager =
+				ClaudePluginManager::new_with_plugins_dir(&plugins_dir)?;
 			let plugin = manager
 				.get_plugin(&PluginId::parse("figma@claude-plugins-official")?)
 				.ok_or_else(|| {
@@ -1024,7 +1025,8 @@ mod tests {
 				r#"{"name":"context7","version":"1.2.3","description":"test","author":{"name":"A"}}"#,
 			)?;
 
-			let manager = ClaudePluginManager::new()?;
+			let manager =
+				ClaudePluginManager::new_with_plugins_dir(&plugins_dir)?;
 			let plugin = manager
 				.get_plugin(&PluginId::parse(
 					"context7@claude-plugins-official",

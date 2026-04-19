@@ -1031,7 +1031,9 @@ mod tests {
 			.prefix(&format!("aghub-marketplace-test-{name}-"))
 			.tempdir()
 			.unwrap();
-		let marketplace_dir = temp_root.path().join(marketplace);
+		let marketplace_dir = marketplace
+			.split('/')
+			.fold(temp_root.path().to_path_buf(), |acc, part| acc.join(part));
 		std::fs::create_dir_all(marketplace_dir.join(".claude-plugin"))
 			.unwrap();
 		write_marketplace_config(&marketplace_dir, plugins);
