@@ -31,6 +31,7 @@ import type {
 	CCPluginConfigResponse,
 	CCPluginDetailResponse,
 	CCPluginListResponse,
+	CCPluginOpenSkillInEditorRequest,
 	CCPluginResponse,
 	ProjectSkillLockResponse,
 	ReconcileRequest,
@@ -525,12 +526,9 @@ export function createApi(baseUrl: string) {
 					})
 					.then(() => undefined);
 			},
-			openSkillInEditor(body: {
-				plugin_id: string;
-				scope: string;
-				skill_name: string;
-				editor: CodeEditorType;
-			}): Promise<void> {
+			openSkillInEditor(
+				body: CCPluginOpenSkillInEditorRequest,
+			): Promise<void> {
 				return client
 					.post("plugins/open-skill-in-editor", { json: body })
 					.then(() => undefined);
