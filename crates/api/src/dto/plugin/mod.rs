@@ -16,8 +16,9 @@ pub use detail::{
 pub use lifecycle::{
 	CCPluginCheckUpdateRequest, CCPluginCheckUpdateResponse,
 	CCPluginInstallRequest, CCPluginInstallResponse, CCPluginListResponse,
-	CCPluginReinstallRequest, CCPluginReinstallResponse,
-	CCPluginUninstallRequest, CCPluginUninstallResponse,
-	CCPluginUpdateConfigRequest, CCPluginUpdateRequest, CCPluginUpdateResponse,
+	CCPluginOpenSkillInEditorRequest, CCPluginReinstallRequest,
+	CCPluginReinstallResponse, CCPluginUninstallRequest,
+	CCPluginUninstallResponse, CCPluginUpdateConfigRequest,
+	CCPluginUpdateRequest, CCPluginUpdateResponse,
 };
 pub use market::CCPluginMarketResponse;

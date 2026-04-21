@@ -2,11 +2,13 @@
 
 import { FolderIcon } from "@heroicons/react/24/solid";
 import { Button, Card, Tooltip } from "@heroui/react";
-import { useQuery } from "@tanstack/react-query";
+import { toast } from "@heroui/react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { CCPluginResponse } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
+import { useCurrentCodeEditor } from "../hooks/use-integrations";
 import {
 	pluginDetailQueryOptions,
 	pluginUpdateStatusQueryOptions,
@@ -36,6 +38,7 @@ export function PluginDetail({
 }: PluginDetailProps) {
 	const { t } = useTranslation();
 	const api = useApi();
+	const { selectedEditor } = useCurrentCodeEditor();
 	const [showUninstallConfirm, setShowUninstallConfirm] = useState(false);
 	const [showReinstallConfirm, setShowReinstallConfirm] = useState(false);
 
@@ -94,6 +97,23 @@ export function PluginDetail({
 	const latestVersion = updateStatus?.latest_version ?? null;
 
 	const providedSkills = pluginDetail?.provided_skills ?? [];
+	const openProvidedSkillMutation = useMutation({
+		mutationFn: (skillName: string) =>
+			api.plugins.openSkillInEditor({
+				plugin_id: currentPlugin.id,
+				scope: currentScope,
+				skill_name: skillName,
+				editor: selectedEditor!,
+			}),
+		onError: (error) => {
+			toast.danger(t("editInEditor"), {
+				description:
+					error instanceof Error && error.message
+						? error.message
+						: t("unknownError"),
+			});
+		},
+	});
 
 	const sourceVersion = useMemo(() => {
 		const version =
@@ -239,7 +259,17 @@ export function PluginDetail({
 							</div>
 						</div>
 
-						<ProvidedSkillsSection skills={providedSkills} />
+						<ProvidedSkillsSection
+							skills={providedSkills}
+							onEditSkill={
+								selectedEditor
+									? (skillName) =>
+											openProvidedSkillMutation.mutate(
+												skillName,
+											)
+									: undefined
+							}
+						/>
 						<McpServersSection config={mcpConfig} />
 					</Card.Content>
 				</Card>

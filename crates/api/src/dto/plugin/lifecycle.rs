@@ -1,4 +1,5 @@
 use super::common::CCPluginResponse;
+use crate::dto::integrations::CodeEditorType;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -99,6 +100,16 @@ pub struct CCPluginReinstallRequest {
 pub struct CCPluginReinstallResponse {
 	pub success: bool,
 	pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CCPluginOpenSkillInEditorRequest {
+	pub plugin_id: String,
+	#[serde(default = "default_scope")]
+	pub scope: String,
+	pub skill_name: String,
+	pub editor: CodeEditorType,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

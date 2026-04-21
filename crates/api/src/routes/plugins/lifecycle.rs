@@ -1,9 +1,9 @@
 use crate::dto::plugin::{
 	CCPluginCheckUpdateRequest, CCPluginCheckUpdateResponse,
 	CCPluginInstallRequest, CCPluginInstallResponse, CCPluginListResponse,
-	CCPluginReinstallRequest, CCPluginReinstallResponse, CCPluginResponse,
-	CCPluginUninstallRequest, CCPluginUninstallResponse, CCPluginUpdateRequest,
-	CCPluginUpdateResponse,
+	CCPluginOpenSkillInEditorRequest, CCPluginReinstallRequest,
+	CCPluginReinstallResponse, CCPluginResponse, CCPluginUninstallRequest,
+	CCPluginUninstallResponse, CCPluginUpdateRequest, CCPluginUpdateResponse,
 };
 use crate::error::{ApiError, ApiNoContent, ApiResult};
 use log::error;
@@ -11,6 +11,8 @@ use rocket::http::Status;
 use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
 use std::fmt::Display;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use super::shared::{
 	build_plugin_response, get_plugin, load_manager_and_plugin,
@@ -278,6 +280,92 @@ fn open_plugin_folder_inner(
 	Ok(NoContent)
 }
 
+fn plugin_skill_dirs_for_scope(
+	plugin: &aghub_plugins::claude::ClaudePluginInfo,
+	install_path: &Path,
+) -> Vec<PathBuf> {
+	let mut paths = vec![
+		install_path.join("skills"),
+		install_path.join(".claude/skills"),
+	];
+
+	if let Ok(Some(manifest)) = plugin.read_manifest() {
+		if let Some(skills_paths) = manifest.skills {
+			for skills_path in skills_paths.iter() {
+				paths.push(install_path.join(skills_path));
+			}
+		}
+	}
+
+	paths
+}
+
+fn resolve_plugin_skill_path(
+	plugin: &aghub_plugins::claude::ClaudePluginInfo,
+	scope: &str,
+	skill_name: &str,
+) -> Result<PathBuf, ApiError> {
+	let install_path = resolve_plugin_scope(plugin, Some(scope))?
+		.map(|item| item.install_path.clone())
+		.unwrap_or_else(|| plugin.install_path.clone());
+
+	for skills_dir in plugin_skill_dirs_for_scope(plugin, &install_path) {
+		if !skills_dir.is_dir() {
+			continue;
+		}
+
+		if let Ok(entries) = std::fs::read_dir(&skills_dir) {
+			for entry in entries.flatten() {
+				let path = entry.path();
+				if !path.is_dir() {
+					continue;
+				}
+
+				let matches_name = entry
+					.file_name()
+					.to_str()
+					.is_some_and(|value| value == skill_name);
+				if !matches_name {
+					continue;
+				}
+
+				let skill_file = path.join("SKILL.md");
+				return Ok(if skill_file.is_file() {
+					skill_file
+				} else {
+					path
+				});
+			}
+		}
+	}
+
+	Err(ApiError::not_found(format!(
+		"Skill '{}' not found in plugin '{}' for scope '{}'",
+		skill_name, plugin.id, scope
+	)))
+}
+
+fn open_plugin_skill_in_editor_inner(
+	req: CCPluginOpenSkillInEditorRequest,
+) -> ApiNoContent {
+	let id = parse_plugin_id(&req.plugin_id)?;
+	let (_, plugin) = load_manager_and_plugin(&id)?;
+	let path = resolve_plugin_skill_path(&plugin, &req.scope, &req.skill_name)?;
+
+	Command::new(req.editor.cli_command())
+		.arg(&path)
+		.spawn()
+		.map_err(|error| {
+			error!(
+				"Failed to open plugin skill in editor {} {}: {}",
+				req.plugin_id, req.skill_name, error
+			);
+			ApiError::internal("Failed to open plugin skill in editor")
+		})?;
+
+	Ok(NoContent)
+}
+
 #[post("/plugins/open-folder?<plugin_id>&<scope>")]
 pub fn open_plugin_folder(
 	plugin_id: &str,
@@ -292,4 +380,11 @@ pub fn open_plugin_folder_legacy(
 	scope: Option<&str>,
 ) -> ApiNoContent {
 	open_plugin_folder_inner(plugin_id, scope)
+}
+
+#[post("/plugins/open-skill-in-editor", data = "<body>")]
+pub fn open_plugin_skill_in_editor(
+	body: Json<CCPluginOpenSkillInEditorRequest>,
+) -> ApiNoContent {
+	open_plugin_skill_in_editor_inner(body.into_inner())
 }

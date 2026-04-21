@@ -30,6 +30,9 @@ export function PluginDetailHeader({
 	onToggle,
 }: PluginDetailHeaderProps) {
 	const { t } = useTranslation();
+	const statusLabel = plugin.enabled
+		? t("pluginEnabled")
+		: t("pluginDisabled");
 	const handleScopeSelectionChange = (key: Key | null) => {
 		if (!key) {
 			return;
@@ -41,12 +44,15 @@ export function PluginDetailHeader({
 	return (
 		<Card.Header className="flex flex-row items-start justify-between gap-3">
 			<div className="min-w-0 flex-1">
-				<h2 className="text-xl font-semibold text-foreground truncate flex items-center gap-2">
+				<h2 className="truncate text-xl font-semibold text-foreground">
 					{plugin.name}
+				</h2>
+				<div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted">
+					<p className="min-w-0 break-all font-mono">{plugin.id}</p>
 					{plugin.scopes.length > 1 && (
 						<Select
 							variant="secondary"
-							className="ml-2 w-32 shrink-0"
+							className="w-32 shrink-0"
 							selectedKey={currentScope}
 							onSelectionChange={handleScopeSelectionChange}
 						>
@@ -69,8 +75,7 @@ export function PluginDetailHeader({
 							</Select.Popover>
 						</Select>
 					)}
-				</h2>
-				<p className="text-xs text-muted mt-1">{plugin.id}</p>
+				</div>
 			</div>
 			<div className="flex items-center gap-1">
 				{plugin.source_info.can_reinstall && (
@@ -78,8 +83,8 @@ export function PluginDetailHeader({
 						<Button
 							isIconOnly
 							variant="ghost"
-							size="sm"
-							className="size-8 text-muted"
+							size="md"
+							className="min-h-[40px] min-w-[40px] text-muted hover:text-foreground"
 							onPress={onReinstall}
 							isDisabled={isReinstalling}
 							aria-label={t("reinstallPlugin")}
@@ -97,8 +102,8 @@ export function PluginDetailHeader({
 					<Button
 						isIconOnly
 						variant="ghost"
-						size="sm"
-						className="size-8 text-muted"
+						size="md"
+						className="min-h-[40px] min-w-[40px] text-muted hover:text-foreground"
 						onPress={onUninstall}
 						isDisabled={isUninstalling}
 						aria-label={t("uninstallPlugin")}
@@ -109,31 +114,42 @@ export function PluginDetailHeader({
 					</Button>
 					<Tooltip.Content>{t("uninstallPlugin")}</Tooltip.Content>
 				</Tooltip>
-				<Tooltip delay={0}>
-					<Tooltip.Trigger>
-						<span className="inline-flex">
-							<Switch
-								isSelected={plugin.enabled}
-								isDisabled={isToggling}
-								onChange={onToggle}
-								aria-label={
-									plugin.enabled
-										? t("disablePlugin")
-										: t("enablePlugin")
-								}
-							>
-								<Switch.Control>
-									<Switch.Thumb />
-								</Switch.Control>
-							</Switch>
-						</span>
-					</Tooltip.Trigger>
-					<Tooltip.Content>
-						{plugin.enabled
-							? t("disablePlugin")
-							: t("enablePlugin")}
-					</Tooltip.Content>
-				</Tooltip>
+				<div className="ml-1 flex items-center gap-2 rounded-lg border border-separator/70 px-2 py-1.5">
+					<span
+						className={
+							plugin.enabled
+								? "text-xs font-medium text-foreground"
+								: "text-xs font-medium text-muted"
+						}
+					>
+						{statusLabel}
+					</span>
+					<Tooltip delay={0}>
+						<Tooltip.Trigger>
+							<span className="inline-flex">
+								<Switch
+									isSelected={plugin.enabled}
+									isDisabled={isToggling}
+									onChange={onToggle}
+									aria-label={
+										plugin.enabled
+											? t("disablePlugin")
+											: t("enablePlugin")
+									}
+								>
+									<Switch.Control>
+										<Switch.Thumb />
+									</Switch.Control>
+								</Switch>
+							</span>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							{plugin.enabled
+								? t("disablePlugin")
+								: t("enablePlugin")}
+						</Tooltip.Content>
+					</Tooltip>
+				</div>
 			</div>
 		</Card.Header>
 	);

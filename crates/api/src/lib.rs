@@ -164,6 +164,7 @@ fn build_rocket(config: rocket::Config) -> rocket::Rocket<rocket::Build> {
 				routes::plugins::check_plugin_update,
 				routes::plugins::open_plugin_folder,
 				routes::plugins::open_plugin_folder_legacy,
+				routes::plugins::open_plugin_skill_in_editor,
 				routes::plugins::get_plugin_config,
 				routes::plugins::get_plugin_config_legacy,
 				routes::plugins::update_plugin_config,

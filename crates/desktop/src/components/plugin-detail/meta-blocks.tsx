@@ -19,7 +19,7 @@ export function MetaRow({
 			<span className="text-[11px] font-medium tracking-wide text-muted uppercase">
 				{label}
 			</span>
-			<span
+			<div
 				className={cn(
 					"min-w-0 text-sm text-foreground",
 					mono &&
@@ -28,7 +28,7 @@ export function MetaRow({
 				title={value.length > 200 ? value : undefined}
 			>
 				{displayValue}
-			</span>
+			</div>
 		</div>
 	);
 }
