@@ -25,14 +25,6 @@ pub enum ConfigError {
 	#[error("Unsupported operation for agent: {0}")]
 	UnsupportedOperation(String),
 
-	#[error("Cannot {action} {resource_type} '{name}' managed by {owner}")]
-	ManagedResource {
-		resource_type: String,
-		name: String,
-		owner: String,
-		action: String,
-	},
-
 	#[error("Invalid configuration: {0}")]
 	InvalidConfig(String),
 }
@@ -73,20 +65,6 @@ impl ConfigError {
 			resource_type.into(),
 			agent.into()
 		))
-	}
-
-	pub fn managed_resource(
-		resource_type: impl Into<String>,
-		name: impl Into<String>,
-		owner: impl Into<String>,
-		action: impl Into<String>,
-	) -> Self {
-		Self::ManagedResource {
-			resource_type: resource_type.into(),
-			name: name.into(),
-			owner: owner.into(),
-			action: action.into(),
-		}
 	}
 }
 

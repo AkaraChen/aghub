@@ -142,10 +142,6 @@ impl AgentAdapter for &'static AgentDescriptor {
 		self.skill_write_path(project_root, scope)
 	}
 
-	fn managed_skill_path(&self, path: &Path) -> Option<String> {
-		AgentDescriptor::managed_skill_path(self, path)
-	}
-
 	fn load_config(
 		&self,
 		project_root: Option<&Path>,

@@ -131,7 +131,6 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 			},
 		},
 	},
-	managed_skill_path: None,
 	global_skill_paths: Some(GlobalSkillPaths {
 		read: global_skills_paths,
 		write: global_skill_write_path,

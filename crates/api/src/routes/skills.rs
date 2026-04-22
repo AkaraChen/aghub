@@ -748,6 +748,7 @@ pub fn update_skill(
 			ApiError::from(ConfigError::resource_not_found("skill", name))
 		})?
 		.clone();
+	ensure_skill_not_plugin_managed(&existing, "update")?;
 	let updated = body.into_inner().apply_to(existing);
 	let response = SkillResponse::from(&updated);
 	manager
@@ -768,6 +769,9 @@ pub fn delete_skill(
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
+	if let Some(skill) = manager.get_skill(name) {
+		ensure_skill_not_plugin_managed(skill, "delete")?;
+	}
 	manager.remove_skill(name).map_err(ApiError::from)?;
 	Ok(NoContent)
 }
@@ -784,6 +788,9 @@ pub fn enable_skill(
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
+	if let Some(skill) = manager.get_skill(name) {
+		ensure_skill_not_plugin_managed(skill, "enable")?;
+	}
 	manager.enable_skill(name).map_err(ApiError::from)?;
 	let skill = manager.get_skill(name).expect("skill present after enable");
 	Ok(Json(SkillResponse::from(skill)))
@@ -801,11 +808,43 @@ pub fn disable_skill(
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
+	if let Some(skill) = manager.get_skill(name) {
+		ensure_skill_not_plugin_managed(skill, "disable")?;
+	}
 	manager.disable_skill(name).map_err(ApiError::from)?;
 	let skill = manager
 		.get_skill(name)
 		.expect("skill present after disable");
 	Ok(Json(SkillResponse::from(skill)))
+}
+
+/// Reject mutations on skills owned by a Claude plugin.
+fn ensure_skill_not_plugin_managed(
+	skill: &Skill,
+	action: &str,
+) -> Result<(), ApiError> {
+	if let Some(plugin) = detect_plugin_for_path_if_present(skill) {
+		return Err(ApiError::new(
+			Status::BadRequest,
+			format!(
+				"Cannot {} skill '{}' managed by plugin '{}'",
+				action, skill.name, plugin.plugin_name
+			),
+			"MANAGED_RESOURCE",
+		));
+	}
+	Ok(())
+}
+
+fn detect_plugin_for_path_if_present(
+	skill: &Skill,
+) -> Option<SkillPluginMetadata> {
+	let source_path = skill
+		.canonical_path
+		.as_deref()
+		.or(skill.source_path.as_deref())?;
+	let full_path = expand_tilde_path(source_path);
+	detect_plugin_for_path(&full_path)
 }
 
 // Detect plugin info for a skill based on its source path
