@@ -10,10 +10,10 @@ import {
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { CCPluginMarketResponse } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
+import { usePluginInstallState } from "../hooks/use-plugin-install-state";
 import { cn } from "../lib/utils";
 import {
 	installPluginMutationOptions,
@@ -29,10 +29,6 @@ interface PluginMarketDialogProps {
 }
 
 const OTHER_CATEGORY = "other";
-const MIN_INSTALLING_DURATION_MS = 800;
-const INSTALLED_FEEDBACK_DURATION_MS = 1200;
-
-type InstallState = "installing" | "installed";
 
 export function PluginMarketDialog({
 	isOpen,
@@ -46,17 +42,14 @@ export function PluginMarketDialog({
 	const [selectedCategory, setSelectedCategory] = useState<string | null>(
 		null,
 	);
-	const [installStateById, setInstallStateById] = useState<
-		Record<string, InstallState>
-	>({});
-	const [transientPluginsById, setTransientPluginsById] = useState<
-		Record<string, CCPluginMarketResponse>
-	>({});
 	const deferredSearchQuery = useDeferredValue(searchQuery);
-	const installFeedbackTimeoutsRef = useRef<
-		Map<string, ReturnType<typeof setTimeout>>
-	>(new Map());
-	const installStartedAtRef = useRef<Map<string, number>>(new Map());
+	const {
+		installStateById,
+		transientPluginsById,
+		markInstalling,
+		markInstalled,
+		clearInstallState,
+	} = usePluginInstallState();
 
 	const compactFormatter = useMemo(
 		() =>
@@ -75,24 +68,6 @@ export function PluginMarketDialog({
 		error,
 	} = useQuery(pluginMarketQueryOptions({ api, enabled: isOpen }));
 
-	const clearInstallFeedbackTimeout = (pluginId: string) => {
-		const timeout = installFeedbackTimeoutsRef.current.get(pluginId);
-		if (timeout) {
-			clearTimeout(timeout);
-			installFeedbackTimeoutsRef.current.delete(pluginId);
-		}
-	};
-
-	useEffect(() => {
-		const timeouts = installFeedbackTimeoutsRef.current;
-		return () => {
-			for (const timeout of timeouts.values()) {
-				clearTimeout(timeout);
-			}
-			timeouts.clear();
-		};
-	}, []);
-
 	const errorMessage = (value: unknown) =>
 		value instanceof Error ? value.message : t("unknownError");
 
@@ -101,65 +76,14 @@ export function PluginMarketDialog({
 			api,
 			queryClient,
 			onSuccess: async (_data, variables) => {
-				const pluginId = variables.plugin_id;
-				const startedAt =
-					installStartedAtRef.current.get(pluginId) ?? Date.now();
-				const elapsed = Date.now() - startedAt;
-				const installDelay = Math.max(
-					0,
-					MIN_INSTALLING_DURATION_MS - elapsed,
-				);
-
 				toast.success(
-					t("pluginInstalled", {
-						id: variables.plugin_id,
-					}),
+					t("pluginInstalled", { id: variables.plugin_id }),
 				);
-				clearInstallFeedbackTimeout(pluginId);
-				const installingTimeout = setTimeout(() => {
-					setInstallStateById((current) => ({
-						...current,
-						[pluginId]: "installed",
-					}));
-					const installedTimeout = setTimeout(() => {
-						setInstallStateById((current) => {
-							const next = { ...current };
-							delete next[pluginId];
-							return next;
-						});
-						setTransientPluginsById((current) => {
-							const next = { ...current };
-							delete next[pluginId];
-							return next;
-						});
-						installStartedAtRef.current.delete(pluginId);
-						installFeedbackTimeoutsRef.current.delete(pluginId);
-					}, INSTALLED_FEEDBACK_DURATION_MS);
-					installFeedbackTimeoutsRef.current.set(
-						pluginId,
-						installedTimeout,
-					);
-				}, installDelay);
-				installFeedbackTimeoutsRef.current.set(
-					pluginId,
-					installingTimeout,
-				);
+				markInstalled(variables.plugin_id);
 			},
 		}),
 		onError: (mutationError, variables) => {
-			const pluginId = variables.plugin_id;
-			clearInstallFeedbackTimeout(pluginId);
-			installStartedAtRef.current.delete(pluginId);
-			setInstallStateById((current) => {
-				const next = { ...current };
-				delete next[pluginId];
-				return next;
-			});
-			setTransientPluginsById((current) => {
-				const next = { ...current };
-				delete next[pluginId];
-				return next;
-			});
+			clearInstallState(variables.plugin_id);
 			toast.danger(errorMessage(mutationError));
 		},
 	});
@@ -277,16 +201,7 @@ export function PluginMarketDialog({
 			return;
 		}
 
-		clearInstallFeedbackTimeout(pluginId);
-		installStartedAtRef.current.set(pluginId, Date.now());
-		setInstallStateById((current) => ({
-			...current,
-			[pluginId]: "installing",
-		}));
-		setTransientPluginsById((current) => ({
-			...current,
-			[pluginId]: plugin,
-		}));
+		markInstalling(pluginId, plugin);
 		installMutation.mutate({
 			plugin_id: pluginId,
 			scope: installScope,

@@ -8,6 +8,7 @@ import {
 import { Button, Tooltip } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import { siGithub } from "simple-icons";
+import { cn } from "../../lib/utils";
 
 interface PluginSourceCardProps {
 	sourceLabel: string;
@@ -90,7 +91,10 @@ export function PluginSourceCard({
 								isDisabled={isUpdating}
 							>
 								<ArrowPathIcon
-									className={`size-4 ${isUpdating ? "animate-spin" : ""}`}
+									className={cn(
+										"size-4",
+										isUpdating && "animate-spin",
+									)}
 								/>
 							</Button>
 							<Tooltip.Content>

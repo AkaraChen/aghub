@@ -4,6 +4,7 @@ import { ArrowPathIcon, TrashIcon } from "@heroicons/react/24/solid";
 import { Button, Card, ListBox, Select, Switch, Tooltip } from "@heroui/react";
 import type { Key } from "react";
 import { useTranslation } from "react-i18next";
+import { cn } from "../../lib/utils";
 import type { CCPluginResponse } from "../../generated/dto";
 
 interface PluginDetailHeaderProps {
@@ -90,7 +91,10 @@ export function PluginDetailHeader({
 							aria-label={t("reinstallPlugin")}
 						>
 							<ArrowPathIcon
-								className={`size-4 ${isReinstalling ? "animate-spin" : ""}`}
+								className={cn(
+									"size-4",
+									isReinstalling && "animate-spin",
+								)}
 							/>
 						</Button>
 						<Tooltip.Content>
@@ -109,7 +113,10 @@ export function PluginDetailHeader({
 						aria-label={t("uninstallPlugin")}
 					>
 						<TrashIcon
-							className={`size-4 ${isUninstalling ? "animate-spin" : ""}`}
+							className={cn(
+								"size-4",
+								isUninstalling && "animate-spin",
+							)}
 						/>
 					</Button>
 					<Tooltip.Content>{t("uninstallPlugin")}</Tooltip.Content>
