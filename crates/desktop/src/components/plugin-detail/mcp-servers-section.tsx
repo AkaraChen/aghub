@@ -8,8 +8,10 @@ import {
 import { Button, toast } from "@heroui/react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { CCPluginDetailResponse } from "../../generated/dto";
-import { CodeBlock, MetaRow } from "./meta-blocks";
+import type { CCPluginDetailResponse, TransportDto } from "../../generated/dto";
+import { KeyValueList } from "../key-value-list";
+import { CodeBlock, MetaRow } from "../meta-blocks";
+import { serializeMcpImportJson } from "../../lib/mcp-utils";
 
 interface McpServersSectionProps {
 	config?: CCPluginDetailResponse["mcp_config"];
@@ -20,92 +22,43 @@ type PluginMcpServer = NonNullable<
 >["servers"][number];
 type CopyMode = "config" | "value";
 
-function formatTransportLabel(transportType: string) {
-	return transportType === "streamable_http"
-		? "Streamable HTTP"
-		: transportType.toUpperCase();
-}
-
-function buildCommandLine(command: string, args?: string[]) {
-	return args && args.length > 0 ? `${command} ${args.join(" ")}` : command;
-}
-
-function KeyValueBlock({
-	label,
-	values,
-}: {
-	label: string;
-	values: Record<string, string>;
-}) {
-	return (
-		<div className="space-y-3">
-			<h4 className="text-xs font-medium tracking-wider text-muted uppercase">
-				{label}
-			</h4>
-			<div className="space-y-2">
-				{Object.entries(values).map(([key, value]) => (
-					<div
-						key={key}
-						className="grid gap-1 rounded-lg border border-separator bg-surface-secondary px-3 py-2"
-					>
-						<span className="font-mono text-[11px] text-muted">
-							{key}
-						</span>
-						<code className="font-mono text-xs leading-5 text-foreground break-words">
-							{value}
-						</code>
-					</div>
-				))}
-			</div>
-		</div>
-	);
-}
-
-function serializeServerConfig(server: PluginMcpServer) {
-	const config = server.command
-		? {
-				command: server.command,
-				...(server.args && server.args.length > 0
-					? { args: server.args }
-					: {}),
-				...(server.env ? { env: server.env } : {}),
-			}
-		: {
-				url: server.url,
-				...(server.transport_type === "streamable_http"
-					? { type: "streamable_http" as const }
-					: {}),
-				...(server.headers ? { headers: server.headers } : {}),
-			};
-
-	return JSON.stringify(
-		{
-			mcpServers: {
-				[server.name]: config,
-			},
-		},
-		null,
-		2,
-	);
-}
-
 export function McpServersSection({ config }: McpServersSectionProps) {
 	const { t } = useTranslation();
 	const [copiedState, setCopiedState] = useState<{
 		serverName: string;
 		mode: CopyMode;
 	} | null>(null);
+	const [expandedBlocks, setExpandedBlocks] = useState<
+		Record<string, boolean>
+	>({});
 
 	if (!config || config.servers.length === 0) {
 		return null;
 	}
 
 	const handleCopy = async (server: PluginMcpServer, mode: CopyMode) => {
+		const transport: TransportDto = server.command
+			? {
+					type: "stdio",
+					command: server.command,
+					args: server.args ?? [],
+					env: server.env ?? null,
+					timeout: null,
+				}
+			: {
+					type:
+						server.transport_type === "streamable_http"
+							? "streamable_http"
+							: "sse",
+					url: server.url ?? "",
+					headers: server.headers ?? null,
+					timeout: null,
+				};
 		const value =
 			mode === "config"
-				? serializeServerConfig(server)
+				? serializeMcpImportJson(server.name, transport)
 				: server.command
-					? buildCommandLine(server.command, server.args)
+					? [server.command, ...(server.args ?? [])].join(" ")
 					: (server.url ?? "");
 
 		if (!value) {
@@ -138,104 +91,158 @@ export function McpServersSection({ config }: McpServersSectionProps) {
 				{t("mcpServers")}
 			</h3>
 			<div className="space-y-3">
-				{config.servers.map((server) => (
-					<div
-						key={server.name}
-						className="space-y-4 rounded-xl border border-separator/60 bg-surface-secondary/40 px-3 py-3"
-					>
-						<div className="flex items-baseline gap-2">
-							<span className="text-sm font-medium text-foreground">
-								{server.name}
-							</span>
-							<span className="font-mono text-xs text-muted">
-								({formatTransportLabel(server.transport_type)})
-							</span>
-						</div>
+				{config.servers.map((server) => {
+					const headerEntries = server.headers
+						? Object.entries(server.headers)
+						: [];
+					const envEntries = server.env
+						? Object.entries(server.env)
+						: [];
+					const headersKey = `${server.name}:headers`;
+					const envKey = `${server.name}:env`;
+					const showAllHeaders = expandedBlocks[headersKey] ?? false;
+					const showAllEnv = expandedBlocks[envKey] ?? false;
+					const transportLabel =
+						server.transport_type === "streamable_http"
+							? "Streamable HTTP"
+							: server.transport_type;
 
-						{server.note && (
-							<p className="text-sm leading-6 text-muted">
-								{server.note}
-							</p>
-						)}
+					return (
+						<div
+							key={server.name}
+							className="space-y-4 rounded-xl border border-separator/60 bg-surface-secondary/60 px-3 py-3"
+						>
+							<div className="flex items-baseline gap-2">
+								<span className="text-sm font-medium text-foreground">
+									{server.name}
+								</span>
+								<span className="font-mono text-xs text-muted">
+									({transportLabel})
+								</span>
+							</div>
 
-						<div className="grid gap-4">
-							{server.command ? (
-								<CodeBlock
-									label={t("command")}
-									command={server.command}
-									args={server.args}
-								/>
-							) : (
-								server.url && (
-									<MetaRow
-										label={t("url")}
-										value={server.url}
-										mono
-									/>
-								)
+							{server.note && (
+								<p className="text-sm leading-6 text-muted">
+									{server.note}
+								</p>
 							)}
 
-							{server.env &&
-								Object.keys(server.env).length > 0 && (
-									<KeyValueBlock
-										label={t("envCount", {
-											count: Object.keys(server.env)
-												.length,
-										})}
-										values={server.env}
+							<div className="grid gap-4">
+								{server.command ? (
+									<CodeBlock
+										label={t("command")}
+										command={server.command}
+										args={server.args}
 									/>
-								)}
-
-							{server.headers &&
-								Object.keys(server.headers).length > 0 && (
-									<KeyValueBlock
-										label={t("headersCount", {
-											count: Object.keys(server.headers)
-												.length,
-										})}
-										values={server.headers}
-									/>
-								)}
-						</div>
-
-						<div className="flex flex-wrap gap-2 border-t border-separator/70 pt-3">
-							<Button
-								variant="secondary"
-								size="sm"
-								onPress={() => handleCopy(server, "config")}
-							>
-								{copiedState?.serverName === server.name &&
-								copiedState.mode === "config" ? (
-									<CheckCircleIcon className="size-4 text-success" />
 								) : (
-									<DocumentDuplicateIcon className="size-4" />
+									server.url && (
+										<MetaRow
+											label={t("url")}
+											value={server.url}
+											mono
+										/>
+									)
 								)}
-								{copiedState?.serverName === server.name &&
-								copiedState.mode === "config"
-									? t("copied")
-									: t("copyConfig")}
-							</Button>
 
-							<Button
-								variant="secondary"
-								size="sm"
-								onPress={() => handleCopy(server, "value")}
-								isDisabled={!server.command && !server.url}
-							>
-								{copiedState?.serverName === server.name &&
-								copiedState.mode === "value" ? (
-									<CheckCircleIcon className="size-4 text-success" />
-								) : (
-									<ClipboardDocumentIcon className="size-4" />
+								{envEntries.length > 0 && (
+									<div className="space-y-3">
+										<h4 className="text-xs font-medium tracking-wider text-muted uppercase">
+											{t("envCount", {
+												count: envEntries.length,
+											})}
+										</h4>
+										<KeyValueList
+											items={envEntries}
+											showAll={showAllEnv}
+											onToggle={() =>
+												setExpandedBlocks(
+													(current) => ({
+														...current,
+														[envKey]: !(
+															current[envKey] ??
+															false
+														),
+													}),
+												)
+											}
+											showMoreLabel={(count) =>
+												t("showMore", { count })
+											}
+											showLessLabel={t("showLess")}
+										/>
+									</div>
 								)}
-								{copiedState?.serverName === server.name &&
-								copiedState.mode === "value"
-									? t("copied")
-									: t("copy")}
-							</Button>
+
+								{headerEntries.length > 0 && (
+									<div className="space-y-3">
+										<h4 className="text-xs font-medium tracking-wider text-muted uppercase">
+											{t("headersCount", {
+												count: headerEntries.length,
+											})}
+										</h4>
+										<KeyValueList
+											items={headerEntries}
+											showAll={showAllHeaders}
+											onToggle={() =>
+												setExpandedBlocks(
+													(current) => ({
+														...current,
+														[headersKey]: !(
+															current[
+																headersKey
+															] ?? false
+														),
+													}),
+												)
+											}
+											showMoreLabel={(count) =>
+												t("showMore", { count })
+											}
+											showLessLabel={t("showLess")}
+										/>
+									</div>
+								)}
+							</div>
+
+							<div className="flex flex-wrap gap-2 border-t border-separator/70 pt-3">
+								<Button
+									variant="secondary"
+									size="sm"
+									onPress={() => handleCopy(server, "config")}
+								>
+									{copiedState?.serverName === server.name &&
+									copiedState.mode === "config" ? (
+										<CheckCircleIcon className="size-4 text-success" />
+									) : (
+										<DocumentDuplicateIcon className="size-4" />
+									)}
+									{copiedState?.serverName === server.name &&
+									copiedState.mode === "config"
+										? t("copied")
+										: t("copyConfig")}
+								</Button>
+
+								<Button
+									variant="secondary"
+									size="sm"
+									onPress={() => handleCopy(server, "value")}
+									isDisabled={!server.command && !server.url}
+								>
+									{copiedState?.serverName === server.name &&
+									copiedState.mode === "value" ? (
+										<CheckCircleIcon className="size-4 text-success" />
+									) : (
+										<ClipboardDocumentIcon className="size-4" />
+									)}
+									{copiedState?.serverName === server.name &&
+									copiedState.mode === "value"
+										? t("copied")
+										: t("copy")}
+								</Button>
+							</div>
 						</div>
-					</div>
-				))}
+					);
+				})}
 			</div>
 		</div>
 	);

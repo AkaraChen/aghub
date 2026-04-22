@@ -156,7 +156,6 @@ export function PluginDetail({
 		handleOpenUrl,
 		handleOpenInstallPath,
 	} = usePluginDetailActions({
-		pluginId: plugin.id,
 		currentPlugin,
 		currentScope,
 		currentScopeInfo,

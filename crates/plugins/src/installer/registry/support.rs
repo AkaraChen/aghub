@@ -1,7 +1,5 @@
-use super::git::GitBasedInstaller;
 use crate::claude::types::PluginManifest;
 use anyhow::{Context, Result};
-use async_trait::async_trait;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use tempfile::{Builder, TempDir};
@@ -226,7 +224,7 @@ pub(crate) async fn fetch_github_raw_manifest(
 	None
 }
 
-async fn fetch_github_commit(
+pub(crate) async fn fetch_github_commit(
 	client: &reqwest::Client,
 	owner: &str,
 	repo: &str,
@@ -289,7 +287,7 @@ pub(crate) fn first_manifest_dir(root: &Path) -> Option<PathBuf> {
 }
 
 pub(crate) async fn extract_repository_archive(
-	git_installer: &GitBasedInstaller,
+	git_installer: &crate::installer::git::GitBasedInstaller,
 	url: &str,
 	target_dir: &Path,
 ) -> Result<String> {
@@ -316,165 +314,6 @@ pub(crate) async fn extract_repository_archive(
 	anyhow::bail!("No repository archive URL available for {}", url);
 }
 
-pub use super::marketplace::MarketplaceRegistry;
-
-#[async_trait]
-pub trait PluginRegistry: Send + Sync {
-	async fn fetch_manifest(&self, name: &str) -> Result<PluginManifest>;
-
-	async fn install(
-		&self,
-		name: &str,
-		target_dir: &Path,
-	) -> Result<Option<String>>;
-
-	async fn get_latest_version(
-		&self,
-		name: &str,
-	) -> Result<Option<(String, Option<String>)>>;
-}
-
-pub struct GitHubRegistry {
-	client: reqwest::Client,
-	owner: String,
-	repo: String,
-	subdir: Option<String>,
-	git_installer: GitBasedInstaller,
-}
-
-impl GitHubRegistry {
-	pub fn new(
-		client: reqwest::Client,
-		owner: &str,
-		repo: &str,
-		subdir: Option<String>,
-	) -> Result<Self> {
-		Ok(Self {
-			client,
-			owner: owner.to_string(),
-			repo: repo.to_string(),
-			subdir,
-			git_installer: GitBasedInstaller::new()?,
-		})
-	}
-
-	fn plugin_candidates(&self, name: &str) -> Vec<PathBuf> {
-		match &self.subdir {
-			Some(sub) => vec![PathBuf::from(format!("{}{}", sub, name))],
-			None => remote_plugin_candidates(name),
-		}
-	}
-}
-
-#[async_trait]
-impl PluginRegistry for GitHubRegistry {
-	async fn fetch_manifest(&self, name: &str) -> Result<PluginManifest> {
-		if let Some(manifest) = fetch_github_raw_manifest(
-			&self.client,
-			&self.owner,
-			&self.repo,
-			&manifest_candidate_paths(&self.plugin_candidates(name)),
-		)
-		.await
-		{
-			return Ok(manifest);
-		}
-
-		anyhow::bail!(
-			"Plugin manifest not found: {} (tried main and master branches with multiple paths)",
-			name
-		)
-	}
-
-	async fn install(
-		&self,
-		name: &str,
-		target_dir: &Path,
-	) -> Result<Option<String>> {
-		let url = format!("https://github.com/{}/{}", self.owner, self.repo);
-		let temp_dir =
-			temp_dir(&format!("aghub-plugin-install-{}-", self.repo))?;
-
-		let commit = extract_repository_archive(
-			&self.git_installer,
-			&url,
-			temp_dir.path(),
-		)
-		.await?;
-
-		let source_dir = match resolve_plugin_dir_with_wrappers(
-			temp_dir.path(),
-			&self.plugin_candidates(name),
-		) {
-			Some(path) => path,
-			None => anyhow::bail!(
-				"Plugin directory not found in repository for '{}'",
-				name
-			),
-		};
-
-		copy_dir_all(&source_dir, target_dir).await?;
-		Ok(Some(commit))
-	}
-
-	async fn get_latest_version(
-		&self,
-		_name: &str,
-	) -> Result<Option<(String, Option<String>)>> {
-		fetch_github_commit(&self.client, &self.owner, &self.repo).await
-	}
-}
-
-pub struct LocalRegistry {
-	base_path: std::path::PathBuf,
-}
-
-impl LocalRegistry {
-	pub fn new(base_path: std::path::PathBuf) -> Self {
-		Self { base_path }
-	}
-}
-
-#[async_trait]
-impl PluginRegistry for LocalRegistry {
-	async fn fetch_manifest(&self, name: &str) -> Result<PluginManifest> {
-		let plugin_dir =
-			resolve_plugin_dir(&self.base_path, &local_plugin_candidates(name))
-				.ok_or_else(|| {
-					anyhow::anyhow!(
-						"plugin.json not found in local plugin: {}",
-						name
-					)
-				})?;
-		read_plugin_manifest(&plugin_dir).await
-	}
-
-	async fn install(
-		&self,
-		name: &str,
-		target_dir: &Path,
-	) -> Result<Option<String>> {
-		let source_dir =
-			resolve_plugin_dir(&self.base_path, &local_plugin_candidates(name))
-				.ok_or_else(|| {
-					anyhow::anyhow!(
-						"Local plugin directory not found for '{}'",
-						name
-					)
-				})?;
-
-		copy_dir_all(&source_dir, target_dir).await?;
-		Ok(None)
-	}
-
-	async fn get_latest_version(
-		&self,
-		_name: &str,
-	) -> Result<Option<(String, Option<String>)>> {
-		Ok(Some(("local".to_string(), None)))
-	}
-}
-
 pub(crate) async fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
 	tokio::fs::create_dir_all(dst).await?;
 
@@ -498,96 +337,4 @@ pub(crate) async fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
 	}
 
 	Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use serde_json::json;
-
-	fn write_manifest(path: &Path, value: serde_json::Value) {
-		std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-		std::fs::write(path, serde_json::to_string_pretty(&value).unwrap())
-			.unwrap();
-	}
-
-	fn demo_manifest(name: &str) -> serde_json::Value {
-		json!({
-			"name": name,
-			"description": "test",
-			"author": { "name": "A" },
-		})
-	}
-
-	#[tokio::test]
-	async fn test_local_registry_supports_plugin_root_base_path() {
-		let temp_dir = temp_dir("aghub-local-registry-").unwrap();
-		let plugin_dir = temp_dir.path().join("demo-plugin");
-		let install_dir = temp_dir.path().join("installed");
-		let manifest_dir = plugin_dir.join(".claude-plugin");
-
-		std::fs::create_dir_all(&manifest_dir).unwrap();
-		std::fs::write(
-			manifest_dir.join("plugin.json"),
-			r#"{"name":"demo-plugin","description":"test","author":{"name":"A"}}"#,
-		)
-		.unwrap();
-
-		let registry = LocalRegistry::new(plugin_dir.clone());
-		let manifest = registry.fetch_manifest("demo-plugin").await.unwrap();
-		assert_eq!(manifest.name, "demo-plugin");
-
-		registry.install("demo-plugin", &install_dir).await.unwrap();
-		assert!(install_dir.join(".claude-plugin/plugin.json").exists());
-	}
-
-	#[test]
-	fn test_resolve_plugin_dir_variants() {
-		let cases = [
-			(
-				"root",
-				PathBuf::new(),
-				vec![PathBuf::from("demo-plugin"), PathBuf::new()],
-				false,
-			),
-			(
-				"subdir",
-				PathBuf::from("demo-plugin"),
-				vec![PathBuf::from("demo-plugin"), PathBuf::new()],
-				false,
-			),
-			(
-				"wrapper",
-				PathBuf::from("repo-wrapper/plugins/demo-plugin"),
-				vec![PathBuf::from("plugins/demo-plugin")],
-				true,
-			),
-		];
-
-		for (name, manifest_dir, candidates, use_wrappers) in cases {
-			let temp_dir =
-				temp_dir(&format!("aghub-remote-registry-{name}-")).unwrap();
-			let plugin_dir = temp_dir.path().join(manifest_dir);
-			write_manifest(
-				&plugin_dir.join(".claude-plugin/plugin.json"),
-				demo_manifest("demo-plugin"),
-			);
-
-			let resolved = if use_wrappers {
-				resolve_plugin_dir_with_wrappers(temp_dir.path(), &candidates)
-			} else {
-				resolve_plugin_dir(temp_dir.path(), &candidates)
-			}
-			.unwrap();
-			assert_eq!(resolved, plugin_dir);
-		}
-	}
-
-	#[test]
-	fn test_normalize_repository_url_supports_repo_shorthand() {
-		assert_eq!(
-			normalize_repository_url("railwayapp/railway-skills"),
-			"https://github.com/railwayapp/railway-skills"
-		);
-	}
 }

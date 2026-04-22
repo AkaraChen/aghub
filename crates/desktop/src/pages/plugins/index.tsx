@@ -7,6 +7,7 @@ import {
 	useQueryClient,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { PluginDetail } from "../../components/plugin-detail";
 import { PluginConfirmDialog } from "../../components/plugin-detail/confirm-dialog";
@@ -25,7 +26,13 @@ import {
 	bulkUninstallPluginsMutationOptions,
 	pluginListQueryOptions,
 } from "../../requests/plugins";
-import { usePluginsPageState } from "./use-plugins-page-state";
+
+type PluginScopeValue = "user" | "project" | "local";
+
+interface PluginScopeSelection {
+	pluginId: string;
+	scope: PluginScopeValue;
+}
 
 export default function PluginsPage() {
 	const { t } = useTranslation();
@@ -34,29 +41,125 @@ export default function PluginsPage() {
 	const { data, refetch, isFetching } = useSuspenseQuery(
 		pluginListQueryOptions({ api }),
 	);
-	const plugins = data?.plugins ?? [];
-	const {
-		searchQuery,
-		setSearchQuery,
-		sortedPlugins,
-		selectedPlugin,
-		marketInstallScope,
-		selectedKeysInPlugins,
-		effectiveSelectedKeys,
-		selectedPlugins,
-		isMultiSelectMode,
-		isMarketDialogOpen,
-		isBulkUninstallDialogOpen,
-		activeSelectedPluginId,
-		handleSelectionChange,
-		openMarketDialog,
-		closeMarketDialog,
-		toggleMultiSelect,
-		openBulkUninstallDialog,
-		setBulkUninstallDialogOpen,
-		setSelectedPluginScope,
-		clearBulkSelectionAfterUninstall,
-	} = usePluginsPageState(plugins);
+	const plugins = data.plugins;
+	const [searchQuery, setSearchQuery] = useState("");
+	const [selectedPluginId, setSelectedPluginId] = useState<string | null>(
+		plugins[0]?.id ?? null,
+	);
+	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
+		() => new Set(),
+	);
+	const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+	const [selectedPluginScope, setSelectedPluginScope] =
+		useState<PluginScopeSelection | null>(null);
+	const [isMarketDialogOpen, setIsMarketDialogOpen] = useState(false);
+	const [isBulkUninstallDialogOpen, setIsBulkUninstallDialogOpen] =
+		useState(false);
+
+	const sortedPlugins = useMemo(
+		() => [...plugins].sort((a, b) => a.name.localeCompare(b.name)),
+		[plugins],
+	);
+	const validPluginIds = useMemo(
+		() => new Set(plugins.map((plugin) => plugin.id)),
+		[plugins],
+	);
+	const activeSelectedPluginId =
+		selectedPluginId && validPluginIds.has(selectedPluginId)
+			? selectedPluginId
+			: (plugins[0]?.id ?? null);
+	const selectedPlugin =
+		plugins.find((plugin) => plugin.id === activeSelectedPluginId) ?? null;
+	const marketInstallScope =
+		selectedPlugin &&
+		selectedPluginScope?.pluginId === selectedPlugin.id &&
+		selectedPlugin.scopes.some(
+			(scope) => scope.scope === selectedPluginScope.scope,
+		)
+			? selectedPluginScope.scope
+			: ((selectedPlugin?.display_scope ??
+					selectedPlugin?.scopes[0]?.scope ??
+					"user") as PluginScopeValue);
+	const selectedKeysInPlugins = useMemo(
+		() =>
+			new Set(
+				[...selectedKeys].filter((pluginId) =>
+					validPluginIds.has(pluginId),
+				),
+			),
+		[selectedKeys, validPluginIds],
+	);
+	const effectiveSelectedKeys = useMemo(() => {
+		if (selectedKeysInPlugins.size > 0 && isMultiSelectMode) {
+			return selectedKeysInPlugins;
+		}
+
+		return activeSelectedPluginId
+			? new Set([activeSelectedPluginId])
+			: new Set<string>();
+	}, [selectedKeysInPlugins, isMultiSelectMode, activeSelectedPluginId]);
+	const selectedPlugins = useMemo(
+		() => plugins.filter((plugin) => selectedKeysInPlugins.has(plugin.id)),
+		[plugins, selectedKeysInPlugins],
+	);
+
+	const handleSelectionChange = (keys: Set<string>, clickedKey?: string) => {
+		setSelectedKeys(keys);
+
+		if (!isMultiSelectMode) {
+			if (clickedKey) {
+				setSelectedPluginId(clickedKey);
+			} else if (keys.size === 1) {
+				setSelectedPluginId([...keys][0] ?? null);
+			} else if (keys.size === 0) {
+				setSelectedPluginId(null);
+			}
+		}
+
+		if (keys.size > 1 && !isMultiSelectMode) {
+			setIsMultiSelectMode(true);
+		}
+
+		if (keys.size === 0 && isMultiSelectMode) {
+			setIsMultiSelectMode(false);
+		}
+	};
+
+	const toggleMultiSelect = () => {
+		if (isMultiSelectMode) {
+			setSelectedKeys(new Set());
+			setIsMultiSelectMode(false);
+			return;
+		}
+
+		setIsMultiSelectMode(true);
+	};
+
+	const setSelectedPluginScopeForPlugin = (
+		pluginId: string,
+		scope: PluginScopeValue,
+	) => {
+		setSelectedPluginScope({
+			pluginId,
+			scope,
+		});
+	};
+
+	const clearBulkSelectionAfterUninstall = (
+		removedPluginIds: Set<string>,
+	) => {
+		setSelectedKeys(new Set());
+		setIsMultiSelectMode(false);
+		setSelectedPluginScope(null);
+		setIsBulkUninstallDialogOpen(false);
+		setSelectedPluginId((currentSelectedPluginId) =>
+			currentSelectedPluginId &&
+			!removedPluginIds.has(currentSelectedPluginId)
+				? currentSelectedPluginId
+				: (plugins.find((plugin) => !removedPluginIds.has(plugin.id))
+						?.id ?? null),
+		);
+	};
 
 	const bulkUninstallMutation = useMutation({
 		...bulkUninstallPluginsMutationOptions({
@@ -117,10 +220,10 @@ export default function PluginsPage() {
 					searchQuery={searchQuery}
 					onSearchChange={setSearchQuery}
 					onSelectionChange={handleSelectionChange}
-					onOpenMarket={openMarketDialog}
+					onOpenMarket={() => setIsMarketDialogOpen(true)}
 					onToggleMultiSelect={toggleMultiSelect}
 					onRefresh={() => void handleRefresh()}
-					onDeleteSelection={openBulkUninstallDialog}
+					onDeleteSelection={() => setIsBulkUninstallDialogOpen(true)}
 					selectedCount={selectedKeysInPlugins.size}
 					totalCount={plugins.length}
 					isRefreshing={isFetching}
@@ -135,7 +238,10 @@ export default function PluginsPage() {
 						plugin={selectedPlugin}
 						selectedScope={marketInstallScope}
 						onScopeChange={(scope) =>
-							setSelectedPluginScope(selectedPlugin.id, scope)
+							setSelectedPluginScopeForPlugin(
+								selectedPlugin.id,
+								scope,
+							)
 						}
 					/>
 				) : (
@@ -158,7 +264,7 @@ export default function PluginsPage() {
 
 			<PluginMarketDialog
 				isOpen={isMarketDialogOpen}
-				onClose={closeMarketDialog}
+				onClose={() => setIsMarketDialogOpen(false)}
 				installScope={marketInstallScope}
 			/>
 
@@ -177,7 +283,7 @@ export default function PluginsPage() {
 					if (bulkUninstallMutation.isPending) {
 						return;
 					}
-					setBulkUninstallDialogOpen(open);
+					setIsBulkUninstallDialogOpen(open);
 				}}
 				onConfirm={() => bulkUninstallMutation.mutate(selectedPlugins)}
 			/>

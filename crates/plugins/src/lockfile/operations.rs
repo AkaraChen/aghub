@@ -1,55 +1,11 @@
-//! Plugin lockfile management
-//!
-//! Stores the aghub-owned plugin lock schema in
-//! `~/.claude/plugins/plugin-lock.json`.
-//!
-//! The file uses deterministic key ordering via `BTreeMap`, pretty-printed
-//! JSON for review, and atomic replace-on-write semantics.
-
+use super::model::{LockedPlugin, PluginLockfile, RestoreResult};
 use crate::PluginId;
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Plugin lockfile structure
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PluginLockfile {
-	/// When the lockfile was generated
-	pub generated_at: String,
-	/// Installed plugins with exact versions
-	pub plugins: BTreeMap<String, LockedPlugin>,
-}
-
-/// A locked plugin entry with exact version information
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LockedPlugin {
-	/// Plugin ID (name@source)
-	pub id: String,
-	/// Plugin name
-	pub name: String,
-	/// Exact semantic version
-	pub version: String,
-	/// Git commit SHA (for git-based sources)
-	pub commit_sha: Option<String>,
-	/// Source (registry or URL)
-	pub source: String,
-	/// Download URL or local path
-	pub resolved: String,
-	/// Integrity hash (SHA-256 of tarball)
-	pub integrity: Option<String>,
-	/// Installation scope
-	pub scope: String,
-	/// Installation timestamp
-	pub installed_at: String,
-	/// Dependencies on other plugins
-	#[serde(default)]
-	pub dependencies: Vec<String>,
-}
-
 impl PluginLockfile {
-	fn entry_key(id: &str, scope: &str) -> String {
+	pub(crate) fn entry_key(id: &str, scope: &str) -> String {
 		format!("{id}#{scope}")
 	}
 
@@ -65,7 +21,7 @@ impl PluginLockfile {
 		self.save_to_path(&path)
 	}
 
-	fn load_from_path(path: &Path) -> Result<Self> {
+	pub(crate) fn load_from_path(path: &Path) -> Result<Self> {
 		if !path.exists() {
 			return Ok(Self::default());
 		}
@@ -78,8 +34,7 @@ impl PluginLockfile {
 			.with_context(|| "Failed to parse plugin lockfile")
 	}
 
-	fn save_to_path(&self, path: &Path) -> Result<()> {
-		// Ensure parent directory exists
+	pub(crate) fn save_to_path(&self, path: &Path) -> Result<()> {
 		if let Some(parent) = path.parent() {
 			std::fs::create_dir_all(parent)?;
 		}
@@ -129,18 +84,16 @@ impl PluginLockfile {
 		self.plugins.insert(key, plugin);
 	}
 
-	/// Update timestamp
 	fn touch(&mut self) {
 		self.generated_at = chrono::Utc::now().to_rfc3339();
 	}
 
 	/// Sync with installed plugins
-	/// This updates the lockfile to match currently installed plugins
 	pub fn sync(
 		&mut self,
 		installed: &[crate::claude::ClaudePluginInfo],
 	) -> Result<()> {
-		let mut new_plugins = BTreeMap::new();
+		let mut new_plugins = std::collections::BTreeMap::new();
 
 		for plugin in installed {
 			for scope in &plugin.scopes {
@@ -175,7 +128,6 @@ impl PluginLockfile {
 	}
 
 	/// Verify lockfile integrity
-	/// Checks that all locked plugins are actually installed
 	pub fn verify(&self) -> Result<Vec<String>> {
 		use crate::claude::ClaudePluginManager;
 
@@ -201,7 +153,6 @@ impl PluginLockfile {
 	}
 
 	/// Restore from lockfile
-	/// This would reinstall all plugins from the lockfile
 	pub async fn restore(&self) -> Result<Vec<RestoreResult>> {
 		use crate::installer::PluginInstaller;
 
@@ -214,7 +165,6 @@ impl PluginLockfile {
 				locked.scope.as_str(),
 			);
 
-			// Check if already installed
 			if installer.is_installed(&plugin_id, scope).await {
 				results.push(RestoreResult {
 					id: locked.id.clone(),
@@ -224,7 +174,6 @@ impl PluginLockfile {
 				continue;
 			}
 
-			// Install from lockfile
 			match installer.install_locked(&plugin_id, scope, locked).await {
 				Ok(_) => results.push(RestoreResult {
 					id: locked.id.clone(),
@@ -240,90 +189,5 @@ impl PluginLockfile {
 		}
 
 		Ok(results)
-	}
-}
-
-impl Default for PluginLockfile {
-	fn default() -> Self {
-		Self {
-			generated_at: chrono::Utc::now().to_rfc3339(),
-			plugins: BTreeMap::new(),
-		}
-	}
-}
-
-/// Result of a restore operation
-#[derive(Debug)]
-pub struct RestoreResult {
-	pub id: String,
-	pub success: bool,
-	pub message: String,
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-	use tempfile::tempdir;
-
-	#[test]
-	fn test_lockfile_operations() {
-		let mut lockfile = PluginLockfile::default();
-
-		let plugin = LockedPlugin {
-			id: "test@claude-plugins-official".to_string(),
-			name: "Test Plugin".to_string(),
-			version: "1.0.0".to_string(),
-			commit_sha: Some("abc123".to_string()),
-			source: "claude-plugins-official".to_string(),
-			resolved: "https://github.com/...".to_string(),
-			integrity: Some("sha256-...".to_string()),
-			scope: "user".to_string(),
-			installed_at: "2024-01-01T00:00:00Z".to_string(),
-			dependencies: vec![],
-		};
-		let plugin_key = PluginLockfile::entry_key(&plugin.id, &plugin.scope);
-
-		lockfile.insert(plugin.clone());
-		assert_eq!(lockfile.plugins.len(), 1);
-		assert_eq!(lockfile.plugins.get(&plugin_key).unwrap().version, "1.0.0");
-	}
-
-	#[test]
-	fn test_lockfile_roundtrip_preserves_schema() {
-		let temp = tempdir().expect("tempdir");
-		let path = temp.path().join("plugin-lock.json");
-		let lockfile = PluginLockfile {
-			generated_at: "2024-01-01T00:00:00Z".to_string(),
-			..PluginLockfile::default()
-		};
-
-		lockfile.save_to_path(&path).expect("save lockfile");
-		let loaded =
-			PluginLockfile::load_from_path(&path).expect("load lockfile");
-
-		assert_eq!(loaded.generated_at, "2024-01-01T00:00:00Z");
-		assert!(loaded.plugins.is_empty());
-	}
-
-	#[test]
-	fn test_lockfile_ignores_unknown_fields() {
-		let temp = tempdir().expect("tempdir");
-		let path = temp.path().join("plugin-lock.json");
-
-		std::fs::write(
-			&path,
-			r#"{
-  "lockfile_version": 999,
-  "generated_at": "2024-01-01T00:00:00Z",
-  "plugins": {}
-}
-"#,
-		)
-		.expect("write lockfile");
-
-		let loaded =
-			PluginLockfile::load_from_path(&path).expect("load lockfile");
-		assert_eq!(loaded.generated_at, "2024-01-01T00:00:00Z");
-		assert!(loaded.plugins.is_empty());
 	}
 }

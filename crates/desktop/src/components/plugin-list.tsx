@@ -155,7 +155,7 @@ export function PluginList({
 					</p>
 					{searchQuery && (
 						<p className="mt-1 text-xs text-muted">
-							&ldquo;{searchQuery}&rdquo;
+							"{searchQuery}"
 						</p>
 					)}
 				</div>

@@ -31,8 +31,8 @@ export function ProvidedSkillsSection({
 						key={skill.name}
 						className="rounded-lg border border-separator/70 bg-surface-secondary px-3 py-2.5"
 					>
-						<div className="min-w-0 space-y-1">
-							<div className="flex items-start justify-between gap-2">
+						<div className="min-w-0 space-y-1.5">
+							<div className="flex items-start justify-between gap-3">
 								<p className="min-w-0 flex-1 break-words text-sm font-medium text-foreground">
 									{skill.name}
 								</p>
@@ -57,7 +57,7 @@ export function ProvidedSkillsSection({
 								)}
 							</div>
 							{skill.description && (
-								<p className="line-clamp-2 text-xs leading-5 text-muted">
+								<p className="line-clamp-2 pr-1 text-xs leading-5 text-muted">
 									{skill.description}
 								</p>
 							)}
