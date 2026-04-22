@@ -30,8 +30,11 @@ tar = "0.4"
 chrono = { version = "0.4", features = [ "serde" ] }
 
 # Hash for URL-based sources
-md5 = "0.7"
+sha2 = "0.10"
 semver = "1.0.28"
+
+# Error types
+thiserror = { workspace = true }
 
 # Logging
 log = "0.4"

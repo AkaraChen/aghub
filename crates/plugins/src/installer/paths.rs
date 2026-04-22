@@ -2,7 +2,21 @@ use crate::claude::settings::InstallScope;
 use crate::PluginSource;
 use anyhow::{Context, Result};
 use chrono::Utc;
+use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
+
+/// Produce a short hex digest (first 16 bytes / 32 hex chars) for filesystem paths.
+pub(crate) fn short_sha256(data: impl AsRef<[u8]>) -> String {
+	let hash = Sha256::digest(data);
+	// 16 bytes → 32 hex chars — unique enough for path dedup, shorter than full SHA-256
+	hash.iter()
+		.take(16)
+		.fold(String::with_capacity(32), |mut s, b| {
+			use std::fmt::Write;
+			let _ = write!(s, "{b:02x}");
+			s
+		})
+}
 
 pub(super) fn storage_key_for_source(
 	source: &str,
@@ -14,16 +28,11 @@ pub(super) fn storage_key_for_source(
 
 	match PluginSource::parse(source) {
 		Ok(PluginSource::OfficialRegistry) => source.to_string(),
-		Ok(PluginSource::ThirdParty { url }) => {
-			format!("{:x}", md5::compute(url))
-		}
+		Ok(PluginSource::ThirdParty { url }) => short_sha256(url),
 		Ok(PluginSource::Local { path }) => {
-			format!(
-				"local-{:x}",
-				md5::compute(path.to_string_lossy().as_bytes())
-			)
+			format!("local-{}", short_sha256(path.to_string_lossy().as_bytes()))
 		}
-		Err(_) => format!("{:x}", md5::compute(source.as_bytes())),
+		Err(_) => short_sha256(source.as_bytes()),
 	}
 }
 

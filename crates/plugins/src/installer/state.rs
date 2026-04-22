@@ -5,6 +5,7 @@ use crate::claude::{
 	types::{InstalledPluginInfo, InstalledPluginsManifest},
 	ClaudePluginInfo, ClaudePluginManager, PluginScopeInfo,
 };
+use crate::errors::PluginError;
 use crate::PluginId;
 use anyhow::Result;
 use std::path::{Path, PathBuf};
@@ -26,11 +27,11 @@ impl PluginInstaller {
 			.get_plugin(id)
 			.is_some_and(|plugin| Self::scope_is_installed(plugin, scope))
 		{
-			anyhow::bail!(
-				"Plugin '{}' is already installed for scope '{}'",
-				id,
-				scope
-			);
+			return Err(PluginError::AlreadyInstalled {
+				id: id.clone(),
+				scope: scope.to_string(),
+			}
+			.into());
 		}
 
 		Ok(())

@@ -8,6 +8,8 @@ pub mod installer;
 pub mod lockfile;
 pub mod market;
 
+pub mod errors;
+
 use std::fmt::Display;
 use std::path::PathBuf;
 

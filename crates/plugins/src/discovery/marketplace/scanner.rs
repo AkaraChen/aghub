@@ -24,18 +24,28 @@ impl MarketplaceScanner {
 			.join(".claude-plugin")
 			.join("marketplace.json");
 
-		if !tokio::fs::try_exists(&manifest_path).await.unwrap_or(false) {
-			anyhow::bail!(
-				"Marketplace manifest not found: {}",
-				manifest_path.display()
-			);
+		match tokio::fs::try_exists(&manifest_path).await {
+			Ok(true) => {}
+			Ok(false) => {
+				anyhow::bail!(
+					"Marketplace manifest not found: {}",
+					manifest_path.display()
+				);
+			}
+			Err(e) => {
+				anyhow::bail!(
+					"Cannot check marketplace manifest at {}: {}",
+					manifest_path.display(),
+					e
+				);
+			}
 		}
 
 		let content = tokio::fs::read_to_string(&manifest_path).await?;
 		let config: MarketplaceConfig = serde_json::from_str(&content)?;
 
 		self.config = Some(config);
-		Ok(self.config.as_ref().unwrap())
+		Ok(self.config.as_ref().expect("config just assigned"))
 	}
 
 	/// Get the loaded config (must call load() first)
@@ -79,8 +89,16 @@ impl MarketplaceScanner {
 			];
 
 			for path in &possible_paths {
-				if tokio::fs::try_exists(path).await.unwrap_or(false) {
-					return Some(path.clone());
+				match tokio::fs::try_exists(path).await {
+					Ok(true) => return Some(path.clone()),
+					Ok(false) => {}
+					Err(e) => {
+						log::warn!(
+							"Cannot check plugin manifest at {}: {}",
+							path.display(),
+							e
+						);
+					}
 				}
 			}
 		}
@@ -106,15 +124,23 @@ pub async fn scan_marketplaces(
 ) -> Result<Vec<(String, MarketplaceConfig)>> {
 	let mut results = Vec::new();
 
-	if !tokio::fs::try_exists(marketplaces_dir)
-		.await
-		.unwrap_or(false)
-	{
-		log::warn!(
-			"Marketplaces directory does not exist: {}",
-			marketplaces_dir.display()
-		);
-		return Ok(results);
+	match tokio::fs::try_exists(marketplaces_dir).await {
+		Ok(true) => {}
+		Ok(false) => {
+			log::warn!(
+				"Marketplaces directory does not exist: {}",
+				marketplaces_dir.display()
+			);
+			return Ok(results);
+		}
+		Err(e) => {
+			log::warn!(
+				"Cannot check marketplaces directory at {}: {}",
+				marketplaces_dir.display(),
+				e
+			);
+			return Ok(results);
+		}
 	}
 
 	let mut entries = tokio::fs::read_dir(marketplaces_dir).await?;
@@ -128,7 +154,18 @@ pub async fn scan_marketplaces(
 
 		let manifest_path = path.join(".claude-plugin/marketplace.json");
 
-		if tokio::fs::try_exists(&manifest_path).await.unwrap_or(false) {
+		let exists = match tokio::fs::try_exists(&manifest_path).await {
+			Ok(v) => v,
+			Err(e) => {
+				log::warn!(
+					"Cannot check manifest at {}: {}",
+					manifest_path.display(),
+					e
+				);
+				false
+			}
+		};
+		if exists {
 			match tokio::fs::read_to_string(&manifest_path).await {
 				Ok(content) => {
 					match serde_json::from_str::<MarketplaceConfig>(&content) {

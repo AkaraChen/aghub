@@ -118,8 +118,13 @@ pub async fn install_plugin(
 			),
 		})),
 		Err(e) => {
-			let error_str = e.to_string();
-			if error_str.contains("already installed") {
+			if e.downcast_ref::<aghub_plugins::errors::PluginError>()
+				.is_some_and(|pe| {
+					matches!(
+						pe,
+						aghub_plugins::errors::PluginError::AlreadyInstalled { .. }
+					)
+				}) {
 				return Ok(Json(CCPluginInstallResponse {
 					success: true,
 					message: "Plugin is already installed".to_string(),
@@ -179,8 +184,13 @@ pub async fn update_plugin(
 			),
 		})),
 		Err(e) => {
-			let error_str = e.to_string();
-			if error_str.contains("already up to date") {
+			if e.downcast_ref::<aghub_plugins::errors::PluginError>()
+				.is_some_and(|pe| {
+					matches!(
+						pe,
+						aghub_plugins::errors::PluginError::AlreadyUpToDate { .. }
+					)
+				}) {
 				return Ok(Json(CCPluginUpdateResponse {
 					success: true,
 					message: "Plugin is already up to date".to_string(),

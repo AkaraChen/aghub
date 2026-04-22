@@ -36,7 +36,7 @@ impl PluginInstaller {
 			)
 			.await?;
 			let storage_key = if is_remote {
-				format!("{:x}", md5::compute(&resolved_source))
+				super::paths::short_sha256(&resolved_source)
 			} else {
 				id.source.clone()
 			};
@@ -333,7 +333,10 @@ impl PluginInstaller {
 			.await?;
 
 		if update_info.is_none() {
-			anyhow::bail!("Plugin '{}' is already up to date", id);
+			return Err(crate::errors::PluginError::AlreadyUpToDate {
+				id: id.clone(),
+			}
+			.into());
 		}
 
 		self.install_into_scope(
