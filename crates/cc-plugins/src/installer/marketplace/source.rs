@@ -268,9 +268,8 @@ pub(in crate::installer::marketplace) fn local_source_remote_fallback(
 }
 
 fn parse_github_tree_url(url: &str) -> Option<(String, String)> {
-	let normalized = normalize_repository_url(url);
 	let marker = "/tree/";
-	let (repo_url, rest) = normalized.split_once(marker)?;
+	let (repo_part, rest) = url.split_once(marker)?;
 	let mut parts = rest.split('/');
 	let branch = parts.next()?;
 	let subdir = parts.collect::<Vec<_>>().join("/");
@@ -278,7 +277,8 @@ fn parse_github_tree_url(url: &str) -> Option<(String, String)> {
 		return None;
 	}
 
-	Some((repo_url.to_string(), subdir))
+	let repo_url = normalize_repository_url(repo_part);
+	Some((repo_url, subdir))
 }
 
 pub(in crate::installer::marketplace) fn github_owner_repo(
