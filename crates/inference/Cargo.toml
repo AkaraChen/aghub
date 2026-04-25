@@ -1,0 +1,26 @@
+[package]
+name = "aghub-inference"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Inference provider configuration storage for aghub"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+keyring = { version = "3", features = [
+	"apple-native",
+	"windows-native",
+	"linux-native",
+] }
+uuid = { version = "1", features = [ "v4" ] }
+tauri = { version = "2", optional = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[features]
+default = [  ]
+tauri = [ "dep:tauri" ]

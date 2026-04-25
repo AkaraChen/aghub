@@ -124,6 +124,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "aghub-inference"
+version = "0.1.2"
+dependencies = [
+ "keyring",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tempfile",
+ "thiserror 2.0.18",
+ "uuid",
+]
+
+[[package]]
 name = "aghub-markdown"
 version = "0.1.2"
 dependencies = [
