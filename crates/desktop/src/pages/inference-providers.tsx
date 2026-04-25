@@ -3,7 +3,6 @@ import {
 	ClipboardDocumentIcon,
 	EyeIcon,
 	EyeSlashIcon,
-	KeyIcon,
 	PencilIcon,
 	PlusIcon,
 	TrashIcon,
@@ -103,6 +102,12 @@ function ProviderIcon({
 	format: InferenceProviderFormatDto;
 	isActive?: boolean;
 }) {
+	const marker = {
+		anthropic: "A",
+		openai_completions: "C",
+		openai_responses: "R",
+	}[format];
+
 	return (
 		<div
 			className={cn(
@@ -110,7 +115,12 @@ function ProviderIcon({
 				isActive && "border-accent/40 bg-accent/10 text-accent",
 			)}
 		>
-			<KeyIcon className="size-4" />
+			<span
+				aria-hidden="true"
+				className="text-[11px] font-semibold leading-none"
+			>
+				{marker}
+			</span>
 			<span className="sr-only">{format}</span>
 		</div>
 	);
