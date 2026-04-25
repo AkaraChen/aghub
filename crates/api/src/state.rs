@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Instant;
 use tempfile::TempDir;
@@ -18,4 +19,8 @@ pub struct GitCloneSession {
 
 pub struct GitCloneSessions {
 	pub sessions: Mutex<HashMap<String, GitCloneSession>>,
+}
+
+pub struct InferenceProviderState {
+	pub app_data_dir: PathBuf,
 }

@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate rocket;
 
+use std::path::PathBuf;
+
 use log::{debug, error, info, warn};
 use rocket::{
 	fairing::{Fairing, Info, Kind},
@@ -16,6 +18,22 @@ pub mod state;
 
 pub struct ApiOptions {
 	pub port: u16,
+	pub app_data_dir: Option<PathBuf>,
+}
+
+impl ApiOptions {
+	pub fn new(port: u16) -> Self {
+		Self {
+			port,
+			app_data_dir: None,
+		}
+	}
+}
+
+fn default_app_data_dir() -> PathBuf {
+	dirs::data_dir()
+		.unwrap_or_else(std::env::temp_dir)
+		.join("aghub")
 }
 
 struct ApiLogFairing;
@@ -70,6 +88,8 @@ impl Fairing for ApiLogFairing {
 
 pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 	info!("starting aghub API server on 127.0.0.1:{}", options.port);
+	let app_data_dir =
+		options.app_data_dir.unwrap_or_else(default_app_data_dir);
 	let config = rocket::Config {
 		port: options.port,
 		address: std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
@@ -103,6 +123,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 		.manage(crate::state::GitCloneSessions {
 			sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
 		})
+		.manage(crate::state::InferenceProviderState { app_data_dir })
 		.mount(
 			"/api/v1",
 			routes![
@@ -145,6 +166,11 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 				routes::credentials::list_credentials,
 				routes::credentials::create_credential,
 				routes::credentials::delete_credential,
+				routes::inference::list_inference_providers,
+				routes::inference::get_inference_provider_password,
+				routes::inference::create_inference_provider,
+				routes::inference::update_inference_provider,
+				routes::inference::delete_inference_provider,
 				routes::skills::open_skill_folder,
 				routes::skills::edit_skill_folder,
 				routes::skills::get_skill_content,

@@ -49,6 +49,12 @@ export const queryKeys = {
 		all: () => ["credentials"] as const,
 		list: () => ["credentials", "list"] as const,
 	},
+	inferenceProviders: {
+		all: () => ["inference-providers"] as const,
+		list: () => ["inference-providers", "list"] as const,
+		password: (name: string) =>
+			["inference-providers", "password", name] as const,
+	},
 	integrations: {
 		all: () => ["integrations"] as const,
 		codeEditors: () => ["integrations", "code-editors"] as const,

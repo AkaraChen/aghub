@@ -1,4 +1,5 @@
 use aghub_core::errors::ConfigError;
+use aghub_inference::InferenceProviderError;
 use rocket::http::{ContentType, Status};
 use rocket::response::{self, Responder};
 use rocket::serde::json::serde_json;
@@ -77,6 +78,42 @@ impl From<ConfigError> for ApiError {
 				Status::InternalServerError,
 				e.to_string(),
 				"IO_ERROR",
+			),
+		}
+	}
+}
+
+impl From<InferenceProviderError> for ApiError {
+	fn from(e: InferenceProviderError) -> Self {
+		match e {
+			InferenceProviderError::EmptyName
+			| InferenceProviderError::EmptyApiKey
+			| InferenceProviderError::InvalidFormat(_) => ApiError::new(
+				Status::BadRequest,
+				e.to_string(),
+				"INVALID_PARAM",
+			),
+			InferenceProviderError::AlreadyExists(_) => ApiError::new(
+				Status::Conflict,
+				e.to_string(),
+				"RESOURCE_EXISTS",
+			),
+			InferenceProviderError::NotFound(_) => ApiError::new(
+				Status::NotFound,
+				e.to_string(),
+				"RESOURCE_NOT_FOUND",
+			),
+			InferenceProviderError::Keyring(_) => ApiError::new(
+				Status::InternalServerError,
+				e.to_string(),
+				"KEYCHAIN_ERROR",
+			),
+			InferenceProviderError::Io(_)
+			| InferenceProviderError::Json(_)
+			| InferenceProviderError::AppDataDir(_) => ApiError::new(
+				Status::InternalServerError,
+				e.to_string(),
+				"INFERENCE_PROVIDER_STORE_ERROR",
 			),
 		}
 	}

@@ -4,6 +4,7 @@ import type {
 	AgentInfo,
 	CodeEditorType,
 	CreateCredentialRequest,
+	CreateInferenceProviderRequest,
 	CreateMcpRequest,
 	CreateSkillRequest,
 	CreateSubAgentRequest,
@@ -18,6 +19,8 @@ import type {
 	GitSyncResponse,
 	GlobalSkillLockResponse,
 	ImportSkillRequest,
+	InferenceProviderPasswordResponse,
+	InferenceProviderResponse,
 	InstallSkillRequest,
 	InstallSkillResponse,
 	MarketSkill,
@@ -30,6 +33,7 @@ import type {
 	SubAgentResponse,
 	ToolInfoDto,
 	TransferRequest,
+	UpdateInferenceProviderRequest,
 	UpdateMcpRequest,
 	UpdateSubAgentRequest,
 } from "../generated/dto";
@@ -436,6 +440,42 @@ export function createApi(baseUrl: string) {
 			},
 			delete(id: string): Promise<void> {
 				return client.delete(`credentials/${id}`).then(() => undefined);
+			},
+		},
+		inferenceProviders: {
+			list(): Promise<InferenceProviderResponse[]> {
+				return client.get("inference/providers").json();
+			},
+			getPassword(
+				name: string,
+			): Promise<InferenceProviderPasswordResponse> {
+				return client
+					.get(
+						`inference/providers/${encodeURIComponent(name)}/password`,
+					)
+					.json();
+			},
+			create(
+				body: CreateInferenceProviderRequest,
+			): Promise<InferenceProviderResponse> {
+				return client
+					.post("inference/providers", { json: body })
+					.json();
+			},
+			update(
+				name: string,
+				body: UpdateInferenceProviderRequest,
+			): Promise<InferenceProviderResponse> {
+				return client
+					.put(`inference/providers/${encodeURIComponent(name)}`, {
+						json: body,
+					})
+					.json();
+			},
+			delete(name: string): Promise<void> {
+				return client
+					.delete(`inference/providers/${encodeURIComponent(name)}`)
+					.then(() => undefined);
 			},
 		},
 	};
