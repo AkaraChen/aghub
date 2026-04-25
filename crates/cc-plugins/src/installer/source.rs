@@ -27,9 +27,13 @@ pub(super) fn classify_registry_source(source: &str) -> RegistrySource {
 
 fn classify_remote_source(url: &str) -> RegistrySource {
 	let normalized = normalize_repository_url(url);
-	if let Some((owner, repo)) =
-		crate::github_repo_path(&normalized).and_then(|path| {
-			path.split_once('/')
+	if let Some((owner, repo)) = aghub_git::resolve_remote_source(&normalized)
+		.ok()
+		.filter(|r| r.source_type == aghub_git::RemoteSourceType::Github)
+		.and_then(|resolved| {
+			resolved
+				.source
+				.split_once('/')
 				.map(|(o, r)| (o.to_string(), r.to_string()))
 		}) {
 		return RegistrySource::GitHub { owner, repo };

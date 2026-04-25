@@ -240,7 +240,9 @@ impl PluginInfo {
 }
 
 fn extract_github_owner(reference: &str) -> Option<String> {
-	crate::github_repo_path(reference)?
+	let resolved = aghub_git::resolve_remote_source(reference).ok()?;
+	resolved
+		.source
 		.split('/')
 		.next()
 		.filter(|owner| !owner.is_empty())
@@ -248,8 +250,14 @@ fn extract_github_owner(reference: &str) -> Option<String> {
 }
 
 fn normalize_github_url(reference: &str) -> Option<String> {
-	let repo = crate::github_repo_path(reference)?;
-	Some(format!("https://github.com/{repo}"))
+	let resolved = aghub_git::resolve_remote_source(reference).ok()?;
+	Some(
+		resolved
+			.source_url
+			.trim_end_matches('/')
+			.trim_end_matches(".git")
+			.to_string(),
+	)
 }
 
 #[cfg(test)]

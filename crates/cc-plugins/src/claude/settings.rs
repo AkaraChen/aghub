@@ -119,12 +119,24 @@ impl ClaudeSettings {
 
 		let enabled_plugins = full_settings
 			.get("enabledPlugins")
-			.and_then(|value| serde_json::from_value(value.clone()).ok())
+			.and_then(|value| {
+				serde_json::from_value(value.clone())
+					.inspect_err(|e| {
+						log::debug!("Failed to parse enabledPlugins: {e}")
+					})
+					.ok()
+			})
 			.unwrap_or_default();
 
 		let plugin_config = full_settings
 			.get("pluginConfig")
-			.and_then(|value| serde_json::from_value(value.clone()).ok())
+			.and_then(|value| {
+				serde_json::from_value(value.clone())
+					.inspect_err(|e| {
+						log::debug!("Failed to parse pluginConfig: {e}")
+					})
+					.ok()
+			})
 			.unwrap_or_default();
 
 		Ok(Self {

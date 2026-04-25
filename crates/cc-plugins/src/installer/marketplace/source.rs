@@ -289,10 +289,14 @@ pub(in crate::installer::marketplace) fn github_owner_repo(
 	let clean = parse_github_tree_url(&normalized)
 		.map(|(repo_url, _)| repo_url)
 		.unwrap_or(normalized);
-	crate::github_repo_path(&clean).and_then(|path| {
-		path.split_once('/')
-			.map(|(o, r)| (o.to_string(), r.to_string()))
-	})
+	aghub_git::resolve_remote_source(&clean)
+		.ok()
+		.and_then(|resolved| {
+			resolved
+				.source
+				.split_once('/')
+				.map(|(o, r)| (o.to_string(), r.to_string()))
+		})
 }
 
 fn marketplace_plugin_repository(plugin: &MarketplacePlugin) -> Option<String> {

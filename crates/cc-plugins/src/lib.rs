@@ -14,28 +14,6 @@ pub(crate) const MANIFEST_CANDIDATE_PATHS: &[&str] = &[
 	"plugin.json",
 ];
 
-pub(crate) fn github_repo_path(reference: &str) -> Option<String> {
-	let trimmed = reference.trim_end_matches('/').trim_end_matches(".git");
-	let path = if let Some(path) = trimmed.strip_prefix("https://github.com/") {
-		path
-	} else if let Some(path) = trimmed.strip_prefix("http://github.com/") {
-		path
-	} else if let Some(path) = trimmed.strip_prefix("git@github.com:") {
-		path
-	} else if trimmed.contains('/') && !trimmed.contains("://") {
-		trimmed
-	} else {
-		return None;
-	};
-	let mut segments = path.split('/');
-	let owner = segments.next()?;
-	let repo = segments.next()?;
-	if owner.is_empty() || repo.is_empty() {
-		return None;
-	}
-	Some(format!("{owner}/{repo}"))
-}
-
 pub mod errors {
 	use crate::PluginId;
 

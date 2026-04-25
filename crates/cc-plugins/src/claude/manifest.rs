@@ -65,7 +65,9 @@ pub(super) fn parse_mcp_json(content: &str) -> Option<types::McpConfig> {
 		return Some(config);
 	}
 
-	let value: serde_json::Value = serde_json::from_str(content).ok()?;
+	let value: serde_json::Value = serde_json::from_str(content)
+		.inspect_err(|e| log::debug!("Failed to parse MCP JSON: {e}"))
+		.ok()?;
 	let obj = value.as_object()?;
 
 	let mut servers = HashMap::new();

@@ -10,6 +10,7 @@ import type { CCPluginResponse } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
 import { useCurrentCodeEditor } from "../hooks/use-integrations";
 import {
+	openSkillInEditorMutationOptions,
 	pluginDetailQueryOptions,
 	pluginUpdateStatusQueryOptions,
 } from "../requests/plugins";
@@ -96,21 +97,17 @@ export function PluginDetail({
 
 	const providedSkills = pluginDetail?.provided_skills ?? [];
 	const openProvidedSkillMutation = useMutation({
-		mutationFn: (skillName: string) =>
-			api.plugins.openSkillInEditor({
-				plugin_id: currentPlugin.id,
-				scope: currentScope,
-				skill_name: skillName,
-				editor: selectedEditor!,
-			}),
-		onError: (error) => {
-			toast.danger(t("editInEditor"), {
-				description:
-					error instanceof Error && error.message
-						? error.message
-						: t("unknownError"),
-			});
-		},
+		...openSkillInEditorMutationOptions({
+			api,
+			onError: (error) => {
+				toast.danger(t("editInEditor"), {
+					description:
+						error instanceof Error && error.message
+							? error.message
+							: t("unknownError"),
+				});
+			},
+		}),
 	});
 
 	const sourceVersion = useMemo(() => {
@@ -244,9 +241,12 @@ export function PluginDetail({
 							onEditSkill={
 								selectedEditor
 									? (skillName) =>
-											openProvidedSkillMutation.mutate(
-												skillName,
-											)
+											openProvidedSkillMutation.mutate({
+												plugin_id: currentPlugin.id,
+												scope: currentScope,
+												skill_name: skillName,
+												editor: selectedEditor,
+											})
 									: undefined
 							}
 						/>

@@ -173,8 +173,12 @@ pub(crate) fn repository_archive_urls(
 }
 
 pub(crate) fn normalize_repository_url(url: &str) -> String {
-	if let Some(repo) = crate::github_repo_path(url) {
-		return format!("https://github.com/{repo}");
+	if let Ok(resolved) = aghub_git::resolve_remote_source(url) {
+		return resolved
+			.source_url
+			.trim_end_matches('/')
+			.trim_end_matches(".git")
+			.to_string();
 	}
 	url.trim_end_matches('/')
 		.trim_end_matches(".git")

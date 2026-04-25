@@ -20,6 +20,7 @@ import type {
 	CCPluginUpdateRequest,
 	CCPluginUpdateResponse,
 	CCPluginUpdateConfigRequest,
+	CCPluginOpenSkillInEditorRequest,
 } from "../generated/dto";
 import type { ApiClient } from "./client";
 import { queryKeys } from "./keys";
@@ -548,5 +549,21 @@ export function updatePluginConfigMutationOptions({
 		mutationFn: ({ body }: { body: CCPluginUpdateConfigRequest }) =>
 			api.plugins.updateConfig(body),
 		onSuccess,
+	});
+}
+
+interface OpenSkillInEditorMutationParams {
+	api: ApiClient;
+	onError?: (error: Error) => void | Promise<void>;
+}
+
+export function openSkillInEditorMutationOptions({
+	api,
+	onError,
+}: OpenSkillInEditorMutationParams) {
+	return mutationOptions({
+		mutationFn: (body: CCPluginOpenSkillInEditorRequest) =>
+			api.plugins.openSkillInEditor(body),
+		onError,
 	});
 }

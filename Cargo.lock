@@ -86,6 +86,7 @@ dependencies = [
 name = "aghub-cc-plugins"
 version = "0.1.2"
 dependencies = [
+ "aghub-git",
  "anyhow",
  "chrono",
  "dirs",

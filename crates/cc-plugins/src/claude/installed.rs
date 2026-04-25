@@ -131,7 +131,15 @@ fn collect_cache_install_candidates(
 			continue;
 		}
 
-		let manifest = read_manifest(&path).ok().flatten();
+		let manifest = read_manifest(&path)
+			.inspect_err(|e| {
+				log::debug!(
+					"Failed to read manifest at {}: {e}",
+					path.display()
+				)
+			})
+			.ok()
+			.flatten();
 		if manifest.is_none() {
 			collect_cache_install_candidates(&path, candidates, depth + 1);
 			continue;
