@@ -83,7 +83,7 @@ jobs:
                   targets: ${{ matrix.target }}
 
             - name: Setup sccache
-              uses: mozilla-actions/sccache-action@v0.0.9
+              uses: mozilla-actions/sccache-action@v0.0.10
 
             - name: Rust Cache
               uses: Swatinem/rust-cache@v2
@@ -192,7 +192,7 @@ jobs:
                   targets: ${{ matrix.target }}
 
             - name: Setup sccache
-              uses: mozilla-actions/sccache-action@v0.0.9
+              uses: mozilla-actions/sccache-action@v0.0.10
 
             - name: Rust Cache
               uses: Swatinem/rust-cache@v2
