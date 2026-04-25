@@ -3,17 +3,17 @@ import {
 	ClipboardDocumentIcon,
 	EyeIcon,
 	EyeSlashIcon,
-	GlobeAltIcon,
 	PencilIcon,
 	PlusIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
+import AnthropicIcon from "@lobehub/icons/es/Anthropic";
+import OpenAIIcon from "@lobehub/icons/es/OpenAI";
 import {
 	Alert,
 	AlertDialog,
 	Button,
 	Card,
-	Chip,
 	FieldError,
 	Fieldset,
 	Form,
@@ -88,11 +88,33 @@ function formatOption(
 	return option ? t(option.labelKey) : format;
 }
 
-function ProviderIcon() {
+function ProviderIcon({ format }: { format: InferenceProviderFormatDto }) {
+	const Icon = format === "anthropic" ? AnthropicIcon : OpenAIIcon;
+
 	return (
 		<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
-			<GlobeAltIcon className="size-4" />
+			<Icon aria-hidden="true" size={16} />
 		</div>
+	);
+}
+
+function MonoValue({
+	children,
+	className,
+}: {
+	children: string;
+	className?: string;
+}) {
+	return (
+		<span
+			className={cn(
+				"block min-w-0 overflow-x-auto rounded-md bg-surface-secondary px-3 py-2 font-mono text-xs leading-5 text-foreground",
+				className,
+			)}
+			title={children}
+		>
+			{children}
+		</span>
 	);
 }
 
@@ -524,7 +546,7 @@ function ProviderDetail({
 					<Card>
 						<Card.Header className="flex flex-row items-start justify-between gap-3">
 							<div className="flex min-w-0 items-center gap-3">
-								<ProviderIcon />
+								<ProviderIcon format={provider.format} />
 								<div className="min-w-0">
 									<h2 className="truncate text-xl font-semibold text-foreground">
 										{provider.name}
@@ -578,42 +600,23 @@ function ProviderDetail({
 							</div>
 						</Card.Header>
 
-						<Card.Content className="flex flex-col gap-6">
-							<div className="space-y-3">
-								<div className="flex items-center justify-between gap-3">
-									<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
-										{t("providerFormat")}
-									</h3>
-									<Chip
-										color="accent"
-										variant="soft"
-										size="sm"
-									>
-										{formatOption(provider.format, t)}
-									</Chip>
-								</div>
-							</div>
-
-							<div className="space-y-3">
+						<Card.Content className="flex flex-col gap-4">
+							<div className="grid gap-1.5 py-1">
 								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
 									{t("providerApiBaseUrl")}
 								</h3>
-								<div className="overflow-x-auto rounded-lg border border-separator bg-surface-secondary px-3 py-2">
-									<code className="block font-mono text-xs leading-5 text-foreground break-words">
-										{provider.api_base_url}
-									</code>
-								</div>
+								<MonoValue>{provider.api_base_url}</MonoValue>
 							</div>
 
-							<div className="space-y-3">
+							<div className="grid gap-1.5 py-1">
 								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
 									{t("providerApiKey")}
 								</h3>
-								<div className="flex min-w-0 items-center gap-2 rounded-lg border border-separator bg-surface-secondary px-3 py-2">
-									<code className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">
+								<div className="flex min-w-0 items-center gap-2">
+									<MonoValue className="flex-1">
 										{revealedKey ??
 											"••••••••••••••••••••••••"}
-									</code>
+									</MonoValue>
 									<Button
 										isIconOnly
 										variant="tertiary"
@@ -826,7 +829,9 @@ export default function InferenceProvidersPage() {
 									className="data-selected:bg-surface"
 								>
 									<div className="flex min-w-0 items-center gap-2">
-										<ProviderIcon />
+										<ProviderIcon
+											format={provider.format}
+										/>
 										<div className="min-w-0 flex-1">
 											<Label className="block truncate">
 												{provider.name}
