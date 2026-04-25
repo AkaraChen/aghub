@@ -9,11 +9,11 @@ import type { CCPluginResponse } from "../../generated/dto";
 
 interface PluginDetailHeaderProps {
 	plugin: CCPluginResponse;
-	currentScope: "user" | "project" | "local";
+	currentScope: "global" | "project" | "local";
 	isToggling: boolean;
 	isReinstalling: boolean;
 	isUninstalling: boolean;
-	onScopeChange?: (scope: "user" | "project" | "local") => void;
+	onScopeChange?: (scope: "global" | "project" | "local") => void;
 	onReinstall: () => void;
 	onUninstall: () => void;
 	onToggle: () => void;
@@ -39,7 +39,7 @@ export function PluginDetailHeader({
 			return;
 		}
 
-		onScopeChange?.(key as "user" | "project" | "local");
+		onScopeChange?.(key as "global" | "project" | "local");
 	};
 
 	return (

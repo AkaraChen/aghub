@@ -60,9 +60,9 @@ dependencies = [
 name = "aghub-api"
 version = "0.1.2"
 dependencies = [
+ "aghub-cc-plugins",
  "aghub-core",
  "aghub-git",
- "aghub-plugins",
  "dirs",
  "keyring",
  "log",
@@ -83,12 +83,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "aghub-cc-plugins"
+version = "0.1.2"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "dirs",
+ "flate2",
+ "log",
+ "reqwest 0.13.2",
+ "semver",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tar",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "aghub-cli"
 version = "0.1.2"
 dependencies = [
  "aghub-agents",
+ "aghub-cc-plugins",
  "aghub-core",
- "aghub-plugins",
  "anyhow",
  "assert_cmd",
  "clap",
@@ -134,27 +154,6 @@ dependencies = [
  "serde",
  "serde_yaml",
  "thiserror 2.0.18",
-]
-
-[[package]]
-name = "aghub-plugins"
-version = "0.1.2"
-dependencies = [
- "anyhow",
- "async-trait",
- "chrono",
- "dirs",
- "flate2",
- "log",
- "reqwest 0.13.2",
- "semver",
- "serde",
- "serde_json",
- "sha2",
- "tar",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
 ]
 
 [[package]]

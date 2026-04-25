@@ -1,5 +1,6 @@
 import { ClipboardDocumentIcon } from "@heroicons/react/24/solid";
 import { Button } from "@heroui/react";
+import { parse as parseDotenv } from "dotenv";
 import { useTranslation } from "react-i18next";
 import type { KeyPair } from "../lib/key-pair-utils";
 import { objectToKeyPairs } from "../lib/key-pair-utils";
@@ -15,44 +16,19 @@ interface EnvEditorProps {
 	errorMessage?: string;
 }
 
-const ENV_LINE_SPLIT_REGEX = /\r?\n/u;
+const LINE_SPLIT_RE = /\r?\n/u;
+const EXPORT_PREFIX_RE = /^\s*export\s+/;
 
 function parseClipboardEnv(text: string): Record<string, string> {
-	const env: Record<string, string> = {};
-
-	for (const rawLine of text.split(ENV_LINE_SPLIT_REGEX)) {
-		const line = rawLine.trim();
-		if (!line || line.startsWith("#")) {
-			continue;
-		}
-
-		const content = line.startsWith("export ")
-			? line.slice("export ".length).trim()
-			: line;
-		const equalsIndex = content.indexOf("=");
-
-		if (equalsIndex <= 0) {
-			continue;
-		}
-
-		const key = content.slice(0, equalsIndex).trim();
-		if (!key) {
-			continue;
-		}
-
-		let value = content.slice(equalsIndex + 1).trim();
-		if (
-			value.length >= 2 &&
-			((value.startsWith('"') && value.endsWith('"')) ||
-				(value.startsWith("'") && value.endsWith("'")))
-		) {
-			value = value.slice(1, -1);
-		}
-
-		env[key] = value;
-	}
-
-	return env;
+	const stripped = text
+		.split(LINE_SPLIT_RE)
+		.map((line) =>
+			line.trimStart().startsWith("export ")
+				? line.replace(EXPORT_PREFIX_RE, "")
+				: line,
+		)
+		.join("\n");
+	return parseDotenv(stripped);
 }
 
 export function EnvEditor({

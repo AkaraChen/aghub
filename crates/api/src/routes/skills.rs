@@ -1,3 +1,4 @@
+use aghub_cc_plugins::claude::ClaudePluginManager;
 use aghub_core::{
 	convert_skill, create_adapter,
 	errors::ConfigError,
@@ -5,7 +6,6 @@ use aghub_core::{
 	models::{AgentType, ResourceScope, Skill},
 	registry, transfer,
 };
-use aghub_plugins::claude::ClaudePluginManager;
 use rocket::http::Status;
 use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
@@ -25,9 +25,8 @@ use crate::{
 		GlobalSkillLockResponse, InstallSkillRequest, InstallSkillResponse,
 		LocalSkillLockEntryResponse, ProjectLockQuery,
 		ProjectSkillLockResponse, SkillContentQuery, SkillLockEntryResponse,
-		SkillPluginMetadata, SkillResponse, SkillTreeNodeKind,
-		SkillTreeNodeResponse, SkillTreeQuery, UpdateSkillRequest,
-		ValidationError,
+		SkillResponse, SkillTreeNodeKind, SkillTreeNodeResponse,
+		SkillTreeQuery, UpdateSkillRequest, ValidationError,
 	},
 	dto::transfer::{
 		OperationBatchResponse, ReconcileRequest, TransferRequest,
@@ -74,16 +73,11 @@ fn expand_tilde_path(path: &str) -> std::path::PathBuf {
 	}
 }
 
-fn detect_plugin_for_path(
-	path: &std::path::Path,
-) -> Option<SkillPluginMetadata> {
+fn detect_plugin_for_path(path: &std::path::Path) -> Option<String> {
 	let plugins = ClaudePluginManager::new().ok()?;
 	plugins
 		.plugin_owning_path(path)
-		.map(|plugin| SkillPluginMetadata {
-			plugin_id: plugin.id.to_string(),
-			plugin_name: plugin.display_name.clone(),
-		})
+		.map(|plugin| plugin.display_name.clone())
 }
 
 async fn list_branches_for_scan<F>(
@@ -274,13 +268,12 @@ pub fn delete_skill_by_path(
 		}));
 	}
 
-	if let Some(plugin) = detect_plugin_for_path(&skill_dir) {
+	if let Some(plugin_name) = detect_plugin_for_path(&skill_dir) {
 		return Ok(Json(DeleteSkillByPathResponse {
 			success: false,
 			deleted_path: None,
 			error: Some(format!(
-				"Cannot delete plugin-managed skill from plugin '{}'",
-				plugin.plugin_name
+				"Cannot delete plugin-managed skill from plugin '{plugin_name}'"
 			)),
 			validation_errors: None,
 		}));
@@ -823,12 +816,12 @@ fn ensure_skill_not_plugin_managed(
 	skill: &Skill,
 	action: &str,
 ) -> Result<(), ApiError> {
-	if let Some(plugin) = detect_plugin_for_path_if_present(skill) {
+	if let Some(plugin_name) = detect_plugin_for_path_if_present(skill) {
 		return Err(ApiError::new(
 			Status::BadRequest,
 			format!(
-				"Cannot {} skill '{}' managed by plugin '{}'",
-				action, skill.name, plugin.plugin_name
+				"Cannot {action} skill '{}' managed by plugin '{plugin_name}'",
+				skill.name
 			),
 			"MANAGED_RESOURCE",
 		));
@@ -836,9 +829,7 @@ fn ensure_skill_not_plugin_managed(
 	Ok(())
 }
 
-fn detect_plugin_for_path_if_present(
-	skill: &Skill,
-) -> Option<SkillPluginMetadata> {
+fn detect_plugin_for_path_if_present(skill: &Skill) -> Option<String> {
 	let source_path = skill
 		.canonical_path
 		.as_deref()
@@ -847,23 +838,19 @@ fn detect_plugin_for_path_if_present(
 	detect_plugin_for_path(&full_path)
 }
 
-// Detect plugin info for a skill based on its source path
-fn detect_plugin_for_skill(
+fn is_plugin_managed_skill(
 	skill: &Skill,
-	plugins: &[aghub_plugins::claude::ClaudePluginInfo],
-) -> Option<SkillPluginMetadata> {
+	plugins: &[aghub_cc_plugins::claude::ClaudePluginInfo],
+) -> bool {
 	let source_path = skill
 		.canonical_path
 		.as_deref()
-		.or(skill.source_path.as_deref())?;
-	let full_path = expand_tilde_path(source_path);
-
-	plugins.iter().find_map(|plugin| {
-		plugin.owns_path(&full_path).then(|| SkillPluginMetadata {
-			plugin_id: plugin.id.to_string(),
-			plugin_name: plugin.display_name.clone(),
-		})
-	})
+		.or(skill.source_path.as_deref());
+	let Some(path) = source_path else {
+		return false;
+	};
+	let full_path = expand_tilde_path(path);
+	plugins.iter().any(|plugin| plugin.owns_path(&full_path))
 }
 
 #[get("/agents/all/skills?<params..>")]
@@ -882,11 +869,11 @@ pub(crate) fn list_all_agents_skills(
 			let agent_id = ar.agent_id;
 			let plugins = &detected_plugins;
 			ar.skills.into_iter().filter_map(move |skill| {
-				let plugin = detect_plugin_for_skill(&skill, plugins);
-				if !include_managed && plugin.is_some() {
+				if !include_managed && is_plugin_managed_skill(&skill, plugins)
+				{
 					return None;
 				}
-				Some(SkillResponse::from_agent_skill(skill, agent_id, plugin))
+				Some(SkillResponse::from_agent_skill(skill, agent_id))
 			})
 		})
 		.collect();

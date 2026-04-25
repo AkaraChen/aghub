@@ -560,7 +560,7 @@ export function createApi(baseUrl: string) {
 					.json();
 			},
 			listMarket(): Promise<CCPluginMarketResponse[]> {
-				return client.get("plugins-market").json();
+				return client.get("plugins-market", { timeout: 30000 }).json();
 			},
 			updateMarketplace(): Promise<{
 				success: boolean;

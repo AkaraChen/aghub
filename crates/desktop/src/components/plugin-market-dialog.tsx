@@ -25,7 +25,7 @@ import { PluginMarketTable } from "./plugin-market/market-table";
 interface PluginMarketDialogProps {
 	isOpen: boolean;
 	onClose: () => void;
-	installScope?: "user" | "project" | "local";
+	installScope?: "global" | "project" | "local";
 }
 
 const OTHER_CATEGORY = "other";
@@ -33,7 +33,7 @@ const OTHER_CATEGORY = "other";
 export function PluginMarketDialog({
 	isOpen,
 	onClose,
-	installScope = "user",
+	installScope = "global",
 }: PluginMarketDialogProps) {
 	const { t, i18n } = useTranslation();
 	const api = useApi();

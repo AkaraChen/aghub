@@ -4,12 +4,6 @@ use ts_rs::TS;
 
 use crate::dto::common::ConfigSource;
 
-#[derive(Debug, Clone)]
-pub struct SkillPluginMetadata {
-	pub plugin_id: String,
-	pub plugin_name: String,
-}
-
 #[derive(Debug, Deserialize, TS)]
 #[ts(export)]
 pub struct CreateSkillRequest {
@@ -89,10 +83,6 @@ pub struct SkillResponse {
 	pub source: Option<ConfigSource>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub agent: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub plugin_id: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub plugin_name: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -119,19 +109,9 @@ impl From<Skill> for SkillResponse {
 }
 
 impl SkillResponse {
-	pub fn from_agent_skill(
-		skill: Skill,
-		agent_id: &str,
-		plugin: Option<SkillPluginMetadata>,
-	) -> Self {
+	pub fn from_agent_skill(skill: Skill, agent_id: &str) -> Self {
 		let mut response = Self::from(&skill);
 		response.agent = Some(agent_id.to_string());
-
-		if let Some(plugin) = plugin {
-			response.plugin_id = Some(plugin.plugin_id);
-			response.plugin_name = Some(plugin.plugin_name);
-		}
-
 		response
 	}
 }
@@ -149,8 +129,6 @@ impl From<&Skill> for SkillResponse {
 			tools: s.tools.clone(),
 			source: s.config_source.map(Into::into),
 			agent: None,
-			plugin_id: None,
-			plugin_name: None,
 		}
 	}
 }

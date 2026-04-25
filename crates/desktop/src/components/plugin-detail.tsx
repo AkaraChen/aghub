@@ -18,12 +18,10 @@ import { PluginConfirmDialog } from "./plugin-detail/confirm-dialog";
 import { PluginDetailHeader } from "./plugin-detail/detail-header";
 import { ProvidedSkillsSection } from "./plugin-detail/provided-skills-section";
 import { PluginSourceCard } from "./plugin-detail/source-card";
+import { formatPluginVersion } from "../lib/plugin-version";
 import { usePluginDetailActions } from "./plugin-detail/use-plugin-detail-actions";
 
-const SEMANTIC_VERSION_REGEX = /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
-const GIT_HASH_REGEX = /^[0-9a-f]{7,40}$/i;
-
-type PluginScopeValue = "user" | "project" | "local";
+type PluginScopeValue = "global" | "project" | "local";
 
 interface PluginDetailProps {
 	plugin: CCPluginResponse;
@@ -71,7 +69,7 @@ export function PluginDetail({
 			return selectedScope;
 		}
 
-		return (displayScopeInfo?.scope ?? "user") as PluginScopeValue;
+		return (displayScopeInfo?.scope ?? "global") as PluginScopeValue;
 	}, [selectedScope, currentPlugin.scopes, displayScopeInfo]);
 
 	const currentScopeInfo = useMemo(
@@ -121,24 +119,7 @@ export function PluginDetail({
 		if (!version) {
 			return null;
 		}
-
-		if (version === "latest") {
-			return "latest";
-		}
-
-		if (version.startsWith("v")) {
-			return version;
-		}
-
-		if (GIT_HASH_REGEX.test(version)) {
-			return `#${version}`;
-		}
-
-		if (SEMANTIC_VERSION_REGEX.test(version)) {
-			return `v${version}`;
-		}
-
-		return version;
+		return formatPluginVersion(version);
 	}, [currentPlugin.version, currentScopeInfo?.version]);
 	const installPath =
 		currentScopeInfo?.folder_path ?? displayScopeInfo?.folder_path ?? "—";

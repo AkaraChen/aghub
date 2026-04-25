@@ -1,18 +1,11 @@
 "use client";
 
 import { toast } from "@heroui/react";
-import {
-	useMutation,
-	type QueryClient,
-	useQueryClient,
-} from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
 import type {
 	CCPluginCheckUpdateResponse,
-	CCPluginDetailResponse,
-	CCPluginListResponse,
-	CCPluginMarketResponse,
 	CCPluginResponse,
 	CCPluginScopeResponse,
 } from "../../generated/dto";
@@ -20,7 +13,8 @@ import { useApi } from "../../hooks/use-api";
 import { queryKeys } from "../../requests/keys";
 import {
 	checkPluginUpdateMutationOptions,
-	invalidatePluginSkillQueries,
+	disablePluginMutationOptions,
+	enablePluginMutationOptions,
 	reinstallPluginMutationOptions,
 	uninstallPluginMutationOptions,
 	updatePluginMutationOptions,
@@ -28,55 +22,10 @@ import {
 
 interface UsePluginDetailActionsParams {
 	currentPlugin: CCPluginResponse;
-	currentScope: "user" | "project" | "local";
+	currentScope: "global" | "project" | "local";
 	currentScopeInfo: CCPluginScopeResponse | null;
 	updateAvailable: boolean;
 	latestVersion: string | null;
-}
-
-interface PluginToggleSnapshot {
-	previousPlugins?: CCPluginListResponse;
-	previousDetail?: CCPluginDetailResponse;
-	previousMarket?: CCPluginMarketResponse[];
-}
-
-function updatePluginCaches(
-	queryClient: QueryClient,
-	pluginId: string,
-	currentPlugin: CCPluginResponse,
-	updater: (entry: CCPluginResponse) => CCPluginResponse,
-) {
-	queryClient.setQueryData<CCPluginListResponse | undefined>(
-		queryKeys.plugins.list(),
-		(existing) =>
-			existing
-				? {
-						...existing,
-						plugins: existing.plugins.map((entry) =>
-							entry.id === pluginId ? updater(entry) : entry,
-						),
-					}
-				: existing,
-	);
-	queryClient.setQueryData<CCPluginDetailResponse | undefined>(
-		queryKeys.plugins.detail(pluginId),
-		(existing) =>
-			existing
-				? {
-						...existing,
-						...updater(existing),
-					}
-				: existing,
-	);
-	queryClient.setQueryData<CCPluginMarketResponse[] | undefined>(
-		queryKeys.plugins.market(),
-		(existing) =>
-			existing?.map((entry) =>
-				entry.id === pluginId
-					? { ...entry, enabled: updater(currentPlugin).enabled }
-					: entry,
-			) ?? existing,
-	);
 }
 
 export function usePluginDetailActions({
@@ -104,105 +53,24 @@ export function usePluginDetailActions({
 				description: errorMessage(error, "unknownError"),
 			});
 		});
-	const createPluginToggleOptions = (
-		enabled: boolean,
-		mutationFn: (pluginId: string) => Promise<CCPluginResponse>,
-	) => ({
-		mutationFn,
-		onMutate: async (): Promise<PluginToggleSnapshot> => {
-			await Promise.all([
-				queryClient.cancelQueries({
-					queryKey: queryKeys.plugins.list(),
-				}),
-				queryClient.cancelQueries({
-					queryKey: queryKeys.plugins.detail(pluginId),
-				}),
-				queryClient.cancelQueries({
-					queryKey: queryKeys.plugins.market(),
-				}),
-			]);
 
-			const previousPlugins =
-				queryClient.getQueryData<CCPluginListResponse>(
-					queryKeys.plugins.list(),
-				);
-			const previousDetail =
-				queryClient.getQueryData<CCPluginDetailResponse>(
-					queryKeys.plugins.detail(pluginId),
-				);
-			const previousMarket = queryClient.getQueryData<
-				CCPluginMarketResponse[]
-			>(queryKeys.plugins.market());
-
-			updatePluginCaches(
-				queryClient,
-				pluginId,
-				currentPlugin,
-				(entry) => ({
-					...entry,
-					enabled,
-				}),
-			);
-
-			return {
-				previousPlugins,
-				previousDetail,
-				previousMarket,
-			};
-		},
-		onSuccess: async (data: CCPluginResponse) => {
-			updatePluginCaches(
-				queryClient,
-				pluginId,
-				currentPlugin,
-				(entry) => ({
-					...entry,
-					...data,
-				}),
-			);
-			await invalidatePluginSkillQueries(queryClient);
-		},
-		onError: (
-			_error: Error,
-			_pluginId: string,
-			context: PluginToggleSnapshot | undefined,
-		) => {
-			queryClient.setQueryData(
-				queryKeys.plugins.list(),
-				context?.previousPlugins,
-			);
-			queryClient.setQueryData(
-				queryKeys.plugins.detail(pluginId),
-				context?.previousDetail,
-			);
-			queryClient.setQueryData(
-				queryKeys.plugins.market(),
-				context?.previousMarket,
-			);
-		},
+	const enableMutation = useMutation({
+		...enablePluginMutationOptions({
+			api,
+			queryClient,
+			pluginId,
+			currentPlugin,
+		}),
 	});
 
-	const enableMutation = useMutation<
-		CCPluginResponse,
-		Error,
-		string,
-		PluginToggleSnapshot
-	>(
-		createPluginToggleOptions(true, (pluginToEnable) =>
-			api.plugins.enable(pluginToEnable),
-		),
-	);
-
-	const disableMutation = useMutation<
-		CCPluginResponse,
-		Error,
-		string,
-		PluginToggleSnapshot
-	>(
-		createPluginToggleOptions(false, (pluginToDisable) =>
-			api.plugins.disable(pluginToDisable),
-		),
-	);
+	const disableMutation = useMutation({
+		...disablePluginMutationOptions({
+			api,
+			queryClient,
+			pluginId,
+			currentPlugin,
+		}),
+	});
 	const isToggling = enableMutation.isPending || disableMutation.isPending;
 
 	const updateMutation = useMutation({

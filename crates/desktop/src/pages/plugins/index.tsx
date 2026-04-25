@@ -27,7 +27,7 @@ import {
 	pluginListQueryOptions,
 } from "../../requests/plugins";
 
-type PluginScopeValue = "user" | "project" | "local";
+type PluginScopeValue = "global" | "project" | "local";
 
 interface PluginScopeSelection {
 	pluginId: string;
@@ -79,7 +79,7 @@ export default function PluginsPage() {
 			? selectedPluginScope.scope
 			: ((selectedPlugin?.display_scope ??
 					selectedPlugin?.scopes[0]?.scope ??
-					"user") as PluginScopeValue);
+					"global") as PluginScopeValue);
 	const selectedKeysInPlugins = useMemo(
 		() =>
 			new Set(

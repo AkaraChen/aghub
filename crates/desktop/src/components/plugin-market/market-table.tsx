@@ -13,8 +13,7 @@ import type { CCPluginMarketResponse } from "../../generated/dto";
 import { cn } from "../../lib/utils";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 
-const SEMANTIC_VERSION_REGEX = /^\d+\.\d+\.\d+(?:[-+][\w.-]+)?$/;
-const GIT_HASH_REGEX = /^[0-9a-f]{7,40}$/i;
+import { formatPluginVersion } from "../../lib/plugin-version";
 
 interface PluginMarketTableProps {
 	plugins: CCPluginMarketResponse[];
@@ -34,30 +33,6 @@ interface PluginMarketRow {
 	id: string;
 	plugin: CCPluginMarketResponse;
 	installState: TableInstallState;
-}
-
-function formatPluginVersion(version: string) {
-	if (!version) {
-		return "unknown";
-	}
-
-	if (version === "latest" || version.startsWith("v")) {
-		return version;
-	}
-
-	if (version.startsWith("#")) {
-		return version;
-	}
-
-	if (GIT_HASH_REGEX.test(version)) {
-		return `#${version}`;
-	}
-
-	if (SEMANTIC_VERSION_REGEX.test(version)) {
-		return `v${version}`;
-	}
-
-	return version;
 }
 
 function buildPluginMeta(
@@ -94,7 +69,7 @@ export function PluginMarketTable({
 	const tableRows = useMemo<PluginMarketRow[]>(
 		() =>
 			plugins.map((plugin) => ({
-				id: `${plugin.id}:${installStates[plugin.id] ?? "idle"}`,
+				id: plugin.id,
 				plugin,
 				installState: installStates[plugin.id] ?? "idle",
 			})),

@@ -57,7 +57,7 @@ const SIDEBAR_ITEM_DEFINITIONS: Record<SidebarItemId, SidebarItemDefinition> = {
 	plugins: {
 		id: "plugins",
 		labelKey: "claudeCodePlugins",
-		href: "/plugins",
+		href: "/cc-plugins",
 		icon: PuzzlePieceIcon,
 	},
 };

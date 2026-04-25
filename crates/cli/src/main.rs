@@ -479,8 +479,8 @@ mod describe {
 
 // Handle plugin management commands
 fn handle_plugin_action(action: PluginAction) -> Result<()> {
-	use aghub_plugins::claude::ClaudePluginManager;
-	use aghub_plugins::PluginId;
+	use aghub_cc_plugins::claude::ClaudePluginManager;
+	use aghub_cc_plugins::PluginId;
 
 	match action {
 		PluginAction::List { json } => {

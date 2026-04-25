@@ -79,8 +79,7 @@ export function McpServersSection({ config }: McpServersSectionProps) {
 				);
 			}, 2000);
 			toast.success(t("copyConfigSuccess"));
-		} catch (error) {
-			console.error("Failed to copy plugin MCP content:", error);
+		} catch {
 			toast.danger(t("copyConfigError"));
 		}
 	};

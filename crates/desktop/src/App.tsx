@@ -231,7 +231,7 @@ function App() {
 											</ErrorBoundary>
 										</MainLayout>
 									</Route>
-									<Route path="/plugins">
+									<Route path="/cc-plugins">
 										<MainLayout>
 											<ErrorBoundary>
 												<Suspense

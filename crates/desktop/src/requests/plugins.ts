@@ -7,8 +7,11 @@ import type {
 	CCPluginCheckUpdateRequest,
 	CCPluginCheckUpdateResponse,
 	CCPluginConfigResponse,
+	CCPluginDetailResponse,
 	CCPluginInstallRequest,
 	CCPluginInstallResponse,
+	CCPluginListResponse,
+	CCPluginMarketResponse,
 	CCPluginReinstallRequest,
 	CCPluginReinstallResponse,
 	CCPluginResponse,
@@ -184,38 +187,172 @@ export function updateMarketplaceMutationOptions({
 	});
 }
 
-interface EnablePluginMutationParams {
+export interface PluginToggleSnapshot {
+	previousPlugins?: CCPluginListResponse;
+	previousDetail?: CCPluginDetailResponse;
+	previousMarket?: CCPluginMarketResponse[];
+}
+
+export function updatePluginCaches(
+	queryClient: QueryClient,
+	pluginId: string,
+	currentPlugin: CCPluginResponse,
+	updater: (entry: CCPluginResponse) => CCPluginResponse,
+) {
+	queryClient.setQueryData<CCPluginListResponse | undefined>(
+		queryKeys.plugins.list(),
+		(existing) =>
+			existing
+				? {
+						...existing,
+						plugins: existing.plugins.map((entry) =>
+							entry.id === pluginId ? updater(entry) : entry,
+						),
+					}
+				: existing,
+	);
+	queryClient.setQueryData<CCPluginDetailResponse | undefined>(
+		queryKeys.plugins.detail(pluginId),
+		(existing) =>
+			existing
+				? {
+						...existing,
+						...updater(existing),
+					}
+				: existing,
+	);
+	queryClient.setQueryData<CCPluginMarketResponse[] | undefined>(
+		queryKeys.plugins.market(),
+		(existing) =>
+			existing?.map((entry) =>
+				entry.id === pluginId
+					? { ...entry, enabled: updater(currentPlugin).enabled }
+					: entry,
+			) ?? existing,
+	);
+}
+
+interface TogglePluginMutationParams {
 	api: ApiClient;
-	onSuccess?: (
-		data: CCPluginResponse,
-		pluginId: string,
-	) => void | Promise<void>;
+	queryClient: QueryClient;
+	pluginId: string;
+	currentPlugin: CCPluginResponse;
+	onSuccess?: (data: CCPluginResponse) => void | Promise<void>;
+}
+
+function togglePluginMutationOptions(
+	enabled: boolean,
+	mutationFn: (pluginId: string) => Promise<CCPluginResponse>,
+	{
+		queryClient,
+		pluginId,
+		currentPlugin,
+		onSuccess,
+	}: Omit<TogglePluginMutationParams, "api">,
+) {
+	return mutationOptions({
+		mutationFn,
+		onMutate: async (): Promise<PluginToggleSnapshot> => {
+			await Promise.all([
+				queryClient.cancelQueries({
+					queryKey: queryKeys.plugins.list(),
+				}),
+				queryClient.cancelQueries({
+					queryKey: queryKeys.plugins.detail(pluginId),
+				}),
+				queryClient.cancelQueries({
+					queryKey: queryKeys.plugins.market(),
+				}),
+			]);
+
+			const previousPlugins =
+				queryClient.getQueryData<CCPluginListResponse>(
+					queryKeys.plugins.list(),
+				);
+			const previousDetail =
+				queryClient.getQueryData<CCPluginDetailResponse>(
+					queryKeys.plugins.detail(pluginId),
+				);
+			const previousMarket = queryClient.getQueryData<
+				CCPluginMarketResponse[]
+			>(queryKeys.plugins.market());
+
+			updatePluginCaches(
+				queryClient,
+				pluginId,
+				currentPlugin,
+				(entry) => ({
+					...entry,
+					enabled,
+				}),
+			);
+
+			return {
+				previousPlugins,
+				previousDetail,
+				previousMarket,
+			};
+		},
+		onSuccess: async (data: CCPluginResponse) => {
+			updatePluginCaches(
+				queryClient,
+				pluginId,
+				currentPlugin,
+				(entry) => ({
+					...entry,
+					...data,
+				}),
+			);
+			await invalidatePluginSkillQueries(queryClient);
+			await onSuccess?.(data);
+		},
+		onError: (
+			_error: Error,
+			_pluginId: string,
+			context: PluginToggleSnapshot | undefined,
+		) => {
+			queryClient.setQueryData(
+				queryKeys.plugins.list(),
+				context?.previousPlugins,
+			);
+			queryClient.setQueryData(
+				queryKeys.plugins.detail(pluginId),
+				context?.previousDetail,
+			);
+			queryClient.setQueryData(
+				queryKeys.plugins.market(),
+				context?.previousMarket,
+			);
+		},
+	});
 }
 
 export function enablePluginMutationOptions({
 	api,
+	queryClient,
+	pluginId,
+	currentPlugin,
 	onSuccess,
-}: EnablePluginMutationParams) {
-	return mutationOptions({
-		mutationFn: (pluginId: string) => api.plugins.enable(pluginId),
+}: TogglePluginMutationParams) {
+	return togglePluginMutationOptions(true, (id) => api.plugins.enable(id), {
+		queryClient,
+		pluginId,
+		currentPlugin,
 		onSuccess,
 	});
 }
 
-interface DisablePluginMutationParams {
-	api: ApiClient;
-	onSuccess?: (
-		data: CCPluginResponse,
-		pluginId: string,
-	) => void | Promise<void>;
-}
-
 export function disablePluginMutationOptions({
 	api,
+	queryClient,
+	pluginId,
+	currentPlugin,
 	onSuccess,
-}: DisablePluginMutationParams) {
-	return mutationOptions({
-		mutationFn: (pluginId: string) => api.plugins.disable(pluginId),
+}: TogglePluginMutationParams) {
+	return togglePluginMutationOptions(false, (id) => api.plugins.disable(id), {
+		queryClient,
+		pluginId,
+		currentPlugin,
 		onSuccess,
 	});
 }

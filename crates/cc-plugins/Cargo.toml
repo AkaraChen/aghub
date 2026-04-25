@@ -1,0 +1,40 @@
+[package]
+name = "aghub-cc-plugins"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+dirs = { workspace = true }
+reqwest = { workspace = true }
+
+# Async runtime
+tokio = { version = "1", features = [
+	"fs",
+	"process",
+	"time",
+	"rt-multi-thread",
+	"macros",
+] }
+
+# Tarball extraction
+flate2 = "1.0"
+tar = "0.4"
+
+# Date/time
+chrono = { version = "0.4", features = [ "serde" ] }
+
+# Hash for URL-based sources
+sha2 = "0.10"
+semver = "1.0.28"
+
+# Error types
+thiserror = { workspace = true }
+
+# Logging
+log = "0.4"
+tempfile = { workspace = true }
