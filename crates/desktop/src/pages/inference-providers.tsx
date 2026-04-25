@@ -30,19 +30,19 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { ListSearchHeader } from "../../components/list-search-header";
+import { ListSearchHeader } from "../components/list-search-header";
 import type {
 	InferenceProviderFormatDto,
 	InferenceProviderResponse,
-} from "../../generated/dto";
-import { useApi } from "../../hooks/use-api";
-import { cn } from "../../lib/utils";
+} from "../generated/dto";
+import { useApi } from "../hooks/use-api";
+import { cn } from "../lib/utils";
 import {
 	createInferenceProviderMutationOptions,
 	deleteInferenceProviderMutationOptions,
 	inferenceProviderListQueryOptions,
 	updateInferenceProviderMutationOptions,
-} from "../../requests/inference-providers";
+} from "../requests/inference-providers";
 
 type PanelMode =
 	| { type: "detail" }
@@ -633,7 +633,7 @@ function ProviderDetail({
 	);
 }
 
-export default function InferenceProvidersPanel() {
+export default function InferenceProvidersPage() {
 	const { t } = useTranslation();
 	const api = useApi();
 	const [searchQuery, setSearchQuery] = useState("");
@@ -686,166 +686,162 @@ export default function InferenceProvidersPanel() {
 
 	if (isLoading) {
 		return (
-			<div className="flex h-40 items-center justify-center">
+			<div className="flex h-full items-center justify-center">
 				<Spinner size="lg" />
 			</div>
 		);
 	}
 
 	return (
-		<div className="h-[calc(100vh-11rem)] min-h-[540px] overflow-hidden rounded-lg border border-border bg-surface">
-			<div className="flex h-full">
-				<div className="relative flex w-80 shrink-0 flex-col border-r border-border">
-					<ListSearchHeader
-						searchValue={searchQuery}
-						onSearchChange={setSearchQuery}
-						placeholder={t("searchInferenceProviders")}
-						ariaLabel={t("searchInferenceProviders")}
-					>
-						<Tooltip delay={0}>
-							<Tooltip.Trigger>
-								<Button
-									isIconOnly
-									variant="ghost"
-									size="sm"
-									aria-label={t("createInferenceProvider")}
-									onPress={() => {
-										setSelectedName(null);
-										setPanel({ type: "create" });
-									}}
-								>
-									<PlusIcon className="size-4" />
-								</Button>
-							</Tooltip.Trigger>
-							<Tooltip.Content>{t("add")}</Tooltip.Content>
-						</Tooltip>
-						<Tooltip delay={0}>
-							<Tooltip.Trigger>
-								<Button
-									isIconOnly
-									variant="ghost"
-									size="sm"
-									aria-label={t("refreshInferenceProviders")}
-									onPress={() => refetch()}
-								>
-									<ArrowPathIcon
-										className={cn(
-											"size-4",
-											isFetching && "animate-spin",
-										)}
-									/>
-								</Button>
-							</Tooltip.Trigger>
-							<Tooltip.Content>{t("refresh")}</Tooltip.Content>
-						</Tooltip>
-					</ListSearchHeader>
-
-					{filteredProviders.length === 0 ? (
-						<div className="px-4 py-8 text-center">
-							<p className="text-sm text-muted">
-								{providers.length === 0
-									? t("noInferenceProviders")
-									: t("noInferenceProvidersMatch")}
-							</p>
-						</div>
-					) : (
-						<div className="flex-1 overflow-y-auto">
-							<ListBox
-								aria-label={t("inferenceProviders")}
-								selectionMode="single"
-								selectedKeys={selectedKeys}
-								onAction={(key) => {
-									setSelectedName(String(key));
-									setPanel({ type: "detail" });
+		<div className="flex h-full">
+			<div className="relative flex w-80 shrink-0 flex-col border-r border-border">
+				<ListSearchHeader
+					searchValue={searchQuery}
+					onSearchChange={setSearchQuery}
+					placeholder={t("searchInferenceProviders")}
+					ariaLabel={t("searchInferenceProviders")}
+				>
+					<Tooltip delay={0}>
+						<Tooltip.Trigger>
+							<Button
+								isIconOnly
+								variant="ghost"
+								size="sm"
+								aria-label={t("createInferenceProvider")}
+								onPress={() => {
+									setSelectedName(null);
+									setPanel({ type: "create" });
 								}}
-								className="p-2"
 							>
-								{filteredProviders.map((provider) => (
-									<ListBox.Item
-										key={provider.name}
-										id={provider.name}
-										textValue={provider.name}
-										className="data-selected:bg-surface"
-									>
-										<div className="flex min-w-0 items-center gap-2">
-											<ProviderIcon
-												format={provider.format}
-												isActive={
-													activeProvider?.name ===
-													provider.name
-												}
-											/>
-											<div className="min-w-0 flex-1">
-												<Label className="block truncate">
-													{provider.name}
-												</Label>
-												<span className="block truncate text-xs text-muted">
-													{formatOption(
-														provider.format,
-														t,
-													)}
-												</span>
-											</div>
-										</div>
-									</ListBox.Item>
-								))}
-							</ListBox>
-						</div>
-					)}
-				</div>
+								<PlusIcon className="size-4" />
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>{t("add")}</Tooltip.Content>
+					</Tooltip>
+					<Tooltip delay={0}>
+						<Tooltip.Trigger>
+							<Button
+								isIconOnly
+								variant="ghost"
+								size="sm"
+								aria-label={t("refreshInferenceProviders")}
+								onPress={() => refetch()}
+							>
+								<ArrowPathIcon
+									className={cn(
+										"size-4",
+										isFetching && "animate-spin",
+									)}
+								/>
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>{t("refresh")}</Tooltip.Content>
+					</Tooltip>
+				</ListSearchHeader>
 
-				<div className="relative flex-1 overflow-hidden">
-					{panel.type === "create" && (
-						<ProviderForm
-							mode="create"
-							onCancel={() => setPanel({ type: "detail" })}
-							onSuccess={handleCreatedOrUpdated}
-						/>
-					)}
-
-					{panel.type === "edit" && (
-						<ProviderForm
-							key={panel.provider.name}
-							mode="edit"
-							provider={panel.provider}
-							onCancel={() => setPanel({ type: "detail" })}
-							onSuccess={handleCreatedOrUpdated}
-						/>
-					)}
-
-					{panel.type === "detail" && activeProvider && (
-						<ProviderDetail
-							key={activeProvider.name}
-							provider={activeProvider}
-							onEdit={() =>
-								setPanel({
-									type: "edit",
-									provider: activeProvider,
-								})
-							}
-							onDeleted={() => {
-								setSelectedName(null);
+				{filteredProviders.length === 0 ? (
+					<div className="px-4 py-8 text-center">
+						<p className="text-sm text-muted">
+							{providers.length === 0
+								? t("noInferenceProviders")
+								: t("noInferenceProvidersMatch")}
+						</p>
+					</div>
+				) : (
+					<div className="flex-1 overflow-y-auto">
+						<ListBox
+							aria-label={t("inferenceProviders")}
+							selectionMode="single"
+							selectedKeys={selectedKeys}
+							onAction={(key) => {
+								setSelectedName(String(key));
 								setPanel({ type: "detail" });
 							}}
-						/>
-					)}
+							className="p-2"
+						>
+							{filteredProviders.map((provider) => (
+								<ListBox.Item
+									key={provider.name}
+									id={provider.name}
+									textValue={provider.name}
+									className="data-selected:bg-surface"
+								>
+									<div className="flex min-w-0 items-center gap-2">
+										<ProviderIcon
+											format={provider.format}
+											isActive={
+												activeProvider?.name ===
+												provider.name
+											}
+										/>
+										<div className="min-w-0 flex-1">
+											<Label className="block truncate">
+												{provider.name}
+											</Label>
+											<span className="block truncate text-xs text-muted">
+												{formatOption(
+													provider.format,
+													t,
+												)}
+											</span>
+										</div>
+									</div>
+								</ListBox.Item>
+							))}
+						</ListBox>
+					</div>
+				)}
+			</div>
 
-					{panel.type === "detail" && !activeProvider && (
-						<div className="flex h-full flex-col items-center justify-center gap-4">
-							<div className="text-center">
-								<p className="mb-2 text-sm text-muted">
-									{t("noInferenceProviders")}
-								</p>
-							</div>
-							<Button
-								onPress={() => setPanel({ type: "create" })}
-							>
-								<PlusIcon className="mr-2 size-4" />
-								{t("createInferenceProvider")}
-							</Button>
+			<div className="relative flex-1 overflow-hidden">
+				{panel.type === "create" && (
+					<ProviderForm
+						mode="create"
+						onCancel={() => setPanel({ type: "detail" })}
+						onSuccess={handleCreatedOrUpdated}
+					/>
+				)}
+
+				{panel.type === "edit" && (
+					<ProviderForm
+						key={panel.provider.name}
+						mode="edit"
+						provider={panel.provider}
+						onCancel={() => setPanel({ type: "detail" })}
+						onSuccess={handleCreatedOrUpdated}
+					/>
+				)}
+
+				{panel.type === "detail" && activeProvider && (
+					<ProviderDetail
+						key={activeProvider.name}
+						provider={activeProvider}
+						onEdit={() =>
+							setPanel({
+								type: "edit",
+								provider: activeProvider,
+							})
+						}
+						onDeleted={() => {
+							setSelectedName(null);
+							setPanel({ type: "detail" });
+						}}
+					/>
+				)}
+
+				{panel.type === "detail" && !activeProvider && (
+					<div className="flex h-full flex-col items-center justify-center gap-4">
+						<div className="text-center">
+							<p className="mb-2 text-sm text-muted">
+								{t("noInferenceProviders")}
+							</p>
 						</div>
-					)}
-				</div>
+						<Button onPress={() => setPanel({ type: "create" })}>
+							<PlusIcon className="mr-2 size-4" />
+							{t("createInferenceProvider")}
+						</Button>
+					</div>
+				)}
 			</div>
 		</div>
 	);

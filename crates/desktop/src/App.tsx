@@ -20,6 +20,7 @@ import type { DeepLinkImportIntent } from "./lib/deep-link";
 import { parseDeepLink } from "./lib/deep-link";
 import { setupAppMenu } from "./lib/menu";
 import { initStore } from "./lib/store";
+import InferenceProvidersPage from "./pages/inference-providers";
 import ProjectDetailPage from "./pages/project/detail";
 import SettingsPage from "./pages/settings";
 import CustomAgentsPage from "./pages/settings/custom-agents";
@@ -201,6 +202,13 @@ function App() {
 												>
 													<MCPServersPage />
 												</Suspense>
+											</ErrorBoundary>
+										</MainLayout>
+									</Route>
+									<Route path="/inference-providers">
+										<MainLayout>
+											<ErrorBoundary>
+												<InferenceProvidersPage />
 											</ErrorBoundary>
 										</MainLayout>
 									</Route>
