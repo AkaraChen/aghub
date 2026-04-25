@@ -29,6 +29,18 @@ impl ApiError {
 			},
 		}
 	}
+
+	pub fn internal(error: impl Into<String>) -> Self {
+		Self::new(Status::InternalServerError, error, "INTERNAL_ERROR")
+	}
+
+	pub fn bad_request(error: impl Into<String>) -> Self {
+		Self::new(Status::BadRequest, error, "BAD_REQUEST")
+	}
+
+	pub fn not_found(error: impl Into<String>) -> Self {
+		Self::new(Status::NotFound, error, "NOT_FOUND")
+	}
 }
 
 impl From<ConfigError> for ApiError {

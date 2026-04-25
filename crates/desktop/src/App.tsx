@@ -20,6 +20,7 @@ import type { DeepLinkImportIntent } from "./lib/deep-link";
 import { parseDeepLink } from "./lib/deep-link";
 import { setupAppMenu } from "./lib/menu";
 import { initStore } from "./lib/store";
+import PluginsPage from "./pages/plugins";
 import ProjectDetailPage from "./pages/project/detail";
 import SettingsPage from "./pages/settings";
 import CustomAgentsPage from "./pages/settings/custom-agents";
@@ -226,6 +227,19 @@ function App() {
 													}
 												>
 													<SkillsShPage />
+												</Suspense>
+											</ErrorBoundary>
+										</MainLayout>
+									</Route>
+									<Route path="/cc-plugins">
+										<MainLayout>
+											<ErrorBoundary>
+												<Suspense
+													fallback={
+														<SkillsPageSkeleton />
+													}
+												>
+													<PluginsPage />
 												</Suspense>
 											</ErrorBoundary>
 										</MainLayout>

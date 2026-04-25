@@ -68,14 +68,7 @@ impl Fairing for ApiLogFairing {
 	}
 }
 
-pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
-	info!("starting aghub API server on 127.0.0.1:{}", options.port);
-	let config = rocket::Config {
-		port: options.port,
-		address: std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
-		log_level: rocket::config::LogLevel::Normal,
-		..rocket::Config::default()
-	};
+fn build_rocket(config: rocket::Config) -> rocket::Rocket<rocket::Build> {
 	let cors = rocket_cors::CorsOptions {
 		allowed_origins: rocket_cors::AllOrSome::All,
 		allowed_methods: vec![
@@ -83,6 +76,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 			rocket::http::Method::Post,
 			rocket::http::Method::Put,
 			rocket::http::Method::Delete,
+			rocket::http::Method::Options,
 		]
 		.into_iter()
 		.map(From::from)
@@ -106,6 +100,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 		.mount(
 			"/api/v1",
 			routes![
+				routes::preflight,
 				routes::agents::list_agents,
 				routes::agents::check_availability,
 				routes::market::search_skill_market,
@@ -155,6 +150,22 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 				routes::skills::git_scan_skills,
 				routes::skills::git_install_skills,
 				routes::skills::git_sync_skill,
+				routes::plugins::list_plugins,
+				routes::plugins::get_plugin_detail,
+				routes::plugins::enable_plugin,
+				routes::plugins::disable_plugin,
+				routes::plugins::install_plugin,
+				routes::plugins::uninstall_plugin,
+				routes::plugins::reinstall_plugin,
+				routes::plugins::update_plugin,
+				routes::plugins::check_plugin_update,
+				routes::plugins::open_plugin_folder,
+				routes::plugins::open_plugin_skill_in_editor,
+				routes::plugins::get_plugin_config,
+				routes::plugins::update_plugin_config,
+				routes::plugins::delete_plugin_config,
+				routes::plugins::list_plugin_market,
+				routes::plugins::update_marketplace,
 			],
 		)
 		.register(
@@ -166,6 +177,17 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 				routes::catchers::default_catcher,
 			],
 		)
+}
+
+pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
+	info!("starting aghub API server on 127.0.0.1:{}", options.port);
+	let config = rocket::Config {
+		port: options.port,
+		address: std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
+		log_level: rocket::config::LogLevel::Normal,
+		..rocket::Config::default()
+	};
+	build_rocket(config)
 		.launch()
 		.await
 		.inspect(|_rocket| {
@@ -176,4 +198,43 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 			error!("aghub API server exited with error: {error}");
 			error
 		})
+}
+
+#[cfg(test)]
+mod tests {
+	use super::build_rocket;
+	use rocket::http::{Header, Status};
+	use rocket::local::blocking::Client;
+
+	#[test]
+	fn plugin_preflight_routes_return_cors_response() {
+		let client = Client::tracked(build_rocket(rocket::Config::default()))
+			.expect("client");
+
+		for path in [
+			"/api/v1/plugins/check-update",
+			"/api/v1/plugins/reinstall",
+			"/api/v1/plugins/uninstall",
+		] {
+			let response = client
+				.req(rocket::http::Method::Options, path)
+				.header(Header::new("Origin", "http://localhost:1420"))
+				.header(Header::new("Access-Control-Request-Method", "POST"))
+				.header(Header::new(
+					"Access-Control-Request-Headers",
+					"content-type",
+				))
+				.dispatch();
+
+			assert_eq!(response.status(), Status::NoContent);
+			assert_eq!(
+				response.headers().get_one("Access-Control-Allow-Origin"),
+				Some("http://localhost:1420"),
+			);
+			assert_eq!(
+				response.headers().get_one("Access-Control-Allow-Headers"),
+				Some("content-type"),
+			);
+		}
+	}
 }

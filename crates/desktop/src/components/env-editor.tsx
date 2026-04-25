@@ -1,6 +1,6 @@
 import { ClipboardDocumentIcon } from "@heroicons/react/24/solid";
 import { Button } from "@heroui/react";
-import * as dotenv from "dotenv";
+import { parse as parseDotenv } from "dotenv";
 import { useTranslation } from "react-i18next";
 import type { KeyPair } from "../lib/key-pair-utils";
 import { objectToKeyPairs } from "../lib/key-pair-utils";
@@ -14,6 +14,21 @@ interface EnvEditorProps {
 	variant?: "primary" | "secondary";
 	errors?: Array<{ key?: string; value?: string }>;
 	errorMessage?: string;
+}
+
+const LINE_SPLIT_RE = /\r?\n/u;
+const EXPORT_PREFIX_RE = /^\s*export\s+/;
+
+function parseClipboardEnv(text: string): Record<string, string> {
+	const stripped = text
+		.split(LINE_SPLIT_RE)
+		.map((line) =>
+			line.trimStart().startsWith("export ")
+				? line.replace(EXPORT_PREFIX_RE, "")
+				: line,
+		)
+		.join("\n");
+	return parseDotenv(stripped);
 }
 
 export function EnvEditor({
@@ -31,7 +46,7 @@ export function EnvEditor({
 			const clipboardText = await navigator.clipboard.readText();
 			if (!clipboardText.trim()) return;
 
-			const parsed = dotenv.parse(clipboardText);
+			const parsed = parseClipboardEnv(clipboardText);
 			const pairs = objectToKeyPairs(parsed);
 			if (pairs.length > 0) {
 				onChange(pairs);

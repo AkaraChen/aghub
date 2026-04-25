@@ -49,8 +49,9 @@ macro_rules! define_mcp_paths {
 			Some(root.join($path))
 		}
 		fn global_data_dir() -> Option<std::path::PathBuf> {
-			$crate::descriptor::home_dir()
-				.map(|home| home.join($path).parent().unwrap().to_path_buf())
+			$crate::descriptor::home_dir().and_then(|home| {
+				home.join($path).parent().map(|p| p.to_path_buf())
+			})
 		}
 		fn load_mcps(
 			project_root: Option<&std::path::Path>,

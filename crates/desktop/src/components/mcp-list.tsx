@@ -6,9 +6,9 @@ import {
 import { Label, ListBox } from "@heroui/react";
 import Fuse from "fuse.js";
 import { useMemo } from "react";
-import { useMultiSelect } from "../hooks/use-multi-select";
 import { useTranslation } from "react-i18next";
 import type { McpResponse } from "../generated/dto";
+import { useMultiSelect } from "../hooks/use-multi-select";
 import { AgentIcons } from "./agent-icons";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useFavorites } from "../hooks/use-favorites";
