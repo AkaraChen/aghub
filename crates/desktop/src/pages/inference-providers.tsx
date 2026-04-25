@@ -223,11 +223,6 @@ function ProviderForm({
 								? t("createInferenceProvider")
 								: t("editInferenceProvider")}
 						</Card.Title>
-						<Card.Description>
-							{mode === "create"
-								? t("createInferenceProviderDescription")
-								: t("editInferenceProviderDescription")}
-						</Card.Description>
 					</div>
 				</Card.Header>
 				<Card.Content>
