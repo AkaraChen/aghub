@@ -3,6 +3,7 @@ import {
 	ClipboardDocumentIcon,
 	EyeIcon,
 	EyeSlashIcon,
+	GlobeAltIcon,
 	PencilIcon,
 	PlusIcon,
 	TrashIcon,
@@ -95,33 +96,15 @@ function formatDescription(
 	return option ? t(option.descriptionKey) : format;
 }
 
-function ProviderIcon({
-	format,
-	isActive = false,
-}: {
-	format: InferenceProviderFormatDto;
-	isActive?: boolean;
-}) {
-	const marker = {
-		anthropic: "A",
-		openai_completions: "C",
-		openai_responses: "R",
-	}[format];
-
+function ProviderIcon({ isActive = false }: { isActive?: boolean }) {
 	return (
 		<div
 			className={cn(
-				"flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-surface-secondary text-muted",
-				isActive && "border-accent/40 bg-accent/10 text-accent",
+				"relative inline-flex size-4 shrink-0 items-center justify-center text-muted",
+				isActive && "text-accent",
 			)}
 		>
-			<span
-				aria-hidden="true"
-				className="text-[11px] font-semibold leading-none"
-			>
-				{marker}
-			</span>
-			<span className="sr-only">{format}</span>
+			<GlobeAltIcon className="size-4" />
 		</div>
 	);
 }
@@ -548,127 +531,148 @@ function ProviderDetail({
 	};
 
 	return (
-		<div className="h-full overflow-y-auto p-4 sm:p-6">
-			<div className="mb-5 flex items-start justify-between gap-4">
-				<div className="flex min-w-0 items-center gap-3">
-					<ProviderIcon format={provider.format} isActive />
-					<div className="min-w-0">
-						<h3 className="truncate text-xl font-semibold text-foreground">
-							{provider.name}
-						</h3>
-						<p className="text-sm text-muted">
-							{formatOption(provider.format, t)}
-						</p>
-					</div>
+		<>
+			<div className="h-full overflow-y-auto">
+				<div className="w-full p-4 sm:p-6">
+					<Card>
+						<Card.Header className="flex flex-row items-start justify-between gap-3">
+							<div className="flex min-w-0 items-center gap-3">
+								<ProviderIcon isActive />
+								<div className="min-w-0">
+									<h2 className="truncate text-xl font-semibold text-foreground">
+										{provider.name}
+									</h2>
+									<p className="text-sm text-muted">
+										{formatOption(provider.format, t)}
+									</p>
+								</div>
+							</div>
+							<div className="flex shrink-0 items-center gap-2">
+								<Tooltip delay={0}>
+									<Tooltip.Trigger>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="md"
+											className="min-h-[44px] min-w-[44px] text-muted"
+											aria-label={t(
+												"editInferenceProvider",
+											)}
+											onPress={onEdit}
+										>
+											<PencilIcon className="size-4" />
+										</Button>
+									</Tooltip.Trigger>
+									<Tooltip.Content>
+										{t("edit")}
+									</Tooltip.Content>
+								</Tooltip>
+								<Tooltip delay={0}>
+									<Tooltip.Trigger>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="md"
+											className="min-h-[44px] min-w-[44px] text-muted hover:text-danger"
+											aria-label={t(
+												"deleteInferenceProvider",
+											)}
+											onPress={() =>
+												setIsDeleteOpen(true)
+											}
+										>
+											<TrashIcon className="size-4" />
+										</Button>
+									</Tooltip.Trigger>
+									<Tooltip.Content>
+										{t("delete")}
+									</Tooltip.Content>
+								</Tooltip>
+							</div>
+						</Card.Header>
+
+						<Card.Content className="flex flex-col gap-6">
+							<div className="space-y-3">
+								<div className="flex items-center justify-between gap-3">
+									<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+										{t("providerFormat")}
+									</h3>
+									<Chip
+										color="accent"
+										variant="soft"
+										size="sm"
+									>
+										{formatOption(provider.format, t)}
+									</Chip>
+								</div>
+								<p className="text-sm text-muted">
+									{formatDescription(provider.format, t)}
+								</p>
+							</div>
+
+							<div className="space-y-3">
+								<div>
+									<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+										{t("providerApiBaseUrl")}
+									</h3>
+									<p className="mt-1 text-sm text-muted">
+										{t("providerApiBaseUrlDescription")}
+									</p>
+								</div>
+								<div className="overflow-x-auto rounded-lg border border-separator bg-surface-secondary px-3 py-2">
+									<code className="block font-mono text-xs leading-5 text-foreground break-words">
+										{provider.api_base_url}
+									</code>
+								</div>
+							</div>
+
+							<div className="space-y-3">
+								<div>
+									<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+										{t("providerApiKey")}
+									</h3>
+									<p className="mt-1 text-sm text-muted">
+										{t("providerApiKeyStored")}
+									</p>
+								</div>
+								<div className="flex min-w-0 items-center gap-2 rounded-lg border border-separator bg-surface-secondary px-3 py-2">
+									<code className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">
+										{revealedKey ??
+											"••••••••••••••••••••••••"}
+									</code>
+									<Button
+										isIconOnly
+										variant="tertiary"
+										size="sm"
+										aria-label={
+											revealedKey
+												? t("hideProviderApiKey")
+												: t("revealProviderApiKey")
+										}
+										isPending={passwordMutation.isPending}
+										onPress={handleReveal}
+									>
+										{revealedKey ? (
+											<EyeSlashIcon className="size-4" />
+										) : (
+											<EyeIcon className="size-4" />
+										)}
+									</Button>
+									<Button
+										isIconOnly
+										variant="tertiary"
+										size="sm"
+										aria-label={t("copyProviderApiKey")}
+										isPending={isCopying}
+										onPress={handleCopyKey}
+									>
+										<ClipboardDocumentIcon className="size-4" />
+									</Button>
+								</div>
+							</div>
+						</Card.Content>
+					</Card>
 				</div>
-				<div className="flex shrink-0 items-center gap-1">
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								aria-label={t("editInferenceProvider")}
-								onPress={onEdit}
-							>
-								<PencilIcon className="size-4" />
-							</Button>
-						</Tooltip.Trigger>
-						<Tooltip.Content>{t("edit")}</Tooltip.Content>
-					</Tooltip>
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								aria-label={t("deleteInferenceProvider")}
-								onPress={() => setIsDeleteOpen(true)}
-							>
-								<TrashIcon className="size-4" />
-							</Button>
-						</Tooltip.Trigger>
-						<Tooltip.Content>{t("delete")}</Tooltip.Content>
-					</Tooltip>
-				</div>
-			</div>
-
-			<div className="grid gap-4">
-				<Card variant="secondary">
-					<Card.Header className="flex flex-row items-start justify-between gap-3">
-						<div>
-							<Card.Title>{t("providerFormat")}</Card.Title>
-							<Card.Description>
-								{formatDescription(provider.format, t)}
-							</Card.Description>
-						</div>
-						<Chip color="accent" variant="soft" size="sm">
-							{formatOption(provider.format, t)}
-						</Chip>
-					</Card.Header>
-				</Card>
-
-				<Card variant="secondary">
-					<Card.Header>
-						<div>
-							<Card.Title>{t("providerApiBaseUrl")}</Card.Title>
-							<Card.Description>
-								{t("providerApiBaseUrlDescription")}
-							</Card.Description>
-						</div>
-					</Card.Header>
-					<Card.Content>
-						<code className="block truncate rounded-lg border border-separator bg-surface-secondary px-3 py-2 font-mono text-xs text-foreground">
-							{provider.api_base_url}
-						</code>
-					</Card.Content>
-				</Card>
-
-				<Card variant="secondary">
-					<Card.Header>
-						<div>
-							<Card.Title>{t("providerApiKey")}</Card.Title>
-							<Card.Description>
-								{t("providerApiKeyStored")}
-							</Card.Description>
-						</div>
-					</Card.Header>
-					<Card.Content>
-						<div className="flex min-w-0 items-center gap-2 rounded-lg border border-separator bg-surface-secondary px-3 py-2">
-							<code className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">
-								{revealedKey ?? "••••••••••••••••••••••••"}
-							</code>
-							<Button
-								isIconOnly
-								variant="tertiary"
-								size="sm"
-								aria-label={
-									revealedKey
-										? t("hideProviderApiKey")
-										: t("revealProviderApiKey")
-								}
-								isPending={passwordMutation.isPending}
-								onPress={handleReveal}
-							>
-								{revealedKey ? (
-									<EyeSlashIcon className="size-4" />
-								) : (
-									<EyeIcon className="size-4" />
-								)}
-							</Button>
-							<Button
-								isIconOnly
-								variant="tertiary"
-								size="sm"
-								aria-label={t("copyProviderApiKey")}
-								isPending={isCopying}
-								onPress={handleCopyKey}
-							>
-								<ClipboardDocumentIcon className="size-4" />
-							</Button>
-						</div>
-					</Card.Content>
-				</Card>
 			</div>
 
 			<AlertDialog.Backdrop
@@ -709,7 +713,7 @@ function ProviderDetail({
 					</AlertDialog.Dialog>
 				</AlertDialog.Container>
 			</AlertDialog.Backdrop>
-		</div>
+		</>
 	);
 }
 
@@ -849,7 +853,6 @@ export default function InferenceProvidersPage() {
 								>
 									<div className="flex min-w-0 items-center gap-2">
 										<ProviderIcon
-											format={provider.format}
 											isActive={
 												activeProvider?.name ===
 												provider.name
