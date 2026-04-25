@@ -47,6 +47,7 @@ impl From<InferenceProviderFormatDto> for InferenceProviderFormat {
 pub struct CreateInferenceProviderRequest {
 	pub name: String,
 	pub format: InferenceProviderFormatDto,
+	pub api_base_url: String,
 	pub api_key: String,
 }
 
@@ -55,6 +56,7 @@ impl From<CreateInferenceProviderRequest> for CreateInferenceProvider {
 		CreateInferenceProvider {
 			name: req.name,
 			format: req.format.into(),
+			api_base_url: req.api_base_url,
 			api_key: req.api_key,
 		}
 	}
@@ -65,6 +67,7 @@ impl From<CreateInferenceProviderRequest> for CreateInferenceProvider {
 pub struct UpdateInferenceProviderRequest {
 	pub name: Option<String>,
 	pub format: Option<InferenceProviderFormatDto>,
+	pub api_base_url: Option<String>,
 	pub api_key: Option<String>,
 }
 
@@ -73,6 +76,7 @@ impl From<UpdateInferenceProviderRequest> for UpdateInferenceProvider {
 		UpdateInferenceProvider {
 			name: req.name,
 			format: req.format.map(Into::into),
+			api_base_url: req.api_base_url,
 			api_key: req.api_key,
 		}
 	}
@@ -84,6 +88,7 @@ pub struct InferenceProviderResponse {
 	pub id: String,
 	pub name: String,
 	pub format: InferenceProviderFormatDto,
+	pub api_base_url: String,
 }
 
 impl From<InferenceProvider> for InferenceProviderResponse {
@@ -98,6 +103,7 @@ impl From<&InferenceProvider> for InferenceProviderResponse {
 			id: provider.id.clone(),
 			name: provider.name.clone(),
 			format: provider.format.into(),
+			api_base_url: provider.api_base_url.clone(),
 		}
 	}
 }

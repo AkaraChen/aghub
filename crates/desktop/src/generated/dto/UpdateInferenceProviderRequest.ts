@@ -4,5 +4,6 @@ import type { InferenceProviderFormatDto } from "./InferenceProviderFormatDto";
 export type UpdateInferenceProviderRequest = {
 	name: string | null;
 	format: InferenceProviderFormatDto | null;
+	api_base_url: string | null;
 	api_key: string | null;
 };

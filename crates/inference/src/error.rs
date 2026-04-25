@@ -23,6 +23,10 @@ pub enum InferenceProviderError {
 	#[error("provider API key cannot be empty")]
 	EmptyApiKey,
 
+	/// API base URLs must not be empty.
+	#[error("provider API base URL cannot be empty")]
+	EmptyApiBaseUrl,
+
 	/// Provider name is already in use.
 	#[error("provider already exists: {0}")]
 	AlreadyExists(String),

@@ -87,6 +87,7 @@ impl From<InferenceProviderError> for ApiError {
 	fn from(e: InferenceProviderError) -> Self {
 		match e {
 			InferenceProviderError::EmptyName
+			| InferenceProviderError::EmptyApiBaseUrl
 			| InferenceProviderError::EmptyApiKey
 			| InferenceProviderError::InvalidFormat(_) => ApiError::new(
 				Status::BadRequest,

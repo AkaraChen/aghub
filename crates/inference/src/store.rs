@@ -176,6 +176,7 @@ impl<C: CredentialStore> InferenceProviderRepository
 		input: CreateInferenceProvider,
 	) -> Result<InferenceProvider> {
 		let name = clean_name(&input.name)?;
+		let api_base_url = clean_api_base_url(&input.api_base_url)?;
 		ensure_api_key(&input.api_key)?;
 
 		let mut file = self.read_file()?;
@@ -185,6 +186,7 @@ impl<C: CredentialStore> InferenceProviderRepository
 			id: uuid::Uuid::new_v4().to_string(),
 			name,
 			format: input.format,
+			api_base_url,
 		};
 
 		self.credentials.set_api_key(&provider.id, &input.api_key)?;
@@ -213,6 +215,11 @@ impl<C: CredentialStore> InferenceProviderRepository
 
 		if let Some(format) = input.format {
 			file.providers[index].format = format;
+		}
+
+		if let Some(ref api_base_url) = input.api_base_url {
+			file.providers[index].api_base_url =
+				clean_api_base_url(api_base_url)?;
 		}
 
 		let previous_api_key = match input.api_key.as_ref() {
@@ -293,6 +300,15 @@ fn ensure_api_key(api_key: &str) -> Result<()> {
 	}
 }
 
+fn clean_api_base_url(api_base_url: &str) -> Result<String> {
+	let api_base_url = api_base_url.trim();
+	if api_base_url.is_empty() {
+		Err(InferenceProviderError::EmptyApiBaseUrl)
+	} else {
+		Ok(api_base_url.to_string())
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use std::collections::HashMap;
@@ -352,6 +368,7 @@ mod tests {
 			.create(CreateInferenceProvider {
 				name: "OpenAI".to_string(),
 				format: InferenceProviderFormat::OpenAiResponses,
+				api_base_url: "https://api.openai.com/v1".to_string(),
 				api_key: "sk-test".to_string(),
 			})
 			.unwrap();
@@ -359,6 +376,7 @@ mod tests {
 		let contents = fs::read_to_string(store.file_path()).unwrap();
 		assert!(contents.contains("OpenAI"));
 		assert!(contents.contains("openai_responses"));
+		assert!(contents.contains("https://api.openai.com/v1"));
 		assert!(!contents.contains("sk-test"));
 		assert_eq!(
 			store.get_api_key(&provider.id).unwrap(),
@@ -373,6 +391,7 @@ mod tests {
 			.create(CreateInferenceProvider {
 				name: "Anthropic".to_string(),
 				format: InferenceProviderFormat::Anthropic,
+				api_base_url: "https://api.anthropic.com/v1".to_string(),
 				api_key: "first-key".to_string(),
 			})
 			.unwrap();
@@ -383,6 +402,9 @@ mod tests {
 				UpdateInferenceProvider {
 					name: Some("Claude".to_string()),
 					format: Some(InferenceProviderFormat::OpenAiCompletions),
+					api_base_url: Some(
+						"https://gateway.example.com/v1".to_string(),
+					),
 					api_key: Some("second-key".to_string()),
 				},
 			)
@@ -390,6 +412,7 @@ mod tests {
 
 		assert_eq!(updated.name, "Claude");
 		assert_eq!(updated.format, InferenceProviderFormat::OpenAiCompletions);
+		assert_eq!(updated.api_base_url, "https://gateway.example.com/v1");
 		assert_eq!(
 			store.get_api_key(&provider.id).unwrap(),
 			Some("second-key".to_string())
@@ -403,6 +426,7 @@ mod tests {
 			.create(CreateInferenceProvider {
 				name: "Anthropic".to_string(),
 				format: InferenceProviderFormat::Anthropic,
+				api_base_url: "https://api.anthropic.com/v1".to_string(),
 				api_key: "secret".to_string(),
 			})
 			.unwrap();
@@ -421,6 +445,7 @@ mod tests {
 			.create(CreateInferenceProvider {
 				name: "OpenAI".to_string(),
 				format: InferenceProviderFormat::OpenAiResponses,
+				api_base_url: "https://api.openai.com/v1".to_string(),
 				api_key: "first".to_string(),
 			})
 			.unwrap();
@@ -429,10 +454,27 @@ mod tests {
 			.create(CreateInferenceProvider {
 				name: "openai".to_string(),
 				format: InferenceProviderFormat::OpenAiCompletions,
+				api_base_url: "https://gateway.example.com/v1".to_string(),
 				api_key: "second".to_string(),
 			})
 			.unwrap_err();
 
 		assert!(matches!(error, InferenceProviderError::AlreadyExists(_)));
+	}
+
+	#[test]
+	fn test_empty_api_base_url_is_rejected() {
+		let (_temp, store) = store();
+
+		let error = store
+			.create(CreateInferenceProvider {
+				name: "OpenAI".to_string(),
+				format: InferenceProviderFormat::OpenAiResponses,
+				api_base_url: " ".to_string(),
+				api_key: "secret".to_string(),
+			})
+			.unwrap_err();
+
+		assert!(matches!(error, InferenceProviderError::EmptyApiBaseUrl));
 	}
 }

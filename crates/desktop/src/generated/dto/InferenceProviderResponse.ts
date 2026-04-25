@@ -5,4 +5,5 @@ export type InferenceProviderResponse = {
 	id: string;
 	name: string;
 	format: InferenceProviderFormatDto;
+	api_base_url: string;
 };

@@ -73,6 +73,9 @@ pub struct InferenceProvider {
 
 	/// Request/response format supported by this provider.
 	pub format: InferenceProviderFormat,
+
+	/// Base URL for provider API requests.
+	pub api_base_url: String,
 }
 
 /// Provider creation input.
@@ -84,6 +87,9 @@ pub struct CreateInferenceProvider {
 	/// Request/response format supported by this provider.
 	pub format: InferenceProviderFormat,
 
+	/// Base URL for provider API requests.
+	pub api_base_url: String,
+
 	/// Provider API key. This is write-only and never stored in JSON.
 	pub api_key: String,
 }
@@ -93,6 +99,7 @@ impl fmt::Debug for CreateInferenceProvider {
 		f.debug_struct("CreateInferenceProvider")
 			.field("name", &self.name)
 			.field("format", &self.format)
+			.field("api_base_url", &self.api_base_url)
 			.field("api_key", &"[redacted]")
 			.finish()
 	}
@@ -107,6 +114,9 @@ pub struct UpdateInferenceProvider {
 	/// Updated request/response format.
 	pub format: Option<InferenceProviderFormat>,
 
+	/// Updated base URL for provider API requests.
+	pub api_base_url: Option<String>,
+
 	/// Updated provider API key. This is write-only and never stored in JSON.
 	pub api_key: Option<String>,
 }
@@ -116,6 +126,7 @@ impl fmt::Debug for UpdateInferenceProvider {
 		f.debug_struct("UpdateInferenceProvider")
 			.field("name", &self.name)
 			.field("format", &self.format)
+			.field("api_base_url", &self.api_base_url)
 			.field("api_key", &self.api_key.as_ref().map(|_| "[redacted]"))
 			.finish()
 	}

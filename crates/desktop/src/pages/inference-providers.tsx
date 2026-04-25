@@ -76,6 +76,7 @@ const FORMAT_OPTIONS: FormatOption[] = [
 interface InferenceProviderFormValues {
 	name: string;
 	format: InferenceProviderFormatDto;
+	apiBaseUrl: string;
 	apiKey: string;
 }
 
@@ -139,6 +140,7 @@ function ProviderForm({
 		defaultValues: {
 			name: provider?.name ?? "",
 			format: provider?.format ?? "openai_responses",
+			apiBaseUrl: provider?.api_base_url ?? "",
 			apiKey: "",
 		},
 	});
@@ -163,6 +165,7 @@ function ProviderForm({
 
 	const onSubmit = async (values: InferenceProviderFormValues) => {
 		const name = values.name.trim();
+		const apiBaseUrl = values.apiBaseUrl.trim();
 		const apiKey = values.apiKey.trim();
 
 		try {
@@ -170,6 +173,7 @@ function ProviderForm({
 				const created = await createMutation.mutateAsync({
 					name,
 					format: values.format,
+					api_base_url: apiBaseUrl,
 					api_key: apiKey,
 				});
 				toast.success(t("inferenceProviderCreated"));
@@ -183,6 +187,7 @@ function ProviderForm({
 				body: {
 					name,
 					format: values.format,
+					api_base_url: apiBaseUrl,
 					api_key: apiKey || null,
 				},
 			});
@@ -265,6 +270,55 @@ function ProviderForm({
 												onBlur={field.onBlur}
 												placeholder={t(
 													"providerNamePlaceholder",
+												)}
+												variant="secondary"
+											/>
+											{fieldState.error && (
+												<FieldError>
+													{fieldState.error.message}
+												</FieldError>
+											)}
+										</TextField>
+									)}
+								/>
+
+								<Controller
+									name="apiBaseUrl"
+									control={control}
+									rules={{
+										required: t(
+											"validationProviderApiBaseUrlRequired",
+										),
+										validate: (value) =>
+											value.trim()
+												? true
+												: t(
+														"validationProviderApiBaseUrlRequired",
+													),
+									}}
+									render={({ field, fieldState }) => (
+										<TextField
+											className="w-full"
+											variant="secondary"
+											isRequired
+											validationBehavior="aria"
+											isInvalid={Boolean(
+												fieldState.error,
+											)}
+										>
+											<Label>
+												{t("providerApiBaseUrl")}
+											</Label>
+											<Input
+												value={field.value}
+												onChange={(event) =>
+													field.onChange(
+														event.target.value,
+													)
+												}
+												onBlur={field.onBlur}
+												placeholder={t(
+													"providerApiBaseUrlPlaceholder",
 												)}
 												variant="secondary"
 											/>
@@ -547,6 +601,22 @@ function ProviderDetail({
 				<Card variant="secondary">
 					<Card.Header>
 						<div>
+							<Card.Title>{t("providerApiBaseUrl")}</Card.Title>
+							<Card.Description>
+								{t("providerApiBaseUrlDescription")}
+							</Card.Description>
+						</div>
+					</Card.Header>
+					<Card.Content>
+						<code className="block truncate rounded-lg border border-separator bg-surface-secondary px-3 py-2 font-mono text-xs text-foreground">
+							{provider.api_base_url}
+						</code>
+					</Card.Content>
+				</Card>
+
+				<Card variant="secondary">
+					<Card.Header>
+						<div>
 							<Card.Title>{t("providerApiKey")}</Card.Title>
 							<Card.Description>
 								{t("providerApiKeyStored")}
@@ -657,6 +727,7 @@ export default function InferenceProvidersPage() {
 			const format = formatOption(provider.format, t).toLowerCase();
 			return (
 				provider.name.toLowerCase().includes(query) ||
+				provider.api_base_url.toLowerCase().includes(query) ||
 				provider.format.includes(query) ||
 				format.includes(query)
 			);
