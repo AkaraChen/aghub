@@ -1,7 +1,8 @@
 //! Inference provider configuration storage.
 //!
-//! Provider metadata is stored in `inference_providers.json` under the app data
-//! directory. API keys are stored separately via the platform-native keyring.
+//! Provider metadata is stored in `inference_providers.db` (SQLite) under the
+//! app data directory. API keys are stored separately via the platform-native
+//! keyring.
 
 pub mod credentials;
 pub mod error;

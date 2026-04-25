@@ -7,9 +7,9 @@ pub enum InferenceProviderError {
 	#[error("IO error: {0}")]
 	Io(#[from] std::io::Error),
 
-	/// JSON serialization or deserialization error.
-	#[error("JSON error: {0}")]
-	Json(#[from] serde_json::Error),
+	/// SQLite database error.
+	#[error("database error: {0}")]
+	Database(String),
 
 	/// Platform keyring error.
 	#[error("keyring error: {0}")]
@@ -47,6 +47,18 @@ pub enum InferenceProviderError {
 impl From<keyring::Error> for InferenceProviderError {
 	fn from(error: keyring::Error) -> Self {
 		Self::Keyring(error.to_string())
+	}
+}
+
+impl From<sqlx::Error> for InferenceProviderError {
+	fn from(error: sqlx::Error) -> Self {
+		Self::Database(error.to_string())
+	}
+}
+
+impl From<sqlx::migrate::MigrateError> for InferenceProviderError {
+	fn from(error: sqlx::migrate::MigrateError) -> Self {
+		Self::Database(error.to_string())
 	}
 }
 

@@ -1,24 +1,20 @@
-//! CRUD storage for inference providers.
+//! SQLite-backed CRUD storage for inference providers.
 
-use std::fs;
+use std::future::Future;
 use std::path::{Path, PathBuf};
 
-use serde::{Deserialize, Serialize};
+use sqlx::sqlite::{SqliteConnectOptions, SqliteConnection};
+use sqlx::{ConnectOptions, Row};
 
 use crate::credentials::{CredentialStore, NativeCredentialStore};
 use crate::error::{InferenceProviderError, Result};
 use crate::model::{
-	CreateInferenceProvider, InferenceProvider, UpdateInferenceProvider,
+	CreateInferenceProvider, InferenceProvider, InferenceProviderFormat,
+	UpdateInferenceProvider,
 };
 
-/// File name under the Tauri app data directory.
-pub const INFERENCE_PROVIDERS_FILE: &str = "inference_providers.json";
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-struct InferenceProvidersFile {
-	#[serde(default)]
-	providers: Vec<InferenceProvider>,
-}
+/// SQLite database file name under the app data directory.
+pub const INFERENCE_PROVIDERS_FILE: &str = "inference_providers.db";
 
 /// CRUD interface for inference provider metadata and API keys.
 pub trait InferenceProviderRepository {
@@ -54,7 +50,7 @@ pub trait InferenceProviderRepository {
 	fn delete_api_key(&self, id: &str) -> Result<()>;
 }
 
-/// File-backed inference provider store.
+/// SQLite-backed inference provider store.
 #[derive(Debug, Clone)]
 pub struct InferenceProviderStore<C = NativeCredentialStore> {
 	app_data_dir: PathBuf,
@@ -98,59 +94,88 @@ impl<C> InferenceProviderStore<C> {
 		&self.app_data_dir
 	}
 
-	/// Full path to `inference_providers.json`.
+	/// Full path to `inference_providers.db`.
 	pub fn file_path(&self) -> PathBuf {
 		self.app_data_dir.join(INFERENCE_PROVIDERS_FILE)
+	}
+
+	/// Bridge a future to synchronous callers.
+	///
+	/// Safe to call from `spawn_blocking` threads (Rocket handlers) or from
+	/// plain synchronous code that has no active runtime. Must NOT be called
+	/// from within an async task — use `block_in_place` for that.
+	fn block_on<F>(&self, fut: F) -> F::Output
+	where
+		F: Future,
+	{
+		match tokio::runtime::Handle::try_current() {
+			Ok(handle) => tokio::task::block_in_place(|| handle.block_on(fut)),
+			Err(_) => tokio::runtime::Builder::new_current_thread()
+				.enable_all()
+				.build()
+				.expect("failed to build tokio runtime")
+				.block_on(fut),
+		}
 	}
 }
 
 impl<C: CredentialStore> InferenceProviderStore<C> {
-	fn read_file(&self) -> Result<InferenceProvidersFile> {
-		let path = self.file_path();
-		let contents = match fs::read_to_string(&path) {
-			Ok(contents) => contents,
-			Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-				return Ok(InferenceProvidersFile::default());
-			}
-			Err(error) => return Err(error.into()),
-		};
-
-		if contents.trim().is_empty() {
-			return Ok(InferenceProvidersFile::default());
+	async fn open_db(&self) -> Result<SqliteConnection> {
+		let db_path = self.file_path();
+		if let Some(parent) = db_path.parent() {
+			std::fs::create_dir_all(parent)?;
 		}
-
-		Ok(serde_json::from_str(&contents)?)
+		let mut conn = SqliteConnectOptions::new()
+			.filename(&db_path)
+			.create_if_missing(true)
+			.connect()
+			.await?;
+		sqlx::migrate!().run(&mut conn).await?;
+		Ok(conn)
 	}
 
-	fn write_file(&self, file: &InferenceProvidersFile) -> Result<()> {
-		let path = self.file_path();
-		if let Some(parent) = path.parent() {
-			fs::create_dir_all(parent)?;
-		}
+	async fn fetch_by_id(
+		conn: &mut SqliteConnection,
+		id: &str,
+	) -> Result<InferenceProvider> {
+		let row = sqlx::query(
+			"SELECT id, name, format, api_base_url \
+             FROM inference_providers WHERE id = ?",
+		)
+		.bind(id)
+		.fetch_optional(conn)
+		.await?;
 
-		let json = serde_json::to_string_pretty(file)?;
-		fs::write(path, json)?;
-		Ok(())
-	}
-
-	fn find_index(providers: &[InferenceProvider], id: &str) -> Result<usize> {
-		providers
-			.iter()
-			.position(|provider| provider.id == id)
+		row.map(map_row)
+			.transpose()?
 			.ok_or_else(|| InferenceProviderError::NotFound(id.to_string()))
 	}
 
-	fn ensure_unique_name(
-		providers: &[InferenceProvider],
+	async fn check_name_unique(
+		conn: &mut SqliteConnection,
 		name: &str,
 		ignore_id: Option<&str>,
 	) -> Result<()> {
-		let exists = providers.iter().any(|provider| {
-			ignore_id != Some(provider.id.as_str())
-				&& provider.name.eq_ignore_ascii_case(name)
-		});
+		let count: i64 = if let Some(id) = ignore_id {
+			sqlx::query_scalar(
+				"SELECT COUNT(*) FROM inference_providers \
+                 WHERE LOWER(name) = LOWER(?) AND id != ?",
+			)
+			.bind(name)
+			.bind(id)
+			.fetch_one(conn)
+			.await?
+		} else {
+			sqlx::query_scalar(
+				"SELECT COUNT(*) FROM inference_providers \
+                 WHERE LOWER(name) = LOWER(?)",
+			)
+			.bind(name)
+			.fetch_one(conn)
+			.await?
+		};
 
-		if exists {
+		if count > 0 {
 			Err(InferenceProviderError::AlreadyExists(name.to_string()))
 		} else {
 			Ok(())
@@ -158,17 +183,38 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 	}
 }
 
+fn map_row(row: sqlx::sqlite::SqliteRow) -> Result<InferenceProvider> {
+	let format_str: String = row.try_get("format")?;
+	let format = format_str.parse::<InferenceProviderFormat>()?;
+	Ok(InferenceProvider {
+		id: row.try_get("id")?,
+		name: row.try_get("name")?,
+		format,
+		api_base_url: row.try_get("api_base_url")?,
+	})
+}
+
 impl<C: CredentialStore> InferenceProviderRepository
 	for InferenceProviderStore<C>
 {
 	fn list(&self) -> Result<Vec<InferenceProvider>> {
-		Ok(self.read_file()?.providers)
+		self.block_on(async {
+			let mut conn = self.open_db().await?;
+			let rows = sqlx::query(
+				"SELECT id, name, format, api_base_url \
+                 FROM inference_providers ORDER BY rowid",
+			)
+			.fetch_all(&mut conn)
+			.await?;
+			rows.into_iter().map(map_row).collect()
+		})
 	}
 
 	fn get(&self, id: &str) -> Result<InferenceProvider> {
-		let file = self.read_file()?;
-		let index = Self::find_index(&file.providers, id)?;
-		Ok(file.providers[index].clone())
+		self.block_on(async {
+			let mut conn = self.open_db().await?;
+			Self::fetch_by_id(&mut conn, id).await
+		})
 	}
 
 	fn create(
@@ -179,24 +225,37 @@ impl<C: CredentialStore> InferenceProviderRepository
 		let api_base_url = clean_api_base_url(&input.api_base_url)?;
 		ensure_api_key(&input.api_key)?;
 
-		let mut file = self.read_file()?;
-		Self::ensure_unique_name(&file.providers, &name, None)?;
+		self.block_on(async {
+			let mut conn = self.open_db().await?;
+			Self::check_name_unique(&mut conn, &name, None).await?;
 
-		let provider = InferenceProvider {
-			id: uuid::Uuid::new_v4().to_string(),
-			name,
-			format: input.format,
-			api_base_url,
-		};
+			let provider = InferenceProvider {
+				id: uuid::Uuid::new_v4().to_string(),
+				name,
+				format: input.format,
+				api_base_url,
+			};
 
-		self.credentials.set_api_key(&provider.id, &input.api_key)?;
-		file.providers.push(provider.clone());
-		if let Err(error) = self.write_file(&file) {
-			let _ = self.credentials.delete_api_key(&provider.id);
-			return Err(error);
-		}
+			self.credentials.set_api_key(&provider.id, &input.api_key)?;
 
-		Ok(provider)
+			let result = sqlx::query(
+				"INSERT INTO inference_providers (id, name, format, api_base_url) \
+                 VALUES (?, ?, ?, ?)",
+			)
+			.bind(&provider.id)
+			.bind(&provider.name)
+			.bind(provider.format.to_string())
+			.bind(&provider.api_base_url)
+			.execute(&mut conn)
+			.await;
+
+			if let Err(error) = result {
+				let _ = self.credentials.delete_api_key(&provider.id);
+				return Err(error.into());
+			}
+
+			Ok(provider)
+		})
 	}
 
 	fn update(
@@ -204,66 +263,87 @@ impl<C: CredentialStore> InferenceProviderRepository
 		id: &str,
 		input: UpdateInferenceProvider,
 	) -> Result<InferenceProvider> {
-		let mut file = self.read_file()?;
-		let index = Self::find_index(&file.providers, id)?;
+		self.block_on(async {
+			let mut conn = self.open_db().await?;
+			let mut provider = Self::fetch_by_id(&mut conn, id).await?;
 
-		if let Some(ref name) = input.name {
-			let name = clean_name(name)?;
-			Self::ensure_unique_name(&file.providers, &name, Some(id))?;
-			file.providers[index].name = name;
-		}
-
-		if let Some(format) = input.format {
-			file.providers[index].format = format;
-		}
-
-		if let Some(ref api_base_url) = input.api_base_url {
-			file.providers[index].api_base_url =
-				clean_api_base_url(api_base_url)?;
-		}
-
-		let previous_api_key = match input.api_key.as_ref() {
-			Some(api_key) => {
-				ensure_api_key(api_key)?;
-				let previous = self.credentials.get_api_key(id)?;
-				self.credentials.set_api_key(id, api_key)?;
-				Some(previous)
+			if let Some(ref name) = input.name {
+				let name = clean_name(name)?;
+				Self::check_name_unique(&mut conn, &name, Some(id)).await?;
+				provider.name = name;
 			}
-			None => None,
-		};
 
-		if let Err(error) = self.write_file(&file) {
-			if let Some(previous_api_key) = previous_api_key {
-				match previous_api_key {
-					Some(api_key) => {
-						let _ = self.credentials.set_api_key(id, &api_key);
-					}
-					None => {
-						let _ = self.credentials.delete_api_key(id);
+			if let Some(format) = input.format {
+				provider.format = format;
+			}
+
+			if let Some(ref api_base_url) = input.api_base_url {
+				provider.api_base_url = clean_api_base_url(api_base_url)?;
+			}
+
+			let previous_api_key = match input.api_key.as_ref() {
+				Some(api_key) => {
+					ensure_api_key(api_key)?;
+					let previous = self.credentials.get_api_key(id)?;
+					self.credentials.set_api_key(id, api_key)?;
+					Some(previous)
+				}
+				None => None,
+			};
+
+			let result = sqlx::query(
+				"UPDATE inference_providers \
+                 SET name = ?, format = ?, api_base_url = ? \
+                 WHERE id = ?",
+			)
+			.bind(&provider.name)
+			.bind(provider.format.to_string())
+			.bind(&provider.api_base_url)
+			.bind(id)
+			.execute(&mut conn)
+			.await;
+
+			if let Err(error) = result {
+				if let Some(previous) = previous_api_key {
+					match previous {
+						Some(key) => {
+							let _ = self.credentials.set_api_key(id, &key);
+						}
+						None => {
+							let _ = self.credentials.delete_api_key(id);
+						}
 					}
 				}
+				return Err(error.into());
 			}
-			return Err(error);
-		}
 
-		Ok(file.providers[index].clone())
+			Ok(provider)
+		})
 	}
 
 	fn delete(&self, id: &str) -> Result<InferenceProvider> {
-		let mut file = self.read_file()?;
-		let index = Self::find_index(&file.providers, id)?;
-		let provider = file.providers.remove(index);
-		let previous_api_key = self.credentials.get_api_key(id)?;
+		self.block_on(async {
+			let mut conn = self.open_db().await?;
+			let provider = Self::fetch_by_id(&mut conn, id).await?;
+			let previous_api_key = self.credentials.get_api_key(id)?;
 
-		self.credentials.delete_api_key(id)?;
-		if let Err(error) = self.write_file(&file) {
-			if let Some(api_key) = previous_api_key {
-				let _ = self.credentials.set_api_key(id, &api_key);
+			self.credentials.delete_api_key(id)?;
+
+			let result =
+				sqlx::query("DELETE FROM inference_providers WHERE id = ?")
+					.bind(id)
+					.execute(&mut conn)
+					.await;
+
+			if let Err(error) = result {
+				if let Some(key) = previous_api_key {
+					let _ = self.credentials.set_api_key(id, &key);
+				}
+				return Err(error.into());
 			}
-			return Err(error);
-		}
 
-		Ok(provider)
+			Ok(provider)
+		})
 	}
 
 	fn get_api_key(&self, id: &str) -> Result<Option<String>> {
@@ -373,11 +453,18 @@ mod tests {
 			})
 			.unwrap();
 
-		let contents = fs::read_to_string(store.file_path()).unwrap();
-		assert!(contents.contains("OpenAI"));
-		assert!(contents.contains("openai_responses"));
-		assert!(contents.contains("https://api.openai.com/v1"));
-		assert!(!contents.contains("sk-test"));
+		// Metadata is persisted and retrievable
+		let fetched = store.get(&provider.id).unwrap();
+		assert_eq!(fetched.name, "OpenAI");
+		assert_eq!(fetched.format, InferenceProviderFormat::OpenAiResponses);
+		assert_eq!(fetched.api_base_url, "https://api.openai.com/v1");
+
+		// API key is kept in the credential store, not in provider metadata
+		assert!(store
+			.list()
+			.unwrap()
+			.iter()
+			.all(|p| { !format!("{p:?}").contains("sk-test") }));
 		assert_eq!(
 			store.get_api_key(&provider.id).unwrap(),
 			Some("sk-test".to_string())

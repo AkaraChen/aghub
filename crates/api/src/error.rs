@@ -110,7 +110,7 @@ impl From<InferenceProviderError> for ApiError {
 				"KEYCHAIN_ERROR",
 			),
 			InferenceProviderError::Io(_)
-			| InferenceProviderError::Json(_)
+			| InferenceProviderError::Database(_)
 			| InferenceProviderError::AppDataDir(_) => ApiError::new(
 				Status::InternalServerError,
 				e.to_string(),
