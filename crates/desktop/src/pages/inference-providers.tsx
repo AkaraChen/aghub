@@ -88,22 +88,9 @@ function formatOption(
 	return option ? t(option.labelKey) : format;
 }
 
-function formatDescription(
-	format: InferenceProviderFormatDto,
-	t: (key: string) => string,
-) {
-	const option = FORMAT_OPTIONS.find((item) => item.id === format);
-	return option ? t(option.descriptionKey) : format;
-}
-
-function ProviderIcon({ isActive = false }: { isActive?: boolean }) {
+function ProviderIcon() {
 	return (
-		<div
-			className={cn(
-				"relative inline-flex size-4 shrink-0 items-center justify-center text-muted",
-				isActive && "text-accent",
-			)}
-		>
+		<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
 			<GlobeAltIcon className="size-4" />
 		</div>
 	);
@@ -537,7 +524,7 @@ function ProviderDetail({
 					<Card>
 						<Card.Header className="flex flex-row items-start justify-between gap-3">
 							<div className="flex min-w-0 items-center gap-3">
-								<ProviderIcon isActive />
+								<ProviderIcon />
 								<div className="min-w-0">
 									<h2 className="truncate text-xl font-semibold text-foreground">
 										{provider.name}
@@ -605,20 +592,12 @@ function ProviderDetail({
 										{formatOption(provider.format, t)}
 									</Chip>
 								</div>
-								<p className="text-sm text-muted">
-									{formatDescription(provider.format, t)}
-								</p>
 							</div>
 
 							<div className="space-y-3">
-								<div>
-									<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
-										{t("providerApiBaseUrl")}
-									</h3>
-									<p className="mt-1 text-sm text-muted">
-										{t("providerApiBaseUrlDescription")}
-									</p>
-								</div>
+								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+									{t("providerApiBaseUrl")}
+								</h3>
 								<div className="overflow-x-auto rounded-lg border border-separator bg-surface-secondary px-3 py-2">
 									<code className="block font-mono text-xs leading-5 text-foreground break-words">
 										{provider.api_base_url}
@@ -627,14 +606,9 @@ function ProviderDetail({
 							</div>
 
 							<div className="space-y-3">
-								<div>
-									<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
-										{t("providerApiKey")}
-									</h3>
-									<p className="mt-1 text-sm text-muted">
-										{t("providerApiKeyStored")}
-									</p>
-								</div>
+								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+									{t("providerApiKey")}
+								</h3>
 								<div className="flex min-w-0 items-center gap-2 rounded-lg border border-separator bg-surface-secondary px-3 py-2">
 									<code className="min-w-0 flex-1 truncate font-mono text-xs text-foreground">
 										{revealedKey ??
@@ -852,22 +826,11 @@ export default function InferenceProvidersPage() {
 									className="data-selected:bg-surface"
 								>
 									<div className="flex min-w-0 items-center gap-2">
-										<ProviderIcon
-											isActive={
-												activeProvider?.name ===
-												provider.name
-											}
-										/>
+										<ProviderIcon />
 										<div className="min-w-0 flex-1">
 											<Label className="block truncate">
 												{provider.name}
 											</Label>
-											<span className="block truncate text-xs text-muted">
-												{formatOption(
-													provider.format,
-													t,
-												)}
-											</span>
 										</div>
 									</div>
 								</ListBox.Item>
