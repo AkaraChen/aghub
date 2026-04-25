@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import AgentsPanel from "./agents-panel";
 import AppearancePanel from "./appearance-panel";
 import ApplicationPanel from "./application-panel";
+import InferenceProvidersPanel from "./inference-providers-panel";
 import IntegrationsPanel from "./integrations-panel";
 
 export default function SettingsPage() {
@@ -43,6 +44,10 @@ export default function SettingsPage() {
 									{t("integrations")}
 									<Tabs.Indicator />
 								</Tabs.Tab>
+								<Tabs.Tab id="inference">
+									{t("inferenceProviders")}
+									<Tabs.Indicator />
+								</Tabs.Tab>
 								<Tabs.Tab id="application">
 									{t("application")}
 									<Tabs.Indicator />
@@ -61,6 +66,10 @@ export default function SettingsPage() {
 
 					<Tabs.Panel id="integrations">
 						<IntegrationsPanel />
+					</Tabs.Panel>
+
+					<Tabs.Panel id="inference">
+						<InferenceProvidersPanel />
 					</Tabs.Panel>
 
 					<Tabs.Panel id="application">
