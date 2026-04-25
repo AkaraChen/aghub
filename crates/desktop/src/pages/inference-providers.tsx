@@ -551,9 +551,6 @@ function ProviderDetail({
 									<h2 className="truncate text-xl font-semibold text-foreground">
 										{provider.name}
 									</h2>
-									<p className="text-sm text-muted">
-										{formatOption(provider.format, t)}
-									</p>
 								</div>
 							</div>
 							<div className="flex shrink-0 items-center gap-2">
