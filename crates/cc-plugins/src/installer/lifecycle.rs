@@ -1,6 +1,6 @@
 use super::marketplace::{is_marketplace_source, resolve_marketplace_source};
 use super::paths::{
-	cleanup_empty_dirs, manifest_path, scope_root, staging_dir_for,
+	cleanup_empty_dirs, manifest_path, plugin_install_root, staging_dir_for,
 	storage_key_for_source,
 };
 use super::registry::{GitHubRegistry, PluginRegistryKind};
@@ -223,31 +223,42 @@ impl PluginInstaller {
 	) -> Result<InstalledPluginInfo> {
 		let (registry, storage_key) = self.resolve_registry(id).await?;
 		let manifest = registry.fetch_manifest(&id.name).await?;
-		let (version_dir, registry_commit_sha) = registry
+		let (mut version_dir, registry_commit_sha) = registry
 			.get_latest_version(&id.name)
 			.await?
 			.map_or(("latest".to_string(), None), |info| info);
+		if version_dir == "latest" {
+			if let Some(sha) = &registry_commit_sha {
+				version_dir = sha.chars().take(12).collect();
+			}
+		}
 		let target_dir =
-			scope_root(&self.cache_root, &storage_key, &id.name, scope)
+			plugin_install_root(&self.cache_root, &storage_key, &id.name)
 				.join(&version_dir);
 		let staging_dir = staging_dir_for(&target_dir)?;
 
-		if let Err(e) = tokio::fs::remove_dir_all(&staging_dir).await {
-			log::warn!(
-				"Failed to clean up staging dir before install {}: {e}",
-				staging_dir.display()
-			);
+		if staging_dir.exists() {
+			if let Err(e) = tokio::fs::remove_dir_all(&staging_dir).await {
+				log::warn!(
+					"Failed to clean up staging dir {}: {e}",
+					staging_dir.display()
+				);
+			}
 		}
 
 		let actual_commit = match registry.install(&id.name, &staging_dir).await
 		{
 			Ok(commit) => commit,
 			Err(error) => {
-				if let Err(e) = tokio::fs::remove_dir_all(&staging_dir).await {
-					log::warn!(
-						"Failed to clean up staging dir after error {}: {e}",
-						staging_dir.display()
-					);
+				if staging_dir.exists() {
+					if let Err(e) =
+						tokio::fs::remove_dir_all(&staging_dir).await
+					{
+						log::warn!(
+							"Failed to clean up staging dir {}: {e}",
+							staging_dir.display()
+						);
+					}
 				}
 				return Err(error);
 			}

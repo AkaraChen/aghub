@@ -1,4 +1,3 @@
-use crate::claude::settings::InstallScope;
 use crate::PluginSource;
 use anyhow::{Context, Result};
 use chrono::Utc;
@@ -42,17 +41,12 @@ pub(super) fn manifest_path() -> Result<PathBuf> {
 		.join(".claude/plugins/installed_plugins.json"))
 }
 
-pub(super) fn scope_root(
+pub(super) fn plugin_install_root(
 	cache_root: &Path,
 	storage_key: &str,
 	name: &str,
-	scope: InstallScope,
 ) -> PathBuf {
-	cache_root
-		.join(storage_key)
-		.join(name)
-		.join("scopes")
-		.join(scope.to_string())
+	cache_root.join(storage_key).join(name)
 }
 
 pub(super) fn staging_dir_for(target_dir: &Path) -> Result<PathBuf> {

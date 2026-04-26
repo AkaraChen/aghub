@@ -506,17 +506,21 @@ impl MarketplaceRegistry {
 		let clone_path = parent_dir.join(format!(".{name}-clone-{suffix}"));
 		let backup_path = parent_dir.join(format!(".{name}-backup-{suffix}"));
 
-		if let Err(e) = tokio::fs::remove_dir_all(&clone_path).await {
-			log::warn!(
-				"Failed to clean up clone dir {}: {e}",
-				clone_path.display()
-			);
+		if clone_path.exists() {
+			if let Err(e) = tokio::fs::remove_dir_all(&clone_path).await {
+				log::warn!(
+					"Failed to clean up clone dir {}: {e}",
+					clone_path.display()
+				);
+			}
 		}
-		if let Err(e) = tokio::fs::remove_dir_all(&backup_path).await {
-			log::warn!(
-				"Failed to clean up backup dir {}: {e}",
-				backup_path.display()
-			);
+		if backup_path.exists() {
+			if let Err(e) = tokio::fs::remove_dir_all(&backup_path).await {
+				log::warn!(
+					"Failed to clean up backup dir {}: {e}",
+					backup_path.display()
+				);
+			}
 		}
 
 		if let Err(error) = git_clone(
@@ -526,11 +530,13 @@ impl MarketplaceRegistry {
 		)
 		.await
 		{
-			if let Err(e) = tokio::fs::remove_dir_all(&clone_path).await {
-				log::warn!(
-					"Failed to clean up clone dir {}: {e}",
-					clone_path.display()
-				);
+			if clone_path.exists() {
+				if let Err(e) = tokio::fs::remove_dir_all(&clone_path).await {
+					log::warn!(
+						"Failed to clean up clone dir {}: {e}",
+						clone_path.display()
+					);
+				}
 			}
 			return Err(error);
 		}
@@ -549,11 +555,13 @@ impl MarketplaceRegistry {
 		{
 			let restore_result =
 				tokio::fs::rename(&backup_path, &self.marketplace_path).await;
-			if let Err(e) = tokio::fs::remove_dir_all(&clone_path).await {
-				log::warn!(
-					"Failed to clean up clone dir {}: {e}",
-					clone_path.display()
-				);
+			if clone_path.exists() {
+				if let Err(e) = tokio::fs::remove_dir_all(&clone_path).await {
+					log::warn!(
+						"Failed to clean up clone dir {}: {e}",
+						clone_path.display()
+					);
+				}
 			}
 			match restore_result {
 				Ok(_) => {
@@ -569,11 +577,13 @@ impl MarketplaceRegistry {
 			}
 		}
 
-		if let Err(e) = tokio::fs::remove_dir_all(&backup_path).await {
-			log::warn!(
-				"Failed to clean up backup dir {}: {e}",
-				backup_path.display()
-			);
+		if backup_path.exists() {
+			if let Err(e) = tokio::fs::remove_dir_all(&backup_path).await {
+				log::warn!(
+					"Failed to clean up backup dir {}: {e}",
+					backup_path.display()
+				);
+			}
 		}
 		Ok(())
 	}
