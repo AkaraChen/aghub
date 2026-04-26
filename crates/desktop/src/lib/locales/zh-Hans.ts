@@ -105,6 +105,13 @@ export default {
 	openCodeProviderUpdated: "OpenCode Provider 已更新",
 	openCodeProviderDeleted: "OpenCode Provider 已删除",
 	openCodeProviderDeleteError: "删除 OpenCode Provider 失败",
+	openCodeProviderSynced: "OpenCode Provider 已更新",
+	openCodeProviderSyncError: "更新 OpenCode Provider 失败",
+	openCodeBuiltInProvider: "内置 provider",
+	openCodeBuiltInProviderInfo:
+		"未在 Aghub 推理 Provider 中找到相同 API Base URL 和 API key，疑似用户直接在 OpenCode 里添加。",
+	syncOpenCodeProvider: "更新 OpenCode Provider",
+	syncOpenCodeProviderFromInferenceProvider: "从 {{name}} 更新模型列表和配置",
 	agentProviderSourceCustom: "自定义",
 	agentProviderSourceBuiltIn: "内置",
 	agentProviderSourceClosedSlot: "封闭槽位",

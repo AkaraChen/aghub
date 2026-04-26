@@ -14,7 +14,7 @@ mod tests;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use serde_json::json;
+use serde_json::{json, Value};
 
 use crate::agent::{
 	AgentCredentialSupport, AgentProviderAdapter, AgentProviderBinding,
@@ -103,7 +103,7 @@ impl OpenCodeProviderAdapter {
 		Ok(binding)
 	}
 
-	/// Add a provider using a slug derived from its display name.
+	/// Add a provider using a slug derived from its stable key.
 	pub fn add_inventory_provider(
 		&self,
 		provider: &InferenceProvider,
@@ -111,6 +111,76 @@ impl OpenCodeProviderAdapter {
 	) -> Result<AgentProviderBinding> {
 		let provider_id = mapping::provider_id_from_name(&provider.name);
 		self.add_provider(&provider_id, provider, api_key)
+	}
+
+	/// Update an existing OpenCode provider's display name and/or API key.
+	pub fn update_provider(
+		&self,
+		provider_id: &str,
+		name: Option<&str>,
+		api_key: Option<&str>,
+	) -> Result<AgentProviderBinding> {
+		let provider_id = mapping::clean_provider_id(provider_id)?;
+		let current = self
+			.load_providers()?
+			.providers
+			.into_iter()
+			.find(|provider| provider.id == provider_id)
+			.ok_or_else(|| {
+				crate::error::InferenceProviderError::NotFound(
+					provider_id.clone(),
+				)
+			})?;
+
+		let name = name.map(mapping::clean_provider_name).transpose()?;
+		if let Some(api_key) = api_key {
+			mapping::ensure_api_key(api_key)?;
+		}
+
+		if let Some(name) = name {
+			let mut config = files::read_config(&self.config_path)?;
+			config.provider.entry(provider_id.clone()).or_default().name =
+				Some(name);
+			files::write_config(&self.config_path, config)?;
+		}
+
+		if let Some(api_key) = api_key {
+			self.set_api_auth(&provider_id, api_key)?;
+		}
+
+		Ok(self
+			.load_providers()?
+			.providers
+			.into_iter()
+			.find(|provider| provider.id == provider_id)
+			.unwrap_or(current))
+	}
+
+	/// Read an API key visible to OpenCode for a provider.
+	pub fn api_key(&self, provider_id: &str) -> Result<Option<String>> {
+		let provider_id = mapping::clean_provider_id(provider_id)?;
+		let auth = files::read_auth_values(&self.auth_path)?;
+		if let Some(api_key) =
+			auth.get(&provider_id).and_then(auth_entry_api_key)
+		{
+			return Ok(Some(api_key.to_string()));
+		}
+
+		let config = files::read_config(&self.config_path)?;
+		let Some(api_key) = config
+			.provider
+			.get(&provider_id)
+			.and_then(|provider| provider.options.get("apiKey"))
+			.and_then(Value::as_str)
+		else {
+			return Ok(None);
+		};
+
+		if let Some(env_name) = parse_env_var_ref(api_key) {
+			return Ok(std::env::var(env_name).ok());
+		}
+
+		Ok(Some(api_key.to_string()))
 	}
 
 	/// Remove a provider definition and matching OpenCode auth entry.
@@ -154,6 +224,23 @@ impl OpenCodeProviderAdapter {
 			}),
 		);
 		files::write_auth_values(&self.auth_path, &auth)
+	}
+}
+
+fn auth_entry_api_key(entry: &Value) -> Option<&str> {
+	if entry.get("type").and_then(Value::as_str) == Some("api") {
+		entry.get("key").and_then(Value::as_str)
+	} else {
+		None
+	}
+}
+
+fn parse_env_var_ref(value: &str) -> Option<&str> {
+	let name = value.strip_prefix("{env:")?.strip_suffix('}')?.trim();
+	if name.is_empty() {
+		None
+	} else {
+		Some(name)
 	}
 }
 

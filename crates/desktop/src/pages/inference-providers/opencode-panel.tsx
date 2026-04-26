@@ -2,6 +2,7 @@ import {
 	ArrowPathIcon,
 	PencilIcon,
 	PlusIcon,
+	QuestionMarkCircleIcon,
 	ServerIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
@@ -10,21 +11,23 @@ import {
 	AlertDialog,
 	Button,
 	Card,
+	FieldError,
+	Input,
 	Label,
 	ListBox,
+	Modal,
 	Select,
 	Spinner,
+	TextField,
 	Tooltip,
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type {
 	AgentProviderResponse,
-	AgentProviderSourceDto,
-	InferenceProviderFormatDto,
 	InferenceProviderResponse,
 } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
@@ -35,99 +38,35 @@ import {
 	deleteOpenCodeProviderMutationOptions,
 	inferenceProviderListQueryOptions,
 	openCodeProviderListQueryOptions,
+	syncOpenCodeProviderMutationOptions,
 	updateOpenCodeProviderMutationOptions,
 } from "../../requests/inference-providers";
 
-type PanelMode =
-	| { type: "list" }
+type ProviderDialogMode =
 	| { type: "create" }
 	| { type: "edit"; provider: AgentProviderResponse };
 
-function formatLabelKey(format: InferenceProviderFormatDto | null) {
-	switch (format) {
-		case "anthropic":
-			return "inferenceFormatAnthropic";
-		case "openai_completions":
-			return "inferenceFormatOpenAiCompletions";
-		case "openai_responses":
-			return "inferenceFormatOpenAiResponses";
-		default:
-			return "unknown";
-	}
-}
-
-function sourceLabelKey(source: AgentProviderSourceDto) {
-	switch (source) {
-		case "built_in":
-			return "agentProviderSourceBuiltIn";
-		case "closed_slot":
-			return "agentProviderSourceClosedSlot";
-		case "custom":
-			return "agentProviderSourceCustom";
-		case "stored_credential":
-			return "agentProviderSourceStoredCredential";
-	}
-}
-
-function credentialLabel(provider: AgentProviderResponse) {
-	switch (provider.credential.type) {
-		case "agent_store":
-			return "agentProviderCredentialAgentStore";
-		case "env_var":
-			return provider.credential.name;
-		case "inline":
-			return "agentProviderCredentialInline";
-		case "none":
-			return "agentProviderCredentialNone";
-	}
-}
-
-function findInventoryProviderId(
-	provider: AgentProviderResponse | undefined,
-	inventoryProviders: InferenceProviderResponse[],
-) {
-	if (!provider) return inventoryProviders[0]?.id ?? "";
-	if (
-		provider.source_provider_id &&
-		inventoryProviders.some(
-			(item) => item.id === provider.source_provider_id,
-		)
-	) {
-		return provider.source_provider_id;
-	}
-
-	return (
-		inventoryProviders.find(
-			(item) =>
-				item.name === provider.name &&
-				item.api_base_url === provider.api_base_url &&
-				item.format === provider.format,
-		)?.id ??
-		inventoryProviders.find((item) => item.name === provider.name)?.id ??
-		inventoryProviders[0]?.id ??
-		""
-	);
-}
-
-function OpenCodeProviderForm({
-	mode,
-	provider,
+function OpenCodeCreateProviderDialog({
+	isOpen,
 	inventoryProviders,
-	onCancel,
-	onSaved,
+	isInventoryLoading,
+	onClose,
 }: {
-	mode: "create" | "edit";
-	provider?: AgentProviderResponse;
+	isOpen: boolean;
 	inventoryProviders: InferenceProviderResponse[];
-	onCancel: () => void;
-	onSaved: () => void;
+	isInventoryLoading: boolean;
+	onClose: () => void;
 }) {
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
-	const [selectedProviderId, setSelectedProviderId] = useState(() =>
-		findInventoryProviderId(provider, inventoryProviders),
-	);
+	const [selectedProviderId, setSelectedProviderId] = useState("");
+
+	const defaultProviderId = inventoryProviders[0]?.id ?? "";
+	useEffect(() => {
+		if (!isOpen) return;
+		setSelectedProviderId((current) => current || defaultProviderId);
+	}, [defaultProviderId, isOpen]);
 
 	const createMutation = useMutation({
 		...createOpenCodeProviderMutationOptions({
@@ -135,141 +74,301 @@ function OpenCodeProviderForm({
 			queryClient,
 			onSuccess: async () => {
 				toast.success(t("openCodeProviderCreated"));
-				onSaved();
-			},
-		}),
-	});
-	const updateMutation = useMutation({
-		...updateOpenCodeProviderMutationOptions({
-			api,
-			queryClient,
-			onSuccess: async () => {
-				toast.success(t("openCodeProviderUpdated"));
-				onSaved();
+				onClose();
 			},
 		}),
 	});
 
-	const activeError =
-		mode === "create" ? createMutation.error : updateMutation.error;
-	const isPending = createMutation.isPending || updateMutation.isPending;
+	const activeError = createMutation.error;
+	const isPending = createMutation.isPending;
 	const hasInventoryProviders = inventoryProviders.length > 0;
 
 	const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
 		if (!selectedProviderId) return;
 
-		if (mode === "create") {
-			createMutation.mutate({
-				inference_provider_id: selectedProviderId,
-			});
+		createMutation.mutate({
+			inference_provider_id: selectedProviderId,
+		});
+	};
+
+	return (
+		<Modal.Backdrop
+			isOpen={isOpen}
+			onOpenChange={(open) => {
+				if (!open) onClose();
+			}}
+		>
+			<Modal.Container>
+				<Modal.Dialog className="sm:max-w-[440px]">
+					<Modal.CloseTrigger />
+					<Modal.Header>
+						<Modal.Heading>
+							{t("createOpenCodeProvider")}
+						</Modal.Heading>
+					</Modal.Header>
+					<form onSubmit={handleSubmit}>
+						<Modal.Body className="grid gap-4 p-4">
+							{activeError && (
+								<Alert status="danger">
+									<Alert.Indicator />
+									<Alert.Content>
+										<Alert.Description>
+											{activeError instanceof Error
+												? activeError.message
+												: String(activeError)}
+										</Alert.Description>
+									</Alert.Content>
+								</Alert>
+							)}
+
+							{isInventoryLoading && (
+								<div className="flex justify-center py-6">
+									<Spinner />
+								</div>
+							)}
+
+							{!isInventoryLoading && !hasInventoryProviders && (
+								<Alert status="warning">
+									<Alert.Indicator />
+									<Alert.Content>
+										<Alert.Description>
+											{t(
+												"noInferenceProvidersForOpenCode",
+											)}
+										</Alert.Description>
+									</Alert.Content>
+								</Alert>
+							)}
+
+							{!isInventoryLoading && hasInventoryProviders && (
+								<Select
+									className="w-full"
+									selectedKey={
+										selectedProviderId || undefined
+									}
+									onSelectionChange={(key) => {
+										if (!key) return;
+										setSelectedProviderId(String(key));
+									}}
+									isDisabled={isPending}
+									variant="secondary"
+								>
+									<Label>
+										{t("selectInferenceProvider")}
+									</Label>
+									<Select.Trigger>
+										<Select.Value />
+										<Select.Indicator />
+									</Select.Trigger>
+									<Select.Popover>
+										<ListBox>
+											{inventoryProviders.map((item) => (
+												<ListBox.Item
+													key={item.id}
+													id={item.id}
+													textValue={`${item.display_name} ${item.name}`}
+												>
+													<div className="grid min-w-0 gap-0.5">
+														<Label className="truncate">
+															{item.display_name}
+														</Label>
+														<span className="truncate text-xs text-muted">
+															{item.api_base_url}
+														</span>
+													</div>
+												</ListBox.Item>
+											))}
+										</ListBox>
+									</Select.Popover>
+								</Select>
+							)}
+						</Modal.Body>
+						<Modal.Footer>
+							<Button
+								type="button"
+								variant="tertiary"
+								onPress={onClose}
+								isDisabled={isPending}
+							>
+								{t("cancel")}
+							</Button>
+							<Button
+								type="submit"
+								isPending={isPending}
+								isDisabled={
+									isInventoryLoading ||
+									!hasInventoryProviders ||
+									!selectedProviderId
+								}
+							>
+								{t("add")}
+							</Button>
+						</Modal.Footer>
+					</form>
+				</Modal.Dialog>
+			</Modal.Container>
+		</Modal.Backdrop>
+	);
+}
+
+function OpenCodeEditProviderDialog({
+	isOpen,
+	provider,
+	onClose,
+}: {
+	isOpen: boolean;
+	provider: AgentProviderResponse;
+	onClose: () => void;
+}) {
+	const { t } = useTranslation();
+	const api = useApi();
+	const queryClient = useQueryClient();
+	const [name, setName] = useState(provider.name);
+	const [apiKey, setApiKey] = useState("");
+	const [nameError, setNameError] = useState<string | null>(null);
+
+	useEffect(() => {
+		if (!isOpen) return;
+		setName(provider.name);
+		setApiKey("");
+		setNameError(null);
+	}, [isOpen, provider.id, provider.name]);
+
+	const updateMutation = useMutation({
+		...updateOpenCodeProviderMutationOptions({
+			api,
+			queryClient,
+			onSuccess: async () => {
+				toast.success(t("openCodeProviderUpdated"));
+				onClose();
+			},
+		}),
+	});
+
+	const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		const trimmedName = name.trim();
+		if (!trimmedName) {
+			setNameError(t("validationProviderNameRequired"));
 			return;
 		}
 
-		if (!provider) return;
+		const trimmedApiKey = apiKey.trim();
 		updateMutation.mutate({
 			id: provider.id,
 			body: {
-				inference_provider_id: selectedProviderId,
+				name: trimmedName === provider.name ? null : trimmedName,
+				api_key: trimmedApiKey ? trimmedApiKey : null,
 			},
 		});
 	};
 
 	return (
-		<form className="grid gap-4" onSubmit={handleSubmit}>
-			{activeError && (
-				<Alert status="danger">
-					<Alert.Indicator />
-					<Alert.Content>
-						<Alert.Description>
-							{activeError instanceof Error
-								? activeError.message
-								: String(activeError)}
-						</Alert.Description>
-					</Alert.Content>
-				</Alert>
-			)}
+		<Modal.Backdrop
+			isOpen={isOpen}
+			onOpenChange={(open) => {
+				if (!open) onClose();
+			}}
+		>
+			<Modal.Container>
+				<Modal.Dialog className="sm:max-w-[440px]">
+					<Modal.CloseTrigger />
+					<Modal.Header>
+						<Modal.Heading>
+							{t("editOpenCodeProvider")}
+						</Modal.Heading>
+					</Modal.Header>
+					<form onSubmit={handleSubmit}>
+						<Modal.Body className="grid gap-4 p-4">
+							{updateMutation.error && (
+								<Alert status="danger">
+									<Alert.Indicator />
+									<Alert.Content>
+										<Alert.Description>
+											{updateMutation.error instanceof
+											Error
+												? updateMutation.error.message
+												: String(updateMutation.error)}
+										</Alert.Description>
+									</Alert.Content>
+								</Alert>
+							)}
 
-			{!hasInventoryProviders && (
-				<Alert status="warning">
-					<Alert.Indicator />
-					<Alert.Content>
-						<Alert.Description>
-							{t("noInferenceProvidersForOpenCode")}
-						</Alert.Description>
-					</Alert.Content>
-				</Alert>
-			)}
-
-			<Select
-				className="w-full"
-				selectedKey={selectedProviderId || undefined}
-				onSelectionChange={(key) => {
-					if (!key) return;
-					setSelectedProviderId(String(key));
-				}}
-				isDisabled={!hasInventoryProviders || isPending}
-				variant="secondary"
-			>
-				<Label>{t("selectInferenceProvider")}</Label>
-				<Select.Trigger>
-					<Select.Value />
-					<Select.Indicator />
-				</Select.Trigger>
-				<Select.Popover>
-					<ListBox>
-						{inventoryProviders.map((item) => (
-							<ListBox.Item
-								key={item.id}
-								id={item.id}
-								textValue={item.name}
+							<TextField
+								className="w-full"
+								isRequired
+								validationBehavior="aria"
+								isInvalid={Boolean(nameError)}
 							>
-								<div className="grid min-w-0 gap-0.5">
-									<Label className="truncate">
-										{item.name}
-									</Label>
-									<span className="truncate text-xs text-muted">
-										{item.api_base_url}
-									</span>
-								</div>
-							</ListBox.Item>
-						))}
-					</ListBox>
-				</Select.Popover>
-			</Select>
+								<Label>{t("providerName")}</Label>
+								<Input
+									value={name}
+									onChange={(event) => {
+										setName(event.target.value);
+										if (nameError) setNameError(null);
+									}}
+									placeholder={t("providerNamePlaceholder")}
+									variant="secondary"
+								/>
+								{nameError && (
+									<FieldError>{nameError}</FieldError>
+								)}
+							</TextField>
 
-			<div className="flex justify-end gap-2">
-				<Button
-					type="button"
-					variant="tertiary"
-					onPress={onCancel}
-					isDisabled={isPending}
-				>
-					{t("cancel")}
-				</Button>
-				<Button
-					type="submit"
-					isPending={isPending}
-					isDisabled={!hasInventoryProviders || !selectedProviderId}
-				>
-					{mode === "create" ? t("create") : t("save")}
-				</Button>
-			</div>
-		</form>
+							<TextField className="w-full">
+								<Label>{t("providerApiKey")}</Label>
+								<Input
+									type="password"
+									value={apiKey}
+									onChange={(event) =>
+										setApiKey(event.target.value)
+									}
+									placeholder={t(
+										"providerApiKeyEditPlaceholder",
+									)}
+									variant="secondary"
+								/>
+							</TextField>
+						</Modal.Body>
+						<Modal.Footer>
+							<Button
+								type="button"
+								variant="tertiary"
+								onPress={onClose}
+								isDisabled={updateMutation.isPending}
+							>
+								{t("cancel")}
+							</Button>
+							<Button
+								type="submit"
+								isPending={updateMutation.isPending}
+							>
+								{t("save")}
+							</Button>
+						</Modal.Footer>
+					</form>
+				</Modal.Dialog>
+			</Modal.Container>
+		</Modal.Backdrop>
 	);
 }
 
 function ProviderRow({
 	provider,
+	isSyncing,
 	onEdit,
+	onSync,
 	onDelete,
 }: {
 	provider: AgentProviderResponse;
+	isSyncing: boolean;
 	onEdit: () => void;
+	onSync: () => void;
 	onDelete: () => void;
 }) {
 	const { t } = useTranslation();
-	const credential = credentialLabel(provider);
+	const matchedProvider = provider.matched_inference_provider;
 
 	return (
 		<div className="grid gap-3 border-t border-border py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
@@ -284,25 +383,56 @@ function ProviderRow({
 					)}
 				</div>
 				<div className="flex min-w-0 flex-wrap gap-2 text-xs text-muted">
-					<span>{t(formatLabelKey(provider.format))}</span>
-					{provider.api_base_url && (
-						<span className="max-w-full truncate font-mono">
-							{provider.api_base_url}
+					{matchedProvider ? (
+						<span>
+							{t("providerModels")}: {matchedProvider.model_count}
+						</span>
+					) : (
+						<span className="inline-flex items-center gap-1">
+							{t("openCodeBuiltInProvider")}
+							<Tooltip delay={0}>
+								<Tooltip.Trigger>
+									<span
+										tabIndex={0}
+										aria-label={t(
+											"openCodeBuiltInProviderInfo",
+										)}
+										className="inline-flex size-4 items-center justify-center text-muted"
+									>
+										<QuestionMarkCircleIcon className="size-4" />
+									</span>
+								</Tooltip.Trigger>
+								<Tooltip.Content className="max-w-64">
+									{t("openCodeBuiltInProviderInfo")}
+								</Tooltip.Content>
+							</Tooltip>
 						</span>
 					)}
-					<span>
-						{t("providerModels")}: {provider.models.length}
-					</span>
-					<span>{t(sourceLabelKey(provider.source))}</span>
-					<span>
-						{credential.startsWith("agentProvider")
-							? t(credential)
-							: credential}
-					</span>
 				</div>
 			</div>
 
 			<div className="flex items-center gap-2 sm:justify-end">
+				{matchedProvider && (
+					<Tooltip delay={0}>
+						<Tooltip.Trigger>
+							<Button
+								isIconOnly
+								variant="ghost"
+								size="sm"
+								aria-label={t("syncOpenCodeProvider")}
+								isPending={isSyncing}
+								onPress={onSync}
+							>
+								<ArrowPathIcon className="size-4" />
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							{t("syncOpenCodeProviderFromInferenceProvider", {
+								name: matchedProvider.display_name,
+							})}
+						</Tooltip.Content>
+					</Tooltip>
+				)}
 				<Tooltip delay={0}>
 					<Tooltip.Trigger>
 						<Button
@@ -341,7 +471,8 @@ export function OpenCodeInferenceProviderPanel() {
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
-	const [mode, setMode] = useState<PanelMode>({ type: "list" });
+	const [providerDialog, setProviderDialog] =
+		useState<ProviderDialogMode | null>(null);
 	const [deleteTarget, setDeleteTarget] =
 		useState<AgentProviderResponse | null>(null);
 
@@ -357,11 +488,6 @@ export function OpenCodeInferenceProviderPanel() {
 		useQuery({
 			...inferenceProviderListQueryOptions({ api }),
 		});
-
-	const activeProvider = useMemo(() => {
-		if (mode.type !== "edit") return undefined;
-		return mode.provider;
-	}, [mode]);
 
 	const deleteMutation = useMutation({
 		...deleteOpenCodeProviderMutationOptions({
@@ -381,8 +507,23 @@ export function OpenCodeInferenceProviderPanel() {
 			);
 		},
 	});
-
-	const showForm = mode.type === "create" || mode.type === "edit";
+	const syncMutation = useMutation({
+		...syncOpenCodeProviderMutationOptions({
+			api,
+			queryClient,
+			onSuccess: async () => {
+				toast.success(t("openCodeProviderSynced"));
+			},
+		}),
+		onError: (error) => {
+			console.error("Failed to sync OpenCode provider:", error);
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: t("openCodeProviderSyncError"),
+			);
+		},
+	});
 
 	return (
 		<>
@@ -431,7 +572,9 @@ export function OpenCodeInferenceProviderPanel() {
 								<Button
 									size="sm"
 									aria-label={t("createOpenCodeProvider")}
-									onPress={() => setMode({ type: "create" })}
+									onPress={() =>
+										setProviderDialog({ type: "create" })
+									}
 								>
 									<PlusIcon className="size-4" />
 									{t("add")}
@@ -440,41 +583,12 @@ export function OpenCodeInferenceProviderPanel() {
 						</Card.Header>
 
 						<Card.Content className="grid gap-4">
-							{isLoading || isInventoryLoading ? (
+							{isLoading ? (
 								<div className="flex justify-center py-8">
 									<Spinner />
 								</div>
 							) : (
 								<>
-									{showForm && (
-										<div className="rounded-md border border-border bg-surface-secondary p-3">
-											<div className="mb-3">
-												<h3 className="text-sm font-medium text-foreground">
-													{mode.type === "create"
-														? t(
-																"createOpenCodeProvider",
-															)
-														: t(
-																"editOpenCodeProvider",
-															)}
-												</h3>
-											</div>
-											<OpenCodeProviderForm
-												mode={mode.type}
-												provider={activeProvider}
-												inventoryProviders={
-													inventoryProviders
-												}
-												onCancel={() =>
-													setMode({ type: "list" })
-												}
-												onSaved={() =>
-													setMode({ type: "list" })
-												}
-											/>
-										</div>
-									)}
-
 									{providers.length === 0 ? (
 										<div className="grid justify-items-center gap-3 py-8 text-center">
 											<p className="text-sm text-muted">
@@ -486,7 +600,9 @@ export function OpenCodeInferenceProviderPanel() {
 													"createOpenCodeProvider",
 												)}
 												onPress={() =>
-													setMode({ type: "create" })
+													setProviderDialog({
+														type: "create",
+													})
 												}
 											>
 												<PlusIcon className="size-4" />
@@ -499,11 +615,21 @@ export function OpenCodeInferenceProviderPanel() {
 												<ProviderRow
 													key={provider.id}
 													provider={provider}
+													isSyncing={
+														syncMutation.isPending &&
+														syncMutation.variables ===
+															provider.id
+													}
 													onEdit={() =>
-														setMode({
+														setProviderDialog({
 															type: "edit",
 															provider,
 														})
+													}
+													onSync={() =>
+														syncMutation.mutate(
+															provider.id,
+														)
 													}
 													onDelete={() =>
 														setDeleteTarget(
@@ -520,6 +646,20 @@ export function OpenCodeInferenceProviderPanel() {
 					</Card>
 				</div>
 			</div>
+
+			<OpenCodeCreateProviderDialog
+				isOpen={providerDialog?.type === "create"}
+				inventoryProviders={inventoryProviders}
+				isInventoryLoading={isInventoryLoading}
+				onClose={() => setProviderDialog(null)}
+			/>
+			{providerDialog?.type === "edit" && (
+				<OpenCodeEditProviderDialog
+					isOpen
+					provider={providerDialog.provider}
+					onClose={() => setProviderDialog(null)}
+				/>
+			)}
 
 			<AlertDialog.Backdrop
 				isOpen={Boolean(deleteTarget)}

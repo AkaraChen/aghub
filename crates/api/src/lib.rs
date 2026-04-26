@@ -170,6 +170,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 				routes::inference::list_opencode_providers,
 				routes::inference::create_opencode_provider,
 				routes::inference::update_opencode_provider,
+				routes::inference::sync_opencode_provider,
 				routes::inference::delete_opencode_provider,
 				routes::inference::get_inference_provider_password,
 				routes::inference::create_inference_provider,

@@ -4,6 +4,7 @@ import type { InferenceProviderFormatDto } from "./InferenceProviderFormatDto";
 export type InferenceProviderResponse = {
 	id: string;
 	name: string;
+	display_name: string;
 	format: InferenceProviderFormatDto;
 	api_base_url: string;
 	masked_api_key: string;

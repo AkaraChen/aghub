@@ -13,12 +13,13 @@ use aghub_api::dto::{
 	common::ConfigSource,
 	credential::{CreateCredentialRequest, CredentialResponse},
 	inference::{
-		AgentProviderCredentialDto, AgentProviderModelResponse,
-		AgentProviderResponse, AgentProviderSourceDto,
-		CreateAgentProviderRequest, CreateInferenceProviderRequest,
-		InferenceProviderFormatDto, InferenceProviderPasswordResponse,
-		InferenceProviderResponse, UpdateAgentProviderRequest,
-		UpdateInferenceProviderRequest,
+		AgentProviderCredentialDto,
+		AgentProviderMatchedInferenceProviderResponse,
+		AgentProviderModelResponse, AgentProviderResponse,
+		AgentProviderSourceDto, CreateAgentProviderRequest,
+		CreateInferenceProviderRequest, InferenceProviderFormatDto,
+		InferenceProviderPasswordResponse, InferenceProviderResponse,
+		UpdateAgentProviderRequest, UpdateInferenceProviderRequest,
 	},
 	integrations::{
 		CodeEditorType, EditSkillFolderRequest, OpenSkillFolderRequest,
@@ -124,6 +125,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<AgentProviderSourceDto>(&cfg)?;
 	export_type::<AgentProviderCredentialDto>(&cfg)?;
 	export_type::<AgentProviderModelResponse>(&cfg)?;
+	export_type::<AgentProviderMatchedInferenceProviderResponse>(&cfg)?;
 	export_type::<AgentProviderResponse>(&cfg)?;
 	export_type::<CreateAgentProviderRequest>(&cfg)?;
 	export_type::<UpdateAgentProviderRequest>(&cfg)?;

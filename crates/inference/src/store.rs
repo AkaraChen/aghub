@@ -143,7 +143,8 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 		id: &str,
 	) -> Result<InferenceProvider> {
 		let row = sqlx::query(
-			"SELECT id, name, format, api_base_url, masked_api_key \
+			"SELECT id, name, display_name, format, api_base_url, \
+                 masked_api_key \
              FROM inference_providers WHERE id = ?",
 		)
 		.bind(id)
@@ -237,6 +238,7 @@ fn map_row(row: sqlx::sqlite::SqliteRow) -> Result<InferenceProvider> {
 	Ok(InferenceProvider {
 		id: row.try_get("id")?,
 		name: row.try_get("name")?,
+		display_name: row.try_get("display_name")?,
 		format,
 		api_base_url: row.try_get("api_base_url")?,
 		masked_api_key: row.try_get("masked_api_key")?,
@@ -251,7 +253,8 @@ impl<C: CredentialStore> InferenceProviderRepository
 		self.block_on(async {
 			let mut conn = self.open_db().await?;
 			let rows = sqlx::query(
-				"SELECT id, name, format, api_base_url, masked_api_key \
+				"SELECT id, name, display_name, format, api_base_url, \
+                     masked_api_key \
                  FROM inference_providers ORDER BY rowid",
 			)
 			.fetch_all(&mut conn)
@@ -279,6 +282,7 @@ impl<C: CredentialStore> InferenceProviderRepository
 		input: CreateInferenceProvider,
 	) -> Result<InferenceProvider> {
 		let name = clean_name(&input.name)?;
+		let display_name = clean_display_name(&input.display_name)?;
 		let api_base_url = clean_api_base_url(&input.api_base_url)?;
 		let models = clean_model_names(&input.models)?;
 		ensure_api_key(&input.api_key)?;
@@ -290,6 +294,7 @@ impl<C: CredentialStore> InferenceProviderRepository
 			let provider = InferenceProvider {
 				id: uuid::Uuid::new_v4().to_string(),
 				name,
+				display_name,
 				format: input.format,
 				api_base_url,
 				masked_api_key: mask_api_key(&input.api_key),
@@ -301,11 +306,13 @@ impl<C: CredentialStore> InferenceProviderRepository
 			let result: Result<()> = async {
 				sqlx::query(
 					"INSERT INTO inference_providers \
-                     (id, name, format, api_base_url, masked_api_key) \
-                     VALUES (?, ?, ?, ?, ?)",
+                     (id, name, display_name, format, api_base_url, \
+                      masked_api_key) \
+                     VALUES (?, ?, ?, ?, ?, ?)",
 				)
 				.bind(&provider.id)
 				.bind(&provider.name)
+				.bind(&provider.display_name)
 				.bind(provider.format.to_string())
 				.bind(&provider.api_base_url)
 				.bind(&provider.masked_api_key)
@@ -352,6 +359,10 @@ impl<C: CredentialStore> InferenceProviderRepository
 				provider.name = name;
 			}
 
+			if let Some(ref display_name) = input.display_name {
+				provider.display_name = clean_display_name(display_name)?;
+			}
+
 			if let Some(format) = input.format {
 				provider.format = format;
 			}
@@ -378,11 +389,12 @@ impl<C: CredentialStore> InferenceProviderRepository
 			let result: Result<()> = async {
 				sqlx::query(
 					"UPDATE inference_providers \
-                     SET name = ?, format = ?, api_base_url = ?, \
-                         masked_api_key = ? \
+                     SET name = ?, display_name = ?, format = ?, \
+                         api_base_url = ?, masked_api_key = ? \
                      WHERE id = ?",
 				)
 				.bind(&provider.name)
+				.bind(&provider.display_name)
 				.bind(provider.format.to_string())
 				.bind(&provider.api_base_url)
 				.bind(&provider.masked_api_key)
@@ -538,6 +550,15 @@ fn clean_name(name: &str) -> Result<String> {
 	}
 }
 
+fn clean_display_name(display_name: &str) -> Result<String> {
+	let display_name = display_name.trim();
+	if display_name.is_empty() {
+		Err(InferenceProviderError::EmptyName)
+	} else {
+		Ok(display_name.to_string())
+	}
+}
+
 fn ensure_api_key(api_key: &str) -> Result<()> {
 	if api_key.trim().is_empty() {
 		Err(InferenceProviderError::EmptyApiKey)
@@ -623,6 +644,7 @@ mod tests {
 		store
 			.create(CreateInferenceProvider {
 				name: name.to_string(),
+				display_name: name.to_string(),
 				format: InferenceProviderFormat::OpenAiResponses,
 				api_base_url: "https://api.openai.com/v1".to_string(),
 				api_key: "secret".to_string(),
@@ -645,6 +667,7 @@ mod tests {
 		let provider = store
 			.create(CreateInferenceProvider {
 				name: "OpenAI".to_string(),
+				display_name: "OpenAI".to_string(),
 				format: InferenceProviderFormat::OpenAiResponses,
 				api_base_url: "https://api.openai.com/v1".to_string(),
 				api_key: "sk-test".to_string(),
@@ -655,6 +678,7 @@ mod tests {
 		// Metadata is persisted and retrievable
 		let fetched = store.get(&provider.id).unwrap();
 		assert_eq!(fetched.name, "OpenAI");
+		assert_eq!(fetched.display_name, "OpenAI");
 		assert_eq!(fetched.format, InferenceProviderFormat::OpenAiResponses);
 		assert_eq!(fetched.api_base_url, "https://api.openai.com/v1");
 		assert_eq!(fetched.masked_api_key, "s*****t");
@@ -689,6 +713,7 @@ mod tests {
 		let provider = store
 			.create(CreateInferenceProvider {
 				name: "Anthropic".to_string(),
+				display_name: "Anthropic".to_string(),
 				format: InferenceProviderFormat::Anthropic,
 				api_base_url: "https://api.anthropic.com/v1".to_string(),
 				api_key: "first-key".to_string(),
@@ -701,6 +726,7 @@ mod tests {
 				&provider.id,
 				UpdateInferenceProvider {
 					name: Some("Claude".to_string()),
+					display_name: Some("Claude Team".to_string()),
 					format: Some(InferenceProviderFormat::OpenAiCompletions),
 					api_base_url: Some(
 						"https://gateway.example.com/v1".to_string(),
@@ -712,6 +738,7 @@ mod tests {
 			.unwrap();
 
 		assert_eq!(updated.name, "Claude");
+		assert_eq!(updated.display_name, "Claude Team");
 		assert_eq!(updated.format, InferenceProviderFormat::OpenAiCompletions);
 		assert_eq!(updated.api_base_url, "https://gateway.example.com/v1");
 		assert_eq!(updated.masked_api_key, "s********y");
@@ -727,6 +754,7 @@ mod tests {
 		let provider = store
 			.create(CreateInferenceProvider {
 				name: "Anthropic".to_string(),
+				display_name: "Anthropic".to_string(),
 				format: InferenceProviderFormat::Anthropic,
 				api_base_url: "https://api.anthropic.com/v1".to_string(),
 				api_key: "secret".to_string(),
@@ -762,6 +790,7 @@ mod tests {
 		store
 			.create(CreateInferenceProvider {
 				name: "OpenAI".to_string(),
+				display_name: "OpenAI".to_string(),
 				format: InferenceProviderFormat::OpenAiResponses,
 				api_base_url: "https://api.openai.com/v1".to_string(),
 				api_key: "first".to_string(),
@@ -772,6 +801,7 @@ mod tests {
 		let error = store
 			.create(CreateInferenceProvider {
 				name: "openai".to_string(),
+				display_name: "OpenAI Gateway".to_string(),
 				format: InferenceProviderFormat::OpenAiCompletions,
 				api_base_url: "https://gateway.example.com/v1".to_string(),
 				api_key: "second".to_string(),
@@ -789,6 +819,7 @@ mod tests {
 		let error = store
 			.create(CreateInferenceProvider {
 				name: "OpenAI".to_string(),
+				display_name: "OpenAI".to_string(),
 				format: InferenceProviderFormat::OpenAiResponses,
 				api_base_url: " ".to_string(),
 				api_key: "secret".to_string(),
@@ -805,6 +836,7 @@ mod tests {
 		let provider = store
 			.create(CreateInferenceProvider {
 				name: "OpenAI".to_string(),
+				display_name: "OpenAI".to_string(),
 				format: InferenceProviderFormat::OpenAiResponses,
 				api_base_url: "https://api.openai.com/v1".to_string(),
 				api_key: "secret".to_string(),
@@ -830,6 +862,7 @@ mod tests {
 		let error = store
 			.create(CreateInferenceProvider {
 				name: "OpenAI".to_string(),
+				display_name: "OpenAI".to_string(),
 				format: InferenceProviderFormat::OpenAiResponses,
 				api_base_url: "https://api.openai.com/v1".to_string(),
 				api_key: "secret".to_string(),
@@ -853,6 +886,7 @@ mod tests {
 				&provider.id,
 				UpdateInferenceProvider {
 					name: None,
+					display_name: None,
 					format: None,
 					api_base_url: None,
 					api_key: None,
@@ -869,6 +903,7 @@ mod tests {
 				&provider.id,
 				UpdateInferenceProvider {
 					name: None,
+					display_name: None,
 					format: None,
 					api_base_url: None,
 					api_key: None,
@@ -887,6 +922,7 @@ mod tests {
 		let provider = store
 			.create(CreateInferenceProvider {
 				name: "OpenAI".to_string(),
+				display_name: "OpenAI".to_string(),
 				format: InferenceProviderFormat::OpenAiResponses,
 				api_base_url: "https://api.openai.com/v1".to_string(),
 				api_key: "secret".to_string(),
@@ -914,6 +950,7 @@ mod tests {
 		let error = store
 			.create(CreateInferenceProvider {
 				name: "OpenAI".to_string(),
+				display_name: "OpenAI".to_string(),
 				format: InferenceProviderFormat::OpenAiResponses,
 				api_base_url: "https://api.openai.com/v1".to_string(),
 				api_key: "secret".to_string(),

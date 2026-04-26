@@ -194,6 +194,29 @@ export function updateOpenCodeProviderMutationOptions({
 	});
 }
 
+interface SyncAgentProviderMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (
+		data: AgentProviderResponse,
+		id: string,
+	) => void | Promise<void>;
+}
+
+export function syncOpenCodeProviderMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: SyncAgentProviderMutationParams) {
+	return mutationOptions({
+		mutationFn: (id: string) => api.inferenceProviders.syncOpenCode(id),
+		onSuccess: async (data, id) => {
+			await invalidateOpenCodeProviderQueries(queryClient);
+			await onSuccess?.(data, id);
+		},
+	});
+}
+
 interface UpdateInferenceModelVariables {
 	providerName: string;
 	modelName: string;

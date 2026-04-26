@@ -109,6 +109,14 @@ export default {
 	openCodeProviderUpdated: "OpenCode provider updated",
 	openCodeProviderDeleted: "OpenCode provider deleted",
 	openCodeProviderDeleteError: "Failed to delete OpenCode provider",
+	openCodeProviderSynced: "OpenCode provider updated",
+	openCodeProviderSyncError: "Failed to update OpenCode provider",
+	openCodeBuiltInProvider: "Built-in provider",
+	openCodeBuiltInProviderInfo:
+		"No Aghub inference provider has the same API Base URL and API key. This was likely added directly in OpenCode.",
+	syncOpenCodeProvider: "Update OpenCode provider",
+	syncOpenCodeProviderFromInferenceProvider:
+		"Update models and config from {{name}}",
 	agentProviderSourceCustom: "Custom",
 	agentProviderSourceBuiltIn: "Built-in",
 	agentProviderSourceClosedSlot: "Closed slot",

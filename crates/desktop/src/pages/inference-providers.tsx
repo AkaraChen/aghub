@@ -100,7 +100,7 @@ const CODING_AGENT_OPTIONS: CodingAgentOption[] = [
 ];
 
 interface InferenceProviderFormValues {
-	name: string;
+	displayName: string;
 	format: InferenceProviderFormatDto;
 	apiBaseUrl: string;
 	apiKey: string;
@@ -284,7 +284,7 @@ function ProviderForm({
 		mode: "onSubmit",
 		reValidateMode: "onChange",
 		defaultValues: {
-			name: provider?.name ?? "",
+			displayName: provider?.display_name ?? "",
 			format: provider?.format ?? "openai_responses",
 			apiBaseUrl: provider?.api_base_url ?? "",
 			apiKey: "",
@@ -311,7 +311,7 @@ function ProviderForm({
 		createMutation.isPending || updateMutation.isPending || isSubmitting;
 
 	const onSubmit = async (values: InferenceProviderFormValues) => {
-		const name = values.name.trim();
+		const displayName = values.displayName.trim();
 		const apiBaseUrl = values.apiBaseUrl.trim();
 		const apiKey = values.apiKey.trim();
 		const models = normalizeModelNames(values.models);
@@ -319,7 +319,8 @@ function ProviderForm({
 		try {
 			if (mode === "create") {
 				const created = await createMutation.mutateAsync({
-					name,
+					name: displayName,
+					display_name: displayName,
 					format: values.format,
 					api_base_url: apiBaseUrl,
 					api_key: apiKey,
@@ -334,7 +335,8 @@ function ProviderForm({
 			const updated = await updateMutation.mutateAsync({
 				name: provider.name,
 				body: {
-					name,
+					name: null,
+					display_name: displayName,
 					format: values.format,
 					api_base_url: apiBaseUrl,
 					api_key: apiKey || null,
@@ -381,7 +383,7 @@ function ProviderForm({
 						<Fieldset>
 							<Fieldset.Group>
 								<Controller
-									name="name"
+									name="displayName"
 									control={control}
 									rules={{
 										required: t(
@@ -731,7 +733,7 @@ function ProviderDetail({
 								<ProviderIcon format={provider.format} />
 								<div className="min-w-0">
 									<h2 className="truncate text-xl font-semibold text-foreground">
-										{provider.name}
+										{provider.display_name}
 									</h2>
 								</div>
 							</div>
@@ -876,7 +878,7 @@ function ProviderDetail({
 						</AlertDialog.Header>
 						<AlertDialog.Body>
 							{t("deleteInferenceProviderConfirm", {
-								name: provider.name,
+								name: provider.display_name,
 							})}
 						</AlertDialog.Body>
 						<AlertDialog.Footer>
@@ -943,8 +945,9 @@ export default function InferenceProvidersPage() {
 		() =>
 			new Fuse(providers, {
 				keys: [
-					{ name: "name", weight: 2 },
+					{ name: "display_name", weight: 2 },
 					{ name: "models", weight: 2 },
+					{ name: "name", weight: 1 },
 					{ name: "api_base_url", weight: 1 },
 					{ name: "format", weight: 1 },
 				],
@@ -1127,7 +1130,7 @@ export default function InferenceProvidersPage() {
 								<ListBox.Item
 									key={provider.name}
 									id={provider.name}
-									textValue={provider.name}
+									textValue={`${provider.display_name} ${provider.name}`}
 									className="data-selected:bg-surface"
 								>
 									<div className="flex min-w-0 items-center gap-2">
@@ -1136,7 +1139,7 @@ export default function InferenceProvidersPage() {
 										/>
 										<div className="min-w-0 flex-1">
 											<Label className="block truncate">
-												{provider.name}
+												{provider.display_name}
 											</Label>
 										</div>
 									</div>

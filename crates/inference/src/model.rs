@@ -68,8 +68,11 @@ pub struct InferenceProvider {
 	/// Stable provider identifier.
 	pub id: String,
 
-	/// User-visible provider name.
+	/// Stable provider key.
 	pub name: String,
+
+	/// User-visible provider name.
+	pub display_name: String,
 
 	/// Request/response format supported by this provider.
 	pub format: InferenceProviderFormat,
@@ -87,8 +90,11 @@ pub struct InferenceProvider {
 /// Provider creation input.
 #[derive(Clone, Deserialize)]
 pub struct CreateInferenceProvider {
-	/// User-visible provider name.
+	/// Stable provider key.
 	pub name: String,
+
+	/// User-visible provider name.
+	pub display_name: String,
 
 	/// Request/response format supported by this provider.
 	pub format: InferenceProviderFormat,
@@ -108,6 +114,7 @@ impl fmt::Debug for CreateInferenceProvider {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("CreateInferenceProvider")
 			.field("name", &self.name)
+			.field("display_name", &self.display_name)
 			.field("format", &self.format)
 			.field("api_base_url", &self.api_base_url)
 			.field("models", &self.models)
@@ -119,8 +126,11 @@ impl fmt::Debug for CreateInferenceProvider {
 /// Provider update input.
 #[derive(Clone, Default, Deserialize)]
 pub struct UpdateInferenceProvider {
-	/// Updated user-visible provider name.
+	/// Updated stable provider key.
 	pub name: Option<String>,
+
+	/// Updated user-visible provider name.
+	pub display_name: Option<String>,
 
 	/// Updated request/response format.
 	pub format: Option<InferenceProviderFormat>,
@@ -139,6 +149,7 @@ impl fmt::Debug for UpdateInferenceProvider {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("UpdateInferenceProvider")
 			.field("name", &self.name)
+			.field("display_name", &self.display_name)
 			.field("format", &self.format)
 			.field("api_base_url", &self.api_base_url)
 			.field("models", &self.models)

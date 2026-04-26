@@ -413,7 +413,7 @@ impl AgentProviderBinding {
 		Ok(Self {
 			id,
 			source_provider_id: Some(provider.id.clone()),
-			name: provider.name.clone(),
+			name: provider.display_name.clone(),
 			format: Some(provider.format),
 			api_base_url: Some(provider.api_base_url.clone()),
 			credential,
@@ -626,7 +626,8 @@ mod tests {
 	fn provider() -> InferenceProvider {
 		InferenceProvider {
 			id: "inventory-id".to_string(),
-			name: "OpenRouter".to_string(),
+			name: "openrouter".to_string(),
+			display_name: "OpenRouter".to_string(),
 			format: InferenceProviderFormat::OpenAiResponses,
 			api_base_url: "https://openrouter.ai/api/v1".to_string(),
 			masked_api_key: "sk****st".to_string(),
@@ -691,6 +692,7 @@ mod tests {
 		.unwrap();
 
 		assert_eq!(binding.id, "openrouter");
+		assert_eq!(binding.name, "OpenRouter");
 		assert_eq!(binding.source_provider_id.as_deref(), Some("inventory-id"));
 		assert_eq!(binding.models.len(), 2);
 	}

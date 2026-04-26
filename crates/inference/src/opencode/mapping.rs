@@ -183,6 +183,15 @@ pub(super) fn clean_provider_id(provider_id: &str) -> Result<String> {
 	}
 }
 
+pub(super) fn clean_provider_name(name: &str) -> Result<String> {
+	let name = name.trim().to_string();
+	if name.is_empty() {
+		Err(InferenceProviderError::EmptyName)
+	} else {
+		Ok(name)
+	}
+}
+
 pub(super) fn ensure_api_key(api_key: &str) -> Result<()> {
 	if api_key.trim().is_empty() {
 		Err(InferenceProviderError::EmptyApiKey)

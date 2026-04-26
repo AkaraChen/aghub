@@ -1,6 +1,7 @@
 export type { AgentAvailabilityDto } from "./AgentAvailabilityDto";
 export type { AgentInfo } from "./AgentInfo";
 export type { AgentProviderCredentialDto } from "./AgentProviderCredentialDto";
+export type { AgentProviderMatchedInferenceProviderResponse } from "./AgentProviderMatchedInferenceProviderResponse";
 export type { AgentProviderModelResponse } from "./AgentProviderModelResponse";
 export type { AgentProviderResponse } from "./AgentProviderResponse";
 export type { AgentProviderSourceDto } from "./AgentProviderSourceDto";

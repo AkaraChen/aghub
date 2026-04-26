@@ -17,6 +17,7 @@ fn provider() -> InferenceProvider {
 	InferenceProvider {
 		id: "inventory-id".to_string(),
 		name: "OpenRouter".to_string(),
+		display_name: "OpenRouter".to_string(),
 		format: InferenceProviderFormat::OpenAiCompletions,
 		api_base_url: "https://openrouter.ai/api/v1".to_string(),
 		masked_api_key: "sk****st".to_string(),
@@ -200,6 +201,107 @@ fn add_provider_preserves_jsonc_comments() {
 	let auth: Option<Value> =
 		aghub_json::parse_jsonc_opt(&auth_content).unwrap();
 	assert_eq!(auth.unwrap()["openrouter"]["key"], "sk-test");
+}
+
+#[test]
+fn update_provider_edits_name_and_auth_key() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	adapter
+		.add_provider("openrouter", &provider(), "sk-old")
+		.unwrap();
+
+	let binding = adapter
+		.update_provider("openrouter", Some("OpenRouter Team"), Some("sk-new"))
+		.unwrap();
+
+	assert_eq!(binding.name, "OpenRouter Team");
+	let config: Value = serde_json::from_str(
+		&fs::read_to_string(adapter.config_path()).unwrap(),
+	)
+	.unwrap();
+	assert_eq!(config["provider"]["openrouter"]["name"], "OpenRouter Team");
+	assert_eq!(
+		config["provider"]["openrouter"]["options"]["baseURL"],
+		"https://openrouter.ai/api/v1"
+	);
+
+	let auth: Value =
+		serde_json::from_str(&fs::read_to_string(adapter.auth_path()).unwrap())
+			.unwrap();
+	assert_eq!(auth["openrouter"]["key"], "sk-new");
+}
+
+#[test]
+fn update_provider_can_name_auth_only_provider() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	fs::write(
+		adapter.auth_path(),
+		r#"{ "auth-only": { "type": "api", "key": "old" } }"#,
+	)
+	.unwrap();
+
+	let binding = adapter
+		.update_provider("auth-only", Some("Auth Only"), None)
+		.unwrap();
+
+	assert_eq!(binding.name, "Auth Only");
+	assert_eq!(binding.source, AgentProviderSource::Custom);
+	let config: Value = serde_json::from_str(
+		&fs::read_to_string(adapter.config_path()).unwrap(),
+	)
+	.unwrap();
+	assert_eq!(config["provider"]["auth-only"]["name"], "Auth Only");
+}
+
+#[test]
+fn api_key_reads_auth_store_before_config() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	fs::write(
+		adapter.config_path(),
+		r#"{
+			"provider": {
+				"local": {
+					"options": { "apiKey": "inline-key" }
+				}
+			}
+		}"#,
+	)
+	.unwrap();
+	fs::write(
+		adapter.auth_path(),
+		r#"{ "local": { "type": "api", "key": "auth-key" } }"#,
+	)
+	.unwrap();
+
+	assert_eq!(
+		adapter.api_key("local").unwrap().as_deref(),
+		Some("auth-key")
+	);
+}
+
+#[test]
+fn api_key_reads_inline_config_key() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	fs::write(
+		adapter.config_path(),
+		r#"{
+			"provider": {
+				"local": {
+					"options": { "apiKey": "inline-key" }
+				}
+			}
+		}"#,
+	)
+	.unwrap();
+
+	assert_eq!(
+		adapter.api_key("local").unwrap().as_deref(),
+		Some("inline-key")
+	);
 }
 
 #[test]

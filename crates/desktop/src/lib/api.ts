@@ -91,6 +91,7 @@ export function createApi(baseUrl: string) {
 			.put(`inference/providers/${encodeURIComponent(provider.name)}`, {
 				json: {
 					name: null,
+					display_name: null,
 					format: null,
 					api_base_url: null,
 					api_key: null,
@@ -529,6 +530,13 @@ export function createApi(baseUrl: string) {
 					.put(
 						`inference/agents/opencode/providers/${encodeURIComponent(id)}`,
 						{ json: body },
+					)
+					.json();
+			},
+			syncOpenCode(id: string): Promise<AgentProviderResponse> {
+				return client
+					.post(
+						`inference/agents/opencode/providers/${encodeURIComponent(id)}/sync`,
 					)
 					.json();
 			},
