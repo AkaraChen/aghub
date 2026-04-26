@@ -87,10 +87,14 @@ impl From<InferenceProviderError> for ApiError {
 	fn from(e: InferenceProviderError) -> Self {
 		match e {
 			InferenceProviderError::EmptyName
+			| InferenceProviderError::EmptyAgentProviderId
 			| InferenceProviderError::EmptyModelName
 			| InferenceProviderError::EmptyApiBaseUrl
 			| InferenceProviderError::EmptyApiKey
-			| InferenceProviderError::InvalidFormat(_) => ApiError::new(
+			| InferenceProviderError::InvalidFormat(_)
+			| InferenceProviderError::UnsupportedAgentProviderCapability {
+				..
+			} => ApiError::new(
 				Status::BadRequest,
 				e.to_string(),
 				"INVALID_PARAM",

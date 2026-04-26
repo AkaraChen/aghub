@@ -47,6 +47,19 @@ pub enum InferenceProviderError {
 	#[error("provider not found: {0}")]
 	NotFound(String),
 
+	/// Agent-local provider IDs must not be empty.
+	#[error("agent provider id cannot be empty")]
+	EmptyAgentProviderId,
+
+	/// Agent does not support the requested provider-management capability.
+	#[error("{agent_id} does not support {capability}")]
+	UnsupportedAgentProviderCapability {
+		/// Stable agent id.
+		agent_id: String,
+		/// Unsupported capability label.
+		capability: String,
+	},
+
 	/// Tauri app data directory could not be resolved.
 	#[error("failed to resolve Tauri app data directory: {0}")]
 	AppDataDir(String),
