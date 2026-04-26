@@ -174,14 +174,9 @@ export function PluginDetail({
 
 					<Card.Content className="flex flex-col gap-6">
 						{currentPlugin.description && (
-							<div className="space-y-2">
-								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
-									{t("description")}
-								</h3>
-								<p className="text-sm text-foreground">
-									{currentPlugin.description}
-								</p>
-							</div>
+							<p className="text-sm text-foreground">
+								{currentPlugin.description}
+							</p>
 						)}
 
 						<PluginSourceCard

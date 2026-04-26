@@ -42,7 +42,7 @@ export default {
 		"Plugin is inactive and not providing capabilities",
 	capabilities: "Capabilities",
 	noCapabilities: "No capabilities provided",
-	providedSkills: "Provided Skills",
+	providedSkills: "Included Skills",
 	installationInfo: "Installation Info",
 	installPath: "Install Path",
 	openInstallFolder: "Open Install Folder",
@@ -555,7 +555,7 @@ export default {
 	pluginMarket: "Plugin Market",
 	pluginMarketDescription:
 		"Discover and install plugins from your configured marketplace sources",
-	pluginInfo: "Plugin Info",
+	pluginInfo: "Location",
 	installPlugin: "Install Plugin",
 	pluginInstalled: "Plugin '{{id}}' installed successfully",
 	noPluginsFound: "No plugins found",

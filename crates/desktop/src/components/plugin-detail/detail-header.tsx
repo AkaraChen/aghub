@@ -49,7 +49,6 @@ export function PluginDetailHeader({
 					{plugin.name}
 				</h2>
 				<div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-muted">
-					<p className="min-w-0 break-all font-mono">{plugin.id}</p>
 					{plugin.scopes.length > 1 && (
 						<Select
 							variant="secondary"

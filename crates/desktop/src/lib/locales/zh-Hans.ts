@@ -37,7 +37,7 @@ export default {
 	pluginDisabled: "已禁用",
 	pluginEnabledDescription: "插件正在运行并提供功能",
 	pluginDisabledDescription: "插件未运行，不提供功能",
-	providedSkills: "提供的技能",
+	providedSkills: "包含的技能",
 	installationInfo: "安装信息",
 	installPath: "安装路径",
 	openInstallFolder: "打开安装文件夹",
@@ -556,7 +556,7 @@ export default {
 	// Plugin Market
 	pluginMarket: "插件市场",
 	pluginMarketDescription: "从当前配置的市场源发现并安装插件",
-	pluginInfo: "插件信息",
+	pluginInfo: "位置",
 	installPlugin: "安装插件",
 	pluginInstalled: "插件 '{{id}}' 安装成功",
 	noPluginsFound: "未找到插件",

@@ -181,9 +181,6 @@ export function PluginList({
 										<Label className="truncate font-medium">
 											{plugin.name}
 										</Label>
-										<span className="truncate text-xs text-muted">
-											{plugin.id}
-										</span>
 									</div>
 									<div className="shrink-0 pl-1">
 										<div

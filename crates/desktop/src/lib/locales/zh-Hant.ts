@@ -37,7 +37,7 @@ export default {
 	pluginDisabled: "已停用",
 	pluginEnabledDescription: "外掛正在運行並提供功能",
 	pluginDisabledDescription: "外掛未運行，不提供功能",
-	providedSkills: "提供的技能",
+	providedSkills: "包含的技能",
 	installationInfo: "安裝資訊",
 	installPath: "安裝路徑",
 	openInstallFolder: "開啟安裝資料夾",
@@ -551,7 +551,7 @@ export default {
 	// Plugin Market
 	pluginMarket: "外掛市場",
 	pluginMarketDescription: "從目前設定的市場來源探索並安裝外掛",
-	pluginInfo: "外掛資訊",
+	pluginInfo: "位置",
 	installPlugin: "安裝外掛",
 	pluginInstalled: "外掛 '{{id}}' 安裝成功",
 	noPluginsFound: "未找到外掛",
