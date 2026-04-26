@@ -128,6 +128,8 @@ dependencies = [
 name = "aghub-inference"
 version = "0.1.2"
 dependencies = [
+ "aghub-json",
+ "dirs",
  "keyring",
  "serde",
  "serde_json",
@@ -137,6 +139,16 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "aghub-json"
+version = "0.1.2"
+dependencies = [
+ "jsonc-parser",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
@@ -3851,6 +3863,16 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 1.0.69",
+]
+
+[[package]]
+name = "jsonc-parser"
+version = "0.32.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8c2e5dea04f54739ca5694ee06e4448ffda065a55b3427d2b131bd5ea697ea2c"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -8,6 +8,7 @@ pub mod agent;
 pub mod credentials;
 pub mod error;
 pub mod model;
+pub mod opencode;
 pub mod store;
 
 pub use agent::{
@@ -23,6 +24,7 @@ pub use model::{
 	CreateInferenceProvider, InferenceProvider, InferenceProviderFormat,
 	UpdateInferenceProvider,
 };
+pub use opencode::OpenCodeProviderAdapter;
 pub use store::{
 	InferenceProviderRepository, InferenceProviderStore,
 	INFERENCE_PROVIDERS_FILE,

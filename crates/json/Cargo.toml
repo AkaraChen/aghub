@@ -1,0 +1,13 @@
+[package]
+name = "aghub-json"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "JSON and JSONC editing helpers for aghub"
+
+[dependencies]
+jsonc-parser = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }

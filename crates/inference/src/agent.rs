@@ -332,6 +332,9 @@ pub enum AgentProviderSource {
 
 	/// Custom provider from user configuration.
 	Custom,
+
+	/// Provider discovered only from the agent's credential store.
+	StoredCredential,
 }
 
 /// Model entry attached to an agent provider.
@@ -382,7 +385,7 @@ pub struct AgentProviderBinding {
 	pub name: String,
 
 	/// Request/response wire format.
-	pub format: InferenceProviderFormat,
+	pub format: Option<InferenceProviderFormat>,
 
 	/// API base URL, if the agent exposes one.
 	pub api_base_url: Option<String>,
@@ -411,7 +414,7 @@ impl AgentProviderBinding {
 			id,
 			source_provider_id: Some(provider.id.clone()),
 			name: provider.name.clone(),
-			format: provider.format,
+			format: Some(provider.format),
 			api_base_url: Some(provider.api_base_url.clone()),
 			credential,
 			models: provider
@@ -515,6 +518,11 @@ impl AgentProviderState {
 					agent_id,
 					AgentProviderCapability::CustomProviders,
 				)?,
+				AgentProviderSource::StoredCredential => capabilities
+					.ensure_supports(
+						agent_id,
+						AgentProviderCapability::AgentCredentialStore,
+					)?,
 			}
 
 			if let Some(capability) =

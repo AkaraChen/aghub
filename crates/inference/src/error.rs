@@ -60,6 +60,28 @@ pub enum InferenceProviderError {
 		capability: String,
 	},
 
+	/// Agent provider config could not be parsed.
+	#[error("invalid {agent_id} provider config at {path}: {message}")]
+	InvalidAgentProviderConfig {
+		/// Stable agent id.
+		agent_id: String,
+		/// Config path.
+		path: String,
+		/// Parse or validation message.
+		message: String,
+	},
+
+	/// Agent credential store could not be parsed.
+	#[error("invalid {agent_id} credential store at {path}: {message}")]
+	InvalidAgentCredentialStore {
+		/// Stable agent id.
+		agent_id: String,
+		/// Credential store path.
+		path: String,
+		/// Parse or validation message.
+		message: String,
+	},
+
 	/// Tauri app data directory could not be resolved.
 	#[error("failed to resolve Tauri app data directory: {0}")]
 	AppDataDir(String),

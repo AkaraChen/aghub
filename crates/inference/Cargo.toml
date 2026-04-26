@@ -7,8 +7,11 @@ license.workspace = true
 description = "Inference provider configuration storage for aghub"
 
 [dependencies]
+aghub-json = { path = "../json" }
 serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
+dirs = { workspace = true }
 keyring = { version = "3", features = [
 	"apple-native",
 	"windows-native",
