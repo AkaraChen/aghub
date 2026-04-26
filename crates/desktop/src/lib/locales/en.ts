@@ -137,7 +137,7 @@ export default {
 	codexActiveProfile: "Active Profile",
 	codexProfileProvider: "Profile Provider",
 	codexProfilesUsingProvider: "Profiles",
-	codexUseForActiveProfile: "Use",
+	codexUseForActiveProfile: "Enable",
 	codexCurrentRoute: "Current Route",
 	codexActiveProvider: "Active",
 	codexLoginProvider: "Codex login",

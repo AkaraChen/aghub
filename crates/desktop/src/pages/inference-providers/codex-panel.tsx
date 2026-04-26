@@ -554,7 +554,6 @@ function ProviderActions({
 function ProviderRow({
 	provider,
 	isActive,
-	profileNames,
 	isSyncing,
 	isSelecting,
 	canSelect,
@@ -565,7 +564,6 @@ function ProviderRow({
 }: {
 	provider: AgentProviderResponse;
 	isActive: boolean;
-	profileNames: string[];
 	isSyncing: boolean;
 	isSelecting: boolean;
 	canSelect: boolean;
@@ -574,8 +572,6 @@ function ProviderRow({
 	onSync: () => void;
 	onDelete: () => void;
 }) {
-	const { t } = useTranslation();
-
 	return (
 		<div className="grid gap-3 border-t border-border py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
 			<div className="grid min-w-0 gap-1">
@@ -586,12 +582,6 @@ function ProviderRow({
 				/>
 				<div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1">
 					<ProviderMeta provider={provider} />
-					{profileNames.length > 0 && (
-						<span className="truncate text-xs text-muted">
-							{t("codexProfilesUsingProvider")}:{" "}
-							{profileNames.join(", ")}
-						</span>
-					)}
 					{provider.api_base_url && (
 						<span className="truncate text-xs text-muted">
 							{provider.api_base_url}
@@ -645,15 +635,6 @@ export function CodexInferenceProviderPanel({
 	const profiles = codexState?.profiles ?? [];
 	const activeProfile =
 		profiles.find((profile) => profile.is_active) ?? profiles[0];
-	const profileNamesByProviderId = useMemo(
-		() =>
-			profiles.reduce((map, profile) => {
-				const names = map.get(profile.selected_provider_id) ?? [];
-				map.set(profile.selected_provider_id, [...names, profile.name]);
-				return map;
-			}, new Map<string, string[]>()),
-		[profiles],
-	);
 
 	const profileMutation = useMutation({
 		...updateCodexActiveProfileMutationOptions({
@@ -760,6 +741,52 @@ export function CodexInferenceProviderPanel({
 								</div>
 							</div>
 							<div className="flex shrink-0 items-center gap-2">
+								<Select
+									className="w-44"
+									selectedKey={activeProfile?.id}
+									onSelectionChange={(key) => {
+										if (!key) return;
+										profileMutation.mutate({
+											profile_id: String(key),
+										});
+									}}
+									isDisabled={
+										isLoading ||
+										profileMutation.isPending ||
+										profiles.length === 0
+									}
+									variant="secondary"
+								>
+									<Label className="sr-only">
+										{t("codexActiveProfile")}
+									</Label>
+									<Select.Trigger>
+										<Select.Value />
+										<Select.Indicator />
+									</Select.Trigger>
+									<Select.Popover>
+										<ListBox>
+											{profiles.map((profile) => (
+												<ListBox.Item
+													key={profile.id}
+													id={profile.id}
+													textValue={profile.name}
+												>
+													<div className="grid min-w-0 gap-0.5">
+														<Label className="truncate">
+															{profile.name}
+														</Label>
+														<span className="truncate text-xs text-muted">
+															{
+																profile.selected_provider_id
+															}
+														</span>
+													</div>
+												</ListBox.Item>
+											))}
+										</ListBox>
+									</Select.Popover>
+								</Select>
 								<Tooltip delay={0}>
 									<Tooltip.Trigger>
 										<Button
@@ -804,123 +831,77 @@ export function CodexInferenceProviderPanel({
 								</div>
 							) : (
 								<>
-									<div>
-										<Select
-											className="w-full sm:max-w-xs"
-											selectedKey={activeProfile?.id}
-											onSelectionChange={(key) => {
-												if (!key) return;
-												profileMutation.mutate({
-													profile_id: String(key),
-												});
-											}}
-											isDisabled={
-												profileMutation.isPending ||
-												profiles.length === 0
-											}
-											variant="secondary"
-										>
-											<Label>
-												{t("codexActiveProfile")}
-											</Label>
-											<Select.Trigger>
-												<Select.Value />
-												<Select.Indicator />
-											</Select.Trigger>
-											<Select.Popover>
-												<ListBox>
-													{profiles.map((profile) => (
-														<ListBox.Item
-															key={profile.id}
-															id={profile.id}
-															textValue={
-																profile.name
-															}
-														>
-															<div className="grid min-w-0 gap-0.5">
-																<Label className="truncate">
-																	{
-																		profile.name
-																	}
-																</Label>
-																<span className="truncate text-xs text-muted">
-																	{
-																		profile.selected_provider_id
-																	}
-																</span>
-															</div>
-														</ListBox.Item>
-													))}
-												</ListBox>
-											</Select.Popover>
-										</Select>
-									</div>
-
-									<div>
-										{providers.length === 0 ? (
-											<div className="grid justify-items-center gap-3 py-8 text-center">
-												<p className="text-sm text-muted">
-													{t("noCodexProviders")}
-												</p>
-											</div>
-										) : (
-											<div>
-												{providers.map((provider) => {
-													const isActive =
-														activeProfile?.selected_provider_id ===
-														provider.id;
-													return (
-														<ProviderRow
-															key={provider.id}
-															provider={provider}
-															isActive={isActive}
-															profileNames={
-																profileNamesByProviderId.get(
-																	provider.id,
-																) ?? []
-															}
-															isSyncing={
-																syncMutation.isPending &&
-																syncMutation.variables ===
-																	provider.id
-															}
-															isSelecting={
-																profileProviderMutation.isPending &&
-																profileProviderMutation
-																	.variables
-																	?.body
-																	.provider_id ===
-																	provider.id
-															}
-															canSelect={Boolean(
-																activeProfile,
-															)}
-															onSelectForProfile={() =>
-																handleProfileProviderChange(
-																	provider.id,
-																)
-															}
-															onEdit={() =>
-																handleEditProvider(
-																	provider,
-																)
-															}
-															onSync={() =>
-																syncMutation.mutate(
-																	provider.id,
-																)
-															}
-															onDelete={() =>
-																setDeleteTarget(
-																	provider,
-																)
-															}
-														/>
-													);
-												})}
-											</div>
-										)}
-									</div>
+									{providers.length === 0 ? (
+										<div className="grid justify-items-center gap-3 py-8 text-center">
+											<p className="text-sm text-muted">
+												{t("noCodexProviders")}
+											</p>
+											<Button
+												size="sm"
+												aria-label={t(
+													"createCodexProvider",
+												)}
+												onPress={() =>
+													setProviderDialog({
+														type: "create",
+													})
+												}
+											>
+												<PlusIcon className="size-4" />
+												{t("add")}
+											</Button>
+										</div>
+									) : (
+										<div>
+											{providers.map((provider) => {
+												const isActive =
+													activeProfile?.selected_provider_id ===
+													provider.id;
+												return (
+													<ProviderRow
+														key={provider.id}
+														provider={provider}
+														isActive={isActive}
+														isSyncing={
+															syncMutation.isPending &&
+															syncMutation.variables ===
+																provider.id
+														}
+														isSelecting={
+															profileProviderMutation.isPending &&
+															profileProviderMutation
+																.variables?.body
+																.provider_id ===
+																provider.id
+														}
+														canSelect={Boolean(
+															activeProfile,
+														)}
+														onSelectForProfile={() =>
+															handleProfileProviderChange(
+																provider.id,
+															)
+														}
+														onEdit={() =>
+															handleEditProvider(
+																provider,
+															)
+														}
+														onSync={() =>
+															syncMutation.mutate(
+																provider.id,
+															)
+														}
+														onDelete={() =>
+															setDeleteTarget(
+																provider,
+															)
+														}
+													/>
+												);
+											})}
+										</div>
+									)}
 								</>
 							)}
 						</Card.Content>

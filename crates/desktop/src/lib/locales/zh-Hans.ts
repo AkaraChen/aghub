@@ -132,7 +132,7 @@ export default {
 	codexActiveProfile: "当前 Profile",
 	codexProfileProvider: "Profile Provider",
 	codexProfilesUsingProvider: "使用中的 Profile",
-	codexUseForActiveProfile: "设为当前",
+	codexUseForActiveProfile: "启用",
 	codexCurrentRoute: "当前路由",
 	codexActiveProvider: "当前",
 	codexLoginProvider: "Codex 登录",
