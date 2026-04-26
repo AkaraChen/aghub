@@ -10,6 +10,7 @@ description = "Inference provider configuration storage for aghub"
 aghub-json = { path = "../json" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+toml_edit = { workspace = true }
 thiserror = { workspace = true }
 dirs = { workspace = true }
 keyring = { version = "3", features = [

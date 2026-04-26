@@ -117,6 +117,26 @@ export default {
 	syncOpenCodeProvider: "Update OpenCode provider",
 	syncOpenCodeProviderFromInferenceProvider:
 		"Update models and config from {{name}}",
+	createCodexProvider: "Add Codex Provider",
+	editCodexProvider: "Edit Codex Provider",
+	deleteCodexProvider: "Delete Codex Provider",
+	deleteCodexProviderConfirm: 'Delete "{{name}}" from Codex config.toml?',
+	refreshCodexProviders: "Refresh Codex providers",
+	noCodexProviders: "No Codex providers configured.",
+	noInferenceProvidersForCodex:
+		"Create an OpenAI Responses inference provider first, then select it here.",
+	codexProviderCreated: "Codex provider created",
+	codexProviderUpdated: "Codex provider updated",
+	codexProviderDeleted: "Codex provider deleted",
+	codexProviderDeleteError: "Failed to delete Codex provider",
+	codexProviderSynced: "Codex provider updated",
+	codexProviderSyncError: "Failed to update Codex provider",
+	codexBuiltInProvider: "Built-in provider",
+	codexBuiltInProviderInfo:
+		"No Aghub OpenAI Responses provider has the same API Base URL and API key. This was likely added directly in Codex.",
+	syncCodexProvider: "Update Codex provider",
+	syncCodexProviderFromInferenceProvider:
+		"Update provider config from {{name}}",
 	agentProviderSourceCustom: "Custom",
 	agentProviderSourceBuiltIn: "Built-in",
 	agentProviderSourceClosedSlot: "Closed slot",

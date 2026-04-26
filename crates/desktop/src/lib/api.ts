@@ -489,6 +489,9 @@ export function createApi(baseUrl: string) {
 			listOpenCode(): Promise<AgentProviderResponse[]> {
 				return client.get("inference/agents/opencode/providers").json();
 			},
+			listCodex(): Promise<AgentProviderResponse[]> {
+				return client.get("inference/agents/codex/providers").json();
+			},
 			getPassword(
 				name: string,
 			): Promise<InferenceProviderPasswordResponse> {
@@ -512,6 +515,13 @@ export function createApi(baseUrl: string) {
 					.post("inference/agents/opencode/providers", { json: body })
 					.json();
 			},
+			createCodex(
+				body: CreateAgentProviderRequest,
+			): Promise<AgentProviderResponse> {
+				return client
+					.post("inference/agents/codex/providers", { json: body })
+					.json();
+			},
 			update(
 				name: string,
 				body: UpdateInferenceProviderRequest,
@@ -533,10 +543,28 @@ export function createApi(baseUrl: string) {
 					)
 					.json();
 			},
+			updateCodex(
+				id: string,
+				body: UpdateAgentProviderRequest,
+			): Promise<AgentProviderResponse> {
+				return client
+					.put(
+						`inference/agents/codex/providers/${encodeURIComponent(id)}`,
+						{ json: body },
+					)
+					.json();
+			},
 			syncOpenCode(id: string): Promise<AgentProviderResponse> {
 				return client
 					.post(
 						`inference/agents/opencode/providers/${encodeURIComponent(id)}/sync`,
+					)
+					.json();
+			},
+			syncCodex(id: string): Promise<AgentProviderResponse> {
+				return client
+					.post(
+						`inference/agents/codex/providers/${encodeURIComponent(id)}/sync`,
 					)
 					.json();
 			},
@@ -588,6 +616,13 @@ export function createApi(baseUrl: string) {
 				return client
 					.delete(
 						`inference/agents/opencode/providers/${encodeURIComponent(id)}`,
+					)
+					.then(() => undefined);
+			},
+			deleteCodex(id: string): Promise<void> {
+				return client
+					.delete(
+						`inference/agents/codex/providers/${encodeURIComponent(id)}`,
 					)
 					.then(() => undefined);
 			},

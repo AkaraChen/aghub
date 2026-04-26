@@ -46,6 +46,19 @@ export function openCodeProviderListQueryOptions({
 	});
 }
 
+export function codexProviderListQueryOptions({
+	api,
+	enabled = true,
+	staleTime = 30_000,
+}: InferenceProviderListQueryParams) {
+	return queryOptions({
+		queryKey: queryKeys.inferenceProviders.agent("codex"),
+		queryFn: () => api.inferenceProviders.listCodex(),
+		enabled,
+		staleTime,
+	});
+}
+
 export async function invalidateInferenceProviderQueries(
 	queryClient: QueryClient,
 ) {
@@ -59,6 +72,12 @@ export async function invalidateOpenCodeProviderQueries(
 ) {
 	await queryClient.invalidateQueries({
 		queryKey: queryKeys.inferenceProviders.agent("opencode"),
+	});
+}
+
+export async function invalidateCodexProviderQueries(queryClient: QueryClient) {
+	await queryClient.invalidateQueries({
+		queryKey: queryKeys.inferenceProviders.agent("codex"),
 	});
 }
 
@@ -99,6 +118,21 @@ export function createOpenCodeProviderMutationOptions({
 			api.inferenceProviders.createOpenCode(body),
 		onSuccess: async (data) => {
 			await invalidateOpenCodeProviderQueries(queryClient);
+			await onSuccess?.(data);
+		},
+	});
+}
+
+export function createCodexProviderMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: CreateAgentProviderMutationParams) {
+	return mutationOptions({
+		mutationFn: (body: CreateAgentProviderRequest) =>
+			api.inferenceProviders.createCodex(body),
+		onSuccess: async (data) => {
+			await invalidateCodexProviderQueries(queryClient);
 			await onSuccess?.(data);
 		},
 	});
@@ -194,6 +228,21 @@ export function updateOpenCodeProviderMutationOptions({
 	});
 }
 
+export function updateCodexProviderMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: UpdateAgentProviderMutationParams) {
+	return mutationOptions({
+		mutationFn: ({ id, body }: UpdateAgentProviderVariables) =>
+			api.inferenceProviders.updateCodex(id, body),
+		onSuccess: async (data, variables) => {
+			await invalidateCodexProviderQueries(queryClient);
+			await onSuccess?.(data, variables);
+		},
+	});
+}
+
 interface SyncAgentProviderMutationParams {
 	api: ApiClient;
 	queryClient: QueryClient;
@@ -212,6 +261,20 @@ export function syncOpenCodeProviderMutationOptions({
 		mutationFn: (id: string) => api.inferenceProviders.syncOpenCode(id),
 		onSuccess: async (data, id) => {
 			await invalidateOpenCodeProviderQueries(queryClient);
+			await onSuccess?.(data, id);
+		},
+	});
+}
+
+export function syncCodexProviderMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: SyncAgentProviderMutationParams) {
+	return mutationOptions({
+		mutationFn: (id: string) => api.inferenceProviders.syncCodex(id),
+		onSuccess: async (data, id) => {
+			await invalidateCodexProviderQueries(queryClient);
 			await onSuccess?.(data, id);
 		},
 	});
@@ -290,6 +353,20 @@ export function deleteOpenCodeProviderMutationOptions({
 		mutationFn: (id: string) => api.inferenceProviders.deleteOpenCode(id),
 		onSuccess: async () => {
 			await invalidateOpenCodeProviderQueries(queryClient);
+			await onSuccess?.();
+		},
+	});
+}
+
+export function deleteCodexProviderMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: DeleteAgentProviderMutationParams) {
+	return mutationOptions({
+		mutationFn: (id: string) => api.inferenceProviders.deleteCodex(id),
+		onSuccess: async () => {
+			await invalidateCodexProviderQueries(queryClient);
 			await onSuccess?.();
 		},
 	});

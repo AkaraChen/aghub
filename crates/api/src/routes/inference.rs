@@ -1,6 +1,6 @@
 use aghub_inference::{
-	AgentProviderAdapter, AgentProviderBinding, InferenceProvider,
-	InferenceProviderRepository, InferenceProviderStore,
+	AgentProviderAdapter, AgentProviderBinding, CodexProviderAdapter,
+	InferenceProvider, InferenceProviderRepository, InferenceProviderStore,
 	OpenCodeProviderAdapter,
 };
 use rocket::http::Status;
@@ -41,6 +41,10 @@ fn find_by_name(
 
 fn opencode_adapter() -> Result<OpenCodeProviderAdapter, ApiError> {
 	OpenCodeProviderAdapter::global().map_err(ApiError::from)
+}
+
+fn codex_adapter() -> Result<CodexProviderAdapter, ApiError> {
+	CodexProviderAdapter::global().map_err(ApiError::from)
 }
 
 fn get_inventory_provider(
@@ -85,15 +89,13 @@ fn inventory_providers_with_api_keys(
 
 fn find_matching_inventory_provider(
 	inventory: &[(InferenceProvider, String)],
-	adapter: &OpenCodeProviderAdapter,
 	binding: &AgentProviderBinding,
+	agent_api_key: Option<String>,
 ) -> Result<Option<(InferenceProvider, String)>, ApiError> {
 	let Some(api_base_url) = binding.api_base_url.as_deref() else {
 		return Ok(None);
 	};
-	let Some(agent_api_key) =
-		adapter.api_key(&binding.id).map_err(ApiError::from)?
-	else {
+	let Some(agent_api_key) = agent_api_key else {
 		return Ok(None);
 	};
 
@@ -114,8 +116,26 @@ fn opencode_provider_response(
 	adapter: &OpenCodeProviderAdapter,
 	binding: AgentProviderBinding,
 ) -> Result<AgentProviderResponse, ApiError> {
+	let agent_api_key = adapter.api_key(&binding.id).map_err(ApiError::from)?;
 	let matched =
-		find_matching_inventory_provider(inventory, adapter, &binding)?;
+		find_matching_inventory_provider(inventory, &binding, agent_api_key)?;
+	let response = AgentProviderResponse::from(binding);
+	Ok(match matched {
+		Some((provider, _)) => {
+			response.with_matched_inference_provider(&provider)
+		}
+		None => response,
+	})
+}
+
+fn codex_provider_response(
+	inventory: &[(InferenceProvider, String)],
+	adapter: &CodexProviderAdapter,
+	binding: AgentProviderBinding,
+) -> Result<AgentProviderResponse, ApiError> {
+	let agent_api_key = adapter.api_key(&binding.id).map_err(ApiError::from)?;
+	let matched =
+		find_matching_inventory_provider(inventory, &binding, agent_api_key)?;
 	let response = AgentProviderResponse::from(binding);
 	Ok(match matched {
 		Some((provider, _)) => {
@@ -157,6 +177,23 @@ pub fn list_opencode_providers(
 	Ok(Json(providers))
 }
 
+#[get("/inference/agents/codex/providers")]
+pub fn list_codex_providers(
+	state: &State<InferenceProviderState>,
+) -> ApiResult<Vec<AgentProviderResponse>> {
+	let store = store(state);
+	let adapter = codex_adapter()?;
+	let inventory = inventory_providers_with_api_keys(&store)?;
+	let providers = adapter
+		.load_providers()
+		.map_err(ApiError::from)?
+		.providers
+		.into_iter()
+		.map(|binding| codex_provider_response(&inventory, &adapter, binding))
+		.collect::<Result<Vec<_>, _>>()?;
+	Ok(Json(providers))
+}
+
 #[post("/inference/agents/opencode/providers", data = "<body>")]
 pub fn create_opencode_provider(
 	state: &State<InferenceProviderState>,
@@ -172,6 +209,21 @@ pub fn create_opencode_provider(
 	Ok((Status::Created, Json(binding.into())))
 }
 
+#[post("/inference/agents/codex/providers", data = "<body>")]
+pub fn create_codex_provider(
+	state: &State<InferenceProviderState>,
+	body: Json<CreateAgentProviderRequest>,
+) -> ApiCreated<AgentProviderResponse> {
+	let store = store(state);
+	let (provider, api_key) =
+		get_inventory_provider(&store, &body.inference_provider_id)?;
+	let binding = codex_adapter()?
+		.add_inventory_provider(&provider, &api_key)
+		.map_err(ApiError::from)?;
+
+	Ok((Status::Created, Json(binding.into())))
+}
+
 #[put("/inference/agents/opencode/providers/<id>", data = "<body>")]
 pub fn update_opencode_provider(
 	id: &str,
@@ -179,6 +231,19 @@ pub fn update_opencode_provider(
 ) -> ApiResult<AgentProviderResponse> {
 	let body = body.into_inner();
 	let binding = opencode_adapter()?
+		.update_provider(id, body.name.as_deref(), body.api_key.as_deref())
+		.map_err(ApiError::from)?;
+
+	Ok(Json(binding.into()))
+}
+
+#[put("/inference/agents/codex/providers/<id>", data = "<body>")]
+pub fn update_codex_provider(
+	id: &str,
+	body: Json<UpdateAgentProviderRequest>,
+) -> ApiResult<AgentProviderResponse> {
+	let body = body.into_inner();
+	let binding = codex_adapter()?
 		.update_provider(id, body.name.as_deref(), body.api_key.as_deref())
 		.map_err(ApiError::from)?;
 
@@ -206,8 +271,9 @@ pub fn sync_opencode_provider(
 				"RESOURCE_NOT_FOUND",
 			)
 		})?;
+	let agent_api_key = adapter.api_key(&binding.id).map_err(ApiError::from)?;
 	let Some((provider, api_key)) =
-		find_matching_inventory_provider(&inventory, &adapter, &binding)?
+		find_matching_inventory_provider(&inventory, &binding, agent_api_key)?
 	else {
 		return Err(ApiError::new(
 			Status::UnprocessableEntity,
@@ -229,9 +295,62 @@ pub fn sync_opencode_provider(
 	))
 }
 
+#[post("/inference/agents/codex/providers/<id>/sync")]
+pub fn sync_codex_provider(
+	state: &State<InferenceProviderState>,
+	id: &str,
+) -> ApiResult<AgentProviderResponse> {
+	let store = store(state);
+	let adapter = codex_adapter()?;
+	let inventory = inventory_providers_with_api_keys(&store)?;
+	let binding = adapter
+		.load_providers()
+		.map_err(ApiError::from)?
+		.providers
+		.into_iter()
+		.find(|provider| provider.id == id)
+		.ok_or_else(|| {
+			ApiError::new(
+				Status::NotFound,
+				format!("Codex provider '{id}' not found"),
+				"RESOURCE_NOT_FOUND",
+			)
+		})?;
+	let agent_api_key = adapter.api_key(&binding.id).map_err(ApiError::from)?;
+	let Some((provider, api_key)) =
+		find_matching_inventory_provider(&inventory, &binding, agent_api_key)?
+	else {
+		return Err(ApiError::new(
+			Status::UnprocessableEntity,
+			format!(
+				"Codex provider '{id}' is not backed by an aghub inference \
+				 provider"
+			),
+			"UNRECOGNIZED_PROVIDER",
+		));
+	};
+
+	let updated = adapter
+		.add_provider(id, &provider, &api_key)
+		.map_err(ApiError::from)?;
+
+	Ok(Json(
+		AgentProviderResponse::from(updated)
+			.with_matched_inference_provider(&provider),
+	))
+}
+
 #[delete("/inference/agents/opencode/providers/<id>")]
 pub fn delete_opencode_provider(id: &str) -> ApiNoContent {
 	opencode_adapter()?
+		.remove_provider(id)
+		.map_err(ApiError::from)?;
+	Ok(NoContent)
+}
+
+#[delete("/inference/agents/codex/providers/<id>")]
+pub fn delete_codex_provider(id: &str) -> ApiNoContent {
+	codex_adapter()?
 		.remove_provider(id)
 		.map_err(ApiError::from)?;
 	Ok(NoContent)

@@ -1164,7 +1164,9 @@ export default function InferenceProvidersPage() {
 				)}
 
 				{panel.type === "agent" && panel.agentId === "codex" && (
-					<CodexInferenceProviderPanel />
+					<CodexInferenceProviderPanel
+						onEditInferenceProvider={handleEditProviderByName}
+					/>
 				)}
 
 				{panel.type === "create" && (

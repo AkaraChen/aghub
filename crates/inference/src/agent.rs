@@ -141,6 +141,13 @@ impl AgentCredentialSupport {
 		agent_credential_store: false,
 	};
 
+	/// Environment variables, inline config values, or agent auth.
+	pub const ENV_VAR_INLINE_OR_AGENT_STORE: Self = Self {
+		env_var_reference: true,
+		inline_api_key: true,
+		agent_credential_store: true,
+	};
+
 	/// Environment variables plus the agent's own credential store.
 	pub const ENV_VAR_OR_AGENT_STORE: Self = Self {
 		env_var_reference: true,
@@ -668,12 +675,13 @@ mod tests {
 	fn codex_caps_support_default_provider_and_registry() {
 		let caps = AgentProviderCapabilities::registry(
 			AgentProviderDefaultSupport::PROVIDER_AND_MODEL,
-			AgentCredentialSupport::ENV_VAR,
+			AgentCredentialSupport::ENV_VAR_INLINE_OR_AGENT_STORE,
 			BuiltInProviderSupport::IMMUTABLE,
 		);
 
 		assert!(caps.supports(AgentProviderCapability::DefaultProvider));
 		assert!(caps.supports(AgentProviderCapability::CustomProviders));
+		assert!(caps.supports(AgentProviderCapability::InlineApiKeyCredentials));
 		assert!(
 			!caps.supports(AgentProviderCapability::OverrideBuiltInProviders)
 		);

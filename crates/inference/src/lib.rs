@@ -5,6 +5,7 @@
 //! keyring.
 
 pub mod agent;
+pub mod codex;
 pub mod credentials;
 pub mod error;
 pub mod model;
@@ -18,6 +19,7 @@ pub use agent::{
 	AgentProviderModel, AgentProviderSource, AgentProviderState,
 	BuiltInProviderSupport,
 };
+pub use codex::CodexProviderAdapter;
 pub use credentials::{CredentialStore, NativeCredentialStore};
 pub use error::{InferenceProviderError, Result};
 pub use model::{
