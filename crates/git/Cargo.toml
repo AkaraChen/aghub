@@ -8,10 +8,13 @@ repository.workspace = true
 description = "Git clone with credential injection from environment variables"
 
 [dependencies]
-gix = { version = "0.70", default-features = false, features = [
+gix = { version = "0.82", default-features = false, features = [
 	"blocking-network-client",
 	"worktree-mutation",
 	"blocking-http-transport-reqwest-native-tls",
+] }
+gix-hash = { version = "0.24", default-features = false, features = [
+	"sha1",
 ] }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
