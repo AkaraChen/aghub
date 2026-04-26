@@ -136,6 +136,8 @@ export default {
 		"No Aghub OpenAI Responses provider has the same API Base URL and API key. This was likely added directly in Codex.",
 	codexActiveProfile: "Active Profile",
 	codexProfileProvider: "Profile Provider",
+	codexProfilesUsingProvider: "Profiles",
+	codexUseForActiveProfile: "Use",
 	codexCurrentRoute: "Current Route",
 	codexActiveProvider: "Active",
 	codexLoginProvider: "Codex login",

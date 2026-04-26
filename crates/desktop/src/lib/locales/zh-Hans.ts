@@ -131,6 +131,8 @@ export default {
 		"未在 Aghub OpenAI Responses Provider 中找到相同 API Base URL 和 API key，疑似用户直接在 Codex 里添加。",
 	codexActiveProfile: "当前 Profile",
 	codexProfileProvider: "Profile Provider",
+	codexProfilesUsingProvider: "使用中的 Profile",
+	codexUseForActiveProfile: "设为当前",
 	codexCurrentRoute: "当前路由",
 	codexActiveProvider: "当前",
 	codexLoginProvider: "Codex 登录",
