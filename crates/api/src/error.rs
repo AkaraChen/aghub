@@ -87,6 +87,7 @@ impl From<InferenceProviderError> for ApiError {
 	fn from(e: InferenceProviderError) -> Self {
 		match e {
 			InferenceProviderError::EmptyName
+			| InferenceProviderError::EmptyModelName
 			| InferenceProviderError::EmptyApiBaseUrl
 			| InferenceProviderError::EmptyApiKey
 			| InferenceProviderError::InvalidFormat(_) => ApiError::new(
@@ -94,7 +95,8 @@ impl From<InferenceProviderError> for ApiError {
 				e.to_string(),
 				"INVALID_PARAM",
 			),
-			InferenceProviderError::AlreadyExists(_) => ApiError::new(
+			InferenceProviderError::AlreadyExists(_)
+			| InferenceProviderError::ModelAlreadyExists(_) => ApiError::new(
 				Status::Conflict,
 				e.to_string(),
 				"RESOURCE_EXISTS",

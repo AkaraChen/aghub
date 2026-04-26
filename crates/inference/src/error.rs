@@ -19,6 +19,10 @@ pub enum InferenceProviderError {
 	#[error("provider name cannot be empty")]
 	EmptyName,
 
+	/// Model names must not be empty.
+	#[error("model name cannot be empty")]
+	EmptyModelName,
+
 	/// API keys must not be empty.
 	#[error("provider API key cannot be empty")]
 	EmptyApiKey,
@@ -30,6 +34,10 @@ pub enum InferenceProviderError {
 	/// Provider name is already in use.
 	#[error("provider already exists: {0}")]
 	AlreadyExists(String),
+
+	/// Model name is already in use for the provider.
+	#[error("inference model already exists: {0}")]
+	ModelAlreadyExists(String),
 
 	/// Provider format is not supported.
 	#[error("unsupported inference provider format: {0}")]

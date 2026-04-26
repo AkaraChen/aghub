@@ -49,6 +49,7 @@ pub struct CreateInferenceProviderRequest {
 	pub format: InferenceProviderFormatDto,
 	pub api_base_url: String,
 	pub api_key: String,
+	pub models: Option<Vec<String>>,
 }
 
 impl From<CreateInferenceProviderRequest> for CreateInferenceProvider {
@@ -58,6 +59,7 @@ impl From<CreateInferenceProviderRequest> for CreateInferenceProvider {
 			format: req.format.into(),
 			api_base_url: req.api_base_url,
 			api_key: req.api_key,
+			models: req.models.unwrap_or_default(),
 		}
 	}
 }
@@ -69,6 +71,7 @@ pub struct UpdateInferenceProviderRequest {
 	pub format: Option<InferenceProviderFormatDto>,
 	pub api_base_url: Option<String>,
 	pub api_key: Option<String>,
+	pub models: Option<Vec<String>>,
 }
 
 impl From<UpdateInferenceProviderRequest> for UpdateInferenceProvider {
@@ -78,6 +81,7 @@ impl From<UpdateInferenceProviderRequest> for UpdateInferenceProvider {
 			format: req.format.map(Into::into),
 			api_base_url: req.api_base_url,
 			api_key: req.api_key,
+			models: req.models,
 		}
 	}
 }
@@ -89,6 +93,7 @@ pub struct InferenceProviderResponse {
 	pub name: String,
 	pub format: InferenceProviderFormatDto,
 	pub api_base_url: String,
+	pub models: Vec<String>,
 }
 
 impl From<InferenceProvider> for InferenceProviderResponse {
@@ -104,6 +109,7 @@ impl From<&InferenceProvider> for InferenceProviderResponse {
 			name: provider.name.clone(),
 			format: provider.format.into(),
 			api_base_url: provider.api_base_url.clone(),
+			models: provider.models.clone(),
 		}
 	}
 }

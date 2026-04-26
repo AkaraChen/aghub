@@ -59,6 +59,38 @@ export function createInferenceProviderMutationOptions({
 	});
 }
 
+interface CreateInferenceModelVariables {
+	providerName: string;
+	modelName: string;
+}
+
+interface CreateInferenceModelMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (
+		data: InferenceProviderResponse,
+		variables: CreateInferenceModelVariables,
+	) => void | Promise<void>;
+}
+
+export function createInferenceModelMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: CreateInferenceModelMutationParams) {
+	return mutationOptions({
+		mutationFn: ({
+			providerName,
+			modelName,
+		}: CreateInferenceModelVariables) =>
+			api.inferenceProviders.createModel(providerName, modelName),
+		onSuccess: async (data, variables) => {
+			await invalidateInferenceProviderQueries(queryClient);
+			await onSuccess?.(data, variables);
+		},
+	});
+}
+
 interface UpdateInferenceProviderVariables {
 	name: string;
 	body: UpdateInferenceProviderRequest;
@@ -88,6 +120,44 @@ export function updateInferenceProviderMutationOptions({
 	});
 }
 
+interface UpdateInferenceModelVariables {
+	providerName: string;
+	modelName: string;
+	nextModelName: string;
+}
+
+interface UpdateInferenceModelMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (
+		data: InferenceProviderResponse,
+		variables: UpdateInferenceModelVariables,
+	) => void | Promise<void>;
+}
+
+export function updateInferenceModelMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: UpdateInferenceModelMutationParams) {
+	return mutationOptions({
+		mutationFn: ({
+			providerName,
+			modelName,
+			nextModelName,
+		}: UpdateInferenceModelVariables) =>
+			api.inferenceProviders.updateModel(
+				providerName,
+				modelName,
+				nextModelName,
+			),
+		onSuccess: async (data, variables) => {
+			await invalidateInferenceProviderQueries(queryClient);
+			await onSuccess?.(data, variables);
+		},
+	});
+}
+
 interface DeleteInferenceProviderMutationParams {
 	api: ApiClient;
 	queryClient: QueryClient;
@@ -104,6 +174,38 @@ export function deleteInferenceProviderMutationOptions({
 		onSuccess: async () => {
 			await invalidateInferenceProviderQueries(queryClient);
 			await onSuccess?.();
+		},
+	});
+}
+
+interface DeleteInferenceModelVariables {
+	providerName: string;
+	modelName: string;
+}
+
+interface DeleteInferenceModelMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (
+		data: InferenceProviderResponse,
+		variables: DeleteInferenceModelVariables,
+	) => void | Promise<void>;
+}
+
+export function deleteInferenceModelMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: DeleteInferenceModelMutationParams) {
+	return mutationOptions({
+		mutationFn: ({
+			providerName,
+			modelName,
+		}: DeleteInferenceModelVariables) =>
+			api.inferenceProviders.deleteModel(providerName, modelName),
+		onSuccess: async (data, variables) => {
+			await invalidateInferenceProviderQueries(queryClient);
+			await onSuccess?.(data, variables);
 		},
 	});
 }

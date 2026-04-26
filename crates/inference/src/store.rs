@@ -1,5 +1,6 @@
 //! SQLite-backed CRUD storage for inference providers.
 
+use std::collections::HashSet;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 
@@ -130,6 +131,9 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 			.create_if_missing(true)
 			.connect()
 			.await?;
+		sqlx::query("PRAGMA foreign_keys = ON")
+			.execute(&mut conn)
+			.await?;
 		sqlx::migrate!().run(&mut conn).await?;
 		Ok(conn)
 	}
@@ -143,12 +147,15 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
              FROM inference_providers WHERE id = ?",
 		)
 		.bind(id)
-		.fetch_optional(conn)
+		.fetch_optional(&mut *conn)
 		.await?;
 
-		row.map(map_row)
+		let mut provider = row
+			.map(map_row)
 			.transpose()?
-			.ok_or_else(|| InferenceProviderError::NotFound(id.to_string()))
+			.ok_or_else(|| InferenceProviderError::NotFound(id.to_string()))?;
+		provider.models = Self::fetch_model_names(conn, &provider.id).await?;
+		Ok(provider)
 	}
 
 	async fn check_name_unique(
@@ -181,6 +188,47 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 			Ok(())
 		}
 	}
+
+	async fn fetch_model_names(
+		conn: &mut SqliteConnection,
+		provider_id: &str,
+	) -> Result<Vec<String>> {
+		let rows = sqlx::query(
+			"SELECT name FROM inference_models \
+             WHERE provider_id = ? ORDER BY rowid",
+		)
+		.bind(provider_id)
+		.fetch_all(conn)
+		.await?;
+
+		rows.into_iter()
+			.map(|row| row.try_get("name").map_err(Into::into))
+			.collect()
+	}
+
+	async fn replace_models(
+		conn: &mut SqliteConnection,
+		provider_id: &str,
+		models: &[String],
+	) -> Result<()> {
+		sqlx::query("DELETE FROM inference_models WHERE provider_id = ?")
+			.bind(provider_id)
+			.execute(&mut *conn)
+			.await?;
+
+		for model in models {
+			sqlx::query(
+				"INSERT INTO inference_models (provider_id, name) \
+                 VALUES (?, ?)",
+			)
+			.bind(provider_id)
+			.bind(model)
+			.execute(&mut *conn)
+			.await?;
+		}
+
+		Ok(())
+	}
 }
 
 fn map_row(row: sqlx::sqlite::SqliteRow) -> Result<InferenceProvider> {
@@ -191,6 +239,7 @@ fn map_row(row: sqlx::sqlite::SqliteRow) -> Result<InferenceProvider> {
 		name: row.try_get("name")?,
 		format,
 		api_base_url: row.try_get("api_base_url")?,
+		models: Vec::new(),
 	})
 }
 
@@ -206,7 +255,14 @@ impl<C: CredentialStore> InferenceProviderRepository
 			)
 			.fetch_all(&mut conn)
 			.await?;
-			rows.into_iter().map(map_row).collect()
+			let mut providers = Vec::with_capacity(rows.len());
+			for row in rows {
+				let mut provider = map_row(row)?;
+				provider.models =
+					Self::fetch_model_names(&mut conn, &provider.id).await?;
+				providers.push(provider);
+			}
+			Ok(providers)
 		})
 	}
 
@@ -223,6 +279,7 @@ impl<C: CredentialStore> InferenceProviderRepository
 	) -> Result<InferenceProvider> {
 		let name = clean_name(&input.name)?;
 		let api_base_url = clean_api_base_url(&input.api_base_url)?;
+		let models = clean_model_names(&input.models)?;
 		ensure_api_key(&input.api_key)?;
 
 		self.block_on(async {
@@ -234,24 +291,37 @@ impl<C: CredentialStore> InferenceProviderRepository
 				name,
 				format: input.format,
 				api_base_url,
+				models,
 			};
 
 			self.credentials.set_api_key(&provider.id, &input.api_key)?;
 
-			let result = sqlx::query(
-				"INSERT INTO inference_providers (id, name, format, api_base_url) \
-                 VALUES (?, ?, ?, ?)",
-			)
-			.bind(&provider.id)
-			.bind(&provider.name)
-			.bind(provider.format.to_string())
-			.bind(&provider.api_base_url)
-			.execute(&mut conn)
+			let result: Result<()> = async {
+				sqlx::query(
+					"INSERT INTO inference_providers \
+                     (id, name, format, api_base_url) \
+                     VALUES (?, ?, ?, ?)",
+				)
+				.bind(&provider.id)
+				.bind(&provider.name)
+				.bind(provider.format.to_string())
+				.bind(&provider.api_base_url)
+				.execute(&mut conn)
+				.await?;
+				Self::replace_models(&mut conn, &provider.id, &provider.models)
+					.await?;
+				Ok(())
+			}
 			.await;
 
 			if let Err(error) = result {
 				let _ = self.credentials.delete_api_key(&provider.id);
-				return Err(error.into());
+				let _ =
+					sqlx::query("DELETE FROM inference_providers WHERE id = ?")
+						.bind(&provider.id)
+						.execute(&mut conn)
+						.await;
+				return Err(error);
 			}
 
 			Ok(provider)
@@ -263,6 +333,12 @@ impl<C: CredentialStore> InferenceProviderRepository
 		id: &str,
 		input: UpdateInferenceProvider,
 	) -> Result<InferenceProvider> {
+		let models = input
+			.models
+			.as_ref()
+			.map(|models| clean_model_names(models))
+			.transpose()?;
+
 		self.block_on(async {
 			let mut conn = self.open_db().await?;
 			let mut provider = Self::fetch_by_id(&mut conn, id).await?;
@@ -281,6 +357,10 @@ impl<C: CredentialStore> InferenceProviderRepository
 				provider.api_base_url = clean_api_base_url(api_base_url)?;
 			}
 
+			if let Some(models) = models {
+				provider.models = models;
+			}
+
 			let previous_api_key = match input.api_key.as_ref() {
 				Some(api_key) => {
 					ensure_api_key(api_key)?;
@@ -291,16 +371,24 @@ impl<C: CredentialStore> InferenceProviderRepository
 				None => None,
 			};
 
-			let result = sqlx::query(
-				"UPDATE inference_providers \
-                 SET name = ?, format = ?, api_base_url = ? \
-                 WHERE id = ?",
-			)
-			.bind(&provider.name)
-			.bind(provider.format.to_string())
-			.bind(&provider.api_base_url)
-			.bind(id)
-			.execute(&mut conn)
+			let result: Result<()> = async {
+				sqlx::query(
+					"UPDATE inference_providers \
+                     SET name = ?, format = ?, api_base_url = ? \
+                     WHERE id = ?",
+				)
+				.bind(&provider.name)
+				.bind(provider.format.to_string())
+				.bind(&provider.api_base_url)
+				.bind(id)
+				.execute(&mut conn)
+				.await?;
+				if input.models.is_some() {
+					Self::replace_models(&mut conn, id, &provider.models)
+						.await?;
+				}
+				Ok(())
+			}
 			.await;
 
 			if let Err(error) = result {
@@ -314,7 +402,7 @@ impl<C: CredentialStore> InferenceProviderRepository
 						}
 					}
 				}
-				return Err(error.into());
+				return Err(error);
 			}
 
 			Ok(provider)
@@ -361,6 +449,30 @@ impl<C: CredentialStore> InferenceProviderRepository
 		self.get(id)?;
 		self.credentials.delete_api_key(id)
 	}
+}
+
+fn clean_model_name(name: &str) -> Result<String> {
+	let name = name.trim();
+	if name.is_empty() {
+		Err(InferenceProviderError::EmptyModelName)
+	} else {
+		Ok(name.to_string())
+	}
+}
+
+fn clean_model_names(models: &[String]) -> Result<Vec<String>> {
+	let mut seen = HashSet::new();
+	let mut clean = Vec::with_capacity(models.len());
+
+	for model in models {
+		let model = clean_model_name(model)?;
+		if !seen.insert(model.to_ascii_lowercase()) {
+			return Err(InferenceProviderError::ModelAlreadyExists(model));
+		}
+		clean.push(model);
+	}
+
+	Ok(clean)
 }
 
 fn clean_name(name: &str) -> Result<String> {
@@ -433,6 +545,21 @@ mod tests {
 		(temp, store)
 	}
 
+	fn create_provider(
+		store: &InferenceProviderStore<MemoryCredentialStore>,
+		name: &str,
+	) -> InferenceProvider {
+		store
+			.create(CreateInferenceProvider {
+				name: name.to_string(),
+				format: InferenceProviderFormat::OpenAiResponses,
+				api_base_url: "https://api.openai.com/v1".to_string(),
+				api_key: "secret".to_string(),
+				models: Vec::new(),
+			})
+			.unwrap()
+	}
+
 	#[test]
 	fn test_list_missing_file_is_empty() {
 		let (_temp, store) = store();
@@ -450,6 +577,7 @@ mod tests {
 				format: InferenceProviderFormat::OpenAiResponses,
 				api_base_url: "https://api.openai.com/v1".to_string(),
 				api_key: "sk-test".to_string(),
+				models: Vec::new(),
 			})
 			.unwrap();
 
@@ -458,6 +586,7 @@ mod tests {
 		assert_eq!(fetched.name, "OpenAI");
 		assert_eq!(fetched.format, InferenceProviderFormat::OpenAiResponses);
 		assert_eq!(fetched.api_base_url, "https://api.openai.com/v1");
+		assert!(fetched.models.is_empty());
 
 		// API key is kept in the credential store, not in provider metadata
 		assert!(store
@@ -480,6 +609,7 @@ mod tests {
 				format: InferenceProviderFormat::Anthropic,
 				api_base_url: "https://api.anthropic.com/v1".to_string(),
 				api_key: "first-key".to_string(),
+				models: Vec::new(),
 			})
 			.unwrap();
 
@@ -493,6 +623,7 @@ mod tests {
 						"https://gateway.example.com/v1".to_string(),
 					),
 					api_key: Some("second-key".to_string()),
+					models: None,
 				},
 			)
 			.unwrap();
@@ -515,6 +646,7 @@ mod tests {
 				format: InferenceProviderFormat::Anthropic,
 				api_base_url: "https://api.anthropic.com/v1".to_string(),
 				api_key: "secret".to_string(),
+				models: Vec::new(),
 			})
 			.unwrap();
 
@@ -534,6 +666,7 @@ mod tests {
 				format: InferenceProviderFormat::OpenAiResponses,
 				api_base_url: "https://api.openai.com/v1".to_string(),
 				api_key: "first".to_string(),
+				models: Vec::new(),
 			})
 			.unwrap();
 
@@ -543,6 +676,7 @@ mod tests {
 				format: InferenceProviderFormat::OpenAiCompletions,
 				api_base_url: "https://gateway.example.com/v1".to_string(),
 				api_key: "second".to_string(),
+				models: Vec::new(),
 			})
 			.unwrap_err();
 
@@ -559,9 +693,135 @@ mod tests {
 				format: InferenceProviderFormat::OpenAiResponses,
 				api_base_url: " ".to_string(),
 				api_key: "secret".to_string(),
+				models: Vec::new(),
 			})
 			.unwrap_err();
 
 		assert!(matches!(error, InferenceProviderError::EmptyApiBaseUrl));
+	}
+
+	#[test]
+	fn test_create_and_list_provider_models() {
+		let (_temp, store) = store();
+		let provider = store
+			.create(CreateInferenceProvider {
+				name: "OpenAI".to_string(),
+				format: InferenceProviderFormat::OpenAiResponses,
+				api_base_url: "https://api.openai.com/v1".to_string(),
+				api_key: "secret".to_string(),
+				models: vec![
+					" gpt-5.4 ".to_string(),
+					"gpt-5.4-mini".to_string(),
+				],
+			})
+			.unwrap();
+
+		assert_eq!(
+			provider.models,
+			vec!["gpt-5.4".to_string(), "gpt-5.4-mini".to_string()]
+		);
+		assert_eq!(store.get(&provider.id).unwrap().models, provider.models);
+		assert_eq!(store.list().unwrap()[0].models, provider.models);
+	}
+
+	#[test]
+	fn test_provider_model_names_are_unique_case_insensitive() {
+		let (_temp, store) = store();
+
+		let error = store
+			.create(CreateInferenceProvider {
+				name: "OpenAI".to_string(),
+				format: InferenceProviderFormat::OpenAiResponses,
+				api_base_url: "https://api.openai.com/v1".to_string(),
+				api_key: "secret".to_string(),
+				models: vec!["gpt-5.4".to_string(), "GPT-5.4".to_string()],
+			})
+			.unwrap_err();
+
+		assert!(matches!(
+			error,
+			InferenceProviderError::ModelAlreadyExists(_)
+		));
+	}
+
+	#[test]
+	fn test_update_and_delete_provider_model() {
+		let (_temp, store) = store();
+		let provider = create_provider(&store, "OpenAI");
+
+		let updated = store
+			.update(
+				&provider.id,
+				UpdateInferenceProvider {
+					name: None,
+					format: None,
+					api_base_url: None,
+					api_key: None,
+					models: Some(vec!["gpt-5.5".to_string()]),
+				},
+			)
+			.unwrap();
+
+		assert_eq!(updated.models, vec!["gpt-5.5".to_string()]);
+		assert_eq!(store.get(&provider.id).unwrap().models, updated.models);
+
+		let updated = store
+			.update(
+				&provider.id,
+				UpdateInferenceProvider {
+					name: None,
+					format: None,
+					api_base_url: None,
+					api_key: None,
+					models: Some(Vec::new()),
+				},
+			)
+			.unwrap();
+
+		assert!(updated.models.is_empty());
+		assert!(store.get(&provider.id).unwrap().models.is_empty());
+	}
+
+	#[test]
+	fn test_delete_provider_cascades_models() {
+		let (_temp, store) = store();
+		let provider = store
+			.create(CreateInferenceProvider {
+				name: "OpenAI".to_string(),
+				format: InferenceProviderFormat::OpenAiResponses,
+				api_base_url: "https://api.openai.com/v1".to_string(),
+				api_key: "secret".to_string(),
+				models: vec!["gpt-5.4".to_string()],
+			})
+			.unwrap();
+
+		store.delete(&provider.id).unwrap();
+
+		store.block_on(async {
+			let mut conn = store.open_db().await.unwrap();
+			let count: i64 =
+				sqlx::query_scalar("SELECT COUNT(*) FROM inference_models")
+					.fetch_one(&mut conn)
+					.await
+					.unwrap();
+			assert_eq!(count, 0);
+		});
+	}
+
+	#[test]
+	fn test_empty_model_name_is_rejected() {
+		let (_temp, store) = store();
+
+		let error = store
+			.create(CreateInferenceProvider {
+				name: "OpenAI".to_string(),
+				format: InferenceProviderFormat::OpenAiResponses,
+				api_base_url: "https://api.openai.com/v1".to_string(),
+				api_key: "secret".to_string(),
+				models: vec![" ".to_string()],
+			})
+			.unwrap_err();
+
+		assert!(matches!(error, InferenceProviderError::EmptyModelName));
 	}
 }

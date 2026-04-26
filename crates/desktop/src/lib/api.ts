@@ -61,6 +61,42 @@ export function createApi(baseUrl: string) {
 		},
 	});
 
+	async function getInferenceProviderByName(name: string) {
+		const providers: InferenceProviderResponse[] = await client
+			.get("inference/providers")
+			.json();
+		const provider = providers.find(
+			(item) =>
+				item.name.localeCompare(name, undefined, {
+					sensitivity: "accent",
+				}) === 0,
+		);
+
+		if (!provider) {
+			throw new Error(`inference provider '${name}' not found`);
+		}
+
+		return provider;
+	}
+
+	async function updateInferenceProviderModels(
+		providerName: string,
+		models: (current: string[]) => string[],
+	) {
+		const provider = await getInferenceProviderByName(providerName);
+		return client
+			.put(`inference/providers/${encodeURIComponent(provider.name)}`, {
+				json: {
+					name: null,
+					format: null,
+					api_base_url: null,
+					api_key: null,
+					models: models(provider.models),
+				} satisfies UpdateInferenceProviderRequest,
+			})
+			.json<InferenceProviderResponse>();
+	}
+
 	return {
 		agents: {
 			list(): Promise<AgentInfo[]> {
@@ -471,6 +507,45 @@ export function createApi(baseUrl: string) {
 						json: body,
 					})
 					.json();
+			},
+			async createModel(
+				providerName: string,
+				modelName: string,
+			): Promise<InferenceProviderResponse> {
+				return updateInferenceProviderModels(providerName, (models) => [
+					...models,
+					modelName,
+				]);
+			},
+			async updateModel(
+				providerName: string,
+				modelName: string,
+				nextModelName: string,
+			): Promise<InferenceProviderResponse> {
+				return updateInferenceProviderModels(providerName, (models) => {
+					const index = models.indexOf(modelName);
+					if (index === -1) {
+						throw new Error(
+							`inference model '${modelName}' not found`,
+						);
+					}
+					const nextModels = [...models];
+					nextModels[index] = nextModelName;
+					return nextModels;
+				});
+			},
+			async deleteModel(
+				providerName: string,
+				modelName: string,
+			): Promise<InferenceProviderResponse> {
+				return updateInferenceProviderModels(providerName, (models) => {
+					if (!models.includes(modelName)) {
+						throw new Error(
+							`inference model '${modelName}' not found`,
+						);
+					}
+					return models.filter((model) => model !== modelName);
+				});
 			},
 			delete(name: string): Promise<void> {
 				return client

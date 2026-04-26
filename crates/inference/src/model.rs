@@ -76,6 +76,9 @@ pub struct InferenceProvider {
 
 	/// Base URL for provider API requests.
 	pub api_base_url: String,
+
+	/// Model names supported by this provider.
+	pub models: Vec<String>,
 }
 
 /// Provider creation input.
@@ -92,6 +95,10 @@ pub struct CreateInferenceProvider {
 
 	/// Provider API key. This is write-only and never stored in JSON.
 	pub api_key: String,
+
+	/// Model names supported by this provider.
+	#[serde(default)]
+	pub models: Vec<String>,
 }
 
 impl fmt::Debug for CreateInferenceProvider {
@@ -100,6 +107,7 @@ impl fmt::Debug for CreateInferenceProvider {
 			.field("name", &self.name)
 			.field("format", &self.format)
 			.field("api_base_url", &self.api_base_url)
+			.field("models", &self.models)
 			.field("api_key", &"[redacted]")
 			.finish()
 	}
@@ -119,6 +127,9 @@ pub struct UpdateInferenceProvider {
 
 	/// Updated provider API key. This is write-only and never stored in JSON.
 	pub api_key: Option<String>,
+
+	/// Updated model names supported by this provider.
+	pub models: Option<Vec<String>>,
 }
 
 impl fmt::Debug for UpdateInferenceProvider {
@@ -127,6 +138,7 @@ impl fmt::Debug for UpdateInferenceProvider {
 			.field("name", &self.name)
 			.field("format", &self.format)
 			.field("api_base_url", &self.api_base_url)
+			.field("models", &self.models)
 			.field("api_key", &self.api_key.as_ref().map(|_| "[redacted]"))
 			.finish()
 	}

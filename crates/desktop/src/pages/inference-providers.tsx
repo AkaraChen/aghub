@@ -78,6 +78,23 @@ interface InferenceProviderFormValues {
 	format: InferenceProviderFormatDto;
 	apiBaseUrl: string;
 	apiKey: string;
+	models: ProviderModelFormValue[];
+}
+
+interface ProviderModelFormValue {
+	id: string;
+	name: string;
+}
+
+let nextProviderModelId = 0;
+
+function createProviderModelFormValue(name = ""): ProviderModelFormValue {
+	const id = `provider-model-${nextProviderModelId++}`;
+	return { id, name };
+}
+
+function toProviderModelFormValues(models: string[]) {
+	return models.map((model) => createProviderModelFormValue(model));
 }
 
 function formatOption(
@@ -118,6 +135,115 @@ function MonoValue({
 	);
 }
 
+function normalizeModelNames(models: ProviderModelFormValue[]) {
+	return models.map((model) => model.name.trim()).filter(Boolean);
+}
+
+function validateModelNames(models: ProviderModelFormValue[], message: string) {
+	const seen = new Set<string>();
+
+	for (const model of models) {
+		const name = model.name.trim();
+		if (!name) continue;
+
+		const key = name.toLowerCase();
+		if (seen.has(key)) return message;
+		seen.add(key);
+	}
+
+	return true;
+}
+
+function ProviderModelsEditor({
+	value,
+	onChange,
+	onBlur,
+	errorMessage,
+}: {
+	value: ProviderModelFormValue[];
+	onChange: (value: ProviderModelFormValue[]) => void;
+	onBlur: () => void;
+	errorMessage?: string;
+}) {
+	const { t } = useTranslation();
+	const emptyModel = useMemo(() => createProviderModelFormValue(), []);
+	const displayModels = value.length > 0 ? value : [emptyModel];
+
+	const handleAdd = () => {
+		onChange([...value, createProviderModelFormValue()]);
+	};
+
+	const handleRemove = (id: string) => {
+		onChange(value.filter((model) => model.id !== id));
+	};
+
+	const handleChange = (id: string, modelName: string) => {
+		const nextModels =
+			value.length > 0
+				? value.map((model) =>
+						model.id === id ? { ...model, name: modelName } : model,
+					)
+				: [{ ...emptyModel, name: modelName }];
+		onChange(nextModels);
+	};
+
+	return (
+		<div className="grid gap-2">
+			<div className="flex items-start justify-between gap-3">
+				<div className="grid gap-0.5">
+					<Label>{t("providerModels")}</Label>
+					<p className="text-xs text-muted">
+						{t("providerModelsDescription")}
+					</p>
+				</div>
+				<Button
+					type="button"
+					variant="secondary"
+					size="sm"
+					onPress={handleAdd}
+				>
+					<PlusIcon className="size-4" />
+					{t("addProviderModel")}
+				</Button>
+			</div>
+
+			<div className="grid gap-2">
+				{displayModels.map((model) => (
+					<div key={model.id} className="flex items-start gap-2">
+						<Input
+							value={model.name}
+							onChange={(event) =>
+								handleChange(model.id, event.target.value)
+							}
+							onBlur={onBlur}
+							placeholder={t("providerModelNamePlaceholder")}
+							aria-label={t("providerModelName")}
+							variant="secondary"
+							className="min-w-0 flex-1"
+						/>
+						<Button
+							type="button"
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							className="mt-1 shrink-0 text-muted"
+							aria-label={t("remove")}
+							isDisabled={value.length === 0}
+							onPress={() => handleRemove(model.id)}
+						>
+							<TrashIcon className="size-4" />
+						</Button>
+					</div>
+				))}
+			</div>
+
+			{errorMessage && (
+				<p className="text-sm text-danger">{errorMessage}</p>
+			)}
+		</div>
+	);
+}
+
 function ProviderForm({
 	mode,
 	provider,
@@ -144,6 +270,7 @@ function ProviderForm({
 			format: provider?.format ?? "openai_responses",
 			apiBaseUrl: provider?.api_base_url ?? "",
 			apiKey: "",
+			models: toProviderModelFormValues(provider?.models ?? []),
 		},
 	});
 
@@ -169,6 +296,7 @@ function ProviderForm({
 		const name = values.name.trim();
 		const apiBaseUrl = values.apiBaseUrl.trim();
 		const apiKey = values.apiKey.trim();
+		const models = normalizeModelNames(values.models);
 
 		try {
 			if (mode === "create") {
@@ -177,6 +305,7 @@ function ProviderForm({
 					format: values.format,
 					api_base_url: apiBaseUrl,
 					api_key: apiKey,
+					models,
 				});
 				toast.success(t("inferenceProviderCreated"));
 				onSuccess(created);
@@ -191,6 +320,7 @@ function ProviderForm({
 					format: values.format,
 					api_base_url: apiBaseUrl,
 					api_key: apiKey || null,
+					models,
 				},
 			});
 			toast.success(t("inferenceProviderUpdated"));
@@ -432,6 +562,30 @@ function ProviderForm({
 										</TextField>
 									)}
 								/>
+
+								<Controller
+									name="models"
+									control={control}
+									rules={{
+										validate: (value) =>
+											validateModelNames(
+												value,
+												t(
+													"validationProviderModelNameUnique",
+												),
+											),
+									}}
+									render={({ field, fieldState }) => (
+										<ProviderModelsEditor
+											value={field.value}
+											onChange={field.onChange}
+											onBlur={field.onBlur}
+											errorMessage={
+												fieldState.error?.message
+											}
+										/>
+									)}
+								/>
 							</Fieldset.Group>
 						</Fieldset>
 
@@ -531,6 +685,20 @@ function ProviderDetail({
 			);
 		} finally {
 			setIsCopying(false);
+		}
+	};
+
+	const handleCopyModel = async (modelName: string) => {
+		try {
+			await navigator.clipboard.writeText(modelName);
+			toast.success(t("providerModelNameCopied"));
+		} catch (error) {
+			console.error("Failed to copy inference model name:", error);
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: t("providerModelNameCopyFailed"),
+			);
 		}
 	};
 
@@ -639,6 +807,37 @@ function ProviderDetail({
 									</Button>
 								</div>
 							</div>
+
+							<div className="grid gap-1.5 py-1">
+								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+									{t("providerModels")}
+								</h3>
+								{provider.models.length === 0 ? (
+									<p className="text-sm text-muted">
+										{t("noProviderModels")}
+									</p>
+								) : (
+									<div className="flex flex-wrap gap-2">
+										{provider.models.map((model) => (
+											<button
+												key={model}
+												type="button"
+												className="max-w-full cursor-copy truncate rounded-md bg-surface-secondary px-2.5 py-1 font-mono text-xs leading-5 text-foreground transition-colors hover:bg-default focus:ring-2 focus:ring-accent/40 focus:outline-none"
+												aria-label={t(
+													"copyProviderModelName",
+													{ name: model },
+												)}
+												title={model}
+												onClick={() =>
+													handleCopyModel(model)
+												}
+											>
+												{model}
+											</button>
+										))}
+									</div>
+								)}
+							</div>
 						</Card.Content>
 					</Card>
 				</div>
@@ -712,7 +911,10 @@ export default function InferenceProvidersPage() {
 				provider.name.toLowerCase().includes(query) ||
 				provider.api_base_url.toLowerCase().includes(query) ||
 				provider.format.includes(query) ||
-				format.includes(query)
+				format.includes(query) ||
+				provider.models.some((model) =>
+					model.toLowerCase().includes(query),
+				)
 			);
 		});
 	}, [providers, searchQuery, t]);
