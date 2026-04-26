@@ -2,24 +2,29 @@ import antfu from "@antfu/eslint-config";
 import eslintReact from "@eslint-react/eslint-plugin";
 import tailwind from "eslint-plugin-better-tailwindcss";
 
-export default antfu({
+const baseConfig = await antfu({
 	react: false,
 	stylistic: false,
 	imports: false,
 })
-	.append({
+	.removePlugins("perfectionist")
+	.toConfigs();
+
+export default [
+	...baseConfig,
+	{
 		...eslintReact.configs["recommended-typescript"],
 		files: ["**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}"],
-	})
-	.append({
+	},
+	{
 		...tailwind.configs.correctness,
 		settings: {
 			"better-tailwindcss": {
 				entryPoint: "./src/index.css",
 			},
 		},
-	})
-	.append({
+	},
+	{
 		ignores: ["./src/generated/**"],
-	})
-	.removePlugins("perfectionist");
+	},
+];

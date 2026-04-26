@@ -1,3 +1,4 @@
+use aghub_cc_plugins::claude::ClaudePluginManager;
 use aghub_core::{
 	convert_skill, create_adapter,
 	errors::ConfigError,
@@ -39,6 +40,29 @@ use crate::{
 	state::{GitCloneSession, GitCloneSessions},
 };
 
+#[derive(rocket::FromForm)]
+pub(crate) struct SkillListParams {
+	scope: Option<String>,
+	project_root: Option<String>,
+	include_managed: Option<bool>,
+}
+
+impl SkillListParams {
+	fn resolve_scope(
+		&self,
+	) -> Result<crate::extractors::ResolvedScope, ApiError> {
+		ScopeParams {
+			scope: self.scope.clone(),
+			project_root: self.project_root.clone(),
+		}
+		.resolve()
+	}
+
+	fn include_managed(&self) -> bool {
+		self.include_managed.unwrap_or(false)
+	}
+}
+
 fn expand_tilde_path(path: &str) -> std::path::PathBuf {
 	if path.starts_with("~/") {
 		dirs::home_dir()
@@ -47,6 +71,13 @@ fn expand_tilde_path(path: &str) -> std::path::PathBuf {
 	} else {
 		path.into()
 	}
+}
+
+fn detect_plugin_for_path(path: &std::path::Path) -> Option<String> {
+	let plugins = ClaudePluginManager::new().ok()?;
+	plugins
+		.plugin_owning_path(path)
+		.map(|plugin| plugin.display_name.clone())
 }
 
 async fn list_branches_for_scan<F>(
@@ -233,6 +264,17 @@ pub fn delete_skill_by_path(
 			success: true,
 			deleted_path: Some(skill_dir.display().to_string()),
 			error: None,
+			validation_errors: None,
+		}));
+	}
+
+	if let Some(plugin_name) = detect_plugin_for_path(&skill_dir) {
+		return Ok(Json(DeleteSkillByPathResponse {
+			success: false,
+			deleted_path: None,
+			error: Some(format!(
+				"Cannot delete plugin-managed skill from plugin '{plugin_name}'"
+			)),
 			validation_errors: None,
 		}));
 	}
@@ -699,6 +741,7 @@ pub fn update_skill(
 			ApiError::from(ConfigError::resource_not_found("skill", name))
 		})?
 		.clone();
+	ensure_skill_not_plugin_managed(&existing, "update")?;
 	let updated = body.into_inner().apply_to(existing);
 	let response = SkillResponse::from(&updated);
 	manager
@@ -719,6 +762,9 @@ pub fn delete_skill(
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
+	if let Some(skill) = manager.get_skill(name) {
+		ensure_skill_not_plugin_managed(skill, "delete")?;
+	}
 	manager.remove_skill(name).map_err(ApiError::from)?;
 	Ok(NoContent)
 }
@@ -735,6 +781,9 @@ pub fn enable_skill(
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
+	if let Some(skill) = manager.get_skill(name) {
+		ensure_skill_not_plugin_managed(skill, "enable")?;
+	}
 	manager.enable_skill(name).map_err(ApiError::from)?;
 	let skill = manager.get_skill(name).expect("skill present after enable");
 	Ok(Json(SkillResponse::from(skill)))
@@ -752,6 +801,9 @@ pub fn disable_skill(
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
+	if let Some(skill) = manager.get_skill(name) {
+		ensure_skill_not_plugin_managed(skill, "disable")?;
+	}
 	manager.disable_skill(name).map_err(ApiError::from)?;
 	let skill = manager
 		.get_skill(name)
@@ -759,19 +811,70 @@ pub fn disable_skill(
 	Ok(Json(SkillResponse::from(skill)))
 }
 
-#[get("/agents/all/skills?<scope..>")]
-pub fn list_all_agents_skills(
-	scope: ScopeParams,
+/// Reject mutations on skills owned by a Claude plugin.
+fn ensure_skill_not_plugin_managed(
+	skill: &Skill,
+	action: &str,
+) -> Result<(), ApiError> {
+	if let Some(plugin_name) = detect_plugin_for_path_if_present(skill) {
+		return Err(ApiError::new(
+			Status::BadRequest,
+			format!(
+				"Cannot {action} skill '{}' managed by plugin '{plugin_name}'",
+				skill.name
+			),
+			"MANAGED_RESOURCE",
+		));
+	}
+	Ok(())
+}
+
+fn detect_plugin_for_path_if_present(skill: &Skill) -> Option<String> {
+	let source_path = skill
+		.canonical_path
+		.as_deref()
+		.or(skill.source_path.as_deref())?;
+	let full_path = expand_tilde_path(source_path);
+	detect_plugin_for_path(&full_path)
+}
+
+fn is_plugin_managed_skill(
+	skill: &Skill,
+	plugins: &[aghub_cc_plugins::claude::ClaudePluginInfo],
+) -> bool {
+	let source_path = skill
+		.canonical_path
+		.as_deref()
+		.or(skill.source_path.as_deref());
+	let Some(path) = source_path else {
+		return false;
+	};
+	let full_path = expand_tilde_path(path);
+	plugins.iter().any(|plugin| plugin.owns_path(&full_path))
+}
+
+#[get("/agents/all/skills?<params..>")]
+pub(crate) fn list_all_agents_skills(
+	params: SkillListParams,
 ) -> ApiResult<Vec<SkillResponse>> {
-	let resolved = scope.resolve()?;
+	let include_managed = params.include_managed();
+	let resolved = params.resolve_scope()?;
 	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
+	let detected_plugins = ClaudePluginManager::new()
+		.map(|manager| manager.list_plugins().to_vec())
+		.unwrap_or_default();
 	let items = load_all_agents(resource_scope, project_root.as_deref())
 		.into_iter()
 		.flat_map(|ar| {
-			let id = ar.agent_id;
-			ar.skills
-				.into_iter()
-				.map(move |s| SkillResponse::from((s, id)))
+			let agent_id = ar.agent_id;
+			let plugins = &detected_plugins;
+			ar.skills.into_iter().filter_map(move |skill| {
+				if !include_managed && is_plugin_managed_skill(&skill, plugins)
+				{
+					return None;
+				}
+				Some(SkillResponse::from_agent_skill(skill, agent_id))
+			})
 		})
 		.collect();
 	Ok(Json(items))

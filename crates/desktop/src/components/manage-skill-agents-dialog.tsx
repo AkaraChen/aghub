@@ -1,6 +1,6 @@
 import { Button, Modal, toast } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
@@ -61,20 +61,11 @@ export function ManageSkillAgentsDialog({
 		[availableAgents, installedAgentIds, scope],
 	);
 
-	const prevIsOpenRef = useRef(false);
 	const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
 	const [agentStates, setAgentStates] = useState<Record<string, AgentState>>(
 		{},
 	);
 	const [isApplying, setIsApplying] = useState(false);
-
-	if (isOpen && !prevIsOpenRef.current) {
-		queueMicrotask(() => {
-			setSelectedAgents([]);
-			setAgentStates({});
-		});
-	}
-	prevIsOpenRef.current = isOpen;
 
 	const selectedSet = useMemo(
 		() => new Set(selectedAgents),

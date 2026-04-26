@@ -1,8 +1,6 @@
 import { StarIcon as StarIconOutline } from "@heroicons/react/24/outline";
 import {
 	CheckCircleIcon,
-	ChevronDownIcon,
-	ChevronUpIcon,
 	DocumentDuplicateIcon,
 	ExclamationTriangleIcon,
 	PencilIcon,
@@ -30,7 +28,9 @@ import { AgentIcon } from "../lib/agent-icons";
 import { serializeMcpImportJson } from "../lib/mcp-utils";
 import { cn, filterItemsByAgentIds, sortAgentObjects } from "../lib/utils";
 import { invalidateMcpQueries } from "../requests/mcps";
+import { KeyValueList } from "./key-value-list";
 import { ManageAgentsDialog } from "./manage-agents-dialog";
+import { CodeBlock, MetaRow } from "./meta-blocks";
 import { TransferDialog } from "./transfer-dialog";
 
 export interface McpGroup {
@@ -43,125 +43,6 @@ interface McpDetailProps {
 	group: McpGroup;
 	onEdit: () => void;
 	projectPath?: string;
-}
-
-function MetaRow({
-	label,
-	value,
-	mono = false,
-}: {
-	label: string;
-	value: string;
-	mono?: boolean;
-}) {
-	// Truncate very long values to prevent overflow
-	const displayValue =
-		value.length > 200 ? `${value.slice(0, 200)}...` : value;
-
-	return (
-		<div className="grid gap-1.5 py-1">
-			<span className="text-[11px] font-medium tracking-wide text-muted uppercase">
-				{label}
-			</span>
-			<span
-				className={cn(
-					"min-w-0 text-sm text-foreground",
-					mono &&
-						"overflow-x-auto rounded-md bg-surface-secondary px-3 py-2 font-mono text-xs leading-5 text-foreground",
-				)}
-				title={value.length > 200 ? value : undefined}
-			>
-				{displayValue}
-			</span>
-		</div>
-	);
-}
-
-function CodeBlock({
-	label,
-	command,
-	args,
-}: {
-	label: string;
-	command: string;
-	args?: string[];
-}) {
-	const commandLine =
-		args && args.length > 0 ? `${command} ${args.join(" ")}` : command;
-
-	return (
-		<div className="grid gap-1.5">
-			<span className="text-[11px] font-medium tracking-wide text-muted uppercase">
-				{label}
-			</span>
-			<div className="overflow-x-auto rounded-lg border border-separator bg-surface-secondary px-3 py-2">
-				<code className="block font-mono text-xs leading-5 text-foreground whitespace-pre-wrap break-words">
-					{commandLine}
-				</code>
-			</div>
-		</div>
-	);
-}
-
-function KeyValueList({
-	items,
-	collapsedCount = 2,
-	showAll,
-	onToggle,
-	showMoreLabel,
-	showLessLabel,
-}: {
-	items: Array<[string, string]>;
-	collapsedCount?: number;
-	showAll: boolean;
-	onToggle: () => void;
-	showMoreLabel: (count: number) => string;
-	showLessLabel: string;
-}) {
-	const displayedItems =
-		showAll || items.length <= collapsedCount
-			? items
-			: items.slice(0, collapsedCount);
-	const hiddenCount = Math.max(items.length - collapsedCount, 0);
-
-	return (
-		<div className="grid gap-1.5">
-			<div className="space-y-2">
-				{displayedItems.map(([key, value]) => (
-					<div
-						key={key}
-						className="grid gap-1 rounded-lg border border-separator bg-surface-secondary px-3 py-2"
-					>
-						<span className="font-mono text-[11px] text-muted">
-							{key}
-						</span>
-						<code className="font-mono text-xs leading-5 text-foreground break-words">
-							{value}
-						</code>
-					</div>
-				))}
-			</div>
-			{hiddenCount > 0 && (
-				<button
-					type="button"
-					onClick={onToggle}
-					className="flex items-center gap-1 text-xs text-muted transition-colors hover:text-foreground"
-				>
-					{showAll ? (
-						<>
-							<ChevronUpIcon className="size-3.5" />
-							<span>{showLessLabel}</span>
-						</>
-					) : (
-						<>
-							<ChevronDownIcon className="size-3.5" />
-							<span>{showMoreLabel(hiddenCount)}</span>
-						</>
-					)}
-				</button>
-			)}
-		</div>
-	);
 }
 
 interface McpDetailUiState {

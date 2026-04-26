@@ -77,17 +77,19 @@ function SubAgentAgentIcons({ items }: { items: SubAgentResponse[] }) {
 		<div className="flex shrink-0 items-center -space-x-1">
 			{agents.slice(0, 3).map((agentId, idx) => (
 				<Tooltip key={agentId} delay={0}>
-					<div
-						className="relative rounded-full bg-surface ring-1 ring-surface transition-transform hover:scale-110"
-						style={{ zIndex: 3 - idx }}
-					>
-						<AgentIcon
-							id={agentId}
-							name={formatAgentName(agentId)}
-							size="xs"
-							variant="ghost"
-						/>
-					</div>
+					<Tooltip.Trigger>
+						<div
+							className="relative rounded-full bg-surface ring-1 ring-surface transition-transform hover:scale-110"
+							style={{ zIndex: 3 - idx }}
+						>
+							<AgentIcon
+								id={agentId}
+								name={formatAgentName(agentId)}
+								size="xs"
+								variant="ghost"
+							/>
+						</div>
+					</Tooltip.Trigger>
 					<Tooltip.Content>
 						{formatAgentName(agentId)}
 					</Tooltip.Content>

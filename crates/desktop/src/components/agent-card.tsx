@@ -26,7 +26,7 @@ export function AgentCard({ agent, isUpdating, onToggle }: AgentCardProps) {
 		<Tooltip delay={500}>
 			<Card
 				className="bg-surface transition-all duration-200"
-				variant="transparent"
+				variant="secondary"
 			>
 				<Card.Content className="flex flex-row items-center gap-3">
 					<AgentIcon id={agent.id} name={agent.display_name} />
@@ -41,20 +41,24 @@ export function AgentCard({ agent, isUpdating, onToggle }: AgentCardProps) {
 						)}
 					</div>
 					<Tooltip>
-						<Switch
-							isSelected={!agent.isDisabled}
-							onChange={() =>
-								onToggle(agent.id, agent.isDisabled)
-							}
-							isDisabled={isUpdating}
-							aria-label={t("toggleAgent", {
-								name: agent.display_name,
-							})}
-						>
-							<Switch.Control>
-								<Switch.Thumb />
-							</Switch.Control>
-						</Switch>
+						<Tooltip.Trigger>
+							<span className="inline-flex">
+								<Switch
+									isSelected={!agent.isDisabled}
+									onChange={() =>
+										onToggle(agent.id, agent.isDisabled)
+									}
+									isDisabled={isUpdating}
+									aria-label={t("toggleAgent", {
+										name: agent.display_name,
+									})}
+								>
+									<Switch.Control>
+										<Switch.Thumb />
+									</Switch.Control>
+								</Switch>
+							</span>
+						</Tooltip.Trigger>
 						<Tooltip.Content>
 							{agent.isDisabled
 								? t("enableAgentTooltip", {
