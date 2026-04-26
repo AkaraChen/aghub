@@ -992,6 +992,12 @@ export default function InferenceProvidersPage() {
 		setPanel({ type: "detail" });
 	};
 
+	const handleEditProviderByName = (name: string) => {
+		const provider = providers.find((provider) => provider.name === name);
+		setSelectedName(name);
+		setPanel(provider ? { type: "edit", provider } : { type: "detail" });
+	};
+
 	if (isLoading) {
 		return (
 			<div className="flex h-full items-center justify-center">
@@ -1152,7 +1158,9 @@ export default function InferenceProvidersPage() {
 
 			<div className="relative flex-1 overflow-hidden">
 				{panel.type === "agent" && panel.agentId === "opencode" && (
-					<OpenCodeInferenceProviderPanel />
+					<OpenCodeInferenceProviderPanel
+						onEditInferenceProvider={handleEditProviderByName}
+					/>
 				)}
 
 				{panel.type === "agent" && panel.agentId === "codex" && (

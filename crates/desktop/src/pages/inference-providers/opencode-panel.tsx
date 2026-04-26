@@ -439,7 +439,11 @@ function ProviderRow({
 							isIconOnly
 							variant="ghost"
 							size="sm"
-							aria-label={t("editOpenCodeProvider")}
+							aria-label={t(
+								matchedProvider
+									? "editInferenceProvider"
+									: "editOpenCodeProvider",
+							)}
 							onPress={onEdit}
 						>
 							<PencilIcon className="size-4" />
@@ -467,7 +471,11 @@ function ProviderRow({
 	);
 }
 
-export function OpenCodeInferenceProviderPanel() {
+export function OpenCodeInferenceProviderPanel({
+	onEditInferenceProvider,
+}: {
+	onEditInferenceProvider: (providerName: string) => void;
+}) {
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
@@ -524,6 +532,16 @@ export function OpenCodeInferenceProviderPanel() {
 			);
 		},
 	});
+
+	const handleEditProvider = (provider: AgentProviderResponse) => {
+		const matchedProvider = provider.matched_inference_provider;
+		if (matchedProvider) {
+			onEditInferenceProvider(matchedProvider.name);
+			return;
+		}
+
+		setProviderDialog({ type: "edit", provider });
+	};
 
 	return (
 		<>
@@ -621,10 +639,9 @@ export function OpenCodeInferenceProviderPanel() {
 															provider.id
 													}
 													onEdit={() =>
-														setProviderDialog({
-															type: "edit",
+														handleEditProvider(
 															provider,
-														})
+														)
 													}
 													onSync={() =>
 														syncMutation.mutate(
