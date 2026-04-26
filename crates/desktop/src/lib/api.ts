@@ -2,7 +2,9 @@ import ky, { isHTTPError } from "ky";
 import type {
 	AgentAvailabilityDto,
 	AgentInfo,
+	AgentProviderResponse,
 	CodeEditorType,
+	CreateAgentProviderRequest,
 	CreateCredentialRequest,
 	CreateInferenceProviderRequest,
 	CreateMcpRequest,
@@ -33,6 +35,7 @@ import type {
 	SubAgentResponse,
 	ToolInfoDto,
 	TransferRequest,
+	UpdateAgentProviderRequest,
 	UpdateInferenceProviderRequest,
 	UpdateMcpRequest,
 	UpdateSubAgentRequest,
@@ -482,6 +485,9 @@ export function createApi(baseUrl: string) {
 			list(): Promise<InferenceProviderResponse[]> {
 				return client.get("inference/providers").json();
 			},
+			listOpenCode(): Promise<AgentProviderResponse[]> {
+				return client.get("inference/agents/opencode/providers").json();
+			},
 			getPassword(
 				name: string,
 			): Promise<InferenceProviderPasswordResponse> {
@@ -498,6 +504,13 @@ export function createApi(baseUrl: string) {
 					.post("inference/providers", { json: body })
 					.json();
 			},
+			createOpenCode(
+				body: CreateAgentProviderRequest,
+			): Promise<AgentProviderResponse> {
+				return client
+					.post("inference/agents/opencode/providers", { json: body })
+					.json();
+			},
 			update(
 				name: string,
 				body: UpdateInferenceProviderRequest,
@@ -506,6 +519,17 @@ export function createApi(baseUrl: string) {
 					.put(`inference/providers/${encodeURIComponent(name)}`, {
 						json: body,
 					})
+					.json();
+			},
+			updateOpenCode(
+				id: string,
+				body: UpdateAgentProviderRequest,
+			): Promise<AgentProviderResponse> {
+				return client
+					.put(
+						`inference/agents/opencode/providers/${encodeURIComponent(id)}`,
+						{ json: body },
+					)
 					.json();
 			},
 			async createModel(
@@ -550,6 +574,13 @@ export function createApi(baseUrl: string) {
 			delete(name: string): Promise<void> {
 				return client
 					.delete(`inference/providers/${encodeURIComponent(name)}`)
+					.then(() => undefined);
+			},
+			deleteOpenCode(id: string): Promise<void> {
+				return client
+					.delete(
+						`inference/agents/opencode/providers/${encodeURIComponent(id)}`,
+					)
 					.then(() => undefined);
 			},
 		},

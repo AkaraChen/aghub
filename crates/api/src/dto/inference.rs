@@ -1,6 +1,7 @@
 use aghub_inference::{
-	CreateInferenceProvider, InferenceProvider, InferenceProviderFormat,
-	UpdateInferenceProvider,
+	AgentProviderBinding, AgentProviderCredential, AgentProviderModel,
+	AgentProviderSource, CreateInferenceProvider, InferenceProvider,
+	InferenceProviderFormat, UpdateInferenceProvider,
 };
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -93,6 +94,7 @@ pub struct InferenceProviderResponse {
 	pub name: String,
 	pub format: InferenceProviderFormatDto,
 	pub api_base_url: String,
+	pub masked_api_key: String,
 	pub models: Vec<String>,
 }
 
@@ -109,6 +111,7 @@ impl From<&InferenceProvider> for InferenceProviderResponse {
 			name: provider.name.clone(),
 			format: provider.format.into(),
 			api_base_url: provider.api_base_url.clone(),
+			masked_api_key: provider.masked_api_key.clone(),
 			models: provider.models.clone(),
 		}
 	}
@@ -119,4 +122,116 @@ impl From<&InferenceProvider> for InferenceProviderResponse {
 pub struct InferenceProviderPasswordResponse {
 	pub name: String,
 	pub api_key: String,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentProviderSourceDto {
+	ClosedSlot,
+	BuiltIn,
+	Custom,
+	StoredCredential,
+}
+
+impl From<AgentProviderSource> for AgentProviderSourceDto {
+	fn from(value: AgentProviderSource) -> Self {
+		match value {
+			AgentProviderSource::ClosedSlot => Self::ClosedSlot,
+			AgentProviderSource::BuiltIn => Self::BuiltIn,
+			AgentProviderSource::Custom => Self::Custom,
+			AgentProviderSource::StoredCredential => Self::StoredCredential,
+		}
+	}
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AgentProviderCredentialDto {
+	None,
+	EnvVar { name: String },
+	AgentStore { id: Option<String> },
+	Inline,
+}
+
+impl From<&AgentProviderCredential> for AgentProviderCredentialDto {
+	fn from(value: &AgentProviderCredential) -> Self {
+		match value {
+			AgentProviderCredential::None => Self::None,
+			AgentProviderCredential::EnvVar { name } => {
+				Self::EnvVar { name: name.clone() }
+			}
+			AgentProviderCredential::AgentStore { id } => {
+				Self::AgentStore { id: id.clone() }
+			}
+			AgentProviderCredential::Inline => Self::Inline,
+		}
+	}
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct AgentProviderModelResponse {
+	pub id: String,
+	pub name: Option<String>,
+}
+
+impl From<&AgentProviderModel> for AgentProviderModelResponse {
+	fn from(value: &AgentProviderModel) -> Self {
+		Self {
+			id: value.id.clone(),
+			name: value.name.clone(),
+		}
+	}
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct AgentProviderResponse {
+	pub id: String,
+	pub source_provider_id: Option<String>,
+	pub name: String,
+	pub format: Option<InferenceProviderFormatDto>,
+	pub api_base_url: Option<String>,
+	pub credential: AgentProviderCredentialDto,
+	pub models: Vec<AgentProviderModelResponse>,
+	pub source: AgentProviderSourceDto,
+}
+
+impl From<AgentProviderBinding> for AgentProviderResponse {
+	fn from(provider: AgentProviderBinding) -> Self {
+		Self::from(&provider)
+	}
+}
+
+impl From<&AgentProviderBinding> for AgentProviderResponse {
+	fn from(provider: &AgentProviderBinding) -> Self {
+		Self {
+			id: provider.id.clone(),
+			source_provider_id: provider.source_provider_id.clone(),
+			name: provider.name.clone(),
+			format: provider.format.map(Into::into),
+			api_base_url: provider.api_base_url.clone(),
+			credential: (&provider.credential).into(),
+			models: provider
+				.models
+				.iter()
+				.map(AgentProviderModelResponse::from)
+				.collect(),
+			source: provider.source.into(),
+		}
+	}
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct CreateAgentProviderRequest {
+	pub inference_provider_id: String,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct UpdateAgentProviderRequest {
+	pub inference_provider_id: String,
 }

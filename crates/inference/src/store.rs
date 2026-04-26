@@ -143,7 +143,7 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 		id: &str,
 	) -> Result<InferenceProvider> {
 		let row = sqlx::query(
-			"SELECT id, name, format, api_base_url \
+			"SELECT id, name, format, api_base_url, masked_api_key \
              FROM inference_providers WHERE id = ?",
 		)
 		.bind(id)
@@ -239,6 +239,7 @@ fn map_row(row: sqlx::sqlite::SqliteRow) -> Result<InferenceProvider> {
 		name: row.try_get("name")?,
 		format,
 		api_base_url: row.try_get("api_base_url")?,
+		masked_api_key: row.try_get("masked_api_key")?,
 		models: Vec::new(),
 	})
 }
@@ -250,7 +251,7 @@ impl<C: CredentialStore> InferenceProviderRepository
 		self.block_on(async {
 			let mut conn = self.open_db().await?;
 			let rows = sqlx::query(
-				"SELECT id, name, format, api_base_url \
+				"SELECT id, name, format, api_base_url, masked_api_key \
                  FROM inference_providers ORDER BY rowid",
 			)
 			.fetch_all(&mut conn)
@@ -291,6 +292,7 @@ impl<C: CredentialStore> InferenceProviderRepository
 				name,
 				format: input.format,
 				api_base_url,
+				masked_api_key: mask_api_key(&input.api_key),
 				models,
 			};
 
@@ -299,13 +301,14 @@ impl<C: CredentialStore> InferenceProviderRepository
 			let result: Result<()> = async {
 				sqlx::query(
 					"INSERT INTO inference_providers \
-                     (id, name, format, api_base_url) \
-                     VALUES (?, ?, ?, ?)",
+                     (id, name, format, api_base_url, masked_api_key) \
+                     VALUES (?, ?, ?, ?, ?)",
 				)
 				.bind(&provider.id)
 				.bind(&provider.name)
 				.bind(provider.format.to_string())
 				.bind(&provider.api_base_url)
+				.bind(&provider.masked_api_key)
 				.execute(&mut conn)
 				.await?;
 				Self::replace_models(&mut conn, &provider.id, &provider.models)
@@ -366,6 +369,7 @@ impl<C: CredentialStore> InferenceProviderRepository
 					ensure_api_key(api_key)?;
 					let previous = self.credentials.get_api_key(id)?;
 					self.credentials.set_api_key(id, api_key)?;
+					provider.masked_api_key = mask_api_key(api_key);
 					Some(previous)
 				}
 				None => None,
@@ -374,12 +378,14 @@ impl<C: CredentialStore> InferenceProviderRepository
 			let result: Result<()> = async {
 				sqlx::query(
 					"UPDATE inference_providers \
-                     SET name = ?, format = ?, api_base_url = ? \
+                     SET name = ?, format = ?, api_base_url = ?, \
+                         masked_api_key = ? \
                      WHERE id = ?",
 				)
 				.bind(&provider.name)
 				.bind(provider.format.to_string())
 				.bind(&provider.api_base_url)
+				.bind(&provider.masked_api_key)
 				.bind(id)
 				.execute(&mut conn)
 				.await?;
@@ -440,14 +446,62 @@ impl<C: CredentialStore> InferenceProviderRepository
 	}
 
 	fn set_api_key(&self, id: &str, api_key: &str) -> Result<()> {
-		self.get(id)?;
 		ensure_api_key(api_key)?;
-		self.credentials.set_api_key(id, api_key)
+		self.block_on(async {
+			let mut conn = self.open_db().await?;
+			Self::fetch_by_id(&mut conn, id).await?;
+			let previous = self.credentials.get_api_key(id)?;
+			self.credentials.set_api_key(id, api_key)?;
+
+			let result = sqlx::query(
+				"UPDATE inference_providers SET masked_api_key = ? \
+                 WHERE id = ?",
+			)
+			.bind(mask_api_key(api_key))
+			.bind(id)
+			.execute(&mut conn)
+			.await;
+
+			if let Err(error) = result {
+				match previous {
+					Some(key) => {
+						let _ = self.credentials.set_api_key(id, &key);
+					}
+					None => {
+						let _ = self.credentials.delete_api_key(id);
+					}
+				}
+				return Err(error.into());
+			}
+
+			Ok(())
+		})
 	}
 
 	fn delete_api_key(&self, id: &str) -> Result<()> {
-		self.get(id)?;
-		self.credentials.delete_api_key(id)
+		self.block_on(async {
+			let mut conn = self.open_db().await?;
+			Self::fetch_by_id(&mut conn, id).await?;
+			let previous = self.credentials.get_api_key(id)?;
+			self.credentials.delete_api_key(id)?;
+
+			let result = sqlx::query(
+				"UPDATE inference_providers SET masked_api_key = '' \
+                 WHERE id = ?",
+			)
+			.bind(id)
+			.execute(&mut conn)
+			.await;
+
+			if let Err(error) = result {
+				if let Some(key) = previous {
+					let _ = self.credentials.set_api_key(id, &key);
+				}
+				return Err(error.into());
+			}
+
+			Ok(())
+		})
 	}
 }
 
@@ -490,6 +544,23 @@ fn ensure_api_key(api_key: &str) -> Result<()> {
 	} else {
 		Ok(())
 	}
+}
+
+fn mask_api_key(api_key: &str) -> String {
+	let value = api_key.trim();
+	let chars = value.chars().collect::<Vec<_>>();
+	let len = chars.len();
+
+	if len <= 4 {
+		return "*".repeat(len);
+	}
+
+	let visible_each = (len / 6).clamp(1, 6);
+	let mask_len = len.saturating_sub(visible_each * 2);
+	let prefix = chars.iter().take(visible_each).collect::<String>();
+	let suffix = chars.iter().skip(len - visible_each).collect::<String>();
+
+	format!("{prefix}{}{suffix}", "*".repeat(mask_len))
 }
 
 fn clean_api_base_url(api_base_url: &str) -> Result<String> {
@@ -586,6 +657,7 @@ mod tests {
 		assert_eq!(fetched.name, "OpenAI");
 		assert_eq!(fetched.format, InferenceProviderFormat::OpenAiResponses);
 		assert_eq!(fetched.api_base_url, "https://api.openai.com/v1");
+		assert_eq!(fetched.masked_api_key, "s*****t");
 		assert!(fetched.models.is_empty());
 
 		// API key is kept in the credential store, not in provider metadata
@@ -597,6 +669,17 @@ mod tests {
 		assert_eq!(
 			store.get_api_key(&provider.id).unwrap(),
 			Some("sk-test".to_string())
+		);
+	}
+
+	#[test]
+	fn test_mask_api_key_uses_length_ratio() {
+		assert_eq!(mask_api_key("abc"), "***");
+		assert_eq!(mask_api_key("abcde"), "a***e");
+		assert_eq!(mask_api_key("sk-test"), "s*****t");
+		assert_eq!(
+			mask_api_key("sk-v1-abcdefghijklmnopqrstuvwxyz"),
+			"sk-v1**********************vwxyz"
 		);
 	}
 
@@ -631,6 +714,7 @@ mod tests {
 		assert_eq!(updated.name, "Claude");
 		assert_eq!(updated.format, InferenceProviderFormat::OpenAiCompletions);
 		assert_eq!(updated.api_base_url, "https://gateway.example.com/v1");
+		assert_eq!(updated.masked_api_key, "s********y");
 		assert_eq!(
 			store.get_api_key(&provider.id).unwrap(),
 			Some("second-key".to_string())
@@ -655,6 +739,21 @@ mod tests {
 		assert_eq!(deleted.id, provider.id);
 		assert!(store.list().unwrap().is_empty());
 		assert_eq!(store.credentials.get_api_key(&provider.id).unwrap(), None);
+	}
+
+	#[test]
+	fn test_set_and_delete_api_key_updates_masked_preview() {
+		let (_temp, store) = store();
+		let provider = create_provider(&store, "OpenAI");
+
+		store.set_api_key(&provider.id, "replacement-key").unwrap();
+		assert_eq!(
+			store.get(&provider.id).unwrap().masked_api_key,
+			"re***********ey"
+		);
+
+		store.delete_api_key(&provider.id).unwrap();
+		assert_eq!(store.get(&provider.id).unwrap().masked_api_key, "");
 	}
 
 	#[test]

@@ -52,6 +52,8 @@ export const queryKeys = {
 	inferenceProviders: {
 		all: () => ["inference-providers"] as const,
 		list: () => ["inference-providers", "list"] as const,
+		agent: (agentId: string) =>
+			["inference-providers", "agent", agentId] as const,
 		password: (name: string) =>
 			["inference-providers", "password", name] as const,
 	},

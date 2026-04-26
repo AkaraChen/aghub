@@ -113,6 +113,37 @@ impl OpenCodeProviderAdapter {
 		self.add_provider(&provider_id, provider, api_key)
 	}
 
+	/// Remove a provider definition and matching OpenCode auth entry.
+	pub fn remove_provider(
+		&self,
+		provider_id: &str,
+	) -> Result<AgentProviderBinding> {
+		let provider_id = mapping::clean_provider_id(provider_id)?;
+		let mut state = self.load_providers()?;
+		let removed = state
+			.providers
+			.iter()
+			.find(|provider| provider.id == provider_id)
+			.cloned()
+			.ok_or_else(|| {
+				crate::error::InferenceProviderError::NotFound(
+					provider_id.clone(),
+				)
+			})?;
+
+		state
+			.providers
+			.retain(|provider| provider.id != provider_id);
+		self.save_providers(&state)?;
+
+		let mut auth = files::read_auth_values(&self.auth_path)?;
+		if auth.remove(&provider_id).is_some() {
+			files::write_auth_values(&self.auth_path, &auth)?;
+		}
+
+		Ok(removed)
+	}
+
 	fn set_api_auth(&self, provider_id: &str, api_key: &str) -> Result<()> {
 		let mut auth = files::read_auth_values(&self.auth_path)?;
 		auth.insert(

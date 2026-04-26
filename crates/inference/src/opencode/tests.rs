@@ -19,6 +19,7 @@ fn provider() -> InferenceProvider {
 		name: "OpenRouter".to_string(),
 		format: InferenceProviderFormat::OpenAiCompletions,
 		api_base_url: "https://openrouter.ai/api/v1".to_string(),
+		masked_api_key: "sk****st".to_string(),
 		models: vec!["anthropic/claude-sonnet-4-5".to_string()],
 	}
 }
@@ -219,6 +220,26 @@ fn save_preserves_auth_only_entries_without_configuring_them() {
 	)
 	.unwrap();
 	assert!(config.get("provider").is_none());
+}
+
+#[test]
+fn remove_provider_deletes_config_and_auth_entry() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	adapter
+		.add_provider("openrouter", &provider(), "sk-test")
+		.unwrap();
+
+	let removed = adapter.remove_provider("openrouter").unwrap();
+
+	assert_eq!(removed.id, "openrouter");
+	let state = adapter.load_providers().unwrap();
+	assert!(state.providers.is_empty());
+	let auth: Option<Value> = aghub_json::parse_jsonc_opt(
+		&fs::read_to_string(adapter.auth_path()).unwrap(),
+	)
+	.unwrap();
+	assert!(auth.unwrap().get("openrouter").is_none());
 }
 
 #[test]

@@ -629,6 +629,7 @@ mod tests {
 			name: "OpenRouter".to_string(),
 			format: InferenceProviderFormat::OpenAiResponses,
 			api_base_url: "https://openrouter.ai/api/v1".to_string(),
+			masked_api_key: "sk****st".to_string(),
 			models: vec![
 				"openai/gpt-5.4".to_string(),
 				"anthropic/claude-sonnet-4-5".to_string(),

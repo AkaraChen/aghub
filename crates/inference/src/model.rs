@@ -77,6 +77,9 @@ pub struct InferenceProvider {
 	/// Base URL for provider API requests.
 	pub api_base_url: String,
 
+	/// Masked API key stored for preview only.
+	pub masked_api_key: String,
+
 	/// Model names supported by this provider.
 	pub models: Vec<String>,
 }

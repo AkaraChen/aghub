@@ -4,8 +4,11 @@ import {
 	queryOptions,
 } from "@tanstack/react-query";
 import type {
+	AgentProviderResponse,
+	CreateAgentProviderRequest,
 	CreateInferenceProviderRequest,
 	InferenceProviderResponse,
+	UpdateAgentProviderRequest,
 	UpdateInferenceProviderRequest,
 } from "../generated/dto";
 import type { ApiClient } from "./client";
@@ -30,11 +33,32 @@ export function inferenceProviderListQueryOptions({
 	});
 }
 
+export function openCodeProviderListQueryOptions({
+	api,
+	enabled = true,
+	staleTime = 30_000,
+}: InferenceProviderListQueryParams) {
+	return queryOptions({
+		queryKey: queryKeys.inferenceProviders.agent("opencode"),
+		queryFn: () => api.inferenceProviders.listOpenCode(),
+		enabled,
+		staleTime,
+	});
+}
+
 export async function invalidateInferenceProviderQueries(
 	queryClient: QueryClient,
 ) {
 	await queryClient.invalidateQueries({
 		queryKey: queryKeys.inferenceProviders.all(),
+	});
+}
+
+export async function invalidateOpenCodeProviderQueries(
+	queryClient: QueryClient,
+) {
+	await queryClient.invalidateQueries({
+		queryKey: queryKeys.inferenceProviders.agent("opencode"),
 	});
 }
 
@@ -54,6 +78,27 @@ export function createInferenceProviderMutationOptions({
 			api.inferenceProviders.create(body),
 		onSuccess: async (data) => {
 			await invalidateInferenceProviderQueries(queryClient);
+			await onSuccess?.(data);
+		},
+	});
+}
+
+interface CreateAgentProviderMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (data: AgentProviderResponse) => void | Promise<void>;
+}
+
+export function createOpenCodeProviderMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: CreateAgentProviderMutationParams) {
+	return mutationOptions({
+		mutationFn: (body: CreateAgentProviderRequest) =>
+			api.inferenceProviders.createOpenCode(body),
+		onSuccess: async (data) => {
+			await invalidateOpenCodeProviderQueries(queryClient);
 			await onSuccess?.(data);
 		},
 	});
@@ -120,6 +165,35 @@ export function updateInferenceProviderMutationOptions({
 	});
 }
 
+interface UpdateAgentProviderVariables {
+	id: string;
+	body: UpdateAgentProviderRequest;
+}
+
+interface UpdateAgentProviderMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (
+		data: AgentProviderResponse,
+		variables: UpdateAgentProviderVariables,
+	) => void | Promise<void>;
+}
+
+export function updateOpenCodeProviderMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: UpdateAgentProviderMutationParams) {
+	return mutationOptions({
+		mutationFn: ({ id, body }: UpdateAgentProviderVariables) =>
+			api.inferenceProviders.updateOpenCode(id, body),
+		onSuccess: async (data, variables) => {
+			await invalidateOpenCodeProviderQueries(queryClient);
+			await onSuccess?.(data, variables);
+		},
+	});
+}
+
 interface UpdateInferenceModelVariables {
 	providerName: string;
 	modelName: string;
@@ -173,6 +247,26 @@ export function deleteInferenceProviderMutationOptions({
 		mutationFn: (name: string) => api.inferenceProviders.delete(name),
 		onSuccess: async () => {
 			await invalidateInferenceProviderQueries(queryClient);
+			await onSuccess?.();
+		},
+	});
+}
+
+interface DeleteAgentProviderMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: () => void | Promise<void>;
+}
+
+export function deleteOpenCodeProviderMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: DeleteAgentProviderMutationParams) {
+	return mutationOptions({
+		mutationFn: (id: string) => api.inferenceProviders.deleteOpenCode(id),
+		onSuccess: async () => {
+			await invalidateOpenCodeProviderQueries(queryClient);
 			await onSuccess?.();
 		},
 	});

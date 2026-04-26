@@ -642,6 +642,7 @@ function ProviderDetail({
 	const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 	const [revealedKey, setRevealedKey] = useState<string | null>(null);
 	const [isCopying, setIsCopying] = useState(false);
+	const previewKey = provider.masked_api_key || "••••••••••••••••••••••••";
 
 	const passwordMutation = useMutation({
 		mutationFn: (name: string) => api.inferenceProviders.getPassword(name),
@@ -792,8 +793,7 @@ function ProviderDetail({
 								</h3>
 								<div className="flex min-w-0 items-center gap-2">
 									<MonoValue className="flex-1">
-										{revealedKey ??
-											"••••••••••••••••••••••••"}
+										{revealedKey ?? previewKey}
 									</MonoValue>
 									<Button
 										isIconOnly
