@@ -9,9 +9,27 @@ use crate::agent::{
 use crate::error::{InferenceProviderError, Result};
 use crate::model::InferenceProviderFormat;
 
+pub(super) const OPENAI_PROVIDER_ID: &str = "openai";
+
 const WIRE_API_RESPONSES: &str = "responses";
 const AUTHORIZATION_HEADER: &str = "Authorization";
-const RESERVED_PROVIDER_IDS: &[&str] = &["openai", "ollama", "lmstudio"];
+const RESERVED_PROVIDER_IDS: &[&str] =
+	&[OPENAI_PROVIDER_ID, "ollama", "lmstudio"];
+
+pub(super) fn built_in_openai_binding() -> AgentProviderBinding {
+	AgentProviderBinding {
+		id: OPENAI_PROVIDER_ID.to_string(),
+		source_provider_id: None,
+		name: "OpenAI".to_string(),
+		format: Some(InferenceProviderFormat::OpenAiResponses),
+		api_base_url: None,
+		credential: AgentProviderCredential::AgentStore {
+			id: Some(OPENAI_PROVIDER_ID.to_string()),
+		},
+		models: Vec::<AgentProviderModel>::new(),
+		source: AgentProviderSource::BuiltIn,
+	}
+}
 
 pub(super) fn binding_from_table(
 	provider_id: &str,
@@ -185,7 +203,7 @@ fn string_field(table: &Table, key: &str) -> Option<String> {
 	table.get(key)?.as_str().map(ToString::to_string)
 }
 
-fn is_reserved_provider_id(provider_id: &str) -> bool {
+pub(super) fn is_reserved_provider_id(provider_id: &str) -> bool {
 	RESERVED_PROVIDER_IDS
 		.iter()
 		.any(|reserved| provider_id.eq_ignore_ascii_case(reserved))

@@ -16,10 +16,12 @@ use aghub_api::dto::{
 		AgentProviderCredentialDto,
 		AgentProviderMatchedInferenceProviderResponse,
 		AgentProviderModelResponse, AgentProviderResponse,
-		AgentProviderSourceDto, CreateAgentProviderRequest,
+		AgentProviderSourceDto, CodexProfileResponse,
+		CodexProviderStateResponse, CreateAgentProviderRequest,
 		CreateInferenceProviderRequest, InferenceProviderFormatDto,
 		InferenceProviderPasswordResponse, InferenceProviderResponse,
-		UpdateAgentProviderRequest, UpdateInferenceProviderRequest,
+		UpdateAgentProviderRequest, UpdateCodexActiveProfileRequest,
+		UpdateCodexProfileProviderRequest, UpdateInferenceProviderRequest,
 	},
 	integrations::{
 		CodeEditorType, EditSkillFolderRequest, OpenSkillFolderRequest,
@@ -127,8 +129,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<AgentProviderModelResponse>(&cfg)?;
 	export_type::<AgentProviderMatchedInferenceProviderResponse>(&cfg)?;
 	export_type::<AgentProviderResponse>(&cfg)?;
+	export_type::<CodexProfileResponse>(&cfg)?;
+	export_type::<CodexProviderStateResponse>(&cfg)?;
 	export_type::<CreateAgentProviderRequest>(&cfg)?;
 	export_type::<UpdateAgentProviderRequest>(&cfg)?;
+	export_type::<UpdateCodexActiveProfileRequest>(&cfg)?;
+	export_type::<UpdateCodexProfileProviderRequest>(&cfg)?;
 	export_type::<InferenceProviderFormatDto>(&cfg)?;
 	export_type::<CreateInferenceProviderRequest>(&cfg)?;
 	export_type::<UpdateInferenceProviderRequest>(&cfg)?;

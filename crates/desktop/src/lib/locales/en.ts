@@ -134,6 +134,22 @@ export default {
 	codexBuiltInProvider: "Built-in provider",
 	codexBuiltInProviderInfo:
 		"No Aghub OpenAI Responses provider has the same API Base URL and API key. This was likely added directly in Codex.",
+	codexActiveProfile: "Active Profile",
+	codexProfileProvider: "Profile Provider",
+	codexCurrentRoute: "Current Route",
+	codexActiveProvider: "Active",
+	codexLoginProvider: "Codex login",
+	codexLoginProviderInfo:
+		"Uses Codex's own OpenAI login credentials without writing a base URL or API key to config.toml.",
+	codexConfigProvider: "Config provider",
+	codexConfigProviderInfo:
+		"This provider comes from Codex config.toml and does not currently match an Aghub inference provider.",
+	codexCustomProviders: "Custom Providers",
+	noCodexCustomProviders: "No custom Codex providers configured.",
+	codexNoProfiles: "No Codex profiles configured.",
+	codexProfileUpdateError: "Failed to switch Codex profile",
+	codexProfileProviderUpdated: "Codex profile provider updated",
+	codexProfileProviderUpdateError: "Failed to update Codex profile provider",
 	syncCodexProvider: "Update Codex provider",
 	syncCodexProviderFromInferenceProvider:
 		"Update provider config from {{name}}",

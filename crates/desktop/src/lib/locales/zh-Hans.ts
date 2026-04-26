@@ -129,6 +129,22 @@ export default {
 	codexBuiltInProvider: "内置 provider",
 	codexBuiltInProviderInfo:
 		"未在 Aghub OpenAI Responses Provider 中找到相同 API Base URL 和 API key，疑似用户直接在 Codex 里添加。",
+	codexActiveProfile: "当前 Profile",
+	codexProfileProvider: "Profile Provider",
+	codexCurrentRoute: "当前路由",
+	codexActiveProvider: "当前",
+	codexLoginProvider: "Codex 登录",
+	codexLoginProviderInfo:
+		"使用 Codex 自己的 OpenAI 登录凭据，不在 config.toml 写入 base URL 或 API key。",
+	codexConfigProvider: "配置文件 provider",
+	codexConfigProviderInfo:
+		"这个 provider 来自 Codex config.toml，暂未匹配到 Aghub 推理 Provider。",
+	codexCustomProviders: "自定义 Provider",
+	noCodexCustomProviders: "暂无自定义 Codex Provider。",
+	codexNoProfiles: "暂无 Codex profile。",
+	codexProfileUpdateError: "切换 Codex Profile 失败",
+	codexProfileProviderUpdated: "Codex Profile Provider 已更新",
+	codexProfileProviderUpdateError: "更新 Codex Profile Provider 失败",
 	syncCodexProvider: "更新 Codex Provider",
 	syncCodexProviderFromInferenceProvider: "从 {{name}} 更新 Provider 配置",
 	agentProviderSourceCustom: "自定义",

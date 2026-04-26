@@ -4,6 +4,7 @@ import type {
 	AgentInfo,
 	AgentProviderResponse,
 	CodeEditorType,
+	CodexProviderStateResponse,
 	CreateAgentProviderRequest,
 	CreateCredentialRequest,
 	CreateInferenceProviderRequest,
@@ -36,6 +37,8 @@ import type {
 	ToolInfoDto,
 	TransferRequest,
 	UpdateAgentProviderRequest,
+	UpdateCodexActiveProfileRequest,
+	UpdateCodexProfileProviderRequest,
 	UpdateInferenceProviderRequest,
 	UpdateMcpRequest,
 	UpdateSubAgentRequest,
@@ -492,6 +495,9 @@ export function createApi(baseUrl: string) {
 			listCodex(): Promise<AgentProviderResponse[]> {
 				return client.get("inference/agents/codex/providers").json();
 			},
+			getCodexState(): Promise<CodexProviderStateResponse> {
+				return client.get("inference/agents/codex/state").json();
+			},
 			getPassword(
 				name: string,
 			): Promise<InferenceProviderPasswordResponse> {
@@ -550,6 +556,24 @@ export function createApi(baseUrl: string) {
 				return client
 					.put(
 						`inference/agents/codex/providers/${encodeURIComponent(id)}`,
+						{ json: body },
+					)
+					.json();
+			},
+			updateCodexActiveProfile(
+				body: UpdateCodexActiveProfileRequest,
+			): Promise<CodexProviderStateResponse> {
+				return client
+					.put("inference/agents/codex/profile", { json: body })
+					.json();
+			},
+			updateCodexProfileProvider(
+				profileId: string,
+				body: UpdateCodexProfileProviderRequest,
+			): Promise<CodexProviderStateResponse> {
+				return client
+					.put(
+						`inference/agents/codex/profiles/${encodeURIComponent(profileId)}/provider`,
 						{ json: body },
 					)
 					.json();

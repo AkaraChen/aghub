@@ -1,7 +1,8 @@
 use aghub_inference::{
 	AgentProviderBinding, AgentProviderCredential, AgentProviderModel,
-	AgentProviderSource, CreateInferenceProvider, InferenceProvider,
-	InferenceProviderFormat, UpdateInferenceProvider,
+	AgentProviderSource, CodexProfileState, CodexProviderState,
+	CreateInferenceProvider, InferenceProvider, InferenceProviderFormat,
+	UpdateInferenceProvider,
 };
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -229,6 +230,55 @@ pub struct AgentProviderResponse {
 		Option<AgentProviderMatchedInferenceProviderResponse>,
 }
 
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct CodexProfileResponse {
+	pub id: String,
+	pub name: String,
+	pub is_default: bool,
+	pub is_active: bool,
+	pub selected_provider_id: String,
+	pub model: Option<String>,
+}
+
+impl From<&CodexProfileState> for CodexProfileResponse {
+	fn from(profile: &CodexProfileState) -> Self {
+		Self {
+			id: profile.id.clone(),
+			name: profile.name.clone(),
+			is_default: profile.is_default,
+			is_active: profile.is_active,
+			selected_provider_id: profile.selected_provider_id.clone(),
+			model: profile.model.clone(),
+		}
+	}
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct CodexProviderStateResponse {
+	pub active_profile_id: String,
+	pub profiles: Vec<CodexProfileResponse>,
+	pub providers: Vec<AgentProviderResponse>,
+}
+
+impl CodexProviderStateResponse {
+	pub fn from_state(
+		state: CodexProviderState,
+		providers: Vec<AgentProviderResponse>,
+	) -> Self {
+		Self {
+			active_profile_id: state.active_profile_id,
+			profiles: state
+				.profiles
+				.iter()
+				.map(CodexProfileResponse::from)
+				.collect(),
+			providers,
+		}
+	}
+}
+
 impl From<AgentProviderBinding> for AgentProviderResponse {
 	fn from(provider: AgentProviderBinding) -> Self {
 		Self::from(&provider)
@@ -277,4 +327,16 @@ pub struct CreateAgentProviderRequest {
 pub struct UpdateAgentProviderRequest {
 	pub name: Option<String>,
 	pub api_key: Option<String>,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct UpdateCodexActiveProfileRequest {
+	pub profile_id: String,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct UpdateCodexProfileProviderRequest {
+	pub provider_id: String,
 }

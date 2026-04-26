@@ -19,7 +19,10 @@ pub use agent::{
 	AgentProviderModel, AgentProviderSource, AgentProviderState,
 	BuiltInProviderSupport,
 };
-pub use codex::CodexProviderAdapter;
+pub use codex::{
+	CodexProfileState, CodexProviderAdapter, CodexProviderState,
+	DEFAULT_PROFILE_ID as CODEX_DEFAULT_PROFILE_ID,
+};
 pub use credentials::{CredentialStore, NativeCredentialStore};
 pub use error::{InferenceProviderError, Result};
 pub use model::{

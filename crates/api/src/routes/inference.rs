@@ -9,10 +9,11 @@ use rocket::serde::json::Json;
 use rocket::State;
 
 use crate::dto::inference::{
-	AgentProviderResponse, CreateAgentProviderRequest,
-	CreateInferenceProviderRequest, InferenceProviderPasswordResponse,
-	InferenceProviderResponse, UpdateAgentProviderRequest,
-	UpdateInferenceProviderRequest,
+	AgentProviderResponse, CodexProviderStateResponse,
+	CreateAgentProviderRequest, CreateInferenceProviderRequest,
+	InferenceProviderPasswordResponse, InferenceProviderResponse,
+	UpdateAgentProviderRequest, UpdateCodexActiveProfileRequest,
+	UpdateCodexProfileProviderRequest, UpdateInferenceProviderRequest,
 };
 use crate::error::{ApiCreated, ApiError, ApiNoContent, ApiResult};
 use crate::state::InferenceProviderState;
@@ -145,6 +146,21 @@ fn codex_provider_response(
 	})
 }
 
+fn codex_state_response(
+	store: &InferenceProviderStore,
+	adapter: &CodexProviderAdapter,
+) -> Result<CodexProviderStateResponse, ApiError> {
+	let inventory = inventory_providers_with_api_keys(store)?;
+	let state = adapter.load_profile_state().map_err(ApiError::from)?;
+	let providers = state
+		.providers
+		.iter()
+		.cloned()
+		.map(|binding| codex_provider_response(&inventory, adapter, binding))
+		.collect::<Result<Vec<_>, _>>()?;
+	Ok(CodexProviderStateResponse::from_state(state, providers))
+}
+
 #[get("/inference/providers")]
 pub fn list_inference_providers(
 	state: &State<InferenceProviderState>,
@@ -192,6 +208,15 @@ pub fn list_codex_providers(
 		.map(|binding| codex_provider_response(&inventory, &adapter, binding))
 		.collect::<Result<Vec<_>, _>>()?;
 	Ok(Json(providers))
+}
+
+#[get("/inference/agents/codex/state")]
+pub fn get_codex_state(
+	state: &State<InferenceProviderState>,
+) -> ApiResult<CodexProviderStateResponse> {
+	let store = store(state);
+	let adapter = codex_adapter()?;
+	Ok(Json(codex_state_response(&store, &adapter)?))
 }
 
 #[post("/inference/agents/opencode/providers", data = "<body>")]
@@ -248,6 +273,36 @@ pub fn update_codex_provider(
 		.map_err(ApiError::from)?;
 
 	Ok(Json(binding.into()))
+}
+
+#[put("/inference/agents/codex/profile", data = "<body>")]
+pub fn update_codex_active_profile(
+	state: &State<InferenceProviderState>,
+	body: Json<UpdateCodexActiveProfileRequest>,
+) -> ApiResult<CodexProviderStateResponse> {
+	let store = store(state);
+	let adapter = codex_adapter()?;
+	adapter
+		.set_active_profile(&body.profile_id)
+		.map_err(ApiError::from)?;
+	Ok(Json(codex_state_response(&store, &adapter)?))
+}
+
+#[put(
+	"/inference/agents/codex/profiles/<profile_id>/provider",
+	data = "<body>"
+)]
+pub fn update_codex_profile_provider(
+	state: &State<InferenceProviderState>,
+	profile_id: &str,
+	body: Json<UpdateCodexProfileProviderRequest>,
+) -> ApiResult<CodexProviderStateResponse> {
+	let store = store(state);
+	let adapter = codex_adapter()?;
+	adapter
+		.set_profile_provider(profile_id, &body.provider_id)
+		.map_err(ApiError::from)?;
+	Ok(Json(codex_state_response(&store, &adapter)?))
 }
 
 #[post("/inference/agents/opencode/providers/<id>/sync")]

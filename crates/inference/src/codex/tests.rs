@@ -3,7 +3,9 @@ use std::fs;
 use toml_edit::{DocumentMut, Item};
 
 use super::*;
-use crate::agent::{AgentProviderAdapter, AgentProviderCredential};
+use crate::agent::{
+	AgentProviderAdapter, AgentProviderCredential, AgentProviderSource,
+};
 use crate::error::InferenceProviderError;
 use crate::model::{InferenceProvider, InferenceProviderFormat};
 
@@ -44,8 +46,12 @@ env_key = "OPENROUTER_API_KEY"
 
 	let state = adapter.load_providers().unwrap();
 
-	assert_eq!(state.providers.len(), 1);
-	let provider = &state.providers[0];
+	assert_eq!(state.providers.len(), 2);
+	let provider = state
+		.providers
+		.iter()
+		.find(|provider| provider.id == "openrouter")
+		.unwrap();
 	assert_eq!(provider.id, "openrouter");
 	assert_eq!(provider.name, "OpenRouter");
 	assert_eq!(
@@ -65,6 +71,159 @@ env_key = "OPENROUTER_API_KEY"
 	let default = state.default_model.unwrap();
 	assert_eq!(default.provider_id.as_deref(), Some("openrouter"));
 	assert_eq!(default.model_id, "openai/gpt-5.4");
+}
+
+#[test]
+fn profile_state_defaults_to_openai_login() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	fs::write(adapter.config_path(), r#"model = "gpt-5.4""#).unwrap();
+
+	let state = adapter.load_profile_state().unwrap();
+
+	assert_eq!(state.active_profile_id, DEFAULT_PROFILE_ID);
+	assert_eq!(state.providers.len(), 1);
+	let openai = &state.providers[0];
+	assert_eq!(openai.id, "openai");
+	assert_eq!(openai.source, AgentProviderSource::BuiltIn);
+	assert_eq!(openai.api_base_url, None);
+	assert_eq!(
+		openai.credential,
+		AgentProviderCredential::AgentStore {
+			id: Some("openai".to_string())
+		}
+	);
+	let profile = &state.profiles[0];
+	assert!(profile.is_default);
+	assert!(profile.is_active);
+	assert_eq!(profile.selected_provider_id, "openai");
+	assert_eq!(profile.model.as_deref(), Some("gpt-5.4"));
+}
+
+#[test]
+fn profile_state_uses_active_profile_overrides() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	fs::write(
+		adapter.config_path(),
+		r#"
+profile = "work"
+model = "gpt-5.4"
+model_provider = "openai"
+
+[profiles.work]
+model = "openai/gpt-5.4"
+model_provider = "openrouter"
+
+[model_providers.openrouter]
+name = "OpenRouter"
+base_url = "https://openrouter.ai/api/v1"
+wire_api = "responses"
+"#,
+	)
+	.unwrap();
+
+	let state = adapter.load_profile_state().unwrap();
+
+	assert_eq!(state.active_profile_id, "work");
+	let work = state
+		.profiles
+		.iter()
+		.find(|profile| profile.id == "work")
+		.unwrap();
+	assert!(work.is_active);
+	assert_eq!(work.selected_provider_id, "openrouter");
+	assert_eq!(work.model.as_deref(), Some("openai/gpt-5.4"));
+	let default = state
+		.profiles
+		.iter()
+		.find(|profile| profile.is_default)
+		.unwrap();
+	assert_eq!(default.selected_provider_id, "openai");
+	assert_eq!(default.model.as_deref(), Some("gpt-5.4"));
+}
+
+#[test]
+fn set_active_profile_preserves_comments() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	fs::write(
+		adapter.config_path(),
+		r#"# user note
+model = "gpt-5.4"
+
+[profiles.work]
+model_provider = "openrouter"
+"#,
+	)
+	.unwrap();
+
+	let state = adapter.set_active_profile("work").unwrap();
+
+	assert_eq!(state.active_profile_id, "work");
+	let content = fs::read_to_string(adapter.config_path()).unwrap();
+	assert!(content.contains("# user note"));
+	let config = content.parse::<DocumentMut>().unwrap();
+	assert_eq!(config["profile"].as_str(), Some("work"));
+
+	let state = adapter.set_active_profile(DEFAULT_PROFILE_ID).unwrap();
+	assert_eq!(state.active_profile_id, DEFAULT_PROFILE_ID);
+	let config = fs::read_to_string(adapter.config_path())
+		.unwrap()
+		.parse::<DocumentMut>()
+		.unwrap();
+	assert!(config.get("profile").is_none());
+}
+
+#[test]
+fn set_profile_provider_can_select_openai_without_base_or_key() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	fs::write(
+		adapter.config_path(),
+		r#"
+model_provider = "openrouter"
+
+[profiles.work]
+model_provider = "openrouter"
+
+[model_providers.openrouter]
+name = "OpenRouter"
+base_url = "https://openrouter.ai/api/v1"
+wire_api = "responses"
+"#,
+	)
+	.unwrap();
+
+	let state = adapter.set_profile_provider("work", "openai").unwrap();
+
+	let work = state
+		.profiles
+		.iter()
+		.find(|profile| profile.id == "work")
+		.unwrap();
+	assert_eq!(work.selected_provider_id, "openai");
+	let content = fs::read_to_string(adapter.config_path()).unwrap();
+	let config = content.parse::<DocumentMut>().unwrap();
+	assert_eq!(
+		config["profiles"]["work"]["model_provider"].as_str(),
+		Some("openai")
+	);
+
+	let state = adapter
+		.set_profile_provider(DEFAULT_PROFILE_ID, "openai")
+		.unwrap();
+	let default = state
+		.profiles
+		.iter()
+		.find(|profile| profile.is_default)
+		.unwrap();
+	assert_eq!(default.selected_provider_id, "openai");
+	let config = fs::read_to_string(adapter.config_path())
+		.unwrap()
+		.parse::<DocumentMut>()
+		.unwrap();
+	assert!(config.get("model_provider").is_none());
 }
 
 #[test]
@@ -165,6 +324,14 @@ experimental_bearer_token = "sk-inline"
 		adapter.api_key("openrouter").unwrap(),
 		Some("sk-inline".to_string())
 	);
+}
+
+#[test]
+fn api_key_for_openai_login_provider_is_not_config_backed() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+
+	assert_eq!(adapter.api_key("openai").unwrap(), None);
 }
 
 #[test]

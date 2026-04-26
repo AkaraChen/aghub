@@ -1,5 +1,7 @@
 import {
 	ArrowPathIcon,
+	CheckCircleIcon,
+	KeyIcon,
 	PencilIcon,
 	PlusIcon,
 	QuestionMarkCircleIcon,
@@ -34,11 +36,13 @@ import { useApi } from "../../hooks/use-api";
 import { AgentIcon } from "../../lib/agent-icons";
 import { cn } from "../../lib/utils";
 import {
-	codexProviderListQueryOptions,
+	codexProviderStateQueryOptions,
 	createCodexProviderMutationOptions,
 	deleteCodexProviderMutationOptions,
 	inferenceProviderListQueryOptions,
 	syncCodexProviderMutationOptions,
+	updateCodexActiveProfileMutationOptions,
+	updateCodexProfileProviderMutationOptions,
 	updateCodexProviderMutationOptions,
 } from "../../requests/inference-providers";
 
@@ -357,7 +361,98 @@ function CodexEditProviderDialog({
 	);
 }
 
-function ProviderRow({
+function ProviderIdentity({
+	provider,
+	fallbackId,
+	isActive,
+}: {
+	provider: AgentProviderResponse | undefined;
+	fallbackId: string;
+	isActive?: boolean;
+}) {
+	const { t } = useTranslation();
+	const isLoginProvider = provider?.source === "built_in";
+	const label = provider?.name ?? fallbackId;
+
+	return (
+		<div className="flex min-w-0 items-center gap-2">
+			{isLoginProvider ? (
+				<KeyIcon className="size-4 shrink-0 text-accent" />
+			) : (
+				<ServerIcon className="size-4 shrink-0 text-muted" />
+			)}
+			<Label className="truncate">{label}</Label>
+			{provider && provider.id !== provider.name && (
+				<span className="rounded-md bg-surface-secondary px-2 py-0.5 text-xs text-muted">
+					{provider.id}
+				</span>
+			)}
+			{isActive && (
+				<span className="inline-flex items-center gap-1 rounded-md bg-accent/10 px-2 py-0.5 text-xs text-accent">
+					<CheckCircleIcon className="size-3.5" />
+					{t("codexActiveProvider")}
+				</span>
+			)}
+		</div>
+	);
+}
+
+function ProviderMeta({ provider }: { provider: AgentProviderResponse }) {
+	const { t } = useTranslation();
+	const matchedProvider = provider.matched_inference_provider;
+
+	if (provider.source === "built_in") {
+		return (
+			<span className="inline-flex items-center gap-1 text-xs text-muted">
+				{t("codexLoginProvider")}
+				<Tooltip delay={0}>
+					<Tooltip.Trigger>
+						<span
+							tabIndex={0}
+							aria-label={t("codexLoginProviderInfo")}
+							className="inline-flex size-4 items-center justify-center"
+						>
+							<QuestionMarkCircleIcon className="size-4" />
+						</span>
+					</Tooltip.Trigger>
+					<Tooltip.Content className="max-w-64">
+						{t("codexLoginProviderInfo")}
+					</Tooltip.Content>
+				</Tooltip>
+			</span>
+		);
+	}
+
+	if (matchedProvider) {
+		return (
+			<span className="text-xs text-muted">
+				{t("providerModels")}: {matchedProvider.model_count}
+			</span>
+		);
+	}
+
+	return (
+		<span className="inline-flex items-center gap-1 text-xs text-muted">
+			{t("codexConfigProvider")}
+			<Tooltip delay={0}>
+				<Tooltip.Trigger>
+					<span
+						tabIndex={0}
+						aria-label={t("codexConfigProviderInfo")}
+						className="inline-flex size-4 items-center justify-center"
+					>
+						<QuestionMarkCircleIcon className="size-4" />
+					</span>
+				</Tooltip.Trigger>
+				<Tooltip.Content className="max-w-64">
+					{t("codexConfigProviderInfo")}
+				</Tooltip.Content>
+			</Tooltip>
+		</span>
+	);
+}
+
+function ProviderActions({
 	provider,
 	isSyncing,
 	onEdit,
@@ -372,104 +467,112 @@ function ProviderRow({
 }) {
 	const { t } = useTranslation();
 	const matchedProvider = provider.matched_inference_provider;
+	const isBuiltIn = provider.source === "built_in";
 
+	if (isBuiltIn) {
+		return null;
+	}
+
+	return (
+		<div className="flex items-center gap-1 sm:justify-end">
+			{matchedProvider && (
+				<Tooltip delay={0}>
+					<Tooltip.Trigger>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							aria-label={t("syncCodexProvider")}
+							isPending={isSyncing}
+							onPress={onSync}
+						>
+							<ArrowPathIcon className="size-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						{t("syncCodexProviderFromInferenceProvider", {
+							name: matchedProvider.display_name,
+						})}
+					</Tooltip.Content>
+				</Tooltip>
+			)}
+			<Tooltip delay={0}>
+				<Tooltip.Trigger>
+					<Button
+						isIconOnly
+						variant="ghost"
+						size="sm"
+						aria-label={t(
+							matchedProvider
+								? "editInferenceProvider"
+								: "editCodexProvider",
+						)}
+						onPress={onEdit}
+					>
+						<PencilIcon className="size-4" />
+					</Button>
+				</Tooltip.Trigger>
+				<Tooltip.Content>{t("edit")}</Tooltip.Content>
+			</Tooltip>
+			<Tooltip delay={0}>
+				<Tooltip.Trigger>
+					<Button
+						isIconOnly
+						variant="ghost"
+						size="sm"
+						className="text-muted hover:text-danger"
+						aria-label={t("deleteCodexProvider")}
+						onPress={onDelete}
+					>
+						<TrashIcon className="size-4" />
+					</Button>
+				</Tooltip.Trigger>
+				<Tooltip.Content>{t("delete")}</Tooltip.Content>
+			</Tooltip>
+		</div>
+	);
+}
+
+function ProviderRow({
+	provider,
+	isActive,
+	isSyncing,
+	onEdit,
+	onSync,
+	onDelete,
+}: {
+	provider: AgentProviderResponse;
+	isActive: boolean;
+	isSyncing: boolean;
+	onEdit: () => void;
+	onSync: () => void;
+	onDelete: () => void;
+}) {
 	return (
 		<div className="grid gap-3 border-t border-border py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
 			<div className="grid min-w-0 gap-1">
-				<div className="flex min-w-0 items-center gap-2">
-					<ServerIcon className="size-4 shrink-0 text-muted" />
-					<Label className="truncate">{provider.name}</Label>
-					{provider.id !== provider.name && (
-						<span className="rounded-md bg-surface-secondary px-2 py-0.5 text-xs text-muted">
-							{provider.id}
-						</span>
-					)}
-				</div>
-				<div className="flex min-w-0 flex-wrap gap-2 text-xs text-muted">
-					{matchedProvider ? (
-						<span>
-							{t("providerModels")}: {matchedProvider.model_count}
-						</span>
-					) : (
-						<span className="inline-flex items-center gap-1">
-							{t("codexBuiltInProvider")}
-							<Tooltip delay={0}>
-								<Tooltip.Trigger>
-									<span
-										tabIndex={0}
-										aria-label={t(
-											"codexBuiltInProviderInfo",
-										)}
-										className="inline-flex size-4 items-center justify-center text-muted"
-									>
-										<QuestionMarkCircleIcon className="size-4" />
-									</span>
-								</Tooltip.Trigger>
-								<Tooltip.Content className="max-w-64">
-									{t("codexBuiltInProviderInfo")}
-								</Tooltip.Content>
-							</Tooltip>
+				<ProviderIdentity
+					provider={provider}
+					fallbackId={provider.id}
+					isActive={isActive}
+				/>
+				<div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1">
+					<ProviderMeta provider={provider} />
+					{provider.api_base_url && (
+						<span className="truncate text-xs text-muted">
+							{provider.api_base_url}
 						</span>
 					)}
 				</div>
 			</div>
 
-			<div className="flex items-center gap-2 sm:justify-end">
-				{matchedProvider && (
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								aria-label={t("syncCodexProvider")}
-								isPending={isSyncing}
-								onPress={onSync}
-							>
-								<ArrowPathIcon className="size-4" />
-							</Button>
-						</Tooltip.Trigger>
-						<Tooltip.Content>
-							{t("syncCodexProviderFromInferenceProvider", {
-								name: matchedProvider.display_name,
-							})}
-						</Tooltip.Content>
-					</Tooltip>
-				)}
-				<Tooltip delay={0}>
-					<Tooltip.Trigger>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							aria-label={t(
-								matchedProvider
-									? "editInferenceProvider"
-									: "editCodexProvider",
-							)}
-							onPress={onEdit}
-						>
-							<PencilIcon className="size-4" />
-						</Button>
-					</Tooltip.Trigger>
-					<Tooltip.Content>{t("edit")}</Tooltip.Content>
-				</Tooltip>
-				<Tooltip delay={0}>
-					<Tooltip.Trigger>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							className="text-muted hover:text-danger"
-							aria-label={t("deleteCodexProvider")}
-							onPress={onDelete}
-						>
-							<TrashIcon className="size-4" />
-						</Button>
-					</Tooltip.Trigger>
-					<Tooltip.Content>{t("delete")}</Tooltip.Content>
-				</Tooltip>
-			</div>
+			<ProviderActions
+				provider={provider}
+				isSyncing={isSyncing}
+				onEdit={onEdit}
+				onSync={onSync}
+				onDelete={onDelete}
+			/>
 		</div>
 	);
 }
@@ -488,18 +591,63 @@ export function CodexInferenceProviderPanel({
 		useState<AgentProviderResponse | null>(null);
 
 	const {
-		data: providers = [],
+		data: codexState,
 		isLoading,
 		isFetching,
 		refetch,
 	} = useQuery({
-		...codexProviderListQueryOptions({ api }),
+		...codexProviderStateQueryOptions({ api }),
 	});
 	const { data: inventoryProviders = [], isLoading: isInventoryLoading } =
 		useQuery({
 			...inferenceProviderListQueryOptions({ api }),
 		});
 
+	const providers = codexState?.providers ?? [];
+	const profiles = codexState?.profiles ?? [];
+	const activeProfile =
+		profiles.find((profile) => profile.is_active) ?? profiles[0];
+	const activeProvider = providers.find(
+		(provider) => provider.id === activeProfile?.selected_provider_id,
+	);
+	const customProviders = providers.filter(
+		(provider) => provider.source !== "built_in",
+	);
+	const selectableProviderIds = new Set(
+		providers.map((provider) => provider.id),
+	);
+
+	const profileMutation = useMutation({
+		...updateCodexActiveProfileMutationOptions({
+			api,
+			queryClient,
+		}),
+		onError: (error) => {
+			console.error("Failed to update Codex profile:", error);
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: t("codexProfileUpdateError"),
+			);
+		},
+	});
+	const profileProviderMutation = useMutation({
+		...updateCodexProfileProviderMutationOptions({
+			api,
+			queryClient,
+			onSuccess: async () => {
+				toast.success(t("codexProfileProviderUpdated"));
+			},
+		}),
+		onError: (error) => {
+			console.error("Failed to update Codex profile provider:", error);
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: t("codexProfileProviderUpdateError"),
+			);
+		},
+	});
 	const deleteMutation = useMutation({
 		...deleteCodexProviderMutationOptions({
 			api,
@@ -544,6 +692,14 @@ export function CodexInferenceProviderPanel({
 		}
 
 		setProviderDialog({ type: "edit", provider });
+	};
+
+	const handleProfileProviderChange = (providerId: string) => {
+		if (!activeProfile) return;
+		profileProviderMutation.mutate({
+			profileId: activeProfile.id,
+			body: { provider_id: providerId },
+		});
 	};
 
 	return (
@@ -603,20 +759,194 @@ export function CodexInferenceProviderPanel({
 							</div>
 						</Card.Header>
 
-						<Card.Content className="grid gap-4">
+						<Card.Content className="grid gap-5">
 							{isLoading ? (
 								<div className="flex justify-center py-8">
 									<Spinner />
 								</div>
 							) : (
 								<>
-									{providers.length === 0 ? (
-										<div className="grid justify-items-center gap-3 py-8 text-center">
-											<p className="text-sm text-muted">
-												{t("noCodexProviders")}
-											</p>
+									<div className="grid gap-4 rounded-md border border-border bg-surface-secondary/40 p-3 sm:grid-cols-[minmax(0,1fr)_minmax(220px,300px)] sm:items-start">
+										<div className="grid min-w-0 gap-2">
+											<span className="text-xs font-medium uppercase tracking-wide text-muted">
+												{t("codexCurrentRoute")}
+											</span>
+											{activeProfile ? (
+												<>
+													<ProviderIdentity
+														provider={
+															activeProvider
+														}
+														fallbackId={
+															activeProfile.selected_provider_id
+														}
+													/>
+													<div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1">
+														{activeProvider && (
+															<ProviderMeta
+																provider={
+																	activeProvider
+																}
+															/>
+														)}
+														{activeProfile.model && (
+															<span className="truncate text-xs text-muted">
+																{t(
+																	"providerModels",
+																)}
+																:{" "}
+																{
+																	activeProfile.model
+																}
+															</span>
+														)}
+														{activeProvider?.api_base_url && (
+															<span className="truncate text-xs text-muted">
+																{
+																	activeProvider.api_base_url
+																}
+															</span>
+														)}
+													</div>
+												</>
+											) : (
+												<p className="text-sm text-muted">
+													{t("codexNoProfiles")}
+												</p>
+											)}
+										</div>
+
+										<div className="grid gap-3">
+											<Select
+												className="w-full"
+												selectedKey={activeProfile?.id}
+												onSelectionChange={(key) => {
+													if (!key) return;
+													profileMutation.mutate({
+														profile_id: String(key),
+													});
+												}}
+												isDisabled={
+													profileMutation.isPending ||
+													profiles.length === 0
+												}
+												variant="secondary"
+											>
+												<Label>
+													{t("codexActiveProfile")}
+												</Label>
+												<Select.Trigger>
+													<Select.Value />
+													<Select.Indicator />
+												</Select.Trigger>
+												<Select.Popover>
+													<ListBox>
+														{profiles.map(
+															(profile) => (
+																<ListBox.Item
+																	key={
+																		profile.id
+																	}
+																	id={
+																		profile.id
+																	}
+																	textValue={
+																		profile.name
+																	}
+																>
+																	<div className="grid min-w-0 gap-0.5">
+																		<Label className="truncate">
+																			{
+																				profile.name
+																			}
+																		</Label>
+																		<span className="truncate text-xs text-muted">
+																			{
+																				profile.selected_provider_id
+																			}
+																		</span>
+																	</div>
+																</ListBox.Item>
+															),
+														)}
+													</ListBox>
+												</Select.Popover>
+											</Select>
+
+											<Select
+												className="w-full"
+												selectedKey={
+													activeProfile &&
+													selectableProviderIds.has(
+														activeProfile.selected_provider_id,
+													)
+														? activeProfile.selected_provider_id
+														: undefined
+												}
+												onSelectionChange={(key) => {
+													if (!key) return;
+													handleProfileProviderChange(
+														String(key),
+													);
+												}}
+												isDisabled={
+													!activeProfile ||
+													profileProviderMutation.isPending
+												}
+												variant="secondary"
+											>
+												<Label>
+													{t("codexProfileProvider")}
+												</Label>
+												<Select.Trigger>
+													<Select.Value />
+													<Select.Indicator />
+												</Select.Trigger>
+												<Select.Popover>
+													<ListBox>
+														{providers.map(
+															(provider) => (
+																<ListBox.Item
+																	key={
+																		provider.id
+																	}
+																	id={
+																		provider.id
+																	}
+																	textValue={`${provider.name} ${provider.id}`}
+																>
+																	<div className="grid min-w-0 gap-0.5">
+																		<Label className="truncate">
+																			{
+																				provider.name
+																			}
+																		</Label>
+																		<span className="truncate text-xs text-muted">
+																			{provider.source ===
+																			"built_in"
+																				? t(
+																						"codexLoginProvider",
+																					)
+																				: provider.api_base_url}
+																		</span>
+																	</div>
+																</ListBox.Item>
+															),
+														)}
+													</ListBox>
+												</Select.Popover>
+											</Select>
+										</div>
+									</div>
+
+									<div>
+										<div className="mb-1 flex items-center justify-between gap-3">
+											<Label>
+												{t("codexCustomProviders")}
+											</Label>
 											<Button
 												size="sm"
+												variant="ghost"
 												aria-label={t(
 													"createCodexProvider",
 												)}
@@ -630,36 +960,51 @@ export function CodexInferenceProviderPanel({
 												{t("add")}
 											</Button>
 										</div>
-									) : (
-										<div>
-											{providers.map((provider) => (
-												<ProviderRow
-													key={provider.id}
-													provider={provider}
-													isSyncing={
-														syncMutation.isPending &&
-														syncMutation.variables ===
-															provider.id
-													}
-													onEdit={() =>
-														handleEditProvider(
-															provider,
-														)
-													}
-													onSync={() =>
-														syncMutation.mutate(
-															provider.id,
-														)
-													}
-													onDelete={() =>
-														setDeleteTarget(
-															provider,
-														)
-													}
-												/>
-											))}
-										</div>
-									)}
+										{customProviders.length === 0 ? (
+											<div className="grid justify-items-center gap-3 py-8 text-center">
+												<p className="text-sm text-muted">
+													{t(
+														"noCodexCustomProviders",
+													)}
+												</p>
+											</div>
+										) : (
+											<div>
+												{customProviders.map(
+													(provider) => (
+														<ProviderRow
+															key={provider.id}
+															provider={provider}
+															isActive={
+																activeProfile?.selected_provider_id ===
+																provider.id
+															}
+															isSyncing={
+																syncMutation.isPending &&
+																syncMutation.variables ===
+																	provider.id
+															}
+															onEdit={() =>
+																handleEditProvider(
+																	provider,
+																)
+															}
+															onSync={() =>
+																syncMutation.mutate(
+																	provider.id,
+																)
+															}
+															onDelete={() =>
+																setDeleteTarget(
+																	provider,
+																)
+															}
+														/>
+													),
+												)}
+											</div>
+										)}
+									</div>
 								</>
 							)}
 						</Card.Content>

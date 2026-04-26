@@ -5,10 +5,13 @@ import {
 } from "@tanstack/react-query";
 import type {
 	AgentProviderResponse,
+	CodexProviderStateResponse,
 	CreateAgentProviderRequest,
 	CreateInferenceProviderRequest,
 	InferenceProviderResponse,
 	UpdateAgentProviderRequest,
+	UpdateCodexActiveProfileRequest,
+	UpdateCodexProfileProviderRequest,
 	UpdateInferenceProviderRequest,
 } from "../generated/dto";
 import type { ApiClient } from "./client";
@@ -54,6 +57,19 @@ export function codexProviderListQueryOptions({
 	return queryOptions({
 		queryKey: queryKeys.inferenceProviders.agent("codex"),
 		queryFn: () => api.inferenceProviders.listCodex(),
+		enabled,
+		staleTime,
+	});
+}
+
+export function codexProviderStateQueryOptions({
+	api,
+	enabled = true,
+	staleTime = 30_000,
+}: InferenceProviderListQueryParams) {
+	return queryOptions({
+		queryKey: queryKeys.inferenceProviders.agentState("codex"),
+		queryFn: () => api.inferenceProviders.getCodexState(),
 		enabled,
 		staleTime,
 	});
@@ -236,6 +252,59 @@ export function updateCodexProviderMutationOptions({
 	return mutationOptions({
 		mutationFn: ({ id, body }: UpdateAgentProviderVariables) =>
 			api.inferenceProviders.updateCodex(id, body),
+		onSuccess: async (data, variables) => {
+			await invalidateCodexProviderQueries(queryClient);
+			await onSuccess?.(data, variables);
+		},
+	});
+}
+
+interface UpdateCodexActiveProfileMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (data: CodexProviderStateResponse) => void | Promise<void>;
+}
+
+export function updateCodexActiveProfileMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: UpdateCodexActiveProfileMutationParams) {
+	return mutationOptions({
+		mutationFn: (body: UpdateCodexActiveProfileRequest) =>
+			api.inferenceProviders.updateCodexActiveProfile(body),
+		onSuccess: async (data) => {
+			await invalidateCodexProviderQueries(queryClient);
+			await onSuccess?.(data);
+		},
+	});
+}
+
+interface UpdateCodexProfileProviderVariables {
+	profileId: string;
+	body: UpdateCodexProfileProviderRequest;
+}
+
+interface UpdateCodexProfileProviderMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (
+		data: CodexProviderStateResponse,
+		variables: UpdateCodexProfileProviderVariables,
+	) => void | Promise<void>;
+}
+
+export function updateCodexProfileProviderMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: UpdateCodexProfileProviderMutationParams) {
+	return mutationOptions({
+		mutationFn: ({
+			profileId,
+			body,
+		}: UpdateCodexProfileProviderVariables) =>
+			api.inferenceProviders.updateCodexProfileProvider(profileId, body),
 		onSuccess: async (data, variables) => {
 			await invalidateCodexProviderQueries(queryClient);
 			await onSuccess?.(data, variables);
