@@ -42,6 +42,8 @@ import type {
 import { useApi } from "../hooks/use-api";
 import { AgentIcon } from "../lib/agent-icons";
 import { cn } from "../lib/utils";
+import { CodexInferenceProviderPanel } from "./inference-providers/codex-panel";
+import { OpenCodeInferenceProviderPanel } from "./inference-providers/opencode-panel";
 import {
 	createInferenceProviderMutationOptions,
 	deleteInferenceProviderMutationOptions,
@@ -49,12 +51,13 @@ import {
 	updateInferenceProviderMutationOptions,
 } from "../requests/inference-providers";
 
+type CodingAgentId = "opencode" | "codex";
+
 type PanelMode =
 	| { type: "detail" }
 	| { type: "create" }
-	| { type: "edit"; provider: InferenceProviderResponse };
-
-type CodingAgentId = "opencode" | "codex";
+	| { type: "edit"; provider: InferenceProviderResponse }
+	| { type: "agent"; agentId: CodingAgentId };
 
 interface CodingAgentOption {
 	id: CodingAgentId;
@@ -904,8 +907,6 @@ export default function InferenceProvidersPage() {
 	const { t } = useTranslation();
 	const api = useApi();
 	const [searchQuery, setSearchQuery] = useState("");
-	const [selectedAgentId, setSelectedAgentId] =
-		useState<CodingAgentId>("opencode");
 	const [selectedName, setSelectedName] = useState<string | null>(null);
 	const [panel, setPanel] = useState<PanelMode>({ type: "detail" });
 
@@ -971,11 +972,14 @@ export default function InferenceProvidersPage() {
 	}, [providers, selectedName]);
 
 	const selectedAgentKeys = useMemo(() => {
-		return new Set([selectedAgentId]);
-	}, [selectedAgentId]);
+		return panel.type === "agent"
+			? new Set([panel.agentId])
+			: new Set<string>();
+	}, [panel]);
 
 	const selectedProviderKeys = useMemo(() => {
-		return activeProvider && panel.type !== "create"
+		return activeProvider &&
+			(panel.type === "detail" || panel.type === "edit")
 			? new Set([activeProvider.name])
 			: new Set<string>();
 	}, [activeProvider, panel.type]);
@@ -1056,10 +1060,18 @@ export default function InferenceProvidersPage() {
 						<ListBox
 							aria-label={t("codingAgents")}
 							selectionMode="single"
+							selectionBehavior="replace"
 							selectedKeys={selectedAgentKeys}
-							onAction={(key) =>
-								setSelectedAgentId(key as CodingAgentId)
-							}
+							onSelectionChange={(keys) => {
+								if (keys === "all") return;
+								const agentId = [...keys][0] as
+									| CodingAgentId
+									| undefined;
+								if (!agentId) return;
+
+								setSelectedName(null);
+								setPanel({ type: "agent", agentId });
+							}}
 							className="p-2"
 						>
 							{filteredCodingAgents.map((agent) => (
@@ -1136,6 +1148,14 @@ export default function InferenceProvidersPage() {
 			</div>
 
 			<div className="relative flex-1 overflow-hidden">
+				{panel.type === "agent" && panel.agentId === "opencode" && (
+					<OpenCodeInferenceProviderPanel />
+				)}
+
+				{panel.type === "agent" && panel.agentId === "codex" && (
+					<CodexInferenceProviderPanel />
+				)}
+
 				{panel.type === "create" && (
 					<ProviderForm
 						mode="create"
