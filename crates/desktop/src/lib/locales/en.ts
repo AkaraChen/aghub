@@ -92,6 +92,8 @@ export default {
 	codeEditorsDescription:
 		"Choose your preferred code editor for opening files",
 	inferenceProviders: "Inference Providers",
+	codingAgents: "Coding Agents",
+	searchInferenceProviderResources: "Search agents or providers...",
 	searchInferenceProviders: "Search providers...",
 	refreshInferenceProviders: "Refresh providers",
 	createInferenceProvider: "Add Provider",
@@ -103,6 +105,7 @@ export default {
 	deleteInferenceProvider: "Delete Provider",
 	deleteInferenceProviderConfirm:
 		'Delete "{{name}}"? The stored API key will also be removed.',
+	noCodingAgentsMatch: "No coding agents match",
 	noInferenceProviders: "No inference providers yet.",
 	noInferenceProvidersMatch: "No providers match",
 	providerName: "Name",

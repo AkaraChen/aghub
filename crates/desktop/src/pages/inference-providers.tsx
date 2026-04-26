@@ -1,10 +1,12 @@
 import {
 	ArrowPathIcon,
 	ClipboardDocumentIcon,
+	CpuChipIcon,
 	EyeIcon,
 	EyeSlashIcon,
 	PencilIcon,
 	PlusIcon,
+	ServerIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import AnthropicIcon from "@lobehub/icons/es/Anthropic";
@@ -27,15 +29,18 @@ import {
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import Fuse from "fuse.js";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { ListSearchHeader } from "../components/list-search-header";
+import { ResourceSectionHeader } from "../components/resource-section-header";
 import type {
 	InferenceProviderFormatDto,
 	InferenceProviderResponse,
 } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
+import { AgentIcon } from "../lib/agent-icons";
 import { cn } from "../lib/utils";
 import {
 	createInferenceProviderMutationOptions,
@@ -48,6 +53,13 @@ type PanelMode =
 	| { type: "detail" }
 	| { type: "create" }
 	| { type: "edit"; provider: InferenceProviderResponse };
+
+type CodingAgentId = "opencode" | "codex";
+
+interface CodingAgentOption {
+	id: CodingAgentId;
+	label: string;
+}
 
 interface FormatOption {
 	id: InferenceProviderFormatDto;
@@ -73,6 +85,17 @@ const FORMAT_OPTIONS: FormatOption[] = [
 	},
 ];
 
+const CODING_AGENT_OPTIONS: CodingAgentOption[] = [
+	{
+		id: "opencode",
+		label: "OpenCode",
+	},
+	{
+		id: "codex",
+		label: "Codex",
+	},
+];
+
 interface InferenceProviderFormValues {
 	name: string;
 	format: InferenceProviderFormatDto;
@@ -95,14 +118,6 @@ function createProviderModelFormValue(name = ""): ProviderModelFormValue {
 
 function toProviderModelFormValues(models: string[]) {
 	return models.map((model) => createProviderModelFormValue(model));
-}
-
-function formatOption(
-	format: InferenceProviderFormatDto,
-	t: (key: string) => string,
-) {
-	const option = FORMAT_OPTIONS.find((item) => item.id === format);
-	return option ? t(option.labelKey) : format;
 }
 
 function ProviderIcon({ format }: { format: InferenceProviderFormatDto }) {
@@ -822,7 +837,7 @@ function ProviderDetail({
 											<button
 												key={model}
 												type="button"
-												className="max-w-full cursor-copy truncate rounded-md bg-surface-secondary px-2.5 py-1 font-mono text-xs leading-5 text-foreground transition-colors hover:bg-default focus:ring-2 focus:ring-accent/40 focus:outline-none"
+												className="max-w-full cursor-pointer truncate rounded-md bg-surface-secondary px-2.5 py-1 font-mono text-xs leading-5 text-foreground transition-colors hover:bg-default focus:ring-2 focus:ring-accent/40 focus:outline-none"
 												aria-label={t(
 													"copyProviderModelName",
 													{ name: model },
@@ -889,6 +904,8 @@ export default function InferenceProvidersPage() {
 	const { t } = useTranslation();
 	const api = useApi();
 	const [searchQuery, setSearchQuery] = useState("");
+	const [selectedAgentId, setSelectedAgentId] =
+		useState<CodingAgentId>("opencode");
 	const [selectedName, setSelectedName] = useState<string | null>(null);
 	const [panel, setPanel] = useState<PanelMode>({ type: "detail" });
 
@@ -901,23 +918,47 @@ export default function InferenceProvidersPage() {
 		...inferenceProviderListQueryOptions({ api }),
 	});
 
+	const codingAgentFuse = useMemo(
+		() =>
+			new Fuse(CODING_AGENT_OPTIONS, {
+				keys: [
+					{ name: "label", weight: 2 },
+					{ name: "id", weight: 1 },
+				],
+				threshold: 0.4,
+				ignoreLocation: true,
+			}),
+		[],
+	);
+
+	const filteredCodingAgents = useMemo(() => {
+		const query = searchQuery.trim();
+		if (!query) return CODING_AGENT_OPTIONS;
+
+		return codingAgentFuse.search(query).map((result) => result.item);
+	}, [codingAgentFuse, searchQuery]);
+
+	const providerFuse = useMemo(
+		() =>
+			new Fuse(providers, {
+				keys: [
+					{ name: "name", weight: 2 },
+					{ name: "models", weight: 2 },
+					{ name: "api_base_url", weight: 1 },
+					{ name: "format", weight: 1 },
+				],
+				threshold: 0.4,
+				ignoreLocation: true,
+			}),
+		[providers],
+	);
+
 	const filteredProviders = useMemo(() => {
-		const query = searchQuery.trim().toLowerCase();
+		const query = searchQuery.trim();
 		if (!query) return providers;
 
-		return providers.filter((provider) => {
-			const format = formatOption(provider.format, t).toLowerCase();
-			return (
-				provider.name.toLowerCase().includes(query) ||
-				provider.api_base_url.toLowerCase().includes(query) ||
-				provider.format.includes(query) ||
-				format.includes(query) ||
-				provider.models.some((model) =>
-					model.toLowerCase().includes(query),
-				)
-			);
-		});
-	}, [providers, searchQuery, t]);
+		return providerFuse.search(query).map((result) => result.item);
+	}, [providerFuse, providers, searchQuery]);
 
 	const activeProvider = useMemo(() => {
 		if (selectedName) {
@@ -929,7 +970,11 @@ export default function InferenceProvidersPage() {
 		return providers[0] ?? null;
 	}, [providers, selectedName]);
 
-	const selectedKeys = useMemo(() => {
+	const selectedAgentKeys = useMemo(() => {
+		return new Set([selectedAgentId]);
+	}, [selectedAgentId]);
+
+	const selectedProviderKeys = useMemo(() => {
 		return activeProvider && panel.type !== "create"
 			? new Set([activeProvider.name])
 			: new Set<string>();
@@ -954,8 +999,8 @@ export default function InferenceProvidersPage() {
 				<ListSearchHeader
 					searchValue={searchQuery}
 					onSearchChange={setSearchQuery}
-					placeholder={t("searchInferenceProviders")}
-					ariaLabel={t("searchInferenceProviders")}
+					placeholder={t("searchInferenceProviderResources")}
+					ariaLabel={t("searchInferenceProviderResources")}
 				>
 					<Tooltip delay={0}>
 						<Tooltip.Trigger>
@@ -995,20 +1040,71 @@ export default function InferenceProvidersPage() {
 					</Tooltip>
 				</ListSearchHeader>
 
-				{filteredProviders.length === 0 ? (
-					<div className="px-4 py-8 text-center">
-						<p className="text-sm text-muted">
-							{providers.length === 0
-								? t("noInferenceProviders")
-								: t("noInferenceProvidersMatch")}
-						</p>
-					</div>
-				) : (
-					<div className="flex-1 overflow-y-auto">
+				<div className="flex-1 overflow-y-auto">
+					<ResourceSectionHeader
+						title={t("codingAgents")}
+						count={filteredCodingAgents.length}
+						icon={<CpuChipIcon className="size-3.5" />}
+					/>
+					{filteredCodingAgents.length === 0 ? (
+						<div className="px-4 py-4 text-center">
+							<p className="text-sm text-muted">
+								{t("noCodingAgentsMatch")}
+							</p>
+						</div>
+					) : (
+						<ListBox
+							aria-label={t("codingAgents")}
+							selectionMode="single"
+							selectedKeys={selectedAgentKeys}
+							onAction={(key) =>
+								setSelectedAgentId(key as CodingAgentId)
+							}
+							className="p-2"
+						>
+							{filteredCodingAgents.map((agent) => (
+								<ListBox.Item
+									key={agent.id}
+									id={agent.id}
+									textValue={agent.label}
+									className="data-selected:bg-surface"
+								>
+									<div className="flex min-w-0 items-center gap-2">
+										<AgentIcon
+											id={agent.id}
+											name={agent.label}
+											size="xs"
+											variant="ghost"
+										/>
+										<div className="min-w-0 flex-1">
+											<Label className="block truncate">
+												{agent.label}
+											</Label>
+										</div>
+									</div>
+								</ListBox.Item>
+							))}
+						</ListBox>
+					)}
+
+					<ResourceSectionHeader
+						title={t("inferenceProviders")}
+						count={filteredProviders.length}
+						icon={<ServerIcon className="size-3.5" />}
+					/>
+					{filteredProviders.length === 0 ? (
+						<div className="px-4 py-4 text-center">
+							<p className="text-sm text-muted">
+								{providers.length === 0
+									? t("noInferenceProviders")
+									: t("noInferenceProvidersMatch")}
+							</p>
+						</div>
+					) : (
 						<ListBox
 							aria-label={t("inferenceProviders")}
 							selectionMode="single"
-							selectedKeys={selectedKeys}
+							selectedKeys={selectedProviderKeys}
 							onAction={(key) => {
 								setSelectedName(String(key));
 								setPanel({ type: "detail" });
@@ -1035,8 +1131,8 @@ export default function InferenceProvidersPage() {
 								</ListBox.Item>
 							))}
 						</ListBox>
-					</div>
-				)}
+					)}
+				</div>
 			</div>
 
 			<div className="relative flex-1 overflow-hidden">

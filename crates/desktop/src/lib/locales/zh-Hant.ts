@@ -88,6 +88,8 @@ export default {
 	codeEditors: "程式碼編輯器",
 	codeEditorsDescription: "選擇用於開啟檔案的偏好程式碼編輯器",
 	inferenceProviders: "推理 Provider",
+	codingAgents: "Coding Agents",
+	searchInferenceProviderResources: "搜尋 Agent 或 Provider...",
 	searchInferenceProviders: "搜尋 Provider...",
 	refreshInferenceProviders: "重新整理 Provider",
 	createInferenceProvider: "新增 Provider",
@@ -99,6 +101,7 @@ export default {
 	deleteInferenceProvider: "刪除 Provider",
 	deleteInferenceProviderConfirm:
 		"確定要刪除「{{name}}」嗎？已儲存的 API key 也會被移除。",
+	noCodingAgentsMatch: "沒有符合的 Coding Agent",
 	noInferenceProviders: "尚無推理 Provider。",
 	noInferenceProvidersMatch: "沒有符合的 Provider",
 	providerName: "名稱",

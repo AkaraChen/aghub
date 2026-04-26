@@ -88,6 +88,8 @@ export default {
 	codeEditors: "代码编辑器",
 	codeEditorsDescription: "选择用于打开文件的首选代码编辑器",
 	inferenceProviders: "推理 Provider",
+	codingAgents: "Coding Agents",
+	searchInferenceProviderResources: "搜索 Agent 或 Provider...",
 	searchInferenceProviders: "搜索 Provider...",
 	refreshInferenceProviders: "刷新 Provider",
 	createInferenceProvider: "添加 Provider",
@@ -99,6 +101,7 @@ export default {
 	deleteInferenceProvider: "删除 Provider",
 	deleteInferenceProviderConfirm:
 		'确定要删除"{{name}}"吗？已存储的 API key 也会被移除。',
+	noCodingAgentsMatch: "没有匹配的 Coding Agent",
 	noInferenceProviders: "暂无推理 Provider。",
 	noInferenceProvidersMatch: "没有匹配的 Provider",
 	providerName: "名称",
