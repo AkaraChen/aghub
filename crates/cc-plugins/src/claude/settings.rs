@@ -36,7 +36,12 @@ impl From<&str> for InstallScope {
 			"global" | "user" => InstallScope::Global,
 			"project" => InstallScope::Project,
 			"local" => InstallScope::Local,
-			_ => InstallScope::Global,
+			other => {
+				log::warn!(
+					"Unknown install scope '{other}', defaulting to global"
+				);
+				InstallScope::Global
+			}
 		}
 	}
 }

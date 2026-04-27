@@ -99,7 +99,11 @@ impl UnifiedPluginRegistry {
 			return;
 		};
 		let manifest =
-			serde_json::from_value::<ClaudePluginManifest>(json.clone()).ok();
+			serde_json::from_value::<ClaudePluginManifest>(json.clone())
+				.inspect_err(|e| {
+					log::debug!("Failed to parse plugin manifest: {e}")
+				})
+				.ok();
 
 		if let Some(m) = &manifest {
 			if info.version.is_none() {

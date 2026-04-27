@@ -280,6 +280,12 @@ impl MarketplaceRegistry {
 		} else {
 			self.fetch_manifest_for_plugin(plugin)
 				.await
+				.inspect_err(|e| {
+					log::debug!(
+						"Failed to fetch manifest for {}: {e}",
+						plugin.name
+					)
+				})
 				.ok()
 				.and_then(|manifest| manifest.version)
 				.unwrap_or_else(|| "latest".to_string())
@@ -412,6 +418,12 @@ impl MarketplaceRegistry {
 			Some(MarketplaceEntry::Directory(path)) => {
 				let version = read_plugin_manifest(&path)
 					.await
+					.inspect_err(|e| {
+						log::debug!(
+							"Failed to read manifest at {}: {e}",
+							path.display()
+						)
+					})
 					.ok()
 					.and_then(|manifest| manifest.version)
 					.unwrap_or_else(|| "latest".to_string());

@@ -97,6 +97,9 @@ impl PluginInstaller {
 		if let Some(url) = self
 			.marketplace_urls
 			.read()
+			.inspect_err(|e| {
+				log::error!("Marketplace URL cache lock poisoned: {e}")
+			})
 			.ok()?
 			.get(&id.source)
 			.and_then(|urls| urls.get(&id.name).cloned())
@@ -111,6 +114,9 @@ impl PluginInstaller {
 		let url = urls.get(&id.name).cloned();
 		self.marketplace_urls
 			.write()
+			.inspect_err(|e| {
+				log::error!("Marketplace URL cache lock poisoned: {e}")
+			})
 			.ok()?
 			.insert(id.source.clone(), urls);
 		url

@@ -99,6 +99,12 @@ impl PluginId {
 				s
 			)
 		})?;
+		if name.is_empty() || source.is_empty() {
+			anyhow::bail!(
+				"Plugin ID name and source must be non-empty, got: {}",
+				s
+			);
+		}
 		Ok(Self {
 			name: name.to_string(),
 			source: source.to_string(),
