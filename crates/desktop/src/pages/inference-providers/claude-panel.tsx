@@ -2,6 +2,7 @@ import {
 	ArrowPathIcon,
 	CheckCircleIcon,
 	KeyIcon,
+	PlayIcon,
 	PlusIcon,
 	ServerIcon,
 	TrashIcon,
@@ -64,16 +65,30 @@ function ClaudeOfficialRow({
 			</div>
 
 			<div className="flex items-center gap-1 sm:justify-end">
-				{!isActive && (
-					<Button
-						size="sm"
-						variant="ghost"
-						isPending={isPending}
-						onPress={onActivate}
-					>
-						{t("enable")}
-					</Button>
-				)}
+				<Tooltip delay={0}>
+					<Tooltip.Trigger>
+						<Button
+							isIconOnly
+							size="sm"
+							variant="ghost"
+							isPending={isPending}
+							isDisabled={isActive}
+							aria-label={
+								isActive
+									? t("claudeProviderAlreadyActive")
+									: t("enable")
+							}
+							onPress={onActivate}
+						>
+							<PlayIcon className="size-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						{isActive
+							? t("claudeProviderAlreadyActive")
+							: t("enable")}
+					</Tooltip.Content>
+				</Tooltip>
 			</div>
 		</div>
 	);
@@ -87,6 +102,7 @@ function ClaudeProviderRow({
 	isActive,
 	isSyncing,
 	isDeleting,
+	onActivate,
 	onSync,
 	onDelete,
 }: {
@@ -97,6 +113,7 @@ function ClaudeProviderRow({
 	isActive: boolean;
 	isSyncing: boolean;
 	isDeleting: boolean;
+	onActivate: () => void;
 	onSync: () => void;
 	onDelete: () => void;
 }) {
@@ -171,6 +188,29 @@ function ClaudeProviderRow({
 						</Button>
 					</Tooltip.Trigger>
 					<Tooltip.Content>{t("delete")}</Tooltip.Content>
+				</Tooltip>
+				<Tooltip delay={0}>
+					<Tooltip.Trigger>
+						<Button
+							isIconOnly
+							size="sm"
+							variant="ghost"
+							isDisabled={isActive}
+							aria-label={
+								isActive
+									? t("claudeProviderAlreadyActive")
+									: t("enable")
+							}
+							onPress={onActivate}
+						>
+							<PlayIcon className="size-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						{isActive
+							? t("claudeProviderAlreadyActive")
+							: t("enable")}
+					</Tooltip.Content>
 				</Tooltip>
 			</div>
 		</div>
@@ -398,6 +438,7 @@ export function ClaudeInferenceProviderPanel() {
 											isActive={hasCustomConfig}
 											isSyncing={updateMutation.isPending}
 											isDeleting={clearMutation.isPending}
+											onActivate={() => {}}
 											onSync={handleSync}
 											onDelete={() =>
 												setIsDeleteDialogOpen(true)

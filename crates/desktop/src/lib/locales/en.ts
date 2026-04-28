@@ -112,8 +112,7 @@ export default {
 	openCodeProviderSynced: "OpenCode provider updated",
 	openCodeProviderSyncError: "Failed to update OpenCode provider",
 	openCodeBuiltInProvider: "Built-in provider",
-	openCodeBuiltInProviderInfo:
-		"No Aghub inference provider has the same API Base URL and API key. This was likely added directly in OpenCode.",
+	openCodeBuiltInProviderInfo: "This credential is not managed by aghub.",
 	syncOpenCodeProvider: "Update OpenCode provider",
 	syncOpenCodeProviderFromInferenceProvider:
 		"Update models and config from {{name}}",
@@ -170,6 +169,7 @@ export default {
 	claudeProviderUpdateError: "Failed to update Claude Code configuration",
 	claudeProviderCleared: "Claude Code configuration cleared",
 	claudeProviderClearError: "Failed to clear Claude Code configuration",
+	claudeProviderAlreadyActive: "Already the active configuration",
 	claudeUsingOfficialApi: "Using Anthropic official API with browser login.",
 	clearClaudeProvider: "Clear Claude Code Configuration",
 	clearClaudeProviderConfirm:

@@ -108,8 +108,7 @@ export default {
 	openCodeProviderSynced: "OpenCode Provider 已更新",
 	openCodeProviderSyncError: "更新 OpenCode Provider 失敗",
 	openCodeBuiltInProvider: "內建 provider",
-	openCodeBuiltInProviderInfo:
-		"未在 Aghub 推理 Provider 中找到相同 API Base URL 和 API key，疑似使用者直接在 OpenCode 裡新增。",
+	openCodeBuiltInProviderInfo: "不是由 aghub 管理的 Credential。",
 	syncOpenCodeProvider: "更新 OpenCode Provider",
 	syncOpenCodeProviderFromInferenceProvider: "從 {{name}} 更新模型列表和配置",
 	createCodexProvider: "新增 Codex Provider",
@@ -164,6 +163,7 @@ export default {
 	claudeProviderUpdateError: "更新 Claude Code 配置失敗",
 	claudeProviderCleared: "Claude Code 配置已清除",
 	claudeProviderClearError: "清除 Claude Code 配置失敗",
+	claudeProviderAlreadyActive: "已是目前配置",
 	claudeUsingOfficialApi: "使用 Anthropic 官方 API（瀏覽器登入）。",
 	clearClaudeProvider: "清除 Claude Code 配置",
 	clearClaudeProviderConfirm:
