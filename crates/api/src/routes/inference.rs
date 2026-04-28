@@ -247,11 +247,21 @@ pub fn create_codex_provider(
 	let store = store(state);
 	let (provider, api_key) =
 		get_inventory_provider(&store, &body.inference_provider_id)?;
-	let binding = codex_adapter()?
+	let adapter = codex_adapter()?;
+	let binding = adapter
 		.add_inventory_provider(&provider, &api_key)
 		.map_err(ApiError::from)?;
+	adapter
+		.set_active_provider(&binding.id)
+		.map_err(ApiError::from)?;
 
-	Ok((Status::Created, Json(binding.into())))
+	Ok((
+		Status::Created,
+		Json(
+			AgentProviderResponse::from(binding)
+				.with_matched_inference_provider(&provider),
+		),
+	))
 }
 
 #[put("/inference/agents/opencode/providers/<id>", data = "<body>")]
@@ -498,7 +508,11 @@ pub fn update_claude_state(
 	let state = aghub_inference::ClaudeConfigState {
 		api_base_url: body.api_base_url.clone(),
 		api_key: body.api_key.clone(),
+		api_key_env_name: None,
 		model: body.model.clone(),
+		haiku_model: None,
+		sonnet_model: None,
+		opus_model: None,
 	};
 	adapter.save_config_state(&state).map_err(ApiError::from)?;
 	Ok(Json(state.into()))
@@ -508,5 +522,12 @@ pub fn update_claude_state(
 pub fn clear_claude_state() -> ApiNoContent {
 	let adapter = claude_adapter()?;
 	adapter.clear_provider_config().map_err(ApiError::from)?;
+	Ok(NoContent)
+}
+
+#[delete("/inference/agents/codex/state")]
+pub fn clear_codex_state() -> ApiNoContent {
+	let adapter = codex_adapter()?;
+	adapter.clear_active_provider().map_err(ApiError::from)?;
 	Ok(NoContent)
 }

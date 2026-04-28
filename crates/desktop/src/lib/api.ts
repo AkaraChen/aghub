@@ -500,6 +500,11 @@ export function createApi(baseUrl: string) {
 			getCodexState(): Promise<CodexProviderStateResponse> {
 				return client.get("inference/agents/codex/state").json();
 			},
+			clearCodexState(): Promise<void> {
+				return client
+					.delete("inference/agents/codex/state")
+					.then(() => undefined);
+			},
 			getPassword(
 				name: string,
 			): Promise<InferenceProviderPasswordResponse> {

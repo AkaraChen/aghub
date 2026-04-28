@@ -128,6 +128,8 @@ export default {
 	codexProviderUpdated: "Codex provider updated",
 	codexProviderDeleted: "Codex provider deleted",
 	codexProviderDeleteError: "Failed to delete Codex provider",
+	codexProviderCleared: "Codex provider selection cleared",
+	codexProviderClearError: "Failed to clear Codex provider selection",
 	codexProviderSynced: "Codex provider updated",
 	codexProviderSyncError: "Failed to update Codex provider",
 	codexBuiltInProvider: "Built-in provider",
@@ -155,6 +157,9 @@ export default {
 	syncCodexProvider: "Update Codex provider",
 	syncCodexProviderFromInferenceProvider:
 		"Update provider config from {{name}}",
+	clearCodexProvider: "Clear Codex Provider Selection",
+	clearCodexProviderConfirm:
+		"Switch Codex back to its built-in OpenAI login provider?",
 	active: "Active",
 	custom: "Custom",
 	enable: "Enable",

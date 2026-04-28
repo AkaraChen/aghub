@@ -5,7 +5,6 @@ import {
 	PlayIcon,
 	PlusIcon,
 	ServerIcon,
-	TrashIcon,
 } from "@heroicons/react/24/solid";
 import {
 	Alert,
@@ -34,6 +33,10 @@ import {
 	inferenceProviderListQueryOptions,
 	updateClaudeProviderMutationOptions,
 } from "../../requests/inference-providers";
+
+function sameApiBaseUrl(left: string, right: string) {
+	return left.trim().replace(/\/+$/, "") === right.trim().replace(/\/+$/, "");
+}
 
 function ClaudeOfficialRow({
 	isActive,
@@ -95,27 +98,25 @@ function ClaudeOfficialRow({
 }
 
 function ClaudeProviderRow({
+	label,
 	apiBaseUrl,
 	apiKey,
 	model,
-	matchedProvider,
 	isActive,
 	isSyncing,
-	isDeleting,
 	onActivate,
 	onSync,
-	onDelete,
+	showSync,
 }: {
+	label: string;
 	apiBaseUrl: string | null;
 	apiKey: string | null;
 	model: string | null;
-	matchedProvider: InferenceProviderResponse | undefined;
 	isActive: boolean;
 	isSyncing: boolean;
-	isDeleting: boolean;
 	onActivate: () => void;
 	onSync: () => void;
-	onDelete: () => void;
+	showSync: boolean;
 }) {
 	const { t } = useTranslation();
 
@@ -124,12 +125,7 @@ function ClaudeProviderRow({
 			<div className="grid min-w-0 gap-1">
 				<div className="flex min-w-0 items-center gap-2">
 					<ServerIcon className="size-4 shrink-0 text-muted" />
-					<Label className="truncate">
-						{matchedProvider?.display_name ??
-							matchedProvider?.name ??
-							apiBaseUrl ??
-							t("custom")}
-					</Label>
+					<Label className="truncate">{label}</Label>
 					{isActive && (
 						<span className="inline-flex items-center gap-1 rounded-md bg-accent/10 px-2 py-0.5 text-xs text-accent">
 							<CheckCircleIcon className="size-3.5" />
@@ -152,7 +148,7 @@ function ClaudeProviderRow({
 			</div>
 
 			<div className="flex items-center gap-1 sm:justify-end">
-				{matchedProvider && (
+				{showSync && (
 					<Tooltip delay={0}>
 						<Tooltip.Trigger>
 							<Button
@@ -168,27 +164,11 @@ function ClaudeProviderRow({
 						</Tooltip.Trigger>
 						<Tooltip.Content>
 							{t("syncClaudeProviderFromInferenceProvider", {
-								name: matchedProvider.display_name,
+								name: label,
 							})}
 						</Tooltip.Content>
 					</Tooltip>
 				)}
-				<Tooltip delay={0}>
-					<Tooltip.Trigger>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							className="text-muted hover:text-danger"
-							aria-label={t("delete")}
-							isPending={isDeleting}
-							onPress={onDelete}
-						>
-							<TrashIcon className="size-4" />
-						</Button>
-					</Tooltip.Trigger>
-					<Tooltip.Content>{t("delete")}</Tooltip.Content>
-				</Tooltip>
 				<Tooltip delay={0}>
 					<Tooltip.Trigger>
 						<Button
@@ -257,8 +237,9 @@ export function ClaudeInferenceProviderPanel() {
 			if (!state?.api_base_url || !state?.api_key) {
 				return undefined;
 			}
-			const candidate = inventoryProviders.find(
-				(p) => p.api_base_url === state.api_base_url,
+			const currentApiBaseUrl = state.api_base_url;
+			const candidate = inventoryProviders.find((p) =>
+				sameApiBaseUrl(p.api_base_url, currentApiBaseUrl),
 			);
 			if (!candidate) return undefined;
 			try {
@@ -318,14 +299,11 @@ export function ClaudeInferenceProviderPanel() {
 	const hasCustomConfig = Boolean(
 		state?.api_base_url || state?.api_key || state?.model,
 	);
+	const hasUnmatchedCustomConfig = hasCustomConfig && !matchedProvider;
 
-	const handleAdd = async (event: FormEvent<HTMLFormElement>) => {
-		event.preventDefault();
-		if (!selectedProviderId) return;
-
-		const provider = inventoryProviders.find(
-			(p) => p.id === selectedProviderId,
-		);
+	const activateProvider = async (target: InferenceProviderResponse) => {
+		if (target.format !== "anthropic") return;
+		const provider = inventoryProviders.find((p) => p.id === target.id);
 		if (!provider) return;
 
 		try {
@@ -345,6 +323,16 @@ export function ClaudeInferenceProviderPanel() {
 					: t("inferenceProviderPasswordLoadFailed"),
 			);
 		}
+	};
+
+	const handleAdd = async (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		if (!selectedProviderId) return;
+		const provider = inventoryProviders.find(
+			(p) => p.id === selectedProviderId,
+		);
+		if (!provider) return;
+		await activateProvider(provider);
 	};
 
 	const handleSync = async () => {
@@ -427,22 +415,59 @@ export function ClaudeInferenceProviderPanel() {
 											setIsDeleteDialogOpen(true)
 										}
 									/>
-									{hasCustomConfig && (
+									{anthropicProviders.map((provider) => (
 										<ClaudeProviderRow
+											key={provider.id}
+											label={
+												provider.display_name ||
+												provider.name
+											}
+											apiBaseUrl={provider.api_base_url}
+											apiKey={
+												matchedProvider?.id ===
+												provider.id
+													? (state?.api_key ?? null)
+													: null
+											}
+											model={
+												matchedProvider?.id ===
+												provider.id
+													? (state?.model ?? null)
+													: (provider.models[0] ??
+														null)
+											}
+											isActive={
+												matchedProvider?.id ===
+												provider.id
+											}
+											isSyncing={
+												updateMutation.isPending &&
+												matchedProvider?.id ===
+													provider.id
+											}
+											onActivate={() => {
+												void activateProvider(provider);
+											}}
+											onSync={handleSync}
+											showSync={
+												matchedProvider?.id ===
+												provider.id
+											}
+										/>
+									))}
+									{hasUnmatchedCustomConfig && (
+										<ClaudeProviderRow
+											label={t("custom")}
 											apiBaseUrl={
 												state?.api_base_url ?? null
 											}
 											apiKey={state?.api_key ?? null}
 											model={state?.model ?? null}
-											matchedProvider={matchedProvider}
-											isActive={hasCustomConfig}
-											isSyncing={updateMutation.isPending}
-											isDeleting={clearMutation.isPending}
+											isActive
+											isSyncing={false}
 											onActivate={() => {}}
-											onSync={handleSync}
-											onDelete={() =>
-												setIsDeleteDialogOpen(true)
-											}
+											onSync={() => {}}
+											showSync={false}
 										/>
 									)}
 								</div>

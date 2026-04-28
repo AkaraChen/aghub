@@ -29,6 +29,7 @@ pub const DEFAULT_PROFILE_ID: &str = "default";
 #[derive(Debug, Clone)]
 pub struct CodexProviderAdapter {
 	config_path: PathBuf,
+	auth_path: PathBuf,
 }
 
 /// Effective provider selection for one Codex profile.
@@ -64,8 +65,14 @@ pub struct CodexProviderState {
 impl CodexProviderAdapter {
 	/// Create an adapter with an explicit `config.toml` path.
 	pub fn new(config_path: impl Into<PathBuf>) -> Self {
+		let config_path = config_path.into();
+		let auth_path = config_path
+			.parent()
+			.map(|parent| parent.join("auth.json"))
+			.unwrap_or_else(|| PathBuf::from("auth.json"));
 		Self {
-			config_path: config_path.into(),
+			config_path,
+			auth_path,
 		}
 	}
 
@@ -82,6 +89,11 @@ impl CodexProviderAdapter {
 	/// Path to the Codex config file this adapter manages.
 	pub fn config_path(&self) -> &Path {
 		&self.config_path
+	}
+
+	/// Path to the Codex auth file paired with this config.
+	pub fn auth_path(&self) -> &Path {
+		&self.auth_path
 	}
 
 	/// Load Codex providers with effective profile selection.
@@ -118,6 +130,21 @@ impl CodexProviderAdapter {
 
 		files::write_config(&self.config_path, &config)?;
 		self.load_profile_state()
+	}
+
+	/// Set the provider used by Codex's current active profile.
+	pub fn set_active_provider(
+		&self,
+		provider_id: &str,
+	) -> Result<CodexProviderState> {
+		let config = files::read_config(&self.config_path)?;
+		let active_profile_id = active_profile_id(&config);
+		self.set_profile_provider(&active_profile_id, provider_id)
+	}
+
+	/// Clear the current active-provider override and fall back to OpenAI.
+	pub fn clear_active_provider(&self) -> Result<CodexProviderState> {
+		self.set_active_provider(mapping::OPENAI_PROVIDER_ID)
 	}
 
 	/// Set the provider used by one Codex profile.
@@ -161,12 +188,15 @@ impl CodexProviderAdapter {
 		mapping::ensure_responses_format(Some(provider.format))?;
 		mapping::ensure_api_key(api_key)?;
 		let provider_id = mapping::clean_provider_id(provider_id)?;
-		let binding = AgentProviderBinding::from_inventory(
+		let mut binding = AgentProviderBinding::from_inventory(
 			provider_id.clone(),
 			provider,
 			AgentProviderCredential::Inline,
 			AgentProviderSource::Custom,
 		)?;
+		if let Some(api_base_url) = binding.api_base_url.as_mut() {
+			*api_base_url = normalize_inventory_base_url(api_base_url);
+		}
 
 		let mut config = files::read_config(&self.config_path)?;
 		upsert_provider(&mut config, &binding, Some(api_key))?;
@@ -204,6 +234,19 @@ impl CodexProviderAdapter {
 		let name = name.map(mapping::clean_provider_name).transpose()?;
 		if let Some(api_key) = api_key {
 			mapping::ensure_api_key(api_key)?;
+			if mapping::uses_auth_command(&provider) {
+				return Err(
+					crate::error::InferenceProviderError::InvalidAgentProviderConfig {
+						agent_id: AGENT_ID.to_string(),
+						path: self.config_path.display().to_string(),
+						message: format!(
+							"codex provider '{provider_id}' uses \
+							 command-backed auth and cannot be updated \
+							 with an inline API key"
+						),
+					},
+				);
+			}
 		}
 
 		let mut binding = mapping::binding_from_table(&provider_id, &provider)?;
@@ -213,6 +256,11 @@ impl CodexProviderAdapter {
 		}
 		upsert_provider(&mut config, &binding, api_key)?;
 		files::write_config(&self.config_path, &config)?;
+		if let Some(api_key) = api_key {
+			if mapping::uses_shared_openai_api_key(&provider) {
+				self.write_shared_openai_api_key(api_key)?;
+			}
+		}
 
 		Ok(self
 			.load_providers()?
@@ -233,6 +281,13 @@ impl CodexProviderAdapter {
 		let Some(table) = provider_table(&config, &provider_id)? else {
 			return Ok(None);
 		};
+		if mapping::uses_shared_openai_api_key(table) {
+			let auth = files::read_auth(&self.auth_path)?;
+			return Ok(mapping::api_key_from_auth_file(&auth));
+		}
+		if mapping::uses_auth_command(table) {
+			return Ok(None);
+		}
 		Ok(mapping::api_key_from_table(table))
 	}
 
@@ -264,6 +319,23 @@ impl CodexProviderAdapter {
 		clear_profile_provider_references(&mut config, &provider_id);
 		files::write_config(&self.config_path, &config)?;
 		Ok(removed)
+	}
+
+	fn write_shared_openai_api_key(&self, api_key: &str) -> Result<()> {
+		let mut auth = files::read_auth(&self.auth_path)?;
+		let Some(auth_object) = auth.as_object_mut() else {
+			return Err(
+				crate::error::InferenceProviderError::InvalidAgentCredentialStore {
+					agent_id: AGENT_ID.to_string(),
+					path: self.auth_path.display().to_string(),
+					message: "auth.json must contain a JSON object"
+						.to_string(),
+				},
+			);
+		};
+		auth_object
+			.insert("OPENAI_API_KEY".to_string(), serde_json::json!(api_key));
+		files::write_auth(&self.auth_path, &auth)
 	}
 }
 
@@ -318,9 +390,19 @@ impl AgentProviderAdapter for CodexProviderAdapter {
 
 		if let Some(selection) = &state.default_model {
 			if let Some(provider_id) = &selection.provider_id {
-				config["model_provider"] = value(provider_id.clone());
+				if provider_id.eq_ignore_ascii_case(mapping::OPENAI_PROVIDER_ID)
+				{
+					config.as_table_mut().remove("model_provider");
+				} else {
+					config["model_provider"] = value(provider_id.clone());
+				}
+			} else {
+				config.as_table_mut().remove("model_provider");
 			}
 			config["model"] = value(selection.model_id.clone());
+		} else {
+			config.as_table_mut().remove("model_provider");
+			config.as_table_mut().remove("model");
 		}
 
 		files::write_config(&self.config_path, &config)
@@ -330,7 +412,9 @@ impl AgentProviderAdapter for CodexProviderAdapter {
 fn providers_from_config(
 	config: &DocumentMut,
 ) -> Result<Vec<AgentProviderBinding>> {
-	let mut providers = vec![mapping::built_in_openai_binding()];
+	let mut providers = vec![mapping::built_in_openai_binding(
+		built_in_openai_api_base_url(config),
+	)];
 
 	if let Some(model_providers) =
 		config.get("model_providers").and_then(Item::as_table)
@@ -415,11 +499,38 @@ fn default_model_selection(
 	let provider = config
 		.get("model_provider")
 		.and_then(Item::as_str)
+		.filter(|provider| {
+			!provider.eq_ignore_ascii_case(mapping::OPENAI_PROVIDER_ID)
+		})
 		.map(ToString::to_string);
 	Some(match provider {
 		Some(provider) => AgentModelSelection::provider_model(provider, model),
 		None => AgentModelSelection::model(model),
 	})
+}
+
+fn built_in_openai_api_base_url(config: &DocumentMut) -> Option<String> {
+	config
+		.get("openai_base_url")
+		.and_then(Item::as_str)
+		.or_else(|| config.get("base_url").and_then(Item::as_str))
+		.map(ToString::to_string)
+}
+
+fn normalize_inventory_base_url(api_base_url: &str) -> String {
+	let trimmed = api_base_url.trim().trim_end_matches('/');
+	let origin_only = match trimmed.split_once("://") {
+		Some((_scheme, rest)) => !rest.contains('/'),
+		None => !trimmed.contains('/'),
+	};
+
+	if trimmed.ends_with("/v1") {
+		trimmed.to_string()
+	} else if origin_only {
+		format!("{trimmed}/v1")
+	} else {
+		trimmed.to_string()
+	}
 }
 
 fn upsert_provider(

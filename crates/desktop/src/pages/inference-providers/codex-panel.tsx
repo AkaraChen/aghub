@@ -2,9 +2,7 @@ import {
 	ArrowPathIcon,
 	CheckCircleIcon,
 	PlayIcon,
-	PencilIcon,
 	PlusIcon,
-	QuestionMarkCircleIcon,
 	ServerIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
@@ -13,14 +11,11 @@ import {
 	AlertDialog,
 	Button,
 	Card,
-	FieldError,
-	Input,
 	Label,
 	ListBox,
 	Modal,
 	Select,
 	Spinner,
-	TextField,
 	Tooltip,
 	toast,
 } from "@heroui/react";
@@ -36,18 +31,14 @@ import { useApi } from "../../hooks/use-api";
 import { AgentIcon } from "../../lib/agent-icons";
 import { cn } from "../../lib/utils";
 import {
+	clearCodexProviderMutationOptions,
 	codexProviderStateQueryOptions,
 	createCodexProviderMutationOptions,
 	deleteCodexProviderMutationOptions,
 	inferenceProviderListQueryOptions,
 	syncCodexProviderMutationOptions,
 	updateCodexProfileProviderMutationOptions,
-	updateCodexProviderMutationOptions,
 } from "../../requests/inference-providers";
-
-type ProviderDialogMode =
-	| { type: "create" }
-	| { type: "edit"; provider: AgentProviderResponse };
 
 function CodexCreateProviderDialog({
 	isOpen,
@@ -73,6 +64,7 @@ function CodexCreateProviderDialog({
 		[inventoryProviders],
 	);
 	const defaultProviderId = responseProviders[0]?.id ?? "";
+
 	useEffect(() => {
 		if (!isOpen) return;
 		setSelectedProviderId((current) => current || defaultProviderId);
@@ -83,7 +75,7 @@ function CodexCreateProviderDialog({
 			api,
 			queryClient,
 			onSuccess: async () => {
-				toast.success(t("codexProviderCreated"));
+				toast.success(t("codexProviderUpdated"));
 				onClose();
 			},
 		}),
@@ -220,407 +212,198 @@ function CodexCreateProviderDialog({
 	);
 }
 
-function CodexEditProviderDialog({
-	isOpen,
-	provider,
-	onClose,
-}: {
-	isOpen: boolean;
-	provider: AgentProviderResponse;
-	onClose: () => void;
-}) {
-	const { t } = useTranslation();
-	const api = useApi();
-	const queryClient = useQueryClient();
-	const [name, setName] = useState(provider.name);
-	const [apiKey, setApiKey] = useState("");
-	const [nameError, setNameError] = useState<string | null>(null);
-
-	useEffect(() => {
-		if (!isOpen) return;
-		setName(provider.name);
-		setApiKey("");
-		setNameError(null);
-	}, [isOpen, provider.id, provider.name]);
-
-	const updateMutation = useMutation({
-		...updateCodexProviderMutationOptions({
-			api,
-			queryClient,
-			onSuccess: async () => {
-				toast.success(t("codexProviderUpdated"));
-				onClose();
-			},
-		}),
-	});
-
-	const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
-		event.preventDefault();
-		const trimmedName = name.trim();
-		if (!trimmedName) {
-			setNameError(t("validationProviderNameRequired"));
-			return;
-		}
-
-		const trimmedApiKey = apiKey.trim();
-		updateMutation.mutate({
-			id: provider.id,
-			body: {
-				name: trimmedName === provider.name ? null : trimmedName,
-				api_key: trimmedApiKey ? trimmedApiKey : null,
-			},
-		});
-	};
-
-	return (
-		<Modal.Backdrop
-			isOpen={isOpen}
-			onOpenChange={(open) => {
-				if (!open) onClose();
-			}}
-		>
-			<Modal.Container>
-				<Modal.Dialog className="sm:max-w-[440px]">
-					<Modal.CloseTrigger />
-					<Modal.Header>
-						<Modal.Heading>{t("editCodexProvider")}</Modal.Heading>
-					</Modal.Header>
-					<form onSubmit={handleSubmit}>
-						<Modal.Body className="grid gap-4 p-4">
-							{updateMutation.error && (
-								<Alert status="danger">
-									<Alert.Indicator />
-									<Alert.Content>
-										<Alert.Description>
-											{updateMutation.error instanceof
-											Error
-												? updateMutation.error.message
-												: String(updateMutation.error)}
-										</Alert.Description>
-									</Alert.Content>
-								</Alert>
-							)}
-
-							<TextField
-								className="w-full"
-								isRequired
-								validationBehavior="aria"
-								isInvalid={Boolean(nameError)}
-							>
-								<Label>{t("providerName")}</Label>
-								<Input
-									value={name}
-									onChange={(event) => {
-										setName(event.target.value);
-										if (nameError) setNameError(null);
-									}}
-									placeholder={t("providerNamePlaceholder")}
-									variant="secondary"
-								/>
-								{nameError && (
-									<FieldError>{nameError}</FieldError>
-								)}
-							</TextField>
-
-							<TextField className="w-full">
-								<Label>{t("providerApiKey")}</Label>
-								<Input
-									type="password"
-									value={apiKey}
-									onChange={(event) =>
-										setApiKey(event.target.value)
-									}
-									placeholder={t(
-										"providerApiKeyEditPlaceholder",
-									)}
-									variant="secondary"
-								/>
-							</TextField>
-						</Modal.Body>
-						<Modal.Footer>
-							<Button
-								type="button"
-								variant="tertiary"
-								onPress={onClose}
-								isDisabled={updateMutation.isPending}
-							>
-								{t("cancel")}
-							</Button>
-							<Button
-								type="submit"
-								isPending={updateMutation.isPending}
-							>
-								{t("save")}
-							</Button>
-						</Modal.Footer>
-					</form>
-				</Modal.Dialog>
-			</Modal.Container>
-		</Modal.Backdrop>
-	);
-}
-
-function ProviderIdentity({
-	provider,
-	fallbackId,
+function CodexOfficialRow({
 	isActive,
+	isPending,
+	onActivate,
 }: {
-	provider: AgentProviderResponse | undefined;
-	fallbackId: string;
-	isActive?: boolean;
+	isActive: boolean;
+	isPending: boolean;
+	onActivate: () => void;
 }) {
 	const { t } = useTranslation();
-	const label = provider?.name ?? fallbackId;
 
 	return (
-		<div className="flex min-w-0 items-center gap-2">
-			<ServerIcon className="size-4 shrink-0 text-muted" />
-			<Label className="truncate">{label}</Label>
-			{provider && provider.id !== provider.name && (
-				<span className="rounded-md bg-surface-secondary px-2 py-0.5 text-xs text-muted">
-					{provider.id}
+		<div className="grid gap-3 border-t border-border py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+			<div className="grid min-w-0 gap-1">
+				<div className="flex min-w-0 items-center gap-2">
+					<ServerIcon className="size-4 shrink-0 text-muted" />
+					<Label className="truncate">OpenAI</Label>
+					{isActive && (
+						<span className="inline-flex items-center gap-1 rounded-md bg-accent/10 px-2 py-0.5 text-xs text-accent">
+							<CheckCircleIcon className="size-3.5" />
+							{t("active")}
+						</span>
+					)}
+				</div>
+				<span className="text-xs text-muted">
+					{t("codexLoginProviderInfo")}
 				</span>
-			)}
-			{isActive && (
-				<span className="inline-flex items-center gap-1 rounded-md bg-accent/10 px-2 py-0.5 text-xs text-accent">
-					<CheckCircleIcon className="size-3.5" />
-					{t("active")}
-				</span>
-			)}
+			</div>
+
+			<div className="flex items-center gap-1 sm:justify-end">
+				<Tooltip delay={0}>
+					<Tooltip.Trigger>
+						<Button
+							isIconOnly
+							size="sm"
+							variant="ghost"
+							isPending={isPending}
+							isDisabled={isActive}
+							aria-label={
+								isActive
+									? t("codexProviderAlreadyActive")
+									: t("enable")
+							}
+							onPress={onActivate}
+						>
+							<PlayIcon className="size-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						{isActive
+							? t("codexProviderAlreadyActive")
+							: t("enable")}
+					</Tooltip.Content>
+				</Tooltip>
+			</div>
 		</div>
 	);
 }
 
-function ProviderMeta({ provider }: { provider: AgentProviderResponse }) {
-	const { t } = useTranslation();
-	const matchedProvider = provider.matched_inference_provider;
-
-	if (provider.source === "built_in") {
-		return (
-			<span className="inline-flex items-center gap-1 text-xs text-muted">
-				{t("codexLoginProvider")}
-				<Tooltip delay={0}>
-					<Tooltip.Trigger>
-						<span
-							tabIndex={0}
-							aria-label={t("codexLoginProviderInfo")}
-							className="inline-flex size-4 items-center justify-center"
-						>
-							<QuestionMarkCircleIcon className="size-4" />
-						</span>
-					</Tooltip.Trigger>
-					<Tooltip.Content className="max-w-64">
-						{t("codexLoginProviderInfo")}
-					</Tooltip.Content>
-				</Tooltip>
-			</span>
-		);
-	}
-
-	if (matchedProvider) {
-		return (
-			<span className="text-xs text-muted">
-				{t("providerModels")}: {matchedProvider.model_count}
-			</span>
-		);
-	}
-
-	return (
-		<span className="inline-flex items-center gap-1 text-xs text-muted">
-			{t("codexConfigProvider")}
-			<Tooltip delay={0}>
-				<Tooltip.Trigger>
-					<span
-						tabIndex={0}
-						aria-label={t("codexConfigProviderInfo")}
-						className="inline-flex size-4 items-center justify-center"
-					>
-						<QuestionMarkCircleIcon className="size-4" />
-					</span>
-				</Tooltip.Trigger>
-				<Tooltip.Content className="max-w-64">
-					{t("codexConfigProviderInfo")}
-				</Tooltip.Content>
-			</Tooltip>
-		</span>
-	);
-}
-
-function ProviderActions({
+function CodexProviderRow({
 	provider,
+	model,
 	isActive,
 	isSyncing,
 	isSelecting,
+	isDeleting,
 	canSelect,
-	onSelectForProfile,
-	onEdit,
+	onSelect,
 	onSync,
 	onDelete,
 }: {
 	provider: AgentProviderResponse;
+	model: string | null;
 	isActive: boolean;
 	isSyncing: boolean;
 	isSelecting: boolean;
+	isDeleting: boolean;
 	canSelect: boolean;
-	onSelectForProfile: () => void;
-	onEdit: () => void;
+	onSelect: () => void;
 	onSync: () => void;
 	onDelete: () => void;
 }) {
 	const { t } = useTranslation();
 	const matchedProvider = provider.matched_inference_provider;
-	const isBuiltIn = provider.source === "built_in";
+	const label = matchedProvider?.display_name ?? provider.name;
 
 	return (
-		<div className="flex items-center gap-1 sm:justify-end">
-			{matchedProvider && (
+		<div className="grid gap-3 border-t border-border py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+			<div className="grid min-w-0 gap-1">
+				<div className="flex min-w-0 items-center gap-2">
+					<ServerIcon className="size-4 shrink-0 text-muted" />
+					<Label className="truncate">{label}</Label>
+					{isActive && (
+						<span className="inline-flex items-center gap-1 rounded-md bg-accent/10 px-2 py-0.5 text-xs text-accent">
+							<CheckCircleIcon className="size-3.5" />
+							{t("active")}
+						</span>
+					)}
+				</div>
+				<div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
+					<span>
+						{matchedProvider
+							? `${t("providerModels")}: ${
+									matchedProvider.model_count
+								}`
+							: t("codexConfigProvider")}
+					</span>
+					{provider.api_base_url && (
+						<span className="truncate">
+							{provider.api_base_url}
+						</span>
+					)}
+					{model && <span>{model}</span>}
+				</div>
+			</div>
+
+			<div className="flex items-center gap-1 sm:justify-end">
+				{matchedProvider && (
+					<Tooltip delay={0}>
+						<Tooltip.Trigger>
+							<Button
+								isIconOnly
+								variant="ghost"
+								size="sm"
+								aria-label={t("syncCodexProvider")}
+								isPending={isSyncing}
+								onPress={onSync}
+							>
+								<ArrowPathIcon className="size-4" />
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							{t("syncCodexProviderFromInferenceProvider", {
+								name: matchedProvider.display_name,
+							})}
+						</Tooltip.Content>
+					</Tooltip>
+				)}
 				<Tooltip delay={0}>
 					<Tooltip.Trigger>
 						<Button
 							isIconOnly
 							variant="ghost"
 							size="sm"
-							aria-label={t("syncCodexProvider")}
-							isPending={isSyncing}
-							onPress={onSync}
+							isPending={isSelecting}
+							isDisabled={isActive || !canSelect}
+							aria-label={
+								isActive
+									? t("codexProviderAlreadyActive")
+									: t("enable")
+							}
+							onPress={onSelect}
 						>
-							<ArrowPathIcon className="size-4" />
+							<PlayIcon className="size-4" />
 						</Button>
 					</Tooltip.Trigger>
 					<Tooltip.Content>
-						{t("syncCodexProviderFromInferenceProvider", {
-							name: matchedProvider.display_name,
-						})}
+						{isActive
+							? t("codexProviderAlreadyActive")
+							: !canSelect
+								? t("codexNoProfiles")
+								: t("enable")}
 					</Tooltip.Content>
 				</Tooltip>
-			)}
-			{!isBuiltIn && (
-				<>
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								aria-label={t(
-									matchedProvider
-										? "editInferenceProvider"
-										: "editCodexProvider",
-								)}
-								onPress={onEdit}
-							>
-								<PencilIcon className="size-4" />
-							</Button>
-						</Tooltip.Trigger>
-						<Tooltip.Content>{t("edit")}</Tooltip.Content>
-					</Tooltip>
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								className="text-muted hover:text-danger"
-								aria-label={t("deleteCodexProvider")}
-								onPress={onDelete}
-							>
-								<TrashIcon className="size-4" />
-							</Button>
-						</Tooltip.Trigger>
-						<Tooltip.Content>{t("delete")}</Tooltip.Content>
-					</Tooltip>
-				</>
-			)}
-			<Tooltip delay={0}>
-				<Tooltip.Trigger>
-					<Button
-						isIconOnly
-						size="sm"
-						variant="ghost"
-						isPending={isSelecting}
-						isDisabled={isActive || !canSelect}
-						aria-label={t("codexUseForActiveProfile")}
-						onPress={onSelectForProfile}
-					>
-						<PlayIcon className="size-4" />
-					</Button>
-				</Tooltip.Trigger>
-				<Tooltip.Content>
-					{isActive
-						? t("codexProviderAlreadyActive")
-						: !canSelect
-							? t("codexNoProfiles")
-							: t("codexUseForActiveProfile")}
-				</Tooltip.Content>
-			</Tooltip>
-		</div>
-	);
-}
-
-function ProviderRow({
-	provider,
-	isActive,
-	isSyncing,
-	isSelecting,
-	canSelect,
-	onSelectForProfile,
-	onEdit,
-	onSync,
-	onDelete,
-}: {
-	provider: AgentProviderResponse;
-	isActive: boolean;
-	isSyncing: boolean;
-	isSelecting: boolean;
-	canSelect: boolean;
-	onSelectForProfile: () => void;
-	onEdit: () => void;
-	onSync: () => void;
-	onDelete: () => void;
-}) {
-	return (
-		<div className="grid gap-3 border-t border-border py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-			<div className="grid min-w-0 gap-1">
-				<ProviderIdentity
-					provider={provider}
-					fallbackId={provider.id}
-					isActive={isActive}
-				/>
-				<div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1">
-					<ProviderMeta provider={provider} />
-					{provider.api_base_url && (
-						<span className="truncate text-xs text-muted">
-							{provider.api_base_url}
-						</span>
-					)}
-				</div>
+				<Tooltip delay={0}>
+					<Tooltip.Trigger>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							className="text-muted hover:text-danger"
+							aria-label={t("deleteCodexProvider")}
+							isPending={isDeleting}
+							onPress={onDelete}
+						>
+							<TrashIcon className="size-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>{t("delete")}</Tooltip.Content>
+				</Tooltip>
 			</div>
-
-			<ProviderActions
-				provider={provider}
-				isActive={isActive}
-				isSyncing={isSyncing}
-				isSelecting={isSelecting}
-				canSelect={canSelect}
-				onSelectForProfile={onSelectForProfile}
-				onEdit={onEdit}
-				onSync={onSync}
-				onDelete={onDelete}
-			/>
 		</div>
 	);
 }
 
-export function CodexInferenceProviderPanel({
-	onEditInferenceProvider,
-}: {
+export function CodexInferenceProviderPanel(_: {
 	onEditInferenceProvider: (providerName: string) => void;
 }) {
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
-	const [providerDialog, setProviderDialog] =
-		useState<ProviderDialogMode | null>(null);
+	const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
 	const [deleteTarget, setDeleteTarget] =
 		useState<AgentProviderResponse | null>(null);
 
@@ -637,21 +420,42 @@ export function CodexInferenceProviderPanel({
 			...inferenceProviderListQueryOptions({ api }),
 		});
 
-	const providers = codexState?.providers ?? [];
-	const profiles = codexState?.profiles ?? [];
 	const activeProfile =
-		profiles.find((profile) => profile.is_active) ?? profiles[0];
+		codexState?.profiles.find((profile) => profile.is_active) ??
+		codexState?.profiles[0];
+	const activeProviderId = activeProfile?.selected_provider_id ?? "openai";
+	const isOfficialActive = activeProviderId === "openai";
+	const customProviders = (codexState?.providers ?? []).filter(
+		(provider) => provider.id !== "openai",
+	);
 
-	const profileProviderMutation = useMutation({
+	const clearMutation = useMutation({
+		...clearCodexProviderMutationOptions({
+			api,
+			queryClient,
+			onSuccess: async () => {
+				toast.success(t("codexProviderCleared"));
+			},
+		}),
+		onError: (error) => {
+			console.error("Failed to clear Codex provider:", error);
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: t("codexProviderClearError"),
+			);
+		},
+	});
+	const selectProviderMutation = useMutation({
 		...updateCodexProfileProviderMutationOptions({
 			api,
 			queryClient,
 			onSuccess: async () => {
-				toast.success(t("codexProfileProviderUpdated"));
+				toast.success(t("codexProviderUpdated"));
 			},
 		}),
 		onError: (error) => {
-			console.error("Failed to update Codex profile provider:", error);
+			console.error("Failed to switch Codex provider:", error);
 			toast.danger(
 				error instanceof Error
 					? error.message
@@ -694,24 +498,6 @@ export function CodexInferenceProviderPanel({
 			);
 		},
 	});
-
-	const handleEditProvider = (provider: AgentProviderResponse) => {
-		const matchedProvider = provider.matched_inference_provider;
-		if (matchedProvider) {
-			onEditInferenceProvider(matchedProvider.name);
-			return;
-		}
-
-		setProviderDialog({ type: "edit", provider });
-	};
-
-	const handleProfileProviderChange = (providerId: string) => {
-		if (!activeProfile) return;
-		profileProviderMutation.mutate({
-			profileId: activeProfile.id,
-			body: { provider_id: providerId },
-		});
-	};
 
 	return (
 		<>
@@ -760,9 +546,7 @@ export function CodexInferenceProviderPanel({
 								<Button
 									size="sm"
 									aria-label={t("createCodexProvider")}
-									onPress={() =>
-										setProviderDialog({ type: "create" })
-									}
+									onPress={() => setIsAddDialogOpen(true)}
 								>
 									<PlusIcon className="size-4" />
 									{t("add")}
@@ -776,8 +560,15 @@ export function CodexInferenceProviderPanel({
 									<Spinner />
 								</div>
 							) : (
-								<>
-									{providers.length === 0 ? (
+								<div>
+									<CodexOfficialRow
+										isActive={isOfficialActive}
+										isPending={clearMutation.isPending}
+										onActivate={() =>
+											clearMutation.mutate()
+										}
+									/>
+									{customProviders.length === 0 ? (
 										<div className="grid justify-items-center gap-3 py-8 text-center">
 											<p className="text-sm text-muted">
 												{t("noCodexProviders")}
@@ -788,9 +579,7 @@ export function CodexInferenceProviderPanel({
 													"createCodexProvider",
 												)}
 												onPress={() =>
-													setProviderDialog({
-														type: "create",
-													})
+													setIsAddDialogOpen(true)
 												}
 											>
 												<PlusIcon className="size-4" />
@@ -798,57 +587,66 @@ export function CodexInferenceProviderPanel({
 											</Button>
 										</div>
 									) : (
-										<div>
-											{providers.map((provider) => {
-												const isActive =
-													activeProfile?.selected_provider_id ===
-													provider.id;
-												return (
-													<ProviderRow
-														key={provider.id}
-														provider={provider}
-														isActive={isActive}
-														isSyncing={
-															syncMutation.isPending &&
-															syncMutation.variables ===
-																provider.id
-														}
-														isSelecting={
-															profileProviderMutation.isPending &&
-															profileProviderMutation
-																.variables?.body
-																.provider_id ===
-																provider.id
-														}
-														canSelect={Boolean(
-															activeProfile,
-														)}
-														onSelectForProfile={() =>
-															handleProfileProviderChange(
-																provider.id,
-															)
-														}
-														onEdit={() =>
-															handleEditProvider(
-																provider,
-															)
-														}
-														onSync={() =>
-															syncMutation.mutate(
-																provider.id,
-															)
-														}
-														onDelete={() =>
-															setDeleteTarget(
-																provider,
-															)
-														}
-													/>
-												);
-											})}
-										</div>
+										customProviders.map((provider) => (
+											<CodexProviderRow
+												key={provider.id}
+												provider={provider}
+												model={
+													activeProviderId ===
+													provider.id
+														? (activeProfile?.model ??
+															null)
+														: null
+												}
+												isActive={
+													activeProviderId ===
+													provider.id
+												}
+												isSyncing={
+													syncMutation.isPending &&
+													syncMutation.variables ===
+														provider.id
+												}
+												isSelecting={
+													selectProviderMutation.isPending &&
+													selectProviderMutation
+														.variables?.body
+														.provider_id ===
+														provider.id
+												}
+												isDeleting={
+													deleteMutation.isPending &&
+													deleteTarget?.id ===
+														provider.id
+												}
+												canSelect={Boolean(
+													activeProfile,
+												)}
+												onSelect={() => {
+													if (!activeProfile) return;
+													selectProviderMutation.mutate(
+														{
+															profileId:
+																activeProfile.id,
+															body: {
+																provider_id:
+																	provider.id,
+															},
+														},
+													);
+												}}
+												onSync={() =>
+													syncMutation.mutate(
+														provider.id,
+													)
+												}
+												onDelete={() =>
+													setDeleteTarget(provider)
+												}
+											/>
+										))
 									)}
-								</>
+								</div>
 							)}
 						</Card.Content>
 					</Card>
@@ -856,18 +654,11 @@ export function CodexInferenceProviderPanel({
 			</div>
 
 			<CodexCreateProviderDialog
-				isOpen={providerDialog?.type === "create"}
+				isOpen={isAddDialogOpen}
 				inventoryProviders={inventoryProviders}
 				isInventoryLoading={isInventoryLoading}
-				onClose={() => setProviderDialog(null)}
+				onClose={() => setIsAddDialogOpen(false)}
 			/>
-			{providerDialog?.type === "edit" && (
-				<CodexEditProviderDialog
-					isOpen
-					provider={providerDialog.provider}
-					onClose={() => setProviderDialog(null)}
-				/>
-			)}
 
 			<AlertDialog.Backdrop
 				isOpen={Boolean(deleteTarget)}
@@ -900,9 +691,8 @@ export function CodexInferenceProviderPanel({
 								variant="danger"
 								isPending={deleteMutation.isPending}
 								onPress={() => {
-									if (deleteTarget) {
-										deleteMutation.mutate(deleteTarget.id);
-									}
+									if (!deleteTarget) return;
+									deleteMutation.mutate(deleteTarget.id);
 								}}
 							>
 								{t("delete")}

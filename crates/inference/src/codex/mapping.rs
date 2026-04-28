@@ -1,5 +1,6 @@
 //! Mapping between Codex config.toml and normalized agent state.
 
+use serde_json::Value as JsonValue;
 use toml_edit::{value, Item, Table};
 
 use crate::agent::{
@@ -16,13 +17,15 @@ const AUTHORIZATION_HEADER: &str = "Authorization";
 const RESERVED_PROVIDER_IDS: &[&str] =
 	&[OPENAI_PROVIDER_ID, "ollama", "lmstudio"];
 
-pub(super) fn built_in_openai_binding() -> AgentProviderBinding {
+pub(super) fn built_in_openai_binding(
+	api_base_url: Option<String>,
+) -> AgentProviderBinding {
 	AgentProviderBinding {
 		id: OPENAI_PROVIDER_ID.to_string(),
 		source_provider_id: None,
 		name: "OpenAI".to_string(),
 		format: Some(InferenceProviderFormat::OpenAiResponses),
-		api_base_url: None,
+		api_base_url,
 		credential: AgentProviderCredential::AgentStore {
 			id: Some(OPENAI_PROVIDER_ID.to_string()),
 		},
@@ -35,6 +38,7 @@ pub(super) fn binding_from_table(
 	provider_id: &str,
 	table: &Table,
 ) -> Result<AgentProviderBinding> {
+	let credential = credential_from_table(table);
 	Ok(AgentProviderBinding {
 		id: clean_provider_id(provider_id)?,
 		source_provider_id: None,
@@ -42,7 +46,14 @@ pub(super) fn binding_from_table(
 			.unwrap_or_else(|| provider_id.to_string()),
 		format: format_from_table(table),
 		api_base_url: string_field(table, "base_url"),
-		credential: credential_from_table(table),
+		credential: match credential {
+			AgentProviderCredential::AgentStore { .. } => {
+				AgentProviderCredential::AgentStore {
+					id: Some(provider_id.to_string()),
+				}
+			}
+			other => other,
+		},
 		models: Vec::<AgentProviderModel>::new(),
 		source: AgentProviderSource::Custom,
 	})
@@ -59,12 +70,7 @@ pub(super) fn provider_table_from_binding(
 		table["base_url"] = value(api_base_url.clone());
 	}
 	table["wire_api"] = value(WIRE_API_RESPONSES);
-	table.remove("env_key");
-	table.remove("requires_openai_auth");
-	table.remove("auth");
-	if let Some(api_key) = api_key {
-		table["experimental_bearer_token"] = value(api_key.to_string());
-	}
+	apply_credential(&mut table, &binding.credential, api_key);
 	table
 }
 
@@ -85,6 +91,14 @@ pub(super) fn api_key_from_table(table: &Table) -> Option<String> {
 	auth.strip_prefix("Bearer ")
 		.map(str::trim)
 		.filter(|token| !token.is_empty())
+		.map(ToString::to_string)
+}
+
+pub(super) fn api_key_from_auth_file(auth: &JsonValue) -> Option<String> {
+	auth.get("OPENAI_API_KEY")
+		.and_then(JsonValue::as_str)
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
 		.map(ToString::to_string)
 }
 
@@ -159,6 +173,72 @@ pub(super) fn ensure_responses_format(
 			"Codex only supports openai_responses providers, got {other}"
 		))),
 		None => Ok(()),
+	}
+}
+
+pub(super) fn uses_auth_command(table: &Table) -> bool {
+	table.contains_key("auth")
+}
+
+pub(super) fn uses_shared_openai_api_key(table: &Table) -> bool {
+	table
+		.get("requires_openai_auth")
+		.and_then(Item::as_bool)
+		.unwrap_or(false)
+		&& !uses_auth_command(table)
+}
+
+fn apply_credential(
+	table: &mut Table,
+	credential: &AgentProviderCredential,
+	api_key: Option<&str>,
+) {
+	match credential {
+		AgentProviderCredential::EnvVar { name } => {
+			table["env_key"] = value(name.clone());
+			table.remove("experimental_bearer_token");
+			table.remove("requires_openai_auth");
+			table.remove("auth");
+			remove_authorization_header(table);
+		}
+		AgentProviderCredential::AgentStore { .. } => {
+			table.remove("env_key");
+			table.remove("experimental_bearer_token");
+			remove_authorization_header(table);
+			if table.get("auth").is_none() {
+				table["requires_openai_auth"] = value(true);
+			}
+		}
+		AgentProviderCredential::Inline => {
+			table.remove("env_key");
+			table.remove("requires_openai_auth");
+			table.remove("auth");
+			if let Some(api_key) = api_key {
+				table["experimental_bearer_token"] = value(api_key.to_string());
+				remove_authorization_header(table);
+			}
+		}
+		AgentProviderCredential::None => {
+			table.remove("env_key");
+			table.remove("experimental_bearer_token");
+			table.remove("requires_openai_auth");
+			table.remove("auth");
+			remove_authorization_header(table);
+		}
+	}
+}
+
+fn remove_authorization_header(table: &mut Table) {
+	let remove_headers = table
+		.get_mut("http_headers")
+		.and_then(Item::as_table_like_mut)
+		.map(|headers| {
+			headers.remove(AUTHORIZATION_HEADER);
+			headers.is_empty()
+		})
+		.unwrap_or(false);
+	if remove_headers {
+		table.remove("http_headers");
 	}
 }
 

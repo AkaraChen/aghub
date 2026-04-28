@@ -96,6 +96,9 @@ export async function invalidateCodexProviderQueries(queryClient: QueryClient) {
 	await queryClient.invalidateQueries({
 		queryKey: queryKeys.inferenceProviders.agent("codex"),
 	});
+	await queryClient.invalidateQueries({
+		queryKey: queryKeys.inferenceProviders.agentState("codex"),
+	});
 }
 
 interface CreateInferenceProviderMutationParams {
@@ -435,6 +438,26 @@ export function deleteCodexProviderMutationOptions({
 }: DeleteAgentProviderMutationParams) {
 	return mutationOptions({
 		mutationFn: (id: string) => api.inferenceProviders.deleteCodex(id),
+		onSuccess: async () => {
+			await invalidateCodexProviderQueries(queryClient);
+			await onSuccess?.();
+		},
+	});
+}
+
+interface ClearCodexProviderMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: () => void | Promise<void>;
+}
+
+export function clearCodexProviderMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: ClearCodexProviderMutationParams) {
+	return mutationOptions({
+		mutationFn: () => api.inferenceProviders.clearCodexState(),
 		onSuccess: async () => {
 			await invalidateCodexProviderQueries(queryClient);
 			await onSuccess?.();
