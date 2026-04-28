@@ -342,6 +342,12 @@ pub enum AgentProviderSource {
 
 	/// Provider discovered only from the agent's credential store.
 	StoredCredential,
+
+	/// Provider defined externally in the agent's native config file.
+	///
+	/// Used for agents like Codex that may have providers in their own
+	/// config format which aghub can activate but does not manage.
+	External,
 }
 
 /// Model entry attached to an agent provider.
@@ -530,6 +536,7 @@ impl AgentProviderState {
 						agent_id,
 						AgentProviderCapability::AgentCredentialStore,
 					)?,
+				AgentProviderSource::External => {}
 			}
 
 			if let Some(capability) =

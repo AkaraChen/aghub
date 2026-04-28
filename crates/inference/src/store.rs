@@ -7,6 +7,9 @@ use std::path::{Path, PathBuf};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteConnection};
 use sqlx::{ConnectOptions, Row};
 
+use crate::agent::{
+	AgentProviderBinding, AgentProviderCredential, AgentProviderSource,
+};
 use crate::credentials::{CredentialStore, NativeCredentialStore};
 use crate::error::{InferenceProviderError, Result};
 use crate::model::{
@@ -590,6 +593,228 @@ fn clean_api_base_url(api_base_url: &str) -> Result<String> {
 		Err(InferenceProviderError::EmptyApiBaseUrl)
 	} else {
 		Ok(api_base_url.to_string())
+	}
+}
+
+// ============================================================================
+// Agent-provider binding table methods
+// ============================================================================
+
+/// Data model for an agent-provider binding row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentProviderBindingRow {
+	pub id: String,
+	pub agent_id: String,
+	pub inference_provider_id: String,
+	pub is_active: bool,
+	pub model: Option<String>,
+}
+
+impl<C: CredentialStore> InferenceProviderStore<C> {
+	/// List all bindings for a given agent.
+	pub fn list_agent_bindings(
+		&self,
+		agent_id: &str,
+	) -> Result<Vec<AgentProviderBindingRow>> {
+		self.block_on(async {
+			let mut conn = self.open_db().await?;
+			let rows = sqlx::query(
+				"SELECT id, agent_id, inference_provider_id, is_active, model \
+				 FROM agent_provider_bindings \
+				 WHERE agent_id = ? \
+				 ORDER BY created_at",
+			)
+			.bind(agent_id)
+			.fetch_all(&mut conn)
+			.await?;
+
+			rows.into_iter()
+				.map(|row| {
+					Ok(AgentProviderBindingRow {
+						id: row.try_get("id")?,
+						agent_id: row.try_get("agent_id")?,
+						inference_provider_id: row
+							.try_get("inference_provider_id")?,
+						is_active: row.try_get::<i64, _>("is_active")? != 0,
+						model: row.try_get("model")?,
+					})
+				})
+				.collect::<Result<Vec<_>>>()
+		})
+	}
+
+	/// Get a single binding by its id and agent.
+	pub fn get_agent_binding(
+		&self,
+		agent_id: &str,
+		binding_id: &str,
+	) -> Result<AgentProviderBindingRow> {
+		self.block_on(async {
+			let mut conn = self.open_db().await?;
+			let row = sqlx::query(
+				"SELECT id, agent_id, inference_provider_id, is_active, model \
+				 FROM agent_provider_bindings \
+				 WHERE agent_id = ? AND id = ?",
+			)
+			.bind(agent_id)
+			.bind(binding_id)
+			.fetch_optional(&mut conn)
+			.await?;
+
+			match row {
+				Some(row) => Ok(AgentProviderBindingRow {
+					id: row.try_get("id")?,
+					agent_id: row.try_get("agent_id")?,
+					inference_provider_id: row
+						.try_get("inference_provider_id")?,
+					is_active: row.try_get::<i64, _>("is_active")? != 0,
+					model: row.try_get("model")?,
+				}),
+				None => Err(InferenceProviderError::NotFound(
+					binding_id.to_string(),
+				)),
+			}
+		})
+	}
+
+	/// Create a binding and optionally mark it active (deactivating others).
+	pub fn create_agent_binding(
+		&self,
+		agent_id: &str,
+		inference_provider_id: &str,
+		model: Option<&str>,
+		set_active: bool,
+	) -> Result<AgentProviderBindingRow> {
+		self.block_on(async {
+			let mut conn = self.open_db().await?;
+
+			// Verify the inference provider exists.
+			let _: InferenceProvider =
+				Self::fetch_by_id(&mut conn, inference_provider_id).await?;
+
+			let binding = AgentProviderBindingRow {
+				id: uuid::Uuid::new_v4().to_string(),
+				agent_id: agent_id.to_string(),
+				inference_provider_id: inference_provider_id.to_string(),
+				is_active: set_active,
+				model: model.map(ToString::to_string),
+			};
+
+			if set_active {
+				sqlx::query(
+					"UPDATE agent_provider_bindings \
+					 SET is_active = 0 \
+					 WHERE agent_id = ?",
+				)
+				.bind(agent_id)
+				.execute(&mut conn)
+				.await?;
+			}
+
+			sqlx::query(
+				"INSERT INTO agent_provider_bindings \
+				 (id, agent_id, inference_provider_id, is_active, model) \
+				 VALUES (?, ?, ?, ?, ?)",
+			)
+			.bind(&binding.id)
+			.bind(&binding.agent_id)
+			.bind(&binding.inference_provider_id)
+			.bind(if binding.is_active { 1 } else { 0 })
+			.bind(&binding.model)
+			.execute(&mut conn)
+			.await?;
+
+			Ok(binding)
+		})
+	}
+
+	/// Update a binding's active state and/or model.
+	pub fn update_agent_binding(
+		&self,
+		agent_id: &str,
+		binding_id: &str,
+		is_active: Option<bool>,
+		model: Option<Option<String>>,
+	) -> Result<AgentProviderBindingRow> {
+		self.block_on(async {
+			let mut conn = self.open_db().await?;
+			let mut binding = self.get_agent_binding(agent_id, binding_id)?;
+
+			if let Some(active) = is_active {
+				binding.is_active = active;
+				if active {
+					sqlx::query(
+						"UPDATE agent_provider_bindings \
+						 SET is_active = 0 \
+						 WHERE agent_id = ? AND id != ?",
+					)
+					.bind(agent_id)
+					.bind(binding_id)
+					.execute(&mut conn)
+					.await?;
+				}
+			}
+
+			if let Some(model) = model {
+				binding.model = model;
+			}
+
+			sqlx::query(
+				"UPDATE agent_provider_bindings \
+				 SET is_active = ?, model = ? \
+				 WHERE id = ?",
+			)
+			.bind(if binding.is_active { 1 } else { 0 })
+			.bind(&binding.model)
+			.bind(binding_id)
+			.execute(&mut conn)
+			.await?;
+
+			Ok(binding)
+		})
+	}
+
+	/// Delete a binding by id.
+	pub fn delete_agent_binding(
+		&self,
+		agent_id: &str,
+		binding_id: &str,
+	) -> Result<AgentProviderBindingRow> {
+		self.block_on(async {
+			let mut conn = self.open_db().await?;
+			let binding = self.get_agent_binding(agent_id, binding_id)?;
+
+			sqlx::query(
+				"DELETE FROM agent_provider_bindings \
+				 WHERE id = ?",
+			)
+			.bind(binding_id)
+			.execute(&mut conn)
+			.await?;
+
+			Ok(binding)
+		})
+	}
+
+	/// Build an `AgentProviderBinding` from a binding row + inventory provider.
+	pub fn binding_from_row(
+		&self,
+		row: &AgentProviderBindingRow,
+	) -> Result<AgentProviderBinding> {
+		let provider = self.get(&row.inference_provider_id)?;
+		let api_key = self.credentials.get_api_key(&provider.id)?;
+
+		AgentProviderBinding::from_inventory(
+			row.id.clone(),
+			&provider,
+			match api_key {
+				Some(_) => AgentProviderCredential::EnvVar {
+					name: "AGHUB_INFERENCE_API_KEY".to_string(),
+				},
+				None => AgentProviderCredential::None,
+			},
+			AgentProviderSource::Custom,
+		)
 	}
 }
 

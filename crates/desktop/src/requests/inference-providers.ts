@@ -10,7 +10,6 @@ import type {
 	CreateInferenceProviderRequest,
 	InferenceProviderResponse,
 	UpdateAgentProviderRequest,
-	UpdateClaudeProviderRequest,
 	UpdateCodexActiveProfileRequest,
 	UpdateCodexProfileProviderRequest,
 	UpdateInferenceProviderRequest,
@@ -522,6 +521,27 @@ export async function invalidateClaudeProviderQueries(
 	});
 }
 
+interface CreateClaudeProviderMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (data: AgentProviderResponse) => void | Promise<void>;
+}
+
+export function createClaudeProviderMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: CreateClaudeProviderMutationParams) {
+	return mutationOptions({
+		mutationFn: (body: CreateAgentProviderRequest) =>
+			api.inferenceProviders.createClaude(body),
+		onSuccess: async (data) => {
+			await invalidateClaudeProviderQueries(queryClient);
+			await onSuccess?.(data);
+		},
+	});
+}
+
 interface UpdateClaudeProviderMutationParams {
 	api: ApiClient;
 	queryClient: QueryClient;
@@ -534,8 +554,56 @@ export function updateClaudeProviderMutationOptions({
 	onSuccess,
 }: UpdateClaudeProviderMutationParams) {
 	return mutationOptions({
-		mutationFn: (body: UpdateClaudeProviderRequest) =>
-			api.inferenceProviders.updateClaudeState(body),
+		mutationFn: ({
+			id,
+			body,
+		}: {
+			id: string;
+			body: UpdateAgentProviderRequest;
+		}) => api.inferenceProviders.updateClaude(id, body),
+		onSuccess: async () => {
+			await invalidateClaudeProviderQueries(queryClient);
+			await onSuccess?.();
+		},
+	});
+}
+
+interface SyncClaudeProviderMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (
+		data: AgentProviderResponse,
+		id: string,
+	) => void | Promise<void>;
+}
+
+export function syncClaudeProviderMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: SyncClaudeProviderMutationParams) {
+	return mutationOptions({
+		mutationFn: (id: string) => api.inferenceProviders.syncClaude(id),
+		onSuccess: async (data, id) => {
+			await invalidateClaudeProviderQueries(queryClient);
+			await onSuccess?.(data, id);
+		},
+	});
+}
+
+interface DeleteClaudeProviderMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: () => void | Promise<void>;
+}
+
+export function deleteClaudeProviderMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: DeleteClaudeProviderMutationParams) {
+	return mutationOptions({
+		mutationFn: (id: string) => api.inferenceProviders.deleteClaude(id),
 		onSuccess: async () => {
 			await invalidateClaudeProviderQueries(queryClient);
 			await onSuccess?.();

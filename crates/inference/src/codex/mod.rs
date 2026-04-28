@@ -21,6 +21,7 @@ use crate::agent::{
 };
 use crate::error::Result;
 use crate::model::InferenceProvider;
+use crate::store::{InferenceProviderRepository, InferenceProviderStore};
 
 pub(super) const AGENT_ID: &str = "codex";
 pub const DEFAULT_PROFILE_ID: &str = "default";
@@ -97,9 +98,17 @@ impl CodexProviderAdapter {
 	}
 
 	/// Load Codex providers with effective profile selection.
-	pub fn load_profile_state(&self) -> Result<CodexProviderState> {
+	///
+	/// Merges providers from three sources:
+	/// 1. OpenAI built-in provider
+	/// 2. config.toml `[model_providers]` (marked as External)
+	/// 3. Binding table providers (marked as Custom)
+	pub fn load_profile_state(
+		&self,
+		store: &InferenceProviderStore,
+	) -> Result<CodexProviderState> {
 		let config = files::read_config(&self.config_path)?;
-		let providers = providers_from_config(&config)?;
+		let providers = self.load_all_providers(store, &config)?;
 		let active_profile_id = active_profile_id(&config);
 		let profiles = profile_ids(&config, &active_profile_id)
 			.into_iter()
@@ -129,27 +138,33 @@ impl CodexProviderAdapter {
 		}
 
 		files::write_config(&self.config_path, &config)?;
-		self.load_profile_state()
+		let store = InferenceProviderStore::new("");
+		self.load_profile_state(&store)
 	}
 
 	/// Set the provider used by Codex's current active profile.
 	pub fn set_active_provider(
 		&self,
+		store: &InferenceProviderStore,
 		provider_id: &str,
 	) -> Result<CodexProviderState> {
 		let config = files::read_config(&self.config_path)?;
 		let active_profile_id = active_profile_id(&config);
-		self.set_profile_provider(&active_profile_id, provider_id)
+		self.set_profile_provider(store, &active_profile_id, provider_id)
 	}
 
 	/// Clear the current active-provider override and fall back to OpenAI.
-	pub fn clear_active_provider(&self) -> Result<CodexProviderState> {
-		self.set_active_provider(mapping::OPENAI_PROVIDER_ID)
+	pub fn clear_active_provider(
+		&self,
+		store: &InferenceProviderStore,
+	) -> Result<CodexProviderState> {
+		self.set_active_provider(store, mapping::OPENAI_PROVIDER_ID)
 	}
 
 	/// Set the provider used by one Codex profile.
 	pub fn set_profile_provider(
 		&self,
+		store: &InferenceProviderStore,
 		profile_id: &str,
 		provider_id: &str,
 	) -> Result<CodexProviderState> {
@@ -157,22 +172,47 @@ impl CodexProviderAdapter {
 		let provider_id = clean_selected_provider_id(provider_id)?;
 		let mut config = files::read_config(&self.config_path)?;
 		ensure_profile_exists(&config, &profile_id)?;
-		ensure_selectable_provider(&config, &provider_id)?;
+
+		// Check if provider is selectable (built-in, config.toml, or binding)
+		let all_providers = self.load_all_providers(store, &config)?;
+		let is_selectable = provider_id
+			.eq_ignore_ascii_case(mapping::OPENAI_PROVIDER_ID)
+			|| all_providers.iter().any(|p| p.id == provider_id);
+		if !is_selectable {
+			return Err(crate::error::InferenceProviderError::NotFound(
+				provider_id.to_string(),
+			));
+		}
 
 		if profile_id == DEFAULT_PROFILE_ID {
 			let table = config.as_table_mut();
 			if provider_id == mapping::OPENAI_PROVIDER_ID {
 				table.remove("model_provider");
 			} else {
-				table["model_provider"] = value(provider_id);
+				table["model_provider"] = value(provider_id.clone());
 			}
 		} else {
 			let profile = profile_table_mut(&mut config, &profile_id)?;
-			profile["model_provider"] = value(provider_id);
+			profile["model_provider"] = value(provider_id.clone());
+		}
+
+		// If selecting a binding provider, also write its details to config.toml
+		if let Some(binding) =
+			all_providers.iter().find(|p| p.id == provider_id)
+		{
+			if binding.source == AgentProviderSource::Custom {
+				if let Some(api_key) =
+					self.api_key_for_binding(store, &provider_id)?
+				{
+					upsert_provider(&mut config, binding, Some(&api_key))?;
+				} else {
+					upsert_provider(&mut config, binding, None)?;
+				}
+			}
 		}
 
 		files::write_config(&self.config_path, &config)?;
-		self.load_profile_state()
+		self.load_profile_state(store)
 	}
 
 	/// Add or replace an aghub provider in Codex.
@@ -205,23 +245,84 @@ impl CodexProviderAdapter {
 	}
 
 	/// Add a provider using a slug derived from its stable key.
+	///
+	/// Creates a binding in the database and optionally writes to config.toml
+	/// if the provider should be active.
 	pub fn add_inventory_provider(
 		&self,
+		store: &InferenceProviderStore,
 		provider: &InferenceProvider,
 		api_key: &str,
 	) -> Result<AgentProviderBinding> {
 		let provider_id = mapping::provider_id_from_name(&provider.name);
-		self.add_provider(&provider_id, provider, api_key)
+
+		// Create binding in the database
+		let _row = store.create_agent_binding(
+			AGENT_ID,
+			&provider.id,
+			provider.models.first().map(|m| m.as_str()),
+			false,
+		)?;
+
+		// Write provider details to config.toml
+		let mut binding = AgentProviderBinding::from_inventory(
+			provider_id.clone(),
+			provider,
+			AgentProviderCredential::Inline,
+			AgentProviderSource::Custom,
+		)?;
+		if let Some(api_base_url) = binding.api_base_url.as_mut() {
+			*api_base_url = normalize_inventory_base_url(api_base_url);
+		}
+
+		let mut config = files::read_config(&self.config_path)?;
+		upsert_provider(&mut config, &binding, Some(api_key))?;
+		files::write_config(&self.config_path, &config)?;
+
+		Ok(binding)
 	}
 
 	/// Update an existing Codex provider's display name and/or API key.
+	///
+	/// For binding providers (Custom source), only the model can be updated
+	/// via the binding table. For config.toml providers (External source),
+	/// updates are not supported through aghub.
 	pub fn update_provider(
 		&self,
+		store: &InferenceProviderStore,
 		provider_id: &str,
 		name: Option<&str>,
 		api_key: Option<&str>,
 	) -> Result<AgentProviderBinding> {
 		let provider_id = mapping::clean_provider_id(provider_id)?;
+
+		// Check if this is a binding provider first
+		let binding_rows = store.list_agent_bindings(AGENT_ID)?;
+		if let Some(row) = binding_rows.iter().find(|r| r.id == provider_id) {
+			// This is a binding provider - update model only via binding table
+			if name.is_some() {
+				return Err(
+					crate::error::InferenceProviderError::InvalidAgentProviderConfig {
+						agent_id: AGENT_ID.to_string(),
+						path: self.config_path.display().to_string(),
+						message: format!(
+							"codex binding provider '{provider_id}' name \
+							 cannot be changed via aghub"
+						),
+					},
+				);
+			}
+
+			if let Some(api_key) = api_key {
+				mapping::ensure_api_key(api_key)?;
+				let provider = store.get(&row.inference_provider_id)?;
+				store.set_api_key(&provider.id, api_key)?;
+			}
+
+			return store.binding_from_row(row);
+		}
+
+		// Not a binding provider - check config.toml
 		let mut config = files::read_config(&self.config_path)?;
 		let provider = provider_table(&config, &provider_id)?
 			.cloned()
@@ -230,6 +331,21 @@ impl CodexProviderAdapter {
 					provider_id.clone(),
 				)
 			})?;
+
+		// Config.toml providers are External and cannot be updated via aghub
+		let binding = mapping::binding_from_table(&provider_id, &provider)?;
+		if binding.source == AgentProviderSource::External {
+			return Err(
+				crate::error::InferenceProviderError::InvalidAgentProviderConfig {
+					agent_id: AGENT_ID.to_string(),
+					path: self.config_path.display().to_string(),
+					message: format!(
+						"codex provider '{provider_id}' is defined in \
+						 config.toml and cannot be updated via aghub"
+					),
+				},
+			);
+		}
 
 		let name = name.map(mapping::clean_provider_name).transpose()?;
 		if let Some(api_key) = api_key {
@@ -271,12 +387,27 @@ impl CodexProviderAdapter {
 	}
 
 	/// Read an API key visible to Codex for a provider.
-	pub fn api_key(&self, provider_id: &str) -> Result<Option<String>> {
+	///
+	/// For binding providers, reads from the store's credential store.
+	/// For config.toml providers, uses existing logic.
+	pub fn api_key(
+		&self,
+		store: &InferenceProviderStore,
+		provider_id: &str,
+	) -> Result<Option<String>> {
 		let provider_id = provider_id.trim().trim_end_matches('/').to_string();
 		if mapping::is_reserved_provider_id(&provider_id) {
 			return Ok(None);
 		}
 		let provider_id = mapping::clean_provider_id(&provider_id)?;
+
+		// Check if this is a binding provider
+		let binding_rows = store.list_agent_bindings(AGENT_ID)?;
+		if let Some(row) = binding_rows.iter().find(|r| r.id == provider_id) {
+			return store.get_api_key(&row.inference_provider_id);
+		}
+
+		// Fall back to config.toml
 		let config = files::read_config(&self.config_path)?;
 		let Some(table) = provider_table(&config, &provider_id)? else {
 			return Ok(None);
@@ -292,11 +423,40 @@ impl CodexProviderAdapter {
 	}
 
 	/// Remove a custom provider definition.
+	///
+	/// Checks binding table first. If found, deletes the binding.
+	/// For config.toml providers, errors since they are External.
 	pub fn remove_provider(
 		&self,
+		store: &InferenceProviderStore,
 		provider_id: &str,
 	) -> Result<AgentProviderBinding> {
 		let provider_id = mapping::clean_provider_id(provider_id)?;
+
+		// Check binding table first
+		let binding_rows = store.list_agent_bindings(AGENT_ID)?;
+		if let Some(row) = binding_rows.iter().find(|r| r.id == provider_id) {
+			let binding = store.binding_from_row(row)?;
+			store.delete_agent_binding(AGENT_ID, &row.id)?;
+
+			// Also remove from config.toml if present
+			let mut config = files::read_config(&self.config_path)?;
+			let providers = providers_table_mut(&mut config)?;
+			providers.remove(&provider_id);
+			if config
+				.get("model_provider")
+				.and_then(Item::as_str)
+				.is_some_and(|value| value == provider_id)
+			{
+				config.as_table_mut().remove("model_provider");
+			}
+			clear_profile_provider_references(&mut config, &provider_id);
+			files::write_config(&self.config_path, &config)?;
+
+			return Ok(binding);
+		}
+
+		// Not a binding provider - check config.toml
 		let mut config = files::read_config(&self.config_path)?;
 		let removed = provider_table(&config, &provider_id)?
 			.map(|table| mapping::binding_from_table(&provider_id, table))
@@ -306,6 +466,20 @@ impl CodexProviderAdapter {
 					provider_id.clone(),
 				)
 			})?;
+
+		// Config.toml providers are External and cannot be deleted via aghub
+		if removed.source == AgentProviderSource::External {
+			return Err(
+				crate::error::InferenceProviderError::InvalidAgentProviderConfig {
+					agent_id: AGENT_ID.to_string(),
+					path: self.config_path.display().to_string(),
+					message: format!(
+						"Provider '{provider_id}' is defined in config.toml, \
+						 cannot delete via aghub"
+					),
+				},
+			);
+		}
 
 		let providers = providers_table_mut(&mut config)?;
 		providers.remove(&provider_id);
@@ -319,6 +493,62 @@ impl CodexProviderAdapter {
 		clear_profile_provider_references(&mut config, &provider_id);
 		files::write_config(&self.config_path, &config)?;
 		Ok(removed)
+	}
+
+	/// Load all providers including those from the binding table.
+	///
+	/// This is a Codex-specific extension that merges providers from:
+	/// 1. OpenAI built-in provider
+	/// 2. config.toml `[model_providers]` (marked as External)
+	/// 3. Binding table providers (marked as Custom)
+	pub fn load_all_providers(
+		&self,
+		store: &InferenceProviderStore,
+		config: &DocumentMut,
+	) -> Result<Vec<AgentProviderBinding>> {
+		let mut providers = vec![mapping::built_in_openai_binding(
+			built_in_openai_api_base_url(config),
+		)];
+
+		// Load config.toml providers (marked as External)
+		if let Some(model_providers) =
+			config.get("model_providers").and_then(Item::as_table)
+		{
+			for (provider_id, item) in model_providers {
+				let Some(provider) = item.as_table() else {
+					continue;
+				};
+				providers.push(mapping::binding_from_table_external(
+					provider_id,
+					provider,
+				)?);
+			}
+		}
+
+		// Load binding table providers (marked as Custom)
+		let binding_rows = store.list_agent_bindings(AGENT_ID)?;
+		for row in binding_rows {
+			let binding = store.binding_from_row(&row)?;
+			// Only add if not already present from config.toml
+			if !providers.iter().any(|p| p.id == binding.id) {
+				providers.push(binding);
+			}
+		}
+
+		Ok(providers)
+	}
+
+	/// Helper to get API key for a binding provider.
+	fn api_key_for_binding(
+		&self,
+		store: &InferenceProviderStore,
+		provider_id: &str,
+	) -> Result<Option<String>> {
+		let binding_rows = store.list_agent_bindings(AGENT_ID)?;
+		if let Some(row) = binding_rows.iter().find(|r| r.id == provider_id) {
+			return store.get_api_key(&row.inference_provider_id);
+		}
+		Ok(None)
 	}
 
 	fn write_shared_openai_api_key(&self, api_key: &str) -> Result<()> {
@@ -423,7 +653,10 @@ fn providers_from_config(
 			let Some(provider) = item.as_table() else {
 				continue;
 			};
-			providers.push(mapping::binding_from_table(provider_id, provider)?);
+			providers.push(mapping::binding_from_table_external(
+				provider_id,
+				provider,
+			)?);
 		}
 	}
 

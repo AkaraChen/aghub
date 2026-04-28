@@ -59,6 +59,18 @@ pub(super) fn binding_from_table(
 	})
 }
 
+/// Like `binding_from_table` but marks the source as External.
+///
+/// Used for providers read from config.toml that aghub does not manage.
+pub(super) fn binding_from_table_external(
+	provider_id: &str,
+	table: &Table,
+) -> Result<AgentProviderBinding> {
+	let mut binding = binding_from_table(provider_id, table)?;
+	binding.source = AgentProviderSource::External;
+	Ok(binding)
+}
+
 pub(super) fn provider_table_from_binding(
 	binding: &AgentProviderBinding,
 	api_key: Option<&str>,

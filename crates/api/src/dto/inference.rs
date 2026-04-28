@@ -139,6 +139,7 @@ pub enum AgentProviderSourceDto {
 	BuiltIn,
 	Custom,
 	StoredCredential,
+	External,
 }
 
 impl From<AgentProviderSource> for AgentProviderSourceDto {
@@ -148,6 +149,7 @@ impl From<AgentProviderSource> for AgentProviderSourceDto {
 			AgentProviderSource::BuiltIn => Self::BuiltIn,
 			AgentProviderSource::Custom => Self::Custom,
 			AgentProviderSource::StoredCredential => Self::StoredCredential,
+			AgentProviderSource::External => Self::External,
 		}
 	}
 }
@@ -344,19 +346,8 @@ pub struct UpdateCodexProfileProviderRequest {
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
 pub struct ClaudeProviderStateResponse {
-	pub api_base_url: Option<String>,
-	pub api_key: Option<String>,
-	pub model: Option<String>,
-}
-
-impl From<aghub_inference::ClaudeConfigState> for ClaudeProviderStateResponse {
-	fn from(state: aghub_inference::ClaudeConfigState) -> Self {
-		Self {
-			api_base_url: state.api_base_url,
-			api_key: state.api_key,
-			model: state.model,
-		}
-	}
+	pub providers: Vec<AgentProviderResponse>,
+	pub active_provider_id: String,
 }
 
 #[derive(Debug, Deserialize, TS)]

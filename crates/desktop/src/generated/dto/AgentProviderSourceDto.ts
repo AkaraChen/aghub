@@ -4,4 +4,5 @@ export type AgentProviderSourceDto =
 	| "closed_slot"
 	| "built_in"
 	| "custom"
-	| "stored_credential";
+	| "stored_credential"
+	| "external";

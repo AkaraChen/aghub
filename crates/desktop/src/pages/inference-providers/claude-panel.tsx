@@ -1,10 +1,10 @@
 import {
 	ArrowPathIcon,
 	CheckCircleIcon,
-	KeyIcon,
 	PlayIcon,
 	PlusIcon,
 	ServerIcon,
+	TrashIcon,
 } from "@heroicons/react/24/solid";
 import {
 	Alert,
@@ -20,22 +20,196 @@ import {
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import type { InferenceProviderResponse } from "../../generated/dto";
+import type {
+	AgentProviderResponse,
+	InferenceProviderResponse,
+} from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
 import { AgentIcon } from "../../lib/agent-icons";
 import { cn } from "../../lib/utils";
 import {
 	clearClaudeProviderMutationOptions,
 	claudeProviderStateQueryOptions,
+	createClaudeProviderMutationOptions,
+	deleteClaudeProviderMutationOptions,
 	inferenceProviderListQueryOptions,
+	syncClaudeProviderMutationOptions,
 	updateClaudeProviderMutationOptions,
 } from "../../requests/inference-providers";
 
-function sameApiBaseUrl(left: string, right: string) {
-	return left.trim().replace(/\/+$/, "") === right.trim().replace(/\/+$/, "");
+function ClaudeCreateProviderDialog({
+	isOpen,
+	inventoryProviders,
+	isInventoryLoading,
+	onClose,
+}: {
+	isOpen: boolean;
+	inventoryProviders: InferenceProviderResponse[];
+	isInventoryLoading: boolean;
+	onClose: () => void;
+}) {
+	const { t } = useTranslation();
+	const api = useApi();
+	const queryClient = useQueryClient();
+	const [selectedProviderId, setSelectedProviderId] = useState("");
+
+	const anthropicProviders = useMemo(
+		() =>
+			inventoryProviders.filter(
+				(provider) => provider.format === "anthropic",
+			),
+		[inventoryProviders],
+	);
+	const defaultProviderId = anthropicProviders[0]?.id ?? "";
+
+	useEffect(() => {
+		if (!isOpen) return;
+		setSelectedProviderId((current) => current || defaultProviderId);
+	}, [defaultProviderId, isOpen]);
+
+	const createMutation = useMutation({
+		...createClaudeProviderMutationOptions({
+			api,
+			queryClient,
+			onSuccess: async () => {
+				toast.success(t("claudeProviderUpdated"));
+				onClose();
+			},
+		}),
+	});
+
+	const activeError = createMutation.error;
+	const isPending = createMutation.isPending;
+	const hasAnthropicProviders = anthropicProviders.length > 0;
+
+	const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+		event.preventDefault();
+		if (!selectedProviderId) return;
+
+		createMutation.mutate({
+			inference_provider_id: selectedProviderId,
+		});
+	};
+
+	return (
+		<Modal.Backdrop
+			isOpen={isOpen}
+			onOpenChange={(open) => {
+				if (!open) onClose();
+			}}
+		>
+			<Modal.Container>
+				<Modal.Dialog className="sm:max-w-[440px]">
+					<Modal.CloseTrigger />
+					<Modal.Header>
+						<Modal.Heading>
+							{t("createClaudeProvider")}
+						</Modal.Heading>
+					</Modal.Header>
+					<form onSubmit={handleSubmit}>
+						<Modal.Body className="grid gap-4 p-4">
+							{activeError && (
+								<Alert status="danger">
+									<Alert.Indicator />
+									<Alert.Content>
+										<Alert.Description>
+											{activeError instanceof Error
+												? activeError.message
+												: String(activeError)}
+										</Alert.Description>
+									</Alert.Content>
+								</Alert>
+							)}
+
+							{isInventoryLoading && (
+								<div className="flex justify-center py-6">
+									<Spinner />
+								</div>
+							)}
+
+							{!isInventoryLoading && !hasAnthropicProviders && (
+								<Alert status="warning">
+									<Alert.Indicator />
+									<Alert.Content>
+										<Alert.Description>
+											{t("noInferenceProvidersForClaude")}
+										</Alert.Description>
+									</Alert.Content>
+								</Alert>
+							)}
+
+							{!isInventoryLoading && hasAnthropicProviders && (
+								<Select
+									className="w-full"
+									selectedKey={
+										selectedProviderId || undefined
+									}
+									onSelectionChange={(key) => {
+										if (!key) return;
+										setSelectedProviderId(String(key));
+									}}
+									isDisabled={isPending}
+									variant="secondary"
+								>
+									<Label>
+										{t("selectInferenceProvider")}
+									</Label>
+									<Select.Trigger>
+										<Select.Value />
+										<Select.Indicator />
+									</Select.Trigger>
+									<Select.Popover>
+										<ListBox>
+											{anthropicProviders.map((item) => (
+												<ListBox.Item
+													key={item.id}
+													id={item.id}
+													textValue={`${item.display_name} ${item.name}`}
+												>
+													<div className="grid min-w-0 gap-0.5">
+														<Label className="truncate">
+															{item.display_name}
+														</Label>
+														<span className="truncate text-xs text-muted">
+															{item.api_base_url}
+														</span>
+													</div>
+												</ListBox.Item>
+											))}
+										</ListBox>
+									</Select.Popover>
+								</Select>
+							)}
+						</Modal.Body>
+						<Modal.Footer>
+							<Button
+								type="button"
+								variant="tertiary"
+								onPress={onClose}
+								isDisabled={isPending}
+							>
+								{t("cancel")}
+							</Button>
+							<Button
+								type="submit"
+								isPending={isPending}
+								isDisabled={
+									isInventoryLoading ||
+									!hasAnthropicProviders ||
+									!selectedProviderId
+								}
+							>
+								{t("add")}
+							</Button>
+						</Modal.Footer>
+					</form>
+				</Modal.Dialog>
+			</Modal.Container>
+		</Modal.Backdrop>
+	);
 }
 
 function ClaudeOfficialRow({
@@ -98,27 +272,30 @@ function ClaudeOfficialRow({
 }
 
 function ClaudeProviderRow({
-	label,
-	apiBaseUrl,
-	apiKey,
-	model,
+	provider,
 	isActive,
 	isSyncing,
-	onActivate,
+	isSelecting,
+	isDeleting,
+	canSelect,
+	onSelect,
 	onSync,
-	showSync,
+	onDelete,
 }: {
-	label: string;
-	apiBaseUrl: string | null;
-	apiKey: string | null;
-	model: string | null;
+	provider: AgentProviderResponse;
 	isActive: boolean;
 	isSyncing: boolean;
-	onActivate: () => void;
+	isSelecting: boolean;
+	isDeleting: boolean;
+	canSelect: boolean;
+	onSelect: () => void;
 	onSync: () => void;
-	showSync: boolean;
+	onDelete: () => void;
 }) {
 	const { t } = useTranslation();
+	const matchedProvider = provider.matched_inference_provider;
+	const label = matchedProvider?.display_name ?? provider.name;
+	const model = provider.models[0]?.id ?? null;
 
 	return (
 		<div className="grid gap-3 border-t border-border py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
@@ -134,13 +311,16 @@ function ClaudeProviderRow({
 					)}
 				</div>
 				<div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
-					{apiBaseUrl && (
-						<span className="truncate">{apiBaseUrl}</span>
-					)}
-					{apiKey && (
-						<span className="inline-flex items-center gap-1">
-							<KeyIcon className="size-3" />
-							***
+					<span>
+						{matchedProvider
+							? `${t("providerModels")}: ${
+									matchedProvider.model_count
+								}`
+							: t("claudeConfigProvider")}
+					</span>
+					{provider.api_base_url && (
+						<span className="truncate">
+							{provider.api_base_url}
 						</span>
 					)}
 					{model && <span>{model}</span>}
@@ -148,7 +328,7 @@ function ClaudeProviderRow({
 			</div>
 
 			<div className="flex items-center gap-1 sm:justify-end">
-				{showSync && (
+				{matchedProvider && (
 					<Tooltip delay={0}>
 						<Tooltip.Trigger>
 							<Button
@@ -164,7 +344,7 @@ function ClaudeProviderRow({
 						</Tooltip.Trigger>
 						<Tooltip.Content>
 							{t("syncClaudeProviderFromInferenceProvider", {
-								name: label,
+								name: matchedProvider.display_name,
 							})}
 						</Tooltip.Content>
 					</Tooltip>
@@ -173,15 +353,32 @@ function ClaudeProviderRow({
 					<Tooltip.Trigger>
 						<Button
 							isIconOnly
-							size="sm"
 							variant="ghost"
-							isDisabled={isActive}
+							size="sm"
+							className="text-muted hover:text-danger"
+							aria-label={t("deleteClaudeProvider")}
+							isPending={isDeleting}
+							onPress={onDelete}
+						>
+							<TrashIcon className="size-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>{t("delete")}</Tooltip.Content>
+				</Tooltip>
+				<Tooltip delay={0}>
+					<Tooltip.Trigger>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							isPending={isSelecting}
+							isDisabled={isActive || !canSelect}
 							aria-label={
 								isActive
 									? t("claudeProviderAlreadyActive")
 									: t("enable")
 							}
-							onPress={onActivate}
+							onPress={onSelect}
 						>
 							<PlayIcon className="size-4" />
 						</Button>
@@ -189,7 +386,9 @@ function ClaudeProviderRow({
 					<Tooltip.Content>
 						{isActive
 							? t("claudeProviderAlreadyActive")
-							: t("enable")}
+							: !canSelect
+								? t("claudeNoProfiles")
+								: t("enable")}
 					</Tooltip.Content>
 				</Tooltip>
 			</div>
@@ -197,92 +396,42 @@ function ClaudeProviderRow({
 	);
 }
 
-export function ClaudeInferenceProviderPanel() {
+export function ClaudeInferenceProviderPanel(_: {
+	onEditInferenceProvider: (providerName: string) => void;
+}) {
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
 	const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-	const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-	const [selectedProviderId, setSelectedProviderId] = useState("");
+	const [deleteTarget, setDeleteTarget] =
+		useState<AgentProviderResponse | null>(null);
 
 	const {
-		data: state,
+		data: claudeState,
 		isLoading,
 		isFetching,
 		refetch,
 	} = useQuery({
 		...claudeProviderStateQueryOptions({ api }),
 	});
-
 	const { data: inventoryProviders = [], isLoading: isInventoryLoading } =
 		useQuery({
 			...inferenceProviderListQueryOptions({ api }),
 		});
 
-	const anthropicProviders = useMemo(
-		() =>
-			inventoryProviders.filter(
-				(provider) => provider.format === "anthropic",
-			),
-		[inventoryProviders],
-	);
-
-	const { data: matchedProvider } = useQuery({
-		queryKey: [
-			"claude-provider-match",
-			state?.api_base_url,
-			state?.api_key,
-		],
-		queryFn: async () => {
-			if (!state?.api_base_url || !state?.api_key) {
-				return undefined;
-			}
-			const currentApiBaseUrl = state.api_base_url;
-			const candidate = inventoryProviders.find((p) =>
-				sameApiBaseUrl(p.api_base_url, currentApiBaseUrl),
-			);
-			if (!candidate) return undefined;
-			try {
-				const password = await api.inferenceProviders.getPassword(
-					candidate.name,
-				);
-				return password.api_key === state.api_key
-					? candidate
-					: undefined;
-			} catch {
-				return undefined;
-			}
-		},
-		enabled: Boolean(state?.api_base_url && state?.api_key),
-		staleTime: 0,
-	});
-
-	const updateMutation = useMutation({
-		...updateClaudeProviderMutationOptions({
-			api,
-			queryClient,
-			onSuccess: async () => {
-				toast.success(t("claudeProviderUpdated"));
-				setIsAddDialogOpen(false);
-				setSelectedProviderId("");
-			},
-		}),
-		onError: (error) => {
-			console.error("Failed to update Claude provider:", error);
-			toast.danger(
-				error instanceof Error
-					? error.message
-					: t("claudeProviderUpdateError"),
-			);
-		},
-	});
+	const activeProviderId =
+		(claudeState as { active_provider_id?: string } | undefined)
+			?.active_provider_id ?? "";
+	const isOfficialActive = activeProviderId === "";
+	const customProviders =
+		(claudeState as { providers?: AgentProviderResponse[] } | undefined)
+			?.providers ?? [];
 
 	const clearMutation = useMutation({
 		...clearClaudeProviderMutationOptions({
 			api,
 			queryClient,
 			onSuccess: async () => {
-				setIsDeleteDialogOpen(false);
 				toast.success(t("claudeProviderCleared"));
 			},
 		}),
@@ -295,66 +444,58 @@ export function ClaudeInferenceProviderPanel() {
 			);
 		},
 	});
-
-	const hasCustomConfig = Boolean(
-		state?.api_base_url || state?.api_key || state?.model,
-	);
-	const hasUnmatchedCustomConfig = hasCustomConfig && !matchedProvider;
-
-	const activateProvider = async (target: InferenceProviderResponse) => {
-		if (target.format !== "anthropic") return;
-		const provider = inventoryProviders.find((p) => p.id === target.id);
-		if (!provider) return;
-
-		try {
-			const password = await api.inferenceProviders.getPassword(
-				provider.name,
-			);
-			updateMutation.mutate({
-				api_base_url: provider.api_base_url,
-				api_key: password.api_key,
-				model: provider.models[0] ?? null,
-			});
-		} catch (error) {
-			console.error("Failed to get provider password:", error);
-			toast.danger(
-				error instanceof Error
-					? error.message
-					: t("inferenceProviderPasswordLoadFailed"),
-			);
-		}
-	};
-
-	const handleAdd = async (event: FormEvent<HTMLFormElement>) => {
-		event.preventDefault();
-		if (!selectedProviderId) return;
-		const provider = inventoryProviders.find(
-			(p) => p.id === selectedProviderId,
-		);
-		if (!provider) return;
-		await activateProvider(provider);
-	};
-
-	const handleSync = async () => {
-		if (!matchedProvider) return;
-		try {
-			const password = await api.inferenceProviders.getPassword(
-				matchedProvider.name,
-			);
-			updateMutation.mutate({
-				api_base_url: matchedProvider.api_base_url,
-				api_key: password.api_key,
-				model: matchedProvider.models[0] ?? state?.model ?? null,
-			});
-		} catch (error) {
-			console.error("Failed to sync Claude provider:", error);
+	const selectProviderMutation = useMutation({
+		...updateClaudeProviderMutationOptions({
+			api,
+			queryClient,
+			onSuccess: async () => {
+				toast.success(t("claudeProviderUpdated"));
+			},
+		}),
+		onError: (error) => {
+			console.error("Failed to switch Claude provider:", error);
 			toast.danger(
 				error instanceof Error
 					? error.message
 					: t("claudeProviderUpdateError"),
 			);
-		}
-	};
+		},
+	});
+	const deleteMutation = useMutation({
+		...deleteClaudeProviderMutationOptions({
+			api,
+			queryClient,
+			onSuccess: async () => {
+				setDeleteTarget(null);
+				toast.success(t("claudeProviderDeleted"));
+			},
+		}),
+		onError: (error) => {
+			console.error("Failed to delete Claude provider:", error);
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: t("claudeProviderDeleteError"),
+			);
+		},
+	});
+	const syncMutation = useMutation({
+		...syncClaudeProviderMutationOptions({
+			api,
+			queryClient,
+			onSuccess: async () => {
+				toast.success(t("claudeProviderSynced"));
+			},
+		}),
+		onError: (error) => {
+			console.error("Failed to sync Claude provider:", error);
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: t("claudeProviderSyncError"),
+			);
+		},
+	});
 
 	return (
 		<>
@@ -376,20 +517,30 @@ export function ClaudeInferenceProviderPanel() {
 								</div>
 							</div>
 							<div className="flex shrink-0 items-center gap-2">
-								<Button
-									variant="ghost"
-									size="sm"
-									aria-label={t("refresh")}
-									onPress={() => refetch()}
-									isPending={isFetching}
-								>
-									<ArrowPathIcon
-										className={cn(
-											"size-4",
-											isFetching && "animate-spin",
-										)}
-									/>
-								</Button>
+								<Tooltip delay={0}>
+									<Tooltip.Trigger>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="sm"
+											aria-label={t(
+												"refreshClaudeProviders",
+											)}
+											onPress={() => refetch()}
+										>
+											<ArrowPathIcon
+												className={cn(
+													"size-4",
+													isFetching &&
+														"animate-spin",
+												)}
+											/>
+										</Button>
+									</Tooltip.Trigger>
+									<Tooltip.Content>
+										{t("refresh")}
+									</Tooltip.Content>
+								</Tooltip>
 								<Button
 									size="sm"
 									aria-label={t("createClaudeProvider")}
@@ -409,66 +560,59 @@ export function ClaudeInferenceProviderPanel() {
 							) : (
 								<div>
 									<ClaudeOfficialRow
-										isActive={!hasCustomConfig}
+										isActive={isOfficialActive}
 										isPending={clearMutation.isPending}
 										onActivate={() =>
-											setIsDeleteDialogOpen(true)
+											clearMutation.mutate()
 										}
 									/>
-									{anthropicProviders.map((provider) => (
-										<ClaudeProviderRow
-											key={provider.id}
-											label={
-												provider.display_name ||
-												provider.name
-											}
-											apiBaseUrl={provider.api_base_url}
-											apiKey={
-												matchedProvider?.id ===
-												provider.id
-													? (state?.api_key ?? null)
-													: null
-											}
-											model={
-												matchedProvider?.id ===
-												provider.id
-													? (state?.model ?? null)
-													: (provider.models[0] ??
-														null)
-											}
-											isActive={
-												matchedProvider?.id ===
-												provider.id
-											}
-											isSyncing={
-												updateMutation.isPending &&
-												matchedProvider?.id ===
+									{customProviders.map(
+										(provider: AgentProviderResponse) => (
+											<ClaudeProviderRow
+												key={provider.id}
+												provider={provider}
+												isActive={
+													activeProviderId ===
 													provider.id
-											}
-											onActivate={() => {
-												void activateProvider(provider);
-											}}
-											onSync={handleSync}
-											showSync={
-												matchedProvider?.id ===
-												provider.id
-											}
-										/>
-									))}
-									{hasUnmatchedCustomConfig && (
-										<ClaudeProviderRow
-											label={t("custom")}
-											apiBaseUrl={
-												state?.api_base_url ?? null
-											}
-											apiKey={state?.api_key ?? null}
-											model={state?.model ?? null}
-											isActive
-											isSyncing={false}
-											onActivate={() => {}}
-											onSync={() => {}}
-											showSync={false}
-										/>
+												}
+												isSyncing={
+													syncMutation.isPending &&
+													syncMutation.variables ===
+														provider.id
+												}
+												isSelecting={
+													selectProviderMutation.isPending &&
+													selectProviderMutation
+														.variables?.id ===
+														provider.id
+												}
+												isDeleting={
+													deleteMutation.isPending &&
+													deleteTarget?.id ===
+														provider.id
+												}
+												canSelect
+												onSelect={() => {
+													selectProviderMutation.mutate(
+														{
+															id: provider.id,
+															body: {
+																name: null,
+																api_key: null,
+															},
+														},
+													);
+												}}
+												onSync={() =>
+													syncMutation.mutate(
+														provider.id,
+													)
+												}
+												onDelete={() =>
+													setDeleteTarget(provider)
+												}
+											/>
+										),
 									)}
 								</div>
 							)}
@@ -477,150 +621,18 @@ export function ClaudeInferenceProviderPanel() {
 				</div>
 			</div>
 
-			<Modal.Backdrop
+			<ClaudeCreateProviderDialog
 				isOpen={isAddDialogOpen}
-				onOpenChange={(open) => {
-					if (!open) {
-						setIsAddDialogOpen(false);
-						setSelectedProviderId("");
-					}
-				}}
-			>
-				<Modal.Container>
-					<Modal.Dialog className="sm:max-w-[440px]">
-						<Modal.CloseTrigger />
-						<Modal.Header>
-							<Modal.Heading>
-								{t("createClaudeProvider")}
-							</Modal.Heading>
-						</Modal.Header>
-						<form onSubmit={handleAdd}>
-							<Modal.Body className="grid gap-4 p-4">
-								{updateMutation.error && (
-									<Alert status="danger">
-										<Alert.Indicator />
-										<Alert.Content>
-											<Alert.Description>
-												{updateMutation.error instanceof
-												Error
-													? updateMutation.error
-															.message
-													: String(
-															updateMutation.error,
-														)}
-											</Alert.Description>
-										</Alert.Content>
-									</Alert>
-								)}
-
-								{isInventoryLoading && (
-									<div className="flex justify-center py-6">
-										<Spinner />
-									</div>
-								)}
-
-								{!isInventoryLoading &&
-									anthropicProviders.length === 0 && (
-										<Alert status="warning">
-											<Alert.Indicator />
-											<Alert.Content>
-												<Alert.Description>
-													{t(
-														"noInferenceProvidersForClaude",
-													)}
-												</Alert.Description>
-											</Alert.Content>
-										</Alert>
-									)}
-
-								{!isInventoryLoading &&
-									anthropicProviders.length > 0 && (
-										<Select
-											className="w-full"
-											selectedKey={
-												selectedProviderId || undefined
-											}
-											onSelectionChange={(key) => {
-												if (!key) return;
-												setSelectedProviderId(
-													String(key),
-												);
-											}}
-											isDisabled={
-												updateMutation.isPending
-											}
-											variant="secondary"
-										>
-											<Label>
-												{t("selectInferenceProvider")}
-											</Label>
-											<Select.Trigger>
-												<Select.Value />
-												<Select.Indicator />
-											</Select.Trigger>
-											<Select.Popover>
-												<ListBox>
-													{anthropicProviders.map(
-														(
-															item: InferenceProviderResponse,
-														) => (
-															<ListBox.Item
-																key={item.id}
-																id={item.id}
-																textValue={`${item.display_name} ${item.name}`}
-															>
-																<div className="grid min-w-0 gap-0.5">
-																	<Label className="truncate">
-																		{
-																			item.display_name
-																		}
-																	</Label>
-																	<span className="truncate text-xs text-muted">
-																		{
-																			item.api_base_url
-																		}
-																	</span>
-																</div>
-															</ListBox.Item>
-														),
-													)}
-												</ListBox>
-											</Select.Popover>
-										</Select>
-									)}
-							</Modal.Body>
-							<Modal.Footer>
-								<Button
-									type="button"
-									variant="tertiary"
-									onPress={() => {
-										setIsAddDialogOpen(false);
-										setSelectedProviderId("");
-									}}
-									isDisabled={updateMutation.isPending}
-								>
-									{t("cancel")}
-								</Button>
-								<Button
-									type="submit"
-									isPending={updateMutation.isPending}
-									isDisabled={
-										isInventoryLoading ||
-										anthropicProviders.length === 0 ||
-										!selectedProviderId
-									}
-								>
-									{t("add")}
-								</Button>
-							</Modal.Footer>
-						</form>
-					</Modal.Dialog>
-				</Modal.Container>
-			</Modal.Backdrop>
+				inventoryProviders={inventoryProviders}
+				isInventoryLoading={isInventoryLoading}
+				onClose={() => setIsAddDialogOpen(false)}
+			/>
 
 			<AlertDialog.Backdrop
-				isOpen={isDeleteDialogOpen}
-				onOpenChange={() => setIsDeleteDialogOpen(false)}
+				isOpen={Boolean(deleteTarget)}
+				onOpenChange={(open) => {
+					if (!open) setDeleteTarget(null);
+				}}
 			>
 				<AlertDialog.Container>
 					<AlertDialog.Dialog className="sm:max-w-[420px]">
@@ -628,25 +640,30 @@ export function ClaudeInferenceProviderPanel() {
 						<AlertDialog.Header>
 							<AlertDialog.Icon status="danger" />
 							<AlertDialog.Heading>
-								{t("clearClaudeProvider")}
+								{t("deleteClaudeProvider")}
 							</AlertDialog.Heading>
 						</AlertDialog.Header>
 						<AlertDialog.Body>
-							{t("clearClaudeProviderConfirm")}
+							{t("deleteClaudeProviderConfirm", {
+								name: deleteTarget?.name,
+							})}
 						</AlertDialog.Body>
 						<AlertDialog.Footer>
 							<Button
 								variant="tertiary"
-								onPress={() => setIsDeleteDialogOpen(false)}
+								onPress={() => setDeleteTarget(null)}
 							>
 								{t("cancel")}
 							</Button>
 							<Button
 								variant="danger"
-								isPending={clearMutation.isPending}
-								onPress={() => clearMutation.mutate()}
+								isPending={deleteMutation.isPending}
+								onPress={() => {
+									if (!deleteTarget) return;
+									deleteMutation.mutate(deleteTarget.id);
+								}}
 							>
-								{t("clear")}
+								{t("delete")}
 							</Button>
 						</AlertDialog.Footer>
 					</AlertDialog.Dialog>

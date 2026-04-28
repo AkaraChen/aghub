@@ -8,9 +8,14 @@ use crate::agent::{
 };
 use crate::error::InferenceProviderError;
 use crate::model::{InferenceProvider, InferenceProviderFormat};
+use crate::store::InferenceProviderStore;
 
 fn adapter(temp: &tempfile::TempDir) -> CodexProviderAdapter {
 	CodexProviderAdapter::new(temp.path().join("config.toml"))
+}
+
+fn store(temp: &tempfile::TempDir) -> InferenceProviderStore {
+	InferenceProviderStore::new(temp.path())
 }
 
 fn auth_path(temp: &tempfile::TempDir) -> std::path::PathBuf {
@@ -79,6 +84,7 @@ env_key = "OPENROUTER_API_KEY"
 			name: "OPENROUTER_API_KEY".to_string()
 		}
 	);
+	assert_eq!(provider.source, AgentProviderSource::External);
 	let default = state.default_model.clone().unwrap();
 	assert_eq!(default.provider_id.as_deref(), Some("openrouter"));
 	assert_eq!(default.model_id, "openai/gpt-5.4");
@@ -90,7 +96,8 @@ fn profile_state_defaults_to_openai_login() {
 	let adapter = adapter(&temp);
 	fs::write(adapter.config_path(), r#"model = "gpt-5.4""#).unwrap();
 
-	let state = adapter.load_profile_state().unwrap();
+	let store = store(&temp);
+	let state = adapter.load_profile_state(&store).unwrap();
 
 	assert_eq!(state.active_profile_id, DEFAULT_PROFILE_ID);
 	assert_eq!(state.providers.len(), 1);
@@ -202,7 +209,8 @@ wire_api = "responses"
 	)
 	.unwrap();
 
-	let state = adapter.load_profile_state().unwrap();
+	let store = store(&temp);
+	let state = adapter.load_profile_state(&store).unwrap();
 
 	assert_eq!(state.active_profile_id, "work");
 	let work = state
@@ -274,7 +282,10 @@ wire_api = "responses"
 	)
 	.unwrap();
 
-	let state = adapter.set_profile_provider("work", "openai").unwrap();
+	let store = store(&temp);
+	let state = adapter
+		.set_profile_provider(&store, "work", "openai")
+		.unwrap();
 
 	let work = state
 		.profiles
@@ -290,7 +301,7 @@ wire_api = "responses"
 	);
 
 	let state = adapter
-		.set_profile_provider(DEFAULT_PROFILE_ID, "openai")
+		.set_profile_provider(&store, DEFAULT_PROFILE_ID, "openai")
 		.unwrap();
 	let default = state
 		.profiles
@@ -326,7 +337,8 @@ wire_api = "responses"
 	)
 	.unwrap();
 
-	let state = adapter.set_active_provider("openrouter").unwrap();
+	let store = store(&temp);
+	let state = adapter.set_active_provider(&store, "openrouter").unwrap();
 
 	assert_eq!(state.active_profile_id, "work");
 	let work = state
@@ -363,7 +375,8 @@ wire_api = "responses"
 	)
 	.unwrap();
 
-	let state = adapter.clear_active_provider().unwrap();
+	let store = store(&temp);
+	let state = adapter.clear_active_provider(&store).unwrap();
 
 	let default = state
 		.profiles
@@ -468,8 +481,14 @@ experimental_bearer_token = "sk-old"
 	)
 	.unwrap();
 
+	let store = store(&temp);
 	let binding = adapter
-		.update_provider("openrouter", Some("OpenRouter Team"), Some("sk-new"))
+		.update_provider(
+			&store,
+			"openrouter",
+			Some("OpenRouter Team"),
+			Some("sk-new"),
+		)
 		.unwrap();
 
 	assert_eq!(binding.name, "OpenRouter Team");
@@ -501,8 +520,9 @@ env_key = "OPENROUTER_API_KEY"
 	)
 	.unwrap();
 
+	let store = store(&temp);
 	let binding = adapter
-		.update_provider("openrouter", Some("OpenRouter Team"), None)
+		.update_provider(&store, "openrouter", Some("OpenRouter Team"), None)
 		.unwrap();
 
 	assert_eq!(binding.name, "OpenRouter Team");
@@ -545,10 +565,16 @@ requires_openai_auth = true
 
 	let content = fs::read_to_string(adapter.config_path()).unwrap();
 	let config = content.parse::<DocumentMut>().unwrap();
-	let provider = config["model_providers"]["newapi"].as_table().unwrap();
-	assert_eq!(provider["requires_openai_auth"].as_bool(), Some(true));
-	assert!(provider.get("env_key").is_none());
-	assert!(provider.get("experimental_bearer_token").is_none());
+	// Since newapi is now External source, save_providers skips it
+	// (only Custom sources are saved). The provider should be removed
+	// from config.toml since External providers are not managed by aghub.
+	assert!(config
+		.get("model_providers")
+		.and_then(|t| t.get("newapi"))
+		.is_none());
+	// But the model_provider reference and model should still exist
+	assert_eq!(config["model"].as_str(), Some("gpt-5.4"));
+	assert_eq!(config["model_provider"].as_str(), Some("newapi"));
 }
 
 #[test]
@@ -568,8 +594,9 @@ requires_openai_auth = true
 	.unwrap();
 	fs::write(auth_path(&temp), r#"{ "OPENAI_API_KEY": "sk-old" }"#).unwrap();
 
+	let store = store(&temp);
 	let binding = adapter
-		.update_provider("newapi", Some("New API"), Some("sk-new"))
+		.update_provider(&store, "newapi", Some("New API"), Some("sk-new"))
 		.unwrap();
 
 	assert_eq!(binding.name, "New API");
@@ -629,8 +656,9 @@ experimental_bearer_token = "sk-inline"
 	)
 	.unwrap();
 
+	let store = store(&temp);
 	assert_eq!(
-		adapter.api_key("openrouter").unwrap(),
+		adapter.api_key(&store, "openrouter").unwrap(),
 		Some("sk-inline".to_string())
 	);
 }
@@ -652,8 +680,9 @@ requires_openai_auth = true
 	.unwrap();
 	fs::write(auth_path(&temp), r#"{ "OPENAI_API_KEY": "sk-auth" }"#).unwrap();
 
+	let store = store(&temp);
 	assert_eq!(
-		adapter.api_key("newapi").unwrap(),
+		adapter.api_key(&store, "newapi").unwrap(),
 		Some("sk-auth".to_string())
 	);
 }
@@ -662,8 +691,9 @@ requires_openai_auth = true
 fn api_key_for_openai_login_provider_is_not_config_backed() {
 	let temp = tempfile::tempdir().unwrap();
 	let adapter = adapter(&temp);
+	let store = store(&temp);
 
-	assert_eq!(adapter.api_key("openai").unwrap(), None);
+	assert_eq!(adapter.api_key(&store, "openai").unwrap(), None);
 }
 
 #[test]
@@ -683,7 +713,8 @@ base_url = "https://openrouter.ai/api/v1"
 	)
 	.unwrap();
 
-	let removed = adapter.remove_provider("openrouter").unwrap();
+	let store = store(&temp);
+	let removed = adapter.remove_provider(&store, "openrouter").unwrap();
 
 	assert_eq!(removed.id, "openrouter");
 	let content = fs::read_to_string(adapter.config_path()).unwrap();
@@ -719,7 +750,8 @@ wire_api = "responses"
 	)
 	.unwrap();
 
-	adapter.remove_provider("openrouter").unwrap();
+	let store = store(&temp);
+	adapter.remove_provider(&store, "openrouter").unwrap();
 
 	let content = fs::read_to_string(adapter.config_path()).unwrap();
 	let config = content.parse::<DocumentMut>().unwrap();

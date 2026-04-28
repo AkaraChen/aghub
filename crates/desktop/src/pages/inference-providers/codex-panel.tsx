@@ -273,7 +273,6 @@ function CodexOfficialRow({
 
 function CodexProviderRow({
 	provider,
-	model,
 	isActive,
 	isSyncing,
 	isSelecting,
@@ -284,7 +283,6 @@ function CodexProviderRow({
 	onDelete,
 }: {
 	provider: AgentProviderResponse;
-	model: string | null;
 	isActive: boolean;
 	isSyncing: boolean;
 	isSelecting: boolean;
@@ -297,6 +295,8 @@ function CodexProviderRow({
 	const { t } = useTranslation();
 	const matchedProvider = provider.matched_inference_provider;
 	const label = matchedProvider?.display_name ?? provider.name;
+	const model = provider.models[0]?.id ?? null;
+	const isExternal = provider.source === "external";
 
 	return (
 		<div className="grid gap-3 border-t border-border py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
@@ -329,7 +329,7 @@ function CodexProviderRow({
 			</div>
 
 			<div className="flex items-center gap-1 sm:justify-end">
-				{matchedProvider && (
+				{matchedProvider && !isExternal && (
 					<Tooltip delay={0}>
 						<Tooltip.Trigger>
 							<Button
@@ -356,6 +356,31 @@ function CodexProviderRow({
 							isIconOnly
 							variant="ghost"
 							size="sm"
+							className="text-muted hover:text-danger"
+							aria-label={
+								isExternal
+									? t("codexProviderExternalTooltip")
+									: t("deleteCodexProvider")
+							}
+							isPending={isDeleting}
+							isDisabled={isExternal}
+							onPress={onDelete}
+						>
+							<TrashIcon className="size-4" />
+						</Button>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						{isExternal
+							? t("codexProviderExternalTooltip")
+							: t("delete")}
+					</Tooltip.Content>
+				</Tooltip>
+				<Tooltip delay={0}>
+					<Tooltip.Trigger>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
 							isPending={isSelecting}
 							isDisabled={isActive || !canSelect}
 							aria-label={
@@ -375,22 +400,6 @@ function CodexProviderRow({
 								? t("codexNoProfiles")
 								: t("enable")}
 					</Tooltip.Content>
-				</Tooltip>
-				<Tooltip delay={0}>
-					<Tooltip.Trigger>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							className="text-muted hover:text-danger"
-							aria-label={t("deleteCodexProvider")}
-							isPending={isDeleting}
-							onPress={onDelete}
-						>
-							<TrashIcon className="size-4" />
-						</Button>
-					</Tooltip.Trigger>
-					<Tooltip.Content>{t("delete")}</Tooltip.Content>
 				</Tooltip>
 			</div>
 		</div>
@@ -568,84 +577,47 @@ export function CodexInferenceProviderPanel(_: {
 											clearMutation.mutate()
 										}
 									/>
-									{customProviders.length === 0 ? (
-										<div className="grid justify-items-center gap-3 py-8 text-center">
-											<p className="text-sm text-muted">
-												{t("noCodexProviders")}
-											</p>
-											<Button
-												size="sm"
-												aria-label={t(
-													"createCodexProvider",
-												)}
-												onPress={() =>
-													setIsAddDialogOpen(true)
-												}
-											>
-												<PlusIcon className="size-4" />
-												{t("add")}
-											</Button>
-										</div>
-									) : (
-										customProviders.map((provider) => (
-											<CodexProviderRow
-												key={provider.id}
-												provider={provider}
-												model={
-													activeProviderId ===
+									{customProviders.map((provider) => (
+										<CodexProviderRow
+											key={provider.id}
+											provider={provider}
+											isActive={
+												activeProviderId === provider.id
+											}
+											isSyncing={
+												syncMutation.isPending &&
+												syncMutation.variables ===
 													provider.id
-														? (activeProfile?.model ??
-															null)
-														: null
-												}
-												isActive={
-													activeProviderId ===
+											}
+											isSelecting={
+												selectProviderMutation.isPending &&
+												selectProviderMutation.variables
+													?.body.provider_id ===
 													provider.id
-												}
-												isSyncing={
-													syncMutation.isPending &&
-													syncMutation.variables ===
-														provider.id
-												}
-												isSelecting={
-													selectProviderMutation.isPending &&
-													selectProviderMutation
-														.variables?.body
-														.provider_id ===
-														provider.id
-												}
-												isDeleting={
-													deleteMutation.isPending &&
-													deleteTarget?.id ===
-														provider.id
-												}
-												canSelect={Boolean(
-													activeProfile,
-												)}
-												onSelect={() => {
-													if (!activeProfile) return;
-													selectProviderMutation.mutate(
-														{
-															profileId:
-																activeProfile.id,
-															body: {
-																provider_id:
-																	provider.id,
-															},
-														},
-													);
-												}}
-												onSync={() =>
-													syncMutation.mutate(
-														provider.id,
-													)
-												}
-												onDelete={() =>
-													setDeleteTarget(provider)
-												}
-											/>
-										))
-									)}
+											}
+											isDeleting={
+												deleteMutation.isPending &&
+												deleteTarget?.id === provider.id
+											}
+											canSelect={Boolean(activeProfile)}
+											onSelect={() => {
+												if (!activeProfile) return;
+												selectProviderMutation.mutate({
+													profileId: activeProfile.id,
+													body: {
+														provider_id:
+															provider.id,
+													},
+												});
+											}}
+											onSync={() =>
+												syncMutation.mutate(provider.id)
+											}
+											onDelete={() =>
+												setDeleteTarget(provider)
+											}
+										/>
+									))}
 								</div>
 							)}
 						</Card.Content>

@@ -38,7 +38,6 @@ import type {
 	ToolInfoDto,
 	TransferRequest,
 	UpdateAgentProviderRequest,
-	UpdateClaudeProviderRequest,
 	UpdateCodexActiveProfileRequest,
 	UpdateCodexProfileProviderRequest,
 	UpdateInferenceProviderRequest,
@@ -660,12 +659,37 @@ export function createApi(baseUrl: string) {
 			getClaudeState(): Promise<ClaudeProviderStateResponse> {
 				return client.get("inference/agents/claude/state").json();
 			},
-			updateClaudeState(
-				body: UpdateClaudeProviderRequest,
+			createClaude(
+				body: CreateAgentProviderRequest,
+			): Promise<AgentProviderResponse> {
+				return client
+					.post("inference/agents/claude/providers", { json: body })
+					.json();
+			},
+			updateClaude(
+				id: string,
+				body: UpdateAgentProviderRequest,
 			): Promise<ClaudeProviderStateResponse> {
 				return client
-					.put("inference/agents/claude/state", { json: body })
+					.put(
+						`inference/agents/claude/providers/${encodeURIComponent(id)}`,
+						{ json: body },
+					)
 					.json();
+			},
+			syncClaude(id: string): Promise<AgentProviderResponse> {
+				return client
+					.post(
+						`inference/agents/claude/providers/${encodeURIComponent(id)}/sync`,
+					)
+					.json();
+			},
+			deleteClaude(id: string): Promise<void> {
+				return client
+					.delete(
+						`inference/agents/claude/providers/${encodeURIComponent(id)}`,
+					)
+					.then(() => undefined);
 			},
 			clearClaudeState(): Promise<void> {
 				return client

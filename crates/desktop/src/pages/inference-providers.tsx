@@ -1175,7 +1175,9 @@ export default function InferenceProvidersPage() {
 				)}
 
 				{panel.type === "agent" && panel.agentId === "claude" && (
-					<ClaudeInferenceProviderPanel />
+					<ClaudeInferenceProviderPanel
+						onEditInferenceProvider={handleEditProviderByName}
+					/>
 				)}
 
 				{panel.type === "create" && (

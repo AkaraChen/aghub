@@ -13,8 +13,8 @@ use crate::dto::inference::{
 	CodexProviderStateResponse, CreateAgentProviderRequest,
 	CreateInferenceProviderRequest, InferenceProviderPasswordResponse,
 	InferenceProviderResponse, UpdateAgentProviderRequest,
-	UpdateClaudeProviderRequest, UpdateCodexActiveProfileRequest,
-	UpdateCodexProfileProviderRequest, UpdateInferenceProviderRequest,
+	UpdateCodexActiveProfileRequest, UpdateCodexProfileProviderRequest,
+	UpdateInferenceProviderRequest,
 };
 use crate::error::{ApiCreated, ApiError, ApiNoContent, ApiResult};
 use crate::state::InferenceProviderState;
@@ -135,11 +135,14 @@ fn opencode_provider_response(
 }
 
 fn codex_provider_response(
+	store: &InferenceProviderStore,
 	inventory: &[(InferenceProvider, String)],
 	adapter: &CodexProviderAdapter,
 	binding: AgentProviderBinding,
 ) -> Result<AgentProviderResponse, ApiError> {
-	let agent_api_key = adapter.api_key(&binding.id).map_err(ApiError::from)?;
+	let agent_api_key = adapter
+		.api_key(store, &binding.id)
+		.map_err(ApiError::from)?;
 	let matched =
 		find_matching_inventory_provider(inventory, &binding, agent_api_key)?;
 	let response = AgentProviderResponse::from(binding);
@@ -156,12 +159,14 @@ fn codex_state_response(
 	adapter: &CodexProviderAdapter,
 ) -> Result<CodexProviderStateResponse, ApiError> {
 	let inventory = inventory_providers_with_api_keys(store)?;
-	let state = adapter.load_profile_state().map_err(ApiError::from)?;
+	let state = adapter.load_profile_state(store).map_err(ApiError::from)?;
 	let providers = state
 		.providers
 		.iter()
 		.cloned()
-		.map(|binding| codex_provider_response(&inventory, adapter, binding))
+		.map(|binding| {
+			codex_provider_response(store, &inventory, adapter, binding)
+		})
 		.collect::<Result<Vec<_>, _>>()?;
 	Ok(CodexProviderStateResponse::from_state(state, providers))
 }
@@ -210,7 +215,9 @@ pub fn list_codex_providers(
 		.map_err(ApiError::from)?
 		.providers
 		.into_iter()
-		.map(|binding| codex_provider_response(&inventory, &adapter, binding))
+		.map(|binding| {
+			codex_provider_response(&store, &inventory, &adapter, binding)
+		})
 		.collect::<Result<Vec<_>, _>>()?;
 	Ok(Json(providers))
 }
@@ -249,10 +256,10 @@ pub fn create_codex_provider(
 		get_inventory_provider(&store, &body.inference_provider_id)?;
 	let adapter = codex_adapter()?;
 	let binding = adapter
-		.add_inventory_provider(&provider, &api_key)
+		.add_inventory_provider(&store, &provider, &api_key)
 		.map_err(ApiError::from)?;
 	adapter
-		.set_active_provider(&binding.id)
+		.set_active_provider(&store, &binding.id)
 		.map_err(ApiError::from)?;
 
 	Ok((
@@ -279,12 +286,19 @@ pub fn update_opencode_provider(
 
 #[put("/inference/agents/codex/providers/<id>", data = "<body>")]
 pub fn update_codex_provider(
+	state: &State<InferenceProviderState>,
 	id: &str,
 	body: Json<UpdateAgentProviderRequest>,
 ) -> ApiResult<AgentProviderResponse> {
+	let store = store(state);
 	let body = body.into_inner();
 	let binding = codex_adapter()?
-		.update_provider(id, body.name.as_deref(), body.api_key.as_deref())
+		.update_provider(
+			&store,
+			id,
+			body.name.as_deref(),
+			body.api_key.as_deref(),
+		)
 		.map_err(ApiError::from)?;
 
 	Ok(Json(binding.into()))
@@ -315,7 +329,7 @@ pub fn update_codex_profile_provider(
 	let store = store(state);
 	let adapter = codex_adapter()?;
 	adapter
-		.set_profile_provider(profile_id, &body.provider_id)
+		.set_profile_provider(&store, profile_id, &body.provider_id)
 		.map_err(ApiError::from)?;
 	Ok(Json(codex_state_response(&store, &adapter)?))
 }
@@ -386,7 +400,9 @@ pub fn sync_codex_provider(
 				"RESOURCE_NOT_FOUND",
 			)
 		})?;
-	let agent_api_key = adapter.api_key(&binding.id).map_err(ApiError::from)?;
+	let agent_api_key = adapter
+		.api_key(&store, &binding.id)
+		.map_err(ApiError::from)?;
 	let Some((provider, api_key)) =
 		find_matching_inventory_provider(&inventory, &binding, agent_api_key)?
 	else {
@@ -419,9 +435,13 @@ pub fn delete_opencode_provider(id: &str) -> ApiNoContent {
 }
 
 #[delete("/inference/agents/codex/providers/<id>")]
-pub fn delete_codex_provider(id: &str) -> ApiNoContent {
+pub fn delete_codex_provider(
+	state: &State<InferenceProviderState>,
+	id: &str,
+) -> ApiNoContent {
+	let store = store(state);
 	codex_adapter()?
-		.remove_provider(id)
+		.remove_provider(&store, id)
 		.map_err(ApiError::from)?;
 	Ok(NoContent)
 }
@@ -490,44 +510,194 @@ pub fn delete_inference_provider(
 }
 
 // ============================================================================
-// Claude Code routes
+// Claude Code routes (binding-table backed)
 // ============================================================================
 
-#[get("/inference/agents/claude/state")]
-pub fn get_claude_state() -> ApiResult<ClaudeProviderStateResponse> {
-	let adapter = claude_adapter()?;
-	let state = adapter.load_config_state().map_err(ApiError::from)?;
-	Ok(Json(state.into()))
+fn claude_state_response(
+	store: &InferenceProviderStore,
+	adapter: &ClaudeProviderAdapter,
+) -> Result<ClaudeProviderStateResponse, ApiError> {
+	let state = adapter.load_bindings_state(store).map_err(ApiError::from)?;
+	let inventory = inventory_providers_with_api_keys(store)?;
+	let providers = state
+		.providers
+		.iter()
+		.cloned()
+		.map(|binding| {
+			let agent_api_key = store
+				.get_api_key(
+					binding.source_provider_id.as_deref().unwrap_or(""),
+				)
+				.map_err(ApiError::from)?;
+			let matched = find_matching_inventory_provider(
+				&inventory,
+				&binding,
+				agent_api_key,
+			)?;
+			let response = AgentProviderResponse::from(binding);
+			let result: Result<AgentProviderResponse, ApiError> =
+				Ok(match matched {
+					Some((provider, _)) => {
+						response.with_matched_inference_provider(&provider)
+					}
+					None => response,
+				});
+			result
+		})
+		.collect::<Result<Vec<_>, _>>()?;
+	Ok(ClaudeProviderStateResponse {
+		providers,
+		active_provider_id: state
+			.providers
+			.iter()
+			.find(|p| {
+				state.default_model.as_ref().is_some_and(|m| {
+					p.models.iter().any(|model| model.id == m.model_id)
+				})
+			})
+			.map(|p| p.id.clone())
+			.unwrap_or_default(),
+	})
 }
 
-#[put("/inference/agents/claude/state", data = "<body>")]
-pub fn update_claude_state(
-	body: Json<UpdateClaudeProviderRequest>,
+#[get("/inference/agents/claude/state")]
+pub fn get_claude_state(
+	state: &State<InferenceProviderState>,
 ) -> ApiResult<ClaudeProviderStateResponse> {
+	let store = store(state);
 	let adapter = claude_adapter()?;
-	let state = aghub_inference::ClaudeConfigState {
-		api_base_url: body.api_base_url.clone(),
-		api_key: body.api_key.clone(),
-		api_key_env_name: None,
-		model: body.model.clone(),
-		haiku_model: None,
-		sonnet_model: None,
-		opus_model: None,
-	};
-	adapter.save_config_state(&state).map_err(ApiError::from)?;
-	Ok(Json(state.into()))
+	Ok(Json(claude_state_response(&store, &adapter)?))
+}
+
+#[post("/inference/agents/claude/providers", data = "<body>")]
+pub fn create_claude_provider(
+	state: &State<InferenceProviderState>,
+	body: Json<CreateAgentProviderRequest>,
+) -> ApiCreated<AgentProviderResponse> {
+	let store = store(state);
+	let (provider, api_key) =
+		get_inventory_provider(&store, &body.inference_provider_id)?;
+	let adapter = claude_adapter()?;
+	let binding = adapter
+		.add_binding(&store, &provider, &api_key, true)
+		.map_err(ApiError::from)?;
+
+	Ok((
+		Status::Created,
+		Json(
+			AgentProviderResponse::from(binding)
+				.with_matched_inference_provider(&provider),
+		),
+	))
+}
+
+#[put("/inference/agents/claude/providers/<id>", data = "<body>")]
+pub fn update_claude_provider(
+	state: &State<InferenceProviderState>,
+	id: &str,
+	body: Json<UpdateAgentProviderRequest>,
+) -> ApiResult<ClaudeProviderStateResponse> {
+	let store = store(state);
+	let adapter = claude_adapter()?;
+
+	if body.name.as_deref().is_some() {
+		return Err(ApiError::new(
+			Status::BadRequest,
+			"Claude provider name cannot be changed".to_string(),
+			"UNSUPPORTED_OPERATION",
+		));
+	}
+
+	if let Some(api_key) = body.api_key.as_deref() {
+		let row = store
+			.get_agent_binding("claude", id)
+			.map_err(ApiError::from)?;
+		let provider = store
+			.get(&row.inference_provider_id)
+			.map_err(ApiError::from)?;
+		adapter
+			.sync_active_binding(&provider, api_key, row.model.as_deref())
+			.map_err(ApiError::from)?;
+	}
+
+	Ok(Json(claude_state_response(&store, &adapter)?))
+}
+
+#[post("/inference/agents/claude/providers/<id>/sync")]
+pub fn sync_claude_provider(
+	state: &State<InferenceProviderState>,
+	id: &str,
+) -> ApiResult<AgentProviderResponse> {
+	let store = store(state);
+	let adapter = claude_adapter()?;
+	let row = store
+		.get_agent_binding("claude", id)
+		.map_err(ApiError::from)?;
+	let provider = store
+		.get(&row.inference_provider_id)
+		.map_err(ApiError::from)?;
+	let api_key = store
+		.get_api_key(&provider.id)
+		.map_err(ApiError::from)?
+		.ok_or_else(|| {
+			ApiError::new(
+				Status::UnprocessableEntity,
+				format!(
+					"inference provider '{}' has no stored API key",
+					provider.display_name
+				),
+				"MISSING_CREDENTIAL",
+			)
+		})?;
+
+	adapter
+		.sync_active_binding(&provider, &api_key, row.model.as_deref())
+		.map_err(ApiError::from)?;
+
+	let binding = store.binding_from_row(&row).map_err(ApiError::from)?;
+	Ok(Json(
+		AgentProviderResponse::from(binding)
+			.with_matched_inference_provider(&provider),
+	))
+}
+
+#[delete("/inference/agents/claude/providers/<id>")]
+pub fn delete_claude_provider(
+	state: &State<InferenceProviderState>,
+	id: &str,
+) -> ApiNoContent {
+	let store = store(state);
+	let adapter = claude_adapter()?;
+	adapter.remove_binding(&store, id).map_err(ApiError::from)?;
+	Ok(NoContent)
 }
 
 #[delete("/inference/agents/claude/state")]
-pub fn clear_claude_state() -> ApiNoContent {
+pub fn clear_claude_state(
+	state: &State<InferenceProviderState>,
+) -> ApiNoContent {
+	let store = store(state);
 	let adapter = claude_adapter()?;
+	let rows = store
+		.list_agent_bindings("claude")
+		.map_err(ApiError::from)?;
+	for row in rows {
+		store
+			.delete_agent_binding("claude", &row.id)
+			.map_err(ApiError::from)?;
+	}
 	adapter.clear_provider_config().map_err(ApiError::from)?;
 	Ok(NoContent)
 }
 
 #[delete("/inference/agents/codex/state")]
-pub fn clear_codex_state() -> ApiNoContent {
+pub fn clear_codex_state(
+	state: &State<InferenceProviderState>,
+) -> ApiNoContent {
+	let store = store(state);
 	let adapter = codex_adapter()?;
-	adapter.clear_active_provider().map_err(ApiError::from)?;
+	adapter
+		.clear_active_provider(&store)
+		.map_err(ApiError::from)?;
 	Ok(NoContent)
 }

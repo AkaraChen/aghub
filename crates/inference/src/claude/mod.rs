@@ -2,6 +2,14 @@
 //!
 //! Claude Code stores provider configuration in `~/.claude/settings.json`
 //! via environment variable overrides in the `env` object.
+//!
+//! Because Claude does not natively support multiple providers, aghub uses
+//! the `agent_provider_bindings` SQLite table as a workaround. Each binding
+//! row maps an inference provider to Claude; the active binding is the one
+//! whose `is_active` flag is set. When a binding is active, its provider's
+//! URL, API key, and model are written to Claude's `settings.json` env
+//! object. Switching providers simply swaps which binding is active and
+//! rewrites the env block.
 
 mod files;
 
@@ -19,9 +27,10 @@ use crate::agent::{
 	AgentProviderDefaultSupport, AgentProviderSource, AgentProviderState,
 };
 use crate::error::Result;
+use crate::model::InferenceProvider;
+use crate::store::{InferenceProviderRepository, InferenceProviderStore};
 
 pub(super) const AGENT_ID: &str = "claude";
-pub(super) const PRIMARY_PROVIDER_ID: &str = "primary";
 
 const API_BASE_URL_ENV: &str = "ANTHROPIC_BASE_URL";
 const API_KEY_ENV: &str = "ANTHROPIC_API_KEY";
@@ -189,6 +198,143 @@ impl ClaudeProviderAdapter {
 		files::write_config(&self.config_path, &config)?;
 		Ok(())
 	}
+
+	/// Load bindings from the SQLite store and sync the active one into
+	/// `settings.json`. Returns the effective provider state.
+	pub fn load_bindings_state(
+		&self,
+		store: &InferenceProviderStore,
+	) -> Result<AgentProviderState> {
+		let rows = store.list_agent_bindings(AGENT_ID)?;
+		let active_row = rows.iter().find(|r| r.is_active);
+
+		// If there is an active binding but settings.json does not match,
+		// rewrite settings.json now so the agent sees the correct config.
+		if let Some(row) = active_row {
+			let provider = store.get(&row.inference_provider_id)?;
+			let api_key =
+				store.get_api_key(&provider.id)?.ok_or_else(|| {
+					crate::error::InferenceProviderError::NotFound(
+						provider.id.clone(),
+					)
+				})?;
+			self.sync_active_binding(
+				&provider,
+				&api_key,
+				row.model.as_deref(),
+			)?;
+		} else if active_row.is_none() && self.has_custom_config()? {
+			// No active binding but settings.json still has overrides;
+			// clear them so Claude falls back to official API.
+			self.clear_provider_config()?;
+		}
+
+		let providers = rows
+			.iter()
+			.map(|row| store.binding_from_row(row))
+			.collect::<Result<Vec<_>>>()?;
+
+		let default_model = active_row
+			.and_then(|r| r.model.clone())
+			.map(AgentModelSelection::model);
+
+		Ok(AgentProviderState {
+			providers,
+			default_model,
+			small_model: None,
+		})
+	}
+
+	/// Add a new binding, optionally making it active.
+	pub fn add_binding(
+		&self,
+		store: &InferenceProviderStore,
+		provider: &InferenceProvider,
+		api_key: &str,
+		set_active: bool,
+	) -> Result<AgentProviderBinding> {
+		let model = provider.models.first().cloned();
+		let row = store.create_agent_binding(
+			AGENT_ID,
+			&provider.id,
+			model.as_deref(),
+			set_active,
+		)?;
+
+		if set_active {
+			self.sync_active_binding(provider, api_key, model.as_deref())?;
+		}
+
+		store.binding_from_row(&row)
+	}
+
+	/// Switch the active binding.
+	pub fn set_active_binding(
+		&self,
+		store: &InferenceProviderStore,
+		binding_id: &str,
+	) -> Result<AgentProviderState> {
+		store.update_agent_binding(AGENT_ID, binding_id, Some(true), None)?;
+		let row = store
+			.list_agent_bindings(AGENT_ID)?
+			.into_iter()
+			.find(|r| r.id == binding_id)
+			.ok_or_else(|| {
+				crate::error::InferenceProviderError::NotFound(
+					binding_id.to_string(),
+				)
+			})?;
+
+		let provider = store.get(&row.inference_provider_id)?;
+		let api_key = store.get_api_key(&provider.id)?.ok_or_else(|| {
+			crate::error::InferenceProviderError::NotFound(provider.id.clone())
+		})?;
+		self.sync_active_binding(&provider, &api_key, row.model.as_deref())?;
+
+		self.load_bindings_state(store)
+	}
+
+	/// Remove a binding. If it was active, clear settings.json.
+	pub fn remove_binding(
+		&self,
+		store: &InferenceProviderStore,
+		binding_id: &str,
+	) -> Result<AgentProviderBinding> {
+		let row = store.get_agent_binding(AGENT_ID, binding_id)?;
+		let binding = store.binding_from_row(&row)?;
+		store.delete_agent_binding(AGENT_ID, binding_id)?;
+
+		if row.is_active {
+			self.clear_provider_config()?;
+		}
+
+		Ok(binding)
+	}
+
+	/// Sync an inventory provider into settings.json as the active config.
+	pub fn sync_active_binding(
+		&self,
+		provider: &InferenceProvider,
+		api_key: &str,
+		model: Option<&str>,
+	) -> Result<()> {
+		let state = ClaudeConfigState {
+			api_base_url: Some(provider.api_base_url.clone()),
+			api_key: Some(api_key.to_string()),
+			api_key_env_name: Some(AUTH_TOKEN_ENV.to_string()),
+			model: model.map(ToString::to_string),
+			haiku_model: None,
+			sonnet_model: None,
+			opus_model: None,
+		};
+		self.save_config_state(&state)
+	}
+
+	/// Whether settings.json currently contains any custom provider config.
+	fn has_custom_config(&self) -> Result<bool> {
+		let state = self.load_config_state()?;
+		Ok(state.api_base_url.is_some() || state.api_key.is_some())
+	}
 }
 
 impl AgentProviderAdapter for ClaudeProviderAdapter {
@@ -197,20 +343,24 @@ impl AgentProviderAdapter for ClaudeProviderAdapter {
 	}
 
 	fn capabilities(&self) -> AgentProviderCapabilities {
-		AgentProviderCapabilities::closed_single(
+		AgentProviderCapabilities::registry(
 			AgentProviderDefaultSupport::MODEL_ONLY,
 			AgentCredentialSupport::ENV_VAR,
+			crate::agent::BuiltInProviderSupport::NONE,
 		)
 	}
 
 	fn load_providers(&self) -> Result<AgentProviderState> {
+		// When called without a store (generic adapter interface), fall back
+		// to reading settings.json directly and return a single closed-slot
+		// provider for backward compatibility.
 		let state = self.load_config_state()?;
 
 		let provider = if state.api_base_url.is_some()
 			|| state.api_key.is_some()
 		{
 			Some(AgentProviderBinding {
-				id: PRIMARY_PROVIDER_ID.to_string(),
+				id: "primary".to_string(),
 				source_provider_id: None,
 				name: "Custom".to_string(),
 				format: Some(crate::model::InferenceProviderFormat::Anthropic),

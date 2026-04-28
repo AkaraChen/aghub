@@ -53,7 +53,7 @@ fn load_reads_auth_token_and_normalized_model_state() {
 	assert_eq!(state.default_model.unwrap().model_id, "claude-top");
 
 	let provider = &state.providers[0];
-	assert_eq!(provider.id, PRIMARY_PROVIDER_ID);
+	assert_eq!(provider.id, "primary");
 	assert_eq!(provider.name, "Custom");
 	assert_eq!(provider.source, AgentProviderSource::ClosedSlot);
 	assert_eq!(provider.format, Some(InferenceProviderFormat::Anthropic));
