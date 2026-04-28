@@ -5,11 +5,10 @@
 //!
 //! Because Claude does not natively support multiple providers, aghub uses
 //! the `agent_provider_bindings` SQLite table as a workaround. Each binding
-//! row maps an inference provider to Claude; the active binding is the one
-//! whose `is_active` flag is set. When a binding is active, its provider's
-//! URL, API key, and model are written to Claude's `settings.json` env
-//! object. Switching providers simply swaps which binding is active and
-//! rewrites the env block.
+//! row maps an inference provider to Claude. The active binding is derived
+//! by comparing the current `settings.json` env values against the bound
+//! provider's URL, API key, and model. Switching providers rewrites the env
+//! block so the new provider's details match what is in `settings.json`.
 
 mod files;
 
@@ -199,35 +198,36 @@ impl ClaudeProviderAdapter {
 		Ok(())
 	}
 
-	/// Load bindings from the SQLite store and sync the active one into
+	/// Derive which binding is active by comparing `settings.json` against
+	/// each bound provider's URL, API key, and model.
+	fn derive_active_binding(
+		&self,
+		store: &InferenceProviderStore,
+		rows: &[crate::store::AgentProviderBindingRow],
+	) -> Result<Option<crate::store::AgentProviderBindingRow>> {
+		let current = self.load_config_state()?;
+		for row in rows {
+			let provider = store.get(&row.inference_provider_id)?;
+			let api_key = store.get_api_key(&provider.id)?;
+			if provider.api_base_url
+				== current.api_base_url.as_deref().unwrap_or_default()
+				&& api_key == current.api_key
+				&& row.model.as_deref() == current.model.as_deref()
+			{
+				return Ok(Some(row.clone()));
+			}
+		}
+		Ok(None)
+	}
+
+	/// Load bindings from the SQLite store and derive the active one from
 	/// `settings.json`. Returns the effective provider state.
 	pub fn load_bindings_state(
 		&self,
 		store: &InferenceProviderStore,
 	) -> Result<AgentProviderState> {
 		let rows = store.list_agent_bindings(AGENT_ID)?;
-		let active_row = rows.iter().find(|r| r.is_active);
-
-		// If there is an active binding but settings.json does not match,
-		// rewrite settings.json now so the agent sees the correct config.
-		if let Some(row) = active_row {
-			let provider = store.get(&row.inference_provider_id)?;
-			let api_key =
-				store.get_api_key(&provider.id)?.ok_or_else(|| {
-					crate::error::InferenceProviderError::NotFound(
-						provider.id.clone(),
-					)
-				})?;
-			self.sync_active_binding(
-				&provider,
-				&api_key,
-				row.model.as_deref(),
-			)?;
-		} else if active_row.is_none() && self.has_custom_config()? {
-			// No active binding but settings.json still has overrides;
-			// clear them so Claude falls back to official API.
-			self.clear_provider_config()?;
-		}
+		let active_row = self.derive_active_binding(store, &rows)?;
 
 		let providers = rows
 			.iter()
@@ -235,6 +235,7 @@ impl ClaudeProviderAdapter {
 			.collect::<Result<Vec<_>>>()?;
 
 		let default_model = active_row
+			.as_ref()
 			.and_then(|r| r.model.clone())
 			.map(AgentModelSelection::model);
 
@@ -245,7 +246,7 @@ impl ClaudeProviderAdapter {
 		})
 	}
 
-	/// Add a new binding, optionally making it active.
+	/// Add a new binding and optionally sync it into `settings.json`.
 	pub fn add_binding(
 		&self,
 		store: &InferenceProviderStore,
@@ -258,7 +259,6 @@ impl ClaudeProviderAdapter {
 			AGENT_ID,
 			&provider.id,
 			model.as_deref(),
-			set_active,
 		)?;
 
 		if set_active {
@@ -268,13 +268,12 @@ impl ClaudeProviderAdapter {
 		store.binding_from_row(&row)
 	}
 
-	/// Switch the active binding.
+	/// Switch the active provider by rewriting `settings.json`.
 	pub fn set_active_binding(
 		&self,
 		store: &InferenceProviderStore,
 		binding_id: &str,
 	) -> Result<AgentProviderState> {
-		store.update_agent_binding(AGENT_ID, binding_id, Some(true), None)?;
 		let row = store
 			.list_agent_bindings(AGENT_ID)?
 			.into_iter()
@@ -294,17 +293,19 @@ impl ClaudeProviderAdapter {
 		self.load_bindings_state(store)
 	}
 
-	/// Remove a binding. If it was active, clear settings.json.
+	/// Remove a binding. If it was the active one, clear settings.json.
 	pub fn remove_binding(
 		&self,
 		store: &InferenceProviderStore,
 		binding_id: &str,
 	) -> Result<AgentProviderBinding> {
+		let rows = store.list_agent_bindings(AGENT_ID)?;
+		let active = self.derive_active_binding(store, &rows)?;
 		let row = store.get_agent_binding(AGENT_ID, binding_id)?;
 		let binding = store.binding_from_row(&row)?;
 		store.delete_agent_binding(AGENT_ID, binding_id)?;
 
-		if row.is_active {
+		if active.is_some_and(|a| a.id == binding_id) {
 			self.clear_provider_config()?;
 		}
 
@@ -328,12 +329,6 @@ impl ClaudeProviderAdapter {
 			opus_model: None,
 		};
 		self.save_config_state(&state)
-	}
-
-	/// Whether settings.json currently contains any custom provider config.
-	fn has_custom_config(&self) -> Result<bool> {
-		let state = self.load_config_state()?;
-		Ok(state.api_base_url.is_some() || state.api_key.is_some())
 	}
 }
 

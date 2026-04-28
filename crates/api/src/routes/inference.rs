@@ -312,7 +312,7 @@ pub fn update_codex_active_profile(
 	let store = store(state);
 	let adapter = codex_adapter()?;
 	adapter
-		.set_active_profile(&body.profile_id)
+		.set_active_profile(&store, &body.profile_id)
 		.map_err(ApiError::from)?;
 	Ok(Json(codex_state_response(&store, &adapter)?))
 }

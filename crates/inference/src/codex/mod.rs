@@ -125,6 +125,7 @@ impl CodexProviderAdapter {
 	/// Select the active Codex profile.
 	pub fn set_active_profile(
 		&self,
+		store: &InferenceProviderStore,
 		profile_id: &str,
 	) -> Result<CodexProviderState> {
 		let profile_id = clean_profile_id(profile_id)?;
@@ -138,8 +139,7 @@ impl CodexProviderAdapter {
 		}
 
 		files::write_config(&self.config_path, &config)?;
-		let store = InferenceProviderStore::new("");
-		self.load_profile_state(&store)
+		self.load_profile_state(store)
 	}
 
 	/// Set the provider used by Codex's current active profile.
@@ -261,7 +261,6 @@ impl CodexProviderAdapter {
 			AGENT_ID,
 			&provider.id,
 			provider.models.first().map(|m| m.as_str()),
-			false,
 		)?;
 
 		// Write provider details to config.toml

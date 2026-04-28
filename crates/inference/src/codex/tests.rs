@@ -245,7 +245,8 @@ model_provider = "openrouter"
 	)
 	.unwrap();
 
-	let state = adapter.set_active_profile("work").unwrap();
+	let store = store(&temp);
+	let state = adapter.set_active_profile(&store, "work").unwrap();
 
 	assert_eq!(state.active_profile_id, "work");
 	let content = fs::read_to_string(adapter.config_path()).unwrap();
@@ -253,7 +254,9 @@ model_provider = "openrouter"
 	let config = content.parse::<DocumentMut>().unwrap();
 	assert_eq!(config["profile"].as_str(), Some("work"));
 
-	let state = adapter.set_active_profile(DEFAULT_PROFILE_ID).unwrap();
+	let state = adapter
+		.set_active_profile(&store, DEFAULT_PROFILE_ID)
+		.unwrap();
 	assert_eq!(state.active_profile_id, DEFAULT_PROFILE_ID);
 	let config = fs::read_to_string(adapter.config_path())
 		.unwrap()
