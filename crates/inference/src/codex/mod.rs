@@ -880,21 +880,6 @@ fn ensure_profile_exists(config: &DocumentMut, profile_id: &str) -> Result<()> {
 	}
 }
 
-fn ensure_selectable_provider(
-	config: &DocumentMut,
-	provider_id: &str,
-) -> Result<()> {
-	if provider_id.eq_ignore_ascii_case(mapping::OPENAI_PROVIDER_ID)
-		|| provider_table(config, provider_id)?.is_some()
-	{
-		Ok(())
-	} else {
-		Err(crate::error::InferenceProviderError::NotFound(
-			provider_id.to_string(),
-		))
-	}
-}
-
 fn clear_profile_provider_references(
 	config: &mut DocumentMut,
 	provider_id: &str,
