@@ -13,7 +13,7 @@ gix = { version = "0.82", default-features = false, features = [
 	"worktree-mutation",
 	"blocking-http-transport-reqwest-native-tls",
 ] }
-gix-hash = { version = "0.24", default-features = false, features = [
+gix-hash = { version = "0.25", default-features = false, features = [
 	"sha1",
 ] }
 tempfile = { workspace = true }
