@@ -10,6 +10,7 @@ import type {
 	CreateInferenceProviderRequest,
 	InferenceProviderResponse,
 	UpdateAgentProviderRequest,
+	UpdateClaudeProviderRequest,
 	UpdateCodexActiveProfileRequest,
 	UpdateCodexProfileProviderRequest,
 	UpdateInferenceProviderRequest,
@@ -469,6 +470,72 @@ export function deleteInferenceModelMutationOptions({
 		onSuccess: async (data, variables) => {
 			await invalidateInferenceProviderQueries(queryClient);
 			await onSuccess?.(data, variables);
+		},
+	});
+}
+
+// ============================================================================
+// Claude Code
+// ============================================================================
+
+export function claudeProviderStateQueryOptions({
+	api,
+	enabled = true,
+	staleTime = 30_000,
+}: InferenceProviderListQueryParams) {
+	return queryOptions({
+		queryKey: queryKeys.inferenceProviders.agentState("claude"),
+		queryFn: () => api.inferenceProviders.getClaudeState(),
+		enabled,
+		staleTime,
+	});
+}
+
+export async function invalidateClaudeProviderQueries(
+	queryClient: QueryClient,
+) {
+	await queryClient.invalidateQueries({
+		queryKey: queryKeys.inferenceProviders.agentState("claude"),
+	});
+}
+
+interface UpdateClaudeProviderMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: () => void | Promise<void>;
+}
+
+export function updateClaudeProviderMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: UpdateClaudeProviderMutationParams) {
+	return mutationOptions({
+		mutationFn: (body: UpdateClaudeProviderRequest) =>
+			api.inferenceProviders.updateClaudeState(body),
+		onSuccess: async () => {
+			await invalidateClaudeProviderQueries(queryClient);
+			await onSuccess?.();
+		},
+	});
+}
+
+interface ClearClaudeProviderMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: () => void | Promise<void>;
+}
+
+export function clearClaudeProviderMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: ClearClaudeProviderMutationParams) {
+	return mutationOptions({
+		mutationFn: () => api.inferenceProviders.clearClaudeState(),
+		onSuccess: async () => {
+			await invalidateClaudeProviderQueries(queryClient);
+			await onSuccess?.();
 		},
 	});
 }

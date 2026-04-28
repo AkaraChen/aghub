@@ -5,6 +5,7 @@
 //! keyring.
 
 pub mod agent;
+pub mod claude;
 pub mod codex;
 pub mod credentials;
 pub mod error;
@@ -19,6 +20,7 @@ pub use agent::{
 	AgentProviderModel, AgentProviderSource, AgentProviderState,
 	BuiltInProviderSupport,
 };
+pub use claude::{ClaudeConfigState, ClaudeProviderAdapter};
 pub use codex::{
 	CodexProfileState, CodexProviderAdapter, CodexProviderState,
 	DEFAULT_PROFILE_ID as CODEX_DEFAULT_PROFILE_ID,

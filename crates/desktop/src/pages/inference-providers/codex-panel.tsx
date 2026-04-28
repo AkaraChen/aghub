@@ -1,7 +1,7 @@
 import {
 	ArrowPathIcon,
 	CheckCircleIcon,
-	KeyIcon,
+	PlayIcon,
 	PencilIcon,
 	PlusIcon,
 	QuestionMarkCircleIcon,
@@ -41,7 +41,6 @@ import {
 	deleteCodexProviderMutationOptions,
 	inferenceProviderListQueryOptions,
 	syncCodexProviderMutationOptions,
-	updateCodexActiveProfileMutationOptions,
 	updateCodexProfileProviderMutationOptions,
 	updateCodexProviderMutationOptions,
 } from "../../requests/inference-providers";
@@ -371,16 +370,11 @@ function ProviderIdentity({
 	isActive?: boolean;
 }) {
 	const { t } = useTranslation();
-	const isLoginProvider = provider?.source === "built_in";
 	const label = provider?.name ?? fallbackId;
 
 	return (
 		<div className="flex min-w-0 items-center gap-2">
-			{isLoginProvider ? (
-				<KeyIcon className="size-4 shrink-0 text-accent" />
-			) : (
-				<ServerIcon className="size-4 shrink-0 text-muted" />
-			)}
+			<ServerIcon className="size-4 shrink-0 text-muted" />
 			<Label className="truncate">{label}</Label>
 			{provider && provider.id !== provider.name && (
 				<span className="rounded-md bg-surface-secondary px-2 py-0.5 text-xs text-muted">
@@ -390,7 +384,7 @@ function ProviderIdentity({
 			{isActive && (
 				<span className="inline-flex items-center gap-1 rounded-md bg-accent/10 px-2 py-0.5 text-xs text-accent">
 					<CheckCircleIcon className="size-3.5" />
-					{t("codexActiveProvider")}
+					{t("active")}
 				</span>
 			)}
 		</div>
@@ -479,16 +473,6 @@ function ProviderActions({
 
 	return (
 		<div className="flex items-center gap-1 sm:justify-end">
-			{canSelect && !isActive && (
-				<Button
-					size="sm"
-					variant="ghost"
-					isPending={isSelecting}
-					onPress={onSelectForProfile}
-				>
-					{t("codexUseForActiveProfile")}
-				</Button>
-			)}
 			{matchedProvider && (
 				<Tooltip delay={0}>
 					<Tooltip.Trigger>
@@ -547,6 +531,28 @@ function ProviderActions({
 					</Tooltip>
 				</>
 			)}
+			<Tooltip delay={0}>
+				<Tooltip.Trigger>
+					<Button
+						isIconOnly
+						size="sm"
+						variant="ghost"
+						isPending={isSelecting}
+						isDisabled={isActive || !canSelect}
+						aria-label={t("codexUseForActiveProfile")}
+						onPress={onSelectForProfile}
+					>
+						<PlayIcon className="size-4" />
+					</Button>
+				</Tooltip.Trigger>
+				<Tooltip.Content>
+					{isActive
+						? t("codexProviderAlreadyActive")
+						: !canSelect
+							? t("codexNoProfiles")
+							: t("codexUseForActiveProfile")}
+				</Tooltip.Content>
+			</Tooltip>
 		</div>
 	);
 }
@@ -636,20 +642,6 @@ export function CodexInferenceProviderPanel({
 	const activeProfile =
 		profiles.find((profile) => profile.is_active) ?? profiles[0];
 
-	const profileMutation = useMutation({
-		...updateCodexActiveProfileMutationOptions({
-			api,
-			queryClient,
-		}),
-		onError: (error) => {
-			console.error("Failed to update Codex profile:", error);
-			toast.danger(
-				error instanceof Error
-					? error.message
-					: t("codexProfileUpdateError"),
-			);
-		},
-	});
 	const profileProviderMutation = useMutation({
 		...updateCodexProfileProviderMutationOptions({
 			api,
@@ -741,52 +733,6 @@ export function CodexInferenceProviderPanel({
 								</div>
 							</div>
 							<div className="flex shrink-0 items-center gap-2">
-								<Select
-									className="w-44"
-									selectedKey={activeProfile?.id}
-									onSelectionChange={(key) => {
-										if (!key) return;
-										profileMutation.mutate({
-											profile_id: String(key),
-										});
-									}}
-									isDisabled={
-										isLoading ||
-										profileMutation.isPending ||
-										profiles.length === 0
-									}
-									variant="secondary"
-								>
-									<Label className="sr-only">
-										{t("codexActiveProfile")}
-									</Label>
-									<Select.Trigger>
-										<Select.Value />
-										<Select.Indicator />
-									</Select.Trigger>
-									<Select.Popover>
-										<ListBox>
-											{profiles.map((profile) => (
-												<ListBox.Item
-													key={profile.id}
-													id={profile.id}
-													textValue={profile.name}
-												>
-													<div className="grid min-w-0 gap-0.5">
-														<Label className="truncate">
-															{profile.name}
-														</Label>
-														<span className="truncate text-xs text-muted">
-															{
-																profile.selected_provider_id
-															}
-														</span>
-													</div>
-												</ListBox.Item>
-											))}
-										</ListBox>
-									</Select.Popover>
-								</Select>
 								<Tooltip delay={0}>
 									<Tooltip.Trigger>
 										<Button

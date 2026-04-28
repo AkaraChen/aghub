@@ -340,3 +340,29 @@ pub struct UpdateCodexActiveProfileRequest {
 pub struct UpdateCodexProfileProviderRequest {
 	pub provider_id: String,
 }
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct ClaudeProviderStateResponse {
+	pub api_base_url: Option<String>,
+	pub api_key: Option<String>,
+	pub model: Option<String>,
+}
+
+impl From<aghub_inference::ClaudeConfigState> for ClaudeProviderStateResponse {
+	fn from(state: aghub_inference::ClaudeConfigState) -> Self {
+		Self {
+			api_base_url: state.api_base_url,
+			api_key: state.api_key,
+			model: state.model,
+		}
+	}
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct UpdateClaudeProviderRequest {
+	pub api_base_url: Option<String>,
+	pub api_key: Option<String>,
+	pub model: Option<String>,
+}

@@ -3,6 +3,7 @@ import type {
 	AgentAvailabilityDto,
 	AgentInfo,
 	AgentProviderResponse,
+	ClaudeProviderStateResponse,
 	CodeEditorType,
 	CodexProviderStateResponse,
 	CreateAgentProviderRequest,
@@ -37,6 +38,7 @@ import type {
 	ToolInfoDto,
 	TransferRequest,
 	UpdateAgentProviderRequest,
+	UpdateClaudeProviderRequest,
 	UpdateCodexActiveProfileRequest,
 	UpdateCodexProfileProviderRequest,
 	UpdateInferenceProviderRequest,
@@ -648,6 +650,21 @@ export function createApi(baseUrl: string) {
 					.delete(
 						`inference/agents/codex/providers/${encodeURIComponent(id)}`,
 					)
+					.then(() => undefined);
+			},
+			getClaudeState(): Promise<ClaudeProviderStateResponse> {
+				return client.get("inference/agents/claude/state").json();
+			},
+			updateClaudeState(
+				body: UpdateClaudeProviderRequest,
+			): Promise<ClaudeProviderStateResponse> {
+				return client
+					.put("inference/agents/claude/state", { json: body })
+					.json();
+			},
+			clearClaudeState(): Promise<void> {
+				return client
+					.delete("inference/agents/claude/state")
 					.then(() => undefined);
 			},
 		},

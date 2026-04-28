@@ -1,7 +1,7 @@
 use aghub_inference::{
-	AgentProviderAdapter, AgentProviderBinding, CodexProviderAdapter,
-	InferenceProvider, InferenceProviderRepository, InferenceProviderStore,
-	OpenCodeProviderAdapter,
+	AgentProviderAdapter, AgentProviderBinding, ClaudeProviderAdapter,
+	CodexProviderAdapter, InferenceProvider, InferenceProviderRepository,
+	InferenceProviderStore, OpenCodeProviderAdapter,
 };
 use rocket::http::Status;
 use rocket::response::status::NoContent;
@@ -9,10 +9,11 @@ use rocket::serde::json::Json;
 use rocket::State;
 
 use crate::dto::inference::{
-	AgentProviderResponse, CodexProviderStateResponse,
-	CreateAgentProviderRequest, CreateInferenceProviderRequest,
-	InferenceProviderPasswordResponse, InferenceProviderResponse,
-	UpdateAgentProviderRequest, UpdateCodexActiveProfileRequest,
+	AgentProviderResponse, ClaudeProviderStateResponse,
+	CodexProviderStateResponse, CreateAgentProviderRequest,
+	CreateInferenceProviderRequest, InferenceProviderPasswordResponse,
+	InferenceProviderResponse, UpdateAgentProviderRequest,
+	UpdateClaudeProviderRequest, UpdateCodexActiveProfileRequest,
 	UpdateCodexProfileProviderRequest, UpdateInferenceProviderRequest,
 };
 use crate::error::{ApiCreated, ApiError, ApiNoContent, ApiResult};
@@ -46,6 +47,10 @@ fn opencode_adapter() -> Result<OpenCodeProviderAdapter, ApiError> {
 
 fn codex_adapter() -> Result<CodexProviderAdapter, ApiError> {
 	CodexProviderAdapter::global().map_err(ApiError::from)
+}
+
+fn claude_adapter() -> Result<ClaudeProviderAdapter, ApiError> {
+	ClaudeProviderAdapter::global().map_err(ApiError::from)
 }
 
 fn get_inventory_provider(
@@ -471,5 +476,37 @@ pub fn delete_inference_provider(
 	let store = store(state);
 	let provider = find_by_name(&store, name)?;
 	store.delete(&provider.id).map_err(ApiError::from)?;
+	Ok(NoContent)
+}
+
+// ============================================================================
+// Claude Code routes
+// ============================================================================
+
+#[get("/inference/agents/claude/state")]
+pub fn get_claude_state() -> ApiResult<ClaudeProviderStateResponse> {
+	let adapter = claude_adapter()?;
+	let state = adapter.load_config_state().map_err(ApiError::from)?;
+	Ok(Json(state.into()))
+}
+
+#[put("/inference/agents/claude/state", data = "<body>")]
+pub fn update_claude_state(
+	body: Json<UpdateClaudeProviderRequest>,
+) -> ApiResult<ClaudeProviderStateResponse> {
+	let adapter = claude_adapter()?;
+	let state = aghub_inference::ClaudeConfigState {
+		api_base_url: body.api_base_url.clone(),
+		api_key: body.api_key.clone(),
+		model: body.model.clone(),
+	};
+	adapter.save_config_state(&state).map_err(ApiError::from)?;
+	Ok(Json(state.into()))
+}
+
+#[delete("/inference/agents/claude/state")]
+pub fn clear_claude_state() -> ApiNoContent {
+	let adapter = claude_adapter()?;
+	adapter.clear_provider_config().map_err(ApiError::from)?;
 	Ok(NoContent)
 }

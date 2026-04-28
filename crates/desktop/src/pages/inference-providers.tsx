@@ -42,6 +42,7 @@ import type {
 import { useApi } from "../hooks/use-api";
 import { AgentIcon } from "../lib/agent-icons";
 import { cn } from "../lib/utils";
+import { ClaudeInferenceProviderPanel } from "./inference-providers/claude-panel";
 import { CodexInferenceProviderPanel } from "./inference-providers/codex-panel";
 import { OpenCodeInferenceProviderPanel } from "./inference-providers/opencode-panel";
 import {
@@ -51,7 +52,7 @@ import {
 	updateInferenceProviderMutationOptions,
 } from "../requests/inference-providers";
 
-type CodingAgentId = "opencode" | "codex";
+type CodingAgentId = "opencode" | "codex" | "claude";
 
 type PanelMode =
 	| { type: "detail" }
@@ -96,6 +97,10 @@ const CODING_AGENT_OPTIONS: CodingAgentOption[] = [
 	{
 		id: "codex",
 		label: "Codex",
+	},
+	{
+		id: "claude",
+		label: "Claude Code",
 	},
 ];
 
@@ -1167,6 +1172,10 @@ export default function InferenceProvidersPage() {
 					<CodexInferenceProviderPanel
 						onEditInferenceProvider={handleEditProviderByName}
 					/>
+				)}
+
+				{panel.type === "agent" && panel.agentId === "claude" && (
+					<ClaudeInferenceProviderPanel />
 				)}
 
 				{panel.type === "create" && (
