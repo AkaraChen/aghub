@@ -141,20 +141,34 @@ jobs:
 
             - name: Prepare Generic Artifact
               shell: bash
+              env:
+                  VERSION: ${{ github.event.inputs.version || github.ref_name }}
               run: |
+                  VERSION="${VERSION#v}"
                   if [ "${{ matrix.target }}" = "x86_64-pc-windows-msvc" ]; then
                       find target -type f -name "*setup.exe" -exec cp {} aghub-windows-setup.exe \;
                       echo "GENERIC_ASSET=aghub-windows-setup.exe" >> $GITHUB_ENV
+                      echo "TAURI_DUP_ASSET=aghub_${VERSION}_x64-setup.exe" >> $GITHUB_ENV
                   elif [ "${{ matrix.target }}" = "x86_64-unknown-linux-gnu" ]; then
                       find target -type f -name "*.AppImage" -exec cp {} aghub-linux.AppImage \;
                       echo "GENERIC_ASSET=aghub-linux.AppImage" >> $GITHUB_ENV
+                      echo "TAURI_DUP_ASSET=aghub_${VERSION}_amd64.AppImage" >> $GITHUB_ENV
                   elif [ "${{ matrix.target }}" = "x86_64-apple-darwin" ]; then
                       find target -type f -name "*.dmg" -exec cp {} aghub_mac_intel.dmg \;
                       echo "GENERIC_ASSET=aghub_mac_intel.dmg" >> $GITHUB_ENV
+                      echo "TAURI_DUP_ASSET=aghub_${VERSION}_x64.dmg" >> $GITHUB_ENV
                   elif [ "${{ matrix.target }}" = "aarch64-apple-darwin" ]; then
                       find target -type f -name "*.dmg" -exec cp {} aghub_mac_arm.dmg \;
                       echo "GENERIC_ASSET=aghub_mac_arm.dmg" >> $GITHUB_ENV
+                      echo "TAURI_DUP_ASSET=aghub_${VERSION}_aarch64.dmg" >> $GITHUB_ENV
                   fi
+
+            - name: Remove Duplicate Tauri Asset
+              if: env.TAURI_DUP_ASSET != ''
+              env:
+                  GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  gh release delete-asset "${{ github.event.inputs.version || github.ref_name }}" "${{ env.TAURI_DUP_ASSET }}" --yes || true
 
             - name: Upload Generic Release Asset
               uses: softprops/action-gh-release@v3
