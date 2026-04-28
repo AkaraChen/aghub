@@ -271,7 +271,10 @@ impl MarketplaceRegistry {
 			}
 			MarketplaceSource::Url { sha, .. }
 			| MarketplaceSource::GitHub { sha, .. }
-			| MarketplaceSource::GitSubdir { sha, .. } => sha.clone(),
+			| MarketplaceSource::GitSubdir { sha, .. } => match sha {
+				Some(pinned) => Some(pinned.clone()),
+				None => self.get_marketplace_commit().await?,
+			},
 			MarketplaceSource::Npm { .. } => None,
 		};
 

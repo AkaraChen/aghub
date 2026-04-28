@@ -1,4 +1,4 @@
-use super::marketplace::{is_marketplace_source, resolve_marketplace_source};
+use super::marketplace::is_marketplace_source;
 use super::paths::{
 	cleanup_empty_dirs, manifest_path, plugin_install_root, staging_dir_for,
 	storage_key_for_source,
@@ -190,22 +190,11 @@ impl PluginInstaller {
 		id: &PluginId,
 	) -> Result<(PluginRegistryKind, String)> {
 		if is_marketplace_source(&self.marketplace_root, &id.source) {
-			let (resolved_source, is_remote) = resolve_marketplace_source(
-				&self.marketplace_root,
-				&id.source,
-				&id.name,
-			)
-			.await?;
-			let storage_key = if is_remote {
-				super::paths::short_sha256(&resolved_source)
-			} else {
-				id.source.clone()
-			};
 			return Ok((
 				PluginRegistryKind::Marketplace(
 					self.marketplace_registry(&id.source)?,
 				),
-				storage_key,
+				id.source.clone(),
 			));
 		}
 
@@ -271,7 +260,7 @@ impl PluginInstaller {
 			version: manifest.version.unwrap_or(version_dir),
 			installed_at: now.clone(),
 			last_updated: now,
-			git_commit_sha: actual_commit.or(registry_commit_sha),
+			git_commit_sha: registry_commit_sha.or(actual_commit),
 		};
 		self.activate_installation(
 			id,

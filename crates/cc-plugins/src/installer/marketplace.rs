@@ -4,7 +4,7 @@ mod source;
 pub use self::registry_catalog::MarketplaceRegistry;
 pub(super) use self::source::{
 	is_marketplace_source, load_marketplace_repository_urls,
-	marketplace_path_for, resolve_marketplace_source,
+	marketplace_path_for,
 };
 
 #[cfg(test)]
@@ -82,102 +82,6 @@ mod tests {
 		}
 
 		(temp_root, marketplace_dir)
-	}
-
-	async fn assert_resolved(
-		root: &Path,
-		marketplace: &str,
-		plugin_name: &str,
-		expected: &str,
-		is_remote: bool,
-	) {
-		let (source, actual_is_remote) =
-			resolve_marketplace_source(root, marketplace, plugin_name)
-				.await
-				.unwrap();
-
-		assert_eq!(source, expected);
-		assert_eq!(actual_is_remote, is_remote);
-	}
-
-	#[tokio::test]
-	async fn test_resolve_marketplace_source_remote_variants() {
-		let cases = [
-			(
-				"github",
-				json!({
-					"name": "test-github",
-					"description": "desc",
-					"source": {
-						"source": "github",
-						"repo": "owner/repo",
-					},
-				}),
-				"test-github",
-				"https://github.com/owner/repo",
-			),
-			(
-				"fallback",
-				json!({
-					"name": "autofix-bot",
-					"description": "desc",
-					"homepage": "https://github.com/anthropics/claude-plugins-public/tree/main/external_plugins/autofix-bot",
-					"source": "./external_plugins/autofix-bot",
-				}),
-				"autofix-bot",
-				"https://github.com/anthropics/claude-plugins-public#external_plugins/autofix-bot",
-			),
-		];
-
-		for (name, plugin, plugin_name, expected) in cases {
-			let (temp_root, _) = marketplace_fixture(
-				name,
-				"claude-plugins-official",
-				vec![plugin],
-				None,
-			);
-
-			assert_resolved(
-				temp_root.path().join("cache").as_path(),
-				"claude-plugins-official",
-				plugin_name,
-				expected,
-				true,
-			)
-			.await;
-		}
-	}
-
-	#[tokio::test]
-	async fn test_resolve_marketplace_source_for_custom_marketplace_root() {
-		let (temp_root, marketplace_dir) = marketplace_fixture(
-			"custom",
-			"marketplaces/impeccable",
-			vec![json!({
-				"name": "impeccable",
-				"description": "desc",
-				"version": "1.5.1",
-				"source": "./",
-			})],
-			Some(
-				r#"{"name":"impeccable","description":"test","author":{"name":"A"}}"#,
-			),
-		);
-		let marketplaces_dir = temp_root.path().join("marketplaces");
-
-		assert!(is_marketplace_source(
-			marketplaces_dir.join("claude-plugins-official").as_path(),
-			"impeccable",
-		));
-
-		assert_resolved(
-			marketplaces_dir.join("claude-plugins-official").as_path(),
-			"impeccable",
-			"impeccable",
-			&marketplace_dir.to_string_lossy(),
-			false,
-		)
-		.await;
 	}
 
 	#[tokio::test]
