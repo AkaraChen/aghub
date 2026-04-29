@@ -19,6 +19,7 @@ use crate::agent::{
 	AgentProviderDefaultSupport, AgentProviderSource, AgentProviderState,
 	BuiltInProviderSupport,
 };
+use crate::credentials::CredentialStore;
 use crate::error::Result;
 use crate::model::InferenceProvider;
 use crate::store::{InferenceProviderRepository, InferenceProviderStore};
@@ -103,9 +104,9 @@ impl CodexProviderAdapter {
 	/// 1. OpenAI built-in provider
 	/// 2. config.toml `[model_providers]` (marked as External)
 	/// 3. Binding table providers (marked as Custom)
-	pub fn load_profile_state(
+	pub fn load_profile_state<C: CredentialStore>(
 		&self,
-		store: &InferenceProviderStore,
+		store: &InferenceProviderStore<C>,
 	) -> Result<CodexProviderState> {
 		let config = files::read_config(&self.config_path)?;
 		let providers = self.load_all_providers(store, &config)?;
@@ -123,9 +124,9 @@ impl CodexProviderAdapter {
 	}
 
 	/// Select the active Codex profile.
-	pub fn set_active_profile(
+	pub fn set_active_profile<C: CredentialStore>(
 		&self,
-		store: &InferenceProviderStore,
+		store: &InferenceProviderStore<C>,
 		profile_id: &str,
 	) -> Result<CodexProviderState> {
 		let profile_id = clean_profile_id(profile_id)?;
@@ -143,9 +144,9 @@ impl CodexProviderAdapter {
 	}
 
 	/// Set the provider used by Codex's current active profile.
-	pub fn set_active_provider(
+	pub fn set_active_provider<C: CredentialStore>(
 		&self,
-		store: &InferenceProviderStore,
+		store: &InferenceProviderStore<C>,
 		provider_id: &str,
 	) -> Result<CodexProviderState> {
 		let config = files::read_config(&self.config_path)?;
@@ -154,17 +155,17 @@ impl CodexProviderAdapter {
 	}
 
 	/// Clear the current active-provider override and fall back to OpenAI.
-	pub fn clear_active_provider(
+	pub fn clear_active_provider<C: CredentialStore>(
 		&self,
-		store: &InferenceProviderStore,
+		store: &InferenceProviderStore<C>,
 	) -> Result<CodexProviderState> {
 		self.set_active_provider(store, mapping::OPENAI_PROVIDER_ID)
 	}
 
 	/// Set the provider used by one Codex profile.
-	pub fn set_profile_provider(
+	pub fn set_profile_provider<C: CredentialStore>(
 		&self,
-		store: &InferenceProviderStore,
+		store: &InferenceProviderStore<C>,
 		profile_id: &str,
 		provider_id: &str,
 	) -> Result<CodexProviderState> {
@@ -175,6 +176,8 @@ impl CodexProviderAdapter {
 
 		// Check if provider is selectable (built-in, config.toml, or binding)
 		let all_providers = self.load_all_providers(store, &config)?;
+		let current_model =
+			effective_profile_value(&config, &profile_id, "model");
 		let is_selectable = provider_id
 			.eq_ignore_ascii_case(mapping::OPENAI_PROVIDER_ID)
 			|| all_providers.iter().any(|p| p.id == provider_id);
@@ -183,6 +186,20 @@ impl CodexProviderAdapter {
 				provider_id.to_string(),
 			));
 		}
+		let replacement_model = all_providers
+			.iter()
+			.find(|binding| binding.id == provider_id)
+			.and_then(|binding| {
+				let current_is_valid =
+					current_model.as_ref().is_some_and(|model_id| {
+						binding.models.iter().any(|m| m.id == *model_id)
+					});
+				if current_is_valid {
+					None
+				} else {
+					binding.models.first().map(|model| model.id.clone())
+				}
+			});
 
 		if profile_id == DEFAULT_PROFILE_ID {
 			let table = config.as_table_mut();
@@ -194,6 +211,14 @@ impl CodexProviderAdapter {
 		} else {
 			let profile = profile_table_mut(&mut config, &profile_id)?;
 			profile["model_provider"] = value(provider_id.clone());
+		}
+		if let Some(model_id) = replacement_model {
+			if profile_id == DEFAULT_PROFILE_ID {
+				config["model"] = value(model_id);
+			} else {
+				let profile = profile_table_mut(&mut config, &profile_id)?;
+				profile["model"] = value(model_id);
+			}
 		}
 
 		// If selecting a binding provider, also write its details to config.toml
@@ -248,17 +273,18 @@ impl CodexProviderAdapter {
 	///
 	/// Creates a binding in the database and optionally writes to config.toml
 	/// if the provider should be active.
-	pub fn add_inventory_provider(
+	pub fn add_inventory_provider<C: CredentialStore>(
 		&self,
-		store: &InferenceProviderStore,
+		store: &InferenceProviderStore<C>,
 		provider: &InferenceProvider,
 		api_key: &str,
 	) -> Result<AgentProviderBinding> {
 		let provider_id = mapping::provider_id_from_name(&provider.name);
 
 		// Create binding in the database
-		let _row = store.create_agent_binding(
+		let _row = store.upsert_agent_binding(
 			AGENT_ID,
+			&provider_id,
 			&provider.id,
 			provider.models.first().map(|m| m.as_str()),
 		)?;
@@ -286,9 +312,9 @@ impl CodexProviderAdapter {
 	/// For binding providers (Custom source), only the model can be updated
 	/// via the binding table. For config.toml providers (External source),
 	/// updates are not supported through aghub.
-	pub fn update_provider(
+	pub fn update_provider<C: CredentialStore>(
 		&self,
-		store: &InferenceProviderStore,
+		store: &InferenceProviderStore<C>,
 		provider_id: &str,
 		name: Option<&str>,
 		api_key: Option<&str>,
@@ -389,9 +415,9 @@ impl CodexProviderAdapter {
 	///
 	/// For binding providers, reads from the store's credential store.
 	/// For config.toml providers, uses existing logic.
-	pub fn api_key(
+	pub fn api_key<C: CredentialStore>(
 		&self,
-		store: &InferenceProviderStore,
+		store: &InferenceProviderStore<C>,
 		provider_id: &str,
 	) -> Result<Option<String>> {
 		let provider_id = provider_id.trim().trim_end_matches('/').to_string();
@@ -425,9 +451,9 @@ impl CodexProviderAdapter {
 	///
 	/// Checks binding table first. If found, deletes the binding.
 	/// For config.toml providers, errors since they are External.
-	pub fn remove_provider(
+	pub fn remove_provider<C: CredentialStore>(
 		&self,
-		store: &InferenceProviderStore,
+		store: &InferenceProviderStore<C>,
 		provider_id: &str,
 	) -> Result<AgentProviderBinding> {
 		let provider_id = mapping::clean_provider_id(provider_id)?;
@@ -500,9 +526,9 @@ impl CodexProviderAdapter {
 	/// 1. OpenAI built-in provider
 	/// 2. config.toml `[model_providers]` (marked as External)
 	/// 3. Binding table providers (marked as Custom)
-	pub fn load_all_providers(
+	pub fn load_all_providers<C: CredentialStore>(
 		&self,
-		store: &InferenceProviderStore,
+		store: &InferenceProviderStore<C>,
 		config: &DocumentMut,
 	) -> Result<Vec<AgentProviderBinding>> {
 		let mut providers = vec![mapping::built_in_openai_binding(
@@ -528,8 +554,11 @@ impl CodexProviderAdapter {
 		let binding_rows = store.list_agent_bindings(AGENT_ID)?;
 		for row in binding_rows {
 			let binding = store.binding_from_row(&row)?;
-			// Only add if not already present from config.toml
-			if !providers.iter().any(|p| p.id == binding.id) {
+			if let Some(existing) =
+				providers.iter_mut().find(|p| p.id == binding.id)
+			{
+				*existing = binding;
+			} else {
 				providers.push(binding);
 			}
 		}
@@ -538,9 +567,9 @@ impl CodexProviderAdapter {
 	}
 
 	/// Helper to get API key for a binding provider.
-	fn api_key_for_binding(
+	fn api_key_for_binding<C: CredentialStore>(
 		&self,
-		store: &InferenceProviderStore,
+		store: &InferenceProviderStore<C>,
 		provider_id: &str,
 	) -> Result<Option<String>> {
 		let binding_rows = store.list_agent_bindings(AGENT_ID)?;

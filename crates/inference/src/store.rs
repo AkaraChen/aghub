@@ -714,6 +714,48 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 		})
 	}
 
+	/// Create or replace a binding with an explicit public id.
+	pub fn upsert_agent_binding(
+		&self,
+		agent_id: &str,
+		binding_id: &str,
+		inference_provider_id: &str,
+		model: Option<&str>,
+	) -> Result<AgentProviderBindingRow> {
+		self.block_on(async {
+			let mut conn = self.open_db().await?;
+
+			let _: InferenceProvider =
+				Self::fetch_by_id(&mut conn, inference_provider_id).await?;
+
+			let binding = AgentProviderBindingRow {
+				id: binding_id.to_string(),
+				agent_id: agent_id.to_string(),
+				inference_provider_id: inference_provider_id.to_string(),
+				model: model.map(ToString::to_string),
+			};
+
+			sqlx::query(
+				"INSERT INTO agent_provider_bindings \
+				 (id, agent_id, inference_provider_id, model) \
+				 VALUES (?, ?, ?, ?) \
+				 ON CONFLICT(id) DO UPDATE SET \
+				 agent_id = excluded.agent_id, \
+				 inference_provider_id = excluded.inference_provider_id, \
+				 model = excluded.model, \
+				 updated_at = datetime('now')",
+			)
+			.bind(&binding.id)
+			.bind(&binding.agent_id)
+			.bind(&binding.inference_provider_id)
+			.bind(&binding.model)
+			.execute(&mut conn)
+			.await?;
+
+			Ok(binding)
+		})
+	}
+
 	/// Update a binding's model.
 	pub fn update_agent_binding(
 		&self,

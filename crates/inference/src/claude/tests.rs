@@ -1,4 +1,5 @@
 use std::fs;
+use std::sync::{Arc, Mutex};
 
 use serde_json::Value;
 
@@ -6,10 +7,72 @@ use super::*;
 use crate::agent::{
 	AgentProviderAdapter, AgentProviderCredential, AgentProviderSource,
 };
-use crate::model::InferenceProviderFormat;
+use crate::credentials::CredentialStore;
+use crate::model::{
+	CreateInferenceProvider, InferenceProvider, InferenceProviderFormat,
+};
+use crate::store::InferenceProviderStore;
 
 fn adapter(temp: &tempfile::TempDir) -> ClaudeProviderAdapter {
 	ClaudeProviderAdapter::new(temp.path().join("settings.json"))
+}
+
+#[derive(Debug, Clone, Default)]
+struct MemoryCredentialStore {
+	values: Arc<Mutex<std::collections::HashMap<String, String>>>,
+}
+
+impl CredentialStore for MemoryCredentialStore {
+	fn get_api_key(
+		&self,
+		provider_id: &str,
+	) -> crate::error::Result<Option<String>> {
+		Ok(self.values.lock().unwrap().get(provider_id).cloned())
+	}
+
+	fn set_api_key(
+		&self,
+		provider_id: &str,
+		api_key: &str,
+	) -> crate::error::Result<()> {
+		self.values
+			.lock()
+			.unwrap()
+			.insert(provider_id.to_string(), api_key.to_string());
+		Ok(())
+	}
+
+	fn delete_api_key(&self, provider_id: &str) -> crate::error::Result<()> {
+		self.values.lock().unwrap().remove(provider_id);
+		Ok(())
+	}
+}
+
+fn store(
+	temp: &tempfile::TempDir,
+) -> InferenceProviderStore<MemoryCredentialStore> {
+	InferenceProviderStore::with_credentials(
+		temp.path(),
+		MemoryCredentialStore::default(),
+	)
+}
+
+fn create_provider(
+	store: &InferenceProviderStore<MemoryCredentialStore>,
+	name: &str,
+	api_base_url: &str,
+	api_key: &str,
+) -> InferenceProvider {
+	store
+		.create(CreateInferenceProvider {
+			name: name.to_string(),
+			display_name: name.to_string(),
+			format: InferenceProviderFormat::Anthropic,
+			api_base_url: api_base_url.to_string(),
+			api_key: api_key.to_string(),
+			models: Vec::new(),
+		})
+		.unwrap()
 }
 
 #[test]
@@ -227,4 +290,49 @@ fn clear_provider_config_removes_only_provider_env_keys() {
 	assert!(!env.contains_key("ANTHROPIC_DEFAULT_OPUS_MODEL"));
 	assert!(config.get("permissions").is_some());
 	assert!(config.get("model").is_none());
+}
+
+#[test]
+fn active_binding_id_tracks_switches_without_model_selection() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	let store = store(&temp);
+	let first = create_provider(
+		&store,
+		"Anthropic One",
+		"https://api.one.example",
+		"sk-one",
+	);
+	let second = create_provider(
+		&store,
+		"Anthropic Two",
+		"https://api.two.example",
+		"sk-two",
+	);
+
+	let first_binding =
+		adapter.add_binding(&store, &first, "sk-one", true).unwrap();
+	let second_binding = adapter
+		.add_binding(&store, &second, "sk-two", false)
+		.unwrap();
+
+	let state = adapter.load_bindings_state(&store).unwrap();
+	assert!(state.default_model.is_none());
+	assert_eq!(
+		adapter.active_binding_id(&store).unwrap().as_deref(),
+		Some(first_binding.id.as_str())
+	);
+
+	adapter
+		.set_active_binding(&store, &second_binding.id)
+		.unwrap();
+
+	assert_eq!(
+		adapter.active_binding_id(&store).unwrap().as_deref(),
+		Some(second_binding.id.as_str())
+	);
+	assert_eq!(
+		adapter.load_config_state().unwrap().api_base_url.as_deref(),
+		Some("https://api.two.example")
+	);
 }

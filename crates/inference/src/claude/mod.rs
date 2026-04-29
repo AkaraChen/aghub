@@ -25,6 +25,7 @@ use crate::agent::{
 	AgentProviderBinding, AgentProviderCapabilities, AgentProviderCredential,
 	AgentProviderDefaultSupport, AgentProviderSource, AgentProviderState,
 };
+use crate::credentials::CredentialStore;
 use crate::error::Result;
 use crate::model::InferenceProvider;
 use crate::store::{InferenceProviderRepository, InferenceProviderStore};
@@ -200,9 +201,9 @@ impl ClaudeProviderAdapter {
 
 	/// Derive which binding is active by comparing `settings.json` against
 	/// each bound provider's URL, API key, and model.
-	fn derive_active_binding(
+	fn derive_active_binding<C: CredentialStore>(
 		&self,
-		store: &InferenceProviderStore,
+		store: &InferenceProviderStore<C>,
 		rows: &[crate::store::AgentProviderBindingRow],
 	) -> Result<Option<crate::store::AgentProviderBindingRow>> {
 		let current = self.load_config_state()?;
@@ -222,9 +223,9 @@ impl ClaudeProviderAdapter {
 
 	/// Load bindings from the SQLite store and derive the active one from
 	/// `settings.json`. Returns the effective provider state.
-	pub fn load_bindings_state(
+	pub fn load_bindings_state<C: CredentialStore>(
 		&self,
-		store: &InferenceProviderStore,
+		store: &InferenceProviderStore<C>,
 	) -> Result<AgentProviderState> {
 		let rows = store.list_agent_bindings(AGENT_ID)?;
 		let active_row = self.derive_active_binding(store, &rows)?;
@@ -246,10 +247,19 @@ impl ClaudeProviderAdapter {
 		})
 	}
 
-	/// Add a new binding and optionally sync it into `settings.json`.
-	pub fn add_binding(
+	/// Read the public id of the binding currently active in settings.json.
+	pub fn active_binding_id<C: CredentialStore>(
 		&self,
-		store: &InferenceProviderStore,
+		store: &InferenceProviderStore<C>,
+	) -> Result<Option<String>> {
+		let rows = store.list_agent_bindings(AGENT_ID)?;
+		Ok(self.derive_active_binding(store, &rows)?.map(|row| row.id))
+	}
+
+	/// Add a new binding and optionally sync it into `settings.json`.
+	pub fn add_binding<C: CredentialStore>(
+		&self,
+		store: &InferenceProviderStore<C>,
 		provider: &InferenceProvider,
 		api_key: &str,
 		set_active: bool,
@@ -269,9 +279,9 @@ impl ClaudeProviderAdapter {
 	}
 
 	/// Switch the active provider by rewriting `settings.json`.
-	pub fn set_active_binding(
+	pub fn set_active_binding<C: CredentialStore>(
 		&self,
-		store: &InferenceProviderStore,
+		store: &InferenceProviderStore<C>,
 		binding_id: &str,
 	) -> Result<AgentProviderState> {
 		let row = store
@@ -294,9 +304,9 @@ impl ClaudeProviderAdapter {
 	}
 
 	/// Remove a binding. If it was the active one, clear settings.json.
-	pub fn remove_binding(
+	pub fn remove_binding<C: CredentialStore>(
 		&self,
-		store: &InferenceProviderStore,
+		store: &InferenceProviderStore<C>,
 		binding_id: &str,
 	) -> Result<AgentProviderBinding> {
 		let rows = store.list_agent_bindings(AGENT_ID)?;

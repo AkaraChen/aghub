@@ -5,14 +5,11 @@
 -- switch providers) we track bindings in our own database. Agents that
 -- already have native multi-provider support (e.g. OpenCode) should NOT
 -- use this table.
---
--- Active state is NOT stored here; it is derived by comparing the
--- agent's current config (e.g. settings.json / config.toml) against
--- the bound provider's API base URL and key.
 CREATE TABLE IF NOT EXISTS agent_provider_bindings (
 	id                   TEXT PRIMARY KEY NOT NULL,
 	agent_id             TEXT NOT NULL,
 	inference_provider_id TEXT NOT NULL,
+	is_active            INTEGER NOT NULL DEFAULT 0,
 	model                TEXT,
 	created_at           TEXT NOT NULL DEFAULT (datetime('now')),
 	updated_at           TEXT NOT NULL DEFAULT (datetime('now')),
@@ -23,3 +20,6 @@ CREATE TABLE IF NOT EXISTS agent_provider_bindings (
 
 CREATE INDEX IF NOT EXISTS idx_agent_provider_bindings_agent
 ON agent_provider_bindings(agent_id);
+
+CREATE INDEX IF NOT EXISTS idx_agent_provider_bindings_active
+ON agent_provider_bindings(agent_id, is_active);

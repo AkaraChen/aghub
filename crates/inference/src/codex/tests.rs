@@ -1,4 +1,5 @@
 use std::fs;
+use std::sync::{Arc, Mutex};
 
 use toml_edit::{DocumentMut, Item};
 
@@ -6,16 +7,55 @@ use super::*;
 use crate::agent::{
 	AgentProviderAdapter, AgentProviderCredential, AgentProviderSource,
 };
+use crate::credentials::CredentialStore;
 use crate::error::InferenceProviderError;
-use crate::model::{InferenceProvider, InferenceProviderFormat};
+use crate::model::{
+	CreateInferenceProvider, InferenceProvider, InferenceProviderFormat,
+};
 use crate::store::InferenceProviderStore;
 
 fn adapter(temp: &tempfile::TempDir) -> CodexProviderAdapter {
 	CodexProviderAdapter::new(temp.path().join("config.toml"))
 }
 
-fn store(temp: &tempfile::TempDir) -> InferenceProviderStore {
-	InferenceProviderStore::new(temp.path())
+#[derive(Debug, Clone, Default)]
+struct MemoryCredentialStore {
+	values: Arc<Mutex<std::collections::HashMap<String, String>>>,
+}
+
+impl CredentialStore for MemoryCredentialStore {
+	fn get_api_key(
+		&self,
+		provider_id: &str,
+	) -> crate::error::Result<Option<String>> {
+		Ok(self.values.lock().unwrap().get(provider_id).cloned())
+	}
+
+	fn set_api_key(
+		&self,
+		provider_id: &str,
+		api_key: &str,
+	) -> crate::error::Result<()> {
+		self.values
+			.lock()
+			.unwrap()
+			.insert(provider_id.to_string(), api_key.to_string());
+		Ok(())
+	}
+
+	fn delete_api_key(&self, provider_id: &str) -> crate::error::Result<()> {
+		self.values.lock().unwrap().remove(provider_id);
+		Ok(())
+	}
+}
+
+fn store(
+	temp: &tempfile::TempDir,
+) -> InferenceProviderStore<MemoryCredentialStore> {
+	InferenceProviderStore::with_credentials(
+		temp.path(),
+		MemoryCredentialStore::default(),
+	)
 }
 
 fn auth_path(temp: &tempfile::TempDir) -> std::path::PathBuf {
@@ -39,6 +79,21 @@ fn provider_without_versioned_base_url() -> InferenceProvider {
 		api_base_url: "https://api.example.com".to_string(),
 		..provider()
 	}
+}
+
+fn create_inventory_provider(
+	store: &InferenceProviderStore<MemoryCredentialStore>,
+) -> InferenceProvider {
+	store
+		.create(CreateInferenceProvider {
+			name: "openrouter".to_string(),
+			display_name: "OpenRouter".to_string(),
+			format: InferenceProviderFormat::OpenAiResponses,
+			api_base_url: "https://openrouter.ai/api/v1".to_string(),
+			api_key: "sk-test".to_string(),
+			models: vec!["openai/gpt-5.4".to_string()],
+		})
+		.unwrap()
 }
 
 #[test]
@@ -362,6 +417,55 @@ wire_api = "responses"
 }
 
 #[test]
+fn set_profile_provider_updates_invalid_model_for_inventory_binding() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	fs::write(
+		adapter.config_path(),
+		r#"
+profile = "work"
+model = "gpt-5"
+
+[profiles.work]
+model_provider = "openai"
+"#,
+	)
+	.unwrap();
+
+	let store = store(&temp);
+	let provider = create_inventory_provider(&store);
+	adapter
+		.add_inventory_provider(&store, &provider, "sk-test")
+		.unwrap();
+
+	let state = adapter
+		.set_profile_provider(&store, "work", "openrouter")
+		.unwrap();
+
+	let work = state
+		.profiles
+		.iter()
+		.find(|profile| profile.id == "work")
+		.unwrap();
+	assert_eq!(work.selected_provider_id, "openrouter");
+	assert_eq!(work.model.as_deref(), Some("openai/gpt-5.4"));
+
+	let config = fs::read_to_string(adapter.config_path())
+		.unwrap()
+		.parse::<DocumentMut>()
+		.unwrap();
+	assert_eq!(
+		config["profiles"]["work"]["model_provider"].as_str(),
+		Some("openrouter")
+	);
+	assert_eq!(
+		config["profiles"]["work"]["model"].as_str(),
+		Some("openai/gpt-5.4")
+	);
+	assert_eq!(config["model"].as_str(), Some("gpt-5"));
+}
+
+#[test]
 fn clear_active_provider_falls_back_to_openai() {
 	let temp = tempfile::tempdir().unwrap();
 	let adapter = adapter(&temp);
@@ -463,6 +567,37 @@ fn add_provider_rejects_chat_completion_inventory() {
 		.unwrap_err();
 
 	assert!(matches!(error, InferenceProviderError::InvalidFormat(_)));
+}
+
+#[test]
+fn add_inventory_provider_uses_stable_public_id() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	let store = store(&temp);
+	let provider = create_inventory_provider(&store);
+
+	let binding = adapter
+		.add_inventory_provider(&store, &provider, "sk-test")
+		.unwrap();
+
+	assert_eq!(binding.id, "openrouter");
+	assert_eq!(
+		store
+			.get_agent_binding(AGENT_ID, "openrouter")
+			.unwrap()
+			.inference_provider_id,
+		provider.id
+	);
+
+	let state = adapter.load_profile_state(&store).unwrap();
+	let openrouter = state
+		.providers
+		.iter()
+		.filter(|provider| provider.id == "openrouter")
+		.collect::<Vec<_>>();
+	assert_eq!(openrouter.len(), 1);
+	assert_eq!(openrouter[0].source, AgentProviderSource::Custom);
+	assert_eq!(openrouter[0].models[0].id, "openai/gpt-5.4");
 }
 
 #[test]

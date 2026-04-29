@@ -1,8 +1,10 @@
--- Remove is_active from agent_provider_bindings if it exists.
+-- Remove is_active from agent_provider_bindings.
 --
 -- Active state should be derived from the agent's config file, not
 -- stored in the database.
--- SQLite does not support DROP COLUMN IF EXISTS, so we recreate the table.
+--
+-- SQLite does not support DROP COLUMN IF EXISTS, so we recreate the
+-- table while ignoring the is_active column if it exists.
 CREATE TABLE IF NOT EXISTS agent_provider_bindings_new (
 	id                   TEXT PRIMARY KEY NOT NULL,
 	agent_id             TEXT NOT NULL,
@@ -15,6 +17,7 @@ CREATE TABLE IF NOT EXISTS agent_provider_bindings_new (
 		ON DELETE CASCADE
 );
 
+-- Copy data ignoring is_active if present.
 INSERT INTO agent_provider_bindings_new
 	(id, agent_id, inference_provider_id, model, created_at, updated_at)
 SELECT

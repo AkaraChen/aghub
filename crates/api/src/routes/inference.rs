@@ -211,7 +211,7 @@ pub fn list_codex_providers(
 	let adapter = codex_adapter()?;
 	let inventory = inventory_providers_with_api_keys(&store)?;
 	let providers = adapter
-		.load_providers()
+		.load_profile_state(&store)
 		.map_err(ApiError::from)?
 		.providers
 		.into_iter()
@@ -388,7 +388,7 @@ pub fn sync_codex_provider(
 	let adapter = codex_adapter()?;
 	let inventory = inventory_providers_with_api_keys(&store)?;
 	let binding = adapter
-		.load_providers()
+		.load_profile_state(&store)
 		.map_err(ApiError::from)?
 		.providers
 		.into_iter()
@@ -547,15 +547,9 @@ fn claude_state_response(
 		.collect::<Result<Vec<_>, _>>()?;
 	Ok(ClaudeProviderStateResponse {
 		providers,
-		active_provider_id: state
-			.providers
-			.iter()
-			.find(|p| {
-				state.default_model.as_ref().is_some_and(|m| {
-					p.models.iter().any(|model| model.id == m.model_id)
-				})
-			})
-			.map(|p| p.id.clone())
+		active_provider_id: adapter
+			.active_binding_id(store)
+			.map_err(ApiError::from)?
 			.unwrap_or_default(),
 	})
 }
@@ -615,10 +609,13 @@ pub fn update_claude_provider(
 		let provider = store
 			.get(&row.inference_provider_id)
 			.map_err(ApiError::from)?;
-		adapter
-			.sync_active_binding(&provider, api_key, row.model.as_deref())
+		store
+			.set_api_key(&provider.id, api_key)
 			.map_err(ApiError::from)?;
 	}
+	adapter
+		.set_active_binding(&store, id)
+		.map_err(ApiError::from)?;
 
 	Ok(Json(claude_state_response(&store, &adapter)?))
 }
