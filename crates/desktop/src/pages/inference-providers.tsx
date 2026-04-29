@@ -51,6 +51,7 @@ import {
 	inferenceProviderListQueryOptions,
 	updateInferenceProviderMutationOptions,
 } from "../requests/inference-providers";
+import { useAgentAvailability } from "../hooks/use-agent-availability";
 
 type CodingAgentId = "opencode" | "codex" | "claude";
 
@@ -913,6 +914,7 @@ function ProviderDetail({
 export default function InferenceProvidersPage() {
 	const { t } = useTranslation();
 	const api = useApi();
+	const { availableAgents } = useAgentAvailability();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [selectedName, setSelectedName] = useState<string | null>(null);
 	const [panel, setPanel] = useState<PanelMode>({ type: "detail" });
@@ -926,9 +928,29 @@ export default function InferenceProvidersPage() {
 		...inferenceProviderListQueryOptions({ api }),
 	});
 
+	const codingAgents = useMemo(
+		() =>
+			availableAgents
+				.filter((agent) => agent.isUsable)
+				.flatMap((agent) => {
+					const option = CODING_AGENT_OPTIONS.find(
+						(candidate) => candidate.id === agent.id,
+					);
+					return option
+						? [
+								{
+									...option,
+									label: agent.display_name,
+								},
+							]
+						: [];
+				}),
+		[availableAgents],
+	);
+
 	const codingAgentFuse = useMemo(
 		() =>
-			new Fuse(CODING_AGENT_OPTIONS, {
+			new Fuse(codingAgents, {
 				keys: [
 					{ name: "label", weight: 2 },
 					{ name: "id", weight: 1 },
@@ -936,15 +958,15 @@ export default function InferenceProvidersPage() {
 				threshold: 0.4,
 				ignoreLocation: true,
 			}),
-		[],
+		[codingAgents],
 	);
 
 	const filteredCodingAgents = useMemo(() => {
 		const query = searchQuery.trim();
-		if (!query) return CODING_AGENT_OPTIONS;
+		if (!query) return codingAgents;
 
 		return codingAgentFuse.search(query).map((result) => result.item);
-	}, [codingAgentFuse, searchQuery]);
+	}, [codingAgentFuse, codingAgents, searchQuery]);
 
 	const providerFuse = useMemo(
 		() =>
@@ -979,21 +1001,40 @@ export default function InferenceProvidersPage() {
 		return providers[0] ?? null;
 	}, [providers, selectedName]);
 
+	const hasCodingAgent = (agentId: CodingAgentId) =>
+		codingAgents.some((agent) => agent.id === agentId);
+
+	const resolvedPanel: PanelMode =
+		panel.type === "agent" && !hasCodingAgent(panel.agentId)
+			? { type: "detail" }
+			: panel;
+
 	const selectedAgentKeys = useMemo(() => {
-		return panel.type === "agent"
-			? new Set([panel.agentId])
+		return resolvedPanel.type === "agent"
+			? new Set([resolvedPanel.agentId])
 			: new Set<string>();
-	}, [panel]);
+	}, [resolvedPanel]);
 
 	const selectedProviderKeys = useMemo(() => {
 		return activeProvider &&
-			(panel.type === "detail" || panel.type === "edit")
+			(resolvedPanel.type === "detail" || resolvedPanel.type === "edit")
 			? new Set([activeProvider.name])
 			: new Set<string>();
-	}, [activeProvider, panel.type]);
+	}, [activeProvider, resolvedPanel.type]);
 
 	const handleCreatedOrUpdated = (provider: InferenceProviderResponse) => {
 		setSelectedName(provider.name);
+		setPanel({ type: "detail" });
+	};
+
+	const handleAgentClick = (agentId: CodingAgentId) => {
+		if (!hasCodingAgent(agentId)) return;
+		setSelectedName(null);
+		setPanel({ type: "agent", agentId });
+	};
+
+	const handleProviderClick = (providerName: string) => {
+		setSelectedName(providerName);
 		setPanel({ type: "detail" });
 	};
 
@@ -1067,7 +1108,9 @@ export default function InferenceProvidersPage() {
 					{filteredCodingAgents.length === 0 ? (
 						<div className="px-4 py-4 text-center">
 							<p className="text-sm text-muted">
-								{t("noCodingAgentsMatch")}
+								{searchQuery.trim()
+									? t("noCodingAgentsMatch")
+									: t("noAgentsAvailable")}
 							</p>
 						</div>
 					) : (
@@ -1082,9 +1125,7 @@ export default function InferenceProvidersPage() {
 									| CodingAgentId
 									| undefined;
 								if (!agentId) return;
-
-								setSelectedName(null);
-								setPanel({ type: "agent", agentId });
+								handleAgentClick(agentId);
 							}}
 							className="p-2"
 						>
@@ -1131,10 +1172,7 @@ export default function InferenceProvidersPage() {
 							aria-label={t("inferenceProviders")}
 							selectionMode="single"
 							selectedKeys={selectedProviderKeys}
-							onAction={(key) => {
-								setSelectedName(String(key));
-								setPanel({ type: "detail" });
-							}}
+							onAction={(key) => handleProviderClick(String(key))}
 							className="p-2"
 						>
 							{filteredProviders.map((provider) => (
@@ -1162,25 +1200,28 @@ export default function InferenceProvidersPage() {
 			</div>
 
 			<div className="relative flex-1 overflow-hidden">
-				{panel.type === "agent" && panel.agentId === "opencode" && (
-					<OpenCodeInferenceProviderPanel
-						onEditInferenceProvider={handleEditProviderByName}
-					/>
-				)}
+				{resolvedPanel.type === "agent" &&
+					resolvedPanel.agentId === "opencode" && (
+						<OpenCodeInferenceProviderPanel
+							onEditInferenceProvider={handleEditProviderByName}
+						/>
+					)}
 
-				{panel.type === "agent" && panel.agentId === "codex" && (
-					<CodexInferenceProviderPanel
-						onEditInferenceProvider={handleEditProviderByName}
-					/>
-				)}
+				{resolvedPanel.type === "agent" &&
+					resolvedPanel.agentId === "codex" && (
+						<CodexInferenceProviderPanel
+							onEditInferenceProvider={handleEditProviderByName}
+						/>
+					)}
 
-				{panel.type === "agent" && panel.agentId === "claude" && (
-					<ClaudeInferenceProviderPanel
-						onEditInferenceProvider={handleEditProviderByName}
-					/>
-				)}
+				{resolvedPanel.type === "agent" &&
+					resolvedPanel.agentId === "claude" && (
+						<ClaudeInferenceProviderPanel
+							onEditInferenceProvider={handleEditProviderByName}
+						/>
+					)}
 
-				{panel.type === "create" && (
+				{resolvedPanel.type === "create" && (
 					<ProviderForm
 						mode="create"
 						onCancel={() => setPanel({ type: "detail" })}
@@ -1188,17 +1229,17 @@ export default function InferenceProvidersPage() {
 					/>
 				)}
 
-				{panel.type === "edit" && (
+				{resolvedPanel.type === "edit" && (
 					<ProviderForm
-						key={panel.provider.name}
+						key={resolvedPanel.provider.name}
 						mode="edit"
-						provider={panel.provider}
+						provider={resolvedPanel.provider}
 						onCancel={() => setPanel({ type: "detail" })}
 						onSuccess={handleCreatedOrUpdated}
 					/>
 				)}
 
-				{panel.type === "detail" && activeProvider && (
+				{resolvedPanel.type === "detail" && activeProvider && (
 					<ProviderDetail
 						key={activeProvider.name}
 						provider={activeProvider}
@@ -1215,7 +1256,7 @@ export default function InferenceProvidersPage() {
 					/>
 				)}
 
-				{panel.type === "detail" && !activeProvider && (
+				{resolvedPanel.type === "detail" && !activeProvider && (
 					<div className="flex h-full flex-col items-center justify-center gap-4">
 						<div className="text-center">
 							<p className="mb-2 text-sm text-muted">
