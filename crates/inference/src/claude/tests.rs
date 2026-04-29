@@ -336,3 +336,129 @@ fn active_binding_id_tracks_switches_without_model_selection() {
 		Some("https://api.two.example")
 	);
 }
+
+#[test]
+fn official_login_appears_first_in_provider_list() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	let store = store(&temp);
+	fs::write(adapter.config_path(), "{}").unwrap();
+
+	let state = adapter.load_bindings_state(&store).unwrap();
+	assert!(!state.providers.is_empty());
+	assert_eq!(state.providers[0].id, OFFICIAL_LOGIN_PROVIDER_ID);
+	assert_eq!(state.providers[0].source, AgentProviderSource::BuiltIn);
+	assert_eq!(
+		state.providers[0].format,
+		Some(InferenceProviderFormat::Anthropic)
+	);
+}
+
+#[test]
+fn official_login_active_when_no_api_key_override() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	let store = store(&temp);
+	fs::write(
+		adapter.config_path(),
+		r#"{ "permissions": { "allow": ["Read"] } }"#,
+	)
+	.unwrap();
+
+	let active_id = adapter.derive_active_provider_id(&store).unwrap();
+	assert_eq!(active_id, OFFICIAL_LOGIN_PROVIDER_ID);
+}
+
+#[test]
+fn switch_to_official_login_clears_env_block() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	let store = store(&temp);
+	fs::write(
+		adapter.config_path(),
+		r#"{
+			"model": "claude-sonnet-4-5",
+			"permissions": { "allow": ["Read"] },
+			"env": {
+				"ANTHROPIC_BASE_URL": "https://api.example.com",
+				"ANTHROPIC_AUTH_TOKEN": "sk-test",
+				"ANTHROPIC_MODEL": "claude-sonnet-4-5",
+				"KEEP": "1"
+			}
+		}"#,
+	)
+	.unwrap();
+
+	adapter
+		.set_active_binding(&store, OFFICIAL_LOGIN_PROVIDER_ID)
+		.unwrap();
+
+	let config: Value = serde_json::from_str(
+		&fs::read_to_string(adapter.config_path()).unwrap(),
+	)
+	.unwrap();
+	let env = config["env"].as_object().unwrap();
+	assert!(!env.contains_key("ANTHROPIC_AUTH_TOKEN"));
+	assert!(!env.contains_key("ANTHROPIC_BASE_URL"));
+	assert!(!env.contains_key("ANTHROPIC_MODEL"));
+	assert_eq!(env.get("KEEP").and_then(Value::as_str), Some("1"));
+	assert!(config.get("permissions").is_some());
+	assert!(config.get("model").is_none());
+
+	let active_id = adapter.derive_active_provider_id(&store).unwrap();
+	assert_eq!(active_id, OFFICIAL_LOGIN_PROVIDER_ID);
+}
+
+#[test]
+fn switch_from_official_to_api_via_sync_writes_env() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	let store = store(&temp);
+	fs::write(adapter.config_path(), "{}").unwrap();
+
+	// Directly sync a provider into settings.json (bypasses store create).
+	let provider = InferenceProvider {
+		id: "inv-anthropic".to_string(),
+		name: "my-anthropic".to_string(),
+		display_name: "My Anthropic".to_string(),
+		format: InferenceProviderFormat::Anthropic,
+		api_base_url: "https://api.anthropic.com".to_string(),
+		masked_api_key: "sk****st".to_string(),
+		models: vec!["claude-sonnet-4-5".to_string()],
+	};
+	adapter
+		.sync_active_binding(
+			&provider,
+			"sk-live-key",
+			Some("claude-sonnet-4-5"),
+		)
+		.unwrap();
+
+	// Verify settings.json has the API key.
+	let config: Value = serde_json::from_str(
+		&fs::read_to_string(adapter.config_path()).unwrap(),
+	)
+	.unwrap();
+	assert_eq!(
+		config["env"]["ANTHROPIC_AUTH_TOKEN"].as_str(),
+		Some("sk-live-key")
+	);
+	assert_eq!(
+		config["env"]["ANTHROPIC_BASE_URL"].as_str(),
+		Some("https://api.anthropic.com")
+	);
+
+	// Switch back to official login.
+	adapter
+		.set_active_binding(&store, OFFICIAL_LOGIN_PROVIDER_ID)
+		.unwrap();
+	let active_id = adapter.derive_active_provider_id(&store).unwrap();
+	assert_eq!(active_id, OFFICIAL_LOGIN_PROVIDER_ID);
+
+	// settings.json env block should be cleared.
+	let config: Value = serde_json::from_str(
+		&fs::read_to_string(adapter.config_path()).unwrap(),
+	)
+	.unwrap();
+	assert!(config.get("env").is_none());
+}

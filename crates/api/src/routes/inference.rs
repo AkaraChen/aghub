@@ -524,16 +524,19 @@ fn claude_state_response(
 		.iter()
 		.cloned()
 		.map(|binding| {
-			let agent_api_key = store
-				.get_api_key(
-					binding.source_provider_id.as_deref().unwrap_or(""),
-				)
-				.map_err(ApiError::from)?;
-			let matched = find_matching_inventory_provider(
-				&inventory,
-				&binding,
-				agent_api_key,
-			)?;
+			// Built-in providers have no inventory backing; skip matching.
+			let matched = match binding.source_provider_id.as_deref() {
+				Some(id) if !id.is_empty() => {
+					let agent_api_key =
+						store.get_api_key(id).map_err(ApiError::from)?;
+					find_matching_inventory_provider(
+						&inventory,
+						&binding,
+						agent_api_key,
+					)?
+				}
+				_ => None,
+			};
 			let response = AgentProviderResponse::from(binding);
 			let result: Result<AgentProviderResponse, ApiError> =
 				Ok(match matched {
@@ -545,12 +548,12 @@ fn claude_state_response(
 			result
 		})
 		.collect::<Result<Vec<_>, _>>()?;
+	let active_provider_id = adapter
+		.derive_active_provider_id(store)
+		.map_err(ApiError::from)?;
 	Ok(ClaudeProviderStateResponse {
 		providers,
-		active_provider_id: adapter
-			.active_binding_id(store)
-			.map_err(ApiError::from)?
-			.unwrap_or_default(),
+		active_provider_id,
 	})
 }
 
@@ -673,16 +676,8 @@ pub fn delete_claude_provider(
 pub fn clear_claude_state(
 	state: &State<InferenceProviderState>,
 ) -> ApiNoContent {
-	let store = store(state);
+	let _store = store(state);
 	let adapter = claude_adapter()?;
-	let rows = store
-		.list_agent_bindings("claude")
-		.map_err(ApiError::from)?;
-	for row in rows {
-		store
-			.delete_agent_binding("claude", &row.id)
-			.map_err(ApiError::from)?;
-	}
 	adapter.clear_provider_config().map_err(ApiError::from)?;
 	Ok(NoContent)
 }

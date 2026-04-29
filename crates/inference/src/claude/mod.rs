@@ -23,7 +23,8 @@ use serde_json::{Map, Value};
 use crate::agent::{
 	AgentCredentialSupport, AgentModelSelection, AgentProviderAdapter,
 	AgentProviderBinding, AgentProviderCapabilities, AgentProviderCredential,
-	AgentProviderDefaultSupport, AgentProviderSource, AgentProviderState,
+	AgentProviderDefaultSupport, AgentProviderModel, AgentProviderSource,
+	AgentProviderState, BuiltInProviderSupport,
 };
 use crate::credentials::CredentialStore;
 use crate::error::Result;
@@ -31,6 +32,9 @@ use crate::model::InferenceProvider;
 use crate::store::{InferenceProviderRepository, InferenceProviderStore};
 
 pub(super) const AGENT_ID: &str = "claude";
+
+/// Provider ID for the built-in official login (OAuth via Keychain).
+pub const OFFICIAL_LOGIN_PROVIDER_ID: &str = "official_login";
 
 const API_BASE_URL_ENV: &str = "ANTHROPIC_BASE_URL";
 const API_KEY_ENV: &str = "ANTHROPIC_API_KEY";
@@ -69,6 +73,25 @@ pub struct ClaudeConfigState {
 	pub sonnet_model: Option<String>,
 	/// Default Opus alias model.
 	pub opus_model: Option<String>,
+}
+
+/// Built-in binding representing the official Anthropic login (OAuth).
+///
+/// When no API key override exists in `settings.json`, Claude Code
+/// automatically falls back to the OAuth token stored in macOS Keychain.
+fn built_in_official_login_binding() -> AgentProviderBinding {
+	AgentProviderBinding {
+		id: OFFICIAL_LOGIN_PROVIDER_ID.to_string(),
+		source_provider_id: None,
+		name: "Official Login".to_string(),
+		format: Some(crate::model::InferenceProviderFormat::Anthropic),
+		api_base_url: None,
+		credential: AgentProviderCredential::AgentStore {
+			id: Some(OFFICIAL_LOGIN_PROVIDER_ID.to_string()),
+		},
+		models: Vec::<AgentProviderModel>::new(),
+		source: AgentProviderSource::BuiltIn,
+	}
 }
 
 impl ClaudeProviderAdapter {
@@ -223,6 +246,10 @@ impl ClaudeProviderAdapter {
 
 	/// Load bindings from the SQLite store and derive the active one from
 	/// `settings.json`. Returns the effective provider state.
+	///
+	/// The built-in "Official Login" provider is always prepended. It is
+	/// considered active when no binding row matches the current config
+	/// (i.e. no API key override is present in `settings.json`).
 	pub fn load_bindings_state<C: CredentialStore>(
 		&self,
 		store: &InferenceProviderStore<C>,
@@ -230,10 +257,10 @@ impl ClaudeProviderAdapter {
 		let rows = store.list_agent_bindings(AGENT_ID)?;
 		let active_row = self.derive_active_binding(store, &rows)?;
 
-		let providers = rows
-			.iter()
-			.map(|row| store.binding_from_row(row))
-			.collect::<Result<Vec<_>>>()?;
+		let mut providers = vec![built_in_official_login_binding()];
+		for row in &rows {
+			providers.push(store.binding_from_row(row)?);
+		}
 
 		let default_model = active_row
 			.as_ref()
@@ -254,6 +281,19 @@ impl ClaudeProviderAdapter {
 	) -> Result<Option<String>> {
 		let rows = store.list_agent_bindings(AGENT_ID)?;
 		Ok(self.derive_active_binding(store, &rows)?.map(|row| row.id))
+	}
+
+	/// Derive the active provider ID from current `settings.json` state.
+	///
+	/// Returns `"official_login"` when no binding matches (OAuth fallback),
+	/// or the matching binding's ID when an API key override is active.
+	pub fn derive_active_provider_id<C: CredentialStore>(
+		&self,
+		store: &InferenceProviderStore<C>,
+	) -> Result<String> {
+		Ok(self
+			.active_binding_id(store)?
+			.unwrap_or_else(|| OFFICIAL_LOGIN_PROVIDER_ID.to_string()))
 	}
 
 	/// Add a new binding and optionally sync it into `settings.json`.
@@ -279,11 +319,19 @@ impl ClaudeProviderAdapter {
 	}
 
 	/// Switch the active provider by rewriting `settings.json`.
+	///
+	/// When `binding_id` is `"official_login"`, all API key overrides are
+	/// cleared so Claude Code falls back to its native OAuth token.
 	pub fn set_active_binding<C: CredentialStore>(
 		&self,
 		store: &InferenceProviderStore<C>,
 		binding_id: &str,
 	) -> Result<AgentProviderState> {
+		if binding_id == OFFICIAL_LOGIN_PROVIDER_ID {
+			self.clear_provider_config()?;
+			return self.load_bindings_state(store);
+		}
+
 		let row = store
 			.list_agent_bindings(AGENT_ID)?
 			.into_iter()
@@ -351,7 +399,7 @@ impl AgentProviderAdapter for ClaudeProviderAdapter {
 		AgentProviderCapabilities::registry(
 			AgentProviderDefaultSupport::MODEL_ONLY,
 			AgentCredentialSupport::ENV_VAR,
-			crate::agent::BuiltInProviderSupport::NONE,
+			BuiltInProviderSupport::IMMUTABLE,
 		)
 	}
 

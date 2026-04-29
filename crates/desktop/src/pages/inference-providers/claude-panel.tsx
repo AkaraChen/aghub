@@ -31,13 +31,12 @@ import { useApi } from "../../hooks/use-api";
 import { AgentIcon } from "../../lib/agent-icons";
 import { cn } from "../../lib/utils";
 import {
-	clearClaudeProviderMutationOptions,
 	claudeProviderStateQueryOptions,
+	clearClaudeProviderMutationOptions,
 	createClaudeProviderMutationOptions,
 	deleteClaudeProviderMutationOptions,
 	inferenceProviderListQueryOptions,
 	syncClaudeProviderMutationOptions,
-	updateClaudeProviderMutationOptions,
 } from "../../requests/inference-providers";
 
 function ClaudeCreateProviderDialog({
@@ -421,11 +420,12 @@ export function ClaudeInferenceProviderPanel(_: {
 
 	const activeProviderId =
 		(claudeState as { active_provider_id?: string } | undefined)
-			?.active_provider_id ?? "";
-	const isOfficialActive = activeProviderId === "";
-	const customProviders =
+			?.active_provider_id ?? "official_login";
+	const isOfficialActive = activeProviderId === "official_login";
+	const customProviders = (
 		(claudeState as { providers?: AgentProviderResponse[] } | undefined)
-			?.providers ?? [];
+			?.providers ?? []
+	).filter((p) => p.source !== "built_in");
 
 	const clearMutation = useMutation({
 		...clearClaudeProviderMutationOptions({
@@ -441,23 +441,6 @@ export function ClaudeInferenceProviderPanel(_: {
 				error instanceof Error
 					? error.message
 					: t("claudeProviderClearError"),
-			);
-		},
-	});
-	const selectProviderMutation = useMutation({
-		...updateClaudeProviderMutationOptions({
-			api,
-			queryClient,
-			onSuccess: async () => {
-				toast.success(t("claudeProviderUpdated"));
-			},
-		}),
-		onError: (error) => {
-			console.error("Failed to switch Claude provider:", error);
-			toast.danger(
-				error instanceof Error
-					? error.message
-					: t("claudeProviderUpdateError"),
 			);
 		},
 	});
@@ -581,9 +564,8 @@ export function ClaudeInferenceProviderPanel(_: {
 														provider.id
 												}
 												isSelecting={
-													selectProviderMutation.isPending &&
-													selectProviderMutation
-														.variables?.id ===
+													syncMutation.isPending &&
+													syncMutation.variables ===
 														provider.id
 												}
 												isDeleting={
@@ -593,14 +575,8 @@ export function ClaudeInferenceProviderPanel(_: {
 												}
 												canSelect
 												onSelect={() => {
-													selectProviderMutation.mutate(
-														{
-															id: provider.id,
-															body: {
-																name: null,
-																api_key: null,
-															},
-														},
+													syncMutation.mutate(
+														provider.id,
 													);
 												}}
 												onSync={() =>
