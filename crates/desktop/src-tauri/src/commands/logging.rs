@@ -1,6 +1,7 @@
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
+#[cfg(not(target_os = "linux"))]
 use std::process::Command;
 
 use serde::{Deserialize, Serialize};
