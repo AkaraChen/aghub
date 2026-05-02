@@ -73,6 +73,17 @@ export default {
 	exportLogsSuccess: "Logs exported successfully",
 	exportLogsError: "Failed to export logs",
 	openLogFolder: "Open Folder",
+	clearLogs: "Clear Logs",
+	clearLogsConfirm:
+		"This will delete all archived log files. The current log file will be kept. This action cannot be undone.",
+	logsClearedSuccess: "Cleared {{count}} archived log files",
+	logLoadError: "Failed to load logs",
+	logRotationSettings: "Log Rotation",
+	logRotationSettingsDescription:
+		"Changes take effect after restarting the app.",
+	maxFileSizeMb: "Max file size (MB)",
+	maxArchives: "Max archives",
+	logConfigSaved: "Log settings saved",
 	onboarding: "Onboarding",
 	showWelcome: "Show Welcome",
 	replayAppTour: "Replay App Tour",

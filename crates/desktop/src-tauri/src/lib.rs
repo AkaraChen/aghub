@@ -1,6 +1,6 @@
 use crate::commands::{
-	export_diagnostic_logs, get_log_dir_path, get_log_entries, get_log_stats,
-	start_server,
+	clear_log_files, export_diagnostic_logs, get_log_config, get_log_dir_path,
+	get_log_entries, get_log_stats, start_server, update_log_config,
 };
 use log::info;
 use tauri::{Manager, WebviewWindow};
@@ -15,6 +15,35 @@ pub struct AppState {
 	pub port: std::sync::Mutex<Option<u16>>,
 }
 
+fn default_log_config() -> commands::logging::LogConfig {
+	// Read log config from the default app data dir before Tauri is fully
+	// initialized (app handle not yet available).
+	let base = if cfg!(target_os = "macos") {
+		std::env::var("HOME").ok().map(|h| {
+			std::path::PathBuf::from(h).join("Library/Application Support")
+		})
+	} else if cfg!(target_os = "windows") {
+		std::env::var("APPDATA").ok().map(std::path::PathBuf::from)
+	} else {
+		std::env::var("XDG_DATA_HOME")
+			.ok()
+			.map(std::path::PathBuf::from)
+			.or_else(|| {
+				std::env::var("HOME")
+					.ok()
+					.map(|h| std::path::PathBuf::from(h).join(".local/share"))
+			})
+	};
+	let Some(base) = base else {
+		return commands::logging::LogConfig::default();
+	};
+	let path = base.join("com.akrc.aghub").join("log_config.json");
+	std::fs::read_to_string(&path)
+		.ok()
+		.and_then(|s| serde_json::from_str(&s).ok())
+		.unwrap_or_default()
+}
+
 fn focus_main_window(window: &WebviewWindow) {
 	let _ = window.show();
 	let _ = window.unminimize();
@@ -24,6 +53,7 @@ fn focus_main_window(window: &WebviewWindow) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
 	let _ = fix_path_env::fix();
+	let log_config = default_log_config();
 	let prefix_colors = ColoredLevelConfig::new()
 		.error(Color::Red)
 		.warn(Color::Yellow)
@@ -87,8 +117,10 @@ pub fn run() {
 				.format(|out, message, _record| {
 					out.finish(format_args!("{message}"))
 				})
-				.max_file_size(10_485_760) // 10 MB
-				.rotation_strategy(RotationStrategy::KeepSome(5))
+				.max_file_size(log_config.max_file_size_mb as u128 * 1_048_576)
+				.rotation_strategy(RotationStrategy::KeepSome(
+					log_config.max_archives as usize,
+				))
 				.timezone_strategy(TimezoneStrategy::UseLocal)
 				.level(log::LevelFilter::Info)
 				.build(),
@@ -143,6 +175,9 @@ pub fn run() {
 			get_log_dir_path,
 			get_log_entries,
 			get_log_stats,
+			clear_log_files,
+			get_log_config,
+			update_log_config,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");

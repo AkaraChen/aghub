@@ -222,6 +222,7 @@ pub struct LogStats {
 	pub entries_by_level: std::collections::HashMap<String, usize>,
 	pub log_files: Vec<String>,
 	pub total_size_bytes: u64,
+	pub log_dir_path: String,
 }
 
 #[tauri::command]
@@ -253,5 +254,86 @@ pub async fn get_log_stats(app: tauri::AppHandle) -> Result<LogStats, String> {
 		entries_by_level,
 		log_files: file_names,
 		total_size_bytes: total_size,
+		log_dir_path: dir.to_string_lossy().to_string(),
 	})
+}
+
+// -- Log management commands --
+
+#[tauri::command]
+pub async fn clear_log_files(app: tauri::AppHandle) -> Result<usize, String> {
+	let dir = log_dir(&app)?;
+	let files = collect_log_files(&dir);
+	let mut removed = 0;
+	for path in &files {
+		let name = path
+			.file_name()
+			.map(|n| n.to_string_lossy().to_string())
+			.unwrap_or_default();
+		// Keep the current log file, only remove rotated archives.
+		if name == "aghub.log" {
+			continue;
+		}
+		if fs::remove_file(path).is_ok() {
+			removed += 1;
+		}
+	}
+	Ok(removed)
+}
+
+const LOG_CONFIG_FILE: &str = "log_config.json";
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct LogConfig {
+	pub max_file_size_mb: u32,
+	pub max_archives: u32,
+}
+
+impl Default for LogConfig {
+	fn default() -> Self {
+		Self {
+			max_file_size_mb: 10,
+			max_archives: 5,
+		}
+	}
+}
+
+fn log_config_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+	app.path()
+		.app_data_dir()
+		.map(|d| d.join(LOG_CONFIG_FILE))
+		.map_err(|e| format!("failed to resolve config path: {e}"))
+}
+
+pub fn read_log_config(app: &tauri::AppHandle) -> LogConfig {
+	let Ok(path) = log_config_path(app) else {
+		return LogConfig::default();
+	};
+	fs::read_to_string(&path)
+		.ok()
+		.and_then(|s| serde_json::from_str(&s).ok())
+		.unwrap_or_default()
+}
+
+#[tauri::command]
+pub async fn get_log_config(
+	app: tauri::AppHandle,
+) -> Result<LogConfig, String> {
+	Ok(read_log_config(&app))
+}
+
+#[tauri::command]
+pub async fn update_log_config(
+	app: tauri::AppHandle,
+	config: LogConfig,
+) -> Result<LogConfig, String> {
+	let path = log_config_path(&app)?;
+	if let Some(parent) = path.parent() {
+		fs::create_dir_all(parent)
+			.map_err(|e| format!("failed to create config dir: {e}"))?;
+	}
+	let json = serde_json::to_string_pretty(&config)
+		.map_err(|e| format!("serialize error: {e}"))?;
+	fs::write(&path, json).map_err(|e| format!("write error: {e}"))?;
+	Ok(config)
 }

@@ -1,8 +1,24 @@
-import { ArrowPathIcon, FunnelIcon } from "@heroicons/react/24/solid";
-import { Button, Card, Input, Spinner } from "@heroui/react";
-import { useQuery } from "@tanstack/react-query";
+import {
+	ArrowPathIcon,
+	FolderOpenIcon,
+	FunnelIcon,
+	ArrowDownTrayIcon,
+	TrashIcon,
+} from "@heroicons/react/24/solid";
+import {
+	AlertDialog,
+	Button,
+	Card,
+	Input,
+	Label,
+	NumberField,
+	Spinner,
+	toast,
+} from "@heroui/react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
-import { useCallback, useState } from "react";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Virtuoso } from "react-virtuoso";
 import { cn } from "../../lib/utils";
@@ -25,6 +41,12 @@ interface LogStats {
 	entries_by_level: Record<string, number>;
 	log_files: string[];
 	total_size_bytes: number;
+	log_dir_path: string;
+}
+
+interface LogConfig {
+	max_file_size_mb: number;
+	max_archives: number;
 }
 
 const LEVELS = ["ERROR", "WARN", "INFO", "DEBUG", "TRACE"] as const;
@@ -45,8 +67,17 @@ function formatSize(bytes: number): string {
 
 export default function LogsPanel() {
 	const { t } = useTranslation();
+	const queryClient = useQueryClient();
 	const [search, setSearch] = useState("");
+	const [debouncedSearch, setDebouncedSearch] = useState("");
 	const [activeLevels, setActiveLevels] = useState<string[]>([]);
+	const [showClearDialog, setShowClearDialog] = useState(false);
+	const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+
+	useEffect(() => {
+		debounceRef.current = setTimeout(() => setDebouncedSearch(search), 300);
+		return () => clearTimeout(debounceRef.current);
+	}, [search]);
 
 	const statsQuery = useQuery({
 		queryKey: ["log-stats"],
@@ -54,20 +85,55 @@ export default function LogsPanel() {
 	});
 
 	const entriesQuery = useQuery({
-		queryKey: ["log-entries", activeLevels, search],
+		queryKey: ["log-entries", activeLevels, debouncedSearch],
 		queryFn: () =>
 			invoke<GetLogEntriesResponse>("get_log_entries", {
-				params: {
-					offset: 0,
-					limit: 5000,
-					level_filter: activeLevels.length > 0 ? activeLevels : null,
-					search: search || null,
-				},
+				offset: 0,
+				limit: 5000,
+				level_filter: activeLevels.length > 0 ? activeLevels : null,
+				search: debouncedSearch || null,
 			}),
+	});
+
+	const configQuery = useQuery({
+		queryKey: ["log-config"],
+		queryFn: () => invoke<LogConfig>("get_log_config"),
+	});
+
+	const updateConfigMutation = useMutation({
+		mutationFn: (config: LogConfig) =>
+			invoke<LogConfig>("update_log_config", { config }),
+		onSuccess: () => {
+			queryClient.invalidateQueries({ queryKey: ["log-config"] });
+			toast.success(t("logConfigSaved"));
+		},
+	});
+
+	const exportMutation = useMutation({
+		mutationFn: () => invoke<string>("export_diagnostic_logs"),
+		onSuccess: (path) => {
+			toast.success(t("exportLogsSuccess"), { description: path });
+		},
+		onError: (error) => {
+			toast.danger(
+				`${t("exportLogsError")}: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		},
+	});
+
+	const clearMutation = useMutation({
+		mutationFn: () => invoke<number>("clear_log_files"),
+		onSuccess: (count) => {
+			setShowClearDialog(false);
+			queryClient.invalidateQueries({ queryKey: ["log-stats"] });
+			queryClient.invalidateQueries({ queryKey: ["log-entries"] });
+			toast.success(t("logsClearedSuccess", { count: String(count) }));
+		},
 	});
 
 	const entries = entriesQuery.data?.entries ?? [];
 	const totalCount = entriesQuery.data?.total_count ?? 0;
+	const logDirPath = statsQuery.data?.log_dir_path ?? "";
 
 	const toggleLevel = useCallback((level: string) => {
 		setActiveLevels((prev) =>
@@ -84,15 +150,16 @@ export default function LogsPanel() {
 
 	return (
 		<div className="space-y-4">
+			{/* Header: directory path + actions */}
 			<Card className="p-0">
 				<Card.Content className="space-y-3 p-4">
 					<div className="flex items-center justify-between">
-						<div className="flex items-center gap-3">
+						<div className="min-w-0">
 							<span className="text-sm font-medium">
 								{t("diagnosticLogs")}
 							</span>
 							{statsQuery.data && (
-								<span className="text-xs text-muted">
+								<span className="ml-3 text-xs text-muted">
 									{statsQuery.data.total_entries.toLocaleString()}{" "}
 									{t("entries")} &middot;{" "}
 									{formatSize(
@@ -102,22 +169,61 @@ export default function LogsPanel() {
 									{t("files")}
 								</span>
 							)}
+							{logDirPath && (
+								<p className="mt-0.5 truncate text-xs text-muted">
+									{logDirPath}
+								</p>
+							)}
 						</div>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							onPress={handleRefresh}
-						>
-							<ArrowPathIcon
-								className={cn(
-									"size-4",
-									entriesQuery.isFetching && "animate-spin",
-								)}
-							/>
-						</Button>
+						<div className="flex shrink-0 items-center gap-1">
+							<Button
+								isIconOnly
+								variant="ghost"
+								size="sm"
+								aria-label={t("openLogFolder")}
+								onPress={() => {
+									if (logDirPath) revealItemInDir(logDirPath);
+								}}
+							>
+								<FolderOpenIcon className="size-4" />
+							</Button>
+							<Button
+								isIconOnly
+								variant="ghost"
+								size="sm"
+								aria-label={t("exportLogs")}
+								isPending={exportMutation.isPending}
+								onPress={() => exportMutation.mutate()}
+							>
+								<ArrowDownTrayIcon className="size-4" />
+							</Button>
+							<Button
+								isIconOnly
+								variant="ghost"
+								size="sm"
+								aria-label={t("clearLogs")}
+								onPress={() => setShowClearDialog(true)}
+							>
+								<TrashIcon className="size-4" />
+							</Button>
+							<Button
+								isIconOnly
+								variant="ghost"
+								size="sm"
+								onPress={handleRefresh}
+							>
+								<ArrowPathIcon
+									className={cn(
+										"size-4",
+										entriesQuery.isFetching &&
+											"animate-spin",
+									)}
+								/>
+							</Button>
+						</div>
 					</div>
 
+					{/* Search + level filter */}
 					<div className="flex items-center gap-2">
 						<Input
 							className="flex-1"
@@ -157,11 +263,19 @@ export default function LogsPanel() {
 				</Card.Content>
 			</Card>
 
+			{/* Log entries */}
 			<Card className="p-0">
 				<Card.Content className="p-0">
 					{entriesQuery.isLoading ? (
 						<div className="flex justify-center py-12">
 							<Spinner />
+						</div>
+					) : entriesQuery.isError ? (
+						<div className="py-12 text-center text-sm text-red-500">
+							{t("logLoadError")}:{" "}
+							{entriesQuery.error instanceof Error
+								? entriesQuery.error.message
+								: String(entriesQuery.error)}
 						</div>
 					) : entries.length === 0 ? (
 						<div className="py-12 text-center text-sm text-muted">
@@ -169,10 +283,10 @@ export default function LogsPanel() {
 						</div>
 					) : (
 						<Virtuoso
-							style={{ height: "60vh" }}
+							style={{ height: "50vh" }}
 							data={entries}
 							itemContent={(_, entry) => (
-								<div className="flex gap-2 border-b border-border px-3 py-1.5 font-mono text-xs">
+								<div className="flex items-baseline gap-2 overflow-hidden border-b border-border px-3 py-1 font-mono text-xs whitespace-nowrap">
 									<span className="shrink-0 text-muted">
 										{entry.timestamp
 											.replace("T", " ")
@@ -180,17 +294,17 @@ export default function LogsPanel() {
 									</span>
 									<span
 										className={cn(
-											"shrink-0 rounded px-1 font-semibold",
+											"inline-block w-[3.2rem] shrink-0 rounded px-1 text-center font-semibold",
 											levelColor[entry.level] ??
 												"text-muted",
 										)}
 									>
-										{entry.level.padEnd(5)}
+										{entry.level}
 									</span>
 									<span className="shrink-0 text-muted">
 										{entry.target}
 									</span>
-									<span className="min-w-0 break-all text-foreground">
+									<span className="min-w-0 truncate text-foreground">
 										{entry.message}
 									</span>
 								</div>
@@ -209,6 +323,108 @@ export default function LogsPanel() {
 					})}
 				</div>
 			)}
+
+			{/* Rotation settings */}
+			{configQuery.data && (
+				<Card className="p-0">
+					<Card.Content className="space-y-3 p-4">
+						<span className="text-sm font-medium">
+							{t("logRotationSettings")}
+						</span>
+						<p className="text-xs text-muted">
+							{t("logRotationSettingsDescription")}
+						</p>
+						<div className="flex items-end gap-4">
+							<div className="space-y-1">
+								<Label className="text-xs">
+									{t("maxFileSizeMb")}
+								</Label>
+								<NumberField
+									minValue={1}
+									maxValue={100}
+									defaultValue={
+										configQuery.data.max_file_size_mb
+									}
+									onChange={(value) => {
+										if (!configQuery.data) return;
+										updateConfigMutation.mutate({
+											...configQuery.data,
+											max_file_size_mb: value,
+										});
+									}}
+								>
+									<NumberField.Group>
+										<NumberField.DecrementButton />
+										<NumberField.Input />
+										<NumberField.IncrementButton />
+									</NumberField.Group>
+								</NumberField>
+							</div>
+							<div className="space-y-1">
+								<Label className="text-xs">
+									{t("maxArchives")}
+								</Label>
+								<NumberField
+									minValue={1}
+									maxValue={20}
+									defaultValue={configQuery.data.max_archives}
+									onChange={(value) => {
+										if (!configQuery.data) return;
+										updateConfigMutation.mutate({
+											...configQuery.data,
+											max_archives: value,
+										});
+									}}
+								>
+									<NumberField.Group>
+										<NumberField.DecrementButton />
+										<NumberField.Input />
+										<NumberField.IncrementButton />
+									</NumberField.Group>
+								</NumberField>
+							</div>
+						</div>
+					</Card.Content>
+				</Card>
+			)}
+
+			{/* Clear dialog */}
+			<AlertDialog.Backdrop
+				isOpen={showClearDialog}
+				onOpenChange={(open) => {
+					if (!open) setShowClearDialog(false);
+				}}
+			>
+				<AlertDialog.Container>
+					<AlertDialog.Dialog className="sm:max-w-[420px]">
+						<AlertDialog.CloseTrigger />
+						<AlertDialog.Header>
+							<AlertDialog.Icon status="danger" />
+							<AlertDialog.Heading>
+								{t("clearLogs")}
+							</AlertDialog.Heading>
+						</AlertDialog.Header>
+						<AlertDialog.Body>
+							{t("clearLogsConfirm")}
+						</AlertDialog.Body>
+						<AlertDialog.Footer>
+							<Button
+								variant="tertiary"
+								onPress={() => setShowClearDialog(false)}
+							>
+								{t("cancel")}
+							</Button>
+							<Button
+								variant="danger"
+								isPending={clearMutation.isPending}
+								onPress={() => clearMutation.mutate()}
+							>
+								{t("clearLogs")}
+							</Button>
+						</AlertDialog.Footer>
+					</AlertDialog.Dialog>
+				</AlertDialog.Container>
+			</AlertDialog.Backdrop>
 		</div>
 	);
 }

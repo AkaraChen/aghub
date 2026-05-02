@@ -44,12 +44,12 @@ export default function SettingsPage() {
 									{t("integrations")}
 									<Tabs.Indicator />
 								</Tabs.Tab>
-								<Tabs.Tab id="application">
-									{t("application")}
-									<Tabs.Indicator />
-								</Tabs.Tab>
 								<Tabs.Tab id="logs">
 									{t("logs")}
+									<Tabs.Indicator />
+								</Tabs.Tab>
+								<Tabs.Tab id="application">
+									{t("application")}
 									<Tabs.Indicator />
 								</Tabs.Tab>
 							</Tabs.List>
@@ -68,12 +68,12 @@ export default function SettingsPage() {
 						<IntegrationsPanel />
 					</Tabs.Panel>
 
-					<Tabs.Panel id="application">
-						<ApplicationPanel />
-					</Tabs.Panel>
-
 					<Tabs.Panel id="logs">
 						<LogsPanel />
+					</Tabs.Panel>
+
+					<Tabs.Panel id="application">
+						<ApplicationPanel />
 					</Tabs.Panel>
 				</Tabs>
 			</div>
