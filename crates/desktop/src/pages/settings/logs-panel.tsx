@@ -1,5 +1,6 @@
 import {
 	ArrowPathIcon,
+	Cog6ToothIcon,
 	FolderOpenIcon,
 	ArrowDownTrayIcon,
 	TrashIcon,
@@ -10,8 +11,10 @@ import {
 	Card,
 	Input,
 	ListBox,
+	Modal,
 	Select,
 	Spinner,
+	Tooltip,
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -73,8 +76,9 @@ export default function LogsPanel() {
 	const [debouncedSearch, setDebouncedSearch] = useState("");
 	const [activeLevel, setActiveLevel] = useState<string>("ALL");
 	const [showClearDialog, setShowClearDialog] = useState(false);
+	const [showSettingsDialog, setShowSettingsDialog] = useState(false);
 	const [draftConfig, setDraftConfig] = useState<LogConfig | null>(null);
-	const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+	const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
 	useEffect(() => {
 		debounceRef.current = setTimeout(setDebouncedSearch, 300, search);
@@ -184,229 +188,168 @@ export default function LogsPanel() {
 	}, [statsQuery, entriesQuery]);
 
 	return (
-		<div className="space-y-4">
-			{/* Header: directory path + actions */}
+		<>
 			<Card className="p-0">
-				<Card.Content className="p-4">
-					<div className="flex items-start justify-between gap-4">
-						<div className="min-w-0 space-y-1">
-							<div className="flex items-center gap-2">
-								<span className="text-sm font-medium">
-									{t("diagnosticLogs")}
-								</span>
-								{statsQuery.data && (
-									<span className="text-xs text-muted">
-										{statsQuery.data.total_entries.toLocaleString()}{" "}
-										{t("entries")} &middot;{" "}
-										{formatSize(
-											statsQuery.data.total_size_bytes,
-										)}{" "}
-										&middot;{" "}
-										{statsQuery.data.log_files.length}{" "}
-										{t("files")}
-									</span>
-								)}
-							</div>
-							{logDirPath && (
-								<p className="truncate text-xs text-muted">
-									{logDirPath}
-								</p>
-							)}
-							{currentConfig && (
-								<div className="flex items-center gap-2 pt-1 text-xs text-muted">
-									<span>{t("logRotationSettings")}:</span>
-									<input
-										type="number"
-										min={1}
-										max={100}
-										className="w-14 rounded border border-border bg-transparent px-1.5 py-0.5 text-center text-xs text-foreground"
-										value={currentConfig.max_file_size_mb}
-										onChange={(e) => {
-											const v = Number.parseInt(
-												e.target.value,
-												10,
-											);
-											if (Number.isNaN(v) || v < 1)
-												return;
-											setDraftConfig({
-												...currentConfig,
-												max_file_size_mb: v,
-											});
-										}}
-									/>
-									<span>MB &times;</span>
-									<input
-										type="number"
-										min={1}
-										max={20}
-										className="w-12 rounded border border-border bg-transparent px-1.5 py-0.5 text-center text-xs text-foreground"
-										value={currentConfig.max_archives}
-										onChange={(e) => {
-											const v = Number.parseInt(
-												e.target.value,
-												10,
-											);
-											if (Number.isNaN(v) || v < 1)
-												return;
-											setDraftConfig({
-												...currentConfig,
-												max_archives: v,
-											});
-										}}
-									/>
-									<span>{t("files")}</span>
-									{isConfigDirty && (
-										<>
-											<Button
-												size="sm"
-												variant="tertiary"
-												className="ml-1 h-5 text-xs"
-												onPress={() =>
-													setDraftConfig(null)
-												}
-											>
-												{t("reset")}
-											</Button>
-											<Button
-												size="sm"
-												className="h-5 text-xs"
-												isPending={
-													updateConfigMutation.isPending
-												}
-												onPress={() => {
-													if (currentConfig)
-														updateConfigMutation.mutate(
-															currentConfig,
-														);
-												}}
-											>
-												{t("save")}
-											</Button>
-											<span className="text-amber-500">
-												{t(
-													"logRotationSettingsDescription",
-												)}
-											</span>
-										</>
-									)}
-								</div>
-							)}
-						</div>
-						<div className="flex shrink-0 items-center gap-1">
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								aria-label={t("openLogFolder")}
-								onPress={() => {
-									if (logDirPath) revealItemInDir(logDirPath);
-								}}
-							>
-								<FolderOpenIcon className="size-4" />
-							</Button>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								aria-label={t("exportLogs")}
-								isPending={exportMutation.isPending}
-								onPress={() => exportMutation.mutate()}
-							>
-								<ArrowDownTrayIcon className="size-4" />
-							</Button>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								aria-label={t("clearLogs")}
-								onPress={() => setShowClearDialog(true)}
-							>
-								<TrashIcon className="size-4" />
-							</Button>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								onPress={handleRefresh}
-							>
-								<ArrowPathIcon
-									className={cn(
-										"size-4",
-										entriesQuery.isFetching &&
-											"animate-spin",
-									)}
-								/>
-							</Button>
-						</div>
+				{/* Header: title + stats + actions */}
+				<Card.Header className="flex flex-row items-center justify-between gap-3 px-4 py-3">
+					<div className="flex min-w-0 items-center gap-2">
+						<h3 className="text-sm font-semibold">
+							{t("diagnosticLogs")}
+						</h3>
+						{statsQuery.data && (
+							<span className="text-xs text-muted">
+								{statsQuery.data.total_entries.toLocaleString()}{" "}
+								{t("entries")} &middot;{" "}
+								{formatSize(statsQuery.data.total_size_bytes)}{" "}
+								&middot; {statsQuery.data.log_files.length}{" "}
+								{t("files")}
+							</span>
+						)}
 					</div>
-				</Card.Content>
-			</Card>
+					<div className="flex shrink-0 items-center gap-1">
+						<Tooltip delay={0}>
+							<Tooltip.Trigger>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									onPress={() => setShowSettingsDialog(true)}
+								>
+									<Cog6ToothIcon className="size-4" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								{t("logRotationSettings")}
+							</Tooltip.Content>
+						</Tooltip>
+						<Tooltip delay={0}>
+							<Tooltip.Trigger>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									onPress={() => {
+										if (logDirPath)
+											revealItemInDir(logDirPath);
+									}}
+								>
+									<FolderOpenIcon className="size-4" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								{t("openLogFolder")}
+							</Tooltip.Content>
+						</Tooltip>
+						<Tooltip delay={0}>
+							<Tooltip.Trigger>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									isPending={exportMutation.isPending}
+									onPress={() => exportMutation.mutate()}
+								>
+									<ArrowDownTrayIcon className="size-4" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>{t("exportLogs")}</Tooltip.Content>
+						</Tooltip>
+						<Tooltip delay={0}>
+							<Tooltip.Trigger>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									onPress={() => setShowClearDialog(true)}
+								>
+									<TrashIcon className="size-4" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>{t("clearLogs")}</Tooltip.Content>
+						</Tooltip>
+						<Tooltip delay={0}>
+							<Tooltip.Trigger>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									onPress={handleRefresh}
+								>
+									<ArrowPathIcon
+										className={cn(
+											"size-4",
+											entriesQuery.isFetching &&
+												"animate-spin",
+										)}
+									/>
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>{t("refresh")}</Tooltip.Content>
+						</Tooltip>
+					</div>
+				</Card.Header>
 
-			{/* Log entries */}
-			<Card className="p-0">
-				<Card.Content className="p-0">
-					{/* Search + level filter */}
-					<div className="flex items-center gap-2 border-b border-border px-3 py-2">
-						<Input
-							className="flex-1"
-							placeholder={t("searchLogs")}
-							value={search}
-							onChange={(e) => setSearch(e.target.value)}
-						/>
-						<Select
-							variant="secondary"
-							selectedKey={activeLevel}
-							onSelectionChange={(key) =>
-								setActiveLevel(String(key))
-							}
-							aria-label={t("logLevel")}
-							className="w-28 shrink-0"
-						>
-							<Select.Trigger>
-								<Select.Value />
-								<Select.Indicator />
-							</Select.Trigger>
-							<Select.Popover>
-								<ListBox>
+				{/* Search + level filter */}
+				<div className="flex items-center gap-2 border-t border-border px-4 py-2">
+					<Input
+						className="flex-1"
+						placeholder={t("searchLogs")}
+						value={search}
+						onChange={(e) => setSearch(e.target.value)}
+					/>
+					<Select
+						variant="secondary"
+						selectedKey={activeLevel}
+						onSelectionChange={(key) => setActiveLevel(String(key))}
+						aria-label={t("logLevel")}
+						className="w-28 shrink-0"
+					>
+						<Select.Trigger>
+							<Select.Value />
+							<Select.Indicator />
+						</Select.Trigger>
+						<Select.Popover>
+							<ListBox>
+								<ListBox.Item
+									key="ALL"
+									id="ALL"
+									textValue="ALL"
+								>
+									ALL
+								</ListBox.Item>
+								{LEVELS.map((level) => (
 									<ListBox.Item
-										key="ALL"
-										id="ALL"
-										textValue="ALL"
+										key={level}
+										id={level}
+										textValue={level}
 									>
-										ALL
-									</ListBox.Item>
-									{LEVELS.map((level) => (
-										<ListBox.Item
-											key={level}
-											id={level}
-											textValue={level}
-										>
-											<span
-												className={cn(
-													"rounded px-1 font-mono text-xs font-semibold",
-													levelColor[level],
-												)}
-											>
-												{level}
-											</span>
-											{statsQuery.data?.entries_by_level[
-												level
-											] != null && (
-												<span className="ml-auto text-xs text-muted">
-													{
-														statsQuery.data
-															.entries_by_level[
-															level
-														]
-													}
-												</span>
+										<span
+											className={cn(
+												"rounded px-1 font-mono text-xs font-semibold",
+												levelColor[level],
 											)}
-										</ListBox.Item>
-									))}
-								</ListBox>
-							</Select.Popover>
-						</Select>
-					</div>
+										>
+											{level}
+										</span>
+										{statsQuery.data?.entries_by_level[
+											level
+										] != null && (
+											<span className="ml-auto text-xs text-muted">
+												{
+													statsQuery.data
+														.entries_by_level[level]
+												}
+											</span>
+										)}
+									</ListBox.Item>
+								))}
+							</ListBox>
+						</Select.Popover>
+					</Select>
+				</div>
+
+				{/* Log entries */}
+				<Card.Content className="p-0">
 					{entriesQuery.isLoading ? (
 						<div className="flex justify-center py-12">
 							<Spinner />
@@ -424,7 +367,7 @@ export default function LogsPanel() {
 						</div>
 					) : (
 						<Virtuoso
-							style={{ height: "50vh" }}
+							style={{ height: "60vh" }}
 							data={entries}
 							itemContent={(_, entry) => (
 								<div className="border-b border-border px-3 py-1.5 font-mono text-xs">
@@ -456,16 +399,132 @@ export default function LogsPanel() {
 						/>
 					)}
 				</Card.Content>
+
+				{totalCount > 0 && (
+					<Card.Footer className="px-4 py-2">
+						<span className="ml-auto text-xs text-muted">
+							{t("showingEntries", {
+								shown: entries.length,
+								total: totalCount,
+							})}
+						</span>
+					</Card.Footer>
+				)}
 			</Card>
 
-			{totalCount > 0 && (
-				<div className="text-right text-xs text-muted">
-					{t("showingEntries", {
-						shown: entries.length,
-						total: totalCount,
-					})}
-				</div>
-			)}
+			{/* Settings dialog */}
+			<Modal.Backdrop
+				isOpen={showSettingsDialog}
+				onOpenChange={(open) => {
+					if (!open) {
+						setShowSettingsDialog(false);
+						setDraftConfig(null);
+					}
+				}}
+			>
+				<Modal.Container>
+					<Modal.Dialog className="sm:max-w-[400px]">
+						<Modal.Header>
+							<Modal.Heading>
+								{t("logRotationSettings")}
+							</Modal.Heading>
+						</Modal.Header>
+						<Modal.Body className="space-y-4">
+							{currentConfig && (
+								<>
+									<div className="space-y-1">
+										<label className="text-sm font-medium">
+											{t("maxFileSizeMb")}
+										</label>
+										<input
+											type="number"
+											min={1}
+											max={100}
+											className="w-full rounded border border-border bg-transparent px-3 py-1.5 text-sm text-foreground"
+											value={
+												currentConfig.max_file_size_mb
+											}
+											onChange={(e) => {
+												const v = Number.parseInt(
+													e.target.value,
+													10,
+												);
+												if (Number.isNaN(v) || v < 1)
+													return;
+												setDraftConfig({
+													...currentConfig,
+													max_file_size_mb: v,
+												});
+											}}
+										/>
+									</div>
+									<div className="space-y-1">
+										<label className="text-sm font-medium">
+											{t("maxArchives")}
+										</label>
+										<input
+											type="number"
+											min={1}
+											max={20}
+											className="w-full rounded border border-border bg-transparent px-3 py-1.5 text-sm text-foreground"
+											value={currentConfig.max_archives}
+											onChange={(e) => {
+												const v = Number.parseInt(
+													e.target.value,
+													10,
+												);
+												if (Number.isNaN(v) || v < 1)
+													return;
+												setDraftConfig({
+													...currentConfig,
+													max_archives: v,
+												});
+											}}
+										/>
+									</div>
+									{isConfigDirty && (
+										<p className="text-xs text-amber-500">
+											{t(
+												"logRotationSettingsDescription",
+											)}
+										</p>
+									)}
+								</>
+							)}
+						</Modal.Body>
+						<Modal.Footer>
+							<Button
+								variant="tertiary"
+								onPress={() => {
+									setShowSettingsDialog(false);
+									setDraftConfig(null);
+								}}
+							>
+								{t("cancel")}
+							</Button>
+							<Button
+								isPending={updateConfigMutation.isPending}
+								isDisabled={!isConfigDirty}
+								onPress={() => {
+									if (currentConfig) {
+										updateConfigMutation.mutate(
+											currentConfig,
+											{
+												onSuccess: () =>
+													setShowSettingsDialog(
+														false,
+													),
+											},
+										);
+									}
+								}}
+							>
+								{t("save")}
+							</Button>
+						</Modal.Footer>
+					</Modal.Dialog>
+				</Modal.Container>
+			</Modal.Backdrop>
 
 			{/* Clear dialog */}
 			<AlertDialog.Backdrop
@@ -504,6 +563,6 @@ export default function LogsPanel() {
 					</AlertDialog.Dialog>
 				</AlertDialog.Container>
 			</AlertDialog.Backdrop>
-		</div>
+		</>
 	);
 }
