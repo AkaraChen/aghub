@@ -258,6 +258,13 @@ pub async fn get_log_stats(app: tauri::AppHandle) -> Result<LogStats, String> {
 	})
 }
 
+#[tauri::command]
+pub async fn move_file(from: String, to: String) -> Result<(), String> {
+	fs::copy(&from, &to).map_err(|e| format!("copy failed: {e}"))?;
+	let _ = fs::remove_file(&from);
+	Ok(())
+}
+
 // -- Log management commands --
 
 #[tauri::command]
@@ -281,8 +288,7 @@ pub async fn clear_log_files(app: tauri::AppHandle) -> Result<usize, String> {
 	Ok(removed)
 }
 
-const LOG_CONFIG_FILE: &str = "log_config.json";
-
+/// Log rotation config read from `store.json` at startup.
 #[derive(Serialize, Deserialize, Clone)]
 pub struct LogConfig {
 	pub max_file_size_mb: u32,
@@ -296,44 +302,4 @@ impl Default for LogConfig {
 			max_archives: 5,
 		}
 	}
-}
-
-fn log_config_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
-	app.path()
-		.app_data_dir()
-		.map(|d| d.join(LOG_CONFIG_FILE))
-		.map_err(|e| format!("failed to resolve config path: {e}"))
-}
-
-pub fn read_log_config(app: &tauri::AppHandle) -> LogConfig {
-	let Ok(path) = log_config_path(app) else {
-		return LogConfig::default();
-	};
-	fs::read_to_string(&path)
-		.ok()
-		.and_then(|s| serde_json::from_str(&s).ok())
-		.unwrap_or_default()
-}
-
-#[tauri::command]
-pub async fn get_log_config(
-	app: tauri::AppHandle,
-) -> Result<LogConfig, String> {
-	Ok(read_log_config(&app))
-}
-
-#[tauri::command]
-pub async fn update_log_config(
-	app: tauri::AppHandle,
-	config: LogConfig,
-) -> Result<LogConfig, String> {
-	let path = log_config_path(&app)?;
-	if let Some(parent) = path.parent() {
-		fs::create_dir_all(parent)
-			.map_err(|e| format!("failed to create config dir: {e}"))?;
-	}
-	let json = serde_json::to_string_pretty(&config)
-		.map_err(|e| format!("serialize error: {e}"))?;
-	fs::write(&path, json).map_err(|e| format!("write error: {e}"))?;
-	Ok(config)
 }

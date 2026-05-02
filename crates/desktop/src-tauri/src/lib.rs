@@ -1,6 +1,6 @@
 use crate::commands::{
-	clear_log_files, export_diagnostic_logs, get_log_config, get_log_dir_path,
-	get_log_entries, get_log_stats, start_server, update_log_config,
+	clear_log_files, export_diagnostic_logs, get_log_dir_path, get_log_entries,
+	get_log_stats, move_file, start_server,
 };
 use log::info;
 use tauri::{Manager, WebviewWindow};
@@ -16,8 +16,8 @@ pub struct AppState {
 }
 
 fn default_log_config() -> commands::logging::LogConfig {
-	// Read log config from the default app data dir before Tauri is fully
-	// initialized (app handle not yet available).
+	// Read log config from tauri-plugin-store's store.json before Tauri is
+	// fully initialized (app handle not yet available).
 	let base = if cfg!(target_os = "macos") {
 		std::env::var("HOME").ok().map(|h| {
 			std::path::PathBuf::from(h).join("Library/Application Support")
@@ -37,10 +37,18 @@ fn default_log_config() -> commands::logging::LogConfig {
 	let Some(base) = base else {
 		return commands::logging::LogConfig::default();
 	};
-	let path = base.join("com.akrc.aghub").join("log_config.json");
-	std::fs::read_to_string(&path)
-		.ok()
-		.and_then(|s| serde_json::from_str(&s).ok())
+	let path = base.join("com.akrc.aghub").join("store.json");
+	let content = match std::fs::read_to_string(&path) {
+		Ok(c) => c,
+		Err(_) => return commands::logging::LogConfig::default(),
+	};
+	let store: serde_json::Value = match serde_json::from_str(&content) {
+		Ok(v) => v,
+		Err(_) => return commands::logging::LogConfig::default(),
+	};
+	store
+		.get("logConfig")
+		.and_then(|v| serde_json::from_value(v.clone()).ok())
 		.unwrap_or_default()
 }
 
@@ -176,8 +184,7 @@ pub fn run() {
 			get_log_entries,
 			get_log_stats,
 			clear_log_files,
-			get_log_config,
-			update_log_config,
+			move_file,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");

@@ -17,10 +17,12 @@ import {
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Virtuoso } from "react-virtuoso";
+import { getStore } from "../../lib/store";
 import { cn } from "../../lib/utils";
 
 interface LogEntry {
@@ -88,21 +90,34 @@ export default function LogsPanel() {
 		queryKey: ["log-entries", activeLevels, debouncedSearch],
 		queryFn: () =>
 			invoke<GetLogEntriesResponse>("get_log_entries", {
-				offset: 0,
-				limit: 5000,
-				level_filter: activeLevels.length > 0 ? activeLevels : null,
-				search: debouncedSearch || null,
+				params: {
+					offset: 0,
+					limit: 5000,
+					level_filter: activeLevels.length > 0 ? activeLevels : null,
+					search: debouncedSearch || null,
+				},
 			}),
 	});
 
 	const configQuery = useQuery({
 		queryKey: ["log-config"],
-		queryFn: () => invoke<LogConfig>("get_log_config"),
+		queryFn: async () => {
+			const store = await getStore();
+			return (
+				(await store.get<LogConfig>("logConfig")) ?? {
+					max_file_size_mb: 10,
+					max_archives: 5,
+				}
+			);
+		},
 	});
 
 	const updateConfigMutation = useMutation({
-		mutationFn: (config: LogConfig) =>
-			invoke<LogConfig>("update_log_config", { config }),
+		mutationFn: async (config: LogConfig) => {
+			const store = await getStore();
+			await store.set("logConfig", config);
+			return config;
+		},
 		onSuccess: () => {
 			queryClient.invalidateQueries({ queryKey: ["log-config"] });
 			toast.success(t("logConfigSaved"));
@@ -110,9 +125,30 @@ export default function LogsPanel() {
 	});
 
 	const exportMutation = useMutation({
-		mutationFn: () => invoke<string>("export_diagnostic_logs"),
+		mutationFn: async () => {
+			const zipPath = await invoke<string>("export_diagnostic_logs");
+			const savePath = await save({
+				defaultPath: zipPath.split("/").pop() ?? "aghub-logs.zip",
+				filters: [{ name: "ZIP", extensions: ["zip"] }],
+			});
+			if (!savePath) return null;
+			// Move the zip to the user-selected path.
+			await invoke<void>("move_file", {
+				from: zipPath,
+				to: savePath,
+			});
+			return savePath;
+		},
 		onSuccess: (path) => {
-			toast.success(t("exportLogsSuccess"), { description: path });
+			if (!path) return;
+			toast.success(t("exportLogsSuccess"), {
+				description: path,
+				actionProps: {
+					onPress: () => revealItemInDir(path),
+					variant: "tertiary",
+					children: t("openLogFolder"),
+				},
+			});
 		},
 		onError: (error) => {
 			toast.danger(
