@@ -77,7 +77,7 @@ export default function LogsPanel() {
 	const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
 	useEffect(() => {
-		debounceRef.current = setTimeout(() => setDebouncedSearch(search), 300);
+		debounceRef.current = setTimeout(setDebouncedSearch, 300, search);
 		return () => clearTimeout(debounceRef.current);
 	}, [search]);
 
@@ -170,6 +170,14 @@ export default function LogsPanel() {
 	const totalCount = entriesQuery.data?.total_count ?? 0;
 	const logDirPath = statsQuery.data?.log_dir_path ?? "";
 
+	const savedConfig = configQuery.data ?? null;
+	const currentConfig = draftConfig ?? savedConfig;
+	const isConfigDirty =
+		savedConfig != null &&
+		currentConfig != null &&
+		(currentConfig.max_file_size_mb !== savedConfig.max_file_size_mb ||
+			currentConfig.max_archives !== savedConfig.max_archives);
+
 	const handleRefresh = useCallback(() => {
 		statsQuery.refetch();
 		entriesQuery.refetch();
@@ -204,102 +212,85 @@ export default function LogsPanel() {
 									{logDirPath}
 								</p>
 							)}
-							{configQuery.data &&
-								(() => {
-									const saved = configQuery.data;
-									const current = draftConfig ?? saved;
-									const isDirty =
-										current.max_file_size_mb !==
-											saved.max_file_size_mb ||
-										current.max_archives !==
-											saved.max_archives;
-									return (
-										<div className="flex items-center gap-2 pt-1 text-xs text-muted">
-											<span>
-												{t("logRotationSettings")}:
+							{currentConfig && (
+								<div className="flex items-center gap-2 pt-1 text-xs text-muted">
+									<span>{t("logRotationSettings")}:</span>
+									<input
+										type="number"
+										min={1}
+										max={100}
+										className="w-14 rounded border border-border bg-transparent px-1.5 py-0.5 text-center text-xs text-foreground"
+										value={currentConfig.max_file_size_mb}
+										onChange={(e) => {
+											const v = Number.parseInt(
+												e.target.value,
+												10,
+											);
+											if (Number.isNaN(v) || v < 1)
+												return;
+											setDraftConfig({
+												...currentConfig,
+												max_file_size_mb: v,
+											});
+										}}
+									/>
+									<span>MB &times;</span>
+									<input
+										type="number"
+										min={1}
+										max={20}
+										className="w-12 rounded border border-border bg-transparent px-1.5 py-0.5 text-center text-xs text-foreground"
+										value={currentConfig.max_archives}
+										onChange={(e) => {
+											const v = Number.parseInt(
+												e.target.value,
+												10,
+											);
+											if (Number.isNaN(v) || v < 1)
+												return;
+											setDraftConfig({
+												...currentConfig,
+												max_archives: v,
+											});
+										}}
+									/>
+									<span>{t("files")}</span>
+									{isConfigDirty && (
+										<>
+											<Button
+												size="sm"
+												variant="tertiary"
+												className="ml-1 h-5 text-xs"
+												onPress={() =>
+													setDraftConfig(null)
+												}
+											>
+												{t("reset")}
+											</Button>
+											<Button
+												size="sm"
+												className="h-5 text-xs"
+												isPending={
+													updateConfigMutation.isPending
+												}
+												onPress={() => {
+													if (currentConfig)
+														updateConfigMutation.mutate(
+															currentConfig,
+														);
+												}}
+											>
+												{t("save")}
+											</Button>
+											<span className="text-amber-500">
+												{t(
+													"logRotationSettingsDescription",
+												)}
 											</span>
-											<input
-												type="number"
-												min={1}
-												max={100}
-												className="w-14 rounded border border-border bg-transparent px-1.5 py-0.5 text-center text-xs text-foreground"
-												value={current.max_file_size_mb}
-												onChange={(e) => {
-													const v = Number.parseInt(
-														e.target.value,
-														10,
-													);
-													if (
-														Number.isNaN(v) ||
-														v < 1
-													)
-														return;
-													setDraftConfig({
-														...current,
-														max_file_size_mb: v,
-													});
-												}}
-											/>
-											<span>MB &times;</span>
-											<input
-												type="number"
-												min={1}
-												max={20}
-												className="w-12 rounded border border-border bg-transparent px-1.5 py-0.5 text-center text-xs text-foreground"
-												value={current.max_archives}
-												onChange={(e) => {
-													const v = Number.parseInt(
-														e.target.value,
-														10,
-													);
-													if (
-														Number.isNaN(v) ||
-														v < 1
-													)
-														return;
-													setDraftConfig({
-														...current,
-														max_archives: v,
-													});
-												}}
-											/>
-											<span>{t("files")}</span>
-											{isDirty && (
-												<>
-													<Button
-														size="sm"
-														variant="tertiary"
-														className="ml-1 h-5 text-xs"
-														onPress={() =>
-															setDraftConfig(null)
-														}
-													>
-														{t("reset")}
-													</Button>
-													<Button
-														size="sm"
-														className="h-5 text-xs"
-														isPending={
-															updateConfigMutation.isPending
-														}
-														onPress={() =>
-															updateConfigMutation.mutate(
-																current,
-															)
-														}
-													>
-														{t("save")}
-													</Button>
-													<span className="text-amber-500">
-														{t(
-															"logRotationSettingsDescription",
-														)}
-													</span>
-												</>
-											)}
-										</div>
-									);
-								})()}
+										</>
+									)}
+								</div>
+							)}
 						</div>
 						<div className="flex shrink-0 items-center gap-1">
 							<Button
