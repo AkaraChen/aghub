@@ -138,7 +138,7 @@ export default function LogsPanel() {
 			});
 			if (!savePath) return null;
 			await invoke<string>("export_diagnostic_logs", {
-				save_path: savePath,
+				savePath,
 			});
 			return savePath;
 		},
