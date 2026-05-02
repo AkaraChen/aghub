@@ -2,7 +2,9 @@ use crate::commands::start_server;
 use log::info;
 use tauri::{Manager, WebviewWindow};
 use tauri_plugin_log::fern::colors::{Color, ColoredLevelConfig};
-use tauri_plugin_log::{Target, TargetKind};
+use tauri_plugin_log::{
+	RotationStrategy, Target, TargetKind, TimezoneStrategy,
+};
 
 mod commands;
 
@@ -52,11 +54,19 @@ pub fn run() {
 						file_name: Some("aghub".into()),
 					})
 					.format(|out, message, record| {
+						let now = time::OffsetDateTime::now_local()
+							.unwrap_or_else(|_| {
+								time::OffsetDateTime::now_utc()
+							});
 						out.finish(format_args!(
-							"[{} {}] {}",
+							"{} {} [{}] {}",
+							now.format(
+								&time::format_description::well_known::Rfc3339,
+							)
+							.unwrap_or_default(),
 							record.level(),
 							record.target(),
-							message
+							message,
 						))
 					}),
 					Target::new(TargetKind::Webview).format(
@@ -74,6 +84,9 @@ pub fn run() {
 				.format(|out, message, _record| {
 					out.finish(format_args!("{message}"))
 				})
+				.max_file_size(10_485_760) // 10 MB
+				.rotation_strategy(RotationStrategy::KeepSome(5))
+				.timezone_strategy(TimezoneStrategy::UseLocal)
 				.level(log::LevelFilter::Info)
 				.build(),
 		)
