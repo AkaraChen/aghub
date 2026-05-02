@@ -5,6 +5,7 @@ import AgentsPanel from "./agents-panel";
 import AppearancePanel from "./appearance-panel";
 import ApplicationPanel from "./application-panel";
 import IntegrationsPanel from "./integrations-panel";
+import LogsPanel from "./logs-panel";
 
 export default function SettingsPage() {
 	const { t } = useTranslation();
@@ -47,6 +48,10 @@ export default function SettingsPage() {
 									{t("application")}
 									<Tabs.Indicator />
 								</Tabs.Tab>
+								<Tabs.Tab id="logs">
+									{t("logs")}
+									<Tabs.Indicator />
+								</Tabs.Tab>
 							</Tabs.List>
 						</Tabs.ListContainer>
 					</div>
@@ -65,6 +70,10 @@ export default function SettingsPage() {
 
 					<Tabs.Panel id="application">
 						<ApplicationPanel />
+					</Tabs.Panel>
+
+					<Tabs.Panel id="logs">
+						<LogsPanel />
 					</Tabs.Panel>
 				</Tabs>
 			</div>

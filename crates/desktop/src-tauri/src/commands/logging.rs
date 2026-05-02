@@ -1,8 +1,8 @@
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tauri::Manager;
 use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
@@ -111,4 +111,147 @@ pub async fn export_diagnostic_logs(
 #[tauri::command]
 pub async fn get_log_dir_path(app: tauri::AppHandle) -> Result<String, String> {
 	log_dir(&app).map(|p| p.to_string_lossy().to_string())
+}
+
+// -- Log viewer commands --
+
+#[derive(Serialize, Clone)]
+pub struct LogEntry {
+	pub timestamp: String,
+	pub level: String,
+	pub target: String,
+	pub message: String,
+}
+
+fn parse_log_line(line: &str) -> Option<LogEntry> {
+	// Format: "{rfc3339} {LEVEL} [{target}] {message}"
+	let (timestamp, rest) = line.split_once(' ')?;
+	let (level, rest) = rest.split_once(' ')?;
+	let rest = rest.strip_prefix('[')?;
+	let (target, message) = rest.split_once("] ")?;
+	Some(LogEntry {
+		timestamp: timestamp.to_string(),
+		level: level.to_string(),
+		target: target.to_string(),
+		message: message.to_string(),
+	})
+}
+
+fn read_all_entries(log_dir: &PathBuf) -> Vec<LogEntry> {
+	let mut files = collect_log_files(log_dir);
+	files.sort();
+	let mut entries = Vec::new();
+	for path in &files {
+		let Ok(file) = fs::File::open(path) else {
+			continue;
+		};
+		for line in BufReader::new(file).lines().map_while(Result::ok) {
+			if let Some(entry) = parse_log_line(&line) {
+				entries.push(entry);
+			}
+		}
+	}
+	entries
+}
+
+#[derive(Deserialize)]
+pub struct GetLogEntriesParams {
+	pub offset: Option<usize>,
+	pub limit: Option<usize>,
+	pub level_filter: Option<Vec<String>>,
+	pub search: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct GetLogEntriesResponse {
+	pub entries: Vec<LogEntry>,
+	pub total_count: usize,
+	pub has_more: bool,
+}
+
+#[tauri::command]
+pub async fn get_log_entries(
+	app: tauri::AppHandle,
+	params: GetLogEntriesParams,
+) -> Result<GetLogEntriesResponse, String> {
+	let log_dir = log_dir(&app)?;
+	let all = read_all_entries(&log_dir);
+
+	let filtered: Vec<&LogEntry> = all
+		.iter()
+		.filter(|e| {
+			if let Some(levels) = &params.level_filter {
+				if !levels.is_empty()
+					&& !levels.iter().any(|l| l.eq_ignore_ascii_case(&e.level))
+				{
+					return false;
+				}
+			}
+			if let Some(search) = &params.search {
+				if !search.is_empty() {
+					let s = search.to_lowercase();
+					return e.message.to_lowercase().contains(&s)
+						|| e.target.to_lowercase().contains(&s);
+				}
+			}
+			true
+		})
+		.collect();
+
+	let total_count = filtered.len();
+	let offset = params.offset.unwrap_or(0);
+	let limit = params.limit.unwrap_or(200);
+	let entries: Vec<LogEntry> = filtered
+		.into_iter()
+		.skip(offset)
+		.take(limit)
+		.cloned()
+		.collect();
+	let has_more = offset + entries.len() < total_count;
+
+	Ok(GetLogEntriesResponse {
+		entries,
+		total_count,
+		has_more,
+	})
+}
+
+#[derive(Serialize)]
+pub struct LogStats {
+	pub total_entries: usize,
+	pub entries_by_level: std::collections::HashMap<String, usize>,
+	pub log_files: Vec<String>,
+	pub total_size_bytes: u64,
+}
+
+#[tauri::command]
+pub async fn get_log_stats(app: tauri::AppHandle) -> Result<LogStats, String> {
+	let dir = log_dir(&app)?;
+	let files = collect_log_files(&dir);
+	let mut total_size = 0u64;
+	let mut file_names = Vec::new();
+	for path in &files {
+		if let Ok(meta) = fs::metadata(path) {
+			total_size += meta.len();
+		}
+		if let Some(name) = path.file_name() {
+			file_names.push(name.to_string_lossy().to_string());
+		}
+	}
+
+	let all = read_all_entries(&dir);
+	let total_entries = all.len();
+	let mut entries_by_level = std::collections::HashMap::new();
+	for entry in &all {
+		*entries_by_level
+			.entry(entry.level.clone())
+			.or_insert(0usize) += 1;
+	}
+
+	Ok(LogStats {
+		total_entries,
+		entries_by_level,
+		log_files: file_names,
+		total_size_bytes: total_size,
+	})
 }

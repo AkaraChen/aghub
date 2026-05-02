@@ -1,4 +1,7 @@
-use crate::commands::{export_diagnostic_logs, get_log_dir_path, start_server};
+use crate::commands::{
+	export_diagnostic_logs, get_log_dir_path, get_log_entries, get_log_stats,
+	start_server,
+};
 use log::info;
 use tauri::{Manager, WebviewWindow};
 use tauri_plugin_log::fern::colors::{Color, ColoredLevelConfig};
@@ -138,6 +141,8 @@ pub fn run() {
 			start_server,
 			export_diagnostic_logs,
 			get_log_dir_path,
+			get_log_entries,
+			get_log_stats,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
