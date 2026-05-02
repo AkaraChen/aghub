@@ -466,6 +466,32 @@ model_provider = "openai"
 }
 
 #[test]
+fn set_active_provider_writes_inventory_key_inline() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	fs::write(adapter.config_path(), r#"model_provider = "openai""#).unwrap();
+
+	let store = store(&temp);
+	let provider = create_inventory_provider(&store);
+	adapter
+		.add_inventory_provider(&store, &provider, "sk-test")
+		.unwrap();
+
+	adapter.set_active_provider(&store, "openrouter").unwrap();
+
+	let config = fs::read_to_string(adapter.config_path())
+		.unwrap()
+		.parse::<DocumentMut>()
+		.unwrap();
+	let provider = config["model_providers"]["openrouter"].as_table().unwrap();
+	assert_eq!(
+		provider["experimental_bearer_token"].as_str(),
+		Some("sk-test")
+	);
+	assert!(provider.get("env_key").is_none());
+}
+
+#[test]
 fn clear_active_provider_falls_back_to_openai() {
 	let temp = tempfile::tempdir().unwrap();
 	let adapter = adapter(&temp);
