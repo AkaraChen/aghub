@@ -126,16 +126,14 @@ export default function LogsPanel() {
 
 	const exportMutation = useMutation({
 		mutationFn: async () => {
-			const zipPath = await invoke<string>("export_diagnostic_logs");
+			const defaultName = `aghub-logs-${new Date().toISOString().slice(0, 10)}.zip`;
 			const savePath = await save({
-				defaultPath: zipPath.split("/").pop() ?? "aghub-logs.zip",
+				defaultPath: defaultName,
 				filters: [{ name: "ZIP", extensions: ["zip"] }],
 			});
 			if (!savePath) return null;
-			// Move the zip to the user-selected path.
-			await invoke<void>("move_file", {
-				from: zipPath,
-				to: savePath,
+			await invoke<string>("export_diagnostic_logs", {
+				save_path: savePath,
 			});
 			return savePath;
 		},

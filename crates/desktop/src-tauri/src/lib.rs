@@ -1,6 +1,6 @@
 use crate::commands::{
 	clear_log_files, export_diagnostic_logs, get_log_dir_path, get_log_entries,
-	get_log_stats, move_file, start_server,
+	get_log_stats, start_server,
 };
 use log::info;
 use tauri::{Manager, WebviewWindow};
@@ -184,7 +184,6 @@ pub fn run() {
 			get_log_entries,
 			get_log_stats,
 			clear_log_files,
-			move_file,
 		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
