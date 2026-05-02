@@ -10,8 +10,6 @@ import {
 	Button,
 	Card,
 	Input,
-	Label,
-	NumberField,
 	Spinner,
 	toast,
 } from "@heroui/react";
@@ -74,6 +72,7 @@ export default function LogsPanel() {
 	const [debouncedSearch, setDebouncedSearch] = useState("");
 	const [activeLevels, setActiveLevels] = useState<string[]>([]);
 	const [showClearDialog, setShowClearDialog] = useState(false);
+	const [draftConfig, setDraftConfig] = useState<LogConfig | null>(null);
 	const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
 	useEffect(() => {
@@ -118,8 +117,9 @@ export default function LogsPanel() {
 			await store.set("logConfig", config);
 			return config;
 		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({ queryKey: ["log-config"] });
+		onSuccess: async (savedConfig) => {
+			queryClient.setQueryData(["log-config"], savedConfig);
+			setDraftConfig(null);
 			toast.success(t("logConfigSaved"));
 		},
 	});
@@ -186,28 +186,127 @@ export default function LogsPanel() {
 		<div className="space-y-4">
 			{/* Header: directory path + actions */}
 			<Card className="p-0">
-				<Card.Content className="space-y-3 p-4">
-					<div className="flex items-center justify-between">
-						<div className="min-w-0">
-							<span className="text-sm font-medium">
-								{t("diagnosticLogs")}
-							</span>
-							{statsQuery.data && (
-								<span className="ml-3 text-xs text-muted">
-									{statsQuery.data.total_entries.toLocaleString()}{" "}
-									{t("entries")} &middot;{" "}
-									{formatSize(
-										statsQuery.data.total_size_bytes,
-									)}{" "}
-									&middot; {statsQuery.data.log_files.length}{" "}
-									{t("files")}
+				<Card.Content className="p-4">
+					<div className="flex items-start justify-between gap-4">
+						<div className="min-w-0 space-y-1">
+							<div className="flex items-center gap-2">
+								<span className="text-sm font-medium">
+									{t("diagnosticLogs")}
 								</span>
-							)}
+								{statsQuery.data && (
+									<span className="text-xs text-muted">
+										{statsQuery.data.total_entries.toLocaleString()}{" "}
+										{t("entries")} &middot;{" "}
+										{formatSize(
+											statsQuery.data.total_size_bytes,
+										)}{" "}
+										&middot;{" "}
+										{statsQuery.data.log_files.length}{" "}
+										{t("files")}
+									</span>
+								)}
+							</div>
 							{logDirPath && (
-								<p className="mt-0.5 truncate text-xs text-muted">
+								<p className="truncate text-xs text-muted">
 									{logDirPath}
 								</p>
 							)}
+							{configQuery.data &&
+								(() => {
+									const saved = configQuery.data;
+									const current = draftConfig ?? saved;
+									const isDirty =
+										current.max_file_size_mb !==
+											saved.max_file_size_mb ||
+										current.max_archives !==
+											saved.max_archives;
+									return (
+										<div className="flex items-center gap-2 pt-1 text-xs text-muted">
+											<span>
+												{t("logRotationSettings")}:
+											</span>
+											<input
+												type="number"
+												min={1}
+												max={100}
+												className="w-14 rounded border border-border bg-transparent px-1.5 py-0.5 text-center text-xs text-foreground"
+												value={current.max_file_size_mb}
+												onChange={(e) => {
+													const v = Number.parseInt(
+														e.target.value,
+														10,
+													);
+													if (
+														Number.isNaN(v) ||
+														v < 1
+													)
+														return;
+													setDraftConfig({
+														...current,
+														max_file_size_mb: v,
+													});
+												}}
+											/>
+											<span>MB &times;</span>
+											<input
+												type="number"
+												min={1}
+												max={20}
+												className="w-12 rounded border border-border bg-transparent px-1.5 py-0.5 text-center text-xs text-foreground"
+												value={current.max_archives}
+												onChange={(e) => {
+													const v = Number.parseInt(
+														e.target.value,
+														10,
+													);
+													if (
+														Number.isNaN(v) ||
+														v < 1
+													)
+														return;
+													setDraftConfig({
+														...current,
+														max_archives: v,
+													});
+												}}
+											/>
+											<span>{t("files")}</span>
+											{isDirty && (
+												<>
+													<Button
+														size="sm"
+														variant="tertiary"
+														className="ml-1 h-5 text-xs"
+														onPress={() =>
+															setDraftConfig(null)
+														}
+													>
+														{t("reset")}
+													</Button>
+													<Button
+														size="sm"
+														className="h-5 text-xs"
+														isPending={
+															updateConfigMutation.isPending
+														}
+														onPress={() =>
+															updateConfigMutation.mutate(
+																current,
+															)
+														}
+													>
+														{t("save")}
+													</Button>
+													<span className="text-amber-500">
+														{t(
+															"logRotationSettingsDescription",
+														)}
+													</span>
+												</>
+											)}
+										</div>
+									);
+								})()}
 						</div>
 						<div className="flex shrink-0 items-center gap-1">
 							<Button
@@ -256,9 +355,14 @@ export default function LogsPanel() {
 							</Button>
 						</div>
 					</div>
+				</Card.Content>
+			</Card>
 
+			{/* Log entries */}
+			<Card className="p-0">
+				<Card.Content className="p-0">
 					{/* Search + level filter */}
-					<div className="flex items-center gap-2">
+					<div className="flex items-center gap-2 border-b border-border px-3 py-2">
 						<Input
 							className="flex-1"
 							placeholder={t("searchLogs")}
@@ -294,12 +398,6 @@ export default function LogsPanel() {
 							))}
 						</div>
 					</div>
-				</Card.Content>
-			</Card>
-
-			{/* Log entries */}
-			<Card className="p-0">
-				<Card.Content className="p-0">
 					{entriesQuery.isLoading ? (
 						<div className="flex justify-center py-12">
 							<Spinner />
@@ -320,27 +418,29 @@ export default function LogsPanel() {
 							style={{ height: "50vh" }}
 							data={entries}
 							itemContent={(_, entry) => (
-								<div className="flex items-baseline gap-2 overflow-hidden border-b border-border px-3 py-1 font-mono text-xs whitespace-nowrap">
-									<span className="shrink-0 text-muted">
-										{entry.timestamp
-											.replace("T", " ")
-											.slice(0, 23)}
-									</span>
-									<span
-										className={cn(
-											"inline-block w-[3.2rem] shrink-0 rounded px-1 text-center font-semibold",
-											levelColor[entry.level] ??
-												"text-muted",
-										)}
-									>
-										{entry.level}
-									</span>
-									<span className="shrink-0 text-muted">
-										{entry.target}
-									</span>
-									<span className="min-w-0 truncate text-foreground">
+								<div className="border-b border-border px-3 py-1.5 font-mono text-xs">
+									<div className="flex items-center gap-2">
+										<span className="shrink-0 text-muted">
+											{entry.timestamp
+												.replace("T", " ")
+												.slice(0, 23)}
+										</span>
+										<span
+											className={cn(
+												"inline-block w-[3.2rem] shrink-0 rounded px-1 text-center font-semibold",
+												levelColor[entry.level] ??
+													"text-muted",
+											)}
+										>
+											{entry.level}
+										</span>
+										<span className="truncate text-muted">
+											{entry.target}
+										</span>
+									</div>
+									<p className="mt-0.5 break-words text-foreground">
 										{entry.message}
-									</span>
+									</p>
 								</div>
 							)}
 							followOutput="smooth"
@@ -356,70 +456,6 @@ export default function LogsPanel() {
 						total: totalCount,
 					})}
 				</div>
-			)}
-
-			{/* Rotation settings */}
-			{configQuery.data && (
-				<Card className="p-0">
-					<Card.Content className="space-y-3 p-4">
-						<span className="text-sm font-medium">
-							{t("logRotationSettings")}
-						</span>
-						<p className="text-xs text-muted">
-							{t("logRotationSettingsDescription")}
-						</p>
-						<div className="flex items-end gap-4">
-							<div className="space-y-1">
-								<Label className="text-xs">
-									{t("maxFileSizeMb")}
-								</Label>
-								<NumberField
-									minValue={1}
-									maxValue={100}
-									defaultValue={
-										configQuery.data.max_file_size_mb
-									}
-									onChange={(value) => {
-										if (!configQuery.data) return;
-										updateConfigMutation.mutate({
-											...configQuery.data,
-											max_file_size_mb: value,
-										});
-									}}
-								>
-									<NumberField.Group>
-										<NumberField.DecrementButton />
-										<NumberField.Input />
-										<NumberField.IncrementButton />
-									</NumberField.Group>
-								</NumberField>
-							</div>
-							<div className="space-y-1">
-								<Label className="text-xs">
-									{t("maxArchives")}
-								</Label>
-								<NumberField
-									minValue={1}
-									maxValue={20}
-									defaultValue={configQuery.data.max_archives}
-									onChange={(value) => {
-										if (!configQuery.data) return;
-										updateConfigMutation.mutate({
-											...configQuery.data,
-											max_archives: value,
-										});
-									}}
-								>
-									<NumberField.Group>
-										<NumberField.DecrementButton />
-										<NumberField.Input />
-										<NumberField.IncrementButton />
-									</NumberField.Group>
-								</NumberField>
-							</div>
-						</div>
-					</Card.Content>
-				</Card>
 			)}
 
 			{/* Clear dialog */}

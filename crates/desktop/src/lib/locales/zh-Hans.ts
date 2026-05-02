@@ -52,6 +52,7 @@ export default {
 	remove: "删除",
 	edit: "编辑",
 	save: "保存",
+	reset: "重置",
 	cancel: "取消",
 	create: "创建",
 	copy: "复制",

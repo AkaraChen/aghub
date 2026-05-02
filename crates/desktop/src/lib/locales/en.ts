@@ -55,6 +55,7 @@ export default {
 	remove: "Remove",
 	edit: "Edit",
 	save: "Save",
+	reset: "Reset",
 	cancel: "Cancel",
 	create: "Create",
 	copy: "Copy",

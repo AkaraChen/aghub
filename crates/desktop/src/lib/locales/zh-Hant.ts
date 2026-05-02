@@ -52,6 +52,7 @@ export default {
 	remove: "刪除",
 	edit: "編輯",
 	save: "儲存",
+	reset: "重設",
 	cancel: "取消",
 	create: "建立",
 	copy: "複製",
