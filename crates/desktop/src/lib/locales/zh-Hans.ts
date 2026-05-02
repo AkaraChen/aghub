@@ -73,9 +73,8 @@ export default {
 	exportLogsError: "日志导出失败",
 	openLogFolder: "打开文件夹",
 	clearLogs: "清除日志",
-	clearLogsConfirm:
-		"将删除所有归档日志文件，当前日志文件将保留。此操作不可撤销。",
-	logsClearedSuccess: "已清除 {{count}} 个归档日志文件",
+	clearLogsConfirm: "将删除所有日志文件。此操作不可撤销。",
+	logsClearedSuccess: "已清除 {{count}} 个日志文件",
 	logLoadError: "日志加载失败",
 	logRotationSettings: "日志轮转",
 	logRotationSettingsDescription: "更改将在重启应用后生效。",

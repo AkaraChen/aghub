@@ -144,13 +144,9 @@ export default function LogsPanel() {
 		},
 		onSuccess: (path) => {
 			if (!path) return;
+			revealItemInDir(path);
 			toast.success(t("exportLogsSuccess"), {
 				description: path,
-				actionProps: {
-					onPress: () => revealItemInDir(path),
-					variant: "tertiary",
-					children: t("openLogFolder"),
-				},
 			});
 		},
 		onError: (error) => {

@@ -1,6 +1,7 @@
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::path::PathBuf;
+use std::process::Command;
 
 use serde::{Deserialize, Serialize};
 use tauri::Manager;
@@ -10,11 +11,52 @@ use zip::ZipWriter;
 #[derive(Serialize)]
 struct LogManifest {
 	app_version: String,
+	tauri_version: &'static str,
 	os: String,
+	os_version: String,
 	arch: String,
+	log_level: String,
 	timestamp: String,
 	log_files: Vec<String>,
 	total_log_size_bytes: u64,
+}
+
+fn os_version() -> String {
+	#[cfg(target_os = "macos")]
+	{
+		Command::new("sw_vers")
+			.arg("-productVersion")
+			.output()
+			.ok()
+			.and_then(|o| String::from_utf8(o.stdout).ok())
+			.map(|s| format!("macOS {}", s.trim()))
+			.unwrap_or_default()
+	}
+	#[cfg(target_os = "windows")]
+	{
+		Command::new("cmd")
+			.args(["/C", "ver"])
+			.output()
+			.ok()
+			.and_then(|o| String::from_utf8(o.stdout).ok())
+			.map(|s| s.trim().to_string())
+			.unwrap_or_default()
+	}
+	#[cfg(target_os = "linux")]
+	{
+		fs::read_to_string("/etc/os-release")
+			.ok()
+			.and_then(|content| {
+				content.lines().find(|l| l.starts_with("PRETTY_NAME=")).map(
+					|l| {
+						l.trim_start_matches("PRETTY_NAME=")
+							.trim_matches('"')
+							.to_string()
+					},
+				)
+			})
+			.unwrap_or_default()
+	}
 }
 
 fn log_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -82,8 +124,11 @@ pub async fn export_diagnostic_logs(
 
 	let manifest = LogManifest {
 		app_version: version,
-		os: format!("{} {}", std::env::consts::OS, std::env::consts::ARCH),
+		tauri_version: tauri::VERSION,
+		os: std::env::consts::OS.to_string(),
+		os_version: os_version(),
 		arch: std::env::consts::ARCH.to_string(),
+		log_level: log::max_level().to_string(),
 		timestamp: now
 			.format(&time::format_description::well_known::Rfc3339)
 			.unwrap_or_default(),
@@ -270,21 +315,20 @@ pub async fn get_log_stats(app: tauri::AppHandle) -> Result<LogStats, String> {
 pub async fn clear_log_files(app: tauri::AppHandle) -> Result<usize, String> {
 	let dir = log_dir(&app)?;
 	let files = collect_log_files(&dir);
-	let mut removed = 0;
+	let mut cleared = 0;
 	for path in &files {
-		let name = path
-			.file_name()
-			.map(|n| n.to_string_lossy().to_string())
-			.unwrap_or_default();
-		// Keep the current log file, only remove rotated archives.
-		if name == "aghub.log" {
-			continue;
-		}
-		if fs::remove_file(path).is_ok() {
-			removed += 1;
+		let is_current = path.file_name().is_some_and(|n| n == "aghub.log");
+		if is_current {
+			// Truncate the current file instead of deleting it,
+			// because tauri-plugin-log holds the file handle open.
+			if fs::write(path, b"").is_ok() {
+				cleared += 1;
+			}
+		} else if fs::remove_file(path).is_ok() {
+			cleared += 1;
 		}
 	}
-	Ok(removed)
+	Ok(cleared)
 }
 
 /// Log rotation config read from `store.json` at startup.
@@ -300,5 +344,89 @@ impl Default for LogConfig {
 			max_file_size_mb: 10,
 			max_archives: 5,
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn parse_valid_log_line() {
+		let line =
+			"2026-05-02T15:19:03.970+08:00 INFO [aghub_api] api request started: GET /api/v1/agents";
+		let entry = parse_log_line(line).unwrap();
+		assert_eq!(entry.timestamp, "2026-05-02T15:19:03.970+08:00");
+		assert_eq!(entry.level, "INFO");
+		assert_eq!(entry.target, "aghub_api");
+		assert_eq!(entry.message, "api request started: GET /api/v1/agents");
+	}
+
+	#[test]
+	fn parse_warn_level() {
+		let line = "2026-05-02T10:00:00Z WARN [rocket::server] something wrong";
+		let entry = parse_log_line(line).unwrap();
+		assert_eq!(entry.level, "WARN");
+		assert_eq!(entry.target, "rocket::server");
+		assert_eq!(entry.message, "something wrong");
+	}
+
+	#[test]
+	fn parse_message_with_brackets() {
+		let line =
+			"2026-05-02T10:00:00Z INFO [target] [nested] bracket content";
+		let entry = parse_log_line(line).unwrap();
+		assert_eq!(entry.target, "target");
+		assert_eq!(entry.message, "[nested] bracket content");
+	}
+
+	#[test]
+	fn parse_invalid_line_returns_none() {
+		assert!(parse_log_line("").is_none());
+		assert!(parse_log_line("no format here").is_none());
+		assert!(parse_log_line("2026-05-02 INFO missing brackets").is_none());
+	}
+
+	#[test]
+	fn collect_log_files_filters_by_extension() {
+		let dir = tempfile::tempdir().unwrap();
+		fs::write(dir.path().join("aghub.log"), "log1").unwrap();
+		fs::write(dir.path().join("aghub_old.log"), "log2").unwrap();
+		fs::write(dir.path().join("store.json"), "{}").unwrap();
+		fs::write(dir.path().join("notes.txt"), "text").unwrap();
+
+		let files = collect_log_files(&dir.path().to_path_buf());
+		let names: Vec<String> = files
+			.iter()
+			.filter_map(|p| p.file_name())
+			.map(|n| n.to_string_lossy().to_string())
+			.collect();
+		assert!(names.contains(&"aghub.log".to_string()));
+		assert!(names.contains(&"aghub_old.log".to_string()));
+		assert!(!names.contains(&"store.json".to_string()));
+		assert!(!names.contains(&"notes.txt".to_string()));
+	}
+
+	#[test]
+	fn os_version_returns_non_empty() {
+		let version = os_version();
+		assert!(!version.is_empty(), "os_version() should not be empty");
+	}
+
+	#[test]
+	fn read_all_entries_from_temp_dir() {
+		let dir = tempfile::tempdir().unwrap();
+		fs::write(
+			dir.path().join("aghub.log"),
+			"2026-05-02T10:00:00Z INFO [app] line one\n\
+			 2026-05-02T10:00:01Z WARN [app] line two\n\
+			 invalid line\n",
+		)
+		.unwrap();
+
+		let entries = read_all_entries(&dir.path().to_path_buf());
+		assert_eq!(entries.len(), 2);
+		assert_eq!(entries[0].level, "INFO");
+		assert_eq!(entries[1].level, "WARN");
 	}
 }

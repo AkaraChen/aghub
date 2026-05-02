@@ -73,9 +73,8 @@ export default {
 	exportLogsError: "日誌匯出失敗",
 	openLogFolder: "開啟資料夾",
 	clearLogs: "清除日誌",
-	clearLogsConfirm:
-		"將刪除所有歸檔日誌檔案，目前的日誌檔案將保留。此操作無法復原。",
-	logsClearedSuccess: "已清除 {{count}} 個歸檔日誌檔案",
+	clearLogsConfirm: "將刪除所有日誌檔案。此操作無法復原。",
+	logsClearedSuccess: "已清除 {{count}} 個日誌檔案",
 	logLoadError: "日誌載入失敗",
 	logRotationSettings: "日誌輪轉",
 	logRotationSettingsDescription: "更改將在重啟應用程式後生效。",

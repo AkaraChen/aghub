@@ -77,8 +77,8 @@ export default {
 	openLogFolder: "Open Folder",
 	clearLogs: "Clear Logs",
 	clearLogsConfirm:
-		"This will delete all archived log files. The current log file will be kept. This action cannot be undone.",
-	logsClearedSuccess: "Cleared {{count}} archived log files",
+		"This will delete all log files. This action cannot be undone.",
+	logsClearedSuccess: "Cleared {{count}} log files",
 	logLoadError: "Failed to load logs",
 	logRotationSettings: "Log Rotation",
 	logRotationSettingsDescription:
