@@ -301,60 +301,7 @@ export default function LogsPanel() {
 									);
 								})()}
 						</div>
-						<div className="flex shrink-0 items-center gap-2">
-							<Select
-								variant="secondary"
-								selectedKey={activeLevel}
-								onSelectionChange={(key) =>
-									setActiveLevel(String(key))
-								}
-								aria-label={t("logLevel")}
-								className="w-28"
-							>
-								<Select.Trigger>
-									<Select.Value />
-									<Select.Indicator />
-								</Select.Trigger>
-								<Select.Popover>
-									<ListBox>
-										<ListBox.Item
-											key="ALL"
-											id="ALL"
-											textValue="ALL"
-										>
-											ALL
-										</ListBox.Item>
-										{LEVELS.map((level) => (
-											<ListBox.Item
-												key={level}
-												id={level}
-												textValue={level}
-											>
-												<span
-													className={cn(
-														"rounded px-1 font-mono text-xs font-semibold",
-														levelColor[level],
-													)}
-												>
-													{level}
-												</span>
-												{statsQuery.data
-													?.entries_by_level[level] !=
-													null && (
-													<span className="ml-auto text-xs text-muted">
-														{
-															statsQuery.data
-																.entries_by_level[
-																level
-															]
-														}
-													</span>
-												)}
-											</ListBox.Item>
-										))}
-									</ListBox>
-								</Select.Popover>
-							</Select>
+						<div className="flex shrink-0 items-center gap-1">
 							<Button
 								isIconOnly
 								variant="ghost"
@@ -407,14 +354,67 @@ export default function LogsPanel() {
 			{/* Log entries */}
 			<Card className="p-0">
 				<Card.Content className="p-0">
-					{/* Search */}
-					<div className="border-b border-border px-3 py-2">
+					{/* Search + level filter */}
+					<div className="flex items-center gap-2 border-b border-border px-3 py-2">
 						<Input
-							className="w-full"
+							className="flex-1"
 							placeholder={t("searchLogs")}
 							value={search}
 							onChange={(e) => setSearch(e.target.value)}
 						/>
+						<Select
+							variant="secondary"
+							selectedKey={activeLevel}
+							onSelectionChange={(key) =>
+								setActiveLevel(String(key))
+							}
+							aria-label={t("logLevel")}
+							className="w-28 shrink-0"
+						>
+							<Select.Trigger>
+								<Select.Value />
+								<Select.Indicator />
+							</Select.Trigger>
+							<Select.Popover>
+								<ListBox>
+									<ListBox.Item
+										key="ALL"
+										id="ALL"
+										textValue="ALL"
+									>
+										ALL
+									</ListBox.Item>
+									{LEVELS.map((level) => (
+										<ListBox.Item
+											key={level}
+											id={level}
+											textValue={level}
+										>
+											<span
+												className={cn(
+													"rounded px-1 font-mono text-xs font-semibold",
+													levelColor[level],
+												)}
+											>
+												{level}
+											</span>
+											{statsQuery.data?.entries_by_level[
+												level
+											] != null && (
+												<span className="ml-auto text-xs text-muted">
+													{
+														statsQuery.data
+															.entries_by_level[
+															level
+														]
+													}
+												</span>
+											)}
+										</ListBox.Item>
+									))}
+								</ListBox>
+							</Select.Popover>
+						</Select>
 					</div>
 					{entriesQuery.isLoading ? (
 						<div className="flex justify-center py-12">
