@@ -1,7 +1,6 @@
 import {
 	ArrowPathIcon,
 	FolderOpenIcon,
-	FunnelIcon,
 	ArrowDownTrayIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
@@ -10,6 +9,8 @@ import {
 	Button,
 	Card,
 	Input,
+	ListBox,
+	Select,
 	Spinner,
 	toast,
 } from "@heroui/react";
@@ -70,7 +71,7 @@ export default function LogsPanel() {
 	const queryClient = useQueryClient();
 	const [search, setSearch] = useState("");
 	const [debouncedSearch, setDebouncedSearch] = useState("");
-	const [activeLevels, setActiveLevels] = useState<string[]>([]);
+	const [activeLevel, setActiveLevel] = useState<string>("ALL");
 	const [showClearDialog, setShowClearDialog] = useState(false);
 	const [draftConfig, setDraftConfig] = useState<LogConfig | null>(null);
 	const debounceRef = useRef<ReturnType<typeof setTimeout>>();
@@ -86,13 +87,13 @@ export default function LogsPanel() {
 	});
 
 	const entriesQuery = useQuery({
-		queryKey: ["log-entries", activeLevels, debouncedSearch],
+		queryKey: ["log-entries", activeLevel, debouncedSearch],
 		queryFn: () =>
 			invoke<GetLogEntriesResponse>("get_log_entries", {
 				params: {
 					offset: 0,
 					limit: 5000,
-					level_filter: activeLevels.length > 0 ? activeLevels : null,
+					level_filter: activeLevel !== "ALL" ? [activeLevel] : null,
 					search: debouncedSearch || null,
 				},
 			}),
@@ -168,14 +169,6 @@ export default function LogsPanel() {
 	const entries = entriesQuery.data?.entries ?? [];
 	const totalCount = entriesQuery.data?.total_count ?? 0;
 	const logDirPath = statsQuery.data?.log_dir_path ?? "";
-
-	const toggleLevel = useCallback((level: string) => {
-		setActiveLevels((prev) =>
-			prev.includes(level)
-				? prev.filter((l) => l !== level)
-				: [...prev, level],
-		);
-	}, []);
 
 	const handleRefresh = useCallback(() => {
 		statsQuery.refetch();
@@ -308,7 +301,60 @@ export default function LogsPanel() {
 									);
 								})()}
 						</div>
-						<div className="flex shrink-0 items-center gap-1">
+						<div className="flex shrink-0 items-center gap-2">
+							<Select
+								variant="secondary"
+								selectedKey={activeLevel}
+								onSelectionChange={(key) =>
+									setActiveLevel(String(key))
+								}
+								aria-label={t("logLevel")}
+								className="w-28"
+							>
+								<Select.Trigger>
+									<Select.Value />
+									<Select.Indicator />
+								</Select.Trigger>
+								<Select.Popover>
+									<ListBox>
+										<ListBox.Item
+											key="ALL"
+											id="ALL"
+											textValue="ALL"
+										>
+											ALL
+										</ListBox.Item>
+										{LEVELS.map((level) => (
+											<ListBox.Item
+												key={level}
+												id={level}
+												textValue={level}
+											>
+												<span
+													className={cn(
+														"rounded px-1 font-mono text-xs font-semibold",
+														levelColor[level],
+													)}
+												>
+													{level}
+												</span>
+												{statsQuery.data
+													?.entries_by_level[level] !=
+													null && (
+													<span className="ml-auto text-xs text-muted">
+														{
+															statsQuery.data
+																.entries_by_level[
+																level
+															]
+														}
+													</span>
+												)}
+											</ListBox.Item>
+										))}
+									</ListBox>
+								</Select.Popover>
+							</Select>
 							<Button
 								isIconOnly
 								variant="ghost"
@@ -361,42 +407,14 @@ export default function LogsPanel() {
 			{/* Log entries */}
 			<Card className="p-0">
 				<Card.Content className="p-0">
-					{/* Search + level filter */}
-					<div className="flex items-center gap-2 border-b border-border px-3 py-2">
+					{/* Search */}
+					<div className="border-b border-border px-3 py-2">
 						<Input
-							className="flex-1"
+							className="w-full"
 							placeholder={t("searchLogs")}
 							value={search}
 							onChange={(e) => setSearch(e.target.value)}
 						/>
-						<div className="flex items-center gap-1">
-							<FunnelIcon className="size-3.5 text-muted" />
-							{LEVELS.map((level) => (
-								<button
-									key={level}
-									type="button"
-									className={cn(
-										"rounded px-1.5 py-0.5 text-[10px] font-medium transition-opacity",
-										levelColor[level],
-										activeLevels.length > 0 &&
-											!activeLevels.includes(level) &&
-											"opacity-30",
-									)}
-									onClick={() => toggleLevel(level)}
-								>
-									{level}
-									{statsQuery.data?.entries_by_level[level] !=
-										null && (
-										<span className="ml-1 opacity-60">
-											{
-												statsQuery.data
-													.entries_by_level[level]
-											}
-										</span>
-									)}
-								</button>
-							))}
-						</div>
 					</div>
 					{entriesQuery.isLoading ? (
 						<div className="flex justify-center py-12">

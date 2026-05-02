@@ -60,6 +60,7 @@ export default {
 	enabled: "已啟用",
 	disabled: "已停用",
 	logs: "日誌",
+	logLevel: "日誌級別",
 	searchLogs: "搜尋日誌...",
 	noLogEntries: "沒有找到日誌條目",
 	entries: "條",

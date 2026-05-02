@@ -63,6 +63,7 @@ export default {
 	all: "All",
 	enabled: "Enabled",
 	logs: "Logs",
+	logLevel: "Log Level",
 	searchLogs: "Search logs...",
 	noLogEntries: "No log entries found",
 	entries: "entries",
