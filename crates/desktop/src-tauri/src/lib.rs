@@ -1,4 +1,4 @@
-use crate::commands::start_server;
+use crate::commands::{export_diagnostic_logs, get_log_dir_path, start_server};
 use log::info;
 use tauri::{Manager, WebviewWindow};
 use tauri_plugin_log::fern::colors::{Color, ColoredLevelConfig};
@@ -134,7 +134,11 @@ pub fn run() {
 			info!("aghub desktop setup completed");
 			Ok(())
 		})
-		.invoke_handler(tauri::generate_handler![start_server])
+		.invoke_handler(tauri::generate_handler![
+			start_server,
+			export_diagnostic_logs,
+			get_log_dir_path,
+		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
 }

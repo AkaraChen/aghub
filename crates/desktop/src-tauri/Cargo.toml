@@ -33,3 +33,4 @@ tokio = { version = "1", features = [ "rt" ] }
 fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs", rev = "c4c45d503ea115a839aae718d02f79e7c7f0f673" }
 log = "0.4.29"
 time = { version = "0.3", features = ["formatting", "local-offset"] }
+zip = { version = "2", default-features = false, features = ["deflate"] }

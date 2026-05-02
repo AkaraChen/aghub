@@ -1,6 +1,7 @@
 import { Avatar, Button, Card, toast } from "@heroui/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { getName, getVersion } from "@tauri-apps/api/app";
+import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
@@ -70,6 +71,27 @@ export default function ApplicationPanel() {
 	const hasError = checkMutation.isError || downloadMutation.isError;
 	const errorMessage =
 		checkMutation.error?.message || downloadMutation.error?.message;
+
+	const exportLogsMutation = useMutation({
+		mutationFn: () => invoke<string>("export_diagnostic_logs"),
+		onSuccess: (path) => {
+			toast.success(t("exportLogsSuccess"), {
+				description: path,
+			});
+		},
+		onError: (error) => {
+			toast.danger(
+				`${t("exportLogsError")}: ${error instanceof Error ? error.message : String(error)}`,
+			);
+		},
+	});
+
+	const openLogFolderMutation = useMutation({
+		mutationFn: async () => {
+			const path = await invoke<string>("get_log_dir_path");
+			await openUrl(path);
+		},
+	});
 
 	const teamMembers = [
 		{
@@ -180,6 +202,34 @@ export default function ApplicationPanel() {
 									{t("downloadAndInstall")}
 								</Button>
 							)}
+						</div>
+					</div>
+
+					<div className="flex items-center justify-between">
+						<div className="space-y-0.5">
+							<span className="text-sm font-medium text-(--foreground)">
+								{t("diagnosticLogs")}
+							</span>
+							<span className="block text-xs text-muted">
+								{t("diagnosticLogsDescription")}
+							</span>
+						</div>
+						<div className="flex gap-2">
+							<Button
+								variant="secondary"
+								size="sm"
+								onPress={() => openLogFolderMutation.mutate()}
+							>
+								{t("openLogFolder")}
+							</Button>
+							<Button
+								variant="secondary"
+								size="sm"
+								isPending={exportLogsMutation.isPending}
+								onPress={() => exportLogsMutation.mutate()}
+							>
+								{t("exportLogs")}
+							</Button>
 						</div>
 					</div>
 
