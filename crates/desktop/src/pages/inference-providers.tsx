@@ -1,6 +1,7 @@
 import {
 	ArrowPathIcon,
 	ClipboardDocumentIcon,
+	CloudArrowDownIcon,
 	CpuChipIcon,
 	EyeIcon,
 	EyeSlashIcon,
@@ -10,18 +11,26 @@ import {
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import AnthropicIcon from "@lobehub/icons/es/Anthropic";
+import DeepSeekIcon from "@lobehub/icons/es/DeepSeek";
+import GroqIcon from "@lobehub/icons/es/Groq";
+import MistralIcon from "@lobehub/icons/es/Mistral";
 import OpenAIIcon from "@lobehub/icons/es/OpenAI";
+import OpenRouterIcon from "@lobehub/icons/es/OpenRouter";
+import TogetherIcon from "@lobehub/icons/es/Together";
 import {
+	Accordion,
 	Alert,
 	AlertDialog,
 	Button,
 	Card,
+	Checkbox,
 	FieldError,
 	Fieldset,
 	Form,
 	Input,
 	Label,
 	ListBox,
+	SearchField,
 	Select,
 	Spinner,
 	TextField,
@@ -30,8 +39,9 @@ import {
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Fuse from "fuse.js";
-import { useMemo, useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import type React from "react";
+import { type Key, useMemo, useState } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { ListSearchHeader } from "../components/list-search-header";
 import { ResourceSectionHeader } from "../components/resource-section-header";
@@ -49,8 +59,11 @@ import {
 	createInferenceProviderMutationOptions,
 	deleteInferenceProviderMutationOptions,
 	inferenceProviderListQueryOptions,
+	inferenceProviderPresetsQueryOptions,
 	updateInferenceProviderMutationOptions,
 } from "../requests/inference-providers";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import type { InferenceProviderPresetResponse } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 
 type CodingAgentId = "opencode" | "codex" | "claude";
@@ -89,6 +102,50 @@ const FORMAT_OPTIONS: FormatOption[] = [
 		descriptionKey: "inferenceFormatOpenAiResponsesDescription",
 	},
 ];
+
+async function fetchProviderModels({
+	format,
+	apiBaseUrl,
+	apiKey,
+}: {
+	format: InferenceProviderFormatDto;
+	apiBaseUrl: string;
+	apiKey: string;
+}): Promise<string[]> {
+	const trimmedBase = apiBaseUrl.trim().replace(/\/+$/, "");
+	if (!trimmedBase) throw new Error("Missing API base URL");
+	if (!apiKey.trim()) throw new Error("Missing API key");
+
+	const headers: Record<string, string> =
+		format === "anthropic"
+			? {
+					"x-api-key": apiKey,
+					"anthropic-version": "2023-06-01",
+				}
+			: {
+					Authorization: `Bearer ${apiKey}`,
+				};
+
+	const response = await fetch(`${trimmedBase}/models`, {
+		method: "GET",
+		headers,
+	});
+
+	if (!response.ok) {
+		throw new Error(`HTTP ${response.status}`);
+	}
+
+	const payload = (await response.json()) as {
+		data?: Array<{ id?: unknown }>;
+	};
+	const data = Array.isArray(payload?.data) ? payload.data : [];
+	const ids = data
+		.map((entry) => (typeof entry?.id === "string" ? entry.id : null))
+		.filter((id): id is string => Boolean(id));
+
+	if (ids.length === 0) throw new Error("No models in response");
+	return ids;
+}
 
 const CODING_AGENT_OPTIONS: CodingAgentOption[] = [
 	{
@@ -139,6 +196,32 @@ function ProviderIcon({ format }: { format: InferenceProviderFormatDto }) {
 	);
 }
 
+const PRESET_LOGO_MAP: Record<
+	string,
+	React.ComponentType<{ size?: number; "aria-hidden"?: boolean }>
+> = {
+	OpenAI: OpenAIIcon,
+	Anthropic: AnthropicIcon,
+	OpenRouter: OpenRouterIcon,
+	Groq: GroqIcon,
+	Mistral: MistralIcon,
+	Together: TogetherIcon,
+	DeepSeek: DeepSeekIcon,
+};
+
+function PresetLogo({ logo, size = 16 }: { logo: string; size?: number }) {
+	const Icon = PRESET_LOGO_MAP[logo];
+	return (
+		<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
+			{Icon ? (
+				<Icon aria-hidden size={size} />
+			) : (
+				<ServerIcon className="size-4 text-muted" aria-hidden />
+			)}
+		</div>
+	);
+}
+
 function MonoValue({
 	children,
 	className,
@@ -178,23 +261,193 @@ function validateModelNames(models: ProviderModelFormValue[], message: string) {
 	return true;
 }
 
+const UNCATEGORIZED_GROUP_KEY = "__uncategorized__";
+
+interface ProviderModelGroup {
+	key: string;
+	label: string;
+	isUncategorized: boolean;
+	items: ProviderModelFormValue[];
+}
+
+function groupProviderModels(
+	models: ProviderModelFormValue[],
+): ProviderModelGroup[] {
+	const buckets = new Map<string, ProviderModelGroup>();
+	for (const model of models) {
+		const name = model.name.trim();
+		const slashIndex = name.indexOf("/");
+		const isPrefixed = slashIndex > 0 && slashIndex < name.length - 1;
+		const key = isPrefixed
+			? name.slice(0, slashIndex)
+			: UNCATEGORIZED_GROUP_KEY;
+		const existing = buckets.get(key);
+		if (existing) {
+			existing.items.push(model);
+		} else {
+			buckets.set(key, {
+				key,
+				label: isPrefixed ? key : "",
+				isUncategorized: !isPrefixed,
+				items: [model],
+			});
+		}
+	}
+
+	const groups = Array.from(buckets.values());
+	groups.sort((a, b) => {
+		if (a.isUncategorized) return 1;
+		if (b.isUncategorized) return -1;
+		return a.label.localeCompare(b.label);
+	});
+	return groups;
+}
+
 function ProviderModelsEditor({
 	value,
 	onChange,
 	onBlur,
 	errorMessage,
+	onFetchModels,
+	canFetchModels = false,
 }: {
 	value: ProviderModelFormValue[];
 	onChange: (value: ProviderModelFormValue[]) => void;
 	onBlur: () => void;
 	errorMessage?: string;
+	onFetchModels?: () => Promise<string[]>;
+	canFetchModels?: boolean;
 }) {
 	const { t } = useTranslation();
 	const emptyModel = useMemo(() => createProviderModelFormValue(), []);
-	const displayModels = value.length > 0 ? value : [emptyModel];
+	const [isFetching, setIsFetching] = useState(false);
+	const [searchQuery, setSearchQuery] = useState("");
+	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+	const [isBatchDeleteOpen, setIsBatchDeleteOpen] = useState(false);
+	const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
+		new Set(),
+	);
+
+	const hasRealModels = value.length > 0;
+	const trimmedQuery = searchQuery.trim().toLowerCase();
+	const filteredModels = useMemo(() => {
+		if (!hasRealModels) return [];
+		if (!trimmedQuery) return value;
+		return value.filter((model) =>
+			model.name.toLowerCase().includes(trimmedQuery),
+		);
+	}, [hasRealModels, trimmedQuery, value]);
+
+	const displayModels = hasRealModels ? filteredModels : [emptyModel];
+
+	const filteredSelectedCount = filteredModels.reduce(
+		(count, model) => count + (selectedIds.has(model.id) ? 1 : 0),
+		0,
+	);
+	const totalSelectedCount = value.reduce(
+		(count, model) => count + (selectedIds.has(model.id) ? 1 : 0),
+		0,
+	);
+	const allFilteredSelected =
+		filteredModels.length > 0 &&
+		filteredSelectedCount === filteredModels.length;
+	const someFilteredSelected =
+		filteredSelectedCount > 0 && !allFilteredSelected;
+
+	const filteredGroups = useMemo(
+		() => groupProviderModels(filteredModels),
+		[filteredModels],
+	);
+	const useAccordion = hasRealModels && filteredGroups.length > 1;
+	const expandedGroupKeys = useMemo(
+		() =>
+			filteredGroups
+				.map((group) => group.key)
+				.filter((key) => !collapsedGroups.has(key)),
+		[filteredGroups, collapsedGroups],
+	);
+
+	const handleExpandedChange = (next: Set<Key>) => {
+		const visibleKeys = filteredGroups.map((group) => group.key);
+		setCollapsedGroups((prev) => {
+			const result = new Set(prev);
+			for (const key of visibleKeys) {
+				if (next.has(key)) result.delete(key);
+				else result.add(key);
+			}
+			return result;
+		});
+	};
 
 	const handleAdd = () => {
 		onChange([...value, createProviderModelFormValue()]);
+	};
+
+	const toggleSelected = (id: string, selected: boolean) => {
+		setSelectedIds((prev) => {
+			const next = new Set(prev);
+			if (selected) next.add(id);
+			else next.delete(id);
+			return next;
+		});
+	};
+
+	const handleToggleAllFiltered = (selected: boolean) => {
+		setSelectedIds((prev) => {
+			const next = new Set(prev);
+			for (const model of filteredModels) {
+				if (selected) next.add(model.id);
+				else next.delete(model.id);
+			}
+			return next;
+		});
+	};
+
+	const handleBatchDelete = () => {
+		if (totalSelectedCount === 0) return;
+		const remaining = value.filter((model) => !selectedIds.has(model.id));
+		onChange(remaining);
+		setSelectedIds(new Set());
+		setIsBatchDeleteOpen(false);
+	};
+
+	const handleFetch = async () => {
+		if (!onFetchModels) return;
+		setIsFetching(true);
+		try {
+			const fetched = await onFetchModels();
+			const existing = new Set(
+				value.map((model) => model.name.trim()).filter(Boolean),
+			);
+			const additions = fetched
+				.filter((name) => !existing.has(name))
+				.map((name) => createProviderModelFormValue(name));
+			const baseline = value.filter((model) => model.name.trim());
+			onChange([...baseline, ...additions]);
+			if (additions.length === 0) {
+				toast.success(
+					t("fetchProviderModelsSuccessNoNew", {
+						total: fetched.length,
+					}),
+				);
+			} else {
+				toast.success(
+					t("fetchProviderModelsSuccess", {
+						added: additions.length,
+						total: fetched.length,
+					}),
+				);
+			}
+		} catch (error) {
+			console.error("Failed to fetch provider models:", error);
+			const reason =
+				error instanceof Error && error.message
+					? error.message
+					: t("fetchProviderModelsUnknownError");
+			toast.danger(t("fetchProviderModelsFailed", { reason }));
+		} finally {
+			setIsFetching(false);
+		}
 	};
 
 	const handleRemove = (id: string) => {
@@ -211,60 +464,273 @@ function ProviderModelsEditor({
 		onChange(nextModels);
 	};
 
-	return (
-		<div className="grid gap-2">
-			<div className="flex items-start justify-between gap-3">
-				<div className="grid gap-0.5">
-					<Label>{t("providerModels")}</Label>
-					<p className="text-xs text-muted">
-						{t("providerModelsDescription")}
-					</p>
-				</div>
-				<Button
-					type="button"
+	const renderModelRow = (model: ProviderModelFormValue) => (
+		<div key={model.id} className="flex items-start gap-2">
+			{hasRealModels && (
+				<Checkbox
 					variant="secondary"
-					size="sm"
-					onPress={handleAdd}
+					aria-label={t("selectProviderModel", {
+						name: model.name || t("providerModelName"),
+					})}
+					isSelected={selectedIds.has(model.id)}
+					onChange={(selected) => toggleSelected(model.id, selected)}
+					className="mt-2 shrink-0"
 				>
-					<PlusIcon className="size-4" />
-					{t("addProviderModel")}
-				</Button>
-			</div>
+					<Checkbox.Control>
+						<Checkbox.Indicator />
+					</Checkbox.Control>
+				</Checkbox>
+			)}
+			<Input
+				value={model.name}
+				onChange={(event) => handleChange(model.id, event.target.value)}
+				onBlur={onBlur}
+				placeholder={t("providerModelNamePlaceholder")}
+				aria-label={t("providerModelName")}
+				variant="secondary"
+				className="min-w-0 flex-1"
+			/>
+			<Button
+				type="button"
+				isIconOnly
+				variant="ghost"
+				size="sm"
+				className="mt-1 shrink-0 text-muted"
+				aria-label={t("remove")}
+				isDisabled={value.length === 0}
+				onPress={() => handleRemove(model.id)}
+			>
+				<TrashIcon className="size-4" />
+			</Button>
+		</div>
+	);
 
+	return (
+		<>
 			<div className="grid gap-2">
-				{displayModels.map((model) => (
-					<div key={model.id} className="flex items-start gap-2">
-						<Input
-							value={model.name}
-							onChange={(event) =>
-								handleChange(model.id, event.target.value)
-							}
-							onBlur={onBlur}
-							placeholder={t("providerModelNamePlaceholder")}
-							aria-label={t("providerModelName")}
-							variant="secondary"
-							className="min-w-0 flex-1"
-						/>
+				<div className="flex items-start justify-between gap-3">
+					<div className="grid gap-0.5">
+						<Label>{t("providerModels")}</Label>
+						<p className="text-xs text-muted">
+							{t("providerModelsDescription")}
+						</p>
+					</div>
+					<div className="flex shrink-0 items-center gap-2">
+						{onFetchModels && (
+							<Button
+								type="button"
+								variant="tertiary"
+								size="sm"
+								isPending={isFetching}
+								isDisabled={!canFetchModels}
+								onPress={handleFetch}
+							>
+								{({ isPending }) => (
+									<>
+										{isPending ? (
+											<Spinner
+												color="current"
+												size="sm"
+											/>
+										) : (
+											<CloudArrowDownIcon className="size-4" />
+										)}
+										{isPending
+											? t("fetchProviderModelsPending")
+											: t("fetchProviderModels")}
+									</>
+								)}
+							</Button>
+						)}
 						<Button
 							type="button"
-							isIconOnly
-							variant="ghost"
+							variant="secondary"
 							size="sm"
-							className="mt-1 shrink-0 text-muted"
-							aria-label={t("remove")}
-							isDisabled={value.length === 0}
-							onPress={() => handleRemove(model.id)}
+							onPress={handleAdd}
 						>
-							<TrashIcon className="size-4" />
+							<PlusIcon className="size-4" />
+							{t("addProviderModel")}
 						</Button>
 					</div>
-				))}
+				</div>
+
+				{hasRealModels && (
+					<SearchField
+						value={searchQuery}
+						onChange={setSearchQuery}
+						aria-label={t("searchProviderModels")}
+						variant="secondary"
+						className="w-full"
+					>
+						<SearchField.Group>
+							<SearchField.SearchIcon />
+							<SearchField.Input
+								placeholder={t(
+									"searchProviderModelsPlaceholder",
+								)}
+							/>
+							<SearchField.ClearButton />
+						</SearchField.Group>
+					</SearchField>
+				)}
+
+				{hasRealModels && (
+					<div className="flex items-center justify-between gap-3 px-1">
+						<Checkbox
+							variant="secondary"
+							aria-label={
+								allFilteredSelected
+									? t("deselectAllProviderModels")
+									: t("selectAllProviderModels")
+							}
+							isSelected={allFilteredSelected}
+							isIndeterminate={someFilteredSelected}
+							isDisabled={filteredModels.length === 0}
+							onChange={handleToggleAllFiltered}
+						>
+							<Checkbox.Control>
+								<Checkbox.Indicator />
+							</Checkbox.Control>
+							<Checkbox.Content>
+								<span className="text-xs text-muted">
+									{t("selectedProviderModelsCount", {
+										selected: totalSelectedCount,
+										total: value.length,
+									})}
+								</span>
+							</Checkbox.Content>
+						</Checkbox>
+						{totalSelectedCount > 0 && (
+							<Button
+								type="button"
+								variant="danger"
+								size="sm"
+								onPress={() => setIsBatchDeleteOpen(true)}
+							>
+								<TrashIcon className="size-4" />
+								{t("deleteSelectedProviderModels", {
+									count: totalSelectedCount,
+								})}
+							</Button>
+						)}
+					</div>
+				)}
+
+				<div className="grid max-h-[420px] gap-2 overflow-y-auto pr-1">
+					{hasRealModels && filteredModels.length === 0 ? (
+						<p className="px-1 py-2 text-sm text-muted">
+							{t("noProviderModelsMatch")}
+						</p>
+					) : useAccordion ? (
+						<Accordion
+							allowsMultipleExpanded
+							expandedKeys={expandedGroupKeys}
+							onExpandedChange={handleExpandedChange}
+							hideSeparator
+						>
+							{filteredGroups.map((group) => {
+								const groupSelected = group.items.reduce(
+									(count, model) =>
+										count +
+										(selectedIds.has(model.id) ? 1 : 0),
+									0,
+								);
+								const groupLabel = group.isUncategorized
+									? t("providerModelGroupUncategorized")
+									: group.label;
+								return (
+									<Accordion.Item
+										key={group.key}
+										id={group.key}
+									>
+										<Accordion.Heading>
+											<Accordion.Trigger>
+												<span className="flex-1 text-left font-medium">
+													{groupLabel}
+												</span>
+												<span className="mx-2 text-xs text-muted">
+													{groupSelected > 0
+														? t(
+																"providerModelGroupCountWithSelected",
+																{
+																	selected:
+																		groupSelected,
+																	total: group
+																		.items
+																		.length,
+																},
+															)
+														: t(
+																"providerModelGroupCount",
+																{
+																	count: group
+																		.items
+																		.length,
+																},
+															)}
+												</span>
+												<Accordion.Indicator />
+											</Accordion.Trigger>
+										</Accordion.Heading>
+										<Accordion.Panel>
+											<Accordion.Body>
+												<div className="grid gap-2">
+													{group.items.map((model) =>
+														renderModelRow(model),
+													)}
+												</div>
+											</Accordion.Body>
+										</Accordion.Panel>
+									</Accordion.Item>
+								);
+							})}
+						</Accordion>
+					) : (
+						displayModels.map((model) => renderModelRow(model))
+					)}
+				</div>
+
+				{errorMessage && (
+					<p className="text-sm text-danger">{errorMessage}</p>
+				)}
 			</div>
 
-			{errorMessage && (
-				<p className="text-sm text-danger">{errorMessage}</p>
-			)}
-		</div>
+			<AlertDialog.Backdrop
+				isOpen={isBatchDeleteOpen}
+				onOpenChange={setIsBatchDeleteOpen}
+			>
+				<AlertDialog.Container>
+					<AlertDialog.Dialog className="sm:max-w-[420px]">
+						<AlertDialog.CloseTrigger />
+						<AlertDialog.Header>
+							<AlertDialog.Icon status="danger" />
+							<AlertDialog.Heading>
+								{t("confirmDeleteProviderModels")}
+							</AlertDialog.Heading>
+						</AlertDialog.Header>
+						<AlertDialog.Body>
+							{t("confirmDeleteProviderModelsBody", {
+								count: totalSelectedCount,
+							})}
+						</AlertDialog.Body>
+						<AlertDialog.Footer>
+							<Button
+								variant="tertiary"
+								onPress={() => setIsBatchDeleteOpen(false)}
+							>
+								{t("cancel")}
+							</Button>
+							<Button
+								variant="danger"
+								onPress={handleBatchDelete}
+							>
+								{t("delete")}
+							</Button>
+						</AlertDialog.Footer>
+					</AlertDialog.Dialog>
+				</AlertDialog.Container>
+			</AlertDialog.Backdrop>
+		</>
 	);
 }
 
@@ -285,6 +751,8 @@ function ProviderForm({
 	const {
 		control,
 		handleSubmit,
+		getValues,
+		setValue,
 		formState: { isSubmitting },
 	} = useForm<InferenceProviderFormValues>({
 		mode: "onSubmit",
@@ -297,6 +765,51 @@ function ProviderForm({
 			models: toProviderModelFormValues(provider?.models ?? []),
 		},
 	});
+
+	const [selectedPresetId, setSelectedPresetId] = useState<string | null>(
+		null,
+	);
+	const { data: presets = [] } = useQuery({
+		...inferenceProviderPresetsQueryOptions({ api }),
+	});
+	const selectedPreset = useMemo(
+		() => presets.find((preset) => preset.id === selectedPresetId) ?? null,
+		[presets, selectedPresetId],
+	);
+
+	const handleApplyPreset = (preset: InferenceProviderPresetResponse) => {
+		setValue("displayName", preset.name, { shouldDirty: true });
+		setValue("apiBaseUrl", preset.api_base_url, { shouldDirty: true });
+		setValue("format", preset.format, { shouldDirty: true });
+		setValue("models", toProviderModelFormValues(preset.models), {
+			shouldDirty: true,
+		});
+		setSelectedPresetId(preset.id);
+	};
+
+	const handlePresetSelectionChange = (key: string | null) => {
+		if (!key || key === "__none__") {
+			setSelectedPresetId(null);
+			return;
+		}
+		const preset = presets.find((candidate) => candidate.id === key);
+		if (preset) handleApplyPreset(preset);
+	};
+
+	const watchedApiBaseUrl = useWatch({ control, name: "apiBaseUrl" });
+	const watchedApiKey = useWatch({ control, name: "apiKey" });
+	const canFetchModels = Boolean(
+		watchedApiBaseUrl?.trim() && watchedApiKey?.trim(),
+	);
+
+	const handleFetchModels = async () => {
+		const values = getValues();
+		return fetchProviderModels({
+			format: values.format,
+			apiBaseUrl: values.apiBaseUrl,
+			apiKey: values.apiKey,
+		});
+	};
 
 	const createMutation = useMutation({
 		...createInferenceProviderMutationOptions({
@@ -356,6 +869,21 @@ function ProviderForm({
 		}
 	};
 
+	const rawErrorMessage =
+		activeError instanceof Error
+			? activeError.message
+			: activeError
+				? String(activeError)
+				: "";
+	const duplicateMatch = rawErrorMessage.match(
+		/provider already exists:\s*(.+)/i,
+	);
+	const friendlyErrorMessage = duplicateMatch
+		? t("inferenceProviderDuplicateError", {
+				name: duplicateMatch[1].trim(),
+			})
+		: rawErrorMessage;
+
 	return (
 		<div className="h-full overflow-y-auto p-4 sm:p-6">
 			{activeError && (
@@ -363,12 +891,94 @@ function ProviderForm({
 					<Alert.Indicator />
 					<Alert.Content>
 						<Alert.Description>
-							{activeError instanceof Error
-								? activeError.message
-								: String(activeError)}
+							{friendlyErrorMessage}
 						</Alert.Description>
 					</Alert.Content>
 				</Alert>
+			)}
+
+			{presets.length > 0 && (
+				<Card className="mb-4">
+					<Card.Header>
+						<div>
+							<Card.Title>{t("providerPresetsTitle")}</Card.Title>
+							<Card.Description>
+								{t("providerPresetsDescription")}
+							</Card.Description>
+						</div>
+					</Card.Header>
+					<Card.Content>
+						<Select
+							className="w-full"
+							variant="secondary"
+							aria-label={t("providerPresetsTitle")}
+							placeholder={t("providerPresetsPlaceholder")}
+							selectedKey={selectedPresetId ?? "__none__"}
+							onSelectionChange={(key) =>
+								handlePresetSelectionChange(
+									key === null ? null : String(key),
+								)
+							}
+						>
+							<Select.Trigger>
+								<Select.Value>
+									{selectedPreset ? (
+										<span className="flex min-w-0 items-center gap-2">
+											<PresetLogo
+												logo={selectedPreset.logo}
+											/>
+											<span className="truncate">
+												{selectedPreset.name}
+											</span>
+										</span>
+									) : (
+										<span className="text-muted">
+											{t("providerPresetsNone")}
+										</span>
+									)}
+								</Select.Value>
+								<Select.Indicator />
+							</Select.Trigger>
+							<Select.Popover>
+								<ListBox>
+									<ListBox.Item
+										id="__none__"
+										textValue={t("providerPresetsNone")}
+									>
+										<span className="text-muted">
+											{t("providerPresetsNone")}
+										</span>
+										<ListBox.ItemIndicator />
+									</ListBox.Item>
+									{presets.map((preset) => (
+										<ListBox.Item
+											key={preset.id}
+											id={preset.id}
+											textValue={preset.name}
+										>
+											<div className="flex min-w-0 items-start gap-2">
+												<PresetLogo
+													logo={preset.logo}
+												/>
+												<div className="min-w-0 grid gap-0.5">
+													<span className="truncate">
+														{preset.name}
+													</span>
+													{preset.description && (
+														<span className="truncate text-xs text-muted">
+															{preset.description}
+														</span>
+													)}
+												</div>
+											</div>
+											<ListBox.ItemIndicator />
+										</ListBox.Item>
+									))}
+								</ListBox>
+							</Select.Popover>
+						</Select>
+					</Card.Content>
+				</Card>
 			)}
 
 			<Card>
@@ -559,7 +1169,28 @@ function ProviderForm({
 												fieldState.error,
 											)}
 										>
-											<Label>{t("providerApiKey")}</Label>
+											<div className="flex items-center justify-between gap-2">
+												<Label>
+													{t("providerApiKey")}
+												</Label>
+												{selectedPreset?.homepage && (
+													<button
+														type="button"
+														className="text-xs text-accent hover:underline focus:underline focus:outline-none"
+														onClick={() => {
+															if (
+																selectedPreset?.homepage
+															) {
+																openUrl(
+																	selectedPreset.homepage,
+																);
+															}
+														}}
+													>
+														{t("providerGetApiKey")}
+													</button>
+												)}
+											</div>
 											<Input
 												type="password"
 												value={field.value}
@@ -609,6 +1240,8 @@ function ProviderForm({
 											errorMessage={
 												fieldState.error?.message
 											}
+											onFetchModels={handleFetchModels}
+											canFetchModels={canFetchModels}
 										/>
 									)}
 								/>
@@ -1009,11 +1642,8 @@ export default function InferenceProvidersPage() {
 			? { type: "detail" }
 			: panel;
 
-	const selectedAgentKeys = useMemo(() => {
-		return resolvedPanel.type === "agent"
-			? new Set([resolvedPanel.agentId])
-			: new Set<string>();
-	}, [resolvedPanel]);
+	const selectedAgentKey =
+		resolvedPanel.type === "agent" ? resolvedPanel.agentId : null;
 
 	const selectedProviderKeys = useMemo(() => {
 		return activeProvider &&
@@ -1105,54 +1735,58 @@ export default function InferenceProvidersPage() {
 						count={filteredCodingAgents.length}
 						icon={<CpuChipIcon className="size-3.5" />}
 					/>
-					{filteredCodingAgents.length === 0 ? (
-						<div className="px-4 py-4 text-center">
-							<p className="text-sm text-muted">
-								{searchQuery.trim()
-									? t("noCodingAgentsMatch")
-									: t("noAgentsAvailable")}
-							</p>
-						</div>
-					) : (
-						<ListBox
-							aria-label={t("codingAgents")}
-							selectionMode="single"
-							selectionBehavior="replace"
-							selectedKeys={selectedAgentKeys}
-							onSelectionChange={(keys) => {
-								if (keys === "all") return;
-								const agentId = [...keys][0] as
-									| CodingAgentId
-									| undefined;
-								if (!agentId) return;
-								handleAgentClick(agentId);
-							}}
-							className="p-2"
-						>
-							{filteredCodingAgents.map((agent) => (
-								<ListBox.Item
-									key={agent.id}
-									id={agent.id}
-									textValue={agent.label}
-									className="data-selected:bg-surface"
-								>
-									<div className="flex min-w-0 items-center gap-2">
-										<AgentIcon
-											id={agent.id}
-											name={agent.label}
-											size="xs"
-											variant="ghost"
-										/>
-										<div className="min-w-0 flex-1">
-											<Label className="block truncate">
-												{agent.label}
-											</Label>
-										</div>
-									</div>
-								</ListBox.Item>
-							))}
-						</ListBox>
-					)}
+					<div className="p-2">
+						{filteredCodingAgents.length === 0 ? (
+							<div className="px-2 py-2 text-center">
+								<p className="text-sm text-muted">
+									{searchQuery.trim()
+										? t("noCodingAgentsMatch")
+										: t("noAgentsAvailable")}
+								</p>
+							</div>
+						) : (
+							<Select
+								className="w-full"
+								variant="secondary"
+								aria-label={t("codingAgents")}
+								placeholder={t("selectCodingAgent")}
+								selectedKey={selectedAgentKey}
+								onSelectionChange={(key) => {
+									if (key === null) return;
+									handleAgentClick(key as CodingAgentId);
+								}}
+							>
+								<Select.Trigger>
+									<Select.Value />
+									<Select.Indicator />
+								</Select.Trigger>
+								<Select.Popover>
+									<ListBox>
+										{filteredCodingAgents.map((agent) => (
+											<ListBox.Item
+												key={agent.id}
+												id={agent.id}
+												textValue={agent.label}
+											>
+												<div className="flex min-w-0 items-center gap-2">
+													<AgentIcon
+														id={agent.id}
+														name={agent.label}
+														size="xs"
+														variant="ghost"
+													/>
+													<span className="min-w-0 flex-1 truncate">
+														{agent.label}
+													</span>
+												</div>
+												<ListBox.ItemIndicator />
+											</ListBox.Item>
+										))}
+									</ListBox>
+								</Select.Popover>
+							</Select>
+						)}
+					</div>
 
 					<ResourceSectionHeader
 						title={t("inferenceProviders")}
