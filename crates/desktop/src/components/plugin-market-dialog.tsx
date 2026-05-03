@@ -233,10 +233,11 @@ export function PluginMarketDialog({
 						<div className="shrink-0">
 							<div className="flex items-center gap-2">
 								<SearchField
+									variant="secondary"
 									value={searchQuery}
 									onChange={setSearchQuery}
 									aria-label={t("searchPlugins")}
-									className="min-w-0 flex-1 [&_[data-slot=group]]:bg-surface-secondary/55 [&_[data-slot=group]]:shadow-none"
+									className="min-w-0 flex-1"
 								>
 									<SearchField.Group>
 										<SearchField.SearchIcon />
@@ -300,9 +301,7 @@ export function PluginMarketDialog({
 													"animate-spin",
 											)}
 										/>
-										{isRefreshingMarketplace
-											? t("refreshing")
-											: t("updateMarketplace")}
+										{t("updateMarketplace")}
 									</span>
 								</Button>
 							</div>

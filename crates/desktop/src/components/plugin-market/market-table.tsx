@@ -10,7 +10,6 @@ import { Button, Spinner, Table } from "@heroui/react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { CCPluginMarketResponse } from "../../generated/dto";
-import { cn } from "../../lib/utils";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 
 import { formatPluginVersion } from "../../lib/plugin-version";
@@ -77,7 +76,7 @@ export function PluginMarketTable({
 	);
 
 	return (
-		<div className="flex min-h-[16rem] max-h-[52vh] flex-col overflow-hidden rounded-lg border border-separator/80 bg-surface">
+		<div className="flex min-h-[16rem] max-h-[52vh] flex-col overflow-hidden rounded-lg bg-surface">
 			{isLoading ? (
 				<div className="flex flex-1 items-center justify-center">
 					<Spinner size="lg" />
@@ -118,18 +117,7 @@ export function PluginMarketTable({
 				<div className="min-h-0 flex-1 overflow-hidden">
 					<Table className="h-full">
 						<Table.ScrollContainer className="h-full overflow-auto rounded-[inherit] [scrollbar-gutter:stable]">
-							<Table.Content
-								aria-label={t("pluginMarket")}
-								className={cn(
-									"table-fixed border-separate border-spacing-0",
-									"[&_thead]:sticky [&_thead]:top-0 [&_thead]:z-10 [&_thead]:bg-surface",
-									"[&_thead_th]:h-10 [&_thead_th]:border-b [&_thead_th]:border-separator/70 [&_thead_th]:bg-surface-secondary/40 [&_thead_th]:px-3.5 [&_thead_th]:text-left [&_thead_th]:text-sm [&_thead_th]:font-medium [&_thead_th]:text-muted",
-									"[&_tbody_td]:px-3.5 [&_tbody_td]:py-1.5 [&_tbody_td]:align-top",
-									"[&_tbody_tr]:border-b [&_tbody_tr]:border-separator/60 [&_tbody_tr]:transition-colors",
-									"[&_tbody_tr:hover]:bg-surface-secondary/18",
-									"[&_tbody_tr:last-child]:border-b-0",
-								)}
-							>
+							<Table.Content aria-label={t("pluginMarket")}>
 								<Table.Header>
 									<Table.Column
 										isRowHeader
@@ -161,16 +149,8 @@ export function PluginMarketTable({
 										);
 
 										return (
-											<Table.Row
-												id={id}
-												className={cn(
-													"align-top",
-													(isInstalling ||
-														isInstalled) &&
-														"bg-surface-secondary/32",
-												)}
-											>
-												<Table.Cell className="align-top">
+											<Table.Row id={id}>
+												<Table.Cell>
 													<div className="min-w-0 space-y-1 py-0.5">
 														<div className="flex min-w-0 items-center gap-2">
 															<span className="truncate text-sm font-semibold text-foreground">
@@ -191,7 +171,7 @@ export function PluginMarketTable({
 														)}
 													</div>
 												</Table.Cell>
-												<Table.Cell className="align-top">
+												<Table.Cell>
 													<div className="flex justify-end py-0.5">
 														<span className="text-sm tabular-nums text-muted">
 															{plugin.installs > 0
@@ -202,15 +182,14 @@ export function PluginMarketTable({
 														</span>
 													</div>
 												</Table.Cell>
-												<Table.Cell className="align-top">
+												<Table.Cell>
 													<div className="flex flex-col gap-1 py-0.5">
 														<span
-															className={cn(
-																"truncate text-sm font-medium",
+															className={
 																plugin.author
-																	? "text-foreground"
-																	: "text-muted",
-															)}
+																	? "truncate text-sm font-medium text-foreground"
+																	: "truncate text-sm font-medium text-muted"
+															}
 														>
 															{plugin.author ||
 																t("unknown")}
@@ -222,15 +201,11 @@ export function PluginMarketTable({
 														</span>
 													</div>
 												</Table.Cell>
-												<Table.Cell className="align-top">
+												<Table.Cell>
 													<div className="flex justify-end py-0.5">
 														<Button
 															size="sm"
-															variant={
-																isInstalled
-																	? "secondary"
-																	: "tertiary"
-															}
+															variant="tertiary"
 															className="h-8 min-w-[92px] justify-center gap-1.5 whitespace-nowrap px-3 transition-colors duration-200"
 															onPress={() =>
 																onInstall(
@@ -247,7 +222,7 @@ export function PluginMarketTable({
 																	<ArrowPathIcon className="size-3.5 animate-spin text-foreground" />
 																)}
 																{isInstalled && (
-																	<CheckCircleIcon className="size-3.5 text-success" />
+																	<CheckCircleIcon className="size-3.5" />
 																)}
 																{isInstalling
 																	? t(
@@ -255,7 +230,7 @@ export function PluginMarketTable({
 																		)
 																	: isInstalled
 																		? t(
-																				"installSuccess",
+																				"installed",
 																			)
 																		: t(
 																				"install",

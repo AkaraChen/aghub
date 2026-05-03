@@ -4,7 +4,6 @@ import type { CCPluginMarketResponse } from "../generated/dto";
 type InstallState = "installing" | "installed";
 
 const MIN_INSTALLING_DURATION_MS = 800;
-const INSTALLED_FEEDBACK_DURATION_MS = 1200;
 
 export function usePluginInstallState() {
 	const [installStateById, setInstallStateById] = useState<
@@ -68,21 +67,8 @@ export function usePluginInstallState() {
 					...current,
 					[pluginId]: "installed",
 				}));
-				const installedTimeout = setTimeout(() => {
-					setInstallStateById((current) => {
-						const next = { ...current };
-						delete next[pluginId];
-						return next;
-					});
-					setTransientPluginsById((current) => {
-						const next = { ...current };
-						delete next[pluginId];
-						return next;
-					});
-					installStartedAtRef.current.delete(pluginId);
-					feedbackTimeoutsRef.current.delete(pluginId);
-				}, INSTALLED_FEEDBACK_DURATION_MS);
-				feedbackTimeoutsRef.current.set(pluginId, installedTimeout);
+				installStartedAtRef.current.delete(pluginId);
+				feedbackTimeoutsRef.current.delete(pluginId);
 			}, installDelay);
 			feedbackTimeoutsRef.current.set(pluginId, installingTimeout);
 		},

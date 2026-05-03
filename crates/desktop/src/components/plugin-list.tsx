@@ -4,6 +4,7 @@ import {
 	ArrowPathIcon,
 	CheckCircleIcon,
 	PlusIcon,
+	PuzzlePieceIcon,
 	RectangleStackIcon,
 } from "@heroicons/react/24/solid";
 import { Button, Label, ListBox, Tooltip } from "@heroui/react";
@@ -177,11 +178,10 @@ export function PluginList({
 								className="transition-colors duration-200 data-selected:bg-surface"
 							>
 								<div className="flex w-full items-center gap-2">
-									<div className="flex min-w-0 flex-1 flex-col">
-										<Label className="truncate font-medium">
-											{plugin.name}
-										</Label>
-									</div>
+									<PuzzlePieceIcon className="size-4 shrink-0 text-muted" />
+									<Label className="flex-1 truncate font-medium">
+										{plugin.name}
+									</Label>
 									<div className="shrink-0 pl-1">
 										<div
 											className={cn(

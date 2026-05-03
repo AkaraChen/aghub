@@ -31,9 +31,6 @@ export function PluginDetailHeader({
 	onToggle,
 }: PluginDetailHeaderProps) {
 	const { t } = useTranslation();
-	const statusLabel = plugin.enabled
-		? t("pluginEnabled")
-		: t("pluginDisabled");
 	const handleScopeSelectionChange = (key: Key | null) => {
 		if (!key) {
 			return;
@@ -120,42 +117,31 @@ export function PluginDetailHeader({
 					</Button>
 					<Tooltip.Content>{t("uninstallPlugin")}</Tooltip.Content>
 				</Tooltip>
-				<div className="ml-1 flex items-center gap-2 rounded-lg border border-separator/70 px-2 py-1.5">
-					<span
-						className={
-							plugin.enabled
-								? "text-xs font-medium text-foreground"
-								: "text-xs font-medium text-muted"
-						}
-					>
-						{statusLabel}
-					</span>
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<span className="inline-flex">
-								<Switch
-									isSelected={plugin.enabled}
-									isDisabled={isToggling}
-									onChange={onToggle}
-									aria-label={
-										plugin.enabled
-											? t("disablePlugin")
-											: t("enablePlugin")
-									}
-								>
-									<Switch.Control>
-										<Switch.Thumb />
-									</Switch.Control>
-								</Switch>
-							</span>
-						</Tooltip.Trigger>
-						<Tooltip.Content>
-							{plugin.enabled
-								? t("disablePlugin")
-								: t("enablePlugin")}
-						</Tooltip.Content>
-					</Tooltip>
-				</div>
+				<Tooltip delay={0}>
+					<Tooltip.Trigger>
+						<span className="inline-flex">
+							<Switch
+								isSelected={plugin.enabled}
+								isDisabled={isToggling}
+								onChange={onToggle}
+								aria-label={
+									plugin.enabled
+										? t("disablePlugin")
+										: t("enablePlugin")
+								}
+							>
+								<Switch.Control>
+									<Switch.Thumb />
+								</Switch.Control>
+							</Switch>
+						</span>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						{plugin.enabled
+							? t("disablePlugin")
+							: t("enablePlugin")}
+					</Tooltip.Content>
+				</Tooltip>
 			</div>
 		</Card.Header>
 	);
