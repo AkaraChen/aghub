@@ -102,6 +102,9 @@ const FORMAT_OPTIONS: FormatOption[] = [
 	},
 ];
 
+const TRAILING_SLASHES_REGEX = /\/+$/;
+const PROVIDER_EXISTS_REGEX = /provider already exists:\s*(.+)/i;
+
 async function fetchProviderModels({
 	format,
 	apiBaseUrl,
@@ -111,7 +114,7 @@ async function fetchProviderModels({
 	apiBaseUrl: string;
 	apiKey: string;
 }): Promise<string[]> {
-	const trimmedBase = apiBaseUrl.trim().replace(/\/+$/, "");
+	const trimmedBase = apiBaseUrl.trim().replace(TRAILING_SLASHES_REGEX, "");
 	if (!trimmedBase) throw new Error("Missing API base URL");
 	if (!apiKey.trim()) throw new Error("Missing API key");
 
@@ -321,10 +324,12 @@ function ProviderModelsEditor({
 	const emptyModel = useMemo(() => createProviderModelFormValue(), []);
 	const [isFetching, setIsFetching] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
-	const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+	const [selectedIds, setSelectedIds] = useState<Set<string>>(
+		() => new Set(),
+	);
 	const [isBatchDeleteOpen, setIsBatchDeleteOpen] = useState(false);
 	const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
-		new Set(),
+		() => new Set(),
 	);
 
 	const hasRealModels = value.length > 0;
@@ -874,9 +879,7 @@ function ProviderForm({
 			: activeError
 				? String(activeError)
 				: "";
-	const duplicateMatch = rawErrorMessage.match(
-		/provider already exists:\s*(.+)/i,
-	);
+	const duplicateMatch = rawErrorMessage.match(PROVIDER_EXISTS_REGEX);
 	const friendlyErrorMessage = duplicateMatch
 		? t("inferenceProviderDuplicateError", {
 				name: duplicateMatch[1].trim(),
@@ -1641,8 +1644,12 @@ export default function InferenceProvidersPage() {
 			? { type: "detail" }
 			: panel;
 
-	const selectedAgentKey =
+	const selectedAgentId =
 		resolvedPanel.type === "agent" ? resolvedPanel.agentId : null;
+
+	const selectedAgentKeys = useMemo(() => {
+		return selectedAgentId ? new Set([selectedAgentId]) : new Set<string>();
+	}, [selectedAgentId]);
 
 	const selectedProviderKeys = useMemo(() => {
 		return activeProvider &&
@@ -1734,58 +1741,54 @@ export default function InferenceProvidersPage() {
 						count={filteredCodingAgents.length}
 						icon={<CpuChipIcon className="size-3.5" />}
 					/>
-					<div className="p-2">
-						{filteredCodingAgents.length === 0 ? (
-							<div className="px-2 py-2 text-center">
-								<p className="text-sm text-muted">
-									{searchQuery.trim()
-										? t("noCodingAgentsMatch")
-										: t("noAgentsAvailable")}
-								</p>
-							</div>
-						) : (
-							<Select
-								className="w-full"
-								variant="secondary"
-								aria-label={t("codingAgents")}
-								placeholder={t("selectCodingAgent")}
-								selectedKey={selectedAgentKey}
-								onSelectionChange={(key) => {
-									if (key === null) return;
-									handleAgentClick(key as CodingAgentId);
-								}}
-							>
-								<Select.Trigger>
-									<Select.Value />
-									<Select.Indicator />
-								</Select.Trigger>
-								<Select.Popover>
-									<ListBox>
-										{filteredCodingAgents.map((agent) => (
-											<ListBox.Item
-												key={agent.id}
-												id={agent.id}
-												textValue={agent.label}
-											>
-												<div className="flex min-w-0 items-center gap-2">
-													<AgentIcon
-														id={agent.id}
-														name={agent.label}
-														size="xs"
-														variant="ghost"
-													/>
-													<span className="min-w-0 flex-1 truncate">
-														{agent.label}
-													</span>
-												</div>
-												<ListBox.ItemIndicator />
-											</ListBox.Item>
-										))}
-									</ListBox>
-								</Select.Popover>
-							</Select>
-						)}
-					</div>
+					{filteredCodingAgents.length === 0 ? (
+						<div className="px-4 py-4 text-center">
+							<p className="text-sm text-muted">
+								{searchQuery.trim()
+									? t("noCodingAgentsMatch")
+									: t("noAgentsAvailable")}
+							</p>
+						</div>
+					) : (
+						<ListBox
+							aria-label={t("codingAgents")}
+							selectionMode="single"
+							selectionBehavior="replace"
+							selectedKeys={selectedAgentKeys}
+							onSelectionChange={(keys) => {
+								if (keys === "all") return;
+								const agentId = [...keys][0] as
+									| CodingAgentId
+									| undefined;
+								if (!agentId) return;
+								handleAgentClick(agentId);
+							}}
+							className="p-2"
+						>
+							{filteredCodingAgents.map((agent) => (
+								<ListBox.Item
+									key={agent.id}
+									id={agent.id}
+									textValue={agent.label}
+									className="data-selected:bg-surface"
+								>
+									<div className="flex min-w-0 items-center gap-2">
+										<AgentIcon
+											id={agent.id}
+											name={agent.label}
+											size="xs"
+											variant="ghost"
+										/>
+										<div className="min-w-0 flex-1">
+											<Label className="block truncate">
+												{agent.label}
+											</Label>
+										</div>
+									</div>
+								</ListBox.Item>
+							))}
+						</ListBox>
+					)}
 
 					<ResourceSectionHeader
 						title={t("inferenceProviders")}
