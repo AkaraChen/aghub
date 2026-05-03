@@ -167,6 +167,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 				routes::credentials::create_credential,
 				routes::credentials::delete_credential,
 				routes::inference::list_inference_providers,
+				routes::inference::list_inference_provider_presets,
 				routes::inference::list_opencode_providers,
 				routes::inference::list_codex_providers,
 				routes::inference::get_codex_state,

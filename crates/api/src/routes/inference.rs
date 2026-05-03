@@ -12,9 +12,9 @@ use crate::dto::inference::{
 	AgentProviderResponse, ClaudeProviderStateResponse,
 	CodexProviderStateResponse, CreateAgentProviderRequest,
 	CreateInferenceProviderRequest, InferenceProviderPasswordResponse,
-	InferenceProviderResponse, UpdateAgentProviderRequest,
-	UpdateCodexActiveProfileRequest, UpdateCodexProfileProviderRequest,
-	UpdateInferenceProviderRequest,
+	InferenceProviderPresetResponse, InferenceProviderResponse,
+	UpdateAgentProviderRequest, UpdateCodexActiveProfileRequest,
+	UpdateCodexProfileProviderRequest, UpdateInferenceProviderRequest,
 };
 use crate::error::{ApiCreated, ApiError, ApiNoContent, ApiResult};
 use crate::state::InferenceProviderState;
@@ -182,6 +182,25 @@ pub fn list_inference_providers(
 		.map(InferenceProviderResponse::from)
 		.collect();
 	Ok(Json(providers))
+}
+
+const INFERENCE_PROVIDER_PRESETS_JSON: &str =
+	include_str!("../dto/data/inference_provider_presets.json");
+
+fn inference_provider_presets() -> &'static [InferenceProviderPresetResponse] {
+	use std::sync::OnceLock;
+	static PRESETS: OnceLock<Vec<InferenceProviderPresetResponse>> =
+		OnceLock::new();
+	PRESETS.get_or_init(|| {
+		serde_json::from_str(INFERENCE_PROVIDER_PRESETS_JSON)
+			.expect("inference_provider_presets.json must be valid")
+	})
+}
+
+#[get("/inference/presets")]
+pub fn list_inference_provider_presets(
+) -> Json<Vec<InferenceProviderPresetResponse>> {
+	Json(inference_provider_presets().to_vec())
 }
 
 #[get("/inference/agents/opencode/providers")]
