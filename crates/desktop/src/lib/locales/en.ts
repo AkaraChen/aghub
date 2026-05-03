@@ -119,6 +119,8 @@ export default {
 	createCodexProvider: "Add Codex Provider",
 	editCodexProvider: "Edit Codex Provider",
 	deleteCodexProvider: "Delete Codex Provider",
+	showConfigFolder: "Show config folder",
+	showConfigFolderFailed: "Failed to open config folder",
 	deleteCodexProviderConfirm: 'Delete "{{name}}" from Codex config.toml?',
 	refreshCodexProviders: "Refresh Codex providers",
 	noCodexProviders: "No Codex providers configured.",

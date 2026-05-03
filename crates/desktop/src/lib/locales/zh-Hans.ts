@@ -114,6 +114,8 @@ export default {
 	createCodexProvider: "添加 Codex Provider",
 	editCodexProvider: "编辑 Codex Provider",
 	deleteCodexProvider: "删除 Codex Provider",
+	showConfigFolder: "显示配置文件夹",
+	showConfigFolderFailed: "无法打开配置文件夹",
 	deleteCodexProviderConfirm: '确定从 Codex config.toml 删除"{{name}}"吗？',
 	refreshCodexProviders: "刷新 Codex Provider",
 	noCodexProviders: "暂无 Codex Provider。",

@@ -114,6 +114,8 @@ export default {
 	createCodexProvider: "新增 Codex Provider",
 	editCodexProvider: "編輯 Codex Provider",
 	deleteCodexProvider: "刪除 Codex Provider",
+	showConfigFolder: "顯示設定資料夾",
+	showConfigFolderFailed: "無法開啟設定資料夾",
 	deleteCodexProviderConfirm: "確定從 Codex config.toml 刪除「{{name}}」嗎？",
 	refreshCodexProviders: "重新整理 Codex Provider",
 	noCodexProviders: "尚無 Codex Provider。",
