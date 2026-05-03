@@ -33,6 +33,7 @@ export type { GlobalSkillLockResponse } from "./GlobalSkillLockResponse";
 export type { ImportSkillRequest } from "./ImportSkillRequest";
 export type { InferenceProviderFormatDto } from "./InferenceProviderFormatDto";
 export type { InferenceProviderPasswordResponse } from "./InferenceProviderPasswordResponse";
+export type { InferenceProviderPresetResponse } from "./InferenceProviderPresetResponse";
 export type { InferenceProviderResponse } from "./InferenceProviderResponse";
 export type { InstallScopeDto } from "./InstallScopeDto";
 export type { InstallSkillRequest } from "./InstallSkillRequest";
