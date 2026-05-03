@@ -24,6 +24,7 @@ import type {
 	GlobalSkillLockResponse,
 	ImportSkillRequest,
 	InferenceProviderPasswordResponse,
+	InferenceProviderPresetResponse,
 	InferenceProviderResponse,
 	InstallSkillRequest,
 	InstallSkillResponse,
@@ -489,6 +490,9 @@ export function createApi(baseUrl: string) {
 		inferenceProviders: {
 			list(): Promise<InferenceProviderResponse[]> {
 				return client.get("inference/providers").json();
+			},
+			listPresets(): Promise<InferenceProviderPresetResponse[]> {
+				return client.get("inference/presets").json();
 			},
 			listOpenCode(): Promise<AgentProviderResponse[]> {
 				return client.get("inference/agents/opencode/providers").json();

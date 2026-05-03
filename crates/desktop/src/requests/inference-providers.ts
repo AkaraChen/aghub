@@ -8,6 +8,7 @@ import type {
 	CodexProviderStateResponse,
 	CreateAgentProviderRequest,
 	CreateInferenceProviderRequest,
+	InferenceProviderPresetResponse,
 	InferenceProviderResponse,
 	UpdateAgentProviderRequest,
 	UpdateCodexActiveProfileRequest,
@@ -31,6 +32,25 @@ export function inferenceProviderListQueryOptions({
 	return queryOptions({
 		queryKey: queryKeys.inferenceProviders.list(),
 		queryFn: () => api.inferenceProviders.list(),
+		enabled,
+		staleTime,
+	});
+}
+
+interface InferenceProviderPresetsQueryParams {
+	api: ApiClient;
+	enabled?: boolean;
+	staleTime?: number;
+}
+
+export function inferenceProviderPresetsQueryOptions({
+	api,
+	enabled = true,
+	staleTime = 60 * 60 * 1000,
+}: InferenceProviderPresetsQueryParams) {
+	return queryOptions<InferenceProviderPresetResponse[]>({
+		queryKey: queryKeys.inferenceProviders.presets(),
+		queryFn: () => api.inferenceProviders.listPresets(),
 		enabled,
 		staleTime,
 	});
