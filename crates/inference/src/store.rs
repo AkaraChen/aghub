@@ -902,6 +902,155 @@ mod tests {
 	}
 
 	#[test]
+	fn test_migrates_existing_v6_binding_database() {
+		let (temp, store) = store();
+		let db_path = temp.path().join(INFERENCE_PROVIDERS_FILE);
+		store.block_on(async {
+			let mut conn = SqliteConnectOptions::new()
+				.filename(&db_path)
+				.create_if_missing(true)
+				.connect()
+				.await
+				.unwrap();
+			sqlx::query(
+				"CREATE TABLE _sqlx_migrations (
+					version BIGINT PRIMARY KEY,
+					description TEXT NOT NULL,
+					installed_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+					success BOOLEAN NOT NULL,
+					checksum BLOB NOT NULL,
+					execution_time BIGINT NOT NULL
+				)",
+			)
+			.execute(&mut conn)
+			.await
+			.unwrap();
+			sqlx::query(
+				"CREATE TABLE inference_providers (
+					id TEXT PRIMARY KEY NOT NULL,
+					name TEXT NOT NULL UNIQUE,
+					format TEXT NOT NULL,
+					api_base_url TEXT NOT NULL,
+					masked_api_key TEXT NOT NULL DEFAULT '',
+					display_name TEXT NOT NULL DEFAULT ''
+				)",
+			)
+			.execute(&mut conn)
+			.await
+			.unwrap();
+			sqlx::query(
+				"CREATE TABLE inference_models (
+					id TEXT PRIMARY KEY NOT NULL,
+					provider_id TEXT NOT NULL,
+					name TEXT NOT NULL,
+					created_at TEXT NOT NULL DEFAULT (datetime('now')),
+					FOREIGN KEY (provider_id)
+						REFERENCES inference_providers(id)
+						ON DELETE CASCADE,
+					UNIQUE (provider_id, name)
+				)",
+			)
+			.execute(&mut conn)
+			.await
+			.unwrap();
+			sqlx::query(
+				"CREATE TABLE agent_provider_bindings (
+					id TEXT PRIMARY KEY NOT NULL,
+					agent_id TEXT NOT NULL,
+					inference_provider_id TEXT NOT NULL,
+					model TEXT,
+					created_at TEXT NOT NULL DEFAULT (datetime('now')),
+					updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+					FOREIGN KEY (inference_provider_id)
+						REFERENCES inference_providers(id)
+						ON DELETE CASCADE
+				)",
+			)
+			.execute(&mut conn)
+			.await
+			.unwrap();
+
+			let migrations = [
+				(
+					1,
+					"create inference providers",
+					"bf935d5229df4e204f7e0cc2f14721dbfeb45c9a15c229dca50127407ec9fc2311906fa98f567db786f9bf3a4dbc7412",
+				),
+				(
+					2,
+					"create inference models",
+					"95502c735b08fa0f0074c6885090be68f2b033da1c918e0a825279169faace7fe9fa4fd64b08bf2417f892d65597d0fd",
+				),
+				(
+					3,
+					"add masked api key",
+					"ff15b82d3ce15332f0ee9c0264db8340326bfa025fb554c32275c33b1be11d29cea5ad4386f4c2c2350e42c61a145b1e",
+				),
+				(
+					4,
+					"add display name",
+					"5bdac59333690e70da935d043ababf088fe53f7c836a250855472288b38bda5952c3117936bf1b054f662adb3cd7ce48",
+				),
+				(
+					5,
+					"create agent provider bindings",
+					"14ca7c3e31001e23f4646d99d9dbd27badfcc4bf595eec9ccd4bcbe7bd69e17cae9d5c1eba1ea515764b395c41abf27a",
+				),
+				(
+					6,
+					"drop binding is active",
+					"a442005806c4fa8c07d3beab28091ede276eea39ea6529df31c1bfa784ea70f14320223fd513d5a84f6121371800417c",
+				),
+			];
+			for (version, description, checksum) in migrations {
+				let query = format!(
+					"INSERT INTO _sqlx_migrations
+						(version, description, success, checksum, execution_time)
+					VALUES ({version}, '{description}', 1, x'{checksum}', 0)"
+				);
+				sqlx::query(&query).execute(&mut conn).await.unwrap();
+			}
+		});
+
+		assert!(store.list().unwrap().is_empty());
+
+		store.block_on(async {
+			let mut conn = SqliteConnectOptions::new()
+				.filename(&db_path)
+				.connect()
+				.await
+				.unwrap();
+			let version: i64 =
+				sqlx::query_scalar("SELECT MAX(version) FROM _sqlx_migrations")
+					.fetch_one(&mut conn)
+					.await
+					.unwrap();
+			assert_eq!(version, 7);
+
+			let trigger_count: i64 = sqlx::query_scalar(
+				"SELECT COUNT(*) FROM sqlite_master
+				 WHERE type = 'trigger'
+				 AND name = 'trg_agent_provider_bindings_updated_at'",
+			)
+			.fetch_one(&mut conn)
+			.await
+			.unwrap();
+			assert_eq!(trigger_count, 1);
+
+			let unique_count: i64 = sqlx::query_scalar(
+				"SELECT COUNT(*) FROM pragma_index_list(
+					'agent_provider_bindings'
+				)
+				WHERE [unique] = 1",
+			)
+			.fetch_one(&mut conn)
+			.await
+			.unwrap();
+			assert_eq!(unique_count, 1);
+		});
+	}
+
+	#[test]
 	fn test_list_missing_file_is_empty() {
 		let (_temp, store) = store();
 
