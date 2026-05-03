@@ -20,9 +20,10 @@ use aghub_api::dto::{
 		CodexProfileResponse, CodexProviderStateResponse,
 		CreateAgentProviderRequest, CreateInferenceProviderRequest,
 		InferenceProviderFormatDto, InferenceProviderPasswordResponse,
-		InferenceProviderResponse, UpdateAgentProviderRequest,
-		UpdateClaudeProviderRequest, UpdateCodexActiveProfileRequest,
-		UpdateCodexProfileProviderRequest, UpdateInferenceProviderRequest,
+		InferenceProviderPresetResponse, InferenceProviderResponse,
+		UpdateAgentProviderRequest, UpdateClaudeProviderRequest,
+		UpdateCodexActiveProfileRequest, UpdateCodexProfileProviderRequest,
+		UpdateInferenceProviderRequest,
 	},
 	integrations::{
 		CodeEditorType, EditSkillFolderRequest, OpenSkillFolderRequest,
@@ -143,6 +144,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<UpdateInferenceProviderRequest>(&cfg)?;
 	export_type::<InferenceProviderResponse>(&cfg)?;
 	export_type::<InferenceProviderPasswordResponse>(&cfg)?;
+	export_type::<InferenceProviderPresetResponse>(&cfg)?;
 	export_type::<CodeEditorType>(&cfg)?;
 	export_type::<ToolInfoDto>(&cfg)?;
 	export_type::<ToolPreferencesDto>(&cfg)?;

@@ -131,6 +131,23 @@ pub struct InferenceProviderPasswordResponse {
 	pub api_key: String,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, TS)]
+#[ts(export)]
+pub struct InferenceProviderPresetResponse {
+	pub id: String,
+	pub name: String,
+	pub api_base_url: String,
+	pub format: InferenceProviderFormatDto,
+	pub models: Vec<String>,
+	pub logo: String,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub homepage: Option<String>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub description: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
