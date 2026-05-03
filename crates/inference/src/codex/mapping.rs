@@ -80,6 +80,8 @@ pub(super) fn provider_table_from_binding(
 	table["name"] = value(binding.name.clone());
 	if let Some(api_base_url) = &binding.api_base_url {
 		table["base_url"] = value(api_base_url.clone());
+	} else {
+		table.remove("base_url");
 	}
 	table["wire_api"] = value(WIRE_API_RESPONSES);
 	apply_credential(&mut table, &binding.credential, api_key);
@@ -207,13 +209,9 @@ fn apply_credential(
 ) {
 	match credential {
 		AgentProviderCredential::EnvVar { name } => {
-			if let Some(api_key) = api_key {
-				table.remove("env_key");
-				table["experimental_bearer_token"] = value(api_key.to_string());
-			} else {
-				table["env_key"] = value(name.clone());
-				table.remove("experimental_bearer_token");
-			}
+			let _ = api_key;
+			table["env_key"] = value(name.clone());
+			table.remove("experimental_bearer_token");
 			table.remove("requires_openai_auth");
 			table.remove("auth");
 			remove_authorization_header(table);

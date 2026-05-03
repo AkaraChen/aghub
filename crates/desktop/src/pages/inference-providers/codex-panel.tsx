@@ -23,7 +23,7 @@ import {
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type {
@@ -42,6 +42,7 @@ import {
 	syncCodexProviderMutationOptions,
 	updateCodexProfileProviderMutationOptions,
 } from "../../requests/inference-providers";
+import { selectValidProviderId } from "./provider-selection";
 
 function CodexCreateProviderDialog({
 	isOpen,
@@ -67,11 +68,11 @@ function CodexCreateProviderDialog({
 		[inventoryProviders],
 	);
 	const defaultProviderId = responseProviders[0]?.id ?? "";
-
-	useEffect(() => {
-		if (!isOpen) return;
-		setSelectedProviderId((current) => current || defaultProviderId);
-	}, [defaultProviderId, isOpen]);
+	const effectiveSelectedProviderId = selectValidProviderId(
+		selectedProviderId,
+		responseProviders,
+		defaultProviderId,
+	);
 
 	const createMutation = useMutation({
 		...createCodexProviderMutationOptions({
@@ -90,10 +91,10 @@ function CodexCreateProviderDialog({
 
 	const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		if (!selectedProviderId) return;
+		if (!effectiveSelectedProviderId) return;
 
 		createMutation.mutate({
-			inference_provider_id: selectedProviderId,
+			inference_provider_id: effectiveSelectedProviderId,
 		});
 	};
 
@@ -148,7 +149,7 @@ function CodexCreateProviderDialog({
 								<Select
 									className="w-full"
 									selectedKey={
-										selectedProviderId || undefined
+										effectiveSelectedProviderId || undefined
 									}
 									onSelectionChange={(key) => {
 										if (!key) return;
@@ -202,7 +203,7 @@ function CodexCreateProviderDialog({
 								isDisabled={
 									isInventoryLoading ||
 									!hasResponseProviders ||
-									!selectedProviderId
+									!effectiveSelectedProviderId
 								}
 							>
 								{t("add")}

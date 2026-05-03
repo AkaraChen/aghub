@@ -4,7 +4,7 @@
 		"name": "OpenAI",
 		"api_base_url": "https://api.openai.com/v1",
 		"format": "openai_responses",
-		"models": ["gpt-4o", "gpt-4o-mini", "o1-mini"],
+		"models": ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini"],
 		"logo": "OpenAI",
 		"homepage": "https://platform.openai.com/api-keys",
 		"description": "Official OpenAI API."
@@ -14,11 +14,7 @@
 		"name": "Anthropic",
 		"api_base_url": "https://api.anthropic.com",
 		"format": "anthropic",
-		"models": [
-			"claude-3-5-sonnet-latest",
-			"claude-3-5-haiku-latest",
-			"claude-3-opus-latest"
-		],
+		"models": ["claude-opus-4-7", "claude-sonnet-4-6", "claude-haiku-4-5"],
 		"logo": "Anthropic",
 		"homepage": "https://console.anthropic.com/settings/keys",
 		"description": "Claude models via the Anthropic Messages API."
@@ -29,9 +25,9 @@
 		"api_base_url": "https://openrouter.ai/api/v1",
 		"format": "openai_completions",
 		"models": [
-			"openai/gpt-4o-mini",
-			"anthropic/claude-3.5-sonnet",
-			"meta-llama/llama-3.1-70b-instruct"
+			"openai/gpt-5.5",
+			"anthropic/claude-sonnet-4.6",
+			"meta-llama/llama-4-maverick"
 		],
 		"logo": "OpenRouter",
 		"homepage": "https://openrouter.ai/keys",
@@ -44,8 +40,8 @@
 		"format": "openai_completions",
 		"models": [
 			"llama-3.3-70b-versatile",
-			"llama-3.1-8b-instant",
-			"mixtral-8x7b-32768"
+			"openai/gpt-oss-120b",
+			"llama-3.1-8b-instant"
 		],
 		"logo": "Groq",
 		"homepage": "https://console.groq.com/keys",
@@ -72,8 +68,8 @@
 		"format": "openai_completions",
 		"models": [
 			"meta-llama/Llama-3.3-70B-Instruct-Turbo",
-			"Qwen/Qwen2.5-Coder-32B-Instruct",
-			"deepseek-ai/DeepSeek-V3"
+			"Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8",
+			"deepseek-ai/DeepSeek-V4-Pro"
 		],
 		"logo": "Together",
 		"homepage": "https://api.together.xyz/settings/api-keys",
@@ -84,7 +80,7 @@
 		"name": "DeepSeek",
 		"api_base_url": "https://api.deepseek.com/v1",
 		"format": "openai_completions",
-		"models": ["deepseek-chat", "deepseek-reasoner"],
+		"models": ["deepseek-v4-flash", "deepseek-v4-pro"],
 		"logo": "DeepSeek",
 		"homepage": "https://platform.deepseek.com/api_keys",
 		"description": "DeepSeek's hosted Chat and Reasoner models."

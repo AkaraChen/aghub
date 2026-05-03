@@ -88,8 +88,22 @@ fn load_scans_config_and_auth_store() {
 	assert_eq!(auth_only.source, AgentProviderSource::StoredCredential);
 	assert_eq!(auth_only.format, None);
 	assert_eq!(
-		state.default_model.unwrap().qualified_model_id.as_deref(),
+		state
+			.default_model
+			.as_ref()
+			.unwrap()
+			.qualified_model_id
+			.as_deref(),
 		Some("myprovider/my-model")
+	);
+	assert_eq!(
+		state
+			.small_model
+			.as_ref()
+			.unwrap()
+			.qualified_model_id
+			.as_deref(),
+		Some("myprovider/small-model")
 	);
 }
 

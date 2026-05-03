@@ -41,6 +41,7 @@ import {
 	syncOpenCodeProviderMutationOptions,
 	updateOpenCodeProviderMutationOptions,
 } from "../../requests/inference-providers";
+import { selectValidProviderId } from "./provider-selection";
 
 type ProviderDialogMode =
 	| { type: "create" }
@@ -63,10 +64,11 @@ function OpenCodeCreateProviderDialog({
 	const [selectedProviderId, setSelectedProviderId] = useState("");
 
 	const defaultProviderId = inventoryProviders[0]?.id ?? "";
-	useEffect(() => {
-		if (!isOpen) return;
-		setSelectedProviderId((current) => current || defaultProviderId);
-	}, [defaultProviderId, isOpen]);
+	const effectiveSelectedProviderId = selectValidProviderId(
+		selectedProviderId,
+		inventoryProviders,
+		defaultProviderId,
+	);
 
 	const createMutation = useMutation({
 		...createOpenCodeProviderMutationOptions({
@@ -85,10 +87,10 @@ function OpenCodeCreateProviderDialog({
 
 	const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		if (!selectedProviderId) return;
+		if (!effectiveSelectedProviderId) return;
 
 		createMutation.mutate({
-			inference_provider_id: selectedProviderId,
+			inference_provider_id: effectiveSelectedProviderId,
 		});
 	};
 
@@ -145,7 +147,7 @@ function OpenCodeCreateProviderDialog({
 								<Select
 									className="w-full"
 									selectedKey={
-										selectedProviderId || undefined
+										effectiveSelectedProviderId || undefined
 									}
 									onSelectionChange={(key) => {
 										if (!key) return;
@@ -199,7 +201,7 @@ function OpenCodeCreateProviderDialog({
 								isDisabled={
 									isInventoryLoading ||
 									!hasInventoryProviders ||
-									!selectedProviderId
+									!effectiveSelectedProviderId
 								}
 							>
 								{t("add")}

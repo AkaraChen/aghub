@@ -312,7 +312,12 @@ impl ClaudeProviderAdapter {
 		)?;
 
 		if set_active {
-			self.sync_active_binding(provider, api_key, model.as_deref())?;
+			if let Err(error) =
+				self.sync_active_binding(provider, api_key, model.as_deref())
+			{
+				let _ = store.delete_agent_binding(AGENT_ID, &row.id);
+				return Err(error);
+			}
 		}
 
 		store.binding_from_row(&row)
@@ -364,7 +369,15 @@ impl ClaudeProviderAdapter {
 		store.delete_agent_binding(AGENT_ID, binding_id)?;
 
 		if active.is_some_and(|a| a.id == binding_id) {
-			self.clear_provider_config()?;
+			if let Err(error) = self.clear_provider_config() {
+				let _ = store.upsert_agent_binding(
+					AGENT_ID,
+					&row.id,
+					&row.inference_provider_id,
+					row.model.as_deref(),
+				);
+				return Err(error);
+			}
 		}
 
 		Ok(binding)

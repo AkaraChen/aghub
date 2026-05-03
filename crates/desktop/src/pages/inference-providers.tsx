@@ -10,13 +10,13 @@ import {
 	ServerIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
-import AnthropicIcon from "@lobehub/icons/es/Anthropic";
-import DeepSeekIcon from "@lobehub/icons/es/DeepSeek";
-import GroqIcon from "@lobehub/icons/es/Groq";
-import MistralIcon from "@lobehub/icons/es/Mistral";
-import OpenAIIcon from "@lobehub/icons/es/OpenAI";
-import OpenRouterIcon from "@lobehub/icons/es/OpenRouter";
-import TogetherIcon from "@lobehub/icons/es/Together";
+import anthropicLogo from "@lobehub/icons-static-svg/icons/anthropic.svg";
+import deepSeekLogo from "@lobehub/icons-static-svg/icons/deepseek.svg";
+import groqLogo from "@lobehub/icons-static-svg/icons/groq.svg";
+import mistralLogo from "@lobehub/icons-static-svg/icons/mistral.svg";
+import openAiLogo from "@lobehub/icons-static-svg/icons/openai.svg";
+import openRouterLogo from "@lobehub/icons-static-svg/icons/openrouter.svg";
+import togetherLogo from "@lobehub/icons-static-svg/icons/together.svg";
 import {
 	Accordion,
 	Alert,
@@ -39,7 +39,6 @@ import {
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Fuse from "fuse.js";
-import type React from "react";
 import { type Key, useMemo, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
@@ -175,10 +174,8 @@ interface ProviderModelFormValue {
 	name: string;
 }
 
-let nextProviderModelId = 0;
-
 function createProviderModelFormValue(name = ""): ProviderModelFormValue {
-	const id = `provider-model-${nextProviderModelId++}`;
+	const id = `provider-model-${crypto.randomUUID()}`;
 	return { id, name };
 }
 
@@ -187,34 +184,36 @@ function toProviderModelFormValues(models: string[]) {
 }
 
 function ProviderIcon({ format }: { format: InferenceProviderFormatDto }) {
-	const Icon = format === "anthropic" ? AnthropicIcon : OpenAIIcon;
+	const src = format === "anthropic" ? anthropicLogo : openAiLogo;
 
 	return (
 		<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
-			<Icon aria-hidden="true" size={16} />
+			<img src={src} alt="" className="size-4" aria-hidden="true" />
 		</div>
 	);
 }
 
-const PRESET_LOGO_MAP: Record<
-	string,
-	React.ComponentType<{ size?: number; "aria-hidden"?: boolean }>
-> = {
-	OpenAI: OpenAIIcon,
-	Anthropic: AnthropicIcon,
-	OpenRouter: OpenRouterIcon,
-	Groq: GroqIcon,
-	Mistral: MistralIcon,
-	Together: TogetherIcon,
-	DeepSeek: DeepSeekIcon,
+const PRESET_LOGO_MAP: Record<string, string> = {
+	OpenAI: openAiLogo,
+	Anthropic: anthropicLogo,
+	OpenRouter: openRouterLogo,
+	Groq: groqLogo,
+	Mistral: mistralLogo,
+	Together: togetherLogo,
+	DeepSeek: deepSeekLogo,
 };
 
 function PresetLogo({ logo, size = 16 }: { logo: string; size?: number }) {
-	const Icon = PRESET_LOGO_MAP[logo];
+	const src = PRESET_LOGO_MAP[logo];
 	return (
 		<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
-			{Icon ? (
-				<Icon aria-hidden size={size} />
+			{src ? (
+				<img
+					src={src}
+					alt=""
+					aria-hidden="true"
+					style={{ width: size, height: size }}
+				/>
 			) : (
 				<ServerIcon className="size-4 text-muted" aria-hidden />
 			)}

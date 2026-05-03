@@ -17,6 +17,9 @@ pub trait CredentialStore {
 }
 
 /// Platform-native keyring implementation.
+///
+/// OS keyring backends may not support concurrent writes reliably. Callers
+/// sharing this store across threads should serialize access themselves.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NativeCredentialStore;
 

@@ -613,6 +613,34 @@ pub struct AgentProviderBindingRow {
 }
 
 impl<C: CredentialStore> InferenceProviderStore<C> {
+	async fn fetch_agent_binding(
+		conn: &mut SqliteConnection,
+		agent_id: &str,
+		binding_id: &str,
+	) -> Result<AgentProviderBindingRow> {
+		let row = sqlx::query(
+			"SELECT id, agent_id, inference_provider_id, model \
+			 FROM agent_provider_bindings \
+			 WHERE agent_id = ? AND id = ?",
+		)
+		.bind(agent_id)
+		.bind(binding_id)
+		.fetch_optional(&mut *conn)
+		.await?;
+
+		match row {
+			Some(row) => Ok(AgentProviderBindingRow {
+				id: row.try_get("id")?,
+				agent_id: row.try_get("agent_id")?,
+				inference_provider_id: row.try_get("inference_provider_id")?,
+				model: row.try_get("model")?,
+			}),
+			None => {
+				Err(InferenceProviderError::NotFound(binding_id.to_string()))
+			}
+		}
+	}
+
 	/// List all bindings for a given agent.
 	pub fn list_agent_bindings(
 		&self,
@@ -652,28 +680,7 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 	) -> Result<AgentProviderBindingRow> {
 		self.block_on(async {
 			let mut conn = self.open_db().await?;
-			let row = sqlx::query(
-				"SELECT id, agent_id, inference_provider_id, model \
-				 FROM agent_provider_bindings \
-				 WHERE agent_id = ? AND id = ?",
-			)
-			.bind(agent_id)
-			.bind(binding_id)
-			.fetch_optional(&mut conn)
-			.await?;
-
-			match row {
-				Some(row) => Ok(AgentProviderBindingRow {
-					id: row.try_get("id")?,
-					agent_id: row.try_get("agent_id")?,
-					inference_provider_id: row
-						.try_get("inference_provider_id")?,
-					model: row.try_get("model")?,
-				}),
-				None => Err(InferenceProviderError::NotFound(
-					binding_id.to_string(),
-				)),
-			}
+			Self::fetch_agent_binding(&mut conn, agent_id, binding_id).await
 		})
 	}
 
@@ -739,8 +746,7 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 				"INSERT INTO agent_provider_bindings \
 				 (id, agent_id, inference_provider_id, model) \
 				 VALUES (?, ?, ?, ?) \
-				 ON CONFLICT(id) DO UPDATE SET \
-				 agent_id = excluded.agent_id, \
+				 ON CONFLICT(agent_id, id) DO UPDATE SET \
 				 inference_provider_id = excluded.inference_provider_id, \
 				 model = excluded.model, \
 				 updated_at = datetime('now')",
@@ -765,7 +771,9 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 	) -> Result<AgentProviderBindingRow> {
 		self.block_on(async {
 			let mut conn = self.open_db().await?;
-			let mut binding = self.get_agent_binding(agent_id, binding_id)?;
+			let mut binding =
+				Self::fetch_agent_binding(&mut conn, agent_id, binding_id)
+					.await?;
 
 			if let Some(model) = model {
 				binding.model = model;
@@ -774,9 +782,10 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 			sqlx::query(
 				"UPDATE agent_provider_bindings \
 				 SET model = ? \
-				 WHERE id = ?",
+				 WHERE agent_id = ? AND id = ?",
 			)
 			.bind(&binding.model)
+			.bind(agent_id)
 			.bind(binding_id)
 			.execute(&mut conn)
 			.await?;
@@ -793,12 +802,15 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 	) -> Result<AgentProviderBindingRow> {
 		self.block_on(async {
 			let mut conn = self.open_db().await?;
-			let binding = self.get_agent_binding(agent_id, binding_id)?;
+			let binding =
+				Self::fetch_agent_binding(&mut conn, agent_id, binding_id)
+					.await?;
 
 			sqlx::query(
 				"DELETE FROM agent_provider_bindings \
-				 WHERE id = ?",
+				 WHERE agent_id = ? AND id = ?",
 			)
+			.bind(agent_id)
 			.bind(binding_id)
 			.execute(&mut conn)
 			.await?;

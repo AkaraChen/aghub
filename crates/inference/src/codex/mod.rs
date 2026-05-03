@@ -281,15 +281,6 @@ impl CodexProviderAdapter {
 	) -> Result<AgentProviderBinding> {
 		let provider_id = mapping::provider_id_from_name(&provider.name);
 
-		// Create binding in the database
-		let _row = store.upsert_agent_binding(
-			AGENT_ID,
-			&provider_id,
-			&provider.id,
-			provider.models.first().map(|m| m.as_str()),
-		)?;
-
-		// Write provider details to config.toml
 		let mut binding = AgentProviderBinding::from_inventory(
 			provider_id.clone(),
 			provider,
@@ -303,6 +294,13 @@ impl CodexProviderAdapter {
 		let mut config = files::read_config(&self.config_path)?;
 		upsert_provider(&mut config, &binding, Some(api_key))?;
 		files::write_config(&self.config_path, &config)?;
+
+		store.upsert_agent_binding(
+			AGENT_ID,
+			&provider_id,
+			&provider.id,
+			provider.models.first().map(|m| m.as_str()),
+		)?;
 
 		Ok(binding)
 	}
@@ -474,6 +472,7 @@ impl CodexProviderAdapter {
 				.is_some_and(|value| value == provider_id)
 			{
 				config.as_table_mut().remove("model_provider");
+				config.as_table_mut().remove("model");
 			}
 			clear_profile_provider_references(&mut config, &provider_id);
 			files::write_config(&self.config_path, &config)?;
@@ -514,6 +513,7 @@ impl CodexProviderAdapter {
 			.is_some_and(|value| value == provider_id)
 		{
 			config.as_table_mut().remove("model_provider");
+			config.as_table_mut().remove("model");
 		}
 		clear_profile_provider_references(&mut config, &provider_id);
 		files::write_config(&self.config_path, &config)?;
@@ -927,6 +927,7 @@ fn clear_profile_provider_references(
 			.is_some_and(|value| value == provider_id)
 		{
 			profile.remove("model_provider");
+			profile.remove("model");
 		}
 	}
 }

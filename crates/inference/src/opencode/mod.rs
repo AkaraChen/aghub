@@ -97,8 +97,8 @@ impl OpenCodeProviderAdapter {
 		let mut state = self.load_providers()?;
 		state.providers.retain(|item| item.id != provider_id);
 		state.providers.push(binding.clone());
-		self.save_providers(&state)?;
 		self.set_api_auth(&provider_id, api_key)?;
+		self.save_providers(&state)?;
 
 		Ok(binding)
 	}
@@ -137,15 +137,15 @@ impl OpenCodeProviderAdapter {
 			mapping::ensure_api_key(api_key)?;
 		}
 
+		if let Some(api_key) = api_key {
+			self.set_api_auth(&provider_id, api_key)?;
+		}
+
 		if let Some(name) = name {
 			let mut config = files::read_config(&self.config_path)?;
 			config.provider.entry(provider_id.clone()).or_default().name =
 				Some(name);
 			files::write_config(&self.config_path, config)?;
-		}
-
-		if let Some(api_key) = api_key {
-			self.set_api_auth(&provider_id, api_key)?;
 		}
 
 		Ok(self

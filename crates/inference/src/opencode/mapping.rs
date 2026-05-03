@@ -90,8 +90,10 @@ pub(super) fn provider_config_from_binding(
 		provider
 			.options
 			.insert("baseURL".to_string(), Value::String(api_base_url.clone()));
+		provider.options.remove("endpoint");
 	} else {
 		provider.options.remove("baseURL");
+		provider.options.remove("endpoint");
 	}
 
 	match &binding.credential {

@@ -466,7 +466,7 @@ model_provider = "openai"
 }
 
 #[test]
-fn set_active_provider_writes_inventory_key_inline() {
+fn set_active_provider_preserves_inventory_key_reference() {
 	let temp = tempfile::tempdir().unwrap();
 	let adapter = adapter(&temp);
 	fs::write(adapter.config_path(), r#"model_provider = "openai""#).unwrap();
@@ -485,10 +485,10 @@ fn set_active_provider_writes_inventory_key_inline() {
 		.unwrap();
 	let provider = config["model_providers"]["openrouter"].as_table().unwrap();
 	assert_eq!(
-		provider["experimental_bearer_token"].as_str(),
-		Some("sk-test")
+		provider["env_key"].as_str(),
+		Some("AGHUB_INFERENCE_API_KEY")
 	);
-	assert!(provider.get("env_key").is_none());
+	assert!(provider.get("experimental_bearer_token").is_none());
 }
 
 #[test]
@@ -706,7 +706,7 @@ env_key = "OPENROUTER_API_KEY"
 }
 
 #[test]
-fn save_preserves_openai_auth_provider_credentials() {
+fn save_removes_external_providers_from_config() {
 	let temp = tempfile::tempdir().unwrap();
 	let adapter = adapter(&temp);
 	fs::write(
@@ -884,6 +884,7 @@ base_url = "https://openrouter.ai/api/v1"
 	let content = fs::read_to_string(adapter.config_path()).unwrap();
 	let config = content.parse::<DocumentMut>().unwrap();
 	assert!(config.get("model_provider").is_none());
+	assert!(config.get("model").is_none());
 	assert!(config
 		.get("model_providers")
 		.and_then(Item::as_table)
@@ -901,9 +902,11 @@ fn remove_provider_clears_profile_provider_references() {
 model_provider = "openrouter"
 
 [profiles.work]
+model = "openrouter/gpt-5.4"
 model_provider = "openrouter"
 
 [profiles.review]
+model = "openrouter/gpt-5.4"
 model_provider = "openrouter"
 
 [model_providers.openrouter]
@@ -920,7 +923,18 @@ wire_api = "responses"
 	let content = fs::read_to_string(adapter.config_path()).unwrap();
 	let config = content.parse::<DocumentMut>().unwrap();
 	assert!(config.get("model_provider").is_none());
+	assert!(config.get("model").is_none());
 	assert!(config["profiles"]["work"]
+		.as_table()
+		.unwrap()
+		.get("model_provider")
+		.is_none());
+	assert!(config["profiles"]["work"]
+		.as_table()
+		.unwrap()
+		.get("model")
+		.is_none());
+	assert!(config["profiles"]["review"]
 		.as_table()
 		.unwrap()
 		.get("model_provider")
@@ -928,6 +942,6 @@ wire_api = "responses"
 	assert!(config["profiles"]["review"]
 		.as_table()
 		.unwrap()
-		.get("model_provider")
+		.get("model")
 		.is_none());
 }

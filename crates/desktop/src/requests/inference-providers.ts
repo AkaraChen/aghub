@@ -583,6 +583,9 @@ export function updateClaudeProviderMutationOptions({
 		}) => api.inferenceProviders.updateClaude(id, body),
 		onSuccess: async () => {
 			await invalidateClaudeProviderQueries(queryClient);
+			await queryClient.invalidateQueries({
+				queryKey: queryKeys.inferenceProviders.list(),
+			});
 			await onSuccess?.();
 		},
 	});

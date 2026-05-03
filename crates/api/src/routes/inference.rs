@@ -545,15 +545,10 @@ fn claude_state_response(
 		.map(|binding| {
 			// Built-in providers have no inventory backing; skip matching.
 			let matched = match binding.source_provider_id.as_deref() {
-				Some(id) if !id.is_empty() => {
-					let agent_api_key =
-						store.get_api_key(id).map_err(ApiError::from)?;
-					find_matching_inventory_provider(
-						&inventory,
-						&binding,
-						agent_api_key,
-					)?
-				}
+				Some(id) if !id.is_empty() => inventory
+					.iter()
+					.find(|(provider, _)| provider.id == id)
+					.cloned(),
 				_ => None,
 			};
 			let response = AgentProviderResponse::from(binding);

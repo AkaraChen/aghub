@@ -20,7 +20,7 @@ import {
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type {
@@ -37,7 +37,9 @@ import {
 	deleteClaudeProviderMutationOptions,
 	inferenceProviderListQueryOptions,
 	syncClaudeProviderMutationOptions,
+	updateClaudeProviderMutationOptions,
 } from "../../requests/inference-providers";
+import { selectValidProviderId } from "./provider-selection";
 
 function ClaudeCreateProviderDialog({
 	isOpen,
@@ -63,11 +65,11 @@ function ClaudeCreateProviderDialog({
 		[inventoryProviders],
 	);
 	const defaultProviderId = anthropicProviders[0]?.id ?? "";
-
-	useEffect(() => {
-		if (!isOpen) return;
-		setSelectedProviderId((current) => current || defaultProviderId);
-	}, [defaultProviderId, isOpen]);
+	const effectiveSelectedProviderId = selectValidProviderId(
+		selectedProviderId,
+		anthropicProviders,
+		defaultProviderId,
+	);
 
 	const createMutation = useMutation({
 		...createClaudeProviderMutationOptions({
@@ -78,18 +80,25 @@ function ClaudeCreateProviderDialog({
 				onClose();
 			},
 		}),
+		onError: (error) => {
+			console.error("Failed to create Claude provider:", error);
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: t("claudeProviderUpdateError"),
+			);
+		},
 	});
 
-	const activeError = createMutation.error;
 	const isPending = createMutation.isPending;
 	const hasAnthropicProviders = anthropicProviders.length > 0;
 
 	const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		if (!selectedProviderId) return;
+		if (!effectiveSelectedProviderId) return;
 
 		createMutation.mutate({
-			inference_provider_id: selectedProviderId,
+			inference_provider_id: effectiveSelectedProviderId,
 		});
 	};
 
@@ -110,19 +119,6 @@ function ClaudeCreateProviderDialog({
 					</Modal.Header>
 					<form onSubmit={handleSubmit}>
 						<Modal.Body className="grid gap-4 p-4">
-							{activeError && (
-								<Alert status="danger">
-									<Alert.Indicator />
-									<Alert.Content>
-										<Alert.Description>
-											{activeError instanceof Error
-												? activeError.message
-												: String(activeError)}
-										</Alert.Description>
-									</Alert.Content>
-								</Alert>
-							)}
-
 							{isInventoryLoading && (
 								<div className="flex justify-center py-6">
 									<Spinner />
@@ -144,7 +140,7 @@ function ClaudeCreateProviderDialog({
 								<Select
 									className="w-full"
 									selectedKey={
-										selectedProviderId || undefined
+										effectiveSelectedProviderId || undefined
 									}
 									onSelectionChange={(key) => {
 										if (!key) return;
@@ -198,7 +194,7 @@ function ClaudeCreateProviderDialog({
 								isDisabled={
 									isInventoryLoading ||
 									!hasAnthropicProviders ||
-									!selectedProviderId
+									!effectiveSelectedProviderId
 								}
 							>
 								{t("add")}
@@ -479,6 +475,23 @@ export function ClaudeInferenceProviderPanel(_: {
 			);
 		},
 	});
+	const updateMutation = useMutation({
+		...updateClaudeProviderMutationOptions({
+			api,
+			queryClient,
+			onSuccess: async () => {
+				toast.success(t("claudeProviderUpdated"));
+			},
+		}),
+		onError: (error) => {
+			console.error("Failed to update Claude provider:", error);
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: t("claudeProviderUpdateError"),
+			);
+		},
+	});
 
 	return (
 		<>
@@ -564,9 +577,9 @@ export function ClaudeInferenceProviderPanel(_: {
 														provider.id
 												}
 												isSelecting={
-													syncMutation.isPending &&
-													syncMutation.variables ===
-														provider.id
+													updateMutation.isPending &&
+													updateMutation.variables
+														?.id === provider.id
 												}
 												isDeleting={
 													deleteMutation.isPending &&
@@ -575,9 +588,13 @@ export function ClaudeInferenceProviderPanel(_: {
 												}
 												canSelect
 												onSelect={() => {
-													syncMutation.mutate(
-														provider.id,
-													);
+													updateMutation.mutate({
+														id: provider.id,
+														body: {
+															name: null,
+															api_key: null,
+														},
+													});
 												}}
 												onSync={() =>
 													syncMutation.mutate(

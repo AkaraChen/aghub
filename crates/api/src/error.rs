@@ -94,15 +94,29 @@ impl From<InferenceProviderError> for ApiError {
 			| InferenceProviderError::InvalidFormat(_)
 			| InferenceProviderError::UnsupportedAgentProviderCapability {
 				..
-			}
-			| InferenceProviderError::InvalidAgentProviderConfig { .. }
-			| InferenceProviderError::InvalidAgentCredentialStore { .. } => {
-				ApiError::new(
-					Status::BadRequest,
-					e.to_string(),
-					"INVALID_PARAM",
-				)
-			}
+			} => ApiError::new(
+				Status::BadRequest,
+				e.to_string(),
+				"INVALID_PARAM",
+			),
+			InferenceProviderError::InvalidAgentProviderConfig {
+				agent_id,
+				message,
+				..
+			} => ApiError::new(
+				Status::BadRequest,
+				format!("invalid {agent_id} provider config: {message}"),
+				"INVALID_PARAM",
+			),
+			InferenceProviderError::InvalidAgentCredentialStore {
+				agent_id,
+				message,
+				..
+			} => ApiError::new(
+				Status::BadRequest,
+				format!("invalid {agent_id} credential store: {message}"),
+				"INVALID_PARAM",
+			),
 			InferenceProviderError::AlreadyExists(_)
 			| InferenceProviderError::ModelAlreadyExists(_) => ApiError::new(
 				Status::Conflict,
