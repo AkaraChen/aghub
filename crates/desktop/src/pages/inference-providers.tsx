@@ -10,13 +10,13 @@ import {
 	ServerIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
-import anthropicLogo from "@lobehub/icons-static-svg/icons/anthropic.svg";
-import deepSeekLogo from "@lobehub/icons-static-svg/icons/deepseek.svg";
-import groqLogo from "@lobehub/icons-static-svg/icons/groq.svg";
-import mistralLogo from "@lobehub/icons-static-svg/icons/mistral.svg";
-import openAiLogo from "@lobehub/icons-static-svg/icons/openai.svg";
-import openRouterLogo from "@lobehub/icons-static-svg/icons/openrouter.svg";
-import togetherLogo from "@lobehub/icons-static-svg/icons/together.svg";
+import anthropicLogo from "@lobehub/icons-static-svg/icons/anthropic.svg?raw";
+import deepSeekLogo from "@lobehub/icons-static-svg/icons/deepseek.svg?raw";
+import groqLogo from "@lobehub/icons-static-svg/icons/groq.svg?raw";
+import mistralLogo from "@lobehub/icons-static-svg/icons/mistral.svg?raw";
+import openAiLogo from "@lobehub/icons-static-svg/icons/openai.svg?raw";
+import openRouterLogo from "@lobehub/icons-static-svg/icons/openrouter.svg?raw";
+import togetherLogo from "@lobehub/icons-static-svg/icons/together.svg?raw";
 import {
 	Accordion,
 	Alert,
@@ -206,21 +206,18 @@ const PRESET_LOGO_MAP: Record<string, string> = {
 	DeepSeek: deepSeekLogo,
 };
 
-function PresetLogo({ logo, size = 16 }: { logo: string; size?: number }) {
-	const src = PRESET_LOGO_MAP[logo];
+function PresetLogo({ logo }: { logo: string }) {
+	const svg = PRESET_LOGO_MAP[logo];
+	if (!svg) {
+		return (
+			<ServerIcon className="size-4 shrink-0 text-muted" aria-hidden />
+		);
+	}
 	return (
-		<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
-			{src ? (
-				<img
-					src={src}
-					alt=""
-					aria-hidden="true"
-					style={{ width: size, height: size }}
-				/>
-			) : (
-				<ServerIcon className="size-4 text-muted" aria-hidden />
-			)}
-		</div>
+		<span
+			className="inline-flex size-4 shrink-0 items-center justify-center text-foreground [&_svg]:size-4"
+			dangerouslySetInnerHTML={{ __html: svg }}
+		/>
 	);
 }
 
@@ -958,7 +955,7 @@ function ProviderForm({
 											id={preset.id}
 											textValue={preset.name}
 										>
-											<div className="flex min-w-0 items-start gap-2">
+											<div className="flex min-w-0 items-center gap-2">
 												<PresetLogo
 													logo={preset.logo}
 												/>
