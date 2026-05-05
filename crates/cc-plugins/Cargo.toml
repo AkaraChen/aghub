@@ -30,7 +30,7 @@ tar = "0.4"
 chrono = { version = "0.4", features = [ "serde" ] }
 
 # Hash for URL-based sources
-sha2 = "0.10"
+sha2 = "0.11"
 semver = "1.0.28"
 
 # Error types
