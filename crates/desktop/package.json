@@ -72,11 +72,7 @@
     "vite": "^8.0.0"
   },
   "knip": {
-    "ignoreDependencies": [
-      "react-grab",
-      "nano-staged",
-      "prettier"
-    ]
+    "ignoreDependencies": ["react-grab", "nano-staged", "prettier"]
   },
   "nano-staged": {
     "*.{js,ts,jsx,tsx,json,md,css,html}": "prettier --write"
