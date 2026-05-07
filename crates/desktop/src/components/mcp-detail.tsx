@@ -150,7 +150,9 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 		);
 
 		try {
-			await navigator.clipboard.writeText(configJson);
+			const { writeText } =
+				await import("@tauri-apps/plugin-clipboard-manager");
+			await writeText(configJson);
 			dispatch({ type: "show_copy_feedback" });
 			setTimeout(() => {
 				dispatch({ type: "hide_copy_feedback" });

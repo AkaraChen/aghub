@@ -66,7 +66,9 @@ export function McpServersSection({ config }: McpServersSectionProps) {
 		}
 
 		try {
-			await navigator.clipboard.writeText(value);
+			const { writeText } =
+				await import("@tauri-apps/plugin-clipboard-manager");
+			await writeText(value);
 			setCopiedState({
 				serverName: server.name,
 				mode,

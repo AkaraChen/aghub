@@ -43,7 +43,9 @@ export function EnvEditor({
 	// Import from clipboard
 	const handleImportFromClipboard = async () => {
 		try {
-			const clipboardText = await navigator.clipboard.readText();
+			const { readText } =
+				await import("@tauri-apps/plugin-clipboard-manager");
+			const clipboardText = await readText();
 			if (!clipboardText.trim()) return;
 
 			const parsed = parseClipboardEnv(clipboardText);
