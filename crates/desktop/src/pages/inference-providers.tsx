@@ -28,6 +28,7 @@ import {
 	Fieldset,
 	Form,
 	Input,
+	InputGroup,
 	Label,
 	ListBox,
 	SearchField,
@@ -797,6 +798,7 @@ function ProviderForm({
 		if (preset) handleApplyPreset(preset);
 	};
 
+	const [showApiKey, setShowApiKey] = useState(false);
 	const watchedApiBaseUrl = useWatch({ control, name: "apiBaseUrl" });
 	const watchedApiKey = useWatch({ control, name: "apiKey" });
 	const canFetchModels = Boolean(
@@ -1190,26 +1192,54 @@ function ProviderForm({
 													</button>
 												)}
 											</div>
-											<Input
-												type="password"
-												value={field.value}
-												onChange={(event) =>
-													field.onChange(
-														event.target.value,
-													)
-												}
-												onBlur={field.onBlur}
-												placeholder={
-													mode === "create"
-														? t(
-																"providerApiKeyPlaceholder",
+											<InputGroup variant="secondary">
+												<InputGroup.Input
+													type={
+														showApiKey
+															? "text"
+															: "password"
+													}
+													value={field.value}
+													onChange={(event) =>
+														field.onChange(
+															event.target.value,
+														)
+													}
+													onBlur={field.onBlur}
+													placeholder={
+														mode === "create"
+															? t(
+																	"providerApiKeyPlaceholder",
+																)
+															: t(
+																	"providerApiKeyEditPlaceholder",
+																)
+													}
+												/>
+												<InputGroup.Suffix className="pr-0">
+													<Button
+														isIconOnly
+														aria-label={
+															showApiKey
+																? "Hide"
+																: "Show"
+														}
+														size="sm"
+														variant="ghost"
+														onPress={() =>
+															setShowApiKey(
+																(v) => !v,
 															)
-														: t(
-																"providerApiKeyEditPlaceholder",
-															)
-												}
-												variant="secondary"
-											/>
+														}
+													>
+														{showApiKey ? (
+															<EyeSlashIcon className="size-4" />
+														) : (
+															<EyeIcon className="size-4" />
+														)}
+													</Button>
+												</InputGroup.Suffix>
+											</InputGroup>
 											{fieldState.error && (
 												<FieldError>
 													{fieldState.error.message}
