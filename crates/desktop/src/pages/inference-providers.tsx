@@ -188,12 +188,13 @@ function toProviderModelFormValues(models: string[]) {
 }
 
 function ProviderIcon({ format }: { format: InferenceProviderFormatDto }) {
-	const src = format === "anthropic" ? anthropicLogo : openAiLogo;
+	const svg = format === "anthropic" ? anthropicLogo : openAiLogo;
 
 	return (
-		<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
-			<img src={src} alt="" className="size-4" aria-hidden="true" />
-		</div>
+		<span
+			className="inline-flex size-4 shrink-0 items-center justify-center text-foreground [&_svg]:size-4"
+			dangerouslySetInnerHTML={{ __html: svg }}
+		/>
 	);
 }
 
