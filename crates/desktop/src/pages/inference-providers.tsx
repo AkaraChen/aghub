@@ -62,6 +62,7 @@ import {
 	inferenceProviderPresetsQueryOptions,
 	updateInferenceProviderMutationOptions,
 } from "../requests/inference-providers";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import type { InferenceProviderPresetResponse } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
@@ -1364,7 +1365,7 @@ function ProviderDetail({
 			const password = revealedKey
 				? { api_key: revealedKey }
 				: await api.inferenceProviders.getPassword(provider.name);
-			await navigator.clipboard.writeText(password.api_key);
+			await writeText(password.api_key);
 			toast.success(t("providerApiKeyCopied"));
 		} catch (error) {
 			console.error("Failed to copy inference provider key:", error);
@@ -1380,7 +1381,7 @@ function ProviderDetail({
 
 	const handleCopyModel = async (modelName: string) => {
 		try {
-			await navigator.clipboard.writeText(modelName);
+			await writeText(modelName);
 			toast.success(t("providerModelNameCopied"));
 		} catch (error) {
 			console.error("Failed to copy inference model name:", error);
