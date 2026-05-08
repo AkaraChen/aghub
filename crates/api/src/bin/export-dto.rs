@@ -31,6 +31,22 @@ use aghub_api::dto::{
 	},
 	market::MarketSkill,
 	mcp::{CreateMcpRequest, McpResponse, TransportDto, UpdateMcpRequest},
+	plugin::{
+		CCPluginAuthorResponse, CCPluginCheckUpdateRequest,
+		CCPluginCheckUpdateResponse, CCPluginConfigResponse,
+		CCPluginDetailResponse, CCPluginHookActionResponse,
+		CCPluginHookEventResponse, CCPluginHookMatcherResponse,
+		CCPluginHooksManifestResponse, CCPluginInstallRequest,
+		CCPluginInstallResponse, CCPluginListResponse,
+		CCPluginManifestResponse, CCPluginMarketResponse,
+		CCPluginMcpConfigResponse, CCPluginMcpServerResponse,
+		CCPluginOpenSkillInEditorRequest, CCPluginReinstallRequest,
+		CCPluginReinstallResponse, CCPluginResponse, CCPluginScopeResponse,
+		CCPluginSkillInfo, CCPluginSourceInfoResponse,
+		CCPluginUninstallRequest, CCPluginUninstallResponse,
+		CCPluginUpdateConfigRequest, CCPluginUpdateRequest,
+		CCPluginUpdateResponse,
+	},
 	skill::{
 		CreateSkillRequest, DeleteSkillByPathRequest,
 		DeleteSkillByPathResponse, GitInstallRequest, GitInstallResponse,
@@ -193,6 +209,34 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<CreateSubAgentRequest>(&cfg)?;
 	export_type::<UpdateSubAgentRequest>(&cfg)?;
 	export_type::<SubAgentResponse>(&cfg)?;
+	export_type::<CCPluginResponse>(&cfg)?;
+	export_type::<CCPluginScopeResponse>(&cfg)?;
+	export_type::<CCPluginSourceInfoResponse>(&cfg)?;
+	export_type::<CCPluginListResponse>(&cfg)?;
+	export_type::<CCPluginDetailResponse>(&cfg)?;
+	export_type::<CCPluginSkillInfo>(&cfg)?;
+	export_type::<CCPluginManifestResponse>(&cfg)?;
+	export_type::<CCPluginAuthorResponse>(&cfg)?;
+	export_type::<CCPluginHooksManifestResponse>(&cfg)?;
+	export_type::<CCPluginHookEventResponse>(&cfg)?;
+	export_type::<CCPluginHookMatcherResponse>(&cfg)?;
+	export_type::<CCPluginHookActionResponse>(&cfg)?;
+	export_type::<CCPluginMcpConfigResponse>(&cfg)?;
+	export_type::<CCPluginMcpServerResponse>(&cfg)?;
+	export_type::<CCPluginInstallRequest>(&cfg)?;
+	export_type::<CCPluginInstallResponse>(&cfg)?;
+	export_type::<CCPluginUninstallRequest>(&cfg)?;
+	export_type::<CCPluginUninstallResponse>(&cfg)?;
+	export_type::<CCPluginUpdateRequest>(&cfg)?;
+	export_type::<CCPluginUpdateResponse>(&cfg)?;
+	export_type::<CCPluginCheckUpdateRequest>(&cfg)?;
+	export_type::<CCPluginCheckUpdateResponse>(&cfg)?;
+	export_type::<CCPluginReinstallRequest>(&cfg)?;
+	export_type::<CCPluginReinstallResponse>(&cfg)?;
+	export_type::<CCPluginOpenSkillInEditorRequest>(&cfg)?;
+	export_type::<CCPluginConfigResponse>(&cfg)?;
+	export_type::<CCPluginUpdateConfigRequest>(&cfg)?;
+	export_type::<CCPluginMarketResponse>(&cfg)?;
 
 	write_index_file(&out_dir)?;
 

@@ -15,8 +15,20 @@ pub async fn start_server(
 	state: tauri::State<'_, AppState>,
 	app: tauri::AppHandle,
 ) -> Result<u16, String> {
-	let port = find_available_port()?;
 	let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+	let port = {
+		let mut guard = state.port.lock().unwrap();
+		if let Some(port) = *guard {
+			debug!("reusing embedded API server port {port}");
+			return Ok(port);
+		}
+
+		let port = find_available_port()?;
+		*guard = Some(port);
+		debug!("stored embedded API server port {port} in application state");
+		port
+	};
+
 	info!("received request to start embedded API server on port {port}");
 	tokio::spawn(async move {
 		info!("starting embedded API server on 127.0.0.1:{port}");
@@ -29,7 +41,5 @@ pub async fn start_server(
 			error!("embedded API server exited with error: {error}");
 		}
 	});
-	*state.port.lock().unwrap() = Some(port);
-	debug!("stored embedded API server port {port} in application state");
 	Ok(port)
 }

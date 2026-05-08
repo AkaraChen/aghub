@@ -38,7 +38,7 @@ jobs:
                   GITHUB_REPO: ${{ github.repository }}
 
             - name: Create GitHub Release
-              uses: softprops/action-gh-release@v2
+              uses: softprops/action-gh-release@v3
               with:
                   tag_name: ${{ github.event.inputs.version || github.ref_name }}
                   name: "aghub ${{ github.event.inputs.version || github.ref_name }}"
@@ -83,7 +83,7 @@ jobs:
                   targets: ${{ matrix.target }}
 
             - name: Setup sccache
-              uses: mozilla-actions/sccache-action@v0.0.9
+              uses: mozilla-actions/sccache-action@v0.0.10
 
             - name: Rust Cache
               uses: Swatinem/rust-cache@v2
@@ -157,7 +157,7 @@ jobs:
                   fi
 
             - name: Upload Generic Release Asset
-              uses: softprops/action-gh-release@v2
+              uses: softprops/action-gh-release@v3
               with:
                   tag_name: ${{ github.event.inputs.version || github.ref_name }}
                   files: ${{ env.GENERIC_ASSET }}
@@ -192,7 +192,7 @@ jobs:
                   targets: ${{ matrix.target }}
 
             - name: Setup sccache
-              uses: mozilla-actions/sccache-action@v0.0.9
+              uses: mozilla-actions/sccache-action@v0.0.10
 
             - name: Rust Cache
               uses: Swatinem/rust-cache@v2
@@ -227,7 +227,7 @@ jobs:
                   Compress-Archive -Path target/${{ matrix.target }}/release/aghub-cli.exe -DestinationPath aghub-cli-${{ matrix.target }}.zip
 
             - name: Upload CLI to Release
-              uses: softprops/action-gh-release@v2
+              uses: softprops/action-gh-release@v3
               with:
                   tag_name: ${{ github.event.inputs.version || github.ref_name }}
                   prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}

@@ -22,6 +22,8 @@
 		"log:default",
 		"store:default",
 		"updater:default",
-		"process:default"
+		"process:default",
+		"clipboard-manager:allow-read-text",
+		"clipboard-manager:allow-write-text"
 	]
 }

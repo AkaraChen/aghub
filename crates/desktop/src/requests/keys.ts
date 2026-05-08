@@ -1,4 +1,15 @@
 export const queryKeys = {
+	plugins: {
+		all: () => ["plugins"] as const,
+		list: () => ["plugins", "list"] as const,
+		detail: (pluginId: string) => ["plugins", "detail", pluginId] as const,
+		detailDisabled: () => ["plugins", "detail", "__no_plugin__"] as const,
+		updateStatus: (pluginId: string, scope?: string | null) =>
+			["plugins", "update-status", pluginId, scope ?? null] as const,
+		updateStatusDisabled: () =>
+			["plugins", "update-status", "__no_plugin__", null] as const,
+		market: () => ["plugins", "market"] as const,
+	},
 	agents: {
 		all: () => ["agents"] as const,
 		list: () => ["agents", "list"] as const,

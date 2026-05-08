@@ -5,6 +5,7 @@ pub mod inference;
 pub mod integrations;
 pub mod market;
 pub mod mcps;
+pub mod plugins;
 pub mod skills;
 pub mod sub_agents;
 
@@ -12,6 +13,7 @@ use aghub_core::{
 	create_adapter, manager::ConfigManager, models::ResourceScope,
 };
 use rocket::http::Status;
+use rocket::response::status::NoContent;
 use std::path::PathBuf;
 
 use crate::error::ApiError;
@@ -65,4 +67,9 @@ pub fn resolved_to_resource_scope(
 			(ResourceScope::Both, project_root.clone())
 		}
 	}
+}
+
+#[options("/<_path..>")]
+pub fn preflight(_path: PathBuf) -> NoContent {
+	NoContent
 }

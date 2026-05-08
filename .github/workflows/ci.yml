@@ -35,9 +35,9 @@ jobs:
                   components: clippy, rustfmt
 
             - name: Setup Node.js
-              uses: actions/setup-node@v4
+              uses: actions/setup-node@v6
               with:
-                  node-version: "22"
+                  node-version: "24"
 
             - name: Setup Bun
               uses: oven-sh/setup-bun@v2
@@ -53,7 +53,7 @@ jobs:
                   tool: just
 
             - name: Setup sccache
-              uses: mozilla-actions/sccache-action@v0.0.9
+              uses: mozilla-actions/sccache-action@v0.0.10
 
             - name: Rust Cache
               uses: Swatinem/rust-cache@v2

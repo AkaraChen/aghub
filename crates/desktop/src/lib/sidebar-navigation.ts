@@ -4,6 +4,7 @@ import {
 	KeyIcon,
 	ServerIcon,
 	SquaresPlusIcon,
+	PuzzlePieceIcon,
 } from "@heroicons/react/24/solid";
 import type { ComponentType, SVGProps } from "react";
 import {
@@ -59,6 +60,12 @@ const SIDEBAR_ITEM_DEFINITIONS: Record<SidebarItemId, SidebarItemDefinition> = {
 		labelKey: "subAgents",
 		href: "/sub-agents",
 		icon: CpuChipIcon,
+	},
+	plugins: {
+		id: "plugins",
+		labelKey: "claudeCodePlugins",
+		href: "/cc-plugins",
+		icon: PuzzlePieceIcon,
 	},
 };
 

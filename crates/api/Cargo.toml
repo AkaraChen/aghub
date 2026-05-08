@@ -19,6 +19,7 @@ crate-type = [ "rlib" ]
 aghub-core = { path = "../core" }
 aghub-git = { path = "../git" }
 aghub-inference = { path = "../inference" }
+aghub-cc-plugins = { path = "../cc-plugins" }
 skill = { path = "../skill" }
 skills-sh = { path = "../skills-sh" }
 rocket = { version = "0.5", features = [ "json" ] }
@@ -39,3 +40,4 @@ keyring = { version = "3", features = [
 ] }
 uuid = { version = "1", features = [ "v4" ] }
 log = "0.4.29"
+reqwest = { version = "0.13", features = [ "json" ] }

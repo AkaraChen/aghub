@@ -1,13 +1,55 @@
-use crate::commands::start_server;
+use crate::commands::{
+	clear_log_files, export_diagnostic_logs, get_log_dir_path, get_log_entries,
+	get_log_stats, start_server,
+};
 use log::info;
 use tauri::{Manager, WebviewWindow};
 use tauri_plugin_log::fern::colors::{Color, ColoredLevelConfig};
-use tauri_plugin_log::{Target, TargetKind};
+use tauri_plugin_log::{
+	RotationStrategy, Target, TargetKind, TimezoneStrategy,
+};
 
 mod commands;
 
 pub struct AppState {
 	pub port: std::sync::Mutex<Option<u16>>,
+}
+
+fn default_log_config() -> commands::logging::LogConfig {
+	// Read log config from tauri-plugin-store's store.json before Tauri is
+	// fully initialized (app handle not yet available).
+	let base = if cfg!(target_os = "macos") {
+		std::env::var("HOME").ok().map(|h| {
+			std::path::PathBuf::from(h).join("Library/Application Support")
+		})
+	} else if cfg!(target_os = "windows") {
+		std::env::var("APPDATA").ok().map(std::path::PathBuf::from)
+	} else {
+		std::env::var("XDG_DATA_HOME")
+			.ok()
+			.map(std::path::PathBuf::from)
+			.or_else(|| {
+				std::env::var("HOME")
+					.ok()
+					.map(|h| std::path::PathBuf::from(h).join(".local/share"))
+			})
+	};
+	let Some(base) = base else {
+		return commands::logging::LogConfig::default();
+	};
+	let path = base.join("com.akrc.aghub").join("store.json");
+	let content = match std::fs::read_to_string(&path) {
+		Ok(c) => c,
+		Err(_) => return commands::logging::LogConfig::default(),
+	};
+	let store: serde_json::Value = match serde_json::from_str(&content) {
+		Ok(v) => v,
+		Err(_) => return commands::logging::LogConfig::default(),
+	};
+	store
+		.get("logConfig")
+		.and_then(|v| serde_json::from_value(v.clone()).ok())
+		.unwrap_or_default()
 }
 
 fn focus_main_window(window: &WebviewWindow) {
@@ -19,6 +61,7 @@ fn focus_main_window(window: &WebviewWindow) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
 	let _ = fix_path_env::fix();
+	let log_config = default_log_config();
 	let prefix_colors = ColoredLevelConfig::new()
 		.error(Color::Red)
 		.warn(Color::Yellow)
@@ -52,11 +95,19 @@ pub fn run() {
 						file_name: Some("aghub".into()),
 					})
 					.format(|out, message, record| {
+						let now = time::OffsetDateTime::now_local()
+							.unwrap_or_else(|_| {
+								time::OffsetDateTime::now_utc()
+							});
 						out.finish(format_args!(
-							"[{} {}] {}",
+							"{} {} [{}] {}",
+							now.format(
+								&time::format_description::well_known::Rfc3339,
+							)
+							.unwrap_or_default(),
 							record.level(),
 							record.target(),
-							message
+							message,
 						))
 					}),
 					Target::new(TargetKind::Webview).format(
@@ -74,6 +125,11 @@ pub fn run() {
 				.format(|out, message, _record| {
 					out.finish(format_args!("{message}"))
 				})
+				.max_file_size(log_config.max_file_size_mb as u128 * 1_048_576)
+				.rotation_strategy(RotationStrategy::KeepSome(
+					log_config.max_archives as usize,
+				))
+				.timezone_strategy(TimezoneStrategy::UseLocal)
 				.level(log::LevelFilter::Info)
 				.build(),
 		)
@@ -86,6 +142,7 @@ pub fn run() {
 				focus_main_window(&window);
 			}
 		}))
+		.plugin(tauri_plugin_clipboard_manager::init())
 		.plugin(tauri_plugin_opener::init())
 		.plugin(tauri_plugin_dialog::init())
 		.plugin(tauri_plugin_store::Builder::default().build())
@@ -121,7 +178,14 @@ pub fn run() {
 			info!("aghub desktop setup completed");
 			Ok(())
 		})
-		.invoke_handler(tauri::generate_handler![start_server])
+		.invoke_handler(tauri::generate_handler![
+			start_server,
+			export_diagnostic_logs,
+			get_log_dir_path,
+			get_log_entries,
+			get_log_stats,
+			clear_log_files,
+		])
 		.run(tauri::generate_context!())
 		.expect("error while running tauri application");
 }

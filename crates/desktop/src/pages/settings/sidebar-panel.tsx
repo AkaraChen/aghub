@@ -114,60 +114,46 @@ export default function SidebarPanel() {
 
 								<div className="flex items-center gap-1">
 									<Tooltip delay={0}>
-										<Tooltip.Trigger>
-											<Button
-												isIconOnly
-												variant="ghost"
-												size="sm"
-												aria-label={t(
-													"moveSidebarItemUp",
-													{
-														name: t(item.labelKey),
-													},
-												)}
-												isDisabled={index === 0}
-												onPress={() =>
-													void handleMove(
-														item.id,
-														"up",
-													)
-												}
-											>
-												<ChevronUpIcon className="size-4" />
-											</Button>
-										</Tooltip.Trigger>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="sm"
+											aria-label={t("moveSidebarItemUp", {
+												name: t(item.labelKey),
+											})}
+											isDisabled={index === 0}
+											onPress={() =>
+												void handleMove(item.id, "up")
+											}
+										>
+											<ChevronUpIcon className="size-4" />
+										</Button>
 										<Tooltip.Content>
 											{t("moveUp")}
 										</Tooltip.Content>
 									</Tooltip>
 
 									<Tooltip delay={0}>
-										<Tooltip.Trigger>
-											<Button
-												isIconOnly
-												variant="ghost"
-												size="sm"
-												aria-label={t(
-													"moveSidebarItemDown",
-													{
-														name: t(item.labelKey),
-													},
-												)}
-												isDisabled={
-													index ===
-													resolvedSidebarItems.length -
-														1
-												}
-												onPress={() =>
-													void handleMove(
-														item.id,
-														"down",
-													)
-												}
-											>
-												<ChevronDownIcon className="size-4" />
-											</Button>
-										</Tooltip.Trigger>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="sm"
+											aria-label={t(
+												"moveSidebarItemDown",
+												{
+													name: t(item.labelKey),
+												},
+											)}
+											isDisabled={
+												index ===
+												resolvedSidebarItems.length - 1
+											}
+											onPress={() =>
+												void handleMove(item.id, "down")
+											}
+										>
+											<ChevronDownIcon className="size-4" />
+										</Button>
 										<Tooltip.Content>
 											{t("moveDown")}
 										</Tooltip.Content>

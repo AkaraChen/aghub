@@ -123,14 +123,17 @@ impl ConfigManager {
 	pub fn update_skill(&mut self, name: &str, skill: Skill) -> Result<()> {
 		let target_dir = self.target_skills_dir();
 		let agent_name = self.adapter.name().to_string();
-		let config = self.config_mut()?;
+		let config = self.config.as_ref().ok_or_else(|| {
+			ConfigError::InvalidConfig("No configuration loaded".to_string())
+		})?;
 		let index = config
 			.skills
 			.iter()
 			.position(|s| s.name == name)
 			.ok_or_else(|| ConfigError::resource_not_found("skill", name))?;
+		let existing_skill = config.skills[index].clone();
 
-		let existing_skill = &config.skills[index];
+		let config = self.config_mut()?;
 		info!(
 			"updating skill '{}' -> '{}' for agent '{}'",
 			name, skill.name, agent_name
@@ -237,14 +240,17 @@ impl ConfigManager {
 	pub fn remove_skill(&mut self, name: &str) -> Result<()> {
 		let target_dir = self.target_skills_dir();
 		let agent_name = self.adapter.name().to_string();
-		let config = self.config_mut()?;
+		let config = self.config.as_ref().ok_or_else(|| {
+			ConfigError::InvalidConfig("No configuration loaded".to_string())
+		})?;
 		let index = config
 			.skills
 			.iter()
 			.position(|s| s.name == name)
 			.ok_or_else(|| ConfigError::resource_not_found("skill", name))?;
+		let existing_skill = config.skills[index].clone();
 
-		let existing_skill = &config.skills[index];
+		let config = self.config_mut()?;
 		info!("removing skill '{}' for agent '{}'", name, agent_name);
 		let safe_name = sanitize_name(name);
 		let file_path = if let Some(sp) = &existing_skill.source_path {

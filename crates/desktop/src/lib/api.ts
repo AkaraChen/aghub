@@ -3,6 +3,8 @@ import type {
 	AgentAvailabilityDto,
 	AgentInfo,
 	AgentProviderResponse,
+	CCPluginCheckUpdateRequest,
+	CCPluginCheckUpdateResponse,
 	ClaudeProviderStateResponse,
 	CodeEditorType,
 	CodexProviderStateResponse,
@@ -23,26 +25,41 @@ import type {
 	GitSyncResponse,
 	GlobalSkillLockResponse,
 	ImportSkillRequest,
+	CCPluginInstallRequest,
+	CCPluginInstallResponse,
 	InferenceProviderPasswordResponse,
 	InferenceProviderPresetResponse,
 	InferenceProviderResponse,
 	InstallSkillRequest,
 	InstallSkillResponse,
+	CCPluginMarketResponse,
 	MarketSkill,
 	McpResponse,
 	OperationBatchResponse,
+	CCPluginConfigResponse,
+	CCPluginDetailResponse,
+	CCPluginListResponse,
+	CCPluginOpenSkillInEditorRequest,
+	CCPluginResponse,
 	ProjectSkillLockResponse,
 	ReconcileRequest,
+	CCPluginReinstallRequest,
+	CCPluginReinstallResponse,
 	SkillResponse,
 	SkillTreeNodeResponse,
 	SubAgentResponse,
 	ToolInfoDto,
 	TransferRequest,
+	CCPluginUninstallRequest,
+	CCPluginUninstallResponse,
 	UpdateAgentProviderRequest,
 	UpdateCodexActiveProfileRequest,
 	UpdateCodexProfileProviderRequest,
 	UpdateInferenceProviderRequest,
 	UpdateMcpRequest,
+	CCPluginUpdateConfigRequest,
+	CCPluginUpdateRequest,
+	CCPluginUpdateResponse,
 	UpdateSubAgentRequest,
 } from "../generated/dto";
 
@@ -56,13 +73,18 @@ export function createApi(baseUrl: string) {
 		prefix: baseUrl,
 		hooks: {
 			beforeError: [
-				({ error }) => {
-					if (isHTTPError(error)) {
-						const body = error.data as ApiErrorBody | undefined;
-						if (body?.error) {
+				async ({ error }) => {
+					if (
+						isHTTPError(error) &&
+						error.data &&
+						typeof error.data === "object"
+					) {
+						const body = error.data as ApiErrorBody;
+						if (body.error) {
 							error.message = body.error;
 						}
 					}
+
 					return error;
 				},
 			],
@@ -119,11 +141,13 @@ export function createApi(baseUrl: string) {
 			listAll(
 				scope: "global" | "project" | "all" = "global",
 				projectRoot?: string,
+				includeManaged = false,
 			): Promise<SkillResponse[]> {
 				return client
 					.get("agents/all/skills", {
 						searchParams: {
 							scope,
+							include_managed: includeManaged.toString(),
 							...(projectRoot
 								? { project_root: projectRoot }
 								: {}),
@@ -699,6 +723,117 @@ export function createApi(baseUrl: string) {
 				return client
 					.delete("inference/agents/claude/state")
 					.then(() => undefined);
+			},
+		},
+		plugins: {
+			list(): Promise<CCPluginListResponse> {
+				return client.get("plugins").json();
+			},
+			detail(pluginId: string): Promise<CCPluginDetailResponse> {
+				return client
+					.get("plugins/detail", {
+						searchParams: { plugin_id: pluginId },
+					})
+					.json();
+			},
+			enable(pluginId: string): Promise<CCPluginResponse> {
+				return client
+					.post("plugins/enable", {
+						searchParams: { plugin_id: pluginId },
+					})
+					.json();
+			},
+			disable(pluginId: string): Promise<CCPluginResponse> {
+				return client
+					.post("plugins/disable", {
+						searchParams: { plugin_id: pluginId },
+					})
+					.json();
+			},
+			install(
+				body: CCPluginInstallRequest,
+			): Promise<CCPluginInstallResponse> {
+				return client
+					.post("plugins/install", { json: body, timeout: 180000 })
+					.json();
+			},
+			uninstall(
+				body: CCPluginUninstallRequest,
+			): Promise<CCPluginUninstallResponse> {
+				return client
+					.post("plugins/uninstall", { json: body, timeout: 60000 })
+					.json();
+			},
+			update(
+				body: CCPluginUpdateRequest,
+			): Promise<CCPluginUpdateResponse> {
+				return client
+					.post("plugins/update", { json: body, timeout: 180000 })
+					.json();
+			},
+			checkUpdate(
+				body: CCPluginCheckUpdateRequest,
+			): Promise<CCPluginCheckUpdateResponse> {
+				return client
+					.post("plugins/check-update", { json: body })
+					.json();
+			},
+			openFolder(pluginId: string, scope?: string): Promise<void> {
+				const search = new URLSearchParams({ plugin_id: pluginId });
+				if (scope) {
+					search.set("scope", scope);
+				}
+				return client
+					.post("plugins/open-folder", {
+						searchParams: search,
+					})
+					.then(() => undefined);
+			},
+			openSkillInEditor(
+				body: CCPluginOpenSkillInEditorRequest,
+			): Promise<void> {
+				return client
+					.post("plugins/open-skill-in-editor", { json: body })
+					.then(() => undefined);
+			},
+			reinstall(
+				body: CCPluginReinstallRequest,
+			): Promise<CCPluginReinstallResponse> {
+				return client
+					.post("plugins/reinstall", { json: body, timeout: 180000 })
+					.json();
+			},
+			getConfig(pluginId: string): Promise<CCPluginConfigResponse> {
+				return client
+					.get("plugins/config", {
+						searchParams: { plugin_id: pluginId },
+					})
+					.json();
+			},
+			updateConfig(
+				body: CCPluginUpdateConfigRequest,
+			): Promise<CCPluginConfigResponse> {
+				return client.post("plugins/config", { json: body }).json();
+			},
+			deleteConfig(pluginId: string): Promise<CCPluginConfigResponse> {
+				return client
+					.delete("plugins/config", {
+						searchParams: { plugin_id: pluginId },
+					})
+					.json();
+			},
+			listMarket(): Promise<CCPluginMarketResponse[]> {
+				return client.get("plugins-market", { timeout: 30000 }).json();
+			},
+			updateMarketplace(): Promise<{
+				success: boolean;
+				updated_count: number;
+			}> {
+				return client
+					.post("plugins-market/update", {
+						timeout: 300000,
+					})
+					.json();
 			},
 		},
 	};

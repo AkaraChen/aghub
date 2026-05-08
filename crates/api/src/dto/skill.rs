@@ -108,6 +108,14 @@ impl From<Skill> for SkillResponse {
 	}
 }
 
+impl SkillResponse {
+	pub fn from_agent_skill(skill: Skill, agent_id: &str) -> Self {
+		let mut response = Self::from(&skill);
+		response.agent = Some(agent_id.to_string());
+		response
+	}
+}
+
 impl From<&Skill> for SkillResponse {
 	fn from(s: &Skill) -> Self {
 		SkillResponse {
@@ -121,15 +129,6 @@ impl From<&Skill> for SkillResponse {
 			tools: s.tools.clone(),
 			source: s.config_source.map(Into::into),
 			agent: None,
-		}
-	}
-}
-
-impl From<(Skill, &str)> for SkillResponse {
-	fn from((s, agent_id): (Skill, &str)) -> Self {
-		SkillResponse {
-			agent: Some(agent_id.to_string()),
-			..SkillResponse::from(s)
 		}
 	}
 }
