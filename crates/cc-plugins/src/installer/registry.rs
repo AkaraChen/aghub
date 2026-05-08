@@ -296,10 +296,11 @@ pub(crate) async fn extract_repository_archive(
 	git_installer: &crate::installer::git::GitBasedInstaller,
 	url: &str,
 	target_dir: &Path,
+	revision: Option<&str>,
 ) -> Result<String> {
 	let mut last_error = None;
 
-	for tarball_url in repository_archive_urls(url, None) {
+	for tarball_url in repository_archive_urls(url, revision) {
 		match git_installer
 			.download_and_extract(&tarball_url, "", target_dir)
 			.await
@@ -409,6 +410,7 @@ impl GitHubRegistry {
 			&self.git_installer,
 			&url,
 			temp_dir.path(),
+			None,
 		)
 		.await?;
 
