@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import type { CCPluginDetailResponse, TransportDto } from "../../generated/dto";
 import { KeyValueList } from "../key-value-list";
 import { CodeBlock, MetaRow } from "../meta-blocks";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { serializeMcpImportJson } from "../../lib/mcp-utils";
 
 interface McpServersSectionProps {
@@ -66,8 +67,6 @@ export function McpServersSection({ config }: McpServersSectionProps) {
 		}
 
 		try {
-			const { writeText } =
-				await import("@tauri-apps/plugin-clipboard-manager");
 			await writeText(value);
 			setCopiedState({
 				serverName: server.name,
