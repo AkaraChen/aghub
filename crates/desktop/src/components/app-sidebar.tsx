@@ -1,24 +1,23 @@
 import {
 	BookOpenIcon,
-	ChevronDownIcon,
 	Cog6ToothIcon,
 	CpuChipIcon,
 	KeyIcon,
 	ServerIcon,
 } from "@heroicons/react/24/solid";
 import { Surface } from "@heroui/react";
-import { useMemo, useState } from "react";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { Link, useLocation } from "wouter";
-import { useAgentAvailability } from "../hooks/use-agent-availability";
+import { Link, useLocation, useSearch } from "wouter";
 import { useSidebarNavigation } from "../hooks/use-sidebar-navigation";
-import { AgentIcon } from "../lib/agent-icons";
+import {
+	setStickyAgentFilter,
+	useStickyAgentFilter,
+} from "../hooks/use-sticky-agent-filter";
 import { isSidebarHrefActive } from "../lib/sidebar-navigation";
 import { cn } from "../lib/utils";
 import { GlobalSearch } from "./global-search";
 import { ProjectList } from "./project-list";
-
-const COLLAPSED_AGENT_COUNT = 5;
 
 function navItemClasses(isActive: boolean) {
 	return cn(
@@ -41,47 +40,42 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 	);
 }
 
+const RESOURCE_HREFS = ["/skills", "/mcp", "/sub-agents"] as const;
+
+function isOnResourcePage(pathname: string) {
+	return RESOURCE_HREFS.some(
+		(href) => pathname === href || pathname.startsWith(`${href}/`),
+	);
+}
+
+function withAgent(href: string, agent: string | null) {
+	if (!agent) return href;
+	return `${href}?agent=${encodeURIComponent(agent)}`;
+}
+
 export function AppSidebar() {
 	const { t } = useTranslation();
 	const [pathname] = useLocation();
+	const search = useSearch();
 	const { visibleSidebarItems } = useSidebarNavigation();
-	const { availableAgents } = useAgentAvailability();
+	const stickyAgent = useStickyAgentFilter();
 
-	const sortedAgents = useMemo(() => {
-		const installed = availableAgents.filter(
-			(agent) => agent.availability.is_available,
-		);
-		return installed.sort((a, b) => {
-			if (a.isDisabled !== b.isDisabled) {
-				return a.isDisabled ? 1 : -1;
-			}
-			return a.display_name.localeCompare(b.display_name);
-		});
-	}, [availableAgents]);
-
-	const [agentsExpanded, setAgentsExpanded] = useState(false);
-
-	const visibleAgents = useMemo(() => {
-		if (agentsExpanded || sortedAgents.length <= COLLAPSED_AGENT_COUNT) {
-			return sortedAgents;
+	// On a resource page, the URL is the source of truth for the active filter,
+	// so mirror it into the sticky store. On non-resource pages we leave the
+	// sticky value alone so it survives the round-trip.
+	const onResource = isOnResourcePage(pathname);
+	const urlAgent = new URLSearchParams(search).get("agent") || null;
+	useEffect(() => {
+		if (onResource) {
+			setStickyAgentFilter(urlAgent);
 		}
-		const baseSlice = sortedAgents.slice(0, COLLAPSED_AGENT_COUNT);
-		const activeAgent = sortedAgents.find((agent) =>
-			isSidebarHrefActive(pathname, `/agents/${agent.id}`),
-		);
-		if (
-			activeAgent &&
-			!baseSlice.some((agent) => agent.id === activeAgent.id)
-		) {
-			return [...baseSlice, activeAgent];
-		}
-		return baseSlice;
-	}, [sortedAgents, agentsExpanded, pathname]);
+	}, [onResource, urlAgent]);
 
-	const hiddenAgentCount = sortedAgents.length - visibleAgents.length;
-	const showAgentToggle =
-		sortedAgents.length > COLLAPSED_AGENT_COUNT &&
-		(hiddenAgentCount > 0 || agentsExpanded);
+	// Sidebar resource links carry the sticky filter forward, even from
+	// non-resource pages (so going to /inference-providers and back to /skills
+	// restores ?agent=<last>). The chip's clear button on a resource page
+	// resets both the URL and the sticky store.
+	const carriedAgent = stickyAgent;
 
 	const homeItem = visibleSidebarItems.find((item) => item.id === "home");
 	const marketItem = visibleSidebarItems.find((item) => item.id === "market");
@@ -135,9 +129,9 @@ export function AppSidebar() {
 
 					<section
 						className="flex flex-col gap-1"
-						data-tour="all-resources-section"
+						data-tour="resources-section"
 					>
-						<SectionLabel>{t("allResources")}</SectionLabel>
+						<SectionLabel>{t("resources")}</SectionLabel>
 						<nav className="flex flex-col gap-0.5">
 							{(
 								[
@@ -156,16 +150,11 @@ export function AppSidebar() {
 										labelKey: "subAgents",
 										Icon: CpuChipIcon,
 									},
-									{
-										href: "/inference-providers",
-										labelKey: "inferenceProviders",
-										Icon: KeyIcon,
-									},
 								] as const
 							).map(({ href, labelKey, Icon }) => (
 								<Link
 									key={href}
-									href={href}
+									href={withAgent(href, carriedAgent)}
 									className={navItemClasses(
 										isSidebarHrefActive(pathname, href),
 									)}
@@ -179,71 +168,20 @@ export function AppSidebar() {
 
 					<Separator />
 
-					<section
-						className="flex flex-col gap-1"
-						data-tour="agents-section"
-					>
-						<SectionLabel>{t("allAgents")}</SectionLabel>
-						<nav className="flex flex-col gap-0.5">
-							{sortedAgents.length === 0 ? (
-								<p className="px-2 py-2 text-xs text-muted">
-									{t("noAgentsAvailable")}
-								</p>
-							) : (
-								visibleAgents.map((agent) => {
-									const href = `/agents/${agent.id}`;
-									const isActive = isSidebarHrefActive(
-										pathname,
-										href,
-									);
-									return (
-										<Link
-											key={agent.id}
-											href={href}
-											className={cn(
-												navItemClasses(isActive),
-												agent.isDisabled &&
-													"opacity-60",
-											)}
-										>
-											<AgentIcon
-												id={agent.id}
-												name={agent.display_name}
-												size="xs"
-												variant="ghost"
-											/>
-											<span className="min-w-0 flex-1 truncate">
-												{agent.display_name}
-											</span>
-										</Link>
-									);
-								})
+					<nav className="flex flex-col gap-0.5">
+						<Link
+							href="/inference-providers"
+							className={navItemClasses(
+								isSidebarHrefActive(
+									pathname,
+									"/inference-providers",
+								),
 							)}
-							{showAgentToggle && (
-								<button
-									type="button"
-									onClick={() => setAgentsExpanded((v) => !v)}
-									aria-expanded={agentsExpanded}
-									className={cn(
-										"mt-0.5 flex items-center gap-2 rounded-md px-2.5 py-1 text-xs font-medium text-muted transition-colors",
-										"hover:bg-surface-secondary hover:text-foreground focus:bg-surface-secondary focus:outline-none",
-									)}
-								>
-									<ChevronDownIcon
-										className={cn(
-											"size-3.5 transition-transform",
-											agentsExpanded && "rotate-180",
-										)}
-									/>
-									{agentsExpanded
-										? t("sidebarShowLess")
-										: t("sidebarShowMoreAgents", {
-												count: hiddenAgentCount,
-											})}
-								</button>
-							)}
-						</nav>
-					</section>
+						>
+							<KeyIcon className="size-4" />
+							<span>{t("inferenceProviders")}</span>
+						</Link>
+					</nav>
 
 					<Separator />
 

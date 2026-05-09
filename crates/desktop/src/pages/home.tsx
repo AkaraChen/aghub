@@ -1,12 +1,18 @@
-import { ArrowRightIcon, PlusIcon } from "@heroicons/react/24/solid";
-import { Button, Card } from "@heroui/react";
+import {
+	ArrowRightIcon,
+	FolderOpenIcon,
+	PlusIcon,
+} from "@heroicons/react/24/solid";
+import { Button, Card, toast } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import type { AvailableAgent } from "../contexts/agent-availability";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
+import { resolveAgentConfigPath } from "../lib/agent-config-paths";
 import { AgentIcon } from "../lib/agent-icons";
 import { cn } from "../lib/utils";
 import { mcpListQueryOptions } from "../requests/mcps";
@@ -59,6 +65,11 @@ function AgentOverviewCard({ agent }: { agent: AvailableAgent }) {
 	const { data: mcps = [] } = useQuery({
 		...mcpListQueryOptions({ api, scope: "global" }),
 	});
+	const { data: configPath } = useQuery({
+		queryKey: ["agent-config-path", agent.id],
+		queryFn: () => resolveAgentConfigPath(agent),
+		staleTime: Infinity,
+	});
 
 	const skillCount = useMemo(
 		() => skills.filter((s) => !s.agent || s.agent === agent.id).length,
@@ -68,6 +79,27 @@ function AgentOverviewCard({ agent }: { agent: AvailableAgent }) {
 		() => mcps.filter((m) => !m.agent || m.agent === agent.id).length,
 		[mcps, agent.id],
 	);
+
+	const handleOpenConfigFolder = async () => {
+		if (!configPath) return;
+		try {
+			await revealItemInDir(configPath);
+		} catch (error) {
+			console.error(
+				`Failed to reveal config folder for ${agent.id}:`,
+				error,
+			);
+			toast.danger(
+				t("openAgentConfigFolderFailed", {
+					name: agent.display_name,
+				}),
+			);
+		}
+	};
+
+	const handleOpen = () => {
+		setLocation(`/skills?agent=${encodeURIComponent(agent.id)}`);
+	};
 
 	return (
 		<Card variant="secondary" className="flex flex-col">
@@ -109,16 +141,29 @@ function AgentOverviewCard({ agent }: { agent: AvailableAgent }) {
 							: t("agentDisabledHint")}
 					</p>
 				)}
-				<div className="mt-auto">
+				<div className="mt-auto flex gap-2">
 					<Button
 						variant={status === "ready" ? "primary" : "tertiary"}
 						size="sm"
-						className="w-full"
-						onPress={() => setLocation(`/agents/${agent.id}`)}
+						className="flex-1"
+						onPress={handleOpen}
 					>
 						{status === "ready" ? t("open") : t("manage")}
 						<ArrowRightIcon className="size-3.5" />
 					</Button>
+					{configPath && (
+						<Button
+							isIconOnly
+							variant="tertiary"
+							size="sm"
+							aria-label={t("openAgentConfigFolder", {
+								name: agent.display_name,
+							})}
+							onPress={handleOpenConfigFolder}
+						>
+							<FolderOpenIcon className="size-4" />
+						</Button>
+					)}
 				</div>
 			</Card.Content>
 		</Card>

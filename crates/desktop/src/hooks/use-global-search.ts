@@ -144,7 +144,7 @@ export function useGlobalSearch({
 					name: agent.display_name,
 					subtitle: agent.id,
 					agentId: agent.id,
-					href: `/agents/${agent.id}`,
+					href: `/skills?agent=${encodeURIComponent(agent.id)}`,
 				};
 			},
 		);
@@ -152,15 +152,16 @@ export function useGlobalSearch({
 		const skillMatches: SearchMatch[] = cap(skillFuse.search(trimmed)).map(
 			({ item }) => {
 				const skill = item as SkillResponse;
+				const params = new URLSearchParams();
+				if (skill.agent) params.set("agent", skill.agent);
+				params.set("skill", skill.name);
 				return {
 					kind: "skill",
 					id: `${skill.agent ?? "all"}:${skill.name}`,
 					name: skill.name,
 					subtitle: skill.description,
 					agentId: skill.agent,
-					href: skill.agent
-						? `/agents/${skill.agent}/skills?skill=${encodeURIComponent(skill.name)}`
-						: `/market/search?q=${encodeURIComponent(skill.name)}`,
+					href: `/skills?${params.toString()}`,
 				};
 			},
 		);
@@ -168,15 +169,16 @@ export function useGlobalSearch({
 		const mcpMatches: SearchMatch[] = cap(mcpFuse.search(trimmed)).map(
 			({ item }) => {
 				const mcp = item as McpResponse;
+				const params = new URLSearchParams();
+				if (mcp.agent) params.set("agent", mcp.agent);
+				params.set("server", mcp.name);
 				return {
 					kind: "mcp",
 					id: `${mcp.agent ?? "all"}:${mcp.name}`,
 					name: mcp.name,
 					subtitle: null,
 					agentId: mcp.agent,
-					href: mcp.agent
-						? `/agents/${mcp.agent}/mcp?server=${encodeURIComponent(mcp.name)}`
-						: "/",
+					href: `/mcp?${params.toString()}`,
 				};
 			},
 		);
@@ -185,15 +187,16 @@ export function useGlobalSearch({
 			subAgentFuse.search(trimmed),
 		).map(({ item }) => {
 			const subAgent = item as SubAgentResponse;
+			const params = new URLSearchParams();
+			if (subAgent.agent) params.set("agent", subAgent.agent);
+			const qs = params.toString();
 			return {
 				kind: "sub-agent",
 				id: `${subAgent.agent ?? "all"}:${subAgent.name}`,
 				name: subAgent.name,
 				subtitle: subAgent.description,
 				agentId: subAgent.agent,
-				href: subAgent.agent
-					? `/agents/${subAgent.agent}/sub-agents`
-					: "/",
+				href: qs ? `/sub-agents?${qs}` : "/sub-agents",
 			};
 		});
 

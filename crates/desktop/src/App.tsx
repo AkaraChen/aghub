@@ -19,7 +19,6 @@ import type { DeepLinkImportIntent } from "./lib/deep-link";
 import { parseDeepLink } from "./lib/deep-link";
 import { setupAppMenu } from "./lib/menu";
 import { initStore } from "./lib/store";
-import AgentDetailPage from "./pages/agent";
 import HomePage from "./pages/home";
 import InferenceProvidersPage from "./pages/inference-providers";
 import MarketPage from "./pages/market";
@@ -187,27 +186,19 @@ function App() {
 									</Route>
 
 									<Route path="/agents/:agentId/:rest*">
-										<MainLayout>
-											<ErrorBoundary>
-												<Suspense
-													fallback={<PageSkeleton />}
-												>
-													<AgentDetailPage />
-												</Suspense>
-											</ErrorBoundary>
-										</MainLayout>
+										{(params) => (
+											<Redirect
+												to={`/skills?agent=${encodeURIComponent(params.agentId)}`}
+											/>
+										)}
 									</Route>
 
 									<Route path="/agents/:agentId">
-										<MainLayout>
-											<ErrorBoundary>
-												<Suspense
-													fallback={<PageSkeleton />}
-												>
-													<AgentDetailPage />
-												</Suspense>
-											</ErrorBoundary>
-										</MainLayout>
+										{(params) => (
+											<Redirect
+												to={`/skills?agent=${encodeURIComponent(params.agentId)}`}
+											/>
+										)}
 									</Route>
 
 									<Route path="/market">
