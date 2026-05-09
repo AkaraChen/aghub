@@ -14,21 +14,23 @@ import { DeepLinkImportModal } from "./components/deep-link-import-modal";
 import { OnboardingController } from "./components/onboarding-controller";
 import { Redirect } from "./components/redirect";
 import { ErrorBoundary } from "./components/ui/error-boundary";
-import { useSidebarNavigation } from "./hooks/use-sidebar-navigation";
 import { MainLayout } from "./layouts/main-layout";
 import type { DeepLinkImportIntent } from "./lib/deep-link";
 import { parseDeepLink } from "./lib/deep-link";
 import { setupAppMenu } from "./lib/menu";
 import { initStore } from "./lib/store";
+import AgentDetailPage from "./pages/agent";
+import HomePage from "./pages/home";
 import InferenceProvidersPage from "./pages/inference-providers";
+import MarketPage from "./pages/market";
 import PluginsPage from "./pages/plugins";
 import ProjectDetailPage from "./pages/project/detail";
+import SearchResultsPage from "./pages/search";
 import SettingsPage from "./pages/settings";
 import CustomAgentsPage from "./pages/settings/custom-agents";
 import MCPServersPage from "./pages/settings/mcp-servers";
 import SkillsPage from "./pages/settings/skills";
 import SubAgentsPage from "./pages/settings/sub-agents";
-import SkillsShPage from "./pages/skills-sh";
 import SkillsSearchPage from "./pages/skills-sh/search";
 import { AgentAvailabilityProvider } from "./providers/agent-availability";
 import { ServerProvider } from "./providers/server";
@@ -44,29 +46,12 @@ const queryClient = new QueryClient({
 	},
 });
 
-function SkillsPageSkeleton() {
+function PageSkeleton() {
 	return (
-		<div className="flex h-full">
-			<div
-				className="
-      flex w-80 shrink-0 items-center justify-center border-r border-border
-    "
-			>
-				<Spinner />
-			</div>
-			<div className="flex-1" />
+		<div className="flex h-full items-center justify-center">
+			<Spinner />
 		</div>
 	);
-}
-
-function DefaultSidebarRoute() {
-	const { defaultHref, isLoading } = useSidebarNavigation();
-
-	if (isLoading) {
-		return null;
-	}
-
-	return <Redirect to={defaultHref} />;
 }
 
 function App() {
@@ -178,15 +163,89 @@ function App() {
 								<OnboardingController />
 								<Switch>
 									<Route path="/">
-										<DefaultSidebarRoute />
+										<MainLayout>
+											<ErrorBoundary>
+												<Suspense
+													fallback={<PageSkeleton />}
+												>
+													<HomePage />
+												</Suspense>
+											</ErrorBoundary>
+										</MainLayout>
 									</Route>
+
+									<Route path="/search">
+										<MainLayout>
+											<ErrorBoundary>
+												<Suspense
+													fallback={<PageSkeleton />}
+												>
+													<SearchResultsPage />
+												</Suspense>
+											</ErrorBoundary>
+										</MainLayout>
+									</Route>
+
+									<Route path="/agents/:agentId/:rest*">
+										<MainLayout>
+											<ErrorBoundary>
+												<Suspense
+													fallback={<PageSkeleton />}
+												>
+													<AgentDetailPage />
+												</Suspense>
+											</ErrorBoundary>
+										</MainLayout>
+									</Route>
+
+									<Route path="/agents/:agentId">
+										<MainLayout>
+											<ErrorBoundary>
+												<Suspense
+													fallback={<PageSkeleton />}
+												>
+													<AgentDetailPage />
+												</Suspense>
+											</ErrorBoundary>
+										</MainLayout>
+									</Route>
+
+									<Route path="/market">
+										<MainLayout>
+											<ErrorBoundary>
+												<Suspense
+													fallback={<PageSkeleton />}
+												>
+													<MarketPage />
+												</Suspense>
+											</ErrorBoundary>
+										</MainLayout>
+									</Route>
+
+									<Route path="/market/search">
+										<MainLayout>
+											<ErrorBoundary>
+												<Suspense
+													fallback={<PageSkeleton />}
+												>
+													<SkillsSearchPage />
+												</Suspense>
+											</ErrorBoundary>
+										</MainLayout>
+									</Route>
+
+									<Route path="/library">
+										<Redirect to="/market" />
+									</Route>
+									<Route path="/library/search">
+										<Redirect to="/market/search" />
+									</Route>
+
 									<Route path="/skills">
 										<MainLayout>
 											<ErrorBoundary>
 												<Suspense
-													fallback={
-														<SkillsPageSkeleton />
-													}
+													fallback={<PageSkeleton />}
 												>
 													<SkillsPage />
 												</Suspense>
@@ -197,11 +256,20 @@ function App() {
 										<MainLayout>
 											<ErrorBoundary>
 												<Suspense
-													fallback={
-														<SkillsPageSkeleton />
-													}
+													fallback={<PageSkeleton />}
 												>
 													<MCPServersPage />
+												</Suspense>
+											</ErrorBoundary>
+										</MainLayout>
+									</Route>
+									<Route path="/sub-agents">
+										<MainLayout>
+											<ErrorBoundary>
+												<Suspense
+													fallback={<PageSkeleton />}
+												>
+													<SubAgentsPage />
 												</Suspense>
 											</ErrorBoundary>
 										</MainLayout>
@@ -213,45 +281,26 @@ function App() {
 											</ErrorBoundary>
 										</MainLayout>
 									</Route>
-									<Route path="/skills-sh/search">
-										<MainLayout>
-											<ErrorBoundary>
-												<Suspense
-													fallback={
-														<SkillsPageSkeleton />
-													}
-												>
-													<SkillsSearchPage />
-												</Suspense>
-											</ErrorBoundary>
-										</MainLayout>
-									</Route>
 									<Route path="/skills-sh">
-										<MainLayout>
-											<ErrorBoundary>
-												<Suspense
-													fallback={
-														<SkillsPageSkeleton />
-													}
-												>
-													<SkillsShPage />
-												</Suspense>
-											</ErrorBoundary>
-										</MainLayout>
+										<Redirect to="/market" />
 									</Route>
+									<Route path="/skills-sh/search">
+										<Redirect to="/market/search" />
+									</Route>
+
 									<Route path="/cc-plugins">
 										<MainLayout>
 											<ErrorBoundary>
 												<Suspense
-													fallback={
-														<SkillsPageSkeleton />
-													}
+													fallback={<PageSkeleton />}
 												>
 													<PluginsPage />
 												</Suspense>
 											</ErrorBoundary>
 										</MainLayout>
 									</Route>
+
+
 									<Route path="/settings">
 										<MainLayout>
 											<SettingsPage />
@@ -262,26 +311,13 @@ function App() {
 											<CustomAgentsPage />
 										</MainLayout>
 									</Route>
-									<Route path="/sub-agents">
-										<MainLayout>
-											<ErrorBoundary>
-												<Suspense
-													fallback={
-														<SkillsPageSkeleton />
-													}
-												>
-													<SubAgentsPage />
-												</Suspense>
-											</ErrorBoundary>
-										</MainLayout>
-									</Route>
 									<Route path="/projects/:id">
 										<MainLayout>
 											<ProjectDetailPage />
 										</MainLayout>
 									</Route>
 									<Route>
-										<DefaultSidebarRoute />
+										<Redirect to="/" />
 									</Route>
 								</Switch>
 								<DeepLinkImportModal

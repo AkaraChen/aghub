@@ -64,7 +64,7 @@ export async function setupAppMenu(t: TFunction) {
 			id: "discover-skills",
 			text: t("menu.discoverSkills"),
 			accelerator: "CmdOrControl+D",
-			action: () => emit("navigate", "/skills-sh"),
+			action: () => emit("navigate", "/market"),
 		});
 
 		const manageMcpMenuItem = await MenuItem.new({

@@ -82,8 +82,8 @@ export function ProjectList() {
 	return (
 		<>
 			{/* Projects Header */}
-			<div className="mt-4">
-				<div className="flex items-center justify-between px-3 py-2">
+			<div>
+				<div className="flex items-center justify-between px-2 py-1">
 					<button
 						className="flex flex-1 items-center gap-2"
 						onClick={() => setIsExpanded(!isExpanded)}

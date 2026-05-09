@@ -12,7 +12,6 @@ import {
 } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../hooks/use-theme";
-import SidebarPanel from "./sidebar-panel";
 
 export default function AppearancePanel() {
 	const { t, i18n } = useTranslation();
@@ -111,8 +110,6 @@ export default function AppearancePanel() {
 					</div>
 				</Card.Content>
 			</Card>
-
-			<SidebarPanel />
 		</div>
 	);
 }

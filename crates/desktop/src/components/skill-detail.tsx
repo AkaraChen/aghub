@@ -83,9 +83,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 			return;
 		}
 
-		setLocation(
-			`/skills-sh/search?q=${encodeURIComponent(trimmedSkillName)}`,
-		);
+		setLocation(`/market/search?q=${encodeURIComponent(trimmedSkillName)}`);
 	};
 
 	const openFolderMutation = useMutation(
