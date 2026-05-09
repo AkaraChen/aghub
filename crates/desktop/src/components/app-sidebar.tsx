@@ -3,6 +3,7 @@ import {
 	Cog6ToothIcon,
 	CpuChipIcon,
 	KeyIcon,
+	PuzzlePieceIcon,
 	ServerIcon,
 } from "@heroicons/react/24/solid";
 import { Surface } from "@heroui/react";
@@ -139,30 +140,50 @@ export function AppSidebar() {
 										href: "/skills",
 										labelKey: "skills",
 										Icon: BookOpenIcon,
+										carriesAgentFilter: true,
 									},
 									{
 										href: "/mcp",
 										labelKey: "mcpServers",
 										Icon: ServerIcon,
+										carriesAgentFilter: true,
 									},
 									{
 										href: "/sub-agents",
 										labelKey: "subAgents",
 										Icon: CpuChipIcon,
+										carriesAgentFilter: true,
+									},
+									{
+										href: "/cc-plugins",
+										labelKey: "claudeCodePlugins",
+										Icon: PuzzlePieceIcon,
+										carriesAgentFilter: false,
 									},
 								] as const
-							).map(({ href, labelKey, Icon }) => (
-								<Link
-									key={href}
-									href={withAgent(href, carriedAgent)}
-									className={navItemClasses(
-										isSidebarHrefActive(pathname, href),
-									)}
-								>
-									<Icon className="size-4" />
-									<span>{t(labelKey)}</span>
-								</Link>
-							))}
+							).map(
+								({
+									href,
+									labelKey,
+									Icon,
+									carriesAgentFilter,
+								}) => (
+									<Link
+										key={href}
+										href={
+											carriesAgentFilter
+												? withAgent(href, carriedAgent)
+												: href
+										}
+										className={navItemClasses(
+											isSidebarHrefActive(pathname, href),
+										)}
+									>
+										<Icon className="size-4" />
+										<span>{t(labelKey)}</span>
+									</Link>
+								),
+							)}
 						</nav>
 					</section>
 

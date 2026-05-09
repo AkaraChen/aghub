@@ -11,6 +11,7 @@ import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import { ImportGithubSkillPanel } from "../components/import-github-skill-panel";
 import { cn } from "../lib/utils";
+import PluginsPage from "./plugins";
 import SkillsShPage from "./skills-sh";
 
 const MARKET_TAB_IDS = [
@@ -221,45 +222,7 @@ function McpMarketTab() {
 }
 
 function ClaudePluginsTab() {
-	const { t } = useTranslation();
-
-	const handleOpenDocs = () => {
-		window.open(
-			"https://docs.claude.com/en/docs/claude-code/plugins",
-			"_blank",
-			"noopener,noreferrer",
-		);
-	};
-
-	return (
-		<div className="flex h-full items-center justify-center p-8">
-			<Card
-				variant="secondary"
-				className="w-full max-w-md border border-dashed"
-			>
-				<Card.Content className="flex flex-col items-center gap-3 py-8 text-center">
-					<div className="flex size-12 items-center justify-center rounded-lg bg-surface">
-						<PuzzlePieceIcon className="size-6 text-muted" />
-					</div>
-					<div>
-						<p className="text-base font-medium">
-							{t("marketClaudePluginsComingSoonTitle")}
-						</p>
-						<p className="mt-1.5 text-sm text-muted">
-							{t("marketClaudePluginsComingSoonHint")}
-						</p>
-					</div>
-					<Button
-						variant="tertiary"
-						size="sm"
-						onPress={handleOpenDocs}
-					>
-						{t("marketClaudePluginsLearnMore")}
-					</Button>
-				</Card.Content>
-			</Card>
-		</div>
-	);
+	return <PluginsPage />;
 }
 
 export default function MarketPage() {
