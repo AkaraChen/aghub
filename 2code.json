@@ -1,0 +1,13 @@
+{
+	"setup_script": ["bun i"],
+	"teardown_script": [],
+	"init_script": [],
+	"terminal_templates": [
+		{
+			"id": "0adfab1c-c852-4b40-9c1e-cd6341c567ee",
+			"name": "Run",
+			"cwd": "",
+			"commands": ["just desktop"]
+		}
+	]
+}

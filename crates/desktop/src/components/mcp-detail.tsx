@@ -25,6 +25,7 @@ import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useFavorites } from "../hooks/use-favorites";
 import { AgentIcon } from "../lib/agent-icons";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { serializeMcpImportJson } from "../lib/mcp-utils";
 import { cn, filterItemsByAgentIds, sortAgentObjects } from "../lib/utils";
 import { invalidateMcpQueries } from "../requests/mcps";
@@ -150,7 +151,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 		);
 
 		try {
-			await navigator.clipboard.writeText(configJson);
+			await writeText(configJson);
 			dispatch({ type: "show_copy_feedback" });
 			setTimeout(() => {
 				dispatch({ type: "hide_copy_feedback" });

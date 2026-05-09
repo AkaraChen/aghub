@@ -1,5 +1,6 @@
 import { ClipboardDocumentIcon } from "@heroicons/react/24/solid";
 import { Button } from "@heroui/react";
+import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { parse as parseDotenv } from "dotenv";
 import { useTranslation } from "react-i18next";
 import type { KeyPair } from "../lib/key-pair-utils";
@@ -43,7 +44,7 @@ export function EnvEditor({
 	// Import from clipboard
 	const handleImportFromClipboard = async () => {
 		try {
-			const clipboardText = await navigator.clipboard.readText();
+			const clipboardText = await readText();
 			if (!clipboardText.trim()) return;
 
 			const parsed = parseClipboardEnv(clipboardText);

@@ -33,6 +33,7 @@ export default {
 	pluginsDescription:
 		"Manage Claude Code plugins — enable or disable installed plugins.",
 	noPluginsInstalled: "No plugins installed.",
+	noPluginsMatch: "No plugins match",
 	enablePlugin: "Enable plugin",
 	disablePlugin: "Disable plugin",
 	pluginEnabled: "Enabled",

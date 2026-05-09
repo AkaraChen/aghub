@@ -31,6 +31,7 @@ export default {
 	plugins: "外掛",
 	pluginsDescription: "管理 Claude Code 外掛 — 啟用或停用已安裝的外掛。",
 	noPluginsInstalled: "暫無已安裝的外掛。",
+	noPluginsMatch: "沒有匹配的外掛",
 	enablePlugin: "啟用外掛",
 	disablePlugin: "停用外掛",
 	pluginEnabled: "已啟用",
