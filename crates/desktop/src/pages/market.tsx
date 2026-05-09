@@ -10,8 +10,8 @@ import { useQueryState } from "nuqs";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import { ImportGithubSkillPanel } from "../components/import-github-skill-panel";
+import { PluginMarketContent } from "../components/plugin-market-content";
 import { cn } from "../lib/utils";
-import PluginsPage from "./plugins";
 import SkillsShPage from "./skills-sh";
 
 const MARKET_TAB_IDS = [
@@ -222,7 +222,7 @@ function McpMarketTab() {
 }
 
 function ClaudePluginsTab() {
-	return <PluginsPage />;
+	return <PluginMarketContent enabled variant="page" />;
 }
 
 export default function MarketPage() {
