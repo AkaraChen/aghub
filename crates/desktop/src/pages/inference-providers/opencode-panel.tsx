@@ -261,7 +261,7 @@ function OpenCodeEditProviderDialog({
 			id: provider.id,
 			body: {
 				name: trimmedName === provider.name ? null : trimmedName,
-				api_key: trimmedApiKey ? trimmedApiKey : null,
+				api_key: trimmedApiKey || null,
 			},
 		});
 	};
