@@ -31,6 +31,7 @@ export default {
 	plugins: "插件",
 	pluginsDescription: "管理 Claude Code 插件 — 启用或禁用已安装的插件。",
 	noPluginsInstalled: "暂无已安装的插件。",
+	noPluginsMatch: "没有匹配的插件",
 	enablePlugin: "启用插件",
 	disablePlugin: "禁用插件",
 	pluginEnabled: "已启用",
