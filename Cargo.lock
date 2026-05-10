@@ -68,6 +68,7 @@ dependencies = [
  "aghub-core",
  "aghub-git",
  "aghub-inference",
+ "aghub-workspace",
  "dirs",
  "keyring",
  "log",
@@ -189,6 +190,21 @@ dependencies = [
  "serde",
  "serde_yaml",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "aghub-workspace"
+version = "0.1.2"
+dependencies = [
+ "aghub-agents",
+ "aghub-core",
+ "dirs",
+ "log",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "ts-rs",
 ]
 
 [[package]]

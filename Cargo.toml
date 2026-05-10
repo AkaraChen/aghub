@@ -11,6 +11,7 @@ members = [
 	"crates/markdown",
 	"crates/inference",
 	"crates/cc-plugins",
+	"crates/workspace",
 	"crates/desktop/src-tauri",
 ]
 resolver = "2"
