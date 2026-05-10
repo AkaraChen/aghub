@@ -19,6 +19,7 @@ import { useLocation } from "wouter";
 import { useProjects } from "../hooks/use-projects";
 import { ONBOARDING_EVENT, type OnboardingCommand } from "../lib/onboarding";
 import { getOnboardingProgress, updateOnboardingProgress } from "../lib/store";
+import { capture } from "../lib/analytics";
 import { cn } from "../lib/utils";
 
 type OverlayMode = "welcome" | null;
@@ -381,6 +382,7 @@ export function OnboardingController() {
 	const dismissWelcome = async () => {
 		setOverlayMode(null);
 		setCurrentStep(0);
+		capture("onboarding completed");
 		await saveProgress({
 			hasSeenWelcome: true,
 		});
