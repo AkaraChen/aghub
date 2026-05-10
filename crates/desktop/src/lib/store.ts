@@ -1,5 +1,9 @@
 export { disableAgent, enableAgent, getDisabledAgents } from "./store/agents";
 export {
+	getLastSeenWhatsNewVersion,
+	setLastSeenWhatsNewVersion,
+} from "./store/whats-new";
+export {
 	type AnalyticsConsent,
 	getAnalyticsConsent,
 	getAutoCheckUpdates,
