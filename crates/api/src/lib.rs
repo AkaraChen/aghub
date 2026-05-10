@@ -214,6 +214,9 @@ fn build_rocket(
 				routes::plugins::delete_plugin_config,
 				routes::plugins::list_plugin_market,
 				routes::plugins::update_marketplace,
+				routes::workspace::list_workspace_files,
+				routes::workspace::get_workspace_file,
+				routes::workspace::save_workspace_file,
 			],
 		)
 		.register(
