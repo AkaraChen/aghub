@@ -55,7 +55,7 @@ serde_yaml = "0.9"
 
 # TOML parsing
 toml = "1.0"
-toml_edit = "0.22"
+toml_edit = "0.25"
 
 # Interactive CLI
 inquire = "0.9"
