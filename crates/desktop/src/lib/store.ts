@@ -1,4 +1,9 @@
 export { disableAgent, enableAgent, getDisabledAgents } from "./store/agents";
+export {
+	type AnalyticsConsent,
+	getAnalyticsConsent,
+	setAnalyticsConsent,
+} from "./store/analytics-consent";
 export { getStore, initStore } from "./store/index";
 export {
 	getIntegrationPreferences,

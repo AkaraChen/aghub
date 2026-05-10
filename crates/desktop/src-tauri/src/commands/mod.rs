@@ -8,6 +8,6 @@ pub use logging::{
 };
 pub use posthog::{
 	posthog_capture, posthog_get_distinct_id, posthog_get_session_id,
-	posthog_identify,
+	posthog_identify, posthog_set_enabled,
 };
 pub use server::start_server;

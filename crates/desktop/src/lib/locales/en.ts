@@ -406,6 +406,13 @@ export default {
 	onboardingStepProjectsTitle: "Projects",
 	onboardingStepProjectsDescription:
 		"Scope MCP servers and skills to individual repositories. Keep project configs isolated from your global setup.",
+	onboardingAnalyticsTitle: "Help improve aghub",
+	onboardingAnalyticsDescription:
+		"Share anonymous usage data and crash reports so we can fix bugs and prioritise features. You can change this any time in Settings.",
+	settingsAnalyticsHeading: "Usage analytics",
+	settingsAnalyticsDescription:
+		"Send anonymous usage data and crash reports to help improve aghub. Disabling this stops both event capture and session replay.",
+	settingsAnalyticsToggleLabel: "Share anonymous usage data",
 	onboardingSkip: "Skip",
 	onboardingBack: "Back",
 	onboardingNext: "Next",
