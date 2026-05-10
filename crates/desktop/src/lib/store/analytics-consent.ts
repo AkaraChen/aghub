@@ -3,6 +3,7 @@ import { getStore } from ".";
 export type AnalyticsConsent = "granted" | "denied";
 
 const STORE_KEY = "analyticsConsent";
+const ACK_KEY = "analyticsConsentAcked";
 
 /**
  * Default for users who never saw the welcome dialog (or upgraded
@@ -26,4 +27,23 @@ export async function setAnalyticsConsent(
 	await store.set(STORE_KEY, value);
 	await store.save();
 	return value;
+}
+
+/**
+ * Whether the user has explicitly acknowledged the consent prompt.
+ * Distinct from `analyticsConsent` itself: a user upgrading from a
+ * pre-consent build implicitly has `analyticsConsent === "granted"`
+ * but `consentAcked === false`, which is what triggers the
+ * one-time consent step in the welcome/upgrade wizard.
+ */
+export async function getConsentAcked(): Promise<boolean> {
+	const store = await getStore();
+	const value = await store.get<boolean>(ACK_KEY);
+	return value === true;
+}
+
+export async function setConsentAcked(value: boolean): Promise<void> {
+	const store = await getStore();
+	await store.set(ACK_KEY, value);
+	await store.save();
 }

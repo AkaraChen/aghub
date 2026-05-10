@@ -2,8 +2,14 @@ export { disableAgent, enableAgent, getDisabledAgents } from "./store/agents";
 export {
 	type AnalyticsConsent,
 	getAnalyticsConsent,
+	getConsentAcked,
 	setAnalyticsConsent,
+	setConsentAcked,
 } from "./store/analytics-consent";
+export {
+	getLastSeenWhatsNewVersion,
+	setLastSeenWhatsNewVersion,
+} from "./store/whats-new";
 export { getStore, initStore } from "./store/index";
 export {
 	getIntegrationPreferences,

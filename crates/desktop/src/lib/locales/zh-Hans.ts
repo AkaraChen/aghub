@@ -174,10 +174,23 @@ export default {
 	onboardingAnalyticsTitle: "帮助改进 aghub",
 	onboardingAnalyticsDescription:
 		"分享匿名使用数据和崩溃报告，帮助我们修复 bug 并确定功能优先级。可随时在设置中更改。",
+	onboardingConsentSectionLabel: "隐私",
 	settingsAnalyticsHeading: "使用统计",
 	settingsAnalyticsDescription:
 		"发送匿名使用数据和崩溃报告以帮助改进 aghub。关闭后将同时停止事件采集和会话回放。",
 	settingsAnalyticsToggleLabel: "分享匿名使用数据",
+	whatsNewSectionLabel: "{{version}} 的新功能",
+	whatsNewV02Title: "插件、隐私与体验打磨",
+	whatsNewV02Subtitle: "上一版本以来的一系列升级，点击查看详情。",
+	whatsNewV02PluginsTitle: "支持 Claude Code 插件",
+	whatsNewV02PluginsDescription:
+		"在「市场」标签页中浏览并安装 Claude Code 插件 —— 与技能、MCP 服务的安装流程一致。",
+	whatsNewV02AnalyticsTitle: "数据采集由你做主",
+	whatsNewV02AnalyticsDescription:
+		"设置中新增隐私开关，可随时停用使用数据采集和会话回放。",
+	whatsNewV02PolishTitle: "侧边栏与搜索优化",
+	whatsNewV02PolishDescription:
+		"导航更清晰、全局搜索更快，并修复了多处性能问题。",
 	onboardingSkip: "跳过",
 	onboardingBack: "返回",
 	onboardingNext: "下一步",
