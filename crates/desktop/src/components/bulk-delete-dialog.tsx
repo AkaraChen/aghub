@@ -7,6 +7,7 @@ import { useApi } from "../hooks/use-api";
 import { BulkOperationError, bulkFailureItemsLabel } from "../lib/bulk-errors";
 import { invalidateMcpQueries } from "../requests/mcps";
 import { invalidateSkillQueries } from "../requests/skills";
+import { capture } from "../lib/analytics";
 
 interface BulkDeleteItem {
 	name: string;
@@ -111,13 +112,23 @@ export function BulkDeleteDialog({
 			}
 			return { deleted: promises.length };
 		},
-		onSuccess: async () => {
+		onSuccess: async (_data) => {
 			if (resourceType === "mcp" || resourceType === "mixed") {
 				await invalidateMcpQueries(queryClient);
 			}
 			if (resourceType === "skill" || resourceType === "mixed") {
 				await invalidateSkillQueries(queryClient);
 			}
+			const eventName =
+				resourceType === "mcp"
+					? "mcp server deleted"
+					: resourceType === "skill"
+						? "skill deleted"
+						: "resources deleted";
+			capture(eventName, {
+				resource_type: resourceType,
+				count: groups.length,
+			});
 			onSuccess();
 			onClose();
 		},

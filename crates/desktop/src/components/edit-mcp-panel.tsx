@@ -28,6 +28,7 @@ import { objectToKeyPairs } from "../lib/key-pair-utils";
 import { buildTransportFromForm, capitalize } from "../lib/mcp-utils";
 import { getMcpMergeKey } from "../lib/utils";
 import { invalidateMcpQueries } from "../requests/mcps";
+import { capture } from "../lib/analytics";
 import type { EnvVar } from "./env-editor";
 import { EnvEditor } from "./env-editor";
 import type { HttpHeader } from "./http-header-editor";
@@ -146,6 +147,13 @@ export function EditMcpPanel({
 		},
 		onSuccess: async (_data, body) => {
 			await invalidateMcpQueries(queryClient);
+			capture("mcp server updated", {
+				mcp_name: body.name ?? primaryServer.name,
+				transport_type:
+					body.transport?.type ?? primaryServer.transport.type,
+				agents: group.items.map((i) => i.agent).filter(Boolean),
+				scope: projectPath ? "project" : "global",
+			});
 			onDone(getMcpMergeKey(body.transport ?? primaryServer.transport));
 		},
 		onError: () => {

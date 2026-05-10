@@ -1,6 +1,7 @@
 import { Button } from "@heroui/react";
 import type { ReactNode } from "react";
 import { Component } from "react";
+import { captureException } from "../../lib/analytics";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "./empty";
 
 interface Props {
@@ -16,6 +17,7 @@ export class ErrorBoundary extends Component<Props, State> {
 	state: State = { error: null };
 
 	static getDerivedStateFromError(error: Error) {
+		captureException(error);
 		return { error };
 	}
 

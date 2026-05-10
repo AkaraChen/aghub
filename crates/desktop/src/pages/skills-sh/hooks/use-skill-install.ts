@@ -11,6 +11,7 @@ import {
 	type InstallResult,
 } from "../../../lib/install-utils";
 import { installSkillMutationOptions } from "../../../requests/skills";
+import { capture, captureException } from "../../../lib/analytics";
 
 export function useSkillInstall() {
 	const { t } = useTranslation();
@@ -91,8 +92,19 @@ export function useSkillInstall() {
 				error: response.success ? undefined : t("skillInstallFailed"),
 			}));
 
+			if (response.success) {
+				capture("skill installed", {
+					skill_name: selectedSkill.name,
+					skill_source: selectedSkill.source,
+					agents: Array.from(selectedAgents),
+					scope: installToProject ? "project" : "global",
+					install_all: installAll,
+				});
+			}
+
 			setInstallResults(updatedResults);
 		} catch (err) {
+			captureException(err);
 			const updatedResults = pendingResults.map((result) => ({
 				...result,
 				status: "error" as const,
