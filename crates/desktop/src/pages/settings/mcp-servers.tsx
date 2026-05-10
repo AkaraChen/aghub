@@ -9,13 +9,12 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { AgentFilterChip } from "../../components/agent-filter-chip";
 import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
 import { CreateMcpPanel } from "../../components/create-mcp-panel";
-import { setStickyAgentFilter } from "../../hooks/use-sticky-agent-filter";
 import { EditMcpPanel } from "../../components/edit-mcp-panel";
 import { ImportMcpPanel } from "../../components/import-mcp-panel";
-import { ListSearchHeader } from "../../components/list-search-header";
+import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
+import { setStickyAgentFilter } from "../../hooks/use-sticky-agent-filter";
 import type { McpGroup } from "../../components/mcp-detail";
 import { McpDetail } from "../../components/mcp-detail";
 import { McpList } from "../../components/mcp-list";
@@ -152,126 +151,123 @@ export default function MCPServersPage() {
 		panel.type !== "import" &&
 		panel.type !== "edit";
 
+	const handleAgentFilterChange = (next: string | null) => {
+		setAgentFilter(next);
+		setStickyAgentFilter(next);
+	};
+
 	return (
 		<div className="flex h-full flex-col">
-			<AgentFilterChip
-				agentId={agentFilter}
-				onClear={() => {
-					setAgentFilter(null);
-					setStickyAgentFilter(null);
+			<ResourcePageToolbar
+				agentFilter={{
+					agentId: agentFilter,
+					onChange: handleAgentFilterChange,
 				}}
-			/>
+				searchValue={searchQuery}
+				onSearchChange={setSearchQuery}
+				searchPlaceholder={t("searchServers")}
+				searchAriaLabel={t("searchServers")}
+			>
+				<Tooltip delay={0}>
+					<Tooltip.Trigger>
+						<div
+							role="button"
+							tabIndex={0}
+							className={cn(
+								"flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-default hover:text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40",
+								isMultiSelectMode && "bg-accent/10 text-accent",
+							)}
+							aria-label={
+								isMultiSelectMode
+									? t("doneSelecting")
+									: t("multiSelect")
+							}
+							onClick={() => {
+								setIsMultiSelectMode((prev) => !prev);
+								if (isMultiSelectMode) {
+									handleSelectionChange(new Set());
+								}
+							}}
+							onKeyDown={(event) => {
+								if (
+									event.key !== "Enter" &&
+									event.key !== " "
+								) {
+									return;
+								}
+								event.preventDefault();
+								setIsMultiSelectMode((prev) => !prev);
+								if (isMultiSelectMode) {
+									handleSelectionChange(new Set());
+								}
+							}}
+						>
+							{isMultiSelectMode ? (
+								<CheckCircleIcon className="size-4" />
+							) : (
+								<RectangleStackIcon className="size-4" />
+							)}
+						</div>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						{isMultiSelectMode
+							? t("doneSelecting")
+							: t("multiSelect")}
+					</Tooltip.Content>
+				</Tooltip>
+				<Dropdown>
+					<Button
+						isIconOnly
+						variant="ghost"
+						size="sm"
+						data-tour="mcp-add"
+						className="shrink-0"
+						aria-label={t("addMcpServer")}
+						isDisabled={!hasMcpCapableAgents}
+					>
+						<PlusIcon className="size-4" />
+					</Button>
+					<Dropdown.Popover placement="bottom end">
+						<Dropdown.Menu
+							onAction={(key) => {
+								if (key === "manual") {
+									handleCreate();
+								} else if (key === "import") {
+									handleImport();
+								}
+							}}
+						>
+							<Dropdown.Item
+								id="manual"
+								textValue={t("manualCreation")}
+							>
+								{t("manualCreation")}
+							</Dropdown.Item>
+							<Dropdown.Item
+								id="import"
+								textValue={t("importFromJson")}
+							>
+								{t("importFromJson")}
+							</Dropdown.Item>
+						</Dropdown.Menu>
+					</Dropdown.Popover>
+				</Dropdown>
+				<Button
+					isIconOnly
+					variant="ghost"
+					size="sm"
+					className="shrink-0"
+					aria-label={t("refreshServers")}
+					onPress={() => refetch()}
+				>
+					<ArrowPathIcon
+						className={cn("size-4", isFetching && "animate-spin")}
+					/>
+				</Button>
+			</ResourcePageToolbar>
 			<div className="flex min-h-0 flex-1">
 				{/* Servers List Panel */}
 				<div className="relative flex w-80 shrink-0 flex-col border-r border-border">
-					<ListSearchHeader
-						searchValue={searchQuery}
-						onSearchChange={setSearchQuery}
-						placeholder={t("searchServers")}
-						ariaLabel={t("searchServers")}
-					>
-						<Tooltip delay={0}>
-							<Tooltip.Trigger>
-								<div
-									role="button"
-									tabIndex={0}
-									className={cn(
-										"flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-default hover:text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40",
-										isMultiSelectMode &&
-											"bg-accent/10 text-accent",
-									)}
-									aria-label={
-										isMultiSelectMode
-											? t("doneSelecting")
-											: t("multiSelect")
-									}
-									onClick={() => {
-										setIsMultiSelectMode((prev) => !prev);
-										if (isMultiSelectMode) {
-											handleSelectionChange(new Set());
-										}
-									}}
-									onKeyDown={(event) => {
-										if (
-											event.key !== "Enter" &&
-											event.key !== " "
-										) {
-											return;
-										}
-										event.preventDefault();
-										setIsMultiSelectMode((prev) => !prev);
-										if (isMultiSelectMode) {
-											handleSelectionChange(new Set());
-										}
-									}}
-								>
-									{isMultiSelectMode ? (
-										<CheckCircleIcon className="size-4" />
-									) : (
-										<RectangleStackIcon className="size-4" />
-									)}
-								</div>
-							</Tooltip.Trigger>
-							<Tooltip.Content>
-								{isMultiSelectMode
-									? t("doneSelecting")
-									: t("multiSelect")}
-							</Tooltip.Content>
-						</Tooltip>
-						<Dropdown>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								data-tour="mcp-add"
-								className="shrink-0"
-								aria-label={t("addMcpServer")}
-								isDisabled={!hasMcpCapableAgents}
-							>
-								<PlusIcon className="size-4" />
-							</Button>
-							<Dropdown.Popover placement="bottom end">
-								<Dropdown.Menu
-									onAction={(key) => {
-										if (key === "manual") {
-											handleCreate();
-										} else if (key === "import") {
-											handleImport();
-										}
-									}}
-								>
-									<Dropdown.Item
-										id="manual"
-										textValue={t("manualCreation")}
-									>
-										{t("manualCreation")}
-									</Dropdown.Item>
-									<Dropdown.Item
-										id="import"
-										textValue={t("importFromJson")}
-									>
-										{t("importFromJson")}
-									</Dropdown.Item>
-								</Dropdown.Menu>
-							</Dropdown.Popover>
-						</Dropdown>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							className="shrink-0"
-							aria-label={t("refreshServers")}
-							onPress={() => refetch()}
-						>
-							<ArrowPathIcon
-								className={cn(
-									"size-4",
-									isFetching && "animate-spin",
-								)}
-							/>
-						</Button>
-					</ListSearchHeader>
-
 					{/* Servers List */}
 					<McpList
 						mcps={filteredMcps}

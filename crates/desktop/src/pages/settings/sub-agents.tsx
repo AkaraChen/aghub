@@ -22,10 +22,9 @@ import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
-import { AgentFilterChip } from "../../components/agent-filter-chip";
 import { CreateSubAgentPanel } from "../../components/create-sub-agent-panel";
+import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
 import { setStickyAgentFilter } from "../../hooks/use-sticky-agent-filter";
-import { ListSearchHeader } from "../../components/list-search-header";
 import type { SubAgentGroup } from "../../components/sub-agent-detail";
 import { SubAgentDetail } from "../../components/sub-agent-detail";
 import type {
@@ -254,36 +253,37 @@ export default function SubAgentsPage() {
 		},
 	});
 
+	const handleAgentFilterChange = (next: string | null) => {
+		setAgentFilter(next);
+		setStickyAgentFilter(next);
+	};
+
 	return (
 		<div className="flex h-full flex-col">
-			<AgentFilterChip
-				agentId={agentFilter}
-				onClear={() => {
-					setAgentFilter(null);
-					setStickyAgentFilter(null);
+			<ResourcePageToolbar
+				agentFilter={{
+					agentId: agentFilter,
+					onChange: handleAgentFilterChange,
 				}}
-			/>
+				searchValue={searchQuery}
+				onSearchChange={setSearchQuery}
+				searchPlaceholder={t("searchSubAgents")}
+				searchAriaLabel={t("searchSubAgents")}
+			>
+				<Button
+					isIconOnly
+					variant="ghost"
+					size="sm"
+					className="shrink-0"
+					onPress={() => setPanel({ type: "create" })}
+					aria-label={t("createSubAgent")}
+				>
+					<PlusIcon className="size-4" />
+				</Button>
+			</ResourcePageToolbar>
 			<div className="flex min-h-0 flex-1">
 				{/* List panel */}
 				<div className="relative flex w-80 shrink-0 flex-col border-r border-border">
-					<ListSearchHeader
-						searchValue={searchQuery}
-						onSearchChange={setSearchQuery}
-						placeholder={t("searchSubAgents")}
-						ariaLabel={t("searchSubAgents")}
-					>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							className="shrink-0"
-							onPress={() => setPanel({ type: "create" })}
-							aria-label={t("createSubAgent")}
-						>
-							<PlusIcon className="size-4" />
-						</Button>
-					</ListSearchHeader>
-
 					<div className="flex-1 overflow-y-auto">
 						{filteredGroups.length === 0 ? (
 							<div className="flex h-full flex-col items-center justify-center gap-3 p-6">
