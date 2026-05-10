@@ -43,6 +43,7 @@ dependencies = [
  "tempfile",
  "time",
  "tokio",
+ "uuid",
  "zip 2.4.2",
 ]
 
