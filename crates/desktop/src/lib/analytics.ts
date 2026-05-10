@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import posthog from "posthog-js";
+import { getAnalyticsConsent } from "./store";
 
 /**
  * Hybrid PostHog setup that splits responsibilities between the Rust
@@ -65,6 +66,18 @@ function logFailure(action: string, error: unknown) {
 export async function initBrowserPosthog() {
 	if (!key || !host) return;
 
+	// Gate everything on user consent. We tell Rust first so even if
+	// posthog-js doesn't initialize, the Rust side respects the same
+	// flag for any captures triggered from the React tree.
+	const consent = await getAnalyticsConsent();
+	const enabled = consent === "granted";
+	try {
+		await invoke("posthog_set_enabled", { enabled });
+	} catch (error) {
+		logFailure("posthog_set_enabled", error);
+	}
+	if (!enabled) return;
+
 	let distinctId: string | undefined;
 	let sessionId: string | undefined;
 	try {
@@ -94,8 +107,15 @@ export async function initBrowserPosthog() {
 		capture_pageview: false,
 		capture_pageleave: false,
 		// Turn replay on. The recording lives in posthog-js; there is
-		// no Rust replacement for it.
+		// no Rust replacement for it. Override PostHog's privacy defaults
+		// since this is an internal desktop app — without this every
+		// piece of text in the UI renders as the diagonal-stripe mask.
 		disable_session_recording: false,
+		session_recording: {
+			maskAllInputs: false,
+			maskTextSelector: undefined,
+			blockSelector: undefined,
+		},
 		// posthog-js has its own try/catch around send; this just makes
 		// sure it surfaces during local dev.
 		debug: import.meta.env.DEV,
@@ -105,6 +125,42 @@ export async function initBrowserPosthog() {
 		// Force posthog-js to use the same $session_id Rust attaches to
 		// every event so replays group with their triggering events.
 		posthog.register({ $session_id: sessionId });
+	}
+}
+
+/**
+ * Sync consent changes after initial boot. Called when the user
+ * toggles analytics in the welcome dialog or Settings. The Rust
+ * static flag is the source of truth for capture() / identify();
+ * we also opt posthog-js in/out so session replay stops/starts.
+ *
+ * If consent is granted *after* boot when posthog-js wasn't
+ * initialized, we initialize it now so replay starts working.
+ */
+export async function applyAnalyticsConsent(granted: boolean) {
+	try {
+		await invoke("posthog_set_enabled", { enabled: granted });
+	} catch (error) {
+		logFailure("posthog_set_enabled", error);
+	}
+
+	if (!key || !host) return;
+
+	if (granted) {
+		// posthog-js may not have been initialized at boot if consent
+		// was denied. Run the full init now.
+		// posthog.__loaded indicates a previous init() succeeded.
+		// biome-ignore lint/suspicious/noExplicitAny: posthog-js exposes __loaded for this case
+		const initialized = (posthog as any).__loaded === true;
+		if (!initialized) {
+			await initBrowserPosthog();
+		} else {
+			posthog.opt_in_capturing();
+			posthog.startSessionRecording();
+		}
+	} else {
+		posthog.opt_out_capturing();
+		posthog.stopSessionRecording();
 	}
 }
 

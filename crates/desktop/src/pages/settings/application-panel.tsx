@@ -1,14 +1,17 @@
-import { Avatar, Button, Card, toast } from "@heroui/react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { Avatar, Button, Card, Switch, toast } from "@heroui/react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getName, getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { useTranslation } from "react-i18next";
+import { applyAnalyticsConsent } from "../../lib/analytics";
 import { dispatchOnboardingCommand } from "../../lib/onboarding";
+import { getAnalyticsConsent, setAnalyticsConsent } from "../../lib/store";
 
 export default function ApplicationPanel() {
 	const { t } = useTranslation();
+	const queryClient = useQueryClient();
 
 	const { data: appInfo } = useQuery({
 		queryKey: ["app-info"],
@@ -16,6 +19,32 @@ export default function ApplicationPanel() {
 			const name = await getName();
 			const version = await getVersion();
 			return { name, version };
+		},
+	});
+
+	const { data: analyticsConsent } = useQuery({
+		queryKey: ["analytics-consent"],
+		queryFn: getAnalyticsConsent,
+	});
+	const analyticsEnabled = analyticsConsent !== "denied";
+
+	const analyticsMutation = useMutation({
+		mutationFn: async (enabled: boolean) => {
+			await setAnalyticsConsent(enabled ? "granted" : "denied");
+			await applyAnalyticsConsent(enabled);
+			return enabled;
+		},
+		onSuccess: () => {
+			queryClient.invalidateQueries({
+				queryKey: ["analytics-consent"],
+			});
+		},
+		onError: (error) => {
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: "Failed to update analytics consent",
+			);
 		},
 	});
 
@@ -181,6 +210,29 @@ export default function ApplicationPanel() {
 								</Button>
 							)}
 						</div>
+					</div>
+
+					<div className="flex items-center justify-between gap-4">
+						<div className="space-y-0.5">
+							<span className="text-sm font-medium text-(--foreground)">
+								{t("settingsAnalyticsHeading")}
+							</span>
+							<span className="block text-xs text-muted">
+								{t("settingsAnalyticsDescription")}
+							</span>
+						</div>
+						<Switch
+							isSelected={analyticsEnabled}
+							onChange={(checked) =>
+								analyticsMutation.mutate(checked)
+							}
+							isDisabled={analyticsMutation.isPending}
+							aria-label={t("settingsAnalyticsToggleLabel")}
+						>
+							<Switch.Control>
+								<Switch.Thumb />
+							</Switch.Control>
+						</Switch>
 					</div>
 
 					<div className="flex items-center justify-between">

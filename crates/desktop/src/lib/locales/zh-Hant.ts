@@ -171,6 +171,13 @@ export default {
 	onboardingStepProjectsTitle: "專案",
 	onboardingStepProjectsDescription:
 		"將 MCP 服務和技能限定到單一儲存庫。專案設定與全域設定完全隔離。",
+	onboardingAnalyticsTitle: "協助改進 aghub",
+	onboardingAnalyticsDescription:
+		"分享匿名使用資料和當機回報，協助我們修正錯誤並決定功能優先順序。可隨時在設定中更改。",
+	settingsAnalyticsHeading: "使用統計",
+	settingsAnalyticsDescription:
+		"傳送匿名使用資料和當機回報以協助改進 aghub。關閉後將同時停止事件擷取和工作階段重播。",
+	settingsAnalyticsToggleLabel: "分享匿名使用資料",
 	onboardingSkip: "跳過",
 	onboardingBack: "返回",
 	onboardingNext: "下一步",

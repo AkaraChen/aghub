@@ -4,6 +4,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
 use std::time::Instant;
 use tauri::{AppHandle, Manager};
@@ -28,6 +29,14 @@ const POSTHOG_HOST: Option<&str> = option_env!("VITE_POSTHOG_HOST");
 const DISTINCT_ID_FILE: &str = "posthog-distinct-id";
 
 static CLIENT: OnceCell<Option<Client>> = OnceCell::const_new();
+
+/// Mirrors the user's analytics consent in the desktop store. Starts
+/// `true` to match the JS-side default (`granted`); the webview calls
+/// `posthog_set_enabled(false)` early in bootstrap if the user has
+/// opted out, before any captures fire. When `false`, `posthog_capture`
+/// and `posthog_identify` short-circuit before constructing or
+/// touching the client.
+static ENABLED: AtomicBool = AtomicBool::new(true);
 
 /// Generated once per process start. PostHog uses this to group events
 /// into a session for live events / session replay / funnels. posthog-js
@@ -170,6 +179,9 @@ pub async fn posthog_capture(
 	properties: HashMap<String, Value>,
 	distinct_id: Option<String>,
 ) -> Result<(), String> {
+	if !ENABLED.load(Ordering::Relaxed) {
+		return Ok(());
+	}
 	let Some(client) = get_client().await else {
 		return Ok(());
 	};
@@ -209,6 +221,9 @@ pub async fn posthog_identify(
 	distinct_id: String,
 	properties: HashMap<String, Value>,
 ) -> Result<(), String> {
+	if !ENABLED.load(Ordering::Relaxed) {
+		return Ok(());
+	}
 	let Some(client) = get_client().await else {
 		return Ok(());
 	};
@@ -271,4 +286,19 @@ pub async fn posthog_get_distinct_id(app: AppHandle) -> String {
 #[tauri::command]
 pub async fn posthog_get_session_id() -> String {
 	session_id().to_string()
+}
+
+/// Toggle Rust-side capture/identify based on the user's analytics
+/// consent. The webview owns the consent UI and persistence (in the
+/// Tauri store), so it's responsible for syncing the flag here on
+/// boot and whenever the user toggles it in Settings.
+#[tauri::command]
+pub fn posthog_set_enabled(enabled: bool) {
+	let previous = ENABLED.swap(enabled, Ordering::Relaxed);
+	if previous != enabled {
+		info!(
+			"posthog: capture {}",
+			if enabled { "enabled" } else { "disabled" }
+		);
+	}
 }
