@@ -1,5 +1,6 @@
 import {
 	BookOpenIcon,
+	CommandLineIcon,
 	CpuChipIcon,
 	KeyIcon,
 	ServerIcon,
@@ -40,6 +41,12 @@ const SIDEBAR_ITEM_DEFINITIONS: Record<SidebarItemId, SidebarItemDefinition> = {
 		labelKey: "inferenceProviders",
 		href: "/inference-providers",
 		icon: KeyIcon,
+	},
+	agentWorkspace: {
+		id: "agentWorkspace",
+		labelKey: "agentWorkspace",
+		href: "/agent-workspace",
+		icon: CommandLineIcon,
 	},
 	skills: {
 		id: "skills",

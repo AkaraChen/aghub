@@ -2,6 +2,7 @@ import ky, { isHTTPError } from "ky";
 import type {
 	AgentAvailabilityDto,
 	AgentInfo,
+	AgentWorkspaceResponse,
 	AgentProviderResponse,
 	CCPluginCheckUpdateRequest,
 	CCPluginCheckUpdateResponse,
@@ -17,6 +18,7 @@ import type {
 	CredentialResponse,
 	DeleteSkillByPathRequest,
 	DeleteSkillByPathResponse,
+	FileContentResponse,
 	GitInstallRequest,
 	GitInstallResponse,
 	GitScanRequest,
@@ -833,6 +835,41 @@ export function createApi(baseUrl: string) {
 					.post("plugins-market/update", {
 						timeout: 300000,
 					})
+					.json();
+			},
+		},
+		workspace: {
+			getAgentFiles(agentId: string): Promise<AgentWorkspaceResponse> {
+				return client
+					.get(
+						`workspace/agents/${encodeURIComponent(agentId)}/files`,
+					)
+					.json();
+			},
+			getFileContent(
+				agentId: string,
+				path: string,
+			): Promise<FileContentResponse> {
+				return client
+					.get(
+						`workspace/agents/${encodeURIComponent(agentId)}/file`,
+						{ searchParams: { path } },
+					)
+					.json();
+			},
+			saveFile(
+				agentId: string,
+				path: string,
+				content: string,
+			): Promise<FileContentResponse> {
+				return client
+					.put(
+						`workspace/agents/${encodeURIComponent(agentId)}/file`,
+						{
+							searchParams: { path },
+							json: { content },
+						},
+					)
 					.json();
 			},
 		},

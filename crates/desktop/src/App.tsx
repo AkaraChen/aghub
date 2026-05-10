@@ -20,6 +20,7 @@ import type { DeepLinkImportIntent } from "./lib/deep-link";
 import { parseDeepLink } from "./lib/deep-link";
 import { setupAppMenu } from "./lib/menu";
 import { initStore } from "./lib/store";
+import AgentWorkspacePage from "./pages/agent-workspace";
 import InferenceProvidersPage from "./pages/inference-providers";
 import PluginsPage from "./pages/plugins";
 import ProjectDetailPage from "./pages/project/detail";
@@ -210,6 +211,19 @@ function App() {
 										<MainLayout>
 											<ErrorBoundary>
 												<InferenceProvidersPage />
+											</ErrorBoundary>
+										</MainLayout>
+									</Route>
+									<Route path="/agent-workspace">
+										<MainLayout>
+											<ErrorBoundary>
+												<Suspense
+													fallback={
+														<SkillsPageSkeleton />
+													}
+												>
+													<AgentWorkspacePage />
+												</Suspense>
 											</ErrorBoundary>
 										</MainLayout>
 									</Route>

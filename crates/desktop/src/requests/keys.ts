@@ -79,4 +79,10 @@ export const queryKeys = {
 		all: () => ["market"] as const,
 		search: (query: string) => ["market", "search", query] as const,
 	},
+	workspace: {
+		all: () => ["workspace"] as const,
+		files: (agentId: string) => ["workspace", "files", agentId] as const,
+		content: (agentId: string, path: string) =>
+			["workspace", "content", agentId, path] as const,
+	},
 };

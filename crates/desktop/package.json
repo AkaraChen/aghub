@@ -18,7 +18,9 @@
 		"@heroicons/react": "^2.2.0",
 		"@heroui/react": "^3.0.1",
 		"@heroui/styles": "^3.0.1",
+		"@lobehub/icons": "^5.5.4",
 		"@lobehub/icons-static-svg": "^1.88.0",
+		"@monaco-editor/react": "^4.7.0",
 		"@tanstack/react-query": "^5.94.5",
 		"@tauri-apps/api": "^2",
 		"@tauri-apps/plugin-clipboard-manager": "^2.3.2",
@@ -37,6 +39,7 @@
 		"i18next-browser-languagedetector": "^8.2.1",
 		"immer": "^11.1.4",
 		"ky": "^2.0.0",
+		"monaco-editor": "^0.55.1",
 		"nuqs": "^2.8.9",
 		"pathe": "^2.0.3",
 		"react": "^19.1.0",
@@ -50,6 +53,7 @@
 		"simple-icons": "^16.13.0",
 		"stable-hash": "^0.0.6",
 		"tailwind-merge": "^3.5.0",
+		"vscode-icons-ts": "^0.1.2",
 		"wouter": "^3.9.0"
 	},
 	"devDependencies": {
