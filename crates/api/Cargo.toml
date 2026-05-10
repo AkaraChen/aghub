@@ -18,6 +18,7 @@ crate-type = [ "rlib" ]
 [dependencies]
 aghub-core = { path = "../core" }
 aghub-git = { path = "../git" }
+aghub-inference = { path = "../inference" }
 aghub-cc-plugins = { path = "../cc-plugins" }
 skill = { path = "../skill" }
 skills-sh = { path = "../skills-sh" }

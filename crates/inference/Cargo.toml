@@ -1,0 +1,32 @@
+[package]
+name = "aghub-inference"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Inference provider configuration storage for aghub"
+
+[dependencies]
+aghub-json = { path = "../json" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml_edit = { workspace = true }
+thiserror = { workspace = true }
+dirs = { workspace = true }
+keyring = { version = "3", features = [
+	"apple-native",
+	"windows-native",
+	"linux-native",
+] }
+uuid = { version = "1", features = [ "v4" ] }
+sqlx = { version = "0.8", features = [ "sqlite", "runtime-tokio", "migrate" ] }
+tokio = { version = "1", features = [ "rt", "rt-multi-thread" ] }
+tauri = { version = "2", optional = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+serde_json = { workspace = true }
+
+[features]
+default = [  ]
+tauri = [ "dep:tauri" ]

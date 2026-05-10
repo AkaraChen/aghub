@@ -1,6 +1,7 @@
 import {
 	BookOpenIcon,
 	CpuChipIcon,
+	KeyIcon,
 	ServerIcon,
 	SquaresPlusIcon,
 	PuzzlePieceIcon,
@@ -33,6 +34,12 @@ const SIDEBAR_ITEM_DEFINITIONS: Record<SidebarItemId, SidebarItemDefinition> = {
 		href: "/mcp",
 		icon: ServerIcon,
 		tour: "nav-mcp",
+	},
+	inferenceProviders: {
+		id: "inferenceProviders",
+		labelKey: "inferenceProviders",
+		href: "/inference-providers",
+		icon: KeyIcon,
 	},
 	skills: {
 		id: "skills",

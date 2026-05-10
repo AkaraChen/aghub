@@ -12,6 +12,19 @@ use aghub_api::dto::{
 	},
 	common::ConfigSource,
 	credential::{CreateCredentialRequest, CredentialResponse},
+	inference::{
+		AgentProviderCredentialDto,
+		AgentProviderMatchedInferenceProviderResponse,
+		AgentProviderModelResponse, AgentProviderResponse,
+		AgentProviderSourceDto, ClaudeProviderStateResponse,
+		CodexProfileResponse, CodexProviderStateResponse,
+		CreateAgentProviderRequest, CreateInferenceProviderRequest,
+		InferenceProviderFormatDto, InferenceProviderPasswordResponse,
+		InferenceProviderPresetResponse, InferenceProviderResponse,
+		UpdateAgentProviderRequest, UpdateClaudeProviderRequest,
+		UpdateCodexActiveProfileRequest, UpdateCodexProfileProviderRequest,
+		UpdateInferenceProviderRequest,
+	},
 	integrations::{
 		CodeEditorType, EditSkillFolderRequest, OpenSkillFolderRequest,
 		OpenWithEditorRequest, ToolInfoDto, ToolPreferencesDto,
@@ -129,6 +142,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<ConfigSource>(&cfg)?;
 	export_type::<CreateCredentialRequest>(&cfg)?;
 	export_type::<CredentialResponse>(&cfg)?;
+	export_type::<AgentProviderSourceDto>(&cfg)?;
+	export_type::<AgentProviderCredentialDto>(&cfg)?;
+	export_type::<AgentProviderModelResponse>(&cfg)?;
+	export_type::<AgentProviderMatchedInferenceProviderResponse>(&cfg)?;
+	export_type::<AgentProviderResponse>(&cfg)?;
+	export_type::<ClaudeProviderStateResponse>(&cfg)?;
+	export_type::<UpdateClaudeProviderRequest>(&cfg)?;
+	export_type::<CodexProfileResponse>(&cfg)?;
+	export_type::<CodexProviderStateResponse>(&cfg)?;
+	export_type::<CreateAgentProviderRequest>(&cfg)?;
+	export_type::<UpdateAgentProviderRequest>(&cfg)?;
+	export_type::<UpdateCodexActiveProfileRequest>(&cfg)?;
+	export_type::<UpdateCodexProfileProviderRequest>(&cfg)?;
+	export_type::<InferenceProviderFormatDto>(&cfg)?;
+	export_type::<CreateInferenceProviderRequest>(&cfg)?;
+	export_type::<UpdateInferenceProviderRequest>(&cfg)?;
+	export_type::<InferenceProviderResponse>(&cfg)?;
+	export_type::<InferenceProviderPasswordResponse>(&cfg)?;
+	export_type::<InferenceProviderPresetResponse>(&cfg)?;
 	export_type::<CodeEditorType>(&cfg)?;
 	export_type::<ToolInfoDto>(&cfg)?;
 	export_type::<ToolPreferencesDto>(&cfg)?;

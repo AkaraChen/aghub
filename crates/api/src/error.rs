@@ -1,4 +1,5 @@
 use aghub_core::errors::ConfigError;
+use aghub_inference::InferenceProviderError;
 use rocket::http::{ContentType, Status};
 use rocket::response::{self, Responder};
 use rocket::serde::json::serde_json;
@@ -89,6 +90,67 @@ impl From<ConfigError> for ApiError {
 				Status::InternalServerError,
 				e.to_string(),
 				"IO_ERROR",
+			),
+		}
+	}
+}
+
+impl From<InferenceProviderError> for ApiError {
+	fn from(e: InferenceProviderError) -> Self {
+		match e {
+			InferenceProviderError::EmptyName
+			| InferenceProviderError::EmptyAgentProviderId
+			| InferenceProviderError::EmptyModelName
+			| InferenceProviderError::EmptyApiBaseUrl
+			| InferenceProviderError::EmptyApiKey
+			| InferenceProviderError::InvalidFormat(_)
+			| InferenceProviderError::UnsupportedAgentProviderCapability {
+				..
+			} => ApiError::new(
+				Status::BadRequest,
+				e.to_string(),
+				"INVALID_PARAM",
+			),
+			InferenceProviderError::InvalidAgentProviderConfig {
+				agent_id,
+				message,
+				..
+			} => ApiError::new(
+				Status::BadRequest,
+				format!("invalid {agent_id} provider config: {message}"),
+				"INVALID_PARAM",
+			),
+			InferenceProviderError::InvalidAgentCredentialStore {
+				agent_id,
+				message,
+				..
+			} => ApiError::new(
+				Status::BadRequest,
+				format!("invalid {agent_id} credential store: {message}"),
+				"INVALID_PARAM",
+			),
+			InferenceProviderError::AlreadyExists(_)
+			| InferenceProviderError::ModelAlreadyExists(_) => ApiError::new(
+				Status::Conflict,
+				e.to_string(),
+				"RESOURCE_EXISTS",
+			),
+			InferenceProviderError::NotFound(_) => ApiError::new(
+				Status::NotFound,
+				e.to_string(),
+				"RESOURCE_NOT_FOUND",
+			),
+			InferenceProviderError::Keyring(_) => ApiError::new(
+				Status::InternalServerError,
+				e.to_string(),
+				"KEYCHAIN_ERROR",
+			),
+			InferenceProviderError::Io(_)
+			| InferenceProviderError::Database(_)
+			| InferenceProviderError::AppDataDir(_) => ApiError::new(
+				Status::InternalServerError,
+				e.to_string(),
+				"INFERENCE_PROVIDER_STORE_ERROR",
 			),
 		}
 	}

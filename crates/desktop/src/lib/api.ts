@@ -2,10 +2,15 @@ import ky, { isHTTPError } from "ky";
 import type {
 	AgentAvailabilityDto,
 	AgentInfo,
+	AgentProviderResponse,
 	CCPluginCheckUpdateRequest,
 	CCPluginCheckUpdateResponse,
+	ClaudeProviderStateResponse,
 	CodeEditorType,
+	CodexProviderStateResponse,
+	CreateAgentProviderRequest,
 	CreateCredentialRequest,
+	CreateInferenceProviderRequest,
 	CreateMcpRequest,
 	CreateSkillRequest,
 	CreateSubAgentRequest,
@@ -22,6 +27,9 @@ import type {
 	ImportSkillRequest,
 	CCPluginInstallRequest,
 	CCPluginInstallResponse,
+	InferenceProviderPasswordResponse,
+	InferenceProviderPresetResponse,
+	InferenceProviderResponse,
 	InstallSkillRequest,
 	InstallSkillResponse,
 	CCPluginMarketResponse,
@@ -44,6 +52,10 @@ import type {
 	TransferRequest,
 	CCPluginUninstallRequest,
 	CCPluginUninstallResponse,
+	UpdateAgentProviderRequest,
+	UpdateCodexActiveProfileRequest,
+	UpdateCodexProfileProviderRequest,
+	UpdateInferenceProviderRequest,
 	UpdateMcpRequest,
 	CCPluginUpdateConfigRequest,
 	CCPluginUpdateRequest,
@@ -78,6 +90,43 @@ export function createApi(baseUrl: string) {
 			],
 		},
 	});
+
+	async function getInferenceProviderByName(name: string) {
+		const providers: InferenceProviderResponse[] = await client
+			.get("inference/providers")
+			.json();
+		const provider = providers.find(
+			(item) =>
+				item.name.localeCompare(name, undefined, {
+					sensitivity: "accent",
+				}) === 0,
+		);
+
+		if (!provider) {
+			throw new Error(`inference provider '${name}' not found`);
+		}
+
+		return provider;
+	}
+
+	async function updateInferenceProviderModels(
+		providerName: string,
+		models: (current: string[]) => string[],
+	) {
+		const provider = await getInferenceProviderByName(providerName);
+		return client
+			.put(`inference/providers/${encodeURIComponent(provider.name)}`, {
+				json: {
+					name: null,
+					display_name: null,
+					format: null,
+					api_base_url: null,
+					api_key: null,
+					models: models(provider.models),
+				} satisfies UpdateInferenceProviderRequest,
+			})
+			.json<InferenceProviderResponse>();
+	}
 
 	return {
 		agents: {
@@ -460,6 +509,220 @@ export function createApi(baseUrl: string) {
 			},
 			delete(id: string): Promise<void> {
 				return client.delete(`credentials/${id}`).then(() => undefined);
+			},
+		},
+		inferenceProviders: {
+			list(): Promise<InferenceProviderResponse[]> {
+				return client.get("inference/providers").json();
+			},
+			listPresets(): Promise<InferenceProviderPresetResponse[]> {
+				return client.get("inference/presets").json();
+			},
+			listOpenCode(): Promise<AgentProviderResponse[]> {
+				return client.get("inference/agents/opencode/providers").json();
+			},
+			listCodex(): Promise<AgentProviderResponse[]> {
+				return client.get("inference/agents/codex/providers").json();
+			},
+			getCodexState(): Promise<CodexProviderStateResponse> {
+				return client.get("inference/agents/codex/state").json();
+			},
+			clearCodexState(): Promise<void> {
+				return client
+					.delete("inference/agents/codex/state")
+					.then(() => undefined);
+			},
+			getPassword(
+				name: string,
+			): Promise<InferenceProviderPasswordResponse> {
+				return client
+					.get(
+						`inference/providers/${encodeURIComponent(name)}/password`,
+					)
+					.json();
+			},
+			create(
+				body: CreateInferenceProviderRequest,
+			): Promise<InferenceProviderResponse> {
+				return client
+					.post("inference/providers", { json: body })
+					.json();
+			},
+			createOpenCode(
+				body: CreateAgentProviderRequest,
+			): Promise<AgentProviderResponse> {
+				return client
+					.post("inference/agents/opencode/providers", { json: body })
+					.json();
+			},
+			createCodex(
+				body: CreateAgentProviderRequest,
+			): Promise<AgentProviderResponse> {
+				return client
+					.post("inference/agents/codex/providers", { json: body })
+					.json();
+			},
+			update(
+				name: string,
+				body: UpdateInferenceProviderRequest,
+			): Promise<InferenceProviderResponse> {
+				return client
+					.put(`inference/providers/${encodeURIComponent(name)}`, {
+						json: body,
+					})
+					.json();
+			},
+			updateOpenCode(
+				id: string,
+				body: UpdateAgentProviderRequest,
+			): Promise<AgentProviderResponse> {
+				return client
+					.put(
+						`inference/agents/opencode/providers/${encodeURIComponent(id)}`,
+						{ json: body },
+					)
+					.json();
+			},
+			updateCodex(
+				id: string,
+				body: UpdateAgentProviderRequest,
+			): Promise<AgentProviderResponse> {
+				return client
+					.put(
+						`inference/agents/codex/providers/${encodeURIComponent(id)}`,
+						{ json: body },
+					)
+					.json();
+			},
+			updateCodexActiveProfile(
+				body: UpdateCodexActiveProfileRequest,
+			): Promise<CodexProviderStateResponse> {
+				return client
+					.put("inference/agents/codex/profile", { json: body })
+					.json();
+			},
+			updateCodexProfileProvider(
+				profileId: string,
+				body: UpdateCodexProfileProviderRequest,
+			): Promise<CodexProviderStateResponse> {
+				return client
+					.put(
+						`inference/agents/codex/profiles/${encodeURIComponent(profileId)}/provider`,
+						{ json: body },
+					)
+					.json();
+			},
+			syncOpenCode(id: string): Promise<AgentProviderResponse> {
+				return client
+					.post(
+						`inference/agents/opencode/providers/${encodeURIComponent(id)}/sync`,
+					)
+					.json();
+			},
+			syncCodex(id: string): Promise<AgentProviderResponse> {
+				return client
+					.post(
+						`inference/agents/codex/providers/${encodeURIComponent(id)}/sync`,
+					)
+					.json();
+			},
+			async createModel(
+				providerName: string,
+				modelName: string,
+			): Promise<InferenceProviderResponse> {
+				return updateInferenceProviderModels(providerName, (models) => [
+					...models,
+					modelName,
+				]);
+			},
+			async updateModel(
+				providerName: string,
+				modelName: string,
+				nextModelName: string,
+			): Promise<InferenceProviderResponse> {
+				return updateInferenceProviderModels(providerName, (models) => {
+					const index = models.indexOf(modelName);
+					if (index === -1) {
+						throw new Error(
+							`inference model '${modelName}' not found`,
+						);
+					}
+					const nextModels = [...models];
+					nextModels[index] = nextModelName;
+					return nextModels;
+				});
+			},
+			async deleteModel(
+				providerName: string,
+				modelName: string,
+			): Promise<InferenceProviderResponse> {
+				return updateInferenceProviderModels(providerName, (models) => {
+					if (!models.includes(modelName)) {
+						throw new Error(
+							`inference model '${modelName}' not found`,
+						);
+					}
+					return models.filter((model) => model !== modelName);
+				});
+			},
+			delete(name: string): Promise<void> {
+				return client
+					.delete(`inference/providers/${encodeURIComponent(name)}`)
+					.then(() => undefined);
+			},
+			deleteOpenCode(id: string): Promise<void> {
+				return client
+					.delete(
+						`inference/agents/opencode/providers/${encodeURIComponent(id)}`,
+					)
+					.then(() => undefined);
+			},
+			deleteCodex(id: string): Promise<void> {
+				return client
+					.delete(
+						`inference/agents/codex/providers/${encodeURIComponent(id)}`,
+					)
+					.then(() => undefined);
+			},
+			getClaudeState(): Promise<ClaudeProviderStateResponse> {
+				return client.get("inference/agents/claude/state").json();
+			},
+			createClaude(
+				body: CreateAgentProviderRequest,
+			): Promise<AgentProviderResponse> {
+				return client
+					.post("inference/agents/claude/providers", { json: body })
+					.json();
+			},
+			updateClaude(
+				id: string,
+				body: UpdateAgentProviderRequest,
+			): Promise<ClaudeProviderStateResponse> {
+				return client
+					.put(
+						`inference/agents/claude/providers/${encodeURIComponent(id)}`,
+						{ json: body },
+					)
+					.json();
+			},
+			syncClaude(id: string): Promise<AgentProviderResponse> {
+				return client
+					.post(
+						`inference/agents/claude/providers/${encodeURIComponent(id)}/sync`,
+					)
+					.json();
+			},
+			deleteClaude(id: string): Promise<void> {
+				return client
+					.delete(
+						`inference/agents/claude/providers/${encodeURIComponent(id)}`,
+					)
+					.then(() => undefined);
+			},
+			clearClaudeState(): Promise<void> {
+				return client
+					.delete("inference/agents/claude/state")
+					.then(() => undefined);
 			},
 		},
 		plugins: {

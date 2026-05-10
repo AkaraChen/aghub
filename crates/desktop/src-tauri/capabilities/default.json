@@ -17,6 +17,7 @@
 		"deep-link:default",
 		"opener:default",
 		"opener:allow-open-path",
+		"opener:allow-reveal-item-in-dir",
 		"dialog:default",
 		"log:default",
 		"store:default",

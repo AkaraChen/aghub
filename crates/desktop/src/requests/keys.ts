@@ -60,6 +60,17 @@ export const queryKeys = {
 		all: () => ["credentials"] as const,
 		list: () => ["credentials", "list"] as const,
 	},
+	inferenceProviders: {
+		all: () => ["inference-providers"] as const,
+		list: () => ["inference-providers", "list"] as const,
+		presets: () => ["inference-providers", "presets"] as const,
+		agent: (agentId: string) =>
+			["inference-providers", "agent", agentId] as const,
+		agentState: (agentId: string) =>
+			["inference-providers", "agent", agentId, "state"] as const,
+		password: (name: string) =>
+			["inference-providers", "password", name] as const,
+	},
 	integrations: {
 		all: () => ["integrations"] as const,
 		codeEditors: () => ["integrations", "code-editors"] as const,
