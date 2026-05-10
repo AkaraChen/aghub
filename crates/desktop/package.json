@@ -42,7 +42,6 @@
 		"ky": "^2.0.0",
 		"nuqs": "^2.8.9",
 		"pathe": "^2.0.3",
-		"posthog-js": "^1.250.0",
 		"react": "^19.1.0",
 		"react-aria-components": "^1.16.0",
 		"react-dom": "^19.1.0",
