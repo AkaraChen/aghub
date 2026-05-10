@@ -5,14 +5,32 @@ import {
 	ServerIcon,
 	SparklesIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Card, Surface, Tabs } from "@heroui/react";
+import { Button, Card, Spinner, Surface, Tabs } from "@heroui/react";
 import { useQueryState } from "nuqs";
+import { lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { ImportGithubSkillPanel } from "../components/import-github-skill-panel";
-import { PluginMarketContent } from "../components/plugin-market-content";
 import { cn } from "../lib/utils";
 import SkillsShPage from "./skills-sh";
+
+const PluginMarketContent = lazy(() =>
+	import("../components/plugin-market-content").then((module) => ({
+		default: module.PluginMarketContent,
+	})),
+);
+const ImportGithubSkillPanel = lazy(() =>
+	import("../components/import-github-skill-panel").then((module) => ({
+		default: module.ImportGithubSkillPanel,
+	})),
+);
+
+function TabFallback() {
+	return (
+		<div className="flex h-full items-center justify-center">
+			<Spinner />
+		</div>
+	);
+}
 
 const MARKET_TAB_IDS = [
 	"skills-sh",
@@ -317,9 +335,15 @@ export default function MarketPage() {
 						<McpMarketTab />
 					</div>
 				)}
-				{activeTab === "claude-plugins" && <ClaudePluginsTab />}
+				{activeTab === "claude-plugins" && (
+					<Suspense fallback={<TabFallback />}>
+						<ClaudePluginsTab />
+					</Suspense>
+				)}
 				{activeTab === "github" && (
-					<ImportGithubSkillPanel onDone={() => {}} />
+					<Suspense fallback={<TabFallback />}>
+						<ImportGithubSkillPanel onDone={() => {}} />
+					</Suspense>
 				)}
 			</div>
 		</div>

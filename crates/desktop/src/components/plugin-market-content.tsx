@@ -3,7 +3,13 @@
 import { ArrowPathIcon } from "@heroicons/react/24/solid";
 import { Button, ListBox, SearchField, Select, toast } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useDeferredValue, useMemo, useState } from "react";
+import {
+	useCallback,
+	useDeferredValue,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { useApi } from "../hooks/use-api";
 import { usePluginInstallState } from "../hooks/use-plugin-install-state";
@@ -198,7 +204,11 @@ export function PluginMarketContent({
 		transientPluginsById,
 	]);
 
-	const handleInstall = (pluginId: string) => {
+	// Keep a stable onInstall reference so the memoized row cells don't all
+	// re-render whenever marketPlugins / installStateById change. The latest
+	// callback body lives in a ref that we update on every render.
+	const installRef = useRef<(pluginId: string) => void>(() => {});
+	installRef.current = (pluginId: string) => {
 		const plugin = marketPlugins.find((entry) => entry.id === pluginId);
 		if (!plugin || installStateById[pluginId]) {
 			return;
@@ -210,6 +220,9 @@ export function PluginMarketContent({
 			scope: installScope,
 		});
 	};
+	const handleInstall = useCallback((pluginId: string) => {
+		installRef.current(pluginId);
+	}, []);
 
 	const handleUpdateMarketplace = () => {
 		updateMarketplaceMutation.mutate();
@@ -304,6 +317,7 @@ export function PluginMarketContent({
 				onRetry={refetch}
 				onInstall={handleInstall}
 				installStates={installStateById}
+				variant={variant}
 			/>
 
 			<div className="shrink-0 border-t border-separator/70 pt-2">

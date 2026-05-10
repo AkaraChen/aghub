@@ -9,10 +9,10 @@ import {
 } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "wouter";
 import { PluginDetail } from "../../components/plugin-detail";
 import { PluginConfirmDialog } from "../../components/plugin-detail/confirm-dialog";
 import { PluginList } from "../../components/plugin-list";
-import { PluginMarketDialog } from "../../components/plugin-market-dialog";
 import {
 	Empty,
 	EmptyDescription,
@@ -38,6 +38,7 @@ export default function PluginsPage() {
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
+	const [, setLocation] = useLocation();
 	const { data, refetch, isFetching } = useSuspenseQuery(
 		pluginListQueryOptions({ api }),
 	);
@@ -52,7 +53,6 @@ export default function PluginsPage() {
 	const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
 	const [selectedPluginScope, setSelectedPluginScope] =
 		useState<PluginScopeSelection | null>(null);
-	const [isMarketDialogOpen, setIsMarketDialogOpen] = useState(false);
 	const [isBulkUninstallDialogOpen, setIsBulkUninstallDialogOpen] =
 		useState(false);
 
@@ -220,7 +220,9 @@ export default function PluginsPage() {
 					searchQuery={searchQuery}
 					onSearchChange={setSearchQuery}
 					onSelectionChange={handleSelectionChange}
-					onOpenMarket={() => setIsMarketDialogOpen(true)}
+					onOpenMarket={() =>
+						setLocation("/market?tab=claude-plugins")
+					}
 					onToggleMultiSelect={toggleMultiSelect}
 					onRefresh={() => void handleRefresh()}
 					onDeleteSelection={() => setIsBulkUninstallDialogOpen(true)}
@@ -261,12 +263,6 @@ export default function PluginsPage() {
 					</Empty>
 				)}
 			</div>
-
-			<PluginMarketDialog
-				isOpen={isMarketDialogOpen}
-				onClose={() => setIsMarketDialogOpen(false)}
-				installScope={marketInstallScope}
-			/>
 
 			<PluginConfirmDialog
 				isOpen={isBulkUninstallDialogOpen}
