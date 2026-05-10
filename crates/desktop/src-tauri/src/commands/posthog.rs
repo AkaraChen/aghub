@@ -209,3 +209,23 @@ pub async fn posthog_identify(
 	}
 	Ok(())
 }
+
+/// Hand the persistent distinct_id to the webview so posthog-js can be
+/// bootstrapped with the same identity. This is the linchpin of the
+/// Rust-events + JS-replay split: when posthog-js calls
+/// `posthog.init(..., { bootstrap: { distinctID } })` with this value,
+/// session replay segments and Rust-originated events both attach to
+/// the same person in PostHog.
+#[tauri::command]
+pub async fn posthog_get_distinct_id(app: AppHandle) -> String {
+	resolve_distinct_id(&app)
+}
+
+/// Hand the per-process session id to the webview so posthog-js can
+/// share it via `register_session({ session_id })` if desired. Letting
+/// both sides agree on $session_id is what stitches Rust events and
+/// JS replays into the same PostHog session.
+#[tauri::command]
+pub async fn posthog_get_session_id() -> String {
+	session_id().to_string()
+}
