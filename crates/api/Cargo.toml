@@ -33,7 +33,7 @@ ts-rs = { workspace = true }
 which = "8"
 open = "5"
 tempfile = "3"
-keyring = { version = "3", features = [
+keyring = { version = "4", features = [
 	"apple-native",
 	"windows-native",
 	"linux-native",

@@ -13,7 +13,7 @@ serde_json = { workspace = true }
 toml_edit = { workspace = true }
 thiserror = { workspace = true }
 dirs = { workspace = true }
-keyring = { version = "3", features = [
+keyring = { version = "4", features = [
 	"apple-native",
 	"windows-native",
 	"linux-native",
