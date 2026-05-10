@@ -1,10 +1,11 @@
-use log::warn;
+use log::{debug, info, warn};
 use posthog_rs::{client, Client, ClientOptionsBuilder, Event};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use std::sync::OnceLock;
+use std::time::Instant;
 use tauri::{AppHandle, Manager};
 use tokio::sync::OnceCell;
 use uuid::Uuid;
@@ -37,10 +38,19 @@ static SESSION_ID: OnceLock<String> = OnceLock::new();
 static DISTINCT_ID: OnceLock<String> = OnceLock::new();
 
 async fn build_client() -> Option<Client> {
-	let key = POSTHOG_KEY?;
+	let Some(key) = POSTHOG_KEY else {
+		warn!(
+			"posthog: VITE_POSTHOG_KEY was not embedded at compile time; \
+			analytics disabled. Make sure crates/desktop/.env exists \
+			before running cargo build."
+		);
+		return None;
+	};
 	if key.is_empty() {
+		warn!("posthog: VITE_POSTHOG_KEY is empty; analytics disabled");
 		return None;
 	}
+	let host_log = POSTHOG_HOST.unwrap_or("https://us.i.posthog.com (default)");
 	let mut builder = ClientOptionsBuilder::default();
 	builder.api_key(key.to_string());
 	if let Some(host) = POSTHOG_HOST.filter(|h| !h.is_empty()) {
@@ -53,6 +63,7 @@ async fn build_client() -> Option<Client> {
 			return None;
 		}
 	};
+	info!("posthog: client initialized for host {host_log}");
 	Some(client(options).await)
 }
 
@@ -144,6 +155,14 @@ fn apply_default_properties(event: &mut Event) {
 }
 
 /// Capture a regular event (`capture` in posthog-js terms).
+///
+/// Detaches the actual HTTP send via `tokio::spawn` so the IPC reply
+/// isn't blocked on the network round-trip. Without this, the command
+/// future runs as part of Tauri's invoke-handler task and is at risk
+/// of being dropped if the webview context tears down or another
+/// command races ahead — explaining why early-bootstrap events
+/// (`app started`) never reach PostHog while idle-time events
+/// (`onboarding completed`) do.
 #[tauri::command]
 pub async fn posthog_capture(
 	app: AppHandle,
@@ -160,9 +179,21 @@ pub async fn posthog_capture(
 	let mut ev = Event::new(event.as_str(), did.as_str());
 	apply_default_properties(&mut ev);
 	apply_properties(&mut ev, properties);
-	if let Err(error) = client.capture(ev).await {
-		warn!("posthog: capture failed for {event}: {error}");
-	}
+
+	let event_label = event.clone();
+	tokio::spawn(async move {
+		let started = Instant::now();
+		match client.capture(ev).await {
+			Ok(()) => debug!(
+				"posthog: capture {event_label} sent in {:?}",
+				started.elapsed()
+			),
+			Err(error) => warn!(
+				"posthog: capture {event_label} failed after {:?}: {error}",
+				started.elapsed()
+			),
+		}
+	});
 	Ok(())
 }
 
@@ -204,9 +235,21 @@ pub async fn posthog_identify(
 			warn!("posthog: failed to set $set on identify: {error}");
 		}
 	}
-	if let Err(error) = client.capture(ev).await {
-		warn!("posthog: identify failed for {distinct_id}: {error}");
-	}
+
+	let id_label = distinct_id.clone();
+	tokio::spawn(async move {
+		let started = Instant::now();
+		match client.capture(ev).await {
+			Ok(()) => debug!(
+				"posthog: identify {id_label} sent in {:?}",
+				started.elapsed()
+			),
+			Err(error) => warn!(
+				"posthog: identify {id_label} failed after {:?}: {error}",
+				started.elapsed()
+			),
+		}
+	});
 	Ok(())
 }
 
