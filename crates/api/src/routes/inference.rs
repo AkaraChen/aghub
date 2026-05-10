@@ -11,10 +11,12 @@ use rocket::State;
 use crate::dto::inference::{
 	AgentProviderResponse, ClaudeProviderStateResponse,
 	CodexProviderStateResponse, CreateAgentProviderRequest,
-	CreateInferenceProviderRequest, InferenceProviderPasswordResponse,
-	InferenceProviderPresetResponse, InferenceProviderResponse,
-	UpdateAgentProviderRequest, UpdateCodexActiveProfileRequest,
-	UpdateCodexProfileProviderRequest, UpdateInferenceProviderRequest,
+	CreateInferenceProviderRequest, FetchProviderModelsRequest,
+	FetchProviderModelsResponse, InferenceProviderFormatDto,
+	InferenceProviderPasswordResponse, InferenceProviderPresetResponse,
+	InferenceProviderResponse, UpdateAgentProviderRequest,
+	UpdateCodexActiveProfileRequest, UpdateCodexProfileProviderRequest,
+	UpdateInferenceProviderRequest,
 };
 use crate::error::{ApiCreated, ApiError, ApiNoContent, ApiResult};
 use crate::state::InferenceProviderState;
@@ -201,6 +203,49 @@ fn inference_provider_presets() -> &'static [InferenceProviderPresetResponse] {
 pub fn list_inference_provider_presets(
 ) -> Json<Vec<InferenceProviderPresetResponse>> {
 	Json(inference_provider_presets().to_vec())
+}
+
+#[post("/inference/fetch-models", data = "<body>")]
+pub async fn fetch_inference_provider_models(
+	body: Json<FetchProviderModelsRequest>,
+) -> ApiResult<FetchProviderModelsResponse> {
+	let api_base_url = body.api_base_url.trim().trim_end_matches('/');
+	if api_base_url.is_empty() {
+		return Err(ApiError::bad_request("api_base_url is required"));
+	}
+	let api_key = body.api_key.trim();
+	if api_key.is_empty() {
+		return Err(ApiError::bad_request("api_key is required"));
+	}
+
+	let client = reqwest::Client::builder()
+		.timeout(std::time::Duration::from_secs(15))
+		.build()
+		.map_err(|e| ApiError::internal(format!("http client init: {e}")))?;
+
+	let url = format!("{api_base_url}/models");
+	let request = match body.format {
+		InferenceProviderFormatDto::Anthropic => client
+			.get(&url)
+			.header("x-api-key", api_key)
+			.header("anthropic-version", "2023-06-01"),
+		InferenceProviderFormatDto::OpenAiCompletions
+		| InferenceProviderFormatDto::OpenAiResponses => client
+			.get(&url)
+			.header("Authorization", format!("Bearer {api_key}")),
+	};
+
+	let response = request.send().await.map_err(|e| {
+		ApiError::new(
+			Status::BadGateway,
+			format!("upstream request failed: {e}"),
+			"UPSTREAM_REQUEST_FAILED",
+		)
+	})?;
+	Ok(Json(FetchProviderModelsResponse {
+		status: response.status().as_u16(),
+		body: response.text().await.unwrap_or_default(),
+	}))
 }
 
 #[get("/inference/agents/opencode/providers")]

@@ -164,6 +164,7 @@ fn build_rocket(
 				routes::credentials::delete_credential,
 				routes::inference::list_inference_providers,
 				routes::inference::list_inference_provider_presets,
+				routes::inference::fetch_inference_provider_models,
 				routes::inference::list_opencode_providers,
 				routes::inference::list_codex_providers,
 				routes::inference::get_codex_state,

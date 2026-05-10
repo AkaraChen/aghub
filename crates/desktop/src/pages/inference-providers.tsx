@@ -107,50 +107,6 @@ const FORMAT_OPTIONS: FormatOption[] = [
 const TRAILING_SLASHES_REGEX = /\/+$/;
 const PROVIDER_EXISTS_REGEX = /provider already exists:\s*(.+)/i;
 
-async function fetchProviderModels({
-	format,
-	apiBaseUrl,
-	apiKey,
-}: {
-	format: InferenceProviderFormatDto;
-	apiBaseUrl: string;
-	apiKey: string;
-}): Promise<string[]> {
-	const trimmedBase = apiBaseUrl.trim().replace(TRAILING_SLASHES_REGEX, "");
-	if (!trimmedBase) throw new Error("Missing API base URL");
-	if (!apiKey.trim()) throw new Error("Missing API key");
-
-	const headers: Record<string, string> =
-		format === "anthropic"
-			? {
-					"x-api-key": apiKey,
-					"anthropic-version": "2023-06-01",
-				}
-			: {
-					Authorization: `Bearer ${apiKey}`,
-				};
-
-	const response = await fetch(`${trimmedBase}/models`, {
-		method: "GET",
-		headers,
-	});
-
-	if (!response.ok) {
-		throw new Error(`HTTP ${response.status}`);
-	}
-
-	const payload = (await response.json()) as {
-		data?: Array<{ id?: unknown }>;
-	};
-	const data = Array.isArray(payload?.data) ? payload.data : [];
-	const ids = data
-		.map((entry) => (typeof entry?.id === "string" ? entry.id : null))
-		.filter((id): id is string => Boolean(id));
-
-	if (ids.length === 0) throw new Error("No models in response");
-	return ids;
-}
-
 const CODING_AGENT_OPTIONS: CodingAgentOption[] = [
 	{
 		id: "opencode",
@@ -809,11 +765,29 @@ function ProviderForm({
 
 	const handleFetchModels = async () => {
 		const values = getValues();
-		return fetchProviderModels({
+		const trimmedBase = values.apiBaseUrl
+			.trim()
+			.replace(TRAILING_SLASHES_REGEX, "");
+		if (!trimmedBase) throw new Error("Missing API base URL");
+		if (!values.apiKey.trim()) throw new Error("Missing API key");
+
+		const result = await api.inferenceProviders.fetchModels({
 			format: values.format,
-			apiBaseUrl: values.apiBaseUrl,
-			apiKey: values.apiKey,
+			api_base_url: trimmedBase,
+			api_key: values.apiKey,
 		});
+
+		if (result.status !== 200) {
+			throw new Error(result.body || `HTTP ${result.status}`);
+		}
+		const payload = JSON.parse(result.body) as {
+			data?: Array<{ id?: unknown }>;
+		};
+		const ids = (payload.data ?? [])
+			.map((entry) => (typeof entry?.id === "string" ? entry.id : null))
+			.filter((id): id is string => Boolean(id));
+		if (ids.length === 0) throw new Error("No models in response");
+		return ids;
 	};
 
 	const createMutation = useMutation({

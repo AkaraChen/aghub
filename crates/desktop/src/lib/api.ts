@@ -15,6 +15,8 @@ import type {
 	CreateSkillRequest,
 	CreateSubAgentRequest,
 	CredentialResponse,
+	FetchProviderModelsRequest,
+	FetchProviderModelsResponse,
 	DeleteSkillByPathRequest,
 	DeleteSkillByPathResponse,
 	GitInstallRequest,
@@ -517,6 +519,16 @@ export function createApi(baseUrl: string) {
 			},
 			listPresets(): Promise<InferenceProviderPresetResponse[]> {
 				return client.get("inference/presets").json();
+			},
+			fetchModels(
+				body: FetchProviderModelsRequest,
+			): Promise<FetchProviderModelsResponse> {
+				return client
+					.post("inference/fetch-models", {
+						json: body,
+						timeout: 30000,
+					})
+					.json();
 			},
 			listOpenCode(): Promise<AgentProviderResponse[]> {
 				return client.get("inference/agents/opencode/providers").json();

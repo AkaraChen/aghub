@@ -70,6 +70,21 @@ impl From<CreateInferenceProviderRequest> for CreateInferenceProvider {
 
 #[derive(Debug, Deserialize, TS)]
 #[ts(export)]
+pub struct FetchProviderModelsRequest {
+	pub format: InferenceProviderFormatDto,
+	pub api_base_url: String,
+	pub api_key: String,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct FetchProviderModelsResponse {
+	pub status: u16,
+	pub body: String,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
 pub struct UpdateInferenceProviderRequest {
 	pub name: Option<String>,
 	pub display_name: Option<String>,
