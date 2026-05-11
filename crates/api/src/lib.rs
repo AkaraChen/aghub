@@ -252,7 +252,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 
 #[cfg(test)]
 mod tests {
-	use super::build_rocket;
+	use super::{build_rocket, default_app_data_dir};
 	use rocket::http::{Header, Status};
 	use rocket::local::blocking::Client;
 
