@@ -1,0 +1,21 @@
+version: 2
+updates:
+    - package-ecosystem: "cargo"
+      directory: "/"
+      schedule:
+          interval: "weekly"
+
+    - package-ecosystem: "bun"
+      directory: "/"
+      schedule:
+          interval: "weekly"
+
+    - package-ecosystem: "bun"
+      directory: "/crates/desktop"
+      schedule:
+          interval: "weekly"
+
+    - package-ecosystem: "github-actions"
+      directory: "/"
+      schedule:
+          interval: "weekly"
