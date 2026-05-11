@@ -276,6 +276,8 @@ export default {
 		"没有新模型需要添加（已配置 {{total}} 个）",
 	fetchProviderModelsFailed: "获取模型失败：{{reason}}",
 	fetchProviderModelsUnknownError: "端点不支持",
+	fetchProviderModelsUnsupportedAnthropic:
+		"Anthropic Provider 不支持获取模型列表。",
 	noProviderModels: "暂无模型。",
 	noProviderModelsMatch: "没有匹配的模型。",
 	providerModelGroupUncategorized: "未分类",

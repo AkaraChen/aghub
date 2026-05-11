@@ -107,6 +107,10 @@ const FORMAT_OPTIONS: FormatOption[] = [
 const TRAILING_SLASHES_REGEX = /\/+$/;
 const PROVIDER_EXISTS_REGEX = /provider already exists:\s*(.+)/i;
 
+function canFetchProviderModels(format: InferenceProviderFormatDto) {
+	return format !== "anthropic";
+}
+
 async function fetchProviderModels({
 	format,
 	apiBaseUrl,
@@ -116,19 +120,17 @@ async function fetchProviderModels({
 	apiBaseUrl: string;
 	apiKey: string;
 }): Promise<string[]> {
+	if (!canFetchProviderModels(format)) {
+		throw new Error("Model fetching is not available for Anthropic");
+	}
+
 	const trimmedBase = apiBaseUrl.trim().replace(TRAILING_SLASHES_REGEX, "");
 	if (!trimmedBase) throw new Error("Missing API base URL");
 	if (!apiKey.trim()) throw new Error("Missing API key");
 
-	const headers: Record<string, string> =
-		format === "anthropic"
-			? {
-					"x-api-key": apiKey,
-					"anthropic-version": "2023-06-01",
-				}
-			: {
-					Authorization: `Bearer ${apiKey}`,
-				};
+	const headers: Record<string, string> = {
+		Authorization: `Bearer ${apiKey}`,
+	};
 
 	const response = await fetch(`${trimmedBase}/models`, {
 		method: "GET",
@@ -312,6 +314,7 @@ function ProviderModelsEditor({
 	errorMessage,
 	onFetchModels,
 	canFetchModels = false,
+	fetchModelsDisabledReason,
 }: {
 	value: ProviderModelFormValue[];
 	onChange: (value: ProviderModelFormValue[]) => void;
@@ -319,6 +322,7 @@ function ProviderModelsEditor({
 	errorMessage?: string;
 	onFetchModels?: () => Promise<string[]>;
 	canFetchModels?: boolean;
+	fetchModelsDisabledReason?: string;
 }) {
 	const { t } = useTranslation();
 	const emptyModel = useMemo(() => createProviderModelFormValue(), []);
@@ -509,6 +513,30 @@ function ProviderModelsEditor({
 		</div>
 	);
 
+	const fetchModelsButton = onFetchModels ? (
+		<Button
+			type="button"
+			variant="tertiary"
+			size="sm"
+			isPending={isFetching}
+			isDisabled={!canFetchModels}
+			onPress={handleFetch}
+		>
+			{({ isPending }) => (
+				<>
+					{isPending ? (
+						<Spinner color="current" size="sm" />
+					) : (
+						<CloudArrowDownIcon className="size-4" />
+					)}
+					{isPending
+						? t("fetchProviderModelsPending")
+						: t("fetchProviderModels")}
+				</>
+			)}
+		</Button>
+	) : null;
+
 	return (
 		<>
 			<div className="grid gap-2">
@@ -520,32 +548,19 @@ function ProviderModelsEditor({
 						</p>
 					</div>
 					<div className="flex shrink-0 items-center gap-2">
-						{onFetchModels && (
-							<Button
-								type="button"
-								variant="tertiary"
-								size="sm"
-								isPending={isFetching}
-								isDisabled={!canFetchModels}
-								onPress={handleFetch}
-							>
-								{({ isPending }) => (
-									<>
-										{isPending ? (
-											<Spinner
-												color="current"
-												size="sm"
-											/>
-										) : (
-											<CloudArrowDownIcon className="size-4" />
-										)}
-										{isPending
-											? t("fetchProviderModelsPending")
-											: t("fetchProviderModels")}
-									</>
-								)}
-							</Button>
-						)}
+						{fetchModelsButton &&
+							(fetchModelsDisabledReason ? (
+								<Tooltip delay={0}>
+									<Tooltip.Trigger>
+										{fetchModelsButton}
+									</Tooltip.Trigger>
+									<Tooltip.Content>
+										{fetchModelsDisabledReason}
+									</Tooltip.Content>
+								</Tooltip>
+							) : (
+								fetchModelsButton
+							))}
 						<Button
 							type="button"
 							variant="secondary"
@@ -801,14 +816,24 @@ function ProviderForm({
 	};
 
 	const [showApiKey, setShowApiKey] = useState(false);
+	const watchedFormat = useWatch({ control, name: "format" });
 	const watchedApiBaseUrl = useWatch({ control, name: "apiBaseUrl" });
 	const watchedApiKey = useWatch({ control, name: "apiKey" });
+	const fetchModelsDisabledReason = !canFetchProviderModels(watchedFormat)
+		? t("fetchProviderModelsUnsupportedAnthropic")
+		: undefined;
 	const canFetchModels = Boolean(
-		watchedApiBaseUrl?.trim() && watchedApiKey?.trim(),
+		canFetchProviderModels(watchedFormat) &&
+		watchedApiBaseUrl?.trim() &&
+		watchedApiKey?.trim(),
 	);
 
 	const handleFetchModels = async () => {
 		const values = getValues();
+		if (!canFetchProviderModels(values.format)) {
+			throw new Error(t("fetchProviderModelsUnsupportedAnthropic"));
+		}
+
 		return fetchProviderModels({
 			format: values.format,
 			apiBaseUrl: values.apiBaseUrl,
@@ -1273,6 +1298,9 @@ function ProviderForm({
 											}
 											onFetchModels={handleFetchModels}
 											canFetchModels={canFetchModels}
+											fetchModelsDisabledReason={
+												fetchModelsDisabledReason
+											}
 										/>
 									)}
 								/>
