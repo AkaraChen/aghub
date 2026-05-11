@@ -288,6 +288,8 @@ export default {
 		"No new models to add ({{total}} already configured)",
 	fetchProviderModelsFailed: "Failed to fetch models: {{reason}}",
 	fetchProviderModelsUnknownError: "endpoint not supported",
+	fetchProviderModelsUnsupportedAnthropic:
+		"Anthropic providers do not support fetching model lists.",
 	noProviderModels: "No models configured.",
 	noProviderModelsMatch: "No models match your search.",
 	providerModelGroupUncategorized: "Uncategorized",
