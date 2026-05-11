@@ -22,7 +22,10 @@ use crate::agent::{
 use crate::credentials::CredentialStore;
 use crate::error::Result;
 use crate::model::InferenceProvider;
-use crate::store::{InferenceProviderRepository, InferenceProviderStore};
+use crate::store::{
+	AgentProviderBindingRow, InferenceProviderRepository,
+	InferenceProviderStore,
+};
 
 pub(super) const AGENT_ID: &str = "codex";
 pub const DEFAULT_PROFILE_ID: &str = "default";
@@ -342,71 +345,27 @@ impl CodexProviderAdapter {
 				store.set_api_key(&provider.id, api_key)?;
 			}
 
-			return store.binding_from_row(row);
+			return binding_from_row(store, row);
 		}
 
-		// Not a binding provider - check config.toml
-		let mut config = files::read_config(&self.config_path)?;
-		let provider = provider_table(&config, &provider_id)?
-			.cloned()
-			.ok_or_else(|| {
-				crate::error::InferenceProviderError::NotFound(
-					provider_id.clone(),
-				)
-			})?;
-
-		// Config.toml providers are External and cannot be updated via aghub
-		let binding = mapping::binding_from_table(&provider_id, &provider)?;
-		if binding.source == AgentProviderSource::External {
-			return Err(
-				crate::error::InferenceProviderError::InvalidAgentProviderConfig {
-					agent_id: AGENT_ID.to_string(),
-					path: self.config_path.display().to_string(),
-					message: format!(
-						"codex provider '{provider_id}' is defined in \
-						 config.toml and cannot be updated via aghub"
-					),
-				},
-			);
+		let config = files::read_config(&self.config_path)?;
+		let exists = provider_table(&config, &provider_id)?.is_some();
+		if !exists {
+			return Err(crate::error::InferenceProviderError::NotFound(
+				provider_id,
+			));
 		}
 
-		let name = name.map(mapping::clean_provider_name).transpose()?;
-		if let Some(api_key) = api_key {
-			mapping::ensure_api_key(api_key)?;
-			if mapping::uses_auth_command(&provider) {
-				return Err(
-					crate::error::InferenceProviderError::InvalidAgentProviderConfig {
-						agent_id: AGENT_ID.to_string(),
-						path: self.config_path.display().to_string(),
-						message: format!(
-							"codex provider '{provider_id}' uses \
-							 command-backed auth and cannot be updated \
-							 with an inline API key"
-						),
-					},
-				);
-			}
-		}
-
-		let mut binding = mapping::binding_from_table(&provider_id, &provider)?;
-		mapping::ensure_responses_format(binding.format)?;
-		if let Some(name) = name {
-			binding.name = name;
-		}
-		upsert_provider(&mut config, &binding, api_key)?;
-		files::write_config(&self.config_path, &config)?;
-		if let Some(api_key) = api_key {
-			if mapping::uses_shared_openai_api_key(&provider) {
-				self.write_shared_openai_api_key(api_key)?;
-			}
-		}
-
-		Ok(self
-			.load_providers()?
-			.providers
-			.into_iter()
-			.find(|provider| provider.id == provider_id)
-			.unwrap_or(binding))
+		Err(
+			crate::error::InferenceProviderError::InvalidAgentProviderConfig {
+				agent_id: AGENT_ID.to_string(),
+				path: self.config_path.display().to_string(),
+				message: format!(
+					"codex provider '{provider_id}' is defined in \
+					 config.toml and cannot be updated via aghub"
+				),
+			},
+		)
 	}
 
 	/// Read an API key visible to Codex for a provider.
@@ -459,7 +418,7 @@ impl CodexProviderAdapter {
 		// Check binding table first
 		let binding_rows = store.list_agent_bindings(AGENT_ID)?;
 		if let Some(row) = binding_rows.iter().find(|r| r.id == provider_id) {
-			let binding = store.binding_from_row(row)?;
+			let binding = binding_from_row(store, row)?;
 			store.delete_agent_binding(AGENT_ID, &row.id)?;
 
 			// Also remove from config.toml if present
@@ -480,44 +439,24 @@ impl CodexProviderAdapter {
 			return Ok(binding);
 		}
 
-		// Not a binding provider - check config.toml
-		let mut config = files::read_config(&self.config_path)?;
-		let removed = provider_table(&config, &provider_id)?
-			.map(|table| mapping::binding_from_table(&provider_id, table))
-			.transpose()?
-			.ok_or_else(|| {
-				crate::error::InferenceProviderError::NotFound(
-					provider_id.clone(),
-				)
-			})?;
-
-		// Config.toml providers are External and cannot be deleted via aghub
-		if removed.source == AgentProviderSource::External {
-			return Err(
-				crate::error::InferenceProviderError::InvalidAgentProviderConfig {
-					agent_id: AGENT_ID.to_string(),
-					path: self.config_path.display().to_string(),
-					message: format!(
-						"Provider '{provider_id}' is defined in config.toml, \
-						 cannot delete via aghub"
-					),
-				},
-			);
+		let config = files::read_config(&self.config_path)?;
+		let exists = provider_table(&config, &provider_id)?.is_some();
+		if !exists {
+			return Err(crate::error::InferenceProviderError::NotFound(
+				provider_id,
+			));
 		}
 
-		let providers = providers_table_mut(&mut config)?;
-		providers.remove(&provider_id);
-		if config
-			.get("model_provider")
-			.and_then(Item::as_str)
-			.is_some_and(|value| value == provider_id)
-		{
-			config.as_table_mut().remove("model_provider");
-			config.as_table_mut().remove("model");
-		}
-		clear_profile_provider_references(&mut config, &provider_id);
-		files::write_config(&self.config_path, &config)?;
-		Ok(removed)
+		Err(
+			crate::error::InferenceProviderError::InvalidAgentProviderConfig {
+				agent_id: AGENT_ID.to_string(),
+				path: self.config_path.display().to_string(),
+				message: format!(
+					"Provider '{provider_id}' is defined in config.toml, \
+					 cannot delete via aghub"
+				),
+			},
+		)
 	}
 
 	/// Load all providers including those from the binding table.
@@ -553,7 +492,7 @@ impl CodexProviderAdapter {
 		// Load binding table providers (marked as Custom)
 		let binding_rows = store.list_agent_bindings(AGENT_ID)?;
 		for row in binding_rows {
-			let binding = store.binding_from_row(&row)?;
+			let binding = binding_from_row(store, &row)?;
 			if let Some(existing) =
 				providers.iter_mut().find(|p| p.id == binding.id)
 			{
@@ -577,23 +516,6 @@ impl CodexProviderAdapter {
 			return store.get_api_key(&row.inference_provider_id);
 		}
 		Ok(None)
-	}
-
-	fn write_shared_openai_api_key(&self, api_key: &str) -> Result<()> {
-		let mut auth = files::read_auth(&self.auth_path)?;
-		let Some(auth_object) = auth.as_object_mut() else {
-			return Err(
-				crate::error::InferenceProviderError::InvalidAgentCredentialStore {
-					agent_id: AGENT_ID.to_string(),
-					path: self.auth_path.display().to_string(),
-					message: "auth.json must contain a JSON object"
-						.to_string(),
-				},
-			);
-		};
-		auth_object
-			.insert("OPENAI_API_KEY".to_string(), serde_json::json!(api_key));
-		files::write_auth(&self.auth_path, &auth)
 	}
 }
 
@@ -792,6 +714,17 @@ fn normalize_inventory_base_url(api_base_url: &str) -> String {
 	} else {
 		trimmed.to_string()
 	}
+}
+
+fn binding_from_row<C: CredentialStore>(
+	store: &InferenceProviderStore<C>,
+	row: &AgentProviderBindingRow,
+) -> Result<AgentProviderBinding> {
+	let mut binding = store.binding_from_row(row)?;
+	if matches!(binding.credential, AgentProviderCredential::EnvVar { .. }) {
+		binding.credential = AgentProviderCredential::Inline;
+	}
+	Ok(binding)
 }
 
 fn upsert_provider(
