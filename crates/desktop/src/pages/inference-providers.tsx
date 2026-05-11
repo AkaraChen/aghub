@@ -268,6 +268,7 @@ function ProviderModelsEditor({
 	errorMessage,
 	onFetchModels,
 	canFetchModels = false,
+	fetchModelsDisabledReason,
 }: {
 	value: ProviderModelFormValue[];
 	onChange: (value: ProviderModelFormValue[]) => void;
@@ -275,6 +276,7 @@ function ProviderModelsEditor({
 	errorMessage?: string;
 	onFetchModels?: () => Promise<string[]>;
 	canFetchModels?: boolean;
+	fetchModelsDisabledReason?: string;
 }) {
 	const { t } = useTranslation();
 	const emptyModel = useMemo(() => createProviderModelFormValue(), []);
@@ -465,6 +467,30 @@ function ProviderModelsEditor({
 		</div>
 	);
 
+	const fetchModelsButton = onFetchModels ? (
+		<Button
+			type="button"
+			variant="tertiary"
+			size="sm"
+			isPending={isFetching}
+			isDisabled={!canFetchModels}
+			onPress={handleFetch}
+		>
+			{({ isPending }) => (
+				<>
+					{isPending ? (
+						<Spinner color="current" size="sm" />
+					) : (
+						<CloudArrowDownIcon className="size-4" />
+					)}
+					{isPending
+						? t("fetchProviderModelsPending")
+						: t("fetchProviderModels")}
+				</>
+			)}
+		</Button>
+	) : null;
+
 	return (
 		<>
 			<div className="grid gap-2">
@@ -476,32 +502,19 @@ function ProviderModelsEditor({
 						</p>
 					</div>
 					<div className="flex shrink-0 items-center gap-2">
-						{onFetchModels && (
-							<Button
-								type="button"
-								variant="tertiary"
-								size="sm"
-								isPending={isFetching}
-								isDisabled={!canFetchModels}
-								onPress={handleFetch}
-							>
-								{({ isPending }) => (
-									<>
-										{isPending ? (
-											<Spinner
-												color="current"
-												size="sm"
-											/>
-										) : (
-											<CloudArrowDownIcon className="size-4" />
-										)}
-										{isPending
-											? t("fetchProviderModelsPending")
-											: t("fetchProviderModels")}
-									</>
-								)}
-							</Button>
-						)}
+						{fetchModelsButton &&
+							(fetchModelsDisabledReason ? (
+								<Tooltip delay={0}>
+									<Tooltip.Trigger>
+										{fetchModelsButton}
+									</Tooltip.Trigger>
+									<Tooltip.Content>
+										{fetchModelsDisabledReason}
+									</Tooltip.Content>
+								</Tooltip>
+							) : (
+								fetchModelsButton
+							))}
 						<Button
 							type="button"
 							variant="secondary"
