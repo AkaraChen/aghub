@@ -319,6 +319,68 @@ fn api_key_reads_inline_config_key() {
 }
 
 #[test]
+fn api_key_reads_file_config_key() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	let secret_dir = temp.path().join("secrets");
+	fs::create_dir_all(&secret_dir).unwrap();
+	fs::write(secret_dir.join("openrouter-key"), "file-key\n").unwrap();
+	fs::write(
+		adapter.config_path(),
+		r#"{
+			"provider": {
+				"local": {
+					"options": { "apiKey": "{file:secrets/openrouter-key}" }
+				}
+			}
+		}"#,
+	)
+	.unwrap();
+
+	assert_eq!(
+		adapter.api_key("local").unwrap().as_deref(),
+		Some("file-key")
+	);
+}
+
+#[test]
+fn save_preserves_inline_config_key() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	fs::write(
+		adapter.config_path(),
+		r#"{
+			"provider": {
+				"local": {
+					"name": "Local",
+					"options": {
+						"baseURL": "https://api.example.com/v1",
+						"apiKey": "inline-key"
+					}
+				}
+			}
+		}"#,
+	)
+	.unwrap();
+
+	let state = adapter.load_providers().unwrap();
+	assert_eq!(
+		state.providers[0].credential,
+		AgentProviderCredential::Inline
+	);
+	adapter.save_providers(&state).unwrap();
+
+	let config: Value = serde_json::from_str(
+		&fs::read_to_string(adapter.config_path()).unwrap(),
+	)
+	.unwrap();
+	assert_eq!(
+		config["provider"]["local"]["options"]["apiKey"],
+		"inline-key"
+	);
+}
+
+#[test]
 fn save_preserves_auth_only_entries_without_configuring_them() {
 	let temp = tempfile::tempdir().unwrap();
 	let adapter = adapter(&temp);

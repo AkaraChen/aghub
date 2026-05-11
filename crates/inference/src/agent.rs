@@ -668,13 +668,14 @@ mod tests {
 	fn opencode_caps_support_registry_and_qualified_models() {
 		let caps = AgentProviderCapabilities::registry(
 			AgentProviderDefaultSupport::QUALIFIED_MODELS,
-			AgentCredentialSupport::ENV_VAR_OR_AGENT_STORE,
+			AgentCredentialSupport::ENV_VAR_INLINE_OR_AGENT_STORE,
 			BuiltInProviderSupport::OVERRIDABLE,
 		);
 
 		assert!(caps.supports(AgentProviderCapability::CustomProviders));
 		assert!(caps.supports(AgentProviderCapability::MultipleProviders));
 		assert!(caps.supports(AgentProviderCapability::ProviderQualifiedModel));
+		assert!(caps.supports(AgentProviderCapability::InlineApiKeyCredentials));
 		assert!(!caps.supports(AgentProviderCapability::DefaultProvider));
 	}
 
@@ -775,7 +776,7 @@ mod tests {
 	fn state_validation_accepts_opencode_qualified_selection() {
 		let caps = AgentProviderCapabilities::registry(
 			AgentProviderDefaultSupport::QUALIFIED_MODELS,
-			AgentCredentialSupport::ENV_VAR_OR_AGENT_STORE,
+			AgentCredentialSupport::ENV_VAR_INLINE_OR_AGENT_STORE,
 			BuiltInProviderSupport::OVERRIDABLE,
 		);
 		let state = AgentProviderState {
