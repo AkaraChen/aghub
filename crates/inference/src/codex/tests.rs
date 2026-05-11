@@ -466,7 +466,7 @@ model_provider = "openai"
 }
 
 #[test]
-fn set_active_provider_preserves_inventory_key_reference() {
+fn set_active_provider_writes_inventory_key_inline() {
 	let temp = tempfile::tempdir().unwrap();
 	let adapter = adapter(&temp);
 	fs::write(adapter.config_path(), r#"model_provider = "openai""#).unwrap();
@@ -485,10 +485,10 @@ fn set_active_provider_preserves_inventory_key_reference() {
 		.unwrap();
 	let provider = config["model_providers"]["openrouter"].as_table().unwrap();
 	assert_eq!(
-		provider["env_key"].as_str(),
-		Some("AGHUB_INFERENCE_API_KEY")
+		provider["experimental_bearer_token"].as_str(),
+		Some("sk-test")
 	);
-	assert!(provider.get("experimental_bearer_token").is_none());
+	assert!(provider.get("env_key").is_none());
 }
 
 #[test]
@@ -623,11 +623,12 @@ fn add_inventory_provider_uses_stable_public_id() {
 		.collect::<Vec<_>>();
 	assert_eq!(openrouter.len(), 1);
 	assert_eq!(openrouter[0].source, AgentProviderSource::Custom);
+	assert_eq!(openrouter[0].credential, AgentProviderCredential::Inline);
 	assert_eq!(openrouter[0].models[0].id, "openai/gpt-5.4");
 }
 
 #[test]
-fn update_provider_edits_name_and_token_preserving_comments() {
+fn update_provider_rejects_config_toml_provider() {
 	let temp = tempfile::tempdir().unwrap();
 	let adapter = adapter(&temp);
 	fs::write(
@@ -646,30 +647,33 @@ experimental_bearer_token = "sk-old"
 	.unwrap();
 
 	let store = store(&temp);
-	let binding = adapter
+	let error = adapter
 		.update_provider(
 			&store,
 			"openrouter",
 			Some("OpenRouter Team"),
 			Some("sk-new"),
 		)
-		.unwrap();
+		.unwrap_err();
 
-	assert_eq!(binding.name, "OpenRouter Team");
+	assert!(matches!(
+		error,
+		InferenceProviderError::InvalidAgentProviderConfig { .. }
+	));
 	let content = fs::read_to_string(adapter.config_path()).unwrap();
 	assert!(content.contains("# user note"));
 	assert!(content.contains("# provider note"));
 	let config = content.parse::<DocumentMut>().unwrap();
 	let provider = config["model_providers"]["openrouter"].as_table().unwrap();
-	assert_eq!(provider["name"].as_str(), Some("OpenRouter Team"));
+	assert_eq!(provider["name"].as_str(), Some("OpenRouter"));
 	assert_eq!(
 		provider["experimental_bearer_token"].as_str(),
-		Some("sk-new")
+		Some("sk-old")
 	);
 }
 
 #[test]
-fn update_provider_preserves_env_key_credentials() {
+fn update_provider_rejects_env_key_config_provider() {
 	let temp = tempfile::tempdir().unwrap();
 	let adapter = adapter(&temp);
 	fs::write(
@@ -685,22 +689,18 @@ env_key = "OPENROUTER_API_KEY"
 	.unwrap();
 
 	let store = store(&temp);
-	let binding = adapter
+	let error = adapter
 		.update_provider(&store, "openrouter", Some("OpenRouter Team"), None)
-		.unwrap();
+		.unwrap_err();
 
-	assert_eq!(binding.name, "OpenRouter Team");
-	assert_eq!(
-		binding.credential,
-		AgentProviderCredential::EnvVar {
-			name: "OPENROUTER_API_KEY".to_string()
-		}
-	);
-
+	assert!(matches!(
+		error,
+		InferenceProviderError::InvalidAgentProviderConfig { .. }
+	));
 	let content = fs::read_to_string(adapter.config_path()).unwrap();
 	let config = content.parse::<DocumentMut>().unwrap();
 	let provider = config["model_providers"]["openrouter"].as_table().unwrap();
-	assert_eq!(provider["name"].as_str(), Some("OpenRouter Team"));
+	assert_eq!(provider["name"].as_str(), Some("OpenRouter"));
 	assert_eq!(provider["env_key"].as_str(), Some("OPENROUTER_API_KEY"));
 	assert!(provider.get("experimental_bearer_token").is_none());
 }
@@ -742,7 +742,7 @@ requires_openai_auth = true
 }
 
 #[test]
-fn update_provider_updates_shared_auth_json_for_openai_auth_provider() {
+fn update_provider_rejects_shared_auth_config_provider() {
 	let temp = tempfile::tempdir().unwrap();
 	let adapter = adapter(&temp);
 	fs::write(
@@ -759,21 +759,18 @@ requires_openai_auth = true
 	fs::write(auth_path(&temp), r#"{ "OPENAI_API_KEY": "sk-old" }"#).unwrap();
 
 	let store = store(&temp);
-	let binding = adapter
+	let error = adapter
 		.update_provider(&store, "newapi", Some("New API"), Some("sk-new"))
-		.unwrap();
+		.unwrap_err();
 
-	assert_eq!(binding.name, "New API");
-	assert_eq!(
-		binding.credential,
-		AgentProviderCredential::AgentStore {
-			id: Some("newapi".to_string())
-		}
-	);
+	assert!(matches!(
+		error,
+		InferenceProviderError::InvalidAgentProviderConfig { .. }
+	));
 	let auth: serde_json::Value =
 		serde_json::from_str(&fs::read_to_string(auth_path(&temp)).unwrap())
 			.unwrap();
-	assert_eq!(auth["OPENAI_API_KEY"].as_str(), Some("sk-new"));
+	assert_eq!(auth["OPENAI_API_KEY"].as_str(), Some("sk-old"));
 }
 
 #[test]
@@ -861,6 +858,40 @@ fn api_key_for_openai_login_provider_is_not_config_backed() {
 }
 
 #[test]
+fn remove_provider_rejects_config_toml_provider() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	fs::write(
+		adapter.config_path(),
+		r#"
+model = "openai/gpt-5.4"
+model_provider = "openrouter"
+
+[model_providers.openrouter]
+name = "OpenRouter"
+base_url = "https://openrouter.ai/api/v1"
+"#,
+	)
+	.unwrap();
+
+	let store = store(&temp);
+	let error = adapter.remove_provider(&store, "openrouter").unwrap_err();
+
+	assert!(matches!(
+		error,
+		InferenceProviderError::InvalidAgentProviderConfig { .. }
+	));
+	let content = fs::read_to_string(adapter.config_path()).unwrap();
+	let config = content.parse::<DocumentMut>().unwrap();
+	assert_eq!(config["model_provider"].as_str(), Some("openrouter"));
+	assert!(config
+		.get("model_providers")
+		.and_then(Item::as_table)
+		.and_then(|providers| providers.get("openrouter"))
+		.is_some());
+}
+
+#[test]
 fn remove_provider_clears_default_provider() {
 	let temp = tempfile::tempdir().unwrap();
 	let adapter = adapter(&temp);
@@ -878,6 +909,15 @@ base_url = "https://openrouter.ai/api/v1"
 	.unwrap();
 
 	let store = store(&temp);
+	let inventory = create_inventory_provider(&store);
+	store
+		.upsert_agent_binding(
+			AGENT_ID,
+			"openrouter",
+			&inventory.id,
+			Some("openai/gpt-5.4"),
+		)
+		.unwrap();
 	let removed = adapter.remove_provider(&store, "openrouter").unwrap();
 
 	assert_eq!(removed.id, "openrouter");
@@ -918,6 +958,15 @@ wire_api = "responses"
 	.unwrap();
 
 	let store = store(&temp);
+	let inventory = create_inventory_provider(&store);
+	store
+		.upsert_agent_binding(
+			AGENT_ID,
+			"openrouter",
+			&inventory.id,
+			Some("openai/gpt-5.4"),
+		)
+		.unwrap();
 	adapter.remove_provider(&store, "openrouter").unwrap();
 
 	let content = fs::read_to_string(adapter.config_path()).unwrap();
