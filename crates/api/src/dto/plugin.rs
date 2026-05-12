@@ -299,23 +299,6 @@ pub struct CCPluginCheckUpdateResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct CCPluginReinstallRequest {
-	pub plugin_id: String,
-	#[serde(default = "default_scope")]
-	pub scope: String,
-	#[serde(default)]
-	pub keep_data: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct CCPluginReinstallResponse {
-	pub success: bool,
-	pub message: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export)]
 pub struct CCPluginOpenSkillInEditorRequest {
 	pub plugin_id: String,
 	#[serde(default = "default_scope")]

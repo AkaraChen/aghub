@@ -15,8 +15,6 @@ import type {
 	CCPluginInstallResponse,
 	CCPluginListResponse,
 	CCPluginMarketResponse,
-	CCPluginReinstallRequest,
-	CCPluginReinstallResponse,
 	CCPluginResponse,
 	CCPluginUninstallRequest,
 	CCPluginUninstallResponse,
@@ -523,12 +521,29 @@ export function checkPluginUpdateMutationOptions({
 	});
 }
 
+/**
+ * Reinstall is intentionally not a backend operation. We chain the
+ * existing uninstall + install endpoints client-side so we never grow a
+ * separate state machine that can drift from the official CLI semantics.
+ */
+export interface ReinstallPluginVariables {
+	plugin_id: string;
+	scope: string;
+	/** Preserve persistent data dir between uninstall and install. */
+	keep_data?: boolean;
+}
+
+export interface ReinstallPluginResult {
+	success: boolean;
+	message: string;
+}
+
 interface ReinstallPluginMutationParams {
 	api: ApiClient;
 	queryClient: QueryClient;
 	onSuccess?: (
-		data: CCPluginReinstallResponse,
-		variables: CCPluginReinstallRequest,
+		data: ReinstallPluginResult,
+		variables: ReinstallPluginVariables,
 	) => void | Promise<void>;
 }
 
@@ -538,8 +553,23 @@ export function reinstallPluginMutationOptions({
 	onSuccess,
 }: ReinstallPluginMutationParams) {
 	return mutationOptions({
-		mutationFn: (body: CCPluginReinstallRequest) =>
-			api.plugins.reinstall(body),
+		mutationFn: async (
+			variables: ReinstallPluginVariables,
+		): Promise<ReinstallPluginResult> => {
+			await api.plugins.uninstall({
+				plugin_id: variables.plugin_id,
+				scope: variables.scope,
+				keep_data: variables.keep_data ?? false,
+			});
+			const installed = await api.plugins.install({
+				plugin_id: variables.plugin_id,
+				scope: variables.scope,
+			});
+			return {
+				success: installed.success,
+				message: installed.message,
+			};
+		},
 		onSuccess: async (data, variables) => {
 			await invalidatePluginQueries(queryClient, variables.plugin_id);
 			await onSuccess?.(data, variables);

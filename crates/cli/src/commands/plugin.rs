@@ -47,15 +47,6 @@ pub enum PluginAction {
 		#[arg(long, value_enum, default_value_t = ScopeArg::Global)]
 		scope: ScopeArg,
 	},
-	/// Uninstall and reinstall a plugin (preserves data by default)
-	Reinstall {
-		plugin_id: String,
-		#[arg(long, value_enum, default_value_t = ScopeArg::Global)]
-		scope: ScopeArg,
-		/// Wipe the plugin's persistent data dir between uninstall and install
-		#[arg(long)]
-		purge_data: bool,
-	},
 	/// Enable a plugin
 	Enable { plugin_id: String },
 	/// Disable a plugin
@@ -131,11 +122,6 @@ async fn dispatch(action: PluginAction) -> Result<()> {
 		PluginAction::Update { plugin_id, scope } => {
 			update_plugin(&plugin_id, scope.into()).await
 		}
-		PluginAction::Reinstall {
-			plugin_id,
-			scope,
-			purge_data,
-		} => reinstall_plugin(&plugin_id, scope.into(), purge_data).await,
 		PluginAction::Enable { plugin_id } => enable_plugin(&plugin_id).await,
 		PluginAction::Disable { plugin_id } => disable_plugin(&plugin_id).await,
 		PluginAction::Marketplace { action } => {
@@ -295,22 +281,6 @@ async fn update_plugin(plugin_id: &str, scope: InstallScope) -> Result<()> {
 	let info = installer.update(&id, scope).await?;
 	println!(
 		"Updated {} to {} ({} scope)",
-		plugin_id, info.version, scope
-	);
-	Ok(())
-}
-
-async fn reinstall_plugin(
-	plugin_id: &str,
-	scope: InstallScope,
-	purge_data: bool,
-) -> Result<()> {
-	let id = parse_id(plugin_id)?;
-	let installer = PluginInstaller::new()?;
-	installer.uninstall(&id, scope, !purge_data).await?;
-	let info = installer.install(&id, scope).await?;
-	println!(
-		"Reinstalled {} {} ({} scope)",
 		plugin_id, info.version, scope
 	);
 	Ok(())

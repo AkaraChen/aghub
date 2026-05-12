@@ -28,8 +28,6 @@ export type { CCPluginMarketResponse } from "./CCPluginMarketResponse";
 export type { CCPluginMcpConfigResponse } from "./CCPluginMcpConfigResponse";
 export type { CCPluginMcpServerResponse } from "./CCPluginMcpServerResponse";
 export type { CCPluginOpenSkillInEditorRequest } from "./CCPluginOpenSkillInEditorRequest";
-export type { CCPluginReinstallRequest } from "./CCPluginReinstallRequest";
-export type { CCPluginReinstallResponse } from "./CCPluginReinstallResponse";
 export type { CCPluginResponse } from "./CCPluginResponse";
 export type { CCPluginScopeResponse } from "./CCPluginScopeResponse";
 export type { CCPluginSkillInfo } from "./CCPluginSkillInfo";

@@ -9,8 +9,7 @@ use crate::dto::plugin::{
 	CCPluginInstallRequest, CCPluginInstallResponse, CCPluginListResponse,
 	CCPluginManifestResponse, CCPluginMarketResponse,
 	CCPluginMcpConfigResponse, CCPluginMcpServerResponse,
-	CCPluginOpenSkillInEditorRequest, CCPluginReinstallRequest,
-	CCPluginReinstallResponse, CCPluginResponse, CCPluginScopeResponse,
+	CCPluginOpenSkillInEditorRequest, CCPluginResponse, CCPluginScopeResponse,
 	CCPluginSkillInfo, CCPluginSourceInfoResponse, CCPluginUninstallRequest,
 	CCPluginUninstallResponse, CCPluginUpdateConfigRequest,
 	CCPluginUpdateRequest, CCPluginUpdateResponse,
@@ -325,7 +324,7 @@ pub async fn disable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
 	Ok(Json(build_plugin_response(&plugin, installer.as_ref())))
 }
 
-// ── Install / Uninstall / Update / Reinstall ─────────────────────────────────
+// ── Install / Uninstall / Update ─────────────────────────────────────────────
 
 #[post("/plugins/install", data = "<body>")]
 pub async fn install_plugin(
@@ -427,45 +426,6 @@ pub async fn update_plugin(
 				&e,
 			))
 		}
-	}
-}
-
-#[post("/plugins/reinstall", data = "<body>")]
-pub async fn reinstall_plugin(
-	body: Json<CCPluginReinstallRequest>,
-) -> ApiResult<CCPluginReinstallResponse> {
-	let req = body.into_inner();
-	let scope = parse_install_scope(&req.scope)?;
-	let plugin_id = parse_plugin_id(&req.plugin_id)?;
-	let installer = load_plugin_installer()?;
-
-	installer
-		.uninstall(&plugin_id, scope, req.keep_data)
-		.await
-		.map_err(|e| {
-			plugin_error(
-				Status::BadRequest,
-				"uninstall",
-				&req.plugin_id,
-				"PLUGIN_UNINSTALL_FAILED",
-				&e,
-			)
-		})?;
-	match installer.install(&plugin_id, scope).await {
-		Ok(info) => Ok(Json(CCPluginReinstallResponse {
-			success: true,
-			message: format!(
-				"Plugin '{}' reinstalled successfully (version: {})",
-				req.plugin_id, info.version
-			),
-		})),
-		Err(e) => Err(plugin_error(
-			Status::BadRequest,
-			"reinstall",
-			&req.plugin_id,
-			"PLUGIN_REINSTALL_FAILED",
-			&e,
-		)),
 	}
 }
 

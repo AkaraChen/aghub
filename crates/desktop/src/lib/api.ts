@@ -47,8 +47,6 @@ import type {
 	CCPluginResponse,
 	ProjectSkillLockResponse,
 	ReconcileRequest,
-	CCPluginReinstallRequest,
-	CCPluginReinstallResponse,
 	SkillResponse,
 	SkillTreeNodeResponse,
 	SubAgentResponse,
@@ -799,13 +797,6 @@ export function createApi(baseUrl: string) {
 				return client
 					.post("plugins/open-skill-in-editor", { json: body })
 					.then(() => undefined);
-			},
-			reinstall(
-				body: CCPluginReinstallRequest,
-			): Promise<CCPluginReinstallResponse> {
-				return client
-					.post("plugins/reinstall", { json: body, timeout: 180000 })
-					.json();
 			},
 			getConfig(pluginId: string): Promise<CCPluginConfigResponse> {
 				return client

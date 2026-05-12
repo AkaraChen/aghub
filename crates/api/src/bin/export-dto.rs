@@ -43,9 +43,8 @@ use aghub_api::dto::{
 		CCPluginInstallResponse, CCPluginListResponse,
 		CCPluginManifestResponse, CCPluginMarketResponse,
 		CCPluginMcpConfigResponse, CCPluginMcpServerResponse,
-		CCPluginOpenSkillInEditorRequest, CCPluginReinstallRequest,
-		CCPluginReinstallResponse, CCPluginResponse, CCPluginScopeResponse,
-		CCPluginSkillInfo, CCPluginSourceInfoResponse,
+		CCPluginOpenSkillInEditorRequest, CCPluginResponse,
+		CCPluginScopeResponse, CCPluginSkillInfo, CCPluginSourceInfoResponse,
 		CCPluginUninstallRequest, CCPluginUninstallResponse,
 		CCPluginUpdateConfigRequest, CCPluginUpdateRequest,
 		CCPluginUpdateResponse,
@@ -234,8 +233,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<CCPluginUpdateResponse>(&cfg)?;
 	export_type::<CCPluginCheckUpdateRequest>(&cfg)?;
 	export_type::<CCPluginCheckUpdateResponse>(&cfg)?;
-	export_type::<CCPluginReinstallRequest>(&cfg)?;
-	export_type::<CCPluginReinstallResponse>(&cfg)?;
 	export_type::<CCPluginOpenSkillInEditorRequest>(&cfg)?;
 	export_type::<CCPluginConfigResponse>(&cfg)?;
 	export_type::<CCPluginUpdateConfigRequest>(&cfg)?;
