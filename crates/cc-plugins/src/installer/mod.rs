@@ -3,18 +3,14 @@ mod lifecycle;
 mod marketplace;
 mod marketplace_ops;
 pub mod registry;
-mod source;
 
 use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::RwLock;
 
-use self::git::build_http_client;
-
 pub struct PluginInstaller {
 	marketplace_root: PathBuf,
-	client: reqwest::Client,
 	marketplace_urls: RwLock<HashMap<String, HashMap<String, String>>>,
 }
 
@@ -24,28 +20,17 @@ impl PluginInstaller {
 		let marketplace_root =
 			home.join(".claude/plugins/marketplaces/claude-plugins-official");
 
-		let client = Self::build_client()?;
-
 		Ok(Self {
 			marketplace_root,
-			client,
 			marketplace_urls: RwLock::new(HashMap::new()),
 		})
 	}
 
 	pub fn with_roots(marketplace_root: PathBuf) -> Result<Self> {
-		let client = Self::build_client()?;
-
 		Ok(Self {
 			marketplace_root,
-			client,
 			marketplace_urls: RwLock::new(HashMap::new()),
 		})
-	}
-
-	fn build_client() -> Result<reqwest::Client> {
-		build_http_client(60)
-			.context("Failed to create plugin installer HTTP client")
 	}
 }
 

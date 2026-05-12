@@ -1,6 +1,4 @@
-use super::marketplace::is_marketplace_source;
-use super::registry::{GitHubRegistry, PluginRegistryKind};
-use super::source::{classify_registry_source, RegistrySource};
+use super::marketplace::{is_marketplace_source, MarketplaceRegistry};
 use super::PluginInstaller;
 use crate::claude::settings::InstallScope;
 use crate::claude::types::InstalledPluginInfo;
@@ -114,61 +112,37 @@ impl PluginInstaller {
 		current_ver: &str,
 		current_commit: Option<&str>,
 	) -> Result<Option<(String, Option<String>)>> {
-		let registry = self.get_registry(&id.source)?;
-		let latest = registry.get_latest_version(&id.name).await?;
+		let Some(registry) = self.marketplace_registry_for(&id.source)? else {
+			return Ok(None);
+		};
+		let Some((latest_ver, latest_sha)) =
+			registry.get_latest_version(&id.name).await?
+		else {
+			return Ok(None);
+		};
 
-		if let Some((latest_ver, latest_sha)) = latest {
-			let needs_update = if is_semantic_version(current_ver)
-				&& is_semantic_version(&latest_ver)
-			{
-				compare_versions(&latest_ver, current_ver) > 0
-			} else {
-				match latest_sha.as_deref() {
-					Some(new) => Some(new) != current_commit,
-					None => latest_ver != *current_ver,
-				}
-			};
-
-			if needs_update {
-				return Ok(Some((latest_ver, latest_sha)));
+		let needs_update = if is_semantic_version(current_ver)
+			&& is_semantic_version(&latest_ver)
+		{
+			compare_versions(&latest_ver, current_ver) > 0
+		} else {
+			match latest_sha.as_deref() {
+				Some(new) => Some(new) != current_commit,
+				None => latest_ver != *current_ver,
 			}
-		}
+		};
 
-		Ok(None)
+		Ok(needs_update.then_some((latest_ver, latest_sha)))
 	}
 
-	fn get_registry(&self, source: &str) -> Result<PluginRegistryKind> {
-		match source {
-			source if is_marketplace_source(&self.marketplace_root, source) => {
-				Ok(PluginRegistryKind::Marketplace(
-					self.marketplace_registry(source)?,
-				))
-			}
-			_ => match classify_registry_source(source) {
-				RegistrySource::OfficialRegistry => {
-					Ok(PluginRegistryKind::Marketplace(
-						self.marketplace_registry("claude-plugins-official")?,
-					))
-				}
-				RegistrySource::GitHub { owner, repo } => {
-					Ok(PluginRegistryKind::GitHub(GitHubRegistry::new(
-						self.client.clone(),
-						&owner,
-						&repo,
-						None,
-					)?))
-				}
-				RegistrySource::Local { path } => {
-					Ok(PluginRegistryKind::Local(
-						super::registry::LocalRegistry::new(path),
-					))
-				}
-				RegistrySource::UnsupportedRemote { url } => anyhow::bail!(
-					"Unsupported third-party plugin source '{}'. Only GitHub repositories are currently supported",
-					url
-				),
-			},
+	fn marketplace_registry_for(
+		&self,
+		source: &str,
+	) -> Result<Option<MarketplaceRegistry>> {
+		if !is_marketplace_source(&self.marketplace_root, source) {
+			return Ok(None);
 		}
+		self.marketplace_registry(source).map(Some)
 	}
 }
 
