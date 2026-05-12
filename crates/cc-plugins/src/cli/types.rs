@@ -43,6 +43,7 @@ pub struct CliAvailablePlugin {
 	pub description: String,
 	pub marketplace_name: String,
 	pub source: CliPluginSource,
+	#[serde(default)]
 	pub install_count: u64,
 }
 
