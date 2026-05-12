@@ -3,6 +3,7 @@
 //! Provides support for managing Claude Code Plugin System (v2)
 
 pub mod claude;
+pub mod cli;
 pub mod discovery;
 pub mod installer;
 
