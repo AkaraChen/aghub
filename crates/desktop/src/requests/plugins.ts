@@ -560,6 +560,7 @@ export function reinstallPluginMutationOptions({
 				plugin_id: variables.plugin_id,
 				scope: variables.scope,
 				keep_data: variables.keep_data ?? false,
+				prune: false,
 			});
 			const installed = await api.plugins.install({
 				plugin_id: variables.plugin_id,
@@ -632,6 +633,7 @@ export function bulkUninstallPluginsMutationOptions({
 						plugin_id: plugin.id,
 						scope,
 						keep_data: false,
+						prune: false,
 					}),
 				})),
 			);

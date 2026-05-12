@@ -12,12 +12,15 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
-/// Plugin installation scope
+/// Plugin installation scope. Mirrors the four `--scope` values the
+/// official `claude` CLI accepts. `Global` is the aghub-side name for
+/// what the CLI calls `user`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InstallScope {
 	Global,
 	Project,
 	Local,
+	Managed,
 }
 
 impl fmt::Display for InstallScope {
@@ -26,6 +29,7 @@ impl fmt::Display for InstallScope {
 			InstallScope::Global => write!(f, "global"),
 			InstallScope::Project => write!(f, "project"),
 			InstallScope::Local => write!(f, "local"),
+			InstallScope::Managed => write!(f, "managed"),
 		}
 	}
 }
@@ -36,6 +40,7 @@ impl From<&str> for InstallScope {
 			"global" | "user" => InstallScope::Global,
 			"project" => InstallScope::Project,
 			"local" => InstallScope::Local,
+			"managed" => InstallScope::Managed,
 			other => {
 				log::warn!(
 					"Unknown install scope '{other}', defaulting to global"

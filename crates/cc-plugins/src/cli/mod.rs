@@ -22,6 +22,7 @@ pub(crate) fn cli_scope(scope: InstallScope) -> &'static str {
 		InstallScope::Global => "user",
 		InstallScope::Project => "project",
 		InstallScope::Local => "local",
+		InstallScope::Managed => "managed",
 	}
 }
 
@@ -73,6 +74,7 @@ impl ClaudeCli {
 		id: &PluginId,
 		scope: InstallScope,
 		keep_data: bool,
+		prune: bool,
 	) -> Result<()> {
 		let id_str = id.to_string();
 		let scope_str = cli_scope(scope);
@@ -81,6 +83,9 @@ impl ClaudeCli {
 			vec!["plugin", "uninstall", &id_str, "--scope", scope_str, "-y"];
 		if keep_data {
 			args.push("--keep-data");
+		}
+		if prune {
+			args.push("--prune");
 		}
 		self.spawn(&args).await?;
 		Ok(())
@@ -175,13 +180,14 @@ impl ClaudeCli {
 	}
 
 	/// Accepts `owner/repo`, git URLs, local paths, or `marketplace.json` URLs.
-	/// The CLI's success line is human-only (`✔ Successfully added marketplace:
-	/// <name>`) and prone to glyph/localization drift, so we instead diff the
-	/// marketplace list before and after the add to identify the new entry.
+	/// `sparse` lets monorepo marketplaces opt into git sparse-checkout. The
+	/// CLI's success line is human-only and prone to glyph/localization drift,
+	/// so we identify the newly-added entry by diffing the marketplace list.
 	pub async fn marketplace_add(
 		&self,
 		source: &str,
 		scope: InstallScope,
+		sparse: &[String],
 	) -> Result<CliMarketplace> {
 		let before: std::collections::HashSet<String> = self
 			.marketplace_list()
@@ -189,15 +195,16 @@ impl ClaudeCli {
 			.map(|entries| entries.into_iter().map(|e| e.name).collect())
 			.unwrap_or_default();
 
-		self.spawn(&[
-			"plugin",
-			"marketplace",
-			"add",
-			source,
-			"--scope",
-			cli_scope(scope),
-		])
-		.await?;
+		let scope_str = cli_scope(scope);
+		let mut args: Vec<&str> =
+			vec!["plugin", "marketplace", "add", source, "--scope", scope_str];
+		if !sparse.is_empty() {
+			args.push("--sparse");
+			for path in sparse {
+				args.push(path.as_str());
+			}
+		}
+		self.spawn(&args).await?;
 
 		let after = self.marketplace_list().await?;
 		after

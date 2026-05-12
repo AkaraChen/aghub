@@ -102,7 +102,11 @@ export function MarketplacesPanel({
 		if (!trimmed) {
 			return;
 		}
-		addMutation.mutate({ source: trimmed, scope: installScope });
+		addMutation.mutate({
+			source: trimmed,
+			scope: installScope,
+			sparse: [],
+		});
 	};
 
 	const marketplaces = data?.marketplaces ?? [];

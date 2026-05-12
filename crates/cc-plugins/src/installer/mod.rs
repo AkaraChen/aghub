@@ -90,7 +90,7 @@ mod tests {
 			assert!(installer.is_installed(&plugin_id, InstallScope::Global).await);
 
 			installer
-				.uninstall(&plugin_id, InstallScope::Global, true)
+				.uninstall(&plugin_id, InstallScope::Global, true, false)
 				.await
 				.expect("uninstall local plugin but keep data");
 
@@ -109,7 +109,7 @@ mod tests {
 			assert!(installer.is_installed(&plugin_id, InstallScope::Global).await);
 
 			installer
-				.uninstall(&plugin_id, InstallScope::Global, false)
+				.uninstall(&plugin_id, InstallScope::Global, false, false)
 				.await
 				.expect("uninstall local plugin and remove data");
 

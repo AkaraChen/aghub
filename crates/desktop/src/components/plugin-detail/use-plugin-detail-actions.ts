@@ -177,6 +177,7 @@ export function usePluginDetailActions({
 			uninstallMutation.mutate({
 				...pluginScopeRequest,
 				keep_data: false,
+				prune: false,
 			});
 		},
 		handleOpenUrl: (url: string | undefined) => {

@@ -91,9 +91,10 @@ impl PluginInstaller {
 		id: &PluginId,
 		scope: InstallScope,
 		keep_data: bool,
+		prune: bool,
 	) -> Result<()> {
 		let cli = ClaudeCli::new()?;
-		cli.plugin_uninstall(id, scope, keep_data).await
+		cli.plugin_uninstall(id, scope, keep_data, prune).await
 	}
 
 	pub async fn update(

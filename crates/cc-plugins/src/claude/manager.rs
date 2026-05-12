@@ -46,21 +46,36 @@ impl ClaudePluginManager {
 			.unwrap_or(false)
 	}
 
-	pub async fn enable(&mut self, id: &PluginId) -> Result<()> {
+	pub async fn enable(
+		&mut self,
+		id: &PluginId,
+		scope: Option<settings::InstallScope>,
+	) -> Result<()> {
 		let cli = ClaudeCli::new()?;
-		cli.plugin_enable(id, None).await?;
-		if let Some(plugin) = self.installed.iter_mut().find(|p| p.id == *id) {
-			plugin.enabled = true;
-		}
-		Ok(())
+		cli.plugin_enable(id, scope).await?;
+		self.refresh_after_toggle().await
 	}
 
-	pub async fn disable(&mut self, id: &PluginId) -> Result<()> {
+	pub async fn disable(
+		&mut self,
+		id: &PluginId,
+		scope: Option<settings::InstallScope>,
+	) -> Result<()> {
 		let cli = ClaudeCli::new()?;
-		cli.plugin_disable(id, None).await?;
-		if let Some(plugin) = self.installed.iter_mut().find(|p| p.id == *id) {
-			plugin.enabled = false;
-		}
+		cli.plugin_disable(id, scope).await?;
+		self.refresh_after_toggle().await
+	}
+
+	/// Reload settings + plugin list after a state mutation. This is the
+	/// only correct way to refresh enabled flags because the CLI's enable
+	/// state lives in settings.json, not the install manifest.
+	async fn refresh_after_toggle(&mut self) -> Result<()> {
+		let settings_path = dirs::home_dir()
+			.context("Cannot find home directory")?
+			.join(".claude/settings.json");
+		self.settings =
+			settings::ClaudeSettings::load_from_path(&settings_path)?;
+		self.installed = load_via_cli(&self.settings).await?;
 		Ok(())
 	}
 
@@ -162,6 +177,7 @@ fn build_plugin_info(
 fn cli_scope_to_aghub(cli_scope: &str) -> String {
 	match cli_scope {
 		"user" => "global".to_string(),
+		// project, local, managed map through as-is
 		other => other.to_string(),
 	}
 }

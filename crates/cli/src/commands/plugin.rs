@@ -40,17 +40,28 @@ pub enum PluginAction {
 		/// Preserve the plugin's persistent data directory
 		#[arg(long)]
 		keep_data: bool,
+		/// Also remove auto-installed dependencies that are no longer needed
+		#[arg(long)]
+		prune: bool,
 	},
-	/// Update a plugin to its latest version
+	/// Update a plugin to its latest version (restart required to apply)
 	Update {
 		plugin_id: String,
 		#[arg(long, value_enum, default_value_t = ScopeArg::Global)]
 		scope: ScopeArg,
 	},
-	/// Enable a plugin
-	Enable { plugin_id: String },
-	/// Disable a plugin
-	Disable { plugin_id: String },
+	/// Enable a plugin (optionally in a specific scope)
+	Enable {
+		plugin_id: String,
+		#[arg(long, value_enum)]
+		scope: Option<ScopeArg>,
+	},
+	/// Disable a plugin (optionally in a specific scope)
+	Disable {
+		plugin_id: String,
+		#[arg(long, value_enum)]
+		scope: Option<ScopeArg>,
+	},
 	/// Manage plugin marketplaces
 	Marketplace {
 		#[command(subcommand)]
@@ -70,6 +81,10 @@ pub enum MarketplaceAction {
 		source: String,
 		#[arg(long, value_enum, default_value_t = ScopeArg::Global)]
 		scope: ScopeArg,
+		/// Limit checkout to specific directories via git sparse-checkout
+		/// (for monorepos). Example: --sparse .claude-plugin plugins
+		#[arg(long, value_name = "PATHS", num_args = 1..)]
+		sparse: Vec<String>,
 	},
 	/// Remove a marketplace by name
 	Remove { name: String },
@@ -82,6 +97,7 @@ pub enum ScopeArg {
 	Global,
 	Project,
 	Local,
+	Managed,
 }
 
 impl From<ScopeArg> for InstallScope {
@@ -90,6 +106,7 @@ impl From<ScopeArg> for InstallScope {
 			ScopeArg::Global => InstallScope::Global,
 			ScopeArg::Project => InstallScope::Project,
 			ScopeArg::Local => InstallScope::Local,
+			ScopeArg::Managed => InstallScope::Managed,
 		}
 	}
 }
@@ -118,12 +135,17 @@ async fn dispatch(action: PluginAction) -> Result<()> {
 			plugin_id,
 			scope,
 			keep_data,
-		} => uninstall_plugin(&plugin_id, scope.into(), keep_data).await,
+			prune,
+		} => uninstall_plugin(&plugin_id, scope.into(), keep_data, prune).await,
 		PluginAction::Update { plugin_id, scope } => {
 			update_plugin(&plugin_id, scope.into()).await
 		}
-		PluginAction::Enable { plugin_id } => enable_plugin(&plugin_id).await,
-		PluginAction::Disable { plugin_id } => disable_plugin(&plugin_id).await,
+		PluginAction::Enable { plugin_id, scope } => {
+			enable_plugin(&plugin_id, scope.map(Into::into)).await
+		}
+		PluginAction::Disable { plugin_id, scope } => {
+			disable_plugin(&plugin_id, scope.map(Into::into)).await
+		}
 		PluginAction::Marketplace { action } => {
 			marketplace_dispatch(action).await
 		}
@@ -133,9 +155,11 @@ async fn dispatch(action: PluginAction) -> Result<()> {
 async fn marketplace_dispatch(action: MarketplaceAction) -> Result<()> {
 	match action {
 		MarketplaceAction::List { json } => list_marketplaces(json).await,
-		MarketplaceAction::Add { source, scope } => {
-			add_marketplace(&source, scope.into()).await
-		}
+		MarketplaceAction::Add {
+			source,
+			scope,
+			sparse,
+		} => add_marketplace(&source, scope.into(), &sparse).await,
 		MarketplaceAction::Remove { name } => remove_marketplace(&name).await,
 		MarketplaceAction::Update { name } => {
 			update_marketplaces(name.as_deref()).await
@@ -260,18 +284,18 @@ async fn uninstall_plugin(
 	plugin_id: &str,
 	scope: InstallScope,
 	keep_data: bool,
+	prune: bool,
 ) -> Result<()> {
 	let id = parse_id(plugin_id)?;
-	let installer = PluginInstaller::new()?;
-	installer.uninstall(&id, scope, keep_data).await?;
-	if keep_data {
-		println!(
-			"Uninstalled {} ({} scope), data preserved",
-			plugin_id, scope
-		);
-	} else {
-		println!("Uninstalled {} ({} scope)", plugin_id, scope);
-	}
+	let cli = ClaudeCli::new()?;
+	cli.plugin_uninstall(&id, scope, keep_data, prune).await?;
+	let parts = match (keep_data, prune) {
+		(true, true) => ", data preserved, pruned dependencies",
+		(true, false) => ", data preserved",
+		(false, true) => ", pruned dependencies",
+		(false, false) => "",
+	};
+	println!("Uninstalled {} ({} scope){}", plugin_id, scope, parts);
 	Ok(())
 }
 
@@ -280,24 +304,30 @@ async fn update_plugin(plugin_id: &str, scope: InstallScope) -> Result<()> {
 	let installer = PluginInstaller::new()?;
 	let info = installer.update(&id, scope).await?;
 	println!(
-		"Updated {} to {} ({} scope)",
+		"Updated {} to {} ({} scope) — restart Claude Code to apply",
 		plugin_id, info.version, scope
 	);
 	Ok(())
 }
 
-async fn enable_plugin(plugin_id: &str) -> Result<()> {
+async fn enable_plugin(
+	plugin_id: &str,
+	scope: Option<InstallScope>,
+) -> Result<()> {
 	let id = parse_id(plugin_id)?;
 	let mut manager = manager().await?;
-	manager.enable(&id).await?;
+	manager.enable(&id, scope).await?;
 	println!("Enabled {}", plugin_id);
 	Ok(())
 }
 
-async fn disable_plugin(plugin_id: &str) -> Result<()> {
+async fn disable_plugin(
+	plugin_id: &str,
+	scope: Option<InstallScope>,
+) -> Result<()> {
 	let id = parse_id(plugin_id)?;
 	let mut manager = manager().await?;
-	manager.disable(&id).await?;
+	manager.disable(&id, scope).await?;
 	println!("Disabled {}", plugin_id);
 	Ok(())
 }
@@ -340,9 +370,13 @@ async fn list_marketplaces(json: bool) -> Result<()> {
 	Ok(())
 }
 
-async fn add_marketplace(source: &str, scope: InstallScope) -> Result<()> {
+async fn add_marketplace(
+	source: &str,
+	scope: InstallScope,
+	sparse: &[String],
+) -> Result<()> {
 	let cli = ClaudeCli::new()?;
-	let entry = cli.marketplace_add(source, scope).await?;
+	let entry = cli.marketplace_add(source, scope, sparse).await?;
 	println!(
 		"Added marketplace {} ({})",
 		entry.name,

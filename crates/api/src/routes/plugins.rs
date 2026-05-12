@@ -46,11 +46,11 @@ fn parse_plugin_id(plugin_id: &str) -> Result<PluginId, ApiError> {
 
 fn parse_install_scope(scope: &str) -> Result<InstallScope, ApiError> {
 	match scope {
-		"global" | "user" | "project" | "local" => {
+		"global" | "user" | "project" | "local" | "managed" => {
 			Ok(InstallScope::from(scope))
 		}
 		_ => Err(ApiError::bad_request(format!(
-			"Invalid scope '{scope}'. Use 'global', 'project', or 'local'"
+			"Invalid scope '{scope}'. Use 'global', 'project', 'local', or 'managed'"
 		))),
 	}
 }
@@ -288,12 +288,16 @@ pub async fn list_plugins() -> ApiResult<CCPluginListResponse> {
 	Ok(Json(CCPluginListResponse { plugins }))
 }
 
-#[post("/plugins/enable?<plugin_id>")]
-pub async fn enable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
+#[post("/plugins/enable?<plugin_id>&<scope>")]
+pub async fn enable_plugin(
+	plugin_id: &str,
+	scope: Option<&str>,
+) -> ApiResult<CCPluginResponse> {
 	let id = parse_plugin_id(plugin_id)?;
+	let scope = scope.map(parse_install_scope).transpose()?;
 	let mut manager = load_plugin_manager().await?;
 	let installer = try_load_plugin_installer();
-	manager.enable(&id).await.map_err(|e| {
+	manager.enable(&id, scope).await.map_err(|e| {
 		plugin_error(
 			Status::InternalServerError,
 			"enable",
@@ -306,12 +310,16 @@ pub async fn enable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
 	Ok(Json(build_plugin_response(&plugin, installer.as_ref())))
 }
 
-#[post("/plugins/disable?<plugin_id>")]
-pub async fn disable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
+#[post("/plugins/disable?<plugin_id>&<scope>")]
+pub async fn disable_plugin(
+	plugin_id: &str,
+	scope: Option<&str>,
+) -> ApiResult<CCPluginResponse> {
 	let id = parse_plugin_id(plugin_id)?;
+	let scope = scope.map(parse_install_scope).transpose()?;
 	let mut manager = load_plugin_manager().await?;
 	let installer = try_load_plugin_installer();
-	manager.disable(&id).await.map_err(|e| {
+	manager.disable(&id, scope).await.map_err(|e| {
 		plugin_error(
 			Status::InternalServerError,
 			"disable",
@@ -374,7 +382,7 @@ pub async fn uninstall_plugin(
 	let installer = load_plugin_installer()?;
 
 	installer
-		.uninstall(&plugin_id, scope, req.keep_data)
+		.uninstall(&plugin_id, scope, req.keep_data, req.prune)
 		.await
 		.map_err(|e| {
 			plugin_error(
@@ -885,14 +893,17 @@ pub async fn add_marketplace(
 	let req = body.into_inner();
 	let scope = parse_install_scope(&req.scope)?;
 	let cli = load_claude_cli()?;
-	let entry = cli.marketplace_add(&req.source, scope).await.map_err(|e| {
-		error!("Failed to add marketplace {}: {e}", req.source);
-		ApiError::new(
-			Status::BadRequest,
-			format!("Failed to add marketplace '{}'", req.source),
-			"PLUGIN_MARKETPLACE_ADD_FAILED",
-		)
-	})?;
+	let entry = cli
+		.marketplace_add(&req.source, scope, &req.sparse)
+		.await
+		.map_err(|e| {
+			error!("Failed to add marketplace {}: {e}", req.source);
+			ApiError::new(
+				Status::BadRequest,
+				format!("Failed to add marketplace '{}'", req.source),
+				"PLUGIN_MARKETPLACE_ADD_FAILED",
+			)
+		})?;
 	let entry = marketplace_entry_to_dto(entry);
 	Ok(Json(CCMarketplaceMutationResponse {
 		success: true,

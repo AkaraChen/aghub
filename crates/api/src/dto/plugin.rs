@@ -250,6 +250,9 @@ pub struct CCPluginUninstallRequest {
 	pub scope: String,
 	#[serde(default)]
 	pub keep_data: bool,
+	/// Also remove auto-installed dependencies that are no longer needed.
+	#[serde(default)]
+	pub prune: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -362,6 +365,9 @@ pub struct CCMarketplaceAddRequest {
 	pub source: String,
 	#[serde(default = "default_scope")]
 	pub scope: String,
+	/// Optional git sparse-checkout paths (for monorepo marketplaces).
+	#[serde(default)]
+	pub sparse: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
