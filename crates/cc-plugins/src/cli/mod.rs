@@ -174,40 +174,38 @@ impl ClaudeCli {
 		)
 	}
 
-	/// The CLI accepts `owner/repo`, git URLs, local paths, or `marketplace.json`
-	/// URLs. The real marketplace name is read from the resolved
-	/// `.claude-plugin/marketplace.json`, so we parse it from stdout and then
-	/// look up the full entry via `marketplace_list`.
+	/// Accepts `owner/repo`, git URLs, local paths, or `marketplace.json` URLs.
+	/// The CLI's success line is human-only (`✔ Successfully added marketplace:
+	/// <name>`) and prone to glyph/localization drift, so we instead diff the
+	/// marketplace list before and after the add to identify the new entry.
 	pub async fn marketplace_add(
 		&self,
 		source: &str,
 		scope: InstallScope,
 	) -> Result<CliMarketplace> {
-		let output = self
-			.spawn(&[
-				"plugin",
-				"marketplace",
-				"add",
-				source,
-				"--scope",
-				cli_scope(scope),
-			])
-			.await?;
-		let stdout = String::from_utf8_lossy(&output.stdout);
-		let name =
-			parse_added_marketplace_name(&stdout).with_context(|| {
-				format!(
-					"could not extract marketplace name from CLI output: {}",
-					stdout.trim()
-				)
-			})?;
-		let entries = self.marketplace_list().await?;
-		entries
+		let before: std::collections::HashSet<String> = self
+			.marketplace_list()
+			.await
+			.map(|entries| entries.into_iter().map(|e| e.name).collect())
+			.unwrap_or_default();
+
+		self.spawn(&[
+			"plugin",
+			"marketplace",
+			"add",
+			source,
+			"--scope",
+			cli_scope(scope),
+		])
+		.await?;
+
+		let after = self.marketplace_list().await?;
+		after
 			.into_iter()
-			.find(|entry| entry.name == name)
+			.find(|entry| !before.contains(&entry.name))
 			.ok_or_else(|| {
 				anyhow::anyhow!(
-					"marketplace {name} was added but is missing from `marketplace list`"
+					"`claude plugin marketplace add {source}` finished but the marketplace list shows no new entry"
 				)
 			})
 	}
@@ -261,22 +259,6 @@ fn parse_cli_error(stderr: &str) -> Option<String> {
 		.filter(|message| !message.is_empty())
 }
 
-/// Pull the marketplace name out of the CLI's `marketplace add` stdout.
-///
-/// The success line looks like `✔ Successfully added marketplace: <NAME>` and
-/// may include trailing context such as `(declared in user settings)`.
-fn parse_added_marketplace_name(stdout: &str) -> Option<String> {
-	stdout
-		.lines()
-		.find_map(|line| line.split_once("added marketplace:"))
-		.map(|(_, rest)| rest.trim())
-		.map(|rest| match rest.split_once(" (") {
-			Some((name, _)) => name.trim().to_string(),
-			None => rest.to_string(),
-		})
-		.filter(|name| !name.is_empty())
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -301,29 +283,6 @@ mod tests {
 	#[test]
 	fn parse_cli_error_returns_none_for_glyph_without_message() {
 		assert!(parse_cli_error("✘   ").is_none());
-	}
-
-	#[test]
-	fn parse_added_marketplace_name_strips_trailing_clause() {
-		let stdout = "Adding marketplace…\n✔ Successfully added marketplace: claude-code-plugins (declared in user settings)\n";
-		assert_eq!(
-			parse_added_marketplace_name(stdout).as_deref(),
-			Some("claude-code-plugins")
-		);
-	}
-
-	#[test]
-	fn parse_added_marketplace_name_handles_no_trailing_clause() {
-		let stdout = "✔ Successfully added marketplace: my-mp\n";
-		assert_eq!(
-			parse_added_marketplace_name(stdout).as_deref(),
-			Some("my-mp")
-		);
-	}
-
-	#[test]
-	fn parse_added_marketplace_name_returns_none_when_missing() {
-		assert!(parse_added_marketplace_name("nothing here").is_none());
 	}
 
 	#[test]

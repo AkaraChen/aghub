@@ -72,11 +72,17 @@ impl PluginInstaller {
 		url
 	}
 
-	pub fn can_reinstall(&self, _id: &PluginId) -> bool {
-		true
+	pub fn can_reinstall(&self, id: &PluginId) -> bool {
+		// Reinstall is uninstall+install. Both delegate to the CLI which only
+		// knows how to install via a marketplace, so non-marketplace plugins
+		// can't be reinstalled either.
+		is_marketplace_source(&self.marketplace_root, &id.source)
 	}
 
-	pub fn can_check_updates(&self, _id: &PluginId) -> bool {
-		true
+	pub fn can_check_updates(&self, id: &PluginId) -> bool {
+		// check_update_against only consults marketplace catalogs; anything
+		// else returns Ok(None) and would mislead the UI into showing an
+		// "update available" affordance that never resolves.
+		is_marketplace_source(&self.marketplace_root, &id.source)
 	}
 }
