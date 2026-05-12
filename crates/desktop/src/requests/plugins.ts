@@ -4,6 +4,9 @@ import {
 	queryOptions,
 } from "@tanstack/react-query";
 import type {
+	CCMarketplaceAddRequest,
+	CCMarketplaceListResponse,
+	CCMarketplaceMutationResponse,
 	CCPluginCheckUpdateRequest,
 	CCPluginCheckUpdateResponse,
 	CCPluginConfigResponse,
@@ -185,6 +188,126 @@ export function updateMarketplaceMutationOptions({
 			});
 			await onSuccess?.(data);
 		},
+	});
+}
+
+interface MarketplaceListQueryParams {
+	api: ApiClient;
+	enabled?: boolean;
+	staleTime?: number;
+}
+
+export function marketplaceListQueryOptions({
+	api,
+	enabled = true,
+	staleTime = 30_000,
+}: MarketplaceListQueryParams) {
+	return queryOptions({
+		queryKey: queryKeys.plugins.marketplaces(),
+		queryFn: () => api.plugins.listMarketplaces(),
+		enabled,
+		staleTime,
+	});
+}
+
+async function invalidateMarketplaceQueries(queryClient: QueryClient) {
+	await queryClient.invalidateQueries({
+		queryKey: queryKeys.plugins.marketplaces(),
+	});
+	await queryClient.invalidateQueries({
+		queryKey: queryKeys.plugins.market(),
+	});
+}
+
+interface AddMarketplaceMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (
+		data: CCMarketplaceMutationResponse,
+		variables: CCMarketplaceAddRequest,
+	) => void | Promise<void>;
+}
+
+export function addMarketplaceMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: AddMarketplaceMutationParams) {
+	return mutationOptions({
+		mutationFn: (body: CCMarketplaceAddRequest) =>
+			api.plugins.addMarketplace(body),
+		onSuccess: async (data, variables) => {
+			await invalidateMarketplaceQueries(queryClient);
+			await onSuccess?.(data, variables);
+		},
+	});
+}
+
+interface RemoveMarketplaceMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (
+		data: CCMarketplaceMutationResponse,
+		name: string,
+	) => void | Promise<void>;
+}
+
+export function removeMarketplaceMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: RemoveMarketplaceMutationParams) {
+	return mutationOptions({
+		mutationFn: (name: string) => api.plugins.removeMarketplace(name),
+		onSuccess: async (data, name) => {
+			await invalidateMarketplaceQueries(queryClient);
+			await invalidatePluginQueries(queryClient);
+			await onSuccess?.(data, name);
+		},
+	});
+}
+
+interface UpdateMarketplaceOneMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (
+		data: CCMarketplaceMutationResponse,
+		name: string,
+	) => void | Promise<void>;
+}
+
+export function updateMarketplaceOneMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: UpdateMarketplaceOneMutationParams) {
+	return mutationOptions({
+		mutationFn: (name: string) => api.plugins.updateMarketplaceOne(name),
+		onSuccess: async (data, name) => {
+			await invalidateMarketplaceQueries(queryClient);
+			await onSuccess?.(data, name);
+		},
+	});
+}
+
+export type { CCMarketplaceListResponse };
+
+interface CliStatusQueryParams {
+	api: ApiClient;
+	enabled?: boolean;
+	staleTime?: number;
+}
+
+export function cliStatusQueryOptions({
+	api,
+	enabled = true,
+	staleTime = 60_000,
+}: CliStatusQueryParams) {
+	return queryOptions({
+		queryKey: queryKeys.plugins.cliStatus(),
+		queryFn: () => api.plugins.getCliStatus(),
+		enabled,
+		staleTime,
 	});
 }
 

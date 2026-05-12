@@ -3,8 +3,12 @@ import type {
 	AgentAvailabilityDto,
 	AgentInfo,
 	AgentProviderResponse,
+	CCMarketplaceAddRequest,
+	CCMarketplaceListResponse,
+	CCMarketplaceMutationResponse,
 	CCPluginCheckUpdateRequest,
 	CCPluginCheckUpdateResponse,
+	CCPluginCliStatusResponse,
 	ClaudeProviderStateResponse,
 	CodeEditorType,
 	CodexProviderStateResponse,
@@ -834,6 +838,39 @@ export function createApi(baseUrl: string) {
 						timeout: 300000,
 					})
 					.json();
+			},
+			listMarketplaces(): Promise<CCMarketplaceListResponse> {
+				return client.get("plugins/marketplaces").json();
+			},
+			addMarketplace(
+				body: CCMarketplaceAddRequest,
+			): Promise<CCMarketplaceMutationResponse> {
+				return client
+					.post("plugins/marketplaces", {
+						json: body,
+						timeout: 300000,
+					})
+					.json();
+			},
+			removeMarketplace(
+				name: string,
+			): Promise<CCMarketplaceMutationResponse> {
+				return client
+					.delete(`plugins/marketplaces/${encodeURIComponent(name)}`)
+					.json();
+			},
+			updateMarketplaceOne(
+				name: string,
+			): Promise<CCMarketplaceMutationResponse> {
+				return client
+					.post(
+						`plugins/marketplaces/${encodeURIComponent(name)}/update`,
+						{ timeout: 300000 },
+					)
+					.json();
+			},
+			getCliStatus(): Promise<CCPluginCliStatusResponse> {
+				return client.get("plugins/cli/status").json();
 			},
 		},
 	};

@@ -2,12 +2,6 @@
 
 export type CCPluginConfigResponse = {
 	plugin_id: string;
-	/**
-	 * Config as JSON string (use serde_json to parse)
-	 */
 	config?: string;
-	/**
-	 * Schema as JSON string (use serde_json to parse)
-	 */
 	schema?: string;
 };

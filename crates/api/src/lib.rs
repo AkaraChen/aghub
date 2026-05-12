@@ -214,6 +214,11 @@ fn build_rocket(
 				routes::plugins::delete_plugin_config,
 				routes::plugins::list_plugin_market,
 				routes::plugins::update_marketplace,
+				routes::plugins::list_marketplaces,
+				routes::plugins::add_marketplace,
+				routes::plugins::remove_marketplace,
+				routes::plugins::update_marketplace_one,
+				routes::plugins::cli_status,
 			],
 		)
 		.register(

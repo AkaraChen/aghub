@@ -32,8 +32,11 @@ use aghub_api::dto::{
 	market::MarketSkill,
 	mcp::{CreateMcpRequest, McpResponse, TransportDto, UpdateMcpRequest},
 	plugin::{
-		CCPluginAuthorResponse, CCPluginCheckUpdateRequest,
-		CCPluginCheckUpdateResponse, CCPluginConfigResponse,
+		CCMarketplaceAddRequest, CCMarketplaceEntryResponse,
+		CCMarketplaceListResponse, CCMarketplaceMutationResponse,
+		CCMarketplaceSourceResponse, CCPluginAuthorResponse,
+		CCPluginCheckUpdateRequest, CCPluginCheckUpdateResponse,
+		CCPluginCliStatusResponse, CCPluginConfigResponse,
 		CCPluginDetailResponse, CCPluginHookActionResponse,
 		CCPluginHookEventResponse, CCPluginHookMatcherResponse,
 		CCPluginHooksManifestResponse, CCPluginInstallRequest,
@@ -237,6 +240,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<CCPluginConfigResponse>(&cfg)?;
 	export_type::<CCPluginUpdateConfigRequest>(&cfg)?;
 	export_type::<CCPluginMarketResponse>(&cfg)?;
+	export_type::<CCMarketplaceSourceResponse>(&cfg)?;
+	export_type::<CCMarketplaceEntryResponse>(&cfg)?;
+	export_type::<CCMarketplaceListResponse>(&cfg)?;
+	export_type::<CCMarketplaceAddRequest>(&cfg)?;
+	export_type::<CCMarketplaceMutationResponse>(&cfg)?;
+	export_type::<CCPluginCliStatusResponse>(&cfg)?;
 
 	write_index_file(&out_dir)?;
 

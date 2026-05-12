@@ -6,13 +6,7 @@ import type { CCPluginSourceInfoResponse } from "./CCPluginSourceInfoResponse";
 export type CCPluginResponse = {
 	id: string;
 	name: string;
-	/**
-	 * Display version derived from the default display scope installation.
-	 */
 	version: string;
-	/**
-	 * Scope that provides the top-level display version and default selection.
-	 */
 	display_scope?: string;
 	description: string | null;
 	enabled: boolean;
@@ -25,8 +19,5 @@ export type CCPluginResponse = {
 	license?: string;
 	keywords?: Array<string>;
 	source_info: CCPluginSourceInfoResponse;
-	/**
-	 * All scopes where this plugin is installed
-	 */
 	scopes: Array<CCPluginScopeResponse>;
 };

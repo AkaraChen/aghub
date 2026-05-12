@@ -5,9 +5,15 @@ export type { AgentProviderMatchedInferenceProviderResponse } from "./AgentProvi
 export type { AgentProviderModelResponse } from "./AgentProviderModelResponse";
 export type { AgentProviderResponse } from "./AgentProviderResponse";
 export type { AgentProviderSourceDto } from "./AgentProviderSourceDto";
+export type { CCMarketplaceAddRequest } from "./CCMarketplaceAddRequest";
+export type { CCMarketplaceEntryResponse } from "./CCMarketplaceEntryResponse";
+export type { CCMarketplaceListResponse } from "./CCMarketplaceListResponse";
+export type { CCMarketplaceMutationResponse } from "./CCMarketplaceMutationResponse";
+export type { CCMarketplaceSourceResponse } from "./CCMarketplaceSourceResponse";
 export type { CCPluginAuthorResponse } from "./CCPluginAuthorResponse";
 export type { CCPluginCheckUpdateRequest } from "./CCPluginCheckUpdateRequest";
 export type { CCPluginCheckUpdateResponse } from "./CCPluginCheckUpdateResponse";
+export type { CCPluginCliStatusResponse } from "./CCPluginCliStatusResponse";
 export type { CCPluginConfigResponse } from "./CCPluginConfigResponse";
 export type { CCPluginDetailResponse } from "./CCPluginDetailResponse";
 export type { CCPluginHookActionResponse } from "./CCPluginHookActionResponse";

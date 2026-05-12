@@ -1,20 +1,25 @@
 use crate::dto::plugin::{
-	CCPluginAuthorResponse, CCPluginCheckUpdateRequest,
-	CCPluginCheckUpdateResponse, CCPluginConfigResponse,
-	CCPluginDetailResponse, CCPluginHookActionResponse,
-	CCPluginHookEventResponse, CCPluginHookMatcherResponse,
-	CCPluginHooksManifestResponse, CCPluginInstallRequest,
-	CCPluginInstallResponse, CCPluginListResponse, CCPluginManifestResponse,
-	CCPluginMarketResponse, CCPluginMcpConfigResponse,
-	CCPluginMcpServerResponse, CCPluginOpenSkillInEditorRequest,
-	CCPluginReinstallRequest, CCPluginReinstallResponse, CCPluginResponse,
-	CCPluginScopeResponse, CCPluginSkillInfo, CCPluginSourceInfoResponse,
-	CCPluginUninstallRequest, CCPluginUninstallResponse,
-	CCPluginUpdateConfigRequest, CCPluginUpdateRequest, CCPluginUpdateResponse,
+	CCMarketplaceAddRequest, CCMarketplaceEntryResponse,
+	CCMarketplaceListResponse, CCMarketplaceMutationResponse,
+	CCMarketplaceSourceResponse, CCPluginAuthorResponse,
+	CCPluginCheckUpdateRequest, CCPluginCheckUpdateResponse,
+	CCPluginCliStatusResponse, CCPluginConfigResponse, CCPluginDetailResponse,
+	CCPluginHookActionResponse, CCPluginHookEventResponse,
+	CCPluginHookMatcherResponse, CCPluginHooksManifestResponse,
+	CCPluginInstallRequest, CCPluginInstallResponse, CCPluginListResponse,
+	CCPluginManifestResponse, CCPluginMarketResponse,
+	CCPluginMcpConfigResponse, CCPluginMcpServerResponse,
+	CCPluginOpenSkillInEditorRequest, CCPluginReinstallRequest,
+	CCPluginReinstallResponse, CCPluginResponse, CCPluginScopeResponse,
+	CCPluginSkillInfo, CCPluginSourceInfoResponse, CCPluginUninstallRequest,
+	CCPluginUninstallResponse, CCPluginUpdateConfigRequest,
+	CCPluginUpdateRequest, CCPluginUpdateResponse,
 };
 use crate::error::{ApiError, ApiNoContent, ApiResult};
 use aghub_cc_plugins::claude::settings::InstallScope;
 use aghub_cc_plugins::claude::{ClaudePluginInfo, ClaudePluginManager};
+use aghub_cc_plugins::cli::types::{CliMarketplace, CliMarketplaceSource};
+use aghub_cc_plugins::cli::ClaudeCli;
 use aghub_cc_plugins::installer::PluginInstaller;
 use aghub_cc_plugins::PluginId;
 use aghub_git::source::{resolve_remote_source, RemoteSourceType};
@@ -861,6 +866,121 @@ pub async fn list_plugin_market() -> ApiResult<Vec<CCPluginMarketResponse>> {
 	Ok(Json(response))
 }
 
+fn marketplace_source_to_dto(
+	source: CliMarketplaceSource,
+) -> CCMarketplaceSourceResponse {
+	match source {
+		CliMarketplaceSource::Github { repo } => {
+			CCMarketplaceSourceResponse::Github { repo }
+		}
+		CliMarketplaceSource::Url { url } => {
+			CCMarketplaceSourceResponse::Url { url }
+		}
+		CliMarketplaceSource::Local { path } => {
+			CCMarketplaceSourceResponse::Local { path }
+		}
+	}
+}
+
+fn marketplace_entry_to_dto(
+	entry: CliMarketplace,
+) -> CCMarketplaceEntryResponse {
+	CCMarketplaceEntryResponse {
+		name: entry.name,
+		source: marketplace_source_to_dto(entry.source),
+		install_location: entry.install_location,
+	}
+}
+
+fn load_claude_cli() -> Result<ClaudeCli, ApiError> {
+	ClaudeCli::new().map_err(|e| {
+		error!("Failed to locate claude CLI: {e}");
+		ApiError::internal("claude CLI is not installed or not on PATH")
+	})
+}
+
+#[get("/plugins/marketplaces")]
+pub async fn list_marketplaces() -> ApiResult<CCMarketplaceListResponse> {
+	let cli = load_claude_cli()?;
+	let entries = cli.marketplace_list().await.map_err(|e| {
+		error!("Failed to list marketplaces: {e}");
+		ApiError::new(
+			Status::BadGateway,
+			"Failed to list marketplaces",
+			"PLUGIN_MARKETPLACE_LIST_FAILED",
+		)
+	})?;
+	Ok(Json(CCMarketplaceListResponse {
+		marketplaces: entries
+			.into_iter()
+			.map(marketplace_entry_to_dto)
+			.collect(),
+	}))
+}
+
+#[post("/plugins/marketplaces", data = "<body>")]
+pub async fn add_marketplace(
+	body: Json<CCMarketplaceAddRequest>,
+) -> ApiResult<CCMarketplaceMutationResponse> {
+	let req = body.into_inner();
+	let scope = parse_install_scope(&req.scope)?;
+	let cli = load_claude_cli()?;
+	let entry = cli.marketplace_add(&req.source, scope).await.map_err(|e| {
+		error!("Failed to add marketplace {}: {e}", req.source);
+		ApiError::new(
+			Status::BadRequest,
+			format!("Failed to add marketplace '{}'", req.source),
+			"PLUGIN_MARKETPLACE_ADD_FAILED",
+		)
+	})?;
+	let entry = marketplace_entry_to_dto(entry);
+	Ok(Json(CCMarketplaceMutationResponse {
+		success: true,
+		message: format!("Added marketplace '{}'", entry.name),
+		marketplace: Some(entry),
+	}))
+}
+
+#[delete("/plugins/marketplaces/<name>")]
+pub async fn remove_marketplace(
+	name: &str,
+) -> ApiResult<CCMarketplaceMutationResponse> {
+	let cli = load_claude_cli()?;
+	cli.marketplace_remove(name).await.map_err(|e| {
+		error!("Failed to remove marketplace {name}: {e}");
+		ApiError::new(
+			Status::BadRequest,
+			format!("Failed to remove marketplace '{name}'"),
+			"PLUGIN_MARKETPLACE_REMOVE_FAILED",
+		)
+	})?;
+	Ok(Json(CCMarketplaceMutationResponse {
+		success: true,
+		message: format!("Removed marketplace '{name}'"),
+		marketplace: None,
+	}))
+}
+
+#[post("/plugins/marketplaces/<name>/update")]
+pub async fn update_marketplace_one(
+	name: &str,
+) -> ApiResult<CCMarketplaceMutationResponse> {
+	let cli = load_claude_cli()?;
+	cli.marketplace_update(Some(name)).await.map_err(|e| {
+		error!("Failed to update marketplace {name}: {e}");
+		ApiError::new(
+			Status::BadGateway,
+			format!("Failed to update marketplace '{name}'"),
+			"PLUGIN_MARKETPLACE_UPDATE_FAILED",
+		)
+	})?;
+	Ok(Json(CCMarketplaceMutationResponse {
+		success: true,
+		message: format!("Updated marketplace '{name}'"),
+		marketplace: None,
+	}))
+}
+
 #[post("/plugins-market/update")]
 pub async fn update_marketplace() -> ApiResult<serde_json::Value> {
 	let installer = load_plugin_installer()?;
@@ -889,4 +1009,36 @@ pub async fn update_marketplace() -> ApiResult<serde_json::Value> {
 		"success": true,
 		"updated_count": updated.len()
 	})))
+}
+
+// ── CLI status ───────────────────────────────────────────────────────────────
+
+#[get("/plugins/cli/status")]
+pub async fn cli_status() -> Json<CCPluginCliStatusResponse> {
+	let cli = match ClaudeCli::new() {
+		Ok(cli) => cli,
+		Err(e) => {
+			return Json(CCPluginCliStatusResponse {
+				installed: false,
+				version: None,
+				path: None,
+				error: Some(e.to_string()),
+			});
+		}
+	};
+	let path = Some(cli.binary_path().display().to_string());
+	match cli.version().await {
+		Ok(version) => Json(CCPluginCliStatusResponse {
+			installed: true,
+			version: Some(version),
+			path,
+			error: None,
+		}),
+		Err(e) => Json(CCPluginCliStatusResponse {
+			installed: true,
+			version: None,
+			path,
+			error: Some(e.to_string()),
+		}),
+	}
 }

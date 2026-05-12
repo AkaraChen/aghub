@@ -331,7 +331,65 @@ pub struct CCPluginUpdateConfigRequest {
 	pub config: String,
 }
 
+// ── CLI status ───────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CCPluginCliStatusResponse {
+	pub installed: bool,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub version: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub path: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub error: Option<String>,
+}
+
 // ── Marketplace ──────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum CCMarketplaceSourceResponse {
+	Github { repo: String },
+	Url { url: String },
+	Local { path: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CCMarketplaceEntryResponse {
+	pub name: String,
+	pub source: CCMarketplaceSourceResponse,
+	pub install_location: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CCMarketplaceListResponse {
+	pub marketplaces: Vec<CCMarketplaceEntryResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CCMarketplaceAddRequest {
+	pub source: String,
+	#[serde(default = "default_scope")]
+	pub scope: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CCMarketplaceMutationResponse {
+	pub success: bool,
+	pub message: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub marketplace: Option<CCMarketplaceEntryResponse>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
