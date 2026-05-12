@@ -7,6 +7,7 @@ import {
 	Modal,
 	SearchField,
 	Select,
+	Tabs,
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -21,6 +22,7 @@ import {
 	updateMarketplaceMutationOptions,
 } from "../requests/plugins";
 import { PluginMarketTable } from "./plugin-market/market-table";
+import { MarketplacesPanel } from "./plugin-market/marketplaces-panel";
 
 interface PluginMarketDialogProps {
 	isOpen: boolean;
@@ -224,100 +226,152 @@ export function PluginMarketDialog({
 
 	const selectedCategoryKey = selectedCategory ?? "__all__";
 	const isRefreshingMarketplace = updateMarketplaceMutation.isPending;
+	const [activeTab, setActiveTab] = useState<"plugins" | "marketplaces">(
+		"plugins",
+	);
 	return (
 		<Modal.Backdrop isOpen={isOpen} onOpenChange={handleClose}>
 			<Modal.Container>
 				<Modal.Dialog className="max-h-[80vh] w-[calc(100vw-2rem)] max-w-5xl overflow-hidden">
 					<Modal.CloseTrigger />
 					<Modal.Body className="flex min-h-0 flex-col gap-2.5 overflow-hidden px-4 pb-2.5 pt-3.5">
-						<div className="shrink-0">
-							<div className="flex items-center gap-2">
-								<SearchField
-									variant="secondary"
-									value={searchQuery}
-									onChange={setSearchQuery}
-									aria-label={t("searchPlugins")}
-									className="min-w-0 flex-1"
+						<Tabs
+							selectedKey={activeTab}
+							onSelectionChange={(key) =>
+								setActiveTab(key as "plugins" | "marketplaces")
+							}
+							className="flex min-h-0 flex-1 flex-col"
+						>
+							<Tabs.ListContainer>
+								<Tabs.List
+									aria-label={t("pluginMarketTabs")}
+									className="inline-flex w-auto"
 								>
-									<SearchField.Group>
-										<SearchField.SearchIcon />
-										<SearchField.Input
-											placeholder={t("searchPlugins")}
-										/>
-										<SearchField.ClearButton />
-									</SearchField.Group>
-								</SearchField>
-								<Select
-									variant="secondary"
-									aria-label={t("pluginMarketCategory")}
-									selectedKey={selectedCategoryKey}
-									onSelectionChange={(key) =>
-										setSelectedCategory(
-											key === "__all__"
-												? null
-												: (key as string),
-										)
-									}
-									className="min-w-32 max-w-40 shrink-0"
-								>
-									<Select.Trigger>
-										<Select.Value />
-										<Select.Indicator />
-									</Select.Trigger>
-									<Select.Popover>
-										<ListBox>
-											<ListBox.Item
-												id="__all__"
-												textValue={t("all")}
-											>
-												{t("all")}
-											</ListBox.Item>
-											{categories.map((category) => (
-												<ListBox.Item
-													key={category}
-													id={category}
-													textValue={getCategoryLabel(
-														category,
-													)}
-												>
-													{getCategoryLabel(category)}
-												</ListBox.Item>
-											))}
-										</ListBox>
-									</Select.Popover>
-								</Select>
-								<Button
-									variant="secondary"
-									size="sm"
-									className="shrink-0"
-									onPress={handleUpdateMarketplace}
-									isDisabled={isRefreshingMarketplace}
-								>
-									<span className="flex items-center gap-1.5">
-										<ArrowPathIcon
-											className={cn(
-												"size-4",
-												isRefreshingMarketplace &&
-													"animate-spin",
-											)}
-										/>
-										{t("updateMarketplace")}
-									</span>
-								</Button>
-							</div>
-						</div>
+									<Tabs.Tab id="plugins">
+										{t("pluginMarketTabPlugins")}
+										<Tabs.Indicator />
+									</Tabs.Tab>
+									<Tabs.Tab id="marketplaces">
+										{t("pluginMarketTabMarketplaces")}
+										<Tabs.Indicator />
+									</Tabs.Tab>
+								</Tabs.List>
+							</Tabs.ListContainer>
 
-						<PluginMarketTable
-							plugins={filteredPlugins}
-							isLoading={isLoading}
-							isError={isError}
-							error={error}
-							searchQuery={searchQuery}
-							compactFormatter={compactFormatter}
-							onRetry={refetch}
-							onInstall={handleInstall}
-							installStates={installStateById}
-						/>
+							<Tabs.Panel
+								id="plugins"
+								className="flex min-h-0 flex-1 flex-col gap-2.5"
+							>
+								<div className="shrink-0">
+									<div className="flex items-center gap-2">
+										<SearchField
+											variant="secondary"
+											value={searchQuery}
+											onChange={setSearchQuery}
+											aria-label={t("searchPlugins")}
+											className="min-w-0 flex-1"
+										>
+											<SearchField.Group>
+												<SearchField.SearchIcon />
+												<SearchField.Input
+													placeholder={t(
+														"searchPlugins",
+													)}
+												/>
+												<SearchField.ClearButton />
+											</SearchField.Group>
+										</SearchField>
+										<Select
+											variant="secondary"
+											aria-label={t(
+												"pluginMarketCategory",
+											)}
+											selectedKey={selectedCategoryKey}
+											onSelectionChange={(key) =>
+												setSelectedCategory(
+													key === "__all__"
+														? null
+														: (key as string),
+												)
+											}
+											className="min-w-32 max-w-40 shrink-0"
+										>
+											<Select.Trigger>
+												<Select.Value />
+												<Select.Indicator />
+											</Select.Trigger>
+											<Select.Popover>
+												<ListBox>
+													<ListBox.Item
+														id="__all__"
+														textValue={t("all")}
+													>
+														{t("all")}
+													</ListBox.Item>
+													{categories.map(
+														(category) => (
+															<ListBox.Item
+																key={category}
+																id={category}
+																textValue={getCategoryLabel(
+																	category,
+																)}
+															>
+																{getCategoryLabel(
+																	category,
+																)}
+															</ListBox.Item>
+														),
+													)}
+												</ListBox>
+											</Select.Popover>
+										</Select>
+										<Button
+											variant="secondary"
+											size="sm"
+											className="shrink-0"
+											onPress={handleUpdateMarketplace}
+											isDisabled={isRefreshingMarketplace}
+										>
+											<span className="flex items-center gap-1.5">
+												<ArrowPathIcon
+													className={cn(
+														"size-4",
+														isRefreshingMarketplace &&
+															"animate-spin",
+													)}
+												/>
+												{t("updateMarketplace")}
+											</span>
+										</Button>
+									</div>
+								</div>
+
+								<PluginMarketTable
+									plugins={filteredPlugins}
+									isLoading={isLoading}
+									isError={isError}
+									error={error}
+									searchQuery={searchQuery}
+									compactFormatter={compactFormatter}
+									onRetry={refetch}
+									onInstall={handleInstall}
+									installStates={installStateById}
+								/>
+							</Tabs.Panel>
+
+							<Tabs.Panel
+								id="marketplaces"
+								className="flex min-h-0 flex-1 flex-col"
+							>
+								<MarketplacesPanel
+									enabled={
+										isOpen && activeTab === "marketplaces"
+									}
+									installScope={installScope}
+								/>
+							</Tabs.Panel>
+						</Tabs>
 					</Modal.Body>
 
 					<div className="shrink-0 border-t border-separator/70 px-4 py-2">
