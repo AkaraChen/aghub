@@ -317,6 +317,37 @@ pub struct CCPluginUpdateConfigRequest {
 	pub config: String,
 }
 
+// ── Prune / Validate ─────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CCPluginPruneRequest {
+	#[serde(default = "default_scope")]
+	pub scope: String,
+	#[serde(default)]
+	pub dry_run: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CCPluginPruneResponse {
+	pub success: bool,
+	pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CCPluginValidateRequest {
+	pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CCPluginValidateResponse {
+	pub success: bool,
+	pub message: String,
+}
+
 // ── CLI status ───────────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

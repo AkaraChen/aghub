@@ -43,11 +43,13 @@ use aghub_api::dto::{
 		CCPluginInstallResponse, CCPluginListResponse,
 		CCPluginManifestResponse, CCPluginMarketResponse,
 		CCPluginMcpConfigResponse, CCPluginMcpServerResponse,
-		CCPluginOpenSkillInEditorRequest, CCPluginResponse,
-		CCPluginScopeResponse, CCPluginSkillInfo, CCPluginSourceInfoResponse,
+		CCPluginOpenSkillInEditorRequest, CCPluginPruneRequest,
+		CCPluginPruneResponse, CCPluginResponse, CCPluginScopeResponse,
+		CCPluginSkillInfo, CCPluginSourceInfoResponse,
 		CCPluginUninstallRequest, CCPluginUninstallResponse,
 		CCPluginUpdateConfigRequest, CCPluginUpdateRequest,
-		CCPluginUpdateResponse,
+		CCPluginUpdateResponse, CCPluginValidateRequest,
+		CCPluginValidateResponse,
 	},
 	skill::{
 		CreateSkillRequest, DeleteSkillByPathRequest,
@@ -243,6 +245,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<CCMarketplaceAddRequest>(&cfg)?;
 	export_type::<CCMarketplaceMutationResponse>(&cfg)?;
 	export_type::<CCPluginCliStatusResponse>(&cfg)?;
+	export_type::<CCPluginPruneRequest>(&cfg)?;
+	export_type::<CCPluginPruneResponse>(&cfg)?;
+	export_type::<CCPluginValidateRequest>(&cfg)?;
+	export_type::<CCPluginValidateResponse>(&cfg)?;
 
 	write_index_file(&out_dir)?;
 

@@ -9,6 +9,10 @@ import type {
 	CCPluginCheckUpdateRequest,
 	CCPluginCheckUpdateResponse,
 	CCPluginCliStatusResponse,
+	CCPluginPruneRequest,
+	CCPluginPruneResponse,
+	CCPluginValidateRequest,
+	CCPluginValidateResponse,
 	ClaudeProviderStateResponse,
 	CodeEditorType,
 	CodexProviderStateResponse,
@@ -862,6 +866,16 @@ export function createApi(baseUrl: string) {
 			},
 			getCliStatus(): Promise<CCPluginCliStatusResponse> {
 				return client.get("plugins/cli/status").json();
+			},
+			prune(body: CCPluginPruneRequest): Promise<CCPluginPruneResponse> {
+				return client
+					.post("plugins/prune", { json: body, timeout: 120000 })
+					.json();
+			},
+			validate(
+				body: CCPluginValidateRequest,
+			): Promise<CCPluginValidateResponse> {
+				return client.post("plugins/validate", { json: body }).json();
 			},
 		},
 	};

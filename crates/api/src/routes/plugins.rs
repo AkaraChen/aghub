@@ -9,10 +9,12 @@ use crate::dto::plugin::{
 	CCPluginInstallRequest, CCPluginInstallResponse, CCPluginListResponse,
 	CCPluginManifestResponse, CCPluginMarketResponse,
 	CCPluginMcpConfigResponse, CCPluginMcpServerResponse,
-	CCPluginOpenSkillInEditorRequest, CCPluginResponse, CCPluginScopeResponse,
+	CCPluginOpenSkillInEditorRequest, CCPluginPruneRequest,
+	CCPluginPruneResponse, CCPluginResponse, CCPluginScopeResponse,
 	CCPluginSkillInfo, CCPluginSourceInfoResponse, CCPluginUninstallRequest,
 	CCPluginUninstallResponse, CCPluginUpdateConfigRequest,
-	CCPluginUpdateRequest, CCPluginUpdateResponse,
+	CCPluginUpdateRequest, CCPluginUpdateResponse, CCPluginValidateRequest,
+	CCPluginValidateResponse,
 };
 use crate::error::{ApiError, ApiNoContent, ApiResult};
 use aghub_cc_plugins::claude::settings::InstallScope;
@@ -980,6 +982,53 @@ pub async fn update_marketplace() -> ApiResult<serde_json::Value> {
 		"success": true,
 		"updated_count": updated.len()
 	})))
+}
+
+// ── Prune / Validate ─────────────────────────────────────────────────────────
+
+#[post("/plugins/prune", data = "<body>")]
+pub async fn prune_plugins(
+	body: Json<CCPluginPruneRequest>,
+) -> ApiResult<CCPluginPruneResponse> {
+	let req = body.into_inner();
+	let scope = parse_install_scope(&req.scope)?;
+	let cli = load_claude_cli()?;
+	let summary = cli.plugin_prune(scope, req.dry_run).await.map_err(|e| {
+		error!("Failed to prune plugins: {e}");
+		ApiError::new(
+			Status::BadGateway,
+			"Failed to prune plugins",
+			"PLUGIN_PRUNE_FAILED",
+		)
+	})?;
+	Ok(Json(CCPluginPruneResponse {
+		success: true,
+		summary,
+	}))
+}
+
+#[post("/plugins/validate", data = "<body>")]
+pub async fn validate_plugin(
+	body: Json<CCPluginValidateRequest>,
+) -> ApiResult<CCPluginValidateResponse> {
+	let req = body.into_inner();
+	let cli = load_claude_cli()?;
+	let path = std::path::PathBuf::from(&req.path);
+	cli.plugin_validate(&path).await.map_err(|e| {
+		error!("Plugin validation failed for {}: {e}", req.path);
+		ApiError::new(
+			Status::BadRequest,
+			format!("Plugin validation failed for {}", req.path),
+			"PLUGIN_VALIDATE_FAILED",
+		)
+	})?;
+	Ok(Json(CCPluginValidateResponse {
+		success: true,
+		message: format!(
+			"{} is a valid plugin / marketplace manifest",
+			req.path
+		),
+	}))
 }
 
 // ── CLI status ───────────────────────────────────────────────────────────────

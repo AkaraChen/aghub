@@ -5,6 +5,7 @@
 
 use anyhow::{Context, Result};
 use clap::{Subcommand, ValueEnum};
+use std::path::PathBuf;
 
 use aghub_cc_plugins::claude::settings::InstallScope;
 use aghub_cc_plugins::claude::ClaudePluginManager;
@@ -62,6 +63,16 @@ pub enum PluginAction {
 		#[arg(long, value_enum)]
 		scope: Option<ScopeArg>,
 	},
+	/// Remove auto-installed dependencies that are no longer needed
+	Prune {
+		#[arg(long, value_enum, default_value_t = ScopeArg::Global)]
+		scope: ScopeArg,
+		/// List what would be removed without removing
+		#[arg(long)]
+		dry_run: bool,
+	},
+	/// Validate a plugin or marketplace manifest at the given path
+	Validate { path: PathBuf },
 	/// Manage plugin marketplaces
 	Marketplace {
 		#[command(subcommand)]
@@ -146,6 +157,10 @@ async fn dispatch(action: PluginAction) -> Result<()> {
 		PluginAction::Disable { plugin_id, scope } => {
 			disable_plugin(&plugin_id, scope.map(Into::into)).await
 		}
+		PluginAction::Prune { scope, dry_run } => {
+			prune_plugins(scope.into(), dry_run).await
+		}
+		PluginAction::Validate { path } => validate_plugin(&path).await,
 		PluginAction::Marketplace { action } => {
 			marketplace_dispatch(action).await
 		}
@@ -329,6 +344,24 @@ async fn disable_plugin(
 	let mut manager = manager().await?;
 	manager.disable(&id, scope).await?;
 	println!("Disabled {}", plugin_id);
+	Ok(())
+}
+
+async fn prune_plugins(scope: InstallScope, dry_run: bool) -> Result<()> {
+	let cli = ClaudeCli::new()?;
+	let summary = cli.plugin_prune(scope, dry_run).await?;
+	if summary.is_empty() {
+		println!("(no output from claude plugin prune)");
+	} else {
+		println!("{summary}");
+	}
+	Ok(())
+}
+
+async fn validate_plugin(path: &std::path::Path) -> Result<()> {
+	let cli = ClaudeCli::new()?;
+	cli.plugin_validate(path).await?;
+	println!("Validation passed: {}", path.display());
 	Ok(())
 }
 
