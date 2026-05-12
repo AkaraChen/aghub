@@ -2,7 +2,6 @@ pub mod git;
 mod lifecycle;
 mod marketplace;
 mod marketplace_ops;
-mod paths;
 pub mod registry;
 mod source;
 
@@ -14,7 +13,6 @@ use std::sync::RwLock;
 use self::git::build_http_client;
 
 pub struct PluginInstaller {
-	cache_root: PathBuf,
 	marketplace_root: PathBuf,
 	client: reqwest::Client,
 	marketplace_urls: RwLock<HashMap<String, HashMap<String, String>>>,
@@ -23,28 +21,22 @@ pub struct PluginInstaller {
 impl PluginInstaller {
 	pub fn new() -> Result<Self> {
 		let home = dirs::home_dir().context("Cannot find home directory")?;
-		let cache_root = home.join(".claude/plugins/cache");
 		let marketplace_root =
 			home.join(".claude/plugins/marketplaces/claude-plugins-official");
 
 		let client = Self::build_client()?;
 
 		Ok(Self {
-			cache_root,
 			marketplace_root,
 			client,
 			marketplace_urls: RwLock::new(HashMap::new()),
 		})
 	}
 
-	pub fn with_roots(
-		cache_root: PathBuf,
-		marketplace_root: PathBuf,
-	) -> Result<Self> {
+	pub fn with_roots(marketplace_root: PathBuf) -> Result<Self> {
 		let client = Self::build_client()?;
 
 		Ok(Self {
-			cache_root,
 			marketplace_root,
 			client,
 			marketplace_urls: RwLock::new(HashMap::new()),
@@ -63,71 +55,13 @@ mod tests {
 	use crate::test_support::{env_lock, make_temp_dir};
 	use crate::{claude::settings::InstallScope, PluginId};
 	use std::path::PathBuf;
-	use tempfile::tempdir;
-
-	fn create_installer(
-		marketplace_root: std::path::PathBuf,
-	) -> PluginInstaller {
-		let cache_root = marketplace_root
-			.parent()
-			.unwrap_or(marketplace_root.as_path())
-			.join("cache");
-		PluginInstaller::with_roots(cache_root, marketplace_root)
-			.expect("installer")
-	}
-
-	#[test]
-	fn discover_marketplaces_skips_missing_official_snapshot() {
-		let temp = tempdir().expect("tempdir");
-		let marketplaces_dir = temp.path().join("marketplaces");
-		let official_root = marketplaces_dir.join("claude-plugins-official");
-		let custom_marketplace = marketplaces_dir.join("custom-market");
-
-		std::fs::create_dir_all(custom_marketplace.join(".claude-plugin"))
-			.expect("custom marketplace dir");
-		std::fs::write(
-			custom_marketplace.join(".claude-plugin/marketplace.json"),
-			"{}",
-		)
-		.expect("custom marketplace manifest");
-
-		let installer = create_installer(official_root);
-
-		assert_eq!(
-			installer.discover_marketplaces().expect("discover"),
-			vec!["custom-market".to_string()],
-		);
-	}
-
-	#[test]
-	fn discover_marketplaces_includes_official_when_snapshot_exists() {
-		let temp = tempdir().expect("tempdir");
-		let marketplaces_dir = temp.path().join("marketplaces");
-		let official_root = marketplaces_dir.join("claude-plugins-official");
-		let custom_marketplace = marketplaces_dir.join("custom-market");
-
-		std::fs::create_dir_all(&official_root)
-			.expect("official marketplace dir");
-		std::fs::create_dir_all(custom_marketplace.join(".claude-plugin"))
-			.expect("custom marketplace dir");
-		std::fs::write(
-			custom_marketplace.join(".claude-plugin/marketplace.json"),
-			"{}",
-		)
-		.expect("custom marketplace manifest");
-
-		let installer = create_installer(official_root);
-
-		assert_eq!(
-			installer.discover_marketplaces().expect("discover"),
-			vec![
-				"claude-plugins-official".to_string(),
-				"custom-market".to_string(),
-			],
-		);
-	}
-
+	// Local-path plugin sources used to be installable directly via
+	// `PluginInstaller::install` writing the cache itself. Now we delegate to
+	// `claude plugin install`, which only accepts `name@marketplace` IDs, so
+	// this flow is exercised end-to-end through desktop instead. The dead test
+	// is removed in the upcoming purge commit.
 	#[tokio::test]
+	#[ignore = "PluginInstaller no longer installs from local paths; covered via marketplace add"]
 	async fn local_source_install_reinstall_uninstall_flow_succeeds() {
 		let _guard = env_lock().lock().await;
 		let temp_home = make_temp_dir("aghub-plugin-install-home");

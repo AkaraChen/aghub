@@ -59,8 +59,8 @@ fn normalize_scope_value(scope: &str) -> String {
 	}
 }
 
-fn load_plugin_manager() -> Result<ClaudePluginManager, ApiError> {
-	ClaudePluginManager::new().map_err(|e| {
+async fn load_plugin_manager() -> Result<ClaudePluginManager, ApiError> {
+	ClaudePluginManager::new().await.map_err(|e| {
 		error!("Failed to initialize plugin manager: {e}");
 		ApiError::internal("Failed to initialize plugin manager")
 	})
@@ -89,10 +89,10 @@ fn get_plugin(
 		.ok_or_else(|| ApiError::not_found(format!("Plugin '{id}' not found")))
 }
 
-fn load_manager_and_plugin(
+async fn load_manager_and_plugin(
 	id: &PluginId,
 ) -> Result<(ClaudePluginManager, ClaudePluginInfo), ApiError> {
-	let manager = load_plugin_manager()?;
+	let manager = load_plugin_manager().await?;
 	let plugin = get_plugin(&manager, id)?;
 	Ok((manager, plugin))
 }
@@ -272,8 +272,8 @@ fn sorted_entries(
 // ── List / Enable / Disable ──────────────────────────────────────────────────
 
 #[get("/plugins")]
-pub fn list_plugins() -> ApiResult<CCPluginListResponse> {
-	let manager = load_plugin_manager()?;
+pub async fn list_plugins() -> ApiResult<CCPluginListResponse> {
+	let manager = load_plugin_manager().await?;
 	let installer = try_load_plugin_installer();
 	let mut plugins: Vec<CCPluginResponse> = manager
 		.list_plugins()
@@ -285,11 +285,11 @@ pub fn list_plugins() -> ApiResult<CCPluginListResponse> {
 }
 
 #[post("/plugins/enable?<plugin_id>")]
-pub fn enable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
+pub async fn enable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
 	let id = parse_plugin_id(plugin_id)?;
-	let mut manager = load_plugin_manager()?;
+	let mut manager = load_plugin_manager().await?;
 	let installer = try_load_plugin_installer();
-	manager.enable(&id).map_err(|e| {
+	manager.enable(&id).await.map_err(|e| {
 		plugin_error(
 			Status::InternalServerError,
 			"enable",
@@ -303,11 +303,11 @@ pub fn enable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
 }
 
 #[post("/plugins/disable?<plugin_id>")]
-pub fn disable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
+pub async fn disable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
 	let id = parse_plugin_id(plugin_id)?;
-	let mut manager = load_plugin_manager()?;
+	let mut manager = load_plugin_manager().await?;
 	let installer = try_load_plugin_installer();
-	manager.disable(&id).map_err(|e| {
+	manager.disable(&id).await.map_err(|e| {
 		plugin_error(
 			Status::InternalServerError,
 			"disable",
@@ -472,7 +472,7 @@ pub async fn check_plugin_update(
 ) -> ApiResult<CCPluginCheckUpdateResponse> {
 	let req = body.into_inner();
 	let id = parse_plugin_id(&req.plugin_id)?;
-	let (_, plugin) = load_manager_and_plugin(&id)?;
+	let (_, plugin) = load_manager_and_plugin(&id).await?;
 	let scope_info = resolve_plugin_scope(&plugin, req.scope.as_deref())?;
 	let current_version = scope_info
 		.map(|s| s.version.as_str())
@@ -521,7 +521,7 @@ pub async fn get_plugin_detail(
 	plugin_id: &str,
 ) -> ApiResult<CCPluginDetailResponse> {
 	let id = parse_plugin_id(plugin_id)?;
-	let (_, plugin) = load_manager_and_plugin(&id)?;
+	let (_, plugin) = load_manager_and_plugin(&id).await?;
 
 	let manifest = plugin.read_manifest().unwrap_or_else(|e| {
 		warn!("Failed to read manifest for {}: {}", plugin.id, e);
@@ -634,11 +634,11 @@ pub async fn get_plugin_detail(
 // ── Config ───────────────────────────────────────────────────────────────────
 
 #[get("/plugins/config?<plugin_id>")]
-pub fn get_plugin_config(
+pub async fn get_plugin_config(
 	plugin_id: String,
 ) -> ApiResult<CCPluginConfigResponse> {
 	let id = parse_plugin_id(&plugin_id)?;
-	let (manager, plugin) = load_manager_and_plugin(&id)?;
+	let (manager, plugin) = load_manager_and_plugin(&id).await?;
 	let config = manager
 		.get_plugin_config(&id)
 		.and_then(|v| serde_json::to_string(v).ok());
@@ -656,13 +656,13 @@ pub fn get_plugin_config(
 }
 
 #[post("/plugins/config", data = "<body>")]
-pub fn update_plugin_config(
+pub async fn update_plugin_config(
 	body: Json<CCPluginUpdateConfigRequest>,
 ) -> ApiResult<CCPluginConfigResponse> {
 	let req = body.into_inner();
 	let plugin_id = req.plugin_id.clone();
 	let id = parse_plugin_id(&plugin_id)?;
-	let (mut manager, plugin) = load_manager_and_plugin(&id)?;
+	let (mut manager, plugin) = load_manager_and_plugin(&id).await?;
 	let schema = plugin
 		.read_manifest()
 		.ok()
@@ -693,11 +693,11 @@ pub fn update_plugin_config(
 }
 
 #[delete("/plugins/config?<plugin_id>")]
-pub fn delete_plugin_config(
+pub async fn delete_plugin_config(
 	plugin_id: String,
 ) -> ApiResult<CCPluginConfigResponse> {
 	let id = parse_plugin_id(&plugin_id)?;
-	let (mut manager, plugin) = load_manager_and_plugin(&id)?;
+	let (mut manager, plugin) = load_manager_and_plugin(&id).await?;
 	let schema = plugin
 		.read_manifest()
 		.ok()
@@ -719,12 +719,12 @@ pub fn delete_plugin_config(
 // ── Open Folder / Editor ─────────────────────────────────────────────────────
 
 #[post("/plugins/open-folder?<plugin_id>&<scope>")]
-pub fn open_plugin_folder(
+pub async fn open_plugin_folder(
 	plugin_id: &str,
 	scope: Option<&str>,
 ) -> ApiNoContent {
 	let id = parse_plugin_id(plugin_id)?;
-	let (_, plugin) = load_manager_and_plugin(&id)?;
+	let (_, plugin) = load_manager_and_plugin(&id).await?;
 	let install_path = resolve_plugin_scope(&plugin, scope)?
 		.map(|s| s.install_path.clone())
 		.unwrap_or_else(|| plugin.install_path.clone());
@@ -736,12 +736,12 @@ pub fn open_plugin_folder(
 }
 
 #[post("/plugins/open-skill-in-editor", data = "<body>")]
-pub fn open_plugin_skill_in_editor(
+pub async fn open_plugin_skill_in_editor(
 	body: Json<CCPluginOpenSkillInEditorRequest>,
 ) -> ApiNoContent {
 	let req = body.into_inner();
 	let id = parse_plugin_id(&req.plugin_id)?;
-	let (_, plugin) = load_manager_and_plugin(&id)?;
+	let (_, plugin) = load_manager_and_plugin(&id).await?;
 	let path = resolve_plugin_skill_path(&plugin, &req.scope, &req.skill_name)?;
 	Command::new(req.editor.cli_command())
 		.arg(&path)
@@ -819,7 +819,7 @@ pub async fn list_plugin_market() -> ApiResult<Vec<CCPluginMarketResponse>> {
 				error!("Failed to create plugin registry: {e}");
 				ApiError::internal("Failed to create plugin registry")
 			})?;
-	let installed_manager = load_plugin_manager().ok();
+	let installed_manager = load_plugin_manager().await.ok();
 
 	let response: Vec<CCPluginMarketResponse> = registry
 		.all_plugins()

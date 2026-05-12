@@ -17,7 +17,7 @@ use tokio::process::Command;
 /// Map an aghub-side scope name to the value the CLI accepts.
 ///
 /// aghub historically uses `global` while the CLI calls the same scope `user`.
-fn cli_scope(scope: InstallScope) -> &'static str {
+pub(crate) fn cli_scope(scope: InstallScope) -> &'static str {
 	match scope {
 		InstallScope::Global => "user",
 		InstallScope::Project => "project",

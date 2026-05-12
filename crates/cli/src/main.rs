@@ -482,79 +482,94 @@ fn handle_plugin_action(action: PluginAction) -> Result<()> {
 	use aghub_cc_plugins::claude::ClaudePluginManager;
 	use aghub_cc_plugins::PluginId;
 
-	match action {
-		PluginAction::List { json } => {
-			let manager = ClaudePluginManager::new()
+	let runtime = tokio::runtime::Builder::new_current_thread()
+		.enable_all()
+		.build()
+		.context("Failed to build tokio runtime")?;
+
+	runtime.block_on(async move {
+		match action {
+			PluginAction::List { json } => {
+				let manager = ClaudePluginManager::new()
+				.await
 				.context("Failed to initialize plugin manager. Is Claude Code installed?")?;
 
-			let plugins = manager.list_plugins();
+				let plugins = manager.list_plugins();
 
-			if plugins.is_empty() {
-				println!("No plugins installed.");
-				return Ok(());
-			}
-
-			if json {
-				// JSON output
-				let plugins_json: Vec<_> = plugins
-					.iter()
-					.map(|p| {
-						serde_json::json!({
-							"id": p.id.to_string(),
-							"name": p.display_name,
-							"version": p.version,
-							"enabled": p.enabled,
-							"source": p.source.to_string(),
-							"install_path": p.install_path,
-							"has_skills": p.has_skills(),
-						})
-					})
-					.collect();
-				println!("{}", serde_json::to_string_pretty(&plugins_json)?);
-			} else {
-				// Table output
-				println!(
-					"{:<50} {:<12} {:<10} Name",
-					"ID", "Version", "Status"
-				);
-				for plugin in plugins {
-					let status = if plugin.enabled {
-						"✓ enabled"
-					} else {
-						"✗ disabled"
-					};
-					println!(
-						"{:<50} {:<12} {:<10} {}",
-						plugin.id.to_string(),
-						plugin.version,
-						status,
-						plugin.display_name
-					);
+				if plugins.is_empty() {
+					println!("No plugins installed.");
+					return Ok(());
 				}
+
+				if json {
+					// JSON output
+					let plugins_json: Vec<_> = plugins
+						.iter()
+						.map(|p| {
+							serde_json::json!({
+								"id": p.id.to_string(),
+								"name": p.display_name,
+								"version": p.version,
+								"enabled": p.enabled,
+								"source": p.source.to_string(),
+								"install_path": p.install_path,
+								"has_skills": p.has_skills(),
+							})
+						})
+						.collect();
+					println!(
+						"{}",
+						serde_json::to_string_pretty(&plugins_json)?
+					);
+				} else {
+					// Table output
+					println!(
+						"{:<50} {:<12} {:<10} Name",
+						"ID", "Version", "Status"
+					);
+					for plugin in plugins {
+						let status = if plugin.enabled {
+							"✓ enabled"
+						} else {
+							"✗ disabled"
+						};
+						println!(
+							"{:<50} {:<12} {:<10} {}",
+							plugin.id.to_string(),
+							plugin.version,
+							status,
+							plugin.display_name
+						);
+					}
+				}
+				Ok(())
 			}
-			Ok(())
+			PluginAction::Enable { plugin_id } => {
+				let id = PluginId::parse(&plugin_id).with_context(|| {
+					format!("Invalid plugin ID: {}", plugin_id)
+				})?;
+
+				let mut manager = ClaudePluginManager::new()
+					.await
+					.context("Failed to initialize plugin manager")?;
+
+				manager.enable(&id).await?;
+				println!("Plugin '{}' enabled successfully.", plugin_id);
+				Ok(())
+			}
+			PluginAction::Disable { plugin_id } => {
+				let id = PluginId::parse(&plugin_id).with_context(|| {
+					format!("Invalid plugin ID: {}", plugin_id)
+				})?;
+
+				let mut manager = ClaudePluginManager::new()
+					.await
+					.context("Failed to initialize plugin manager")?;
+
+				manager.disable(&id).await?;
+				println!("Plugin '{}' disabled successfully.", plugin_id);
+				Ok(())
+			}
 		}
-		PluginAction::Enable { plugin_id } => {
-			let id = PluginId::parse(&plugin_id)
-				.with_context(|| format!("Invalid plugin ID: {}", plugin_id))?;
-
-			let mut manager = ClaudePluginManager::new()
-				.context("Failed to initialize plugin manager")?;
-
-			manager.enable(&id)?;
-			println!("Plugin '{}' enabled successfully.", plugin_id);
-			Ok(())
-		}
-		PluginAction::Disable { plugin_id } => {
-			let id = PluginId::parse(&plugin_id)
-				.with_context(|| format!("Invalid plugin ID: {}", plugin_id))?;
-
-			let mut manager = ClaudePluginManager::new()
-				.context("Failed to initialize plugin manager")?;
-
-			manager.disable(&id)?;
-			println!("Plugin '{}' disabled successfully.", plugin_id);
-			Ok(())
-		}
-	}
+	})
 }
