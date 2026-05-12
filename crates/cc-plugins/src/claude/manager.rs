@@ -19,7 +19,7 @@ impl ClaudePluginManager {
 			.join(".claude/settings.json");
 		let settings =
 			settings::ClaudeSettings::load_from_path(&settings_path)?;
-		let installed = load_via_cli().await?;
+		let installed = load_via_cli(&settings).await?;
 		Ok(Self {
 			settings,
 			installed,
@@ -92,7 +92,9 @@ impl ClaudePluginManager {
 	}
 }
 
-async fn load_via_cli() -> Result<Vec<ClaudePluginInfo>> {
+async fn load_via_cli(
+	settings: &settings::ClaudeSettings,
+) -> Result<Vec<ClaudePluginInfo>> {
 	let cli = ClaudeCli::new()?;
 	let cli_plugins = cli.plugin_list().await?;
 
@@ -103,7 +105,8 @@ async fn load_via_cli() -> Result<Vec<ClaudePluginInfo>> {
 
 	let mut plugins = Vec::with_capacity(by_id.len());
 	for (id_str, scope_entries) in by_id {
-		if let Some(plugin) = build_plugin_info(id_str, scope_entries) {
+		if let Some(plugin) = build_plugin_info(id_str, scope_entries, settings)
+		{
 			plugins.push(plugin);
 		}
 	}
@@ -113,6 +116,7 @@ async fn load_via_cli() -> Result<Vec<ClaudePluginInfo>> {
 fn build_plugin_info(
 	id_str: String,
 	scope_entries: Vec<CliInstalledPlugin>,
+	settings: &settings::ClaudeSettings,
 ) -> Option<ClaudePluginInfo> {
 	let id = PluginId::parse(&id_str).ok()?;
 	let source = PluginSource::parse(&id.source)
@@ -135,6 +139,7 @@ fn build_plugin_info(
 		})
 		.collect();
 
+	let enabled = settings.is_enabled(&id);
 	Some(ClaudePluginInfo {
 		id,
 		display_name,
@@ -148,7 +153,7 @@ fn build_plugin_info(
 		keywords: manifest.as_ref().and_then(|m| m.keywords.clone()),
 		source,
 		install_path,
-		enabled: primary.enabled,
+		enabled,
 		commit_hash: String::new(),
 		scopes,
 	})
@@ -158,5 +163,54 @@ fn cli_scope_to_aghub(cli_scope: &str) -> String {
 	match cli_scope {
 		"user" => "global".to_string(),
 		other => other.to_string(),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::cli::types::CliInstalledPlugin;
+
+	fn make_cli_entry(id: &str, enabled: bool) -> CliInstalledPlugin {
+		CliInstalledPlugin {
+			id: id.to_string(),
+			version: "1.0.0".to_string(),
+			scope: "user".to_string(),
+			enabled,
+			install_path: "/tmp/x".to_string(),
+			installed_at: "2026-01-01T00:00:00.000Z".to_string(),
+			last_updated: "2026-01-02T00:00:00.000Z".to_string(),
+		}
+	}
+
+	#[test]
+	fn build_plugin_info_overlays_settings_disabled_over_cli_enabled() {
+		let cli_entry = make_cli_entry("foo@bar", true);
+		let mut settings = settings::ClaudeSettings::default();
+		settings.set_enabled(&PluginId::parse("foo@bar").unwrap(), false);
+
+		let info = build_plugin_info(
+			"foo@bar".to_string(),
+			vec![cli_entry],
+			&settings,
+		)
+		.expect("plugin info");
+
+		assert!(!info.enabled, "settings.json disabled state must win over CLI's always-true enabled field");
+	}
+
+	#[test]
+	fn build_plugin_info_defaults_to_enabled_when_settings_unset() {
+		let cli_entry = make_cli_entry("foo@bar", true);
+		let settings = settings::ClaudeSettings::default();
+
+		let info = build_plugin_info(
+			"foo@bar".to_string(),
+			vec![cli_entry],
+			&settings,
+		)
+		.expect("plugin info");
+
+		assert!(info.enabled);
 	}
 }
