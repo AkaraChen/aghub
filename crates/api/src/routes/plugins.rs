@@ -2,7 +2,6 @@ use crate::dto::plugin::{
 	CCMarketplaceAddRequest, CCMarketplaceEntryResponse,
 	CCMarketplaceListResponse, CCMarketplaceMutationResponse,
 	CCMarketplaceSourceResponse, CCPluginAuthorResponse,
-	CCPluginCheckUpdateRequest, CCPluginCheckUpdateResponse,
 	CCPluginCliStatusResponse, CCPluginConfigResponse, CCPluginDetailResponse,
 	CCPluginHookActionResponse, CCPluginHookEventResponse,
 	CCPluginHookMatcherResponse, CCPluginHooksManifestResponse,
@@ -221,9 +220,6 @@ fn build_source_info(
 		can_reinstall: installer
 			.map(|i| i.can_reinstall(&plugin.id))
 			.unwrap_or(false),
-		can_check_updates: installer
-			.map(|i| i.can_check_updates(&plugin.id))
-			.unwrap_or(false),
 	}
 }
 
@@ -439,56 +435,6 @@ pub async fn update_plugin(
 			))
 		}
 	}
-}
-
-// ── Check Update ─────────────────────────────────────────────────────────────
-
-#[post("/plugins/check-update", data = "<body>")]
-pub async fn check_plugin_update(
-	body: Json<CCPluginCheckUpdateRequest>,
-) -> ApiResult<CCPluginCheckUpdateResponse> {
-	let req = body.into_inner();
-	let id = parse_plugin_id(&req.plugin_id)?;
-	let (_, plugin) = load_manager_and_plugin(&id).await?;
-	let scope_info = resolve_plugin_scope(&plugin, req.scope.as_deref())?;
-	let current_version = scope_info
-		.map(|s| s.version.as_str())
-		.unwrap_or(plugin.version.as_str());
-	let current_commit = scope_info
-		.and_then(|s| s.git_commit_sha.as_deref())
-		.or_else(|| {
-			(!plugin.commit_hash.is_empty())
-				.then_some(plugin.commit_hash.as_str())
-		});
-
-	let installer = load_plugin_installer()?;
-	let latest_version = if !installer.can_check_updates(&id) {
-		None
-	} else {
-		match installer
-			.check_update_against(&id, current_version, current_commit)
-			.await
-		{
-			Ok(Some((v, _))) => Some(v),
-			Ok(None) => None,
-			Err(e) => {
-				error!("Failed to check updates for {id}: {e}");
-				return Err(ApiError::new(
-					Status::BadGateway,
-					"Failed to check plugin updates",
-					"PLUGIN_UPDATE_CHECK_FAILED",
-				));
-			}
-		}
-	};
-
-	Ok(Json(CCPluginCheckUpdateResponse {
-		plugin_id: req.plugin_id,
-		update_available: latest_version.is_some(),
-		current_version: current_version.to_string(),
-		latest_version,
-		changelog: None,
-	}))
 }
 
 // ── Detail ───────────────────────────────────────────────────────────────────

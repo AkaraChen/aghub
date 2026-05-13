@@ -38,7 +38,6 @@ pub struct CCPluginSourceInfoResponse {
 	pub url: Option<String>,
 	pub is_github: bool,
 	pub can_reinstall: bool,
-	pub can_check_updates: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -280,29 +279,6 @@ pub struct CCPluginUpdateResponse {
 	/// installed and false for the "already up to date" early return.
 	#[serde(default)]
 	pub restart_required: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct CCPluginCheckUpdateRequest {
-	pub plugin_id: String,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	#[ts(optional)]
-	pub scope: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct CCPluginCheckUpdateResponse {
-	pub plugin_id: String,
-	pub update_available: bool,
-	pub current_version: String,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	#[ts(optional)]
-	pub latest_version: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	#[ts(optional)]
-	pub changelog: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

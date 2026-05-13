@@ -829,13 +829,10 @@ export default {
 		"Are you sure you want to uninstall the {{count}} selected plugins? This removes every installed scope for each plugin.",
 	bulkUninstallPluginsFailed:
 		"Failed to uninstall selected plugins: {{error}}",
-	noUpdateAvailable: "No updates available",
-	updateCheckFailed: "Failed to check for updates: {{error}}",
 	updatePlugin: "Update Plugin",
 	updating: "Updating...",
 	pluginUpdated: "Plugin updated to v{{version}}",
 	pluginUpdateRestartHint: "Restart Claude Code to load the new version.",
-	updateToVersion: "Update to v{{version}}",
 	updateFailed: "Failed to update plugin: {{error}}",
 	pluginNotFound: "Plugin not found",
 	marketplaceNotFound: "Marketplace not found. Please clone it first.",

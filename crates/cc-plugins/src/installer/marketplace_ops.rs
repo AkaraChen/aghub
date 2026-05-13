@@ -1,37 +1,12 @@
 use super::marketplace::{
 	is_marketplace_source, load_marketplace_repository_urls,
-	marketplace_path_for,
 };
-use super::{registry, PluginInstaller};
+use super::PluginInstaller;
 use crate::cli::ClaudeCli;
 use crate::PluginId;
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 impl PluginInstaller {
-	pub(super) fn marketplace_registry(
-		&self,
-		marketplace: &str,
-	) -> Result<registry::MarketplaceRegistry> {
-		if marketplace == "claude-plugins-official" {
-			return registry::MarketplaceRegistry::new_official().context(
-				"Official marketplace not found. Please clone it first: git clone https://github.com/anthropics/claude-plugins-official ~/.claude/plugins/marketplaces/claude-plugins-official",
-			);
-		}
-
-		let marketplace_path =
-			marketplace_path_for(&self.marketplace_root, marketplace);
-		let marketplace_json =
-			marketplace_path.join(".claude-plugin/marketplace.json");
-		if !marketplace_json.exists() {
-			anyhow::bail!("Marketplace '{}' not found", marketplace);
-		}
-
-		registry::MarketplaceRegistry::new(
-			marketplace_path,
-			vec!["plugins/".to_string(), "external_plugins/".to_string()],
-		)
-	}
-
 	pub async fn update_marketplaces(&self) -> Result<Vec<String>> {
 		let cli = ClaudeCli::new()?;
 		cli.marketplace_update(None).await?;
@@ -76,13 +51,6 @@ impl PluginInstaller {
 		// Reinstall is uninstall+install. Both delegate to the CLI which only
 		// knows how to install via a marketplace, so non-marketplace plugins
 		// can't be reinstalled either.
-		is_marketplace_source(&self.marketplace_root, &id.source)
-	}
-
-	pub fn can_check_updates(&self, id: &PluginId) -> bool {
-		// check_update_against only consults marketplace catalogs; anything
-		// else returns Ok(None) and would mislead the UI into showing an
-		// "update available" affordance that never resolves.
 		is_marketplace_source(&self.marketplace_root, &id.source)
 	}
 }

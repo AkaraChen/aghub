@@ -12,7 +12,6 @@ import { useCurrentCodeEditor } from "../hooks/use-integrations";
 import {
 	openSkillInEditorMutationOptions,
 	pluginDetailQueryOptions,
-	pluginUpdateStatusQueryOptions,
 } from "../requests/plugins";
 import { McpServersSection } from "./plugin-detail/mcp-servers-section";
 import { PluginConfirmDialog } from "./plugin-detail/confirm-dialog";
@@ -81,20 +80,6 @@ export function PluginDetail({
 		[currentPlugin.scopes, currentScope, displayScopeInfo],
 	);
 
-	const canCheckUpdates = currentPlugin.source_info.can_check_updates;
-
-	const { data: updateStatus } = useQuery(
-		pluginUpdateStatusQueryOptions({
-			api,
-			pluginId: currentPlugin.id,
-			scope: currentScope,
-			enabled: canCheckUpdates,
-		}),
-	);
-
-	const updateAvailable = updateStatus?.update_available ?? false;
-	const latestVersion = updateStatus?.latest_version ?? null;
-
 	const providedSkills = pluginDetail?.provided_skills ?? [];
 	const openProvidedSkillMutation = useMutation({
 		...openSkillInEditorMutationOptions({
@@ -125,10 +110,9 @@ export function PluginDetail({
 		disableMutation,
 		isToggling,
 		updateMutation,
-		checkUpdateMutation,
 		reinstallMutation,
 		uninstallMutation,
-		handleSourceRefresh,
+		handleUpdate,
 		handleReinstall,
 		handleUninstall,
 		handleOpenUrl,
@@ -137,8 +121,6 @@ export function PluginDetail({
 		currentPlugin,
 		currentScope,
 		currentScopeInfo,
-		updateAvailable,
-		latestVersion,
 	});
 	const confirmUninstall = () => {
 		setShowUninstallConfirm(false);
@@ -184,16 +166,9 @@ export function PluginDetail({
 							sourceVersion={sourceVersion}
 							sourceUrl={currentPlugin.source_info.url ?? null}
 							isGitHubSource={currentPlugin.source_info.is_github}
-							canCheckUpdates={
-								currentPlugin.source_info.can_check_updates
-							}
-							updateAvailable={updateAvailable}
-							latestVersion={latestVersion}
-							isUpdating={
-								updateMutation.isPending ||
-								checkUpdateMutation.isPending
-							}
-							onRefresh={handleSourceRefresh}
+							canUpdate={currentPlugin.source_info.can_reinstall}
+							isUpdating={updateMutation.isPending}
+							onUpdate={handleUpdate}
 							onOpenUrl={handleOpenUrl}
 						/>
 

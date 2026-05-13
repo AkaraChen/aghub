@@ -820,13 +820,10 @@ export default {
 	bulkUninstallPluginsConfirm:
 		"确定要卸载这 {{count}} 个被选中的插件吗？这会移除每个插件当前已安装的所有 scope。",
 	bulkUninstallPluginsFailed: "批量卸载插件失败: {{error}}",
-	noUpdateAvailable: "已是最新版本",
-	updateCheckFailed: "检查更新失败: {{error}}",
 	updatePlugin: "更新插件",
 	updating: "更新中...",
 	pluginUpdated: "插件已更新到 v{{version}}",
 	pluginUpdateRestartHint: "重启 Claude Code 以加载新版本。",
-	updateToVersion: "更新到 v{{version}}",
 	updateFailed: "更新插件失败: {{error}}",
 	pluginNotFound: "插件未找到",
 	marketplaceNotFound: "市场未找到。请先克隆市场。",

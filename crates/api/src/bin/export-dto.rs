@@ -35,7 +35,6 @@ use aghub_api::dto::{
 		CCMarketplaceAddRequest, CCMarketplaceEntryResponse,
 		CCMarketplaceListResponse, CCMarketplaceMutationResponse,
 		CCMarketplaceSourceResponse, CCPluginAuthorResponse,
-		CCPluginCheckUpdateRequest, CCPluginCheckUpdateResponse,
 		CCPluginCliStatusResponse, CCPluginConfigResponse,
 		CCPluginDetailResponse, CCPluginHookActionResponse,
 		CCPluginHookEventResponse, CCPluginHookMatcherResponse,
@@ -233,8 +232,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<CCPluginUninstallResponse>(&cfg)?;
 	export_type::<CCPluginUpdateRequest>(&cfg)?;
 	export_type::<CCPluginUpdateResponse>(&cfg)?;
-	export_type::<CCPluginCheckUpdateRequest>(&cfg)?;
-	export_type::<CCPluginCheckUpdateResponse>(&cfg)?;
 	export_type::<CCPluginOpenSkillInEditorRequest>(&cfg)?;
 	export_type::<CCPluginConfigResponse>(&cfg)?;
 	export_type::<CCPluginUpdateConfigRequest>(&cfg)?;

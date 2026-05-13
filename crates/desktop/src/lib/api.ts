@@ -6,8 +6,6 @@ import type {
 	CCMarketplaceAddRequest,
 	CCMarketplaceListResponse,
 	CCMarketplaceMutationResponse,
-	CCPluginCheckUpdateRequest,
-	CCPluginCheckUpdateResponse,
 	CCPluginCliStatusResponse,
 	CCPluginPruneRequest,
 	CCPluginPruneResponse,
@@ -775,13 +773,6 @@ export function createApi(baseUrl: string) {
 			): Promise<CCPluginUpdateResponse> {
 				return client
 					.post("plugins/update", { json: body, timeout: 180000 })
-					.json();
-			},
-			checkUpdate(
-				body: CCPluginCheckUpdateRequest,
-			): Promise<CCPluginCheckUpdateResponse> {
-				return client
-					.post("plugins/check-update", { json: body })
 					.json();
 			},
 			openFolder(pluginId: string, scope?: string): Promise<void> {

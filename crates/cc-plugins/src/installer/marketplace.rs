@@ -4,7 +4,6 @@ mod source;
 pub use self::registry_catalog::MarketplaceRegistry;
 pub(super) use self::source::{
 	is_marketplace_source, load_marketplace_repository_urls,
-	marketplace_path_for,
 };
 
 #[cfg(test)]

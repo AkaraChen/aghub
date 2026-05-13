@@ -7,8 +7,6 @@ import type {
 	CCMarketplaceAddRequest,
 	CCMarketplaceListResponse,
 	CCMarketplaceMutationResponse,
-	CCPluginCheckUpdateRequest,
-	CCPluginCheckUpdateResponse,
 	CCPluginConfigResponse,
 	CCPluginDetailResponse,
 	CCPluginInstallRequest,
@@ -64,36 +62,6 @@ export function pluginDetailQueryOptions({
 			? queryKeys.plugins.detail(pluginId)
 			: queryKeys.plugins.detailDisabled(),
 		queryFn: () => api.plugins.detail(pluginId!),
-		enabled: isEnabled,
-		staleTime,
-	});
-}
-
-interface PluginUpdateStatusQueryParams {
-	api: ApiClient;
-	pluginId?: string;
-	scope?: string | null;
-	enabled?: boolean;
-	staleTime?: number;
-}
-
-export function pluginUpdateStatusQueryOptions({
-	api,
-	pluginId,
-	scope,
-	enabled = true,
-	staleTime = 30_000,
-}: PluginUpdateStatusQueryParams) {
-	const isEnabled = enabled && Boolean(pluginId);
-	return queryOptions({
-		queryKey: pluginId
-			? queryKeys.plugins.updateStatus(pluginId, scope)
-			: queryKeys.plugins.updateStatusDisabled(),
-		queryFn: () =>
-			api.plugins.checkUpdate({
-				plugin_id: pluginId!,
-				scope: scope ?? undefined,
-			}),
 		enabled: isEnabled,
 		staleTime,
 	});
@@ -499,25 +467,6 @@ export function updatePluginMutationOptions({
 			await invalidatePluginQueries(queryClient, variables.plugin_id);
 			await onSuccess?.(data, variables);
 		},
-	});
-}
-
-interface CheckPluginUpdateMutationParams {
-	api: ApiClient;
-	onSuccess?: (
-		data: CCPluginCheckUpdateResponse,
-		variables: CCPluginCheckUpdateRequest,
-	) => void | Promise<void>;
-}
-
-export function checkPluginUpdateMutationOptions({
-	api,
-	onSuccess,
-}: CheckPluginUpdateMutationParams) {
-	return mutationOptions({
-		mutationFn: (body: CCPluginCheckUpdateRequest) =>
-			api.plugins.checkUpdate(body),
-		onSuccess,
 	});
 }
 
