@@ -834,6 +834,7 @@ export default {
 	updatePlugin: "Update Plugin",
 	updating: "Updating...",
 	pluginUpdated: "Plugin updated to v{{version}}",
+	pluginUpdateRestartHint: "Restart Claude Code to load the new version.",
 	updateToVersion: "Update to v{{version}}",
 	updateFailed: "Failed to update plugin: {{error}}",
 	pluginNotFound: "Plugin not found",

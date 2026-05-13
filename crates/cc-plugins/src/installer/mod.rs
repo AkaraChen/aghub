@@ -87,7 +87,10 @@ mod tests {
 			assert_eq!(info.scope, "global");
 			assert_eq!(info.version, "1.2.3");
 			assert!(install_path.join(".claude-plugin/plugin.json").exists());
-			assert!(installer.is_installed(&plugin_id, InstallScope::Global).await);
+			assert!(installer
+				.is_installed(&plugin_id, InstallScope::Global)
+				.await
+				.expect("is_installed after install"));
 
 			installer
 				.uninstall(&plugin_id, InstallScope::Global, true, false)
@@ -96,7 +99,8 @@ mod tests {
 
 			assert!(!installer
 				.is_installed(&plugin_id, InstallScope::Global)
-				.await);
+				.await
+				.expect("is_installed after uninstall"));
 			assert!(install_path.exists());
 
 			let reinstalled = installer
@@ -106,7 +110,10 @@ mod tests {
 
 			assert_eq!(reinstalled.version, "1.2.3");
 			assert_eq!(reinstalled.install_path, info.install_path);
-			assert!(installer.is_installed(&plugin_id, InstallScope::Global).await);
+			assert!(installer
+				.is_installed(&plugin_id, InstallScope::Global)
+				.await
+				.expect("is_installed after reinstall"));
 
 			installer
 				.uninstall(&plugin_id, InstallScope::Global, false, false)
@@ -115,7 +122,8 @@ mod tests {
 
 			assert!(!installer
 				.is_installed(&plugin_id, InstallScope::Global)
-				.await);
+				.await
+				.expect("is_installed after final uninstall"));
 			assert!(!install_path.exists());
 		}
 		.await;

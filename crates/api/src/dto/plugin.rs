@@ -275,6 +275,11 @@ pub struct CCPluginUpdateRequest {
 pub struct CCPluginUpdateResponse {
 	pub success: bool,
 	pub message: String,
+	/// Mirrors the upstream CLI behavior: a plugin update only takes
+	/// effect after Claude Code reloads. True whenever a new version was
+	/// installed and false for the "already up to date" early return.
+	#[serde(default)]
+	pub restart_required: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]

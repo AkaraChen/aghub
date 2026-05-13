@@ -417,6 +417,7 @@ pub async fn update_plugin(
 				"Plugin '{}' updated successfully (version: {})",
 				req.plugin_id, info.version
 			),
+			restart_required: true,
 		})),
 		Err(e) => {
 			if e.downcast_ref::<aghub_cc_plugins::errors::PluginError>()
@@ -426,6 +427,7 @@ pub async fn update_plugin(
 				return Ok(Json(CCPluginUpdateResponse {
 					success: true,
 					message: "Plugin is already up to date".to_string(),
+					restart_required: false,
 				}));
 			}
 			Err(plugin_error(

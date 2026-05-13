@@ -64,16 +64,12 @@ impl PluginInstaller {
 		&self,
 		id: &PluginId,
 		scope: InstallScope,
-	) -> bool {
-		let Ok(cli) = ClaudeCli::new() else {
-			return false;
-		};
-		let Ok(plugins) = cli.plugin_list().await else {
-			return false;
-		};
+	) -> Result<bool> {
+		let cli = ClaudeCli::new()?;
+		let plugins = cli.plugin_list().await?;
 		let id_str = id.to_string();
 		let target = cli_scope(scope);
-		plugins.iter().any(|p| p.id == id_str && p.scope == target)
+		Ok(plugins.iter().any(|p| p.id == id_str && p.scope == target))
 	}
 
 	pub async fn install(

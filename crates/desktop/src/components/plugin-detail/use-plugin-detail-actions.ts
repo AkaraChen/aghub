@@ -77,16 +77,16 @@ export function usePluginDetailActions({
 		...updatePluginMutationOptions({
 			api,
 			queryClient,
-			onSuccess: async () => {
+			onSuccess: async (data) => {
 				const version =
 					latestVersion ??
 					currentScopeInfo?.version ??
 					currentPlugin.version;
-				toast.success(
-					t("pluginUpdated", {
-						version,
-					}),
-				);
+				toast.success(t("pluginUpdated", { version }), {
+					description: data.restart_required
+						? t("pluginUpdateRestartHint")
+						: undefined,
+				});
 			},
 		}),
 		onError: (error) => toast.danger(errorMessage(error, "updateFailed")),

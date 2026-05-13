@@ -825,6 +825,7 @@ export default {
 	updatePlugin: "更新插件",
 	updating: "更新中...",
 	pluginUpdated: "插件已更新到 v{{version}}",
+	pluginUpdateRestartHint: "重启 Claude Code 以加载新版本。",
 	updateToVersion: "更新到 v{{version}}",
 	updateFailed: "更新插件失败: {{error}}",
 	pluginNotFound: "插件未找到",

@@ -821,6 +821,7 @@ export default {
 	updatePlugin: "更新外掛",
 	updating: "更新中...",
 	pluginUpdated: "外掛已更新到 v{{version}}",
+	pluginUpdateRestartHint: "重新啟動 Claude Code 以載入新版本。",
 	updateToVersion: "更新到 v{{version}}",
 	updateFailed: "更新外掛失敗: {{error}}",
 	pluginNotFound: "外掛未找到",
