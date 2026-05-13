@@ -20,6 +20,7 @@ import {
 	addMarketplaceMutationOptions,
 	marketplaceListQueryOptions,
 	removeMarketplaceMutationOptions,
+	updateMarketplaceMutationOptions,
 	updateMarketplaceOneMutationOptions,
 } from "../../requests/plugins";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
@@ -97,6 +98,25 @@ export function MarketplacesPanel({
 		},
 	});
 
+	const updateAllMutation = useMutation({
+		...updateMarketplaceMutationOptions({
+			api,
+			queryClient,
+			onSuccess: (resp) => {
+				toast.success(t("marketplaceUpdated"), {
+					description: t("marketplaceUpdatedCount", {
+						count: resp.updated_count,
+					}),
+				});
+			},
+		}),
+		onError: (mutationError) => {
+			toast.danger(t("marketplaceUpdateFailed"), {
+				description: errorMessage(mutationError),
+			});
+		},
+	});
+
 	const handleAdd = () => {
 		const trimmed = source.trim();
 		if (!trimmed) {
@@ -110,6 +130,7 @@ export function MarketplacesPanel({
 	};
 
 	const marketplaces = data?.marketplaces ?? [];
+	const bulkUpdating = updateAllMutation.isPending;
 
 	return (
 		<div className="flex h-full min-h-0 flex-col gap-3">
@@ -146,6 +167,21 @@ export function MarketplacesPanel({
 							{t("marketplaceAddSubmit")}
 						</>
 					)}
+				</Button>
+				<Button
+					variant="secondary"
+					onPress={() => updateAllMutation.mutate()}
+					isDisabled={bulkUpdating || marketplaces.length === 0}
+				>
+					<span className="flex items-center gap-1.5">
+						<ArrowPathIcon
+							className={cn(
+								"size-4",
+								bulkUpdating && "animate-spin",
+							)}
+						/>
+						{t("updateMarketplace")}
+					</span>
 				</Button>
 			</div>
 
@@ -198,8 +234,10 @@ export function MarketplacesPanel({
 									removeMutation.variables === entry.name
 								}
 								updating={
-									updateOneMutation.isPending &&
-									updateOneMutation.variables === entry.name
+									bulkUpdating ||
+									(updateOneMutation.isPending &&
+										updateOneMutation.variables ===
+											entry.name)
 								}
 							/>
 						))}
@@ -231,16 +269,9 @@ function MarketplaceRow({
 		<li className="rounded-lg border border-separator/60 bg-surface px-3 py-2.5">
 			<div className="flex items-start justify-between gap-3">
 				<div className="min-w-0 flex-1">
-					<div className="flex items-center gap-2">
-						<span className="truncate text-sm font-medium">
-							{entry.name}
-						</span>
-						{isProtected && (
-							<span className="rounded bg-default/20 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted">
-								{t("marketplaceProtected")}
-							</span>
-						)}
-					</div>
+					<span className="truncate text-sm font-medium">
+						{entry.name}
+					</span>
 					<p className="mt-0.5 truncate text-xs text-muted">
 						{describeSource(entry.source)}
 					</p>
@@ -260,20 +291,22 @@ function MarketplaceRow({
 							className={cn("size-4", updating && "animate-spin")}
 						/>
 					</Button>
-					<Button
-						variant="secondary"
-						size="sm"
-						onPress={() => onRemove(entry.name)}
-						isDisabled={removing || isProtected}
-						aria-label={t("marketplaceRemove")}
-						className="text-danger"
-					>
-						{removing ? (
-							<Spinner size="sm" />
-						) : (
-							<TrashIcon className="size-4" />
-						)}
-					</Button>
+					{!isProtected && (
+						<Button
+							variant="secondary"
+							size="sm"
+							onPress={() => onRemove(entry.name)}
+							isDisabled={removing}
+							aria-label={t("marketplaceRemove")}
+							className="text-danger"
+						>
+							{removing ? (
+								<Spinner size="sm" />
+							) : (
+								<TrashIcon className="size-4" />
+							)}
+						</Button>
+					)}
 				</div>
 			</div>
 		</li>

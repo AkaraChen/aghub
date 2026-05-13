@@ -1,6 +1,5 @@
 "use client";
 
-import { ArrowPathIcon } from "@heroicons/react/24/solid";
 import {
 	Button,
 	ListBox,
@@ -15,11 +14,9 @@ import { useDeferredValue, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useApi } from "../hooks/use-api";
 import { usePluginInstallState } from "../hooks/use-plugin-install-state";
-import { cn } from "../lib/utils";
 import {
 	installPluginMutationOptions,
 	pluginMarketQueryOptions,
-	updateMarketplaceMutationOptions,
 } from "../requests/plugins";
 import { PluginMarketTable } from "./plugin-market/market-table";
 import { MarketplacesPanel } from "./plugin-market/marketplaces-panel";
@@ -87,25 +84,6 @@ export function PluginMarketDialog({
 		onError: (mutationError, variables) => {
 			clearInstallState(variables.plugin_id);
 			toast.danger(errorMessage(mutationError));
-		},
-	});
-
-	const updateMarketplaceMutation = useMutation({
-		...updateMarketplaceMutationOptions({
-			api,
-			queryClient,
-			onSuccess: async (data) => {
-				toast.success(t("marketplaceUpdated"), {
-					description: t("marketplaceUpdatedCount", {
-						count: data.updated_count,
-					}),
-				});
-			},
-		}),
-		onError: (mutationError) => {
-			toast.danger(t("marketplaceUpdateFailed"), {
-				description: errorMessage(mutationError),
-			});
 		},
 	});
 
@@ -210,10 +188,6 @@ export function PluginMarketDialog({
 		});
 	};
 
-	const handleUpdateMarketplace = () => {
-		updateMarketplaceMutation.mutate();
-	};
-
 	const resetFilters = () => {
 		setSearchQuery("");
 		setSelectedCategory(null);
@@ -225,7 +199,6 @@ export function PluginMarketDialog({
 	};
 
 	const selectedCategoryKey = selectedCategory ?? "__all__";
-	const isRefreshingMarketplace = updateMarketplaceMutation.isPending;
 	const [activeTab, setActiveTab] = useState<"plugins" | "marketplaces">(
 		"plugins",
 	);
@@ -326,24 +299,6 @@ export function PluginMarketDialog({
 												</ListBox>
 											</Select.Popover>
 										</Select>
-										<Button
-											variant="secondary"
-											size="sm"
-											className="shrink-0"
-											onPress={handleUpdateMarketplace}
-											isDisabled={isRefreshingMarketplace}
-										>
-											<span className="flex items-center gap-1.5">
-												<ArrowPathIcon
-													className={cn(
-														"size-4",
-														isRefreshingMarketplace &&
-															"animate-spin",
-													)}
-												/>
-												{t("updateMarketplace")}
-											</span>
-										</Button>
 									</div>
 								</div>
 
