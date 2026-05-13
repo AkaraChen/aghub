@@ -18,10 +18,9 @@ import { useApi } from "../../hooks/use-api";
 import { cn } from "../../lib/utils";
 import {
 	addMarketplaceMutationOptions,
+	invalidateMarketplaceQueries,
 	marketplaceListQueryOptions,
 	removeMarketplaceMutationOptions,
-	updateMarketplaceMutationOptions,
-	updateMarketplaceOneMutationOptions,
 } from "../../requests/plugins";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 
@@ -40,6 +39,10 @@ export function MarketplacesPanel({
 	const api = useApi();
 	const queryClient = useQueryClient();
 	const [source, setSource] = useState("");
+	const [bulkUpdating, setBulkUpdating] = useState(false);
+	const [updatingMarketplaces, setUpdatingMarketplaces] = useState<
+		Set<string>
+	>(() => new Set());
 
 	const errorMessage = (value: unknown) =>
 		value instanceof Error ? value.message : t("unknownError");
@@ -83,40 +86,6 @@ export function MarketplacesPanel({
 		},
 	});
 
-	const updateOneMutation = useMutation({
-		...updateMarketplaceOneMutationOptions({
-			api,
-			queryClient,
-			onSuccess: (_data, name) => {
-				toast.success(t("marketplaceUpdatedOne", { name }));
-			},
-		}),
-		onError: (mutationError, name) => {
-			toast.danger(t("marketplaceUpdateFailed"), {
-				description: `${name}: ${errorMessage(mutationError)}`,
-			});
-		},
-	});
-
-	const updateAllMutation = useMutation({
-		...updateMarketplaceMutationOptions({
-			api,
-			queryClient,
-			onSuccess: (resp) => {
-				toast.success(t("marketplaceUpdated"), {
-					description: t("marketplaceUpdatedCount", {
-						count: resp.updated_count,
-					}),
-				});
-			},
-		}),
-		onError: (mutationError) => {
-			toast.danger(t("marketplaceUpdateFailed"), {
-				description: errorMessage(mutationError),
-			});
-		},
-	});
-
 	const handleAdd = () => {
 		const trimmed = source.trim();
 		if (!trimmed) {
@@ -130,13 +99,90 @@ export function MarketplacesPanel({
 	};
 
 	const marketplaces = data?.marketplaces ?? [];
-	const bulkUpdating = updateAllMutation.isPending;
+
+	const setMarketplaceUpdating = (name: string, value: boolean) => {
+		setUpdatingMarketplaces((current) => {
+			const next = new Set(current);
+			if (value) {
+				next.add(name);
+			} else {
+				next.delete(name);
+			}
+			return next;
+		});
+	};
+
+	const updateMarketplace = async (name: string, announce: boolean) => {
+		setMarketplaceUpdating(name, true);
+		try {
+			await api.plugins.updateMarketplaceOne(name);
+			await invalidateMarketplaceQueries(queryClient);
+			if (announce) {
+				toast.success(t("marketplaceUpdatedOne", { name }));
+			}
+		} catch (mutationError) {
+			if (announce) {
+				toast.danger(t("marketplaceUpdateFailed"), {
+					description: `${name}: ${errorMessage(mutationError)}`,
+				});
+			}
+			throw mutationError;
+		} finally {
+			setMarketplaceUpdating(name, false);
+		}
+	};
+
+	const handleUpdateAll = async () => {
+		if (
+			bulkUpdating ||
+			updatingMarketplaces.size > 0 ||
+			marketplaces.length === 0
+		) {
+			return;
+		}
+
+		setBulkUpdating(true);
+		try {
+			const names = marketplaces.map((entry) => entry.name);
+			const results = await Promise.allSettled(
+				names.map((name) => updateMarketplace(name, false)),
+			);
+			await invalidateMarketplaceQueries(queryClient);
+
+			const failures = results.filter(
+				(result): result is PromiseRejectedResult =>
+					result.status === "rejected",
+			);
+			const updatedCount = names.length - failures.length;
+
+			if (failures.length === 0) {
+				toast.success(t("marketplaceUpdated"), {
+					description: t("marketplaceUpdatedCount", {
+						count: updatedCount,
+					}),
+				});
+				return;
+			}
+
+			toast.danger(t("marketplaceUpdateFailed"), {
+				description: t("marketplaceUpdatedCount", {
+					count: updatedCount,
+				}),
+			});
+		} catch (mutationError) {
+			toast.danger(t("marketplaceUpdateFailed"), {
+				description: errorMessage(mutationError),
+			});
+		} finally {
+			setBulkUpdating(false);
+		}
+	};
 
 	return (
-		<div className="flex h-full min-h-0 flex-col gap-3">
-			<div className="flex items-end gap-2">
+		<div className="flex h-full min-h-0 flex-col gap-2.5">
+			<div className="flex shrink-0 items-end gap-2">
 				<TextField
-					className="flex-1"
+					className="min-w-0 flex-1"
 					variant="secondary"
 					value={source}
 					onChange={setSource}
@@ -156,6 +202,8 @@ export function MarketplacesPanel({
 				</TextField>
 				<Button
 					variant="primary"
+					size="sm"
+					className="h-9 shrink-0 whitespace-nowrap"
 					onPress={handleAdd}
 					isDisabled={!source.trim() || addMutation.isPending}
 				>
@@ -170,8 +218,14 @@ export function MarketplacesPanel({
 				</Button>
 				<Button
 					variant="secondary"
-					onPress={() => updateAllMutation.mutate()}
-					isDisabled={bulkUpdating || marketplaces.length === 0}
+					size="sm"
+					className="h-9 shrink-0 whitespace-nowrap"
+					onPress={handleUpdateAll}
+					isDisabled={
+						bulkUpdating ||
+						updatingMarketplaces.size > 0 ||
+						marketplaces.length === 0
+					}
 				>
 					<span className="flex items-center gap-1.5">
 						<ArrowPathIcon
@@ -227,18 +281,13 @@ export function MarketplacesPanel({
 								entry={entry}
 								onRemove={(name) => removeMutation.mutate(name)}
 								onUpdate={(name) =>
-									updateOneMutation.mutate(name)
+									void updateMarketplace(name, true)
 								}
 								removing={
 									removeMutation.isPending &&
 									removeMutation.variables === entry.name
 								}
-								updating={
-									bulkUpdating ||
-									(updateOneMutation.isPending &&
-										updateOneMutation.variables ===
-											entry.name)
-								}
+								updating={updatingMarketplaces.has(entry.name)}
 							/>
 						))}
 					</ul>

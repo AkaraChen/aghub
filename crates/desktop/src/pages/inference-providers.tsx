@@ -40,7 +40,7 @@ import {
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Fuse from "fuse.js";
-import { type Key, useMemo, useState } from "react";
+import { type CSSProperties, type Key, useMemo, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { ListSearchHeader } from "../components/list-search-header";
@@ -190,15 +190,29 @@ function toProviderModelFormValues(models: string[]) {
 	return models.map((model) => createProviderModelFormValue(model));
 }
 
+function svgMaskStyle(svg: string): CSSProperties {
+	const dataUri = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+
+	return {
+		mask: `${dataUri} center / contain no-repeat`,
+		WebkitMask: `${dataUri} center / contain no-repeat`,
+	};
+}
+
+function ProviderLogo({ svg }: { svg: string }) {
+	return (
+		<span
+			aria-hidden
+			className="inline-flex size-4 shrink-0 bg-current text-foreground"
+			style={svgMaskStyle(svg)}
+		/>
+	);
+}
+
 function ProviderIcon({ format }: { format: InferenceProviderFormatDto }) {
 	const svg = format === "anthropic" ? anthropicLogo : openAiLogo;
 
-	return (
-		<span
-			className="inline-flex size-4 shrink-0 items-center justify-center text-foreground [&_svg]:size-4"
-			dangerouslySetInnerHTML={{ __html: svg }}
-		/>
-	);
+	return <ProviderLogo svg={svg} />;
 }
 
 const PRESET_LOGO_MAP: Record<string, string> = {
@@ -218,12 +232,7 @@ function PresetLogo({ logo }: { logo: string }) {
 			<ServerIcon className="size-4 shrink-0 text-muted" aria-hidden />
 		);
 	}
-	return (
-		<span
-			className="inline-flex size-4 shrink-0 items-center justify-center text-foreground [&_svg]:size-4"
-			dangerouslySetInnerHTML={{ __html: svg }}
-		/>
-	);
+	return <ProviderLogo svg={svg} />;
 }
 
 function MonoValue({

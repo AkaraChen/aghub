@@ -149,9 +149,7 @@ export function updateMarketplaceMutationOptions({
 	return mutationOptions({
 		mutationFn: () => api.plugins.updateMarketplace(),
 		onSuccess: async (data) => {
-			await queryClient.invalidateQueries({
-				queryKey: queryKeys.plugins.market(),
-			});
+			await invalidateMarketplaceQueries(queryClient);
 			await onSuccess?.(data);
 		},
 	});
@@ -176,7 +174,7 @@ export function marketplaceListQueryOptions({
 	});
 }
 
-async function invalidateMarketplaceQueries(queryClient: QueryClient) {
+export async function invalidateMarketplaceQueries(queryClient: QueryClient) {
 	await queryClient.invalidateQueries({
 		queryKey: queryKeys.plugins.marketplaces(),
 	});

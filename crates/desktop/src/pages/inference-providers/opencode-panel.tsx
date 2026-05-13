@@ -23,7 +23,7 @@ import {
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type {
@@ -224,18 +224,48 @@ function OpenCodeEditProviderDialog({
 	onClose: () => void;
 }) {
 	const { t } = useTranslation();
+
+	return (
+		<Modal.Backdrop
+			isOpen={isOpen}
+			onOpenChange={(open) => {
+				if (!open) onClose();
+			}}
+		>
+			<Modal.Container>
+				<Modal.Dialog className="sm:max-w-[440px]">
+					<Modal.CloseTrigger />
+					<Modal.Header>
+						<Modal.Heading>
+							{t("editOpenCodeProvider")}
+						</Modal.Heading>
+					</Modal.Header>
+					{isOpen && (
+						<OpenCodeEditProviderForm
+							key={provider.id}
+							provider={provider}
+							onClose={onClose}
+						/>
+					)}
+				</Modal.Dialog>
+			</Modal.Container>
+		</Modal.Backdrop>
+	);
+}
+
+function OpenCodeEditProviderForm({
+	provider,
+	onClose,
+}: {
+	provider: AgentProviderResponse;
+	onClose: () => void;
+}) {
+	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
 	const [name, setName] = useState(provider.name);
 	const [apiKey, setApiKey] = useState("");
 	const [nameError, setNameError] = useState<string | null>(null);
-
-	useEffect(() => {
-		if (!isOpen) return;
-		setName(provider.name);
-		setApiKey("");
-		setNameError(null);
-	}, [isOpen, provider.id, provider.name]);
 
 	const updateMutation = useMutation({
 		...updateOpenCodeProviderMutationOptions({
@@ -261,98 +291,71 @@ function OpenCodeEditProviderDialog({
 			id: provider.id,
 			body: {
 				name: trimmedName === provider.name ? null : trimmedName,
-				api_key: trimmedApiKey ? trimmedApiKey : null,
+				api_key: trimmedApiKey || null,
 			},
 		});
 	};
 
 	return (
-		<Modal.Backdrop
-			isOpen={isOpen}
-			onOpenChange={(open) => {
-				if (!open) onClose();
-			}}
-		>
-			<Modal.Container>
-				<Modal.Dialog className="sm:max-w-[440px]">
-					<Modal.CloseTrigger />
-					<Modal.Header>
-						<Modal.Heading>
-							{t("editOpenCodeProvider")}
-						</Modal.Heading>
-					</Modal.Header>
-					<form onSubmit={handleSubmit}>
-						<Modal.Body className="grid gap-4 p-4">
-							{updateMutation.error && (
-								<Alert status="danger">
-									<Alert.Indicator />
-									<Alert.Content>
-										<Alert.Description>
-											{updateMutation.error instanceof
-											Error
-												? updateMutation.error.message
-												: String(updateMutation.error)}
-										</Alert.Description>
-									</Alert.Content>
-								</Alert>
-							)}
+		<form onSubmit={handleSubmit}>
+			<Modal.Body className="grid gap-4 p-4">
+				{updateMutation.error && (
+					<Alert status="danger">
+						<Alert.Indicator />
+						<Alert.Content>
+							<Alert.Description>
+								{updateMutation.error instanceof Error
+									? updateMutation.error.message
+									: String(updateMutation.error)}
+							</Alert.Description>
+						</Alert.Content>
+					</Alert>
+				)}
 
-							<TextField
-								className="w-full"
-								isRequired
-								validationBehavior="aria"
-								isInvalid={Boolean(nameError)}
-							>
-								<Label>{t("providerName")}</Label>
-								<Input
-									value={name}
-									onChange={(event) => {
-										setName(event.target.value);
-										if (nameError) setNameError(null);
-									}}
-									placeholder={t("providerNamePlaceholder")}
-									variant="secondary"
-								/>
-								{nameError && (
-									<FieldError>{nameError}</FieldError>
-								)}
-							</TextField>
+				<TextField
+					className="w-full"
+					isRequired
+					validationBehavior="aria"
+					isInvalid={Boolean(nameError)}
+				>
+					<Label>{t("providerName")}</Label>
+					<Input
+						value={name}
+						onChange={(event) => {
+							setName(event.target.value);
+							if (nameError) setNameError(null);
+						}}
+						placeholder={t("providerNamePlaceholder")}
+						variant="secondary"
+					/>
+					{nameError && <FieldError>{nameError}</FieldError>}
+				</TextField>
 
-							<TextField className="w-full">
-								<Label>{t("providerApiKey")}</Label>
-								<Input
-									type="password"
-									value={apiKey}
-									onChange={(event) =>
-										setApiKey(event.target.value)
-									}
-									placeholder={t(
-										"providerApiKeyEditPlaceholder",
-									)}
-									variant="secondary"
-								/>
-							</TextField>
-						</Modal.Body>
-						<Modal.Footer>
-							<Button
-								type="button"
-								variant="tertiary"
-								onPress={onClose}
-								isDisabled={updateMutation.isPending}
-							>
-								{t("cancel")}
-							</Button>
-							<Button
-								type="submit"
-								isPending={updateMutation.isPending}
-							>
-								{t("save")}
-							</Button>
-						</Modal.Footer>
-					</form>
-				</Modal.Dialog>
-			</Modal.Container>
-		</Modal.Backdrop>
+				<TextField className="w-full">
+					<Label>{t("providerApiKey")}</Label>
+					<Input
+						type="password"
+						value={apiKey}
+						onChange={(event) => setApiKey(event.target.value)}
+						placeholder={t("providerApiKeyEditPlaceholder")}
+						variant="secondary"
+					/>
+				</TextField>
+			</Modal.Body>
+			<Modal.Footer>
+				<Button
+					type="button"
+					variant="tertiary"
+					onPress={onClose}
+					isDisabled={updateMutation.isPending}
+				>
+					{t("cancel")}
+				</Button>
+				<Button type="submit" isPending={updateMutation.isPending}>
+					{t("save")}
+				</Button>
+			</Modal.Footer>
+		</form>
 	);
 }
 

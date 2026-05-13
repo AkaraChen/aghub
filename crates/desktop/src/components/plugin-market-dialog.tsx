@@ -220,12 +220,22 @@ export function PluginMarketDialog({
 									aria-label={t("pluginMarketTabs")}
 									className="inline-flex w-auto"
 								>
-									<Tabs.Tab id="plugins">
-										{t("pluginMarketTabPlugins")}
+									<Tabs.Tab
+										id="plugins"
+										className="min-w-max"
+									>
+										<span className="whitespace-nowrap">
+											{t("pluginMarketTabPlugins")}
+										</span>
 										<Tabs.Indicator />
 									</Tabs.Tab>
-									<Tabs.Tab id="marketplaces">
-										{t("pluginMarketTabMarketplaces")}
+									<Tabs.Tab
+										id="marketplaces"
+										className="min-w-max"
+									>
+										<span className="whitespace-nowrap">
+											{t("pluginMarketTabMarketplaces")}
+										</span>
 										<Tabs.Indicator />
 									</Tabs.Tab>
 								</Tabs.List>
