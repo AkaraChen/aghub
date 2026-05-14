@@ -8,7 +8,6 @@ import {
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import { FolderIcon, GlobeAltIcon } from "@heroicons/react/24/outline";
-import claudeCodeIcon from "@lobehub/icons-static-svg/icons/claudecode-color.svg?raw";
 import githubIcon from "@lobehub/icons-static-svg/icons/github.svg?raw";
 import {
 	Button,
@@ -17,8 +16,10 @@ import {
 	Spinner,
 	Table,
 	TextField,
+	Tooltip,
 	toast,
 } from "@heroui/react";
+import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -35,6 +36,7 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 
 const PROTECTED_MARKETPLACES = new Set(["claude-plugins-official"]);
 const OFFICIAL_GITHUB_URL = "https://github.com/anthropics/claude-code";
+const OFFICIAL_GITHUB_REPO = "anthropics/claude-code";
 
 interface MarketplacesPanelProps {
 	enabled: boolean;
@@ -260,9 +262,7 @@ export function MarketplacesPanel({
 						<ArrowPathIcon
 							className={cn(
 								"size-4",
-								// Spin whenever any update is in flight, including per-row
-								(isUpdatingAll || isAnyUpdating) &&
-									"animate-spin",
+								isUpdatingAll && "animate-spin",
 							)}
 						/>
 						{t("updateMarketplace")}
@@ -343,7 +343,7 @@ export function MarketplacesPanel({
 															<span className="truncate text-sm font-medium text-foreground">
 																{entry.name}
 															</span>
-															<span className="max-w-[12rem] shrink-0 overflow-hidden text-xs text-muted">
+															<span className="shrink-0 whitespace-nowrap text-xs text-muted">
 																<SourceLink
 																	source={
 																		entry.source
@@ -363,57 +363,76 @@ export function MarketplacesPanel({
 												</Table.Cell>
 												<Table.Cell>
 													<div className="flex justify-end gap-1 py-0.5">
-														<Button
-															variant="tertiary"
-															size="sm"
-															onPress={() =>
-																void updateMarketplace(
-																	entry.name,
-																	{
-																		announce: true,
-																		invalidate: true,
-																	},
-																)
-															}
-															isDisabled={
-																isUpdating ||
-																isUpdatingAll
-															}
-															aria-label={t(
-																"marketplaceRefresh",
-															)}
-														>
-															<ArrowPathIcon
-																className={cn(
-																	"size-4",
-																	isUpdating &&
-																		"animate-spin",
-																)}
-															/>
-														</Button>
-														{!isProtected && (
+														<Tooltip delay={0}>
 															<Button
 																variant="tertiary"
 																size="sm"
-																onPress={() =>
-																	removeMutation.mutate(
+																onPress={() => {
+																	if (
+																		isUpdating ||
+																		isUpdatingAll
+																	) {
+																		return;
+																	}
+																	void updateMarketplace(
 																		entry.name,
-																	)
-																}
+																		{
+																			announce: true,
+																			invalidate: true,
+																		},
+																	);
+																}}
 																isDisabled={
-																	isRemoving
+																	isUpdatingAll
 																}
 																aria-label={t(
-																	"marketplaceRemove",
+																	"marketplaceRefresh",
 																)}
-																className="text-danger"
 															>
-																{isRemoving ? (
-																	<Spinner size="sm" />
-																) : (
-																	<TrashIcon className="size-4" />
-																)}
+																<ArrowPathIcon
+																	className={cn(
+																		"size-4",
+																		isUpdating &&
+																			"animate-spin",
+																	)}
+																/>
 															</Button>
+															<Tooltip.Content>
+																{t(
+																	"marketplaceRefresh",
+																)}
+															</Tooltip.Content>
+														</Tooltip>
+														{!isProtected && (
+															<Tooltip delay={0}>
+																<Button
+																	variant="tertiary"
+																	size="sm"
+																	onPress={() =>
+																		removeMutation.mutate(
+																			entry.name,
+																		)
+																	}
+																	isDisabled={
+																		isRemoving
+																	}
+																	aria-label={t(
+																		"marketplaceRemove",
+																	)}
+																	className="text-danger"
+																>
+																	{isRemoving ? (
+																		<Spinner size="sm" />
+																	) : (
+																		<TrashIcon className="size-4" />
+																	)}
+																</Button>
+																<Tooltip.Content>
+																	{t(
+																		"marketplaceRemove",
+																	)}
+																</Tooltip.Content>
+															</Tooltip>
 														)}
 													</div>
 												</Table.Cell>
@@ -437,24 +456,23 @@ function SourceLink({
 	source: CCMarketplaceSourceResponse;
 	isOfficial: boolean;
 }) {
-	const { t } = useTranslation();
-
 	if (isOfficial) {
 		return (
 			<a
 				href={OFFICIAL_GITHUB_URL}
-				target="_blank"
 				rel="noopener noreferrer"
 				className="flex min-w-0 items-center gap-1 text-muted transition-colors hover:text-foreground"
+				onClick={(e) => {
+					e.preventDefault();
+					void openUrl(OFFICIAL_GITHUB_URL);
+				}}
 			>
 				<span
 					className="inline-flex size-3.5 shrink-0 items-center [&_svg]:size-full"
 					// eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml
-					dangerouslySetInnerHTML={{ __html: claudeCodeIcon }}
+					dangerouslySetInnerHTML={{ __html: githubIcon }}
 				/>
-				<span className="min-w-0 flex-1 truncate">
-					{t("marketplaceOfficial")}
-				</span>
+				<span>{OFFICIAL_GITHUB_REPO}</span>
 			</a>
 		);
 	}
@@ -464,42 +482,46 @@ function SourceLink({
 			return (
 				<a
 					href={`https://github.com/${source.repo}`}
-					target="_blank"
 					rel="noopener noreferrer"
 					className="flex min-w-0 items-center gap-1 text-muted transition-colors hover:text-foreground"
+					onClick={(e) => {
+						e.preventDefault();
+						void openUrl(`https://github.com/${source.repo}`);
+					}}
 				>
 					<span
 						className="inline-flex size-3.5 shrink-0 items-center [&_svg]:size-full"
 						// eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml
 						dangerouslySetInnerHTML={{ __html: githubIcon }}
 					/>
-					<span className="min-w-0 flex-1 truncate">
-						{source.repo}
-					</span>
+					<span>{source.repo}</span>
 				</a>
 			);
 		case "url":
 			return (
 				<a
 					href={source.url}
-					target="_blank"
 					rel="noopener noreferrer"
 					className="flex min-w-0 items-center gap-1 text-muted transition-colors hover:text-foreground"
+					onClick={(e) => {
+						e.preventDefault();
+						void openUrl(source.url);
+					}}
 				>
 					<GlobeAltIcon className="size-3.5 shrink-0" />
-					<span className="min-w-0 flex-1 truncate">
-						{source.url}
-					</span>
+					<span>{source.url}</span>
 				</a>
 			);
 		case "local":
 			return (
-				<span className="flex min-w-0 items-center gap-1">
+				<button
+					type="button"
+					className="flex cursor-pointer items-center gap-1 text-muted transition-colors hover:text-foreground"
+					onClick={() => void revealItemInDir(source.path)}
+				>
 					<FolderIcon className="size-3.5 shrink-0" />
-					<span className="min-w-0 flex-1 truncate">
-						{source.path}
-					</span>
-				</span>
+					<span>{source.path}</span>
+				</button>
 			);
 	}
 }
