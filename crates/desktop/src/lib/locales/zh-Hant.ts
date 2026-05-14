@@ -789,6 +789,8 @@ export default {
 	marketplaceUpdatedOne: "已重新整理市場「{{name}}」",
 	marketplaceLoadFailed: "載入市場失敗",
 	marketplaceNoneTitle: "尚未設定任何市場來源",
+	marketplaceOfficial: "官方",
+	actions: "操作",
 	refreshing: "重新整理中...",
 	pluginMarketCategory: "分類",
 	browseMarketplace: "瀏覽市場",

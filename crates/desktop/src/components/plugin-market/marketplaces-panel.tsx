@@ -130,7 +130,7 @@ export function MarketplacesPanel({
 		try {
 			await Promise.all([
 				// 300ms floor: prevents spinner from flickering on fast connections
-				new Promise((r) => setTimeout(r, 300)),
+				new Promise<void>((r) => setTimeout(r, 300)),
 				api.plugins.updateMarketplaceOne(name),
 			]);
 			if (invalidate) {
@@ -191,14 +191,13 @@ export function MarketplacesPanel({
 						count: updatedCount,
 					}),
 				});
-				return;
+			} else {
+				toast.danger(t("marketplaceUpdateFailed"), {
+					description: t("marketplaceUpdatedCount", {
+						count: updatedCount,
+					}),
+				});
 			}
-
-			toast.danger(t("marketplaceUpdateFailed"), {
-				description: t("marketplaceUpdatedCount", {
-					count: updatedCount,
-				}),
-			});
 		} finally {
 			setIsUpdatingAll(false);
 		}
@@ -207,7 +206,9 @@ export function MarketplacesPanel({
 	const isAnyUpdating = updatingMarketplaces.size > 0;
 
 	return (
-		<div className="flex min-h-[16rem] max-h-[52vh] flex-col overflow-hidden rounded-lg bg-surface">
+		// min-h-[16rem]: prevents panel from collapsing in the empty/loading states
+		// max-h-[52vh]: fits inside the 80vh modal after the tab bar and dialog header
+		<div className="flex min-h-[16rem] max-h-[52vh] flex-col overflow-hidden">
 			<div className="flex shrink-0 items-end gap-2 border-b border-separator/50 p-2.5">
 				<TextField
 					className="min-w-0 flex-1"
@@ -259,7 +260,9 @@ export function MarketplacesPanel({
 						<ArrowPathIcon
 							className={cn(
 								"size-4",
-								isUpdatingAll && "animate-spin",
+								// Spin whenever any update is in flight, including per-row
+								(isUpdatingAll || isAnyUpdating) &&
+									"animate-spin",
 							)}
 						/>
 						{t("updateMarketplace")}
@@ -272,31 +275,34 @@ export function MarketplacesPanel({
 					<Spinner size="lg" />
 				</div>
 			) : isError ? (
-				<div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
-					<ExclamationCircleIcon className="mb-2 size-8 text-danger" />
-					<p className="text-sm text-muted">{errorMessage(error)}</p>
+				<Empty className="rounded-none border-0">
+					<EmptyHeader>
+						<EmptyMedia>
+							<ExclamationCircleIcon className="size-8 text-danger" />
+						</EmptyMedia>
+						<EmptyTitle className="text-sm font-normal text-muted">
+							{errorMessage(error)}
+						</EmptyTitle>
+					</EmptyHeader>
 					<Button
 						variant="secondary"
 						size="sm"
 						onPress={() => refetch()}
-						className="mt-4"
 					>
 						{t("retry")}
 					</Button>
-				</div>
+				</Empty>
 			) : marketplaces.length === 0 ? (
-				<div className="flex flex-1 items-center justify-center">
-					<Empty className="border-0">
-						<EmptyHeader>
-							<EmptyMedia>
-								<CircleStackIcon className="size-8 text-muted" />
-							</EmptyMedia>
-							<EmptyTitle className="text-sm font-normal text-muted">
-								{t("marketplaceNoneTitle")}
-							</EmptyTitle>
-						</EmptyHeader>
-					</Empty>
-				</div>
+				<Empty className="rounded-none border-0">
+					<EmptyHeader>
+						<EmptyMedia>
+							<CircleStackIcon className="size-8 text-muted" />
+						</EmptyMedia>
+						<EmptyTitle className="text-sm font-normal text-muted">
+							{t("marketplaceNoneTitle")}
+						</EmptyTitle>
+					</EmptyHeader>
+				</Empty>
 			) : (
 				<div className="min-h-0 flex-1 overflow-hidden">
 					<Table className="h-full">
@@ -337,7 +343,7 @@ export function MarketplacesPanel({
 															<span className="truncate text-sm font-medium text-foreground">
 																{entry.name}
 															</span>
-															<span className="shrink-0 text-xs text-muted">
+															<span className="max-w-[12rem] shrink-0 overflow-hidden text-xs text-muted">
 																<SourceLink
 																	source={
 																		entry.source
@@ -361,7 +367,7 @@ export function MarketplacesPanel({
 															variant="tertiary"
 															size="sm"
 															onPress={() =>
-																updateMarketplace(
+																void updateMarketplace(
 																	entry.name,
 																	{
 																		announce: true,
@@ -370,7 +376,8 @@ export function MarketplacesPanel({
 																)
 															}
 															isDisabled={
-																isUpdating
+																isUpdating ||
+																isUpdatingAll
 															}
 															aria-label={t(
 																"marketplaceRefresh",
@@ -430,20 +437,24 @@ function SourceLink({
 	source: CCMarketplaceSourceResponse;
 	isOfficial: boolean;
 }) {
+	const { t } = useTranslation();
+
 	if (isOfficial) {
 		return (
 			<a
 				href={OFFICIAL_GITHUB_URL}
 				target="_blank"
 				rel="noopener noreferrer"
-				className="flex items-center gap-1 text-muted transition-colors hover:text-foreground"
+				className="flex min-w-0 items-center gap-1 text-muted transition-colors hover:text-foreground"
 			>
 				<span
 					className="inline-flex size-3.5 shrink-0 items-center [&_svg]:size-full"
 					// eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml
 					dangerouslySetInnerHTML={{ __html: claudeCodeIcon }}
 				/>
-				<span>Official</span>
+				<span className="min-w-0 flex-1 truncate">
+					{t("marketplaceOfficial")}
+				</span>
 			</a>
 		);
 	}
@@ -455,14 +466,16 @@ function SourceLink({
 					href={`https://github.com/${source.repo}`}
 					target="_blank"
 					rel="noopener noreferrer"
-					className="flex items-center gap-1 text-muted transition-colors hover:text-foreground"
+					className="flex min-w-0 items-center gap-1 text-muted transition-colors hover:text-foreground"
 				>
 					<span
 						className="inline-flex size-3.5 shrink-0 items-center [&_svg]:size-full"
 						// eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml
 						dangerouslySetInnerHTML={{ __html: githubIcon }}
 					/>
-					<span className="truncate">{source.repo}</span>
+					<span className="min-w-0 flex-1 truncate">
+						{source.repo}
+					</span>
 				</a>
 			);
 		case "url":
@@ -471,17 +484,21 @@ function SourceLink({
 					href={source.url}
 					target="_blank"
 					rel="noopener noreferrer"
-					className="flex items-center gap-1 text-muted transition-colors hover:text-foreground"
+					className="flex min-w-0 items-center gap-1 text-muted transition-colors hover:text-foreground"
 				>
 					<GlobeAltIcon className="size-3.5 shrink-0" />
-					<span className="truncate">{source.url}</span>
+					<span className="min-w-0 flex-1 truncate">
+						{source.url}
+					</span>
 				</a>
 			);
 		case "local":
 			return (
-				<span className="flex items-center gap-1">
+				<span className="flex min-w-0 items-center gap-1">
 					<FolderIcon className="size-3.5 shrink-0" />
-					<span className="truncate">{source.path}</span>
+					<span className="min-w-0 flex-1 truncate">
+						{source.path}
+					</span>
 				</span>
 			);
 	}

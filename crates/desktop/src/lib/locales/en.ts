@@ -801,6 +801,8 @@ export default {
 	marketplaceUpdatedOne: "Marketplace '{{name}}' updated",
 	marketplaceLoadFailed: "Failed to load marketplaces",
 	marketplaceNoneTitle: "No marketplaces configured",
+	marketplaceOfficial: "Official",
+	actions: "Actions",
 	refreshing: "Refreshing...",
 	pluginMarketCategory: "Category",
 	browseMarketplace: "Browse Marketplace",

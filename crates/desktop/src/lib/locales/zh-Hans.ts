@@ -795,6 +795,8 @@ export default {
 	marketplaceUpdatedOne: "已刷新市场 “{{name}}”",
 	marketplaceLoadFailed: "加载市场失败",
 	marketplaceNoneTitle: "尚未配置任何市场源",
+	marketplaceOfficial: "官方",
+	actions: "操作",
 	refreshing: "刷新中...",
 	pluginMarketCategory: "分类",
 	browseMarketplace: "浏览市场",
