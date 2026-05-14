@@ -8,6 +8,7 @@ import {
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import { FolderIcon, GlobeAltIcon } from "@heroicons/react/24/outline";
+import claudeCodeIcon from "@lobehub/icons-static-svg/icons/claudecode-color.svg?raw";
 import githubIcon from "@lobehub/icons-static-svg/icons/github.svg?raw";
 import {
 	Button,
@@ -463,7 +464,7 @@ function SourceLink({
 				<span
 					className="inline-flex size-3.5 shrink-0 items-center [&_svg]:size-full"
 					// eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml
-					dangerouslySetInnerHTML={{ __html: githubIcon }}
+					dangerouslySetInnerHTML={{ __html: claudeCodeIcon }}
 				/>
 				<span>{OFFICIAL_GITHUB_REPO}</span>
 			</a>
