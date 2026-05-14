@@ -269,26 +269,25 @@ mod tests {
 		))
 		.expect("client");
 
-		for path in ["/api/v1/plugins/uninstall"] {
-			let response = client
-				.req(rocket::http::Method::Options, path)
-				.header(Header::new("Origin", "http://localhost:1420"))
-				.header(Header::new("Access-Control-Request-Method", "POST"))
-				.header(Header::new(
-					"Access-Control-Request-Headers",
-					"content-type",
-				))
-				.dispatch();
+		let path = "/api/v1/plugins/uninstall";
+		let response = client
+			.req(rocket::http::Method::Options, path)
+			.header(Header::new("Origin", "http://localhost:1420"))
+			.header(Header::new("Access-Control-Request-Method", "POST"))
+			.header(Header::new(
+				"Access-Control-Request-Headers",
+				"content-type",
+			))
+			.dispatch();
 
-			assert_eq!(response.status(), Status::NoContent);
-			assert_eq!(
-				response.headers().get_one("Access-Control-Allow-Origin"),
-				Some("http://localhost:1420"),
-			);
-			assert_eq!(
-				response.headers().get_one("Access-Control-Allow-Headers"),
-				Some("content-type"),
-			);
-		}
+		assert_eq!(response.status(), Status::NoContent);
+		assert_eq!(
+			response.headers().get_one("Access-Control-Allow-Origin"),
+			Some("http://localhost:1420"),
+		);
+		assert_eq!(
+			response.headers().get_one("Access-Control-Allow-Headers"),
+			Some("content-type"),
+		);
 	}
 }

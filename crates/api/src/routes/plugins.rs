@@ -887,7 +887,9 @@ pub async fn update_marketplace_one(
 	name: &str,
 ) -> ApiResult<CCMarketplaceMutationResponse> {
 	let cli = load_claude_cli()?;
-	cli.marketplace_update(Some(name)).await.map_err(|e| {
+	// claude plugin marketplace update does not accept a name argument;
+	// run the all-update so the named marketplace's index is refreshed
+	cli.marketplace_update(None).await.map_err(|e| {
 		error!("Failed to update marketplace {name}: {e}");
 		ApiError::new(
 			Status::BadGateway,
