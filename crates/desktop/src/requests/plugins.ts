@@ -133,28 +133,6 @@ export function installPluginMutationOptions({
 	});
 }
 
-interface UpdateMarketplaceMutationParams {
-	api: ApiClient;
-	queryClient: QueryClient;
-	onSuccess?: (
-		data: Awaited<ReturnType<ApiClient["plugins"]["updateMarketplace"]>>,
-	) => void | Promise<void>;
-}
-
-export function updateMarketplaceMutationOptions({
-	api,
-	queryClient,
-	onSuccess,
-}: UpdateMarketplaceMutationParams) {
-	return mutationOptions({
-		mutationFn: () => api.plugins.updateMarketplace(),
-		onSuccess: async (data) => {
-			await invalidateMarketplaceQueries(queryClient);
-			await onSuccess?.(data);
-		},
-	});
-}
-
 interface MarketplaceListQueryParams {
 	api: ApiClient;
 	enabled?: boolean;

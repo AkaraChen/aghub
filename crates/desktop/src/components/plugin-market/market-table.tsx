@@ -173,7 +173,7 @@ export function PluginMarketTable({
 												</Table.Cell>
 												<Table.Cell>
 													<div className="flex justify-end py-0.5">
-														<span className="text-sm tabular-nums text-muted">
+														<span className="whitespace-nowrap text-sm tabular-nums text-muted">
 															{plugin.installs > 0
 																? compactFormatter.format(
 																		plugin.installs,

@@ -178,7 +178,7 @@ export default function SkillsSearchPage() {
 									</span>
 								</td>
 								<td className="p-2 align-middle">
-									<span className="text-muted">
+									<span className="whitespace-nowrap text-muted">
 										{compactFormatter.format(
 											skill.installs,
 										)}

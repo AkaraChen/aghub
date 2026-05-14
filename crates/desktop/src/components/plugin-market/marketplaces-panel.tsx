@@ -2,18 +2,27 @@
 
 import {
 	ArrowPathIcon,
+	CircleStackIcon,
 	ExclamationCircleIcon,
 	PlusIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Input, Label, Spinner, TextField, toast } from "@heroui/react";
+import { FolderIcon, GlobeAltIcon } from "@heroicons/react/24/outline";
+import claudeCodeIcon from "@lobehub/icons-static-svg/icons/claudecode-color.svg?raw";
+import githubIcon from "@lobehub/icons-static-svg/icons/github.svg?raw";
+import {
+	Button,
+	Input,
+	Label,
+	Spinner,
+	Table,
+	TextField,
+	toast,
+} from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import type {
-	CCMarketplaceEntryResponse,
-	CCMarketplaceSourceResponse,
-} from "../../generated/dto";
+import type { CCMarketplaceSourceResponse } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
 import { cn } from "../../lib/utils";
 import {
@@ -25,6 +34,7 @@ import {
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 
 const PROTECTED_MARKETPLACES = new Set(["claude-plugins-official"]);
+const OFFICIAL_GITHUB_URL = "https://github.com/anthropics/claude-code";
 
 interface MarketplacesPanelProps {
 	enabled: boolean;
@@ -39,10 +49,10 @@ export function MarketplacesPanel({
 	const api = useApi();
 	const queryClient = useQueryClient();
 	const [source, setSource] = useState("");
-	const [bulkUpdating, setBulkUpdating] = useState(false);
 	const [updatingMarketplaces, setUpdatingMarketplaces] = useState<
 		Set<string>
 	>(() => new Set());
+	const [isUpdatingAll, setIsUpdatingAll] = useState(false);
 
 	const errorMessage = (value: unknown) =>
 		value instanceof Error ? value.message : t("unknownError");
@@ -112,11 +122,20 @@ export function MarketplacesPanel({
 		});
 	};
 
-	const updateMarketplace = async (name: string, announce: boolean) => {
+	const updateMarketplace = async (
+		name: string,
+		{ announce, invalidate }: { announce: boolean; invalidate: boolean },
+	) => {
 		setMarketplaceUpdating(name, true);
 		try {
-			await api.plugins.updateMarketplaceOne(name);
-			await invalidateMarketplaceQueries(queryClient);
+			await Promise.all([
+				// 300ms floor: prevents spinner from flickering on fast connections
+				new Promise((r) => setTimeout(r, 300)),
+				api.plugins.updateMarketplaceOne(name),
+			]);
+			if (invalidate) {
+				await invalidateMarketplaceQueries(queryClient);
+			}
 			if (announce) {
 				toast.success(t("marketplaceUpdatedOne", { name }));
 			}
@@ -134,20 +153,31 @@ export function MarketplacesPanel({
 
 	const handleUpdateAll = async () => {
 		if (
-			bulkUpdating ||
+			isUpdatingAll ||
 			updatingMarketplaces.size > 0 ||
 			marketplaces.length === 0
 		) {
 			return;
 		}
 
-		setBulkUpdating(true);
+		setIsUpdatingAll(true);
 		try {
 			const names = marketplaces.map((entry) => entry.name);
 			const results = await Promise.allSettled(
-				names.map((name) => updateMarketplace(name, false)),
+				names.map((name) =>
+					updateMarketplace(name, {
+						announce: false,
+						invalidate: false,
+					}),
+				),
 			);
-			await invalidateMarketplaceQueries(queryClient);
+			// Invalidation is best-effort: individual update results are already
+			// accurate. A failure here must not suppress the per-update toast.
+			try {
+				await invalidateMarketplaceQueries(queryClient);
+			} catch {
+				// ignore — stale data is preferable to a silent crash
+			}
 
 			const failures = results.filter(
 				(result): result is PromiseRejectedResult =>
@@ -169,18 +199,16 @@ export function MarketplacesPanel({
 					count: updatedCount,
 				}),
 			});
-		} catch (mutationError) {
-			toast.danger(t("marketplaceUpdateFailed"), {
-				description: errorMessage(mutationError),
-			});
 		} finally {
-			setBulkUpdating(false);
+			setIsUpdatingAll(false);
 		}
 	};
 
+	const isAnyUpdating = updatingMarketplaces.size > 0;
+
 	return (
-		<div className="flex h-full min-h-0 flex-col gap-2.5">
-			<div className="flex shrink-0 items-end gap-2">
+		<div className="flex min-h-[16rem] max-h-[52vh] flex-col overflow-hidden rounded-lg bg-surface">
+			<div className="flex shrink-0 items-end gap-2 border-b border-separator/50 p-2.5">
 				<TextField
 					className="min-w-0 flex-1"
 					variant="secondary"
@@ -222,8 +250,8 @@ export function MarketplacesPanel({
 					className="h-9 shrink-0 whitespace-nowrap"
 					onPress={handleUpdateAll}
 					isDisabled={
-						bulkUpdating ||
-						updatingMarketplaces.size > 0 ||
+						isUpdatingAll ||
+						isAnyUpdating ||
 						marketplaces.length === 0
 					}
 				>
@@ -231,7 +259,7 @@ export function MarketplacesPanel({
 						<ArrowPathIcon
 							className={cn(
 								"size-4",
-								bulkUpdating && "animate-spin",
+								isUpdatingAll && "animate-spin",
 							)}
 						/>
 						{t("updateMarketplace")}
@@ -239,136 +267,222 @@ export function MarketplacesPanel({
 				</Button>
 			</div>
 
-			<div className="min-h-0 flex-1 overflow-y-auto">
-				{isLoading ? (
-					<div className="flex h-full items-center justify-center">
-						<Spinner size="md" />
-					</div>
-				) : isError ? (
-					<Empty>
+			{isLoading ? (
+				<div className="flex flex-1 items-center justify-center">
+					<Spinner size="lg" />
+				</div>
+			) : isError ? (
+				<div className="flex flex-1 flex-col items-center justify-center p-6 text-center">
+					<ExclamationCircleIcon className="mb-2 size-8 text-danger" />
+					<p className="text-sm text-muted">{errorMessage(error)}</p>
+					<Button
+						variant="secondary"
+						size="sm"
+						onPress={() => refetch()}
+						className="mt-4"
+					>
+						{t("retry")}
+					</Button>
+				</div>
+			) : marketplaces.length === 0 ? (
+				<div className="flex flex-1 items-center justify-center">
+					<Empty className="border-0">
 						<EmptyHeader>
 							<EmptyMedia>
-								<ExclamationCircleIcon className="size-8 text-danger" />
+								<CircleStackIcon className="size-8 text-muted" />
 							</EmptyMedia>
-							<EmptyTitle>
-								{t("marketplaceLoadFailed")}
+							<EmptyTitle className="text-sm font-normal text-muted">
+								{t("marketplaceNoneTitle")}
 							</EmptyTitle>
 						</EmptyHeader>
-						<div className="mt-3 flex flex-col items-center gap-2">
-							<p className="text-sm text-muted">
-								{errorMessage(error)}
-							</p>
-							<Button
-								variant="secondary"
-								size="sm"
-								onPress={() => refetch()}
+					</Empty>
+				</div>
+			) : (
+				<div className="min-h-0 flex-1 overflow-hidden">
+					<Table className="h-full">
+						<Table.ScrollContainer className="h-full overflow-auto rounded-[inherit] [scrollbar-gutter:stable]">
+							<Table.Content
+								aria-label={t("pluginMarketTabMarketplaces")}
 							>
-								{t("retry")}
-							</Button>
-						</div>
-					</Empty>
-				) : marketplaces.length === 0 ? (
-					<Empty>
-						<EmptyHeader>
-							<EmptyTitle>{t("marketplaceNoneTitle")}</EmptyTitle>
-						</EmptyHeader>
-					</Empty>
-				) : (
-					<ul className="flex flex-col gap-2">
-						{marketplaces.map((entry) => (
-							<MarketplaceRow
-								key={entry.name}
-								entry={entry}
-								onRemove={(name) => removeMutation.mutate(name)}
-								onUpdate={(name) =>
-									void updateMarketplace(name, true)
-								}
-								removing={
-									removeMutation.isPending &&
-									removeMutation.variables === entry.name
-								}
-								updating={updatingMarketplaces.has(entry.name)}
-							/>
-						))}
-					</ul>
-				)}
-			</div>
+								<Table.Header>
+									<Table.Column isRowHeader>
+										{t("name")}
+									</Table.Column>
+									<Table.Column className="w-[104px] text-right">
+										<span className="sr-only">
+											{t("actions")}
+										</span>
+									</Table.Column>
+								</Table.Header>
+								<Table.Body items={marketplaces}>
+									{(entry) => {
+										const isProtected =
+											PROTECTED_MARKETPLACES.has(
+												entry.name,
+											);
+										const isUpdating =
+											updatingMarketplaces.has(
+												entry.name,
+											);
+										const isRemoving =
+											removeMutation.isPending &&
+											removeMutation.variables ===
+												entry.name;
+
+										return (
+											<Table.Row id={entry.name}>
+												<Table.Cell>
+													<div className="min-w-0 space-y-0.5 py-0.5">
+														<div className="flex min-w-0 items-center gap-2">
+															<span className="truncate text-sm font-medium text-foreground">
+																{entry.name}
+															</span>
+															<span className="shrink-0 text-xs text-muted">
+																<SourceLink
+																	source={
+																		entry.source
+																	}
+																	isOfficial={
+																		isProtected
+																	}
+																/>
+															</span>
+														</div>
+														<p className="truncate font-mono text-[11px] text-muted/80">
+															{
+																entry.install_location
+															}
+														</p>
+													</div>
+												</Table.Cell>
+												<Table.Cell>
+													<div className="flex justify-end gap-1 py-0.5">
+														<Button
+															variant="tertiary"
+															size="sm"
+															onPress={() =>
+																updateMarketplace(
+																	entry.name,
+																	{
+																		announce: true,
+																		invalidate: true,
+																	},
+																)
+															}
+															isDisabled={
+																isUpdating
+															}
+															aria-label={t(
+																"marketplaceRefresh",
+															)}
+														>
+															<ArrowPathIcon
+																className={cn(
+																	"size-4",
+																	isUpdating &&
+																		"animate-spin",
+																)}
+															/>
+														</Button>
+														{!isProtected && (
+															<Button
+																variant="tertiary"
+																size="sm"
+																onPress={() =>
+																	removeMutation.mutate(
+																		entry.name,
+																	)
+																}
+																isDisabled={
+																	isRemoving
+																}
+																aria-label={t(
+																	"marketplaceRemove",
+																)}
+																className="text-danger"
+															>
+																{isRemoving ? (
+																	<Spinner size="sm" />
+																) : (
+																	<TrashIcon className="size-4" />
+																)}
+															</Button>
+														)}
+													</div>
+												</Table.Cell>
+											</Table.Row>
+										);
+									}}
+								</Table.Body>
+							</Table.Content>
+						</Table.ScrollContainer>
+					</Table>
+				</div>
+			)}
 		</div>
 	);
 }
 
-interface MarketplaceRowProps {
-	entry: CCMarketplaceEntryResponse;
-	onRemove: (name: string) => void;
-	onUpdate: (name: string) => void;
-	removing: boolean;
-	updating: boolean;
-}
+function SourceLink({
+	source,
+	isOfficial,
+}: {
+	source: CCMarketplaceSourceResponse;
+	isOfficial: boolean;
+}) {
+	if (isOfficial) {
+		return (
+			<a
+				href={OFFICIAL_GITHUB_URL}
+				target="_blank"
+				rel="noopener noreferrer"
+				className="flex items-center gap-1 text-muted transition-colors hover:text-foreground"
+			>
+				<span
+					className="inline-flex size-3.5 shrink-0 items-center [&_svg]:size-full"
+					// eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml
+					dangerouslySetInnerHTML={{ __html: claudeCodeIcon }}
+				/>
+				<span>Official</span>
+			</a>
+		);
+	}
 
-function MarketplaceRow({
-	entry,
-	onRemove,
-	onUpdate,
-	removing,
-	updating,
-}: MarketplaceRowProps) {
-	const { t } = useTranslation();
-	const isProtected = PROTECTED_MARKETPLACES.has(entry.name);
-	return (
-		<li className="rounded-lg border border-separator/60 bg-surface px-3 py-2.5">
-			<div className="flex items-start justify-between gap-3">
-				<div className="min-w-0 flex-1">
-					<span className="truncate text-sm font-medium">
-						{entry.name}
-					</span>
-					<p className="mt-0.5 truncate text-xs text-muted">
-						{describeSource(entry.source)}
-					</p>
-					<p className="mt-0.5 truncate font-mono text-[11px] text-muted/80">
-						{entry.install_location}
-					</p>
-				</div>
-				<div className="flex shrink-0 items-center gap-1">
-					<Button
-						variant="secondary"
-						size="sm"
-						onPress={() => onUpdate(entry.name)}
-						isDisabled={updating}
-						aria-label={t("marketplaceRefresh")}
-					>
-						<ArrowPathIcon
-							className={cn("size-4", updating && "animate-spin")}
-						/>
-					</Button>
-					{!isProtected && (
-						<Button
-							variant="secondary"
-							size="sm"
-							onPress={() => onRemove(entry.name)}
-							isDisabled={removing}
-							aria-label={t("marketplaceRemove")}
-							className="text-danger"
-						>
-							{removing ? (
-								<Spinner size="sm" />
-							) : (
-								<TrashIcon className="size-4" />
-							)}
-						</Button>
-					)}
-				</div>
-			</div>
-		</li>
-	);
-}
-
-function describeSource(source: CCMarketplaceSourceResponse): string {
 	switch (source.kind) {
 		case "github":
-			return `github:${source.repo}`;
+			return (
+				<a
+					href={`https://github.com/${source.repo}`}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="flex items-center gap-1 text-muted transition-colors hover:text-foreground"
+				>
+					<span
+						className="inline-flex size-3.5 shrink-0 items-center [&_svg]:size-full"
+						// eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml
+						dangerouslySetInnerHTML={{ __html: githubIcon }}
+					/>
+					<span className="truncate">{source.repo}</span>
+				</a>
+			);
 		case "url":
-			return source.url;
+			return (
+				<a
+					href={source.url}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="flex items-center gap-1 text-muted transition-colors hover:text-foreground"
+				>
+					<GlobeAltIcon className="size-3.5 shrink-0" />
+					<span className="truncate">{source.url}</span>
+				</a>
+			);
 		case "local":
-			return `local:${source.path}`;
+			return (
+				<span className="flex items-center gap-1">
+					<FolderIcon className="size-3.5 shrink-0" />
+					<span className="truncate">{source.path}</span>
+				</span>
+			);
 	}
 }
