@@ -128,13 +128,14 @@ export function MarketplacesPanel({
 		name: string,
 		{ announce, invalidate }: { announce: boolean; invalidate: boolean },
 	) => {
+		// Start the 300ms floor before the API call so finally always awaits it.
+		// This forces a macrotask boundary between setMarketplaceUpdating(true)
+		// and setMarketplaceUpdating(false), preventing React from batching both
+		// state updates into a single render that skips the spinner entirely.
+		const floor = new Promise<void>((r) => setTimeout(r, 300));
 		setMarketplaceUpdating(name, true);
 		try {
-			await Promise.all([
-				// 300ms floor: prevents spinner from flickering on fast connections
-				new Promise<void>((r) => setTimeout(r, 300)),
-				api.plugins.updateMarketplaceOne(name),
-			]);
+			await api.plugins.updateMarketplaceOne(name);
 			if (invalidate) {
 				await invalidateMarketplaceQueries(queryClient);
 			}
@@ -149,6 +150,7 @@ export function MarketplacesPanel({
 			}
 			throw mutationError;
 		} finally {
+			await floor;
 			setMarketplaceUpdating(name, false);
 		}
 	};
