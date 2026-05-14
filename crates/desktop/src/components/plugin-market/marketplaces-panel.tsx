@@ -205,8 +205,6 @@ export function MarketplacesPanel({
 		}
 	};
 
-	const isAnyUpdating = updatingMarketplaces.size > 0;
-
 	return (
 		// min-h-[16rem]: prevents panel from collapsing in the empty/loading states
 		// max-h-[52vh]: fits inside the 80vh modal after the tab bar and dialog header
@@ -248,15 +246,11 @@ export function MarketplacesPanel({
 					)}
 				</Button>
 				<Button
-					variant="secondary"
+					variant="tertiary"
 					size="sm"
 					className="h-9 shrink-0 whitespace-nowrap"
 					onPress={handleUpdateAll}
-					isDisabled={
-						isUpdatingAll ||
-						isAnyUpdating ||
-						marketplaces.length === 0
-					}
+					isDisabled={isUpdatingAll || marketplaces.length === 0}
 				>
 					<span className="flex items-center gap-1.5">
 						<ArrowPathIcon
@@ -365,24 +359,20 @@ export function MarketplacesPanel({
 													<div className="flex justify-end gap-1 py-0.5">
 														<Tooltip delay={0}>
 															<Button
-																variant="tertiary"
+																isIconOnly
+																variant="ghost"
 																size="sm"
-																onPress={() => {
-																	if (
-																		isUpdating ||
-																		isUpdatingAll
-																	) {
-																		return;
-																	}
+																onPress={() =>
 																	void updateMarketplace(
 																		entry.name,
 																		{
 																			announce: true,
 																			invalidate: true,
 																		},
-																	);
-																}}
+																	)
+																}
 																isDisabled={
+																	isUpdating ||
 																	isUpdatingAll
 																}
 																aria-label={t(
@@ -406,6 +396,7 @@ export function MarketplacesPanel({
 														{!isProtected && (
 															<Tooltip delay={0}>
 																<Button
+																	isIconOnly
 																	variant="tertiary"
 																	size="sm"
 																	onPress={() =>
