@@ -12,8 +12,6 @@ import claudeCodeIcon from "@lobehub/icons-static-svg/icons/claudecode-color.svg
 import githubIcon from "@lobehub/icons-static-svg/icons/github.svg?raw";
 import {
 	Button,
-	Description,
-	Disclosure,
 	Input,
 	Label,
 	Spinner,
@@ -40,6 +38,8 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 const PROTECTED_MARKETPLACES = new Set(["claude-plugins-official"]);
 const OFFICIAL_GITHUB_URL = "https://github.com/anthropics/claude-code";
 const OFFICIAL_GITHUB_REPO = "anthropics/claude-code";
+const GITHUB_GIT_URL_RE =
+	/^https:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?\/?$/;
 
 interface MarketplacesPanelProps {
 	enabled: boolean;
@@ -54,17 +54,10 @@ export function MarketplacesPanel({
 	const api = useApi();
 	const queryClient = useQueryClient();
 	const [source, setSource] = useState("");
-	const [sparseInput, setSparseInput] = useState("");
 	const [updatingMarketplaces, setUpdatingMarketplaces] = useState<
 		Set<string>
 	>(() => new Set());
 	const [isUpdatingAll, setIsUpdatingAll] = useState(false);
-
-	const parseSparsePaths = (raw: string): string[] =>
-		raw
-			.split(",")
-			.map((token) => token.trim())
-			.filter((token) => token.length > 0);
 
 	const errorMessage = (value: unknown) =>
 		value instanceof Error ? value.message : t("unknownError");
@@ -79,7 +72,6 @@ export function MarketplacesPanel({
 			queryClient,
 			onSuccess: (resp) => {
 				setSource("");
-				setSparseInput("");
 				toast.success(
 					t("marketplaceAdded", {
 						name: resp.marketplace?.name ?? source,
@@ -117,7 +109,7 @@ export function MarketplacesPanel({
 		addMutation.mutate({
 			source: trimmed,
 			scope: installScope,
-			sparse: parseSparsePaths(sparseInput),
+			sparse: [],
 		});
 	};
 
@@ -219,85 +211,63 @@ export function MarketplacesPanel({
 		// min-h-[16rem]: prevents panel from collapsing in the empty/loading states
 		// max-h-[52vh]: fits inside the 80vh modal after the tab bar and dialog header
 		<div className="flex min-h-[16rem] max-h-[52vh] flex-col overflow-hidden">
-			<div className="flex shrink-0 flex-col gap-2 border-b border-separator/50 p-2.5">
-				<div className="flex items-end gap-2">
-					<TextField
-						className="min-w-0 flex-1"
+			<div className="flex shrink-0 items-end gap-2 border-b border-separator/50 p-2.5">
+				<TextField
+					className="min-w-0 flex-1"
+					variant="secondary"
+					value={source}
+					onChange={setSource}
+					isDisabled={addMutation.isPending}
+				>
+					<Label>{t("marketplaceAddLabel")}</Label>
+					<Input
 						variant="secondary"
-						value={source}
-						onChange={setSource}
-						isDisabled={addMutation.isPending}
-					>
-						<Label>{t("marketplaceAddLabel")}</Label>
-						<Input
-							variant="secondary"
-							placeholder={t("marketplaceAddPlaceholder")}
-							onKeyDown={(event) => {
-								if (event.key === "Enter") {
-									event.preventDefault();
-									handleAdd();
-								}
-							}}
-						/>
-					</TextField>
+						placeholder={t("marketplaceAddPlaceholder")}
+						onKeyDown={(event) => {
+							if (event.key === "Enter") {
+								event.preventDefault();
+								handleAdd();
+							}
+						}}
+					/>
+				</TextField>
+				<Button
+					variant="primary"
+					size="sm"
+					className="h-9 shrink-0 whitespace-nowrap"
+					onPress={handleAdd}
+					isDisabled={!source.trim() || addMutation.isPending}
+				>
+					{addMutation.isPending ? (
+						<Spinner size="sm" />
+					) : (
+						<>
+							<PlusIcon className="size-4" />
+							{t("marketplaceAddSubmit")}
+						</>
+					)}
+				</Button>
+				<Tooltip delay={0}>
 					<Button
-						variant="primary"
+						isIconOnly
+						variant="ghost"
 						size="sm"
-						className="h-9 shrink-0 whitespace-nowrap"
-						onPress={handleAdd}
-						isDisabled={!source.trim() || addMutation.isPending}
-					>
-						{addMutation.isPending ? (
-							<Spinner size="sm" />
-						) : (
-							<>
-								<PlusIcon className="size-4" />
-								{t("marketplaceAddSubmit")}
-							</>
-						)}
-					</Button>
-					<Button
-						variant="tertiary"
-						size="sm"
-						className="h-9 shrink-0 whitespace-nowrap"
+						className="h-9 w-9 shrink-0"
 						onPress={handleUpdateAll}
 						isDisabled={isUpdatingAll || marketplaces.length === 0}
+						aria-label={t("marketplaceRefreshAll")}
 					>
-						<span className="flex items-center gap-1.5">
-							<ArrowPathIcon
-								className={cn(
-									"size-4",
-									isUpdatingAll && "animate-spin",
-								)}
-							/>
-							{t("updateMarketplace")}
-						</span>
+						<ArrowPathIcon
+							className={cn(
+								"size-4",
+								isUpdatingAll && "animate-spin",
+							)}
+						/>
 					</Button>
-				</div>
-				<Disclosure>
-					<Disclosure.Trigger className="flex w-full items-center justify-between text-xs text-muted hover:text-foreground">
-						{t("marketplaceAddAdvanced")}
-						<Disclosure.Indicator />
-					</Disclosure.Trigger>
-					<Disclosure.Content>
-						<TextField
-							className="mt-2"
-							variant="secondary"
-							value={sparseInput}
-							onChange={setSparseInput}
-							isDisabled={addMutation.isPending}
-						>
-							<Label>{t("marketplaceSparseLabel")}</Label>
-							<Input
-								variant="secondary"
-								placeholder={t("marketplaceSparsePlaceholder")}
-							/>
-							<Description>
-								{t("marketplaceSparseHint")}
-							</Description>
-						</TextField>
-					</Disclosure.Content>
-				</Disclosure>
+					<Tooltip.Content>
+						{t("marketplaceRefreshAll")}
+					</Tooltip.Content>
+				</Tooltip>
 			</div>
 
 			{isLoading ? (
@@ -524,6 +494,47 @@ function SourceLink({
 					<span>{source.repo}</span>
 				</a>
 			);
+		case "git": {
+			// CLI emits `git` for full git URLs the user typed instead of
+			// the `owner/repo` shorthand. When the host is github.com,
+			// reuse the github visual treatment for consistency.
+			const githubRepo = source.url.match(GITHUB_GIT_URL_RE)?.[1];
+			if (githubRepo) {
+				const href = `https://github.com/${githubRepo}`;
+				return (
+					<a
+						href={href}
+						rel="noopener noreferrer"
+						className="flex min-w-0 items-center gap-1 text-muted transition-colors hover:text-foreground"
+						onClick={(e) => {
+							e.preventDefault();
+							void openUrl(href);
+						}}
+					>
+						<span
+							className="inline-flex size-3.5 shrink-0 items-center [&_svg]:size-full"
+							// eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml
+							dangerouslySetInnerHTML={{ __html: githubIcon }}
+						/>
+						<span>{githubRepo}</span>
+					</a>
+				);
+			}
+			return (
+				<a
+					href={source.url}
+					rel="noopener noreferrer"
+					className="flex min-w-0 items-center gap-1 text-muted transition-colors hover:text-foreground"
+					onClick={(e) => {
+						e.preventDefault();
+						void openUrl(source.url);
+					}}
+				>
+					<GlobeAltIcon className="size-3.5 shrink-0" />
+					<span>{source.url}</span>
+				</a>
+			);
+		}
 		case "url":
 			return (
 				<a
