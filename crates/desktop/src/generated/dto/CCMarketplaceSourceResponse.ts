@@ -2,5 +2,6 @@
 
 export type CCMarketplaceSourceResponse =
 	| { kind: "github"; repo: string }
+	| { kind: "git"; url: string }
 	| { kind: "url"; url: string }
 	| { kind: "local"; path: string };

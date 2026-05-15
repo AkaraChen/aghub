@@ -353,6 +353,7 @@ pub struct CCPluginCliStatusResponse {
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum CCMarketplaceSourceResponse {
 	Github { repo: String },
+	Git { url: String },
 	Url { url: String },
 	Local { path: String },
 }

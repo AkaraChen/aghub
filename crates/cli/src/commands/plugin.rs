@@ -450,6 +450,7 @@ fn parse_id(s: &str) -> Result<PluginId> {
 fn format_marketplace_source(source: &CliMarketplaceSource) -> String {
 	match source {
 		CliMarketplaceSource::Github { repo } => format!("github:{}", repo),
+		CliMarketplaceSource::Git { url } => format!("git:{}", url),
 		CliMarketplaceSource::Url { url } => url.clone(),
 		CliMarketplaceSource::Local { path } => format!("local:{}", path),
 	}

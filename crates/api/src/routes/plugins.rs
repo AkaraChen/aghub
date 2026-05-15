@@ -791,6 +791,9 @@ fn marketplace_source_to_dto(
 		CliMarketplaceSource::Github { repo } => {
 			CCMarketplaceSourceResponse::Github { repo }
 		}
+		CliMarketplaceSource::Git { url } => {
+			CCMarketplaceSourceResponse::Git { url }
+		}
 		CliMarketplaceSource::Url { url } => {
 			CCMarketplaceSourceResponse::Url { url }
 		}

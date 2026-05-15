@@ -29,9 +29,21 @@ pub struct CliMarketplace {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "source", rename_all = "lowercase")]
 pub enum CliMarketplaceSource {
-	Github { repo: String },
-	Url { url: String },
-	Local { path: String },
+	Github {
+		repo: String,
+	},
+	/// Generic git clone source. Emitted by the CLI when the user
+	/// supplied a full git URL (e.g. https://github.com/owner/repo.git)
+	/// rather than the `owner/repo` shorthand that maps to Github.
+	Git {
+		url: String,
+	},
+	Url {
+		url: String,
+	},
+	Local {
+		path: String,
+	},
 }
 
 /// `available[]` entry inside `claude plugin list --json --available`.
@@ -145,6 +157,26 @@ mod tests {
 				assert_eq!(repo, "anthropics/claude-plugins-official");
 			}
 			_ => panic!("expected github source"),
+		}
+	}
+
+	#[test]
+	fn deserialize_marketplace_git() {
+		let json = r#"{
+			"name": "claude-code-warp",
+			"source": "git",
+			"url": "https://github.com/warpdotdev/claude-code-warp.git",
+			"installLocation": "/Users/mac/.claude/plugins/marketplaces/claude-code-warp"
+		}"#;
+		let mp: CliMarketplace = serde_json::from_str(json).unwrap();
+		match mp.source {
+			CliMarketplaceSource::Git { url } => {
+				assert_eq!(
+					url,
+					"https://github.com/warpdotdev/claude-code-warp.git"
+				);
+			}
+			_ => panic!("expected git source"),
 		}
 	}
 
