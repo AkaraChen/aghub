@@ -70,7 +70,7 @@ export function PluginSourceCard({
 								isIconOnly
 								variant="ghost"
 								size="md"
-								className="min-h-[40px] min-w-[40px] text-muted hover:text-foreground"
+								className="min-h-[44px] min-w-[44px] text-muted hover:text-foreground"
 								aria-label={t("updatePlugin")}
 								onPress={onUpdate}
 								isDisabled={isUpdating}
@@ -93,7 +93,7 @@ export function PluginSourceCard({
 								isIconOnly
 								variant="ghost"
 								size="md"
-								className="min-h-[40px] min-w-[40px] text-muted hover:text-foreground"
+								className="min-h-[44px] min-w-[44px] text-muted hover:text-foreground"
 								aria-label={t("openRepository")}
 								onPress={() => onOpenUrl(sourceUrl)}
 							>

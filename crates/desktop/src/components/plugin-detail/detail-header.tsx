@@ -81,7 +81,7 @@ export function PluginDetailHeader({
 							isIconOnly
 							variant="ghost"
 							size="md"
-							className="min-h-[40px] min-w-[40px] text-muted hover:text-foreground"
+							className="min-h-[44px] min-w-[44px] text-muted hover:text-foreground"
 							onPress={onReinstall}
 							isDisabled={isReinstalling}
 							aria-label={t("reinstallPlugin")}
@@ -103,7 +103,7 @@ export function PluginDetailHeader({
 						isIconOnly
 						variant="ghost"
 						size="md"
-						className="min-h-[40px] min-w-[40px] text-muted hover:text-foreground"
+						className="min-h-[44px] min-w-[44px] text-muted hover:text-danger"
 						onPress={onUninstall}
 						isDisabled={isUninstalling}
 						aria-label={t("uninstallPlugin")}

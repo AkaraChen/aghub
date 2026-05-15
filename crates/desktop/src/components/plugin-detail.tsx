@@ -1,8 +1,7 @@
 "use client";
 
 import { FolderIcon } from "@heroicons/react/24/solid";
-import { Button, Card, Tooltip } from "@heroui/react";
-import { toast } from "@heroui/react";
+import { Button, Card, Tooltip, toast } from "@heroui/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
