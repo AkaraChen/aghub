@@ -29,29 +29,6 @@ pub mod errors {
 }
 use std::path::PathBuf;
 
-#[cfg(test)]
-pub(crate) mod test_support {
-	use std::path::PathBuf;
-	use std::sync::OnceLock;
-	use std::time::{SystemTime, UNIX_EPOCH};
-	use tokio::sync::Mutex;
-
-	pub(crate) fn env_lock() -> &'static Mutex<()> {
-		static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-		LOCK.get_or_init(|| Mutex::new(()))
-	}
-
-	pub(crate) fn make_temp_dir(prefix: &str) -> PathBuf {
-		let unique = SystemTime::now()
-			.duration_since(UNIX_EPOCH)
-			.unwrap()
-			.as_nanos();
-		let path = std::env::temp_dir().join(format!("{prefix}-{unique}"));
-		std::fs::create_dir_all(&path).unwrap();
-		path
-	}
-}
-
 #[derive(Debug, Clone)]
 pub enum PluginSource {
 	OfficialRegistry,
