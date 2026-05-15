@@ -1,7 +1,9 @@
 //! Claude Code settings.json management
 //!
-//! Handles reading and writing the ~/.claude/settings.json file,
-//! specifically the "enabledPlugins" configuration.
+//! Handles reading and writing the `pluginConfig` map in
+//! `~/.claude/settings.json`. The neighbouring `enabledPlugins` map is
+//! owned exclusively by `claude plugin enable/disable`; aghub reads the
+//! current state from `claude plugin list --json` instead.
 
 use crate::PluginId;
 use anyhow::{Context, Result};
@@ -54,8 +56,6 @@ impl From<&str> for InstallScope {
 /// Plugin-related configuration from settings.json
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ClaudeSettings {
-	#[serde(rename = "enabledPlugins", default)]
-	pub enabled_plugins: HashMap<String, bool>,
 	/// Per-plugin user configuration
 	#[serde(rename = "pluginConfig", default)]
 	pub plugin_config: HashMap<String, serde_json::Value>,
@@ -71,18 +71,6 @@ impl ClaudeSettings {
 	{
 		let path = Self::settings_path()?;
 		Self::update_with_path(&path, mutate)
-	}
-
-	/// Defaults to true for plugins not explicitly listed.
-	pub fn is_enabled(&self, id: &PluginId) -> bool {
-		self.enabled_plugins
-			.get(&id.to_string())
-			.copied()
-			.unwrap_or(true)
-	}
-
-	pub fn set_enabled(&mut self, id: &PluginId, enabled: bool) {
-		self.enabled_plugins.insert(id.to_string(), enabled);
 	}
 
 	pub fn get_plugin_config(
@@ -127,17 +115,6 @@ impl ClaudeSettings {
 			serde_json::from_str(&content)
 				.with_context(|| "Failed to parse settings.json".to_string())?;
 
-		let enabled_plugins = full_settings
-			.get("enabledPlugins")
-			.and_then(|value| {
-				serde_json::from_value(value.clone())
-					.inspect_err(|e| {
-						log::debug!("Failed to parse enabledPlugins: {e}")
-					})
-					.ok()
-			})
-			.unwrap_or_default();
-
 		let plugin_config = full_settings
 			.get("pluginConfig")
 			.and_then(|value| {
@@ -149,10 +126,7 @@ impl ClaudeSettings {
 			})
 			.unwrap_or_default();
 
-		Ok(Self {
-			enabled_plugins,
-			plugin_config,
-		})
+		Ok(Self { plugin_config })
 	}
 
 	fn save_to_path(&self, path: &Path) -> Result<()> {
@@ -168,8 +142,6 @@ impl ClaudeSettings {
 			serde_json::json!({})
 		};
 
-		full_settings["enabledPlugins"] =
-			serde_json::to_value(&self.enabled_plugins)?;
 		full_settings["pluginConfig"] =
 			serde_json::to_value(&self.plugin_config)?;
 
@@ -205,6 +177,7 @@ impl ClaudeSettings {
 mod tests {
 	use super::ClaudeSettings;
 	use crate::PluginId;
+	use serde_json::json;
 	use std::sync::Arc;
 
 	#[test]
@@ -220,11 +193,12 @@ mod tests {
 		];
 
 		std::thread::scope(|scope| {
-			for plugin_id in plugin_ids {
+			for plugin_id in &plugin_ids {
 				let path = Arc::clone(&path);
+				let id = plugin_id.clone();
 				scope.spawn(move || {
 					ClaudeSettings::update_with_path(&path, |settings| {
-						settings.set_enabled(&plugin_id, false);
+						settings.set_plugin_config(&id, json!({ "k": "v" }));
 					})
 					.unwrap();
 				});
@@ -233,10 +207,12 @@ mod tests {
 
 		let settings = ClaudeSettings::load_from_path(&path).unwrap();
 
-		assert_eq!(settings.enabled_plugins.len(), 4);
-		assert_eq!(settings.enabled_plugins.get("alpha@example"), Some(&false));
-		assert_eq!(settings.enabled_plugins.get("beta@example"), Some(&false));
-		assert_eq!(settings.enabled_plugins.get("gamma@example"), Some(&false));
-		assert_eq!(settings.enabled_plugins.get("delta@example"), Some(&false));
+		assert_eq!(settings.plugin_config.len(), 4);
+		for id in &plugin_ids {
+			assert_eq!(
+				settings.plugin_config.get(&id.to_string()),
+				Some(&json!({ "k": "v" })),
+			);
+		}
 	}
 }

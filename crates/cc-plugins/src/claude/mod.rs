@@ -1,9 +1,9 @@
 //! Claude Code Plugin System Support
 //!
 //! Handles Claude Code's plugin v2 format:
-//! - `~/.claude/plugins/installed_plugins.json` - Plugin manifest
-//! - `~/.claude/settings.json` - `enabledPlugins` configuration
-//! - `~/.claude/plugins/cache/<source>/<name>/` - Plugin cache directory
+//! - install state and enabled flags: sourced from `claude plugin list --json`
+//! - `~/.claude/settings.json` `pluginConfig`: per-plugin user config we own
+//! - `~/.claude/plugins/cache/<source>/<name>/`: plugin cache directory
 
 mod capabilities;
 mod manager;
