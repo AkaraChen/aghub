@@ -12,6 +12,8 @@ import claudeCodeIcon from "@lobehub/icons-static-svg/icons/claudecode-color.svg
 import githubIcon from "@lobehub/icons-static-svg/icons/github.svg?raw";
 import {
 	Button,
+	Description,
+	Disclosure,
 	Input,
 	Label,
 	Spinner,
@@ -52,10 +54,17 @@ export function MarketplacesPanel({
 	const api = useApi();
 	const queryClient = useQueryClient();
 	const [source, setSource] = useState("");
+	const [sparseInput, setSparseInput] = useState("");
 	const [updatingMarketplaces, setUpdatingMarketplaces] = useState<
 		Set<string>
 	>(() => new Set());
 	const [isUpdatingAll, setIsUpdatingAll] = useState(false);
+
+	const parseSparsePaths = (raw: string): string[] =>
+		raw
+			.split(",")
+			.map((token) => token.trim())
+			.filter((token) => token.length > 0);
 
 	const errorMessage = (value: unknown) =>
 		value instanceof Error ? value.message : t("unknownError");
@@ -70,6 +79,7 @@ export function MarketplacesPanel({
 			queryClient,
 			onSuccess: (resp) => {
 				setSource("");
+				setSparseInput("");
 				toast.success(
 					t("marketplaceAdded", {
 						name: resp.marketplace?.name ?? source,
@@ -107,7 +117,7 @@ export function MarketplacesPanel({
 		addMutation.mutate({
 			source: trimmed,
 			scope: installScope,
-			sparse: [],
+			sparse: parseSparsePaths(sparseInput),
 		});
 	};
 
@@ -129,10 +139,9 @@ export function MarketplacesPanel({
 		name: string,
 		{ announce, invalidate }: { announce: boolean; invalidate: boolean },
 	) => {
-		// Start the 300ms floor before the API call so finally always awaits it.
-		// This forces a macrotask boundary between setMarketplaceUpdating(true)
-		// and setMarketplaceUpdating(false), preventing React from batching both
-		// state updates into a single render that skips the spinner entirely.
+		// 300ms floor in finally forces a macrotask boundary between
+		// setMarketplaceUpdating(true) and setMarketplaceUpdating(false),
+		// guaranteeing at least one render with the spinner visible.
 		const floor = new Promise<void>((r) => setTimeout(r, 300));
 		setMarketplaceUpdating(name, true);
 		try {
@@ -176,8 +185,6 @@ export function MarketplacesPanel({
 					}),
 				),
 			);
-			// Invalidation is best-effort: individual update results are already
-			// accurate. A failure here must not suppress the per-update toast.
 			try {
 				await invalidateMarketplaceQueries(queryClient);
 			} catch {
@@ -212,59 +219,85 @@ export function MarketplacesPanel({
 		// min-h-[16rem]: prevents panel from collapsing in the empty/loading states
 		// max-h-[52vh]: fits inside the 80vh modal after the tab bar and dialog header
 		<div className="flex min-h-[16rem] max-h-[52vh] flex-col overflow-hidden">
-			<div className="flex shrink-0 items-end gap-2 border-b border-separator/50 p-2.5">
-				<TextField
-					className="min-w-0 flex-1"
-					variant="secondary"
-					value={source}
-					onChange={setSource}
-					isDisabled={addMutation.isPending}
-				>
-					<Label>{t("marketplaceAddLabel")}</Label>
-					<Input
+			<div className="flex shrink-0 flex-col gap-2 border-b border-separator/50 p-2.5">
+				<div className="flex items-end gap-2">
+					<TextField
+						className="min-w-0 flex-1"
 						variant="secondary"
-						placeholder={t("marketplaceAddPlaceholder")}
-						onKeyDown={(event) => {
-							if (event.key === "Enter") {
-								event.preventDefault();
-								handleAdd();
-							}
-						}}
-					/>
-				</TextField>
-				<Button
-					variant="primary"
-					size="sm"
-					className="h-9 shrink-0 whitespace-nowrap"
-					onPress={handleAdd}
-					isDisabled={!source.trim() || addMutation.isPending}
-				>
-					{addMutation.isPending ? (
-						<Spinner size="sm" />
-					) : (
-						<>
-							<PlusIcon className="size-4" />
-							{t("marketplaceAddSubmit")}
-						</>
-					)}
-				</Button>
-				<Button
-					variant="tertiary"
-					size="sm"
-					className="h-9 shrink-0 whitespace-nowrap"
-					onPress={handleUpdateAll}
-					isDisabled={isUpdatingAll || marketplaces.length === 0}
-				>
-					<span className="flex items-center gap-1.5">
-						<ArrowPathIcon
-							className={cn(
-								"size-4",
-								isUpdatingAll && "animate-spin",
-							)}
+						value={source}
+						onChange={setSource}
+						isDisabled={addMutation.isPending}
+					>
+						<Label>{t("marketplaceAddLabel")}</Label>
+						<Input
+							variant="secondary"
+							placeholder={t("marketplaceAddPlaceholder")}
+							onKeyDown={(event) => {
+								if (event.key === "Enter") {
+									event.preventDefault();
+									handleAdd();
+								}
+							}}
 						/>
-						{t("updateMarketplace")}
-					</span>
-				</Button>
+					</TextField>
+					<Button
+						variant="primary"
+						size="sm"
+						className="h-9 shrink-0 whitespace-nowrap"
+						onPress={handleAdd}
+						isDisabled={!source.trim() || addMutation.isPending}
+					>
+						{addMutation.isPending ? (
+							<Spinner size="sm" />
+						) : (
+							<>
+								<PlusIcon className="size-4" />
+								{t("marketplaceAddSubmit")}
+							</>
+						)}
+					</Button>
+					<Button
+						variant="tertiary"
+						size="sm"
+						className="h-9 shrink-0 whitespace-nowrap"
+						onPress={handleUpdateAll}
+						isDisabled={isUpdatingAll || marketplaces.length === 0}
+					>
+						<span className="flex items-center gap-1.5">
+							<ArrowPathIcon
+								className={cn(
+									"size-4",
+									isUpdatingAll && "animate-spin",
+								)}
+							/>
+							{t("updateMarketplace")}
+						</span>
+					</Button>
+				</div>
+				<Disclosure>
+					<Disclosure.Trigger className="flex w-full items-center justify-between text-xs text-muted hover:text-foreground">
+						{t("marketplaceAddAdvanced")}
+						<Disclosure.Indicator />
+					</Disclosure.Trigger>
+					<Disclosure.Content>
+						<TextField
+							className="mt-2"
+							variant="secondary"
+							value={sparseInput}
+							onChange={setSparseInput}
+							isDisabled={addMutation.isPending}
+						>
+							<Label>{t("marketplaceSparseLabel")}</Label>
+							<Input
+								variant="secondary"
+								placeholder={t("marketplaceSparsePlaceholder")}
+							/>
+							<Description>
+								{t("marketplaceSparseHint")}
+							</Description>
+						</TextField>
+					</Disclosure.Content>
+				</Disclosure>
 			</div>
 
 			{isLoading ? (

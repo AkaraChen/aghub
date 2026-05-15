@@ -794,6 +794,11 @@ export default {
 	marketplaceAddSubmit: "Add",
 	marketplaceAdded: "Marketplace '{{name}}' added",
 	marketplaceAddFailed: "Failed to add marketplace",
+	marketplaceAddAdvanced: "Advanced",
+	marketplaceSparseLabel: "Sparse paths",
+	marketplaceSparsePlaceholder: "packages/foo, vendor/bar",
+	marketplaceSparseHint:
+		"Comma-separated git sparse-checkout paths for monorepo marketplaces.",
 	marketplaceRemoved: "Marketplace '{{name}}' removed",
 	marketplaceRemoveFailed: "Failed to remove marketplace '{{name}}'",
 	marketplaceRemove: "Remove marketplace",

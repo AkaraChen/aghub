@@ -788,6 +788,11 @@ export default {
 	marketplaceAddSubmit: "添加",
 	marketplaceAdded: "已添加市场 “{{name}}”",
 	marketplaceAddFailed: "添加市场失败",
+	marketplaceAddAdvanced: "高级",
+	marketplaceSparseLabel: "Sparse 路径",
+	marketplaceSparsePlaceholder: "packages/foo, vendor/bar",
+	marketplaceSparseHint:
+		"以英文逗号分隔的 git sparse-checkout 路径，用于 monorepo 市场源。",
 	marketplaceRemoved: "已移除市场 “{{name}}”",
 	marketplaceRemoveFailed: "移除市场 “{{name}}” 失败",
 	marketplaceRemove: "移除市场",

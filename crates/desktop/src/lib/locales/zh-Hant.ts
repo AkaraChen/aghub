@@ -782,6 +782,11 @@ export default {
 	marketplaceAddSubmit: "新增",
 	marketplaceAdded: "已新增市場「{{name}}」",
 	marketplaceAddFailed: "新增市場失敗",
+	marketplaceAddAdvanced: "進階",
+	marketplaceSparseLabel: "Sparse 路徑",
+	marketplaceSparsePlaceholder: "packages/foo, vendor/bar",
+	marketplaceSparseHint:
+		"以半形逗號分隔的 git sparse-checkout 路徑，用於 monorepo 市場來源。",
 	marketplaceRemoved: "已移除市場「{{name}}」",
 	marketplaceRemoveFailed: "移除市場「{{name}}」失敗",
 	marketplaceRemove: "移除市場",
