@@ -131,10 +131,11 @@ export function MarketplacesPanel({
 		name: string,
 		{ announce, invalidate }: { announce: boolean; invalidate: boolean },
 	) => {
-		// 300ms floor in finally forces a macrotask boundary between
-		// setMarketplaceUpdating(true) and setMarketplaceUpdating(false),
-		// guaranteeing at least one render with the spinner visible.
-		const floor = new Promise<void>((r) => setTimeout(r, 300));
+		// 600ms floor: animate-spin is 1s per rotation, so a too-short
+		// floor leaves the icon barely past its starting angle and looks
+		// like the button never reacted. 600ms ≈ 216° of rotation, which
+		// is the minimum that reads as "actually spinning" to the eye.
+		const floor = new Promise<void>((r) => setTimeout(r, 600));
 		setMarketplaceUpdating(name, true);
 		try {
 			await api.plugins.updateMarketplaceOne(name);
@@ -247,27 +248,21 @@ export function MarketplacesPanel({
 						</>
 					)}
 				</Button>
-				<Tooltip delay={0}>
-					<Button
-						isIconOnly
-						variant="ghost"
-						size="sm"
-						className="h-9 w-9 shrink-0"
-						onPress={handleUpdateAll}
-						isDisabled={isUpdatingAll || marketplaces.length === 0}
-						aria-label={t("marketplaceRefreshAll")}
-					>
-						<ArrowPathIcon
-							className={cn(
-								"size-4",
-								isUpdatingAll && "animate-spin",
-							)}
-						/>
-					</Button>
-					<Tooltip.Content>
-						{t("marketplaceRefreshAll")}
-					</Tooltip.Content>
-				</Tooltip>
+				<Button
+					variant="tertiary"
+					size="sm"
+					className="h-9 shrink-0 whitespace-nowrap"
+					onPress={handleUpdateAll}
+					isDisabled={isUpdatingAll || marketplaces.length === 0}
+				>
+					<ArrowPathIcon
+						className={cn(
+							"size-4",
+							isUpdatingAll && "animate-spin",
+						)}
+					/>
+					{t("marketplaceRefreshAll")}
+				</Button>
 			</div>
 
 			{isLoading ? (
