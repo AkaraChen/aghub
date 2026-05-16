@@ -1,10 +1,17 @@
 "use client";
 
 import { ArrowPathIcon, TrashIcon } from "@heroicons/react/24/solid";
-import { Button, Card, ListBox, Select, Switch, Tooltip } from "@heroui/react";
+import {
+	Button,
+	Card,
+	ListBox,
+	Select,
+	Spinner,
+	Switch,
+	Tooltip,
+} from "@heroui/react";
 import type { Key } from "react";
 import { useTranslation } from "react-i18next";
-import { cn } from "../../lib/utils";
 import type { CCPluginResponse } from "../../generated/dto";
 
 interface PluginDetailHeaderProps {
@@ -83,15 +90,14 @@ export function PluginDetailHeader({
 							size="md"
 							className="min-h-[44px] min-w-[44px] text-muted hover:text-foreground"
 							onPress={onReinstall}
-							isDisabled={isReinstalling}
+							isPending={isReinstalling}
 							aria-label={t("reinstallPlugin")}
 						>
-							<ArrowPathIcon
-								className={cn(
-									"size-4",
-									isReinstalling && "animate-spin",
-								)}
-							/>
+							{isReinstalling ? (
+								<Spinner size="sm" />
+							) : (
+								<ArrowPathIcon className="size-4" />
+							)}
 						</Button>
 						<Tooltip.Content>
 							{t("reinstallPlugin")}
@@ -105,15 +111,14 @@ export function PluginDetailHeader({
 						size="md"
 						className="min-h-[44px] min-w-[44px] text-muted hover:text-danger"
 						onPress={onUninstall}
-						isDisabled={isUninstalling}
+						isPending={isUninstalling}
 						aria-label={t("uninstallPlugin")}
 					>
-						<TrashIcon
-							className={cn(
-								"size-4",
-								isUninstalling && "animate-spin",
-							)}
-						/>
+						{isUninstalling ? (
+							<Spinner size="sm" />
+						) : (
+							<TrashIcon className="size-4" />
+						)}
 					</Button>
 					<Tooltip.Content>{t("uninstallPlugin")}</Tooltip.Content>
 				</Tooltip>

@@ -374,13 +374,13 @@ export function UnifiedResourceList({
 						className="shrink-0"
 						aria-label={t("refreshResources")}
 						onPress={onRefresh}
+						isPending={isRefreshing}
 					>
-						<ArrowPathIcon
-							className={cn(
-								"size-4",
-								isRefreshing && "animate-spin",
-							)}
-						/>
+						{isRefreshing ? (
+							<Spinner size="sm" />
+						) : (
+							<ArrowPathIcon className="size-4" />
+						)}
 					</Button>
 				</ListSearchHeader>
 			</div>

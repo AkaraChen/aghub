@@ -270,14 +270,13 @@ export default function LogsPanel() {
 									variant="ghost"
 									size="sm"
 									onPress={handleRefresh}
+									isPending={entriesQuery.isFetching}
 								>
-									<ArrowPathIcon
-										className={cn(
-											"size-4",
-											entriesQuery.isFetching &&
-												"animate-spin",
-										)}
-									/>
+									{entriesQuery.isFetching ? (
+										<Spinner size="sm" />
+									) : (
+										<ArrowPathIcon className="size-4" />
+									)}
 								</Button>
 							</Tooltip.Trigger>
 							<Tooltip.Content>{t("refresh")}</Tooltip.Content>

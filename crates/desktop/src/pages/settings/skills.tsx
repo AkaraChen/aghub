@@ -4,7 +4,7 @@ import {
 	PlusIcon,
 	RectangleStackIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Dropdown, Tooltip } from "@heroui/react";
+import { Button, Dropdown, Spinner, Tooltip } from "@heroui/react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
@@ -216,13 +216,13 @@ export default function SkillsPage() {
 						className="shrink-0"
 						aria-label={t("refreshSkills")}
 						onPress={() => refetch()}
+						isPending={isFetching}
 					>
-						<ArrowPathIcon
-							className={cn(
-								"size-4",
-								isFetching && "animate-spin",
-							)}
-						/>
+						{isFetching ? (
+							<Spinner size="sm" />
+						) : (
+							<ArrowPathIcon className="size-4" />
+						)}
 					</Button>
 				</ListSearchHeader>
 

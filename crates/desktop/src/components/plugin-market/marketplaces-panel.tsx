@@ -130,10 +130,10 @@ export function MarketplacesPanel({
 		name: string,
 		{ announce, invalidate }: { announce: boolean; invalidate: boolean },
 	) => {
-		// 600ms floor: animate-spin is 1s per rotation, so a too-short
-		// floor leaves the icon barely past its starting angle and looks
-		// like the button never reacted. 600ms ≈ 216° of rotation, which
-		// is the minimum that reads as "actually spinning" to the eye.
+		// 600ms floor: HeroUI Spinner runs at ~1s per rotation, so a
+		// too-short floor leaves it barely past its starting angle and
+		// looks like the button never reacted. 600ms ≈ 216° of rotation,
+		// which is the minimum that reads as "actually loading" to the eye.
 		const floor = new Promise<void>((r) => setTimeout(r, 600));
 		setMarketplaceUpdating(name, true);
 		try {
@@ -248,7 +248,7 @@ export function MarketplacesPanel({
 					)}
 				</Button>
 				<Button
-					variant="tertiary"
+					variant="secondary"
 					size="sm"
 					className="h-9 shrink-0 whitespace-nowrap"
 					onPress={handleUpdateAll}

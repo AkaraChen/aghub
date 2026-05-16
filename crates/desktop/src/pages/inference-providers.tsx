@@ -1788,13 +1788,13 @@ export default function InferenceProvidersPage() {
 								size="sm"
 								aria-label={t("refreshInferenceProviders")}
 								onPress={() => refetch()}
+								isPending={isFetching}
 							>
-								<ArrowPathIcon
-									className={cn(
-										"size-4",
-										isFetching && "animate-spin",
-									)}
-								/>
+								{isFetching ? (
+									<Spinner size="sm" />
+								) : (
+									<ArrowPathIcon className="size-4" />
+								)}
 							</Button>
 						</Tooltip.Trigger>
 						<Tooltip.Content>{t("refresh")}</Tooltip.Content>

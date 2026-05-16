@@ -1,7 +1,6 @@
 "use client";
 
 import {
-	ArrowPathIcon,
 	CheckCircleIcon,
 	ExclamationCircleIcon,
 	MagnifyingGlassIcon,
@@ -212,18 +211,19 @@ export function PluginMarketTable({
 																	plugin.id,
 																)
 															}
+															isPending={
+																isInstalling
+															}
 															isDisabled={
-																isInstalling ||
 																isInstalled
 															}
 														>
 															<span className="flex items-center gap-1.5">
-																{isInstalling && (
-																	<ArrowPathIcon className="size-3.5 animate-spin text-foreground" />
-																)}
-																{isInstalled && (
+																{isInstalling ? (
+																	<Spinner size="sm" />
+																) : isInstalled ? (
 																	<CheckCircleIcon className="size-3.5" />
-																)}
+																) : null}
 																{isInstalling
 																	? t(
 																			"installing",

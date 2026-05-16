@@ -5,10 +5,9 @@ import {
 	GlobeAltIcon,
 	LinkIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Tooltip } from "@heroui/react";
+import { Button, Spinner, Tooltip } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import { siGithub } from "simple-icons";
-import { cn } from "../../lib/utils";
 
 interface PluginSourceCardProps {
 	sourceLabel: string;
@@ -73,14 +72,13 @@ export function PluginSourceCard({
 								className="min-h-[44px] min-w-[44px] text-muted hover:text-foreground"
 								aria-label={t("updatePlugin")}
 								onPress={onUpdate}
-								isDisabled={isUpdating}
+								isPending={isUpdating}
 							>
-								<ArrowPathIcon
-									className={cn(
-										"size-4",
-										isUpdating && "animate-spin",
-									)}
-								/>
+								{isUpdating ? (
+									<Spinner size="sm" />
+								) : (
+									<ArrowPathIcon className="size-4" />
+								)}
 							</Button>
 							<Tooltip.Content>
 								{t("updatePlugin")}

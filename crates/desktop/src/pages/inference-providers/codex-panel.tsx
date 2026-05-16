@@ -32,7 +32,6 @@ import type {
 } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
 import { AgentIcon } from "../../lib/agent-icons";
-import { cn } from "../../lib/utils";
 import {
 	clearCodexProviderMutationOptions,
 	codexProviderStateQueryOptions,
@@ -571,14 +570,13 @@ export function CodexInferenceProviderPanel(_: {
 												"refreshCodexProviders",
 											)}
 											onPress={() => refetch()}
+											isPending={isFetching}
 										>
-											<ArrowPathIcon
-												className={cn(
-													"size-4",
-													isFetching &&
-														"animate-spin",
-												)}
-											/>
+											{isFetching ? (
+												<Spinner size="sm" />
+											) : (
+												<ArrowPathIcon className="size-4" />
+											)}
 										</Button>
 									</Tooltip.Trigger>
 									<Tooltip.Content>

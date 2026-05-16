@@ -1,8 +1,5 @@
-import {
-	ArrowPathIcon,
-	CheckCircleIcon,
-	XCircleIcon,
-} from "@heroicons/react/24/solid";
+import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/solid";
+import { Spinner } from "@heroui/react";
 
 interface ResultStatusItemProps {
 	displayName: string;
@@ -20,7 +17,7 @@ export function ResultStatusItem({
 	return (
 		<div className="flex items-start gap-2 rounded-lg bg-surface-secondary p-3">
 			{status === "pending" && (
-				<ArrowPathIcon className="mt-0.5 size-4 shrink-0 animate-spin text-muted" />
+				<Spinner size="sm" className="mt-0.5 shrink-0 text-muted" />
 			)}
 			{status === "success" && (
 				<CheckCircleIcon className="mt-0.5 size-4 shrink-0 text-success" />

@@ -1,9 +1,11 @@
+import { CheckCircleIcon, XCircleIcon } from "@heroicons/react/24/solid";
 import {
-	ArrowPathIcon,
-	CheckCircleIcon,
-	XCircleIcon,
-} from "@heroicons/react/24/solid";
-import { Checkbox, CheckboxGroup, Description, Label } from "@heroui/react";
+	Checkbox,
+	CheckboxGroup,
+	Description,
+	Label,
+	Spinner,
+} from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import type { AvailableAgent } from "../contexts/agent-availability";
 import { AgentIcon } from "../lib/agent-icons";
@@ -133,9 +135,9 @@ export function AgentList({
 											aria-live="polite"
 											className="flex items-center gap-1"
 										>
-											<ArrowPathIcon
-												className="size-3.5 animate-spin text-muted"
-												aria-hidden="true"
+											<Spinner
+												size="sm"
+												className="text-muted"
 											/>
 											<span className="sr-only">
 												{t("processing")}

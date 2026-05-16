@@ -1,5 +1,12 @@
-import { ArrowPathIcon } from "@heroicons/react/24/solid";
-import { Button, Label, ListBox, Modal, Select, toast } from "@heroui/react";
+import {
+	Button,
+	Label,
+	ListBox,
+	Modal,
+	Select,
+	Spinner,
+	toast,
+} from "@heroui/react";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -462,7 +469,7 @@ export function TransferDialog({
 														"loadingDestinations",
 													)}
 												>
-													<ArrowPathIcon className="size-5 animate-spin text-muted" />
+													<Spinner size="lg" />
 												</div>
 											) : (
 												<AgentList
@@ -509,19 +516,17 @@ export function TransferDialog({
 						<Button
 							variant="primary"
 							onPress={handleTransfer}
+							isPending={isApplying}
 							isDisabled={
 								!selectedScope ||
 								selectedAgents.length === 0 ||
-								isApplying ||
 								isLoadingDestinations ||
 								selectedAgents.every((id) =>
 									installedInDestination.has(id),
 								)
 							}
 						>
-							{isApplying && (
-								<ArrowPathIcon className="size-4 animate-spin" />
-							)}
+							{isApplying && <Spinner size="sm" />}
 							{t("transfer")}
 						</Button>
 					</Modal.Footer>

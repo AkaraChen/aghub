@@ -7,7 +7,7 @@ import {
 	PuzzlePieceIcon,
 	RectangleStackIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Label, ListBox, Tooltip } from "@heroui/react";
+import { Button, Label, ListBox, Spinner, Tooltip } from "@heroui/react";
 import Fuse from "fuse.js";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -135,14 +135,13 @@ export function PluginList({
 						className="shrink-0"
 						aria-label={t("refreshPlugins")}
 						onPress={onRefresh}
-						isDisabled={isRefreshing}
+						isPending={isRefreshing}
 					>
-						<ArrowPathIcon
-							className={cn(
-								"size-4",
-								isRefreshing && "animate-spin",
-							)}
-						/>
+						{isRefreshing ? (
+							<Spinner size="sm" />
+						) : (
+							<ArrowPathIcon className="size-4" />
+						)}
 					</Button>
 					<Tooltip.Content>{t("refreshPlugins")}</Tooltip.Content>
 				</Tooltip>
