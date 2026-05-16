@@ -765,8 +765,10 @@ pub fn delete_skill(
 	if let Some(skill) = manager.get_skill(name) {
 		ensure_skill_not_plugin_managed(skill, "delete")?;
 	}
-	manager.remove_skill(name).map_err(ApiError::from)?;
-	Ok(NoContent)
+	match manager.remove_skill(name) {
+		Ok(()) | Err(ConfigError::ResourceNotFound { .. }) => Ok(NoContent),
+		Err(e) => Err(ApiError::from(e)),
+	}
 }
 
 #[post("/agents/<agent>/skills/<name>/enable?<scope..>")]

@@ -202,8 +202,10 @@ pub fn delete_mcp(
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
-	manager.remove_mcp(name).map_err(ApiError::from)?;
-	Ok(NoContent)
+	match manager.remove_mcp(name) {
+		Ok(()) | Err(ConfigError::ResourceNotFound { .. }) => Ok(NoContent),
+		Err(e) => Err(ApiError::from(e)),
+	}
 }
 
 #[post("/agents/<agent>/mcps/<name>/enable?<scope..>")]
