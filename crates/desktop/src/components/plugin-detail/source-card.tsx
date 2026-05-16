@@ -75,7 +75,7 @@ export function PluginSourceCard({
 								isPending={isUpdating}
 							>
 								{isUpdating ? (
-									<Spinner size="sm" />
+									<Spinner color="current" size="sm" />
 								) : (
 									<ArrowPathIcon className="size-4" />
 								)}

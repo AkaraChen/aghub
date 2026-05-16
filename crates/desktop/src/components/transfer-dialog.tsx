@@ -526,7 +526,9 @@ export function TransferDialog({
 								)
 							}
 						>
-							{isApplying && <Spinner size="sm" />}
+							{isApplying && (
+								<Spinner color="current" size="sm" />
+							)}
 							{t("transfer")}
 						</Button>
 					</Modal.Footer>

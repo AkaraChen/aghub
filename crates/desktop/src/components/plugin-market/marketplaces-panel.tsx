@@ -239,7 +239,7 @@ export function MarketplacesPanel({
 					isDisabled={!source.trim() || addMutation.isPending}
 				>
 					{addMutation.isPending ? (
-						<Spinner size="sm" />
+						<Spinner color="current" size="sm" />
 					) : (
 						<>
 							<PlusIcon className="size-4" />
@@ -256,7 +256,7 @@ export function MarketplacesPanel({
 					isDisabled={marketplaces.length === 0}
 				>
 					{isUpdatingAll ? (
-						<Spinner size="sm" />
+						<Spinner color="current" size="sm" />
 					) : (
 						<>
 							<ArrowPathIcon className="size-4" />
@@ -384,7 +384,10 @@ export function MarketplacesPanel({
 																)}
 															>
 																{isUpdating ? (
-																	<Spinner size="sm" />
+																	<Spinner
+																		color="current"
+																		size="sm"
+																	/>
 																) : (
 																	<ArrowPathIcon className="size-4" />
 																)}
@@ -415,7 +418,10 @@ export function MarketplacesPanel({
 																	className="text-danger"
 																>
 																	{isRemoving ? (
-																		<Spinner size="sm" />
+																		<Spinner
+																			color="current"
+																			size="sm"
+																		/>
 																	) : (
 																		<TrashIcon className="size-4" />
 																	)}

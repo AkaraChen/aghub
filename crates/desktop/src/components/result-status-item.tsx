@@ -17,7 +17,11 @@ export function ResultStatusItem({
 	return (
 		<div className="flex items-start gap-2 rounded-lg bg-surface-secondary p-3">
 			{status === "pending" && (
-				<Spinner size="sm" className="mt-0.5 shrink-0 text-muted" />
+				<Spinner
+					color="current"
+					size="sm"
+					className="mt-0.5 shrink-0 text-muted"
+				/>
 			)}
 			{status === "success" && (
 				<CheckCircleIcon className="mt-0.5 size-4 shrink-0 text-success" />

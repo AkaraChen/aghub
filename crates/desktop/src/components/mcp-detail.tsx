@@ -518,7 +518,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 								className="min-h-[44px] min-w-[120px]"
 							>
 								{deleteMutation.isPending ? (
-									<Spinner size="sm" />
+									<Spinner color="current" size="sm" />
 								) : (
 									t("deleteMcpServer")
 								)}

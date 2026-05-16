@@ -377,7 +377,7 @@ export function UnifiedResourceList({
 						isPending={isRefreshing}
 					>
 						{isRefreshing ? (
-							<Spinner size="sm" />
+							<Spinner color="current" size="sm" />
 						) : (
 							<ArrowPathIcon className="size-4" />
 						)}

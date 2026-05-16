@@ -94,7 +94,7 @@ export function PluginDetailHeader({
 							aria-label={t("reinstallPlugin")}
 						>
 							{isReinstalling ? (
-								<Spinner size="sm" />
+								<Spinner color="current" size="sm" />
 							) : (
 								<ArrowPathIcon className="size-4" />
 							)}
@@ -115,7 +115,7 @@ export function PluginDetailHeader({
 						aria-label={t("uninstallPlugin")}
 					>
 						{isUninstalling ? (
-							<Spinner size="sm" />
+							<Spinner color="current" size="sm" />
 						) : (
 							<TrashIcon className="size-4" />
 						)}

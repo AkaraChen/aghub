@@ -136,6 +136,7 @@ export function SkillsAgentList({
 											className="flex items-center gap-1"
 										>
 											<Spinner
+												color="current"
 												size="sm"
 												className="text-muted"
 											/>

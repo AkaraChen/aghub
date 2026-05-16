@@ -220,7 +220,10 @@ export function PluginMarketTable({
 														>
 															<span className="flex items-center gap-1.5">
 																{isInstalling ? (
-																	<Spinner size="sm" />
+																	<Spinner
+																		color="current"
+																		size="sm"
+																	/>
 																) : isInstalled ? (
 																	<CheckCircleIcon className="size-3.5" />
 																) : null}

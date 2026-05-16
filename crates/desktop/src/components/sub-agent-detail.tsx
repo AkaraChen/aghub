@@ -252,7 +252,7 @@ export function SubAgentDetail({
 								}}
 							>
 								{isDeleting ? (
-									<Spinner size="sm" />
+									<Spinner color="current" size="sm" />
 								) : (
 									t("deleteSubAgent")
 								)}

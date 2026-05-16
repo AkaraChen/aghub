@@ -224,7 +224,7 @@ export default function SkillsSearchPage() {
 										colSpan={4}
 										className="py-3 text-center"
 									>
-										<Spinner size="sm" />
+										<Spinner color="current" size="sm" />
 									</td>
 								</tr>
 							)}

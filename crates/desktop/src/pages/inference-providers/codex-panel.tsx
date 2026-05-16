@@ -573,7 +573,10 @@ export function CodexInferenceProviderPanel(_: {
 											isPending={isFetching}
 										>
 											{isFetching ? (
-												<Spinner size="sm" />
+												<Spinner
+													color="current"
+													size="sm"
+												/>
 											) : (
 												<ArrowPathIcon className="size-4" />
 											)}
