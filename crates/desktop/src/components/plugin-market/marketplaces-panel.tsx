@@ -26,7 +26,6 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { CCMarketplaceSourceResponse } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
-import { cn } from "../../lib/utils";
 import {
 	addMarketplaceMutationOptions,
 	invalidateMarketplaceQueries,
@@ -253,15 +252,17 @@ export function MarketplacesPanel({
 					size="sm"
 					className="h-9 shrink-0 whitespace-nowrap"
 					onPress={handleUpdateAll}
-					isDisabled={isUpdatingAll || marketplaces.length === 0}
+					isPending={isUpdatingAll}
+					isDisabled={marketplaces.length === 0}
 				>
-					<ArrowPathIcon
-						className={cn(
-							"size-4",
-							isUpdatingAll && "animate-spin",
-						)}
-					/>
-					{t("marketplaceRefreshAll")}
+					{isUpdatingAll ? (
+						<Spinner size="sm" />
+					) : (
+						<>
+							<ArrowPathIcon className="size-4" />
+							{t("marketplaceRefreshAll")}
+						</>
+					)}
 				</Button>
 			</div>
 
@@ -372,21 +373,21 @@ export function MarketplacesPanel({
 																		},
 																	)
 																}
+																isPending={
+																	isUpdating
+																}
 																isDisabled={
-																	isUpdating ||
 																	isUpdatingAll
 																}
 																aria-label={t(
 																	"marketplaceRefresh",
 																)}
 															>
-																<ArrowPathIcon
-																	className={cn(
-																		"size-4",
-																		isUpdating &&
-																			"animate-spin",
-																	)}
-																/>
+																{isUpdating ? (
+																	<Spinner size="sm" />
+																) : (
+																	<ArrowPathIcon className="size-4" />
+																)}
 															</Button>
 															<Tooltip.Content>
 																{t(
