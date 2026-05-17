@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { ConfigSource } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
+import { BulkOperationError, bulkFailureItemsLabel } from "../lib/bulk-errors";
 import { invalidateMcpQueries } from "../requests/mcps";
 import { invalidateSkillQueries } from "../requests/skills";
 
@@ -102,8 +103,8 @@ export function BulkDeleteDialog({
 					`${resourceType} bulk delete failures:`,
 					failures,
 				);
-				throw new Error(
-					`${failures.length} of ${promises.length} deletions failed`,
+				throw new BulkOperationError(
+					failures.map(({ name, agent }) => ({ name, agent })),
 				);
 			}
 			return { deleted: promises.length };
@@ -120,6 +121,15 @@ export function BulkDeleteDialog({
 		},
 		onError: (error) => {
 			console.error("Bulk delete mutation error:", error);
+			if (error instanceof BulkOperationError) {
+				toast.danger(
+					t(
+						"bulkDeleteFailedItems",
+						bulkFailureItemsLabel(error.failures),
+					),
+				);
+				return;
+			}
 			toast.danger(
 				error instanceof Error ? error.message : t("bulkDeleteFailed"),
 			);

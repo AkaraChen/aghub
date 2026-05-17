@@ -451,6 +451,7 @@ export default {
 	bulkDeleteMixedConfirm:
 		"Are you sure you want to delete the {{count}} selected resources from this project?",
 	bulkDeleteFailed: "Bulk delete failed",
+	bulkDeleteFailedItems: "{{count}} item(s) failed to delete: {{items}}",
 	starSkill: "Favorite",
 	unstarSkill: "Unfavorite",
 	starServer: "Favorite",
