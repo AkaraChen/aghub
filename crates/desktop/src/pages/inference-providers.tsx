@@ -194,7 +194,9 @@ function ProviderIcon({ format }: { format: InferenceProviderFormatDto }) {
 	const svg = format === "anthropic" ? anthropicLogo : openAiLogo;
 	const svgDataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 
-	return <img src={svgDataUrl} className="size-4 shrink-0" alt={format} />;
+	return (
+		<img src={svgDataUrl} className="size-4 shrink-0" alt="" aria-hidden />
+	);
 }
 
 const PRESET_LOGO_MAP: Record<string, string> = {
@@ -215,7 +217,9 @@ function PresetLogo({ logo }: { logo: string }) {
 		);
 	}
 	const svgDataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-	return <img src={svgDataUrl} className="size-4 shrink-0" alt={logo} />;
+	return (
+		<img src={svgDataUrl} className="size-4 shrink-0" alt="" aria-hidden />
+	);
 }
 
 function MonoValue({

@@ -248,9 +248,11 @@ export default function SubAgentsPage() {
 			}
 		},
 		onSuccess: async () => {
-			await invalidateSubAgentQueries(queryClient);
 			toast.success(t("subAgentDeleted"));
 			setPanel({ type: "empty" });
+		},
+		onSettled: async () => {
+			await invalidateSubAgentQueries(queryClient);
 		},
 		onError: (error) => {
 			if (error instanceof BulkOperationError) {

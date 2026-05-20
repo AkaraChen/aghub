@@ -61,7 +61,9 @@ export function BulkDeleteDialog({
 					const dedupKey =
 						groupResourceType === "skill" && item.source_path
 							? `skill:${item.source_path}:${scope}`
-							: `${groupResourceType}:${item.agent}:${item.name}:${scope}`;
+							: groupResourceType === "skill"
+								? `skill:${item.agent}:${group.key}:${scope}`
+								: `${groupResourceType}:${item.agent}:${item.name}:${scope}`;
 					if (seen.has(dedupKey)) continue;
 					seen.add(dedupKey);
 					if (groupResourceType === "mcp") {
