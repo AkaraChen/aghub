@@ -761,11 +761,16 @@ pub async fn delete_skill(
 	check_skills_mutable(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
-	manager.load().map_err(ApiError::from)?;
-	if let Some(skill) = manager.get_skill(name) {
-		ensure_skill_not_plugin_managed(skill, "delete").await?;
+	match manager.load() {
+		Ok(()) => {
+			if let Some(skill) = manager.get_skill(name) {
+				ensure_skill_not_plugin_managed(skill, "delete").await?;
+			}
+			manager.remove_skill(name).map_err(ApiError::from)?;
+		}
+		Err(ConfigError::NotFound { .. }) => {}
+		Err(e) => return Err(ApiError::from(e)),
 	}
-	manager.remove_skill(name).map_err(ApiError::from)?;
 	Ok(NoContent)
 }
 

@@ -201,8 +201,13 @@ pub fn delete_mcp(
 	check_mcp_supported(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
-	manager.load().map_err(ApiError::from)?;
-	manager.remove_mcp(name).map_err(ApiError::from)?;
+	match manager.load() {
+		Ok(()) => {
+			manager.remove_mcp(name).map_err(ApiError::from)?;
+		}
+		Err(ConfigError::NotFound { .. }) => {}
+		Err(e) => return Err(ApiError::from(e)),
+	}
 	Ok(NoContent)
 }
 
