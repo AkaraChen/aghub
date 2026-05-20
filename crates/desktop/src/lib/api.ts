@@ -3,8 +3,14 @@ import type {
 	AgentAvailabilityDto,
 	AgentInfo,
 	AgentProviderResponse,
-	CCPluginCheckUpdateRequest,
-	CCPluginCheckUpdateResponse,
+	CCMarketplaceAddRequest,
+	CCMarketplaceListResponse,
+	CCMarketplaceMutationResponse,
+	CCPluginCliStatusResponse,
+	CCPluginPruneRequest,
+	CCPluginPruneResponse,
+	CCPluginValidateRequest,
+	CCPluginValidateResponse,
 	ClaudeProviderStateResponse,
 	CodeEditorType,
 	CodexProviderStateResponse,
@@ -43,8 +49,6 @@ import type {
 	CCPluginResponse,
 	ProjectSkillLockResponse,
 	ReconcileRequest,
-	CCPluginReinstallRequest,
-	CCPluginReinstallResponse,
 	SkillResponse,
 	SkillTreeNodeResponse,
 	SubAgentResponse,
@@ -771,13 +775,6 @@ export function createApi(baseUrl: string) {
 					.post("plugins/update", { json: body, timeout: 180000 })
 					.json();
 			},
-			checkUpdate(
-				body: CCPluginCheckUpdateRequest,
-			): Promise<CCPluginCheckUpdateResponse> {
-				return client
-					.post("plugins/check-update", { json: body })
-					.json();
-			},
 			openFolder(pluginId: string, scope?: string): Promise<void> {
 				const search = new URLSearchParams({ plugin_id: pluginId });
 				if (scope) {
@@ -795,13 +792,6 @@ export function createApi(baseUrl: string) {
 				return client
 					.post("plugins/open-skill-in-editor", { json: body })
 					.then(() => undefined);
-			},
-			reinstall(
-				body: CCPluginReinstallRequest,
-			): Promise<CCPluginReinstallResponse> {
-				return client
-					.post("plugins/reinstall", { json: body, timeout: 180000 })
-					.json();
 			},
 			getConfig(pluginId: string): Promise<CCPluginConfigResponse> {
 				return client
@@ -825,15 +815,48 @@ export function createApi(baseUrl: string) {
 			listMarket(): Promise<CCPluginMarketResponse[]> {
 				return client.get("plugins-market", { timeout: 30000 }).json();
 			},
-			updateMarketplace(): Promise<{
-				success: boolean;
-				updated_count: number;
-			}> {
+			listMarketplaces(): Promise<CCMarketplaceListResponse> {
+				return client.get("plugins/marketplaces").json();
+			},
+			addMarketplace(
+				body: CCMarketplaceAddRequest,
+			): Promise<CCMarketplaceMutationResponse> {
 				return client
-					.post("plugins-market/update", {
+					.post("plugins/marketplaces", {
+						json: body,
 						timeout: 300000,
 					})
 					.json();
+			},
+			removeMarketplace(
+				name: string,
+			): Promise<CCMarketplaceMutationResponse> {
+				return client
+					.delete(`plugins/marketplaces/${encodeURIComponent(name)}`)
+					.json();
+			},
+			updateMarketplaceOne(
+				name: string,
+			): Promise<CCMarketplaceMutationResponse> {
+				return client
+					.post(
+						`plugins/marketplaces/${encodeURIComponent(name)}/update`,
+						{ timeout: 300000 },
+					)
+					.json();
+			},
+			getCliStatus(): Promise<CCPluginCliStatusResponse> {
+				return client.get("plugins/cli/status").json();
+			},
+			prune(body: CCPluginPruneRequest): Promise<CCPluginPruneResponse> {
+				return client
+					.post("plugins/prune", { json: body, timeout: 120000 })
+					.json();
+			},
+			validate(
+				body: CCPluginValidateRequest,
+			): Promise<CCPluginValidateResponse> {
+				return client.post("plugins/validate", { json: body }).json();
 			},
 		},
 	};

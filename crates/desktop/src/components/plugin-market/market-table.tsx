@@ -1,7 +1,6 @@
 "use client";
 
 import {
-	ArrowPathIcon,
 	CheckCircleIcon,
 	ExclamationCircleIcon,
 	MagnifyingGlassIcon,
@@ -173,7 +172,7 @@ export function PluginMarketTable({
 												</Table.Cell>
 												<Table.Cell>
 													<div className="flex justify-end py-0.5">
-														<span className="text-sm tabular-nums text-muted">
+														<span className="whitespace-nowrap text-sm tabular-nums text-muted">
 															{plugin.installs > 0
 																? compactFormatter.format(
 																		plugin.installs,
@@ -212,18 +211,22 @@ export function PluginMarketTable({
 																	plugin.id,
 																)
 															}
+															isPending={
+																isInstalling
+															}
 															isDisabled={
-																isInstalling ||
 																isInstalled
 															}
 														>
 															<span className="flex items-center gap-1.5">
-																{isInstalling && (
-																	<ArrowPathIcon className="size-3.5 animate-spin text-foreground" />
-																)}
-																{isInstalled && (
+																{isInstalling ? (
+																	<Spinner
+																		color="current"
+																		size="sm"
+																	/>
+																) : isInstalled ? (
 																	<CheckCircleIcon className="size-3.5" />
-																)}
+																) : null}
 																{isInstalling
 																	? t(
 																			"installing",

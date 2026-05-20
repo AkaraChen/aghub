@@ -15,11 +15,9 @@ interface PluginSourceCardProps {
 	sourceVersion: string | null;
 	sourceUrl: string | null;
 	isGitHubSource: boolean;
-	canCheckUpdates: boolean;
-	updateAvailable: boolean;
-	latestVersion: string | null;
+	canUpdate: boolean;
 	isUpdating: boolean;
-	onRefresh: () => void;
+	onUpdate: () => void;
 	onOpenUrl: (url: string | undefined) => void;
 }
 
@@ -28,11 +26,9 @@ export function PluginSourceCard({
 	sourceVersion,
 	sourceUrl,
 	isGitHubSource,
-	canCheckUpdates,
-	updateAvailable,
-	latestVersion,
+	canUpdate,
 	isUpdating,
-	onRefresh,
+	onUpdate,
 	onOpenUrl,
 }: PluginSourceCardProps) {
 	const { t } = useTranslation();
@@ -66,28 +62,17 @@ export function PluginSourceCard({
 							<span className="font-mono">{sourceVersion}</span>
 						</div>
 					)}
-					{updateAvailable && latestVersion && (
-						<p className="mt-1 text-xs font-medium text-accent">
-							{t("updateAvailable", {
-								version: latestVersion,
-							})}
-						</p>
-					)}
 				</div>
 				<div className="flex shrink-0 items-center gap-1">
-					{canCheckUpdates && (
+					{canUpdate && (
 						<Tooltip delay={0}>
 							<Button
 								isIconOnly
 								variant="ghost"
 								size="md"
-								className="min-h-[40px] min-w-[40px] text-muted hover:text-foreground"
-								aria-label={
-									updateAvailable
-										? t("updatePlugin")
-										: t("checkForUpdates")
-								}
-								onPress={onRefresh}
+								className="min-h-[44px] min-w-[44px] text-muted hover:text-foreground"
+								aria-label={t("updatePlugin")}
+								onPress={onUpdate}
 								isDisabled={isUpdating}
 							>
 								<ArrowPathIcon
@@ -97,12 +82,9 @@ export function PluginSourceCard({
 									)}
 								/>
 							</Button>
+
 							<Tooltip.Content>
-								{updateAvailable && latestVersion
-									? t("updateToVersion", {
-											version: latestVersion,
-										})
-									: t("checkForUpdates")}
+								{t("updatePlugin")}
 							</Tooltip.Content>
 						</Tooltip>
 					)}
@@ -112,7 +94,7 @@ export function PluginSourceCard({
 								isIconOnly
 								variant="ghost"
 								size="md"
-								className="min-h-[40px] min-w-[40px] text-muted hover:text-foreground"
+								className="min-h-[44px] min-w-[44px] text-muted hover:text-foreground"
 								aria-label={t("openRepository")}
 								onPress={() => onOpenUrl(sourceUrl)}
 							>
