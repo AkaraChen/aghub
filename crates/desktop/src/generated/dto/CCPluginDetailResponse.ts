@@ -7,9 +7,6 @@ import type { CCPluginScopeResponse } from "./CCPluginScopeResponse";
 import type { CCPluginSkillInfo } from "./CCPluginSkillInfo";
 import type { CCPluginSourceInfoResponse } from "./CCPluginSourceInfoResponse";
 
-/**
- * Plugin detail response (combined)
- */
 export type CCPluginDetailResponse = {
 	manifest?: CCPluginManifestResponse;
 	hooks?: CCPluginHooksManifestResponse;
@@ -17,13 +14,7 @@ export type CCPluginDetailResponse = {
 	provided_skills: Array<CCPluginSkillInfo>;
 	id: string;
 	name: string;
-	/**
-	 * Display version derived from the default display scope installation.
-	 */
 	version: string;
-	/**
-	 * Scope that provides the top-level display version and default selection.
-	 */
 	display_scope?: string;
 	description: string | null;
 	enabled: boolean;
@@ -36,8 +27,5 @@ export type CCPluginDetailResponse = {
 	license?: string;
 	keywords?: Array<string>;
 	source_info: CCPluginSourceInfoResponse;
-	/**
-	 * All scopes where this plugin is installed
-	 */
 	scopes: Array<CCPluginScopeResponse>;
 };

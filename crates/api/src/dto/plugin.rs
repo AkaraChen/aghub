@@ -38,7 +38,6 @@ pub struct CCPluginSourceInfoResponse {
 	pub url: Option<String>,
 	pub is_github: bool,
 	pub can_reinstall: bool,
-	pub can_check_updates: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -250,6 +249,9 @@ pub struct CCPluginUninstallRequest {
 	pub scope: String,
 	#[serde(default)]
 	pub keep_data: bool,
+	/// Also remove auto-installed dependencies that are no longer needed.
+	#[serde(default)]
+	pub prune: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -272,46 +274,11 @@ pub struct CCPluginUpdateRequest {
 pub struct CCPluginUpdateResponse {
 	pub success: bool,
 	pub message: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct CCPluginCheckUpdateRequest {
-	pub plugin_id: String,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	#[ts(optional)]
-	pub scope: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct CCPluginCheckUpdateResponse {
-	pub plugin_id: String,
-	pub update_available: bool,
-	pub current_version: String,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	#[ts(optional)]
-	pub latest_version: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	#[ts(optional)]
-	pub changelog: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct CCPluginReinstallRequest {
-	pub plugin_id: String,
-	#[serde(default = "default_scope")]
-	pub scope: String,
+	/// Mirrors the upstream CLI behavior: a plugin update only takes
+	/// effect after Claude Code reloads. True whenever a new version was
+	/// installed and false for the "already up to date" early return.
 	#[serde(default)]
-	pub keep_data: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct CCPluginReinstallResponse {
-	pub success: bool,
-	pub message: String,
+	pub restart_required: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
@@ -331,7 +298,100 @@ pub struct CCPluginUpdateConfigRequest {
 	pub config: String,
 }
 
+// ── Prune / Validate ─────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CCPluginPruneRequest {
+	#[serde(default = "default_scope")]
+	pub scope: String,
+	#[serde(default)]
+	pub dry_run: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CCPluginPruneResponse {
+	pub success: bool,
+	pub summary: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CCPluginValidateRequest {
+	pub path: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CCPluginValidateResponse {
+	pub success: bool,
+	pub message: String,
+}
+
+// ── CLI status ───────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CCPluginCliStatusResponse {
+	pub installed: bool,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub version: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub path: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub error: Option<String>,
+}
+
 // ── Marketplace ──────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum CCMarketplaceSourceResponse {
+	Github { repo: String },
+	Git { url: String },
+	Url { url: String },
+	Local { path: String },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CCMarketplaceEntryResponse {
+	pub name: String,
+	pub source: CCMarketplaceSourceResponse,
+	pub install_location: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CCMarketplaceListResponse {
+	pub marketplaces: Vec<CCMarketplaceEntryResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CCMarketplaceAddRequest {
+	pub source: String,
+	#[serde(default = "default_scope")]
+	pub scope: String,
+	/// Optional git sparse-checkout paths (for monorepo marketplaces).
+	#[serde(default)]
+	pub sparse: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct CCMarketplaceMutationResponse {
+	pub success: bool,
+	pub message: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub marketplace: Option<CCMarketplaceEntryResponse>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]

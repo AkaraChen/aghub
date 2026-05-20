@@ -73,8 +73,8 @@ fn expand_tilde_path(path: &str) -> std::path::PathBuf {
 	}
 }
 
-fn detect_plugin_for_path(path: &std::path::Path) -> Option<String> {
-	let plugins = ClaudePluginManager::new().ok()?;
+async fn detect_plugin_for_path(path: &std::path::Path) -> Option<String> {
+	let plugins = ClaudePluginManager::new().await.ok()?;
 	plugins
 		.plugin_owning_path(path)
 		.map(|plugin| plugin.display_name.clone())
@@ -169,7 +169,7 @@ pub fn reconcile_skill_route(
 }
 
 #[delete("/skills/by-path", data = "<body>")]
-pub fn delete_skill_by_path(
+pub async fn delete_skill_by_path(
 	body: Json<DeleteSkillByPathRequest>,
 ) -> ApiResult<DeleteSkillByPathResponse> {
 	let req = body.into_inner();
@@ -268,7 +268,7 @@ pub fn delete_skill_by_path(
 		}));
 	}
 
-	if let Some(plugin_name) = detect_plugin_for_path(&skill_dir) {
+	if let Some(plugin_name) = detect_plugin_for_path(&skill_dir).await {
 		return Ok(Json(DeleteSkillByPathResponse {
 			success: false,
 			deleted_path: None,
@@ -638,7 +638,7 @@ pub fn list_skills(
 }
 
 #[post("/agents/<agent>/skills?<scope..>", data = "<body>")]
-pub fn create_skill(
+pub async fn create_skill(
 	agent: AgentParam,
 	scope: ScopeParams,
 	body: Json<CreateSkillRequest>,
@@ -723,7 +723,7 @@ pub fn get_skill(
 }
 
 #[put("/agents/<agent>/skills/<name>?<scope..>", data = "<body>")]
-pub fn update_skill(
+pub async fn update_skill(
 	agent: AgentParam,
 	name: &str,
 	scope: ScopeParams,
@@ -741,7 +741,7 @@ pub fn update_skill(
 			ApiError::from(ConfigError::resource_not_found("skill", name))
 		})?
 		.clone();
-	ensure_skill_not_plugin_managed(&existing, "update")?;
+	ensure_skill_not_plugin_managed(&existing, "update").await?;
 	let updated = body.into_inner().apply_to(existing);
 	let response = SkillResponse::from(&updated);
 	manager
@@ -751,7 +751,7 @@ pub fn update_skill(
 }
 
 #[delete("/agents/<agent>/skills/<name>?<scope..>")]
-pub fn delete_skill(
+pub async fn delete_skill(
 	agent: AgentParam,
 	name: &str,
 	scope: ScopeParams,
@@ -763,14 +763,14 @@ pub fn delete_skill(
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
 	if let Some(skill) = manager.get_skill(name) {
-		ensure_skill_not_plugin_managed(skill, "delete")?;
+		ensure_skill_not_plugin_managed(skill, "delete").await?;
 	}
 	manager.remove_skill(name).map_err(ApiError::from)?;
 	Ok(NoContent)
 }
 
 #[post("/agents/<agent>/skills/<name>/enable?<scope..>")]
-pub fn enable_skill(
+pub async fn enable_skill(
 	agent: AgentParam,
 	name: &str,
 	scope: ScopeParams,
@@ -782,7 +782,7 @@ pub fn enable_skill(
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
 	if let Some(skill) = manager.get_skill(name) {
-		ensure_skill_not_plugin_managed(skill, "enable")?;
+		ensure_skill_not_plugin_managed(skill, "enable").await?;
 	}
 	manager.enable_skill(name).map_err(ApiError::from)?;
 	let skill = manager.get_skill(name).expect("skill present after enable");
@@ -790,7 +790,7 @@ pub fn enable_skill(
 }
 
 #[post("/agents/<agent>/skills/<name>/disable?<scope..>")]
-pub fn disable_skill(
+pub async fn disable_skill(
 	agent: AgentParam,
 	name: &str,
 	scope: ScopeParams,
@@ -802,7 +802,7 @@ pub fn disable_skill(
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
 	manager.load().map_err(ApiError::from)?;
 	if let Some(skill) = manager.get_skill(name) {
-		ensure_skill_not_plugin_managed(skill, "disable")?;
+		ensure_skill_not_plugin_managed(skill, "disable").await?;
 	}
 	manager.disable_skill(name).map_err(ApiError::from)?;
 	let skill = manager
@@ -812,11 +812,11 @@ pub fn disable_skill(
 }
 
 /// Reject mutations on skills owned by a Claude plugin.
-fn ensure_skill_not_plugin_managed(
+async fn ensure_skill_not_plugin_managed(
 	skill: &Skill,
 	action: &str,
 ) -> Result<(), ApiError> {
-	if let Some(plugin_name) = detect_plugin_for_path_if_present(skill) {
+	if let Some(plugin_name) = detect_plugin_for_path_if_present(skill).await {
 		return Err(ApiError::new(
 			Status::BadRequest,
 			format!(
@@ -829,13 +829,13 @@ fn ensure_skill_not_plugin_managed(
 	Ok(())
 }
 
-fn detect_plugin_for_path_if_present(skill: &Skill) -> Option<String> {
+async fn detect_plugin_for_path_if_present(skill: &Skill) -> Option<String> {
 	let source_path = skill
 		.canonical_path
 		.as_deref()
 		.or(skill.source_path.as_deref())?;
 	let full_path = expand_tilde_path(source_path);
-	detect_plugin_for_path(&full_path)
+	detect_plugin_for_path(&full_path).await
 }
 
 fn is_plugin_managed_skill(
@@ -854,13 +854,14 @@ fn is_plugin_managed_skill(
 }
 
 #[get("/agents/all/skills?<params..>")]
-pub(crate) fn list_all_agents_skills(
+pub(crate) async fn list_all_agents_skills(
 	params: SkillListParams,
 ) -> ApiResult<Vec<SkillResponse>> {
 	let include_managed = params.include_managed();
 	let resolved = params.resolve_scope()?;
 	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
 	let detected_plugins = ClaudePluginManager::new()
+		.await
 		.map(|manager| manager.list_plugins().to_vec())
 		.unwrap_or_default();
 	let items = load_all_agents(resource_scope, project_root.as_deref())

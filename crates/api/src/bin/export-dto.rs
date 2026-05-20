@@ -32,20 +32,23 @@ use aghub_api::dto::{
 	market::MarketSkill,
 	mcp::{CreateMcpRequest, McpResponse, TransportDto, UpdateMcpRequest},
 	plugin::{
-		CCPluginAuthorResponse, CCPluginCheckUpdateRequest,
-		CCPluginCheckUpdateResponse, CCPluginConfigResponse,
+		CCMarketplaceAddRequest, CCMarketplaceEntryResponse,
+		CCMarketplaceListResponse, CCMarketplaceMutationResponse,
+		CCMarketplaceSourceResponse, CCPluginAuthorResponse,
+		CCPluginCliStatusResponse, CCPluginConfigResponse,
 		CCPluginDetailResponse, CCPluginHookActionResponse,
 		CCPluginHookEventResponse, CCPluginHookMatcherResponse,
 		CCPluginHooksManifestResponse, CCPluginInstallRequest,
 		CCPluginInstallResponse, CCPluginListResponse,
 		CCPluginManifestResponse, CCPluginMarketResponse,
 		CCPluginMcpConfigResponse, CCPluginMcpServerResponse,
-		CCPluginOpenSkillInEditorRequest, CCPluginReinstallRequest,
-		CCPluginReinstallResponse, CCPluginResponse, CCPluginScopeResponse,
+		CCPluginOpenSkillInEditorRequest, CCPluginPruneRequest,
+		CCPluginPruneResponse, CCPluginResponse, CCPluginScopeResponse,
 		CCPluginSkillInfo, CCPluginSourceInfoResponse,
 		CCPluginUninstallRequest, CCPluginUninstallResponse,
 		CCPluginUpdateConfigRequest, CCPluginUpdateRequest,
-		CCPluginUpdateResponse,
+		CCPluginUpdateResponse, CCPluginValidateRequest,
+		CCPluginValidateResponse,
 	},
 	skill::{
 		CreateSkillRequest, DeleteSkillByPathRequest,
@@ -229,14 +232,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<CCPluginUninstallResponse>(&cfg)?;
 	export_type::<CCPluginUpdateRequest>(&cfg)?;
 	export_type::<CCPluginUpdateResponse>(&cfg)?;
-	export_type::<CCPluginCheckUpdateRequest>(&cfg)?;
-	export_type::<CCPluginCheckUpdateResponse>(&cfg)?;
-	export_type::<CCPluginReinstallRequest>(&cfg)?;
-	export_type::<CCPluginReinstallResponse>(&cfg)?;
 	export_type::<CCPluginOpenSkillInEditorRequest>(&cfg)?;
 	export_type::<CCPluginConfigResponse>(&cfg)?;
 	export_type::<CCPluginUpdateConfigRequest>(&cfg)?;
 	export_type::<CCPluginMarketResponse>(&cfg)?;
+	export_type::<CCMarketplaceSourceResponse>(&cfg)?;
+	export_type::<CCMarketplaceEntryResponse>(&cfg)?;
+	export_type::<CCMarketplaceListResponse>(&cfg)?;
+	export_type::<CCMarketplaceAddRequest>(&cfg)?;
+	export_type::<CCMarketplaceMutationResponse>(&cfg)?;
+	export_type::<CCPluginCliStatusResponse>(&cfg)?;
+	export_type::<CCPluginPruneRequest>(&cfg)?;
+	export_type::<CCPluginPruneResponse>(&cfg)?;
+	export_type::<CCPluginValidateRequest>(&cfg)?;
+	export_type::<CCPluginValidateResponse>(&cfg)?;
 
 	write_index_file(&out_dir)?;
 

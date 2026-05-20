@@ -5,5 +5,4 @@ export type CCPluginSourceInfoResponse = {
 	url?: string;
 	is_github: boolean;
 	can_reinstall: boolean;
-	can_check_updates: boolean;
 };
