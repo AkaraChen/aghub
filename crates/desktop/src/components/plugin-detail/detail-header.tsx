@@ -1,15 +1,7 @@
 "use client";
 
 import { ArrowPathIcon, TrashIcon } from "@heroicons/react/24/solid";
-import {
-	Button,
-	Card,
-	ListBox,
-	Select,
-	Spinner,
-	Switch,
-	Tooltip,
-} from "@heroui/react";
+import { Button, Card, ListBox, Select, Switch, Tooltip } from "@heroui/react";
 import type { Key } from "react";
 import { useTranslation } from "react-i18next";
 import type { CCPluginResponse } from "../../generated/dto";
@@ -113,14 +105,10 @@ export function PluginDetailHeader({
 						size="md"
 						className="min-h-[44px] min-w-[44px] text-muted hover:text-danger"
 						onPress={onUninstall}
-						isPending={isUninstalling}
+						isDisabled={isUninstalling}
 						aria-label={t("uninstallPlugin")}
 					>
-						{isUninstalling ? (
-							<Spinner color="current" size="sm" />
-						) : (
-							<TrashIcon className="size-4" />
-						)}
+						<TrashIcon className="size-4" />
 					</Button>
 					<Tooltip.Content>{t("uninstallPlugin")}</Tooltip.Content>
 				</Tooltip>

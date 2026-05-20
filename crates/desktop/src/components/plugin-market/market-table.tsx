@@ -1,6 +1,7 @@
 "use client";
 
 import {
+	ArrowPathIcon,
 	CheckCircleIcon,
 	ExclamationCircleIcon,
 	MagnifyingGlassIcon,
@@ -204,36 +205,36 @@ export function PluginMarketTable({
 													<div className="flex justify-end py-0.5">
 														<Button
 															size="sm"
-															variant="tertiary"
+															variant={
+																isInstalled
+																	? "secondary"
+																	: "tertiary"
+															}
 															className="h-8 min-w-[92px] justify-center gap-1.5 whitespace-nowrap px-3 transition-colors duration-200"
 															onPress={() =>
 																onInstall(
 																	plugin.id,
 																)
 															}
-															isPending={
-																isInstalling
-															}
 															isDisabled={
+																isInstalling ||
 																isInstalled
 															}
 														>
 															<span className="flex items-center gap-1.5">
-																{isInstalling ? (
-																	<Spinner
-																		color="current"
-																		size="sm"
-																	/>
-																) : isInstalled ? (
-																	<CheckCircleIcon className="size-3.5" />
-																) : null}
+																{isInstalling && (
+																	<ArrowPathIcon className="size-3.5 animate-spin text-foreground" />
+																)}
+																{isInstalled && (
+																	<CheckCircleIcon className="size-3.5 text-success" />
+																)}
 																{isInstalling
 																	? t(
 																			"installing",
 																		)
 																	: isInstalled
 																		? t(
-																				"installed",
+																				"installSuccess",
 																			)
 																		: t(
 																				"install",

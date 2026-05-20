@@ -158,7 +158,7 @@ export function MarketplacesPanel({
 		try {
 			await api.plugins.updateMarketplaceOne(name);
 			if (invalidate) {
-				await invalidateMarketplaceQueries(queryClient);
+				void invalidateMarketplaceQueries(queryClient);
 			}
 			if (announce) {
 				toast.success(t("marketplaceUpdatedOne", { name }));
@@ -201,7 +201,7 @@ export function MarketplacesPanel({
 			await floor;
 
 			try {
-				await invalidateMarketplaceQueries(queryClient);
+				void invalidateMarketplaceQueries(queryClient);
 			} catch {
 				// ignore — stale data is preferable to a silent crash
 			}
@@ -255,9 +255,9 @@ export function MarketplacesPanel({
 					size="sm"
 					className="h-9 shrink-0 whitespace-nowrap"
 					onPress={handleAdd}
-					isPending={addMutation.isPending}
 					isDisabled={
 						!source.trim() ||
+						addMutation.isPending ||
 						isUpdatingAll ||
 						updatingMarketplaces.size > 0
 					}
@@ -421,10 +421,8 @@ export function MarketplacesPanel({
 																			entry.name,
 																		)
 																	}
-																	isPending={
-																		isRemoving
-																	}
 																	isDisabled={
+																		isRemoving ||
 																		isUpdating ||
 																		isUpdatingAll
 																	}
