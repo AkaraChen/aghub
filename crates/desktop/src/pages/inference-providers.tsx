@@ -787,7 +787,7 @@ function ProviderForm({
 		const result = await api.inferenceProviders.fetchModels({
 			format: values.format,
 			api_base_url: trimmedBase,
-			api_key: values.apiKey,
+			api_key: values.apiKey.trim(),
 		});
 
 		return result.models.map((m) => m.id);
