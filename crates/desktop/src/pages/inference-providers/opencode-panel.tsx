@@ -23,7 +23,7 @@ import {
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type {
@@ -230,13 +230,6 @@ function OpenCodeEditProviderDialog({
 	const [apiKey, setApiKey] = useState("");
 	const [nameError, setNameError] = useState<string | null>(null);
 
-	useEffect(() => {
-		if (!isOpen) return;
-		setName(provider.name);
-		setApiKey("");
-		setNameError(null);
-	}, [isOpen, provider.id, provider.name]);
-
 	const updateMutation = useMutation({
 		...updateOpenCodeProviderMutationOptions({
 			api,
@@ -261,7 +254,7 @@ function OpenCodeEditProviderDialog({
 			id: provider.id,
 			body: {
 				name: trimmedName === provider.name ? null : trimmedName,
-				api_key: trimmedApiKey ? trimmedApiKey : null,
+				api_key: trimmedApiKey || null,
 			},
 		});
 	};
@@ -674,6 +667,7 @@ export function OpenCodeInferenceProviderPanel({
 			/>
 			{providerDialog?.type === "edit" && (
 				<OpenCodeEditProviderDialog
+					key={providerDialog.provider.id}
 					isOpen
 					provider={providerDialog.provider}
 					onClose={() => setProviderDialog(null)}

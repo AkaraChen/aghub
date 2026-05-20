@@ -192,13 +192,9 @@ function toProviderModelFormValues(models: string[]) {
 
 function ProviderIcon({ format }: { format: InferenceProviderFormatDto }) {
 	const svg = format === "anthropic" ? anthropicLogo : openAiLogo;
+	const svgDataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 
-	return (
-		<span
-			className="inline-flex size-4 shrink-0 items-center justify-center text-foreground [&_svg]:size-4"
-			dangerouslySetInnerHTML={{ __html: svg }}
-		/>
-	);
+	return <img src={svgDataUrl} className="size-4 shrink-0" alt={format} />;
 }
 
 const PRESET_LOGO_MAP: Record<string, string> = {
@@ -218,12 +214,8 @@ function PresetLogo({ logo }: { logo: string }) {
 			<ServerIcon className="size-4 shrink-0 text-muted" aria-hidden />
 		);
 	}
-	return (
-		<span
-			className="inline-flex size-4 shrink-0 items-center justify-center text-foreground [&_svg]:size-4"
-			dangerouslySetInnerHTML={{ __html: svg }}
-		/>
-	);
+	const svgDataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+	return <img src={svgDataUrl} className="size-4 shrink-0" alt={logo} />;
 }
 
 function MonoValue({
