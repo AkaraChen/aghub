@@ -49,19 +49,6 @@ impl UnifiedPluginRegistry {
 		self.plugins.get(id)
 	}
 
-	#[cfg(test)]
-	fn count(&self) -> usize {
-		self.plugins.len()
-	}
-
-	#[cfg(test)]
-	fn installed_count(&self) -> usize {
-		self.plugins
-			.values()
-			.filter(|plugin| plugin.installed)
-			.count()
-	}
-
 	async fn load_install_counts(&mut self) -> Result<()> {
 		let path = self.config.install_counts_path();
 		if !path.exists() {
@@ -141,9 +128,7 @@ impl UnifiedPluginRegistry {
 	}
 
 	pub(super) async fn scan_local_installs(&mut self) -> Result<()> {
-		match ClaudePluginManager::new_with_plugins_dir(
-			&self.config.plugins_dir,
-		) {
+		match ClaudePluginManager::new().await {
 			Ok(manager) => {
 				let installed = manager.list_plugins();
 				log::debug!("Found {} installed plugins", installed.len());
@@ -331,32 +316,6 @@ mod tests {
 	use super::*;
 	use std::fs;
 	use tempfile::tempdir;
-
-	#[test]
-	fn test_registry_with_existing_plugins_dir() {
-		let temp_dir = tempdir().unwrap();
-		let plugins_dir = temp_dir.path().join("plugins");
-		fs::create_dir_all(plugins_dir.join("marketplaces")).unwrap();
-
-		let config = DiscoveryConfig {
-			plugins_dir,
-			marketplaces_subdir: "marketplaces".to_string(),
-			known_marketplaces: vec!["claude-plugins-official".to_string()],
-		};
-
-		let rt = tokio::runtime::Builder::new_current_thread()
-			.enable_all()
-			.build()
-			.unwrap();
-
-		rt.block_on(async {
-			let registry = UnifiedPluginRegistry::new_async(&config).await;
-			assert!(registry.is_ok());
-			let registry = registry.unwrap();
-			assert_eq!(registry.count(), 0);
-			assert_eq!(registry.installed_count(), 0);
-		});
-	}
 
 	#[tokio::test]
 	async fn enrich_from_local_manifest_reads_manifest_fields() {

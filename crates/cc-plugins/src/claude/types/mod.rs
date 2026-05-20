@@ -1,7 +1,3 @@
-mod installed_manifest;
-
-pub use self::installed_manifest::InstalledPluginsManifest;
-
 use anyhow::Result;
 use serde::de::Deserializer;
 use serde::{Deserialize, Serialize};
