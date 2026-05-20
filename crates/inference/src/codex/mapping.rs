@@ -178,17 +178,6 @@ pub(super) fn ensure_api_key(api_key: &str) -> Result<()> {
 	}
 }
 
-pub(super) fn ensure_responses_format(
-	format: Option<InferenceProviderFormat>,
-) -> Result<()> {
-	match format {
-		Some(InferenceProviderFormat::OpenAiResponses) => Ok(()),
-		Some(other) => Err(InferenceProviderError::InvalidFormat(format!(
-			"Codex only supports openai_responses providers, got {other}"
-		))),
-		None => Ok(()),
-	}
-}
 
 pub(super) fn uses_auth_command(table: &Table) -> bool {
 	table.contains_key("auth")

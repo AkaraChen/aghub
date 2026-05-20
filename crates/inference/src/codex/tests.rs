@@ -8,7 +8,6 @@ use crate::agent::{
 	AgentProviderAdapter, AgentProviderCredential, AgentProviderSource,
 };
 use crate::credentials::CredentialStore;
-use crate::error::InferenceProviderError;
 use crate::model::{
 	CreateInferenceProvider, InferenceProvider, InferenceProviderFormat,
 };
@@ -582,17 +581,18 @@ fn add_provider_appends_v1_for_origin_only_base_url() {
 }
 
 #[test]
-fn add_provider_rejects_chat_completion_inventory() {
+fn add_provider_accepts_chat_completion_inventory() {
 	let temp = tempfile::tempdir().unwrap();
 	let adapter = adapter(&temp);
 	let mut provider = provider();
 	provider.format = InferenceProviderFormat::OpenAiCompletions;
 
-	let error = adapter
+	let binding = adapter
 		.add_provider("openrouter", &provider, "sk-test")
-		.unwrap_err();
+		.unwrap();
 
-	assert!(matches!(error, InferenceProviderError::InvalidFormat(_)));
+	assert_eq!(binding.id, "openrouter");
+	assert_eq!(binding.format, Some(InferenceProviderFormat::OpenAiCompletions));
 }
 
 #[test]

@@ -78,9 +78,17 @@ pub struct FetchProviderModelsRequest {
 
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
+pub struct FetchedModelDto {
+	pub id: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub name: Option<String>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct FetchProviderModelsResponse {
-	pub status: u16,
-	pub body: String,
+	pub models: Vec<FetchedModelDto>,
 }
 
 #[derive(Debug, Deserialize, TS)]

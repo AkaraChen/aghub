@@ -49,6 +49,7 @@ export type { CredentialResponse } from "./CredentialResponse";
 export type { DeleteSkillByPathRequest } from "./DeleteSkillByPathRequest";
 export type { DeleteSkillByPathResponse } from "./DeleteSkillByPathResponse";
 export type { EditSkillFolderRequest } from "./EditSkillFolderRequest";
+export type { FetchedModelDto } from "./FetchedModelDto";
 export type { FetchProviderModelsRequest } from "./FetchProviderModelsRequest";
 export type { FetchProviderModelsResponse } from "./FetchProviderModelsResponse";
 export type { GitInstallRequest } from "./GitInstallRequest";

@@ -19,7 +19,7 @@ use aghub_api::dto::{
 		AgentProviderSourceDto, ClaudeProviderStateResponse,
 		CodexProfileResponse, CodexProviderStateResponse,
 		CreateAgentProviderRequest, CreateInferenceProviderRequest,
-		FetchProviderModelsRequest, FetchProviderModelsResponse,
+		FetchedModelDto, FetchProviderModelsRequest, FetchProviderModelsResponse,
 		InferenceProviderFormatDto, InferenceProviderPasswordResponse,
 		InferenceProviderPresetResponse, InferenceProviderResponse,
 		UpdateAgentProviderRequest, UpdateClaudeProviderRequest,
@@ -159,6 +159,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<InferenceProviderFormatDto>(&cfg)?;
 	export_type::<CreateInferenceProviderRequest>(&cfg)?;
 	export_type::<UpdateInferenceProviderRequest>(&cfg)?;
+	export_type::<FetchedModelDto>(&cfg)?;
 	export_type::<FetchProviderModelsRequest>(&cfg)?;
 	export_type::<FetchProviderModelsResponse>(&cfg)?;
 	export_type::<InferenceProviderResponse>(&cfg)?;

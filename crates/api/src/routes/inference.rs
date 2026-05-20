@@ -11,7 +11,7 @@ use rocket::State;
 use crate::dto::inference::{
 	AgentProviderResponse, ClaudeProviderStateResponse,
 	CodexProviderStateResponse, CreateAgentProviderRequest,
-	CreateInferenceProviderRequest, FetchProviderModelsRequest,
+	CreateInferenceProviderRequest, FetchedModelDto, FetchProviderModelsRequest,
 	FetchProviderModelsResponse, InferenceProviderFormatDto,
 	InferenceProviderPasswordResponse, InferenceProviderPresetResponse,
 	InferenceProviderResponse, UpdateAgentProviderRequest,
@@ -242,10 +242,67 @@ pub async fn fetch_inference_provider_models(
 			"UPSTREAM_REQUEST_FAILED",
 		)
 	})?;
-	Ok(Json(FetchProviderModelsResponse {
-		status: response.status().as_u16(),
-		body: response.text().await.unwrap_or_default(),
-	}))
+
+	if !response.status().is_success() {
+		let status = response.status().as_u16();
+		let body = response.text().await.unwrap_or_default();
+		return Err(ApiError::new(
+			Status::BadGateway,
+			if body.is_empty() {
+				format!("upstream returned HTTP {status}")
+			} else {
+				body
+			},
+			"UPSTREAM_ERROR",
+		));
+	}
+
+	let raw = response
+		.text()
+		.await
+		.map_err(|e| ApiError::internal(format!("failed to read response: {e}")))?;
+
+	let payload: serde_json::Value = serde_json::from_str(&raw)
+		.map_err(|e| ApiError::internal(format!("invalid JSON from upstream: {e}")))?;
+
+	let models = parse_models(&payload, body.format);
+	if models.is_empty() {
+		return Err(ApiError::new(
+			Status::BadGateway,
+			"upstream returned no models".to_string(),
+			"NO_MODELS",
+		));
+	}
+
+	Ok(Json(FetchProviderModelsResponse { models }))
+}
+
+fn parse_models(
+	payload: &serde_json::Value,
+	format: InferenceProviderFormatDto,
+) -> Vec<FetchedModelDto> {
+	let data = match payload.get("data").and_then(|v| v.as_array()) {
+		Some(arr) => arr,
+		None => return Vec::new(),
+	};
+
+	data.iter()
+		.filter_map(|entry| {
+			let id = entry.get("id")?.as_str()?.to_string();
+			if id.is_empty() {
+				return None;
+			}
+			let name = match format {
+				InferenceProviderFormatDto::Anthropic => entry
+					.get("display_name")
+					.and_then(|v| v.as_str())
+					.map(str::to_string),
+				InferenceProviderFormatDto::OpenAiCompletions
+				| InferenceProviderFormatDto::OpenAiResponses => None,
+			};
+			Some(FetchedModelDto { id, name })
+		})
+		.collect()
 }
 
 #[get("/inference/agents/opencode/providers")]
@@ -751,4 +808,121 @@ pub fn clear_codex_state(
 		.clear_active_provider(&store)
 		.map_err(ApiError::from)?;
 	Ok(NoContent)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn parse_models_anthropic() {
+		let payload = serde_json::json!({
+			"data": [
+				{"id": "claude-sonnet-4-6", "display_name": "Claude Sonnet 4.6"},
+				{"id": "claude-opus-4-7", "display_name": "Claude Opus 4.7"}
+			]
+		});
+		let models =
+			parse_models(&payload, InferenceProviderFormatDto::Anthropic);
+		assert_eq!(models.len(), 2);
+		assert_eq!(models[0].id, "claude-sonnet-4-6");
+		assert_eq!(
+			models[0].name.as_deref(),
+			Some("Claude Sonnet 4.6")
+		);
+		assert_eq!(models[1].id, "claude-opus-4-7");
+		assert_eq!(models[1].name.as_deref(), Some("Claude Opus 4.7"));
+	}
+
+	#[test]
+	fn parse_models_openai_completions() {
+		let payload = serde_json::json!({
+			"data": [
+				{"id": "gpt-5", "created": 1234567890},
+				{"id": "gpt-5-mini", "created": 1234567890}
+			]
+		});
+		let models = parse_models(
+			&payload,
+			InferenceProviderFormatDto::OpenAiCompletions,
+		);
+		assert_eq!(models.len(), 2);
+		assert_eq!(models[0].id, "gpt-5");
+		assert!(models[0].name.is_none());
+		assert_eq!(models[1].id, "gpt-5-mini");
+		assert!(models[1].name.is_none());
+	}
+
+	#[test]
+	fn parse_models_openai_responses() {
+		let payload = serde_json::json!({
+			"data": [
+				{"id": "gpt-5"},
+				{"id": "o4-mini"}
+			]
+		});
+		let models = parse_models(
+			&payload,
+			InferenceProviderFormatDto::OpenAiResponses,
+		);
+		assert_eq!(models.len(), 2);
+		assert_eq!(models[0].id, "gpt-5");
+		assert!(models[0].name.is_none());
+		assert_eq!(models[1].id, "o4-mini");
+		assert!(models[1].name.is_none());
+	}
+
+	#[test]
+	fn parse_models_empty_data_array() {
+		let payload = serde_json::json!({"data": []});
+		let models =
+			parse_models(&payload, InferenceProviderFormatDto::Anthropic);
+		assert!(models.is_empty());
+	}
+
+	#[test]
+	fn parse_models_missing_data_field() {
+		let payload = serde_json::json!({"object": "list"});
+		let models =
+			parse_models(&payload, InferenceProviderFormatDto::Anthropic);
+		assert!(models.is_empty());
+	}
+
+	#[test]
+	fn parse_models_data_not_an_array() {
+		let payload = serde_json::json!({"data": "not_an_array"});
+		let models =
+			parse_models(&payload, InferenceProviderFormatDto::Anthropic);
+		assert!(models.is_empty());
+	}
+
+	#[test]
+	fn parse_models_skips_missing_id() {
+		let payload = serde_json::json!({
+			"data": [
+				{"id": "valid-model"},
+				{"display_name": "no id here"},
+				{"id": "another-valid"}
+			]
+		});
+		let models =
+			parse_models(&payload, InferenceProviderFormatDto::OpenAiCompletions);
+		assert_eq!(models.len(), 2);
+		assert_eq!(models[0].id, "valid-model");
+		assert_eq!(models[1].id, "another-valid");
+	}
+
+	#[test]
+	fn parse_models_skips_empty_id() {
+		let payload = serde_json::json!({
+			"data": [
+				{"id": ""},
+				{"id": "good-one"}
+			]
+		});
+		let models =
+			parse_models(&payload, InferenceProviderFormatDto::Anthropic);
+		assert_eq!(models.len(), 1);
+		assert_eq!(models[0].id, "good-one");
+	}
 }

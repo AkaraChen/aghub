@@ -250,7 +250,6 @@ impl CodexProviderAdapter {
 		provider: &InferenceProvider,
 		api_key: &str,
 	) -> Result<AgentProviderBinding> {
-		mapping::ensure_responses_format(Some(provider.format))?;
 		mapping::ensure_api_key(api_key)?;
 		let provider_id = mapping::clean_provider_id(provider_id)?;
 		let mut binding = AgentProviderBinding::from_inventory(
@@ -389,7 +388,6 @@ impl CodexProviderAdapter {
 		}
 
 		let mut binding = mapping::binding_from_table(&provider_id, &provider)?;
-		mapping::ensure_responses_format(binding.format)?;
 		if let Some(name) = name {
 			binding.name = name;
 		}
@@ -635,7 +633,6 @@ impl AgentProviderAdapter for CodexProviderAdapter {
 			if binding.source != AgentProviderSource::Custom {
 				continue;
 			}
-			mapping::ensure_responses_format(binding.format)?;
 			let existing_table =
 				existing.get(&binding.id).and_then(Item::as_table);
 			let provider = mapping::provider_table_from_binding(
@@ -799,7 +796,6 @@ fn upsert_provider(
 	binding: &AgentProviderBinding,
 	api_key: Option<&str>,
 ) -> Result<()> {
-	mapping::ensure_responses_format(binding.format)?;
 	let existing = provider_table(config, &binding.id)?.cloned();
 	let provider = mapping::provider_table_from_binding(
 		binding,

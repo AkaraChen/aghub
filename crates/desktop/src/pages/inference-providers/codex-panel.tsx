@@ -63,7 +63,9 @@ function CodexCreateProviderDialog({
 	const responseProviders = useMemo(
 		() =>
 			inventoryProviders.filter(
-				(provider) => provider.format === "openai_responses",
+				(provider) =>
+					provider.format === "openai_responses" ||
+					provider.format === "openai_completions",
 			),
 		[inventoryProviders],
 	);

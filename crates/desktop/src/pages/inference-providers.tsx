@@ -790,17 +790,7 @@ function ProviderForm({
 			api_key: values.apiKey,
 		});
 
-		if (result.status !== 200) {
-			throw new Error(result.body || `HTTP ${result.status}`);
-		}
-		const payload = JSON.parse(result.body) as {
-			data?: Array<{ id?: unknown }>;
-		};
-		const ids = (payload.data ?? [])
-			.map((entry) => (typeof entry?.id === "string" ? entry.id : null))
-			.filter((id): id is string => Boolean(id));
-		if (ids.length === 0) throw new Error("No models in response");
-		return ids;
+		return result.models.map((m) => m.id);
 	};
 
 	const createMutation = useMutation({
