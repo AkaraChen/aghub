@@ -291,7 +291,6 @@ function App() {
 										</MainLayout>
 									</Route>
 
-
 									<Route path="/settings">
 										<MainLayout>
 											<SettingsPage />
