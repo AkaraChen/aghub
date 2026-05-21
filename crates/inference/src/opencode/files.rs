@@ -105,7 +105,7 @@ fn existing_content(path: &Path) -> Result<Option<String>> {
 	}
 }
 
-fn home_dir_error() -> InferenceProviderError {
+pub(super) fn home_dir_error() -> InferenceProviderError {
 	InferenceProviderError::Io(std::io::Error::new(
 		std::io::ErrorKind::NotFound,
 		"home directory not found",

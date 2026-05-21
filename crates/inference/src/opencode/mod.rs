@@ -1,8 +1,8 @@
 //! OpenCode provider configuration adapter.
 //!
-//! OpenCode splits provider configuration and credentials. Provider metadata
-//! lives in `opencode.json`, while credentials written by `/connect` live in
-//! `~/.local/share/opencode/auth.json`.
+//! OpenCode stores provider configuration in `opencode.json`. Credentials can
+//! live in `~/.local/share/opencode/auth.json` when written by `/connect`, or
+//! in provider `options.apiKey` config values.
 
 mod files;
 mod mapping;
@@ -12,6 +12,7 @@ mod schema;
 mod tests;
 
 use std::collections::HashSet;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
@@ -179,6 +180,9 @@ impl OpenCodeProviderAdapter {
 		if let Some(env_name) = parse_env_var_ref(api_key) {
 			return Ok(std::env::var(env_name).ok());
 		}
+		if let Some(file_path) = parse_file_var_ref(api_key) {
+			return read_api_key_file(&self.config_path, file_path);
+		}
 
 		Ok(Some(api_key.to_string()))
 	}
@@ -244,6 +248,51 @@ fn parse_env_var_ref(value: &str) -> Option<&str> {
 	}
 }
 
+fn parse_file_var_ref(value: &str) -> Option<&str> {
+	let path = value.strip_prefix("{file:")?.strip_suffix('}')?.trim();
+	if path.is_empty() {
+		None
+	} else {
+		Some(path)
+	}
+}
+
+fn read_api_key_file(
+	config_path: &Path,
+	file_path: &str,
+) -> Result<Option<String>> {
+	let path = resolve_file_var_path(config_path, file_path)?;
+	let content = fs::read_to_string(path)?;
+	let api_key = content.trim().to_string();
+	if api_key.is_empty() {
+		Ok(None)
+	} else {
+		Ok(Some(api_key))
+	}
+}
+
+fn resolve_file_var_path(
+	config_path: &Path,
+	file_path: &str,
+) -> Result<PathBuf> {
+	let path = if file_path == "~" {
+		dirs::home_dir().ok_or_else(files::home_dir_error)?
+	} else if let Some(rest) = file_path.strip_prefix("~/") {
+		dirs::home_dir()
+			.ok_or_else(files::home_dir_error)?
+			.join(rest)
+	} else {
+		PathBuf::from(file_path)
+	};
+
+	if path.is_absolute() {
+		Ok(path)
+	} else {
+		let base = config_path.parent().unwrap_or_else(|| Path::new("."));
+		Ok(base.join(path))
+	}
+}
+
 impl AgentProviderAdapter for OpenCodeProviderAdapter {
 	fn agent_id(&self) -> &'static str {
 		AGENT_ID
@@ -252,7 +301,7 @@ impl AgentProviderAdapter for OpenCodeProviderAdapter {
 	fn capabilities(&self) -> AgentProviderCapabilities {
 		AgentProviderCapabilities::registry(
 			AgentProviderDefaultSupport::QUALIFIED_MODELS,
-			AgentCredentialSupport::ENV_VAR_OR_AGENT_STORE,
+			AgentCredentialSupport::ENV_VAR_INLINE_OR_AGENT_STORE,
 			BuiltInProviderSupport::OVERRIDABLE,
 		)
 	}

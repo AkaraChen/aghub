@@ -62,10 +62,6 @@ pub(crate) fn resolve_plugin_dir_with_wrappers(
 	None
 }
 
-pub(crate) fn local_plugin_candidates(name: &str) -> Vec<PathBuf> {
-	vec![PathBuf::from(name), PathBuf::new()]
-}
-
 pub(crate) fn remote_plugin_candidates(name: &str) -> Vec<PathBuf> {
 	vec![PathBuf::new(), PathBuf::from(name)]
 }
@@ -233,32 +229,6 @@ pub(crate) async fn fetch_github_raw_manifest(
 	None
 }
 
-pub(crate) async fn fetch_github_commit(
-	client: &reqwest::Client,
-	owner: &str,
-	repo: &str,
-) -> Result<Option<(String, Option<String>)>> {
-	for branch in GITHUB_BRANCHES {
-		let url = format!(
-			"https://api.github.com/repos/{owner}/{repo}/commits/{branch}"
-		);
-		let response = client.get(&url).send().await?;
-		if !response.status().is_success() {
-			continue;
-		}
-
-		let json: serde_json::Value = response.json().await?;
-		if let Some(sha) = json.get("sha").and_then(|value| value.as_str()) {
-			return Ok(Some((
-				sha[..8.min(sha.len())].to_string(),
-				Some(sha.to_string()),
-			)));
-		}
-	}
-
-	Ok(None)
-}
-
 pub(crate) async fn read_plugin_manifest(dir: &Path) -> Result<PluginManifest> {
 	let path = find_plugin_manifest_path(dir)
 		.ok_or_else(|| anyhow::anyhow!("plugin.json not found in {:?}", dir))?;
@@ -296,10 +266,11 @@ pub(crate) async fn extract_repository_archive(
 	git_installer: &crate::installer::git::GitBasedInstaller,
 	url: &str,
 	target_dir: &Path,
+	revision: Option<&str>,
 ) -> Result<String> {
 	let mut last_error = None;
 
-	for tarball_url in repository_archive_urls(url, None) {
+	for tarball_url in repository_archive_urls(url, revision) {
 		match git_installer
 			.download_and_extract(&tarball_url, "", target_dir)
 			.await
@@ -345,184 +316,6 @@ pub(crate) async fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
 	Ok(())
 }
 
-// ── Registries ──
-
-pub struct GitHubRegistry {
-	client: reqwest::Client,
-	owner: String,
-	repo: String,
-	subdir: Option<String>,
-	git_installer: crate::installer::git::GitBasedInstaller,
-}
-
-impl GitHubRegistry {
-	pub fn new(
-		client: reqwest::Client,
-		owner: &str,
-		repo: &str,
-		subdir: Option<String>,
-	) -> Result<Self> {
-		Ok(Self {
-			client,
-			owner: owner.to_string(),
-			repo: repo.to_string(),
-			subdir,
-			git_installer: crate::installer::git::GitBasedInstaller::new()?,
-		})
-	}
-
-	fn plugin_candidates(&self, name: &str) -> Vec<PathBuf> {
-		match &self.subdir {
-			Some(sub) => vec![PathBuf::from(format!("{}{}", sub, name))],
-			None => remote_plugin_candidates(name),
-		}
-	}
-
-	pub async fn fetch_manifest(&self, name: &str) -> Result<PluginManifest> {
-		if let Some(manifest) = fetch_github_raw_manifest(
-			&self.client,
-			&self.owner,
-			&self.repo,
-			&manifest_candidate_paths(&self.plugin_candidates(name)),
-		)
-		.await
-		{
-			return Ok(manifest);
-		}
-
-		anyhow::bail!(
-			"Plugin manifest not found: {} (tried main and master branches with multiple paths)",
-			name
-		)
-	}
-
-	pub async fn install(
-		&self,
-		name: &str,
-		target_dir: &Path,
-	) -> Result<Option<String>> {
-		let url = format!("https://github.com/{}/{}", self.owner, self.repo);
-		let temp_dir =
-			temp_dir(&format!("aghub-plugin-install-{}-", self.repo))?;
-
-		let commit = extract_repository_archive(
-			&self.git_installer,
-			&url,
-			temp_dir.path(),
-		)
-		.await?;
-
-		let source_dir = match resolve_plugin_dir_with_wrappers(
-			temp_dir.path(),
-			&self.plugin_candidates(name),
-		) {
-			Some(path) => path,
-			None => anyhow::bail!(
-				"Plugin directory not found in repository for '{}'",
-				name
-			),
-		};
-
-		copy_dir_all(&source_dir, target_dir).await?;
-		Ok(Some(commit))
-	}
-
-	pub async fn get_latest_version(
-		&self,
-		_name: &str,
-	) -> Result<Option<(String, Option<String>)>> {
-		fetch_github_commit(&self.client, &self.owner, &self.repo).await
-	}
-}
-
-pub struct LocalRegistry {
-	base_path: PathBuf,
-}
-
-impl LocalRegistry {
-	pub fn new(base_path: PathBuf) -> Self {
-		Self { base_path }
-	}
-
-	pub async fn fetch_manifest(&self, name: &str) -> Result<PluginManifest> {
-		let plugin_dir =
-			resolve_plugin_dir(&self.base_path, &local_plugin_candidates(name))
-				.ok_or_else(|| {
-					anyhow::anyhow!(
-						"plugin.json not found in local plugin: {}",
-						name
-					)
-				})?;
-		read_plugin_manifest(&plugin_dir).await
-	}
-
-	pub async fn install(
-		&self,
-		name: &str,
-		target_dir: &Path,
-	) -> Result<Option<String>> {
-		let source_dir =
-			resolve_plugin_dir(&self.base_path, &local_plugin_candidates(name))
-				.ok_or_else(|| {
-					anyhow::anyhow!(
-						"Local plugin directory not found for '{}'",
-						name
-					)
-				})?;
-
-		copy_dir_all(&source_dir, target_dir).await?;
-		Ok(None)
-	}
-
-	pub async fn get_latest_version(
-		&self,
-		_name: &str,
-	) -> Result<Option<(String, Option<String>)>> {
-		Ok(Some(("local".to_string(), None)))
-	}
-}
-
-// ── Enum dispatch ──
-
-pub enum PluginRegistryKind {
-	Marketplace(MarketplaceRegistry),
-	GitHub(GitHubRegistry),
-	Local(LocalRegistry),
-}
-
-impl PluginRegistryKind {
-	pub async fn fetch_manifest(&self, name: &str) -> Result<PluginManifest> {
-		match self {
-			Self::Marketplace(r) => r.fetch_manifest(name).await,
-			Self::GitHub(r) => r.fetch_manifest(name).await,
-			Self::Local(r) => r.fetch_manifest(name).await,
-		}
-	}
-
-	pub async fn install(
-		&self,
-		name: &str,
-		target_dir: &Path,
-	) -> Result<Option<String>> {
-		match self {
-			Self::Marketplace(r) => r.install(name, target_dir).await,
-			Self::GitHub(r) => r.install(name, target_dir).await,
-			Self::Local(r) => r.install(name, target_dir).await,
-		}
-	}
-
-	pub async fn get_latest_version(
-		&self,
-		name: &str,
-	) -> Result<Option<(String, Option<String>)>> {
-		match self {
-			Self::Marketplace(r) => r.get_latest_version(name).await,
-			Self::GitHub(r) => r.get_latest_version(name).await,
-			Self::Local(r) => r.get_latest_version(name).await,
-		}
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -541,28 +334,6 @@ mod tests {
 			"description": "test",
 			"author": { "name": "A" },
 		})
-	}
-
-	#[tokio::test]
-	async fn test_local_registry_supports_plugin_root_base_path() {
-		let temp_dir = temp_dir("aghub-local-registry-").unwrap();
-		let plugin_dir = temp_dir.path().join("demo-plugin");
-		let install_dir = temp_dir.path().join("installed");
-		let manifest_dir = plugin_dir.join(".claude-plugin");
-
-		std::fs::create_dir_all(&manifest_dir).unwrap();
-		std::fs::write(
-			manifest_dir.join("plugin.json"),
-			r#"{"name":"demo-plugin","description":"test","author":{"name":"A"}}"#,
-		)
-		.unwrap();
-
-		let registry = LocalRegistry::new(plugin_dir.clone());
-		let manifest = registry.fetch_manifest("demo-plugin").await.unwrap();
-		assert_eq!(manifest.name, "demo-plugin");
-
-		registry.install("demo-plugin", &install_dir).await.unwrap();
-		assert!(install_dir.join(".claude-plugin/plugin.json").exists());
 	}
 
 	#[test]

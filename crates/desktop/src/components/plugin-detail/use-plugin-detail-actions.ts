@@ -5,14 +5,11 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
 import type {
-	CCPluginCheckUpdateResponse,
 	CCPluginResponse,
 	CCPluginScopeResponse,
 } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
-import { queryKeys } from "../../requests/keys";
 import {
-	checkPluginUpdateMutationOptions,
 	disablePluginMutationOptions,
 	enablePluginMutationOptions,
 	reinstallPluginMutationOptions,
@@ -24,16 +21,12 @@ interface UsePluginDetailActionsParams {
 	currentPlugin: CCPluginResponse;
 	currentScope: "global" | "project" | "local";
 	currentScopeInfo: CCPluginScopeResponse | null;
-	updateAvailable: boolean;
-	latestVersion: string | null;
 }
 
 export function usePluginDetailActions({
 	currentPlugin,
 	currentScope,
 	currentScopeInfo,
-	updateAvailable,
-	latestVersion,
 }: UsePluginDetailActionsParams) {
 	const { t } = useTranslation();
 	const api = useApi();
@@ -77,50 +70,17 @@ export function usePluginDetailActions({
 		...updatePluginMutationOptions({
 			api,
 			queryClient,
-			onSuccess: async () => {
+			onSuccess: async (data) => {
 				const version =
-					latestVersion ??
-					currentScopeInfo?.version ??
-					currentPlugin.version;
-				toast.success(
-					t("pluginUpdated", {
-						version,
-					}),
-				);
+					currentScopeInfo?.version ?? currentPlugin.version;
+				toast.success(t("pluginUpdated", { version }), {
+					description: data.restart_required
+						? t("pluginUpdateRestartHint")
+						: undefined,
+				});
 			},
 		}),
 		onError: (error) => toast.danger(errorMessage(error, "updateFailed")),
-	});
-
-	const checkUpdateMutation = useMutation({
-		...checkPluginUpdateMutationOptions({ api }),
-		onSuccess: (data) => {
-			queryClient.setQueryData<CCPluginCheckUpdateResponse>(
-				queryKeys.plugins.updateStatus(pluginId, currentScope),
-				data,
-			);
-
-			void queryClient.invalidateQueries({
-				queryKey: queryKeys.plugins.list(),
-			});
-
-			if (data.update_available) {
-				toast.success(
-					t("updateAvailable", {
-						version: data.latest_version ?? "latest",
-					}),
-				);
-				return;
-			}
-
-			toast.success(t("noUpdateAvailable"));
-		},
-		onError: (error) =>
-			toast.danger(
-				t("updateCheckFailed", {
-					error: error.message || t("unknownError"),
-				}),
-			),
 	});
 
 	const reinstallMutation = useMutation({
@@ -152,20 +112,13 @@ export function usePluginDetailActions({
 		disableMutation,
 		isToggling,
 		updateMutation,
-		checkUpdateMutation,
 		reinstallMutation,
 		uninstallMutation,
-		handleSourceRefresh: () => {
-			if (checkUpdateMutation.isPending || updateMutation.isPending) {
+		handleUpdate: () => {
+			if (updateMutation.isPending) {
 				return;
 			}
-
-			if (updateAvailable) {
-				updateMutation.mutate(pluginScopeRequest);
-				return;
-			}
-
-			checkUpdateMutation.mutate(pluginScopeRequest);
+			updateMutation.mutate(pluginScopeRequest);
 		},
 		handleReinstall: () => {
 			reinstallMutation.mutate({
@@ -177,13 +130,13 @@ export function usePluginDetailActions({
 			uninstallMutation.mutate({
 				...pluginScopeRequest,
 				keep_data: false,
+				prune: false,
 			});
 		},
 		handleOpenUrl: (url: string | undefined) => {
 			if (!url) {
 				return;
 			}
-
 			openWithErrorToast(t("openRepository"), () => openUrl(url));
 		},
 		handleOpenInstallPath: () =>

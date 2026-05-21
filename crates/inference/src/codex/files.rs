@@ -44,16 +44,6 @@ pub(super) fn read_auth(path: &Path) -> Result<Value> {
 		.map_err(|error| invalid_credential_store(path, error.to_string()))
 }
 
-pub(super) fn write_auth(path: &Path, auth: &Value) -> Result<()> {
-	if let Some(parent) = path.parent() {
-		fs::create_dir_all(parent)?;
-	}
-	let json = serde_json::to_string_pretty(auth)
-		.map_err(|error| invalid_credential_store(path, error.to_string()))?;
-	fs::write(path, json)?;
-	Ok(())
-}
-
 pub(super) fn default_global_config_path() -> Result<PathBuf> {
 	let codex_home = std::env::var_os("CODEX_HOME")
 		.map(PathBuf::from)

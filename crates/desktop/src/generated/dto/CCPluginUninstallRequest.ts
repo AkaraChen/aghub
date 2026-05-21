@@ -4,4 +4,8 @@ export type CCPluginUninstallRequest = {
 	plugin_id: string;
 	scope: string;
 	keep_data: boolean;
+	/**
+	 * Also remove auto-installed dependencies that are no longer needed.
+	 */
+	prune: boolean;
 };

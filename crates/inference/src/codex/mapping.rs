@@ -161,15 +161,6 @@ pub(super) fn clean_provider_id(provider_id: &str) -> Result<String> {
 	Ok(provider_id)
 }
 
-pub(super) fn clean_provider_name(name: &str) -> Result<String> {
-	let name = name.trim().to_string();
-	if name.is_empty() {
-		Err(InferenceProviderError::EmptyName)
-	} else {
-		Ok(name)
-	}
-}
-
 pub(super) fn ensure_api_key(api_key: &str) -> Result<()> {
 	if api_key.trim().is_empty() {
 		Err(InferenceProviderError::EmptyApiKey)
@@ -208,29 +199,23 @@ fn apply_credential(
 	api_key: Option<&str>,
 ) {
 	match credential {
-		AgentProviderCredential::EnvVar { name } => {
-			let _ = api_key;
-			table["env_key"] = value(name.clone());
-			table.remove("experimental_bearer_token");
-			table.remove("requires_openai_auth");
-			table.remove("auth");
-			remove_authorization_header(table);
-		}
-		AgentProviderCredential::AgentStore { .. } => {
-			table.remove("env_key");
-			table.remove("experimental_bearer_token");
-			remove_authorization_header(table);
-			if table.get("auth").is_none() {
-				table["requires_openai_auth"] = value(true);
-			}
-		}
-		AgentProviderCredential::Inline => {
+		AgentProviderCredential::EnvVar { .. }
+		| AgentProviderCredential::Inline => {
 			table.remove("env_key");
 			table.remove("requires_openai_auth");
 			table.remove("auth");
 			if let Some(api_key) = api_key {
 				table["experimental_bearer_token"] = value(api_key.to_string());
 				remove_authorization_header(table);
+			}
+		}
+		AgentProviderCredential::AgentStore { .. } => {
+			table.remove("env_key");
+			table.remove("experimental_bearer_token");
+			table.remove("requires_openai_auth");
+			remove_authorization_header(table);
+			if table.get("auth").is_none() {
+				table["requires_openai_auth"] = value(true);
 			}
 		}
 		AgentProviderCredential::None => {

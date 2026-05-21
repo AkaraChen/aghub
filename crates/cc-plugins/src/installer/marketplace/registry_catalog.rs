@@ -215,7 +215,7 @@ impl MarketplaceRegistry {
 						)
 						.await?;
 					}
-					return self.get_marketplace_commit().await;
+					return self.get_path_commit(path).await;
 				}
 			}
 			MarketplaceSource::Npm { package, .. } => {
@@ -232,7 +232,6 @@ impl MarketplaceRegistry {
 				return self
 					.install_remote_candidates(
 						&url,
-						&candidates[0].to_string_lossy(),
 						target_dir,
 						&candidates,
 						format!(
@@ -240,13 +239,13 @@ impl MarketplaceRegistry {
 							candidates[0].display()
 						),
 						false,
+						pinned_revision(&plugin.source),
 					)
 					.await;
 			}
 			return self
 				.install_remote_candidates(
 					&url,
-					&plugin.name,
 					target_dir,
 					&remote_plugin_candidates(&plugin.name),
 					format!(
@@ -254,6 +253,7 @@ impl MarketplaceRegistry {
 						plugin.name
 					),
 					true,
+					pinned_revision(&plugin.source),
 				)
 				.await;
 		}
@@ -266,8 +266,8 @@ impl MarketplaceRegistry {
 		plugin: &MarketplacePlugin,
 	) -> Result<(String, Option<String>)> {
 		let commit = match &plugin.source {
-			MarketplaceSource::Local(_) => {
-				self.get_marketplace_commit().await?
+			MarketplaceSource::Local(path) => {
+				self.get_path_commit(path).await?
 			}
 			MarketplaceSource::Url { sha, .. }
 			| MarketplaceSource::GitHub { sha, .. }
@@ -318,14 +318,19 @@ impl MarketplaceRegistry {
 	) -> Result<PluginManifest> {
 		let temp_dir = temp_dir("aghub-plugin-manifest-")?;
 
-		extract_repository_archive(&self.git_installer, url, temp_dir.path())
-			.await
-			.map_err(|error| {
-				anyhow::anyhow!(
-					"Failed to download remote plugin manifest: {}",
-					error
-				)
-			})?;
+		extract_repository_archive(
+			&self.git_installer,
+			url,
+			temp_dir.path(),
+			None,
+		)
+		.await
+		.map_err(|error| {
+			anyhow::anyhow!(
+				"Failed to download remote plugin manifest: {}",
+				error
+			)
+		})?;
 
 		let plugin_dir =
 			resolve_plugin_dir_with_wrappers(temp_dir.path(), candidates)
@@ -347,22 +352,24 @@ impl MarketplaceRegistry {
 	async fn install_remote_candidates(
 		&self,
 		url: &str,
-		temp_name: &str,
 		target_dir: &Path,
 		candidates: &[PathBuf],
 		missing_message: String,
 		allow_fallback: bool,
+		revision: Option<&str>,
 	) -> Result<Option<String>> {
 		log::info!("Installing remote plugin from {} to {:?}", url, target_dir);
-		let temp_dir = temp_dir(&format!(
-			"aghub-plugin-temp-{}-",
-			temp_name.replace('/', "_")
-		))?;
+		let label = candidates
+			.first()
+			.map(|c| c.to_string_lossy().replace('/', "_"))
+			.unwrap_or_else(|| "plugin".to_string());
+		let temp_dir = temp_dir(&format!("aghub-plugin-temp-{label}-"))?;
 
 		let commit = extract_repository_archive(
 			&self.git_installer,
 			url,
 			temp_dir.path(),
+			revision,
 		)
 		.await?;
 
@@ -404,7 +411,15 @@ impl MarketplaceRegistry {
 			}
 			Some(MarketplaceEntry::Directory(path)) => {
 				copy_dir_all(&path, target_dir).await?;
-				self.get_marketplace_commit().await
+				let relative = path
+					.strip_prefix(&self.marketplace_path)
+					.map(|p| p.to_string_lossy().to_string())
+					.unwrap_or_default();
+				if relative.is_empty() {
+					self.get_marketplace_commit().await
+				} else {
+					self.get_path_commit(&relative).await
+				}
 			}
 			None => anyhow::bail!("Plugin not found in marketplace: {}", name),
 		}
@@ -430,10 +445,32 @@ impl MarketplaceRegistry {
 					.ok()
 					.and_then(|manifest| manifest.version)
 					.unwrap_or_else(|| "latest".to_string());
-				Ok(Some((version, self.get_marketplace_commit().await?)))
+				let relative = path
+					.strip_prefix(&self.marketplace_path)
+					.map(|p| p.to_string_lossy().to_string())
+					.unwrap_or_default();
+				let commit = if relative.is_empty() {
+					self.get_marketplace_commit().await?
+				} else {
+					self.get_path_commit(&relative).await?
+				};
+				Ok(Some((version, commit)))
 			}
 			None => Ok(None),
 		}
+	}
+}
+
+fn pinned_revision(source: &MarketplaceSource) -> Option<&str> {
+	match source {
+		MarketplaceSource::GitHub { sha, git_ref, .. } => {
+			sha.as_deref().or(git_ref.as_deref())
+		}
+		MarketplaceSource::Url { sha, .. } => sha.as_deref(),
+		MarketplaceSource::GitSubdir { sha, git_ref, .. } => {
+			sha.as_deref().or(git_ref.as_deref())
+		}
+		MarketplaceSource::Local(_) | MarketplaceSource::Npm { .. } => None,
 	}
 }
 
@@ -620,5 +657,25 @@ impl MarketplaceRegistry {
 		}
 
 		Ok(None)
+	}
+
+	async fn get_path_commit(&self, path: &str) -> Result<Option<String>> {
+		let normalized = path.trim_start_matches("./");
+		let output = git_output(
+			&["log", "-1", "--format=%H", "--", normalized],
+			Some(&self.marketplace_path),
+			"Failed to get path-specific commit",
+		)
+		.await?;
+
+		if output.status.success() {
+			let commit =
+				String::from_utf8_lossy(&output.stdout).trim().to_string();
+			if !commit.is_empty() {
+				return Ok(Some(commit));
+			}
+		}
+
+		self.get_marketplace_commit().await
 	}
 }

@@ -727,7 +727,11 @@ pub fn reconcile_skill(
 
 	// Process each actual location for deletion
 	for (skill_path, agent) in skill_locations {
-		let delete_error = fs::remove_dir_all(&skill_path).err();
+		let delete_error = match fs::remove_dir_all(&skill_path) {
+			Ok(()) => None,
+			Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+			Err(e) => Some(e),
+		};
 
 		results.push(OperationResult {
 			target: InstallTarget {

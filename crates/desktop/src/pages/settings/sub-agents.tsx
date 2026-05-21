@@ -35,6 +35,10 @@ import { useAgentAvailability } from "../../hooks/use-agent-availability";
 import { useApi } from "../../hooks/use-api";
 import { AgentIcon } from "../../lib/agent-icons";
 import {
+	BulkOperationError,
+	bulkFailureItemsLabel,
+} from "../../lib/bulk-errors";
+import {
 	filterItemsByAgentIds,
 	getSubAgentMergeKey,
 	sortAgents,
@@ -228,23 +232,46 @@ export default function SubAgentsPage() {
 
 	const deleteMutation = useMutation({
 		mutationFn: async (group: SubAgentGroup) => {
-			await Promise.all(
-				group.items.map((item) => {
-					if (!item.agent) return Promise.resolve(null);
-					return api.subAgents.delete(
+			const itemsWithAgent = group.items.filter(
+				(item): item is typeof item & { agent: string } => !!item.agent,
+			);
+			const results = await Promise.allSettled(
+				itemsWithAgent.map((item) =>
+					api.subAgents.delete(
 						item.name,
 						item.agent,
 						item.source === "project" ? "project" : "global",
-					);
-				}),
+					),
+				),
 			);
+			const failures = results
+				.map((result, index) => ({
+					result,
+					item: itemsWithAgent[index],
+				}))
+				.filter(({ result }) => result.status === "rejected")
+				.map(({ item }) => ({ name: item.name, agent: item.agent }));
+			if (failures.length > 0) {
+				throw new BulkOperationError(failures);
+			}
 		},
 		onSuccess: async () => {
-			await invalidateSubAgentQueries(queryClient);
 			toast.success(t("subAgentDeleted"));
 			setPanel({ type: "empty" });
 		},
+		onSettled: async () => {
+			await invalidateSubAgentQueries(queryClient);
+		},
 		onError: (error) => {
+			if (error instanceof BulkOperationError) {
+				toast.danger(
+					t(
+						"bulkDeleteFailedItems",
+						bulkFailureItemsLabel(error.failures),
+					),
+				);
+				return;
+			}
 			toast.danger(
 				error instanceof Error
 					? error.message

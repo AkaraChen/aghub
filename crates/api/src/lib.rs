@@ -204,9 +204,7 @@ fn build_rocket(
 				routes::plugins::disable_plugin,
 				routes::plugins::install_plugin,
 				routes::plugins::uninstall_plugin,
-				routes::plugins::reinstall_plugin,
 				routes::plugins::update_plugin,
-				routes::plugins::check_plugin_update,
 				routes::plugins::open_plugin_folder,
 				routes::plugins::open_plugin_skill_in_editor,
 				routes::plugins::get_plugin_config,
@@ -214,6 +212,13 @@ fn build_rocket(
 				routes::plugins::delete_plugin_config,
 				routes::plugins::list_plugin_market,
 				routes::plugins::update_marketplace,
+				routes::plugins::list_marketplaces,
+				routes::plugins::add_marketplace,
+				routes::plugins::remove_marketplace,
+				routes::plugins::update_marketplace_one,
+				routes::plugins::cli_status,
+				routes::plugins::prune_plugins,
+				routes::plugins::validate_plugin,
 			],
 		)
 		.register(
@@ -252,7 +257,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 
 #[cfg(test)]
 mod tests {
-	use super::build_rocket;
+	use super::{build_rocket, default_app_data_dir};
 	use rocket::http::{Header, Status};
 	use rocket::local::blocking::Client;
 
@@ -264,30 +269,25 @@ mod tests {
 		))
 		.expect("client");
 
-		for path in [
-			"/api/v1/plugins/check-update",
-			"/api/v1/plugins/reinstall",
-			"/api/v1/plugins/uninstall",
-		] {
-			let response = client
-				.req(rocket::http::Method::Options, path)
-				.header(Header::new("Origin", "http://localhost:1420"))
-				.header(Header::new("Access-Control-Request-Method", "POST"))
-				.header(Header::new(
-					"Access-Control-Request-Headers",
-					"content-type",
-				))
-				.dispatch();
+		let path = "/api/v1/plugins/uninstall";
+		let response = client
+			.req(rocket::http::Method::Options, path)
+			.header(Header::new("Origin", "http://localhost:1420"))
+			.header(Header::new("Access-Control-Request-Method", "POST"))
+			.header(Header::new(
+				"Access-Control-Request-Headers",
+				"content-type",
+			))
+			.dispatch();
 
-			assert_eq!(response.status(), Status::NoContent);
-			assert_eq!(
-				response.headers().get_one("Access-Control-Allow-Origin"),
-				Some("http://localhost:1420"),
-			);
-			assert_eq!(
-				response.headers().get_one("Access-Control-Allow-Headers"),
-				Some("content-type"),
-			);
-		}
+		assert_eq!(response.status(), Status::NoContent);
+		assert_eq!(
+			response.headers().get_one("Access-Control-Allow-Origin"),
+			Some("http://localhost:1420"),
+		);
+		assert_eq!(
+			response.headers().get_one("Access-Control-Allow-Headers"),
+			Some("content-type"),
+		);
 	}
 }
