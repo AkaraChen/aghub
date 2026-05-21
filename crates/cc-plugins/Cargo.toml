@@ -39,3 +39,6 @@ thiserror = { workspace = true }
 # Logging
 log = "0.4"
 tempfile = { workspace = true }
+
+# CLI binary detection
+which = "8"

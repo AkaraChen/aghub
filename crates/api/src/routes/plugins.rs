@@ -1,20 +1,25 @@
 use crate::dto::plugin::{
-	CCPluginAuthorResponse, CCPluginCheckUpdateRequest,
-	CCPluginCheckUpdateResponse, CCPluginConfigResponse,
-	CCPluginDetailResponse, CCPluginHookActionResponse,
-	CCPluginHookEventResponse, CCPluginHookMatcherResponse,
-	CCPluginHooksManifestResponse, CCPluginInstallRequest,
-	CCPluginInstallResponse, CCPluginListResponse, CCPluginManifestResponse,
-	CCPluginMarketResponse, CCPluginMcpConfigResponse,
-	CCPluginMcpServerResponse, CCPluginOpenSkillInEditorRequest,
-	CCPluginReinstallRequest, CCPluginReinstallResponse, CCPluginResponse,
-	CCPluginScopeResponse, CCPluginSkillInfo, CCPluginSourceInfoResponse,
-	CCPluginUninstallRequest, CCPluginUninstallResponse,
-	CCPluginUpdateConfigRequest, CCPluginUpdateRequest, CCPluginUpdateResponse,
+	CCMarketplaceAddRequest, CCMarketplaceEntryResponse,
+	CCMarketplaceListResponse, CCMarketplaceMutationResponse,
+	CCMarketplaceSourceResponse, CCPluginAuthorResponse,
+	CCPluginCliStatusResponse, CCPluginConfigResponse, CCPluginDetailResponse,
+	CCPluginHookActionResponse, CCPluginHookEventResponse,
+	CCPluginHookMatcherResponse, CCPluginHooksManifestResponse,
+	CCPluginInstallRequest, CCPluginInstallResponse, CCPluginListResponse,
+	CCPluginManifestResponse, CCPluginMarketResponse,
+	CCPluginMcpConfigResponse, CCPluginMcpServerResponse,
+	CCPluginOpenSkillInEditorRequest, CCPluginPruneRequest,
+	CCPluginPruneResponse, CCPluginResponse, CCPluginScopeResponse,
+	CCPluginSkillInfo, CCPluginSourceInfoResponse, CCPluginUninstallRequest,
+	CCPluginUninstallResponse, CCPluginUpdateConfigRequest,
+	CCPluginUpdateRequest, CCPluginUpdateResponse, CCPluginValidateRequest,
+	CCPluginValidateResponse,
 };
 use crate::error::{ApiError, ApiNoContent, ApiResult};
 use aghub_cc_plugins::claude::settings::InstallScope;
 use aghub_cc_plugins::claude::{ClaudePluginInfo, ClaudePluginManager};
+use aghub_cc_plugins::cli::types::{CliMarketplace, CliMarketplaceSource};
+use aghub_cc_plugins::cli::ClaudeCli;
 use aghub_cc_plugins::installer::PluginInstaller;
 use aghub_cc_plugins::PluginId;
 use aghub_git::source::{resolve_remote_source, RemoteSourceType};
@@ -42,11 +47,11 @@ fn parse_plugin_id(plugin_id: &str) -> Result<PluginId, ApiError> {
 
 fn parse_install_scope(scope: &str) -> Result<InstallScope, ApiError> {
 	match scope {
-		"global" | "user" | "project" | "local" => {
+		"global" | "user" | "project" | "local" | "managed" => {
 			Ok(InstallScope::from(scope))
 		}
 		_ => Err(ApiError::bad_request(format!(
-			"Invalid scope '{scope}'. Use 'global', 'project', or 'local'"
+			"Invalid scope '{scope}'. Use 'global', 'project', 'local', or 'managed'"
 		))),
 	}
 }
@@ -59,8 +64,8 @@ fn normalize_scope_value(scope: &str) -> String {
 	}
 }
 
-fn load_plugin_manager() -> Result<ClaudePluginManager, ApiError> {
-	ClaudePluginManager::new().map_err(|e| {
+async fn load_plugin_manager() -> Result<ClaudePluginManager, ApiError> {
+	ClaudePluginManager::new().await.map_err(|e| {
 		error!("Failed to initialize plugin manager: {e}");
 		ApiError::internal("Failed to initialize plugin manager")
 	})
@@ -89,10 +94,10 @@ fn get_plugin(
 		.ok_or_else(|| ApiError::not_found(format!("Plugin '{id}' not found")))
 }
 
-fn load_manager_and_plugin(
+async fn load_manager_and_plugin(
 	id: &PluginId,
 ) -> Result<(ClaudePluginManager, ClaudePluginInfo), ApiError> {
-	let manager = load_plugin_manager()?;
+	let manager = load_plugin_manager().await?;
 	let plugin = get_plugin(&manager, id)?;
 	Ok((manager, plugin))
 }
@@ -215,9 +220,6 @@ fn build_source_info(
 		can_reinstall: installer
 			.map(|i| i.can_reinstall(&plugin.id))
 			.unwrap_or(false),
-		can_check_updates: installer
-			.map(|i| i.can_check_updates(&plugin.id))
-			.unwrap_or(false),
 	}
 }
 
@@ -272,8 +274,8 @@ fn sorted_entries(
 // ── List / Enable / Disable ──────────────────────────────────────────────────
 
 #[get("/plugins")]
-pub fn list_plugins() -> ApiResult<CCPluginListResponse> {
-	let manager = load_plugin_manager()?;
+pub async fn list_plugins() -> ApiResult<CCPluginListResponse> {
+	let manager = load_plugin_manager().await?;
 	let installer = try_load_plugin_installer();
 	let mut plugins: Vec<CCPluginResponse> = manager
 		.list_plugins()
@@ -284,12 +286,16 @@ pub fn list_plugins() -> ApiResult<CCPluginListResponse> {
 	Ok(Json(CCPluginListResponse { plugins }))
 }
 
-#[post("/plugins/enable?<plugin_id>")]
-pub fn enable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
+#[post("/plugins/enable?<plugin_id>&<scope>")]
+pub async fn enable_plugin(
+	plugin_id: &str,
+	scope: Option<&str>,
+) -> ApiResult<CCPluginResponse> {
 	let id = parse_plugin_id(plugin_id)?;
-	let mut manager = load_plugin_manager()?;
+	let scope = scope.map(parse_install_scope).transpose()?;
+	let mut manager = load_plugin_manager().await?;
 	let installer = try_load_plugin_installer();
-	manager.enable(&id).map_err(|e| {
+	manager.enable(&id, scope).await.map_err(|e| {
 		plugin_error(
 			Status::InternalServerError,
 			"enable",
@@ -302,12 +308,16 @@ pub fn enable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
 	Ok(Json(build_plugin_response(&plugin, installer.as_ref())))
 }
 
-#[post("/plugins/disable?<plugin_id>")]
-pub fn disable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
+#[post("/plugins/disable?<plugin_id>&<scope>")]
+pub async fn disable_plugin(
+	plugin_id: &str,
+	scope: Option<&str>,
+) -> ApiResult<CCPluginResponse> {
 	let id = parse_plugin_id(plugin_id)?;
-	let mut manager = load_plugin_manager()?;
+	let scope = scope.map(parse_install_scope).transpose()?;
+	let mut manager = load_plugin_manager().await?;
 	let installer = try_load_plugin_installer();
-	manager.disable(&id).map_err(|e| {
+	manager.disable(&id, scope).await.map_err(|e| {
 		plugin_error(
 			Status::InternalServerError,
 			"disable",
@@ -320,7 +330,7 @@ pub fn disable_plugin(plugin_id: &str) -> ApiResult<CCPluginResponse> {
 	Ok(Json(build_plugin_response(&plugin, installer.as_ref())))
 }
 
-// ── Install / Uninstall / Update / Reinstall ─────────────────────────────────
+// ── Install / Uninstall / Update ─────────────────────────────────────────────
 
 #[post("/plugins/install", data = "<body>")]
 pub async fn install_plugin(
@@ -370,7 +380,7 @@ pub async fn uninstall_plugin(
 	let installer = load_plugin_installer()?;
 
 	installer
-		.uninstall(&plugin_id, scope, req.keep_data)
+		.uninstall(&plugin_id, scope, req.keep_data, req.prune)
 		.await
 		.map_err(|e| {
 			plugin_error(
@@ -403,6 +413,7 @@ pub async fn update_plugin(
 				"Plugin '{}' updated successfully (version: {})",
 				req.plugin_id, info.version
 			),
+			restart_required: true,
 		})),
 		Err(e) => {
 			if e.downcast_ref::<aghub_cc_plugins::errors::PluginError>()
@@ -412,6 +423,7 @@ pub async fn update_plugin(
 				return Ok(Json(CCPluginUpdateResponse {
 					success: true,
 					message: "Plugin is already up to date".to_string(),
+					restart_required: false,
 				}));
 			}
 			Err(plugin_error(
@@ -425,95 +437,6 @@ pub async fn update_plugin(
 	}
 }
 
-#[post("/plugins/reinstall", data = "<body>")]
-pub async fn reinstall_plugin(
-	body: Json<CCPluginReinstallRequest>,
-) -> ApiResult<CCPluginReinstallResponse> {
-	let req = body.into_inner();
-	let scope = parse_install_scope(&req.scope)?;
-	let plugin_id = parse_plugin_id(&req.plugin_id)?;
-	let installer = load_plugin_installer()?;
-
-	installer
-		.uninstall(&plugin_id, scope, req.keep_data)
-		.await
-		.map_err(|e| {
-			plugin_error(
-				Status::BadRequest,
-				"uninstall",
-				&req.plugin_id,
-				"PLUGIN_UNINSTALL_FAILED",
-				&e,
-			)
-		})?;
-	match installer.install(&plugin_id, scope).await {
-		Ok(info) => Ok(Json(CCPluginReinstallResponse {
-			success: true,
-			message: format!(
-				"Plugin '{}' reinstalled successfully (version: {})",
-				req.plugin_id, info.version
-			),
-		})),
-		Err(e) => Err(plugin_error(
-			Status::BadRequest,
-			"reinstall",
-			&req.plugin_id,
-			"PLUGIN_REINSTALL_FAILED",
-			&e,
-		)),
-	}
-}
-
-// ── Check Update ─────────────────────────────────────────────────────────────
-
-#[post("/plugins/check-update", data = "<body>")]
-pub async fn check_plugin_update(
-	body: Json<CCPluginCheckUpdateRequest>,
-) -> ApiResult<CCPluginCheckUpdateResponse> {
-	let req = body.into_inner();
-	let id = parse_plugin_id(&req.plugin_id)?;
-	let (_, plugin) = load_manager_and_plugin(&id)?;
-	let scope_info = resolve_plugin_scope(&plugin, req.scope.as_deref())?;
-	let current_version = scope_info
-		.map(|s| s.version.as_str())
-		.unwrap_or(plugin.version.as_str());
-	let current_commit = scope_info
-		.and_then(|s| s.git_commit_sha.as_deref())
-		.or_else(|| {
-			(!plugin.commit_hash.is_empty())
-				.then_some(plugin.commit_hash.as_str())
-		});
-
-	let installer = load_plugin_installer()?;
-	let latest_version = if !installer.can_check_updates(&id) {
-		None
-	} else {
-		match installer
-			.check_update_against(&id, current_version, current_commit)
-			.await
-		{
-			Ok(Some((v, _))) => Some(v),
-			Ok(None) => None,
-			Err(e) => {
-				error!("Failed to check updates for {id}: {e}");
-				return Err(ApiError::new(
-					Status::BadGateway,
-					"Failed to check plugin updates",
-					"PLUGIN_UPDATE_CHECK_FAILED",
-				));
-			}
-		}
-	};
-
-	Ok(Json(CCPluginCheckUpdateResponse {
-		plugin_id: req.plugin_id,
-		update_available: latest_version.is_some(),
-		current_version: current_version.to_string(),
-		latest_version,
-		changelog: None,
-	}))
-}
-
 // ── Detail ───────────────────────────────────────────────────────────────────
 
 #[get("/plugins/detail?<plugin_id>")]
@@ -521,7 +444,7 @@ pub async fn get_plugin_detail(
 	plugin_id: &str,
 ) -> ApiResult<CCPluginDetailResponse> {
 	let id = parse_plugin_id(plugin_id)?;
-	let (_, plugin) = load_manager_and_plugin(&id)?;
+	let (_, plugin) = load_manager_and_plugin(&id).await?;
 
 	let manifest = plugin.read_manifest().unwrap_or_else(|e| {
 		warn!("Failed to read manifest for {}: {}", plugin.id, e);
@@ -634,11 +557,11 @@ pub async fn get_plugin_detail(
 // ── Config ───────────────────────────────────────────────────────────────────
 
 #[get("/plugins/config?<plugin_id>")]
-pub fn get_plugin_config(
+pub async fn get_plugin_config(
 	plugin_id: String,
 ) -> ApiResult<CCPluginConfigResponse> {
 	let id = parse_plugin_id(&plugin_id)?;
-	let (manager, plugin) = load_manager_and_plugin(&id)?;
+	let (manager, plugin) = load_manager_and_plugin(&id).await?;
 	let config = manager
 		.get_plugin_config(&id)
 		.and_then(|v| serde_json::to_string(v).ok());
@@ -656,13 +579,13 @@ pub fn get_plugin_config(
 }
 
 #[post("/plugins/config", data = "<body>")]
-pub fn update_plugin_config(
+pub async fn update_plugin_config(
 	body: Json<CCPluginUpdateConfigRequest>,
 ) -> ApiResult<CCPluginConfigResponse> {
 	let req = body.into_inner();
 	let plugin_id = req.plugin_id.clone();
 	let id = parse_plugin_id(&plugin_id)?;
-	let (mut manager, plugin) = load_manager_and_plugin(&id)?;
+	let (mut manager, plugin) = load_manager_and_plugin(&id).await?;
 	let schema = plugin
 		.read_manifest()
 		.ok()
@@ -693,11 +616,11 @@ pub fn update_plugin_config(
 }
 
 #[delete("/plugins/config?<plugin_id>")]
-pub fn delete_plugin_config(
+pub async fn delete_plugin_config(
 	plugin_id: String,
 ) -> ApiResult<CCPluginConfigResponse> {
 	let id = parse_plugin_id(&plugin_id)?;
-	let (mut manager, plugin) = load_manager_and_plugin(&id)?;
+	let (mut manager, plugin) = load_manager_and_plugin(&id).await?;
 	let schema = plugin
 		.read_manifest()
 		.ok()
@@ -719,12 +642,12 @@ pub fn delete_plugin_config(
 // ── Open Folder / Editor ─────────────────────────────────────────────────────
 
 #[post("/plugins/open-folder?<plugin_id>&<scope>")]
-pub fn open_plugin_folder(
+pub async fn open_plugin_folder(
 	plugin_id: &str,
 	scope: Option<&str>,
 ) -> ApiNoContent {
 	let id = parse_plugin_id(plugin_id)?;
-	let (_, plugin) = load_manager_and_plugin(&id)?;
+	let (_, plugin) = load_manager_and_plugin(&id).await?;
 	let install_path = resolve_plugin_scope(&plugin, scope)?
 		.map(|s| s.install_path.clone())
 		.unwrap_or_else(|| plugin.install_path.clone());
@@ -736,12 +659,12 @@ pub fn open_plugin_folder(
 }
 
 #[post("/plugins/open-skill-in-editor", data = "<body>")]
-pub fn open_plugin_skill_in_editor(
+pub async fn open_plugin_skill_in_editor(
 	body: Json<CCPluginOpenSkillInEditorRequest>,
 ) -> ApiNoContent {
 	let req = body.into_inner();
 	let id = parse_plugin_id(&req.plugin_id)?;
-	let (_, plugin) = load_manager_and_plugin(&id)?;
+	let (_, plugin) = load_manager_and_plugin(&id).await?;
 	let path = resolve_plugin_skill_path(&plugin, &req.scope, &req.skill_name)?;
 	Command::new(req.editor.cli_command())
 		.arg(&path)
@@ -819,7 +742,7 @@ pub async fn list_plugin_market() -> ApiResult<Vec<CCPluginMarketResponse>> {
 				error!("Failed to create plugin registry: {e}");
 				ApiError::internal("Failed to create plugin registry")
 			})?;
-	let installed_manager = load_plugin_manager().ok();
+	let installed_manager = load_plugin_manager().await.ok();
 
 	let response: Vec<CCPluginMarketResponse> = registry
 		.all_plugins()
@@ -861,6 +784,144 @@ pub async fn list_plugin_market() -> ApiResult<Vec<CCPluginMarketResponse>> {
 	Ok(Json(response))
 }
 
+fn marketplace_source_to_dto(
+	source: CliMarketplaceSource,
+) -> CCMarketplaceSourceResponse {
+	match source {
+		CliMarketplaceSource::Github { repo } => {
+			CCMarketplaceSourceResponse::Github { repo }
+		}
+		CliMarketplaceSource::Git { url } => {
+			CCMarketplaceSourceResponse::Git { url }
+		}
+		CliMarketplaceSource::Url { url } => {
+			CCMarketplaceSourceResponse::Url { url }
+		}
+		CliMarketplaceSource::Local { path } => {
+			CCMarketplaceSourceResponse::Local { path }
+		}
+	}
+}
+
+fn marketplace_entry_to_dto(
+	entry: CliMarketplace,
+) -> CCMarketplaceEntryResponse {
+	CCMarketplaceEntryResponse {
+		name: entry.name,
+		source: marketplace_source_to_dto(entry.source),
+		install_location: entry.install_location,
+	}
+}
+
+fn load_claude_cli() -> Result<ClaudeCli, ApiError> {
+	ClaudeCli::new().map_err(|e| {
+		error!("Failed to locate claude CLI: {e}");
+		ApiError::internal("claude CLI is not installed or not on PATH")
+	})
+}
+
+#[get("/plugins/marketplaces")]
+pub async fn list_marketplaces() -> ApiResult<CCMarketplaceListResponse> {
+	let cli = load_claude_cli()?;
+	let entries = cli.marketplace_list().await.map_err(|e| {
+		error!("Failed to list marketplaces: {e}");
+		ApiError::new(
+			Status::BadGateway,
+			"Failed to list marketplaces",
+			"PLUGIN_MARKETPLACE_LIST_FAILED",
+		)
+	})?;
+	Ok(Json(CCMarketplaceListResponse {
+		marketplaces: entries
+			.into_iter()
+			.map(marketplace_entry_to_dto)
+			.collect(),
+	}))
+}
+
+#[post("/plugins/marketplaces", data = "<body>")]
+pub async fn add_marketplace(
+	body: Json<CCMarketplaceAddRequest>,
+) -> ApiResult<CCMarketplaceMutationResponse> {
+	let req = body.into_inner();
+	let scope = parse_install_scope(&req.scope)?;
+	let cli = load_claude_cli()?;
+	let entry = cli
+		.marketplace_add(&req.source, scope, &req.sparse)
+		.await
+		.map_err(|e| {
+			error!("Failed to add marketplace {}: {e}", req.source);
+			ApiError::new(
+				Status::BadRequest,
+				format!("Failed to add marketplace '{}'", req.source),
+				"PLUGIN_MARKETPLACE_ADD_FAILED",
+			)
+		})?;
+	let entry = marketplace_entry_to_dto(entry);
+	Ok(Json(CCMarketplaceMutationResponse {
+		success: true,
+		message: format!("Added marketplace '{}'", entry.name),
+		marketplace: Some(entry),
+	}))
+}
+
+#[delete("/plugins/marketplaces/<name>")]
+pub async fn remove_marketplace(
+	name: &str,
+) -> ApiResult<CCMarketplaceMutationResponse> {
+	let cli = load_claude_cli()?;
+	cli.marketplace_remove(name).await.map_err(|e| {
+		error!("Failed to remove marketplace {name}: {e}");
+		ApiError::new(
+			Status::BadRequest,
+			format!("Failed to remove marketplace '{name}'"),
+			"PLUGIN_MARKETPLACE_REMOVE_FAILED",
+		)
+	})?;
+	Ok(Json(CCMarketplaceMutationResponse {
+		success: true,
+		message: format!("Removed marketplace '{name}'"),
+		marketplace: None,
+	}))
+}
+
+#[post("/plugins/marketplaces/<name>/update")]
+pub async fn update_marketplace_one(
+	name: &str,
+) -> ApiResult<CCMarketplaceMutationResponse> {
+	let cli = load_claude_cli()?;
+	let entries = cli.marketplace_list().await.map_err(|e| {
+		error!("Failed to validate marketplace existence: {e}");
+		ApiError::new(
+			Status::BadGateway,
+			"Failed to validate marketplace existence",
+			"PLUGIN_MARKETPLACE_UPDATE_FAILED",
+		)
+	})?;
+	if !entries.iter().any(|e| e.name == name) {
+		return Err(ApiError::new(
+			Status::NotFound,
+			format!("Marketplace '{name}' not found"),
+			"PLUGIN_MARKETPLACE_NOT_FOUND",
+		));
+	}
+	// claude plugin marketplace update does not accept a name argument;
+	// run the all-update so the named marketplace's index is refreshed
+	cli.marketplace_update(None).await.map_err(|e| {
+		error!("Failed to update marketplace {name}: {e}");
+		ApiError::new(
+			Status::BadGateway,
+			format!("Failed to update marketplace '{name}'"),
+			"PLUGIN_MARKETPLACE_UPDATE_FAILED",
+		)
+	})?;
+	Ok(Json(CCMarketplaceMutationResponse {
+		success: true,
+		message: format!("Updated marketplace '{name}'"),
+		marketplace: None,
+	}))
+}
+
 #[post("/plugins-market/update")]
 pub async fn update_marketplace() -> ApiResult<serde_json::Value> {
 	let installer = load_plugin_installer()?;
@@ -889,4 +950,80 @@ pub async fn update_marketplace() -> ApiResult<serde_json::Value> {
 		"success": true,
 		"updated_count": updated.len()
 	})))
+}
+
+// ── Prune / Validate ─────────────────────────────────────────────────────────
+
+#[post("/plugins/prune", data = "<body>")]
+pub async fn prune_plugins(
+	body: Json<CCPluginPruneRequest>,
+) -> ApiResult<CCPluginPruneResponse> {
+	let req = body.into_inner();
+	let scope = parse_install_scope(&req.scope)?;
+	let cli = load_claude_cli()?;
+	let summary = cli.plugin_prune(scope, req.dry_run).await.map_err(|e| {
+		error!("Failed to prune plugins: {e}");
+		ApiError::new(
+			Status::BadGateway,
+			"Failed to prune plugins",
+			"PLUGIN_PRUNE_FAILED",
+		)
+	})?;
+	Ok(Json(CCPluginPruneResponse {
+		success: true,
+		summary,
+	}))
+}
+
+#[post("/plugins/validate", data = "<body>")]
+pub async fn validate_plugin(
+	body: Json<CCPluginValidateRequest>,
+) -> ApiResult<CCPluginValidateResponse> {
+	let req = body.into_inner();
+	let cli = load_claude_cli()?;
+	let path = std::path::PathBuf::from(&req.path);
+	cli.plugin_validate(&path).await.map_err(|e| {
+		error!("Plugin validation failed for {}: {e}", req.path);
+		ApiError::new(
+			Status::BadRequest,
+			"Plugin validation failed for manifest".to_string(),
+			"PLUGIN_VALIDATE_FAILED",
+		)
+	})?;
+	Ok(Json(CCPluginValidateResponse {
+		success: true,
+		message: "Manifest is valid".to_string(),
+	}))
+}
+
+// ── CLI status ───────────────────────────────────────────────────────────────
+
+#[get("/plugins/cli/status")]
+pub async fn cli_status() -> Json<CCPluginCliStatusResponse> {
+	let cli = match ClaudeCli::new() {
+		Ok(cli) => cli,
+		Err(e) => {
+			return Json(CCPluginCliStatusResponse {
+				installed: false,
+				version: None,
+				path: None,
+				error: Some(e.to_string()),
+			});
+		}
+	};
+	let path = Some("REDACTED".to_string());
+	match cli.version().await {
+		Ok(version) => Json(CCPluginCliStatusResponse {
+			installed: true,
+			version: Some(version),
+			path,
+			error: None,
+		}),
+		Err(e) => Json(CCPluginCliStatusResponse {
+			installed: true,
+			version: None,
+			path,
+			error: Some(e.to_string()),
+		}),
+	}
 }
