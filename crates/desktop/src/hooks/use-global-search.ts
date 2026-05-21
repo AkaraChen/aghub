@@ -41,7 +41,7 @@ interface Options {
 function useDebouncedValue<T>(value: T, delay: number): T {
 	const [debounced, setDebounced] = useState(value);
 	useEffect(() => {
-		const handle = window.setTimeout(() => setDebounced(value), delay);
+		const handle = window.setTimeout(setDebounced, delay, value);
 		return () => window.clearTimeout(handle);
 	}, [value, delay]);
 	return debounced;

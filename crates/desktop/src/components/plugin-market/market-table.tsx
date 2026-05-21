@@ -58,109 +58,111 @@ interface RowCellsProps {
 	};
 }
 
-const PluginMarketRowCells = memo(function PluginMarketRowCells({
-	plugin,
-	installState,
-	compactFormatter,
-	onInstall,
-	labels,
-}: RowCellsProps) {
-	const isInstalling = installState === "installing";
-	const isInstalled = installState === "installed";
+const PluginMarketRowCells = memo(
+	({
+		plugin,
+		installState,
+		compactFormatter,
+		onInstall,
+		labels,
+	}: RowCellsProps) => {
+		const isInstalling = installState === "installing";
+		const isInstalled = installState === "installed";
 
-	const pluginMeta = useMemo(() => {
-		const values: string[] = [];
-		if (plugin.has_mcp) values.push(labels.mcp);
-		if (plugin.has_skills) values.push(labels.skills);
-		if (plugin.has_hooks) values.push(labels.hooks);
-		return values.join(" · ");
-	}, [
-		plugin.has_mcp,
-		plugin.has_skills,
-		plugin.has_hooks,
-		labels.mcp,
-		labels.skills,
-		labels.hooks,
-	]);
+		const pluginMeta = useMemo(() => {
+			const values: string[] = [];
+			if (plugin.has_mcp) values.push(labels.mcp);
+			if (plugin.has_skills) values.push(labels.skills);
+			if (plugin.has_hooks) values.push(labels.hooks);
+			return values.join(" · ");
+		}, [
+			plugin.has_mcp,
+			plugin.has_skills,
+			plugin.has_hooks,
+			labels.mcp,
+			labels.skills,
+			labels.hooks,
+		]);
 
-	const handlePress = useCallback(() => {
-		onInstall(plugin.id);
-	}, [onInstall, plugin.id]);
+		const handlePress = useCallback(() => {
+			onInstall(plugin.id);
+		}, [onInstall, plugin.id]);
 
-	return (
-		<>
-			<Table.Cell>
-				<div className="min-w-0 space-y-1 py-0.5">
-					<div className="flex min-w-0 items-center gap-2">
-						<span className="truncate text-sm font-semibold text-foreground">
-							{plugin.name}
+		return (
+			<>
+				<Table.Cell>
+					<div className="min-w-0 space-y-1 py-0.5">
+						<div className="flex min-w-0 items-center gap-2">
+							<span className="truncate text-sm font-semibold text-foreground">
+								{plugin.name}
+							</span>
+						</div>
+						{plugin.description && (
+							<p className="line-clamp-2 text-xs leading-5 text-muted">
+								{plugin.description}
+							</p>
+						)}
+						{pluginMeta && (
+							<p className="line-clamp-1 text-[11px] text-muted">
+								{pluginMeta}
+							</p>
+						)}
+					</div>
+				</Table.Cell>
+				<Table.Cell>
+					<div className="flex justify-end py-0.5">
+						<span className="text-sm tabular-nums text-muted">
+							{plugin.installs > 0
+								? compactFormatter.format(plugin.installs)
+								: "—"}
 						</span>
 					</div>
-					{plugin.description && (
-						<p className="line-clamp-2 text-xs leading-5 text-muted">
-							{plugin.description}
-						</p>
-					)}
-					{pluginMeta && (
-						<p className="line-clamp-1 text-[11px] text-muted">
-							{pluginMeta}
-						</p>
-					)}
-				</div>
-			</Table.Cell>
-			<Table.Cell>
-				<div className="flex justify-end py-0.5">
-					<span className="text-sm tabular-nums text-muted">
-						{plugin.installs > 0
-							? compactFormatter.format(plugin.installs)
-							: "—"}
-					</span>
-				</div>
-			</Table.Cell>
-			<Table.Cell>
-				<div className="flex flex-col gap-1 py-0.5">
-					<span
-						className={
-							plugin.author
-								? "truncate text-sm font-medium text-foreground"
-								: "truncate text-sm font-medium text-muted"
-						}
-					>
-						{plugin.author || labels.unknown}
-					</span>
-					<span className="font-mono text-xs text-muted">
-						{formatPluginVersion(plugin.version)}
-					</span>
-				</div>
-			</Table.Cell>
-			<Table.Cell>
-				<div className="flex justify-end py-0.5">
-					<Button
-						size="sm"
-						variant="tertiary"
-						className="h-8 min-w-[92px] justify-center gap-1.5 whitespace-nowrap px-3"
-						onPress={handlePress}
-						isDisabled={isInstalling || isInstalled}
-					>
-						<span className="flex items-center gap-1.5">
-							{isInstalling && (
-								<ArrowPathIcon className="size-3.5 animate-spin text-foreground" />
-							)}
-							{isInstalled && (
-								<CheckCircleIcon className="size-3.5" />
-							)}
-							{isInstalling
-								? labels.installing
-								: isInstalled
-									? labels.installed
-									: labels.install}
+				</Table.Cell>
+				<Table.Cell>
+					<div className="flex flex-col gap-1 py-0.5">
+						<span
+							className={
+								plugin.author
+									? "truncate text-sm font-medium text-foreground"
+									: "truncate text-sm font-medium text-muted"
+							}
+						>
+							{plugin.author || labels.unknown}
 						</span>
-					</Button>
-				</div>
-			</Table.Cell>
-		</>
-	);
-});
+						<span className="font-mono text-xs text-muted">
+							{formatPluginVersion(plugin.version)}
+						</span>
+					</div>
+				</Table.Cell>
+				<Table.Cell>
+					<div className="flex justify-end py-0.5">
+						<Button
+							size="sm"
+							variant="tertiary"
+							className="h-8 min-w-[92px] justify-center gap-1.5 whitespace-nowrap px-3"
+							onPress={handlePress}
+							isDisabled={isInstalling || isInstalled}
+						>
+							<span className="flex items-center gap-1.5">
+								{isInstalling && (
+									<ArrowPathIcon className="size-3.5 animate-spin text-foreground" />
+								)}
+								{isInstalled && (
+									<CheckCircleIcon className="size-3.5" />
+								)}
+								{isInstalling
+									? labels.installing
+									: isInstalled
+										? labels.installed
+										: labels.install}
+							</span>
+						</Button>
+					</div>
+				</Table.Cell>
+			</>
+		);
+	},
+);
 
 export function PluginMarketTable({
 	plugins,
