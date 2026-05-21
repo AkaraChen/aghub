@@ -434,6 +434,8 @@ export default {
 		"確定要從所有已安裝的 Agent 中刪除這 {{count}} 個被選中的 MCP 伺服器嗎？",
 	bulkDeleteMixedConfirm:
 		"確定要從目前專案中刪除這 {{count}} 個被選中的資源嗎？",
+	bulkDeleteFailed: "批次刪除失敗",
+	bulkDeleteFailedItems: "{{count}} 項刪除失敗: {{items}}",
 	starSkill: "收藏技能",
 	unstarSkill: "取消收藏",
 	starServer: "收藏伺服器",
