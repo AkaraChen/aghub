@@ -1,9 +1,10 @@
 import { ExclamationTriangleIcon } from "@heroicons/react/24/solid";
-import { Button, Modal, Spinner } from "@heroui/react";
+import { Button, Modal, Spinner, toast } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { ConfigSource } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
+import { BulkOperationError, bulkFailureItemsLabel } from "../lib/bulk-errors";
 import { invalidateMcpQueries } from "../requests/mcps";
 import { invalidateSkillQueries } from "../requests/skills";
 
@@ -11,6 +12,7 @@ interface BulkDeleteItem {
 	name: string;
 	agent?: string | null;
 	source?: ConfigSource | null;
+	source_path?: string | null;
 }
 
 interface BulkDeleteGroup {
@@ -48,6 +50,7 @@ export function BulkDeleteDialog({
 				agent: string;
 				scope: string;
 			}> = [];
+			const seen = new Set<string>();
 			for (const group of groups) {
 				const groupResourceType = group.resourceType ?? resourceType;
 				for (const item of group.items) {
@@ -55,6 +58,14 @@ export function BulkDeleteDialog({
 					const scope: "global" | "project" = item.source ?? "global";
 					const projectRoot =
 						scope === "project" ? projectPath : undefined;
+					const dedupKey =
+						groupResourceType === "skill" && item.source_path
+							? `skill:${item.source_path}:${scope}`
+							: groupResourceType === "skill"
+								? `skill:${item.agent}:${group.key}:${scope}`
+								: `${groupResourceType}:${item.agent}:${item.name}:${scope}`;
+					if (seen.has(dedupKey)) continue;
+					seen.add(dedupKey);
 					if (groupResourceType === "mcp") {
 						promises.push(
 							api.mcps.delete(
@@ -94,8 +105,8 @@ export function BulkDeleteDialog({
 					`${resourceType} bulk delete failures:`,
 					failures,
 				);
-				throw new Error(
-					`${failures.length} of ${promises.length} deletions failed`,
+				throw new BulkOperationError(
+					failures.map(({ name, agent }) => ({ name, agent })),
 				);
 			}
 			return { deleted: promises.length };
@@ -112,6 +123,18 @@ export function BulkDeleteDialog({
 		},
 		onError: (error) => {
 			console.error("Bulk delete mutation error:", error);
+			if (error instanceof BulkOperationError) {
+				toast.danger(
+					t(
+						"bulkDeleteFailedItems",
+						bulkFailureItemsLabel(error.failures),
+					),
+				);
+				return;
+			}
+			toast.danger(
+				error instanceof Error ? error.message : t("bulkDeleteFailed"),
+			);
 		},
 	});
 
