@@ -192,10 +192,13 @@ function toProviderModelFormValues(models: string[]) {
 
 function ProviderIcon({ format }: { format: InferenceProviderFormatDto }) {
 	const svg = format === "anthropic" ? anthropicLogo : openAiLogo;
-	const svgDataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 
 	return (
-		<img src={svgDataUrl} className="size-4 shrink-0" alt="" aria-hidden />
+		<span
+			className="size-4 shrink-0 text-foreground [&>svg]:size-full"
+			aria-hidden
+			dangerouslySetInnerHTML={{ __html: svg }}
+		/>
 	);
 }
 
@@ -1860,8 +1863,14 @@ export default function InferenceProvidersPage() {
 						<ListBox
 							aria-label={t("inferenceProviders")}
 							selectionMode="single"
+							selectionBehavior="replace"
 							selectedKeys={selectedProviderKeys}
-							onAction={(key) => handleProviderClick(String(key))}
+							onSelectionChange={(keys) => {
+								if (keys === "all") return;
+								const providerName = [...keys][0];
+								if (!providerName) return;
+								handleProviderClick(String(providerName));
+							}}
 							className="p-2"
 						>
 							{filteredProviders.map((provider) => (
