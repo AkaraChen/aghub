@@ -43,7 +43,7 @@
 		"react-aria-components": "^1.16.0",
 		"react-dom": "^19.1.0",
 		"react-grab": "^0.1.32",
-		"react-hook-form": "^7.72.0",
+		"react-hook-form": "^7.76.1",
 		"react-i18next": "^17.0.0",
 		"react-virtuoso": "^4.18.3",
 		"rooks": "^9.8.0",
