@@ -47,7 +47,7 @@ url = "2.5"
 
 # Testing dependencies
 tempfile = "3.10"
-assert_cmd = "2.0"
+assert_cmd = "2.2"
 predicates = "3.1"
 
 # YAML parsing
