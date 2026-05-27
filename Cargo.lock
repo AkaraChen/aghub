@@ -47,7 +47,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-agents"
-version = "0.1.2"
+version = "1.1.1"
 dependencies = [
  "aghub-markdown",
  "dirs",
@@ -62,7 +62,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-api"
-version = "0.1.2"
+version = "1.1.1"
 dependencies = [
  "aghub-cc-plugins",
  "aghub-core",
@@ -89,7 +89,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-cc-plugins"
-version = "0.1.2"
+version = "1.1.1"
 dependencies = [
  "aghub-git",
  "anyhow",
@@ -111,7 +111,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-cli"
-version = "0.1.2"
+version = "1.1.1"
 dependencies = [
  "aghub-agents",
  "aghub-cc-plugins",
@@ -130,7 +130,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-core"
-version = "0.1.2"
+version = "1.1.1"
 dependencies = [
  "aghub-agents",
  "dirs",
@@ -147,7 +147,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-git"
-version = "0.1.2"
+version = "1.1.1"
 dependencies = [
  "gix",
  "gix-hash",
@@ -158,7 +158,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-inference"
-version = "0.1.2"
+version = "1.1.1"
 dependencies = [
  "aghub-json",
  "dirs",
@@ -176,7 +176,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-json"
-version = "0.1.2"
+version = "1.1.1"
 dependencies = [
  "jsonc-parser",
  "serde",
@@ -186,7 +186,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-markdown"
-version = "0.1.2"
+version = "1.1.1"
 dependencies = [
  "serde",
  "serde_yaml",
@@ -6831,7 +6831,7 @@ checksum = "b2aa850e253778c88a04c3d7323b043aeda9d3e30d5971937c1855769763678e"
 
 [[package]]
 name = "skill"
-version = "0.1.2"
+version = "1.1.1"
 dependencies = [
  "chrono",
  "dirs",
@@ -6861,7 +6861,7 @@ dependencies = [
 
 [[package]]
 name = "skills-sh"
-version = "0.1.2"
+version = "1.1.1"
 dependencies = [
  "reqwest",
  "serde",
