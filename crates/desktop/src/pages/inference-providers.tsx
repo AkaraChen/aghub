@@ -549,25 +549,22 @@ function ProviderModelsEditor({
 					</div>
 				</div>
 
-				{hasRealModels && (
-					<SearchField
-						value={searchQuery}
-						onChange={setSearchQuery}
-						aria-label={t("searchProviderModels")}
-						variant="secondary"
-						className="w-full"
-					>
-						<SearchField.Group>
-							<SearchField.SearchIcon />
-							<SearchField.Input
-								placeholder={t(
-									"searchProviderModelsPlaceholder",
-								)}
-							/>
-							<SearchField.ClearButton />
-						</SearchField.Group>
-					</SearchField>
-				)}
+				<SearchField
+					value={searchQuery}
+					onChange={setSearchQuery}
+					aria-label={t("searchProviderModels")}
+					variant="secondary"
+					className="w-full"
+					isDisabled={!hasRealModels}
+				>
+					<SearchField.Group>
+						<SearchField.SearchIcon />
+						<SearchField.Input
+							placeholder={t("searchProviderModelsPlaceholder")}
+						/>
+						<SearchField.ClearButton />
+					</SearchField.Group>
+				</SearchField>
 
 				<div className="flex items-center justify-between gap-3 px-1">
 					<Checkbox
