@@ -147,7 +147,7 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 	) -> Result<InferenceProvider> {
 		let row = sqlx::query(
 			"SELECT id, name, display_name, format, api_base_url, \
-                 masked_api_key \
+                 preset, masked_api_key \
              FROM inference_providers WHERE id = ?",
 		)
 		.bind(id)
@@ -244,6 +244,7 @@ fn map_row(row: sqlx::sqlite::SqliteRow) -> Result<InferenceProvider> {
 		display_name: row.try_get("display_name")?,
 		format,
 		api_base_url: row.try_get("api_base_url")?,
+		preset: row.try_get("preset")?,
 		masked_api_key: row.try_get("masked_api_key")?,
 		models: Vec::new(),
 	})
@@ -257,7 +258,7 @@ impl<C: CredentialStore> InferenceProviderRepository
 			let mut conn = self.open_db().await?;
 			let rows = sqlx::query(
 				"SELECT id, name, display_name, format, api_base_url, \
-                     masked_api_key \
+                     preset, masked_api_key \
                  FROM inference_providers ORDER BY rowid",
 			)
 			.fetch_all(&mut conn)
@@ -287,6 +288,7 @@ impl<C: CredentialStore> InferenceProviderRepository
 		let name = clean_name(&input.name)?;
 		let display_name = clean_display_name(&input.display_name)?;
 		let api_base_url = clean_api_base_url(&input.api_base_url)?;
+		let preset = clean_optional_preset(input.preset.as_deref());
 		let models = clean_model_names(&input.models)?;
 		ensure_api_key(&input.api_key)?;
 
@@ -300,6 +302,7 @@ impl<C: CredentialStore> InferenceProviderRepository
 				display_name,
 				format: input.format,
 				api_base_url,
+				preset,
 				masked_api_key: mask_api_key(&input.api_key),
 				models,
 			};
@@ -310,14 +313,15 @@ impl<C: CredentialStore> InferenceProviderRepository
 				sqlx::query(
 					"INSERT INTO inference_providers \
                      (id, name, display_name, format, api_base_url, \
-                      masked_api_key) \
-                     VALUES (?, ?, ?, ?, ?, ?)",
+                      preset, masked_api_key) \
+                     VALUES (?, ?, ?, ?, ?, ?, ?)",
 				)
 				.bind(&provider.id)
 				.bind(&provider.name)
 				.bind(&provider.display_name)
 				.bind(provider.format.to_string())
 				.bind(&provider.api_base_url)
+				.bind(&provider.preset)
 				.bind(&provider.masked_api_key)
 				.execute(&mut conn)
 				.await?;
@@ -374,6 +378,10 @@ impl<C: CredentialStore> InferenceProviderRepository
 				provider.api_base_url = clean_api_base_url(api_base_url)?;
 			}
 
+			if let Some(ref preset) = input.preset {
+				provider.preset = clean_optional_preset(preset.as_deref());
+			}
+
 			if let Some(models) = models {
 				provider.models = models;
 			}
@@ -393,13 +401,14 @@ impl<C: CredentialStore> InferenceProviderRepository
 				sqlx::query(
 					"UPDATE inference_providers \
                      SET name = ?, display_name = ?, format = ?, \
-                         api_base_url = ?, masked_api_key = ? \
+                         api_base_url = ?, preset = ?, masked_api_key = ? \
                      WHERE id = ?",
 				)
 				.bind(&provider.name)
 				.bind(&provider.display_name)
 				.bind(provider.format.to_string())
 				.bind(&provider.api_base_url)
+				.bind(&provider.preset)
 				.bind(&provider.masked_api_key)
 				.bind(id)
 				.execute(&mut conn)
@@ -542,6 +551,17 @@ fn clean_model_names(models: &[String]) -> Result<Vec<String>> {
 	}
 
 	Ok(clean)
+}
+
+fn clean_optional_preset(preset: Option<&str>) -> Option<String> {
+	preset.and_then(|value| {
+		let value = value.trim();
+		if value.is_empty() {
+			None
+		} else {
+			Some(value.to_string())
+		}
+	})
 }
 
 fn clean_name(name: &str) -> Result<String> {
@@ -895,6 +915,7 @@ mod tests {
 				display_name: name.to_string(),
 				format: InferenceProviderFormat::OpenAiResponses,
 				api_base_url: "https://api.openai.com/v1".to_string(),
+				preset: None,
 				api_key: "secret".to_string(),
 				models: Vec::new(),
 			})
@@ -1025,7 +1046,7 @@ mod tests {
 					.fetch_one(&mut conn)
 					.await
 					.unwrap();
-			assert_eq!(version, 7);
+			assert_eq!(version, 8);
 
 			let trigger_count: i64 = sqlx::query_scalar(
 				"SELECT COUNT(*) FROM sqlite_master
@@ -1067,6 +1088,7 @@ mod tests {
 				display_name: "OpenAI".to_string(),
 				format: InferenceProviderFormat::OpenAiResponses,
 				api_base_url: "https://api.openai.com/v1".to_string(),
+				preset: None,
 				api_key: "sk-test".to_string(),
 				models: Vec::new(),
 			})
@@ -1078,6 +1100,7 @@ mod tests {
 		assert_eq!(fetched.display_name, "OpenAI");
 		assert_eq!(fetched.format, InferenceProviderFormat::OpenAiResponses);
 		assert_eq!(fetched.api_base_url, "https://api.openai.com/v1");
+		assert_eq!(fetched.preset, None);
 		assert_eq!(fetched.masked_api_key, "s*****t");
 		assert!(fetched.models.is_empty());
 
@@ -1091,6 +1114,45 @@ mod tests {
 			store.get_api_key(&provider.id).unwrap(),
 			Some("sk-test".to_string())
 		);
+	}
+
+	#[test]
+	fn test_create_and_clear_provider_preset() {
+		let (_temp, store) = store();
+		let provider = store
+			.create(CreateInferenceProvider {
+				name: "OpenRouter".to_string(),
+				display_name: "OpenRouter".to_string(),
+				format: InferenceProviderFormat::OpenAiCompletions,
+				api_base_url: "https://openrouter.ai/api/v1".to_string(),
+				preset: Some(" openrouter ".to_string()),
+				api_key: "secret".to_string(),
+				models: Vec::new(),
+			})
+			.unwrap();
+
+		assert_eq!(provider.preset.as_deref(), Some("openrouter"));
+		assert_eq!(
+			store.get(&provider.id).unwrap().preset.as_deref(),
+			Some("openrouter")
+		);
+
+		let updated = store
+			.update(
+				&provider.id,
+				UpdateInferenceProvider {
+					name: None,
+					display_name: None,
+					format: None,
+					api_base_url: None,
+					preset: Some(None),
+					api_key: None,
+					models: None,
+				},
+			)
+			.unwrap();
+
+		assert_eq!(updated.preset, None);
 	}
 
 	#[test]
@@ -1113,6 +1175,7 @@ mod tests {
 				display_name: "Anthropic".to_string(),
 				format: InferenceProviderFormat::Anthropic,
 				api_base_url: "https://api.anthropic.com/v1".to_string(),
+				preset: None,
 				api_key: "first-key".to_string(),
 				models: Vec::new(),
 			})
@@ -1128,6 +1191,7 @@ mod tests {
 					api_base_url: Some(
 						"https://gateway.example.com/v1".to_string(),
 					),
+					preset: None,
 					api_key: Some("second-key".to_string()),
 					models: None,
 				},
@@ -1154,6 +1218,7 @@ mod tests {
 				display_name: "Anthropic".to_string(),
 				format: InferenceProviderFormat::Anthropic,
 				api_base_url: "https://api.anthropic.com/v1".to_string(),
+				preset: None,
 				api_key: "secret".to_string(),
 				models: Vec::new(),
 			})
@@ -1190,6 +1255,7 @@ mod tests {
 				display_name: "OpenAI".to_string(),
 				format: InferenceProviderFormat::OpenAiResponses,
 				api_base_url: "https://api.openai.com/v1".to_string(),
+				preset: None,
 				api_key: "first".to_string(),
 				models: Vec::new(),
 			})
@@ -1201,6 +1267,7 @@ mod tests {
 				display_name: "OpenAI Gateway".to_string(),
 				format: InferenceProviderFormat::OpenAiCompletions,
 				api_base_url: "https://gateway.example.com/v1".to_string(),
+				preset: None,
 				api_key: "second".to_string(),
 				models: Vec::new(),
 			})
@@ -1219,6 +1286,7 @@ mod tests {
 				display_name: "OpenAI".to_string(),
 				format: InferenceProviderFormat::OpenAiResponses,
 				api_base_url: " ".to_string(),
+				preset: None,
 				api_key: "secret".to_string(),
 				models: Vec::new(),
 			})
@@ -1236,6 +1304,7 @@ mod tests {
 				display_name: "OpenAI".to_string(),
 				format: InferenceProviderFormat::OpenAiResponses,
 				api_base_url: "https://api.openai.com/v1".to_string(),
+				preset: None,
 				api_key: "secret".to_string(),
 				models: vec![
 					" gpt-5.4 ".to_string(),
@@ -1262,6 +1331,7 @@ mod tests {
 				display_name: "OpenAI".to_string(),
 				format: InferenceProviderFormat::OpenAiResponses,
 				api_base_url: "https://api.openai.com/v1".to_string(),
+				preset: None,
 				api_key: "secret".to_string(),
 				models: vec!["gpt-5.4".to_string(), "GPT-5.4".to_string()],
 			})
@@ -1286,6 +1356,7 @@ mod tests {
 					display_name: None,
 					format: None,
 					api_base_url: None,
+					preset: None,
 					api_key: None,
 					models: Some(vec!["gpt-5.5".to_string()]),
 				},
@@ -1303,6 +1374,7 @@ mod tests {
 					display_name: None,
 					format: None,
 					api_base_url: None,
+					preset: None,
 					api_key: None,
 					models: Some(Vec::new()),
 				},
@@ -1322,6 +1394,7 @@ mod tests {
 				display_name: "OpenAI".to_string(),
 				format: InferenceProviderFormat::OpenAiResponses,
 				api_base_url: "https://api.openai.com/v1".to_string(),
+				preset: None,
 				api_key: "secret".to_string(),
 				models: vec!["gpt-5.4".to_string()],
 			})
@@ -1350,6 +1423,7 @@ mod tests {
 				display_name: "OpenAI".to_string(),
 				format: InferenceProviderFormat::OpenAiResponses,
 				api_base_url: "https://api.openai.com/v1".to_string(),
+				preset: None,
 				api_key: "secret".to_string(),
 				models: vec![" ".to_string()],
 			})

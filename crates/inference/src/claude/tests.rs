@@ -69,6 +69,7 @@ fn create_provider(
 			display_name: name.to_string(),
 			format: InferenceProviderFormat::Anthropic,
 			api_base_url: api_base_url.to_string(),
+			preset: None,
 			api_key: api_key.to_string(),
 			models: Vec::new(),
 		})
@@ -423,6 +424,7 @@ fn switch_from_official_to_api_via_sync_writes_env() {
 		display_name: "My Anthropic".to_string(),
 		format: InferenceProviderFormat::Anthropic,
 		api_base_url: "https://api.anthropic.com".to_string(),
+		preset: None,
 		masked_api_key: "sk****st".to_string(),
 		models: vec!["claude-sonnet-4-5".to_string()],
 	};

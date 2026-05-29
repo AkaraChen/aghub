@@ -7,14 +7,18 @@ use rocket::http::Status;
 use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
 use rocket::State;
+use serde::Deserialize;
+use std::collections::BTreeMap;
+use std::time::Duration;
 
 use crate::dto::inference::{
 	AgentProviderResponse, ClaudeProviderStateResponse,
 	CodexProviderStateResponse, CreateAgentProviderRequest,
-	CreateInferenceProviderRequest, InferenceProviderPasswordResponse,
-	InferenceProviderPresetResponse, InferenceProviderResponse,
-	UpdateAgentProviderRequest, UpdateCodexActiveProfileRequest,
-	UpdateCodexProfileProviderRequest, UpdateInferenceProviderRequest,
+	CreateInferenceProviderRequest, InferenceProviderFormatDto,
+	InferenceProviderPasswordResponse, InferenceProviderPresetResponse,
+	InferenceProviderResponse, UpdateAgentProviderRequest,
+	UpdateCodexActiveProfileRequest, UpdateCodexProfileProviderRequest,
+	UpdateInferenceProviderRequest,
 };
 use crate::error::{ApiCreated, ApiError, ApiNoContent, ApiResult};
 use crate::state::InferenceProviderState;
@@ -186,6 +190,9 @@ pub fn list_inference_providers(
 
 const INFERENCE_PROVIDER_PRESETS_JSON: &str =
 	include_str!("../dto/data/inference_provider_presets.json");
+const MODELS_DEV_API_JSON: &str =
+	include_str!("../dto/data/models_dev_api.json");
+const MODELS_DEV_API_URL: &str = "https://models.dev/api.json";
 
 fn inference_provider_presets() -> &'static [InferenceProviderPresetResponse] {
 	use std::sync::OnceLock;
@@ -197,10 +204,130 @@ fn inference_provider_presets() -> &'static [InferenceProviderPresetResponse] {
 	})
 }
 
+fn models_dev_presets_from_json(
+	json: &str,
+) -> serde_json::Result<Vec<InferenceProviderPresetResponse>> {
+	let providers =
+		serde_json::from_str::<BTreeMap<String, ModelsDevProvider>>(json)?;
+	let mut presets = providers
+		.into_values()
+		.filter_map(models_dev_provider_to_preset)
+		.collect::<Vec<_>>();
+	presets.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+	Ok(presets)
+}
+
+fn vendored_models_dev_presets() -> &'static [InferenceProviderPresetResponse] {
+	use std::sync::OnceLock;
+	static PRESETS: OnceLock<Vec<InferenceProviderPresetResponse>> =
+		OnceLock::new();
+	PRESETS.get_or_init(|| {
+		models_dev_presets_from_json(MODELS_DEV_API_JSON)
+			.expect("models_dev_api.json must be valid")
+	})
+}
+
+#[derive(Debug, Deserialize)]
+struct ModelsDevProvider {
+	id: String,
+	name: String,
+	#[serde(default)]
+	npm: Option<String>,
+	#[serde(default)]
+	api: Option<String>,
+	#[serde(default)]
+	doc: Option<String>,
+	#[serde(default)]
+	models: BTreeMap<String, serde_json::Value>,
+}
+
+fn default_api_base_url(provider_id: &str) -> Option<&'static str> {
+	match provider_id {
+		"anthropic" => Some("https://api.anthropic.com"),
+		"openai" => Some("https://api.openai.com/v1"),
+		_ => None,
+	}
+}
+
+fn preset_format(npm: Option<&str>) -> Option<InferenceProviderFormatDto> {
+	match npm {
+		Some("@ai-sdk/anthropic") => {
+			Some(InferenceProviderFormatDto::Anthropic)
+		}
+		Some("@ai-sdk/openai") => {
+			Some(InferenceProviderFormatDto::OpenAiResponses)
+		}
+		Some("@ai-sdk/openai-compatible") => {
+			Some(InferenceProviderFormatDto::OpenAiCompletions)
+		}
+		_ => None,
+	}
+}
+
+fn preset_logo(provider_id: &str, provider_name: &str) -> String {
+	match provider_id {
+		"anthropic" => "Anthropic".to_string(),
+		"deepseek" => "DeepSeek".to_string(),
+		"groq" => "Groq".to_string(),
+		"mistral" => "Mistral".to_string(),
+		"openai" => "OpenAI".to_string(),
+		"openrouter" => "OpenRouter".to_string(),
+		"together" => "Together".to_string(),
+		_ => provider_name.to_string(),
+	}
+}
+
+fn models_dev_provider_to_preset(
+	provider: ModelsDevProvider,
+) -> Option<InferenceProviderPresetResponse> {
+	let api_base_url = provider
+		.api
+		.or_else(|| default_api_base_url(&provider.id).map(str::to_string))?;
+	let format = preset_format(provider.npm.as_deref())?;
+	let models = provider.models.into_keys().collect::<Vec<_>>();
+
+	Some(InferenceProviderPresetResponse {
+		id: provider.id.clone(),
+		name: provider.name.clone(),
+		api_base_url,
+		format,
+		models,
+		logo: preset_logo(&provider.id, &provider.name),
+		homepage: provider.doc,
+		description: None,
+	})
+}
+
+async fn fetch_models_dev_presets() -> Result<
+	Vec<InferenceProviderPresetResponse>,
+	Box<dyn std::error::Error + Send + Sync>,
+> {
+	let json = reqwest::Client::builder()
+		.timeout(Duration::from_secs(8))
+		.build()?
+		.get(MODELS_DEV_API_URL)
+		.send()
+		.await?
+		.error_for_status()?
+		.text()
+		.await?;
+	Ok(models_dev_presets_from_json(&json)?)
+}
+
 #[get("/inference/presets")]
-pub fn list_inference_provider_presets(
+pub async fn list_inference_provider_presets(
 ) -> Json<Vec<InferenceProviderPresetResponse>> {
-	Json(inference_provider_presets().to_vec())
+	match fetch_models_dev_presets().await {
+		Ok(presets) if !presets.is_empty() => Json(presets),
+		_ => {
+			let presets = vendored_models_dev_presets();
+			if presets.is_empty() {
+				Json(inference_provider_presets().to_vec())
+			} else {
+				Json(presets.to_vec())
+			}
+		}
+	}
 }
 
 #[get("/inference/agents/opencode/providers")]

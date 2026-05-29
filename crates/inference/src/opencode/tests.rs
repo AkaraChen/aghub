@@ -20,6 +20,7 @@ fn provider() -> InferenceProvider {
 		display_name: "OpenRouter".to_string(),
 		format: InferenceProviderFormat::OpenAiCompletions,
 		api_base_url: "https://openrouter.ai/api/v1".to_string(),
+		preset: None,
 		masked_api_key: "sk****st".to_string(),
 		models: vec!["anthropic/claude-sonnet-4-5".to_string()],
 	}

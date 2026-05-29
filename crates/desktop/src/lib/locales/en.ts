@@ -255,6 +255,10 @@ export default {
 		"Pick a preset to fill in the name, base URL, format, and models.",
 	providerPresetsPlaceholder: "Choose a preset",
 	providerPresetsNone: "None",
+	providerPresetsLoading: "Loading presets...",
+	searchProviderPresets: "Search presets",
+	searchProviderPresetsPlaceholder: "Search by provider, URL, or model...",
+	noProviderPresetsMatch: "No presets match",
 	providerGetApiKey: "Get API key →",
 	createInferenceProviderDescription:
 		"Add an inference endpoint and store its API key securely.",
@@ -288,8 +292,10 @@ export default {
 		"No new models to add ({{total}} already configured)",
 	fetchProviderModelsFailed: "Failed to fetch models: {{reason}}",
 	fetchProviderModelsUnknownError: "endpoint not supported",
-	fetchProviderModelsUnsupportedAnthropic:
-		"Anthropic providers do not support fetching model lists.",
+	fetchProviderModelsRequiresPreset:
+		"Choose a preset before fetching models.",
+	providerPresetFormatChanged:
+		"Format changed from the preset. Check the provider docs and update the API URL if needed.",
 	noProviderModels: "No models configured.",
 	noProviderModelsMatch: "No models match your search.",
 	providerModelGroupUncategorized: "Uncategorized",

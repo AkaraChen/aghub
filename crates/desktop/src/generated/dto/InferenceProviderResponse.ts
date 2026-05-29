@@ -7,6 +7,7 @@ export type InferenceProviderResponse = {
 	display_name: string;
 	format: InferenceProviderFormatDto;
 	api_base_url: string;
+	preset: string | null;
 	masked_api_key: string;
 	models: Array<string>;
 };

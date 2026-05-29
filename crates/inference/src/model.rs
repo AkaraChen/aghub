@@ -80,6 +80,9 @@ pub struct InferenceProvider {
 	/// Base URL for provider API requests.
 	pub api_base_url: String,
 
+	/// Preset id this provider was created from, if any.
+	pub preset: Option<String>,
+
 	/// Masked API key stored for preview only.
 	pub masked_api_key: String,
 
@@ -102,6 +105,10 @@ pub struct CreateInferenceProvider {
 	/// Base URL for provider API requests.
 	pub api_base_url: String,
 
+	/// Preset id this provider was created from, if any.
+	#[serde(default)]
+	pub preset: Option<String>,
+
 	/// Provider API key. This is write-only and never stored in JSON.
 	pub api_key: String,
 
@@ -117,6 +124,7 @@ impl fmt::Debug for CreateInferenceProvider {
 			.field("display_name", &self.display_name)
 			.field("format", &self.format)
 			.field("api_base_url", &self.api_base_url)
+			.field("preset", &self.preset)
 			.field("models", &self.models)
 			.field("api_key", &"[redacted]")
 			.finish()
@@ -138,6 +146,9 @@ pub struct UpdateInferenceProvider {
 	/// Updated base URL for provider API requests.
 	pub api_base_url: Option<String>,
 
+	/// Updated preset id this provider is linked to.
+	pub preset: Option<Option<String>>,
+
 	/// Updated provider API key. This is write-only and never stored in JSON.
 	pub api_key: Option<String>,
 
@@ -152,6 +163,7 @@ impl fmt::Debug for UpdateInferenceProvider {
 			.field("display_name", &self.display_name)
 			.field("format", &self.format)
 			.field("api_base_url", &self.api_base_url)
+			.field("preset", &self.preset)
 			.field("models", &self.models)
 			.field("api_key", &self.api_key.as_ref().map(|_| "[redacted]"))
 			.finish()
