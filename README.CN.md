@@ -1,4 +1,6 @@
-# aghub
+!['aghub banner'](/docs/assets/gh_banner_cn.png)
+
+!['aghub screenshot'](/docs/assets/app_screenshot.png)
 
 **你的AI智能体配置中心**
 
@@ -12,10 +14,6 @@
 <a href="https://www.producthunt.com/products/aghub/reviews/new?utm_source=badge-product_review&utm_medium=badge&utm_source=badge-aghub" target="_blank"><img src="https://api.producthunt.com/widgets/embed-image/v1/product_review.svg?product_id=1193657&theme=light" alt="AGHub - The&#32;hub&#32;for&#32;every&#32;AI&#32;agent&#32;that&#32;isn&#39;t&#32;slop&#46; | Product Hunt" style="width: 250px; height: 54px;" width="250" height="54" /></a>
 
 [English Version](./README.md)
-
-!['aghub banner'](/docs/assets/gh_baner_cn.png)
-
-!['aghub screenshot'](/docs/assets/app_screenshot.jpg)
 
 ---
 
@@ -45,8 +43,6 @@ brew install --cask akarachen/tap/aghub
 - macOS: macOS 12 (Monterey) 及以上
 - Linux: Ubuntu 22.04+ / Debian 11+ / Fedora 34+ 及其他主流发行版
 
----
-
 ## 功能
 
 **统一 MCP 管理**
@@ -69,7 +65,20 @@ brew install --cask akarachen/tap/aghub
 - 按单个助手筛选或一次列出全部
 - 每个配置资源的完整审计轨迹
 
----
+**供应商管理**
+
+  - 从预设开始 — 通过内置预设快速创建常用供应商，或从头配置自定义端点
+  - 使用你自己的模型 — 让 Claude、Codex 和 OpenCode 指向任何自定义推理端点
+  - 支持所有 API 格式 — Anthropic Messages、OpenAI Chat Completions 以及 OpenAI Responses
+  - 密钥安全无忧 — API 密钥存储在操作系统原生的密钥环中，绝不以明文写入配置文件
+  - 逐代理模型选择 — 为每个代理独立挑选最合适的供应商与模型
+
+**Claude Code 插件**
+
+  - 随处安装插件 — 可来自官方注册表、第三方 Git URL 或本地路径
+  - 内置市场 — 无需离开 aghub，即可发现、浏览并安装 Claude Code 插件（v2）
+  - 完整生命周期管理 — 一条命令完成插件的安装、更新、启用／禁用与移除
+  - 全局或项目范围 — 应用到所有项目，或仅限定于单个项目
 
 ## 贡献
 
