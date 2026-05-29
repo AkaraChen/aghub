@@ -197,6 +197,7 @@ function ProviderIcon({ format }: { format: InferenceProviderFormatDto }) {
 		<span
 			className="size-4 shrink-0 text-foreground [&>svg]:size-full"
 			aria-hidden
+			// eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml
 			dangerouslySetInnerHTML={{ __html: svg }}
 		/>
 	);
