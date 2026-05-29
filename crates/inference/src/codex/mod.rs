@@ -179,8 +179,11 @@ impl CodexProviderAdapter {
 
 		// Check if provider is selectable (built-in, config.toml, or binding)
 		let all_providers = self.load_all_providers(store, &config)?;
-		let current_model =
-			effective_profile_value(&config, &profile_id, "model");
+		let current_provider_id =
+			effective_profile_value(&config, &profile_id, "model_provider")
+				.unwrap_or_else(|| mapping::OPENAI_PROVIDER_ID.to_string());
+		let provider_changed =
+			!current_provider_id.eq_ignore_ascii_case(&provider_id);
 		let is_selectable = provider_id
 			.eq_ignore_ascii_case(mapping::OPENAI_PROVIDER_ID)
 			|| all_providers.iter().any(|p| p.id == provider_id);
@@ -189,20 +192,17 @@ impl CodexProviderAdapter {
 				provider_id.to_string(),
 			));
 		}
-		let replacement_model = all_providers
-			.iter()
-			.find(|binding| binding.id == provider_id)
-			.and_then(|binding| {
-				let current_is_valid =
-					current_model.as_ref().is_some_and(|model_id| {
-						binding.models.iter().any(|m| m.id == *model_id)
-					});
-				if current_is_valid {
-					None
-				} else {
-					binding.models.first().map(|model| model.id.clone())
-				}
-			});
+		let replacement_model = if provider_changed
+			&& !provider_id.eq_ignore_ascii_case(mapping::OPENAI_PROVIDER_ID)
+		{
+			all_providers
+				.iter()
+				.find(|binding| binding.id == provider_id)
+				.and_then(|binding| binding.models.first())
+				.map(|model| model.id.clone())
+		} else {
+			None
+		};
 
 		if profile_id == DEFAULT_PROFILE_ID {
 			let table = config.as_table_mut();
@@ -215,12 +215,24 @@ impl CodexProviderAdapter {
 			let profile = profile_table_mut(&mut config, &profile_id)?;
 			profile["model_provider"] = value(provider_id.clone());
 		}
-		if let Some(model_id) = replacement_model {
+		if provider_changed {
 			if profile_id == DEFAULT_PROFILE_ID {
-				config["model"] = value(model_id);
+				if let Some(model_id) = replacement_model {
+					config["model"] = value(model_id);
+				} else if provider_id
+					.eq_ignore_ascii_case(mapping::OPENAI_PROVIDER_ID)
+				{
+					config.as_table_mut().remove("model");
+				}
 			} else {
 				let profile = profile_table_mut(&mut config, &profile_id)?;
-				profile["model"] = value(model_id);
+				if let Some(model_id) = replacement_model {
+					profile["model"] = value(model_id);
+				} else if provider_id
+					.eq_ignore_ascii_case(mapping::OPENAI_PROVIDER_ID)
+				{
+					profile.remove("model");
+				}
 			}
 		}
 

@@ -419,16 +419,16 @@ wire_api = "responses"
 }
 
 #[test]
-fn set_profile_provider_updates_invalid_model_for_inventory_binding() {
+fn set_profile_provider_uses_first_model_for_inventory_binding() {
 	let temp = tempfile::tempdir().unwrap();
 	let adapter = adapter(&temp);
 	fs::write(
 		adapter.config_path(),
 		r#"
 profile = "work"
-model = "gpt-5"
 
 [profiles.work]
+model = "gpt-5"
 model_provider = "openai"
 "#,
 	)
@@ -464,7 +464,85 @@ model_provider = "openai"
 		config["profiles"]["work"]["model"].as_str(),
 		Some("openai/gpt-5.4")
 	);
-	assert_eq!(config["model"].as_str(), Some("gpt-5"));
+	assert!(config.get("model").is_none());
+}
+
+#[test]
+fn set_default_provider_uses_first_model_for_inventory_binding() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	fs::write(
+		adapter.config_path(),
+		r#"
+model = "gpt-5"
+model_provider = "openai"
+"#,
+	)
+	.unwrap();
+
+	let store = store(&temp);
+	let provider = create_inventory_provider(&store);
+	adapter
+		.add_inventory_provider(&store, &provider, "sk-test")
+		.unwrap();
+
+	let state = adapter
+		.set_profile_provider(&store, DEFAULT_PROFILE_ID, "openrouter")
+		.unwrap();
+
+	let default = state
+		.profiles
+		.iter()
+		.find(|profile| profile.is_default)
+		.unwrap();
+	assert_eq!(default.selected_provider_id, "openrouter");
+	assert_eq!(default.model.as_deref(), Some("openai/gpt-5.4"));
+
+	let config = fs::read_to_string(adapter.config_path())
+		.unwrap()
+		.parse::<DocumentMut>()
+		.unwrap();
+	assert_eq!(config["model_provider"].as_str(), Some("openrouter"));
+	assert_eq!(config["model"].as_str(), Some("openai/gpt-5.4"));
+}
+
+#[test]
+fn set_provider_to_default_clears_model() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	fs::write(
+		adapter.config_path(),
+		r#"
+model = "openai/gpt-5.4"
+model_provider = "openrouter"
+
+[model_providers.openrouter]
+name = "OpenRouter"
+base_url = "https://openrouter.ai/api/v1"
+wire_api = "responses"
+"#,
+	)
+	.unwrap();
+
+	let store = store(&temp);
+	let state = adapter
+		.set_profile_provider(&store, DEFAULT_PROFILE_ID, "openai")
+		.unwrap();
+
+	let default = state
+		.profiles
+		.iter()
+		.find(|profile| profile.is_default)
+		.unwrap();
+	assert_eq!(default.selected_provider_id, "openai");
+	assert_eq!(default.model.as_deref(), None);
+
+	let config = fs::read_to_string(adapter.config_path())
+		.unwrap()
+		.parse::<DocumentMut>()
+		.unwrap();
+	assert!(config.get("model_provider").is_none());
+	assert!(config.get("model").is_none());
 }
 
 #[test]
