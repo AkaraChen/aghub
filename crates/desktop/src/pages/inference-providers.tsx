@@ -100,6 +100,13 @@ const FORMAT_OPTIONS: FormatOption[] = [
 	},
 ];
 
+function formatLabelKey(format: InferenceProviderFormatDto) {
+	return (
+		FORMAT_OPTIONS.find((option) => option.id === format)?.labelKey ??
+		"providerFormat"
+	);
+}
+
 const PROVIDER_EXISTS_REGEX = /provider already exists:\s*(.+)/i;
 
 const CODING_AGENT_OPTIONS: CodingAgentOption[] = [
@@ -995,22 +1002,31 @@ function ProviderForm({
 												id={preset.id}
 												textValue={preset.name}
 											>
-												<div className="flex min-w-0 items-center gap-2">
-													<PresetLogo
-														logo={preset.logo}
-													/>
-													<div className="min-w-0 grid gap-0.5">
-														<span className="truncate">
-															{preset.name}
-														</span>
-														{preset.description && (
-															<span className="truncate text-xs text-muted">
-																{
-																	preset.description
-																}
+												<div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+													<div className="flex min-w-0 items-center gap-2">
+														<PresetLogo
+															logo={preset.logo}
+														/>
+														<div className="min-w-0 grid gap-0.5">
+															<span className="truncate">
+																{preset.name}
 															</span>
-														)}
+															{preset.description && (
+																<span className="truncate text-xs text-muted">
+																	{
+																		preset.description
+																	}
+																</span>
+															)}
+														</div>
 													</div>
+													<span className="shrink-0 text-xs text-muted">
+														{t(
+															formatLabelKey(
+																preset.format,
+															),
+														)}
+													</span>
 												</div>
 												<ListBox.ItemIndicator />
 											</ListBox.Item>

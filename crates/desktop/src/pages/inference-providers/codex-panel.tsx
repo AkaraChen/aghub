@@ -302,21 +302,6 @@ function CodexProviderRow({
 	const model = provider.models[0]?.id ?? null;
 	const isExternal = provider.source === "external";
 
-	const handleShowFolder = async () => {
-		try {
-			const home = await homeDir();
-			const configPath = await join(home, ".codex", "config.toml");
-			await revealItemInDir(configPath);
-		} catch (error) {
-			console.error("Failed to reveal codex config folder:", error);
-			toast.danger(
-				error instanceof Error
-					? error.message
-					: t("showConfigFolderFailed"),
-			);
-		}
-	};
-
 	return (
 		<div className="grid gap-3 border-t border-border py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
 			<div className="grid min-w-0 gap-1">
@@ -348,20 +333,6 @@ function CodexProviderRow({
 			</div>
 
 			<div className="flex items-center gap-1 sm:justify-end">
-				<Tooltip delay={0}>
-					<Tooltip.Trigger>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							aria-label={t("showConfigFolder")}
-							onPress={handleShowFolder}
-						>
-							<FolderOpenIcon className="size-4" />
-						</Button>
-					</Tooltip.Trigger>
-					<Tooltip.Content>{t("showConfigFolder")}</Tooltip.Content>
-				</Tooltip>
 				{matchedProvider && !isExternal && (
 					<Tooltip delay={0}>
 						<Tooltip.Trigger>
@@ -471,6 +442,21 @@ export function CodexInferenceProviderPanel(_: {
 		(provider) => provider.id !== "openai",
 	);
 
+	const handleShowFolder = async () => {
+		try {
+			const home = await homeDir();
+			const configPath = await join(home, ".codex", "config.toml");
+			await revealItemInDir(configPath);
+		} catch (error) {
+			console.error("Failed to reveal codex config folder:", error);
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: t("showConfigFolderFailed"),
+			);
+		}
+	};
+
 	const clearMutation = useMutation({
 		...clearCodexProviderMutationOptions({
 			api,
@@ -561,6 +547,22 @@ export function CodexInferenceProviderPanel(_: {
 								</div>
 							</div>
 							<div className="flex shrink-0 items-center gap-2">
+								<Tooltip delay={0}>
+									<Tooltip.Trigger>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="sm"
+											aria-label={t("showConfigFolder")}
+											onPress={handleShowFolder}
+										>
+											<FolderOpenIcon className="size-4" />
+										</Button>
+									</Tooltip.Trigger>
+									<Tooltip.Content>
+										{t("showConfigFolder")}
+									</Tooltip.Content>
+								</Tooltip>
 								<Tooltip delay={0}>
 									<Tooltip.Trigger>
 										<Button
