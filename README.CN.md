@@ -4,7 +4,7 @@
 
 [![Version](https://img.shields.io/github/v/release/akarachen/aghub?include_prereleases&label=release)](https://github.com/akarachen/aghub/releases)
 [![Downloads](https://img.shields.io/github/downloads/akarachen/aghub/total.svg)](https://github.com/akarachen/aghub/releases)
-[![Homebrew](https://img.shields.io/badge/homebrew-tap-orange?logo=homebrew)](https://github.com/Fldicoahkiin/homebrew-tap)
+[![Homebrew](https://img.shields.io/badge/homebrew-tap-orange?logo=homebrew)](https://github.com/AkaraChen/homebrew-tap)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/akarachen/aghub/releases)
 [![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-orange.svg)](https://tauri.app/)
 [![License](https://img.shields.io/github/license/akarachen/aghub)](https://github.com/akarachen/aghub/blob/main/LICENSE)
@@ -24,14 +24,8 @@
 ### macOS (Homebrew)
 
 ```bash
-# 添加官方 Tap
-brew tap fldicoahkiin/tap
-
 # 安装桌面端应用
-brew install --cask aghub
-
-# 或仅安装命令行工具 (CLI)
-brew install aghub-cli
+brew install --cask akarachen/tap/aghub
 ```
 
 ### 下载
