@@ -220,9 +220,13 @@ function PresetLogo({ logo }: { logo: string }) {
 			<ServerIcon className="size-4 shrink-0 text-muted" aria-hidden />
 		);
 	}
-	const svgDataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 	return (
-		<img src={svgDataUrl} className="size-4 shrink-0" alt="" aria-hidden />
+		<span
+			className="size-4 shrink-0 text-foreground [&>svg]:size-full"
+			aria-hidden
+			// eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml
+			dangerouslySetInnerHTML={{ __html: svg }}
+		/>
 	);
 }
 
