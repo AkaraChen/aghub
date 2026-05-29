@@ -11,16 +11,12 @@ import {
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import anthropicLogo from "@lobehub/icons-static-svg/icons/anthropic.svg?raw";
-import deepSeekLogo from "@lobehub/icons-static-svg/icons/deepseek.svg?raw";
-import groqLogo from "@lobehub/icons-static-svg/icons/groq.svg?raw";
-import mistralLogo from "@lobehub/icons-static-svg/icons/mistral.svg?raw";
 import openAiLogo from "@lobehub/icons-static-svg/icons/openai.svg?raw";
-import openRouterLogo from "@lobehub/icons-static-svg/icons/openrouter.svg?raw";
-import togetherLogo from "@lobehub/icons-static-svg/icons/together.svg?raw";
 import {
 	Accordion,
 	Alert,
 	AlertDialog,
+	Avatar,
 	Button,
 	Card,
 	Checkbox,
@@ -156,30 +152,21 @@ function ProviderIcon({ format }: { format: InferenceProviderFormatDto }) {
 	);
 }
 
-const PRESET_LOGO_MAP: Record<string, string> = {
-	OpenAI: openAiLogo,
-	Anthropic: anthropicLogo,
-	OpenRouter: openRouterLogo,
-	Groq: groqLogo,
-	Mistral: mistralLogo,
-	Together: togetherLogo,
-	DeepSeek: deepSeekLogo,
-};
-
 function PresetLogo({ logo }: { logo: string }) {
-	const svg = PRESET_LOGO_MAP[logo];
-	if (!svg) {
-		return (
-			<ServerIcon className="size-4 shrink-0 text-muted" aria-hidden />
-		);
-	}
+	const logoUrl = `https://models.dev/logos/${encodeURIComponent(logo)}.svg`;
 	return (
-		<span
-			className="size-4 shrink-0 text-foreground [&>svg]:size-full"
+		<Avatar
+			className="size-4 shrink-0 rounded-none bg-transparent"
 			aria-hidden
-			// eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml
-			dangerouslySetInnerHTML={{ __html: svg }}
-		/>
+		>
+			<Avatar.Image
+				alt=""
+				className="size-4 rounded-none object-contain dark:invert"
+				loading="lazy"
+				src={logoUrl}
+			/>
+			<Avatar.Fallback className="size-4 rounded-none bg-transparent" />
+		</Avatar>
 	);
 }
 
@@ -620,7 +607,7 @@ function ProviderModelsEditor({
 										id={group.key}
 									>
 										<Accordion.Heading>
-											<Accordion.Trigger>
+											<Accordion.Trigger className="hover:bg-transparent focus:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:outline-none">
 												<span className="flex-1 text-left font-medium">
 													{groupLabel}
 												</span>

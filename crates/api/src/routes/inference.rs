@@ -188,21 +188,9 @@ pub fn list_inference_providers(
 	Ok(Json(providers))
 }
 
-const INFERENCE_PROVIDER_PRESETS_JSON: &str =
-	include_str!("../dto/data/inference_provider_presets.json");
 const MODELS_DEV_API_JSON: &str =
 	include_str!("../dto/data/models_dev_api.json");
 const MODELS_DEV_API_URL: &str = "https://models.dev/api.json";
-
-fn inference_provider_presets() -> &'static [InferenceProviderPresetResponse] {
-	use std::sync::OnceLock;
-	static PRESETS: OnceLock<Vec<InferenceProviderPresetResponse>> =
-		OnceLock::new();
-	PRESETS.get_or_init(|| {
-		serde_json::from_str(INFERENCE_PROVIDER_PRESETS_JSON)
-			.expect("inference_provider_presets.json must be valid")
-	})
-}
 
 fn models_dev_presets_from_json(
 	json: &str,
@@ -264,19 +252,6 @@ fn preset_format(npm: Option<&str>) -> Option<InferenceProviderFormatDto> {
 	}
 }
 
-fn preset_logo(provider_id: &str, provider_name: &str) -> String {
-	match provider_id {
-		"anthropic" => "Anthropic".to_string(),
-		"deepseek" => "DeepSeek".to_string(),
-		"groq" => "Groq".to_string(),
-		"mistral" => "Mistral".to_string(),
-		"openai" => "OpenAI".to_string(),
-		"openrouter" => "OpenRouter".to_string(),
-		"together" => "Together".to_string(),
-		_ => provider_name.to_string(),
-	}
-}
-
 fn models_dev_provider_to_preset(
 	provider: ModelsDevProvider,
 ) -> Option<InferenceProviderPresetResponse> {
@@ -292,7 +267,7 @@ fn models_dev_provider_to_preset(
 		api_base_url,
 		format,
 		models,
-		logo: preset_logo(&provider.id, &provider.name),
+		logo: provider.id,
 		homepage: provider.doc,
 		description: None,
 	})
@@ -319,14 +294,7 @@ pub async fn list_inference_provider_presets(
 ) -> Json<Vec<InferenceProviderPresetResponse>> {
 	match fetch_models_dev_presets().await {
 		Ok(presets) if !presets.is_empty() => Json(presets),
-		_ => {
-			let presets = vendored_models_dev_presets();
-			if presets.is_empty() {
-				Json(inference_provider_presets().to_vec())
-			} else {
-				Json(presets.to_vec())
-			}
-		}
+		_ => Json(vendored_models_dev_presets().to_vec()),
 	}
 }
 
@@ -777,23 +745,34 @@ pub fn sync_claude_provider(
 	let provider = store
 		.get(&row.inference_provider_id)
 		.map_err(ApiError::from)?;
-	let api_key = store
-		.get_api_key(&provider.id)
+	let was_active = adapter
+		.derive_active_provider_id(&store)
 		.map_err(ApiError::from)?
-		.ok_or_else(|| {
-			ApiError::new(
-				Status::UnprocessableEntity,
-				format!(
-					"inference provider '{}' has no stored API key",
-					provider.display_name
-				),
-				"MISSING_CREDENTIAL",
-			)
-		})?;
-
-	adapter
-		.sync_active_binding(&provider, &api_key, row.model.as_deref())
+		== id;
+	let model = provider.models.first().cloned();
+	let row = store
+		.update_agent_binding("claude", id, Some(model.clone()))
 		.map_err(ApiError::from)?;
+
+	if was_active {
+		let api_key = store
+			.get_api_key(&provider.id)
+			.map_err(ApiError::from)?
+			.ok_or_else(|| {
+				ApiError::new(
+					Status::UnprocessableEntity,
+					format!(
+						"inference provider '{}' has no stored API key",
+						provider.display_name
+					),
+					"MISSING_CREDENTIAL",
+				)
+			})?;
+
+		adapter
+			.sync_active_binding(&provider, &api_key, model.as_deref())
+			.map_err(ApiError::from)?;
+	}
 
 	let binding = store.binding_from_row(&row).map_err(ApiError::from)?;
 	Ok(Json(
