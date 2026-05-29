@@ -32,23 +32,14 @@ import { getAnalyticsConsent } from "./store";
 const key = import.meta.env.VITE_POSTHOG_KEY as string | undefined;
 const host = import.meta.env.VITE_POSTHOG_HOST as string | undefined;
 
-type PropertyValue =
-	| string
-	| number
-	| boolean
-	| null
-	| undefined
-	| PropertyValue[]
-	| { [key: string]: PropertyValue };
-
-type Properties = Record<string, PropertyValue>;
+type Properties = Record<string, unknown>;
 
 function toRustProperties(input?: Record<string, unknown>): Properties {
 	if (!input) return {};
 	const out: Properties = {};
 	for (const [k, value] of Object.entries(input)) {
 		if (value === undefined) continue;
-		out[k] = value as PropertyValue;
+		out[k] = value;
 	}
 	return out;
 }
