@@ -461,7 +461,7 @@ function ProviderModelsEditor({
 					})}
 					isSelected={selectedIds.has(model.id)}
 					onChange={(selected) => toggleSelected(model.id, selected)}
-					className="mt-2 shrink-0"
+					className="shrink-0"
 				>
 					<Checkbox.Control>
 						<Checkbox.Indicator />
@@ -1018,102 +1018,52 @@ function ProviderForm({
 					</Alert>
 				)}
 
-				<Card className="mb-4">
-					<Card.Header>
-						<div>
-							<Card.Title>{t("providerPresetsTitle")}</Card.Title>
-							<Card.Description>
-								{t("providerPresetsDescription")}
-							</Card.Description>
-						</div>
-					</Card.Header>
-					<Card.Content>
-						<Select
-							className="w-full"
-							variant="secondary"
-							aria-label={t("providerPresetsTitle")}
-							placeholder={t("providerPresetsPlaceholder")}
-							selectedKey={selectedPresetId ?? "__none__"}
-							onSelectionChange={(key) =>
-								handlePresetSelectionChange(
-									key === null ? null : String(key),
-								)
-							}
-						>
-							<Select.Trigger>
-								<Select.Value>
-									{selectedPreset ? (
-										<span className="flex min-w-0 items-center gap-2">
-											<PresetLogo
-												logo={selectedPreset.logo}
-											/>
-											<span className="truncate">
-												{selectedPreset.name}
+				{mode === "create" && (
+					<Card className="mb-4">
+						<Card.Header>
+							<div>
+								<Card.Title>
+									{t("providerPresetsTitle")}
+								</Card.Title>
+								<Card.Description>
+									{t("providerPresetsDescription")}
+								</Card.Description>
+							</div>
+						</Card.Header>
+						<Card.Content>
+							<Select
+								className="w-full"
+								variant="secondary"
+								aria-label={t("providerPresetsTitle")}
+								placeholder={t("providerPresetsPlaceholder")}
+								selectedKey={selectedPresetId ?? "__none__"}
+								onSelectionChange={(key) =>
+									handlePresetSelectionChange(
+										key === null ? null : String(key),
+									)
+								}
+							>
+								<Select.Trigger>
+									<Select.Value>
+										{selectedPreset ? (
+											<span className="flex min-w-0 items-center gap-2">
+												<PresetLogo
+													logo={selectedPreset.logo}
+												/>
+												<span className="truncate">
+													{selectedPreset.name}
+												</span>
 											</span>
-										</span>
-									) : (
-										<span className="text-muted">
-											{t("providerPresetsNone")}
-										</span>
-									)}
-								</Select.Value>
-								<Select.Indicator />
-							</Select.Trigger>
-							<Select.Popover>
-								{isPresetsLoading ? (
-									<ListBox>
-										<ListBox.Item
-											id="__none__"
-											textValue={t("providerPresetsNone")}
-										>
+										) : (
 											<span className="text-muted">
 												{t("providerPresetsNone")}
 											</span>
-											<ListBox.ItemIndicator />
-										</ListBox.Item>
-										<ListBox.Item
-											id="__loading__"
-											textValue={t(
-												"providerPresetsLoading",
-											)}
-											className="pointer-events-none"
-										>
-											<div className="flex items-center gap-2 text-sm text-muted">
-												<Spinner
-													color="current"
-													size="sm"
-												/>
-												<span>
-													{t(
-														"providerPresetsLoading",
-													)}
-												</span>
-											</div>
-										</ListBox.Item>
-									</ListBox>
-								) : (
-									<>
-										<div className="sticky top-0 z-10 bg-overlay p-2">
-											<SearchField
-												value={presetSearchQuery}
-												onChange={setPresetSearchQuery}
-												aria-label={t(
-													"searchProviderPresets",
-												)}
-												variant="secondary"
-												className="w-full"
-											>
-												<SearchField.Group>
-													<SearchField.SearchIcon />
-													<SearchField.Input
-														placeholder={t(
-															"searchProviderPresetsPlaceholder",
-														)}
-													/>
-													<SearchField.ClearButton />
-												</SearchField.Group>
-											</SearchField>
-										</div>
+										)}
+									</Select.Value>
+									<Select.Indicator />
+								</Select.Trigger>
+								<Select.Popover>
+									{isPresetsLoading ? (
 										<ListBox>
 											<ListBox.Item
 												id="__none__"
@@ -1126,57 +1076,123 @@ function ProviderForm({
 												</span>
 												<ListBox.ItemIndicator />
 											</ListBox.Item>
-											{filteredPresets.map((preset) => (
-												<ListBox.Item
-													key={preset.id}
-													id={preset.id}
-													textValue={preset.name}
+											<ListBox.Item
+												id="__loading__"
+												textValue={t(
+													"providerPresetsLoading",
+												)}
+												className="pointer-events-none"
+											>
+												<div className="flex items-center gap-2 text-sm text-muted">
+													<Spinner
+														color="current"
+														size="sm"
+													/>
+													<span>
+														{t(
+															"providerPresetsLoading",
+														)}
+													</span>
+												</div>
+											</ListBox.Item>
+										</ListBox>
+									) : (
+										<>
+											<div className="sticky top-0 z-10 bg-overlay p-2">
+												<SearchField
+													value={presetSearchQuery}
+													onChange={
+														setPresetSearchQuery
+													}
+													aria-label={t(
+														"searchProviderPresets",
+													)}
+													variant="secondary"
+													className="w-full"
 												>
-													<div className="flex min-w-0 flex-1 items-center justify-between gap-3">
-														<div className="flex min-w-0 items-center gap-2">
-															<PresetLogo
-																logo={
-																	preset.logo
-																}
-															/>
-															<div className="min-w-0 grid gap-0.5">
-																<span className="truncate">
-																	{
-																		preset.name
-																	}
-																</span>
-																{preset.description && (
-																	<span className="truncate text-xs text-muted">
-																		{
-																			preset.description
-																		}
-																	</span>
-																)}
-															</div>
-														</div>
-														<span className="shrink-0 text-xs text-muted">
-															{t(
-																formatLabelKey(
-																	preset.format,
-																),
+													<SearchField.Group>
+														<SearchField.SearchIcon />
+														<SearchField.Input
+															placeholder={t(
+																"searchProviderPresetsPlaceholder",
 															)}
-														</span>
-													</div>
+														/>
+														<SearchField.ClearButton />
+													</SearchField.Group>
+												</SearchField>
+											</div>
+											<ListBox>
+												<ListBox.Item
+													id="__none__"
+													textValue={t(
+														"providerPresetsNone",
+													)}
+												>
+													<span className="text-muted">
+														{t(
+															"providerPresetsNone",
+														)}
+													</span>
 													<ListBox.ItemIndicator />
 												</ListBox.Item>
-											))}
-										</ListBox>
-										{filteredPresets.length === 0 && (
-											<p className="px-3 py-2 text-sm text-muted">
-												{t("noProviderPresetsMatch")}
-											</p>
-										)}
-									</>
-								)}
-							</Select.Popover>
-						</Select>
-					</Card.Content>
-				</Card>
+												{filteredPresets.map(
+													(preset) => (
+														<ListBox.Item
+															key={preset.id}
+															id={preset.id}
+															textValue={
+																preset.name
+															}
+														>
+															<div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+																<div className="flex min-w-0 items-center gap-2">
+																	<PresetLogo
+																		logo={
+																			preset.logo
+																		}
+																	/>
+																	<div className="min-w-0 grid gap-0.5">
+																		<span className="truncate">
+																			{
+																				preset.name
+																			}
+																		</span>
+																		{preset.description && (
+																			<span className="truncate text-xs text-muted">
+																				{
+																					preset.description
+																				}
+																			</span>
+																		)}
+																	</div>
+																</div>
+																<span className="shrink-0 text-xs text-muted">
+																	{t(
+																		formatLabelKey(
+																			preset.format,
+																		),
+																	)}
+																</span>
+															</div>
+															<ListBox.ItemIndicator />
+														</ListBox.Item>
+													),
+												)}
+											</ListBox>
+											{filteredPresets.length === 0 && (
+												<p className="px-3 py-2 text-sm text-muted">
+													{t(
+														"noProviderPresetsMatch",
+													)}
+												</p>
+											)}
+										</>
+									)}
+								</Select.Popover>
+							</Select>
+						</Card.Content>
+					</Card>
+				)}
 
 				<Card>
 					<Card.Header>
@@ -1299,65 +1315,69 @@ function ProviderForm({
 										)}
 									/>
 
-									<Controller
-										name="format"
-										control={control}
-										render={({ field }) => (
-											<Select
-												className="w-full"
-												selectedKey={field.value}
-												onSelectionChange={(key) => {
-													if (!key) return;
-													handleFormatChange(
-														key as InferenceProviderFormatDto,
-														field.value,
-														field.onChange,
-													);
-												}}
-												variant="secondary"
-											>
-												<Label>
-													{t("providerFormat")}
-												</Label>
-												<Select.Trigger>
-													<Select.Value />
-													<Select.Indicator />
-												</Select.Trigger>
-												<Select.Popover>
-													<ListBox>
-														{FORMAT_OPTIONS.map(
-															(option) => (
-																<ListBox.Item
-																	key={
-																		option.id
-																	}
-																	id={
-																		option.id
-																	}
-																	textValue={t(
-																		option.labelKey,
-																	)}
-																>
-																	<div className="grid gap-0.5">
-																		<Label>
-																			{t(
-																				option.labelKey,
-																			)}
-																		</Label>
-																		<span className="text-xs text-muted">
-																			{t(
-																				option.descriptionKey,
-																			)}
-																		</span>
-																	</div>
-																</ListBox.Item>
-															),
-														)}
-													</ListBox>
-												</Select.Popover>
-											</Select>
-										)}
-									/>
+									{mode === "create" && (
+										<Controller
+											name="format"
+											control={control}
+											render={({ field }) => (
+												<Select
+													className="w-full"
+													selectedKey={field.value}
+													onSelectionChange={(
+														key,
+													) => {
+														if (!key) return;
+														handleFormatChange(
+															key as InferenceProviderFormatDto,
+															field.value,
+															field.onChange,
+														);
+													}}
+													variant="secondary"
+												>
+													<Label>
+														{t("providerFormat")}
+													</Label>
+													<Select.Trigger>
+														<Select.Value />
+														<Select.Indicator />
+													</Select.Trigger>
+													<Select.Popover>
+														<ListBox>
+															{FORMAT_OPTIONS.map(
+																(option) => (
+																	<ListBox.Item
+																		key={
+																			option.id
+																		}
+																		id={
+																			option.id
+																		}
+																		textValue={t(
+																			option.labelKey,
+																		)}
+																	>
+																		<div className="grid gap-0.5">
+																			<Label>
+																				{t(
+																					option.labelKey,
+																				)}
+																			</Label>
+																			<span className="text-xs text-muted">
+																				{t(
+																					option.descriptionKey,
+																				)}
+																			</span>
+																		</div>
+																	</ListBox.Item>
+																),
+															)}
+														</ListBox>
+													</Select.Popover>
+												</Select>
+											)}
+										/>
+									)}
 
 									<Controller
 										name="apiKey"

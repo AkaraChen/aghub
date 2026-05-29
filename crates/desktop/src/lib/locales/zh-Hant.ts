@@ -183,8 +183,7 @@ export default {
 	codexCurrentRoute: "目前路由",
 	codexActiveProvider: "目前",
 	codexLoginProvider: "Codex 登入",
-	codexLoginProviderInfo:
-		"使用 Codex 自己的 OpenAI 登入憑據，不在 config.toml 寫入 base URL 或 API key。",
+	codexLoginProviderInfo: "使用 Codex 自己的 OpenAI 登入憑據",
 	codexConfigProvider: "設定檔 provider",
 	codexConfigProviderInfo:
 		"這個 provider 來自 Codex config.toml，暫未匹配到 Aghub 推理 Provider。",
@@ -234,6 +233,7 @@ export default {
 	agentProviderCredentialAgentStore: "Agent 儲存",
 	agentProviderCredentialInline: "內嵌 key",
 	agentProviderCredentialNone: "無憑證",
+	agentProviderModelCount: "{{count}} 個模型",
 	searchInferenceProviderResources: "搜尋 Agent 或 Provider...",
 	searchInferenceProviders: "搜尋 Provider...",
 	refreshInferenceProviders: "重新整理 Provider",

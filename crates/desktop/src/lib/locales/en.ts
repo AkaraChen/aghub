@@ -193,8 +193,7 @@ export default {
 	codexCurrentRoute: "Current Route",
 	codexActiveProvider: "Active",
 	codexLoginProvider: "Codex login",
-	codexLoginProviderInfo:
-		"Uses Codex's own OpenAI login credentials without writing a base URL or API key to config.toml.",
+	codexLoginProviderInfo: "Uses Codex's own OpenAI login credentials",
 	codexConfigProvider: "Config provider",
 	codexConfigProviderInfo:
 		"This provider comes from Codex config.toml and does not currently match an Aghub inference provider.",
@@ -246,6 +245,7 @@ export default {
 	agentProviderCredentialAgentStore: "Agent store",
 	agentProviderCredentialInline: "Inline key",
 	agentProviderCredentialNone: "No credential",
+	agentProviderModelCount: "{{count}} model(s)",
 	searchInferenceProviderResources: "Search agents or providers...",
 	searchInferenceProviders: "Search providers...",
 	refreshInferenceProviders: "Refresh providers",

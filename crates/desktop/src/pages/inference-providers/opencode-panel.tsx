@@ -380,7 +380,9 @@ function ProviderRow({
 				<div className="flex min-w-0 flex-wrap gap-2 text-xs text-muted">
 					{matchedProvider ? (
 						<span>
-							{t("providerModels")}: {matchedProvider.model_count}
+							{t("agentProviderModelCount", {
+								count: matchedProvider.model_count,
+							})}
 						</span>
 					) : (
 						<span className="inline-flex items-center gap-1">

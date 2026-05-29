@@ -299,7 +299,6 @@ function CodexProviderRow({
 	const { t } = useTranslation();
 	const matchedProvider = provider.matched_inference_provider;
 	const label = matchedProvider?.display_name ?? provider.name;
-	const model = provider.models[0]?.id ?? null;
 	const isExternal = provider.source === "external";
 
 	return (
@@ -318,17 +317,11 @@ function CodexProviderRow({
 				<div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
 					<span>
 						{matchedProvider
-							? `${t("providerModels")}: ${
-									matchedProvider.model_count
-								}`
+							? t("agentProviderModelCount", {
+									count: matchedProvider.model_count,
+								})
 							: t("codexConfigProvider")}
 					</span>
-					{provider.api_base_url && (
-						<span className="truncate">
-							{provider.api_base_url}
-						</span>
-					)}
-					{model && <span>{model}</span>}
 				</div>
 			</div>
 
