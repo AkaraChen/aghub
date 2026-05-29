@@ -27,19 +27,19 @@ fn store(state: &State<InferenceProviderState>) -> InferenceProviderStore {
 	InferenceProviderStore::new(state.app_data_dir.clone())
 }
 
-fn find_by_name(
+fn find_by_latin_name(
 	store: &InferenceProviderStore,
-	name: &str,
+	latin_name: &str,
 ) -> Result<InferenceProvider, ApiError> {
 	store
 		.list()
 		.map_err(ApiError::from)?
 		.into_iter()
-		.find(|provider| provider.name.eq_ignore_ascii_case(name))
+		.find(|provider| provider.latin_name == latin_name)
 		.ok_or_else(|| {
 			ApiError::new(
 				Status::NotFound,
-				format!("inference provider '{name}' not found"),
+				format!("inference provider '{latin_name}' not found"),
 				"RESOURCE_NOT_FOUND",
 			)
 		})
@@ -95,6 +95,22 @@ fn inventory_providers_with_api_keys(
 		providers.push((provider, api_key));
 	}
 	Ok(providers)
+}
+
+fn opencode_inventory_providers_with_api_keys(
+	store: &InferenceProviderStore,
+) -> Result<Vec<(InferenceProvider, String)>, ApiError> {
+	Ok(inventory_providers_with_api_keys(store)?
+		.into_iter()
+		.map(|(provider, api_key)| {
+			(
+				OpenCodeProviderAdapter::normalize_inventory_provider(
+					&provider,
+				),
+				api_key,
+			)
+		})
+		.collect())
 }
 
 fn find_matching_inventory_provider(
@@ -201,7 +217,7 @@ fn models_dev_presets_from_json(
 		.into_values()
 		.filter_map(models_dev_provider_to_preset)
 		.collect::<Vec<_>>();
-	presets.sort_by_key(|a| a.name.to_lowercase());
+	presets.sort_by_key(|preset| preset.name.to_lowercase());
 	Ok(presets)
 }
 
@@ -304,7 +320,7 @@ pub fn list_opencode_providers(
 ) -> ApiResult<Vec<AgentProviderResponse>> {
 	let store = store(state);
 	let adapter = opencode_adapter()?;
-	let inventory = inventory_providers_with_api_keys(&store)?;
+	let inventory = opencode_inventory_providers_with_api_keys(&store)?;
 	let providers = adapter
 		.load_providers()
 		.map_err(ApiError::from)?
@@ -455,7 +471,7 @@ pub fn sync_opencode_provider(
 ) -> ApiResult<AgentProviderResponse> {
 	let store = store(state);
 	let adapter = opencode_adapter()?;
-	let inventory = inventory_providers_with_api_keys(&store)?;
+	let inventory = opencode_inventory_providers_with_api_keys(&store)?;
 	let binding = adapter
 		.load_providers()
 		.map_err(ApiError::from)?
@@ -560,13 +576,13 @@ pub fn delete_codex_provider(
 	Ok(NoContent)
 }
 
-#[get("/inference/providers/<name>/password")]
+#[get("/inference/providers/<latin_name>/password")]
 pub fn get_inference_provider_password(
 	state: &State<InferenceProviderState>,
-	name: &str,
+	latin_name: &str,
 ) -> ApiResult<InferenceProviderPasswordResponse> {
 	let store = store(state);
-	let provider = find_by_name(&store, name)?;
+	let provider = find_by_latin_name(&store, latin_name)?;
 	let api_key = store
 		.get_api_key(&provider.id)
 		.map_err(ApiError::from)?
@@ -582,7 +598,7 @@ pub fn get_inference_provider_password(
 		})?;
 
 	Ok(Json(InferenceProviderPasswordResponse {
-		name: provider.name,
+		latin_name: provider.latin_name,
 		api_key,
 	}))
 }
@@ -598,27 +614,121 @@ pub fn create_inference_provider(
 	Ok((Status::Created, Json(provider.into())))
 }
 
-#[put("/inference/providers/<name>", data = "<body>")]
+#[put("/inference/providers/<latin_name>", data = "<body>")]
 pub fn update_inference_provider(
 	state: &State<InferenceProviderState>,
-	name: &str,
+	latin_name: &str,
 	body: Json<UpdateInferenceProviderRequest>,
 ) -> ApiResult<InferenceProviderResponse> {
 	let store = store(state);
-	let provider = find_by_name(&store, name)?;
+	let provider = find_by_latin_name(&store, latin_name)?;
 	let updated = store
 		.update(&provider.id, body.into_inner().into())
 		.map_err(ApiError::from)?;
 	Ok(Json(updated.into()))
 }
 
-#[delete("/inference/providers/<name>")]
+fn remove_claude_provider_references(
+	store: &InferenceProviderStore,
+	provider: &InferenceProvider,
+) -> Result<(), ApiError> {
+	let adapter = claude_adapter()?;
+	let binding_ids = store
+		.list_agent_bindings("claude")
+		.map_err(ApiError::from)?
+		.into_iter()
+		.filter(|row| row.inference_provider_id == provider.id)
+		.map(|row| row.id)
+		.collect::<Vec<_>>();
+
+	for binding_id in binding_ids {
+		adapter
+			.remove_binding(store, &binding_id)
+			.map_err(ApiError::from)?;
+	}
+
+	Ok(())
+}
+
+fn remove_codex_provider_references(
+	store: &InferenceProviderStore,
+	provider: &InferenceProvider,
+) -> Result<(), ApiError> {
+	let adapter = codex_adapter()?;
+	let binding_ids = store
+		.list_agent_bindings("codex")
+		.map_err(ApiError::from)?
+		.into_iter()
+		.filter(|row| row.inference_provider_id == provider.id)
+		.map(|row| row.id)
+		.collect::<Vec<_>>();
+
+	for binding_id in binding_ids {
+		adapter
+			.remove_provider(store, &binding_id)
+			.map_err(ApiError::from)?;
+	}
+
+	Ok(())
+}
+
+fn remove_opencode_provider_references(
+	store: &InferenceProviderStore,
+	provider: &InferenceProvider,
+) -> Result<(), ApiError> {
+	let Some(api_key) =
+		store.get_api_key(&provider.id).map_err(ApiError::from)?
+	else {
+		return Ok(());
+	};
+
+	let adapter = opencode_adapter()?;
+	let inventory = vec![(
+		OpenCodeProviderAdapter::normalize_inventory_provider(provider),
+		api_key,
+	)];
+	let mut provider_ids = Vec::new();
+	for binding in adapter.load_providers().map_err(ApiError::from)?.providers {
+		let agent_api_key =
+			adapter.api_key(&binding.id).map_err(ApiError::from)?;
+		if find_matching_inventory_provider(
+			&inventory,
+			&binding,
+			agent_api_key,
+		)?
+		.is_some() && !provider_ids.iter().any(|id| id == &binding.id)
+		{
+			provider_ids.push(binding.id);
+		}
+	}
+
+	for provider_id in provider_ids {
+		adapter
+			.remove_provider(&provider_id)
+			.map_err(ApiError::from)?;
+	}
+
+	Ok(())
+}
+
+fn remove_agent_provider_references(
+	store: &InferenceProviderStore,
+	provider: &InferenceProvider,
+) -> Result<(), ApiError> {
+	remove_claude_provider_references(store, provider)?;
+	remove_codex_provider_references(store, provider)?;
+	remove_opencode_provider_references(store, provider)?;
+	Ok(())
+}
+
+#[delete("/inference/providers/<latin_name>")]
 pub fn delete_inference_provider(
 	state: &State<InferenceProviderState>,
-	name: &str,
+	latin_name: &str,
 ) -> ApiNoContent {
 	let store = store(state);
-	let provider = find_by_name(&store, name)?;
+	let provider = find_by_latin_name(&store, latin_name)?;
+	remove_agent_provider_references(&store, &provider)?;
 	store.delete(&provider.id).map_err(ApiError::from)?;
 	Ok(NoContent)
 }

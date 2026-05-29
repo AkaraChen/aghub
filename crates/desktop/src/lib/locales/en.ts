@@ -192,8 +192,7 @@ export default {
 	codexCurrentRoute: "Current Route",
 	codexActiveProvider: "Active",
 	codexLoginProvider: "Codex login",
-	codexLoginProviderInfo:
-		"Uses Codex's own OpenAI login credentials without writing a base URL or API key to config.toml.",
+	codexLoginProviderInfo: "Uses Codex's own OpenAI login credentials",
 	codexConfigProvider: "Config provider",
 	codexConfigProviderInfo:
 		"This provider comes from Codex config.toml and does not currently match an Aghub inference provider.",
@@ -245,6 +244,7 @@ export default {
 	agentProviderCredentialAgentStore: "Agent store",
 	agentProviderCredentialInline: "Inline key",
 	agentProviderCredentialNone: "No credential",
+	agentProviderModelCount: "{{count}} model(s)",
 	searchInferenceProviderResources: "Search agents or providers...",
 	searchInferenceProviders: "Search providers...",
 	refreshInferenceProviders: "Refresh providers",
@@ -271,9 +271,18 @@ export default {
 	noInferenceProviders: "No inference providers yet.",
 	noInferenceProvidersMatch: "No providers match",
 	providerName: "Name",
+	providerDisplayName: "Display Name",
+	providerDisplayNameHelp:
+		"This is only shown in aghub. It is safe to use any readable name, including spaces, symbols, or non-English characters.",
 	providerNamePlaceholder: "e.g., OpenAI",
+	providerLatinName: "Provider ID",
+	providerLatinNameHelp:
+		"Used as the provider key written into agent config files. Use lowercase a-z only so every supported agent can read it safely.",
+	providerLatinNamePlaceholder: "e.g., openai",
 	providerFormat: "Format",
 	providerApiBaseUrl: "API Base URL",
+	providerApiBaseUrlHelp:
+		"For OpenAI Responses and OpenAI-compatible providers, a bare origin such as https://api.example.com is written to OpenCode as https://api.example.com/v1. URLs that already include a path are kept as entered.",
 	providerApiBaseUrlPlaceholder: "https://api.openai.com/v1",
 	providerApiKey: "API Key",
 	providerApiKeyPlaceholder: "sk-...",
@@ -320,14 +329,29 @@ export default {
 	hideProviderApiKey: "Hide API key",
 	inferenceProviderCreated: "Provider created",
 	inferenceProviderUpdated: "Provider updated",
+	inferenceProviderUpdatedAndAgentSynced:
+		"Provider updated and {{count}} agent config(s) synced",
+	inferenceProviderAgentSyncPartialError:
+		"Provider updated, but {{count}} of {{total}} agent config(s) failed to sync.",
+	confirmInferenceProviderAgentSyncTitle: "Update agent configs?",
+	confirmInferenceProviderAgentSyncBody:
+		"Saving this provider updates aghub's inventory only. Existing provider configs inside individual agents are not updated automatically.",
+	confirmInferenceProviderAgentSyncManualHint:
+		"You can sync them now, or skip this and update them later from each agent's settings.",
+	saveWithoutAgentSync: "Save only",
+	saveAndSyncAgentProviders: "Save and update agents",
 	inferenceProviderDuplicateError:
 		"A provider named “{{name}}” is already configured. Please choose a different name or edit the existing entry.",
 	inferenceProviderDeleted: "Provider deleted",
 	deleteInferenceProviderError: "Failed to delete provider",
 	inferenceProviderPasswordLoadFailed: "Failed to load API key",
 	validationProviderNameRequired: "Enter a provider name.",
+	validationProviderLatinNameRequired: "Enter a provider ID.",
+	validationProviderLatinNameInvalid:
+		"Provider ID must contain only lowercase a-z.",
 	validationProviderApiBaseUrlRequired: "Enter an API base URL.",
 	validationProviderApiKeyRequired: "Enter an API key.",
+	validationProviderModelsRequired: "Select at least one model.",
 	validationProviderModelNameUnique: "Model names must be unique.",
 	inferenceFormatAnthropic: "Anthropic",
 	inferenceFormatAnthropicDescription: "Anthropic Messages API",

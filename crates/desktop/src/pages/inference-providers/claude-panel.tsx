@@ -162,7 +162,7 @@ function ClaudeCreateProviderDialog({
 												<ListBox.Item
 													key={item.id}
 													id={item.id}
-													textValue={`${item.display_name} ${item.name}`}
+													textValue={`${item.display_name} ${item.latin_name}`}
 												>
 													<div className="grid min-w-0 gap-0.5">
 														<Label className="truncate">
@@ -304,13 +304,15 @@ function ClaudeProviderRow({
 						</span>
 					)}
 				</div>
-				<div className="flex min-w-0 text-xs text-muted">
-					{provider.api_base_url && (
-						<span className="truncate">
-							{provider.api_base_url}
+				{matchedProvider && (
+					<div className="flex min-w-0 text-xs text-muted">
+						<span>
+							{t("agentProviderModelCount", {
+								count: matchedProvider.model_count,
+							})}
 						</span>
-					)}
-				</div>
+					</div>
+				)}
 			</div>
 
 			<div className="flex items-center gap-1 sm:justify-end">

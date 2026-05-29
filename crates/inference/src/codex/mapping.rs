@@ -116,33 +116,6 @@ pub(super) fn api_key_from_auth_file(auth: &JsonValue) -> Option<String> {
 		.map(ToString::to_string)
 }
 
-pub(super) fn provider_id_from_name(name: &str) -> String {
-	let mut out = String::new();
-	let mut previous_was_dash = false;
-
-	for ch in name.chars().flat_map(char::to_lowercase) {
-		if ch.is_ascii_alphanumeric() {
-			out.push(ch);
-			previous_was_dash = false;
-		} else if !previous_was_dash && !out.is_empty() {
-			out.push('-');
-			previous_was_dash = true;
-		}
-	}
-
-	while out.ends_with('-') {
-		out.pop();
-	}
-
-	if out.is_empty() {
-		"provider".to_string()
-	} else if is_reserved_provider_id(&out) {
-		format!("aghub-{out}")
-	} else {
-		out
-	}
-}
-
 pub(super) fn clean_provider_id(provider_id: &str) -> Result<String> {
 	let provider_id = provider_id.trim().trim_end_matches('/').to_string();
 	if provider_id.is_empty() {

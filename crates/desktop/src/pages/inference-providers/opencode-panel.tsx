@@ -169,7 +169,7 @@ function OpenCodeCreateProviderDialog({
 												<ListBox.Item
 													key={item.id}
 													id={item.id}
-													textValue={`${item.display_name} ${item.name}`}
+													textValue={`${item.display_name} ${item.latin_name}`}
 												>
 													<div className="grid min-w-0 gap-0.5">
 														<Label className="truncate">
@@ -380,7 +380,9 @@ function ProviderRow({
 				<div className="flex min-w-0 flex-wrap gap-2 text-xs text-muted">
 					{matchedProvider ? (
 						<span>
-							{t("providerModels")}: {matchedProvider.model_count}
+							{t("agentProviderModelCount", {
+								count: matchedProvider.model_count,
+							})}
 						</span>
 					) : (
 						<span className="inline-flex items-center gap-1">
@@ -531,7 +533,7 @@ export function OpenCodeInferenceProviderPanel({
 	const handleEditProvider = (provider: AgentProviderResponse) => {
 		const matchedProvider = provider.matched_inference_provider;
 		if (matchedProvider) {
-			onEditInferenceProvider(matchedProvider.name);
+			onEditInferenceProvider(matchedProvider.latin_name);
 			return;
 		}
 

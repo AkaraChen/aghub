@@ -47,7 +47,7 @@ impl From<InferenceProviderFormatDto> for InferenceProviderFormat {
 #[derive(Debug, Deserialize, TS)]
 #[ts(export)]
 pub struct CreateInferenceProviderRequest {
-	pub name: String,
+	pub latin_name: String,
 	pub display_name: String,
 	pub format: InferenceProviderFormatDto,
 	pub api_base_url: String,
@@ -59,7 +59,7 @@ pub struct CreateInferenceProviderRequest {
 impl From<CreateInferenceProviderRequest> for CreateInferenceProvider {
 	fn from(req: CreateInferenceProviderRequest) -> Self {
 		CreateInferenceProvider {
-			name: req.name,
+			latin_name: req.latin_name,
 			display_name: req.display_name,
 			format: req.format.into(),
 			api_base_url: req.api_base_url,
@@ -73,7 +73,7 @@ impl From<CreateInferenceProviderRequest> for CreateInferenceProvider {
 #[derive(Debug, Deserialize, TS)]
 #[ts(export)]
 pub struct UpdateInferenceProviderRequest {
-	pub name: Option<String>,
+	pub latin_name: Option<String>,
 	pub display_name: Option<String>,
 	pub format: Option<InferenceProviderFormatDto>,
 	pub api_base_url: Option<String>,
@@ -86,7 +86,7 @@ pub struct UpdateInferenceProviderRequest {
 impl From<UpdateInferenceProviderRequest> for UpdateInferenceProvider {
 	fn from(req: UpdateInferenceProviderRequest) -> Self {
 		UpdateInferenceProvider {
-			name: req.name,
+			latin_name: req.latin_name,
 			display_name: req.display_name,
 			format: req.format.map(Into::into),
 			api_base_url: req.api_base_url,
@@ -101,7 +101,7 @@ impl From<UpdateInferenceProviderRequest> for UpdateInferenceProvider {
 #[ts(export)]
 pub struct InferenceProviderResponse {
 	pub id: String,
-	pub name: String,
+	pub latin_name: String,
 	pub display_name: String,
 	pub format: InferenceProviderFormatDto,
 	pub api_base_url: String,
@@ -120,7 +120,7 @@ impl From<&InferenceProvider> for InferenceProviderResponse {
 	fn from(provider: &InferenceProvider) -> Self {
 		InferenceProviderResponse {
 			id: provider.id.clone(),
-			name: provider.name.clone(),
+			latin_name: provider.latin_name.clone(),
 			display_name: provider.display_name.clone(),
 			format: provider.format.into(),
 			api_base_url: provider.api_base_url.clone(),
@@ -134,7 +134,7 @@ impl From<&InferenceProvider> for InferenceProviderResponse {
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
 pub struct InferenceProviderPasswordResponse {
-	pub name: String,
+	pub latin_name: String,
 	pub api_key: String,
 }
 
@@ -223,7 +223,7 @@ impl From<&AgentProviderModel> for AgentProviderModelResponse {
 #[ts(export)]
 pub struct AgentProviderMatchedInferenceProviderResponse {
 	pub id: String,
-	pub name: String,
+	pub latin_name: String,
 	pub display_name: String,
 	pub model_count: usize,
 }
@@ -234,7 +234,7 @@ impl From<&InferenceProvider>
 	fn from(provider: &InferenceProvider) -> Self {
 		Self {
 			id: provider.id.clone(),
-			name: provider.name.clone(),
+			latin_name: provider.latin_name.clone(),
 			display_name: provider.display_name.clone(),
 			model_count: provider.models.len(),
 		}

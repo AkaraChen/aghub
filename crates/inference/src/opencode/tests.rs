@@ -16,7 +16,7 @@ fn adapter(temp: &tempfile::TempDir) -> OpenCodeProviderAdapter {
 fn provider() -> InferenceProvider {
 	InferenceProvider {
 		id: "inventory-id".to_string(),
-		name: "OpenRouter".to_string(),
+		latin_name: "openrouter".to_string(),
 		display_name: "OpenRouter".to_string(),
 		format: InferenceProviderFormat::OpenAiCompletions,
 		api_base_url: "https://openrouter.ai/api/v1".to_string(),
@@ -167,6 +167,44 @@ fn add_provider_writes_config_and_auth_json() {
 			.unwrap();
 	assert_eq!(auth["openrouter"]["type"], "api");
 	assert_eq!(auth["openrouter"]["key"], "sk-test");
+}
+
+#[test]
+fn add_provider_normalizes_origin_only_openai_base_url() {
+	let temp = tempfile::TempDir::new().unwrap();
+	let adapter = adapter(&temp);
+	let mut provider = provider();
+	provider.api_base_url = "https://api.tu-zi.com".to_string();
+
+	adapter.add_provider("tuzi", &provider, "sk-test").unwrap();
+
+	let config: Value = serde_json::from_str(
+		&fs::read_to_string(adapter.config_path()).unwrap(),
+	)
+	.unwrap();
+	assert_eq!(
+		config["provider"]["tuzi"]["options"]["baseURL"],
+		"https://api.tu-zi.com/v1"
+	);
+}
+
+#[test]
+fn add_provider_preserves_openai_base_url_with_path() {
+	let temp = tempfile::TempDir::new().unwrap();
+	let adapter = adapter(&temp);
+	let mut provider = provider();
+	provider.api_base_url = "https://api.z.ai/api/coding/paas/v4/".to_string();
+
+	adapter.add_provider("zai", &provider, "sk-test").unwrap();
+
+	let config: Value = serde_json::from_str(
+		&fs::read_to_string(adapter.config_path()).unwrap(),
+	)
+	.unwrap();
+	assert_eq!(
+		config["provider"]["zai"]["options"]["baseURL"],
+		"https://api.z.ai/api/coding/paas/v4"
+	);
 }
 
 #[test]

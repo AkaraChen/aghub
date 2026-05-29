@@ -65,7 +65,7 @@ fn auth_path(temp: &tempfile::TempDir) -> std::path::PathBuf {
 fn provider() -> InferenceProvider {
 	InferenceProvider {
 		id: "inventory-id".to_string(),
-		name: "openrouter".to_string(),
+		latin_name: "openrouter".to_string(),
 		display_name: "OpenRouter".to_string(),
 		format: InferenceProviderFormat::OpenAiResponses,
 		api_base_url: "https://openrouter.ai/api/v1".to_string(),
@@ -87,7 +87,7 @@ fn create_inventory_provider(
 ) -> InferenceProvider {
 	store
 		.create(CreateInferenceProvider {
-			name: "openrouter".to_string(),
+			latin_name: "openrouter".to_string(),
 			display_name: "OpenRouter".to_string(),
 			format: InferenceProviderFormat::OpenAiResponses,
 			api_base_url: "https://openrouter.ai/api/v1".to_string(),

@@ -7,6 +7,7 @@ import {
 	EyeSlashIcon,
 	PencilIcon,
 	PlusIcon,
+	QuestionMarkCircleIcon,
 	ServerIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
@@ -36,6 +37,7 @@ import {
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Fuse from "fuse.js";
+import { pinyin } from "pinyin-pro";
 import { type Key, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
@@ -56,11 +58,15 @@ import {
 	deleteInferenceProviderMutationOptions,
 	inferenceProviderListQueryOptions,
 	inferenceProviderPresetsQueryOptions,
+	invalidateInferenceProviderQueries,
 	updateInferenceProviderMutationOptions,
 } from "../requests/inference-providers";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { InferenceProviderPresetResponse } from "../generated/dto";
+import type {
+	AgentProviderResponse,
+	InferenceProviderPresetResponse,
+} from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 
 type CodingAgentId = "opencode" | "codex" | "claude";
@@ -100,7 +106,22 @@ const FORMAT_OPTIONS: FormatOption[] = [
 	},
 ];
 
+function formatLabelKey(format: InferenceProviderFormatDto) {
+	return (
+		FORMAT_OPTIONS.find((option) => option.id === format)?.labelKey ??
+		"providerFormat"
+	);
+}
+
 const PROVIDER_EXISTS_REGEX = /provider already exists:\s*(.+)/i;
+const LATIN_NAME_REGEX = /^[a-z]+$/;
+
+function makeLatinNameSuggestion(value: string) {
+	return pinyin(value, { toneType: "none", type: "array" })
+		.join("")
+		.toLowerCase()
+		.replace(/[^a-z]/g, "");
+}
 
 const CODING_AGENT_OPTIONS: CodingAgentOption[] = [
 	{
@@ -119,6 +140,7 @@ const CODING_AGENT_OPTIONS: CodingAgentOption[] = [
 
 interface InferenceProviderFormValues {
 	displayName: string;
+	latinName: string;
 	format: InferenceProviderFormatDto;
 	apiBaseUrl: string;
 	apiKey: string;
@@ -128,15 +150,19 @@ interface InferenceProviderFormValues {
 interface ProviderModelFormValue {
 	id: string;
 	name: string;
+	selected: boolean;
 }
 
-function createProviderModelFormValue(name = ""): ProviderModelFormValue {
+function createProviderModelFormValue(
+	name = "",
+	selected = false,
+): ProviderModelFormValue {
 	const id = `provider-model-${crypto.randomUUID()}`;
-	return { id, name };
+	return { id, name, selected };
 }
 
-function toProviderModelFormValues(models: string[]) {
-	return models.map((model) => createProviderModelFormValue(model));
+function toProviderModelFormValues(models: string[], selected = true) {
+	return models.map((model) => createProviderModelFormValue(model, selected));
 }
 
 function ProviderIcon({ format }: { format: InferenceProviderFormatDto }) {
@@ -191,13 +217,17 @@ function MonoValue({
 }
 
 function normalizeModelNames(models: ProviderModelFormValue[]) {
-	return models.map((model) => model.name.trim()).filter(Boolean);
+	return models
+		.filter((model) => model.selected)
+		.map((model) => model.name.trim())
+		.filter(Boolean);
 }
 
 function validateModelNames(models: ProviderModelFormValue[], message: string) {
 	const seen = new Set<string>();
 
 	for (const model of models) {
+		if (!model.selected) continue;
 		const name = model.name.trim();
 		if (!name) continue;
 
@@ -207,6 +237,30 @@ function validateModelNames(models: ProviderModelFormValue[], message: string) {
 	}
 
 	return true;
+}
+
+function validateRequiredModelNames(
+	models: ProviderModelFormValue[],
+	message: string,
+) {
+	return normalizeModelNames(models).length > 0 || message;
+}
+
+type SyncAgentId = "opencode" | "codex" | "claude";
+
+interface SyncAgentProviderTarget {
+	agentId: SyncAgentId;
+	providerId: string;
+}
+
+function isProviderBackedBy(
+	provider: AgentProviderResponse,
+	inferenceProviderId: string,
+) {
+	return (
+		provider.source_provider_id === inferenceProviderId ||
+		provider.matched_inference_provider?.id === inferenceProviderId
+	);
 }
 
 const UNCATEGORIZED_GROUP_KEY = "__uncategorized__";
@@ -269,12 +323,12 @@ function ProviderModelsEditor({
 	fetchModelsDisabledReason?: string;
 }) {
 	const { t } = useTranslation();
-	const emptyModel = useMemo(() => createProviderModelFormValue(), []);
+	const emptyModel = useMemo(
+		() => createProviderModelFormValue("", true),
+		[],
+	);
 	const [isFetching, setIsFetching] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
-	const [selectedIds, setSelectedIds] = useState<Set<string>>(
-		() => new Set(),
-	);
 	const [isBatchDeleteOpen, setIsBatchDeleteOpen] = useState(false);
 	const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
 		() => new Set(),
@@ -293,11 +347,11 @@ function ProviderModelsEditor({
 	const displayModels = hasRealModels ? filteredModels : [emptyModel];
 
 	const filteredSelectedCount = filteredModels.reduce(
-		(count, model) => count + (selectedIds.has(model.id) ? 1 : 0),
+		(count, model) => count + (model.selected ? 1 : 0),
 		0,
 	);
 	const totalSelectedCount = value.reduce(
-		(count, model) => count + (selectedIds.has(model.id) ? 1 : 0),
+		(count, model) => count + (model.selected ? 1 : 0),
 		0,
 	);
 	const allFilteredSelected =
@@ -332,34 +386,34 @@ function ProviderModelsEditor({
 	};
 
 	const handleAdd = () => {
-		onChange([...value, createProviderModelFormValue()]);
+		onChange([...value, createProviderModelFormValue("", true)]);
 	};
 
 	const toggleSelected = (id: string, selected: boolean) => {
-		setSelectedIds((prev) => {
-			const next = new Set(prev);
-			if (selected) next.add(id);
-			else next.delete(id);
-			return next;
-		});
+		if (value.length === 0) {
+			onChange([{ ...emptyModel, selected }]);
+			return;
+		}
+		onChange(
+			value.map((model) =>
+				model.id === id ? { ...model, selected } : model,
+			),
+		);
 	};
 
 	const handleToggleAllFiltered = (selected: boolean) => {
-		setSelectedIds((prev) => {
-			const next = new Set(prev);
-			for (const model of filteredModels) {
-				if (selected) next.add(model.id);
-				else next.delete(model.id);
-			}
-			return next;
-		});
+		const filteredIds = new Set(filteredModels.map((model) => model.id));
+		onChange(
+			value.map((model) =>
+				filteredIds.has(model.id) ? { ...model, selected } : model,
+			),
+		);
 	};
 
 	const handleBatchDelete = () => {
 		if (totalSelectedCount === 0) return;
-		const remaining = value.filter((model) => !selectedIds.has(model.id));
+		const remaining = value.filter((model) => !model.selected);
 		onChange(remaining);
-		setSelectedIds(new Set());
 		setIsBatchDeleteOpen(false);
 	};
 
@@ -416,46 +470,53 @@ function ProviderModelsEditor({
 		onChange(nextModels);
 	};
 
-	const renderModelRow = (model: ProviderModelFormValue) => (
-		<div key={model.id} className="flex items-start gap-2">
-			{hasRealModels && (
+	const renderModelRow = (
+		model: ProviderModelFormValue,
+		options: { inAccordion?: boolean } = {},
+	) => {
+		const controlVariant = options.inAccordion ? undefined : "secondary";
+
+		return (
+			<div key={model.id} className="flex items-center gap-2">
 				<Checkbox
-					variant="secondary"
+					variant={controlVariant}
 					aria-label={t("selectProviderModel", {
 						name: model.name || t("providerModelName"),
 					})}
-					isSelected={selectedIds.has(model.id)}
+					isSelected={model.selected}
 					onChange={(selected) => toggleSelected(model.id, selected)}
-					className="mt-2 shrink-0"
+					className="shrink-0"
 				>
 					<Checkbox.Control>
 						<Checkbox.Indicator />
 					</Checkbox.Control>
 				</Checkbox>
-			)}
-			<Input
-				value={model.name}
-				onChange={(event) => handleChange(model.id, event.target.value)}
-				onBlur={onBlur}
-				placeholder={t("providerModelNamePlaceholder")}
-				aria-label={t("providerModelName")}
-				variant="secondary"
-				className="min-w-0 flex-1"
-			/>
-			<Button
-				type="button"
-				isIconOnly
-				variant="ghost"
-				size="sm"
-				className="mt-1 shrink-0 text-muted"
-				aria-label={t("remove")}
-				isDisabled={value.length === 0}
-				onPress={() => handleRemove(model.id)}
-			>
-				<TrashIcon className="size-4" />
-			</Button>
-		</div>
-	);
+				<Input
+					value={model.name}
+					onChange={(event) =>
+						handleChange(model.id, event.target.value)
+					}
+					onBlur={onBlur}
+					placeholder={t("providerModelNamePlaceholder")}
+					aria-label={t("providerModelName")}
+					variant={controlVariant}
+					className="my-1.5 min-w-0 flex-1 text-sm"
+				/>
+				<Button
+					type="button"
+					isIconOnly
+					variant="ghost"
+					size="sm"
+					className="shrink-0 text-muted"
+					aria-label={t("remove")}
+					isDisabled={value.length === 0}
+					onPress={() => handleRemove(model.id)}
+				>
+					<TrashIcon className="size-4" />
+				</Button>
+			</div>
+		);
+	};
 
 	const fetchModelsButton = onFetchModels ? (
 		<Button
@@ -487,9 +548,6 @@ function ProviderModelsEditor({
 				<div className="flex items-start justify-between gap-3">
 					<div className="grid gap-0.5">
 						<Label>{t("providerModels")}</Label>
-						<p className="text-xs text-muted">
-							{t("providerModelsDescription")}
-						</p>
 					</div>
 					<div className="flex shrink-0 items-center gap-2">
 						{fetchModelsButton &&
@@ -517,69 +575,64 @@ function ProviderModelsEditor({
 					</div>
 				</div>
 
-				{hasRealModels && (
-					<SearchField
-						value={searchQuery}
-						onChange={setSearchQuery}
-						aria-label={t("searchProviderModels")}
+				<SearchField
+					value={searchQuery}
+					onChange={setSearchQuery}
+					aria-label={t("searchProviderModels")}
+					variant="secondary"
+					className="w-full"
+					isDisabled={!hasRealModels}
+				>
+					<SearchField.Group>
+						<SearchField.SearchIcon />
+						<SearchField.Input
+							placeholder={t("searchProviderModelsPlaceholder")}
+						/>
+						<SearchField.ClearButton />
+					</SearchField.Group>
+				</SearchField>
+
+				<div className="flex min-h-8 items-center justify-between gap-3 px-1">
+					<Checkbox
 						variant="secondary"
-						className="w-full"
+						aria-label={
+							allFilteredSelected
+								? t("deselectAllProviderModels")
+								: t("selectAllProviderModels")
+						}
+						isSelected={allFilteredSelected}
+						isIndeterminate={someFilteredSelected}
+						isDisabled={filteredModels.length === 0}
+						onChange={handleToggleAllFiltered}
 					>
-						<SearchField.Group>
-							<SearchField.SearchIcon />
-							<SearchField.Input
-								placeholder={t(
-									"searchProviderModelsPlaceholder",
-								)}
-							/>
-							<SearchField.ClearButton />
-						</SearchField.Group>
-					</SearchField>
-				)}
-
-				{hasRealModels && (
-					<div className="flex items-center justify-between gap-3 px-1">
-						<Checkbox
-							variant="secondary"
-							aria-label={
-								allFilteredSelected
-									? t("deselectAllProviderModels")
-									: t("selectAllProviderModels")
-							}
-							isSelected={allFilteredSelected}
-							isIndeterminate={someFilteredSelected}
-							isDisabled={filteredModels.length === 0}
-							onChange={handleToggleAllFiltered}
-						>
-							<Checkbox.Control>
-								<Checkbox.Indicator />
-							</Checkbox.Control>
-							<Checkbox.Content>
-								<span className="text-xs text-muted">
-									{t("selectedProviderModelsCount", {
-										selected: totalSelectedCount,
-										total: value.length,
-									})}
-								</span>
-							</Checkbox.Content>
-						</Checkbox>
-						{totalSelectedCount > 0 && (
-							<Button
-								type="button"
-								variant="danger"
-								size="sm"
-								onPress={() => setIsBatchDeleteOpen(true)}
-							>
-								<TrashIcon className="size-4" />
-								{t("deleteSelectedProviderModels", {
-									count: totalSelectedCount,
+						<Checkbox.Control>
+							<Checkbox.Indicator />
+						</Checkbox.Control>
+						<Checkbox.Content>
+							<span className="text-xs text-muted">
+								{t("selectedProviderModelsCount", {
+									selected: totalSelectedCount,
+									total: value.length,
 								})}
-							</Button>
-						)}
-					</div>
-				)}
+							</span>
+						</Checkbox.Content>
+					</Checkbox>
+					{totalSelectedCount > 0 && (
+						<Button
+							type="button"
+							variant="danger"
+							size="sm"
+							onPress={() => setIsBatchDeleteOpen(true)}
+						>
+							<TrashIcon className="size-4" />
+							{t("deleteSelectedProviderModels", {
+								count: totalSelectedCount,
+							})}
+						</Button>
+					)}
+				</div>
 
-				<div className="grid max-h-[420px] gap-2 overflow-y-auto pr-1">
+				<div className="grid max-h-[420px] min-h-0 gap-2 overflow-y-auto pr-1">
 					{hasRealModels && filteredModels.length === 0 ? (
 						<p className="px-1 py-2 text-sm text-muted">
 							{t("noProviderModelsMatch")}
@@ -590,12 +643,12 @@ function ProviderModelsEditor({
 							expandedKeys={expandedGroupKeys}
 							onExpandedChange={handleExpandedChange}
 							hideSeparator
+							className="rounded-lg bg-surface-secondary"
 						>
 							{filteredGroups.map((group) => {
 								const groupSelected = group.items.reduce(
 									(count, model) =>
-										count +
-										(selectedIds.has(model.id) ? 1 : 0),
+										count + (model.selected ? 1 : 0),
 									0,
 								);
 								const groupLabel = group.isUncategorized
@@ -639,7 +692,9 @@ function ProviderModelsEditor({
 											<Accordion.Body>
 												<div className="grid gap-2">
 													{group.items.map((model) =>
-														renderModelRow(model),
+														renderModelRow(model, {
+															inAccordion: true,
+														}),
 													)}
 												</div>
 											</Accordion.Body>
@@ -725,6 +780,7 @@ function ProviderForm({
 		reValidateMode: "onChange",
 		defaultValues: {
 			displayName: provider?.display_name ?? "",
+			latinName: provider?.latin_name ?? "",
 			format: provider?.format ?? "openai_responses",
 			apiBaseUrl: provider?.api_base_url ?? "",
 			apiKey: "",
@@ -736,6 +792,11 @@ function ProviderForm({
 		provider?.preset ?? null,
 	);
 	const [presetSearchQuery, setPresetSearchQuery] = useState("");
+	const [pendingEditValues, setPendingEditValues] =
+		useState<InferenceProviderFormValues | null>(null);
+	const [isSyncPromptOpen, setIsSyncPromptOpen] = useState(false);
+	const [isSavingProvider, setIsSavingProvider] = useState(false);
+	const [hasEditedLatinName, setHasEditedLatinName] = useState(false);
 	const selectedPreset = useMemo(
 		() => presets.find((preset) => preset.id === selectedPresetId) ?? null,
 		[presets, selectedPresetId],
@@ -757,6 +818,12 @@ function ProviderForm({
 
 	const handleApplyPreset = (preset: InferenceProviderPresetResponse) => {
 		setValue("displayName", preset.name, { shouldDirty: true });
+		if (!hasEditedLatinName && mode === "create") {
+			setValue("latinName", makeLatinNameSuggestion(preset.id), {
+				shouldDirty: true,
+				shouldValidate: true,
+			});
+		}
 		setValue("apiBaseUrl", preset.api_base_url, { shouldDirty: true });
 		setValue("format", preset.format, { shouldDirty: true });
 		setValue("models", toProviderModelFormValues(preset.models), {
@@ -789,6 +856,27 @@ function ProviderForm({
 		onChange(nextFormat);
 	};
 
+	const handleNameChange = (
+		value: string,
+		onChange: (value: string) => void,
+	) => {
+		onChange(value);
+		if (!hasEditedLatinName && mode === "create") {
+			setValue("latinName", makeLatinNameSuggestion(value), {
+				shouldDirty: true,
+				shouldValidate: true,
+			});
+		}
+	};
+
+	const handleLatinNameChange = (
+		value: string,
+		onChange: (value: string) => void,
+	) => {
+		setHasEditedLatinName(true);
+		onChange(value);
+	};
+
 	const [showApiKey, setShowApiKey] = useState(false);
 	const canFetchModels = Boolean(selectedPreset);
 	const fetchModelsDisabledReason = selectedPreset
@@ -818,18 +906,78 @@ function ProviderForm({
 	const activeError =
 		mode === "create" ? createMutation.error : updateMutation.error;
 	const isPending =
-		createMutation.isPending || updateMutation.isPending || isSubmitting;
+		createMutation.isPending ||
+		updateMutation.isPending ||
+		isSubmitting ||
+		isSavingProvider;
 
-	const onSubmit = async (values: InferenceProviderFormValues) => {
+	const findAgentProviderSyncTargets = async (
+		inferenceProviderId: string,
+	): Promise<SyncAgentProviderTarget[]> => {
+		const [openCodeProviders, codexState, claudeState] = await Promise.all([
+			api.inferenceProviders.listOpenCode(),
+			api.inferenceProviders.getCodexState(),
+			api.inferenceProviders.getClaudeState(),
+		]);
+
+		return [
+			...openCodeProviders
+				.filter((item) => isProviderBackedBy(item, inferenceProviderId))
+				.map((item) => ({
+					agentId: "opencode" as const,
+					providerId: item.id,
+				})),
+			...codexState.providers
+				.filter((item) => isProviderBackedBy(item, inferenceProviderId))
+				.map((item) => ({
+					agentId: "codex" as const,
+					providerId: item.id,
+				})),
+			...claudeState.providers
+				.filter((item) => isProviderBackedBy(item, inferenceProviderId))
+				.map((item) => ({
+					agentId: "claude" as const,
+					providerId: item.id,
+				})),
+		];
+	};
+
+	const syncAgentProviders = async (targets: SyncAgentProviderTarget[]) => {
+		const results = await Promise.allSettled(
+			targets.map((target) => {
+				if (target.agentId === "opencode") {
+					return api.inferenceProviders.syncOpenCode(
+						target.providerId,
+					);
+				}
+				if (target.agentId === "codex") {
+					return api.inferenceProviders.syncCodex(target.providerId);
+				}
+				return api.inferenceProviders.syncClaude(target.providerId);
+			}),
+		);
+		return results.filter((result) => result.status === "rejected").length;
+	};
+
+	const saveProvider = async (
+		values: InferenceProviderFormValues,
+		syncAgents: boolean,
+	) => {
+		setIsSavingProvider(true);
 		const displayName = values.displayName.trim();
+		const latinName = values.latinName.trim();
 		const apiBaseUrl = values.apiBaseUrl.trim();
 		const apiKey = values.apiKey.trim();
 		const models = normalizeModelNames(values.models);
+		if (models.length === 0) {
+			setIsSavingProvider(false);
+			return;
+		}
 
 		try {
 			if (mode === "create") {
 				const created = await createMutation.mutateAsync({
-					name: displayName,
+					latin_name: latinName,
 					display_name: displayName,
 					format: values.format,
 					api_base_url: apiBaseUrl,
@@ -843,10 +991,13 @@ function ProviderForm({
 			}
 
 			if (!provider) return;
+			const syncTargets = syncAgents
+				? await findAgentProviderSyncTargets(provider.id)
+				: [];
 			const updated = await updateMutation.mutateAsync({
-				name: provider.name,
+				name: provider.latin_name,
 				body: {
-					name: null,
+					latin_name: null,
 					display_name: displayName,
 					format: values.format,
 					api_base_url: apiBaseUrl,
@@ -854,11 +1005,48 @@ function ProviderForm({
 					models,
 				},
 			});
-			toast.success(t("inferenceProviderUpdated"));
+			if (syncTargets.length > 0) {
+				const failedCount = await syncAgentProviders(syncTargets);
+				await invalidateInferenceProviderQueries(queryClient);
+				if (failedCount > 0) {
+					toast.danger(
+						t("inferenceProviderAgentSyncPartialError", {
+							count: failedCount,
+							total: syncTargets.length,
+						}),
+					);
+				} else {
+					toast.success(
+						t("inferenceProviderUpdatedAndAgentSynced", {
+							count: syncTargets.length,
+						}),
+					);
+				}
+			} else {
+				toast.success(t("inferenceProviderUpdated"));
+			}
 			onSuccess(updated);
 		} catch (error) {
 			console.error("Failed to save inference provider:", error);
+		} finally {
+			setIsSavingProvider(false);
 		}
+	};
+
+	const onSubmit = async (values: InferenceProviderFormValues) => {
+		if (mode === "edit") {
+			setPendingEditValues(values);
+			setIsSyncPromptOpen(true);
+			return;
+		}
+		await saveProvider(values, false);
+	};
+
+	const handleConfirmEditSave = async (syncAgents: boolean) => {
+		if (!pendingEditValues) return;
+		await saveProvider(pendingEditValues, syncAgents);
+		setIsSyncPromptOpen(false);
+		setPendingEditValues(null);
 	};
 
 	const rawErrorMessage =
@@ -875,378 +1063,419 @@ function ProviderForm({
 		: rawErrorMessage;
 
 	return (
-		<div className="h-full overflow-y-auto p-4 sm:p-6">
-			{activeError && (
-				<Alert className="mb-4" status="danger">
-					<Alert.Indicator />
-					<Alert.Content>
-						<Alert.Description>
-							{friendlyErrorMessage}
-						</Alert.Description>
-					</Alert.Content>
-				</Alert>
-			)}
+		<>
+			<div className="h-full overflow-y-auto p-4 sm:p-6">
+				{activeError && (
+					<Alert className="mb-4" status="danger">
+						<Alert.Indicator />
+						<Alert.Content>
+							<Alert.Description>
+								{friendlyErrorMessage}
+							</Alert.Description>
+						</Alert.Content>
+					</Alert>
+				)}
 
-			<Card className="mb-4">
-				<Card.Header>
-					<div>
-						<Card.Title>{t("providerPresetsTitle")}</Card.Title>
-						<Card.Description>
-							{t("providerPresetsDescription")}
-						</Card.Description>
-					</div>
-				</Card.Header>
-				<Card.Content>
-					<Select
-						className="w-full"
-						variant="secondary"
-						aria-label={t("providerPresetsTitle")}
-						placeholder={t("providerPresetsPlaceholder")}
-						selectedKey={selectedPresetId ?? "__none__"}
-						onSelectionChange={(key) =>
-							handlePresetSelectionChange(
-								key === null ? null : String(key),
-							)
-						}
-					>
-						<Select.Trigger>
-							<Select.Value>
-								{selectedPreset ? (
-									<span className="flex min-w-0 items-center gap-2">
-										<PresetLogo
-											logo={selectedPreset.logo}
-										/>
-										<span className="truncate">
-											{selectedPreset.name}
-										</span>
-									</span>
-								) : (
-									<span className="text-muted">
-										{t("providerPresetsNone")}
-									</span>
-								)}
-							</Select.Value>
-							<Select.Indicator />
-						</Select.Trigger>
-						<Select.Popover>
-							{isPresetsLoading ? (
-								<ListBox>
-									<ListBox.Item
-										id="__none__"
-										textValue={t("providerPresetsNone")}
-									>
-										<span className="text-muted">
-											{t("providerPresetsNone")}
-										</span>
-										<ListBox.ItemIndicator />
-									</ListBox.Item>
-									<ListBox.Item
-										id="__loading__"
-										textValue={t("providerPresetsLoading")}
-										className="pointer-events-none"
-									>
-										<div className="flex items-center gap-2 text-sm text-muted">
-											<Spinner
-												color="current"
-												size="sm"
-											/>
-											<span>
-												{t("providerPresetsLoading")}
-											</span>
-										</div>
-									</ListBox.Item>
-								</ListBox>
-							) : (
-								<>
-									<div className="sticky top-0 z-10 bg-overlay p-2">
-										<SearchField
-											value={presetSearchQuery}
-											onChange={setPresetSearchQuery}
-											aria-label={t(
-												"searchProviderPresets",
-											)}
-											variant="secondary"
-											className="w-full"
-										>
-											<SearchField.Group>
-												<SearchField.SearchIcon />
-												<SearchField.Input
-													placeholder={t(
-														"searchProviderPresetsPlaceholder",
-													)}
+				{mode === "create" && (
+					<Card className="mb-4">
+						<Card.Header>
+							<div>
+								<Card.Title>
+									{t("providerPresetsTitle")}
+								</Card.Title>
+								<Card.Description>
+									{t("providerPresetsDescription")}
+								</Card.Description>
+							</div>
+						</Card.Header>
+						<Card.Content>
+							<Select
+								className="w-full"
+								variant="secondary"
+								aria-label={t("providerPresetsTitle")}
+								placeholder={t("providerPresetsPlaceholder")}
+								selectedKey={selectedPresetId ?? "__none__"}
+								onSelectionChange={(key) =>
+									handlePresetSelectionChange(
+										key === null ? null : String(key),
+									)
+								}
+							>
+								<Select.Trigger>
+									<Select.Value>
+										{selectedPreset ? (
+											<span className="flex min-w-0 items-center gap-2">
+												<PresetLogo
+													logo={selectedPreset.logo}
 												/>
-												<SearchField.ClearButton />
-											</SearchField.Group>
-										</SearchField>
-									</div>
-									<ListBox>
-										<ListBox.Item
-											id="__none__"
-											textValue={t("providerPresetsNone")}
-										>
+												<span className="truncate">
+													{selectedPreset.name}
+												</span>
+											</span>
+										) : (
 											<span className="text-muted">
 												{t("providerPresetsNone")}
 											</span>
-											<ListBox.ItemIndicator />
-										</ListBox.Item>
-										{filteredPresets.map((preset) => (
+										)}
+									</Select.Value>
+									<Select.Indicator />
+								</Select.Trigger>
+								<Select.Popover>
+									{isPresetsLoading ? (
+										<ListBox>
 											<ListBox.Item
-												key={preset.id}
-												id={preset.id}
-												textValue={preset.name}
+												id="__none__"
+												textValue={t(
+													"providerPresetsNone",
+												)}
 											>
-												<div className="flex min-w-0 items-center gap-2">
-													<PresetLogo
-														logo={preset.logo}
-													/>
-													<div className="min-w-0 grid gap-0.5">
-														<span className="truncate">
-															{preset.name}
-														</span>
-														{preset.description && (
-															<span className="truncate text-xs text-muted">
-																{
-																	preset.description
-																}
-															</span>
-														)}
-													</div>
-												</div>
+												<span className="text-muted">
+													{t("providerPresetsNone")}
+												</span>
 												<ListBox.ItemIndicator />
 											</ListBox.Item>
-										))}
-									</ListBox>
-									{filteredPresets.length === 0 && (
-										<p className="px-3 py-2 text-sm text-muted">
-											{t("noProviderPresetsMatch")}
-										</p>
-									)}
-								</>
-							)}
-						</Select.Popover>
-					</Select>
-				</Card.Content>
-			</Card>
-
-			<Card>
-				<Card.Header>
-					<div>
-						<Card.Title>
-							{mode === "create"
-								? t("createInferenceProvider")
-								: t("editInferenceProvider")}
-						</Card.Title>
-					</div>
-				</Card.Header>
-				<Card.Content>
-					<Form
-						validationBehavior="aria"
-						onSubmit={handleSubmit(onSubmit)}
-					>
-						<Fieldset>
-							<Fieldset.Group>
-								<Controller
-									name="displayName"
-									control={control}
-									rules={{
-										required: t(
-											"validationProviderNameRequired",
-										),
-										validate: (value) =>
-											value.trim()
-												? true
-												: t(
-														"validationProviderNameRequired",
-													),
-									}}
-									render={({ field, fieldState }) => (
-										<TextField
-											className="w-full"
-											variant="secondary"
-											isRequired
-											validationBehavior="aria"
-											isInvalid={Boolean(
-												fieldState.error,
-											)}
-										>
-											<Label>{t("providerName")}</Label>
-											<Input
-												value={field.value}
-												onChange={(event) =>
-													field.onChange(
-														event.target.value,
-													)
-												}
-												onBlur={field.onBlur}
-												placeholder={t(
-													"providerNamePlaceholder",
+											<ListBox.Item
+												id="__loading__"
+												textValue={t(
+													"providerPresetsLoading",
 												)}
-												variant="secondary"
-											/>
-											{fieldState.error && (
-												<FieldError>
-													{fieldState.error.message}
-												</FieldError>
-											)}
-										</TextField>
-									)}
-								/>
-
-								<Controller
-									name="apiBaseUrl"
-									control={control}
-									rules={{
-										required: t(
-											"validationProviderApiBaseUrlRequired",
-										),
-										validate: (value) =>
-											value.trim()
-												? true
-												: t(
-														"validationProviderApiBaseUrlRequired",
-													),
-									}}
-									render={({ field, fieldState }) => (
-										<TextField
-											className="w-full"
-											variant="secondary"
-											isRequired
-											validationBehavior="aria"
-											isInvalid={Boolean(
-												fieldState.error,
-											)}
-										>
-											<Label>
-												{t("providerApiBaseUrl")}
-											</Label>
-											<Input
-												value={field.value}
-												onChange={(event) =>
-													field.onChange(
-														event.target.value,
-													)
-												}
-												onBlur={field.onBlur}
-												placeholder={t(
-													"providerApiBaseUrlPlaceholder",
-												)}
-												variant="secondary"
-											/>
-											{fieldState.error && (
-												<FieldError>
-													{fieldState.error.message}
-												</FieldError>
-											)}
-										</TextField>
-									)}
-								/>
-
-								<Controller
-									name="format"
-									control={control}
-									render={({ field }) => (
-										<Select
-											className="w-full"
-											selectedKey={field.value}
-											onSelectionChange={(key) => {
-												if (!key) return;
-												handleFormatChange(
-													key as InferenceProviderFormatDto,
-													field.value,
-													field.onChange,
-												);
-											}}
-											variant="secondary"
-										>
-											<Label>{t("providerFormat")}</Label>
-											<Select.Trigger>
-												<Select.Value />
-												<Select.Indicator />
-											</Select.Trigger>
-											<Select.Popover>
-												<ListBox>
-													{FORMAT_OPTIONS.map(
-														(option) => (
-															<ListBox.Item
-																key={option.id}
-																id={option.id}
-																textValue={t(
-																	option.labelKey,
-																)}
-															>
-																<div className="grid gap-0.5">
-																	<Label>
-																		{t(
-																			option.labelKey,
-																		)}
-																	</Label>
-																	<span className="text-xs text-muted">
-																		{t(
-																			option.descriptionKey,
-																		)}
-																	</span>
-																</div>
-															</ListBox.Item>
-														),
-													)}
-												</ListBox>
-											</Select.Popover>
-										</Select>
-									)}
-								/>
-
-								<Controller
-									name="apiKey"
-									control={control}
-									rules={{
-										validate: (value) => {
-											if (mode === "edit") return true;
-											return value.trim()
-												? true
-												: t(
-														"validationProviderApiKeyRequired",
-													);
-										},
-									}}
-									render={({ field, fieldState }) => (
-										<TextField
-											className="w-full"
-											variant="secondary"
-											isRequired={mode === "create"}
-											validationBehavior="aria"
-											isInvalid={Boolean(
-												fieldState.error,
-											)}
-										>
-											<div className="flex items-center justify-between gap-2">
-												<Label>
-													{t("providerApiKey")}
-												</Label>
-												{selectedPreset?.homepage && (
-													<button
-														type="button"
-														className="text-xs text-accent hover:underline focus:underline focus:outline-none"
-														onClick={() => {
-															if (
-																selectedPreset?.homepage
-															) {
-																openUrl(
-																	selectedPreset.homepage,
-																);
-															}
-														}}
-													>
-														{t("providerGetApiKey")}
-													</button>
-												)}
-											</div>
-											<InputGroup variant="secondary">
-												<InputGroup.Input
-													type={
-														showApiKey
-															? "text"
-															: "password"
+												className="pointer-events-none"
+											>
+												<div className="flex items-center gap-2 text-sm text-muted">
+													<Spinner
+														color="current"
+														size="sm"
+													/>
+													<span>
+														{t(
+															"providerPresetsLoading",
+														)}
+													</span>
+												</div>
+											</ListBox.Item>
+										</ListBox>
+									) : (
+										<>
+											<div className="sticky top-0 z-10 bg-overlay p-2">
+												<SearchField
+													value={presetSearchQuery}
+													onChange={
+														setPresetSearchQuery
 													}
+													aria-label={t(
+														"searchProviderPresets",
+													)}
+													variant="secondary"
+													className="w-full"
+												>
+													<SearchField.Group>
+														<SearchField.SearchIcon />
+														<SearchField.Input
+															placeholder={t(
+																"searchProviderPresetsPlaceholder",
+															)}
+														/>
+														<SearchField.ClearButton />
+													</SearchField.Group>
+												</SearchField>
+											</div>
+											<ListBox>
+												<ListBox.Item
+													id="__none__"
+													textValue={t(
+														"providerPresetsNone",
+													)}
+												>
+													<span className="text-muted">
+														{t(
+															"providerPresetsNone",
+														)}
+													</span>
+													<ListBox.ItemIndicator />
+												</ListBox.Item>
+												{filteredPresets.map(
+													(preset) => (
+														<ListBox.Item
+															key={preset.id}
+															id={preset.id}
+															textValue={
+																preset.name
+															}
+														>
+															<div className="flex min-w-0 flex-1 items-center justify-between gap-3">
+																<div className="flex min-w-0 items-center gap-2">
+																	<PresetLogo
+																		logo={
+																			preset.logo
+																		}
+																	/>
+																	<div className="min-w-0 grid gap-0.5">
+																		<span className="truncate">
+																			{
+																				preset.name
+																			}
+																		</span>
+																		{preset.description && (
+																			<span className="truncate text-xs text-muted">
+																				{
+																					preset.description
+																				}
+																			</span>
+																		)}
+																	</div>
+																</div>
+																<span className="shrink-0 text-xs text-muted">
+																	{t(
+																		formatLabelKey(
+																			preset.format,
+																		),
+																	)}
+																</span>
+															</div>
+															<ListBox.ItemIndicator />
+														</ListBox.Item>
+													),
+												)}
+											</ListBox>
+											{filteredPresets.length === 0 && (
+												<p className="px-3 py-2 text-sm text-muted">
+													{t(
+														"noProviderPresetsMatch",
+													)}
+												</p>
+											)}
+										</>
+									)}
+								</Select.Popover>
+							</Select>
+						</Card.Content>
+					</Card>
+				)}
+
+				<Card>
+					<Card.Header>
+						<div>
+							<Card.Title>
+								{mode === "create"
+									? t("createInferenceProvider")
+									: t("editInferenceProvider")}
+							</Card.Title>
+						</div>
+					</Card.Header>
+					<Card.Content>
+						<Form
+							validationBehavior="aria"
+							onSubmit={handleSubmit(onSubmit)}
+						>
+							<Fieldset>
+								<Fieldset.Group>
+									<Controller
+										name="displayName"
+										control={control}
+										rules={{
+											required: t(
+												"validationProviderNameRequired",
+											),
+											validate: (value) =>
+												value.trim()
+													? true
+													: t(
+															"validationProviderNameRequired",
+														),
+										}}
+										render={({ field, fieldState }) => (
+											<TextField
+												className="w-full"
+												variant="secondary"
+												isRequired
+												validationBehavior="aria"
+												isInvalid={Boolean(
+													fieldState.error,
+												)}
+											>
+												<Label>
+													<span className="inline-flex items-center gap-1">
+														{t(
+															"providerDisplayName",
+														)}
+														<Tooltip delay={0}>
+															<Tooltip.Trigger>
+																<span
+																	tabIndex={0}
+																	aria-label={t(
+																		"providerDisplayNameHelp",
+																	)}
+																	className="relative top-0.5 inline-flex size-4 items-center justify-center text-muted"
+																>
+																	<QuestionMarkCircleIcon className="size-4" />
+																</span>
+															</Tooltip.Trigger>
+															<Tooltip.Content className="max-w-72">
+																{t(
+																	"providerDisplayNameHelp",
+																)}
+															</Tooltip.Content>
+														</Tooltip>
+													</span>
+												</Label>
+												<Input
+													value={field.value}
+													onChange={(event) =>
+														handleNameChange(
+															event.target.value,
+															field.onChange,
+														)
+													}
+													onBlur={field.onBlur}
+													placeholder={t(
+														"providerNamePlaceholder",
+													)}
+													variant="secondary"
+												/>
+												{fieldState.error && (
+													<FieldError>
+														{
+															fieldState.error
+																.message
+														}
+													</FieldError>
+												)}
+											</TextField>
+										)}
+									/>
+
+									{mode === "create" && (
+										<Controller
+											name="latinName"
+											control={control}
+											rules={{
+												required: t(
+													"validationProviderLatinNameRequired",
+												),
+												validate: (value) =>
+													LATIN_NAME_REGEX.test(
+														value.trim(),
+													)
+														? true
+														: t(
+																"validationProviderLatinNameInvalid",
+															),
+											}}
+											render={({ field, fieldState }) => (
+												<TextField
+													className="w-full"
+													variant="secondary"
+													isRequired
+													validationBehavior="aria"
+													isInvalid={Boolean(
+														fieldState.error,
+													)}
+												>
+													<Label>
+														<span className="inline-flex items-center gap-1">
+															{t(
+																"providerLatinName",
+															)}
+															<Tooltip delay={0}>
+																<Tooltip.Trigger>
+																	<span
+																		tabIndex={
+																			0
+																		}
+																		aria-label={t(
+																			"providerLatinNameHelp",
+																		)}
+																		className="relative top-0.5 inline-flex size-4 items-center justify-center text-muted"
+																	>
+																		<QuestionMarkCircleIcon className="size-4" />
+																	</span>
+																</Tooltip.Trigger>
+																<Tooltip.Content className="max-w-72">
+																	{t(
+																		"providerLatinNameHelp",
+																	)}
+																</Tooltip.Content>
+															</Tooltip>
+														</span>
+													</Label>
+													<Input
+														value={field.value}
+														onChange={(event) =>
+															handleLatinNameChange(
+																event.target
+																	.value,
+																field.onChange,
+															)
+														}
+														onBlur={field.onBlur}
+														placeholder={t(
+															"providerLatinNamePlaceholder",
+														)}
+														variant="secondary"
+													/>
+													{fieldState.error && (
+														<FieldError>
+															{
+																fieldState.error
+																	.message
+															}
+														</FieldError>
+													)}
+												</TextField>
+											)}
+										/>
+									)}
+
+									<Controller
+										name="apiBaseUrl"
+										control={control}
+										rules={{
+											required: t(
+												"validationProviderApiBaseUrlRequired",
+											),
+											validate: (value) =>
+												value.trim()
+													? true
+													: t(
+															"validationProviderApiBaseUrlRequired",
+														),
+										}}
+										render={({ field, fieldState }) => (
+											<TextField
+												className="w-full"
+												variant="secondary"
+												isRequired
+												validationBehavior="aria"
+												isInvalid={Boolean(
+													fieldState.error,
+												)}
+											>
+												<Label>
+													<span className="inline-flex items-center gap-1">
+														{t(
+															"providerApiBaseUrl",
+														)}
+														<Tooltip delay={0}>
+															<Tooltip.Trigger>
+																<span
+																	tabIndex={0}
+																	aria-label={t(
+																		"providerApiBaseUrlHelp",
+																	)}
+																	className="relative top-0.5 inline-flex size-4 items-center justify-center text-muted"
+																>
+																	<QuestionMarkCircleIcon className="size-4" />
+																</span>
+															</Tooltip.Trigger>
+															<Tooltip.Content className="max-w-72">
+																{t(
+																	"providerApiBaseUrlHelp",
+																)}
+															</Tooltip.Content>
+														</Tooltip>
+													</span>
+												</Label>
+												<Input
 													value={field.value}
 													onChange={(event) =>
 														field.onChange(
@@ -1254,97 +1483,315 @@ function ProviderForm({
 														)
 													}
 													onBlur={field.onBlur}
-													placeholder={
-														mode === "create"
-															? t(
-																	"providerApiKeyPlaceholder",
-																)
-															: t(
-																	"providerApiKeyEditPlaceholder",
-																)
-													}
+													placeholder={t(
+														"providerApiBaseUrlPlaceholder",
+													)}
+													variant="secondary"
 												/>
-												<InputGroup.Suffix className="pr-0">
-													<Button
-														isIconOnly
-														aria-label={
-															showApiKey
-																? "Hide"
-																: "Show"
+												{fieldState.error && (
+													<FieldError>
+														{
+															fieldState.error
+																.message
 														}
-														size="sm"
-														variant="ghost"
-														onPress={() =>
-															setShowApiKey(
-																(v) => !v,
-															)
-														}
-													>
-														{showApiKey ? (
-															<EyeSlashIcon className="size-4" />
-														) : (
-															<EyeIcon className="size-4" />
-														)}
-													</Button>
-												</InputGroup.Suffix>
-											</InputGroup>
-											{fieldState.error && (
-												<FieldError>
-													{fieldState.error.message}
-												</FieldError>
-											)}
-										</TextField>
-									)}
-								/>
+													</FieldError>
+												)}
+											</TextField>
+										)}
+									/>
 
-								<Controller
-									name="models"
-									control={control}
-									rules={{
-										validate: (value) =>
-											validateModelNames(
-												value,
-												t(
-													"validationProviderModelNameUnique",
-												),
-											),
-									}}
-									render={({ field, fieldState }) => (
-										<ProviderModelsEditor
-											value={field.value}
-											onChange={field.onChange}
-											onBlur={field.onBlur}
-											errorMessage={
-												fieldState.error?.message
-											}
-											onFetchModels={handleFetchModels}
-											canFetchModels={canFetchModels}
-											fetchModelsDisabledReason={
-												fetchModelsDisabledReason
-											}
+									{mode === "create" && (
+										<Controller
+											name="format"
+											control={control}
+											render={({ field }) => (
+												<Select
+													className="w-full"
+													selectedKey={field.value}
+													onSelectionChange={(
+														key,
+													) => {
+														if (!key) return;
+														handleFormatChange(
+															key as InferenceProviderFormatDto,
+															field.value,
+															field.onChange,
+														);
+													}}
+													variant="secondary"
+												>
+													<Label>
+														{t("providerFormat")}
+													</Label>
+													<Select.Trigger>
+														<Select.Value />
+														<Select.Indicator />
+													</Select.Trigger>
+													<Select.Popover>
+														<ListBox>
+															{FORMAT_OPTIONS.map(
+																(option) => (
+																	<ListBox.Item
+																		key={
+																			option.id
+																		}
+																		id={
+																			option.id
+																		}
+																		textValue={t(
+																			option.labelKey,
+																		)}
+																	>
+																		<div className="grid gap-0.5">
+																			<Label>
+																				{t(
+																					option.labelKey,
+																				)}
+																			</Label>
+																			<span className="text-xs text-muted">
+																				{t(
+																					option.descriptionKey,
+																				)}
+																			</span>
+																		</div>
+																	</ListBox.Item>
+																),
+															)}
+														</ListBox>
+													</Select.Popover>
+												</Select>
+											)}
 										/>
 									)}
-								/>
-							</Fieldset.Group>
-						</Fieldset>
 
-						<div className="mt-4 flex justify-end gap-2">
+									<Controller
+										name="apiKey"
+										control={control}
+										rules={{
+											validate: (value) => {
+												if (mode === "edit")
+													return true;
+												return value.trim()
+													? true
+													: t(
+															"validationProviderApiKeyRequired",
+														);
+											},
+										}}
+										render={({ field, fieldState }) => (
+											<TextField
+												className="w-full"
+												variant="secondary"
+												isRequired={mode === "create"}
+												validationBehavior="aria"
+												isInvalid={Boolean(
+													fieldState.error,
+												)}
+											>
+												<div className="flex items-center justify-between gap-2">
+													<Label>
+														{t("providerApiKey")}
+													</Label>
+													{selectedPreset?.homepage && (
+														<button
+															type="button"
+															className="text-xs text-accent hover:underline focus:underline focus:outline-none"
+															onClick={() => {
+																if (
+																	selectedPreset?.homepage
+																) {
+																	openUrl(
+																		selectedPreset.homepage,
+																	);
+																}
+															}}
+														>
+															{t(
+																"providerGetApiKey",
+															)}
+														</button>
+													)}
+												</div>
+												<InputGroup variant="secondary">
+													<InputGroup.Input
+														type={
+															showApiKey
+																? "text"
+																: "password"
+														}
+														value={field.value}
+														onChange={(event) =>
+															field.onChange(
+																event.target
+																	.value,
+															)
+														}
+														onBlur={field.onBlur}
+														placeholder={
+															mode === "create"
+																? t(
+																		"providerApiKeyPlaceholder",
+																	)
+																: t(
+																		"providerApiKeyEditPlaceholder",
+																	)
+														}
+													/>
+													<InputGroup.Suffix className="pr-0">
+														<Button
+															isIconOnly
+															aria-label={
+																showApiKey
+																	? "Hide"
+																	: "Show"
+															}
+															size="sm"
+															variant="ghost"
+															onPress={() =>
+																setShowApiKey(
+																	(v) => !v,
+																)
+															}
+														>
+															{showApiKey ? (
+																<EyeSlashIcon className="size-4" />
+															) : (
+																<EyeIcon className="size-4" />
+															)}
+														</Button>
+													</InputGroup.Suffix>
+												</InputGroup>
+												{fieldState.error && (
+													<FieldError>
+														{
+															fieldState.error
+																.message
+														}
+													</FieldError>
+												)}
+											</TextField>
+										)}
+									/>
+
+									<Controller
+										name="models"
+										control={control}
+										rules={{
+											validate: {
+												required: (value) =>
+													validateRequiredModelNames(
+														value,
+														t(
+															"validationProviderModelsRequired",
+														),
+													),
+												unique: (value) =>
+													validateModelNames(
+														value,
+														t(
+															"validationProviderModelNameUnique",
+														),
+													),
+											},
+										}}
+										render={({ field, fieldState }) => (
+											<ProviderModelsEditor
+												value={field.value}
+												onChange={field.onChange}
+												onBlur={field.onBlur}
+												errorMessage={
+													fieldState.error?.message
+												}
+												onFetchModels={
+													handleFetchModels
+												}
+												canFetchModels={canFetchModels}
+												fetchModelsDisabledReason={
+													fetchModelsDisabledReason
+												}
+											/>
+										)}
+									/>
+								</Fieldset.Group>
+							</Fieldset>
+
+							<div className="mt-4 flex justify-end gap-2">
+								<Button
+									type="button"
+									variant="tertiary"
+									onPress={onCancel}
+									isDisabled={isPending}
+								>
+									{t("cancel")}
+								</Button>
+								<Button type="submit" isPending={isPending}>
+									{mode === "create"
+										? t("create")
+										: t("save")}
+								</Button>
+							</div>
+						</Form>
+					</Card.Content>
+				</Card>
+			</div>
+
+			<AlertDialog.Backdrop
+				isOpen={isSyncPromptOpen}
+				onOpenChange={(open) => {
+					if (isPending) return;
+					setIsSyncPromptOpen(open);
+					if (!open) setPendingEditValues(null);
+				}}
+			>
+				<AlertDialog.Container>
+					<AlertDialog.Dialog className="sm:max-w-[460px]">
+						<AlertDialog.CloseTrigger />
+						<AlertDialog.Header>
+							<AlertDialog.Heading>
+								{t("confirmInferenceProviderAgentSyncTitle")}
+							</AlertDialog.Heading>
+						</AlertDialog.Header>
+						<AlertDialog.Body>
+							<div className="grid gap-2 text-sm text-muted">
+								<p>
+									{t("confirmInferenceProviderAgentSyncBody")}
+								</p>
+								<p>
+									{t(
+										"confirmInferenceProviderAgentSyncManualHint",
+									)}
+								</p>
+							</div>
+						</AlertDialog.Body>
+						<AlertDialog.Footer>
 							<Button
-								type="button"
 								variant="tertiary"
-								onPress={onCancel}
 								isDisabled={isPending}
+								onPress={() => {
+									setIsSyncPromptOpen(false);
+									setPendingEditValues(null);
+								}}
 							>
 								{t("cancel")}
 							</Button>
-							<Button type="submit" isPending={isPending}>
-								{mode === "create" ? t("create") : t("save")}
+							<Button
+								variant="secondary"
+								isDisabled={isPending}
+								onPress={() => handleConfirmEditSave(false)}
+							>
+								{t("saveWithoutAgentSync")}
 							</Button>
-						</div>
-					</Form>
-				</Card.Content>
-			</Card>
-		</div>
+							<Button
+								isPending={isPending}
+								onPress={() => handleConfirmEditSave(true)}
+							>
+								{t("saveAndSyncAgentProviders")}
+							</Button>
+						</AlertDialog.Footer>
+					</AlertDialog.Dialog>
+				</AlertDialog.Container>
+			</AlertDialog.Backdrop>
+		</>
 	);
 }
 
@@ -1405,7 +1852,7 @@ function ProviderDetail({
 			setRevealedKey(null);
 			return;
 		}
-		passwordMutation.mutate(provider.name);
+		passwordMutation.mutate(provider.latin_name);
 	};
 
 	const handleCopyKey = async () => {
@@ -1413,7 +1860,7 @@ function ProviderDetail({
 		try {
 			const password = revealedKey
 				? { api_key: revealedKey }
-				: await api.inferenceProviders.getPassword(provider.name);
+				: await api.inferenceProviders.getPassword(provider.latin_name);
 			await writeText(password.api_key);
 			toast.success(t("providerApiKeyCopied"));
 		} catch (error) {
@@ -1501,6 +1948,15 @@ function ProviderDetail({
 						</Card.Header>
 
 						<Card.Content className="flex flex-col gap-4">
+							<div className="grid gap-1.5 py-1">
+								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+									{t("providerFormat")}
+								</h3>
+								<MonoValue>
+									{t(formatLabelKey(provider.format))}
+								</MonoValue>
+							</div>
+
 							<div className="grid gap-1.5 py-1">
 								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
 									{t("providerApiBaseUrl")}
@@ -1611,7 +2067,7 @@ function ProviderDetail({
 								variant="danger"
 								isPending={deleteMutation.isPending}
 								onPress={() =>
-									deleteMutation.mutate(provider.name)
+									deleteMutation.mutate(provider.latin_name)
 								}
 							>
 								{t("delete")}
@@ -1629,7 +2085,9 @@ export default function InferenceProvidersPage() {
 	const api = useApi();
 	const { availableAgents } = useAgentAvailability();
 	const [searchQuery, setSearchQuery] = useState("");
-	const [selectedName, setSelectedName] = useState<string | null>(null);
+	const [selectedLatinName, setSelectedLatinName] = useState<string | null>(
+		null,
+	);
 	const [panel, setPanel] = useState<PanelMode>({ type: "detail" });
 
 	const {
@@ -1690,7 +2148,7 @@ export default function InferenceProvidersPage() {
 				keys: [
 					{ name: "display_name", weight: 2 },
 					{ name: "models", weight: 2 },
-					{ name: "name", weight: 1 },
+					{ name: "latin_name", weight: 1 },
 					{ name: "api_base_url", weight: 1 },
 					{ name: "format", weight: 1 },
 				],
@@ -1708,14 +2166,14 @@ export default function InferenceProvidersPage() {
 	}, [providerFuse, providers, searchQuery]);
 
 	const activeProvider = useMemo(() => {
-		if (selectedName) {
+		if (selectedLatinName) {
 			const selected = providers.find(
-				(provider) => provider.name === selectedName,
+				(provider) => provider.latin_name === selectedLatinName,
 			);
 			if (selected) return selected;
 		}
 		return providers[0] ?? null;
-	}, [providers, selectedName]);
+	}, [providers, selectedLatinName]);
 
 	const hasCodingAgent = (agentId: CodingAgentId) =>
 		codingAgents.some((agent) => agent.id === agentId);
@@ -1735,29 +2193,31 @@ export default function InferenceProvidersPage() {
 	const selectedProviderKeys = useMemo(() => {
 		return activeProvider &&
 			(resolvedPanel.type === "detail" || resolvedPanel.type === "edit")
-			? new Set([activeProvider.name])
+			? new Set([activeProvider.latin_name])
 			: new Set<string>();
 	}, [activeProvider, resolvedPanel.type]);
 
 	const handleCreatedOrUpdated = (provider: InferenceProviderResponse) => {
-		setSelectedName(provider.name);
+		setSelectedLatinName(provider.latin_name);
 		setPanel({ type: "detail" });
 	};
 
 	const handleAgentClick = (agentId: CodingAgentId) => {
 		if (!hasCodingAgent(agentId)) return;
-		setSelectedName(null);
+		setSelectedLatinName(null);
 		setPanel({ type: "agent", agentId });
 	};
 
-	const handleProviderClick = (providerName: string) => {
-		setSelectedName(providerName);
+	const handleProviderClick = (latinName: string) => {
+		setSelectedLatinName(latinName);
 		setPanel({ type: "detail" });
 	};
 
-	const handleEditProviderByName = (name: string) => {
-		const provider = providers.find((provider) => provider.name === name);
-		setSelectedName(name);
+	const handleEditProviderByName = (latinName: string) => {
+		const provider = providers.find(
+			(provider) => provider.latin_name === latinName,
+		);
+		setSelectedLatinName(latinName);
 		setPanel(provider ? { type: "edit", provider } : { type: "detail" });
 	};
 
@@ -1786,7 +2246,7 @@ export default function InferenceProvidersPage() {
 								size="sm"
 								aria-label={t("createInferenceProvider")}
 								onPress={() => {
-									setSelectedName(null);
+									setSelectedLatinName(null);
 									setPanel({ type: "create" });
 								}}
 							>
@@ -1892,17 +2352,17 @@ export default function InferenceProvidersPage() {
 							selectedKeys={selectedProviderKeys}
 							onSelectionChange={(keys) => {
 								if (keys === "all") return;
-								const providerName = [...keys][0];
-								if (!providerName) return;
-								handleProviderClick(String(providerName));
+								const latinName = [...keys][0];
+								if (!latinName) return;
+								handleProviderClick(String(latinName));
 							}}
 							className="p-2"
 						>
 							{filteredProviders.map((provider) => (
 								<ListBox.Item
-									key={provider.name}
-									id={provider.name}
-									textValue={`${provider.display_name} ${provider.name}`}
+									key={provider.latin_name}
+									id={provider.latin_name}
+									textValue={`${provider.display_name} ${provider.latin_name}`}
 									className="data-selected:bg-surface"
 								>
 									<div className="flex min-w-0 items-center gap-2">
@@ -1956,7 +2416,7 @@ export default function InferenceProvidersPage() {
 
 				{resolvedPanel.type === "edit" && (
 					<ProviderForm
-						key={resolvedPanel.provider.name}
+						key={resolvedPanel.provider.latin_name}
 						mode="edit"
 						provider={resolvedPanel.provider}
 						presets={presets}
@@ -1968,7 +2428,7 @@ export default function InferenceProvidersPage() {
 
 				{resolvedPanel.type === "detail" && activeProvider && (
 					<ProviderDetail
-						key={activeProvider.name}
+						key={activeProvider.latin_name}
 						provider={activeProvider}
 						onEdit={() =>
 							setPanel({
@@ -1977,7 +2437,7 @@ export default function InferenceProvidersPage() {
 							})
 						}
 						onDeleted={() => {
-							setSelectedName(null);
+							setSelectedLatinName(null);
 							setPanel({ type: "detail" });
 						}}
 					/>

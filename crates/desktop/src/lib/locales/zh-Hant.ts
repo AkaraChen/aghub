@@ -182,8 +182,7 @@ export default {
 	codexCurrentRoute: "目前路由",
 	codexActiveProvider: "目前",
 	codexLoginProvider: "Codex 登入",
-	codexLoginProviderInfo:
-		"使用 Codex 自己的 OpenAI 登入憑據，不在 config.toml 寫入 base URL 或 API key。",
+	codexLoginProviderInfo: "使用 Codex 自己的 OpenAI 登入憑據",
 	codexConfigProvider: "設定檔 provider",
 	codexConfigProviderInfo:
 		"這個 provider 來自 Codex config.toml，暫未匹配到 Aghub 推理 Provider。",
@@ -233,6 +232,7 @@ export default {
 	agentProviderCredentialAgentStore: "Agent 儲存",
 	agentProviderCredentialInline: "內嵌 key",
 	agentProviderCredentialNone: "無憑證",
+	agentProviderModelCount: "{{count}} 個模型",
 	searchInferenceProviderResources: "搜尋 Agent 或 Provider...",
 	searchInferenceProviders: "搜尋 Provider...",
 	refreshInferenceProviders: "重新整理 Provider",
@@ -259,9 +259,18 @@ export default {
 	noInferenceProviders: "尚無推理 Provider。",
 	noInferenceProvidersMatch: "沒有符合的 Provider",
 	providerName: "名稱",
+	providerDisplayName: "Display Name",
+	providerDisplayNameHelp:
+		"这里只在 aghub 裡顯示。可以安全填寫任何可讀名稱，包括空格、符號或非英文字元。",
 	providerNamePlaceholder: "例如：OpenAI",
+	providerLatinName: "Provider ID",
+	providerLatinNameHelp:
+		"會作為 provider key 寫入各個 agent 的設定檔。只能使用小寫 a-z，確保所有支援的 agent 都能安全讀取。",
+	providerLatinNamePlaceholder: "例如：openai",
 	providerFormat: "格式",
 	providerApiBaseUrl: "API Base URL",
+	providerApiBaseUrlHelp:
+		"對於 OpenAI Responses 和 OpenAI-compatible Provider，像 https://api.example.com 這樣的裸網域寫入 OpenCode 時會變成 https://api.example.com/v1；已經包含路徑的 URL 會保持原樣。",
 	providerApiBaseUrlPlaceholder: "https://api.openai.com/v1",
 	providerApiKey: "API Key",
 	providerApiKeyPlaceholder: "sk-...",
@@ -306,14 +315,28 @@ export default {
 	hideProviderApiKey: "隱藏 API key",
 	inferenceProviderCreated: "Provider 已建立",
 	inferenceProviderUpdated: "Provider 已更新",
+	inferenceProviderUpdatedAndAgentSynced:
+		"Provider 已更新，並已同步 {{count}} 個 Agent 設定",
+	inferenceProviderAgentSyncPartialError:
+		"Provider 已更新，但 {{count}} / {{total}} 個 Agent 設定同步失敗。",
+	confirmInferenceProviderAgentSyncTitle: "是否更新 Agent 設定？",
+	confirmInferenceProviderAgentSyncBody:
+		"儲存此 Provider 只會更新 aghub 的清單。各個 Agent 裡既有的 Provider 設定不會自動更新。",
+	confirmInferenceProviderAgentSyncManualHint:
+		"你可以現在自動掃描並更新，也可以略過，之後進入對應 Agent 設定裡手動點擊更新。",
+	saveWithoutAgentSync: "僅儲存",
+	saveAndSyncAgentProviders: "儲存並更新 Agent",
 	inferenceProviderDuplicateError:
 		"已存在名為「{{name}}」的 Provider。請改用其他名稱，或直接編輯既有項目。",
 	inferenceProviderDeleted: "Provider 已刪除",
 	deleteInferenceProviderError: "刪除 Provider 失敗",
 	inferenceProviderPasswordLoadFailed: "讀取 API key 失敗",
 	validationProviderNameRequired: "請輸入 Provider 名稱。",
+	validationProviderLatinNameRequired: "請輸入 Provider ID。",
+	validationProviderLatinNameInvalid: "Provider ID 只能包含小寫 a-z。",
 	validationProviderApiBaseUrlRequired: "請輸入 API base URL。",
 	validationProviderApiKeyRequired: "請輸入 API key。",
+	validationProviderModelsRequired: "請至少選擇一個模型。",
 	validationProviderModelNameUnique: "模型名稱不能重複。",
 	inferenceFormatAnthropic: "Anthropic",
 	inferenceFormatAnthropicDescription: "Anthropic Messages API",
