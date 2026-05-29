@@ -804,7 +804,7 @@ function ProviderForm({
 	const presetFuse = useMemo(
 		() =>
 			new Fuse(presets, {
-				keys: ["name", "description", "api_base_url", "models"],
+				keys: ["name"],
 				threshold: 0.3,
 				ignoreLocation: true,
 			}),
