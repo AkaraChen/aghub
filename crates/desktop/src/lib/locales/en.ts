@@ -341,8 +341,6 @@ export default {
 		"You can sync them now, or skip this and update them later from each agent's settings.",
 	saveWithoutAgentSync: "Save only",
 	saveAndSyncAgentProviders: "Save and update agents",
-	inferenceProviderDuplicateError:
-		"A provider named “{{name}}” is already configured. Please choose a different name or edit the existing entry.",
 	inferenceProviderDeleted: "Provider deleted",
 	deleteInferenceProviderError: "Failed to delete provider",
 	inferenceProviderPasswordLoadFailed: "Failed to load API key",
@@ -350,6 +348,8 @@ export default {
 	validationProviderLatinNameRequired: "Enter a provider ID.",
 	validationProviderLatinNameInvalid:
 		"Provider ID must contain only lowercase a-z.",
+	validationProviderLatinNameDuplicate:
+		"Provider ID “{{providerId}}” is already used by an existing provider. Change the ID so it identifies the source, for example “{{exampleId}}”, or delete the existing “{{providerId}}” provider before saving.",
 	validationProviderApiBaseUrlRequired: "Enter an API base URL.",
 	validationProviderApiKeyRequired: "Enter an API key.",
 	validationProviderModelsRequired: "Select at least one model.",

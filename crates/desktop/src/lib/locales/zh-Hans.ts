@@ -328,14 +328,14 @@ export default {
 		"你可以现在自动扫描并更新，也可以跳过，之后进入对应 Agent 设置里手动点击更新。",
 	saveWithoutAgentSync: "仅保存",
 	saveAndSyncAgentProviders: "保存并更新 Agent",
-	inferenceProviderDuplicateError:
-		"已存在名为 “{{name}}” 的 Provider。请使用其他名称，或直接编辑已有条目。",
 	inferenceProviderDeleted: "Provider 已删除",
 	deleteInferenceProviderError: "删除 Provider 失败",
 	inferenceProviderPasswordLoadFailed: "读取 API key 失败",
 	validationProviderNameRequired: "请输入 Provider 名称。",
 	validationProviderLatinNameRequired: "请输入 Provider ID。",
 	validationProviderLatinNameInvalid: "Provider ID 只能包含小写 a-z。",
+	validationProviderLatinNameDuplicate:
+		"Provider ID “{{providerId}}” 已被现有 Provider 使用。请把 ID 改成能区分来源的值，例如 “{{exampleId}}”，或删除已有的 “{{providerId}}” Provider 后再保存。",
 	validationProviderApiBaseUrlRequired: "请输入 API base URL。",
 	validationProviderApiKeyRequired: "请输入 API key。",
 	validationProviderModelsRequired: "请至少选择一个模型。",

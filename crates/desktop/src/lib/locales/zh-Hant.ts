@@ -327,14 +327,14 @@ export default {
 		"你可以現在自動掃描並更新，也可以略過，之後進入對應 Agent 設定裡手動點擊更新。",
 	saveWithoutAgentSync: "僅儲存",
 	saveAndSyncAgentProviders: "儲存並更新 Agent",
-	inferenceProviderDuplicateError:
-		"已存在名為「{{name}}」的 Provider。請改用其他名稱，或直接編輯既有項目。",
 	inferenceProviderDeleted: "Provider 已刪除",
 	deleteInferenceProviderError: "刪除 Provider 失敗",
 	inferenceProviderPasswordLoadFailed: "讀取 API key 失敗",
 	validationProviderNameRequired: "請輸入 Provider 名稱。",
 	validationProviderLatinNameRequired: "請輸入 Provider ID。",
 	validationProviderLatinNameInvalid: "Provider ID 只能包含小寫 a-z。",
+	validationProviderLatinNameDuplicate:
+		"Provider ID「{{providerId}}」已被既有 Provider 使用。請把 ID 改成能區分來源的值，例如「{{exampleId}}」，或刪除既有的「{{providerId}}」Provider 後再儲存。",
 	validationProviderApiBaseUrlRequired: "請輸入 API base URL。",
 	validationProviderApiKeyRequired: "請輸入 API key。",
 	validationProviderModelsRequired: "請至少選擇一個模型。",

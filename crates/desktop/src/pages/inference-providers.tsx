@@ -113,7 +113,7 @@ function formatLabelKey(format: InferenceProviderFormatDto) {
 	);
 }
 
-const PROVIDER_EXISTS_REGEX = /provider already exists:\s*(.+)/i;
+const PROVIDER_ID_EXISTS_REGEX = /provider already exists:\s*(.+)/i;
 const LATIN_NAME_REGEX = /^[a-z]+$/;
 
 function makeLatinNameSuggestion(value: string) {
@@ -121,6 +121,10 @@ function makeLatinNameSuggestion(value: string) {
 		.join("")
 		.toLowerCase()
 		.replace(/[^a-z]/g, "");
+}
+
+function makeProviderIdConflictExample(providerId: string) {
+	return `${providerId}custom`;
 }
 
 const CODING_AGENT_OPTIONS: CodingAgentOption[] = [
@@ -755,6 +759,7 @@ function ProviderModelsEditor({
 function ProviderForm({
 	mode,
 	provider,
+	providers,
 	presets,
 	isPresetsLoading,
 	onCancel,
@@ -762,6 +767,7 @@ function ProviderForm({
 }: {
 	mode: "create" | "edit";
 	provider?: InferenceProviderResponse;
+	providers: InferenceProviderResponse[];
 	presets: InferenceProviderPresetResponse[];
 	isPresetsLoading: boolean;
 	onCancel: () => void;
@@ -773,6 +779,7 @@ function ProviderForm({
 	const {
 		control,
 		handleSubmit,
+		setError,
 		setValue,
 		formState: { isSubmitting },
 	} = useForm<InferenceProviderFormValues>({
@@ -801,6 +808,10 @@ function ProviderForm({
 		() => presets.find((preset) => preset.id === selectedPresetId) ?? null,
 		[presets, selectedPresetId],
 	);
+	const existingProviderIds = useMemo(
+		() => new Set(providers.map((item) => item.latin_name)),
+		[providers],
+	);
 	const presetFuse = useMemo(
 		() =>
 			new Fuse(presets, {
@@ -815,6 +826,12 @@ function ProviderForm({
 		if (!query) return presets;
 		return presetFuse.search(query).map((result) => result.item);
 	}, [presetFuse, presetSearchQuery, presets]);
+
+	const formatDuplicateProviderIdError = (providerId: string) =>
+		t("validationProviderLatinNameDuplicate", {
+			providerId,
+			exampleId: makeProviderIdConflictExample(providerId),
+		});
 
 	const handleApplyPreset = (preset: InferenceProviderPresetResponse) => {
 		setValue("displayName", preset.name, { shouldDirty: true });
@@ -1027,6 +1044,22 @@ function ProviderForm({
 			}
 			onSuccess(updated);
 		} catch (error) {
+			const message =
+				error instanceof Error ? error.message : String(error);
+			const duplicateProviderId = message
+				.match(PROVIDER_ID_EXISTS_REGEX)?.[1]
+				?.trim();
+			if (duplicateProviderId && mode === "create") {
+				setError(
+					"latinName",
+					{
+						type: "server",
+						message:
+							formatDuplicateProviderIdError(duplicateProviderId),
+					},
+					{ shouldFocus: true },
+				);
+			}
 			console.error("Failed to save inference provider:", error);
 		} finally {
 			setIsSavingProvider(false);
@@ -1055,17 +1088,20 @@ function ProviderForm({
 			: activeError
 				? String(activeError)
 				: "";
-	const duplicateMatch = rawErrorMessage.match(PROVIDER_EXISTS_REGEX);
-	const friendlyErrorMessage = duplicateMatch
-		? t("inferenceProviderDuplicateError", {
-				name: duplicateMatch[1].trim(),
-			})
+	const duplicateProviderId = rawErrorMessage
+		.match(PROVIDER_ID_EXISTS_REGEX)?.[1]
+		?.trim();
+	const friendlyErrorMessage = duplicateProviderId
+		? formatDuplicateProviderIdError(duplicateProviderId)
 		: rawErrorMessage;
+	const showActiveError = Boolean(
+		activeError && !(mode === "create" && duplicateProviderId),
+	);
 
 	return (
 		<>
 			<div className="h-full overflow-y-auto p-4 sm:p-6">
-				{activeError && (
+				{showActiveError && (
 					<Alert className="mb-4" status="danger">
 						<Alert.Indicator />
 						<Alert.Content>
@@ -1352,14 +1388,34 @@ function ProviderForm({
 												required: t(
 													"validationProviderLatinNameRequired",
 												),
-												validate: (value) =>
-													LATIN_NAME_REGEX.test(
-														value.trim(),
-													)
-														? true
-														: t(
-																"validationProviderLatinNameInvalid",
-															),
+												validate: (value) => {
+													const providerId =
+														value.trim();
+													if (!providerId) {
+														return t(
+															"validationProviderLatinNameRequired",
+														);
+													}
+													if (
+														!LATIN_NAME_REGEX.test(
+															providerId,
+														)
+													) {
+														return t(
+															"validationProviderLatinNameInvalid",
+														);
+													}
+													if (
+														existingProviderIds.has(
+															providerId,
+														)
+													) {
+														return formatDuplicateProviderIdError(
+															providerId,
+														);
+													}
+													return true;
+												},
 											}}
 											render={({ field, fieldState }) => (
 												<TextField
@@ -2407,6 +2463,7 @@ export default function InferenceProvidersPage() {
 				{resolvedPanel.type === "create" && (
 					<ProviderForm
 						mode="create"
+						providers={providers}
 						presets={presets}
 						isPresetsLoading={isPresetsLoading}
 						onCancel={() => setPanel({ type: "detail" })}
@@ -2419,6 +2476,7 @@ export default function InferenceProvidersPage() {
 						key={resolvedPanel.provider.latin_name}
 						mode="edit"
 						provider={resolvedPanel.provider}
+						providers={providers}
 						presets={presets}
 						isPresetsLoading={isPresetsLoading}
 						onCancel={() => setPanel({ type: "detail" })}
