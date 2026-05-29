@@ -290,7 +290,6 @@ function ClaudeProviderRow({
 	const { t } = useTranslation();
 	const matchedProvider = provider.matched_inference_provider;
 	const label = matchedProvider?.display_name ?? provider.name;
-	const model = provider.models[0]?.id ?? null;
 
 	return (
 		<div className="grid gap-3 border-t border-border py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
@@ -305,20 +304,12 @@ function ClaudeProviderRow({
 						</span>
 					)}
 				</div>
-				<div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
-					<span>
-						{matchedProvider
-							? `${t("providerModels")}: ${
-									matchedProvider.model_count
-								}`
-							: t("claudeConfigProvider")}
-					</span>
+				<div className="flex min-w-0 text-xs text-muted">
 					{provider.api_base_url && (
 						<span className="truncate">
 							{provider.api_base_url}
 						</span>
 					)}
-					{model && <span>{model}</span>}
 				</div>
 			</div>
 
