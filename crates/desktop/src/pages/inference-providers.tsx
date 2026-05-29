@@ -115,6 +115,21 @@ function formatLabelKey(format: InferenceProviderFormatDto) {
 
 const PROVIDER_ID_EXISTS_REGEX = /provider already exists:\s*(.+)/i;
 const LATIN_NAME_REGEX = /^[a-z]+$/;
+const SVG_FILE_EXTENSION_REGEX = /\.svg$/;
+const VENDORED_PROVIDER_LOGOS = import.meta.glob(
+	"../assets/inference-provider/*.svg",
+	{
+		eager: true,
+		import: "default",
+		query: "?url",
+	},
+) as Record<string, string>;
+const VENDORED_PROVIDER_LOGO_URL_BY_ID = new Map(
+	Object.entries(VENDORED_PROVIDER_LOGOS).map(([path, url]) => {
+		const fileName = path.slice(path.lastIndexOf("/") + 1);
+		return [fileName.replace(SVG_FILE_EXTENSION_REGEX, ""), url];
+	}),
+);
 
 function makeLatinNameSuggestion(value: string) {
 	return pinyin(value, { toneType: "none", type: "array" })
@@ -169,12 +184,21 @@ function toProviderModelFormValues(models: string[], selected = true) {
 	return models.map((model) => createProviderModelFormValue(model, selected));
 }
 
-function ProviderIcon({ format }: { format: InferenceProviderFormatDto }) {
+function ProviderFormatIcon({
+	format,
+	className,
+}: {
+	format: InferenceProviderFormatDto;
+	className?: string;
+}) {
 	const svg = format === "anthropic" ? anthropicLogo : openAiLogo;
 
 	return (
 		<span
-			className="size-4 shrink-0 text-foreground [&>svg]:size-full"
+			className={cn(
+				"size-4 shrink-0 text-foreground [&>svg]:size-full",
+				className,
+			)}
 			aria-hidden
 			// eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml
 			dangerouslySetInnerHTML={{ __html: svg }}
@@ -182,8 +206,25 @@ function ProviderIcon({ format }: { format: InferenceProviderFormatDto }) {
 	);
 }
 
-function PresetLogo({ logo }: { logo: string }) {
-	const logoUrl = `https://models.dev/logos/${encodeURIComponent(logo)}.svg`;
+function modelsDevLogoUrl(logo: string) {
+	return `https://models.dev/logos/${encodeURIComponent(logo)}.svg`;
+}
+
+function getPresetLogoUrl(logo: string) {
+	return VENDORED_PROVIDER_LOGO_URL_BY_ID.get(logo) ?? modelsDevLogoUrl(logo);
+}
+
+function ProviderIcon({
+	format,
+	logo,
+}: {
+	format: InferenceProviderFormatDto;
+	logo?: string | null;
+}) {
+	const logoUrl = logo ? getPresetLogoUrl(logo) : null;
+
+	if (!logoUrl) return <ProviderFormatIcon format={format} />;
+
 	return (
 		<Avatar
 			className="size-4 shrink-0 rounded-none bg-transparent"
@@ -194,6 +235,23 @@ function PresetLogo({ logo }: { logo: string }) {
 				className="size-4 rounded-none object-contain dark:invert"
 				loading="lazy"
 				src={logoUrl}
+			/>
+			<Avatar.Fallback className="size-4 rounded-none bg-transparent" />
+		</Avatar>
+	);
+}
+
+function PresetLogo({ logo }: { logo: string }) {
+	return (
+		<Avatar
+			className="size-4 shrink-0 rounded-none bg-transparent"
+			aria-hidden
+		>
+			<Avatar.Image
+				alt=""
+				className="size-4 rounded-none object-contain dark:invert"
+				loading="lazy"
+				src={getPresetLogoUrl(logo)}
 			/>
 			<Avatar.Fallback className="size-4 rounded-none bg-transparent" />
 		</Avatar>
@@ -1952,7 +2010,10 @@ function ProviderDetail({
 					<Card>
 						<Card.Header className="flex flex-row items-start justify-between gap-3">
 							<div className="flex min-w-0 items-center gap-3">
-								<ProviderIcon format={provider.format} />
+								<ProviderIcon
+									format={provider.format}
+									logo={provider.preset}
+								/>
 								<div className="min-w-0">
 									<h2 className="truncate text-xl font-semibold text-foreground">
 										{provider.display_name}
@@ -2424,6 +2485,7 @@ export default function InferenceProvidersPage() {
 									<div className="flex min-w-0 items-center gap-2">
 										<ProviderIcon
 											format={provider.format}
+											logo={provider.preset}
 										/>
 										<div className="min-w-0 flex-1">
 											<Label className="block truncate">
