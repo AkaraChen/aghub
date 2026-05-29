@@ -4,7 +4,6 @@ import {
 	FolderOpenIcon,
 	PlayIcon,
 	PlusIcon,
-	ServerIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import { homeDir, join } from "@tauri-apps/api/path";
@@ -43,6 +42,7 @@ import {
 	updateCodexProfileProviderMutationOptions,
 } from "../../requests/inference-providers";
 import { selectValidProviderId } from "./provider-selection";
+import { ProviderActiveBadge, ProviderRowShell } from "./provider-row";
 
 function CodexCreateProviderDialog({
 	isOpen,
@@ -228,24 +228,20 @@ function CodexOfficialRow({
 	const { t } = useTranslation();
 
 	return (
-		<div className="grid gap-3 border-t border-border py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-			<div className="grid min-w-0 gap-1">
-				<div className="flex min-w-0 items-center gap-2">
-					<ServerIcon className="size-4 shrink-0 text-muted" />
-					<Label className="truncate">OpenAI</Label>
-					{isActive && (
-						<span className="inline-flex items-center gap-1 rounded-md bg-accent/10 px-2 py-0.5 text-xs text-accent">
-							<CheckCircleIcon className="size-3.5" />
-							{t("active")}
-						</span>
-					)}
-				</div>
-				<span className="text-xs text-muted">
-					{t("codexLoginProviderInfo")}
-				</span>
-			</div>
-
-			<div className="flex items-center gap-1 sm:justify-end">
+		<ProviderRowShell
+			isActive={isActive}
+			title="OpenAI"
+			titleExtras={
+				isActive && (
+					<ProviderActiveBadge
+						icon={<CheckCircleIcon className="size-3.5" />}
+					>
+						{t("active")}
+					</ProviderActiveBadge>
+				)
+			}
+			description={t("codexLoginProviderInfo")}
+			actions={
 				<Tooltip delay={0}>
 					<Tooltip.Trigger>
 						<Button
@@ -270,8 +266,8 @@ function CodexOfficialRow({
 							: t("enable")}
 					</Tooltip.Content>
 				</Tooltip>
-			</div>
-		</div>
+			}
+		/>
 	);
 }
 
@@ -302,104 +298,102 @@ function CodexProviderRow({
 	const isExternal = provider.source === "external";
 
 	return (
-		<div className="grid gap-3 border-t border-border py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-			<div className="grid min-w-0 gap-1">
-				<div className="flex min-w-0 items-center gap-2">
-					<ServerIcon className="size-4 shrink-0 text-muted" />
-					<Label className="truncate">{label}</Label>
-					{isActive && (
-						<span className="inline-flex items-center gap-1 rounded-md bg-accent/10 px-2 py-0.5 text-xs text-accent">
-							<CheckCircleIcon className="size-3.5" />
-							{t("active")}
-						</span>
+		<ProviderRowShell
+			isActive={isActive}
+			title={label}
+			titleExtras={
+				isActive && (
+					<ProviderActiveBadge
+						icon={<CheckCircleIcon className="size-3.5" />}
+					>
+						{t("active")}
+					</ProviderActiveBadge>
+				)
+			}
+			description={
+				matchedProvider
+					? t("agentProviderModelCount", {
+							count: matchedProvider.model_count,
+						})
+					: t("codexConfigProvider")
+			}
+			actions={
+				<>
+					{matchedProvider && !isExternal && (
+						<Tooltip delay={0}>
+							<Tooltip.Trigger>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									aria-label={t("syncCodexProvider")}
+									isPending={isSyncing}
+									onPress={onSync}
+								>
+									<ArrowPathIcon className="size-4" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								{t("syncCodexProviderFromInferenceProvider", {
+									name: matchedProvider.display_name,
+								})}
+							</Tooltip.Content>
+						</Tooltip>
 					)}
-				</div>
-				<div className="flex min-w-0 flex-wrap gap-x-3 gap-y-1 text-xs text-muted">
-					<span>
-						{matchedProvider
-							? t("agentProviderModelCount", {
-									count: matchedProvider.model_count,
-								})
-							: t("codexConfigProvider")}
-					</span>
-				</div>
-			</div>
-
-			<div className="flex items-center gap-1 sm:justify-end">
-				{matchedProvider && !isExternal && (
 					<Tooltip delay={0}>
 						<Tooltip.Trigger>
 							<Button
 								isIconOnly
 								variant="ghost"
 								size="sm"
-								aria-label={t("syncCodexProvider")}
-								isPending={isSyncing}
-								onPress={onSync}
+								className="text-muted hover:text-danger"
+								aria-label={
+									isExternal
+										? t("codexProviderExternalTooltip")
+										: t("deleteCodexProvider")
+								}
+								isPending={isDeleting}
+								isDisabled={isExternal}
+								onPress={onDelete}
 							>
-								<ArrowPathIcon className="size-4" />
+								<TrashIcon className="size-4" />
 							</Button>
 						</Tooltip.Trigger>
 						<Tooltip.Content>
-							{t("syncCodexProviderFromInferenceProvider", {
-								name: matchedProvider.display_name,
-							})}
+							{isExternal
+								? t("codexProviderExternalTooltip")
+								: t("delete")}
 						</Tooltip.Content>
 					</Tooltip>
-				)}
-				<Tooltip delay={0}>
-					<Tooltip.Trigger>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							className="text-muted hover:text-danger"
-							aria-label={
-								isExternal
-									? t("codexProviderExternalTooltip")
-									: t("deleteCodexProvider")
-							}
-							isPending={isDeleting}
-							isDisabled={isExternal}
-							onPress={onDelete}
-						>
-							<TrashIcon className="size-4" />
-						</Button>
-					</Tooltip.Trigger>
-					<Tooltip.Content>
-						{isExternal
-							? t("codexProviderExternalTooltip")
-							: t("delete")}
-					</Tooltip.Content>
-				</Tooltip>
-				<Tooltip delay={0}>
-					<Tooltip.Trigger>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							isPending={isSelecting}
-							isDisabled={isActive || !canSelect}
-							aria-label={
-								isActive
-									? t("codexProviderAlreadyActive")
-									: t("enable")
-							}
-							onPress={onSelect}
-						>
-							<PlayIcon className="size-4" />
-						</Button>
-					</Tooltip.Trigger>
-					<Tooltip.Content>
-						{isActive
-							? t("codexProviderAlreadyActive")
-							: !canSelect
-								? t("codexNoProfiles")
-								: t("enable")}
-					</Tooltip.Content>
-				</Tooltip>
-			</div>
-		</div>
+					<Tooltip delay={0}>
+						<Tooltip.Trigger>
+							<Button
+								isIconOnly
+								variant="ghost"
+								size="sm"
+								isPending={isSelecting}
+								isDisabled={isActive || !canSelect}
+								aria-label={
+									isActive
+										? t("codexProviderAlreadyActive")
+										: t("enable")
+								}
+								onPress={onSelect}
+							>
+								<PlayIcon className="size-4" />
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							{isActive
+								? t("codexProviderAlreadyActive")
+								: !canSelect
+									? t("codexNoProfiles")
+									: t("enable")}
+						</Tooltip.Content>
+					</Tooltip>
+				</>
+			}
+		/>
 	);
 }
 

@@ -183,7 +183,7 @@ export default {
 	codexCurrentRoute: "当前路由",
 	codexActiveProvider: "当前",
 	codexLoginProvider: "Codex 登录",
-	codexLoginProviderInfo: "使用 Codex 自己的 OpenAI 登录凭据",
+	codexLoginProviderInfo: "使用 Codex 自己的 OpenAI 登录凭据。",
 	codexConfigProvider: "配置文件 provider",
 	codexConfigProviderInfo:
 		"这个 provider 来自 Codex config.toml，暂未匹配到 Aghub 推理 Provider。",

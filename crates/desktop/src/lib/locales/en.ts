@@ -193,7 +193,7 @@ export default {
 	codexCurrentRoute: "Current Route",
 	codexActiveProvider: "Active",
 	codexLoginProvider: "Codex login",
-	codexLoginProviderInfo: "Uses Codex's own OpenAI login credentials",
+	codexLoginProviderInfo: "Uses Codex's own OpenAI login credentials.",
 	codexConfigProvider: "Config provider",
 	codexConfigProviderInfo:
 		"This provider comes from Codex config.toml and does not currently match an Aghub inference provider.",

@@ -3,7 +3,6 @@ import {
 	CheckCircleIcon,
 	PlayIcon,
 	PlusIcon,
-	ServerIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import {
@@ -40,6 +39,7 @@ import {
 	updateClaudeProviderMutationOptions,
 } from "../../requests/inference-providers";
 import { selectValidProviderId } from "./provider-selection";
+import { ProviderActiveBadge, ProviderRowShell } from "./provider-row";
 
 function ClaudeCreateProviderDialog({
 	isOpen,
@@ -219,24 +219,20 @@ function ClaudeOfficialRow({
 	const { t } = useTranslation();
 
 	return (
-		<div className="grid gap-3 border-t border-border py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-			<div className="grid min-w-0 gap-1">
-				<div className="flex min-w-0 items-center gap-2">
-					<ServerIcon className="size-4 shrink-0 text-muted" />
-					<Label className="truncate">{t("claudeOfficial")}</Label>
-					{isActive && (
-						<span className="inline-flex items-center gap-1 rounded-md bg-accent/10 px-2 py-0.5 text-xs text-accent">
-							<CheckCircleIcon className="size-3.5" />
-							{t("active")}
-						</span>
-					)}
-				</div>
-				<span className="text-xs text-muted">
-					{t("claudeOfficialDescription")}
-				</span>
-			</div>
-
-			<div className="flex items-center gap-1 sm:justify-end">
+		<ProviderRowShell
+			isActive={isActive}
+			title={t("claudeOfficial")}
+			titleExtras={
+				isActive && (
+					<ProviderActiveBadge
+						icon={<CheckCircleIcon className="size-3.5" />}
+					>
+						{t("active")}
+					</ProviderActiveBadge>
+				)
+			}
+			description={t("claudeOfficialDescription")}
+			actions={
 				<Tooltip delay={0}>
 					<Tooltip.Trigger>
 						<Button
@@ -261,8 +257,8 @@ function ClaudeOfficialRow({
 							: t("enable")}
 					</Tooltip.Content>
 				</Tooltip>
-			</div>
-		</div>
+			}
+		/>
 	);
 }
 
@@ -292,95 +288,93 @@ function ClaudeProviderRow({
 	const label = matchedProvider?.display_name ?? provider.name;
 
 	return (
-		<div className="grid gap-3 border-t border-border py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-			<div className="grid min-w-0 gap-1">
-				<div className="flex min-w-0 items-center gap-2">
-					<ServerIcon className="size-4 shrink-0 text-muted" />
-					<Label className="truncate">{label}</Label>
-					{isActive && (
-						<span className="inline-flex items-center gap-1 rounded-md bg-accent/10 px-2 py-0.5 text-xs text-accent">
-							<CheckCircleIcon className="size-3.5" />
-							{t("active")}
-						</span>
+		<ProviderRowShell
+			isActive={isActive}
+			title={label}
+			titleExtras={
+				isActive && (
+					<ProviderActiveBadge
+						icon={<CheckCircleIcon className="size-3.5" />}
+					>
+						{t("active")}
+					</ProviderActiveBadge>
+				)
+			}
+			description={
+				matchedProvider
+					? t("agentProviderModelCount", {
+							count: matchedProvider.model_count,
+						})
+					: undefined
+			}
+			actions={
+				<>
+					{matchedProvider && (
+						<Tooltip delay={0}>
+							<Tooltip.Trigger>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									aria-label={t("syncClaudeProvider")}
+									isPending={isSyncing}
+									onPress={onSync}
+								>
+									<ArrowPathIcon className="size-4" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								{t("syncClaudeProviderFromInferenceProvider", {
+									name: matchedProvider.display_name,
+								})}
+							</Tooltip.Content>
+						</Tooltip>
 					)}
-				</div>
-				{matchedProvider && (
-					<div className="flex min-w-0 text-xs text-muted">
-						<span>
-							{t("agentProviderModelCount", {
-								count: matchedProvider.model_count,
-							})}
-						</span>
-					</div>
-				)}
-			</div>
-
-			<div className="flex items-center gap-1 sm:justify-end">
-				{matchedProvider && (
 					<Tooltip delay={0}>
 						<Tooltip.Trigger>
 							<Button
 								isIconOnly
 								variant="ghost"
 								size="sm"
-								aria-label={t("syncClaudeProvider")}
-								isPending={isSyncing}
-								onPress={onSync}
+								className="text-muted hover:text-danger"
+								aria-label={t("deleteClaudeProvider")}
+								isPending={isDeleting}
+								onPress={onDelete}
 							>
-								<ArrowPathIcon className="size-4" />
+								<TrashIcon className="size-4" />
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>{t("delete")}</Tooltip.Content>
+					</Tooltip>
+					<Tooltip delay={0}>
+						<Tooltip.Trigger>
+							<Button
+								isIconOnly
+								variant="ghost"
+								size="sm"
+								isPending={isSelecting}
+								isDisabled={isActive || !canSelect}
+								aria-label={
+									isActive
+										? t("claudeProviderAlreadyActive")
+										: t("enable")
+								}
+								onPress={onSelect}
+							>
+								<PlayIcon className="size-4" />
 							</Button>
 						</Tooltip.Trigger>
 						<Tooltip.Content>
-							{t("syncClaudeProviderFromInferenceProvider", {
-								name: matchedProvider.display_name,
-							})}
+							{isActive
+								? t("claudeProviderAlreadyActive")
+								: !canSelect
+									? t("claudeNoProfiles")
+									: t("enable")}
 						</Tooltip.Content>
 					</Tooltip>
-				)}
-				<Tooltip delay={0}>
-					<Tooltip.Trigger>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							className="text-muted hover:text-danger"
-							aria-label={t("deleteClaudeProvider")}
-							isPending={isDeleting}
-							onPress={onDelete}
-						>
-							<TrashIcon className="size-4" />
-						</Button>
-					</Tooltip.Trigger>
-					<Tooltip.Content>{t("delete")}</Tooltip.Content>
-				</Tooltip>
-				<Tooltip delay={0}>
-					<Tooltip.Trigger>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							isPending={isSelecting}
-							isDisabled={isActive || !canSelect}
-							aria-label={
-								isActive
-									? t("claudeProviderAlreadyActive")
-									: t("enable")
-							}
-							onPress={onSelect}
-						>
-							<PlayIcon className="size-4" />
-						</Button>
-					</Tooltip.Trigger>
-					<Tooltip.Content>
-						{isActive
-							? t("claudeProviderAlreadyActive")
-							: !canSelect
-								? t("claudeNoProfiles")
-								: t("enable")}
-					</Tooltip.Content>
-				</Tooltip>
-			</div>
-		</div>
+				</>
+			}
+		/>
 	);
 }
 

@@ -2,8 +2,6 @@ import {
 	ArrowPathIcon,
 	PencilIcon,
 	PlusIcon,
-	QuestionMarkCircleIcon,
-	ServerIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import {
@@ -42,6 +40,7 @@ import {
 	updateOpenCodeProviderMutationOptions,
 } from "../../requests/inference-providers";
 import { selectValidProviderId } from "./provider-selection";
+import { ProviderRowShell } from "./provider-row";
 
 type ProviderDialogMode =
 	| { type: "create" }
@@ -366,105 +365,88 @@ function ProviderRow({
 	const matchedProvider = provider.matched_inference_provider;
 
 	return (
-		<div className="grid gap-3 border-t border-border py-3 first:border-t-0 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-			<div className="grid min-w-0 gap-1">
-				<div className="flex min-w-0 items-center gap-2">
-					<ServerIcon className="size-4 shrink-0 text-muted" />
-					<Label className="truncate">{provider.name}</Label>
-					{provider.id !== provider.name && (
-						<span className="rounded-md bg-surface-secondary px-2 py-0.5 text-xs text-muted">
-							{provider.id}
-						</span>
+		<ProviderRowShell
+			title={provider.name}
+			titleExtras={
+				provider.id !== provider.name && (
+					<span className="rounded-md bg-surface-secondary px-2 py-0.5 text-xs text-muted">
+						{provider.id}
+					</span>
+				)
+			}
+			description={
+				matchedProvider
+					? t("agentProviderModelCount", {
+							count: matchedProvider.model_count,
+						})
+					: t("openCodeBuiltInProvider")
+			}
+			descriptionTooltip={
+				matchedProvider ? undefined : t("openCodeBuiltInProviderInfo")
+			}
+			actionsClassName="gap-2"
+			actions={
+				<>
+					{matchedProvider && (
+						<Tooltip delay={0}>
+							<Tooltip.Trigger>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									aria-label={t("syncOpenCodeProvider")}
+									isPending={isSyncing}
+									onPress={onSync}
+								>
+									<ArrowPathIcon className="size-4" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								{t(
+									"syncOpenCodeProviderFromInferenceProvider",
+									{
+										name: matchedProvider.display_name,
+									},
+								)}
+							</Tooltip.Content>
+						</Tooltip>
 					)}
-				</div>
-				<div className="flex min-w-0 flex-wrap gap-2 text-xs text-muted">
-					{matchedProvider ? (
-						<span>
-							{t("agentProviderModelCount", {
-								count: matchedProvider.model_count,
-							})}
-						</span>
-					) : (
-						<span className="inline-flex items-center gap-1">
-							{t("openCodeBuiltInProvider")}
-							<Tooltip delay={0}>
-								<Tooltip.Trigger>
-									<span
-										tabIndex={0}
-										aria-label={t(
-											"openCodeBuiltInProviderInfo",
-										)}
-										className="inline-flex size-4 items-center justify-center text-muted"
-									>
-										<QuestionMarkCircleIcon className="size-4" />
-									</span>
-								</Tooltip.Trigger>
-								<Tooltip.Content className="max-w-64">
-									{t("openCodeBuiltInProviderInfo")}
-								</Tooltip.Content>
-							</Tooltip>
-						</span>
-					)}
-				</div>
-			</div>
-
-			<div className="flex items-center gap-2 sm:justify-end">
-				{matchedProvider && (
 					<Tooltip delay={0}>
 						<Tooltip.Trigger>
 							<Button
 								isIconOnly
 								variant="ghost"
 								size="sm"
-								aria-label={t("syncOpenCodeProvider")}
-								isPending={isSyncing}
-								onPress={onSync}
+								aria-label={t(
+									matchedProvider
+										? "editInferenceProvider"
+										: "editOpenCodeProvider",
+								)}
+								onPress={onEdit}
 							>
-								<ArrowPathIcon className="size-4" />
+								<PencilIcon className="size-4" />
 							</Button>
 						</Tooltip.Trigger>
-						<Tooltip.Content>
-							{t("syncOpenCodeProviderFromInferenceProvider", {
-								name: matchedProvider.display_name,
-							})}
-						</Tooltip.Content>
+						<Tooltip.Content>{t("edit")}</Tooltip.Content>
 					</Tooltip>
-				)}
-				<Tooltip delay={0}>
-					<Tooltip.Trigger>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							aria-label={t(
-								matchedProvider
-									? "editInferenceProvider"
-									: "editOpenCodeProvider",
-							)}
-							onPress={onEdit}
-						>
-							<PencilIcon className="size-4" />
-						</Button>
-					</Tooltip.Trigger>
-					<Tooltip.Content>{t("edit")}</Tooltip.Content>
-				</Tooltip>
-				<Tooltip delay={0}>
-					<Tooltip.Trigger>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							className="text-muted hover:text-danger"
-							aria-label={t("deleteOpenCodeProvider")}
-							onPress={onDelete}
-						>
-							<TrashIcon className="size-4" />
-						</Button>
-					</Tooltip.Trigger>
-					<Tooltip.Content>{t("delete")}</Tooltip.Content>
-				</Tooltip>
-			</div>
-		</div>
+					<Tooltip delay={0}>
+						<Tooltip.Trigger>
+							<Button
+								isIconOnly
+								variant="ghost"
+								size="sm"
+								className="text-muted hover:text-danger"
+								aria-label={t("deleteOpenCodeProvider")}
+								onPress={onDelete}
+							>
+								<TrashIcon className="size-4" />
+							</Button>
+						</Tooltip.Trigger>
+						<Tooltip.Content>{t("delete")}</Tooltip.Content>
+					</Tooltip>
+				</>
+			}
+		/>
 	);
 }
 
