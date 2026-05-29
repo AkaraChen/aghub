@@ -171,7 +171,7 @@ function CodexCreateProviderDialog({
 												<ListBox.Item
 													key={item.id}
 													id={item.id}
-													textValue={`${item.display_name} ${item.name}`}
+													textValue={`${item.display_name} ${item.latin_name}`}
 												>
 													<div className="grid min-w-0 gap-0.5">
 														<Label className="truncate">

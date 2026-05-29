@@ -73,6 +73,18 @@ impl OpenCodeProviderAdapter {
 		&self.auth_path
 	}
 
+	/// Normalize an inventory provider as it will be written to OpenCode.
+	pub fn normalize_inventory_provider(
+		provider: &InferenceProvider,
+	) -> InferenceProvider {
+		let mut provider = provider.clone();
+		provider.api_base_url = mapping::normalize_openai_base_url(
+			&provider.api_base_url,
+			Some(provider.format),
+		);
+		provider
+	}
+
 	/// Add or replace an aghub provider in OpenCode.
 	///
 	/// This writes the provider definition to `opencode.json` and stores the
@@ -104,13 +116,13 @@ impl OpenCodeProviderAdapter {
 		Ok(binding)
 	}
 
-	/// Add a provider using a slug derived from its stable key.
+	/// Add a provider using its stable latin key.
 	pub fn add_inventory_provider(
 		&self,
 		provider: &InferenceProvider,
 		api_key: &str,
 	) -> Result<AgentProviderBinding> {
-		let provider_id = mapping::provider_id_from_name(&provider.name);
+		let provider_id = mapping::clean_provider_id(&provider.latin_name)?;
 		self.add_provider(&provider_id, provider, api_key)
 	}
 

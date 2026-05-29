@@ -272,7 +272,7 @@ impl CodexProviderAdapter {
 		Ok(binding)
 	}
 
-	/// Add a provider using a slug derived from its stable key.
+	/// Add a provider using its stable latin key.
 	///
 	/// Creates a binding in the database and optionally writes to config.toml
 	/// if the provider should be active.
@@ -282,7 +282,7 @@ impl CodexProviderAdapter {
 		provider: &InferenceProvider,
 		api_key: &str,
 	) -> Result<AgentProviderBinding> {
-		let provider_id = mapping::provider_id_from_name(&provider.name);
+		let provider_id = mapping::clean_provider_id(&provider.latin_name)?;
 
 		let mut binding = AgentProviderBinding::from_inventory(
 			provider_id.clone(),

@@ -260,9 +260,18 @@ export default {
 	noInferenceProviders: "尚無推理 Provider。",
 	noInferenceProvidersMatch: "沒有符合的 Provider",
 	providerName: "名稱",
+	providerDisplayName: "Display Name",
+	providerDisplayNameHelp:
+		"这里只在 aghub 裡顯示。可以安全填寫任何可讀名稱，包括空格、符號或非英文字元。",
 	providerNamePlaceholder: "例如：OpenAI",
+	providerLatinName: "Provider ID",
+	providerLatinNameHelp:
+		"會作為 provider key 寫入各個 agent 的設定檔。只能使用小寫 a-z，確保所有支援的 agent 都能安全讀取。",
+	providerLatinNamePlaceholder: "例如：openai",
 	providerFormat: "格式",
 	providerApiBaseUrl: "API Base URL",
+	providerApiBaseUrlHelp:
+		"對於 OpenAI Responses 和 OpenAI-compatible Provider，像 https://api.example.com 這樣的裸網域寫入 OpenCode 時會變成 https://api.example.com/v1；已經包含路徑的 URL 會保持原樣。",
 	providerApiBaseUrlPlaceholder: "https://api.openai.com/v1",
 	providerApiKey: "API Key",
 	providerApiKeyPlaceholder: "sk-...",
@@ -324,6 +333,8 @@ export default {
 	deleteInferenceProviderError: "刪除 Provider 失敗",
 	inferenceProviderPasswordLoadFailed: "讀取 API key 失敗",
 	validationProviderNameRequired: "請輸入 Provider 名稱。",
+	validationProviderLatinNameRequired: "請輸入 Provider ID。",
+	validationProviderLatinNameInvalid: "Provider ID 只能包含小寫 a-z。",
 	validationProviderApiBaseUrlRequired: "請輸入 API base URL。",
 	validationProviderApiKeyRequired: "請輸入 API key。",
 	validationProviderModelsRequired: "請至少新增一個模型。",

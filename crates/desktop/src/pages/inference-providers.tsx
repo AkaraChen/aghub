@@ -7,6 +7,7 @@ import {
 	EyeSlashIcon,
 	PencilIcon,
 	PlusIcon,
+	QuestionMarkCircleIcon,
 	ServerIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
@@ -36,6 +37,7 @@ import {
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Fuse from "fuse.js";
+import { pinyin } from "pinyin-pro";
 import { type Key, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
@@ -112,6 +114,14 @@ function formatLabelKey(format: InferenceProviderFormatDto) {
 }
 
 const PROVIDER_EXISTS_REGEX = /provider already exists:\s*(.+)/i;
+const LATIN_NAME_REGEX = /^[a-z]+$/;
+
+function makeLatinNameSuggestion(value: string) {
+	return pinyin(value, { toneType: "none", type: "array" })
+		.join("")
+		.toLowerCase()
+		.replace(/[^a-z]/g, "");
+}
 
 const CODING_AGENT_OPTIONS: CodingAgentOption[] = [
 	{
@@ -130,6 +140,7 @@ const CODING_AGENT_OPTIONS: CodingAgentOption[] = [
 
 interface InferenceProviderFormValues {
 	displayName: string;
+	latinName: string;
 	format: InferenceProviderFormatDto;
 	apiBaseUrl: string;
 	apiKey: string;
@@ -451,46 +462,57 @@ function ProviderModelsEditor({
 		onChange(nextModels);
 	};
 
-	const renderModelRow = (model: ProviderModelFormValue) => (
-		<div key={model.id} className="flex items-center gap-2">
-			{hasRealModels && (
-				<Checkbox
-					variant="secondary"
-					aria-label={t("selectProviderModel", {
-						name: model.name || t("providerModelName"),
-					})}
-					isSelected={selectedIds.has(model.id)}
-					onChange={(selected) => toggleSelected(model.id, selected)}
-					className="shrink-0"
+	const renderModelRow = (
+		model: ProviderModelFormValue,
+		options: { inAccordion?: boolean } = {},
+	) => {
+		const controlVariant = options.inAccordion ? undefined : "secondary";
+
+		return (
+			<div key={model.id} className="flex items-center gap-2">
+				{hasRealModels && (
+					<Checkbox
+						variant={controlVariant}
+						aria-label={t("selectProviderModel", {
+							name: model.name || t("providerModelName"),
+						})}
+						isSelected={selectedIds.has(model.id)}
+						onChange={(selected) =>
+							toggleSelected(model.id, selected)
+						}
+						className="shrink-0"
+					>
+						<Checkbox.Control>
+							<Checkbox.Indicator />
+						</Checkbox.Control>
+					</Checkbox>
+				)}
+				<Input
+					value={model.name}
+					onChange={(event) =>
+						handleChange(model.id, event.target.value)
+					}
+					onBlur={onBlur}
+					placeholder={t("providerModelNamePlaceholder")}
+					aria-label={t("providerModelName")}
+					variant={controlVariant}
+					className="my-1.5 min-w-0 flex-1 text-sm"
+				/>
+				<Button
+					type="button"
+					isIconOnly
+					variant="ghost"
+					size="sm"
+					className="shrink-0 text-muted"
+					aria-label={t("remove")}
+					isDisabled={value.length === 0}
+					onPress={() => handleRemove(model.id)}
 				>
-					<Checkbox.Control>
-						<Checkbox.Indicator />
-					</Checkbox.Control>
-				</Checkbox>
-			)}
-			<Input
-				value={model.name}
-				onChange={(event) => handleChange(model.id, event.target.value)}
-				onBlur={onBlur}
-				placeholder={t("providerModelNamePlaceholder")}
-				aria-label={t("providerModelName")}
-				variant="secondary"
-				className="my-1.5 min-w-0 flex-1 text-sm"
-			/>
-			<Button
-				type="button"
-				isIconOnly
-				variant="ghost"
-				size="sm"
-				className="shrink-0 text-muted"
-				aria-label={t("remove")}
-				isDisabled={value.length === 0}
-				onPress={() => handleRemove(model.id)}
-			>
-				<TrashIcon className="size-4" />
-			</Button>
-		</div>
-	);
+					<TrashIcon className="size-4" />
+				</Button>
+			</div>
+		);
+	};
 
 	const fetchModelsButton = onFetchModels ? (
 		<Button
@@ -566,7 +588,7 @@ function ProviderModelsEditor({
 					</SearchField.Group>
 				</SearchField>
 
-				<div className="flex items-center justify-between gap-3 px-1">
+				<div className="flex min-h-8 items-center justify-between gap-3 px-1">
 					<Checkbox
 						variant="secondary"
 						aria-label={
@@ -606,7 +628,7 @@ function ProviderModelsEditor({
 					)}
 				</div>
 
-				<div className="grid max-h-[420px] gap-2 pr-1">
+				<div className="grid max-h-[420px] min-h-0 gap-2 overflow-y-auto pr-1">
 					{hasRealModels && filteredModels.length === 0 ? (
 						<p className="px-1 py-2 text-sm text-muted">
 							{t("noProviderModelsMatch")}
@@ -617,6 +639,7 @@ function ProviderModelsEditor({
 							expandedKeys={expandedGroupKeys}
 							onExpandedChange={handleExpandedChange}
 							hideSeparator
+							className="rounded-lg bg-surface-secondary"
 						>
 							{filteredGroups.map((group) => {
 								const groupSelected = group.items.reduce(
@@ -666,7 +689,9 @@ function ProviderModelsEditor({
 											<Accordion.Body>
 												<div className="grid gap-2">
 													{group.items.map((model) =>
-														renderModelRow(model),
+														renderModelRow(model, {
+															inAccordion: true,
+														}),
 													)}
 												</div>
 											</Accordion.Body>
@@ -752,6 +777,7 @@ function ProviderForm({
 		reValidateMode: "onChange",
 		defaultValues: {
 			displayName: provider?.display_name ?? "",
+			latinName: provider?.latin_name ?? "",
 			format: provider?.format ?? "openai_responses",
 			apiBaseUrl: provider?.api_base_url ?? "",
 			apiKey: "",
@@ -767,6 +793,7 @@ function ProviderForm({
 		useState<InferenceProviderFormValues | null>(null);
 	const [isSyncPromptOpen, setIsSyncPromptOpen] = useState(false);
 	const [isSavingProvider, setIsSavingProvider] = useState(false);
+	const [hasEditedLatinName, setHasEditedLatinName] = useState(false);
 	const selectedPreset = useMemo(
 		() => presets.find((preset) => preset.id === selectedPresetId) ?? null,
 		[presets, selectedPresetId],
@@ -788,6 +815,12 @@ function ProviderForm({
 
 	const handleApplyPreset = (preset: InferenceProviderPresetResponse) => {
 		setValue("displayName", preset.name, { shouldDirty: true });
+		if (!hasEditedLatinName && mode === "create") {
+			setValue("latinName", makeLatinNameSuggestion(preset.id), {
+				shouldDirty: true,
+				shouldValidate: true,
+			});
+		}
 		setValue("apiBaseUrl", preset.api_base_url, { shouldDirty: true });
 		setValue("format", preset.format, { shouldDirty: true });
 		setValue("models", toProviderModelFormValues(preset.models), {
@@ -818,6 +851,27 @@ function ProviderForm({
 			toast.warning(t("providerPresetFormatChanged"));
 		}
 		onChange(nextFormat);
+	};
+
+	const handleNameChange = (
+		value: string,
+		onChange: (value: string) => void,
+	) => {
+		onChange(value);
+		if (!hasEditedLatinName && mode === "create") {
+			setValue("latinName", makeLatinNameSuggestion(value), {
+				shouldDirty: true,
+				shouldValidate: true,
+			});
+		}
+	};
+
+	const handleLatinNameChange = (
+		value: string,
+		onChange: (value: string) => void,
+	) => {
+		setHasEditedLatinName(true);
+		onChange(value);
 	};
 
 	const [showApiKey, setShowApiKey] = useState(false);
@@ -908,6 +962,7 @@ function ProviderForm({
 	) => {
 		setIsSavingProvider(true);
 		const displayName = values.displayName.trim();
+		const latinName = values.latinName.trim();
 		const apiBaseUrl = values.apiBaseUrl.trim();
 		const apiKey = values.apiKey.trim();
 		const models = normalizeModelNames(values.models);
@@ -919,7 +974,7 @@ function ProviderForm({
 		try {
 			if (mode === "create") {
 				const created = await createMutation.mutateAsync({
-					name: displayName,
+					latin_name: latinName,
 					display_name: displayName,
 					format: values.format,
 					api_base_url: apiBaseUrl,
@@ -937,9 +992,9 @@ function ProviderForm({
 				? await findAgentProviderSyncTargets(provider.id)
 				: [];
 			const updated = await updateMutation.mutateAsync({
-				name: provider.name,
+				name: provider.latin_name,
 				body: {
-					name: null,
+					latin_name: null,
 					display_name: displayName,
 					format: values.format,
 					api_base_url: apiBaseUrl,
@@ -1236,13 +1291,36 @@ function ProviderForm({
 												)}
 											>
 												<Label>
-													{t("providerName")}
+													<span className="inline-flex items-center gap-1">
+														{t(
+															"providerDisplayName",
+														)}
+														<Tooltip delay={0}>
+															<Tooltip.Trigger>
+																<span
+																	tabIndex={0}
+																	aria-label={t(
+																		"providerDisplayNameHelp",
+																	)}
+																	className="relative top-0.5 inline-flex size-4 items-center justify-center text-muted"
+																>
+																	<QuestionMarkCircleIcon className="size-4" />
+																</span>
+															</Tooltip.Trigger>
+															<Tooltip.Content className="max-w-72">
+																{t(
+																	"providerDisplayNameHelp",
+																)}
+															</Tooltip.Content>
+														</Tooltip>
+													</span>
 												</Label>
 												<Input
 													value={field.value}
 													onChange={(event) =>
-														field.onChange(
+														handleNameChange(
 															event.target.value,
+															field.onChange,
 														)
 													}
 													onBlur={field.onBlur}
@@ -1262,6 +1340,88 @@ function ProviderForm({
 											</TextField>
 										)}
 									/>
+
+									{mode === "create" && (
+										<Controller
+											name="latinName"
+											control={control}
+											rules={{
+												required: t(
+													"validationProviderLatinNameRequired",
+												),
+												validate: (value) =>
+													LATIN_NAME_REGEX.test(
+														value.trim(),
+													)
+														? true
+														: t(
+																"validationProviderLatinNameInvalid",
+															),
+											}}
+											render={({ field, fieldState }) => (
+												<TextField
+													className="w-full"
+													variant="secondary"
+													isRequired
+													validationBehavior="aria"
+													isInvalid={Boolean(
+														fieldState.error,
+													)}
+												>
+													<Label>
+														<span className="inline-flex items-center gap-1">
+															{t(
+																"providerLatinName",
+															)}
+															<Tooltip delay={0}>
+																<Tooltip.Trigger>
+																	<span
+																		tabIndex={
+																			0
+																		}
+																		aria-label={t(
+																			"providerLatinNameHelp",
+																		)}
+																		className="relative top-0.5 inline-flex size-4 items-center justify-center text-muted"
+																	>
+																		<QuestionMarkCircleIcon className="size-4" />
+																	</span>
+																</Tooltip.Trigger>
+																<Tooltip.Content className="max-w-72">
+																	{t(
+																		"providerLatinNameHelp",
+																	)}
+																</Tooltip.Content>
+															</Tooltip>
+														</span>
+													</Label>
+													<Input
+														value={field.value}
+														onChange={(event) =>
+															handleLatinNameChange(
+																event.target
+																	.value,
+																field.onChange,
+															)
+														}
+														onBlur={field.onBlur}
+														placeholder={t(
+															"providerLatinNamePlaceholder",
+														)}
+														variant="secondary"
+													/>
+													{fieldState.error && (
+														<FieldError>
+															{
+																fieldState.error
+																	.message
+															}
+														</FieldError>
+													)}
+												</TextField>
+											)}
+										/>
+									)}
 
 									<Controller
 										name="apiBaseUrl"
@@ -1288,7 +1448,29 @@ function ProviderForm({
 												)}
 											>
 												<Label>
-													{t("providerApiBaseUrl")}
+													<span className="inline-flex items-center gap-1">
+														{t(
+															"providerApiBaseUrl",
+														)}
+														<Tooltip delay={0}>
+															<Tooltip.Trigger>
+																<span
+																	tabIndex={0}
+																	aria-label={t(
+																		"providerApiBaseUrlHelp",
+																	)}
+																	className="relative top-0.5 inline-flex size-4 items-center justify-center text-muted"
+																>
+																	<QuestionMarkCircleIcon className="size-4" />
+																</span>
+															</Tooltip.Trigger>
+															<Tooltip.Content className="max-w-72">
+																{t(
+																	"providerApiBaseUrlHelp",
+																)}
+															</Tooltip.Content>
+														</Tooltip>
+													</span>
 												</Label>
 												<Input
 													value={field.value}
@@ -1667,7 +1849,7 @@ function ProviderDetail({
 			setRevealedKey(null);
 			return;
 		}
-		passwordMutation.mutate(provider.name);
+		passwordMutation.mutate(provider.latin_name);
 	};
 
 	const handleCopyKey = async () => {
@@ -1675,7 +1857,7 @@ function ProviderDetail({
 		try {
 			const password = revealedKey
 				? { api_key: revealedKey }
-				: await api.inferenceProviders.getPassword(provider.name);
+				: await api.inferenceProviders.getPassword(provider.latin_name);
 			await writeText(password.api_key);
 			toast.success(t("providerApiKeyCopied"));
 		} catch (error) {
@@ -1763,6 +1945,15 @@ function ProviderDetail({
 						</Card.Header>
 
 						<Card.Content className="flex flex-col gap-4">
+							<div className="grid gap-1.5 py-1">
+								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+									{t("providerFormat")}
+								</h3>
+								<MonoValue>
+									{t(formatLabelKey(provider.format))}
+								</MonoValue>
+							</div>
+
 							<div className="grid gap-1.5 py-1">
 								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
 									{t("providerApiBaseUrl")}
@@ -1873,7 +2064,7 @@ function ProviderDetail({
 								variant="danger"
 								isPending={deleteMutation.isPending}
 								onPress={() =>
-									deleteMutation.mutate(provider.name)
+									deleteMutation.mutate(provider.latin_name)
 								}
 							>
 								{t("delete")}
@@ -1891,7 +2082,9 @@ export default function InferenceProvidersPage() {
 	const api = useApi();
 	const { availableAgents } = useAgentAvailability();
 	const [searchQuery, setSearchQuery] = useState("");
-	const [selectedName, setSelectedName] = useState<string | null>(null);
+	const [selectedLatinName, setSelectedLatinName] = useState<string | null>(
+		null,
+	);
 	const [panel, setPanel] = useState<PanelMode>({ type: "detail" });
 
 	const {
@@ -1952,7 +2145,7 @@ export default function InferenceProvidersPage() {
 				keys: [
 					{ name: "display_name", weight: 2 },
 					{ name: "models", weight: 2 },
-					{ name: "name", weight: 1 },
+					{ name: "latin_name", weight: 1 },
 					{ name: "api_base_url", weight: 1 },
 					{ name: "format", weight: 1 },
 				],
@@ -1970,14 +2163,14 @@ export default function InferenceProvidersPage() {
 	}, [providerFuse, providers, searchQuery]);
 
 	const activeProvider = useMemo(() => {
-		if (selectedName) {
+		if (selectedLatinName) {
 			const selected = providers.find(
-				(provider) => provider.name === selectedName,
+				(provider) => provider.latin_name === selectedLatinName,
 			);
 			if (selected) return selected;
 		}
 		return providers[0] ?? null;
-	}, [providers, selectedName]);
+	}, [providers, selectedLatinName]);
 
 	const hasCodingAgent = (agentId: CodingAgentId) =>
 		codingAgents.some((agent) => agent.id === agentId);
@@ -1997,29 +2190,31 @@ export default function InferenceProvidersPage() {
 	const selectedProviderKeys = useMemo(() => {
 		return activeProvider &&
 			(resolvedPanel.type === "detail" || resolvedPanel.type === "edit")
-			? new Set([activeProvider.name])
+			? new Set([activeProvider.latin_name])
 			: new Set<string>();
 	}, [activeProvider, resolvedPanel.type]);
 
 	const handleCreatedOrUpdated = (provider: InferenceProviderResponse) => {
-		setSelectedName(provider.name);
+		setSelectedLatinName(provider.latin_name);
 		setPanel({ type: "detail" });
 	};
 
 	const handleAgentClick = (agentId: CodingAgentId) => {
 		if (!hasCodingAgent(agentId)) return;
-		setSelectedName(null);
+		setSelectedLatinName(null);
 		setPanel({ type: "agent", agentId });
 	};
 
-	const handleProviderClick = (providerName: string) => {
-		setSelectedName(providerName);
+	const handleProviderClick = (latinName: string) => {
+		setSelectedLatinName(latinName);
 		setPanel({ type: "detail" });
 	};
 
-	const handleEditProviderByName = (name: string) => {
-		const provider = providers.find((provider) => provider.name === name);
-		setSelectedName(name);
+	const handleEditProviderByName = (latinName: string) => {
+		const provider = providers.find(
+			(provider) => provider.latin_name === latinName,
+		);
+		setSelectedLatinName(latinName);
 		setPanel(provider ? { type: "edit", provider } : { type: "detail" });
 	};
 
@@ -2048,7 +2243,7 @@ export default function InferenceProvidersPage() {
 								size="sm"
 								aria-label={t("createInferenceProvider")}
 								onPress={() => {
-									setSelectedName(null);
+									setSelectedLatinName(null);
 									setPanel({ type: "create" });
 								}}
 							>
@@ -2154,17 +2349,17 @@ export default function InferenceProvidersPage() {
 							selectedKeys={selectedProviderKeys}
 							onSelectionChange={(keys) => {
 								if (keys === "all") return;
-								const providerName = [...keys][0];
-								if (!providerName) return;
-								handleProviderClick(String(providerName));
+								const latinName = [...keys][0];
+								if (!latinName) return;
+								handleProviderClick(String(latinName));
 							}}
 							className="p-2"
 						>
 							{filteredProviders.map((provider) => (
 								<ListBox.Item
-									key={provider.name}
-									id={provider.name}
-									textValue={`${provider.display_name} ${provider.name}`}
+									key={provider.latin_name}
+									id={provider.latin_name}
+									textValue={`${provider.display_name} ${provider.latin_name}`}
 									className="data-selected:bg-surface"
 								>
 									<div className="flex min-w-0 items-center gap-2">
@@ -2218,7 +2413,7 @@ export default function InferenceProvidersPage() {
 
 				{resolvedPanel.type === "edit" && (
 					<ProviderForm
-						key={resolvedPanel.provider.name}
+						key={resolvedPanel.provider.latin_name}
 						mode="edit"
 						provider={resolvedPanel.provider}
 						presets={presets}
@@ -2230,7 +2425,7 @@ export default function InferenceProvidersPage() {
 
 				{resolvedPanel.type === "detail" && activeProvider && (
 					<ProviderDetail
-						key={activeProvider.name}
+						key={activeProvider.latin_name}
 						provider={activeProvider}
 						onEdit={() =>
 							setPanel({
@@ -2239,7 +2434,7 @@ export default function InferenceProvidersPage() {
 							})
 						}
 						onDeleted={() => {
-							setSelectedName(null);
+							setSelectedLatinName(null);
 							setPanel({ type: "detail" });
 						}}
 					/>

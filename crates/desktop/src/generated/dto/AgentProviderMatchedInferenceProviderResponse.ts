@@ -2,7 +2,7 @@
 
 export type AgentProviderMatchedInferenceProviderResponse = {
 	id: string;
-	name: string;
+	latin_name: string;
 	display_name: string;
 	model_count: number;
 };

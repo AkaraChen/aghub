@@ -95,40 +95,40 @@ export function createApi(baseUrl: string) {
 		},
 	});
 
-	async function getInferenceProviderByName(name: string) {
+	async function getInferenceProviderByLatinName(latinName: string) {
 		const providers: InferenceProviderResponse[] = await client
 			.get("inference/providers")
 			.json();
 		const provider = providers.find(
-			(item) =>
-				item.name.localeCompare(name, undefined, {
-					sensitivity: "accent",
-				}) === 0,
+			(item) => item.latin_name === latinName,
 		);
 
 		if (!provider) {
-			throw new Error(`inference provider '${name}' not found`);
+			throw new Error(`inference provider '${latinName}' not found`);
 		}
 
 		return provider;
 	}
 
 	async function updateInferenceProviderModels(
-		providerName: string,
+		latinName: string,
 		models: (current: string[]) => string[],
 	) {
-		const provider = await getInferenceProviderByName(providerName);
+		const provider = await getInferenceProviderByLatinName(latinName);
 		return client
-			.put(`inference/providers/${encodeURIComponent(provider.name)}`, {
-				json: {
-					name: null,
-					display_name: null,
-					format: null,
-					api_base_url: null,
-					api_key: null,
-					models: models(provider.models),
-				} satisfies UpdateInferenceProviderRequest,
-			})
+			.put(
+				`inference/providers/${encodeURIComponent(provider.latin_name)}`,
+				{
+					json: {
+						latin_name: null,
+						display_name: null,
+						format: null,
+						api_base_url: null,
+						api_key: null,
+						models: models(provider.models),
+					} satisfies UpdateInferenceProviderRequest,
+				},
+			)
 			.json<InferenceProviderResponse>();
 	}
 
@@ -537,11 +537,11 @@ export function createApi(baseUrl: string) {
 					.then(() => undefined);
 			},
 			getPassword(
-				name: string,
+				latinName: string,
 			): Promise<InferenceProviderPasswordResponse> {
 				return client
 					.get(
-						`inference/providers/${encodeURIComponent(name)}/password`,
+						`inference/providers/${encodeURIComponent(latinName)}/password`,
 					)
 					.json();
 			},
@@ -567,13 +567,16 @@ export function createApi(baseUrl: string) {
 					.json();
 			},
 			update(
-				name: string,
+				latinName: string,
 				body: UpdateInferenceProviderRequest,
 			): Promise<InferenceProviderResponse> {
 				return client
-					.put(`inference/providers/${encodeURIComponent(name)}`, {
-						json: body,
-					})
+					.put(
+						`inference/providers/${encodeURIComponent(latinName)}`,
+						{
+							json: body,
+						},
+					)
 					.json();
 			},
 			updateOpenCode(
@@ -631,20 +634,20 @@ export function createApi(baseUrl: string) {
 					.json();
 			},
 			async createModel(
-				providerName: string,
+				latinName: string,
 				modelName: string,
 			): Promise<InferenceProviderResponse> {
-				return updateInferenceProviderModels(providerName, (models) => [
+				return updateInferenceProviderModels(latinName, (models) => [
 					...models,
 					modelName,
 				]);
 			},
 			async updateModel(
-				providerName: string,
+				latinName: string,
 				modelName: string,
 				nextModelName: string,
 			): Promise<InferenceProviderResponse> {
-				return updateInferenceProviderModels(providerName, (models) => {
+				return updateInferenceProviderModels(latinName, (models) => {
 					const index = models.indexOf(modelName);
 					if (index === -1) {
 						throw new Error(
@@ -657,10 +660,10 @@ export function createApi(baseUrl: string) {
 				});
 			},
 			async deleteModel(
-				providerName: string,
+				latinName: string,
 				modelName: string,
 			): Promise<InferenceProviderResponse> {
-				return updateInferenceProviderModels(providerName, (models) => {
+				return updateInferenceProviderModels(latinName, (models) => {
 					if (!models.includes(modelName)) {
 						throw new Error(
 							`inference model '${modelName}' not found`,
@@ -669,9 +672,11 @@ export function createApi(baseUrl: string) {
 					return models.filter((model) => model !== modelName);
 				});
 			},
-			delete(name: string): Promise<void> {
+			delete(latinName: string): Promise<void> {
 				return client
-					.delete(`inference/providers/${encodeURIComponent(name)}`)
+					.delete(
+						`inference/providers/${encodeURIComponent(latinName)}`,
+					)
 					.then(() => undefined);
 			},
 			deleteOpenCode(id: string): Promise<void> {

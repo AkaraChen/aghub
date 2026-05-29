@@ -65,7 +65,11 @@ fn create_provider(
 ) -> InferenceProvider {
 	store
 		.create(CreateInferenceProvider {
-			name: name.to_string(),
+			latin_name: name
+				.chars()
+				.filter(|ch| ch.is_ascii_alphabetic())
+				.flat_map(char::to_lowercase)
+				.collect(),
 			display_name: name.to_string(),
 			format: InferenceProviderFormat::Anthropic,
 			api_base_url: api_base_url.to_string(),
@@ -420,7 +424,7 @@ fn switch_from_official_to_api_via_sync_writes_env() {
 	// Directly sync a provider into settings.json (bypasses store create).
 	let provider = InferenceProvider {
 		id: "inv-anthropic".to_string(),
-		name: "my-anthropic".to_string(),
+		latin_name: "my-anthropic".to_string(),
 		display_name: "My Anthropic".to_string(),
 		format: InferenceProviderFormat::Anthropic,
 		api_base_url: "https://api.anthropic.com".to_string(),

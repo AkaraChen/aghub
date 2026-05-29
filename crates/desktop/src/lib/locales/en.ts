@@ -272,9 +272,18 @@ export default {
 	noInferenceProviders: "No inference providers yet.",
 	noInferenceProvidersMatch: "No providers match",
 	providerName: "Name",
+	providerDisplayName: "Display Name",
+	providerDisplayNameHelp:
+		"This is only shown in aghub. It is safe to use any readable name, including spaces, symbols, or non-English characters.",
 	providerNamePlaceholder: "e.g., OpenAI",
+	providerLatinName: "Provider ID",
+	providerLatinNameHelp:
+		"Used as the provider key written into agent config files. Use lowercase a-z only so every supported agent can read it safely.",
+	providerLatinNamePlaceholder: "e.g., openai",
 	providerFormat: "Format",
 	providerApiBaseUrl: "API Base URL",
+	providerApiBaseUrlHelp:
+		"For OpenAI Responses and OpenAI-compatible providers, a bare origin such as https://api.example.com is written to OpenCode as https://api.example.com/v1. URLs that already include a path are kept as entered.",
 	providerApiBaseUrlPlaceholder: "https://api.openai.com/v1",
 	providerApiKey: "API Key",
 	providerApiKeyPlaceholder: "sk-...",
@@ -338,6 +347,9 @@ export default {
 	deleteInferenceProviderError: "Failed to delete provider",
 	inferenceProviderPasswordLoadFailed: "Failed to load API key",
 	validationProviderNameRequired: "Enter a provider name.",
+	validationProviderLatinNameRequired: "Enter a provider ID.",
+	validationProviderLatinNameInvalid:
+		"Provider ID must contain only lowercase a-z.",
 	validationProviderApiBaseUrlRequired: "Enter an API base URL.",
 	validationProviderApiKeyRequired: "Enter an API key.",
 	validationProviderModelsRequired: "Add at least one model.",

@@ -15,9 +15,13 @@ pub enum InferenceProviderError {
 	#[error("keyring error: {0}")]
 	Keyring(String),
 
-	/// Provider names must not be empty.
-	#[error("provider name cannot be empty")]
+	/// Provider latin names must not be empty.
+	#[error("provider latin name cannot be empty")]
 	EmptyName,
+
+	/// Provider latin names must be lowercase a-z.
+	#[error("provider latin name must contain only lowercase a-z: {0}")]
+	InvalidLatinName(String),
 
 	/// Model names must not be empty.
 	#[error("model name cannot be empty")]
@@ -31,7 +35,7 @@ pub enum InferenceProviderError {
 	#[error("provider API base URL cannot be empty")]
 	EmptyApiBaseUrl,
 
-	/// Provider name is already in use.
+	/// Provider latin name is already in use.
 	#[error("provider already exists: {0}")]
 	AlreadyExists(String),
 

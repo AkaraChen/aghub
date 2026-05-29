@@ -3,6 +3,7 @@
 use std::collections::BTreeMap;
 
 use serde_json::Value;
+use url::Url;
 
 use super::schema::OpenCodeProviderConfig;
 use crate::agent::{
@@ -87,9 +88,11 @@ pub(super) fn provider_config_from_binding(
 	provider.name = Some(binding.name.clone());
 
 	if let Some(api_base_url) = &binding.api_base_url {
+		let api_base_url =
+			normalize_openai_base_url(api_base_url, binding.format);
 		provider
 			.options
-			.insert("baseURL".to_string(), Value::String(api_base_url.clone()));
+			.insert("baseURL".to_string(), Value::String(api_base_url));
 		provider.options.remove("endpoint");
 	} else {
 		provider.options.remove("baseURL");
@@ -149,31 +152,6 @@ pub(super) fn format_selection(selection: &AgentModelSelection) -> String {
 		return format!("{provider_id}/{}", selection.model_id);
 	}
 	selection.model_id.clone()
-}
-
-pub(super) fn provider_id_from_name(name: &str) -> String {
-	let mut out = String::new();
-	let mut previous_was_dash = false;
-
-	for ch in name.chars().flat_map(char::to_lowercase) {
-		if ch.is_ascii_alphanumeric() {
-			out.push(ch);
-			previous_was_dash = false;
-		} else if !previous_was_dash && !out.is_empty() {
-			out.push('-');
-			previous_was_dash = true;
-		}
-	}
-
-	while out.ends_with('-') {
-		out.pop();
-	}
-
-	if out.is_empty() {
-		"provider".to_string()
-	} else {
-		out
-	}
 }
 
 pub(super) fn clean_provider_id(provider_id: &str) -> Result<String> {
@@ -239,6 +217,37 @@ fn npm_from_format(format: InferenceProviderFormat) -> &'static str {
 		InferenceProviderFormat::Anthropic => ANTHROPIC_NPM,
 		InferenceProviderFormat::OpenAiCompletions => OPENAI_COMPATIBLE_NPM,
 		InferenceProviderFormat::OpenAiResponses => OPENAI_NPM,
+	}
+}
+
+pub(super) fn normalize_openai_base_url(
+	api_base_url: &str,
+	format: Option<InferenceProviderFormat>,
+) -> String {
+	let trimmed = api_base_url.trim().trim_end_matches('/');
+
+	match format {
+		Some(
+			InferenceProviderFormat::OpenAiCompletions
+			| InferenceProviderFormat::OpenAiResponses,
+		) => {
+			let Ok(parsed) = Url::parse(trimmed) else {
+				return trimmed.to_string();
+			};
+			if parsed.path() == "/"
+				&& parsed.query().is_none()
+				&& parsed.fragment().is_none()
+			{
+				return parsed
+					.join("v1")
+					.map(|url| {
+						url.to_string().trim_end_matches('/').to_string()
+					})
+					.unwrap_or_else(|_| trimmed.to_string());
+			}
+			parsed.to_string().trim_end_matches('/').to_string()
+		}
+		_ => trimmed.to_string(),
 	}
 }
 

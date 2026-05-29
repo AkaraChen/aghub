@@ -640,7 +640,7 @@ mod tests {
 	fn provider() -> InferenceProvider {
 		InferenceProvider {
 			id: "inventory-id".to_string(),
-			name: "openrouter".to_string(),
+			latin_name: "openrouter".to_string(),
 			display_name: "OpenRouter".to_string(),
 			format: InferenceProviderFormat::OpenAiResponses,
 			api_base_url: "https://openrouter.ai/api/v1".to_string(),

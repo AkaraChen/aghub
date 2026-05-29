@@ -104,6 +104,7 @@ impl From<InferenceProviderError> for ApiError {
 			| InferenceProviderError::EmptyApiBaseUrl
 			| InferenceProviderError::EmptyApiKey
 			| InferenceProviderError::InvalidFormat(_)
+			| InferenceProviderError::InvalidLatinName(_)
 			| InferenceProviderError::UnsupportedAgentProviderCapability {
 				..
 			} => ApiError::new(

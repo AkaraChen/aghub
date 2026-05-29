@@ -423,7 +423,14 @@ export function deleteInferenceProviderMutationOptions({
 }: DeleteInferenceProviderMutationParams) {
 	return mutationOptions({
 		mutationFn: (name: string) => api.inferenceProviders.delete(name),
-		onSuccess: async () => {
+		onSuccess: async (_data, latinName) => {
+			queryClient.setQueryData<InferenceProviderResponse[]>(
+				queryKeys.inferenceProviders.list(),
+				(current) =>
+					current?.filter(
+						(provider) => provider.latin_name !== latinName,
+					) ?? current,
+			);
 			await invalidateInferenceProviderQueries(queryClient);
 			await onSuccess?.();
 		},
