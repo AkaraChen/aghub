@@ -308,6 +308,17 @@ export default {
 	hideProviderApiKey: "隐藏 API key",
 	inferenceProviderCreated: "Provider 已创建",
 	inferenceProviderUpdated: "Provider 已更新",
+	inferenceProviderUpdatedAndAgentSynced:
+		"Provider 已更新，并已同步 {{count}} 个 Agent 配置",
+	inferenceProviderAgentSyncPartialError:
+		"Provider 已更新，但 {{count}} / {{total}} 个 Agent 配置同步失败。",
+	confirmInferenceProviderAgentSyncTitle: "是否更新 Agent 配置？",
+	confirmInferenceProviderAgentSyncBody:
+		"保存此 Provider 只会更新 aghub 的清单。各个 Agent 里已有的 Provider 配置不会自动更新。",
+	confirmInferenceProviderAgentSyncManualHint:
+		"你可以现在自动扫描并更新，也可以跳过，之后进入对应 Agent 设置里手动点击更新。",
+	saveWithoutAgentSync: "仅保存",
+	saveAndSyncAgentProviders: "保存并更新 Agent",
 	inferenceProviderDuplicateError:
 		"已存在名为 “{{name}}” 的 Provider。请使用其他名称，或直接编辑已有条目。",
 	inferenceProviderDeleted: "Provider 已删除",
@@ -316,6 +327,7 @@ export default {
 	validationProviderNameRequired: "请输入 Provider 名称。",
 	validationProviderApiBaseUrlRequired: "请输入 API base URL。",
 	validationProviderApiKeyRequired: "请输入 API key。",
+	validationProviderModelsRequired: "请至少添加一个模型。",
 	validationProviderModelNameUnique: "模型名称不能重复。",
 	inferenceFormatAnthropic: "Anthropic",
 	inferenceFormatAnthropicDescription: "Anthropic Messages API",

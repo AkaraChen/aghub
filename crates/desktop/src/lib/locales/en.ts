@@ -321,6 +321,17 @@ export default {
 	hideProviderApiKey: "Hide API key",
 	inferenceProviderCreated: "Provider created",
 	inferenceProviderUpdated: "Provider updated",
+	inferenceProviderUpdatedAndAgentSynced:
+		"Provider updated and {{count}} agent config(s) synced",
+	inferenceProviderAgentSyncPartialError:
+		"Provider updated, but {{count}} of {{total}} agent config(s) failed to sync.",
+	confirmInferenceProviderAgentSyncTitle: "Update agent configs?",
+	confirmInferenceProviderAgentSyncBody:
+		"Saving this provider updates aghub's inventory only. Existing provider configs inside individual agents are not updated automatically.",
+	confirmInferenceProviderAgentSyncManualHint:
+		"You can sync them now, or skip this and update them later from each agent's settings.",
+	saveWithoutAgentSync: "Save only",
+	saveAndSyncAgentProviders: "Save and update agents",
 	inferenceProviderDuplicateError:
 		"A provider named “{{name}}” is already configured. Please choose a different name or edit the existing entry.",
 	inferenceProviderDeleted: "Provider deleted",
@@ -329,6 +340,7 @@ export default {
 	validationProviderNameRequired: "Enter a provider name.",
 	validationProviderApiBaseUrlRequired: "Enter an API base URL.",
 	validationProviderApiKeyRequired: "Enter an API key.",
+	validationProviderModelsRequired: "Add at least one model.",
 	validationProviderModelNameUnique: "Model names must be unique.",
 	inferenceFormatAnthropic: "Anthropic",
 	inferenceFormatAnthropicDescription: "Anthropic Messages API",
