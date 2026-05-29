@@ -201,7 +201,7 @@ fn models_dev_presets_from_json(
 		.into_values()
 		.filter_map(models_dev_provider_to_preset)
 		.collect::<Vec<_>>();
-	presets.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+	presets.sort_by_key(|a| a.name.to_lowercase());
 	Ok(presets)
 }
 
