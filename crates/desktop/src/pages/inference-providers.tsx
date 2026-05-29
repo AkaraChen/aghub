@@ -620,7 +620,7 @@ function ProviderModelsEditor({
 										id={group.key}
 									>
 										<Accordion.Heading>
-											<Accordion.Trigger>
+											<Accordion.Trigger className="hover:bg-transparent focus:bg-transparent focus-visible:bg-transparent focus-visible:ring-0 focus-visible:outline-none">
 												<span className="flex-1 text-left font-medium">
 													{groupLabel}
 												</span>
