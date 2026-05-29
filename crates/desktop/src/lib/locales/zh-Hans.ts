@@ -242,6 +242,10 @@ export default {
 		"选择一个预设以自动填充名称、Base URL、格式和模型。",
 	providerPresetsPlaceholder: "选择一个预设",
 	providerPresetsNone: "不使用预设",
+	providerPresetsLoading: "正在加载预设...",
+	searchProviderPresets: "搜索预设",
+	searchProviderPresetsPlaceholder: "按 Provider、URL 或模型搜索...",
+	noProviderPresetsMatch: "没有匹配的预设",
 	providerGetApiKey: "获取 API Key →",
 	createInferenceProviderDescription:
 		"添加一个推理端点，并安全存储它的 API key。",
@@ -275,6 +279,9 @@ export default {
 		"没有新模型需要添加（已配置 {{total}} 个）",
 	fetchProviderModelsFailed: "获取模型失败：{{reason}}",
 	fetchProviderModelsUnknownError: "端点不支持",
+	fetchProviderModelsRequiresPreset: "请先选择一个预设，再获取模型。",
+	providerPresetFormatChanged:
+		"格式已不同于预设，请查看 Provider 文档并按需更新 API URL。",
 	noProviderModels: "暂无模型。",
 	noProviderModelsMatch: "没有匹配的模型。",
 	providerModelGroupUncategorized: "未分类",

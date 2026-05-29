@@ -6,6 +6,7 @@ export type UpdateInferenceProviderRequest = {
 	display_name: string | null;
 	format: InferenceProviderFormatDto | null;
 	api_base_url: string | null;
+	preset?: string | null;
 	api_key: string | null;
 	models: Array<string> | null;
 };

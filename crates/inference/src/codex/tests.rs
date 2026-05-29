@@ -69,6 +69,7 @@ fn provider() -> InferenceProvider {
 		display_name: "OpenRouter".to_string(),
 		format: InferenceProviderFormat::OpenAiResponses,
 		api_base_url: "https://openrouter.ai/api/v1".to_string(),
+		preset: None,
 		masked_api_key: "sk****st".to_string(),
 		models: vec!["openai/gpt-5.4".to_string()],
 	}
@@ -90,6 +91,7 @@ fn create_inventory_provider(
 			display_name: "OpenRouter".to_string(),
 			format: InferenceProviderFormat::OpenAiResponses,
 			api_base_url: "https://openrouter.ai/api/v1".to_string(),
+			preset: None,
 			api_key: "sk-test".to_string(),
 			models: vec!["openai/gpt-5.4".to_string()],
 		})

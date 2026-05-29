@@ -41,7 +41,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Fuse from "fuse.js";
 import { type Key, useMemo, useState } from "react";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { ListSearchHeader } from "../components/list-search-header";
 import { ResourceSectionHeader } from "../components/resource-section-header";
@@ -104,52 +104,7 @@ const FORMAT_OPTIONS: FormatOption[] = [
 	},
 ];
 
-const TRAILING_SLASHES_REGEX = /\/+$/;
 const PROVIDER_EXISTS_REGEX = /provider already exists:\s*(.+)/i;
-
-async function fetchProviderModels({
-	format,
-	apiBaseUrl,
-	apiKey,
-}: {
-	format: InferenceProviderFormatDto;
-	apiBaseUrl: string;
-	apiKey: string;
-}): Promise<string[]> {
-	const trimmedBase = apiBaseUrl.trim().replace(TRAILING_SLASHES_REGEX, "");
-	if (!trimmedBase) throw new Error("Missing API base URL");
-	if (!apiKey.trim()) throw new Error("Missing API key");
-
-	const headers: Record<string, string> =
-		format === "anthropic"
-			? {
-					"x-api-key": apiKey,
-					"anthropic-version": "2023-06-01",
-				}
-			: {
-					Authorization: `Bearer ${apiKey}`,
-				};
-
-	const response = await fetch(`${trimmedBase}/models`, {
-		method: "GET",
-		headers,
-	});
-
-	if (!response.ok) {
-		throw new Error(`HTTP ${response.status}`);
-	}
-
-	const payload = (await response.json()) as {
-		data?: Array<{ id?: unknown }>;
-	};
-	const data = Array.isArray(payload?.data) ? payload.data : [];
-	const ids = data
-		.map((entry) => (typeof entry?.id === "string" ? entry.id : null))
-		.filter((id): id is string => Boolean(id));
-
-	if (ids.length === 0) throw new Error("No models in response");
-	return ids;
-}
 
 const CODING_AGENT_OPTIONS: CodingAgentOption[] = [
 	{
@@ -193,7 +148,9 @@ function ProviderIcon({ format }: { format: InferenceProviderFormatDto }) {
 
 	return (
 		<span
-			className="inline-flex size-4 shrink-0 items-center justify-center text-foreground [&_svg]:size-4"
+			className="size-4 shrink-0 text-foreground [&>svg]:size-full"
+			aria-hidden
+			// eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml
 			dangerouslySetInnerHTML={{ __html: svg }}
 		/>
 	);
@@ -218,7 +175,9 @@ function PresetLogo({ logo }: { logo: string }) {
 	}
 	return (
 		<span
-			className="inline-flex size-4 shrink-0 items-center justify-center text-foreground [&_svg]:size-4"
+			className="size-4 shrink-0 text-foreground [&>svg]:size-full"
+			aria-hidden
+			// eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml
 			dangerouslySetInnerHTML={{ __html: svg }}
 		/>
 	);
@@ -312,6 +271,7 @@ function ProviderModelsEditor({
 	errorMessage,
 	onFetchModels,
 	canFetchModels = false,
+	fetchModelsDisabledReason,
 }: {
 	value: ProviderModelFormValue[];
 	onChange: (value: ProviderModelFormValue[]) => void;
@@ -319,6 +279,7 @@ function ProviderModelsEditor({
 	errorMessage?: string;
 	onFetchModels?: () => Promise<string[]>;
 	canFetchModels?: boolean;
+	fetchModelsDisabledReason?: string;
 }) {
 	const { t } = useTranslation();
 	const emptyModel = useMemo(() => createProviderModelFormValue(), []);
@@ -509,6 +470,30 @@ function ProviderModelsEditor({
 		</div>
 	);
 
+	const fetchModelsButton = onFetchModels ? (
+		<Button
+			type="button"
+			variant="tertiary"
+			size="sm"
+			isPending={isFetching}
+			isDisabled={!canFetchModels}
+			onPress={handleFetch}
+		>
+			{({ isPending }) => (
+				<>
+					{isPending ? (
+						<Spinner color="current" size="sm" />
+					) : (
+						<CloudArrowDownIcon className="size-4" />
+					)}
+					{isPending
+						? t("fetchProviderModelsPending")
+						: t("fetchProviderModels")}
+				</>
+			)}
+		</Button>
+	) : null;
+
 	return (
 		<>
 			<div className="grid gap-2">
@@ -520,32 +505,19 @@ function ProviderModelsEditor({
 						</p>
 					</div>
 					<div className="flex shrink-0 items-center gap-2">
-						{onFetchModels && (
-							<Button
-								type="button"
-								variant="tertiary"
-								size="sm"
-								isPending={isFetching}
-								isDisabled={!canFetchModels}
-								onPress={handleFetch}
-							>
-								{({ isPending }) => (
-									<>
-										{isPending ? (
-											<Spinner
-												color="current"
-												size="sm"
-											/>
-										) : (
-											<CloudArrowDownIcon className="size-4" />
-										)}
-										{isPending
-											? t("fetchProviderModelsPending")
-											: t("fetchProviderModels")}
-									</>
-								)}
-							</Button>
-						)}
+						{fetchModelsButton &&
+							(fetchModelsDisabledReason ? (
+								<Tooltip delay={0}>
+									<Tooltip.Trigger>
+										{fetchModelsButton}
+									</Tooltip.Trigger>
+									<Tooltip.Content>
+										{fetchModelsDisabledReason}
+									</Tooltip.Content>
+								</Tooltip>
+							) : (
+								fetchModelsButton
+							))}
 						<Button
 							type="button"
 							variant="secondary"
@@ -741,11 +713,15 @@ function ProviderModelsEditor({
 function ProviderForm({
 	mode,
 	provider,
+	presets,
+	isPresetsLoading,
 	onCancel,
 	onSuccess,
 }: {
 	mode: "create" | "edit";
 	provider?: InferenceProviderResponse;
+	presets: InferenceProviderPresetResponse[];
+	isPresetsLoading: boolean;
 	onCancel: () => void;
 	onSuccess: (provider: InferenceProviderResponse) => void;
 }) {
@@ -755,7 +731,6 @@ function ProviderForm({
 	const {
 		control,
 		handleSubmit,
-		getValues,
 		setValue,
 		formState: { isSubmitting },
 	} = useForm<InferenceProviderFormValues>({
@@ -771,15 +746,27 @@ function ProviderForm({
 	});
 
 	const [selectedPresetId, setSelectedPresetId] = useState<string | null>(
-		null,
+		provider?.preset ?? null,
 	);
-	const { data: presets = [] } = useQuery({
-		...inferenceProviderPresetsQueryOptions({ api }),
-	});
+	const [presetSearchQuery, setPresetSearchQuery] = useState("");
 	const selectedPreset = useMemo(
 		() => presets.find((preset) => preset.id === selectedPresetId) ?? null,
 		[presets, selectedPresetId],
 	);
+	const presetFuse = useMemo(
+		() =>
+			new Fuse(presets, {
+				keys: ["name", "description", "api_base_url", "models"],
+				threshold: 0.3,
+				ignoreLocation: true,
+			}),
+		[presets],
+	);
+	const filteredPresets = useMemo(() => {
+		const query = presetSearchQuery.trim();
+		if (!query) return presets;
+		return presetFuse.search(query).map((result) => result.item);
+	}, [presetFuse, presetSearchQuery, presets]);
 
 	const handleApplyPreset = (preset: InferenceProviderPresetResponse) => {
 		setValue("displayName", preset.name, { shouldDirty: true });
@@ -800,20 +787,32 @@ function ProviderForm({
 		if (preset) handleApplyPreset(preset);
 	};
 
+	const handleFormatChange = (
+		nextFormat: InferenceProviderFormatDto,
+		currentFormat: InferenceProviderFormatDto,
+		onChange: (value: InferenceProviderFormatDto) => void,
+	) => {
+		if (
+			selectedPresetId &&
+			nextFormat !== currentFormat &&
+			(!selectedPreset || nextFormat !== selectedPreset.format)
+		) {
+			toast.warning(t("providerPresetFormatChanged"));
+		}
+		onChange(nextFormat);
+	};
+
 	const [showApiKey, setShowApiKey] = useState(false);
-	const watchedApiBaseUrl = useWatch({ control, name: "apiBaseUrl" });
-	const watchedApiKey = useWatch({ control, name: "apiKey" });
-	const canFetchModels = Boolean(
-		watchedApiBaseUrl?.trim() && watchedApiKey?.trim(),
-	);
+	const canFetchModels = Boolean(selectedPreset);
+	const fetchModelsDisabledReason = selectedPreset
+		? undefined
+		: t("fetchProviderModelsRequiresPreset");
 
 	const handleFetchModels = async () => {
-		const values = getValues();
-		return fetchProviderModels({
-			format: values.format,
-			apiBaseUrl: values.apiBaseUrl,
-			apiKey: values.apiKey,
-		});
+		if (!selectedPreset) {
+			throw new Error(t("fetchProviderModelsRequiresPreset"));
+		}
+		return selectedPreset.models;
 	};
 
 	const createMutation = useMutation({
@@ -847,6 +846,7 @@ function ProviderForm({
 					display_name: displayName,
 					format: values.format,
 					api_base_url: apiBaseUrl,
+					preset: selectedPresetId,
 					api_key: apiKey,
 					models,
 				});
@@ -900,49 +900,49 @@ function ProviderForm({
 				</Alert>
 			)}
 
-			{presets.length > 0 && (
-				<Card className="mb-4">
-					<Card.Header>
-						<div>
-							<Card.Title>{t("providerPresetsTitle")}</Card.Title>
-							<Card.Description>
-								{t("providerPresetsDescription")}
-							</Card.Description>
-						</div>
-					</Card.Header>
-					<Card.Content>
-						<Select
-							className="w-full"
-							variant="secondary"
-							aria-label={t("providerPresetsTitle")}
-							placeholder={t("providerPresetsPlaceholder")}
-							selectedKey={selectedPresetId ?? "__none__"}
-							onSelectionChange={(key) =>
-								handlePresetSelectionChange(
-									key === null ? null : String(key),
-								)
-							}
-						>
-							<Select.Trigger>
-								<Select.Value>
-									{selectedPreset ? (
-										<span className="flex min-w-0 items-center gap-2">
-											<PresetLogo
-												logo={selectedPreset.logo}
-											/>
-											<span className="truncate">
-												{selectedPreset.name}
-											</span>
+			<Card className="mb-4">
+				<Card.Header>
+					<div>
+						<Card.Title>{t("providerPresetsTitle")}</Card.Title>
+						<Card.Description>
+							{t("providerPresetsDescription")}
+						</Card.Description>
+					</div>
+				</Card.Header>
+				<Card.Content>
+					<Select
+						className="w-full"
+						variant="secondary"
+						aria-label={t("providerPresetsTitle")}
+						placeholder={t("providerPresetsPlaceholder")}
+						selectedKey={selectedPresetId ?? "__none__"}
+						onSelectionChange={(key) =>
+							handlePresetSelectionChange(
+								key === null ? null : String(key),
+							)
+						}
+					>
+						<Select.Trigger>
+							<Select.Value>
+								{selectedPreset ? (
+									<span className="flex min-w-0 items-center gap-2">
+										<PresetLogo
+											logo={selectedPreset.logo}
+										/>
+										<span className="truncate">
+											{selectedPreset.name}
 										</span>
-									) : (
-										<span className="text-muted">
-											{t("providerPresetsNone")}
-										</span>
-									)}
-								</Select.Value>
-								<Select.Indicator />
-							</Select.Trigger>
-							<Select.Popover>
+									</span>
+								) : (
+									<span className="text-muted">
+										{t("providerPresetsNone")}
+									</span>
+								)}
+							</Select.Value>
+							<Select.Indicator />
+						</Select.Trigger>
+						<Select.Popover>
+							{isPresetsLoading ? (
 								<ListBox>
 									<ListBox.Item
 										id="__none__"
@@ -953,36 +953,93 @@ function ProviderForm({
 										</span>
 										<ListBox.ItemIndicator />
 									</ListBox.Item>
-									{presets.map((preset) => (
-										<ListBox.Item
-											key={preset.id}
-											id={preset.id}
-											textValue={preset.name}
+									<ListBox.Item
+										id="__loading__"
+										textValue={t("providerPresetsLoading")}
+										className="pointer-events-none"
+									>
+										<div className="flex items-center gap-2 text-sm text-muted">
+											<Spinner
+												color="current"
+												size="sm"
+											/>
+											<span>
+												{t("providerPresetsLoading")}
+											</span>
+										</div>
+									</ListBox.Item>
+								</ListBox>
+							) : (
+								<>
+									<div className="sticky top-0 z-10 bg-overlay p-2">
+										<SearchField
+											value={presetSearchQuery}
+											onChange={setPresetSearchQuery}
+											aria-label={t(
+												"searchProviderPresets",
+											)}
+											variant="secondary"
+											className="w-full"
 										>
-											<div className="flex min-w-0 items-center gap-2">
-												<PresetLogo
-													logo={preset.logo}
-												/>
-												<div className="min-w-0 grid gap-0.5">
-													<span className="truncate">
-														{preset.name}
-													</span>
-													{preset.description && (
-														<span className="truncate text-xs text-muted">
-															{preset.description}
-														</span>
+											<SearchField.Group>
+												<SearchField.SearchIcon />
+												<SearchField.Input
+													placeholder={t(
+														"searchProviderPresetsPlaceholder",
 													)}
-												</div>
-											</div>
+												/>
+												<SearchField.ClearButton />
+											</SearchField.Group>
+										</SearchField>
+									</div>
+									<ListBox>
+										<ListBox.Item
+											id="__none__"
+											textValue={t("providerPresetsNone")}
+										>
+											<span className="text-muted">
+												{t("providerPresetsNone")}
+											</span>
 											<ListBox.ItemIndicator />
 										</ListBox.Item>
-									))}
-								</ListBox>
-							</Select.Popover>
-						</Select>
-					</Card.Content>
-				</Card>
-			)}
+										{filteredPresets.map((preset) => (
+											<ListBox.Item
+												key={preset.id}
+												id={preset.id}
+												textValue={preset.name}
+											>
+												<div className="flex min-w-0 items-center gap-2">
+													<PresetLogo
+														logo={preset.logo}
+													/>
+													<div className="min-w-0 grid gap-0.5">
+														<span className="truncate">
+															{preset.name}
+														</span>
+														{preset.description && (
+															<span className="truncate text-xs text-muted">
+																{
+																	preset.description
+																}
+															</span>
+														)}
+													</div>
+												</div>
+												<ListBox.ItemIndicator />
+											</ListBox.Item>
+										))}
+									</ListBox>
+									{filteredPresets.length === 0 && (
+										<p className="px-3 py-2 text-sm text-muted">
+											{t("noProviderPresetsMatch")}
+										</p>
+									)}
+								</>
+							)}
+						</Select.Popover>
+					</Select>
+				</Card.Content>
+			</Card>
 
 			<Card>
 				<Card.Header>
@@ -1106,8 +1163,10 @@ function ProviderForm({
 											selectedKey={field.value}
 											onSelectionChange={(key) => {
 												if (!key) return;
-												field.onChange(
+												handleFormatChange(
 													key as InferenceProviderFormatDto,
+													field.value,
+													field.onChange,
 												);
 											}}
 											variant="secondary"
@@ -1273,6 +1332,9 @@ function ProviderForm({
 											}
 											onFetchModels={handleFetchModels}
 											canFetchModels={canFetchModels}
+											fetchModelsDisabledReason={
+												fetchModelsDisabledReason
+											}
 										/>
 									)}
 								/>
@@ -1591,6 +1653,9 @@ export default function InferenceProvidersPage() {
 	} = useQuery({
 		...inferenceProviderListQueryOptions({ api }),
 	});
+	const { data: presets = [], isLoading: isPresetsLoading } = useQuery({
+		...inferenceProviderPresetsQueryOptions({ api }),
+	});
 
 	const codingAgents = useMemo(
 		() =>
@@ -1836,8 +1901,14 @@ export default function InferenceProvidersPage() {
 						<ListBox
 							aria-label={t("inferenceProviders")}
 							selectionMode="single"
+							selectionBehavior="replace"
 							selectedKeys={selectedProviderKeys}
-							onAction={(key) => handleProviderClick(String(key))}
+							onSelectionChange={(keys) => {
+								if (keys === "all") return;
+								const providerName = [...keys][0];
+								if (!providerName) return;
+								handleProviderClick(String(providerName));
+							}}
 							className="p-2"
 						>
 							{filteredProviders.map((provider) => (
@@ -1889,6 +1960,8 @@ export default function InferenceProvidersPage() {
 				{resolvedPanel.type === "create" && (
 					<ProviderForm
 						mode="create"
+						presets={presets}
+						isPresetsLoading={isPresetsLoading}
 						onCancel={() => setPanel({ type: "detail" })}
 						onSuccess={handleCreatedOrUpdated}
 					/>
@@ -1899,6 +1972,8 @@ export default function InferenceProvidersPage() {
 						key={resolvedPanel.provider.name}
 						mode="edit"
 						provider={resolvedPanel.provider}
+						presets={presets}
+						isPresetsLoading={isPresetsLoading}
 						onCancel={() => setPanel({ type: "detail" })}
 						onSuccess={handleCreatedOrUpdated}
 					/>
