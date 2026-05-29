@@ -150,15 +150,19 @@ interface InferenceProviderFormValues {
 interface ProviderModelFormValue {
 	id: string;
 	name: string;
+	selected: boolean;
 }
 
-function createProviderModelFormValue(name = ""): ProviderModelFormValue {
+function createProviderModelFormValue(
+	name = "",
+	selected = false,
+): ProviderModelFormValue {
 	const id = `provider-model-${crypto.randomUUID()}`;
-	return { id, name };
+	return { id, name, selected };
 }
 
-function toProviderModelFormValues(models: string[]) {
-	return models.map((model) => createProviderModelFormValue(model));
+function toProviderModelFormValues(models: string[], selected = true) {
+	return models.map((model) => createProviderModelFormValue(model, selected));
 }
 
 function ProviderIcon({ format }: { format: InferenceProviderFormatDto }) {
@@ -213,13 +217,17 @@ function MonoValue({
 }
 
 function normalizeModelNames(models: ProviderModelFormValue[]) {
-	return models.map((model) => model.name.trim()).filter(Boolean);
+	return models
+		.filter((model) => model.selected)
+		.map((model) => model.name.trim())
+		.filter(Boolean);
 }
 
 function validateModelNames(models: ProviderModelFormValue[], message: string) {
 	const seen = new Set<string>();
 
 	for (const model of models) {
+		if (!model.selected) continue;
 		const name = model.name.trim();
 		if (!name) continue;
 
@@ -315,12 +323,12 @@ function ProviderModelsEditor({
 	fetchModelsDisabledReason?: string;
 }) {
 	const { t } = useTranslation();
-	const emptyModel = useMemo(() => createProviderModelFormValue(), []);
+	const emptyModel = useMemo(
+		() => createProviderModelFormValue("", true),
+		[],
+	);
 	const [isFetching, setIsFetching] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
-	const [selectedIds, setSelectedIds] = useState<Set<string>>(
-		() => new Set(),
-	);
 	const [isBatchDeleteOpen, setIsBatchDeleteOpen] = useState(false);
 	const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
 		() => new Set(),
@@ -339,11 +347,11 @@ function ProviderModelsEditor({
 	const displayModels = hasRealModels ? filteredModels : [emptyModel];
 
 	const filteredSelectedCount = filteredModels.reduce(
-		(count, model) => count + (selectedIds.has(model.id) ? 1 : 0),
+		(count, model) => count + (model.selected ? 1 : 0),
 		0,
 	);
 	const totalSelectedCount = value.reduce(
-		(count, model) => count + (selectedIds.has(model.id) ? 1 : 0),
+		(count, model) => count + (model.selected ? 1 : 0),
 		0,
 	);
 	const allFilteredSelected =
@@ -378,34 +386,34 @@ function ProviderModelsEditor({
 	};
 
 	const handleAdd = () => {
-		onChange([...value, createProviderModelFormValue()]);
+		onChange([...value, createProviderModelFormValue("", true)]);
 	};
 
 	const toggleSelected = (id: string, selected: boolean) => {
-		setSelectedIds((prev) => {
-			const next = new Set(prev);
-			if (selected) next.add(id);
-			else next.delete(id);
-			return next;
-		});
+		if (value.length === 0) {
+			onChange([{ ...emptyModel, selected }]);
+			return;
+		}
+		onChange(
+			value.map((model) =>
+				model.id === id ? { ...model, selected } : model,
+			),
+		);
 	};
 
 	const handleToggleAllFiltered = (selected: boolean) => {
-		setSelectedIds((prev) => {
-			const next = new Set(prev);
-			for (const model of filteredModels) {
-				if (selected) next.add(model.id);
-				else next.delete(model.id);
-			}
-			return next;
-		});
+		const filteredIds = new Set(filteredModels.map((model) => model.id));
+		onChange(
+			value.map((model) =>
+				filteredIds.has(model.id) ? { ...model, selected } : model,
+			),
+		);
 	};
 
 	const handleBatchDelete = () => {
 		if (totalSelectedCount === 0) return;
-		const remaining = value.filter((model) => !selectedIds.has(model.id));
+		const remaining = value.filter((model) => !model.selected);
 		onChange(remaining);
-		setSelectedIds(new Set());
 		setIsBatchDeleteOpen(false);
 	};
 
@@ -470,23 +478,19 @@ function ProviderModelsEditor({
 
 		return (
 			<div key={model.id} className="flex items-center gap-2">
-				{hasRealModels && (
-					<Checkbox
-						variant={controlVariant}
-						aria-label={t("selectProviderModel", {
-							name: model.name || t("providerModelName"),
-						})}
-						isSelected={selectedIds.has(model.id)}
-						onChange={(selected) =>
-							toggleSelected(model.id, selected)
-						}
-						className="shrink-0"
-					>
-						<Checkbox.Control>
-							<Checkbox.Indicator />
-						</Checkbox.Control>
-					</Checkbox>
-				)}
+				<Checkbox
+					variant={controlVariant}
+					aria-label={t("selectProviderModel", {
+						name: model.name || t("providerModelName"),
+					})}
+					isSelected={model.selected}
+					onChange={(selected) => toggleSelected(model.id, selected)}
+					className="shrink-0"
+				>
+					<Checkbox.Control>
+						<Checkbox.Indicator />
+					</Checkbox.Control>
+				</Checkbox>
 				<Input
 					value={model.name}
 					onChange={(event) =>
@@ -644,8 +648,7 @@ function ProviderModelsEditor({
 							{filteredGroups.map((group) => {
 								const groupSelected = group.items.reduce(
 									(count, model) =>
-										count +
-										(selectedIds.has(model.id) ? 1 : 0),
+										count + (model.selected ? 1 : 0),
 									0,
 								);
 								const groupLabel = group.isUncategorized

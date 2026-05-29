@@ -337,7 +337,7 @@ export default {
 	validationProviderLatinNameInvalid: "Provider ID 只能包含小寫 a-z。",
 	validationProviderApiBaseUrlRequired: "請輸入 API base URL。",
 	validationProviderApiKeyRequired: "請輸入 API key。",
-	validationProviderModelsRequired: "請至少新增一個模型。",
+	validationProviderModelsRequired: "請至少選擇一個模型。",
 	validationProviderModelNameUnique: "模型名稱不能重複。",
 	inferenceFormatAnthropic: "Anthropic",
 	inferenceFormatAnthropicDescription: "Anthropic Messages API",

@@ -352,7 +352,7 @@ export default {
 		"Provider ID must contain only lowercase a-z.",
 	validationProviderApiBaseUrlRequired: "Enter an API base URL.",
 	validationProviderApiKeyRequired: "Enter an API key.",
-	validationProviderModelsRequired: "Add at least one model.",
+	validationProviderModelsRequired: "Select at least one model.",
 	validationProviderModelNameUnique: "Model names must be unique.",
 	inferenceFormatAnthropic: "Anthropic",
 	inferenceFormatAnthropicDescription: "Anthropic Messages API",
