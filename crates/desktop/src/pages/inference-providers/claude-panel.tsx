@@ -1,10 +1,13 @@
 import {
 	ArrowPathIcon,
 	CheckCircleIcon,
+	FolderOpenIcon,
 	PlayIcon,
 	PlusIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
+import { homeDir, join } from "@tauri-apps/api/path";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
 	Alert,
 	AlertDialog,
@@ -480,6 +483,21 @@ export function ClaudeInferenceProviderPanel(_: {
 		},
 	});
 
+	const handleShowFolder = async () => {
+		try {
+			const home = await homeDir();
+			const configPath = await join(home, ".claude", "settings.json");
+			await revealItemInDir(configPath);
+		} catch (error) {
+			console.error("Failed to reveal Claude Code config folder:", error);
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: t("showConfigFolderFailed"),
+			);
+		}
+	};
+
 	return (
 		<>
 			<div className="h-full overflow-y-auto">
@@ -500,6 +518,22 @@ export function ClaudeInferenceProviderPanel(_: {
 								</div>
 							</div>
 							<div className="flex shrink-0 items-center gap-2">
+								<Tooltip delay={0}>
+									<Tooltip.Trigger>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="sm"
+											aria-label={t("showConfigFolder")}
+											onPress={handleShowFolder}
+										>
+											<FolderOpenIcon className="size-4" />
+										</Button>
+									</Tooltip.Trigger>
+									<Tooltip.Content>
+										{t("showConfigFolder")}
+									</Tooltip.Content>
+								</Tooltip>
 								<Tooltip delay={0}>
 									<Tooltip.Trigger>
 										<Button
