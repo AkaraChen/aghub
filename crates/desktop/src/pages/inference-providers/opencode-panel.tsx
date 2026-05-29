@@ -23,7 +23,7 @@ import {
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type {
@@ -229,13 +229,6 @@ function OpenCodeEditProviderDialog({
 	const [name, setName] = useState(provider.name);
 	const [apiKey, setApiKey] = useState("");
 	const [nameError, setNameError] = useState<string | null>(null);
-
-	useEffect(() => {
-		if (!isOpen) return;
-		setName(provider.name);
-		setApiKey("");
-		setNameError(null);
-	}, [isOpen, provider.id, provider.name]);
 
 	const updateMutation = useMutation({
 		...updateOpenCodeProviderMutationOptions({

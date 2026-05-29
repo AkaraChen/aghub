@@ -33,10 +33,6 @@ export function GlobalSearch() {
 	const flatMatches = useMemo(() => groups.flatMap((g) => g.items), [groups]);
 
 	useEffect(() => {
-		setActiveIndex(-1);
-	}, [trimmed]);
-
-	useEffect(() => {
 		if (!isOpen) return;
 		const handleClick = (event: MouseEvent) => {
 			if (
@@ -80,6 +76,7 @@ export function GlobalSearch() {
 				onChange={(value) => {
 					setQuery(value);
 					setIsOpen(true);
+					setActiveIndex(-1);
 				}}
 				aria-label={t("globalSearchLabel")}
 				variant="secondary"

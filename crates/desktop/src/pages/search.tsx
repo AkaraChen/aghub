@@ -5,7 +5,7 @@ import {
 } from "@heroicons/react/24/solid";
 import { SearchField, Spinner } from "@heroui/react";
 import { useQueryState } from "nuqs";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import type { AvailableAgent } from "../contexts/agent-availability";
@@ -154,10 +154,11 @@ export default function SearchResultsPage() {
 	const { availableAgents } = useAgentAvailability();
 	const [urlQuery, setUrlQuery] = useQueryState("q", { defaultValue: "" });
 	const [draft, setDraft] = useState(urlQuery);
-
-	useEffect(() => {
+	const [lastSyncedQuery, setLastSyncedQuery] = useState(urlQuery);
+	if (urlQuery !== lastSyncedQuery) {
+		setLastSyncedQuery(urlQuery);
 		setDraft(urlQuery);
-	}, [urlQuery]);
+	}
 
 	const { groups, isMarketFetching } = useGlobalSearch({
 		query: urlQuery,
