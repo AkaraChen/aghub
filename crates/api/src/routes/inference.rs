@@ -201,7 +201,7 @@ fn models_dev_presets_from_json(
 		.into_values()
 		.filter_map(models_dev_provider_to_preset)
 		.collect::<Vec<_>>();
-	presets.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+	presets.sort_by_key(|preset| preset.name.to_lowercase());
 	Ok(presets)
 }
 
@@ -612,6 +612,96 @@ pub fn update_inference_provider(
 	Ok(Json(updated.into()))
 }
 
+fn remove_claude_provider_references(
+	store: &InferenceProviderStore,
+	provider: &InferenceProvider,
+) -> Result<(), ApiError> {
+	let adapter = claude_adapter()?;
+	let binding_ids = store
+		.list_agent_bindings("claude")
+		.map_err(ApiError::from)?
+		.into_iter()
+		.filter(|row| row.inference_provider_id == provider.id)
+		.map(|row| row.id)
+		.collect::<Vec<_>>();
+
+	for binding_id in binding_ids {
+		adapter
+			.remove_binding(store, &binding_id)
+			.map_err(ApiError::from)?;
+	}
+
+	Ok(())
+}
+
+fn remove_codex_provider_references(
+	store: &InferenceProviderStore,
+	provider: &InferenceProvider,
+) -> Result<(), ApiError> {
+	let adapter = codex_adapter()?;
+	let binding_ids = store
+		.list_agent_bindings("codex")
+		.map_err(ApiError::from)?
+		.into_iter()
+		.filter(|row| row.inference_provider_id == provider.id)
+		.map(|row| row.id)
+		.collect::<Vec<_>>();
+
+	for binding_id in binding_ids {
+		adapter
+			.remove_provider(store, &binding_id)
+			.map_err(ApiError::from)?;
+	}
+
+	Ok(())
+}
+
+fn remove_opencode_provider_references(
+	store: &InferenceProviderStore,
+	provider: &InferenceProvider,
+) -> Result<(), ApiError> {
+	let Some(api_key) =
+		store.get_api_key(&provider.id).map_err(ApiError::from)?
+	else {
+		return Ok(());
+	};
+
+	let adapter = opencode_adapter()?;
+	let inventory = vec![(provider.clone(), api_key)];
+	let mut provider_ids = Vec::new();
+	for binding in adapter.load_providers().map_err(ApiError::from)?.providers {
+		let agent_api_key =
+			adapter.api_key(&binding.id).map_err(ApiError::from)?;
+		if find_matching_inventory_provider(
+			&inventory,
+			&binding,
+			agent_api_key,
+		)?
+		.is_some() && !provider_ids.iter().any(|id| id == &binding.id)
+		{
+			provider_ids.push(binding.id);
+		}
+	}
+
+	for provider_id in provider_ids {
+		adapter
+			.remove_provider(&provider_id)
+			.map_err(ApiError::from)?;
+	}
+
+	Ok(())
+}
+
+fn remove_agent_provider_references(
+	store: &InferenceProviderStore,
+	provider: &InferenceProvider,
+) -> Result<(), ApiError> {
+	remove_claude_provider_references(store, provider)?;
+	remove_codex_provider_references(store, provider)?;
+	remove_opencode_provider_references(store, provider)?;
+	Ok(())
+}
+
 #[delete("/inference/providers/<name>")]
 pub fn delete_inference_provider(
 	state: &State<InferenceProviderState>,
@@ -619,6 +709,7 @@ pub fn delete_inference_provider(
 ) -> ApiNoContent {
 	let store = store(state);
 	let provider = find_by_name(&store, name)?;
+	remove_agent_provider_references(&store, &provider)?;
 	store.delete(&provider.id).map_err(ApiError::from)?;
 	Ok(NoContent)
 }
