@@ -39,12 +39,11 @@ const DISTINCT_ID_FILE: &str = "posthog-distinct-id";
 static CLIENT: OnceCell<Option<Client>> = OnceCell::const_new();
 
 /// Mirrors the user's analytics consent in the desktop store. Starts
-/// `true` to match the JS-side default (`granted`); the webview calls
-/// `posthog_set_enabled(false)` early in bootstrap if the user has
-/// opted out, before any captures fire. When `false`, `posthog_capture`
-/// and `posthog_identify` short-circuit before constructing or
-/// touching the client.
-static ENABLED: AtomicBool = AtomicBool::new(true);
+/// fail-closed so analytics remains disabled until the webview
+/// successfully syncs a granted consent state. When `false`,
+/// `posthog_capture` and `posthog_identify` short-circuit before
+/// constructing or touching the client.
+static ENABLED: AtomicBool = AtomicBool::new(false);
 
 /// Generated once per process start. PostHog uses this to group events
 /// into a session for live events / session replay / funnels. posthog-js
