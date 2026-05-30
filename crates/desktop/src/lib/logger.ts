@@ -27,12 +27,13 @@ const SERVICE_NAME = "aghub-desktop";
 const key = import.meta.env.VITE_POSTHOG_KEY as string | undefined;
 const host = import.meta.env.VITE_POSTHOG_HOST as string | undefined;
 const configured = Boolean(key && host) && import.meta.env.PROD;
+const TRAILING_SLASHES = /\/+$/;
 
 let logger: Logger | null = null;
 let provider: LoggerProvider | null = null;
 
 function logIngestUrl(posthogHost: string) {
-	return `${posthogHost.replace(/\/+$/, "")}/i/v1/logs`;
+	return `${posthogHost.replace(TRAILING_SLASHES, "")}/i/v1/logs`;
 }
 
 function startLogForwarding() {
