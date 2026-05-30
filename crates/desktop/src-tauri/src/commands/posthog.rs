@@ -50,9 +50,6 @@ static ENABLED: AtomicBool = AtomicBool::new(false);
 /// generates one automatically; the Rust SDK does not, so we own it.
 static SESSION_ID: OnceLock<String> = OnceLock::new();
 
-/// Resolved on first capture call and cached. Persisted across restarts.
-static DISTINCT_ID: OnceLock<String> = OnceLock::new();
-
 async fn build_client() -> Option<Client> {
 	let Some(key) = POSTHOG_KEY else {
 		warn!(
@@ -114,40 +111,44 @@ fn distinct_id_file_path(app: &AppHandle) -> Option<PathBuf> {
 	Some(dir.join(DISTINCT_ID_FILE))
 }
 
-/// Read the persisted distinct_id, generating + writing one if missing
-/// or unreadable. Falls back to an in-memory UUID if the disk path is
-/// unavailable for any reason — better than reusing "anonymous".
-fn resolve_distinct_id(app: &AppHandle) -> String {
-	if let Some(cached) = DISTINCT_ID.get() {
-		return cached.clone();
+fn persist_distinct_id(app: &AppHandle, distinct_id: &str) {
+	if let Some(path) = distinct_id_file_path(app) {
+		if let Err(error) = fs::write(&path, distinct_id) {
+			warn!(
+				"posthog: failed to persist distinct_id at {}: {error}",
+				path.display()
+			);
+		}
 	}
-	let resolved = match distinct_id_file_path(app) {
+}
+
+fn read_or_create_distinct_id(app: &AppHandle) -> String {
+	match distinct_id_file_path(app) {
 		Some(path) => match fs::read_to_string(&path) {
 			Ok(content) => {
 				let trimmed = content.trim().to_string();
-				if !trimmed.is_empty() {
-					trimmed
-				} else {
+				if trimmed.is_empty() {
 					let id = Uuid::new_v4().to_string();
-					let _ = fs::write(&path, &id);
+					persist_distinct_id(app, &id);
 					id
+				} else {
+					trimmed
 				}
 			}
 			Err(_) => {
 				let id = Uuid::new_v4().to_string();
-				if let Err(error) = fs::write(&path, &id) {
-					warn!(
-						"posthog: failed to persist distinct_id at {}: {error}",
-						path.display()
-					);
-				}
+				persist_distinct_id(app, &id);
 				id
 			}
 		},
 		None => Uuid::new_v4().to_string(),
-	};
-	let _ = DISTINCT_ID.set(resolved.clone());
-	resolved
+	}
+}
+
+fn replace_distinct_id(app: &AppHandle, distinct_id: &str) -> String {
+	let previous = read_or_create_distinct_id(app);
+	persist_distinct_id(app, distinct_id);
+	previous
 }
 
 fn apply_properties(event: &mut Event, properties: HashMap<String, Value>) {
@@ -202,7 +203,7 @@ pub async fn posthog_capture(
 	};
 	let did = distinct_id
 		.filter(|s| !s.is_empty())
-		.unwrap_or_else(|| resolve_distinct_id(&app));
+		.unwrap_or_else(|| read_or_create_distinct_id(&app));
 	let mut ev = Event::new(event.as_str(), did.as_str());
 	apply_default_properties(&mut ev);
 	apply_properties(&mut ev, properties);
@@ -243,20 +244,19 @@ pub async fn posthog_identify(
 		return Ok(());
 	};
 
-	// Persist the identified id so future anonymous captures use it.
-	if let Some(path) = distinct_id_file_path(&app) {
-		if let Err(error) = fs::write(&path, &distinct_id) {
-			warn!(
-				"posthog: failed to persist distinct_id at {}: {error}",
-				path.display()
-			);
-		}
-	}
-	// Replace the cached value (OnceLock can't mutate, but the next
-	// process start will read the file we just wrote).
+	let anon_distinct_id = replace_distinct_id(&app, &distinct_id);
 
 	let mut ev = Event::new("$identify", distinct_id.as_str());
 	apply_default_properties(&mut ev);
+	if anon_distinct_id != distinct_id {
+		if let Err(error) =
+			ev.insert_prop("$anon_distinct_id", anon_distinct_id)
+		{
+			warn!(
+				"posthog: failed to set $anon_distinct_id on identify: {error}"
+			);
+		}
+	}
 	if !properties.is_empty() {
 		let set_value = Value::Object(
 			properties.into_iter().collect::<serde_json::Map<_, _>>(),
@@ -291,7 +291,7 @@ pub async fn posthog_identify(
 /// the same person in PostHog.
 #[tauri::command]
 pub async fn posthog_get_distinct_id(app: AppHandle) -> String {
-	resolve_distinct_id(&app)
+	read_or_create_distinct_id(&app)
 }
 
 /// Hand the per-process session id to the webview so posthog-js can
