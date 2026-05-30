@@ -8,23 +8,17 @@ fn main() {
 	// export the env vars manually before `cargo build`. Falls back to
 	// any value already in the process env so CI can override.
 	let env_path = Path::new("../.env");
-	println!("cargo:rerun-if-changed={}", env_path.display());
-	if let Ok(iter) = dotenvy::from_path_iter(env_path) {
-		for item in iter.flatten() {
-			let (key, value) = item;
-			// Only forward VITE_-prefixed entries (those are the ones
-			// shared between the webview and Rust by convention).
-			if !key.starts_with("VITE_") {
-				continue;
-			}
-			if std::env::var_os(&key).is_none() {
-				println!("cargo:rustc-env={key}={value}");
-			}
-		}
+	if env_path.exists() {
+		println!("cargo:rerun-if-changed={}", env_path.display());
+		let _ = dotenvy::from_path(env_path);
 	}
 
-	println!("cargo:rerun-if-env-changed=VITE_POSTHOG_KEY");
-	println!("cargo:rerun-if-env-changed=VITE_POSTHOG_HOST");
+	for key in ["VITE_POSTHOG_KEY", "VITE_POSTHOG_HOST"] {
+		println!("cargo:rerun-if-env-changed={key}");
+		if let Ok(value) = std::env::var(key) {
+			println!("cargo:rustc-env={key}={value}");
+		}
+	}
 
 	tauri_build::build()
 }
