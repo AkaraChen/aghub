@@ -21,12 +21,11 @@ const ANALYTICS_CONSENT_KEY = "analyticsConsent";
 const ANALYTICS_CONSENT_ACK_KEY = "analyticsConsentAcked";
 
 /**
- * Default for users who never saw the welcome dialog (or upgraded
- * from a pre-consent build): granted. Aligns with desktop-tool
- * convention — users actively opt out via the welcome dialog or
- * Settings → Application rather than being asked on every launch.
+ * Default for users who have not made an analytics choice yet: denied.
+ * Analytics starts only after the user grants consent in the welcome
+ * dialog or Settings.
  */
-const DEFAULT_CONSENT: AnalyticsConsent = "granted";
+const DEFAULT_CONSENT: AnalyticsConsent = "denied";
 
 export async function getAnalyticsConsent(): Promise<AnalyticsConsent> {
 	const s = await getStore();
