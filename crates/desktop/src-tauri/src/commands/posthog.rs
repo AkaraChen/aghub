@@ -28,60 +28,68 @@ const POSTHOG_HOST: Option<&str> = option_env!("VITE_POSTHOG_HOST");
 /// (localStorage in the webview).
 const DISTINCT_ID_FILE: &str = "posthog-distinct-id";
 
-static CLIENT: OnceCell<Option<Client>> = OnceCell::const_new();
+static CLIENT: OnceCell<PostHogRuntime> = OnceCell::const_new();
 
-/// Mirrors the user's analytics consent in the desktop store. Starts
-/// `true` to match the JS-side default (`granted`); the webview calls
-/// `posthog_set_enabled(false)` early in bootstrap if the user has
-/// opted out, before any captures fire. When `false`, `posthog_capture`
-/// and `posthog_identify` short-circuit before constructing or
-/// touching the client.
-static ENABLED: AtomicBool = AtomicBool::new(true);
+struct PostHogRuntime {
+	client: Option<Client>,
+	/// Mirrors the user's analytics consent in the desktop store. Starts
+	/// `true` to match the JS-side default (`granted`); the webview calls
+	/// `posthog_set_enabled(false)` early in bootstrap if the user has
+	/// opted out, before any captures fire.
+	enabled: AtomicBool,
+	/// Generated once per process start. PostHog uses this to group
+	/// events into a session for live events / session replay / funnels.
+	session_id: String,
+	/// Resolved on first capture call and cached. Persisted across restarts.
+	distinct_id: OnceLock<String>,
+}
 
-/// Generated once per process start. PostHog uses this to group events
-/// into a session for live events / session replay / funnels. posthog-js
-/// generates one automatically; the Rust SDK does not, so we own it.
-static SESSION_ID: OnceLock<String> = OnceLock::new();
+async fn build_client() -> PostHogRuntime {
+	let client = match POSTHOG_KEY {
+		Some("") => {
+			warn!("posthog: VITE_POSTHOG_KEY is empty; analytics disabled");
+			None
+		}
+		Some(key) => {
+			let host_log =
+				POSTHOG_HOST.unwrap_or("https://us.i.posthog.com (default)");
+			let mut builder = ClientOptionsBuilder::default();
+			builder.api_key(key.to_string());
+			if let Some(host) = POSTHOG_HOST.filter(|h| !h.is_empty()) {
+				builder.host(host.to_string());
+			}
 
-/// Resolved on first capture call and cached. Persisted across restarts.
-static DISTINCT_ID: OnceLock<String> = OnceLock::new();
-
-async fn build_client() -> Option<Client> {
-	let Some(key) = POSTHOG_KEY else {
-		warn!(
-			"posthog: VITE_POSTHOG_KEY was not embedded at compile time; \
-			analytics disabled. Make sure crates/desktop/.env exists \
-			before running cargo build."
-		);
-		return None;
-	};
-	if key.is_empty() {
-		warn!("posthog: VITE_POSTHOG_KEY is empty; analytics disabled");
-		return None;
-	}
-	let host_log = POSTHOG_HOST.unwrap_or("https://us.i.posthog.com (default)");
-	let mut builder = ClientOptionsBuilder::default();
-	builder.api_key(key.to_string());
-	if let Some(host) = POSTHOG_HOST.filter(|h| !h.is_empty()) {
-		builder.host(host.to_string());
-	}
-	let options = match builder.build() {
-		Ok(options) => options,
-		Err(error) => {
-			warn!("posthog: invalid client options: {error}");
-			return None;
+			match builder.build() {
+				Ok(options) => {
+					info!("posthog: client initialized for host {host_log}");
+					Some(client(options).await)
+				}
+				Err(error) => {
+					warn!("posthog: invalid client options: {error}");
+					None
+				}
+			}
+		}
+		None => {
+			warn!(
+				"posthog: VITE_POSTHOG_KEY was not embedded at compile time; \
+				analytics disabled. Make sure crates/desktop/.env exists \
+				before running cargo build."
+			);
+			None
 		}
 	};
-	info!("posthog: client initialized for host {host_log}");
-	Some(client(options).await)
+
+	PostHogRuntime {
+		client,
+		enabled: AtomicBool::new(true),
+		session_id: Uuid::new_v4().to_string(),
+		distinct_id: OnceLock::new(),
+	}
 }
 
-async fn get_client() -> Option<&'static Client> {
-	CLIENT.get_or_init(build_client).await.as_ref()
-}
-
-fn session_id() -> &'static str {
-	SESSION_ID.get_or_init(|| Uuid::new_v4().to_string())
+async fn runtime() -> &'static PostHogRuntime {
+	CLIENT.get_or_init(build_client).await
 }
 
 fn distinct_id_file_path(app: &AppHandle) -> Option<PathBuf> {
@@ -102,8 +110,8 @@ fn distinct_id_file_path(app: &AppHandle) -> Option<PathBuf> {
 /// Read the persisted distinct_id, generating + writing one if missing
 /// or unreadable. Falls back to an in-memory UUID if the disk path is
 /// unavailable for any reason — better than reusing "anonymous".
-fn resolve_distinct_id(app: &AppHandle) -> String {
-	if let Some(cached) = DISTINCT_ID.get() {
+fn resolve_distinct_id(runtime: &PostHogRuntime, app: &AppHandle) -> String {
+	if let Some(cached) = runtime.distinct_id.get() {
 		return cached.clone();
 	}
 	let resolved = match distinct_id_file_path(app) {
@@ -131,7 +139,7 @@ fn resolve_distinct_id(app: &AppHandle) -> String {
 		},
 		None => Uuid::new_v4().to_string(),
 	};
-	let _ = DISTINCT_ID.set(resolved.clone());
+	let _ = runtime.distinct_id.set(resolved.clone());
 	resolved
 }
 
@@ -145,8 +153,8 @@ fn apply_properties(event: &mut Event, properties: HashMap<String, Value>) {
 
 /// Adds the session/platform context PostHog needs to group events
 /// into a usable session for live events, persons, and replay.
-fn apply_default_properties(event: &mut Event) {
-	let _ = event.insert_prop("$session_id", session_id());
+fn apply_default_properties(runtime: &PostHogRuntime, event: &mut Event) {
+	let _ = event.insert_prop("$session_id", runtime.session_id.as_str());
 	let _ = event.insert_prop(
 		"$os",
 		if cfg!(target_os = "macos") {
@@ -179,17 +187,18 @@ pub async fn posthog_capture(
 	properties: HashMap<String, Value>,
 	distinct_id: Option<String>,
 ) -> Result<(), String> {
-	if !ENABLED.load(Ordering::Relaxed) {
+	let runtime = runtime().await;
+	if !runtime.enabled.load(Ordering::Relaxed) {
 		return Ok(());
 	}
-	let Some(client) = get_client().await else {
+	let Some(client) = runtime.client.as_ref() else {
 		return Ok(());
 	};
 	let did = distinct_id
 		.filter(|s| !s.is_empty())
-		.unwrap_or_else(|| resolve_distinct_id(&app));
+		.unwrap_or_else(|| resolve_distinct_id(runtime, &app));
 	let mut ev = Event::new(event.as_str(), did.as_str());
-	apply_default_properties(&mut ev);
+	apply_default_properties(runtime, &mut ev);
 	apply_properties(&mut ev, properties);
 
 	let event_label = event.clone();
@@ -221,10 +230,11 @@ pub async fn posthog_identify(
 	distinct_id: String,
 	properties: HashMap<String, Value>,
 ) -> Result<(), String> {
-	if !ENABLED.load(Ordering::Relaxed) {
+	let runtime = runtime().await;
+	if !runtime.enabled.load(Ordering::Relaxed) {
 		return Ok(());
 	}
-	let Some(client) = get_client().await else {
+	let Some(client) = runtime.client.as_ref() else {
 		return Ok(());
 	};
 
@@ -237,11 +247,10 @@ pub async fn posthog_identify(
 			);
 		}
 	}
-	// Replace the cached value (OnceLock can't mutate, but the next
-	// process start will read the file we just wrote).
+	// OnceLock can't mutate; the next process start will read the file we just wrote.
 
 	let mut ev = Event::new("$identify", distinct_id.as_str());
-	apply_default_properties(&mut ev);
+	apply_default_properties(runtime, &mut ev);
 	if !properties.is_empty() {
 		let set_value = Value::Object(
 			properties.into_iter().collect::<serde_json::Map<_, _>>(),
@@ -276,7 +285,7 @@ pub async fn posthog_identify(
 /// the same person in PostHog.
 #[tauri::command]
 pub async fn posthog_get_distinct_id(app: AppHandle) -> String {
-	resolve_distinct_id(&app)
+	resolve_distinct_id(runtime().await, &app)
 }
 
 /// Hand the per-process session id to the webview so posthog-js can
@@ -285,7 +294,7 @@ pub async fn posthog_get_distinct_id(app: AppHandle) -> String {
 /// JS replays into the same PostHog session.
 #[tauri::command]
 pub async fn posthog_get_session_id() -> String {
-	session_id().to_string()
+	runtime().await.session_id.clone()
 }
 
 /// Toggle Rust-side capture/identify based on the user's analytics
@@ -293,8 +302,8 @@ pub async fn posthog_get_session_id() -> String {
 /// Tauri store), so it's responsible for syncing the flag here on
 /// boot and whenever the user toggles it in Settings.
 #[tauri::command]
-pub fn posthog_set_enabled(enabled: bool) {
-	let previous = ENABLED.swap(enabled, Ordering::Relaxed);
+pub async fn posthog_set_enabled(enabled: bool) {
+	let previous = runtime().await.enabled.swap(enabled, Ordering::Relaxed);
 	if previous != enabled {
 		info!(
 			"posthog: capture {}",
