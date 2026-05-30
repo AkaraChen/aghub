@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import posthog from "posthog-js";
+import { setLogForwardingEnabled } from "./logger";
 import { getAnalyticsConsent } from "./store";
 
 /**
@@ -67,6 +68,7 @@ export async function initBrowserPosthog() {
 	} catch (error) {
 		logFailure("posthog_set_enabled", error);
 	}
+	setLogForwardingEnabled(enabled);
 	if (!enabled) return;
 
 	let distinctId: string | undefined;
@@ -98,14 +100,12 @@ export async function initBrowserPosthog() {
 		capture_pageview: false,
 		capture_pageleave: false,
 		// Turn replay on. The recording lives in posthog-js; there is
-		// no Rust replacement for it. Override PostHog's privacy defaults
-		// since this is an internal desktop app — without this every
-		// piece of text in the UI renders as the diagonal-stripe mask.
+		// no Rust replacement for it. Keep PostHog's privacy masking
+		// defaults so config screens do not leak env vars, headers, or
+		// credentials through session replay.
 		disable_session_recording: false,
 		session_recording: {
-			maskAllInputs: false,
-			maskTextSelector: undefined,
-			blockSelector: undefined,
+			maskAllInputs: true,
 		},
 		// posthog-js has its own try/catch around send; this just makes
 		// sure it surfaces during local dev.
@@ -134,6 +134,7 @@ export async function applyAnalyticsConsent(granted: boolean) {
 	} catch (error) {
 		logFailure("posthog_set_enabled", error);
 	}
+	setLogForwardingEnabled(granted);
 
 	if (!key || !host) return;
 

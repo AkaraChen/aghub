@@ -61,27 +61,26 @@ Or visit [Releases](https://github.com/akarachen/aghub/releases) for all availab
 
 **Flexible Scoping**
 
-  - **Install plugins from anywhere** — the official registry, third-party Git URLs, or a local path
-  - **Marketplace built in** — discover, browse, and install Claude Code plugins (v2) without leaving aghub
-  - **Full lifecycle management** — install, update, enable/disable, and remove plugins with one command
-  - **Global or project scope** — apply plugins everywhere or pin them to a single project
+- **Install plugins from anywhere** — the official registry, third-party Git URLs, or a local path
+- **Marketplace built in** — discover, browse, and install Claude Code plugins (v2) without leaving aghub
+- **Full lifecycle management** — install, update, enable/disable, and remove plugins with one command
+- **Global or project scope** — apply plugins everywhere or pin them to a single project
 
 **Claude Code Plugins**
 
-  - **Start from a preset** — spin up popular providers from built-in presets, or configure a custom endpoint from
+- **Start from a preset** — spin up popular providers from built-in presets, or configure a custom endpoint from
   scratch
-  - **Bring your own model** — point Claude, Codex, and OpenCode at any custom inference endpoint
-  - **Every API format** — Anthropic Messages, OpenAI Chat Completions, and OpenAI Responses
-  - **Keys stay safe** — API keys are stored in your OS-native keychain, never in plaintext config
-  - **Per-agent model selection** — choose the right provider and model for each agent independently
+- **Bring your own model** — point Claude, Codex, and OpenCode at any custom inference endpoint
+- **Every API format** — Anthropic Messages, OpenAI Chat Completions, and OpenAI Responses
+- **Keys stay safe** — API keys are stored in your OS-native keychain, never in plaintext config
+- **Per-agent model selection** — choose the right provider and model for each agent independently
 
 **Claude Code Plugins**
 
-  - **Install plugins from anywhere** — the official registry, third-party Git URLs, or a local path
-  - **Marketplace built in** — discover, browse, and install Claude Code plugins (v2) without leaving aghub
-  - **Full lifecycle management** — install, update, enable/disable, and remove plugins with one command
-  - **Global or project scope** — apply plugins everywhere or pin them to a single project
-
+- **Install plugins from anywhere** — the official registry, third-party Git URLs, or a local path
+- **Marketplace built in** — discover, browse, and install Claude Code plugins (v2) without leaving aghub
+- **Full lifecycle management** — install, update, enable/disable, and remove plugins with one command
+- **Global or project scope** — apply plugins everywhere or pin them to a single project
 
 ## Contributing
 

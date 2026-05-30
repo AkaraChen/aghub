@@ -5,38 +5,47 @@ import {
 	BatchLogRecordProcessor,
 	LoggerProvider,
 } from "@opentelemetry/sdk-logs";
+import { getAnalyticsConsent } from "./store";
 
 /**
  * OpenTelemetry-based log forwarding to PostHog Logs.
  *
  * Sits alongside `./analytics.ts` (which uses posthog-js for events,
- * sessions, and exception capture). PostHog accepts OTLP log records at
- * `${VITE_POSTHOG_HOST}/otlp/v1/logs` with the project key as a Bearer
+ * sessions, and exception capture). PostHog accepts log records at
+ * `${VITE_POSTHOG_HOST}/i/v1/logs` with the project key as a Bearer
  * token, so we reuse the same env vars analytics.ts already reads.
  *
  * Disabled when:
- * - VITE_POSTHOG_KEY / VITE_POSTHOG_HOST aren't set, or
+ * - VITE_POSTHOG_KEY / VITE_POSTHOG_HOST aren't set,
  * - we're running in dev (`import.meta.env.PROD === false`) — local
- *   noise shouldn't reach production telemetry.
+ *   noise shouldn't reach production telemetry, or
+ * - the user has not granted analytics consent.
  */
 
 const SERVICE_NAME = "aghub-desktop";
 
 const key = import.meta.env.VITE_POSTHOG_KEY as string | undefined;
 const host = import.meta.env.VITE_POSTHOG_HOST as string | undefined;
-const enabled = Boolean(key && host) && import.meta.env.PROD;
+const configured = Boolean(key && host) && import.meta.env.PROD;
 
 let logger: Logger | null = null;
+let provider: LoggerProvider | null = null;
 
-if (enabled) {
+function logIngestUrl(posthogHost: string) {
+	return `${posthogHost.replace(/\/+$/, "")}/i/v1/logs`;
+}
+
+function startLogForwarding() {
+	if (!configured || logger || !key || !host) return;
+
 	const exporter = new OTLPLogExporter({
-		url: `${host?.replace(/\/+$/, "")}/otlp/v1/logs`,
+		url: logIngestUrl(host),
 		headers: {
 			Authorization: `Bearer ${key}`,
 		},
 	});
 
-	const provider = new LoggerProvider({
+	provider = new LoggerProvider({
 		resource: resourceFromAttributes({
 			"service.name": SERVICE_NAME,
 		}),
@@ -44,14 +53,34 @@ if (enabled) {
 	});
 
 	logger = provider.getLogger(SERVICE_NAME);
+}
 
-	// Best-effort flush on tab close / app shutdown so the last logs
-	// in the batch don't get dropped.
-	if (typeof window !== "undefined") {
-		window.addEventListener("beforeunload", () => {
-			void provider.shutdown();
-		});
+function stopLogForwarding() {
+	const activeProvider = provider;
+	logger = null;
+	provider = null;
+	if (activeProvider) {
+		void activeProvider.shutdown();
 	}
+}
+
+export async function initLogForwarding() {
+	const consent = await getAnalyticsConsent();
+	setLogForwardingEnabled(consent === "granted");
+}
+
+export function setLogForwardingEnabled(enabled: boolean) {
+	if (enabled) {
+		startLogForwarding();
+	} else {
+		stopLogForwarding();
+	}
+}
+
+if (typeof window !== "undefined") {
+	window.addEventListener("beforeunload", () => {
+		stopLogForwarding();
+	});
 }
 
 interface LogAttributes {
