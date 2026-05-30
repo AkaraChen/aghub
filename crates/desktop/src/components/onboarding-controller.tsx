@@ -17,8 +17,10 @@ import {
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import { useProjects } from "../hooks/use-projects";
-import { ONBOARDING_EVENT, type OnboardingCommand } from "../lib/onboarding";
 import { applyAnalyticsConsent, capture } from "../lib/analytics";
+import { useAppConfig } from "../lib/app-config";
+import { initLogForwarding } from "../lib/logger";
+import { ONBOARDING_EVENT, type OnboardingCommand } from "../lib/onboarding";
 import {
 	getOnboardingProgress,
 	setAnalyticsConsent,
@@ -79,13 +81,16 @@ export function OnboardingController() {
 	const { t } = useTranslation();
 	const [location, setLocation] = useLocation();
 	const { data: projects = [] } = useProjects();
+	const { config: appConfig, setConfig: setAppConfig } = useAppConfig();
 	const [isReady, setIsReady] = useState(false);
 	const [overlayMode, setOverlayMode] = useState<OverlayMode>(null);
 	const [currentStep, setCurrentStep] = useState(0);
 	const [pendingProjectTour, setPendingProjectTour] = useState(false);
 	// Pre-checked: opt-in by default for first-time users. Persisted +
 	// applied (Rust + posthog-js) when the user dismisses the dialog.
-	const [analyticsOptIn, setAnalyticsOptIn] = useState(true);
+	const [analyticsOptIn, setAnalyticsOptIn] = useState(
+		appConfig.analyticsEnabled,
+	);
 	const activeDriverRef = useRef<Driver | null>(null);
 	const previousProjectIdsRef = useRef<string[]>([]);
 
@@ -395,7 +400,13 @@ export function OnboardingController() {
 		const consent = analyticsOptIn ? "granted" : "denied";
 		try {
 			await setAnalyticsConsent(consent);
-			await applyAnalyticsConsent(analyticsOptIn);
+			const nextConfig = {
+				...appConfig,
+				analyticsEnabled: analyticsOptIn,
+			};
+			const savedConfig = await setAppConfig(nextConfig);
+			applyAnalyticsConsent(analyticsOptIn, savedConfig);
+			initLogForwarding(savedConfig);
 		} catch (error) {
 			console.error("Failed to persist analytics consent:", error);
 		}

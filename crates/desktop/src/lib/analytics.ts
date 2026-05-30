@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import posthog from "posthog-js";
-import { getAnalyticsConsent } from "./store";
+import { type AppConfig, getCurrentAppConfig } from "./app-config";
 
 /**
  * Hybrid PostHog setup that splits responsibilities between the Rust
@@ -10,27 +10,15 @@ import { getAnalyticsConsent } from "./store";
  *   ─────────────────        ──────────────────────
  *   custom event capture     session replay
  *   identify                 autocapture (clicks)
- *   exception forwarding     pageviews
- *   owns distinct_id         exception autocapture
+ *   owns app config          pageviews
+ *                            exception autocapture
  *                            console capture
  *
- * Why both? posthog-js fetches silently fail in some Tauri v2
- * webviews (PostHog/posthog-js#1760), so we route any *manually
- * triggered* event through Rust to guarantee delivery. posthog-js
- * stays in the loop because session replay, autocapture, and the
- * exception/console listeners are all browser-only features that
- * have no Rust equivalent.
- *
- * The two SDKs share the same `distinct_id`: Rust generates and
- * persists a UUID on first launch, exposes it via the
- * `posthog_get_distinct_id` Tauri command, and the webview boots
- * posthog-js with `bootstrap.distinctID` set to that value. Without
- * this hand-off, replays wouldn't link to the events that triggered
- * them.
+ * App config is loaded once via `get_app_config` before React renders.
+ * From that point both this module and React components read/update the
+ * same config object instead of independently touching env vars or
+ * asking Rust for distinct/session IDs.
  */
-
-const key = import.meta.env.VITE_POSTHOG_KEY as string | undefined;
-const host = import.meta.env.VITE_POSTHOG_HOST as string | undefined;
 
 type Properties = Record<string, unknown>;
 
@@ -48,107 +36,69 @@ function logFailure(action: string, error: unknown) {
 	console.warn(`[analytics] ${action} failed`, error);
 }
 
+function isPosthogConfigured(config: AppConfig | null): config is AppConfig {
+	return Boolean(config?.posthog.key && config.posthog.host);
+}
+
+function isPosthogLoaded() {
+	// posthog-js exposes __loaded for this case.
+	// biome-ignore lint/suspicious/noExplicitAny: posthog-js internal flag
+	return (posthog as any).__loaded === true;
+}
+
 /**
- * Initialize posthog-js for replay + autocapture, bootstrapped with
- * the Rust-owned distinct_id so JS-side replays attach to the same
- * person as Rust-originated events. Must be awaited before any
- * capture call so the distinct_id is in place. Safe to call once.
+ * Initialize posthog-js for replay + autocapture. This is called after
+ * the blocking app-config load and before React renders. We still create
+ * the JS client when credentials exist even if analytics is disabled;
+ * capture paths early-return and the JS client is opted out/stopped.
  */
-export async function initBrowserPosthog() {
-	if (!key || !host) return;
-
-	// Gate everything on user consent. We tell Rust first so even if
-	// posthog-js doesn't initialize, the Rust side respects the same
-	// flag for any captures triggered from the React tree.
-	const consent = await getAnalyticsConsent();
-	const enabled = consent === "granted";
-	try {
-		await invoke("posthog_set_enabled", { enabled });
-	} catch (error) {
-		logFailure("posthog_set_enabled", error);
-	}
-	if (!enabled) return;
-
-	let distinctId: string | undefined;
-	let sessionId: string | undefined;
-	try {
-		distinctId = await invoke<string>("posthog_get_distinct_id");
-	} catch (error) {
-		logFailure("posthog_get_distinct_id", error);
-	}
-	try {
-		sessionId = await invoke<string>("posthog_get_session_id");
-	} catch (error) {
-		logFailure("posthog_get_session_id", error);
+export function initBrowserPosthog(config = getCurrentAppConfig()) {
+	if (!isPosthogConfigured(config)) return;
+	if (isPosthogLoaded()) {
+		applyAnalyticsConsent(config.analyticsEnabled, config);
+		return;
 	}
 
-	posthog.init(key, {
-		api_host: host,
-		// Tie this PostHog instance to the same identity Rust uses.
-		// `isIdentifiedID: true` tells PostHog to treat the UUID as a
-		// real distinct id (vs. an anonymous one to be merged later).
-		bootstrap: distinctId
-			? { distinctID: distinctId, isIdentifiedID: true }
-			: undefined,
-		// We send custom events from Rust via posthog_capture; if both
-		// sides send the same event we'd double-count. Disable the JS
-		// SDK's autocapture and pageview triggers so it only records
-		// what Rust can't reach (replay snapshots + exception traces).
+	posthog.init(config.posthog.key, {
+		api_host: config.posthog.host,
+		bootstrap: {
+			distinctID: config.posthog.distinctId,
+			isIdentifiedID: true,
+		},
 		autocapture: false,
 		capture_pageview: false,
 		capture_pageleave: false,
-		// Turn replay on. The recording lives in posthog-js; there is
-		// no Rust replacement for it. Override PostHog's privacy defaults
-		// since this is an internal desktop app — without this every
-		// piece of text in the UI renders as the diagonal-stripe mask.
 		disable_session_recording: false,
 		session_recording: {
 			maskAllInputs: false,
 			maskTextSelector: undefined,
 			blockSelector: undefined,
 		},
-		// posthog-js has its own try/catch around send; this just makes
-		// sure it surfaces during local dev.
 		debug: import.meta.env.DEV,
 	});
 
-	if (sessionId) {
-		// Force posthog-js to use the same $session_id Rust attaches to
-		// every event so replays group with their triggering events.
-		posthog.register({ $session_id: sessionId });
-	}
+	posthog.register({ $session_id: config.posthog.sessionId });
+	applyAnalyticsConsent(config.analyticsEnabled, config);
 }
 
 /**
- * Sync consent changes after initial boot. Called when the user
- * toggles analytics in the welcome dialog or Settings. The Rust
- * static flag is the source of truth for capture() / identify();
- * we also opt posthog-js in/out so session replay stops/starts.
- *
- * If consent is granted *after* boot when posthog-js wasn't
- * initialized, we initialize it now so replay starts working.
+ * Sync browser-only PostHog behavior after app config changes. Rust reads
+ * the backend copy of AppConfig directly, so this function only updates
+ * the JS SDK state.
  */
-export async function applyAnalyticsConsent(granted: boolean) {
-	try {
-		await invoke("posthog_set_enabled", { enabled: granted });
-	} catch (error) {
-		logFailure("posthog_set_enabled", error);
+export function applyAnalyticsConsent(
+	granted: boolean,
+	config = getCurrentAppConfig(),
+) {
+	if (!isPosthogConfigured(config)) return;
+	if (!isPosthogLoaded()) {
+		initBrowserPosthog(config);
+		return;
 	}
 
-	if (!key || !host) return;
-
 	if (granted) {
-		// posthog-js may not have been initialized at boot if consent
-		// was denied. Run the full init now.
-		// posthog.__loaded indicates a previous init() succeeded.
-		// biome-ignore lint/suspicious/noExplicitAny: posthog-js exposes __loaded for this case
-		const initialized = (posthog as any).__loaded === true;
-		if (!initialized) {
-			await initBrowserPosthog();
-		} else {
-			posthog.opt_in_capturing();
-			posthog.startSessionRecording();
-		}
+		posthog.opt_in_capturing();
+		posthog.startSessionRecording();
 	} else {
 		posthog.opt_out_capturing();
 		posthog.stopSessionRecording();
@@ -156,6 +106,8 @@ export async function applyAnalyticsConsent(granted: boolean) {
 }
 
 export function capture(event: string, properties?: Record<string, unknown>) {
+	const config = getCurrentAppConfig();
+	if (!config?.analyticsEnabled) return;
 	void invoke("posthog_capture", {
 		event,
 		properties: toRustProperties(properties),
@@ -167,6 +119,8 @@ export function captureException(
 	error: unknown,
 	properties?: Record<string, unknown>,
 ) {
+	const config = getCurrentAppConfig();
+	if (!config?.analyticsEnabled) return;
 	const err = error instanceof Error ? error : null;
 	void invoke("posthog_capture", {
 		event: "$exception",
@@ -184,15 +138,14 @@ export function identify(
 	distinctId: string,
 	properties?: Record<string, unknown>,
 ) {
+	const config = getCurrentAppConfig();
+	if (!config?.analyticsEnabled) return;
 	void invoke("posthog_identify", {
 		distinctId,
 		properties: toRustProperties(properties),
 	}).catch((error) => logFailure(`identify ${distinctId}`, error));
 
-	// Also identify on the JS side so replay attaches to the right
-	// person going forward. The bootstrap.distinctID set at init is
-	// only the *initial* identity; explicit identify() updates it.
-	if (key && host) {
+	if (isPosthogConfigured(config) && isPosthogLoaded()) {
 		try {
 			posthog.identify(distinctId, properties);
 		} catch (error) {
@@ -203,17 +156,6 @@ export function identify(
 
 let exceptionListenersInstalled = false;
 
-/**
- * Register a fallback for exceptions that posthog-js's exception
- * autocapture might miss. posthog-js installs window.onerror /
- * unhandledrejection listeners of its own, but they go through its
- * own send pipeline — which is the path that may silently fail in
- * Tauri v2. So we add our own listeners that route through the Rust
- * command instead, ensuring the exception still reaches PostHog
- * even if posthog-js drops it. Yes, the same exception will be
- * captured twice in PostHog if posthog-js *does* succeed, but
- * deduplication on the dashboard is preferable to silent loss.
- */
 export function installExceptionAutocapture() {
 	if (exceptionListenersInstalled) return;
 	exceptionListenersInstalled = true;

@@ -1,146 +1,44 @@
+use crate::commands::app_config::{current_app_config, set_distinct_id};
 use log::{debug, info, warn};
 use posthog_rs::{client, Client, ClientOptionsBuilder, Event};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::fs;
-use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::OnceLock;
 use std::time::Instant;
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 use tokio::sync::OnceCell;
-use uuid::Uuid;
 
-/// Reads `VITE_POSTHOG_KEY` and `VITE_POSTHOG_HOST` at compile time so
-/// the desktop binary embeds the project key, matching the way the
-/// webview reads them through Vite's `import.meta.env`. When the env
-/// vars are unset (e.g. local dev without a `.env`) every command
-/// becomes a silent no-op so analytics never blocks the user flow.
-///
-/// We route event capture through Rust because posthog-js fetch calls
-/// silently fail in some Tauri v2 webviews (PostHog/posthog-js#1760).
-const POSTHOG_KEY: Option<&str> = option_env!("VITE_POSTHOG_KEY");
-const POSTHOG_HOST: Option<&str> = option_env!("VITE_POSTHOG_HOST");
+static CLIENT: OnceCell<Option<Client>> = OnceCell::const_new();
 
-/// Filename for the persistent per-install distinct_id. Lives in the
-/// Tauri app data dir so a reinstall keeps the same identity but
-/// uninstalling clears it. Matches the convention posthog-js uses
-/// (localStorage in the webview).
-const DISTINCT_ID_FILE: &str = "posthog-distinct-id";
-
-static CLIENT: OnceCell<PostHogRuntime> = OnceCell::const_new();
-
-struct PostHogRuntime {
-	client: Option<Client>,
-	/// Mirrors the user's analytics consent in the desktop store. Starts
-	/// `true` to match the JS-side default (`granted`); the webview calls
-	/// `posthog_set_enabled(false)` early in bootstrap if the user has
-	/// opted out, before any captures fire.
-	enabled: AtomicBool,
-	/// Generated once per process start. PostHog uses this to group
-	/// events into a session for live events / session replay / funnels.
-	session_id: String,
-	/// Resolved on first capture call and cached. Persisted across restarts.
-	distinct_id: OnceLock<String>,
-}
-
-async fn build_client() -> PostHogRuntime {
-	let client = match POSTHOG_KEY {
-		Some("") => {
-			warn!("posthog: VITE_POSTHOG_KEY is empty; analytics disabled");
-			None
-		}
-		Some(key) => {
-			let host_log =
-				POSTHOG_HOST.unwrap_or("https://us.i.posthog.com (default)");
-			let mut builder = ClientOptionsBuilder::default();
-			builder.api_key(key.to_string());
-			if let Some(host) = POSTHOG_HOST.filter(|h| !h.is_empty()) {
-				builder.host(host.to_string());
-			}
-
-			match builder.build() {
-				Ok(options) => {
-					info!("posthog: client initialized for host {host_log}");
-					Some(client(options).await)
-				}
-				Err(error) => {
-					warn!("posthog: invalid client options: {error}");
-					None
-				}
-			}
-		}
-		None => {
-			warn!(
-				"posthog: VITE_POSTHOG_KEY was not embedded at compile time; \
-				analytics disabled. Make sure crates/desktop/.env exists \
-				before running cargo build."
-			);
-			None
-		}
-	};
-
-	PostHogRuntime {
-		client,
-		enabled: AtomicBool::new(true),
-		session_id: Uuid::new_v4().to_string(),
-		distinct_id: OnceLock::new(),
-	}
-}
-
-async fn runtime() -> &'static PostHogRuntime {
-	CLIENT.get_or_init(build_client).await
-}
-
-fn distinct_id_file_path(app: &AppHandle) -> Option<PathBuf> {
-	let dir = app
-		.path()
-		.app_data_dir()
-		.map_err(|error| {
-			warn!("posthog: failed to resolve app data dir: {error}");
-		})
-		.ok()?;
-	if let Err(error) = fs::create_dir_all(&dir) {
-		warn!("posthog: failed to create app data dir: {error}");
+async fn build_client() -> Option<Client> {
+	let Some(config) = current_app_config() else {
+		warn!("posthog: app config was not initialized; analytics disabled");
 		return None;
-	}
-	Some(dir.join(DISTINCT_ID_FILE))
+	};
+	let Some(key) = config.posthog.key.filter(|key| !key.is_empty()) else {
+		info!("posthog: no project key configured; analytics disabled");
+		return None;
+	};
+
+	let mut builder = ClientOptionsBuilder::default();
+	builder.api_key(key);
+	builder.host(config.posthog.host.clone());
+
+	let options = match builder.build() {
+		Ok(options) => options,
+		Err(error) => {
+			warn!("posthog: invalid client options: {error}");
+			return None;
+		}
+	};
+	info!(
+		"posthog: client initialized for host {}",
+		config.posthog.host
+	);
+	Some(client(options).await)
 }
 
-/// Read the persisted distinct_id, generating + writing one if missing
-/// or unreadable. Falls back to an in-memory UUID if the disk path is
-/// unavailable for any reason — better than reusing "anonymous".
-fn resolve_distinct_id(runtime: &PostHogRuntime, app: &AppHandle) -> String {
-	if let Some(cached) = runtime.distinct_id.get() {
-		return cached.clone();
-	}
-	let resolved = match distinct_id_file_path(app) {
-		Some(path) => match fs::read_to_string(&path) {
-			Ok(content) => {
-				let trimmed = content.trim().to_string();
-				if !trimmed.is_empty() {
-					trimmed
-				} else {
-					let id = Uuid::new_v4().to_string();
-					let _ = fs::write(&path, &id);
-					id
-				}
-			}
-			Err(_) => {
-				let id = Uuid::new_v4().to_string();
-				if let Err(error) = fs::write(&path, &id) {
-					warn!(
-						"posthog: failed to persist distinct_id at {}: {error}",
-						path.display()
-					);
-				}
-				id
-			}
-		},
-		None => Uuid::new_v4().to_string(),
-	};
-	let _ = runtime.distinct_id.set(resolved.clone());
-	resolved
+async fn get_client() -> Option<&'static Client> {
+	CLIENT.get_or_init(build_client).await.as_ref()
 }
 
 fn apply_properties(event: &mut Event, properties: HashMap<String, Value>) {
@@ -153,8 +51,8 @@ fn apply_properties(event: &mut Event, properties: HashMap<String, Value>) {
 
 /// Adds the session/platform context PostHog needs to group events
 /// into a usable session for live events, persons, and replay.
-fn apply_default_properties(runtime: &PostHogRuntime, event: &mut Event) {
-	let _ = event.insert_prop("$session_id", runtime.session_id.as_str());
+fn apply_default_properties(event: &mut Event, session_id: &str) {
+	let _ = event.insert_prop("$session_id", session_id);
 	let _ = event.insert_prop(
 		"$os",
 		if cfg!(target_os = "macos") {
@@ -174,31 +72,28 @@ fn apply_default_properties(runtime: &PostHogRuntime, event: &mut Event) {
 /// Capture a regular event (`capture` in posthog-js terms).
 ///
 /// Detaches the actual HTTP send via `tokio::spawn` so the IPC reply
-/// isn't blocked on the network round-trip. Without this, the command
-/// future runs as part of Tauri's invoke-handler task and is at risk
-/// of being dropped if the webview context tears down or another
-/// command races ahead — explaining why early-bootstrap events
-/// (`app started`) never reach PostHog while idle-time events
-/// (`onboarding completed`) do.
+/// isn't blocked on the network round-trip.
 #[tauri::command]
 pub async fn posthog_capture(
-	app: AppHandle,
 	event: String,
 	properties: HashMap<String, Value>,
 	distinct_id: Option<String>,
 ) -> Result<(), String> {
-	let runtime = runtime().await;
-	if !runtime.enabled.load(Ordering::Relaxed) {
-		return Ok(());
-	}
-	let Some(client) = runtime.client.as_ref() else {
+	let Some(config) = current_app_config() else {
 		return Ok(());
 	};
+	let Some(client) = get_client().await else {
+		return Ok(());
+	};
+	if !config.analytics_enabled {
+		return Ok(());
+	}
+
 	let did = distinct_id
-		.filter(|s| !s.is_empty())
-		.unwrap_or_else(|| resolve_distinct_id(runtime, &app));
+		.filter(|value| !value.is_empty())
+		.unwrap_or_else(|| config.posthog.distinct_id.clone());
 	let mut ev = Event::new(event.as_str(), did.as_str());
-	apply_default_properties(runtime, &mut ev);
+	apply_default_properties(&mut ev, config.posthog.session_id.as_str());
 	apply_properties(&mut ev, properties);
 
 	let event_label = event.clone();
@@ -230,27 +125,20 @@ pub async fn posthog_identify(
 	distinct_id: String,
 	properties: HashMap<String, Value>,
 ) -> Result<(), String> {
-	let runtime = runtime().await;
-	if !runtime.enabled.load(Ordering::Relaxed) {
-		return Ok(());
-	}
-	let Some(client) = runtime.client.as_ref() else {
+	let Some(config) = current_app_config() else {
 		return Ok(());
 	};
-
-	// Persist the identified id so future anonymous captures use it.
-	if let Some(path) = distinct_id_file_path(&app) {
-		if let Err(error) = fs::write(&path, &distinct_id) {
-			warn!(
-				"posthog: failed to persist distinct_id at {}: {error}",
-				path.display()
-			);
-		}
+	let Some(client) = get_client().await else {
+		return Ok(());
+	};
+	if !config.analytics_enabled {
+		return Ok(());
 	}
-	// OnceLock can't mutate; the next process start will read the file we just wrote.
+
+	set_distinct_id(&app, &distinct_id);
 
 	let mut ev = Event::new("$identify", distinct_id.as_str());
-	apply_default_properties(runtime, &mut ev);
+	apply_default_properties(&mut ev, config.posthog.session_id.as_str());
 	if !properties.is_empty() {
 		let set_value = Value::Object(
 			properties.into_iter().collect::<serde_json::Map<_, _>>(),
@@ -275,39 +163,4 @@ pub async fn posthog_identify(
 		}
 	});
 	Ok(())
-}
-
-/// Hand the persistent distinct_id to the webview so posthog-js can be
-/// bootstrapped with the same identity. This is the linchpin of the
-/// Rust-events + JS-replay split: when posthog-js calls
-/// `posthog.init(..., { bootstrap: { distinctID } })` with this value,
-/// session replay segments and Rust-originated events both attach to
-/// the same person in PostHog.
-#[tauri::command]
-pub async fn posthog_get_distinct_id(app: AppHandle) -> String {
-	resolve_distinct_id(runtime().await, &app)
-}
-
-/// Hand the per-process session id to the webview so posthog-js can
-/// share it via `register_session({ session_id })` if desired. Letting
-/// both sides agree on $session_id is what stitches Rust events and
-/// JS replays into the same PostHog session.
-#[tauri::command]
-pub async fn posthog_get_session_id() -> String {
-	runtime().await.session_id.clone()
-}
-
-/// Toggle Rust-side capture/identify based on the user's analytics
-/// consent. The webview owns the consent UI and persistence (in the
-/// Tauri store), so it's responsible for syncing the flag here on
-/// boot and whenever the user toggles it in Settings.
-#[tauri::command]
-pub async fn posthog_set_enabled(enabled: bool) {
-	let previous = runtime().await.enabled.swap(enabled, Ordering::Relaxed);
-	if previous != enabled {
-		info!(
-			"posthog: capture {}",
-			if enabled { "enabled" } else { "disabled" }
-		);
-	}
 }

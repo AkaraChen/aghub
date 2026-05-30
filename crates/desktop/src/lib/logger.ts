@@ -5,34 +5,32 @@ import {
 	BatchLogRecordProcessor,
 	LoggerProvider,
 } from "@opentelemetry/sdk-logs";
+import { type AppConfig, getCurrentAppConfig } from "./app-config";
 
 /**
  * OpenTelemetry-based log forwarding to PostHog Logs.
  *
  * Sits alongside `./analytics.ts` (which uses posthog-js for events,
  * sessions, and exception capture). PostHog accepts OTLP log records at
- * `${VITE_POSTHOG_HOST}/otlp/v1/logs` with the project key as a Bearer
- * token, so we reuse the same env vars analytics.ts already reads.
- *
- * Disabled when:
- * - VITE_POSTHOG_KEY / VITE_POSTHOG_HOST aren't set, or
- * - we're running in dev (`import.meta.env.PROD === false`) — local
- *   noise shouldn't reach production telemetry.
+ * `${POSTHOG_HOST}/otlp/v1/logs` with the project key as a Bearer token;
+ * both values come from the backend-owned AppConfig loaded before React
+ * renders.
  */
 
 const SERVICE_NAME = "aghub-desktop";
 
-const key = import.meta.env.VITE_POSTHOG_KEY as string | undefined;
-const host = import.meta.env.VITE_POSTHOG_HOST as string | undefined;
-const enabled = Boolean(key && host) && import.meta.env.PROD;
-
 let logger: Logger | null = null;
 
-if (enabled) {
+export function initLogForwarding(config: AppConfig = getCurrentAppConfig()!) {
+	if (logger) return;
+	if (!config?.analyticsEnabled || !config.posthog.key || !import.meta.env.PROD) {
+		return;
+	}
+
 	const exporter = new OTLPLogExporter({
-		url: `${host?.replace(/\/+$/, "")}/otlp/v1/logs`,
+		url: `${config.posthog.host.replace(/\/+$/, "")}/otlp/v1/logs`,
 		headers: {
-			Authorization: `Bearer ${key}`,
+			Authorization: `Bearer ${config.posthog.key}`,
 		},
 	});
 
@@ -45,8 +43,6 @@ if (enabled) {
 
 	logger = provider.getLogger(SERVICE_NAME);
 
-	// Best-effort flush on tab close / app shutdown so the last logs
-	// in the batch don't get dropped.
 	if (typeof window !== "undefined") {
 		window.addEventListener("beforeunload", () => {
 			void provider.shutdown();

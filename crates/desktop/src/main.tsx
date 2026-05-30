@@ -8,7 +8,8 @@ import {
 	initBrowserPosthog,
 	installExceptionAutocapture,
 } from "./lib/analytics";
-import { log } from "./lib/logger";
+import { AppConfigProvider, loadAppConfig } from "./lib/app-config";
+import { initLogForwarding, log } from "./lib/logger";
 
 async function bootstrap() {
 	try {
@@ -18,18 +19,23 @@ async function bootstrap() {
 		console.error("Failed to attach Tauri log stream:", error);
 	}
 
-	// posthog-js needs the Rust-owned distinct_id before it boots so
-	// replay attaches to the same person as Rust-originated events.
-	await initBrowserPosthog();
+	// Synchronously block React render on backend-owned app config so
+	// PostHog credentials, consent, distinct_id, and session_id all come
+	// from one type-safe source of truth.
+	const appConfig = await loadAppConfig();
+	initBrowserPosthog(appConfig);
+	initLogForwarding(appConfig);
 	installExceptionAutocapture();
 	capture("app started");
 	log.info("app started", {
-		"app.version": import.meta.env.VITE_APP_VERSION,
+		"app.version": appConfig.appVersion,
 	});
 
 	ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
 		<React.StrictMode>
-			<App />
+			<AppConfigProvider initialConfig={appConfig}>
+				<App />
+			</AppConfigProvider>
 		</React.StrictMode>,
 	);
 }

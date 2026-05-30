@@ -1,17 +1,19 @@
 import { Avatar, Button, Card, Switch, toast } from "@heroui/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { getName, getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { useTranslation } from "react-i18next";
 import { applyAnalyticsConsent } from "../../lib/analytics";
+import { useAppConfig } from "../../lib/app-config";
+import { initLogForwarding } from "../../lib/logger";
 import { dispatchOnboardingCommand } from "../../lib/onboarding";
-import { getAnalyticsConsent, setAnalyticsConsent } from "../../lib/store";
+import { setAnalyticsConsent } from "../../lib/store";
 
 export default function ApplicationPanel() {
 	const { t } = useTranslation();
-	const queryClient = useQueryClient();
+	const { config: appConfig, setConfig: setAppConfig } = useAppConfig();
 
 	const { data: appInfo } = useQuery({
 		queryKey: ["app-info"],
@@ -22,22 +24,17 @@ export default function ApplicationPanel() {
 		},
 	});
 
-	const { data: analyticsConsent } = useQuery({
-		queryKey: ["analytics-consent"],
-		queryFn: getAnalyticsConsent,
-	});
-	const analyticsEnabled = analyticsConsent !== "denied";
-
 	const analyticsMutation = useMutation({
 		mutationFn: async (enabled: boolean) => {
 			await setAnalyticsConsent(enabled ? "granted" : "denied");
-			await applyAnalyticsConsent(enabled);
+			const nextConfig = {
+				...appConfig,
+				analyticsEnabled: enabled,
+			};
+			const savedConfig = await setAppConfig(nextConfig);
+			applyAnalyticsConsent(enabled, savedConfig);
+			initLogForwarding(savedConfig);
 			return enabled;
-		},
-		onSuccess: () => {
-			queryClient.invalidateQueries({
-				queryKey: ["analytics-consent"],
-			});
 		},
 		onError: (error) => {
 			toast.danger(
@@ -142,7 +139,7 @@ export default function ApplicationPanel() {
 								{t("version")}
 							</span>
 							<span className="block text-xs text-muted">
-								{appInfo?.version ?? "0.1.0"}
+								{appInfo?.version ?? appConfig.appVersion}
 							</span>
 						</div>
 					</div>
@@ -222,7 +219,7 @@ export default function ApplicationPanel() {
 							</span>
 						</div>
 						<Switch
-							isSelected={analyticsEnabled}
+							isSelected={appConfig.analyticsEnabled}
 							onChange={(checked) =>
 								analyticsMutation.mutate(checked)
 							}
@@ -295,21 +292,16 @@ export default function ApplicationPanel() {
 							<button
 								key={member.name}
 								type="button"
-								className="flex flex-col items-center text-center cursor-pointer"
 								onClick={() => openUrl(member.githubUrl)}
+								className="flex flex-col items-center gap-2 rounded-lg border border-border bg-surface p-4 transition-colors hover:bg-surface-secondary"
 							>
-								<Avatar size="lg">
-									<Avatar.Image
-										src={member.avatar}
-										alt={member.name}
-									/>
-								</Avatar>
-								<span className="mt-2 text-sm font-medium">
-									{member.name}
-								</span>
-								<span className="text-xs text-muted">
-									{member.role}
-								</span>
+								<Avatar src={member.avatar} className="size-14" />
+								<div className="text-center">
+									<p className="text-sm font-medium text-foreground">
+										{member.name}
+									</p>
+									<p className="text-xs text-muted">{member.role}</p>
+								</div>
 							</button>
 						))}
 					</div>
