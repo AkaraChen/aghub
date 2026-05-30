@@ -5,6 +5,7 @@ import {
 	BatchLogRecordProcessor,
 	LoggerProvider,
 } from "@opentelemetry/sdk-logs";
+import { getPosthogConfig } from "./posthog-config";
 import { getAnalyticsConsent } from "./store";
 
 /**
@@ -12,11 +13,11 @@ import { getAnalyticsConsent } from "./store";
  *
  * Sits alongside `./analytics.ts` (which uses posthog-js for events,
  * sessions, and exception capture). PostHog accepts log records at
- * `${VITE_POSTHOG_HOST}/i/v1/logs` with the project key as a Bearer
- * token, so we reuse the same env vars analytics.ts already reads.
+ * `${POSTHOG_HOST}/i/v1/logs` with the project key as a Bearer
+ * token. The values are parsed by Rust and exposed via Tauri IPC.
  *
  * Disabled when:
- * - VITE_POSTHOG_KEY / VITE_POSTHOG_HOST aren't set,
+ * - POSTHOG_KEY / POSTHOG_HOST aren't set,
  * - we're running in dev (`import.meta.env.PROD === false`) — local
  *   noise shouldn't reach production telemetry, or
  * - the user has not granted analytics consent.
@@ -24,9 +25,6 @@ import { getAnalyticsConsent } from "./store";
 
 const SERVICE_NAME = "aghub-desktop";
 
-const key = import.meta.env.VITE_POSTHOG_KEY as string | undefined;
-const host = import.meta.env.VITE_POSTHOG_HOST as string | undefined;
-const configured = Boolean(key && host) && import.meta.env.PROD;
 const TRAILING_SLASHES = /\/+$/;
 
 let logger: Logger | null = null;
@@ -36,8 +34,11 @@ function logIngestUrl(posthogHost: string) {
 	return `${posthogHost.replace(TRAILING_SLASHES, "")}/i/v1/logs`;
 }
 
-function startLogForwarding() {
-	if (!configured || logger || !key || !host) return;
+async function startLogForwarding() {
+	if (logger || !import.meta.env.PROD) return;
+
+	const { key, host } = await getPosthogConfig();
+	if (!key || !host || logger) return;
 
 	const exporter = new OTLPLogExporter({
 		url: logIngestUrl(host),
@@ -67,12 +68,12 @@ function stopLogForwarding() {
 
 export async function initLogForwarding() {
 	const consent = await getAnalyticsConsent();
-	setLogForwardingEnabled(consent === "granted");
+	await setLogForwardingEnabled(consent === "granted");
 }
 
-export function setLogForwardingEnabled(enabled: boolean) {
+export async function setLogForwardingEnabled(enabled: boolean) {
 	if (enabled) {
-		startLogForwarding();
+		await startLogForwarding();
 	} else {
 		stopLogForwarding();
 	}

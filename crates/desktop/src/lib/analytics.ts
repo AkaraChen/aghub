@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import posthog from "posthog-js";
 import { setLogForwardingEnabled } from "./logger";
+import { getPosthogConfig } from "./posthog-config";
 import { getAnalyticsConsent } from "./store";
 
 /**
@@ -30,9 +31,6 @@ import { getAnalyticsConsent } from "./store";
  * them.
  */
 
-const key = import.meta.env.VITE_POSTHOG_KEY as string | undefined;
-const host = import.meta.env.VITE_POSTHOG_HOST as string | undefined;
-
 type Properties = Record<string, unknown>;
 
 function toRustProperties(input?: Record<string, unknown>): Properties {
@@ -56,6 +54,7 @@ function logFailure(action: string, error: unknown) {
  * capture call so the distinct_id is in place. Safe to call once.
  */
 export async function initBrowserPosthog() {
+	const { key, host } = await getPosthogConfig();
 	if (!key || !host) return;
 
 	// Gate everything on user consent. We tell Rust first so even if
@@ -68,7 +67,7 @@ export async function initBrowserPosthog() {
 	} catch (error) {
 		logFailure("posthog_set_enabled", error);
 	}
-	setLogForwardingEnabled(enabled);
+	await setLogForwardingEnabled(enabled);
 	if (!enabled) return;
 
 	let distinctId: string | undefined;
@@ -134,8 +133,9 @@ export async function applyAnalyticsConsent(granted: boolean) {
 	} catch (error) {
 		logFailure("posthog_set_enabled", error);
 	}
-	setLogForwardingEnabled(granted);
+	await setLogForwardingEnabled(granted);
 
+	const { key, host } = await getPosthogConfig();
 	if (!key || !host) return;
 
 	if (granted) {
@@ -193,13 +193,14 @@ export function identify(
 	// Also identify on the JS side so replay attaches to the right
 	// person going forward. The bootstrap.distinctID set at init is
 	// only the *initial* identity; explicit identify() updates it.
-	if (key && host) {
+	void getPosthogConfig().then(({ key, host }) => {
+		if (!key || !host) return;
 		try {
 			posthog.identify(distinctId, properties);
 		} catch (error) {
 			logFailure(`posthog.identify ${distinctId}`, error);
 		}
-	}
+	});
 }
 
 let exceptionListenersInstalled = false;

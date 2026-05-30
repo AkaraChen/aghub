@@ -1,5 +1,6 @@
 use log::{debug, info, warn};
 use posthog_rs::{client, Client, ClientOptionsBuilder, Event};
+use serde::Serialize;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
@@ -11,16 +12,23 @@ use tauri::{AppHandle, Manager};
 use tokio::sync::OnceCell;
 use uuid::Uuid;
 
-/// Reads `VITE_POSTHOG_KEY` and `VITE_POSTHOG_HOST` at compile time so
-/// the desktop binary embeds the project key, matching the way the
-/// webview reads them through Vite's `import.meta.env`. When the env
+/// Reads `POSTHOG_KEY` and `POSTHOG_HOST` at compile time so
+/// the desktop binary embeds the project key. The webview reads the
+/// same values through `posthog_get_config` instead of Vite env. When the env
 /// vars are unset (e.g. local dev without a `.env`) every command
 /// becomes a silent no-op so analytics never blocks the user flow.
 ///
 /// We route event capture through Rust because posthog-js fetch calls
 /// silently fail in some Tauri v2 webviews (PostHog/posthog-js#1760).
-const POSTHOG_KEY: Option<&str> = option_env!("VITE_POSTHOG_KEY");
-const POSTHOG_HOST: Option<&str> = option_env!("VITE_POSTHOG_HOST");
+const POSTHOG_KEY: Option<&str> = option_env!("POSTHOG_KEY");
+const POSTHOG_HOST: Option<&str> = option_env!("POSTHOG_HOST");
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PosthogConfig {
+	key: Option<&'static str>,
+	host: Option<&'static str>,
+}
 
 /// Filename for the persistent per-install distinct_id. Lives in the
 /// Tauri app data dir so a reinstall keeps the same identity but
@@ -49,14 +57,14 @@ static DISTINCT_ID: OnceLock<String> = OnceLock::new();
 async fn build_client() -> Option<Client> {
 	let Some(key) = POSTHOG_KEY else {
 		warn!(
-			"posthog: VITE_POSTHOG_KEY was not embedded at compile time; \
+			"posthog: POSTHOG_KEY was not embedded at compile time; \
 			analytics disabled. Make sure crates/desktop/.env exists \
 			before running cargo build."
 		);
 		return None;
 	};
 	if key.is_empty() {
-		warn!("posthog: VITE_POSTHOG_KEY is empty; analytics disabled");
+		warn!("posthog: POSTHOG_KEY is empty; analytics disabled");
 		return None;
 	}
 	let host_log = POSTHOG_HOST.unwrap_or("https://us.i.posthog.com (default)");
@@ -78,6 +86,14 @@ async fn build_client() -> Option<Client> {
 
 async fn get_client() -> Option<&'static Client> {
 	CLIENT.get_or_init(build_client).await.as_ref()
+}
+
+#[tauri::command]
+pub fn posthog_get_config() -> PosthogConfig {
+	PosthogConfig {
+		key: POSTHOG_KEY.filter(|value| !value.is_empty()),
+		host: POSTHOG_HOST.filter(|value| !value.is_empty()),
+	}
 }
 
 fn session_id() -> &'static str {
