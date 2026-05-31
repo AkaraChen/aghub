@@ -4,6 +4,9 @@ use std::{
 	path::{Path, PathBuf},
 };
 
+use aghub_api::dto::usage::{
+	AgentUsageDto, UsageDayDto, UsageModelDto, UsageReportDto, UsageTotalsDto,
+};
 use aghub_api::dto::{
 	agents::{
 		AgentAvailabilityDto, AgentInfo, CapabilitiesDto, McpCapabilitiesDto,
@@ -246,6 +249,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<CCPluginPruneResponse>(&cfg)?;
 	export_type::<CCPluginValidateRequest>(&cfg)?;
 	export_type::<CCPluginValidateResponse>(&cfg)?;
+
+	export_type::<UsageModelDto>(&cfg)?;
+	export_type::<UsageDayDto>(&cfg)?;
+	export_type::<UsageTotalsDto>(&cfg)?;
+	export_type::<AgentUsageDto>(&cfg)?;
+	export_type::<UsageReportDto>(&cfg)?;
 
 	write_index_file(&out_dir)?;
 

@@ -5,6 +5,7 @@ export type { AgentProviderMatchedInferenceProviderResponse } from "./AgentProvi
 export type { AgentProviderModelResponse } from "./AgentProviderModelResponse";
 export type { AgentProviderResponse } from "./AgentProviderResponse";
 export type { AgentProviderSourceDto } from "./AgentProviderSourceDto";
+export type { AgentUsageDto } from "./AgentUsageDto";
 export type { CCMarketplaceAddRequest } from "./CCMarketplaceAddRequest";
 export type { CCMarketplaceEntryResponse } from "./CCMarketplaceEntryResponse";
 export type { CCMarketplaceListResponse } from "./CCMarketplaceListResponse";
@@ -109,4 +110,8 @@ export type { UpdateInferenceProviderRequest } from "./UpdateInferenceProviderRe
 export type { UpdateMcpRequest } from "./UpdateMcpRequest";
 export type { UpdateSkillRequest } from "./UpdateSkillRequest";
 export type { UpdateSubAgentRequest } from "./UpdateSubAgentRequest";
+export type { UsageDayDto } from "./UsageDayDto";
+export type { UsageModelDto } from "./UsageModelDto";
+export type { UsageReportDto } from "./UsageReportDto";
+export type { UsageTotalsDto } from "./UsageTotalsDto";
 export type { ValidationError } from "./ValidationError";

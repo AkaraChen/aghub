@@ -71,6 +71,7 @@ dependencies = [
  "aghub-core",
  "aghub-git",
  "aghub-inference",
+ "chrono",
  "dirs",
  "keyring",
  "log",

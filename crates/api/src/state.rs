@@ -24,3 +24,10 @@ pub struct GitCloneSessions {
 pub struct InferenceProviderState {
 	pub app_data_dir: PathBuf,
 }
+
+/// Path to the bundled `ccusage` sidecar binary, injected by the desktop shell.
+/// `None` in dev / standalone server: usage routes fall back to the
+/// `AGHUB_CCUSAGE_BIN` env var, then to `ccusage` on `PATH`.
+pub struct UsageState {
+	pub ccusage_bin: Option<PathBuf>,
+}
