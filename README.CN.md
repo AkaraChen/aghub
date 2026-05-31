@@ -67,18 +67,18 @@ brew install --cask akarachen/tap/aghub
 
 **供应商管理**
 
-  - 从预设开始 — 通过内置预设快速创建常用供应商，或从头配置自定义端点
-  - 使用你自己的模型 — 让 Claude、Codex 和 OpenCode 指向任何自定义推理端点
-  - 支持所有 API 格式 — Anthropic Messages、OpenAI Chat Completions 以及 OpenAI Responses
-  - 密钥安全无忧 — API 密钥存储在操作系统原生的密钥环中，绝不以明文写入配置文件
-  - 逐代理模型选择 — 为每个代理独立挑选最合适的供应商与模型
+- 从预设开始 — 通过内置预设快速创建常用供应商，或从头配置自定义端点
+- 使用你自己的模型 — 让 Claude、Codex 和 OpenCode 指向任何自定义推理端点
+- 支持所有 API 格式 — Anthropic Messages、OpenAI Chat Completions 以及 OpenAI Responses
+- 密钥安全无忧 — API 密钥存储在操作系统原生的密钥环中，绝不以明文写入配置文件
+- 逐代理模型选择 — 为每个代理独立挑选最合适的供应商与模型
 
 **Claude Code 插件**
 
-  - 随处安装插件 — 可来自官方注册表、第三方 Git URL 或本地路径
-  - 内置市场 — 无需离开 aghub，即可发现、浏览并安装 Claude Code 插件（v2）
-  - 完整生命周期管理 — 一条命令完成插件的安装、更新、启用／禁用与移除
-  - 全局或项目范围 — 应用到所有项目，或仅限定于单个项目
+- 随处安装插件 — 可来自官方注册表、第三方 Git URL 或本地路径
+- 内置市场 — 无需离开 aghub，即可发现、浏览并安装 Claude Code 插件（v2）
+- 完整生命周期管理 — 一条命令完成插件的安装、更新、启用／禁用与移除
+- 全局或项目范围 — 应用到所有项目，或仅限定于单个项目
 
 ## 贡献
 
