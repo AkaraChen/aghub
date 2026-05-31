@@ -15,7 +15,7 @@ dev:
     cargo build -p aghub-cli
 
 # Run all tests
-test:
+test: _fetch-ccusage
     cargo test --workspace
 
 # Run integration tests only
