@@ -124,8 +124,10 @@ export function PluginMarketTable({
 									>
 										{t("name")}
 									</Table.Column>
-									<Table.Column className="w-[88px] text-right">
-										{t("installs")}
+									<Table.Column className="w-[112px] text-right">
+										<span className="whitespace-nowrap">
+											{t("installs")}
+										</span>
 									</Table.Column>
 									<Table.Column className="w-[136px]">
 										{t("author")}
