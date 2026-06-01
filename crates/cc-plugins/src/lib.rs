@@ -15,6 +15,9 @@ pub(crate) const MANIFEST_CANDIDATE_PATHS: &[&str] = &[
 	"plugin.json",
 ];
 
+#[cfg(windows)]
+pub(crate) const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 pub mod errors {
 	use crate::PluginId;
 

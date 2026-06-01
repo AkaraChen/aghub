@@ -1013,10 +1013,14 @@ pub async fn edit_skill_folder(
 
 	match detect_available_editor() {
 		Some(editor) => {
-			match std::process::Command::new(editor.cli_command())
-				.arg(&folder)
-				.spawn()
+			let mut cmd = std::process::Command::new(editor.cli_command());
+			cmd.arg(&folder);
+			#[cfg(windows)]
 			{
+				use std::os::windows::process::CommandExt;
+				cmd.creation_flags(crate::CREATE_NO_WINDOW);
+			}
+			match cmd.spawn() {
 				Ok(_) => Ok(()),
 				Err(e) => Err(format!("Failed to open editor: {e}")),
 			}
@@ -1297,11 +1301,15 @@ pub async fn git_scan_skills(
 
 /// Try to detect the checked-out branch from the cloned repo.
 fn detect_current_branch(repo_path: &std::path::Path) -> Option<String> {
-	let output = std::process::Command::new("git")
-		.args(["rev-parse", "--abbrev-ref", "HEAD"])
-		.current_dir(repo_path)
-		.output()
-		.ok()?;
+	let mut cmd = std::process::Command::new("git");
+	cmd.args(["rev-parse", "--abbrev-ref", "HEAD"])
+		.current_dir(repo_path);
+	#[cfg(windows)]
+	{
+		use std::os::windows::process::CommandExt;
+		cmd.creation_flags(crate::CREATE_NO_WINDOW);
+	}
+	let output = cmd.output().ok()?;
 
 	if !output.status.success() {
 		return None;

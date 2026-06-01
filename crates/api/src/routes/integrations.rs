@@ -38,7 +38,14 @@ pub async fn open_with_editor(
 	let req = request.into_inner();
 	let path = resolve_editor_path(&req.path);
 
-	match Command::new(req.editor.cli_command()).arg(&path).spawn() {
+	let mut cmd = Command::new(req.editor.cli_command());
+	cmd.arg(&path);
+	#[cfg(windows)]
+	{
+		use std::os::windows::process::CommandExt;
+		cmd.creation_flags(crate::CREATE_NO_WINDOW);
+	}
+	match cmd.spawn() {
 		Ok(_) => Ok(()),
 		Err(e) => Err(format!("Failed to open editor: {e}")),
 	}

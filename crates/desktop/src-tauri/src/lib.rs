@@ -11,6 +11,9 @@ use tauri_plugin_log::{
 
 mod commands;
 
+#[cfg(windows)]
+pub(crate) const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 pub struct AppState {
 	pub port: std::sync::Mutex<Option<u16>>,
 }

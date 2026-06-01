@@ -83,6 +83,8 @@ pub(crate) async fn git_output(
 	let context = context.to_string();
 	let mut command = Command::new("git");
 	command.args(args);
+	#[cfg(windows)]
+	command.creation_flags(crate::CREATE_NO_WINDOW);
 	if let Some(path) = current_dir {
 		command.current_dir(path);
 	}
@@ -114,16 +116,14 @@ pub(crate) async fn git_clone(
 	context: &str,
 ) -> Result<()> {
 	let context = context.to_string();
-	let output = tokio::time::timeout(
-		GIT_COMMAND_TIMEOUT,
-		Command::new("git")
-			.args(["clone", "--depth", "1", source])
-			.arg(target)
-			.output(),
-	)
-	.await
-	.with_context(|| format!("{context} timed out"))?
-	.context(context)?;
+	let mut command = Command::new("git");
+	command.args(["clone", "--depth", "1", source]).arg(target);
+	#[cfg(windows)]
+	command.creation_flags(crate::CREATE_NO_WINDOW);
+	let output = tokio::time::timeout(GIT_COMMAND_TIMEOUT, command.output())
+		.await
+		.with_context(|| format!("{context} timed out"))?
+		.context(context)?;
 	if !output.status.success() {
 		let stderr = String::from_utf8_lossy(&output.stderr);
 		anyhow::bail!("Git clone failed: {}", stderr);
