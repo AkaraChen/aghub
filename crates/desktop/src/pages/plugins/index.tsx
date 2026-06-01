@@ -57,7 +57,11 @@ export default function PluginsPage() {
 		useState(false);
 
 	const sortedPlugins = useMemo(
-		() => [...plugins].sort((a, b) => a.name.localeCompare(b.name)),
+		() =>
+			[...plugins].sort((a, b) => {
+				if (a.enabled !== b.enabled) return a.enabled ? -1 : 1;
+				return a.name.localeCompare(b.name);
+			}),
 		[plugins],
 	);
 	const validPluginIds = useMemo(
