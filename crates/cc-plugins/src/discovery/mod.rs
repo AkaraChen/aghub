@@ -40,6 +40,10 @@ impl DiscoveryConfig {
 	pub fn install_counts_path(&self) -> PathBuf {
 		self.plugins_dir.join("install-counts-cache.json")
 	}
+
+	pub fn plugin_catalog_path(&self) -> PathBuf {
+		self.plugins_dir.join("plugin-catalog-cache.json")
+	}
 }
 
 // ── Install counts ───────────────────────────────────────────────────────────
@@ -53,6 +57,24 @@ pub(crate) struct InstallCountEntry {
 #[derive(Debug, Deserialize)]
 pub(crate) struct InstallCountsCache {
 	pub counts: Vec<InstallCountEntry>,
+}
+
+// CC maintains a richer cache at `~/.claude/plugins/plugin-catalog-cache.json`
+// whose `.catalog.plugins[<id>].unique_installs` holds the real install
+// counts. Keys are already `name@marketplace` form, matching our lookup id.
+#[derive(Debug, Deserialize)]
+pub(crate) struct PluginCatalogCache {
+	pub catalog: PluginCatalog,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct PluginCatalog {
+	pub plugins: std::collections::HashMap<String, PluginCatalogEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct PluginCatalogEntry {
+	pub unique_installs: Option<u64>,
 }
 
 // ── Plugin source ────────────────────────────────────────────────────────────
