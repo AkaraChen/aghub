@@ -16,6 +16,9 @@ crate-type = [ "staticlib", "cdylib", "rlib" ]
 [build-dependencies]
 dotenvy = "0.15.7"
 tauri-build = { version = "2", features = [  ] }
+ureq = "2"
+flate2 = "1.0"
+tar = "0.4"
 
 [dependencies]
 tauri = { version = "2", features = [  ] }

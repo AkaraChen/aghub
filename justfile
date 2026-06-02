@@ -14,15 +14,8 @@ build:
 dev:
     cargo build -p aghub-cli
 
-# Fetch the ccusage sidecar binary for the current target triple (idempotent;
-# skips if already present). Required before compiling the desktop crate:
-# tauri-build validates the externalBin path at build time and the binary is
-# gitignored, so CI / fresh clones must fetch it first.
-_fetch-ccusage:
-    node scripts/fetch-ccusage.mjs
-
 # Run all tests
-test: _fetch-ccusage
+test:
     cargo test --workspace
 
 # Run integration tests only
@@ -39,7 +32,7 @@ fmt:
 	bun run format
 
 # Run clippy linter
-lint: _fetch-ccusage
+lint:
     cargo clippy --workspace -- -D warnings
     cd ./crates/desktop && nr lint
 
