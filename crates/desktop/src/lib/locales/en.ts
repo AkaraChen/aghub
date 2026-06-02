@@ -413,6 +413,13 @@ export default {
 	settingsAnalyticsDescription:
 		"Send anonymous usage data and crash reports to help improve aghub. Disabling this stops both event capture and session replay.",
 	settingsAnalyticsToggleLabel: "Share anonymous usage data",
+	settingsAutostartHeading: "Launch at startup",
+	settingsAutostartDescription:
+		"Start aghub automatically on Windows and keep it available from the system tray.",
+	settingsAutostartToggleLabel: "Launch aghub at Windows startup",
+	settingsAutostartEnabled: "Startup launch enabled",
+	settingsAutostartDisabled: "Startup launch disabled",
+	settingsAutostartError: "Failed to update startup launch",
 	onboardingSkip: "Skip",
 	onboardingBack: "Back",
 	onboardingNext: "Next",
