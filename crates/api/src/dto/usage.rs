@@ -70,3 +70,39 @@ pub struct UsageTotalsDto {
 	pub total_tokens: u64,
 	pub cost_usd: Option<f64>,
 }
+
+/// Remaining-quota report across agents, returned by `GET /api/v1/usage/limits`.
+///
+/// Unlike [`UsageReportDto`] (consumed tokens from local ccusage data), this
+/// queries each vendor's private OAuth usage endpoint for how much of the
+/// current rate-limit window is left. Auth tokens are read from each agent's
+/// local credential store.
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct UsageLimitsReportDto {
+	pub agents: Vec<AgentLimitsDto>,
+	pub generated_at: String,
+	/// Non-fatal notes (e.g. an agent is not logged in, or its endpoint failed).
+	pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct AgentLimitsDto {
+	/// "claude" | "codex"
+	pub agent: String,
+	pub windows: Vec<LimitWindowDto>,
+}
+
+/// One rate-limit window for an agent.
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct LimitWindowDto {
+	/// "5h" | "weekly" | "weekly_opus" | "weekly_sonnet"
+	pub kind: String,
+	/// Percent of the window consumed, 0-100 (Codex's `percent_left` is
+	/// converted to `100 - percent_left` here so all windows share a meaning).
+	pub utilization_pct: f64,
+	/// ISO-8601 reset time, when the endpoint reports one.
+	pub resets_at: Option<String>,
+}

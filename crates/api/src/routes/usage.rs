@@ -7,6 +7,7 @@
 
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
+use std::path::PathBuf;
 use std::time::Duration;
 
 use rocket::serde::json::Json;
@@ -14,12 +15,14 @@ use rocket::State;
 use serde::Deserialize;
 
 use crate::dto::usage::{
-	AgentUsageDto, UsageDayDto, UsageModelDto, UsageReportDto, UsageTotalsDto,
+	AgentLimitsDto, AgentUsageDto, LimitWindowDto, UsageDayDto,
+	UsageLimitsReportDto, UsageModelDto, UsageReportDto, UsageTotalsDto,
 };
 use crate::error::ApiError;
 use crate::state::UsageState;
 
 const CCUSAGE_TIMEOUT: Duration = Duration::from_secs(30);
+const LIMITS_TIMEOUT: Duration = Duration::from_secs(15);
 
 /// Locate the ccusage binary. Preference order: the sidecar path injected by
 /// the desktop shell (`UsageState`), then the `AGHUB_CCUSAGE_BIN` env var (dev),
@@ -335,6 +338,256 @@ pub async fn usage_summary(
 		agents,
 		generated_at: chrono::Utc::now().to_rfc3339(),
 		ccusage_version: version,
+		warnings,
+	})
+}
+
+// ---- remaining-quota (limits) ----------------------------------------------
+//
+// Local credential stores hold the OAuth token each agent already uses; we
+// reuse it to call the vendor's private usage endpoint. No new login flow.
+
+fn home_dir() -> Result<PathBuf, String> {
+	dirs::home_dir().ok_or_else(|| "cannot resolve home directory".to_string())
+}
+
+/// Claude Code's OAuth access token. macOS keeps it in the login keychain
+/// (service `Claude Code-credentials`); other platforms use the JSON file.
+fn claude_access_token() -> Result<String, String> {
+	#[derive(Deserialize)]
+	struct CredFile {
+		#[serde(rename = "claudeAiOauth")]
+		oauth: OauthBlock,
+	}
+	#[derive(Deserialize)]
+	struct OauthBlock {
+		#[serde(rename = "accessToken")]
+		access_token: String,
+	}
+	let parse = |json: &str| -> Result<String, String> {
+		serde_json::from_str::<CredFile>(json)
+			.map(|c| c.oauth.access_token)
+			.map_err(|e| format!("parse claude credentials: {e}"))
+	};
+
+	#[cfg(target_os = "macos")]
+	{
+		let user =
+			std::env::var("USER").map_err(|_| "USER not set".to_string())?;
+		let entry = keyring::Entry::new("Claude Code-credentials", &user)
+			.map_err(|e| e.to_string())?;
+		match entry.get_password() {
+			Ok(json) => return parse(&json),
+			// Not in keychain: fall through to the file (some setups use it).
+			Err(keyring::Error::NoEntry) => {}
+			Err(e) => return Err(e.to_string()),
+		}
+	}
+
+	let path = home_dir()?.join(".claude/.credentials.json");
+	let json = std::fs::read_to_string(&path)
+		.map_err(|e| format!("read {}: {e}", path.display()))?;
+	parse(&json)
+}
+
+/// Codex's OAuth token plus the ChatGPT account id its usage endpoint needs.
+fn codex_auth() -> Result<(String, Option<String>), String> {
+	#[derive(Deserialize)]
+	struct AuthFile {
+		tokens: Tokens,
+	}
+	#[derive(Deserialize)]
+	struct Tokens {
+		access_token: String,
+		#[serde(default)]
+		account_id: Option<String>,
+	}
+	let path = home_dir()?.join(".codex/auth.json");
+	let json = std::fs::read_to_string(&path)
+		.map_err(|e| format!("read {}: {e}", path.display()))?;
+	serde_json::from_str::<AuthFile>(&json)
+		.map(|a| (a.tokens.access_token, a.tokens.account_id))
+		.map_err(|e| format!("parse codex auth: {e}"))
+}
+
+// ---- Anthropic `GET /api/oauth/usage` shape --------------------------------
+
+#[derive(Deserialize)]
+struct ClaudeOauthUsage {
+	#[serde(default)]
+	five_hour: Option<ClaudeWindow>,
+	#[serde(default)]
+	seven_day: Option<ClaudeWindow>,
+	#[serde(default)]
+	seven_day_opus: Option<ClaudeWindow>,
+	#[serde(default)]
+	seven_day_sonnet: Option<ClaudeWindow>,
+}
+
+#[derive(Deserialize)]
+struct ClaudeWindow {
+	utilization: f64,
+	#[serde(default)]
+	resets_at: Option<String>,
+}
+
+async fn fetch_claude_limits() -> Result<AgentLimitsDto, String> {
+	let token = claude_access_token()?;
+	let client = reqwest::Client::builder()
+		.timeout(LIMITS_TIMEOUT)
+		.build()
+		.map_err(|e| e.to_string())?;
+	let resp = client
+		.get("https://api.anthropic.com/api/oauth/usage")
+		.bearer_auth(token)
+		.header("anthropic-beta", "oauth-2025-04-20")
+		.send()
+		.await
+		.map_err(|e| format!("claude usage request: {e}"))?;
+	if !resp.status().is_success() {
+		return Err(format!(
+			"claude usage endpoint returned {}",
+			resp.status()
+		));
+	}
+	let usage: ClaudeOauthUsage = resp
+		.json()
+		.await
+		.map_err(|e| format!("parse claude usage: {e}"))?;
+
+	let windows = [
+		("5h", usage.five_hour),
+		("weekly", usage.seven_day),
+		("weekly_opus", usage.seven_day_opus),
+		("weekly_sonnet", usage.seven_day_sonnet),
+	]
+	.into_iter()
+	.filter_map(|(kind, w)| {
+		w.map(|w| LimitWindowDto {
+			kind: kind.to_string(),
+			utilization_pct: w.utilization,
+			resets_at: w.resets_at,
+		})
+	})
+	.collect();
+
+	Ok(AgentLimitsDto {
+		agent: "claude".to_string(),
+		windows,
+	})
+}
+
+/// Codex's usage shape is undocumented and field names vary across versions, so
+/// we extract defensively: `used_percent` directly, or `percent_left` inverted;
+/// reset as an ISO string, or seconds-from-now, or epoch millis.
+fn codex_window(
+	value: &serde_json::Value,
+	kind: &str,
+) -> Option<LimitWindowDto> {
+	let obj = value.as_object()?;
+	let utilization_pct = obj
+		.get("used_percent")
+		.and_then(serde_json::Value::as_f64)
+		.or_else(|| {
+			obj.get("percent_left")
+				.and_then(serde_json::Value::as_f64)
+				.map(|left| 100.0 - left)
+		})?;
+	let resets_at = obj
+		.get("resets_at")
+		.and_then(serde_json::Value::as_str)
+		.map(str::to_string)
+		.or_else(|| {
+			obj.get("resets_in_seconds")
+				.and_then(serde_json::Value::as_i64)
+				.map(|secs| {
+					(chrono::Utc::now() + chrono::Duration::seconds(secs))
+						.to_rfc3339()
+				})
+		})
+		.or_else(|| {
+			obj.get("reset_time_ms")
+				.and_then(serde_json::Value::as_i64)
+				.and_then(chrono::DateTime::from_timestamp_millis)
+				.map(|dt| dt.to_rfc3339())
+		});
+	Some(LimitWindowDto {
+		kind: kind.to_string(),
+		utilization_pct,
+		resets_at,
+	})
+}
+
+async fn fetch_codex_limits() -> Result<AgentLimitsDto, String> {
+	let (token, account_id) = codex_auth()?;
+	let client = reqwest::Client::builder()
+		.timeout(LIMITS_TIMEOUT)
+		.build()
+		.map_err(|e| e.to_string())?;
+	let mut req = client
+		.get("https://chatgpt.com/backend-api/wham/usage")
+		.bearer_auth(token);
+	if let Some(id) = account_id {
+		req = req.header("ChatGPT-Account-Id", id);
+	}
+	let resp = req
+		.send()
+		.await
+		.map_err(|e| format!("codex usage request: {e}"))?;
+	if !resp.status().is_success() {
+		return Err(format!("codex usage endpoint returned {}", resp.status()));
+	}
+	let body: serde_json::Value = resp
+		.json()
+		.await
+		.map_err(|e| format!("parse codex usage: {e}"))?;
+
+	// Codex exposes a `primary` (5h) and `secondary` (weekly) window, possibly
+	// nested under `rate_limits`.
+	let root = body.get("rate_limits").unwrap_or(&body);
+	let windows: Vec<LimitWindowDto> =
+		[("primary", "5h"), ("secondary", "weekly")]
+			.into_iter()
+			.filter_map(|(key, kind)| {
+				root.get(key).and_then(|v| codex_window(v, kind))
+			})
+			.collect();
+	if windows.is_empty() {
+		return Err(
+			"codex usage response had no recognizable rate-limit windows"
+				.to_string(),
+		);
+	}
+
+	Ok(AgentLimitsDto {
+		agent: "codex".to_string(),
+		windows,
+	})
+}
+
+/// `GET /api/v1/usage/limits` — remaining rate-limit quota for Claude and Codex.
+///
+/// Degrades like [`usage_summary`]: a not-logged-in or failing agent becomes a
+/// `warnings` entry instead of failing the whole request.
+#[get("/usage/limits")]
+pub async fn usage_limits() -> Json<UsageLimitsReportDto> {
+	let (claude_res, codex_res) =
+		tokio::join!(fetch_claude_limits(), fetch_codex_limits());
+
+	let mut agents = Vec::new();
+	let mut warnings = Vec::new();
+	match claude_res {
+		Ok(agent) => agents.push(agent),
+		Err(e) => warnings.push(format!("claude limits unavailable: {e}")),
+	}
+	match codex_res {
+		Ok(agent) => agents.push(agent),
+		Err(e) => warnings.push(format!("codex limits unavailable: {e}")),
+	}
+
+	Json(UsageLimitsReportDto {
+		agents,
+		generated_at: chrono::Utc::now().to_rfc3339(),
 		warnings,
 	})
 }

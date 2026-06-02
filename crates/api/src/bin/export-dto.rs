@@ -5,7 +5,8 @@ use std::{
 };
 
 use aghub_api::dto::usage::{
-	AgentUsageDto, UsageDayDto, UsageModelDto, UsageReportDto, UsageTotalsDto,
+	AgentLimitsDto, AgentUsageDto, LimitWindowDto, UsageDayDto,
+	UsageLimitsReportDto, UsageModelDto, UsageReportDto, UsageTotalsDto,
 };
 use aghub_api::dto::{
 	agents::{
@@ -255,6 +256,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<UsageTotalsDto>(&cfg)?;
 	export_type::<AgentUsageDto>(&cfg)?;
 	export_type::<UsageReportDto>(&cfg)?;
+
+	export_type::<LimitWindowDto>(&cfg)?;
+	export_type::<AgentLimitsDto>(&cfg)?;
+	export_type::<UsageLimitsReportDto>(&cfg)?;
 
 	write_index_file(&out_dir)?;
 
