@@ -63,6 +63,46 @@ fn focus_main_window(window: &WebviewWindow) {
 	let _ = window.set_focus();
 }
 
+#[cfg_attr(not(windows), allow(dead_code))]
+struct TrayText {
+	app_name: &'static str,
+	show: &'static str,
+	quit: &'static str,
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+fn localized_tray_text() -> TrayText {
+	let locale = sys_locale::get_locale()
+		.unwrap_or_default()
+		.replace('_', "-")
+		.to_ascii_lowercase();
+
+	if ["zh-hant", "zh-tw", "zh-hk", "zh-mo"]
+		.iter()
+		.any(|prefix| locale.starts_with(prefix))
+	{
+		return TrayText {
+			app_name: "aghub",
+			show: "顯示 aghub",
+			quit: "退出 aghub",
+		};
+	}
+
+	if locale.starts_with("zh") {
+		return TrayText {
+			app_name: "aghub",
+			show: "显示 aghub",
+			quit: "退出 aghub",
+		};
+	}
+
+	TrayText {
+		app_name: "aghub",
+		show: "Show aghub",
+		quit: "Quit aghub",
+	}
+}
+
 #[cfg(windows)]
 fn restore_main_window(app: &tauri::AppHandle) {
 	if let Some(window) = app.get_webview_window("main") {
@@ -80,16 +120,17 @@ fn setup_windows_tray(app: &mut tauri::App) -> tauri::Result<()> {
 	const SHOW_ID: &str = "show";
 	const QUIT_ID: &str = "quit";
 
+	let text = localized_tray_text();
 	let menu = MenuBuilder::new(app)
-		.text(SHOW_ID, "Show aghub")
+		.text(SHOW_ID, text.show)
 		.separator()
-		.text(QUIT_ID, "Quit")
+		.text(QUIT_ID, text.quit)
 		.build()?;
 
 	let mut tray = TrayIconBuilder::with_id("main")
 		.menu(&menu)
 		.show_menu_on_left_click(false)
-		.tooltip("aghub")
+		.tooltip(text.app_name)
 		.on_menu_event(|app, event| match event.id().as_ref() {
 			SHOW_ID => restore_main_window(app),
 			QUIT_ID => app.exit(0),
