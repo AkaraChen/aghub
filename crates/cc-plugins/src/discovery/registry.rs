@@ -7,7 +7,8 @@
 
 use super::{
 	marketplace::scan_marketplaces, DiscoveryConfig, InstallCountsCache,
-	MarketplaceSource, PluginAuthor, PluginInfo, PluginSource,
+	MarketplaceSource, PluginAuthor, PluginCatalogCache, PluginInfo,
+	PluginSource,
 };
 use crate::claude::types::PluginManifest as ClaudePluginManifest;
 use crate::claude::ClaudePluginManager;
@@ -50,16 +51,35 @@ impl UnifiedPluginRegistry {
 	}
 
 	async fn load_install_counts(&mut self) -> Result<()> {
-		let path = self.config.install_counts_path();
-		if !path.exists() {
-			return Ok(());
+		// Prefer CC's richer `plugin-catalog-cache.json` whose keys are already
+		// `name@marketplace`, matching our lookup id directly.
+		let catalog_path = self.config.plugin_catalog_path();
+		if catalog_path.exists() {
+			let content = tokio::fs::read_to_string(&catalog_path).await?;
+			if let Ok(cache) =
+				serde_json::from_str::<PluginCatalogCache>(&content)
+			{
+				for (plugin_id, entry) in cache.catalog.plugins {
+					if let Some(installs) = entry.unique_installs {
+						self.install_counts.insert(plugin_id, installs);
+					}
+				}
+			}
 		}
-		let content = tokio::fs::read_to_string(&path).await?;
-		if let Ok(cache) = serde_json::from_str::<InstallCountsCache>(&content)
-		{
-			for entry in cache.counts {
-				self.install_counts
-					.insert(entry.plugin, entry.unique_installs);
+
+		// Legacy fallback: older CC versions wrote a flat
+		// `install-counts-cache.json`. Skipped if the file is absent.
+		let legacy_path = self.config.install_counts_path();
+		if legacy_path.exists() {
+			let content = tokio::fs::read_to_string(&legacy_path).await?;
+			if let Ok(cache) =
+				serde_json::from_str::<InstallCountsCache>(&content)
+			{
+				for entry in cache.counts {
+					self.install_counts
+						.entry(entry.plugin)
+						.or_insert(entry.unique_installs);
+				}
 			}
 		}
 		Ok(())

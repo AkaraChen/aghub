@@ -666,13 +666,17 @@ pub async fn open_plugin_skill_in_editor(
 	let id = parse_plugin_id(&req.plugin_id)?;
 	let (_, plugin) = load_manager_and_plugin(&id).await?;
 	let path = resolve_plugin_skill_path(&plugin, &req.scope, &req.skill_name)?;
-	Command::new(req.editor.cli_command())
-		.arg(&path)
-		.spawn()
-		.map_err(|e| {
-			error!("Failed to open plugin skill in editor: {e}");
-			ApiError::internal("Failed to open plugin skill in editor")
-		})?;
+	let mut cmd = Command::new(req.editor.cli_command());
+	cmd.arg(&path);
+	#[cfg(windows)]
+	{
+		use std::os::windows::process::CommandExt;
+		cmd.creation_flags(crate::CREATE_NO_WINDOW);
+	}
+	cmd.spawn().map_err(|e| {
+		error!("Failed to open plugin skill in editor: {e}");
+		ApiError::internal("Failed to open plugin skill in editor")
+	})?;
 	Ok(NoContent)
 }
 

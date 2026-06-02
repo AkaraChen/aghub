@@ -167,7 +167,9 @@ export function PluginMarketDialog({
 			}
 		}
 
-		return [...filtered].sort((a, b) => b.installs - a.installs);
+		return [...filtered].sort(
+			(a, b) => b.installs - a.installs || a.name.localeCompare(b.name),
+		);
 	}, [
 		marketPlugins,
 		deferredSearchQuery,
