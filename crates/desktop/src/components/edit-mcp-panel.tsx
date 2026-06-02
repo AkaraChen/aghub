@@ -148,7 +148,6 @@ export function EditMcpPanel({
 		onSuccess: async (_data, body) => {
 			await invalidateMcpQueries(queryClient);
 			capture("mcp server updated", {
-				mcp_name: body.name ?? primaryServer.name,
 				transport_type:
 					body.transport?.type ?? primaryServer.transport.type,
 				agents: group.items.map((i) => i.agent).filter(Boolean),

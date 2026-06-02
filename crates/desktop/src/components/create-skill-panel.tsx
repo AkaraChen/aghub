@@ -116,7 +116,6 @@ export function CreateSkillPanel({
 				),
 			);
 			capture("skill created", {
-				skill_name: body.name,
 				agents: values.selectedAgents,
 				scope: projectPath ? "project" : "global",
 			});

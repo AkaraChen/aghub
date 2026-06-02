@@ -156,7 +156,6 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 				),
 			);
 			capture("mcp server created", {
-				mcp_name: body.name,
 				transport_type: values.transportType,
 				agents: values.selectedAgents,
 				scope: projectPath ? "project" : "global",

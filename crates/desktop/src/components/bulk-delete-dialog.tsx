@@ -112,7 +112,7 @@ export function BulkDeleteDialog({
 			}
 			return { deleted: promises.length };
 		},
-		onSuccess: async (_data) => {
+		onSuccess: async (data) => {
 			if (resourceType === "mcp" || resourceType === "mixed") {
 				await invalidateMcpQueries(queryClient);
 			}
@@ -127,7 +127,7 @@ export function BulkDeleteDialog({
 						: "resources deleted";
 			capture(eventName, {
 				resource_type: resourceType,
-				count: groups.length,
+				count: data.deleted,
 			});
 			onSuccess();
 			onClose();

@@ -11,6 +11,7 @@ export function getPosthogConfig(): Promise<PosthogConfig> {
 	configPromise ??= invoke<PosthogConfig>("posthog_get_config").catch(
 		(error) => {
 			console.warn("[posthog] failed to load config", error);
+			configPromise = null;
 			return { key: null, host: null };
 		},
 	);

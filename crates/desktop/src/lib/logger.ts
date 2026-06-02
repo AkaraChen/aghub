@@ -57,12 +57,12 @@ async function startLogForwarding() {
 	logger = provider.getLogger(SERVICE_NAME);
 }
 
-function stopLogForwarding() {
+async function stopLogForwarding() {
 	const activeProvider = provider;
 	logger = null;
 	provider = null;
 	if (activeProvider) {
-		void activeProvider.shutdown();
+		await activeProvider.shutdown();
 	}
 }
 
@@ -75,13 +75,13 @@ export async function setLogForwardingEnabled(enabled: boolean) {
 	if (enabled) {
 		await startLogForwarding();
 	} else {
-		stopLogForwarding();
+		await stopLogForwarding();
 	}
 }
 
 if (typeof window !== "undefined") {
 	window.addEventListener("beforeunload", () => {
-		stopLogForwarding();
+		void stopLogForwarding();
 	});
 }
 

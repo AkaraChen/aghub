@@ -94,7 +94,6 @@ export function useSkillInstall() {
 
 			if (response.success) {
 				capture("skill installed", {
-					skill_name: selectedSkill.name,
 					skill_source: selectedSkill.source,
 					agents: Array.from(selectedAgents),
 					scope: installToProject ? "project" : "global",

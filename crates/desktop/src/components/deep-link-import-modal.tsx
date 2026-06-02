@@ -155,7 +155,6 @@ export function DeepLinkImportModal({
 				});
 				capture("deep link imported", {
 					import_kind: "skill",
-					skill_name: variables.intent.name,
 					agents: Array.from(variables.selectedAgents),
 					scope: variables.installToProject ? "project" : "global",
 				});
@@ -165,7 +164,6 @@ export function DeepLinkImportModal({
 				});
 				capture("deep link imported", {
 					import_kind: "mcp",
-					mcp_name: variables.intent.name,
 					agents: Array.from(variables.selectedAgents),
 					scope: variables.installToProject ? "project" : "global",
 				});
