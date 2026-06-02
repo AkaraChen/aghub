@@ -12,12 +12,13 @@ import { check } from "@tauri-apps/plugin-updater";
 import { useTranslation } from "react-i18next";
 import { applyAnalyticsConsent } from "../../lib/analytics";
 import { dispatchOnboardingCommand } from "../../lib/onboarding";
+import { isWindows } from "../../lib/platform";
 import { getAnalyticsConsent, setAnalyticsConsent } from "../../lib/store";
 
 export default function ApplicationPanel() {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
-	const isWindows = navigator.userAgent.toLowerCase().includes("windows");
+	const isWindowsOS = isWindows();
 
 	const { data: appInfo } = useQuery({
 		queryKey: ["app-info"],
@@ -38,7 +39,7 @@ export default function ApplicationPanel() {
 		useQuery({
 			queryKey: ["windows-autostart"],
 			queryFn: isAutostartEnabled,
-			enabled: isWindows,
+			enabled: isWindowsOS,
 		});
 
 	const analyticsMutation = useMutation({
@@ -276,7 +277,7 @@ export default function ApplicationPanel() {
 						</Switch>
 					</div>
 
-					{isWindows ? (
+					{isWindowsOS ? (
 						<div className="flex items-center justify-between gap-4">
 							<div className="space-y-0.5">
 								<span className="text-sm font-medium text-(--foreground)">

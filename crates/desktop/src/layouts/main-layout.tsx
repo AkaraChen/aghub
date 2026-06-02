@@ -1,10 +1,9 @@
 import { Surface } from "@heroui/react";
 import { AppSidebar } from "../components/app-sidebar";
 import { WindowControls } from "../components/window-controls";
+import { isMacOS } from "../lib/platform";
 
 export function MainLayout({ children }: { children: React.ReactNode }) {
-	const isMac = navigator.userAgent.toLowerCase().includes("mac");
-
 	return (
 		<Surface
 			variant="secondary"
@@ -15,7 +14,7 @@ export function MainLayout({ children }: { children: React.ReactNode }) {
 				className="flex h-8 shrink-0 items-center justify-between border-b border-border pl-3"
 			>
 				<div className="pointer-events-none flex select-none items-center">
-					{!isMac && (
+					{!isMacOS() && (
 						<span className="text-xs font-medium tracking-wide text-foreground/50">
 							aghub
 						</span>
