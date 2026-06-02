@@ -237,6 +237,8 @@ impl ClaudeCli {
 		let mut cmd = Command::new(&self.binary);
 		cmd.kill_on_drop(true);
 		cmd.args(args);
+		#[cfg(windows)]
+		cmd.creation_flags(crate::CREATE_NO_WINDOW);
 		let output = tokio::time::timeout(SPAWN_TIMEOUT, cmd.output())
 			.await
 			.with_context(|| format!("claude {} timed out", args.join(" ")))?

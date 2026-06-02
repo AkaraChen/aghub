@@ -1,5 +1,7 @@
 use std::fs;
 use std::io::{BufRead, BufReader, Read, Write};
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 #[cfg(not(target_os = "linux"))]
 use std::process::Command;
@@ -37,6 +39,7 @@ fn os_version() -> String {
 	{
 		Command::new("cmd")
 			.args(["/C", "ver"])
+			.creation_flags(crate::CREATE_NO_WINDOW)
 			.output()
 			.ok()
 			.and_then(|o| String::from_utf8(o.stdout).ok())
