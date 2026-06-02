@@ -1,5 +1,13 @@
 export { disableAgent, enableAgent, getDisabledAgents } from "./store/agents";
-export { getStore, initStore } from "./store/index";
+export {
+	type AnalyticsConsent,
+	getAnalyticsConsent,
+	getConsentAcked,
+	setAnalyticsConsent,
+	setConsentAcked,
+	getStore,
+	initStore,
+} from "./store/index";
 export {
 	getIntegrationPreferences,
 	saveIntegrationPreferences,

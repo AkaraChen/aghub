@@ -20,6 +20,7 @@ import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { supportsSkillMutation } from "../lib/agent-capabilities";
 import { importSkillMutationOptions } from "../requests/skills";
+import { capture } from "../lib/analytics";
 import { AgentSelector } from "./agent-selector";
 
 interface ImportSkillPanelProps {
@@ -97,6 +98,10 @@ export function ImportSkillPanel({
 					}),
 				),
 			);
+			capture("skill imported", {
+				agents: values.selectedAgents,
+				scope: projectPath ? "project" : "global",
+			});
 			onDone();
 		} catch {
 			// Error is handled by onError callback

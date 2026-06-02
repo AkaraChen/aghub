@@ -28,6 +28,7 @@ import {
 } from "../lib/form-utils";
 import { buildTransportFromForm } from "../lib/mcp-utils";
 import { createMcpMutationOptions } from "../requests/mcps";
+import { capture } from "../lib/analytics";
 import { AgentSelector } from "./agent-selector";
 import type { EnvVar } from "./env-editor";
 import { EnvEditor } from "./env-editor";
@@ -154,6 +155,11 @@ export function CreateMcpPanel({ onDone, projectPath }: CreateMcpPanelProps) {
 					}),
 				),
 			);
+			capture("mcp server created", {
+				transport_type: values.transportType,
+				agents: values.selectedAgents,
+				scope: projectPath ? "project" : "global",
+			});
 			onDone();
 		} catch (error) {
 			const errorMessage =

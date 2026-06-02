@@ -13,6 +13,7 @@ import {
 } from "../lib/deep-link";
 import { buildPendingResults, type InstallResult } from "../lib/install-utils";
 import { queryKeys } from "../requests/keys";
+import { capture } from "../lib/analytics";
 import { AgentSelector } from "./agent-selector";
 import { InstallTargetSelector } from "./install-target-selector";
 import { ResultStatusItem } from "./result-status-item";
@@ -147,14 +148,24 @@ export function DeepLinkImportModal({
 			);
 			return { pendingResults };
 		},
-		onSuccess: () => {
+		onSuccess: (_data, variables) => {
 			if (intent?.kind === "skill-market-install") {
 				queryClient.invalidateQueries({
 					queryKey: queryKeys.skills.all(),
 				});
+				capture("deep link imported", {
+					import_kind: "skill",
+					agents: Array.from(variables.selectedAgents),
+					scope: variables.installToProject ? "project" : "global",
+				});
 			} else {
 				queryClient.invalidateQueries({
 					queryKey: queryKeys.mcps.all(),
+				});
+				capture("deep link imported", {
+					import_kind: "mcp",
+					agents: Array.from(variables.selectedAgents),
+					scope: variables.installToProject ? "project" : "global",
 				});
 			}
 		},

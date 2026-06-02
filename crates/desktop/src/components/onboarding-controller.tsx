@@ -4,7 +4,7 @@ import {
 	FolderIcon,
 	ServerIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Modal, Spinner } from "@heroui/react";
+import { Button, Checkbox, Modal, Spinner } from "@heroui/react";
 import { type Driver, type DriveStep, driver } from "driver.js";
 import "driver.js/dist/driver.css";
 import {
@@ -18,7 +18,12 @@ import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import { useProjects } from "../hooks/use-projects";
 import { ONBOARDING_EVENT, type OnboardingCommand } from "../lib/onboarding";
-import { getOnboardingProgress, updateOnboardingProgress } from "../lib/store";
+import { applyAnalyticsConsent, capture } from "../lib/analytics";
+import {
+	getOnboardingProgress,
+	setAnalyticsConsent,
+	updateOnboardingProgress,
+} from "../lib/store";
 import { cn } from "../lib/utils";
 
 type OverlayMode = "welcome" | null;
@@ -78,6 +83,9 @@ export function OnboardingController() {
 	const [overlayMode, setOverlayMode] = useState<OverlayMode>(null);
 	const [currentStep, setCurrentStep] = useState(0);
 	const [pendingProjectTour, setPendingProjectTour] = useState(false);
+	// Pre-checked: opt-in by default for first-time users. Persisted +
+	// applied (Rust + posthog-js) when the user dismisses the dialog.
+	const [analyticsOptIn, setAnalyticsOptIn] = useState(true);
 	const activeDriverRef = useRef<Driver | null>(null);
 	const previousProjectIdsRef = useRef<string[]>([]);
 
@@ -381,6 +389,17 @@ export function OnboardingController() {
 	const dismissWelcome = async () => {
 		setOverlayMode(null);
 		setCurrentStep(0);
+		// Persist the user's consent choice and apply it before any
+		// further captures fire. The default is opt-in (state was
+		// initialised to true) so most users land in `granted`.
+		const consent = analyticsOptIn ? "granted" : "denied";
+		try {
+			await setAnalyticsConsent(consent);
+			await applyAnalyticsConsent(analyticsOptIn);
+		} catch (error) {
+			console.error("Failed to persist analytics consent:", error);
+		}
+		capture("onboarding completed");
 		await saveProgress({
 			hasSeenWelcome: true,
 		});
@@ -536,6 +555,31 @@ export function OnboardingController() {
 							<WizardIllustration
 								stepId={WIZARD_STEPS[currentStep].id}
 							/>
+						</div>
+
+						{/* Analytics consent — opt-in by default. */}
+						<div className="rounded-lg border border-border bg-surface-secondary/50 p-3">
+							<Checkbox
+								variant="secondary"
+								isSelected={analyticsOptIn}
+								onChange={setAnalyticsOptIn}
+							>
+								<Checkbox.Control>
+									<Checkbox.Indicator />
+								</Checkbox.Control>
+								<Checkbox.Content>
+									<div className="space-y-0.5">
+										<p className="text-sm font-medium">
+											{t("onboardingAnalyticsTitle")}
+										</p>
+										<p className="text-xs leading-5 text-muted">
+											{t(
+												"onboardingAnalyticsDescription",
+											)}
+										</p>
+									</div>
+								</Checkbox.Content>
+							</Checkbox>
 						</div>
 					</Modal.Body>
 
