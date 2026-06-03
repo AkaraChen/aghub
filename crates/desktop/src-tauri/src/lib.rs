@@ -244,23 +244,7 @@ pub fn run() {
 		.plugin(tauri_plugin_opener::init())
 		.plugin(tauri_plugin_dialog::init())
 		.plugin(tauri_plugin_store::Builder::default().build())
-		.plugin(
-			tauri_plugin_autostart::Builder::new()
-				.arg("--minimized")
-				.build(),
-		)
-		.on_window_event(|window, event| {
-			#[cfg(windows)]
-			if window.label() == "main" {
-				if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-					api.prevent_close();
-					let _ = window.hide();
-				}
-			}
-
-			#[cfg(not(windows))]
-			let _ = (window, event);
-		})
+		.plugin(tauri_plugin_autostart::Builder::new().build())
 		.setup(|app| {
 			info!("aghub desktop application setup started");
 			#[cfg(desktop)]
@@ -291,16 +275,7 @@ pub fn run() {
 			}
 
 			#[cfg(windows)]
-			{
-				setup_windows_tray(app)?;
-				if std::env::args().any(|arg| arg == "--minimized") {
-					if let Some(window) =
-						app.handle().get_webview_window("main")
-					{
-						let _ = window.hide();
-					}
-				}
-			}
+			setup_windows_tray(app)?;
 
 			info!("aghub desktop setup completed");
 			Ok(())
