@@ -44,6 +44,7 @@ export function SyncGithubSkillDialog({
 	skillPath,
 	isOpen,
 	onClose,
+	projectPath,
 }: SyncGithubSkillDialogProps) {
 	const { t } = useTranslation();
 	const api = useApi();
@@ -151,6 +152,8 @@ export function SyncGithubSkillDialog({
 				session_id: sessionId,
 				skill_path: matchedSkill.path,
 				source_paths: sourcePaths,
+				scope: "all",
+				project_root: projectPath ?? null,
 			},
 			{
 				onError: (error) => {

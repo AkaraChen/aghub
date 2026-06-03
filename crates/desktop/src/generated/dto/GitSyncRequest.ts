@@ -13,4 +13,13 @@ export type GitSyncRequest = {
 	 * Tilde-prefixed `source_path` values of every installation to replace.
 	 */
 	source_paths: Array<string>;
+	/**
+	 * Scope that contains the existing skill installations.
+	 * Use `all` to sync both global and project installations.
+	 */
+	scope: string;
+	/**
+	 * Project root for project-scoped installations.
+	 */
+	project_root: string | null;
 };
