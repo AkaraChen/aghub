@@ -20,6 +20,7 @@ aghub-core = { path = "../core" }
 aghub-git = { path = "../git" }
 aghub-inference = { path = "../inference" }
 aghub-cc-plugins = { path = "../cc-plugins" }
+aghub-usage = { path = "../usage" }
 skill = { path = "../skill" }
 skills-sh = { path = "../skills-sh" }
 rocket = { version = "0.5", features = [ "json" ] }

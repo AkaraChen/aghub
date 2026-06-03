@@ -4,10 +4,6 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-use aghub_api::dto::usage::{
-	AgentLimitsDto, AgentUsageDto, LimitWindowDto, UsageDayDto,
-	UsageLimitsReportDto, UsageModelDto, UsageReportDto, UsageTotalsDto,
-};
 use aghub_api::dto::{
 	agents::{
 		AgentAvailabilityDto, AgentInfo, CapabilitiesDto, McpCapabilitiesDto,
@@ -73,6 +69,10 @@ use aghub_api::dto::{
 		OperationResultDto, ReconcileRequest, ResourceLocatorDto, TargetDto,
 		TransferRequest,
 	},
+};
+use aghub_usage::{
+	AgentLimitsDto, AgentUsageDto, LimitWindowDto, UsageDayDto,
+	UsageLimitsReportDto, UsageModelDto, UsageReportDto, UsageTotalsDto,
 };
 use ts_rs::{Config, TS};
 

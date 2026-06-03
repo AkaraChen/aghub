@@ -6,7 +6,7 @@ use ts_rs::TS;
 /// ccusage emits a different JSON shape per agent (claude has cache-creation,
 /// codex has reasoning, cost keys differ); this DTO is the normalized shape the
 /// frontend consumes. The mapping from each ccusage shape lives in
-/// `routes::usage`.
+/// `claude_to_agent` / `codex_to_agent`.
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
 pub struct UsageReportDto {
