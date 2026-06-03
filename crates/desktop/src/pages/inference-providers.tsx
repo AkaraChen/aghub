@@ -192,16 +192,14 @@ function ProviderFormatIcon({
 	className?: string;
 }) {
 	const svg = format === "anthropic" ? anthropicLogo : openAiLogo;
+	const svgDataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 
 	return (
-		<span
-			className={cn(
-				"size-4 shrink-0 text-foreground [&>svg]:size-full",
-				className,
-			)}
+		<img
+			alt=""
+			className={cn("size-4 shrink-0 dark:invert", className)}
 			aria-hidden
-			// eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml
-			dangerouslySetInnerHTML={{ __html: svg }}
+			src={svgDataUrl}
 		/>
 	);
 }
