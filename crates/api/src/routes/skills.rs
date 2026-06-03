@@ -1120,14 +1120,58 @@ pub fn get_project_skill_lock(
 	}))
 }
 
+fn git_scan_session_data(
+	session: &GitCloneSession,
+	request_url: &str,
+	reuse_credentials: bool,
+) -> Result<(Option<String>, Option<Vec<String>>), ApiError> {
+	if session.url != request_url {
+		if reuse_credentials && session.credential_token.is_some() {
+			return Err(ApiError::new(
+				Status::BadRequest,
+				concat!(
+					"Cannot reuse a credential-bearing git scan ",
+					"session for a different repository URL"
+				),
+				"SESSION_URL_MISMATCH",
+			));
+		}
+
+		return Ok((None, None));
+	}
+
+	let credential_token = if reuse_credentials {
+		session.credential_token.clone()
+	} else {
+		None
+	};
+
+	Ok((credential_token, Some(session.branches.clone())))
+}
+
 #[post("/skills/git/scan", data = "<body>")]
 pub async fn git_scan_skills(
 	body: Json<GitScanRequest>,
 	sessions: &rocket::State<GitCloneSessions>,
 ) -> ApiResult<GitScanResponse> {
 	let req = body.into_inner();
+	let reuse_session_credential = req.credential_id.is_none();
 
-	// Resolve credential token — either from session or from request
+	let (session_credential_token, cached_branches) = if let Some(ref sid) =
+		req.session_id
+	{
+		let map = sessions.sessions.lock().unwrap();
+		if let Some(session) = map.get(sid) {
+			git_scan_session_data(session, &req.url, reuse_session_credential)?
+		} else {
+			(None, None)
+		}
+	} else {
+		(None, None)
+	};
+
+	// Resolve credential token — either from request or, when the
+	// requested URL matches the original scan URL, from the session.
 	let credential_token: Option<String> =
 		if let Some(ref cred_id) = req.credential_id {
 			let creds = crate::routes::credentials::load_credentials()
@@ -1147,21 +1191,8 @@ pub async fn git_scan_skills(
 					)
 				})?;
 			Some(cred.token.clone())
-		} else if let Some(ref sid) = req.session_id {
-			// Reuse credential from existing session
-			let map = sessions.sessions.lock().unwrap();
-			map.get(sid).and_then(|s| s.credential_token.clone())
 		} else {
-			None
-		};
-
-	// Retrieve cached branches from existing session if re-scanning
-	let cached_branches: Option<Vec<String>> =
-		if let Some(ref sid) = req.session_id {
-			let map = sessions.sessions.lock().unwrap();
-			map.get(sid).map(|s| s.branches.clone())
-		} else {
-			None
+			session_credential_token
 		};
 
 	let url = req.url.clone();
@@ -1599,6 +1630,75 @@ mod tests {
 			.join(".opencode/skills/repo-helper/assets/notes.txt")
 			.exists());
 		assert!(!project_root.join(".agents/skills/repo-helper").exists());
+	}
+
+	#[test]
+	fn git_scan_session_data_reuses_matching_session_credentials() {
+		let temp_dir = tempfile::tempdir().unwrap();
+		let session = GitCloneSession {
+			temp_dir,
+			created_at: std::time::Instant::now(),
+			url: "https://github.com/example/repo.git".to_string(),
+			credential_token: Some("secret-token".to_string()),
+			branches: vec!["main".to_string()],
+			current_branch: "main".to_string(),
+		};
+
+		let (token, branches) = git_scan_session_data(
+			&session,
+			"https://github.com/example/repo.git",
+			true,
+		)
+		.unwrap();
+
+		assert_eq!(token, Some("secret-token".to_string()));
+		assert_eq!(branches, Some(vec!["main".to_string()]));
+	}
+
+	#[test]
+	fn git_scan_session_data_rejects_credential_reuse_url_mismatch() {
+		let temp_dir = tempfile::tempdir().unwrap();
+		let session = GitCloneSession {
+			temp_dir,
+			created_at: std::time::Instant::now(),
+			url: "https://github.com/example/repo.git".to_string(),
+			credential_token: Some("secret-token".to_string()),
+			branches: vec!["main".to_string()],
+			current_branch: "main".to_string(),
+		};
+
+		let error = git_scan_session_data(
+			&session,
+			"https://attacker.example/collect.git",
+			true,
+		)
+		.unwrap_err();
+
+		assert_eq!(error.status, Status::BadRequest);
+		assert_eq!(error.body.code, "SESSION_URL_MISMATCH");
+	}
+
+	#[test]
+	fn git_scan_session_data_ignores_mismatched_session_without_reuse() {
+		let temp_dir = tempfile::tempdir().unwrap();
+		let session = GitCloneSession {
+			temp_dir,
+			created_at: std::time::Instant::now(),
+			url: "https://github.com/example/repo.git".to_string(),
+			credential_token: Some("secret-token".to_string()),
+			branches: vec!["main".to_string()],
+			current_branch: "main".to_string(),
+		};
+
+		let (token, branches) = git_scan_session_data(
+			&session,
+			"https://attacker.example/collect.git",
+			false,
+		)
+		.unwrap();
+
+		assert_eq!(token, None);
+		assert_eq!(branches, None);
 	}
 
 	#[test]
