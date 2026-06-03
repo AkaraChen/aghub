@@ -307,6 +307,130 @@ fn get_skill_root(path: std::path::PathBuf) -> std::path::PathBuf {
 	}
 }
 
+fn invalid_git_sync_path(message: impl Into<String>) -> ApiError {
+	ApiError::new(Status::BadRequest, message.into(), "INVALID_SYNC_PATH")
+}
+
+fn ensure_relative_child_path(
+	path: &str,
+) -> Result<&std::path::Path, ApiError> {
+	let path = std::path::Path::new(path);
+	let invalid_component = path.components().any(|component| {
+		matches!(
+			component,
+			std::path::Component::ParentDir
+				| std::path::Component::RootDir
+				| std::path::Component::Prefix(_)
+		)
+	});
+	if path.as_os_str().is_empty() || path.is_absolute() || invalid_component {
+		return Err(invalid_git_sync_path(
+			"skill_path must be a relative path inside the cloned repository",
+		));
+	}
+	Ok(path)
+}
+
+fn resolve_cloned_skill_dir(
+	temp_path: &std::path::Path,
+	skill_path: &str,
+) -> Result<(std::path::PathBuf, std::path::PathBuf), ApiError> {
+	let relative_skill_path = ensure_relative_child_path(skill_path)?;
+	let cloned_skill_path = temp_path.join(relative_skill_path);
+	let cloned_skill_dir = get_skill_root(cloned_skill_path.clone());
+
+	if !cloned_skill_dir.exists() {
+		return Err(ApiError::new(
+			Status::NotFound,
+			format!(
+				"Skill path '{}' not found in cloned repository",
+				skill_path
+			),
+			"SKILL_PATH_NOT_FOUND",
+		));
+	}
+
+	let temp_root = temp_path
+		.canonicalize()
+		.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
+	let canonical_skill_dir = cloned_skill_dir
+		.canonicalize()
+		.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
+	if !canonical_skill_dir.starts_with(&temp_root) {
+		return Err(invalid_git_sync_path(
+			"skill_path resolves outside the cloned repository",
+		));
+	}
+
+	Ok((cloned_skill_path, canonical_skill_dir))
+}
+
+fn validate_git_sync_target_dir(
+	source_path: &str,
+	expected_skill_name: &str,
+) -> Result<std::path::PathBuf, ApiError> {
+	let target_skill_md = expand_tilde_path(source_path);
+	if target_skill_md.file_name() != Some(std::ffi::OsStr::new("SKILL.md")) {
+		return Err(invalid_git_sync_path(
+			"source_paths entries must point to an existing SKILL.md file",
+		));
+	}
+
+	let metadata = target_skill_md.symlink_metadata().map_err(|_| {
+		invalid_git_sync_path(format!(
+			"Source path '{}' is not an existing skill",
+			source_path
+		))
+	})?;
+	if !metadata.is_file() || metadata.file_type().is_symlink() {
+		return Err(invalid_git_sync_path(
+			"source_paths entries must be regular SKILL.md files",
+		));
+	}
+
+	let target_dir = target_skill_md.parent().ok_or_else(|| {
+		invalid_git_sync_path(
+			"source_paths entries must include a skill directory",
+		)
+	})?;
+	let target_metadata = target_dir
+		.symlink_metadata()
+		.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
+	if !target_metadata.is_dir() || target_metadata.file_type().is_symlink() {
+		return Err(invalid_git_sync_path(
+			"source_paths entries must be inside regular skill directories",
+		));
+	}
+
+	let existing_skill =
+		skill::parser::parse(&target_skill_md).map_err(|e| {
+			invalid_git_sync_path(format!(
+				"Source path '{}' is not a parseable skill: {e}",
+				source_path
+			))
+		})?;
+	if existing_skill.name != expected_skill_name {
+		return Err(invalid_git_sync_path(format!(
+			"Source path '{}' contains skill '{}' but sync requested '{}'",
+			source_path, existing_skill.name, expected_skill_name
+		)));
+	}
+
+	let expected_dir_name = sanitize_name(&existing_skill.name);
+	if target_dir.file_name().and_then(|n| n.to_str())
+		!= Some(expected_dir_name.as_str())
+	{
+		return Err(invalid_git_sync_path(format!(
+			"Source path '{}' is not in a managed skill directory",
+			source_path
+		)));
+	}
+
+	target_dir
+		.canonicalize()
+		.map_err(|e| ApiError::from(ConfigError::Io(e)))
+}
+
 fn copy_dir_recursive(
 	from: &std::path::Path,
 	to: &std::path::Path,
@@ -1458,38 +1582,29 @@ pub async fn git_sync_skill(
 		session.temp_dir.path().to_path_buf()
 	};
 
-	// Full path of the SKILL.md (or skill dir) inside the clone
-	let cloned_skill_path = temp_path.join(&req.skill_path);
-	let cloned_skill_dir = get_skill_root(cloned_skill_path.clone());
+	let (cloned_skill_path, cloned_skill_dir) =
+		resolve_cloned_skill_dir(&temp_path, &req.skill_path)?;
 
-	if !cloned_skill_dir.exists() {
-		return Err(ApiError::new(
-			Status::NotFound,
-			format!(
-				"Skill path '{}' not found in cloned repository",
-				req.skill_path
-			),
-			"SKILL_PATH_NOT_FOUND",
-		));
+	let cloned_skill =
+		skill::parser::parse(&cloned_skill_path).map_err(|e| {
+			ApiError::new(
+				Status::BadRequest,
+				format!("Failed to parse cloned skill: {e}"),
+				"SKILL_PARSE_FAILED",
+			)
+		})?;
+	let skill_name = cloned_skill.name;
+
+	let mut target_dirs = Vec::with_capacity(req.source_paths.len());
+	for source_path in &req.source_paths {
+		target_dirs
+			.push(validate_git_sync_target_dir(source_path, &skill_name)?);
 	}
 
-	// Parse skill name from the cloned copy
-	let skill_name: Option<String> = skill::parser::parse(&cloned_skill_path)
-		.ok()
-		.map(|p| p.name);
-
-	// Replace each installation path
-	for source_path in &req.source_paths {
-		let target_skill_md = expand_tilde_path(source_path);
-		let target_dir = get_skill_root(target_skill_md);
-
-		// Remove old content
-		if target_dir.exists() {
-			std::fs::remove_dir_all(&target_dir)
-				.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
-		}
-
-		// Copy new content
+	// Replace each verified skill installation path.
+	for target_dir in target_dirs {
+		std::fs::remove_dir_all(&target_dir)
+			.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
 		copy_dir_recursive(&cloned_skill_dir, &target_dir)?;
 	}
 
@@ -1501,7 +1616,7 @@ pub async fn git_sync_skill(
 
 	Ok(Json(GitSyncResponse {
 		success: true,
-		name: skill_name,
+		name: Some(skill_name),
 		error: None,
 	}))
 }
@@ -1518,6 +1633,70 @@ mod tests {
 	fn env_lock() -> &'static Mutex<()> {
 		static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 		LOCK.get_or_init(|| Mutex::new(()))
+	}
+
+	fn write_skill_md(path: &std::path::Path, name: &str) {
+		std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+		std::fs::write(
+			path,
+			format!("---\nname: {name}\ndescription: Test skill\n---\nBody"),
+		)
+		.unwrap();
+	}
+
+	#[test]
+	fn git_sync_target_accepts_existing_managed_skill_dir() {
+		let temp = tempdir().unwrap();
+		let skill_md = temp.path().join("hello-skill/SKILL.md");
+		write_skill_md(&skill_md, "hello-skill");
+
+		let target_dir = validate_git_sync_target_dir(
+			&skill_md.display().to_string(),
+			"hello-skill",
+		)
+		.unwrap();
+
+		assert_eq!(
+			target_dir,
+			skill_md.parent().unwrap().canonicalize().unwrap()
+		);
+	}
+
+	#[test]
+	fn git_sync_target_rejects_arbitrary_existing_directory() {
+		let temp = tempdir().unwrap();
+		let skill_md = temp.path().join("victim-config/SKILL.md");
+		write_skill_md(&skill_md, "hello-skill");
+
+		let err = validate_git_sync_target_dir(
+			&skill_md.display().to_string(),
+			"hello-skill",
+		)
+		.unwrap_err();
+
+		assert_eq!(err.body.code, "INVALID_SYNC_PATH");
+	}
+
+	#[test]
+	fn git_sync_target_rejects_missing_skill_file() {
+		let temp = tempdir().unwrap();
+		let skill_md = temp.path().join("victim-config/SKILL.md");
+
+		let err = validate_git_sync_target_dir(
+			&skill_md.display().to_string(),
+			"hello-skill",
+		)
+		.unwrap_err();
+
+		assert_eq!(err.body.code, "INVALID_SYNC_PATH");
+	}
+
+	#[test]
+	fn git_sync_skill_path_rejects_repo_traversal() {
+		let err =
+			ensure_relative_child_path("../outside/SKILL.md").unwrap_err();
+
+		assert_eq!(err.body.code, "INVALID_SYNC_PATH");
 	}
 
 	#[test]
