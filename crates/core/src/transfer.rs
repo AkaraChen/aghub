@@ -225,9 +225,78 @@ fn skill_target_dir(target: &InstallTarget) -> Result<PathBuf> {
 	})
 }
 
+fn has_symlink_component(path: &Path) -> bool {
+	let absolute_path = if path.is_absolute() {
+		path.to_path_buf()
+	} else {
+		std::env::current_dir()
+			.unwrap_or_else(|_| PathBuf::from("."))
+			.join(path)
+	};
+	let mut current = PathBuf::new();
+
+	for component in absolute_path.components() {
+		current.push(component.as_os_str());
+		if fs::symlink_metadata(&current)
+			.map(|metadata| metadata.file_type().is_symlink())
+			.unwrap_or(false)
+		{
+			return true;
+		}
+	}
+
+	false
+}
+
+fn valid_skill_delete_location(
+	skill_path: &Path,
+	skills_dir: &Path,
+	skill_name: &str,
+) -> Option<PathBuf> {
+	let safe_name = sanitize_name(skill_name);
+	if skill_path.file_name().and_then(|name| name.to_str())
+		!= Some(safe_name.as_str())
+	{
+		return None;
+	}
+
+	if has_symlink_component(skills_dir) {
+		warn!(
+			"skipping skill delete from symlinked skills root '{}'",
+			skills_dir.display()
+		);
+		return None;
+	}
+
+	let metadata = fs::symlink_metadata(skill_path).ok()?;
+	if !metadata.is_dir() || metadata.file_type().is_symlink() {
+		return None;
+	}
+
+	let skill_md = skill_path.join("SKILL.md");
+	let skill_md_metadata = fs::symlink_metadata(&skill_md).ok()?;
+	if !skill_md_metadata.is_file()
+		|| skill_md_metadata.file_type().is_symlink()
+	{
+		return None;
+	}
+
+	let parsed = skill::parser::parse(&skill_md).ok()?;
+	if parsed.name != skill_name {
+		return None;
+	}
+
+	let canonical_dir = skills_dir.canonicalize().ok()?;
+	let canonical_skill = skill_path.canonicalize().ok()?;
+	if !canonical_skill.starts_with(&canonical_dir) {
+		return None;
+	}
+
+	Some(canonical_skill)
+}
+
 /// Find where a skill actually exists in each agent's skills directories.
-/// Returns (skill_path, agent) pairs for locations where the skill exists.
-/// TODO: Only find one, maybe we should remove all?
+/// Returns (skill_path, agent) pairs for safe, matching skill locations.
 fn find_skill_locations_in_agents(
 	skill_name: &str,
 	agents: &[AgentType],
@@ -236,6 +305,7 @@ fn find_skill_locations_in_agents(
 ) -> Vec<(PathBuf, AgentType)> {
 	let safe_name = sanitize_name(skill_name);
 	let mut locations = Vec::new();
+	let mut seen = HashSet::new();
 
 	for agent in agents {
 		let adapter = create_adapter(*agent);
@@ -250,7 +320,13 @@ fn find_skill_locations_in_agents(
 
 		for dir in skills_dirs {
 			let skill_path = dir.join(&safe_name);
-			if skill_path.exists() {
+			let Some(canonical_skill) =
+				valid_skill_delete_location(&skill_path, &dir, skill_name)
+			else {
+				continue;
+			};
+
+			if seen.insert(canonical_skill) {
 				locations.push((skill_path, *agent));
 			}
 		}
@@ -727,10 +803,26 @@ pub fn reconcile_skill(
 
 	// Process each actual location for deletion
 	for (skill_path, agent) in skill_locations {
-		let delete_error = match fs::remove_dir_all(&skill_path) {
-			Ok(()) => None,
-			Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-			Err(e) => Some(e),
+		let delete_error = if valid_skill_delete_location(
+			&skill_path,
+			skill_path.parent().unwrap_or_else(|| Path::new("")),
+			&skill.name,
+		)
+		.is_some()
+		{
+			match fs::remove_dir_all(&skill_path) {
+				Ok(()) => None,
+				Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+				Err(e) => Some(e),
+			}
+		} else {
+			Some(std::io::Error::new(
+				std::io::ErrorKind::PermissionDenied,
+				format!(
+					"refusing to delete unsafe skill path '{}'",
+					skill_path.display()
+				),
+			))
 		};
 
 		results.push(OperationResult {
@@ -934,6 +1026,42 @@ mod tests {
 		);
 		manager.load().unwrap();
 		assert!(manager.get_skill("repo-helper").is_none());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn reconcile_skill_skips_symlinked_skills_root_delete() {
+		let _guard = env_lock().lock().unwrap();
+		let temp = tempdir().unwrap();
+		let root = temp.path().join("project");
+		let claude_dir = root.join(".claude");
+		let outside_skills = temp.path().join("outside-skills");
+		let outside_skill = outside_skills.join("repo-helper");
+		fs::create_dir_all(&claude_dir).unwrap();
+		fs::create_dir_all(&outside_skill).unwrap();
+		fs::write(
+			outside_skill.join("SKILL.md"),
+			"---\nname: repo-helper\ndescription: Copies files\n---\nbody",
+		)
+		.unwrap();
+		std::os::unix::fs::symlink(&outside_skills, claude_dir.join("skills"))
+			.unwrap();
+
+		let result = reconcile_skill(
+			ResourceLocator {
+				agent: AgentType::Claude,
+				scope: InstallScope::Project,
+				project_root: Some(root.clone()),
+				name: "repo-helper".to_string(),
+			},
+			vec![],
+			vec![AgentType::Claude],
+		)
+		.unwrap();
+
+		assert_eq!(result.results.len(), 0);
+		assert!(outside_skill.exists());
+		assert!(outside_skill.join("SKILL.md").exists());
 	}
 
 	#[test]
