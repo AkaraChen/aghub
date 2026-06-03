@@ -53,7 +53,7 @@ jobs:
                   tool: just
 
             - name: Setup sccache
-              uses: mozilla-actions/sccache-action@v0.0.10
+              uses: mozilla-actions/sccache-action@3ca012d1e0c8c9f363fd709c2a022f9d0c3d6f85
 
             - name: Rust Cache
               uses: Swatinem/rust-cache@v2
