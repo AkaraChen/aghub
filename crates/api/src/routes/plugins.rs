@@ -16,6 +16,7 @@ use crate::dto::plugin::{
 	CCPluginValidateResponse,
 };
 use crate::error::{ApiError, ApiNoContent, ApiResult};
+use crate::extractors::ApiToken;
 use aghub_cc_plugins::claude::settings::InstallScope;
 use aghub_cc_plugins::claude::{ClaudePluginInfo, ClaudePluginManager};
 use aghub_cc_plugins::cli::types::{CliMarketplace, CliMarketplaceSource};
@@ -288,6 +289,7 @@ pub async fn list_plugins() -> ApiResult<CCPluginListResponse> {
 
 #[post("/plugins/enable?<plugin_id>&<scope>")]
 pub async fn enable_plugin(
+	_auth: ApiToken,
 	plugin_id: &str,
 	scope: Option<&str>,
 ) -> ApiResult<CCPluginResponse> {
@@ -310,6 +312,7 @@ pub async fn enable_plugin(
 
 #[post("/plugins/disable?<plugin_id>&<scope>")]
 pub async fn disable_plugin(
+	_auth: ApiToken,
 	plugin_id: &str,
 	scope: Option<&str>,
 ) -> ApiResult<CCPluginResponse> {
@@ -334,6 +337,7 @@ pub async fn disable_plugin(
 
 #[post("/plugins/install", data = "<body>")]
 pub async fn install_plugin(
+	_auth: ApiToken,
 	body: Json<CCPluginInstallRequest>,
 ) -> ApiResult<CCPluginInstallResponse> {
 	let req = body.into_inner();
@@ -372,6 +376,7 @@ pub async fn install_plugin(
 
 #[post("/plugins/uninstall", data = "<body>")]
 pub async fn uninstall_plugin(
+	_auth: ApiToken,
 	body: Json<CCPluginUninstallRequest>,
 ) -> ApiResult<CCPluginUninstallResponse> {
 	let req = body.into_inner();
@@ -399,6 +404,7 @@ pub async fn uninstall_plugin(
 
 #[post("/plugins/update", data = "<body>")]
 pub async fn update_plugin(
+	_auth: ApiToken,
 	body: Json<CCPluginUpdateRequest>,
 ) -> ApiResult<CCPluginUpdateResponse> {
 	let req = body.into_inner();
@@ -580,6 +586,7 @@ pub async fn get_plugin_config(
 
 #[post("/plugins/config", data = "<body>")]
 pub async fn update_plugin_config(
+	_auth: ApiToken,
 	body: Json<CCPluginUpdateConfigRequest>,
 ) -> ApiResult<CCPluginConfigResponse> {
 	let req = body.into_inner();
@@ -617,6 +624,7 @@ pub async fn update_plugin_config(
 
 #[delete("/plugins/config?<plugin_id>")]
 pub async fn delete_plugin_config(
+	_auth: ApiToken,
 	plugin_id: String,
 ) -> ApiResult<CCPluginConfigResponse> {
 	let id = parse_plugin_id(&plugin_id)?;
@@ -643,6 +651,7 @@ pub async fn delete_plugin_config(
 
 #[post("/plugins/open-folder?<plugin_id>&<scope>")]
 pub async fn open_plugin_folder(
+	_auth: ApiToken,
 	plugin_id: &str,
 	scope: Option<&str>,
 ) -> ApiNoContent {
@@ -660,6 +669,7 @@ pub async fn open_plugin_folder(
 
 #[post("/plugins/open-skill-in-editor", data = "<body>")]
 pub async fn open_plugin_skill_in_editor(
+	_auth: ApiToken,
 	body: Json<CCPluginOpenSkillInEditorRequest>,
 ) -> ApiNoContent {
 	let req = body.into_inner();
@@ -845,6 +855,7 @@ pub async fn list_marketplaces() -> ApiResult<CCMarketplaceListResponse> {
 
 #[post("/plugins/marketplaces", data = "<body>")]
 pub async fn add_marketplace(
+	_auth: ApiToken,
 	body: Json<CCMarketplaceAddRequest>,
 ) -> ApiResult<CCMarketplaceMutationResponse> {
 	let req = body.into_inner();
@@ -871,6 +882,7 @@ pub async fn add_marketplace(
 
 #[delete("/plugins/marketplaces/<name>")]
 pub async fn remove_marketplace(
+	_auth: ApiToken,
 	name: &str,
 ) -> ApiResult<CCMarketplaceMutationResponse> {
 	let cli = load_claude_cli()?;
@@ -891,6 +903,7 @@ pub async fn remove_marketplace(
 
 #[post("/plugins/marketplaces/<name>/update")]
 pub async fn update_marketplace_one(
+	_auth: ApiToken,
 	name: &str,
 ) -> ApiResult<CCMarketplaceMutationResponse> {
 	let cli = load_claude_cli()?;
@@ -927,7 +940,9 @@ pub async fn update_marketplace_one(
 }
 
 #[post("/plugins-market/update")]
-pub async fn update_marketplace() -> ApiResult<serde_json::Value> {
+pub async fn update_marketplace(
+	_auth: ApiToken,
+) -> ApiResult<serde_json::Value> {
 	let installer = load_plugin_installer()?;
 	let updated = tokio::time::timeout(
 		PLUGIN_MARKET_UPDATE_TIMEOUT,
@@ -960,6 +975,7 @@ pub async fn update_marketplace() -> ApiResult<serde_json::Value> {
 
 #[post("/plugins/prune", data = "<body>")]
 pub async fn prune_plugins(
+	_auth: ApiToken,
 	body: Json<CCPluginPruneRequest>,
 ) -> ApiResult<CCPluginPruneResponse> {
 	let req = body.into_inner();
@@ -981,6 +997,7 @@ pub async fn prune_plugins(
 
 #[post("/plugins/validate", data = "<body>")]
 pub async fn validate_plugin(
+	_auth: ApiToken,
 	body: Json<CCPluginValidateRequest>,
 ) -> ApiResult<CCPluginValidateResponse> {
 	let req = body.into_inner();

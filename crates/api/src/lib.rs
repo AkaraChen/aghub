@@ -22,6 +22,7 @@ pub(crate) const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 pub struct ApiOptions {
 	pub port: u16,
 	pub app_data_dir: Option<PathBuf>,
+	pub auth_token: Option<String>,
 }
 
 impl ApiOptions {
@@ -29,6 +30,9 @@ impl ApiOptions {
 		Self {
 			port,
 			app_data_dir: None,
+			auth_token: std::env::var("AGHUB_API_TOKEN")
+				.ok()
+				.filter(|token| !token.is_empty()),
 		}
 	}
 }
@@ -92,6 +96,7 @@ impl Fairing for ApiLogFairing {
 fn build_rocket(
 	config: rocket::Config,
 	app_data_dir: PathBuf,
+	auth_token: String,
 ) -> rocket::Rocket<rocket::Build> {
 	let cors = rocket_cors::CorsOptions {
 		allowed_origins: rocket_cors::AllOrSome::All,
@@ -109,6 +114,7 @@ fn build_rocket(
 			"Authorization",
 			"Accept",
 			"Content-Type",
+			crate::extractors::API_TOKEN_HEADER,
 		]),
 		allow_credentials: true,
 		..Default::default()
@@ -122,6 +128,7 @@ fn build_rocket(
 			sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
 		})
 		.manage(crate::state::InferenceProviderState { app_data_dir })
+		.manage(crate::extractors::ApiAuthToken(auth_token))
 		.mount(
 			"/api/v1",
 			routes![
@@ -239,13 +246,20 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 	info!("starting aghub API server on 127.0.0.1:{}", options.port);
 	let app_data_dir =
 		options.app_data_dir.unwrap_or_else(default_app_data_dir);
+	let (auth_token, generated_auth_token) = match options.auth_token {
+		Some(token) => (token, false),
+		None => (uuid::Uuid::new_v4().to_string(), true),
+	};
+	if generated_auth_token {
+		eprintln!("aghub API token: {auth_token}");
+	}
 	let config = rocket::Config {
 		port: options.port,
 		address: std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
 		log_level: rocket::config::LogLevel::Normal,
 		..rocket::Config::default()
 	};
-	build_rocket(config, app_data_dir)
+	build_rocket(config, app_data_dir, auth_token)
 		.launch()
 		.await
 		.inspect(|_rocket| {
@@ -261,6 +275,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 #[cfg(test)]
 mod tests {
 	use super::{build_rocket, default_app_data_dir};
+	use crate::extractors::API_TOKEN_HEADER;
 	use rocket::http::{Header, Status};
 	use rocket::local::blocking::Client;
 
@@ -269,6 +284,7 @@ mod tests {
 		let client = Client::tracked(build_rocket(
 			rocket::Config::default(),
 			default_app_data_dir(),
+			"test-token".to_string(),
 		))
 		.expect("client");
 
@@ -279,7 +295,7 @@ mod tests {
 			.header(Header::new("Access-Control-Request-Method", "POST"))
 			.header(Header::new(
 				"Access-Control-Request-Headers",
-				"content-type",
+				format!("content-type, {API_TOKEN_HEADER}"),
 			))
 			.dispatch();
 
@@ -288,9 +304,31 @@ mod tests {
 			response.headers().get_one("Access-Control-Allow-Origin"),
 			Some("http://localhost:1420"),
 		);
-		assert_eq!(
-			response.headers().get_one("Access-Control-Allow-Headers"),
-			Some("content-type"),
-		);
+		let allow_headers = response
+			.headers()
+			.get_one("Access-Control-Allow-Headers")
+			.unwrap_or_default()
+			.to_ascii_lowercase();
+		assert!(allow_headers.contains("content-type"));
+		assert!(allow_headers.contains(&API_TOKEN_HEADER.to_ascii_lowercase()));
+	}
+
+	#[test]
+	fn plugin_marketplace_add_requires_api_token() {
+		let client = Client::tracked(build_rocket(
+			rocket::Config::default(),
+			default_app_data_dir(),
+			"test-token".to_string(),
+		))
+		.expect("client");
+
+		let response = client
+			.post("/api/v1/plugins/marketplaces")
+			.header(Header::new("Origin", "http://localhost:1420"))
+			.header(Header::new("Content-Type", "application/json"))
+			.body(r#"{"source":"attacker/repo","scope":"user","sparse":[]}"#)
+			.dispatch();
+
+		assert_eq!(response.status(), Status::Unauthorized);
 	}
 }

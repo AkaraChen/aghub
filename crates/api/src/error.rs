@@ -5,12 +5,13 @@ use rocket::response::{self, Responder};
 use rocket::serde::json::serde_json;
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct ErrorBody {
 	pub error: String,
 	pub code: &'static str,
 }
 
+#[derive(Debug)]
 pub struct ApiError {
 	pub status: Status,
 	pub body: ErrorBody,

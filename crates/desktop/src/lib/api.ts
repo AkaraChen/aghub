@@ -72,9 +72,12 @@ interface ApiErrorBody {
 	code?: string;
 }
 
-export function createApi(baseUrl: string) {
+export function createApi(baseUrl: string, authToken: string) {
 	const client = ky.create({
 		prefix: baseUrl,
+		headers: {
+			"X-AGHUB-API-TOKEN": authToken,
+		},
 		hooks: {
 			beforeError: [
 				async ({ error }) => {

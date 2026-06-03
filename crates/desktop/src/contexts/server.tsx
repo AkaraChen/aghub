@@ -4,6 +4,7 @@ import { createContext, use } from "react";
 export interface ServerContextValue {
 	port: number;
 	baseUrl: string;
+	authToken: string;
 }
 
 export const ServerContext = createContext<ServerContextValue | null>(null);

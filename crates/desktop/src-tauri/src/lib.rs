@@ -6,6 +6,8 @@ use crate::commands::{
 };
 use log::info;
 use tauri::{Manager, WebviewWindow};
+
+use crate::commands::server::ServerInfo;
 use tauri_plugin_log::fern::colors::{Color, ColoredLevelConfig};
 use tauri_plugin_log::{
 	RotationStrategy, Target, TargetKind, TimezoneStrategy,
@@ -17,7 +19,7 @@ mod commands;
 pub(crate) const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 pub struct AppState {
-	pub port: std::sync::Mutex<Option<u16>>,
+	pub server: std::sync::Mutex<Option<ServerInfo>>,
 }
 
 fn default_log_config() -> commands::logging::LogConfig {
@@ -232,7 +234,7 @@ pub fn run() {
 				.build(),
 		)
 		.manage(AppState {
-			port: std::sync::Mutex::new(None),
+			server: std::sync::Mutex::new(None),
 		})
 		.plugin(tauri_plugin_deep_link::init())
 		.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {

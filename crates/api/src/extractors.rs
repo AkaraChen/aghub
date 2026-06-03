@@ -1,10 +1,44 @@
 use aghub_core::models::AgentType;
 use aghub_core::paths::find_project_root;
 use rocket::http::Status;
-use rocket::request::FromParam;
+use rocket::request::{FromParam, FromRequest, Outcome};
 use std::path::PathBuf;
 
 use crate::error::ApiError;
+
+pub const API_TOKEN_HEADER: &str = "X-AGHUB-API-TOKEN";
+
+pub struct ApiAuthToken(pub String);
+
+pub struct ApiToken;
+
+#[rocket::async_trait]
+impl<'r> FromRequest<'r> for ApiToken {
+	type Error = ApiError;
+
+	async fn from_request(
+		request: &'r rocket::Request<'_>,
+	) -> Outcome<Self, Self::Error> {
+		let Some(expected) = request.rocket().state::<ApiAuthToken>() else {
+			return Outcome::Error((
+				Status::InternalServerError,
+				ApiError::internal("API auth token is not configured"),
+			));
+		};
+		let provided = request.headers().get_one(API_TOKEN_HEADER);
+		if provided.is_some_and(|token| token == expected.0) {
+			return Outcome::Success(ApiToken);
+		}
+		Outcome::Error((
+			Status::Unauthorized,
+			ApiError::new(
+				Status::Unauthorized,
+				"Missing or invalid API token",
+				"UNAUTHORIZED",
+			),
+		))
+	}
+}
 
 pub struct AgentParam(pub AgentType);
 
