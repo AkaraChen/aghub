@@ -13,7 +13,7 @@ use aghub_core::{
 
 mod commands;
 
-use commands::{add, delete, disable, enable, get, plugin, update};
+use commands::{add, delete, disable, enable, get, plugin, update, usage};
 
 /// Global verbose flag used by the eprintln_verbose macro
 static VERBOSE: AtomicBool = AtomicBool::new(false);
@@ -205,6 +205,11 @@ enum Commands {
 		#[command(subcommand)]
 		action: plugin::PluginAction,
 	},
+	/// Report token usage and rate-limit quota for Claude and Codex
+	Usage {
+		#[command(subcommand)]
+		action: usage::UsageAction,
+	},
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug)]
@@ -220,6 +225,12 @@ fn main() -> Result<()> {
 
 	// Set global verbose flag
 	set_verbose(cli.verbose);
+
+	// Usage reporting is agent-agnostic: it reads each vendor's own data, so it
+	// runs before agent/scope resolution and config loading.
+	if let Commands::Usage { action } = cli.command {
+		return usage::execute(action);
+	}
 
 	// Handle --agent all: iterate all registered agents
 	if cli.agent == "all" {
@@ -379,6 +390,9 @@ fn main() -> Result<()> {
 				));
 			}
 			plugin::execute(action)
+		}
+		Commands::Usage { .. } => {
+			unreachable!("usage is dispatched before agent resolution")
 		}
 	}
 }

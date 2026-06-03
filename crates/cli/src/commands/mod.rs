@@ -5,6 +5,7 @@ pub mod enable;
 pub mod get;
 pub mod plugin;
 pub mod update;
+pub mod usage;
 
 use aghub_core::models::McpTransport;
 use anyhow::{bail, Result};
