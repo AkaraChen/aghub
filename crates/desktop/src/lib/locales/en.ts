@@ -726,6 +726,11 @@ export default {
 	deepLinkUnsupportedType: "This deep link type is not supported.",
 	deepLinkInvalidSkill: "This skill link is missing required fields.",
 	deepLinkInvalidMcp: "This MCP link payload is invalid.",
+	executableMcpWarningTitle: "This MCP can run a command",
+	executableMcpWarningDescription:
+		"Stdio MCP servers are executable commands that agents may run later. Only install this import if you trust its source and have reviewed every command, argument, and environment variable below.",
+	confirmExecutableMcp:
+		"I understand this import can persist an executable command for agents to run later.",
 	copyTooltip: "Copy as JSON",
 	copied: "Copied to clipboard",
 	editTooltip: "Edit server",
