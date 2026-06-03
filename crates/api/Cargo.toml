@@ -41,3 +41,4 @@ keyring = { version = "3", features = [
 uuid = { version = "1", features = [ "v4" ] }
 log = "0.4.30"
 reqwest = { version = "0.13", features = [ "json" ] }
+url = { workspace = true }
