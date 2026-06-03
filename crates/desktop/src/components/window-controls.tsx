@@ -1,6 +1,8 @@
 import { MinusIcon, XMarkIcon } from "@heroicons/react/24/outline";
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useEffect, useState } from "react";
+import { isMacOS, isWindows } from "../lib/platform";
 
 function MaximizeIcon({ className }: { className?: string }) {
 	return (
@@ -39,8 +41,6 @@ function RestoreIcon({ className }: { className?: string }) {
 }
 
 export function WindowControls() {
-	const isMac = navigator.userAgent.toLowerCase().includes("mac");
-
 	const [isMaximized, setIsMaximized] = useState(false);
 	const [isTauri, setIsTauri] = useState(true);
 
@@ -66,7 +66,7 @@ export function WindowControls() {
 		};
 	}, []);
 
-	if (isMac || !isTauri) return null;
+	if (isMacOS() || !isTauri) return null;
 
 	return (
 		<div className="flex h-full items-stretch">
@@ -75,7 +75,11 @@ export function WindowControls() {
 				className="inline-flex w-12 cursor-default items-center justify-center text-muted transition-colors hover:bg-surface-secondary hover:text-foreground"
 				onClick={async () => {
 					try {
-						await getCurrentWindow().minimize();
+						if (isWindows()) {
+							await invoke("minimize_to_tray");
+						} else {
+							await getCurrentWindow().minimize();
+						}
 					} catch {}
 				}}
 				tabIndex={-1}
