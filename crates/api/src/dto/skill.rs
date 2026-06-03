@@ -270,6 +270,11 @@ pub struct GitSyncRequest {
 	pub skill_path: String,
 	/// Tilde-prefixed `source_path` values of every installation to replace.
 	pub source_paths: Vec<String>,
+	/// Scope that contains the existing skill installations.
+	/// Use `all` to sync both global and project installations.
+	pub scope: String,
+	/// Project root for project-scoped installations.
+	pub project_root: Option<String>,
 }
 
 /// Response for a git sync operation.

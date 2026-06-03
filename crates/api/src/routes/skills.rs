@@ -10,7 +10,10 @@ use rocket::http::Status;
 use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
 use skill::sanitize::sanitize_name;
-use std::{collections::HashMap, time::Duration};
+use std::{
+	collections::{HashMap, HashSet},
+	time::Duration,
+};
 use tokio::time::timeout;
 
 use crate::{
@@ -332,6 +335,123 @@ fn copy_dir_recursive(
 	Ok(())
 }
 
+fn reject_unsafe_relative_path(path: &str) -> Result<(), ApiError> {
+	let path = std::path::Path::new(path);
+	if path.is_absolute() {
+		return Err(ApiError::new(
+			Status::BadRequest,
+			"Skill path must be relative to the cloned repository",
+			"INVALID_SKILL_PATH",
+		));
+	}
+
+	let has_unsafe_component = path.components().any(|component| {
+		matches!(
+			component,
+			std::path::Component::ParentDir
+				| std::path::Component::Prefix(_)
+				| std::path::Component::RootDir
+		)
+	});
+
+	if has_unsafe_component {
+		return Err(ApiError::new(
+			Status::BadRequest,
+			"Skill path cannot contain absolute or parent components",
+			"INVALID_SKILL_PATH",
+		));
+	}
+
+	Ok(())
+}
+
+fn resolve_cloned_skill_dir(
+	repo_root: &std::path::Path,
+	skill_path: &str,
+) -> Result<(std::path::PathBuf, String), ApiError> {
+	reject_unsafe_relative_path(skill_path)?;
+
+	let cloned_skill_path = repo_root.join(skill_path);
+	let parsed = skill::parser::parse(&cloned_skill_path).map_err(|e| {
+		ApiError::new(
+			Status::BadRequest,
+			format!("Failed to parse skill path '{skill_path}': {e}"),
+			"SKILL_PARSE_FAILED",
+		)
+	})?;
+	let cloned_skill_dir = get_skill_root(cloned_skill_path);
+
+	let canonical_repo = repo_root
+		.canonicalize()
+		.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
+	let canonical_skill_dir = cloned_skill_dir
+		.canonicalize()
+		.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
+
+	if !canonical_skill_dir.starts_with(&canonical_repo) {
+		return Err(ApiError::new(
+			Status::BadRequest,
+			"Skill path resolves outside the cloned repository",
+			"INVALID_SKILL_PATH",
+		));
+	}
+
+	Ok((cloned_skill_dir, parsed.name))
+}
+
+fn canonical_skill_dir_from_source_path(
+	source_path: &str,
+) -> Result<std::path::PathBuf, std::io::Error> {
+	let path = expand_tilde_path(source_path);
+	get_skill_root(path).canonicalize()
+}
+
+fn allowed_git_sync_target_dirs(
+	resource_scope: ResourceScope,
+	project_root: Option<&std::path::Path>,
+) -> HashSet<std::path::PathBuf> {
+	let mut allowed = HashSet::new();
+
+	for resources in load_all_agents(resource_scope, project_root) {
+		for skill in resources.skills {
+			for path in [skill.source_path, skill.canonical_path]
+				.into_iter()
+				.flatten()
+			{
+				if let Ok(dir) = canonical_skill_dir_from_source_path(&path) {
+					allowed.insert(dir);
+				}
+			}
+		}
+	}
+
+	allowed
+}
+
+fn validate_git_sync_target_dir(
+	source_path: &str,
+	allowed_dirs: &HashSet<std::path::PathBuf>,
+) -> Result<std::path::PathBuf, ApiError> {
+	let target_skill_md = expand_tilde_path(source_path);
+	let target_dir = get_skill_root(target_skill_md);
+	let canonical_target = target_dir
+		.canonicalize()
+		.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
+
+	if !allowed_dirs.contains(&canonical_target) {
+		return Err(ApiError::new(
+			Status::BadRequest,
+			format!(
+				"Path '{}' is not an installed skill in the requested scope",
+				source_path
+			),
+			"INVALID_SYNC_TARGET",
+		));
+	}
+
+	Ok(target_dir)
+}
+
 fn resolve_git_install_target_dir(
 	agent_type: AgentType,
 	resource_scope: ResourceScope,
@@ -415,6 +535,21 @@ fn build_git_install_groups(
 	}
 
 	(groups, invalid)
+}
+
+fn parse_git_sync_scope(scope: &str) -> Result<ResourceScope, ApiError> {
+	match scope {
+		"global" => Ok(ResourceScope::GlobalOnly),
+		"project" => Ok(ResourceScope::ProjectOnly),
+		"all" => Ok(ResourceScope::Both),
+		other => Err(ApiError::new(
+			Status::BadRequest,
+			format!(
+				"Invalid scope '{other}'. Use 'global', 'project', or 'all'"
+			),
+			"INVALID_PARAM",
+		)),
+	}
 }
 
 fn parse_install_scope(scope: &str) -> Result<ResourceScope, ApiError> {
@@ -1458,38 +1593,31 @@ pub async fn git_sync_skill(
 		session.temp_dir.path().to_path_buf()
 	};
 
-	// Full path of the SKILL.md (or skill dir) inside the clone
-	let cloned_skill_path = temp_path.join(&req.skill_path);
-	let cloned_skill_dir = get_skill_root(cloned_skill_path.clone());
+	let (cloned_skill_dir, skill_name) =
+		resolve_cloned_skill_dir(&temp_path, &req.skill_path)?;
 
-	if !cloned_skill_dir.exists() {
+	let resource_scope = parse_git_sync_scope(&req.scope)?;
+	let project_root = req.project_root.as_ref().map(std::path::PathBuf::from);
+	if resource_scope == ResourceScope::ProjectOnly && project_root.is_none() {
 		return Err(ApiError::new(
-			Status::NotFound,
-			format!(
-				"Skill path '{}' not found in cloned repository",
-				req.skill_path
-			),
-			"SKILL_PATH_NOT_FOUND",
+			Status::BadRequest,
+			"project_root is required for project skill sync",
+			"INVALID_PARAM",
 		));
 	}
 
-	// Parse skill name from the cloned copy
-	let skill_name: Option<String> = skill::parser::parse(&cloned_skill_path)
-		.ok()
-		.map(|p| p.name);
-
-	// Replace each installation path
+	let allowed_dirs =
+		allowed_git_sync_target_dirs(resource_scope, project_root.as_deref());
+	let mut target_dirs = Vec::with_capacity(req.source_paths.len());
 	for source_path in &req.source_paths {
-		let target_skill_md = expand_tilde_path(source_path);
-		let target_dir = get_skill_root(target_skill_md);
+		target_dirs
+			.push(validate_git_sync_target_dir(source_path, &allowed_dirs)?);
+	}
 
-		// Remove old content
-		if target_dir.exists() {
-			std::fs::remove_dir_all(&target_dir)
-				.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
-		}
-
-		// Copy new content
+	// Replace each validated installation path.
+	for target_dir in target_dirs {
+		std::fs::remove_dir_all(&target_dir)
+			.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
 		copy_dir_recursive(&cloned_skill_dir, &target_dir)?;
 	}
 
@@ -1501,7 +1629,7 @@ pub async fn git_sync_skill(
 
 	Ok(Json(GitSyncResponse {
 		success: true,
-		name: skill_name,
+		name: Some(skill_name),
 		error: None,
 	}))
 }
@@ -1518,6 +1646,69 @@ mod tests {
 	fn env_lock() -> &'static Mutex<()> {
 		static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 		LOCK.get_or_init(|| Mutex::new(()))
+	}
+
+	#[test]
+	fn reject_unsafe_relative_path_blocks_traversal_and_absolute() {
+		assert!(reject_unsafe_relative_path("skills/demo/SKILL.md").is_ok());
+		assert!(reject_unsafe_relative_path("../outside/SKILL.md").is_err());
+		assert!(reject_unsafe_relative_path("skills/../outside").is_err());
+		assert!(reject_unsafe_relative_path("/tmp/outside/SKILL.md").is_err());
+	}
+
+	#[test]
+	fn resolve_cloned_skill_dir_requires_skill_under_repo_root() {
+		let temp = tempdir().unwrap();
+		let repo = temp.path().join("repo");
+		let skill_dir = repo.join("skills/demo");
+		std::fs::create_dir_all(&skill_dir).unwrap();
+		std::fs::write(
+			skill_dir.join("SKILL.md"),
+			"---
+name: demo
+description: safe
+---
+
+# Demo
+",
+		)
+		.unwrap();
+
+		let (resolved_dir, name) =
+			resolve_cloned_skill_dir(&repo, "skills/demo/SKILL.md")
+				.unwrap_or_else(|e| panic!("{}", e.body.error));
+		assert_eq!(resolved_dir, skill_dir);
+		assert_eq!(name, "demo");
+		assert!(resolve_cloned_skill_dir(&repo, ".").is_err());
+		assert!(resolve_cloned_skill_dir(&repo, "../repo/skills/demo").is_err());
+	}
+
+	#[test]
+	fn validate_git_sync_target_dir_requires_installed_skill() {
+		let temp = tempdir().unwrap();
+		let allowed = temp.path().join("allowed");
+		let denied = temp.path().join("denied");
+		std::fs::create_dir_all(&allowed).unwrap();
+		std::fs::create_dir_all(&denied).unwrap();
+
+		let mut allowed_dirs = HashSet::new();
+		allowed_dirs.insert(allowed.canonicalize().unwrap());
+
+		let allowed_skill = allowed.join("SKILL.md");
+		let denied_skill = denied.join("SKILL.md");
+		assert_eq!(
+			validate_git_sync_target_dir(
+				&allowed_skill.to_string_lossy(),
+				&allowed_dirs,
+			)
+			.unwrap_or_else(|e| panic!("{}", e.body.error)),
+			allowed
+		);
+		assert!(validate_git_sync_target_dir(
+			&denied_skill.to_string_lossy(),
+			&allowed_dirs,
+		)
+		.is_err());
 	}
 
 	#[test]
