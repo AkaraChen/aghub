@@ -140,7 +140,7 @@ export function SkillList({
 		});
 	}, [fuse, groupedByName, searchQuery, isSkillStarred]);
 
-	const { sourceGroups, singleItemGroups, unknownGroups } = useMemo(() => {
+	const { sourceGroups, ungroupedGroups } = useMemo(() => {
 		const findSkillSource = (
 			skillName: string,
 		): { source: string; sourceType: string } | null => {
@@ -158,11 +158,18 @@ export function SkillList({
 			return null;
 		};
 
+		const byStarredThenName = (a: SkillGroup, b: SkillGroup) => {
+			const aStarred = isSkillStarred(a.name);
+			const bStarred = isSkillStarred(b.name);
+			if (aStarred && !bStarred) return -1;
+			if (!aStarred && bStarred) return 1;
+			return a.name.localeCompare(b.name);
+		};
+
 		if (!groupBySource) {
 			return {
 				sourceGroups: [],
-				singleItemGroups: [],
-				unknownGroups: filteredByName,
+				ungroupedGroups: filteredByName,
 			};
 		}
 
@@ -207,36 +214,17 @@ export function SkillList({
 		const sortedSourceGroups = multiItemGroups
 			.map((sg) => ({
 				...sg,
-				skills: [...sg.skills].sort((a, b) => {
-					const aStarred = isSkillStarred(a.name);
-					const bStarred = isSkillStarred(b.name);
-					if (aStarred && !bStarred) return -1;
-					if (!aStarred && bStarred) return 1;
-					return a.name.localeCompare(b.name);
-				}),
+				skills: [...sg.skills].sort(byStarredThenName),
 			}))
 			.sort((a, b) => a.source.localeCompare(b.source));
 
-		const sortedSingleItems = singleItems.sort((a, b) => {
-			const aStarred = isSkillStarred(a.name);
-			const bStarred = isSkillStarred(b.name);
-			if (aStarred && !bStarred) return -1;
-			if (!aStarred && bStarred) return 1;
-			return a.name.localeCompare(b.name);
-		});
-
-		const sortedUnknown = unknown.sort((a, b) => {
-			const aStarred = isSkillStarred(a.name);
-			const bStarred = isSkillStarred(b.name);
-			if (aStarred && !bStarred) return -1;
-			if (!aStarred && bStarred) return 1;
-			return a.name.localeCompare(b.name);
-		});
+		const ungroupedGroups = [...singleItems, ...unknown].sort(
+			byStarredThenName,
+		);
 
 		return {
 			sourceGroups: sortedSourceGroups,
-			singleItemGroups: sortedSingleItems,
-			unknownGroups: sortedUnknown,
+			ungroupedGroups,
 		};
 	}, [
 		filteredByName,
@@ -302,10 +290,7 @@ export function SkillList({
 			);
 		}
 
-		const hasItems =
-			sourceGroups.length > 0 ||
-			singleItemGroups.length > 0 ||
-			unknownGroups.length > 0;
+		const hasItems = sourceGroups.length > 0 || ungroupedGroups.length > 0;
 		if (!hasItems) {
 			return (
 				<p className="px-3 py-6 text-center text-sm text-muted">
@@ -358,22 +343,18 @@ export function SkillList({
 					</div>
 				))}
 
-				{(singleItemGroups.length > 0 || unknownGroups.length > 0) && (
+				{ungroupedGroups.length > 0 && (
 					<ListBox
 						aria-label="Ungrouped skills"
 						selectionMode={selectionMode}
 						selectionBehavior="toggle"
 						selectedKeys={selectedKeys}
 						onSelectionChange={createSelectionHandler(
-							[...singleItemGroups, ...unknownGroups].map(
-								(s) => s.name,
-							),
+							ungroupedGroups.map((s) => s.name),
 						)}
 						className="p-2"
 					>
-						{[...singleItemGroups, ...unknownGroups].map(
-							renderSkillItem,
-						)}
+						{ungroupedGroups.map(renderSkillItem)}
 					</ListBox>
 				)}
 			</div>
