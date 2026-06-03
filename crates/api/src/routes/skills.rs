@@ -10,7 +10,11 @@ use rocket::http::Status;
 use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
 use skill::sanitize::sanitize_name;
-use std::{collections::HashMap, time::Duration};
+use std::{
+	collections::HashMap,
+	path::{Path, PathBuf},
+	time::Duration,
+};
 use tokio::time::timeout;
 
 use crate::{
@@ -63,13 +67,146 @@ impl SkillListParams {
 	}
 }
 
-fn expand_tilde_path(path: &str) -> std::path::PathBuf {
+fn expand_tilde_path(path: &str) -> PathBuf {
 	if path.starts_with("~/") {
 		dirs::home_dir()
 			.map(|home| home.join(&path[2..]))
 			.unwrap_or_else(|| path.into())
 	} else {
 		path.into()
+	}
+}
+
+fn delete_by_path_response(
+	success: bool,
+	deleted_path: Option<String>,
+	error: Option<String>,
+	validation_errors: Option<Vec<ValidationError>>,
+) -> Json<DeleteSkillByPathResponse> {
+	Json(DeleteSkillByPathResponse {
+		success,
+		deleted_path,
+		error,
+		validation_errors,
+	})
+}
+
+fn source_skill_dir(source_path: &Path) -> Option<PathBuf> {
+	if !source_path.exists() {
+		return None;
+	}
+
+	if source_path.is_dir() {
+		Some(source_path.to_path_buf())
+	} else {
+		source_path.parent().map(|p| p.to_path_buf())
+	}
+}
+
+fn canonical_skill_dir(source_path: &Path) -> Result<Option<PathBuf>, String> {
+	if !source_path.exists() {
+		return Ok(None);
+	}
+
+	let canonical_path = source_path.canonicalize().map_err(|e| {
+		format!("Failed to resolve path '{}': {}", source_path.display(), e)
+	})?;
+
+	if canonical_path.is_dir() {
+		Ok(Some(canonical_path))
+	} else {
+		canonical_path
+			.parent()
+			.map(|p| Some(p.to_path_buf()))
+			.ok_or_else(|| {
+				format!(
+					"Path '{}' does not have a parent directory",
+					canonical_path.display()
+				)
+			})
+	}
+}
+
+fn canonical_allowed_skills_paths(skills_paths: &[PathBuf]) -> Vec<PathBuf> {
+	skills_paths
+		.iter()
+		.filter_map(|path| path.canonicalize().ok())
+		.collect()
+}
+
+fn path_is_in_allowed_skill_dir(
+	skill_dir: &Path,
+	allowed_paths: &[PathBuf],
+) -> bool {
+	allowed_paths
+		.iter()
+		.any(|path| skill_dir != path && skill_dir.starts_with(path))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::fs;
+
+	#[test]
+	fn canonical_skill_dir_returns_none_for_missing_path() {
+		let temp = tempfile::tempdir().unwrap();
+		let missing = temp.path().join("missing-skill/SKILL.md");
+
+		assert_eq!(canonical_skill_dir(&missing).unwrap(), None);
+	}
+
+	#[test]
+	fn canonical_skill_dir_resolves_existing_file_parent() {
+		let temp = tempfile::tempdir().unwrap();
+		let skill_dir = temp.path().join("skill");
+		fs::create_dir_all(&skill_dir).unwrap();
+		let skill_file = skill_dir.join("SKILL.md");
+		fs::write(&skill_file, "---\nname: skill\n---\n").unwrap();
+
+		let resolved = canonical_skill_dir(&skill_file).unwrap().unwrap();
+
+		assert_eq!(resolved, skill_dir.canonicalize().unwrap());
+	}
+
+	#[test]
+	fn path_validation_rejects_parent_traversal_after_canonicalize() {
+		let temp = tempfile::tempdir().unwrap();
+		let allowed = temp.path().join("allowed/skills");
+		let outside = temp.path().join("outside/victim");
+		fs::create_dir_all(&allowed).unwrap();
+		fs::create_dir_all(&outside).unwrap();
+		let traversing = allowed.join("../../outside/victim");
+		let skill_dir = canonical_skill_dir(&traversing).unwrap().unwrap();
+		let allowed_paths =
+			canonical_allowed_skills_paths(std::slice::from_ref(&allowed));
+
+		assert!(!path_is_in_allowed_skill_dir(&skill_dir, &allowed_paths));
+	}
+
+	#[test]
+	fn path_validation_rejects_skills_root_itself() {
+		let temp = tempfile::tempdir().unwrap();
+		let allowed = temp.path().join("allowed/skills");
+		fs::create_dir_all(&allowed).unwrap();
+		let allowed_paths =
+			canonical_allowed_skills_paths(std::slice::from_ref(&allowed));
+		let skill_dir = allowed.canonicalize().unwrap();
+
+		assert!(!path_is_in_allowed_skill_dir(&skill_dir, &allowed_paths));
+	}
+
+	#[test]
+	fn path_validation_accepts_canonical_child_path() {
+		let temp = tempfile::tempdir().unwrap();
+		let allowed = temp.path().join("allowed/skills");
+		let skill_dir = allowed.join("safe-skill");
+		fs::create_dir_all(&skill_dir).unwrap();
+		let allowed_paths =
+			canonical_allowed_skills_paths(std::slice::from_ref(&allowed));
+		let skill_dir = skill_dir.canonicalize().unwrap();
+
+		assert!(path_is_in_allowed_skill_dir(&skill_dir, &allowed_paths));
 	}
 }
 
@@ -174,65 +311,94 @@ pub async fn delete_skill_by_path(
 ) -> ApiResult<DeleteSkillByPathResponse> {
 	let req = body.into_inner();
 
-	let skill_path = expand_tilde_path(&req.source_path);
-	let skill_dir = if skill_path.is_dir() {
-		skill_path
-	} else {
-		skill_path
-			.parent()
-			.map(|p| p.to_path_buf())
-			.unwrap_or(skill_path)
-	};
+	if req.agents.is_empty() {
+		return Ok(delete_by_path_response(
+			false,
+			None,
+			Some("At least one agent is required".to_string()),
+			None,
+		));
+	}
 
 	let resource_scope = match req.scope.as_str() {
 		"global" => aghub_core::models::ResourceScope::GlobalOnly,
 		"project" => aghub_core::models::ResourceScope::ProjectOnly,
 		_ => {
-			return Ok(Json(DeleteSkillByPathResponse {
-				success: false,
-				deleted_path: None,
-				error: Some(format!("Invalid scope: {}", req.scope)),
-				validation_errors: None,
-			}));
+			return Ok(delete_by_path_response(
+				false,
+				None,
+				Some(format!("Invalid scope: {}", req.scope)),
+				None,
+			));
 		}
 	};
 
 	if resource_scope == aghub_core::models::ResourceScope::ProjectOnly
 		&& req.project_root.is_none()
 	{
-		return Ok(Json(DeleteSkillByPathResponse {
-			success: false,
-			deleted_path: None,
-			error: Some(
+		return Ok(delete_by_path_response(
+			false,
+			None,
+			Some(
 				"project_root is required when scope is 'project'".to_string(),
 			),
-			validation_errors: None,
-		}));
+			None,
+		));
 	}
 
-	let project_root = req.project_root.as_ref().map(std::path::PathBuf::from);
-
 	let mut validation_errors = Vec::new();
-
+	let mut agents = Vec::new();
 	for agent_str in &req.agents {
-		let agent: AgentType = match agent_str.parse() {
-			Ok(a) => a,
-			Err(_) => {
-				validation_errors.push(ValidationError {
-					agent: agent_str.clone(),
-					reason: format!("Unknown agent: {agent_str}"),
-				});
-				continue;
-			}
-		};
+		match agent_str.parse() {
+			Ok(agent) => agents.push((agent_str, agent)),
+			Err(_) => validation_errors.push(ValidationError {
+				agent: agent_str.clone(),
+				reason: format!("Unknown agent: {agent_str}"),
+			}),
+		}
+	}
 
+	if !validation_errors.is_empty() {
+		return Ok(delete_by_path_response(
+			false,
+			None,
+			Some("Validation failed for one or more agents".to_string()),
+			Some(validation_errors),
+		));
+	}
+
+	let skill_path = expand_tilde_path(&req.source_path);
+	let Some(delete_dir) = source_skill_dir(&skill_path) else {
+		return Ok(delete_by_path_response(
+			true,
+			Some(skill_path.display().to_string()),
+			None,
+			None,
+		));
+	};
+	let skill_dir = match canonical_skill_dir(&delete_dir) {
+		Ok(Some(path)) => path,
+		Ok(None) => {
+			return Ok(delete_by_path_response(
+				true,
+				Some(delete_dir.display().to_string()),
+				None,
+				None,
+			));
+		}
+		Err(error) => {
+			return Ok(delete_by_path_response(false, None, Some(error), None));
+		}
+	};
+
+	let project_root = req.project_root.as_ref().map(PathBuf::from);
+
+	for (agent_str, agent) in agents {
 		let adapter = aghub_core::create_adapter(agent);
 		let skills_paths =
 			adapter.get_skills_paths(project_root.as_deref(), resource_scope);
-
-		let is_valid = skills_paths
-			.iter()
-			.any(|sp| skill_dir.starts_with(sp) || skill_dir == *sp);
+		let allowed_paths = canonical_allowed_skills_paths(&skills_paths);
+		let is_valid = path_is_in_allowed_skill_dir(&skill_dir, &allowed_paths);
 
 		if !is_valid {
 			let valid_paths: Vec<String> = skills_paths
@@ -240,7 +406,7 @@ pub async fn delete_skill_by_path(
 				.map(|p| p.display().to_string())
 				.collect();
 			validation_errors.push(ValidationError {
-				agent: agent_str.clone(),
+				agent: agent_str.to_string(),
 				reason: format!(
 					"Path '{}' is not in agent's skills directories: {}",
 					skill_dir.display(),
@@ -251,47 +417,38 @@ pub async fn delete_skill_by_path(
 	}
 
 	if !validation_errors.is_empty() {
-		return Ok(Json(DeleteSkillByPathResponse {
-			success: false,
-			deleted_path: None,
-			error: Some("Validation failed for one or more agents".to_string()),
-			validation_errors: Some(validation_errors),
-		}));
+		return Ok(delete_by_path_response(
+			false,
+			None,
+			Some("Validation failed for one or more agents".to_string()),
+			Some(validation_errors),
+		));
 	}
 
-	if !skill_dir.exists() {
-		return Ok(Json(DeleteSkillByPathResponse {
-			success: true,
-			deleted_path: Some(skill_dir.display().to_string()),
-			error: None,
-			validation_errors: None,
-		}));
-	}
-
-	if let Some(plugin_name) = detect_plugin_for_path(&skill_dir).await {
-		return Ok(Json(DeleteSkillByPathResponse {
-			success: false,
-			deleted_path: None,
-			error: Some(format!(
+	if let Some(plugin_name) = detect_plugin_for_path(&delete_dir).await {
+		return Ok(delete_by_path_response(
+			false,
+			None,
+			Some(format!(
 				"Cannot delete plugin-managed skill from plugin '{plugin_name}'"
 			)),
-			validation_errors: None,
-		}));
+			None,
+		));
 	}
 
-	match std::fs::remove_dir_all(&skill_dir) {
-		Ok(_) => Ok(Json(DeleteSkillByPathResponse {
-			success: true,
-			deleted_path: Some(skill_dir.display().to_string()),
-			error: None,
-			validation_errors: None,
-		})),
-		Err(e) => Ok(Json(DeleteSkillByPathResponse {
-			success: false,
-			deleted_path: None,
-			error: Some(format!("Failed to delete: {e}")),
-			validation_errors: None,
-		})),
+	match std::fs::remove_dir_all(&delete_dir) {
+		Ok(_) => Ok(delete_by_path_response(
+			true,
+			Some(delete_dir.display().to_string()),
+			None,
+			None,
+		)),
+		Err(e) => Ok(delete_by_path_response(
+			false,
+			None,
+			Some(format!("Failed to delete: {e}")),
+			None,
+		)),
 	}
 }
 
