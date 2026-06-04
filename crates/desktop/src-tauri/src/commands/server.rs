@@ -19,9 +19,10 @@ fn find_available_port() -> Result<u16, String> {
 /// 2. dev build (`tauri dev` / `cargo run`) — no sidecar is staged next to the
 ///    executable, so return `None` and let the API fall back to `ccusage` on PATH.
 /// 3. packaged build — the sidecar ships beside the main executable as `ccusage`
-///    (Tauri strips the `-<triple>` suffix at bundle time). We trust the computed
-///    path: if the fetch step was skipped the API surfaces a clear spawn error
-///    rather than us silently masking it with a PATH fallback.
+///    plus the platform's executable extension (Tauri strips the `-<triple>`
+///    suffix but keeps the extension at bundle time). We trust the computed path:
+///    if the fetch step was skipped the API surfaces a clear spawn error rather
+///    than us silently masking it with a PATH fallback.
 ///
 /// `tauri::process::current_binary` is preferred over std's `current_exe`
 /// because it returns the real path under AppImage (not the temp mountpoint).
@@ -34,7 +35,11 @@ fn resolve_ccusage_bin(app: &tauri::AppHandle) -> Option<PathBuf> {
 	}
 	tauri::process::current_binary(&app.env())
 		.ok()
-		.and_then(|exe| exe.parent().map(|dir| dir.join("ccusage")))
+		.and_then(|exe| {
+			exe.parent().map(|dir| {
+				dir.join(format!("ccusage{}", std::env::consts::EXE_SUFFIX))
+			})
+		})
 }
 
 #[tauri::command]
