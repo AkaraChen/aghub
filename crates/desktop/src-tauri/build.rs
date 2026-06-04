@@ -48,18 +48,40 @@ fn fetch_ccusage_sidecar() {
 
 	fs::create_dir_all(&binaries_dir).expect("create binaries dir");
 
+	// Read the tarball URL and Subresource Integrity hash from the registry
+	// rather than hardcoding either. The hash ships with the package metadata,
+	// so a bumped CCUSAGE_VERSION verifies against its own published integrity.
 	let pkg = format!("@ccusage/ccusage-{platform}");
-	let url = format!(
-		"https://registry.npmjs.org/{pkg}/-/ccusage-{platform}-{CCUSAGE_VERSION}.tgz"
-	);
+	let meta_url = format!("https://registry.npmjs.org/{pkg}");
+	let meta_resp = ureq::get(&meta_url)
+		.set("Accept", "application/vnd.npm.install-v1+json")
+		.call()
+		.unwrap_or_else(|e| panic!("fetch {meta_url} failed: {e}"));
+	let mut meta_bytes = Vec::new();
+	meta_resp
+		.into_reader()
+		.read_to_end(&mut meta_bytes)
+		.expect("read ccusage registry metadata");
+	let meta: serde_json::Value = serde_json::from_slice(&meta_bytes)
+		.expect("parse ccusage registry metadata");
 
-	let resp = ureq::get(&url)
+	let dist = &meta["versions"][CCUSAGE_VERSION]["dist"];
+	let url = dist["tarball"].as_str().unwrap_or_else(|| {
+		panic!("registry has no tarball url for {pkg}@{CCUSAGE_VERSION}")
+	});
+	let integrity = dist["integrity"].as_str().unwrap_or_else(|| {
+		panic!("registry has no integrity for {pkg}@{CCUSAGE_VERSION}")
+	});
+
+	let resp = ureq::get(url)
 		.call()
 		.unwrap_or_else(|e| panic!("download {url} failed: {e}"));
 	let mut tarball = Vec::new();
 	resp.into_reader()
 		.read_to_end(&mut tarball)
 		.expect("read ccusage tarball");
+
+	verify_tarball_integrity(&pkg, &tarball, integrity);
 
 	// npm tarball layout: package/bin/ccusage(.exe).
 	let member = format!("package/bin/ccusage{ext}");
@@ -93,6 +115,33 @@ fn fetch_ccusage_sidecar() {
 	}
 
 	fs::write(&stamp, CCUSAGE_VERSION).expect("write ccusage version stamp");
+}
+
+// Check the tarball against the registry's `sha512-<base64>` integrity string,
+// so a tampered or truncated download fails the build instead of shipping a
+// bad sidecar.
+fn verify_tarball_integrity(pkg: &str, tarball: &[u8], integrity: &str) {
+	use base64::Engine as _;
+	use sha2::{Digest, Sha512};
+
+	let expected =
+		integrity
+			.split_whitespace()
+			.find(|hash| hash.starts_with("sha512-"))
+			.unwrap_or_else(|| {
+				panic!("{pkg}: registry integrity carries no sha512 hash: {integrity}")
+			});
+	let actual = format!(
+		"sha512-{}",
+		base64::engine::general_purpose::STANDARD
+			.encode(Sha512::digest(tarball))
+	);
+	if actual != expected {
+		panic!(
+			"{pkg}: ccusage tarball integrity mismatch \
+			 (expected {expected}, computed {actual})"
+		);
+	}
 }
 
 fn main() {

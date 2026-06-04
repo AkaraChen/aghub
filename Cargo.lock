@@ -24,6 +24,7 @@ name = "aghub"
 version = "0.0.0"
 dependencies = [
  "aghub-api",
+ "base64 0.22.1",
  "dotenvy",
  "fix-path-env",
  "flate2",
@@ -31,6 +32,7 @@ dependencies = [
  "posthog-rs",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "tar",
  "tauri",
  "tauri-build",
