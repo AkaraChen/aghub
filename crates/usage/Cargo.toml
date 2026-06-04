@@ -11,7 +11,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 ts-rs = { workspace = true }
 dirs = { workspace = true }
-tokio = { version = "1", features = [ "process", "time" ] }
+tokio = { version = "1", features = [ "process", "time", "macros" ] }
 reqwest = { version = "0.13", features = [ "json" ] }
 chrono = "0.4"
 keyring = { version = "3", features = [
