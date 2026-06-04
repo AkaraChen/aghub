@@ -85,7 +85,8 @@ struct CcClaudeDay {
 	cache_creation_tokens: u64,
 	cache_read_tokens: u64,
 	total_tokens: u64,
-	total_cost: f64,
+	#[serde(default)]
+	total_cost: Option<f64>,
 	#[serde(default)]
 	model_breakdowns: Vec<CcClaudeModel>,
 }
@@ -98,7 +99,8 @@ struct CcClaudeModel {
 	output_tokens: u64,
 	cache_creation_tokens: u64,
 	cache_read_tokens: u64,
-	cost: f64,
+	#[serde(default)]
+	cost: Option<f64>,
 }
 
 #[derive(Deserialize)]
@@ -109,7 +111,8 @@ struct CcClaudeTotals {
 	cache_creation_tokens: u64,
 	cache_read_tokens: u64,
 	total_tokens: u64,
-	total_cost: f64,
+	#[serde(default)]
+	total_cost: Option<f64>,
 }
 
 // ---- ccusage `codex daily --json` shape ------------------------------------
@@ -129,8 +132,8 @@ struct CcCodexDay {
 	output_tokens: u64,
 	reasoning_output_tokens: u64,
 	total_tokens: u64,
-	#[serde(rename = "costUSD")]
-	cost_usd: f64,
+	#[serde(default, rename = "costUSD")]
+	cost_usd: Option<f64>,
 	#[serde(default)]
 	models: HashMap<String, CcCodexModel>,
 }
@@ -153,8 +156,8 @@ struct CcCodexTotals {
 	output_tokens: u64,
 	reasoning_output_tokens: u64,
 	total_tokens: u64,
-	#[serde(rename = "costUSD")]
-	cost_usd: f64,
+	#[serde(default, rename = "costUSD")]
+	cost_usd: Option<f64>,
 }
 
 // ---- normalization ---------------------------------------------------------
@@ -179,7 +182,7 @@ fn claude_to_agent(report: CcClaudeReport) -> AgentUsageDto {
 			cache_read_tokens: d.cache_read_tokens,
 			reasoning_tokens: 0,
 			total_tokens: d.total_tokens,
-			cost_usd: Some(d.total_cost),
+			cost_usd: d.total_cost,
 			models: d
 				.model_breakdowns
 				.into_iter()
@@ -193,7 +196,7 @@ fn claude_to_agent(report: CcClaudeReport) -> AgentUsageDto {
 					cache_creation_tokens: m.cache_creation_tokens,
 					cache_read_tokens: m.cache_read_tokens,
 					reasoning_tokens: 0,
-					cost_usd: Some(m.cost),
+					cost_usd: m.cost,
 				})
 				.collect(),
 		})
@@ -209,7 +212,7 @@ fn claude_to_agent(report: CcClaudeReport) -> AgentUsageDto {
 			cache_read_tokens: report.totals.cache_read_tokens,
 			reasoning_tokens: 0,
 			total_tokens: report.totals.total_tokens,
-			cost_usd: Some(report.totals.total_cost),
+			cost_usd: report.totals.total_cost,
 		},
 	}
 }
@@ -226,7 +229,7 @@ fn codex_to_agent(report: CcCodexReport) -> AgentUsageDto {
 			cache_read_tokens: d.cached_input_tokens,
 			reasoning_tokens: d.reasoning_output_tokens,
 			total_tokens: d.total_tokens,
-			cost_usd: Some(d.cost_usd),
+			cost_usd: d.cost_usd,
 			models: d
 				.models
 				.into_iter()
@@ -254,7 +257,7 @@ fn codex_to_agent(report: CcCodexReport) -> AgentUsageDto {
 			cache_read_tokens: report.totals.cached_input_tokens,
 			reasoning_tokens: report.totals.reasoning_output_tokens,
 			total_tokens: report.totals.total_tokens,
-			cost_usd: Some(report.totals.cost_usd),
+			cost_usd: report.totals.cost_usd,
 		},
 	}
 }
@@ -632,14 +635,14 @@ mod tests {
 				cache_creation_tokens: 5,
 				cache_read_tokens: 3,
 				total_tokens: 158,
-				total_cost: 1.25,
+				total_cost: Some(1.25),
 				model_breakdowns: vec![CcClaudeModel {
 					model_name: "claude-opus-4".to_string(),
 					input_tokens: 100,
 					output_tokens: 50,
 					cache_creation_tokens: 5,
 					cache_read_tokens: 3,
-					cost: 1.25,
+					cost: Some(1.25),
 				}],
 			}],
 			totals: CcClaudeTotals {
@@ -648,7 +651,7 @@ mod tests {
 				cache_creation_tokens: 5,
 				cache_read_tokens: 3,
 				total_tokens: 158,
-				total_cost: 1.25,
+				total_cost: Some(1.25),
 			},
 		};
 		let agent = claude_to_agent(report);
@@ -680,7 +683,7 @@ mod tests {
 				output_tokens: 80,
 				reasoning_output_tokens: 20,
 				total_tokens: 340,
-				cost_usd: 0.5,
+				cost_usd: Some(0.5),
 				models,
 			}],
 			totals: CcCodexTotals {
@@ -689,7 +692,7 @@ mod tests {
 				output_tokens: 80,
 				reasoning_output_tokens: 20,
 				total_tokens: 340,
-				cost_usd: 0.5,
+				cost_usd: Some(0.5),
 			},
 		};
 		let agent = codex_to_agent(report);
@@ -697,5 +700,43 @@ mod tests {
 		assert_eq!(agent.totals.cache_creation_tokens, 0);
 		assert_eq!(agent.totals.cache_read_tokens, 40);
 		assert_eq!(agent.days[0].models[0].cost_usd, None);
+	}
+
+	#[test]
+	fn claude_tolerates_null_cost() {
+		// ccusage emits null cost for models it can't price; the whole report
+		// must survive instead of failing deserialization and dropping the agent.
+		let raw = json!({
+			"daily": [{
+				"date": "2026-06-01",
+				"inputTokens": 100,
+				"outputTokens": 50,
+				"cacheCreationTokens": 0,
+				"cacheReadTokens": 0,
+				"totalTokens": 150,
+				"totalCost": null,
+				"modelBreakdowns": [{
+					"modelName": "claude-future",
+					"inputTokens": 100,
+					"outputTokens": 50,
+					"cacheCreationTokens": 0,
+					"cacheReadTokens": 0,
+					"cost": null
+				}]
+			}],
+			"totals": {
+				"inputTokens": 100,
+				"outputTokens": 50,
+				"cacheCreationTokens": 0,
+				"cacheReadTokens": 0,
+				"totalTokens": 150,
+				"totalCost": null
+			}
+		});
+		let report: CcClaudeReport = serde_json::from_value(raw).unwrap();
+		let agent = claude_to_agent(report);
+		assert_eq!(agent.days[0].cost_usd, None);
+		assert_eq!(agent.days[0].models[0].cost_usd, None);
+		assert_eq!(agent.totals.cost_usd, None);
 	}
 }
