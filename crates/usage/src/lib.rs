@@ -39,13 +39,14 @@ async fn run_ccusage(
 	bin: &OsStr,
 	args: Vec<String>,
 ) -> Result<Vec<u8>, String> {
-	let run = tokio::process::Command::new(bin).args(&args).output();
+	let run = tokio::process::Command::new(bin)
+		.kill_on_drop(true)
+		.args(&args)
+		.output();
 	let output = tokio::time::timeout(CCUSAGE_TIMEOUT, run)
 		.await
 		.map_err(|_| "ccusage timed out after 30s".to_string())?
-		.map_err(|e| {
-			format!("failed to spawn ccusage ({}): {e}", bin.to_string_lossy())
-		})?;
+		.map_err(|e| format!("failed to spawn ccusage: {e}"))?;
 	if !output.status.success() {
 		return Err(format!(
 			"ccusage {:?} exited with {}: {}",
@@ -384,7 +385,7 @@ fn claude_access_token() -> Result<String, String> {
 
 	let path = home_dir()?.join(".claude/.credentials.json");
 	let json = std::fs::read_to_string(&path)
-		.map_err(|e| format!("read {}: {e}", path.display()))?;
+		.map_err(|e| format!("read claude credentials: {e}"))?;
 	parse(&json)
 }
 
@@ -402,7 +403,7 @@ fn codex_auth() -> Result<(String, Option<String>), String> {
 	}
 	let path = home_dir()?.join(".codex/auth.json");
 	let json = std::fs::read_to_string(&path)
-		.map_err(|e| format!("read {}: {e}", path.display()))?;
+		.map_err(|e| format!("read codex auth: {e}"))?;
 	serde_json::from_str::<AuthFile>(&json)
 		.map(|a| (a.tokens.access_token, a.tokens.account_id))
 		.map_err(|e| format!("parse codex auth: {e}"))
