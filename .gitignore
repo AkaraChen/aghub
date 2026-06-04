@@ -33,5 +33,5 @@ build/
 crates/api/bindings/
 crates/usage/bindings/
 
-# ccusage sidecar binaries — fetched at build time by scripts/fetch-ccusage.mjs
+# ccusage sidecar binaries — fetched at build time by src-tauri/build.rs
 crates/desktop/src-tauri/binaries/

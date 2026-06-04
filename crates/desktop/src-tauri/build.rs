@@ -35,9 +35,14 @@ fn fetch_ccusage_sidecar() {
 	let binaries_dir =
 		PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("binaries");
 	let dest = binaries_dir.join(format!("ccusage-{triple}{ext}"));
+	let stamp = binaries_dir.join(format!(".ccusage-{triple}.version"));
 
-	// Filename is version-independent, so bumping CCUSAGE_VERSION needs binaries/ cleared.
-	if dest.exists() {
+	// Tauri resolves the sidecar by its fixed `ccusage-<triple>` name, so the
+	// filename can't carry the version. Track the staged version in a sibling
+	// stamp file and re-fetch whenever CCUSAGE_VERSION changes.
+	if dest.exists()
+		&& fs::read_to_string(&stamp).ok().as_deref() == Some(CCUSAGE_VERSION)
+	{
 		return;
 	}
 
@@ -86,6 +91,8 @@ fn fetch_ccusage_sidecar() {
 		fs::set_permissions(&dest, fs::Permissions::from_mode(0o755))
 			.expect("chmod sidecar");
 	}
+
+	fs::write(&stamp, CCUSAGE_VERSION).expect("write ccusage version stamp");
 }
 
 fn main() {
