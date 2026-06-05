@@ -1036,7 +1036,7 @@ mod tests {
 						(version, description, success, checksum, execution_time)
 					VALUES ({version}, '{description}', 1, x'{checksum}', 0)"
 				);
-				sqlx::query(&query).execute(&mut conn).await.unwrap();
+				sqlx::query(&*query).execute(&mut conn).await.unwrap();
 			}
 		});
 
