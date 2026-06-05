@@ -24,7 +24,7 @@ sha2 = "0.10"
 base64 = "0.22"
 
 [dependencies]
-tauri = { version = "2", features = [  ] }
+tauri = { version = "2", features = [ "tray-icon" ] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-deep-link = "2.4.7"
@@ -44,6 +44,8 @@ time = { version = "0.3", features = ["formatting", "local-offset"] }
 zip = { version = "8", default-features = false, features = ["deflate"] }
 posthog-rs = "0.7.0"
 uuid = { version = "1", features = [ "v4" ] }
+tauri-plugin-autostart = "2.5.1"
+sys-locale = "0.3.2"
 
 [dev-dependencies]
 tempfile = "3"

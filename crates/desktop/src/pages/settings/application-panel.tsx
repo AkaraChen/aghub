@@ -1,17 +1,24 @@
 import { Avatar, Button, Card, Switch, toast } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getName, getVersion } from "@tauri-apps/api/app";
+import {
+	disable as disableAutostart,
+	enable as enableAutostart,
+	isEnabled as isAutostartEnabled,
+} from "@tauri-apps/plugin-autostart";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { useTranslation } from "react-i18next";
 import { applyAnalyticsConsent } from "../../lib/analytics";
 import { dispatchOnboardingCommand } from "../../lib/onboarding";
+import { isWindows } from "../../lib/platform";
 import { getAnalyticsConsent, setAnalyticsConsent } from "../../lib/store";
 
 export default function ApplicationPanel() {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
+	const isWindowsOS = isWindows();
 
 	const { data: appInfo } = useQuery({
 		queryKey: ["app-info"],
@@ -27,6 +34,13 @@ export default function ApplicationPanel() {
 		queryFn: getAnalyticsConsent,
 	});
 	const analyticsEnabled = analyticsConsent !== "denied";
+
+	const { data: autostartEnabled = false, isPending: isAutostartLoading } =
+		useQuery({
+			queryKey: ["windows-autostart"],
+			queryFn: isAutostartEnabled,
+			enabled: isWindowsOS,
+		});
 
 	const analyticsMutation = useMutation({
 		mutationFn: async (enabled: boolean) => {
@@ -44,6 +58,34 @@ export default function ApplicationPanel() {
 				error instanceof Error
 					? error.message
 					: "Failed to update analytics consent",
+			);
+		},
+	});
+
+	const autostartMutation = useMutation({
+		mutationFn: async (enabled: boolean) => {
+			if (enabled) {
+				await enableAutostart();
+			} else {
+				await disableAutostart();
+			}
+			return enabled;
+		},
+		onSuccess: (enabled) => {
+			queryClient.invalidateQueries({
+				queryKey: ["windows-autostart"],
+			});
+			toast.success(
+				enabled
+					? t("settingsAutostartEnabled")
+					: t("settingsAutostartDisabled"),
+			);
+		},
+		onError: (error) => {
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: t("settingsAutostartError"),
 			);
 		},
 	});
@@ -234,6 +276,34 @@ export default function ApplicationPanel() {
 							</Switch.Control>
 						</Switch>
 					</div>
+
+					{isWindowsOS ? (
+						<div className="flex items-center justify-between gap-4">
+							<div className="space-y-0.5">
+								<span className="text-sm font-medium text-(--foreground)">
+									{t("settingsAutostartHeading")}
+								</span>
+								<span className="block text-xs text-muted">
+									{t("settingsAutostartDescription")}
+								</span>
+							</div>
+							<Switch
+								isSelected={autostartEnabled}
+								onChange={(checked) =>
+									autostartMutation.mutate(checked)
+								}
+								isDisabled={
+									isAutostartLoading ||
+									autostartMutation.isPending
+								}
+								aria-label={t("settingsAutostartToggleLabel")}
+							>
+								<Switch.Control>
+									<Switch.Thumb />
+								</Switch.Control>
+							</Switch>
+						</div>
+					) : null}
 
 					<div className="flex items-center justify-between">
 						<div className="space-y-0.5">

@@ -6,6 +6,7 @@ import {
 	Submenu,
 } from "@tauri-apps/api/menu";
 import type { TFunction } from "i18next";
+import { isMacOS } from "./platform";
 
 let activeAppMenu: Menu | null = null;
 
@@ -160,8 +161,7 @@ export async function setupAppMenu(t: TFunction) {
 			items: [appSubmenu, agentSubmenu, editSubmenu, controlSubmenu],
 		});
 
-		const isMac = navigator.userAgent.toLowerCase().includes("mac");
-		if (isMac) {
+		if (isMacOS()) {
 			await activeAppMenu.setAsAppMenu();
 		}
 	} catch (e) {

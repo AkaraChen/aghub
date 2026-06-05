@@ -396,6 +396,13 @@ export default {
 	settingsAnalyticsDescription:
 		"发送匿名使用数据和崩溃报告以帮助改进 aghub。关闭后将同时停止事件采集和会话回放。",
 	settingsAnalyticsToggleLabel: "分享匿名使用数据",
+	settingsAutostartHeading: "开机自启动",
+	settingsAutostartDescription:
+		"在 Windows 开机时自动启动 aghub，并保持在系统托盘可用。",
+	settingsAutostartToggleLabel: "Windows 开机时启动 aghub",
+	settingsAutostartEnabled: "已启用开机自启动",
+	settingsAutostartDisabled: "已关闭开机自启动",
+	settingsAutostartError: "更新开机自启动失败",
 	onboardingSkip: "跳过",
 	onboardingBack: "返回",
 	onboardingNext: "下一步",
