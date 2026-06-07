@@ -75,31 +75,23 @@ impl ScopeParams {
 
 pub struct TrustedLocalOrigin;
 
-fn origin_host(origin: &str) -> Option<(&str, &str)> {
-	let origin = origin.trim();
-	let (scheme, rest) = origin.split_once("://")?;
-	let authority = rest.split('/').next()?;
-	let host = if let Some(rest) = authority.strip_prefix('[') {
-		rest.split_once(']')?.0
-	} else {
-		authority.split(':').next()?
-	};
-
-	Some((scheme, host))
-}
-
 fn is_trusted_local_origin(origin: &str) -> bool {
-	let Some((scheme, host)) = origin_host(origin) else {
+	let Ok(url) = url::Url::parse(origin.trim()) else {
 		return false;
 	};
-	let scheme = scheme.to_ascii_lowercase();
-	let host = host.to_ascii_lowercase();
 
-	matches!(scheme.as_str(), "http" | "https" | "tauri")
-		&& matches!(
-			host.as_str(),
-			"localhost" | "127.0.0.1" | "::1" | "tauri.localhost"
-		)
+	let scheme_ok = matches!(url.scheme(), "http" | "https" | "tauri");
+	let host_ok = match url.host() {
+		Some(url::Host::Domain(domain)) => matches!(
+			domain.to_ascii_lowercase().as_str(),
+			"localhost" | "tauri.localhost"
+		),
+		Some(url::Host::Ipv4(addr)) => addr.is_loopback(),
+		Some(url::Host::Ipv6(addr)) => addr.is_loopback(),
+		None => false,
+	};
+
+	scheme_ok && host_ok
 }
 
 #[rocket::async_trait]
@@ -128,6 +120,7 @@ mod tests {
 		assert!(is_trusted_local_origin("https://127.0.0.1:8000"));
 		assert!(is_trusted_local_origin("tauri://localhost"));
 		assert!(is_trusted_local_origin("http://tauri.localhost"));
+		assert!(is_trusted_local_origin("https://[::1]:9000"));
 	}
 
 	#[test]
