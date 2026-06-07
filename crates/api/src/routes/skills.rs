@@ -1120,6 +1120,27 @@ pub fn get_project_skill_lock(
 	}))
 }
 
+fn require_github_credential_url(url: &str) -> Result<(), ApiError> {
+	let parsed = url::Url::parse(url).map_err(|_| {
+		ApiError::new(
+			Status::BadRequest,
+			"GitHub credentials can only be used with github.com HTTPS URLs",
+			"INVALID_GITHUB_CREDENTIAL_URL",
+		)
+	})?;
+
+	let host = parsed.host_str().unwrap_or_default();
+	if parsed.scheme() == "https" && host.eq_ignore_ascii_case("github.com") {
+		return Ok(());
+	}
+
+	Err(ApiError::new(
+		Status::BadRequest,
+		"GitHub credentials can only be used with github.com HTTPS URLs",
+		"INVALID_GITHUB_CREDENTIAL_URL",
+	))
+}
+
 #[post("/skills/git/scan", data = "<body>")]
 pub async fn git_scan_skills(
 	body: Json<GitScanRequest>,
@@ -1163,6 +1184,10 @@ pub async fn git_scan_skills(
 		} else {
 			None
 		};
+
+	if credential_token.is_some() {
+		require_github_credential_url(&req.url)?;
+	}
 
 	let url = req.url.clone();
 	let branch = req.branch.clone();
@@ -1518,6 +1543,44 @@ mod tests {
 	fn env_lock() -> &'static Mutex<()> {
 		static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 		LOCK.get_or_init(|| Mutex::new(()))
+	}
+
+	#[test]
+	fn github_credential_url_accepts_github_https() {
+		assert!(require_github_credential_url(
+			"https://github.com/owner/repo.git",
+		)
+		.is_ok());
+	}
+
+	#[test]
+	fn github_credential_url_rejects_non_github_hosts() {
+		let err = require_github_credential_url(
+			"https://attacker.example/owner/repo.git",
+		)
+		.unwrap_err();
+
+		assert_eq!(err.status, Status::BadRequest);
+		assert_eq!(err.body.code, "INVALID_GITHUB_CREDENTIAL_URL");
+	}
+
+	#[test]
+	fn github_credential_url_rejects_github_lookalikes() {
+		let err = require_github_credential_url(
+			"https://github.com.attacker.example/owner/repo.git",
+		)
+		.unwrap_err();
+
+		assert_eq!(err.status, Status::BadRequest);
+	}
+
+	#[test]
+	fn github_credential_url_rejects_non_https_github() {
+		let err =
+			require_github_credential_url("http://github.com/owner/repo.git")
+				.unwrap_err();
+
+		assert_eq!(err.status, Status::BadRequest);
 	}
 
 	#[test]
