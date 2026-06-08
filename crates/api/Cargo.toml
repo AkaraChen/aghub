@@ -40,6 +40,7 @@ keyring = { version = "3", features = [
 	"linux-native",
 ] }
 uuid = { version = "1", features = [ "v4" ] }
-log = "0.4.30"
+log = "0.4.31"
 reqwest = { version = "0.13", features = [ "json" ] }
 chrono = "0.4"
+url = { workspace = true }

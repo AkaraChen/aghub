@@ -20,7 +20,7 @@ keyring = { version = "3", features = [
 	"linux-native",
 ] }
 uuid = { version = "1", features = [ "v4" ] }
-sqlx = { version = "0.8", features = [ "sqlite", "runtime-tokio", "migrate" ] }
+sqlx = { version = "0.9", features = [ "sqlite", "runtime-tokio", "migrate" ] }
 tokio = { version = "1", features = [ "rt", "rt-multi-thread" ] }
 tauri = { version = "2", optional = true }
 

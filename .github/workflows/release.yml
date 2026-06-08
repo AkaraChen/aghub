@@ -237,7 +237,17 @@ jobs:
         name: Update Homebrew Tap
         needs: [build-tauri, build-cli]
         runs-on: ubuntu-latest
+        env:
+            RELEASE_TAG: ${{ github.event.inputs.version || github.ref_name }}
         steps:
+            - name: Validate release tag
+              shell: bash
+              run: |
+                  if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+                      echo "Invalid release tag: $RELEASE_TAG" >&2
+                      exit 1
+                  fi
+
             - name: Checkout Homebrew Tap
               uses: actions/checkout@v6
               with:
@@ -247,7 +257,7 @@ jobs:
 
             - name: Update Formula and Cask
               env:
-                  VERSION: ${{ github.event.inputs.version || github.ref_name }}
+                  VERSION: ${{ env.RELEASE_TAG }}
               run: |
                   VERSION="${VERSION#v}"
                   echo "Updating for version: ${VERSION}"
@@ -334,5 +344,5 @@ jobs:
                   git config user.name "github-actions[bot]"
                   git config user.email "github-actions[bot]@users.noreply.github.com"
                   git add aghub-cli.rb Casks/aghub.rb
-                  git commit -m "Update Homebrew formula and cask for aghub v${{ github.event.inputs.version || github.ref_name }}" || echo "No changes to commit"
+                  git commit -m "Update Homebrew formula and cask for aghub ${RELEASE_TAG}" || echo "No changes to commit"
                   git push

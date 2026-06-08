@@ -8,7 +8,7 @@ repository.workspace = true
 description = "Git clone with credential injection from environment variables"
 
 [dependencies]
-gix = { version = "0.83", default-features = false, features = [
+gix = { version = "0.84", default-features = false, features = [
 	"blocking-network-client",
 	"worktree-mutation",
 	"blocking-http-transport-reqwest-native-tls",
