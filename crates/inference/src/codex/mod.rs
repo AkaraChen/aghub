@@ -9,8 +9,11 @@ mod mapping;
 #[cfg(test)]
 mod tests;
 
+use std::collections::HashSet;
+use std::fs;
 use std::path::{Path, PathBuf};
 
+use serde_json::{json, Value};
 use toml_edit::{value, DocumentMut, Item, Table};
 
 use crate::agent::{
@@ -29,6 +32,10 @@ use crate::store::{
 
 pub(super) const AGENT_ID: &str = "codex";
 pub const DEFAULT_PROFILE_ID: &str = "default";
+
+const GENERATED_MODEL_CATALOG_PATH: &str = "model-catalogs/models.json";
+const CODEX_MODEL_CATALOG_TEMPLATE_SLUG: &str = "gpt-5.5";
+const DEFAULT_CODEX_CONTEXT_WINDOW: u64 = 128_000;
 
 /// Provider adapter for Codex.
 #[derive(Debug, Clone)]
@@ -142,6 +149,8 @@ impl CodexProviderAdapter {
 			config["profile"] = value(profile_id);
 		}
 
+		let all_providers = self.load_all_providers(store, &config)?;
+		self.sync_active_model_catalog(&mut config, &all_providers)?;
 		files::write_config(&self.config_path, &config)?;
 		self.load_profile_state(store)
 	}
@@ -155,6 +164,23 @@ impl CodexProviderAdapter {
 		let config = files::read_config(&self.config_path)?;
 		let active_profile_id = active_profile_id(&config);
 		self.set_profile_provider(store, &active_profile_id, provider_id)
+	}
+
+	/// Set the provider and optional model for Codex's active profile.
+	pub fn set_active_provider_model<C: CredentialStore>(
+		&self,
+		store: &InferenceProviderStore<C>,
+		provider_id: &str,
+		model: Option<Option<&str>>,
+	) -> Result<CodexProviderState> {
+		let config = files::read_config(&self.config_path)?;
+		let active_profile_id = active_profile_id(&config);
+		self.set_profile_provider_model(
+			store,
+			&active_profile_id,
+			provider_id,
+			model,
+		)
 	}
 
 	/// Clear the current active-provider override and fall back to OpenAI.
@@ -171,6 +197,17 @@ impl CodexProviderAdapter {
 		store: &InferenceProviderStore<C>,
 		profile_id: &str,
 		provider_id: &str,
+	) -> Result<CodexProviderState> {
+		self.set_profile_provider_model(store, profile_id, provider_id, None)
+	}
+
+	/// Set the provider and optional model used by one Codex profile.
+	pub fn set_profile_provider_model<C: CredentialStore>(
+		&self,
+		store: &InferenceProviderStore<C>,
+		profile_id: &str,
+		provider_id: &str,
+		model: Option<Option<&str>>,
 	) -> Result<CodexProviderState> {
 		let profile_id = clean_profile_id(profile_id)?;
 		let provider_id = clean_selected_provider_id(provider_id)?;
@@ -192,16 +229,30 @@ impl CodexProviderAdapter {
 				provider_id.to_string(),
 			));
 		}
-		let replacement_model = if provider_changed
-			&& !provider_id.eq_ignore_ascii_case(mapping::OPENAI_PROVIDER_ID)
-		{
-			all_providers
-				.iter()
-				.find(|binding| binding.id == provider_id)
-				.and_then(|binding| binding.models.first())
-				.map(|model| model.id.clone())
-		} else {
-			None
+		let selected_provider = all_providers
+			.iter()
+			.find(|binding| binding.id == provider_id);
+		let replacement_model = match model {
+			Some(Some(model)) => {
+				let model = clean_selected_model(model)?;
+				if let Some(provider) = selected_provider {
+					ensure_provider_model(provider, &model)?;
+				}
+				Some(Some(model))
+			}
+			Some(None) => Some(None),
+			None if provider_changed
+				&& !provider_id
+					.eq_ignore_ascii_case(mapping::OPENAI_PROVIDER_ID) =>
+			{
+				Some(
+					selected_provider
+						.and_then(|binding| binding.models.first())
+						.map(|model| model.id.clone()),
+				)
+			}
+			None if provider_changed => Some(None),
+			None => None,
 		};
 
 		if profile_id == DEFAULT_PROFILE_ID {
@@ -215,22 +266,18 @@ impl CodexProviderAdapter {
 			let profile = profile_table_mut(&mut config, &profile_id)?;
 			profile["model_provider"] = value(provider_id.clone());
 		}
-		if provider_changed {
+		if let Some(replacement_model) = replacement_model {
 			if profile_id == DEFAULT_PROFILE_ID {
 				if let Some(model_id) = replacement_model {
 					config["model"] = value(model_id);
-				} else if provider_id
-					.eq_ignore_ascii_case(mapping::OPENAI_PROVIDER_ID)
-				{
+				} else {
 					config.as_table_mut().remove("model");
 				}
 			} else {
 				let profile = profile_table_mut(&mut config, &profile_id)?;
 				if let Some(model_id) = replacement_model {
 					profile["model"] = value(model_id);
-				} else if provider_id
-					.eq_ignore_ascii_case(mapping::OPENAI_PROVIDER_ID)
-				{
+				} else {
 					profile.remove("model");
 				}
 			}
@@ -251,6 +298,7 @@ impl CodexProviderAdapter {
 			}
 		}
 
+		self.sync_active_model_catalog(&mut config, &all_providers)?;
 		files::write_config(&self.config_path, &config)?;
 		self.load_profile_state(store)
 	}
@@ -280,6 +328,7 @@ impl CodexProviderAdapter {
 
 		let mut config = files::read_config(&self.config_path)?;
 		upsert_provider(&mut config, &binding, Some(api_key))?;
+		self.sync_provider_model_catalog_if_active(&mut config, &binding)?;
 		files::write_config(&self.config_path, &config)?;
 		Ok(binding)
 	}
@@ -446,6 +495,8 @@ impl CodexProviderAdapter {
 				config.as_table_mut().remove("model");
 			}
 			clear_profile_provider_references(&mut config, &provider_id);
+			let all_providers = self.load_all_providers(store, &config)?;
+			self.sync_active_model_catalog(&mut config, &all_providers)?;
 			files::write_config(&self.config_path, &config)?;
 
 			return Ok(binding);
@@ -529,6 +580,34 @@ impl CodexProviderAdapter {
 		}
 		Ok(None)
 	}
+
+	fn sync_active_model_catalog(
+		&self,
+		config: &mut DocumentMut,
+		providers: &[AgentProviderBinding],
+	) -> Result<()> {
+		let active_provider_id = active_selected_provider_id(config);
+		let binding = providers.iter().find(|provider| {
+			provider.id == active_provider_id
+				&& provider.source == AgentProviderSource::Custom
+		});
+		sync_model_catalog_for_binding(&self.config_path, config, binding)
+	}
+
+	fn sync_provider_model_catalog_if_active(
+		&self,
+		config: &mut DocumentMut,
+		binding: &AgentProviderBinding,
+	) -> Result<()> {
+		if active_selected_provider_id(config) == binding.id {
+			sync_model_catalog_for_binding(
+				&self.config_path,
+				config,
+				Some(binding),
+			)?;
+		}
+		Ok(())
+	}
 }
 
 impl AgentProviderAdapter for CodexProviderAdapter {
@@ -597,6 +676,16 @@ impl AgentProviderAdapter for CodexProviderAdapter {
 			config.as_table_mut().remove("model");
 		}
 
+		let active_provider_id = active_selected_provider_id(&config);
+		let active_binding = state.providers.iter().find(|provider| {
+			provider.id == active_provider_id
+				&& provider.source == AgentProviderSource::Custom
+		});
+		sync_model_catalog_for_binding(
+			&self.config_path,
+			&mut config,
+			active_binding,
+		)?;
 		files::write_config(&self.config_path, &config)
 	}
 }
@@ -712,6 +801,12 @@ fn built_in_openai_api_base_url(config: &DocumentMut) -> Option<String> {
 		.map(ToString::to_string)
 }
 
+fn active_selected_provider_id(config: &DocumentMut) -> String {
+	let active_profile_id = active_profile_id(config);
+	effective_profile_value(config, &active_profile_id, "model_provider")
+		.unwrap_or_else(|| mapping::OPENAI_PROVIDER_ID.to_string())
+}
+
 fn normalize_inventory_base_url(api_base_url: &str) -> String {
 	let trimmed = api_base_url.trim().trim_end_matches('/');
 	let origin_only = match trimmed.split_once("://") {
@@ -737,6 +832,234 @@ fn binding_from_row<C: CredentialStore>(
 		binding.credential = AgentProviderCredential::Inline;
 	}
 	Ok(binding)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CodexCatalogModelSpec {
+	model: String,
+	display_name: String,
+	context_window: u64,
+}
+
+fn sync_model_catalog_for_binding(
+	config_path: &Path,
+	config: &mut DocumentMut,
+	binding: Option<&AgentProviderBinding>,
+) -> Result<()> {
+	let Some(binding) = binding else {
+		remove_generated_model_catalog(config_path, config)?;
+		return Ok(());
+	};
+	let specs = codex_catalog_model_specs(binding, config);
+	if specs.is_empty() {
+		remove_generated_model_catalog(config_path, config)?;
+		return Ok(());
+	}
+
+	let template = codex_model_catalog_template(config_path);
+	let catalog = codex_model_catalog_from_specs(&specs, &template);
+	write_model_catalog(config_path, &catalog)?;
+	config["model_catalog_json"] = value(GENERATED_MODEL_CATALOG_PATH);
+	Ok(())
+}
+
+fn codex_catalog_model_specs(
+	binding: &AgentProviderBinding,
+	config: &DocumentMut,
+) -> Vec<CodexCatalogModelSpec> {
+	let context_window = top_level_u64(config, "model_context_window")
+		.unwrap_or(DEFAULT_CODEX_CONTEXT_WINDOW);
+	let mut seen = HashSet::new();
+	let mut specs = Vec::new();
+
+	for model in &binding.models {
+		let model_id = model.id.trim();
+		if model_id.is_empty() || !seen.insert(model_id.to_string()) {
+			continue;
+		}
+		let display_name = model
+			.name
+			.as_deref()
+			.map(str::trim)
+			.filter(|name| !name.is_empty())
+			.unwrap_or(model_id);
+		specs.push(CodexCatalogModelSpec {
+			model: model_id.to_string(),
+			display_name: display_name.to_string(),
+			context_window,
+		});
+	}
+
+	specs
+}
+
+fn codex_model_catalog_from_specs(
+	specs: &[CodexCatalogModelSpec],
+	template: &Value,
+) -> Value {
+	let models = specs
+		.iter()
+		.enumerate()
+		.map(|(index, spec)| {
+			codex_model_catalog_entry(
+				template,
+				&spec.model,
+				&spec.display_name,
+				spec.context_window,
+				index,
+			)
+		})
+		.collect::<Vec<_>>();
+	json!({ "models": models })
+}
+
+fn codex_model_catalog_entry(
+	template: &Value,
+	model: &str,
+	display_name: &str,
+	context_window: u64,
+	priority: usize,
+) -> Value {
+	let mut entry = template.clone();
+	let Some(entry_obj) = entry.as_object_mut() else {
+		return json!({});
+	};
+
+	entry_obj.insert("slug".to_string(), json!(model));
+	entry_obj.insert("display_name".to_string(), json!(display_name));
+	entry_obj.insert("description".to_string(), json!(display_name));
+	entry_obj.insert("context_window".to_string(), json!(context_window));
+	entry_obj.insert("max_context_window".to_string(), json!(context_window));
+	entry_obj.insert("priority".to_string(), json!(1000 + priority));
+	entry_obj.insert("additional_speed_tiers".to_string(), json!([]));
+	entry_obj.insert("service_tiers".to_string(), json!([]));
+	entry_obj.insert("availability_nux".to_string(), Value::Null);
+	entry_obj.insert("upgrade".to_string(), Value::Null);
+
+	entry
+}
+
+fn codex_model_catalog_template(config_path: &Path) -> Value {
+	let cache_path = config_path
+		.parent()
+		.map(|parent| parent.join("models_cache.json"))
+		.unwrap_or_else(|| PathBuf::from("models_cache.json"));
+
+	fs::read_to_string(cache_path)
+		.ok()
+		.and_then(|content| serde_json::from_str::<Value>(&content).ok())
+		.and_then(|catalog| find_codex_model_template(&catalog))
+		.unwrap_or_else(fallback_codex_model_template)
+}
+
+fn find_codex_model_template(catalog: &Value) -> Option<Value> {
+	let models = catalog.get("models").and_then(Value::as_array)?;
+	models
+		.iter()
+		.find(|model| {
+			model.get("slug").and_then(Value::as_str)
+				== Some(CODEX_MODEL_CATALOG_TEMPLATE_SLUG)
+		})
+		.or_else(|| {
+			models.iter().find(|model| {
+				model.get("base_instructions").is_some()
+					&& model.get("model_messages").is_some()
+			})
+		})
+		.cloned()
+}
+
+fn fallback_codex_model_template() -> Value {
+	json!({
+		"slug": CODEX_MODEL_CATALOG_TEMPLATE_SLUG,
+		"display_name": "GPT-5.5",
+		"description": "Codex-compatible model template",
+		"default_reasoning_level": "medium",
+		"supported_reasoning_levels": [
+			{
+				"effort": "low",
+				"description": "Fast responses with lighter reasoning"
+			},
+			{
+				"effort": "medium",
+				"description": "Balanced reasoning"
+			},
+			{
+				"effort": "high",
+				"description": "More reasoning depth"
+			}
+		],
+		"shell_type": "shell_command",
+		"visibility": "list",
+		"supported_in_api": true,
+		"priority": 0,
+		"additional_speed_tiers": [],
+		"service_tiers": [],
+		"availability_nux": null,
+		"upgrade": null,
+		"base_instructions": "You are Codex, a coding agent.",
+		"model_messages": {
+			"instructions_template": "{{ base_instructions }}",
+			"instructions_variables": {}
+		},
+		"context_window": DEFAULT_CODEX_CONTEXT_WINDOW,
+		"max_context_window": DEFAULT_CODEX_CONTEXT_WINDOW
+	})
+}
+
+fn write_model_catalog(config_path: &Path, catalog: &Value) -> Result<()> {
+	let path = model_catalog_path(config_path);
+	if let Some(parent) = path.parent() {
+		fs::create_dir_all(parent)?;
+	}
+	let content = serde_json::to_string_pretty(catalog)
+		.map_err(|error| files::invalid_config(&path, error.to_string()))?;
+	fs::write(path, content)?;
+	Ok(())
+}
+
+fn remove_generated_model_catalog(
+	config_path: &Path,
+	config: &mut DocumentMut,
+) -> Result<()> {
+	let model_catalog_json =
+		config.get("model_catalog_json").and_then(Item::as_str);
+	let should_remove_field = model_catalog_json
+		.map(is_generated_model_catalog_path)
+		.unwrap_or(false);
+	if should_remove_field {
+		config.as_table_mut().remove("model_catalog_json");
+		remove_file_if_exists(model_catalog_path(config_path))?;
+	}
+
+	Ok(())
+}
+
+fn remove_file_if_exists(path: PathBuf) -> Result<()> {
+	match fs::remove_file(path) {
+		Ok(()) => Ok(()),
+		Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+		Err(error) => Err(error.into()),
+	}
+}
+
+fn model_catalog_path(config_path: &Path) -> PathBuf {
+	config_path
+		.parent()
+		.map(|parent| parent.join(GENERATED_MODEL_CATALOG_PATH))
+		.unwrap_or_else(|| PathBuf::from(GENERATED_MODEL_CATALOG_PATH))
+}
+
+fn is_generated_model_catalog_path(path: &str) -> bool {
+	Path::new(path) == Path::new(GENERATED_MODEL_CATALOG_PATH)
+}
+
+fn top_level_u64(config: &DocumentMut, field: &str) -> Option<u64> {
+	config
+		.get(field)
+		.and_then(Item::as_integer)
+		.and_then(|value| u64::try_from(value).ok())
+		.filter(|value| *value > 0)
 }
 
 fn upsert_provider(
@@ -838,6 +1161,33 @@ fn clean_selected_provider_id(provider_id: &str) -> Result<String> {
 		Err(crate::error::InferenceProviderError::EmptyAgentProviderId)
 	} else {
 		Ok(provider_id)
+	}
+}
+
+fn clean_selected_model(model: &str) -> Result<String> {
+	let model = model.trim().to_string();
+	if model.is_empty() {
+		Err(crate::error::InferenceProviderError::EmptyModelName)
+	} else {
+		Ok(model)
+	}
+}
+
+fn ensure_provider_model(
+	provider: &AgentProviderBinding,
+	model: &str,
+) -> Result<()> {
+	if provider.models.is_empty()
+		|| provider
+			.models
+			.iter()
+			.any(|candidate| candidate.id == model)
+	{
+		Ok(())
+	} else {
+		Err(crate::error::InferenceProviderError::NotFound(
+			model.to_string(),
+		))
 	}
 }
 

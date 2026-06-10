@@ -29,7 +29,11 @@ use crate::agent::{
 use crate::credentials::CredentialStore;
 use crate::error::Result;
 use crate::model::InferenceProvider;
-use crate::store::{InferenceProviderRepository, InferenceProviderStore};
+use crate::store::{
+	AgentProviderBindingModelUpdate, AgentProviderBindingModels,
+	AgentProviderBindingRow, InferenceProviderRepository,
+	InferenceProviderStore,
+};
 
 pub(super) const AGENT_ID: &str = "claude";
 
@@ -72,6 +76,15 @@ pub struct ClaudeConfigState {
 	/// Default Sonnet alias model.
 	pub sonnet_model: Option<String>,
 	/// Default Opus alias model.
+	pub opus_model: Option<String>,
+}
+
+/// Claude Code model routing for a provider binding.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ClaudeModelRouting {
+	pub model: Option<String>,
+	pub haiku_model: Option<String>,
+	pub sonnet_model: Option<String>,
 	pub opus_model: Option<String>,
 }
 
@@ -227,16 +240,34 @@ impl ClaudeProviderAdapter {
 	fn derive_active_binding<C: CredentialStore>(
 		&self,
 		store: &InferenceProviderStore<C>,
-		rows: &[crate::store::AgentProviderBindingRow],
-	) -> Result<Option<crate::store::AgentProviderBindingRow>> {
+		rows: &[AgentProviderBindingRow],
+	) -> Result<Option<AgentProviderBindingRow>> {
 		let current = self.load_config_state()?;
 		for row in rows {
 			let provider = store.get(&row.inference_provider_id)?;
 			let api_key = store.get_api_key(&provider.id)?;
-			if provider.api_base_url
-				== current.api_base_url.as_deref().unwrap_or_default()
+			let base_url_matches = provider.api_base_url
+				== current.api_base_url.as_deref().unwrap_or_default();
+			let model_matches =
+				binding_model_matches(row.model.as_deref(), &current.model);
+			let haiku_matches = binding_model_matches(
+				binding_alias_model(row.haiku_model.as_deref(), row),
+				&current.haiku_model,
+			);
+			let sonnet_matches = binding_model_matches(
+				binding_alias_model(row.sonnet_model.as_deref(), row),
+				&current.sonnet_model,
+			);
+			let opus_matches = binding_model_matches(
+				binding_alias_model(row.opus_model.as_deref(), row),
+				&current.opus_model,
+			);
+			if base_url_matches
 				&& api_key == current.api_key
-				&& row.model.as_deref() == current.model.as_deref()
+				&& model_matches
+				&& haiku_matches
+				&& sonnet_matches
+				&& opus_matches
 			{
 				return Ok(Some(row.clone()));
 			}
@@ -304,16 +335,39 @@ impl ClaudeProviderAdapter {
 		api_key: &str,
 		set_active: bool,
 	) -> Result<AgentProviderBinding> {
-		let model = provider.models.first().cloned();
-		let row = store.create_agent_binding(
+		let routing = ClaudeModelRouting {
+			model: provider.models.first().cloned(),
+			..Default::default()
+		};
+		self.add_binding_with_models(
+			store, provider, api_key, routing, set_active,
+		)
+	}
+
+	/// Add a binding with explicit model routing.
+	pub fn add_binding_with_models<C: CredentialStore>(
+		&self,
+		store: &InferenceProviderStore<C>,
+		provider: &InferenceProvider,
+		api_key: &str,
+		routing: ClaudeModelRouting,
+		set_active: bool,
+	) -> Result<AgentProviderBinding> {
+		let routing = clean_model_routing(provider, routing)?;
+		let row = store.create_agent_binding_with_models(
 			AGENT_ID,
 			&provider.id,
-			model.as_deref(),
+			AgentProviderBindingModels {
+				model: routing.model.clone(),
+				haiku_model: routing.haiku_model.clone(),
+				sonnet_model: routing.sonnet_model.clone(),
+				opus_model: routing.opus_model.clone(),
+			},
 		)?;
 
 		if set_active {
 			if let Err(error) =
-				self.sync_active_binding(provider, api_key, model.as_deref())
+				self.sync_active_binding_models(provider, api_key, &routing)
 			{
 				let _ = store.delete_agent_binding(AGENT_ID, &row.id);
 				return Err(error);
@@ -331,6 +385,33 @@ impl ClaudeProviderAdapter {
 		&self,
 		store: &InferenceProviderStore<C>,
 		binding_id: &str,
+	) -> Result<AgentProviderState> {
+		self.set_active_binding_model(store, binding_id, None)
+	}
+
+	/// Switch the active provider and optionally update its selected model.
+	pub fn set_active_binding_model<C: CredentialStore>(
+		&self,
+		store: &InferenceProviderStore<C>,
+		binding_id: &str,
+		model: Option<Option<String>>,
+	) -> Result<AgentProviderState> {
+		self.set_active_binding_models(
+			store,
+			binding_id,
+			AgentProviderBindingModelUpdate {
+				model,
+				..Default::default()
+			},
+		)
+	}
+
+	/// Switch the active provider and optionally update model routing.
+	pub fn set_active_binding_models<C: CredentialStore>(
+		&self,
+		store: &InferenceProviderStore<C>,
+		binding_id: &str,
+		update: AgentProviderBindingModelUpdate,
 	) -> Result<AgentProviderState> {
 		if binding_id == OFFICIAL_LOGIN_PROVIDER_ID {
 			self.clear_provider_config()?;
@@ -351,7 +432,23 @@ impl ClaudeProviderAdapter {
 		let api_key = store.get_api_key(&provider.id)?.ok_or_else(|| {
 			crate::error::InferenceProviderError::NotFound(provider.id.clone())
 		})?;
-		self.sync_active_binding(&provider, &api_key, row.model.as_deref())?;
+		let update = clean_model_update(&provider, update)?;
+		let row = if update.model.is_some()
+			|| update.haiku_model.is_some()
+			|| update.sonnet_model.is_some()
+			|| update.opus_model.is_some()
+		{
+			store.update_agent_binding_models(AGENT_ID, binding_id, update)?
+		} else {
+			row
+		};
+		let routing = ClaudeModelRouting {
+			model: row.model,
+			haiku_model: row.haiku_model,
+			sonnet_model: row.sonnet_model,
+			opus_model: row.opus_model,
+		};
+		self.sync_active_binding_models(&provider, &api_key, &routing)?;
 
 		self.load_bindings_state(store)
 	}
@@ -370,11 +467,16 @@ impl ClaudeProviderAdapter {
 
 		if active.is_some_and(|a| a.id == binding_id) {
 			if let Err(error) = self.clear_provider_config() {
-				let _ = store.upsert_agent_binding(
+				let _ = store.upsert_agent_binding_with_models(
 					AGENT_ID,
 					&row.id,
 					&row.inference_provider_id,
-					row.model.as_deref(),
+					AgentProviderBindingModels {
+						model: row.model.clone(),
+						haiku_model: row.haiku_model.clone(),
+						sonnet_model: row.sonnet_model.clone(),
+						opus_model: row.opus_model.clone(),
+					},
 				);
 				return Err(error);
 			}
@@ -390,14 +492,31 @@ impl ClaudeProviderAdapter {
 		api_key: &str,
 		model: Option<&str>,
 	) -> Result<()> {
+		self.sync_active_binding_models(
+			provider,
+			api_key,
+			&ClaudeModelRouting {
+				model: model.map(ToString::to_string),
+				..Default::default()
+			},
+		)
+	}
+
+	/// Sync an inventory provider and model routing into settings.json.
+	pub fn sync_active_binding_models(
+		&self,
+		provider: &InferenceProvider,
+		api_key: &str,
+		routing: &ClaudeModelRouting,
+	) -> Result<()> {
 		let state = ClaudeConfigState {
 			api_base_url: Some(provider.api_base_url.clone()),
 			api_key: Some(api_key.to_string()),
 			api_key_env_name: Some(AUTH_TOKEN_ENV.to_string()),
-			model: model.map(ToString::to_string),
-			haiku_model: None,
-			sonnet_model: None,
-			opus_model: None,
+			model: routing.model.clone(),
+			haiku_model: routing.haiku_model.clone(),
+			sonnet_model: routing.sonnet_model.clone(),
+			opus_model: routing.opus_model.clone(),
 		};
 		self.save_config_state(&state)
 	}
@@ -616,6 +735,103 @@ fn string_field(value: &Value, key: &str) -> Option<String> {
 		.get(key)
 		.and_then(Value::as_str)
 		.map(ToString::to_string)
+}
+
+fn binding_alias_model<'a>(
+	alias_model: Option<&'a str>,
+	row: &'a AgentProviderBindingRow,
+) -> Option<&'a str> {
+	alias_model.or(row.model.as_deref())
+}
+
+fn binding_model_matches(
+	expected: Option<&str>,
+	actual: &Option<String>,
+) -> bool {
+	expected == actual.as_deref()
+}
+
+fn clean_selected_model(model: &str) -> Result<String> {
+	let model = model.trim().to_string();
+	if model.is_empty() {
+		Err(crate::error::InferenceProviderError::EmptyModelName)
+	} else {
+		Ok(model)
+	}
+}
+
+fn clean_optional_selected_model(
+	model: Option<String>,
+) -> Result<Option<String>> {
+	model.map(|model| clean_selected_model(&model)).transpose()
+}
+
+fn ensure_provider_model(
+	provider: &InferenceProvider,
+	model: &str,
+) -> Result<()> {
+	if provider.models.is_empty()
+		|| provider.models.iter().any(|candidate| candidate == model)
+	{
+		Ok(())
+	} else {
+		Err(crate::error::InferenceProviderError::NotFound(
+			model.to_string(),
+		))
+	}
+}
+
+fn clean_model_routing(
+	provider: &InferenceProvider,
+	routing: ClaudeModelRouting,
+) -> Result<ClaudeModelRouting> {
+	let routing = ClaudeModelRouting {
+		model: clean_optional_selected_model(routing.model)?,
+		haiku_model: clean_optional_selected_model(routing.haiku_model)?,
+		sonnet_model: clean_optional_selected_model(routing.sonnet_model)?,
+		opus_model: clean_optional_selected_model(routing.opus_model)?,
+	};
+	for model in [
+		routing.model.as_deref(),
+		routing.haiku_model.as_deref(),
+		routing.sonnet_model.as_deref(),
+		routing.opus_model.as_deref(),
+	]
+	.into_iter()
+	.flatten()
+	{
+		ensure_provider_model(provider, model)?;
+	}
+	Ok(routing)
+}
+
+fn clean_model_update(
+	provider: &InferenceProvider,
+	update: AgentProviderBindingModelUpdate,
+) -> Result<AgentProviderBindingModelUpdate> {
+	Ok(AgentProviderBindingModelUpdate {
+		model: clean_model_update_value(provider, update.model)?,
+		haiku_model: clean_model_update_value(provider, update.haiku_model)?,
+		sonnet_model: clean_model_update_value(provider, update.sonnet_model)?,
+		opus_model: clean_model_update_value(provider, update.opus_model)?,
+	})
+}
+
+fn clean_model_update_value(
+	provider: &InferenceProvider,
+	model: Option<Option<String>>,
+) -> Result<Option<Option<String>>> {
+	model
+		.map(|model| {
+			model
+				.map(|model| {
+					let model = clean_selected_model(&model)?;
+					ensure_provider_model(provider, &model)?;
+					Ok(model)
+				})
+				.transpose()
+		})
+		.transpose()
 }
 
 fn provider_models_from_state(

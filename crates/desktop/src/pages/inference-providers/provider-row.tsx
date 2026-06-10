@@ -1,7 +1,12 @@
 import { QuestionMarkCircleIcon, ServerIcon } from "@heroicons/react/24/solid";
-import { Chip, Label, Tooltip } from "@heroui/react";
+import { Chip, Label, ListBox, Select, Tooltip } from "@heroui/react";
 import type { ReactNode } from "react";
 import { cn } from "../../lib/utils";
+
+interface ProviderModelOption {
+	id: string;
+	name?: string | null;
+}
 
 export function ProviderActiveBadge({
 	children,
@@ -91,5 +96,65 @@ export function ProviderRowShell({
 				</div>
 			)}
 		</div>
+	);
+}
+
+export function ProviderModelSelect({
+	models,
+	selectedModel,
+	label,
+	isDisabled,
+	onSelect,
+}: {
+	models: ProviderModelOption[];
+	selectedModel?: string | null;
+	label: string;
+	isDisabled?: boolean;
+	onSelect: (model: string) => void;
+}) {
+	if (models.length === 0) {
+		return null;
+	}
+
+	const hasSelectedModel =
+		selectedModel && models.some((model) => model.id === selectedModel);
+	const options =
+		selectedModel && !hasSelectedModel
+			? [{ id: selectedModel, name: selectedModel }, ...models]
+			: models;
+	const selectedKey = selectedModel ?? options[0]?.id;
+
+	return (
+		<Select
+			aria-label={label}
+			className="min-w-44 sm:w-56"
+			selectedKey={selectedKey}
+			isDisabled={isDisabled}
+			onSelectionChange={(key) => {
+				if (!key) return;
+				onSelect(String(key));
+			}}
+			variant="secondary"
+		>
+			<Select.Trigger className="h-9 min-h-9">
+				<Select.Value />
+				<Select.Indicator />
+			</Select.Trigger>
+			<Select.Popover>
+				<ListBox>
+					{options.map((model) => (
+						<ListBox.Item
+							key={model.id}
+							id={model.id}
+							textValue={model.name ?? model.id}
+						>
+							<Label className="truncate">
+								{model.name ?? model.id}
+							</Label>
+						</ListBox.Item>
+					))}
+				</ListBox>
+			</Select.Popover>
+		</Select>
 	);
 }

@@ -1,7 +1,9 @@
+use aghub_inference::AgentProviderBindingModelUpdate;
 use aghub_inference::{
-	AgentProviderAdapter, AgentProviderBinding, ClaudeProviderAdapter,
-	CodexProviderAdapter, InferenceProvider, InferenceProviderRepository,
-	InferenceProviderStore, OpenCodeProviderAdapter,
+	AgentProviderAdapter, AgentProviderBinding, ClaudeModelRouting,
+	ClaudeProviderAdapter, CodexProviderAdapter, InferenceProvider,
+	InferenceProviderRepository, InferenceProviderStore,
+	OpenCodeProviderAdapter,
 };
 use rocket::http::Status;
 use rocket::response::status::NoContent;
@@ -382,20 +384,58 @@ pub fn create_codex_provider(
 	body: Json<CreateAgentProviderRequest>,
 ) -> ApiCreated<AgentProviderResponse> {
 	let store = store(state);
+	let body = body.into_inner();
 	let (provider, api_key) =
 		get_inventory_provider(&store, &body.inference_provider_id)?;
+	let requested_model = match body.model.as_deref() {
+		Some(model) => {
+			let model = model.trim();
+			if model.is_empty()
+				|| !provider.models.iter().any(|item| item == model)
+			{
+				return Err(ApiError::new(
+					Status::BadRequest,
+					format!(
+						"model '{model}' is not available for inference \
+						 provider '{}'",
+						provider.display_name
+					),
+					"INVALID_MODEL",
+				));
+			}
+			Some(model.to_string())
+		}
+		None => None,
+	};
 	let adapter = codex_adapter()?;
 	let binding = adapter
 		.add_inventory_provider(&store, &provider, &api_key)
 		.map_err(ApiError::from)?;
-	adapter
-		.set_active_provider(&store, &binding.id)
-		.map_err(ApiError::from)?;
+	let row = if let Some(model) = requested_model.as_deref() {
+		adapter
+			.set_active_provider_model(&store, &binding.id, Some(Some(model)))
+			.map_err(ApiError::from)?;
+		store
+			.update_agent_binding(
+				"codex",
+				&binding.id,
+				Some(Some(model.to_string())),
+			)
+			.map_err(ApiError::from)?
+	} else {
+		adapter
+			.set_active_provider(&store, &binding.id)
+			.map_err(ApiError::from)?;
+		store
+			.get_agent_binding("codex", &binding.id)
+			.map_err(ApiError::from)?
+	};
 
 	Ok((
 		Status::Created,
 		Json(
 			AgentProviderResponse::from(binding)
+				.with_agent_binding_models(&row)
 				.with_matched_inference_provider(&provider),
 		),
 	))
@@ -458,8 +498,15 @@ pub fn update_codex_profile_provider(
 ) -> ApiResult<CodexProviderStateResponse> {
 	let store = store(state);
 	let adapter = codex_adapter()?;
+	let body = body.into_inner();
+	let model = body.model.as_ref().map(|model| model.as_deref());
 	adapter
-		.set_profile_provider(&store, profile_id, &body.provider_id)
+		.set_profile_provider_model(
+			&store,
+			profile_id,
+			&body.provider_id,
+			model,
+		)
 		.map_err(ApiError::from)?;
 	Ok(Json(codex_state_response(&store, &adapter)?))
 }
@@ -743,10 +790,12 @@ fn claude_state_response(
 ) -> Result<ClaudeProviderStateResponse, ApiError> {
 	let state = adapter.load_bindings_state(store).map_err(ApiError::from)?;
 	let inventory = inventory_providers_with_api_keys(store)?;
+	let rows = store
+		.list_agent_bindings("claude")
+		.map_err(ApiError::from)?;
 	let providers = state
 		.providers
 		.iter()
-		.cloned()
 		.map(|binding| {
 			// Built-in providers have no inventory backing; skip matching.
 			let matched = match binding.source_provider_id.as_deref() {
@@ -756,7 +805,10 @@ fn claude_state_response(
 					.cloned(),
 				_ => None,
 			};
-			let response = AgentProviderResponse::from(binding);
+			let mut response = AgentProviderResponse::from(binding);
+			if let Some(row) = rows.iter().find(|row| row.id == binding.id) {
+				response = response.with_agent_binding_models(row);
+			}
 			let result: Result<AgentProviderResponse, ApiError> =
 				Ok(match matched {
 					Some((provider, _)) => {
@@ -770,9 +822,24 @@ fn claude_state_response(
 	let active_provider_id = adapter
 		.derive_active_provider_id(store)
 		.map_err(ApiError::from)?;
+	let active_model = state
+		.default_model
+		.as_ref()
+		.map(|selection| selection.model_id.clone());
+	let active_row = rows.iter().find(|row| row.id == active_provider_id);
 	Ok(ClaudeProviderStateResponse {
 		providers,
 		active_provider_id,
+		active_model,
+		active_haiku_model: active_row.and_then(|row| {
+			row.haiku_model.clone().or_else(|| row.model.clone())
+		}),
+		active_sonnet_model: active_row.and_then(|row| {
+			row.sonnet_model.clone().or_else(|| row.model.clone())
+		}),
+		active_opus_model: active_row.and_then(|row| {
+			row.opus_model.clone().or_else(|| row.model.clone())
+		}),
 	})
 }
 
@@ -791,17 +858,33 @@ pub fn create_claude_provider(
 	body: Json<CreateAgentProviderRequest>,
 ) -> ApiCreated<AgentProviderResponse> {
 	let store = store(state);
+	let body = body.into_inner();
 	let (provider, api_key) =
 		get_inventory_provider(&store, &body.inference_provider_id)?;
 	let adapter = claude_adapter()?;
 	let binding = adapter
-		.add_binding(&store, &provider, &api_key, true)
+		.add_binding_with_models(
+			&store,
+			&provider,
+			&api_key,
+			ClaudeModelRouting {
+				model: body.model,
+				haiku_model: body.haiku_model,
+				sonnet_model: body.sonnet_model,
+				opus_model: body.opus_model,
+			},
+			true,
+		)
+		.map_err(ApiError::from)?;
+	let row = store
+		.get_agent_binding("claude", &binding.id)
 		.map_err(ApiError::from)?;
 
 	Ok((
 		Status::Created,
 		Json(
 			AgentProviderResponse::from(binding)
+				.with_agent_binding_models(&row)
 				.with_matched_inference_provider(&provider),
 		),
 	))
@@ -815,6 +898,7 @@ pub fn update_claude_provider(
 ) -> ApiResult<ClaudeProviderStateResponse> {
 	let store = store(state);
 	let adapter = claude_adapter()?;
+	let body = body.into_inner();
 
 	if body.name.as_deref().is_some() {
 		return Err(ApiError::new(
@@ -836,7 +920,16 @@ pub fn update_claude_provider(
 			.map_err(ApiError::from)?;
 	}
 	adapter
-		.set_active_binding(&store, id)
+		.set_active_binding_models(
+			&store,
+			id,
+			AgentProviderBindingModelUpdate {
+				model: body.model,
+				haiku_model: body.haiku_model,
+				sonnet_model: body.sonnet_model,
+				opus_model: body.opus_model,
+			},
+		)
 		.map_err(ApiError::from)?;
 
 	Ok(Json(claude_state_response(&store, &adapter)?))
@@ -880,13 +973,23 @@ pub fn sync_claude_provider(
 			})?;
 
 		adapter
-			.sync_active_binding(&provider, &api_key, model.as_deref())
+			.sync_active_binding_models(
+				&provider,
+				&api_key,
+				&ClaudeModelRouting {
+					model: row.model.clone(),
+					haiku_model: row.haiku_model.clone(),
+					sonnet_model: row.sonnet_model.clone(),
+					opus_model: row.opus_model.clone(),
+				},
+			)
 			.map_err(ApiError::from)?;
 	}
 
 	let binding = store.binding_from_row(&row).map_err(ApiError::from)?;
 	Ok(Json(
 		AgentProviderResponse::from(binding)
+			.with_agent_binding_models(&row)
 			.with_matched_inference_provider(&provider),
 	))
 }
