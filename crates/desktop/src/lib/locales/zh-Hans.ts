@@ -743,6 +743,11 @@ export default {
 	deepLinkUnsupportedType: "该深链类型暂不支持。",
 	deepLinkInvalidSkill: "该技能链接缺少必要字段。",
 	deepLinkInvalidMcp: "该 MCP 链接载荷无效。",
+	executableMcpWarningTitle: "此 MCP 可以运行命令",
+	executableMcpWarningDescription:
+		"Stdio MCP 服务器是代理稍后可能运行的可执行命令。仅当你信任来源，并已查看下方的所有命令、参数和环境变量后才安装。",
+	confirmExecutableMcp:
+		"我了解此导入会持久保存一个可执行命令，供代理稍后运行。",
 
 	// skills.sh
 	searchMarketSkills: "在 skills.sh 搜索技能...",
