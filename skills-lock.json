@@ -71,6 +71,12 @@
 			"sourceType": "github",
 			"computedHash": "890ddb374d1baf208b4015e38ebb16b633596e3de575927075640b6480eef917"
 		},
+		"improve": {
+			"source": "shadcn/improve",
+			"sourceType": "github",
+			"skillPath": "skills/improve/SKILL.md",
+			"computedHash": "7a0f09dd535fc84391dc63bea826d6aeab985b92423fa4dd93edacb5dfb82524"
+		},
 		"normalize": {
 			"source": "pbakaus/impeccable",
 			"sourceType": "github",
