@@ -265,6 +265,26 @@ mod tests {
 	use rocket::local::blocking::Client;
 
 	#[test]
+	fn plugin_install_rejects_remote_browser_origin() {
+		let client = Client::tracked(build_rocket(
+			rocket::Config::default(),
+			default_app_data_dir(),
+		))
+		.expect("client");
+
+		let response = client
+			.post("/api/v1/plugins/install")
+			.header(Header::new("Origin", "https://evil.example"))
+			.header(Header::new("Content-Type", "application/json"))
+			.body(
+				r#"{"plugin_id":"p@https://github.com/a/b","scope":"global"}"#,
+			)
+			.dispatch();
+
+		assert_eq!(response.status(), Status::Forbidden);
+	}
+
+	#[test]
 	fn plugin_preflight_routes_return_cors_response() {
 		let client = Client::tracked(build_rocket(
 			rocket::Config::default(),
