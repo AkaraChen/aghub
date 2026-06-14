@@ -230,17 +230,37 @@ export function createApi(baseUrl: string, token: string) {
 					.post("skills/edit", { json: { skill_path: skillPath } })
 					.then(() => undefined);
 			},
-			getContent(skillPath: string): Promise<string> {
+			getContent(
+				skillPath: string,
+				scope: "global" | "project" | "all" = "global",
+				projectRoot?: string,
+			): Promise<string> {
 				return client
 					.get("skills/content", {
-						searchParams: { path: skillPath },
+						searchParams: {
+							path: skillPath,
+							scope,
+							...(projectRoot
+								? { project_root: projectRoot }
+								: {}),
+						},
 					})
 					.json();
 			},
-			getTree(skillPath: string): Promise<SkillTreeNodeResponse> {
+			getTree(
+				skillPath: string,
+				scope: "global" | "project" | "all" = "global",
+				projectRoot?: string,
+			): Promise<SkillTreeNodeResponse> {
 				return client
 					.get("skills/tree", {
-						searchParams: { path: skillPath },
+						searchParams: {
+							path: skillPath,
+							scope,
+							...(projectRoot
+								? { project_root: projectRoot }
+								: {}),
+						},
 					})
 					.json();
 			},

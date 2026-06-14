@@ -393,10 +393,12 @@ mod tests {
 		serializer.finish()
 	}
 
-	fn skill_content_query(skill_file: &Path) -> String {
+	fn skill_content_query(skill_file: &Path, project_root: &Path) -> String {
 		let mut serializer =
 			url::form_urlencoded::Serializer::new(String::new());
 		serializer.append_pair("path", &skill_file.to_string_lossy());
+		serializer.append_pair("scope", "project");
+		serializer.append_pair("project_root", &project_root.to_string_lossy());
 		serializer.finish()
 	}
 
@@ -640,8 +642,12 @@ mod tests {
 	#[test]
 	fn route_skill_content_requires_auth() {
 		let app_data_dir = tempfile::tempdir().expect("app data dir");
-		let skill_dir = tempfile::tempdir().expect("skill dir");
-		let skill_file = skill_dir.path().join("SKILL.md");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let skill_file = project_dir
+			.path()
+			.join(".claude/skills/route-skill/SKILL.md");
+		std::fs::create_dir_all(skill_file.parent().expect("skill parent"))
+			.expect("skill dir");
 		std::fs::write(
 			&skill_file,
 			"---\nname: route-skill\ndescription: route skill\n---\n\n# Body\n",
@@ -649,7 +655,7 @@ mod tests {
 		.expect("skill file");
 
 		let client = test_client(app_data_dir.path());
-		let query = skill_content_query(&skill_file);
+		let query = skill_content_query(&skill_file, project_dir.path());
 		let uri = format!("/api/v1/skills/content?{query}");
 		let response = client.get(&uri).dispatch();
 		assert_json_error(response, Status::Unauthorized, "UNAUTHORIZED");
