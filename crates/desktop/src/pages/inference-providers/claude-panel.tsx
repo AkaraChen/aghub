@@ -337,6 +337,12 @@ function ClaudeCreateProviderDialog({
 		modelOptions,
 	);
 
+	const handleClose = () => {
+		setSelectedProviderId("");
+		setModelSelection({});
+		onClose();
+	};
+
 	const createMutation = useMutation({
 		...createClaudeProviderMutationOptions({
 			api,
@@ -358,12 +364,6 @@ function ClaudeCreateProviderDialog({
 
 	const isPending = createMutation.isPending;
 	const hasAnthropicProviders = anthropicProviders.length > 0;
-
-	const handleClose = () => {
-		setSelectedProviderId("");
-		setModelSelection({});
-		onClose();
-	};
 
 	const handleModelChange = (
 		route: ClaudeModelRoute,
