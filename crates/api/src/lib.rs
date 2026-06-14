@@ -268,17 +268,125 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 #[cfg(test)]
 mod tests {
 	use super::{build_rocket, default_app_data_dir};
-	use rocket::http::{Header, Status};
-	use rocket::local::blocking::Client;
+	use rocket::http::{ContentType, Header, Status};
+	use rocket::local::blocking::{Client, LocalResponse};
+	use serde_json::{json, Value};
+	use std::ffi::OsString;
+	use std::path::Path;
+	use std::sync::{Mutex, MutexGuard, OnceLock};
+
+	struct PathEnvGuard {
+		_lock: MutexGuard<'static, ()>,
+		previous: Option<OsString>,
+	}
+
+	impl Drop for PathEnvGuard {
+		fn drop(&mut self) {
+			match &self.previous {
+				Some(path) => std::env::set_var("PATH", path),
+				None => std::env::remove_var("PATH"),
+			}
+		}
+	}
+
+	fn env_lock() -> &'static Mutex<()> {
+		static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+		LOCK.get_or_init(|| Mutex::new(()))
+	}
+
+	fn hide_cli_path() -> PathEnvGuard {
+		let lock = env_lock().lock().expect("env lock");
+		let previous = std::env::var_os("PATH");
+		std::env::set_var("PATH", "");
+		PathEnvGuard {
+			_lock: lock,
+			previous,
+		}
+	}
+
+	fn test_client(app_data_dir: &Path) -> Client {
+		Client::tracked(build_rocket(
+			rocket::Config::default(),
+			app_data_dir.to_path_buf(),
+			None,
+		))
+		.expect("client")
+	}
+
+	fn project_query(project_root: &Path) -> String {
+		let mut serializer =
+			url::form_urlencoded::Serializer::new(String::new());
+		serializer.append_pair("scope", "project");
+		serializer.append_pair("project_root", &project_root.to_string_lossy());
+		serializer.finish()
+	}
+
+	fn response_json(response: LocalResponse<'_>) -> Value {
+		let body = response.into_string().expect("response body");
+		serde_json::from_str(&body).expect("json response")
+	}
+
+	fn assert_json_error(
+		response: LocalResponse<'_>,
+		status: Status,
+		code: &str,
+	) {
+		assert_eq!(response.status(), status);
+		let body = response_json(response);
+		assert_eq!(body["code"], code);
+	}
+
+	fn post_json<'c>(
+		client: &'c Client,
+		uri: &'c str,
+		body: Value,
+	) -> LocalResponse<'c> {
+		client
+			.post(uri)
+			.header(ContentType::JSON)
+			.body(body.to_string())
+			.dispatch()
+	}
+
+	fn put_json<'c>(
+		client: &'c Client,
+		uri: &'c str,
+		body: Value,
+	) -> LocalResponse<'c> {
+		client
+			.put(uri)
+			.header(ContentType::JSON)
+			.body(body.to_string())
+			.dispatch()
+	}
+
+	fn get_json<'c>(client: &'c Client, uri: &'c str) -> LocalResponse<'c> {
+		client.get(uri).dispatch()
+	}
+
+	fn delete_json<'c>(client: &'c Client, uri: &'c str) -> LocalResponse<'c> {
+		client.delete(uri).dispatch()
+	}
+
+	#[test]
+	fn plugin_install_rejects_remote_browser_origin() {
+		let client = test_client(&default_app_data_dir());
+
+		let response = client
+			.post("/api/v1/plugins/install")
+			.header(Header::new("Origin", "https://evil.example"))
+			.header(Header::new("Content-Type", "application/json"))
+			.body(
+				r#"{"plugin_id":"p@https://github.com/a/b","scope":"global"}"#,
+			)
+			.dispatch();
+
+		assert_eq!(response.status(), Status::Forbidden);
+	}
 
 	#[test]
 	fn plugin_preflight_routes_return_cors_response() {
-		let client = Client::tracked(build_rocket(
-			rocket::Config::default(),
-			default_app_data_dir(),
-			None,
-		))
-		.expect("client");
+		let client = test_client(&default_app_data_dir());
 
 		let path = "/api/v1/plugins/uninstall";
 		let response = client
@@ -300,5 +408,209 @@ mod tests {
 			response.headers().get_one("Access-Control-Allow-Headers"),
 			Some("content-type"),
 		);
+	}
+
+	#[test]
+	fn route_skill_create_update_delete_persists_project_files() {
+		let _path_guard = hide_cli_path();
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let client = test_client(app_data_dir.path());
+		let query = project_query(project_dir.path());
+		let collection_uri = format!("/api/v1/agents/claude/skills?{query}");
+		let item_uri =
+			format!("/api/v1/agents/claude/skills/route-skill?{query}");
+
+		let response = post_json(
+			&client,
+			&collection_uri,
+			json!({
+				"name": "route-skill",
+				"description": "created",
+				"author": null,
+				"version": null,
+				"content": "# Body",
+				"tools": [],
+			}),
+		);
+		assert_eq!(response.status(), Status::Created);
+		let body = response_json(response);
+		assert_eq!(body["name"], "route-skill");
+
+		let response = get_json(&client, &item_uri);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["description"], "created");
+
+		let response = put_json(
+			&client,
+			&item_uri,
+			json!({
+				"description": "updated",
+				"content": "# Updated",
+			}),
+		);
+		assert_eq!(response.status(), Status::Ok);
+
+		let skill_file = project_dir
+			.path()
+			.join(".claude/skills/route-skill/SKILL.md");
+		let persisted =
+			std::fs::read_to_string(&skill_file).expect("persisted skill");
+		assert!(persisted.contains("route-skill"));
+		assert!(persisted.contains("updated"));
+		assert!(persisted.contains("# Updated"));
+
+		let response = delete_json(&client, &item_uri);
+		assert_eq!(response.status(), Status::NoContent);
+		assert!(!skill_file.exists(), "deleted skill file should be removed");
+
+		let response = get_json(&client, &collection_uri);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body.as_array().expect("skill list").len(), 0);
+	}
+
+	#[test]
+	fn route_mcp_create_update_delete_persists_project_config() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let client = test_client(app_data_dir.path());
+		let query = project_query(project_dir.path());
+		let collection_uri = format!("/api/v1/agents/claude/mcps?{query}");
+		let item_uri = format!("/api/v1/agents/claude/mcps/route-mcp?{query}");
+
+		let response = post_json(
+			&client,
+			&collection_uri,
+			json!({
+				"name": "route-mcp",
+				"transport": {
+					"type": "stdio",
+					"command": "node",
+					"args": ["server.js"],
+				},
+				"timeout": null,
+			}),
+		);
+		assert_eq!(response.status(), Status::Created);
+		let body = response_json(response);
+		assert_eq!(body["name"], "route-mcp");
+		assert_eq!(body["transport"]["command"], "node");
+
+		let response = get_json(&client, &item_uri);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["transport"]["args"], json!(["server.js"]));
+
+		let response = put_json(
+			&client,
+			&item_uri,
+			json!({
+				"transport": {
+					"type": "stdio",
+					"command": "node",
+					"args": ["updated.js"],
+				},
+			}),
+		);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["transport"]["args"], json!(["updated.js"]));
+
+		let config_path = project_dir.path().join(".mcp.json");
+		assert!(config_path.exists(), "mcp config should be persisted");
+		let persisted =
+			std::fs::read_to_string(&config_path).expect("mcp config");
+		assert!(persisted.contains("route-mcp"));
+		assert!(persisted.contains("updated.js"));
+
+		let response = delete_json(&client, &item_uri);
+		assert_eq!(response.status(), Status::NoContent);
+		if config_path.exists() {
+			let persisted =
+				std::fs::read_to_string(config_path).expect("mcp config");
+			assert!(!persisted.contains("route-mcp"));
+		}
+	}
+
+	#[test]
+	fn route_sub_agent_create_update_delete_persists_project_file() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let client = test_client(app_data_dir.path());
+		let query = project_query(project_dir.path());
+		let collection_uri =
+			format!("/api/v1/agents/claude/sub-agents?{query}");
+		let item_uri =
+			format!("/api/v1/agents/claude/sub-agents/route-agent?{query}");
+
+		let response = post_json(
+			&client,
+			&collection_uri,
+			json!({
+				"name": "route-agent",
+				"description": "created",
+				"instruction": "Create useful output.",
+			}),
+		);
+		assert_eq!(response.status(), Status::Created);
+		let body = response_json(response);
+		assert_eq!(body["name"], "route-agent");
+
+		let response = get_json(&client, &item_uri);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["description"], "created");
+
+		let response = put_json(
+			&client,
+			&item_uri,
+			json!({
+				"description": "updated",
+				"instruction": "Use updated instructions.",
+			}),
+		);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["instruction"], "Use updated instructions.");
+
+		let sub_agent_file =
+			project_dir.path().join(".claude/agents/route-agent.md");
+		let persisted = std::fs::read_to_string(&sub_agent_file)
+			.expect("persisted sub-agent");
+		assert!(persisted.contains("updated"));
+		assert!(persisted.contains("Use updated instructions."));
+
+		let response = delete_json(&client, &item_uri);
+		assert_eq!(response.status(), Status::NoContent);
+		assert!(
+			!sub_agent_file.exists(),
+			"deleted sub-agent file should be removed"
+		);
+
+		let response = get_json(&client, &collection_uri);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body.as_array().expect("sub-agent list").len(), 0);
+	}
+
+	#[test]
+	fn route_invalid_scope_returns_bad_request_json() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+		let response = client
+			.get("/api/v1/agents/claude/skills?scope=sideways")
+			.dispatch();
+
+		assert_json_error(response, Status::BadRequest, "INVALID_PARAM");
+		let response = client
+			.get("/api/v1/agents/claude/skills?scope=sideways")
+			.dispatch();
+		let body = response_json(response);
+		let error = body["error"].as_str().expect("error message");
+		assert!(error.contains("global"));
+		assert!(error.contains("project"));
+		assert!(error.contains("all"));
 	}
 }

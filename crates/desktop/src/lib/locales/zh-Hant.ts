@@ -193,6 +193,13 @@ export default {
 	codexProfileUpdateError: "切換 Codex Profile 失敗",
 	codexProfileProviderUpdated: "Codex Profile Provider 已更新",
 	codexProfileProviderUpdateError: "更新 Codex Profile Provider 失敗",
+	codexModelSettings: "模型設定",
+	providerModelSettings: "{{name}} 模型設定",
+	codexModel: "模型",
+	codexPrimaryModel: "主模型",
+	codexPrimaryModelHelp:
+		"這是該 Codex Provider 的預設模型。Provider 的完整模型列表仍會寫入 Codex 的 model catalog，所以之後也可以在 Codex CLI 裡選擇這些模型。",
+	codexProviderNeedsModels: "請先給這個推理 Provider 新增至少一個模型。",
 	syncCodexProvider: "更新 Codex Provider",
 	syncCodexProviderFromInferenceProvider: "從 {{name}} 更新 Provider 配置",
 	clearCodexProvider: "清除 Codex Provider 選擇",
@@ -205,6 +212,19 @@ export default {
 	createClaudeProvider: "新增 Claude Code Provider",
 	noInferenceProvidersForClaude:
 		"請先建立一個 Anthropic 推理 Provider，然後在這裡選擇。",
+	claudePrimaryModel: "主模型",
+	claudeHaikuModel: "Haiku 模型",
+	claudeHaikuModelHelp:
+		"Claude Code 請求 Haiku 檔位模型時使用的選填覆蓋。選擇「使用主模型」則繼承主模型。",
+	claudeSonnetModel: "Sonnet 模型",
+	claudeSonnetModelHelp:
+		"Claude Code 請求 Sonnet 檔位模型時使用的選填覆蓋。選擇「使用主模型」則繼承主模型。",
+	claudeOpusModel: "Opus 模型",
+	claudeOpusModelHelp:
+		"Claude Code 請求 Opus 檔位模型時使用的選填覆蓋。選擇「使用主模型」則繼承主模型。",
+	claudeModelSettings: "模型設定",
+	claudeModelUsePrimary: "使用主模型",
+	claudeProviderNeedsModels: "請先給這個推理 Provider 新增至少一個模型。",
 	syncClaudeProvider: "更新 Claude Code Provider",
 	syncClaudeProviderFromInferenceProvider: "從 {{name}} 更新配置",
 	claudeProviderUpdated: "Claude Code 配置已更新",
@@ -721,6 +741,11 @@ export default {
 	deepLinkUnsupportedType: "此深層連結類型目前不支援。",
 	deepLinkInvalidSkill: "此技能連結缺少必要欄位。",
 	deepLinkInvalidMcp: "此 MCP 連結載荷無效。",
+	executableMcpWarningTitle: "此 MCP 可以執行命令",
+	executableMcpWarningDescription:
+		"Stdio MCP 伺服器是代理稍後可能執行的可執行命令。只有在你信任來源，並已檢視下方所有命令、參數和環境變數後才安裝。",
+	confirmExecutableMcp:
+		"我了解此匯入會持久保存一個可執行命令，供代理稍後執行。",
 
 	// skills.sh
 	searchMarketSkills: "在 skills.sh 搜尋技能...",

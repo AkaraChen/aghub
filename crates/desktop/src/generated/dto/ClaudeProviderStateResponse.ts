@@ -4,4 +4,8 @@ import type { AgentProviderResponse } from "./AgentProviderResponse";
 export type ClaudeProviderStateResponse = {
 	providers: Array<AgentProviderResponse>;
 	active_provider_id: string;
+	active_model: string | null;
+	active_haiku_model: string | null;
+	active_sonnet_model: string | null;
+	active_opus_model: string | null;
 };

@@ -1,9 +1,11 @@
 import {
 	ArrowPathIcon,
 	CheckCircleIcon,
+	Cog6ToothIcon,
 	FolderOpenIcon,
 	PlayIcon,
 	PlusIcon,
+	QuestionMarkCircleIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import { homeDir, join } from "@tauri-apps/api/path";
@@ -22,7 +24,7 @@ import {
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type {
@@ -44,6 +46,56 @@ import {
 import { selectValidProviderId } from "./provider-selection";
 import { ProviderActiveBadge, ProviderRowShell } from "./provider-row";
 
+interface CodexModelOption {
+	id: string;
+	name?: string | null;
+}
+
+function codexModelOptionsWithSelected(
+	models: CodexModelOption[],
+	selectedModel?: string | null,
+) {
+	if (!selectedModel || models.some((model) => model.id === selectedModel)) {
+		return models;
+	}
+	return [{ id: selectedModel, name: selectedModel }, ...models];
+}
+
+function selectCodexModel(
+	modelId: string | null | undefined,
+	models: CodexModelOption[],
+) {
+	return modelId && models.some((model) => model.id === modelId)
+		? modelId
+		: (models[0]?.id ?? "");
+}
+
+function CodexPrimaryModelLabel() {
+	const { t } = useTranslation();
+
+	return (
+		<Label>
+			<span className="inline-flex min-w-0 items-center gap-1">
+				<span className="truncate">{t("codexPrimaryModel")}</span>
+				<Tooltip delay={0}>
+					<Tooltip.Trigger>
+						<span
+							tabIndex={0}
+							aria-label={t("codexPrimaryModelHelp")}
+							className="inline-flex size-4 shrink-0 items-center justify-center text-muted outline-none transition-colors hover:text-foreground focus-visible:text-foreground"
+						>
+							<QuestionMarkCircleIcon className="size-4" />
+						</span>
+					</Tooltip.Trigger>
+					<Tooltip.Content className="max-w-72">
+						{t("codexPrimaryModelHelp")}
+					</Tooltip.Content>
+				</Tooltip>
+			</span>
+		</Label>
+	);
+}
+
 function CodexCreateProviderDialog({
 	isOpen,
 	inventoryProviders,
@@ -59,6 +111,7 @@ function CodexCreateProviderDialog({
 	const api = useApi();
 	const queryClient = useQueryClient();
 	const [selectedProviderId, setSelectedProviderId] = useState("");
+	const [selectedModel, setSelectedModel] = useState("");
 
 	const responseProviders = useMemo(
 		() =>
@@ -73,6 +126,24 @@ function CodexCreateProviderDialog({
 		responseProviders,
 		defaultProviderId,
 	);
+	const selectedProvider = responseProviders.find(
+		(provider) => provider.id === effectiveSelectedProviderId,
+	);
+	const modelOptions = useMemo(
+		() =>
+			selectedProvider?.models.map((model) => ({
+				id: model,
+				name: model,
+			})) ?? [],
+		[selectedProvider],
+	);
+	const effectiveModel = selectCodexModel(selectedModel, modelOptions);
+
+	const handleClose = () => {
+		setSelectedProviderId("");
+		setSelectedModel("");
+		onClose();
+	};
 
 	const createMutation = useMutation({
 		...createCodexProviderMutationOptions({
@@ -80,7 +151,7 @@ function CodexCreateProviderDialog({
 			queryClient,
 			onSuccess: async () => {
 				toast.success(t("codexProviderUpdated"));
-				onClose();
+				handleClose();
 			},
 		}),
 	});
@@ -91,10 +162,11 @@ function CodexCreateProviderDialog({
 
 	const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();
-		if (!effectiveSelectedProviderId) return;
+		if (!effectiveSelectedProviderId || !effectiveModel) return;
 
 		createMutation.mutate({
 			inference_provider_id: effectiveSelectedProviderId,
+			model: effectiveModel,
 		});
 	};
 
@@ -102,7 +174,7 @@ function CodexCreateProviderDialog({
 		<Modal.Backdrop
 			isOpen={isOpen}
 			onOpenChange={(open) => {
-				if (!open) onClose();
+				if (!open) handleClose();
 			}}
 		>
 			<Modal.Container>
@@ -148,12 +220,15 @@ function CodexCreateProviderDialog({
 							{!isInventoryLoading && hasResponseProviders && (
 								<Select
 									className="w-full"
+									isRequired
+									validationBehavior="aria"
 									selectedKey={
 										effectiveSelectedProviderId || undefined
 									}
 									onSelectionChange={(key) => {
 										if (!key) return;
 										setSelectedProviderId(String(key));
+										setSelectedModel("");
 									}}
 									isDisabled={isPending}
 									variant="secondary"
@@ -187,12 +262,70 @@ function CodexCreateProviderDialog({
 									</Select.Popover>
 								</Select>
 							)}
+
+							{!isInventoryLoading &&
+								hasResponseProviders &&
+								selectedProvider &&
+								modelOptions.length === 0 && (
+									<Alert status="warning">
+										<Alert.Indicator />
+										<Alert.Content>
+											<Alert.Description>
+												{t("codexProviderNeedsModels")}
+											</Alert.Description>
+										</Alert.Content>
+									</Alert>
+								)}
+
+							{!isInventoryLoading &&
+								hasResponseProviders &&
+								modelOptions.length > 0 && (
+									<Select
+										className="w-full"
+										isRequired
+										validationBehavior="aria"
+										selectedKey={
+											effectiveModel || undefined
+										}
+										isDisabled={isPending}
+										onSelectionChange={(key) => {
+											if (!key) return;
+											setSelectedModel(String(key));
+										}}
+										variant="secondary"
+									>
+										<CodexPrimaryModelLabel />
+										<Select.Trigger>
+											<Select.Value />
+											<Select.Indicator />
+										</Select.Trigger>
+										<Select.Popover>
+											<ListBox>
+												{modelOptions.map((model) => (
+													<ListBox.Item
+														key={model.id}
+														id={model.id}
+														textValue={
+															model.name ??
+															model.id
+														}
+													>
+														<Label className="truncate">
+															{model.name ??
+																model.id}
+														</Label>
+													</ListBox.Item>
+												))}
+											</ListBox>
+										</Select.Popover>
+									</Select>
+								)}
 						</Modal.Body>
 						<Modal.Footer>
 							<Button
 								type="button"
 								variant="tertiary"
-								onPress={onClose}
+								onPress={handleClose}
 								isDisabled={isPending}
 							>
 								{t("cancel")}
@@ -203,13 +336,149 @@ function CodexCreateProviderDialog({
 								isDisabled={
 									isInventoryLoading ||
 									!hasResponseProviders ||
-									!effectiveSelectedProviderId
+									!effectiveSelectedProviderId ||
+									!effectiveModel
 								}
 							>
 								{t("add")}
 							</Button>
 						</Modal.Footer>
 					</form>
+				</Modal.Dialog>
+			</Modal.Container>
+		</Modal.Backdrop>
+	);
+}
+
+function CodexModelSettingsDialog({
+	provider,
+	isOpen,
+	activeModel,
+	isActive,
+	isPending,
+	onClose,
+	onSave,
+}: {
+	provider: AgentProviderResponse | null;
+	isOpen: boolean;
+	activeModel?: string | null;
+	isActive: boolean;
+	isPending: boolean;
+	onClose: () => void;
+	onSave: (model: string) => void;
+}) {
+	const { t } = useTranslation();
+	const [selectedModel, setSelectedModel] = useState("");
+
+	const modelOptions = useMemo(() => {
+		if (!provider) return [];
+		return codexModelOptionsWithSelected(
+			provider.models,
+			isActive ? activeModel : undefined,
+		);
+	}, [activeModel, isActive, provider]);
+
+	useEffect(() => {
+		if (!provider || !isOpen) return;
+		setSelectedModel(
+			selectCodexModel(
+				isActive ? activeModel : provider.models[0]?.id,
+				modelOptions,
+			),
+		);
+	}, [activeModel, isActive, isOpen, modelOptions, provider]);
+
+	const label =
+		provider?.matched_inference_provider?.display_name ??
+		provider?.name ??
+		"";
+	const heading = label
+		? t("providerModelSettings", { name: label })
+		: t("codexModelSettings");
+	const effectiveModel = selectCodexModel(selectedModel, modelOptions);
+
+	return (
+		<Modal.Backdrop
+			isOpen={isOpen}
+			onOpenChange={(open) => {
+				if (!open) onClose();
+			}}
+		>
+			<Modal.Container>
+				<Modal.Dialog className="sm:max-w-[520px]">
+					<Modal.CloseTrigger />
+					<Modal.Header>
+						<Modal.Heading>
+							<span className="truncate">{heading}</span>
+						</Modal.Heading>
+					</Modal.Header>
+					<Modal.Body className="grid gap-4 p-4">
+						{modelOptions.length === 0 ? (
+							<Alert status="warning">
+								<Alert.Indicator />
+								<Alert.Content>
+									<Alert.Description>
+										{t("codexProviderNeedsModels")}
+									</Alert.Description>
+								</Alert.Content>
+							</Alert>
+						) : (
+							<Select
+								className="w-full"
+								isRequired
+								validationBehavior="aria"
+								selectedKey={effectiveModel || undefined}
+								isDisabled={isPending}
+								onSelectionChange={(key) => {
+									if (!key) return;
+									setSelectedModel(String(key));
+								}}
+								variant="secondary"
+							>
+								<CodexPrimaryModelLabel />
+								<Select.Trigger>
+									<Select.Value />
+									<Select.Indicator />
+								</Select.Trigger>
+								<Select.Popover>
+									<ListBox>
+										{modelOptions.map((model) => (
+											<ListBox.Item
+												key={model.id}
+												id={model.id}
+												textValue={
+													model.name ?? model.id
+												}
+											>
+												<Label className="truncate">
+													{model.name ?? model.id}
+												</Label>
+											</ListBox.Item>
+										))}
+									</ListBox>
+								</Select.Popover>
+							</Select>
+						)}
+					</Modal.Body>
+					<Modal.Footer>
+						<Button
+							type="button"
+							variant="tertiary"
+							isDisabled={isPending}
+							onPress={onClose}
+						>
+							{t("cancel")}
+						</Button>
+						<Button
+							isPending={isPending}
+							isDisabled={
+								!effectiveModel || modelOptions.length === 0
+							}
+							onPress={() => onSave(effectiveModel)}
+						>
+							{t("save")}
+						</Button>
+					</Modal.Footer>
 				</Modal.Dialog>
 			</Modal.Container>
 		</Modal.Backdrop>
@@ -274,21 +543,25 @@ function CodexOfficialRow({
 function CodexProviderRow({
 	provider,
 	isActive,
+	activeModel,
 	isSyncing,
 	isSelecting,
 	isDeleting,
 	canSelect,
 	onSelect,
+	onEditModels,
 	onSync,
 	onDelete,
 }: {
 	provider: AgentProviderResponse;
 	isActive: boolean;
+	activeModel?: string | null;
 	isSyncing: boolean;
 	isSelecting: boolean;
 	isDeleting: boolean;
 	canSelect: boolean;
-	onSelect: () => void;
+	onSelect: (model?: string) => void;
+	onEditModels: () => void;
 	onSync: () => void;
 	onDelete: () => void;
 }) {
@@ -296,6 +569,16 @@ function CodexProviderRow({
 	const matchedProvider = provider.matched_inference_provider;
 	const label = matchedProvider?.display_name ?? provider.name;
 	const isExternal = provider.source === "external";
+	const modelOptions = codexModelOptionsWithSelected(
+		provider.models,
+		isActive ? activeModel : undefined,
+	);
+	const modelIds = new Set(modelOptions.map((model) => model.id));
+	const selectedModel = selectCodexModel(
+		isActive ? activeModel : provider.models[0]?.id,
+		modelOptions,
+	);
+	const isBusy = isSelecting || isSyncing || isDeleting;
 
 	return (
 		<ProviderRowShell
@@ -319,6 +602,25 @@ function CodexProviderRow({
 			}
 			actions={
 				<>
+					{modelOptions.length > 0 && (
+						<Tooltip delay={0}>
+							<Tooltip.Trigger>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									aria-label={t("codexModelSettings")}
+									isDisabled={!canSelect || isBusy}
+									onPress={onEditModels}
+								>
+									<Cog6ToothIcon className="size-4" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>
+								{t("codexModelSettings")}
+							</Tooltip.Content>
+						</Tooltip>
+					)}
 					{matchedProvider && !isExternal && (
 						<Tooltip delay={0}>
 							<Tooltip.Trigger>
@@ -372,13 +674,22 @@ function CodexProviderRow({
 								variant="ghost"
 								size="sm"
 								isPending={isSelecting}
-								isDisabled={isActive || !canSelect}
+								isDisabled={
+									isActive || !canSelect || !selectedModel
+								}
 								aria-label={
 									isActive
 										? t("codexProviderAlreadyActive")
 										: t("enable")
 								}
-								onPress={onSelect}
+								onPress={() =>
+									onSelect(
+										selectedModel &&
+											modelIds.has(selectedModel)
+											? selectedModel
+											: undefined,
+									)
+								}
 							>
 								<PlayIcon className="size-4" />
 							</Button>
@@ -393,6 +704,7 @@ function CodexProviderRow({
 					</Tooltip>
 				</>
 			}
+			actionsClassName="flex-wrap gap-2"
 		/>
 	);
 }
@@ -404,6 +716,8 @@ export function CodexInferenceProviderPanel(_: {
 	const api = useApi();
 	const queryClient = useQueryClient();
 	const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+	const [modelSettingsTarget, setModelSettingsTarget] =
+		useState<AgentProviderResponse | null>(null);
 	const [deleteTarget, setDeleteTarget] =
 		useState<AgentProviderResponse | null>(null);
 
@@ -428,6 +742,9 @@ export function CodexInferenceProviderPanel(_: {
 	const customProviders = (codexState?.providers ?? []).filter(
 		(provider) => provider.id !== "openai",
 	);
+	const isModelSettingsActive = modelSettingsTarget
+		? activeProviderId === modelSettingsTarget.id
+		: false;
 
 	const handleShowFolder = async () => {
 		try {
@@ -606,6 +923,7 @@ export function CodexInferenceProviderPanel(_: {
 											isActive={
 												activeProviderId === provider.id
 											}
+											activeModel={activeProfile?.model}
 											isSyncing={
 												syncMutation.isPending &&
 												syncMutation.variables ===
@@ -622,16 +940,22 @@ export function CodexInferenceProviderPanel(_: {
 												deleteTarget?.id === provider.id
 											}
 											canSelect={Boolean(activeProfile)}
-											onSelect={() => {
+											onSelect={(model) => {
 												if (!activeProfile) return;
 												selectProviderMutation.mutate({
 													profileId: activeProfile.id,
 													body: {
 														provider_id:
 															provider.id,
+														...(model
+															? { model }
+															: {}),
 													},
 												});
 											}}
+											onEditModels={() =>
+												setModelSettingsTarget(provider)
+											}
 											onSync={() =>
 												syncMutation.mutate(provider.id)
 											}
@@ -652,6 +976,34 @@ export function CodexInferenceProviderPanel(_: {
 				inventoryProviders={inventoryProviders}
 				isInventoryLoading={isInventoryLoading}
 				onClose={() => setIsAddDialogOpen(false)}
+			/>
+
+			<CodexModelSettingsDialog
+				provider={modelSettingsTarget}
+				isOpen={Boolean(modelSettingsTarget)}
+				activeModel={activeProfile?.model}
+				isActive={isModelSettingsActive}
+				isPending={
+					selectProviderMutation.isPending &&
+					selectProviderMutation.variables?.body.provider_id ===
+						modelSettingsTarget?.id
+				}
+				onClose={() => setModelSettingsTarget(null)}
+				onSave={(model) => {
+					if (!activeProfile || !modelSettingsTarget) return;
+					selectProviderMutation.mutate(
+						{
+							profileId: activeProfile.id,
+							body: {
+								provider_id: modelSettingsTarget.id,
+								model,
+							},
+						},
+						{
+							onSuccess: () => setModelSettingsTarget(null),
+						},
+					);
+				}}
 			/>
 
 			<AlertDialog.Backdrop

@@ -39,6 +39,38 @@ function transportLabel(transport: TransportDto): string {
 	return transport.type.toUpperCase();
 }
 
+function hasMapEntries(value: Record<string, string> | null): boolean {
+	return Boolean(value && Object.keys(value).length > 0);
+}
+
+function formatReviewValue(value: unknown): string {
+	if (Array.isArray(value)) {
+		return value.length > 0 ? JSON.stringify(value, null, 2) : "[]";
+	}
+
+	if (value && typeof value === "object") {
+		return JSON.stringify(value, null, 2);
+	}
+
+	return String(value);
+}
+
+interface TransportReviewFieldProps {
+	label: string;
+	value: string;
+}
+
+function TransportReviewField({ label, value }: TransportReviewFieldProps) {
+	return (
+		<div className="space-y-1">
+			<p className="text-muted">{label}</p>
+			<pre className="max-h-28 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-surface-secondary px-3 py-2 font-mono text-xs text-foreground">
+				{value}
+			</pre>
+		</div>
+	);
+}
+
 export function DeepLinkImportModal({
 	intent,
 	onComplete,
@@ -61,6 +93,7 @@ export function DeepLinkImportModal({
 	const [selectedAgents, setSelectedAgents] = useState<Set<string>>(
 		() => new Set(),
 	);
+	const [hasExecutableConsent, setHasExecutableConsent] = useState(false);
 
 	const compatibleAgents = useMemo(() => {
 		if (!intent) {
@@ -190,6 +223,7 @@ export function DeepLinkImportModal({
 			return;
 		}
 		setSelectedAgents(new Set());
+		setHasExecutableConsent(false);
 		installMutation.reset();
 		resetInstallTarget();
 		onComplete();
@@ -200,6 +234,7 @@ export function DeepLinkImportModal({
 			handleClose();
 		} else if (isOpen && intent) {
 			setSelectedAgents(defaultSelectedAgents);
+			setHasExecutableConsent(false);
 			resetInstallTarget();
 		}
 	};
@@ -208,6 +243,9 @@ export function DeepLinkImportModal({
 		installMutation.data ?? installMutation.context?.pendingResults ?? [];
 	const isInstalling = installMutation.isPending;
 	const error = installMutation.error?.message ?? null;
+	const requiresExecutableConsent =
+		intent?.kind === "mcp-config-install" &&
+		intent.transport.type === "stdio";
 
 	return (
 		<Modal.Backdrop
@@ -253,38 +291,143 @@ export function DeepLinkImportModal({
 						)}
 
 						{intent?.kind === "mcp-config-install" && (
-							<Card>
-								<Card.Header>
-									<div>
-										<p className="text-sm text-muted">
-											{t("mcp")}
-										</p>
-										<h3 className="text-base font-semibold">
-											{intent.name}
-										</h3>
-									</div>
-								</Card.Header>
-								<Card.Content className="space-y-2 text-sm">
-									<div className="flex items-center justify-between gap-3">
-										<span className="text-muted">
-											{t("type")}
-										</span>
-										<span>
-											{transportLabel(intent.transport)}
-										</span>
-									</div>
-									<div className="space-y-1">
-										<p className="text-muted">
-											{t("details")}
-										</p>
-										<p className="break-all rounded-lg bg-surface-secondary px-3 py-2 text-foreground">
-											{formatTransportSummary(
-												intent.transport,
+							<div className="space-y-3">
+								{requiresExecutableConsent && (
+									<Alert status="warning">
+										<Alert.Indicator />
+										<Alert.Content>
+											<Alert.Title>
+												{t("executableMcpWarningTitle")}
+											</Alert.Title>
+											<Alert.Description>
+												{t(
+													"executableMcpWarningDescription",
+												)}
+											</Alert.Description>
+										</Alert.Content>
+									</Alert>
+								)}
+								<Card>
+									<Card.Header>
+										<div>
+											<p className="text-sm text-muted">
+												{t("mcp")}
+											</p>
+											<h3 className="break-all text-base font-semibold">
+												{intent.name}
+											</h3>
+										</div>
+									</Card.Header>
+									<Card.Content className="space-y-3 text-sm">
+										<div className="flex items-center justify-between gap-3">
+											<span className="text-muted">
+												{t("type")}
+											</span>
+											<span>
+												{transportLabel(
+													intent.transport,
+												)}
+											</span>
+										</div>
+										<div className="space-y-1">
+											<p className="text-muted">
+												{t("details")}
+											</p>
+											<p className="break-all rounded-lg bg-surface-secondary px-3 py-2 text-foreground">
+												{formatTransportSummary(
+													intent.transport,
+												)}
+											</p>
+										</div>
+										<div className="space-y-2">
+											{intent.transport.type ===
+											"stdio" ? (
+												<>
+													<TransportReviewField
+														label={t("command")}
+														value={
+															intent.transport
+																.command
+														}
+													/>
+													<TransportReviewField
+														label={t("args")}
+														value={formatReviewValue(
+															intent.transport
+																.args,
+														)}
+													/>
+													<TransportReviewField
+														label={t("env")}
+														value={
+															hasMapEntries(
+																intent.transport
+																	.env,
+															)
+																? formatReviewValue(
+																		intent
+																			.transport
+																			.env,
+																	)
+																: t("noEnvVars")
+														}
+													/>
+												</>
+											) : (
+												<>
+													<TransportReviewField
+														label={t("url")}
+														value={
+															intent.transport.url
+														}
+													/>
+													<TransportReviewField
+														label={t("headers")}
+														value={
+															hasMapEntries(
+																intent.transport
+																	.headers,
+															)
+																? formatReviewValue(
+																		intent
+																			.transport
+																			.headers,
+																	)
+																: t("noHeaders")
+														}
+													/>
+												</>
 											)}
-										</p>
-									</div>
-								</Card.Content>
-							</Card>
+											{intent.timeout !== undefined && (
+												<TransportReviewField
+													label={t("timeout")}
+													value={t("timeoutSeconds", {
+														seconds: intent.timeout,
+													})}
+												/>
+											)}
+										</div>
+									</Card.Content>
+								</Card>
+								{requiresExecutableConsent &&
+									results.length === 0 && (
+										<label className="flex gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
+											<input
+												type="checkbox"
+												checked={hasExecutableConsent}
+												onChange={(event) =>
+													setHasExecutableConsent(
+														event.currentTarget
+															.checked,
+													)
+												}
+											/>
+											<span>
+												{t("confirmExecutableMcp")}
+											</span>
+										</label>
+									)}
+							</div>
 						)}
 
 						{results.length === 0 && (
@@ -350,6 +493,8 @@ export function DeepLinkImportModal({
 									isDisabled={
 										selectedAgents.size === 0 ||
 										isInstalling ||
+										(requiresExecutableConsent &&
+											!hasExecutableConsent) ||
 										(installToProject && !selectedProject)
 									}
 								>

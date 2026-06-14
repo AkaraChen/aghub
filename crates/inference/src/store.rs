@@ -637,6 +637,27 @@ pub struct AgentProviderBindingRow {
 	pub agent_id: String,
 	pub inference_provider_id: String,
 	pub model: Option<String>,
+	pub haiku_model: Option<String>,
+	pub sonnet_model: Option<String>,
+	pub opus_model: Option<String>,
+}
+
+/// Model routing values stored on an agent-provider binding.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AgentProviderBindingModels {
+	pub model: Option<String>,
+	pub haiku_model: Option<String>,
+	pub sonnet_model: Option<String>,
+	pub opus_model: Option<String>,
+}
+
+/// Partial model routing update for an agent-provider binding.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct AgentProviderBindingModelUpdate {
+	pub model: Option<Option<String>>,
+	pub haiku_model: Option<Option<String>>,
+	pub sonnet_model: Option<Option<String>>,
+	pub opus_model: Option<Option<String>>,
 }
 
 impl<C: CredentialStore> InferenceProviderStore<C> {
@@ -646,7 +667,8 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 		binding_id: &str,
 	) -> Result<AgentProviderBindingRow> {
 		let row = sqlx::query(
-			"SELECT id, agent_id, inference_provider_id, model \
+			"SELECT id, agent_id, inference_provider_id, model, \
+			 haiku_model, sonnet_model, opus_model \
 			 FROM agent_provider_bindings \
 			 WHERE agent_id = ? AND id = ?",
 		)
@@ -661,6 +683,9 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 				agent_id: row.try_get("agent_id")?,
 				inference_provider_id: row.try_get("inference_provider_id")?,
 				model: row.try_get("model")?,
+				haiku_model: row.try_get("haiku_model")?,
+				sonnet_model: row.try_get("sonnet_model")?,
+				opus_model: row.try_get("opus_model")?,
 			}),
 			None => {
 				Err(InferenceProviderError::NotFound(binding_id.to_string()))
@@ -676,7 +701,8 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 		self.block_on(async {
 			let mut conn = self.open_db().await?;
 			let rows = sqlx::query(
-				"SELECT id, agent_id, inference_provider_id, model \
+				"SELECT id, agent_id, inference_provider_id, model, \
+				 haiku_model, sonnet_model, opus_model \
 				 FROM agent_provider_bindings \
 				 WHERE agent_id = ? \
 				 ORDER BY created_at",
@@ -693,6 +719,9 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 						inference_provider_id: row
 							.try_get("inference_provider_id")?,
 						model: row.try_get("model")?,
+						haiku_model: row.try_get("haiku_model")?,
+						sonnet_model: row.try_get("sonnet_model")?,
+						opus_model: row.try_get("opus_model")?,
 					})
 				})
 				.collect::<Result<Vec<_>>>()
@@ -718,6 +747,23 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 		inference_provider_id: &str,
 		model: Option<&str>,
 	) -> Result<AgentProviderBindingRow> {
+		self.create_agent_binding_with_models(
+			agent_id,
+			inference_provider_id,
+			AgentProviderBindingModels {
+				model: model.map(ToString::to_string),
+				..Default::default()
+			},
+		)
+	}
+
+	/// Create a binding with model routing metadata.
+	pub fn create_agent_binding_with_models(
+		&self,
+		agent_id: &str,
+		inference_provider_id: &str,
+		models: AgentProviderBindingModels,
+	) -> Result<AgentProviderBindingRow> {
 		self.block_on(async {
 			let mut conn = self.open_db().await?;
 
@@ -729,18 +775,25 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 				id: uuid::Uuid::new_v4().to_string(),
 				agent_id: agent_id.to_string(),
 				inference_provider_id: inference_provider_id.to_string(),
-				model: model.map(ToString::to_string),
+				model: models.model,
+				haiku_model: models.haiku_model,
+				sonnet_model: models.sonnet_model,
+				opus_model: models.opus_model,
 			};
 
 			sqlx::query(
 				"INSERT INTO agent_provider_bindings \
-				 (id, agent_id, inference_provider_id, model) \
-				 VALUES (?, ?, ?, ?)",
+				 (id, agent_id, inference_provider_id, model, \
+				  haiku_model, sonnet_model, opus_model) \
+				 VALUES (?, ?, ?, ?, ?, ?, ?)",
 			)
 			.bind(&binding.id)
 			.bind(&binding.agent_id)
 			.bind(&binding.inference_provider_id)
 			.bind(&binding.model)
+			.bind(&binding.haiku_model)
+			.bind(&binding.sonnet_model)
+			.bind(&binding.opus_model)
 			.execute(&mut conn)
 			.await?;
 
@@ -756,6 +809,25 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 		inference_provider_id: &str,
 		model: Option<&str>,
 	) -> Result<AgentProviderBindingRow> {
+		self.upsert_agent_binding_with_models(
+			agent_id,
+			binding_id,
+			inference_provider_id,
+			AgentProviderBindingModels {
+				model: model.map(ToString::to_string),
+				..Default::default()
+			},
+		)
+	}
+
+	/// Create or replace a binding with model routing metadata.
+	pub fn upsert_agent_binding_with_models(
+		&self,
+		agent_id: &str,
+		binding_id: &str,
+		inference_provider_id: &str,
+		models: AgentProviderBindingModels,
+	) -> Result<AgentProviderBindingRow> {
 		self.block_on(async {
 			let mut conn = self.open_db().await?;
 
@@ -766,22 +838,32 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 				id: binding_id.to_string(),
 				agent_id: agent_id.to_string(),
 				inference_provider_id: inference_provider_id.to_string(),
-				model: model.map(ToString::to_string),
+				model: models.model,
+				haiku_model: models.haiku_model,
+				sonnet_model: models.sonnet_model,
+				opus_model: models.opus_model,
 			};
 
 			sqlx::query(
 				"INSERT INTO agent_provider_bindings \
-				 (id, agent_id, inference_provider_id, model) \
-				 VALUES (?, ?, ?, ?) \
+				 (id, agent_id, inference_provider_id, model, \
+				  haiku_model, sonnet_model, opus_model) \
+				 VALUES (?, ?, ?, ?, ?, ?, ?) \
 				 ON CONFLICT(agent_id, id) DO UPDATE SET \
 				 inference_provider_id = excluded.inference_provider_id, \
 				 model = excluded.model, \
+				 haiku_model = excluded.haiku_model, \
+				 sonnet_model = excluded.sonnet_model, \
+				 opus_model = excluded.opus_model, \
 				 updated_at = datetime('now')",
 			)
 			.bind(&binding.id)
 			.bind(&binding.agent_id)
 			.bind(&binding.inference_provider_id)
 			.bind(&binding.model)
+			.bind(&binding.haiku_model)
+			.bind(&binding.sonnet_model)
+			.bind(&binding.opus_model)
 			.execute(&mut conn)
 			.await?;
 
@@ -796,22 +878,52 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 		binding_id: &str,
 		model: Option<Option<String>>,
 	) -> Result<AgentProviderBindingRow> {
+		self.update_agent_binding_models(
+			agent_id,
+			binding_id,
+			AgentProviderBindingModelUpdate {
+				model,
+				..Default::default()
+			},
+		)
+	}
+
+	/// Update a binding's model routing metadata.
+	pub fn update_agent_binding_models(
+		&self,
+		agent_id: &str,
+		binding_id: &str,
+		models: AgentProviderBindingModelUpdate,
+	) -> Result<AgentProviderBindingRow> {
 		self.block_on(async {
 			let mut conn = self.open_db().await?;
 			let mut binding =
 				Self::fetch_agent_binding(&mut conn, agent_id, binding_id)
 					.await?;
 
-			if let Some(model) = model {
+			if let Some(model) = models.model {
 				binding.model = model;
+			}
+			if let Some(model) = models.haiku_model {
+				binding.haiku_model = model;
+			}
+			if let Some(model) = models.sonnet_model {
+				binding.sonnet_model = model;
+			}
+			if let Some(model) = models.opus_model {
+				binding.opus_model = model;
 			}
 
 			sqlx::query(
 				"UPDATE agent_provider_bindings \
-				 SET model = ? \
+				 SET model = ?, haiku_model = ?, sonnet_model = ?, \
+				     opus_model = ? \
 				 WHERE agent_id = ? AND id = ?",
 			)
 			.bind(&binding.model)
+			.bind(&binding.haiku_model)
+			.bind(&binding.sonnet_model)
+			.bind(&binding.opus_model)
 			.bind(agent_id)
 			.bind(binding_id)
 			.execute(&mut conn)
@@ -1056,7 +1168,7 @@ mod tests {
 					.fetch_one(&mut conn)
 					.await
 					.unwrap();
-			assert_eq!(version, 9);
+			assert_eq!(version, 10);
 
 			let trigger_count: i64 = sqlx::query_scalar(
 				"SELECT COUNT(*) FROM sqlite_master
