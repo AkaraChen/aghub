@@ -2,8 +2,10 @@ export { disableAgent, enableAgent, getDisabledAgents } from "./store/agents";
 export {
 	type AnalyticsConsent,
 	getAnalyticsConsent,
+	getAutoCheckUpdates,
 	getConsentAcked,
 	setAnalyticsConsent,
+	setAutoCheckUpdates,
 	setConsentAcked,
 	getStore,
 	initStore,

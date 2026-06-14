@@ -13,7 +13,12 @@ import { useTranslation } from "react-i18next";
 import { applyAnalyticsConsent } from "../../lib/analytics";
 import { dispatchOnboardingCommand } from "../../lib/onboarding";
 import { isWindows } from "../../lib/platform";
-import { getAnalyticsConsent, setAnalyticsConsent } from "../../lib/store";
+import {
+	getAnalyticsConsent,
+	getAutoCheckUpdates,
+	setAnalyticsConsent,
+	setAutoCheckUpdates,
+} from "../../lib/store";
 
 export default function ApplicationPanel() {
 	const { t } = useTranslation();
@@ -40,6 +45,12 @@ export default function ApplicationPanel() {
 			queryKey: ["windows-autostart"],
 			queryFn: isAutostartEnabled,
 			enabled: isWindowsOS,
+		});
+
+	const { data: autoCheckUpdates = true, isPending: isAutoCheckLoading } =
+		useQuery({
+			queryKey: ["auto-check-updates"],
+			queryFn: getAutoCheckUpdates,
 		});
 
 	const analyticsMutation = useMutation({
@@ -86,6 +97,30 @@ export default function ApplicationPanel() {
 				error instanceof Error
 					? error.message
 					: t("settingsAutostartError"),
+			);
+		},
+	});
+
+	const autoCheckUpdatesMutation = useMutation({
+		mutationFn: async (enabled: boolean) => {
+			await setAutoCheckUpdates(enabled);
+			return enabled;
+		},
+		onSuccess: (enabled) => {
+			queryClient.invalidateQueries({
+				queryKey: ["auto-check-updates"],
+			});
+			toast.success(
+				enabled
+					? t("settingsAutoCheckUpdatesEnabled")
+					: t("settingsAutoCheckUpdatesDisabled"),
+			);
+		},
+		onError: (error) => {
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: t("settingsAutoCheckUpdatesError"),
 			);
 		},
 	});
@@ -252,6 +287,34 @@ export default function ApplicationPanel() {
 								</Button>
 							)}
 						</div>
+					</div>
+
+					<div className="flex items-center justify-between gap-4">
+						<div className="space-y-0.5">
+							<span className="text-sm font-medium text-(--foreground)">
+								{t("settingsAutoCheckUpdatesHeading")}
+							</span>
+							<span className="block text-xs text-muted">
+								{t("settingsAutoCheckUpdatesDescription")}
+							</span>
+						</div>
+						<Switch
+							isSelected={autoCheckUpdates}
+							onChange={(checked) =>
+								autoCheckUpdatesMutation.mutate(checked)
+							}
+							isDisabled={
+								isAutoCheckLoading ||
+								autoCheckUpdatesMutation.isPending
+							}
+							aria-label={t(
+								"settingsAutoCheckUpdatesToggleLabel",
+							)}
+						>
+							<Switch.Control>
+								<Switch.Thumb />
+							</Switch.Control>
+						</Switch>
 					</div>
 
 					<div className="flex items-center justify-between gap-4">
