@@ -419,6 +419,7 @@ export default {
 	settingsAutoCheckUpdatesEnabled: "Automatic update checks enabled",
 	settingsAutoCheckUpdatesDisabled: "Automatic update checks disabled",
 	settingsAutoCheckUpdatesError: "Failed to update automatic update checks",
+	openSettings: "Open Settings",
 	onboardingDescription:
 		"Replay the welcome screen or either guided tour any time.",
 

@@ -402,6 +402,7 @@ export default {
 	settingsAutoCheckUpdatesEnabled: "已开启自动检查更新",
 	settingsAutoCheckUpdatesDisabled: "已关闭自动检查更新",
 	settingsAutoCheckUpdatesError: "更新自动检查更新设置失败",
+	openSettings: "打开设置",
 	onboardingDescription: "随时重新打开欢迎页或任一引导流程。",
 
 	// Onboarding — Wizard

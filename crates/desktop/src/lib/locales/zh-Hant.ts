@@ -401,6 +401,7 @@ export default {
 	settingsAutoCheckUpdatesEnabled: "已開啟自動檢查更新",
 	settingsAutoCheckUpdatesDisabled: "已關閉自動檢查更新",
 	settingsAutoCheckUpdatesError: "更新自動檢查更新設定失敗",
+	openSettings: "開啟設定",
 	onboardingDescription: "隨時重新開啟歡迎頁或任一導覽流程。",
 
 	// Onboarding — Wizard
