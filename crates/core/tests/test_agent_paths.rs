@@ -5,6 +5,44 @@
 use aghub_agents::agents::{amp, cursor, kimi, openclaw, opencode, pi};
 use std::path::{Path, PathBuf};
 
+fn write_import_skill(dir: &Path, name: &str, body: &str) {
+	std::fs::create_dir_all(dir).unwrap();
+	std::fs::write(
+		dir.join("SKILL.md"),
+		format!(
+			"---\nname: {name}\ndescription: imported skill\n---\n\n{body}\n"
+		),
+	)
+	.unwrap();
+}
+
+fn write_import_resources(dir: &Path) {
+	std::fs::create_dir_all(dir.join("scripts")).unwrap();
+	std::fs::create_dir_all(dir.join("references")).unwrap();
+	std::fs::create_dir_all(dir.join("assets")).unwrap();
+	std::fs::write(dir.join("scripts/setup.sh"), "echo setup").unwrap();
+	std::fs::write(dir.join("references/guide.md"), "# Guide").unwrap();
+	std::fs::write(dir.join("assets/logo.txt"), "logo").unwrap();
+}
+
+fn contains_entry_named_with_prefix(root: &Path, prefix: &str) -> bool {
+	let Ok(entries) = std::fs::read_dir(root) else {
+		return false;
+	};
+	for entry in entries.flatten() {
+		if entry.file_name().to_string_lossy().starts_with(prefix) {
+			return true;
+		}
+		let path = entry.path();
+		if entry.file_type().map(|t| t.is_dir()).unwrap_or(false)
+			&& contains_entry_named_with_prefix(&path, prefix)
+		{
+			return true;
+		}
+	}
+	false
+}
+
 // ─── XDG config path tests (xdg-config-paths.test.ts) ───────────────────────
 
 #[test]
@@ -302,4 +340,254 @@ fn test_delete_skill_with_slash_removes_sanitized_directory() {
 		!skill_dir.exists(),
 		"Sanitized directory should be removed on delete"
 	);
+}
+
+#[test]
+fn skill_import_directory_preserves_body_and_resources() {
+	let test =
+		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
+			.unwrap();
+	let source_dir = test.temp_dir().join("source/imported-skill");
+	write_import_skill(
+		&source_dir,
+		"imported-skill",
+		"# Real imported instructions",
+	);
+	write_import_resources(&source_dir);
+
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+	let imported = manager.add_skill_from_path(&source_dir).unwrap();
+
+	assert_eq!(imported.name, "imported-skill");
+	assert!(imported
+		.content
+		.as_deref()
+		.unwrap()
+		.contains("# Real imported instructions"));
+	let target_dir = test.skills_dir().join("imported-skill");
+	let target_content =
+		std::fs::read_to_string(target_dir.join("SKILL.md")).unwrap();
+	assert!(target_content.contains("# Real imported instructions"));
+	assert!(target_dir.join("scripts/setup.sh").exists());
+	assert!(target_dir.join("references/guide.md").exists());
+	assert!(target_dir.join("assets/logo.txt").exists());
+
+	let mut reloaded = test.create_manager();
+	reloaded.load().unwrap();
+	let loaded = reloaded.get_skill("imported-skill").unwrap();
+	assert!(loaded.source_path.as_deref().unwrap().contains("SKILL.md"));
+	assert_eq!(
+		reloaded
+			.config()
+			.unwrap()
+			.skills
+			.iter()
+			.filter(|skill| skill.name == "imported-skill")
+			.count(),
+		1
+	);
+}
+
+#[test]
+fn skill_import_lowercase_skill_md_normalizes_target_source_path() {
+	let test =
+		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
+			.unwrap();
+	let source_dir = test.temp_dir().join("source/lower-skill");
+	std::fs::create_dir_all(&source_dir).unwrap();
+	std::fs::write(
+		source_dir.join("skill.md"),
+		"---\nname: lower-skill\ndescription: lower file\n---\n\nbody\n",
+	)
+	.unwrap();
+
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+	manager
+		.add_skill_from_path(&source_dir.join("skill.md"))
+		.unwrap();
+
+	let target_dir = test.skills_dir().join("lower-skill");
+	let target_names = std::fs::read_dir(&target_dir)
+		.unwrap()
+		.map(|entry| entry.unwrap().file_name().to_string_lossy().to_string())
+		.collect::<Vec<_>>();
+	assert!(target_names.iter().any(|name| name == "SKILL.md"));
+	assert!(!target_names.iter().any(|name| name == "skill.md"));
+
+	let mut reloaded = test.create_manager();
+	reloaded.load().unwrap();
+	let loaded = reloaded.get_skill("lower-skill").unwrap();
+	let source_path = PathBuf::from(loaded.source_path.as_ref().unwrap());
+	assert_eq!(source_path.file_name().unwrap(), "SKILL.md");
+}
+
+#[test]
+fn skill_import_ancestor_source_skips_destination_skills_dir() {
+	let temp = tempfile::TempDir::new().unwrap();
+	let project = temp.path().join("project");
+	write_import_skill(
+		&project,
+		"project-root-skill",
+		"# Project root instructions",
+	);
+
+	let mut manager = aghub_core::ConfigManager::new(
+		aghub_core::create_adapter(aghub_core::AgentType::Claude),
+		false,
+		Some(&project),
+	);
+	manager.init_empty_config();
+	let imported = manager.add_skill_from_path(&project).unwrap();
+
+	assert_eq!(imported.name, "project-root-skill");
+	let target_dir = project.join(".claude/skills/project-root-skill");
+	let target_content =
+		std::fs::read_to_string(target_dir.join("SKILL.md")).unwrap();
+	assert!(target_content.contains("# Project root instructions"));
+	assert!(
+		!target_dir.join(".claude/skills").exists(),
+		"Destination skills dir should not be copied into imported skill"
+	);
+	assert!(
+		!contains_entry_named_with_prefix(&target_dir, ".aghub-import-"),
+		"Staging directory should not be copied into imported skill"
+	);
+}
+
+#[cfg(unix)]
+#[test]
+fn skill_import_directory_rejects_symlinked_file() {
+	let test =
+		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
+			.unwrap();
+	let source_dir = test.temp_dir().join("source/link-skill");
+	write_import_skill(&source_dir, "link-skill", "body");
+	std::fs::create_dir_all(source_dir.join("scripts")).unwrap();
+	let secret_path = test.temp_dir().join("secret.txt");
+	std::fs::write(&secret_path, "secret").unwrap();
+	std::os::unix::fs::symlink(
+		&secret_path,
+		source_dir.join("scripts/leak.txt"),
+	)
+	.unwrap();
+
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+	let error = manager.add_skill_from_path(&source_dir).unwrap_err();
+
+	assert!(matches!(
+		error,
+		aghub_core::ConfigError::InvalidConfig(message)
+			if message.contains("symlink")
+	));
+	assert!(!test.skills_dir().join("link-skill").exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn skill_import_skill_md_rejects_symlinked_resource_dir() {
+	let test =
+		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
+			.unwrap();
+	let source_dir = test.temp_dir().join("source/resource-link-skill");
+	write_import_skill(&source_dir, "resource-link-skill", "body");
+	let outside_assets = test.temp_dir().join("outside-assets");
+	std::fs::create_dir_all(&outside_assets).unwrap();
+	std::fs::write(outside_assets.join("secret.txt"), "secret").unwrap();
+	std::os::unix::fs::symlink(&outside_assets, source_dir.join("assets"))
+		.unwrap();
+
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+	let error = manager
+		.add_skill_from_path(&source_dir.join("SKILL.md"))
+		.unwrap_err();
+
+	assert!(matches!(
+		error,
+		aghub_core::ConfigError::InvalidConfig(message)
+			if message.contains("symlink")
+	));
+	assert!(!test.skills_dir().join("resource-link-skill").exists());
+}
+
+#[test]
+fn skill_import_package_preserves_body_and_resources() {
+	let test =
+		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
+			.unwrap();
+	let source_dir = test.temp_dir().join("source/package-skill");
+	write_import_skill(
+		&source_dir,
+		"package-skill",
+		"# Packaged imported instructions",
+	);
+	write_import_resources(&source_dir);
+	let package_path = test.temp_dir().join("package-skill.skill");
+	skill::package::pack(&source_dir, &package_path).unwrap();
+
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+	manager.add_skill_from_path(&package_path).unwrap();
+
+	let target_dir = test.skills_dir().join("package-skill");
+	let target_content =
+		std::fs::read_to_string(target_dir.join("SKILL.md")).unwrap();
+	assert!(target_content.contains("# Packaged imported instructions"));
+	assert!(target_dir.join("scripts/setup.sh").exists());
+	assert!(target_dir.join("references/guide.md").exists());
+	assert!(target_dir.join("assets/logo.txt").exists());
+}
+
+#[test]
+fn skill_import_package_rejects_duplicate_same_name_roots() {
+	let test =
+		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
+			.unwrap();
+	let source_dir = test.temp_dir().join("source/duplicate-package");
+	write_import_skill(&source_dir, "duplicate-package", "# Root");
+	write_import_skill(
+		&source_dir.join("nested"),
+		"duplicate-package",
+		"# Nested",
+	);
+	let package_path = test.temp_dir().join("duplicate-package.skill");
+	skill::package::pack(&source_dir, &package_path).unwrap();
+
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+	let error = manager.add_skill_from_path(&package_path).unwrap_err();
+
+	assert!(matches!(
+		error,
+		aghub_core::ConfigError::InvalidConfig(message)
+			if message.contains("multiple roots")
+	));
+	assert!(!test.skills_dir().join("duplicate-package").exists());
+}
+
+#[test]
+fn skill_import_rejects_sanitized_target_collision() {
+	let test =
+		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
+			.unwrap();
+	let existing_dir = test.skills_dir().join("owner-repo");
+	write_import_skill(&existing_dir, "existing", "existing body");
+	let source_dir = test.temp_dir().join("source/owner-repo");
+	write_import_skill(&source_dir, "owner/repo", "new body");
+
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+	let error = manager.add_skill_from_path(&source_dir).unwrap_err();
+
+	assert!(matches!(
+		error,
+		aghub_core::ConfigError::ResourceExists { .. }
+	));
+	let target_content =
+		std::fs::read_to_string(existing_dir.join("SKILL.md")).unwrap();
+	assert!(target_content.contains("existing body"));
+	assert!(!target_content.contains("new body"));
 }

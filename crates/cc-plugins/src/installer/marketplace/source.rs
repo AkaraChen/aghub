@@ -291,6 +291,9 @@ pub(in crate::installer::marketplace) fn github_owner_repo(
 		.unwrap_or(normalized);
 	aghub_git::resolve_remote_source(&clean)
 		.ok()
+		.filter(|resolved| {
+			resolved.source_type == aghub_git::RemoteSourceType::Github
+		})
 		.and_then(|resolved| {
 			resolved
 				.source
@@ -314,5 +317,36 @@ fn marketplace_plugin_repository(plugin: &MarketplacePlugin) -> Option<String> {
 			.and_then(|url| parse_github_tree_url(url).map(|(repo, _)| repo))
 			.or_else(|| plugin.homepage.clone()),
 		MarketplaceSource::Npm { .. } => plugin.homepage.clone(),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::github_owner_repo;
+
+	#[test]
+	fn github_owner_repo_accepts_github_sources() {
+		assert_eq!(
+			github_owner_repo(
+				"https://github.com/trusted/plugin/tree/main/example",
+			),
+			Some(("trusted".to_string(), "plugin".to_string()))
+		);
+		assert_eq!(
+			github_owner_repo("git@github.com:trusted/plugin.git"),
+			Some(("trusted".to_string(), "plugin".to_string()))
+		);
+	}
+
+	#[test]
+	fn github_owner_repo_rejects_non_github_sources() {
+		assert_eq!(
+			github_owner_repo("https://evil.example/trusted/plugin"),
+			None
+		);
+		assert_eq!(
+			github_owner_repo("https://gitlab.com/trusted/plugin"),
+			None
+		);
 	}
 }

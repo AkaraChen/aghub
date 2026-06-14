@@ -6,6 +6,7 @@ use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
 
 use crate::{
+	auth::ApiAuth,
 	dto::sub_agent::{
 		CreateSubAgentRequest, SubAgentResponse, UpdateSubAgentRequest,
 	},
@@ -40,6 +41,7 @@ fn check_sub_agent_supported(
 
 #[post("/sub-agents/transfer", data = "<body>")]
 pub fn transfer_sub_agent_route(
+	_auth: ApiAuth,
 	body: Json<TransferRequest>,
 ) -> ApiResult<OperationBatchResponse> {
 	let req = body.into_inner();
@@ -56,6 +58,7 @@ pub fn transfer_sub_agent_route(
 
 #[post("/sub-agents/reconcile", data = "<body>")]
 pub fn reconcile_sub_agent_route(
+	_auth: ApiAuth,
 	body: Json<ReconcileRequest>,
 ) -> ApiResult<OperationBatchResponse> {
 	let req = body.into_inner();
@@ -98,6 +101,7 @@ pub fn reconcile_sub_agent_route(
 
 #[get("/agents/<agent>/sub-agents?<scope..>")]
 pub fn list_sub_agents(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	scope: ScopeParams,
 ) -> ApiResult<Vec<SubAgentResponse>> {
@@ -124,6 +128,7 @@ pub fn list_sub_agents(
 
 #[get("/agents/all/sub-agents?<scope..>")]
 pub fn list_all_agents_sub_agents(
+	_auth: ApiAuth,
 	scope: ScopeParams,
 ) -> ApiResult<Vec<SubAgentResponse>> {
 	let resolved = scope.resolve()?;
@@ -143,6 +148,7 @@ pub fn list_all_agents_sub_agents(
 
 #[get("/agents/<agent>/sub-agents/<name>?<scope..>")]
 pub fn get_sub_agent(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	name: String,
 	scope: ScopeParams,
@@ -182,6 +188,7 @@ pub fn get_sub_agent(
 
 #[post("/agents/<agent>/sub-agents?<scope..>", data = "<body>")]
 pub fn create_sub_agent(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	scope: ScopeParams,
 	body: Json<CreateSubAgentRequest>,
@@ -201,6 +208,7 @@ pub fn create_sub_agent(
 
 #[put("/agents/<agent>/sub-agents/<name>?<scope..>", data = "<body>")]
 pub fn update_sub_agent(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	name: String,
 	scope: ScopeParams,
@@ -239,6 +247,7 @@ pub fn update_sub_agent(
 
 #[delete("/agents/<agent>/sub-agents/<name>?<scope..>")]
 pub fn delete_sub_agent(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	name: String,
 	scope: ScopeParams,

@@ -13,4 +13,6 @@ export type GitSyncRequest = {
 	 * Tilde-prefixed `source_path` values of every installation to replace.
 	 */
 	source_paths: Array<string>;
+	scope: string | null;
+	project_root: string | null;
 };

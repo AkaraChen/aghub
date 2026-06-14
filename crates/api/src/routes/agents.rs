@@ -2,6 +2,7 @@ use aghub_core::{availability, registry};
 use rocket::serde::json::Json;
 use std::path::Path;
 
+use crate::auth::ApiAuth;
 use crate::dto::agents::{
 	AgentAvailabilityDto, AgentInfo, CapabilitiesDto, McpCapabilitiesDto,
 	ScopeSupportDto, SkillCapabilitiesDto, SkillsPathsDto,
@@ -22,7 +23,7 @@ fn format_path(path: std::path::PathBuf) -> String {
 }
 
 #[get("/agents")]
-pub fn list_agents() -> Json<Vec<AgentInfo>> {
+pub fn list_agents(_auth: ApiAuth) -> Json<Vec<AgentInfo>> {
 	let agents = registry::iter_all()
 		.map(|d| {
 			let project_root = Path::new("");
@@ -98,7 +99,7 @@ pub fn list_agents() -> Json<Vec<AgentInfo>> {
 }
 
 #[get("/agents/availability")]
-pub fn check_availability() -> Json<Vec<AgentAvailabilityDto>> {
+pub fn check_availability(_auth: ApiAuth) -> Json<Vec<AgentAvailabilityDto>> {
 	let availability_info = availability::check_all_agents_availability();
 
 	let dtos: Vec<AgentAvailabilityDto> = availability_info
@@ -120,7 +121,7 @@ mod tests {
 
 	#[test]
 	fn test_list_agents_includes_pi_without_mcp_capabilities() {
-		let agents = list_agents().into_inner();
+		let agents = list_agents(ApiAuth).into_inner();
 		let pi = agents
 			.into_iter()
 			.find(|agent| agent.id == "pi")

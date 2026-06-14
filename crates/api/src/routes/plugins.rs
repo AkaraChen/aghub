@@ -1,3 +1,4 @@
+use crate::auth::ApiAuth;
 use crate::dto::plugin::{
 	CCMarketplaceAddRequest, CCMarketplaceEntryResponse,
 	CCMarketplaceListResponse, CCMarketplaceMutationResponse,
@@ -16,6 +17,7 @@ use crate::dto::plugin::{
 	CCPluginValidateResponse,
 };
 use crate::error::{ApiError, ApiNoContent, ApiResult};
+use crate::extractors::TrustedLocalOrigin;
 use aghub_cc_plugins::claude::settings::InstallScope;
 use aghub_cc_plugins::claude::{ClaudePluginInfo, ClaudePluginManager};
 use aghub_cc_plugins::cli::types::{CliMarketplace, CliMarketplaceSource};
@@ -274,7 +276,7 @@ fn sorted_entries(
 // ── List / Enable / Disable ──────────────────────────────────────────────────
 
 #[get("/plugins")]
-pub async fn list_plugins() -> ApiResult<CCPluginListResponse> {
+pub async fn list_plugins(_auth: ApiAuth) -> ApiResult<CCPluginListResponse> {
 	let manager = load_plugin_manager().await?;
 	let installer = try_load_plugin_installer();
 	let mut plugins: Vec<CCPluginResponse> = manager
@@ -288,6 +290,8 @@ pub async fn list_plugins() -> ApiResult<CCPluginListResponse> {
 
 #[post("/plugins/enable?<plugin_id>&<scope>")]
 pub async fn enable_plugin(
+	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	plugin_id: &str,
 	scope: Option<&str>,
 ) -> ApiResult<CCPluginResponse> {
@@ -310,6 +314,8 @@ pub async fn enable_plugin(
 
 #[post("/plugins/disable?<plugin_id>&<scope>")]
 pub async fn disable_plugin(
+	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	plugin_id: &str,
 	scope: Option<&str>,
 ) -> ApiResult<CCPluginResponse> {
@@ -334,6 +340,8 @@ pub async fn disable_plugin(
 
 #[post("/plugins/install", data = "<body>")]
 pub async fn install_plugin(
+	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	body: Json<CCPluginInstallRequest>,
 ) -> ApiResult<CCPluginInstallResponse> {
 	let req = body.into_inner();
@@ -372,6 +380,8 @@ pub async fn install_plugin(
 
 #[post("/plugins/uninstall", data = "<body>")]
 pub async fn uninstall_plugin(
+	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	body: Json<CCPluginUninstallRequest>,
 ) -> ApiResult<CCPluginUninstallResponse> {
 	let req = body.into_inner();
@@ -399,6 +409,8 @@ pub async fn uninstall_plugin(
 
 #[post("/plugins/update", data = "<body>")]
 pub async fn update_plugin(
+	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	body: Json<CCPluginUpdateRequest>,
 ) -> ApiResult<CCPluginUpdateResponse> {
 	let req = body.into_inner();
@@ -441,6 +453,7 @@ pub async fn update_plugin(
 
 #[get("/plugins/detail?<plugin_id>")]
 pub async fn get_plugin_detail(
+	_auth: ApiAuth,
 	plugin_id: &str,
 ) -> ApiResult<CCPluginDetailResponse> {
 	let id = parse_plugin_id(plugin_id)?;
@@ -558,6 +571,7 @@ pub async fn get_plugin_detail(
 
 #[get("/plugins/config?<plugin_id>")]
 pub async fn get_plugin_config(
+	_auth: ApiAuth,
 	plugin_id: String,
 ) -> ApiResult<CCPluginConfigResponse> {
 	let id = parse_plugin_id(&plugin_id)?;
@@ -580,6 +594,8 @@ pub async fn get_plugin_config(
 
 #[post("/plugins/config", data = "<body>")]
 pub async fn update_plugin_config(
+	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	body: Json<CCPluginUpdateConfigRequest>,
 ) -> ApiResult<CCPluginConfigResponse> {
 	let req = body.into_inner();
@@ -617,6 +633,8 @@ pub async fn update_plugin_config(
 
 #[delete("/plugins/config?<plugin_id>")]
 pub async fn delete_plugin_config(
+	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	plugin_id: String,
 ) -> ApiResult<CCPluginConfigResponse> {
 	let id = parse_plugin_id(&plugin_id)?;
@@ -643,6 +661,8 @@ pub async fn delete_plugin_config(
 
 #[post("/plugins/open-folder?<plugin_id>&<scope>")]
 pub async fn open_plugin_folder(
+	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	plugin_id: &str,
 	scope: Option<&str>,
 ) -> ApiNoContent {
@@ -660,6 +680,8 @@ pub async fn open_plugin_folder(
 
 #[post("/plugins/open-skill-in-editor", data = "<body>")]
 pub async fn open_plugin_skill_in_editor(
+	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	body: Json<CCPluginOpenSkillInEditorRequest>,
 ) -> ApiNoContent {
 	let req = body.into_inner();
@@ -736,7 +758,9 @@ fn resolve_plugin_skill_path(
 // ── Marketplace ──────────────────────────────────────────────────────────────
 
 #[get("/plugins-market")]
-pub async fn list_plugin_market() -> ApiResult<Vec<CCPluginMarketResponse>> {
+pub async fn list_plugin_market(
+	_auth: ApiAuth,
+) -> ApiResult<Vec<CCPluginMarketResponse>> {
 	use aghub_cc_plugins::discovery::{DiscoveryConfig, UnifiedPluginRegistry};
 
 	let registry =
@@ -825,7 +849,9 @@ fn load_claude_cli() -> Result<ClaudeCli, ApiError> {
 }
 
 #[get("/plugins/marketplaces")]
-pub async fn list_marketplaces() -> ApiResult<CCMarketplaceListResponse> {
+pub async fn list_marketplaces(
+	_auth: ApiAuth,
+) -> ApiResult<CCMarketplaceListResponse> {
 	let cli = load_claude_cli()?;
 	let entries = cli.marketplace_list().await.map_err(|e| {
 		error!("Failed to list marketplaces: {e}");
@@ -845,6 +871,8 @@ pub async fn list_marketplaces() -> ApiResult<CCMarketplaceListResponse> {
 
 #[post("/plugins/marketplaces", data = "<body>")]
 pub async fn add_marketplace(
+	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	body: Json<CCMarketplaceAddRequest>,
 ) -> ApiResult<CCMarketplaceMutationResponse> {
 	let req = body.into_inner();
@@ -871,6 +899,8 @@ pub async fn add_marketplace(
 
 #[delete("/plugins/marketplaces/<name>")]
 pub async fn remove_marketplace(
+	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	name: &str,
 ) -> ApiResult<CCMarketplaceMutationResponse> {
 	let cli = load_claude_cli()?;
@@ -891,6 +921,8 @@ pub async fn remove_marketplace(
 
 #[post("/plugins/marketplaces/<name>/update")]
 pub async fn update_marketplace_one(
+	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	name: &str,
 ) -> ApiResult<CCMarketplaceMutationResponse> {
 	let cli = load_claude_cli()?;
@@ -927,7 +959,10 @@ pub async fn update_marketplace_one(
 }
 
 #[post("/plugins-market/update")]
-pub async fn update_marketplace() -> ApiResult<serde_json::Value> {
+pub async fn update_marketplace(
+	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
+) -> ApiResult<serde_json::Value> {
 	let installer = load_plugin_installer()?;
 	let updated = tokio::time::timeout(
 		PLUGIN_MARKET_UPDATE_TIMEOUT,
@@ -960,6 +995,8 @@ pub async fn update_marketplace() -> ApiResult<serde_json::Value> {
 
 #[post("/plugins/prune", data = "<body>")]
 pub async fn prune_plugins(
+	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	body: Json<CCPluginPruneRequest>,
 ) -> ApiResult<CCPluginPruneResponse> {
 	let req = body.into_inner();
@@ -981,6 +1018,8 @@ pub async fn prune_plugins(
 
 #[post("/plugins/validate", data = "<body>")]
 pub async fn validate_plugin(
+	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	body: Json<CCPluginValidateRequest>,
 ) -> ApiResult<CCPluginValidateResponse> {
 	let req = body.into_inner();
@@ -1003,7 +1042,7 @@ pub async fn validate_plugin(
 // ── CLI status ───────────────────────────────────────────────────────────────
 
 #[get("/plugins/cli/status")]
-pub async fn cli_status() -> Json<CCPluginCliStatusResponse> {
+pub async fn cli_status(_auth: ApiAuth) -> Json<CCPluginCliStatusResponse> {
 	let cli = match ClaudeCli::new() {
 		Ok(cli) => cli,
 		Err(e) => {
