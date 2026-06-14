@@ -44,6 +44,7 @@ export function SyncGithubSkillDialog({
 	skillPath,
 	isOpen,
 	onClose,
+	projectPath,
 }: SyncGithubSkillDialogProps) {
 	const { t } = useTranslation();
 	const api = useApi();
@@ -94,6 +95,10 @@ export function SyncGithubSkillDialog({
 	const sourcePaths = group.items
 		.map((item) => item.source_path)
 		.filter((p): p is string => Boolean(p));
+	const syncScope =
+		projectPath && group.items.some((item) => item.source === "project")
+			? "all"
+			: "global";
 
 	const scanMutation = useMutation({
 		mutationFn: (branch?: string) =>
@@ -151,6 +156,8 @@ export function SyncGithubSkillDialog({
 				session_id: sessionId,
 				skill_path: matchedSkill.path,
 				source_paths: sourcePaths,
+				scope: syncScope,
+				project_root: projectPath ?? null,
 			},
 			{
 				onError: (error) => {

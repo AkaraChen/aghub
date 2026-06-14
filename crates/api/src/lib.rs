@@ -9,6 +9,7 @@ use rocket::{
 	Data, Request, Response,
 };
 
+pub mod auth;
 pub mod dto;
 pub mod editor_detection;
 pub mod error;
@@ -24,6 +25,9 @@ pub struct ApiOptions {
 	pub app_data_dir: Option<PathBuf>,
 	/// Path to the bundled `ccusage` sidecar; `None` falls back to env/PATH.
 	pub ccusage_bin: Option<PathBuf>,
+	pub auth_token: Option<String>,
+	pub allowed_origins: Vec<String>,
+	pub allowed_origin_regexes: Vec<String>,
 }
 
 impl ApiOptions {
@@ -32,6 +36,36 @@ impl ApiOptions {
 			port,
 			app_data_dir: None,
 			ccusage_bin: None,
+			auth_token: None,
+			allowed_origins: default_allowed_origins(),
+			allowed_origin_regexes: default_allowed_origin_regexes(),
+		}
+	}
+
+	fn resolve(self) -> ResolvedApiOptions {
+		let env_token = std::env::var("AGHUB_API_TOKEN")
+			.ok()
+			.filter(|value| !value.trim().is_empty());
+		let configured_token = self
+			.auth_token
+			.filter(|value| !value.trim().is_empty())
+			.or(env_token);
+		let (auth_token, token_was_generated) =
+			if let Some(token) = configured_token {
+				(token, false)
+			} else {
+				(crate::auth::generate_auth_token(), true)
+			};
+		ResolvedApiOptions {
+			port: self.port,
+			app_data_dir: self
+				.app_data_dir
+				.unwrap_or_else(default_app_data_dir),
+			ccusage_bin: self.ccusage_bin,
+			auth_token,
+			token_was_generated,
+			allowed_origins: self.allowed_origins,
+			allowed_origin_regexes: self.allowed_origin_regexes,
 		}
 	}
 }
@@ -40,6 +74,28 @@ fn default_app_data_dir() -> PathBuf {
 	dirs::data_dir()
 		.unwrap_or_else(std::env::temp_dir)
 		.join("aghub")
+}
+
+fn default_allowed_origins() -> Vec<String> {
+	vec![
+		"http://localhost:1420".to_string(),
+		"http://tauri.localhost".to_string(),
+		"https://tauri.localhost".to_string(),
+	]
+}
+
+fn default_allowed_origin_regexes() -> Vec<String> {
+	vec![r"^tauri://localhost$".to_string()]
+}
+
+struct ResolvedApiOptions {
+	port: u16,
+	app_data_dir: PathBuf,
+	ccusage_bin: Option<PathBuf>,
+	auth_token: String,
+	token_was_generated: bool,
+	allowed_origins: Vec<String>,
+	allowed_origin_regexes: Vec<String>,
 }
 
 struct ApiLogFairing;
@@ -94,11 +150,14 @@ impl Fairing for ApiLogFairing {
 
 fn build_rocket(
 	config: rocket::Config,
-	app_data_dir: PathBuf,
-	ccusage_bin: Option<PathBuf>,
+	options: ResolvedApiOptions,
 ) -> rocket::Rocket<rocket::Build> {
+	let allowed_origins = rocket_cors::AllowedOrigins::some(
+		&options.allowed_origins,
+		&options.allowed_origin_regexes,
+	);
 	let cors = rocket_cors::CorsOptions {
-		allowed_origins: rocket_cors::AllOrSome::All,
+		allowed_origins,
 		allowed_methods: vec![
 			rocket::http::Method::Get,
 			rocket::http::Method::Post,
@@ -111,10 +170,11 @@ fn build_rocket(
 		.collect(),
 		allowed_headers: rocket_cors::AllowedHeaders::some(&[
 			"Authorization",
+			"X-AGHUB-API-Token",
 			"Accept",
 			"Content-Type",
 		]),
-		allow_credentials: true,
+		allow_credentials: false,
 		..Default::default()
 	}
 	.to_cors()
@@ -125,8 +185,15 @@ fn build_rocket(
 		.manage(crate::state::GitCloneSessions {
 			sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
 		})
-		.manage(crate::state::InferenceProviderState { app_data_dir })
-		.manage(crate::state::UsageState { ccusage_bin })
+		.manage(crate::state::InferenceProviderState {
+			app_data_dir: options.app_data_dir,
+		})
+		.manage(crate::state::UsageState {
+			ccusage_bin: options.ccusage_bin,
+		})
+		.manage(crate::auth::ApiAuthState {
+			token: options.auth_token,
+		})
 		.mount(
 			"/api/v1",
 			routes![
@@ -234,6 +301,8 @@ fn build_rocket(
 		.register(
 			"/",
 			catchers![
+				routes::catchers::unauthorized,
+				routes::catchers::forbidden,
 				routes::catchers::not_found,
 				routes::catchers::unprocessable_entity,
 				routes::catchers::internal_error,
@@ -243,16 +312,18 @@ fn build_rocket(
 }
 
 pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
-	info!("starting aghub API server on 127.0.0.1:{}", options.port);
-	let app_data_dir =
-		options.app_data_dir.unwrap_or_else(default_app_data_dir);
+	let resolved = options.resolve();
+	if resolved.token_was_generated {
+		eprintln!("AGHUB_API_TOKEN={}", resolved.auth_token);
+	}
+	info!("starting aghub API server on 127.0.0.1:{}", resolved.port);
 	let config = rocket::Config {
-		port: options.port,
+		port: resolved.port,
 		address: std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST),
 		log_level: rocket::config::LogLevel::Normal,
 		..rocket::Config::default()
 	};
-	build_rocket(config, app_data_dir, options.ccusage_bin)
+	build_rocket(config, resolved)
 		.launch()
 		.await
 		.inspect(|_rocket| {
@@ -267,7 +338,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 
 #[cfg(test)]
 mod tests {
-	use super::{build_rocket, default_app_data_dir};
+	use super::{build_rocket, default_app_data_dir, ApiOptions};
 	use rocket::http::{ContentType, Header, Status};
 	use rocket::local::blocking::{Client, LocalResponse};
 	use serde_json::{json, Value};
@@ -304,18 +375,38 @@ mod tests {
 		}
 	}
 
+	const TEST_AUTH_TOKEN: &str = "test-auth-token";
+
 	fn test_client(app_data_dir: &Path) -> Client {
+		let mut options = ApiOptions::new(0);
+		options.app_data_dir = Some(app_data_dir.to_path_buf());
+		options.auth_token = Some(TEST_AUTH_TOKEN.to_string());
 		Client::tracked(build_rocket(
 			rocket::Config::default(),
-			app_data_dir.to_path_buf(),
-			None,
+			options.resolve(),
 		))
 		.expect("client")
+	}
+
+	fn auth_header() -> Header<'static> {
+		Header::new(
+			crate::auth::AUTHORIZATION_HEADER,
+			format!("Bearer {TEST_AUTH_TOKEN}"),
+		)
 	}
 
 	fn project_query(project_root: &Path) -> String {
 		let mut serializer =
 			url::form_urlencoded::Serializer::new(String::new());
+		serializer.append_pair("scope", "project");
+		serializer.append_pair("project_root", &project_root.to_string_lossy());
+		serializer.finish()
+	}
+
+	fn skill_content_query(skill_file: &Path, project_root: &Path) -> String {
+		let mut serializer =
+			url::form_urlencoded::Serializer::new(String::new());
+		serializer.append_pair("path", &skill_file.to_string_lossy());
 		serializer.append_pair("scope", "project");
 		serializer.append_pair("project_root", &project_root.to_string_lossy());
 		serializer.finish()
@@ -343,6 +434,7 @@ mod tests {
 	) -> LocalResponse<'c> {
 		client
 			.post(uri)
+			.header(auth_header())
 			.header(ContentType::JSON)
 			.body(body.to_string())
 			.dispatch()
@@ -355,17 +447,60 @@ mod tests {
 	) -> LocalResponse<'c> {
 		client
 			.put(uri)
+			.header(auth_header())
 			.header(ContentType::JSON)
 			.body(body.to_string())
 			.dispatch()
 	}
 
-	fn get_json<'c>(client: &'c Client, uri: &'c str) -> LocalResponse<'c> {
-		client.get(uri).dispatch()
+	fn get_auth<'c>(client: &'c Client, uri: &'c str) -> LocalResponse<'c> {
+		client.get(uri).header(auth_header()).dispatch()
 	}
 
-	fn delete_json<'c>(client: &'c Client, uri: &'c str) -> LocalResponse<'c> {
-		client.delete(uri).dispatch()
+	fn delete_auth<'c>(client: &'c Client, uri: &'c str) -> LocalResponse<'c> {
+		client.delete(uri).header(auth_header()).dispatch()
+	}
+
+	#[test]
+	fn auth_options_generate_distinct_tokens() {
+		let first = crate::auth::generate_auth_token();
+		let second = crate::auth::generate_auth_token();
+
+		assert_ne!(first, second);
+		assert!(first.len() >= 32);
+	}
+
+	#[test]
+	fn auth_missing_token_returns_unauthorized_json() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+		let response = client.get("/api/v1/agents").dispatch();
+
+		assert_json_error(response, Status::Unauthorized, "UNAUTHORIZED");
+	}
+
+	#[test]
+	fn auth_wrong_token_returns_forbidden_json() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+		let response = client
+			.get("/api/v1/agents")
+			.header(Header::new(
+				crate::auth::AUTHORIZATION_HEADER,
+				"Bearer wrong-token",
+			))
+			.dispatch();
+
+		assert_json_error(response, Status::Forbidden, "FORBIDDEN");
+	}
+
+	#[test]
+	fn auth_correct_token_allows_api_access() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+		let response = get_auth(&client, "/api/v1/agents");
+
+		assert_eq!(response.status(), Status::Ok);
 	}
 
 	#[test]
@@ -374,6 +509,7 @@ mod tests {
 
 		let response = client
 			.post("/api/v1/plugins/install")
+			.header(auth_header())
 			.header(Header::new("Origin", "https://evil.example"))
 			.header(Header::new("Content-Type", "application/json"))
 			.body(
@@ -395,7 +531,7 @@ mod tests {
 			.header(Header::new("Access-Control-Request-Method", "POST"))
 			.header(Header::new(
 				"Access-Control-Request-Headers",
-				"content-type",
+				"authorization,content-type",
 			))
 			.dispatch();
 
@@ -404,9 +540,37 @@ mod tests {
 			response.headers().get_one("Access-Control-Allow-Origin"),
 			Some("http://localhost:1420"),
 		);
+		let allow_headers = response
+			.headers()
+			.get_one("Access-Control-Allow-Headers")
+			.expect("allow headers");
+		assert!(allow_headers.contains("authorization"));
+		assert!(allow_headers.contains("content-type"));
 		assert_eq!(
-			response.headers().get_one("Access-Control-Allow-Headers"),
-			Some("content-type"),
+			response
+				.headers()
+				.get_one("Access-Control-Allow-Credentials"),
+			None,
+		);
+	}
+
+	#[test]
+	fn cors_disallowed_origin_does_not_grant_access() {
+		let client = test_client(&default_app_data_dir());
+
+		let response = client
+			.req(rocket::http::Method::Options, "/api/v1/plugins/uninstall")
+			.header(Header::new("Origin", "https://example.com"))
+			.header(Header::new("Access-Control-Request-Method", "POST"))
+			.header(Header::new(
+				"Access-Control-Request-Headers",
+				"authorization,content-type",
+			))
+			.dispatch();
+
+		assert_eq!(
+			response.headers().get_one("Access-Control-Allow-Origin"),
+			None,
 		);
 	}
 
@@ -420,6 +584,20 @@ mod tests {
 		let collection_uri = format!("/api/v1/agents/claude/skills?{query}");
 		let item_uri =
 			format!("/api/v1/agents/claude/skills/route-skill?{query}");
+		let missing_auth = client
+			.post(&collection_uri)
+			.header(ContentType::JSON)
+			.body(
+				json!({
+					"name": "route-skill",
+					"description": "created",
+					"content": "# Body",
+					"tools": [],
+				})
+				.to_string(),
+			)
+			.dispatch();
+		assert_json_error(missing_auth, Status::Unauthorized, "UNAUTHORIZED");
 
 		let response = post_json(
 			&client,
@@ -437,7 +615,7 @@ mod tests {
 		let body = response_json(response);
 		assert_eq!(body["name"], "route-skill");
 
-		let response = get_json(&client, &item_uri);
+		let response = get_auth(&client, &item_uri);
 		assert_eq!(response.status(), Status::Ok);
 		let body = response_json(response);
 		assert_eq!(body["description"], "created");
@@ -461,14 +639,40 @@ mod tests {
 		assert!(persisted.contains("updated"));
 		assert!(persisted.contains("# Updated"));
 
-		let response = delete_json(&client, &item_uri);
+		let response = delete_auth(&client, &item_uri);
 		assert_eq!(response.status(), Status::NoContent);
 		assert!(!skill_file.exists(), "deleted skill file should be removed");
 
-		let response = get_json(&client, &collection_uri);
+		let response = get_auth(&client, &collection_uri);
 		assert_eq!(response.status(), Status::Ok);
 		let body = response_json(response);
 		assert_eq!(body.as_array().expect("skill list").len(), 0);
+	}
+
+	#[test]
+	fn route_skill_content_requires_auth() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let skill_file = project_dir
+			.path()
+			.join(".claude/skills/route-skill/SKILL.md");
+		std::fs::create_dir_all(skill_file.parent().expect("skill parent"))
+			.expect("skill dir");
+		std::fs::write(
+			&skill_file,
+			"---\nname: route-skill\ndescription: route skill\n---\n\n# Body\n",
+		)
+		.expect("skill file");
+
+		let client = test_client(app_data_dir.path());
+		let query = skill_content_query(&skill_file, project_dir.path());
+		let uri = format!("/api/v1/skills/content?{query}");
+		let response = client.get(&uri).dispatch();
+		assert_json_error(response, Status::Unauthorized, "UNAUTHORIZED");
+
+		let response = get_auth(&client, &uri);
+		assert_eq!(response.status(), Status::Ok);
+		assert_eq!(response_json(response), json!("# Body"));
 	}
 
 	#[test]
@@ -498,7 +702,7 @@ mod tests {
 		assert_eq!(body["name"], "route-mcp");
 		assert_eq!(body["transport"]["command"], "node");
 
-		let response = get_json(&client, &item_uri);
+		let response = get_auth(&client, &item_uri);
 		assert_eq!(response.status(), Status::Ok);
 		let body = response_json(response);
 		assert_eq!(body["transport"]["args"], json!(["server.js"]));
@@ -525,7 +729,7 @@ mod tests {
 		assert!(persisted.contains("route-mcp"));
 		assert!(persisted.contains("updated.js"));
 
-		let response = delete_json(&client, &item_uri);
+		let response = delete_auth(&client, &item_uri);
 		assert_eq!(response.status(), Status::NoContent);
 		if config_path.exists() {
 			let persisted =
@@ -558,7 +762,7 @@ mod tests {
 		let body = response_json(response);
 		assert_eq!(body["name"], "route-agent");
 
-		let response = get_json(&client, &item_uri);
+		let response = get_auth(&client, &item_uri);
 		assert_eq!(response.status(), Status::Ok);
 		let body = response_json(response);
 		assert_eq!(body["description"], "created");
@@ -582,14 +786,14 @@ mod tests {
 		assert!(persisted.contains("updated"));
 		assert!(persisted.contains("Use updated instructions."));
 
-		let response = delete_json(&client, &item_uri);
+		let response = delete_auth(&client, &item_uri);
 		assert_eq!(response.status(), Status::NoContent);
 		assert!(
 			!sub_agent_file.exists(),
 			"deleted sub-agent file should be removed"
 		);
 
-		let response = get_json(&client, &collection_uri);
+		let response = get_auth(&client, &collection_uri);
 		assert_eq!(response.status(), Status::Ok);
 		let body = response_json(response);
 		assert_eq!(body.as_array().expect("sub-agent list").len(), 0);
@@ -601,11 +805,13 @@ mod tests {
 		let client = test_client(app_data_dir.path());
 		let response = client
 			.get("/api/v1/agents/claude/skills?scope=sideways")
+			.header(auth_header())
 			.dispatch();
 
 		assert_json_error(response, Status::BadRequest, "INVALID_PARAM");
 		let response = client
 			.get("/api/v1/agents/claude/skills?scope=sideways")
+			.header(auth_header())
 			.dispatch();
 		let body = response_json(response);
 		let error = body["error"].as_str().expect("error message");

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Instant;
@@ -15,6 +15,8 @@ pub struct GitCloneSession {
 	pub branches: Vec<String>,
 	/// The branch currently checked out in this session.
 	pub current_branch: String,
+	/// Normalized relative skill paths returned by the scan.
+	pub scanned_skill_paths: HashSet<String>,
 }
 
 pub struct GitCloneSessions {
