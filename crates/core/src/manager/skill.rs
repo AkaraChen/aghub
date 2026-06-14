@@ -5,9 +5,34 @@ use crate::{
 	models::Skill,
 };
 use log::{debug, info, warn};
-use skill::sanitize::sanitize_name;
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use skill::{sanitize::sanitize_name, SkillSource};
+use std::{
+	collections::{hash_map::DefaultHasher, BTreeMap},
+	hash::{Hash, Hasher},
+	path::{Path, PathBuf},
+};
+
+const MAX_STAGING_SAFE_NAME_BYTES: usize = 80;
+const MAX_UNPACKED_SKILL_SCAN_DEPTH: usize = 10;
+
+enum SkillImportSource {
+	Directory(PathBuf),
+	SkillMd(PathBuf),
+	Package {
+		root: PathBuf,
+		_temp_dir: tempfile::TempDir,
+	},
+}
+
+impl SkillImportSource {
+	fn root_path(&self) -> Option<&Path> {
+		match self {
+			SkillImportSource::Directory(root)
+			| SkillImportSource::Package { root, .. } => Some(root),
+			SkillImportSource::SkillMd(path) => path.parent(),
+		}
+	}
+}
 
 /// Resolve a source_path string (potentially with `~/` prefix) to an absolute PathBuf
 fn resolve_source_path(sp: &str) -> PathBuf {
@@ -82,6 +107,310 @@ fn remove_skill_path(
 		})?;
 	}
 	Ok(())
+}
+
+fn symlink_import_error(path: &Path) -> ConfigError {
+	ConfigError::InvalidConfig(format!(
+		"Refusing to copy symlink '{}'",
+		path.display()
+	))
+}
+
+fn unsupported_import_entry_error(path: &Path) -> ConfigError {
+	ConfigError::InvalidConfig(format!(
+		"Refusing to copy unsupported import entry '{}'",
+		path.display()
+	))
+}
+
+fn same_existing_path(left: &Path, right: &Path) -> bool {
+	if left == right {
+		return true;
+	}
+
+	match (std::fs::canonicalize(left), std::fs::canonicalize(right)) {
+		(Ok(left), Ok(right)) => left == right,
+		_ => false,
+	}
+}
+
+fn should_skip_import_path(path: &Path, skip_paths: &[PathBuf]) -> bool {
+	skip_paths
+		.iter()
+		.any(|skip_path| same_existing_path(path, skip_path))
+}
+
+fn is_strict_ancestor(parent: &Path, child: &Path) -> bool {
+	let parent =
+		std::fs::canonicalize(parent).unwrap_or_else(|_| parent.to_path_buf());
+	let child =
+		std::fs::canonicalize(child).unwrap_or_else(|_| child.to_path_buf());
+	child.starts_with(&parent) && child != parent
+}
+
+fn copy_dir_recursive(
+	from: &Path,
+	to: &Path,
+	skip_paths: &[PathBuf],
+) -> Result<()> {
+	let metadata = std::fs::symlink_metadata(from)?;
+	if metadata.file_type().is_symlink() {
+		return Err(symlink_import_error(from));
+	}
+	if !metadata.is_dir() {
+		return Err(unsupported_import_entry_error(from));
+	}
+
+	std::fs::create_dir_all(to)?;
+	for entry in std::fs::read_dir(from)? {
+		let entry = entry?;
+		let from_path = entry.path();
+		let to_path = to.join(entry.file_name());
+		let file_type = entry.file_type()?;
+		if file_type.is_symlink() {
+			return Err(symlink_import_error(&from_path));
+		}
+		if should_skip_import_path(&from_path, skip_paths) {
+			continue;
+		}
+		if file_type.is_dir() {
+			copy_dir_recursive(&from_path, &to_path, skip_paths)?;
+		} else if file_type.is_file() {
+			std::fs::copy(&from_path, &to_path)?;
+		} else {
+			return Err(unsupported_import_entry_error(&from_path));
+		}
+	}
+	Ok(())
+}
+
+fn cleanup_import_path(path: &Path) {
+	if let Ok(metadata) = std::fs::symlink_metadata(path) {
+		let result = if metadata.file_type().is_symlink() {
+			std::fs::remove_file(path)
+		} else if metadata.is_dir() {
+			std::fs::remove_dir_all(path)
+		} else {
+			std::fs::remove_file(path)
+		};
+		let _ = result;
+	}
+}
+
+fn copy_skill_md_with_resources(
+	from: &Path,
+	to: &Path,
+	skip_paths: &[PathBuf],
+) -> Result<()> {
+	let metadata = std::fs::symlink_metadata(from)?;
+	if metadata.file_type().is_symlink() {
+		return Err(symlink_import_error(from));
+	}
+	if !metadata.is_file() {
+		return Err(unsupported_import_entry_error(from));
+	}
+
+	std::fs::create_dir_all(to)?;
+	std::fs::copy(from, to.join("SKILL.md"))?;
+	if let Some(parent) = from.parent() {
+		for dir_name in ["scripts", "references", "assets"] {
+			let resource_dir = parent.join(dir_name);
+			match std::fs::symlink_metadata(&resource_dir) {
+				Ok(metadata) if metadata.file_type().is_symlink() => {
+					return Err(symlink_import_error(&resource_dir));
+				}
+				Ok(metadata) if metadata.is_dir() => {
+					copy_dir_recursive(
+						&resource_dir,
+						&to.join(dir_name),
+						skip_paths,
+					)?;
+				}
+				Ok(_) => {}
+				Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+				Err(e) => return Err(ConfigError::Io(e)),
+			}
+		}
+	}
+	Ok(())
+}
+
+fn copy_import_source(
+	source: &SkillImportSource,
+	to: &Path,
+	skip_paths: &[PathBuf],
+) -> Result<()> {
+	match source {
+		SkillImportSource::Directory(root)
+		| SkillImportSource::Package { root, .. } => {
+			copy_dir_recursive(root, to, skip_paths)
+		}
+		SkillImportSource::SkillMd(path) => {
+			copy_skill_md_with_resources(path, to, skip_paths)
+		}
+	}
+}
+
+fn staged_import_dir(parent: &Path, safe_name: &str) -> PathBuf {
+	let now = std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.map(|duration| duration.as_nanos())
+		.unwrap_or_default();
+	let safe_name = staging_safe_name(safe_name);
+	parent.join(format!(".aghub-import-{safe_name}-{now}"))
+}
+
+fn staging_safe_name(safe_name: &str) -> String {
+	if safe_name.len() <= MAX_STAGING_SAFE_NAME_BYTES {
+		return safe_name.to_string();
+	}
+
+	let mut hasher = DefaultHasher::new();
+	safe_name.hash(&mut hasher);
+	let digest = format!("{:016x}", hasher.finish());
+	let mut prefix = String::new();
+	for ch in safe_name.chars() {
+		if prefix.len() + ch.len_utf8() > MAX_STAGING_SAFE_NAME_BYTES {
+			break;
+		}
+		prefix.push(ch);
+	}
+	format!("{prefix}-{digest}")
+}
+
+fn copy_import_source_staged(
+	source: &SkillImportSource,
+	target_dir: &Path,
+) -> Result<()> {
+	let parent = target_dir.parent().ok_or_else(|| {
+		ConfigError::InvalidConfig(format!(
+			"Skill target '{}' has no parent",
+			target_dir.display()
+		))
+	})?;
+	std::fs::create_dir_all(parent)?;
+	let safe_name = target_dir
+		.file_name()
+		.and_then(|name| name.to_str())
+		.unwrap_or("skill");
+	let staged = staged_import_dir(parent, safe_name);
+	cleanup_import_path(&staged);
+
+	let mut skip_paths = vec![staged.clone()];
+	if let Some(source_root) = source.root_path() {
+		if is_strict_ancestor(source_root, parent) {
+			skip_paths.push(parent.to_path_buf());
+		}
+	}
+
+	if let Err(e) = copy_import_source(source, &staged, &skip_paths) {
+		cleanup_import_path(&staged);
+		return Err(e);
+	}
+
+	if let Err(e) = std::fs::rename(&staged, target_dir) {
+		cleanup_import_path(&staged);
+		return Err(ConfigError::Io(e));
+	}
+
+	Ok(())
+}
+
+fn find_unpacked_skill_root(
+	unpack_dir: &Path,
+	skill_name: &str,
+) -> Result<PathBuf> {
+	let mut skill_dirs = Vec::new();
+	collect_unpacked_skill_roots(unpack_dir, 0, &mut skill_dirs).map_err(
+		|e| {
+			ConfigError::InvalidConfig(format!(
+				"Failed to scan unpacked skill package: {e}"
+			))
+		},
+	)?;
+	let matches = skill_dirs
+		.into_iter()
+		.filter(|dir| {
+			skill::parser::parse_skill_dir(dir)
+				.map(|skill| skill.name == skill_name)
+				.unwrap_or(false)
+		})
+		.collect::<Vec<_>>();
+
+	match matches.as_slice() {
+		[root] => Ok(root.clone()),
+		[] => Err(ConfigError::InvalidConfig(format!(
+			"Unpacked skill package did not contain skill '{skill_name}'"
+		))),
+		_ => Err(ConfigError::InvalidConfig(format!(
+			"Unpacked skill package contains multiple roots named \
+			 '{skill_name}'"
+		))),
+	}
+}
+
+fn has_skill_md_file(dir: &Path) -> bool {
+	["SKILL.md", "skill.md"]
+		.iter()
+		.any(|name| dir.join(name).is_file())
+}
+
+fn collect_unpacked_skill_roots(
+	dir: &Path,
+	depth: usize,
+	out: &mut Vec<PathBuf>,
+) -> std::io::Result<()> {
+	if depth > MAX_UNPACKED_SKILL_SCAN_DEPTH {
+		return Ok(());
+	}
+
+	if has_skill_md_file(dir) {
+		out.push(dir.to_path_buf());
+	}
+	if depth == MAX_UNPACKED_SKILL_SCAN_DEPTH {
+		return Ok(());
+	}
+
+	for entry in std::fs::read_dir(dir)? {
+		let entry = entry?;
+		let path = entry.path();
+		let metadata = std::fs::symlink_metadata(&path)?;
+		if metadata.file_type().is_symlink() {
+			continue;
+		}
+		if metadata.is_dir() {
+			collect_unpacked_skill_roots(&path, depth + 1, out)?;
+		}
+	}
+	Ok(())
+}
+
+fn import_source_from_parsed(
+	path: &Path,
+	source: &SkillSource,
+	skill_name: &str,
+) -> Result<SkillImportSource> {
+	match source {
+		SkillSource::Directory(root) => {
+			Ok(SkillImportSource::Directory(root.clone()))
+		}
+		SkillSource::SkillMd(skill_md) => {
+			Ok(SkillImportSource::SkillMd(skill_md.clone()))
+		}
+		SkillSource::SkillFile(_) | SkillSource::ZipFile(_) => {
+			let temp_dir = tempfile::TempDir::new().map_err(ConfigError::Io)?;
+			skill::package::unpack(path, temp_dir.path()).map_err(|e| {
+				ConfigError::InvalidConfig(format!(
+					"Failed to unpack skill package: {e}"
+				))
+			})?;
+			let root = find_unpacked_skill_root(temp_dir.path(), skill_name)?;
+			Ok(SkillImportSource::Package {
+				root,
+				_temp_dir: temp_dir,
+			})
+		}
+	}
 }
 
 impl ConfigManager {
@@ -303,8 +632,49 @@ impl ConfigManager {
 		let skill_pkg = skill::parser::parse(path).map_err(|e| {
 			ConfigError::InvalidConfig(format!("Failed to parse skill: {e}"))
 		})?;
-		let skill = convert_skill(skill_pkg);
-		self.add_skill(skill.clone())?;
+		let source = import_source_from_parsed(
+			path,
+			&skill_pkg.source,
+			&skill_pkg.name,
+		)?;
+		let mut skill = convert_skill(skill_pkg);
+		let target_dir = self.target_skills_dir().ok_or_else(|| {
+			ConfigError::InvalidConfig(
+				"Agent does not support persistent skill creation \
+				 in the current scope"
+					.into(),
+			)
+		})?;
+		let safe_name = sanitize_name(&skill.name);
+		let skill_dir = target_dir.join(&safe_name);
+		let agent_name = self.adapter.name().to_string();
+
+		{
+			let config = self.config_mut()?;
+			if config.skills.iter().any(|s| s.name == skill.name) {
+				return Err(ConfigError::resource_exists("skill", &skill.name));
+			}
+			if skill_dir.exists() {
+				return Err(ConfigError::resource_exists(
+					"skill target",
+					skill_dir.display().to_string(),
+				));
+			}
+		}
+
+		info!(
+			"importing skill '{}' from '{}' for agent '{}'",
+			skill.name,
+			path.display(),
+			agent_name
+		);
+		copy_import_source_staged(&source, &skill_dir)?;
+
+		skill.source_path =
+			Some(skill_dir.join("SKILL.md").to_string_lossy().to_string());
+		skill.canonical_path = None;
+		self.config_mut()?.skills.push(skill.clone());
+		self.save_current()?;
 		Ok(skill)
 	}
 
@@ -446,5 +816,16 @@ mod tests {
 		.expect("Should produce valid YAML");
 		assert_eq!(reparsed["version"], "123");
 		assert_eq!(reparsed["author"], "true");
+	}
+
+	#[test]
+	fn staged_import_dir_bounds_long_safe_name() {
+		let safe_name = "a".repeat(300);
+		let staged = staged_import_dir(Path::new("/tmp"), &safe_name);
+		let file_name = staged.file_name().unwrap().to_string_lossy();
+
+		assert!(file_name.starts_with(".aghub-import-"));
+		assert!(file_name.len() < 255);
+		assert!(file_name.len() < safe_name.len());
 	}
 }
