@@ -75,6 +75,10 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 
 	const skill = group.items[0];
 	const primaryScope = skill.source ?? "global";
+	const skillQueryScope =
+		primaryScope === "project" && projectPath ? "project" : "global";
+	const skillQueryEnabled =
+		primaryScope !== "project" || Boolean(projectPath);
 	const trimmedSkillName = skill.name.trim();
 	const canSearchSkillsSh = trimmedSkillName.length >= 2;
 
@@ -108,6 +112,9 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		...skillContentQueryOptions({
 			api,
 			path: skill.source_path ?? undefined,
+			scope: skillQueryScope,
+			projectRoot: projectPath,
+			enabled: skillQueryEnabled,
 		}),
 	});
 
@@ -115,6 +122,9 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		...skillTreeQueryOptions({
 			api,
 			path: skill.source_path ?? undefined,
+			scope: skillQueryScope,
+			projectRoot: projectPath,
+			enabled: skillQueryEnabled,
 		}),
 	});
 
