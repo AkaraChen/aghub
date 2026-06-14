@@ -13,6 +13,7 @@ use serde::Deserialize;
 use std::collections::BTreeMap;
 use std::time::Duration;
 
+use crate::auth::ApiAuth;
 use crate::dto::inference::{
 	AgentProviderResponse, ClaudeProviderStateResponse,
 	CodexProviderStateResponse, CreateAgentProviderRequest,
@@ -195,6 +196,7 @@ fn codex_state_response(
 
 #[get("/inference/providers")]
 pub fn list_inference_providers(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 ) -> ApiResult<Vec<InferenceProviderResponse>> {
 	let providers = store(state)
@@ -309,6 +311,7 @@ async fn fetch_models_dev_presets() -> Result<
 
 #[get("/inference/presets")]
 pub async fn list_inference_provider_presets(
+	_auth: ApiAuth,
 ) -> Json<Vec<InferenceProviderPresetResponse>> {
 	match fetch_models_dev_presets().await {
 		Ok(presets) if !presets.is_empty() => Json(presets),
@@ -318,6 +321,7 @@ pub async fn list_inference_provider_presets(
 
 #[get("/inference/agents/opencode/providers")]
 pub fn list_opencode_providers(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 ) -> ApiResult<Vec<AgentProviderResponse>> {
 	let store = store(state);
@@ -337,6 +341,7 @@ pub fn list_opencode_providers(
 
 #[get("/inference/agents/codex/providers")]
 pub fn list_codex_providers(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 ) -> ApiResult<Vec<AgentProviderResponse>> {
 	let store = store(state);
@@ -356,6 +361,7 @@ pub fn list_codex_providers(
 
 #[get("/inference/agents/codex/state")]
 pub fn get_codex_state(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 ) -> ApiResult<CodexProviderStateResponse> {
 	let store = store(state);
@@ -365,6 +371,7 @@ pub fn get_codex_state(
 
 #[post("/inference/agents/opencode/providers", data = "<body>")]
 pub fn create_opencode_provider(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 	body: Json<CreateAgentProviderRequest>,
 ) -> ApiCreated<AgentProviderResponse> {
@@ -380,6 +387,7 @@ pub fn create_opencode_provider(
 
 #[post("/inference/agents/codex/providers", data = "<body>")]
 pub fn create_codex_provider(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 	body: Json<CreateAgentProviderRequest>,
 ) -> ApiCreated<AgentProviderResponse> {
@@ -443,6 +451,7 @@ pub fn create_codex_provider(
 
 #[put("/inference/agents/opencode/providers/<id>", data = "<body>")]
 pub fn update_opencode_provider(
+	_auth: ApiAuth,
 	id: &str,
 	body: Json<UpdateAgentProviderRequest>,
 ) -> ApiResult<AgentProviderResponse> {
@@ -456,6 +465,7 @@ pub fn update_opencode_provider(
 
 #[put("/inference/agents/codex/providers/<id>", data = "<body>")]
 pub fn update_codex_provider(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 	id: &str,
 	body: Json<UpdateAgentProviderRequest>,
@@ -476,6 +486,7 @@ pub fn update_codex_provider(
 
 #[put("/inference/agents/codex/profile", data = "<body>")]
 pub fn update_codex_active_profile(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 	body: Json<UpdateCodexActiveProfileRequest>,
 ) -> ApiResult<CodexProviderStateResponse> {
@@ -492,6 +503,7 @@ pub fn update_codex_active_profile(
 	data = "<body>"
 )]
 pub fn update_codex_profile_provider(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 	profile_id: &str,
 	body: Json<UpdateCodexProfileProviderRequest>,
@@ -513,6 +525,7 @@ pub fn update_codex_profile_provider(
 
 #[post("/inference/agents/opencode/providers/<id>/sync")]
 pub fn sync_opencode_provider(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 	id: &str,
 ) -> ApiResult<AgentProviderResponse> {
@@ -558,6 +571,7 @@ pub fn sync_opencode_provider(
 
 #[post("/inference/agents/codex/providers/<id>/sync")]
 pub fn sync_codex_provider(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 	id: &str,
 ) -> ApiResult<AgentProviderResponse> {
@@ -604,7 +618,7 @@ pub fn sync_codex_provider(
 }
 
 #[delete("/inference/agents/opencode/providers/<id>")]
-pub fn delete_opencode_provider(id: &str) -> ApiNoContent {
+pub fn delete_opencode_provider(_auth: ApiAuth, id: &str) -> ApiNoContent {
 	opencode_adapter()?
 		.remove_provider(id)
 		.map_err(ApiError::from)?;
@@ -613,6 +627,7 @@ pub fn delete_opencode_provider(id: &str) -> ApiNoContent {
 
 #[delete("/inference/agents/codex/providers/<id>")]
 pub fn delete_codex_provider(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 	id: &str,
 ) -> ApiNoContent {
@@ -625,6 +640,7 @@ pub fn delete_codex_provider(
 
 #[get("/inference/providers/<latin_name>/password")]
 pub fn get_inference_provider_password(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 	latin_name: &str,
 ) -> ApiResult<InferenceProviderPasswordResponse> {
@@ -652,6 +668,7 @@ pub fn get_inference_provider_password(
 
 #[post("/inference/providers", data = "<body>")]
 pub fn create_inference_provider(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 	body: Json<CreateInferenceProviderRequest>,
 ) -> ApiCreated<InferenceProviderResponse> {
@@ -663,6 +680,7 @@ pub fn create_inference_provider(
 
 #[put("/inference/providers/<latin_name>", data = "<body>")]
 pub fn update_inference_provider(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 	latin_name: &str,
 	body: Json<UpdateInferenceProviderRequest>,
@@ -770,6 +788,7 @@ fn remove_agent_provider_references(
 
 #[delete("/inference/providers/<latin_name>")]
 pub fn delete_inference_provider(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 	latin_name: &str,
 ) -> ApiNoContent {
@@ -845,6 +864,7 @@ fn claude_state_response(
 
 #[get("/inference/agents/claude/state")]
 pub fn get_claude_state(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 ) -> ApiResult<ClaudeProviderStateResponse> {
 	let store = store(state);
@@ -854,6 +874,7 @@ pub fn get_claude_state(
 
 #[post("/inference/agents/claude/providers", data = "<body>")]
 pub fn create_claude_provider(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 	body: Json<CreateAgentProviderRequest>,
 ) -> ApiCreated<AgentProviderResponse> {
@@ -892,6 +913,7 @@ pub fn create_claude_provider(
 
 #[put("/inference/agents/claude/providers/<id>", data = "<body>")]
 pub fn update_claude_provider(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 	id: &str,
 	body: Json<UpdateAgentProviderRequest>,
@@ -937,6 +959,7 @@ pub fn update_claude_provider(
 
 #[post("/inference/agents/claude/providers/<id>/sync")]
 pub fn sync_claude_provider(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 	id: &str,
 ) -> ApiResult<AgentProviderResponse> {
@@ -996,6 +1019,7 @@ pub fn sync_claude_provider(
 
 #[delete("/inference/agents/claude/providers/<id>")]
 pub fn delete_claude_provider(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 	id: &str,
 ) -> ApiNoContent {
@@ -1007,6 +1031,7 @@ pub fn delete_claude_provider(
 
 #[delete("/inference/agents/claude/state")]
 pub fn clear_claude_state(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 ) -> ApiNoContent {
 	let _store = store(state);
@@ -1017,6 +1042,7 @@ pub fn clear_claude_state(
 
 #[delete("/inference/agents/codex/state")]
 pub fn clear_codex_state(
+	_auth: ApiAuth,
 	state: &State<InferenceProviderState>,
 ) -> ApiNoContent {
 	let store = store(state);

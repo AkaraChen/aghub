@@ -6,6 +6,7 @@ use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
 
 use crate::{
+	auth::ApiAuth,
 	dto::mcp::{CreateMcpRequest, McpResponse, UpdateMcpRequest},
 	dto::transfer::{
 		OperationBatchResponse, ReconcileRequest, TransferRequest,
@@ -38,6 +39,7 @@ fn check_mcp_supported(
 
 #[get("/agents/<agent>/mcps?<scope..>")]
 pub fn list_mcps(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	scope: ScopeParams,
 ) -> ApiResult<Vec<McpResponse>> {
@@ -60,6 +62,7 @@ pub fn list_mcps(
 
 #[post("/mcps/transfer", data = "<body>")]
 pub fn transfer_mcp_route(
+	_auth: ApiAuth,
 	body: Json<TransferRequest>,
 ) -> ApiResult<OperationBatchResponse> {
 	let req = body.into_inner();
@@ -76,6 +79,7 @@ pub fn transfer_mcp_route(
 
 #[post("/mcps/reconcile", data = "<body>")]
 pub fn reconcile_mcp_route(
+	_auth: ApiAuth,
 	body: Json<ReconcileRequest>,
 ) -> ApiResult<OperationBatchResponse> {
 	let req = body.into_inner();
@@ -118,6 +122,7 @@ pub fn reconcile_mcp_route(
 
 #[post("/agents/<agent>/mcps?<scope..>", data = "<body>")]
 pub fn create_mcp(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	scope: ScopeParams,
 	body: Json<CreateMcpRequest>,
@@ -140,6 +145,7 @@ pub fn create_mcp(
 
 #[get("/agents/<agent>/mcps/<name>?<scope..>")]
 pub fn get_mcp(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	name: &str,
 	scope: ScopeParams,
@@ -167,6 +173,7 @@ pub fn get_mcp(
 
 #[put("/agents/<agent>/mcps/<name>?<scope..>", data = "<body>")]
 pub fn update_mcp(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	name: &str,
 	scope: ScopeParams,
@@ -192,6 +199,7 @@ pub fn update_mcp(
 
 #[delete("/agents/<agent>/mcps/<name>?<scope..>")]
 pub fn delete_mcp(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	name: &str,
 	scope: ScopeParams,
@@ -214,6 +222,7 @@ pub fn delete_mcp(
 
 #[post("/agents/<agent>/mcps/<name>/enable?<scope..>")]
 pub fn enable_mcp(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	name: &str,
 	scope: ScopeParams,
@@ -231,6 +240,7 @@ pub fn enable_mcp(
 
 #[post("/agents/<agent>/mcps/<name>/disable?<scope..>")]
 pub fn disable_mcp(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	name: &str,
 	scope: ScopeParams,
@@ -247,7 +257,10 @@ pub fn disable_mcp(
 }
 
 #[get("/agents/all/mcps?<scope..>")]
-pub fn list_all_agents_mcps(scope: ScopeParams) -> ApiResult<Vec<McpResponse>> {
+pub fn list_all_agents_mcps(
+	_auth: ApiAuth,
+	scope: ScopeParams,
+) -> ApiResult<Vec<McpResponse>> {
 	let resolved = scope.resolve()?;
 	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
 	let items = load_all_agents(resource_scope, project_root.as_deref())
@@ -273,6 +286,7 @@ mod tests {
 	#[test]
 	fn test_create_mcp_rejects_pi_agent() {
 		let result = create_mcp(
+			ApiAuth,
 			AgentParam(AgentType::Pi),
 			ScopeParams {
 				scope: Some("global".to_string()),
