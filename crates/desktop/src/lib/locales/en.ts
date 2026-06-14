@@ -412,6 +412,14 @@ export default {
 	updateInstalledSuccess: "Update installed successfully",
 	restartToUpdate: "Restart to Update",
 	restartNow: "Restart Now",
+	settingsAutoCheckUpdatesHeading: "Check for updates automatically",
+	settingsAutoCheckUpdatesDescription:
+		"Let aghub check for new versions in the background when the app starts. You can still trigger a manual check at any time.",
+	settingsAutoCheckUpdatesToggleLabel: "Check for updates automatically",
+	settingsAutoCheckUpdatesEnabled: "Automatic update checks enabled",
+	settingsAutoCheckUpdatesDisabled: "Automatic update checks disabled",
+	settingsAutoCheckUpdatesError: "Failed to update automatic update checks",
+	openSettings: "Open Settings",
 	onboardingDescription:
 		"Replay the welcome screen or either guided tour any time.",
 

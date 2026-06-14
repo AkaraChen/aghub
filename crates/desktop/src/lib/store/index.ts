@@ -61,3 +61,25 @@ export async function setConsentAcked(value: boolean): Promise<void> {
 	await s.set(ANALYTICS_CONSENT_ACK_KEY, value);
 	await s.save();
 }
+
+const AUTO_CHECK_UPDATES_KEY = "autoCheckUpdates";
+
+/**
+ * Default: enabled. The app will check for updates on startup unless
+ * the user has explicitly opted out via Settings → Application.
+ */
+const DEFAULT_AUTO_CHECK_UPDATES = true;
+
+export async function getAutoCheckUpdates(): Promise<boolean> {
+	const s = await getStore();
+	const value = await s.get<boolean>(AUTO_CHECK_UPDATES_KEY);
+	if (typeof value === "boolean") return value;
+	return DEFAULT_AUTO_CHECK_UPDATES;
+}
+
+export async function setAutoCheckUpdates(value: boolean): Promise<boolean> {
+	const s = await getStore();
+	await s.set(AUTO_CHECK_UPDATES_KEY, value);
+	await s.save();
+	return value;
+}
