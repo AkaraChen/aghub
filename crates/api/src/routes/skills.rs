@@ -14,6 +14,7 @@ use std::{collections::HashMap, time::Duration};
 use tokio::time::timeout;
 
 use crate::{
+	auth::ApiAuth,
 	dto::integrations::{
 		CodeEditorType, EditSkillFolderRequest, OpenSkillFolderRequest,
 	},
@@ -111,6 +112,7 @@ where
 
 #[post("/skills/transfer", data = "<body>")]
 pub fn transfer_skill_route(
+	_auth: ApiAuth,
 	body: Json<TransferRequest>,
 ) -> ApiResult<OperationBatchResponse> {
 	let req = body.into_inner();
@@ -127,6 +129,7 @@ pub fn transfer_skill_route(
 
 #[post("/skills/reconcile", data = "<body>")]
 pub fn reconcile_skill_route(
+	_auth: ApiAuth,
 	body: Json<ReconcileRequest>,
 ) -> ApiResult<OperationBatchResponse> {
 	let req = body.into_inner();
@@ -170,6 +173,7 @@ pub fn reconcile_skill_route(
 
 #[delete("/skills/by-path", data = "<body>")]
 pub async fn delete_skill_by_path(
+	_auth: ApiAuth,
 	body: Json<DeleteSkillByPathRequest>,
 ) -> ApiResult<DeleteSkillByPathResponse> {
 	let req = body.into_inner();
@@ -617,6 +621,7 @@ fn check_skills_mutable(
 
 #[get("/agents/<agent>/skills?<scope..>")]
 pub fn list_skills(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	scope: ScopeParams,
 ) -> ApiResult<Vec<SkillResponse>> {
@@ -639,6 +644,7 @@ pub fn list_skills(
 
 #[post("/agents/<agent>/skills?<scope..>", data = "<body>")]
 pub async fn create_skill(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	scope: ScopeParams,
 	body: Json<CreateSkillRequest>,
@@ -661,6 +667,7 @@ pub async fn create_skill(
 
 #[post("/agents/<agent>/skills/import?<scope..>", data = "<body>")]
 pub fn import_skill(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	scope: ScopeParams,
 	body: Json<crate::dto::skill::ImportSkillRequest>,
@@ -696,6 +703,7 @@ pub fn import_skill(
 
 #[get("/agents/<agent>/skills/<name>?<scope..>")]
 pub fn get_skill(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	name: &str,
 	scope: ScopeParams,
@@ -724,6 +732,7 @@ pub fn get_skill(
 
 #[put("/agents/<agent>/skills/<name>?<scope..>", data = "<body>")]
 pub async fn update_skill(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	name: &str,
 	scope: ScopeParams,
@@ -752,6 +761,7 @@ pub async fn update_skill(
 
 #[delete("/agents/<agent>/skills/<name>?<scope..>")]
 pub async fn delete_skill(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	name: &str,
 	scope: ScopeParams,
@@ -777,6 +787,7 @@ pub async fn delete_skill(
 
 #[post("/agents/<agent>/skills/<name>/enable?<scope..>")]
 pub async fn enable_skill(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	name: &str,
 	scope: ScopeParams,
@@ -797,6 +808,7 @@ pub async fn enable_skill(
 
 #[post("/agents/<agent>/skills/<name>/disable?<scope..>")]
 pub async fn disable_skill(
+	_auth: ApiAuth,
 	agent: AgentParam,
 	name: &str,
 	scope: ScopeParams,
@@ -861,6 +873,7 @@ fn is_plugin_managed_skill(
 
 #[get("/agents/all/skills?<params..>")]
 pub(crate) async fn list_all_agents_skills(
+	_auth: ApiAuth,
 	params: SkillListParams,
 ) -> ApiResult<Vec<SkillResponse>> {
 	let include_managed = params.include_managed();
@@ -889,6 +902,7 @@ pub(crate) async fn list_all_agents_skills(
 
 #[post("/skills/install", data = "<body>")]
 pub async fn install_skill(
+	_auth: ApiAuth,
 	body: Json<InstallSkillRequest>,
 ) -> ApiResult<InstallSkillResponse> {
 	let req = body.into_inner();
@@ -991,6 +1005,7 @@ pub async fn install_skill(
 
 #[post("/skills/open", format = "json", data = "<request>")]
 pub async fn open_skill_folder(
+	_auth: ApiAuth,
 	request: Json<OpenSkillFolderRequest>,
 ) -> Result<(), String> {
 	let req = request.into_inner();
@@ -1005,6 +1020,7 @@ pub async fn open_skill_folder(
 
 #[post("/skills/edit", format = "json", data = "<request>")]
 pub async fn edit_skill_folder(
+	_auth: ApiAuth,
 	request: Json<EditSkillFolderRequest>,
 ) -> Result<(), String> {
 	let req = request.into_inner();
@@ -1039,7 +1055,10 @@ pub async fn edit_skill_folder(
 }
 
 #[get("/skills/content?<query..>")]
-pub fn get_skill_content(query: SkillContentQuery) -> ApiResult<String> {
+pub fn get_skill_content(
+	_auth: ApiAuth,
+	query: SkillContentQuery,
+) -> ApiResult<String> {
 	let path = expand_tilde_path(&query.path);
 	let content = std::fs::read_to_string(&path).map_err(|e| {
 		ApiError::new(
@@ -1063,6 +1082,7 @@ pub fn get_skill_content(query: SkillContentQuery) -> ApiResult<String> {
 
 #[get("/skills/tree?<query..>")]
 pub fn get_skill_tree(
+	_auth: ApiAuth,
 	query: SkillTreeQuery,
 ) -> ApiResult<SkillTreeNodeResponse> {
 	let path = expand_tilde_path(&query.path);
@@ -1072,7 +1092,9 @@ pub fn get_skill_tree(
 }
 
 #[get("/skills/lock/global")]
-pub fn get_global_skill_lock() -> ApiResult<GlobalSkillLockResponse> {
+pub fn get_global_skill_lock(
+	_auth: ApiAuth,
+) -> ApiResult<GlobalSkillLockResponse> {
 	let lock = skill::lock::global::read_skill_lock();
 	let skills: Vec<SkillLockEntryResponse> = lock
 		.skills
@@ -1099,6 +1121,7 @@ pub fn get_global_skill_lock() -> ApiResult<GlobalSkillLockResponse> {
 
 #[get("/skills/lock/project?<query..>")]
 pub fn get_project_skill_lock(
+	_auth: ApiAuth,
 	query: ProjectLockQuery,
 ) -> ApiResult<ProjectSkillLockResponse> {
 	let cwd = query.project_path.as_deref().map(std::path::Path::new);
@@ -1143,6 +1166,7 @@ fn require_github_credential_url(url: &str) -> Result<(), ApiError> {
 
 #[post("/skills/git/scan", data = "<body>")]
 pub async fn git_scan_skills(
+	_auth: ApiAuth,
 	body: Json<GitScanRequest>,
 	sessions: &rocket::State<GitCloneSessions>,
 ) -> ApiResult<GitScanResponse> {
@@ -1350,6 +1374,7 @@ fn detect_current_branch(repo_path: &std::path::Path) -> Option<String> {
 
 #[post("/skills/git/install", data = "<body>")]
 pub async fn git_install_skills(
+	_auth: ApiAuth,
 	body: Json<GitInstallRequest>,
 	sessions: &rocket::State<GitCloneSessions>,
 ) -> ApiResult<GitInstallResponse> {
@@ -1465,6 +1490,7 @@ pub async fn git_install_skills(
 /// agent identifiers.
 #[post("/skills/git/sync", data = "<body>")]
 pub async fn git_sync_skill(
+	_auth: ApiAuth,
 	body: Json<GitSyncRequest>,
 	sessions: &rocket::State<GitCloneSessions>,
 ) -> ApiResult<GitSyncResponse> {

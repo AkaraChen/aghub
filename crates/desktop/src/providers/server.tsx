@@ -5,15 +5,20 @@ import { useEffect, useState } from "react";
 import type { ServerProviderProps } from "../contexts/server";
 import { ServerContext } from "../contexts/server";
 
+interface ServerInfo {
+	port: number;
+	token: string;
+}
+
 export function ServerProvider({ children }: ServerProviderProps) {
-	const [port, setPort] = useState<number | null>(null);
+	const [server, setServer] = useState<ServerInfo | null>(null);
 	const [error, setError] = useState<string | null>(null);
 
 	useEffect(() => {
-		invoke<number>("start_server")
+		invoke<ServerInfo>("start_server")
 			.then((value) => {
-				void info(`Desktop API server started on port ${value}`);
-				setPort(value);
+				void info(`Desktop API server started on port ${value.port}`);
+				setServer(value);
 			})
 			.catch((e) => {
 				console.error("Failed to start desktop API server:", e);
@@ -31,7 +36,7 @@ export function ServerProvider({ children }: ServerProviderProps) {
 		);
 	}
 
-	if (port === null) {
+	if (server === null) {
 		return (
 			<div className="flex h-screen items-center justify-center">
 				<Spinner size="lg" />
@@ -41,7 +46,11 @@ export function ServerProvider({ children }: ServerProviderProps) {
 
 	return (
 		<ServerContext
-			value={{ port, baseUrl: `http://localhost:${port}/api/v1` }}
+			value={{
+				port: server.port,
+				baseUrl: `http://localhost:${server.port}/api/v1`,
+				token: server.token,
+			}}
 		>
 			{children}
 		</ServerContext>

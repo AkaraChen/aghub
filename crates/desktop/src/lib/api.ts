@@ -72,9 +72,12 @@ interface ApiErrorBody {
 	code?: string;
 }
 
-export function createApi(baseUrl: string) {
+export function createApi(baseUrl: string, token: string) {
 	const client = ky.create({
 		prefix: baseUrl,
+		headers: {
+			Authorization: `Bearer ${token}`,
+		},
 		hooks: {
 			beforeError: [
 				async ({ error }) => {
