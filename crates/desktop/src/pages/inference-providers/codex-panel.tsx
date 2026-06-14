@@ -139,6 +139,12 @@ function CodexCreateProviderDialog({
 	);
 	const effectiveModel = selectCodexModel(selectedModel, modelOptions);
 
+	const handleClose = () => {
+		setSelectedProviderId("");
+		setSelectedModel("");
+		onClose();
+	};
+
 	const createMutation = useMutation({
 		...createCodexProviderMutationOptions({
 			api,
@@ -153,12 +159,6 @@ function CodexCreateProviderDialog({
 	const activeError = createMutation.error;
 	const isPending = createMutation.isPending;
 	const hasResponseProviders = responseProviders.length > 0;
-
-	const handleClose = () => {
-		setSelectedProviderId("");
-		setSelectedModel("");
-		onClose();
-	};
 
 	const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
 		event.preventDefault();

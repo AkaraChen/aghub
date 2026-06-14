@@ -264,7 +264,38 @@ mod tests {
 	use rocket::http::{ContentType, Header, Status};
 	use rocket::local::blocking::{Client, LocalResponse};
 	use serde_json::{json, Value};
+	use std::ffi::OsString;
 	use std::path::Path;
+	use std::sync::{Mutex, MutexGuard, OnceLock};
+
+	struct PathEnvGuard {
+		_lock: MutexGuard<'static, ()>,
+		previous: Option<OsString>,
+	}
+
+	impl Drop for PathEnvGuard {
+		fn drop(&mut self) {
+			match &self.previous {
+				Some(path) => std::env::set_var("PATH", path),
+				None => std::env::remove_var("PATH"),
+			}
+		}
+	}
+
+	fn env_lock() -> &'static Mutex<()> {
+		static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+		LOCK.get_or_init(|| Mutex::new(()))
+	}
+
+	fn hide_cli_path() -> PathEnvGuard {
+		let lock = env_lock().lock().expect("env lock");
+		let previous = std::env::var_os("PATH");
+		std::env::set_var("PATH", "");
+		PathEnvGuard {
+			_lock: lock,
+			previous,
+		}
+	}
 
 	fn test_client(app_data_dir: &Path) -> Client {
 		Client::tracked(build_rocket(
@@ -373,6 +404,7 @@ mod tests {
 
 	#[test]
 	fn route_skill_create_update_delete_persists_project_files() {
+		let _path_guard = hide_cli_path();
 		let app_data_dir = tempfile::tempdir().expect("app data dir");
 		let project_dir = tempfile::tempdir().expect("project dir");
 		let client = test_client(app_data_dir.path());
@@ -478,9 +510,15 @@ mod tests {
 		let body = response_json(response);
 		assert_eq!(body["transport"]["args"], json!(["updated.js"]));
 
+		let config_path = project_dir.path().join(".mcp.json");
+		assert!(config_path.exists(), "mcp config should be persisted");
+		let persisted =
+			std::fs::read_to_string(&config_path).expect("mcp config");
+		assert!(persisted.contains("route-mcp"));
+		assert!(persisted.contains("updated.js"));
+
 		let response = delete_json(&client, &item_uri);
 		assert_eq!(response.status(), Status::NoContent);
-		let config_path = project_dir.path().join(".mcp.json");
 		if config_path.exists() {
 			let persisted =
 				std::fs::read_to_string(config_path).expect("mcp config");
