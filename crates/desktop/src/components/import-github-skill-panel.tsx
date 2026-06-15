@@ -1,7 +1,6 @@
 import {
 	BookOpenIcon,
 	CheckCircleIcon,
-	ChevronDownIcon,
 	EyeIcon,
 	XCircleIcon,
 } from "@heroicons/react/24/solid";
@@ -11,6 +10,7 @@ import {
 	Card,
 	Checkbox,
 	Chip,
+	Disclosure,
 	FieldError,
 	Fieldset,
 	Form,
@@ -248,9 +248,9 @@ export function ImportGithubSkillPanel({
 		installMutation.reset();
 	};
 
-	// Card 1 toggle: re-opening resets everything back to scanning
-	const handleCard1Toggle = () => {
-		if (!card1Open) {
+	// Card 1: re-opening resets everything back to scanning
+	const handleCard1ExpandedChange = (isExpanded: boolean) => {
+		if (isExpanded) {
 			// Reset all downstream state
 			setScannedSkills([]);
 			setSelectedPaths(new Set());
@@ -267,19 +267,7 @@ export function ImportGithubSkillPanel({
 			branchScanMutation.reset();
 			installMutation.reset();
 		}
-		setCard1Open((v) => !v);
-	};
-
-	// Card 2 toggle: only when it has been reached
-	const handleCard2Toggle = () => {
-		if (!cardReached(2, phase)) return;
-		setCard2Open((v) => !v);
-	};
-
-	// Card 3 toggle: only when it has been reached
-	const handleCard3Toggle = () => {
-		if (!cardReached(3, phase)) return;
-		setCard3Open((v) => !v);
+		setCard1Open(isExpanded);
 	};
 
 	const togglePath = (path: string) => {
@@ -318,46 +306,27 @@ export function ImportGithubSkillPanel({
 				</div>
 
 				{/* ── Card 1: Repository & Credential ── */}
-				<Card
-					className={cn(
-						!card1Active && "opacity-60",
-						!card1Open && "!pb-0",
-					)}
-				>
-					<button
-						type="button"
-						className="flex w-full items-center justify-between text-left"
-						onClick={handleCard1Toggle}
-						aria-expanded={card1Open}
+				<Card className={cn(!card1Active && "opacity-60")}>
+					<Disclosure
+						isExpanded={card1Open}
+						onExpandedChange={handleCard1ExpandedChange}
 					>
-						<div className="min-w-0">
-							<h2 className="text-base font-semibold text-foreground">
-								{t("repositoryAndCredentials")}
-							</h2>
-							{!card1Open && urlValue && (
-								<p className="mt-0.5 truncate text-xs text-muted">
-									{urlValue}
-								</p>
-							)}
-						</div>
-						<span className="ml-3 shrink-0 text-muted">
-							<ChevronDownIcon
-								className={cn(
-									"size-4 transition-transform duration-300",
-									card1Open ? "rotate-0" : "-rotate-90",
+						<Disclosure.Trigger className="flex w-full items-center justify-between text-left">
+							<div className="min-w-0">
+								<h2 className="text-base font-semibold text-foreground">
+									{t("repositoryAndCredentials")}
+								</h2>
+								{!card1Open && urlValue && (
+									<p className="mt-0.5 truncate text-xs text-muted">
+										{urlValue}
+									</p>
 								)}
-							/>
-						</span>
-					</button>
-
-					<div
-						className={cn(
-							"grid transition-[grid-template-rows] duration-300 ease-out",
-							card1Open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-						)}
-					>
-						<div className="overflow-hidden px-0.5">
-							<Card.Content className="pt-0">
+							</div>
+							<Disclosure.Indicator />
+						</Disclosure.Trigger>
+						<Disclosure.Content>
+							<div className="px-0.5">
+								<Card.Content className="pt-0">
 								{scanError && (
 									<Alert className="mb-4" status="danger">
 										<Alert.Indicator />
@@ -584,79 +553,53 @@ export function ImportGithubSkillPanel({
 								</Form>
 							</Card.Content>
 						</div>
-					</div>
+						</Disclosure.Content>
+					</Disclosure>
 				</Card>
 
 				{/* ── Card 2: Select Skills + Target Agent ── */}
-				<Card
-					className={cn(
-						!card2Active && "opacity-60",
-						!card2Open && "!pb-0",
-					)}
-				>
-					<button
-						type="button"
-						className={cn(
-							"flex w-full items-center justify-between text-left",
-							!card2Reached && "cursor-not-allowed",
-						)}
-						onClick={handleCard2Toggle}
-						aria-expanded={card2Open}
-						disabled={!card2Reached}
+				<Card className={cn(!card2Active && "opacity-60")}>
+					<Disclosure
+						isExpanded={card2Open}
+						onExpandedChange={setCard2Open}
+						isDisabled={!card2Reached}
 					>
-						<div className="min-w-0">
-							<h2 className="text-base font-semibold text-foreground">
-								{t("selectSkillsToInstall")}
-							</h2>
-							{!card2Open && card2Reached && (
-								<p className="mt-0.5 text-xs text-muted">
-									{selectedPaths.size} {t("skillsSelected")}
-								</p>
-							)}
-						</div>
-						<div className="ml-3 flex shrink-0 items-center gap-3">
-							{card2Active && (
-								<div
-									className="flex gap-1"
-									onClick={(e) => e.stopPropagation()}
-								>
-									<Button
-										variant="ghost"
-										size="sm"
-										isDisabled={isBranchSwitching}
-										onPress={selectAll}
-									>
-										{t("selectAll")}
-									</Button>
-									<Button
-										variant="ghost"
-										size="sm"
-										isDisabled={isBranchSwitching}
-										onPress={deselectAll}
-									>
-										{t("deselectAll")}
-									</Button>
-								</div>
-							)}
-							<span className="text-muted">
-								<ChevronDownIcon
-									className={cn(
-										"size-4 transition-transform duration-300",
-										card2Open ? "rotate-0" : "-rotate-90",
+						<Disclosure.Trigger className="flex w-full items-center justify-between text-left">
+							<div className="min-w-0">
+								<h2 className="text-base font-semibold text-foreground">
+									{t("selectSkillsToInstall")}
+								</h2>
+								{!card2Open && card2Reached && (
+									<p className="mt-0.5 text-xs text-muted">
+										{selectedPaths.size} {t("skillsSelected")}
+									</p>
+								)}
+							</div>
+							<Disclosure.Indicator />
+						</Disclosure.Trigger>
+						<Disclosure.Content>
+							<div className="px-0.5">
+								<Card.Content className="space-y-4 pt-0">
+									{card2Active && (
+										<div className="flex gap-1">
+											<Button
+												variant="ghost"
+												size="sm"
+												isDisabled={isBranchSwitching}
+												onPress={selectAll}
+											>
+												{t("selectAll")}
+											</Button>
+											<Button
+												variant="ghost"
+												size="sm"
+												isDisabled={isBranchSwitching}
+												onPress={deselectAll}
+											>
+												{t("deselectAll")}
+											</Button>
+										</div>
 									)}
-								/>
-							</span>
-						</div>
-					</button>
-
-					<div
-						className={cn(
-							"grid transition-[grid-template-rows] duration-300 ease-out",
-							card2Open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-						)}
-					>
-						<div className="overflow-hidden px-0.5">
-							<Card.Content className="space-y-4 pt-0">
 								{installError && (
 									<Alert status="danger">
 										<Alert.Indicator />
@@ -847,7 +790,9 @@ export function ImportGithubSkillPanel({
 									<div className="flex justify-end gap-2 pt-2">
 										<Button
 											variant="secondary"
-											onPress={handleCard1Toggle}
+											onPress={() =>
+												handleCard1ExpandedChange(true)
+											}
 										>
 											{t("back")}
 										</Button>
@@ -870,59 +815,38 @@ export function ImportGithubSkillPanel({
 								)}
 							</Card.Content>
 						</div>
-					</div>
+						</Disclosure.Content>
+					</Disclosure>
 				</Card>
 
 				{/* ── Card 3: Install progress / results ── */}
-				<Card
-					className={cn(
-						!card3Active && "opacity-60",
-						!card3Open && "!pb-0",
-					)}
-				>
-					<button
-						type="button"
-						className={cn(
-							"flex w-full items-center justify-between text-left",
-							!card3Reached && "cursor-not-allowed",
-						)}
-						onClick={handleCard3Toggle}
-						aria-expanded={card3Open}
-						disabled={!card3Reached}
+				<Card className={cn(!card3Active && "opacity-60")}>
+					<Disclosure
+						isExpanded={card3Open}
+						onExpandedChange={setCard3Open}
+						isDisabled={!card3Reached}
 					>
-						<div className="min-w-0">
-							<h2 className="text-base font-semibold text-foreground">
-								{phase === "done"
-									? t("installComplete")
-									: t("installingSkills")}
-							</h2>
-							{!card3Open && phase === "done" && (
-								<p className="mt-0.5 text-xs text-muted">
-									{successCount}{" "}
-									{t("installed").toLowerCase()}
-									{failCount > 0 &&
-										`, ${failCount} ${t("skillsFailed")}`}
-								</p>
-							)}
-						</div>
-						<span className="ml-3 shrink-0 text-muted">
-							<ChevronDownIcon
-								className={cn(
-									"size-4 transition-transform duration-300",
-									card3Open ? "rotate-0" : "-rotate-90",
+						<Disclosure.Trigger className="flex w-full items-center justify-between text-left">
+							<div className="min-w-0">
+								<h2 className="text-base font-semibold text-foreground">
+									{phase === "done"
+										? t("installComplete")
+										: t("installingSkills")}
+								</h2>
+								{!card3Open && phase === "done" && (
+									<p className="mt-0.5 text-xs text-muted">
+										{successCount}{" "}
+										{t("installed").toLowerCase()}
+										{failCount > 0 &&
+											`, ${failCount} ${t("skillsFailed")}`}
+									</p>
 								)}
-							/>
-						</span>
-					</button>
-
-					<div
-						className={cn(
-							"grid transition-[grid-template-rows] duration-300 ease-out",
-							card3Open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-						)}
-					>
-						<div className="overflow-hidden px-0.5">
-							<Card.Content className="pt-0">
+							</div>
+							<Disclosure.Indicator />
+						</Disclosure.Trigger>
+						<Disclosure.Content>
+							<div className="px-0.5">
+								<Card.Content className="pt-0">
 								{phase === "installing" ? (
 									<div className="flex flex-col items-center gap-3 py-6">
 										<Spinner size="lg" />
@@ -1017,7 +941,8 @@ export function ImportGithubSkillPanel({
 								)}
 							</Card.Content>
 						</div>
-					</div>
+						</Disclosure.Content>
+					</Disclosure>
 				</Card>
 			</div>
 
