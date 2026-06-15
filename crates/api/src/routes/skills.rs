@@ -1654,7 +1654,7 @@ mod tests {
 			&skill_md.display().to_string(),
 			"hello-skill",
 		)
-		.unwrap();
+		.unwrap_or_else(|e| panic!("{}", e.body.error));
 
 		assert_eq!(
 			target_dir,
