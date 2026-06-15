@@ -24,21 +24,17 @@ skill = { path = "../skill" }
 skills-sh = { path = "../skills-sh" }
 rocket = { version = "0.5", features = [ "json" ] }
 rocket_cors = "0.6.0"
-tokio = { version = "1", features = [ "rt-multi-thread", "macros", "process" ] }
+tokio = { workspace = true, features = [ "rt-multi-thread", "macros", "process" ] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 dirs = { workspace = true }
 ts-rs = { workspace = true }
-which = "8"
+which = { workspace = true }
 open = "5"
-tempfile = "3"
-keyring = { version = "3", features = [
-	"apple-native",
-	"windows-native",
-	"linux-native",
-] }
-uuid = { version = "1", features = [ "v4" ] }
-log = "0.4.31"
-reqwest = { version = "0.13", features = [ "json" ] }
+tempfile = { workspace = true }
+keyring = { workspace = true }
+uuid = { workspace = true }
+log = { workspace = true }
+reqwest = { workspace = true }
 url = { workspace = true }

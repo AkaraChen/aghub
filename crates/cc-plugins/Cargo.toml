@@ -14,7 +14,7 @@ reqwest = { workspace = true }
 aghub-git = { path = "../git" }
 
 # Async runtime
-tokio = { version = "1", features = [
+tokio = { workspace = true, features = [
 	"fs",
 	"process",
 	"time",
@@ -27,7 +27,7 @@ flate2 = "1.0"
 tar = "0.4"
 
 # Date/time
-chrono = { version = "0.4", features = [ "serde" ] }
+chrono = { workspace = true }
 
 # Hash for URL-based sources
 sha2 = "0.11"
@@ -37,8 +37,8 @@ semver = "1.0.28"
 thiserror = { workspace = true }
 
 # Logging
-log = "0.4"
+log = { workspace = true }
 tempfile = { workspace = true }
 
 # CLI binary detection
-which = "8"
+which = { workspace = true }

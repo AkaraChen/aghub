@@ -35,6 +35,8 @@ thiserror = "2.0"
 dirs = "6.0"
 libc = "0.2"
 ts-rs = "12.0.1"
+which = "8"
+log = "0.4.31"
 
 # CLI dependencies
 clap = { version = "4.5", features = [ "derive" ] }
@@ -45,6 +47,16 @@ colored = "3.0"
 # HTTP dependencies
 reqwest = { version = "0.13", features = [ "json" ] }
 url = "2.5"
+
+# Async and shared platform dependencies
+tokio = "1"
+keyring = { version = "3", features = [
+	"apple-native",
+	"windows-native",
+	"linux-native",
+] }
+uuid = { version = "1", features = [ "v4" ] }
+tauri = "2"
 
 # Testing dependencies
 tempfile = "3.10"
@@ -60,6 +72,9 @@ toml_edit = "0.25"
 
 # Interactive CLI
 inquire = "0.9"
+
+# Date/time
+chrono = { version = "0.4", features = [ "serde" ] }
 
 # Git hooks
 cargo-husky = { version = "1", default-features = false, features = [
