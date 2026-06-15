@@ -2,6 +2,12 @@
 	"name": "aghub",
 	"type": "module",
 	"private": true,
+	"workspaces": {
+		"catalog": {
+			"react": "19.2.7",
+			"react-dom": "19.2.7"
+		}
+	},
 	"scripts": {
 		"dev": "vite",
 		"build": "tsc && vite build",
@@ -47,9 +53,9 @@
 		"pathe": "^2.0.3",
 		"pinyin-pro": "^3.28.1",
 		"posthog-js": "^1.378.1",
-		"react": "19.2.7",
+		"react": "catalog:",
 		"react-aria-components": "^1.16.0",
-		"react-dom": "19.2.7",
+		"react-dom": "catalog:",
 		"react-grab": "^0.1.32",
 		"react-hook-form": "^7.79.0",
 		"react-i18next": "^17.0.0",

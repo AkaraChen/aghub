@@ -15,8 +15,8 @@ dirs = { workspace = true }
 toml = { workspace = true }
 tempfile = { workspace = true }
 skill = { path = "../skill" }
-which = "8"
-log = "0.4.31"
+which = { workspace = true }
+log = { workspace = true }
 
 [dev-dependencies]
 aghub-agents = { path = "../agents" }
