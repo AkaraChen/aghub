@@ -49,8 +49,21 @@ const tableComponents: TableComponents<MarketSkill> = {
 
 function buildSkillsShUrl(skill: MarketSkill) {
 	const sourceParts = skill.source.split("/").filter(Boolean);
-	const pathParts =
-		sourceParts[0] === "github" ? sourceParts.slice(1) : sourceParts;
+	const pathParts = (() => {
+		if (sourceParts.length === 0) {
+			return [];
+		}
+
+		if (sourceParts[0] === "github") {
+			return sourceParts.slice(1);
+		}
+
+		if (sourceParts[0] === "site") {
+			return sourceParts;
+		}
+
+		return ["site", ...sourceParts];
+	})();
 	const skillSegment = skill.slug || skill.name;
 	const urlSegments = [...pathParts, skillSegment]
 		.filter(Boolean)
@@ -126,11 +139,7 @@ export default function SkillsSearchPage() {
 				toast.success(t("skillsShLinkCopied"));
 			} catch (error) {
 				console.error("Failed to copy skills.sh URL:", error);
-				toast.danger(
-					error instanceof Error
-						? error.message
-						: t("skillsShLinkCopyFailed"),
-				);
+				toast.danger(t("skillsShLinkCopyFailed"));
 			}
 		},
 		[t],
