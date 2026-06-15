@@ -761,6 +761,10 @@ export default {
 	searchToFindSkills: "搜尋以從 skills.sh 尋找技能",
 	poweredByVercel: "由 Vercel 提供支援",
 	dataFromSkillsSh: "資料來自 skills.sh",
+	copySkillsShLink: "複製 skills.sh 連結",
+	copySkillsShLinkHint: "點擊可複製這個 skills.sh 地址。",
+	skillsShLinkCopied: "skills.sh 連結已複製",
+	skillsShLinkCopyFailed: "複製 skills.sh 連結失敗",
 
 	// Projects
 	addProject: "新增專案",
