@@ -1,8 +1,8 @@
 use aghub_inference::{
-	AgentProviderBinding, AgentProviderCredential, AgentProviderModel,
-	AgentProviderSource, CodexProfileState, CodexProviderState,
-	CreateInferenceProvider, InferenceProvider, InferenceProviderFormat,
-	UpdateInferenceProvider,
+	AgentProviderBinding, AgentProviderBindingRow, AgentProviderCredential,
+	AgentProviderModel, AgentProviderSource, CodexProfileState,
+	CodexProviderState, CreateInferenceProvider, InferenceProvider,
+	InferenceProviderFormat, UpdateInferenceProvider,
 };
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -254,6 +254,10 @@ pub struct AgentProviderResponse {
 	pub source: AgentProviderSourceDto,
 	pub matched_inference_provider:
 		Option<AgentProviderMatchedInferenceProviderResponse>,
+	pub model: Option<String>,
+	pub haiku_model: Option<String>,
+	pub sonnet_model: Option<String>,
+	pub opus_model: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -327,6 +331,10 @@ impl From<&AgentProviderBinding> for AgentProviderResponse {
 				.collect(),
 			source: provider.source.into(),
 			matched_inference_provider: None,
+			model: None,
+			haiku_model: None,
+			sonnet_model: None,
+			opus_model: None,
 		}
 	}
 }
@@ -340,12 +348,31 @@ impl AgentProviderResponse {
 		self.matched_inference_provider = Some(provider.into());
 		self
 	}
+
+	pub fn with_agent_binding_models(
+		mut self,
+		row: &AgentProviderBindingRow,
+	) -> Self {
+		self.model = row.model.clone();
+		self.haiku_model = row.haiku_model.clone();
+		self.sonnet_model = row.sonnet_model.clone();
+		self.opus_model = row.opus_model.clone();
+		self
+	}
 }
 
 #[derive(Debug, Deserialize, TS)]
 #[ts(export)]
 pub struct CreateAgentProviderRequest {
 	pub inference_provider_id: String,
+	#[ts(optional)]
+	pub model: Option<String>,
+	#[ts(optional)]
+	pub haiku_model: Option<String>,
+	#[ts(optional)]
+	pub sonnet_model: Option<String>,
+	#[ts(optional)]
+	pub opus_model: Option<String>,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -353,6 +380,14 @@ pub struct CreateAgentProviderRequest {
 pub struct UpdateAgentProviderRequest {
 	pub name: Option<String>,
 	pub api_key: Option<String>,
+	#[ts(optional)]
+	pub model: Option<Option<String>>,
+	#[ts(optional)]
+	pub haiku_model: Option<Option<String>>,
+	#[ts(optional)]
+	pub sonnet_model: Option<Option<String>>,
+	#[ts(optional)]
+	pub opus_model: Option<Option<String>>,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -365,6 +400,8 @@ pub struct UpdateCodexActiveProfileRequest {
 #[ts(export)]
 pub struct UpdateCodexProfileProviderRequest {
 	pub provider_id: String,
+	#[ts(optional)]
+	pub model: Option<Option<String>>,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -372,6 +409,10 @@ pub struct UpdateCodexProfileProviderRequest {
 pub struct ClaudeProviderStateResponse {
 	pub providers: Vec<AgentProviderResponse>,
 	pub active_provider_id: String,
+	pub active_model: Option<String>,
+	pub active_haiku_model: Option<String>,
+	pub active_sonnet_model: Option<String>,
+	pub active_opus_model: Option<String>,
 }
 
 #[derive(Debug, Deserialize, TS)]

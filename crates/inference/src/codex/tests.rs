@@ -85,6 +85,13 @@ fn provider_without_versioned_base_url() -> InferenceProvider {
 fn create_inventory_provider(
 	store: &InferenceProviderStore<MemoryCredentialStore>,
 ) -> InferenceProvider {
+	create_inventory_provider_with_models(store, vec!["openai/gpt-5.4"])
+}
+
+fn create_inventory_provider_with_models(
+	store: &InferenceProviderStore<MemoryCredentialStore>,
+	models: Vec<&str>,
+) -> InferenceProvider {
 	store
 		.create(CreateInferenceProvider {
 			latin_name: "openrouter".to_string(),
@@ -93,7 +100,7 @@ fn create_inventory_provider(
 			api_base_url: "https://openrouter.ai/api/v1".to_string(),
 			preset: None,
 			api_key: "sk-test".to_string(),
-			models: vec!["openai/gpt-5.4".to_string()],
+			models: models.into_iter().map(ToString::to_string).collect(),
 		})
 		.unwrap()
 }
@@ -465,6 +472,280 @@ model_provider = "openai"
 		Some("openai/gpt-5.4")
 	);
 	assert!(config.get("model").is_none());
+}
+
+#[test]
+fn set_profile_provider_uses_requested_model_for_inventory_binding() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	fs::write(
+		adapter.config_path(),
+		r#"
+profile = "work"
+
+[profiles.work]
+model = "gpt-5"
+model_provider = "openai"
+"#,
+	)
+	.unwrap();
+
+	let store = store(&temp);
+	let provider = create_inventory_provider_with_models(
+		&store,
+		vec!["model-a", "model-b"],
+	);
+	adapter
+		.add_inventory_provider(&store, &provider, "sk-test")
+		.unwrap();
+
+	let state = adapter
+		.set_profile_provider_model(
+			&store,
+			"work",
+			"openrouter",
+			Some(Some("model-b")),
+		)
+		.unwrap();
+
+	let work = state
+		.profiles
+		.iter()
+		.find(|profile| profile.id == "work")
+		.unwrap();
+	assert_eq!(work.selected_provider_id, "openrouter");
+	assert_eq!(work.model.as_deref(), Some("model-b"));
+
+	let config = fs::read_to_string(adapter.config_path())
+		.unwrap()
+		.parse::<DocumentMut>()
+		.unwrap();
+	assert_eq!(
+		config["profiles"]["work"]["model_provider"].as_str(),
+		Some("openrouter")
+	);
+	assert_eq!(
+		config["profiles"]["work"]["model"].as_str(),
+		Some("model-b")
+	);
+}
+
+#[test]
+fn set_profile_provider_writes_model_catalog_for_inventory_binding() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	fs::write(
+		adapter.config_path(),
+		r#"
+model_context_window = 64000
+model_provider = "openai"
+"#,
+	)
+	.unwrap();
+
+	let store = store(&temp);
+	let provider = create_inventory_provider_with_models(
+		&store,
+		vec!["model-a", "model-b"],
+	);
+	adapter
+		.add_inventory_provider(&store, &provider, "sk-test")
+		.unwrap();
+
+	adapter
+		.set_profile_provider_model(
+			&store,
+			DEFAULT_PROFILE_ID,
+			"openrouter",
+			Some(Some("model-b")),
+		)
+		.unwrap();
+
+	let content = fs::read_to_string(adapter.config_path()).unwrap();
+	let config = content.parse::<DocumentMut>().unwrap();
+	assert_eq!(
+		config["model_catalog_json"].as_str(),
+		Some(GENERATED_MODEL_CATALOG_PATH)
+	);
+
+	let catalog: serde_json::Value = serde_json::from_str(
+		&fs::read_to_string(model_catalog_path(adapter.config_path())).unwrap(),
+	)
+	.unwrap();
+	let models = catalog["models"].as_array().unwrap();
+	assert_eq!(models.len(), 2);
+	assert_eq!(models[0]["slug"].as_str(), Some("model-a"));
+	assert_eq!(models[1]["slug"].as_str(), Some("model-b"));
+	assert_eq!(models[0]["context_window"].as_u64(), Some(64_000));
+	assert_eq!(models[0]["max_context_window"].as_u64(), Some(64_000));
+	assert!(
+		models[0].get("model_messages").is_some(),
+		"Codex custom catalogs need model prompt metadata"
+	);
+	assert_eq!(
+		models[0]["additional_speed_tiers"]
+			.as_array()
+			.unwrap()
+			.len(),
+		0
+	);
+	assert_eq!(models[0]["service_tiers"].as_array().unwrap().len(), 0);
+	assert!(models[0]["availability_nux"].is_null());
+	assert!(models[0]["upgrade"].is_null());
+}
+
+#[test]
+fn set_provider_to_default_clears_generated_model_catalog() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	fs::write(
+		adapter.config_path(),
+		format!(
+			r#"
+model = "model-a"
+model_provider = "openrouter"
+model_catalog_json = "{GENERATED_MODEL_CATALOG_PATH}"
+
+[model_providers.openrouter]
+name = "OpenRouter"
+base_url = "https://openrouter.ai/api/v1"
+wire_api = "responses"
+"#
+		),
+	)
+	.unwrap();
+	let catalog_path = model_catalog_path(adapter.config_path());
+	fs::create_dir_all(catalog_path.parent().unwrap()).unwrap();
+	fs::write(catalog_path, r#"{"models":[]}"#).unwrap();
+
+	let store = store(&temp);
+	adapter
+		.set_profile_provider(&store, DEFAULT_PROFILE_ID, "openai")
+		.unwrap();
+
+	let config = fs::read_to_string(adapter.config_path())
+		.unwrap()
+		.parse::<DocumentMut>()
+		.unwrap();
+	assert!(config.get("model_catalog_json").is_none());
+	assert!(!model_catalog_path(adapter.config_path()).exists());
+}
+
+#[test]
+fn set_provider_to_default_preserves_user_model_catalog_pointer() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	fs::write(
+		adapter.config_path(),
+		r#"
+model = "model-a"
+model_provider = "openrouter"
+model_catalog_json = "my-custom-catalog.json"
+
+[model_providers.openrouter]
+name = "OpenRouter"
+base_url = "https://openrouter.ai/api/v1"
+wire_api = "responses"
+"#,
+	)
+	.unwrap();
+	let catalog_path = model_catalog_path(adapter.config_path());
+	fs::create_dir_all(catalog_path.parent().unwrap()).unwrap();
+	fs::write(&catalog_path, r#"{"models":[]}"#).unwrap();
+
+	let store = store(&temp);
+	adapter
+		.set_profile_provider(&store, DEFAULT_PROFILE_ID, "openai")
+		.unwrap();
+
+	let config = fs::read_to_string(adapter.config_path())
+		.unwrap()
+		.parse::<DocumentMut>()
+		.unwrap();
+	assert_eq!(
+		config["model_catalog_json"].as_str(),
+		Some("my-custom-catalog.json")
+	);
+	assert!(catalog_path.exists());
+}
+
+#[test]
+fn set_profile_provider_updates_model_without_provider_change() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	fs::write(
+		adapter.config_path(),
+		r#"
+profile = "work"
+
+[profiles.work]
+model = "model-a"
+model_provider = "openrouter"
+"#,
+	)
+	.unwrap();
+
+	let store = store(&temp);
+	let provider = create_inventory_provider_with_models(
+		&store,
+		vec!["model-a", "model-b"],
+	);
+	adapter
+		.add_inventory_provider(&store, &provider, "sk-test")
+		.unwrap();
+
+	let state = adapter
+		.set_profile_provider_model(
+			&store,
+			"work",
+			"openrouter",
+			Some(Some("model-b")),
+		)
+		.unwrap();
+
+	let work = state
+		.profiles
+		.iter()
+		.find(|profile| profile.id == "work")
+		.unwrap();
+	assert_eq!(work.selected_provider_id, "openrouter");
+	assert_eq!(work.model.as_deref(), Some("model-b"));
+}
+
+#[test]
+fn set_profile_provider_rejects_unknown_inventory_model() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	fs::write(
+		adapter.config_path(),
+		r#"
+profile = "work"
+
+[profiles.work]
+model_provider = "openai"
+"#,
+	)
+	.unwrap();
+
+	let store = store(&temp);
+	let provider = create_inventory_provider_with_models(
+		&store,
+		vec!["model-a", "model-b"],
+	);
+	adapter
+		.add_inventory_provider(&store, &provider, "sk-test")
+		.unwrap();
+
+	let error = adapter
+		.set_profile_provider_model(
+			&store,
+			"work",
+			"openrouter",
+			Some(Some("missing-model")),
+		)
+		.unwrap_err();
+
+	assert!(matches!(error, InferenceProviderError::NotFound(_)));
 }
 
 #[test]

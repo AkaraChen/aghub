@@ -7,8 +7,10 @@
 
 use crate::errors::{ConfigError, Result};
 use crate::models::{ResourceScope, SubAgent};
-use std::fs;
-use std::path::Path;
+use std::fs::{self, File, OpenOptions};
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 // ── File parsing / formatting ────────────────────────────────────────────────
 
@@ -17,7 +19,7 @@ use std::path::Path;
 /// Reads `name`, `description`, and `developer_instructions` from the TOML
 /// document.  When `name` is absent or empty the file stem is used instead.
 fn parse_file(path: &Path) -> Option<SubAgent> {
-	let content = fs::read_to_string(path).ok()?;
+	let content = read_regular_file(path).ok()?;
 	let stem = path
 		.file_stem()
 		.and_then(|n| n.to_str())
@@ -130,21 +132,149 @@ fn load_from_dir(dir: &Path) -> Vec<SubAgent> {
 	};
 	let mut agents: Vec<SubAgent> = entries
 		.flatten()
-		.filter(|e| {
-			e.path().extension().and_then(|x| x.to_str()) == Some("toml")
-		})
+		.filter(is_regular_toml_entry)
 		.filter_map(|e| parse_file(&e.path()))
 		.collect();
 	agents.sort_by(|a, b| a.name.cmp(&b.name));
 	agents
 }
 
-fn save_to_dir(dir: &Path, agent: &SubAgent) -> Result<()> {
+fn is_regular_toml_entry(entry: &fs::DirEntry) -> bool {
+	if entry.path().extension().and_then(|x| x.to_str()) != Some("toml") {
+		return false;
+	}
+	entry.file_type().map(|t| t.is_file()).unwrap_or(false)
+}
+
+fn safe_canonical_dir(dir: &Path) -> Result<PathBuf> {
 	fs::create_dir_all(dir)?;
+	let meta = fs::symlink_metadata(dir)?;
+	if meta.file_type().is_symlink() || !meta.is_dir() {
+		return Err(ConfigError::InvalidConfig(format!(
+			"Codex sub-agent directory is not a real directory: {}",
+			dir.display()
+		)));
+	}
+	dir.canonicalize().map_err(ConfigError::from)
+}
+
+fn validate_existing_file(file: &Path, canonical_dir: &Path) -> Result<()> {
+	let meta = fs::symlink_metadata(file)?;
+	if meta.file_type().is_symlink() {
+		return Err(ConfigError::InvalidConfig(format!(
+			"Refusing to follow Codex sub-agent symlink: {}",
+			file.display()
+		)));
+	}
+	if !meta.is_file() {
+		return Err(ConfigError::InvalidConfig(format!(
+			"Codex sub-agent path is not a regular file: {}",
+			file.display()
+		)));
+	}
+	let canonical_file = file.canonicalize()?;
+	if !canonical_file.starts_with(canonical_dir) {
+		return Err(ConfigError::InvalidConfig(format!(
+			"Codex sub-agent path escapes agents directory: {}",
+			file.display()
+		)));
+	}
+	Ok(())
+}
+
+fn read_regular_file(path: &Path) -> Result<String> {
+	let canonical_dir = path
+		.parent()
+		.and_then(|p| p.canonicalize().ok())
+		.ok_or_else(|| {
+			ConfigError::InvalidConfig(format!(
+				"Codex sub-agent path has no parent: {}",
+				path.display()
+			))
+		})?;
+	validate_existing_file(path, &canonical_dir)?;
+	let mut content = String::new();
+	open_no_follow(path)?.read_to_string(&mut content)?;
+	Ok(content)
+}
+
+fn read_original(file: &Path, canonical_dir: &Path) -> Result<Option<String>> {
+	match fs::symlink_metadata(file) {
+		Ok(_) => {}
+		Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+			return Ok(None);
+		}
+		Err(e) => return Err(e.into()),
+	}
+	validate_existing_file(file, canonical_dir)?;
+	let mut content = String::new();
+	open_no_follow(file)?.read_to_string(&mut content)?;
+	Ok(Some(content))
+}
+
+#[cfg(unix)]
+fn open_no_follow(path: &Path) -> std::io::Result<File> {
+	use std::os::unix::fs::OpenOptionsExt;
+
+	OpenOptions::new()
+		.read(true)
+		.custom_flags(libc::O_NOFOLLOW)
+		.open(path)
+}
+
+#[cfg(not(unix))]
+fn open_no_follow(path: &Path) -> std::io::Result<File> {
+	OpenOptions::new().read(true).open(path)
+}
+
+fn write_replace(file: &Path, content: &str) -> Result<()> {
+	let dir = file.parent().ok_or_else(|| {
+		ConfigError::InvalidConfig(format!(
+			"Codex sub-agent path has no parent: {}",
+			file.display()
+		))
+	})?;
+	let file_name =
+		file.file_name().and_then(|n| n.to_str()).ok_or_else(|| {
+			ConfigError::InvalidConfig(format!(
+				"Codex sub-agent path has invalid filename: {}",
+				file.display()
+			))
+		})?;
+	let suffix = SystemTime::now()
+		.duration_since(UNIX_EPOCH)
+		.map(|d| d.as_nanos())
+		.unwrap_or_default();
+	let tmp = dir.join(format!(".{file_name}.{suffix}.tmp"));
+	let result = (|| -> Result<()> {
+		let mut handle =
+			OpenOptions::new().write(true).create_new(true).open(&tmp)?;
+		handle.write_all(content.as_bytes())?;
+		handle.sync_all()?;
+		drop(handle);
+		fs::rename(&tmp, file)?;
+		Ok(())
+	})();
+	if result.is_err() {
+		let _ = fs::remove_file(&tmp);
+	}
+	result
+}
+
+fn save_to_dir(dir: &Path, agent: &SubAgent) -> Result<()> {
+	let canonical_dir = safe_canonical_dir(dir)?;
 	let safe = sanitize_filename(&agent.name);
 	let file = dir.join(format!("{safe}.toml"));
-	let original = fs::read_to_string(&file).ok();
-	fs::write(&file, format(agent, original.as_deref())?)?;
+	let original = read_original(&file, &canonical_dir)?;
+	let content = format(agent, original.as_deref())?;
+	write_replace(&file, &content)?;
+	let canonical_file = file.canonicalize()?;
+	if !canonical_file.starts_with(&canonical_dir) {
+		return Err(ConfigError::InvalidConfig(format!(
+			"Codex sub-agent path escapes agents directory: {}",
+			file.display()
+		)));
+	}
 	Ok(())
 }
 
@@ -289,6 +419,53 @@ mod tests {
 		assert_eq!(loaded[0].name, "Test Agent");
 		assert_eq!(loaded[0].description, Some("A test agent".to_string()));
 		assert_eq!(loaded[0].instruction, Some("Do X.".to_string()));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn load_ignores_symlinked_toml_files() {
+		use std::os::unix::fs::symlink;
+
+		let dir = TempDir::new().unwrap();
+		let outside = dir.path().join("outside.toml");
+		fs::write(
+			&outside,
+			concat!(
+				"name = \"outside\"\n",
+				"developer_instructions = \"secret\"\n",
+			),
+		)
+		.unwrap();
+		let agents_dir = dir.path().join("agents");
+		fs::create_dir(&agents_dir).unwrap();
+		symlink(&outside, agents_dir.join("evil.toml")).unwrap();
+
+		let loaded = load_from_dir(&agents_dir);
+		assert!(loaded.is_empty());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn save_rejects_symlinked_target_without_clobbering_victim() {
+		use std::os::unix::fs::symlink;
+
+		let dir = TempDir::new().unwrap();
+		let agents_dir = dir.path().join("agents");
+		fs::create_dir(&agents_dir).unwrap();
+		let victim = dir.path().join("victim.txt");
+		fs::write(&victim, "do not overwrite").unwrap();
+		symlink(&victim, agents_dir.join("evil.toml")).unwrap();
+		let agent = SubAgent {
+			name: "evil".to_string(),
+			description: Some("malicious".to_string()),
+			instruction: Some("clobber".to_string()),
+			source_path: None,
+			config_source: None,
+		};
+
+		let err = save_to_dir(&agents_dir, &agent).unwrap_err();
+		assert!(err.to_string().contains("symlink"));
+		assert_eq!(fs::read_to_string(&victim).unwrap(), "do not overwrite");
 	}
 
 	#[test]

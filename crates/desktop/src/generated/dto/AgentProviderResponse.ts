@@ -15,4 +15,8 @@ export type AgentProviderResponse = {
 	models: Array<AgentProviderModelResponse>;
 	source: AgentProviderSourceDto;
 	matched_inference_provider: AgentProviderMatchedInferenceProviderResponse | null;
+	model: string | null;
+	haiku_model: string | null;
+	sonnet_model: string | null;
+	opus_model: string | null;
 };

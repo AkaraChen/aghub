@@ -3,6 +3,22 @@ use rocket::Request;
 
 use crate::error::ErrorBody;
 
+#[catch(401)]
+pub fn unauthorized(_: &Request) -> Json<ErrorBody> {
+	Json(ErrorBody {
+		error: "Authentication token is required".to_string(),
+		code: "UNAUTHORIZED",
+	})
+}
+
+#[catch(403)]
+pub fn forbidden(_: &Request) -> Json<ErrorBody> {
+	Json(ErrorBody {
+		error: "Authentication token is invalid".to_string(),
+		code: "FORBIDDEN",
+	})
+}
+
 #[catch(404)]
 pub fn not_found(req: &Request) -> Json<ErrorBody> {
 	Json(ErrorBody {

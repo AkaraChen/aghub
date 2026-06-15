@@ -88,6 +88,8 @@ export function projectSkillLockQueryOptions({
 interface SkillPathQueryParams {
 	api: ApiClient;
 	path?: string;
+	scope?: "global" | "project" | "all";
+	projectRoot?: string;
 	enabled?: boolean;
 	staleTime?: number;
 }
@@ -95,12 +97,14 @@ interface SkillPathQueryParams {
 export function skillContentQueryOptions({
 	api,
 	path,
+	scope = "global",
+	projectRoot,
 	enabled = true,
 	staleTime = 60_000,
 }: SkillPathQueryParams) {
 	return queryOptions({
-		queryKey: queryKeys.skills.content(path ?? ""),
-		queryFn: () => api.skills.getContent(path!),
+		queryKey: queryKeys.skills.content(path ?? "", scope, projectRoot),
+		queryFn: () => api.skills.getContent(path!, scope, projectRoot),
 		enabled: enabled && Boolean(path),
 		staleTime,
 	});
@@ -109,12 +113,14 @@ export function skillContentQueryOptions({
 export function skillTreeQueryOptions({
 	api,
 	path,
+	scope = "global",
+	projectRoot,
 	enabled = true,
 	staleTime = 60_000,
 }: SkillPathQueryParams) {
 	return queryOptions({
-		queryKey: queryKeys.skills.tree(path ?? ""),
-		queryFn: () => api.skills.getTree(path!),
+		queryKey: queryKeys.skills.tree(path ?? "", scope, projectRoot),
+		queryFn: () => api.skills.getTree(path!, scope, projectRoot),
 		enabled: enabled && Boolean(path),
 		staleTime,
 	});

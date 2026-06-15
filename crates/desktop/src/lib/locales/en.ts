@@ -203,6 +203,14 @@ export default {
 	codexProfileUpdateError: "Failed to switch Codex profile",
 	codexProfileProviderUpdated: "Codex profile provider updated",
 	codexProfileProviderUpdateError: "Failed to update Codex profile provider",
+	codexModelSettings: "Model settings",
+	providerModelSettings: "{{name}} model settings",
+	codexModel: "Model",
+	codexPrimaryModel: "Primary model",
+	codexPrimaryModelHelp:
+		"This is the default model for this Codex provider. The provider's full model list is still written to Codex's model catalog, so you can choose any of those models from Codex CLI.",
+	codexProviderNeedsModels:
+		"Add at least one model to this inference provider first.",
 	syncCodexProvider: "Update Codex provider",
 	syncCodexProviderFromInferenceProvider:
 		"Update provider config from {{name}}",
@@ -217,6 +225,20 @@ export default {
 	createClaudeProvider: "Add Claude Code Provider",
 	noInferenceProvidersForClaude:
 		"Create an Anthropic inference provider first, then select it here.",
+	claudePrimaryModel: "Primary model",
+	claudeHaikuModel: "Haiku model",
+	claudeHaikuModelHelp:
+		"Optional override for Claude Code requests that target Haiku-class models. Choose Use primary model to inherit the primary model.",
+	claudeSonnetModel: "Sonnet model",
+	claudeSonnetModelHelp:
+		"Optional override for Claude Code requests that target Sonnet-class models. Choose Use primary model to inherit the primary model.",
+	claudeOpusModel: "Opus model",
+	claudeOpusModelHelp:
+		"Optional override for Claude Code requests that target Opus-class models. Choose Use primary model to inherit the primary model.",
+	claudeModelSettings: "Model settings",
+	claudeModelUsePrimary: "Use primary model",
+	claudeProviderNeedsModels:
+		"Add at least one model to this inference provider first.",
 	syncClaudeProvider: "Update Claude Code provider",
 	syncClaudeProviderFromInferenceProvider: "Update config from {{name}}",
 	claudeProviderUpdated: "Claude Code configuration updated",
@@ -390,6 +412,14 @@ export default {
 	updateInstalledSuccess: "Update installed successfully",
 	restartToUpdate: "Restart to Update",
 	restartNow: "Restart Now",
+	settingsAutoCheckUpdatesHeading: "Check for updates automatically",
+	settingsAutoCheckUpdatesDescription:
+		"Let aghub check for new versions in the background when the app starts. You can still trigger a manual check at any time.",
+	settingsAutoCheckUpdatesToggleLabel: "Check for updates automatically",
+	settingsAutoCheckUpdatesEnabled: "Automatic update checks enabled",
+	settingsAutoCheckUpdatesDisabled: "Automatic update checks disabled",
+	settingsAutoCheckUpdatesError: "Failed to update automatic update checks",
+	openSettings: "Open Settings",
 	onboardingDescription:
 		"Replay the welcome screen or either guided tour any time.",
 
@@ -726,6 +756,11 @@ export default {
 	deepLinkUnsupportedType: "This deep link type is not supported.",
 	deepLinkInvalidSkill: "This skill link is missing required fields.",
 	deepLinkInvalidMcp: "This MCP link payload is invalid.",
+	executableMcpWarningTitle: "This MCP can run a command",
+	executableMcpWarningDescription:
+		"Stdio MCP servers are executable commands that agents may run later. Only install this import if you trust its source and have reviewed every command, argument, and environment variable below.",
+	confirmExecutableMcp:
+		"I understand this import can persist an executable command for agents to run later.",
 	copyTooltip: "Copy as JSON",
 	copied: "Copied to clipboard",
 	editTooltip: "Edit server",

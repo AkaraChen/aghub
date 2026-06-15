@@ -2,6 +2,7 @@ use rocket::http::Status;
 use rocket::serde::json::Json;
 use skills_sh::{Client, SearchParams};
 
+use crate::auth::ApiAuth;
 use crate::dto::market::MarketSkill;
 use crate::error::ApiError;
 
@@ -9,6 +10,7 @@ use crate::error::ApiError;
 /// `source` defaults to "skills-sh", extensible for future providers
 #[get("/skills-market/search?<q>&<limit>&<source>")]
 pub async fn search_skill_market(
+	_auth: ApiAuth,
 	q: &str,
 	limit: Option<usize>,
 	source: Option<&str>,

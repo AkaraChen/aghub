@@ -98,6 +98,8 @@ export function codexProviderStateQueryOptions({
 export async function invalidateInferenceProviderQueries(
 	queryClient: QueryClient,
 ) {
+	// Provider inventory, agent bindings, passwords, and model state are
+	// cross-linked in the UI, so mutations need to refresh the whole namespace.
 	await queryClient.invalidateQueries({
 		queryKey: queryKeys.inferenceProviders.all(),
 	});
@@ -106,18 +108,11 @@ export async function invalidateInferenceProviderQueries(
 export async function invalidateOpenCodeProviderQueries(
 	queryClient: QueryClient,
 ) {
-	await queryClient.invalidateQueries({
-		queryKey: queryKeys.inferenceProviders.agent("opencode"),
-	});
+	await invalidateInferenceProviderQueries(queryClient);
 }
 
 export async function invalidateCodexProviderQueries(queryClient: QueryClient) {
-	await queryClient.invalidateQueries({
-		queryKey: queryKeys.inferenceProviders.agent("codex"),
-	});
-	await queryClient.invalidateQueries({
-		queryKey: queryKeys.inferenceProviders.agentState("codex"),
-	});
+	await invalidateInferenceProviderQueries(queryClient);
 }
 
 interface CreateInferenceProviderMutationParams {
@@ -543,9 +538,7 @@ export function claudeProviderStateQueryOptions({
 export async function invalidateClaudeProviderQueries(
 	queryClient: QueryClient,
 ) {
-	await queryClient.invalidateQueries({
-		queryKey: queryKeys.inferenceProviders.agentState("claude"),
-	});
+	await invalidateInferenceProviderQueries(queryClient);
 }
 
 interface CreateClaudeProviderMutationParams {
@@ -590,9 +583,6 @@ export function updateClaudeProviderMutationOptions({
 		}) => api.inferenceProviders.updateClaude(id, body),
 		onSuccess: async () => {
 			await invalidateClaudeProviderQueries(queryClient);
-			await queryClient.invalidateQueries({
-				queryKey: queryKeys.inferenceProviders.list(),
-			});
 			await onSuccess?.();
 		},
 	});

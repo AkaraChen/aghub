@@ -270,6 +270,8 @@ pub struct GitSyncRequest {
 	pub skill_path: String,
 	/// Tilde-prefixed `source_path` values of every installation to replace.
 	pub source_paths: Vec<String>,
+	pub scope: Option<String>,
+	pub project_root: Option<String>,
 }
 
 /// Response for a git sync operation.
@@ -314,12 +316,16 @@ pub struct DeleteSkillByPathResponse {
 #[ts(export)]
 pub struct SkillContentQuery {
 	pub path: String,
+	pub scope: Option<String>,
+	pub project_root: Option<String>,
 }
 
 #[derive(Debug, TS, rocket::FromForm)]
 #[ts(export)]
 pub struct SkillTreeQuery {
 	pub path: String,
+	pub scope: Option<String>,
+	pub project_root: Option<String>,
 }
 
 #[derive(Debug, TS, rocket::FromForm)]

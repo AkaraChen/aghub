@@ -63,6 +63,16 @@ fn create_provider(
 	api_base_url: &str,
 	api_key: &str,
 ) -> InferenceProvider {
+	create_provider_with_models(store, name, api_base_url, api_key, Vec::new())
+}
+
+fn create_provider_with_models(
+	store: &InferenceProviderStore<MemoryCredentialStore>,
+	name: &str,
+	api_base_url: &str,
+	api_key: &str,
+	models: Vec<&str>,
+) -> InferenceProvider {
 	store
 		.create(CreateInferenceProvider {
 			latin_name: name
@@ -75,7 +85,7 @@ fn create_provider(
 			api_base_url: api_base_url.to_string(),
 			preset: None,
 			api_key: api_key.to_string(),
-			models: Vec::new(),
+			models: models.into_iter().map(ToString::to_string).collect(),
 		})
 		.unwrap()
 }
@@ -339,6 +349,128 @@ fn active_binding_id_tracks_switches_without_model_selection() {
 	assert_eq!(
 		adapter.load_config_state().unwrap().api_base_url.as_deref(),
 		Some("https://api.two.example")
+	);
+}
+
+#[test]
+fn set_active_binding_model_writes_selected_model_and_aliases() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	let store = store(&temp);
+	fs::write(adapter.config_path(), "{}").unwrap();
+	let provider = create_provider_with_models(
+		&store,
+		"Anthropic One",
+		"https://api.one.example",
+		"sk-one",
+		vec!["claude-a", "claude-b"],
+	);
+
+	let binding = adapter
+		.add_binding(&store, &provider, "sk-one", true)
+		.unwrap();
+	let state = adapter
+		.set_active_binding_model(
+			&store,
+			&binding.id,
+			Some(Some("claude-b".to_string())),
+		)
+		.unwrap();
+
+	assert_eq!(state.default_model.unwrap().model_id.as_str(), "claude-b");
+	assert_eq!(
+		store
+			.get_agent_binding(AGENT_ID, &binding.id)
+			.unwrap()
+			.model
+			.as_deref(),
+		Some("claude-b")
+	);
+
+	let config: Value = serde_json::from_str(
+		&fs::read_to_string(adapter.config_path()).unwrap(),
+	)
+	.unwrap();
+	assert_eq!(config["model"].as_str(), Some("claude-b"));
+	assert_eq!(config["env"]["ANTHROPIC_MODEL"].as_str(), Some("claude-b"));
+	assert_eq!(
+		config["env"]["ANTHROPIC_DEFAULT_HAIKU_MODEL"].as_str(),
+		Some("claude-b")
+	);
+	assert_eq!(
+		config["env"]["ANTHROPIC_DEFAULT_SONNET_MODEL"].as_str(),
+		Some("claude-b")
+	);
+	assert_eq!(
+		config["env"]["ANTHROPIC_DEFAULT_OPUS_MODEL"].as_str(),
+		Some("claude-b")
+	);
+}
+
+#[test]
+fn add_binding_with_models_writes_alias_model_routing() {
+	let temp = tempfile::tempdir().unwrap();
+	let adapter = adapter(&temp);
+	let store = store(&temp);
+	fs::write(adapter.config_path(), "{}").unwrap();
+	let provider = create_provider_with_models(
+		&store,
+		"Anthropic Routing",
+		"https://api.routing.example",
+		"sk-routing",
+		vec![
+			"claude-main",
+			"claude-haiku",
+			"claude-sonnet",
+			"claude-opus",
+		],
+	);
+
+	let binding = adapter
+		.add_binding_with_models(
+			&store,
+			&provider,
+			"sk-routing",
+			ClaudeModelRouting {
+				model: Some("claude-main".to_string()),
+				haiku_model: Some("claude-haiku".to_string()),
+				sonnet_model: Some("claude-sonnet".to_string()),
+				opus_model: Some("claude-opus".to_string()),
+			},
+			true,
+		)
+		.unwrap();
+
+	let row = store.get_agent_binding(AGENT_ID, &binding.id).unwrap();
+	assert_eq!(row.model.as_deref(), Some("claude-main"));
+	assert_eq!(row.haiku_model.as_deref(), Some("claude-haiku"));
+	assert_eq!(row.sonnet_model.as_deref(), Some("claude-sonnet"));
+	assert_eq!(row.opus_model.as_deref(), Some("claude-opus"));
+
+	let config: Value = serde_json::from_str(
+		&fs::read_to_string(adapter.config_path()).unwrap(),
+	)
+	.unwrap();
+	assert_eq!(config["model"].as_str(), Some("claude-main"));
+	assert_eq!(
+		config["env"]["ANTHROPIC_MODEL"].as_str(),
+		Some("claude-main")
+	);
+	assert_eq!(
+		config["env"]["ANTHROPIC_DEFAULT_HAIKU_MODEL"].as_str(),
+		Some("claude-haiku")
+	);
+	assert_eq!(
+		config["env"]["ANTHROPIC_DEFAULT_SONNET_MODEL"].as_str(),
+		Some("claude-sonnet")
+	);
+	assert_eq!(
+		config["env"]["ANTHROPIC_DEFAULT_OPUS_MODEL"].as_str(),
+		Some("claude-opus")
+	);
+	assert_eq!(
+		adapter.derive_active_provider_id(&store).unwrap().as_str(),
+		binding.id.as_str()
 	);
 }
 

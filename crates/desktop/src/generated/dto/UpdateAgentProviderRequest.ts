@@ -3,4 +3,8 @@
 export type UpdateAgentProviderRequest = {
 	name: string | null;
 	api_key: string | null;
+	model?: string | null;
+	haiku_model?: string | null;
+	sonnet_model?: string | null;
+	opus_model?: string | null;
 };
