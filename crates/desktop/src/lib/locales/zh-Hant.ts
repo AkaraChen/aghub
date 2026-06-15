@@ -394,6 +394,14 @@ export default {
 	updateInstalledSuccess: "更新已安裝成功",
 	restartToUpdate: "重新啟動以更新",
 	restartNow: "立即重新啟動",
+	settingsAutoCheckUpdatesHeading: "自動檢查更新",
+	settingsAutoCheckUpdatesDescription:
+		"允許 aghub 在應用啟動時於背景檢查新版本。你仍可隨時手動檢查更新。",
+	settingsAutoCheckUpdatesToggleLabel: "自動檢查更新",
+	settingsAutoCheckUpdatesEnabled: "已開啟自動檢查更新",
+	settingsAutoCheckUpdatesDisabled: "已關閉自動檢查更新",
+	settingsAutoCheckUpdatesError: "更新自動檢查更新設定失敗",
+	openSettings: "開啟設定",
 	onboardingDescription: "隨時重新開啟歡迎頁或任一導覽流程。",
 
 	// Onboarding — Wizard

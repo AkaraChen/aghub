@@ -461,6 +461,26 @@ mod tests {
 		client.delete(uri).header(auth_header()).dispatch()
 	}
 
+	fn write_import_skill(dir: &Path, name: &str, body: &str) {
+		std::fs::create_dir_all(dir).expect("skill dir");
+		std::fs::write(
+			dir.join("SKILL.md"),
+			format!(
+				"---\nname: {name}\ndescription: imported skill\n---\n\n{body}\n"
+			),
+		)
+		.expect("skill file");
+		std::fs::create_dir_all(dir.join("scripts")).expect("scripts dir");
+		std::fs::create_dir_all(dir.join("references"))
+			.expect("references dir");
+		std::fs::create_dir_all(dir.join("assets")).expect("assets dir");
+		std::fs::write(dir.join("scripts/setup.sh"), "echo setup")
+			.expect("script");
+		std::fs::write(dir.join("references/guide.md"), "# Guide")
+			.expect("guide");
+		std::fs::write(dir.join("assets/logo.txt"), "logo").expect("asset");
+	}
+
 	#[test]
 	fn auth_options_generate_distinct_tokens() {
 		let first = crate::auth::generate_auth_token();
@@ -673,6 +693,40 @@ mod tests {
 		let response = get_auth(&client, &uri);
 		assert_eq!(response.status(), Status::Ok);
 		assert_eq!(response_json(response), json!("# Body"));
+	}
+
+	#[test]
+	fn import_skill_route_preserves_body_and_resources() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let source_dir = tempfile::tempdir().expect("source dir");
+		let skill_dir = source_dir.path().join("imported-route");
+		write_import_skill(
+			&skill_dir,
+			"imported-route",
+			"# Route imported instructions",
+		);
+		let client = test_client(app_data_dir.path());
+		let query = project_query(project_dir.path());
+		let uri = format!("/api/v1/agents/claude/skills/import?{query}");
+
+		let response = post_json(
+			&client,
+			&uri,
+			json!({ "path": skill_dir.display().to_string() }),
+		);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["name"], "imported-route");
+
+		let target_dir =
+			project_dir.path().join(".claude/skills/imported-route");
+		let content =
+			std::fs::read_to_string(target_dir.join("SKILL.md")).unwrap();
+		assert!(content.contains("# Route imported instructions"));
+		assert!(target_dir.join("scripts/setup.sh").exists());
+		assert!(target_dir.join("references/guide.md").exists());
+		assert!(target_dir.join("assets/logo.txt").exists());
 	}
 
 	#[test]

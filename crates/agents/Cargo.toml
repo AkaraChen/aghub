@@ -13,7 +13,7 @@ toml = { workspace = true }
 thiserror = { workspace = true }
 dirs = { workspace = true }
 libc = { workspace = true }
-which = "8"
+which = { workspace = true }
 aghub-markdown = { path = "../markdown" }
 
 [dev-dependencies]

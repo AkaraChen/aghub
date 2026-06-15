@@ -16,7 +16,7 @@ zip = "8.0"
 tempfile = { workspace = true }
 skills-ref = { git = "https://github.com/AkaraChen/skills-ref" }
 walkdir = "2.5"
-chrono = { version = "0.4", features = [ "serde" ] }
+chrono = { workspace = true }
 dirs = { workspace = true }
 ignore = "0.4"
 
