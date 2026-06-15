@@ -773,7 +773,6 @@ export default {
 	poweredByVercel: "Powered by Vercel",
 	dataFromSkillsSh: "Data from skills.sh",
 	copySkillsShLink: "Copy skills.sh link",
-	copySkillsShLinkHint: "Click to copy this skills.sh URL.",
 	skillsShLinkCopied: "skills.sh link copied",
 	skillsShLinkCopyFailed: "Failed to copy skills.sh link",
 

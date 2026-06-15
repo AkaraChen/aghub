@@ -1,5 +1,5 @@
 import { MagnifyingGlassIcon } from "@heroicons/react/24/solid";
-import { Button, Spinner, Tooltip, toast } from "@heroui/react";
+import { Button, Spinner, toast } from "@heroui/react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useQueryState } from "nuqs";
@@ -213,8 +213,6 @@ export default function SkillsSearchPage() {
 						style={{ height: "100%" }}
 						components={tableComponents}
 						itemContent={(_index, skill) => {
-							const skillsShUrl = buildSkillsShUrl(skill);
-
 							return (
 								<>
 									<td className="p-2 align-middle">
@@ -230,36 +228,18 @@ export default function SkillsSearchPage() {
 										</span>
 									</td>
 									<td className="p-2 align-middle">
-										<Tooltip delay={0}>
-											<Tooltip.Trigger>
-												<button
-													type="button"
-													className="block max-w-full truncate text-left text-sm text-muted underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-													aria-label={t(
-														"copySkillsShLink",
-													)}
-													onClick={() => {
-														void handleCopySkillsShUrl(
-															skill,
-														);
-													}}
-												>
-													{skill.source}
-												</button>
-											</Tooltip.Trigger>
-											<Tooltip.Content className="max-w-80">
-												<div className="space-y-1">
-													<div className="break-all font-mono text-xs">
-														{skillsShUrl}
-													</div>
-													<div className="text-xs text-muted">
-														{t(
-															"copySkillsShLinkHint",
-														)}
-													</div>
-												</div>
-											</Tooltip.Content>
-										</Tooltip>
+										<button
+											type="button"
+											className="block max-w-full truncate text-left text-sm text-muted underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+											aria-label={t("copySkillsShLink")}
+											onClick={() => {
+												void handleCopySkillsShUrl(
+													skill,
+												);
+											}}
+										>
+											{skill.source}
+										</button>
 									</td>
 									<td className="p-2 align-middle">
 										<Button

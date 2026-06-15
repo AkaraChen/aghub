@@ -764,7 +764,6 @@ export default {
 	poweredByVercel: "由 Vercel 提供支持",
 	dataFromSkillsSh: "数据来自 skills.sh",
 	copySkillsShLink: "复制 skills.sh 链接",
-	copySkillsShLinkHint: "点击可复制这个 skills.sh 地址。",
 	skillsShLinkCopied: "skills.sh 链接已复制",
 	skillsShLinkCopyFailed: "复制 skills.sh 链接失败",
 
