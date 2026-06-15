@@ -26,6 +26,20 @@ const FETCH_SIZE = 100;
 const ROW_HEIGHT = 48;
 const SKILLS_SH_BASE_URL = "https://www.skills.sh";
 
+function splitUrlPath(path: string) {
+	return path.split("/").filter(Boolean);
+}
+
+function normalizeSkillsShPathParts(parts: string[]) {
+	return parts[0] === "github" ? parts.slice(1) : parts;
+}
+
+function formatSkillsShUrl(parts: string[]) {
+	const urlSegments = parts.map((part) => encodeURIComponent(part));
+
+	return `${SKILLS_SH_BASE_URL}/${urlSegments.join("/")}`;
+}
+
 const tableComponents: TableComponents<MarketSkill> = {
 	Table: ({ style, ...props }) => (
 		<table
@@ -48,7 +62,12 @@ const tableComponents: TableComponents<MarketSkill> = {
 };
 
 function buildSkillsShUrl(skill: MarketSkill) {
-	const sourceParts = skill.source.split("/").filter(Boolean);
+	const slugParts = normalizeSkillsShPathParts(splitUrlPath(skill.slug));
+	if (slugParts.length > 1) {
+		return formatSkillsShUrl(slugParts);
+	}
+
+	const sourceParts = splitUrlPath(skill.source);
 	const pathParts = (() => {
 		if (sourceParts.length === 0) {
 			return [];
@@ -62,14 +81,16 @@ function buildSkillsShUrl(skill: MarketSkill) {
 			return sourceParts;
 		}
 
-		return ["site", ...sourceParts];
-	})();
-	const skillSegment = skill.slug || skill.name;
-	const urlSegments = [...pathParts, skillSegment]
-		.filter(Boolean)
-		.map((part) => encodeURIComponent(part));
+		if (sourceParts.length === 1 && sourceParts[0].includes(".")) {
+			return ["site", ...sourceParts];
+		}
 
-	return `${SKILLS_SH_BASE_URL}/${urlSegments.join("/")}`;
+		return sourceParts;
+	})();
+	const skillParts =
+		slugParts.length > 0 ? slugParts : splitUrlPath(skill.name);
+
+	return formatSkillsShUrl([...pathParts, ...skillParts]);
 }
 
 export default function SkillsSearchPage() {
