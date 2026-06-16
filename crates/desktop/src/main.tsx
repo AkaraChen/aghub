@@ -10,7 +10,19 @@ import {
 } from "./lib/analytics";
 import { log } from "./lib/logger";
 
-async function bootstrap() {
+// Mount the UI first and unconditionally. Telemetry and log setup go
+// through Tauri IPC, and a single rejected/hung command there must not
+// keep the window blank: rendering can't depend on analytics. The React
+// error boundary only catches failures inside a mounted tree, so any
+// throw before this render would leave a permanent white screen with no
+// recovery path.
+ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
+	<React.StrictMode>
+		<App />
+	</React.StrictMode>,
+);
+
+async function initTelemetry() {
 	try {
 		await attachConsole();
 		await info("Tauri log stream attached to frontend console");
@@ -18,22 +30,18 @@ async function bootstrap() {
 		console.error("Failed to attach Tauri log stream:", error);
 	}
 
-	// posthog-js needs the Rust-owned distinct_id before it boots so
-	// replay attaches to the same person as Rust-originated events.
-	await initBrowserPosthog();
-	installExceptionAutocapture();
-	capture("app started");
-	log.info("app started", {
-		"app.version": import.meta.env.VITE_APP_VERSION,
-	});
-
-	ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-		<React.StrictMode>
-			<App />
-		</React.StrictMode>,
-	);
+	try {
+		// posthog-js needs the Rust-owned distinct_id before it boots so
+		// replay attaches to the same person as Rust-originated events.
+		await initBrowserPosthog();
+		installExceptionAutocapture();
+		capture("app started");
+		log.info("app started", {
+			"app.version": import.meta.env.VITE_APP_VERSION,
+		});
+	} catch (error: unknown) {
+		console.error("Failed to initialize analytics:", error);
+	}
 }
 
-bootstrap().catch((error: unknown) => {
-	console.error("Failed to bootstrap desktop app:", error);
-});
+void initTelemetry();
