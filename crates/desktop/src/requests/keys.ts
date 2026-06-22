@@ -62,6 +62,19 @@ export const queryKeys = {
 			scope: "global" | "project" | "all",
 		) => ["sub-agents", "detail", name, agent, scope] as const,
 	},
+	rules: {
+		all: () => ["rules"] as const,
+		lists: () => ["rules", "list"] as const,
+		list: (
+			scope: "global" | "project" | "all" = "global",
+			projectRoot?: string,
+		) => ["rules", "list", scope, projectRoot ?? null] as const,
+		content: (
+			path: string,
+			scope: "global" | "project" | "all" = "global",
+			projectRoot?: string,
+		) => ["rules", "content", path, scope, projectRoot ?? null] as const,
+	},
 	credentials: {
 		all: () => ["credentials"] as const,
 		list: () => ["credentials", "list"] as const,

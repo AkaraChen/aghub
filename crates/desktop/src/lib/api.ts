@@ -49,6 +49,8 @@ import type {
 	CCPluginResponse,
 	ProjectSkillLockResponse,
 	ReconcileRequest,
+	RuleFileContentResponse,
+	RuleFileResponse,
 	SkillResponse,
 	SkillTreeNodeResponse,
 	SubAgentResponse,
@@ -64,6 +66,7 @@ import type {
 	CCPluginUpdateConfigRequest,
 	CCPluginUpdateRequest,
 	CCPluginUpdateResponse,
+	UpdateRuleContentRequest,
 	UpdateSubAgentRequest,
 } from "../generated/dto";
 
@@ -501,6 +504,45 @@ export function createApi(baseUrl: string, token: string) {
 				return client
 					.post("sub-agents/reconcile", { json: body })
 					.json();
+			},
+		},
+		rules: {
+			listAll(
+				scope: "global" | "project" | "all" = "global",
+				projectRoot?: string,
+			): Promise<RuleFileResponse[]> {
+				return client
+					.get("agents/all/rules", {
+						searchParams: {
+							scope,
+							...(projectRoot
+								? { project_root: projectRoot }
+								: {}),
+						},
+					})
+					.json();
+			},
+			getContent(
+				path: string,
+				scope: "global" | "project" | "all" = "global",
+				projectRoot?: string,
+			): Promise<RuleFileContentResponse> {
+				return client
+					.get("rules/content", {
+						searchParams: {
+							path,
+							scope,
+							...(projectRoot
+								? { project_root: projectRoot }
+								: {}),
+						},
+					})
+					.json();
+			},
+			updateContent(
+				body: UpdateRuleContentRequest,
+			): Promise<RuleFileContentResponse> {
+				return client.put("rules/content", { json: body }).json();
 			},
 		},
 		market: {

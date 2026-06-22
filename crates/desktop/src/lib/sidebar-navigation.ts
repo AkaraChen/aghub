@@ -1,6 +1,7 @@
 import {
 	BookOpenIcon,
 	CpuChipIcon,
+	DocumentTextIcon,
 	KeyIcon,
 	ServerIcon,
 	SquaresPlusIcon,
@@ -60,6 +61,12 @@ const SIDEBAR_ITEM_DEFINITIONS: Record<SidebarItemId, SidebarItemDefinition> = {
 		labelKey: "subAgents",
 		href: "/sub-agents",
 		icon: CpuChipIcon,
+	},
+	rules: {
+		id: "rules",
+		labelKey: "rules",
+		href: "/rules",
+		icon: DocumentTextIcon,
 	},
 	plugins: {
 		id: "plugins",

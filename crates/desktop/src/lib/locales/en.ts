@@ -5,6 +5,18 @@ export default {
 	mcpServers: "MCP Servers",
 	skillsSh: "skills.sh",
 	mcp: "MCP",
+	rules: "Rules",
+	rulesDescription:
+		"Manage the instruction files agents read from your project and home directory.",
+	rulesEmptyTitle: "No rule files",
+	rulesEmptyDescription: "The selected scope has no managed rule files yet.",
+	rulesFileExists: "Exists",
+	rulesFileMissing: "Not created",
+	rulesSelectFile: "Select a rule file to view or edit it.",
+	rulesCreateOnSave:
+		"This file does not exist yet — it will be created on save.",
+	rulesSaved: "Rule file saved",
+	rulesSaveFailed: "Failed to save rule file",
 	subAgents: "Sub-agents",
 	subAgent: "Sub-agent",
 	createSubAgent: "Create sub-agent",

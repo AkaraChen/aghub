@@ -27,6 +27,7 @@ import ProjectDetailPage from "./pages/project/detail";
 import SettingsPage from "./pages/settings";
 import CustomAgentsPage from "./pages/settings/custom-agents";
 import MCPServersPage from "./pages/settings/mcp-servers";
+import RulesPage from "./pages/settings/rules";
 import SkillsPage from "./pages/settings/skills";
 import SubAgentsPage from "./pages/settings/sub-agents";
 import SkillsShPage from "./pages/skills-sh";
@@ -273,6 +274,19 @@ function App() {
 													}
 												>
 													<SubAgentsPage />
+												</Suspense>
+											</ErrorBoundary>
+										</MainLayout>
+									</Route>
+									<Route path="/rules">
+										<MainLayout>
+											<ErrorBoundary>
+												<Suspense
+													fallback={
+														<SkillsPageSkeleton />
+													}
+												>
+													<RulesPage />
 												</Suspense>
 											</ErrorBoundary>
 										</MainLayout>
