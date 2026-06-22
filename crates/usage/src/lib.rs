@@ -231,20 +231,27 @@ fn codex_to_agent(report: CcCodexReport) -> AgentUsageDto {
 			reasoning_tokens: d.reasoning_output_tokens,
 			total_tokens: d.total_tokens,
 			cost_usd: d.cost_usd,
-			models: d
-				.models
-				.into_iter()
-				.map(|(name, m)| UsageModelDto {
-					model: name,
-					input_tokens: m.input_tokens,
-					output_tokens: m.output_tokens,
-					cache_creation_tokens: 0,
-					cache_read_tokens: m.cached_input_tokens,
-					reasoning_tokens: m.reasoning_output_tokens,
-					total_tokens: m.total_tokens,
-					cost_usd: None,
-				})
-				.collect(),
+			// ccusage's Codex per-model data is a HashMap, so iteration order is
+			// nondeterministic; sort by model name for a stable API/CLI response
+			// (Claude's per-model data is already an ordered Vec).
+			models: {
+				let mut models: Vec<UsageModelDto> = d
+					.models
+					.into_iter()
+					.map(|(name, m)| UsageModelDto {
+						model: name,
+						input_tokens: m.input_tokens,
+						output_tokens: m.output_tokens,
+						cache_creation_tokens: 0,
+						cache_read_tokens: m.cached_input_tokens,
+						reasoning_tokens: m.reasoning_output_tokens,
+						total_tokens: m.total_tokens,
+						cost_usd: None,
+					})
+					.collect();
+				models.sort_by(|a, b| a.model.cmp(&b.model));
+				models
+			},
 		})
 		.collect();
 
@@ -350,9 +357,10 @@ fn home_dir() -> Result<PathBuf, String> {
 	dirs::home_dir().ok_or_else(|| "cannot resolve home directory".to_string())
 }
 
-/// Claude Code's OAuth access token. macOS keeps it in the login keychain
-/// (service `Claude Code-credentials`); other platforms use the JSON file.
-fn claude_access_token() -> Result<String, String> {
+/// Parse Claude Code's credential JSON (keychain blob or file) into the access
+/// token. Extracted from [`claude_access_token`] so the vendor key names can be
+/// pinned by a unit test without a keychain or the filesystem.
+fn parse_claude_credentials(json: &str) -> Result<String, String> {
 	#[derive(Deserialize)]
 	struct CredFile {
 		#[serde(rename = "claudeAiOauth")]
@@ -363,12 +371,14 @@ fn claude_access_token() -> Result<String, String> {
 		#[serde(rename = "accessToken")]
 		access_token: String,
 	}
-	let parse = |json: &str| -> Result<String, String> {
-		serde_json::from_str::<CredFile>(json)
-			.map(|c| c.oauth.access_token)
-			.map_err(|e| format!("parse claude credentials: {e}"))
-	};
+	serde_json::from_str::<CredFile>(json)
+		.map(|c| c.oauth.access_token)
+		.map_err(|e| format!("parse claude credentials: {e}"))
+}
 
+/// Claude Code's OAuth access token. macOS keeps it in the login keychain
+/// (service `Claude Code-credentials`); other platforms use the JSON file.
+fn claude_access_token() -> Result<String, String> {
 	#[cfg(target_os = "macos")]
 	{
 		let user =
@@ -376,7 +386,7 @@ fn claude_access_token() -> Result<String, String> {
 		let entry = keyring::Entry::new("Claude Code-credentials", &user)
 			.map_err(|e| e.to_string())?;
 		match entry.get_password() {
-			Ok(json) => return parse(&json),
+			Ok(json) => return parse_claude_credentials(&json),
 			// Not in keychain: fall through to the file (some setups use it).
 			Err(keyring::Error::NoEntry) => {}
 			Err(e) => return Err(e.to_string()),
@@ -386,11 +396,13 @@ fn claude_access_token() -> Result<String, String> {
 	let path = home_dir()?.join(".claude/.credentials.json");
 	let json = std::fs::read_to_string(&path)
 		.map_err(|e| format!("read claude credentials: {e}"))?;
-	parse(&json)
+	parse_claude_credentials(&json)
 }
 
-/// Codex's OAuth token plus the ChatGPT account id its usage endpoint needs.
-fn codex_auth() -> Result<(String, Option<String>), String> {
+/// Parse Codex's `auth.json` into (access token, optional ChatGPT account id).
+/// Extracted from [`codex_auth`] so the token / account-id key names can be
+/// pinned by a unit test without touching the filesystem.
+fn parse_codex_auth(json: &str) -> Result<(String, Option<String>), String> {
 	#[derive(Deserialize)]
 	struct AuthFile {
 		tokens: Tokens,
@@ -401,12 +413,17 @@ fn codex_auth() -> Result<(String, Option<String>), String> {
 		#[serde(default)]
 		account_id: Option<String>,
 	}
+	serde_json::from_str::<AuthFile>(json)
+		.map(|a| (a.tokens.access_token, a.tokens.account_id))
+		.map_err(|e| format!("parse codex auth: {e}"))
+}
+
+/// Codex's OAuth token plus the ChatGPT account id its usage endpoint needs.
+fn codex_auth() -> Result<(String, Option<String>), String> {
 	let path = home_dir()?.join(".codex/auth.json");
 	let json = std::fs::read_to_string(&path)
 		.map_err(|e| format!("read codex auth: {e}"))?;
-	serde_json::from_str::<AuthFile>(&json)
-		.map(|a| (a.tokens.access_token, a.tokens.account_id))
-		.map_err(|e| format!("parse codex auth: {e}"))
+	parse_codex_auth(&json)
 }
 
 // ---- Anthropic `GET /api/oauth/usage` shape --------------------------------
@@ -454,7 +471,26 @@ async fn fetch_claude_limits() -> Result<AgentLimitsDto, String> {
 		.await
 		.map_err(|e| format!("parse claude usage: {e}"))?;
 
-	let windows = [
+	let windows = claude_windows(usage);
+	if windows.is_empty() {
+		// Mirror the Codex path: a 200 with no recognizable windows (logged out,
+		// endpoint shape drift) is a degraded warning, not a silent empty agent.
+		return Err(
+			"claude usage response had no recognizable rate-limit windows"
+				.to_string(),
+		);
+	}
+
+	Ok(AgentLimitsDto {
+		agent: "claude".to_string(),
+		windows,
+	})
+}
+
+/// Map the Anthropic usage response into the unified windows. Pulled out of
+/// [`fetch_claude_limits`] so the scale handling is unit-testable.
+fn claude_windows(usage: ClaudeOauthUsage) -> Vec<LimitWindowDto> {
+	[
 		("5h", usage.five_hour),
 		("weekly", usage.seven_day),
 		("weekly_opus", usage.seven_day_opus),
@@ -464,16 +500,14 @@ async fn fetch_claude_limits() -> Result<AgentLimitsDto, String> {
 	.filter_map(|(kind, w)| {
 		w.map(|w| LimitWindowDto {
 			kind: kind.to_string(),
-			utilization_pct: w.utilization,
+			// Anthropic's /api/oauth/usage reports `utilization` already as a
+			// 0-100 percent (confirmed against a live response), matching the
+			// DTO contract; clamp defensively in case it ever returns otherwise.
+			utilization_pct: w.utilization.clamp(0.0, 100.0),
 			resets_at: w.resets_at,
 		})
 	})
-	.collect();
-
-	Ok(AgentLimitsDto {
-		agent: "claude".to_string(),
-		windows,
-	})
+	.collect()
 }
 
 /// Codex's usage shape is undocumented and field names vary across versions, so
@@ -491,7 +525,10 @@ fn codex_window(
 			obj.get("percent_left")
 				.and_then(serde_json::Value::as_f64)
 				.map(|left| 100.0 - left)
-		})?;
+		})?
+		// The Codex shape is undocumented; keep utilization within the 0-100
+		// the DTO promises rather than emitting an out-of-range value.
+		.clamp(0.0, 100.0);
 	let resets_at = obj
 		.get("resets_at")
 		.and_then(serde_json::Value::as_str)
@@ -739,5 +776,152 @@ mod tests {
 		assert_eq!(agent.days[0].cost_usd, None);
 		assert_eq!(agent.days[0].models[0].cost_usd, None);
 		assert_eq!(agent.totals.cost_usd, None);
+	}
+
+	#[test]
+	fn parse_claude_credentials_reads_renamed_keys() {
+		let json = r#"{"claudeAiOauth":{"accessToken":"sk-tok"}}"#;
+		assert_eq!(parse_claude_credentials(json).unwrap(), "sk-tok");
+		assert!(parse_claude_credentials(r#"{"other":1}"#).is_err());
+	}
+
+	#[test]
+	fn parse_codex_auth_reads_token_and_optional_account_id() {
+		let with_id =
+			r#"{"tokens":{"access_token":"at","account_id":"acc-1"}}"#;
+		assert_eq!(
+			parse_codex_auth(with_id).unwrap(),
+			("at".to_string(), Some("acc-1".to_string()))
+		);
+		let without_id = r#"{"tokens":{"access_token":"at"}}"#;
+		assert_eq!(
+			parse_codex_auth(without_id).unwrap(),
+			("at".to_string(), None)
+		);
+		assert!(parse_codex_auth(r#"{"tokens":{}}"#).is_err());
+	}
+
+	#[test]
+	fn resolve_ccusage_bin_prefers_explicit_path() {
+		let explicit = PathBuf::from("/opt/ccusage");
+		assert_eq!(
+			resolve_ccusage_bin(Some(explicit.clone())),
+			explicit.into_os_string()
+		);
+	}
+
+	#[test]
+	fn resolve_ccusage_bin_falls_back_to_env_then_default() {
+		// No other test in this crate touches AGHUB_CCUSAGE_BIN, so mutating it
+		// here is race-free.
+		std::env::remove_var("AGHUB_CCUSAGE_BIN");
+		assert_eq!(resolve_ccusage_bin(None), OsString::from("ccusage"));
+		std::env::set_var("AGHUB_CCUSAGE_BIN", "/from/env");
+		assert_eq!(resolve_ccusage_bin(None), OsString::from("/from/env"));
+		std::env::remove_var("AGHUB_CCUSAGE_BIN");
+	}
+
+	#[test]
+	fn claude_windows_maps_and_clamps() {
+		let usage = ClaudeOauthUsage {
+			five_hour: Some(ClaudeWindow {
+				utilization: 42.0,
+				resets_at: Some("2026-06-09T12:00:00+00:00".to_string()),
+			}),
+			seven_day: Some(ClaudeWindow {
+				utilization: 150.0,
+				resets_at: None,
+			}),
+			seven_day_opus: None,
+			seven_day_sonnet: None,
+		};
+		let windows = claude_windows(usage);
+		assert_eq!(windows.len(), 2);
+		assert_eq!(windows[0].kind, "5h");
+		assert_eq!(windows[0].utilization_pct, 42.0);
+		// out-of-range utilization is clamped to the documented 0-100
+		assert_eq!(windows[1].kind, "weekly");
+		assert_eq!(windows[1].utilization_pct, 100.0);
+	}
+
+	#[test]
+	fn claude_windows_empty_when_all_absent() {
+		let usage = ClaudeOauthUsage {
+			five_hour: None,
+			seven_day: None,
+			seven_day_opus: None,
+			seven_day_sonnet: None,
+		};
+		assert!(claude_windows(usage).is_empty());
+	}
+
+	#[test]
+	fn codex_window_clamps_out_of_range() {
+		// percent_left below 0 inverts to > 100; clamp keeps the contract.
+		let w = codex_window(&json!({ "percent_left": -20.0 }), "5h").unwrap();
+		assert_eq!(w.utilization_pct, 100.0);
+		let w = codex_window(&json!({ "used_percent": 250.0 }), "5h").unwrap();
+		assert_eq!(w.utilization_pct, 100.0);
+	}
+
+	#[test]
+	fn codex_window_resolves_resets_at_string_and_epoch_ms() {
+		let w = codex_window(
+			&json!({ "used_percent": 1.0, "resets_at": "2026-06-09T12:00:00+00:00" }),
+			"weekly",
+		)
+		.unwrap();
+		assert_eq!(w.resets_at.as_deref(), Some("2026-06-09T12:00:00+00:00"));
+
+		let w = codex_window(
+			&json!({ "used_percent": 1.0, "reset_time_ms": 1_780_000_000_000i64 }),
+			"5h",
+		)
+		.unwrap();
+		assert!(w.resets_at.is_some());
+	}
+
+	#[test]
+	fn codex_models_sorted_by_name() {
+		let mut models = HashMap::new();
+		for name in ["zeta", "alpha", "mid"] {
+			models.insert(
+				name.to_string(),
+				CcCodexModel {
+					input_tokens: 1,
+					cached_input_tokens: 0,
+					output_tokens: 1,
+					reasoning_output_tokens: 0,
+					total_tokens: 2,
+				},
+			);
+		}
+		let report = CcCodexReport {
+			daily: vec![CcCodexDay {
+				date: "2026-06-01".to_string(),
+				input_tokens: 3,
+				cached_input_tokens: 0,
+				output_tokens: 3,
+				reasoning_output_tokens: 0,
+				total_tokens: 6,
+				cost_usd: None,
+				models,
+			}],
+			totals: CcCodexTotals {
+				input_tokens: 3,
+				cached_input_tokens: 0,
+				output_tokens: 3,
+				reasoning_output_tokens: 0,
+				total_tokens: 6,
+				cost_usd: None,
+			},
+		};
+		let agent = codex_to_agent(report);
+		let names: Vec<&str> = agent.days[0]
+			.models
+			.iter()
+			.map(|m| m.model.as_str())
+			.collect();
+		assert_eq!(names, ["alpha", "mid", "zeta"]);
 	}
 }
