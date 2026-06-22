@@ -524,6 +524,18 @@ mod tests {
 	}
 
 	#[test]
+	fn usage_routes_require_auth() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+		// The guard rejects before the handler runs, so no ccusage spawn / vendor
+		// call happens here.
+		for uri in ["/api/v1/usage/summary", "/api/v1/usage/limits"] {
+			let response = client.get(uri).dispatch();
+			assert_json_error(response, Status::Unauthorized, "UNAUTHORIZED");
+		}
+	}
+
+	#[test]
 	fn plugin_install_rejects_remote_browser_origin() {
 		let client = test_client(&default_app_data_dir());
 
