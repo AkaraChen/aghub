@@ -11,14 +11,10 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 ts-rs = { workspace = true }
 dirs = { workspace = true }
-tokio = { version = "1", features = [ "process", "time", "macros" ] }
-reqwest = { version = "0.13", features = [ "json" ] }
-chrono = "0.4"
-keyring = { version = "3", features = [
-	"apple-native",
-	"windows-native",
-	"linux-native",
-] }
+tokio = { workspace = true, features = [ "process", "time", "macros" ] }
+reqwest = { workspace = true }
+chrono = { workspace = true }
+keyring = { workspace = true }
 
 [dev-dependencies]
-tokio = { version = "1", features = [ "process", "time", "rt", "macros" ] }
+tokio = { workspace = true, features = [ "process", "time", "rt", "macros" ] }
