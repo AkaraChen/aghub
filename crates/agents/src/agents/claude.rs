@@ -55,6 +55,16 @@ fn project_skill_write_path(root: &Path) -> Option<PathBuf> {
 	Some(root.join(".claude/skills"))
 }
 
+fn global_rule_paths() -> Vec<PathBuf> {
+	home_dir()
+		.map(|home| vec![home.join(".claude/CLAUDE.md")])
+		.unwrap_or_default()
+}
+
+fn project_rule_paths(root: &Path) -> Vec<PathBuf> {
+	vec![root.join("CLAUDE.md")]
+}
+
 fn sub_agent_global_dir() -> Option<PathBuf> {
 	home_dir().map(|home| home.join(".claude/agents"))
 }
@@ -137,4 +147,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	validate_args: &["--version"],
 	project_markers: &[".claude", ".mcp.json"],
 	skills_cli_name: Some("claude-code"),
+	rule_paths: Some(RulePaths {
+		global: Some(global_rule_paths),
+		project: Some(project_rule_paths),
+	}),
 };

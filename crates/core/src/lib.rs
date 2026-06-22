@@ -9,6 +9,7 @@ pub mod availability;
 pub mod manager;
 pub mod paths;
 pub mod registry;
+pub mod rules;
 pub mod skills;
 pub mod transfer;
 

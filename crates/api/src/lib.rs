@@ -223,6 +223,10 @@ fn build_rocket(
 				routes::sub_agents::delete_sub_agent,
 				routes::sub_agents::transfer_sub_agent_route,
 				routes::sub_agents::reconcile_sub_agent_route,
+				routes::rules::list_all_rules,
+				routes::rules::list_rules,
+				routes::rules::get_rule_content,
+				routes::rules::update_rule_content,
 				routes::integrations::list_code_editors,
 				routes::integrations::open_with_editor,
 				routes::integrations::get_preferences,
@@ -841,6 +845,95 @@ mod tests {
 		assert_eq!(response.status(), Status::Ok);
 		let body = response_json(response);
 		assert_eq!(body.as_array().expect("sub-agent list").len(), 0);
+	}
+
+	fn rule_content_query(rule_path: &str, project_root: &Path) -> String {
+		let mut serializer =
+			url::form_urlencoded::Serializer::new(String::new());
+		serializer.append_pair("path", rule_path);
+		serializer.append_pair("scope", "project");
+		serializer.append_pair("project_root", &project_root.to_string_lossy());
+		serializer.finish()
+	}
+
+	#[test]
+	fn route_rules_list_read_write_persists_project_file() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let client = test_client(app_data_dir.path());
+		let query = project_query(project_dir.path());
+		let list_uri = format!("/api/v1/agents/claude/rules?{query}");
+
+		let response = get_auth(&client, &list_uri);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		let entry = body
+			.as_array()
+			.expect("rule list")
+			.iter()
+			.find(|file| {
+				file["path"]
+					.as_str()
+					.is_some_and(|path| path.ends_with("CLAUDE.md"))
+			})
+			.expect("CLAUDE.md entry")
+			.clone();
+		assert_eq!(entry["agent"], "claude");
+		assert_eq!(entry["exists"], false);
+		let rule_path = entry["path"].as_str().expect("rule path").to_string();
+
+		let content_query = rule_content_query(&rule_path, project_dir.path());
+		let content_uri = format!("/api/v1/rules/content?{content_query}");
+		let response = get_auth(&client, &content_uri);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["content"], "");
+		assert_eq!(body["exists"], false);
+
+		let response = put_json(
+			&client,
+			"/api/v1/rules/content",
+			json!({
+				"path": rule_path,
+				"content": "# Project rules\n",
+				"scope": "project",
+				"project_root": project_dir.path().to_string_lossy(),
+			}),
+		);
+		assert_eq!(response.status(), Status::Ok);
+
+		let rule_file = project_dir.path().join("CLAUDE.md");
+		let persisted =
+			std::fs::read_to_string(&rule_file).expect("persisted rule file");
+		assert!(persisted.contains("# Project rules"));
+
+		let response = get_auth(&client, &list_uri);
+		let body = response_json(response);
+		let entry = body
+			.as_array()
+			.expect("rule list")
+			.iter()
+			.find(|file| {
+				file["path"]
+					.as_str()
+					.is_some_and(|path| path.ends_with("CLAUDE.md"))
+			})
+			.expect("CLAUDE.md entry")
+			.clone();
+		assert_eq!(entry["exists"], true);
+
+		let response = put_json(
+			&client,
+			"/api/v1/rules/content",
+			json!({
+				"path": project_dir.path().join("evil.txt").to_string_lossy(),
+				"content": "x",
+				"scope": "project",
+				"project_root": project_dir.path().to_string_lossy(),
+			}),
+		);
+		assert_eq!(response.status(), Status::Forbidden);
+		assert!(!project_dir.path().join("evil.txt").exists());
 	}
 
 	#[test]

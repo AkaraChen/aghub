@@ -145,4 +145,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	validate_args: &["--version"],
 	project_markers: &[".opencode"],
 	skills_cli_name: Some("opencode"),
+	rule_paths: Some(RulePaths {
+		global: None,
+		project: Some(project_agents_md),
+	}),
 };

@@ -34,6 +34,12 @@ fn project_skill_write_path(root: &Path) -> Option<PathBuf> {
 	Some(root.join(".agents/skills"))
 }
 
+fn global_rule_paths() -> Vec<PathBuf> {
+	home_dir()
+		.map(|home| vec![home.join(".codex/AGENTS.md")])
+		.unwrap_or_default()
+}
+
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "codex",
 	display_name: "OpenAI Codex",
@@ -82,4 +88,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	validate_args: &["--version"],
 	project_markers: &[".codex"],
 	skills_cli_name: Some("codex"),
+	rule_paths: Some(RulePaths {
+		global: Some(global_rule_paths),
+		project: Some(project_agents_md),
+	}),
 };

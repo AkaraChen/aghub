@@ -85,6 +85,9 @@ export type { ProjectLockQuery } from "./ProjectLockQuery";
 export type { ProjectSkillLockResponse } from "./ProjectSkillLockResponse";
 export type { ReconcileRequest } from "./ReconcileRequest";
 export type { ResourceLocatorDto } from "./ResourceLocatorDto";
+export type { RuleContentQuery } from "./RuleContentQuery";
+export type { RuleFileContentResponse } from "./RuleFileContentResponse";
+export type { RuleFileResponse } from "./RuleFileResponse";
 export type { ScopeSupportDto } from "./ScopeSupportDto";
 export type { SkillCapabilitiesDto } from "./SkillCapabilitiesDto";
 export type { SkillContentQuery } from "./SkillContentQuery";
@@ -107,6 +110,7 @@ export type { UpdateCodexActiveProfileRequest } from "./UpdateCodexActiveProfile
 export type { UpdateCodexProfileProviderRequest } from "./UpdateCodexProfileProviderRequest";
 export type { UpdateInferenceProviderRequest } from "./UpdateInferenceProviderRequest";
 export type { UpdateMcpRequest } from "./UpdateMcpRequest";
+export type { UpdateRuleContentRequest } from "./UpdateRuleContentRequest";
 export type { UpdateSkillRequest } from "./UpdateSkillRequest";
 export type { UpdateSubAgentRequest } from "./UpdateSubAgentRequest";
 export type { ValidationError } from "./ValidationError";
