@@ -1,5 +1,6 @@
 import {
 	BookOpenIcon,
+	BoltIcon,
 	CpuChipIcon,
 	KeyIcon,
 	ServerIcon,
@@ -40,6 +41,12 @@ const SIDEBAR_ITEM_DEFINITIONS: Record<SidebarItemId, SidebarItemDefinition> = {
 		labelKey: "inferenceProviders",
 		href: "/inference-providers",
 		icon: KeyIcon,
+	},
+	hooks: {
+		id: "hooks",
+		labelKey: "hooks",
+		href: "/hooks",
+		icon: BoltIcon,
 	},
 	skills: {
 		id: "skills",
