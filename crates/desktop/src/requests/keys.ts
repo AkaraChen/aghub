@@ -85,4 +85,13 @@ export const queryKeys = {
 		all: () => ["market"] as const,
 		search: (query: string) => ["market", "search", query] as const,
 	},
+	usage: {
+		all: () => ["usage"] as const,
+		summary: (
+			since: string | null,
+			until: string | null,
+			timezone: string | null,
+		) => ["usage", "summary", since, until, timezone] as const,
+		limits: () => ["usage", "limits"] as const,
+	},
 };

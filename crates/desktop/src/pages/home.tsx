@@ -1,179 +1,63 @@
-import {
-	ArrowRightIcon,
-	FolderOpenIcon,
-	PlusIcon,
-} from "@heroicons/react/24/solid";
-import { Button, Card, toast } from "@heroui/react";
+import { PlusIcon } from "@heroicons/react/24/solid";
+import { Button } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import type { AvailableAgent } from "../contexts/agent-availability";
+import { AgentOverviewCard } from "../components/agent-overview-card";
+import { hasUsageContent } from "../components/agent-overview-card-helpers";
+import type { AgentLimitsDto, AgentUsageDto } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
-import { resolveAgentConfigPath } from "../lib/agent-config-paths";
-import { AgentIcon } from "../lib/agent-icons";
+import { agentStatus } from "../lib/agent-status";
 import { cn } from "../lib/utils";
 import { mcpListQueryOptions } from "../requests/mcps";
 import { skillListQueryOptions } from "../requests/skills";
+import {
+	usageLimitsQueryOptions,
+	usageSummaryQueryOptions,
+} from "../requests/usage";
 
-type AgentStatus = "ready" | "missing" | "disabled";
+const USAGE_WINDOW_DAYS = 30;
 
-function statusOf(agent: AvailableAgent): AgentStatus {
-	if (agent.isDisabled) return "disabled";
-	if (!agent.availability.is_available) return "missing";
-	return "ready";
-}
-
-function StatusBadge({ status }: { status: AgentStatus }) {
-	const { t } = useTranslation();
-	const tone =
-		status === "ready"
-			? "bg-success/15 text-success"
-			: status === "missing"
-				? "bg-warning/15 text-warning"
-				: "bg-muted/15 text-muted";
-	const labelKey =
-		status === "ready"
-			? "agentStatusReady"
-			: status === "missing"
-				? "agentStatusMissing"
-				: "agentStatusDisabled";
-	return (
-		<span
-			className={cn(
-				"inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium",
-				tone,
-			)}
-		>
-			<span className="size-1.5 rounded-full bg-current" />
-			{t(labelKey)}
-		</span>
-	);
-}
-
-function AgentOverviewCard({ agent }: { agent: AvailableAgent }) {
-	const { t } = useTranslation();
-	const api = useApi();
-	const [, setLocation] = useLocation();
-	const status = statusOf(agent);
-
-	const { data: skills = [] } = useQuery({
-		...skillListQueryOptions({ api, scope: "global" }),
-	});
-	const { data: mcps = [] } = useQuery({
-		...mcpListQueryOptions({ api, scope: "global" }),
-	});
-	const { data: configPath } = useQuery({
-		queryKey: ["agent-config-path", agent.id],
-		queryFn: () => resolveAgentConfigPath(agent),
-		staleTime: Infinity,
-	});
-
-	const skillCount = useMemo(
-		() => skills.filter((s) => !s.agent || s.agent === agent.id).length,
-		[skills, agent.id],
-	);
-	const mcpCount = useMemo(
-		() => mcps.filter((m) => !m.agent || m.agent === agent.id).length,
-		[mcps, agent.id],
-	);
-
-	const handleOpenConfigFolder = async () => {
-		if (!configPath) return;
-		try {
-			await revealItemInDir(configPath);
-		} catch (error) {
-			console.error(
-				`Failed to reveal config folder for ${agent.id}:`,
-				error,
-			);
-			toast.danger(
-				t("openAgentConfigFolderFailed", {
-					name: agent.display_name,
-				}),
-			);
-		}
-	};
-
-	const handleOpen = () => {
-		setLocation(`/skills?agent=${encodeURIComponent(agent.id)}`);
-	};
-
-	return (
-		<Card variant="secondary" className="flex flex-col">
-			<Card.Header className="flex flex-row items-start gap-3">
-				<AgentIcon id={agent.id} name={agent.display_name} size="sm" />
-				<div className="min-w-0 flex-1">
-					<Card.Title className="truncate">
-						{agent.display_name}
-					</Card.Title>
-					<div className="mt-1">
-						<StatusBadge status={status} />
-					</div>
-				</div>
-			</Card.Header>
-			<Card.Content className="flex flex-1 flex-col gap-3">
-				{status === "ready" ? (
-					<dl className="grid grid-cols-2 gap-2 text-sm">
-						<div className="rounded-md bg-surface p-2">
-							<dt className="text-[11px] text-muted uppercase tracking-wider">
-								{t("skills")}
-							</dt>
-							<dd className="mt-0.5 text-base font-medium">
-								{skillCount}
-							</dd>
-						</div>
-						<div className="rounded-md bg-surface p-2">
-							<dt className="text-[11px] text-muted uppercase tracking-wider">
-								{t("mcp")}
-							</dt>
-							<dd className="mt-0.5 text-base font-medium">
-								{mcpCount}
-							</dd>
-						</div>
-					</dl>
-				) : (
-					<p className="text-sm text-muted">
-						{status === "missing"
-							? t("agentMissingHint")
-							: t("agentDisabledHint")}
-					</p>
-				)}
-				<div className="mt-auto flex gap-2">
-					<Button
-						variant={status === "ready" ? "primary" : "tertiary"}
-						size="sm"
-						className="flex-1"
-						onPress={handleOpen}
-					>
-						{status === "ready" ? t("open") : t("manage")}
-						<ArrowRightIcon className="size-3.5" />
-					</Button>
-					{configPath && (
-						<Button
-							isIconOnly
-							variant="tertiary"
-							size="sm"
-							aria-label={t("openAgentConfigFolder", {
-								name: agent.display_name,
-							})}
-							onPress={handleOpenConfigFolder}
-						>
-							<FolderOpenIcon className="size-4" />
-						</Button>
-					)}
-				</div>
-			</Card.Content>
-		</Card>
-	);
+function toCompactYmd(date: Date): string {
+	const year = date.getFullYear();
+	const month = String(date.getMonth() + 1).padStart(2, "0");
+	const day = String(date.getDate()).padStart(2, "0");
+	return `${year}${month}${day}`;
 }
 
 export default function HomePage() {
 	const { t } = useTranslation();
 	const [, setLocation] = useLocation();
+	const api = useApi();
 	const { availableAgents } = useAgentAvailability();
+
+	const { data: skills = [] } = useQuery(
+		skillListQueryOptions({ api, scope: "global" }),
+	);
+	const { data: mcps = [] } = useQuery(
+		mcpListQueryOptions({ api, scope: "global" }),
+	);
+
+	const usageRange = useMemo(() => {
+		const until = new Date();
+		const since = new Date(until);
+		since.setDate(since.getDate() - (USAGE_WINDOW_DAYS - 1));
+		return {
+			since: toCompactYmd(since),
+			until: toCompactYmd(until),
+			timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+		};
+	}, []);
+
+	// Usage is best-effort: only Claude/Codex report it, and an agent that
+	// isn't logged in lands in the report's `warnings` with no entry. Cards
+	// without an entry simply omit the usage section.
+	const { data: usageReport } = useQuery(
+		usageSummaryQueryOptions({ api, ...usageRange }),
+	);
+	const { data: limitsReport } = useQuery(usageLimitsQueryOptions({ api }));
 
 	const installedAgents = useMemo(
 		() =>
@@ -181,20 +65,61 @@ export default function HomePage() {
 		[availableAgents],
 	);
 
-	const sortedAgents = useMemo(() => {
-		const order = { ready: 0, missing: 1, disabled: 2 } as const;
-		return [...installedAgents].sort((a, b) => {
-			const sa = order[statusOf(a)];
-			const sb = order[statusOf(b)];
-			if (sa !== sb) return sa - sb;
-			return a.display_name.localeCompare(b.display_name);
-		});
-	}, [installedAgents]);
-
 	const readyCount = useMemo(
-		() => installedAgents.filter((a) => statusOf(a) === "ready").length,
+		() => installedAgents.filter((a) => agentStatus(a) === "ready").length,
 		[installedAgents],
 	);
+
+	const countsByAgent = useMemo(() => {
+		const map = new Map<string, { skills: number; mcps: number }>();
+		for (const agent of installedAgents) {
+			map.set(agent.id, {
+				skills: skills.filter((s) => !s.agent || s.agent === agent.id)
+					.length,
+				mcps: mcps.filter((m) => !m.agent || m.agent === agent.id)
+					.length,
+			});
+		}
+		return map;
+	}, [installedAgents, skills, mcps]);
+
+	const usageByAgent = useMemo(() => {
+		const map = new Map<string, AgentUsageDto>();
+		for (const entry of usageReport?.agents ?? []) {
+			map.set(entry.agent, entry);
+		}
+		return map;
+	}, [usageReport]);
+
+	const limitsByAgent = useMemo(() => {
+		const map = new Map<string, AgentLimitsDto>();
+		for (const entry of limitsReport?.agents ?? []) {
+			map.set(entry.agent, entry);
+		}
+		return map;
+	}, [limitsReport]);
+
+	// Cards with a usage section sort first and span two grid rows; usage-less
+	// cards span one, so a dense grid packs two short cards into the column
+	// space of one tall card.
+	const sortedAgents = useMemo(() => {
+		const order = { ready: 0, missing: 1, disabled: 2 } as const;
+		return installedAgents
+			.map((agent) => ({
+				agent,
+				hasUsage: hasUsageContent({
+					usage: usageByAgent.get(agent.id),
+					limits: limitsByAgent.get(agent.id),
+				}),
+			}))
+			.sort((a, b) => {
+				if (a.hasUsage !== b.hasUsage) return a.hasUsage ? -1 : 1;
+				const byStatus =
+					order[agentStatus(a.agent)] - order[agentStatus(b.agent)];
+				if (byStatus !== 0) return byStatus;
+				return a.agent.display_name.localeCompare(b.agent.display_name);
+			});
+	}, [installedAgents, usageByAgent, limitsByAgent]);
 
 	return (
 		<div className="h-full overflow-y-auto">
@@ -213,34 +138,32 @@ export default function HomePage() {
 
 				<section
 					aria-label={t("yourAgents")}
-					className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+					className="grid grid-flow-row-dense auto-rows-[6.25rem] grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
 				>
-					{sortedAgents.map((agent) => (
-						<AgentOverviewCard key={agent.id} agent={agent} />
-					))}
-					<Card
-						variant="secondary"
-						className="border border-dashed border-border bg-transparent"
+					{sortedAgents.map(({ agent }) => {
+						const counts = countsByAgent.get(agent.id);
+						return (
+							<AgentOverviewCard
+								key={agent.id}
+								agent={agent}
+								skillCount={counts?.skills ?? 0}
+								mcpCount={counts?.mcps ?? 0}
+								usage={usageByAgent.get(agent.id)}
+								limits={limitsByAgent.get(agent.id)}
+							/>
+						);
+					})}
+					<button
+						type="button"
+						onClick={() => setLocation("/settings?tab=agents")}
+						className={cn(
+							"group/add row-span-1 flex h-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-foreground/20 p-4 text-center transition-colors",
+							"hover:border-accent hover:bg-accent/15 focus-visible:border-accent focus-visible:bg-accent/15 focus-visible:outline-none",
+						)}
 					>
-						<Card.Content className="flex h-full flex-col items-center justify-center gap-2 py-8 text-center">
-							<PlusIcon className="size-5 text-muted" />
-							<p className="text-sm font-medium">
-								{t("addAgent")}
-							</p>
-							<p className="text-xs text-muted">
-								{t("addAgentHint")}
-							</p>
-							<Button
-								variant="tertiary"
-								size="sm"
-								onPress={() =>
-									setLocation("/settings?tab=agents")
-								}
-							>
-								{t("manageAgents")}
-							</Button>
-						</Card.Content>
-					</Card>
+						<PlusIcon className="size-5 text-muted transition-colors group-hover/add:text-accent group-focus-visible/add:text-accent" />
+						<p className="text-sm font-medium">{t("addAgent")}</p>
+					</button>
 				</section>
 
 				<section className="mt-8">

@@ -65,6 +65,8 @@ import type {
 	CCPluginUpdateRequest,
 	CCPluginUpdateResponse,
 	UpdateSubAgentRequest,
+	UsageLimitsReportDto,
+	UsageReportDto,
 } from "../generated/dto";
 
 interface ApiErrorBody {
@@ -510,6 +512,26 @@ export function createApi(baseUrl: string, token: string) {
 				return client
 					.get("skills-market/search", { searchParams })
 					.json();
+			},
+		},
+		usage: {
+			summary(
+				params: {
+					since?: string;
+					until?: string;
+					timezone?: string;
+				} = {},
+			): Promise<UsageReportDto> {
+				const searchParams: Record<string, string> = {};
+				if (params.since) searchParams.since = params.since;
+				if (params.until) searchParams.until = params.until;
+				if (params.timezone) searchParams.timezone = params.timezone;
+				return client
+					.get("usage/summary", { searchParams, timeout: 60000 })
+					.json();
+			},
+			limits(): Promise<UsageLimitsReportDto> {
+				return client.get("usage/limits", { timeout: 30000 }).json();
 			},
 		},
 		integrations: {
