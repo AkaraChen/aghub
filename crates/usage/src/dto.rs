@@ -1,6 +1,16 @@
 use serde::Serialize;
 use ts_rs::TS;
 
+/// Which agent a usage/limits row belongs to. Only Claude and Codex expose the
+/// local data these reports read, so the set is closed.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "lowercase")]
+pub enum UsageAgent {
+	Claude,
+	Codex,
+}
+
 /// Unified usage report across agents, returned by `GET /api/v1/usage/summary`.
 ///
 /// ccusage emits a different JSON shape per agent (claude has cache-creation,
@@ -20,8 +30,7 @@ pub struct UsageReportDto {
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
 pub struct AgentUsageDto {
-	/// "claude" | "codex"
-	pub agent: String,
+	pub agent: UsageAgent,
 	pub days: Vec<UsageDayDto>,
 	pub totals: UsageTotalsDto,
 }
@@ -89,17 +98,31 @@ pub struct UsageLimitsReportDto {
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
 pub struct AgentLimitsDto {
-	/// "claude" | "codex"
-	pub agent: String,
+	pub agent: UsageAgent,
 	pub windows: Vec<LimitWindowDto>,
+}
+
+/// Which rate-limit window a [`LimitWindowDto`] describes. `weekly_opus` /
+/// `weekly_sonnet` are Claude-only and omitted when the endpoint doesn't report
+/// them; Codex maps `primary`/`secondary` onto `5h`/`weekly`.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, TS)]
+#[ts(export)]
+pub enum LimitWindowKind {
+	#[serde(rename = "5h")]
+	FiveHour,
+	#[serde(rename = "weekly")]
+	Weekly,
+	#[serde(rename = "weekly_opus")]
+	WeeklyOpus,
+	#[serde(rename = "weekly_sonnet")]
+	WeeklySonnet,
 }
 
 /// One rate-limit window for an agent.
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
 pub struct LimitWindowDto {
-	/// "5h" | "weekly" | "weekly_opus" | "weekly_sonnet"
-	pub kind: String,
+	pub kind: LimitWindowKind,
 	/// Percent of the window consumed, 0-100 (Codex's `percent_left` is
 	/// converted to `100 - percent_left` here so all windows share a meaning).
 	pub utilization_pct: f64,

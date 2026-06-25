@@ -71,8 +71,9 @@ use aghub_api::dto::{
 	},
 };
 use aghub_usage::{
-	AgentLimitsDto, AgentUsageDto, LimitWindowDto, UsageDayDto,
-	UsageLimitsReportDto, UsageModelDto, UsageReportDto, UsageTotalsDto,
+	AgentLimitsDto, AgentUsageDto, LimitWindowDto, LimitWindowKind, UsageAgent,
+	UsageDayDto, UsageLimitsReportDto, UsageModelDto, UsageReportDto,
+	UsageTotalsDto,
 };
 use ts_rs::{Config, TS};
 
@@ -251,12 +252,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<CCPluginValidateRequest>(&cfg)?;
 	export_type::<CCPluginValidateResponse>(&cfg)?;
 
+	export_type::<UsageAgent>(&cfg)?;
 	export_type::<UsageModelDto>(&cfg)?;
 	export_type::<UsageDayDto>(&cfg)?;
 	export_type::<UsageTotalsDto>(&cfg)?;
 	export_type::<AgentUsageDto>(&cfg)?;
 	export_type::<UsageReportDto>(&cfg)?;
 
+	export_type::<LimitWindowKind>(&cfg)?;
 	export_type::<LimitWindowDto>(&cfg)?;
 	export_type::<AgentLimitsDto>(&cfg)?;
 	export_type::<UsageLimitsReportDto>(&cfg)?;

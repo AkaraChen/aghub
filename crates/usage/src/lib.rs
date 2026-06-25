@@ -24,6 +24,13 @@ use serde::Deserialize;
 const CCUSAGE_TIMEOUT: Duration = Duration::from_secs(30);
 const LIMITS_TIMEOUT: Duration = Duration::from_secs(15);
 
+/// Windows `CREATE_NO_WINDOW` process-creation flag. The desktop app runs
+/// without a console, so an unflagged child would flash a console window on
+/// every ccusage call; this suppresses it (same flag the api / cc-plugins
+/// crates pass to their own child processes).
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 /// Locate the ccusage binary. Preference order: an explicit path injected by the
 /// caller (the desktop shell passes the bundled sidecar), then the
 /// `AGHUB_CCUSAGE_BIN` env var (dev), then `ccusage` on `PATH`.
@@ -39,11 +46,13 @@ async fn run_ccusage(
 	bin: &OsStr,
 	args: Vec<String>,
 ) -> Result<Vec<u8>, String> {
-	let run = tokio::process::Command::new(bin)
-		.kill_on_drop(true)
-		.args(&args)
-		.output();
-	let output = tokio::time::timeout(CCUSAGE_TIMEOUT, run)
+	let mut cmd = tokio::process::Command::new(bin);
+	cmd.kill_on_drop(true).args(&args);
+	// Suppress the console window Windows would otherwise pop for the child when
+	// the spawning process (the desktop app) has none.
+	#[cfg(target_os = "windows")]
+	cmd.creation_flags(CREATE_NO_WINDOW);
+	let output = tokio::time::timeout(CCUSAGE_TIMEOUT, cmd.output())
 		.await
 		.map_err(|_| "ccusage timed out after 30s".to_string())?
 		.map_err(|e| format!("failed to spawn ccusage: {e}"))?;
@@ -204,7 +213,7 @@ fn claude_to_agent(report: CcClaudeReport) -> AgentUsageDto {
 		.collect();
 
 	AgentUsageDto {
-		agent: "claude".to_string(),
+		agent: UsageAgent::Claude,
 		days,
 		totals: UsageTotalsDto {
 			input_tokens: report.totals.input_tokens,
@@ -256,7 +265,7 @@ fn codex_to_agent(report: CcCodexReport) -> AgentUsageDto {
 		.collect();
 
 	AgentUsageDto {
-		agent: "codex".to_string(),
+		agent: UsageAgent::Codex,
 		days,
 		totals: UsageTotalsDto {
 			input_tokens: report.totals.input_tokens,
@@ -379,24 +388,30 @@ fn parse_claude_credentials(json: &str) -> Result<String, String> {
 /// Claude Code's OAuth access token. macOS keeps it in the login keychain
 /// (service `Claude Code-credentials`); other platforms use the JSON file.
 fn claude_access_token() -> Result<String, String> {
+	// macOS: try the keychain first, but treat *any* miss as "fall through to
+	// the file" — keychain item absent, ACL-protected for another binary, or
+	// `USER` unset. GUI launches can have a stripped environment (the app
+	// already ships `fix-path-env` for the same reason), so a hard failure here
+	// would skip the documented `~/.claude/.credentials.json` fallback.
 	#[cfg(target_os = "macos")]
-	{
-		let user =
-			std::env::var("USER").map_err(|_| "USER not set".to_string())?;
-		let entry = keyring::Entry::new("Claude Code-credentials", &user)
-			.map_err(|e| e.to_string())?;
-		match entry.get_password() {
-			Ok(json) => return parse_claude_credentials(&json),
-			// Not in keychain: fall through to the file (some setups use it).
-			Err(keyring::Error::NoEntry) => {}
-			Err(e) => return Err(e.to_string()),
-		}
+	if let Some(token) = macos_keychain_token() {
+		return Ok(token);
 	}
 
 	let path = home_dir()?.join(".claude/.credentials.json");
 	let json = std::fs::read_to_string(&path)
 		.map_err(|e| format!("read claude credentials: {e}"))?;
 	parse_claude_credentials(&json)
+}
+
+/// Best-effort read of Claude Code's token from the macOS login keychain.
+/// Returns `None` on any failure so the caller falls back to the file.
+#[cfg(target_os = "macos")]
+fn macos_keychain_token() -> Option<String> {
+	let user = std::env::var("USER").ok()?;
+	let entry = keyring::Entry::new("Claude Code-credentials", &user).ok()?;
+	let json = entry.get_password().ok()?;
+	parse_claude_credentials(&json).ok()
 }
 
 /// Parse Codex's `auth.json` into (access token, optional ChatGPT account id).
@@ -482,7 +497,7 @@ async fn fetch_claude_limits() -> Result<AgentLimitsDto, String> {
 	}
 
 	Ok(AgentLimitsDto {
-		agent: "claude".to_string(),
+		agent: UsageAgent::Claude,
 		windows,
 	})
 }
@@ -491,15 +506,15 @@ async fn fetch_claude_limits() -> Result<AgentLimitsDto, String> {
 /// [`fetch_claude_limits`] so the scale handling is unit-testable.
 fn claude_windows(usage: ClaudeOauthUsage) -> Vec<LimitWindowDto> {
 	[
-		("5h", usage.five_hour),
-		("weekly", usage.seven_day),
-		("weekly_opus", usage.seven_day_opus),
-		("weekly_sonnet", usage.seven_day_sonnet),
+		(LimitWindowKind::FiveHour, usage.five_hour),
+		(LimitWindowKind::Weekly, usage.seven_day),
+		(LimitWindowKind::WeeklyOpus, usage.seven_day_opus),
+		(LimitWindowKind::WeeklySonnet, usage.seven_day_sonnet),
 	]
 	.into_iter()
 	.filter_map(|(kind, w)| {
 		w.map(|w| LimitWindowDto {
-			kind: kind.to_string(),
+			kind,
 			// Anthropic's /api/oauth/usage reports `utilization` already as a
 			// 0-100 percent (confirmed against a live response), matching the
 			// DTO contract; clamp defensively in case it ever returns otherwise.
@@ -515,7 +530,7 @@ fn claude_windows(usage: ClaudeOauthUsage) -> Vec<LimitWindowDto> {
 /// reset as an ISO string, or seconds-from-now, or epoch millis.
 fn codex_window(
 	value: &serde_json::Value,
-	kind: &str,
+	kind: LimitWindowKind,
 ) -> Option<LimitWindowDto> {
 	let obj = value.as_object()?;
 	let utilization_pct = obj
@@ -548,7 +563,7 @@ fn codex_window(
 				.map(|dt| dt.to_rfc3339())
 		});
 	Some(LimitWindowDto {
-		kind: kind.to_string(),
+		kind,
 		utilization_pct,
 		resets_at,
 	})
@@ -581,13 +596,13 @@ async fn fetch_codex_limits() -> Result<AgentLimitsDto, String> {
 	// Codex exposes a `primary` (5h) and `secondary` (weekly) window, possibly
 	// nested under `rate_limits`.
 	let root = body.get("rate_limits").unwrap_or(&body);
-	let windows: Vec<LimitWindowDto> =
-		[("primary", "5h"), ("secondary", "weekly")]
-			.into_iter()
-			.filter_map(|(key, kind)| {
-				root.get(key).and_then(|v| codex_window(v, kind))
-			})
-			.collect();
+	let windows: Vec<LimitWindowDto> = [
+		("primary", LimitWindowKind::FiveHour),
+		("secondary", LimitWindowKind::Weekly),
+	]
+	.into_iter()
+	.filter_map(|(key, kind)| root.get(key).and_then(|v| codex_window(v, kind)))
+	.collect();
 	if windows.is_empty() {
 		return Err(
 			"codex usage response had no recognizable rate-limit windows"
@@ -596,7 +611,7 @@ async fn fetch_codex_limits() -> Result<AgentLimitsDto, String> {
 	}
 
 	Ok(AgentLimitsDto {
-		agent: "codex".to_string(),
+		agent: UsageAgent::Codex,
 		windows,
 	})
 }
@@ -634,16 +649,23 @@ mod tests {
 
 	#[test]
 	fn codex_window_reads_used_percent() {
-		let w = codex_window(&json!({ "used_percent": 42.5 }), "5h").unwrap();
-		assert_eq!(w.kind, "5h");
+		let w = codex_window(
+			&json!({ "used_percent": 42.5 }),
+			LimitWindowKind::FiveHour,
+		)
+		.unwrap();
+		assert_eq!(w.kind, LimitWindowKind::FiveHour);
 		assert_eq!(w.utilization_pct, 42.5);
 		assert_eq!(w.resets_at, None);
 	}
 
 	#[test]
 	fn codex_window_inverts_percent_left() {
-		let w =
-			codex_window(&json!({ "percent_left": 30.0 }), "weekly").unwrap();
+		let w = codex_window(
+			&json!({ "percent_left": 30.0 }),
+			LimitWindowKind::Weekly,
+		)
+		.unwrap();
 		assert_eq!(w.utilization_pct, 70.0);
 	}
 
@@ -651,7 +673,7 @@ mod tests {
 	fn codex_window_resolves_resets_in_seconds() {
 		let w = codex_window(
 			&json!({ "used_percent": 10.0, "resets_in_seconds": 3600 }),
-			"5h",
+			LimitWindowKind::FiveHour,
 		)
 		.unwrap();
 		assert!(w.resets_at.is_some());
@@ -659,8 +681,15 @@ mod tests {
 
 	#[test]
 	fn codex_window_none_without_utilization() {
-		assert!(codex_window(&json!({ "foo": 1 }), "5h").is_none());
-		assert!(codex_window(&json!("not an object"), "5h").is_none());
+		assert!(
+			codex_window(&json!({ "foo": 1 }), LimitWindowKind::FiveHour)
+				.is_none()
+		);
+		assert!(codex_window(
+			&json!("not an object"),
+			LimitWindowKind::FiveHour
+		)
+		.is_none());
 	}
 
 	#[test]
@@ -693,7 +722,7 @@ mod tests {
 			},
 		};
 		let agent = claude_to_agent(report);
-		assert_eq!(agent.agent, "claude");
+		assert_eq!(agent.agent, UsageAgent::Claude);
 		assert_eq!(agent.totals.reasoning_tokens, 0);
 		let model = &agent.days[0].models[0];
 		assert_eq!(model.total_tokens, 158);
@@ -734,7 +763,7 @@ mod tests {
 			},
 		};
 		let agent = codex_to_agent(report);
-		assert_eq!(agent.agent, "codex");
+		assert_eq!(agent.agent, UsageAgent::Codex);
 		assert_eq!(agent.totals.cache_creation_tokens, 0);
 		assert_eq!(agent.totals.cache_read_tokens, 40);
 		assert_eq!(agent.days[0].models[0].cost_usd, None);
@@ -837,10 +866,10 @@ mod tests {
 		};
 		let windows = claude_windows(usage);
 		assert_eq!(windows.len(), 2);
-		assert_eq!(windows[0].kind, "5h");
+		assert_eq!(windows[0].kind, LimitWindowKind::FiveHour);
 		assert_eq!(windows[0].utilization_pct, 42.0);
 		// out-of-range utilization is clamped to the documented 0-100
-		assert_eq!(windows[1].kind, "weekly");
+		assert_eq!(windows[1].kind, LimitWindowKind::Weekly);
 		assert_eq!(windows[1].utilization_pct, 100.0);
 	}
 
@@ -858,9 +887,17 @@ mod tests {
 	#[test]
 	fn codex_window_clamps_out_of_range() {
 		// percent_left below 0 inverts to > 100; clamp keeps the contract.
-		let w = codex_window(&json!({ "percent_left": -20.0 }), "5h").unwrap();
+		let w = codex_window(
+			&json!({ "percent_left": -20.0 }),
+			LimitWindowKind::FiveHour,
+		)
+		.unwrap();
 		assert_eq!(w.utilization_pct, 100.0);
-		let w = codex_window(&json!({ "used_percent": 250.0 }), "5h").unwrap();
+		let w = codex_window(
+			&json!({ "used_percent": 250.0 }),
+			LimitWindowKind::FiveHour,
+		)
+		.unwrap();
 		assert_eq!(w.utilization_pct, 100.0);
 	}
 
@@ -868,14 +905,14 @@ mod tests {
 	fn codex_window_resolves_resets_at_string_and_epoch_ms() {
 		let w = codex_window(
 			&json!({ "used_percent": 1.0, "resets_at": "2026-06-09T12:00:00+00:00" }),
-			"weekly",
+			LimitWindowKind::Weekly,
 		)
 		.unwrap();
 		assert_eq!(w.resets_at.as_deref(), Some("2026-06-09T12:00:00+00:00"));
 
 		let w = codex_window(
 			&json!({ "used_percent": 1.0, "reset_time_ms": 1_780_000_000_000i64 }),
-			"5h",
+			LimitWindowKind::FiveHour,
 		)
 		.unwrap();
 		assert!(w.resets_at.is_some());

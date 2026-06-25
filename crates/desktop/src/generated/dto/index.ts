@@ -75,6 +75,7 @@ export type { InstallScopeDto } from "./InstallScopeDto";
 export type { InstallSkillRequest } from "./InstallSkillRequest";
 export type { InstallSkillResponse } from "./InstallSkillResponse";
 export type { LimitWindowDto } from "./LimitWindowDto";
+export type { LimitWindowKind } from "./LimitWindowKind";
 export type { LocalSkillLockEntryResponse } from "./LocalSkillLockEntryResponse";
 export type { MarketSkill } from "./MarketSkill";
 export type { McpCapabilitiesDto } from "./McpCapabilitiesDto";
@@ -112,6 +113,7 @@ export type { UpdateInferenceProviderRequest } from "./UpdateInferenceProviderRe
 export type { UpdateMcpRequest } from "./UpdateMcpRequest";
 export type { UpdateSkillRequest } from "./UpdateSkillRequest";
 export type { UpdateSubAgentRequest } from "./UpdateSubAgentRequest";
+export type { UsageAgent } from "./UsageAgent";
 export type { UsageDayDto } from "./UsageDayDto";
 export type { UsageLimitsReportDto } from "./UsageLimitsReportDto";
 export type { UsageModelDto } from "./UsageModelDto";
