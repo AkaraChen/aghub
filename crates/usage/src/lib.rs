@@ -434,8 +434,18 @@ fn parse_codex_auth(json: &str) -> Result<(String, Option<String>), String> {
 }
 
 /// Codex's OAuth token plus the ChatGPT account id its usage endpoint needs.
+/// Codex's config/auth root: `CODEX_HOME` if set, else `~/.codex`. Matches how
+/// the rest of the repo resolves Codex paths (`crates/inference/src/codex`), so
+/// a non-default `CODEX_HOME` doesn't make `limits` miss the auth file.
+fn codex_home() -> Result<PathBuf, String> {
+	if let Some(dir) = std::env::var_os("CODEX_HOME") {
+		return Ok(PathBuf::from(dir));
+	}
+	Ok(home_dir()?.join(".codex"))
+}
+
 fn codex_auth() -> Result<(String, Option<String>), String> {
-	let path = home_dir()?.join(".codex/auth.json");
+	let path = codex_home()?.join("auth.json");
 	let json = std::fs::read_to_string(&path)
 		.map_err(|e| format!("read codex auth: {e}"))?;
 	parse_codex_auth(&json)
@@ -848,6 +858,17 @@ mod tests {
 		std::env::set_var("AGHUB_CCUSAGE_BIN", "/from/env");
 		assert_eq!(resolve_ccusage_bin(None), OsString::from("/from/env"));
 		std::env::remove_var("AGHUB_CCUSAGE_BIN");
+	}
+
+	#[test]
+	fn codex_home_prefers_env_then_default() {
+		// No other test in this crate touches CODEX_HOME, so mutating it here is
+		// race-free.
+		std::env::remove_var("CODEX_HOME");
+		assert_eq!(codex_home().unwrap(), home_dir().unwrap().join(".codex"));
+		std::env::set_var("CODEX_HOME", "/custom/codex");
+		assert_eq!(codex_home().unwrap(), PathBuf::from("/custom/codex"));
+		std::env::remove_var("CODEX_HOME");
 	}
 
 	#[test]
