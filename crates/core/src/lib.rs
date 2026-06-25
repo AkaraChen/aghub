@@ -12,6 +12,12 @@ pub mod registry;
 pub mod skills;
 pub mod transfer;
 
+/// Windows `CREATE_NO_WINDOW` process-creation flag. Subprocesses spawned from
+/// the console-less desktop app would otherwise flash a console window; callers
+/// OR this into `creation_flags` on Windows (see `ConfigManager::validate`).
+#[cfg(windows)]
+pub(crate) const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 pub use aghub_agents::{descriptor, errors, format, models};
 pub use aghub_agents::{
 	AgentConfig, AgentDescriptor, AgentType, Capabilities, ConfigError,

@@ -23,6 +23,8 @@ pub(crate) const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 pub struct ApiOptions {
 	pub port: u16,
 	pub app_data_dir: Option<PathBuf>,
+	/// Path to the bundled `ccusage` sidecar; `None` falls back to env/PATH.
+	pub ccusage_bin: Option<PathBuf>,
 	pub auth_token: Option<String>,
 	pub allowed_origins: Vec<String>,
 	pub allowed_origin_regexes: Vec<String>,
@@ -33,6 +35,7 @@ impl ApiOptions {
 		Self {
 			port,
 			app_data_dir: None,
+			ccusage_bin: None,
 			auth_token: None,
 			allowed_origins: default_allowed_origins(),
 			allowed_origin_regexes: default_allowed_origin_regexes(),
@@ -58,6 +61,7 @@ impl ApiOptions {
 			app_data_dir: self
 				.app_data_dir
 				.unwrap_or_else(default_app_data_dir),
+			ccusage_bin: self.ccusage_bin,
 			auth_token,
 			token_was_generated,
 			allowed_origins: self.allowed_origins,
@@ -87,6 +91,7 @@ fn default_allowed_origin_regexes() -> Vec<String> {
 struct ResolvedApiOptions {
 	port: u16,
 	app_data_dir: PathBuf,
+	ccusage_bin: Option<PathBuf>,
 	auth_token: String,
 	token_was_generated: bool,
 	allowed_origins: Vec<String>,
@@ -182,6 +187,9 @@ fn build_rocket(
 		})
 		.manage(crate::state::InferenceProviderState {
 			app_data_dir: options.app_data_dir,
+		})
+		.manage(crate::state::UsageState {
+			ccusage_bin: options.ccusage_bin,
 		})
 		.manage(crate::auth::ApiAuthState {
 			token: options.auth_token,
@@ -286,6 +294,8 @@ fn build_rocket(
 				routes::plugins::cli_status,
 				routes::plugins::prune_plugins,
 				routes::plugins::validate_plugin,
+				routes::usage::usage_summary,
+				routes::usage::usage_limits,
 			],
 		)
 		.register(
@@ -511,6 +521,18 @@ mod tests {
 		let response = get_auth(&client, "/api/v1/agents");
 
 		assert_eq!(response.status(), Status::Ok);
+	}
+
+	#[test]
+	fn usage_routes_require_auth() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+		// The guard rejects before the handler runs, so no ccusage spawn / vendor
+		// call happens here.
+		for uri in ["/api/v1/usage/summary", "/api/v1/usage/limits"] {
+			let response = client.get(uri).dispatch();
+			assert_json_error(response, Status::Unauthorized, "UNAUTHORIZED");
+		}
 	}
 
 	#[test]

@@ -235,6 +235,13 @@ impl AgentAdapter for &'static AgentDescriptor {
 		if let Some(config_path) = config_path {
 			cmd.arg(config_path);
 		}
+		// `validate` runs this from the console-less desktop app; suppress the
+		// console window Windows would otherwise pop for the agent CLI.
+		#[cfg(target_os = "windows")]
+		{
+			use std::os::windows::process::CommandExt;
+			cmd.creation_flags(crate::CREATE_NO_WINDOW);
+		}
 		cmd
 	}
 

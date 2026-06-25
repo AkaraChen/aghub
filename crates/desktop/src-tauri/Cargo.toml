@@ -16,6 +16,12 @@ crate-type = [ "staticlib", "cdylib", "rlib" ]
 [build-dependencies]
 dotenvy = "0.15.7"
 tauri-build = { version = "2", features = [  ] }
+ureq = "2"
+flate2 = "1.0"
+tar = "0.4"
+serde_json = "1"
+sha2 = "0.10"
+base64 = "0.22"
 
 [dependencies]
 tauri = { workspace = true, features = [ "tray-icon" ] }
