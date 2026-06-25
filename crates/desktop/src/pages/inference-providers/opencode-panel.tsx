@@ -690,7 +690,6 @@ export function OpenCodeInferenceProviderPanel({
 			/>
 			{providerDialog?.type === "edit" && (
 				<OpenCodeEditProviderDialog
-					key={providerDialog.provider.id}
 					isOpen
 					provider={providerDialog.provider}
 					onClose={() => setProviderDialog(null)}

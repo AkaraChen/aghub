@@ -13,7 +13,8 @@ import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
 import { CreateMcpPanel } from "../../components/create-mcp-panel";
 import { EditMcpPanel } from "../../components/edit-mcp-panel";
 import { ImportMcpPanel } from "../../components/import-mcp-panel";
-import { ListSearchHeader } from "../../components/list-search-header";
+import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
+import { setStickyAgentFilter } from "../../hooks/use-sticky-agent-filter";
 import type { McpGroup } from "../../components/mcp-detail";
 import { McpDetail } from "../../components/mcp-detail";
 import { McpList } from "../../components/mcp-list";
@@ -45,6 +46,7 @@ export default function MCPServersPage() {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [panel, setPanel] = useState<RightPanel>({ type: "empty" });
 	const [selectedKey, setSelectedKey] = useQueryState("server");
+	const [agentFilter, setAgentFilter] = useQueryState("agent");
 	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
 		() => new Set(),
 	);
@@ -59,10 +61,15 @@ export default function MCPServersPage() {
 		[availableAgents],
 	);
 
+	const filteredMcps = useMemo(() => {
+		if (!agentFilter) return mcps;
+		return mcps.filter((mcp) => mcp.agent === agentFilter);
+	}, [mcps, agentFilter]);
+
 	const groupedMcps = useMemo(() => {
 		const map = new Map<string, McpGroup>();
 
-		for (const mcp of mcps) {
+		for (const mcp of filteredMcps) {
 			const key = getMcpMergeKey(mcp.transport);
 			const existing = map.get(key);
 			if (existing) {
@@ -77,7 +84,7 @@ export default function MCPServersPage() {
 		}
 
 		return Array.from(map.values());
-	}, [mcps]);
+	}, [filteredMcps]);
 
 	const activeGroup = useMemo(() => {
 		if (selectedKey) {
@@ -144,200 +151,206 @@ export default function MCPServersPage() {
 		panel.type !== "import" &&
 		panel.type !== "edit";
 
+	const handleAgentFilterChange = (next: string | null) => {
+		setAgentFilter(next);
+		setStickyAgentFilter(next);
+	};
+
 	return (
-		<div className="flex h-full">
-			{/* Servers List Panel */}
-			<div className="relative flex w-80 shrink-0 flex-col border-r border-border">
-				<ListSearchHeader
-					searchValue={searchQuery}
-					onSearchChange={setSearchQuery}
-					placeholder={t("searchServers")}
-					ariaLabel={t("searchServers")}
-				>
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<div
-								role="button"
-								tabIndex={0}
-								className={cn(
-									"flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-default hover:text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40",
-									isMultiSelectMode &&
-										"bg-accent/10 text-accent",
-								)}
-								aria-label={
-									isMultiSelectMode
-										? t("doneSelecting")
-										: t("multiSelect")
+		<div className="flex h-full flex-col">
+			<ResourcePageToolbar
+				agentFilter={{
+					agentId: agentFilter,
+					onChange: handleAgentFilterChange,
+				}}
+				searchValue={searchQuery}
+				onSearchChange={setSearchQuery}
+				searchPlaceholder={t("searchServers")}
+				searchAriaLabel={t("searchServers")}
+			>
+				<Tooltip delay={0}>
+					<Tooltip.Trigger>
+						<div
+							role="button"
+							tabIndex={0}
+							className={cn(
+								"flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-default hover:text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40",
+								isMultiSelectMode && "bg-accent/10 text-accent",
+							)}
+							aria-label={
+								isMultiSelectMode
+									? t("doneSelecting")
+									: t("multiSelect")
+							}
+							onClick={() => {
+								setIsMultiSelectMode((prev) => !prev);
+								if (isMultiSelectMode) {
+									handleSelectionChange(new Set());
 								}
-								onClick={() => {
-									setIsMultiSelectMode((prev) => !prev);
-									if (isMultiSelectMode) {
-										handleSelectionChange(new Set());
-									}
-								}}
-								onKeyDown={(event) => {
-									if (
-										event.key !== "Enter" &&
-										event.key !== " "
-									) {
-										return;
-									}
-									event.preventDefault();
-									setIsMultiSelectMode((prev) => !prev);
-									if (isMultiSelectMode) {
-										handleSelectionChange(new Set());
-									}
-								}}
-							>
-								{isMultiSelectMode ? (
-									<CheckCircleIcon className="size-4" />
-								) : (
-									<RectangleStackIcon className="size-4" />
-								)}
-							</div>
-						</Tooltip.Trigger>
-						<Tooltip.Content>
-							{isMultiSelectMode
-								? t("doneSelecting")
-								: t("multiSelect")}
-						</Tooltip.Content>
-					</Tooltip>
-					<Dropdown>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							data-tour="mcp-add"
-							className="shrink-0"
-							aria-label={t("addMcpServer")}
-							isDisabled={!hasMcpCapableAgents}
+							}}
+							onKeyDown={(event) => {
+								if (
+									event.key !== "Enter" &&
+									event.key !== " "
+								) {
+									return;
+								}
+								event.preventDefault();
+								setIsMultiSelectMode((prev) => !prev);
+								if (isMultiSelectMode) {
+									handleSelectionChange(new Set());
+								}
+							}}
 						>
-							<PlusIcon className="size-4" />
-						</Button>
-						<Dropdown.Popover placement="bottom end">
-							<Dropdown.Menu
-								onAction={(key) => {
-									if (key === "manual") {
-										handleCreate();
-									} else if (key === "import") {
-										handleImport();
-									}
-								}}
-							>
-								<Dropdown.Item
-									id="manual"
-									textValue={t("manualCreation")}
-								>
-									{t("manualCreation")}
-								</Dropdown.Item>
-								<Dropdown.Item
-									id="import"
-									textValue={t("importFromJson")}
-								>
-									{t("importFromJson")}
-								</Dropdown.Item>
-							</Dropdown.Menu>
-						</Dropdown.Popover>
-					</Dropdown>
+							{isMultiSelectMode ? (
+								<CheckCircleIcon className="size-4" />
+							) : (
+								<RectangleStackIcon className="size-4" />
+							)}
+						</div>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						{isMultiSelectMode
+							? t("doneSelecting")
+							: t("multiSelect")}
+					</Tooltip.Content>
+				</Tooltip>
+				<Dropdown>
 					<Button
 						isIconOnly
 						variant="ghost"
 						size="sm"
+						data-tour="mcp-add"
 						className="shrink-0"
-						aria-label={t("refreshServers")}
-						onPress={() => refetch()}
+						aria-label={t("addMcpServer")}
+						isDisabled={!hasMcpCapableAgents}
 					>
-						<ArrowPathIcon
-							className={cn(
-								"size-4",
-								isFetching && "animate-spin",
-							)}
-						/>
+						<PlusIcon className="size-4" />
 					</Button>
-				</ListSearchHeader>
-
-				{/* Servers List */}
-				<McpList
-					mcps={mcps}
-					selectedKeys={effectiveSelectedKeys}
-					searchQuery={searchQuery}
-					onSelectionChange={handleSelectionChange}
-					selectionMode="multiple"
-					isMultiSelectMode={isMultiSelectMode}
-				/>
-
-				{isMultiSelectMode && selectedKeys.size > 0 && (
-					<MultiSelectFloatingBar
-						selectedCount={selectedKeys.size}
-						totalCount={groupedMcps.length}
-						onDelete={() => setIsBulkDeleteDialogOpen(true)}
+					<Dropdown.Popover placement="bottom end">
+						<Dropdown.Menu
+							onAction={(key) => {
+								if (key === "manual") {
+									handleCreate();
+								} else if (key === "import") {
+									handleImport();
+								}
+							}}
+						>
+							<Dropdown.Item
+								id="manual"
+								textValue={t("manualCreation")}
+							>
+								{t("manualCreation")}
+							</Dropdown.Item>
+							<Dropdown.Item
+								id="import"
+								textValue={t("importFromJson")}
+							>
+								{t("importFromJson")}
+							</Dropdown.Item>
+						</Dropdown.Menu>
+					</Dropdown.Popover>
+				</Dropdown>
+				<Button
+					isIconOnly
+					variant="ghost"
+					size="sm"
+					className="shrink-0"
+					aria-label={t("refreshServers")}
+					onPress={() => refetch()}
+				>
+					<ArrowPathIcon
+						className={cn("size-4", isFetching && "animate-spin")}
 					/>
-				)}
-			</div>
+				</Button>
+			</ResourcePageToolbar>
+			<div className="flex min-h-0 flex-1">
+				{/* Servers List Panel */}
+				<div className="relative flex w-80 shrink-0 flex-col border-r border-border">
+					{/* Servers List */}
+					<McpList
+						mcps={filteredMcps}
+						selectedKeys={effectiveSelectedKeys}
+						searchQuery={searchQuery}
+						onSelectionChange={handleSelectionChange}
+						selectionMode="multiple"
+						isMultiSelectMode={isMultiSelectMode}
+					/>
 
-			{/* Server Detail Panel */}
-			<div className="flex-1 overflow-hidden relative">
-				{panel.type === "create" && (
-					<CreateMcpPanel onDone={handlePanelDone} />
-				)}
-				{panel.type === "import" && (
-					<ImportMcpPanel onDone={handlePanelDone} />
-				)}
-				{panel.type === "edit" && activeGroup && (
-					<EditMcpPanel
-						key={activeGroup.mergeKey}
-						group={activeGroup}
-						onDone={() => handleEditDone(activeGroup.mergeKey)}
-					/>
-				)}
-				{showDetail && activeGroup && (
-					<McpDetail
-						group={activeGroup}
-						onEdit={() =>
-							setPanel({
-								type: "edit",
-								selectedKey: activeGroup.mergeKey,
-							})
-						}
-					/>
-				)}
-				{showDetail && !activeGroup && !hasMcpCapableAgents && (
-					<div className="flex h-full flex-col items-center justify-center gap-3">
-						<p className="text-sm text-muted">
-							{t("noTargetAgents")}
-						</p>
-					</div>
-				)}
-				{showDetail && !activeGroup && hasMcpCapableAgents && (
-					<div className="flex h-full flex-col items-center justify-center gap-4">
-						<div className="text-center">
-							<p className="mb-2 text-sm text-muted">
-								{t("selectServer")}
-							</p>
-							<p className="text-xs text-muted">
-								{t("orCreateNew")}
+					{isMultiSelectMode && selectedKeys.size > 0 && (
+						<MultiSelectFloatingBar
+							selectedCount={selectedKeys.size}
+							totalCount={groupedMcps.length}
+							onDelete={() => setIsBulkDeleteDialogOpen(true)}
+						/>
+					)}
+				</div>
+
+				{/* Server Detail Panel */}
+				<div className="flex-1 overflow-hidden relative">
+					{panel.type === "create" && (
+						<CreateMcpPanel onDone={handlePanelDone} />
+					)}
+					{panel.type === "import" && (
+						<ImportMcpPanel onDone={handlePanelDone} />
+					)}
+					{panel.type === "edit" && activeGroup && (
+						<EditMcpPanel
+							key={activeGroup.mergeKey}
+							group={activeGroup}
+							onDone={() => handleEditDone(activeGroup.mergeKey)}
+						/>
+					)}
+					{showDetail && activeGroup && (
+						<McpDetail
+							group={activeGroup}
+							onEdit={() =>
+								setPanel({
+									type: "edit",
+									selectedKey: activeGroup.mergeKey,
+								})
+							}
+						/>
+					)}
+					{showDetail && !activeGroup && !hasMcpCapableAgents && (
+						<div className="flex h-full flex-col items-center justify-center gap-3">
+							<p className="text-sm text-muted">
+								{t("noTargetAgents")}
 							</p>
 						</div>
-						<Button onPress={handleCreate}>
-							<PlusIcon className="mr-2 size-4" />
-							{t("addMcpServer")}
-						</Button>
-					</div>
-				)}
+					)}
+					{showDetail && !activeGroup && hasMcpCapableAgents && (
+						<div className="flex h-full flex-col items-center justify-center gap-4">
+							<div className="text-center">
+								<p className="mb-2 text-sm text-muted">
+									{t("selectServer")}
+								</p>
+								<p className="text-xs text-muted">
+									{t("orCreateNew")}
+								</p>
+							</div>
+							<Button onPress={handleCreate}>
+								<PlusIcon className="mr-2 size-4" />
+								{t("addMcpServer")}
+							</Button>
+						</div>
+					)}
 
-				<BulkDeleteDialog
-					isOpen={isBulkDeleteDialogOpen}
-					onClose={() => setIsBulkDeleteDialogOpen(false)}
-					groups={selectedGroups.map((g) => ({
-						key: g.mergeKey,
-						items: g.items,
-					}))}
-					onSuccess={() => {
-						handleSelectionChange(new Set());
-						refetch();
-					}}
-					resourceType="mcp"
-				/>
+					<BulkDeleteDialog
+						isOpen={isBulkDeleteDialogOpen}
+						onClose={() => setIsBulkDeleteDialogOpen(false)}
+						groups={selectedGroups.map((g) => ({
+							key: g.mergeKey,
+							items: g.items,
+						}))}
+						onSuccess={() => {
+							handleSelectionChange(new Set());
+							refetch();
+						}}
+						resourceType="mcp"
+					/>
+				</div>
 			</div>
 		</div>
 	);

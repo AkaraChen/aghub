@@ -843,6 +843,16 @@ export function createApi(baseUrl: string, token: string) {
 			listMarket(): Promise<CCPluginMarketResponse[]> {
 				return client.get("plugins-market", { timeout: 30000 }).json();
 			},
+			updateMarketplace(): Promise<{
+				success: boolean;
+				updated_count: number;
+			}> {
+				return client
+					.post("plugins-market/update", {
+						timeout: 300000,
+					})
+					.json();
+			},
 			listMarketplaces(): Promise<CCMarketplaceListResponse> {
 				return client.get("plugins/marketplaces").json();
 			},

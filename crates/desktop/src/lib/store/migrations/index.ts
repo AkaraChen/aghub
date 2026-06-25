@@ -7,6 +7,7 @@ import { migrateV3ToV4 } from "./v3-to-v4";
 import { migrateV4ToV5 } from "./v4-to-v5";
 import { migrateV5ToV6 } from "./v5-to-v6";
 import { migrateV6ToV7 } from "./v6-to-v7";
+import { migrateV7ToV8 } from "./v7-to-v8";
 
 export async function migrate(store: Store): Promise<void> {
 	const version = (await store.get<number>("version")) ?? 0;
@@ -39,6 +40,10 @@ export async function migrate(store: Store): Promise<void> {
 
 	if (version < 7) {
 		await migrateV6ToV7(store);
+	}
+
+	if (version < 8) {
+		await migrateV7ToV8(store);
 	}
 
 	await store.set("version", CURRENT_VERSION);

@@ -124,7 +124,7 @@ export default function SkillsSearchPage() {
 	]);
 
 	if (submittedQuery.length < 2) {
-		setLocation("/skills-sh");
+		setLocation("/market");
 		return null;
 	}
 

@@ -13,7 +13,8 @@ import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
 import { CreateSkillPanel } from "../../components/create-skill-panel";
 import { ImportGithubSkillPanel } from "../../components/import-github-skill-panel";
 import { ImportSkillPanel } from "../../components/import-skill-panel";
-import { ListSearchHeader } from "../../components/list-search-header";
+import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
+import { setStickyAgentFilter } from "../../hooks/use-sticky-agent-filter";
 import { MultiSelectFloatingBar } from "../../components/multi-select-floating-bar";
 import { SkillDetail } from "../../components/skill-detail";
 import { SkillList } from "../../components/skill-list";
@@ -34,6 +35,7 @@ export default function SkillsPage() {
 	});
 	const [searchQuery, setSearchQuery] = useState("");
 	const [selectedName, setSelectedName] = useQueryState("skill");
+	const [agentFilter, setAgentFilter] = useQueryState("agent");
 	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
 		() => new Set(),
 	);
@@ -44,9 +46,14 @@ export default function SkillsPage() {
 		"create" | "import" | "import-github" | null
 	>(null);
 
+	const filteredSkills = useMemo(() => {
+		if (!agentFilter) return skills;
+		return skills.filter((skill) => skill.agent === agentFilter);
+	}, [skills, agentFilter]);
+
 	const groupedSkills = useMemo(() => {
 		const map = new Map<string, SkillResponse[]>();
-		for (const skill of skills) {
+		for (const skill of filteredSkills) {
 			const existing = map.get(skill.name) ?? [];
 			map.set(skill.name, [...existing, skill]);
 		}
@@ -55,7 +62,7 @@ export default function SkillsPage() {
 			items,
 			description: items.find((s) => s.description)?.description ?? "",
 		}));
-	}, [skills]);
+	}, [filteredSkills]);
 
 	const activeGroup = useMemo(() => {
 		if (selectedName) {
@@ -106,178 +113,186 @@ export default function SkillsPage() {
 		setPanelMode("import");
 	};
 
+	const handleAgentFilterChange = (next: string | null) => {
+		setAgentFilter(next);
+		setStickyAgentFilter(next);
+	};
+
 	return (
-		<div className="flex h-full">
-			{/* Skills List Panel */}
-			<div className="relative flex w-80 shrink-0 flex-col border-r border-border">
-				<ListSearchHeader
-					searchValue={searchQuery}
-					onSearchChange={setSearchQuery}
-					placeholder={t("searchSkills")}
-					ariaLabel={t("searchSkills")}
-				>
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<div
-								role="button"
-								tabIndex={0}
-								className={cn(
-									"flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-default hover:text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40",
-									isMultiSelectMode &&
-										"bg-accent/10 text-accent",
-								)}
-								aria-label={
-									isMultiSelectMode
-										? t("doneSelecting")
-										: t("multiSelect")
+		<div className="flex h-full flex-col">
+			<ResourcePageToolbar
+				agentFilter={{
+					agentId: agentFilter,
+					onChange: handleAgentFilterChange,
+				}}
+				searchValue={searchQuery}
+				onSearchChange={setSearchQuery}
+				searchPlaceholder={t("searchSkills")}
+				searchAriaLabel={t("searchSkills")}
+			>
+				<Tooltip delay={0}>
+					<Tooltip.Trigger>
+						<div
+							role="button"
+							tabIndex={0}
+							className={cn(
+								"flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-default hover:text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40",
+								isMultiSelectMode && "bg-accent/10 text-accent",
+							)}
+							aria-label={
+								isMultiSelectMode
+									? t("doneSelecting")
+									: t("multiSelect")
+							}
+							onClick={() => {
+								setIsMultiSelectMode((prev) => !prev);
+								if (isMultiSelectMode) {
+									handleSelectionChange(new Set());
 								}
-								onClick={() => {
-									setIsMultiSelectMode((prev) => !prev);
-									if (isMultiSelectMode) {
-										handleSelectionChange(new Set());
-									}
-								}}
-								onKeyDown={(event) => {
-									if (
-										event.key !== "Enter" &&
-										event.key !== " "
-									) {
-										return;
-									}
-									event.preventDefault();
-									setIsMultiSelectMode((prev) => !prev);
-									if (isMultiSelectMode) {
-										handleSelectionChange(new Set());
-									}
-								}}
-							>
-								{isMultiSelectMode ? (
-									<CheckCircleIcon className="size-4" />
-								) : (
-									<RectangleStackIcon className="size-4" />
-								)}
-							</div>
-						</Tooltip.Trigger>
-						<Tooltip.Content>
-							{isMultiSelectMode
-								? t("doneSelecting")
-								: t("multiSelect")}
-						</Tooltip.Content>
-					</Tooltip>
-					<Dropdown>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							className="shrink-0"
-							aria-label={t("addSkill")}
+							}}
+							onKeyDown={(event) => {
+								if (
+									event.key !== "Enter" &&
+									event.key !== " "
+								) {
+									return;
+								}
+								event.preventDefault();
+								setIsMultiSelectMode((prev) => !prev);
+								if (isMultiSelectMode) {
+									handleSelectionChange(new Set());
+								}
+							}}
 						>
-							<PlusIcon className="size-4" />
-						</Button>
-						<Dropdown.Popover placement="bottom end">
-							<Dropdown.Menu
-								onAction={(key) => {
-									if (key === "create") {
-										handleCreateSkill();
-									} else if (key === "import") {
-										handleImportSkill();
-									} else if (key === "import-github") {
-										setSelectedKeys(new Set());
-										setSelectedName(null);
-										setPanelMode("import-github");
-									}
-								}}
-							>
-								<Dropdown.Item
-									id="create"
-									textValue={t("createCustomSkill")}
-								>
-									{t("createCustomSkill")}
-								</Dropdown.Item>
-								<Dropdown.Item
-									id="import"
-									textValue={t("importFromFile")}
-								>
-									{t("importFromFile")}
-								</Dropdown.Item>
-								<Dropdown.Item
-									id="import-github"
-									textValue={t("importRemoteSource")}
-								>
-									{t("importRemoteSource")}
-								</Dropdown.Item>
-							</Dropdown.Menu>
-						</Dropdown.Popover>
-					</Dropdown>
+							{isMultiSelectMode ? (
+								<CheckCircleIcon className="size-4" />
+							) : (
+								<RectangleStackIcon className="size-4" />
+							)}
+						</div>
+					</Tooltip.Trigger>
+					<Tooltip.Content>
+						{isMultiSelectMode
+							? t("doneSelecting")
+							: t("multiSelect")}
+					</Tooltip.Content>
+				</Tooltip>
+				<Dropdown>
 					<Button
 						isIconOnly
 						variant="ghost"
 						size="sm"
 						className="shrink-0"
-						aria-label={t("refreshSkills")}
-						onPress={() => refetch()}
+						aria-label={t("addSkill")}
 					>
-						<ArrowPathIcon
-							className={cn(
-								"size-4",
-								isFetching && "animate-spin",
-							)}
-						/>
+						<PlusIcon className="size-4" />
 					</Button>
-				</ListSearchHeader>
-
-				{/* Skills List */}
-				<SkillList
-					skills={skills}
-					selectedKeys={effectiveSelectedKeys}
-					searchQuery={searchQuery}
-					onSelectionChange={handleSelectionChange}
-					selectionMode="multiple"
-					isMultiSelectMode={isMultiSelectMode}
-					groupBySource={true}
-				/>
-
-				{isMultiSelectMode && selectedKeys.size > 0 && (
-					<MultiSelectFloatingBar
-						selectedCount={selectedKeys.size}
-						totalCount={groupedSkills.length}
-						onDelete={() => setIsBulkDeleteDialogOpen(true)}
+					<Dropdown.Popover placement="bottom end">
+						<Dropdown.Menu
+							onAction={(key) => {
+								if (key === "create") {
+									handleCreateSkill();
+								} else if (key === "import") {
+									handleImportSkill();
+								} else if (key === "import-github") {
+									setSelectedKeys(new Set());
+									setSelectedName(null);
+									setPanelMode("import-github");
+								}
+							}}
+						>
+							<Dropdown.Item
+								id="create"
+								textValue={t("createCustomSkill")}
+							>
+								{t("createCustomSkill")}
+							</Dropdown.Item>
+							<Dropdown.Item
+								id="import"
+								textValue={t("importFromFile")}
+							>
+								{t("importFromFile")}
+							</Dropdown.Item>
+							<Dropdown.Item
+								id="import-github"
+								textValue={t("importRemoteSource")}
+							>
+								{t("importRemoteSource")}
+							</Dropdown.Item>
+						</Dropdown.Menu>
+					</Dropdown.Popover>
+				</Dropdown>
+				<Button
+					isIconOnly
+					variant="ghost"
+					size="sm"
+					className="shrink-0"
+					aria-label={t("refreshSkills")}
+					onPress={() => refetch()}
+				>
+					<ArrowPathIcon
+						className={cn("size-4", isFetching && "animate-spin")}
 					/>
-				)}
-			</div>
+				</Button>
+			</ResourcePageToolbar>
+			<div className="flex min-h-0 flex-1">
+				{/* Skills List Panel */}
+				<div className="relative flex w-80 shrink-0 flex-col border-r border-border">
+					{/* Skills List */}
+					<SkillList
+						skills={filteredSkills}
+						selectedKeys={effectiveSelectedKeys}
+						searchQuery={searchQuery}
+						onSelectionChange={handleSelectionChange}
+						selectionMode="multiple"
+						isMultiSelectMode={isMultiSelectMode}
+						groupBySource={true}
+					/>
 
-			<div className="flex-1 overflow-hidden relative">
-				{panelMode === "create" ? (
-					<CreateSkillPanel onDone={() => setPanelMode(null)} />
-				) : panelMode === "import" ? (
-					<ImportSkillPanel onDone={() => setPanelMode(null)} />
-				) : panelMode === "import-github" ? (
-					<ImportGithubSkillPanel onDone={() => setPanelMode(null)} />
-				) : activeGroup ? (
-					<SkillDetail group={activeGroup} />
-				) : (
-					<div className="flex h-full flex-col items-center justify-center gap-4">
-						<div className="text-center">
-							<p className="mb-2 text-sm text-muted">
-								{t("selectSkill")}
-							</p>
+					{isMultiSelectMode && selectedKeys.size > 0 && (
+						<MultiSelectFloatingBar
+							selectedCount={selectedKeys.size}
+							totalCount={groupedSkills.length}
+							onDelete={() => setIsBulkDeleteDialogOpen(true)}
+						/>
+					)}
+				</div>
+
+				<div className="flex-1 overflow-hidden relative">
+					{panelMode === "create" ? (
+						<CreateSkillPanel onDone={() => setPanelMode(null)} />
+					) : panelMode === "import" ? (
+						<ImportSkillPanel onDone={() => setPanelMode(null)} />
+					) : panelMode === "import-github" ? (
+						<ImportGithubSkillPanel
+							onDone={() => setPanelMode(null)}
+						/>
+					) : activeGroup ? (
+						<SkillDetail group={activeGroup} />
+					) : (
+						<div className="flex h-full flex-col items-center justify-center gap-4">
+							<div className="text-center">
+								<p className="mb-2 text-sm text-muted">
+									{t("selectSkill")}
+								</p>
+							</div>
 						</div>
-					</div>
-				)}
+					)}
 
-				<BulkDeleteDialog
-					isOpen={isBulkDeleteDialogOpen}
-					onClose={() => setIsBulkDeleteDialogOpen(false)}
-					groups={selectedGroups.map((g) => ({
-						key: g.name,
-						items: g.items,
-					}))}
-					onSuccess={() => {
-						handleSelectionChange(new Set());
-						refetch();
-					}}
-					resourceType="skill"
-				/>
+					<BulkDeleteDialog
+						isOpen={isBulkDeleteDialogOpen}
+						onClose={() => setIsBulkDeleteDialogOpen(false)}
+						groups={selectedGroups.map((g) => ({
+							key: g.name,
+							items: g.items,
+						}))}
+						onSuccess={() => {
+							handleSelectionChange(new Set());
+							refetch();
+						}}
+						resourceType="skill"
+					/>
+				</div>
 			</div>
 		</div>
 	);
