@@ -23,13 +23,6 @@ fn ccusage_platform(triple: &str) -> Option<&'static str> {
 
 fn fetch_ccusage_sidecar() {
 	let triple = env::var("TARGET").expect("cargo sets TARGET");
-	let platform = ccusage_platform(&triple).unwrap_or_else(|| {
-		panic!(
-			"no ccusage prebuilt binary for target triple '{triple}'. \
-			 Add the mapping in build.rs if a package now exists."
-		)
-	});
-
 	let is_windows = triple.contains("windows");
 	let ext = if is_windows { ".exe" } else { "" };
 
@@ -49,9 +42,11 @@ fn fetch_ccusage_sidecar() {
 
 	// Offline / CLI-only escape hatch. A bare `cargo build --workspace` compiles
 	// this crate (and runs build.rs) even for contributors who only touch the
-	// CLI/core, which would otherwise force a network fetch. With
-	// AGHUB_SKIP_SIDECAR set, stage an empty placeholder so tauri-build's
-	// externalBin existence check still passes without hitting the network. The
+	// CLI/core, which would otherwise force a network fetch. Checked before the
+	// platform-triple lookup below so even an unmapped target can stage a
+	// placeholder instead of panicking. With AGHUB_SKIP_SIDECAR set, stage an
+	// empty placeholder so tauri-build's externalBin existence check still passes
+	// without hitting the network. The
 	// placeholder is NOT runnable — never set this for a real bundle (`tauri
 	// build` does not), and we leave the version stamp unwritten so a later
 	// online build re-fetches the real binary.
@@ -74,6 +69,17 @@ fn fetch_ccusage_sidecar() {
 	}
 
 	fs::create_dir_all(&binaries_dir).expect("create binaries dir");
+
+	// Only the real network fetch needs the npm platform package, so the triple
+	// mapping is resolved here rather than up front: an unsupported triple now
+	// fails only when a sidecar is actually required, leaving the stamp short-
+	// circuit and AGHUB_SKIP_SIDECAR hatch above reachable on any target.
+	let platform = ccusage_platform(&triple).unwrap_or_else(|| {
+		panic!(
+			"no ccusage prebuilt binary for target triple '{triple}'. \
+			 Add the mapping in build.rs if a package now exists."
+		)
+	});
 
 	// A configured agent gives the otherwise-unbounded registry/tarball fetches
 	// connect/read timeouts, so an unreachable or stalled registry fails the
