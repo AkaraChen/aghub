@@ -81,7 +81,7 @@ export function AgentOverviewCard({
 								isIconOnly
 								variant="ghost"
 								size="sm"
-								className="size-7 text-muted transition-colors hover:bg-accent/15 hover:text-accent focus-visible:bg-accent/15 focus-visible:text-accent"
+								className="size-7 text-muted transition-colors hover:bg-accent/10 hover:text-accent focus-visible:bg-accent/10 focus-visible:text-accent"
 								aria-label={t("openAgentConfigFolder", {
 									name: agent.display_name,
 								})}
@@ -162,7 +162,7 @@ function ResourceTile({
 			type="button"
 			onClick={onPress}
 			className={cn(
-				"group/tile flex flex-1 items-center justify-center rounded-full border border-foreground/20 px-3 py-2 transition-colors",
+				"group/tile flex flex-1 items-center justify-center rounded-full border border-border px-3 py-2 transition-colors",
 				"hover:border-accent hover:bg-accent focus-visible:border-accent focus-visible:bg-accent focus-visible:outline-none",
 			)}
 		>

@@ -157,8 +157,8 @@ export default function HomePage() {
 						type="button"
 						onClick={() => setLocation("/settings?tab=agents")}
 						className={cn(
-							"group/add row-span-1 flex h-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-foreground/20 p-4 text-center transition-colors",
-							"hover:border-accent hover:bg-accent/15 focus-visible:border-accent focus-visible:bg-accent/15 focus-visible:outline-none",
+							"group/add row-span-1 flex h-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border p-4 text-center transition-colors",
+							"hover:border-accent hover:bg-accent/10 focus-visible:border-accent focus-visible:bg-accent/10 focus-visible:outline-none",
 						)}
 					>
 						<PlusIcon className="size-5 text-muted transition-colors group-hover/add:text-accent group-focus-visible/add:text-accent" />
