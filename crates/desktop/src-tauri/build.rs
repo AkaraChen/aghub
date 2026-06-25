@@ -142,6 +142,13 @@ fn fetch_ccusage_sidecar() {
 			&mut fs::File::create(&tmp).expect("create temp sidecar"),
 		)
 		.expect("write sidecar");
+		// Windows `rename` fails if the destination exists (a prior version or an
+		// AGHUB_SKIP_SIDECAR placeholder), so a re-fetch would panic here; drop
+		// the stale sidecar first. Build-time staging is single-threaded, so the
+		// lost atomicity on unix is harmless.
+		if dest.exists() {
+			fs::remove_file(&dest).expect("remove stale sidecar");
+		}
 		fs::rename(&tmp, &dest).expect("rename sidecar into place");
 		staged = true;
 		break;
