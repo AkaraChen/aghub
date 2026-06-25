@@ -8,6 +8,7 @@ pub mod mcps;
 pub mod plugins;
 pub mod skills;
 pub mod sub_agents;
+pub mod usage;
 
 use aghub_core::{
 	create_adapter, manager::ConfigManager, models::ResourceScope,

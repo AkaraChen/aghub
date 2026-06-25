@@ -1,0 +1,20 @@
+[package]
+name = "aghub-usage"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Usage and rate-limit reporting for AI coding agents"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+ts-rs = { workspace = true }
+dirs = { workspace = true }
+tokio = { workspace = true, features = [ "process", "time", "macros" ] }
+reqwest = { workspace = true }
+chrono = { workspace = true }
+keyring = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = [ "process", "time", "rt", "macros" ] }

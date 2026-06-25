@@ -3,6 +3,12 @@
 
 set windows-shell := ["cmd.exe", "/c"]
 
+# The ccusage sidecar is only needed for a real `tauri build` bundle. Workspace
+# recipes (test/lint) build the desktop crate's build.rs too, which would
+# otherwise fetch the sidecar from npm; skip it so the dev loop stays offline and
+# needs no network. A real bundle runs `tauri build` directly, outside just.
+export AGHUB_SKIP_SIDECAR := "1"
+
 # Default recipe - build the CLI
 default: build
 
