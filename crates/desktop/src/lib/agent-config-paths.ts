@@ -9,11 +9,11 @@ const KNOWN_AGENT_RELATIVE_PATHS: Record<string, string[]> = {
 	windsurf: [".codeium", "windsurf"],
 	zed: [".config", "zed"],
 	warp: [".warp"],
-	copilot: [".claude.json"],
-	cline: [".config", "cline"],
-	gemini: [".config", "gemini"],
-	roocode: [".config", "roocode"],
-	mistral: [".config", "mistral"],
+	copilot: [".copilot"],
+	cline: [".cline"],
+	gemini: [".gemini", "settings.json"],
+	roocode: [".roo"],
+	mistral: [".vibe"],
 	amp: [".config", "amp"],
 };
 
