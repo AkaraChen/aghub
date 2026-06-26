@@ -157,7 +157,7 @@ export default function HomePage() {
 						type="button"
 						onClick={() => setLocation("/settings?tab=agents")}
 						className={cn(
-							"group/add row-span-1 flex h-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border p-4 text-center transition-colors",
+							"group/add row-span-1 flex h-full flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border p-4 text-center transition-colors dark:border-foreground/15",
 							"hover:border-accent hover:bg-accent/10 focus-visible:border-accent focus-visible:bg-accent/10 focus-visible:outline-none",
 						)}
 					>

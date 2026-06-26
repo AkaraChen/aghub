@@ -4,6 +4,11 @@
 @import "./styles/form.css";
 @import "./styles/onboarding.css";
 
+/* The app toggles dark mode via a `.dark` class on <html> (see
+ * providers/theme.tsx), so point Tailwind's `dark:` variant at that class
+ * instead of the default prefers-color-scheme media query. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @layer utilities {
 	.grid-rows-expand {
 		grid-template-rows: 1fr;

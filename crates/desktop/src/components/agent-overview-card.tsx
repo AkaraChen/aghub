@@ -64,7 +64,7 @@ export function AgentOverviewCard({
 		<Card
 			variant="secondary"
 			className={cn(
-				"flex h-full flex-col gap-0 overflow-hidden p-3",
+				"flex h-full flex-col gap-0 overflow-hidden p-3 dark:shadow-[0_2px_4px_0_#0000004d,0_1px_2px_0_#00000066,0_0_1px_0_#00000066]",
 				tall ? "row-span-2" : "row-span-1",
 			)}
 		>
@@ -162,7 +162,7 @@ function ResourceTile({
 			type="button"
 			onClick={onPress}
 			className={cn(
-				"group/tile flex flex-1 items-center justify-center rounded-full border border-border px-3 py-2 transition-colors",
+				"group/tile flex flex-1 items-center justify-center rounded-full border border-border px-3 py-2 transition-colors dark:border-foreground/15",
 				"hover:border-accent hover:bg-accent focus-visible:border-accent focus-visible:bg-accent focus-visible:outline-none",
 			)}
 		>
