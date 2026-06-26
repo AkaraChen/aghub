@@ -14,7 +14,7 @@ import { CreateMcpPanel } from "../../components/create-mcp-panel";
 import { EditMcpPanel } from "../../components/edit-mcp-panel";
 import { ImportMcpPanel } from "../../components/import-mcp-panel";
 import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
-import { setStickyAgentFilter } from "../../hooks/use-sticky-agent-filter";
+import { useAgentFilter } from "../../hooks/use-agent-filter";
 import type { McpGroup } from "../../components/mcp-detail";
 import { McpDetail } from "../../components/mcp-detail";
 import { McpList } from "../../components/mcp-list";
@@ -46,7 +46,6 @@ export default function MCPServersPage() {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [panel, setPanel] = useState<RightPanel>({ type: "empty" });
 	const [selectedKey, setSelectedKey] = useQueryState("server");
-	const [agentFilter, setAgentFilter] = useQueryState("agent");
 	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
 		() => new Set(),
 	);
@@ -61,10 +60,11 @@ export default function MCPServersPage() {
 		[availableAgents],
 	);
 
-	const filteredMcps = useMemo(() => {
-		if (!agentFilter) return mcps;
-		return mcps.filter((mcp) => mcp.agent === agentFilter);
-	}, [mcps, agentFilter]);
+	const {
+		agentId: agentFilter,
+		setAgentId,
+		filtered: filteredMcps,
+	} = useAgentFilter(mcps);
 
 	const groupedMcps = useMemo(() => {
 		const map = new Map<string, McpGroup>();
@@ -151,17 +151,12 @@ export default function MCPServersPage() {
 		panel.type !== "import" &&
 		panel.type !== "edit";
 
-	const handleAgentFilterChange = (next: string | null) => {
-		setAgentFilter(next);
-		setStickyAgentFilter(next);
-	};
-
 	return (
 		<div className="flex h-full flex-col">
 			<ResourcePageToolbar
 				agentFilter={{
 					agentId: agentFilter,
-					onChange: handleAgentFilterChange,
+					onChange: setAgentId,
 				}}
 				searchValue={searchQuery}
 				onSearchChange={setSearchQuery}

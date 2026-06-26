@@ -18,13 +18,12 @@ import {
 	useSuspenseQuery,
 	useMutation,
 } from "@tanstack/react-query";
-import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { CreateSubAgentPanel } from "../../components/create-sub-agent-panel";
 import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
-import { setStickyAgentFilter } from "../../hooks/use-sticky-agent-filter";
+import { useAgentFilter } from "../../hooks/use-agent-filter";
 import type { SubAgentGroup } from "../../components/sub-agent-detail";
 import { SubAgentDetail } from "../../components/sub-agent-detail";
 import type {
@@ -116,17 +115,17 @@ export default function SubAgentsPage() {
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
 	const [searchQuery, setSearchQuery] = useState("");
-	const [agentFilter, setAgentFilter] = useQueryState("agent");
 	const [panel, setPanel] = useState<PanelState>({ type: "empty" });
 
 	const { data: subAgents = [] } = useSuspenseQuery({
 		...subAgentListQueryOptions({ api, scope: "global" }),
 	});
 
-	const filteredSubAgents = useMemo(() => {
-		if (!agentFilter) return subAgents;
-		return subAgents.filter((agent) => agent.agent === agentFilter);
-	}, [subAgents, agentFilter]);
+	const {
+		agentId: agentFilter,
+		setAgentId,
+		filtered: filteredSubAgents,
+	} = useAgentFilter(subAgents);
 
 	const groupedSubAgents = useMemo(() => {
 		const map = new Map<string, SubAgentGroup>();
@@ -280,17 +279,12 @@ export default function SubAgentsPage() {
 		},
 	});
 
-	const handleAgentFilterChange = (next: string | null) => {
-		setAgentFilter(next);
-		setStickyAgentFilter(next);
-	};
-
 	return (
 		<div className="flex h-full flex-col">
 			<ResourcePageToolbar
 				agentFilter={{
 					agentId: agentFilter,
-					onChange: handleAgentFilterChange,
+					onChange: setAgentId,
 				}}
 				searchValue={searchQuery}
 				onSearchChange={setSearchQuery}

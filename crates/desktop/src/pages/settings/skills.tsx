@@ -13,7 +13,7 @@ import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
 import { CreateSkillPanel } from "../../components/create-skill-panel";
 import { ImportSkillPanel } from "../../components/import-skill-panel";
 import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
-import { setStickyAgentFilter } from "../../hooks/use-sticky-agent-filter";
+import { useAgentFilter } from "../../hooks/use-agent-filter";
 import { MultiSelectFloatingBar } from "../../components/multi-select-floating-bar";
 import { SkillDetail } from "../../components/skill-detail";
 import { SkillList } from "../../components/skill-list";
@@ -34,7 +34,6 @@ export default function SkillsPage() {
 	});
 	const [searchQuery, setSearchQuery] = useState("");
 	const [selectedName, setSelectedName] = useQueryState("skill");
-	const [agentFilter, setAgentFilter] = useQueryState("agent");
 	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
 		() => new Set(),
 	);
@@ -45,10 +44,11 @@ export default function SkillsPage() {
 		null,
 	);
 
-	const filteredSkills = useMemo(() => {
-		if (!agentFilter) return skills;
-		return skills.filter((skill) => skill.agent === agentFilter);
-	}, [skills, agentFilter]);
+	const {
+		agentId: agentFilter,
+		setAgentId,
+		filtered: filteredSkills,
+	} = useAgentFilter(skills);
 
 	const groupedSkills = useMemo(() => {
 		const map = new Map<string, SkillResponse[]>();
@@ -112,17 +112,12 @@ export default function SkillsPage() {
 		setPanelMode("import");
 	};
 
-	const handleAgentFilterChange = (next: string | null) => {
-		setAgentFilter(next);
-		setStickyAgentFilter(next);
-	};
-
 	return (
 		<div className="flex h-full flex-col">
 			<ResourcePageToolbar
 				agentFilter={{
 					agentId: agentFilter,
-					onChange: handleAgentFilterChange,
+					onChange: setAgentId,
 				}}
 				searchValue={searchQuery}
 				onSearchChange={setSearchQuery}
