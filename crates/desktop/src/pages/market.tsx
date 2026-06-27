@@ -184,24 +184,26 @@ function McpMarketTab() {
 
 			<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
 				{MOCK_MCP_SERVERS.map((server) => (
-					<Card key={server.id} variant="secondary">
-						<Card.Header className="gap-1">
-							<div className="flex items-start gap-2">
-								<div className="flex size-9 shrink-0 items-center justify-center rounded-md bg-surface">
-									<ServerIcon className="size-4 text-muted" />
-								</div>
-								<div className="min-w-0 flex-1">
-									<Card.Title className="truncate">
-										{server.name}
-									</Card.Title>
-									<p className="truncate text-xs text-muted">
-										{server.publisher}
-									</p>
-								</div>
+					<Card
+						key={server.id}
+						variant="secondary"
+						className="flex h-full flex-col gap-0 overflow-hidden p-3 dark:shadow-[0_2px_4px_0_#0000004d,0_1px_2px_0_#00000066,0_0_1px_0_#00000066]"
+					>
+						<Card.Header className="flex flex-row items-center gap-2 p-0">
+							<div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-surface">
+								<ServerIcon className="size-4 text-muted" />
+							</div>
+							<div className="min-w-0 flex-1">
+								<Card.Title className="truncate text-sm font-medium">
+									{server.name}
+								</Card.Title>
+								<p className="truncate text-xs text-muted">
+									{server.publisher}
+								</p>
 							</div>
 						</Card.Header>
-						<Card.Content className="flex flex-col gap-3">
-							<p className="line-clamp-3 text-sm text-muted">
+						<Card.Content className="flex flex-1 flex-col gap-2 p-0 pt-2">
+							<p className="line-clamp-2 text-xs text-muted">
 								{server.description}
 							</p>
 							<div className="flex flex-wrap gap-1">
