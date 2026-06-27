@@ -96,6 +96,8 @@ export type { InstallSkillResponse } from "./InstallSkillResponse";
 export type { LimitWindowDto } from "./LimitWindowDto";
 export type { LimitWindowKind } from "./LimitWindowKind";
 export type { LocalSkillLockEntryResponse } from "./LocalSkillLockEntryResponse";
+export type { MarketMcpEnv } from "./MarketMcpEnv";
+export type { MarketMcpServer } from "./MarketMcpServer";
 export type { MarketSkill } from "./MarketSkill";
 export type { McpCapabilitiesDto } from "./McpCapabilitiesDto";
 export type { McpResponse } from "./McpResponse";

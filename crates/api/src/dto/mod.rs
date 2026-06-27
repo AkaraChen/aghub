@@ -6,6 +6,7 @@ pub mod inference;
 pub mod integrations;
 pub mod market;
 pub mod mcp;
+pub mod mcp_market;
 pub mod plugin;
 pub mod prompt;
 pub mod rule;

@@ -218,6 +218,7 @@ fn build_rocket(
 				routes::agents::list_agents,
 				routes::agents::check_availability,
 				routes::market::search_skill_market,
+				routes::mcp_market::search_mcp_market,
 				routes::skills::list_all_agents_skills,
 				routes::skills::list_codex_provider_skills,
 				routes::skills::select_codex_visible_copy,

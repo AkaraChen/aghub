@@ -1,0 +1,14 @@
+[package]
+name = "mcp-catalog"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Aggregates MCP server listings from catalog sources"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+reqwest = { workspace = true }
+url = { workspace = true }

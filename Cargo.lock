@@ -109,6 +109,7 @@ dependencies = [
  "dirs 6.0.0",
  "keyring",
  "log",
+ "mcp-catalog",
  "open",
  "reqwest",
  "rocket",
@@ -4971,6 +4972,17 @@ name = "matches"
 version = "0.1.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2532096657941c2fea9c289d370a250971c689d4f143798ff67113ec042024a5"
+
+[[package]]
+name = "mcp-catalog"
+version = "1.9.0-beta.1"
+dependencies = [
+ "reqwest",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.20",
+ "url",
+]
 
 [[package]]
 name = "md-5"

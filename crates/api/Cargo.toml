@@ -26,6 +26,7 @@ aghub-prompt = { path = "../prompt" }
 skill = { path = "../skill" }
 skill-audit = { path = "../skill-audit", features = [ "from-path" ] }
 skills-sh = { path = "../skills-sh" }
+mcp-catalog = { path = "../mcp-catalog" }
 rocket = { version = "0.5", features = [ "json" ] }
 rocket_cors = "0.6.0"
 tokio = { workspace = true, features = [ "rt-multi-thread", "macros", "process", "time", "io-util" ] }
