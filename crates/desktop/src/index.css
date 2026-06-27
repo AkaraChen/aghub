@@ -9,6 +9,29 @@
  * instead of the default prefers-color-scheme media query. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* HEROUI-WORKAROUND (toggle/button-group separators) — remove when heroui fixed.
+ * Symptom : a stray ~1px vertical line on the left edge of any Card that holds a
+ *           ToggleButtonGroup/ButtonGroup (e.g. Settings → Appearance).
+ * Cause   : upstream v3 design flaw, present through @heroui/styles 3.2.1 (react and
+ *           styles are aligned — NOT a version skew). The separator renders as a
+ *           `<span data-slot="*-separator">` that is a SIBLING of the buttons inside
+ *           the group, styled `position: absolute; left: -1px`. But the group
+ *           (`.button-group`/`.toggle-button-group`) is `inline-flex` with no
+ *           `position: relative`, and the buttons (which are relative) are the
+ *           separator's siblings, not its ancestors — so it has no per-segment
+ *           positioning anchor and falls back to the nearest positioned ancestor
+ *           (the Card), collapsing every separator onto its left edge.
+ * Revert  : when heroui anchors the separator correctly (a per-button relative
+ *           wrapper, or an in-flow border between buttons), DELETE this rule and
+ *           check the dividers render between the buttons.
+ * Caution : re-check on every @heroui/* bump; grep "HEROUI-WORKAROUND" to find all
+ *           such patches.
+ * Upstream: reported as heroui-inc/heroui#6680; fix proposed in PR #6681. */
+.toggle-button-group__separator,
+.button-group__separator {
+	display: none;
+}
+
 @layer utilities {
 	.grid-rows-expand {
 		grid-template-rows: 1fr;
