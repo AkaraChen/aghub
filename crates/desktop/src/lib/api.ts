@@ -48,6 +48,7 @@ import type {
 	InstallSkillRequest,
 	InstallSkillResponse,
 	CCPluginMarketResponse,
+	MarketMcpServer,
 	MarketSkill,
 	McpResponse,
 	OperationBatchResponse,
@@ -794,6 +795,14 @@ export function createApi(baseUrl: string, token: string) {
 				return client
 					.get("skills-market/search", { searchParams })
 					.json();
+			},
+		},
+		mcpMarket: {
+			search(q: string, limit?: number): Promise<MarketMcpServer[]> {
+				const searchParams: Record<string, string> = {};
+				if (q) searchParams.q = q;
+				if (limit) searchParams.limit = String(limit);
+				return client.get("mcp-market/search", { searchParams }).json();
 			},
 		},
 		usage: {

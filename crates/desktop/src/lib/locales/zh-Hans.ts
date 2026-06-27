@@ -1481,10 +1481,18 @@ export default {
 	marketClaudePluginsComingSoonHint:
 		"在 aghub 中浏览并安装 Claude Code 插件。我们正在整合官方插件注册表，敬请期待。",
 	marketClaudePluginsLearnMore: "了解插件",
-	marketMcpComingSoonTitle: "MCP 市场 — 预览",
-	marketMcpComingSoonHint:
-		"我们正在整合官方 MCP 服务器目录。在此之前，这里是精选列表 — 选一个即可打开手动安装面板。",
-	marketMcpAddManually: "手动添加",
+	marketMcpSearchLabel: "搜索 MCP 服务器",
+	marketMcpSearchPlaceholder: "搜索 MCP 服务器，回车确认…",
+	marketMcpSourceNote:
+		"数据来自官方 MCP Registry。安装前请核对命令并填好所需的密钥。",
+	marketMcpLoadError: "无法连接 MCP registry。",
+	marketMcpAdd: "添加",
+	marketMcpInstallTitle: "安装 MCP 服务器",
+	marketMcpViewSource: "查看源码",
+	marketMcpEnvVars: "环境变量",
+	marketMcpHeaders: "请求头",
+	marketMcpSelectAgents: "选择要安装到哪些 agent。",
+	marketMcpSecretPlaceholder: "输入值…",
 	yourAgents: "你的代理",
 	allAgents: "全部代理",
 	allResources: "全部资源",

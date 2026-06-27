@@ -147,6 +147,10 @@ export const queryKeys = {
 		all: () => ["sidebar"] as const,
 		items: () => ["sidebar", "items"] as const,
 	},
+	mcpMarket: {
+		all: () => ["mcp-market"] as const,
+		search: (query: string) => ["mcp-market", "search", query] as const,
+	},
 	usage: {
 		all: () => ["usage"] as const,
 		summaries: () => ["usage", "summary"] as const,

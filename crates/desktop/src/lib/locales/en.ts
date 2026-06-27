@@ -1485,10 +1485,18 @@ export default {
 	marketClaudePluginsComingSoonHint:
 		"Browse and install Claude Code plugins right from aghub. We're aggregating the official plugin registry — check back soon.",
 	marketClaudePluginsLearnMore: "Learn about plugins",
-	marketMcpComingSoonTitle: "MCP Marketplace — preview",
-	marketMcpComingSoonHint:
-		"We're aggregating MCP servers from official registries. Until then, here's a curated list — pick one and we'll open the manual install panel.",
-	marketMcpAddManually: "Add manually",
+	marketMcpSearchLabel: "Search MCP servers",
+	marketMcpSearchPlaceholder: "Search MCP servers, then press Enter…",
+	marketMcpSourceNote:
+		"Servers from the official MCP Registry. Review the command and fill in any required keys before installing.",
+	marketMcpLoadError: "Couldn't reach the MCP registry.",
+	marketMcpAdd: "Add",
+	marketMcpInstallTitle: "Install MCP server",
+	marketMcpViewSource: "View source",
+	marketMcpEnvVars: "Environment variables",
+	marketMcpHeaders: "Headers",
+	marketMcpSelectAgents: "Choose which agents to install into.",
+	marketMcpSecretPlaceholder: "Enter value…",
 	yourAgents: "Your Agents",
 	allAgents: "All Agents",
 	allResources: "All Resources",
