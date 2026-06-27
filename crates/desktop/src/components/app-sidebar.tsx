@@ -85,7 +85,7 @@ export function AppSidebar() {
 		<Surface
 			variant="secondary"
 			data-tour="sidebar"
-			className="flex w-60 shrink-0 flex-col border-r border-border p-3"
+			className="flex w-60 shrink-0 flex-col p-3"
 		>
 			<aside className="flex h-full min-h-0 flex-col gap-3">
 				<GlobalSearch />
