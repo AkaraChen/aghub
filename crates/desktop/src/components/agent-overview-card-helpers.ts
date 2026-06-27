@@ -8,6 +8,8 @@ import { formatCost, formatTokens } from "../lib/usage-format";
 export interface UsageView {
 	tokens: string | null;
 	cost: string | null;
+	input: string | null;
+	output: string | null;
 	windows: LimitWindowDto[];
 	primaryWindow: LimitWindowDto | null;
 }
@@ -23,12 +25,16 @@ export function buildUsage({
 	usage?: AgentUsageDto;
 	limits?: AgentLimitsDto;
 }): UsageView {
-	const windows = [...(limits?.windows ?? [])].sort(
-		(a, b) => b.utilization_pct - a.utilization_pct,
-	);
+	// Drop the Sonnet weekly window: it's a separate quota most users never
+	// touch (sits at 0% with no reset) and just pushes the card past its row.
+	const windows = (limits?.windows ?? [])
+		.filter((window) => window.kind !== "weekly_sonnet")
+		.sort((a, b) => b.utilization_pct - a.utilization_pct);
 	return {
 		tokens: usage ? formatTokens(usage.totals.total_tokens) : null,
 		cost: usage ? formatCost(usage.totals.cost_usd) : null,
+		input: usage ? formatTokens(usage.totals.input_tokens) : null,
+		output: usage ? formatTokens(usage.totals.output_tokens) : null,
 		windows,
 		primaryWindow: windows[0] ?? null,
 	};

@@ -993,6 +993,8 @@ export default {
 	usageWindowWeeklySonnet: "Weekly (Sonnet)",
 	usageWindowOther: "Usage limit",
 	usageTokensShort: "tokens",
+	usageInput: "Input",
+	usageOutput: "Output",
 	globalSearchLabel: "Search agents, skills, MCP servers, and library",
 	globalSearchPlaceholder: "Search…",
 	globalSearchNoResults: "No matches",

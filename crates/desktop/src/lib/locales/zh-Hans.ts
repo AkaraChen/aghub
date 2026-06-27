@@ -971,6 +971,8 @@ export default {
 	usageWindowWeeklySonnet: "每周（Sonnet）",
 	usageWindowOther: "用量额度",
 	usageTokensShort: "tokens",
+	usageInput: "输入",
+	usageOutput: "输出",
 	globalSearchLabel: "搜索代理、技能、MCP 服务器与技能库",
 	globalSearchPlaceholder: "搜索…",
 	globalSearchNoResults: "无匹配结果",

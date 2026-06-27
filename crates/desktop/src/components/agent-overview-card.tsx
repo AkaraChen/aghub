@@ -117,20 +117,39 @@ export function AgentOverviewCard({
 									<QuotaRow windows={view.windows} />
 								)}
 								{view.tokens && (
-									<p className="text-xs text-muted">
-										<span className="text-foreground tabular-nums">
-											{view.tokens}
-										</span>{" "}
-										{t("usageTokensShort")}
-										{view.cost && (
-											<>
-												{" · "}
+									<div className="flex flex-col gap-1">
+										<div className="flex items-baseline justify-between text-xs">
+											<span>
+												<span className="text-foreground tabular-nums">
+													{view.tokens}
+												</span>{" "}
+												<span className="text-muted">
+													{t("usageTokensShort")}
+												</span>
+											</span>
+											{view.cost && (
 												<span className="text-foreground tabular-nums">
 													{view.cost}
 												</span>
-											</>
+											)}
+										</div>
+										{(view.input || view.output) && (
+											<div className="flex items-baseline justify-between text-[11px] text-muted">
+												<span>
+													{t("usageInput")}{" "}
+													<span className="text-foreground tabular-nums">
+														{view.input}
+													</span>
+												</span>
+												<span>
+													{t("usageOutput")}{" "}
+													<span className="text-foreground tabular-nums">
+														{view.output}
+													</span>
+												</span>
+											</div>
 										)}
-									</p>
+									</div>
 								)}
 							</div>
 						)}
