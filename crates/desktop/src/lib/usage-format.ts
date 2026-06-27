@@ -1,26 +1,26 @@
+import i18n from "i18next";
 import type { LimitWindowKind } from "../generated/dto";
 
-const tokenFormatter = new Intl.NumberFormat(undefined, {
-	notation: "compact",
-	maximumFractionDigits: 1,
-});
-
-const costFormatter = new Intl.NumberFormat(undefined, {
-	style: "currency",
-	currency: "USD",
-	minimumFractionDigits: 2,
-	maximumFractionDigits: 2,
-});
-
-/** Compact token count, e.g. `45.2K` / `1.2M`. */
+/** Compact token count in the active UI locale, e.g. `6.7B` / `66.5亿`. */
 export function formatTokens(count: number): string {
-	return tokenFormatter.format(count);
+	return new Intl.NumberFormat(i18n.language, {
+		notation: "compact",
+		maximumFractionDigits: 1,
+	}).format(count);
 }
 
-/** Formatted USD cost, or `null` when the backend reports no priced cost. */
+/** Formatted USD cost in the active UI locale, or `null` when unpriced. */
 export function formatCost(usd: number | null | undefined): string | null {
 	if (usd == null) return null;
-	return costFormatter.format(usd);
+	// Cents are noise once the spend reaches the hundreds; show whole dollars.
+	const digits = usd >= 100 ? 0 : 2;
+	return new Intl.NumberFormat(i18n.language, {
+		style: "currency",
+		currency: "USD",
+		currencyDisplay: "narrowSymbol",
+		minimumFractionDigits: digits,
+		maximumFractionDigits: digits,
+	}).format(usd);
 }
 
 /** Quota fill color by how much of the window is consumed. */
