@@ -16,10 +16,12 @@ import {
 	marketMcpIdentityKey,
 	mcpTransportIdentityKey,
 } from "../../lib/mcp-market-utils";
+import { getMcpMergeKey } from "../../lib/utils";
 import {
 	createMcpMutationOptions,
 	mcpListQueryOptions,
 } from "../../requests/mcps";
+import type { McpGroup } from "../mcp-detail";
 
 export function useMcpInstall() {
 	const api = useApi();
@@ -48,6 +50,8 @@ export function useMcpInstall() {
 	const [fieldValues, setFieldValues] = useState<Record<string, string>>({});
 	const [installResults, setInstallResults] = useState<InstallResult[]>([]);
 	const [isInstalling, setIsInstalling] = useState(false);
+	const [manageGroup, setManageGroup] = useState<McpGroup | null>(null);
+	const [isManageOpen, setIsManageOpen] = useState(false);
 
 	const scope = installToProject ? "project" : "global";
 	const mcpAgents = availableAgents.filter(
@@ -62,18 +66,6 @@ export function useMcpInstall() {
 	const installedKeys = new Set(
 		installedMcps.map((mcp) => mcpTransportIdentityKey(mcp.transport)),
 	);
-	const installedAgentIds = selectedServer
-		? new Set(
-				installedMcps
-					.filter(
-						(mcp) =>
-							mcp.agent != null &&
-							mcpTransportIdentityKey(mcp.transport) ===
-								marketMcpIdentityKey(selectedServer),
-					)
-					.map((mcp) => mcp.agent as string),
-			)
-		: new Set<string>();
 
 	const handleInstallClick = (server: MarketMcpServer) => {
 		setSelectedServer(server);
@@ -82,6 +74,27 @@ export function useMcpInstall() {
 		setInstallResults([]);
 		resetInstallTarget();
 		setInstallModalOpen(true);
+	};
+
+	// Already-installed entries are managed through the existing
+	// ManageAgentsDialog (reconcile copies the live config, secrets included,
+	// across agents) rather than re-running the create flow.
+	const handleManageClick = (server: MarketMcpServer) => {
+		const key = marketMcpIdentityKey(server);
+		const items = installedMcps.filter(
+			(mcp) => mcpTransportIdentityKey(mcp.transport) === key,
+		);
+		if (items.length === 0) return;
+		setManageGroup({
+			mergeKey: getMcpMergeKey(items[0].transport),
+			transport: items[0].transport,
+			items,
+		});
+		setIsManageOpen(true);
+	};
+
+	const handleCloseManage = () => {
+		setIsManageOpen(false);
 	};
 
 	const setFieldValue = (name: string, value: string) => {
@@ -158,8 +171,11 @@ export function useMcpInstall() {
 		setSelectedProjectId,
 		projects,
 		installedKeys,
-		installedAgentIds,
+		manageGroup,
+		isManageOpen,
 		handleInstallClick,
+		handleManageClick,
+		handleCloseManage,
 		handleInstall,
 		handleCloseInstallModal,
 	};

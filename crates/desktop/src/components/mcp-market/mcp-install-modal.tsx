@@ -24,7 +24,6 @@ interface McpInstallModalProps {
 	installResults: InstallResult[];
 	isInstalling: boolean;
 	mcpAgents: ReturnType<typeof useMcpInstall>["mcpAgents"];
-	markedAgents: Set<string>;
 	installToProject: boolean;
 	canInstallToProject: boolean;
 	onInstallToProjectChange: (value: boolean) => void;
@@ -45,7 +44,6 @@ export function McpInstallModal({
 	installResults,
 	isInstalling,
 	mcpAgents,
-	markedAgents,
 	installToProject,
 	canInstallToProject,
 	onInstallToProjectChange,
@@ -181,7 +179,6 @@ export function McpInstallModal({
 									onSelectionChange={onSelectedAgentsChange}
 									emptyMessage={t("noTargetAgents")}
 									showSelectedIcon
-									markedKeys={markedAgents}
 									variant="secondary"
 								/>
 

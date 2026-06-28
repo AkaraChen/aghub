@@ -20,12 +20,27 @@ import { useApi } from "../../hooks/use-api";
 import { marketMcpIdentityKey } from "../../lib/mcp-market-utils";
 import { cn } from "../../lib/utils";
 import { mcpMarketSearchQueryOptions } from "../../requests/mcp-market";
+import type { McpGroup } from "../mcp-detail";
+import { ManageAgentsDialog } from "../manage-agents-dialog";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 import { McpInstallModal } from "./mcp-install-modal";
 import { useMcpInstall } from "./use-mcp-install";
 
 const ALL_TYPES = "__all__";
 const TRANSPORT_TYPES = ["stdio", "streamable_http", "sse"] as const;
+
+// Fallback while no entry is selected for management; the dialog is closed then.
+const EMPTY_MANAGE_GROUP: McpGroup = {
+	mergeKey: "",
+	transport: {
+		type: "stdio",
+		command: "",
+		args: [],
+		env: null,
+		timeout: null,
+	},
+	items: [],
+};
 
 export function McpMarketTab() {
 	const { t } = useTranslation();
@@ -174,7 +189,9 @@ export function McpMarketTab() {
 											variant="ghost"
 											size="sm"
 											className="size-7 shrink-0 text-muted"
-											aria-label={t("marketMcpViewSource")}
+											aria-label={t(
+												"marketMcpViewSource",
+											)}
 											onPress={() => openUrl(repoUrl)}
 										>
 											<svg
@@ -211,9 +228,13 @@ export function McpMarketTab() {
 											}
 											size="sm"
 											onPress={() =>
-												install.handleInstallClick(
-													server,
-												)
+												installed
+													? install.handleManageClick(
+															server,
+														)
+													: install.handleInstallClick(
+															server,
+														)
 											}
 										>
 											{installed ? (
@@ -243,7 +264,6 @@ export function McpMarketTab() {
 				installResults={install.installResults}
 				isInstalling={install.isInstalling}
 				mcpAgents={install.mcpAgents}
-				markedAgents={install.installedAgentIds}
 				installToProject={install.installToProject}
 				canInstallToProject={install.canInstallToProject}
 				onInstallToProjectChange={install.setInstallToProject}
@@ -252,6 +272,13 @@ export function McpMarketTab() {
 				projects={install.projects}
 				onClose={install.handleCloseInstallModal}
 				onInstall={install.handleInstall}
+			/>
+
+			<ManageAgentsDialog
+				group={install.manageGroup ?? EMPTY_MANAGE_GROUP}
+				isOpen={install.isManageOpen}
+				onClose={install.handleCloseManage}
+				requiredCapabilities={["mcp"]}
 			/>
 		</div>
 	);

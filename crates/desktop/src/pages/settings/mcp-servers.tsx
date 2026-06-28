@@ -5,6 +5,7 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import { useDeferredValue, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "wouter";
 import { matrixGroup } from "../../components/agent-coverage-matrix";
 import { BulkActionsPanel } from "../../components/bulk-actions-panel";
 import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
@@ -44,6 +45,7 @@ type RightPanel =
 export default function MCPServersPage() {
 	const { t } = useTranslation();
 	const api = useApi();
+	const [, setLocation] = useLocation();
 	const {
 		data: mcps,
 		refetch,
@@ -304,6 +306,8 @@ export default function MCPServersPage() {
 										handleCreate();
 									} else if (key === "import") {
 										handleImport();
+									} else if (key === "market") {
+										setLocation("/market?tab=mcp");
 									} else if (key === "create-group") {
 										setCreateGroupKeys([]);
 									}
@@ -320,6 +324,12 @@ export default function MCPServersPage() {
 									textValue={t("importFromJson")}
 								>
 									{t("importFromJson")}
+								</Dropdown.Item>
+								<Dropdown.Item
+									id="market"
+									textValue={t("browseMarket")}
+								>
+									{t("browseMarket")}
 								</Dropdown.Item>
 								<Dropdown.Item
 									id="create-group"
