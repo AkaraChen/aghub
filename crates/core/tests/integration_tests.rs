@@ -6,6 +6,7 @@
 use aghub_core::{
 	models::{AgentType, McpServer, McpTransport, Skill},
 	testing::{TestConfig, TestConfigBuilder},
+	ConfigManager,
 };
 use std::collections::HashMap;
 
@@ -680,8 +681,6 @@ test_mcp_workflow! {
 	test_amp_mcp_workflow => AgentType::Amp, "amp-mcp",
 	test_augmentcode_mcp_workflow => AgentType::AugmentCode, "augmentcode-mcp",
 	test_warp_mcp_workflow => AgentType::Warp, "warp-mcp",
-	test_trae_mcp_workflow => AgentType::Trae, "trae-mcp",
-	test_jetbrains_ai_mcp_workflow => AgentType::JetBrainsAi, "jetbrains-ai-mcp",
 }
 
 #[test]
@@ -697,6 +696,60 @@ fn test_pi_rejects_mcp_workflow() {
 		err,
 		aghub_core::errors::ConfigError::UnsupportedOperation(_)
 	));
+}
+
+// Trae configures MCP through its GUI; only project scope is file-based, so a
+// global add is rejected.
+#[test]
+fn test_trae_rejects_global_mcp() {
+	let test = TestConfig::new(AgentType::Trae).unwrap();
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+
+	let err = manager
+		.add_mcp(create_test_mcp_stdio("trae-mcp"))
+		.unwrap_err();
+	assert!(matches!(
+		err,
+		aghub_core::errors::ConfigError::UnsupportedOperation(_)
+	));
+}
+
+// JetBrains AI Assistant configures MCP only via the IDE GUI — no scope is
+// file-based, so any add is rejected.
+#[test]
+fn test_jetbrains_ai_rejects_mcp() {
+	let test = TestConfig::new(AgentType::JetBrainsAi).unwrap();
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+
+	let err = manager
+		.add_mcp(create_test_mcp_stdio("jetbrains-mcp"))
+		.unwrap_err();
+	assert!(matches!(
+		err,
+		aghub_core::errors::ConfigError::UnsupportedOperation(_)
+	));
+}
+
+// Trae's project scope IS file-based — the add/get/remove roundtrip works,
+// complementing the global rejection above.
+#[test]
+fn test_trae_project_mcp_roundtrip() {
+	let test = TestConfig::new(AgentType::Trae).unwrap();
+	let adapter = test.create_adapter();
+	let mut manager = ConfigManager::new(adapter, false, Some(test.temp_dir()));
+	manager.load().unwrap();
+
+	manager.add_mcp(create_test_mcp_stdio("trae-mcp")).unwrap();
+	manager.load().unwrap();
+	let config = manager.config().unwrap();
+	assert_eq!(config.mcps.len(), 1);
+	assert_eq!(config.mcps[0].name, "trae-mcp");
+
+	manager.remove_mcp("trae-mcp").unwrap();
+	manager.load().unwrap();
+	assert!(manager.config().unwrap().mcps.is_empty());
 }
 
 // ==================== Special Case: Agent-Specific Key Tests ====================

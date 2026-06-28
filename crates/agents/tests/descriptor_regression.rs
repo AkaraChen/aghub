@@ -192,12 +192,12 @@ fn test_project_markers() {
 		(AgentType::Windsurf, &[".windsurf"]),
 		(AgentType::Trae, &[".trae"]),
 		(AgentType::Zed, &[".zed"]),
-		(AgentType::JetBrainsAi, &[".jetbrains-ai"]),
+		(AgentType::JetBrainsAi, &[]),
 		(AgentType::RooCode, &[".roo"]),
 		(AgentType::Kimi, &[".kimi"]),
 		(AgentType::Mistral, &[".vibe"]),
 		(AgentType::Pi, &[".pi"]),
-		(AgentType::AugmentCode, &[".augmentcode"]),
+		(AgentType::AugmentCode, &[]),
 		(AgentType::KiloCode, &[".kilocode"]),
 		(AgentType::Amp, &[".amp"]),
 		(AgentType::Warp, &[".warp"]),
@@ -246,14 +246,14 @@ fn test_mcp_global_paths() {
 			AgentType::Windsurf,
 			Some(".codeium/windsurf/mcp_config.json"),
 		),
-		(AgentType::Trae, Some(".trae/mcp.json")),
+		(AgentType::Trae, None), // global MCP is GUI-managed (no file)
 		(AgentType::Zed, Some(".config/zed/settings.json")),
-		(AgentType::JetBrainsAi, Some(".jetbrains-ai/mcp.json")),
+		(AgentType::JetBrainsAi, None), // MCP is GUI-only (no file)
 		(AgentType::RooCode, Some(".roo/mcp.json")),
 		(AgentType::Kimi, Some(".kimi/mcp.json")),
 		(AgentType::Mistral, Some(".vibe/mcp.toml")),
 		(AgentType::Pi, None), // Pi has no MCP
-		(AgentType::AugmentCode, Some(".augmentcode/mcp.json")),
+		(AgentType::AugmentCode, Some(".augment/settings.json")),
 		(AgentType::KiloCode, Some(".kilocode/mcp.json")),
 		(AgentType::Amp, Some(".config/amp/settings.json")),
 		(AgentType::Warp, Some(".warp/mcp.json")),
@@ -315,12 +315,12 @@ fn test_mcp_project_paths() {
 		(AgentType::Windsurf, Some(".windsurf/mcp_config.json")),
 		(AgentType::Trae, Some(".trae/mcp.json")),
 		(AgentType::Zed, Some(".zed/settings.json")),
-		(AgentType::JetBrainsAi, Some(".jetbrains-ai/mcp.json")),
+		(AgentType::JetBrainsAi, None), // MCP is GUI-only (no file)
 		(AgentType::RooCode, Some(".roo/mcp.json")),
 		(AgentType::Kimi, Some(".kimi/mcp.json")),
 		(AgentType::Mistral, Some(".vibe/mcp.toml")),
-		(AgentType::Pi, None), // Pi has no MCP
-		(AgentType::AugmentCode, Some(".augmentcode/mcp.json")),
+		(AgentType::Pi, None),          // Pi has no MCP
+		(AgentType::AugmentCode, None), // CLI has no project MCP file
 		(AgentType::KiloCode, Some(".kilocode/mcp.json")),
 		(AgentType::Amp, Some(".amp/mcp.json")),
 		(AgentType::Warp, Some(".warp/mcp.json")),
@@ -367,7 +367,7 @@ fn test_mcp_project_paths() {
 
 #[test]
 fn test_global_data_dirs() {
-	let expected: [(AgentType, Option<&str>); 22] = [
+	let expected: [(AgentType, Option<&str>); 20] = [
 		(AgentType::Claude, Some(".claude")),
 		(AgentType::Codex, Some(".codex")),
 		(AgentType::Openclaw, Some(".openclaw")),
@@ -379,14 +379,14 @@ fn test_global_data_dirs() {
 		(AgentType::Antigravity, Some(".gemini/antigravity")),
 		(AgentType::Kiro, Some(".kiro")),
 		(AgentType::Windsurf, Some(".codeium/windsurf")),
-		(AgentType::Trae, Some(".trae")),
+		// Trae and JetBrainsAi use the OS config dir, not a home dotfolder —
+		// asserted explicitly after the loop.
 		(AgentType::Zed, Some(".config/zed")),
-		(AgentType::JetBrainsAi, Some(".jetbrains-ai")),
 		(AgentType::RooCode, Some(".roo")),
 		(AgentType::Kimi, Some(".kimi")),
 		(AgentType::Mistral, Some(".vibe")),
 		(AgentType::Pi, Some(".pi/agent")),
-		(AgentType::AugmentCode, Some(".augmentcode")),
+		(AgentType::AugmentCode, Some(".augment")),
 		(AgentType::KiloCode, Some(".kilocode")),
 		(AgentType::Amp, Some(".config/amp")),
 		(AgentType::Warp, Some(".warp")),
@@ -419,6 +419,20 @@ fn test_global_data_dirs() {
 			None => {}
 		}
 	}
+
+	// Trae and JetBrains AI store data in the OS config dir (Application
+	// Support on macOS, .config on Linux), not a home dotfolder.
+	use aghub_agents::agents;
+	assert_eq!(
+		(agents::trae::DESCRIPTOR.global_data_dir)(),
+		dirs::config_dir().map(|c| c.join("Trae")),
+		"trae global_data_dir should be the OS config dir"
+	);
+	assert_eq!(
+		(agents::jetbrains_ai::DESCRIPTOR.global_data_dir)(),
+		dirs::config_dir().map(|c| c.join("JetBrains")),
+		"jetbrains-ai global_data_dir should be the OS config dir"
+	);
 }
 
 // =============================================================================
@@ -441,7 +455,7 @@ fn test_mcp_capabilities_stdio() {
 		(AgentType::Windsurf, true),
 		(AgentType::Trae, true),
 		(AgentType::Zed, true),
-		(AgentType::JetBrainsAi, true),
+		(AgentType::JetBrainsAi, false), // GUI-only, no file-based MCP
 		(AgentType::RooCode, true),
 		(AgentType::Kimi, true),
 		(AgentType::Mistral, true),
@@ -480,7 +494,7 @@ fn test_mcp_capabilities_remote() {
 		(AgentType::Windsurf, true),
 		(AgentType::Trae, true),
 		(AgentType::Zed, true),
-		(AgentType::JetBrainsAi, true),
+		(AgentType::JetBrainsAi, false), // GUI-only, no file-based MCP
 		(AgentType::RooCode, true),
 		(AgentType::Kimi, true),
 		(AgentType::Mistral, true),
@@ -517,9 +531,9 @@ fn test_mcp_capabilities_scopes_global() {
 		(AgentType::Antigravity, true),
 		(AgentType::Kiro, true),
 		(AgentType::Windsurf, true),
-		(AgentType::Trae, true),
+		(AgentType::Trae, false), // global MCP is GUI-managed
 		(AgentType::Zed, true),
-		(AgentType::JetBrainsAi, true),
+		(AgentType::JetBrainsAi, false), // GUI-only, no file-based MCP
 		(AgentType::RooCode, true),
 		(AgentType::Kimi, true),
 		(AgentType::Mistral, true),
@@ -558,12 +572,12 @@ fn test_mcp_capabilities_scopes_project() {
 		(AgentType::Windsurf, true),
 		(AgentType::Trae, true),
 		(AgentType::Zed, true),
-		(AgentType::JetBrainsAi, true),
+		(AgentType::JetBrainsAi, false), // GUI-only, no file-based MCP
 		(AgentType::RooCode, true),
 		(AgentType::Kimi, true),
 		(AgentType::Mistral, true),
-		(AgentType::Pi, false), // Pi has no MCP
-		(AgentType::AugmentCode, true),
+		(AgentType::Pi, false),          // Pi has no MCP
+		(AgentType::AugmentCode, false), // CLI has no project MCP file
 		(AgentType::KiloCode, true),
 		(AgentType::Amp, true),
 		(AgentType::Warp, true),
@@ -599,8 +613,8 @@ fn test_skills_capabilities_scopes_global() {
 		(AgentType::Antigravity, true),
 		(AgentType::Kiro, true),
 		(AgentType::Windsurf, true),
-		(AgentType::Trae, true),
-		(AgentType::Zed, false), // Zed has no global skills
+		(AgentType::Trae, false), // global skills are not attested
+		(AgentType::Zed, false),  // Zed has no global skills
 		(AgentType::JetBrainsAi, false),
 		(AgentType::RooCode, true),
 		(AgentType::Kimi, true),
@@ -820,7 +834,7 @@ fn test_global_skill_paths() {
 		),
 		(AgentType::Kiro, Some(&[".kiro/skills"])),
 		(AgentType::Windsurf, Some(&[".codeium/windsurf/skills"])),
-		(AgentType::Trae, Some(&[".trae/skills"])),
+		(AgentType::Trae, None),
 		(AgentType::Zed, None), // Zed has no skills
 		(AgentType::JetBrainsAi, None),
 		(AgentType::RooCode, Some(&[".roo/skills"])),

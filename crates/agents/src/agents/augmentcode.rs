@@ -1,10 +1,41 @@
-use crate::define_mcp_paths;
 use crate::descriptor::*;
+use std::path::{Path, PathBuf};
 
-define_mcp_paths! {
-	symmetric: ".augmentcode/mcp.json",
-	strategy: mcp_strategy::parse_json_map_mcp_servers,
-			  mcp_strategy::serialize_json_map_mcp_servers,
+// The Auggie CLI persists MCP servers in ~/.augment/settings.json (a top-level
+// "mcpServers" map). There is no project-level MCP file — project servers are
+// per-run via `--mcp-config` only — and the IDE extension is GUI-managed.
+// See https://docs.augmentcode.com/cli/integrations.
+fn mcp_global_path() -> Option<PathBuf> {
+	home_dir().map(|home| home.join(".augment/settings.json"))
+}
+fn global_data_dir() -> Option<PathBuf> {
+	home_dir().map(|home| home.join(".augment"))
+}
+fn load_mcps(
+	project_root: Option<&Path>,
+	scope: crate::ResourceScope,
+) -> crate::Result<Vec<crate::McpServer>> {
+	load_scoped_mcps(
+		project_root,
+		scope,
+		Some(mcp_global_path),
+		None,
+		mcp_strategy::parse_json_map_mcp_servers,
+	)
+}
+fn save_mcps(
+	project_root: Option<&Path>,
+	scope: crate::ResourceScope,
+	mcps: &[crate::McpServer],
+) -> crate::Result<()> {
+	save_scoped_mcps(
+		project_root,
+		scope,
+		mcps,
+		Some(mcp_global_path),
+		None,
+		mcp_strategy::serialize_json_map_mcp_servers,
+	)
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
@@ -15,7 +46,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	load_mcps,
 	save_mcps,
 	mcp_global_path: Some(mcp_global_path),
-	mcp_project_path: Some(mcp_project_path),
+	mcp_project_path: None,
 	global_data_dir,
 	capabilities: Capabilities {
 		skills: SkillCapabilities {
@@ -28,7 +59,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 		mcp: McpCapabilities {
 			scopes: ScopeSupport {
 				global: true,
-				project: true,
+				project: false,
 			},
 			stdio: true,
 			remote: true,
@@ -47,6 +78,6 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	save_sub_agents: save_sub_agents_noop,
 	cli_name: "augmentcode",
 	validate_args: &["--version"],
-	project_markers: &[".augmentcode"],
+	project_markers: &[],
 	skills_cli_name: Some("augment"),
 };

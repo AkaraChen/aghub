@@ -1,15 +1,50 @@
-use crate::define_mcp_paths;
-use crate::define_skill_paths;
 use crate::descriptor::*;
+use std::path::{Path, PathBuf};
 
-define_mcp_paths! {
-	symmetric: ".trae/mcp.json",
-	strategy: mcp_strategy::parse_json_map_mcp_servers,
-			  mcp_strategy::serialize_json_map_mcp_servers,
+// Trae configures MCP through its GUI (Settings > MCP); there is no documented
+// hand-editable GLOBAL file — the global store is the IDE's opaque app data.
+// Only the project-level `.trae/` directory (mcp.json, skills, rules) is real.
+// See https://docs.trae.ai and https://github.com/trae-community/trae-mcp.
+fn mcp_project_path(root: &Path) -> Option<PathBuf> {
+	Some(root.join(".trae/mcp.json"))
 }
-
-define_skill_paths! {
-	symmetric: ".trae/skills",
+fn global_data_dir() -> Option<PathBuf> {
+	// Trae is a VS Code fork: its app data lives in the OS config dir —
+	// ~/Library/Application Support/Trae (macOS), ~/.config/Trae (Linux),
+	// %APPDATA%\Trae (Windows). Used for availability/reveal, not for writing.
+	dirs::config_dir().map(|dir| dir.join("Trae"))
+}
+fn load_mcps(
+	project_root: Option<&Path>,
+	scope: crate::ResourceScope,
+) -> crate::Result<Vec<crate::McpServer>> {
+	load_scoped_mcps(
+		project_root,
+		scope,
+		None,
+		Some(mcp_project_path),
+		mcp_strategy::parse_json_map_mcp_servers,
+	)
+}
+fn save_mcps(
+	project_root: Option<&Path>,
+	scope: crate::ResourceScope,
+	mcps: &[crate::McpServer],
+) -> crate::Result<()> {
+	save_scoped_mcps(
+		project_root,
+		scope,
+		mcps,
+		None,
+		Some(mcp_project_path),
+		mcp_strategy::serialize_json_map_mcp_servers,
+	)
+}
+fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
+	vec![root.join(".trae/skills")]
+}
+fn project_skill_write_path(root: &Path) -> Option<PathBuf> {
+	Some(root.join(".trae/skills"))
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
@@ -19,20 +54,20 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	mcp_serialize_config: Some(mcp_strategy::serialize_json_map_mcp_servers),
 	load_mcps,
 	save_mcps,
-	mcp_global_path: Some(mcp_global_path),
+	mcp_global_path: None,
 	mcp_project_path: Some(mcp_project_path),
 	global_data_dir,
 	capabilities: Capabilities {
 		skills: SkillCapabilities {
 			scopes: ScopeSupport {
-				global: true,
+				global: false,
 				project: true,
 			},
 			universal: false,
 		},
 		mcp: McpCapabilities {
 			scopes: ScopeSupport {
-				global: true,
+				global: false,
 				project: true,
 			},
 			stdio: true,
@@ -46,10 +81,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 			},
 		},
 	},
-	global_skill_paths: Some(GlobalSkillPaths {
-		read: global_skills_paths,
-		write: global_skill_write_path,
-	}),
+	global_skill_paths: None,
 	project_skill_paths: Some(ProjectSkillPaths {
 		read: project_skills_paths,
 		write: project_skill_write_path,
