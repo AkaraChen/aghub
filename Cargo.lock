@@ -24,6 +24,7 @@ name = "aghub"
 version = "0.0.0"
 dependencies = [
  "aghub-api",
+ "aghub-core",
  "base64 0.22.1",
  "dotenvy",
  "fix-path-env",

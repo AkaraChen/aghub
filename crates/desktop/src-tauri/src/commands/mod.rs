@@ -1,8 +1,10 @@
+pub mod agents;
 pub mod logging;
 pub mod posthog;
 pub mod server;
 pub mod window;
 
+pub use agents::agent_config_dir;
 pub use logging::{
 	clear_log_files, export_diagnostic_logs, get_log_dir_path, get_log_entries,
 	get_log_stats,
