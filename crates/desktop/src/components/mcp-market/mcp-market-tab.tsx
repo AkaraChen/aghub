@@ -1,8 +1,4 @@
-import {
-	InformationCircleIcon,
-	MagnifyingGlassIcon,
-	ServerIcon,
-} from "@heroicons/react/24/solid";
+import { MagnifyingGlassIcon, ServerIcon } from "@heroicons/react/24/solid";
 import { Button, Card, SearchField, Spinner } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -43,7 +39,7 @@ export function McpMarketTab() {
 				onSubmit={(value) => setCommittedQuery(value.trim())}
 				aria-label={t("marketMcpSearchLabel")}
 				variant="secondary"
-				className="w-full max-w-md"
+				className="w-full"
 			>
 				<SearchField.Group>
 					<SearchField.SearchIcon />
@@ -53,11 +49,6 @@ export function McpMarketTab() {
 					<SearchField.ClearButton />
 				</SearchField.Group>
 			</SearchField>
-
-			<div className="flex items-start gap-2 text-xs text-muted">
-				<InformationCircleIcon className="mt-0.5 size-4 shrink-0" />
-				<p>{t("marketMcpSourceNote")}</p>
-			</div>
 
 			{isError ? (
 				<div className="flex flex-1 items-center justify-center py-12">

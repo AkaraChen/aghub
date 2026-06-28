@@ -1483,8 +1483,6 @@ export default {
 	marketClaudePluginsLearnMore: "了解插件",
 	marketMcpSearchLabel: "搜索 MCP 服务器",
 	marketMcpSearchPlaceholder: "搜索 MCP 服务器，回车确认…",
-	marketMcpSourceNote:
-		"服务器来自官方 MCP Registry（registry.modelcontextprotocol.io）。",
 	marketMcpLoadError: "无法连接 MCP registry。",
 	marketMcpAdd: "添加",
 	marketMcpInstallTitle: "安装 MCP 服务器",

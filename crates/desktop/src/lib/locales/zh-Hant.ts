@@ -1479,8 +1479,6 @@ export default {
 	marketClaudePluginsLearnMore: "了解外掛",
 	marketMcpSearchLabel: "搜尋 MCP 伺服器",
 	marketMcpSearchPlaceholder: "搜尋 MCP 伺服器，按 Enter 確認…",
-	marketMcpSourceNote:
-		"伺服器來自官方 MCP Registry（registry.modelcontextprotocol.io）。",
 	marketMcpLoadError: "無法連線 MCP registry。",
 	marketMcpAdd: "新增",
 	marketMcpInstallTitle: "安裝 MCP 伺服器",

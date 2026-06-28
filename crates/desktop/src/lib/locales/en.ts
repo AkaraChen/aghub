@@ -1487,8 +1487,6 @@ export default {
 	marketClaudePluginsLearnMore: "Learn about plugins",
 	marketMcpSearchLabel: "Search MCP servers",
 	marketMcpSearchPlaceholder: "Search MCP servers, then press Enter…",
-	marketMcpSourceNote:
-		"Servers from the official MCP Registry (registry.modelcontextprotocol.io).",
 	marketMcpLoadError: "Couldn't reach the MCP registry.",
 	marketMcpAdd: "Add",
 	marketMcpInstallTitle: "Install MCP server",
