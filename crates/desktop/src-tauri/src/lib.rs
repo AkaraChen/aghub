@@ -1,8 +1,9 @@
 use crate::commands::{
-	clear_log_files, export_diagnostic_logs, get_log_dir_path, get_log_entries,
-	get_log_stats, minimize_to_tray, posthog_capture, posthog_get_config,
-	posthog_get_distinct_id, posthog_get_session_id, posthog_identify,
-	posthog_set_enabled, start_server,
+	agent_config_dir, clear_log_files, export_diagnostic_logs,
+	get_log_dir_path, get_log_entries, get_log_stats, minimize_to_tray,
+	posthog_capture, posthog_get_config, posthog_get_distinct_id,
+	posthog_get_session_id, posthog_identify, posthog_set_enabled,
+	start_server,
 };
 use log::info;
 use tauri::{Manager, WebviewWindow};
@@ -306,6 +307,7 @@ pub fn run() {
 			Ok(())
 		})
 		.invoke_handler(tauri::generate_handler![
+			agent_config_dir,
 			start_server,
 			export_diagnostic_logs,
 			get_log_dir_path,
