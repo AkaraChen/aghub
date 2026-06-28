@@ -1,5 +1,12 @@
 import { MagnifyingGlassIcon, ServerIcon } from "@heroicons/react/24/solid";
-import { Button, Card, SearchField, Spinner } from "@heroui/react";
+import {
+	Button,
+	Card,
+	ListBox,
+	SearchField,
+	Select,
+	Spinner,
+} from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useState } from "react";
@@ -12,11 +19,15 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 import { McpInstallModal } from "./mcp-install-modal";
 import { useMcpInstall } from "./use-mcp-install";
 
+const ALL_TYPES = "__all__";
+const TRANSPORT_TYPES = ["stdio", "streamable_http", "sse"] as const;
+
 export function McpMarketTab() {
 	const { t } = useTranslation();
 	const api = useApi();
 	const [input, setInput] = useState("");
 	const [committedQuery, setCommittedQuery] = useState("");
+	const [typeFilter, setTypeFilter] = useState<string>(ALL_TYPES);
 	const install = useMcpInstall();
 
 	const {
@@ -26,29 +37,63 @@ export function McpMarketTab() {
 		refetch,
 	} = useQuery(mcpMarketSearchQueryOptions({ api, query: committedQuery }));
 
+	const filteredServers =
+		typeFilter === ALL_TYPES
+			? servers
+			: servers.filter((server) => server.transport === typeFilter);
 	const showInitialSpinner = isFetching && servers.length === 0;
 
 	return (
 		<div className="flex flex-col gap-4">
-			<SearchField
-				value={input}
-				onChange={(value) => {
-					setInput(value);
-					if (value === "") setCommittedQuery("");
-				}}
-				onSubmit={(value) => setCommittedQuery(value.trim())}
-				aria-label={t("marketMcpSearchLabel")}
-				variant="secondary"
-				className="w-full"
-			>
-				<SearchField.Group>
-					<SearchField.SearchIcon />
-					<SearchField.Input
-						placeholder={t("marketMcpSearchPlaceholder")}
-					/>
-					<SearchField.ClearButton />
-				</SearchField.Group>
-			</SearchField>
+			<div className="flex items-center gap-2">
+				<SearchField
+					value={input}
+					onChange={(value) => {
+						setInput(value);
+						if (value === "") setCommittedQuery("");
+					}}
+					onSubmit={(value) => setCommittedQuery(value.trim())}
+					aria-label={t("marketMcpSearchLabel")}
+					variant="secondary"
+					className="min-w-0 flex-1"
+				>
+					<SearchField.Group>
+						<SearchField.SearchIcon />
+						<SearchField.Input
+							placeholder={t("marketMcpSearchPlaceholder")}
+						/>
+						<SearchField.ClearButton />
+					</SearchField.Group>
+				</SearchField>
+				<Select
+					variant="secondary"
+					aria-label={t("marketMcpTypeFilter")}
+					selectedKey={typeFilter}
+					onSelectionChange={(key) => setTypeFilter(String(key))}
+					className="min-w-32 max-w-40 shrink-0"
+				>
+					<Select.Trigger>
+						<Select.Value />
+						<Select.Indicator />
+					</Select.Trigger>
+					<Select.Popover>
+						<ListBox>
+							<ListBox.Item id={ALL_TYPES} textValue={t("all")}>
+								{t("all")}
+							</ListBox.Item>
+							{TRANSPORT_TYPES.map((transport) => (
+								<ListBox.Item
+									key={transport}
+									id={transport}
+									textValue={transport}
+								>
+									{transport}
+								</ListBox.Item>
+							))}
+						</ListBox>
+					</Select.Popover>
+				</Select>
+			</div>
 
 			{isError ? (
 				<div className="flex flex-1 items-center justify-center py-12">
@@ -75,7 +120,7 @@ export function McpMarketTab() {
 				<div className="flex items-center justify-center py-12">
 					<Spinner size="lg" />
 				</div>
-			) : servers.length === 0 ? (
+			) : filteredServers.length === 0 ? (
 				<div className="flex flex-1 items-center justify-center py-12">
 					<Empty className="border-0">
 						<EmptyHeader>
@@ -89,8 +134,8 @@ export function McpMarketTab() {
 					</Empty>
 				</div>
 			) : (
-				<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-					{servers.map((server) => {
+				<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+					{filteredServers.map((server) => {
 						const repoUrl = server.repository_url;
 						return (
 							<Card
@@ -116,9 +161,7 @@ export function McpMarketTab() {
 											variant="ghost"
 											size="sm"
 											className="size-7 shrink-0 text-muted"
-											aria-label={t(
-												"marketMcpViewSource",
-											)}
+											aria-label={t("marketMcpViewSource")}
 											onPress={() => openUrl(repoUrl)}
 										>
 											<svg
@@ -136,10 +179,10 @@ export function McpMarketTab() {
 									<p className="line-clamp-2 text-xs text-muted">
 										{server.description}
 									</p>
-									<div className="flex flex-wrap gap-1">
+									<div className="mt-auto flex items-center justify-between gap-2 pt-1">
 										<span
 											className={cn(
-												"rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider",
+												"shrink-0 rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider",
 												server.transport === "stdio"
 													? "bg-success/15 text-success"
 													: "bg-accent/15 text-accent",
@@ -147,17 +190,18 @@ export function McpMarketTab() {
 										>
 											{server.transport}
 										</span>
+										<Button
+											variant="tertiary"
+											size="sm"
+											onPress={() =>
+												install.handleInstallClick(
+													server,
+												)
+											}
+										>
+											{t("marketMcpAdd")}
+										</Button>
 									</div>
-									<Button
-										variant="tertiary"
-										size="sm"
-										className="mt-auto self-start"
-										onPress={() =>
-											install.handleInstallClick(server)
-										}
-									>
-										{t("marketMcpAdd")}
-									</Button>
 								</Card.Content>
 							</Card>
 						);
