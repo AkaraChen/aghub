@@ -1480,7 +1480,7 @@ export default {
 	marketMcpSearchLabel: "搜尋 MCP 伺服器",
 	marketMcpSearchPlaceholder: "搜尋 MCP 伺服器，按 Enter 確認…",
 	marketMcpSourceNote:
-		"資料來自官方 MCP Registry。安裝前請核對指令並填好所需的金鑰。",
+		"伺服器來自官方 MCP Registry（registry.modelcontextprotocol.io）。",
 	marketMcpLoadError: "無法連線 MCP registry。",
 	marketMcpAdd: "新增",
 	marketMcpInstallTitle: "安裝 MCP 伺服器",

@@ -1488,7 +1488,7 @@ export default {
 	marketMcpSearchLabel: "Search MCP servers",
 	marketMcpSearchPlaceholder: "Search MCP servers, then press Enter…",
 	marketMcpSourceNote:
-		"Servers from the official MCP Registry. Review the command and fill in any required keys before installing.",
+		"Servers from the official MCP Registry (registry.modelcontextprotocol.io).",
 	marketMcpLoadError: "Couldn't reach the MCP registry.",
 	marketMcpAdd: "Add",
 	marketMcpInstallTitle: "Install MCP server",
