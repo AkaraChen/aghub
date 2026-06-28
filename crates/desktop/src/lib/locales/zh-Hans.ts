@@ -1486,6 +1486,7 @@ export default {
 	marketMcpLoadError: "无法连接 MCP registry。",
 	marketMcpAdd: "添加",
 	marketMcpInstalled: "已安装",
+	marketMcpGoToPage: "前往 MCP 页面",
 	marketMcpInstallTitle: "安装 MCP 服务器",
 	marketMcpViewSource: "查看源码",
 	marketMcpEnvVars: "环境变量",

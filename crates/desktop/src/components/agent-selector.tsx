@@ -1,4 +1,4 @@
-import { PlusIcon } from "@heroicons/react/24/solid";
+import { CheckCircleIcon, PlusIcon } from "@heroicons/react/24/solid";
 import { FieldError, Label, Tag, TagGroup } from "@heroui/react";
 import type { Key } from "react";
 import { useTranslation } from "react-i18next";
@@ -12,6 +12,8 @@ interface AgentSelectorProps {
 	emptyMessage?: string;
 	emptyHelpText?: string;
 	showSelectedIcon?: boolean;
+	/** Agents to flag as already having the resource (check + dimmed). */
+	markedKeys?: Set<string>;
 	variant?: "default" | "secondary";
 	errorMessage?: string;
 	isDisabled?: boolean;
@@ -25,6 +27,7 @@ export function AgentSelector({
 	emptyMessage,
 	emptyHelpText,
 	showSelectedIcon = false,
+	markedKeys,
 	variant,
 	errorMessage,
 	isDisabled = false,
@@ -61,6 +64,7 @@ export function AgentSelector({
 				<TagGroup.List className="flex-wrap">
 					{agents.map((agent) => {
 						const isSelected = selectedKeys.has(agent.id);
+						const isMarked = markedKeys?.has(agent.id) ?? false;
 						return (
 							<Tag
 								key={agent.id}
@@ -71,19 +75,23 @@ export function AgentSelector({
 									variant === "secondary" &&
 										"bg-surface-secondary",
 									errorMessage && "border border-danger",
+									isMarked && "opacity-60",
 								)}
 							>
-								{showSelectedIcon && isSelected ? (
-									<div className="flex items-center gap-1.5">
-										{agent.display_name}
+								<div className="flex items-center gap-1.5">
+									{agent.display_name}
+									{isMarked ? (
+										<CheckCircleIcon
+											className="size-3 text-success"
+											aria-hidden="true"
+										/>
+									) : showSelectedIcon && isSelected ? (
 										<PlusIcon
 											className="size-3"
 											aria-hidden="true"
 										/>
-									</div>
-								) : (
-									agent.display_name
-								)}
+									) : null}
+								</div>
 							</Tag>
 						);
 					})}

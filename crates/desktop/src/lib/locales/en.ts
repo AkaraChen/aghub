@@ -1490,6 +1490,7 @@ export default {
 	marketMcpLoadError: "Couldn't reach the MCP registry.",
 	marketMcpAdd: "Add",
 	marketMcpInstalled: "Installed",
+	marketMcpGoToPage: "Go to MCP servers",
 	marketMcpInstallTitle: "Install MCP server",
 	marketMcpViewSource: "View source",
 	marketMcpEnvVars: "Environment variables",

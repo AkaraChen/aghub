@@ -2,6 +2,7 @@ import { ClipboardDocumentIcon } from "@heroicons/react/24/solid";
 import { Button, Input, Label, Modal, TextField, toast } from "@heroui/react";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "wouter";
 import type { MarketMcpEnv, MarketMcpServer } from "../../generated/dto";
 import type { InstallResult } from "../../lib/install-utils";
 import { buildMarketMcpRequest } from "../../lib/mcp-market-utils";
@@ -23,6 +24,7 @@ interface McpInstallModalProps {
 	installResults: InstallResult[];
 	isInstalling: boolean;
 	mcpAgents: ReturnType<typeof useMcpInstall>["mcpAgents"];
+	markedAgents: Set<string>;
 	installToProject: boolean;
 	canInstallToProject: boolean;
 	onInstallToProjectChange: (value: boolean) => void;
@@ -43,6 +45,7 @@ export function McpInstallModal({
 	installResults,
 	isInstalling,
 	mcpAgents,
+	markedAgents,
 	installToProject,
 	canInstallToProject,
 	onInstallToProjectChange,
@@ -53,6 +56,7 @@ export function McpInstallModal({
 	onInstall,
 }: McpInstallModalProps) {
 	const { t } = useTranslation();
+	const [, setLocation] = useLocation();
 
 	const fields: MarketMcpEnv[] = server
 		? server.transport === "stdio"
@@ -177,6 +181,7 @@ export function McpInstallModal({
 									onSelectionChange={onSelectedAgentsChange}
 									emptyMessage={t("noTargetAgents")}
 									showSelectedIcon
+									markedKeys={markedAgents}
 									variant="secondary"
 								/>
 
@@ -259,9 +264,18 @@ export function McpInstallModal({
 								</Button>
 							</>
 						) : (
-							<Button slot="close" variant="secondary">
-								{t("done")}
-							</Button>
+							<>
+								<Button
+									variant="secondary"
+									onPress={() => {
+										onClose();
+										setLocation("/mcp");
+									}}
+								>
+									{t("marketMcpGoToPage")}
+								</Button>
+								<Button slot="close">{t("done")}</Button>
+							</>
 						)}
 					</Modal.Footer>
 				</Modal.Dialog>

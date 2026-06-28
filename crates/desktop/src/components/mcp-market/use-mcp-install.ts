@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { MarketMcpServer } from "../../generated/dto";
 import { useAgentAvailability } from "../../hooks/use-agent-availability";
@@ -13,8 +13,13 @@ import {
 import {
 	buildMarketMcpRequest,
 	initialMcpFieldValues,
+	marketMcpIdentityKey,
+	mcpTransportIdentityKey,
 } from "../../lib/mcp-market-utils";
-import { createMcpMutationOptions } from "../../requests/mcps";
+import {
+	createMcpMutationOptions,
+	mcpListQueryOptions,
+} from "../../requests/mcps";
 
 export function useMcpInstall() {
 	const api = useApi();
@@ -48,6 +53,27 @@ export function useMcpInstall() {
 	const mcpAgents = availableAgents.filter(
 		(agent) => agent.isUsable && supportsMcpScope(agent, scope),
 	);
+
+	// Installed MCPs across agents — the "lock" for catalog entries. After an
+	// install the create mutation invalidates these queries, so it stays fresh.
+	const { data: installedMcps = [] } = useQuery(
+		mcpListQueryOptions({ api, scope: "global" }),
+	);
+	const installedKeys = new Set(
+		installedMcps.map((mcp) => mcpTransportIdentityKey(mcp.transport)),
+	);
+	const installedAgentIds = selectedServer
+		? new Set(
+				installedMcps
+					.filter(
+						(mcp) =>
+							mcp.agent != null &&
+							mcpTransportIdentityKey(mcp.transport) ===
+								marketMcpIdentityKey(selectedServer),
+					)
+					.map((mcp) => mcp.agent as string),
+			)
+		: new Set<string>();
 
 	const handleInstallClick = (server: MarketMcpServer) => {
 		setSelectedServer(server);
@@ -131,6 +157,8 @@ export function useMcpInstall() {
 		selectedProjectId,
 		setSelectedProjectId,
 		projects,
+		installedKeys,
+		installedAgentIds,
 		handleInstallClick,
 		handleInstall,
 		handleCloseInstallModal,

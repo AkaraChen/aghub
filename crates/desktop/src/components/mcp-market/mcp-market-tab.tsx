@@ -17,13 +17,9 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { siGithub } from "simple-icons";
 import { useApi } from "../../hooks/use-api";
-import {
-	marketMcpIdentityKey,
-	mcpTransportIdentityKey,
-} from "../../lib/mcp-market-utils";
+import { marketMcpIdentityKey } from "../../lib/mcp-market-utils";
 import { cn } from "../../lib/utils";
 import { mcpMarketSearchQueryOptions } from "../../requests/mcp-market";
-import { mcpListQueryOptions } from "../../requests/mcps";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 import { McpInstallModal } from "./mcp-install-modal";
 import { useMcpInstall } from "./use-mcp-install";
@@ -46,19 +42,18 @@ export function McpMarketTab() {
 		refetch,
 	} = useQuery(mcpMarketSearchQueryOptions({ api, query: committedQuery }));
 
-	// Cross-reference installed MCPs (across agents) to mark catalog entries as
-	// already installed — the union of agent configs is the "lock" for MCPs.
-	const { data: installedMcps = [] } = useQuery(
-		mcpListQueryOptions({ api, scope: "global" }),
-	);
-	const installedKeys = new Set(
-		installedMcps.map((mcp) => mcpTransportIdentityKey(mcp.transport)),
-	);
-
 	const filteredServers =
 		typeFilter === ALL_TYPES
 			? servers
 			: servers.filter((server) => server.transport === typeFilter);
+	// Installed entries sink to the bottom; a freshly installed card moves down
+	// reactively as install.installedKeys updates after the create mutation.
+	const visibleServers = filteredServers
+		.map((server) => ({
+			server,
+			installed: install.installedKeys.has(marketMcpIdentityKey(server)),
+		}))
+		.sort((a, b) => Number(a.installed) - Number(b.installed));
 	const showInitialSpinner = isFetching && servers.length === 0;
 
 	return (
@@ -153,11 +148,8 @@ export function McpMarketTab() {
 				</div>
 			) : (
 				<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-					{filteredServers.map((server) => {
+					{visibleServers.map(({ server, installed }) => {
 						const repoUrl = server.repository_url;
-						const installed = installedKeys.has(
-							marketMcpIdentityKey(server),
-						);
 						return (
 							<Card
 								key={server.name}
@@ -251,6 +243,7 @@ export function McpMarketTab() {
 				installResults={install.installResults}
 				isInstalling={install.isInstalling}
 				mcpAgents={install.mcpAgents}
+				markedAgents={install.installedAgentIds}
 				installToProject={install.installToProject}
 				canInstallToProject={install.canInstallToProject}
 				onInstallToProjectChange={install.setInstallToProject}
