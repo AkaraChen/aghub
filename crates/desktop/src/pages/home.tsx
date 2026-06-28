@@ -138,7 +138,7 @@ export default function HomePage() {
 
 				<section
 					aria-label={t("yourAgents")}
-					className="grid grid-flow-row-dense auto-rows-[6.25rem] grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+					className="grid grid-flow-row-dense auto-rows-[6.5rem] grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
 				>
 					{sortedAgents.map(({ agent }) => {
 						const counts = countsByAgent.get(agent.id);
