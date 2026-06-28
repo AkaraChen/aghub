@@ -1,9 +1,11 @@
-import { ArrowTopRightOnSquareIcon } from "@heroicons/react/24/solid";
-import { Button, Input, Label, Modal, TextField } from "@heroui/react";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { ClipboardDocumentIcon } from "@heroicons/react/24/solid";
+import { Button, Input, Label, Modal, TextField, toast } from "@heroui/react";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useTranslation } from "react-i18next";
 import type { MarketMcpEnv, MarketMcpServer } from "../../generated/dto";
 import type { InstallResult } from "../../lib/install-utils";
+import { buildMarketMcpRequest } from "../../lib/mcp-market-utils";
+import { serializeMcpImportJson } from "../../lib/mcp-utils";
 import type { Project } from "../../lib/store";
 import { cn } from "../../lib/utils";
 import { AgentSelector } from "../agent-selector";
@@ -61,11 +63,21 @@ export function McpInstallModal({
 		server?.transport === "stdio"
 			? t("marketMcpEnvVars")
 			: t("marketMcpHeaders");
-	const invocation = server
-		? server.transport === "stdio"
-			? [server.command ?? "", ...server.args].join(" ").trim()
-			: (server.url ?? "")
+
+	const request = server ? buildMarketMcpRequest(server, fieldValues) : null;
+	const configJson = request
+		? serializeMcpImportJson(request.name, request.transport)
 		: "";
+
+	const handleCopyConfig = async () => {
+		if (!configJson) return;
+		try {
+			await writeText(configJson);
+			toast.success(t("copyConfigSuccess"));
+		} catch {
+			toast.danger(t("copyConfigError"));
+		}
+	};
 
 	return (
 		<Modal.Backdrop isOpen={isOpen} onOpenChange={onClose}>
@@ -101,28 +113,6 @@ export function McpInstallModal({
 										{server.transport}
 									</span>
 								</div>
-
-								{invocation && (
-									<code className="block overflow-x-auto rounded-md bg-surface-secondary px-2 py-1.5 text-xs text-muted">
-										{invocation}
-									</code>
-								)}
-
-								{server.repository_url && (
-									<Button
-										variant="tertiary"
-										size="sm"
-										className="self-start"
-										onPress={() => {
-											if (server.repository_url) {
-												openUrl(server.repository_url);
-											}
-										}}
-									>
-										<ArrowTopRightOnSquareIcon className="mr-1.5 size-3.5" />
-										{t("marketMcpViewSource")}
-									</Button>
-								)}
 							</div>
 						)}
 
@@ -202,6 +192,29 @@ export function McpInstallModal({
 									projects={projects}
 									canInstallToProject={canInstallToProject}
 								/>
+
+								{configJson && (
+									<div className="space-y-2">
+										<div className="flex items-center justify-between">
+											<Label className="text-sm font-medium">
+												{t("marketMcpConfigPreview")}
+											</Label>
+											<Button
+												isIconOnly
+												variant="ghost"
+												size="sm"
+												className="size-7 text-muted"
+												aria-label={t("copyConfig")}
+												onPress={handleCopyConfig}
+											>
+												<ClipboardDocumentIcon className="size-3.5" />
+											</Button>
+										</div>
+										<pre className="max-h-48 overflow-auto rounded-md bg-surface-secondary p-2 text-xs text-muted">
+											<code>{configJson}</code>
+										</pre>
+									</div>
+								)}
 							</div>
 						)}
 

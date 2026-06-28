@@ -1495,6 +1495,7 @@ export default {
 	marketMcpViewSource: "View source",
 	marketMcpEnvVars: "Environment variables",
 	marketMcpHeaders: "Headers",
+	marketMcpConfigPreview: "Config preview",
 	marketMcpSelectAgents: "Choose which agents to install into.",
 	marketMcpSecretPlaceholder: "Enter value…",
 	yourAgents: "Your Agents",

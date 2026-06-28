@@ -5,8 +5,10 @@ import {
 } from "@heroicons/react/24/solid";
 import { Button, Card, SearchField, Spinner } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { siGithub } from "simple-icons";
 import { useApi } from "../../hooks/use-api";
 import { cn } from "../../lib/utils";
 import { mcpMarketSearchQueryOptions } from "../../requests/mcp-market";
@@ -97,54 +99,78 @@ export function McpMarketTab() {
 				</div>
 			) : (
 				<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-					{servers.map((server) => (
-						<Card
-							key={server.name}
-							variant="secondary"
-							className="flex h-full flex-col gap-0 overflow-hidden p-3 dark:shadow-[0_2px_4px_0_#0000004d,0_1px_2px_0_#00000066,0_0_1px_0_#00000066]"
-						>
-							<Card.Header className="flex flex-row items-center gap-2 p-0">
-								<div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-surface">
-									<ServerIcon className="size-4 text-muted" />
-								</div>
-								<div className="min-w-0 flex-1">
-									<Card.Title className="truncate text-sm font-medium">
-										{server.display_name}
-									</Card.Title>
-									<p className="truncate text-xs text-muted">
-										{server.publisher}
+					{servers.map((server) => {
+						const repoUrl = server.repository_url;
+						return (
+							<Card
+								key={server.name}
+								variant="secondary"
+								className="flex h-full flex-col gap-0 overflow-hidden p-3 dark:shadow-[0_2px_4px_0_#0000004d,0_1px_2px_0_#00000066,0_0_1px_0_#00000066]"
+							>
+								<Card.Header className="flex flex-row items-center gap-2 p-0">
+									<div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-surface">
+										<ServerIcon className="size-4 text-muted" />
+									</div>
+									<div className="min-w-0 flex-1">
+										<Card.Title className="truncate text-sm font-medium">
+											{server.display_name}
+										</Card.Title>
+										<p className="truncate text-xs text-muted">
+											{server.publisher}
+										</p>
+									</div>
+									{repoUrl && (
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="sm"
+											className="size-7 shrink-0 text-muted"
+											aria-label={t(
+												"marketMcpViewSource",
+											)}
+											onPress={() => openUrl(repoUrl)}
+										>
+											<svg
+												viewBox="0 0 24 24"
+												fill="currentColor"
+												className="size-4"
+												aria-hidden="true"
+											>
+												<path d={siGithub.path} />
+											</svg>
+										</Button>
+									)}
+								</Card.Header>
+								<Card.Content className="flex flex-1 flex-col gap-2 p-0 pt-2">
+									<p className="line-clamp-2 text-xs text-muted">
+										{server.description}
 									</p>
-								</div>
-							</Card.Header>
-							<Card.Content className="flex flex-1 flex-col gap-2 p-0 pt-2">
-								<p className="line-clamp-2 text-xs text-muted">
-									{server.description}
-								</p>
-								<div className="flex flex-wrap gap-1">
-									<span
-										className={cn(
-											"rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider",
-											server.transport === "stdio"
-												? "bg-success/15 text-success"
-												: "bg-accent/15 text-accent",
-										)}
+									<div className="flex flex-wrap gap-1">
+										<span
+											className={cn(
+												"rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider",
+												server.transport === "stdio"
+													? "bg-success/15 text-success"
+													: "bg-accent/15 text-accent",
+											)}
+										>
+											{server.transport}
+										</span>
+									</div>
+									<Button
+										variant="tertiary"
+										size="sm"
+										className="mt-auto self-start"
+										onPress={() =>
+											install.handleInstallClick(server)
+										}
 									>
-										{server.transport}
-									</span>
-								</div>
-								<Button
-									variant="tertiary"
-									size="sm"
-									className="mt-auto self-start"
-									onPress={() =>
-										install.handleInstallClick(server)
-									}
-								>
-									{t("marketMcpAdd")}
-								</Button>
-							</Card.Content>
-						</Card>
-					))}
+										{t("marketMcpAdd")}
+									</Button>
+								</Card.Content>
+							</Card>
+						);
+					})}
 				</div>
 			)}
 

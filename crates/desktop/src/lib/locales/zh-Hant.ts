@@ -1487,6 +1487,7 @@ export default {
 	marketMcpViewSource: "檢視原始碼",
 	marketMcpEnvVars: "環境變數",
 	marketMcpHeaders: "標頭",
+	marketMcpConfigPreview: "設定預覽",
 	marketMcpSelectAgents: "選擇要安裝到哪些 agent。",
 	marketMcpSecretPlaceholder: "輸入值…",
 	yourAgents: "你的代理",

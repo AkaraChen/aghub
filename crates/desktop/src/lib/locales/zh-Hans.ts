@@ -1491,6 +1491,7 @@ export default {
 	marketMcpViewSource: "查看源码",
 	marketMcpEnvVars: "环境变量",
 	marketMcpHeaders: "请求头",
+	marketMcpConfigPreview: "配置预览",
 	marketMcpSelectAgents: "选择要安装到哪些 agent。",
 	marketMcpSecretPlaceholder: "输入值…",
 	yourAgents: "你的代理",
