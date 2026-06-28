@@ -1485,6 +1485,7 @@ export default {
 	marketMcpSearchPlaceholder: "搜索 MCP 服务器，回车确认…",
 	marketMcpLoadError: "无法连接 MCP registry。",
 	marketMcpAdd: "添加",
+	marketMcpInstalled: "已安装",
 	marketMcpInstallTitle: "安装 MCP 服务器",
 	marketMcpViewSource: "查看源码",
 	marketMcpEnvVars: "环境变量",

@@ -1489,6 +1489,7 @@ export default {
 	marketMcpSearchPlaceholder: "Search MCP servers, then press Enter…",
 	marketMcpLoadError: "Couldn't reach the MCP registry.",
 	marketMcpAdd: "Add",
+	marketMcpInstalled: "Installed",
 	marketMcpInstallTitle: "Install MCP server",
 	marketMcpViewSource: "View source",
 	marketMcpEnvVars: "Environment variables",

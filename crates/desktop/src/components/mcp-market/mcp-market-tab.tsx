@@ -1,4 +1,8 @@
-import { MagnifyingGlassIcon, ServerIcon } from "@heroicons/react/24/solid";
+import {
+	CheckCircleIcon,
+	MagnifyingGlassIcon,
+	ServerIcon,
+} from "@heroicons/react/24/solid";
 import {
 	Button,
 	Card,
@@ -13,8 +17,13 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { siGithub } from "simple-icons";
 import { useApi } from "../../hooks/use-api";
+import {
+	marketMcpIdentityKey,
+	mcpTransportIdentityKey,
+} from "../../lib/mcp-market-utils";
 import { cn } from "../../lib/utils";
 import { mcpMarketSearchQueryOptions } from "../../requests/mcp-market";
+import { mcpListQueryOptions } from "../../requests/mcps";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 import { McpInstallModal } from "./mcp-install-modal";
 import { useMcpInstall } from "./use-mcp-install";
@@ -36,6 +45,15 @@ export function McpMarketTab() {
 		isError,
 		refetch,
 	} = useQuery(mcpMarketSearchQueryOptions({ api, query: committedQuery }));
+
+	// Cross-reference installed MCPs (across agents) to mark catalog entries as
+	// already installed — the union of agent configs is the "lock" for MCPs.
+	const { data: installedMcps = [] } = useQuery(
+		mcpListQueryOptions({ api, scope: "global" }),
+	);
+	const installedKeys = new Set(
+		installedMcps.map((mcp) => mcpTransportIdentityKey(mcp.transport)),
+	);
 
 	const filteredServers =
 		typeFilter === ALL_TYPES
@@ -137,6 +155,9 @@ export function McpMarketTab() {
 				<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 					{filteredServers.map((server) => {
 						const repoUrl = server.repository_url;
+						const installed = installedKeys.has(
+							marketMcpIdentityKey(server),
+						);
 						return (
 							<Card
 								key={server.name}
@@ -191,7 +212,11 @@ export function McpMarketTab() {
 											{server.transport}
 										</span>
 										<Button
-											variant="tertiary"
+											variant={
+												installed
+													? "secondary"
+													: "tertiary"
+											}
 											size="sm"
 											onPress={() =>
 												install.handleInstallClick(
@@ -199,7 +224,14 @@ export function McpMarketTab() {
 												)
 											}
 										>
-											{t("marketMcpAdd")}
+											{installed ? (
+												<span className="flex items-center gap-1">
+													<CheckCircleIcon className="size-3.5 text-success" />
+													{t("marketMcpInstalled")}
+												</span>
+											) : (
+												t("marketMcpAdd")
+											)}
 										</Button>
 									</div>
 								</Card.Content>
