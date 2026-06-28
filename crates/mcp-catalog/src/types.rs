@@ -43,8 +43,9 @@ pub struct McpCatalogEnv {
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct ServerListResponse {
+	/// Parsed as raw values so one malformed entry never fails the whole list.
 	#[serde(default)]
-	pub(crate) servers: Vec<ServerEnvelope>,
+	pub(crate) servers: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -72,7 +73,8 @@ pub(crate) struct ServerDetail {
 
 #[derive(Debug, Deserialize)]
 struct Repository {
-	url: String,
+	#[serde(default)]
+	url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -151,6 +153,15 @@ struct RegistryHeader {
 
 // --- Mapping ---
 
+/// Parse a single raw registry entry, isolating failures so one malformed or
+/// partial entry is skipped rather than failing the whole response.
+pub(crate) fn entry_from_value(
+	value: serde_json::Value,
+) -> Option<McpCatalogEntry> {
+	let envelope: ServerEnvelope = serde_json::from_value(value).ok()?;
+	map_detail(envelope.server)
+}
+
 /// Normalize a registry entry, or drop it if it has no install method we can
 /// construct.
 pub(crate) fn map_detail(detail: ServerDetail) -> Option<McpCatalogEntry> {
@@ -169,7 +180,7 @@ pub(crate) fn map_detail(detail: ServerDetail) -> Option<McpCatalogEntry> {
 		.map(str::to_string)
 		.unwrap_or_else(|| short.to_string());
 	let suggested_name = sanitize_name(short);
-	let repository_url = detail.repository.map(|repo| repo.url);
+	let repository_url = detail.repository.and_then(|repo| repo.url);
 
 	if let Some((command, args, env)) =
 		detail.packages.iter().find_map(stdio_install)
@@ -344,7 +355,7 @@ mod tests {
 		response
 			.servers
 			.into_iter()
-			.filter_map(|envelope| map_detail(envelope.server))
+			.filter_map(entry_from_value)
 			.collect()
 	}
 
@@ -466,5 +477,38 @@ mod tests {
 		);
 		assert_eq!(sanitize_name("weird name@1.0"), "weird-name-1-0");
 		assert_eq!(sanitize_name("///"), "mcp-server");
+	}
+
+	// The live registry returns entries with `repository: {}` (no url); a strict
+	// required `url` field used to fail the whole response (502). Keep it shown.
+	#[test]
+	fn tolerates_empty_repository_object() {
+		let servers = parse(
+			r#"{"servers":[{"server":{
+				"name":"io.github.acme/empty-repo",
+				"description":"empty repository object",
+				"version":"1.0.0",
+				"repository":{},
+				"packages":[{"registryType":"npm","identifier":"acme","runtimeHint":"npx","transport":{"type":"stdio"}}]
+			},"_meta":{}}]}"#,
+		);
+
+		assert_eq!(servers.len(), 1);
+		assert!(servers[0].repository_url.is_none());
+	}
+
+	// One malformed entry must not sink the whole batch.
+	#[test]
+	fn skips_malformed_entry_without_failing_batch() {
+		let servers = parse(
+			r#"{"servers":[
+				{"server":{"name":"io.github.acme/good","description":"ok","version":"1.0.0","packages":[{"registryType":"npm","identifier":"good","runtimeHint":"npx","transport":{"type":"stdio"}}]},"_meta":{}},
+				{"server":{"description":"missing name","version":"1.0.0"}},
+				{"not-a-server":true}
+			]}"#,
+		);
+
+		assert_eq!(servers.len(), 1);
+		assert_eq!(servers[0].suggested_name, "good");
 	}
 }

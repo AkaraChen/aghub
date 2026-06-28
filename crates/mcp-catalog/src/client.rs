@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use reqwest::{Client as HttpClient, Url};
 
-use crate::types::{map_detail, McpCatalogEntry, ServerListResponse};
+use crate::types::{entry_from_value, McpCatalogEntry, ServerListResponse};
 
 const DEFAULT_API_URL: &str = "https://registry.modelcontextprotocol.io/";
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
@@ -112,7 +112,7 @@ impl Client {
 		Ok(body
 			.servers
 			.into_iter()
-			.filter_map(|envelope| map_detail(envelope.server))
+			.filter_map(entry_from_value)
 			.collect())
 	}
 }
