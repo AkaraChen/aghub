@@ -28,7 +28,7 @@
 		"@opentelemetry/api-logs": "^0.218.0",
 		"@opentelemetry/exporter-logs-otlp-http": "^0.218.0",
 		"@opentelemetry/resources": "^2.8.0",
-		"@opentelemetry/sdk-logs": "^0.218.0",
+		"@opentelemetry/sdk-logs": "^0.219.0",
 		"@tanstack/react-query": "^5.100.14",
 		"@tauri-apps/api": "^2.11.0",
 		"@tauri-apps/plugin-autostart": "2.5.1",
