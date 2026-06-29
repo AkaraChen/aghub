@@ -138,7 +138,13 @@ struct CcCodexReport {
 struct CcCodexDay {
 	date: String,
 	input_tokens: u64,
-	cached_input_tokens: u64,
+	// ccusage renamed codex's `cachedInputTokens` -> `cacheReadTokens` (+ added
+	// `cacheCreationTokens`) after the pinned 20.0.6 sidecar; the alias + default
+	// keep both that and a newer global ccusage parsing.
+	#[serde(alias = "cachedInputTokens")]
+	cache_read_tokens: u64,
+	#[serde(default)]
+	cache_creation_tokens: u64,
 	output_tokens: u64,
 	reasoning_output_tokens: u64,
 	total_tokens: u64,
@@ -152,7 +158,10 @@ struct CcCodexDay {
 #[serde(rename_all = "camelCase")]
 struct CcCodexModel {
 	input_tokens: u64,
-	cached_input_tokens: u64,
+	#[serde(alias = "cachedInputTokens")]
+	cache_read_tokens: u64,
+	#[serde(default)]
+	cache_creation_tokens: u64,
 	output_tokens: u64,
 	reasoning_output_tokens: u64,
 	total_tokens: u64,
@@ -162,7 +171,10 @@ struct CcCodexModel {
 #[serde(rename_all = "camelCase")]
 struct CcCodexTotals {
 	input_tokens: u64,
-	cached_input_tokens: u64,
+	#[serde(alias = "cachedInputTokens")]
+	cache_read_tokens: u64,
+	#[serde(default)]
+	cache_creation_tokens: u64,
 	output_tokens: u64,
 	reasoning_output_tokens: u64,
 	total_tokens: u64,
@@ -174,8 +186,8 @@ struct CcCodexTotals {
 //
 // Decisions baked in here (worth a review):
 //   * Claude has no reasoning tokens -> reasoning_tokens = 0.
-//   * Codex has no cache-creation -> cache_creation_tokens = 0, and its
-//     `cachedInputTokens` maps onto the unified `cache_read_tokens`.
+//   * Codex's cache-read tokens come from `cacheReadTokens` (older ccusage:
+//     `cachedInputTokens`); `cacheCreationTokens` is 0 on older output.
 //   * Codex's per-model map carries no cost, so per-model cost_usd = None
 //     (only the day/total cost is known); Claude's per-model cost is Some.
 //   * Claude's per-model breakdown has no totalTokens field, so we sum it.
@@ -235,8 +247,8 @@ fn codex_to_agent(report: CcCodexReport) -> AgentUsageDto {
 			date: d.date,
 			input_tokens: d.input_tokens,
 			output_tokens: d.output_tokens,
-			cache_creation_tokens: 0,
-			cache_read_tokens: d.cached_input_tokens,
+			cache_creation_tokens: d.cache_creation_tokens,
+			cache_read_tokens: d.cache_read_tokens,
 			reasoning_tokens: d.reasoning_output_tokens,
 			total_tokens: d.total_tokens,
 			cost_usd: d.cost_usd,
@@ -251,8 +263,8 @@ fn codex_to_agent(report: CcCodexReport) -> AgentUsageDto {
 						model: name,
 						input_tokens: m.input_tokens,
 						output_tokens: m.output_tokens,
-						cache_creation_tokens: 0,
-						cache_read_tokens: m.cached_input_tokens,
+						cache_creation_tokens: m.cache_creation_tokens,
+						cache_read_tokens: m.cache_read_tokens,
 						reasoning_tokens: m.reasoning_output_tokens,
 						total_tokens: m.total_tokens,
 						cost_usd: None,
@@ -270,8 +282,8 @@ fn codex_to_agent(report: CcCodexReport) -> AgentUsageDto {
 		totals: UsageTotalsDto {
 			input_tokens: report.totals.input_tokens,
 			output_tokens: report.totals.output_tokens,
-			cache_creation_tokens: 0,
-			cache_read_tokens: report.totals.cached_input_tokens,
+			cache_creation_tokens: report.totals.cache_creation_tokens,
+			cache_read_tokens: report.totals.cache_read_tokens,
 			reasoning_tokens: report.totals.reasoning_output_tokens,
 			total_tokens: report.totals.total_tokens,
 			cost_usd: report.totals.cost_usd,
@@ -420,7 +432,8 @@ fn macos_keychain_token() -> Option<String> {
 fn parse_codex_auth(json: &str) -> Result<(String, Option<String>), String> {
 	#[derive(Deserialize)]
 	struct AuthFile {
-		tokens: Tokens,
+		#[serde(default)]
+		tokens: Option<Tokens>,
 	}
 	#[derive(Deserialize)]
 	struct Tokens {
@@ -428,9 +441,13 @@ fn parse_codex_auth(json: &str) -> Result<(String, Option<String>), String> {
 		#[serde(default)]
 		account_id: Option<String>,
 	}
-	serde_json::from_str::<AuthFile>(json)
-		.map(|a| (a.tokens.access_token, a.tokens.account_id))
-		.map_err(|e| format!("parse codex auth: {e}"))
+	let auth: AuthFile = serde_json::from_str(json)
+		.map_err(|e| format!("parse codex auth: {e}"))?;
+	let tokens = auth.tokens.ok_or_else(|| {
+		"codex is not logged in via ChatGPT (no rate-limit data for API-key logins)"
+			.to_string()
+	})?;
+	Ok((tokens.access_token, tokens.account_id))
 }
 
 /// Codex's OAuth token plus the ChatGPT account id its usage endpoint needs.
@@ -540,7 +557,7 @@ fn claude_windows(usage: ClaudeOauthUsage) -> Vec<LimitWindowDto> {
 /// reset as an ISO string, or seconds-from-now, or epoch millis.
 fn codex_window(
 	value: &serde_json::Value,
-	kind: LimitWindowKind,
+	fallback_kind: LimitWindowKind,
 ) -> Option<LimitWindowDto> {
 	let obj = value.as_object()?;
 	let utilization_pct = obj
@@ -554,12 +571,32 @@ fn codex_window(
 		// The Codex shape is undocumented; keep utilization within the 0-100
 		// the DTO promises rather than emitting an out-of-range value.
 		.clamp(0.0, 100.0);
+	// Prefer the window's own duration over the positional fallback: ChatGPT's
+	// `limit_window_seconds` distinguishes the short (5h) from the longer window.
+	let kind = obj
+		.get("limit_window_seconds")
+		.and_then(serde_json::Value::as_i64)
+		.map(|secs| {
+			if secs <= 6 * 3600 {
+				LimitWindowKind::FiveHour
+			} else {
+				LimitWindowKind::Weekly
+			}
+		})
+		.unwrap_or(fallback_kind);
 	let resets_at = obj
 		.get("resets_at")
 		.and_then(serde_json::Value::as_str)
 		.map(str::to_string)
 		.or_else(|| {
+			obj.get("reset_at")
+				.and_then(serde_json::Value::as_i64)
+				.and_then(|secs| chrono::DateTime::from_timestamp(secs, 0))
+				.map(|dt| dt.to_rfc3339())
+		})
+		.or_else(|| {
 			obj.get("resets_in_seconds")
+				.or_else(|| obj.get("reset_after_seconds"))
 				.and_then(serde_json::Value::as_i64)
 				.map(|secs| {
 					(chrono::Utc::now() + chrono::Duration::seconds(secs))
@@ -603,15 +640,25 @@ async fn fetch_codex_limits() -> Result<AgentLimitsDto, String> {
 		.await
 		.map_err(|e| format!("parse codex usage: {e}"))?;
 
-	// Codex exposes a `primary` (5h) and `secondary` (weekly) window, possibly
-	// nested under `rate_limits`.
-	let root = body.get("rate_limits").unwrap_or(&body);
+	// ChatGPT's usage endpoint returns `rate_limit` (singular) with
+	// `primary_window`/`secondary_window`; older output used
+	// `rate_limits.{primary,secondary}`. Read whichever the account returns; the
+	// window kind comes from each window's own `limit_window_seconds`, falling
+	// back to the positional 5h/weekly when absent.
+	let root = body
+		.get("rate_limit")
+		.or_else(|| body.get("rate_limits"))
+		.unwrap_or(&body);
 	let windows: Vec<LimitWindowDto> = [
-		("primary", LimitWindowKind::FiveHour),
-		("secondary", LimitWindowKind::Weekly),
+		("primary_window", "primary", LimitWindowKind::FiveHour),
+		("secondary_window", "secondary", LimitWindowKind::Weekly),
 	]
 	.into_iter()
-	.filter_map(|(key, kind)| root.get(key).and_then(|v| codex_window(v, kind)))
+	.filter_map(|(new_key, old_key, fallback)| {
+		root.get(new_key)
+			.or_else(|| root.get(old_key))
+			.and_then(|v| codex_window(v, fallback))
+	})
 	.collect();
 	if windows.is_empty() {
 		return Err(
@@ -746,7 +793,8 @@ mod tests {
 			"gpt-5".to_string(),
 			CcCodexModel {
 				input_tokens: 200,
-				cached_input_tokens: 40,
+				cache_read_tokens: 40,
+				cache_creation_tokens: 0,
 				output_tokens: 80,
 				reasoning_output_tokens: 20,
 				total_tokens: 340,
@@ -756,7 +804,8 @@ mod tests {
 			daily: vec![CcCodexDay {
 				date: "2026-06-01".to_string(),
 				input_tokens: 200,
-				cached_input_tokens: 40,
+				cache_read_tokens: 40,
+				cache_creation_tokens: 0,
 				output_tokens: 80,
 				reasoning_output_tokens: 20,
 				total_tokens: 340,
@@ -765,7 +814,8 @@ mod tests {
 			}],
 			totals: CcCodexTotals {
 				input_tokens: 200,
-				cached_input_tokens: 40,
+				cache_read_tokens: 40,
+				cache_creation_tokens: 0,
 				output_tokens: 80,
 				reasoning_output_tokens: 20,
 				total_tokens: 340,
@@ -818,6 +868,43 @@ mod tests {
 	}
 
 	#[test]
+	fn codex_report_parses_both_ccusage_field_names() {
+		// 20.0.6 (the pinned sidecar) emits `cachedInputTokens`; 20.0.14+ (a dev's
+		// global ccusage) emits `cacheReadTokens` + `cacheCreationTokens`. Both must
+		// deserialize, or codex usage silently drops for that ccusage version.
+		let old = serde_json::from_value::<CcCodexReport>(json!({
+			"daily": [],
+			"totals": {
+				"inputTokens": 10,
+				"cachedInputTokens": 4,
+				"outputTokens": 6,
+				"reasoningOutputTokens": 2,
+				"totalTokens": 20,
+				"costUSD": 0.5
+			}
+		}))
+		.expect("20.0.6 cachedInputTokens shape");
+		assert_eq!(old.totals.cache_read_tokens, 4);
+		assert_eq!(old.totals.cache_creation_tokens, 0);
+
+		let new = serde_json::from_value::<CcCodexReport>(json!({
+			"daily": [],
+			"totals": {
+				"inputTokens": 10,
+				"cacheReadTokens": 4,
+				"cacheCreationTokens": 1,
+				"outputTokens": 6,
+				"reasoningOutputTokens": 2,
+				"totalTokens": 20,
+				"costUSD": 0.5
+			}
+		}))
+		.expect("20.0.14 cacheReadTokens shape");
+		assert_eq!(new.totals.cache_read_tokens, 4);
+		assert_eq!(new.totals.cache_creation_tokens, 1);
+	}
+
+	#[test]
 	fn parse_claude_credentials_reads_renamed_keys() {
 		let json = r#"{"claudeAiOauth":{"accessToken":"sk-tok"}}"#;
 		assert_eq!(parse_claude_credentials(json).unwrap(), "sk-tok");
@@ -838,6 +925,13 @@ mod tests {
 			("at".to_string(), None)
 		);
 		assert!(parse_codex_auth(r#"{"tokens":{}}"#).is_err());
+		// API-key / logged-out codex carries no `tokens`: a clear error, not a panic
+		// or a cryptic serde "missing field".
+		assert!(
+			parse_codex_auth(r#"{"OPENAI_API_KEY":"sk-x","tokens":null}"#)
+				.is_err()
+		);
+		assert!(parse_codex_auth(r#"{"OPENAI_API_KEY":"sk-x"}"#).is_err());
 	}
 
 	#[test]
@@ -940,6 +1034,32 @@ mod tests {
 	}
 
 	#[test]
+	fn codex_window_reads_new_chatgpt_shape() {
+		// ChatGPT's current `rate_limit.primary_window`: used_percent +
+		// limit_window_seconds (kind by duration) + reset_at (epoch seconds).
+		let w = codex_window(
+			&json!({
+				"used_percent": 5,
+				"limit_window_seconds": 2_592_000i64,
+				"reset_at": 1_785_339_666i64
+			}),
+			LimitWindowKind::FiveHour,
+		)
+		.unwrap();
+		// 30-day window -> long kind despite the 5h positional fallback
+		assert_eq!(w.kind, LimitWindowKind::Weekly);
+		assert_eq!(w.utilization_pct, 5.0);
+		assert!(w.resets_at.is_some());
+		// a 5h-duration window keeps the short kind
+		let w = codex_window(
+			&json!({ "used_percent": 20, "limit_window_seconds": 18_000i64 }),
+			LimitWindowKind::Weekly,
+		)
+		.unwrap();
+		assert_eq!(w.kind, LimitWindowKind::FiveHour);
+	}
+
+	#[test]
 	fn codex_models_sorted_by_name() {
 		let mut models = HashMap::new();
 		for name in ["zeta", "alpha", "mid"] {
@@ -947,7 +1067,8 @@ mod tests {
 				name.to_string(),
 				CcCodexModel {
 					input_tokens: 1,
-					cached_input_tokens: 0,
+					cache_read_tokens: 0,
+					cache_creation_tokens: 0,
 					output_tokens: 1,
 					reasoning_output_tokens: 0,
 					total_tokens: 2,
@@ -958,7 +1079,8 @@ mod tests {
 			daily: vec![CcCodexDay {
 				date: "2026-06-01".to_string(),
 				input_tokens: 3,
-				cached_input_tokens: 0,
+				cache_read_tokens: 0,
+				cache_creation_tokens: 0,
 				output_tokens: 3,
 				reasoning_output_tokens: 0,
 				total_tokens: 6,
@@ -967,7 +1089,8 @@ mod tests {
 			}],
 			totals: CcCodexTotals {
 				input_tokens: 3,
-				cached_input_tokens: 0,
+				cache_read_tokens: 0,
+				cache_creation_tokens: 0,
 				output_tokens: 3,
 				reasoning_output_tokens: 0,
 				total_tokens: 6,
