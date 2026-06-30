@@ -46,11 +46,17 @@ impl ClientBuilder {
 	}
 
 	pub fn build(self) -> Result<Client, ClientError> {
-		let base_url = self
+		let mut base_url = self
 			.api_url
 			.as_deref()
 			.unwrap_or(DEFAULT_API_URL)
 			.parse::<Url>()?;
+		// Ensure a trailing slash so `join("v0/servers")` keeps any path prefix
+		// (e.g. a custom registry mounted under `/mcp-registry`).
+		if !base_url.path().ends_with('/') {
+			let path = format!("{}/", base_url.path());
+			base_url.set_path(&path);
+		}
 		let http = HttpClient::builder().timeout(self.timeout).build()?;
 		Ok(Client { http, base_url })
 	}
@@ -143,6 +149,23 @@ mod tests {
 			.build()
 			.unwrap();
 		assert_eq!(client.base_url.as_str(), "https://example.test/");
+	}
+
+	#[test]
+	fn builder_normalizes_missing_trailing_slash() {
+		let client = ClientBuilder::new()
+			.api_url("https://corp.example/mcp-registry")
+			.build()
+			.unwrap();
+		assert_eq!(
+			client.base_url.as_str(),
+			"https://corp.example/mcp-registry/"
+		);
+		let search = client.base_url.join("v0/servers").unwrap();
+		assert_eq!(
+			search.as_str(),
+			"https://corp.example/mcp-registry/v0/servers"
+		);
 	}
 
 	#[test]
