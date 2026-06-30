@@ -39,12 +39,3 @@ export function buildUsage({
 		primaryWindow: windows[0] ?? null,
 	};
 }
-
-/** Whether a card will render a usage section — drives sort order and row span. */
-export function hasUsageContent(args: {
-	usage?: AgentUsageDto;
-	limits?: AgentLimitsDto;
-}): boolean {
-	const view = buildUsage(args);
-	return view.primaryWindow != null || view.tokens != null;
-}

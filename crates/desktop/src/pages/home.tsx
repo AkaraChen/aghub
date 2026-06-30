@@ -5,7 +5,6 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import { AgentOverviewCard } from "../components/agent-overview-card";
-import { hasUsageContent } from "../components/agent-overview-card-helpers";
 import type { AgentLimitsDto, AgentUsageDto } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
@@ -99,27 +98,23 @@ export default function HomePage() {
 		return map;
 	}, [limitsReport]);
 
-	// Cards with a usage section sort first and span two grid rows; usage-less
-	// cards span one, so a dense grid packs two short cards into the column
-	// space of one tall card.
+	// Claude and Codex carry usage telemetry, so surface them first — stable,
+	// regardless of whether ccusage has data yet. The rest follow by status then
+	// name. Each card decides its own height (a usage section spans two grid
+	// rows), so the dense grid still packs short cards into a tall card's column.
 	const sortedAgents = useMemo(() => {
-		const order = { ready: 0, missing: 1, disabled: 2 } as const;
-		return installedAgents
-			.map((agent) => ({
-				agent,
-				hasUsage: hasUsageContent({
-					usage: usageByAgent.get(agent.id),
-					limits: limitsByAgent.get(agent.id),
-				}),
-			}))
-			.sort((a, b) => {
-				if (a.hasUsage !== b.hasUsage) return a.hasUsage ? -1 : 1;
-				const byStatus =
-					order[agentStatus(a.agent)] - order[agentStatus(b.agent)];
-				if (byStatus !== 0) return byStatus;
-				return a.agent.display_name.localeCompare(b.agent.display_name);
-			});
-	}, [installedAgents, usageByAgent, limitsByAgent]);
+		const statusOrder = { ready: 0, missing: 1, disabled: 2 } as const;
+		const usageRank = (id: string) =>
+			id === "claude" ? 0 : id === "codex" ? 1 : 2;
+		return [...installedAgents].sort((a, b) => {
+			const byUsage = usageRank(a.id) - usageRank(b.id);
+			if (byUsage !== 0) return byUsage;
+			const byStatus =
+				statusOrder[agentStatus(a)] - statusOrder[agentStatus(b)];
+			if (byStatus !== 0) return byStatus;
+			return a.display_name.localeCompare(b.display_name);
+		});
+	}, [installedAgents]);
 
 	return (
 		<div className="h-full overflow-y-auto">
@@ -140,7 +135,7 @@ export default function HomePage() {
 					aria-label={t("yourAgents")}
 					className="grid grid-flow-row-dense auto-rows-[6.5rem] grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
 				>
-					{sortedAgents.map(({ agent }) => {
+					{sortedAgents.map((agent) => {
 						const counts = countsByAgent.get(agent.id);
 						return (
 							<AgentOverviewCard
