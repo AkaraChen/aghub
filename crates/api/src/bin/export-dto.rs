@@ -12,6 +12,10 @@ use aghub_api::dto::{
 	},
 	common::ConfigSource,
 	credential::{CreateCredentialRequest, CredentialResponse},
+	hooks::{
+		CreateHookRequest, HookActionDto, HookResponse, HookSourceKindDto,
+		UpdateHookRequest,
+	},
 	inference::{
 		AgentProviderCredentialDto,
 		AgentProviderMatchedInferenceProviderResponse,
@@ -150,6 +154,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<ConfigSource>(&cfg)?;
 	export_type::<CreateCredentialRequest>(&cfg)?;
 	export_type::<CredentialResponse>(&cfg)?;
+	export_type::<HookSourceKindDto>(&cfg)?;
+	export_type::<HookActionDto>(&cfg)?;
+	export_type::<CreateHookRequest>(&cfg)?;
+	export_type::<UpdateHookRequest>(&cfg)?;
+	export_type::<HookResponse>(&cfg)?;
 	export_type::<AgentProviderSourceDto>(&cfg)?;
 	export_type::<AgentProviderCredentialDto>(&cfg)?;
 	export_type::<AgentProviderModelResponse>(&cfg)?;

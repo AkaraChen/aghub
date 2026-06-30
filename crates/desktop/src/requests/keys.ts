@@ -62,6 +62,12 @@ export const queryKeys = {
 			scope: "global" | "project" | "all",
 		) => ["sub-agents", "detail", name, agent, scope] as const,
 	},
+	hooks: {
+		all: () => ["hooks"] as const,
+		list: (agent?: string) => ["hooks", "list", agent ?? "all"] as const,
+		detail: (agent: string, id: string) =>
+			["hooks", "detail", agent, id] as const,
+	},
 	credentials: {
 		all: () => ["credentials"] as const,
 		list: () => ["credentials", "list"] as const,

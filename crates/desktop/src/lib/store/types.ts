@@ -21,6 +21,7 @@ export interface IntegrationPreferences {
 export const SIDEBAR_ITEM_IDS = [
 	"mcp",
 	"inferenceProviders",
+	"hooks",
 	"skills",
 	"skillsSh",
 	"subAgents",
@@ -34,7 +35,7 @@ export interface SidebarItemPreference {
 	visible: boolean;
 }
 
-export const CURRENT_VERSION = 7;
+export const CURRENT_VERSION = 8;
 
 export const DEFAULT_ONBOARDING_PROGRESS: OnboardingProgress = {
 	hasSeenWelcome: false,

@@ -16,6 +16,7 @@ import type {
 	CodexProviderStateResponse,
 	CreateAgentProviderRequest,
 	CreateCredentialRequest,
+	CreateHookRequest,
 	CreateInferenceProviderRequest,
 	CreateMcpRequest,
 	CreateSkillRequest,
@@ -30,6 +31,7 @@ import type {
 	GitSyncRequest,
 	GitSyncResponse,
 	GlobalSkillLockResponse,
+	HookResponse,
 	ImportSkillRequest,
 	CCPluginInstallRequest,
 	CCPluginInstallResponse,
@@ -59,6 +61,7 @@ import type {
 	UpdateAgentProviderRequest,
 	UpdateCodexActiveProfileRequest,
 	UpdateCodexProfileProviderRequest,
+	UpdateHookRequest,
 	UpdateInferenceProviderRequest,
 	UpdateMcpRequest,
 	CCPluginUpdateConfigRequest,
@@ -501,6 +504,52 @@ export function createApi(baseUrl: string, token: string) {
 				return client
 					.post("sub-agents/reconcile", { json: body })
 					.json();
+			},
+		},
+		hooks: {
+			listAll(): Promise<HookResponse[]> {
+				return client.get("agents/all/hooks").json();
+			},
+			list(agent: string): Promise<HookResponse[]> {
+				return client
+					.get(`agents/${encodeURIComponent(agent)}/hooks`)
+					.json();
+			},
+			get(agent: string, id: string): Promise<HookResponse> {
+				return client
+					.get(
+						`agents/${encodeURIComponent(agent)}/hooks/${encodeURIComponent(id)}`,
+					)
+					.json();
+			},
+			create(
+				agent: string,
+				body: CreateHookRequest,
+			): Promise<HookResponse> {
+				return client
+					.post(`agents/${encodeURIComponent(agent)}/hooks`, {
+						json: body,
+					})
+					.json();
+			},
+			update(
+				agent: string,
+				id: string,
+				body: UpdateHookRequest,
+			): Promise<HookResponse> {
+				return client
+					.put(
+						`agents/${encodeURIComponent(agent)}/hooks/${encodeURIComponent(id)}`,
+						{ json: body },
+					)
+					.json();
+			},
+			delete(agent: string, id: string): Promise<void> {
+				return client
+					.delete(
+						`agents/${encodeURIComponent(agent)}/hooks/${encodeURIComponent(id)}`,
+					)
+					.then(() => undefined);
 			},
 		},
 		market: {

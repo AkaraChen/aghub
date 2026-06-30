@@ -1,6 +1,7 @@
 pub mod agents;
 pub mod common;
 pub mod credential;
+pub mod hooks;
 pub mod inference;
 pub mod integrations;
 pub mod market;
