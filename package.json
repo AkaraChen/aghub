@@ -12,7 +12,7 @@
 		"@types/bun": "latest",
 		"husky": "^9.1.7",
 		"nano-staged": "^1.0.0",
-		"prettier": "^3.8.4",
+		"prettier": "3.9.4",
 		"semver": "^7.8.5"
 	},
 	"peerDependencies": {
