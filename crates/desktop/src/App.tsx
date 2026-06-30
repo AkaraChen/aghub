@@ -231,7 +231,11 @@ function App() {
 										<Redirect to="/market" />
 									</Route>
 									<Route path="/library/search">
-										<Redirect to="/market/search" />
+										{() => (
+											<Redirect
+												to={`/market/search${window.location.search}`}
+											/>
+										)}
 									</Route>
 
 									<Route path="/skills">
@@ -278,7 +282,11 @@ function App() {
 										<Redirect to="/market" />
 									</Route>
 									<Route path="/skills-sh/search">
-										<Redirect to="/market/search" />
+										{() => (
+											<Redirect
+												to={`/market/search${window.location.search}`}
+											/>
+										)}
 									</Route>
 
 									<Route path="/cc-plugins">
