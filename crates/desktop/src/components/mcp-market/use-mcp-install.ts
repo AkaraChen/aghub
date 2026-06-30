@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { MarketMcpServer } from "../../generated/dto";
 import { useAgentAvailability } from "../../hooks/use-agent-availability";
@@ -60,9 +60,21 @@ export function useMcpInstall() {
 
 	// Installed MCPs across agents — the "lock" for catalog entries. After an
 	// install the create mutation invalidates these queries, so it stays fresh.
-	const { data: installedMcps = [] } = useQuery(
-		mcpListQueryOptions({ api, scope: "global" }),
-	);
+	// Project-scoped configs only load when queried per project root, so fan
+	// out over global plus every registered project.
+	const installedQueries = useQueries({
+		queries: [
+			mcpListQueryOptions({ api, scope: "global" }),
+			...projects.map((project) =>
+				mcpListQueryOptions({
+					api,
+					scope: "project",
+					projectRoot: project.path,
+				}),
+			),
+		],
+	});
+	const installedMcps = installedQueries.flatMap((query) => query.data ?? []);
 	const installedKeys = new Set(
 		installedMcps.map((mcp) => mcpTransportIdentityKey(mcp.transport)),
 	);

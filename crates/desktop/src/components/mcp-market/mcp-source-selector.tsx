@@ -77,9 +77,13 @@ export function McpSourceSelector({ onChange }: McpSourceSelectorProps) {
 
 	const handleRemove = async () => {
 		if (!selectedCustom) return;
-		await removeMutation.mutateAsync(selectedCustom.id);
-		setSelectedId(OFFICIAL);
-		onChange(null);
+		try {
+			await removeMutation.mutateAsync(selectedCustom.id);
+			setSelectedId(OFFICIAL);
+			onChange(null);
+		} catch (err) {
+			toast.danger(err instanceof Error ? err.message : String(err));
+		}
 	};
 
 	return (
