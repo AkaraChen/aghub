@@ -447,8 +447,7 @@ export function UnifiedResourceList({
 									onSelectionChange={(keys) => {
 										if (keys === "all") return;
 										const key = [...keys][0] as
-											| string
-											| undefined;
+											string | undefined;
 										if (key)
 											onSubAgentSelectionChange?.(key);
 									}}
