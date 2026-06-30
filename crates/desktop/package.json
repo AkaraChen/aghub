@@ -71,7 +71,7 @@
 		"@eslint-react/eslint-plugin": "^5.8.10",
 		"@tailwindcss/vite": "^4.2.2",
 		"@tauri-apps/cli": "^2.11.4",
-		"@types/node": "^25.9.3",
+		"@types/node": "^26.0.1",
 		"@types/react": "^19.2.16",
 		"@types/react-dom": "^19.1.6",
 		"@vitejs/plugin-react": "^6.0.2",
