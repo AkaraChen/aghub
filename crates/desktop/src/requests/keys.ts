@@ -149,7 +149,8 @@ export const queryKeys = {
 	},
 	mcpMarket: {
 		all: () => ["mcp-market"] as const,
-		search: (query: string) => ["mcp-market", "search", query] as const,
+		search: (query: string, registryUrl: string | null) =>
+			["mcp-market", "search", registryUrl ?? "official", query] as const,
 	},
 	usage: {
 		all: () => ["usage"] as const,

@@ -20,6 +20,11 @@ export {
 	saveIntegrationPreferences,
 } from "./store/integrations";
 export {
+	addMcpRegistry,
+	getMcpRegistries,
+	removeMcpRegistry,
+} from "./store/mcp-registries";
+export {
 	getOnboardingProgress,
 	saveOnboardingCompletion,
 	updateOnboardingProgress,
@@ -77,6 +82,7 @@ export type {
 } from "./store/usage";
 export type {
 	IntegrationPreferences,
+	McpRegistrySource,
 	OnboardingProgress,
 	Project,
 	ResourceGroup,

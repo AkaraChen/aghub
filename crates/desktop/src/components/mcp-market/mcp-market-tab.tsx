@@ -1,4 +1,5 @@
 import {
+	ArrowPathIcon,
 	CheckCircleIcon,
 	MagnifyingGlassIcon,
 	ServerIcon,
@@ -24,6 +25,7 @@ import type { McpGroup } from "../mcp-detail";
 import { ManageAgentsDialog } from "../manage-agents-dialog";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 import { McpInstallModal } from "./mcp-install-modal";
+import { McpSourceSelector } from "./mcp-source-selector";
 import { useMcpInstall } from "./use-mcp-install";
 
 const ALL_TYPES = "__all__";
@@ -48,6 +50,7 @@ export function McpMarketTab() {
 	const [input, setInput] = useState("");
 	const [committedQuery, setCommittedQuery] = useState("");
 	const [typeFilter, setTypeFilter] = useState<string>(ALL_TYPES);
+	const [registryUrl, setRegistryUrl] = useState<string | null>(null);
 	const install = useMcpInstall();
 
 	const {
@@ -55,7 +58,13 @@ export function McpMarketTab() {
 		isFetching,
 		isError,
 		refetch,
-	} = useQuery(mcpMarketSearchQueryOptions({ api, query: committedQuery }));
+	} = useQuery(
+		mcpMarketSearchQueryOptions({
+			api,
+			query: committedQuery,
+			registryUrl,
+		}),
+	);
 
 	const filteredServers =
 		typeFilter === ALL_TYPES
@@ -73,7 +82,8 @@ export function McpMarketTab() {
 
 	return (
 		<div className="flex flex-col gap-4">
-			<div className="flex items-center gap-2">
+			<div className="flex flex-wrap items-center gap-2">
+				<McpSourceSelector onChange={setRegistryUrl} />
 				<SearchField
 					value={input}
 					onChange={(value) => {
@@ -121,6 +131,18 @@ export function McpMarketTab() {
 						</ListBox>
 					</Select.Popover>
 				</Select>
+				<Button
+					isIconOnly
+					variant="ghost"
+					size="sm"
+					className="size-9 shrink-0"
+					aria-label={t("refresh")}
+					onPress={() => refetch()}
+				>
+					<ArrowPathIcon
+						className={cn("size-4", isFetching && "animate-spin")}
+					/>
+				</Button>
 			</div>
 
 			{isError ? (

@@ -1,4 +1,4 @@
-use mcp_catalog::Client;
+use mcp_catalog::{Client, ClientBuilder};
 use rocket::http::Status;
 use rocket::serde::json::Json;
 
@@ -9,14 +9,31 @@ use crate::error::ApiError;
 const DEFAULT_LIMIT: usize = 60;
 const MAX_LIMIT: usize = 100;
 
-/// Search the official MCP registry. An empty `q` returns the latest servers.
-#[get("/mcp-market/search?<q>&<limit>")]
+/// Search an MCP registry. Defaults to the official registry; `registry_url`
+/// points at a custom registry that implements the same API (self-hosted /
+/// sub-registry). An empty `q` returns the latest servers.
+#[get("/mcp-market/search?<q>&<limit>&<registry_url>")]
 pub async fn search_mcp_market(
 	_auth: ApiAuth,
 	q: Option<&str>,
 	limit: Option<usize>,
+	registry_url: Option<&str>,
 ) -> Result<Json<Vec<MarketMcpServer>>, ApiError> {
-	let client = Client::from_env().map_err(|e| {
+	let custom = registry_url.map(str::trim).filter(|url| !url.is_empty());
+	let client = match custom {
+		Some(url) => {
+			if !(url.starts_with("https://") || url.starts_with("http://")) {
+				return Err(ApiError::new(
+					Status::BadRequest,
+					"registry_url must be an http(s) URL",
+					"MCP_MARKET_INVALID_SOURCE",
+				));
+			}
+			ClientBuilder::new().api_url(url).build()
+		}
+		None => Client::from_env(),
+	}
+	.map_err(|e| {
 		ApiError::new(
 			Status::InternalServerError,
 			e.to_string(),

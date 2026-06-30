@@ -798,10 +798,15 @@ export function createApi(baseUrl: string, token: string) {
 			},
 		},
 		mcpMarket: {
-			search(q: string, limit?: number): Promise<MarketMcpServer[]> {
+			search(
+				q: string,
+				limit?: number,
+				registryUrl?: string,
+			): Promise<MarketMcpServer[]> {
 				const searchParams: Record<string, string> = {};
 				if (q) searchParams.q = q;
 				if (limit) searchParams.limit = String(limit);
+				if (registryUrl) searchParams.registry_url = registryUrl;
 				return client.get("mcp-market/search", { searchParams }).json();
 			},
 		},
