@@ -26,7 +26,7 @@
 		"@heroui/styles": "3.2.1",
 		"@lobehub/icons-static-svg": "^1.91.0",
 		"@opentelemetry/api-logs": "^0.219.0",
-		"@opentelemetry/exporter-logs-otlp-http": "^0.218.0",
+		"@opentelemetry/exporter-logs-otlp-http": "^0.219.0",
 		"@opentelemetry/resources": "^2.8.0",
 		"@opentelemetry/sdk-logs": "^0.219.0",
 		"@tanstack/react-query": "^5.100.14",
