@@ -78,16 +78,13 @@ function AgentFilterControl({ agentId, onChange }: AgentFilterControlProps) {
 	const { t } = useTranslation();
 	const { availableAgents } = useAgentAvailability();
 
+	// Only offer usable agents as filters; disabled agents are filtered back out
+	// by the resource lists downstream, so selecting one would show an empty page.
 	const installedAgents = useMemo(
 		() =>
 			[...availableAgents]
-				.filter((agent) => agent.availability.is_available)
-				.sort((a, b) => {
-					if (a.isDisabled !== b.isDisabled) {
-						return a.isDisabled ? 1 : -1;
-					}
-					return a.display_name.localeCompare(b.display_name);
-				}),
+				.filter((agent) => agent.isUsable)
+				.sort((a, b) => a.display_name.localeCompare(b.display_name)),
 		[availableAgents],
 	);
 
