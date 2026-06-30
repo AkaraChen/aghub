@@ -238,6 +238,30 @@ export function updateMarketplaceOneMutationOptions({
 	});
 }
 
+interface UpdateMarketplaceMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (
+		data: Awaited<ReturnType<ApiClient["plugins"]["updateMarketplace"]>>,
+	) => void | Promise<void>;
+}
+
+export function updateMarketplaceMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: UpdateMarketplaceMutationParams) {
+	return mutationOptions({
+		mutationFn: () => api.plugins.updateMarketplace(),
+		onSuccess: async (data) => {
+			await queryClient.invalidateQueries({
+				queryKey: queryKeys.plugins.market(),
+			});
+			await onSuccess?.(data);
+		},
+	});
+}
+
 export type { CCMarketplaceListResponse };
 
 interface CliStatusQueryParams {

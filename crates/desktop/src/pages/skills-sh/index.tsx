@@ -12,7 +12,7 @@ export default function SkillsShPage() {
 	const handleSearch = () => {
 		if (searchQuery.trim().length >= 2) {
 			setLocation(
-				`/skills-sh/search?q=${encodeURIComponent(searchQuery.trim())}`,
+				`/market/search?q=${encodeURIComponent(searchQuery.trim())}`,
 			);
 		}
 	};

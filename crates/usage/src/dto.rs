@@ -1,3 +1,8 @@
+//! ts-rs–exported usage & rate-limit DTOs — the wire contract for
+//! `GET /api/v1/usage/{summary,limits}`, regenerated into the desktop app's
+//! `generated/dto` via `crates/api/src/bin/export-dto.rs`. These types are the
+//! deliverable: every `pub` here has a TypeScript consumer.
+
 use serde::Serialize;
 use ts_rs::TS;
 

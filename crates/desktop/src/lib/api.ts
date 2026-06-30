@@ -65,6 +65,8 @@ import type {
 	CCPluginUpdateRequest,
 	CCPluginUpdateResponse,
 	UpdateSubAgentRequest,
+	UsageLimitsReportDto,
+	UsageReportDto,
 } from "../generated/dto";
 
 interface ApiErrorBody {
@@ -512,6 +514,26 @@ export function createApi(baseUrl: string, token: string) {
 					.json();
 			},
 		},
+		usage: {
+			summary(
+				params: {
+					since?: string;
+					until?: string;
+					timezone?: string;
+				} = {},
+			): Promise<UsageReportDto> {
+				const searchParams: Record<string, string> = {};
+				if (params.since) searchParams.since = params.since;
+				if (params.until) searchParams.until = params.until;
+				if (params.timezone) searchParams.timezone = params.timezone;
+				return client
+					.get("usage/summary", { searchParams, timeout: 60000 })
+					.json();
+			},
+			limits(): Promise<UsageLimitsReportDto> {
+				return client.get("usage/limits", { timeout: 30000 }).json();
+			},
+		},
 		integrations: {
 			listCodeEditors(): Promise<ToolInfoDto[]> {
 				return client.get("integrations/code-editors").json();
@@ -842,6 +864,16 @@ export function createApi(baseUrl: string, token: string) {
 			},
 			listMarket(): Promise<CCPluginMarketResponse[]> {
 				return client.get("plugins-market", { timeout: 30000 }).json();
+			},
+			updateMarketplace(): Promise<{
+				success: boolean;
+				updated_count: number;
+			}> {
+				return client
+					.post("plugins-market/update", {
+						timeout: 300000,
+					})
+					.json();
 			},
 			listMarketplaces(): Promise<CCMarketplaceListResponse> {
 				return client.get("plugins/marketplaces").json();

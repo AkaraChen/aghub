@@ -22,7 +22,8 @@ import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { CreateSubAgentPanel } from "../../components/create-sub-agent-panel";
-import { ListSearchHeader } from "../../components/list-search-header";
+import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
+import { useAgentFilter } from "../../hooks/use-agent-filter";
 import type { SubAgentGroup } from "../../components/sub-agent-detail";
 import { SubAgentDetail } from "../../components/sub-agent-detail";
 import type {
@@ -120,9 +121,15 @@ export default function SubAgentsPage() {
 		...subAgentListQueryOptions({ api, scope: "global" }),
 	});
 
+	const {
+		agentId: agentFilter,
+		setAgentId,
+		filtered: filteredSubAgents,
+	} = useAgentFilter(subAgents);
+
 	const groupedSubAgents = useMemo(() => {
 		const map = new Map<string, SubAgentGroup>();
-		for (const agent of subAgents) {
+		for (const agent of filteredSubAgents) {
 			const key = getSubAgentMergeKey(agent);
 			const existing = map.get(key);
 			if (existing) {
@@ -132,7 +139,7 @@ export default function SubAgentsPage() {
 			}
 		}
 		return Array.from(map.values());
-	}, [subAgents]);
+	}, [filteredSubAgents]);
 
 	const enabledAgentIds = useMemo(
 		() =>
@@ -273,139 +280,148 @@ export default function SubAgentsPage() {
 	});
 
 	return (
-		<div className="flex h-full">
-			{/* List panel */}
-			<div className="relative flex w-80 shrink-0 flex-col border-r border-border">
-				<ListSearchHeader
-					searchValue={searchQuery}
-					onSearchChange={setSearchQuery}
-					placeholder={t("searchSubAgents")}
-					ariaLabel={t("searchSubAgents")}
+		<div className="flex h-full flex-col">
+			<ResourcePageToolbar
+				agentFilter={{
+					agentId: agentFilter,
+					onChange: setAgentId,
+				}}
+				searchValue={searchQuery}
+				onSearchChange={setSearchQuery}
+				searchPlaceholder={t("searchSubAgents")}
+				searchAriaLabel={t("searchSubAgents")}
+			>
+				<Button
+					isIconOnly
+					variant="ghost"
+					size="sm"
+					className="shrink-0"
+					onPress={() => setPanel({ type: "create" })}
+					aria-label={t("createSubAgent")}
 				>
-					<Button
-						isIconOnly
-						variant="ghost"
-						size="sm"
-						className="shrink-0"
-						onPress={() => setPanel({ type: "create" })}
-						aria-label={t("createSubAgent")}
-					>
-						<PlusIcon className="size-4" />
-					</Button>
-				</ListSearchHeader>
+					<PlusIcon className="size-4" />
+				</Button>
+			</ResourcePageToolbar>
+			<div className="flex min-h-0 flex-1">
+				{/* List panel */}
+				<div className="relative flex w-80 shrink-0 flex-col border-r border-border">
+					<div className="flex-1 overflow-y-auto">
+						{filteredGroups.length === 0 ? (
+							<div className="flex h-full flex-col items-center justify-center gap-3 p-6">
+								<CpuChipIcon className="size-8 text-muted" />
+								<p className="text-center text-sm text-muted">
+									{t("noSubAgents")}
+								</p>
+							</div>
+						) : (
+							<ListBox
+								aria-label={t("subAgents")}
+								selectionMode="single"
+								selectionBehavior="replace"
+								selectedKeys={selectedListKey}
+								onSelectionChange={(keys) => {
+									if (keys === "all") return;
+									const key = [...keys][0] as
+										| string
+										| undefined;
+									if (!key) return;
+									setPanel({
+										type: "detail",
+										mergeKey: key,
+									});
+								}}
+								className="p-2"
+							>
+								{filteredGroups.map((group) => (
+									<ListBox.Item
+										key={group.mergeKey}
+										id={group.mergeKey}
+										textValue={group.items[0].name}
+										className="data-selected:bg-surface"
+									>
+										<div className="flex w-full items-center gap-2">
+											<CpuChipIcon className="size-4 shrink-0 text-muted" />
+											<Label className="flex-1 truncate">
+												{group.items[0].name}
+											</Label>
+											<SubAgentAgentIcons
+												items={group.items}
+											/>
+										</div>
+									</ListBox.Item>
+								))}
+							</ListBox>
+						)}
+					</div>
+				</div>
 
-				<div className="flex-1 overflow-y-auto">
-					{filteredGroups.length === 0 ? (
-						<div className="flex h-full flex-col items-center justify-center gap-3 p-6">
-							<CpuChipIcon className="size-8 text-muted" />
-							<p className="text-center text-sm text-muted">
-								{t("noSubAgents")}
-							</p>
+				{/* Detail / form panel */}
+				<div className="relative flex-1 overflow-hidden">
+					{panel.type === "empty" && (
+						<div className="flex h-full flex-col items-center justify-center gap-4">
+							<div className="text-center">
+								<p className="mb-2 text-sm text-muted">
+									{t("noSubAgentsDescription")}
+								</p>
+							</div>
+							<Button
+								onPress={() => setPanel({ type: "create" })}
+							>
+								<PlusIcon className="mr-2 size-4" />
+								{t("createSubAgent")}
+							</Button>
 						</div>
-					) : (
-						<ListBox
-							aria-label={t("subAgents")}
-							selectionMode="single"
-							selectionBehavior="replace"
-							selectedKeys={selectedListKey}
-							onSelectionChange={(keys) => {
-								if (keys === "all") return;
-								const key = [...keys][0] as string | undefined;
-								if (!key) return;
+					)}
+
+					{panel.type === "create" && (
+						<CreateSubAgentPanel
+							onDone={(created) => {
+								if (created) {
+									toast.success(t("subAgentCreated"));
+									setPanel({
+										type: "detail",
+										mergeKey: getSubAgentMergeKey(created),
+									});
+									return;
+								}
+								setPanel({ type: "empty" });
+							}}
+						/>
+					)}
+
+					{panel.type === "detail" && activeGroup && (
+						<SubAgentDetail
+							group={activeGroup}
+							onEdit={() =>
 								setPanel({
-									type: "detail",
-									mergeKey: key,
+									type: "edit",
+									mergeKey: panel.mergeKey,
+								})
+							}
+							onDelete={() => deleteMutation.mutate(activeGroup)}
+							isDeleting={deleteMutation.isPending}
+						/>
+					)}
+
+					{panel.type === "edit" && activeGroup && (
+						<SubAgentEditForm
+							agent={activeGroup.items[0]}
+							onSave={(body) => {
+								updateMutation.mutate({
+									group: activeGroup,
+									body,
 								});
 							}}
-							className="p-2"
-						>
-							{filteredGroups.map((group) => (
-								<ListBox.Item
-									key={group.mergeKey}
-									id={group.mergeKey}
-									textValue={group.items[0].name}
-									className="data-selected:bg-surface"
-								>
-									<div className="flex w-full items-center gap-2">
-										<CpuChipIcon className="size-4 shrink-0 text-muted" />
-										<Label className="flex-1 truncate">
-											{group.items[0].name}
-										</Label>
-										<SubAgentAgentIcons
-											items={group.items}
-										/>
-									</div>
-								</ListBox.Item>
-							))}
-						</ListBox>
-					)}
-				</div>
-			</div>
-
-			{/* Detail / form panel */}
-			<div className="relative flex-1 overflow-hidden">
-				{panel.type === "empty" && (
-					<div className="flex h-full flex-col items-center justify-center gap-4">
-						<div className="text-center">
-							<p className="mb-2 text-sm text-muted">
-								{t("noSubAgentsDescription")}
-							</p>
-						</div>
-						<Button onPress={() => setPanel({ type: "create" })}>
-							<PlusIcon className="mr-2 size-4" />
-							{t("createSubAgent")}
-						</Button>
-					</div>
-				)}
-
-				{panel.type === "create" && (
-					<CreateSubAgentPanel
-						onDone={(created) => {
-							if (created) {
-								toast.success(t("subAgentCreated"));
+							isLoading={updateMutation.isPending}
+							onCancel={() =>
 								setPanel({
 									type: "detail",
-									mergeKey: getSubAgentMergeKey(created),
-								});
-								return;
+									mergeKey: panel.mergeKey,
+								})
 							}
-							setPanel({ type: "empty" });
-						}}
-					/>
-				)}
-
-				{panel.type === "detail" && activeGroup && (
-					<SubAgentDetail
-						group={activeGroup}
-						onEdit={() =>
-							setPanel({
-								type: "edit",
-								mergeKey: panel.mergeKey,
-							})
-						}
-						onDelete={() => deleteMutation.mutate(activeGroup)}
-						isDeleting={deleteMutation.isPending}
-					/>
-				)}
-
-				{panel.type === "edit" && activeGroup && (
-					<SubAgentEditForm
-						agent={activeGroup.items[0]}
-						onSave={(body) => {
-							updateMutation.mutate({
-								group: activeGroup,
-								body,
-							});
-						}}
-						isLoading={updateMutation.isPending}
-						onCancel={() =>
-							setPanel({
-								type: "detail",
-								mergeKey: panel.mergeKey,
-							})
-						}
-					/>
-				)}
+						/>
+					)}
+				</div>
 			</div>
 		</div>
 	);
