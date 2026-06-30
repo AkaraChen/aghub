@@ -133,6 +133,7 @@ export function GlobalSearch() {
 			{showPopover && (
 				<div
 					role="listbox"
+					aria-label={t("globalSearchLabel")}
 					className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[60vh] overflow-y-auto rounded-md border border-border bg-surface shadow-lg"
 				>
 					{flatMatches.length === 0 && !isMarketFetching ? (
