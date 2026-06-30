@@ -41,7 +41,7 @@ log = "0.4.31"
 
 # CLI dependencies
 clap = { version = "4.5", features = [ "derive" ] }
-tabled = "0.20"
+tabled = "0.21"
 anyhow = "1.0"
 colored = "3.0"
 
