@@ -903,6 +903,7 @@ export default {
 		math: "数学",
 		migration: "迁移",
 		monitoring: "监控",
+		other: "其他",
 		productivity: "生产力",
 		search: "搜索",
 		security: "安全",
