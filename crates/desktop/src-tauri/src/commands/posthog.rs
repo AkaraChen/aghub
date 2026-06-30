@@ -7,7 +7,6 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::OnceLock;
-use std::time::Instant;
 use tauri::{AppHandle, Manager};
 use tokio::sync::OnceCell;
 use uuid::Uuid;
@@ -208,20 +207,10 @@ pub async fn posthog_capture(
 	apply_default_properties(&mut ev);
 	apply_properties(&mut ev, properties);
 
-	let event_label = event.clone();
-	tokio::spawn(async move {
-		let started = Instant::now();
-		match client.capture(ev).await {
-			Ok(()) => debug!(
-				"posthog: capture {event_label} sent in {:?}",
-				started.elapsed()
-			),
-			Err(error) => warn!(
-				"posthog: capture {event_label} failed after {:?}: {error}",
-				started.elapsed()
-			),
-		}
-	});
+	// posthog-rs 0.15 `capture` enqueues into the client's background sender and
+	// returns immediately — there is no per-event send result to await or log.
+	client.capture(ev);
+	debug!("posthog: capture {event} dispatched");
 	Ok(())
 }
 
@@ -266,20 +255,8 @@ pub async fn posthog_identify(
 		}
 	}
 
-	let id_label = distinct_id.clone();
-	tokio::spawn(async move {
-		let started = Instant::now();
-		match client.capture(ev).await {
-			Ok(()) => debug!(
-				"posthog: identify {id_label} sent in {:?}",
-				started.elapsed()
-			),
-			Err(error) => warn!(
-				"posthog: identify {id_label} failed after {:?}: {error}",
-				started.elapsed()
-			),
-		}
-	});
+	client.capture(ev);
+	debug!("posthog: identify {distinct_id} dispatched");
 	Ok(())
 }
 
