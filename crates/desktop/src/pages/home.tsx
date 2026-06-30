@@ -58,20 +58,16 @@ export default function HomePage() {
 	);
 	const { data: limitsReport } = useQuery(usageLimitsQueryOptions({ api }));
 
-	const installedAgents = useMemo(
-		() =>
-			availableAgents.filter((agent) => agent.availability.is_available),
-		[availableAgents],
-	);
-
+	// Show every agent and let agentStatus() classify it — pre-filtering by
+	// is_available here would make the "missing" state unreachable on the grid.
 	const readyCount = useMemo(
-		() => installedAgents.filter((a) => agentStatus(a) === "ready").length,
-		[installedAgents],
+		() => availableAgents.filter((a) => agentStatus(a) === "ready").length,
+		[availableAgents],
 	);
 
 	const countsByAgent = useMemo(() => {
 		const map = new Map<string, { skills: number; mcps: number }>();
-		for (const agent of installedAgents) {
+		for (const agent of availableAgents) {
 			map.set(agent.id, {
 				skills: skills.filter((s) => !s.agent || s.agent === agent.id)
 					.length,
@@ -80,7 +76,7 @@ export default function HomePage() {
 			});
 		}
 		return map;
-	}, [installedAgents, skills, mcps]);
+	}, [availableAgents, skills, mcps]);
 
 	const usageByAgent = useMemo(() => {
 		const map = new Map<string, AgentUsageDto>();
@@ -106,7 +102,7 @@ export default function HomePage() {
 		const statusOrder = { ready: 0, missing: 1, disabled: 2 } as const;
 		const usageRank = (id: string) =>
 			id === "claude" ? 0 : id === "codex" ? 1 : 2;
-		return [...installedAgents].sort((a, b) => {
+		return [...availableAgents].sort((a, b) => {
 			const byUsage = usageRank(a.id) - usageRank(b.id);
 			if (byUsage !== 0) return byUsage;
 			const byStatus =
@@ -114,7 +110,7 @@ export default function HomePage() {
 			if (byStatus !== 0) return byStatus;
 			return a.display_name.localeCompare(b.display_name);
 		});
-	}, [installedAgents]);
+	}, [availableAgents]);
 
 	return (
 		<div className="h-full overflow-y-auto">
@@ -126,7 +122,7 @@ export default function HomePage() {
 					<p className="text-sm text-muted">
 						{t("homeSubtitle", {
 							ready: readyCount,
-							total: installedAgents.length,
+							total: availableAgents.length,
 						})}
 					</p>
 				</header>
