@@ -194,8 +194,12 @@ fn build_rocket(
 		.manage(crate::state::GitCloneSessions::default())
 		.manage(crate::state::InferenceProviderState {
 			store: aghub_inference::InferenceProviderStore::new(
-				options.app_data_dir,
+				options.app_data_dir.clone(),
 			),
+		})
+		.manage(crate::state::PromptState {
+			app_data_dir: options.app_data_dir,
+			write_lock: std::sync::Mutex::new(()),
 		})
 		.manage(crate::state::UsageState {
 			runtime: usage_runtime,
@@ -240,6 +244,11 @@ fn build_rocket(
 				routes::sub_agents::delete_sub_agent,
 				routes::sub_agents::transfer_sub_agent_route,
 				routes::sub_agents::reconcile_sub_agent_route,
+				routes::prompts::list_prompts,
+				routes::prompts::get_prompt,
+				routes::prompts::create_prompt,
+				routes::prompts::update_prompt,
+				routes::prompts::delete_prompt,
 				routes::integrations::list_code_editors,
 				routes::integrations::open_with_editor,
 				routes::integrations::get_preferences,
@@ -3027,6 +3036,73 @@ mod tests {
 		assert_eq!(response.status(), Status::Ok);
 		let body = response_json(response);
 		assert_eq!(body.as_array().expect("sub-agent list").len(), 0);
+	}
+
+	#[test]
+	fn route_prompt_create_update_delete_persists_library() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+
+		let empty = post_json(
+			&client,
+			"/api/v1/prompts",
+			json!({ "title": "   ", "content": "x" }),
+		);
+		assert_json_error(empty, Status::BadRequest, "INVALID_PARAM");
+
+		let response = post_json(
+			&client,
+			"/api/v1/prompts",
+			json!({
+				"title": "Greeting",
+				"description": "  a greeting  ",
+				"content": "Hello {{ name }}",
+				"tags": ["chat", " chat ", ""],
+			}),
+		);
+		assert_eq!(response.status(), Status::Created);
+		let body = response_json(response);
+		assert_eq!(body["title"], "Greeting");
+		assert_eq!(body["description"], "a greeting");
+		assert_eq!(body["tags"], json!(["chat"]));
+		assert_eq!(body["variables"], json!(["name"]));
+		let id = body["id"].as_str().expect("prompt id").to_string();
+
+		let prompts_file = app_data_dir.path().join("prompts.json");
+		assert!(prompts_file.exists(), "library file should be persisted");
+
+		let item_uri = format!("/api/v1/prompts/{id}");
+		let response = put_json(
+			&client,
+			&item_uri,
+			json!({ "content": "Bye {{ name }} and {{ team }}" }),
+		);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["title"], "Greeting");
+		assert_eq!(body["description"], "a greeting");
+		assert_eq!(body["variables"], json!(["name", "team"]));
+
+		// An explicit empty string clears the description.
+		let response =
+			put_json(&client, &item_uri, json!({ "description": "" }));
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert!(body["description"].is_null());
+
+		let response = get_auth(&client, "/api/v1/prompts");
+		let body = response_json(response);
+		assert_eq!(body.as_array().expect("prompt list").len(), 1);
+
+		let response = delete_auth(&client, &item_uri);
+		assert_eq!(response.status(), Status::NoContent);
+
+		let missing = get_auth(&client, &item_uri);
+		assert_json_error(missing, Status::NotFound, "RESOURCE_NOT_FOUND");
+
+		let response = get_auth(&client, "/api/v1/prompts");
+		let body = response_json(response);
+		assert_eq!(body.as_array().expect("prompt list").len(), 0);
 	}
 
 	#[test]

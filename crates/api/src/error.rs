@@ -1,5 +1,6 @@
 use aghub_core::errors::ConfigError;
 use aghub_inference::{InferenceProviderError, ModelDiscoveryError};
+use aghub_prompt::PromptError;
 use rocket::http::{ContentType, Status};
 use rocket::response::{self, Responder};
 use rocket::serde::json::serde_json;
@@ -232,6 +233,28 @@ impl From<ModelDiscoveryError> for ApiError {
 				Status::BadGateway,
 				error.to_string(),
 				"UPSTREAM_RESPONSE_FAILED",
+			),
+		}
+	}
+}
+
+impl From<PromptError> for ApiError {
+	fn from(e: PromptError) -> Self {
+		match e {
+			PromptError::NotFound(_) => ApiError::new(
+				Status::NotFound,
+				e.to_string(),
+				"RESOURCE_NOT_FOUND",
+			),
+			PromptError::EmptyTitle => ApiError::new(
+				Status::BadRequest,
+				e.to_string(),
+				"INVALID_PARAM",
+			),
+			PromptError::Io(_) | PromptError::Json(_) => ApiError::new(
+				Status::InternalServerError,
+				e.to_string(),
+				"PROMPT_STORE_ERROR",
 			),
 		}
 	}

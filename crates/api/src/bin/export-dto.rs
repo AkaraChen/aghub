@@ -54,6 +54,7 @@ use aghub_api::dto::{
 		CCPluginUpdateResponse, CCPluginValidateRequest,
 		CCPluginValidateResponse,
 	},
+	prompt::{CreatePromptRequest, PromptResponse, UpdatePromptRequest},
 	skill::{
 		CreateSkillRequest, DeleteSkillByPathRequest,
 		DeleteSkillByPathResponse, GitInstallRequest, GitInstallResponse,
@@ -252,6 +253,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<CreateSubAgentRequest>(&cfg)?;
 	export_type::<UpdateSubAgentRequest>(&cfg)?;
 	export_type::<SubAgentResponse>(&cfg)?;
+	export_type::<PromptResponse>(&cfg)?;
+	export_type::<CreatePromptRequest>(&cfg)?;
+	export_type::<UpdatePromptRequest>(&cfg)?;
 	export_type::<CCPluginResponse>(&cfg)?;
 	export_type::<CCPluginScopeResponse>(&cfg)?;
 	export_type::<CCPluginSourceInfoResponse>(&cfg)?;
