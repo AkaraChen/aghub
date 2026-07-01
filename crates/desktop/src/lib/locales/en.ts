@@ -939,7 +939,7 @@ export default {
 	marketTabSkillsSh: "Skills.sh",
 	marketTabMcp: "MCP Marketplace",
 	marketTabClaudePlugins: "Claude Code Plugins",
-	marketTabGithub: "Import from GitHub",
+	marketTabGithub: "Import Skills from GitHub",
 	marketClaudePluginsComingSoonTitle: "Claude Code Plugins — coming soon",
 	marketClaudePluginsComingSoonHint:
 		"Browse and install Claude Code plugins right from aghub. We're aggregating the official plugin registry — check back soon.",

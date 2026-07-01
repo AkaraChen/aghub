@@ -29,10 +29,6 @@ function navItemClasses(isActive: boolean) {
 	);
 }
 
-function Separator() {
-	return <hr className="border-t border-border" aria-hidden="true" />;
-}
-
 function SectionLabel({ children }: { children: React.ReactNode }) {
 	return (
 		<h2 className="px-2 text-xs font-medium tracking-wider text-muted uppercase">
@@ -126,8 +122,6 @@ export function AppSidebar() {
 						)}
 					</nav>
 
-					<Separator />
-
 					<section
 						className="flex flex-col gap-1"
 						data-tour="resources-section"
@@ -187,8 +181,6 @@ export function AppSidebar() {
 						</nav>
 					</section>
 
-					<Separator />
-
 					<nav className="flex flex-col gap-0.5">
 						<Link
 							href="/inference-providers"
@@ -203,8 +195,6 @@ export function AppSidebar() {
 							<span>{t("inferenceProviders")}</span>
 						</Link>
 					</nav>
-
-					<Separator />
 
 					<div data-tour="project-section">
 						<ProjectList />

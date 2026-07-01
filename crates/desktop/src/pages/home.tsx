@@ -1,7 +1,7 @@
 import { PlusIcon } from "@heroicons/react/24/solid";
-import { Button } from "@heroui/react";
+import { Tabs } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import { AgentOverviewCard } from "../components/agent-overview-card";
@@ -18,6 +18,7 @@ import {
 } from "../requests/usage";
 
 const USAGE_WINDOW_DAYS = 30;
+type AgentFilter = "enabled" | "all";
 
 function toCompactYmd(date: Date): string {
 	const year = date.getFullYear();
@@ -31,6 +32,7 @@ export default function HomePage() {
 	const [, setLocation] = useLocation();
 	const api = useApi();
 	const { availableAgents } = useAgentAvailability();
+	const [agentFilter, setAgentFilter] = useState<AgentFilter>("enabled");
 
 	const { data: skills = [] } = useQuery(
 		skillListQueryOptions({ api, scope: "global" }),
@@ -53,10 +55,12 @@ export default function HomePage() {
 	// Usage is best-effort: only Claude/Codex report it, and an agent that
 	// isn't logged in lands in the report's `warnings` with no entry. Cards
 	// without an entry simply omit the usage section.
-	const { data: usageReport } = useQuery(
+	const { data: usageReport, isLoading: isUsageLoading } = useQuery(
 		usageSummaryQueryOptions({ api, ...usageRange }),
 	);
-	const { data: limitsReport } = useQuery(usageLimitsQueryOptions({ api }));
+	const { data: limitsReport, isLoading: isLimitsLoading } = useQuery(
+		usageLimitsQueryOptions({ api }),
+	);
 
 	const installedAgents = useMemo(
 		() =>
@@ -68,6 +72,11 @@ export default function HomePage() {
 		() => installedAgents.filter((a) => agentStatus(a) === "ready").length,
 		[installedAgents],
 	);
+
+	const visibleAgents = useMemo(() => {
+		if (agentFilter === "all") return installedAgents;
+		return installedAgents.filter((agent) => !agent.isDisabled);
+	}, [agentFilter, installedAgents]);
 
 	const countsByAgent = useMemo(() => {
 		const map = new Map<string, { skills: number; mcps: number }>();
@@ -106,7 +115,7 @@ export default function HomePage() {
 		const statusOrder = { ready: 0, missing: 1, disabled: 2 } as const;
 		const usageRank = (id: string) =>
 			id === "claude" ? 0 : id === "codex" ? 1 : 2;
-		return [...installedAgents].sort((a, b) => {
+		return [...visibleAgents].sort((a, b) => {
 			const byUsage = usageRank(a.id) - usageRank(b.id);
 			if (byUsage !== 0) return byUsage;
 			const byStatus =
@@ -114,21 +123,51 @@ export default function HomePage() {
 			if (byStatus !== 0) return byStatus;
 			return a.display_name.localeCompare(b.display_name);
 		});
-	}, [installedAgents]);
+	}, [visibleAgents]);
 
 	return (
 		<div className="h-full overflow-y-auto">
 			<div className="mx-auto w-full max-w-6xl p-4 sm:p-6">
-				<header className="mb-6 flex flex-col gap-1">
-					<h1 className="text-2xl font-semibold tracking-tight">
-						{t("homeTitle")}
-					</h1>
-					<p className="text-sm text-muted">
-						{t("homeSubtitle", {
-							ready: readyCount,
-							total: installedAgents.length,
-						})}
-					</p>
+				<header className="mb-6 flex flex-wrap items-center justify-between gap-3">
+					<div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+						<h1 className="text-2xl font-semibold tracking-tight">
+							{t("homeTitle")}
+						</h1>
+						<p className="text-sm text-muted">
+							{t("homeSubtitle", {
+								ready: readyCount,
+								total: installedAgents.length,
+							})}
+						</p>
+					</div>
+					<Tabs
+						selectedKey={agentFilter}
+						onSelectionChange={(key) =>
+							setAgentFilter(String(key) as AgentFilter)
+						}
+					>
+						<Tabs.ListContainer>
+							<Tabs.List
+								aria-label={t("agents")}
+								className="inline-flex w-auto"
+							>
+								<Tabs.Tab
+									id="enabled"
+									className="px-3 whitespace-nowrap"
+								>
+									{t("enabled")}
+									<Tabs.Indicator />
+								</Tabs.Tab>
+								<Tabs.Tab
+									id="all"
+									className="px-3 whitespace-nowrap"
+								>
+									{t("all")}
+									<Tabs.Indicator />
+								</Tabs.Tab>
+							</Tabs.List>
+						</Tabs.ListContainer>
+					</Tabs>
 				</header>
 
 				<section
@@ -137,6 +176,8 @@ export default function HomePage() {
 				>
 					{sortedAgents.map((agent) => {
 						const counts = countsByAgent.get(agent.id);
+						const hasUsage =
+							agent.id === "claude" || agent.id === "codex";
 						return (
 							<AgentOverviewCard
 								key={agent.id}
@@ -145,6 +186,10 @@ export default function HomePage() {
 								mcpCount={counts?.mcps ?? 0}
 								usage={usageByAgent.get(agent.id)}
 								limits={limitsByAgent.get(agent.id)}
+								isUsageLoading={
+									hasUsage &&
+									(isUsageLoading || isLimitsLoading)
+								}
 							/>
 						);
 					})}
@@ -159,26 +204,6 @@ export default function HomePage() {
 						<PlusIcon className="size-5 text-muted transition-colors group-hover/add:text-accent group-focus-visible/add:text-accent" />
 						<p className="text-sm font-medium">{t("addAgent")}</p>
 					</button>
-				</section>
-
-				<section className="mt-8">
-					<h2 className="mb-2 text-sm font-medium tracking-wider text-muted uppercase">
-						{t("quickActions")}
-					</h2>
-					<div className="flex flex-wrap gap-2">
-						<Button
-							variant="secondary"
-							onPress={() => setLocation("/market")}
-						>
-							{t("browseMarket")}
-						</Button>
-						<Button
-							variant="tertiary"
-							onPress={() => setLocation("/settings?tab=agents")}
-						>
-							{t("manageAgents")}
-						</Button>
-					</div>
 				</section>
 			</div>
 		</div>

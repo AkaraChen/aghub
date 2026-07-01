@@ -916,7 +916,7 @@ export default {
 	marketTabSkillsSh: "Skills.sh",
 	marketTabMcp: "MCP 市集",
 	marketTabClaudePlugins: "Claude Code 外掛",
-	marketTabGithub: "從 GitHub 匯入",
+	marketTabGithub: "從 GitHub 匯入技能",
 	marketClaudePluginsComingSoonTitle: "Claude Code 外掛 — 即將推出",
 	marketClaudePluginsComingSoonHint:
 		"在 aghub 中瀏覽並安裝 Claude Code 外掛。我們正在整合官方外掛註冊表，敬請期待。",
