@@ -228,14 +228,29 @@ function McpMarketTab() {
 	);
 }
 
-function ClaudePluginsTab() {
-	return <PluginMarketContent enabled variant="page" />;
+function ClaudePluginsTab({
+	installScope,
+}: {
+	installScope: "global" | "project" | "local";
+}) {
+	return (
+		<PluginMarketContent
+			enabled
+			variant="page"
+			installScope={installScope}
+		/>
+	);
 }
 
 export default function MarketPage() {
 	const { t } = useTranslation();
 	const [tabParam] = useQueryState("tab");
 	const activeTab = resolveMarketTab(tabParam);
+	const [scopeParam] = useQueryState("scope", { defaultValue: "global" });
+	const pluginInstallScope: "global" | "project" | "local" =
+		scopeParam === "project" || scopeParam === "local"
+			? scopeParam
+			: "global";
 
 	return (
 		<div className="flex h-full flex-col">
@@ -262,7 +277,7 @@ export default function MarketPage() {
 				)}
 				{activeTab === "claude-plugins" && (
 					<Suspense fallback={<TabFallback />}>
-						<ClaudePluginsTab />
+						<ClaudePluginsTab installScope={pluginInstallScope} />
 					</Suspense>
 				)}
 				{activeTab === "github" && (

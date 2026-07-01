@@ -225,7 +225,9 @@ export default function PluginsPage() {
 					onSearchChange={setSearchQuery}
 					onSelectionChange={handleSelectionChange}
 					onOpenMarket={() =>
-						setLocation("/market?tab=claude-plugins")
+						setLocation(
+							`/market?tab=claude-plugins&scope=${marketInstallScope}`,
+						)
 					}
 					onToggleMultiSelect={toggleMultiSelect}
 					onRefresh={() => void handleRefresh()}

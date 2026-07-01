@@ -916,6 +916,7 @@ export default {
 		math: "Math",
 		migration: "Migration",
 		monitoring: "Monitoring",
+		other: "Other",
 		productivity: "Productivity",
 		search: "Search",
 		security: "Security",

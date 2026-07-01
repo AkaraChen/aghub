@@ -62,25 +62,21 @@ export default function HomePage() {
 		usageLimitsQueryOptions({ api }),
 	);
 
-	const installedAgents = useMemo(
-		() =>
-			availableAgents.filter((agent) => agent.availability.is_available),
+	// Show every agent and let agentStatus() classify it — pre-filtering by
+	// is_available here would make the "missing" state unreachable on the grid.
+	const readyCount = useMemo(
+		() => availableAgents.filter((a) => agentStatus(a) === "ready").length,
 		[availableAgents],
 	);
 
-	const readyCount = useMemo(
-		() => installedAgents.filter((a) => agentStatus(a) === "ready").length,
-		[installedAgents],
-	);
-
 	const visibleAgents = useMemo(() => {
-		if (agentFilter === "all") return installedAgents;
-		return installedAgents.filter((agent) => !agent.isDisabled);
-	}, [agentFilter, installedAgents]);
+		if (agentFilter === "all") return availableAgents;
+		return availableAgents.filter((agent) => !agent.isDisabled);
+	}, [agentFilter, availableAgents]);
 
 	const countsByAgent = useMemo(() => {
 		const map = new Map<string, { skills: number; mcps: number }>();
-		for (const agent of installedAgents) {
+		for (const agent of availableAgents) {
 			map.set(agent.id, {
 				skills: skills.filter((s) => !s.agent || s.agent === agent.id)
 					.length,
@@ -89,7 +85,7 @@ export default function HomePage() {
 			});
 		}
 		return map;
-	}, [installedAgents, skills, mcps]);
+	}, [availableAgents, skills, mcps]);
 
 	const usageByAgent = useMemo(() => {
 		const map = new Map<string, AgentUsageDto>();
@@ -136,7 +132,7 @@ export default function HomePage() {
 						<p className="text-sm text-muted">
 							{t("homeSubtitle", {
 								ready: readyCount,
-								total: installedAgents.length,
+								total: availableAgents.length,
 							})}
 						</p>
 					</div>

@@ -899,6 +899,7 @@ export default {
 		math: "數學",
 		migration: "遷移",
 		monitoring: "監控",
+		other: "其他",
 		productivity: "生產力",
 		search: "搜尋",
 		security: "安全",

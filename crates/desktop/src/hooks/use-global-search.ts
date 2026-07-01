@@ -61,17 +61,22 @@ export function useGlobalSearch({
 		[availableAgents],
 	);
 
+	const trimmed = query.trim();
+
+	// Defer the local resource lists until the user actually searches — this
+	// hook is mounted from the sidebar on every page.
 	const { data: skills = [] } = useQuery({
 		...skillListQueryOptions({ api, scope: "global" }),
+		enabled: trimmed.length > 0,
 	});
 	const { data: mcps = [] } = useQuery({
 		...mcpListQueryOptions({ api, scope: "global" }),
+		enabled: trimmed.length > 0,
 	});
 	const { data: subAgents = [] } = useQuery({
 		...subAgentListQueryOptions({ api, scope: "global" }),
+		enabled: trimmed.length > 0,
 	});
-
-	const trimmed = query.trim();
 	const debouncedTrimmed = useDebouncedValue(trimmed, LIBRARY_DEBOUNCE_MS);
 
 	const { data: marketResults = [], isFetching: isMarketFetching } = useQuery<
