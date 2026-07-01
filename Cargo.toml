@@ -13,6 +13,7 @@ members = [
 	"crates/inference",
 	"crates/cc-plugins",
 	"crates/usage",
+	"crates/prompt",
 	"crates/desktop/src-tauri",
 ]
 resolver = "2"
