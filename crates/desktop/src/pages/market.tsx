@@ -1,15 +1,14 @@
 import {
 	BuildingStorefrontIcon,
-	CodeBracketIcon,
-	PuzzlePieceIcon,
 	ServerIcon,
 	SparklesIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Card, Spinner, Surface, Tabs } from "@heroui/react";
+import { Button, Card, Spinner } from "@heroui/react";
 import { useQueryState } from "nuqs";
 import { lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
+import { resolveMarketTab } from "../lib/market-tabs";
 import { cn } from "../lib/utils";
 import SkillsShPage from "./skills-sh";
 
@@ -31,14 +30,6 @@ function TabFallback() {
 		</div>
 	);
 }
-
-const MARKET_TAB_IDS = [
-	"skills-sh",
-	"mcp",
-	"claude-plugins",
-	"github",
-] as const;
-type MarketTabId = (typeof MARKET_TAB_IDS)[number];
 
 interface McpMarketEntry {
 	id: string;
@@ -158,10 +149,6 @@ const MOCK_MCP_SERVERS: McpMarketEntry[] = [
 	},
 ];
 
-function isMarketTabId(value: string | null): value is MarketTabId {
-	return MARKET_TAB_IDS.includes(value as MarketTabId);
-}
-
 function McpMarketTab() {
 	const { t } = useTranslation();
 	const [, setLocation] = useLocation();
@@ -247,12 +234,8 @@ function ClaudePluginsTab() {
 
 export default function MarketPage() {
 	const { t } = useTranslation();
-	const [tabParam, setTabParam] = useQueryState("tab", {
-		defaultValue: "skills-sh",
-	});
-	const activeTab: MarketTabId = isMarketTabId(tabParam)
-		? tabParam
-		: "skills-sh";
+	const [tabParam] = useQueryState("tab");
+	const activeTab = resolveMarketTab(tabParam);
 
 	return (
 		<div className="flex h-full flex-col">
@@ -269,66 +252,6 @@ export default function MarketPage() {
 					</p>
 				</div>
 			</header>
-
-			<Surface
-				variant="secondary"
-				className="border-b border-border px-4 py-2"
-			>
-				<Tabs
-					selectedKey={activeTab}
-					onSelectionChange={(key) =>
-						setTabParam(String(key) as MarketTabId)
-					}
-				>
-					<Tabs.ListContainer>
-						<Tabs.List
-							aria-label={t("marketSections")}
-							className="inline-flex w-auto"
-						>
-							<Tabs.Tab
-								id="skills-sh"
-								className="px-4 whitespace-nowrap"
-							>
-								<span className="flex items-center gap-1.5">
-									<SparklesIcon className="size-3.5" />
-									{t("marketTabSkillsSh")}
-								</span>
-								<Tabs.Indicator />
-							</Tabs.Tab>
-							<Tabs.Tab
-								id="mcp"
-								className="px-4 whitespace-nowrap"
-							>
-								<span className="flex items-center gap-1.5">
-									<ServerIcon className="size-3.5" />
-									{t("marketTabMcp")}
-								</span>
-								<Tabs.Indicator />
-							</Tabs.Tab>
-							<Tabs.Tab
-								id="claude-plugins"
-								className="px-4 whitespace-nowrap"
-							>
-								<span className="flex items-center gap-1.5">
-									<PuzzlePieceIcon className="size-3.5" />
-									{t("marketTabClaudePlugins")}
-								</span>
-								<Tabs.Indicator />
-							</Tabs.Tab>
-							<Tabs.Tab
-								id="github"
-								className="px-4 whitespace-nowrap"
-							>
-								<span className="flex items-center gap-1.5">
-									<CodeBracketIcon className="size-3.5" />
-									{t("marketTabGithub")}
-								</span>
-								<Tabs.Indicator />
-							</Tabs.Tab>
-						</Tabs.List>
-					</Tabs.ListContainer>
-				</Tabs>
-			</Surface>
 
 			<div className="min-h-0 flex-1 overflow-y-auto">
 				{activeTab === "skills-sh" && <SkillsShPage />}
