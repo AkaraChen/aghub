@@ -53,6 +53,9 @@ import type {
 	CCPluginOpenSkillInEditorRequest,
 	CCPluginResponse,
 	ProjectSkillLockResponse,
+	CreatePromptRequest,
+	PromptResponse,
+	UpdatePromptRequest,
 	ReconcileRequest,
 	SkillResponse,
 	SkillCopyResolutionRequest,
@@ -637,6 +640,26 @@ export function createApi(baseUrl: string, token: string) {
 				return client
 					.post("sub-agents/reconcile", { json: body })
 					.json();
+			},
+		},
+		prompts: {
+			list(): Promise<PromptResponse[]> {
+				return client.get("prompts").json();
+			},
+			get(id: string): Promise<PromptResponse> {
+				return client.get(`prompts/${id}`).json();
+			},
+			create(body: CreatePromptRequest): Promise<PromptResponse> {
+				return client.post("prompts", { json: body }).json();
+			},
+			update(
+				id: string,
+				body: UpdatePromptRequest,
+			): Promise<PromptResponse> {
+				return client.put(`prompts/${id}`, { json: body }).json();
+			},
+			delete(id: string): Promise<void> {
+				return client.delete(`prompts/${id}`).then(() => undefined);
 			},
 		},
 		market: {

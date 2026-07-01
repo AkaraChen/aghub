@@ -88,6 +88,7 @@ export const SIDEBAR_ITEM_IDS = [
 	"skills",
 	"mcp",
 	"subAgents",
+	"prompts",
 	"ccPlugins",
 	"inferenceProviders",
 ] as const;

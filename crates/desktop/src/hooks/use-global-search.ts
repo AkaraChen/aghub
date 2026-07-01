@@ -4,16 +4,19 @@ import { useEffect, useMemo, useState } from "react";
 import type {
 	MarketSkill,
 	McpResponse,
+	PromptResponse,
 	SkillResponse,
 	SubAgentResponse,
 } from "../generated/dto";
 import { useAgentAvailability } from "./use-agent-availability";
 import { useApi } from "./use-api";
 import { mcpListQueryOptions } from "../requests/mcps";
+import { promptListQueryOptions } from "../requests/prompts";
 import { skillListQueryOptions } from "../requests/skills";
 import { subAgentListQueryOptions } from "../requests/sub-agents";
 
-export type ResourceKind = "agent" | "skill" | "mcp" | "sub-agent" | "library";
+export type ResourceKind =
+	"agent" | "skill" | "mcp" | "sub-agent" | "prompt" | "library";
 
 export interface SearchMatch {
 	kind: ResourceKind;
@@ -77,6 +80,10 @@ export function useGlobalSearch({
 		...subAgentListQueryOptions({ api, scope: "global" }),
 		enabled: trimmed.length > 0,
 	});
+	const { data: prompts = [] } = useQuery({
+		...promptListQueryOptions({ api }),
+		enabled: trimmed.length > 0,
+	});
 	const debouncedTrimmed = useDebouncedValue(trimmed, LIBRARY_DEBOUNCE_MS);
 
 	const { data: marketResults = [], isFetching: isMarketFetching } = useQuery<
@@ -132,6 +139,19 @@ export function useGlobalSearch({
 				ignoreLocation: true,
 			}),
 		[subAgents],
+	);
+	const promptFuse = useMemo(
+		() =>
+			new Fuse(prompts, {
+				keys: [
+					{ name: "title", weight: 2 },
+					{ name: "tags", weight: 1 },
+					{ name: "description", weight: 1 },
+				],
+				threshold: 0.4,
+				ignoreLocation: true,
+			}),
+		[prompts],
 	);
 
 	const groups = useMemo<SearchGroup[]>(() => {
@@ -205,6 +225,20 @@ export function useGlobalSearch({
 			};
 		});
 
+		const promptMatches: SearchMatch[] = cap(
+			promptFuse.search(trimmed),
+		).map(({ item }) => {
+			const prompt = item as PromptResponse;
+			return {
+				kind: "prompt",
+				id: `prompt:${prompt.id}`,
+				name: prompt.title,
+				subtitle: prompt.description,
+				agentId: null,
+				href: `/prompts?prompt=${encodeURIComponent(prompt.id)}`,
+			};
+		});
+
 		const libraryMatches: SearchMatch[] = marketResults.map((item) => ({
 			kind: "library",
 			id: `library:${item.slug}`,
@@ -235,6 +269,12 @@ export function useGlobalSearch({
 				labelKey: "subAgents",
 				items: subAgentMatches,
 			});
+		if (promptMatches.length > 0)
+			out.push({
+				kind: "prompt",
+				labelKey: "prompts",
+				items: promptMatches,
+			});
 		if (libraryMatches.length > 0)
 			out.push({
 				kind: "library",
@@ -248,6 +288,7 @@ export function useGlobalSearch({
 		skillFuse,
 		mcpFuse,
 		subAgentFuse,
+		promptFuse,
 		marketResults,
 		perGroupLimit,
 	]);
