@@ -31,6 +31,7 @@ import SearchResultsPage from "./pages/search";
 import SettingsPage from "./pages/settings";
 import CustomAgentsPage from "./pages/settings/custom-agents";
 import MCPServersPage from "./pages/settings/mcp-servers";
+import RulesPage from "./pages/settings/rules";
 import SkillsPage from "./pages/settings/skills";
 import SubAgentsPage from "./pages/settings/sub-agents";
 import SkillsSearchPage from "./pages/skills-sh/search";
@@ -315,6 +316,17 @@ function App() {
 													fallback={<PageSkeleton />}
 												>
 													<PromptsPage />
+												</Suspense>
+											</ErrorBoundary>
+										</MainLayout>
+									</Route>
+									<Route path="/rules">
+										<MainLayout>
+											<ErrorBoundary>
+												<Suspense
+													fallback={<PageSkeleton />}
+												>
+													<RulesPage />
 												</Suspense>
 											</ErrorBoundary>
 										</MainLayout>

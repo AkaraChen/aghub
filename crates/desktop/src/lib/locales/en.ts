@@ -90,6 +90,17 @@ export default {
 		"Local prompts that are not in this backup will be removed.",
 	promptBackupImported:
 		"Import complete: {{added}} added, {{updated}} updated, {{removed}} removed, {{total}} in total.",
+	rules: "Rules",
+	rulesEmptyTitle: "No rule files",
+	rulesEmptyDescription: "The selected scope has no managed rule files yet.",
+	rulesFileExists: "Exists",
+	rulesFileMissing: "Not created",
+	rulesSelectFile: "Select a rule file to view or edit it.",
+	rulesCreateOnSave:
+		"This file does not exist yet — it will be created on save.",
+	rulesSaved: "Rule file saved",
+	rulesSaveFailed: "Failed to save rule file",
+	searchRules: "Search rules...",
 	claudeCodePlugins: "Claude Code Plugins",
 	plugins: "Plugins",
 	pluginsDescription:

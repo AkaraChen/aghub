@@ -5,6 +5,7 @@ import type {
 	MarketSkill,
 	McpResponse,
 	PromptResponse,
+	RuleFileResponse,
 	SkillResponse,
 	SubAgentResponse,
 } from "../generated/dto";
@@ -12,11 +13,12 @@ import { useAgentAvailability } from "./use-agent-availability";
 import { useApi } from "./use-api";
 import { mcpListQueryOptions } from "../requests/mcps";
 import { promptListQueryOptions } from "../requests/prompts";
+import { ruleListQueryOptions } from "../requests/rules";
 import { skillListQueryOptions } from "../requests/skills";
 import { subAgentListQueryOptions } from "../requests/sub-agents";
 
 export type ResourceKind =
-	"agent" | "skill" | "mcp" | "sub-agent" | "prompt" | "library";
+	"agent" | "skill" | "mcp" | "sub-agent" | "prompt" | "rule" | "library";
 
 export interface SearchMatch {
 	kind: ResourceKind;
@@ -82,6 +84,10 @@ export function useGlobalSearch({
 	});
 	const { data: prompts = [] } = useQuery({
 		...promptListQueryOptions({ api }),
+		enabled: trimmed.length > 0,
+	});
+	const { data: rawRuleFiles = [] } = useQuery({
+		...ruleListQueryOptions({ api, scope: "global" }),
 		enabled: trimmed.length > 0,
 	});
 	const debouncedTrimmed = useDebouncedValue(trimmed, LIBRARY_DEBOUNCE_MS);
@@ -153,6 +159,28 @@ export function useGlobalSearch({
 				ignoreLocation: true,
 			}),
 		[prompts],
+	);
+	// Rule files are returned once per (agent, path); dedupe to one entry per
+	// file so a shared file (e.g. AGENTS.md) is not listed multiple times.
+	const ruleFiles = useMemo(() => {
+		const seen = new Set<string>();
+		const unique: RuleFileResponse[] = [];
+		for (const rule of rawRuleFiles) {
+			if (!seen.has(rule.path)) {
+				seen.add(rule.path);
+				unique.push(rule);
+			}
+		}
+		return unique;
+	}, [rawRuleFiles]);
+	const ruleFuse = useMemo(
+		() =>
+			new Fuse(ruleFiles, {
+				keys: ["path"],
+				threshold: 0.4,
+				ignoreLocation: true,
+			}),
+		[ruleFiles],
 	);
 
 	const groups = useMemo<SearchGroup[]>(() => {
@@ -239,6 +267,20 @@ export function useGlobalSearch({
 				href: `/prompts?prompt=${encodeURIComponent(prompt.id)}`,
 			};
 		});
+		const ruleMatches: SearchMatch[] = cap(ruleFuse.search(trimmed)).map(
+			({ item }) => {
+				const rule = item as RuleFileResponse;
+				const fileName = rule.path.split(/[/\\]/).pop() ?? rule.path;
+				return {
+					kind: "rule",
+					id: `rule:${rule.path}`,
+					name: fileName,
+					subtitle: rule.path,
+					agentId: null,
+					href: `/rules?rule=${encodeURIComponent(rule.path)}`,
+				};
+			},
+		);
 
 		const libraryMatches: SearchMatch[] = marketResults.map((item) => ({
 			kind: "library",
@@ -276,6 +318,12 @@ export function useGlobalSearch({
 				labelKey: "prompts",
 				items: promptMatches,
 			});
+		if (ruleMatches.length > 0)
+			out.push({
+				kind: "rule",
+				labelKey: "rules",
+				items: ruleMatches,
+			});
 		if (libraryMatches.length > 0)
 			out.push({
 				kind: "library",
@@ -290,6 +338,7 @@ export function useGlobalSearch({
 		mcpFuse,
 		subAgentFuse,
 		promptFuse,
+		ruleFuse,
 		marketResults,
 		perGroupLimit,
 	]);
