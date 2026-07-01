@@ -78,6 +78,14 @@ pub struct ProjectSkillPaths {
 	pub write: fn(&Path) -> Option<PathBuf>,
 }
 
+/// Locations of an agent's instruction/rule files (e.g. CLAUDE.md, AGENTS.md).
+/// `None` for a scope means the agent has no rule file there.
+#[derive(Clone, Copy)]
+pub struct RulePaths {
+	pub global: Option<fn() -> Vec<PathBuf>>,
+	pub project: Option<fn(&Path) -> Vec<PathBuf>>,
+}
+
 /// Static descriptor for an agent — one per agent, declared in agents/*.rs
 pub struct AgentDescriptor {
 	pub id: &'static str,
@@ -112,6 +120,9 @@ pub struct AgentDescriptor {
 	/// Maps to the `-a, --agent` argument of `npx skills add` CLI
 	/// e.g., "claude-code" becomes `npx skills add <source> -a claude-code`
 	pub skills_cli_name: Option<&'static str>,
+	/// Instruction/rule file locations (CLAUDE.md, AGENTS.md, …).
+	/// `None` if the agent has no managed rule files.
+	pub rule_paths: Option<RulePaths>,
 }
 
 impl AgentDescriptor {
@@ -292,6 +303,20 @@ impl AgentDescriptor {
 			ResourceScope::Both => None,
 		}
 	}
+
+	pub fn global_rule_paths(&self) -> Vec<PathBuf> {
+		self.rule_paths
+			.and_then(|rules| rules.global)
+			.map(|read| read())
+			.unwrap_or_default()
+	}
+
+	pub fn project_rule_paths(&self, project_root: &Path) -> Vec<PathBuf> {
+		self.rule_paths
+			.and_then(|rules| rules.project)
+			.map(|read| read(project_root))
+			.unwrap_or_default()
+	}
 }
 
 /// Get the global directory shared by Agent Skills compatible tools.
@@ -401,6 +426,12 @@ pub fn supports_mcp_transport(
 
 pub fn home_dir() -> Option<PathBuf> {
 	dirs::home_dir()
+}
+
+/// Project-level `AGENTS.md`, the shared instruction file convention used by
+/// several agents (Codex, OpenCode, Amp, …).
+pub fn project_agents_md(project_root: &Path) -> Vec<PathBuf> {
+	vec![project_root.join("AGENTS.md")]
 }
 
 // ── Sub-agent no-ops (used by agents that do not support sub-agents) ─────────

@@ -8,6 +8,7 @@ pub mod market;
 pub mod mcp;
 pub mod plugin;
 pub mod prompt;
+pub mod rule;
 pub mod skill;
 pub mod sub_agent;
 pub mod transfer;

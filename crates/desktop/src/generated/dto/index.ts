@@ -109,6 +109,9 @@ export type { PromptResponse } from "./PromptResponse";
 export type { PromptStorageResponse } from "./PromptStorageResponse";
 export type { ReconcileRequest } from "./ReconcileRequest";
 export type { ResourceLocatorDto } from "./ResourceLocatorDto";
+export type { RuleContentQuery } from "./RuleContentQuery";
+export type { RuleFileContentResponse } from "./RuleFileContentResponse";
+export type { RuleFileResponse } from "./RuleFileResponse";
 export type { ScopeSupportDto } from "./ScopeSupportDto";
 export type { SetCcusageRuntimeRequest } from "./SetCcusageRuntimeRequest";
 export type { SeverityDto } from "./SeverityDto";
@@ -153,6 +156,7 @@ export type { UpdateCodexProfileProviderRequest } from "./UpdateCodexProfileProv
 export type { UpdateInferenceProviderRequest } from "./UpdateInferenceProviderRequest";
 export type { UpdateMcpRequest } from "./UpdateMcpRequest";
 export type { UpdatePromptRequest } from "./UpdatePromptRequest";
+export type { UpdateRuleContentRequest } from "./UpdateRuleContentRequest";
 export type { UpdateSkillRequest } from "./UpdateSkillRequest";
 export type { UpdateSubAgentRequest } from "./UpdateSubAgentRequest";
 export type { UsageAgent } from "./UsageAgent";

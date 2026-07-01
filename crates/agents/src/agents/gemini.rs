@@ -13,6 +13,16 @@ define_skill_paths! {
 	project: ".agents/skills",
 }
 
+fn global_rule_paths() -> Vec<std::path::PathBuf> {
+	home_dir()
+		.map(|home| vec![home.join(".gemini/GEMINI.md")])
+		.unwrap_or_default()
+}
+
+fn project_rule_paths(root: &std::path::Path) -> Vec<std::path::PathBuf> {
+	vec![root.join("GEMINI.md")]
+}
+
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "gemini",
 	display_name: "Gemini CLI",
@@ -61,4 +71,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	validate_args: &["--version"],
 	project_markers: &[".gemini"],
 	skills_cli_name: Some("gemini-cli"),
+	rule_paths: Some(RulePaths {
+		global: Some(global_rule_paths),
+		project: Some(project_rule_paths),
+	}),
 };

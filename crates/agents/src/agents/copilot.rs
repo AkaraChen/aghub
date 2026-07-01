@@ -15,6 +15,10 @@ define_skill_paths! {
 	project: ".agents/skills",
 }
 
+fn project_rule_paths(root: &std::path::Path) -> Vec<std::path::PathBuf> {
+	vec![root.join(".github/copilot-instructions.md")]
+}
+
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "copilot",
 	display_name: "GitHub Copilot",
@@ -63,4 +67,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	validate_args: &["--version"],
 	project_markers: &[".vscode"],
 	skills_cli_name: Some("github-copilot"),
+	rule_paths: Some(RulePaths {
+		global: None,
+		project: Some(project_rule_paths),
+	}),
 };

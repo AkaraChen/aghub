@@ -60,4 +60,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	validate_args: &["--version"],
 	project_markers: &[".kilocode"],
 	skills_cli_name: Some("kilo"),
+	rule_paths: None,
 };
