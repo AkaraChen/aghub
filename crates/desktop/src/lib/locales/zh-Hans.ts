@@ -921,7 +921,7 @@ export default {
 	marketTabSkillsSh: "Skills.sh",
 	marketTabMcp: "MCP 市场",
 	marketTabClaudePlugins: "Claude Code 插件",
-	marketTabGithub: "从 GitHub 导入",
+	marketTabGithub: "从 GitHub 导入技能",
 	marketClaudePluginsComingSoonTitle: "Claude Code 插件 — 即将推出",
 	marketClaudePluginsComingSoonHint:
 		"在 aghub 中浏览并安装 Claude Code 插件。我们正在整合官方插件注册表，敬请期待。",
