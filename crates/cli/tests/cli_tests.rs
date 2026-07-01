@@ -1,6 +1,6 @@
 use assert_cmd::Command;
 use serde_json::Value;
-use std::path::PathBuf;
+use std::{fs, path::PathBuf};
 
 fn fixtures_dir() -> PathBuf {
 	PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -16,6 +16,64 @@ fn aghub_cli() -> Command {
 	cmd.env("USERPROFILE", &dir);
 	cmd.env("APPDATA", &dir);
 	cmd
+}
+
+#[test]
+fn test_conflicts_reports_global_project_mcp_overlap() {
+	let temp = tempfile::tempdir().unwrap();
+	let home = temp.path().join("home");
+	let project = temp.path().join("project");
+	fs::create_dir_all(&home).unwrap();
+	fs::create_dir_all(&project).unwrap();
+	fs::create_dir_all(project.join(".claude")).unwrap();
+	fs::write(project.join(".claude/settings.json"), "{}").unwrap();
+	fs::write(
+		home.join(".claude.json"),
+		r#"{
+			"mcpServers": {
+				"filesystem": {
+					"command": "npx",
+					"args": []
+				}
+			}
+		}"#,
+	)
+	.unwrap();
+	fs::write(
+		project.join(".mcp.json"),
+		r#"{
+			"mcpServers": {
+				"filesystem": {
+					"command": "npx",
+					"args": []
+				}
+			}
+		}"#,
+	)
+	.unwrap();
+
+	let out = Command::cargo_bin("aghub-cli")
+		.unwrap()
+		.current_dir(&project)
+		.env("HOME", &home)
+		.env("USERPROFILE", &home)
+		.env("APPDATA", &home)
+		.args(["--agent", "claude", "conflicts"])
+		.output()
+		.unwrap();
+
+	assert!(
+		out.status.success(),
+		"stderr: {}",
+		String::from_utf8_lossy(&out.stderr)
+	);
+	let json: Value =
+		serde_json::from_slice(&out.stdout).expect("stdout must be valid JSON");
+	let arr = json.as_array().expect("output must be a JSON array");
+	assert_eq!(arr.len(), 1);
+	assert_eq!(arr[0]["resource_type"], "mcp");
+	assert_eq!(arr[0]["name"], "filesystem");
+	assert_eq!(arr[0]["conflict_type"], "scope_overlap");
 }
 
 #[test]

@@ -13,7 +13,9 @@ use aghub_core::{
 
 mod commands;
 
-use commands::{add, delete, disable, enable, get, plugin, update, usage};
+use commands::{
+	add, conflicts, delete, disable, enable, get, plugin, update, usage,
+};
 
 /// Global verbose flag used by the eprintln_verbose macro
 static VERBOSE: AtomicBool = AtomicBool::new(false);
@@ -200,6 +202,8 @@ enum Commands {
 		resource: ResourceType,
 		name: String,
 	},
+	/// Preview scope conflicts and broken skill symlinks
+	Conflicts,
 	/// Manage Claude Code plugins
 	Plugin {
 		#[command(subcommand)]
@@ -255,9 +259,10 @@ fn main() -> Result<()> {
 	};
 
 	// Determine project root if needed for scope
-	let project_root = if scope == ResourceScope::ProjectOnly
+	let needs_project_root = scope == ResourceScope::ProjectOnly
 		|| scope == ResourceScope::Both
-	{
+		|| matches!(&cli.command, Commands::Conflicts);
+	let project_root = if needs_project_root {
 		let current_dir = std::env::current_dir()?;
 		find_project_root(&current_dir)
 	} else {
@@ -279,6 +284,10 @@ fn main() -> Result<()> {
 	eprintln_verbose!("Resource scope: {:?}", scope);
 	if let Some(ref root) = project_root {
 		eprintln_verbose!("Project root: {}", root.display());
+	}
+
+	if matches!(&cli.command, Commands::Conflicts) {
+		return conflicts::execute(agent_type, project_root.as_deref());
 	}
 
 	// Create adapter and manager with scope
@@ -382,6 +391,7 @@ fn main() -> Result<()> {
 		Commands::Describe { resource, name } => {
 			describe::execute(&manager, resource, name)
 		}
+		Commands::Conflicts => unreachable!("conflicts is dispatched earlier"),
 		Commands::Plugin { action } => {
 			// Plugin management is Claude-specific
 			if agent_type != AgentType::Claude {

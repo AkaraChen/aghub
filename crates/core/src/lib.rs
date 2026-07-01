@@ -6,6 +6,7 @@ pub mod adapter;
 pub mod adapters;
 pub mod all_agents;
 pub mod availability;
+pub mod conflicts;
 pub mod manager;
 pub mod paths;
 pub mod registry;
@@ -31,6 +32,9 @@ pub mod testing;
 
 pub use adapters::{create_adapter, AgentAdapter};
 pub use all_agents::{load_all_agents, AgentResources};
+pub use conflicts::{
+	ConfigConflict, ConflictDetector, ConflictType, ResourceInfo, ResourceType,
+};
 pub use manager::ConfigManager;
 pub use transfer::{
 	InstallScope, InstallTarget, OperationAction, OperationBatchResult,

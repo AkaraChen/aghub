@@ -6,12 +6,14 @@ use crate::{
 	registry,
 };
 use log::{info, warn};
+use serde::{Deserialize, Serialize};
 use skill::sanitize::sanitize_name;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum InstallScope {
 	Global,
 	Project,

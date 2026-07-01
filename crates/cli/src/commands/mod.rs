@@ -1,4 +1,5 @@
 pub mod add;
+pub mod conflicts;
 pub mod delete;
 pub mod disable;
 pub mod enable;
