@@ -1,7 +1,7 @@
 import { ArrowTopRightOnSquareIcon } from "@heroicons/react/24/outline";
 import { ArrowRightIcon } from "@heroicons/react/24/solid";
 import { SearchField, Spinner } from "@heroui/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import type { AvailableAgent } from "../contexts/agent-availability";
@@ -21,6 +21,7 @@ export function GlobalSearch() {
 	const [isOpen, setIsOpen] = useState(false);
 	const [activeIndex, setActiveIndex] = useState(-1);
 	const containerRef = useRef<HTMLDivElement>(null);
+	const listboxId = useId();
 
 	const { groups, isMarketFetching } = useGlobalSearch({
 		query,
@@ -68,6 +69,11 @@ export function GlobalSearch() {
 	};
 
 	const showPopover = isOpen && trimmed.length > 0;
+	const listboxVisible = showPopover && flatMatches.length > 0;
+	const activeOptionId =
+		showPopover && activeIndex >= 0 && activeIndex < flatMatches.length
+			? `${listboxId}-opt-${activeIndex}`
+			: undefined;
 
 	return (
 		<div ref={containerRef} className="relative">
@@ -85,6 +91,11 @@ export function GlobalSearch() {
 				<SearchField.Group>
 					<SearchField.SearchIcon />
 					<SearchField.Input
+						role="combobox"
+						aria-autocomplete="list"
+						aria-expanded={listboxVisible}
+						aria-controls={listboxVisible ? listboxId : undefined}
+						aria-activedescendant={activeOptionId}
 						placeholder={t("globalSearchPlaceholder")}
 						onFocus={() => {
 							if (trimmed) setIsOpen(true);
@@ -131,82 +142,99 @@ export function GlobalSearch() {
 			</SearchField>
 
 			{showPopover && (
-				<div
-					role="listbox"
-					aria-label={t("globalSearchLabel")}
-					className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[60vh] overflow-y-auto rounded-md border border-border bg-surface shadow-lg"
-				>
-					{flatMatches.length === 0 && !isMarketFetching ? (
-						<>
+				<div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-[60vh] overflow-y-auto rounded-md border border-border bg-surface shadow-lg">
+					{!listboxVisible ? (
+						!isMarketFetching && (
 							<p className="px-3 py-3 text-sm text-muted">
 								{t("globalSearchNoResults")}
 							</p>
-						</>
+						)
 					) : (
-						groups.map((group) => (
-							<div key={group.kind} className="py-1">
-								<div className="flex items-center justify-between px-3 py-1">
-									<span className="text-[11px] font-medium tracking-wider text-muted uppercase">
-										{t(group.labelKey)}
-									</span>
-								</div>
-								{group.items.map((match) => {
-									const flatIdx = flatMatches.indexOf(match);
-									const isActive = flatIdx === activeIndex;
-									const owningAgent = match.agentId
-										? agentLookup.get(match.agentId)
-										: null;
-									return (
-										<button
-											key={`${match.kind}:${match.id}`}
-											type="button"
-											role="option"
-											aria-selected={isActive}
-											onMouseEnter={() =>
-												setActiveIndex(flatIdx)
-											}
-											onClick={() => handleSelect(match)}
-											className={cn(
-												"flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors",
-												isActive
-													? "bg-surface-secondary"
-													: "hover:bg-surface-secondary",
-											)}
-										>
-											{owningAgent ? (
-												<AgentIcon
-													id={owningAgent.id}
-													name={
-														owningAgent.display_name
-													}
-													size="xs"
-													variant="ghost"
-												/>
-											) : match.kind === "library" ? (
-												<ArrowTopRightOnSquareIcon className="size-4 shrink-0 text-muted" />
-											) : (
-												<span className="size-5 shrink-0" />
-											)}
-											<div className="min-w-0 flex-1">
-												<div className="truncate font-medium">
-													{match.name}
-												</div>
-												{match.subtitle && (
-													<div className="truncate text-xs text-muted">
-														{match.subtitle}
-													</div>
+						<div
+							role="listbox"
+							id={listboxId}
+							aria-label={t("globalSearchLabel")}
+						>
+							{groups.map((group) => (
+								<div
+									key={group.kind}
+									role="group"
+									aria-label={t(group.labelKey)}
+									className="py-1"
+								>
+									<div
+										aria-hidden
+										className="flex items-center justify-between px-3 py-1"
+									>
+										<span className="text-[11px] font-medium tracking-wider text-muted uppercase">
+											{t(group.labelKey)}
+										</span>
+									</div>
+									{group.items.map((match) => {
+										const flatIdx =
+											flatMatches.indexOf(match);
+										const isActive =
+											flatIdx === activeIndex;
+										const owningAgent = match.agentId
+											? agentLookup.get(match.agentId)
+											: null;
+										return (
+											<button
+												key={`${match.kind}:${match.id}`}
+												id={`${listboxId}-opt-${flatIdx}`}
+												type="button"
+												role="option"
+												aria-selected={isActive}
+												onMouseEnter={() =>
+													setActiveIndex(flatIdx)
+												}
+												onClick={() =>
+													handleSelect(match)
+												}
+												className={cn(
+													"flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors",
+													isActive
+														? "bg-surface-secondary"
+														: "hover:bg-surface-secondary",
 												)}
-											</div>
-											{owningAgent && (
-												<span className="shrink-0 text-[11px] text-muted">
-													{owningAgent.display_name}
-												</span>
-											)}
-										</button>
-									);
-								})}
-							</div>
-						))
+											>
+												{owningAgent ? (
+													<AgentIcon
+														id={owningAgent.id}
+														name={
+															owningAgent.display_name
+														}
+														size="xs"
+														variant="ghost"
+													/>
+												) : match.kind === "library" ? (
+													<ArrowTopRightOnSquareIcon className="size-4 shrink-0 text-muted" />
+												) : (
+													<span className="size-5 shrink-0" />
+												)}
+												<div className="min-w-0 flex-1">
+													<div className="truncate font-medium">
+														{match.name}
+													</div>
+													{match.subtitle && (
+														<div className="truncate text-xs text-muted">
+															{match.subtitle}
+														</div>
+													)}
+												</div>
+												{owningAgent && (
+													<span className="shrink-0 text-[11px] text-muted">
+														{
+															owningAgent.display_name
+														}
+													</span>
+												)}
+											</button>
+										);
+									})}
+								</div>
+							))}
+						</div>
 					)}
 					{isMarketFetching && (
 						<div className="flex items-center gap-2 px-3 py-2 text-xs text-muted">
