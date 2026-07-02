@@ -44,13 +44,11 @@ export function hasSupplementarySkillFiles(
 	});
 }
 
-export function countTreeNodes(node: SkillTreeNodeResponse): number {
-	return (
-		getNodeChildren(node).length +
-		getNodeChildren(node).reduce(
-			(total, child) => total + countTreeNodes(child),
-			0,
-		)
+export function countTreeFiles(node: SkillTreeNodeResponse): number {
+	return getNodeChildren(node).reduce(
+		(total, child) =>
+			total + (child.kind === "file" ? 1 : 0) + countTreeFiles(child),
+		0,
 	);
 }
 

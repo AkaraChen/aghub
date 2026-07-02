@@ -39,7 +39,7 @@ import {
 } from "./skill-detail-dialogs";
 import {
 	buildLocationGroups,
-	countTreeNodes,
+	countTreeFiles,
 	hasSupplementarySkillFiles,
 	type LocationGroup,
 	type SkillGroup,
@@ -204,7 +204,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const hasMoreLocations = allLocationGroups.length > 3;
 	const hiddenLocationCount = allLocationGroups.length - 2;
 	const resourceCount = useMemo(
-		() => (skillTree ? countTreeNodes(skillTree) : 0),
+		() => (skillTree ? countTreeFiles(skillTree) : 0),
 		[skillTree],
 	);
 	const hasSupplementaryFiles = useMemo(
