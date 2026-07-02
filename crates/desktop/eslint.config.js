@@ -6,6 +6,10 @@ const baseConfig = await antfu({
 	react: false,
 	stylistic: false,
 	imports: false,
+	// A pnpm-workspace.yaml anywhere up the tree (even outside the repo) makes
+	// antfu auto-enable eslint-plugin-pnpm, whose --fix rewrites package.json
+	// deps to broken `catalog:` refs. This is a bun workspace — never enable it.
+	pnpm: false,
 })
 	.removePlugins("perfectionist")
 	.toConfigs();
