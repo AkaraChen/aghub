@@ -26,6 +26,7 @@ import {
 } from "../lib/form-utils";
 import { objectToKeyPairs } from "../lib/key-pair-utils";
 import { buildTransportFromForm, capitalize } from "../lib/mcp-utils";
+import { migrateStarredMcp } from "../lib/store";
 import { getMcpMergeKey } from "../lib/utils";
 import { invalidateMcpQueries } from "../requests/mcps";
 import { capture } from "../lib/analytics";
@@ -146,6 +147,15 @@ export function EditMcpPanel({
 			);
 		},
 		onSuccess: async (_data, body) => {
+			const newMergeKey = getMcpMergeKey(
+				body.transport ?? primaryServer.transport,
+			);
+			if (newMergeKey !== group.mergeKey) {
+				await migrateStarredMcp(group.mergeKey, newMergeKey);
+				await queryClient.invalidateQueries({
+					queryKey: ["starredMcps"],
+				});
+			}
 			await invalidateMcpQueries(queryClient);
 			capture("mcp server updated", {
 				transport_type:
@@ -153,7 +163,7 @@ export function EditMcpPanel({
 				agents: group.items.map((i) => i.agent).filter(Boolean),
 				scope: projectPath ? "project" : "global",
 			});
-			onDone(getMcpMergeKey(body.transport ?? primaryServer.transport));
+			onDone(newMergeKey);
 		},
 		onError: () => {
 			// handled in render

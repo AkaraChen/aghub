@@ -23,6 +23,7 @@ export { getSidebarItems, saveSidebarItems } from "./store/sidebar";
 export {
 	getStarredMcps,
 	getStarredSkills,
+	migrateStarredMcp,
 	setStarredMcps,
 	setStarredSkills,
 } from "./store/stars";

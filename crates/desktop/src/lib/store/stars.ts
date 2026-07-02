@@ -21,3 +21,14 @@ export async function setStarredMcps(mcps: string[]): Promise<void> {
 	await store.set("starredMcps", mcps);
 	await store.save();
 }
+
+export async function migrateStarredMcp(
+	oldKey: string,
+	newKey: string,
+): Promise<void> {
+	const mcps = await getStarredMcps();
+	if (!mcps.includes(oldKey)) return;
+	const next = mcps.filter((key) => key !== oldKey);
+	if (!next.includes(newKey)) next.push(newKey);
+	await setStarredMcps(next);
+}
