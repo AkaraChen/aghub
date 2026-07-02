@@ -15,7 +15,6 @@ import {
 	setStickyAgentFilter,
 	useStickyAgentFilter,
 } from "../hooks/use-sticky-agent-filter";
-import { MARKET_TABS, resolveMarketTab } from "../lib/market-tabs";
 import { isSidebarHrefActive } from "../lib/sidebar-navigation";
 import { cn } from "../lib/utils";
 import { GlobalSearch } from "./global-search";
@@ -24,26 +23,6 @@ import { ProjectList } from "./project-list";
 function navItemClasses(isActive: boolean) {
 	return cn(
 		"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors",
-		isActive
-			? "bg-surface font-medium text-foreground"
-			: "text-muted hover:bg-surface-secondary hover:text-foreground",
-	);
-}
-
-// The market parent is a group header: it stays in the market section while a
-// child tab carries the filled active state, so it never fills itself.
-function marketParentClasses(isActive: boolean) {
-	return cn(
-		"flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors",
-		isActive
-			? "font-medium text-foreground"
-			: "text-muted hover:bg-surface-secondary hover:text-foreground",
-	);
-}
-
-function marketSubItemClasses(isActive: boolean) {
-	return cn(
-		"flex items-center gap-2.5 rounded-md py-1.5 pr-2.5 pl-9 text-sm transition-colors",
 		isActive
 			? "bg-surface font-medium text-foreground"
 			: "text-muted hover:bg-surface-secondary hover:text-foreground",
@@ -97,10 +76,6 @@ export function AppSidebar() {
 
 	const homeItem = visibleSidebarItems.find((item) => item.id === "home");
 	const marketItem = visibleSidebarItems.find((item) => item.id === "market");
-	const onMarketPage = pathname === "/market";
-	const activeMarketTab = resolveMarketTab(
-		new URLSearchParams(search).get("tab"),
-	);
 
 	return (
 		<Surface
@@ -130,37 +105,20 @@ export function AppSidebar() {
 							</Link>
 						)}
 						{marketItem && (
-							<div className="flex flex-col gap-0.5">
-								<Link
-									key={marketItem.id}
-									href={marketItem.href}
-									data-tour={marketItem.tour}
-									className={marketParentClasses(
-										isSidebarHrefActive(
-											pathname,
-											marketItem.href,
-										),
-									)}
-								>
-									<marketItem.icon className="size-4" />
-									<span>{t(marketItem.labelKey)}</span>
-								</Link>
-								{MARKET_TABS.map((tab) => (
-									<Link
-										key={tab.id}
-										href={`/market?tab=${tab.id}`}
-										className={marketSubItemClasses(
-											onMarketPage &&
-												activeMarketTab === tab.id,
-										)}
-									>
-										<tab.icon className="size-4 shrink-0" />
-										<span className="truncate">
-											{t(tab.labelKey)}
-										</span>
-									</Link>
-								))}
-							</div>
+							<Link
+								key={marketItem.id}
+								href={marketItem.href}
+								data-tour={marketItem.tour}
+								className={navItemClasses(
+									isSidebarHrefActive(
+										pathname,
+										marketItem.href,
+									),
+								)}
+							>
+								<marketItem.icon className="size-4" />
+								<span>{t(marketItem.labelKey)}</span>
+							</Link>
 						)}
 					</nav>
 
