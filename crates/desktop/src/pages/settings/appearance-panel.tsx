@@ -50,13 +50,13 @@ export default function AppearancePanel() {
 								<SunIcon className="size-4" />
 								{t("light")}
 							</ToggleButton>
-							<ToggleButtonGroup.Separator />
 							<ToggleButton id="dark" aria-label={t("dark")}>
+								<ToggleButtonGroup.Separator />
 								<MoonIcon className="size-4" />
 								{t("dark")}
 							</ToggleButton>
-							<ToggleButtonGroup.Separator />
 							<ToggleButton id="system" aria-label={t("system")}>
+								<ToggleButtonGroup.Separator />
 								<ComputerDesktopIcon className="size-4" />
 								{t("system")}
 							</ToggleButton>

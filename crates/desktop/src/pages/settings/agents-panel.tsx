@@ -105,20 +105,20 @@ export default function AgentsPanel() {
 					>
 						{t("all")}
 					</ToggleButton>
-					<ToggleButtonGroup.Separator />
 					<ToggleButton
 						id="enabled"
 						variant="ghost"
 						className={"bg-surface"}
 					>
+						<ToggleButtonGroup.Separator />
 						{t("enabled")}
 					</ToggleButton>
-					<ToggleButtonGroup.Separator />
 					<ToggleButton
 						id="disabled"
 						variant="ghost"
 						className={"bg-surface"}
 					>
+						<ToggleButtonGroup.Separator />
 						{t("disabled")}
 					</ToggleButton>
 				</ToggleButtonGroup>
