@@ -54,6 +54,7 @@ export default {
 	validationPromptTitleRequired: "请输入提示词标题。",
 	selectPrompt: "选择一个提示词以查看或编辑。",
 	promptContentCopied: "提示词内容已复制",
+	promptContentCopyError: "复制提示词内容失败",
 	claudeCodePlugins: "Claude Code 插件",
 	plugins: "插件",
 	pluginsDescription: "管理 Claude Code 插件 — 启用或禁用已安装的插件。",

@@ -54,6 +54,7 @@ export default {
 	validationPromptTitleRequired: "請輸入提示詞標題。",
 	selectPrompt: "選擇一個提示詞以檢視或編輯。",
 	promptContentCopied: "提示詞內容已複製",
+	promptContentCopyError: "複製提示詞內容失敗",
 	claudeCodePlugins: "Claude Code 外掛",
 	plugins: "外掛",
 	pluginsDescription: "管理 Claude Code 外掛 — 啟用或停用已安裝的外掛。",

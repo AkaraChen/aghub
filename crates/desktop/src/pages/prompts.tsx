@@ -327,8 +327,13 @@ function PromptDetail({
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
 	const handleCopy = async () => {
-		await writeText(prompt.content);
-		toast.success(t("promptContentCopied"));
+		try {
+			await writeText(prompt.content);
+			toast.success(t("promptContentCopied"));
+		} catch (error) {
+			console.error("Failed to copy prompt content:", error);
+			toast.danger(t("promptContentCopyError"));
+		}
 	};
 
 	return (

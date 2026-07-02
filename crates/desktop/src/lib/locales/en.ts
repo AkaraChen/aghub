@@ -56,6 +56,7 @@ export default {
 	validationPromptTitleRequired: "Enter a prompt title.",
 	selectPrompt: "Select a prompt to view or edit it.",
 	promptContentCopied: "Prompt content copied",
+	promptContentCopyError: "Failed to copy prompt content",
 	claudeCodePlugins: "Claude Code Plugins",
 	plugins: "Plugins",
 	pluginsDescription:
