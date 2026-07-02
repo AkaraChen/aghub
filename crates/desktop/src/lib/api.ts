@@ -182,11 +182,14 @@ export function createApi(baseUrl: string, token: string) {
 					})
 					.json();
 			},
-			import(
+			// An arrow property, not a shorthand method: the `import(` token of a
+			// method named import is treated as a dynamic import by Vite's
+			// import-analysis and rejected by WebKit's parser (blank window in dev).
+			import: (
 				agent: string,
 				data: ImportSkillRequest,
 				projectRoot?: string,
-			): Promise<SkillResponse> {
+			): Promise<SkillResponse> => {
 				const scope = projectRoot ? "project" : "global";
 				return client
 					.post(`agents/${agent}/skills/import`, {
