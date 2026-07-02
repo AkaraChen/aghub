@@ -1,7 +1,6 @@
 import { PlusIcon } from "@heroicons/react/24/solid";
-import { Tabs } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
 import { AgentOverviewCard } from "../components/agent-overview-card";
@@ -18,7 +17,6 @@ import {
 } from "../requests/usage";
 
 const USAGE_WINDOW_DAYS = 30;
-type AgentFilter = "enabled" | "all";
 
 function toCompactYmd(date: Date): string {
 	const year = date.getFullYear();
@@ -32,7 +30,6 @@ export default function HomePage() {
 	const [, setLocation] = useLocation();
 	const api = useApi();
 	const { availableAgents } = useAgentAvailability();
-	const [agentFilter, setAgentFilter] = useState<AgentFilter>("enabled");
 
 	const { data: skills = [] } = useQuery(
 		skillListQueryOptions({ api, scope: "global" }),
@@ -69,10 +66,12 @@ export default function HomePage() {
 		[availableAgents],
 	);
 
-	const visibleAgents = useMemo(() => {
-		if (agentFilter === "all") return availableAgents;
-		return availableAgents.filter((agent) => !agent.isDisabled);
-	}, [agentFilter, availableAgents]);
+	// Home mirrors the Settings → Agents enablement: only usable agents
+	// (installed and enabled) get a card; everything else is managed there.
+	const visibleAgents = useMemo(
+		() => availableAgents.filter((agent) => agent.isUsable),
+		[availableAgents],
+	);
 
 	const countsByAgent = useMemo(() => {
 		const map = new Map<string, { skills: number; mcps: number }>();
@@ -104,19 +103,15 @@ export default function HomePage() {
 	}, [limitsReport]);
 
 	// Claude and Codex carry usage telemetry, so surface them first — stable,
-	// regardless of whether ccusage has data yet. The rest follow by status then
-	// name. Each card decides its own height (a usage section spans two grid
-	// rows), so the dense grid still packs short cards into a tall card's column.
+	// regardless of whether ccusage has data yet. The rest follow by name.
+	// Each card decides its own height (a usage section spans two grid rows),
+	// so the dense grid still packs short cards into a tall card's column.
 	const sortedAgents = useMemo(() => {
-		const statusOrder = { ready: 0, missing: 1, disabled: 2 } as const;
 		const usageRank = (id: string) =>
 			id === "claude" ? 0 : id === "codex" ? 1 : 2;
 		return [...visibleAgents].sort((a, b) => {
 			const byUsage = usageRank(a.id) - usageRank(b.id);
 			if (byUsage !== 0) return byUsage;
-			const byStatus =
-				statusOrder[agentStatus(a)] - statusOrder[agentStatus(b)];
-			if (byStatus !== 0) return byStatus;
 			return a.display_name.localeCompare(b.display_name);
 		});
 	}, [visibleAgents]);
@@ -124,46 +119,16 @@ export default function HomePage() {
 	return (
 		<div className="h-full overflow-y-auto">
 			<div className="mx-auto w-full max-w-6xl p-4 sm:p-6">
-				<header className="mb-6 flex flex-wrap items-center justify-between gap-3">
-					<div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-						<h1 className="text-2xl font-semibold tracking-tight">
-							{t("homeTitle")}
-						</h1>
-						<p className="text-sm text-muted">
-							{t("homeSubtitle", {
-								ready: readyCount,
-								total: availableAgents.length,
-							})}
-						</p>
-					</div>
-					<Tabs
-						selectedKey={agentFilter}
-						onSelectionChange={(key) =>
-							setAgentFilter(String(key) as AgentFilter)
-						}
-					>
-						<Tabs.ListContainer>
-							<Tabs.List
-								aria-label={t("agents")}
-								className="inline-flex w-auto"
-							>
-								<Tabs.Tab
-									id="enabled"
-									className="px-3 whitespace-nowrap"
-								>
-									{t("enabled")}
-									<Tabs.Indicator />
-								</Tabs.Tab>
-								<Tabs.Tab
-									id="all"
-									className="px-3 whitespace-nowrap"
-								>
-									{t("all")}
-									<Tabs.Indicator />
-								</Tabs.Tab>
-							</Tabs.List>
-						</Tabs.ListContainer>
-					</Tabs>
+				<header className="mb-6 flex flex-col gap-1">
+					<h1 className="text-2xl font-semibold tracking-tight">
+						{t("homeTitle")}
+					</h1>
+					<p className="text-sm text-muted">
+						{t("homeSubtitle", {
+							ready: readyCount,
+							total: availableAgents.length,
+						})}
+					</p>
 				</header>
 
 				<section
