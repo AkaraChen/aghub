@@ -48,7 +48,7 @@ export default function HomePage() {
 		return {
 			since: toCompactYmd(since),
 			until: toCompactYmd(until),
-			timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+			timezone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
 		};
 	}, []);
 
