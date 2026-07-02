@@ -104,11 +104,23 @@ pub fn read_rule_file(path: &Path) -> std::io::Result<String> {
 }
 
 /// Write a rule file, creating parent directories as needed.
+///
+/// Symlinked rule files (e.g. a CLAUDE.md linked into a dotfiles repo) are
+/// resolved so the target is updated in place, and the write replaces the
+/// file atomically (temp file + rename) so a crash cannot truncate a
+/// hand-authored file.
 pub fn write_rule_file(path: &Path, content: &str) -> std::io::Result<()> {
 	if let Some(parent) = path.parent() {
 		std::fs::create_dir_all(parent)?;
 	}
-	std::fs::write(path, content)
+	let target = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+	let file_name = target
+		.file_name()
+		.map(|name| name.to_string_lossy().into_owned())
+		.unwrap_or_else(|| "rule".to_string());
+	let tmp = target.with_file_name(format!(".{file_name}.tmp"));
+	std::fs::write(&tmp, content)?;
+	std::fs::rename(&tmp, &target)
 }
 
 /// Expand a leading `~/` to the user's home directory.
@@ -125,4 +137,37 @@ pub fn expand_tilde(path: &str) -> PathBuf {
 pub fn display_path(path: &Path) -> String {
 	crate::format_path_with_tilde(path)
 		.unwrap_or_else(|| path.to_string_lossy().into_owned())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{read_rule_file, write_rule_file};
+
+	#[test]
+	fn write_creates_then_replaces() {
+		let temp = tempfile::tempdir().unwrap();
+		let path = temp.path().join("sub/CLAUDE.md");
+
+		write_rule_file(&path, "first").unwrap();
+		assert_eq!(read_rule_file(&path).unwrap(), "first");
+
+		write_rule_file(&path, "second").unwrap();
+		assert_eq!(read_rule_file(&path).unwrap(), "second");
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn write_updates_symlink_target_in_place() {
+		let temp = tempfile::tempdir().unwrap();
+		let target = temp.path().join("dotfiles/CLAUDE.md");
+		std::fs::create_dir_all(target.parent().unwrap()).unwrap();
+		std::fs::write(&target, "original").unwrap();
+		let link = temp.path().join("CLAUDE.md");
+		std::os::unix::fs::symlink(&target, &link).unwrap();
+
+		write_rule_file(&link, "updated").unwrap();
+
+		assert_eq!(std::fs::read_to_string(&target).unwrap(), "updated");
+		assert!(link.symlink_metadata().unwrap().file_type().is_symlink());
+	}
 }
