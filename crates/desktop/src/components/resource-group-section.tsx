@@ -43,7 +43,7 @@ export async function readDraggedKeys(
 interface ResourceGroupSectionProps {
 	title: string;
 	count: number;
-	icon: ReactNode;
+	icon?: ReactNode;
 	isExpanded: boolean;
 	/** Highlights the header while the whole group is selected */
 	isSelected: boolean;
@@ -63,10 +63,10 @@ interface ResourceGroupSectionProps {
 }
 
 /**
- * Collapsible section header acting as a compound unit: clicking the
- * title selects every member, the chevron alone toggles expansion,
- * dragging the header drags the whole group, and custom groups accept
- * member drops.
+ * Collapsible section header acting as a compound unit: the whole row
+ * selects every member on click (and highlights on hover), the chevron
+ * alone toggles expansion, dragging the header drags the whole group,
+ * and custom groups accept member drops.
  */
 export function ResourceGroupSection({
 	title,
@@ -112,16 +112,32 @@ export function ResourceGroupSection({
 			}
 		>
 			<div
-				className={cn(
-					"flex w-full items-center gap-2 px-3 py-1.5 transition-colors hover:bg-surface-secondary",
-					isSelected && "bg-accent/10",
-				)}
+				role="button"
+				tabIndex={0}
+				{...headerDragProps}
+				onClick={onSelectAll}
+				onKeyDown={(event) => {
+					if (event.key === "Enter" || event.key === " ") {
+						event.preventDefault();
+						onSelectAll();
+					}
+				}}
 				onContextMenu={onContextMenu}
+				aria-label={t("selectAllInGroup", { name: title })}
+				className={cn(
+					"flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors",
+					// Match the list items: subtle surface on hover, an
+					// elevated surface when the whole group is selected.
+					isSelected ? "bg-surface" : "hover:bg-default",
+				)}
 			>
 				<button
 					type="button"
-					onClick={onToggleExpanded}
-					className="flex size-6 shrink-0 items-center justify-center rounded text-muted hover:bg-default hover:text-foreground"
+					onClick={(event) => {
+						event.stopPropagation();
+						onToggleExpanded();
+					}}
+					className="flex size-6 shrink-0 items-center justify-center rounded text-muted transition-colors hover:bg-default hover:text-foreground"
 					aria-label={title}
 					aria-expanded={isExpanded}
 				>
@@ -131,18 +147,10 @@ export function ResourceGroupSection({
 						<ChevronRightIcon className="size-4" />
 					)}
 				</button>
-				<button
-					type="button"
-					{...headerDragProps}
-					onClick={onSelectAll}
-					aria-label={t("selectAllInGroup", { name: title })}
-					className="flex min-w-0 flex-1 items-center gap-2 py-0.5 text-left"
-				>
-					{icon}
-					<p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-						{title}
-					</p>
-				</button>
+				{icon}
+				<p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+					{title}
+				</p>
 				<Chip size="sm" variant="secondary">
 					{count}
 				</Chip>

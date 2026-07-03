@@ -632,9 +632,6 @@ export function SkillList({
 						key={sg.source}
 						title={sg.source}
 						count={sg.skills.length}
-						icon={
-							<CodeBracketIcon className="size-4 shrink-0 text-muted" />
-						}
 						isExpanded={isExpanded(`s:${sg.source}`)}
 						isSelected={isWholeSelection(memberKeys)}
 						onToggleExpanded={() =>
