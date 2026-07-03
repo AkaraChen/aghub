@@ -18,6 +18,11 @@ export interface IntegrationPreferences {
 	codeEditor?: CodeEditorType;
 }
 
+export interface ResourceGroup {
+	id: string;
+	name: string;
+}
+
 export const SIDEBAR_ITEM_IDS = ["home", "market"] as const;
 
 export type SidebarItemId = (typeof SIDEBAR_ITEM_IDS)[number];
@@ -27,7 +32,7 @@ export interface SidebarItemPreference {
 	visible: boolean;
 }
 
-export const CURRENT_VERSION = 8;
+export const CURRENT_VERSION = 9;
 
 export const DEFAULT_ONBOARDING_PROGRESS: OnboardingProgress = {
 	hasSeenWelcome: false,
