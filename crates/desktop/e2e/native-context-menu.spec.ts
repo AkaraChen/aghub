@@ -32,3 +32,23 @@ test("native context menu is suppressed except in editable fields", async ({
 	// An editable field: the native cut/copy/paste menu is left alone
 	expect(await preventedFor("input")).toBe(false);
 });
+
+test("chrome text is not selectable but editable fields are", async ({
+	page,
+}) => {
+	await installMocks(page);
+	await page.goto("/skills");
+	await page.getByRole("option", { name: "solo-skill" }).waitFor();
+
+	const userSelect = (selector: string) =>
+		page
+			.locator(selector)
+			.first()
+			.evaluate((el) => getComputedStyle(el).userSelect);
+
+	// Nav items and list rows don't select on double-click / drag
+	expect(await userSelect('a[href="/cc-plugins"]')).toBe("none");
+	expect(await userSelect('[role="option"]')).toBe("none");
+	// Inputs stay selectable for copy/paste
+	expect(await userSelect("input")).toBe("text");
+});

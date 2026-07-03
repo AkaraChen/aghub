@@ -17,3 +17,23 @@
 		grid-template-rows: 0fr;
 	}
 }
+
+@layer base {
+	/* Desktop chrome should not select text on double-click or drag.
+	 * Keep selection where copying matters: editable fields, code, and
+	 * anything that opts in with `select-text`. */
+	:root {
+		-webkit-user-select: none;
+		user-select: none;
+	}
+	input,
+	textarea,
+	select,
+	[contenteditable="true"],
+	pre,
+	code,
+	.select-text {
+		-webkit-user-select: text;
+		user-select: text;
+	}
+}
