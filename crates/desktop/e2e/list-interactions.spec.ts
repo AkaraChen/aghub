@@ -139,6 +139,65 @@ test("deselecting a multi-selection down to one item shows that item's detail", 
 	).toBeVisible();
 });
 
+test("clicking the selected item again cancels the selection", async ({
+	page,
+}) => {
+	// solo-skill is not the auto-selected first item, so the first click
+	// selects it and shows its detail
+	await page.getByRole("option", { name: "solo-skill" }).click();
+	await expect(
+		page.getByRole("heading", { name: "solo-skill" }),
+	).toBeVisible();
+
+	// Clicking it again toggles the selection off and the detail falls back
+	// to the empty placeholder rather than the first skill
+	await page.getByRole("option", { name: "solo-skill" }).click();
+	await expect(
+		page.getByText("Select a skill to view details"),
+	).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "solo-skill" }),
+	).toBeHidden();
+});
+
+test("modifier-clicking an item on load selects only it, not the default", async ({
+	page,
+}) => {
+	// react-pro is default-highlighted on load though nothing is committed.
+	// A cmd/ctrl-click on a different item must select just that item — the
+	// phantom default highlight must not leak into a multi-selection.
+	await page
+		.getByRole("option", { name: "solo-skill" })
+		.click({ modifiers: ["ControlOrMeta"] });
+
+	await expect(page.getByText("2 items selected")).toBeHidden();
+	await expect(
+		page.getByRole("heading", { name: "solo-skill" }),
+	).toBeVisible();
+});
+
+test("exiting multi-select keeps the current detail", async ({ page }) => {
+	await page.getByRole("option", { name: "solo-skill" }).click();
+	await expect(
+		page.getByRole("heading", { name: "solo-skill" }),
+	).toBeVisible();
+
+	// Toggling multi-select mode on then off clears the selection set but
+	// must not wipe the detail — the user never cancelled the item
+	await page.getByRole("button", { name: "Multi-select mode" }).first().click();
+	await page
+		.getByRole("button", { name: "Cancel", exact: true })
+		.first()
+		.click();
+
+	await expect(
+		page.getByRole("heading", { name: "solo-skill" }),
+	).toBeVisible();
+	await expect(
+		page.getByText("Select a skill to view details"),
+	).toBeHidden();
+});
+
 test("the header stays selected while all its members are selected", async ({
 	page,
 }) => {

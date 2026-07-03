@@ -53,6 +53,9 @@ export default function MCPServersPage() {
 	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
 		() => new Set(),
 	);
+	// Set once the user clicks the selected server again to cancel: suppresses
+	// the default fallback to the first server so the empty placeholder shows.
+	const [selectionCleared, setSelectionCleared] = useState(false);
 	const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
 	const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
 	const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
@@ -100,8 +103,9 @@ export default function MCPServersPage() {
 		if (selectedKey) {
 			return groupedMcps.find((g) => g.mergeKey === selectedKey) ?? null;
 		}
+		if (selectionCleared) return null;
 		return groupedMcps[0] ?? null;
-	}, [selectedKey, groupedMcps]);
+	}, [selectedKey, groupedMcps, selectionCleared]);
 
 	// 多选模式下被选中的所有 groups（用于批量删除）
 	const selectedGroups = useMemo(() => {
@@ -127,9 +131,19 @@ export default function MCPServersPage() {
 		if (keys.size === 1) {
 			const only = [...keys][0];
 			setSelectedKey(only);
+			setSelectionCleared(false);
 			setPanel({ type: "detail", selectedKey: only });
+		} else if (keys.size === 0 && clickedKey) {
+			// Clicking the selected server again cancels the selection:
+			// clear the detail so the empty placeholder shows. Programmatic
+			// clears (exiting multi-select, bulk deselect, an open
+			// create/import panel) carry no clickedKey and keep their state.
+			setSelectedKey(null);
+			setSelectionCleared(true);
+			setPanel({ type: "empty" });
 		} else if (clickedKey && !isMultiSelectMode) {
 			setSelectedKey(clickedKey);
+			setSelectionCleared(false);
 			setPanel({ type: "detail", selectedKey: clickedKey });
 		}
 
@@ -144,12 +158,14 @@ export default function MCPServersPage() {
 	const handleCreate = () => {
 		setSelectedKeys(new Set());
 		setSelectedKey(null);
+		setSelectionCleared(false);
 		setPanel({ type: "create" });
 	};
 
 	const handleImport = () => {
 		setSelectedKeys(new Set());
 		setSelectedKey(null);
+		setSelectionCleared(false);
 		setPanel({ type: "import" });
 	};
 
@@ -301,6 +317,7 @@ export default function MCPServersPage() {
 					<McpList
 						mcps={filteredMcps}
 						selectedKeys={effectiveSelectedKeys}
+						committedKeys={selectedKeys}
 						searchQuery={searchQuery}
 						onSelectionChange={handleSelectionChange}
 						selectionMode="multiple"

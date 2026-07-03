@@ -3,8 +3,15 @@ import { useCallback, useEffect, useRef } from "react";
 export interface UseListSelectionOptions {
 	/** All visible keys in display order, flattened across sections */
 	orderedKeys: string[];
-	/** Currently selected keys */
+	/** Keys the list highlights, including any default-highlighted item */
 	selectedKeys: Set<string>;
+	/**
+	 * The user's explicit selection, without the default-highlight
+	 * fabrication. Toggle-off only fires when this holds exactly the
+	 * clicked key, so clicking a merely default-highlighted item selects
+	 * it instead of clearing. Defaults to selectedKeys.
+	 */
+	committedKeys?: Set<string>;
 	/** Callback when selection changes */
 	onSelectionChange: (keys: Set<string>, clickedKey?: string) => void;
 	/** Whether multi-select mode is enabled */
@@ -46,6 +53,7 @@ export function useListSelection(
 	const {
 		orderedKeys,
 		selectedKeys,
+		committedKeys = selectedKeys,
 		onSelectionChange,
 		isMultiSelectMode = false,
 	} = options;
@@ -97,12 +105,25 @@ export function useListSelection(
 					];
 					finalKeys = new Set(orderedKeys.slice(from, to + 1));
 				} else {
-					finalKeys = new Set([...selectedKeys, clicked]);
+					finalKeys = new Set([...committedKeys, clicked]);
 				}
 			} else if (!isMultiSelectMode && !modifiersRef.current.meta) {
-				finalKeys = new Set([clicked]);
+				// A plain click that deselects the user's sole committed
+				// selection clears it (click again to cancel); any other
+				// plain click narrows the selection to just that item. A
+				// merely default-highlighted item is not committed, so
+				// clicking it selects rather than clears.
+				const togglingOff =
+					added === undefined &&
+					committedKeys.size === 1 &&
+					committedKeys.has(clicked);
+				finalKeys = togglingOff ? new Set<string>() : new Set([clicked]);
 			} else {
-				finalKeys = new Set(selectedKeys);
+				// Toggle against the committed selection, not the effective
+				// set — a default-highlighted item is not committed, so a
+				// modifier-click on it (or on another item while it is the
+				// phantom highlight) must not pull it into the selection.
+				finalKeys = new Set(committedKeys);
 				if (finalKeys.has(clicked)) {
 					finalKeys.delete(clicked);
 				} else {
@@ -116,7 +137,13 @@ export function useListSelection(
 
 			onSelectionChange(finalKeys, clicked);
 		},
-		[orderedKeys, selectedKeys, onSelectionChange, isMultiSelectMode],
+		[
+			orderedKeys,
+			selectedKeys,
+			committedKeys,
+			onSelectionChange,
+			isMultiSelectMode,
+		],
 	);
 
 	const selectGroup = useCallback(

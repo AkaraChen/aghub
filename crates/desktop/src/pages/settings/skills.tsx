@@ -46,6 +46,9 @@ export default function SkillsPage() {
 	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
 		() => new Set(),
 	);
+	// Set once the user clicks the selected item again to cancel: suppresses
+	// the default fallback to the first skill so the empty placeholder shows.
+	const [selectionCleared, setSelectionCleared] = useState(false);
 	const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
 	const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
 	const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
@@ -85,8 +88,9 @@ export default function SkillsPage() {
 		if (selectedName) {
 			return groupedSkills.find((g) => g.name === selectedName) ?? null;
 		}
+		if (selectionCleared) return null;
 		return groupedSkills[0] ?? null;
-	}, [selectedName, groupedSkills]);
+	}, [selectedName, groupedSkills, selectionCleared]);
 
 	// 多选模式下被选中的所有 groups（用于批量删除）
 	const selectedGroups = useMemo(() => {
@@ -110,8 +114,17 @@ export default function SkillsPage() {
 		// so the detail never lags behind the list highlight.
 		if (keys.size === 1) {
 			setSelectedName([...keys][0]);
+			setSelectionCleared(false);
+		} else if (keys.size === 0 && clickedKey) {
+			// Clicking the selected item again cancels the selection: clear
+			// the detail so the empty placeholder shows. Programmatic clears
+			// (exiting multi-select, bulk deselect) carry no clickedKey and
+			// keep the prior detail.
+			setSelectedName(null);
+			setSelectionCleared(true);
 		} else if (clickedKey && !isMultiSelectMode) {
 			setSelectedName(clickedKey);
+			setSelectionCleared(false);
 		}
 
 		if (keys.size > 1 && !isMultiSelectMode) {
@@ -126,12 +139,14 @@ export default function SkillsPage() {
 	const handleCreateSkill = () => {
 		setSelectedKeys(new Set());
 		setSelectedName(null);
+		setSelectionCleared(false);
 		setPanelMode("create");
 	};
 
 	const handleImportSkill = () => {
 		setSelectedKeys(new Set());
 		setSelectedName(null);
+		setSelectionCleared(false);
 		setPanelMode("import");
 	};
 
@@ -305,6 +320,7 @@ export default function SkillsPage() {
 					<SkillList
 						skills={filteredSkills}
 						selectedKeys={effectiveSelectedKeys}
+						committedKeys={selectedKeys}
 						searchQuery={searchQuery}
 						onSelectionChange={handleSelectionChange}
 						selectionMode="multiple"

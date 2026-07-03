@@ -49,6 +49,8 @@ type MenuTarget =
 interface McpListProps {
 	mcps: McpResponse[];
 	selectedKeys: Set<string>;
+	/** The user's explicit selection, before default-highlight fallback */
+	committedKeys?: Set<string>;
 	searchQuery: string;
 	onSelectionChange: (keys: Set<string>, clickedKey?: string) => void;
 	emptyMessage?: string;
@@ -63,6 +65,7 @@ interface McpListProps {
 export function McpList({
 	mcps,
 	selectedKeys,
+	committedKeys,
 	searchQuery,
 	onSelectionChange,
 	emptyMessage,
@@ -187,6 +190,7 @@ export function McpList({
 		useListSelection({
 			orderedKeys,
 			selectedKeys,
+			committedKeys,
 			onSelectionChange,
 			isMultiSelectMode,
 		});
