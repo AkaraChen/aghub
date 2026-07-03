@@ -76,7 +76,9 @@ export function ContextMenu({
 					if (!open) onClose();
 				}}
 				placement="bottom start"
-				className="p-1"
+				// Standalone PopoverContent misses the popover surface
+				// styling, so apply the overlay background/shadow itself.
+				className="min-w-44 rounded-2xl border border-separator bg-overlay shadow-[var(--overlay-shadow)]"
 			>
 				<Menu aria-label={ariaLabel}>{children}</Menu>
 			</PopoverContent>
