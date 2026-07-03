@@ -164,49 +164,61 @@ export function BulkActionsPanel({
 									? t("unfavorite")
 									: t("favorite")}
 							</Button>
-							<Dropdown>
-								<Button variant="secondary">
-									<FolderIcon className="size-4" />
-									{t("moveToGroup")}
-								</Button>
-								<Dropdown.Popover placement="bottom start">
-									<Dropdown.Menu
-										onAction={(key) => {
-											if (key === "create-group") {
-												actions.requestCreateGroup();
-											} else {
-												void actions.moveToGroup(
-													String(key),
-												);
-											}
-										}}
-									>
-										{actions.groups.map((group) => (
+							{actions.groups.length > 0 ? (
+								<Dropdown>
+									<Button variant="secondary">
+										<FolderIcon className="size-4" />
+										{t("moveToGroup")}
+									</Button>
+									<Dropdown.Popover placement="bottom start">
+										<Dropdown.Menu
+											onAction={(key) => {
+												if (key === "create-group") {
+													actions.requestCreateGroup();
+												} else {
+													void actions.moveToGroup(
+														String(key),
+													);
+												}
+											}}
+										>
+											{actions.groups.map((group) => (
+												<Dropdown.Item
+													key={group.id}
+													id={group.id}
+													textValue={group.name}
+												>
+													<div className="flex items-center gap-2">
+														<FolderIcon className="size-4 text-muted" />
+														<span className="truncate">
+															{group.name}
+														</span>
+													</div>
+												</Dropdown.Item>
+											))}
 											<Dropdown.Item
-												key={group.id}
-												id={group.id}
-												textValue={group.name}
+												id="create-group"
+												textValue={t("createGroup")}
 											>
 												<div className="flex items-center gap-2">
-													<FolderIcon className="size-4 text-muted" />
-													<span className="truncate">
-														{group.name}
+													<FolderPlusIcon className="size-4" />
+													<span>
+														{t("createGroup")}
 													</span>
 												</div>
 											</Dropdown.Item>
-										))}
-										<Dropdown.Item
-											id="create-group"
-											textValue={t("createGroup")}
-										>
-											<div className="flex items-center gap-2">
-												<FolderPlusIcon className="size-4" />
-												<span>{t("createGroup")}</span>
-											</div>
-										</Dropdown.Item>
-									</Dropdown.Menu>
-								</Dropdown.Popover>
-							</Dropdown>
+										</Dropdown.Menu>
+									</Dropdown.Popover>
+								</Dropdown>
+							) : (
+								<Button
+									variant="secondary"
+									onPress={actions.requestCreateGroup}
+								>
+									<FolderPlusIcon className="size-4" />
+									{t("createGroup")}
+								</Button>
+							)}
 							{actions.canRemoveFromGroup && (
 								<Button
 									variant="secondary"

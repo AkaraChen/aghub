@@ -89,9 +89,9 @@ test("multi-select via modifier click opens the bulk actions panel", async ({
 	await expect(
 		page.getByRole("button", { name: "Copy", exact: true }),
 	).toBeVisible();
-	await expect(
-		page.getByRole("button", { name: "Move to group" }),
-	).toBeVisible();
+	// No groups yet, so the panel offers "New group" instead of the
+	// "Move to group" picker
+	await expect(page.getByRole("button", { name: "New group" })).toBeVisible();
 	await expect(
 		page.getByRole("button", { name: "Delete", exact: true }),
 	).toBeVisible();
@@ -200,6 +200,52 @@ test("right click opens the context menu with the full action set", async ({
 		menu.getByRole("menuitem", { name: "New group" }),
 	).toBeVisible();
 	await expect(menu.getByRole("menuitem", { name: "Delete" })).toBeVisible();
+
+	// With no groups yet, the "Move to group" section is not shown —
+	// only the top-level "New group" entry
+	await expect(menu.getByText("Move to group")).toBeHidden();
+});
+
+test("right-clicking within a multi-selection keeps the whole selection", async ({
+	page,
+}) => {
+	await page.getByRole("option", { name: "react-pro" }).click();
+	await page
+		.getByRole("option", { name: "css-wizard" })
+		.click({ modifiers: ["ControlOrMeta"] });
+	await expect(page.getByText("2 items selected")).toBeVisible();
+
+	// Right-clicking one of the selected items keeps the selection so
+	// the menu acts on all of them
+	await page
+		.getByRole("option", { name: "react-pro" })
+		.click({ button: "right" });
+	await expect(
+		page.getByRole("menu", { name: "Resource actions" }),
+	).toBeVisible();
+	await expect(page.getByText("2 items selected")).toBeVisible();
+});
+
+test("the move-to-group section appears once a group exists", async ({
+	page,
+}) => {
+	await page.getByRole("button", { name: "Add skill" }).click();
+	await page.getByRole("menuitem", { name: "New group" }).click();
+	const dialog = page.getByRole("dialog", { name: "New group" });
+	await dialog.getByRole("textbox").fill("My Group");
+	await dialog.getByRole("button", { name: "Save" }).click();
+	await expect(
+		page.getByRole("button", { name: "Select all in My Group" }),
+	).toBeVisible();
+
+	await page
+		.getByRole("option", { name: "solo-skill" })
+		.click({ button: "right" });
+	const menu = page.getByRole("menu", { name: "Resource actions" });
+	await expect(menu.getByText("Move to group")).toBeVisible();
+	await expect(
+		menu.getByRole("menuitem", { name: "My Group" }),
+	).toBeVisible();
 });
 
 test("toolbar creates a group and context menu moves a skill into it", async ({

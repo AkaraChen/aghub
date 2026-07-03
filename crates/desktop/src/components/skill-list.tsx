@@ -386,6 +386,12 @@ export function SkillList({
 		>
 			<div
 				className="flex w-full items-center gap-2"
+				onPointerDown={(event) => {
+					// Right-click must not collapse a multi-selection:
+					// stop react-aria's item from selecting on pointer
+					// down so onContextMenu controls the selection.
+					if (event.button === 2) event.stopPropagation();
+				}}
 				onContextMenu={(event) => openItemMenu(event, skillGroup.name)}
 			>
 				<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
@@ -457,30 +463,55 @@ export function SkillList({
 					<span>{t("transfer")}</span>
 				</div>
 			</Menu.Item>
-			<Menu.Section>
-				<Header className="px-2 py-1 text-xs font-medium text-muted">
-					{t("moveToGroup")}
-				</Header>
-				{actions.groups.map((group) => (
+			{actions.groups.length > 0 ? (
+				<Menu.Section>
+					<Header className="px-2 py-1 text-xs font-medium text-muted">
+						{t("moveToGroup")}
+					</Header>
+					{actions.groups.map((group) => (
+						<Menu.Item
+							key={group.id}
+							id={`group:${group.id}`}
+							textValue={group.name}
+							onAction={() => void actions.moveToGroup(group.id)}
+						>
+							<div className="flex items-center gap-2">
+								<FolderIcon
+									className={cn(
+										"size-4",
+										actions.commonGroupId === group.id
+											? "text-accent"
+											: "text-muted",
+									)}
+								/>
+								<span className="truncate">{group.name}</span>
+							</div>
+						</Menu.Item>
+					))}
 					<Menu.Item
-						key={group.id}
-						id={`group:${group.id}`}
-						textValue={group.name}
-						onAction={() => void actions.moveToGroup(group.id)}
+						id="create-group"
+						textValue={t("createGroup")}
+						onAction={actions.requestCreateGroup}
 					>
 						<div className="flex items-center gap-2">
-							<FolderIcon
-								className={cn(
-									"size-4",
-									actions.commonGroupId === group.id
-										? "text-accent"
-										: "text-muted",
-								)}
-							/>
-							<span className="truncate">{group.name}</span>
+							<FolderPlusIcon className="size-4" />
+							<span>{t("createGroup")}</span>
 						</div>
 					</Menu.Item>
-				))}
+					{actions.canRemoveFromGroup && (
+						<Menu.Item
+							id="remove-from-group"
+							textValue={t("removeFromGroup")}
+							onAction={() => void actions.removeFromGroup()}
+						>
+							<div className="flex items-center gap-2">
+								<FolderMinusIcon className="size-4" />
+								<span>{t("removeFromGroup")}</span>
+							</div>
+						</Menu.Item>
+					)}
+				</Menu.Section>
+			) : (
 				<Menu.Item
 					id="create-group"
 					textValue={t("createGroup")}
@@ -491,19 +522,7 @@ export function SkillList({
 						<span>{t("createGroup")}</span>
 					</div>
 				</Menu.Item>
-				{actions.canRemoveFromGroup && (
-					<Menu.Item
-						id="remove-from-group"
-						textValue={t("removeFromGroup")}
-						onAction={() => void actions.removeFromGroup()}
-					>
-						<div className="flex items-center gap-2">
-							<FolderMinusIcon className="size-4" />
-							<span>{t("removeFromGroup")}</span>
-						</div>
-					</Menu.Item>
-				)}
-			</Menu.Section>
+			)}
 			<Menu.Section>
 				<Menu.Item
 					id="delete"
