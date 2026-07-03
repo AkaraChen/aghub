@@ -139,6 +139,33 @@ test("deselecting a multi-selection down to one item shows that item's detail", 
 	).toBeVisible();
 });
 
+test("the header stays selected while all its members are selected", async ({
+	page,
+}) => {
+	const header = (pressed: boolean) =>
+		page.getByRole("button", {
+			name: "Select all in github/AkaraChen/web-dev",
+			pressed,
+		});
+
+	// Selecting the whole group marks the header selected
+	await header(false).click();
+	await expect(header(true)).toBeVisible();
+
+	// Adding an unrelated item keeps the header selected — every member
+	// is still in the selection
+	await page
+		.getByRole("option", { name: "solo-skill" })
+		.click({ modifiers: ["ControlOrMeta"] });
+	await expect(header(true)).toBeVisible();
+
+	// Deselecting a member clears the header
+	await page
+		.getByRole("option", { name: "react-pro" })
+		.click({ modifiers: ["ControlOrMeta"] });
+	await expect(header(false)).toBeVisible();
+});
+
 test("source group header click selects the whole library", async ({
 	page,
 }) => {

@@ -118,6 +118,7 @@ export function ResourceGroupSection({
 				<div
 					role="button"
 					tabIndex={0}
+					aria-pressed={isSelected}
 					{...headerDragProps}
 					onClick={onSelectAll}
 					onKeyDown={(event) => {

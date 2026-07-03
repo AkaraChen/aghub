@@ -356,9 +356,10 @@ export function SkillList({
 
 	const isExpanded = (id: string) => isSearching || !collapsedIds.has(id);
 
-	const isWholeSelection = (memberKeys: string[]) =>
+	// The header reflects its members: selected once every member is in
+	// the selection, regardless of what else is selected elsewhere.
+	const isGroupSelected = (memberKeys: string[]) =>
 		memberKeys.length > 0 &&
-		memberKeys.length === selectedKeys.size &&
 		memberKeys.every((key) => selectedKeys.has(key));
 
 	const openItemMenu = (event: React.MouseEvent, key: string) => {
@@ -604,7 +605,7 @@ export function SkillList({
 						title={section.group.name}
 						count={section.skills.length}
 						isExpanded={isExpanded(`g:${section.group.id}`)}
-						isSelected={isWholeSelection(memberKeys)}
+						isSelected={isGroupSelected(memberKeys)}
 						onToggleExpanded={() =>
 							toggleCollapsed(`g:${section.group.id}`)
 						}
@@ -636,7 +637,7 @@ export function SkillList({
 						title={sg.source}
 						count={sg.skills.length}
 						isExpanded={isExpanded(`s:${sg.source}`)}
-						isSelected={isWholeSelection(memberKeys)}
+						isSelected={isGroupSelected(memberKeys)}
 						onToggleExpanded={() =>
 							toggleCollapsed(`s:${sg.source}`)
 						}

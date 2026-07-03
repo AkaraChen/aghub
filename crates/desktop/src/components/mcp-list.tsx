@@ -225,9 +225,10 @@ export function McpList({
 		});
 	};
 
-	const isWholeSelection = (memberKeys: string[]) =>
+	// The header reflects its members: selected once every member is in
+	// the selection, regardless of what else is selected elsewhere.
+	const isGroupSelected = (memberKeys: string[]) =>
 		memberKeys.length > 0 &&
-		memberKeys.length === selectedKeys.size &&
 		memberKeys.every((key) => selectedKeys.has(key));
 
 	const openItemMenu = (event: React.MouseEvent, key: string) => {
@@ -469,7 +470,7 @@ export function McpList({
 							isSearching ||
 							!collapsedIds.has(`g:${section.group.id}`)
 						}
-						isSelected={isWholeSelection(memberKeys)}
+						isSelected={isGroupSelected(memberKeys)}
 						onToggleExpanded={() =>
 							toggleCollapsed(`g:${section.group.id}`)
 						}
