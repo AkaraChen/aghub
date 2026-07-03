@@ -62,6 +62,36 @@ export function useFavorites() {
 		[starredMcpsSet, queryClient],
 	);
 
+	const setSkillsStarred = useCallback(
+		async (names: string[], starred: boolean) => {
+			const next = new Set(starredSkillsSet);
+			for (const name of names) {
+				if (starred) next.add(name);
+				else next.delete(name);
+			}
+
+			const arr = Array.from(next);
+			queryClient.setQueryData(["starredSkills"], arr);
+			await setStarredSkills(arr);
+		},
+		[starredSkillsSet, queryClient],
+	);
+
+	const setMcpsStarred = useCallback(
+		async (mergeKeys: string[], starred: boolean) => {
+			const next = new Set(starredMcpsSet);
+			for (const key of mergeKeys) {
+				if (starred) next.add(key);
+				else next.delete(key);
+			}
+
+			const arr = Array.from(next);
+			queryClient.setQueryData(["starredMcps"], arr);
+			await setStarredMcps(arr);
+		},
+		[starredMcpsSet, queryClient],
+	);
+
 	return {
 		starredSkills: starredSkillsSet,
 		starredMcps: starredMcpsSet,
@@ -69,5 +99,7 @@ export function useFavorites() {
 		isMcpStarred,
 		toggleSkillStar,
 		toggleMcpStar,
+		setSkillsStarred,
+		setMcpsStarred,
 	};
 }

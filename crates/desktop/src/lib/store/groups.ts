@@ -7,8 +7,8 @@ export interface ResourceGroupStore {
 	createGroup: (name: string) => Promise<ResourceGroup>;
 	renameGroup: (id: string, name: string) => Promise<void>;
 	deleteGroup: (id: string) => Promise<void>;
-	assignMember: (memberKey: string, groupId: string) => Promise<void>;
-	unassignMember: (memberKey: string) => Promise<void>;
+	assignMembers: (memberKeys: string[], groupId: string) => Promise<void>;
+	unassignMembers: (memberKeys: string[]) => Promise<void>;
 	migrateMember: (oldKey: string, newKey: string) => Promise<void>;
 }
 
@@ -61,20 +61,23 @@ function createResourceGroupStore(
 			await store.set(assignmentsKey, remaining);
 			await store.save();
 		},
-		async assignMember(memberKey: string, groupId: string) {
+		async assignMembers(memberKeys: string[], groupId: string) {
 			const store = await getStore();
 			const assignments = await getAssignments();
-			await store.set(assignmentsKey, {
-				...assignments,
-				[memberKey]: groupId,
-			});
+			const next = { ...assignments };
+			for (const key of memberKeys) {
+				next[key] = groupId;
+			}
+			await store.set(assignmentsKey, next);
 			await store.save();
 		},
-		async unassignMember(memberKey: string) {
+		async unassignMembers(memberKeys: string[]) {
 			const store = await getStore();
 			const assignments = await getAssignments();
 			const remaining = { ...assignments };
-			delete remaining[memberKey];
+			for (const key of memberKeys) {
+				delete remaining[key];
+			}
 			await store.set(assignmentsKey, remaining);
 			await store.save();
 		},

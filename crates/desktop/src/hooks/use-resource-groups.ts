@@ -63,17 +63,17 @@ function useResourceGroups(
 		[store, invalidate],
 	);
 
-	const assignMember = useCallback(
-		async (memberKey: string, groupId: string) => {
-			await store.assignMember(memberKey, groupId);
+	const assignMembers = useCallback(
+		async (memberKeys: string[], groupId: string) => {
+			await store.assignMembers(memberKeys, groupId);
 			await invalidate();
 		},
 		[store, invalidate],
 	);
 
-	const unassignMember = useCallback(
-		async (memberKey: string) => {
-			await store.unassignMember(memberKey);
+	const unassignMembers = useCallback(
+		async (memberKeys: string[]) => {
+			await store.unassignMembers(memberKeys);
 			await invalidate();
 		},
 		[store, invalidate],
@@ -85,8 +85,8 @@ function useResourceGroups(
 		createGroup,
 		renameGroup,
 		deleteGroup,
-		assignMember,
-		unassignMember,
+		assignMembers,
+		unassignMembers,
 	};
 }
 
