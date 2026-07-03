@@ -152,20 +152,28 @@ export function useListSelection(
 
 			let finalKeys: Set<string>;
 			if (modifiersRef.current.meta || isMultiSelectMode) {
-				finalKeys = new Set(selectedKeys);
+				finalKeys = new Set(committedKeys);
 				const allSelected = memberKeys.every((k) => finalKeys.has(k));
 				for (const key of memberKeys) {
 					if (allSelected) finalKeys.delete(key);
 					else finalKeys.add(key);
 				}
 			} else {
-				finalKeys = new Set(memberKeys);
+				// Plain header click selects the whole group; clicking the
+				// header of the group that is already the sole selection
+				// cancels it (click again to cancel).
+				const isSoleGroup =
+					committedKeys.size === memberKeys.length &&
+					memberKeys.every((k) => committedKeys.has(k));
+				finalKeys = isSoleGroup
+					? new Set<string>()
+					: new Set(memberKeys);
 			}
 
 			lastClickedRef.current = memberKeys[0];
 			onSelectionChange(finalKeys, memberKeys[0]);
 		},
-		[selectedKeys, onSelectionChange, isMultiSelectMode],
+		[committedKeys, onSelectionChange, isMultiSelectMode],
 	);
 
 	const ensureSelected = useCallback(

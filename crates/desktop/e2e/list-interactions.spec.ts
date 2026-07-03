@@ -239,6 +239,61 @@ test("source group header click selects the whole library", async ({
 	await expect(page.getByText("2 items selected")).toBeVisible();
 });
 
+test("clicking a selected source group header again cancels it", async ({
+	page,
+}) => {
+	const header = (pressed: boolean) =>
+		page.getByRole("button", {
+			name: "Select all in github/AkaraChen/web-dev",
+			pressed,
+		});
+
+	await header(false).click();
+	await expect(page.getByText("2 items selected")).toBeVisible();
+
+	// Clicking the header again cancels the whole group -> empty placeholder
+	await header(true).click();
+	await expect(page.getByText("2 items selected")).toBeHidden();
+	await expect(header(false)).toBeVisible();
+	await expect(
+		page.getByText("Select a skill to view details"),
+	).toBeVisible();
+});
+
+test("clicking a selected single-member group header again cancels it", async ({
+	page,
+}) => {
+	// Create a custom group and drag solo-skill into it (a single member,
+	// so selecting it stays out of multi-select mode and hits the plain
+	// header-click path)
+	await page.getByRole("button", { name: "Add skill" }).click();
+	await page.getByRole("menuitem", { name: "New group" }).click();
+	const dialog = page.getByRole("dialog", { name: "New group" });
+	await dialog.getByRole("textbox").fill("Solo");
+	await dialog.getByRole("button", { name: "Save" }).click();
+	const section = page.getByTestId("group-section-Solo");
+	await expect(section).toBeVisible();
+	await dragOptionTo(page, "solo-skill", "group-section-Solo");
+	await expect(
+		section.getByRole("option", { name: "solo-skill" }),
+	).toBeVisible();
+
+	// Selecting the group via its header shows the sole member's detail
+	await page.getByRole("button", { name: "Select all in Solo" }).click();
+	await expect(
+		page.getByRole("heading", { name: "solo-skill" }),
+	).toBeVisible();
+
+	// Clicking the header again cancels it -> empty placeholder
+	await page.getByRole("button", { name: "Select all in Solo" }).click();
+	await expect(
+		page.getByText("Select a skill to view details"),
+	).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "solo-skill" }),
+	).toBeHidden();
+});
+
 test("right click opens the context menu with the full action set", async ({
 	page,
 }) => {
