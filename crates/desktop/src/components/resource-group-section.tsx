@@ -94,6 +94,7 @@ export function ResourceGroupSection({
 
 	return (
 		<DropZone
+			data-testid={`group-section-${title}`}
 			getDropOperation={(types) =>
 				onDropKeys && types.has(dragType) ? "move" : "cancel"
 			}
@@ -165,6 +166,7 @@ export function NewGroupDropZone({
 
 	return (
 		<DropZone
+			data-testid="new-group-dropzone"
 			getDropOperation={(types) =>
 				types.has(dragType) ? "move" : "cancel"
 			}
