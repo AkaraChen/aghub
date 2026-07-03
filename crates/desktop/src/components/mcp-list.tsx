@@ -1,24 +1,49 @@
+import { StarIcon as StarIconOutline } from "@heroicons/react/24/outline";
 import {
+	CodeBracketIcon,
 	CommandLineIcon,
+	FolderIcon,
+	FolderMinusIcon,
+	FolderPlusIcon,
 	GlobeAltIcon,
+	PencilIcon,
+	PlusIcon,
 	StarIcon as StarIconSolid,
+	TrashIcon,
 } from "@heroicons/react/24/solid";
-import { Label, ListBox } from "@heroui/react";
+import { Header, Label, ListBox, Menu } from "@heroui/react";
 import Fuse from "fuse.js";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { DropZone, useDragAndDrop } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import type { McpResponse } from "../generated/dto";
-import { useMultiSelect } from "../hooks/use-multi-select";
 import { AgentIcons } from "./agent-icons";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useFavorites } from "../hooks/use-favorites";
-import { filterItemsByAgentIds, getMcpMergeKey } from "../lib/utils";
+import { useListSelection } from "../hooks/use-list-selection";
+import type { ResourceActionIntents } from "../hooks/use-resource-actions";
+import { useResourceActions } from "../hooks/use-resource-actions";
+import { useMcpGroups } from "../hooks/use-resource-groups";
+import type { ResourceGroup } from "../lib/store";
+import { cn, filterItemsByAgentIds, getMcpMergeKey } from "../lib/utils";
+import { ContextMenu, useContextMenu } from "./context-menu";
+import { DeleteGroupDialog, GroupNameDialog } from "./resource-group-dialogs";
+import {
+	NewGroupDropZone,
+	readDraggedKeys,
+	ResourceGroupSection,
+} from "./resource-group-section";
+
+export const MCP_DRAG_TYPE = "aghub-mcp-keys";
 
 interface McpGroup {
 	mergeKey: string;
 	transport: McpResponse["transport"];
 	items: McpResponse[];
 }
+
+type MenuTarget =
+	{ type: "items" } | { type: "custom-group"; group: ResourceGroup };
 
 interface McpListProps {
 	mcps: McpResponse[];
@@ -28,6 +53,10 @@ interface McpListProps {
 	emptyMessage?: string;
 	selectionMode?: "none" | "single" | "multiple";
 	isMultiSelectMode?: boolean;
+	/** Dialog intents owned by the page (delete/transfer/agents/new group) */
+	intents: ResourceActionIntents;
+	/** Dropping items on the new-group zone: page opens the naming dialog */
+	onDropCreateGroup: (keys: string[]) => void;
 }
 
 export function McpList({
@@ -38,6 +67,8 @@ export function McpList({
 	emptyMessage,
 	selectionMode = "single",
 	isMultiSelectMode = false,
+	intents,
+	onDropCreateGroup,
 }: McpListProps) {
 	const { t } = useTranslation();
 	const { availableAgents } = useAgentAvailability();
@@ -89,10 +120,29 @@ export function McpList({
 	}, [fuse, groupedMcps, searchQuery]);
 
 	const { isMcpStarred } = useFavorites();
+	const {
+		groups,
+		assignments,
+		renameGroup,
+		deleteGroup,
+		assignMembers,
+		unassignMembers,
+	} = useMcpGroups();
+
+	const [collapsedIds, setCollapsedIds] = useState<Set<string>>(
+		() => new Set(),
+	);
+	const [renameTarget, setRenameTarget] = useState<ResourceGroup | null>(
+		null,
+	);
+	const [deleteTarget, setDeleteTarget] = useState<ResourceGroup | null>(
+		null,
+	);
+	const [isDraggingKeys, setIsDraggingKeys] = useState(false);
 
 	const sortedGroups = useMemo(() => {
-		const groups = [...filteredGroups];
-		return groups.sort((a, b) => {
+		const list = [...filteredGroups];
+		return list.sort((a, b) => {
 			const aStarred = isMcpStarred(a.mergeKey);
 			const bStarred = isMcpStarred(b.mergeKey);
 			if (aStarred && !bStarred) return -1;
@@ -101,15 +151,83 @@ export function McpList({
 		});
 	}, [filteredGroups, isMcpStarred]);
 
-	const { createSelectionHandler } = useMultiSelect({
+	const { customSections, unassignedGroups } = useMemo(() => {
+		const members = new Map<string, McpGroup[]>();
+		const rest: McpGroup[] = [];
+		const groupIds = new Set(groups.map((g) => g.id));
+		for (const item of sortedGroups) {
+			const groupId = assignments[item.mergeKey];
+			if (groupId && groupIds.has(groupId)) {
+				const existing = members.get(groupId) ?? [];
+				existing.push(item);
+				members.set(groupId, existing);
+			} else {
+				rest.push(item);
+			}
+		}
+		const sections = groups
+			.map((group) => ({
+				group,
+				mcps: members.get(group.id) ?? [],
+			}))
+			.filter((section) => !searchQuery || section.mcps.length > 0);
+		return { customSections: sections, unassignedGroups: rest };
+	}, [sortedGroups, groups, assignments, searchQuery]);
+
+	const orderedKeys = useMemo(
+		() => [
+			...customSections.flatMap((s) => s.mcps.map((g) => g.mergeKey)),
+			...unassignedGroups.map((g) => g.mergeKey),
+		],
+		[customSections, unassignedGroups],
+	);
+
+	const { createSelectionHandler, selectGroup, ensureSelected } =
+		useListSelection({
+			orderedKeys,
+			selectedKeys,
+			onSelectionChange,
+			isMultiSelectMode,
+		});
+
+	const contextMenu = useContextMenu<MenuTarget>();
+	const actions = useResourceActions({
+		kind: "mcp",
 		selectedKeys,
-		onSelectionChange,
-		isMultiSelectMode,
+		intents,
 	});
 
-	const handleSelectionChange = createSelectionHandler(
-		sortedGroups.map((g) => g.mergeKey),
-	);
+	const { dragAndDropHooks } = useDragAndDrop({
+		getItems: (keys) => [
+			{
+				[MCP_DRAG_TYPE]: JSON.stringify(Array.from(keys).map(String)),
+			},
+		],
+		onDragStart: () => setIsDraggingKeys(true),
+		onDragEnd: () => setIsDraggingKeys(false),
+	});
+
+	const isSearching = Boolean(searchQuery);
+
+	const toggleCollapsed = (id: string) => {
+		if (isSearching) return;
+		setCollapsedIds((prev) => {
+			const next = new Set(prev);
+			if (next.has(id)) next.delete(id);
+			else next.add(id);
+			return next;
+		});
+	};
+
+	const isWholeSelection = (memberKeys: string[]) =>
+		memberKeys.length > 0 &&
+		memberKeys.length === selectedKeys.size &&
+		memberKeys.every((key) => selectedKeys.has(key));
+
+	const openItemMenu = (event: React.MouseEvent, key: string) => {
+		ensureSelected(key);
+		contextMenu.open(event, { type: "items" });
+	};
 
 	const getTransportIcon = (
 		transport: McpGroup["transport"],
@@ -127,7 +245,204 @@ export function McpList({
 		);
 	};
 
-	if (sortedGroups.length === 0) {
+	const renderMcpItem = (group: McpGroup) => {
+		const isStarred = isMcpStarred(group.mergeKey);
+		return (
+			<ListBox.Item
+				key={group.mergeKey}
+				id={group.mergeKey}
+				textValue={group.items[0].name}
+				className="data-selected:bg-surface"
+			>
+				<div
+					className="flex w-full items-center gap-2"
+					onContextMenu={(event) =>
+						openItemMenu(event, group.mergeKey)
+					}
+				>
+					{getTransportIcon(group.transport, isStarred)}
+					<Label className="flex-1 truncate">
+						{group.items[0].name}
+					</Label>
+					<AgentIcons items={group.items} />
+				</div>
+			</ListBox.Item>
+		);
+	};
+
+	const renderSectionListBox = (label: string, sectionMcps: McpGroup[]) => (
+		<ListBox
+			aria-label={label}
+			selectionMode={selectionMode}
+			selectionBehavior="toggle"
+			selectedKeys={selectedKeys}
+			onSelectionChange={createSelectionHandler(
+				sectionMcps.map((g) => g.mergeKey),
+			)}
+			dragAndDropHooks={dragAndDropHooks}
+			className="p-2 pl-6"
+		>
+			{sectionMcps.map(renderMcpItem)}
+		</ListBox>
+	);
+
+	const itemsMenuNode = (
+		<>
+			<Menu.Item
+				id="toggle-favorite"
+				textValue={actions.allStarred ? t("unfavorite") : t("favorite")}
+				onAction={() => void actions.toggleFavorite()}
+			>
+				<div className="flex items-center gap-2">
+					{actions.allStarred ? (
+						<StarIconOutline className="size-4" />
+					) : (
+						<StarIconSolid className="size-4 text-warning" />
+					)}
+					<span>
+						{actions.allStarred ? t("unfavorite") : t("favorite")}
+					</span>
+				</div>
+			</Menu.Item>
+			<Menu.Item
+				id="add-to-agent"
+				textValue={t("addToAgent")}
+				onAction={actions.requestAddToAgent}
+			>
+				<div className="flex items-center gap-2">
+					<PlusIcon className="size-4" />
+					<span>{t("addToAgent")}</span>
+				</div>
+			</Menu.Item>
+			<Menu.Item
+				id="transfer"
+				textValue={t("transfer")}
+				onAction={actions.requestTransfer}
+			>
+				<div className="flex items-center gap-2">
+					<CodeBracketIcon className="size-4" />
+					<span>{t("transfer")}</span>
+				</div>
+			</Menu.Item>
+			<Menu.Section>
+				<Header className="px-2 py-1 text-xs font-medium text-muted">
+					{t("moveToGroup")}
+				</Header>
+				{actions.groups.map((group) => (
+					<Menu.Item
+						key={group.id}
+						id={`group:${group.id}`}
+						textValue={group.name}
+						onAction={() => void actions.moveToGroup(group.id)}
+					>
+						<div className="flex items-center gap-2">
+							<FolderIcon
+								className={cn(
+									"size-4",
+									actions.commonGroupId === group.id
+										? "text-accent"
+										: "text-muted",
+								)}
+							/>
+							<span className="truncate">{group.name}</span>
+						</div>
+					</Menu.Item>
+				))}
+				<Menu.Item
+					id="create-group"
+					textValue={t("createGroup")}
+					onAction={actions.requestCreateGroup}
+				>
+					<div className="flex items-center gap-2">
+						<FolderPlusIcon className="size-4" />
+						<span>{t("createGroup")}</span>
+					</div>
+				</Menu.Item>
+				{actions.canRemoveFromGroup && (
+					<Menu.Item
+						id="remove-from-group"
+						textValue={t("removeFromGroup")}
+						onAction={() => void actions.removeFromGroup()}
+					>
+						<div className="flex items-center gap-2">
+							<FolderMinusIcon className="size-4" />
+							<span>{t("removeFromGroup")}</span>
+						</div>
+					</Menu.Item>
+				)}
+			</Menu.Section>
+			<Menu.Section>
+				<Menu.Item
+					id="delete"
+					textValue={t("delete")}
+					onAction={actions.requestDelete}
+				>
+					<div className="flex items-center gap-2 text-danger">
+						<TrashIcon className="size-4" />
+						<span>{t("delete")}</span>
+					</div>
+				</Menu.Item>
+			</Menu.Section>
+		</>
+	);
+
+	const customGroupMenuNode = (group: ResourceGroup) => (
+		<>
+			<Menu.Item
+				id="rename-group"
+				textValue={t("renameGroup")}
+				onAction={() => setRenameTarget(group)}
+			>
+				<div className="flex items-center gap-2">
+					<PencilIcon className="size-4" />
+					<span>{t("renameGroup")}</span>
+				</div>
+			</Menu.Item>
+			<Menu.Item
+				id="delete-group"
+				textValue={t("deleteGroup")}
+				onAction={() => setDeleteTarget(group)}
+			>
+				<div className="flex items-center gap-2 text-danger">
+					<TrashIcon className="size-4" />
+					<span>{t("deleteGroup")}</span>
+				</div>
+			</Menu.Item>
+		</>
+	);
+
+	const overlaysNode = (
+		<>
+			<ContextMenu
+				position={contextMenu.state?.position ?? null}
+				onClose={contextMenu.close}
+				aria-label={t("resourceActions")}
+			>
+				{contextMenu.state?.context.type === "custom-group"
+					? customGroupMenuNode(contextMenu.state.context.group)
+					: itemsMenuNode}
+			</ContextMenu>
+			<GroupNameDialog
+				isOpen={renameTarget !== null}
+				onClose={() => setRenameTarget(null)}
+				title={t("renameGroup")}
+				initialName={renameTarget?.name}
+				onSubmit={async (name) => {
+					if (renameTarget) await renameGroup(renameTarget.id, name);
+				}}
+			/>
+			<DeleteGroupDialog
+				group={deleteTarget}
+				isOpen={deleteTarget !== null}
+				onClose={() => setDeleteTarget(null)}
+				onConfirm={async () => {
+					if (deleteTarget) await deleteGroup(deleteTarget.id);
+				}}
+			/>
+		</>
+	);
+
+	if (sortedGroups.length === 0 && customSections.length === 0) {
 		return (
 			<p className="px-3 py-6 text-center text-sm text-muted">
 				{emptyMessage ?? t("noServersMatch")}
@@ -137,34 +452,95 @@ export function McpList({
 
 	return (
 		<div className="flex-1 overflow-y-auto">
-			<ListBox
-				aria-label="MCP Servers"
-				selectionMode={selectionMode}
-				selectionBehavior="toggle"
-				selectedKeys={selectedKeys}
-				onSelectionChange={handleSelectionChange}
-				className="p-2"
-			>
-				{sortedGroups.map((group) => {
-					const isStarred = isMcpStarred(group.mergeKey);
-					return (
-						<ListBox.Item
-							key={group.mergeKey}
-							id={group.mergeKey}
-							textValue={group.items[0].name}
-							className="data-selected:bg-surface"
-						>
-							<div className="flex w-full items-center gap-2">
-								{getTransportIcon(group.transport, isStarred)}
-								<Label className="flex-1 truncate">
-									{group.items[0].name}
-								</Label>
-								<AgentIcons items={group.items} />
-							</div>
-						</ListBox.Item>
-					);
-				})}
-			</ListBox>
+			{customSections.map((section) => {
+				const memberKeys = section.mcps.map((g) => g.mergeKey);
+				return (
+					<ResourceGroupSection
+						key={section.group.id}
+						title={section.group.name}
+						count={section.mcps.length}
+						icon={
+							<FolderIcon className="size-4 shrink-0 text-muted" />
+						}
+						isExpanded={
+							isSearching ||
+							!collapsedIds.has(`g:${section.group.id}`)
+						}
+						isSelected={isWholeSelection(memberKeys)}
+						onToggleExpanded={() =>
+							toggleCollapsed(`g:${section.group.id}`)
+						}
+						onSelectAll={() => selectGroup(memberKeys)}
+						onContextMenu={(event) =>
+							contextMenu.open(event, {
+								type: "custom-group",
+								group: section.group,
+							})
+						}
+						dragType={MCP_DRAG_TYPE}
+						dragKeys={memberKeys}
+						onDropKeys={(keys) =>
+							void assignMembers(keys, section.group.id)
+						}
+						onHeaderDragChange={setIsDraggingKeys}
+					>
+						{section.mcps.length > 0 &&
+							renderSectionListBox(
+								section.group.name,
+								section.mcps,
+							)}
+					</ResourceGroupSection>
+				);
+			})}
+
+			{unassignedGroups.length > 0 && (
+				<DropZone
+					getDropOperation={(types) =>
+						types.has(MCP_DRAG_TYPE) ? "move" : "cancel"
+					}
+					onDrop={(e) => {
+						void readDraggedKeys(e.items, MCP_DRAG_TYPE).then(
+							(keys) => {
+								if (keys.length > 0) void unassignMembers(keys);
+							},
+						);
+					}}
+					className={({ isDropTarget }) =>
+						cn(
+							isDropTarget &&
+								"bg-accent/10 ring-1 ring-inset ring-accent",
+						)
+					}
+				>
+					{customSections.length > 0 && (
+						<p className="px-3 pt-3 pb-1 text-xs font-medium tracking-wider text-muted uppercase">
+							{t("ungrouped")}
+						</p>
+					)}
+					<ListBox
+						aria-label="MCP Servers"
+						selectionMode={selectionMode}
+						selectionBehavior="toggle"
+						selectedKeys={selectedKeys}
+						onSelectionChange={createSelectionHandler(
+							unassignedGroups.map((g) => g.mergeKey),
+						)}
+						dragAndDropHooks={dragAndDropHooks}
+						className="p-2"
+					>
+						{unassignedGroups.map(renderMcpItem)}
+					</ListBox>
+				</DropZone>
+			)}
+
+			{isDraggingKeys && (
+				<NewGroupDropZone
+					dragType={MCP_DRAG_TYPE}
+					onDropKeys={onDropCreateGroup}
+				/>
+			)}
+
+			{overlaysNode}
 		</div>
 	);
 }

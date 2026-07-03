@@ -530,7 +530,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 
 			{/* Manage Agents Dialog */}
 			<ManageAgentsDialog
-				group={group}
+				groups={[group]}
 				isOpen={uiState.manageDialogOpen}
 				onClose={() =>
 					dispatch({
@@ -551,11 +551,15 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 					})
 				}
 				resourceType="mcp"
-				name={primaryItem.name}
-				sourceAgent={primaryItem.agent ?? "claude"}
+				items={[
+					{
+						name: primaryItem.name,
+						sourceAgent: primaryItem.agent ?? "claude",
+						transport: primaryItem.transport,
+					},
+				]}
 				sourceScope={primaryScope}
 				sourceProjectRoot={projectPath}
-				transport={primaryItem.transport}
 			/>
 		</>
 	);

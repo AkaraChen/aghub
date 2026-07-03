@@ -267,8 +267,12 @@ export function SubAgentDetail({
 					isOpen={transferDialogOpen}
 					onClose={() => setTransferDialogOpen(false)}
 					resourceType="sub_agent"
-					name={primary.name}
-					sourceAgent={primary.agent}
+					items={[
+						{
+							name: primary.name,
+							sourceAgent: primary.agent,
+						},
+					]}
 					sourceScope={
 						primary.source === "project" ? "project" : "global"
 					}

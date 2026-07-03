@@ -13,14 +13,14 @@ import type { SkillGroup } from "./skill-detail-helpers";
 import { SkillsAgentList } from "./skills-agent-list";
 
 interface ManageSkillAgentsDialogProps {
-	group: SkillGroup;
+	groups: SkillGroup[];
 	isOpen: boolean;
 	onClose: () => void;
 	projectPath?: string;
 }
 
 export function ManageSkillAgentsDialog({
-	group,
+	groups,
 	isOpen,
 	onClose,
 	projectPath,
@@ -36,36 +36,62 @@ export function ManageSkillAgentsDialog({
 		}),
 	);
 
-	const hasValidGroup = group?.items && Array.isArray(group.items);
+	const hasValidGroups =
+		groups.length > 0 &&
+		groups.every((group) => group?.items && Array.isArray(group.items));
 
-	const installedAgentIds = useMemo(() => {
-		if (!hasValidGroup) return new Set<string>();
-		return new Set(
-			group.items
-				.map((item) => item.agent)
-				.filter((agent): agent is string => agent != null),
-		);
-	}, [hasValidGroup, group]);
+	const installedAgentIdsByGroup = useMemo(
+		() =>
+			groups.map(
+				(group) =>
+					new Set(
+						(group?.items ?? [])
+							.map((item) => item.agent)
+							.filter((agent): agent is string => agent != null),
+					),
+			),
+		[groups],
+	);
+
+	const commonInstalledAgentIds = useMemo(() => {
+		const [first, ...rest] = installedAgentIdsByGroup;
+		if (!first) return new Set<string>();
+		let common = Array.from(first);
+		for (const installed of rest) {
+			common = common.filter((id) => installed.has(id));
+		}
+		return new Set(common);
+	}, [installedAgentIdsByGroup]);
 
 	const scope: Scope = useMemo(() => {
-		if (!hasValidGroup || group.items.length === 0) return "global";
-		const primary = group.items[0];
+		if (!hasValidGroups) return "global";
+		const primary = groups[0]?.items[0];
 		return primary?.source ?? "global";
-	}, [hasValidGroup, group]);
+	}, [hasValidGroups, groups]);
 
 	const usableAgents = useMemo(
 		() =>
-			(availableAgents ?? [])
-				.filter((a) => a?.isUsable && supportsSkillMutation(a, scope))
-				.filter((a) => !installedAgentIds.has(a.id)),
-		[availableAgents, installedAgentIds, scope],
+			(availableAgents ?? []).filter(
+				(a) => a?.isUsable && supportsSkillMutation(a, scope),
+			),
+		[availableAgents, scope],
 	);
 
+	const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
 	const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
 	const [agentStates, setAgentStates] = useState<Record<string, AgentState>>(
 		{},
 	);
 	const [isApplying, setIsApplying] = useState(false);
+
+	if (isOpen !== prevIsOpen) {
+		setPrevIsOpen(isOpen);
+		if (isOpen) {
+			setSelectedAgents(Array.from(commonInstalledAgentIds));
+			setAgentStates({});
+			setIsApplying(false);
+		}
+	}
 
 	const selectedSet = useMemo(
 		() => new Set(selectedAgents),
@@ -75,14 +101,35 @@ export function ManageSkillAgentsDialog({
 	const diffLabels = useMemo((): Record<string, AgentDiffLabel> => {
 		const labels: Record<string, AgentDiffLabel> = {};
 		for (const agent of usableAgents) {
-			if (selectedSet.has(agent.id)) {
+			const installedInAll = installedAgentIdsByGroup.every((installed) =>
+				installed.has(agent.id),
+			);
+			const installedInAny = installedAgentIdsByGroup.some((installed) =>
+				installed.has(agent.id),
+			);
+			const isSelected = selectedSet.has(agent.id);
+			if (isSelected && !installedInAll) {
 				labels[agent.id] = "adding";
+			} else if (!isSelected && installedInAny) {
+				labels[agent.id] = "removing";
+			} else if (isSelected && installedInAll) {
+				labels[agent.id] = "installed";
+			} else {
+				labels[agent.id] = "unconfigured";
 			}
 		}
 		return labels;
-	}, [usableAgents, selectedSet]);
+	}, [usableAgents, installedAgentIdsByGroup, selectedSet]);
 
-	const hasChanges = selectedAgents.length > 0;
+	const hasChanges = useMemo(
+		() =>
+			installedAgentIdsByGroup.some(
+				(installed) =>
+					selectedAgents.some((id) => !installed.has(id)) ||
+					Array.from(installed).some((id) => !selectedSet.has(id)),
+			),
+		[installedAgentIdsByGroup, selectedAgents, selectedSet],
+	);
 
 	const handleSelectionChange = useCallback((keys: string[]) => {
 		setSelectedAgents(keys);
@@ -95,66 +142,100 @@ export function ManageSkillAgentsDialog({
 	};
 
 	const handleApply = async () => {
-		if (!hasValidGroup || group.items.length === 0) {
+		if (!hasValidGroups) {
 			toast.danger(t("invalidConfiguration"));
 			return;
 		}
 
-		setIsApplying(true);
-		const primary = group.items[0];
-
-		if (!primary?.name) {
+		if (groups.some((group) => !group.items[0]?.name)) {
 			toast.danger(t("invalidSkillConfiguration"));
-			setIsApplying(false);
 			return;
 		}
 
-		const primaryAgent = primary.agent ?? "claude";
-		const sourceAgentItem =
-			group.items.find((item) => item.agent === primaryAgent) ?? primary;
+		setIsApplying(true);
 
-		const toInstall = selectedAgents;
+		const plans = groups.map((group, index) => {
+			const installed =
+				installedAgentIdsByGroup[index] ?? new Set<string>();
+			return {
+				group,
+				added: selectedAgents.filter((id) => !installed.has(id)),
+				removed: Array.from(installed).filter(
+					(id) => !selectedSet.has(id),
+				),
+			};
+		});
+
+		const changedIds = new Set<string>();
+		for (const plan of plans) {
+			for (const id of [...plan.added, ...plan.removed]) {
+				changedIds.add(id);
+			}
+		}
 
 		const pendingStates: Record<string, AgentState> = {};
-		for (const id of toInstall) {
+		for (const id of changedIds) {
 			pendingStates[id] = { status: "pending" };
 		}
 		setAgentStates(pendingStates);
 
 		try {
-			const result = await reconcileMutation.mutateAsync({
-				source: {
-					agent: sourceAgentItem.agent ?? "claude",
-					scope:
-						sourceAgentItem.source === "project"
-							? "project"
-							: "global",
-					project_root: projectPath ?? null,
-					name: primary.name,
-				},
-				added: toInstall.length > 0 ? toInstall : null,
-				removed: null,
-			});
-
+			let successCount = 0;
+			let failedCount = 0;
 			const newAgentStates: Record<string, AgentState> = {};
-			for (const item of result.results) {
-				newAgentStates[item.agent] = {
-					status: item.success ? "success" : "error",
-					error: item.error ?? undefined,
-				};
+			for (const plan of plans) {
+				if (plan.added.length === 0 && plan.removed.length === 0) {
+					continue;
+				}
+
+				const primary = plan.group.items[0];
+				if (!primary?.name) continue;
+
+				const primaryAgent = primary.agent ?? "claude";
+				const sourceAgentItem =
+					plan.group.items.find(
+						(item) => item.agent === primaryAgent,
+					) ?? primary;
+
+				const result = await reconcileMutation.mutateAsync({
+					source: {
+						agent: sourceAgentItem.agent ?? "claude",
+						scope:
+							sourceAgentItem.source === "project"
+								? "project"
+								: "global",
+						project_root: projectPath ?? null,
+						name: primary.name,
+					},
+					added: plan.added.length > 0 ? plan.added : null,
+					removed: plan.removed.length > 0 ? plan.removed : null,
+				});
+
+				for (const item of result.results) {
+					if (item.success) {
+						newAgentStates[item.agent] ??= { status: "success" };
+					} else {
+						newAgentStates[item.agent] = {
+							status: "error",
+							error: item.error ?? undefined,
+						};
+					}
+				}
+				successCount += result.success_count;
+				failedCount += result.failed_count;
 			}
 			setAgentStates(newAgentStates);
 
-			if (result.failed_count === 0) {
+			if (failedCount === 0) {
 				toast.success(
-					t("agentChangesApplied", { count: result.success_count }),
+					t("agentChangesApplied", { count: successCount }),
 				);
 				onCloseAndReset();
 			} else {
 				toast.danger(
 					t("agentChangesFailed", {
-						success: result.success_count,
-						failed: result.failed_count,
+						success: successCount,
+						failed: failedCount,
 					}),
 				);
 			}
@@ -164,7 +245,7 @@ export function ManageSkillAgentsDialog({
 			toast.danger(errorMessage);
 
 			const errorStates: Record<string, AgentState> = {};
-			for (const id of toInstall) {
+			for (const id of changedIds) {
 				errorStates[id] = { status: "error", error: errorMessage };
 			}
 			setAgentStates(errorStates);
@@ -193,7 +274,7 @@ export function ManageSkillAgentsDialog({
 					</Modal.Header>
 
 					<Modal.Body className="p-4">
-						{!hasValidGroup ? (
+						{!hasValidGroups ? (
 							<p className="text-sm text-muted">
 								{t("invalidConfiguration")}
 							</p>

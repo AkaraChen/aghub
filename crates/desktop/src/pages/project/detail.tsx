@@ -13,13 +13,18 @@ import { EditMcpPanel } from "../../components/edit-mcp-panel";
 import { ImportGithubSkillPanel } from "../../components/import-github-skill-panel";
 import { ImportMcpPanel } from "../../components/import-mcp-panel";
 import { ImportSkillPanel } from "../../components/import-skill-panel";
+import { ManageAgentsDialog } from "../../components/manage-agents-dialog";
+import { ManageSkillAgentsDialog } from "../../components/manage-skill-agents-dialog";
 import { McpDetail } from "../../components/mcp-detail";
+import { GroupNameDialog } from "../../components/resource-group-dialogs";
 import { SkillDetail } from "../../components/skill-detail";
 import { SubAgentDetail } from "../../components/sub-agent-detail";
+import { TransferDialog } from "../../components/transfer-dialog";
 import { UnifiedResourceList } from "../../components/unified-resource-list";
 import type { McpResponse, SkillResponse } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
 import { useProjects } from "../../hooks/use-projects";
+import { useMcpGroups, useSkillGroups } from "../../hooks/use-resource-groups";
 import { bulkFailureItemsLabel } from "../../lib/bulk-errors";
 import { getMcpMergeKey, getSubAgentMergeKey } from "../../lib/utils";
 import { mcpListQueryOptions } from "../../requests/mcps";
@@ -60,6 +65,18 @@ export default function ProjectDetailPage() {
 	);
 	const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
 	const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
+	const [bulkDialog, setBulkDialog] = useState<{
+		type: "transfer" | "manage";
+		kind: "skill" | "mcp";
+	} | null>(null);
+	const [createGroupState, setCreateGroupState] = useState<{
+		kind: "skill" | "mcp";
+		keys: string[];
+	} | null>(null);
+	const { createGroup: createSkillGroup, assignMembers: assignSkillMembers } =
+		useSkillGroups();
+	const { createGroup: createMcpGroup, assignMembers: assignMcpMembers } =
+		useMcpGroups();
 
 	// Fetch MCPs and Skills for this project
 	const {
@@ -239,6 +256,37 @@ export default function ProjectDetailPage() {
 		return [...mcpGroups, ...skillGroups];
 	}, [groupedMcps, groupedSkills, selectedMcpKeys, selectedSkillKeys]);
 
+	const selectedSkillGroups = useMemo(
+		() => groupedSkills.filter((g) => selectedSkillKeys.has(g.name)),
+		[groupedSkills, selectedSkillKeys],
+	);
+	const selectedMcpGroups = useMemo(
+		() => groupedMcps.filter((g) => selectedMcpKeys.has(g.mergeKey)),
+		[groupedMcps, selectedMcpKeys],
+	);
+
+	const skillIntents = {
+		onRequestDelete: () => setIsBulkDeleteDialogOpen(true),
+		onRequestAddToAgent: () =>
+			setBulkDialog({ type: "manage", kind: "skill" }),
+		onRequestTransfer: () =>
+			setBulkDialog({ type: "transfer", kind: "skill" }),
+		onRequestCreateGroup: () =>
+			setCreateGroupState({
+				kind: "skill",
+				keys: [...selectedSkillKeys],
+			}),
+	};
+	const mcpIntents = {
+		onRequestDelete: () => setIsBulkDeleteDialogOpen(true),
+		onRequestAddToAgent: () =>
+			setBulkDialog({ type: "manage", kind: "mcp" }),
+		onRequestTransfer: () =>
+			setBulkDialog({ type: "transfer", kind: "mcp" }),
+		onRequestCreateGroup: () =>
+			setCreateGroupState({ kind: "mcp", keys: [...selectedMcpKeys] }),
+	};
+
 	const handleRefresh = () => {
 		refetchMcps();
 		refetchSkills();
@@ -338,6 +386,11 @@ export default function ProjectDetailPage() {
 				isMultiSelectMode={isMultiSelectMode}
 				onMultiSelectModeChange={handleMultiSelectModeChange}
 				onDeleteSelected={() => setIsBulkDeleteDialogOpen(true)}
+				skillIntents={skillIntents}
+				mcpIntents={mcpIntents}
+				onDropCreateGroup={(kind, keys) =>
+					setCreateGroupState({ kind, keys })
+				}
 			/>
 
 			{/* Detail Panel */}
@@ -455,6 +508,69 @@ export default function ProjectDetailPage() {
 					}}
 					resourceType="mixed"
 					projectPath={project.path}
+				/>
+				<TransferDialog
+					isOpen={bulkDialog?.type === "transfer"}
+					onClose={() => setBulkDialog(null)}
+					resourceType={bulkDialog?.kind === "mcp" ? "mcp" : "skill"}
+					items={
+						bulkDialog?.kind === "mcp"
+							? selectedMcpGroups.map((g) => ({
+									name: g.items[0].name,
+									sourceAgent: g.items[0].agent ?? "claude",
+									transport: g.items[0].transport,
+								}))
+							: selectedSkillGroups.map((g) => ({
+									name: g.name,
+									sourceAgent: g.items[0].agent ?? "claude",
+								}))
+					}
+					sourceScope="project"
+					sourceProjectRoot={project.path}
+				/>
+				<ManageSkillAgentsDialog
+					groups={selectedSkillGroups}
+					isOpen={
+						bulkDialog?.type === "manage" &&
+						bulkDialog.kind === "skill"
+					}
+					onClose={() => setBulkDialog(null)}
+					projectPath={project.path}
+				/>
+				<ManageAgentsDialog
+					groups={selectedMcpGroups}
+					isOpen={
+						bulkDialog?.type === "manage" &&
+						bulkDialog.kind === "mcp"
+					}
+					onClose={() => setBulkDialog(null)}
+					projectPath={project.path}
+					requiredCapabilities={["mcp"]}
+				/>
+				<GroupNameDialog
+					isOpen={createGroupState !== null}
+					onClose={() => setCreateGroupState(null)}
+					title={t("createGroup")}
+					onSubmit={async (name) => {
+						if (!createGroupState) return;
+						const created =
+							createGroupState.kind === "mcp"
+								? await createMcpGroup(name)
+								: await createSkillGroup(name);
+						if (createGroupState.keys.length > 0) {
+							if (createGroupState.kind === "mcp") {
+								await assignMcpMembers(
+									createGroupState.keys,
+									created.id,
+								);
+							} else {
+								await assignSkillMembers(
+									createGroupState.keys,
+									created.id,
+								);
+							}
+						}
+					}}
 				/>
 			</div>
 		</div>

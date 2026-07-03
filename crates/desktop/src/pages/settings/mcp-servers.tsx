@@ -9,18 +9,22 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { BulkActionsPanel } from "../../components/bulk-actions-panel";
 import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
 import { CreateMcpPanel } from "../../components/create-mcp-panel";
 import { EditMcpPanel } from "../../components/edit-mcp-panel";
 import { ImportMcpPanel } from "../../components/import-mcp-panel";
+import { ManageAgentsDialog } from "../../components/manage-agents-dialog";
+import { GroupNameDialog } from "../../components/resource-group-dialogs";
 import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
+import { TransferDialog } from "../../components/transfer-dialog";
 import { useAgentFilter } from "../../hooks/use-agent-filter";
 import type { McpGroup } from "../../components/mcp-detail";
 import { McpDetail } from "../../components/mcp-detail";
 import { McpList } from "../../components/mcp-list";
-import { MultiSelectFloatingBar } from "../../components/multi-select-floating-bar";
 import { useAgentAvailability } from "../../hooks/use-agent-availability";
 import { useApi } from "../../hooks/use-api";
+import { useMcpGroups } from "../../hooks/use-resource-groups";
 import { supportsMcp } from "../../lib/agent-capabilities";
 import { cn, getMcpMergeKey } from "../../lib/utils";
 import { mcpListQueryOptions } from "../../requests/mcps";
@@ -51,6 +55,12 @@ export default function MCPServersPage() {
 	);
 	const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
 	const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+	const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
+	const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
+	const [createGroupKeys, setCreateGroupKeys] = useState<string[] | null>(
+		null,
+	);
+	const { createGroup, assignMembers } = useMcpGroups();
 
 	const hasMcpCapableAgents = useMemo(
 		() =>
@@ -147,10 +157,20 @@ export default function MCPServersPage() {
 		setPanel({ type: "detail", selectedKey: mergeKey });
 	};
 
+	const actionIntents = {
+		onRequestDelete: () => setIsBulkDeleteDialogOpen(true),
+		onRequestAddToAgent: () => setIsManageDialogOpen(true),
+		onRequestTransfer: () => setIsTransferDialogOpen(true),
+		onRequestCreateGroup: () => setCreateGroupKeys([...selectedKeys]),
+	};
+
+	const isBulkSelection = selectedKeys.size >= 2;
+
 	const showDetail =
 		panel.type !== "create" &&
 		panel.type !== "import" &&
-		panel.type !== "edit";
+		panel.type !== "edit" &&
+		!isBulkSelection;
 
 	return (
 		<div className="flex h-full flex-col">
@@ -230,6 +250,8 @@ export default function MCPServersPage() {
 									handleCreate();
 								} else if (key === "import") {
 									handleImport();
+								} else if (key === "create-group") {
+									setCreateGroupKeys([]);
 								}
 							}}
 						>
@@ -244,6 +266,12 @@ export default function MCPServersPage() {
 								textValue={t("importFromJson")}
 							>
 								{t("importFromJson")}
+							</Dropdown.Item>
+							<Dropdown.Item
+								id="create-group"
+								textValue={t("createGroup")}
+							>
+								{t("createGroup")}
 							</Dropdown.Item>
 						</Dropdown.Menu>
 					</Dropdown.Popover>
@@ -272,19 +300,29 @@ export default function MCPServersPage() {
 						onSelectionChange={handleSelectionChange}
 						selectionMode="multiple"
 						isMultiSelectMode={isMultiSelectMode}
+						intents={actionIntents}
+						onDropCreateGroup={(keys) => setCreateGroupKeys(keys)}
 					/>
-
-					{isMultiSelectMode && selectedKeys.size > 0 && (
-						<MultiSelectFloatingBar
-							selectedCount={selectedKeys.size}
-							totalCount={groupedMcps.length}
-							onDelete={() => setIsBulkDeleteDialogOpen(true)}
-						/>
-					)}
 				</div>
 
 				{/* Server Detail Panel */}
 				<div className="flex-1 overflow-hidden relative">
+					{isBulkSelection &&
+						panel.type !== "create" &&
+						panel.type !== "import" &&
+						panel.type !== "edit" && (
+							<BulkActionsPanel
+								kind="mcp"
+								items={selectedGroups.map((g) => ({
+									key: g.mergeKey,
+									label: g.items[0].name,
+								}))}
+								intents={actionIntents}
+								onDeselectAll={() =>
+									handleSelectionChange(new Set())
+								}
+							/>
+						)}
 					{panel.type === "create" && (
 						<CreateMcpPanel onDone={handlePanelDone} />
 					)}
@@ -345,6 +383,37 @@ export default function MCPServersPage() {
 							refetch();
 						}}
 						resourceType="mcp"
+					/>
+					<TransferDialog
+						isOpen={isTransferDialogOpen}
+						onClose={() => setIsTransferDialogOpen(false)}
+						resourceType="mcp"
+						items={selectedGroups.map((g) => ({
+							name: g.items[0].name,
+							sourceAgent: g.items[0].agent ?? "claude",
+							transport: g.items[0].transport,
+						}))}
+						sourceScope="global"
+					/>
+					<ManageAgentsDialog
+						groups={selectedGroups}
+						isOpen={isManageDialogOpen}
+						onClose={() => setIsManageDialogOpen(false)}
+						requiredCapabilities={["mcp"]}
+					/>
+					<GroupNameDialog
+						isOpen={createGroupKeys !== null}
+						onClose={() => setCreateGroupKeys(null)}
+						title={t("createGroup")}
+						onSubmit={async (name) => {
+							const created = await createGroup(name);
+							if (createGroupKeys && createGroupKeys.length > 0) {
+								await assignMembers(
+									createGroupKeys,
+									created.id,
+								);
+							}
+						}}
 					/>
 				</div>
 			</div>

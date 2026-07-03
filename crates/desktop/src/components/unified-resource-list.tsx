@@ -27,6 +27,7 @@ import type {
 	SubAgentResponse,
 } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
+import type { ResourceActionIntents } from "../hooks/use-resource-actions";
 import {
 	cn,
 	filterItemsByAgentIds,
@@ -60,6 +61,9 @@ interface UnifiedResourceListProps {
 	isMultiSelectMode?: boolean;
 	onMultiSelectModeChange?: (value: boolean) => void;
 	onDeleteSelected?: () => void;
+	skillIntents: ResourceActionIntents;
+	mcpIntents: ResourceActionIntents;
+	onDropCreateGroup: (kind: "skill" | "mcp", keys: string[]) => void;
 }
 
 export function UnifiedResourceList({
@@ -83,6 +87,9 @@ export function UnifiedResourceList({
 	isMultiSelectMode = false,
 	onMultiSelectModeChange,
 	onDeleteSelected,
+	skillIntents,
+	mcpIntents,
+	onDropCreateGroup,
 }: UnifiedResourceListProps) {
 	const { t } = useTranslation();
 	const { availableAgents } = useAgentAvailability();
@@ -406,6 +413,10 @@ export function UnifiedResourceList({
 									onSelectionChange={handleMcpSelectionChange}
 									selectionMode="multiple"
 									isMultiSelectMode={isMultiSelectMode}
+									intents={mcpIntents}
+									onDropCreateGroup={(keys) =>
+										onDropCreateGroup("mcp", keys)
+									}
 								/>
 							</>
 						)}
@@ -428,6 +439,10 @@ export function UnifiedResourceList({
 									projectPath={projectPath}
 									selectionMode="multiple"
 									isMultiSelectMode={isMultiSelectMode}
+									intents={skillIntents}
+									onDropCreateGroup={(keys) =>
+										onDropCreateGroup("skill", keys)
+									}
 								/>
 							</>
 						)}

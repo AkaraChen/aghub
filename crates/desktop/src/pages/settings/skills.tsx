@@ -5,22 +5,31 @@ import {
 	RectangleStackIcon,
 } from "@heroicons/react/24/solid";
 import { Button, Dropdown, Tooltip } from "@heroui/react";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { BulkActionsPanel } from "../../components/bulk-actions-panel";
 import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
 import { CreateSkillPanel } from "../../components/create-skill-panel";
 import { ImportSkillPanel } from "../../components/import-skill-panel";
+import { ManageSkillAgentsDialog } from "../../components/manage-skill-agents-dialog";
+import { GroupNameDialog } from "../../components/resource-group-dialogs";
 import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
+import { TransferDialog } from "../../components/transfer-dialog";
 import { useAgentFilter } from "../../hooks/use-agent-filter";
-import { MultiSelectFloatingBar } from "../../components/multi-select-floating-bar";
 import { SkillDetail } from "../../components/skill-detail";
 import { SkillList } from "../../components/skill-list";
 import type { SkillResponse } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
+import { useSkillGroups } from "../../hooks/use-resource-groups";
 import { cn } from "../../lib/utils";
-import { skillListQueryOptions } from "../../requests/skills";
+import {
+	globalSkillLockQueryOptions,
+	skillListQueryOptions,
+} from "../../requests/skills";
+
+const GITHUB_PREFIX_REGEX = /^github\//;
 
 export default function SkillsPage() {
 	const { t } = useTranslation();
@@ -39,6 +48,15 @@ export default function SkillsPage() {
 	);
 	const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
 	const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
+	const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
+	const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
+	const [createGroupKeys, setCreateGroupKeys] = useState<string[] | null>(
+		null,
+	);
+	const { createGroup, assignMembers } = useSkillGroups();
+	const { data: globalLock } = useQuery({
+		...globalSkillLockQueryOptions({ api, enabled: true }),
+	});
 
 	const [panelMode, setPanelMode] = useState<"create" | "import" | null>(
 		null,
@@ -111,6 +129,54 @@ export default function SkillsPage() {
 		setSelectedName(null);
 		setPanelMode("import");
 	};
+
+	const actionIntents = {
+		onRequestDelete: () => setIsBulkDeleteDialogOpen(true),
+		onRequestAddToAgent: () => setIsManageDialogOpen(true),
+		onRequestTransfer: () => setIsTransferDialogOpen(true),
+		onRequestCreateGroup: () => setCreateGroupKeys([...selectedKeys]),
+	};
+
+	const isBulkSelection = selectedKeys.size >= 2;
+
+	// The selection is exactly one source group: the bulk panel doubles
+	// as the library detail with the source header on top.
+	const sourceContext = useMemo(() => {
+		if (!isBulkSelection || !globalLock) return null;
+		const visibleNames = new Set(groupedSkills.map((g) => g.name));
+		const bySource = new Map<
+			string,
+			{
+				names: Set<string>;
+				sourceType: string;
+				sourceUrl?: string | null;
+			}
+		>();
+		for (const entry of globalLock.skills) {
+			if (!visibleNames.has(entry.name)) continue;
+			const record = bySource.get(entry.source) ?? {
+				names: new Set<string>(),
+				sourceType: entry.sourceType,
+				sourceUrl: entry.sourceUrl,
+			};
+			record.names.add(entry.name);
+			bySource.set(entry.source, record);
+		}
+		for (const [source, record] of bySource) {
+			if (
+				record.names.size === selectedKeys.size &&
+				[...selectedKeys].every((key) => record.names.has(key))
+			) {
+				const url =
+					record.sourceUrl ??
+					(record.sourceType === "github"
+						? `https://github.com/${source.replace(GITHUB_PREFIX_REGEX, "")}`
+						: null);
+				return { title: source, url };
+			}
+		}
+		return null;
+	}, [isBulkSelection, globalLock, groupedSkills, selectedKeys]);
 
 	return (
 		<div className="flex h-full flex-col">
@@ -188,6 +254,8 @@ export default function SkillsPage() {
 									handleCreateSkill();
 								} else if (key === "import") {
 									handleImportSkill();
+								} else if (key === "create-group") {
+									setCreateGroupKeys([]);
 								}
 							}}
 						>
@@ -202,6 +270,12 @@ export default function SkillsPage() {
 								textValue={t("importFromFile")}
 							>
 								{t("importFromFile")}
+							</Dropdown.Item>
+							<Dropdown.Item
+								id="create-group"
+								textValue={t("createGroup")}
+							>
+								{t("createGroup")}
 							</Dropdown.Item>
 						</Dropdown.Menu>
 					</Dropdown.Popover>
@@ -231,15 +305,9 @@ export default function SkillsPage() {
 						selectionMode="multiple"
 						isMultiSelectMode={isMultiSelectMode}
 						groupBySource={true}
+						intents={actionIntents}
+						onDropCreateGroup={(keys) => setCreateGroupKeys(keys)}
 					/>
-
-					{isMultiSelectMode && selectedKeys.size > 0 && (
-						<MultiSelectFloatingBar
-							selectedCount={selectedKeys.size}
-							totalCount={groupedSkills.length}
-							onDelete={() => setIsBulkDeleteDialogOpen(true)}
-						/>
-					)}
 				</div>
 
 				<div className="flex-1 overflow-hidden relative">
@@ -247,6 +315,19 @@ export default function SkillsPage() {
 						<CreateSkillPanel onDone={() => setPanelMode(null)} />
 					) : panelMode === "import" ? (
 						<ImportSkillPanel onDone={() => setPanelMode(null)} />
+					) : isBulkSelection ? (
+						<BulkActionsPanel
+							kind="skill"
+							items={selectedGroups.map((g) => ({
+								key: g.name,
+								label: g.name,
+							}))}
+							intents={actionIntents}
+							sourceContext={sourceContext}
+							onDeselectAll={() =>
+								handleSelectionChange(new Set())
+							}
+						/>
 					) : activeGroup ? (
 						<SkillDetail group={activeGroup} />
 					) : (
@@ -271,6 +352,35 @@ export default function SkillsPage() {
 							refetch();
 						}}
 						resourceType="skill"
+					/>
+					<TransferDialog
+						isOpen={isTransferDialogOpen}
+						onClose={() => setIsTransferDialogOpen(false)}
+						resourceType="skill"
+						items={selectedGroups.map((g) => ({
+							name: g.name,
+							sourceAgent: g.items[0].agent ?? "claude",
+						}))}
+						sourceScope="global"
+					/>
+					<ManageSkillAgentsDialog
+						groups={selectedGroups}
+						isOpen={isManageDialogOpen}
+						onClose={() => setIsManageDialogOpen(false)}
+					/>
+					<GroupNameDialog
+						isOpen={createGroupKeys !== null}
+						onClose={() => setCreateGroupKeys(null)}
+						title={t("createGroup")}
+						onSubmit={async (name) => {
+							const created = await createGroup(name);
+							if (createGroupKeys && createGroupKeys.length > 0) {
+								await assignMembers(
+									createGroupKeys,
+									created.id,
+								);
+							}
+						}}
 					/>
 				</div>
 			</div>

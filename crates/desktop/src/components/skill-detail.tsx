@@ -584,13 +584,17 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 				isOpen={transferDialogOpen}
 				onClose={() => setTransferDialogOpen(false)}
 				resourceType="skill"
-				name={skill.name}
-				sourceAgent={skill.agent ?? "claude"}
+				items={[
+					{
+						name: skill.name,
+						sourceAgent: skill.agent ?? "claude",
+					},
+				]}
 				sourceScope={primaryScope}
 				sourceProjectRoot={projectPath}
 			/>
 			<ManageSkillAgentsDialog
-				group={group}
+				groups={[group]}
 				isOpen={manageDialogOpen}
 				onClose={() => setManageDialogOpen(false)}
 				projectPath={projectPath}
