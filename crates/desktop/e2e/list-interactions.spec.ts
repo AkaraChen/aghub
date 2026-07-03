@@ -97,6 +97,27 @@ test("multi-select via modifier click opens the bulk actions panel", async ({
 	).toBeVisible();
 });
 
+test("the chevron toggles expansion without selecting the group", async ({
+	page,
+}) => {
+	await expect(
+		page.getByRole("option", { name: "css-wizard" }),
+	).toBeVisible();
+
+	// The chevron's accessible name is the bare group title, distinct
+	// from the row's "Select all in …" label
+	await page
+		.getByRole("button", {
+			name: "github/AkaraChen/web-dev",
+			exact: true,
+		})
+		.click();
+
+	// Members collapse, and no selection was made
+	await expect(page.getByRole("option", { name: "css-wizard" })).toBeHidden();
+	await expect(page.getByText("2 items selected")).toBeHidden();
+});
+
 test("deselecting a multi-selection down to one item shows that item's detail", async ({
 	page,
 }) => {

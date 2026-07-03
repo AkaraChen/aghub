@@ -11,6 +11,11 @@ import { DropZone } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 
+// The same base classes HeroUI applies to a ListBox.Item, so a group
+// header is visually a list item (padding, radius, min-height, hover,
+// press-scale) rather than a full-width band.
+const LIST_ITEM_CLASS = "list-box-item list-box-item--default";
+
 /**
  * Extracts the member keys carried by a list drag (item drag, header
  * drag or selection drag — they all serialize a key array under the
@@ -43,7 +48,6 @@ export async function readDraggedKeys(
 interface ResourceGroupSectionProps {
 	title: string;
 	count: number;
-	icon?: ReactNode;
 	isExpanded: boolean;
 	/** Highlights the header while the whole group is selected */
 	isSelected: boolean;
@@ -63,15 +67,14 @@ interface ResourceGroupSectionProps {
 }
 
 /**
- * Collapsible section header acting as a compound unit: the whole row
- * selects every member on click (and highlights on hover), the chevron
- * alone toggles expansion, dragging the header drags the whole group,
- * and custom groups accept member drops.
+ * Collapsible group header rendered as a list item: clicking the row
+ * selects every member, the leading chevron alone toggles expansion,
+ * dragging the header drags the whole group, and custom groups accept
+ * member drops.
  */
 export function ResourceGroupSection({
 	title,
 	count,
-	icon,
 	isExpanded,
 	isSelected,
 	onToggleExpanded,
@@ -105,55 +108,54 @@ export function ResourceGroupSection({
 			}}
 			className={({ isDropTarget }) =>
 				cn(
-					"border-y border-separator",
+					"rounded-lg",
 					isDropTarget &&
-						"bg-accent/10 ring-1 ring-inset ring-accent",
+						"bg-accent/5 ring-1 ring-inset ring-accent/40",
 				)
 			}
 		>
-			<div
-				role="button"
-				tabIndex={0}
-				{...headerDragProps}
-				onClick={onSelectAll}
-				onKeyDown={(event) => {
-					if (event.key === "Enter" || event.key === " ") {
-						event.preventDefault();
-						onSelectAll();
-					}
-				}}
-				onContextMenu={onContextMenu}
-				aria-label={t("selectAllInGroup", { name: title })}
-				className={cn(
-					"flex w-full cursor-pointer items-center gap-2 px-3 py-1.5 text-left transition-colors",
-					// Match the list items: subtle surface on hover, an
-					// elevated surface when the whole group is selected.
-					isSelected ? "bg-surface" : "hover:bg-default",
-				)}
-			>
-				<button
-					type="button"
-					onClick={(event) => {
-						event.stopPropagation();
-						onToggleExpanded();
+			<div className="px-2 pt-2">
+				<div
+					role="button"
+					tabIndex={0}
+					{...headerDragProps}
+					onClick={onSelectAll}
+					onKeyDown={(event) => {
+						// Ignore keys bubbling up from the chevron button so
+						// Enter there only toggles, not select-all too.
+						if (event.target !== event.currentTarget) return;
+						if (event.key === "Enter" || event.key === " ") {
+							event.preventDefault();
+							onSelectAll();
+						}
 					}}
-					className="flex size-6 shrink-0 items-center justify-center rounded text-muted transition-colors hover:bg-default hover:text-foreground"
-					aria-label={title}
-					aria-expanded={isExpanded}
+					onContextMenu={onContextMenu}
+					aria-label={t("selectAllInGroup", { name: title })}
+					className={cn(LIST_ITEM_CLASS, isSelected && "bg-surface")}
 				>
-					{isExpanded ? (
-						<ChevronDownIcon className="size-4" />
-					) : (
-						<ChevronRightIcon className="size-4" />
-					)}
-				</button>
-				{icon}
-				<p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-					{title}
-				</p>
-				<Chip size="sm" variant="secondary">
-					{count}
-				</Chip>
+					<button
+						type="button"
+						onClick={(event) => {
+							event.stopPropagation();
+							onToggleExpanded();
+						}}
+						className="-ml-0.5 flex size-5 shrink-0 items-center justify-center rounded text-muted transition-colors hover:text-foreground"
+						aria-label={title}
+						aria-expanded={isExpanded}
+					>
+						{isExpanded ? (
+							<ChevronDownIcon className="size-4" />
+						) : (
+							<ChevronRightIcon className="size-4" />
+						)}
+					</button>
+					<span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+						{title}
+					</span>
+					<Chip size="sm" variant="secondary">
+						{count}
+					</Chip>
+				</div>
 			</div>
 			{isExpanded && children}
 		</DropZone>

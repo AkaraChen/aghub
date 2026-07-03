@@ -465,9 +465,6 @@ export function McpList({
 						key={section.group.id}
 						title={section.group.name}
 						count={section.mcps.length}
-						icon={
-							<FolderIcon className="size-4 shrink-0 text-muted" />
-						}
 						isExpanded={
 							isSearching ||
 							!collapsedIds.has(`g:${section.group.id}`)

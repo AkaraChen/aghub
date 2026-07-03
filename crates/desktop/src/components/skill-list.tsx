@@ -603,9 +603,6 @@ export function SkillList({
 						key={section.group.id}
 						title={section.group.name}
 						count={section.skills.length}
-						icon={
-							<FolderIcon className="size-4 shrink-0 text-muted" />
-						}
 						isExpanded={isExpanded(`g:${section.group.id}`)}
 						isSelected={isWholeSelection(memberKeys)}
 						onToggleExpanded={() =>
