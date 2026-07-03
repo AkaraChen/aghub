@@ -53,6 +53,8 @@ export default {
 	add: "Add",
 	refresh: "Refresh",
 	remove: "Remove",
+	rename: "Rename",
+	renameProject: "Rename project",
 	edit: "Edit",
 	save: "Save",
 	reset: "Reset",

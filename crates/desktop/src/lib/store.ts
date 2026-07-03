@@ -23,7 +23,12 @@ export {
 	type ResourceGroupStore,
 	skillGroupStore,
 } from "./store/groups";
-export { addProject, getProjects, removeProject } from "./store/projects";
+export {
+	addProject,
+	getProjects,
+	removeProject,
+	renameProject,
+} from "./store/projects";
 export { getSidebarItems, saveSidebarItems } from "./store/sidebar";
 export {
 	getStarredMcps,

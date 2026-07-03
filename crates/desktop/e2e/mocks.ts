@@ -93,6 +93,38 @@ const mcp = (name: string) => ({
 
 const MCPS = [mcp("alpha-mcp"), mcp("beta-mcp")];
 
+const SUB_AGENTS = [
+	{
+		name: "reviewer",
+		description: "reviews code",
+		instruction: "review",
+		source_path: "/tmp/e2e/.claude/agents/reviewer.md",
+		source: "global",
+		agent: "claude",
+	},
+];
+
+const plugin = (id: string, name: string, enabled: boolean) => ({
+	id,
+	name,
+	version: "1.0.0",
+	description: `${name} plugin`,
+	enabled,
+	source: "github",
+	has_skills: false,
+	has_hooks: false,
+	has_mcp: false,
+	source_info: { kind: "github", value: `AkaraChen/${id}` },
+	scopes: [],
+});
+
+const PLUGINS = {
+	plugins: [
+		plugin("alpha", "alpha-plugin", true),
+		plugin("beta", "beta-plugin", false),
+	],
+};
+
 /**
  * Installs the Tauri IPC mock plus an HTTP mock for the desktop API
  * (baseUrl comes from the mocked start_server: port 45999).
@@ -119,6 +151,8 @@ export async function installMocks(page: Page) {
 		if (p === "/agents/availability") return json(AVAILABILITY);
 		if (p === "/agents/all/skills") return json(SKILLS);
 		if (p === "/agents/all/mcps") return json(MCPS);
+		if (p === "/agents/all/sub-agents") return json(SUB_AGENTS);
+		if (p === "/plugins") return json(PLUGINS);
 		if (p === "/skills/lock/global") return json(GLOBAL_LOCK);
 		if (route.request().method() === "GET") return json([]);
 		return json({});

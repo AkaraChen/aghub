@@ -50,6 +50,8 @@ export default {
 	add: "新增",
 	refresh: "重新整理",
 	remove: "刪除",
+	rename: "重新命名",
+	renameProject: "重新命名專案",
 	edit: "編輯",
 	save: "儲存",
 	reset: "重設",

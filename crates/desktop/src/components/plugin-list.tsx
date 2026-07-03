@@ -4,16 +4,18 @@ import {
 	ArrowPathIcon,
 	CheckCircleIcon,
 	PlusIcon,
+	PowerIcon,
 	PuzzlePieceIcon,
 	RectangleStackIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Label, ListBox, Tooltip } from "@heroui/react";
+import { Button, Label, ListBox, Menu, Tooltip } from "@heroui/react";
 import Fuse from "fuse.js";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { CCPluginResponse } from "../generated/dto";
 import { cn } from "../lib/utils";
 import { useMultiSelect } from "../hooks/use-multi-select";
+import { ContextMenu, useContextMenu } from "./context-menu";
 import { ListSearchHeader } from "./list-search-header";
 import { MultiSelectFloatingBar } from "./multi-select-floating-bar";
 
@@ -27,6 +29,7 @@ interface PluginListProps {
 	onToggleMultiSelect: () => void;
 	onRefresh: () => void;
 	onDeleteSelection: () => void;
+	onToggleEnabled: (plugin: CCPluginResponse) => void;
 	selectedCount: number;
 	totalCount: number;
 	isRefreshing?: boolean;
@@ -43,12 +46,14 @@ export function PluginList({
 	onToggleMultiSelect,
 	onRefresh,
 	onDeleteSelection,
+	onToggleEnabled,
 	selectedCount,
 	totalCount,
 	isRefreshing = false,
 	isMultiSelectMode = false,
 }: PluginListProps) {
 	const { t } = useTranslation();
+	const contextMenu = useContextMenu<CCPluginResponse>();
 
 	const fuse = useMemo(
 		() =>
@@ -177,7 +182,12 @@ export function PluginList({
 								textValue={plugin.name}
 								className="transition-colors duration-200 data-selected:bg-surface"
 							>
-								<div className="flex w-full items-center gap-2">
+								<div
+									className="flex w-full items-center gap-2"
+									onContextMenu={(event) =>
+										contextMenu.open(event, plugin)
+									}
+								>
 									<PuzzlePieceIcon className="size-4 shrink-0 text-muted" />
 									<Label className="flex-1 truncate font-medium">
 										{plugin.name}
@@ -211,6 +221,34 @@ export function PluginList({
 					onDelete={onDeleteSelection}
 				/>
 			)}
+
+			<ContextMenu
+				position={contextMenu.state?.position ?? null}
+				onClose={contextMenu.close}
+				aria-label={t("actions")}
+			>
+				<Menu.Item
+					id="toggle"
+					textValue={
+						contextMenu.state?.context.enabled
+							? t("disablePlugin")
+							: t("enablePlugin")
+					}
+					onAction={() => {
+						const plugin = contextMenu.state?.context;
+						if (plugin) onToggleEnabled(plugin);
+					}}
+				>
+					<div className="flex items-center gap-2">
+						<PowerIcon className="size-4" />
+						<Label>
+							{contextMenu.state?.context.enabled
+								? t("disablePlugin")
+								: t("enablePlugin")}
+						</Label>
+					</div>
+				</Menu.Item>
+			</ContextMenu>
 		</div>
 	);
 }

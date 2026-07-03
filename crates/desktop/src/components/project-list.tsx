@@ -3,16 +3,24 @@ import {
 	ChevronUpIcon,
 	EllipsisVerticalIcon,
 	FolderIcon,
+	PencilIcon,
 	PlusIcon,
+	TrashIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Dropdown } from "@heroui/react";
+import { Button, Dropdown, Label, Menu } from "@heroui/react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation } from "wouter";
-import { useProjects, useRemoveProject } from "../hooks/use-projects";
+import {
+	useProjects,
+	useRemoveProject,
+	useRenameProject,
+} from "../hooks/use-projects";
 import type { Project } from "../lib/store";
 import { cn } from "../lib/utils";
+import { ContextMenu, useContextMenu } from "./context-menu";
 import { CreateProjectDialog } from "./edit-project-dialog";
+import { GroupNameDialog } from "./resource-group-dialogs";
 
 interface ProjectListItemProps {
 	project: Project;
@@ -22,18 +30,21 @@ interface ProjectListItemProps {
 function ProjectListItem({ project, isActive }: ProjectListItemProps) {
 	const { t } = useTranslation();
 	const removeProject = useRemoveProject();
+	const renameProject = useRenameProject();
 	const [isOpen, setIsOpen] = useState(false);
+	const [isRenameOpen, setIsRenameOpen] = useState(false);
+	const contextMenu = useContextMenu<null>();
 
 	const handleAction = (key: React.Key) => {
-		if (key === "delete") {
-			removeProject.mutate(project.id);
-		}
+		if (key === "rename") setIsRenameOpen(true);
+		else if (key === "delete") removeProject.mutate(project.id);
 	};
 
 	return (
 		<div className="group relative">
 			<Link
 				href={`/projects/${project.id}`}
+				onContextMenu={(event) => contextMenu.open(event, null)}
 				className={cn(
 					"flex cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors select-none",
 					isActive
@@ -56,6 +67,9 @@ function ProjectListItem({ project, isActive }: ProjectListItemProps) {
 				</Button>
 				<Dropdown.Popover placement="bottom end">
 					<Dropdown.Menu onAction={handleAction}>
+						<Dropdown.Item id="rename" textValue={t("rename")}>
+							{t("rename")}
+						</Dropdown.Item>
 						<Dropdown.Item
 							id="delete"
 							textValue={t("remove")}
@@ -66,6 +80,43 @@ function ProjectListItem({ project, isActive }: ProjectListItemProps) {
 					</Dropdown.Menu>
 				</Dropdown.Popover>
 			</Dropdown>
+
+			<ContextMenu
+				position={contextMenu.state?.position ?? null}
+				onClose={contextMenu.close}
+				aria-label={t("actions")}
+			>
+				<Menu.Item
+					id="rename"
+					textValue={t("rename")}
+					onAction={() => setIsRenameOpen(true)}
+				>
+					<div className="flex items-center gap-2">
+						<PencilIcon className="size-4" />
+						<Label>{t("rename")}</Label>
+					</div>
+				</Menu.Item>
+				<Menu.Item
+					id="delete"
+					textValue={t("remove")}
+					onAction={() => removeProject.mutate(project.id)}
+				>
+					<div className="flex items-center gap-2 text-danger">
+						<TrashIcon className="size-4" />
+						<Label>{t("remove")}</Label>
+					</div>
+				</Menu.Item>
+			</ContextMenu>
+
+			<GroupNameDialog
+				isOpen={isRenameOpen}
+				onClose={() => setIsRenameOpen(false)}
+				title={t("renameProject")}
+				initialName={project.name}
+				onSubmit={async (name) => {
+					await renameProject.mutateAsync({ id: project.id, name });
+				}}
+			/>
 		</div>
 	);
 }

@@ -24,6 +24,10 @@
 		["skillGroupAssignments", {}],
 		["mcpGroups", []],
 		["mcpGroupAssignments", {}],
+		[
+			"projects",
+			[{ id: "p1", name: "demo-project", path: "/tmp/e2e/demo" }],
+		],
 	]);
 	storeData.set("store.json", seeded);
 

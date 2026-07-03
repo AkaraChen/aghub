@@ -1,6 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Project } from "../lib/store";
-import { addProject, getProjects, removeProject } from "../lib/store";
+import {
+	addProject,
+	getProjects,
+	removeProject,
+	renameProject,
+} from "../lib/store";
 
 export function useProjects() {
 	return useQuery<Project[]>({
@@ -22,6 +27,16 @@ export function useRemoveProject() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		mutationFn: removeProject,
+		onSuccess: () =>
+			queryClient.invalidateQueries({ queryKey: ["projects"] }),
+	});
+}
+
+export function useRenameProject() {
+	const queryClient = useQueryClient();
+	return useMutation({
+		mutationFn: (vars: { id: string; name: string }) =>
+			renameProject(vars.id, vars.name),
 		onSuccess: () =>
 			queryClient.invalidateQueries({ queryKey: ["projects"] }),
 	});

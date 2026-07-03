@@ -1,5 +1,11 @@
-import { CpuChipIcon, PlusIcon } from "@heroicons/react/24/solid";
 import {
+	CpuChipIcon,
+	PencilIcon,
+	PlusIcon,
+	TrashIcon,
+} from "@heroicons/react/24/solid";
+import {
+	AlertDialog,
 	Button,
 	Card,
 	FieldError,
@@ -8,6 +14,8 @@ import {
 	Input,
 	Label,
 	ListBox,
+	Menu,
+	Spinner,
 	TextArea,
 	TextField,
 	Tooltip,
@@ -21,6 +29,7 @@ import {
 import { useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import { ContextMenu, useContextMenu } from "../../components/context-menu";
 import { CreateSubAgentPanel } from "../../components/create-sub-agent-panel";
 import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
 import { useAgentFilter } from "../../hooks/use-agent-filter";
@@ -116,6 +125,10 @@ export default function SubAgentsPage() {
 	const { availableAgents } = useAgentAvailability();
 	const [searchQuery, setSearchQuery] = useState("");
 	const [panel, setPanel] = useState<PanelState>({ type: "empty" });
+	const contextMenu = useContextMenu<SubAgentGroup>();
+	const [deleteTarget, setDeleteTarget] = useState<SubAgentGroup | null>(
+		null,
+	);
 
 	const { data: subAgents = [] } = useSuspenseQuery({
 		...subAgentListQueryOptions({ api, scope: "global" }),
@@ -338,7 +351,12 @@ export default function SubAgentsPage() {
 										textValue={group.items[0].name}
 										className="data-selected:bg-surface"
 									>
-										<div className="flex w-full items-center gap-2">
+										<div
+											className="flex w-full items-center gap-2"
+											onContextMenu={(event) =>
+												contextMenu.open(event, group)
+											}
+										>
 											<CpuChipIcon className="size-4 shrink-0 text-muted" />
 											<Label className="flex-1 truncate">
 												{group.items[0].name}
@@ -422,6 +440,93 @@ export default function SubAgentsPage() {
 					)}
 				</div>
 			</div>
+
+			<ContextMenu
+				position={contextMenu.state?.position ?? null}
+				onClose={contextMenu.close}
+				aria-label={t("actions")}
+			>
+				<Menu.Item
+					id="edit"
+					textValue={t("editSubAgent")}
+					onAction={() => {
+						const group = contextMenu.state?.context;
+						if (group)
+							setPanel({
+								type: "edit",
+								mergeKey: group.mergeKey,
+							});
+					}}
+				>
+					<div className="flex items-center gap-2">
+						<PencilIcon className="size-4" />
+						<Label>{t("editSubAgent")}</Label>
+					</div>
+				</Menu.Item>
+				<Menu.Item
+					id="delete"
+					textValue={t("deleteSubAgent")}
+					onAction={() =>
+						setDeleteTarget(contextMenu.state?.context ?? null)
+					}
+				>
+					<div className="flex items-center gap-2 text-danger">
+						<TrashIcon className="size-4" />
+						<Label>{t("deleteSubAgent")}</Label>
+					</div>
+				</Menu.Item>
+			</ContextMenu>
+
+			<AlertDialog.Backdrop
+				isOpen={deleteTarget !== null}
+				onOpenChange={(open) => {
+					if (!open) setDeleteTarget(null);
+				}}
+			>
+				<AlertDialog.Container>
+					<AlertDialog.Dialog className="sm:max-w-[420px]">
+						<AlertDialog.CloseTrigger />
+						<AlertDialog.Header>
+							<AlertDialog.Icon status="danger" />
+							<AlertDialog.Heading>
+								{t("deleteSubAgent")}
+							</AlertDialog.Heading>
+						</AlertDialog.Header>
+						<AlertDialog.Body>
+							<p className="text-sm text-muted">
+								{t("deleteSubAgentConfirm", {
+									name: deleteTarget?.items[0].name ?? "",
+								})}
+							</p>
+						</AlertDialog.Body>
+						<AlertDialog.Footer>
+							<Button
+								slot="close"
+								variant="tertiary"
+								isDisabled={deleteMutation.isPending}
+							>
+								{t("cancel")}
+							</Button>
+							<Button
+								variant="danger"
+								isDisabled={deleteMutation.isPending}
+								onPress={() => {
+									if (deleteTarget) {
+										deleteMutation.mutate(deleteTarget);
+										setDeleteTarget(null);
+									}
+								}}
+							>
+								{deleteMutation.isPending ? (
+									<Spinner size="sm" color="current" />
+								) : (
+									t("delete")
+								)}
+							</Button>
+						</AlertDialog.Footer>
+					</AlertDialog.Dialog>
+				</AlertDialog.Container>
+			</AlertDialog.Backdrop>
 		</div>
 	);
 }

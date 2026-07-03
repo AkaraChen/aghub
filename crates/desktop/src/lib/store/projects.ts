@@ -29,3 +29,15 @@ export async function removeProject(id: string): Promise<void> {
 	);
 	await store.save();
 }
+
+export async function renameProject(id: string, name: string): Promise<void> {
+	const trimmed = name.trim();
+	if (!trimmed) return;
+	const store = await getStore();
+	const projects = await getProjects();
+	await store.set(
+		"projects",
+		projects.map((p) => (p.id === id ? { ...p, name: trimmed } : p)),
+	);
+	await store.save();
+}
