@@ -25,6 +25,7 @@ import { useListSelection } from "../hooks/use-list-selection";
 import type { ResourceActionIntents } from "../hooks/use-resource-actions";
 import { useResourceActions } from "../hooks/use-resource-actions";
 import { useSkillGroups } from "../hooks/use-resource-groups";
+import { dragSelectionPayload } from "../lib/drag-payload";
 import type { ResourceGroup } from "../lib/store";
 import { cn, filterItemsByAgentIds } from "../lib/utils";
 import {
@@ -329,7 +330,12 @@ export function SkillList({
 	const { dragAndDropHooks } = useDragAndDrop({
 		getItems: (keys) => [
 			{
-				[SKILL_DRAG_TYPE]: JSON.stringify(Array.from(keys).map(String)),
+				[SKILL_DRAG_TYPE]: JSON.stringify(
+					dragSelectionPayload(
+						Array.from(keys).map(String),
+						selectedKeys,
+					),
+				),
 			},
 		],
 		onDragStart: () => setIsDraggingKeys(true),

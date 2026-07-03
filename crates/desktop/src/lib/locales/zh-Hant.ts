@@ -514,7 +514,6 @@ export default {
 	deleteGroup: "刪除分組",
 	groupName: "分組名稱",
 	groupNamePlaceholder: "例如：前端",
-	groupActions: "分組操作",
 	deleteGroupWarning:
 		"確定刪除分組「{{name}}」？成員不會被刪除，將回到未分組列表。",
 	ungrouped: "未分組",

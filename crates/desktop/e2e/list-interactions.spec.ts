@@ -97,6 +97,27 @@ test("multi-select via modifier click opens the bulk actions panel", async ({
 	).toBeVisible();
 });
 
+test("deselecting a multi-selection down to one item shows that item's detail", async ({
+	page,
+}) => {
+	await page.getByRole("option", { name: "solo-skill" }).click();
+	await page
+		.getByRole("option", { name: "react-pro" })
+		.click({ modifiers: ["ControlOrMeta"] });
+	await expect(page.getByText("2 items selected")).toBeVisible();
+
+	// Drop solo-skill from the selection, leaving only react-pro
+	await page
+		.getByRole("option", { name: "solo-skill" })
+		.click({ modifiers: ["ControlOrMeta"] });
+
+	// The detail follows the remaining single selection instead of
+	// lingering on the previously active item
+	await expect(
+		page.getByRole("heading", { name: "react-pro" }),
+	).toBeVisible();
+});
+
 test("source group header click selects the whole library", async ({
 	page,
 }) => {

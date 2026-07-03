@@ -120,12 +120,17 @@ export default function MCPServersPage() {
 	const handleSelectionChange = (keys: Set<string>, clickedKey?: string) => {
 		setSelectedKeys(keys);
 
-		if (clickedKey && !isMultiSelectMode) {
+		// A single selection always drives the detail panel, even when it
+		// was reached by deselecting a multi-selection down to one item —
+		// otherwise the detail would keep showing the previously selected
+		// server while the list highlights a different one.
+		if (keys.size === 1) {
+			const only = [...keys][0];
+			setSelectedKey(only);
+			setPanel({ type: "detail", selectedKey: only });
+		} else if (clickedKey && !isMultiSelectMode) {
 			setSelectedKey(clickedKey);
-			setPanel({
-				type: "detail",
-				selectedKey: clickedKey,
-			});
+			setPanel({ type: "detail", selectedKey: clickedKey });
 		}
 
 		if (keys.size > 1 && !isMultiSelectMode) {

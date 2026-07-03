@@ -24,6 +24,7 @@ import { useListSelection } from "../hooks/use-list-selection";
 import type { ResourceActionIntents } from "../hooks/use-resource-actions";
 import { useResourceActions } from "../hooks/use-resource-actions";
 import { useMcpGroups } from "../hooks/use-resource-groups";
+import { dragSelectionPayload } from "../lib/drag-payload";
 import type { ResourceGroup } from "../lib/store";
 import { cn, filterItemsByAgentIds, getMcpMergeKey } from "../lib/utils";
 import { ContextMenu, useContextMenu } from "./context-menu";
@@ -200,7 +201,12 @@ export function McpList({
 	const { dragAndDropHooks } = useDragAndDrop({
 		getItems: (keys) => [
 			{
-				[MCP_DRAG_TYPE]: JSON.stringify(Array.from(keys).map(String)),
+				[MCP_DRAG_TYPE]: JSON.stringify(
+					dragSelectionPayload(
+						Array.from(keys).map(String),
+						selectedKeys,
+					),
+				),
 			},
 		],
 		onDragStart: () => setIsDraggingKeys(true),

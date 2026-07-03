@@ -105,7 +105,12 @@ export default function SkillsPage() {
 	const handleSelectionChange = (keys: Set<string>, clickedKey?: string) => {
 		setSelectedKeys(keys);
 
-		if (clickedKey && !isMultiSelectMode) {
+		// A single selection always drives the detail panel, even when it
+		// was reached by deselecting a multi-selection down to one item,
+		// so the detail never lags behind the list highlight.
+		if (keys.size === 1) {
+			setSelectedName([...keys][0]);
+		} else if (clickedKey && !isMultiSelectMode) {
 			setSelectedName(clickedKey);
 		}
 
