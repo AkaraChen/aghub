@@ -535,7 +535,6 @@ export default {
 	renameGroup: "Rename group",
 	deleteGroup: "Delete group",
 	groupName: "Group name",
-	groupNamePlaceholder: "e.g. Frontend",
 	deleteGroupWarning:
 		'Delete the group "{{name}}"? Its members are not deleted and return to the ungrouped list.',
 	ungrouped: "Ungrouped",

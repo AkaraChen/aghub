@@ -73,7 +73,7 @@ export function GroupNameDialog({
 							<Input
 								value={name}
 								onChange={(e) => setName(e.target.value)}
-								placeholder={t("groupNamePlaceholder")}
+								placeholder={t("groupName")}
 								variant="secondary"
 								onKeyDown={(e) => {
 									// keyCode 229 covers WKWebView, where

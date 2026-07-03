@@ -516,7 +516,6 @@ export default {
 	renameGroup: "重命名分组",
 	deleteGroup: "删除分组",
 	groupName: "分组名称",
-	groupNamePlaceholder: "例如：前端",
 	deleteGroupWarning:
 		"确定删除分组「{{name}}」？成员不会被删除，将回到未分组列表。",
 	ungrouped: "未分组",
