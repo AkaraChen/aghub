@@ -43,12 +43,6 @@ export default function SkillsPage() {
 	});
 	const [searchQuery, setSearchQuery] = useState("");
 	const [selectedName, setSelectedName] = useQueryState("skill");
-	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
-		() => new Set(),
-	);
-	// Set once the user clicks the selected item again to cancel: suppresses
-	// the default fallback to the first skill so the empty placeholder shows.
-	const [selectionCleared, setSelectionCleared] = useState(false);
 	const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
 	const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
 	const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
@@ -84,48 +78,32 @@ export default function SkillsPage() {
 		}));
 	}, [filteredSkills]);
 
+	// Selection is the single source of truth — it drives the list
+	// highlight, the detail panel, and bulk actions. Seed it with the
+	// deep-linked or first skill so a detail shows on load; an empty
+	// selection then unambiguously means "cancelled" and shows the
+	// placeholder.
+	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => {
+		const deepLinked = groupedSkills.some((g) => g.name === selectedName);
+		const seed = deepLinked ? selectedName : groupedSkills[0]?.name;
+		return seed ? new Set([seed]) : new Set();
+	});
+
 	const activeGroup = useMemo(() => {
-		if (selectedName) {
-			return groupedSkills.find((g) => g.name === selectedName) ?? null;
-		}
-		if (selectionCleared) return null;
-		return groupedSkills[0] ?? null;
-	}, [selectedName, groupedSkills, selectionCleared]);
+		if (selectedKeys.size !== 1) return null;
+		const [key] = selectedKeys;
+		return groupedSkills.find((g) => g.name === key) ?? null;
+	}, [selectedKeys, groupedSkills]);
 
 	// 多选模式下被选中的所有 groups（用于批量删除）
 	const selectedGroups = useMemo(() => {
 		return groupedSkills.filter((g) => selectedKeys.has(g.name));
 	}, [selectedKeys, groupedSkills]);
 
-	// ListBox 高亮用的 keys
-	const effectiveSelectedKeys = useMemo(() => {
-		if (selectedKeys.size > 0) return selectedKeys;
-		if (activeGroup && !isMultiSelectMode) {
-			return new Set([activeGroup.name]);
-		}
-		return new Set<string>();
-	}, [selectedKeys, activeGroup, isMultiSelectMode]);
-
-	const handleSelectionChange = (keys: Set<string>, clickedKey?: string) => {
+	const handleSelectionChange = (keys: Set<string>) => {
 		setSelectedKeys(keys);
-
-		// A single selection always drives the detail panel, even when it
-		// was reached by deselecting a multi-selection down to one item,
-		// so the detail never lags behind the list highlight.
-		if (keys.size === 1) {
-			setSelectedName([...keys][0]);
-			setSelectionCleared(false);
-		} else if (keys.size === 0 && clickedKey) {
-			// Clicking the selected item again cancels the selection: clear
-			// the detail so the empty placeholder shows. Programmatic clears
-			// (exiting multi-select, bulk deselect) carry no clickedKey and
-			// keep the prior detail.
-			setSelectedName(null);
-			setSelectionCleared(true);
-		} else if (clickedKey && !isMultiSelectMode) {
-			setSelectedName(clickedKey);
-			setSelectionCleared(false);
-		}
+		// Mirror a single selection to the URL for deep-linking.
+		setSelectedName(keys.size === 1 ? [...keys][0] : null);
 
 		if (keys.size > 1 && !isMultiSelectMode) {
 			setIsMultiSelectMode(true);
@@ -136,17 +114,25 @@ export default function SkillsPage() {
 		setPanelMode(null);
 	};
 
+	// Leaving multi-select collapses to a single selection so a detail
+	// shows again instead of the bulk panel.
+	const handleToggleMultiSelect = () => {
+		setIsMultiSelectMode((prev) => !prev);
+		if (isMultiSelectMode) {
+			const [first] = selectedKeys;
+			handleSelectionChange(first ? new Set([first]) : new Set());
+		}
+	};
+
 	const handleCreateSkill = () => {
 		setSelectedKeys(new Set());
 		setSelectedName(null);
-		setSelectionCleared(false);
 		setPanelMode("create");
 	};
 
 	const handleImportSkill = () => {
 		setSelectedKeys(new Set());
 		setSelectedName(null);
-		setSelectionCleared(false);
 		setPanelMode("import");
 	};
 
@@ -224,12 +210,7 @@ export default function SkillsPage() {
 									? t("doneSelecting")
 									: t("multiSelect")
 							}
-							onClick={() => {
-								setIsMultiSelectMode((prev) => !prev);
-								if (isMultiSelectMode) {
-									handleSelectionChange(new Set());
-								}
-							}}
+							onClick={handleToggleMultiSelect}
 							onKeyDown={(event) => {
 								if (
 									event.key !== "Enter" &&
@@ -238,10 +219,7 @@ export default function SkillsPage() {
 									return;
 								}
 								event.preventDefault();
-								setIsMultiSelectMode((prev) => !prev);
-								if (isMultiSelectMode) {
-									handleSelectionChange(new Set());
-								}
+								handleToggleMultiSelect();
 							}}
 						>
 							{isMultiSelectMode ? (
@@ -319,8 +297,7 @@ export default function SkillsPage() {
 					{/* Skills List */}
 					<SkillList
 						skills={filteredSkills}
-						selectedKeys={effectiveSelectedKeys}
-						committedKeys={selectedKeys}
+						selectedKeys={selectedKeys}
 						searchQuery={searchQuery}
 						onSelectionChange={handleSelectionChange}
 						selectionMode="multiple"

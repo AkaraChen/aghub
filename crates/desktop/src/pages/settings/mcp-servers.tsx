@@ -50,12 +50,6 @@ export default function MCPServersPage() {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [panel, setPanel] = useState<RightPanel>({ type: "empty" });
 	const [selectedKey, setSelectedKey] = useQueryState("server");
-	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
-		() => new Set(),
-	);
-	// Set once the user clicks the selected server again to cancel: suppresses
-	// the default fallback to the first server so the empty placeholder shows.
-	const [selectionCleared, setSelectionCleared] = useState(false);
 	const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
 	const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
 	const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
@@ -99,53 +93,36 @@ export default function MCPServersPage() {
 		return Array.from(map.values());
 	}, [filteredMcps]);
 
+	// Selection is the single source of truth — it drives the list
+	// highlight, the detail panel, and bulk actions. Seed it with the
+	// deep-linked or first server so a detail shows on load; an empty
+	// selection then unambiguously means "cancelled" and shows the
+	// placeholder.
+	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => {
+		const deepLinked = groupedMcps.some((g) => g.mergeKey === selectedKey);
+		const seed = deepLinked ? selectedKey : groupedMcps[0]?.mergeKey;
+		return seed ? new Set([seed]) : new Set();
+	});
+
 	const activeGroup = useMemo(() => {
-		if (selectedKey) {
-			return groupedMcps.find((g) => g.mergeKey === selectedKey) ?? null;
-		}
-		if (selectionCleared) return null;
-		return groupedMcps[0] ?? null;
-	}, [selectedKey, groupedMcps, selectionCleared]);
+		if (selectedKeys.size !== 1) return null;
+		const [key] = selectedKeys;
+		return groupedMcps.find((g) => g.mergeKey === key) ?? null;
+	}, [selectedKeys, groupedMcps]);
 
 	// 多选模式下被选中的所有 groups（用于批量删除）
 	const selectedGroups = useMemo(() => {
 		return groupedMcps.filter((g) => selectedKeys.has(g.mergeKey));
 	}, [selectedKeys, groupedMcps]);
 
-	// ListBox 高亮用的 keys
-	const effectiveSelectedKeys = useMemo(() => {
-		if (selectedKeys.size > 0) return selectedKeys;
-		if (activeGroup && !isMultiSelectMode) {
-			return new Set([activeGroup.mergeKey]);
-		}
-		return new Set<string>();
-	}, [selectedKeys, activeGroup, isMultiSelectMode]);
-
-	const handleSelectionChange = (keys: Set<string>, clickedKey?: string) => {
+	const handleSelectionChange = (keys: Set<string>) => {
 		setSelectedKeys(keys);
-
-		// A single selection always drives the detail panel, even when it
-		// was reached by deselecting a multi-selection down to one item —
-		// otherwise the detail would keep showing the previously selected
-		// server while the list highlights a different one.
-		if (keys.size === 1) {
-			const only = [...keys][0];
-			setSelectedKey(only);
-			setSelectionCleared(false);
-			setPanel({ type: "detail", selectedKey: only });
-		} else if (keys.size === 0 && clickedKey) {
-			// Clicking the selected server again cancels the selection:
-			// clear the detail so the empty placeholder shows. Programmatic
-			// clears (exiting multi-select, bulk deselect, an open
-			// create/import panel) carry no clickedKey and keep their state.
-			setSelectedKey(null);
-			setSelectionCleared(true);
-			setPanel({ type: "empty" });
-		} else if (clickedKey && !isMultiSelectMode) {
-			setSelectedKey(clickedKey);
-			setSelectionCleared(false);
-			setPanel({ type: "detail", selectedKey: clickedKey });
-		}
+		const only = keys.size === 1 ? [...keys][0] : null;
+		// Mirror a single selection to the URL for deep-linking.
+		setSelectedKey(only);
+		setPanel(
+			only ? { type: "detail", selectedKey: only } : { type: "empty" },
+		);
 
 		if (keys.size > 1 && !isMultiSelectMode) {
 			setIsMultiSelectMode(true);
@@ -155,17 +132,25 @@ export default function MCPServersPage() {
 		}
 	};
 
+	// Leaving multi-select collapses to a single selection so a detail
+	// shows again instead of the bulk panel.
+	const handleToggleMultiSelect = () => {
+		setIsMultiSelectMode((prev) => !prev);
+		if (isMultiSelectMode) {
+			const [first] = selectedKeys;
+			handleSelectionChange(first ? new Set([first]) : new Set());
+		}
+	};
+
 	const handleCreate = () => {
 		setSelectedKeys(new Set());
 		setSelectedKey(null);
-		setSelectionCleared(false);
 		setPanel({ type: "create" });
 	};
 
 	const handleImport = () => {
 		setSelectedKeys(new Set());
 		setSelectedKey(null);
-		setSelectionCleared(false);
 		setPanel({ type: "import" });
 	};
 
@@ -174,8 +159,10 @@ export default function MCPServersPage() {
 	};
 
 	const handleEditDone = (mergeKey: string) => {
-		setSelectedKey(mergeKey);
-		setPanel({ type: "detail", selectedKey: mergeKey });
+		// An edit can change the transport hash and thus the mergeKey, so
+		// move the selection (the source of truth) to the new key — not just
+		// the URL/panel — or the detail would resolve to a stale key.
+		handleSelectionChange(new Set([mergeKey]));
 	};
 
 	const actionIntents = {
@@ -219,12 +206,7 @@ export default function MCPServersPage() {
 									? t("doneSelecting")
 									: t("multiSelect")
 							}
-							onClick={() => {
-								setIsMultiSelectMode((prev) => !prev);
-								if (isMultiSelectMode) {
-									handleSelectionChange(new Set());
-								}
-							}}
+							onClick={handleToggleMultiSelect}
 							onKeyDown={(event) => {
 								if (
 									event.key !== "Enter" &&
@@ -233,10 +215,7 @@ export default function MCPServersPage() {
 									return;
 								}
 								event.preventDefault();
-								setIsMultiSelectMode((prev) => !prev);
-								if (isMultiSelectMode) {
-									handleSelectionChange(new Set());
-								}
+								handleToggleMultiSelect();
 							}}
 						>
 							{isMultiSelectMode ? (
@@ -316,8 +295,7 @@ export default function MCPServersPage() {
 					{/* Servers List */}
 					<McpList
 						mcps={filteredMcps}
-						selectedKeys={effectiveSelectedKeys}
-						committedKeys={selectedKeys}
+						selectedKeys={selectedKeys}
 						searchQuery={searchQuery}
 						onSelectionChange={handleSelectionChange}
 						selectionMode="multiple"

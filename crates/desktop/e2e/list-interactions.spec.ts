@@ -160,19 +160,14 @@ test("clicking the selected item again cancels the selection", async ({
 	).toBeHidden();
 });
 
-test("modifier-clicking an item on load selects only it, not the default", async ({
-	page,
-}) => {
-	// react-pro is default-highlighted on load though nothing is committed.
-	// A cmd/ctrl-click on a different item must select just that item — the
-	// phantom default highlight must not leak into a multi-selection.
-	await page
-		.getByRole("option", { name: "solo-skill" })
-		.click({ modifiers: ["ControlOrMeta"] });
-
-	await expect(page.getByText("2 items selected")).toBeHidden();
+test("the first item is selected and shown on load", async ({ page }) => {
+	// Selection is the single source of truth, seeded with the first item so
+	// a detail shows on load (rather than an empty placeholder)
 	await expect(
-		page.getByRole("heading", { name: "solo-skill" }),
+		page.getByRole("option", { name: "react-pro", selected: true }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "react-pro" }),
 	).toBeVisible();
 });
 
@@ -323,16 +318,16 @@ test("right click opens the context menu with the full action set", async ({
 test("right-clicking within a multi-selection keeps the whole selection", async ({
 	page,
 }) => {
-	await page.getByRole("option", { name: "react-pro" }).click();
+	await page.getByRole("option", { name: "css-wizard" }).click();
 	await page
-		.getByRole("option", { name: "css-wizard" })
+		.getByRole("option", { name: "solo-skill" })
 		.click({ modifiers: ["ControlOrMeta"] });
 	await expect(page.getByText("2 items selected")).toBeVisible();
 
 	// Right-clicking one of the selected items keeps the selection so
 	// the menu acts on all of them
 	await page
-		.getByRole("option", { name: "react-pro" })
+		.getByRole("option", { name: "css-wizard" })
 		.click({ button: "right" });
 	await expect(
 		page.getByRole("menu", { name: "Resource actions" }),

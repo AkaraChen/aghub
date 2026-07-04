@@ -3,15 +3,8 @@ import { useCallback, useEffect, useRef } from "react";
 export interface UseListSelectionOptions {
 	/** All visible keys in display order, flattened across sections */
 	orderedKeys: string[];
-	/** Keys the list highlights, including any default-highlighted item */
+	/** The current selection — the single source of truth */
 	selectedKeys: Set<string>;
-	/**
-	 * The user's explicit selection, without the default-highlight
-	 * fabrication. Toggle-off only fires when this holds exactly the
-	 * clicked key, so clicking a merely default-highlighted item selects
-	 * it instead of clearing. Defaults to selectedKeys.
-	 */
-	committedKeys?: Set<string>;
 	/** Callback when selection changes */
 	onSelectionChange: (keys: Set<string>, clickedKey?: string) => void;
 	/** Whether multi-select mode is enabled */
@@ -53,7 +46,6 @@ export function useListSelection(
 	const {
 		orderedKeys,
 		selectedKeys,
-		committedKeys = selectedKeys,
 		onSelectionChange,
 		isMultiSelectMode = false,
 	} = options;
@@ -105,25 +97,19 @@ export function useListSelection(
 					];
 					finalKeys = new Set(orderedKeys.slice(from, to + 1));
 				} else {
-					finalKeys = new Set([...committedKeys, clicked]);
+					finalKeys = new Set([...selectedKeys, clicked]);
 				}
 			} else if (!isMultiSelectMode && !modifiersRef.current.meta) {
-				// A plain click that deselects the user's sole committed
-				// selection clears it (click again to cancel); any other
-				// plain click narrows the selection to just that item. A
-				// merely default-highlighted item is not committed, so
-				// clicking it selects rather than clears.
+				// A plain click that deselects the sole current selection
+				// clears it (click again to cancel); any other plain click
+				// narrows the selection to just that item.
 				const togglingOff =
 					added === undefined &&
-					committedKeys.size === 1 &&
-					committedKeys.has(clicked);
+					selectedKeys.size === 1 &&
+					selectedKeys.has(clicked);
 				finalKeys = togglingOff ? new Set<string>() : new Set([clicked]);
 			} else {
-				// Toggle against the committed selection, not the effective
-				// set — a default-highlighted item is not committed, so a
-				// modifier-click on it (or on another item while it is the
-				// phantom highlight) must not pull it into the selection.
-				finalKeys = new Set(committedKeys);
+				finalKeys = new Set(selectedKeys);
 				if (finalKeys.has(clicked)) {
 					finalKeys.delete(clicked);
 				} else {
@@ -137,13 +123,7 @@ export function useListSelection(
 
 			onSelectionChange(finalKeys, clicked);
 		},
-		[
-			orderedKeys,
-			selectedKeys,
-			committedKeys,
-			onSelectionChange,
-			isMultiSelectMode,
-		],
+		[orderedKeys, selectedKeys, onSelectionChange, isMultiSelectMode],
 	);
 
 	const selectGroup = useCallback(
@@ -152,7 +132,7 @@ export function useListSelection(
 
 			let finalKeys: Set<string>;
 			if (modifiersRef.current.meta || isMultiSelectMode) {
-				finalKeys = new Set(committedKeys);
+				finalKeys = new Set(selectedKeys);
 				const allSelected = memberKeys.every((k) => finalKeys.has(k));
 				for (const key of memberKeys) {
 					if (allSelected) finalKeys.delete(key);
@@ -163,8 +143,8 @@ export function useListSelection(
 				// header of the group that is already the sole selection
 				// cancels it (click again to cancel).
 				const isSoleGroup =
-					committedKeys.size === memberKeys.length &&
-					memberKeys.every((k) => committedKeys.has(k));
+					selectedKeys.size === memberKeys.length &&
+					memberKeys.every((k) => selectedKeys.has(k));
 				finalKeys = isSoleGroup
 					? new Set<string>()
 					: new Set(memberKeys);
@@ -173,7 +153,7 @@ export function useListSelection(
 			lastClickedRef.current = memberKeys[0];
 			onSelectionChange(finalKeys, memberKeys[0]);
 		},
-		[committedKeys, onSelectionChange, isMultiSelectMode],
+		[selectedKeys, onSelectionChange, isMultiSelectMode],
 	);
 
 	const ensureSelected = useCallback(

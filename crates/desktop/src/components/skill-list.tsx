@@ -60,8 +60,6 @@ type MenuTarget =
 interface SkillListProps {
 	skills: SkillResponse[];
 	selectedKeys: Set<string>;
-	/** The user's explicit selection, before default-highlight fallback */
-	committedKeys?: Set<string>;
 	searchQuery: string;
 	onSelectionChange: (keys: Set<string>, clickedKey?: string) => void;
 	emptyMessage?: string;
@@ -78,7 +76,6 @@ interface SkillListProps {
 export function SkillList({
 	skills,
 	selectedKeys,
-	committedKeys,
 	searchQuery,
 	onSelectionChange,
 	emptyMessage,
@@ -319,7 +316,6 @@ export function SkillList({
 		useListSelection({
 			orderedKeys,
 			selectedKeys,
-			committedKeys,
 			onSelectionChange,
 			isMultiSelectMode,
 		});
