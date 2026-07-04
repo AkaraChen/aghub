@@ -137,9 +137,14 @@ export async function installMocks(page: Page) {
 	await page.route("**/ph/**", (route) => route.abort());
 	await page.route("https://*.posthog.com/**", (route) => route.abort());
 
+	// A per-test mutable copy so an MCP edit (PUT) is reflected by the next
+	// list fetch — the mergeKey changes with the transport.
+	const mcps = MCPS.map((m) => ({ ...m }));
+
 	await page.route("http://localhost:45999/api/v1/**", (route) => {
 		const url = new URL(route.request().url());
 		const p = url.pathname.replace("/api/v1", "");
+		const method = route.request().method();
 		const json = (body: unknown) =>
 			route.fulfill({
 				status: 200,
@@ -150,11 +155,23 @@ export async function installMocks(page: Page) {
 		if (p === "/agents") return json(AGENTS);
 		if (p === "/agents/availability") return json(AVAILABILITY);
 		if (p === "/agents/all/skills") return json(SKILLS);
-		if (p === "/agents/all/mcps") return json(MCPS);
+		if (p === "/agents/all/mcps") return json(mcps);
 		if (p === "/agents/all/sub-agents") return json(SUB_AGENTS);
 		if (p === "/plugins") return json(PLUGINS);
 		if (p === "/skills/lock/global") return json(GLOBAL_LOCK);
-		if (route.request().method() === "GET") return json([]);
+
+		const putMcp = p.match(/^\/agents\/[^/]+\/mcps\/(.+)$/);
+		if (method === "PUT" && putMcp) {
+			const name = decodeURIComponent(putMcp[1]);
+			const body = JSON.parse(route.request().postData() ?? "{}");
+			const idx = mcps.findIndex((m) => m.name === name);
+			if (idx !== -1 && body.transport) {
+				mcps[idx] = { ...mcps[idx], transport: body.transport };
+			}
+			return json(mcps[idx] ?? {});
+		}
+
+		if (method === "GET") return json([]);
 		return json({});
 	});
 }
