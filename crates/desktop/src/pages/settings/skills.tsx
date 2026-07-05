@@ -9,7 +9,7 @@ import {
 import { Button, Dropdown, Tooltip } from "@heroui/react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BulkActionsPanel } from "../../components/bulk-actions-panel";
 import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
@@ -22,6 +22,7 @@ import { TransferDialog } from "../../components/transfer-dialog";
 import { useAgentFilter } from "../../hooks/use-agent-filter";
 import { DragPreview, DropBoard } from "../../components/drop-board";
 import { useListDnd } from "../../hooks/use-list-dnd";
+import { useListKeyboard } from "../../hooks/use-list-keyboard";
 import { SkillDetail } from "../../components/skill-detail";
 import { SkillList } from "../../components/skill-list";
 import type { SkillResponse } from "../../generated/dto";
@@ -200,6 +201,15 @@ export default function SkillsPage() {
 	const { dndProps, draggedKeys, boardGroups, showBoardUngrouped } =
 		useListDnd("skill", (keys) => setCreateGroupKeys(keys));
 
+	const listPanelRef = useRef<HTMLDivElement>(null);
+	useListKeyboard({
+		containerRef: listPanelRef,
+		allKeys: groupedSkills.map((g) => g.name),
+		selectedKeys,
+		onSelectionChange: handleSelectionChange,
+		onRequestDelete: actionIntents.onRequestDelete,
+	});
+
 	return (
 		<DndContext {...dndProps}>
 			<div className="flex h-full flex-col">
@@ -314,7 +324,10 @@ export default function SkillsPage() {
 				</ResourcePageToolbar>
 				<div className="flex min-h-0 flex-1">
 					{/* Skills List Panel */}
-					<div className="relative flex w-80 shrink-0 flex-col border-r border-border">
+					<div
+						ref={listPanelRef}
+						className="relative flex w-80 shrink-0 flex-col border-r border-border"
+					>
 						{/* Skills List */}
 						<SkillList
 							skills={filteredSkills}

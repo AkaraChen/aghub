@@ -543,3 +543,36 @@ test("the drop board replaces the detail while dragging and assigns on drop", as
 		section.getByRole("option", { name: "solo-skill" }),
 	).toBeVisible();
 });
+
+test("cmd+a selects all, escape clears", async ({ page }) => {
+	// Hover the list so the shortcuts are in scope
+	await page.getByRole("option", { name: "solo-skill" }).hover();
+
+	await page.keyboard.press("ControlOrMeta+a");
+	await expect(page.getByText("3 items selected")).toBeVisible();
+
+	await page.keyboard.press("Escape");
+	await expect(page.getByText("3 items selected")).toBeHidden();
+	await expect(
+		page.getByText("Select a skill to view details"),
+	).toBeVisible();
+});
+
+test("delete opens the delete confirmation for the selection", async ({
+	page,
+}) => {
+	await page.getByRole("option", { name: "solo-skill" }).click();
+	await page.getByRole("option", { name: "solo-skill" }).hover();
+	await page.keyboard.press("Delete");
+	await expect(page.getByRole("dialog")).toBeVisible();
+});
+
+test("list shortcuts are ignored while the search field is focused", async ({
+	page,
+}) => {
+	await page.getByRole("option", { name: "css-wizard" }).click();
+	await page.getByRole("searchbox", { name: "Search skills" }).focus();
+	await page.keyboard.press("Delete");
+	// The keypress belongs to the field, not the list — no delete dialog
+	await expect(page.getByRole("dialog")).toBeHidden();
+});

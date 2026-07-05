@@ -9,7 +9,7 @@ import {
 import { Button, Dropdown, Tooltip } from "@heroui/react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { BulkActionsPanel } from "../../components/bulk-actions-panel";
 import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
@@ -23,6 +23,7 @@ import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
 import { TransferDialog } from "../../components/transfer-dialog";
 import { useAgentFilter } from "../../hooks/use-agent-filter";
 import { useListDnd } from "../../hooks/use-list-dnd";
+import { useListKeyboard } from "../../hooks/use-list-keyboard";
 import type { McpGroup } from "../../components/mcp-detail";
 import { McpDetail } from "../../components/mcp-detail";
 import { McpList } from "../../components/mcp-list";
@@ -186,6 +187,15 @@ export default function MCPServersPage() {
 
 	const { dndProps, draggedKeys, boardGroups, showBoardUngrouped } =
 		useListDnd("mcp", (keys) => setCreateGroupKeys(keys));
+
+	const listPanelRef = useRef<HTMLDivElement>(null);
+	useListKeyboard({
+		containerRef: listPanelRef,
+		allKeys: groupedMcps.map((g) => g.mergeKey),
+		selectedKeys,
+		onSelectionChange: handleSelectionChange,
+		onRequestDelete: actionIntents.onRequestDelete,
+	});
 	const dragPreviewLabel = draggedKeys?.[0]
 		? (groupedMcps.find((g) => g.mergeKey === draggedKeys[0])?.items[0]
 				.name ?? "")
@@ -307,7 +317,10 @@ export default function MCPServersPage() {
 				</ResourcePageToolbar>
 				<div className="flex min-h-0 flex-1">
 					{/* Servers List Panel */}
-					<div className="relative flex w-80 shrink-0 flex-col border-r border-border">
+					<div
+						ref={listPanelRef}
+						className="relative flex w-80 shrink-0 flex-col border-r border-border"
+					>
 						{/* Servers List */}
 						<McpList
 							mcps={filteredMcps}
