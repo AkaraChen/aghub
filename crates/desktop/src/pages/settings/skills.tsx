@@ -1,5 +1,7 @@
+import { DndContext, DragOverlay } from "@dnd-kit/core";
 import {
 	ArrowPathIcon,
+	BookOpenIcon,
 	CheckCircleIcon,
 	PlusIcon,
 	RectangleStackIcon,
@@ -18,6 +20,8 @@ import { GroupNameDialog } from "../../components/resource-group-dialogs";
 import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
 import { TransferDialog } from "../../components/transfer-dialog";
 import { useAgentFilter } from "../../hooks/use-agent-filter";
+import { DragPreview, DropBoard } from "../../components/drop-board";
+import { useListDnd } from "../../hooks/use-list-dnd";
 import { SkillDetail } from "../../components/skill-detail";
 import { SkillList } from "../../components/skill-list";
 import type { SkillResponse } from "../../generated/dto";
@@ -184,204 +188,234 @@ export default function SkillsPage() {
 		return null;
 	}, [isBulkSelection, globalLock, groupedSkills, selectedKeys]);
 
+	const { dndProps, draggedKeys, boardGroups, showBoardUngrouped } =
+		useListDnd("skill", (keys) => setCreateGroupKeys(keys));
+
 	return (
-		<div className="flex h-full flex-col">
-			<ResourcePageToolbar
-				agentFilter={{
-					agentId: agentFilter,
-					onChange: setAgentId,
-				}}
-				searchValue={searchQuery}
-				onSearchChange={setSearchQuery}
-				searchPlaceholder={t("searchSkills")}
-				searchAriaLabel={t("searchSkills")}
-			>
-				<Tooltip delay={0}>
-					<Tooltip.Trigger>
-						<div
-							role="button"
-							tabIndex={0}
-							className={cn(
-								"flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-default hover:text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40",
-								isMultiSelectMode && "bg-accent/10 text-accent",
-							)}
-							aria-label={
-								isMultiSelectMode
-									? t("doneSelecting")
-									: t("multiSelect")
-							}
-							onClick={handleToggleMultiSelect}
-							onKeyDown={(event) => {
-								if (
-									event.key !== "Enter" &&
-									event.key !== " "
-								) {
-									return;
+		<DndContext {...dndProps}>
+			<div className="flex h-full flex-col">
+				<ResourcePageToolbar
+					agentFilter={{
+						agentId: agentFilter,
+						onChange: setAgentId,
+					}}
+					searchValue={searchQuery}
+					onSearchChange={setSearchQuery}
+					searchPlaceholder={t("searchSkills")}
+					searchAriaLabel={t("searchSkills")}
+				>
+					<Tooltip delay={0}>
+						<Tooltip.Trigger>
+							<div
+								role="button"
+								tabIndex={0}
+								className={cn(
+									"flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-default hover:text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40",
+									isMultiSelectMode &&
+										"bg-accent/10 text-accent",
+								)}
+								aria-label={
+									isMultiSelectMode
+										? t("doneSelecting")
+										: t("multiSelect")
 								}
-								event.preventDefault();
-								handleToggleMultiSelect();
-							}}
+								onClick={handleToggleMultiSelect}
+								onKeyDown={(event) => {
+									if (
+										event.key !== "Enter" &&
+										event.key !== " "
+									) {
+										return;
+									}
+									event.preventDefault();
+									handleToggleMultiSelect();
+								}}
+							>
+								{isMultiSelectMode ? (
+									<CheckCircleIcon className="size-4" />
+								) : (
+									<RectangleStackIcon className="size-4" />
+								)}
+							</div>
+						</Tooltip.Trigger>
+						<Tooltip.Content>
+							{isMultiSelectMode
+								? t("doneSelecting")
+								: t("multiSelect")}
+						</Tooltip.Content>
+					</Tooltip>
+					<Dropdown>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							className="shrink-0"
+							aria-label={t("addSkill")}
 						>
-							{isMultiSelectMode ? (
-								<CheckCircleIcon className="size-4" />
-							) : (
-								<RectangleStackIcon className="size-4" />
-							)}
-						</div>
-					</Tooltip.Trigger>
-					<Tooltip.Content>
-						{isMultiSelectMode
-							? t("doneSelecting")
-							: t("multiSelect")}
-					</Tooltip.Content>
-				</Tooltip>
-				<Dropdown>
+							<PlusIcon className="size-4" />
+						</Button>
+						<Dropdown.Popover placement="bottom end">
+							<Dropdown.Menu
+								onAction={(key) => {
+									if (key === "create") {
+										handleCreateSkill();
+									} else if (key === "import") {
+										handleImportSkill();
+									} else if (key === "create-group") {
+										setCreateGroupKeys([]);
+									}
+								}}
+							>
+								<Dropdown.Item
+									id="create"
+									textValue={t("createCustomSkill")}
+								>
+									{t("createCustomSkill")}
+								</Dropdown.Item>
+								<Dropdown.Item
+									id="import"
+									textValue={t("importFromFile")}
+								>
+									{t("importFromFile")}
+								</Dropdown.Item>
+								<Dropdown.Item
+									id="create-group"
+									textValue={t("createGroup")}
+								>
+									{t("createGroup")}
+								</Dropdown.Item>
+							</Dropdown.Menu>
+						</Dropdown.Popover>
+					</Dropdown>
 					<Button
 						isIconOnly
 						variant="ghost"
 						size="sm"
 						className="shrink-0"
-						aria-label={t("addSkill")}
+						aria-label={t("refreshSkills")}
+						onPress={() => refetch()}
 					>
-						<PlusIcon className="size-4" />
+						<ArrowPathIcon
+							className={cn(
+								"size-4",
+								isFetching && "animate-spin",
+							)}
+						/>
 					</Button>
-					<Dropdown.Popover placement="bottom end">
-						<Dropdown.Menu
-							onAction={(key) => {
-								if (key === "create") {
-									handleCreateSkill();
-								} else if (key === "import") {
-									handleImportSkill();
-								} else if (key === "create-group") {
-									setCreateGroupKeys([]);
+				</ResourcePageToolbar>
+				<div className="flex min-h-0 flex-1">
+					{/* Skills List Panel */}
+					<div className="relative flex w-80 shrink-0 flex-col border-r border-border">
+						{/* Skills List */}
+						<SkillList
+							skills={filteredSkills}
+							selectedKeys={selectedKeys}
+							searchQuery={searchQuery}
+							onSelectionChange={handleSelectionChange}
+							selectionMode="multiple"
+							isMultiSelectMode={isMultiSelectMode}
+							groupBySource={true}
+							intents={actionIntents}
+						/>
+					</div>
+
+					<div className="flex-1 overflow-hidden relative">
+						{draggedKeys ? (
+							<DropBoard
+								count={draggedKeys.length}
+								groups={boardGroups}
+								showUngrouped={showBoardUngrouped}
+							/>
+						) : panelMode === "create" ? (
+							<CreateSkillPanel
+								onDone={() => setPanelMode(null)}
+							/>
+						) : panelMode === "import" ? (
+							<ImportSkillPanel
+								onDone={() => setPanelMode(null)}
+							/>
+						) : isBulkSelection ? (
+							<BulkActionsPanel
+								kind="skill"
+								items={selectedGroups.map((g) => ({
+									key: g.name,
+									label: g.name,
+								}))}
+								intents={actionIntents}
+								sourceContext={sourceContext}
+								onDeselectAll={() =>
+									handleSelectionChange(new Set())
+								}
+							/>
+						) : activeGroup ? (
+							<SkillDetail group={activeGroup} />
+						) : (
+							<div className="flex h-full flex-col items-center justify-center gap-4">
+								<div className="text-center">
+									<p className="mb-2 text-sm text-muted">
+										{t("selectSkill")}
+									</p>
+								</div>
+							</div>
+						)}
+
+						<BulkDeleteDialog
+							isOpen={isBulkDeleteDialogOpen}
+							onClose={() => setIsBulkDeleteDialogOpen(false)}
+							groups={selectedGroups.map((g) => ({
+								key: g.name,
+								items: g.items,
+							}))}
+							onSuccess={() => {
+								handleSelectionChange(new Set());
+								refetch();
+							}}
+							resourceType="skill"
+						/>
+						<TransferDialog
+							isOpen={isTransferDialogOpen}
+							onClose={() => setIsTransferDialogOpen(false)}
+							resourceType="skill"
+							items={selectedGroups.map((g) => ({
+								name: g.name,
+								sourceAgent: g.items[0].agent ?? "claude",
+							}))}
+							sourceScope="global"
+						/>
+						<ManageSkillAgentsDialog
+							groups={selectedGroups}
+							isOpen={isManageDialogOpen}
+							onClose={() => setIsManageDialogOpen(false)}
+						/>
+						<GroupNameDialog
+							isOpen={createGroupKeys !== null}
+							onClose={() => setCreateGroupKeys(null)}
+							title={t("createGroup")}
+							onSubmit={async (name) => {
+								const created = await createGroup(name);
+								if (
+									createGroupKeys &&
+									createGroupKeys.length > 0
+								) {
+									await assignMembers(
+										createGroupKeys,
+										created.id,
+									);
 								}
 							}}
-						>
-							<Dropdown.Item
-								id="create"
-								textValue={t("createCustomSkill")}
-							>
-								{t("createCustomSkill")}
-							</Dropdown.Item>
-							<Dropdown.Item
-								id="import"
-								textValue={t("importFromFile")}
-							>
-								{t("importFromFile")}
-							</Dropdown.Item>
-							<Dropdown.Item
-								id="create-group"
-								textValue={t("createGroup")}
-							>
-								{t("createGroup")}
-							</Dropdown.Item>
-						</Dropdown.Menu>
-					</Dropdown.Popover>
-				</Dropdown>
-				<Button
-					isIconOnly
-					variant="ghost"
-					size="sm"
-					className="shrink-0"
-					aria-label={t("refreshSkills")}
-					onPress={() => refetch()}
-				>
-					<ArrowPathIcon
-						className={cn("size-4", isFetching && "animate-spin")}
-					/>
-				</Button>
-			</ResourcePageToolbar>
-			<div className="flex min-h-0 flex-1">
-				{/* Skills List Panel */}
-				<div className="relative flex w-80 shrink-0 flex-col border-r border-border">
-					{/* Skills List */}
-					<SkillList
-						skills={filteredSkills}
-						selectedKeys={selectedKeys}
-						searchQuery={searchQuery}
-						onSelectionChange={handleSelectionChange}
-						selectionMode="multiple"
-						isMultiSelectMode={isMultiSelectMode}
-						groupBySource={true}
-						intents={actionIntents}
-						onDropCreateGroup={(keys) => setCreateGroupKeys(keys)}
-					/>
-				</div>
-
-				<div className="flex-1 overflow-hidden relative">
-					{panelMode === "create" ? (
-						<CreateSkillPanel onDone={() => setPanelMode(null)} />
-					) : panelMode === "import" ? (
-						<ImportSkillPanel onDone={() => setPanelMode(null)} />
-					) : isBulkSelection ? (
-						<BulkActionsPanel
-							kind="skill"
-							items={selectedGroups.map((g) => ({
-								key: g.name,
-								label: g.name,
-							}))}
-							intents={actionIntents}
-							sourceContext={sourceContext}
-							onDeselectAll={() =>
-								handleSelectionChange(new Set())
-							}
 						/>
-					) : activeGroup ? (
-						<SkillDetail group={activeGroup} />
-					) : (
-						<div className="flex h-full flex-col items-center justify-center gap-4">
-							<div className="text-center">
-								<p className="mb-2 text-sm text-muted">
-									{t("selectSkill")}
-								</p>
-							</div>
-						</div>
-					)}
-
-					<BulkDeleteDialog
-						isOpen={isBulkDeleteDialogOpen}
-						onClose={() => setIsBulkDeleteDialogOpen(false)}
-						groups={selectedGroups.map((g) => ({
-							key: g.name,
-							items: g.items,
-						}))}
-						onSuccess={() => {
-							handleSelectionChange(new Set());
-							refetch();
-						}}
-						resourceType="skill"
-					/>
-					<TransferDialog
-						isOpen={isTransferDialogOpen}
-						onClose={() => setIsTransferDialogOpen(false)}
-						resourceType="skill"
-						items={selectedGroups.map((g) => ({
-							name: g.name,
-							sourceAgent: g.items[0].agent ?? "claude",
-						}))}
-						sourceScope="global"
-					/>
-					<ManageSkillAgentsDialog
-						groups={selectedGroups}
-						isOpen={isManageDialogOpen}
-						onClose={() => setIsManageDialogOpen(false)}
-					/>
-					<GroupNameDialog
-						isOpen={createGroupKeys !== null}
-						onClose={() => setCreateGroupKeys(null)}
-						title={t("createGroup")}
-						onSubmit={async (name) => {
-							const created = await createGroup(name);
-							if (createGroupKeys && createGroupKeys.length > 0) {
-								await assignMembers(
-									createGroupKeys,
-									created.id,
-								);
-							}
-						}}
-					/>
+					</div>
 				</div>
 			</div>
-		</div>
+			<DragOverlay dropAnimation={null}>
+				{draggedKeys ? (
+					<DragPreview
+						label={draggedKeys[0] ?? ""}
+						count={draggedKeys.length}
+						icon={BookOpenIcon}
+					/>
+				) : null}
+			</DragOverlay>
+		</DndContext>
 	);
 }

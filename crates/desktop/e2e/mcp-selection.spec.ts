@@ -22,18 +22,14 @@ test("clicking the selected server again cancels to the placeholder", async ({
 }) => {
 	// beta-mcp is not the seeded first server, so the first click selects it
 	await page.getByRole("option", { name: "beta-mcp" }).click();
-	await expect(
-		page.getByRole("heading", { name: "beta-mcp" }),
-	).toBeVisible();
+	await expect(page.getByRole("heading", { name: "beta-mcp" })).toBeVisible();
 
 	// Clicking it again cancels the selection -> empty placeholder
 	await page.getByRole("option", { name: "beta-mcp" }).click();
 	await expect(
 		page.getByText("Select a server to view details"),
 	).toBeVisible();
-	await expect(
-		page.getByRole("heading", { name: "beta-mcp" }),
-	).toBeHidden();
+	await expect(page.getByRole("heading", { name: "beta-mcp" })).toBeHidden();
 });
 
 test("multi-select opens the bulk panel and exiting collapses to one", async ({

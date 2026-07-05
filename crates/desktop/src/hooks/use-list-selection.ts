@@ -107,7 +107,9 @@ export function useListSelection(
 					added === undefined &&
 					selectedKeys.size === 1 &&
 					selectedKeys.has(clicked);
-				finalKeys = togglingOff ? new Set<string>() : new Set([clicked]);
+				finalKeys = togglingOff
+					? new Set<string>()
+					: new Set([clicked]);
 			} else {
 				finalKeys = new Set(selectedKeys);
 				if (finalKeys.has(clicked)) {

@@ -5,10 +5,10 @@ import {
 	StarIcon as StarIconSolid,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
+import { useDndContext } from "@dnd-kit/core";
 import { Header, Label, ListBox, Menu } from "@heroui/react";
 import Fuse from "fuse.js";
 import { useMemo, useState } from "react";
-import { DropZone, useDragAndDrop } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import type { McpResponse } from "../generated/dto";
 import { ACTION_ICONS } from "./action-icons";
@@ -23,14 +23,14 @@ import { dragSelectionPayload } from "../lib/drag-payload";
 import type { ResourceGroup } from "../lib/store";
 import { cn, filterItemsByAgentIds, getMcpMergeKey } from "../lib/utils";
 import { ContextMenu, useContextMenu } from "./context-menu";
+import { DraggableItemBody } from "./draggable-item-body";
+import { groupDropId, UNGROUPED_DROP_ID } from "./list-dnd";
 import { DeleteGroupDialog, GroupNameDialog } from "./resource-group-dialogs";
 import {
+	DropRegion,
 	NewGroupDropZone,
-	readDraggedKeys,
 	ResourceGroupSection,
 } from "./resource-group-section";
-
-export const MCP_DRAG_TYPE = "aghub-mcp-keys";
 
 interface McpGroup {
 	mergeKey: string;
@@ -51,8 +51,6 @@ interface McpListProps {
 	isMultiSelectMode?: boolean;
 	/** Dialog intents owned by the page (delete/transfer/agents/new group) */
 	intents: ResourceActionIntents;
-	/** Dropping items on the new-group zone: page opens the naming dialog */
-	onDropCreateGroup: (keys: string[]) => void;
 }
 
 export function McpList({
@@ -64,7 +62,6 @@ export function McpList({
 	selectionMode = "single",
 	isMultiSelectMode = false,
 	intents,
-	onDropCreateGroup,
 }: McpListProps) {
 	const { t } = useTranslation();
 	const { availableAgents } = useAgentAvailability();
@@ -116,14 +113,7 @@ export function McpList({
 	}, [fuse, groupedMcps, searchQuery]);
 
 	const { isMcpStarred } = useFavorites();
-	const {
-		groups,
-		assignments,
-		renameGroup,
-		deleteGroup,
-		assignMembers,
-		unassignMembers,
-	} = useMcpGroups();
+	const { groups, assignments, renameGroup, deleteGroup } = useMcpGroups();
 
 	const [collapsedIds, setCollapsedIds] = useState<Set<string>>(
 		() => new Set(),
@@ -134,7 +124,10 @@ export function McpList({
 	const [deleteTarget, setDeleteTarget] = useState<ResourceGroup | null>(
 		null,
 	);
-	const [isDraggingKeys, setIsDraggingKeys] = useState(false);
+	// The page owns the DndContext; the list reads its active drag to show
+	// the new-group zone and gate selection while dragging.
+	const { active: activeDrag } = useDndContext();
+	const isDragging = activeDrag != null;
 
 	const sortedGroups = useMemo(() => {
 		const list = [...filteredGroups];
@@ -193,21 +186,6 @@ export function McpList({
 		intents,
 	});
 
-	const { dragAndDropHooks } = useDragAndDrop({
-		getItems: (keys) => [
-			{
-				[MCP_DRAG_TYPE]: JSON.stringify(
-					dragSelectionPayload(
-						Array.from(keys).map(String),
-						selectedKeys,
-					),
-				),
-			},
-		],
-		onDragStart: () => setIsDraggingKeys(true),
-		onDragEnd: () => setIsDraggingKeys(false),
-	});
-
 	const isSearching = Boolean(searchQuery);
 
 	const toggleCollapsed = (id: string) => {
@@ -256,14 +234,9 @@ export function McpList({
 				textValue={group.items[0].name}
 				className="data-selected:bg-surface transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]"
 			>
-				<div
-					className="flex w-full items-center gap-2"
-					onPointerDown={(event) => {
-						// Right-click must not collapse a multi-selection:
-						// stop react-aria's item from selecting on pointer
-						// down so onContextMenu controls the selection.
-						if (event.button === 2) event.stopPropagation();
-					}}
+				<DraggableItemBody
+					dragId={`item:${group.mergeKey}`}
+					keys={dragSelectionPayload([group.mergeKey], selectedKeys)}
 					onContextMenu={(event) =>
 						openItemMenu(event, group.mergeKey)
 					}
@@ -273,7 +246,7 @@ export function McpList({
 						{group.items[0].name}
 					</Label>
 					<AgentIcons items={group.items} />
-				</div>
+				</DraggableItemBody>
 			</ListBox.Item>
 		);
 	};
@@ -287,7 +260,6 @@ export function McpList({
 			onSelectionChange={createSelectionHandler(
 				sectionMcps.map((g) => g.mergeKey),
 			)}
-			dragAndDropHooks={dragAndDropHooks}
 			className="p-2 pl-6"
 		>
 			{sectionMcps.map(renderMcpItem)}
@@ -494,12 +466,9 @@ export function McpList({
 								group: section.group,
 							})
 						}
-						dragType={MCP_DRAG_TYPE}
+						dropId={groupDropId(section.group.id)}
+						dragId={`header:${section.group.id}`}
 						dragKeys={memberKeys}
-						onDropKeys={(keys) =>
-							void assignMembers(keys, section.group.id)
-						}
-						onHeaderDragChange={setIsDraggingKeys}
 					>
 						{section.mcps.length > 0 &&
 							renderSectionListBox(
@@ -511,24 +480,7 @@ export function McpList({
 			})}
 
 			{unassignedGroups.length > 0 && (
-				<DropZone
-					getDropOperation={(types) =>
-						types.has(MCP_DRAG_TYPE) ? "move" : "cancel"
-					}
-					onDrop={(e) => {
-						void readDraggedKeys(e.items, MCP_DRAG_TYPE).then(
-							(keys) => {
-								if (keys.length > 0) void unassignMembers(keys);
-							},
-						);
-					}}
-					className={({ isDropTarget }) =>
-						cn(
-							isDropTarget &&
-								"bg-accent/10 ring-1 ring-inset ring-accent",
-						)
-					}
-				>
+				<DropRegion id={UNGROUPED_DROP_ID}>
 					{customSections.length > 0 && (
 						<p className="px-3 pt-3 pb-1 text-xs font-medium tracking-wider text-muted uppercase">
 							{t("ungrouped")}
@@ -542,20 +494,14 @@ export function McpList({
 						onSelectionChange={createSelectionHandler(
 							unassignedGroups.map((g) => g.mergeKey),
 						)}
-						dragAndDropHooks={dragAndDropHooks}
 						className="p-2"
 					>
 						{unassignedGroups.map(renderMcpItem)}
 					</ListBox>
-				</DropZone>
+				</DropRegion>
 			)}
 
-			{isDraggingKeys && (
-				<NewGroupDropZone
-					dragType={MCP_DRAG_TYPE}
-					onDropKeys={onDropCreateGroup}
-				/>
-			)}
+			{isDragging && <NewGroupDropZone />}
 
 			{overlaysNode}
 		</div>

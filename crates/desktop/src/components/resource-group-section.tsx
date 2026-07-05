@@ -1,45 +1,15 @@
 import { ChevronRightIcon, PlusIcon } from "@heroicons/react/24/solid";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { Chip } from "@heroui/react";
 import type { ReactNode } from "react";
-import { useDrag } from "react-aria";
-import type { DropItem } from "react-aria-components";
-import { DropZone } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
+import { NEW_GROUP_DROP_ID } from "./list-dnd";
 
 // The same base classes HeroUI applies to a ListBox.Item, so a group
 // header is visually a list item (padding, radius, min-height, hover,
 // press-scale) rather than a full-width band.
 const LIST_ITEM_CLASS = "list-box-item list-box-item--default";
-
-/**
- * Extracts the member keys carried by a list drag (item drag, header
- * drag or selection drag — they all serialize a key array under the
- * list's drag type).
- */
-export async function readDraggedKeys(
-	items: DropItem[],
-	dragType: string,
-): Promise<string[]> {
-	for (const item of items) {
-		if (item.kind === "text" && item.types.has(dragType)) {
-			try {
-				const parsed: unknown = JSON.parse(
-					await item.getText(dragType),
-				);
-				if (
-					Array.isArray(parsed) &&
-					parsed.every((k) => typeof k === "string")
-				) {
-					return parsed;
-				}
-			} catch {
-				return [];
-			}
-		}
-	}
-	return [];
-}
 
 interface ResourceGroupSectionProps {
 	title: string;
@@ -51,14 +21,12 @@ interface ResourceGroupSectionProps {
 	/** Header click selects the whole group */
 	onSelectAll: () => void;
 	onContextMenu?: (event: React.MouseEvent) => void;
-	/** MIME type namespacing this list's drags (skill vs mcp) */
-	dragType: string;
+	/** Droppable id; omit to reject drops (source groups) */
+	dropId?: string;
+	/** Draggable id for the header (drags the whole group) */
+	dragId: string;
 	/** Member keys carried when the header itself is dragged */
 	dragKeys?: string[];
-	/** Accept dropped member keys; omit to reject drops (source groups) */
-	onDropKeys?: (keys: string[]) => void;
-	/** Header drag lifecycle, so the list can show drop targets */
-	onHeaderDragChange?: (isDragging: boolean) => void;
 	children?: ReactNode;
 }
 
@@ -76,46 +44,42 @@ export function ResourceGroupSection({
 	onToggleExpanded,
 	onSelectAll,
 	onContextMenu,
-	dragType,
+	dropId,
+	dragId,
 	dragKeys,
-	onDropKeys,
-	onHeaderDragChange,
 	children,
 }: ResourceGroupSectionProps) {
 	const { t } = useTranslation();
 
-	const { dragProps } = useDrag({
-		getItems: () => [{ [dragType]: JSON.stringify(dragKeys ?? []) }],
-		onDragStart: () => onHeaderDragChange?.(true),
-		onDragEnd: () => onHeaderDragChange?.(false),
+	const { setNodeRef: setDropRef, isOver } = useDroppable({
+		id: dropId ?? dragId,
+		disabled: !dropId,
 	});
-	const headerDragProps = dragKeys && dragKeys.length > 0 ? dragProps : {};
+
+	const { setNodeRef: setDragRef, listeners } = useDraggable({
+		id: dragId,
+		data: { keys: dragKeys ?? [] },
+		disabled: !dragKeys || dragKeys.length === 0,
+	});
 
 	return (
-		<DropZone
+		<div
+			ref={setDropRef}
 			data-testid={`group-section-${title}`}
-			getDropOperation={(types) =>
-				onDropKeys && types.has(dragType) ? "move" : "cancel"
-			}
-			onDrop={(e) => {
-				void readDraggedKeys(e.items, dragType).then((keys) => {
-					if (keys.length > 0) onDropKeys?.(keys);
-				});
-			}}
-			className={({ isDropTarget }) =>
-				cn(
-					"rounded-lg",
-					isDropTarget &&
-						"bg-accent/5 ring-1 ring-inset ring-accent/40",
-				)
-			}
+			className={cn(
+				"rounded-lg transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+				isOver &&
+					dropId &&
+					"bg-accent/5 ring-1 ring-inset ring-accent/40",
+			)}
 		>
 			<div className="px-2 pt-2">
 				<div
+					ref={setDragRef}
 					role="button"
 					tabIndex={0}
 					aria-pressed={isSelected}
-					{...headerDragProps}
+					{...listeners}
 					onClick={onSelectAll}
 					onKeyDown={(event) => {
 						// Ignore keys bubbling up from the chevron button so
@@ -140,6 +104,8 @@ export function ResourceGroupSection({
 							event.stopPropagation();
 							onToggleExpanded();
 						}}
+						// Keep the drag sensor from swallowing the toggle press
+						onPointerDown={(event) => event.stopPropagation()}
 						className="-ml-0.5 flex size-5 shrink-0 items-center justify-center rounded text-muted transition-colors hover:text-foreground"
 						aria-label={title}
 						aria-expanded={isExpanded}
@@ -167,46 +133,60 @@ export function ResourceGroupSection({
 			>
 				{/* invisible while collapsed so it leaves the a11y tree and
 				 * reads as hidden to tests, not just clipped by overflow */}
-				<div className={cn("overflow-hidden", !isExpanded && "invisible")}>
+				<div
+					className={cn(
+						"overflow-hidden",
+						!isExpanded && "invisible",
+					)}
+				>
 					{children}
 				</div>
 			</div>
-		</DropZone>
+		</div>
 	);
 }
 
-interface NewGroupDropZoneProps {
-	dragType: string;
-	onDropKeys: (keys: string[]) => void;
+interface DropRegionProps {
+	/** dnd-kit droppable id */
+	id: string;
+	className?: string;
+	children: ReactNode;
+}
+
+/** A plain droppable wrapper for regions that are not group headers
+ * (the ungrouped area). Highlights on hover-over during a drag. */
+export function DropRegion({ id, className, children }: DropRegionProps) {
+	const { setNodeRef, isOver } = useDroppable({ id });
+	return (
+		<div
+			ref={setNodeRef}
+			className={cn(
+				"transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+				isOver && "bg-accent/5 ring-1 ring-inset ring-accent/40",
+				className,
+			)}
+		>
+			{children}
+		</div>
+	);
 }
 
 /** Drop target shown while dragging: dropping creates a new group. */
-export function NewGroupDropZone({
-	dragType,
-	onDropKeys,
-}: NewGroupDropZoneProps) {
+export function NewGroupDropZone() {
 	const { t } = useTranslation();
+	const { setNodeRef, isOver } = useDroppable({ id: NEW_GROUP_DROP_ID });
 
 	return (
-		<DropZone
+		<div
+			ref={setNodeRef}
 			data-testid="new-group-dropzone"
-			getDropOperation={(types) =>
-				types.has(dragType) ? "move" : "cancel"
-			}
-			onDrop={(e) => {
-				void readDraggedKeys(e.items, dragType).then((keys) => {
-					if (keys.length > 0) onDropKeys(keys);
-				});
-			}}
-			className={({ isDropTarget }) =>
-				cn(
-					"mx-2 my-2 flex items-center justify-center gap-2 rounded-lg border border-dashed border-separator px-3 py-3 text-xs text-muted",
-					isDropTarget && "border-accent bg-accent/10 text-accent",
-				)
-			}
+			className={cn(
+				"mx-2 my-2 flex items-center justify-center gap-2 rounded-lg border border-dashed border-separator px-3 py-3 text-xs text-muted transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+				isOver && "border-accent bg-accent/10 text-accent",
+			)}
 		>
 			<PlusIcon className="size-4" />
 			{t("dragToNewGroup")}
-		</DropZone>
+		</div>
 	);
 }

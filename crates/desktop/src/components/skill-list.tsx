@@ -4,11 +4,11 @@ import {
 	StarIcon as StarIconSolid,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
+import { useDndContext } from "@dnd-kit/core";
 import { Header, Label, ListBox, Menu, Spinner } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import Fuse from "fuse.js";
 import { useCallback, useMemo, useState } from "react";
-import { DropZone, useDragAndDrop } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import type { SkillResponse } from "../generated/dto";
 import { ACTION_ICONS } from "./action-icons";
@@ -28,14 +28,14 @@ import {
 	projectSkillLockQueryOptions,
 } from "../requests/skills";
 import { ContextMenu, useContextMenu } from "./context-menu";
+import { DraggableItemBody } from "./draggable-item-body";
+import { groupDropId, UNGROUPED_DROP_ID } from "./list-dnd";
 import { DeleteGroupDialog, GroupNameDialog } from "./resource-group-dialogs";
 import {
+	DropRegion,
 	NewGroupDropZone,
-	readDraggedKeys,
 	ResourceGroupSection,
 } from "./resource-group-section";
-
-export const SKILL_DRAG_TYPE = "aghub-skill-keys";
 
 interface SkillGroup {
 	name: string;
@@ -64,8 +64,6 @@ interface SkillListProps {
 	isMultiSelectMode?: boolean;
 	/** Dialog intents owned by the page (delete/transfer/agents/new group) */
 	intents: ResourceActionIntents;
-	/** Dropping items on the new-group zone: page opens the naming dialog */
-	onDropCreateGroup: (keys: string[]) => void;
 }
 
 export function SkillList({
@@ -79,7 +77,6 @@ export function SkillList({
 	selectionMode = "single",
 	isMultiSelectMode = false,
 	intents,
-	onDropCreateGroup,
 }: SkillListProps) {
 	const { t } = useTranslation();
 	const api = useApi();
@@ -150,14 +147,7 @@ export function SkillList({
 	);
 
 	const { isSkillStarred } = useFavorites();
-	const {
-		groups,
-		assignments,
-		renameGroup,
-		deleteGroup,
-		assignMembers,
-		unassignMembers,
-	} = useSkillGroups();
+	const { groups, assignments, renameGroup, deleteGroup } = useSkillGroups();
 
 	const [collapsedIds, setCollapsedIds] = useState<Set<string>>(
 		() => new Set(),
@@ -168,7 +158,10 @@ export function SkillList({
 	const [deleteTarget, setDeleteTarget] = useState<ResourceGroup | null>(
 		null,
 	);
-	const [isDraggingKeys, setIsDraggingKeys] = useState(false);
+	// The page owns the DndContext; the list reads its active drag to show
+	// the new-group zone and gate selection while dragging.
+	const { active: activeDrag } = useDndContext();
+	const isDragging = activeDrag != null;
 
 	const filteredByName = useMemo(() => {
 		let items;
@@ -322,21 +315,6 @@ export function SkillList({
 		intents,
 	});
 
-	const { dragAndDropHooks } = useDragAndDrop({
-		getItems: (keys) => [
-			{
-				[SKILL_DRAG_TYPE]: JSON.stringify(
-					dragSelectionPayload(
-						Array.from(keys).map(String),
-						selectedKeys,
-					),
-				),
-			},
-		],
-		onDragStart: () => setIsDraggingKeys(true),
-		onDragEnd: () => setIsDraggingKeys(false),
-	});
-
 	const isSearching = Boolean(searchQuery);
 
 	const toggleCollapsed = (id: string) => {
@@ -379,14 +357,9 @@ export function SkillList({
 			textValue={skillGroup.name}
 			className="data-selected:bg-surface transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]"
 		>
-			<div
-				className="flex w-full items-center gap-2"
-				onPointerDown={(event) => {
-					// Right-click must not collapse a multi-selection:
-					// stop react-aria's item from selecting on pointer
-					// down so onContextMenu controls the selection.
-					if (event.button === 2) event.stopPropagation();
-				}}
+			<DraggableItemBody
+				dragId={`item:${skillGroup.name}`}
+				keys={dragSelectionPayload([skillGroup.name], selectedKeys)}
 				onContextMenu={(event) => openItemMenu(event, skillGroup.name)}
 			>
 				<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
@@ -397,7 +370,7 @@ export function SkillList({
 				</div>
 				<Label className="flex-1 truncate">{skillGroup.name}</Label>
 				<AgentIcons items={skillGroup.items} overflowVariant="square" />
-			</div>
+			</DraggableItemBody>
 		</ListBox.Item>
 	);
 
@@ -413,7 +386,6 @@ export function SkillList({
 			onSelectionChange={createSelectionHandler(
 				sectionSkills.map((s) => s.name),
 			)}
-			dragAndDropHooks={dragAndDropHooks}
 			className="p-2 pl-6"
 		>
 			{sectionSkills.map(renderSkillItem)}
@@ -626,12 +598,9 @@ export function SkillList({
 						onContextMenu={(event) =>
 							openGroupMenu(event, section.group)
 						}
-						dragType={SKILL_DRAG_TYPE}
+						dropId={groupDropId(section.group.id)}
+						dragId={`header:${section.group.id}`}
 						dragKeys={memberKeys}
-						onDropKeys={(keys) =>
-							void assignMembers(keys, section.group.id)
-						}
-						onHeaderDragChange={setIsDraggingKeys}
 					>
 						{section.skills.length > 0 &&
 							renderSectionListBox(
@@ -658,9 +627,8 @@ export function SkillList({
 						onContextMenu={(event) =>
 							openSourceMenu(event, memberKeys)
 						}
-						dragType={SKILL_DRAG_TYPE}
+						dragId={`header:${sg.source}`}
 						dragKeys={memberKeys}
-						onHeaderDragChange={setIsDraggingKeys}
 					>
 						{renderSectionListBox(sg.source, sg.skills)}
 					</ResourceGroupSection>
@@ -668,24 +636,7 @@ export function SkillList({
 			})}
 
 			{ungroupedGroups.length > 0 && (
-				<DropZone
-					getDropOperation={(types) =>
-						types.has(SKILL_DRAG_TYPE) ? "move" : "cancel"
-					}
-					onDrop={(e) => {
-						void readDraggedKeys(e.items, SKILL_DRAG_TYPE).then(
-							(keys) => {
-								if (keys.length > 0) void unassignMembers(keys);
-							},
-						);
-					}}
-					className={({ isDropTarget }) =>
-						cn(
-							isDropTarget &&
-								"bg-accent/10 ring-1 ring-inset ring-accent",
-						)
-					}
-				>
+				<DropRegion id={UNGROUPED_DROP_ID}>
 					{(customSections.length > 0 || sourceGroups.length > 0) && (
 						<p className="px-3 pt-3 pb-1 text-xs font-medium tracking-wider text-muted uppercase">
 							{t("ungrouped")}
@@ -699,20 +650,14 @@ export function SkillList({
 						onSelectionChange={createSelectionHandler(
 							ungroupedGroups.map((s) => s.name),
 						)}
-						dragAndDropHooks={dragAndDropHooks}
 						className="p-2"
 					>
 						{ungroupedGroups.map(renderSkillItem)}
 					</ListBox>
-				</DropZone>
+				</DropRegion>
 			)}
 
-			{isDraggingKeys && (
-				<NewGroupDropZone
-					dragType={SKILL_DRAG_TYPE}
-					onDropKeys={onDropCreateGroup}
-				/>
-			)}
+			{isDragging && <NewGroupDropZone />}
 
 			{overlaysNode}
 		</div>

@@ -1,3 +1,4 @@
+import { DndContext, DragOverlay } from "@dnd-kit/core";
 import {
 	ArrowDownTrayIcon,
 	ArrowPathIcon,
@@ -27,7 +28,9 @@ import type {
 	SubAgentResponse,
 } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
+import { useListDnd } from "../hooks/use-list-dnd";
 import type { ResourceActionIntents } from "../hooks/use-resource-actions";
+import { DragPreview } from "./drop-board";
 import {
 	cn,
 	filterItemsByAgentIds,
@@ -174,6 +177,18 @@ export function UnifiedResourceList({
 	const handleSkillSelectionChange = (keys: Set<string>) => {
 		onSelectionChange(keys, "skill");
 	};
+
+	// Skill and mcp lists each get their own DndContext so their `group:`
+	// and `ungrouped` droppable ids do not collide in one context.
+	const skillDnd = useListDnd("skill", (keys) =>
+		onDropCreateGroup("skill", keys),
+	);
+	const mcpDnd = useListDnd("mcp", (keys) => onDropCreateGroup("mcp", keys));
+	const mcpDragLabel = mcpDnd.draggedKeys?.[0]
+		? (visibleMcps.find(
+				(m) => getMcpMergeKey(m.transport) === mcpDnd.draggedKeys?.[0],
+			)?.name ?? "")
+		: "";
 
 	return (
 		<div
@@ -406,18 +421,30 @@ export function UnifiedResourceList({
 									count={mergedMcpCount}
 									icon={<ServerIcon className="size-3.5" />}
 								/>
-								<McpList
-									mcps={visibleMcps}
-									selectedKeys={selectedMcpKeys}
-									searchQuery={searchQuery}
-									onSelectionChange={handleMcpSelectionChange}
-									selectionMode="multiple"
-									isMultiSelectMode={isMultiSelectMode}
-									intents={mcpIntents}
-									onDropCreateGroup={(keys) =>
-										onDropCreateGroup("mcp", keys)
-									}
-								/>
+								<DndContext {...mcpDnd.dndProps}>
+									<McpList
+										mcps={visibleMcps}
+										selectedKeys={selectedMcpKeys}
+										searchQuery={searchQuery}
+										onSelectionChange={
+											handleMcpSelectionChange
+										}
+										selectionMode="multiple"
+										isMultiSelectMode={isMultiSelectMode}
+										intents={mcpIntents}
+									/>
+									<DragOverlay dropAnimation={null}>
+										{mcpDnd.draggedKeys ? (
+											<DragPreview
+												label={mcpDragLabel}
+												count={
+													mcpDnd.draggedKeys.length
+												}
+												icon={ServerIcon}
+											/>
+										) : null}
+									</DragOverlay>
+								</DndContext>
 							</>
 						)}
 
@@ -428,22 +455,35 @@ export function UnifiedResourceList({
 									count={mergedSkillCount}
 									icon={<BookOpenIcon className="size-3.5" />}
 								/>
-								<SkillList
-									skills={visibleSkills}
-									selectedKeys={selectedSkillKeys}
-									searchQuery={searchQuery}
-									onSelectionChange={
-										handleSkillSelectionChange
-									}
-									groupBySource={true}
-									projectPath={projectPath}
-									selectionMode="multiple"
-									isMultiSelectMode={isMultiSelectMode}
-									intents={skillIntents}
-									onDropCreateGroup={(keys) =>
-										onDropCreateGroup("skill", keys)
-									}
-								/>
+								<DndContext {...skillDnd.dndProps}>
+									<SkillList
+										skills={visibleSkills}
+										selectedKeys={selectedSkillKeys}
+										searchQuery={searchQuery}
+										onSelectionChange={
+											handleSkillSelectionChange
+										}
+										groupBySource={true}
+										projectPath={projectPath}
+										selectionMode="multiple"
+										isMultiSelectMode={isMultiSelectMode}
+										intents={skillIntents}
+									/>
+									<DragOverlay dropAnimation={null}>
+										{skillDnd.draggedKeys ? (
+											<DragPreview
+												label={
+													skillDnd.draggedKeys[0] ??
+													""
+												}
+												count={
+													skillDnd.draggedKeys.length
+												}
+												icon={BookOpenIcon}
+											/>
+										) : null}
+									</DragOverlay>
+								</DndContext>
 							</>
 						)}
 

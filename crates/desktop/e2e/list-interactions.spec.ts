@@ -3,53 +3,41 @@ import { expect, test } from "@playwright/test";
 import { installMocks } from "./mocks";
 
 /**
- * React Aria's desktop drag and drop rides native HTML5 drag events,
- * which CDP mouse input does not reliably synthesize — so fire the
- * DragEvent sequence directly with a shared DataTransfer.
+ * dnd-kit rides pointer events (PointerSensor, 8px activation), so drive
+ * a real Playwright mouse: press the source, cross the activation
+ * threshold, then move to the target and release. The target is resolved
+ * after activation because drag-only targets (the new-group zone, the
+ * drop board) only render once a drag is underway.
  */
 async function dragOptionTo(
 	page: Page,
 	optionText: string,
 	targetTestId: string,
 ) {
-	await page.evaluate(
-		async ({ optionText, targetTestId }) => {
-			const source = [
-				...document.querySelectorAll('[role="option"]'),
-			].find((el) => el.textContent?.includes(optionText));
-			if (!source) throw new Error("drag source missing");
+	// A just-closed dialog's backdrop lingers for its exit animation and
+	// would swallow the pointer-down; wait it out before pressing.
+	await expect(page.locator(".modal__backdrop")).toHaveCount(0);
 
-			const dataTransfer = new DataTransfer();
-			const fire = (el: Element, type: string) => {
-				const r = el.getBoundingClientRect();
-				el.dispatchEvent(
-					new DragEvent(type, {
-						bubbles: true,
-						cancelable: true,
-						composed: true,
-						clientX: r.x + 20,
-						clientY: r.y + 10,
-						dataTransfer,
-					}),
-				);
-			};
+	const source = page.getByRole("option", { name: optionText });
+	const s = await source.boundingBox();
+	if (!s) throw new Error("drag source missing");
+	const sx = s.x + s.width / 2;
+	const sy = s.y + s.height / 2;
 
-			fire(source, "dragstart");
-			// Give React a frame to render drag-only drop targets
-			await new Promise((resolve) =>
-				requestAnimationFrame(() => requestAnimationFrame(resolve)),
-			);
-			const target = document.querySelector(
-				`[data-testid="${targetTestId}"]`,
-			);
-			if (!target) throw new Error("drag target missing");
-			fire(target, "dragenter");
-			fire(target, "dragover");
-			fire(target, "drop");
-			fire(source, "dragend");
-		},
-		{ optionText, targetTestId },
-	);
+	await page.mouse.move(sx, sy);
+	await page.mouse.down();
+	await page.mouse.move(sx + 12, sy + 12, { steps: 3 });
+
+	const target = page.getByTestId(targetTestId);
+	await target.waitFor();
+	const t = await target.boundingBox();
+	if (!t) throw new Error("drag target missing");
+	const tx = t.x + t.width / 2;
+	const ty = t.y + t.height / 2;
+	await page.mouse.move(tx, ty, { steps: 10 });
+	// A distinct final move so dnd-kit registers the over-target before drop
+	await page.mouse.move(tx + 1, ty + 1);
+	await page.mouse.up();
 }
 
 test.beforeEach(async ({ page }) => {
@@ -179,7 +167,10 @@ test("exiting multi-select keeps the current detail", async ({ page }) => {
 
 	// Toggling multi-select mode on then off clears the selection set but
 	// must not wipe the detail — the user never cancelled the item
-	await page.getByRole("button", { name: "Multi-select mode" }).first().click();
+	await page
+		.getByRole("button", { name: "Multi-select mode" })
+		.first()
+		.click();
 	await page
 		.getByRole("button", { name: "Cancel", exact: true })
 		.first()
@@ -188,9 +179,7 @@ test("exiting multi-select keeps the current detail", async ({ page }) => {
 	await expect(
 		page.getByRole("heading", { name: "solo-skill" }),
 	).toBeVisible();
-	await expect(
-		page.getByText("Select a skill to view details"),
-	).toBeHidden();
+	await expect(page.getByText("Select a skill to view details")).toBeHidden();
 });
 
 test("the header stays selected while all its members are selected", async ({
@@ -464,6 +453,53 @@ test("dragging onto the drop-to-create zone creates a group with the item", asyn
 	await dialog.getByRole("button", { name: "Save" }).click();
 
 	const section = page.getByTestId("group-section-Dropped Group");
+	await expect(
+		section.getByRole("option", { name: "solo-skill" }),
+	).toBeVisible();
+});
+
+test("dragging a selected item carries the whole selection", async ({
+	page,
+}) => {
+	await page.getByRole("button", { name: "Add skill" }).click();
+	await page.getByRole("menuitem", { name: "New group" }).click();
+	const dialog = page.getByRole("dialog", { name: "New group" });
+	await dialog.getByRole("textbox").fill("Multi");
+	await dialog.getByRole("button", { name: "Save" }).click();
+	await expect(page.locator(".modal__backdrop")).toHaveCount(0);
+
+	// Select two items, then drag one — the drag carries both
+	await page.getByRole("option", { name: "css-wizard" }).click();
+	await page
+		.getByRole("option", { name: "solo-skill" })
+		.click({ modifiers: ["ControlOrMeta"] });
+	await expect(page.getByText("2 items selected")).toBeVisible();
+
+	await dragOptionTo(page, "css-wizard", "group-section-Multi");
+
+	const section = page.getByTestId("group-section-Multi");
+	await expect(
+		section.getByRole("option", { name: "css-wizard" }),
+	).toBeVisible();
+	await expect(
+		section.getByRole("option", { name: "solo-skill" }),
+	).toBeVisible();
+});
+
+test("the drop board replaces the detail while dragging and assigns on drop", async ({
+	page,
+}) => {
+	await page.getByRole("button", { name: "Add skill" }).click();
+	await page.getByRole("menuitem", { name: "New group" }).click();
+	const dialog = page.getByRole("dialog", { name: "New group" });
+	await dialog.getByRole("textbox").fill("Board Target");
+	await dialog.getByRole("button", { name: "Save" }).click();
+
+	// Dropping onto the board's group card assigns the item; the board card
+	// only exists while a drag is underway, so dragOptionTo resolves it then
+	await dragOptionTo(page, "solo-skill", "board-card-Board Target");
+
+	const section = page.getByTestId("group-section-Board Target");
 	await expect(
 		section.getByRole("option", { name: "solo-skill" }),
 	).toBeVisible();

@@ -31,6 +31,26 @@
 	}
 }
 
+@keyframes board-card-in {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes badge-pop {
+	from {
+		transform: scale(0.6);
+	}
+	to {
+		transform: scale(1);
+	}
+}
+
 @layer base {
 	/* Desktop chrome should not select text on double-click or drag.
 	 * Keep selection where copying matters: editable fields, code, and
