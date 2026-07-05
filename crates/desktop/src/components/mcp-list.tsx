@@ -1,13 +1,7 @@
-import { StarIcon as StarIconOutline } from "@heroicons/react/24/outline";
 import {
-	CodeBracketIcon,
 	CommandLineIcon,
-	FolderIcon,
-	FolderMinusIcon,
-	FolderPlusIcon,
 	GlobeAltIcon,
 	PencilIcon,
-	PlusIcon,
 	StarIcon as StarIconSolid,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
@@ -17,6 +11,7 @@ import { useMemo, useState } from "react";
 import { DropZone, useDragAndDrop } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import type { McpResponse } from "../generated/dto";
+import { ACTION_ICONS } from "./action-icons";
 import { AgentIcons } from "./agent-icons";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useFavorites } from "../hooks/use-favorites";
@@ -259,7 +254,7 @@ export function McpList({
 				key={group.mergeKey}
 				id={group.mergeKey}
 				textValue={group.items[0].name}
-				className="data-selected:bg-surface"
+				className="data-selected:bg-surface transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]"
 			>
 				<div
 					className="flex w-full items-center gap-2"
@@ -308,9 +303,9 @@ export function McpList({
 			>
 				<div className="flex items-center gap-2">
 					{actions.allStarred ? (
-						<StarIconOutline className="size-4" />
+						<ACTION_ICONS.unfavorite className="size-4" />
 					) : (
-						<StarIconSolid className="size-4 text-warning" />
+						<ACTION_ICONS.favorite className="size-4 text-warning" />
 					)}
 					<span>
 						{actions.allStarred ? t("unfavorite") : t("favorite")}
@@ -323,7 +318,7 @@ export function McpList({
 				onAction={actions.requestAddToAgent}
 			>
 				<div className="flex items-center gap-2">
-					<PlusIcon className="size-4" />
+					<ACTION_ICONS.addToAgent className="size-4" />
 					<span>{t("addToAgent")}</span>
 				</div>
 			</Menu.Item>
@@ -333,7 +328,7 @@ export function McpList({
 				onAction={actions.requestTransfer}
 			>
 				<div className="flex items-center gap-2">
-					<CodeBracketIcon className="size-4" />
+					<ACTION_ICONS.transfer className="size-4" />
 					<span>{t("transfer")}</span>
 				</div>
 			</Menu.Item>
@@ -350,7 +345,7 @@ export function McpList({
 							onAction={() => void actions.moveToGroup(group.id)}
 						>
 							<div className="flex items-center gap-2">
-								<FolderIcon
+								<ACTION_ICONS.moveToGroup
 									className={cn(
 										"size-4",
 										actions.commonGroupId === group.id
@@ -368,22 +363,21 @@ export function McpList({
 						onAction={actions.requestCreateGroup}
 					>
 						<div className="flex items-center gap-2">
-							<FolderPlusIcon className="size-4" />
+							<ACTION_ICONS.createGroup className="size-4" />
 							<span>{t("createGroup")}</span>
 						</div>
 					</Menu.Item>
-					{actions.canRemoveFromGroup && (
-						<Menu.Item
-							id="remove-from-group"
-							textValue={t("removeFromGroup")}
-							onAction={() => void actions.removeFromGroup()}
-						>
-							<div className="flex items-center gap-2">
-								<FolderMinusIcon className="size-4" />
-								<span>{t("removeFromGroup")}</span>
-							</div>
-						</Menu.Item>
-					)}
+					<Menu.Item
+						id="remove-from-group"
+						textValue={t("removeFromGroup")}
+						isDisabled={!actions.canRemoveFromGroup}
+						onAction={() => void actions.removeFromGroup()}
+					>
+						<div className="flex items-center gap-2">
+							<ACTION_ICONS.removeFromGroup className="size-4" />
+							<span>{t("removeFromGroup")}</span>
+						</div>
+					</Menu.Item>
 				</Menu.Section>
 			) : (
 				<Menu.Item
@@ -392,7 +386,7 @@ export function McpList({
 					onAction={actions.requestCreateGroup}
 				>
 					<div className="flex items-center gap-2">
-						<FolderPlusIcon className="size-4" />
+						<ACTION_ICONS.createGroup className="size-4" />
 						<span>{t("createGroup")}</span>
 					</div>
 				</Menu.Item>
@@ -404,7 +398,7 @@ export function McpList({
 					onAction={actions.requestDelete}
 				>
 					<div className="flex items-center gap-2 text-danger">
-						<TrashIcon className="size-4" />
+						<ACTION_ICONS.delete className="size-4" />
 						<span>{t("delete")}</span>
 					</div>
 				</Menu.Item>

@@ -1,14 +1,7 @@
-import { StarIcon as StarIconOutline } from "@heroicons/react/24/outline";
 import {
 	BookOpenIcon,
-	FolderIcon,
-	FolderMinusIcon,
-	FolderPlusIcon,
 	LinkIcon,
-	PlusIcon,
 	ServerIcon,
-	StarIcon as StarIconSolid,
-	TrashIcon,
 	XMarkIcon,
 } from "@heroicons/react/24/solid";
 import { Button, Card, Chip, Dropdown, Tooltip } from "@heroui/react";
@@ -19,6 +12,7 @@ import type {
 	ResourceKind,
 } from "../hooks/use-resource-actions";
 import { useResourceActions } from "../hooks/use-resource-actions";
+import { ACTION_ICONS } from "./action-icons";
 
 export interface BulkPanelItem {
 	key: string;
@@ -141,14 +135,14 @@ export function BulkActionsPanel({
 								variant="primary"
 								onPress={actions.requestAddToAgent}
 							>
-								<PlusIcon className="size-4" />
+								<ACTION_ICONS.addToAgent className="size-4" />
 								{t("addToAgent")}
 							</Button>
 							<Button
 								variant="secondary"
 								onPress={actions.requestTransfer}
 							>
-								<PlusIcon className="size-4" />
+								<ACTION_ICONS.transfer className="size-4" />
 								{t("transfer")}
 							</Button>
 							<Button
@@ -156,9 +150,9 @@ export function BulkActionsPanel({
 								onPress={() => void actions.toggleFavorite()}
 							>
 								{actions.allStarred ? (
-									<StarIconSolid className="size-4 text-warning" />
+									<ACTION_ICONS.unfavorite className="size-4" />
 								) : (
-									<StarIconOutline className="size-4" />
+									<ACTION_ICONS.favorite className="size-4 text-warning" />
 								)}
 								{actions.allStarred
 									? t("unfavorite")
@@ -167,7 +161,7 @@ export function BulkActionsPanel({
 							{actions.groups.length > 0 ? (
 								<Dropdown>
 									<Button variant="secondary">
-										<FolderIcon className="size-4" />
+										<ACTION_ICONS.moveToGroup className="size-4" />
 										{t("moveToGroup")}
 									</Button>
 									<Dropdown.Popover placement="bottom start">
@@ -189,7 +183,7 @@ export function BulkActionsPanel({
 													textValue={group.name}
 												>
 													<div className="flex items-center gap-2">
-														<FolderIcon className="size-4 text-muted" />
+														<ACTION_ICONS.moveToGroup className="size-4 text-muted" />
 														<span className="truncate">
 															{group.name}
 														</span>
@@ -201,7 +195,7 @@ export function BulkActionsPanel({
 												textValue={t("createGroup")}
 											>
 												<div className="flex items-center gap-2">
-													<FolderPlusIcon className="size-4" />
+													<ACTION_ICONS.createGroup className="size-4" />
 													<span>
 														{t("createGroup")}
 													</span>
@@ -215,7 +209,7 @@ export function BulkActionsPanel({
 									variant="secondary"
 									onPress={actions.requestCreateGroup}
 								>
-									<FolderPlusIcon className="size-4" />
+									<ACTION_ICONS.createGroup className="size-4" />
 									{t("createGroup")}
 								</Button>
 							)}
@@ -226,7 +220,7 @@ export function BulkActionsPanel({
 										void actions.removeFromGroup()
 									}
 								>
-									<FolderMinusIcon className="size-4" />
+									<ACTION_ICONS.removeFromGroup className="size-4" />
 									{t("removeFromGroup")}
 								</Button>
 							)}
@@ -234,7 +228,7 @@ export function BulkActionsPanel({
 								variant="danger"
 								onPress={actions.requestDelete}
 							>
-								<TrashIcon className="size-4" />
+								<ACTION_ICONS.delete className="size-4" />
 								{t("delete")}
 							</Button>
 						</Card.Footer>

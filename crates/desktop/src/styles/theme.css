@@ -46,6 +46,14 @@
 	--radius: 0.5rem;
 	--field-radius: 0.75rem;
 
+	/* Motion — mode-invariant, declared once. Animation serves spatial
+	 * continuity and state confirmation only; see
+	 * docs/specs/list-interactions-v2.md §10. */
+	--dur-fast: 120ms;
+	--dur-base: 200ms;
+	--dur-slow: 280ms;
+	--ease-out: cubic-bezier(0.2, 0, 0, 1);
+
 	/* Font Family */
 	/* Make sure to load Inter font in your app */
 	--font-sans: var(--font-inter);

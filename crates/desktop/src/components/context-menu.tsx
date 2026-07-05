@@ -80,7 +80,9 @@ export function ContextMenu({
 				// styling, so apply the overlay background/shadow itself.
 				className="min-w-44 rounded-2xl border border-separator bg-overlay shadow-[var(--overlay-shadow)]"
 			>
-				<Menu aria-label={ariaLabel}>{children}</Menu>
+				<Menu aria-label={ariaLabel} onAction={() => onClose()}>
+					{children}
+				</Menu>
 			</PopoverContent>
 		</>
 	);

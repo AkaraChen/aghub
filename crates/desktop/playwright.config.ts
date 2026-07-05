@@ -11,6 +11,9 @@ export default defineConfig({
 		baseURL: "http://localhost:1420",
 		locale: "en-US",
 		trace: "retain-on-failure",
+		// Animation never participates in assertions; the app honors this
+		// via the reduced-motion media query.
+		reducedMotion: "reduce",
 	},
 	projects: [
 		{

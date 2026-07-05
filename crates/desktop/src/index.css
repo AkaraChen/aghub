@@ -18,6 +18,19 @@
 	}
 }
 
+/* Respect the OS reduced-motion setting: collapse every transition and
+ * animation to instant. Also how e2e stays deterministic — Playwright
+ * forces reducedMotion, so animation never enters assertions. */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		transition-duration: 0.01ms !important;
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+	}
+}
+
 @layer base {
 	/* Desktop chrome should not select text on double-click or drag.
 	 * Keep selection where copying matters: editable fields, code, and

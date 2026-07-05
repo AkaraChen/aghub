@@ -1,8 +1,4 @@
-import {
-	ChevronDownIcon,
-	ChevronRightIcon,
-	PlusIcon,
-} from "@heroicons/react/24/solid";
+import { ChevronRightIcon, PlusIcon } from "@heroicons/react/24/solid";
 import { Chip } from "@heroui/react";
 import type { ReactNode } from "react";
 import { useDrag } from "react-aria";
@@ -132,7 +128,11 @@ export function ResourceGroupSection({
 					}}
 					onContextMenu={onContextMenu}
 					aria-label={t("selectAllInGroup", { name: title })}
-					className={cn(LIST_ITEM_CLASS, isSelected && "bg-surface")}
+					className={cn(
+						LIST_ITEM_CLASS,
+						"transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+						isSelected && "bg-surface",
+					)}
 				>
 					<button
 						type="button"
@@ -144,11 +144,12 @@ export function ResourceGroupSection({
 						aria-label={title}
 						aria-expanded={isExpanded}
 					>
-						{isExpanded ? (
-							<ChevronDownIcon className="size-4" />
-						) : (
-							<ChevronRightIcon className="size-4" />
-						)}
+						<ChevronRightIcon
+							className={cn(
+								"size-4 transition-transform duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+								isExpanded && "rotate-90",
+							)}
+						/>
 					</button>
 					<span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
 						{title}
@@ -158,7 +159,18 @@ export function ResourceGroupSection({
 					</Chip>
 				</div>
 			</div>
-			{isExpanded && children}
+			<div
+				className={cn(
+					"grid transition-[grid-template-rows] duration-[var(--dur-base)] ease-[var(--ease-out)]",
+					isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+				)}
+			>
+				{/* invisible while collapsed so it leaves the a11y tree and
+				 * reads as hidden to tests, not just clipped by overflow */}
+				<div className={cn("overflow-hidden", !isExpanded && "invisible")}>
+					{children}
+				</div>
+			</div>
 		</DropZone>
 	);
 }

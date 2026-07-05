@@ -315,6 +315,53 @@ test("right click opens the context menu with the full action set", async ({
 	await expect(menu.getByText("Move to group")).toBeHidden();
 });
 
+test("the context menu closes after choosing an action", async ({ page }) => {
+	await page
+		.getByRole("option", { name: "solo-skill" })
+		.click({ button: "right" });
+	const menu = page.getByRole("menu", { name: "Resource actions" });
+	await expect(menu).toBeVisible();
+
+	// Choosing any item runs its action and closes the menu
+	await menu.getByRole("menuitem", { name: "Favorite" }).click();
+	await expect(menu).toBeHidden();
+});
+
+test("remove from group is disabled for an ungrouped selection", async ({
+	page,
+}) => {
+	// A group must exist for the move-to-group section (which holds the
+	// remove entry) to show
+	await page.getByRole("button", { name: "Add skill" }).click();
+	await page.getByRole("menuitem", { name: "New group" }).click();
+	const dialog = page.getByRole("dialog", { name: "New group" });
+	await dialog.getByRole("textbox").fill("My Group");
+	await dialog.getByRole("button", { name: "Save" }).click();
+	await expect(
+		page.getByRole("button", { name: "Select all in My Group" }),
+	).toBeVisible();
+
+	// solo-skill is ungrouped, so "Remove from group" shows but is disabled
+	// (present-but-disabled keeps the menu structure stable)
+	await page
+		.getByRole("option", { name: "solo-skill" })
+		.click({ button: "right" });
+	const item = page
+		.getByRole("menu", { name: "Resource actions" })
+		.getByRole("menuitem", { name: "Remove from group" });
+	await expect(item).toBeVisible();
+	await expect(item).toHaveAttribute("aria-disabled", "true");
+});
+
+test("reduced motion collapses transitions to instant", async ({ page }) => {
+	// Playwright forces prefers-reduced-motion: reduce and the app honors
+	// it, so animation never participates in assertions
+	const duration = await page
+		.getByRole("option", { name: "react-pro" })
+		.evaluate((el) => getComputedStyle(el).transitionDuration);
+	expect(Number.parseFloat(duration)).toBeLessThan(1);
+});
+
 test("right-clicking within a multi-selection keeps the whole selection", async ({
 	page,
 }) => {
