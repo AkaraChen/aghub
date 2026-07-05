@@ -188,6 +188,15 @@ export default function SkillsPage() {
 		return null;
 	}, [isBulkSelection, globalLock, groupedSkills, selectedKeys]);
 
+	// Roster badge: where each skill came from
+	const sourceByName = useMemo(() => {
+		const map = new Map<string, string>();
+		for (const entry of globalLock?.skills ?? []) {
+			map.set(entry.name, entry.source);
+		}
+		return map;
+	}, [globalLock]);
+
 	const { dndProps, draggedKeys, boardGroups, showBoardUngrouped } =
 		useListDnd("skill", (keys) => setCreateGroupKeys(keys));
 
@@ -340,11 +349,35 @@ export default function SkillsPage() {
 								items={selectedGroups.map((g) => ({
 									key: g.name,
 									label: g.name,
+									badge: sourceByName.get(g.name),
 								}))}
 								intents={actionIntents}
 								sourceContext={sourceContext}
 								onDeselectAll={() =>
 									handleSelectionChange(new Set())
+								}
+								onRemoveItem={(key) =>
+									handleSelectionChange(
+										new Set(
+											[...selectedKeys].filter(
+												(k) => k !== key,
+											),
+										),
+									)
+								}
+								onInvertSelection={() =>
+									handleSelectionChange(
+										new Set(
+											groupedSkills
+												.map((g) => g.name)
+												.filter(
+													(name) =>
+														!selectedKeys.has(
+															name,
+														),
+												),
+										),
+									)
 								}
 							/>
 						) : activeGroup ? (

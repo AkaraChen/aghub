@@ -340,10 +340,34 @@ export default function MCPServersPage() {
 									items={selectedGroups.map((g) => ({
 										key: g.mergeKey,
 										label: g.items[0].name,
+										badge: g.transport.type,
 									}))}
 									intents={actionIntents}
 									onDeselectAll={() =>
 										handleSelectionChange(new Set())
+									}
+									onRemoveItem={(key) =>
+										handleSelectionChange(
+											new Set(
+												[...selectedKeys].filter(
+													(k) => k !== key,
+												),
+											),
+										)
+									}
+									onInvertSelection={() =>
+										handleSelectionChange(
+											new Set(
+												groupedMcps
+													.map((g) => g.mergeKey)
+													.filter(
+														(key) =>
+															!selectedKeys.has(
+																key,
+															),
+													),
+											),
+										)
 									}
 								/>
 							)}

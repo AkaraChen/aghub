@@ -72,7 +72,7 @@ test("multi-select via modifier click opens the bulk actions panel", async ({
 
 	await expect(page.getByText("2 items selected")).toBeVisible();
 	await expect(
-		page.getByRole("button", { name: "Add to Agent" }),
+		page.getByRole("button", { name: "Manage agents" }),
 	).toBeVisible();
 	await expect(
 		page.getByRole("button", { name: "Copy", exact: true }),
@@ -81,7 +81,46 @@ test("multi-select via modifier click opens the bulk actions panel", async ({
 	// "Move to group" picker
 	await expect(page.getByRole("button", { name: "New group" })).toBeVisible();
 	await expect(
-		page.getByRole("button", { name: "Delete", exact: true }),
+		page.getByRole("button", { name: "Delete 2" }),
+	).toBeVisible();
+});
+
+test("the bulk roster removes one item from the selection", async ({
+	page,
+}) => {
+	await page.getByRole("option", { name: "css-wizard" }).click();
+	await page
+		.getByRole("option", { name: "solo-skill" })
+		.click({ modifiers: ["ControlOrMeta"] });
+	await expect(page.getByText("2 items selected")).toBeVisible();
+
+	// Removing a roster row drops it from the selection; down to one item
+	// the panel returns to the detail view
+	await page
+		.getByRole("button", { name: "Remove from selection" })
+		.first()
+		.click();
+	await expect(page.getByText("2 items selected")).toBeHidden();
+	// css-wizard was the first roster row; solo-skill remains and shows
+	await expect(
+		page.getByRole("heading", { name: "solo-skill" }),
+	).toBeVisible();
+});
+
+test("inverting the selection flips it to the other items", async ({
+	page,
+}) => {
+	// Select two of the three skills, then invert -> the third remains
+	await page.getByRole("option", { name: "css-wizard" }).click();
+	await page
+		.getByRole("option", { name: "solo-skill" })
+		.click({ modifiers: ["ControlOrMeta"] });
+	await expect(page.getByText("2 items selected")).toBeVisible();
+
+	await page.getByRole("button", { name: "Invert selection" }).click();
+	await expect(page.getByText("2 items selected")).toBeHidden();
+	await expect(
+		page.getByRole("heading", { name: "react-pro" }),
 	).toBeVisible();
 });
 
