@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import type { ResourceGroupStore } from "../lib/store";
 import { mcpGroupStore, skillGroupStore } from "../lib/store";
+import { withViewTransition } from "../lib/view-transition";
 
 const QUERY_KEYS = {
 	skill: {
@@ -55,26 +56,34 @@ function useResourceGroups(
 		[store, invalidate],
 	);
 
+	// Membership changes move rows between sections; a View Transition
+	// slides items to their new home instead of teleporting (VT-1).
 	const deleteGroup = useCallback(
 		async (id: string) => {
-			await store.deleteGroup(id);
-			await invalidate();
+			await withViewTransition(async () => {
+				await store.deleteGroup(id);
+				await invalidate();
+			});
 		},
 		[store, invalidate],
 	);
 
 	const assignMembers = useCallback(
 		async (memberKeys: string[], groupId: string) => {
-			await store.assignMembers(memberKeys, groupId);
-			await invalidate();
+			await withViewTransition(async () => {
+				await store.assignMembers(memberKeys, groupId);
+				await invalidate();
+			});
 		},
 		[store, invalidate],
 	);
 
 	const unassignMembers = useCallback(
 		async (memberKeys: string[]) => {
-			await store.unassignMembers(memberKeys);
-			await invalidate();
+			await withViewTransition(async () => {
+				await store.unassignMembers(memberKeys);
+				await invalidate();
+			});
 		},
 		[store, invalidate],
 	);

@@ -1,4 +1,5 @@
 import {
+	CheckCircleIcon,
 	CommandLineIcon,
 	GlobeAltIcon,
 	PencilIcon,
@@ -6,7 +7,7 @@ import {
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import { useDndContext } from "@dnd-kit/core";
-import { Header, Label, ListBox, Menu } from "@heroui/react";
+import { Header, Kbd, Label, ListBox, Menu } from "@heroui/react";
 import Fuse from "fuse.js";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -22,6 +23,7 @@ import { useMcpGroups } from "../hooks/use-resource-groups";
 import { dragSelectionPayload } from "../lib/drag-payload";
 import type { ResourceGroup } from "../lib/store";
 import { cn, filterItemsByAgentIds, getMcpMergeKey } from "../lib/utils";
+import { viewTransitionName } from "../lib/view-transition";
 import { ContextMenu, useContextMenu } from "./context-menu";
 import { DraggableItemBody } from "./draggable-item-body";
 import { groupDropId, UNGROUPED_DROP_ID } from "./list-dnd";
@@ -39,7 +41,8 @@ interface McpGroup {
 }
 
 type MenuTarget =
-	{ type: "items" } | { type: "custom-group"; group: ResourceGroup };
+	| { type: "items" }
+	| { type: "custom-group"; group: ResourceGroup; memberKeys: string[] };
 
 interface McpListProps {
 	mcps: McpResponse[];
@@ -112,7 +115,7 @@ export function McpList({
 		return fuse.search(searchQuery).map((result) => result.item);
 	}, [fuse, groupedMcps, searchQuery]);
 
-	const { isMcpStarred } = useFavorites();
+	const { isMcpStarred, setMcpsStarred } = useFavorites();
 	const { groups, assignments, renameGroup, deleteGroup } = useMcpGroups();
 
 	const [collapsedIds, setCollapsedIds] = useState<Set<string>>(
@@ -233,6 +236,12 @@ export function McpList({
 				id={group.mergeKey}
 				textValue={group.items[0].name}
 				className="data-selected:bg-surface transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]"
+				style={{
+					viewTransitionName: viewTransitionName(
+						"vtm",
+						group.mergeKey,
+					),
+				}}
 			>
 				<DraggableItemBody
 					dragId={`item:${group.mergeKey}`}
@@ -369,37 +378,74 @@ export function McpList({
 					textValue={t("delete")}
 					onAction={actions.requestDelete}
 				>
-					<div className="flex items-center gap-2 text-danger">
+					<div className="flex w-full items-center gap-2 text-danger">
 						<ACTION_ICONS.delete className="size-4" />
-						<span>{t("delete")}</span>
+						<span className="flex-1">{t("delete")}</span>
+						<Kbd>⌫</Kbd>
 					</div>
 				</Menu.Item>
 			</Menu.Section>
 		</>
 	);
 
-	const customGroupMenuNode = (group: ResourceGroup) => (
+	const customGroupMenuNode = (group: ResourceGroup, memberKeys: string[]) => (
 		<>
 			<Menu.Item
-				id="rename-group"
-				textValue={t("renameGroup")}
-				onAction={() => setRenameTarget(group)}
+				id="select-members"
+				textValue={t("selectAllInGroup", { name: group.name })}
+				onAction={() => onSelectionChange(new Set(memberKeys))}
 			>
 				<div className="flex items-center gap-2">
-					<PencilIcon className="size-4" />
-					<span>{t("renameGroup")}</span>
+					<CheckCircleIcon className="size-4" />
+					<span>{t("selectAllInGroup", { name: group.name })}</span>
 				</div>
 			</Menu.Item>
 			<Menu.Item
-				id="delete-group"
-				textValue={t("deleteGroup")}
-				onAction={() => setDeleteTarget(group)}
+				id="group-add-to-agent"
+				textValue={t("addToAgent")}
+				onAction={() => {
+					onSelectionChange(new Set(memberKeys));
+					intents.onRequestAddToAgent();
+				}}
 			>
-				<div className="flex items-center gap-2 text-danger">
-					<TrashIcon className="size-4" />
-					<span>{t("deleteGroup")}</span>
+				<div className="flex items-center gap-2">
+					<ACTION_ICONS.addToAgent className="size-4" />
+					<span>{t("addToAgent")}</span>
 				</div>
 			</Menu.Item>
+			<Menu.Item
+				id="group-favorite-all"
+				textValue={t("favoriteAll")}
+				onAction={() => void setMcpsStarred(memberKeys, true)}
+			>
+				<div className="flex items-center gap-2">
+					<ACTION_ICONS.favorite className="size-4 text-warning" />
+					<span>{t("favoriteAll")}</span>
+				</div>
+			</Menu.Item>
+			<Menu.Section>
+				<Menu.Item
+					id="rename-group"
+					textValue={t("renameGroup")}
+					onAction={() => setRenameTarget(group)}
+				>
+					<div className="flex w-full items-center gap-2">
+						<PencilIcon className="size-4" />
+						<span className="flex-1">{t("renameGroup")}</span>
+						<Kbd>F2</Kbd>
+					</div>
+				</Menu.Item>
+				<Menu.Item
+					id="delete-group"
+					textValue={t("deleteGroup")}
+					onAction={() => setDeleteTarget(group)}
+				>
+					<div className="flex items-center gap-2 text-danger">
+						<TrashIcon className="size-4" />
+						<span>{t("deleteGroup")}</span>
+					</div>
+				</Menu.Item>
+			</Menu.Section>
 		</>
 	);
 
@@ -411,7 +457,10 @@ export function McpList({
 				aria-label={t("resourceActions")}
 			>
 				{contextMenu.state?.context.type === "custom-group"
-					? customGroupMenuNode(contextMenu.state.context.group)
+					? customGroupMenuNode(
+							contextMenu.state.context.group,
+							contextMenu.state.context.memberKeys,
+						)
 					: itemsMenuNode}
 			</ContextMenu>
 			<GroupNameDialog
@@ -464,11 +513,13 @@ export function McpList({
 							contextMenu.open(event, {
 								type: "custom-group",
 								group: section.group,
+								memberKeys,
 							})
 						}
 						dropId={groupDropId(section.group.id)}
 						dragId={`header:${section.group.id}`}
 						dragKeys={memberKeys}
+						onRename={() => setRenameTarget(section.group)}
 					>
 						{section.mcps.length > 0 &&
 							renderSectionListBox(
@@ -482,7 +533,7 @@ export function McpList({
 			{unassignedGroups.length > 0 && (
 				<DropRegion id={UNGROUPED_DROP_ID}>
 					{customSections.length > 0 && (
-						<p className="px-3 pt-3 pb-1 text-xs font-medium tracking-wider text-muted uppercase">
+						<p className="px-4 pt-3 pb-1 text-xs font-medium tracking-wider text-muted uppercase">
 							{t("ungrouped")}
 						</p>
 					)}

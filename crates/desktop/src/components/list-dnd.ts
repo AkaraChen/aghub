@@ -41,6 +41,28 @@ export function boardDropId(id: string): string {
 	return `${BOARD_PREFIX}${id}`;
 }
 
+/**
+ * Post-drop confirmation: flashes the drop target once. Imperative on
+ * purpose — a delayed setState here would re-render mid-press and could
+ * swallow the next drag's activation.
+ */
+export function flashDropTarget(dropId: string): void {
+	if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+	const el = document.querySelector(`[data-drop-id="${CSS.escape(dropId)}"]`);
+	if (el instanceof HTMLElement) {
+		el.animate(
+			[
+				{
+					backgroundColor:
+						"color-mix(in oklab, var(--accent) 15%, transparent)",
+				},
+				{ backgroundColor: "transparent" },
+			],
+			{ duration: 500, easing: "ease-out" },
+		);
+	}
+}
+
 export type DropTarget =
 	| { kind: "group"; groupId: string }
 	| { kind: "ungrouped" }

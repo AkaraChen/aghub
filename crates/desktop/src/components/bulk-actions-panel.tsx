@@ -15,6 +15,8 @@ import type {
 import { useResourceActions } from "../hooks/use-resource-actions";
 import { cn } from "../lib/utils";
 import { ACTION_ICONS } from "./action-icons";
+import type { MatrixGroup } from "./agent-coverage-matrix";
+import { AgentCoverageMatrix } from "./agent-coverage-matrix";
 
 export interface BulkPanelItem {
 	key: string;
@@ -39,6 +41,9 @@ interface BulkActionsPanelProps {
 	onRemoveItem: (key: string) => void;
 	/** Replace the selection with everything else */
 	onInvertSelection: () => void;
+	/** Per-item agent coverage, for the in-place matrix */
+	matrixGroups: MatrixGroup[];
+	projectPath?: string;
 }
 
 /**
@@ -56,6 +61,8 @@ export function BulkActionsPanel({
 	onDeselectAll,
 	onRemoveItem,
 	onInvertSelection,
+	matrixGroups,
+	projectPath,
 }: BulkActionsPanelProps) {
 	const { t } = useTranslation();
 	const actions = useResourceActions({
@@ -147,14 +154,11 @@ export function BulkActionsPanel({
 					</p>
 				)}
 
-				<Button
-					variant="secondary"
-					className="w-full"
-					onPress={actions.requestAddToAgent}
-				>
-					<ACTION_ICONS.addToAgent className="size-4" />
-					{t("manageAgents")}
-				</Button>
+				<AgentCoverageMatrix
+					kind={kind}
+					groups={matrixGroups}
+					projectPath={projectPath}
+				/>
 			</div>
 
 			<footer className="shrink-0 space-y-2 border-t border-separator p-4">

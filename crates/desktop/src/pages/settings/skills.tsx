@@ -6,7 +6,7 @@ import {
 	PlusIcon,
 	RectangleStackIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Dropdown, Tooltip } from "@heroui/react";
+import { Button, Dropdown, Kbd, Menu, Tooltip } from "@heroui/react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import { useMemo, useRef, useState } from "react";
@@ -20,7 +20,9 @@ import { GroupNameDialog } from "../../components/resource-group-dialogs";
 import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
 import { TransferDialog } from "../../components/transfer-dialog";
 import { useAgentFilter } from "../../hooks/use-agent-filter";
+import { ContextMenu, useContextMenu } from "../../components/context-menu";
 import { DragPreview, DropBoard } from "../../components/drop-board";
+import { PanelTransition } from "../../components/panel-transition";
 import { useListDnd } from "../../hooks/use-list-dnd";
 import { useListKeyboard } from "../../hooks/use-list-keyboard";
 import { SkillDetail } from "../../components/skill-detail";
@@ -208,7 +210,22 @@ export default function SkillsPage() {
 		selectedKeys,
 		onSelectionChange: handleSelectionChange,
 		onRequestDelete: actionIntents.onRequestDelete,
+		disabled: draggedKeys !== null,
 	});
+
+	// Blank-area interactions on the list panel: a click clears the
+	// selection, a right-click opens the page menu. Rows and headers own
+	// their events (their handlers stop propagation for the menu; the
+	// click check skips anything interactive).
+	const pageMenu = useContextMenu<null>();
+	const isBlankTarget = (event: React.MouseEvent) =>
+		!(event.target as HTMLElement).closest(
+			'[role="option"], [role="button"], [role="menu"], button, input',
+		);
+	const panelStateKey = draggedKeys
+		? "board"
+		: (panelMode ??
+			(isBulkSelection ? "bulk" : activeGroup ? "detail" : "empty"));
 
 	return (
 		<DndContext {...dndProps}>
@@ -327,6 +344,16 @@ export default function SkillsPage() {
 					<div
 						ref={listPanelRef}
 						className="relative flex w-80 shrink-0 flex-col border-r border-border"
+						onClick={(event) => {
+							if (isBlankTarget(event)) {
+								handleSelectionChange(new Set());
+							}
+						}}
+						onContextMenu={(event) => {
+							if (isBlankTarget(event)) {
+								pageMenu.open(event, null);
+							}
+						}}
 					>
 						{/* Skills List */}
 						<SkillList
@@ -342,6 +369,7 @@ export default function SkillsPage() {
 					</div>
 
 					<div className="flex-1 overflow-hidden relative">
+						<PanelTransition stateKey={panelStateKey}>
 						{draggedKeys ? (
 							<DropBoard
 								count={draggedKeys.length}
@@ -366,6 +394,21 @@ export default function SkillsPage() {
 								}))}
 								intents={actionIntents}
 								sourceContext={sourceContext}
+								matrixGroups={selectedGroups.map((g) => ({
+									key: g.name,
+									name: g.name,
+									sourceAgent: g.items[0].agent ?? "claude",
+									sourceScope:
+										g.items[0].source === "project"
+											? ("project" as const)
+											: ("global" as const),
+									installedAgents: g.items
+										.map((item) => item.agent)
+										.filter(
+											(agent): agent is string =>
+												agent != null,
+										),
+								}))}
 								onDeselectAll={() =>
 									handleSelectionChange(new Set())
 								}
@@ -401,9 +444,68 @@ export default function SkillsPage() {
 									<p className="mb-2 text-sm text-muted">
 										{t("selectSkill")}
 									</p>
+									<p className="text-xs text-muted">
+										{t("emptyShortcutHint")}
+									</p>
 								</div>
 							</div>
 						)}
+						</PanelTransition>
+
+						<ContextMenu
+							position={pageMenu.state?.position ?? null}
+							onClose={pageMenu.close}
+							aria-label={t("resourceActions")}
+						>
+							<Menu.Item
+								id="select-all"
+								textValue={t("selectAll")}
+								onAction={() =>
+									handleSelectionChange(
+										new Set(
+											groupedSkills.map((g) => g.name),
+										),
+									)
+								}
+							>
+								<div className="flex w-full items-center gap-2">
+									<span className="flex-1">
+										{t("selectAll")}
+									</span>
+									<Kbd>⌘A</Kbd>
+								</div>
+							</Menu.Item>
+							<Menu.Section>
+								<Menu.Item
+									id="page-create"
+									textValue={t("createCustomSkill")}
+									onAction={handleCreateSkill}
+								>
+									{t("createCustomSkill")}
+								</Menu.Item>
+								<Menu.Item
+									id="page-import"
+									textValue={t("importFromFile")}
+									onAction={handleImportSkill}
+								>
+									{t("importFromFile")}
+								</Menu.Item>
+								<Menu.Item
+									id="page-create-group"
+									textValue={t("createGroup")}
+									onAction={() => setCreateGroupKeys([])}
+								>
+									{t("createGroup")}
+								</Menu.Item>
+								<Menu.Item
+									id="page-refresh"
+									textValue={t("refreshSkills")}
+									onAction={() => void refetch()}
+								>
+									{t("refreshSkills")}
+								</Menu.Item>
+							</Menu.Section>
+						</ContextMenu>
 
 						<BulkDeleteDialog
 							isOpen={isBulkDeleteDialogOpen}

@@ -6,7 +6,7 @@ import {
 	RectangleStackIcon,
 	ServerIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Dropdown, Tooltip } from "@heroui/react";
+import { Button, Dropdown, Kbd, Menu, Tooltip } from "@heroui/react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import { useMemo, useRef, useState } from "react";
@@ -14,7 +14,9 @@ import { useTranslation } from "react-i18next";
 import { BulkActionsPanel } from "../../components/bulk-actions-panel";
 import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
 import { CreateMcpPanel } from "../../components/create-mcp-panel";
+import { ContextMenu, useContextMenu } from "../../components/context-menu";
 import { DragPreview, DropBoard } from "../../components/drop-board";
+import { PanelTransition } from "../../components/panel-transition";
 import { EditMcpPanel } from "../../components/edit-mcp-panel";
 import { ImportMcpPanel } from "../../components/import-mcp-panel";
 import { ManageAgentsDialog } from "../../components/manage-agents-dialog";
@@ -195,7 +197,25 @@ export default function MCPServersPage() {
 		selectedKeys,
 		onSelectionChange: handleSelectionChange,
 		onRequestDelete: actionIntents.onRequestDelete,
+		disabled: draggedKeys !== null,
 	});
+
+	// Blank-area interactions on the list panel: a click clears the
+	// selection, a right-click opens the page menu.
+	const pageMenu = useContextMenu<null>();
+	const isBlankTarget = (event: React.MouseEvent) =>
+		!(event.target as HTMLElement).closest(
+			'[role="option"], [role="button"], [role="menu"], button, input',
+		);
+	const panelStateKey = draggedKeys
+		? "board"
+		: isBulkSelection
+			? "bulk"
+			: panel.type === "detail" || panel.type === "empty"
+				? activeGroup
+					? "detail"
+					: "empty"
+				: panel.type;
 	const dragPreviewLabel = draggedKeys?.[0]
 		? (groupedMcps.find((g) => g.mergeKey === draggedKeys[0])?.items[0]
 				.name ?? "")
@@ -320,6 +340,16 @@ export default function MCPServersPage() {
 					<div
 						ref={listPanelRef}
 						className="relative flex w-80 shrink-0 flex-col border-r border-border"
+						onClick={(event) => {
+							if (isBlankTarget(event)) {
+								handleSelectionChange(new Set());
+							}
+						}}
+						onContextMenu={(event) => {
+							if (isBlankTarget(event)) {
+								pageMenu.open(event, null);
+							}
+						}}
 					>
 						{/* Servers List */}
 						<McpList
@@ -344,6 +374,7 @@ export default function MCPServersPage() {
 								/>
 							</div>
 						)}
+						<PanelTransition stateKey={panelStateKey}>
 						{isBulkSelection &&
 							panel.type !== "create" &&
 							panel.type !== "import" &&
@@ -356,6 +387,22 @@ export default function MCPServersPage() {
 										badge: g.transport.type,
 									}))}
 									intents={actionIntents}
+									matrixGroups={selectedGroups.map((g) => ({
+										key: g.mergeKey,
+										name: g.items[0].name,
+										sourceAgent:
+											g.items[0].agent ?? "claude",
+										sourceScope:
+											g.items[0].source === "project"
+												? ("project" as const)
+												: ("global" as const),
+										installedAgents: g.items
+											.map((item) => item.agent)
+											.filter(
+												(agent): agent is string =>
+													agent != null,
+											),
+									}))}
 									onDeselectAll={() =>
 										handleSelectionChange(new Set())
 									}
@@ -421,8 +468,11 @@ export default function MCPServersPage() {
 									<p className="mb-2 text-sm text-muted">
 										{t("selectServer")}
 									</p>
-									<p className="text-xs text-muted">
+									<p className="mb-2 text-xs text-muted">
 										{t("orCreateNew")}
+									</p>
+									<p className="text-xs text-muted">
+										{t("emptyShortcutHint")}
 									</p>
 								</div>
 								<Button onPress={handleCreate}>
@@ -431,6 +481,62 @@ export default function MCPServersPage() {
 								</Button>
 							</div>
 						)}
+						</PanelTransition>
+
+						<ContextMenu
+							position={pageMenu.state?.position ?? null}
+							onClose={pageMenu.close}
+							aria-label={t("resourceActions")}
+						>
+							<Menu.Item
+								id="select-all"
+								textValue={t("selectAll")}
+								onAction={() =>
+									handleSelectionChange(
+										new Set(
+											groupedMcps.map((g) => g.mergeKey),
+										),
+									)
+								}
+							>
+								<div className="flex w-full items-center gap-2">
+									<span className="flex-1">
+										{t("selectAll")}
+									</span>
+									<Kbd>⌘A</Kbd>
+								</div>
+							</Menu.Item>
+							<Menu.Section>
+								<Menu.Item
+									id="page-create"
+									textValue={t("manualCreation")}
+									onAction={handleCreate}
+								>
+									{t("manualCreation")}
+								</Menu.Item>
+								<Menu.Item
+									id="page-import"
+									textValue={t("importFromJson")}
+									onAction={handleImport}
+								>
+									{t("importFromJson")}
+								</Menu.Item>
+								<Menu.Item
+									id="page-create-group"
+									textValue={t("createGroup")}
+									onAction={() => setCreateGroupKeys([])}
+								>
+									{t("createGroup")}
+								</Menu.Item>
+								<Menu.Item
+									id="page-refresh"
+									textValue={t("refreshServers")}
+									onAction={() => void refetch()}
+								>
+									{t("refreshServers")}
+								</Menu.Item>
+							</Menu.Section>
+						</ContextMenu>
 
 						<BulkDeleteDialog
 							isOpen={isBulkDeleteDialogOpen}

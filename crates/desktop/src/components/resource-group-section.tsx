@@ -1,10 +1,13 @@
 import { ChevronRightIcon, PlusIcon } from "@heroicons/react/24/solid";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { Chip } from "@heroui/react";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { NEW_GROUP_DROP_ID } from "./list-dnd";
+
+/** How long a drag hovers a collapsed group before it springs open. */
+const SPRING_LOAD_MS = 600;
 
 // The same base classes HeroUI applies to a ListBox.Item, so a group
 // header is visually a list item (padding, radius, min-height, hover,
@@ -27,6 +30,8 @@ interface ResourceGroupSectionProps {
 	dragId: string;
 	/** Member keys carried when the header itself is dragged */
 	dragKeys?: string[];
+	/** F2 on the focused header opens rename (custom groups) */
+	onRename?: () => void;
 	children?: ReactNode;
 }
 
@@ -47,6 +52,7 @@ export function ResourceGroupSection({
 	dropId,
 	dragId,
 	dragKeys,
+	onRename,
 	children,
 }: ResourceGroupSectionProps) {
 	const { t } = useTranslation();
@@ -62,10 +68,24 @@ export function ResourceGroupSection({
 		disabled: !dragKeys || dragKeys.length === 0,
 	});
 
+	// Spring-loading: hovering a collapsed group mid-drag pops it open so
+	// the drag can continue into its members.
+	const toggleRef = useRef(onToggleExpanded);
+	toggleRef.current = onToggleExpanded;
+	useEffect(() => {
+		if (!isOver || isExpanded) return;
+		const timer = window.setTimeout(
+			() => toggleRef.current(),
+			SPRING_LOAD_MS,
+		);
+		return () => window.clearTimeout(timer);
+	}, [isOver, isExpanded]);
+
 	return (
 		<div
 			ref={setDropRef}
 			data-testid={`group-section-${title}`}
+			data-drop-id={dropId}
 			className={cn(
 				"rounded-lg transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]",
 				isOver &&
@@ -73,7 +93,10 @@ export function ResourceGroupSection({
 					"bg-accent/5 ring-1 ring-inset ring-accent/40",
 			)}
 		>
-			<div className="px-2 pt-2">
+			<div
+				className="sticky top-0 z-10 px-2 pt-2"
+				style={{ background: "var(--background)" }}
+			>
 				<div
 					ref={setDragRef}
 					role="button"
@@ -88,6 +111,10 @@ export function ResourceGroupSection({
 						if (event.key === "Enter" || event.key === " ") {
 							event.preventDefault();
 							onSelectAll();
+						}
+						if (event.key === "F2" && onRename) {
+							event.preventDefault();
+							onRename();
 						}
 					}}
 					onContextMenu={onContextMenu}
@@ -160,6 +187,7 @@ export function DropRegion({ id, className, children }: DropRegionProps) {
 	return (
 		<div
 			ref={setNodeRef}
+			data-drop-id={id}
 			className={cn(
 				"transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]",
 				isOver && "bg-accent/5 ring-1 ring-inset ring-accent/40",

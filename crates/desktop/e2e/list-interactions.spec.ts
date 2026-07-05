@@ -71,9 +71,7 @@ test("multi-select via modifier click opens the bulk actions panel", async ({
 		.click({ modifiers: ["ControlOrMeta"] });
 
 	await expect(page.getByText("2 items selected")).toBeVisible();
-	await expect(
-		page.getByRole("button", { name: "Manage agents" }),
-	).toBeVisible();
+	await expect(page.getByText("Agent coverage")).toBeVisible();
 	await expect(
 		page.getByRole("button", { name: "Copy", exact: true }),
 	).toBeVisible();
@@ -575,4 +573,179 @@ test("list shortcuts are ignored while the search field is focused", async ({
 	await page.keyboard.press("Delete");
 	// The keypress belongs to the field, not the list — no delete dialog
 	await expect(page.getByRole("dialog")).toBeHidden();
+});
+
+test("the agent matrix shows coverage and installs the missing", async ({
+	page,
+}) => {
+	// Two skills, both installed on claude only
+	await page.getByRole("option", { name: "css-wizard" }).click();
+	await page
+		.getByRole("option", { name: "solo-skill" })
+		.click({ modifiers: ["ControlOrMeta"] });
+	await expect(page.getByText("2 items selected")).toBeVisible();
+
+	await expect(page.getByTestId("matrix-row-claude")).toContainText("2/2");
+	await expect(page.getByTestId("matrix-row-cursor")).toContainText("0/2");
+
+	// Clicking the uncovered row installs the missing items in place
+	await page.getByTestId("matrix-row-cursor").click();
+	await expect(page.getByTestId("matrix-row-cursor")).toContainText("2/2");
+});
+
+test("a fully covered matrix row asks before uninstalling", async ({
+	page,
+}) => {
+	await page.getByRole("option", { name: "css-wizard" }).click();
+	await page
+		.getByRole("option", { name: "solo-skill" })
+		.click({ modifiers: ["ControlOrMeta"] });
+
+	await page.getByTestId("matrix-row-claude").click();
+	const dialog = page.getByRole("alertdialog");
+	await expect(dialog).toBeVisible();
+	await expect(dialog).toContainText("Claude");
+
+	// Cancelling leaves coverage untouched
+	await dialog.getByRole("button", { name: "Cancel" }).click();
+	await expect(dialog).toBeHidden();
+	await expect(page.getByTestId("matrix-row-claude")).toContainText("2/2");
+});
+
+test("hovering a collapsed group while dragging springs it open", async ({
+	page,
+}) => {
+	// A custom group with one member (only custom groups accept drops, so
+	// only they spring open)
+	await page.getByRole("button", { name: "Add skill" }).click();
+	await page.getByRole("menuitem", { name: "New group" }).click();
+	const dialog = page.getByRole("dialog", { name: "New group" });
+	await dialog.getByRole("textbox").fill("Spring");
+	await dialog.getByRole("button", { name: "Save" }).click();
+	await expect(page.locator(".modal__backdrop")).toHaveCount(0);
+	await dragOptionTo(page, "solo-skill", "group-section-Spring");
+	await expect(
+		page
+			.getByTestId("group-section-Spring")
+			.getByRole("option", { name: "solo-skill" }),
+	).toBeVisible();
+
+	// Collapse it, then hold another drag over its header
+	await page.getByRole("button", { name: "Spring", exact: true }).click();
+	await expect(page.getByRole("option", { name: "solo-skill" })).toBeHidden();
+	// Human pacing between the click and the next press — a synthetic
+	// press within ~50ms of the previous click can lose the sensor
+	// activation, which no real pointer sequence reproduces.
+	await page.waitForTimeout(300);
+
+	const source = page.getByRole("option", { name: "css-wizard" });
+	const s = await source.boundingBox();
+	if (!s) throw new Error("no source");
+	await page.mouse.move(s.x + s.width / 2, s.y + s.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(s.x + 20, s.y + 20, { steps: 3 });
+
+	const header = page.getByRole("button", {
+		name: "Select all in Spring",
+	});
+	const h = await header.boundingBox();
+	if (!h) throw new Error("no header");
+	await page.mouse.move(h.x + h.width / 2, h.y + h.height / 2, { steps: 5 });
+	await page.mouse.move(h.x + h.width / 2 + 1, h.y + h.height / 2 + 1);
+
+	// Spring-loading pops the group open after ~600ms of hovering
+	await expect(
+		page.getByRole("option", { name: "solo-skill" }),
+	).toBeVisible();
+
+	await page.keyboard.press("Escape");
+	await page.mouse.up();
+});
+
+test("right-clicking blank list space offers the page actions", async ({
+	page,
+}) => {
+	const panel = page.getByRole("option", { name: "solo-skill" });
+	const box = await panel.boundingBox();
+	if (!box) throw new Error("no list");
+	// Below the last row: blank space inside the list panel
+	await page.mouse.click(box.x + box.width / 2, box.y + box.height + 80, {
+		button: "right",
+	});
+
+	const menu = page.getByRole("menu", { name: "Resource actions" });
+	await expect(menu).toBeVisible();
+	await expect(
+		menu.getByRole("menuitem", { name: "Select All" }),
+	).toBeVisible();
+	await expect(
+		menu.getByRole("menuitem", { name: "New group" }),
+	).toBeVisible();
+
+	// Select All from the menu selects everything
+	await menu.getByRole("menuitem", { name: "Select All" }).click();
+	await expect(page.getByText("3 items selected")).toBeVisible();
+});
+
+test("clicking blank list space clears the selection", async ({ page }) => {
+	await page.getByRole("option", { name: "solo-skill" }).click();
+	await expect(
+		page.getByRole("heading", { name: "solo-skill" }),
+	).toBeVisible();
+
+	const row = page.getByRole("option", { name: "solo-skill" });
+	const box = await row.boundingBox();
+	if (!box) throw new Error("no list");
+	await page.mouse.click(box.x + box.width / 2, box.y + box.height + 80);
+
+	await expect(
+		page.getByText("Select a skill to view details"),
+	).toBeVisible();
+});
+
+test("the custom group header menu operates on its members", async ({
+	page,
+}) => {
+	await page.getByRole("button", { name: "Add skill" }).click();
+	await page.getByRole("menuitem", { name: "New group" }).click();
+	const dialog = page.getByRole("dialog", { name: "New group" });
+	await dialog.getByRole("textbox").fill("Ops");
+	await dialog.getByRole("button", { name: "Save" }).click();
+	await expect(page.locator(".modal__backdrop")).toHaveCount(0);
+	await dragOptionTo(page, "solo-skill", "group-section-Ops");
+
+	// Favorite all members via the header menu
+	await page
+		.getByRole("button", { name: "Select all in Ops" })
+		.click({ button: "right" });
+	const menu = page.getByRole("menu", { name: "Resource actions" });
+	await expect(
+		menu.getByRole("menuitem", { name: "Select all in Ops" }),
+	).toBeVisible();
+	await menu.getByRole("menuitem", { name: "Favorite all" }).click();
+
+	// The member is now starred: its item menu offers Unfavorite
+	await page
+		.getByRole("option", { name: "solo-skill" })
+		.click({ button: "right" });
+	await expect(
+		page
+			.getByRole("menu", { name: "Resource actions" })
+			.getByRole("menuitem", { name: "Unfavorite" }),
+	).toBeVisible();
+});
+
+test("F2 on a focused custom group header opens rename", async ({ page }) => {
+	await page.getByRole("button", { name: "Add skill" }).click();
+	await page.getByRole("menuitem", { name: "New group" }).click();
+	const dialog = page.getByRole("dialog", { name: "New group" });
+	await dialog.getByRole("textbox").fill("Keys");
+	await dialog.getByRole("button", { name: "Save" }).click();
+	await expect(page.locator(".modal__backdrop")).toHaveCount(0);
+
+	await page.getByRole("button", { name: "Select all in Keys" }).focus();
+	await page.keyboard.press("F2");
+	await expect(
+		page.getByRole("dialog", { name: "Rename group" }),
+	).toBeVisible();
 });

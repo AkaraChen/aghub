@@ -4,33 +4,33 @@ import type { Page } from "@playwright/test";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-const AGENTS = [
-	{
-		id: "claude",
-		display_name: "Claude",
-		capabilities: {
-			skills: {
-				scopes: { global: true, project: true },
-				universal: false,
-				mutable_global: true,
-				mutable_project: true,
-			},
-			mcp: {
-				scopes: { global: true, project: true },
-				stdio: true,
-				remote: true,
-				enable_disable: false,
-			},
-			sub_agents: { scopes: { global: false, project: false } },
+const agentInfo = (id: string, displayName: string) => ({
+	id,
+	display_name: displayName,
+	capabilities: {
+		skills: {
+			scopes: { global: true, project: true },
+			universal: false,
+			mutable_global: true,
+			mutable_project: true,
 		},
-		skills_paths: {
-			global_read: ["/tmp/e2e/.claude/skills"],
-			global_write: "/tmp/e2e/.claude/skills",
-			project_read: [],
-			project_write: null,
+		mcp: {
+			scopes: { global: true, project: true },
+			stdio: true,
+			remote: true,
+			enable_disable: false,
 		},
+		sub_agents: { scopes: { global: false, project: false } },
 	},
-];
+	skills_paths: {
+		global_read: [`/tmp/e2e/.${id}/skills`],
+		global_write: `/tmp/e2e/.${id}/skills`,
+		project_read: [],
+		project_write: null,
+	},
+});
+
+const AGENTS = [agentInfo("claude", "Claude"), agentInfo("cursor", "Cursor")];
 
 const AVAILABILITY = [
 	{
@@ -39,19 +39,25 @@ const AVAILABILITY = [
 		has_cli: true,
 		is_available: true,
 	},
+	{
+		id: "cursor",
+		has_global_directory: true,
+		has_cli: true,
+		is_available: true,
+	},
 ];
 
-const skill = (name: string) => ({
+const skill = (name: string, agent = "claude") => ({
 	name,
 	enabled: true,
-	source_path: `/tmp/e2e/.claude/skills/${name}/SKILL.md`,
-	canonical_path: `/tmp/e2e/.claude/skills/${name}`,
+	source_path: `/tmp/e2e/.${agent}/skills/${name}/SKILL.md`,
+	canonical_path: `/tmp/e2e/.${agent}/skills/${name}`,
 	description: `${name} description`,
 	author: null,
 	version: null,
 	tools: [],
 	source: "global",
-	agent: "claude",
+	agent,
 });
 
 const SKILLS = [skill("react-pro"), skill("css-wizard"), skill("solo-skill")];
@@ -137,9 +143,10 @@ export async function installMocks(page: Page) {
 	await page.route("**/ph/**", (route) => route.abort());
 	await page.route("https://*.posthog.com/**", (route) => route.abort());
 
-	// A per-test mutable copy so an MCP edit (PUT) is reflected by the next
-	// list fetch — the mergeKey changes with the transport.
+	// Per-test mutable copies so mutations (MCP PUT, skills reconcile) are
+	// reflected by the next list fetch.
 	const mcps = MCPS.map((m) => ({ ...m }));
+	const skills = SKILLS.map((s) => ({ ...s }));
 
 	await page.route("http://localhost:45999/api/v1/**", (route) => {
 		const url = new URL(route.request().url());
@@ -154,19 +161,43 @@ export async function installMocks(page: Page) {
 
 		if (p === "/agents") return json(AGENTS);
 		if (p === "/agents/availability") return json(AVAILABILITY);
-		if (p === "/agents/all/skills") return json(SKILLS);
+		if (p === "/agents/all/skills") return json(skills);
 		if (p === "/agents/all/mcps") return json(mcps);
 		if (p === "/agents/all/sub-agents") return json(SUB_AGENTS);
 		if (p === "/plugins") return json(PLUGINS);
 		if (p === "/skills/lock/global") return json(GLOBAL_LOCK);
 
+		if (p === "/skills/reconcile" && method === "POST") {
+			const body = JSON.parse(route.request().postData() ?? "{}");
+			const name: string = body.source?.name ?? "";
+			for (const agent of body.added ?? []) {
+				if (!skills.some((s) => s.name === name && s.agent === agent)) {
+					skills.push(skill(name, agent));
+				}
+			}
+			for (const agent of body.removed ?? []) {
+				const idx = skills.findIndex(
+					(s) => s.name === name && s.agent === agent,
+				);
+				if (idx !== -1) skills.splice(idx, 1);
+			}
+			const changed =
+				(body.added?.length ?? 0) + (body.removed?.length ?? 0);
+			return json({
+				success_count: changed,
+				failed_count: 0,
+				results: [],
+			});
+		}
+
 		const putMcp = p.match(/^\/agents\/[^/]+\/mcps\/(.+)$/);
 		if (method === "PUT" && putMcp) {
-			const name = decodeURIComponent(putMcp[1]);
+			const name = decodeURIComponent(putMcp[1] ?? "");
 			const body = JSON.parse(route.request().postData() ?? "{}");
 			const idx = mcps.findIndex((m) => m.name === name);
-			if (idx !== -1 && body.transport) {
-				mcps[idx] = { ...mcps[idx], transport: body.transport };
+			const existing = idx === -1 ? undefined : mcps[idx];
+			if (existing && body.transport) {
+				mcps[idx] = { ...existing, transport: body.transport };
 			}
 			return json(mcps[idx] ?? {});
 		}

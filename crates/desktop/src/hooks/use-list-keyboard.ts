@@ -9,6 +9,8 @@ interface UseListKeyboardOptions {
 	onSelectionChange: (keys: Set<string>) => void;
 	/** Opens the delete confirmation for the current selection */
 	onRequestDelete: () => void;
+	/** Pause shortcuts (e.g. while a drag is underway) */
+	disabled?: boolean;
 }
 
 /**
@@ -29,7 +31,9 @@ export function useListKeyboard(options: UseListKeyboardOptions) {
 				selectedKeys,
 				onSelectionChange,
 				onRequestDelete,
+				disabled,
 			} = optionsRef.current;
+			if (disabled) return;
 
 			const target = event.target as HTMLElement | null;
 			if (target?.closest("input, textarea, [contenteditable]")) return;

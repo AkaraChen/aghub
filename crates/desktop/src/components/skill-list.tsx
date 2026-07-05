@@ -1,11 +1,14 @@
 import {
 	BookOpenIcon,
+	CheckCircleIcon,
+	LinkIcon,
 	PencilIcon,
 	StarIcon as StarIconSolid,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import { useDndContext } from "@dnd-kit/core";
-import { Header, Label, ListBox, Menu, Spinner } from "@heroui/react";
+import { Header, Kbd, Label, ListBox, Menu, Spinner } from "@heroui/react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useQuery } from "@tanstack/react-query";
 import Fuse from "fuse.js";
 import { useCallback, useMemo, useState } from "react";
@@ -23,6 +26,7 @@ import { useSkillGroups } from "../hooks/use-resource-groups";
 import { dragSelectionPayload } from "../lib/drag-payload";
 import type { ResourceGroup } from "../lib/store";
 import { cn, filterItemsByAgentIds } from "../lib/utils";
+import { viewTransitionName } from "../lib/view-transition";
 import {
 	globalSkillLockQueryOptions,
 	projectSkillLockQueryOptions,
@@ -46,11 +50,13 @@ interface SkillGroup {
 interface SourceGroup {
 	source: string;
 	sourceType: string;
+	sourceUrl: string | null;
 	skills: SkillGroup[];
 }
 
 type MenuTarget =
-	{ type: "items" } | { type: "custom-group"; group: ResourceGroup };
+	| { type: "items"; sourceUrl?: string | null }
+	| { type: "custom-group"; group: ResourceGroup; memberKeys: string[] };
 
 interface SkillListProps {
 	skills: SkillResponse[];
@@ -146,7 +152,7 @@ export function SkillList({
 		[groupedByName],
 	);
 
-	const { isSkillStarred } = useFavorites();
+	const { isSkillStarred, setSkillsStarred } = useFavorites();
 	const { groups, assignments, renameGroup, deleteGroup } = useSkillGroups();
 
 	const [collapsedIds, setCollapsedIds] = useState<Set<string>>(
@@ -216,7 +222,11 @@ export function SkillList({
 	const { sourceGroups, ungroupedGroups } = useMemo(() => {
 		const findSkillSource = (
 			skillName: string,
-		): { source: string; sourceType: string } | null => {
+		): {
+			source: string;
+			sourceType: string;
+			sourceUrl: string | null;
+		} | null => {
 			const relevantEntries =
 				effectiveScope === "project"
 					? projectLock?.skills
@@ -226,6 +236,9 @@ export function SkillList({
 				return {
 					source: entry.source,
 					sourceType: entry.sourceType,
+					// The project lock entry has no url field
+					sourceUrl:
+						"sourceUrl" in entry ? (entry.sourceUrl ?? null) : null,
 				};
 			}
 			return null;
@@ -252,6 +265,7 @@ export function SkillList({
 					bySource.set(sourceInfo.source, {
 						source: sourceInfo.source,
 						sourceType: sourceInfo.sourceType,
+						sourceUrl: sourceInfo.sourceUrl,
 						skills: [group],
 					});
 				}
@@ -340,13 +354,21 @@ export function SkillList({
 		contextMenu.open(event, { type: "items" });
 	};
 
-	const openGroupMenu = (event: React.MouseEvent, group: ResourceGroup) => {
-		contextMenu.open(event, { type: "custom-group", group });
+	const openGroupMenu = (
+		event: React.MouseEvent,
+		group: ResourceGroup,
+		memberKeys: string[],
+	) => {
+		contextMenu.open(event, { type: "custom-group", group, memberKeys });
 	};
 
-	const openSourceMenu = (event: React.MouseEvent, memberKeys: string[]) => {
+	const openSourceMenu = (
+		event: React.MouseEvent,
+		memberKeys: string[],
+		sourceUrl: string | null,
+	) => {
 		selectGroup(memberKeys);
-		contextMenu.open(event, { type: "items" });
+		contextMenu.open(event, { type: "items", sourceUrl });
 	};
 
 	// Helper to render a skill item
@@ -356,6 +378,12 @@ export function SkillList({
 			id={skillGroup.name}
 			textValue={skillGroup.name}
 			className="data-selected:bg-surface transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]"
+			style={{
+				viewTransitionName: viewTransitionName(
+					"vts",
+					skillGroup.name,
+				),
+			}}
 		>
 			<DraggableItemBody
 				dragId={`item:${skillGroup.name}`}
@@ -392,8 +420,20 @@ export function SkillList({
 		</ListBox>
 	);
 
-	const itemsMenuNode = (
+	const itemsMenuNode = (sourceUrl?: string | null) => (
 		<>
+			{sourceUrl && (
+				<Menu.Item
+					id="open-in-browser"
+					textValue={t("openInBrowser")}
+					onAction={() => void openUrl(sourceUrl)}
+				>
+					<div className="flex items-center gap-2">
+						<LinkIcon className="size-4" />
+						<span>{t("openInBrowser")}</span>
+					</div>
+				</Menu.Item>
+			)}
 			<Menu.Item
 				id="toggle-favorite"
 				textValue={actions.allStarred ? t("unfavorite") : t("favorite")}
@@ -495,37 +535,74 @@ export function SkillList({
 					textValue={t("delete")}
 					onAction={actions.requestDelete}
 				>
-					<div className="flex items-center gap-2 text-danger">
+					<div className="flex w-full items-center gap-2 text-danger">
 						<ACTION_ICONS.delete className="size-4" />
-						<span>{t("delete")}</span>
+						<span className="flex-1">{t("delete")}</span>
+						<Kbd>⌫</Kbd>
 					</div>
 				</Menu.Item>
 			</Menu.Section>
 		</>
 	);
 
-	const customGroupMenuNode = (group: ResourceGroup) => (
+	const customGroupMenuNode = (group: ResourceGroup, memberKeys: string[]) => (
 		<>
 			<Menu.Item
-				id="rename-group"
-				textValue={t("renameGroup")}
-				onAction={() => setRenameTarget(group)}
+				id="select-members"
+				textValue={t("selectAllInGroup", { name: group.name })}
+				onAction={() => onSelectionChange(new Set(memberKeys))}
 			>
 				<div className="flex items-center gap-2">
-					<PencilIcon className="size-4" />
-					<span>{t("renameGroup")}</span>
+					<CheckCircleIcon className="size-4" />
+					<span>{t("selectAllInGroup", { name: group.name })}</span>
 				</div>
 			</Menu.Item>
 			<Menu.Item
-				id="delete-group"
-				textValue={t("deleteGroup")}
-				onAction={() => setDeleteTarget(group)}
+				id="group-add-to-agent"
+				textValue={t("addToAgent")}
+				onAction={() => {
+					onSelectionChange(new Set(memberKeys));
+					intents.onRequestAddToAgent();
+				}}
 			>
-				<div className="flex items-center gap-2 text-danger">
-					<TrashIcon className="size-4" />
-					<span>{t("deleteGroup")}</span>
+				<div className="flex items-center gap-2">
+					<ACTION_ICONS.addToAgent className="size-4" />
+					<span>{t("addToAgent")}</span>
 				</div>
 			</Menu.Item>
+			<Menu.Item
+				id="group-favorite-all"
+				textValue={t("favoriteAll")}
+				onAction={() => void setSkillsStarred(memberKeys, true)}
+			>
+				<div className="flex items-center gap-2">
+					<ACTION_ICONS.favorite className="size-4 text-warning" />
+					<span>{t("favoriteAll")}</span>
+				</div>
+			</Menu.Item>
+			<Menu.Section>
+				<Menu.Item
+					id="rename-group"
+					textValue={t("renameGroup")}
+					onAction={() => setRenameTarget(group)}
+				>
+					<div className="flex w-full items-center gap-2">
+						<PencilIcon className="size-4" />
+						<span className="flex-1">{t("renameGroup")}</span>
+						<Kbd>F2</Kbd>
+					</div>
+				</Menu.Item>
+				<Menu.Item
+					id="delete-group"
+					textValue={t("deleteGroup")}
+					onAction={() => setDeleteTarget(group)}
+				>
+					<div className="flex items-center gap-2 text-danger">
+						<TrashIcon className="size-4" />
+						<span>{t("deleteGroup")}</span>
+					</div>
+				</Menu.Item>
+			</Menu.Section>
 		</>
 	);
 
@@ -537,8 +614,11 @@ export function SkillList({
 				aria-label={t("resourceActions")}
 			>
 				{contextMenu.state?.context.type === "custom-group"
-					? customGroupMenuNode(contextMenu.state.context.group)
-					: itemsMenuNode}
+					? customGroupMenuNode(
+							contextMenu.state.context.group,
+							contextMenu.state.context.memberKeys,
+						)
+					: itemsMenuNode(contextMenu.state?.context.sourceUrl)}
 			</ContextMenu>
 			<GroupNameDialog
 				isOpen={renameTarget !== null}
@@ -596,11 +676,12 @@ export function SkillList({
 						}
 						onSelectAll={() => selectGroup(memberKeys)}
 						onContextMenu={(event) =>
-							openGroupMenu(event, section.group)
+							openGroupMenu(event, section.group, memberKeys)
 						}
 						dropId={groupDropId(section.group.id)}
 						dragId={`header:${section.group.id}`}
 						dragKeys={memberKeys}
+						onRename={() => setRenameTarget(section.group)}
 					>
 						{section.skills.length > 0 &&
 							renderSectionListBox(
@@ -625,7 +706,7 @@ export function SkillList({
 						}
 						onSelectAll={() => selectGroup(memberKeys)}
 						onContextMenu={(event) =>
-							openSourceMenu(event, memberKeys)
+							openSourceMenu(event, memberKeys, sg.sourceUrl)
 						}
 						dragId={`header:${sg.source}`}
 						dragKeys={memberKeys}
@@ -638,7 +719,7 @@ export function SkillList({
 			{ungroupedGroups.length > 0 && (
 				<DropRegion id={UNGROUPED_DROP_ID}>
 					{(customSections.length > 0 || sourceGroups.length > 0) && (
-						<p className="px-3 pt-3 pb-1 text-xs font-medium tracking-wider text-muted uppercase">
+						<p className="px-4 pt-3 pb-1 text-xs font-medium tracking-wider text-muted uppercase">
 							{t("ungrouped")}
 						</p>
 					)}

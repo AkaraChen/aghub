@@ -44,7 +44,8 @@ interface ContextMenuProps {
 /**
  * Pointer-positioned menu: an invisible fixed anchor at the pointer
  * coordinates serves as the popover's trigger ref, so the menu reuses
- * the same HeroUI popover/menu styling as Dropdown.
+ * the same HeroUI popover/menu styling as Dropdown. Choosing an item
+ * blinks it once (the macOS confirmation) and closes the menu.
  */
 export function ContextMenu({
 	position,
@@ -53,8 +54,25 @@ export function ContextMenu({
 	children,
 }: ContextMenuProps) {
 	const anchorRef = useRef<HTMLDivElement>(null);
+	const pressedItemRef = useRef<HTMLElement | null>(null);
 
 	if (!position) return null;
+
+	const handleAction = () => {
+		const el = pressedItemRef.current;
+		const reduce = window.matchMedia(
+			"(prefers-reduced-motion: reduce)",
+		).matches;
+		if (el && !reduce) {
+			el.animate(
+				[{ opacity: 1 }, { opacity: 0.35 }, { opacity: 1 }],
+				{ duration: 120, easing: "linear" },
+			);
+			window.setTimeout(onClose, 130);
+		} else {
+			onClose();
+		}
+	};
 
 	return (
 		<>
@@ -78,11 +96,19 @@ export function ContextMenu({
 				placement="bottom start"
 				// Standalone PopoverContent misses the popover surface
 				// styling, so apply the overlay background/shadow itself.
-				className="min-w-44 rounded-2xl border border-separator bg-overlay shadow-[var(--overlay-shadow)]"
+				className="min-w-44 origin-top-left animate-[menu-in_var(--dur-fast)_var(--ease-out)] rounded-2xl border border-separator bg-overlay shadow-[var(--overlay-shadow)]"
 			>
-				<Menu aria-label={ariaLabel} onAction={() => onClose()}>
-					{children}
-				</Menu>
+				<div
+					onPointerUpCapture={(event) => {
+						pressedItemRef.current = (
+							event.target as HTMLElement
+						).closest('[role="menuitem"]');
+					}}
+				>
+					<Menu aria-label={ariaLabel} onAction={handleAction}>
+						{children}
+					</Menu>
+				</div>
 			</PopoverContent>
 		</>
 	);

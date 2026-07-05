@@ -9,8 +9,21 @@ import {
 } from "@dnd-kit/core";
 import { useMemo, useState } from "react";
 import type { DropBoardGroup } from "../components/drop-board";
-import { readActiveKeys, resolveDrop } from "../components/list-dnd";
+import {
+	flashDropTarget,
+	groupDropId,
+	readActiveKeys,
+	resolveDrop,
+	UNGROUPED_DROP_ID,
+} from "../components/list-dnd";
 import { useMcpGroups, useSkillGroups } from "./use-resource-groups";
+
+// Stable references: recreating these per render would re-register the
+// sensor mid-press and drop a pending activation (a re-render between
+// pointer-down and crossing the threshold, e.g. the flash timer, would
+// silently kill the next drag).
+const POINTER_SENSOR_OPTIONS = { activationConstraint: { distance: 8 } };
+const MEASURING = { droppable: { strategy: MeasuringStrategy.Always } };
 
 /**
  * Page-level drag wiring for a resource list. Each surface owns one
@@ -27,7 +40,7 @@ export function useListDnd(
 	const model = kind === "skill" ? skillGroups : mcpGroups;
 
 	const sensors = useSensors(
-		useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+		useSensor(PointerSensor, POINTER_SENSOR_OPTIONS),
 	);
 	const [draggedKeys, setDraggedKeys] = useState<string[] | null>(null);
 
@@ -51,7 +64,7 @@ export function useListDnd(
 		collisionDetection: pointerWithin,
 		// Re-measure droppables during the drag; the new-group zone appears
 		// mid-drag and shifts the sections, so cached rects go stale.
-		measuring: { droppable: { strategy: MeasuringStrategy.Always } },
+		measuring: MEASURING,
 		onDragStart: (event: DragStartEvent) => {
 			setDraggedKeys(readActiveKeys(event.active));
 		},
@@ -63,6 +76,13 @@ export function useListDnd(
 				assignMembers: model.assignMembers,
 				unassignMembers: model.unassignMembers,
 				createGroupWith: onCreateGroupWith,
+				onMutated: (_keys, target) => {
+					if (target.kind === "group") {
+						flashDropTarget(groupDropId(target.groupId));
+					} else if (target.kind === "ungrouped") {
+						flashDropTarget(UNGROUPED_DROP_ID);
+					}
+				},
 			});
 			setDraggedKeys(null);
 		},
