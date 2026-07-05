@@ -91,6 +91,6 @@
 
 ## 10. 实现补记
 
-- 面板三态切换经 `PanelTransition`(state key 驱动的入场 fade/slide,不做退场);组头吸顶 `sticky top-0`(真机注意与 isOver 高亮、header 拖拽的兼容,见 B6)。
+- 面板三态切换经 `PanelTransition`(state key 驱动的入场 fade/slide,不做退场)。组头吸顶(L-2)**已回退**:stuck 头需要不透明底色,而没有 token 能匹配 UA 画布,结果就是被设计规则禁止的全宽色带;要重做须先给列表容器统一显式底色(v3 候选)。
 - 空态教学面:占位下附「⌘A 全选 · 空白处右键」提示。
 - e2e 时序注意:合成指针在上一次点击 ~50ms 内再按下可能丢失 sensor 激活,真实指针不可复现;相关用例以人手节奏(~300ms)间隔。

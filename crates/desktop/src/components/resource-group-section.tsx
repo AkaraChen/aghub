@@ -93,10 +93,10 @@ export function ResourceGroupSection({
 					"bg-accent/5 ring-1 ring-inset ring-accent/40",
 			)}
 		>
-			<div
-				className="sticky top-0 z-10 px-2 pt-2"
-				style={{ background: "var(--background)" }}
-			>
+			{/* No sticky here: an opaque backdrop for a stuck header has no
+			 * token that matches the UA canvas, and it reads as the very
+			 * full-width band the header design forbids. */}
+			<div className="px-2 pt-2">
 				<div
 					ref={setDragRef}
 					role="button"
