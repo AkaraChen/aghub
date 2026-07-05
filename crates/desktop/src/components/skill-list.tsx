@@ -305,11 +305,14 @@ export function SkillList({
 		byStarredThenName,
 	]);
 
+	// Order: custom groups (the user's intent) first, then loose ungrouped
+	// items, then the source clusters last — a source is just provenance and
+	// should not be pinned above the plain items.
 	const orderedKeys = useMemo(
 		() => [
 			...customSections.flatMap((s) => s.skills.map((g) => g.name)),
-			...sourceGroups.flatMap((sg) => sg.skills.map((g) => g.name)),
 			...ungroupedGroups.map((g) => g.name),
+			...sourceGroups.flatMap((sg) => sg.skills.map((g) => g.name)),
 		],
 		[customSections, sourceGroups, ungroupedGroups],
 	);
@@ -692,6 +695,31 @@ export function SkillList({
 				);
 			})}
 
+			{ungroupedGroups.length > 0 && (
+				<DropRegion id={UNGROUPED_DROP_ID}>
+					{/* Only label the loose items when a custom group sits above
+					 * them; leading the list with an "Ungrouped" header reads
+					 * oddly now that source clusters sort below. */}
+					{customSections.length > 0 && (
+						<p className="px-4 pt-3 pb-1 text-xs font-medium tracking-wider text-muted uppercase">
+							{t("ungrouped")}
+						</p>
+					)}
+					<ListBox
+						aria-label="Skills"
+						selectionMode={selectionMode}
+						selectionBehavior="toggle"
+						selectedKeys={selectedKeys}
+						onSelectionChange={createSelectionHandler(
+							ungroupedGroups.map((s) => s.name),
+						)}
+						className="p-2"
+					>
+						{ungroupedGroups.map(renderSkillItem)}
+					</ListBox>
+				</DropRegion>
+			)}
+
 			{sourceGroups.map((sg) => {
 				const memberKeys = sg.skills.map((s) => s.name);
 				return (
@@ -715,28 +743,6 @@ export function SkillList({
 					</ResourceGroupSection>
 				);
 			})}
-
-			{ungroupedGroups.length > 0 && (
-				<DropRegion id={UNGROUPED_DROP_ID}>
-					{(customSections.length > 0 || sourceGroups.length > 0) && (
-						<p className="px-4 pt-3 pb-1 text-xs font-medium tracking-wider text-muted uppercase">
-							{t("ungrouped")}
-						</p>
-					)}
-					<ListBox
-						aria-label="Skills"
-						selectionMode={selectionMode}
-						selectionBehavior="toggle"
-						selectedKeys={selectedKeys}
-						onSelectionChange={createSelectionHandler(
-							ungroupedGroups.map((s) => s.name),
-						)}
-						className="p-2"
-					>
-						{ungroupedGroups.map(renderSkillItem)}
-					</ListBox>
-				</DropRegion>
-			)}
 
 			{isDragging && <NewGroupDropZone />}
 

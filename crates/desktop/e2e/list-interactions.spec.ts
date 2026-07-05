@@ -299,6 +299,14 @@ test("clicking a selected single-member group header again cancels it", async ({
 		section.getByRole("option", { name: "solo-skill" }),
 	).toBeVisible();
 
+	// The drag can leave the moved item selected; normalize to an empty
+	// selection so the header-click genuinely selects (then re-clicking
+	// cancels) rather than starting already-selected
+	await page.keyboard.press("Escape");
+	await expect(
+		page.getByText("Select a skill to view details"),
+	).toBeVisible();
+
 	// Selecting the group via its header shows the sole member's detail
 	await page.getByRole("button", { name: "Select all in Solo" }).click();
 	await expect(
@@ -665,11 +673,12 @@ test("hovering a collapsed group while dragging springs it open", async ({
 test("right-clicking blank list space offers the page actions", async ({
 	page,
 }) => {
-	const panel = page.getByRole("option", { name: "solo-skill" });
+	// react-pro is the last row (the source cluster sorts to the bottom);
+	// well below it is blank space inside the list panel
+	const panel = page.getByRole("option", { name: "react-pro" });
 	const box = await panel.boundingBox();
 	if (!box) throw new Error("no list");
-	// Below the last row: blank space inside the list panel
-	await page.mouse.click(box.x + box.width / 2, box.y + box.height + 80, {
+	await page.mouse.click(box.x + box.width / 2, box.y + box.height + 120, {
 		button: "right",
 	});
 
@@ -693,10 +702,11 @@ test("clicking blank list space clears the selection", async ({ page }) => {
 		page.getByRole("heading", { name: "solo-skill" }),
 	).toBeVisible();
 
-	const row = page.getByRole("option", { name: "solo-skill" });
+	// react-pro is the last row; click well below it in blank panel space
+	const row = page.getByRole("option", { name: "react-pro" });
 	const box = await row.boundingBox();
 	if (!box) throw new Error("no list");
-	await page.mouse.click(box.x + box.width / 2, box.y + box.height + 80);
+	await page.mouse.click(box.x + box.width / 2, box.y + box.height + 120);
 
 	await expect(
 		page.getByText("Select a skill to view details"),
