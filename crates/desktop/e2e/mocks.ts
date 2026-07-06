@@ -60,7 +60,15 @@ const skill = (name: string, agent = "claude") => ({
 	agent,
 });
 
-const SKILLS = [skill("react-pro"), skill("css-wizard"), skill("solo-skill")];
+const SKILLS = [
+	skill("react-pro"),
+	skill("css-wizard"),
+	skill("solo-skill"),
+	// A second source cluster ("alpha-pack") so section ordering — by name
+	// and starred-first — is observable
+	skill("arch-lint"),
+	skill("api-forge"),
+];
 
 const lockEntry = (name: string, source: string) => ({
 	name,
@@ -79,6 +87,8 @@ const GLOBAL_LOCK = {
 	skills: [
 		lockEntry("react-pro", "github/AkaraChen/web-dev"),
 		lockEntry("css-wizard", "github/AkaraChen/web-dev"),
+		lockEntry("arch-lint", "github/AkaraChen/alpha-pack"),
+		lockEntry("api-forge", "github/AkaraChen/alpha-pack"),
 	],
 	lastSelectedAgents: null,
 };

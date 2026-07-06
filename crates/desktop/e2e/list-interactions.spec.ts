@@ -538,10 +538,10 @@ test("cmd+a selects all, escape clears", async ({ page }) => {
 	await page.getByRole("option", { name: "solo-skill" }).hover();
 
 	await page.keyboard.press("ControlOrMeta+a");
-	await expect(page.getByText("3 items selected")).toBeVisible();
+	await expect(page.getByText("5 items selected")).toBeVisible();
 
 	await page.keyboard.press("Escape");
-	await expect(page.getByText("3 items selected")).toBeHidden();
+	await expect(page.getByText("5 items selected")).toBeHidden();
 	await expect(
 		page.getByText("Select a skill to view details"),
 	).toBeVisible();
@@ -676,7 +676,7 @@ test("right-clicking blank list space offers the page actions", async ({
 
 	// Select All from the menu selects everything
 	await menu.getByRole("menuitem", { name: "Select All" }).click();
-	await expect(page.getByText("3 items selected")).toBeVisible();
+	await expect(page.getByText("5 items selected")).toBeVisible();
 });
 
 test("clicking blank list space clears the selection", async ({ page }) => {
@@ -741,4 +741,46 @@ test("F2 on a focused custom group header opens rename", async ({ page }) => {
 	await expect(
 		page.getByRole("dialog", { name: "Rename group" }),
 	).toBeVisible();
+});
+
+async function sectionTop(page: Page, source: string): Promise<number> {
+	const box = await page.getByTestId(`group-section-${source}`).boundingBox();
+	if (!box) throw new Error(`no section ${source}`);
+	return box.y;
+}
+
+test("source clusters sort by the repo name, not the github prefix", async ({
+	page,
+}) => {
+	// "alpha-pack" (a) sorts above "web-dev" (w) — the last path segment,
+	// not the shared "github/AkaraChen/" prefix, drives the order
+	expect(await sectionTop(page, "github/AkaraChen/alpha-pack")).toBeLessThan(
+		await sectionTop(page, "github/AkaraChen/web-dev"),
+	);
+});
+
+test("starring a member floats its whole source cluster up", async ({
+	page,
+}) => {
+	// Baseline: alpha-pack sorts above web-dev by name
+	expect(await sectionTop(page, "github/AkaraChen/alpha-pack")).toBeLessThan(
+		await sectionTop(page, "github/AkaraChen/web-dev"),
+	);
+
+	// Star react-pro, a member of web-dev, via its context menu
+	await page
+		.getByRole("option", { name: "react-pro" })
+		.click({ button: "right" });
+	await page
+		.getByRole("menu", { name: "Resource actions" })
+		.getByRole("menuitem", { name: "Favorite" })
+		.click();
+
+	// web-dev now carries a starred skill, so its whole cluster floats above
+	// the unstarred alpha-pack
+	await expect(async () => {
+		expect(await sectionTop(page, "github/AkaraChen/web-dev")).toBeLessThan(
+			await sectionTop(page, "github/AkaraChen/alpha-pack"),
+		);
+	}).toPass();
 });

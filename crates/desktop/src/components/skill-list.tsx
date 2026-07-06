@@ -283,19 +283,25 @@ export function SkillList({
 			}
 		}
 
-		// Sort by the repo/skill name (the last path segment), not the
-		// "github/owner/" prefix — so github/AkaraChen/web-dev sorts under
-		// "w", consistent with how the items themselves sort by name.
+		// A source group floats to the front when any of its skills is
+		// starred (same starred-first rule as the items), then sorts by the
+		// repo/skill name — the last path segment, not the "github/owner/"
+		// prefix — so github/AkaraChen/web-dev sorts under "w".
 		const sourceName = (source: string) =>
 			source.split("/").pop() ?? source;
+		const hasStarred = (sg: SourceGroup) =>
+			sg.skills.some((s) => isSkillStarred(s.name));
 		const sortedSourceGroups = multiItemGroups
 			.map((sg) => ({
 				...sg,
 				skills: [...sg.skills].sort(byStarredThenName),
 			}))
-			.sort((a, b) =>
-				sourceName(a.source).localeCompare(sourceName(b.source)),
-			);
+			.sort((a, b) => {
+				const aStarred = hasStarred(a);
+				const bStarred = hasStarred(b);
+				if (aStarred !== bStarred) return aStarred ? -1 : 1;
+				return sourceName(a.source).localeCompare(sourceName(b.source));
+			});
 
 		const rest = [...singleItems, ...unknown].sort(byStarredThenName);
 
@@ -310,6 +316,7 @@ export function SkillList({
 		effectiveScope,
 		projectLock,
 		byStarredThenName,
+		isSkillStarred,
 	]);
 
 	// Order: custom groups (the user's intent) first, then loose ungrouped
