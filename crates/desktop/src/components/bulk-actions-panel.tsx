@@ -1,11 +1,7 @@
-import {
-	BookOpenIcon,
-	LinkIcon,
-	ServerIcon,
-	XMarkIcon,
-} from "@heroicons/react/24/solid";
-import { Button, Chip, Dropdown, Tooltip } from "@heroui/react";
+import { LinkIcon, XMarkIcon } from "@heroicons/react/24/solid";
+import { Button, Dropdown, Tag, TagGroup, Tooltip } from "@heroui/react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import type { Key } from "react";
 import { useTranslation } from "react-i18next";
 import type {
 	ResourceActionIntents,
@@ -67,7 +63,6 @@ export function BulkActionsPanel({
 		intents,
 	});
 
-	const ItemIcon = kind === "skill" ? BookOpenIcon : ServerIcon;
 	const sourceCount = new Set(
 		items.map((item) => item.badge).filter(Boolean),
 	).size;
@@ -111,35 +106,27 @@ export function BulkActionsPanel({
 			</header>
 
 			<div className="flex-1 space-y-4 overflow-y-auto p-4">
-				<ul className="space-y-0.5">
-					{items.map((item) => (
-						<li
-							key={item.key}
-							className="group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors duration-[var(--dur-fast)] hover:bg-default"
-						>
-							<ItemIcon className="size-4 shrink-0 text-muted" />
-							<span className="min-w-0 flex-1 truncate">
-								{item.label}
-							</span>
-							{item.badge && (
-								<Chip size="sm" variant="soft">
-									{item.badge}
-								</Chip>
-							)}
-							<button
-								type="button"
-								aria-label={t("removeFromSelection")}
-								onClick={() => onRemoveItem(item.key)}
-								className="shrink-0 rounded p-0.5 text-muted opacity-0 transition-opacity duration-[var(--dur-fast)] hover:text-foreground focus:opacity-100 group-hover:opacity-100"
+				<TagGroup
+					aria-label={t("itemsSelected", { count: items.length })}
+					onRemove={(keys: Set<Key>) => {
+						for (const key of keys) onRemoveItem(String(key));
+					}}
+				>
+					<TagGroup.List className="flex-wrap gap-1.5">
+						{items.map((item) => (
+							<Tag
+								key={item.key}
+								id={item.key}
+								textValue={item.label}
 							>
-								<XMarkIcon className="size-4" />
-							</button>
-						</li>
-					))}
-				</ul>
+								{item.label}
+							</Tag>
+						))}
+					</TagGroup.List>
+				</TagGroup>
 
 				{sourceCount > 0 && (
-					<p className="px-2 text-xs text-muted">
+					<p className="px-1 text-xs text-muted">
 						{t("fromSources", { count: sourceCount })}
 					</p>
 				)}

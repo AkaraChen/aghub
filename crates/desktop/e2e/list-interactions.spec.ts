@@ -92,14 +92,11 @@ test("the bulk roster removes one item from the selection", async ({
 		.click({ modifiers: ["ControlOrMeta"] });
 	await expect(page.getByText("2 items selected")).toBeVisible();
 
-	// Removing a roster row drops it from the selection; down to one item
+	// Removing a roster tag drops it from the selection; down to one item
 	// the panel returns to the detail view
-	await page
-		.getByRole("button", { name: "Remove from selection" })
-		.first()
-		.click();
+	await page.getByRole("button", { name: "Remove tag" }).first().click();
 	await expect(page.getByText("2 items selected")).toBeHidden();
-	// css-wizard was the first roster row; solo-skill remains and shows
+	// css-wizard was the first roster tag; solo-skill remains and shows
 	await expect(
 		page.getByRole("heading", { name: "solo-skill" }),
 	).toBeVisible();

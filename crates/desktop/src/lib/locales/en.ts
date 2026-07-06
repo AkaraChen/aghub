@@ -583,7 +583,6 @@ export default {
 	defaultBranch: "Default",
 	selectAll: "Select All",
 	deselectAll: "Deselect All",
-	removeFromSelection: "Remove from selection",
 	fromSources: "From {{count}} sources",
 	deleteCount: "Delete {{count}}",
 	agentCoverage: "Agent coverage",
