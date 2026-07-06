@@ -11,7 +11,7 @@ import { Header, Kbd, Label, ListBox, Menu, Spinner } from "@heroui/react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useQuery } from "@tanstack/react-query";
 import Fuse from "fuse.js";
-import { useCallback, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { SkillResponse } from "../generated/dto";
 import { ACTION_ICONS } from "./action-icons";
@@ -53,6 +53,12 @@ interface SourceGroup {
 	sourceUrl: string | null;
 	skills: SkillGroup[];
 }
+
+/** One entry in the loose list below custom groups: either an ungrouped
+ * skill or a source cluster, sorted together as peers. */
+type LooseEntry =
+	| { kind: "source"; group: SourceGroup }
+	| { kind: "skill"; skill: SkillGroup };
 
 type MenuTarget =
 	| { type: "items"; sourceUrl?: string | null }
@@ -283,30 +289,17 @@ export function SkillList({
 			}
 		}
 
-		// A source group floats to the front when any of its skills is
-		// starred (same starred-first rule as the items), then sorts by the
-		// repo/skill name — the last path segment, not the "github/owner/"
-		// prefix — so github/AkaraChen/web-dev sorts under "w".
-		const sourceName = (source: string) =>
-			source.split("/").pop() ?? source;
-		const hasStarred = (sg: SourceGroup) =>
-			sg.skills.some((s) => isSkillStarred(s.name));
-		const sortedSourceGroups = multiItemGroups
-			.map((sg) => ({
-				...sg,
-				skills: [...sg.skills].sort(byStarredThenName),
-			}))
-			.sort((a, b) => {
-				const aStarred = hasStarred(a);
-				const bStarred = hasStarred(b);
-				if (aStarred !== bStarred) return aStarred ? -1 : 1;
-				return sourceName(a.source).localeCompare(sourceName(b.source));
-			});
+		// Members within a cluster sort starred-first; the cluster's own
+		// position among the loose entries is decided in looseEntries below.
+		const sourceClusters = multiItemGroups.map((sg) => ({
+			...sg,
+			skills: [...sg.skills].sort(byStarredThenName),
+		}));
 
-		const rest = [...singleItems, ...unknown].sort(byStarredThenName);
+		const rest = [...singleItems, ...unknown];
 
 		return {
-			sourceGroups: sortedSourceGroups,
+			sourceGroups: sourceClusters,
 			ungroupedGroups: rest,
 		};
 	}, [
@@ -316,19 +309,51 @@ export function SkillList({
 		effectiveScope,
 		projectLock,
 		byStarredThenName,
-		isSkillStarred,
 	]);
 
-	// Order: custom groups (the user's intent) first, then loose ungrouped
-	// items, then the source clusters last — a source is just provenance and
-	// should not be pinned above the plain items.
+	// The loose region — source clusters and ungrouped skills — is one level:
+	// each entry sorts starred-first (a cluster counts as starred when any
+	// member is), then by name (a cluster by its repo/skill name, the last
+	// path segment). A source cluster is just a skill row with a dropdown.
+	const looseEntries = useMemo<LooseEntry[]>(() => {
+		const sourceName = (source: string) =>
+			source.split("/").pop() ?? source;
+		const entryStarred = (entry: LooseEntry) =>
+			entry.kind === "source"
+				? entry.group.skills.some((s) => isSkillStarred(s.name))
+				: isSkillStarred(entry.skill.name);
+		const entryName = (entry: LooseEntry) =>
+			entry.kind === "source"
+				? sourceName(entry.group.source)
+				: entry.skill.name;
+		const entries: LooseEntry[] = [
+			...sourceGroups.map(
+				(group) => ({ kind: "source", group }) as LooseEntry,
+			),
+			...ungroupedGroups.map(
+				(skill) => ({ kind: "skill", skill }) as LooseEntry,
+			),
+		];
+		return entries.sort((a, b) => {
+			const aStarred = entryStarred(a);
+			const bStarred = entryStarred(b);
+			if (aStarred !== bStarred) return aStarred ? -1 : 1;
+			return entryName(a).localeCompare(entryName(b));
+		});
+	}, [sourceGroups, ungroupedGroups, isSkillStarred]);
+
+	// Order: custom groups (the user's intent) first, then the loose entries
+	// in their unified display order (source clusters and skills interleaved).
 	const orderedKeys = useMemo(
 		() => [
 			...customSections.flatMap((s) => s.skills.map((g) => g.name)),
-			...ungroupedGroups.map((g) => g.name),
-			...sourceGroups.flatMap((sg) => sg.skills.map((g) => g.name)),
+			...looseEntries.flatMap((entry) =>
+				entry.kind === "source"
+					? entry.group.skills.map((s) => s.name)
+					: [entry.skill.name],
+			),
 		],
-		[customSections, sourceGroups, ungroupedGroups],
+		[customSections, looseEntries],
 	);
 
 	const { createSelectionHandler, selectGroup, ensureSelected } =
@@ -677,6 +702,58 @@ export function SkillList({
 		);
 	}
 
+	// Walk the unified loose list, batching consecutive skill rows into one
+	// ListBox and rendering each source cluster as a subtle peer row.
+	const looseNodes: ReactNode[] = [];
+	let skillRun: SkillGroup[] = [];
+	const flushSkillRun = () => {
+		if (skillRun.length === 0) return;
+		const runKeys = skillRun.map((s) => s.name);
+		looseNodes.push(
+			<ListBox
+				key={`loose-${runKeys[0]}`}
+				aria-label="Skills"
+				selectionMode={selectionMode}
+				selectionBehavior="toggle"
+				selectedKeys={selectedKeys}
+				onSelectionChange={createSelectionHandler(runKeys)}
+				className="px-2 py-1"
+			>
+				{skillRun.map(renderSkillItem)}
+			</ListBox>,
+		);
+		skillRun = [];
+	};
+	for (const entry of looseEntries) {
+		if (entry.kind === "skill") {
+			skillRun.push(entry.skill);
+			continue;
+		}
+		flushSkillRun();
+		const sg = entry.group;
+		const memberKeys = sg.skills.map((s) => s.name);
+		looseNodes.push(
+			<ResourceGroupSection
+				key={sg.source}
+				subtle
+				title={sg.source}
+				count={sg.skills.length}
+				isExpanded={isExpanded(`s:${sg.source}`)}
+				isSelected={isGroupSelected(memberKeys)}
+				onToggleExpanded={() => toggleCollapsed(`s:${sg.source}`)}
+				onSelectAll={() => selectGroup(memberKeys)}
+				onContextMenu={(event) =>
+					openSourceMenu(event, memberKeys, sg.sourceUrl)
+				}
+				dragId={`header:${sg.source}`}
+				dragKeys={memberKeys}
+			>
+				{renderSectionListBox(sg.source, sg.skills)}
+			</ResourceGroupSection>,
+		);
+	}
+	flushSkillRun();
+
 	return (
 		<div className="flex-1 overflow-y-auto">
 			{customSections.map((section) => {
@@ -709,54 +786,9 @@ export function SkillList({
 				);
 			})}
 
-			{ungroupedGroups.length > 0 && (
-				<DropRegion id={UNGROUPED_DROP_ID}>
-					{/* Only label the loose items when a custom group sits above
-					 * them; leading the list with an "Ungrouped" header reads
-					 * oddly now that source clusters sort below. */}
-					{customSections.length > 0 && (
-						<p className="px-4 pt-3 pb-1 text-xs font-medium tracking-wider text-muted uppercase">
-							{t("ungrouped")}
-						</p>
-					)}
-					<ListBox
-						aria-label="Skills"
-						selectionMode={selectionMode}
-						selectionBehavior="toggle"
-						selectedKeys={selectedKeys}
-						onSelectionChange={createSelectionHandler(
-							ungroupedGroups.map((s) => s.name),
-						)}
-						className="p-2"
-					>
-						{ungroupedGroups.map(renderSkillItem)}
-					</ListBox>
-				</DropRegion>
+			{looseEntries.length > 0 && (
+				<DropRegion id={UNGROUPED_DROP_ID}>{looseNodes}</DropRegion>
 			)}
-
-			{sourceGroups.map((sg) => {
-				const memberKeys = sg.skills.map((s) => s.name);
-				return (
-					<ResourceGroupSection
-						key={sg.source}
-						title={sg.source}
-						count={sg.skills.length}
-						isExpanded={isExpanded(`s:${sg.source}`)}
-						isSelected={isGroupSelected(memberKeys)}
-						onToggleExpanded={() =>
-							toggleCollapsed(`s:${sg.source}`)
-						}
-						onSelectAll={() => selectGroup(memberKeys)}
-						onContextMenu={(event) =>
-							openSourceMenu(event, memberKeys, sg.sourceUrl)
-						}
-						dragId={`header:${sg.source}`}
-						dragKeys={memberKeys}
-					>
-						{renderSectionListBox(sg.source, sg.skills)}
-					</ResourceGroupSection>
-				);
-			})}
 
 			{isDragging && <NewGroupDropZone />}
 

@@ -32,6 +32,9 @@ interface ResourceGroupSectionProps {
 	dragKeys?: string[];
 	/** F2 on the focused header opens rename (custom groups) */
 	onRename?: () => void;
+	/** Render as a peer of the skill rows (source clusters): normal weight,
+	 * muted count — not a bold first-class group header */
+	subtle?: boolean;
 	children?: ReactNode;
 }
 
@@ -53,6 +56,7 @@ export function ResourceGroupSection({
 	dragId,
 	dragKeys,
 	onRename,
+	subtle = false,
 	children,
 }: ResourceGroupSectionProps) {
 	const { t } = useTranslation();
@@ -144,12 +148,25 @@ export function ResourceGroupSection({
 							)}
 						/>
 					</button>
-					<span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+					<span
+						className={cn(
+							"min-w-0 flex-1 truncate text-sm",
+							subtle
+								? "text-foreground"
+								: "font-medium text-foreground",
+						)}
+					>
 						{title}
 					</span>
-					<Chip size="sm" variant="secondary">
-						{count}
-					</Chip>
+					{subtle ? (
+						<span className="shrink-0 text-xs tabular-nums text-muted">
+							{count}
+						</span>
+					) : (
+						<Chip size="sm" variant="secondary">
+							{count}
+						</Chip>
+					)}
 				</div>
 			</div>
 			<div

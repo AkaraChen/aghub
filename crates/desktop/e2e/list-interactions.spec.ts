@@ -776,11 +776,18 @@ test("starring a member floats its whole source cluster up", async ({
 		.getByRole("menuitem", { name: "Favorite" })
 		.click();
 
-	// web-dev now carries a starred skill, so its whole cluster floats above
-	// the unstarred alpha-pack
+	// web-dev now carries a starred skill, so its whole cluster floats to the
+	// top of the loose list — above the unstarred alpha-pack cluster AND the
+	// unstarred ungrouped skill, since clusters and skills are one level
 	await expect(async () => {
-		expect(await sectionTop(page, "github/AkaraChen/web-dev")).toBeLessThan(
+		const web = await sectionTop(page, "github/AkaraChen/web-dev");
+		expect(web).toBeLessThan(
 			await sectionTop(page, "github/AkaraChen/alpha-pack"),
 		);
+		const solo = await page
+			.getByRole("option", { name: "solo-skill" })
+			.boundingBox();
+		if (!solo) throw new Error("no solo-skill");
+		expect(web).toBeLessThan(solo.y);
 	}).toPass();
 });
