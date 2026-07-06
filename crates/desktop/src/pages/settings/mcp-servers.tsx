@@ -415,20 +415,6 @@ export default function MCPServersPage() {
 											),
 										)
 									}
-									onInvertSelection={() =>
-										handleSelectionChange(
-											new Set(
-												groupedMcps
-													.map((g) => g.mergeKey)
-													.filter(
-														(key) =>
-															!selectedKeys.has(
-																key,
-															),
-													),
-											),
-										)
-									}
 								/>
 							)}
 						{panel.type === "create" && (

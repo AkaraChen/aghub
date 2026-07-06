@@ -283,12 +283,19 @@ export function SkillList({
 			}
 		}
 
+		// Sort by the repo/skill name (the last path segment), not the
+		// "github/owner/" prefix — so github/AkaraChen/web-dev sorts under
+		// "w", consistent with how the items themselves sort by name.
+		const sourceName = (source: string) =>
+			source.split("/").pop() ?? source;
 		const sortedSourceGroups = multiItemGroups
 			.map((sg) => ({
 				...sg,
 				skills: [...sg.skills].sort(byStarredThenName),
 			}))
-			.sort((a, b) => a.source.localeCompare(b.source));
+			.sort((a, b) =>
+				sourceName(a.source).localeCompare(sourceName(b.source)),
+			);
 
 		const rest = [...singleItems, ...unknown].sort(byStarredThenName);
 

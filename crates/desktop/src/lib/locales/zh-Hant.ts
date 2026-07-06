@@ -562,7 +562,6 @@ export default {
 	defaultBranch: "預設",
 	selectAll: "全選",
 	deselectAll: "取消全選",
-	invertSelection: "反選",
 	removeFromSelection: "從選擇移出",
 	fromSources: "來自 {{count}} 個來源",
 	deleteCount: "刪除 {{count}} 項",

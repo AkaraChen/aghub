@@ -1,5 +1,4 @@
 import {
-	ArrowsRightLeftIcon,
 	BookOpenIcon,
 	LinkIcon,
 	ServerIcon,
@@ -39,8 +38,6 @@ interface BulkActionsPanelProps {
 	onDeselectAll: () => void;
 	/** Drop one item from the selection (not delete it) */
 	onRemoveItem: (key: string) => void;
-	/** Replace the selection with everything else */
-	onInvertSelection: () => void;
 	/** Per-item agent coverage, for the in-place matrix */
 	matrixGroups: MatrixGroup[];
 	projectPath?: string;
@@ -60,7 +57,6 @@ export function BulkActionsPanel({
 	sourceContext,
 	onDeselectAll,
 	onRemoveItem,
-	onInvertSelection,
 	matrixGroups,
 	projectPath,
 }: BulkActionsPanelProps) {
@@ -108,12 +104,6 @@ export function BulkActionsPanel({
 							<LinkIcon className="size-5" />
 						</IconButton>
 					)}
-					<IconButton
-						label={t("invertSelection")}
-						onPress={onInvertSelection}
-					>
-						<ArrowsRightLeftIcon className="size-5" />
-					</IconButton>
 					<IconButton label={t("deselectAll")} onPress={onDeselectAll}>
 						<XMarkIcon className="size-5" />
 					</IconButton>

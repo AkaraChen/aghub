@@ -421,20 +421,6 @@ export default function SkillsPage() {
 										),
 									)
 								}
-								onInvertSelection={() =>
-									handleSelectionChange(
-										new Set(
-											groupedSkills
-												.map((g) => g.name)
-												.filter(
-													(name) =>
-														!selectedKeys.has(
-															name,
-														),
-												),
-										),
-									)
-								}
 							/>
 						) : activeGroup ? (
 							<SkillDetail group={activeGroup} />

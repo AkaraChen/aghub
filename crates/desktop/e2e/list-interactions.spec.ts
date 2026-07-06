@@ -105,23 +105,6 @@ test("the bulk roster removes one item from the selection", async ({
 	).toBeVisible();
 });
 
-test("inverting the selection flips it to the other items", async ({
-	page,
-}) => {
-	// Select two of the three skills, then invert -> the third remains
-	await page.getByRole("option", { name: "css-wizard" }).click();
-	await page
-		.getByRole("option", { name: "solo-skill" })
-		.click({ modifiers: ["ControlOrMeta"] });
-	await expect(page.getByText("2 items selected")).toBeVisible();
-
-	await page.getByRole("button", { name: "Invert selection" }).click();
-	await expect(page.getByText("2 items selected")).toBeHidden();
-	await expect(
-		page.getByRole("heading", { name: "react-pro" }),
-	).toBeVisible();
-});
-
 test("the chevron toggles expansion without selecting the group", async ({
 	page,
 }) => {
