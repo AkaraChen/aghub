@@ -117,7 +117,7 @@ export function AgentCoverageMatrix({
 	if (groups.length === 0 || rows.length === 0) return null;
 
 	return (
-		<div className="space-y-1">
+		<div className="space-y-1 border-t border-separator pt-4">
 			<p className="px-2 text-xs font-medium text-muted">
 				{t("agentCoverage")}
 			</p>

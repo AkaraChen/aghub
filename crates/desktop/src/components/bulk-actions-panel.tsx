@@ -81,9 +81,16 @@ export function BulkActionsPanel({
 							</p>
 						</>
 					) : (
-						<h2 className="truncate text-lg font-semibold text-foreground">
-							{t("itemsSelected", { count: items.length })}
-						</h2>
+						<>
+							<h2 className="truncate text-lg font-semibold text-foreground">
+								{t("itemsSelected", { count: items.length })}
+							</h2>
+							{sourceCount > 0 && (
+								<p className="mt-1 text-sm text-muted">
+									{t("fromSources", { count: sourceCount })}
+								</p>
+							)}
+						</>
 					)}
 				</div>
 				<div className="flex items-center gap-1">
@@ -124,12 +131,6 @@ export function BulkActionsPanel({
 						))}
 					</TagGroup.List>
 				</TagGroup>
-
-				{sourceCount > 0 && (
-					<p className="px-1 text-xs text-muted">
-						{t("fromSources", { count: sourceCount })}
-					</p>
-				)}
 
 				<AgentCoverageMatrix
 					kind={kind}
