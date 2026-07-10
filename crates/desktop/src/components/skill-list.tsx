@@ -19,6 +19,7 @@ import { AgentIcons } from "./agent-icons";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useFavorites } from "../hooks/use-favorites";
+import type { SelectionEntry } from "../hooks/use-list-selection";
 import { useListSelection } from "../hooks/use-list-selection";
 import type { ResourceActionIntents } from "../hooks/use-resource-actions";
 import { useResourceActions } from "../hooks/use-resource-actions";
@@ -363,25 +364,46 @@ export function SkillList({
 		);
 	}
 
-	// Only VISIBLE rows, in display order — shift ranges span what the user
-	// can see; members of a collapsed group or cluster must not be swept in.
-	const orderedKeys = useMemo(() => {
+	// Display-order entries for shift ranges: an expanded section
+	// contributes its member rows, a collapsed one is a single entry
+	// carrying all members — a range crossing it selects the whole thing.
+	const orderedEntries = useMemo<SelectionEntry[]>(() => {
 		const expandedAll = Boolean(searchQuery);
-		return [
-			...customSections.flatMap((s) =>
-				expandedAll || !collapsedIds.has(`g:${s.group.id}`)
-					? s.skills.map((g) => g.name)
-					: [],
-			),
-			...looseEntries.flatMap((entry) =>
-				entry.kind === "source"
-					? expandedAll ||
-						(expandedSources?.has(entry.group.source) ?? false)
-						? entry.group.skills.map((s) => s.name)
-						: []
-					: [entry.skill.name],
-			),
-		];
+		const entries: SelectionEntry[] = [];
+		for (const section of customSections) {
+			const memberKeys = section.skills.map((g) => g.name);
+			if (expandedAll || !collapsedIds.has(`g:${section.group.id}`)) {
+				for (const key of memberKeys)
+					entries.push({ kind: "item", key });
+			} else {
+				entries.push({
+					kind: "cluster",
+					id: `g:${section.group.id}`,
+					memberKeys,
+				});
+			}
+		}
+		for (const entry of looseEntries) {
+			if (entry.kind === "skill") {
+				entries.push({ kind: "item", key: entry.skill.name });
+				continue;
+			}
+			const memberKeys = entry.group.skills.map((s) => s.name);
+			if (
+				expandedAll ||
+				(expandedSources?.has(entry.group.source) ?? false)
+			) {
+				for (const key of memberKeys)
+					entries.push({ kind: "item", key });
+			} else {
+				entries.push({
+					kind: "cluster",
+					id: `s:${entry.group.source}`,
+					memberKeys,
+				});
+			}
+		}
+		return entries;
 	}, [
 		customSections,
 		looseEntries,
@@ -390,13 +412,17 @@ export function SkillList({
 		searchQuery,
 	]);
 
-	const { createSelectionHandler, selectGroup, ensureSelected } =
-		useListSelection({
-			orderedKeys,
-			selectedKeys,
-			onSelectionChange,
-			isMultiSelectMode,
-		});
+	const {
+		createSelectionHandler,
+		selectGroup,
+		ensureSelected,
+		anchorCluster,
+	} = useListSelection({
+		orderedEntries,
+		selectedKeys,
+		onSelectionChange,
+		isMultiSelectMode,
+	});
 
 	const contextMenu = useContextMenu<MenuTarget>();
 	const actions = useResourceActions({
@@ -790,8 +816,13 @@ export function SkillList({
 				count={sg.skills.length}
 				isExpanded={isExpanded(`s:${sg.source}`)}
 				isSelected={isGroupSelected(memberKeys)}
-				onToggleExpanded={() => toggleCollapsed(`s:${sg.source}`)}
-				onSelectAll={() => selectGroup(memberKeys)}
+				onToggleExpanded={() => {
+					// The toggle click also plants the shift-range anchor:
+					// "start the next range at this cluster"
+					anchorCluster(`s:${sg.source}`, memberKeys);
+					toggleCollapsed(`s:${sg.source}`);
+				}}
+				onSelectAll={() => selectGroup(memberKeys, `s:${sg.source}`)}
 				onContextMenu={(event) =>
 					openSourceMenu(event, memberKeys, sg.sourceUrl)
 				}
@@ -818,7 +849,9 @@ export function SkillList({
 						onToggleExpanded={() =>
 							toggleCollapsed(`g:${section.group.id}`)
 						}
-						onSelectAll={() => selectGroup(memberKeys)}
+						onSelectAll={() =>
+							selectGroup(memberKeys, `g:${section.group.id}`)
+						}
 						onContextMenu={(event) =>
 							openGroupMenu(event, section.group, memberKeys)
 						}

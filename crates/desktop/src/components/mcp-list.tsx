@@ -16,6 +16,7 @@ import { ACTION_ICONS } from "./action-icons";
 import { AgentIcons } from "./agent-icons";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useFavorites } from "../hooks/use-favorites";
+import type { SelectionEntry } from "../hooks/use-list-selection";
 import { useListSelection } from "../hooks/use-list-selection";
 import type { ResourceActionIntents } from "../hooks/use-resource-actions";
 import { useResourceActions } from "../hooks/use-resource-actions";
@@ -166,23 +167,33 @@ export function McpList({
 		return { customSections: sections, unassignedGroups: rest };
 	}, [sortedGroups, groups, assignments, searchQuery]);
 
-	// Only VISIBLE rows — shift ranges must not sweep members of a
-	// collapsed group.
-	const orderedKeys = useMemo(
-		() => [
-			...customSections.flatMap((s) =>
-				searchQuery || !collapsedIds.has(`g:${s.group.id}`)
-					? s.mcps.map((g) => g.mergeKey)
-					: [],
-			),
-			...unassignedGroups.map((g) => g.mergeKey),
-		],
-		[customSections, unassignedGroups, collapsedIds, searchQuery],
-	);
+	// Display-order entries for shift ranges: an expanded group
+	// contributes its member rows, a collapsed one is a single entry
+	// carrying all members — a range crossing it selects the whole thing.
+	const orderedEntries = useMemo<SelectionEntry[]>(() => {
+		const entries: SelectionEntry[] = [];
+		for (const section of customSections) {
+			const memberKeys = section.mcps.map((g) => g.mergeKey);
+			if (searchQuery || !collapsedIds.has(`g:${section.group.id}`)) {
+				for (const key of memberKeys)
+					entries.push({ kind: "item", key });
+			} else {
+				entries.push({
+					kind: "cluster",
+					id: `g:${section.group.id}`,
+					memberKeys,
+				});
+			}
+		}
+		for (const group of unassignedGroups) {
+			entries.push({ kind: "item", key: group.mergeKey });
+		}
+		return entries;
+	}, [customSections, unassignedGroups, collapsedIds, searchQuery]);
 
 	const { createSelectionHandler, selectGroup, ensureSelected } =
 		useListSelection({
-			orderedKeys,
+			orderedEntries,
 			selectedKeys,
 			onSelectionChange,
 			isMultiSelectMode,
@@ -516,7 +527,9 @@ export function McpList({
 						onToggleExpanded={() =>
 							toggleCollapsed(`g:${section.group.id}`)
 						}
-						onSelectAll={() => selectGroup(memberKeys)}
+						onSelectAll={() =>
+							selectGroup(memberKeys, `g:${section.group.id}`)
+						}
 						onContextMenu={(event) =>
 							contextMenu.open(event, {
 								type: "custom-group",

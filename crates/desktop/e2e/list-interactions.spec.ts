@@ -837,9 +837,7 @@ test("source clusters collapse by default except the selected one", async ({
 	await expect(page.getByRole("option", { name: "api-forge" })).toBeVisible();
 });
 
-test("shift range skips members hidden in collapsed sections", async ({
-	page,
-}) => {
+test("shift range sweeps a collapsed section it crosses", async ({ page }) => {
 	// Two custom groups so a COLLAPSED section sits between the shift
 	// anchor and the target
 	for (const name of ["G1", "G2"]) {
@@ -862,20 +860,54 @@ test("shift range skips members hidden in collapsed sections", async ({
 	await moveTo("css-wizard", "G1");
 	await moveTo("react-pro", "G2");
 
-	// Collapse G2 — its member react-pro is now hidden between G1 and the
-	// loose rows
+	// Collapse G2 — its member react-pro now sits hidden between G1 and
+	// the loose rows
 	await page.getByRole("button", { name: "G2", exact: true }).click();
 	await expect(page.getByRole("option", { name: "react-pro" })).toBeHidden();
 
-	// Anchor on css-wizard, shift-click solo-skill: the range must span
-	// only the VISIBLE rows — react-pro (collapsed G2) stays out
+	// Anchor on css-wizard, shift-click solo-skill: BOTH collapsed
+	// sections inside the range (G2 and the alpha-pack cluster) join the
+	// selection wholesale
 	await page.getByRole("option", { name: "css-wizard" }).click();
 	await page
 		.getByRole("option", { name: "solo-skill" })
 		.click({ modifiers: ["Shift"] });
 
-	await expect(page.getByText("2 items selected")).toBeVisible();
-	await expect(page.getByRole("row", { name: "react-pro" })).toHaveCount(0);
+	await expect(page.getByText("5 items selected")).toBeVisible();
+	// react-pro shows in the roster even though its row is collapsed away
+	await expect(
+		page.getByRole("gridcell", { name: "react-pro" }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("gridcell", { name: "api-forge" }),
+	).toBeVisible();
+});
+
+test("clicking a collapsed cluster anchors the next shift range", async ({
+	page,
+}) => {
+	// Clicking the collapsed alpha-pack row toggles it (no selection)…
+	await page
+		.getByRole("button", {
+			name: "github/AkaraChen/alpha-pack",
+			exact: true,
+		})
+		.click();
+	await expect(page.getByRole("option", { name: "api-forge" })).toBeVisible();
+	await expect(page.getByText("items selected")).toBeHidden();
+
+	// …but it plants the range anchor: shift-clicking solo-skill selects
+	// the whole cluster plus everything down to the target
+	await page
+		.getByRole("option", { name: "solo-skill" })
+		.click({ modifiers: ["Shift"] });
+	await expect(page.getByText("3 items selected")).toBeVisible();
+	await expect(
+		page.getByRole("gridcell", { name: "api-forge" }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("gridcell", { name: "arch-lint" }),
+	).toBeVisible();
 });
 
 test("escape clears the selection from the detail panel too", async ({
