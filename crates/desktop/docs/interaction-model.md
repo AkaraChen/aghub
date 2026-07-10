@@ -22,7 +22,7 @@
 - 左键单击未选项 → 选中它(详情显示)。
 - 左键单击**唯一已选项** → 取消(空态)。加载时被播种高亮的首项不算"已提交",点它是选中而非取消。
 - ⌘/Ctrl 单击 → 切换该项进/出选择。
-- ⇧ 单击 → 跨 section 范围选(基于 `orderedKeys`)。
+- ⇧ 单击 → 跨 section 范围选,锚点=上次点击(无点击历史时退化为当前唯一选中项,含播种首项)。范围只覆盖**可见行**——收起的分组/源簇成员不被圈入(`orderedKeys` 即可见序)。
 - 退出多选模式 → 塌缩回单个选中(详情保留),非清空。
 - **自定义**组头左键 → 选全组成员;组正是唯一选择时再点 → 取消。
 - **源簇**行左键 → 仅展开/收起(浏览容器,不选中);⌘左键 → 全簇成员进/出选择;右键 → 选中全簇 + items 菜单。拖拽期间源簇整行降透明度(不可落)。
@@ -60,7 +60,7 @@
 
 ## 6. 键盘契约
 
-作用域门:列表面板 hover 或 focus-within;豁免:焦点在 input/textarea/[contenteditable],或任一 dialog/menu 打开时。实现见 `use-list-keyboard.ts`。
+作用域门:**整页**(设置页单列表,详情/批量面板上也生效)hover 或 focus-within;豁免:焦点在 input/textarea/[contenteditable],或任一 dialog/menu 打开时。监听在 **capture 阶段**并对命中键 stopPropagation——react-aria ListBox 自己也处理 Esc(且会拦传播),不接管的话焦点在列表内时清选会被劫持。实现见 `use-list-keyboard.ts`。
 
 | 键                   | 行为                     |
 | -------------------- | ------------------------ |
@@ -77,8 +77,8 @@
 三段全高:
 
 - **头(固定)**:已选 N 项 + 清除;整库选中时顶部带 source header(可开浏览器)。
-- **身(滚动)**:roster —— 每项 图标 + 名称 + 徽章(skill: source;mcp: transport 类型)+ 悬停 × 从选择移出(非删除);移出至 1 项自动回详情。统计行(N 个来源)。**Agent 覆盖矩阵**:行=可用且支持该资源的 agent,值=安装数 n/N 三态(全装实底/部分描边/无 muted);点击 无/部分 → 只补装缺失(不确认,行内 spinner);点击 全装 → AlertDialog 确认后全卸。部分失败 toast 汇总,不回滚,按刷新结果重算。走 `skills|mcps/reconcile`。
-- **尾(固定)**:transfer / 收藏 / 移到分组 / 移出分组 + 全宽「删除 N 项」。
+- **身(滚动)**:roster = 可删除 **TagGroup**,按来源**分节**(节头=来源名+计数,uppercase 小字;无来源的归「未分组」垫底;单节时不显示节头)。每个 tag 自带 × 从选择移出(非删除);移出至 1 项自动回详情。**Agent 覆盖矩阵**:两列格子,每格 agent 图标 + 名称 + n/N;全装=accent 填充+ring,无=名称 muted;用法提示收在标题旁 ? tooltip。点击 无/部分 → 只补装缺失(不确认,格内 spinner);点击 全装 → AlertDialog 确认后全卸。部分失败 toast 汇总,不回滚,按刷新结果重算。走 `skills|mcps/reconcile`。
+- **尾(固定)**:两列网格 —— transfer / 收藏 / 移到分组 / [移出分组],**「删除 N 项」danger 按钮占右下角格**。
 
 ## 8. e2e 映射
 

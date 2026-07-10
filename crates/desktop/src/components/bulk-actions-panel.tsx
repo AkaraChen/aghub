@@ -135,10 +135,11 @@ export function BulkActionsPanel({
 					{rosterSections.map((section) => (
 						<div key={section.title} className="space-y-1.5">
 							{/* Only label the sections when there is more than
-							 * one — a single flat selection needs no header */}
+							 * one; the label shares the matrix title's indent
+							 * so the body reads as one aligned column */}
 							{rosterSections.length > 1 && (
 								<div className="flex items-baseline gap-1.5 px-1">
-									<p className="min-w-0 truncate text-xs font-medium text-muted">
+									<p className="min-w-0 truncate text-[10px] font-medium tracking-wider text-muted uppercase">
 										{section.title}
 									</p>
 									<span className="text-[10px] tabular-nums text-muted/70">
@@ -176,7 +177,7 @@ export function BulkActionsPanel({
 				/>
 			</div>
 
-			<footer className="shrink-0 space-y-2 border-t border-separator p-4">
+			<footer className="shrink-0 border-t border-separator p-4">
 				{/* Two-up grid: fixed footer height, echoes the matrix cells */}
 				<div className="grid grid-cols-2 gap-2">
 					<Button
@@ -263,15 +264,15 @@ export function BulkActionsPanel({
 							{t("removeFromGroup")}
 						</Button>
 					)}
+					<Button
+						variant="danger"
+						className="col-start-2 w-full"
+						onPress={actions.requestDelete}
+					>
+						<ACTION_ICONS.delete className="size-4" />
+						{t("deleteCount", { count: items.length })}
+					</Button>
 				</div>
-				<Button
-					variant="danger"
-					className="w-full"
-					onPress={actions.requestDelete}
-				>
-					<ACTION_ICONS.delete className="size-4" />
-					{t("deleteCount", { count: items.length })}
-				</Button>
 			</footer>
 		</div>
 	);

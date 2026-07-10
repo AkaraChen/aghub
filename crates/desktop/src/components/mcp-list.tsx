@@ -166,12 +166,18 @@ export function McpList({
 		return { customSections: sections, unassignedGroups: rest };
 	}, [sortedGroups, groups, assignments, searchQuery]);
 
+	// Only VISIBLE rows — shift ranges must not sweep members of a
+	// collapsed group.
 	const orderedKeys = useMemo(
 		() => [
-			...customSections.flatMap((s) => s.mcps.map((g) => g.mergeKey)),
+			...customSections.flatMap((s) =>
+				searchQuery || !collapsedIds.has(`g:${s.group.id}`)
+					? s.mcps.map((g) => g.mergeKey)
+					: [],
+			),
 			...unassignedGroups.map((g) => g.mergeKey),
 		],
-		[customSections, unassignedGroups],
+		[customSections, unassignedGroups, collapsedIds, searchQuery],
 	);
 
 	const { createSelectionHandler, selectGroup, ensureSelected } =

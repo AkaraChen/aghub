@@ -836,3 +836,63 @@ test("source clusters collapse by default except the selected one", async ({
 		.click();
 	await expect(page.getByRole("option", { name: "api-forge" })).toBeVisible();
 });
+
+test("shift range skips members hidden in collapsed sections", async ({
+	page,
+}) => {
+	// Two custom groups so a COLLAPSED section sits between the shift
+	// anchor and the target
+	for (const name of ["G1", "G2"]) {
+		await page.getByRole("button", { name: "Add skill" }).click();
+		await page.getByRole("menuitem", { name: "New group" }).click();
+		const dialog = page.getByRole("dialog", { name: "New group" });
+		await dialog.getByRole("textbox").fill(name);
+		await dialog.getByRole("button", { name: "Save" }).click();
+		await expect(page.locator(".modal__backdrop")).toHaveCount(0);
+	}
+	const moveTo = async (skill: string, group: string) => {
+		await page
+			.getByRole("option", { name: skill })
+			.click({ button: "right" });
+		await page
+			.getByRole("menu", { name: "Resource actions" })
+			.getByRole("menuitem", { name: group })
+			.click();
+	};
+	await moveTo("css-wizard", "G1");
+	await moveTo("react-pro", "G2");
+
+	// Collapse G2 — its member react-pro is now hidden between G1 and the
+	// loose rows
+	await page.getByRole("button", { name: "G2", exact: true }).click();
+	await expect(page.getByRole("option", { name: "react-pro" })).toBeHidden();
+
+	// Anchor on css-wizard, shift-click solo-skill: the range must span
+	// only the VISIBLE rows — react-pro (collapsed G2) stays out
+	await page.getByRole("option", { name: "css-wizard" }).click();
+	await page
+		.getByRole("option", { name: "solo-skill" })
+		.click({ modifiers: ["Shift"] });
+
+	await expect(page.getByText("2 items selected")).toBeVisible();
+	await expect(page.getByRole("row", { name: "react-pro" })).toHaveCount(0);
+});
+
+test("escape clears the selection from the detail panel too", async ({
+	page,
+}) => {
+	await page.getByRole("option", { name: "css-wizard" }).click();
+	await page
+		.getByRole("option", { name: "solo-skill" })
+		.click({ modifiers: ["ControlOrMeta"] });
+	await expect(page.getByText("2 items selected")).toBeVisible();
+
+	// Hover the right panel (not the list) and press Escape — the
+	// shortcut is page-scoped, not list-column-scoped
+	await page.getByText("Agent coverage").hover();
+	await page.keyboard.press("Escape");
+	await expect(page.getByText("2 items selected")).toBeHidden();
+	await expect(
+		page.getByText("Select a skill to view details"),
+	).toBeVisible();
+});

@@ -87,8 +87,14 @@ export function useListSelection(
 
 			let finalKeys: Set<string>;
 
-			if (modifiersRef.current.shift && lastClickedRef.current) {
-				const start = orderedKeys.indexOf(lastClickedRef.current);
+			// Shift ranges anchor on the last click, falling back to a sole
+			// current selection (the seeded first item has no click history).
+			const shiftAnchor =
+				lastClickedRef.current ??
+				(selectedKeys.size === 1 ? Array.from(selectedKeys)[0] : null);
+
+			if (modifiersRef.current.shift && shiftAnchor) {
+				const start = orderedKeys.indexOf(shiftAnchor);
 				const end = orderedKeys.indexOf(clicked);
 				if (start !== -1 && end !== -1) {
 					const [from, to] = [

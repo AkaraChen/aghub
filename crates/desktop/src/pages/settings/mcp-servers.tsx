@@ -191,8 +191,12 @@ export default function MCPServersPage() {
 		useListDnd("mcp", (keys) => setCreateGroupKeys(keys));
 
 	const listPanelRef = useRef<HTMLDivElement>(null);
+	// Shortcuts are scoped to the whole page (these pages hold a single
+	// list), so Esc/Cmd+A work from the detail panel too — not only while
+	// the pointer sits over the list column.
+	const pageRef = useRef<HTMLDivElement>(null);
 	useListKeyboard({
-		containerRef: listPanelRef,
+		containerRef: pageRef,
 		allKeys: groupedMcps.map((g) => g.mergeKey),
 		selectedKeys,
 		onSelectionChange: handleSelectionChange,
@@ -223,7 +227,7 @@ export default function MCPServersPage() {
 
 	return (
 		<DndContext {...dndProps}>
-			<div className="flex h-full flex-col">
+			<div ref={pageRef} className="flex h-full flex-col">
 				<ResourcePageToolbar
 					agentFilter={{
 						agentId: agentFilter,

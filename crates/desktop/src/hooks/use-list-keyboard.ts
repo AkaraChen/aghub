@@ -49,19 +49,26 @@ export function useListKeyboard(options: UseListKeyboardOptions) {
 
 			if ((event.metaKey || event.ctrlKey) && event.key === "a") {
 				event.preventDefault();
+				event.stopPropagation();
 				onSelectionChange(new Set(allKeys));
 			} else if (event.key === "Escape") {
+				// Own Escape fully: react-aria's ListBox also handles it
+				// (and stops propagation), so without capture+stop the
+				// clear would be hijacked whenever the list has focus.
+				event.stopPropagation();
 				onSelectionChange(new Set());
 			} else if (
 				(event.key === "Delete" || event.key === "Backspace") &&
 				selectedKeys.size > 0
 			) {
 				event.preventDefault();
+				event.stopPropagation();
 				onRequestDelete();
 			}
 		};
 
-		window.addEventListener("keydown", handler);
-		return () => window.removeEventListener("keydown", handler);
+		// Capture phase — ahead of react-aria's element-level handlers.
+		window.addEventListener("keydown", handler, true);
+		return () => window.removeEventListener("keydown", handler, true);
 	}, []);
 }

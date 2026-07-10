@@ -344,35 +344,6 @@ export function SkillList({
 
 	// Order: custom groups (the user's intent) first, then the loose entries
 	// in their unified display order (source clusters and skills interleaved).
-	const orderedKeys = useMemo(
-		() => [
-			...customSections.flatMap((s) => s.skills.map((g) => g.name)),
-			...looseEntries.flatMap((entry) =>
-				entry.kind === "source"
-					? entry.group.skills.map((s) => s.name)
-					: [entry.skill.name],
-			),
-		],
-		[customSections, looseEntries],
-	);
-
-	const { createSelectionHandler, selectGroup, ensureSelected } =
-		useListSelection({
-			orderedKeys,
-			selectedKeys,
-			onSelectionChange,
-			isMultiSelectMode,
-		});
-
-	const contextMenu = useContextMenu<MenuTarget>();
-	const actions = useResourceActions({
-		kind: "skill",
-		selectedKeys,
-		intents,
-	});
-
-	const isSearching = Boolean(searchQuery);
-
 	// Source clusters collapse by default (custom groups stay open). The
 	// cluster holding the current selection starts open so the seeded or
 	// deep-linked row is visible. One-time init once the lock has loaded;
@@ -391,6 +362,50 @@ export function SkillList({
 			),
 		);
 	}
+
+	// Only VISIBLE rows, in display order — shift ranges span what the user
+	// can see; members of a collapsed group or cluster must not be swept in.
+	const orderedKeys = useMemo(() => {
+		const expandedAll = Boolean(searchQuery);
+		return [
+			...customSections.flatMap((s) =>
+				expandedAll || !collapsedIds.has(`g:${s.group.id}`)
+					? s.skills.map((g) => g.name)
+					: [],
+			),
+			...looseEntries.flatMap((entry) =>
+				entry.kind === "source"
+					? expandedAll ||
+						(expandedSources?.has(entry.group.source) ?? false)
+						? entry.group.skills.map((s) => s.name)
+						: []
+					: [entry.skill.name],
+			),
+		];
+	}, [
+		customSections,
+		looseEntries,
+		collapsedIds,
+		expandedSources,
+		searchQuery,
+	]);
+
+	const { createSelectionHandler, selectGroup, ensureSelected } =
+		useListSelection({
+			orderedKeys,
+			selectedKeys,
+			onSelectionChange,
+			isMultiSelectMode,
+		});
+
+	const contextMenu = useContextMenu<MenuTarget>();
+	const actions = useResourceActions({
+		kind: "skill",
+		selectedKeys,
+		intents,
+	});
+
+	const isSearching = Boolean(searchQuery);
 
 	const toggleCollapsed = (id: string) => {
 		if (isSearching) return;
