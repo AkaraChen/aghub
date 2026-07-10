@@ -2,7 +2,6 @@ import {
 	BookOpenIcon,
 	CheckCircleIcon,
 	ChevronRightIcon,
-	FolderIcon,
 	LinkIcon,
 } from "@heroicons/react/24/solid";
 import { Button, Spinner, Tooltip } from "@heroui/react";
@@ -22,6 +21,7 @@ export interface SourceMember {
 	name: string;
 	/** The skill's on-disk location, for the structure tree */
 	path: string | null;
+	description: string | null;
 }
 
 interface SourceDetailPanelProps {
@@ -60,7 +60,6 @@ export function SourceDetailPanel({
 	onSelectMember,
 }: SourceDetailPanelProps) {
 	const { t } = useTranslation();
-	const repoName = title.split("/").pop() ?? title;
 	const dates = [
 		installedAt &&
 			t("installedOn", {
@@ -120,14 +119,8 @@ export function SourceDetailPanel({
 			</header>
 
 			<div className="flex-1 space-y-4 overflow-y-auto p-4">
-				{/* One repository tree: root, member branches, lazy files */}
-				<div className="rounded-xl border border-separator/60 bg-surface-secondary/60 p-2">
-					<div className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-foreground">
-						<FolderIcon className="size-4 shrink-0 text-accent" />
-						<span className="min-w-0 flex-1 truncate font-medium">
-							{repoName}
-						</span>
-					</div>
+				{/* Member skills as top-level branches; files unfold beneath */}
+				<div>
 					{members.map((member) => (
 						<MemberBranch
 							key={member.name}
@@ -164,51 +157,51 @@ function MemberBranch({
 
 	return (
 		<>
-			<div className="flex w-full items-center px-2 text-sm text-foreground">
-				<TreeIndent depth={1} />
-				<div className="flex min-w-0 flex-1 items-center gap-2 py-1">
-					{member.path ? (
-						<button
-							type="button"
-							aria-label={t("viewStructure", {
-								name: member.name,
-							})}
-							aria-expanded={isOpen}
-							onClick={() => setIsOpen((prev) => !prev)}
-							className="flex size-4 shrink-0 items-center justify-center rounded text-muted transition-colors hover:text-foreground"
-						>
-							<ChevronRightIcon
-								className={cn(
-									"size-3.5 transition-transform duration-[var(--dur-fast)] ease-[var(--ease-out)]",
-									isOpen && "rotate-90",
-								)}
-							/>
-						</button>
-					) : (
-						<span className="size-4 shrink-0" />
-					)}
-					<BookOpenIcon className="size-4 shrink-0 text-muted" />
+			<div className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-foreground transition-colors duration-[var(--dur-fast)] hover:bg-default/40">
+				{member.path ? (
 					<button
 						type="button"
-						onClick={onSelect}
-						className="min-w-0 flex-1 truncate text-left transition-colors duration-[var(--dur-fast)] hover:text-accent"
+						aria-label={t("viewStructure", {
+							name: member.name,
+						})}
+						aria-expanded={isOpen}
+						onClick={() => setIsOpen((prev) => !prev)}
+						className="flex size-4 shrink-0 items-center justify-center rounded text-muted transition-colors hover:text-foreground"
 					>
-						{member.name}
+						<ChevronRightIcon
+							className={cn(
+								"size-3.5 transition-transform duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+								isOpen && "rotate-90",
+							)}
+						/>
 					</button>
-				</div>
+				) : (
+					<span className="size-4 shrink-0" />
+				)}
+				<BookOpenIcon className="size-4 shrink-0 text-muted" />
+				<button
+					type="button"
+					aria-label={member.name}
+					onClick={onSelect}
+					className="flex min-w-0 flex-1 items-baseline gap-2 text-left"
+				>
+					<span className="truncate">{member.name}</span>
+					{member.description && (
+						<span className="min-w-0 flex-1 truncate text-xs text-muted">
+							{member.description}
+						</span>
+					)}
+				</button>
 			</div>
 			{isOpen &&
 				(isLoading ? (
 					<div className="flex items-center px-2 py-1">
-						<TreeIndent depth={2} />
+						<TreeIndent depth={1} />
 						<Spinner size="sm" color="current" />
 					</div>
 				) : tree ? (
 					flattenTree(tree).map((node) => (
-						<TreeNodeRow
-							key={node.path}
-							node={{ ...node, depth: (node.depth ?? 0) + 1 }}
-						/>
+						<TreeNodeRow key={node.path} node={node} />
 					))
 				) : null)}
 		</>

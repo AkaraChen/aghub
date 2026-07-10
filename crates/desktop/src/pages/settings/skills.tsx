@@ -219,6 +219,7 @@ export default function SkillsPage() {
 				return {
 					name: entry.name,
 					path: item?.source_path ?? item?.canonical_path ?? null,
+					description: item?.description ?? null,
 				};
 			})
 			.sort((a, b) => a.name.localeCompare(b.name));
