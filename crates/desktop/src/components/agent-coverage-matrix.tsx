@@ -1,4 +1,5 @@
-import { AlertDialog, Button, Chip, Spinner, toast } from "@heroui/react";
+import { QuestionMarkCircleIcon } from "@heroicons/react/24/solid";
+import { AlertDialog, Button, Spinner, toast, Tooltip } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -9,6 +10,7 @@ import {
 	supportsMcpScope,
 	supportsSkillMutation,
 } from "../lib/agent-capabilities";
+import { AgentIcon } from "../lib/agent-icons";
 import { cn } from "../lib/utils";
 import { reconcileMcpsMutationOptions } from "../requests/mcps";
 import { reconcileSkillsMutationOptions } from "../requests/skills";
@@ -117,11 +119,21 @@ export function AgentCoverageMatrix({
 	if (groups.length === 0 || rows.length === 0) return null;
 
 	return (
-		<div className="space-y-1 border-t border-separator pt-4">
-			<p className="px-2 text-xs font-medium text-muted">
-				{t("agentCoverage")}
-			</p>
-			<ul className="space-y-0.5">
+		<div className="space-y-2 border-t border-separator pt-4">
+			<div className="flex items-center gap-1 px-1">
+				<p className="text-xs font-medium text-muted">
+					{t("agentCoverage")}
+				</p>
+				<Tooltip delay={0}>
+					<Tooltip.Trigger>
+						<span className="flex items-center text-muted">
+							<QuestionMarkCircleIcon className="size-3.5" />
+						</span>
+					</Tooltip.Trigger>
+					<Tooltip.Content>{t("matrixHint")}</Tooltip.Content>
+				</Tooltip>
+			</div>
+			<ul className="grid grid-cols-2 gap-1">
 				{rows.map((agent) => {
 					const installed = installedCount(agent.id);
 					const total = groups.length;
@@ -144,28 +156,43 @@ export function AgentCoverageMatrix({
 										void run(agent.id, "install");
 									}
 								}}
-								className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm transition-colors duration-[var(--dur-fast)] hover:bg-default disabled:opacity-60"
+								className={cn(
+									"flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left text-sm ring-1 ring-transparent transition-colors duration-[var(--dur-fast)] hover:bg-default disabled:opacity-60",
+									// Fill encodes coverage at a glance
+									full && "bg-accent/10 ring-accent/30",
+								)}
 							>
-								<span className="min-w-0 flex-1 truncate">
+								<AgentIcon
+									id={agent.id}
+									name={agent.display_name}
+									size="xs"
+									variant="ghost"
+								/>
+								<span
+									className={cn(
+										"min-w-0 flex-1 truncate",
+										none && "text-muted",
+									)}
+								>
 									{agent.display_name}
 								</span>
 								{isPending ? (
 									<Spinner size="sm" color="current" />
 								) : (
-									<Chip
-										size="sm"
-										variant={full ? "primary" : "soft"}
-										className={cn(none && "opacity-60")}
+									<span
+										className={cn(
+											"shrink-0 text-[10px] font-medium tabular-nums",
+											full ? "text-accent" : "text-muted",
+										)}
 									>
 										{installed}/{total}
-									</Chip>
+									</span>
 								)}
 							</button>
 						</li>
 					);
 				})}
 			</ul>
-			<p className="px-2 text-xs text-muted">{t("matrixHint")}</p>
 
 			<AlertDialog.Backdrop
 				isOpen={confirmAgent !== null}
