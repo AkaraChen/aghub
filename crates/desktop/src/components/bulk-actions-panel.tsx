@@ -90,7 +90,7 @@ export function BulkActionsPanel({
 
 	return (
 		<div className="flex h-full flex-col">
-			<header className="flex shrink-0 items-start justify-between gap-3 border-b border-separator p-4">
+			<header className="flex shrink-0 items-center justify-between gap-3 border-b border-separator px-4 py-3">
 				<div className="min-w-0 flex-1">
 					{sourceContext ? (
 						<>
@@ -129,15 +129,16 @@ export function BulkActionsPanel({
 				</div>
 			</header>
 
-			<div className="flex-1 space-y-4 overflow-y-auto p-4">
-				{/* Roster: one outlined wrap per source — the group name and
-				 * its members read as a single unit; members are plain text
-				 * (no pills), the × only drops the item from the selection */}
+			<div className="flex-1 space-y-4 overflow-y-auto px-4 pt-3 pb-4">
+				{/* Roster: one card per source — the group name and its
+				 * members read as a single unit; members are plain text
+				 * (no pills) that grow to soak up the row's leftover width,
+				 * and the × only drops the item from the selection */}
 				<div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
 					{rosterSections.map((section) => (
 						<div
 							key={section.title}
-							className="flex max-w-full flex-wrap items-center gap-x-0.5 gap-y-0.5 rounded-lg border border-border py-1 pr-1.5 pl-2.5"
+							className="flex max-w-full grow flex-wrap items-center gap-x-0.5 gap-y-0.5 rounded-lg border border-border/60 bg-surface-secondary py-1.5 pr-1.5 pl-2.5"
 						>
 							<span className="mr-1 text-[10px] font-medium tracking-wider text-muted uppercase">
 								{section.title.split("/").pop()}
@@ -148,9 +149,12 @@ export function BulkActionsPanel({
 							{section.members.map((item) => (
 								<div
 									key={item.key}
-									className="flex items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors duration-[var(--dur-fast)] hover:bg-default/40"
+									className="flex min-w-0 grow items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors duration-[var(--dur-fast)] hover:bg-default/60"
 								>
-									<span className="text-sm text-foreground">
+									<span
+										className="min-w-0 truncate text-sm text-foreground"
+										title={item.label}
+									>
 										{item.label}
 									</span>
 									<button
