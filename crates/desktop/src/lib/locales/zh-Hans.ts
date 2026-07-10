@@ -571,6 +571,8 @@ export default {
 		"确定从「{{agent}}」移除选中的 {{count}} 项？将从该 Agent 删除这些资源。",
 	agentBatchResult: "成功 {{success}} · 失败 {{failed}}",
 	favoriteAll: "收藏全部",
+	installedOn: "装于 {{date}}",
+	updatedOn: "更新于 {{date}}",
 	viewStructure: "查看 {{name}} 的结构",
 	emptyShortcutHint: "⌘A 全选 · 空白处右键更多操作",
 	skillsSelected: "skills 已选",

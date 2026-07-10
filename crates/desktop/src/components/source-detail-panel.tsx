@@ -2,6 +2,7 @@ import {
 	BookOpenIcon,
 	CheckCircleIcon,
 	ChevronRightIcon,
+	FolderIcon,
 	LinkIcon,
 } from "@heroicons/react/24/solid";
 import { Button, Spinner, Tooltip } from "@heroui/react";
@@ -13,7 +14,9 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { useApi } from "../hooks/use-api";
 import { cn } from "../lib/utils";
 import { skillTreeQueryOptions } from "../requests/skills";
-import { SkillTree } from "./skill-detail-views";
+import type { MatrixGroup } from "./agent-coverage-matrix";
+import { AgentCoverageMatrix } from "./agent-coverage-matrix";
+import { flattenTree, TreeNodeRow } from "./skill-detail-views";
 
 export interface SourceMember {
 	name: string;
@@ -28,6 +31,10 @@ interface SourceDetailPanelProps {
 	sourceType: string | null;
 	/** Member skills, in list order */
 	members: SourceMember[];
+	installedAt: string | null;
+	updatedAt: string | null;
+	/** Per-member agent coverage, for the in-place matrix */
+	matrixGroups: MatrixGroup[];
 	/** Selects the whole library (opens the batch inspector) */
 	onSelectAll: () => void;
 	/** Selects one member (jumps to its detail) */
@@ -35,20 +42,35 @@ interface SourceDetailPanelProps {
 }
 
 /**
- * The library page: shown when a source cluster row is clicked. A source
- * is provenance, so its page is read-mostly — where it came from, what
- * it contains and how each skill is laid out on disk — with one primary
- * action: select the whole library.
+ * The library page: shown when a source cluster row is clicked. One
+ * repository tree — the source as the root, each member skill an
+ * expandable branch (click the name to jump to its detail, the chevron
+ * to reveal its files) — plus install dates and the agent coverage
+ * matrix, with one primary action: select the whole library.
  */
 export function SourceDetailPanel({
 	title,
 	url,
 	sourceType,
 	members,
+	installedAt,
+	updatedAt,
+	matrixGroups,
 	onSelectAll,
 	onSelectMember,
 }: SourceDetailPanelProps) {
 	const { t } = useTranslation();
+	const repoName = title.split("/").pop() ?? title;
+	const dates = [
+		installedAt &&
+			t("installedOn", {
+				date: new Date(installedAt).toLocaleDateString(),
+			}),
+		updatedAt &&
+			t("updatedOn", {
+				date: new Date(updatedAt).toLocaleDateString(),
+			}),
+	].filter(Boolean);
 
 	return (
 		<div className="flex h-full flex-col">
@@ -59,6 +81,7 @@ export function SourceDetailPanel({
 					</h2>
 					<p className="mt-1 text-sm text-muted">
 						{t("memberCount", { count: members.length })}
+						{dates.length > 0 && ` · ${dates.join(" · ")}`}
 					</p>
 				</div>
 				<div className="flex shrink-0 items-center gap-1">
@@ -96,22 +119,31 @@ export function SourceDetailPanel({
 				</div>
 			</header>
 
-			<div className="flex-1 overflow-y-auto p-4">
-				<ul className="space-y-0.5">
+			<div className="flex-1 space-y-4 overflow-y-auto p-4">
+				{/* One repository tree: root, member branches, lazy files */}
+				<div className="rounded-xl border border-separator/60 bg-surface-secondary/60 p-2">
+					<div className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-foreground">
+						<FolderIcon className="size-4 shrink-0 text-accent" />
+						<span className="min-w-0 flex-1 truncate font-medium">
+							{repoName}
+						</span>
+					</div>
 					{members.map((member) => (
-						<MemberRow
+						<MemberBranch
 							key={member.name}
 							member={member}
 							onSelect={() => onSelectMember(member.name)}
 						/>
 					))}
-				</ul>
+				</div>
+
+				<AgentCoverageMatrix kind="skill" groups={matrixGroups} />
 			</div>
 		</div>
 	);
 }
 
-function MemberRow({
+function MemberBranch({
 	member,
 	onSelect,
 }: {
@@ -131,23 +163,18 @@ function MemberRow({
 	});
 
 	return (
-		<li>
-			<div className="group flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm transition-colors duration-[var(--dur-fast)] hover:bg-default">
-				<BookOpenIcon className="size-4 shrink-0 text-muted" />
-				<button
-					type="button"
-					onClick={onSelect}
-					className="min-w-0 flex-1 truncate text-left"
-				>
-					{member.name}
-				</button>
-				{member.path && (
+		<>
+			<div
+				className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-foreground transition-colors duration-[var(--dur-fast)] hover:bg-default"
+				style={{ paddingLeft: "24px" }}
+			>
+				{member.path ? (
 					<button
 						type="button"
 						aria-label={t("viewStructure", { name: member.name })}
 						aria-expanded={isOpen}
 						onClick={() => setIsOpen((prev) => !prev)}
-						className="flex size-5 shrink-0 items-center justify-center rounded text-muted transition-colors hover:text-foreground"
+						className="-ml-1 flex size-4 shrink-0 items-center justify-center rounded text-muted transition-colors hover:text-foreground"
 					>
 						<ChevronRightIcon
 							className={cn(
@@ -156,17 +183,31 @@ function MemberRow({
 							)}
 						/>
 					</button>
+				) : (
+					<span className="-ml-1 size-4 shrink-0" />
 				)}
+				<BookOpenIcon className="size-4 shrink-0 text-muted" />
+				<button
+					type="button"
+					onClick={onSelect}
+					className="min-w-0 flex-1 truncate text-left hover:text-accent"
+				>
+					{member.name}
+				</button>
 			</div>
-			{isOpen && (
-				<div className="mt-1 mb-2 ml-8">
-					{isLoading ? (
+			{isOpen &&
+				(isLoading ? (
+					<div className="py-1 pl-12">
 						<Spinner size="sm" color="current" />
-					) : tree ? (
-						<SkillTree root={tree} />
-					) : null}
-				</div>
-			)}
-		</li>
+					</div>
+				) : tree ? (
+					flattenTree(tree).map((node) => (
+						<TreeNodeRow
+							key={node.path}
+							node={{ ...node, depth: (node.depth ?? 0) + 1 }}
+						/>
+					))
+				) : null)}
+		</>
 	);
 }

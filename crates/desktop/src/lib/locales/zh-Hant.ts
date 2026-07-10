@@ -570,6 +570,8 @@ export default {
 		"確定從「{{agent}}」移除選取的 {{count}} 項？將從該 Agent 刪除這些資源。",
 	agentBatchResult: "成功 {{success}} · 失敗 {{failed}}",
 	favoriteAll: "收藏全部",
+	installedOn: "裝於 {{date}}",
+	updatedOn: "更新於 {{date}}",
 	viewStructure: "查看 {{name}} 的結構",
 	emptyShortcutHint: "⌘A 全選 · 空白處按右鍵更多操作",
 	installSelected: "安裝已選",

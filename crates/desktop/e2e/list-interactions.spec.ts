@@ -903,6 +903,8 @@ test("clicking a cluster row opens its library page", async ({ page }) => {
 		page.getByRole("heading", { name: "github/AkaraChen/alpha-pack" }),
 	).toBeVisible();
 	await expect(page.getByText("2 members")).toBeVisible();
+	// The page carries the agent coverage matrix for the library
+	await expect(page.getByText("Agent coverage")).toBeVisible();
 
 	// Selecting the whole library from its page opens the batch inspector
 	await page.getByRole("button", { name: "Select All", exact: true }).click();

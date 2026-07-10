@@ -135,7 +135,7 @@ export function LocationRow({
 	);
 }
 
-function flattenTree(
+export function flattenTree(
 	root: SkillTreeNodeResponse,
 ): Array<SkillTreeNodeResponse & { depth?: number }> {
 	const items: Array<SkillTreeNodeResponse & { depth?: number }> = [];
@@ -152,7 +152,7 @@ function flattenTree(
 	return items;
 }
 
-function TreeNodeRow({
+export function TreeNodeRow({
 	node,
 }: {
 	node: SkillTreeNodeResponse & { depth?: number };

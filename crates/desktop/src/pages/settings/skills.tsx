@@ -223,16 +223,46 @@ export default function SkillsPage() {
 			})
 			.sort((a, b) => a.name.localeCompare(b.name));
 		if (members.length === 0) return null;
-		const entry = globalLock?.skills.find(
+		const entries = (globalLock?.skills ?? []).filter(
 			(item) => item.source === focusedSource,
 		);
+		const entry = entries[0];
 		const sourceType = entry?.sourceType ?? null;
 		const url =
 			entry?.sourceUrl ??
 			(sourceType === "github"
 				? `https://github.com/${focusedSource.replace(GITHUB_PREFIX_REGEX, "")}`
 				: null);
-		return { title: focusedSource, url, sourceType, members };
+		const installedAt = entries.map((e) => e.installedAt).sort()[0] ?? null;
+		const updatedAt =
+			entries
+				.map((e) => e.updatedAt)
+				.sort()
+				.at(-1) ?? null;
+		const matrixGroups = members.map((member) => {
+			const items = byName.get(member.name)?.items ?? [];
+			return {
+				key: member.name,
+				name: member.name,
+				sourceAgent: items[0]?.agent ?? "claude",
+				sourceScope:
+					items[0]?.source === "project"
+						? ("project" as const)
+						: ("global" as const),
+				installedAgents: items
+					.map((item) => item.agent)
+					.filter((agent): agent is string => agent != null),
+			};
+		});
+		return {
+			title: focusedSource,
+			url,
+			sourceType,
+			members,
+			installedAt,
+			updatedAt,
+			matrixGroups,
+		};
 	}, [focusedSource, globalLock, groupedSkills]);
 
 	const { dndProps, draggedKeys, boardGroups, showBoardUngrouped } =
@@ -475,6 +505,11 @@ export default function SkillsPage() {
 									url={focusedSourceInfo.url}
 									sourceType={focusedSourceInfo.sourceType}
 									members={focusedSourceInfo.members}
+									installedAt={focusedSourceInfo.installedAt}
+									updatedAt={focusedSourceInfo.updatedAt}
+									matrixGroups={
+										focusedSourceInfo.matrixGroups
+									}
 									onSelectAll={() =>
 										handleSelectionChange(
 											new Set(
