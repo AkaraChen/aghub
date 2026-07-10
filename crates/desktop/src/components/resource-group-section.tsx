@@ -100,7 +100,7 @@ export function ResourceGroupSection({
 			{/* No sticky here: an opaque backdrop for a stuck header has no
 			 * token that matches the UA canvas, and it reads as the very
 			 * full-width band the header design forbids. */}
-			<div className="px-2 pt-2">
+			<div className={cn(subtle ? "px-2 py-1" : "px-2 pt-2")}>
 				<div
 					ref={setDragRef}
 					role="button"
@@ -137,7 +137,12 @@ export function ResourceGroupSection({
 						}}
 						// Keep the drag sensor from swallowing the toggle press
 						onPointerDown={(event) => event.stopPropagation()}
-						className="-ml-0.5 flex size-5 shrink-0 items-center justify-center rounded text-muted transition-colors hover:text-foreground"
+						className={cn(
+							"flex shrink-0 items-center justify-center rounded text-muted transition-colors hover:text-foreground",
+							// Subtle headers sit in the icon slot of a plain
+							// row, so the chevron matches the row icon size
+							subtle ? "size-4" : "-ml-0.5 size-5",
+						)}
 						aria-label={title}
 						aria-expanded={isExpanded}
 					>

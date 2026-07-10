@@ -373,8 +373,37 @@ export function SkillList({
 
 	const isSearching = Boolean(searchQuery);
 
+	// Source clusters collapse by default (custom groups stay open). The
+	// cluster holding the current selection starts open so the seeded or
+	// deep-linked row is visible. One-time init once the lock has loaded;
+	// render-phase state, not an effect.
+	const [expandedSources, setExpandedSources] = useState<Set<string> | null>(
+		null,
+	);
+	if (expandedSources === null && !isGroupingLoading) {
+		setExpandedSources(
+			new Set(
+				sourceGroups
+					.filter((sg) =>
+						sg.skills.some((s) => selectedKeys.has(s.name)),
+					)
+					.map((sg) => sg.source),
+			),
+		);
+	}
+
 	const toggleCollapsed = (id: string) => {
 		if (isSearching) return;
+		if (id.startsWith("s:")) {
+			const source = id.slice(2);
+			setExpandedSources((prev) => {
+				const next = new Set(prev ?? []);
+				if (next.has(source)) next.delete(source);
+				else next.add(source);
+				return next;
+			});
+			return;
+		}
 		setCollapsedIds((prev) => {
 			const next = new Set(prev);
 			if (next.has(id)) next.delete(id);
@@ -383,7 +412,11 @@ export function SkillList({
 		});
 	};
 
-	const isExpanded = (id: string) => isSearching || !collapsedIds.has(id);
+	const isExpanded = (id: string) =>
+		isSearching ||
+		(id.startsWith("s:")
+			? (expandedSources?.has(id.slice(2)) ?? false)
+			: !collapsedIds.has(id));
 
 	// The header reflects its members: selected once every member is in
 	// the selection, regardless of what else is selected elsewhere.
@@ -444,6 +477,7 @@ export function SkillList({
 	const renderSectionListBox = (
 		label: string,
 		sectionSkills: SkillGroup[],
+		dense = false,
 	) => (
 		<ListBox
 			aria-label={label}
@@ -453,7 +487,9 @@ export function SkillList({
 			onSelectionChange={createSelectionHandler(
 				sectionSkills.map((s) => s.name),
 			)}
-			className="p-2 pl-6"
+			// dense: a source cluster's members share the loose list rhythm
+			// (no extra top gap under the header row)
+			className={cn(dense ? "px-2 pb-1 pl-6" : "p-2 pl-6")}
 		>
 			{sectionSkills.map(renderSkillItem)}
 		</ListBox>
@@ -748,7 +784,7 @@ export function SkillList({
 				dragId={`header:${sg.source}`}
 				dragKeys={memberKeys}
 			>
-				{renderSectionListBox(sg.source, sg.skills)}
+				{renderSectionListBox(sg.source, sg.skills, true)}
 			</ResourceGroupSection>,
 		);
 	}

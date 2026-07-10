@@ -786,3 +786,21 @@ test("starring a member floats its whole source cluster up", async ({
 		expect(web).toBeLessThan(solo.y);
 	}).toPass();
 });
+
+test("source clusters collapse by default except the selected one", async ({
+	page,
+}) => {
+	// web-dev holds the seeded selection, so it starts open; alpha-pack
+	// starts collapsed
+	await expect(page.getByRole("option", { name: "react-pro" })).toBeVisible();
+	await expect(page.getByRole("option", { name: "api-forge" })).toBeHidden();
+
+	// The label click expands the collapsed cluster
+	await page
+		.getByRole("button", {
+			name: "github/AkaraChen/alpha-pack",
+			exact: true,
+		})
+		.click();
+	await expect(page.getByRole("option", { name: "api-forge" })).toBeVisible();
+});
