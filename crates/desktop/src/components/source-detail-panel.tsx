@@ -16,7 +16,7 @@ import { cn } from "../lib/utils";
 import { skillTreeQueryOptions } from "../requests/skills";
 import type { MatrixGroup } from "./agent-coverage-matrix";
 import { AgentCoverageMatrix } from "./agent-coverage-matrix";
-import { flattenTree, TreeNodeRow } from "./skill-detail-views";
+import { flattenTree, TreeIndent, TreeNodeRow } from "./skill-detail-views";
 
 export interface SourceMember {
 	name: string;
@@ -164,40 +164,43 @@ function MemberBranch({
 
 	return (
 		<>
-			<div
-				className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm text-foreground transition-colors duration-[var(--dur-fast)] hover:bg-default"
-				style={{ paddingLeft: "24px" }}
-			>
-				{member.path ? (
+			<div className="flex w-full items-center px-2 text-sm text-foreground">
+				<TreeIndent depth={1} />
+				<div className="flex min-w-0 flex-1 items-center gap-2 py-1">
+					{member.path ? (
+						<button
+							type="button"
+							aria-label={t("viewStructure", {
+								name: member.name,
+							})}
+							aria-expanded={isOpen}
+							onClick={() => setIsOpen((prev) => !prev)}
+							className="flex size-4 shrink-0 items-center justify-center rounded text-muted transition-colors hover:text-foreground"
+						>
+							<ChevronRightIcon
+								className={cn(
+									"size-3.5 transition-transform duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+									isOpen && "rotate-90",
+								)}
+							/>
+						</button>
+					) : (
+						<span className="size-4 shrink-0" />
+					)}
+					<BookOpenIcon className="size-4 shrink-0 text-muted" />
 					<button
 						type="button"
-						aria-label={t("viewStructure", { name: member.name })}
-						aria-expanded={isOpen}
-						onClick={() => setIsOpen((prev) => !prev)}
-						className="-ml-1 flex size-4 shrink-0 items-center justify-center rounded text-muted transition-colors hover:text-foreground"
+						onClick={onSelect}
+						className="min-w-0 flex-1 truncate text-left transition-colors duration-[var(--dur-fast)] hover:text-accent"
 					>
-						<ChevronRightIcon
-							className={cn(
-								"size-3.5 transition-transform duration-[var(--dur-fast)] ease-[var(--ease-out)]",
-								isOpen && "rotate-90",
-							)}
-						/>
+						{member.name}
 					</button>
-				) : (
-					<span className="-ml-1 size-4 shrink-0" />
-				)}
-				<BookOpenIcon className="size-4 shrink-0 text-muted" />
-				<button
-					type="button"
-					onClick={onSelect}
-					className="min-w-0 flex-1 truncate text-left hover:text-accent"
-				>
-					{member.name}
-				</button>
+				</div>
 			</div>
 			{isOpen &&
 				(isLoading ? (
-					<div className="py-1 pl-12">
+					<div className="flex items-center px-2 py-1">
+						<TreeIndent depth={2} />
 						<Spinner size="sm" color="current" />
 					</div>
 				) : tree ? (

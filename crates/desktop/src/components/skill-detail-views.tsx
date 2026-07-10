@@ -159,19 +159,35 @@ export function TreeNodeRow({
 }) {
 	return (
 		<div
-			className="
-				flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm
-				text-foreground
-			"
-			style={{ paddingLeft: `${(node.depth ?? 0) * 16 + 8}px` }}
+			className="flex w-full items-center px-2 text-sm text-foreground"
 			title={node.path}
 		>
-			{node.kind === "directory" ? (
-				<FolderIcon className="size-4 shrink-0 text-accent" />
-			) : (
-				<DocumentIcon className="size-4 shrink-0 text-muted" />
-			)}
-			<span className="min-w-0 flex-1 truncate">{node.name}</span>
+			<TreeIndent depth={node.depth ?? 0} />
+			<div className="flex min-w-0 flex-1 items-center gap-2 py-1">
+				{node.kind === "directory" ? (
+					<FolderIcon className="size-4 shrink-0 text-accent" />
+				) : (
+					<DocumentIcon className="size-4 shrink-0 text-muted" />
+				)}
+				<span className="min-w-0 flex-1 truncate">{node.name}</span>
+			</div>
 		</div>
+	);
+}
+
+/** Indent guides: one hairline per depth level, running the row's full
+ * height so consecutive rows read as connected branches. */
+export function TreeIndent({ depth }: { depth: number }) {
+	if (depth <= 0) return null;
+	return (
+		<>
+			{Array.from({ length: depth }, (_, level) => (
+				<span
+					 
+					key={level}
+					className="ml-[7px] mr-2 w-px shrink-0 self-stretch bg-separator"
+				/>
+			))}
+		</>
 	);
 }
