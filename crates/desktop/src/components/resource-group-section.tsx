@@ -1,4 +1,8 @@
-import { ChevronRightIcon, PlusIcon } from "@heroicons/react/24/solid";
+import {
+	ChevronRightIcon,
+	PlusIcon,
+	Square2StackIcon,
+} from "@heroicons/react/24/solid";
 import { useDndContext, useDraggable, useDroppable } from "@dnd-kit/core";
 import { Chip } from "@heroui/react";
 import { type ReactNode, useEffect, useRef } from "react";
@@ -105,7 +109,9 @@ export function ResourceGroupSection({
 			{/* No sticky here: an opaque backdrop for a stuck header has no
 			 * token that matches the UA canvas, and it reads as the very
 			 * full-width band the header design forbids. */}
-			<div className={cn(subtle ? "px-2 py-1" : "px-2 pt-2")}>
+			{/* subtle: no vertical padding of its own — the row must sit in
+			 * the exact rhythm of the skill rows around it */}
+			<div className={cn(subtle ? "px-2" : "px-2 pt-2")}>
 				<div
 					ref={setDragRef}
 					role="button"
@@ -148,18 +154,12 @@ export function ResourceGroupSection({
 					)}
 				>
 					{subtle ? (
-						// The whole row toggles, so the chevron is decoration
-						<span
+						// The icon slot mirrors a skill row's book icon in
+						// weight; the expand cue sits at the trailing edge
+						<Square2StackIcon
 							aria-hidden
-							className="flex size-4 shrink-0 items-center justify-center text-muted"
-						>
-							<ChevronRightIcon
-								className={cn(
-									"size-4 transition-transform duration-[var(--dur-fast)] ease-[var(--ease-out)]",
-									isExpanded && "rotate-90",
-								)}
-							/>
-						</span>
+							className="size-4 shrink-0 text-muted"
+						/>
 					) : (
 						<button
 							type="button"
@@ -192,8 +192,19 @@ export function ResourceGroupSection({
 						{title}
 					</span>
 					{subtle ? (
-						<span className="shrink-0 text-xs tabular-nums text-muted">
-							{count}
+						// Count badge in the same voice as the agent-icons
+						// overflow bubble, then the expand cue
+						<span className="flex shrink-0 items-center gap-1">
+							<span className="flex size-5 items-center justify-center rounded-full bg-default text-[10px] font-medium text-muted ring-1 ring-surface">
+								{count}
+							</span>
+							<ChevronRightIcon
+								aria-hidden
+								className={cn(
+									"size-3 text-muted transition-transform duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+									isExpanded && "rotate-90",
+								)}
+							/>
 						</span>
 					) : (
 						<Chip size="sm" variant="secondary">
