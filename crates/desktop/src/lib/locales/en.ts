@@ -592,7 +592,6 @@ export default {
 	agentBatchResult: "{{success}} succeeded · {{failed}} failed",
 	favoriteAll: "Favorite all",
 	viewStructure: "View structure of {{name}}",
-	selectWholeLibrary: "Select whole library",
 	emptyShortcutHint: "⌘A select all · Right-click blank space for actions",
 	skillsSelected: "skills selected",
 	installSelected: "Install Selected",

@@ -61,31 +61,39 @@ export function SourceDetailPanel({
 						{t("memberCount", { count: members.length })}
 					</p>
 				</div>
-				{url && (
-					<Tooltip delay={0}>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="md"
-							className="min-h-[44px] min-w-[44px] text-muted hover:text-foreground"
-							aria-label={t("openInBrowser")}
-							onPress={() => void openUrl(url)}
-						>
-							{sourceType === "github" ? (
-								<span
-									className="inline-flex size-5 shrink-0 items-center [&_svg]:size-full [&_svg]:fill-current"
-									// eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml
-									dangerouslySetInnerHTML={{
-										__html: githubIcon,
-									}}
-								/>
-							) : (
-								<LinkIcon className="size-5" />
-							)}
-						</Button>
-						<Tooltip.Content>{t("openInBrowser")}</Tooltip.Content>
-					</Tooltip>
-				)}
+				<div className="flex shrink-0 items-center gap-1">
+					<Button variant="secondary" onPress={onSelectAll}>
+						<CheckCircleIcon className="size-4" />
+						{t("selectAll")}
+					</Button>
+					{url && (
+						<Tooltip delay={0}>
+							<Button
+								isIconOnly
+								variant="ghost"
+								size="md"
+								className="min-h-[44px] min-w-[44px] text-muted hover:text-foreground"
+								aria-label={t("openInBrowser")}
+								onPress={() => void openUrl(url)}
+							>
+								{sourceType === "github" ? (
+									<span
+										className="inline-flex size-5 shrink-0 items-center [&_svg]:size-full [&_svg]:fill-current"
+										// eslint-disable-next-line @eslint-react/dom-no-dangerously-set-innerhtml
+										dangerouslySetInnerHTML={{
+											__html: githubIcon,
+										}}
+									/>
+								) : (
+									<LinkIcon className="size-5" />
+								)}
+							</Button>
+							<Tooltip.Content>
+								{t("openInBrowser")}
+							</Tooltip.Content>
+						</Tooltip>
+					)}
+				</div>
 			</header>
 
 			<div className="flex-1 overflow-y-auto p-4">
@@ -99,17 +107,6 @@ export function SourceDetailPanel({
 					))}
 				</ul>
 			</div>
-
-			<footer className="shrink-0 border-t border-separator p-4">
-				<Button
-					variant="secondary"
-					className="w-full"
-					onPress={onSelectAll}
-				>
-					<CheckCircleIcon className="size-4" />
-					{t("selectWholeLibrary")}
-				</Button>
-			</footer>
 		</div>
 	);
 }

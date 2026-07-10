@@ -572,7 +572,6 @@ export default {
 	agentBatchResult: "成功 {{success}} · 失败 {{failed}}",
 	favoriteAll: "收藏全部",
 	viewStructure: "查看 {{name}} 的结构",
-	selectWholeLibrary: "选择整库",
 	emptyShortcutHint: "⌘A 全选 · 空白处右键更多操作",
 	skillsSelected: "skills 已选",
 	installSelected: "安装所选",

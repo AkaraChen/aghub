@@ -905,7 +905,7 @@ test("clicking a cluster row opens its library page", async ({ page }) => {
 	await expect(page.getByText("2 members")).toBeVisible();
 
 	// Selecting the whole library from its page opens the batch inspector
-	await page.getByRole("button", { name: "Select whole library" }).click();
+	await page.getByRole("button", { name: "Select All", exact: true }).click();
 	await expect(page.getByText("2 items selected")).toBeVisible();
 });
 
