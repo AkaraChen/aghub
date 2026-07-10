@@ -48,14 +48,22 @@ test.beforeEach(async ({ page }) => {
 	).toBeVisible();
 });
 
-test("renders source group as a section and ungrouped items", async ({
+test("renders source clusters as rows and ungrouped items", async ({
 	page,
 }) => {
+	// The cluster row is named by its source; there is no click-to-select-all
+	// affordance on it (that moved to right-click and meta-click)
+	await expect(
+		page.getByRole("button", {
+			name: "github/AkaraChen/web-dev",
+			exact: true,
+		}),
+	).toBeVisible();
 	await expect(
 		page.getByRole("button", {
 			name: "Select all in github/AkaraChen/web-dev",
 		}),
-	).toBeVisible();
+	).toHaveCount(0);
 	await expect(page.getByRole("option", { name: "react-pro" })).toBeVisible();
 	await expect(
 		page.getByRole("option", { name: "solo-skill" }),
@@ -100,15 +108,15 @@ test("the bulk roster removes one item from the selection", async ({
 	).toBeVisible();
 });
 
-test("the chevron toggles expansion without selecting the group", async ({
+test("clicking a cluster row toggles expansion without selecting", async ({
 	page,
 }) => {
 	await expect(
 		page.getByRole("option", { name: "css-wizard" }),
 	).toBeVisible();
 
-	// The chevron's accessible name is the bare group title, distinct
-	// from the row's "Select all in …" label
+	// The whole cluster row is the toggle; clicking it never selects the
+	// members (select-all lives on right-click and meta-click)
 	await page
 		.getByRole("button", {
 			name: "github/AkaraChen/web-dev",
@@ -197,39 +205,42 @@ test("exiting multi-select keeps the current detail", async ({ page }) => {
 	await expect(page.getByText("Select a skill to view details")).toBeHidden();
 });
 
-test("the header stays selected while all its members are selected", async ({
+test("the cluster row stays pressed while all its members are selected", async ({
 	page,
 }) => {
 	const header = (pressed: boolean) =>
 		page.getByRole("button", {
-			name: "Select all in github/AkaraChen/web-dev",
+			name: "github/AkaraChen/web-dev",
+			exact: true,
 			pressed,
 		});
 
-	// Selecting the whole group marks the header selected
-	await header(false).click();
+	// Right-clicking the cluster selects every member (and opens the menu)
+	await header(false).click({ button: "right" });
+	await page.keyboard.press("Escape");
 	await expect(header(true)).toBeVisible();
 
-	// Adding an unrelated item keeps the header selected — every member
-	// is still in the selection
+	// Adding an unrelated item keeps the row pressed — every member is
+	// still in the selection
 	await page
 		.getByRole("option", { name: "solo-skill" })
 		.click({ modifiers: ["ControlOrMeta"] });
 	await expect(header(true)).toBeVisible();
 
-	// Deselecting a member clears the header
+	// Deselecting a member clears it
 	await page
 		.getByRole("option", { name: "react-pro" })
 		.click({ modifiers: ["ControlOrMeta"] });
 	await expect(header(false)).toBeVisible();
 });
 
-test("source group header click selects the whole library", async ({
+test("right-clicking a source cluster selects the whole library", async ({
 	page,
 }) => {
 	await page
-		.getByRole("button", { name: "Select all in github/AkaraChen/web-dev" })
-		.click();
+		.getByRole("button", { name: "github/AkaraChen/web-dev", exact: true })
+		.click({ button: "right" });
+	await page.keyboard.press("Escape");
 
 	// Library context header plus the bulk roster
 	await expect(
@@ -238,25 +249,46 @@ test("source group header click selects the whole library", async ({
 	await expect(page.getByText("2 items selected")).toBeVisible();
 });
 
-test("clicking a selected source group header again cancels it", async ({
+test("meta-clicking a cluster row toggles the whole library in and out", async ({
 	page,
 }) => {
-	const header = (pressed: boolean) =>
-		page.getByRole("button", {
-			name: "Select all in github/AkaraChen/web-dev",
-			pressed,
-		});
+	const header = page.getByRole("button", {
+		name: "github/AkaraChen/web-dev",
+		exact: true,
+	});
 
-	await header(false).click();
+	// Meta-click pulls every member into the selection (react-pro was the
+	// seed, css-wizard joins it)
+	await header.click({ modifiers: ["ControlOrMeta"] });
 	await expect(page.getByText("2 items selected")).toBeVisible();
 
-	// Clicking the header again cancels the whole group -> empty placeholder
-	await header(true).click();
+	// Meta-click again removes the whole cluster -> empty placeholder
+	await header.click({ modifiers: ["ControlOrMeta"] });
 	await expect(page.getByText("2 items selected")).toBeHidden();
-	await expect(header(false)).toBeVisible();
 	await expect(
 		page.getByText("Select a skill to view details"),
 	).toBeVisible();
+});
+
+test("a drag dims the source clusters that cannot take the drop", async ({
+	page,
+}) => {
+	const source = page.getByRole("option", { name: "solo-skill" });
+	const s = await source.boundingBox();
+	if (!s) throw new Error("no source");
+	await page.mouse.move(s.x + s.width / 2, s.y + s.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(s.x + 20, s.y + 20, { steps: 3 });
+
+	await expect(
+		page.getByRole("button", {
+			name: "github/AkaraChen/alpha-pack",
+			exact: true,
+		}),
+	).toHaveCSS("opacity", "0.5");
+
+	await page.keyboard.press("Escape");
+	await page.mouse.up();
 });
 
 test("clicking a selected single-member group header again cancels it", async ({

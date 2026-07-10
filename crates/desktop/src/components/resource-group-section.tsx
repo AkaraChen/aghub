@@ -1,5 +1,5 @@
 import { ChevronRightIcon, PlusIcon } from "@heroicons/react/24/solid";
-import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { useDndContext, useDraggable, useDroppable } from "@dnd-kit/core";
 import { Chip } from "@heroui/react";
 import { type ReactNode, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
@@ -72,6 +72,11 @@ export function ResourceGroupSection({
 		disabled: !dragKeys || dragKeys.length === 0,
 	});
 
+	// Subtle clusters cannot accept drops; dim them while a drag is
+	// underway so they read as non-targets.
+	const { active: dndActive } = useDndContext();
+	const isDropInert = subtle && dndActive != null;
+
 	// Spring-loading: hovering a collapsed group mid-drag pops it open so
 	// the drag can continue into its members.
 	const toggleRef = useRef(onToggleExpanded);
@@ -106,15 +111,25 @@ export function ResourceGroupSection({
 					role="button"
 					tabIndex={0}
 					aria-pressed={isSelected}
+					aria-expanded={subtle ? isExpanded : undefined}
 					{...listeners}
-					onClick={onSelectAll}
+					onClick={(event) => {
+						// A subtle cluster is a browsing container: the row
+						// click toggles it (meta/ctrl still selects all).
+						if (subtle && !(event.metaKey || event.ctrlKey)) {
+							onToggleExpanded();
+							return;
+						}
+						onSelectAll();
+					}}
 					onKeyDown={(event) => {
 						// Ignore keys bubbling up from the chevron button so
 						// Enter there only toggles, not select-all too.
 						if (event.target !== event.currentTarget) return;
 						if (event.key === "Enter" || event.key === " ") {
 							event.preventDefault();
-							onSelectAll();
+							if (subtle) onToggleExpanded();
+							else onSelectAll();
 						}
 						if (event.key === "F2" && onRename) {
 							event.preventDefault();
@@ -122,37 +137,50 @@ export function ResourceGroupSection({
 						}
 					}}
 					onContextMenu={onContextMenu}
-					aria-label={t("selectAllInGroup", { name: title })}
+					aria-label={
+						subtle ? title : t("selectAllInGroup", { name: title })
+					}
 					className={cn(
 						LIST_ITEM_CLASS,
-						"transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+						"transition-[color,background-color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)]",
 						isSelected && "bg-surface",
+						isDropInert && "opacity-50",
 					)}
 				>
-					<button
-						type="button"
-						onClick={(event) => {
-							event.stopPropagation();
-							onToggleExpanded();
-						}}
-						// Keep the drag sensor from swallowing the toggle press
-						onPointerDown={(event) => event.stopPropagation()}
-						className={cn(
-							"flex shrink-0 items-center justify-center rounded text-muted transition-colors hover:text-foreground",
-							// Subtle headers sit in the icon slot of a plain
-							// row, so the chevron matches the row icon size
-							subtle ? "size-4" : "-ml-0.5 size-5",
-						)}
-						aria-label={title}
-						aria-expanded={isExpanded}
-					>
-						<ChevronRightIcon
-							className={cn(
-								"size-4 transition-transform duration-[var(--dur-fast)] ease-[var(--ease-out)]",
-								isExpanded && "rotate-90",
-							)}
-						/>
-					</button>
+					{subtle ? (
+						// The whole row toggles, so the chevron is decoration
+						<span
+							aria-hidden
+							className="flex size-4 shrink-0 items-center justify-center text-muted"
+						>
+							<ChevronRightIcon
+								className={cn(
+									"size-4 transition-transform duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+									isExpanded && "rotate-90",
+								)}
+							/>
+						</span>
+					) : (
+						<button
+							type="button"
+							onClick={(event) => {
+								event.stopPropagation();
+								onToggleExpanded();
+							}}
+							// Keep the drag sensor from swallowing the press
+							onPointerDown={(event) => event.stopPropagation()}
+							className="-ml-0.5 flex size-5 shrink-0 items-center justify-center rounded text-muted transition-colors hover:text-foreground"
+							aria-label={title}
+							aria-expanded={isExpanded}
+						>
+							<ChevronRightIcon
+								className={cn(
+									"size-4 transition-transform duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+									isExpanded && "rotate-90",
+								)}
+							/>
+						</button>
+					)}
 					<span
 						className={cn(
 							"min-w-0 flex-1 truncate text-sm",
