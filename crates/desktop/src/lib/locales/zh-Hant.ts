@@ -562,7 +562,6 @@ export default {
 	defaultBranch: "預設",
 	selectAll: "全選",
 	deselectAll: "取消全選",
-	fromSources: "來自 {{count}} 個來源",
 	deleteCount: "刪除 {{count}} 項",
 	agentCoverage: "Agent 覆蓋",
 	matrixHint: "點擊補裝缺失;全裝行點擊可卸載",

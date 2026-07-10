@@ -563,7 +563,6 @@ export default {
 	defaultBranch: "默认",
 	selectAll: "全选",
 	deselectAll: "取消全选",
-	fromSources: "来自 {{count}} 个来源",
 	deleteCount: "删除 {{count}} 项",
 	agentCoverage: "Agent 覆盖",
 	matrixHint: "点击补装缺失;全装行点击可卸载",

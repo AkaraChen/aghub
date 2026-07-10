@@ -63,8 +63,31 @@ export function BulkActionsPanel({
 		intents,
 	});
 
-	const sourceCount = new Set(items.map((item) => item.badge).filter(Boolean))
-		.size;
+	// Roster sections: items grouped by their source badge (sorted by the
+	// repo name, matching the list), badge-less items last as "ungrouped".
+	const rosterSections = (() => {
+		const bySource = new Map<string, BulkPanelItem[]>();
+		const loose: BulkPanelItem[] = [];
+		for (const item of items) {
+			if (!item.badge) {
+				loose.push(item);
+				continue;
+			}
+			const existing = bySource.get(item.badge) ?? [];
+			existing.push(item);
+			bySource.set(item.badge, existing);
+		}
+		const named = Array.from(bySource.entries()).sort(([a], [b]) => {
+			const tail = (s: string) => s.split("/").pop() ?? s;
+			return tail(a).localeCompare(tail(b));
+		});
+		return [
+			...named.map(([title, members]) => ({ title, members })),
+			...(loose.length > 0
+				? [{ title: t("ungrouped"), members: loose }]
+				: []),
+		];
+	})();
 
 	return (
 		<div className="flex h-full flex-col">
@@ -80,16 +103,9 @@ export function BulkActionsPanel({
 							</p>
 						</>
 					) : (
-						<>
-							<h2 className="truncate text-lg font-semibold text-foreground">
-								{t("itemsSelected", { count: items.length })}
-							</h2>
-							{sourceCount > 0 && (
-								<p className="mt-1 text-sm text-muted">
-									{t("fromSources", { count: sourceCount })}
-								</p>
-							)}
-						</>
+						<h2 className="truncate text-lg font-semibold text-foreground">
+							{t("itemsSelected", { count: items.length })}
+						</h2>
 					)}
 				</div>
 				<div className="flex items-center gap-1">
@@ -115,24 +131,43 @@ export function BulkActionsPanel({
 			</header>
 
 			<div className="flex-1 space-y-4 overflow-y-auto p-4">
-				<TagGroup
-					aria-label={t("itemsSelected", { count: items.length })}
-					onRemove={(keys: Set<Key>) => {
-						for (const key of keys) onRemoveItem(String(key));
-					}}
-				>
-					<TagGroup.List className="flex-wrap gap-1.5">
-						{items.map((item) => (
-							<Tag
-								key={item.key}
-								id={item.key}
-								textValue={item.label}
+				<div className="space-y-3">
+					{rosterSections.map((section) => (
+						<div key={section.title} className="space-y-1.5">
+							{/* Only label the sections when there is more than
+							 * one — a single flat selection needs no header */}
+							{rosterSections.length > 1 && (
+								<div className="flex items-baseline gap-1.5 px-1">
+									<p className="min-w-0 truncate text-xs font-medium text-muted">
+										{section.title}
+									</p>
+									<span className="text-[10px] tabular-nums text-muted/70">
+										{section.members.length}
+									</span>
+								</div>
+							)}
+							<TagGroup
+								aria-label={section.title}
+								onRemove={(keys: Set<Key>) => {
+									for (const key of keys)
+										onRemoveItem(String(key));
+								}}
 							>
-								{item.label}
-							</Tag>
-						))}
-					</TagGroup.List>
-				</TagGroup>
+								<TagGroup.List className="flex-wrap gap-1.5">
+									{section.members.map((item) => (
+										<Tag
+											key={item.key}
+											id={item.key}
+											textValue={item.label}
+										>
+											{item.label}
+										</Tag>
+									))}
+								</TagGroup.List>
+							</TagGroup>
+						</div>
+					))}
+				</div>
 
 				<AgentCoverageMatrix
 					kind={kind}
@@ -142,9 +177,11 @@ export function BulkActionsPanel({
 			</div>
 
 			<footer className="shrink-0 space-y-2 border-t border-separator p-4">
-				<div className="flex flex-wrap gap-2">
+				{/* Two-up grid: fixed footer height, echoes the matrix cells */}
+				<div className="grid grid-cols-2 gap-2">
 					<Button
 						variant="secondary"
+						className="w-full"
 						onPress={actions.requestTransfer}
 					>
 						<ACTION_ICONS.transfer className="size-4" />
@@ -152,6 +189,7 @@ export function BulkActionsPanel({
 					</Button>
 					<Button
 						variant="secondary"
+						className="w-full"
 						onPress={() => void actions.toggleFavorite()}
 					>
 						{actions.allStarred ? (
@@ -163,7 +201,7 @@ export function BulkActionsPanel({
 					</Button>
 					{actions.groups.length > 0 ? (
 						<Dropdown>
-							<Button variant="secondary">
+							<Button variant="secondary" className="w-full">
 								<ACTION_ICONS.moveToGroup className="size-4" />
 								{t("moveToGroup")}
 							</Button>
@@ -208,6 +246,7 @@ export function BulkActionsPanel({
 					) : (
 						<Button
 							variant="secondary"
+							className="w-full"
 							onPress={actions.requestCreateGroup}
 						>
 							<ACTION_ICONS.createGroup className="size-4" />
@@ -217,6 +256,7 @@ export function BulkActionsPanel({
 					{actions.canRemoveFromGroup && (
 						<Button
 							variant="secondary"
+							className="w-full"
 							onPress={() => void actions.removeFromGroup()}
 						>
 							<ACTION_ICONS.removeFromGroup className="size-4" />

@@ -583,7 +583,6 @@ export default {
 	defaultBranch: "Default",
 	selectAll: "Select All",
 	deselectAll: "Deselect All",
-	fromSources: "From {{count}} sources",
 	deleteCount: "Delete {{count}}",
 	agentCoverage: "Agent coverage",
 	matrixHint: "Click to install where missing; a full row uninstalls",
