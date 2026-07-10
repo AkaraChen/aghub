@@ -922,7 +922,7 @@ test("the library page jumps to a member's detail", async ({ page }) => {
 
 	// Clicking a member on the library page selects it — its skill detail
 	// replaces the library page
-	await page.getByRole("button", { name: "api-forge" }).click();
+	await page.getByRole("button", { name: "api-forge", exact: true }).click();
 	await expect(
 		page.getByRole("heading", { name: "api-forge" }),
 	).toBeVisible();
@@ -948,4 +948,23 @@ test("escape clears the selection from the detail panel too", async ({
 	await expect(
 		page.getByText("Select a skill to view details"),
 	).toBeVisible();
+});
+
+test("the library page reveals a member's file structure", async ({ page }) => {
+	await page
+		.getByRole("button", {
+			name: "github/AkaraChen/alpha-pack",
+			exact: true,
+		})
+		.click();
+	await expect(
+		page.getByRole("heading", { name: "github/AkaraChen/alpha-pack" }),
+	).toBeVisible();
+
+	// Expanding a member shows its on-disk layout
+	await page
+		.getByRole("button", { name: "View structure of api-forge" })
+		.click();
+	await expect(page.getByText("SKILL.md")).toBeVisible();
+	await expect(page.getByText("run.sh")).toBeVisible();
 });

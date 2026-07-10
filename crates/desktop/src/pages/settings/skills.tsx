@@ -208,25 +208,31 @@ export default function SkillsPage() {
 
 	const focusedSourceInfo = useMemo(() => {
 		if (!focusedSource) return null;
-		const visibleNames = new Set(groupedSkills.map((g) => g.name));
+		const byName = new Map(groupedSkills.map((g) => [g.name, g]));
 		const members = (globalLock?.skills ?? [])
 			.filter(
 				(entry) =>
-					entry.source === focusedSource &&
-					visibleNames.has(entry.name),
+					entry.source === focusedSource && byName.has(entry.name),
 			)
-			.map((entry) => entry.name)
-			.sort((a, b) => a.localeCompare(b));
+			.map((entry) => {
+				const item = byName.get(entry.name)?.items[0];
+				return {
+					name: entry.name,
+					path: item?.source_path ?? item?.canonical_path ?? null,
+				};
+			})
+			.sort((a, b) => a.name.localeCompare(b.name));
 		if (members.length === 0) return null;
 		const entry = globalLock?.skills.find(
 			(item) => item.source === focusedSource,
 		);
+		const sourceType = entry?.sourceType ?? null;
 		const url =
 			entry?.sourceUrl ??
-			(entry?.sourceType === "github"
+			(sourceType === "github"
 				? `https://github.com/${focusedSource.replace(GITHUB_PREFIX_REGEX, "")}`
 				: null);
-		return { title: focusedSource, url, members };
+		return { title: focusedSource, url, sourceType, members };
 	}, [focusedSource, globalLock, groupedSkills]);
 
 	const { dndProps, draggedKeys, boardGroups, showBoardUngrouped } =
@@ -467,10 +473,15 @@ export default function SkillsPage() {
 								<SourceDetailPanel
 									title={focusedSourceInfo.title}
 									url={focusedSourceInfo.url}
+									sourceType={focusedSourceInfo.sourceType}
 									members={focusedSourceInfo.members}
 									onSelectAll={() =>
 										handleSelectionChange(
-											new Set(focusedSourceInfo.members),
+											new Set(
+												focusedSourceInfo.members.map(
+													(m) => m.name,
+												),
+											),
 										)
 									}
 									onSelectMember={(name) =>

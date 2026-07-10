@@ -177,6 +177,37 @@ export async function installMocks(page: Page) {
 		if (p === "/plugins") return json(PLUGINS);
 		if (p === "/skills/lock/global") return json(GLOBAL_LOCK);
 
+		if (p === "/skills/tree") {
+			const treePath = url.searchParams.get("path") ?? "";
+			const base = treePath.split("/").filter(Boolean).pop() ?? "skill";
+			return json({
+				name: base,
+				path: treePath,
+				kind: "directory",
+				children: [
+					{
+						name: "SKILL.md",
+						path: `${treePath}/SKILL.md`,
+						kind: "file",
+						children: [],
+					},
+					{
+						name: "scripts",
+						path: `${treePath}/scripts`,
+						kind: "directory",
+						children: [
+							{
+								name: "run.sh",
+								path: `${treePath}/scripts/run.sh`,
+								kind: "file",
+								children: [],
+							},
+						],
+					},
+				],
+			});
+		}
+
 		if (p === "/skills/reconcile" && method === "POST") {
 			const body = JSON.parse(route.request().postData() ?? "{}");
 			const name: string = body.source?.name ?? "";

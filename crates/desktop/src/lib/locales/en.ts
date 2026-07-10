@@ -591,6 +591,7 @@ export default {
 		'Remove {{count}} selected items from "{{agent}}"? This deletes them from that agent.',
 	agentBatchResult: "{{success}} succeeded · {{failed}} failed",
 	favoriteAll: "Favorite all",
+	viewStructure: "View structure of {{name}}",
 	selectWholeLibrary: "Select whole library",
 	emptyShortcutHint: "⌘A select all · Right-click blank space for actions",
 	skillsSelected: "skills selected",
