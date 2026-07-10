@@ -384,10 +384,9 @@ export function McpList({
 					textValue={t("delete")}
 					onAction={actions.requestDelete}
 				>
-					<div className="flex w-full items-center gap-2 text-danger">
+					<div className="flex items-center gap-2 text-danger">
 						<ACTION_ICONS.delete className="size-4" />
-						<span className="flex-1">{t("delete")}</span>
-						<Kbd>⌫</Kbd>
+						<span>{t("delete")}</span>
 					</div>
 				</Menu.Item>
 			</Menu.Section>
