@@ -1,20 +1,14 @@
 import {
 	BookOpenIcon,
-	CheckCircleIcon,
-	LinkIcon,
-	PencilIcon,
 	StarIcon as StarIconSolid,
-	TrashIcon,
 } from "@heroicons/react/24/solid";
 import { useDndContext } from "@dnd-kit/core";
-import { Header, Kbd, Label, ListBox, Menu, Spinner } from "@heroui/react";
-import { openUrl } from "@tauri-apps/plugin-opener";
+import { Label, ListBox, Spinner } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import Fuse from "fuse.js";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { SkillResponse } from "../generated/dto";
-import { ACTION_ICONS } from "./action-icons";
 import { AgentIcons } from "./agent-icons";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
@@ -33,6 +27,7 @@ import {
 	projectSkillLockQueryOptions,
 } from "../requests/skills";
 import { ContextMenu, useContextMenu } from "./context-menu";
+import { customGroupMenu, resourceItemsMenu } from "./resource-menu-items";
 import { DraggableItemBody } from "./draggable-item-body";
 import { groupDropId, UNGROUPED_DROP_ID } from "./list-dnd";
 import { DeleteGroupDialog, GroupNameDialog } from "./resource-group-dialogs";
@@ -536,194 +531,6 @@ export function SkillList({
 		</ListBox>
 	);
 
-	const itemsMenuNode = (sourceUrl?: string | null) => (
-		<>
-			{sourceUrl && (
-				<Menu.Item
-					id="open-in-browser"
-					textValue={t("openInBrowser")}
-					onAction={() => void openUrl(sourceUrl)}
-				>
-					<div className="flex items-center gap-2">
-						<LinkIcon className="size-4" />
-						<span>{t("openInBrowser")}</span>
-					</div>
-				</Menu.Item>
-			)}
-			<Menu.Item
-				id="toggle-favorite"
-				textValue={actions.allStarred ? t("unfavorite") : t("favorite")}
-				onAction={() => void actions.toggleFavorite()}
-			>
-				<div className="flex items-center gap-2">
-					{actions.allStarred ? (
-						<ACTION_ICONS.unfavorite className="size-4" />
-					) : (
-						<ACTION_ICONS.favorite className="size-4 text-warning" />
-					)}
-					<span>
-						{actions.allStarred ? t("unfavorite") : t("favorite")}
-					</span>
-				</div>
-			</Menu.Item>
-			<Menu.Item
-				id="add-to-agent"
-				textValue={t("addToAgent")}
-				onAction={actions.requestAddToAgent}
-			>
-				<div className="flex items-center gap-2">
-					<ACTION_ICONS.addToAgent className="size-4" />
-					<span>{t("addToAgent")}</span>
-				</div>
-			</Menu.Item>
-			<Menu.Item
-				id="transfer"
-				textValue={t("transfer")}
-				onAction={actions.requestTransfer}
-			>
-				<div className="flex items-center gap-2">
-					<ACTION_ICONS.transfer className="size-4" />
-					<span>{t("transfer")}</span>
-				</div>
-			</Menu.Item>
-			{actions.groups.length > 0 ? (
-				<Menu.Section>
-					<Header className="px-2 py-1 text-xs font-medium text-muted">
-						{t("moveToGroup")}
-					</Header>
-					{actions.groups.map((group) => (
-						<Menu.Item
-							key={group.id}
-							id={`group:${group.id}`}
-							textValue={group.name}
-							onAction={() => void actions.moveToGroup(group.id)}
-						>
-							<div className="flex items-center gap-2">
-								<ACTION_ICONS.moveToGroup
-									className={cn(
-										"size-4",
-										actions.commonGroupId === group.id
-											? "text-accent"
-											: "text-muted",
-									)}
-								/>
-								<span className="truncate">{group.name}</span>
-							</div>
-						</Menu.Item>
-					))}
-					<Menu.Item
-						id="create-group"
-						textValue={t("createGroup")}
-						onAction={actions.requestCreateGroup}
-					>
-						<div className="flex items-center gap-2">
-							<ACTION_ICONS.createGroup className="size-4" />
-							<span>{t("createGroup")}</span>
-						</div>
-					</Menu.Item>
-					<Menu.Item
-						id="remove-from-group"
-						textValue={t("removeFromGroup")}
-						isDisabled={!actions.canRemoveFromGroup}
-						onAction={() => void actions.removeFromGroup()}
-					>
-						<div className="flex items-center gap-2">
-							<ACTION_ICONS.removeFromGroup className="size-4" />
-							<span>{t("removeFromGroup")}</span>
-						</div>
-					</Menu.Item>
-				</Menu.Section>
-			) : (
-				<Menu.Item
-					id="create-group"
-					textValue={t("createGroup")}
-					onAction={actions.requestCreateGroup}
-				>
-					<div className="flex items-center gap-2">
-						<ACTION_ICONS.createGroup className="size-4" />
-						<span>{t("createGroup")}</span>
-					</div>
-				</Menu.Item>
-			)}
-			<Menu.Section>
-				<Menu.Item
-					id="delete"
-					textValue={t("delete")}
-					onAction={actions.requestDelete}
-				>
-					<div className="flex items-center gap-2 text-danger">
-						<ACTION_ICONS.delete className="size-4" />
-						<span>{t("delete")}</span>
-					</div>
-				</Menu.Item>
-			</Menu.Section>
-		</>
-	);
-
-	const customGroupMenuNode = (
-		group: ResourceGroup,
-		memberKeys: string[],
-	) => (
-		<>
-			<Menu.Item
-				id="select-members"
-				textValue={t("selectAllInGroup", { name: group.name })}
-				onAction={() => onSelectionChange(new Set(memberKeys))}
-			>
-				<div className="flex items-center gap-2">
-					<CheckCircleIcon className="size-4" />
-					<span>{t("selectAllInGroup", { name: group.name })}</span>
-				</div>
-			</Menu.Item>
-			<Menu.Item
-				id="group-add-to-agent"
-				textValue={t("addToAgent")}
-				onAction={() => {
-					onSelectionChange(new Set(memberKeys));
-					intents.onRequestAddToAgent();
-				}}
-			>
-				<div className="flex items-center gap-2">
-					<ACTION_ICONS.addToAgent className="size-4" />
-					<span>{t("addToAgent")}</span>
-				</div>
-			</Menu.Item>
-			<Menu.Item
-				id="group-favorite-all"
-				textValue={t("favoriteAll")}
-				onAction={() => void setSkillsStarred(memberKeys, true)}
-			>
-				<div className="flex items-center gap-2">
-					<ACTION_ICONS.favorite className="size-4 text-warning" />
-					<span>{t("favoriteAll")}</span>
-				</div>
-			</Menu.Item>
-			<Menu.Section>
-				<Menu.Item
-					id="rename-group"
-					textValue={t("renameGroup")}
-					onAction={() => setRenameTarget(group)}
-				>
-					<div className="flex w-full items-center gap-2">
-						<PencilIcon className="size-4" />
-						<span className="flex-1">{t("renameGroup")}</span>
-						<Kbd>F2</Kbd>
-					</div>
-				</Menu.Item>
-				<Menu.Item
-					id="delete-group"
-					textValue={t("deleteGroup")}
-					onAction={() => setDeleteTarget(group)}
-				>
-					<div className="flex items-center gap-2 text-danger">
-						<TrashIcon className="size-4" />
-						<span>{t("deleteGroup")}</span>
-					</div>
-				</Menu.Item>
-			</Menu.Section>
-		</>
-	);
-
 	const overlaysNode = (
 		<>
 			<ContextMenu
@@ -732,11 +539,23 @@ export function SkillList({
 				aria-label={t("resourceActions")}
 			>
 				{contextMenu.state?.context.type === "custom-group"
-					? customGroupMenuNode(
-							contextMenu.state.context.group,
-							contextMenu.state.context.memberKeys,
-						)
-					: itemsMenuNode(contextMenu.state?.context.sourceUrl)}
+					? customGroupMenu({
+							t,
+							group: contextMenu.state.context.group,
+							memberKeys: contextMenu.state.context.memberKeys,
+							onSelectMembers: (keys) =>
+								onSelectionChange(new Set(keys)),
+							onAddToAgent: intents.onRequestAddToAgent,
+							onFavoriteAll: (keys) =>
+								void setSkillsStarred(keys, true),
+							onRename: setRenameTarget,
+							onDelete: setDeleteTarget,
+						})
+					: resourceItemsMenu({
+							t,
+							actions,
+							sourceUrl: contextMenu.state?.context.sourceUrl,
+						})}
 			</ContextMenu>
 			<GroupNameDialog
 				isOpen={renameTarget !== null}

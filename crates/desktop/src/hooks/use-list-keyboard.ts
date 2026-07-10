@@ -37,9 +37,16 @@ export function useListKeyboard(options: UseListKeyboardOptions) {
 
 			const target = event.target as HTMLElement | null;
 			if (target?.closest("input, textarea, [contenteditable]")) return;
-			// A dialog or menu owns the keyboard while it is open.
-			if (document.querySelector('[role="dialog"], [role="menu"]'))
-				return;
+			// A dialog or menu owns the keyboard while it is open. Context
+			// menus stay mounted (hidden) for latency — and there can be
+			// several — so ANY visible overlay counts.
+			const overlays = document.querySelectorAll(
+				'[role="dialog"], [role="menu"]',
+			);
+			for (const overlay of overlays) {
+				if ((overlay as HTMLElement).getClientRects().length > 0)
+					return;
+			}
 
 			const el = containerRef.current;
 			if (!el) return;

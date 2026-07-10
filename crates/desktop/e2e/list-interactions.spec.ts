@@ -743,6 +743,11 @@ test("the custom group header menu operates on its members", async ({
 		menu.getByRole("menuitem", { name: "Select all in Ops" }),
 	).toBeVisible();
 	await menu.getByRole("menuitem", { name: "Favorite all" }).click();
+	// Starring re-sorts the list (starred float up); wait for the star to
+	// land so the follow-up right-click resolves the row's NEW position
+	await expect(
+		page.locator('[data-key="solo-skill"] .text-warning'),
+	).toBeVisible();
 
 	// The member is now starred: its item menu offers Unfavorite
 	await page
