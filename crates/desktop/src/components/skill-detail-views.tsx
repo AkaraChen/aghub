@@ -183,7 +183,6 @@ export function TreeIndent({ depth }: { depth: number }) {
 		<>
 			{Array.from({ length: depth }, (_, level) => (
 				<span
-					 
 					key={level}
 					className="ml-[7px] mr-2 w-px shrink-0 self-stretch bg-separator"
 				/>
