@@ -46,12 +46,6 @@ export interface UseListSelectionReturn {
 	 * semantics). Returns the selection the menu should act on.
 	 */
 	ensureSelected: (key: string) => Set<string>;
-	/**
-	 * Marks a cluster as the shift-range anchor WITHOUT changing the
-	 * selection — a cluster row's expand/collapse click still says
-	 * "start here", so the next shift-click ranges from this cluster.
-	 */
-	anchorCluster: (id: string, memberKeys: string[]) => void;
 }
 
 /**
@@ -242,14 +236,5 @@ export function useListSelection(
 		[selectedKeys, onSelectionChange],
 	);
 
-	const anchorCluster = useCallback((id: string, memberKeys: string[]) => {
-		anchorRef.current = { kind: "cluster", id, memberKeys };
-	}, []);
-
-	return {
-		createSelectionHandler,
-		selectGroup,
-		ensureSelected,
-		anchorCluster,
-	};
+	return { createSelectionHandler, selectGroup, ensureSelected };
 }

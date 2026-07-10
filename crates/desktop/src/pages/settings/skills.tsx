@@ -26,6 +26,7 @@ import { PanelTransition } from "../../components/panel-transition";
 import { useListDnd } from "../../hooks/use-list-dnd";
 import { useListKeyboard } from "../../hooks/use-list-keyboard";
 import { SkillDetail } from "../../components/skill-detail";
+import { SourceDetailPanel } from "../../components/source-detail-panel";
 import { SkillList } from "../../components/skill-list";
 import type { SkillResponse } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
@@ -65,6 +66,10 @@ export default function SkillsPage() {
 	const [panelMode, setPanelMode] = useState<"create" | "import" | null>(
 		null,
 	);
+
+	// The library page: set when a source cluster row is clicked; any
+	// selection change or blank-area escape drops back out of it.
+	const [focusedSource, setFocusedSource] = useState<string | null>(null);
 
 	const {
 		agentId: agentFilter,
@@ -109,6 +114,7 @@ export default function SkillsPage() {
 
 	const handleSelectionChange = (keys: Set<string>) => {
 		setSelectedKeys(keys);
+		setFocusedSource(null);
 		// Mirror a single selection to the URL for deep-linking.
 		setSelectedName(keys.size === 1 ? [...keys][0] : null);
 
@@ -200,6 +206,29 @@ export default function SkillsPage() {
 		return map;
 	}, [globalLock]);
 
+	const focusedSourceInfo = useMemo(() => {
+		if (!focusedSource) return null;
+		const visibleNames = new Set(groupedSkills.map((g) => g.name));
+		const members = (globalLock?.skills ?? [])
+			.filter(
+				(entry) =>
+					entry.source === focusedSource &&
+					visibleNames.has(entry.name),
+			)
+			.map((entry) => entry.name)
+			.sort((a, b) => a.localeCompare(b));
+		if (members.length === 0) return null;
+		const entry = globalLock?.skills.find(
+			(item) => item.source === focusedSource,
+		);
+		const url =
+			entry?.sourceUrl ??
+			(entry?.sourceType === "github"
+				? `https://github.com/${focusedSource.replace(GITHUB_PREFIX_REGEX, "")}`
+				: null);
+		return { title: focusedSource, url, members };
+	}, [focusedSource, globalLock, groupedSkills]);
+
 	const { dndProps, draggedKeys, boardGroups, showBoardUngrouped } =
 		useListDnd("skill", (keys) => setCreateGroupKeys(keys));
 
@@ -229,7 +258,13 @@ export default function SkillsPage() {
 	const panelStateKey = draggedKeys
 		? "board"
 		: (panelMode ??
-			(isBulkSelection ? "bulk" : activeGroup ? "detail" : "empty"));
+			(isBulkSelection
+				? "bulk"
+				: focusedSourceInfo
+					? `source:${focusedSourceInfo.title}`
+					: activeGroup
+						? "detail"
+						: "empty"));
 
 	return (
 		<DndContext {...dndProps}>
@@ -369,6 +404,7 @@ export default function SkillsPage() {
 							isMultiSelectMode={isMultiSelectMode}
 							groupBySource={true}
 							intents={actionIntents}
+							onSourceFocus={setFocusedSource}
 						/>
 					</div>
 
@@ -425,6 +461,20 @@ export default function SkillsPage() {
 												),
 											),
 										)
+									}
+								/>
+							) : focusedSourceInfo ? (
+								<SourceDetailPanel
+									title={focusedSourceInfo.title}
+									url={focusedSourceInfo.url}
+									members={focusedSourceInfo.members}
+									onSelectAll={() =>
+										handleSelectionChange(
+											new Set(focusedSourceInfo.members),
+										)
+									}
+									onSelectMember={(name) =>
+										handleSelectionChange(new Set([name]))
 									}
 								/>
 							) : activeGroup ? (

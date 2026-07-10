@@ -72,6 +72,8 @@ interface SkillListProps {
 	isMultiSelectMode?: boolean;
 	/** Dialog intents owned by the page (delete/transfer/agents/new group) */
 	intents: ResourceActionIntents;
+	/** A source cluster row was clicked — the page shows its library page */
+	onSourceFocus?: (source: string) => void;
 }
 
 export function SkillList({
@@ -85,6 +87,7 @@ export function SkillList({
 	selectionMode = "single",
 	isMultiSelectMode = false,
 	intents,
+	onSourceFocus,
 }: SkillListProps) {
 	const { t } = useTranslation();
 	const api = useApi();
@@ -407,17 +410,13 @@ export function SkillList({
 		searchQuery,
 	]);
 
-	const {
-		createSelectionHandler,
-		selectGroup,
-		ensureSelected,
-		anchorCluster,
-	} = useListSelection({
-		orderedEntries,
-		selectedKeys,
-		onSelectionChange,
-		isMultiSelectMode,
-	});
+	const { createSelectionHandler, selectGroup, ensureSelected } =
+		useListSelection({
+			orderedEntries,
+			selectedKeys,
+			onSelectionChange,
+			isMultiSelectMode,
+		});
 
 	const contextMenu = useContextMenu<MenuTarget>();
 	const actions = useResourceActions({
@@ -636,9 +635,9 @@ export function SkillList({
 				isExpanded={isExpanded(`s:${sg.source}`)}
 				isSelected={isGroupSelected(memberKeys)}
 				onToggleExpanded={() => {
-					// The toggle click also plants the shift-range anchor:
-					// "start the next range at this cluster"
-					anchorCluster(`s:${sg.source}`, memberKeys);
+					// Browsing, not selecting: the click focuses the library
+					// (its detail shows on the right) and toggles the rows.
+					onSourceFocus?.(sg.source);
 					toggleCollapsed(`s:${sg.source}`);
 				}}
 				onSelectAll={() => selectGroup(memberKeys, `s:${sg.source}`)}

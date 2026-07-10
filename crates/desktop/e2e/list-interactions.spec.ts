@@ -888,10 +888,9 @@ test("shift range sweeps a collapsed section it crosses", async ({ page }) => {
 	).toBeVisible();
 });
 
-test("clicking a collapsed cluster anchors the next shift range", async ({
-	page,
-}) => {
-	// Clicking the collapsed alpha-pack row toggles it (no selection)…
+test("clicking a cluster row opens its library page", async ({ page }) => {
+	// Clicking the collapsed alpha-pack row expands it and shows the
+	// library page on the right — no selection is made
 	await page
 		.getByRole("button", {
 			name: "github/AkaraChen/alpha-pack",
@@ -900,18 +899,35 @@ test("clicking a collapsed cluster anchors the next shift range", async ({
 		.click();
 	await expect(page.getByRole("option", { name: "api-forge" })).toBeVisible();
 	await expect(page.getByText("items selected")).toBeHidden();
-
-	// …but it plants the range anchor: shift-clicking solo-skill selects
-	// the whole cluster plus everything down to the target
-	await page
-		.getByRole("option", { name: "solo-skill" })
-		.click({ modifiers: ["Shift"] });
-	await expect(page.getByText("3 items selected")).toBeVisible();
 	await expect(
-		page.getByRole("gridcell", { name: "api-forge" }),
+		page.getByRole("heading", { name: "github/AkaraChen/alpha-pack" }),
+	).toBeVisible();
+	await expect(page.getByText("2 members")).toBeVisible();
+
+	// Selecting the whole library from its page opens the batch inspector
+	await page.getByRole("button", { name: "Select whole library" }).click();
+	await expect(page.getByText("2 items selected")).toBeVisible();
+});
+
+test("the library page jumps to a member's detail", async ({ page }) => {
+	await page
+		.getByRole("button", {
+			name: "github/AkaraChen/alpha-pack",
+			exact: true,
+		})
+		.click();
+	await expect(
+		page.getByRole("heading", { name: "github/AkaraChen/alpha-pack" }),
+	).toBeVisible();
+
+	// Clicking a member on the library page selects it — its skill detail
+	// replaces the library page
+	await page.getByRole("button", { name: "api-forge" }).click();
+	await expect(
+		page.getByRole("heading", { name: "api-forge" }),
 	).toBeVisible();
 	await expect(
-		page.getByRole("gridcell", { name: "arch-lint" }),
+		page.getByRole("option", { name: "api-forge", selected: true }),
 	).toBeVisible();
 });
 
