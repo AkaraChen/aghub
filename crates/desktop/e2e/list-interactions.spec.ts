@@ -78,9 +78,7 @@ test("multi-select via modifier click opens the bulk actions panel", async ({
 	// No groups yet, so the panel offers "New group" instead of the
 	// "Move to group" picker
 	await expect(page.getByRole("button", { name: "New group" })).toBeVisible();
-	await expect(
-		page.getByRole("button", { name: "Delete 2" }),
-	).toBeVisible();
+	await expect(page.getByRole("button", { name: "Delete 2" })).toBeVisible();
 });
 
 test("the bulk roster removes one item from the selection", async ({

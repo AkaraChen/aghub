@@ -64,10 +64,10 @@ export function ContextMenu({
 			"(prefers-reduced-motion: reduce)",
 		).matches;
 		if (el && !reduce) {
-			el.animate(
-				[{ opacity: 1 }, { opacity: 0.35 }, { opacity: 1 }],
-				{ duration: 120, easing: "linear" },
-			);
+			el.animate([{ opacity: 1 }, { opacity: 0.35 }, { opacity: 1 }], {
+				duration: 120,
+				easing: "linear",
+			});
 			window.setTimeout(onClose, 130);
 		} else {
 			onClose();

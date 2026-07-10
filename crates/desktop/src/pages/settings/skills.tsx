@@ -370,72 +370,73 @@ export default function SkillsPage() {
 
 					<div className="flex-1 overflow-hidden relative">
 						<PanelTransition stateKey={panelStateKey}>
-						{draggedKeys ? (
-							<DropBoard
-								count={draggedKeys.length}
-								groups={boardGroups}
-								showUngrouped={showBoardUngrouped}
-							/>
-						) : panelMode === "create" ? (
-							<CreateSkillPanel
-								onDone={() => setPanelMode(null)}
-							/>
-						) : panelMode === "import" ? (
-							<ImportSkillPanel
-								onDone={() => setPanelMode(null)}
-							/>
-						) : isBulkSelection ? (
-							<BulkActionsPanel
-								kind="skill"
-								items={selectedGroups.map((g) => ({
-									key: g.name,
-									label: g.name,
-									badge: sourceByName.get(g.name),
-								}))}
-								intents={actionIntents}
-								sourceContext={sourceContext}
-								matrixGroups={selectedGroups.map((g) => ({
-									key: g.name,
-									name: g.name,
-									sourceAgent: g.items[0].agent ?? "claude",
-									sourceScope:
-										g.items[0].source === "project"
-											? ("project" as const)
-											: ("global" as const),
-									installedAgents: g.items
-										.map((item) => item.agent)
-										.filter(
-											(agent): agent is string =>
-												agent != null,
-										),
-								}))}
-								onDeselectAll={() =>
-									handleSelectionChange(new Set())
-								}
-								onRemoveItem={(key) =>
-									handleSelectionChange(
-										new Set(
-											[...selectedKeys].filter(
-												(k) => k !== key,
+							{draggedKeys ? (
+								<DropBoard
+									count={draggedKeys.length}
+									groups={boardGroups}
+									showUngrouped={showBoardUngrouped}
+								/>
+							) : panelMode === "create" ? (
+								<CreateSkillPanel
+									onDone={() => setPanelMode(null)}
+								/>
+							) : panelMode === "import" ? (
+								<ImportSkillPanel
+									onDone={() => setPanelMode(null)}
+								/>
+							) : isBulkSelection ? (
+								<BulkActionsPanel
+									kind="skill"
+									items={selectedGroups.map((g) => ({
+										key: g.name,
+										label: g.name,
+										badge: sourceByName.get(g.name),
+									}))}
+									intents={actionIntents}
+									sourceContext={sourceContext}
+									matrixGroups={selectedGroups.map((g) => ({
+										key: g.name,
+										name: g.name,
+										sourceAgent:
+											g.items[0].agent ?? "claude",
+										sourceScope:
+											g.items[0].source === "project"
+												? ("project" as const)
+												: ("global" as const),
+										installedAgents: g.items
+											.map((item) => item.agent)
+											.filter(
+												(agent): agent is string =>
+													agent != null,
 											),
-										),
-									)
-								}
-							/>
-						) : activeGroup ? (
-							<SkillDetail group={activeGroup} />
-						) : (
-							<div className="flex h-full flex-col items-center justify-center gap-4">
-								<div className="text-center">
-									<p className="mb-2 text-sm text-muted">
-										{t("selectSkill")}
-									</p>
-									<p className="text-xs text-muted">
-										{t("emptyShortcutHint")}
-									</p>
+									}))}
+									onDeselectAll={() =>
+										handleSelectionChange(new Set())
+									}
+									onRemoveItem={(key) =>
+										handleSelectionChange(
+											new Set(
+												[...selectedKeys].filter(
+													(k) => k !== key,
+												),
+											),
+										)
+									}
+								/>
+							) : activeGroup ? (
+								<SkillDetail group={activeGroup} />
+							) : (
+								<div className="flex h-full flex-col items-center justify-center gap-4">
+									<div className="text-center">
+										<p className="mb-2 text-sm text-muted">
+											{t("selectSkill")}
+										</p>
+										<p className="text-xs text-muted">
+											{t("emptyShortcutHint")}
+										</p>
+									</div>
 								</div>
-							</div>
-						)}
+							)}
 						</PanelTransition>
 
 						<ContextMenu

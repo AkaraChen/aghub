@@ -38,7 +38,8 @@ export function useListKeyboard(options: UseListKeyboardOptions) {
 			const target = event.target as HTMLElement | null;
 			if (target?.closest("input, textarea, [contenteditable]")) return;
 			// A dialog or menu owns the keyboard while it is open.
-			if (document.querySelector('[role="dialog"], [role="menu"]')) return;
+			if (document.querySelector('[role="dialog"], [role="menu"]'))
+				return;
 
 			const el = containerRef.current;
 			if (!el) return;

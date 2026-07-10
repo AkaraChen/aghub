@@ -388,7 +388,10 @@ export function McpList({
 		</>
 	);
 
-	const customGroupMenuNode = (group: ResourceGroup, memberKeys: string[]) => (
+	const customGroupMenuNode = (
+		group: ResourceGroup,
+		memberKeys: string[],
+	) => (
 		<>
 			<Menu.Item
 				id="select-members"

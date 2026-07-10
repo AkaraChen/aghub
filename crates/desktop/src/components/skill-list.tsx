@@ -421,10 +421,7 @@ export function SkillList({
 			textValue={skillGroup.name}
 			className="data-selected:bg-surface transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]"
 			style={{
-				viewTransitionName: viewTransitionName(
-					"vts",
-					skillGroup.name,
-				),
+				viewTransitionName: viewTransitionName("vts", skillGroup.name),
 			}}
 		>
 			<DraggableItemBody
@@ -587,7 +584,10 @@ export function SkillList({
 		</>
 	);
 
-	const customGroupMenuNode = (group: ResourceGroup, memberKeys: string[]) => (
+	const customGroupMenuNode = (
+		group: ResourceGroup,
+		memberKeys: string[],
+	) => (
 		<>
 			<Menu.Item
 				id="select-members"

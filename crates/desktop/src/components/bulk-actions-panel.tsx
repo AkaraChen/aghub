@@ -63,9 +63,8 @@ export function BulkActionsPanel({
 		intents,
 	});
 
-	const sourceCount = new Set(
-		items.map((item) => item.badge).filter(Boolean),
-	).size;
+	const sourceCount = new Set(items.map((item) => item.badge).filter(Boolean))
+		.size;
 
 	return (
 		<div className="flex h-full flex-col">
@@ -106,7 +105,10 @@ export function BulkActionsPanel({
 							<LinkIcon className="size-5" />
 						</IconButton>
 					)}
-					<IconButton label={t("deselectAll")} onPress={onDeselectAll}>
+					<IconButton
+						label={t("deselectAll")}
+						onPress={onDeselectAll}
+					>
 						<XMarkIcon className="size-5" />
 					</IconButton>
 				</div>
