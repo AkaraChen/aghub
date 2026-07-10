@@ -1,7 +1,6 @@
 import { LinkIcon, XMarkIcon } from "@heroicons/react/24/solid";
-import { Button, Dropdown, Tag, TagGroup, Tooltip } from "@heroui/react";
+import { Button, Dropdown, Tooltip } from "@heroui/react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { Key } from "react";
 import { useTranslation } from "react-i18next";
 import type {
 	ResourceActionIntents,
@@ -131,41 +130,41 @@ export function BulkActionsPanel({
 			</header>
 
 			<div className="flex-1 space-y-4 overflow-y-auto p-4">
-				<div className="space-y-3">
+				{/* Roster: one outlined wrap per source — the group name and
+				 * its members read as a single unit; members are plain text
+				 * (no pills), the × only drops the item from the selection */}
+				<div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
 					{rosterSections.map((section) => (
-						<div key={section.title} className="space-y-1.5">
-							{/* Only label the sections when there is more than
-							 * one; the label shares the matrix title's indent
-							 * so the body reads as one aligned column */}
-							{rosterSections.length > 1 && (
-								<div className="flex items-baseline gap-1.5 px-1">
-									<p className="min-w-0 truncate text-[10px] font-medium tracking-wider text-muted uppercase">
-										{section.title}
-									</p>
-									<span className="text-[10px] tabular-nums text-muted/70">
-										{section.members.length}
+						<div
+							key={section.title}
+							className="flex max-w-full flex-wrap items-center gap-x-0.5 gap-y-0.5 rounded-lg border border-border py-1 pr-1.5 pl-2.5"
+						>
+							<span className="mr-1 text-[10px] font-medium tracking-wider text-muted uppercase">
+								{section.title.split("/").pop()}
+							</span>
+							<span className="mr-0.5 text-[10px] tabular-nums text-muted/60">
+								{section.members.length}
+							</span>
+							{section.members.map((item) => (
+								<div
+									key={item.key}
+									className="flex items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors duration-[var(--dur-fast)] hover:bg-default/40"
+								>
+									<span className="text-sm text-foreground">
+										{item.label}
 									</span>
+									<button
+										type="button"
+										aria-label={t("removeFromSelection", {
+											name: item.label,
+										})}
+										onClick={() => onRemoveItem(item.key)}
+										className="flex size-4 shrink-0 items-center justify-center rounded text-muted/40 transition-colors hover:text-foreground"
+									>
+										<XMarkIcon className="size-3" />
+									</button>
 								</div>
-							)}
-							<TagGroup
-								aria-label={section.title}
-								onRemove={(keys: Set<Key>) => {
-									for (const key of keys)
-										onRemoveItem(String(key));
-								}}
-							>
-								<TagGroup.List className="flex-wrap gap-1.5">
-									{section.members.map((item) => (
-										<Tag
-											key={item.key}
-											id={item.key}
-											textValue={item.label}
-										>
-											{item.label}
-										</Tag>
-									))}
-								</TagGroup.List>
-							</TagGroup>
+							))}
 						</div>
 					))}
 				</div>

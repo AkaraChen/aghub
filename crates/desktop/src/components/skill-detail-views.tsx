@@ -135,7 +135,7 @@ export function LocationRow({
 	);
 }
 
-export function flattenTree(
+function flattenTree(
 	root: SkillTreeNodeResponse,
 ): Array<SkillTreeNodeResponse & { depth?: number }> {
 	const items: Array<SkillTreeNodeResponse & { depth?: number }> = [];
@@ -152,7 +152,7 @@ export function flattenTree(
 	return items;
 }
 
-export function TreeNodeRow({
+function TreeNodeRow({
 	node,
 }: {
 	node: SkillTreeNodeResponse & { depth?: number };
@@ -177,7 +177,7 @@ export function TreeNodeRow({
 
 /** Indent guides: one hairline per depth level, running the row's full
  * height so consecutive rows read as connected branches. */
-export function TreeIndent({ depth }: { depth: number }) {
+function TreeIndent({ depth }: { depth: number }) {
 	if (depth <= 0) return null;
 	return (
 		<>

@@ -100,7 +100,9 @@ test("the bulk roster removes one item from the selection", async ({
 
 	// Removing a roster tag drops it from the selection; down to one item
 	// the panel returns to the detail view
-	await page.getByRole("button", { name: "Remove tag" }).first().click();
+	await page
+		.getByRole("button", { name: "Remove css-wizard from selection" })
+		.click();
 	await expect(page.getByText("2 items selected")).toBeHidden();
 	// css-wizard was the first roster tag; solo-skill remains and shows
 	await expect(
@@ -881,10 +883,10 @@ test("shift range sweeps a collapsed section it crosses", async ({ page }) => {
 	await expect(page.getByText("5 items selected")).toBeVisible();
 	// react-pro shows in the roster even though its row is collapsed away
 	await expect(
-		page.getByRole("gridcell", { name: "react-pro" }),
+		page.getByRole("button", { name: "Remove react-pro from selection" }),
 	).toBeVisible();
 	await expect(
-		page.getByRole("gridcell", { name: "api-forge" }),
+		page.getByRole("button", { name: "Remove api-forge from selection" }),
 	).toBeVisible();
 });
 
@@ -950,23 +952,4 @@ test("escape clears the selection from the detail panel too", async ({
 	await expect(
 		page.getByText("Select a skill to view details"),
 	).toBeVisible();
-});
-
-test("the library page reveals a member's file structure", async ({ page }) => {
-	await page
-		.getByRole("button", {
-			name: "github/AkaraChen/alpha-pack",
-			exact: true,
-		})
-		.click();
-	await expect(
-		page.getByRole("heading", { name: "github/AkaraChen/alpha-pack" }),
-	).toBeVisible();
-
-	// Expanding a member shows its on-disk layout
-	await page
-		.getByRole("button", { name: "View structure of api-forge" })
-		.click();
-	await expect(page.getByText("SKILL.md")).toBeVisible();
-	await expect(page.getByText("run.sh")).toBeVisible();
 });

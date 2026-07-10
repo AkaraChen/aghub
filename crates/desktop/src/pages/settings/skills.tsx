@@ -218,7 +218,6 @@ export default function SkillsPage() {
 				const item = byName.get(entry.name)?.items[0];
 				return {
 					name: entry.name,
-					path: item?.source_path ?? item?.canonical_path ?? null,
 					description: item?.description ?? null,
 				};
 			})
