@@ -429,7 +429,6 @@ export function UnifiedResourceList({
 										onSelectionChange={
 											handleMcpSelectionChange
 										}
-										selectionMode="multiple"
 										isMultiSelectMode={isMultiSelectMode}
 										intents={mcpIntents}
 									/>
@@ -463,9 +462,7 @@ export function UnifiedResourceList({
 										onSelectionChange={
 											handleSkillSelectionChange
 										}
-										groupBySource={true}
 										projectPath={projectPath}
-										selectionMode="multiple"
 										isMultiSelectMode={isMultiSelectMode}
 										intents={skillIntents}
 									/>

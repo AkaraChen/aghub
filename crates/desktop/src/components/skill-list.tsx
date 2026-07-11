@@ -64,11 +64,9 @@ interface SkillListProps {
 	skills: SkillResponse[];
 	selectedKeys: Set<string>;
 	searchQuery: string;
-	onSelectionChange: (keys: Set<string>, clickedKey?: string) => void;
+	onSelectionChange: (keys: Set<string>) => void;
 	emptyMessage?: string;
-	groupBySource?: boolean;
 	projectPath?: string;
-	selectionMode?: "none" | "single" | "multiple";
 	isMultiSelectMode?: boolean;
 	/** Dialog intents owned by the page (delete/transfer/agents/new group) */
 	intents: ResourceActionIntents;
@@ -84,9 +82,7 @@ export function SkillList({
 	searchQuery,
 	onSelectionChange,
 	emptyMessage,
-	groupBySource = false,
 	projectPath,
-	selectionMode = "single",
 	isMultiSelectMode = false,
 	intents,
 	onSourceFocus,
@@ -95,11 +91,7 @@ export function SkillList({
 	const { t } = useTranslation();
 	const api = useApi();
 	const { availableAgents } = useAgentAvailability();
-	const effectiveScope = groupBySource
-		? projectPath
-			? "project"
-			: "global"
-		: null;
+	const effectiveScope = projectPath ? "project" : "global";
 	const enabledAgentIds = useMemo(
 		() =>
 			new Set(
@@ -130,9 +122,8 @@ export function SkillList({
 	});
 
 	const isGroupingLoading =
-		groupBySource &&
-		((effectiveScope === "global" && isLoadingGlobalLock) ||
-			(effectiveScope === "project" && isLoadingProjectLock));
+		(effectiveScope === "global" && isLoadingGlobalLock) ||
+		(effectiveScope === "project" && isLoadingProjectLock);
 
 	const groupedByName = useMemo(() => {
 		const map = new Map<string, SkillResponse[]>();
@@ -252,13 +243,6 @@ export function SkillList({
 			return null;
 		};
 
-		if (!groupBySource) {
-			return {
-				sourceGroups: [],
-				ungroupedGroups: unassignedByName,
-			};
-		}
-
 		const bySource = new Map<string, SourceGroup>();
 		const singleItems: SkillGroup[] = [];
 		const unknown: SkillGroup[] = [];
@@ -306,7 +290,6 @@ export function SkillList({
 		};
 	}, [
 		unassignedByName,
-		groupBySource,
 		globalLock,
 		effectiveScope,
 		projectLock,
@@ -530,7 +513,7 @@ export function SkillList({
 	) => (
 		<ListBox
 			aria-label={label}
-			selectionMode={selectionMode}
+			selectionMode="multiple"
 			selectionBehavior="toggle"
 			selectedKeys={selectedKeys}
 			onSelectionChange={createSelectionHandler(
@@ -621,7 +604,7 @@ export function SkillList({
 			<ListBox
 				key={`loose-${runKeys[0]}`}
 				aria-label="Skills"
-				selectionMode={selectionMode}
+				selectionMode="multiple"
 				selectionBehavior="toggle"
 				selectedKeys={selectedKeys}
 				onSelectionChange={createSelectionHandler(runKeys)}

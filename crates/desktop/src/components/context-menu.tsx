@@ -2,12 +2,12 @@ import { Menu } from "@heroui/react";
 import type { ReactNode } from "react";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 
-export interface ContextMenuPosition {
+interface ContextMenuPosition {
 	x: number;
 	y: number;
 }
 
-export interface ContextMenuState<T> {
+interface ContextMenuState<T> {
 	position: ContextMenuPosition;
 	context: T;
 }

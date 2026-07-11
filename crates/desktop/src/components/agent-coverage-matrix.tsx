@@ -29,7 +29,6 @@ export interface MatrixGroup {
 interface AgentCoverageMatrixProps {
 	kind: ResourceKind;
 	groups: MatrixGroup[];
-	projectPath?: string;
 }
 
 /**
@@ -42,7 +41,6 @@ interface AgentCoverageMatrixProps {
 export function AgentCoverageMatrix({
 	kind,
 	groups,
-	projectPath,
 }: AgentCoverageMatrixProps) {
 	const { t } = useTranslation();
 	const api = useApi();
@@ -95,7 +93,7 @@ export function AgentCoverageMatrix({
 					source: {
 						agent: group.sourceAgent,
 						scope: group.sourceScope,
-						project_root: projectPath ?? null,
+						project_root: null,
 						name: group.name,
 					},
 					added: mode === "install" ? [agentId] : null,

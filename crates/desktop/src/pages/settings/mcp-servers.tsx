@@ -402,7 +402,6 @@ export default function MCPServersPage() {
 							selectedKeys={selectedKeys}
 							searchQuery={searchQuery}
 							onSelectionChange={handleSelectionChange}
-							selectionMode="multiple"
 							isMultiSelectMode={isMultiSelectMode}
 							intents={actionIntents}
 							seedKey={seedKey}

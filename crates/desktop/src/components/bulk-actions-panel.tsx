@@ -36,7 +36,6 @@ interface BulkActionsPanelProps {
 	onRemoveItem: (key: string) => void;
 	/** Per-item agent coverage, for the in-place matrix */
 	matrixGroups: MatrixGroup[];
-	projectPath?: string;
 }
 
 /**
@@ -54,7 +53,6 @@ export function BulkActionsPanel({
 	onDeselectAll,
 	onRemoveItem,
 	matrixGroups,
-	projectPath,
 }: BulkActionsPanelProps) {
 	const { t } = useTranslation();
 	// Removing a pill unmounts the focused button; refocus its neighbour
@@ -246,11 +244,7 @@ export function BulkActionsPanel({
 					})}
 				</div>
 
-				<AgentCoverageMatrix
-					kind={kind}
-					groups={matrixGroups}
-					projectPath={projectPath}
-				/>
+				<AgentCoverageMatrix kind={kind} groups={matrixGroups} />
 			</div>
 
 			<footer className="shrink-0 border-t border-separator p-4">

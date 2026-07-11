@@ -484,9 +484,7 @@ export default function SkillsPage() {
 							selectedKeys={selectedKeys}
 							searchQuery={searchQuery}
 							onSelectionChange={handleSelectionChange}
-							selectionMode="multiple"
 							isMultiSelectMode={isMultiSelectMode}
-							groupBySource={true}
 							intents={actionIntents}
 							onSourceFocus={setFocusedSource}
 							seedKey={seedKey}

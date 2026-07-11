@@ -10,17 +10,15 @@ export type SelectionEntry =
 	| { kind: "item"; key: string }
 	| { kind: "cluster"; id: string; memberKeys: string[] };
 
-type SelectionAnchor =
-	| { kind: "item"; key: string }
-	| { kind: "cluster"; id: string; memberKeys: string[] };
+type SelectionAnchor = SelectionEntry;
 
-export interface UseListSelectionOptions {
+interface UseListSelectionOptions {
 	/** Display-order entries (visible rows; collapsed sections as one entry) */
 	orderedEntries: SelectionEntry[];
 	/** The current selection — the single source of truth */
 	selectedKeys: Set<string>;
 	/** Callback when selection changes */
-	onSelectionChange: (keys: Set<string>, clickedKey?: string) => void;
+	onSelectionChange: (keys: Set<string>) => void;
 	/** Whether multi-select mode is enabled */
 	isMultiSelectMode?: boolean;
 	/**
@@ -31,7 +29,7 @@ export interface UseListSelectionOptions {
 	seedKey?: string | null;
 }
 
-export interface UseListSelectionReturn {
+interface UseListSelectionReturn {
 	/**
 	 * Creates an onSelectionChange handler for one ListBox section.
 	 * sectionKeys scopes the click diff to that section; shift ranges
@@ -49,9 +47,9 @@ export interface UseListSelectionReturn {
 	/**
 	 * Context-menu opening: keeps the selection if the key is already
 	 * in it, otherwise resets the selection to that key (Finder
-	 * semantics). Returns the selection the menu should act on.
+	 * semantics).
 	 */
-	ensureSelected: (key: string) => Set<string>;
+	ensureSelected: (key: string) => void;
 	/**
 	 * Context-menu opening on a cluster row: keeps the selection if all
 	 * members are already in it, otherwise resets the selection to the
@@ -210,7 +208,7 @@ export function useListSelection(
 			}
 
 			seedPristineRef.current = false;
-			onSelectionChange(finalKeys, clicked);
+			onSelectionChange(finalKeys);
 		},
 		[
 			rangeBetween,
@@ -249,19 +247,17 @@ export function useListSelection(
 				? { kind: "cluster", id: clusterId, memberKeys }
 				: { kind: "item", key: memberKeys[0] };
 			seedPristineRef.current = false;
-			onSelectionChange(finalKeys, memberKeys[0]);
+			onSelectionChange(finalKeys);
 		},
 		[selectedKeys, onSelectionChange, isMultiSelectMode],
 	);
 
 	const ensureSelected = useCallback(
 		(key: string) => {
-			if (selectedKeys.has(key)) return selectedKeys;
-			const finalKeys = new Set([key]);
+			if (selectedKeys.has(key)) return;
 			anchorRef.current = { kind: "item", key };
 			seedPristineRef.current = false;
-			onSelectionChange(finalKeys, key);
-			return finalKeys;
+			onSelectionChange(new Set([key]));
 		},
 		[selectedKeys, onSelectionChange],
 	);
@@ -275,7 +271,7 @@ export function useListSelection(
 			if (memberKeys.every((key) => selectedKeys.has(key))) return;
 			anchorRef.current = { kind: "cluster", id: clusterId, memberKeys };
 			seedPristineRef.current = false;
-			onSelectionChange(new Set(memberKeys), memberKeys[0]);
+			onSelectionChange(new Set(memberKeys));
 		},
 		[selectedKeys, onSelectionChange],
 	);
@@ -293,7 +289,7 @@ export function useListSelection(
 			const range = rangeBetween(anchor, clicked);
 			if (!range) return;
 			seedPristineRef.current = false;
-			onSelectionChange(range, clicked);
+			onSelectionChange(range);
 		},
 		[selectedKeys, rangeBetween, onSelectionChange],
 	);

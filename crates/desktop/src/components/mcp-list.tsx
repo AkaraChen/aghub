@@ -46,9 +46,8 @@ interface McpListProps {
 	mcps: McpResponse[];
 	selectedKeys: Set<string>;
 	searchQuery: string;
-	onSelectionChange: (keys: Set<string>, clickedKey?: string) => void;
+	onSelectionChange: (keys: Set<string>) => void;
 	emptyMessage?: string;
-	selectionMode?: "none" | "single" | "multiple";
 	isMultiSelectMode?: boolean;
 	/** Dialog intents owned by the page (delete/transfer/agents/new group) */
 	intents: ResourceActionIntents;
@@ -62,7 +61,6 @@ export function McpList({
 	searchQuery,
 	onSelectionChange,
 	emptyMessage,
-	selectionMode = "single",
 	isMultiSelectMode = false,
 	intents,
 	seedKey,
@@ -289,7 +287,7 @@ export function McpList({
 	const renderSectionListBox = (label: string, sectionMcps: McpGroup[]) => (
 		<ListBox
 			aria-label={label}
-			selectionMode={selectionMode}
+			selectionMode="multiple"
 			selectionBehavior="toggle"
 			selectedKeys={selectedKeys}
 			onSelectionChange={createSelectionHandler(
@@ -401,7 +399,7 @@ export function McpList({
 					)}
 					<ListBox
 						aria-label="MCP Servers"
-						selectionMode={selectionMode}
+						selectionMode="multiple"
 						selectionBehavior="toggle"
 						selectedKeys={selectedKeys}
 						onSelectionChange={createSelectionHandler(
