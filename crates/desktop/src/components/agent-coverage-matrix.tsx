@@ -133,7 +133,7 @@ export function AgentCoverageMatrix({
 					<Tooltip.Content>{t("matrixHint")}</Tooltip.Content>
 				</Tooltip>
 			</div>
-			<ul className="grid grid-cols-2 gap-1">
+			<ul className="grid grid-cols-3 gap-1">
 				{rows.map((agent) => {
 					const installed = installedCount(agent.id);
 					const total = groups.length;
