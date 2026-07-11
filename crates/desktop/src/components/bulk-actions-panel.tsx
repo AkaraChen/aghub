@@ -62,9 +62,9 @@ export function BulkActionsPanel({
 		intents,
 	});
 
-	// Roster sections: items grouped by their source badge. Sorted small
-	// sources first so one-member cards pack side by side instead of a
-	// big source pushing each of them onto its own row; ties by repo name.
+	// Roster sections: items grouped by their source badge. Ungrouped
+	// items lead; sources follow smallest-first so one-member cards pack
+	// side by side instead of trailing a big source; ties by repo name.
 	const rosterSections = (() => {
 		const bySource = new Map<string, BulkPanelItem[]>();
 		const loose: BulkPanelItem[] = [];
@@ -78,19 +78,19 @@ export function BulkActionsPanel({
 			bySource.set(item.badge, existing);
 		}
 		const tail = (s: string) => s.split("/").pop() ?? s;
+		const named = Array.from(bySource.entries())
+			.map(([title, members]) => ({ title, members }))
+			.sort(
+				(a, b) =>
+					a.members.length - b.members.length ||
+					tail(a.title).localeCompare(tail(b.title)),
+			);
 		return [
-			...Array.from(bySource.entries()).map(([title, members]) => ({
-				title,
-				members,
-			})),
 			...(loose.length > 0
 				? [{ title: t("ungrouped"), members: loose }]
 				: []),
-		].sort(
-			(a, b) =>
-				a.members.length - b.members.length ||
-				tail(a.title).localeCompare(tail(b.title)),
-		);
+			...named,
+		];
 	})();
 
 	return (
@@ -158,7 +158,7 @@ export function BulkActionsPanel({
 									onClick={() => onRemoveItem(only.key)}
 									className="group flex max-w-full items-center gap-1.5 rounded-lg border border-border bg-surface py-1.5 pr-1.5 pl-2.5 transition-colors duration-[var(--dur-fast)]"
 								>
-									<span className="shrink-0 text-[10px] font-medium tracking-wider text-muted uppercase">
+									<span className="shrink-0 text-[10px] font-medium text-muted">
 										{section.title.split("/").pop()}
 									</span>
 									<span
@@ -175,7 +175,7 @@ export function BulkActionsPanel({
 								key={section.title}
 								className="flex max-w-full grow flex-wrap items-center gap-x-1 gap-y-1 rounded-lg border border-border bg-surface py-1.5 pr-1.5 pl-2.5"
 							>
-								<span className="mr-1 text-[10px] font-medium tracking-wider text-muted uppercase">
+								<span className="mr-1 text-[10px] font-medium text-muted">
 									{section.title.split("/").pop()}
 								</span>
 								<span className="mr-0.5 text-[10px] tabular-nums text-muted/60">

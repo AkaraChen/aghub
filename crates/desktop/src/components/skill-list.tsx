@@ -635,6 +635,13 @@ export function SkillList({
 				isExpanded={isExpanded(`s:${sg.source}`)}
 				isSelected={isGroupSelected(memberKeys)}
 				onToggleExpanded={() => {
+					// In multi-select mode the row is a selection surface:
+					// clicking it toggles the whole library in or out, same
+					// as meta-click.
+					if (isMultiSelectMode) {
+						selectGroup(memberKeys, `s:${sg.source}`);
+						return;
+					}
 					// Browsing, not selecting: the click focuses the library
 					// (its detail shows on the right) and toggles the rows.
 					onSourceFocus?.(sg.source);

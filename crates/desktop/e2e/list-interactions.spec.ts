@@ -913,6 +913,48 @@ test("clicking a cluster row opens its library page", async ({ page }) => {
 	await expect(page.getByText("2 items selected")).toBeVisible();
 });
 
+test("multi-select mode: clicking a cluster row toggles the library", async ({
+	page,
+}) => {
+	// Pick one item, then arm multi-select from the toolbar
+	await page.getByRole("option", { name: "solo-skill" }).click();
+	await page
+		.getByRole("button", { name: "Multi-select mode" })
+		.first()
+		.click();
+
+	// Clicking the collapsed alpha-pack row now selects its members
+	// wholesale instead of opening the library page
+	await page
+		.getByRole("button", {
+			name: "github/AkaraChen/alpha-pack",
+			exact: true,
+		})
+		.click();
+	await expect(page.getByText("3 items selected")).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Remove arch-lint from selection" }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Remove api-forge from selection" }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "github/AkaraChen/alpha-pack" }),
+	).toBeHidden();
+
+	// Clicking it again drops the whole library from the selection
+	await page
+		.getByRole("button", {
+			name: "github/AkaraChen/alpha-pack",
+			exact: true,
+		})
+		.click();
+	await expect(page.getByText("items selected")).toBeHidden();
+	await expect(
+		page.getByRole("heading", { name: "solo-skill" }),
+	).toBeVisible();
+});
+
 test("the library page jumps to a member's detail", async ({ page }) => {
 	await page
 		.getByRole("button", {
