@@ -157,9 +157,13 @@ export function AgentCoverageMatrix({
 									}
 								}}
 								className={cn(
-									"flex w-full items-center gap-1.5 rounded-lg bg-surface px-2 py-1.5 text-left text-sm ring-1 ring-border transition-colors duration-[var(--dur-fast)] hover:bg-foreground/10 disabled:opacity-60",
-									// Fill encodes coverage at a glance
-									full && "bg-accent/10 ring-accent/30",
+									"group flex w-full items-center gap-1.5 rounded-lg bg-surface px-2 py-1.5 text-left text-sm ring-1 ring-border transition-colors duration-[var(--dur-fast)] disabled:opacity-60",
+									// Fill encodes coverage; hover previews
+									// the click — accent to install, danger
+									// to uninstall
+									full
+										? "bg-accent/10 ring-accent/30 hover:bg-danger/10 hover:ring-danger/30"
+										: "hover:bg-accent/10 hover:ring-accent/30",
 								)}
 							>
 								<AgentIcon
@@ -182,7 +186,9 @@ export function AgentCoverageMatrix({
 									<span
 										className={cn(
 											"shrink-0 text-[10px] font-medium tabular-nums",
-											full ? "text-accent" : "text-muted",
+											full
+												? "text-accent group-hover:text-danger"
+												: "text-muted",
 										)}
 									>
 										{installed}/{total}
