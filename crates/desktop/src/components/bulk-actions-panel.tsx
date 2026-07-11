@@ -1,6 +1,7 @@
 import { LinkIcon, XMarkIcon } from "@heroicons/react/24/solid";
 import { Button, Dropdown, Tooltip } from "@heroui/react";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type {
 	ResourceActionIntents,
@@ -56,15 +57,41 @@ export function BulkActionsPanel({
 	projectPath,
 }: BulkActionsPanelProps) {
 	const { t } = useTranslation();
+	// Removing a pill unmounts the focused button; refocus its neighbour
+	// so keyboard users can keep removing without re-tabbing in.
+	const rosterRef = useRef<HTMLDivElement>(null);
+	const pendingFocusRef = useRef<number | null>(null);
+	useEffect(() => {
+		const index = pendingFocusRef.current;
+		if (index === null) return;
+		pendingFocusRef.current = null;
+		const pills =
+			rosterRef.current?.querySelectorAll<HTMLButtonElement>(
+				"[data-roster-pill]",
+			);
+		if (!pills || pills.length === 0) return;
+		pills[Math.min(index, pills.length - 1)]?.focus();
+	}, [items]);
+	const removeAndRefocus = (key: string, target: HTMLElement) => {
+		const pills = rosterRef.current?.querySelectorAll("[data-roster-pill]");
+		if (pills) {
+			pendingFocusRef.current = Array.prototype.indexOf.call(
+				pills,
+				target,
+			);
+		}
+		onRemoveItem(key);
+	};
 	const actions = useResourceActions({
 		kind,
 		selectedKeys: new Set(items.map((item) => item.key)),
 		intents,
 	});
 
-	// Roster sections: items grouped by their source badge. Ungrouped
-	// items lead; sources follow smallest-first so one-member cards pack
-	// side by side instead of trailing a big source; ties by repo name.
+	// Roster sections: items grouped by their source badge. A source with
+	// a single selected member has no grouping value here — its member
+	// joins the ungrouped card instead of echoing "name name" in its own
+	// frame. Ungrouped leads; sources follow smallest-first, ties by name.
 	const rosterSections = (() => {
 		const bySource = new Map<string, BulkPanelItem[]>();
 		const loose: BulkPanelItem[] = [];
@@ -78,13 +105,17 @@ export function BulkActionsPanel({
 			bySource.set(item.badge, existing);
 		}
 		const tail = (s: string) => s.split("/").pop() ?? s;
-		const named = Array.from(bySource.entries())
-			.map(([title, members]) => ({ title, members }))
-			.sort(
-				(a, b) =>
-					a.members.length - b.members.length ||
-					tail(a.title).localeCompare(tail(b.title)),
-			);
+		const named: { title: string; members: BulkPanelItem[] }[] = [];
+		for (const [title, members] of bySource) {
+			if (members.length === 1 && members[0]) loose.push(members[0]);
+			else named.push({ title, members });
+		}
+		named.sort(
+			(a, b) =>
+				a.members.length - b.members.length ||
+				tail(a.title).localeCompare(tail(b.title)),
+		);
+		loose.sort((a, b) => a.label.localeCompare(b.label));
 		return [
 			...(loose.length > 0
 				? [{ title: t("ungrouped"), members: loose }]
@@ -139,7 +170,10 @@ export function BulkActionsPanel({
 				 * the shell), members as accent pills. A pill is one button —
 				 * clicking it drops the item from the selection, and it turns
 				 * danger-tinted on hover to say so. */}
-				<div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+				<div
+					ref={rosterRef}
+					className="flex flex-wrap items-center gap-x-2 gap-y-1.5"
+				>
 					{rosterSections.map((section) => {
 						const only =
 							section.members.length === 1
@@ -155,7 +189,13 @@ export function BulkActionsPanel({
 									aria-label={t("removeFromSelection", {
 										name: only.label,
 									})}
-									onClick={() => onRemoveItem(only.key)}
+									onClick={(event) =>
+										removeAndRefocus(
+											only.key,
+											event.currentTarget,
+										)
+									}
+									data-roster-pill
 									className="group flex max-w-full items-center gap-1.5 rounded-lg border border-border bg-surface py-1.5 pr-1.5 pl-2.5 transition-colors duration-[var(--dur-fast)]"
 								>
 									<span className="shrink-0 text-[10px] font-medium text-muted">
@@ -188,7 +228,13 @@ export function BulkActionsPanel({
 										aria-label={t("removeFromSelection", {
 											name: item.label,
 										})}
-										onClick={() => onRemoveItem(item.key)}
+										onClick={(event) =>
+											removeAndRefocus(
+												item.key,
+												event.currentTarget,
+											)
+										}
+										data-roster-pill
 										className="max-w-full min-w-0 truncate rounded-full bg-accent/10 px-2 py-0.5 text-left text-sm text-accent transition-colors duration-[var(--dur-fast)] hover:bg-danger/10 hover:text-danger"
 										title={item.label}
 									>

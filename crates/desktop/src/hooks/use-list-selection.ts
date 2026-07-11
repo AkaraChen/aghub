@@ -23,6 +23,12 @@ export interface UseListSelectionOptions {
 	onSelectionChange: (keys: Set<string>, clickedKey?: string) => void;
 	/** Whether multi-select mode is enabled */
 	isMultiSelectMode?: boolean;
+	/**
+	 * The auto-seeded initial selection (first item or deep link). It has
+	 * no click history, so the first click on it commits it instead of
+	 * cancelling; any other selection act clears the pristine flag.
+	 */
+	seedKey?: string | null;
 }
 
 export interface UseListSelectionReturn {
@@ -46,6 +52,18 @@ export interface UseListSelectionReturn {
 	 * semantics). Returns the selection the menu should act on.
 	 */
 	ensureSelected: (key: string) => Set<string>;
+	/**
+	 * Context-menu opening on a cluster row: keeps the selection if all
+	 * members are already in it, otherwise resets the selection to the
+	 * cluster (Finder semantics — never a toggle).
+	 */
+	ensureGroupSelected: (memberKeys: string[], clusterId: string) => void;
+	/**
+	 * Fallback for a shift-click on an already-selected row: react-stately
+	 * swallows that event (the selection set is unchanged), so the row's
+	 * pointerdown calls this directly to run the range selection.
+	 */
+	selectRangeTo: (key: string) => void;
 }
 
 /**
@@ -64,6 +82,7 @@ export function useListSelection(
 		selectedKeys,
 		onSelectionChange,
 		isMultiSelectMode = false,
+		seedKey = null,
 	} = options;
 
 	const modifiersRef = useRef({
@@ -71,6 +90,7 @@ export function useListSelection(
 		meta: false,
 	});
 	const anchorRef = useRef<SelectionAnchor | null>(null);
+	const seedPristineRef = useRef(true);
 
 	useEffect(() => {
 		const handler = (e: PointerEvent) => {
@@ -110,6 +130,25 @@ export function useListSelection(
 		[orderedEntries],
 	);
 
+	const rangeBetween = useCallback(
+		(anchor: SelectionAnchor, clicked: string): Set<string> | null => {
+			const start = anchorEntryIndex(anchor);
+			const end = orderedEntries.findIndex(
+				(e) => e.kind === "item" && e.key === clicked,
+			);
+			if (start === -1 || end === -1) return null;
+			const [from, to] = [Math.min(start, end), Math.max(start, end)];
+			return new Set(
+				orderedEntries
+					.slice(from, to + 1)
+					.flatMap((e) =>
+						e.kind === "item" ? [e.key] : e.memberKeys,
+					),
+			);
+		},
+		[orderedEntries, anchorEntryIndex],
+	);
+
 	const createSelectionHandler = useCallback(
 		(sectionKeys: string[]) => (keys: "all" | Set<React.Key>) => {
 			if (keys === "all") return;
@@ -139,36 +178,24 @@ export function useListSelection(
 				(soleSelected ? { kind: "item", key: soleSelected } : null);
 
 			if (modifiersRef.current.shift && shiftAnchor) {
-				const start = anchorEntryIndex(shiftAnchor);
-				const end = orderedEntries.findIndex(
-					(e) => e.kind === "item" && e.key === clicked,
-				);
-				if (start !== -1 && end !== -1) {
-					const [from, to] = [
-						Math.min(start, end),
-						Math.max(start, end),
-					];
-					finalKeys = new Set(
-						orderedEntries
-							.slice(from, to + 1)
-							.flatMap((e) =>
-								e.kind === "item" ? [e.key] : e.memberKeys,
-							),
-					);
-				} else {
-					finalKeys = new Set([...selectedKeys, clicked]);
-				}
+				finalKeys =
+					rangeBetween(shiftAnchor, clicked) ??
+					new Set([...selectedKeys, clicked]);
 			} else if (!isMultiSelectMode && !modifiersRef.current.meta) {
 				// A plain click that deselects the sole current selection
 				// clears it (click again to cancel); any other plain click
-				// narrows the selection to just that item.
+				// narrows the selection to just that item. The seeded
+				// selection has no click history — the first click on it
+				// commits it instead of cancelling.
 				const togglingOff =
 					added === undefined &&
 					selectedKeys.size === 1 &&
 					selectedKeys.has(clicked);
-				finalKeys = togglingOff
-					? new Set<string>()
-					: new Set([clicked]);
+				finalKeys =
+					togglingOff &&
+					!(seedPristineRef.current && clicked === seedKey)
+						? new Set<string>()
+						: new Set([clicked]);
 			} else {
 				finalKeys = new Set(selectedKeys);
 				if (finalKeys.has(clicked)) {
@@ -182,14 +209,15 @@ export function useListSelection(
 				anchorRef.current = { kind: "item", key: clicked };
 			}
 
+			seedPristineRef.current = false;
 			onSelectionChange(finalKeys, clicked);
 		},
 		[
-			orderedEntries,
-			anchorEntryIndex,
+			rangeBetween,
 			selectedKeys,
 			onSelectionChange,
 			isMultiSelectMode,
+			seedKey,
 		],
 	);
 
@@ -220,6 +248,7 @@ export function useListSelection(
 			anchorRef.current = clusterId
 				? { kind: "cluster", id: clusterId, memberKeys }
 				: { kind: "item", key: memberKeys[0] };
+			seedPristineRef.current = false;
 			onSelectionChange(finalKeys, memberKeys[0]);
 		},
 		[selectedKeys, onSelectionChange, isMultiSelectMode],
@@ -230,11 +259,50 @@ export function useListSelection(
 			if (selectedKeys.has(key)) return selectedKeys;
 			const finalKeys = new Set([key]);
 			anchorRef.current = { kind: "item", key };
+			seedPristineRef.current = false;
 			onSelectionChange(finalKeys, key);
 			return finalKeys;
 		},
 		[selectedKeys, onSelectionChange],
 	);
 
-	return { createSelectionHandler, selectGroup, ensureSelected };
+	// Finder semantics for a whole cluster: right-clicking a cluster whose
+	// members are already all selected acts on the current selection;
+	// otherwise the selection resets to the cluster. Never a toggle.
+	const ensureGroupSelected = useCallback(
+		(memberKeys: string[], clusterId: string) => {
+			if (memberKeys.length === 0) return;
+			if (memberKeys.every((key) => selectedKeys.has(key))) return;
+			anchorRef.current = { kind: "cluster", id: clusterId, memberKeys };
+			seedPristineRef.current = false;
+			onSelectionChange(new Set(memberKeys), memberKeys[0]);
+		},
+		[selectedKeys, onSelectionChange],
+	);
+
+	const selectRangeTo = useCallback(
+		(clicked: string) => {
+			const soleSelected =
+				selectedKeys.size === 1 ? Array.from(selectedKeys)[0] : null;
+			const anchor =
+				anchorRef.current ??
+				(soleSelected
+					? { kind: "item" as const, key: soleSelected }
+					: null);
+			if (!anchor) return;
+			const range = rangeBetween(anchor, clicked);
+			if (!range) return;
+			seedPristineRef.current = false;
+			onSelectionChange(range, clicked);
+		},
+		[selectedKeys, rangeBetween, onSelectionChange],
+	);
+
+	return {
+		createSelectionHandler,
+		selectGroup,
+		ensureSelected,
+		selectRangeTo,
+		ensureGroupSelected,
+	};
 }

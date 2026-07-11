@@ -52,6 +52,8 @@ interface McpListProps {
 	isMultiSelectMode?: boolean;
 	/** Dialog intents owned by the page (delete/transfer/agents/new group) */
 	intents: ResourceActionIntents;
+	/** The auto-seeded initial selection (first click commits, not cancels) */
+	seedKey?: string | null;
 }
 
 export function McpList({
@@ -63,6 +65,7 @@ export function McpList({
 	selectionMode = "single",
 	isMultiSelectMode = false,
 	intents,
+	seedKey,
 }: McpListProps) {
 	const { t } = useTranslation();
 	const { availableAgents } = useAgentAvailability();
@@ -188,13 +191,18 @@ export function McpList({
 		return entries;
 	}, [customSections, unassignedGroups, collapsedIds, searchQuery]);
 
-	const { createSelectionHandler, selectGroup, ensureSelected } =
-		useListSelection({
-			orderedEntries,
-			selectedKeys,
-			onSelectionChange,
-			isMultiSelectMode,
-		});
+	const {
+		createSelectionHandler,
+		selectGroup,
+		ensureSelected,
+		selectRangeTo,
+	} = useListSelection({
+		orderedEntries,
+		selectedKeys,
+		onSelectionChange,
+		isMultiSelectMode,
+		seedKey,
+	});
 
 	const contextMenu = useContextMenu<MenuTarget>();
 	const actions = useResourceActions({
@@ -263,6 +271,10 @@ export function McpList({
 					onContextMenu={(event) =>
 						openItemMenu(event, group.mergeKey)
 					}
+					onShiftPress={() => {
+						if (selectedKeys.has(group.mergeKey))
+							selectRangeTo(group.mergeKey);
+					}}
 				>
 					{getTransportIcon(group.transport, isStarred)}
 					<Label className="flex-1 truncate">

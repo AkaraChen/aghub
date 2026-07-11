@@ -105,11 +105,30 @@ export default function MCPServersPage() {
 	// deep-linked or first server so a detail shows on load; an empty
 	// selection then unambiguously means "cancelled" and shows the
 	// placeholder.
-	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => {
+	const [seedKey] = useState<string | null>(() => {
 		const deepLinked = groupedMcps.some((g) => g.mergeKey === selectedKey);
-		const seed = deepLinked ? selectedKey : groupedMcps[0]?.mergeKey;
-		return seed ? new Set([seed]) : new Set();
+		return (deepLinked ? selectedKey : groupedMcps[0]?.mergeKey) ?? null;
 	});
+	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() =>
+		seedKey ? new Set([seedKey]) : new Set<string>(),
+	);
+
+	// An in-page navigation (global search) rewrites ?server= without
+	// remounting the page, so adopt it into the selection here. The mirror
+	// write-back is skipped — the URL already holds the target.
+	const [syncedKey, setSyncedKey] = useState(selectedKey);
+	if (selectedKey !== syncedKey) {
+		setSyncedKey(selectedKey);
+		if (
+			selectedKey &&
+			groupedMcps.some((g) => g.mergeKey === selectedKey) &&
+			!(selectedKeys.size === 1 && selectedKeys.has(selectedKey))
+		) {
+			setSelectedKeys(new Set([selectedKey]));
+			setPanel({ type: "detail", selectedKey });
+			setIsMultiSelectMode(false);
+		}
+	}
 
 	const activeGroup = useMemo(() => {
 		if (selectedKeys.size !== 1) return null;
@@ -149,15 +168,16 @@ export default function MCPServersPage() {
 		}
 	};
 
+	// Route through handleSelectionChange so multi-select mode resets
+	// with the selection; the panel opens after (same batch, so its
+	// setPanel is overwritten).
 	const handleCreate = () => {
-		setSelectedKeys(new Set());
-		setSelectedKey(null);
+		handleSelectionChange(new Set());
 		setPanel({ type: "create" });
 	};
 
 	const handleImport = () => {
-		setSelectedKeys(new Set());
-		setSelectedKey(null);
+		handleSelectionChange(new Set());
 		setPanel({ type: "import" });
 	};
 
@@ -201,6 +221,21 @@ export default function MCPServersPage() {
 		selectedKeys,
 		onSelectionChange: handleSelectionChange,
 		onRequestDelete: actionIntents.onRequestDelete,
+		onEscape: () => {
+			if (
+				panel.type !== "create" &&
+				panel.type !== "import" &&
+				panel.type !== "edit"
+			)
+				return false;
+			const [only] = selectedKeys;
+			setPanel(
+				only && selectedKeys.size === 1
+					? { type: "detail", selectedKey: only }
+					: { type: "empty" },
+			);
+			return true;
+		},
 		disabled: draggedKeys !== null,
 	});
 
@@ -346,6 +381,12 @@ export default function MCPServersPage() {
 						className="relative flex w-80 shrink-0 flex-col border-r border-border"
 						onClick={(event) => {
 							if (isBlankTarget(event)) {
+								if (
+									panel.type === "create" ||
+									panel.type === "import" ||
+									panel.type === "edit"
+								)
+									return;
 								handleSelectionChange(new Set());
 							}
 						}}
@@ -364,6 +405,7 @@ export default function MCPServersPage() {
 							selectionMode="multiple"
 							isMultiSelectMode={isMultiSelectMode}
 							intents={actionIntents}
+							seedKey={seedKey}
 						/>
 					</div>
 

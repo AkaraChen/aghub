@@ -9,6 +9,11 @@ interface UseListKeyboardOptions {
 	onSelectionChange: (keys: Set<string>) => void;
 	/** Opens the delete confirmation for the current selection */
 	onRequestDelete: () => void;
+	/**
+	 * Escape is layered: return true to consume it (e.g. close an open
+	 * side panel) before it falls through to clearing the selection.
+	 */
+	onEscape?: () => boolean;
 	/** Pause shortcuts (e.g. while a drag is underway) */
 	disabled?: boolean;
 }
@@ -31,12 +36,15 @@ export function useListKeyboard(options: UseListKeyboardOptions) {
 				selectedKeys,
 				onSelectionChange,
 				onRequestDelete,
+				onEscape,
 				disabled,
 			} = optionsRef.current;
 			if (disabled) return;
 
 			const target = event.target as HTMLElement | null;
-			if (target?.closest("input, textarea, [contenteditable]")) return;
+			const inEditable = Boolean(
+				target?.closest("input, textarea, [contenteditable]"),
+			);
 			// A dialog or menu owns the keyboard while it is open. Context
 			// menus stay mounted (hidden) for latency — and there can be
 			// several — so ANY visible overlay counts.
@@ -55,10 +63,19 @@ export function useListKeyboard(options: UseListKeyboardOptions) {
 			if (!scoped) return;
 
 			if ((event.metaKey || event.ctrlKey) && event.key === "a") {
+				if (inEditable) return;
 				event.preventDefault();
 				event.stopPropagation();
 				onSelectionChange(new Set(allKeys));
 			} else if (event.key === "Escape") {
+				// The panel layer closes even from inside its own form
+				// fields; only the fallthrough (clear selection) defers to
+				// an editable target.
+				if (onEscape?.()) {
+					event.stopPropagation();
+					return;
+				}
+				if (inEditable) return;
 				// Own Escape fully: react-aria's ListBox also handles it
 				// (and stops propagation), so without capture+stop the
 				// clear would be hijacked whenever the list has focus.
@@ -68,6 +85,7 @@ export function useListKeyboard(options: UseListKeyboardOptions) {
 				(event.key === "Delete" || event.key === "Backspace") &&
 				selectedKeys.size > 0
 			) {
+				if (inEditable) return;
 				event.preventDefault();
 				event.stopPropagation();
 				onRequestDelete();

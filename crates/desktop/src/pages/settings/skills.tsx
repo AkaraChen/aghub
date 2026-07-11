@@ -19,6 +19,7 @@ import { ManageSkillAgentsDialog } from "../../components/manage-skill-agents-di
 import { GroupNameDialog } from "../../components/resource-group-dialogs";
 import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
 import { TransferDialog } from "../../components/transfer-dialog";
+import { useAgentAvailability } from "../../hooks/use-agent-availability";
 import { useAgentFilter } from "../../hooks/use-agent-filter";
 import { ContextMenu, useContextMenu } from "../../components/context-menu";
 import { DragPreview, DropBoard } from "../../components/drop-board";
@@ -31,7 +32,7 @@ import { SkillList } from "../../components/skill-list";
 import type { SkillResponse } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
 import { useSkillGroups } from "../../hooks/use-resource-groups";
-import { cn } from "../../lib/utils";
+import { cn, filterItemsByAgentIds } from "../../lib/utils";
 import {
 	globalSkillLockQueryOptions,
 	skillListQueryOptions,
@@ -76,6 +77,16 @@ export default function SkillsPage() {
 		setAgentId,
 		filtered: filteredSkills,
 	} = useAgentFilter(skills);
+	const { availableAgents } = useAgentAvailability();
+	const enabledAgentIds = useMemo(
+		() =>
+			new Set(
+				availableAgents
+					.filter((agent) => !agent.isDisabled)
+					.map((agent) => agent.id),
+			),
+		[availableAgents],
+	);
 
 	const groupedSkills = useMemo(() => {
 		const map = new Map<string, SkillResponse[]>();
@@ -95,11 +106,31 @@ export default function SkillsPage() {
 	// deep-linked or first skill so a detail shows on load; an empty
 	// selection then unambiguously means "cancelled" and shows the
 	// placeholder.
-	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => {
+	const [seedKey] = useState<string | null>(() => {
 		const deepLinked = groupedSkills.some((g) => g.name === selectedName);
-		const seed = deepLinked ? selectedName : groupedSkills[0]?.name;
-		return seed ? new Set([seed]) : new Set();
+		return (deepLinked ? selectedName : groupedSkills[0]?.name) ?? null;
 	});
+	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() =>
+		seedKey ? new Set([seedKey]) : new Set<string>(),
+	);
+
+	// An in-page navigation (global search) rewrites ?skill= without
+	// remounting the page, so adopt it into the selection here. The mirror
+	// write-back is skipped — the URL already holds the target.
+	const [syncedName, setSyncedName] = useState(selectedName);
+	if (selectedName !== syncedName) {
+		setSyncedName(selectedName);
+		if (
+			selectedName &&
+			groupedSkills.some((g) => g.name === selectedName) &&
+			!(selectedKeys.size === 1 && selectedKeys.has(selectedName))
+		) {
+			setSelectedKeys(new Set([selectedName]));
+			setFocusedSource(null);
+			setPanelMode(null);
+			setIsMultiSelectMode(false);
+		}
+	}
 
 	const activeGroup = useMemo(() => {
 		if (selectedKeys.size !== 1) return null;
@@ -137,15 +168,16 @@ export default function SkillsPage() {
 		}
 	};
 
+	// Route through handleSelectionChange so multi-select mode and the
+	// library page reset with the selection; the panel opens after (same
+	// batch, so its setPanelMode(null) is overwritten).
 	const handleCreateSkill = () => {
-		setSelectedKeys(new Set());
-		setSelectedName(null);
+		handleSelectionChange(new Set());
 		setPanelMode("create");
 	};
 
 	const handleImportSkill = () => {
-		setSelectedKeys(new Set());
-		setSelectedName(null);
+		handleSelectionChange(new Set());
 		setPanelMode("import");
 	};
 
@@ -208,7 +240,17 @@ export default function SkillsPage() {
 
 	const focusedSourceInfo = useMemo(() => {
 		if (!focusedSource) return null;
-		const byName = new Map(groupedSkills.map((g) => [g.name, g]));
+		// Match the list's visibility: drop copies on disabled agents so the
+		// page cannot select a member that has no row.
+		const byName = new Map(
+			groupedSkills
+				.map((g) => ({
+					...g,
+					items: filterItemsByAgentIds(g.items, enabledAgentIds),
+				}))
+				.filter((g) => g.items.length > 0)
+				.map((g) => [g.name, g]),
+		);
 		const members = (globalLock?.skills ?? [])
 			.filter(
 				(entry) =>
@@ -263,7 +305,7 @@ export default function SkillsPage() {
 			updatedAt,
 			matrixGroups,
 		};
-	}, [focusedSource, globalLock, groupedSkills]);
+	}, [focusedSource, globalLock, groupedSkills, enabledAgentIds]);
 
 	const { dndProps, draggedKeys, boardGroups, showBoardUngrouped } =
 		useListDnd("skill", (keys) => setCreateGroupKeys(keys));
@@ -279,6 +321,11 @@ export default function SkillsPage() {
 		selectedKeys,
 		onSelectionChange: handleSelectionChange,
 		onRequestDelete: actionIntents.onRequestDelete,
+		onEscape: () => {
+			if (!panelMode) return false;
+			setPanelMode(null);
+			return true;
+		},
 		disabled: draggedKeys !== null,
 	});
 
@@ -421,6 +468,7 @@ export default function SkillsPage() {
 						className="relative flex w-80 shrink-0 flex-col border-r border-border"
 						onClick={(event) => {
 							if (isBlankTarget(event)) {
+								if (panelMode) return;
 								handleSelectionChange(new Set());
 							}
 						}}
@@ -441,6 +489,7 @@ export default function SkillsPage() {
 							groupBySource={true}
 							intents={actionIntents}
 							onSourceFocus={setFocusedSource}
+							seedKey={seedKey}
 						/>
 					</div>
 

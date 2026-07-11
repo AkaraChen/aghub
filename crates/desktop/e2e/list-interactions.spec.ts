@@ -995,3 +995,148 @@ test("escape clears the selection from the detail panel too", async ({
 		page.getByText("Select a skill to view details"),
 	).toBeVisible();
 });
+
+test("the seeded first item commits on first click instead of cancelling", async ({
+	page,
+}) => {
+	// react-pro is the seeded selection; the very first click on it
+	// commits it (the seed has no click history) — the detail must stay
+	await page.getByRole("option", { name: "react-pro" }).click();
+	await expect(
+		page.getByRole("heading", { name: "react-pro" }),
+	).toBeVisible();
+	// The second click is a real cancel
+	await page.getByRole("option", { name: "react-pro" }).click();
+	await expect(
+		page.getByText("Select a skill to view details"),
+	).toBeVisible();
+});
+
+test("shift-clicking an already-selected row shrinks the range", async ({
+	page,
+}) => {
+	// Display order: alpha-pack (collapsed), solo-skill, css-wizard, react-pro
+	await page.getByRole("option", { name: "solo-skill" }).click();
+	await page
+		.getByRole("option", { name: "react-pro" })
+		.click({ modifiers: ["Shift"] });
+	await expect(page.getByText("3 items selected")).toBeVisible();
+
+	// css-wizard is inside the range and already selected; react-stately
+	// swallows that click, so the pointerdown fallback must shrink the
+	// range to anchor..css-wizard
+	await page
+		.getByRole("option", { name: "css-wizard" })
+		.click({ modifiers: ["Shift"] });
+	await expect(page.getByText("2 items selected")).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Remove react-pro from selection" }),
+	).toBeHidden();
+});
+
+test("right-clicking a fully selected cluster keeps the selection", async ({
+	page,
+}) => {
+	await page.getByRole("option", { name: "solo-skill" }).click();
+	await page
+		.getByRole("button", { name: "Multi-select mode" })
+		.first()
+		.click();
+	await page
+		.getByRole("button", {
+			name: "github/AkaraChen/alpha-pack",
+			exact: true,
+		})
+		.click();
+	await expect(page.getByText("3 items selected")).toBeVisible();
+
+	// Finder semantics: the menu acts on the current selection — the
+	// right-click must never toggle the cluster back out
+	await page
+		.getByRole("button", {
+			name: "github/AkaraChen/alpha-pack",
+			exact: true,
+		})
+		.click({ button: "right" });
+	await expect(
+		page.getByRole("menu", { name: "Resource actions" }),
+	).toBeVisible();
+	await expect(page.getByText("3 items selected")).toBeVisible();
+	await page.keyboard.press("Escape");
+});
+
+test("an in-page ?skill= navigation switches the detail", async ({ page }) => {
+	await page.getByRole("option", { name: "solo-skill" }).click();
+	await expect(
+		page.getByRole("heading", { name: "solo-skill" }),
+	).toBeVisible();
+
+	// Global search navigates in-page via history.pushState (nuqs patches
+	// it); the page must adopt the new deep link without a remount
+	await page.evaluate(() => {
+		window.history.pushState(null, "", "/skills?skill=css-wizard");
+		window.dispatchEvent(new PopStateEvent("popstate"));
+	});
+	await expect(
+		page.getByRole("heading", { name: "css-wizard" }),
+	).toBeVisible();
+});
+
+test("escape closes the create panel before clearing the selection", async ({
+	page,
+}) => {
+	await page.getByRole("button", { name: "Add skill" }).click();
+	await page.getByRole("menuitem", { name: "Create Custom Skill" }).click();
+	await expect(
+		page.getByRole("heading", { name: "Create Custom Skill" }),
+	).toBeVisible();
+
+	// A blank-area click must not silently discard the open form
+	const anchorRow = page.getByRole("option", { name: "react-pro" });
+	const box = await anchorRow.boundingBox();
+	if (!box) throw new Error("no list");
+	await page.mouse.click(box.x + box.width / 2, box.y + box.height + 120);
+	await expect(
+		page.getByRole("heading", { name: "Create Custom Skill" }),
+	).toBeVisible();
+
+	// Escape closes the panel even from inside its form (layered above
+	// clearing the selection)
+	await page
+		.getByRole("heading", { name: "Create Custom Skill" })
+		.locator("xpath=ancestor::div[contains(@class,'card')]")
+		.getByRole("textbox")
+		.first()
+		.click();
+	await page.keyboard.press("Escape");
+	await expect(
+		page.getByRole("heading", { name: "Create Custom Skill" }),
+	).toBeHidden();
+});
+
+test("opening the create panel resets multi-select mode", async ({ page }) => {
+	await page.getByRole("option", { name: "css-wizard" }).click();
+	await page
+		.getByRole("option", { name: "solo-skill" })
+		.click({ modifiers: ["ControlOrMeta"] });
+	await expect(page.getByText("2 items selected")).toBeVisible();
+
+	await page.getByRole("button", { name: "Add skill" }).click();
+	await page.getByRole("menuitem", { name: "Create Custom Skill" }).click();
+	await page
+		.getByRole("heading", { name: "Create Custom Skill" })
+		.locator("xpath=ancestor::div[contains(@class,'card')]")
+		.getByRole("textbox")
+		.first()
+		.click();
+	await page.keyboard.press("Escape");
+
+	// Multi-select mode left with the selection: two plain clicks now
+	// behave single-select instead of accumulating
+	await page.getByRole("option", { name: "css-wizard" }).click();
+	await page.getByRole("option", { name: "solo-skill" }).click();
+	await expect(page.getByText("items selected")).toBeHidden();
+	await expect(
+		page.getByRole("heading", { name: "solo-skill" }),
+	).toBeVisible();
+});

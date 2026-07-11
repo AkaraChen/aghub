@@ -74,6 +74,8 @@ interface SkillListProps {
 	intents: ResourceActionIntents;
 	/** A source cluster row was clicked — the page shows its library page */
 	onSourceFocus?: (source: string) => void;
+	/** The auto-seeded initial selection (first click commits, not cancels) */
+	seedKey?: string | null;
 }
 
 export function SkillList({
@@ -88,6 +90,7 @@ export function SkillList({
 	isMultiSelectMode = false,
 	intents,
 	onSourceFocus,
+	seedKey,
 }: SkillListProps) {
 	const { t } = useTranslation();
 	const api = useApi();
@@ -410,13 +413,19 @@ export function SkillList({
 		searchQuery,
 	]);
 
-	const { createSelectionHandler, selectGroup, ensureSelected } =
-		useListSelection({
-			orderedEntries,
-			selectedKeys,
-			onSelectionChange,
-			isMultiSelectMode,
-		});
+	const {
+		createSelectionHandler,
+		selectGroup,
+		ensureSelected,
+		ensureGroupSelected,
+		selectRangeTo,
+	} = useListSelection({
+		orderedEntries,
+		selectedKeys,
+		onSelectionChange,
+		isMultiSelectMode,
+		seedKey,
+	});
 
 	const contextMenu = useContextMenu<MenuTarget>();
 	const actions = useResourceActions({
@@ -475,9 +484,10 @@ export function SkillList({
 	const openSourceMenu = (
 		event: React.MouseEvent,
 		memberKeys: string[],
+		source: string,
 		sourceUrl: string | null,
 	) => {
-		selectGroup(memberKeys);
+		ensureGroupSelected(memberKeys, `s:${source}`);
 		contextMenu.open(event, { type: "items", sourceUrl });
 	};
 
@@ -496,6 +506,10 @@ export function SkillList({
 				dragId={`item:${skillGroup.name}`}
 				keys={dragSelectionPayload([skillGroup.name], selectedKeys)}
 				onContextMenu={(event) => openItemMenu(event, skillGroup.name)}
+				onShiftPress={() => {
+					if (selectedKeys.has(skillGroup.name))
+						selectRangeTo(skillGroup.name);
+				}}
 			>
 				<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
 					<BookOpenIcon className="size-4 text-muted" />
@@ -649,7 +663,7 @@ export function SkillList({
 				}}
 				onSelectAll={() => selectGroup(memberKeys, `s:${sg.source}`)}
 				onContextMenu={(event) =>
-					openSourceMenu(event, memberKeys, sg.sourceUrl)
+					openSourceMenu(event, memberKeys, sg.source, sg.sourceUrl)
 				}
 				dragId={`header:${sg.source}`}
 				dragKeys={memberKeys}

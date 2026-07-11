@@ -7,6 +7,12 @@ interface DraggableItemBodyProps {
 	/** Member keys the drag carries (self plus selection, per payload) */
 	keys: string[];
 	onContextMenu: (event: React.MouseEvent) => void;
+	/**
+	 * A left shift-press on this row. react-stately swallows a shift-click
+	 * on an already-selected row (the selection set is unchanged, so no
+	 * event fires) — the list uses this to run the range selection itself.
+	 */
+	onShiftPress?: () => void;
 	children: ReactNode;
 }
 
@@ -25,6 +31,7 @@ export function DraggableItemBody({
 	dragId,
 	keys,
 	onContextMenu,
+	onShiftPress,
 	children,
 }: DraggableItemBodyProps) {
 	const liveKeysRef = useRef(keys);
@@ -44,6 +51,7 @@ export function DraggableItemBody({
 				frozenKeysRef.current = liveKeysRef.current;
 				listeners?.onPointerDown?.(event);
 				if (event.button === 2) event.stopPropagation();
+				if (event.button === 0 && event.shiftKey) onShiftPress?.();
 			}}
 			onContextMenu={onContextMenu}
 			className="flex w-full items-center gap-2"
