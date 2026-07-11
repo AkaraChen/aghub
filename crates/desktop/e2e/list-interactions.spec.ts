@@ -1148,14 +1148,23 @@ test("a fully covered matrix cell uninstalls after confirmation", async ({
 		.click();
 	await expect(page.getByText("3 items selected")).toBeVisible();
 
+	// Clicking a member pill inside a multi-member source card drops just
+	// that item from the selection
+	await page
+		.getByRole("button", { name: "Remove arch-lint from selection" })
+		.click();
+	await expect(page.getByText("2 items selected")).toBeVisible();
+
 	// Claude is fully covered — clicking asks for confirmation, and
 	// confirming actually uninstalls (the reconcile mock mutates state)
 	await page.getByTestId("matrix-row-claude").click();
 	const dialog = page.getByRole("alertdialog");
 	await expect(dialog).toBeVisible();
 	await dialog.getByRole("button", { name: "Delete" }).click();
-	await expect(page.getByRole("option", { name: "arch-lint" })).toBeHidden();
 	await expect(page.getByRole("option", { name: "api-forge" })).toBeHidden();
+	await expect(page.getByRole("option", { name: "solo-skill" })).toBeHidden();
+	// arch-lint was dropped from the selection, not uninstalled
+	await expect(page.getByRole("option", { name: "arch-lint" })).toBeVisible();
 });
 
 test("right-clicking an unselected item resets the selection to it", async ({

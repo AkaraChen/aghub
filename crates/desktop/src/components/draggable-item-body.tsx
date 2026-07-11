@@ -11,8 +11,10 @@ interface DraggableItemBodyProps {
 	 * A left shift-press on this row. react-stately swallows a shift-click
 	 * on an already-selected row (the selection set is unchanged, so no
 	 * event fires) — the list uses this to run the range selection itself.
+	 * Returning the new drag payload refreezes it, so a shift-press that
+	 * turns into a drag carries the range it just applied.
 	 */
-	onShiftPress?: () => void;
+	onShiftPress?: () => string[] | undefined;
 	children: ReactNode;
 }
 
@@ -51,7 +53,10 @@ export function DraggableItemBody({
 				frozenKeysRef.current = liveKeysRef.current;
 				listeners?.onPointerDown?.(event);
 				if (event.button === 2) event.stopPropagation();
-				if (event.button === 0 && event.shiftKey) onShiftPress?.();
+				if (event.button === 0 && event.shiftKey) {
+					const next = onShiftPress?.();
+					if (next) frozenKeysRef.current = next;
+				}
 			}}
 			onContextMenu={onContextMenu}
 			className="flex w-full items-center gap-2"

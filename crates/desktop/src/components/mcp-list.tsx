@@ -270,8 +270,11 @@ export function McpList({
 						openItemMenu(event, group.mergeKey)
 					}
 					onShiftPress={() => {
-						if (selectedKeys.has(group.mergeKey))
-							selectRangeTo(group.mergeKey);
+						if (!selectedKeys.has(group.mergeKey)) return undefined;
+						const range = selectRangeTo(group.mergeKey);
+						return range
+							? dragSelectionPayload([group.mergeKey], range)
+							: undefined;
 					}}
 				>
 					{getTransportIcon(group.transport, isStarred)}

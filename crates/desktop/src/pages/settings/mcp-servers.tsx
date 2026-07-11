@@ -210,7 +210,6 @@ export default function MCPServersPage() {
 	const { dndProps, draggedKeys, boardGroups, showBoardUngrouped } =
 		useListDnd("mcp", (keys) => setCreateGroupKeys(keys));
 
-	const listPanelRef = useRef<HTMLDivElement>(null);
 	// Shortcuts are scoped to the whole page (these pages hold a single
 	// list), so Esc/Cmd+A work from the detail panel too — not only while
 	// the pointer sits over the list column.
@@ -377,7 +376,6 @@ export default function MCPServersPage() {
 				<div className="flex min-h-0 flex-1">
 					{/* Servers List Panel */}
 					<div
-						ref={listPanelRef}
 						className="relative flex w-80 shrink-0 flex-col border-r border-border"
 						onClick={(event) => {
 							if (isBlankTarget(event)) {
@@ -410,118 +408,133 @@ export default function MCPServersPage() {
 
 					{/* Server Detail Panel */}
 					<div className="flex-1 overflow-hidden relative">
-						{draggedKeys && (
-							<div className="absolute inset-0 z-10 bg-surface">
+						<PanelTransition stateKey={panelStateKey}>
+							{draggedKeys ? (
 								<DropBoard
 									count={draggedKeys.length}
 									groups={boardGroups}
 									showUngrouped={showBoardUngrouped}
 								/>
-							</div>
-						)}
-						<PanelTransition stateKey={panelStateKey}>
-							{isBulkSelection &&
-								panel.type !== "create" &&
-								panel.type !== "import" &&
-								panel.type !== "edit" && (
-									<BulkActionsPanel
-										kind="mcp"
-										items={selectedGroups.map((g) => ({
-											key: g.mergeKey,
-											label: g.items[0].name,
-											badge: g.transport.type,
-										}))}
-										intents={actionIntents}
-										matrixGroups={selectedGroups.map(
-											(g) => ({
-												key: g.mergeKey,
-												name: g.items[0].name,
-												sourceAgent:
-													g.items[0].agent ??
-													"claude",
-												sourceScope:
-													g.items[0].source ===
-													"project"
-														? ("project" as const)
-														: ("global" as const),
-												installedAgents: g.items
-													.map((item) => item.agent)
-													.filter(
-														(
-															agent,
-														): agent is string =>
-															agent != null,
-													),
-											}),
+							) : (
+								<>
+									{isBulkSelection &&
+										panel.type !== "create" &&
+										panel.type !== "import" &&
+										panel.type !== "edit" && (
+											<BulkActionsPanel
+												kind="mcp"
+												items={selectedGroups.map(
+													(g) => ({
+														key: g.mergeKey,
+														label: g.items[0].name,
+														badge: g.transport.type,
+													}),
+												)}
+												intents={actionIntents}
+												matrixGroups={selectedGroups.map(
+													(g) => ({
+														key: g.mergeKey,
+														name: g.items[0].name,
+														sourceAgent:
+															g.items[0].agent ??
+															"claude",
+														// Global-scope page
+														sourceScope:
+															"global" as const,
+														installedAgents: g.items
+															.map(
+																(item) =>
+																	item.agent,
+															)
+															.filter(
+																(
+																	agent,
+																): agent is string =>
+																	agent !=
+																	null,
+															),
+													}),
+												)}
+												onDeselectAll={() =>
+													handleSelectionChange(
+														new Set(),
+													)
+												}
+												onRemoveItem={(key) =>
+													handleSelectionChange(
+														new Set(
+															[
+																...selectedKeys,
+															].filter(
+																(k) =>
+																	k !== key,
+															),
+														),
+													)
+												}
+											/>
 										)}
-										onDeselectAll={() =>
-											handleSelectionChange(new Set())
-										}
-										onRemoveItem={(key) =>
-											handleSelectionChange(
-												new Set(
-													[...selectedKeys].filter(
-														(k) => k !== key,
-													),
-												),
-											)
-										}
-									/>
-								)}
-							{panel.type === "create" && (
-								<CreateMcpPanel onDone={handlePanelDone} />
+									{panel.type === "create" && (
+										<CreateMcpPanel
+											onDone={handlePanelDone}
+										/>
+									)}
+									{panel.type === "import" && (
+										<ImportMcpPanel
+											onDone={handlePanelDone}
+										/>
+									)}
+									{panel.type === "edit" && activeGroup && (
+										<EditMcpPanel
+											key={activeGroup.mergeKey}
+											group={activeGroup}
+											onDone={handleEditDone}
+										/>
+									)}
+									{showDetail && activeGroup && (
+										<McpDetail
+											group={activeGroup}
+											onEdit={() =>
+												setPanel({
+													type: "edit",
+													selectedKey:
+														activeGroup.mergeKey,
+												})
+											}
+										/>
+									)}
+									{showDetail &&
+										!activeGroup &&
+										!hasMcpCapableAgents && (
+											<div className="flex h-full flex-col items-center justify-center gap-3">
+												<p className="text-sm text-muted">
+													{t("noTargetAgents")}
+												</p>
+											</div>
+										)}
+									{showDetail &&
+										!activeGroup &&
+										hasMcpCapableAgents && (
+											<div className="flex h-full flex-col items-center justify-center gap-4">
+												<div className="text-center">
+													<p className="mb-2 text-sm text-muted">
+														{t("selectServer")}
+													</p>
+													<p className="mb-2 text-xs text-muted">
+														{t("orCreateNew")}
+													</p>
+													<p className="text-xs text-muted">
+														{t("emptyShortcutHint")}
+													</p>
+												</div>
+												<Button onPress={handleCreate}>
+													<PlusIcon className="mr-2 size-4" />
+													{t("addMcpServer")}
+												</Button>
+											</div>
+										)}
+								</>
 							)}
-							{panel.type === "import" && (
-								<ImportMcpPanel onDone={handlePanelDone} />
-							)}
-							{panel.type === "edit" && activeGroup && (
-								<EditMcpPanel
-									key={activeGroup.mergeKey}
-									group={activeGroup}
-									onDone={handleEditDone}
-								/>
-							)}
-							{showDetail && activeGroup && (
-								<McpDetail
-									group={activeGroup}
-									onEdit={() =>
-										setPanel({
-											type: "edit",
-											selectedKey: activeGroup.mergeKey,
-										})
-									}
-								/>
-							)}
-							{showDetail &&
-								!activeGroup &&
-								!hasMcpCapableAgents && (
-									<div className="flex h-full flex-col items-center justify-center gap-3">
-										<p className="text-sm text-muted">
-											{t("noTargetAgents")}
-										</p>
-									</div>
-								)}
-							{showDetail &&
-								!activeGroup &&
-								hasMcpCapableAgents && (
-									<div className="flex h-full flex-col items-center justify-center gap-4">
-										<div className="text-center">
-											<p className="mb-2 text-sm text-muted">
-												{t("selectServer")}
-											</p>
-											<p className="mb-2 text-xs text-muted">
-												{t("orCreateNew")}
-											</p>
-											<p className="text-xs text-muted">
-												{t("emptyShortcutHint")}
-											</p>
-										</div>
-										<Button onPress={handleCreate}>
-											<PlusIcon className="mr-2 size-4" />
-											{t("addMcpServer")}
-										</Button>
-									</div>
-								)}
 						</PanelTransition>
 
 						<ContextMenu

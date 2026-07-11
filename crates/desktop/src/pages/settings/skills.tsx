@@ -287,10 +287,8 @@ export default function SkillsPage() {
 				key: member.name,
 				name: member.name,
 				sourceAgent: items[0]?.agent ?? "claude",
-				sourceScope:
-					items[0]?.source === "project"
-						? ("project" as const)
-						: ("global" as const),
+				// This page lists the global scope only
+				sourceScope: "global" as const,
 				installedAgents: items
 					.map((item) => item.agent)
 					.filter((agent): agent is string => agent != null),
@@ -310,7 +308,6 @@ export default function SkillsPage() {
 	const { dndProps, draggedKeys, boardGroups, showBoardUngrouped } =
 		useListDnd("skill", (keys) => setCreateGroupKeys(keys));
 
-	const listPanelRef = useRef<HTMLDivElement>(null);
 	// Shortcuts are scoped to the whole page (these pages hold a single
 	// list), so Esc/Cmd+A work from the detail panel too — not only while
 	// the pointer sits over the list column.
@@ -464,7 +461,6 @@ export default function SkillsPage() {
 				<div className="flex min-h-0 flex-1">
 					{/* Skills List Panel */}
 					<div
-						ref={listPanelRef}
 						className="relative flex w-80 shrink-0 flex-col border-r border-border"
 						onClick={(event) => {
 							if (isBlankTarget(event)) {
@@ -522,10 +518,8 @@ export default function SkillsPage() {
 										name: g.name,
 										sourceAgent:
 											g.items[0].agent ?? "claude",
-										sourceScope:
-											g.items[0].source === "project"
-												? ("project" as const)
-												: ("global" as const),
+										// Global-scope page
+										sourceScope: "global" as const,
 										installedAgents: g.items
 											.map((item) => item.agent)
 											.filter(

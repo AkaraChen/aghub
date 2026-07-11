@@ -168,19 +168,12 @@ export function SkillList({
 	const { active: activeDrag } = useDndContext();
 	const isDragging = activeDrag != null;
 
+	// No ordering here: custom sections and the loose list each sort
+	// their own members (starred-first, then name) downstream.
 	const filteredByName = useMemo(() => {
-		let items;
-		if (!searchQuery) items = groupedByName;
-		else items = fuse.search(searchQuery).map((result) => result.item);
-
-		return [...items].sort((a, b) => {
-			const aStarred = isSkillStarred(a.name);
-			const bStarred = isSkillStarred(b.name);
-			if (aStarred && !bStarred) return -1;
-			if (!aStarred && bStarred) return 1;
-			return 0;
-		});
-	}, [fuse, groupedByName, searchQuery, isSkillStarred]);
+		if (!searchQuery) return groupedByName;
+		return fuse.search(searchQuery).map((result) => result.item);
+	}, [fuse, groupedByName, searchQuery]);
 
 	const byStarredThenName = useCallback(
 		(a: SkillGroup, b: SkillGroup) => {
@@ -490,8 +483,11 @@ export function SkillList({
 				keys={dragSelectionPayload([skillGroup.name], selectedKeys)}
 				onContextMenu={(event) => openItemMenu(event, skillGroup.name)}
 				onShiftPress={() => {
-					if (selectedKeys.has(skillGroup.name))
-						selectRangeTo(skillGroup.name);
+					if (!selectedKeys.has(skillGroup.name)) return undefined;
+					const range = selectRangeTo(skillGroup.name);
+					return range
+						? dragSelectionPayload([skillGroup.name], range)
+						: undefined;
 				}}
 			>
 				<div className="relative inline-flex size-4 shrink-0 items-center justify-center">

@@ -59,9 +59,11 @@ interface UseListSelectionReturn {
 	/**
 	 * Fallback for a shift-click on an already-selected row: react-stately
 	 * swallows that event (the selection set is unchanged), so the row's
-	 * pointerdown calls this directly to run the range selection.
+	 * pointerdown calls this directly to run the range selection. Returns
+	 * the applied range so the caller can keep a frozen drag payload in
+	 * sync.
 	 */
-	selectRangeTo: (key: string) => void;
+	selectRangeTo: (key: string) => Set<string> | null;
 }
 
 /**
@@ -285,11 +287,12 @@ export function useListSelection(
 				(soleSelected
 					? { kind: "item" as const, key: soleSelected }
 					: null);
-			if (!anchor) return;
+			if (!anchor) return null;
 			const range = rangeBetween(anchor, clicked);
-			if (!range) return;
+			if (!range) return null;
 			seedPristineRef.current = false;
 			onSelectionChange(range);
+			return range;
 		},
 		[selectedKeys, rangeBetween, onSelectionChange],
 	);
