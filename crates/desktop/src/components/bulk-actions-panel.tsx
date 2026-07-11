@@ -152,26 +152,35 @@ export function BulkActionsPanel({
 								{section.members.length}
 							</span>
 							{section.members.map((item) => (
+								// The outer wrapper grows to soak up the
+								// row's leftover width; the hover surface
+								// stays content-sized so the feedback maps
+								// to the item, not the whole row
 								<div
 									key={item.key}
-									className="flex min-w-0 grow items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors duration-[var(--dur-fast)] hover:bg-foreground/10"
+									className="flex min-w-0 grow items-center"
 								>
-									<span
-										className="min-w-0 truncate text-sm text-foreground"
-										title={item.label}
-									>
-										{item.label}
-									</span>
-									<button
-										type="button"
-										aria-label={t("removeFromSelection", {
-											name: item.label,
-										})}
-										onClick={() => onRemoveItem(item.key)}
-										className="flex size-4 shrink-0 items-center justify-center rounded text-muted/40 transition-colors hover:text-foreground"
-									>
-										<XMarkIcon className="size-3" />
-									</button>
+									<div className="flex min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors duration-[var(--dur-fast)] hover:bg-foreground/10">
+										<span
+											className="min-w-0 truncate text-sm text-foreground"
+											title={item.label}
+										>
+											{item.label}
+										</span>
+										<button
+											type="button"
+											aria-label={t(
+												"removeFromSelection",
+												{ name: item.label },
+											)}
+											onClick={() =>
+												onRemoveItem(item.key)
+											}
+											className="flex size-4 shrink-0 items-center justify-center rounded text-muted/40 transition-colors hover:text-foreground"
+										>
+											<XMarkIcon className="size-3" />
+										</button>
+									</div>
 								</div>
 							))}
 						</div>
