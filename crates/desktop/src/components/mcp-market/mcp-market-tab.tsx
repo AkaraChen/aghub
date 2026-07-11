@@ -11,6 +11,7 @@ import {
 	SearchField,
 	Select,
 	Spinner,
+	toast,
 } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -30,6 +31,15 @@ import { useMcpInstall } from "./use-mcp-install";
 
 const ALL_TYPES = "__all__";
 const TRANSPORT_TYPES = ["stdio", "streamable_http", "sse"] as const;
+
+// Friendlier display names for transport kinds (protocol names, locale-neutral).
+const TRANSPORT_LABELS: Record<string, string> = {
+	stdio: "stdio",
+	streamable_http: "HTTP",
+	sse: "SSE",
+};
+const transportLabel = (transport: string) =>
+	TRANSPORT_LABELS[transport] ?? transport;
 
 // Fallback while no entry is selected for management; the dialog is closed then.
 const EMPTY_MANAGE_GROUP: McpGroup = {
@@ -111,7 +121,16 @@ export function McpMarketTab() {
 					className="min-w-32 max-w-40 shrink-0"
 				>
 					<Select.Trigger>
-						<Select.Value />
+						<Select.Value>
+							<span className="truncate">
+								<span className="text-muted">
+									{t("marketMcpTypePrefix")}
+								</span>
+								{typeFilter === ALL_TYPES
+									? t("all")
+									: transportLabel(typeFilter)}
+							</span>
+						</Select.Value>
 						<Select.Indicator />
 					</Select.Trigger>
 					<Select.Popover>
@@ -123,9 +142,9 @@ export function McpMarketTab() {
 								<ListBox.Item
 									key={transport}
 									id={transport}
-									textValue={transport}
+									textValue={transportLabel(transport)}
 								>
-									{transport}
+									{transportLabel(transport)}
 								</ListBox.Item>
 							))}
 						</ListBox>
@@ -137,7 +156,19 @@ export function McpMarketTab() {
 					size="sm"
 					className="size-9 shrink-0"
 					aria-label={t("refresh")}
-					onPress={() => refetch()}
+					onPress={() => {
+						refetch().then((result) => {
+							if (result.isError) {
+								toast.danger(t("marketMcpLoadError"));
+							} else {
+								toast.success(
+									t("marketMcpRefreshed", {
+										count: result.data?.length ?? 0,
+									}),
+								);
+							}
+						});
+					}}
 				>
 					<ArrowPathIcon
 						className={cn("size-4", isFetching && "animate-spin")}
@@ -240,7 +271,7 @@ export function McpMarketTab() {
 													: "bg-accent/15 text-accent",
 											)}
 										>
-											{server.transport}
+											{transportLabel(server.transport)}
 										</span>
 										<Button
 											variant={

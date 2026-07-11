@@ -1497,6 +1497,8 @@ export default {
 	marketMcpHeaders: "Headers",
 	marketMcpConfigPreview: "Config preview",
 	marketMcpTypeFilter: "Type",
+	marketMcpTypePrefix: "Type: ",
+	marketMcpRefreshed: "Refreshed · {{count}} results",
 	marketMcpSource: "Source",
 	marketMcpSourceOfficial: "Official registry",
 	marketMcpSourceAdd: "Add custom source…",

@@ -1489,6 +1489,8 @@ export default {
 	marketMcpHeaders: "標頭",
 	marketMcpConfigPreview: "設定預覽",
 	marketMcpTypeFilter: "類型",
+	marketMcpTypePrefix: "類型：",
+	marketMcpRefreshed: "已重新整理 · {{count}} 個結果",
 	marketMcpSource: "來源",
 	marketMcpSourceOfficial: "官方 registry",
 	marketMcpSourceAdd: "新增自訂來源…",

@@ -1493,6 +1493,8 @@ export default {
 	marketMcpHeaders: "请求头",
 	marketMcpConfigPreview: "配置预览",
 	marketMcpTypeFilter: "类型",
+	marketMcpTypePrefix: "类型：",
+	marketMcpRefreshed: "已刷新 · {{count}} 个结果",
 	marketMcpSource: "源",
 	marketMcpSourceOfficial: "官方 registry",
 	marketMcpSourceAdd: "添加自定义源…",
