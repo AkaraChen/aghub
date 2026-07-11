@@ -157,7 +157,7 @@ export function AgentCoverageMatrix({
 									}
 								}}
 								className={cn(
-									"flex w-full items-center gap-1.5 rounded-lg bg-surface-secondary px-2 py-1.5 text-left text-sm ring-1 ring-border transition-colors duration-[var(--dur-fast)] hover:bg-foreground/10 disabled:opacity-60",
+									"flex w-full items-center gap-1.5 rounded-lg bg-surface px-2 py-1.5 text-left text-sm ring-1 ring-border transition-colors duration-[var(--dur-fast)] hover:bg-foreground/10 disabled:opacity-60",
 									// Fill encodes coverage at a glance
 									full && "bg-accent/10 ring-accent/30",
 								)}

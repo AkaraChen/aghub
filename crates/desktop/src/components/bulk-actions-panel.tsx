@@ -94,7 +94,7 @@ export function BulkActionsPanel({
 	})();
 
 	return (
-		<div className="flex h-full flex-col bg-surface">
+		<div className="flex h-full flex-col">
 			<header className="flex shrink-0 items-center justify-between gap-3 border-b border-separator px-4 py-3">
 				<div className="min-w-0 flex-1">
 					{sourceContext ? (
@@ -135,10 +135,10 @@ export function BulkActionsPanel({
 			</header>
 
 			<div className="flex-1 space-y-4 overflow-y-auto px-4 pt-3 pb-4">
-				{/* Roster: one card per source — the group name and its
-				 * members read as a single unit; members are plain text
-				 * (no pills) that grow to soak up the row's leftover width,
-				 * and the × only drops the item from the selection */}
+				{/* Roster: one card per source (the Card surface, floating on
+				 * the shell), members as accent pills. A pill is one button —
+				 * clicking it drops the item from the selection, and it turns
+				 * danger-tinted on hover to say so. */}
 				<div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
 					{rosterSections.map((section) => {
 						const only =
@@ -156,25 +156,24 @@ export function BulkActionsPanel({
 										name: only.label,
 									})}
 									onClick={() => onRemoveItem(only.key)}
-									className="group flex max-w-full items-center gap-1.5 rounded-lg border border-border bg-surface-secondary py-1.5 pr-2 pl-2.5 transition-colors duration-[var(--dur-fast)] hover:bg-foreground/10"
+									className="group flex max-w-full items-center gap-1.5 rounded-lg border border-border bg-surface py-1.5 pr-1.5 pl-2.5 transition-colors duration-[var(--dur-fast)]"
 								>
 									<span className="shrink-0 text-[10px] font-medium tracking-wider text-muted uppercase">
 										{section.title.split("/").pop()}
 									</span>
 									<span
-										className="min-w-0 truncate text-sm text-foreground"
+										className="min-w-0 truncate rounded-full bg-accent/10 px-2 py-0.5 text-sm text-accent transition-colors duration-[var(--dur-fast)] group-hover:bg-danger/10 group-hover:text-danger"
 										title={only.label}
 									>
 										{only.label}
 									</span>
-									<XMarkIcon className="size-3 shrink-0 text-muted/40 transition-colors group-hover:text-foreground" />
 								</button>
 							);
 						}
 						return (
 							<div
 								key={section.title}
-								className="flex max-w-full grow flex-wrap items-center gap-x-0.5 gap-y-0.5 rounded-lg border border-border bg-surface-secondary py-1.5 pr-1.5 pl-2.5"
+								className="flex max-w-full grow flex-wrap items-center gap-x-1 gap-y-1 rounded-lg border border-border bg-surface py-1.5 pr-1.5 pl-2.5"
 							>
 								<span className="mr-1 text-[10px] font-medium tracking-wider text-muted uppercase">
 									{section.title.split("/").pop()}
@@ -183,34 +182,18 @@ export function BulkActionsPanel({
 									{section.members.length}
 								</span>
 								{section.members.map((item) => (
-									// The outer wrapper grows to soak up the
-									// row's leftover width; the whole item is
-									// the remove button, content-sized so the
-									// feedback maps to the item, not the row
-									<div
+									<button
 										key={item.key}
-										className="flex min-w-0 grow items-center"
+										type="button"
+										aria-label={t("removeFromSelection", {
+											name: item.label,
+										})}
+										onClick={() => onRemoveItem(item.key)}
+										className="max-w-full min-w-0 truncate rounded-full bg-accent/10 px-2 py-0.5 text-left text-sm text-accent transition-colors duration-[var(--dur-fast)] hover:bg-danger/10 hover:text-danger"
+										title={item.label}
 									>
-										<button
-											type="button"
-											aria-label={t(
-												"removeFromSelection",
-												{ name: item.label },
-											)}
-											onClick={() =>
-												onRemoveItem(item.key)
-											}
-											className="group flex min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-left transition-colors duration-[var(--dur-fast)] hover:bg-foreground/10"
-										>
-											<span
-												className="min-w-0 truncate text-sm text-foreground"
-												title={item.label}
-											>
-												{item.label}
-											</span>
-											<XMarkIcon className="size-3 shrink-0 text-muted/40 transition-colors group-hover:text-foreground" />
-										</button>
-									</div>
+										{item.label}
+									</button>
 								))}
 							</div>
 						);

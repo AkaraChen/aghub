@@ -62,7 +62,7 @@ export function SourceDetailPanel({
 	].filter(Boolean);
 
 	return (
-		<div className="flex h-full flex-col bg-surface">
+		<div className="flex h-full flex-col">
 			<header className="flex shrink-0 items-start justify-between gap-3 border-b border-separator p-4">
 				<div className="min-w-0 flex-1">
 					<h2 className="truncate text-lg font-semibold text-foreground">
@@ -117,7 +117,7 @@ export function SourceDetailPanel({
 							type="button"
 							aria-label={member.name}
 							onClick={() => onSelectMember(member.name)}
-							className="flex flex-col gap-1 rounded-lg border border-border bg-surface-secondary p-3 text-left transition-colors duration-[var(--dur-fast)] hover:bg-foreground/10"
+							className="flex flex-col gap-1 rounded-lg border border-border bg-surface p-3 text-left transition-colors duration-[var(--dur-fast)] hover:bg-foreground/10"
 						>
 							<span className="flex w-full items-center gap-2 text-sm font-medium text-foreground">
 								<BookOpenIcon className="size-4 shrink-0 text-muted" />
