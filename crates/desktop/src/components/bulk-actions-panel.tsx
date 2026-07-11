@@ -140,40 +140,57 @@ export function BulkActionsPanel({
 				 * (no pills) that grow to soak up the row's leftover width,
 				 * and the × only drops the item from the selection */}
 				<div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-					{rosterSections.map((section) => (
-						<div
-							key={section.title}
-							className={cn(
-								"flex max-w-full flex-wrap items-center gap-x-0.5 gap-y-0.5 rounded-lg border border-border bg-surface-secondary py-1.5 pr-1.5 pl-2.5",
-								// A lone member reads as a compact chip;
-								// only multi-member cards stretch to fill
-								section.members.length > 1 && "grow",
-							)}
-						>
-							<span className="mr-1 text-[10px] font-medium tracking-wider text-muted uppercase">
-								{section.title.split("/").pop()}
-							</span>
-							{section.members.length > 1 && (
+					{rosterSections.map((section) => {
+						const only =
+							section.members.length === 1
+								? section.members[0]
+								: undefined;
+						// A lone member collapses into one clickable chip —
+						// group name as its prefix, no card-in-card framing
+						if (only) {
+							return (
+								<button
+									key={section.title}
+									type="button"
+									aria-label={t("removeFromSelection", {
+										name: only.label,
+									})}
+									onClick={() => onRemoveItem(only.key)}
+									className="group flex max-w-full items-center gap-1.5 rounded-lg border border-border bg-surface-secondary py-1.5 pr-2 pl-2.5 transition-colors duration-[var(--dur-fast)] hover:bg-foreground/10"
+								>
+									<span className="shrink-0 text-[10px] font-medium tracking-wider text-muted uppercase">
+										{section.title.split("/").pop()}
+									</span>
+									<span
+										className="min-w-0 truncate text-sm text-foreground"
+										title={only.label}
+									>
+										{only.label}
+									</span>
+									<XMarkIcon className="size-3 shrink-0 text-muted/40 transition-colors group-hover:text-foreground" />
+								</button>
+							);
+						}
+						return (
+							<div
+								key={section.title}
+								className="flex max-w-full grow flex-wrap items-center gap-x-0.5 gap-y-0.5 rounded-lg border border-border bg-surface-secondary py-1.5 pr-1.5 pl-2.5"
+							>
+								<span className="mr-1 text-[10px] font-medium tracking-wider text-muted uppercase">
+									{section.title.split("/").pop()}
+								</span>
 								<span className="mr-0.5 text-[10px] tabular-nums text-muted/60">
 									{section.members.length}
 								</span>
-							)}
-							{section.members.map((item) => (
-								// The outer wrapper grows to soak up the
-								// row's leftover width; the hover surface
-								// stays content-sized so the feedback maps
-								// to the item, not the whole row
-								<div
-									key={item.key}
-									className="flex min-w-0 grow items-center"
-								>
-									<div className="flex min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors duration-[var(--dur-fast)] hover:bg-foreground/10">
-										<span
-											className="min-w-0 truncate text-sm text-foreground"
-											title={item.label}
-										>
-											{item.label}
-										</span>
+								{section.members.map((item) => (
+									// The outer wrapper grows to soak up the
+									// row's leftover width; the whole item is
+									// the remove button, content-sized so the
+									// feedback maps to the item, not the row
+									<div
+										key={item.key}
+										className="flex min-w-0 grow items-center"
+									>
 										<button
 											type="button"
 											aria-label={t(
@@ -183,15 +200,21 @@ export function BulkActionsPanel({
 											onClick={() =>
 												onRemoveItem(item.key)
 											}
-											className="flex size-4 shrink-0 items-center justify-center rounded text-muted/40 transition-colors hover:text-foreground"
+											className="group flex min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-left transition-colors duration-[var(--dur-fast)] hover:bg-foreground/10"
 										>
-											<XMarkIcon className="size-3" />
+											<span
+												className="min-w-0 truncate text-sm text-foreground"
+												title={item.label}
+											>
+												{item.label}
+											</span>
+											<XMarkIcon className="size-3 shrink-0 text-muted/40 transition-colors group-hover:text-foreground" />
 										</button>
 									</div>
-								</div>
-							))}
-						</div>
-					))}
+								))}
+							</div>
+						);
+					})}
 				</div>
 
 				<AgentCoverageMatrix
