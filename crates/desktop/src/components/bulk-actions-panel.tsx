@@ -143,14 +143,21 @@ export function BulkActionsPanel({
 					{rosterSections.map((section) => (
 						<div
 							key={section.title}
-							className="flex max-w-full grow flex-wrap items-center gap-x-0.5 gap-y-0.5 rounded-lg border border-border bg-surface-secondary py-1.5 pr-1.5 pl-2.5"
+							className={cn(
+								"flex max-w-full flex-wrap items-center gap-x-0.5 gap-y-0.5 rounded-lg border border-border bg-surface-secondary py-1.5 pr-1.5 pl-2.5",
+								// A lone member reads as a compact chip;
+								// only multi-member cards stretch to fill
+								section.members.length > 1 && "grow",
+							)}
 						>
 							<span className="mr-1 text-[10px] font-medium tracking-wider text-muted uppercase">
 								{section.title.split("/").pop()}
 							</span>
-							<span className="mr-0.5 text-[10px] tabular-nums text-muted/60">
-								{section.members.length}
-							</span>
+							{section.members.length > 1 && (
+								<span className="mr-0.5 text-[10px] tabular-nums text-muted/60">
+									{section.members.length}
+								</span>
+							)}
 							{section.members.map((item) => (
 								// The outer wrapper grows to soak up the
 								// row's leftover width; the hover surface
