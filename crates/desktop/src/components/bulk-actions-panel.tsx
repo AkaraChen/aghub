@@ -62,8 +62,9 @@ export function BulkActionsPanel({
 		intents,
 	});
 
-	// Roster sections: items grouped by their source badge (sorted by the
-	// repo name, matching the list), badge-less items last as "ungrouped".
+	// Roster sections: items grouped by their source badge. Sorted small
+	// sources first so one-member cards pack side by side instead of a
+	// big source pushing each of them onto its own row; ties by repo name.
 	const rosterSections = (() => {
 		const bySource = new Map<string, BulkPanelItem[]>();
 		const loose: BulkPanelItem[] = [];
@@ -76,20 +77,24 @@ export function BulkActionsPanel({
 			existing.push(item);
 			bySource.set(item.badge, existing);
 		}
-		const named = Array.from(bySource.entries()).sort(([a], [b]) => {
-			const tail = (s: string) => s.split("/").pop() ?? s;
-			return tail(a).localeCompare(tail(b));
-		});
+		const tail = (s: string) => s.split("/").pop() ?? s;
 		return [
-			...named.map(([title, members]) => ({ title, members })),
+			...Array.from(bySource.entries()).map(([title, members]) => ({
+				title,
+				members,
+			})),
 			...(loose.length > 0
 				? [{ title: t("ungrouped"), members: loose }]
 				: []),
-		];
+		].sort(
+			(a, b) =>
+				a.members.length - b.members.length ||
+				tail(a.title).localeCompare(tail(b.title)),
+		);
 	})();
 
 	return (
-		<div className="flex h-full flex-col">
+		<div className="flex h-full flex-col bg-surface">
 			<header className="flex shrink-0 items-center justify-between gap-3 border-b border-separator px-4 py-3">
 				<div className="min-w-0 flex-1">
 					{sourceContext ? (
@@ -138,7 +143,7 @@ export function BulkActionsPanel({
 					{rosterSections.map((section) => (
 						<div
 							key={section.title}
-							className="flex max-w-full grow flex-wrap items-center gap-x-0.5 gap-y-0.5 rounded-lg border border-border/60 bg-surface-secondary py-1.5 pr-1.5 pl-2.5"
+							className="flex max-w-full grow flex-wrap items-center gap-x-0.5 gap-y-0.5 rounded-lg border border-border bg-surface-secondary py-1.5 pr-1.5 pl-2.5"
 						>
 							<span className="mr-1 text-[10px] font-medium tracking-wider text-muted uppercase">
 								{section.title.split("/").pop()}
@@ -149,7 +154,7 @@ export function BulkActionsPanel({
 							{section.members.map((item) => (
 								<div
 									key={item.key}
-									className="flex min-w-0 grow items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors duration-[var(--dur-fast)] hover:bg-default/60"
+									className="flex min-w-0 grow items-center gap-1 rounded-md px-1.5 py-0.5 transition-colors duration-[var(--dur-fast)] hover:bg-foreground/10"
 								>
 									<span
 										className="min-w-0 truncate text-sm text-foreground"
