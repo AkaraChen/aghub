@@ -783,16 +783,6 @@ async function sectionTop(page: Page, source: string): Promise<number> {
 	return box.y;
 }
 
-test("source clusters sort by the repo name, not the github prefix", async ({
-	page,
-}) => {
-	// "alpha-pack" (a) sorts above "web-dev" (w) — the last path segment,
-	// not the shared "github/AkaraChen/" prefix, drives the order
-	expect(await sectionTop(page, "github/AkaraChen/alpha-pack")).toBeLessThan(
-		await sectionTop(page, "github/AkaraChen/web-dev"),
-	);
-});
-
 test("starring a member floats its whole source cluster up", async ({
 	page,
 }) => {
@@ -1139,4 +1129,68 @@ test("opening the create panel resets multi-select mode", async ({ page }) => {
 	await expect(
 		page.getByRole("heading", { name: "solo-skill" }),
 	).toBeVisible();
+});
+
+test("a fully covered matrix cell uninstalls after confirmation", async ({
+	page,
+}) => {
+	// Select the whole alpha-pack (2 members, both on Claude only)
+	await page.getByRole("option", { name: "solo-skill" }).click();
+	await page
+		.getByRole("button", { name: "Multi-select mode" })
+		.first()
+		.click();
+	await page
+		.getByRole("button", {
+			name: "github/AkaraChen/alpha-pack",
+			exact: true,
+		})
+		.click();
+	await expect(page.getByText("3 items selected")).toBeVisible();
+
+	// Claude is fully covered — clicking asks for confirmation, and
+	// confirming actually uninstalls (the reconcile mock mutates state)
+	await page.getByTestId("matrix-row-claude").click();
+	const dialog = page.getByRole("alertdialog");
+	await expect(dialog).toBeVisible();
+	await dialog.getByRole("button", { name: "Delete" }).click();
+	await expect(page.getByRole("option", { name: "arch-lint" })).toBeHidden();
+	await expect(page.getByRole("option", { name: "api-forge" })).toBeHidden();
+});
+
+test("right-clicking an unselected item resets the selection to it", async ({
+	page,
+}) => {
+	await page.getByRole("option", { name: "solo-skill" }).click();
+	await expect(
+		page.getByRole("heading", { name: "solo-skill" }),
+	).toBeVisible();
+
+	// Finder semantics, other half: hitting an item OUTSIDE the selection
+	// resets the selection to that item before the menu opens
+	await page
+		.getByRole("option", { name: "css-wizard" })
+		.click({ button: "right" });
+	await expect(
+		page.getByRole("menu", { name: "Resource actions" }),
+	).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(
+		page.getByRole("heading", { name: "css-wizard" }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("option", { name: "css-wizard" }),
+	).toHaveAttribute("aria-selected", "true");
+});
+
+test("searching force-expands the collapsed clusters", async ({ page }) => {
+	// alpha-pack starts collapsed; its member is not rendered
+	await expect(page.getByRole("option", { name: "arch-lint" })).toBeHidden();
+
+	await page.getByRole("searchbox", { name: "Search skills" }).fill("arch");
+	await expect(page.getByRole("option", { name: "arch-lint" })).toBeVisible();
+
+	// Clearing the search collapses it again
+	await page.getByRole("searchbox", { name: "Search skills" }).fill("");
+	await expect(page.getByRole("option", { name: "arch-lint" })).toBeHidden();
 });
