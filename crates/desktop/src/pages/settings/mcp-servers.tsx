@@ -382,10 +382,13 @@ export default function MCPServersPage() {
 											<BulkActionsPanel
 												kind="mcp"
 												items={selectedGroups.map(
+													// No badge: servers have
+													// no source library, so
+													// the roster stays one
+													// flat card
 													(g) => ({
 														key: g.mergeKey,
 														label: g.items[0].name,
-														badge: g.transport.type,
 													}),
 												)}
 												intents={actionIntents}
