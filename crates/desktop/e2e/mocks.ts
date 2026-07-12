@@ -153,10 +153,14 @@ export async function installMocks(page: Page) {
 	await page.route("**/ph/**", (route) => route.abort());
 	await page.route("https://*.posthog.com/**", (route) => route.abort());
 
-	// Per-test mutable copies so mutations (MCP PUT, skills reconcile) are
-	// reflected by the next list fetch.
+	// Per-test mutable copies so mutations (MCP PUT, skills reconcile,
+	// source install) are reflected by the next fetch.
 	const mcps = MCPS.map((m) => ({ ...m }));
 	const skills = SKILLS.map((s) => ({ ...s }));
+	const globalLock = {
+		...GLOBAL_LOCK,
+		skills: GLOBAL_LOCK.skills.map((entry) => ({ ...entry })),
+	};
 
 	await page.route("http://localhost:45999/api/v1/**", (route) => {
 		const url = new URL(route.request().url());
@@ -175,7 +179,7 @@ export async function installMocks(page: Page) {
 		if (p === "/agents/all/mcps") return json(mcps);
 		if (p === "/agents/all/sub-agents") return json(SUB_AGENTS);
 		if (p === "/plugins") return json(PLUGINS);
-		if (p === "/skills/lock/global") return json(GLOBAL_LOCK);
+		if (p === "/skills/lock/global") return json(globalLock);
 
 		if (p === "/skills/tree") {
 			const treePath = url.searchParams.get("path") ?? "";
@@ -206,6 +210,17 @@ export async function installMocks(page: Page) {
 					},
 				],
 			});
+		}
+
+		if (p === "/skills/install" && method === "POST") {
+			// Re-install from a source: existing skills stay, the source's
+			// newly added member appears and joins the lock
+			const body = JSON.parse(route.request().postData() ?? "{}");
+			if (!skills.some((s) => s.name === "fresh-skill")) {
+				skills.push(skill("fresh-skill"));
+				globalLock.skills.push(lockEntry("fresh-skill", body.source));
+			}
+			return json({ success: true });
 		}
 
 		if (p === "/skills/reconcile" && method === "POST") {

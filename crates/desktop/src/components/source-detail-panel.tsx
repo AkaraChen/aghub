@@ -1,9 +1,11 @@
 import {
+	ArrowPathIcon,
 	BookOpenIcon,
 	CheckCircleIcon,
 	LinkIcon,
 } from "@heroicons/react/24/solid";
 import { Button, Tooltip } from "@heroui/react";
+import { cn } from "../lib/utils";
 import githubIcon from "@lobehub/icons-static-svg/icons/github.svg?raw";
 import { useTranslation } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -30,6 +32,9 @@ interface SourceDetailPanelProps {
 	onSelectAll: () => void;
 	/** Selects one member (jumps to its detail) */
 	onSelectMember: (name: string) => void;
+	/** Re-installs from the source: picks up newly added members */
+	onUpdate: () => void;
+	isUpdating: boolean;
 }
 
 /**
@@ -48,6 +53,8 @@ export function SourceDetailPanel({
 	matrixGroups,
 	onSelectAll,
 	onSelectMember,
+	onUpdate,
+	isUpdating,
 }: SourceDetailPanelProps) {
 	const { t } = useTranslation();
 	const dates = [
@@ -74,6 +81,27 @@ export function SourceDetailPanel({
 					</p>
 				</div>
 				<div className="flex shrink-0 items-center gap-1">
+					<Tooltip delay={0}>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="md"
+							className="min-h-[44px] min-w-[44px] text-muted hover:text-foreground"
+							aria-label={t("updateFromSource")}
+							isDisabled={isUpdating}
+							onPress={onUpdate}
+						>
+							<ArrowPathIcon
+								className={cn(
+									"size-5",
+									isUpdating && "animate-spin",
+								)}
+							/>
+						</Button>
+						<Tooltip.Content>
+							{t("updateFromSource")}
+						</Tooltip.Content>
+					</Tooltip>
 					<Button variant="secondary" onPress={onSelectAll}>
 						<CheckCircleIcon className="size-4" />
 						{t("selectAll")}

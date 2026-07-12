@@ -574,6 +574,8 @@ export default {
 	favoriteAll: "收藏全部",
 	installedOn: "装于 {{date}}",
 	updatedOn: "更新于 {{date}}",
+	updateFromSource: "从源更新",
+	sourceUpdated: "库已更新",
 	emptyShortcutHint: "⌘A 全选 · 空白处右键更多操作",
 	skillsSelected: "skills 已选",
 	installSelected: "安装所选",

@@ -1203,3 +1203,26 @@ test("searching force-expands the collapsed clusters", async ({ page }) => {
 	await page.getByRole("searchbox", { name: "Search skills" }).fill("");
 	await expect(page.getByRole("option", { name: "arch-lint" })).toBeHidden();
 });
+
+test("updating a library from its page picks up new members", async ({
+	page,
+}) => {
+	await page
+		.getByRole("button", {
+			name: "github/AkaraChen/alpha-pack",
+			exact: true,
+		})
+		.click();
+	await expect(
+		page.getByRole("heading", { name: "github/AkaraChen/alpha-pack" }),
+	).toBeVisible();
+	await expect(page.getByText("2 members")).toBeVisible();
+
+	// Update re-installs from the source; the mock adds fresh-skill to the
+	// list AND the lock, so it must appear clustered under this library
+	await page.getByRole("button", { name: "Update from source" }).click();
+	await expect(page.getByText("3 members")).toBeVisible();
+	await expect(
+		page.getByRole("option", { name: "fresh-skill" }),
+	).toBeVisible();
+});
