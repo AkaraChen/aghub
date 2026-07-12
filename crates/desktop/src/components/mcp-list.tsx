@@ -53,33 +53,35 @@ interface McpRowBodyProps {
  * A row's content behind a memo boundary — see SkillRowBody: stable
  * callbacks keep a selection change from rebuilding every row.
  */
-const McpRowBody = memo(({
-	group,
-	starred,
-	getDragKeys,
-	onShiftPress,
-	onOpenMenu,
-}: McpRowBodyProps) => {
-	const Icon =
-		group.transport.type === "stdio" ? CommandLineIcon : GlobeAltIcon;
-	return (
-		<DraggableItemBody
-			dragId={`item:${group.mergeKey}`}
-			getKeys={() => getDragKeys(group.mergeKey)}
-			onContextMenu={(event) => onOpenMenu(event, group.mergeKey)}
-			onShiftPress={() => onShiftPress(group.mergeKey)}
-		>
-			<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
-				<Icon className="size-4" />
-				{starred && (
-					<StarIconSolid className="absolute -bottom-1 -left-1 size-2.5 text-warning" />
-				)}
-			</div>
-			<Label className="flex-1 truncate">{group.items[0].name}</Label>
-			<AgentIcons items={group.items} />
-		</DraggableItemBody>
-	);
-});
+const McpRowBody = memo(
+	({
+		group,
+		starred,
+		getDragKeys,
+		onShiftPress,
+		onOpenMenu,
+	}: McpRowBodyProps) => {
+		const Icon =
+			group.transport.type === "stdio" ? CommandLineIcon : GlobeAltIcon;
+		return (
+			<DraggableItemBody
+				dragId={`item:${group.mergeKey}`}
+				getKeys={() => getDragKeys(group.mergeKey)}
+				onContextMenu={(event) => onOpenMenu(event, group.mergeKey)}
+				onShiftPress={() => onShiftPress(group.mergeKey)}
+			>
+				<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
+					<Icon className="size-4" />
+					{starred && (
+						<StarIconSolid className="absolute -bottom-1 -left-1 size-2.5 text-warning" />
+					)}
+				</div>
+				<Label className="flex-1 truncate">{group.items[0].name}</Label>
+				<AgentIcons items={group.items} />
+			</DraggableItemBody>
+		);
+	},
+);
 
 interface McpListProps {
 	mcps: McpResponse[];

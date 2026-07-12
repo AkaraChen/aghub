@@ -78,8 +78,11 @@ export function ResourceGroupSection({
 
 	// Subtle clusters cannot accept drops; dim them while a drag is
 	// underway so they read as non-targets.
-	const { active: dndActive, measureDroppableContainers, droppableContainers } =
-		useDndContext();
+	const {
+		active: dndActive,
+		measureDroppableContainers,
+		droppableContainers,
+	} = useDndContext();
 	const isDropInert = subtle && dndActive != null;
 
 	// Spring-loading: hovering a collapsed group mid-drag pops it open so
