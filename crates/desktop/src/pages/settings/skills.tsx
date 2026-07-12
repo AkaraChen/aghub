@@ -11,7 +11,7 @@ import {
 	useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
-import { useMemo, useRef, useState } from "react";
+import { useDeferredValue, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { matrixGroup } from "../../components/agent-coverage-matrix";
 import { BulkActionsPanel } from "../../components/bulk-actions-panel";
@@ -135,16 +135,23 @@ export default function SkillsPage() {
 		}
 	}
 
+	// The right panel derives from a deferred copy of the selection: the
+	// row highlight and the context menu commit at input priority, and the
+	// heavier detail/bulk panel swap follows one non-blocking render later
+	// — right-clicking an unselected row must not wait for a full detail
+	// remount before the menu shows.
+	const deferredSelectedKeys = useDeferredValue(selectedKeys);
+
 	const activeGroup = useMemo(() => {
-		if (selectedKeys.size !== 1) return null;
-		const [key] = selectedKeys;
+		if (deferredSelectedKeys.size !== 1) return null;
+		const [key] = deferredSelectedKeys;
 		return groupedSkills.find((g) => g.name === key) ?? null;
-	}, [selectedKeys, groupedSkills]);
+	}, [deferredSelectedKeys, groupedSkills]);
 
 	// 多选模式下被选中的所有 groups（用于批量删除）
 	const selectedGroups = useMemo(() => {
-		return groupedSkills.filter((g) => selectedKeys.has(g.name));
-	}, [selectedKeys, groupedSkills]);
+		return groupedSkills.filter((g) => deferredSelectedKeys.has(g.name));
+	}, [deferredSelectedKeys, groupedSkills]);
 
 	const handleSelectionChange = (keys: Set<string>) => {
 		setSelectedKeys(keys);
@@ -191,7 +198,7 @@ export default function SkillsPage() {
 		onRequestCreateGroup: () => setCreateGroupKeys([...selectedKeys]),
 	};
 
-	const isBulkSelection = selectedKeys.size >= 2;
+	const isBulkSelection = deferredSelectedKeys.size >= 2;
 
 	// The selection is exactly one source group: the bulk panel doubles
 	// as the library detail with the source header on top.
@@ -218,8 +225,8 @@ export default function SkillsPage() {
 		}
 		for (const [source, record] of bySource) {
 			if (
-				record.names.size === selectedKeys.size &&
-				[...selectedKeys].every((key) => record.names.has(key))
+				record.names.size === deferredSelectedKeys.size &&
+				[...deferredSelectedKeys].every((key) => record.names.has(key))
 			) {
 				const url =
 					record.sourceUrl ??
@@ -230,7 +237,7 @@ export default function SkillsPage() {
 			}
 		}
 		return null;
-	}, [isBulkSelection, globalLock, groupedSkills, selectedKeys]);
+	}, [isBulkSelection, globalLock, groupedSkills, deferredSelectedKeys]);
 
 	// Roster badge: where each skill came from
 	const sourceByName = useMemo(() => {

@@ -235,6 +235,10 @@ export function ResourceGroupSection({
 				onTransitionEnd={(event) => {
 					if (event.target !== event.currentTarget) return;
 					if (event.propertyName !== "grid-template-rows") return;
+					// Coupled to the transition above: if it ever goes behind
+					// motion-safe (no transition → no transitionend), mid-drag
+					// drops below a spring-opened group regress — move this
+					// re-measure to wherever the expansion settles instead.
 					measureAllRef.current();
 				}}
 			>

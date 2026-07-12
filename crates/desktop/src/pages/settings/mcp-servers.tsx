@@ -3,7 +3,7 @@ import { ArrowPathIcon, PlusIcon, ServerIcon } from "@heroicons/react/24/solid";
 import { Button, Dropdown, Kbd, Menu } from "@heroui/react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
-import { useMemo, useRef, useState } from "react";
+import { useDeferredValue, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { matrixGroup } from "../../components/agent-coverage-matrix";
 import { BulkActionsPanel } from "../../components/bulk-actions-panel";
@@ -126,16 +126,20 @@ export default function MCPServersPage() {
 		}
 	}
 
+	// Deferred copy for the right panel — see SkillsPage: the highlight
+	// and menu commit at input priority, the panel swap follows.
+	const deferredSelectedKeys = useDeferredValue(selectedKeys);
+
 	const activeGroup = useMemo(() => {
-		if (selectedKeys.size !== 1) return null;
-		const [key] = selectedKeys;
+		if (deferredSelectedKeys.size !== 1) return null;
+		const [key] = deferredSelectedKeys;
 		return groupedMcps.find((g) => g.mergeKey === key) ?? null;
-	}, [selectedKeys, groupedMcps]);
+	}, [deferredSelectedKeys, groupedMcps]);
 
 	// 多选模式下被选中的所有 groups（用于批量删除）
 	const selectedGroups = useMemo(() => {
-		return groupedMcps.filter((g) => selectedKeys.has(g.mergeKey));
-	}, [selectedKeys, groupedMcps]);
+		return groupedMcps.filter((g) => deferredSelectedKeys.has(g.mergeKey));
+	}, [deferredSelectedKeys, groupedMcps]);
 
 	const handleSelectionChange = (keys: Set<string>) => {
 		setSelectedKeys(keys);
@@ -193,7 +197,7 @@ export default function MCPServersPage() {
 		onRequestCreateGroup: () => setCreateGroupKeys([...selectedKeys]),
 	};
 
-	const isBulkSelection = selectedKeys.size >= 2;
+	const isBulkSelection = deferredSelectedKeys.size >= 2;
 
 	const showDetail =
 		panel.type !== "create" &&

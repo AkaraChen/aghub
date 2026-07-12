@@ -31,4 +31,18 @@ export default [
 	{
 		ignores: ["./src/generated/**"],
 	},
+	{
+		// Named function expressions inside memo() keep the component's
+		// displayName in DevTools; the arrow form erases it.
+		rules: {
+			"prefer-arrow-callback": ["error", { allowNamedFunctions: true }],
+		},
+	},
+	{
+		// The perf probe's console output is its product: measured numbers.
+		files: ["e2e/perf-probe.spec.ts"],
+		rules: {
+			"no-console": "off",
+		},
+	},
 ];
