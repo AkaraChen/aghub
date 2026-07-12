@@ -5,7 +5,6 @@ import {
 	LinkIcon,
 } from "@heroicons/react/24/solid";
 import { Button, Tooltip } from "@heroui/react";
-import { cn } from "../lib/utils";
 import githubIcon from "@lobehub/icons-static-svg/icons/github.svg?raw";
 import { useTranslation } from "react-i18next";
 import { openUrl } from "@tauri-apps/plugin-opener";
@@ -32,9 +31,8 @@ interface SourceDetailPanelProps {
 	onSelectAll: () => void;
 	/** Selects one member (jumps to its detail) */
 	onSelectMember: (name: string) => void;
-	/** Re-installs from the source: picks up newly added members */
+	/** Opens the git import panel pre-filled with this source's URL */
 	onUpdate: () => void;
-	isUpdating: boolean;
 }
 
 /**
@@ -54,7 +52,6 @@ export function SourceDetailPanel({
 	onSelectAll,
 	onSelectMember,
 	onUpdate,
-	isUpdating,
 }: SourceDetailPanelProps) {
 	const { t } = useTranslation();
 	const dates = [
@@ -88,15 +85,9 @@ export function SourceDetailPanel({
 							size="md"
 							className="min-h-[44px] min-w-[44px] text-muted hover:text-foreground"
 							aria-label={t("updateFromSource")}
-							isDisabled={isUpdating}
 							onPress={onUpdate}
 						>
-							<ArrowPathIcon
-								className={cn(
-									"size-5",
-									isUpdating && "animate-spin",
-								)}
-							/>
+							<ArrowPathIcon className="size-5" />
 						</Button>
 						<Tooltip.Content>
 							{t("updateFromSource")}

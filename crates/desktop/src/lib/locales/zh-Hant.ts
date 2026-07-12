@@ -574,7 +574,6 @@ export default {
 	installedOn: "裝於 {{date}}",
 	updatedOn: "更新於 {{date}}",
 	updateFromSource: "從源更新",
-	sourceUpdated: "庫已更新",
 	emptyShortcutHint: "⌘A 全選 · 空白處按右鍵更多操作",
 	installSelected: "安裝已選",
 	installingSkills: "安裝",

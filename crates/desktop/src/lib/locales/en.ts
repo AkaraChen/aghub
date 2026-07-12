@@ -595,7 +595,6 @@ export default {
 	installedOn: "Installed {{date}}",
 	updatedOn: "Updated {{date}}",
 	updateFromSource: "Update from source",
-	sourceUpdated: "Library updated",
 	emptyShortcutHint: "⌘A select all · Right-click blank space for actions",
 	skillsSelected: "skills selected",
 	installSelected: "Install Selected",

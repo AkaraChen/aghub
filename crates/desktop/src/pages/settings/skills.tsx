@@ -4,9 +4,8 @@ import {
 	BookOpenIcon,
 	PlusIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Dropdown, Kbd, Menu, toast } from "@heroui/react";
+import { Button, Dropdown, Kbd, Menu } from "@heroui/react";
 import {
-	useMutation,
 	useQuery,
 	useQueryClient,
 	useSuspenseQuery,
@@ -19,6 +18,7 @@ import { BulkActionsPanel } from "../../components/bulk-actions-panel";
 import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
 import { CreateSkillPanel } from "../../components/create-skill-panel";
 import { ImportSkillPanel } from "../../components/import-skill-panel";
+import { ImportGithubSkillPanel } from "../../components/import-github-skill-panel";
 import { ManageSkillAgentsDialog } from "../../components/manage-skill-agents-dialog";
 import { GroupNameDialog } from "../../components/resource-group-dialogs";
 import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
@@ -40,7 +40,6 @@ import { useSkillGroups } from "../../hooks/use-resource-groups";
 import { cn, filterItemsByAgentIds } from "../../lib/utils";
 import {
 	globalSkillLockQueryOptions,
-	installSkillMutationOptions,
 	invalidateSkillQueries,
 	skillListQueryOptions,
 } from "../../requests/skills";
@@ -68,9 +67,9 @@ export default function SkillsPage() {
 		...globalSkillLockQueryOptions({ api, enabled: true }),
 	});
 
-	const [panelMode, setPanelMode] = useState<"create" | "import" | null>(
-		null,
-	);
+	const [panelMode, setPanelMode] = useState<
+		"create" | "import" | "update-source" | null
+	>(null);
 
 	// The library page: set when a source cluster row is clicked; any
 	// selection change or blank-area escape drops back out of it.
@@ -308,39 +307,6 @@ export default function SkillsPage() {
 	const { dndProps, draggedKeys, boardGroups, showBoardUngrouped } =
 		useListDnd("skill", (keys) => setCreateGroupKeys(keys));
 
-	// Update = re-install from the same source: existing skills are left
-	// in place, newly added members are picked up and the lock refreshed.
-	const updateSourceMutation = useMutation(
-		installSkillMutationOptions({ api, queryClient }),
-	);
-	const handleUpdateSource = () => {
-		if (!focusedSourceInfo) return;
-		const agents = [
-			...new Set(
-				focusedSourceInfo.matrixGroups.flatMap(
-					(g) => g.installedAgents,
-				),
-			),
-		];
-		updateSourceMutation.mutate(
-			{
-				source: focusedSourceInfo.title,
-				agents,
-				skills: [],
-				scope: "global",
-				project_path: null,
-				install_all: true,
-			},
-			{
-				onSuccess: () => toast.success(t("sourceUpdated")),
-				onError: (error) =>
-					toast.danger(
-						error instanceof Error ? error.message : String(error),
-					),
-			},
-		);
-	};
-
 	// Shortcuts are scoped to the whole page (these pages hold a single
 	// list), so Esc/Cmd+A work from the detail panel too — not only while
 	// the pointer sits over the list column.
@@ -506,6 +472,13 @@ export default function SkillsPage() {
 								<ImportSkillPanel
 									onDone={() => setPanelMode(null)}
 								/>
+							) : panelMode === "update-source" ? (
+								<ImportGithubSkillPanel
+									initialUrl={
+										focusedSourceInfo?.url ?? undefined
+									}
+									onDone={() => setPanelMode(null)}
+								/>
 							) : isBulkSelection ? (
 								<BulkActionsPanel
 									kind="skill"
@@ -566,8 +539,9 @@ export default function SkillsPage() {
 									onSelectMember={(name) =>
 										handleSelectionChange(new Set([name]))
 									}
-									onUpdate={handleUpdateSource}
-									isUpdating={updateSourceMutation.isPending}
+									onUpdate={() =>
+										setPanelMode("update-source")
+									}
 								/>
 							) : activeGroup ? (
 								<SkillDetail group={activeGroup} />

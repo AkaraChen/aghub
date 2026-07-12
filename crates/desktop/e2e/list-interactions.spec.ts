@@ -1204,9 +1204,7 @@ test("searching force-expands the collapsed clusters", async ({ page }) => {
 	await expect(page.getByRole("option", { name: "arch-lint" })).toBeHidden();
 });
 
-test("updating a library from its page picks up new members", async ({
-	page,
-}) => {
+test("updating a library re-imports from its source", async ({ page }) => {
 	await page
 		.getByRole("button", {
 			name: "github/AkaraChen/alpha-pack",
@@ -1218,9 +1216,23 @@ test("updating a library from its page picks up new members", async ({
 	).toBeVisible();
 	await expect(page.getByText("2 members")).toBeVisible();
 
-	// Update re-installs from the source; the mock adds fresh-skill to the
-	// list AND the lock, so it must appear clustered under this library
+	// Update opens the git import panel pre-filled with the library URL
 	await page.getByRole("button", { name: "Update from source" }).click();
+	await expect(
+		page.getByRole("heading", { name: "Import Remote Source" }),
+	).toBeVisible();
+	await expect(page.getByLabel("Repository URL")).toHaveValue(
+		"https://github.com/AkaraChen/alpha-pack",
+	);
+
+	// Scan lists the repo content (all selected by default), install
+	// skips the two existing members and adds fresh-skill + its lock
+	await page.getByRole("button", { name: "Scan", exact: true }).click();
+	await expect(page.getByText("fresh-skill description")).toBeVisible();
+	await page.getByRole("button", { name: "Install Selected" }).click();
+	await page.getByRole("button", { name: "Done", exact: true }).click();
+
+	// Back on the library page: the new member is clustered in
 	await expect(page.getByText("3 members")).toBeVisible();
 	await expect(
 		page.getByRole("option", { name: "fresh-skill" }),

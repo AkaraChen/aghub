@@ -212,15 +212,45 @@ export async function installMocks(page: Page) {
 			});
 		}
 
-		if (p === "/skills/install" && method === "POST") {
-			// Re-install from a source: existing skills stay, the source's
-			// newly added member appears and joins the lock
+		if (p === "/skills/git/scan" && method === "POST") {
+			// The repo holds the two installed members plus one new skill
+			const entry = (name: string) => ({
+				name,
+				description: `${name} description`,
+				author: null,
+				version: null,
+				path: `skills/${name}`,
+			});
+			return json({
+				session_id: "scan-session-1",
+				branches: ["main"],
+				current_branch: "main",
+				skills: [
+					entry("arch-lint"),
+					entry("api-forge"),
+					entry("fresh-skill"),
+				],
+			});
+		}
+
+		if (p === "/skills/git/install" && method === "POST") {
+			// Install semantics: skip already-installed skills, add new
+			// ones to the list AND the lock
 			const body = JSON.parse(route.request().postData() ?? "{}");
-			if (!skills.some((s) => s.name === "fresh-skill")) {
-				skills.push(skill("fresh-skill"));
-				globalLock.skills.push(lockEntry("fresh-skill", body.source));
+			const results = [];
+			for (const skillPath of body.skill_paths ?? []) {
+				const name = String(skillPath).split("/").pop() ?? "";
+				if (!skills.some((s) => s.name === name)) {
+					skills.push(skill(name));
+					globalLock.skills.push(
+						lockEntry(name, "github/AkaraChen/alpha-pack"),
+					);
+				}
+				for (const agent of body.agents ?? []) {
+					results.push({ name, agent, success: true, error: null });
+				}
 			}
-			return json({ success: true });
+			return json({ results });
 		}
 
 		if (p === "/skills/reconcile" && method === "POST") {
