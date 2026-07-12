@@ -334,7 +334,13 @@ export default function MCPServersPage() {
 				<div className="flex min-h-0 flex-1">
 					{/* Servers List Panel */}
 					<div
-						className="relative flex w-80 shrink-0 flex-col border-r border-border"
+						className={cn(
+							"relative flex w-80 shrink-0 flex-col border-r border-border",
+							// Mid-drag, rows must not react to the pointer: every
+							// hover flip restyles the whole list. Drop targets
+							// don't need hit-testing — collision is rect math.
+							draggedKeys && "pointer-events-none",
+						)}
 						onClick={(event) => {
 							if (isBlankTarget(event)) {
 								if (

@@ -23,7 +23,10 @@ import { useMcpGroups, useSkillGroups } from "./use-resource-groups";
 // pointer-down and crossing the threshold, e.g. the flash timer, would
 // silently kill the next drag).
 const POINTER_SENSOR_OPTIONS = { activationConstraint: { distance: 8 } };
-const MEASURING = { droppable: { strategy: MeasuringStrategy.Always } };
+// WhileDragging: measure once on drag start. The mid-drag mounts (drop
+// board, new-group zone) are measured on registration, and Always would
+// re-measure every droppable on every move — a per-frame forced reflow.
+const MEASURING = { droppable: { strategy: MeasuringStrategy.WhileDragging } };
 
 /**
  * Page-level drag wiring for a resource list. Each surface owns one
@@ -62,8 +65,6 @@ export function useListDnd(
 	const dndProps = {
 		sensors,
 		collisionDetection: pointerWithin,
-		// Re-measure droppables during the drag; the new-group zone appears
-		// mid-drag and shifts the sections, so cached rects go stale.
 		measuring: MEASURING,
 		onDragStart: (event: DragStartEvent) => {
 			setDraggedKeys(readActiveKeys(event.active));

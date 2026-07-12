@@ -3,10 +3,9 @@ import {
 	GlobeAltIcon,
 	StarIcon as StarIconSolid,
 } from "@heroicons/react/24/solid";
-import { useDndContext } from "@dnd-kit/core";
 import { Label, ListBox } from "@heroui/react";
 import Fuse from "fuse.js";
-import { useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { McpResponse } from "../generated/dto";
 import { AgentIcons } from "./agent-icons";
@@ -41,6 +40,46 @@ interface McpGroup {
 type MenuTarget =
 	| { type: "items" }
 	| { type: "custom-group"; group: ResourceGroup; memberKeys: string[] };
+
+interface McpRowBodyProps {
+	group: McpGroup;
+	starred: boolean;
+	getDragKeys: (key: string) => string[];
+	onShiftPress: (key: string) => string[] | undefined;
+	onOpenMenu: (event: React.MouseEvent, key: string) => void;
+}
+
+/**
+ * A row's content behind a memo boundary — see SkillRowBody: stable
+ * callbacks keep a selection change from rebuilding every row.
+ */
+const McpRowBody = memo(({
+	group,
+	starred,
+	getDragKeys,
+	onShiftPress,
+	onOpenMenu,
+}: McpRowBodyProps) => {
+	const Icon =
+		group.transport.type === "stdio" ? CommandLineIcon : GlobeAltIcon;
+	return (
+		<DraggableItemBody
+			dragId={`item:${group.mergeKey}`}
+			getKeys={() => getDragKeys(group.mergeKey)}
+			onContextMenu={(event) => onOpenMenu(event, group.mergeKey)}
+			onShiftPress={() => onShiftPress(group.mergeKey)}
+		>
+			<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
+				<Icon className="size-4" />
+				{starred && (
+					<StarIconSolid className="absolute -bottom-1 -left-1 size-2.5 text-warning" />
+				)}
+			</div>
+			<Label className="flex-1 truncate">{group.items[0].name}</Label>
+			<AgentIcons items={group.items} />
+		</DraggableItemBody>
+	);
+});
 
 interface McpListProps {
 	mcps: McpResponse[];
@@ -124,11 +163,6 @@ export function McpList({
 	const [deleteTarget, setDeleteTarget] = useState<ResourceGroup | null>(
 		null,
 	);
-	// The page owns the DndContext; the list reads its active drag to show
-	// the new-group zone and gate selection while dragging.
-	const { active: activeDrag } = useDndContext();
-	const isDragging = activeDrag != null;
-
 	const sortedGroups = useMemo(() => {
 		const list = [...filteredGroups];
 		return list.sort((a, b) => {
@@ -225,32 +259,43 @@ export function McpList({
 		memberKeys.length > 0 &&
 		memberKeys.every((key) => selectedKeys.has(key));
 
-	const openItemMenu = (event: React.MouseEvent, key: string) => {
-		ensureSelected(key);
-		contextMenu.open(event, { type: "items" });
+	// Ref bridge for the memoized rows — see SkillList.
+	const rowContextRef = useRef({
+		selectedKeys,
+		selectRangeTo,
+		ensureSelected,
+		openMenu: contextMenu.open,
+	});
+	rowContextRef.current = {
+		selectedKeys,
+		selectRangeTo,
+		ensureSelected,
+		openMenu: contextMenu.open,
 	};
 
-	const getTransportIcon = (
-		transport: McpGroup["transport"],
-		starred: boolean,
-	) => {
-		const Icon =
-			transport.type === "stdio" ? CommandLineIcon : GlobeAltIcon;
-		return (
-			<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
-				<Icon className="size-4" />
-				{starred && (
-					<StarIconSolid className="absolute -bottom-1 -left-1 size-2.5 text-warning" />
-				)}
-			</div>
-		);
-	};
+	const getDragKeys = useCallback(
+		(key: string) =>
+			dragSelectionPayload([key], rowContextRef.current.selectedKeys),
+		[],
+	);
 
-	const renderMcpItem = (group: McpGroup) => {
-		const isStarred = isMcpStarred(group.mergeKey);
-		return (
+	const handleRowShiftPress = useCallback((key: string) => {
+		const row = rowContextRef.current;
+		if (!row.selectedKeys.has(key)) return undefined;
+		const range = row.selectRangeTo(key);
+		return range ? dragSelectionPayload([key], range) : undefined;
+	}, []);
+
+	const openItemMenu = useCallback((event: React.MouseEvent, key: string) => {
+		const row = rowContextRef.current;
+		row.ensureSelected(key);
+		row.openMenu(event, { type: "items" });
+	}, []);
+
+	// Stable render function for the dynamic collection — see SkillList.
+	const renderMcpItem = useCallback(
+		(group: McpGroup) => (
 			<ListBox.Item
-				key={group.mergeKey}
 				id={group.mergeKey}
 				textValue={group.items[0].name}
 				className="data-selected:bg-surface transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]"
@@ -261,33 +306,23 @@ export function McpList({
 					),
 				}}
 			>
-				<DraggableItemBody
-					dragId={`item:${group.mergeKey}`}
-					keys={dragSelectionPayload([group.mergeKey], selectedKeys)}
-					onContextMenu={(event) =>
-						openItemMenu(event, group.mergeKey)
-					}
-					onShiftPress={() => {
-						if (!selectedKeys.has(group.mergeKey)) return undefined;
-						const range = selectRangeTo(group.mergeKey);
-						return range
-							? dragSelectionPayload([group.mergeKey], range)
-							: undefined;
-					}}
-				>
-					{getTransportIcon(group.transport, isStarred)}
-					<Label className="flex-1 truncate">
-						{group.items[0].name}
-					</Label>
-					<AgentIcons items={group.items} />
-				</DraggableItemBody>
+				<McpRowBody
+					group={group}
+					starred={isMcpStarred(group.mergeKey)}
+					getDragKeys={getDragKeys}
+					onShiftPress={handleRowShiftPress}
+					onOpenMenu={openItemMenu}
+				/>
 			</ListBox.Item>
-		);
-	};
+		),
+		[isMcpStarred, getDragKeys, handleRowShiftPress, openItemMenu],
+	);
 
 	const renderSectionListBox = (label: string, sectionMcps: McpGroup[]) => (
 		<ListBox
 			aria-label={label}
+			items={sectionMcps}
+			dependencies={[renderMcpItem]}
 			selectionMode="multiple"
 			selectionBehavior="toggle"
 			selectedKeys={selectedKeys}
@@ -296,7 +331,7 @@ export function McpList({
 			)}
 			className="p-2 pl-6"
 		>
-			{sectionMcps.map(renderMcpItem)}
+			{renderMcpItem}
 		</ListBox>
 	);
 
@@ -400,6 +435,8 @@ export function McpList({
 					)}
 					<ListBox
 						aria-label="MCP Servers"
+						items={unassignedGroups}
+						dependencies={[renderMcpItem]}
 						selectionMode="multiple"
 						selectionBehavior="toggle"
 						selectedKeys={selectedKeys}
@@ -408,12 +445,12 @@ export function McpList({
 						)}
 						className="p-2"
 					>
-						{unassignedGroups.map(renderMcpItem)}
+						{renderMcpItem}
 					</ListBox>
 				</DropRegion>
 			)}
 
-			{isDragging && <NewGroupDropZone />}
+			<NewGroupDropZone />
 
 			{overlaysNode}
 		</div>

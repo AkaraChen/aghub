@@ -2,9 +2,8 @@ import {
 	BookOpenIcon,
 	StarIcon as StarIconSolid,
 } from "@heroicons/react/24/solid";
-import { useDndContext } from "@dnd-kit/core";
 import { Label, ListBox, Spinner } from "@heroui/react";
-import { type ReactNode, useState } from "react";
+import { memo, type ReactNode, useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { SkillResponse } from "../generated/dto";
 import { AgentIcons } from "./agent-icons";
@@ -34,6 +33,46 @@ type MenuTarget =
 	| { type: "items"; sourceUrl?: string | null }
 	| { type: "custom-group"; group: ResourceGroup; memberKeys: string[] };
 
+interface SkillRowBodyProps {
+	skillGroup: SkillGroup;
+	starred: boolean;
+	getDragKeys: (name: string) => string[];
+	onShiftPress: (name: string) => string[] | undefined;
+	onOpenMenu: (event: React.MouseEvent, name: string) => void;
+}
+
+/**
+ * A row's content behind a memo boundary: its props are the row's own
+ * data plus identity-stable callbacks, so a selection change re-renders
+ * only the rows whose data actually changed — not all ~N of them. The
+ * selection highlight itself is react-aria's, propagated by the ListBox.
+ */
+const SkillRowBody = memo(({
+	skillGroup,
+	starred,
+	getDragKeys,
+	onShiftPress,
+	onOpenMenu,
+}: SkillRowBodyProps) => {
+	return (
+		<DraggableItemBody
+			dragId={`item:${skillGroup.name}`}
+			getKeys={() => getDragKeys(skillGroup.name)}
+			onContextMenu={(event) => onOpenMenu(event, skillGroup.name)}
+			onShiftPress={() => onShiftPress(skillGroup.name)}
+		>
+			<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
+				<BookOpenIcon className="size-4 text-muted" />
+				{starred && (
+					<StarIconSolid className="absolute -bottom-1 -left-1 size-2.5 text-warning" />
+				)}
+			</div>
+			<Label className="flex-1 truncate">{skillGroup.name}</Label>
+			<AgentIcons items={skillGroup.items} overflowVariant="square" />
+		</DraggableItemBody>
+	);
+});
+
 interface SkillListProps {
 	skills: SkillResponse[];
 	selectedKeys: Set<string>;
@@ -49,7 +88,7 @@ interface SkillListProps {
 	seedKey?: string | null;
 }
 
-export function SkillList({
+export const SkillList = memo(({
 	skills,
 	selectedKeys,
 	searchQuery,
@@ -59,7 +98,7 @@ export function SkillList({
 	intents,
 	onSourceFocus,
 	seedKey,
-}: SkillListProps) {
+}: SkillListProps) => {
 	const { t } = useTranslation();
 	const {
 		customSections,
@@ -79,11 +118,6 @@ export function SkillList({
 	const [deleteTarget, setDeleteTarget] = useState<ResourceGroup | null>(
 		null,
 	);
-	// The page owns the DndContext; the list reads its active drag to show
-	// the new-group zone and gate selection while dragging.
-	const { active: activeDrag } = useDndContext();
-	const isDragging = activeDrag != null;
-
 	const {
 		createSelectionHandler,
 		selectGroup,
@@ -111,10 +145,41 @@ export function SkillList({
 		memberKeys.length > 0 &&
 		memberKeys.every((key) => selectedKeys.has(key));
 
-	const openItemMenu = (event: React.MouseEvent, key: string) => {
-		ensureSelected(key);
-		contextMenu.open(event, { type: "items" });
+	// Rows sit behind SkillRowBody's memo boundary, so the callbacks they
+	// receive must keep their identity across renders while still seeing
+	// the live selection — a ref bridge, same pattern as the frozen drag
+	// payload in DraggableItemBody.
+	const rowContextRef = useRef({
+		selectedKeys,
+		selectRangeTo,
+		ensureSelected,
+		openMenu: contextMenu.open,
+	});
+	rowContextRef.current = {
+		selectedKeys,
+		selectRangeTo,
+		ensureSelected,
+		openMenu: contextMenu.open,
 	};
+
+	const getDragKeys = useCallback(
+		(name: string) =>
+			dragSelectionPayload([name], rowContextRef.current.selectedKeys),
+		[],
+	);
+
+	const handleRowShiftPress = useCallback((name: string) => {
+		const row = rowContextRef.current;
+		if (!row.selectedKeys.has(name)) return undefined;
+		const range = row.selectRangeTo(name);
+		return range ? dragSelectionPayload([name], range) : undefined;
+	}, []);
+
+	const openItemMenu = useCallback((event: React.MouseEvent, key: string) => {
+		const row = rowContextRef.current;
+		row.ensureSelected(key);
+		row.openMenu(event, { type: "items" });
+	}, []);
 
 	const openGroupMenu = (
 		event: React.MouseEvent,
@@ -134,39 +199,37 @@ export function SkillList({
 		contextMenu.open(event, { type: "items", sourceUrl });
 	};
 
-	// Helper to render a skill item
-	const renderSkillItem = (skillGroup: SkillGroup) => (
-		<ListBox.Item
-			key={skillGroup.name}
-			id={skillGroup.name}
-			textValue={skillGroup.name}
-			className="data-selected:bg-surface transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]"
-			style={{
-				viewTransitionName: viewTransitionName("vts", skillGroup.name),
-			}}
-		>
-			<DraggableItemBody
-				dragId={`item:${skillGroup.name}`}
-				keys={dragSelectionPayload([skillGroup.name], selectedKeys)}
-				onContextMenu={(event) => openItemMenu(event, skillGroup.name)}
-				onShiftPress={() => {
-					if (!selectedKeys.has(skillGroup.name)) return undefined;
-					const range = selectRangeTo(skillGroup.name);
-					return range
-						? dragSelectionPayload([skillGroup.name], range)
-						: undefined;
+	// Stable render function: with `items`, react-aria caches each row's
+	// element by item identity + this function, so a selection change
+	// re-renders only the rows whose selected state flipped.
+	const renderSkillItem = useCallback(
+		(skillGroup: SkillGroup) => (
+			<ListBox.Item
+				id={skillGroup.name}
+				textValue={skillGroup.name}
+				className="data-selected:bg-surface transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]"
+				style={{
+					viewTransitionName: viewTransitionName(
+						"vts",
+						skillGroup.name,
+					),
 				}}
 			>
-				<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
-					<BookOpenIcon className="size-4 text-muted" />
-					{isSkillStarred(skillGroup.name) && (
-						<StarIconSolid className="absolute -bottom-1 -left-1 size-2.5 text-warning" />
-					)}
-				</div>
-				<Label className="flex-1 truncate">{skillGroup.name}</Label>
-				<AgentIcons items={skillGroup.items} overflowVariant="square" />
-			</DraggableItemBody>
-		</ListBox.Item>
+				<SkillRowBody
+					skillGroup={skillGroup}
+					starred={isSkillStarred(skillGroup.name)}
+					getDragKeys={getDragKeys}
+					onShiftPress={handleRowShiftPress}
+					onOpenMenu={openItemMenu}
+				/>
+			</ListBox.Item>
+		),
+		[
+			isSkillStarred,
+			getDragKeys,
+			handleRowShiftPress,
+			openItemMenu,
+		],
 	);
 
 	const renderSectionListBox = (
@@ -176,6 +239,8 @@ export function SkillList({
 	) => (
 		<ListBox
 			aria-label={label}
+			items={sectionSkills}
+			dependencies={[renderSkillItem]}
 			selectionMode="multiple"
 			selectionBehavior="toggle"
 			selectedKeys={selectedKeys}
@@ -186,7 +251,7 @@ export function SkillList({
 			// (no extra top gap under the header row)
 			className={cn(dense ? "px-2 pb-1 pl-6" : "p-2 pl-6")}
 		>
-			{sectionSkills.map(renderSkillItem)}
+			{renderSkillItem}
 		</ListBox>
 	);
 
@@ -264,13 +329,15 @@ export function SkillList({
 			<ListBox
 				key={`loose-${runKeys[0]}`}
 				aria-label="Skills"
+				items={skillRun}
+				dependencies={[renderSkillItem]}
 				selectionMode="multiple"
 				selectionBehavior="toggle"
 				selectedKeys={selectedKeys}
 				onSelectionChange={createSelectionHandler(runKeys)}
 				className="px-2 py-1"
 			>
-				{skillRun.map(renderSkillItem)}
+				{renderSkillItem}
 			</ListBox>,
 		);
 		skillRun = [];
@@ -355,9 +422,9 @@ export function SkillList({
 				<DropRegion id={UNGROUPED_DROP_ID}>{looseNodes}</DropRegion>
 			)}
 
-			{isDragging && <NewGroupDropZone />}
+			<NewGroupDropZone />
 
 			{overlaysNode}
 		</div>
 	);
-}
+});

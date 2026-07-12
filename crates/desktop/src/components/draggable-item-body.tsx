@@ -4,8 +4,12 @@ import { type ReactNode, useRef } from "react";
 interface DraggableItemBodyProps {
 	/** Unique dnd-kit id for this row's draggable */
 	dragId: string;
-	/** Member keys the drag carries (self plus selection, per payload) */
-	keys: string[];
+	/**
+	 * Resolves the member keys the drag carries (self plus selection).
+	 * Called on pointer-down, so the row's JSX never closes over the live
+	 * selection — a selection change must not rebuild every row.
+	 */
+	getKeys: () => string[];
 	onContextMenu: (event: React.MouseEvent) => void;
 	/**
 	 * A left shift-press on this row. react-stately swallows a shift-click
@@ -31,14 +35,12 @@ interface DraggableItemBodyProps {
  */
 export function DraggableItemBody({
 	dragId,
-	keys,
+	getKeys,
 	onContextMenu,
 	onShiftPress,
 	children,
 }: DraggableItemBodyProps) {
-	const liveKeysRef = useRef(keys);
-	liveKeysRef.current = keys;
-	const frozenKeysRef = useRef(keys);
+	const frozenKeysRef = useRef<string[]>([]);
 
 	const { setNodeRef, listeners } = useDraggable({
 		id: dragId,
@@ -50,7 +52,7 @@ export function DraggableItemBody({
 			ref={setNodeRef}
 			{...listeners}
 			onPointerDown={(event) => {
-				frozenKeysRef.current = liveKeysRef.current;
+				frozenKeysRef.current = getKeys();
 				listeners?.onPointerDown?.(event);
 				if (event.button === 2) event.stopPropagation();
 				if (event.button === 0 && event.shiftKey) {

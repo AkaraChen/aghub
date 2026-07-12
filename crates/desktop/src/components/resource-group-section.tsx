@@ -258,11 +258,16 @@ export function DropRegion({ id, children }: DropRegionProps) {
 	);
 }
 
-/** Drop target shown while dragging: dropping creates a new group. */
+/** Drop target shown while dragging: dropping creates a new group.
+ * Subscribes to the drag state itself so the list that mounts it does
+ * not — dnd-kit's context updates on every pointer move, and a list
+ * that reads it re-renders every row per move. */
 export function NewGroupDropZone() {
 	const { t } = useTranslation();
+	const { active } = useDndContext();
 	const { setNodeRef, isOver } = useDroppable({ id: NEW_GROUP_DROP_ID });
 
+	if (!active) return null;
 	return (
 		<div
 			ref={setNodeRef}
