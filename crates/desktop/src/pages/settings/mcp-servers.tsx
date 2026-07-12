@@ -60,7 +60,24 @@ export default function MCPServersPage() {
 	const [createGroupKeys, setCreateGroupKeys] = useState<string[] | null>(
 		null,
 	);
-	const { createGroup, assignMembers } = useMcpGroups();
+	const {
+		createGroup,
+		assignMembers,
+		groups: customGroups,
+		assignments: groupAssignments,
+	} = useMcpGroups();
+
+	// Roster badge — the custom group a server belongs to (servers have no
+	// source library, so this is the only grouping dimension here).
+	const customGroupNameByKey = useMemo(() => {
+		const nameById = new Map(customGroups.map((g) => [g.id, g.name]));
+		const map = new Map<string, string>();
+		for (const [key, groupId] of Object.entries(groupAssignments)) {
+			const name = nameById.get(groupId);
+			if (name) map.set(key, name);
+		}
+		return map;
+	}, [customGroups, groupAssignments]);
 
 	const hasMcpCapableAgents = useMemo(
 		() =>
@@ -392,13 +409,12 @@ export default function MCPServersPage() {
 											<BulkActionsPanel
 												kind="mcp"
 												items={selectedGroups.map(
-													// No badge: servers have
-													// no source library, so
-													// the roster stays one
-													// flat card
 													(g) => ({
 														key: g.mergeKey,
 														label: g.items[0].name,
+														badge: customGroupNameByKey.get(
+															g.mergeKey,
+														),
 													}),
 												)}
 												intents={actionIntents}

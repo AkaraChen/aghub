@@ -293,6 +293,35 @@ test("a drag dims the source clusters that cannot take the drop", async ({
 	await page.mouse.up();
 });
 
+test("the roster labels custom-group members with the group name", async ({
+	page,
+}) => {
+	// A custom group with two members: one from a source library
+	// (css-wizard, github/AkaraChen/web-dev) and one loose (solo-skill).
+	// The bulk roster must file both under the group's card — the custom
+	// group outranks the source library, and neither member is "Ungrouped".
+	await page.getByRole("button", { name: "Add skill" }).click();
+	await page.getByRole("menuitem", { name: "New group" }).click();
+	const dialog = page.getByRole("dialog", { name: "New group" });
+	await dialog.getByRole("textbox").fill("Mine");
+	await dialog.getByRole("button", { name: "Save" }).click();
+	await dragOptionTo(page, "solo-skill", "group-section-Mine");
+	await dragOptionTo(page, "css-wizard", "group-section-Mine");
+
+	await page.getByRole("button", { name: "Select all in Mine" }).click();
+	await expect(page.getByText("2 items selected")).toBeVisible();
+
+	// One roster card titled by the group; no Ungrouped card, and the
+	// source library never appears even though css-wizard belongs to one
+	const card = page
+		.getByRole("button", { name: "Remove css-wizard from selection" })
+		.locator("..");
+	await expect(card).toContainText("Mine");
+	await expect(card).toContainText("solo-skill");
+	await expect(page.getByText("Ungrouped", { exact: true })).toBeHidden();
+	await expect(page.getByText("web-dev")).toBeHidden();
+});
+
 test("clicking a selected single-member group header again cancels it", async ({
 	page,
 }) => {

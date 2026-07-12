@@ -62,7 +62,12 @@ export default function SkillsPage() {
 	const [createGroupKeys, setCreateGroupKeys] = useState<string[] | null>(
 		null,
 	);
-	const { createGroup, assignMembers } = useSkillGroups();
+	const {
+		createGroup,
+		assignMembers,
+		groups: customGroups,
+		assignments: groupAssignments,
+	} = useSkillGroups();
 	const { data: globalLock } = useQuery({
 		...globalSkillLockQueryOptions({ api, enabled: true }),
 	});
@@ -247,6 +252,20 @@ export default function SkillsPage() {
 		}
 		return map;
 	}, [globalLock]);
+
+	// The roster groups by the list's own hierarchy: a custom group claims
+	// its members before the source library does (use-skill-sections keeps
+	// assigned members out of source clusters the same way). Only members
+	// in neither are truly ungrouped.
+	const customGroupNameByKey = useMemo(() => {
+		const nameById = new Map(customGroups.map((g) => [g.id, g.name]));
+		const map = new Map<string, string>();
+		for (const [key, groupId] of Object.entries(groupAssignments)) {
+			const name = nameById.get(groupId);
+			if (name) map.set(key, name);
+		}
+		return map;
+	}, [customGroups, groupAssignments]);
 
 	const focusedSourceInfo = useMemo(() => {
 		if (!focusedSource) return null;
@@ -498,7 +517,9 @@ export default function SkillsPage() {
 									items={selectedGroups.map((g) => ({
 										key: g.name,
 										label: g.name,
-										badge: sourceByName.get(g.name),
+										badge:
+											customGroupNameByKey.get(g.name) ??
+											sourceByName.get(g.name),
 									}))}
 									intents={actionIntents}
 									sourceContext={sourceContext}
