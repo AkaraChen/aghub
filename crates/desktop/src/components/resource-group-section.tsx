@@ -78,7 +78,8 @@ export function ResourceGroupSection({
 
 	// Subtle clusters cannot accept drops; dim them while a drag is
 	// underway so they read as non-targets.
-	const { active: dndActive } = useDndContext();
+	const { active: dndActive, measureDroppableContainers, droppableContainers } =
+		useDndContext();
 	const isDropInert = subtle && dndActive != null;
 
 	// Spring-loading: hovering a collapsed group mid-drag pops it open so
@@ -93,6 +94,16 @@ export function ResourceGroupSection({
 		);
 		return () => window.clearTimeout(timer);
 	}, [isOver, isExpanded]);
+
+	// A mid-drag expand/collapse shifts every section below this one — a
+	// pure position change that neither measuring strategy nor a
+	// ResizeObserver picks up, so drops below would land on stale rects.
+	// Re-measure the lot when the height transition settles.
+	const measureAllRef = useRef(() => {});
+	measureAllRef.current = () => {
+		if (!dndActive) return;
+		measureDroppableContainers([...droppableContainers.keys()]);
+	};
 
 	return (
 		<div
@@ -218,6 +229,11 @@ export function ResourceGroupSection({
 					"grid transition-[grid-template-rows] duration-[var(--dur-base)] ease-[var(--ease-out)]",
 					isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
 				)}
+				onTransitionEnd={(event) => {
+					if (event.target !== event.currentTarget) return;
+					if (event.propertyName !== "grid-template-rows") return;
+					measureAllRef.current();
+				}}
 			>
 				{/* invisible while collapsed so it leaves the a11y tree and
 				 * reads as hidden to tests, not just clipped by overflow */}

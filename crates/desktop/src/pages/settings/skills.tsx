@@ -451,7 +451,13 @@ export default function SkillsPage() {
 							onSelectionChange={handleSelectionChange}
 							isMultiSelectMode={isMultiSelectMode}
 							intents={actionIntents}
-							onSourceFocus={setFocusedSource}
+							onSourceFocus={(source) => {
+								// Focusing a library replaces whatever panel is
+								// open — otherwise another library's update
+								// panel (with its URL) would stay on screen.
+								setFocusedSource(source);
+								setPanelMode(null);
+							}}
 							seedKey={seedKey}
 						/>
 					</div>

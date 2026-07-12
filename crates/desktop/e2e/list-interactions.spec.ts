@@ -682,6 +682,69 @@ test("hovering a collapsed group while dragging springs it open", async ({
 	await page.mouse.up();
 });
 
+test("dropping below a spring-opened group still hits the right target", async ({
+	page,
+}) => {
+	// Two stacked custom groups: hovering the first mid-drag pops it open,
+	// which pushes the second one down. The drop must land where the
+	// second group now is, not where its rect was cached at drag start.
+	await page.getByRole("button", { name: "Add skill" }).click();
+	await page.getByRole("menuitem", { name: "New group" }).click();
+	let dialog = page.getByRole("dialog", { name: "New group" });
+	await dialog.getByRole("textbox").fill("Upper");
+	await dialog.getByRole("button", { name: "Save" }).click();
+	await expect(page.locator(".modal__backdrop")).toHaveCount(0);
+	await page.getByRole("button", { name: "Add skill" }).click();
+	await page.getByRole("menuitem", { name: "New group" }).click();
+	dialog = page.getByRole("dialog", { name: "New group" });
+	await dialog.getByRole("textbox").fill("Lower");
+	await dialog.getByRole("button", { name: "Save" }).click();
+	await expect(page.locator(".modal__backdrop")).toHaveCount(0);
+
+	await dragOptionTo(page, "solo-skill", "group-section-Upper");
+	await expect(
+		page
+			.getByTestId("group-section-Upper")
+			.getByRole("option", { name: "solo-skill" }),
+	).toBeVisible();
+
+	// Collapse Upper so the spring-load has something to pop open
+	await page.getByRole("button", { name: "Upper", exact: true }).click();
+	await expect(page.getByRole("option", { name: "solo-skill" })).toBeHidden();
+	await page.waitForTimeout(300);
+
+	const source = page.getByRole("option", { name: "css-wizard" });
+	const s = await source.boundingBox();
+	if (!s) throw new Error("no source");
+	await page.mouse.move(s.x + s.width / 2, s.y + s.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(s.x + 20, s.y + 20, { steps: 3 });
+
+	// Hover Upper's header until it springs open
+	const upper = page.getByRole("button", { name: "Select all in Upper" });
+	const u = await upper.boundingBox();
+	if (!u) throw new Error("no Upper header");
+	await page.mouse.move(u.x + u.width / 2, u.y + u.height / 2, { steps: 5 });
+	await page.mouse.move(u.x + u.width / 2 + 1, u.y + u.height / 2 + 1);
+	await expect(
+		page.getByRole("option", { name: "solo-skill" }),
+	).toBeVisible();
+
+	// Lower has been pushed down; aim at its CURRENT header position
+	const lower = page.getByRole("button", { name: "Select all in Lower" });
+	const l = await lower.boundingBox();
+	if (!l) throw new Error("no Lower header");
+	await page.mouse.move(l.x + l.width / 2, l.y + l.height / 2, { steps: 10 });
+	await page.mouse.move(l.x + l.width / 2 + 1, l.y + l.height / 2 + 1);
+	await page.mouse.up();
+
+	await expect(
+		page
+			.getByTestId("group-section-Lower")
+			.getByRole("option", { name: "css-wizard" }),
+	).toBeVisible();
+});
+
 test("right-clicking blank list space offers the page actions", async ({
 	page,
 }) => {

@@ -23,9 +23,12 @@ import { useMcpGroups, useSkillGroups } from "./use-resource-groups";
 // pointer-down and crossing the threshold, e.g. the flash timer, would
 // silently kill the next drag).
 const POINTER_SENSOR_OPTIONS = { activationConstraint: { distance: 8 } };
-// WhileDragging: measure once on drag start. The mid-drag mounts (drop
-// board, new-group zone) are measured on registration, and Always would
-// re-measure every droppable on every move — a per-frame forced reflow.
+// WhileDragging: measure on drag start; mid-drag mounts (drop board,
+// new-group zone) are measured on registration. The one layout change
+// neither strategy catches — a spring-loaded expansion shifting the
+// sections below it — is re-measured explicitly by ResourceGroupSection
+// on its height transitionend (e2e "dropping below a spring-opened
+// group" covers it).
 const MEASURING = { droppable: { strategy: MeasuringStrategy.WhileDragging } };
 
 /**
