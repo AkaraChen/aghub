@@ -1,20 +1,16 @@
 import { DndContext, DragOverlay } from "@dnd-kit/core";
-import {
-	ArrowPathIcon,
-	CheckCircleIcon,
-	PlusIcon,
-	RectangleStackIcon,
-	ServerIcon,
-} from "@heroicons/react/24/solid";
-import { Button, Dropdown, Kbd, Menu, Tooltip } from "@heroui/react";
+import { ArrowPathIcon, PlusIcon, ServerIcon } from "@heroicons/react/24/solid";
+import { Button, Dropdown, Kbd, Menu } from "@heroui/react";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { matrixGroup } from "../../components/agent-coverage-matrix";
 import { BulkActionsPanel } from "../../components/bulk-actions-panel";
 import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
 import { CreateMcpPanel } from "../../components/create-mcp-panel";
 import { ContextMenu, useContextMenu } from "../../components/context-menu";
+import { MultiSelectToggle } from "../../components/multi-select-toggle";
 import { DragPreview, DropBoard } from "../../components/drop-board";
 import { PanelTransition } from "../../components/panel-transition";
 import { EditMcpPanel } from "../../components/edit-mcp-panel";
@@ -37,10 +33,10 @@ import { cn, getMcpMergeKey } from "../../lib/utils";
 import { mcpListQueryOptions } from "../../requests/mcps";
 
 type RightPanel =
-	| { type: "detail"; selectedKey: string }
+	| { type: "detail" }
 	| { type: "create" }
 	| { type: "import" }
-	| { type: "edit"; selectedKey: string }
+	| { type: "edit" }
 	| { type: "empty" };
 
 export default function MCPServersPage() {
@@ -125,7 +121,7 @@ export default function MCPServersPage() {
 			!(selectedKeys.size === 1 && selectedKeys.has(selectedKey))
 		) {
 			setSelectedKeys(new Set([selectedKey]));
-			setPanel({ type: "detail", selectedKey });
+			setPanel({ type: "detail" });
 			setIsMultiSelectMode(false);
 		}
 	}
@@ -146,9 +142,7 @@ export default function MCPServersPage() {
 		const only = keys.size === 1 ? [...keys][0] : null;
 		// Mirror a single selection to the URL for deep-linking.
 		setSelectedKey(only);
-		setPanel(
-			only ? { type: "detail", selectedKey: only } : { type: "empty" },
-		);
+		setPanel(only ? { type: "detail" } : { type: "empty" });
 
 		if (keys.size > 1 && !isMultiSelectMode) {
 			setIsMultiSelectMode(true);
@@ -230,7 +224,7 @@ export default function MCPServersPage() {
 			const [only] = selectedKeys;
 			setPanel(
 				only && selectedKeys.size === 1
-					? { type: "detail", selectedKey: only }
+					? { type: "detail" }
 					: { type: "empty" },
 			);
 			return true;
@@ -272,46 +266,10 @@ export default function MCPServersPage() {
 					searchPlaceholder={t("searchServers")}
 					searchAriaLabel={t("searchServers")}
 				>
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<div
-								role="button"
-								tabIndex={0}
-								className={cn(
-									"flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-default hover:text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40",
-									isMultiSelectMode &&
-										"bg-accent/10 text-accent",
-								)}
-								aria-label={
-									isMultiSelectMode
-										? t("doneSelecting")
-										: t("multiSelect")
-								}
-								onClick={handleToggleMultiSelect}
-								onKeyDown={(event) => {
-									if (
-										event.key !== "Enter" &&
-										event.key !== " "
-									) {
-										return;
-									}
-									event.preventDefault();
-									handleToggleMultiSelect();
-								}}
-							>
-								{isMultiSelectMode ? (
-									<CheckCircleIcon className="size-4" />
-								) : (
-									<RectangleStackIcon className="size-4" />
-								)}
-							</div>
-						</Tooltip.Trigger>
-						<Tooltip.Content>
-							{isMultiSelectMode
-								? t("doneSelecting")
-								: t("multiSelect")}
-						</Tooltip.Content>
-					</Tooltip>
+					<MultiSelectToggle
+						isActive={isMultiSelectMode}
+						onToggle={handleToggleMultiSelect}
+					/>
 					<Dropdown>
 						<Button
 							isIconOnly
@@ -432,28 +390,16 @@ export default function MCPServersPage() {
 												)}
 												intents={actionIntents}
 												matrixGroups={selectedGroups.map(
-													(g) => ({
-														key: g.mergeKey,
-														name: g.items[0].name,
-														sourceAgent:
-															g.items[0].agent ??
-															"claude",
-														// Global-scope page
-														sourceScope:
-															"global" as const,
-														installedAgents: g.items
-															.map(
+													(g) =>
+														matrixGroup(
+															g.mergeKey,
+															g.items[0].name,
+															g.items[0].agent,
+															g.items.map(
 																(item) =>
 																	item.agent,
-															)
-															.filter(
-																(
-																	agent,
-																): agent is string =>
-																	agent !=
-																	null,
 															),
-													}),
+														),
 												)}
 												onDeselectAll={() =>
 													handleSelectionChange(
@@ -495,11 +441,7 @@ export default function MCPServersPage() {
 										<McpDetail
 											group={activeGroup}
 											onEdit={() =>
-												setPanel({
-													type: "edit",
-													selectedKey:
-														activeGroup.mergeKey,
-												})
+												setPanel({ type: "edit" })
 											}
 										/>
 									)}

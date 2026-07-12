@@ -2,11 +2,9 @@
 
 import {
 	ArrowPathIcon,
-	CheckCircleIcon,
 	PlusIcon,
 	PowerIcon,
 	PuzzlePieceIcon,
-	RectangleStackIcon,
 } from "@heroicons/react/24/solid";
 import { Button, Label, ListBox, Menu, Tooltip } from "@heroui/react";
 import Fuse from "fuse.js";
@@ -14,6 +12,7 @@ import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { CCPluginResponse } from "../generated/dto";
 import { cn } from "../lib/utils";
+import { MultiSelectToggle } from "./multi-select-toggle";
 import { useMultiSelect } from "../hooks/use-multi-select";
 import { ContextMenu, useContextMenu } from "./context-menu";
 import { ListSearchHeader } from "./list-search-header";
@@ -104,34 +103,10 @@ export function PluginList({
 					</Button>
 					<Tooltip.Content>{t("installFromMarket")}</Tooltip.Content>
 				</Tooltip>
-				<Tooltip delay={0}>
-					<Button
-						isIconOnly
-						variant="ghost"
-						size="sm"
-						className={cn(
-							"shrink-0 text-muted",
-							isMultiSelectMode && "bg-accent/10 text-accent",
-						)}
-						aria-label={
-							isMultiSelectMode
-								? t("doneSelecting")
-								: t("multiSelect")
-						}
-						onPress={onToggleMultiSelect}
-					>
-						{isMultiSelectMode ? (
-							<CheckCircleIcon className="size-4" />
-						) : (
-							<RectangleStackIcon className="size-4" />
-						)}
-					</Button>
-					<Tooltip.Content>
-						{isMultiSelectMode
-							? t("doneSelecting")
-							: t("multiSelect")}
-					</Tooltip.Content>
-				</Tooltip>
+				<MultiSelectToggle
+					isActive={isMultiSelectMode}
+					onToggle={onToggleMultiSelect}
+				/>
 				<Tooltip delay={0}>
 					<Button
 						isIconOnly

@@ -2,15 +2,14 @@ import { DndContext, DragOverlay } from "@dnd-kit/core";
 import {
 	ArrowPathIcon,
 	BookOpenIcon,
-	CheckCircleIcon,
 	PlusIcon,
-	RectangleStackIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Dropdown, Kbd, Menu, Tooltip } from "@heroui/react";
+import { Button, Dropdown, Kbd, Menu } from "@heroui/react";
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { matrixGroup } from "../../components/agent-coverage-matrix";
 import { BulkActionsPanel } from "../../components/bulk-actions-panel";
 import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
 import { CreateSkillPanel } from "../../components/create-skill-panel";
@@ -22,6 +21,7 @@ import { TransferDialog } from "../../components/transfer-dialog";
 import { useAgentAvailability } from "../../hooks/use-agent-availability";
 import { useAgentFilter } from "../../hooks/use-agent-filter";
 import { ContextMenu, useContextMenu } from "../../components/context-menu";
+import { MultiSelectToggle } from "../../components/multi-select-toggle";
 import { DragPreview, DropBoard } from "../../components/drop-board";
 import { PanelTransition } from "../../components/panel-transition";
 import { useListDnd } from "../../hooks/use-list-dnd";
@@ -283,16 +283,12 @@ export default function SkillsPage() {
 				.at(-1) ?? null;
 		const matrixGroups = members.map((member) => {
 			const items = byName.get(member.name)?.items ?? [];
-			return {
-				key: member.name,
-				name: member.name,
-				sourceAgent: items[0]?.agent ?? "claude",
-				// This page lists the global scope only
-				sourceScope: "global" as const,
-				installedAgents: items
-					.map((item) => item.agent)
-					.filter((agent): agent is string => agent != null),
-			};
+			return matrixGroup(
+				member.name,
+				member.name,
+				items[0]?.agent,
+				items.map((item) => item.agent),
+			);
 		});
 		return {
 			title: focusedSource,
@@ -359,46 +355,10 @@ export default function SkillsPage() {
 					searchPlaceholder={t("searchSkills")}
 					searchAriaLabel={t("searchSkills")}
 				>
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<div
-								role="button"
-								tabIndex={0}
-								className={cn(
-									"flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-default hover:text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40",
-									isMultiSelectMode &&
-										"bg-accent/10 text-accent",
-								)}
-								aria-label={
-									isMultiSelectMode
-										? t("doneSelecting")
-										: t("multiSelect")
-								}
-								onClick={handleToggleMultiSelect}
-								onKeyDown={(event) => {
-									if (
-										event.key !== "Enter" &&
-										event.key !== " "
-									) {
-										return;
-									}
-									event.preventDefault();
-									handleToggleMultiSelect();
-								}}
-							>
-								{isMultiSelectMode ? (
-									<CheckCircleIcon className="size-4" />
-								) : (
-									<RectangleStackIcon className="size-4" />
-								)}
-							</div>
-						</Tooltip.Trigger>
-						<Tooltip.Content>
-							{isMultiSelectMode
-								? t("doneSelecting")
-								: t("multiSelect")}
-						</Tooltip.Content>
-					</Tooltip>
+					<MultiSelectToggle
+						isActive={isMultiSelectMode}
+						onToggle={handleToggleMultiSelect}
+					/>
 					<Dropdown>
 						<Button
 							isIconOnly

@@ -1,10 +1,8 @@
 import type { ReactNode } from "react";
-import { cn } from "../lib/utils";
 
 interface PanelTransitionProps {
 	/** Remounts (and replays the entrance) when the panel state changes */
 	stateKey: string;
-	className?: string;
 	children: ReactNode;
 }
 
@@ -14,18 +12,11 @@ interface PanelTransitionProps {
  * instead of hard-swapping. Entrance-only by design — an exit animation
  * would delay the incoming state.
  */
-export function PanelTransition({
-	stateKey,
-	className,
-	children,
-}: PanelTransitionProps) {
+export function PanelTransition({ stateKey, children }: PanelTransitionProps) {
 	return (
 		<div
 			key={stateKey}
-			className={cn(
-				"h-full animate-[panel-in_var(--dur-base)_var(--ease-out)_both]",
-				className,
-			)}
+			className="h-full animate-[panel-in_var(--dur-base)_var(--ease-out)_both]"
 		>
 			{children}
 		</div>

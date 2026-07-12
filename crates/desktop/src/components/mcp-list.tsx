@@ -47,7 +47,6 @@ interface McpListProps {
 	selectedKeys: Set<string>;
 	searchQuery: string;
 	onSelectionChange: (keys: Set<string>) => void;
-	emptyMessage?: string;
 	isMultiSelectMode?: boolean;
 	/** Dialog intents owned by the page (delete/transfer/agents/new group) */
 	intents: ResourceActionIntents;
@@ -60,7 +59,6 @@ export function McpList({
 	selectedKeys,
 	searchQuery,
 	onSelectionChange,
-	emptyMessage,
 	isMultiSelectMode = false,
 	intents,
 	seedKey,
@@ -347,7 +345,7 @@ export function McpList({
 	if (sortedGroups.length === 0 && customSections.length === 0) {
 		return (
 			<p className="px-3 py-6 text-center text-sm text-muted">
-				{emptyMessage ?? t("noServersMatch")}
+				{t("noServersMatch")}
 			</p>
 		);
 	}

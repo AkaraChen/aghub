@@ -237,13 +237,12 @@ export function ResourceGroupSection({
 interface DropRegionProps {
 	/** dnd-kit droppable id */
 	id: string;
-	className?: string;
 	children: ReactNode;
 }
 
 /** A plain droppable wrapper for regions that are not group headers
  * (the ungrouped area). Highlights on hover-over during a drag. */
-export function DropRegion({ id, className, children }: DropRegionProps) {
+export function DropRegion({ id, children }: DropRegionProps) {
 	const { setNodeRef, isOver } = useDroppable({ id });
 	return (
 		<div
@@ -252,7 +251,6 @@ export function DropRegion({ id, className, children }: DropRegionProps) {
 			className={cn(
 				"transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]",
 				isOver && "bg-accent/5 ring-1 ring-inset ring-accent/40",
-				className,
 			)}
 		>
 			{children}

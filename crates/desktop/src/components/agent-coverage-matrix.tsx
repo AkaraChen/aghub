@@ -26,6 +26,24 @@ export interface MatrixGroup {
 	installedAgents: string[];
 }
 
+/** Builds one matrix row for the global-scope settings pages. */
+export function matrixGroup(
+	key: string,
+	name: string,
+	sourceAgent: string | null | undefined,
+	installedAgents: (string | null)[],
+): MatrixGroup {
+	return {
+		key,
+		name,
+		sourceAgent: sourceAgent ?? "claude",
+		sourceScope: "global",
+		installedAgents: installedAgents.filter(
+			(agent): agent is string => agent != null,
+		),
+	};
+}
+
 interface AgentCoverageMatrixProps {
 	kind: ResourceKind;
 	groups: MatrixGroup[];

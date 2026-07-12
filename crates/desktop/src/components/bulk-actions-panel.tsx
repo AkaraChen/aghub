@@ -13,14 +13,14 @@ import { ACTION_ICONS } from "./action-icons";
 import type { MatrixGroup } from "./agent-coverage-matrix";
 import { AgentCoverageMatrix } from "./agent-coverage-matrix";
 
-export interface BulkPanelItem {
+interface BulkPanelItem {
 	key: string;
 	label: string;
 	/** Where the item lives — its custom group or source */
 	badge?: string;
 }
 
-export interface BulkSourceContext {
+interface BulkSourceContext {
 	title: string;
 	url?: string | null;
 }

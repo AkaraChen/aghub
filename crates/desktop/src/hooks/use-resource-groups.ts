@@ -1,5 +1,4 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
 import type { ResourceGroupStore } from "../lib/store";
 import { mcpGroupStore, skillGroupStore } from "../lib/store";
 import { withViewTransition } from "../lib/view-transition";
@@ -32,61 +31,46 @@ function useResourceGroups(
 		queryFn: store.getAssignments,
 	});
 
-	const invalidate = useCallback(async () => {
+	const invalidate = async () => {
 		await Promise.all([
 			queryClient.invalidateQueries({ queryKey: keys.groups }),
 			queryClient.invalidateQueries({ queryKey: keys.assignments }),
 		]);
-	}, [queryClient, keys]);
+	};
 
-	const createGroup = useCallback(
-		async (name: string) => {
-			const group = await store.createGroup(name);
-			await invalidate();
-			return group;
-		},
-		[store, invalidate],
-	);
+	const createGroup = async (name: string) => {
+		const group = await store.createGroup(name);
+		await invalidate();
+		return group;
+	};
 
-	const renameGroup = useCallback(
-		async (id: string, name: string) => {
-			await store.renameGroup(id, name);
-			await invalidate();
-		},
-		[store, invalidate],
-	);
+	const renameGroup = async (id: string, name: string) => {
+		await store.renameGroup(id, name);
+		await invalidate();
+	};
 
 	// Membership changes move rows between sections; a View Transition
 	// slides items to their new home instead of teleporting (VT-1).
-	const deleteGroup = useCallback(
-		async (id: string) => {
-			await withViewTransition(async () => {
-				await store.deleteGroup(id);
-				await invalidate();
-			});
-		},
-		[store, invalidate],
-	);
+	const deleteGroup = async (id: string) => {
+		await withViewTransition(async () => {
+			await store.deleteGroup(id);
+			await invalidate();
+		});
+	};
 
-	const assignMembers = useCallback(
-		async (memberKeys: string[], groupId: string) => {
-			await withViewTransition(async () => {
-				await store.assignMembers(memberKeys, groupId);
-				await invalidate();
-			});
-		},
-		[store, invalidate],
-	);
+	const assignMembers = async (memberKeys: string[], groupId: string) => {
+		await withViewTransition(async () => {
+			await store.assignMembers(memberKeys, groupId);
+			await invalidate();
+		});
+	};
 
-	const unassignMembers = useCallback(
-		async (memberKeys: string[]) => {
-			await withViewTransition(async () => {
-				await store.unassignMembers(memberKeys);
-				await invalidate();
-			});
-		},
-		[store, invalidate],
-	);
+	const unassignMembers = async (memberKeys: string[]) => {
+		await withViewTransition(async () => {
+			await store.unassignMembers(memberKeys);
+			await invalidate();
+		});
+	};
 
 	return {
 		groups,

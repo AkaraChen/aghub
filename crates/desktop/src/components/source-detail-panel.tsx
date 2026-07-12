@@ -10,7 +10,7 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import type { MatrixGroup } from "./agent-coverage-matrix";
 import { AgentCoverageMatrix } from "./agent-coverage-matrix";
 
-export interface SourceMember {
+interface SourceMember {
 	name: string;
 	description: string | null;
 }
