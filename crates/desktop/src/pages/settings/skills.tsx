@@ -5,7 +5,11 @@ import {
 	PlusIcon,
 } from "@heroicons/react/24/solid";
 import { Button, Dropdown, Kbd, Menu } from "@heroui/react";
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import {
+	useQuery,
+	useQueryClient,
+	useSuspenseQuery,
+} from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -35,6 +39,7 @@ import { useSkillGroups } from "../../hooks/use-resource-groups";
 import { cn, filterItemsByAgentIds } from "../../lib/utils";
 import {
 	globalSkillLockQueryOptions,
+	invalidateSkillQueries,
 	skillListQueryOptions,
 } from "../../requests/skills";
 
@@ -43,11 +48,8 @@ const GITHUB_PREFIX_REGEX = /^github\//;
 export default function SkillsPage() {
 	const { t } = useTranslation();
 	const api = useApi();
-	const {
-		data: skills,
-		refetch,
-		isFetching,
-	} = useSuspenseQuery({
+	const queryClient = useQueryClient();
+	const { data: skills, isFetching } = useSuspenseQuery({
 		...skillListQueryOptions({ api, scope: "global" }),
 	});
 	const [searchQuery, setSearchQuery] = useState("");
@@ -408,7 +410,7 @@ export default function SkillsPage() {
 						size="sm"
 						className="shrink-0"
 						aria-label={t("refreshSkills")}
-						onPress={() => refetch()}
+						onPress={() => void invalidateSkillQueries(queryClient)}
 					>
 						<ArrowPathIcon
 							className={cn(
@@ -588,7 +590,9 @@ export default function SkillsPage() {
 								<Menu.Item
 									id="page-refresh"
 									textValue={t("refreshSkills")}
-									onAction={() => void refetch()}
+									onAction={() =>
+										void invalidateSkillQueries(queryClient)
+									}
 								>
 									{t("refreshSkills")}
 								</Menu.Item>
@@ -604,7 +608,7 @@ export default function SkillsPage() {
 							}))}
 							onSuccess={() => {
 								handleSelectionChange(new Set());
-								refetch();
+								void invalidateSkillQueries(queryClient);
 							}}
 							resourceType="skill"
 						/>
