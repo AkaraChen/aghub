@@ -2416,7 +2416,8 @@ export default function InferenceProvidersPage() {
 							onSelectionChange={(keys) => {
 								if (keys === "all") return;
 								const agentId = [...keys][0] as
-									CodingAgentId | undefined;
+									| CodingAgentId
+									| undefined;
 								if (!agentId) return;
 								handleAgentClick(agentId);
 							}}

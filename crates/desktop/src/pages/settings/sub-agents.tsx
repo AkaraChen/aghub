@@ -335,7 +335,8 @@ export default function SubAgentsPage() {
 								onSelectionChange={(keys) => {
 									if (keys === "all") return;
 									const key = [...keys][0] as
-										string | undefined;
+										| string
+										| undefined;
 									if (!key) return;
 									setPanel({
 										type: "detail",

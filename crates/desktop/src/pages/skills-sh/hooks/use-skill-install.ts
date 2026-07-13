@@ -87,7 +87,8 @@ export function useSkillInstall() {
 			const updatedResults = pendingResults.map((result) => ({
 				...result,
 				status: (response.success ? "success" : "error") as
-					"success" | "error",
+					| "success"
+					| "error",
 				error: response.success ? undefined : t("skillInstallFailed"),
 			}));
 

@@ -29,7 +29,8 @@ export function useCurrentCodeEditor() {
 		}
 
 		return codeEditors?.find((editor) => editor.installed)?.id as
-			CodeEditorType | undefined;
+			| CodeEditorType
+			| undefined;
 	}, [codeEditors, preferredEditor]);
 
 	const currentEditor = useMemo(

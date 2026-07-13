@@ -24,7 +24,8 @@ export type DeepLinkImportIntent =
 	  };
 
 type ParseDeepLinkResult =
-	{ ok: true; intent: DeepLinkImportIntent } | { ok: false; error: string };
+	| { ok: true; intent: DeepLinkImportIntent }
+	| { ok: false; error: string };
 
 interface ParsedMcpPayload {
 	name: string;
