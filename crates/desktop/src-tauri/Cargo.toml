@@ -43,7 +43,7 @@ fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs", rev = "c
 log = { workspace = true }
 time = { version = "0.3", features = [ "formatting", "local-offset" ] }
 zip = { version = "8", default-features = false, features = [ "deflate" ] }
-posthog-rs = "0.17.3"
+posthog-rs = "0.19.1"
 uuid = { workspace = true }
 tauri-plugin-autostart = "2.5.1"
 sys-locale = "0.3.2"
