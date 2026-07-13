@@ -83,3 +83,31 @@ jobs:
               run: |
                   just build
                   cd crates/desktop && bun run build
+
+    e2e:
+        name: Desktop E2E
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: latest
+
+            - name: Install frontend dependencies
+              run: cd crates/desktop && bun install
+
+            - name: Install Playwright browsers
+              run: cd crates/desktop && bunx playwright install --with-deps chromium
+
+            - name: Run E2E tests
+              run: cd crates/desktop && bun run test:e2e
+
+            - name: Upload Playwright report
+              if: failure()
+              uses: actions/upload-artifact@v6
+              with:
+                  name: playwright-report
+                  path: crates/desktop/playwright-report/
+                  retention-days: 7

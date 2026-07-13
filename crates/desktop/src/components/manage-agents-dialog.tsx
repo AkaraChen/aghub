@@ -16,11 +16,11 @@ type AgentCapabilityRequirement = keyof AvailableAgent["capabilities"] | "mcp";
 const EMPTY_CAPABILITIES: AgentCapabilityRequirement[] = [];
 
 interface ManageAgentsDialogProps {
-	group: {
+	groups: {
 		mergeKey: string;
 		transport: McpResponse["transport"];
 		items: McpResponse[];
-	};
+	}[];
 	isOpen: boolean;
 	onClose: () => void;
 	projectPath?: string;
@@ -28,7 +28,7 @@ interface ManageAgentsDialogProps {
 }
 
 export function ManageAgentsDialog({
-	group,
+	groups,
 	isOpen,
 	onClose,
 	projectPath,
@@ -56,12 +56,47 @@ export function ManageAgentsDialog({
 		[requiredCapabilities],
 	);
 
-	const hasValidGroup = group?.items && Array.isArray(group.items);
+	const hasValidGroups =
+		groups.length > 0 &&
+		groups.every((group) => group?.items && Array.isArray(group.items));
 
-	const installedAgentIds = useMemo(() => {
-		if (!hasValidGroup) return new Set<string>();
-		return new Set(group.items.map((item) => item.agent ?? "default"));
-	}, [hasValidGroup, group]);
+	const installedAgentIdsByGroup = useMemo(
+		() =>
+			groups.map(
+				(group) =>
+					new Set(
+						(group?.items ?? []).map(
+							(item) => item.agent ?? "default",
+						),
+					),
+			),
+		[groups],
+	);
+
+	const commonInstalledAgentIds = useMemo(() => {
+		const [first, ...rest] = installedAgentIdsByGroup;
+		if (!first) return new Set<string>();
+		let common = Array.from(first);
+		for (const installed of rest) {
+			common = common.filter((id) => installed.has(id));
+		}
+		return new Set(common);
+	}, [installedAgentIdsByGroup]);
+
+	// Agents installed on a strict subset of the selected items. With a
+	// single item this is always empty, so single-item behavior is
+	// unchanged.
+	const partiallyInstalledAgentIds = useMemo(() => {
+		const partial = new Set<string>();
+		for (const installed of installedAgentIdsByGroup) {
+			for (const id of installed) {
+				if (!commonInstalledAgentIds.has(id)) {
+					partial.add(id);
+				}
+			}
+		}
+		return partial;
+	}, [installedAgentIdsByGroup, commonInstalledAgentIds]);
 
 	const usableAgents = useMemo(
 		() =>
@@ -76,6 +111,12 @@ export function ManageAgentsDialog({
 
 	const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
 	const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
+	// macOS-style tri-state: agents installed on only some items start
+	// indeterminate; while an agent stays in this set it is left untouched
+	// by Apply.
+	const [indeterminateAgents, setIndeterminateAgents] = useState<Set<string>>(
+		() => new Set(),
+	);
 	const [agentStates, setAgentStates] = useState<Record<string, AgentState>>(
 		{},
 	);
@@ -84,7 +125,8 @@ export function ManageAgentsDialog({
 	if (isOpen !== prevIsOpen) {
 		setPrevIsOpen(isOpen);
 		if (isOpen) {
-			setSelectedAgents(Array.from(installedAgentIds));
+			setSelectedAgents(Array.from(commonInstalledAgentIds));
+			setIndeterminateAgents(new Set(partiallyInstalledAgentIds));
 			setAgentStates({});
 			setIsApplying(false);
 		}
@@ -97,15 +139,24 @@ export function ManageAgentsDialog({
 
 	const getAgentDiffLabel = useCallback(
 		(agentId: string): AgentDiffLabel | null => {
-			const isCurrentAgent = installedAgentIds.has(agentId);
+			// Still in its initial indeterminate state: Apply leaves every
+			// item untouched for this agent.
+			if (indeterminateAgents.has(agentId)) return "partial";
+
+			const installedInAll = installedAgentIdsByGroup.every((installed) =>
+				installed.has(agentId),
+			);
+			const installedInAny = installedAgentIdsByGroup.some((installed) =>
+				installed.has(agentId),
+			);
 			const isSelected = selectedSet.has(agentId);
 
-			if (isSelected && !isCurrentAgent) return "adding";
-			if (!isSelected && isCurrentAgent) return "removing";
-			if (isSelected && isCurrentAgent) return "installed";
+			if (isSelected && !installedInAll) return "adding";
+			if (!isSelected && installedInAny) return "removing";
+			if (isSelected && installedInAll) return "installed";
 			return "unconfigured";
 		},
-		[installedAgentIds, selectedSet],
+		[indeterminateAgents, installedAgentIdsByGroup, selectedSet],
 	);
 
 	const diffLabels = useMemo(() => {
@@ -119,15 +170,26 @@ export function ManageAgentsDialog({
 		return labels;
 	}, [usableAgents, getAgentDiffLabel]);
 
-	const hasChanges = useMemo(() => {
-		const toInstall = selectedAgents.filter(
-			(id) => !installedAgentIds.has(id),
-		);
-		const toUninstall = Array.from(installedAgentIds).filter(
-			(id) => !selectedSet.has(id),
-		);
-		return toInstall.length > 0 || toUninstall.length > 0;
-	}, [selectedAgents, installedAgentIds, selectedSet]);
+	// True only when some agent's state differs from its initial one:
+	// agents left indeterminate cause no change and never count.
+	const hasChanges = useMemo(
+		() =>
+			installedAgentIdsByGroup.some(
+				(installed) =>
+					selectedAgents.some((id) => !installed.has(id)) ||
+					Array.from(installed).some(
+						(id) =>
+							!selectedSet.has(id) &&
+							!indeterminateAgents.has(id),
+					),
+			),
+		[
+			installedAgentIdsByGroup,
+			selectedAgents,
+			selectedSet,
+			indeterminateAgents,
+		],
+	);
 
 	const onCloseAndReset = () => {
 		setAgentStates({});
@@ -137,76 +199,120 @@ export function ManageAgentsDialog({
 
 	const handleSelectionChange = useCallback((keys: string[]) => {
 		setSelectedAgents(keys);
+		// Clicking an indeterminate agent selects it; from then on it
+		// cycles checked/unchecked like the rest.
+		setIndeterminateAgents((prev) => {
+			if (prev.size === 0) return prev;
+			const next = new Set(
+				Array.from(prev).filter((id) => !keys.includes(id)),
+			);
+			return next.size === prev.size ? prev : next;
+		});
 	}, []);
 
 	const handleApply = async () => {
-		if (!hasValidGroup || group.items.length === 0) {
+		if (!hasValidGroups) {
 			toast.danger(t("invalidConfiguration"));
 			return;
 		}
 
-		setIsApplying(true);
-		const primary = group.items[0];
-
-		if (!primary?.name || !primary.transport) {
+		if (
+			groups.some(
+				(group) => !group.items[0]?.name || !group.items[0].transport,
+			)
+		) {
 			toast.danger(t("invalidMcpConfiguration"));
-			setIsApplying(false);
 			return;
 		}
 
-		const primaryAgent = primary.agent ?? "claude";
-		const sourceAgentItem =
-			group.items.find(
-				(item) => (item.agent ?? "default") === primaryAgent,
-			) ?? primary;
+		setIsApplying(true);
 
-		const toInstall = selectedAgents.filter(
-			(id) => !installedAgentIds.has(id),
-		);
-		const toUninstall = Array.from(installedAgentIds).filter(
-			(id) => !selectedSet.has(id),
-		);
+		const plans = groups.map((group, index) => {
+			const installed =
+				installedAgentIdsByGroup[index] ?? new Set<string>();
+			return {
+				group,
+				added: selectedAgents.filter((id) => !installed.has(id)),
+				// Agents still in their initial indeterminate state are
+				// left untouched — never uninstall what the user did not
+				// explicitly uncheck.
+				removed: Array.from(installed).filter(
+					(id) =>
+						!selectedSet.has(id) && !indeterminateAgents.has(id),
+				),
+			};
+		});
+
+		const changedIds = new Set<string>();
+		for (const plan of plans) {
+			for (const id of [...plan.added, ...plan.removed]) {
+				changedIds.add(id);
+			}
+		}
 
 		const pendingStates: Record<string, AgentState> = {};
-		for (const id of [...toInstall, ...toUninstall]) {
+		for (const id of changedIds) {
 			pendingStates[id] = { status: "pending" };
 		}
 		setAgentStates(pendingStates);
 
 		try {
-			const result = await reconcileMutation.mutateAsync({
-				source: {
-					agent: sourceAgentItem.agent ?? "claude",
-					scope:
-						sourceAgentItem.source === "project"
-							? "project"
-							: "global",
-					project_root: projectPath ?? null,
-					name: primary.name,
-				},
-				added: toInstall.length > 0 ? toInstall : null,
-				removed: toUninstall.length > 0 ? toUninstall : null,
-			});
-
+			let successCount = 0;
+			let failedCount = 0;
 			const newAgentStates: Record<string, AgentState> = {};
-			for (const item of result.results) {
-				newAgentStates[item.agent] = {
-					status: item.success ? "success" : "error",
-					error: item.error ?? undefined,
-				};
+			for (const plan of plans) {
+				if (plan.added.length === 0 && plan.removed.length === 0) {
+					continue;
+				}
+
+				const primary = plan.group.items[0];
+				if (!primary?.name) continue;
+
+				const primaryAgent = primary.agent ?? "claude";
+				const sourceAgentItem =
+					plan.group.items.find(
+						(item) => (item.agent ?? "default") === primaryAgent,
+					) ?? primary;
+
+				const result = await reconcileMutation.mutateAsync({
+					source: {
+						agent: sourceAgentItem.agent ?? "claude",
+						scope:
+							sourceAgentItem.source === "project"
+								? "project"
+								: "global",
+						project_root: projectPath ?? null,
+						name: primary.name,
+					},
+					added: plan.added.length > 0 ? plan.added : null,
+					removed: plan.removed.length > 0 ? plan.removed : null,
+				});
+
+				for (const item of result.results) {
+					if (item.success) {
+						newAgentStates[item.agent] ??= { status: "success" };
+					} else {
+						newAgentStates[item.agent] = {
+							status: "error",
+							error: item.error ?? undefined,
+						};
+					}
+				}
+				successCount += result.success_count;
+				failedCount += result.failed_count;
 			}
 			setAgentStates(newAgentStates);
 
-			if (result.failed_count === 0) {
+			if (failedCount === 0) {
 				toast.success(
-					t("agentChangesApplied", { count: result.success_count }),
+					t("agentChangesApplied", { count: successCount }),
 				);
 				onCloseAndReset();
 			} else {
 				toast.danger(
 					t("agentChangesFailed", {
-						success: result.success_count,
-						failed: result.failed_count,
+						success: successCount,
+						failed: failedCount,
 					}),
 				);
 			}
@@ -216,7 +322,7 @@ export function ManageAgentsDialog({
 			toast.danger(errorMessage);
 
 			const errorStates: Record<string, AgentState> = {};
-			for (const id of [...toInstall, ...toUninstall]) {
+			for (const id of changedIds) {
 				errorStates[id] = { status: "error", error: errorMessage };
 			}
 			setAgentStates(errorStates);
@@ -235,7 +341,7 @@ export function ManageAgentsDialog({
 					</Modal.Header>
 
 					<Modal.Body className="p-4">
-						{!hasValidGroup ? (
+						{!hasValidGroups ? (
 							<p className="text-sm text-muted">
 								{t("invalidConfiguration")}
 							</p>
@@ -249,6 +355,7 @@ export function ManageAgentsDialog({
 								<AgentList
 									agents={usableAgents}
 									selectedKeys={selectedAgents}
+									indeterminateKeys={indeterminateAgents}
 									onSelectionChange={handleSelectionChange}
 									agentStates={agentStates}
 									diffLabels={diffLabels}

@@ -26,7 +26,7 @@ import {
 } from "../lib/form-utils";
 import { objectToKeyPairs } from "../lib/key-pair-utils";
 import { buildTransportFromForm, capitalize } from "../lib/mcp-utils";
-import { migrateStarredMcp } from "../lib/store";
+import { mcpGroupStore, migrateStarredMcp } from "../lib/store";
 import { getMcpMergeKey } from "../lib/utils";
 import { invalidateMcpQueries } from "../requests/mcps";
 import { capture } from "../lib/analytics";
@@ -152,8 +152,12 @@ export function EditMcpPanel({
 			);
 			if (newMergeKey !== group.mergeKey) {
 				await migrateStarredMcp(group.mergeKey, newMergeKey);
+				await mcpGroupStore.migrateMember(group.mergeKey, newMergeKey);
 				await queryClient.invalidateQueries({
 					queryKey: ["starredMcps"],
+				});
+				await queryClient.invalidateQueries({
+					queryKey: ["mcpGroupAssignments"],
 				});
 			}
 			await invalidateMcpQueries(queryClient);

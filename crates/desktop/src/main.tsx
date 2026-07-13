@@ -9,8 +9,11 @@ import {
 	installExceptionAutocapture,
 } from "./lib/analytics";
 import { log } from "./lib/logger";
+import { suppressNativeContextMenu } from "./lib/suppress-native-context-menu";
 
 async function bootstrap() {
+	suppressNativeContextMenu();
+
 	try {
 		await attachConsole();
 		await info("Tauri log stream attached to frontend console");

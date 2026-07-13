@@ -24,6 +24,7 @@ import type { McpResponse, TransportDto } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useFavorites } from "../hooks/use-favorites";
+import { useMcpGroups } from "../hooks/use-resource-groups";
 import { AgentIcon } from "../lib/agent-icons";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { serializeMcpImportJson } from "../lib/mcp-utils";
@@ -99,6 +100,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 	});
 	const api = useApi();
 	const queryClient = useQueryClient();
+	const { pruneAssignments } = useMcpGroups();
 
 	const deleteMutation = useMutation({
 		mutationFn: (g: McpGroup) => {
@@ -115,6 +117,9 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 			);
 		},
 		onSuccess: () => {
+			// The whole server group is gone; drop its group assignment so
+			// a same-keyed server added later starts out ungrouped.
+			void pruneAssignments([group.mergeKey]);
 			void invalidateMcpQueries(queryClient);
 			dispatch({ type: "set_delete_dialog", value: false });
 			toast.success(t("deleteMcpSuccess"));
@@ -200,7 +205,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 					<Card>
 						{/* Header: Name + Actions */}
 						<Card.Header className="flex flex-row items-start justify-between gap-3">
-							<div className="min-w-0 flex-1">
+							<div className="min-w-0 flex-1 select-text">
 								<h2 className="text-xl font-semibold text-foreground truncate">
 									{primaryItem.name}
 								</h2>
@@ -530,7 +535,7 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 
 			{/* Manage Agents Dialog */}
 			<ManageAgentsDialog
-				group={group}
+				groups={[group]}
 				isOpen={uiState.manageDialogOpen}
 				onClose={() =>
 					dispatch({
@@ -551,11 +556,15 @@ export function McpDetail({ group, onEdit, projectPath }: McpDetailProps) {
 					})
 				}
 				resourceType="mcp"
-				name={primaryItem.name}
-				sourceAgent={primaryItem.agent ?? "claude"}
+				items={[
+					{
+						name: primaryItem.name,
+						sourceAgent: primaryItem.agent ?? "claude",
+						transport: primaryItem.transport,
+					},
+				]}
 				sourceScope={primaryScope}
 				sourceProjectRoot={projectPath}
-				transport={primaryItem.transport}
 			/>
 		</>
 	);

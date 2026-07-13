@@ -1,3 +1,4 @@
+import { DndContext, DragOverlay } from "@dnd-kit/core";
 import {
 	ArrowDownTrayIcon,
 	ArrowPathIcon,
@@ -27,6 +28,11 @@ import type {
 	SubAgentResponse,
 } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
+import { useListDnd } from "../hooks/use-list-dnd";
+import { useMcpSections } from "../hooks/use-mcp-sections";
+import type { ResourceActionIntents } from "../hooks/use-resource-actions";
+import { useSkillSections } from "../hooks/use-skill-sections";
+import { DragPreview } from "./drop-board";
 import {
 	cn,
 	filterItemsByAgentIds,
@@ -60,6 +66,9 @@ interface UnifiedResourceListProps {
 	isMultiSelectMode?: boolean;
 	onMultiSelectModeChange?: (value: boolean) => void;
 	onDeleteSelected?: () => void;
+	skillIntents: ResourceActionIntents;
+	mcpIntents: ResourceActionIntents;
+	onDropCreateGroup: (kind: "skill" | "mcp", keys: string[]) => void;
 }
 
 export function UnifiedResourceList({
@@ -83,6 +92,9 @@ export function UnifiedResourceList({
 	isMultiSelectMode = false,
 	onMultiSelectModeChange,
 	onDeleteSelected,
+	skillIntents,
+	mcpIntents,
+	onDropCreateGroup,
 }: UnifiedResourceListProps) {
 	const { t } = useTranslation();
 	const { availableAgents } = useAgentAvailability();
@@ -167,6 +179,29 @@ export function UnifiedResourceList({
 	const handleSkillSelectionChange = (keys: Set<string>) => {
 		onSelectionChange(keys, "skill");
 	};
+
+	// The derivation pipelines live with this wrapper (the pages' stand-in
+	// on the project screen) so the lists and any select-all agree on
+	// what is visible.
+	const skillSections = useSkillSections({
+		skills,
+		searchQuery,
+		selectedKeys: selectedSkillKeys,
+		projectPath,
+	});
+	const mcpSections = useMcpSections({ mcps, searchQuery });
+
+	// Skill and mcp lists each get their own DndContext so their `group:`
+	// and `ungrouped` droppable ids do not collide in one context.
+	const skillDnd = useListDnd("skill", (keys) =>
+		onDropCreateGroup("skill", keys),
+	);
+	const mcpDnd = useListDnd("mcp", (keys) => onDropCreateGroup("mcp", keys));
+	const mcpDragLabel = mcpDnd.draggedKeys?.[0]
+		? (visibleMcps.find(
+				(m) => getMcpMergeKey(m.transport) === mcpDnd.draggedKeys?.[0],
+			)?.name ?? "")
+		: "";
 
 	return (
 		<div
@@ -399,14 +434,28 @@ export function UnifiedResourceList({
 									count={mergedMcpCount}
 									icon={<ServerIcon className="size-3.5" />}
 								/>
-								<McpList
-									mcps={visibleMcps}
-									selectedKeys={selectedMcpKeys}
-									searchQuery={searchQuery}
-									onSelectionChange={handleMcpSelectionChange}
-									selectionMode="multiple"
-									isMultiSelectMode={isMultiSelectMode}
-								/>
+								<DndContext {...mcpDnd.dndProps}>
+									<McpList
+										sections={mcpSections}
+										selectedKeys={selectedMcpKeys}
+										onSelectionChange={
+											handleMcpSelectionChange
+										}
+										isMultiSelectMode={isMultiSelectMode}
+										intents={mcpIntents}
+									/>
+									<DragOverlay dropAnimation={null}>
+										{mcpDnd.draggedKeys ? (
+											<DragPreview
+												label={mcpDragLabel}
+												count={
+													mcpDnd.draggedKeys.length
+												}
+												icon={ServerIcon}
+											/>
+										) : null}
+									</DragOverlay>
+								</DndContext>
 							</>
 						)}
 
@@ -417,18 +466,31 @@ export function UnifiedResourceList({
 									count={mergedSkillCount}
 									icon={<BookOpenIcon className="size-3.5" />}
 								/>
-								<SkillList
-									skills={visibleSkills}
-									selectedKeys={selectedSkillKeys}
-									searchQuery={searchQuery}
-									onSelectionChange={
-										handleSkillSelectionChange
-									}
-									groupBySource={true}
-									projectPath={projectPath}
-									selectionMode="multiple"
-									isMultiSelectMode={isMultiSelectMode}
-								/>
+								<DndContext {...skillDnd.dndProps}>
+									<SkillList
+										sections={skillSections}
+										selectedKeys={selectedSkillKeys}
+										onSelectionChange={
+											handleSkillSelectionChange
+										}
+										isMultiSelectMode={isMultiSelectMode}
+										intents={skillIntents}
+									/>
+									<DragOverlay dropAnimation={null}>
+										{skillDnd.draggedKeys ? (
+											<DragPreview
+												label={
+													skillDnd.draggedKeys[0] ??
+													""
+												}
+												count={
+													skillDnd.draggedKeys.length
+												}
+												icon={BookOpenIcon}
+											/>
+										) : null}
+									</DragOverlay>
+								</DndContext>
 							</>
 						)}
 

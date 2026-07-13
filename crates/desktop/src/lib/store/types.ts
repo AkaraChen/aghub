@@ -18,6 +18,11 @@ export interface IntegrationPreferences {
 	codeEditor?: CodeEditorType;
 }
 
+export interface ResourceGroup {
+	id: string;
+	name: string;
+}
+
 export const SIDEBAR_ITEM_IDS = ["home", "market"] as const;
 
 export type SidebarItemId = (typeof SIDEBAR_ITEM_IDS)[number];

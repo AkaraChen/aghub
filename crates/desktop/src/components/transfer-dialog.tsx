@@ -3,7 +3,11 @@ import { Button, Label, ListBox, Modal, Select, toast } from "@heroui/react";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { TargetDto, TransportDto } from "../generated/dto";
+import type {
+	OperationBatchResponse,
+	TargetDto,
+	TransportDto,
+} from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useProjects } from "../hooks/use-projects";
@@ -35,26 +39,28 @@ type ResourceKind = "mcp" | "skill" | "sub_agent";
 type DestinationScope =
 	{ type: "global" } | { type: "project"; path: string; name: string };
 
+export interface TransferItem {
+	name: string;
+	sourceAgent: string;
+	transport?: TransportDto;
+}
+
 interface TransferDialogProps {
 	isOpen: boolean;
 	onClose: () => void;
 	resourceType: ResourceKind;
-	name: string;
-	sourceAgent: string;
+	items: TransferItem[];
 	sourceScope: "global" | "project";
 	sourceProjectRoot?: string;
-	transport?: TransportDto;
 }
 
 export function TransferDialog({
 	isOpen,
 	onClose,
 	resourceType,
-	name,
-	sourceAgent,
+	items,
 	sourceScope,
 	sourceProjectRoot,
-	transport,
 }: TransferDialogProps) {
 	const { t } = useTranslation();
 	const api = useApi();
@@ -137,6 +143,7 @@ export function TransferDialog({
 	});
 
 	const installedAgentsByDestination = useMemo(() => {
+		const itemNames = new Set(items.map((item) => item.name));
 		const map = new Map<string, Set<string>>();
 		availableDestinations.forEach((dest, index) => {
 			const data = destinationQueries[index]?.data;
@@ -147,16 +154,25 @@ export function TransferDialog({
 				);
 				return;
 			}
+			const namesByAgent = new Map<string, Set<string>>();
+			for (const entry of data) {
+				if (entry.agent && itemNames.has(entry.name)) {
+					const names =
+						namesByAgent.get(entry.agent) ?? new Set<string>();
+					names.add(entry.name);
+					namesByAgent.set(entry.agent, names);
+				}
+			}
 			const agentSet = new Set<string>();
-			for (const item of data) {
-				if (item.name === name && item.agent) {
-					agentSet.add(item.agent);
+			for (const [agent, names] of namesByAgent) {
+				if (names.size === itemNames.size) {
+					agentSet.add(agent);
 				}
 			}
 			map.set(dest.type === "global" ? "global" : dest.path, agentSet);
 		});
 		return map;
-	}, [availableDestinations, destinationQueries, name]);
+	}, [availableDestinations, destinationQueries, items]);
 
 	const selectedScope = useMemo<DestinationScope | null>(() => {
 		if (!selectedScopeKey) return null;
@@ -176,7 +192,9 @@ export function TransferDialog({
 				if (!agent?.isUsable) return false;
 				if (!selectedScope) {
 					if (resourceType === "mcp") {
-						return supportsMcpTransport(agent, transport);
+						return items.every((item) =>
+							supportsMcpTransport(agent, item.transport),
+						);
 					}
 					if (resourceType === "sub_agent") {
 						return (
@@ -193,7 +211,9 @@ export function TransferDialog({
 				if (resourceType === "mcp") {
 					return (
 						supportsMcpScope(agent, selectedScope.type) &&
-						supportsMcpTransport(agent, transport)
+						items.every((item) =>
+							supportsMcpTransport(agent, item.transport),
+						)
 					);
 				}
 
@@ -203,7 +223,7 @@ export function TransferDialog({
 
 				return supportsSkillMutation(agent, selectedScope.type);
 			}),
-		[availableAgents, resourceType, selectedScope, transport],
+		[availableAgents, items, resourceType, selectedScope],
 	);
 
 	const destinationKey = selectedScope
@@ -245,6 +265,11 @@ export function TransferDialog({
 	}, [selectedScope, t]);
 
 	const isLoadingDestinations = destinationQueries.some((q) => q.isFetching);
+
+	const displayName =
+		items.length === 1
+			? items[0].name
+			: t("itemsSelected", { count: items.length });
 
 	if (isOpen !== prevIsOpen) {
 		setPrevIsOpen(isOpen);
@@ -288,38 +313,61 @@ export function TransferDialog({
 			}),
 		);
 
-		const transferSource = {
-			agent: sourceAgent,
-			scope: sourceScope,
-			project_root: sourceProjectRoot ?? null,
-			name,
-		};
-
 		try {
-			let result;
-			if (resourceType === "mcp") {
-				result = await transferMcpsMutation.mutateAsync({
+			// Each transfer read-modify-writes the same destination config
+			// file, so run them sequentially — parallel writers lose items.
+			const outcomes: PromiseSettledResult<OperationBatchResponse>[] = [];
+			for (const item of items) {
+				const transferSource = {
+					agent: item.sourceAgent,
+					scope: sourceScope,
+					project_root: sourceProjectRoot ?? null,
+					name: item.name,
+				};
+				const request = {
 					source: transferSource,
 					destinations: destinationTargets,
-				});
-			} else if (resourceType === "sub_agent") {
-				result = await transferSubAgentsMutation.mutateAsync({
-					source: transferSource,
-					destinations: destinationTargets,
-				});
-			} else {
-				result = await transferSkillsMutation.mutateAsync({
-					source: transferSource,
-					destinations: destinationTargets,
-				});
+				};
+				try {
+					const value =
+						resourceType === "mcp"
+							? await transferMcpsMutation.mutateAsync(request)
+							: resourceType === "sub_agent"
+								? await transferSubAgentsMutation.mutateAsync(
+										request,
+									)
+								: await transferSkillsMutation.mutateAsync(
+										request,
+									);
+					outcomes.push({ status: "fulfilled", value });
+				} catch (reason) {
+					outcomes.push({ status: "rejected", reason });
+				}
 			}
 
+			let successCount = 0;
+			let failed = 0;
 			const newAgentStates: Record<string, AgentState> = {};
-			for (const item of result.results) {
-				newAgentStates[item.agent] = {
-					status: item.success ? "success" : "error",
-					error: item.error ?? undefined,
-				};
+			for (const outcome of outcomes) {
+				if (outcome.status === "rejected") {
+					failed += 1;
+					continue;
+				}
+				const result = outcome.value;
+				for (const item of result.results) {
+					if (item.success) {
+						newAgentStates[item.agent] ??= { status: "success" };
+					} else {
+						newAgentStates[item.agent] = {
+							status: "error",
+							error: item.error ?? undefined,
+						};
+					}
+				}
+				successCount += result.success_count;
+				if (result.failed_count > 0) {
+					failed += 1;
+				}
 			}
 			setAgentStates(newAgentStates);
 
@@ -329,19 +377,17 @@ export function TransferDialog({
 				invalidateSubAgentQueries(queryClient),
 			]);
 
-			if (result.failed_count === 0) {
-				toast.success(
-					t("transferApplied", { count: result.success_count }),
-				);
-				onCloseAndReset();
-			} else {
-				toast.danger(
-					t("agentChangesFailed", {
-						success: result.success_count,
-						failed: result.failed_count,
+			if (failed > 0) {
+				throw new Error(
+					t("transfersFailed", {
+						failed,
+						total: items.length,
 					}),
 				);
 			}
+
+			toast.success(t("transferApplied", { count: successCount }));
+			onCloseAndReset();
 		} catch (err) {
 			const errorMessage =
 				err instanceof Error ? err.message : t("unknownError");
@@ -365,7 +411,7 @@ export function TransferDialog({
 							className="text-sm text-muted"
 							id="transfer-description"
 						>
-							{t("transferDescription", { name })}
+							{t("transferDescription", { name: displayName })}
 						</p>
 
 						{availableDestinations.length === 0 ? (

@@ -1,388 +1,426 @@
 import {
 	BookOpenIcon,
-	ChevronDownIcon,
-	ChevronRightIcon,
 	StarIcon as StarIconSolid,
 } from "@heroicons/react/24/solid";
-import { Chip, Label, ListBox, Spinner } from "@heroui/react";
-import { useQuery } from "@tanstack/react-query";
-import Fuse from "fuse.js";
-import { useMemo, useState } from "react";
-import { useMultiSelect } from "../hooks/use-multi-select";
+import { Label, ListBox, Spinner } from "@heroui/react";
+import { memo, type ReactNode, useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { SkillResponse } from "../generated/dto";
 import { AgentIcons } from "./agent-icons";
-import { useAgentAvailability } from "../hooks/use-agent-availability";
-import { useApi } from "../hooks/use-api";
 import { useFavorites } from "../hooks/use-favorites";
-import { filterItemsByAgentIds } from "../lib/utils";
+import { useListSelection } from "../hooks/use-list-selection";
+import type { ResourceActionIntents } from "../hooks/use-resource-actions";
+import { useResourceActions } from "../hooks/use-resource-actions";
+import { useSkillGroups } from "../hooks/use-resource-groups";
+import type { SkillGroup, SkillSections } from "../hooks/use-skill-sections";
+import { dragSelectionPayload } from "../lib/drag-payload";
+import type { ResourceGroup } from "../lib/store";
+import { cn } from "../lib/utils";
+import { viewTransitionName } from "../lib/view-transition";
+import { ContextMenu, useContextMenu } from "./context-menu";
+import { customGroupMenu, resourceItemsMenu } from "./resource-menu-items";
+import { DraggableItemBody } from "./draggable-item-body";
+import { groupDropId, UNGROUPED_DROP_ID } from "./list-dnd";
+import { DeleteGroupDialog, GroupNameDialog } from "./resource-group-dialogs";
 import {
-	globalSkillLockQueryOptions,
-	projectSkillLockQueryOptions,
-} from "../requests/skills";
+	DropRegion,
+	NewGroupDropZone,
+	ResourceGroupSection,
+} from "./resource-group-section";
 
-interface SkillGroup {
-	name: string;
-	items: SkillResponse[];
-	description: string;
+type MenuTarget =
+	| { type: "items"; sourceUrl?: string | null }
+	| { type: "custom-group"; group: ResourceGroup; memberKeys: string[] };
+
+interface SkillRowBodyProps {
+	skillGroup: SkillGroup;
+	starred: boolean;
+	getDragKeys: (name: string) => string[];
+	onShiftPress: (name: string) => string[] | undefined;
+	onOpenMenu: (event: React.MouseEvent, name: string) => void;
 }
 
-interface SourceGroup {
-	source: string;
-	sourceType: string;
-	skills: SkillGroup[];
-}
+/**
+ * A row's content behind a memo boundary: its props are the row's own
+ * data plus identity-stable callbacks, so a selection change re-renders
+ * only the rows whose data actually changed — not all ~N of them. The
+ * selection highlight itself is react-aria's, propagated by the ListBox.
+ */
+const SkillRowBody = memo(function SkillRowBody({
+	skillGroup,
+	starred,
+	getDragKeys,
+	onShiftPress,
+	onOpenMenu,
+}: SkillRowBodyProps) {
+	return (
+		<DraggableItemBody
+			dragId={`item:${skillGroup.name}`}
+			getKeys={() => getDragKeys(skillGroup.name)}
+			onContextMenu={(event) => onOpenMenu(event, skillGroup.name)}
+			onShiftPress={() => onShiftPress(skillGroup.name)}
+		>
+			<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
+				<BookOpenIcon className="size-4 text-muted" />
+				{starred && (
+					<StarIconSolid className="absolute -bottom-1 -left-1 size-2.5 text-warning" />
+				)}
+			</div>
+			<Label className="flex-1 truncate">{skillGroup.name}</Label>
+			<AgentIcons items={skillGroup.items} overflowVariant="square" />
+		</DraggableItemBody>
+	);
+});
 
 interface SkillListProps {
-	skills: SkillResponse[];
+	/** The derivation pipeline's output — owned by the page (or wrapper)
+	 * so select-all and the list agree on what is visible. */
+	sections: SkillSections;
 	selectedKeys: Set<string>;
-	searchQuery: string;
-	onSelectionChange: (keys: Set<string>, clickedKey?: string) => void;
-	emptyMessage?: string;
-	groupBySource?: boolean;
-	projectPath?: string;
-	selectionMode?: "none" | "single" | "multiple";
+	onSelectionChange: (keys: Set<string>) => void;
 	isMultiSelectMode?: boolean;
+	/** Dialog intents owned by the page (delete/transfer/agents/new group) */
+	intents: ResourceActionIntents;
+	/** A source cluster row was clicked — the page shows its library page */
+	onSourceFocus?: (source: string) => void;
+	/** The auto-seeded initial selection (first click commits, not cancels) */
+	seedKey?: string | null;
 }
 
-export function SkillList({
-	skills,
+export const SkillList = memo(function SkillList({
+	sections,
 	selectedKeys,
-	searchQuery,
 	onSelectionChange,
-	emptyMessage,
-	groupBySource = false,
-	projectPath,
-	selectionMode = "single",
 	isMultiSelectMode = false,
+	intents,
+	onSourceFocus,
+	seedKey,
 }: SkillListProps) {
 	const { t } = useTranslation();
-	const api = useApi();
-	const { availableAgents } = useAgentAvailability();
-	const effectiveScope = groupBySource
-		? projectPath
-			? "project"
-			: "global"
-		: null;
-	const enabledAgentIds = useMemo(
-		() =>
-			new Set(
-				availableAgents
-					.filter((agent) => !agent.isDisabled)
-					.map((agent) => agent.id),
-			),
-		[availableAgents],
+	const {
+		customSections,
+		looseEntries,
+		orderedEntries,
+		isGroupingLoading,
+		toggleCollapsed,
+		isExpanded,
+	} = sections;
+
+	const { isSkillStarred, setSkillsStarred } = useFavorites();
+	const { renameGroup, deleteGroup } = useSkillGroups();
+
+	const [renameTarget, setRenameTarget] = useState<ResourceGroup | null>(
+		null,
 	);
-	const visibleSkills = useMemo(
-		() => filterItemsByAgentIds(skills, enabledAgentIds),
-		[skills, enabledAgentIds],
+	const [deleteTarget, setDeleteTarget] = useState<ResourceGroup | null>(
+		null,
 	);
-
-	const { data: globalLock, isLoading: isLoadingGlobalLock } = useQuery({
-		...globalSkillLockQueryOptions({
-			api,
-			enabled: effectiveScope === "global",
-		}),
-	});
-
-	const { data: projectLock, isLoading: isLoadingProjectLock } = useQuery({
-		...projectSkillLockQueryOptions({
-			api,
-			projectPath,
-			enabled: effectiveScope === "project" && Boolean(projectPath),
-		}),
-	});
-
-	const isGroupingLoading =
-		groupBySource &&
-		((effectiveScope === "global" && isLoadingGlobalLock) ||
-			(effectiveScope === "project" && isLoadingProjectLock));
-
-	const groupedByName = useMemo(() => {
-		const map = new Map<string, SkillResponse[]>();
-		for (const skill of visibleSkills) {
-			const existing = map.get(skill.name) ?? [];
-			map.set(skill.name, [...existing, skill]);
-		}
-		return Array.from(map.entries()).map(([name, items]) => ({
-			name,
-			items,
-			description: items.find((s) => s.description)?.description ?? "",
-		}));
-	}, [visibleSkills]);
-
-	const fuse = useMemo(
-		() =>
-			new Fuse(groupedByName, {
-				keys: [
-					{ name: "name", weight: 2 },
-					{ name: "description", weight: 1 },
-				],
-				threshold: 0.4,
-				includeScore: true,
-			}),
-		[groupedByName],
-	);
-
-	const { isSkillStarred } = useFavorites();
-
-	const filteredByName = useMemo(() => {
-		let items;
-		if (!searchQuery) items = groupedByName;
-		else items = fuse.search(searchQuery).map((result) => result.item);
-
-		return [...items].sort((a, b) => {
-			const aStarred = isSkillStarred(a.name);
-			const bStarred = isSkillStarred(b.name);
-			if (aStarred && !bStarred) return -1;
-			if (!aStarred && bStarred) return 1;
-			return 0;
-		});
-	}, [fuse, groupedByName, searchQuery, isSkillStarred]);
-
-	const { sourceGroups, ungroupedGroups } = useMemo(() => {
-		const findSkillSource = (
-			skillName: string,
-		): { source: string; sourceType: string } | null => {
-			const relevantEntries =
-				effectiveScope === "project"
-					? projectLock?.skills
-					: globalLock?.skills;
-			const entry = relevantEntries?.find((s) => s.name === skillName);
-			if (entry) {
-				return {
-					source: entry.source,
-					sourceType: entry.sourceType,
-				};
-			}
-			return null;
-		};
-
-		const byStarredThenName = (a: SkillGroup, b: SkillGroup) => {
-			const aStarred = isSkillStarred(a.name);
-			const bStarred = isSkillStarred(b.name);
-			if (aStarred && !bStarred) return -1;
-			if (!aStarred && bStarred) return 1;
-			return a.name.localeCompare(b.name);
-		};
-
-		if (!groupBySource) {
-			return {
-				sourceGroups: [],
-				ungroupedGroups: filteredByName,
-			};
-		}
-
-		const groups = new Map<string, SourceGroup>();
-		const singleItems: (SkillGroup & {
-			source: string;
-			sourceType: string;
-		})[] = [];
-		const unknown: SkillGroup[] = [];
-
-		for (const group of filteredByName) {
-			const sourceInfo = findSkillSource(group.name);
-			if (sourceInfo) {
-				const existing = groups.get(sourceInfo.source);
-				if (existing) {
-					existing.skills.push(group);
-				} else {
-					groups.set(sourceInfo.source, {
-						source: sourceInfo.source,
-						sourceType: sourceInfo.sourceType,
-						skills: [group],
-					});
-				}
-			} else {
-				unknown.push(group);
-			}
-		}
-
-		const multiItemGroups: SourceGroup[] = [];
-		for (const sg of groups.values()) {
-			if (sg.skills.length === 1) {
-				singleItems.push({
-					...sg.skills[0],
-					source: sg.source,
-					sourceType: sg.sourceType,
-				});
-			} else {
-				multiItemGroups.push(sg);
-			}
-		}
-
-		const sortedSourceGroups = multiItemGroups
-			.map((sg) => ({
-				...sg,
-				skills: [...sg.skills].sort(byStarredThenName),
-			}))
-			.sort((a, b) => a.source.localeCompare(b.source));
-
-		const ungroupedGroups = [...singleItems, ...unknown].sort(
-			byStarredThenName,
-		);
-
-		return {
-			sourceGroups: sortedSourceGroups,
-			ungroupedGroups,
-		};
-	}, [
-		filteredByName,
-		groupBySource,
-		globalLock,
-		effectiveScope,
-		projectLock,
-		isSkillStarred,
-	]);
-
-	const [expandedSources, setExpandedSources] = useState<Set<string>>(() => {
-		if (sourceGroups.length <= 5) {
-			return new Set(sourceGroups.map((sg) => sg.source));
-		}
-		return new Set();
-	});
-
-	const toggleSource = (source: string) => {
-		setExpandedSources((prev) => {
-			const next = new Set(prev);
-			if (next.has(source)) {
-				next.delete(source);
-			} else {
-				next.add(source);
-			}
-			return next;
-		});
-	};
-
-	const { createSelectionHandler } = useMultiSelect({
+	const {
+		createSelectionHandler,
+		selectGroup,
+		ensureSelected,
+		ensureGroupSelected,
+		selectRangeTo,
+	} = useListSelection({
+		orderedEntries,
 		selectedKeys,
 		onSelectionChange,
 		isMultiSelectMode,
+		seedKey,
 	});
 
-	// Helper to render a skill item
-	const renderSkillItem = (skillGroup: SkillGroup) => (
-		<ListBox.Item
-			key={skillGroup.name}
-			id={skillGroup.name}
-			textValue={skillGroup.name}
-			className="data-selected:bg-surface"
-		>
-			<div className="flex w-full items-center gap-2">
-				<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
-					<BookOpenIcon className="size-4 text-muted" />
-					{isSkillStarred(skillGroup.name) && (
-						<StarIconSolid className="absolute -bottom-1 -left-1 size-2.5 text-warning" />
-					)}
-				</div>
-				<Label className="flex-1 truncate">{skillGroup.name}</Label>
-				<AgentIcons items={skillGroup.items} overflowVariant="square" />
-			</div>
-		</ListBox.Item>
+	const contextMenu = useContextMenu<MenuTarget>();
+	const actions = useResourceActions({
+		kind: "skill",
+		selectedKeys,
+		intents,
+	});
+
+	// The header reflects its members: selected once every member is in
+	// the selection, regardless of what else is selected elsewhere.
+	const isGroupSelected = (memberKeys: string[]) =>
+		memberKeys.length > 0 &&
+		memberKeys.every((key) => selectedKeys.has(key));
+
+	// Rows sit behind SkillRowBody's memo boundary, so the callbacks they
+	// receive must keep their identity across renders while still seeing
+	// the live selection — a ref bridge, same pattern as the frozen drag
+	// payload in DraggableItemBody.
+	const rowContextRef = useRef({
+		selectedKeys,
+		selectRangeTo,
+		ensureSelected,
+		openMenu: contextMenu.open,
+	});
+	rowContextRef.current = {
+		selectedKeys,
+		selectRangeTo,
+		ensureSelected,
+		openMenu: contextMenu.open,
+	};
+
+	const getDragKeys = useCallback(
+		(name: string) =>
+			dragSelectionPayload([name], rowContextRef.current.selectedKeys),
+		[],
 	);
 
-	if (groupBySource) {
-		if (isGroupingLoading) {
-			return (
-				<div className="flex flex-1 items-center justify-center overflow-y-auto">
-					<Spinner size="lg" />
-				</div>
-			);
-		}
+	const handleRowShiftPress = useCallback((name: string) => {
+		const row = rowContextRef.current;
+		if (!row.selectedKeys.has(name)) return undefined;
+		const range = row.selectRangeTo(name);
+		return range ? dragSelectionPayload([name], range) : undefined;
+	}, []);
 
-		const hasItems = sourceGroups.length > 0 || ungroupedGroups.length > 0;
-		if (!hasItems) {
-			return (
-				<p className="px-3 py-6 text-center text-sm text-muted">
-					{emptyMessage ?? t("noSkillsMatch")}
-				</p>
-			);
-		}
+	const openItemMenu = useCallback((event: React.MouseEvent, key: string) => {
+		const row = rowContextRef.current;
+		row.ensureSelected(key);
+		row.openMenu(event, { type: "items" });
+	}, []);
 
+	const openGroupMenu = (
+		event: React.MouseEvent,
+		group: ResourceGroup,
+		memberKeys: string[],
+	) => {
+		contextMenu.open(event, {
+			type: "custom-group",
+			group,
+			memberKeys,
+		});
+	};
+
+	const openSourceMenu = (
+		event: React.MouseEvent,
+		memberKeys: string[],
+		source: string,
+		sourceUrl: string | null,
+	) => {
+		ensureGroupSelected(memberKeys, `s:${source}`);
+		contextMenu.open(event, { type: "items", sourceUrl });
+	};
+
+	// Stable render function: with `items`, react-aria caches each row's
+	// element by item identity + this function, so a selection change
+	// re-renders only the rows whose selected state flipped.
+	const renderSkillItem = useCallback(
+		(skillGroup: SkillGroup) => (
+			<ListBox.Item
+				id={skillGroup.name}
+				textValue={skillGroup.name}
+				className="data-selected:bg-surface transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]"
+				style={{
+					viewTransitionName: viewTransitionName(
+						"vts",
+						skillGroup.name,
+					),
+				}}
+			>
+				<SkillRowBody
+					skillGroup={skillGroup}
+					starred={isSkillStarred(skillGroup.name)}
+					getDragKeys={getDragKeys}
+					onShiftPress={handleRowShiftPress}
+					onOpenMenu={openItemMenu}
+				/>
+			</ListBox.Item>
+		),
+		[isSkillStarred, getDragKeys, handleRowShiftPress, openItemMenu],
+	);
+
+	const renderSectionListBox = (
+		label: string,
+		sectionSkills: SkillGroup[],
+		dense = false,
+	) => (
+		<ListBox
+			aria-label={label}
+			items={sectionSkills}
+			dependencies={[renderSkillItem]}
+			selectionMode="multiple"
+			selectionBehavior="toggle"
+			selectedKeys={selectedKeys}
+			onSelectionChange={createSelectionHandler(
+				sectionSkills.map((s) => s.name),
+			)}
+			// dense: a source cluster's members share the loose list rhythm
+			// (no extra top gap under the header row)
+			className={cn(dense ? "px-2 pb-1 pl-6" : "p-2 pl-6")}
+		>
+			{renderSkillItem}
+		</ListBox>
+	);
+
+	const overlaysNode = (
+		<>
+			<ContextMenu
+				position={contextMenu.state?.position ?? null}
+				onClose={contextMenu.close}
+				aria-label={t("resourceActions")}
+			>
+				{contextMenu.state?.context.type === "custom-group"
+					? customGroupMenu({
+							t,
+							group: contextMenu.state.context.group,
+							memberKeys: contextMenu.state.context.memberKeys,
+							onSelectMembers: (keys) =>
+								onSelectionChange(new Set(keys)),
+							onAddToAgent: intents.onRequestAddToAgent,
+							onFavoriteAll: (keys) =>
+								void setSkillsStarred(keys, true),
+							onRename: setRenameTarget,
+							onDelete: setDeleteTarget,
+						})
+					: resourceItemsMenu({
+							t,
+							actions,
+							sourceUrl: contextMenu.state?.context.sourceUrl,
+						})}
+			</ContextMenu>
+			<GroupNameDialog
+				isOpen={renameTarget !== null}
+				onClose={() => setRenameTarget(null)}
+				title={t("renameGroup")}
+				initialName={renameTarget?.name}
+				onSubmit={async (name) => {
+					if (renameTarget) await renameGroup(renameTarget.id, name);
+				}}
+			/>
+			<DeleteGroupDialog
+				group={deleteTarget}
+				isOpen={deleteTarget !== null}
+				onClose={() => setDeleteTarget(null)}
+				onConfirm={async () => {
+					if (deleteTarget) await deleteGroup(deleteTarget.id);
+				}}
+			/>
+		</>
+	);
+
+	if (isGroupingLoading) {
 		return (
-			<div className="flex-1 overflow-y-auto">
-				{sourceGroups.map((sg) => (
-					<div key={sg.source} className="border-y border-separator">
-						<button
-							type="button"
-							onClick={() => toggleSource(sg.source)}
-							className="
-         flex w-full items-center gap-2 px-3 py-2 text-left transition-colors
-         hover:bg-surface-secondary
-       "
-						>
-							{expandedSources.has(sg.source) ? (
-								<ChevronDownIcon className="size-4 shrink-0 text-muted" />
-							) : (
-								<ChevronRightIcon className="size-4 shrink-0 text-muted" />
-							)}
-							<div className="min-w-0 flex-1">
-								<p className="truncate text-sm font-medium text-foreground">
-									{sg.source}
-								</p>
-							</div>
-							<Chip size="sm" variant="secondary">
-								{sg.skills.length}
-							</Chip>
-						</button>
-
-						{expandedSources.has(sg.source) && (
-							<ListBox
-								aria-label={`Skills from ${sg.source}`}
-								selectionMode={selectionMode}
-								selectionBehavior="toggle"
-								selectedKeys={selectedKeys}
-								onSelectionChange={createSelectionHandler(
-									sg.skills.map((s) => s.name),
-								)}
-								className="p-2 pl-6"
-							>
-								{sg.skills.map(renderSkillItem)}
-							</ListBox>
-						)}
-					</div>
-				))}
-
-				{ungroupedGroups.length > 0 && (
-					<ListBox
-						aria-label="Ungrouped skills"
-						selectionMode={selectionMode}
-						selectionBehavior="toggle"
-						selectedKeys={selectedKeys}
-						onSelectionChange={createSelectionHandler(
-							ungroupedGroups.map((s) => s.name),
-						)}
-						className="p-2"
-					>
-						{ungroupedGroups.map(renderSkillItem)}
-					</ListBox>
-				)}
+			<div className="flex flex-1 items-center justify-center overflow-y-auto">
+				<Spinner size="lg" />
 			</div>
 		);
 	}
 
-	if (filteredByName.length === 0) {
+	const hasItems = customSections.length > 0 || looseEntries.length > 0;
+	if (!hasItems) {
 		return (
 			<p className="px-3 py-6 text-center text-sm text-muted">
-				{emptyMessage ?? t("noSkillsMatch")}
+				{t("noSkillsMatch")}
 			</p>
 		);
 	}
 
-	return (
-		<div className="flex-1 overflow-y-auto">
+	// Walk the unified loose list, batching consecutive skill rows into one
+	// ListBox and rendering each source cluster as a subtle peer row.
+	const looseNodes: ReactNode[] = [];
+	let skillRun: SkillGroup[] = [];
+	const flushSkillRun = () => {
+		if (skillRun.length === 0) return;
+		const runKeys = skillRun.map((s) => s.name);
+		looseNodes.push(
 			<ListBox
+				key={`loose-${runKeys[0]}`}
 				aria-label="Skills"
-				selectionMode={selectionMode}
+				items={skillRun}
+				dependencies={[renderSkillItem]}
+				selectionMode="multiple"
 				selectionBehavior="toggle"
 				selectedKeys={selectedKeys}
-				onSelectionChange={createSelectionHandler(
-					filteredByName.map((s) => s.name),
-				)}
-				className="p-2"
+				onSelectionChange={createSelectionHandler(runKeys)}
+				className="px-2 py-1"
 			>
-				{filteredByName.map(renderSkillItem)}
-			</ListBox>
+				{renderSkillItem}
+			</ListBox>,
+		);
+		skillRun = [];
+	};
+	for (const entry of looseEntries) {
+		if (entry.kind === "skill") {
+			skillRun.push(entry.skill);
+			continue;
+		}
+		flushSkillRun();
+		const sg = entry.group;
+		const memberKeys = sg.skills.map((s) => s.name);
+		looseNodes.push(
+			<ResourceGroupSection
+				key={sg.source}
+				subtle
+				title={sg.source}
+				count={sg.skills.length}
+				isExpanded={isExpanded(`s:${sg.source}`)}
+				isSelected={isGroupSelected(memberKeys)}
+				onToggleExpanded={() => toggleCollapsed(`s:${sg.source}`)}
+				onRowClick={() => {
+					// In multi-select mode the row is a selection surface:
+					// clicking it toggles the whole library in or out, same
+					// as meta-click.
+					if (isMultiSelectMode) {
+						selectGroup(memberKeys, `s:${sg.source}`);
+						return;
+					}
+					// Browsing, not selecting: the click focuses the library
+					// (its detail shows on the right); expansion belongs to
+					// the chevron alone.
+					onSourceFocus?.(sg.source);
+				}}
+				onSelectAll={() => selectGroup(memberKeys, `s:${sg.source}`)}
+				onContextMenu={(event) =>
+					openSourceMenu(event, memberKeys, sg.source, sg.sourceUrl)
+				}
+				dragId={`header:${sg.source}`}
+				dragKeys={memberKeys}
+			>
+				{renderSectionListBox(sg.source, sg.skills, true)}
+			</ResourceGroupSection>,
+		);
+	}
+	flushSkillRun();
+
+	return (
+		<div className="flex-1 overflow-y-auto">
+			{customSections.map((section) => {
+				const memberKeys = section.skills.map((s) => s.name);
+				return (
+					<ResourceGroupSection
+						key={section.group.id}
+						title={section.group.name}
+						count={section.skills.length}
+						isExpanded={isExpanded(`g:${section.group.id}`)}
+						isSelected={isGroupSelected(memberKeys)}
+						onToggleExpanded={() =>
+							toggleCollapsed(`g:${section.group.id}`)
+						}
+						onSelectAll={() =>
+							selectGroup(memberKeys, `g:${section.group.id}`)
+						}
+						onContextMenu={(event) =>
+							openGroupMenu(event, section.group, memberKeys)
+						}
+						dropId={groupDropId(section.group.id)}
+						dragId={`header:${section.group.id}`}
+						dragKeys={memberKeys}
+						onRename={() => setRenameTarget(section.group)}
+					>
+						{section.skills.length > 0 &&
+							renderSectionListBox(
+								section.group.name,
+								section.skills,
+							)}
+					</ResourceGroupSection>
+				);
+			})}
+
+			{looseEntries.length > 0 && (
+				<DropRegion id={UNGROUPED_DROP_ID}>{looseNodes}</DropRegion>
+			)}
+
+			<NewGroupDropZone />
+
+			{overlaysNode}
 		</div>
 	);
-}
+});

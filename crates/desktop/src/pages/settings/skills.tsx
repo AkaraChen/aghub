@@ -1,48 +1,84 @@
+import { DndContext, DragOverlay } from "@dnd-kit/core";
 import {
 	ArrowPathIcon,
-	CheckCircleIcon,
+	BookOpenIcon,
 	PlusIcon,
-	RectangleStackIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Dropdown, Tooltip } from "@heroui/react";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { Button, Dropdown, Kbd, Menu } from "@heroui/react";
+import {
+	useQuery,
+	useQueryClient,
+	useSuspenseQuery,
+} from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { matrixGroup } from "../../components/agent-coverage-matrix";
+import { BulkActionsPanel } from "../../components/bulk-actions-panel";
 import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
 import { CreateSkillPanel } from "../../components/create-skill-panel";
 import { ImportSkillPanel } from "../../components/import-skill-panel";
+import { ImportGithubSkillPanel } from "../../components/import-github-skill-panel";
+import { ManageSkillAgentsDialog } from "../../components/manage-skill-agents-dialog";
+import { GroupNameDialog } from "../../components/resource-group-dialogs";
 import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
+import { TransferDialog } from "../../components/transfer-dialog";
 import { useAgentFilter } from "../../hooks/use-agent-filter";
-import { MultiSelectFloatingBar } from "../../components/multi-select-floating-bar";
+import { ContextMenu, useContextMenu } from "../../components/context-menu";
+import { MultiSelectToggle } from "../../components/multi-select-toggle";
+import { DragPreview, DropBoard } from "../../components/drop-board";
+import { PanelTransition } from "../../components/panel-transition";
+import { useListDnd } from "../../hooks/use-list-dnd";
+import { useListKeyboard } from "../../hooks/use-list-keyboard";
 import { SkillDetail } from "../../components/skill-detail";
+import { SourceDetailPanel } from "../../components/source-detail-panel";
 import { SkillList } from "../../components/skill-list";
-import type { SkillResponse } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
+import { useSkillGroups } from "../../hooks/use-resource-groups";
+import { visibleEntryKeys } from "../../hooks/use-list-selection";
+import { useSkillSections } from "../../hooks/use-skill-sections";
 import { cn } from "../../lib/utils";
-import { skillListQueryOptions } from "../../requests/skills";
+import {
+	globalSkillLockQueryOptions,
+	invalidateSkillQueries,
+	skillListQueryOptions,
+} from "../../requests/skills";
+
+const GITHUB_PREFIX_REGEX = /^github\//;
 
 export default function SkillsPage() {
 	const { t } = useTranslation();
 	const api = useApi();
-	const {
-		data: skills,
-		refetch,
-		isFetching,
-	} = useSuspenseQuery({
+	const queryClient = useQueryClient();
+	const { data: skills, isFetching } = useSuspenseQuery({
 		...skillListQueryOptions({ api, scope: "global" }),
 	});
 	const [searchQuery, setSearchQuery] = useState("");
 	const [selectedName, setSelectedName] = useQueryState("skill");
-	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(
-		() => new Set(),
-	);
 	const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
 	const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
-
-	const [panelMode, setPanelMode] = useState<"create" | "import" | null>(
+	const [isTransferDialogOpen, setIsTransferDialogOpen] = useState(false);
+	const [isManageDialogOpen, setIsManageDialogOpen] = useState(false);
+	const [createGroupKeys, setCreateGroupKeys] = useState<string[] | null>(
 		null,
 	);
+	const {
+		createGroup,
+		assignMembers,
+		groups: customGroups,
+		assignments: groupAssignments,
+	} = useSkillGroups();
+	const { data: globalLock } = useQuery({
+		...globalSkillLockQueryOptions({ api, enabled: true }),
+	});
+
+	const [panelMode, setPanelMode] = useState<
+		"create" | "import" | "update-source" | null
+	>(null);
+
+	// The library page: set when a source cluster row is clicked; any
+	// selection change or blank-area escape drops back out of it.
+	const [focusedSource, setFocusedSource] = useState<string | null>(null);
 
 	const {
 		agentId: agentFilter,
@@ -50,46 +86,77 @@ export default function SkillsPage() {
 		filtered: filteredSkills,
 	} = useAgentFilter(skills);
 
-	const groupedSkills = useMemo(() => {
-		const map = new Map<string, SkillResponse[]>();
-		for (const skill of filteredSkills) {
-			const existing = map.get(skill.name) ?? [];
-			map.set(skill.name, [...existing, skill]);
+	// Selection is the single source of truth — it drives the list
+	// highlight, the detail panel, and bulk actions. Seed it with the
+	// deep-linked or first skill so a detail shows on load; an empty
+	// selection then unambiguously means "cancelled" and shows the
+	// placeholder.
+	const [seedKey] = useState<string | null>(() => {
+		// Pre-pipeline: dedup order matches the pipeline's grouping (first
+		// occurrence), so names[0] is the first grouped skill.
+		const names = filteredSkills.map((s) => s.name);
+		const deepLinked = selectedName && names.includes(selectedName);
+		return (deepLinked ? selectedName : names[0]) ?? null;
+	});
+	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() =>
+		seedKey ? new Set([seedKey]) : new Set<string>(),
+	);
+
+	// The list's derivation pipeline lives with the page so every consumer
+	// of "what is visible" — the list itself, ⌘A, the blank-area menu's
+	// Select All — reads the same answer.
+	const sections = useSkillSections({
+		skills: filteredSkills,
+		searchQuery,
+		selectedKeys,
+	});
+	const groupedSkills = sections.groupedByName;
+	const visibleKeys = useMemo(
+		() => visibleEntryKeys(sections.orderedEntries),
+		[sections.orderedEntries],
+	);
+
+	// An in-page navigation (global search) rewrites ?skill= without
+	// remounting the page, so adopt it into the selection here. The mirror
+	// write-back is skipped — the URL already holds the target.
+	const [syncedName, setSyncedName] = useState(selectedName);
+	if (selectedName !== syncedName) {
+		setSyncedName(selectedName);
+		if (
+			selectedName &&
+			groupedSkills.some((g) => g.name === selectedName) &&
+			!(selectedKeys.size === 1 && selectedKeys.has(selectedName))
+		) {
+			setSelectedKeys(new Set([selectedName]));
+			setFocusedSource(null);
+			setPanelMode(null);
+			setIsMultiSelectMode(false);
 		}
-		return Array.from(map.entries()).map(([name, items]) => ({
-			name,
-			items,
-			description: items.find((s) => s.description)?.description ?? "",
-		}));
-	}, [filteredSkills]);
+	}
+
+	// The right panel derives from a deferred copy of the selection: the
+	// row highlight and the context menu commit at input priority, and the
+	// heavier detail/bulk panel swap follows one non-blocking render later
+	// — right-clicking an unselected row must not wait for a full detail
+	// remount before the menu shows.
+	const deferredSelectedKeys = useDeferredValue(selectedKeys);
 
 	const activeGroup = useMemo(() => {
-		if (selectedName) {
-			return groupedSkills.find((g) => g.name === selectedName) ?? null;
-		}
-		return groupedSkills[0] ?? null;
-	}, [selectedName, groupedSkills]);
+		if (deferredSelectedKeys.size !== 1) return null;
+		const [key] = deferredSelectedKeys;
+		return groupedSkills.find((g) => g.name === key) ?? null;
+	}, [deferredSelectedKeys, groupedSkills]);
 
 	// 多选模式下被选中的所有 groups（用于批量删除）
 	const selectedGroups = useMemo(() => {
-		return groupedSkills.filter((g) => selectedKeys.has(g.name));
-	}, [selectedKeys, groupedSkills]);
+		return groupedSkills.filter((g) => deferredSelectedKeys.has(g.name));
+	}, [deferredSelectedKeys, groupedSkills]);
 
-	// ListBox 高亮用的 keys
-	const effectiveSelectedKeys = useMemo(() => {
-		if (selectedKeys.size > 0) return selectedKeys;
-		if (activeGroup && !isMultiSelectMode) {
-			return new Set([activeGroup.name]);
-		}
-		return new Set<string>();
-	}, [selectedKeys, activeGroup, isMultiSelectMode]);
-
-	const handleSelectionChange = (keys: Set<string>, clickedKey?: string) => {
+	const handleSelectionChange = (keys: Set<string>) => {
 		setSelectedKeys(keys);
-
-		if (clickedKey && !isMultiSelectMode) {
-			setSelectedName(clickedKey);
-		}
+		setFocusedSource(null);
+		// Mirror a single selection to the URL for deep-linking.
+		setSelectedName(keys.size === 1 ? [...keys][0] : null);
 
 		if (keys.size > 1 && !isMultiSelectMode) {
 			setIsMultiSelectMode(true);
@@ -100,180 +167,529 @@ export default function SkillsPage() {
 		setPanelMode(null);
 	};
 
+	// Leaving multi-select collapses to a single selection so a detail
+	// shows again instead of the bulk panel.
+	const handleToggleMultiSelect = () => {
+		setIsMultiSelectMode((prev) => !prev);
+		if (isMultiSelectMode) {
+			const [first] = selectedKeys;
+			handleSelectionChange(first ? new Set([first]) : new Set());
+		}
+	};
+
+	// Route through handleSelectionChange so multi-select mode and the
+	// library page reset with the selection; the panel opens after (same
+	// batch, so its setPanelMode(null) is overwritten).
 	const handleCreateSkill = () => {
-		setSelectedKeys(new Set());
-		setSelectedName(null);
+		handleSelectionChange(new Set());
 		setPanelMode("create");
 	};
 
 	const handleImportSkill = () => {
-		setSelectedKeys(new Set());
-		setSelectedName(null);
+		handleSelectionChange(new Set());
 		setPanelMode("import");
 	};
 
+	const actionIntents = {
+		onRequestDelete: () => setIsBulkDeleteDialogOpen(true),
+		onRequestAddToAgent: () => setIsManageDialogOpen(true),
+		onRequestTransfer: () => setIsTransferDialogOpen(true),
+		onRequestCreateGroup: () => setCreateGroupKeys([...selectedKeys]),
+	};
+
+	const isBulkSelection = deferredSelectedKeys.size >= 2;
+
+	// The selection is exactly one source group: the bulk panel doubles
+	// as the library detail with the source header on top.
+	const sourceContext = useMemo(() => {
+		if (!isBulkSelection || !globalLock) return null;
+		const visibleNames = new Set(groupedSkills.map((g) => g.name));
+		const bySource = new Map<
+			string,
+			{
+				names: Set<string>;
+				sourceType: string;
+				sourceUrl?: string | null;
+			}
+		>();
+		for (const entry of globalLock.skills) {
+			if (!visibleNames.has(entry.name)) continue;
+			const record = bySource.get(entry.source) ?? {
+				names: new Set<string>(),
+				sourceType: entry.sourceType,
+				sourceUrl: entry.sourceUrl,
+			};
+			record.names.add(entry.name);
+			bySource.set(entry.source, record);
+		}
+		for (const [source, record] of bySource) {
+			if (
+				record.names.size === deferredSelectedKeys.size &&
+				[...deferredSelectedKeys].every((key) => record.names.has(key))
+			) {
+				const url =
+					record.sourceUrl ??
+					(record.sourceType === "github"
+						? `https://github.com/${source.replace(GITHUB_PREFIX_REGEX, "")}`
+						: null);
+				return { title: source, url };
+			}
+		}
+		return null;
+	}, [isBulkSelection, globalLock, groupedSkills, deferredSelectedKeys]);
+
+	// Roster badge: where each skill came from
+	const sourceByName = useMemo(() => {
+		const map = new Map<string, string>();
+		for (const entry of globalLock?.skills ?? []) {
+			map.set(entry.name, entry.source);
+		}
+		return map;
+	}, [globalLock]);
+
+	// The roster groups by the list's own hierarchy: a custom group claims
+	// its members before the source library does (use-skill-sections keeps
+	// assigned members out of source clusters the same way). Only members
+	// in neither are truly ungrouped.
+	const customGroupNameByKey = useMemo(() => {
+		const nameById = new Map(customGroups.map((g) => [g.id, g.name]));
+		const map = new Map<string, string>();
+		for (const [key, groupId] of Object.entries(groupAssignments)) {
+			const name = nameById.get(groupId);
+			if (name) map.set(key, name);
+		}
+		return map;
+	}, [customGroups, groupAssignments]);
+
+	const focusedSourceInfo = useMemo(() => {
+		if (!focusedSource) return null;
+		// groupedByName already matches the list's visibility (the pipeline
+		// drops copies on disabled agents), so no member without a row.
+		const byName = new Map(groupedSkills.map((g) => [g.name, g]));
+		const members = (globalLock?.skills ?? [])
+			.filter(
+				(entry) =>
+					entry.source === focusedSource && byName.has(entry.name),
+			)
+			.map((entry) => {
+				const item = byName.get(entry.name)?.items[0];
+				return {
+					name: entry.name,
+					description: item?.description ?? null,
+				};
+			})
+			.sort((a, b) => a.name.localeCompare(b.name));
+		if (members.length === 0) return null;
+		const entries = (globalLock?.skills ?? []).filter(
+			(item) => item.source === focusedSource,
+		);
+		const entry = entries[0];
+		const sourceType = entry?.sourceType ?? null;
+		const url =
+			entry?.sourceUrl ??
+			(sourceType === "github"
+				? `https://github.com/${focusedSource.replace(GITHUB_PREFIX_REGEX, "")}`
+				: null);
+		const installedAt = entries.map((e) => e.installedAt).sort()[0] ?? null;
+		const updatedAt =
+			entries
+				.map((e) => e.updatedAt)
+				.sort()
+				.at(-1) ?? null;
+		const matrixGroups = members.map((member) => {
+			const items = byName.get(member.name)?.items ?? [];
+			return matrixGroup(
+				member.name,
+				member.name,
+				items[0]?.agent,
+				items.map((item) => item.agent),
+			);
+		});
+		return {
+			title: focusedSource,
+			url,
+			sourceType,
+			members,
+			installedAt,
+			updatedAt,
+			matrixGroups,
+		};
+	}, [focusedSource, globalLock, groupedSkills]);
+
+	const { dndProps, draggedKeys, boardGroups, showBoardUngrouped } =
+		useListDnd("skill", (keys) => setCreateGroupKeys(keys));
+
+	// Shortcuts are scoped to the whole page (these pages hold a single
+	// list), so Esc/Cmd+A work from the detail panel too — not only while
+	// the pointer sits over the list column.
+	const pageRef = useRef<HTMLDivElement>(null);
+	useListKeyboard({
+		containerRef: pageRef,
+		// Visible keys only: ⌘A while a search or filter narrows the list
+		// must not sweep in rows the user cannot see.
+		allKeys: visibleKeys,
+		selectedKeys,
+		onSelectionChange: handleSelectionChange,
+		onRequestDelete: actionIntents.onRequestDelete,
+		onEscape: () => {
+			if (!panelMode) return false;
+			setPanelMode(null);
+			return true;
+		},
+		disabled: draggedKeys !== null,
+	});
+
+	// Blank-area interactions on the list panel: a click clears the
+	// selection, a right-click opens the page menu. Rows and headers own
+	// their events (their handlers stop propagation for the menu; the
+	// click check skips anything interactive).
+	const pageMenu = useContextMenu<null>();
+	const isBlankTarget = (event: React.MouseEvent) =>
+		!(event.target as HTMLElement).closest(
+			'[role="option"], [role="button"], [role="menu"], button, input',
+		);
+	const panelStateKey = draggedKeys
+		? "board"
+		: (panelMode ??
+			(isBulkSelection
+				? "bulk"
+				: focusedSourceInfo
+					? `source:${focusedSourceInfo.title}`
+					: activeGroup
+						? "detail"
+						: "empty"));
+
 	return (
-		<div className="flex h-full flex-col">
-			<ResourcePageToolbar
-				agentFilter={{
-					agentId: agentFilter,
-					onChange: setAgentId,
-				}}
-				searchValue={searchQuery}
-				onSearchChange={setSearchQuery}
-				searchPlaceholder={t("searchSkills")}
-				searchAriaLabel={t("searchSkills")}
-			>
-				<Tooltip delay={0}>
-					<Tooltip.Trigger>
-						<div
-							role="button"
-							tabIndex={0}
-							className={cn(
-								"flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-muted transition-colors hover:bg-default hover:text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40",
-								isMultiSelectMode && "bg-accent/10 text-accent",
-							)}
-							aria-label={
-								isMultiSelectMode
-									? t("doneSelecting")
-									: t("multiSelect")
-							}
-							onClick={() => {
-								setIsMultiSelectMode((prev) => !prev);
-								if (isMultiSelectMode) {
-									handleSelectionChange(new Set());
-								}
-							}}
-							onKeyDown={(event) => {
-								if (
-									event.key !== "Enter" &&
-									event.key !== " "
-								) {
-									return;
-								}
-								event.preventDefault();
-								setIsMultiSelectMode((prev) => !prev);
-								if (isMultiSelectMode) {
-									handleSelectionChange(new Set());
-								}
-							}}
+		<DndContext {...dndProps}>
+			<div ref={pageRef} className="flex h-full flex-col">
+				<ResourcePageToolbar
+					agentFilter={{
+						agentId: agentFilter,
+						onChange: setAgentId,
+					}}
+					searchValue={searchQuery}
+					onSearchChange={setSearchQuery}
+					searchPlaceholder={t("searchSkills")}
+					searchAriaLabel={t("searchSkills")}
+				>
+					<MultiSelectToggle
+						isActive={isMultiSelectMode}
+						onToggle={handleToggleMultiSelect}
+					/>
+					<Dropdown>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							className="shrink-0"
+							aria-label={t("addSkill")}
 						>
-							{isMultiSelectMode ? (
-								<CheckCircleIcon className="size-4" />
-							) : (
-								<RectangleStackIcon className="size-4" />
-							)}
-						</div>
-					</Tooltip.Trigger>
-					<Tooltip.Content>
-						{isMultiSelectMode
-							? t("doneSelecting")
-							: t("multiSelect")}
-					</Tooltip.Content>
-				</Tooltip>
-				<Dropdown>
+							<PlusIcon className="size-4" />
+						</Button>
+						<Dropdown.Popover placement="bottom end">
+							<Dropdown.Menu
+								onAction={(key) => {
+									if (key === "create") {
+										handleCreateSkill();
+									} else if (key === "import") {
+										handleImportSkill();
+									} else if (key === "create-group") {
+										setCreateGroupKeys([]);
+									}
+								}}
+							>
+								<Dropdown.Item
+									id="create"
+									textValue={t("createCustomSkill")}
+								>
+									{t("createCustomSkill")}
+								</Dropdown.Item>
+								<Dropdown.Item
+									id="import"
+									textValue={t("importFromFile")}
+								>
+									{t("importFromFile")}
+								</Dropdown.Item>
+								<Dropdown.Item
+									id="create-group"
+									textValue={t("createGroup")}
+								>
+									{t("createGroup")}
+								</Dropdown.Item>
+							</Dropdown.Menu>
+						</Dropdown.Popover>
+					</Dropdown>
 					<Button
 						isIconOnly
 						variant="ghost"
 						size="sm"
 						className="shrink-0"
-						aria-label={t("addSkill")}
+						aria-label={t("refreshSkills")}
+						onPress={() => void invalidateSkillQueries(queryClient)}
 					>
-						<PlusIcon className="size-4" />
+						<ArrowPathIcon
+							className={cn(
+								"size-4",
+								isFetching && "animate-spin",
+							)}
+						/>
 					</Button>
-					<Dropdown.Popover placement="bottom end">
-						<Dropdown.Menu
-							onAction={(key) => {
-								if (key === "create") {
-									handleCreateSkill();
-								} else if (key === "import") {
-									handleImportSkill();
+				</ResourcePageToolbar>
+				<div className="flex min-h-0 flex-1">
+					{/* Skills List Panel */}
+					<div
+						className={cn(
+							"relative flex w-80 shrink-0 flex-col border-r border-border",
+							// Mid-drag, rows must not react to the pointer: every
+							// hover flip restyles the whole list. Drop targets
+							// don't need hit-testing — collision is rect math.
+							draggedKeys && "pointer-events-none",
+						)}
+						onClick={(event) => {
+							if (isBlankTarget(event)) {
+								if (panelMode) return;
+								handleSelectionChange(new Set());
+							}
+						}}
+						onContextMenu={(event) => {
+							if (isBlankTarget(event)) {
+								pageMenu.open(event, null);
+							}
+						}}
+					>
+						{/* Skills List */}
+						<SkillList
+							sections={sections}
+							selectedKeys={selectedKeys}
+							onSelectionChange={handleSelectionChange}
+							isMultiSelectMode={isMultiSelectMode}
+							intents={actionIntents}
+							onSourceFocus={(source) => {
+								// Focusing a library replaces whatever panel is
+								// open — otherwise another library's update
+								// panel (with its URL) would stay on screen.
+								setFocusedSource(source);
+								setPanelMode(null);
+							}}
+							seedKey={seedKey}
+						/>
+					</div>
+
+					<div className="flex-1 overflow-hidden relative">
+						<PanelTransition stateKey={panelStateKey}>
+							{draggedKeys ? (
+								<DropBoard
+									count={draggedKeys.length}
+									groups={boardGroups}
+									showUngrouped={showBoardUngrouped}
+								/>
+							) : panelMode === "create" ? (
+								<CreateSkillPanel
+									onDone={() => setPanelMode(null)}
+								/>
+							) : panelMode === "import" ? (
+								<ImportSkillPanel
+									onDone={() => setPanelMode(null)}
+								/>
+							) : panelMode === "update-source" ? (
+								<ImportGithubSkillPanel
+									initialUrl={
+										focusedSourceInfo?.url ?? undefined
+									}
+									onDone={() => setPanelMode(null)}
+								/>
+							) : isBulkSelection ? (
+								<BulkActionsPanel
+									kind="skill"
+									items={selectedGroups.map((g) => ({
+										key: g.name,
+										label: g.name,
+										badge:
+											customGroupNameByKey.get(g.name) ??
+											sourceByName.get(g.name),
+									}))}
+									intents={actionIntents}
+									sourceContext={sourceContext}
+									matrixGroups={selectedGroups.map((g) => ({
+										key: g.name,
+										name: g.name,
+										sourceAgent:
+											g.items[0].agent ?? "claude",
+										// Global-scope page
+										sourceScope: "global" as const,
+										installedAgents: g.items
+											.map((item) => item.agent)
+											.filter(
+												(agent): agent is string =>
+													agent != null,
+											),
+									}))}
+									onDeselectAll={() =>
+										handleSelectionChange(new Set())
+									}
+									onRemoveItem={(key) =>
+										handleSelectionChange(
+											new Set(
+												[...selectedKeys].filter(
+													(k) => k !== key,
+												),
+											),
+										)
+									}
+								/>
+							) : focusedSourceInfo ? (
+								<SourceDetailPanel
+									title={focusedSourceInfo.title}
+									url={focusedSourceInfo.url}
+									sourceType={focusedSourceInfo.sourceType}
+									members={focusedSourceInfo.members}
+									installedAt={focusedSourceInfo.installedAt}
+									updatedAt={focusedSourceInfo.updatedAt}
+									matrixGroups={
+										focusedSourceInfo.matrixGroups
+									}
+									onSelectAll={() =>
+										handleSelectionChange(
+											new Set(
+												focusedSourceInfo.members.map(
+													(m) => m.name,
+												),
+											),
+										)
+									}
+									onSelectMember={(name) =>
+										handleSelectionChange(new Set([name]))
+									}
+									onUpdate={() =>
+										setPanelMode("update-source")
+									}
+								/>
+							) : activeGroup ? (
+								<SkillDetail group={activeGroup} />
+							) : (
+								<div className="flex h-full flex-col items-center justify-center gap-4">
+									<div className="text-center">
+										<p className="mb-2 text-sm text-muted">
+											{t("selectSkill")}
+										</p>
+										<p className="text-xs text-muted">
+											{t("emptyShortcutHint")}
+										</p>
+									</div>
+								</div>
+							)}
+						</PanelTransition>
+
+						<ContextMenu
+							position={pageMenu.state?.position ?? null}
+							onClose={pageMenu.close}
+							aria-label={t("resourceActions")}
+						>
+							<Menu.Item
+								id="select-all"
+								textValue={t("selectAll")}
+								onAction={() =>
+									handleSelectionChange(new Set(visibleKeys))
+								}
+							>
+								<div className="flex w-full items-center gap-2">
+									<span className="flex-1">
+										{t("selectAll")}
+									</span>
+									<Kbd>⌘A</Kbd>
+								</div>
+							</Menu.Item>
+							<Menu.Section>
+								<Menu.Item
+									id="page-create"
+									textValue={t("createCustomSkill")}
+									onAction={handleCreateSkill}
+								>
+									{t("createCustomSkill")}
+								</Menu.Item>
+								<Menu.Item
+									id="page-import"
+									textValue={t("importFromFile")}
+									onAction={handleImportSkill}
+								>
+									{t("importFromFile")}
+								</Menu.Item>
+								<Menu.Item
+									id="page-create-group"
+									textValue={t("createGroup")}
+									onAction={() => setCreateGroupKeys([])}
+								>
+									{t("createGroup")}
+								</Menu.Item>
+								<Menu.Item
+									id="page-refresh"
+									textValue={t("refreshSkills")}
+									onAction={() =>
+										void invalidateSkillQueries(queryClient)
+									}
+								>
+									{t("refreshSkills")}
+								</Menu.Item>
+							</Menu.Section>
+						</ContextMenu>
+
+						<BulkDeleteDialog
+							isOpen={isBulkDeleteDialogOpen}
+							onClose={() => setIsBulkDeleteDialogOpen(false)}
+							groups={selectedGroups.map((g) => ({
+								key: g.name,
+								items: g.items,
+							}))}
+							onSuccess={() => {
+								handleSelectionChange(new Set());
+								void invalidateSkillQueries(queryClient);
+							}}
+							resourceType="skill"
+						/>
+						<TransferDialog
+							isOpen={isTransferDialogOpen}
+							onClose={() => setIsTransferDialogOpen(false)}
+							resourceType="skill"
+							items={selectedGroups.map((g) => ({
+								name: g.name,
+								sourceAgent: g.items[0].agent ?? "claude",
+							}))}
+							sourceScope="global"
+						/>
+						<ManageSkillAgentsDialog
+							groups={selectedGroups}
+							isOpen={isManageDialogOpen}
+							onClose={() => setIsManageDialogOpen(false)}
+						/>
+						<GroupNameDialog
+							isOpen={createGroupKeys !== null}
+							onClose={() => setCreateGroupKeys(null)}
+							title={t("createGroup")}
+							onSubmit={async (name) => {
+								const created = await createGroup(name);
+								if (
+									createGroupKeys &&
+									createGroupKeys.length > 0
+								) {
+									await assignMembers(
+										createGroupKeys,
+										created.id,
+									);
 								}
 							}}
-						>
-							<Dropdown.Item
-								id="create"
-								textValue={t("createCustomSkill")}
-							>
-								{t("createCustomSkill")}
-							</Dropdown.Item>
-							<Dropdown.Item
-								id="import"
-								textValue={t("importFromFile")}
-							>
-								{t("importFromFile")}
-							</Dropdown.Item>
-						</Dropdown.Menu>
-					</Dropdown.Popover>
-				</Dropdown>
-				<Button
-					isIconOnly
-					variant="ghost"
-					size="sm"
-					className="shrink-0"
-					aria-label={t("refreshSkills")}
-					onPress={() => refetch()}
-				>
-					<ArrowPathIcon
-						className={cn("size-4", isFetching && "animate-spin")}
-					/>
-				</Button>
-			</ResourcePageToolbar>
-			<div className="flex min-h-0 flex-1">
-				{/* Skills List Panel */}
-				<div className="relative flex w-80 shrink-0 flex-col border-r border-border">
-					{/* Skills List */}
-					<SkillList
-						skills={filteredSkills}
-						selectedKeys={effectiveSelectedKeys}
-						searchQuery={searchQuery}
-						onSelectionChange={handleSelectionChange}
-						selectionMode="multiple"
-						isMultiSelectMode={isMultiSelectMode}
-						groupBySource={true}
-					/>
-
-					{isMultiSelectMode && selectedKeys.size > 0 && (
-						<MultiSelectFloatingBar
-							selectedCount={selectedKeys.size}
-							totalCount={groupedSkills.length}
-							onDelete={() => setIsBulkDeleteDialogOpen(true)}
 						/>
-					)}
-				</div>
-
-				<div className="flex-1 overflow-hidden relative">
-					{panelMode === "create" ? (
-						<CreateSkillPanel onDone={() => setPanelMode(null)} />
-					) : panelMode === "import" ? (
-						<ImportSkillPanel onDone={() => setPanelMode(null)} />
-					) : activeGroup ? (
-						<SkillDetail group={activeGroup} />
-					) : (
-						<div className="flex h-full flex-col items-center justify-center gap-4">
-							<div className="text-center">
-								<p className="mb-2 text-sm text-muted">
-									{t("selectSkill")}
-								</p>
-							</div>
-						</div>
-					)}
-
-					<BulkDeleteDialog
-						isOpen={isBulkDeleteDialogOpen}
-						onClose={() => setIsBulkDeleteDialogOpen(false)}
-						groups={selectedGroups.map((g) => ({
-							key: g.name,
-							items: g.items,
-						}))}
-						onSuccess={() => {
-							handleSelectionChange(new Set());
-							refetch();
-						}}
-						resourceType="skill"
-					/>
+					</div>
 				</div>
 			</div>
-		</div>
+			<DragOverlay dropAnimation={null}>
+				{draggedKeys ? (
+					<DragPreview
+						label={draggedKeys[0] ?? ""}
+						count={draggedKeys.length}
+						icon={BookOpenIcon}
+					/>
+				) : null}
+			</DragOverlay>
+		</DndContext>
 	);
 }

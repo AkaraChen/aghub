@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import type { ConfigSource } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
+import { useMcpGroups, useSkillGroups } from "../hooks/use-resource-groups";
 import { BulkOperationError, bulkFailureItemsLabel } from "../lib/bulk-errors";
 import { invalidateMcpQueries } from "../requests/mcps";
 import { invalidateSkillQueries } from "../requests/skills";
@@ -42,6 +43,8 @@ export function BulkDeleteDialog({
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
+	const { pruneAssignments: pruneSkillAssignments } = useSkillGroups();
+	const { pruneAssignments: pruneMcpAssignments } = useMcpGroups();
 
 	const deleteMutation = useMutation({
 		mutationFn: async () => {
@@ -119,6 +122,23 @@ export function BulkDeleteDialog({
 			if (resourceType === "skill" || resourceType === "mixed") {
 				await invalidateSkillQueries(queryClient);
 			}
+			// The deleted resources are gone; drop their group assignments
+			// so a same-named resource added later starts out ungrouped.
+			// group.key is the member key (skill name / mcp mergeKey).
+			const deletedGroups = groups.filter((group) =>
+				group.items.some((item) => item.agent),
+			);
+			const keysOf = (kind: "mcp" | "skill") =>
+				deletedGroups
+					.filter(
+						(group) =>
+							(group.resourceType ?? resourceType) === kind,
+					)
+					.map((group) => group.key);
+			const skillKeys = keysOf("skill");
+			const mcpKeys = keysOf("mcp");
+			if (skillKeys.length > 0) await pruneSkillAssignments(skillKeys);
+			if (mcpKeys.length > 0) await pruneMcpAssignments(mcpKeys);
 			const eventName =
 				resourceType === "mcp"
 					? "mcp server deleted"

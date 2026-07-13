@@ -18,7 +18,17 @@ export {
 	getOnboardingProgress,
 	updateOnboardingProgress,
 } from "./store/onboarding";
-export { addProject, getProjects, removeProject } from "./store/projects";
+export {
+	mcpGroupStore,
+	type ResourceGroupStore,
+	skillGroupStore,
+} from "./store/groups";
+export {
+	addProject,
+	getProjects,
+	removeProject,
+	renameProject,
+} from "./store/projects";
 export { getSidebarItems, saveSidebarItems } from "./store/sidebar";
 export {
 	getStarredMcps,
@@ -31,6 +41,7 @@ export type {
 	IntegrationPreferences,
 	OnboardingProgress,
 	Project,
+	ResourceGroup,
 	SidebarItemId,
 	SidebarItemPreference,
 } from "./store/types";

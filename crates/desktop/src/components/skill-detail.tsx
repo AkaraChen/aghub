@@ -218,7 +218,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 				<div className="w-full space-y-4 p-4 sm:p-6">
 					<Card>
 						<Card.Header className="flex flex-row items-start justify-between gap-3">
-							<div className="min-w-0 flex-1">
+							<div className="min-w-0 flex-1 select-text">
 								<h2 className="text-xl font-semibold text-foreground truncate">
 									{skill.name}
 								</h2>
@@ -579,18 +579,23 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 				onClose={() => setLocationToDelete(null)}
 				projectPath={projectPath}
 				skillName={skill.name}
+				isLastLocation={allLocationGroups.length === 1}
 			/>
 			<TransferDialog
 				isOpen={transferDialogOpen}
 				onClose={() => setTransferDialogOpen(false)}
 				resourceType="skill"
-				name={skill.name}
-				sourceAgent={skill.agent ?? "claude"}
+				items={[
+					{
+						name: skill.name,
+						sourceAgent: skill.agent ?? "claude",
+					},
+				]}
 				sourceScope={primaryScope}
 				sourceProjectRoot={projectPath}
 			/>
 			<ManageSkillAgentsDialog
-				group={group}
+				groups={[group]}
 				isOpen={manageDialogOpen}
 				onClose={() => setManageDialogOpen(false)}
 				projectPath={projectPath}

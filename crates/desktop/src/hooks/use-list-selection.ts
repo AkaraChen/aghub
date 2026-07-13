@@ -1,0 +1,327 @@
+import { useCallback, useEffect, useRef } from "react";
+
+/**
+ * One entry in the list's display order. An expanded group contributes
+ * its members as individual items; a COLLAPSED group or cluster is one
+ * entry carrying all its members — a shift range that crosses it selects
+ * them all, and it can serve as a range anchor.
+ */
+export type SelectionEntry =
+	| { kind: "item"; key: string }
+	| { kind: "cluster"; id: string; memberKeys: string[] };
+
+/** Keys currently visible in the list, in display order. Members of a
+ * collapsed section count as visible — they are on screen as their
+ * cluster row, and a select-all takes them the same way a shift range
+ * sweeping the cluster does. */
+export function visibleEntryKeys(orderedEntries: SelectionEntry[]): string[] {
+	return orderedEntries.flatMap((entry) =>
+		entry.kind === "item" ? [entry.key] : entry.memberKeys,
+	);
+}
+
+type SelectionAnchor = SelectionEntry;
+
+interface UseListSelectionOptions {
+	/** Display-order entries (visible rows; collapsed sections as one entry) */
+	orderedEntries: SelectionEntry[];
+	/** The current selection — the single source of truth */
+	selectedKeys: Set<string>;
+	/** Callback when selection changes */
+	onSelectionChange: (keys: Set<string>) => void;
+	/** Whether multi-select mode is enabled */
+	isMultiSelectMode?: boolean;
+	/**
+	 * The auto-seeded initial selection (first item or deep link). It has
+	 * no click history, so the first click on it commits it instead of
+	 * cancelling; any other selection act clears the pristine flag.
+	 */
+	seedKey?: string | null;
+}
+
+interface UseListSelectionReturn {
+	/**
+	 * Creates an onSelectionChange handler for one ListBox section.
+	 * sectionKeys scopes the click diff to that section; shift ranges
+	 * span sections via the hook-level orderedEntries.
+	 */
+	createSelectionHandler: (
+		sectionKeys: string[],
+	) => (keys: "all" | Set<React.Key>) => void;
+	/**
+	 * Group-header click: plain click replaces the selection with the
+	 * group members; meta/ctrl toggles the whole group in or out. Pass
+	 * the cluster id so the range anchor lands on the cluster.
+	 */
+	selectGroup: (memberKeys: string[], clusterId?: string) => void;
+	/**
+	 * Context-menu opening: keeps the selection if the key is already
+	 * in it, otherwise resets the selection to that key (Finder
+	 * semantics).
+	 */
+	ensureSelected: (key: string) => void;
+	/**
+	 * Context-menu opening on a cluster row: keeps the selection if all
+	 * members are already in it, otherwise resets the selection to the
+	 * cluster (Finder semantics — never a toggle).
+	 */
+	ensureGroupSelected: (memberKeys: string[], clusterId: string) => void;
+	/**
+	 * Fallback for a shift-click on an already-selected row: react-stately
+	 * swallows that event (the selection set is unchanged), so the row's
+	 * pointerdown calls this directly to run the range selection. Returns
+	 * the applied range so the caller can keep a frozen drag payload in
+	 * sync.
+	 */
+	selectRangeTo: (key: string) => Set<string> | null;
+}
+
+/**
+ * Cross-section selection controller for the resource lists.
+ *
+ * Selection state stays a flat Set of item keys; this hook adds the
+ * display-order awareness: shift ranges walk the visible entries, where
+ * a collapsed group/cluster counts as one entry whose members all join
+ * a range that includes it.
+ */
+export function useListSelection(
+	options: UseListSelectionOptions,
+): UseListSelectionReturn {
+	const {
+		orderedEntries,
+		selectedKeys,
+		onSelectionChange,
+		isMultiSelectMode = false,
+		seedKey = null,
+	} = options;
+
+	const modifiersRef = useRef({
+		shift: false,
+		meta: false,
+	});
+	const anchorRef = useRef<SelectionAnchor | null>(null);
+	const seedPristineRef = useRef(true);
+
+	useEffect(() => {
+		// Selection events arrive from react-aria without their input event,
+		// so the triggering modifiers are tracked here. Keyboard selection
+		// (Space, arrows) must see the keyboard's own modifier state — not
+		// replay the last click's — so key events update the same snapshot.
+		const handler = (e: PointerEvent | KeyboardEvent) => {
+			modifiersRef.current = {
+				shift: e.shiftKey,
+				meta: e.metaKey || e.ctrlKey,
+			};
+		};
+		window.addEventListener("pointerdown", handler, true);
+		window.addEventListener("keydown", handler, true);
+		window.addEventListener("keyup", handler, true);
+		return () => {
+			window.removeEventListener("pointerdown", handler, true);
+			window.removeEventListener("keydown", handler, true);
+			window.removeEventListener("keyup", handler, true);
+		};
+	}, []);
+
+	// Where an anchor sits in the current display order. An item anchor
+	// that got collapsed away resolves to the cluster holding it; a
+	// cluster anchor that got expanded resolves to its first member row.
+	const anchorEntryIndex = useCallback(
+		(anchor: SelectionAnchor): number => {
+			if (anchor.kind === "item") {
+				const direct = orderedEntries.findIndex(
+					(e) => e.kind === "item" && e.key === anchor.key,
+				);
+				if (direct !== -1) return direct;
+				return orderedEntries.findIndex(
+					(e) =>
+						e.kind === "cluster" &&
+						e.memberKeys.includes(anchor.key),
+				);
+			}
+			const direct = orderedEntries.findIndex(
+				(e) => e.kind === "cluster" && e.id === anchor.id,
+			);
+			if (direct !== -1) return direct;
+			return orderedEntries.findIndex(
+				(e) => e.kind === "item" && anchor.memberKeys.includes(e.key),
+			);
+		},
+		[orderedEntries],
+	);
+
+	const rangeBetween = useCallback(
+		(anchor: SelectionAnchor, clicked: string): Set<string> | null => {
+			const start = anchorEntryIndex(anchor);
+			const end = orderedEntries.findIndex(
+				(e) => e.kind === "item" && e.key === clicked,
+			);
+			if (start === -1 || end === -1) return null;
+			const [from, to] = [Math.min(start, end), Math.max(start, end)];
+			return new Set(
+				orderedEntries
+					.slice(from, to + 1)
+					.flatMap((e) =>
+						e.kind === "item" ? [e.key] : e.memberKeys,
+					),
+			);
+		},
+		[orderedEntries, anchorEntryIndex],
+	);
+
+	const createSelectionHandler = useCallback(
+		(sectionKeys: string[]) => (keys: "all" | Set<React.Key>) => {
+			if (keys === "all") return;
+			const newKeys = new Set(Array.from(keys).map(String));
+			const added = [...newKeys].find((k) => !selectedKeys.has(k));
+			// A section only reports its own items, so restrict the
+			// removal diff to this section or selections held by other
+			// sections would masquerade as the clicked key.
+			const removed = [...selectedKeys].find(
+				(k) => sectionKeys.includes(k) && !newKeys.has(k),
+			);
+			const clicked = added ?? removed;
+
+			if (!clicked) {
+				onSelectionChange(newKeys);
+				return;
+			}
+
+			let finalKeys: Set<string>;
+
+			// Shift ranges anchor on the last click, falling back to a sole
+			// current selection (the seeded first item has no click history).
+			const soleSelected =
+				selectedKeys.size === 1 ? Array.from(selectedKeys)[0] : null;
+			const shiftAnchor: SelectionAnchor | null =
+				anchorRef.current ??
+				(soleSelected ? { kind: "item", key: soleSelected } : null);
+
+			if (modifiersRef.current.shift && shiftAnchor) {
+				finalKeys =
+					rangeBetween(shiftAnchor, clicked) ??
+					new Set([...selectedKeys, clicked]);
+			} else if (!isMultiSelectMode && !modifiersRef.current.meta) {
+				// A plain click that deselects the sole current selection
+				// clears it (click again to cancel); any other plain click
+				// narrows the selection to just that item. The seeded
+				// selection has no click history — the first click on it
+				// commits it instead of cancelling.
+				const togglingOff =
+					added === undefined &&
+					selectedKeys.size === 1 &&
+					selectedKeys.has(clicked);
+				finalKeys =
+					togglingOff &&
+					!(seedPristineRef.current && clicked === seedKey)
+						? new Set<string>()
+						: new Set([clicked]);
+			} else {
+				finalKeys = new Set(selectedKeys);
+				if (finalKeys.has(clicked)) {
+					finalKeys.delete(clicked);
+				} else {
+					finalKeys.add(clicked);
+				}
+			}
+
+			if (!modifiersRef.current.shift) {
+				anchorRef.current = { kind: "item", key: clicked };
+			}
+
+			seedPristineRef.current = false;
+			onSelectionChange(finalKeys);
+		},
+		[
+			rangeBetween,
+			selectedKeys,
+			onSelectionChange,
+			isMultiSelectMode,
+			seedKey,
+		],
+	);
+
+	const selectGroup = useCallback(
+		(memberKeys: string[], clusterId?: string) => {
+			if (memberKeys.length === 0) return;
+
+			let finalKeys: Set<string>;
+			if (modifiersRef.current.meta || isMultiSelectMode) {
+				finalKeys = new Set(selectedKeys);
+				const allSelected = memberKeys.every((k) => finalKeys.has(k));
+				for (const key of memberKeys) {
+					if (allSelected) finalKeys.delete(key);
+					else finalKeys.add(key);
+				}
+			} else {
+				// Plain header click selects the whole group; clicking the
+				// header of the group that is already the sole selection
+				// cancels it (click again to cancel).
+				const isSoleGroup =
+					selectedKeys.size === memberKeys.length &&
+					memberKeys.every((k) => selectedKeys.has(k));
+				finalKeys = isSoleGroup
+					? new Set<string>()
+					: new Set(memberKeys);
+			}
+
+			anchorRef.current = clusterId
+				? { kind: "cluster", id: clusterId, memberKeys }
+				: { kind: "item", key: memberKeys[0] };
+			seedPristineRef.current = false;
+			onSelectionChange(finalKeys);
+		},
+		[selectedKeys, onSelectionChange, isMultiSelectMode],
+	);
+
+	const ensureSelected = useCallback(
+		(key: string) => {
+			if (selectedKeys.has(key)) return;
+			anchorRef.current = { kind: "item", key };
+			seedPristineRef.current = false;
+			onSelectionChange(new Set([key]));
+		},
+		[selectedKeys, onSelectionChange],
+	);
+
+	// Finder semantics for a whole cluster: right-clicking a cluster whose
+	// members are already all selected acts on the current selection;
+	// otherwise the selection resets to the cluster. Never a toggle.
+	const ensureGroupSelected = useCallback(
+		(memberKeys: string[], clusterId: string) => {
+			if (memberKeys.length === 0) return;
+			if (memberKeys.every((key) => selectedKeys.has(key))) return;
+			anchorRef.current = { kind: "cluster", id: clusterId, memberKeys };
+			seedPristineRef.current = false;
+			onSelectionChange(new Set(memberKeys));
+		},
+		[selectedKeys, onSelectionChange],
+	);
+
+	const selectRangeTo = useCallback(
+		(clicked: string) => {
+			const soleSelected =
+				selectedKeys.size === 1 ? Array.from(selectedKeys)[0] : null;
+			const anchor =
+				anchorRef.current ??
+				(soleSelected
+					? { kind: "item" as const, key: soleSelected }
+					: null);
+			if (!anchor) return null;
+			const range = rangeBetween(anchor, clicked);
+			if (!range) return null;
+			seedPristineRef.current = false;
+			onSelectionChange(range);
+			return range;
+		},
+		[selectedKeys, rangeBetween, onSelectionChange],
+	);
+
+	return {
+		createSelectionHandler,
+		selectGroup,
+		ensureSelected,
+		selectRangeTo,
+		ensureGroupSelected,
+	};
+}

@@ -11,7 +11,8 @@ import type { Scope } from "../lib/skills-path-group";
 import { cn } from "../lib/utils";
 
 type AgentStatus = "idle" | "pending" | "success" | "error";
-type AgentDiffLabel = "adding" | "removing" | "installed" | "unconfigured";
+type AgentDiffLabel =
+	"adding" | "removing" | "installed" | "partial" | "unconfigured";
 
 interface AgentState {
 	status: AgentStatus;
@@ -21,6 +22,7 @@ interface AgentState {
 interface SkillsAgentListProps {
 	agents: AvailableAgent[];
 	selectedKeys: string[];
+	indeterminateKeys?: Set<string>;
 	onSelectionChange: (keys: string[]) => void;
 	scope: Scope;
 	agentStates?: Record<string, AgentState>;
@@ -55,6 +57,13 @@ function DiffLabelDisplay({ diffLabel }: { diffLabel: AgentDiffLabel }) {
 			</Description>
 		);
 	}
+	if (diffLabel === "partial") {
+		return (
+			<Description className="text-xs text-muted">
+				{t("installedOnSome")}
+			</Description>
+		);
+	}
 	if (diffLabel === "unconfigured") {
 		return (
 			<Description className="text-xs text-muted">
@@ -70,6 +79,7 @@ const EMPTY_SET = new Set<string>();
 export function SkillsAgentList({
 	agents,
 	selectedKeys,
+	indeterminateKeys = EMPTY_SET,
 	onSelectionChange,
 	scope: _scope,
 	agentStates = {},
@@ -107,6 +117,7 @@ export function SkillsAgentList({
 						<Checkbox
 							key={agent.id}
 							value={agent.id}
+							isIndeterminate={indeterminateKeys.has(agent.id)}
 							isDisabled={isDisabled}
 							variant="secondary"
 							className={cn(

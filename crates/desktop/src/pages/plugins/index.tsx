@@ -13,6 +13,7 @@ import { useLocation } from "wouter";
 import { PluginDetail } from "../../components/plugin-detail";
 import { PluginConfirmDialog } from "../../components/plugin-detail/confirm-dialog";
 import { PluginList } from "../../components/plugin-list";
+import type { CCPluginResponse } from "../../generated/dto";
 import {
 	Empty,
 	EmptyDescription,
@@ -190,6 +191,21 @@ export default function PluginsPage() {
 		}),
 	});
 
+	const toggleEnabledMutation = useMutation({
+		mutationFn: (plugin: CCPluginResponse) =>
+			plugin.enabled
+				? api.plugins.disable(plugin.id)
+				: api.plugins.enable(plugin.id),
+		onSuccess: () =>
+			queryClient.invalidateQueries({
+				queryKey: queryKeys.plugins.all(),
+			}),
+		onError: (error) =>
+			toast.danger(
+				error instanceof Error ? error.message : String(error),
+			),
+	});
+
 	const handleRefresh = async () => {
 		const refreshes: Array<Promise<unknown>> = [
 			refetch(),
@@ -232,6 +248,9 @@ export default function PluginsPage() {
 					onToggleMultiSelect={toggleMultiSelect}
 					onRefresh={() => void handleRefresh()}
 					onDeleteSelection={() => setIsBulkUninstallDialogOpen(true)}
+					onToggleEnabled={(plugin) =>
+						toggleEnabledMutation.mutate(plugin)
+					}
 					selectedCount={selectedKeysInPlugins.size}
 					totalCount={plugins.length}
 					isRefreshing={isFetching}

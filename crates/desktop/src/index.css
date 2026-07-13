@@ -17,3 +17,78 @@
 		grid-template-rows: 0fr;
 	}
 }
+
+/* Respect the OS reduced-motion setting: collapse every transition and
+ * animation to instant. Also how e2e stays deterministic — Playwright
+ * forces reducedMotion, so animation never enters assertions. */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		transition-duration: 0.01ms !important;
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+	}
+}
+
+@keyframes board-card-in {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes badge-pop {
+	from {
+		transform: scale(0.6);
+	}
+	to {
+		transform: scale(1);
+	}
+}
+
+@keyframes panel-in {
+	from {
+		opacity: 0;
+		transform: translateY(4px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+@keyframes menu-in {
+	from {
+		opacity: 0;
+		transform: scale(0.96);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+@layer base {
+	/* Desktop chrome should not select text on double-click or drag.
+	 * Keep selection where copying matters: editable fields, code, and
+	 * anything that opts in with `select-text`. */
+	:root {
+		-webkit-user-select: none;
+		user-select: none;
+	}
+	input,
+	textarea,
+	select,
+	[contenteditable="true"],
+	pre,
+	code,
+	.select-text {
+		-webkit-user-select: text;
+		user-select: text;
+	}
+}

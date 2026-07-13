@@ -18,9 +18,11 @@
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"generate:dto": "cargo run --manifest-path ../api/Cargo.toml --bin export-dto",
-		"typecheck": "node ./node_modules/@typescript/native/bin/tsc -p tsconfig.json --noEmit"
+		"typecheck": "node ./node_modules/@typescript/native/bin/tsc -p tsconfig.json --noEmit",
+		"test:e2e": "playwright test"
 	},
 	"dependencies": {
+		"@dnd-kit/core": "6.3.1",
 		"@heroicons/react": "^2.2.0",
 		"@heroui/react": "3.2.2",
 		"@heroui/styles": "3.2.2",
@@ -54,7 +56,7 @@
 		"pinyin-pro": "^3.28.1",
 		"posthog-js": "^1.378.1",
 		"react": "catalog:",
-		"react-aria-components": "^1.16.0",
+		"react-aria-components": "1.19.0",
 		"react-dom": "catalog:",
 		"react-grab": "^0.1.32",
 		"react-hook-form": "^7.79.0",
@@ -69,6 +71,7 @@
 	"devDependencies": {
 		"@antfu/eslint-config": "^9.0.0",
 		"@eslint-react/eslint-plugin": "^5.8.10",
+		"@playwright/test": "^1.61.1",
 		"@tailwindcss/vite": "^4.2.2",
 		"@tauri-apps/cli": "^2.11.4",
 		"@types/node": "^26.1.0",
