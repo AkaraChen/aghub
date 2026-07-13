@@ -37,8 +37,7 @@ import { type AgentDiffLabel, AgentList, type AgentState } from "./agent-list";
 
 type ResourceKind = "mcp" | "skill" | "sub_agent";
 type DestinationScope =
-	| { type: "global" }
-	| { type: "project"; path: string; name: string };
+	{ type: "global" } | { type: "project"; path: string; name: string };
 
 export interface TransferItem {
 	name: string;

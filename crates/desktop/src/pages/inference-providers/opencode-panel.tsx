@@ -46,8 +46,7 @@ import { selectValidProviderId } from "./provider-selection";
 import { ProviderRowShell } from "./provider-row";
 
 type ProviderDialogMode =
-	| { type: "create" }
-	| { type: "edit"; provider: AgentProviderResponse };
+	{ type: "create" } | { type: "edit"; provider: AgentProviderResponse };
 
 function OpenCodeCreateProviderDialog({
 	isOpen,

@@ -11,11 +11,7 @@ import { cn } from "../lib/utils";
 
 type AgentStatus = "idle" | "pending" | "success" | "error";
 type AgentDiffLabel =
-	| "adding"
-	| "removing"
-	| "installed"
-	| "partial"
-	| "unconfigured";
+	"adding" | "removing" | "installed" | "partial" | "unconfigured";
 
 interface AgentState {
 	status: AgentStatus;

@@ -1,11 +1,8 @@
 export type OnboardingTourId =
-	| "product-map"
-	| "project-workflow"
-	| "project-setup";
+	"product-map" | "project-workflow" | "project-setup";
 
 export type OnboardingCommand =
-	| { type: "show-welcome" }
-	| { type: "start-tour"; tour: OnboardingTourId };
+	{ type: "show-welcome" } | { type: "start-tour"; tour: OnboardingTourId };
 
 export const ONBOARDING_EVENT = "aghub:onboarding";
 
