@@ -4,21 +4,17 @@ import {
 	StarIcon as StarIconSolid,
 } from "@heroicons/react/24/solid";
 import { Label, ListBox } from "@heroui/react";
-import Fuse from "fuse.js";
-import { memo, useCallback, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { McpResponse } from "../generated/dto";
 import { AgentIcons } from "./agent-icons";
-import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useFavorites } from "../hooks/use-favorites";
-import type { SelectionEntry } from "../hooks/use-list-selection";
 import { useListSelection } from "../hooks/use-list-selection";
+import type { McpSectionGroup, McpSections } from "../hooks/use-mcp-sections";
 import type { ResourceActionIntents } from "../hooks/use-resource-actions";
 import { useResourceActions } from "../hooks/use-resource-actions";
 import { useMcpGroups } from "../hooks/use-resource-groups";
 import { dragSelectionPayload } from "../lib/drag-payload";
 import type { ResourceGroup } from "../lib/store";
-import { filterItemsByAgentIds, getMcpMergeKey } from "../lib/utils";
 import { viewTransitionName } from "../lib/view-transition";
 import { ContextMenu, useContextMenu } from "./context-menu";
 import { customGroupMenu, resourceItemsMenu } from "./resource-menu-items";
@@ -31,11 +27,7 @@ import {
 	ResourceGroupSection,
 } from "./resource-group-section";
 
-interface McpGroup {
-	mergeKey: string;
-	transport: McpResponse["transport"];
-	items: McpResponse[];
-}
+type McpGroup = McpSectionGroup;
 
 type MenuTarget =
 	| { type: "items" }
@@ -82,9 +74,10 @@ const McpRowBody = memo(function McpRowBody({
 });
 
 interface McpListProps {
-	mcps: McpResponse[];
+	/** The derivation pipeline's output — owned by the page (or wrapper)
+	 * so select-all and the list agree on what is visible. */
+	sections: McpSections;
 	selectedKeys: Set<string>;
-	searchQuery: string;
 	onSelectionChange: (keys: Set<string>) => void;
 	isMultiSelectMode?: boolean;
 	/** Dialog intents owned by the page (delete/transfer/agents/new group) */
@@ -94,132 +87,31 @@ interface McpListProps {
 }
 
 export function McpList({
-	mcps,
+	sections,
 	selectedKeys,
-	searchQuery,
 	onSelectionChange,
 	isMultiSelectMode = false,
 	intents,
 	seedKey,
 }: McpListProps) {
 	const { t } = useTranslation();
-	const { availableAgents } = useAgentAvailability();
-	const enabledAgentIds = useMemo(
-		() =>
-			new Set(
-				availableAgents
-					.filter((agent) => !agent.isDisabled)
-					.map((agent) => agent.id),
-			),
-		[availableAgents],
-	);
-	const visibleMcps = useMemo(
-		() => filterItemsByAgentIds(mcps, enabledAgentIds),
-		[mcps, enabledAgentIds],
-	);
-
-	const groupedMcps = useMemo(() => {
-		const map = new Map<string, McpResponse[]>();
-		for (const mcp of visibleMcps) {
-			const key = getMcpMergeKey(mcp.transport);
-			const existing = map.get(key) ?? [];
-			map.set(key, [...existing, mcp]);
-		}
-		return Array.from(map.entries()).map(([mergeKey, items]) => ({
-			mergeKey,
-			transport: items[0].transport,
-			items,
-		}));
-	}, [visibleMcps]);
-
-	const fuse = useMemo(
-		() =>
-			new Fuse(groupedMcps, {
-				keys: [
-					{ name: "items.0.name", weight: 2 },
-					{ name: "items.0.source", weight: 1 },
-					{ name: "items.0.agent", weight: 1 },
-				],
-				threshold: 0.4,
-				includeScore: true,
-			}),
-		[groupedMcps],
-	);
-
-	const filteredGroups = useMemo(() => {
-		if (!searchQuery) return groupedMcps;
-		return fuse.search(searchQuery).map((result) => result.item);
-	}, [fuse, groupedMcps, searchQuery]);
+	const {
+		customSections,
+		unassignedGroups,
+		orderedEntries,
+		toggleCollapsed,
+		isExpanded,
+	} = sections;
 
 	const { isMcpStarred, setMcpsStarred } = useFavorites();
-	const { groups, assignments, renameGroup, deleteGroup } = useMcpGroups();
+	const { renameGroup, deleteGroup } = useMcpGroups();
 
-	const [collapsedIds, setCollapsedIds] = useState<Set<string>>(
-		() => new Set(),
-	);
 	const [renameTarget, setRenameTarget] = useState<ResourceGroup | null>(
 		null,
 	);
 	const [deleteTarget, setDeleteTarget] = useState<ResourceGroup | null>(
 		null,
 	);
-	const sortedGroups = useMemo(() => {
-		const list = [...filteredGroups];
-		return list.sort((a, b) => {
-			const aStarred = isMcpStarred(a.mergeKey);
-			const bStarred = isMcpStarred(b.mergeKey);
-			if (aStarred && !bStarred) return -1;
-			if (!aStarred && bStarred) return 1;
-			return 0;
-		});
-	}, [filteredGroups, isMcpStarred]);
-
-	const { customSections, unassignedGroups } = useMemo(() => {
-		const members = new Map<string, McpGroup[]>();
-		const rest: McpGroup[] = [];
-		const groupIds = new Set(groups.map((g) => g.id));
-		for (const item of sortedGroups) {
-			const groupId = assignments[item.mergeKey];
-			if (groupId && groupIds.has(groupId)) {
-				const existing = members.get(groupId) ?? [];
-				existing.push(item);
-				members.set(groupId, existing);
-			} else {
-				rest.push(item);
-			}
-		}
-		const sections = groups
-			.map((group) => ({
-				group,
-				mcps: members.get(group.id) ?? [],
-			}))
-			.filter((section) => !searchQuery || section.mcps.length > 0);
-		return { customSections: sections, unassignedGroups: rest };
-	}, [sortedGroups, groups, assignments, searchQuery]);
-
-	// Display-order entries for shift ranges: an expanded group
-	// contributes its member rows, a collapsed one is a single entry
-	// carrying all members — a range crossing it selects the whole thing.
-	const orderedEntries = useMemo<SelectionEntry[]>(() => {
-		const entries: SelectionEntry[] = [];
-		for (const section of customSections) {
-			const memberKeys = section.mcps.map((g) => g.mergeKey);
-			if (searchQuery || !collapsedIds.has(`g:${section.group.id}`)) {
-				for (const key of memberKeys)
-					entries.push({ kind: "item", key });
-			} else {
-				entries.push({
-					kind: "cluster",
-					id: `g:${section.group.id}`,
-					memberKeys,
-				});
-			}
-		}
-		for (const group of unassignedGroups) {
-			entries.push({ kind: "item", key: group.mergeKey });
-		}
-		return entries;
-	}, [customSections, unassignedGroups, collapsedIds, searchQuery]);
 
 	const {
 		createSelectionHandler,
@@ -240,18 +132,6 @@ export function McpList({
 		selectedKeys,
 		intents,
 	});
-
-	const isSearching = Boolean(searchQuery);
-
-	const toggleCollapsed = (id: string) => {
-		if (isSearching) return;
-		setCollapsedIds((prev) => {
-			const next = new Set(prev);
-			if (next.has(id)) next.delete(id);
-			else next.add(id);
-			return next;
-		});
-	};
 
 	// The header reflects its members: selected once every member is in
 	// the selection, regardless of what else is selected elsewhere.
@@ -377,7 +257,7 @@ export function McpList({
 		</>
 	);
 
-	if (sortedGroups.length === 0 && customSections.length === 0) {
+	if (unassignedGroups.length === 0 && customSections.length === 0) {
 		return (
 			<p className="px-3 py-6 text-center text-sm text-muted">
 				{t("noServersMatch")}
@@ -394,10 +274,7 @@ export function McpList({
 						key={section.group.id}
 						title={section.group.name}
 						count={section.mcps.length}
-						isExpanded={
-							isSearching ||
-							!collapsedIds.has(`g:${section.group.id}`)
-						}
+						isExpanded={isExpanded(`g:${section.group.id}`)}
 						isSelected={isGroupSelected(memberKeys)}
 						onToggleExpanded={() =>
 							toggleCollapsed(`g:${section.group.id}`)

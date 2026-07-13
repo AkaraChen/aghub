@@ -83,6 +83,21 @@ export function ManageAgentsDialog({
 		return new Set(common);
 	}, [installedAgentIdsByGroup]);
 
+	// Agents installed on a strict subset of the selected items. With a
+	// single item this is always empty, so single-item behavior is
+	// unchanged.
+	const partiallyInstalledAgentIds = useMemo(() => {
+		const partial = new Set<string>();
+		for (const installed of installedAgentIdsByGroup) {
+			for (const id of installed) {
+				if (!commonInstalledAgentIds.has(id)) {
+					partial.add(id);
+				}
+			}
+		}
+		return partial;
+	}, [installedAgentIdsByGroup, commonInstalledAgentIds]);
+
 	const usableAgents = useMemo(
 		() =>
 			(availableAgents ?? []).filter(
@@ -96,6 +111,12 @@ export function ManageAgentsDialog({
 
 	const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
 	const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
+	// macOS-style tri-state: agents installed on only some items start
+	// indeterminate; while an agent stays in this set it is left untouched
+	// by Apply.
+	const [indeterminateAgents, setIndeterminateAgents] = useState<Set<string>>(
+		() => new Set(),
+	);
 	const [agentStates, setAgentStates] = useState<Record<string, AgentState>>(
 		{},
 	);
@@ -105,6 +126,7 @@ export function ManageAgentsDialog({
 		setPrevIsOpen(isOpen);
 		if (isOpen) {
 			setSelectedAgents(Array.from(commonInstalledAgentIds));
+			setIndeterminateAgents(new Set(partiallyInstalledAgentIds));
 			setAgentStates({});
 			setIsApplying(false);
 		}
@@ -117,6 +139,10 @@ export function ManageAgentsDialog({
 
 	const getAgentDiffLabel = useCallback(
 		(agentId: string): AgentDiffLabel | null => {
+			// Still in its initial indeterminate state: Apply leaves every
+			// item untouched for this agent.
+			if (indeterminateAgents.has(agentId)) return "partial";
+
 			const installedInAll = installedAgentIdsByGroup.every((installed) =>
 				installed.has(agentId),
 			);
@@ -130,7 +156,7 @@ export function ManageAgentsDialog({
 			if (isSelected && installedInAll) return "installed";
 			return "unconfigured";
 		},
-		[installedAgentIdsByGroup, selectedSet],
+		[indeterminateAgents, installedAgentIdsByGroup, selectedSet],
 	);
 
 	const diffLabels = useMemo(() => {
@@ -144,14 +170,25 @@ export function ManageAgentsDialog({
 		return labels;
 	}, [usableAgents, getAgentDiffLabel]);
 
+	// True only when some agent's state differs from its initial one:
+	// agents left indeterminate cause no change and never count.
 	const hasChanges = useMemo(
 		() =>
 			installedAgentIdsByGroup.some(
 				(installed) =>
 					selectedAgents.some((id) => !installed.has(id)) ||
-					Array.from(installed).some((id) => !selectedSet.has(id)),
+					Array.from(installed).some(
+						(id) =>
+							!selectedSet.has(id) &&
+							!indeterminateAgents.has(id),
+					),
 			),
-		[installedAgentIdsByGroup, selectedAgents, selectedSet],
+		[
+			installedAgentIdsByGroup,
+			selectedAgents,
+			selectedSet,
+			indeterminateAgents,
+		],
 	);
 
 	const onCloseAndReset = () => {
@@ -162,6 +199,15 @@ export function ManageAgentsDialog({
 
 	const handleSelectionChange = useCallback((keys: string[]) => {
 		setSelectedAgents(keys);
+		// Clicking an indeterminate agent selects it; from then on it
+		// cycles checked/unchecked like the rest.
+		setIndeterminateAgents((prev) => {
+			if (prev.size === 0) return prev;
+			const next = new Set(
+				Array.from(prev).filter((id) => !keys.includes(id)),
+			);
+			return next.size === prev.size ? prev : next;
+		});
 	}, []);
 
 	const handleApply = async () => {
@@ -187,8 +233,12 @@ export function ManageAgentsDialog({
 			return {
 				group,
 				added: selectedAgents.filter((id) => !installed.has(id)),
+				// Agents still in their initial indeterminate state are
+				// left untouched — never uninstall what the user did not
+				// explicitly uncheck.
 				removed: Array.from(installed).filter(
-					(id) => !selectedSet.has(id),
+					(id) =>
+						!selectedSet.has(id) && !indeterminateAgents.has(id),
 				),
 			};
 		});
@@ -305,6 +355,7 @@ export function ManageAgentsDialog({
 								<AgentList
 									agents={usableAgents}
 									selectedKeys={selectedAgents}
+									indeterminateKeys={indeterminateAgents}
 									onSelectionChange={handleSelectionChange}
 									agentStates={agentStates}
 									diffLabels={diffLabels}

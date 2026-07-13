@@ -59,6 +59,10 @@ export function ContextMenu({
 	const containerRef = useRef<HTMLDivElement>(null);
 	const pressedItemRef = useRef<HTMLElement | null>(null);
 	const restoreFocusRef = useRef<HTMLElement | null>(null);
+	// An outside pointer press hands focus to whatever was pressed — the
+	// user is already interacting elsewhere, and yanking focus back would
+	// hijack their typing. Only keyboard/action dismissal restores focus.
+	const dismissedByPointerRef = useRef(false);
 	const isOpen = position != null;
 
 	// Remount the Menu on every open/close transition: react-aria's
@@ -84,6 +88,10 @@ export function ContextMenu({
 			document.activeElement instanceof HTMLElement
 				? document.activeElement
 				: null;
+		dismissedByPointerRef.current = false;
+		// A stale pressed item from a previous menu generation must not
+		// leak into this one's action blink.
+		pressedItemRef.current = null;
 
 		// A previous action's blink may have released pointer events on
 		// this shared container; a fresh open must intercept again.
@@ -111,7 +119,10 @@ export function ContextMenu({
 		el.querySelector<HTMLElement>('[role="menu"]')?.focus();
 
 		const handlePointerDown = (event: PointerEvent) => {
-			if (!el.contains(event.target as Node)) onClose();
+			if (!el.contains(event.target as Node)) {
+				dismissedByPointerRef.current = true;
+				onClose();
+			}
 		};
 		// Escape closes regardless of where focus sits (the menu may not
 		// have taken it) — capture phase, ahead of other handlers.
@@ -126,7 +137,9 @@ export function ContextMenu({
 		return () => {
 			window.removeEventListener("pointerdown", handlePointerDown, true);
 			window.removeEventListener("keydown", handleKeyDown, true);
-			restoreFocusRef.current?.focus();
+			if (!dismissedByPointerRef.current) {
+				restoreFocusRef.current?.focus();
+			}
 		};
 	}, [position, onClose]);
 

@@ -110,25 +110,36 @@ test("the bulk roster removes one item from the selection", async ({
 	).toBeVisible();
 });
 
-test("clicking a cluster row toggles expansion without selecting", async ({
+test("only the chevron toggles a cluster's expansion; the row never does", async ({
 	page,
 }) => {
 	await expect(
 		page.getByRole("option", { name: "css-wizard" }),
 	).toBeVisible();
 
-	// The whole cluster row is the toggle; clicking it never selects the
-	// members (select-all lives on right-click and meta-click)
+	// The row body is a navigation surface (library page), not a toggle:
+	// clicking it must leave the members visible and select nothing
 	await page
 		.getByRole("button", {
 			name: "github/AkaraChen/web-dev",
 			exact: true,
 		})
 		.click();
-
-	// Members collapse, and no selection was made
-	await expect(page.getByRole("option", { name: "css-wizard" })).toBeHidden();
+	await expect(
+		page.getByRole("option", { name: "css-wizard" }),
+	).toBeVisible();
 	await expect(page.getByText("2 items selected")).toBeHidden();
+
+	// The trailing chevron alone collapses the cluster — and expands it back
+	const chevron = page.getByRole("button", {
+		name: "Expand or collapse github/AkaraChen/web-dev",
+	});
+	await chevron.click();
+	await expect(page.getByRole("option", { name: "css-wizard" })).toBeHidden();
+	await chevron.click();
+	await expect(
+		page.getByRole("option", { name: "css-wizard" }),
+	).toBeVisible();
 });
 
 test("deselecting a multi-selection down to one item shows that item's detail", async ({
@@ -244,11 +255,16 @@ test("right-clicking a source cluster selects the whole library", async ({
 		.click({ button: "right" });
 	await page.keyboard.press("Escape");
 
-	// Library context header plus the bulk roster
+	// The count is the headline; both members land in the roster
 	await expect(
-		page.getByRole("heading", { name: "github/AkaraChen/web-dev" }),
+		page.getByRole("heading", { name: "2 items selected" }),
 	).toBeVisible();
-	await expect(page.getByText("2 items selected")).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Remove react-pro from selection" }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Remove css-wizard from selection" }),
+	).toBeVisible();
 });
 
 test("meta-clicking a cluster row toggles the whole library in and out", async ({
@@ -311,13 +327,16 @@ test("the roster labels custom-group members with the group name", async ({
 	await page.getByRole("button", { name: "Select all in Mine" }).click();
 	await expect(page.getByText("2 items selected")).toBeVisible();
 
-	// One roster card titled by the group; no Ungrouped card, and the
-	// source library never appears even though css-wizard belongs to one
-	const card = page
-		.getByRole("button", { name: "Remove css-wizard from selection" })
-		.locator("..");
-	await expect(card).toContainText("Mine");
-	await expect(card).toContainText("solo-skill");
+	// One roster section titled by the group; no Ungrouped section, and
+	// the source library never appears even though css-wizard belongs to
+	// one
+	const rosterSection = page.locator("section").filter({
+		has: page.getByRole("button", {
+			name: "Remove css-wizard from selection",
+		}),
+	});
+	await expect(rosterSection).toContainText("Mine");
+	await expect(rosterSection).toContainText("solo-skill");
 	await expect(page.getByText("Ungrouped", { exact: true })).toBeHidden();
 	await expect(page.getByText("web-dev")).toBeHidden();
 });
@@ -637,8 +656,13 @@ test("the agent matrix shows coverage and installs the missing", async ({
 	await expect(page.getByTestId("matrix-row-claude")).toContainText("2/2");
 	await expect(page.getByTestId("matrix-row-cursor")).toContainText("0/2");
 
-	// Clicking the uncovered row installs the missing items in place
+	// Coverage is a summary; use the explicit tri-state manager to edit it.
 	await page.getByTestId("matrix-row-cursor").click();
+	const manageDialog = page.getByRole("dialog", {
+		name: "Manage Agents",
+	});
+	await manageDialog.locator("label").filter({ hasText: "Cursor" }).click();
+	await manageDialog.getByRole("button", { name: "Apply changes" }).click();
 	await expect(page.getByTestId("matrix-row-cursor")).toContainText("2/2");
 });
 
@@ -651,7 +675,7 @@ test("a fully covered matrix row asks before uninstalling", async ({
 		.click({ modifiers: ["ControlOrMeta"] });
 
 	await page.getByTestId("matrix-row-claude").click();
-	const dialog = page.getByRole("alertdialog");
+	const dialog = page.getByRole("dialog", { name: "Manage Agents" });
 	await expect(dialog).toBeVisible();
 	await expect(dialog).toContainText("Claude");
 
@@ -916,11 +940,10 @@ test("source clusters collapse by default except the selected one", async ({
 	await expect(page.getByRole("option", { name: "react-pro" })).toBeVisible();
 	await expect(page.getByRole("option", { name: "api-forge" })).toBeHidden();
 
-	// The label click expands the collapsed cluster
+	// The chevron expands the collapsed cluster
 	await page
 		.getByRole("button", {
-			name: "github/AkaraChen/alpha-pack",
-			exact: true,
+			name: "Expand or collapse github/AkaraChen/alpha-pack",
 		})
 		.click();
 	await expect(page.getByRole("option", { name: "api-forge" })).toBeVisible();
@@ -973,15 +996,16 @@ test("shift range sweeps a collapsed section it crosses", async ({ page }) => {
 });
 
 test("clicking a cluster row opens its library page", async ({ page }) => {
-	// Clicking the collapsed alpha-pack row expands it and shows the
-	// library page on the right — no selection is made
+	// Clicking the collapsed alpha-pack row shows the library page on the
+	// right — no selection is made, and the cluster stays collapsed
+	// (expansion belongs to the chevron alone)
 	await page
 		.getByRole("button", {
 			name: "github/AkaraChen/alpha-pack",
 			exact: true,
 		})
 		.click();
-	await expect(page.getByRole("option", { name: "api-forge" })).toBeVisible();
+	await expect(page.getByRole("option", { name: "api-forge" })).toBeHidden();
 	await expect(page.getByText("items selected")).toBeHidden();
 	await expect(
 		page.getByRole("heading", { name: "github/AkaraChen/alpha-pack" }),
@@ -1247,12 +1271,12 @@ test("a fully covered matrix cell uninstalls after confirmation", async ({
 		.click();
 	await expect(page.getByText("2 items selected")).toBeVisible();
 
-	// Claude is fully covered — clicking asks for confirmation, and
-	// confirming actually uninstalls (the reconcile mock mutates state)
+	// Claude is fully covered — explicitly uncheck it in the tri-state manager
+	// and apply (the reconcile mock mutates state).
 	await page.getByTestId("matrix-row-claude").click();
-	const dialog = page.getByRole("alertdialog");
-	await expect(dialog).toBeVisible();
-	await dialog.getByRole("button", { name: "Delete" }).click();
+	const dialog = page.getByRole("dialog", { name: "Manage Agents" });
+	await dialog.locator("label").filter({ hasText: "Claude" }).click();
+	await dialog.getByRole("button", { name: "Apply changes" }).click();
 	await expect(page.getByRole("option", { name: "api-forge" })).toBeHidden();
 	await expect(page.getByRole("option", { name: "solo-skill" })).toBeHidden();
 	// arch-lint was dropped from the selection, not uninstalled
@@ -1324,9 +1348,17 @@ test("updating a library re-imports from its source", async ({ page }) => {
 	await page.getByRole("button", { name: "Install Selected" }).click();
 	await page.getByRole("button", { name: "Done", exact: true }).click();
 
-	// Back on the library page: the new member is clustered in
+	// Back on the library page: the new member is clustered in — expand
+	// the cluster (chevron only) and find its row inside the section
 	await expect(page.getByText("3 members")).toBeVisible();
+	await page
+		.getByRole("button", {
+			name: "Expand or collapse github/AkaraChen/alpha-pack",
+		})
+		.click();
 	await expect(
-		page.getByRole("option", { name: "fresh-skill" }),
+		page
+			.getByTestId("group-section-github/AkaraChen/alpha-pack")
+			.getByRole("option", { name: "fresh-skill" }),
 	).toBeVisible();
 });

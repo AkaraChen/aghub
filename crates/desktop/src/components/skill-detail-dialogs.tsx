@@ -7,6 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import * as pathe from "pathe";
 import { useTranslation } from "react-i18next";
 import { useApi } from "../hooks/use-api";
+import { useSkillGroups } from "../hooks/use-resource-groups";
 import { invalidateSkillQueries } from "../requests/skills";
 import {
 	formatAgentName,
@@ -20,6 +21,12 @@ interface DeleteSkillLocationDialogProps {
 	onClose: () => void;
 	projectPath?: string;
 	skillName: string;
+	/**
+	 * True when this location is the skill's only remaining install:
+	 * deleting it removes the skill entirely, so its group assignment
+	 * must be pruned too.
+	 */
+	isLastLocation?: boolean;
 }
 
 interface DeleteSkillDialogProps {
@@ -35,10 +42,12 @@ export function DeleteSkillLocationDialog({
 	onClose,
 	projectPath,
 	skillName,
+	isLastLocation = false,
 }: DeleteSkillLocationDialogProps) {
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
+	const { pruneAssignments } = useSkillGroups();
 	const deleteRequest =
 		item && item.installations.length > 0
 			? {
@@ -70,6 +79,9 @@ export function DeleteSkillLocationDialog({
 			}
 		},
 		onSuccess: async () => {
+			if (isLastLocation) {
+				await pruneAssignments([skillName]);
+			}
 			await invalidateSkillQueries(queryClient);
 			onClose();
 		},
@@ -178,6 +190,7 @@ export function DeleteSkillDialog({
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
+	const { pruneAssignments } = useSkillGroups();
 
 	const skill = group.items[0];
 
@@ -236,6 +249,11 @@ export function DeleteSkillDialog({
 					`${totalFailed} of ${totalResults} deletions failed`,
 				);
 			}
+		},
+		onSuccess: async () => {
+			// The whole skill is gone; drop its group assignment so a
+			// same-named skill installed later starts out ungrouped.
+			await pruneAssignments([skill.name]);
 		},
 		onSettled: async () => {
 			await invalidateSkillQueries(queryClient);

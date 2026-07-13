@@ -10,6 +10,16 @@ export type SelectionEntry =
 	| { kind: "item"; key: string }
 	| { kind: "cluster"; id: string; memberKeys: string[] };
 
+/** Keys currently visible in the list, in display order. Members of a
+ * collapsed section count as visible — they are on screen as their
+ * cluster row, and a select-all takes them the same way a shift range
+ * sweeping the cluster does. */
+export function visibleEntryKeys(orderedEntries: SelectionEntry[]): string[] {
+	return orderedEntries.flatMap((entry) =>
+		entry.kind === "item" ? [entry.key] : entry.memberKeys,
+	);
+}
+
 type SelectionAnchor = SelectionEntry;
 
 interface UseListSelectionOptions {
@@ -93,14 +103,24 @@ export function useListSelection(
 	const seedPristineRef = useRef(true);
 
 	useEffect(() => {
-		const handler = (e: PointerEvent) => {
+		// Selection events arrive from react-aria without their input event,
+		// so the triggering modifiers are tracked here. Keyboard selection
+		// (Space, arrows) must see the keyboard's own modifier state — not
+		// replay the last click's — so key events update the same snapshot.
+		const handler = (e: PointerEvent | KeyboardEvent) => {
 			modifiersRef.current = {
 				shift: e.shiftKey,
 				meta: e.metaKey || e.ctrlKey,
 			};
 		};
 		window.addEventListener("pointerdown", handler, true);
-		return () => window.removeEventListener("pointerdown", handler, true);
+		window.addEventListener("keydown", handler, true);
+		window.addEventListener("keyup", handler, true);
+		return () => {
+			window.removeEventListener("pointerdown", handler, true);
+			window.removeEventListener("keydown", handler, true);
+			window.removeEventListener("keyup", handler, true);
+		};
 	}, []);
 
 	// Where an anchor sits in the current display order. An item anchor

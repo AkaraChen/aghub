@@ -22,6 +22,8 @@ import { TransferDialog } from "../../components/transfer-dialog";
 import { useAgentFilter } from "../../hooks/use-agent-filter";
 import { useListDnd } from "../../hooks/use-list-dnd";
 import { useListKeyboard } from "../../hooks/use-list-keyboard";
+import { visibleEntryKeys } from "../../hooks/use-list-selection";
+import { useMcpSections } from "../../hooks/use-mcp-sections";
 import type { McpGroup } from "../../components/mcp-detail";
 import { McpDetail } from "../../components/mcp-detail";
 import { McpList } from "../../components/mcp-list";
@@ -29,7 +31,7 @@ import { useAgentAvailability } from "../../hooks/use-agent-availability";
 import { useApi } from "../../hooks/use-api";
 import { useMcpGroups } from "../../hooks/use-resource-groups";
 import { supportsMcp } from "../../lib/agent-capabilities";
-import { cn, getMcpMergeKey } from "../../lib/utils";
+import { cn } from "../../lib/utils";
 import { mcpListQueryOptions } from "../../requests/mcps";
 
 type RightPanel =
@@ -93,25 +95,15 @@ export default function MCPServersPage() {
 		filtered: filteredMcps,
 	} = useAgentFilter(mcps);
 
-	const groupedMcps = useMemo(() => {
-		const map = new Map<string, McpGroup>();
-
-		for (const mcp of filteredMcps) {
-			const key = getMcpMergeKey(mcp.transport);
-			const existing = map.get(key);
-			if (existing) {
-				existing.items.push(mcp);
-			} else {
-				map.set(key, {
-					mergeKey: key,
-					transport: mcp.transport,
-					items: [mcp],
-				});
-			}
-		}
-
-		return Array.from(map.values());
-	}, [filteredMcps]);
+	// The list's derivation pipeline lives with the page so every consumer
+	// of "what is visible" — the list itself, ⌘A, the blank-area menu's
+	// Select All — reads the same answer.
+	const sections = useMcpSections({ mcps: filteredMcps, searchQuery });
+	const groupedMcps: McpGroup[] = sections.groupedMcps;
+	const visibleKeys = useMemo(
+		() => visibleEntryKeys(sections.orderedEntries),
+		[sections.orderedEntries],
+	);
 
 	// Selection is the single source of truth — it drives the list
 	// highlight, the detail panel, and bulk actions. Seed it with the
@@ -231,7 +223,9 @@ export default function MCPServersPage() {
 	const pageRef = useRef<HTMLDivElement>(null);
 	useListKeyboard({
 		containerRef: pageRef,
-		allKeys: groupedMcps.map((g) => g.mergeKey),
+		// Visible keys only: ⌘A while a search or filter narrows the list
+		// must not sweep in rows the user cannot see.
+		allKeys: visibleKeys,
 		selectedKeys,
 		onSelectionChange: handleSelectionChange,
 		onRequestDelete: actionIntents.onRequestDelete,
@@ -381,9 +375,8 @@ export default function MCPServersPage() {
 					>
 						{/* Servers List */}
 						<McpList
-							mcps={filteredMcps}
+							sections={sections}
 							selectedKeys={selectedKeys}
-							searchQuery={searchQuery}
 							onSelectionChange={handleSelectionChange}
 							isMultiSelectMode={isMultiSelectMode}
 							intents={actionIntents}
@@ -517,11 +510,7 @@ export default function MCPServersPage() {
 								id="select-all"
 								textValue={t("selectAll")}
 								onAction={() =>
-									handleSelectionChange(
-										new Set(
-											groupedMcps.map((g) => g.mergeKey),
-										),
-									)
+									handleSelectionChange(new Set(visibleKeys))
 								}
 							>
 								<div className="flex w-full items-center gap-2">

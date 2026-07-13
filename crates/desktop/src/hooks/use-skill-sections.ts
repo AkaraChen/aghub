@@ -293,6 +293,27 @@ export function useSkillSections({
 		);
 	}
 
+	// A single selection landing on a row hidden inside a collapsed
+	// cluster (library page member click, global-search deep link) pops
+	// that cluster open — the selected row must be visible. Bulk
+	// selections leave collapse state alone. Render-phase state with a
+	// prev-comparison, same pattern as the pages' URL adoption.
+	const [prevSelectedKeys, setPrevSelectedKeys] = useState(selectedKeys);
+	if (prevSelectedKeys !== selectedKeys) {
+		setPrevSelectedKeys(selectedKeys);
+		if (selectedKeys.size === 1 && expandedSources !== null) {
+			const [only] = selectedKeys;
+			const holder = sourceGroups.find((sg) =>
+				sg.skills.some((s) => s.name === only),
+			);
+			if (holder && !expandedSources.has(holder.source)) {
+				setExpandedSources(
+					new Set([...expandedSources, holder.source]),
+				);
+			}
+		}
+	}
+
 	// Display-order entries for shift ranges: an expanded section
 	// contributes its member rows, a collapsed one is a single entry
 	// carrying all members — a range crossing it selects the whole thing.
@@ -370,6 +391,9 @@ export function useSkillSections({
 			: !collapsedIds.has(id));
 
 	return {
+		/** Name-deduped skills before the search filter — the page's lookup
+		 * table for seed, detail, and dialogs. */
+		groupedByName,
 		customSections,
 		looseEntries,
 		orderedEntries,
@@ -379,3 +403,5 @@ export function useSkillSections({
 		isExpanded,
 	};
 }
+
+export type SkillSections = ReturnType<typeof useSkillSections>;

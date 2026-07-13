@@ -68,7 +68,7 @@ export function SourceDetailPanel({
 	return (
 		<div className="flex h-full flex-col">
 			<header className="flex shrink-0 items-start justify-between gap-3 border-b border-separator p-4">
-				<div className="min-w-0 flex-1">
+				<div className="min-w-0 flex-1 select-text">
 					<h2 className="truncate text-lg font-semibold text-foreground">
 						{title}
 					</h2>

@@ -3,7 +3,11 @@ import { Button, Label, ListBox, Modal, Select, toast } from "@heroui/react";
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { TargetDto, TransportDto } from "../generated/dto";
+import type {
+	OperationBatchResponse,
+	TargetDto,
+	TransportDto,
+} from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useProjects } from "../hooks/use-projects";
@@ -33,7 +37,8 @@ import { type AgentDiffLabel, AgentList, type AgentState } from "./agent-list";
 
 type ResourceKind = "mcp" | "skill" | "sub_agent";
 type DestinationScope =
-	{ type: "global" } | { type: "project"; path: string; name: string };
+	| { type: "global" }
+	| { type: "project"; path: string; name: string };
 
 export interface TransferItem {
 	name: string;
@@ -310,32 +315,36 @@ export function TransferDialog({
 		);
 
 		try {
-			const outcomes = await Promise.allSettled(
-				items.map((item) => {
-					const transferSource = {
-						agent: item.sourceAgent,
-						scope: sourceScope,
-						project_root: sourceProjectRoot ?? null,
-						name: item.name,
-					};
-					if (resourceType === "mcp") {
-						return transferMcpsMutation.mutateAsync({
-							source: transferSource,
-							destinations: destinationTargets,
-						});
-					}
-					if (resourceType === "sub_agent") {
-						return transferSubAgentsMutation.mutateAsync({
-							source: transferSource,
-							destinations: destinationTargets,
-						});
-					}
-					return transferSkillsMutation.mutateAsync({
-						source: transferSource,
-						destinations: destinationTargets,
-					});
-				}),
-			);
+			// Each transfer read-modify-writes the same destination config
+			// file, so run them sequentially — parallel writers lose items.
+			const outcomes: PromiseSettledResult<OperationBatchResponse>[] = [];
+			for (const item of items) {
+				const transferSource = {
+					agent: item.sourceAgent,
+					scope: sourceScope,
+					project_root: sourceProjectRoot ?? null,
+					name: item.name,
+				};
+				const request = {
+					source: transferSource,
+					destinations: destinationTargets,
+				};
+				try {
+					const value =
+						resourceType === "mcp"
+							? await transferMcpsMutation.mutateAsync(request)
+							: resourceType === "sub_agent"
+								? await transferSubAgentsMutation.mutateAsync(
+										request,
+									)
+								: await transferSkillsMutation.mutateAsync(
+										request,
+									);
+					outcomes.push({ status: "fulfilled", value });
+				} catch (reason) {
+					outcomes.push({ status: "rejected", reason });
+				}
+			}
 
 			let successCount = 0;
 			let failed = 0;
@@ -371,7 +380,10 @@ export function TransferDialog({
 
 			if (failed > 0) {
 				throw new Error(
-					`${failed} of ${items.length} transfers failed`,
+					t("transfersFailed", {
+						failed,
+						total: items.length,
+					}),
 				);
 			}
 

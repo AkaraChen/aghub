@@ -29,7 +29,9 @@ import type {
 } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useListDnd } from "../hooks/use-list-dnd";
+import { useMcpSections } from "../hooks/use-mcp-sections";
 import type { ResourceActionIntents } from "../hooks/use-resource-actions";
+import { useSkillSections } from "../hooks/use-skill-sections";
 import { DragPreview } from "./drop-board";
 import {
 	cn,
@@ -177,6 +179,17 @@ export function UnifiedResourceList({
 	const handleSkillSelectionChange = (keys: Set<string>) => {
 		onSelectionChange(keys, "skill");
 	};
+
+	// The derivation pipelines live with this wrapper (the pages' stand-in
+	// on the project screen) so the lists and any select-all agree on
+	// what is visible.
+	const skillSections = useSkillSections({
+		skills,
+		searchQuery,
+		selectedKeys: selectedSkillKeys,
+		projectPath,
+	});
+	const mcpSections = useMcpSections({ mcps, searchQuery });
 
 	// Skill and mcp lists each get their own DndContext so their `group:`
 	// and `ungrouped` droppable ids do not collide in one context.
@@ -423,9 +436,8 @@ export function UnifiedResourceList({
 								/>
 								<DndContext {...mcpDnd.dndProps}>
 									<McpList
-										mcps={visibleMcps}
+										sections={mcpSections}
 										selectedKeys={selectedMcpKeys}
-										searchQuery={searchQuery}
 										onSelectionChange={
 											handleMcpSelectionChange
 										}
@@ -456,13 +468,11 @@ export function UnifiedResourceList({
 								/>
 								<DndContext {...skillDnd.dndProps}>
 									<SkillList
-										skills={visibleSkills}
+										sections={skillSections}
 										selectedKeys={selectedSkillKeys}
-										searchQuery={searchQuery}
 										onSelectionChange={
 											handleSkillSelectionChange
 										}
-										projectPath={projectPath}
 										isMultiSelectMode={isMultiSelectMode}
 										intents={skillIntents}
 									/>
@@ -499,7 +509,8 @@ export function UnifiedResourceList({
 									onSelectionChange={(keys) => {
 										if (keys === "all") return;
 										const key = [...keys][0] as
-											string | undefined;
+											| string
+											| undefined;
 										if (key)
 											onSubAgentSelectionChange?.(key);
 									}}

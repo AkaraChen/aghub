@@ -63,6 +63,21 @@ export function ManageSkillAgentsDialog({
 		return new Set(common);
 	}, [installedAgentIdsByGroup]);
 
+	// Agents installed on a strict subset of the selected items. With a
+	// single item this is always empty, so single-item behavior is
+	// unchanged.
+	const partiallyInstalledAgentIds = useMemo(() => {
+		const partial = new Set<string>();
+		for (const installed of installedAgentIdsByGroup) {
+			for (const id of installed) {
+				if (!commonInstalledAgentIds.has(id)) {
+					partial.add(id);
+				}
+			}
+		}
+		return partial;
+	}, [installedAgentIdsByGroup, commonInstalledAgentIds]);
+
 	const scope: Scope = useMemo(() => {
 		if (!hasValidGroups) return "global";
 		const primary = groups[0]?.items[0];
@@ -79,6 +94,12 @@ export function ManageSkillAgentsDialog({
 
 	const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
 	const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
+	// macOS-style tri-state: agents installed on only some items start
+	// indeterminate; while an agent stays in this set it is left untouched
+	// by Apply.
+	const [indeterminateAgents, setIndeterminateAgents] = useState<Set<string>>(
+		() => new Set(),
+	);
 	const [agentStates, setAgentStates] = useState<Record<string, AgentState>>(
 		{},
 	);
@@ -88,6 +109,7 @@ export function ManageSkillAgentsDialog({
 		setPrevIsOpen(isOpen);
 		if (isOpen) {
 			setSelectedAgents(Array.from(commonInstalledAgentIds));
+			setIndeterminateAgents(new Set(partiallyInstalledAgentIds));
 			setAgentStates({});
 			setIsApplying(false);
 		}
@@ -101,6 +123,12 @@ export function ManageSkillAgentsDialog({
 	const diffLabels = useMemo((): Record<string, AgentDiffLabel> => {
 		const labels: Record<string, AgentDiffLabel> = {};
 		for (const agent of usableAgents) {
+			// Still in its initial indeterminate state: Apply leaves every
+			// item untouched for this agent.
+			if (indeterminateAgents.has(agent.id)) {
+				labels[agent.id] = "partial";
+				continue;
+			}
 			const installedInAll = installedAgentIdsByGroup.every((installed) =>
 				installed.has(agent.id),
 			);
@@ -119,20 +147,45 @@ export function ManageSkillAgentsDialog({
 			}
 		}
 		return labels;
-	}, [usableAgents, installedAgentIdsByGroup, selectedSet]);
+	}, [
+		usableAgents,
+		indeterminateAgents,
+		installedAgentIdsByGroup,
+		selectedSet,
+	]);
 
+	// True only when some agent's state differs from its initial one:
+	// agents left indeterminate cause no change and never count.
 	const hasChanges = useMemo(
 		() =>
 			installedAgentIdsByGroup.some(
 				(installed) =>
 					selectedAgents.some((id) => !installed.has(id)) ||
-					Array.from(installed).some((id) => !selectedSet.has(id)),
+					Array.from(installed).some(
+						(id) =>
+							!selectedSet.has(id) &&
+							!indeterminateAgents.has(id),
+					),
 			),
-		[installedAgentIdsByGroup, selectedAgents, selectedSet],
+		[
+			installedAgentIdsByGroup,
+			selectedAgents,
+			selectedSet,
+			indeterminateAgents,
+		],
 	);
 
 	const handleSelectionChange = useCallback((keys: string[]) => {
 		setSelectedAgents(keys);
+		// Clicking an indeterminate agent selects it; from then on it
+		// cycles checked/unchecked like the rest.
+		setIndeterminateAgents((prev) => {
+			if (prev.size === 0) return prev;
+			const next = new Set(
+				Array.from(prev).filter((id) => !keys.includes(id)),
+			);
+			return next.size === prev.size ? prev : next;
+		});
 	}, []);
 
 	const onCloseAndReset = () => {
@@ -160,8 +213,12 @@ export function ManageSkillAgentsDialog({
 			return {
 				group,
 				added: selectedAgents.filter((id) => !installed.has(id)),
+				// Agents still in their initial indeterminate state are
+				// left untouched — never uninstall what the user did not
+				// explicitly uncheck.
 				removed: Array.from(installed).filter(
-					(id) => !selectedSet.has(id),
+					(id) =>
+						!selectedSet.has(id) && !indeterminateAgents.has(id),
 				),
 			};
 		});
@@ -288,6 +345,7 @@ export function ManageSkillAgentsDialog({
 								<SkillsAgentList
 									agents={usableAgents}
 									selectedKeys={selectedAgents}
+									indeterminateKeys={indeterminateAgents}
 									onSelectionChange={handleSelectionChange}
 									scope={scope}
 									agentStates={agentStates}

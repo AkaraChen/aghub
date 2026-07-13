@@ -5,15 +5,13 @@ import {
 import { Label, ListBox, Spinner } from "@heroui/react";
 import { memo, type ReactNode, useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { SkillResponse } from "../generated/dto";
 import { AgentIcons } from "./agent-icons";
 import { useFavorites } from "../hooks/use-favorites";
 import { useListSelection } from "../hooks/use-list-selection";
 import type { ResourceActionIntents } from "../hooks/use-resource-actions";
 import { useResourceActions } from "../hooks/use-resource-actions";
 import { useSkillGroups } from "../hooks/use-resource-groups";
-import type { SkillGroup } from "../hooks/use-skill-sections";
-import { useSkillSections } from "../hooks/use-skill-sections";
+import type { SkillGroup, SkillSections } from "../hooks/use-skill-sections";
 import { dragSelectionPayload } from "../lib/drag-payload";
 import type { ResourceGroup } from "../lib/store";
 import { cn } from "../lib/utils";
@@ -74,11 +72,11 @@ const SkillRowBody = memo(function SkillRowBody({
 });
 
 interface SkillListProps {
-	skills: SkillResponse[];
+	/** The derivation pipeline's output — owned by the page (or wrapper)
+	 * so select-all and the list agree on what is visible. */
+	sections: SkillSections;
 	selectedKeys: Set<string>;
-	searchQuery: string;
 	onSelectionChange: (keys: Set<string>) => void;
-	projectPath?: string;
 	isMultiSelectMode?: boolean;
 	/** Dialog intents owned by the page (delete/transfer/agents/new group) */
 	intents: ResourceActionIntents;
@@ -89,11 +87,9 @@ interface SkillListProps {
 }
 
 export const SkillList = memo(function SkillList({
-	skills,
+	sections,
 	selectedKeys,
-	searchQuery,
 	onSelectionChange,
-	projectPath,
 	isMultiSelectMode = false,
 	intents,
 	onSourceFocus,
@@ -107,12 +103,7 @@ export const SkillList = memo(function SkillList({
 		isGroupingLoading,
 		toggleCollapsed,
 		isExpanded,
-	} = useSkillSections({
-		skills,
-		searchQuery,
-		selectedKeys,
-		projectPath,
-	});
+	} = sections;
 
 	const { isSkillStarred, setSkillsStarred } = useFavorites();
 	const { renameGroup, deleteGroup } = useSkillGroups();
@@ -362,7 +353,8 @@ export const SkillList = memo(function SkillList({
 				count={sg.skills.length}
 				isExpanded={isExpanded(`s:${sg.source}`)}
 				isSelected={isGroupSelected(memberKeys)}
-				onToggleExpanded={() => {
+				onToggleExpanded={() => toggleCollapsed(`s:${sg.source}`)}
+				onRowClick={() => {
 					// In multi-select mode the row is a selection surface:
 					// clicking it toggles the whole library in or out, same
 					// as meta-click.
@@ -371,9 +363,9 @@ export const SkillList = memo(function SkillList({
 						return;
 					}
 					// Browsing, not selecting: the click focuses the library
-					// (its detail shows on the right) and toggles the rows.
+					// (its detail shows on the right); expansion belongs to
+					// the chevron alone.
 					onSourceFocus?.(sg.source);
-					toggleCollapsed(`s:${sg.source}`);
 				}}
 				onSelectAll={() => selectGroup(memberKeys, `s:${sg.source}`)}
 				onContextMenu={(event) =>

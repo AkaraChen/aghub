@@ -39,13 +39,18 @@ interface ResourceGroupSectionProps {
 	/** Render as a peer of the skill rows (source clusters): normal weight,
 	 * muted count — not a bold first-class group header */
 	subtle?: boolean;
+	/** Subtle rows only: the row body's click action (open the library
+	 * page, or toggle the cluster selection in multi-select mode).
+	 * Expansion belongs to the chevron alone. */
+	onRowClick?: () => void;
 	children?: ReactNode;
 }
 
 /**
- * Collapsible group header rendered as a list item: clicking the row
- * selects every member, the leading chevron alone toggles expansion,
- * dragging the header drags the whole group, and custom groups accept
+ * Collapsible group header rendered as a list item: the chevron alone
+ * toggles expansion; clicking the row selects every member (custom
+ * groups) or runs onRowClick (subtle clusters — open the library page).
+ * Dragging the header drags the whole group, and custom groups accept
  * member drops.
  */
 export function ResourceGroupSection({
@@ -61,6 +66,7 @@ export function ResourceGroupSection({
 	dragKeys,
 	onRename,
 	subtle = false,
+	onRowClick,
 	children,
 }: ResourceGroupSectionProps) {
 	const { t } = useTranslation();
@@ -131,13 +137,13 @@ export function ResourceGroupSection({
 					role="button"
 					tabIndex={0}
 					aria-pressed={isSelected}
-					aria-expanded={subtle ? isExpanded : undefined}
 					{...listeners}
 					onClick={(event) => {
-						// A subtle cluster is a browsing container: the row
-						// click toggles it (meta/ctrl still selects all).
+						// A subtle cluster's row is a navigation surface —
+						// expansion belongs to the chevron alone (meta/ctrl
+						// still selects all).
 						if (subtle && !(event.metaKey || event.ctrlKey)) {
-							onToggleExpanded();
+							onRowClick?.();
 							return;
 						}
 						onSelectAll();
@@ -148,7 +154,7 @@ export function ResourceGroupSection({
 						if (event.target !== event.currentTarget) return;
 						if (event.key === "Enter" || event.key === " ") {
 							event.preventDefault();
-							if (subtle) onToggleExpanded();
+							if (subtle) onRowClick?.();
 							else onSelectAll();
 						}
 						if (event.key === "F2" && onRename) {
@@ -207,18 +213,35 @@ export function ResourceGroupSection({
 					</span>
 					{subtle ? (
 						// Count badge in the same voice as the agent-icons
-						// overflow bubble, then the expand cue
+						// overflow bubble, then the expand toggle — the only
+						// surface that collapses/expands the cluster
 						<span className="flex shrink-0 items-center gap-1">
 							<span className="flex size-5 items-center justify-center rounded-full bg-default text-[10px] font-medium text-muted ring-1 ring-surface">
 								{count}
 							</span>
-							<ChevronRightIcon
-								aria-hidden
-								className={cn(
-									"size-3 text-muted transition-transform duration-[var(--dur-fast)] ease-[var(--ease-out)]",
-									isExpanded && "rotate-90",
-								)}
-							/>
+							<button
+								type="button"
+								onClick={(event) => {
+									event.stopPropagation();
+									onToggleExpanded();
+								}}
+								// Keep the drag sensor from swallowing the press
+								onPointerDown={(event) =>
+									event.stopPropagation()
+								}
+								className="flex size-5 shrink-0 items-center justify-center rounded text-muted transition-colors hover:text-foreground"
+								aria-label={t("toggleGroupExpansion", {
+									name: title,
+								})}
+								aria-expanded={isExpanded}
+							>
+								<ChevronRightIcon
+									className={cn(
+										"size-3 transition-transform duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+										isExpanded && "rotate-90",
+									)}
+								/>
+							</button>
 						</span>
 					) : (
 						<Chip size="sm" variant="secondary">

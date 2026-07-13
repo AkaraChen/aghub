@@ -91,9 +91,20 @@
 			case "plugin:store|reload":
 			case "plugin:resources|close":
 				return Promise.resolve(null);
+			case "plugin:window|is_maximized":
+				return Promise.resolve(false);
+			case "plugin:updater|check":
+				// No update available
+				return Promise.resolve(null);
 			default:
 				if (cmd.startsWith("plugin:event|")) return Promise.resolve(0);
-				return Promise.resolve(null);
+				// An unknown command must fail loudly: silently resolving
+				// null would let the suite stay green while the real app
+				// errors on a renamed or missing command.
+				console.warn(`[tauri-mock] unmocked command: ${cmd}`);
+				return Promise.reject(
+					new Error(`[tauri-mock] unmocked command: ${cmd}`),
+				);
 		}
 	}
 

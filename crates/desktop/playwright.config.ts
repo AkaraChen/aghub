@@ -6,7 +6,9 @@ export default defineConfig({
 	timeout: 30_000,
 	fullyParallel: false,
 	retries: process.env.CI ? 1 : 0,
-	reporter: [["list"]],
+	reporter: process.env.CI
+		? [["list"], ["html", { open: "never" }]]
+		: [["list"]],
 	use: {
 		baseURL: "http://localhost:1420",
 		locale: "en-US",
@@ -24,7 +26,9 @@ export default defineConfig({
 	webServer: {
 		command: "bun run dev",
 		url: "http://localhost:1420",
-		reuseExistingServer: true,
+		// Locally a dev server may already be running; CI must never adopt
+		// a stale one from a previous step.
+		reuseExistingServer: !process.env.CI,
 		timeout: 60_000,
 	},
 });

@@ -10,7 +10,12 @@ import { AgentIcon } from "../lib/agent-icons";
 import { cn } from "../lib/utils";
 
 type AgentStatus = "idle" | "pending" | "success" | "error";
-type AgentDiffLabel = "adding" | "removing" | "installed" | "unconfigured";
+type AgentDiffLabel =
+	| "adding"
+	| "removing"
+	| "installed"
+	| "partial"
+	| "unconfigured";
 
 interface AgentState {
 	status: AgentStatus;
@@ -20,6 +25,7 @@ interface AgentState {
 interface AgentListProps {
 	agents: AvailableAgent[];
 	selectedKeys: string[];
+	indeterminateKeys?: Set<string>;
 	onSelectionChange: (keys: string[]) => void;
 	agentStates?: Record<string, AgentState>;
 	diffLabels?: Record<string, AgentDiffLabel>;
@@ -54,6 +60,13 @@ function DiffLabelDisplay({ diffLabel }: { diffLabel: AgentDiffLabel }) {
 			</Description>
 		);
 	}
+	if (diffLabel === "partial") {
+		return (
+			<Description className="text-xs text-muted">
+				{t("installedOnSome")}
+			</Description>
+		);
+	}
 	if (diffLabel === "unconfigured") {
 		return (
 			<Description className="text-xs text-muted">
@@ -69,6 +82,7 @@ const EMPTY_SET = new Set<string>();
 export function AgentList({
 	agents,
 	selectedKeys,
+	indeterminateKeys = EMPTY_SET,
 	onSelectionChange,
 	agentStates = {},
 	diffLabels = {},
@@ -107,6 +121,7 @@ export function AgentList({
 						<Checkbox
 							key={agent.id}
 							value={agent.id}
+							isIndeterminate={indeterminateKeys.has(agent.id)}
 							isDisabled={isDisabled}
 							variant="secondary"
 							className={cn(

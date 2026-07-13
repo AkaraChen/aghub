@@ -23,7 +23,6 @@ import { ManageSkillAgentsDialog } from "../../components/manage-skill-agents-di
 import { GroupNameDialog } from "../../components/resource-group-dialogs";
 import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
 import { TransferDialog } from "../../components/transfer-dialog";
-import { useAgentAvailability } from "../../hooks/use-agent-availability";
 import { useAgentFilter } from "../../hooks/use-agent-filter";
 import { ContextMenu, useContextMenu } from "../../components/context-menu";
 import { MultiSelectToggle } from "../../components/multi-select-toggle";
@@ -34,10 +33,11 @@ import { useListKeyboard } from "../../hooks/use-list-keyboard";
 import { SkillDetail } from "../../components/skill-detail";
 import { SourceDetailPanel } from "../../components/source-detail-panel";
 import { SkillList } from "../../components/skill-list";
-import type { SkillResponse } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
 import { useSkillGroups } from "../../hooks/use-resource-groups";
-import { cn, filterItemsByAgentIds } from "../../lib/utils";
+import { visibleEntryKeys } from "../../hooks/use-list-selection";
+import { useSkillSections } from "../../hooks/use-skill-sections";
+import { cn } from "../../lib/utils";
 import {
 	globalSkillLockQueryOptions,
 	invalidateSkillQueries,
@@ -85,29 +85,6 @@ export default function SkillsPage() {
 		setAgentId,
 		filtered: filteredSkills,
 	} = useAgentFilter(skills);
-	const { availableAgents } = useAgentAvailability();
-	const enabledAgentIds = useMemo(
-		() =>
-			new Set(
-				availableAgents
-					.filter((agent) => !agent.isDisabled)
-					.map((agent) => agent.id),
-			),
-		[availableAgents],
-	);
-
-	const groupedSkills = useMemo(() => {
-		const map = new Map<string, SkillResponse[]>();
-		for (const skill of filteredSkills) {
-			const existing = map.get(skill.name) ?? [];
-			map.set(skill.name, [...existing, skill]);
-		}
-		return Array.from(map.entries()).map(([name, items]) => ({
-			name,
-			items,
-			description: items.find((s) => s.description)?.description ?? "",
-		}));
-	}, [filteredSkills]);
 
 	// Selection is the single source of truth — it drives the list
 	// highlight, the detail panel, and bulk actions. Seed it with the
@@ -115,11 +92,28 @@ export default function SkillsPage() {
 	// selection then unambiguously means "cancelled" and shows the
 	// placeholder.
 	const [seedKey] = useState<string | null>(() => {
-		const deepLinked = groupedSkills.some((g) => g.name === selectedName);
-		return (deepLinked ? selectedName : groupedSkills[0]?.name) ?? null;
+		// Pre-pipeline: dedup order matches the pipeline's grouping (first
+		// occurrence), so names[0] is the first grouped skill.
+		const names = filteredSkills.map((s) => s.name);
+		const deepLinked = selectedName && names.includes(selectedName);
+		return (deepLinked ? selectedName : names[0]) ?? null;
 	});
 	const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() =>
 		seedKey ? new Set([seedKey]) : new Set<string>(),
+	);
+
+	// The list's derivation pipeline lives with the page so every consumer
+	// of "what is visible" — the list itself, ⌘A, the blank-area menu's
+	// Select All — reads the same answer.
+	const sections = useSkillSections({
+		skills: filteredSkills,
+		searchQuery,
+		selectedKeys,
+	});
+	const groupedSkills = sections.groupedByName;
+	const visibleKeys = useMemo(
+		() => visibleEntryKeys(sections.orderedEntries),
+		[sections.orderedEntries],
 	);
 
 	// An in-page navigation (global search) rewrites ?skill= without
@@ -269,17 +263,9 @@ export default function SkillsPage() {
 
 	const focusedSourceInfo = useMemo(() => {
 		if (!focusedSource) return null;
-		// Match the list's visibility: drop copies on disabled agents so the
-		// page cannot select a member that has no row.
-		const byName = new Map(
-			groupedSkills
-				.map((g) => ({
-					...g,
-					items: filterItemsByAgentIds(g.items, enabledAgentIds),
-				}))
-				.filter((g) => g.items.length > 0)
-				.map((g) => [g.name, g]),
-		);
+		// groupedByName already matches the list's visibility (the pipeline
+		// drops copies on disabled agents), so no member without a row.
+		const byName = new Map(groupedSkills.map((g) => [g.name, g]));
 		const members = (globalLock?.skills ?? [])
 			.filter(
 				(entry) =>
@@ -328,7 +314,7 @@ export default function SkillsPage() {
 			updatedAt,
 			matrixGroups,
 		};
-	}, [focusedSource, globalLock, groupedSkills, enabledAgentIds]);
+	}, [focusedSource, globalLock, groupedSkills]);
 
 	const { dndProps, draggedKeys, boardGroups, showBoardUngrouped } =
 		useListDnd("skill", (keys) => setCreateGroupKeys(keys));
@@ -339,7 +325,9 @@ export default function SkillsPage() {
 	const pageRef = useRef<HTMLDivElement>(null);
 	useListKeyboard({
 		containerRef: pageRef,
-		allKeys: groupedSkills.map((g) => g.name),
+		// Visible keys only: ⌘A while a search or filter narrows the list
+		// must not sweep in rows the user cannot see.
+		allKeys: visibleKeys,
 		selectedKeys,
 		onSelectionChange: handleSelectionChange,
 		onRequestDelete: actionIntents.onRequestDelete,
@@ -471,9 +459,8 @@ export default function SkillsPage() {
 					>
 						{/* Skills List */}
 						<SkillList
-							skills={filteredSkills}
+							sections={sections}
 							selectedKeys={selectedKeys}
-							searchQuery={searchQuery}
 							onSelectionChange={handleSelectionChange}
 							isMultiSelectMode={isMultiSelectMode}
 							intents={actionIntents}
@@ -602,11 +589,7 @@ export default function SkillsPage() {
 								id="select-all"
 								textValue={t("selectAll")}
 								onAction={() =>
-									handleSelectionChange(
-										new Set(
-											groupedSkills.map((g) => g.name),
-										),
-									)
+									handleSelectionChange(new Set(visibleKeys))
 								}
 							>
 								<div className="flex w-full items-center gap-2">

@@ -1,7 +1,6 @@
 import { LinkIcon, XMarkIcon } from "@heroicons/react/24/solid";
-import { Button, Dropdown, Tooltip } from "@heroui/react";
+import { Button, Card, Dropdown, Tag, TagGroup, Tooltip } from "@heroui/react";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type {
 	ResourceActionIntents,
@@ -39,11 +38,12 @@ interface BulkActionsPanelProps {
 }
 
 /**
- * A batch inspector for a multi-selection: a fixed header (count and
- * selection controls), a scrolling roster where each item can be dropped
- * from the selection, and a fixed action footer. The same action model as
- * the context menu, and when the selection is a whole source group it
- * doubles as the library detail with the source header on top.
+ * A batch inspector for a multi-selection, laid out like the detail
+ * panels: one Card with the selection count as its header, a roster
+ * where each item can be dropped from the selection, the agent coverage
+ * matrix, and the actions in the Card footer. The same action model as
+ * the context menu; a whole-library selection adds an open-in-browser
+ * shortcut next to the header.
  */
 export function BulkActionsPanel({
 	kind,
@@ -55,31 +55,6 @@ export function BulkActionsPanel({
 	matrixGroups,
 }: BulkActionsPanelProps) {
 	const { t } = useTranslation();
-	// Removing a pill unmounts the focused button; refocus its neighbour
-	// so keyboard users can keep removing without re-tabbing in.
-	const rosterRef = useRef<HTMLDivElement>(null);
-	const pendingFocusRef = useRef<number | null>(null);
-	useEffect(() => {
-		const index = pendingFocusRef.current;
-		if (index === null) return;
-		pendingFocusRef.current = null;
-		const pills =
-			rosterRef.current?.querySelectorAll<HTMLButtonElement>(
-				"[data-roster-pill]",
-			);
-		if (!pills || pills.length === 0) return;
-		pills[Math.min(index, pills.length - 1)]?.focus();
-	}, [items]);
-	const removeAndRefocus = (key: string, target: HTMLElement) => {
-		const pills = rosterRef.current?.querySelectorAll("[data-roster-pill]");
-		if (pills) {
-			pendingFocusRef.current = Array.prototype.indexOf.call(
-				pills,
-				target,
-			);
-		}
-		onRemoveItem(key);
-	};
 	const actions = useResourceActions({
 		kind,
 		selectedKeys: new Set(items.map((item) => item.key)),
@@ -123,227 +98,204 @@ export function BulkActionsPanel({
 	})();
 
 	return (
-		<div className="flex h-full flex-col">
-			<header className="flex shrink-0 items-center justify-between gap-3 border-b border-separator px-4 py-3">
-				<div className="min-w-0 flex-1">
-					{sourceContext ? (
-						<>
+		<div className="h-full overflow-y-auto">
+			<div className="w-full space-y-4 p-4 sm:p-6">
+				<Card>
+					<Card.Header className="flex flex-row items-start justify-between gap-3">
+						{/* The panel is a selection inspector: the count is the
+						 * title, whatever the selection is — a whole-library
+						 * selection keeps only its open-in-browser shortcut. */}
+						<div className="min-w-0 flex-1">
 							<h2 className="truncate text-lg font-semibold text-foreground">
-								{sourceContext.title}
-							</h2>
-							<p className="mt-1 text-sm text-muted">
 								{t("itemsSelected", { count: items.length })}
-							</p>
-						</>
-					) : (
-						<h2 className="truncate text-lg font-semibold text-foreground">
-							{t("itemsSelected", { count: items.length })}
-						</h2>
-					)}
-				</div>
-				<div className="flex items-center gap-1">
-					{sourceContext?.url && (
-						<IconButton
-							label={t("openInBrowser")}
-							onPress={() => {
-								if (sourceContext.url) {
-									void openUrl(sourceContext.url);
-								}
-							}}
-						>
-							<LinkIcon className="size-5" />
-						</IconButton>
-					)}
-					<IconButton
-						label={t("deselectAll")}
-						onPress={onDeselectAll}
-					>
-						<XMarkIcon className="size-5" />
-					</IconButton>
-				</div>
-			</header>
-
-			<div className="flex-1 space-y-4 overflow-y-auto px-4 pt-3 pb-4">
-				{/* Roster: one card per source (the Card surface, floating on
-				 * the shell), members as accent pills. A pill is one button —
-				 * clicking it drops the item from the selection, and it turns
-				 * danger-tinted on hover to say so. */}
-				<div
-					ref={rosterRef}
-					className="flex flex-wrap items-center gap-x-2 gap-y-1.5"
-				>
-					{rosterSections.map((section) => {
-						const only =
-							section.members.length === 1
-								? section.members[0]
-								: undefined;
-						// A lone member collapses into one clickable chip —
-						// group name as its prefix, no card-in-card framing
-						if (only) {
-							return (
-								<button
-									key={section.title}
-									type="button"
-									aria-label={t("removeFromSelection", {
-										name: only.label,
-									})}
-									onClick={(event) =>
-										removeAndRefocus(
-											only.key,
-											event.currentTarget,
-										)
-									}
-									data-roster-pill
-									className="group flex max-w-full items-center gap-1.5 rounded-lg border border-border bg-surface py-1.5 pr-1.5 pl-2.5 transition-colors duration-[var(--dur-fast)]"
-								>
-									<span className="shrink-0 text-[10px] font-medium text-muted">
-										{section.title.split("/").pop()}
-									</span>
-									<span
-										className="min-w-0 truncate rounded-full bg-accent/10 px-2 py-0.5 text-sm text-accent transition-colors duration-[var(--dur-fast)] group-hover:bg-danger/10 group-hover:text-danger"
-										title={only.label}
-									>
-										{only.label}
-									</span>
-								</button>
-							);
-						}
-						return (
-							<div
-								key={section.title}
-								className="flex max-w-full grow flex-wrap items-center gap-x-1 gap-y-1 rounded-lg border border-border bg-surface py-1.5 pr-1.5 pl-2.5"
-							>
-								<span className="mr-1 text-[10px] font-medium text-muted">
-									{section.title.split("/").pop()}
-								</span>
-								<span className="mr-0.5 text-[10px] tabular-nums text-muted/60">
-									{section.members.length}
-								</span>
-								{section.members.map((item) => (
-									<button
-										key={item.key}
-										type="button"
-										aria-label={t("removeFromSelection", {
-											name: item.label,
-										})}
-										onClick={(event) =>
-											removeAndRefocus(
-												item.key,
-												event.currentTarget,
-											)
-										}
-										data-roster-pill
-										className="max-w-full min-w-0 truncate rounded-full bg-accent/10 px-2 py-0.5 text-left text-sm text-accent transition-colors duration-[var(--dur-fast)] hover:bg-danger/10 hover:text-danger"
-										title={item.label}
-									>
-										{item.label}
-									</button>
-								))}
-							</div>
-						);
-					})}
-				</div>
-
-				<AgentCoverageMatrix kind={kind} groups={matrixGroups} />
-			</div>
-
-			<footer className="shrink-0 border-t border-separator p-4">
-				{/* Two-up grid: fixed footer height, echoes the matrix cells */}
-				<div className="grid grid-cols-2 gap-2">
-					<Button
-						variant="secondary"
-						className="w-full"
-						onPress={actions.requestTransfer}
-					>
-						<ACTION_ICONS.transfer className="size-4" />
-						{t("transfer")}
-					</Button>
-					<Button
-						variant="secondary"
-						className="w-full"
-						onPress={() => void actions.toggleFavorite()}
-					>
-						{actions.allStarred ? (
-							<ACTION_ICONS.unfavorite className="size-4" />
-						) : (
-							<ACTION_ICONS.favorite className="size-4 text-warning" />
-						)}
-						{actions.allStarred ? t("unfavorite") : t("favorite")}
-					</Button>
-					{actions.groups.length > 0 ? (
-						<Dropdown>
-							<Button variant="secondary" className="w-full">
-								<ACTION_ICONS.moveToGroup className="size-4" />
-								{t("moveToGroup")}
-							</Button>
-							<Dropdown.Popover placement="top start">
-								<Dropdown.Menu
-									onAction={(key) => {
-										if (key === "create-group") {
-											actions.requestCreateGroup();
-										} else {
-											void actions.moveToGroup(
-												String(key),
-											);
+							</h2>
+						</div>
+						<div className="flex items-center gap-2">
+							{sourceContext?.url && (
+								<IconButton
+									label={t("openInBrowser")}
+									onPress={() => {
+										if (sourceContext.url) {
+											void openUrl(sourceContext.url);
 										}
 									}}
 								>
-									{actions.groups.map((group) => (
-										<Dropdown.Item
-											key={group.id}
-											id={group.id}
-											textValue={group.name}
-										>
-											<div className="flex items-center gap-2">
-												<ACTION_ICONS.moveToGroup className="size-4 text-muted" />
-												<span className="truncate">
-													{group.name}
-												</span>
-											</div>
-										</Dropdown.Item>
-									))}
-									<Dropdown.Item
-										id="create-group"
-										textValue={t("createGroup")}
+									<LinkIcon className="size-5" />
+								</IconButton>
+							)}
+							<IconButton
+								label={t("deselectAll")}
+								onPress={onDeselectAll}
+							>
+								<XMarkIcon className="size-5" />
+							</IconButton>
+						</div>
+					</Card.Header>
+
+					<Card.Content className="flex flex-col gap-6">
+						{/* Roster: one block per source — a section header in
+						 * the detail panels' uppercase voice over a TagGroup
+						 * of members. Each tag carries an explicit ×;
+						 * react-aria moves focus to a neighbouring tag after
+						 * a removal. */}
+						<div className="flex flex-col gap-4">
+							{rosterSections.map((section) => (
+								<section key={section.title}>
+									<div className="mb-2 flex items-baseline gap-1.5">
+										<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+											{section.title.split("/").pop()}
+										</h3>
+										<span className="text-xs tabular-nums text-muted/60">
+											{section.members.length}
+										</span>
+									</div>
+									<TagGroup
+										aria-label={section.title}
+										onRemove={(keys) => {
+											for (const key of keys)
+												onRemoveItem(String(key));
+										}}
 									>
-										<div className="flex items-center gap-2">
-											<ACTION_ICONS.createGroup className="size-4" />
-											<span>{t("createGroup")}</span>
-										</div>
-									</Dropdown.Item>
-								</Dropdown.Menu>
-							</Dropdown.Popover>
-						</Dropdown>
-					) : (
-						<Button
-							variant="secondary"
-							className="w-full"
-							onPress={actions.requestCreateGroup}
-						>
-							<ACTION_ICONS.createGroup className="size-4" />
-							{t("createGroup")}
-						</Button>
-					)}
-					{actions.canRemoveFromGroup && (
-						<Button
-							variant="secondary"
-							className="w-full"
-							onPress={() => void actions.removeFromGroup()}
-						>
-							<ACTION_ICONS.removeFromGroup className="size-4" />
-							{t("removeFromGroup")}
-						</Button>
-					)}
-					<Button
-						variant="danger"
-						className="col-start-2 w-full"
-						onPress={actions.requestDelete}
-					>
-						<ACTION_ICONS.delete className="size-4" />
-						{t("deleteCount", { count: items.length })}
-					</Button>
-				</div>
-			</footer>
+										<TagGroup.List items={section.members}>
+											{(item) => (
+												<Tag
+													id={item.key}
+													textValue={item.label}
+												>
+													{({ allowsRemoving }) => (
+														<>
+															<span
+																className="max-w-44 truncate"
+																title={
+																	item.label
+																}
+															>
+																{item.label}
+															</span>
+															{!!allowsRemoving && (
+																<Tag.RemoveButton
+																	aria-label={t(
+																		"removeFromSelection",
+																		{
+																			name: item.label,
+																		},
+																	)}
+																/>
+															)}
+														</>
+													)}
+												</Tag>
+											)}
+										</TagGroup.List>
+									</TagGroup>
+								</section>
+							))}
+						</div>
+
+						<AgentCoverageMatrix
+							kind={kind}
+							groups={matrixGroups}
+							onManage={actions.requestAddToAgent}
+						/>
+
+						<Card.Footer className="pt-4 border-t border-separator flex flex-wrap gap-3">
+							<Button
+								variant="secondary"
+								onPress={actions.requestTransfer}
+							>
+								<ACTION_ICONS.transfer className="size-4" />
+								{t("transfer")}
+							</Button>
+							<Button
+								variant="secondary"
+								onPress={() => void actions.toggleFavorite()}
+							>
+								{actions.allStarred ? (
+									<ACTION_ICONS.unfavorite className="size-4" />
+								) : (
+									<ACTION_ICONS.favorite className="size-4 text-warning" />
+								)}
+								{actions.allStarred
+									? t("unfavorite")
+									: t("favorite")}
+							</Button>
+							{actions.groups.length > 0 ? (
+								<Dropdown>
+									<Button variant="secondary">
+										<ACTION_ICONS.moveToGroup className="size-4" />
+										{t("moveToGroup")}
+									</Button>
+									<Dropdown.Popover placement="top start">
+										<Dropdown.Menu
+											onAction={(key) => {
+												if (key === "create-group") {
+													actions.requestCreateGroup();
+												} else {
+													void actions.moveToGroup(
+														String(key),
+													);
+												}
+											}}
+										>
+											{actions.groups.map((group) => (
+												<Dropdown.Item
+													key={group.id}
+													id={group.id}
+													textValue={group.name}
+												>
+													<div className="flex items-center gap-2">
+														<ACTION_ICONS.moveToGroup className="size-4 text-muted" />
+														<span className="truncate">
+															{group.name}
+														</span>
+													</div>
+												</Dropdown.Item>
+											))}
+											<Dropdown.Item
+												id="create-group"
+												textValue={t("createGroup")}
+											>
+												<div className="flex items-center gap-2">
+													<ACTION_ICONS.createGroup className="size-4" />
+													<span>
+														{t("createGroup")}
+													</span>
+												</div>
+											</Dropdown.Item>
+										</Dropdown.Menu>
+									</Dropdown.Popover>
+								</Dropdown>
+							) : (
+								<Button
+									variant="secondary"
+									onPress={actions.requestCreateGroup}
+								>
+									<ACTION_ICONS.createGroup className="size-4" />
+									{t("createGroup")}
+								</Button>
+							)}
+							{actions.canRemoveFromGroup && (
+								<Button
+									variant="secondary"
+									onPress={() =>
+										void actions.removeFromGroup()
+									}
+								>
+									<ACTION_ICONS.removeFromGroup className="size-4" />
+									{t("removeFromGroup")}
+								</Button>
+							)}
+							<Button
+								variant="danger"
+								onPress={actions.requestDelete}
+							>
+								<ACTION_ICONS.delete className="size-4" />
+								{t("deleteCount", { count: items.length })}
+							</Button>
+						</Card.Footer>
+					</Card.Content>
+				</Card>
+			</div>
 		</div>
 	);
 }

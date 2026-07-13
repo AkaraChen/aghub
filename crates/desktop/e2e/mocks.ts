@@ -30,7 +30,13 @@ const agentInfo = (id: string, displayName: string) => ({
 	},
 });
 
-const AGENTS = [agentInfo("claude", "Claude"), agentInfo("cursor", "Cursor")];
+const AGENTS = [
+	agentInfo("claude", "Claude"),
+	agentInfo("cursor", "Cursor"),
+	// A third agent nothing is installed on, so bulk-manage tests can
+	// "add to a new agent" without touching claude/cursor coverage.
+	agentInfo("gemini", "Gemini"),
+];
 
 const AVAILABILITY = [
 	{
@@ -41,6 +47,12 @@ const AVAILABILITY = [
 	},
 	{
 		id: "cursor",
+		has_global_directory: true,
+		has_cli: true,
+		is_available: true,
+	},
+	{
+		id: "gemini",
 		has_global_directory: true,
 		has_cli: true,
 		is_available: true,
@@ -62,6 +74,10 @@ const skill = (name: string, agent = "claude") => ({
 
 const SKILLS = [
 	skill("react-pro"),
+	// react-pro is ALSO installed on cursor so a bulk selection of
+	// react-pro + solo-skill has heterogeneous agent coverage (the list
+	// still groups by name, so the visible item count stays at 5)
+	skill("react-pro", "cursor"),
 	skill("css-wizard"),
 	skill("solo-skill"),
 	// A second source cluster ("alpha-pack") so section ordering — by name
@@ -180,6 +196,10 @@ export async function installMocks(page: Page) {
 		if (p === "/agents/all/sub-agents") return json(SUB_AGENTS);
 		if (p === "/plugins") return json(PLUGINS);
 		if (p === "/skills/lock/global") return json(globalLock);
+		if (p === "/skills/lock/project")
+			return json({ version: 1, skills: [], lastSelectedAgents: null });
+		if (p === "/skills/content") return json("# Skill\n\ncontent");
+		if (p === "/integrations/code-editors") return json([]);
 
 		if (p === "/skills/tree") {
 			const treePath = url.searchParams.get("path") ?? "";
@@ -276,6 +296,18 @@ export async function installMocks(page: Page) {
 			});
 		}
 
+		const deleteSkill = p.match(/^\/agents\/([^/]+)\/skills\/(.+)$/);
+		if (method === "DELETE" && deleteSkill) {
+			const agent = deleteSkill[1] ?? "";
+			const name = decodeURIComponent(deleteSkill[2] ?? "");
+			for (let i = skills.length - 1; i >= 0; i--) {
+				if (skills[i].name === name && skills[i].agent === agent) {
+					skills.splice(i, 1);
+				}
+			}
+			return json({});
+		}
+
 		const putMcp = p.match(/^\/agents\/[^/]+\/mcps\/(.+)$/);
 		if (method === "PUT" && putMcp) {
 			const name = decodeURIComponent(putMcp[1] ?? "");
@@ -288,7 +320,24 @@ export async function installMocks(page: Page) {
 			return json(mcps[idx] ?? {});
 		}
 
-		if (method === "GET") return json([]);
-		return json({});
+		// An unmocked endpoint must fail loudly: an empty 200 would let
+		// the suite stay green while the real app errors on a renamed or
+		// missing route.
+		console.warn(`[api-mock] unmocked route: ${method} ${p}`);
+		return route.fulfill({
+			status: 404,
+			contentType: "application/json",
+			body: JSON.stringify({
+				error: `[api-mock] unmocked route: ${method} ${p}`,
+			}),
+		});
 	});
+
+	// Control handle so specs can mutate the mock state mid-test (e.g.
+	// simulate reinstalling a deleted skill, made visible by a refetch).
+	return {
+		addSkill(name: string, agent = "claude") {
+			skills.push(skill(name, agent));
+		},
+	};
 }

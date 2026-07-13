@@ -72,6 +72,14 @@ function useResourceGroups(
 		});
 	};
 
+	// Cleanup after a resource is deleted: drop its group assignment so a
+	// later same-named resource does not silently resurrect the old
+	// placement. No View Transition — the rows are already gone.
+	const pruneAssignments = async (memberKeys: string[]) => {
+		await store.unassignMembers(memberKeys);
+		await invalidate();
+	};
+
 	return {
 		groups,
 		assignments,
@@ -80,6 +88,7 @@ function useResourceGroups(
 		deleteGroup,
 		assignMembers,
 		unassignMembers,
+		pruneAssignments,
 	};
 }
 
