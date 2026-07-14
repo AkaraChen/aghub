@@ -76,6 +76,7 @@ import type {
 	UpdateSubAgentRequest,
 	UsageLimitsReportDto,
 	UsageReportDto,
+	UsageStatusDto,
 } from "../generated/dto";
 import type { SkillDiscoveryPreferences } from "./store";
 
@@ -635,6 +636,7 @@ export function createApi(baseUrl: string, token: string) {
 					offline?: boolean;
 					config?: string;
 					timeoutSecs?: number;
+					args?: string;
 				} = {},
 			): Promise<UsageReportDto> {
 				const searchParams: Record<string, string> = {};
@@ -646,12 +648,16 @@ export function createApi(baseUrl: string, token: string) {
 				if (params.config) searchParams.config = params.config;
 				if (params.timeoutSecs)
 					searchParams.timeout_secs = String(params.timeoutSecs);
+				if (params.args) searchParams.args = params.args;
 				return client
 					.get("usage/summary", { searchParams, timeout: 60000 })
 					.json();
 			},
 			limits(): Promise<UsageLimitsReportDto> {
 				return client.get("usage/limits", { timeout: 30000 }).json();
+			},
+			status(): Promise<UsageStatusDto> {
+				return client.get("usage/status", { timeout: 30000 }).json();
 			},
 		},
 		integrations: {

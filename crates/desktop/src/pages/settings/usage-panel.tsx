@@ -16,6 +16,7 @@ import {
 	useUsageSettings,
 } from "../../hooks/use-usage-settings";
 import {
+	agentSettings,
 	DEFAULT_USAGE_SETTINGS,
 	HOME_STAT_IDS,
 	type HomeStatId,
@@ -24,11 +25,10 @@ import {
 	saveUsageSettings,
 	USAGE_ALERT_THRESHOLDS_PCT,
 	USAGE_POLL_INTERVALS_MS,
+	USAGE_QUOTA_AGENTS,
 	USAGE_TIMEOUT_SECS_OPTIONS,
-	USAGE_TRACKED_AGENTS,
 	USAGE_WINDOW_DAYS_OPTIONS,
 	type UsageSettings,
-	type UsageTrackedAgent,
 } from "../../lib/store";
 import {
 	HOME_STAT_AGENT_HINT,
@@ -41,7 +41,7 @@ import {
 	type LayoutField,
 } from "./usage-layout-editor";
 
-const AGENT_LABELS: Record<UsageTrackedAgent, string> = {
+const AGENT_LABELS: Record<string, string> = {
 	claude: "Claude",
 	codex: "Codex",
 };
@@ -123,14 +123,14 @@ export default function UsagePanel() {
 	};
 
 	const updateAgent = (
-		agent: UsageTrackedAgent,
-		patch: Partial<UsageSettings["agents"][UsageTrackedAgent]>,
+		agent: string,
+		patch: Partial<UsageSettings["agents"][string]>,
 	) => {
 		mutation.mutate({
 			...current,
 			agents: {
 				...current.agents,
-				[agent]: { ...current.agents[agent], ...patch },
+				[agent]: { ...agentSettings(current, agent), ...patch },
 			},
 		});
 	};
@@ -157,12 +157,14 @@ export default function UsagePanel() {
 		...timezoneIds.map((id) => ({ id, label: id })),
 	];
 
-	// The editor works in fixed slots ((id | null)[]); persist them verbatim.
-	// saveUsageSettings re-normalizes, so the narrowing cast is safe.
+	// The editor works in fixed slots ((id | null)[]); persist them onto the
+	// default layout. saveUsageSettings re-normalizes, so the cast is safe.
 	const onLayoutCommit = (next: CardLayoutModel) =>
 		updateHome({
-			windowSlots: next.windowSlots as (HomeWindowId | null)[],
-			statSlots: next.statSlots as (HomeStatId | null)[],
+			default: {
+				windowSlots: next.windowSlots as (HomeWindowId | null)[],
+				statSlots: next.statSlots as (HomeStatId | null)[],
+			},
 		});
 
 	const windowFields: LayoutField[] = HOME_WINDOW_IDS.map((id) => ({
@@ -364,8 +366,8 @@ export default function UsagePanel() {
 					<InteractiveCardLayout
 						windowFields={windowFields}
 						statFields={statFields}
-						windowSlots={home.windowSlots}
-						statSlots={home.statSlots}
+						windowSlots={home.default.windowSlots}
+						statSlots={home.default.statSlots}
 						isDisabled={layoutDisabled}
 						onCommit={onLayoutCommit}
 						labels={{
@@ -400,8 +402,8 @@ export default function UsagePanel() {
 						}
 					/>
 
-					{USAGE_TRACKED_AGENTS.map((agent) => {
-						const config = current.agents[agent];
+					{USAGE_QUOTA_AGENTS.map((agent) => {
+						const config = agentSettings(current, agent);
 						return (
 							<div
 								key={agent}

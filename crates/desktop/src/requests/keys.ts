@@ -126,6 +126,7 @@ export const queryKeys = {
 			offline: boolean | null,
 			config: string | null,
 			timeoutSecs: number | null,
+			args: string | null,
 		) =>
 			[
 				"usage",
@@ -136,8 +137,10 @@ export const queryKeys = {
 				offline,
 				config,
 				timeoutSecs,
+				args,
 			] as const,
 		limits: () => ["usage", "limits"] as const,
+		status: () => ["usage", "status"] as const,
 	},
 	onboarding: {
 		all: () => ["onboarding"] as const,

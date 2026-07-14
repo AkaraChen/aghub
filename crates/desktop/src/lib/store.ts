@@ -57,28 +57,34 @@ export {
 	setAcknowledgedSkillAssessments,
 } from "./store/audit-acknowledgements";
 export {
+	agentSettings,
 	CARD_STAT_SLOTS,
 	CARD_WINDOW_SLOTS,
+	DEFAULT_AGENT_SETTINGS,
+	DEFAULT_CARD_LAYOUT,
 	DEFAULT_STAT_SLOTS,
 	DEFAULT_USAGE_SETTINGS,
 	DEFAULT_WINDOW_SLOTS,
 	getUsageSettings,
 	HOME_STAT_IDS,
 	HOME_WINDOW_IDS,
+	isQuotaAgent,
 	saveUsageSettings,
+	USAGE_AGENT_IDS,
 	USAGE_ALERT_THRESHOLDS_PCT,
 	USAGE_POLL_INTERVALS_MS,
+	USAGE_QUOTA_AGENTS,
 	USAGE_TIMEOUT_SECS_OPTIONS,
-	USAGE_TRACKED_AGENTS,
 	USAGE_WINDOW_DAYS_OPTIONS,
 } from "./store/usage";
 export type {
+	CardLayout,
 	HomeStatId,
 	HomeWindowId,
+	UsageAgentId,
 	UsageAgentSettings,
 	UsageHomeSettings,
 	UsageSettings,
-	UsageTrackedAgent,
 } from "./store/usage";
 export type {
 	IntegrationPreferences,

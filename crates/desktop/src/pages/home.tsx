@@ -12,7 +12,11 @@ import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useUsageSettings } from "../hooks/use-usage-settings";
 import { agentStatus } from "../lib/agent-status";
-import { DEFAULT_USAGE_SETTINGS } from "../lib/store";
+import {
+	agentSettings,
+	DEFAULT_USAGE_SETTINGS,
+	USAGE_AGENT_IDS,
+} from "../lib/store";
 import { cn } from "../lib/utils";
 import { mcpListQueryOptions } from "../requests/mcps";
 import { skillListQueryOptions } from "../requests/skills";
@@ -27,6 +31,8 @@ function toCompactYmd(date: Date): string {
 	const day = String(date.getDate()).padStart(2, "0");
 	return `${year}${month}${day}`;
 }
+
+const USAGE_AGENT_ID_SET = new Set<string>(USAGE_AGENT_IDS);
 
 export default function HomePage() {
 	const { t } = useTranslation();
@@ -71,6 +77,7 @@ export default function HomePage() {
 			offline: settings.offlinePricing,
 			config: settings.ccusageConfigPath,
 			timeoutSecs: settings.requestTimeoutSecs,
+			args: settings.extraArgs,
 			enabled: showUsageOnHome,
 			refetchInterval,
 		}),
@@ -110,34 +117,32 @@ export default function HomePage() {
 		return map;
 	}, [availableAgents, skills, mcps]);
 
-	const trackedAgents = settings.agents;
 	const usageByAgent = useMemo(() => {
 		const map = new Map<string, AgentUsageDto>();
 		for (const entry of usageReport?.agents ?? []) {
-			if (!trackedAgents[entry.agent]?.tracked) continue;
+			if (!agentSettings(settings, entry.agent).tracked) continue;
 			map.set(entry.agent, entry);
 		}
 		return map;
-	}, [usageReport, trackedAgents]);
+	}, [usageReport, settings]);
 
 	const limitsByAgent = useMemo(() => {
 		const map = new Map<string, AgentLimitsDto>();
 		for (const entry of limitsReport?.agents ?? []) {
-			if (!trackedAgents[entry.agent]?.tracked) continue;
+			if (!agentSettings(settings, entry.agent).tracked) continue;
 			map.set(entry.agent, entry);
 		}
 		return map;
-	}, [limitsReport, trackedAgents]);
+	}, [limitsReport, settings]);
 
 	const usageDisplayFor = (agentId: string): AgentUsageDisplay => {
-		const override =
-			agentId === "claude" || agentId === "codex"
-				? trackedAgents[agentId].alertThresholdPct
-				: null;
+		const agent = agentSettings(settings, agentId);
+		const layout = settings.home.perAgent[agentId] ?? settings.home.default;
 		return {
-			alertThresholdPct: override ?? settings.globalAlertThresholdPct,
-			windowSlots: settings.home.windowSlots,
-			statSlots: settings.home.statSlots,
+			alertThresholdPct:
+				agent.alertThresholdPct ?? settings.globalAlertThresholdPct,
+			windowSlots: layout.windowSlots,
+			statSlots: layout.statSlots,
 		};
 	};
 
@@ -176,11 +181,11 @@ export default function HomePage() {
 				>
 					{sortedAgents.map((agent) => {
 						const counts = countsByAgent.get(agent.id);
-						// Only tracked Claude/Codex carry usage — gate the skeleton
-						// on `tracked` too, so an untracked agent doesn't flash it.
+						// Only tracked usage agents carry a report — gate the
+						// skeleton on both, so others don't flash it.
 						const hasUsage =
-							(agent.id === "claude" || agent.id === "codex") &&
-							trackedAgents[agent.id].tracked;
+							USAGE_AGENT_ID_SET.has(agent.id) &&
+							agentSettings(settings, agent.id).tracked;
 						return (
 							<AgentOverviewCard
 								key={agent.id}

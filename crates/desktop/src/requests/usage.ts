@@ -13,6 +13,8 @@ interface UsageSummaryQueryParams {
 	config?: string;
 	/** ccusage request timeout, in seconds. */
 	timeoutSecs?: number;
+	/** Raw extra ccusage flags appended verbatim; empty/undefined = none. */
+	args?: string;
 	enabled?: boolean;
 	/** Background poll interval in ms; `false` (default) polls only on demand. */
 	refetchInterval?: number | false;
@@ -26,6 +28,7 @@ export function usageSummaryQueryOptions({
 	offline,
 	config,
 	timeoutSecs,
+	args,
 	enabled = true,
 	refetchInterval = false,
 }: UsageSummaryQueryParams) {
@@ -37,6 +40,7 @@ export function usageSummaryQueryOptions({
 			offline ?? null,
 			config || null,
 			timeoutSecs ?? null,
+			args || null,
 		),
 		queryFn: () =>
 			api.usage.summary({
@@ -46,6 +50,7 @@ export function usageSummaryQueryOptions({
 				offline,
 				config,
 				timeoutSecs,
+				args,
 			}),
 		enabled,
 		staleTime: 5 * 60_000,
@@ -75,6 +80,23 @@ export function usageLimitsQueryOptions({
 		enabled,
 		staleTime: 60_000,
 		refetchInterval,
+		retry: false,
+	});
+}
+
+/** ccusage sidecar version + health + update hint, for the status panel. */
+export function usageStatusQueryOptions({
+	api,
+	enabled = true,
+}: {
+	api: ApiClient;
+	enabled?: boolean;
+}) {
+	return queryOptions({
+		queryKey: queryKeys.usage.status(),
+		queryFn: () => api.usage.status(),
+		enabled,
+		staleTime: 5 * 60_000,
 		retry: false,
 	});
 }

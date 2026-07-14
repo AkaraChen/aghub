@@ -1,23 +1,56 @@
 import { getStore } from ".";
 
 /**
- * ccusage usage monitoring covers only Claude and Codex — the backend
- * `UsageAgent` enum is closed (see `crates/usage/src/dto.rs`), so per-agent
- * settings are limited to this set.
+ * ccusage reports token usage for many agents; mirrors the backend
+ * `KNOWN_USAGE_AGENTS`. Only some ({@link USAGE_QUOTA_AGENTS}) also expose an
+ * OAuth rate-limit endpoint, so only those render quota bars + use thresholds.
  */
-export type UsageTrackedAgent = "claude" | "codex";
+export const USAGE_AGENT_IDS = [
+	"claude",
+	"codex",
+	"opencode",
+	"amp",
+	"droid",
+	"codebuff",
+	"hermes",
+	"pi",
+	"goose",
+	"kilo",
+	"copilot",
+	"gemini",
+	"kimi",
+	"qwen",
+	"openclaw",
+] as const;
+export type UsageAgentId = (typeof USAGE_AGENT_IDS)[number];
 
-export const USAGE_TRACKED_AGENTS: UsageTrackedAgent[] = ["claude", "codex"];
+/** Agents with an OAuth rate-limit endpoint — quota bars + alert thresholds. */
+export const USAGE_QUOTA_AGENTS = ["claude", "codex"] as const;
+
+/** Whether an agent id renders quota bars / uses an alert threshold. */
+export function isQuotaAgent(id: string): boolean {
+	return (USAGE_QUOTA_AGENTS as readonly string[]).includes(id);
+}
 
 export interface UsageAgentSettings {
-	/** Whether the usage dashboard polls and shows this agent. */
+	/** Whether the usage surface polls and shows this agent. */
 	tracked: boolean;
 	/**
-	 * Per-agent alert threshold, percent of a rate-limit window (0–100).
-	 * `null` falls back to {@link UsageSettings.globalAlertThresholdPct}.
+	 * Per-agent alert threshold, percent of a rate-limit window (0–100). `null`
+	 * falls back to {@link UsageSettings.globalAlertThresholdPct}. Only
+	 * meaningful for {@link USAGE_QUOTA_AGENTS}.
 	 */
 	alertThresholdPct: number | null;
+	/** Per-agent ccusage config file (`--config`); empty uses the global one. */
+	configPath: string;
 }
+
+/** Per-agent settings default: tracked, global threshold, no config override. */
+export const DEFAULT_AGENT_SETTINGS: UsageAgentSettings = {
+	tracked: true,
+	alertThresholdPct: null,
+	configPath: "",
+};
 
 /**
  * Bottom-stat metrics a home card can show. The first seven map to
@@ -51,20 +84,27 @@ export const CARD_WINDOW_SLOTS = 3;
 /** Fixed stat slots on the card (a 2×2 corner grid). */
 export const CARD_STAT_SLOTS = 4;
 
+/**
+ * One card's fixed slot arrangement. Array index is the slot; `null` is an empty
+ * slot kept in place. Fields not in a slot are the palette (derived, not stored).
+ */
+export interface CardLayout {
+	/** Length {@link CARD_WINDOW_SLOTS}. */
+	windowSlots: (HomeWindowId | null)[];
+	/** Length {@link CARD_STAT_SLOTS}. */
+	statSlots: (HomeStatId | null)[];
+}
+
 /** How the usage block on the home agent cards is rendered. */
 export interface UsageHomeSettings {
 	/** Master switch for the usage block on home cards. */
 	showUsageOnHome: boolean;
 	/** Rolling window (days) for the summary query that feeds the home cards. */
 	windowDays: number;
-	/**
-	 * Fixed bar slots; array index is the slot, `null` an empty slot kept in
-	 * place. Length {@link CARD_WINDOW_SLOTS}. Fields not in a slot are the
-	 * palette (derived, not stored).
-	 */
-	windowSlots: (HomeWindowId | null)[];
-	/** Fixed stat slots (2×2); `null` = empty. Length {@link CARD_STAT_SLOTS}. */
-	statSlots: (HomeStatId | null)[];
+	/** The layout every agent uses unless it has a {@link perAgent} override. */
+	default: CardLayout;
+	/** Per-agent layout overrides, keyed by agent id. */
+	perAgent: Record<string, CardLayout>;
 }
 
 export interface UsageSettings {
@@ -88,10 +128,21 @@ export interface UsageSettings {
 	ccusageConfigPath: string;
 	/** ccusage request timeout, in seconds. */
 	requestTimeoutSecs: number;
+	/** Raw extra ccusage flags appended verbatim (power-user passthrough). */
+	extraArgs: string;
 	/** Global alert threshold, percent of a rate-limit window (0–100). */
 	globalAlertThresholdPct: number;
-	agents: Record<UsageTrackedAgent, UsageAgentSettings>;
+	/** Sparse per-agent overrides; missing agents use {@link DEFAULT_AGENT_SETTINGS}. */
+	agents: Record<string, UsageAgentSettings>;
 	home: UsageHomeSettings;
+}
+
+/** Resolve an agent's settings, falling back to the defaults when unset. */
+export function agentSettings(
+	settings: UsageSettings,
+	id: string,
+): UsageAgentSettings {
+	return settings.agents[id] ?? DEFAULT_AGENT_SETTINGS;
 }
 
 const USAGE_SETTINGS_KEY = "usageSettings";
@@ -111,6 +162,12 @@ export const DEFAULT_STAT_SLOTS: (HomeStatId | null)[] = [
 	"outputTokens",
 ];
 
+/** The default card layout, shared by every agent without an override. */
+export const DEFAULT_CARD_LAYOUT: CardLayout = {
+	windowSlots: DEFAULT_WINDOW_SLOTS,
+	statSlots: DEFAULT_STAT_SLOTS,
+};
+
 export const DEFAULT_USAGE_SETTINGS: UsageSettings = {
 	sidecar: { autoDiscover: true, binPath: "" },
 	pollIntervalMs: 60_000,
@@ -118,16 +175,17 @@ export const DEFAULT_USAGE_SETTINGS: UsageSettings = {
 	offlinePricing: true,
 	ccusageConfigPath: "",
 	requestTimeoutSecs: 30,
+	extraArgs: "",
 	globalAlertThresholdPct: 80,
 	agents: {
-		claude: { tracked: true, alertThresholdPct: null },
-		codex: { tracked: true, alertThresholdPct: null },
+		claude: { ...DEFAULT_AGENT_SETTINGS },
+		codex: { ...DEFAULT_AGENT_SETTINGS },
 	},
 	home: {
 		showUsageOnHome: true,
 		windowDays: 30,
-		windowSlots: DEFAULT_WINDOW_SLOTS,
-		statSlots: DEFAULT_STAT_SLOTS,
+		default: DEFAULT_CARD_LAYOUT,
+		perAgent: {},
 	},
 };
 
@@ -168,6 +226,10 @@ function normalizeAgent(
 			typeof threshold === "number" && Number.isFinite(threshold)
 				? clampPct(threshold)
 				: null,
+		configPath:
+			typeof r.configPath === "string"
+				? r.configPath
+				: fallback.configPath,
 	};
 }
 
@@ -225,18 +287,13 @@ function slotsFromLegacy<Id extends string>(
 	return normalizeSlots(visible, idSet, length);
 }
 
-function normalizeHome(raw: unknown): UsageHomeSettings {
-	const d = DEFAULT_USAGE_SETTINGS.home;
+/** Normalize one card layout, migrating the older flat + `{id,visible}[]` shapes. */
+function normalizeLayout(raw: unknown): CardLayout {
 	const r = (typeof raw === "object" && raw !== null ? raw : {}) as Record<
 		string,
 		unknown
 	>;
 	return {
-		showUsageOnHome: normalizeBool(r.showUsageOnHome, d.showUsageOnHome),
-		windowDays:
-			typeof r.windowDays === "number" && r.windowDays > 0
-				? Math.round(r.windowDays)
-				: d.windowDays,
 		windowSlots:
 			r.windowSlots !== undefined
 				? normalizeSlots(
@@ -248,7 +305,7 @@ function normalizeHome(raw: unknown): UsageHomeSettings {
 						r.windows,
 						HOME_WINDOW_ID_SET,
 						CARD_WINDOW_SLOTS,
-					) ?? [...d.windowSlots]),
+					) ?? [...DEFAULT_WINDOW_SLOTS]),
 		statSlots:
 			r.statSlots !== undefined
 				? normalizeSlots(r.statSlots, HOME_STAT_ID_SET, CARD_STAT_SLOTS)
@@ -256,7 +313,38 @@ function normalizeHome(raw: unknown): UsageHomeSettings {
 						r.stats,
 						HOME_STAT_ID_SET,
 						CARD_STAT_SLOTS,
-					) ?? [...d.statSlots]),
+					) ?? [...DEFAULT_STAT_SLOTS]),
+	};
+}
+
+function normalizeHome(raw: unknown): UsageHomeSettings {
+	const d = DEFAULT_USAGE_SETTINGS.home;
+	const r = (typeof raw === "object" && raw !== null ? raw : {}) as Record<
+		string,
+		unknown
+	>;
+	// `default` present = new shape; otherwise migrate the old flat layout
+	// (home.windowSlots / home.stats) into the default.
+	const defaultLayout =
+		r.default !== undefined
+			? normalizeLayout(r.default)
+			: normalizeLayout(r);
+	const perAgent: Record<string, CardLayout> = {};
+	if (typeof r.perAgent === "object" && r.perAgent !== null) {
+		for (const [id, layout] of Object.entries(
+			r.perAgent as Record<string, unknown>,
+		)) {
+			perAgent[id] = normalizeLayout(layout);
+		}
+	}
+	return {
+		showUsageOnHome: normalizeBool(r.showUsageOnHome, d.showUsageOnHome),
+		windowDays:
+			typeof r.windowDays === "number" && r.windowDays > 0
+				? Math.round(r.windowDays)
+				: d.windowDays,
+		default: defaultLayout,
+		perAgent,
 	};
 }
 
@@ -304,14 +392,20 @@ function normalizeUsageSettings(raw: unknown): UsageSettings {
 			typeof r.requestTimeoutSecs === "number" && r.requestTimeoutSecs > 0
 				? Math.round(r.requestTimeoutSecs)
 				: d.requestTimeoutSecs,
+		extraArgs: typeof r.extraArgs === "string" ? r.extraArgs : d.extraArgs,
 		globalAlertThresholdPct:
 			typeof r.globalAlertThresholdPct === "number"
 				? clampPct(r.globalAlertThresholdPct)
 				: d.globalAlertThresholdPct,
-		agents: {
-			claude: normalizeAgent(agents.claude, d.agents.claude),
-			codex: normalizeAgent(agents.codex, d.agents.codex),
-		},
+		// Sparse: always seed the quota agents, carry over any other stored ones.
+		agents: Object.fromEntries(
+			[...new Set([...USAGE_QUOTA_AGENTS, ...Object.keys(agents)])].map(
+				(id) => [
+					id,
+					normalizeAgent(agents[id], DEFAULT_AGENT_SETTINGS),
+				],
+			),
+		),
 		home: normalizeHome(r.home),
 	};
 }
