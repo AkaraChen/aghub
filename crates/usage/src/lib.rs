@@ -21,8 +21,41 @@ use std::time::Duration;
 
 use serde::Deserialize;
 
-const CCUSAGE_TIMEOUT: Duration = Duration::from_secs(30);
+/// Default ccusage spawn timeout, in seconds; overridable per [`UsageQuery`].
+pub const DEFAULT_TIMEOUT_SECS: u64 = 30;
+const CCUSAGE_TIMEOUT: Duration = Duration::from_secs(DEFAULT_TIMEOUT_SECS);
+/// Short cap for the `--version` probe (it runs beside the data fetches).
+const VERSION_TIMEOUT: Duration = Duration::from_secs(10);
 const LIMITS_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// Options for a ccusage `daily` query. [`Default`] reproduces the previous
+/// hard-coded behaviour: cached offline pricing, no config override, 30s timeout.
+#[derive(Debug, Clone)]
+pub struct UsageQuery {
+	pub since: Option<String>,
+	pub until: Option<String>,
+	pub timezone: Option<String>,
+	/// `true` uses ccusage's cached pricing (`--offline`); `false` fetches live
+	/// pricing (`--no-offline`).
+	pub offline: bool,
+	/// Optional ccusage config file, passed as `--config`.
+	pub config: Option<PathBuf>,
+	/// Per-call spawn timeout.
+	pub timeout: Duration,
+}
+
+impl Default for UsageQuery {
+	fn default() -> Self {
+		Self {
+			since: None,
+			until: None,
+			timezone: None,
+			offline: true,
+			config: None,
+			timeout: CCUSAGE_TIMEOUT,
+		}
+	}
+}
 
 /// Windows `CREATE_NO_WINDOW` process-creation flag. The desktop app runs
 /// without a console, so an unflagged child would flash a console window on
@@ -45,6 +78,7 @@ pub fn resolve_ccusage_bin(explicit: Option<PathBuf>) -> OsString {
 async fn run_ccusage(
 	bin: &OsStr,
 	args: Vec<String>,
+	timeout: Duration,
 ) -> Result<Vec<u8>, String> {
 	let mut cmd = tokio::process::Command::new(bin);
 	cmd.kill_on_drop(true).args(&args);
@@ -52,9 +86,9 @@ async fn run_ccusage(
 	// the spawning process (the desktop app) has none.
 	#[cfg(target_os = "windows")]
 	cmd.creation_flags(CREATE_NO_WINDOW);
-	let output = tokio::time::timeout(CCUSAGE_TIMEOUT, cmd.output())
+	let output = tokio::time::timeout(timeout, cmd.output())
 		.await
-		.map_err(|_| "ccusage timed out after 30s".to_string())?
+		.map_err(|_| format!("ccusage timed out after {}s", timeout.as_secs()))?
 		.map_err(|e| format!("failed to spawn ccusage: {e}"))?;
 	if !output.status.success() {
 		return Err(format!(
@@ -69,7 +103,7 @@ async fn run_ccusage(
 
 /// `ccusage --version` → e.g. "ccusage 20.0.6"; "unknown" if it can't be read.
 async fn ccusage_version(bin: &OsStr) -> String {
-	run_ccusage(bin, vec!["--version".to_string()])
+	run_ccusage(bin, vec!["--version".to_string()], VERSION_TIMEOUT)
 		.await
 		.ok()
 		.and_then(|out| String::from_utf8(out).ok())
@@ -294,8 +328,9 @@ fn codex_to_agent(report: CcCodexReport) -> AgentUsageDto {
 async fn fetch_claude_usage(
 	bin: &OsStr,
 	args: Vec<String>,
+	timeout: Duration,
 ) -> Result<AgentUsageDto, String> {
-	let raw = run_ccusage(bin, args).await?;
+	let raw = run_ccusage(bin, args, timeout).await?;
 	let report: CcClaudeReport = serde_json::from_slice(&raw)
 		.map_err(|e| format!("parse claude usage json: {e}"))?;
 	Ok(claude_to_agent(report))
@@ -304,11 +339,44 @@ async fn fetch_claude_usage(
 async fn fetch_codex_usage(
 	bin: &OsStr,
 	args: Vec<String>,
+	timeout: Duration,
 ) -> Result<AgentUsageDto, String> {
-	let raw = run_ccusage(bin, args).await?;
+	let raw = run_ccusage(bin, args, timeout).await?;
 	let report: CcCodexReport = serde_json::from_slice(&raw)
 		.map_err(|e| format!("parse codex usage json: {e}"))?;
 	Ok(codex_to_agent(report))
+}
+
+/// Build the ccusage argv for one agent's `daily` report from a [`UsageQuery`].
+fn build_ccusage_args(agent: &str, query: &UsageQuery) -> Vec<String> {
+	let mut args = vec![
+		agent.to_string(),
+		"daily".to_string(),
+		"--json".to_string(),
+		if query.offline {
+			"--offline"
+		} else {
+			"--no-offline"
+		}
+		.to_string(),
+	];
+	if let Some(cfg) = &query.config {
+		args.push("--config".to_string());
+		args.push(cfg.to_string_lossy().into_owned());
+	}
+	if let Some(s) = &query.since {
+		args.push("--since".to_string());
+		args.push(s.clone());
+	}
+	if let Some(u) = &query.until {
+		args.push("--until".to_string());
+		args.push(u.clone());
+	}
+	if let Some(tz) = &query.timezone {
+		args.push("--timezone".to_string());
+		args.push(tz.clone());
+	}
+	args
 }
 
 /// Daily token/cost usage for Claude and Codex.
@@ -316,38 +384,19 @@ async fn fetch_codex_usage(
 /// Degrades gracefully: if one agent's ccusage call fails (not installed, no
 /// data, malformed output) it is reported in `warnings` instead of failing the
 /// whole request, so the home page can still render whatever is available.
-pub async fn summary(
-	bin: &OsStr,
-	since: Option<String>,
-	until: Option<String>,
-	timezone: Option<String>,
-) -> UsageReportDto {
-	let build_args = |agent: &str| -> Vec<String> {
-		let mut args = vec![
-			agent.to_string(),
-			"daily".to_string(),
-			"--json".to_string(),
-			"--offline".to_string(),
-		];
-		if let Some(s) = &since {
-			args.push("--since".to_string());
-			args.push(s.clone());
-		}
-		if let Some(u) = &until {
-			args.push("--until".to_string());
-			args.push(u.clone());
-		}
-		if let Some(tz) = &timezone {
-			args.push("--timezone".to_string());
-			args.push(tz.clone());
-		}
-		args
-	};
-
+pub async fn summary(bin: &OsStr, query: &UsageQuery) -> UsageReportDto {
 	let (version, claude_res, codex_res) = tokio::join!(
 		ccusage_version(bin),
-		fetch_claude_usage(bin, build_args("claude")),
-		fetch_codex_usage(bin, build_args("codex")),
+		fetch_claude_usage(
+			bin,
+			build_ccusage_args("claude", query),
+			query.timeout,
+		),
+		fetch_codex_usage(
+			bin,
+			build_ccusage_args("codex", query),
+			query.timeout,
+		),
 	);
 
 	let mut agents = Vec::new();
@@ -952,6 +1001,39 @@ mod tests {
 		std::env::set_var("AGHUB_CCUSAGE_BIN", "/from/env");
 		assert_eq!(resolve_ccusage_bin(None), OsString::from("/from/env"));
 		std::env::remove_var("AGHUB_CCUSAGE_BIN");
+	}
+
+	#[test]
+	fn build_args_default_is_offline_daily_json() {
+		let args = build_ccusage_args("codex", &UsageQuery::default());
+		assert_eq!(args[0], "codex");
+		assert_eq!(args[1], "daily");
+		assert!(args.contains(&"--json".to_string()));
+		assert!(args.contains(&"--offline".to_string()));
+		assert!(!args.contains(&"--no-offline".to_string()));
+		assert!(!args.iter().any(|a| a == "--config"));
+		assert!(!args.iter().any(|a| a == "--since"));
+	}
+
+	#[test]
+	fn build_args_reflects_online_config_and_range() {
+		let query = UsageQuery {
+			since: Some("2026-06-01".to_string()),
+			until: Some("2026-06-30".to_string()),
+			timezone: Some("Asia/Shanghai".to_string()),
+			offline: false,
+			config: Some(PathBuf::from("/tmp/cc.json")),
+			timeout: Duration::from_secs(5),
+		};
+		let args = build_ccusage_args("claude", &query);
+		assert!(args.contains(&"--no-offline".to_string()));
+		assert!(!args.contains(&"--offline".to_string()));
+		let ci = args.iter().position(|a| a == "--config").unwrap();
+		assert_eq!(args[ci + 1], "/tmp/cc.json");
+		let si = args.iter().position(|a| a == "--since").unwrap();
+		assert_eq!(args[si + 1], "2026-06-01");
+		assert!(args.contains(&"--timezone".to_string()));
+		assert!(args.contains(&"Asia/Shanghai".to_string()));
 	}
 
 	#[test]

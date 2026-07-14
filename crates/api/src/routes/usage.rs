@@ -10,22 +10,45 @@
 use rocket::serde::json::Json;
 use rocket::State;
 
-use aghub_usage::{UsageLimitsReportDto, UsageReportDto};
+use std::path::PathBuf;
+use std::time::Duration;
+
+use aghub_usage::{UsageLimitsReportDto, UsageQuery, UsageReportDto};
 
 use crate::auth::ApiAuth;
 use crate::state::UsageState;
 
 /// `GET /api/v1/usage/summary` — daily token/cost usage for Claude and Codex.
-#[get("/usage/summary?<since>&<until>&<timezone>")]
+///
+/// `offline`/`config`/`timeout_secs` map onto ccusage flags; omitted ones keep
+/// the [`UsageQuery`] defaults (cached offline pricing, 30s timeout).
+#[get(
+	"/usage/summary?<since>&<until>&<timezone>&<offline>&<config>&<timeout_secs>"
+)]
 pub async fn usage_summary(
 	_auth: ApiAuth,
 	usage: &State<UsageState>,
 	since: Option<String>,
 	until: Option<String>,
 	timezone: Option<String>,
+	offline: Option<bool>,
+	config: Option<String>,
+	timeout_secs: Option<u64>,
 ) -> Json<UsageReportDto> {
 	let bin = aghub_usage::resolve_ccusage_bin(usage.ccusage_bin.clone());
-	Json(aghub_usage::summary(&bin, since, until, timezone).await)
+	let query = UsageQuery {
+		since,
+		until,
+		timezone,
+		offline: offline.unwrap_or(true),
+		config: config.map(PathBuf::from),
+		timeout: Duration::from_secs(
+			timeout_secs
+				.filter(|s| *s > 0)
+				.unwrap_or(aghub_usage::DEFAULT_TIMEOUT_SECS),
+		),
+	};
+	Json(aghub_usage::summary(&bin, &query).await)
 }
 
 /// `GET /api/v1/usage/limits` — remaining rate-limit quota for Claude and Codex.
