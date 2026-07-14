@@ -302,6 +302,7 @@ fn build_rocket(
 				routes::plugins::validate_plugin,
 				routes::usage::usage_summary,
 				routes::usage::usage_limits,
+				routes::usage::usage_status,
 			],
 		)
 		.register(

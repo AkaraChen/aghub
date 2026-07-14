@@ -6,14 +6,18 @@
 use serde::Serialize;
 use ts_rs::TS;
 
-/// Which agent a usage/limits row belongs to. Only Claude and Codex expose the
-/// local data these reports read, so the set is closed.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, TS)]
+/// The ccusage agent id a usage/limits row belongs to (e.g. "claude", "codex",
+/// "opencode"). Open set: ccusage reports token usage for many agents, only some
+/// of which ("claude", "codex") also expose an OAuth rate-limit endpoint.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[ts(export)]
-#[serde(rename_all = "lowercase")]
-pub enum UsageAgent {
-	Claude,
-	Codex,
+#[serde(transparent)]
+pub struct UsageAgent(pub String);
+
+impl UsageAgent {
+	pub fn new(id: impl Into<String>) -> Self {
+		Self(id.into())
+	}
 }
 
 /// Unified usage report across agents, returned by `GET /api/v1/usage/summary`.
@@ -30,6 +34,24 @@ pub struct UsageReportDto {
 	pub ccusage_version: String,
 	/// Non-fatal notes (e.g. an agent had no data, a model had no pricing).
 	pub warnings: Vec<String>,
+}
+
+/// ccusage sidecar health + version, returned by `GET /api/v1/usage/status`.
+/// The resolved binary path + source (bundled / custom / PATH) come from a Tauri
+/// command instead — the API never returns raw filesystem paths.
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct UsageStatusDto {
+	/// `ccusage --version` output, or `null` when it could not run.
+	pub version: Option<String>,
+	/// Whether `ccusage --version` succeeded.
+	pub reachable: bool,
+	/// Error text when `reachable` is false.
+	pub error: Option<String>,
+	/// Latest ccusage version on npm, when the registry check succeeded.
+	pub latest_version: Option<String>,
+	/// `true` when `latest_version` is newer than the running `version`.
+	pub update_available: bool,
 }
 
 #[derive(Debug, Serialize, TS)]

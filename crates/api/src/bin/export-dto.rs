@@ -86,7 +86,7 @@ use aghub_api::dto::{
 use aghub_usage::{
 	AgentLimitsDto, AgentUsageDto, LimitWindowDto, LimitWindowKind, UsageAgent,
 	UsageDayDto, UsageLimitsReportDto, UsageModelDto, UsageReportDto,
-	UsageTotalsDto,
+	UsageStatusDto, UsageTotalsDto,
 };
 use ts_rs::{Config, TS};
 
@@ -299,6 +299,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<UsageTotalsDto>(&cfg)?;
 	export_type::<AgentUsageDto>(&cfg)?;
 	export_type::<UsageReportDto>(&cfg)?;
+	export_type::<UsageStatusDto>(&cfg)?;
 
 	export_type::<LimitWindowKind>(&cfg)?;
 	export_type::<LimitWindowDto>(&cfg)?;

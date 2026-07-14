@@ -15,6 +15,7 @@ tokio = { workspace = true, features = [ "process", "time", "macros" ] }
 reqwest = { workspace = true }
 chrono = { workspace = true }
 keyring = { workspace = true }
+futures = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = [ "process", "time", "rt", "macros" ] }

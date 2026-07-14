@@ -13,40 +13,55 @@ use rocket::State;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use aghub_usage::{UsageLimitsReportDto, UsageQuery, UsageReportDto};
+use aghub_usage::{
+	UsageLimitsReportDto, UsageQuery, UsageReportDto, UsageStatusDto,
+};
 
 use crate::auth::ApiAuth;
 use crate::state::UsageState;
 
-/// `GET /api/v1/usage/summary` — daily token/cost usage for Claude and Codex.
-///
-/// `offline`/`config`/`timeout_secs` map onto ccusage flags; omitted ones keep
-/// the [`UsageQuery`] defaults (cached offline pricing, 30s timeout).
-#[get(
-	"/usage/summary?<since>&<until>&<timezone>&<offline>&<config>&<timeout_secs>"
-)]
-pub async fn usage_summary(
-	_auth: ApiAuth,
-	usage: &State<UsageState>,
+/// Query params for [`usage_summary`]. Grouped so the handler stays under
+/// Rocket's per-param argument count.
+#[derive(rocket::FromForm)]
+pub struct UsageSummaryParams {
 	since: Option<String>,
 	until: Option<String>,
 	timezone: Option<String>,
 	offline: Option<bool>,
 	config: Option<String>,
 	timeout_secs: Option<u64>,
+	/// Whitespace-separated power-user ccusage flags appended verbatim.
+	args: Option<String>,
+}
+
+/// `GET /api/v1/usage/summary` — daily token/cost usage for every ccusage agent
+/// that has local data.
+///
+/// `offline`/`config`/`timeout_secs`/`args` map onto ccusage flags; omitted ones
+/// keep the [`UsageQuery`] defaults (cached offline pricing, 30s timeout).
+#[get("/usage/summary?<params..>")]
+pub async fn usage_summary(
+	_auth: ApiAuth,
+	usage: &State<UsageState>,
+	params: UsageSummaryParams,
 ) -> Json<UsageReportDto> {
 	let bin = aghub_usage::resolve_ccusage_bin(usage.ccusage_bin.clone());
 	let query = UsageQuery {
-		since,
-		until,
-		timezone,
-		offline: offline.unwrap_or(true),
-		config: config.map(PathBuf::from),
+		since: params.since,
+		until: params.until,
+		timezone: params.timezone,
+		offline: params.offline.unwrap_or(true),
+		config: params.config.map(PathBuf::from),
 		timeout: Duration::from_secs(
-			timeout_secs
+			params
+				.timeout_secs
 				.filter(|s| *s > 0)
 				.unwrap_or(aghub_usage::DEFAULT_TIMEOUT_SECS),
 		),
+		extra_args: params
+			.args
+			.map(|s| s.split_whitespace().map(String::from).collect())
+			.unwrap_or_default(),
 	};
 	Json(aghub_usage::summary(&bin, &query).await)
 }
@@ -55,4 +70,14 @@ pub async fn usage_summary(
 #[get("/usage/limits")]
 pub async fn usage_limits(_auth: ApiAuth) -> Json<UsageLimitsReportDto> {
 	Json(aghub_usage::limits().await)
+}
+
+/// `GET /api/v1/usage/status` — ccusage version, health, and update hint.
+#[get("/usage/status")]
+pub async fn usage_status(
+	_auth: ApiAuth,
+	usage: &State<UsageState>,
+) -> Json<UsageStatusDto> {
+	let bin = aghub_usage::resolve_ccusage_bin(usage.ccusage_bin.clone());
+	Json(aghub_usage::status(&bin).await)
 }

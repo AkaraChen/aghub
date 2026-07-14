@@ -145,6 +145,7 @@ export type { UsageDayDto } from "./UsageDayDto";
 export type { UsageLimitsReportDto } from "./UsageLimitsReportDto";
 export type { UsageModelDto } from "./UsageModelDto";
 export type { UsageReportDto } from "./UsageReportDto";
+export type { UsageStatusDto } from "./UsageStatusDto";
 export type { UsageTotalsDto } from "./UsageTotalsDto";
 export type { ValidationError } from "./ValidationError";
 export type { VerdictDto } from "./VerdictDto";

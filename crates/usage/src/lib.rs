@@ -19,6 +19,7 @@ use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
 use std::time::Duration;
 
+use futures::future::join_all;
 use serde::Deserialize;
 
 /// Default ccusage spawn timeout, in seconds; overridable per [`UsageQuery`].
@@ -42,6 +43,8 @@ pub struct UsageQuery {
 	pub config: Option<PathBuf>,
 	/// Per-call spawn timeout.
 	pub timeout: Duration,
+	/// Raw extra ccusage flags appended verbatim (power-user passthrough).
+	pub extra_args: Vec<String>,
 }
 
 impl Default for UsageQuery {
@@ -53,9 +56,18 @@ impl Default for UsageQuery {
 			offline: true,
 			config: None,
 			timeout: CCUSAGE_TIMEOUT,
+			extra_args: Vec::new(),
 		}
 	}
 }
+
+/// The ccusage agents aghub probes for local usage. ccusage supports this fixed
+/// set; each is queried with `<agent> daily --json`, and only those with data
+/// appear in the report. Extend this table as ccusage adds agents.
+pub const KNOWN_USAGE_AGENTS: &[&str] = &[
+	"claude", "codex", "opencode", "amp", "droid", "codebuff", "hermes", "pi",
+	"goose", "kilo", "copilot", "gemini", "kimi", "qwen", "openclaw",
+];
 
 /// Windows `CREATE_NO_WINDOW` process-creation flag. The desktop app runs
 /// without a console, so an unflagged child would flash a console window on
@@ -259,7 +271,7 @@ fn claude_to_agent(report: CcClaudeReport) -> AgentUsageDto {
 		.collect();
 
 	AgentUsageDto {
-		agent: UsageAgent::Claude,
+		agent: UsageAgent::new("claude"),
 		days,
 		totals: UsageTotalsDto {
 			input_tokens: report.totals.input_tokens,
@@ -311,7 +323,7 @@ fn codex_to_agent(report: CcCodexReport) -> AgentUsageDto {
 		.collect();
 
 	AgentUsageDto {
-		agent: UsageAgent::Codex,
+		agent: UsageAgent::new("codex"),
 		days,
 		totals: UsageTotalsDto {
 			input_tokens: report.totals.input_tokens,
@@ -325,26 +337,143 @@ fn codex_to_agent(report: CcCodexReport) -> AgentUsageDto {
 	}
 }
 
-async fn fetch_claude_usage(
-	bin: &OsStr,
-	args: Vec<String>,
-	timeout: Duration,
-) -> Result<AgentUsageDto, String> {
-	let raw = run_ccusage(bin, args, timeout).await?;
-	let report: CcClaudeReport = serde_json::from_slice(&raw)
-		.map_err(|e| format!("parse claude usage json: {e}"))?;
-	Ok(claude_to_agent(report))
+// ---- generic agent shape (opencode, gemini, kimi, …) -----------------------
+//
+// Most ccusage agents share Claude's daily shape as a subset (no reasoning, a
+// `modelsUsed` name list rather than `modelBreakdowns`). This tolerant struct
+// parses any of them; an agent whose shape doesn't fit is a warning, and one
+// that reports no data is skipped — neither fails the whole report.
+
+#[derive(Deserialize)]
+struct CcAgentReport {
+	#[serde(default)]
+	daily: Vec<CcAgentDay>,
+	#[serde(default)]
+	totals: Option<CcAgentTotals>,
 }
 
-async fn fetch_codex_usage(
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+struct CcAgentTotals {
+	input_tokens: u64,
+	output_tokens: u64,
+	cache_creation_tokens: u64,
+	#[serde(alias = "cachedInputTokens")]
+	cache_read_tokens: u64,
+	reasoning_output_tokens: u64,
+	total_tokens: u64,
+	#[serde(alias = "costUSD")]
+	total_cost: Option<f64>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+struct CcAgentDay {
+	date: String,
+	input_tokens: u64,
+	output_tokens: u64,
+	cache_creation_tokens: u64,
+	#[serde(alias = "cachedInputTokens")]
+	cache_read_tokens: u64,
+	reasoning_output_tokens: u64,
+	total_tokens: u64,
+	#[serde(alias = "costUSD")]
+	total_cost: Option<f64>,
+	model_breakdowns: Vec<CcAgentModel>,
+}
+
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+struct CcAgentModel {
+	model_name: String,
+	input_tokens: u64,
+	output_tokens: u64,
+	cache_creation_tokens: u64,
+	#[serde(alias = "cachedInputTokens")]
+	cache_read_tokens: u64,
+	reasoning_output_tokens: u64,
+	total_tokens: u64,
+	cost: Option<f64>,
+}
+
+fn generic_to_agent(id: &str, report: CcAgentReport) -> AgentUsageDto {
+	let days = report
+		.daily
+		.into_iter()
+		.map(|d| UsageDayDto {
+			date: d.date,
+			input_tokens: d.input_tokens,
+			output_tokens: d.output_tokens,
+			cache_creation_tokens: d.cache_creation_tokens,
+			cache_read_tokens: d.cache_read_tokens,
+			reasoning_tokens: d.reasoning_output_tokens,
+			total_tokens: d.total_tokens,
+			cost_usd: d.total_cost,
+			models: d
+				.model_breakdowns
+				.into_iter()
+				.map(|m| UsageModelDto {
+					total_tokens: if m.total_tokens > 0 {
+						m.total_tokens
+					} else {
+						m.input_tokens
+							+ m.output_tokens + m.cache_creation_tokens
+							+ m.cache_read_tokens
+					},
+					model: m.model_name,
+					input_tokens: m.input_tokens,
+					output_tokens: m.output_tokens,
+					cache_creation_tokens: m.cache_creation_tokens,
+					cache_read_tokens: m.cache_read_tokens,
+					reasoning_tokens: m.reasoning_output_tokens,
+					cost_usd: m.cost,
+				})
+				.collect(),
+		})
+		.collect();
+	let totals = report.totals.unwrap_or_default();
+	AgentUsageDto {
+		agent: UsageAgent::new(id),
+		days,
+		totals: UsageTotalsDto {
+			input_tokens: totals.input_tokens,
+			output_tokens: totals.output_tokens,
+			cache_creation_tokens: totals.cache_creation_tokens,
+			cache_read_tokens: totals.cache_read_tokens,
+			reasoning_tokens: totals.reasoning_output_tokens,
+			total_tokens: totals.total_tokens,
+			cost_usd: totals.total_cost,
+		},
+	}
+}
+
+/// Fetch + normalize one agent's daily usage. `Ok(None)` = ccusage ran but the
+/// agent has no data (skip it); `Err` = the call or parse failed (a warning).
+async fn fetch_agent_usage(
 	bin: &OsStr,
+	id: &str,
 	args: Vec<String>,
 	timeout: Duration,
-) -> Result<AgentUsageDto, String> {
+) -> Result<Option<AgentUsageDto>, String> {
 	let raw = run_ccusage(bin, args, timeout).await?;
-	let report: CcCodexReport = serde_json::from_slice(&raw)
-		.map_err(|e| format!("parse codex usage json: {e}"))?;
-	Ok(codex_to_agent(report))
+	let agent = match id {
+		"claude" => {
+			let r: CcClaudeReport = serde_json::from_slice(&raw)
+				.map_err(|e| format!("parse claude usage json: {e}"))?;
+			claude_to_agent(r)
+		}
+		"codex" => {
+			let r: CcCodexReport = serde_json::from_slice(&raw)
+				.map_err(|e| format!("parse codex usage json: {e}"))?;
+			codex_to_agent(r)
+		}
+		_ => {
+			let r: CcAgentReport = serde_json::from_slice(&raw)
+				.map_err(|e| format!("parse {id} usage json: {e}"))?;
+			generic_to_agent(id, r)
+		}
+	};
+	Ok((agent.totals.total_tokens > 0).then_some(agent))
 }
 
 /// Build the ccusage argv for one agent's `daily` report from a [`UsageQuery`].
@@ -376,38 +505,32 @@ fn build_ccusage_args(agent: &str, query: &UsageQuery) -> Vec<String> {
 		args.push("--timezone".to_string());
 		args.push(tz.clone());
 	}
+	args.extend(query.extra_args.iter().cloned());
 	args
 }
 
-/// Daily token/cost usage for Claude and Codex.
+/// Daily token/cost usage across every ccusage agent that has local data.
 ///
-/// Degrades gracefully: if one agent's ccusage call fails (not installed, no
-/// data, malformed output) it is reported in `warnings` instead of failing the
-/// whole request, so the home page can still render whatever is available.
+/// Probes [`KNOWN_USAGE_AGENTS`] concurrently. Degrades gracefully: an agent
+/// that isn't installed or whose output is malformed lands in `warnings`; one
+/// with no data is skipped; neither fails the whole request, so the page still
+/// renders whatever is available.
 pub async fn summary(bin: &OsStr, query: &UsageQuery) -> UsageReportDto {
-	let (version, claude_res, codex_res) = tokio::join!(
-		ccusage_version(bin),
-		fetch_claude_usage(
-			bin,
-			build_ccusage_args("claude", query),
-			query.timeout,
-		),
-		fetch_codex_usage(
-			bin,
-			build_ccusage_args("codex", query),
-			query.timeout,
-		),
-	);
+	let probes = KNOWN_USAGE_AGENTS.iter().map(|&id| async move {
+		let args = build_ccusage_args(id, query);
+		(id, fetch_agent_usage(bin, id, args, query.timeout).await)
+	});
+	let (version, results) =
+		tokio::join!(ccusage_version(bin), join_all(probes));
 
 	let mut agents = Vec::new();
 	let mut warnings = Vec::new();
-	match claude_res {
-		Ok(agent) => agents.push(agent),
-		Err(e) => warnings.push(format!("claude usage unavailable: {e}")),
-	}
-	match codex_res {
-		Ok(agent) => agents.push(agent),
-		Err(e) => warnings.push(format!("codex usage unavailable: {e}")),
+	for (id, res) in results {
+		match res {
+			Ok(Some(agent)) => agents.push(agent),
+			Ok(None) => {}
+			Err(e) => warnings.push(format!("{id} usage unavailable: {e}")),
+		}
 	}
 
 	UsageReportDto {
@@ -416,6 +539,66 @@ pub async fn summary(bin: &OsStr, query: &UsageQuery) -> UsageReportDto {
 		ccusage_version: version,
 		warnings,
 	}
+}
+
+/// ccusage sidecar health + version, plus an npm-registry check for a newer
+/// release. Backs `GET /api/v1/usage/status`. Each call is timed out.
+pub async fn status(bin: &OsStr) -> UsageStatusDto {
+	let (version, reachable, error) =
+		match run_ccusage(bin, vec!["--version".to_string()], VERSION_TIMEOUT)
+			.await
+		{
+			Ok(out) => {
+				let raw = String::from_utf8_lossy(&out).trim().to_string();
+				// "ccusage 20.0.6" -> "20.0.6"
+				let v = raw.rsplit(' ').next().unwrap_or(&raw).to_string();
+				(Some(v), true, None)
+			}
+			Err(e) => (None, false, Some(e)),
+		};
+	let latest_version = fetch_latest_ccusage_version().await;
+	let update_available = match (&version, &latest_version) {
+		(Some(cur), Some(latest)) => version_lt(cur, latest),
+		_ => false,
+	};
+	UsageStatusDto {
+		version,
+		reachable,
+		error,
+		latest_version,
+		update_available,
+	}
+}
+
+/// Latest published `ccusage` version from the npm registry; `None` on any
+/// network/parse failure (the status panel just omits the update hint).
+async fn fetch_latest_ccusage_version() -> Option<String> {
+	let client = reqwest::Client::builder()
+		.timeout(LIMITS_TIMEOUT)
+		.build()
+		.ok()?;
+	let resp = client
+		.get("https://registry.npmjs.org/ccusage/latest")
+		.send()
+		.await
+		.ok()?;
+	if !resp.status().is_success() {
+		return None;
+	}
+	let json: serde_json::Value = resp.json().await.ok()?;
+	json.get("version")
+		.and_then(serde_json::Value::as_str)
+		.map(str::to_string)
+}
+
+/// Numeric-component "is `a` older than `b`" — enough for an update hint.
+fn version_lt(a: &str, b: &str) -> bool {
+	let parts = |s: &str| {
+		s.split('.')
+			.filter_map(|p| p.parse::<u64>().ok())
+			.collect::<Vec<_>>()
+	};
+	parts(a) < parts(b)
 }
 
 // ---- remaining-quota (limits) ----------------------------------------------
@@ -573,7 +756,7 @@ async fn fetch_claude_limits() -> Result<AgentLimitsDto, String> {
 	}
 
 	Ok(AgentLimitsDto {
-		agent: UsageAgent::Claude,
+		agent: UsageAgent::new("claude"),
 		windows,
 	})
 }
@@ -717,7 +900,7 @@ async fn fetch_codex_limits() -> Result<AgentLimitsDto, String> {
 	}
 
 	Ok(AgentLimitsDto {
-		agent: UsageAgent::Codex,
+		agent: UsageAgent::new("codex"),
 		windows,
 	})
 }
@@ -828,7 +1011,7 @@ mod tests {
 			},
 		};
 		let agent = claude_to_agent(report);
-		assert_eq!(agent.agent, UsageAgent::Claude);
+		assert_eq!(agent.agent, UsageAgent::new("claude"));
 		assert_eq!(agent.totals.reasoning_tokens, 0);
 		let model = &agent.days[0].models[0];
 		assert_eq!(model.total_tokens, 158);
@@ -872,7 +1055,7 @@ mod tests {
 			},
 		};
 		let agent = codex_to_agent(report);
-		assert_eq!(agent.agent, UsageAgent::Codex);
+		assert_eq!(agent.agent, UsageAgent::new("codex"));
 		assert_eq!(agent.totals.cache_creation_tokens, 0);
 		assert_eq!(agent.totals.cache_read_tokens, 40);
 		assert_eq!(agent.days[0].models[0].cost_usd, None);
@@ -1024,6 +1207,7 @@ mod tests {
 			offline: false,
 			config: Some(PathBuf::from("/tmp/cc.json")),
 			timeout: Duration::from_secs(5),
+			extra_args: vec!["--breakdown".to_string()],
 		};
 		let args = build_ccusage_args("claude", &query);
 		assert!(args.contains(&"--no-offline".to_string()));
@@ -1034,6 +1218,60 @@ mod tests {
 		assert_eq!(args[si + 1], "2026-06-01");
 		assert!(args.contains(&"--timezone".to_string()));
 		assert!(args.contains(&"Asia/Shanghai".to_string()));
+		// Passthrough flags are appended verbatim.
+		assert_eq!(args.last().unwrap(), "--breakdown");
+	}
+
+	#[test]
+	fn generic_agent_parses_claude_shaped_subset() {
+		// opencode / gemini / kimi shape: claude's fields minus reasoning and
+		// modelBreakdowns (they carry `modelsUsed` instead, which we ignore).
+		let raw = json!({
+			"daily": [{
+				"date": "2026-07-01",
+				"inputTokens": 100,
+				"outputTokens": 50,
+				"cacheCreationTokens": 0,
+				"cacheReadTokens": 20,
+				"totalTokens": 170,
+				"totalCost": 0.25,
+				"modelsUsed": ["gpt-x"]
+			}],
+			"totals": {
+				"inputTokens": 100,
+				"outputTokens": 50,
+				"cacheCreationTokens": 0,
+				"cacheReadTokens": 20,
+				"totalTokens": 170,
+				"totalCost": 0.25
+			}
+		});
+		let report: CcAgentReport = serde_json::from_value(raw).unwrap();
+		let agent = generic_to_agent("opencode", report);
+		assert_eq!(agent.agent, UsageAgent::new("opencode"));
+		assert_eq!(agent.totals.total_tokens, 170);
+		assert_eq!(agent.totals.cost_usd, Some(0.25));
+		assert_eq!(agent.totals.reasoning_tokens, 0);
+		assert!(agent.days[0].models.is_empty());
+	}
+
+	#[test]
+	fn generic_agent_tolerates_null_totals() {
+		// qwen with no data: `{ "daily": [], "totals": null }` must parse to an
+		// empty, zero-token agent (which the caller then skips) — not an error.
+		let report: CcAgentReport =
+			serde_json::from_value(json!({ "daily": [], "totals": null }))
+				.unwrap();
+		let agent = generic_to_agent("qwen", report);
+		assert_eq!(agent.totals.total_tokens, 0);
+	}
+
+	#[test]
+	fn version_lt_compares_numeric_components() {
+		assert!(version_lt("20.0.6", "20.0.14"));
+		assert!(version_lt("20.0.6", "21.0.0"));
+		assert!(!version_lt("20.0.14", "20.0.6"));
+		assert!(!version_lt("20.0.6", "20.0.6"));
 	}
 
 	#[test]
