@@ -51,7 +51,7 @@ async function startLogForwarding() {
 		resource: resourceFromAttributes({
 			"service.name": SERVICE_NAME,
 		}),
-		processors: [new BatchLogRecordProcessor(exporter)],
+		processors: [new BatchLogRecordProcessor({ exporter })],
 	});
 
 	logger = provider.getLogger(SERVICE_NAME);
