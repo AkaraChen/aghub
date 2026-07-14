@@ -8,6 +8,7 @@ import IntegrationsPanel from "./integrations-panel";
 import LogsPanel from "./logs-panel";
 import SecurityPanel from "./security-panel";
 import SkillPreferencesPanel from "./skill-preferences-panel";
+import UsagePanel from "./usage-panel";
 
 export default function SettingsPage() {
 	const { t } = useTranslation();
@@ -53,6 +54,10 @@ export default function SettingsPage() {
 								</Tabs.Tab>
 								<Tabs.Tab id="logs">
 									{t("logs")}
+									<Tabs.Indicator />
+								</Tabs.Tab>
+								<Tabs.Tab id="usage">
+									{t("usage")}
 									<Tabs.Indicator />
 								</Tabs.Tab>
 								<Tabs.Tab id="application">
@@ -108,6 +113,10 @@ export default function SettingsPage() {
 
 					<Tabs.Panel id="logs">
 						<LogsPanel />
+					</Tabs.Panel>
+
+					<Tabs.Panel id="usage">
+						<UsagePanel />
 					</Tabs.Panel>
 
 					<Tabs.Panel id="application">

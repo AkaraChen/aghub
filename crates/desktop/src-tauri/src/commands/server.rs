@@ -4,6 +4,7 @@ use log::{debug, error, info, warn};
 use serde::Serialize;
 use std::path::PathBuf;
 use tauri::Manager;
+use tauri_plugin_store::StoreExt;
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -24,9 +25,11 @@ fn find_available_port() -> Result<u16, String> {
 /// Resolution order:
 /// 1. `AGHUB_CCUSAGE_BIN` env var — explicit override, always wins (used in dev
 ///    and as a prod escape hatch).
-/// 2. dev build (`tauri dev` / `cargo run`) — no sidecar is staged next to the
+/// 2. a user-configured path in Settings → Usage (`usageSettings.sidecar` with
+///    auto-discovery off) — read once at startup, so changing it needs a restart.
+/// 3. dev build (`tauri dev` / `cargo run`) — no sidecar is staged next to the
 ///    executable, so return `None` and let the API fall back to `ccusage` on PATH.
-/// 3. packaged build — the sidecar ships beside the main executable as `ccusage`
+/// 4. packaged build — the sidecar ships beside the main executable as `ccusage`
 ///    plus the platform's executable extension (Tauri strips the `-<triple>`
 ///    suffix but keeps the extension at bundle time). We trust the computed path:
 ///    if the fetch step was skipped the API surfaces a clear spawn error rather
@@ -38,6 +41,9 @@ fn resolve_ccusage_bin(app: &tauri::AppHandle) -> Option<PathBuf> {
 	if let Some(path) = std::env::var_os("AGHUB_CCUSAGE_BIN") {
 		return Some(PathBuf::from(path));
 	}
+	if let Some(path) = manual_ccusage_bin(app) {
+		return Some(path);
+	}
 	if cfg!(debug_assertions) {
 		return None;
 	}
@@ -48,6 +54,23 @@ fn resolve_ccusage_bin(app: &tauri::AppHandle) -> Option<PathBuf> {
 				dir.join(format!("ccusage{}", std::env::consts::EXE_SUFFIX))
 			})
 		})
+}
+
+/// A user-set ccusage path from the settings store (`usageSettings.sidecar`),
+/// honored only when auto-discovery is explicitly off and the path is non-empty.
+/// `None` falls through to the env / bundled-sidecar / PATH resolution above.
+fn manual_ccusage_bin(app: &tauri::AppHandle) -> Option<PathBuf> {
+	let store = app.store("store.json").ok()?;
+	let settings = store.get("usageSettings")?;
+	let sidecar = settings.get("sidecar")?;
+	if sidecar.get("autoDiscover").and_then(|v| v.as_bool()) != Some(false) {
+		return None;
+	}
+	let path = sidecar.get("binPath")?.as_str()?.trim();
+	if path.is_empty() {
+		return None;
+	}
+	Some(PathBuf::from(path))
 }
 
 #[tauri::command]

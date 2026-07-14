@@ -3,11 +3,16 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { AgentOverviewCard } from "../components/agent-overview-card";
+import {
+	AgentOverviewCard,
+	type AgentUsageDisplay,
+} from "../components/agent-overview-card";
 import type { AgentLimitsDto, AgentUsageDto } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
+import { useUsageSettings } from "../hooks/use-usage-settings";
 import { agentStatus } from "../lib/agent-status";
+import { DEFAULT_USAGE_SETTINGS } from "../lib/store";
 import { cn } from "../lib/utils";
 import { mcpListQueryOptions } from "../requests/mcps";
 import { skillListQueryOptions } from "../requests/skills";
@@ -15,8 +20,6 @@ import {
 	usageLimitsQueryOptions,
 	usageSummaryQueryOptions,
 } from "../requests/usage";
-
-const USAGE_WINDOW_DAYS = 30;
 
 function toCompactYmd(date: Date): string {
 	const year = date.getFullYear();
@@ -30,6 +33,8 @@ export default function HomePage() {
 	const [, setLocation] = useLocation();
 	const api = useApi();
 	const { availableAgents } = useAgentAvailability();
+	const { data: usageSettings } = useUsageSettings();
+	const settings = usageSettings ?? DEFAULT_USAGE_SETTINGS;
 
 	const { data: skills = [] } = useQuery(
 		skillListQueryOptions({ api, scope: "global" }),
@@ -38,25 +43,44 @@ export default function HomePage() {
 		mcpListQueryOptions({ api, scope: "global" }),
 	);
 
+	const { showUsageOnHome, windowDays } = settings.home;
+	const { timezone } = settings;
 	const usageRange = useMemo(() => {
 		const until = new Date();
 		const since = new Date(until);
-		since.setDate(since.getDate() - (USAGE_WINDOW_DAYS - 1));
+		since.setDate(since.getDate() - (windowDays - 1));
 		return {
 			since: toCompactYmd(since),
 			until: toCompactYmd(until),
-			timezone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
+			timezone:
+				timezone ||
+				new Intl.DateTimeFormat().resolvedOptions().timeZone,
 		};
-	}, []);
+	}, [windowDays, timezone]);
+
+	const refetchInterval =
+		settings.pollIntervalMs > 0 ? settings.pollIntervalMs : false;
 
 	// Usage is best-effort: only Claude/Codex report it, and an agent that
 	// isn't logged in lands in the report's `warnings` with no entry. Cards
 	// without an entry simply omit the usage section.
 	const { data: usageReport, isLoading: isUsageLoading } = useQuery(
-		usageSummaryQueryOptions({ api, ...usageRange }),
+		usageSummaryQueryOptions({
+			api,
+			...usageRange,
+			offline: settings.offlinePricing,
+			config: settings.ccusageConfigPath,
+			timeoutSecs: settings.requestTimeoutSecs,
+			enabled: showUsageOnHome,
+			refetchInterval,
+		}),
 	);
 	const { data: limitsReport, isLoading: isLimitsLoading } = useQuery(
-		usageLimitsQueryOptions({ api }),
+		usageLimitsQueryOptions({
+			api,
+			enabled: showUsageOnHome,
+			refetchInterval,
+		}),
 	);
 
 	// Show every agent and let agentStatus() classify it — pre-filtering by
@@ -86,21 +110,36 @@ export default function HomePage() {
 		return map;
 	}, [availableAgents, skills, mcps]);
 
+	const trackedAgents = settings.agents;
 	const usageByAgent = useMemo(() => {
 		const map = new Map<string, AgentUsageDto>();
 		for (const entry of usageReport?.agents ?? []) {
+			if (!trackedAgents[entry.agent]?.tracked) continue;
 			map.set(entry.agent, entry);
 		}
 		return map;
-	}, [usageReport]);
+	}, [usageReport, trackedAgents]);
 
 	const limitsByAgent = useMemo(() => {
 		const map = new Map<string, AgentLimitsDto>();
 		for (const entry of limitsReport?.agents ?? []) {
+			if (!trackedAgents[entry.agent]?.tracked) continue;
 			map.set(entry.agent, entry);
 		}
 		return map;
-	}, [limitsReport]);
+	}, [limitsReport, trackedAgents]);
+
+	const usageDisplayFor = (agentId: string): AgentUsageDisplay => {
+		const override =
+			agentId === "claude" || agentId === "codex"
+				? trackedAgents[agentId].alertThresholdPct
+				: null;
+		return {
+			alertThresholdPct: override ?? settings.globalAlertThresholdPct,
+			windowSlots: settings.home.windowSlots,
+			statSlots: settings.home.statSlots,
+		};
+	};
 
 	// Claude and Codex carry usage telemetry, so surface them first — stable,
 	// regardless of whether ccusage has data yet. The rest follow by name.
@@ -151,6 +190,7 @@ export default function HomePage() {
 									hasUsage &&
 									(isUsageLoading || isLimitsLoading)
 								}
+								usageDisplay={usageDisplayFor(agent.id)}
 							/>
 						);
 					})}

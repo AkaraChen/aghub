@@ -123,7 +123,20 @@ export const queryKeys = {
 			since: string | null,
 			until: string | null,
 			timezone: string | null,
-		) => ["usage", "summary", since, until, timezone] as const,
+			offline: boolean | null,
+			config: string | null,
+			timeoutSecs: number | null,
+		) =>
+			[
+				"usage",
+				"summary",
+				since,
+				until,
+				timezone,
+				offline,
+				config,
+				timeoutSecs,
+			] as const,
 		limits: () => ["usage", "limits"] as const,
 	},
 	onboarding: {

@@ -14,7 +14,29 @@ import { agentStatus } from "../lib/agent-status";
 import { AgentIcon } from "../lib/agent-icons";
 import { cn } from "../lib/utils";
 import { clampPct, meterColor, quotaWindowLabelKey } from "../lib/usage-format";
+import {
+	DEFAULT_STAT_SLOTS,
+	DEFAULT_WINDOW_SLOTS,
+	type HomeStatId,
+	type HomeWindowId,
+} from "../lib/store";
 import { buildUsage } from "./agent-overview-card-helpers";
+
+/** Home-card usage display preferences, resolved per agent by the home page. */
+export interface AgentUsageDisplay {
+	/** Effective alert threshold for this agent's quota bars (0–100). */
+	alertThresholdPct: number;
+	/** Fixed bar slots; `null` = empty slot. */
+	windowSlots: (HomeWindowId | null)[];
+	/** Fixed stat slots (2×2); `null` = empty slot. */
+	statSlots: (HomeStatId | null)[];
+}
+
+const DEFAULT_USAGE_DISPLAY: AgentUsageDisplay = {
+	alertThresholdPct: 90,
+	windowSlots: DEFAULT_WINDOW_SLOTS,
+	statSlots: DEFAULT_STAT_SLOTS,
+};
 
 interface AgentOverviewCardProps {
 	agent: AvailableAgent;
@@ -24,7 +46,10 @@ interface AgentOverviewCardProps {
 	usage?: AgentUsageDto;
 	/** Remaining rate-limit windows for this agent, when available. */
 	limits?: AgentLimitsDto;
+	/** Show the loading skeleton while the first usage/limits fetch is in flight. */
 	isUsageLoading?: boolean;
+	/** How to render the usage block; defaults to showing everything. */
+	usageDisplay?: AgentUsageDisplay;
 }
 
 export function AgentOverviewCard({
@@ -34,12 +59,25 @@ export function AgentOverviewCard({
 	usage,
 	limits,
 	isUsageLoading,
+	usageDisplay = DEFAULT_USAGE_DISPLAY,
 }: AgentOverviewCardProps) {
 	const { t } = useTranslation();
 	const [, setLocation] = useLocation();
 	const { data: configPath } = useAgentConfigPath(agent);
 	const status = agentStatus(agent);
-	const view = buildUsage({ usage, limits });
+	const view = buildUsage({
+		usage,
+		limits,
+		statSlots: usageDisplay.statSlots,
+		windowSlots: usageDisplay.windowSlots,
+	});
+	const showQuota = view.windows.length > 0;
+	const showStats = view.hasStatData;
+	// Stable per-slot keys so empty slots don't fall back to array-index keys.
+	const statCellList = view.statCells.map((cell, index) => ({
+		key: cell ? `stat-${cell.id}` : `stat-empty-${index}`,
+		cell,
+	}));
 
 	function openResource(resource: "skills" | "mcp") {
 		setLocation(`/${resource}?agent=${encodeURIComponent(agent.id)}`);
@@ -60,8 +98,7 @@ export function AgentOverviewCard({
 		}
 	}
 
-	const tall =
-		isUsageLoading || view.primaryWindow != null || view.tokens != null;
+	const tall = isUsageLoading || showQuota || showStats;
 
 	return (
 		<Card
@@ -112,52 +149,45 @@ export function AgentOverviewCard({
 								onPress={() => openResource("mcp")}
 							/>
 						</div>
-						{(isUsageLoading ||
-							view.primaryWindow ||
-							view.tokens) && (
+						{(isUsageLoading || showQuota || showStats) && (
 							<div className="flex flex-col gap-2 pt-2">
 								{isUsageLoading ? (
 									<UsageSkeleton />
 								) : (
 									<>
-										{view.primaryWindow && (
-											<QuotaRow windows={view.windows} />
+										{showQuota && (
+											<QuotaRow
+												windows={view.windows}
+												alertThresholdPct={
+													usageDisplay.alertThresholdPct
+												}
+											/>
 										)}
-										{view.tokens && (
-											<div className="flex flex-col gap-1">
-												<div className="flex items-baseline justify-between text-xs">
-													<span>
-														<span className="text-foreground tabular-nums">
-															{view.tokens}
-														</span>{" "}
-														<span className="text-muted">
-															{t(
-																"usageTokensShort",
-															)}
-														</span>
-													</span>
-													{view.cost && (
-														<span className="text-foreground tabular-nums">
-															{view.cost}
-														</span>
-													)}
-												</div>
-												{(view.input ||
-													view.output) && (
-													<div className="flex items-baseline justify-between text-[11px] text-muted">
-														<span>
-															{t("usageInput")}{" "}
-															<span className="text-foreground tabular-nums">
-																{view.input}
-															</span>
-														</span>
-														<span>
-															{t("usageOutput")}{" "}
-															<span className="text-foreground tabular-nums">
-																{view.output}
-															</span>
-														</span>
-													</div>
+										{showStats && (
+											<div className="grid grid-cols-2 gap-x-3 gap-y-1">
+												{statCellList.map(
+													({ key, cell }) =>
+														cell ? (
+															<div
+																key={key}
+																className="flex items-baseline justify-between gap-1 text-[11px]"
+															>
+																<span className="text-muted">
+																	{t(
+																		cell.labelKey,
+																	)}
+																</span>
+																<span className="text-foreground tabular-nums">
+																	{cell.value}
+																</span>
+															</div>
+														) : (
+															// Empty slot — hold the 2×2 position.
+															<div
+																key={key}
+																aria-hidden
+															/>
+														),
 												)}
 											</div>
 										)}
@@ -229,7 +259,13 @@ function ResourceTile({
 	);
 }
 
-function QuotaRow({ windows }: { windows: LimitWindowDto[] }) {
+function QuotaRow({
+	windows,
+	alertThresholdPct,
+}: {
+	windows: LimitWindowDto[];
+	alertThresholdPct: number;
+}) {
 	const { t } = useTranslation();
 	return (
 		<div className="flex flex-col gap-1.5">
@@ -247,7 +283,7 @@ function QuotaRow({ windows }: { windows: LimitWindowDto[] }) {
 						<Meter
 							aria-label={label}
 							value={pct}
-							color={meterColor(pct)}
+							color={meterColor(pct, alertThresholdPct)}
 							size="sm"
 						>
 							<Meter.Track>

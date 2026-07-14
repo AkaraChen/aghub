@@ -23,12 +23,16 @@ export function formatCost(usd: number | null | undefined): string | null {
 	}).format(usd);
 }
 
-/** Quota fill color by how much of the window is consumed. */
+/**
+ * Quota fill color by how much of the window is consumed. The configured alert
+ * threshold is the `danger` line; `warning` covers the band just below it.
+ */
 export function meterColor(
 	utilizationPct: number,
+	alertThresholdPct = 90,
 ): "success" | "warning" | "danger" {
-	if (utilizationPct >= 90) return "danger";
-	if (utilizationPct >= 70) return "warning";
+	if (utilizationPct >= alertThresholdPct) return "danger";
+	if (utilizationPct >= Math.max(0, alertThresholdPct - 20)) return "warning";
 	return "success";
 }
 

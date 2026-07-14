@@ -56,6 +56,30 @@ export {
 	getAcknowledgedSkillAssessments,
 	setAcknowledgedSkillAssessments,
 } from "./store/audit-acknowledgements";
+export {
+	CARD_STAT_SLOTS,
+	CARD_WINDOW_SLOTS,
+	DEFAULT_STAT_SLOTS,
+	DEFAULT_USAGE_SETTINGS,
+	DEFAULT_WINDOW_SLOTS,
+	getUsageSettings,
+	HOME_STAT_IDS,
+	HOME_WINDOW_IDS,
+	saveUsageSettings,
+	USAGE_ALERT_THRESHOLDS_PCT,
+	USAGE_POLL_INTERVALS_MS,
+	USAGE_TIMEOUT_SECS_OPTIONS,
+	USAGE_TRACKED_AGENTS,
+	USAGE_WINDOW_DAYS_OPTIONS,
+} from "./store/usage";
+export type {
+	HomeStatId,
+	HomeWindowId,
+	UsageAgentSettings,
+	UsageHomeSettings,
+	UsageSettings,
+	UsageTrackedAgent,
+} from "./store/usage";
 export type {
 	IntegrationPreferences,
 	OnboardingProgress,

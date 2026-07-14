@@ -632,12 +632,20 @@ export function createApi(baseUrl: string, token: string) {
 					since?: string;
 					until?: string;
 					timezone?: string;
+					offline?: boolean;
+					config?: string;
+					timeoutSecs?: number;
 				} = {},
 			): Promise<UsageReportDto> {
 				const searchParams: Record<string, string> = {};
 				if (params.since) searchParams.since = params.since;
 				if (params.until) searchParams.until = params.until;
 				if (params.timezone) searchParams.timezone = params.timezone;
+				if (params.offline !== undefined)
+					searchParams.offline = String(params.offline);
+				if (params.config) searchParams.config = params.config;
+				if (params.timeoutSecs)
+					searchParams.timeout_secs = String(params.timeoutSecs);
 				return client
 					.get("usage/summary", { searchParams, timeout: 60000 })
 					.json();
