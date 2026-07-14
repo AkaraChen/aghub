@@ -176,8 +176,11 @@ export default function HomePage() {
 				>
 					{sortedAgents.map((agent) => {
 						const counts = countsByAgent.get(agent.id);
+						// Only tracked Claude/Codex carry usage — gate the skeleton
+						// on `tracked` too, so an untracked agent doesn't flash it.
 						const hasUsage =
-							agent.id === "claude" || agent.id === "codex";
+							(agent.id === "claude" || agent.id === "codex") &&
+							trackedAgents[agent.id].tracked;
 						return (
 							<AgentOverviewCard
 								key={agent.id}
