@@ -81,14 +81,14 @@ test.beforeEach(async ({ page }) => {
 test("Usage settings panel and layout editor render", async ({ page }) => {
 	await page.goto("/settings?tab=usage");
 
-	// Sidecar card + the fixed-slot layout editor's two panes.
+	// Sidecar card + the layout editor's two sections.
 	await expect(page.getByText("Auto-discover ccusage")).toBeVisible();
 	await expect(page.getByText("Card layout", { exact: true })).toBeVisible();
-	await expect(page.getByText("Home card", { exact: true })).toBeVisible();
 	await expect(
-		page.getByText("Available fields", { exact: true }),
+		page.getByText("Rate-limit bars", { exact: true }),
 	).toBeVisible();
-	// A bar slot and a stat slot render inside the preview.
+	await expect(page.getByText("Bottom stats", { exact: true })).toBeVisible();
+	// A bar field and a stat field render as rows in the editor.
 	await expect(page.getByText("5-hour limit").first()).toBeVisible();
 	await expect(page.getByText("Total tokens").first()).toBeVisible();
 

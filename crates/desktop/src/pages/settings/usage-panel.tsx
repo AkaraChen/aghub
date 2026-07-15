@@ -505,11 +505,8 @@ export default function UsagePanel() {
 						isDisabled={layoutDisabled}
 						onCommit={onLayoutCommit}
 						labels={{
-							preview: t("usageLayoutPreview"),
-							available: t("usageLayoutAvailable"),
 							bars: t("usageHomeWindowsLabel"),
 							stats: t("usageHomeStatsLabel"),
-							empty: t("usageLayoutEmptyZone"),
 						}}
 					/>
 				</Card.Content>
