@@ -1,14 +1,15 @@
+import { FolderOpenIcon } from "@heroicons/react/24/solid";
 import {
 	Button,
 	Card,
 	Input,
-	Label,
 	ListBox,
 	Select,
 	Switch,
 	TextField,
 	toast,
 } from "@heroui/react";
+import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
@@ -229,7 +230,7 @@ export default function UsagePanel() {
 			    and the install / update / re-check actions. */}
 			<Card className="p-0">
 				<Card.Content className="space-y-3 p-4">
-					<div className="flex items-start justify-between gap-3">
+					<div className="flex items-center justify-between gap-3">
 						<div className="flex flex-wrap items-center gap-x-2 gap-y-1">
 							<span
 								className={cn(
@@ -323,7 +324,7 @@ export default function UsagePanel() {
 						</p>
 					)}
 					{!current.sidecar.autoDiscover && (
-						<LabeledTextField
+						<PathField
 							label={t("usageSidecarPath")}
 							value={current.sidecar.binPath}
 							onChange={(value) =>
@@ -338,7 +339,7 @@ export default function UsagePanel() {
 							hint={t("usageSidecarPathDescription")}
 						/>
 					)}
-					<LabeledTextField
+					<PathField
 						label={t("usageConfigPath")}
 						value={current.ccusageConfigPath}
 						onChange={(value) =>
@@ -346,6 +347,7 @@ export default function UsagePanel() {
 						}
 						placeholder={t("usageConfigPathPlaceholder")}
 						hint={t("usageConfigPathDescription")}
+						filters={[{ name: "JSON", extensions: ["json"] }]}
 					/>
 				</Card.Content>
 			</Card>
@@ -754,31 +756,72 @@ function SettingNumber({
 	);
 }
 
-function LabeledTextField({
+/**
+ * A file-path setting: a text input plus a native file picker, and a
+ * "restore default" that clears back to auto-discovery (the empty default).
+ */
+function PathField({
 	label,
 	value,
 	onChange,
 	placeholder,
 	hint,
+	filters,
 }: {
 	label: string;
 	value: string;
 	onChange: (value: string) => void;
 	placeholder?: string;
 	hint?: string;
+	/** File-dialog extension filters; omit to accept any file. */
+	filters?: { name: string; extensions: string[] }[];
 }) {
+	const { t } = useTranslation();
+	const browse = async () => {
+		const selected = await open({
+			directory: false,
+			multiple: false,
+			filters,
+		});
+		if (typeof selected === "string") onChange(selected);
+	};
 	return (
-		<TextField
-			variant="secondary"
-			value={value}
-			onChange={onChange}
-			className="w-full"
-		>
-			<Label>{label}</Label>
-			<Input variant="secondary" placeholder={placeholder} />
-			{hint && (
-				<span className="mt-1 block text-xs text-muted">{hint}</span>
-			)}
-		</TextField>
+		<div className="flex flex-col gap-1">
+			<div className="flex items-center justify-between gap-2">
+				<span className="text-sm font-medium text-(--foreground)">
+					{label}
+				</span>
+				{value && (
+					<button
+						type="button"
+						onClick={() => onChange("")}
+						className="text-xs text-muted transition-colors hover:text-accent"
+					>
+						{t("usagePathReset")}
+					</button>
+				)}
+			</div>
+			<div className="flex items-center gap-2">
+				<TextField
+					variant="secondary"
+					value={value}
+					onChange={onChange}
+					aria-label={label}
+					className="flex-1"
+				>
+					<Input variant="secondary" placeholder={placeholder} />
+				</TextField>
+				<Button
+					variant="secondary"
+					size="sm"
+					onPress={browse}
+					className="shrink-0"
+				>
+					<FolderOpenIcon className="size-4" />
+					{t("usagePathBrowse")}
+				</Button>
+			</div>
+			{hint && <span className="text-xs text-muted">{hint}</span>}
+		</div>
 	);
 }
