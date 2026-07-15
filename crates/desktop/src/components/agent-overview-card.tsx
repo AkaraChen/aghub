@@ -150,7 +150,7 @@ export function AgentOverviewCard({
 							/>
 						</div>
 						{(isUsageLoading || showQuota || showStats) && (
-							<div className="flex flex-col gap-2 pt-2">
+							<div className="flex flex-col gap-1.5">
 								{isUsageLoading ? (
 									<UsageSkeleton />
 								) : (
