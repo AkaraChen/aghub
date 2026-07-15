@@ -44,6 +44,14 @@ const limitsReport = {
 	warnings: [],
 };
 
+const statusReport = {
+	version: "ccusage 20.0.6",
+	reachable: true,
+	error: null,
+	latest_version: "20.0.17",
+	update_available: true,
+};
+
 test.beforeEach(async ({ page }) => {
 	await installMocks(page);
 	// Registered after installMocks' catch-all, so these win for usage paths.
@@ -59,6 +67,13 @@ test.beforeEach(async ({ page }) => {
 			status: 200,
 			contentType: "application/json",
 			body: JSON.stringify(limitsReport),
+		}),
+	);
+	await page.route("**/api/v1/usage/status**", (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify(statusReport),
 		}),
 	);
 });
@@ -77,10 +92,11 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await expect(page.getByText("5-hour limit").first()).toBeVisible();
 	await expect(page.getByText("Total tokens").first()).toBeVisible();
 
-	await page.screenshot({
-		path: "artifacts/usage-settings-panel.png",
-		fullPage: true,
-	});
+	// Status card: inline update hint next to the version, plus the update +
+	// re-check actions.
+	await expect(page.getByText("20.0.17 available")).toBeVisible();
+	await expect(page.getByRole("button", { name: "Update" })).toBeVisible();
+	await expect(page.getByRole("button", { name: "Re-check" })).toBeVisible();
 
 	await page.screenshot({
 		path: "artifacts/usage-settings-panel.png",

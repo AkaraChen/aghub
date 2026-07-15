@@ -1,4 +1,5 @@
 import {
+	Button,
 	Card,
 	Input,
 	Label,
@@ -8,6 +9,7 @@ import {
 	TextField,
 	toast,
 } from "@heroui/react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -48,6 +50,9 @@ const AGENT_LABELS: Record<string, string> = {
 
 const GLOBAL_THRESHOLD_KEY = "global";
 
+/** ccusage's npm page — the target for the install / update actions. */
+const CCUSAGE_NPM_URL = "https://www.npmjs.com/package/ccusage";
+
 const THRESHOLD_OPTIONS = USAGE_ALERT_THRESHOLDS_PCT.map((pct) => ({
 	id: String(pct),
 	label: `${pct}%`,
@@ -86,6 +91,8 @@ export default function UsagePanel() {
 
 	const api = useApi();
 	const { data: status } = useQuery(usageStatusQueryOptions({ api }));
+	const recheckStatus = () =>
+		queryClient.invalidateQueries({ queryKey: ["usage", "status"] });
 
 	const mutation = useMutation({
 		mutationFn: saveUsageSettings,
@@ -210,44 +217,71 @@ export default function UsagePanel() {
 
 	return (
 		<div className="space-y-4">
-			{/* ccusage sidecar status — version, health, and an update hint. */}
+			{/* ccusage sidecar status — health, version, an inline update hint,
+			    and the install / update / re-check actions. */}
 			<Card className="p-0">
-				<Card.Content className="p-4">
-					<div className="flex items-center justify-between gap-4">
-						<div className="space-y-0.5">
-							<div className="flex items-center gap-2">
-								<span className="text-sm font-medium text-(--foreground)">
-									ccusage
-								</span>
-								<span
-									className={cn(
-										"size-1.5 rounded-full",
-										status?.reachable
+				<Card.Content className="space-y-3 p-4">
+					<div className="flex items-start justify-between gap-3">
+						<div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+							<span
+								className={cn(
+									"size-2 rounded-full",
+									status === undefined
+										? "bg-muted"
+										: status.reachable
 											? "bg-success"
 											: "bg-danger",
-									)}
-								/>
-								<span className="text-xs text-muted tabular-nums">
-									{status?.version ?? "—"}
-								</span>
-							</div>
-							<span className="block text-xs text-muted">
-								{status && !status.reachable
-									? (status.error ??
-										t("usageStatusUnreachable"))
-									: current.sidecar.autoDiscover
-										? t("usageStatusSourceBundled")
-										: t("usageStatusSourceCustom")}
+								)}
+							/>
+							<span className="text-sm font-medium text-(--foreground)">
+								ccusage
 							</span>
+							<span className="text-xs text-muted tabular-nums">
+								{status?.version ?? "—"}
+							</span>
+							{status?.update_available &&
+								status.latest_version && (
+									<span className="text-[11px] text-accent">
+										{t("usageStatusUpdate", {
+											version: status.latest_version,
+										})}
+									</span>
+								)}
 						</div>
-						{status?.update_available && status.latest_version && (
-							<span className="shrink-0 rounded-md bg-accent/10 px-2 py-1 text-xs text-accent">
-								{t("usageStatusUpdate", {
-									version: status.latest_version,
-								})}
-							</span>
-						)}
+						<div className="flex shrink-0 items-center gap-2">
+							{status && !status.reachable ? (
+								<Button
+									size="sm"
+									variant="secondary"
+									onPress={() => openUrl(CCUSAGE_NPM_URL)}
+								>
+									{t("usageStatusInstall")}
+								</Button>
+							) : (
+								status?.update_available && (
+									<Button
+										size="sm"
+										variant="secondary"
+										onPress={() => openUrl(CCUSAGE_NPM_URL)}
+									>
+										{t("usageStatusUpdateAction")}
+									</Button>
+								)
+							)}
+							<Button
+								size="sm"
+								variant="ghost"
+								onPress={recheckStatus}
+							>
+								{t("usageStatusRecheck")}
+							</Button>
+						</div>
 					</div>
+					{status && !status.reachable && (
+						<p className="text-[11px] text-danger">
+							{status.error ?? t("usageStatusUnreachable")}
+						</p>
+					)}
 				</Card.Content>
 			</Card>
 
@@ -489,30 +523,34 @@ export default function UsagePanel() {
 						return (
 							<div
 								key={agent}
-								className="
-									space-y-3 rounded-lg border border-border
-									bg-surface-secondary px-3 py-3
-								"
+								className="space-y-3 border-t border-border pt-4"
 							>
-								<div className="flex items-center justify-between gap-4">
-									<span className="text-sm font-medium text-(--foreground)">
-										{AGENT_LABELS[agent]}
-									</span>
-									<SettingSwitch
-										isSelected={config.tracked}
-										onChange={(checked) =>
-											updateAgent(agent, {
-												tracked: checked,
-											})
-										}
-										ariaLabel={t("usageAgentTracked", {
-											agent: AGENT_LABELS[agent],
-										})}
-									/>
-								</div>
-								<div className="space-y-1">
+								<SettingRow
+									title={AGENT_LABELS[agent]}
+									control={
+										<SettingSwitch
+											isSelected={config.tracked}
+											onChange={(checked) =>
+												updateAgent(agent, {
+													tracked: checked,
+												})
+											}
+											ariaLabel={t("usageAgentTracked", {
+												agent: AGENT_LABELS[agent],
+											})}
+										/>
+									}
+								/>
+								{config.tracked && (
 									<SettingRow
 										title={t("usageAgentAlert")}
+										description={
+											config.alertThresholdPct === null
+												? t("usageAgentAlertResolved", {
+														pct: current.globalAlertThresholdPct,
+													})
+												: undefined
+										}
 										control={
 											<SettingSelect
 												value={
@@ -532,7 +570,6 @@ export default function UsagePanel() {
 																: Number(key),
 													})
 												}
-												isDisabled={!config.tracked}
 												ariaLabel={t("usageAgentAlert")}
 												options={[
 													{
@@ -546,15 +583,7 @@ export default function UsagePanel() {
 											/>
 										}
 									/>
-									{config.tracked &&
-										config.alertThresholdPct === null && (
-											<p className="text-right text-[11px] text-muted">
-												{t("usageAgentAlertResolved", {
-													pct: current.globalAlertThresholdPct,
-												})}
-											</p>
-										)}
-								</div>
+								)}
 							</div>
 						);
 					})}
