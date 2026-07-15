@@ -1,6 +1,7 @@
 import {
 	BookOpenIcon,
 	BuildingStorefrontIcon,
+	ChartBarIcon,
 	CpuChipIcon,
 	HomeIcon,
 	KeyIcon,
@@ -76,6 +77,13 @@ const SIDEBAR_ITEM_DEFINITIONS: Record<SidebarItemId, SidebarItemDefinition> = {
 		href: "/market",
 		icon: BuildingStorefrontIcon,
 		tour: "nav-market",
+	},
+	usage: {
+		id: "usage",
+		section: "primary",
+		labelKey: "usage",
+		href: "/usage",
+		icon: ChartBarIcon,
 	},
 	skills: {
 		id: "skills",

@@ -84,6 +84,7 @@ export function isSkillPreferences(value: unknown): value is SkillPreferences {
 export const SIDEBAR_ITEM_IDS = [
 	"home",
 	"market",
+	"usage",
 	"skills",
 	"mcp",
 	"subAgents",

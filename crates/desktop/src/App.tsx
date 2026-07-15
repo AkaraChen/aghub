@@ -32,6 +32,7 @@ import MCPServersPage from "./pages/settings/mcp-servers";
 import SkillsPage from "./pages/settings/skills";
 import SubAgentsPage from "./pages/settings/sub-agents";
 import SkillsSearchPage from "./pages/skills-sh/search";
+import UsagePage from "./pages/usage";
 import { AgentAvailabilityProvider } from "./providers/agent-availability";
 import { ServerProvider } from "./providers/server";
 import { ThemeProvider } from "./providers/theme";
@@ -182,6 +183,18 @@ function App() {
 													fallback={<PageSkeleton />}
 												>
 													<SearchResultsPage />
+												</Suspense>
+											</ErrorBoundary>
+										</MainLayout>
+									</Route>
+
+									<Route path="/usage">
+										<MainLayout>
+											<ErrorBoundary>
+												<Suspense
+													fallback={<PageSkeleton />}
+												>
+													<UsagePage />
 												</Suspense>
 											</ErrorBoundary>
 										</MainLayout>
