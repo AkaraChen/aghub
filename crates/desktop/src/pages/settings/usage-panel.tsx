@@ -27,10 +27,7 @@ import {
 	type HomeWindowId,
 	saveUsageSettings,
 	USAGE_ALERT_THRESHOLDS_PCT,
-	USAGE_POLL_INTERVALS_MS,
 	USAGE_QUOTA_AGENTS,
-	USAGE_TIMEOUT_SECS_OPTIONS,
-	USAGE_WINDOW_DAYS_OPTIONS,
 	type UsageSettings,
 } from "../../lib/store";
 import {
@@ -143,12 +140,6 @@ export default function UsagePanel() {
 
 	const updateHome = (patch: Partial<UsageSettings["home"]>) => {
 		mutation.mutate({ ...current, home: { ...current.home, ...patch } });
-	};
-
-	const formatInterval = (ms: number): string => {
-		if (ms === 0) return t("usagePollOff");
-		if (ms < 60_000) return `${Math.round(ms / 1000)}s`;
-		return `${Math.round(ms / 60_000)}m`;
 	};
 
 	const home = current.home;
@@ -319,16 +310,16 @@ export default function UsagePanel() {
 						title={t("usagePollInterval")}
 						description={t("usagePollIntervalDescription")}
 						control={
-							<SettingSelect
-								value={String(current.pollIntervalMs)}
-								onChange={(key) =>
-									update({ pollIntervalMs: Number(key) })
+							<SettingNumber
+								value={Math.round(
+									current.pollIntervalMs / 1000,
+								)}
+								onChange={(s) =>
+									update({ pollIntervalMs: s * 1000 })
 								}
 								ariaLabel={t("usagePollInterval")}
-								options={USAGE_POLL_INTERVALS_MS.map((ms) => ({
-									id: String(ms),
-									label: formatInterval(ms),
-								}))}
+								min={0}
+								suffix="s"
 							/>
 						}
 					/>
@@ -361,18 +352,14 @@ export default function UsagePanel() {
 						title={t("usageRequestTimeout")}
 						description={t("usageRequestTimeoutDescription")}
 						control={
-							<SettingSelect
-								value={String(current.requestTimeoutSecs)}
-								onChange={(key) =>
-									update({ requestTimeoutSecs: Number(key) })
+							<SettingNumber
+								value={current.requestTimeoutSecs}
+								onChange={(s) =>
+									update({ requestTimeoutSecs: s })
 								}
 								ariaLabel={t("usageRequestTimeout")}
-								options={USAGE_TIMEOUT_SECS_OPTIONS.map(
-									(s) => ({
-										id: String(s),
-										label: formatInterval(s * 1000),
-									}),
-								)}
+								min={1}
+								suffix="s"
 							/>
 						}
 					/>
@@ -399,21 +386,13 @@ export default function UsagePanel() {
 						title={t("usageHomeWindow")}
 						description={t("usageHomeWindowDescription")}
 						control={
-							<SettingSelect
-								value={String(home.windowDays)}
-								onChange={(key) =>
-									updateHome({ windowDays: Number(key) })
-								}
+							<SettingNumber
+								value={home.windowDays}
+								onChange={(d) => updateHome({ windowDays: d })}
 								isDisabled={!home.showUsageOnHome}
 								ariaLabel={t("usageHomeWindow")}
-								options={USAGE_WINDOW_DAYS_OPTIONS.map(
-									(days) => ({
-										id: String(days),
-										label: t("usageWindowDaysOption", {
-											days,
-										}),
-									}),
-								)}
+								min={1}
+								suffix="d"
 							/>
 						}
 					/>
@@ -492,15 +471,15 @@ export default function UsagePanel() {
 						title={t("usageGlobalAlertThreshold")}
 						description={t("usageGlobalAlertThresholdDescription")}
 						control={
-							<SettingSelect
-								value={String(current.globalAlertThresholdPct)}
-								onChange={(key) =>
-									update({
-										globalAlertThresholdPct: Number(key),
-									})
+							<SettingNumber
+								value={current.globalAlertThresholdPct}
+								onChange={(pct) =>
+									update({ globalAlertThresholdPct: pct })
 								}
 								ariaLabel={t("usageGlobalAlertThreshold")}
-								options={THRESHOLD_OPTIONS}
+								min={0}
+								max={100}
+								suffix="%"
 							/>
 						}
 					/>
@@ -682,6 +661,51 @@ function SettingSelect({
 				</ListBox>
 			</Select.Popover>
 		</Select>
+	);
+}
+
+/** A compact, right-aligned free numeric input with an optional unit suffix. */
+function SettingNumber({
+	value,
+	onChange,
+	ariaLabel,
+	min = 0,
+	max,
+	suffix,
+	isDisabled,
+}: {
+	value: number;
+	onChange: (n: number) => void;
+	ariaLabel: string;
+	min?: number;
+	max?: number;
+	suffix?: string;
+	isDisabled?: boolean;
+}) {
+	return (
+		<div className="flex items-center gap-1.5">
+			<TextField
+				variant="secondary"
+				value={String(value)}
+				onChange={(raw) => {
+					const n = Number(raw);
+					if (!Number.isFinite(n)) return;
+					const upper = max != null ? Math.min(max, n) : n;
+					onChange(Math.round(Math.max(min, upper)));
+				}}
+				isDisabled={isDisabled}
+				aria-label={ariaLabel}
+				className="w-24"
+			>
+				<Input
+					variant="secondary"
+					type="number"
+					inputMode="numeric"
+					className="text-right tabular-nums"
+				/>
+			</TextField>
+			{suffix && <span className="text-xs text-muted">{suffix}</span>}
+		</div>
 	);
 }
 
