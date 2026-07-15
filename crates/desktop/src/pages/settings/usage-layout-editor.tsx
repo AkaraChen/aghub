@@ -84,40 +84,37 @@ export function InteractiveCardLayout({
 		);
 	};
 
-	const commit = (type: SlotType, slots: (string | null)[]) =>
+	// Placed fields stay compacted to the top; empty slots always trail. Commit
+	// takes an ordered list of placed ids and lays it back over the fixed slot
+	// count, so the card never shows a gap above a filled slot.
+	const commitPlaced = (type: SlotType, placed: string[]) => {
+		const slots = slotsOf(type).map((_, i) => placed[i] ?? null);
 		onCommit(
 			type === "window"
 				? { windowSlots: slots, statSlots }
 				: { windowSlots, statSlots: slots },
 		);
+	};
 
-	// Place a field into slot `index`, swapping the occupant back to where the
-	// dragged field came from (or dropping it to the palette when it came from
-	// the palette, i.e. `from < 0`).
+	const placedOf = (type: SlotType): string[] =>
+		slotsOf(type).filter((x): x is string => x != null);
+
+	// Insert `id` at visual position `index` among the placed fields (moving it
+	// there if it was already placed). Dropping past the end appends.
 	const placeInSlot = (id: string, type: SlotType, index: number) => {
-		const slots = [...slotsOf(type)];
-		const from = slots.indexOf(id);
-		const occupant = slots[index] ?? null;
-		slots[index] = id;
-		if (from >= 0) slots[from] = occupant;
-		commit(type, slots);
+		const rest = placedOf(type).filter((x) => x !== id);
+		const at = Math.min(index, rest.length);
+		commitPlaced(type, [...rest.slice(0, at), id, ...rest.slice(at)]);
 	};
 
-	const removeToPalette = (id: string, type: SlotType) => {
-		const slots = [...slotsOf(type)];
-		const i = slots.indexOf(id);
-		if (i < 0) return;
-		slots[i] = null;
-		commit(type, slots);
-	};
+	const removeToPalette = (id: string, type: SlotType) =>
+		commitPlaced(
+			type,
+			placedOf(type).filter((x) => x !== id),
+		);
 
-	const addToFirstEmpty = (id: string, type: SlotType) => {
-		const slots = [...slotsOf(type)];
-		const empty = slots.indexOf(null);
-		if (empty < 0) return;
-		slots[empty] = id;
-		commit(type, slots);
-	};
+	const addField = (id: string, type: SlotType) =>
+		commitPlaced(type, [...placedOf(type), id]);
 
 	// Discrete, non-overlapping slots: resolve to whatever is under the pointer,
 	// so dragging out onto the palette lands there instead of snapping to a slot.
@@ -244,7 +241,7 @@ export function InteractiveCardLayout({
 						empty={labels.empty}
 						fields={paletteOf("window")}
 						accepts={activeType === "window"}
-						onAdd={(id) => addToFirstEmpty(id, "window")}
+						onAdd={(id) => addField(id, "window")}
 					/>
 					<PaletteZone
 						type="stat"
@@ -252,14 +249,14 @@ export function InteractiveCardLayout({
 						empty={labels.empty}
 						fields={paletteOf("stat")}
 						accepts={activeType === "stat"}
-						onAdd={(id) => addToFirstEmpty(id, "stat")}
+						onAdd={(id) => addField(id, "stat")}
 					/>
 				</div>
 			</div>
 
 			<DragOverlay>
 				{activeField ? (
-					<Chip label={activeField.label} overlay />
+					<FieldOverlay field={activeField} type={activeType} />
 				) : null}
 			</DragOverlay>
 		</DndContext>
@@ -439,7 +436,7 @@ function DraggableChip({
 			{...attributes}
 			{...listeners}
 			className={cn(
-				"inline-flex cursor-grab touch-none items-center gap-1 rounded-full border border-border bg-surface-secondary py-0.5 pr-1 pl-1.5 text-[11px] text-(--foreground) outline-none transition-colors hover:border-foreground/30",
+				"inline-flex cursor-grab touch-none items-center gap-1 rounded-md border border-border bg-surface-secondary py-0.5 pr-1 pl-1.5 text-[11px] text-(--foreground) outline-none transition-colors hover:border-foreground/30",
 				isDragging && "opacity-40",
 			)}
 		>
@@ -460,17 +457,35 @@ function DraggableChip({
 	);
 }
 
-/** Static chip rendered in the drag overlay. */
-function Chip({ label, overlay }: { label: string; overlay?: boolean }) {
+/** The drag preview — a solid card shaped like the field it carries (a bar row
+ * or a stat), so dragging never collapses the row into a floating pill. */
+function FieldOverlay({
+	field,
+	type,
+}: {
+	field: LayoutField;
+	type: SlotType | null;
+}) {
 	return (
-		<span
-			className={cn(
-				"inline-flex items-center gap-1 rounded-full border border-border bg-surface-secondary px-2 py-0.5 text-[11px] text-(--foreground)",
-				overlay && "shadow-md",
+		<div className="flex cursor-grabbing items-center gap-1.5 rounded-md border border-border bg-surface px-2 py-1.5 shadow-lg">
+			<Bars2Icon className="size-3.5 shrink-0 text-muted" />
+			{type === "window" ? (
+				<div className="flex w-40 min-w-0 flex-col gap-1">
+					<span className="truncate text-[11px] text-muted">
+						{field.label}
+					</span>
+					<div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
+						<div
+							className="h-full rounded-full bg-foreground/25"
+							style={{ width: "62%" }}
+						/>
+					</div>
+				</div>
+			) : (
+				<span className="truncate text-[11px] text-muted">
+					{field.label}
+				</span>
 			)}
-		>
-			<Bars2Icon className="size-3 text-muted" />
-			{label}
-		</span>
+		</div>
 	);
 }
