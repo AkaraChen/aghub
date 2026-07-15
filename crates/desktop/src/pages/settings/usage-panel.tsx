@@ -9,7 +9,7 @@ import {
 	toast,
 } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
 	USAGE_SETTINGS_QUERY_KEY,
@@ -147,6 +147,16 @@ export default function UsagePanel() {
 
 	const home = current.home;
 
+	// Which card layout the editor edits: the shared default or an agent's
+	// override. Interaction state, so it lives here rather than in the store.
+	const [layoutTarget, setLayoutTarget] = useState<string>("default");
+	const editedLayout =
+		layoutTarget === "default"
+			? home.default
+			: (home.perAgent[layoutTarget] ?? home.default);
+	const hasOverride =
+		layoutTarget !== "default" && layoutTarget in home.perAgent;
+
 	// Keep a previously-set custom zone selectable even if it isn't common.
 	const timezoneIds =
 		current.timezone && !COMMON_TIMEZONES.includes(current.timezone)
@@ -158,14 +168,26 @@ export default function UsagePanel() {
 	];
 
 	// The editor works in fixed slots ((id | null)[]); persist them onto the
-	// default layout. saveUsageSettings re-normalizes, so the cast is safe.
-	const onLayoutCommit = (next: CardLayoutModel) =>
-		updateHome({
-			default: {
-				windowSlots: next.windowSlots as (HomeWindowId | null)[],
-				statSlots: next.statSlots as (HomeStatId | null)[],
-			},
-		});
+	// selected target. saveUsageSettings re-normalizes, so the cast is safe.
+	const onLayoutCommit = (next: CardLayoutModel) => {
+		const layout = {
+			windowSlots: next.windowSlots as (HomeWindowId | null)[],
+			statSlots: next.statSlots as (HomeStatId | null)[],
+		};
+		if (layoutTarget === "default") {
+			updateHome({ default: layout });
+		} else {
+			updateHome({
+				perAgent: { ...home.perAgent, [layoutTarget]: layout },
+			});
+		}
+	};
+
+	const resetOverride = () => {
+		const next = { ...home.perAgent };
+		delete next[layoutTarget];
+		updateHome({ perAgent: next });
+	};
 
 	const windowFields: LayoutField[] = HOME_WINDOW_IDS.map((id) => ({
 		id,
@@ -363,11 +385,45 @@ export default function UsagePanel() {
 						</span>
 					</div>
 
+					{/* Which agent's layout is being edited — the shared default,
+					    or a per-agent override. */}
+					<div className="flex items-center justify-between gap-3">
+						<span className="text-xs text-muted">
+							{t("usageLayoutTarget")}
+						</span>
+						<div className="flex items-center gap-3">
+							{hasOverride && (
+								<button
+									type="button"
+									onClick={resetOverride}
+									className="text-xs text-muted transition-colors hover:text-accent"
+								>
+									{t("usageLayoutResetOverride")}
+								</button>
+							)}
+							<SettingSelect
+								value={layoutTarget}
+								onChange={setLayoutTarget}
+								ariaLabel={t("usageLayoutTarget")}
+								options={[
+									{
+										id: "default",
+										label: t("usageLayoutTargetDefault"),
+									},
+									...USAGE_QUOTA_AGENTS.map((id) => ({
+										id,
+										label: AGENT_LABELS[id] ?? id,
+									})),
+								]}
+							/>
+						</div>
+					</div>
+
 					<InteractiveCardLayout
 						windowFields={windowFields}
 						statFields={statFields}
-						windowSlots={home.default.windowSlots}
-						statSlots={home.default.statSlots}
+						windowSlots={editedLayout.windowSlots}
+						statSlots={editedLayout.statSlots}
 						isDisabled={layoutDisabled}
 						onCommit={onLayoutCommit}
 						labels={{
