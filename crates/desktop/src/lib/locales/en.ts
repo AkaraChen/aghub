@@ -453,6 +453,10 @@ export default {
 	// Usage (ccusage)
 	usage: "Usage",
 	usageSettingsSaveError: "Failed to save usage settings",
+	usageStatusUnreachable: "ccusage isn't reachable",
+	usageStatusSourceBundled: "Bundled sidecar",
+	usageStatusSourceCustom: "Custom binary",
+	usageStatusUpdate: "{{version}} available",
 	usageSidecarAutoDiscover: "Auto-discover ccusage",
 	usageSidecarAutoDiscoverDescription:
 		"Use the bundled ccusage binary, falling back to one on your PATH.",

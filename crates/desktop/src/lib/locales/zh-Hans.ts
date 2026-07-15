@@ -435,6 +435,10 @@ export default {
 	// Usage (ccusage)
 	usage: "用量",
 	usageSettingsSaveError: "保存用量设置失败",
+	usageStatusUnreachable: "ccusage 不可达",
+	usageStatusSourceBundled: "打包 sidecar",
+	usageStatusSourceCustom: "自定义二进制",
+	usageStatusUpdate: "有新版 {{version}}",
 	usageSidecarAutoDiscover: "自动发现 ccusage",
 	usageSidecarAutoDiscoverDescription:
 		"使用随附的 ccusage 二进制,找不到时回退到 PATH 上的 ccusage。",

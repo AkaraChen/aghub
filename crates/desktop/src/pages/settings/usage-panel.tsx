@@ -8,13 +8,16 @@ import {
 	TextField,
 	toast,
 } from "@heroui/react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
 	USAGE_SETTINGS_QUERY_KEY,
 	useUsageSettings,
 } from "../../hooks/use-usage-settings";
+import { useApi } from "../../hooks/use-api";
+import { cn } from "../../lib/utils";
+import { usageStatusQueryOptions } from "../../requests/usage";
 import {
 	agentSettings,
 	DEFAULT_USAGE_SETTINGS,
@@ -83,6 +86,9 @@ export default function UsagePanel() {
 
 	const { data: settings } = useUsageSettings();
 	const current = settings ?? DEFAULT_USAGE_SETTINGS;
+
+	const api = useApi();
+	const { data: status } = useQuery(usageStatusQueryOptions({ api }));
 
 	const mutation = useMutation({
 		mutationFn: saveUsageSettings,
@@ -213,6 +219,47 @@ export default function UsagePanel() {
 
 	return (
 		<div className="space-y-4">
+			{/* ccusage sidecar status — version, health, and an update hint. */}
+			<Card className="p-0">
+				<Card.Content className="p-4">
+					<div className="flex items-center justify-between gap-4">
+						<div className="space-y-0.5">
+							<div className="flex items-center gap-2">
+								<span className="text-sm font-medium text-(--foreground)">
+									ccusage
+								</span>
+								<span
+									className={cn(
+										"size-1.5 rounded-full",
+										status?.reachable
+											? "bg-success"
+											: "bg-danger",
+									)}
+								/>
+								<span className="text-xs text-muted tabular-nums">
+									{status?.version ?? "—"}
+								</span>
+							</div>
+							<span className="block text-xs text-muted">
+								{status && !status.reachable
+									? (status.error ??
+										t("usageStatusUnreachable"))
+									: current.sidecar.autoDiscover
+										? t("usageStatusSourceBundled")
+										: t("usageStatusSourceCustom")}
+							</span>
+						</div>
+						{status?.update_available && status.latest_version && (
+							<span className="shrink-0 rounded-md bg-accent/10 px-2 py-1 text-xs text-accent">
+								{t("usageStatusUpdate", {
+									version: status.latest_version,
+								})}
+							</span>
+						)}
+					</div>
+				</Card.Content>
+			</Card>
+
 			{/* ccusage sidecar — the one group wired to the backend today. */}
 			<Card className="p-0">
 				<Card.Content className="space-y-4 p-4">
