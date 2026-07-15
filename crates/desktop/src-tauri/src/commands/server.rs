@@ -73,6 +73,24 @@ fn manual_ccusage_bin(app: &tauri::AppHandle) -> Option<PathBuf> {
 	Some(PathBuf::from(path))
 }
 
+/// The ccusage binary the embedded API spawns (via `resolve_ccusage_bin`),
+/// falling back to the bare `ccusage` PATH lookup when nothing is staged. Shown
+/// as a hint under the Settings → Usage auto-discover toggle. Paths cross via
+/// IPC — the HTTP API never returns raw filesystem paths.
+#[derive(serde::Serialize)]
+pub struct CcusageDiagnostics {
+	pub path: String,
+}
+
+#[tauri::command]
+pub fn ccusage_diagnostics(app: tauri::AppHandle) -> CcusageDiagnostics {
+	let path =
+		resolve_ccusage_bin(&app).unwrap_or_else(|| PathBuf::from("ccusage"));
+	CcusageDiagnostics {
+		path: path.to_string_lossy().into_owned(),
+	}
+}
+
 #[tauri::command]
 pub async fn start_server(
 	state: tauri::State<'_, AppState>,

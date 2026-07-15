@@ -98,6 +98,10 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await expect(page.getByRole("button", { name: "Update" })).toBeVisible();
 	await expect(page.getByRole("button", { name: "Re-check" })).toBeVisible();
 
+	// Auto-discover is on by default, so the resolved binary (from the Tauri
+	// mock) shows as a hint under the toggle.
+	await expect(page.getByText("/usr/local/bin/ccusage")).toBeVisible();
+
 	await page.screenshot({
 		path: "artifacts/usage-settings-panel.png",
 		fullPage: true,

@@ -18,6 +18,7 @@ import {
 	useUsageSettings,
 } from "../../hooks/use-usage-settings";
 import { useApi } from "../../hooks/use-api";
+import { ccusageDiagnostics } from "../../lib/ccusage-diagnostics";
 import { cn } from "../../lib/utils";
 import { usageStatusQueryOptions } from "../../requests/usage";
 import {
@@ -91,8 +92,15 @@ export default function UsagePanel() {
 
 	const api = useApi();
 	const { data: status } = useQuery(usageStatusQueryOptions({ api }));
-	const recheckStatus = () =>
+	const { data: diag } = useQuery({
+		queryKey: ["ccusage-diagnostics"],
+		queryFn: ccusageDiagnostics,
+		staleTime: Number.POSITIVE_INFINITY,
+	});
+	const recheckStatus = () => {
 		queryClient.invalidateQueries({ queryKey: ["usage", "status"] });
+		queryClient.invalidateQueries({ queryKey: ["ccusage-diagnostics"] });
+	};
 
 	const mutation = useMutation({
 		mutationFn: saveUsageSettings,
@@ -306,6 +314,14 @@ export default function UsagePanel() {
 							/>
 						}
 					/>
+					{current.sidecar.autoDiscover && diag && (
+						<p
+							className="truncate font-mono text-[11px] text-muted"
+							title={diag.path}
+						>
+							{t("usageSidecarResolved", { path: diag.path })}
+						</p>
+					)}
 					{!current.sidecar.autoDiscover && (
 						<LabeledTextField
 							label={t("usageSidecarPath")}

@@ -442,6 +442,7 @@ export default {
 	usageSidecarAutoDiscover: "自動探索 ccusage",
 	usageSidecarAutoDiscoverDescription:
 		"使用隨附的 ccusage 二進位,找不到時回退到 PATH 上的 ccusage。",
+	usageSidecarResolved: "使用 {{path}}",
 	usageSidecarPath: "自訂 ccusage 路徑",
 	usageSidecarPathDescription:
 		"ccusage 二進位的絕對路徑。重新啟動 aghub 後生效。",

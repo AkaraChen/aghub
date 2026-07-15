@@ -461,6 +461,7 @@ export default {
 	usageSidecarAutoDiscover: "Auto-discover ccusage",
 	usageSidecarAutoDiscoverDescription:
 		"Use the bundled ccusage binary, falling back to one on your PATH.",
+	usageSidecarResolved: "Using {{path}}",
 	usageSidecarPath: "Custom ccusage path",
 	usageSidecarPathDescription:
 		"Absolute path to a ccusage binary. Takes effect after restarting aghub.",

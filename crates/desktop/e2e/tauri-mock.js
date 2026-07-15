@@ -90,6 +90,8 @@
 				return Promise.resolve("aghub");
 			case "plugin:app|version":
 				return Promise.resolve("1.9.0-beta.1");
+			case "ccusage_diagnostics":
+				return Promise.resolve({ path: "/usr/local/bin/ccusage" });
 			case "posthog_get_config":
 				return Promise.resolve({ key: null, host: null });
 			case "posthog_get_distinct_id":
