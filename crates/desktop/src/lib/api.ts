@@ -18,13 +18,25 @@ import type {
 	CodexProviderStateResponse,
 	CreateAgentProviderRequest,
 	CreateCredentialRequest,
+	CreateExternalGatewayRequest,
 	CreateInferenceProviderRequest,
+	CreateManagedGatewayRequest,
 	CreateMcpRequest,
 	CreateSkillRequest,
 	CreateSubAgentRequest,
 	CcusageRuntimeDto,
 	InstallCcusageRuntimeRequest,
 	CredentialResponse,
+	GatewayApiKeysDto,
+	GatewayAuthFileDto,
+	GatewayAuthPollDto,
+	GatewayAuthUrlDto,
+	GatewayConfigFileDto,
+	GatewayInstanceDto,
+	GatewayProvisionStatusDto,
+	GatewaySettingsDto,
+	GatewayUsageDto,
+	GatewayVersionDto,
 	DeleteSkillByPathRequest,
 	DeleteSkillByPathResponse,
 	FetchInferenceProviderModelsRequest,
@@ -46,6 +58,10 @@ import type {
 	InstallSkillResponse,
 	CCPluginMarketResponse,
 	MarketSkill,
+	StartGatewayOauthRequest,
+	UpdateGatewayInstanceRequest,
+	UpdateGatewaySettingRequest,
+	UploadGatewayAuthFileRequest,
 	McpResponse,
 	OperationBatchResponse,
 	CCPluginConfigResponse,
@@ -1111,6 +1127,189 @@ export function createApi(baseUrl: string, token: string) {
 				return client
 					.delete("inference/agents/claude/state")
 					.then(() => undefined);
+			},
+		},
+		gateway: {
+			listInstances(): Promise<GatewayInstanceDto[]> {
+				return client.get("gateway/instances").json();
+			},
+			createManaged(
+				body: CreateManagedGatewayRequest,
+			): Promise<GatewayInstanceDto> {
+				return client
+					.post("gateway/instances/managed", { json: body })
+					.json();
+			},
+			createExternal(
+				body: CreateExternalGatewayRequest,
+			): Promise<GatewayInstanceDto> {
+				// Validates the address and management key against the remote
+				// instance before persisting, so give the round-trip headroom.
+				return client
+					.post("gateway/instances/external", {
+						json: body,
+						timeout: 30000,
+					})
+					.json();
+			},
+			updateInstance(
+				id: string,
+				body: UpdateGatewayInstanceRequest,
+			): Promise<GatewayInstanceDto> {
+				return client
+					.put(`gateway/instances/${encodeURIComponent(id)}`, {
+						json: body,
+					})
+					.json();
+			},
+			deleteInstance(id: string): Promise<void> {
+				return client
+					.delete(`gateway/instances/${encodeURIComponent(id)}`)
+					.then(() => undefined);
+			},
+			startInstance(id: string): Promise<GatewayInstanceDto> {
+				return client
+					.post(`gateway/instances/${encodeURIComponent(id)}/start`, {
+						timeout: 60000,
+					})
+					.json();
+			},
+			stopInstance(id: string): Promise<GatewayInstanceDto> {
+				return client
+					.post(`gateway/instances/${encodeURIComponent(id)}/stop`, {
+						timeout: 30000,
+					})
+					.json();
+			},
+			version(id: string): Promise<GatewayVersionDto> {
+				return client
+					.get(`gateway/instances/${encodeURIComponent(id)}/version`)
+					.json();
+			},
+			provision(): Promise<GatewayProvisionStatusDto> {
+				return client.post("gateway/provision").json();
+			},
+			provisionStatus(): Promise<GatewayProvisionStatusDto> {
+				return client.get("gateway/provision/status").json();
+			},
+			listAuthFiles(id: string): Promise<GatewayAuthFileDto[]> {
+				return client
+					.get(
+						`gateway/instances/${encodeURIComponent(id)}/auth-files`,
+					)
+					.json();
+			},
+			uploadAuthFile(
+				id: string,
+				body: UploadGatewayAuthFileRequest,
+			): Promise<void> {
+				return client
+					.post(
+						`gateway/instances/${encodeURIComponent(id)}/auth-files`,
+						{ json: body, timeout: 30000 },
+					)
+					.then(() => undefined);
+			},
+			getAuthFileContent(
+				id: string,
+				name: string,
+			): Promise<UploadGatewayAuthFileRequest> {
+				return client
+					.get(
+						`gateway/instances/${encodeURIComponent(id)}/auth-files/content`,
+						{ searchParams: { name } },
+					)
+					.json();
+			},
+			deleteAuthFile(id: string, name: string): Promise<void> {
+				return client
+					.delete(
+						`gateway/instances/${encodeURIComponent(id)}/auth-files`,
+						{ searchParams: { name } },
+					)
+					.then(() => undefined);
+			},
+			startOauth(
+				id: string,
+				body: StartGatewayOauthRequest,
+			): Promise<GatewayAuthUrlDto> {
+				return client
+					.post(`gateway/instances/${encodeURIComponent(id)}/oauth`, {
+						json: body,
+						timeout: 30000,
+					})
+					.json();
+			},
+			oauthStatus(
+				id: string,
+				oauthState: string,
+			): Promise<GatewayAuthPollDto> {
+				return client
+					.get(
+						`gateway/instances/${encodeURIComponent(id)}/oauth/status`,
+						{ searchParams: { oauth_state: oauthState } },
+					)
+					.json();
+			},
+			getApiKeys(id: string): Promise<GatewayApiKeysDto> {
+				return client
+					.get(`gateway/instances/${encodeURIComponent(id)}/api-keys`)
+					.json();
+			},
+			updateApiKeys(
+				id: string,
+				body: GatewayApiKeysDto,
+			): Promise<GatewayApiKeysDto> {
+				return client
+					.put(
+						`gateway/instances/${encodeURIComponent(id)}/api-keys`,
+						{
+							json: body,
+						},
+					)
+					.json();
+			},
+			getSettings(id: string): Promise<GatewaySettingsDto> {
+				return client
+					.get(`gateway/instances/${encodeURIComponent(id)}/settings`)
+					.json();
+			},
+			updateSetting(
+				id: string,
+				key: string,
+				body: UpdateGatewaySettingRequest,
+			): Promise<void> {
+				// Setting keys may contain slashes (`quota-exceeded/switch-project`)
+				// that the management route expects verbatim — don't encode them.
+				return client
+					.put(
+						`gateway/instances/${encodeURIComponent(id)}/settings/${key}`,
+						{ json: body },
+					)
+					.then(() => undefined);
+			},
+			getConfigFile(id: string): Promise<GatewayConfigFileDto> {
+				return client
+					.get(
+						`gateway/instances/${encodeURIComponent(id)}/config-file`,
+					)
+					.json();
+			},
+			updateConfigFile(
+				id: string,
+				body: GatewayConfigFileDto,
+			): Promise<GatewayConfigFileDto> {
+				return client
+					.put(
+						`gateway/instances/${encodeURIComponent(id)}/config-file`,
+						{ json: body },
+					)
+					.json();
+			},
+			usage(id: string): Promise<GatewayUsageDto> {
+				return client
+					.get(`gateway/instances/${encodeURIComponent(id)}/usage`)
+					.json();
 			},
 		},
 		plugins: {

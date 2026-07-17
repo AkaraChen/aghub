@@ -119,7 +119,6 @@ export function AppSidebar() {
 							</section>
 						</Fragment>
 					))}
-
 					{visibleSidebarSections.length > 0 ? <Separator /> : null}
 
 					<div data-tour="project-section">

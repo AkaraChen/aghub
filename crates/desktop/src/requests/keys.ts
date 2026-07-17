@@ -131,6 +131,23 @@ export const queryKeys = {
 		password: (name: string) =>
 			["inference-providers", "password", name] as const,
 	},
+	gateway: {
+		all: () => ["gateway"] as const,
+		instances: () => ["gateway", "instances"] as const,
+		provisionStatus: () => ["gateway", "provision-status"] as const,
+		version: (instanceId: string) =>
+			["gateway", "version", instanceId] as const,
+		authFiles: (instanceId: string) =>
+			["gateway", "auth-files", instanceId] as const,
+		apiKeys: (instanceId: string) =>
+			["gateway", "api-keys", instanceId] as const,
+		settings: (instanceId: string) =>
+			["gateway", "settings", instanceId] as const,
+		configFile: (instanceId: string) =>
+			["gateway", "config-file", instanceId] as const,
+		usage: (instanceId: string) =>
+			["gateway", "usage", instanceId] as const,
+	},
 	integrations: {
 		all: () => ["integrations"] as const,
 		codeEditors: () => ["integrations", "code-editors"] as const,
