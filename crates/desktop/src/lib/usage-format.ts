@@ -41,6 +41,26 @@ export function clampPct(value: number): number {
 	return Math.max(0, Math.min(100, value));
 }
 
+/** "ccusage 20.0.6" / "20.0.17" → "v20.0.6" / "v20.0.17" — the ccusage name
+ *  is already carried by the surrounding UI. */
+export function shortCcusageVersion(version: string): string {
+	return `v${version.replace(/^ccusage\s+/, "").replace(/^v/, "")}`;
+}
+
+/**
+ * Compact time until an ISO reset instant: `"18m"`, `"2h"`, `"4d"`.
+ * `null` when the instant is missing or already past.
+ */
+export function resetsIn(iso: string | null): string | null {
+	if (!iso) return null;
+	const ms = new Date(iso).getTime() - Date.now();
+	if (!Number.isFinite(ms) || ms <= 0) return null;
+	const hours = ms / 3_600_000;
+	if (hours < 1) return `${Math.max(1, Math.round(ms / 60_000))}m`;
+	if (hours < 48) return `${Math.round(hours)}h`;
+	return `${Math.round(hours / 24)}d`;
+}
+
 /** i18n key for a rate-limit window label. */
 export function quotaWindowLabelKey(kind: LimitWindowKind): string {
 	switch (kind) {

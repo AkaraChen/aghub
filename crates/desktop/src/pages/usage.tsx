@@ -19,6 +19,8 @@ import {
 	formatTokens,
 	meterColor,
 	quotaWindowLabelKey,
+	resetsIn,
+	shortCcusageVersion,
 } from "../lib/usage-format";
 import { cn } from "../lib/utils";
 import {
@@ -29,6 +31,13 @@ import {
 
 /** The page shows a fixed recent window; day-level tuning lives in settings. */
 const WINDOW_DAYS = 30;
+
+/** Pretty names for report agents that aren't installed locally (agent
+ *  availability carries no display_name for them). */
+const FALLBACK_LABELS: Record<string, string> = {
+	claude: "Claude",
+	codex: "Codex",
+};
 
 /** Token breakdown rows, in report order; zero-valued rows are dropped. */
 const BREAKDOWN: { field: keyof UsageTotalsDto; labelKey: string }[] = [
@@ -84,7 +93,7 @@ export default function UsagePage() {
 		const byId = new Map(
 			availableAgents.map((a) => [a.id, a.display_name]),
 		);
-		return (id: string) => byId.get(id) ?? id;
+		return (id: string) => byId.get(id) ?? FALLBACK_LABELS[id] ?? id;
 	}, [availableAgents]);
 
 	const limitsByAgent = useMemo(() => {
@@ -93,11 +102,35 @@ export default function UsagePage() {
 		return map;
 	}, [limits]);
 
-	const agents = report?.agents ?? [];
+	const agents = useMemo(() => report?.agents ?? [], [report]);
+
+	// Cross-agent headline numbers; spend only when ccusage priced anything.
+	const summary = useMemo(() => {
+		let tokens = 0;
+		let cost = 0;
+		let hasCost = false;
+		const dayTotals = new Map<string, number>();
+		for (const entry of agents) {
+			tokens += entry.totals.total_tokens;
+			if (entry.totals.cost_usd != null) {
+				cost += entry.totals.cost_usd;
+				hasCost = true;
+			}
+			for (const day of entry.days) {
+				dayTotals.set(
+					day.date,
+					(dayTotals.get(day.date) ?? 0) + day.total_tokens,
+				);
+			}
+		}
+		let activeDays = 0;
+		for (const total of dayTotals.values()) if (total > 0) activeDays++;
+		return { tokens, cost: hasCost ? cost : null, activeDays };
+	}, [agents]);
 
 	return (
 		<div className="h-full overflow-y-auto">
-			<div className="mx-auto w-full max-w-6xl p-4 sm:p-6">
+			<div className="mx-auto w-full max-w-5xl p-4 sm:p-6">
 				<header className="mb-6 flex items-start justify-between gap-4">
 					<div className="flex flex-col gap-1">
 						<h1 className="text-2xl font-semibold tracking-tight">
@@ -132,29 +165,171 @@ export default function UsagePage() {
 				) : agents.length === 0 ? (
 					<EmptyState message={t("usageEmpty")} />
 				) : (
-					<section
-						aria-label={t("usage")}
-						className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-					>
-						{agents.map((entry) => (
-							<UsageAgentCard
-								key={entry.agent}
-								usage={entry}
-								name={displayName(entry.agent)}
-								limits={limitsByAgent.get(entry.agent)}
-								alertThresholdPct={
-									settings.globalAlertThresholdPct
-								}
+					<div className="flex flex-col gap-6">
+						<div className="flex flex-wrap items-baseline gap-x-10 gap-y-3">
+							<SummaryStat
+								label={t("usageStatTotalTokens")}
+								value={formatTokens(summary.tokens)}
 							/>
-						))}
-					</section>
+							{summary.cost != null && (
+								<SummaryStat
+									label={t("usageTotalSpend")}
+									value={formatCost(summary.cost) ?? "—"}
+								/>
+							)}
+							<SummaryStat
+								label={t("usageActiveDays")}
+								value={`${summary.activeDays} / ${WINDOW_DAYS}`}
+							/>
+						</div>
+
+						<CombinedDailyBars
+							agents={agents}
+							nameOf={displayName}
+						/>
+
+						<section
+							aria-label={t("usage")}
+							className="flex flex-col gap-3"
+						>
+							{agents.map((entry) => (
+								<AgentSummaryRow
+									key={entry.agent}
+									usage={entry}
+									name={displayName(entry.agent)}
+									limits={limitsByAgent.get(entry.agent)}
+									alertThresholdPct={
+										settings.globalAlertThresholdPct
+									}
+								/>
+							))}
+						</section>
+					</div>
 				)}
 			</div>
 		</div>
 	);
 }
 
-function UsageAgentCard({
+function SummaryStat({ label, value }: { label: string; value: string }) {
+	return (
+		<div className="flex flex-col gap-0.5">
+			<span className="text-2xl font-semibold tracking-tight tabular-nums">
+				{value}
+			</span>
+			<span className="text-xs text-muted">{label}</span>
+		</div>
+	);
+}
+
+/** Bar height of the daily strip; segments derive px heights from this. */
+const CHART_HEIGHT_PX = 96;
+
+/** Stacked fills by report order; neutral ink first, accent tint second. */
+const SERIES_FILLS = [
+	"bg-foreground/30",
+	"bg-accent/45",
+	"bg-foreground/15",
+	"bg-accent/25",
+];
+
+/** Daily totals of every agent with activity, as one stacked-bar strip —
+ *  quiet monochrome + accent, no chart library. */
+function CombinedDailyBars({
+	agents,
+	nameOf,
+}: {
+	agents: AgentUsageDto[];
+	nameOf: (id: string) => string;
+}) {
+	const { t } = useTranslation();
+	const series = agents
+		.filter((a) => a.days.some((d) => d.total_tokens > 0))
+		.slice(0, SERIES_FILLS.length);
+
+	const dates = Array.from(
+		new Set(series.flatMap((a) => a.days.map((d) => d.date))),
+	).sort();
+	const byAgent = series.map((a) => {
+		const map = new Map(a.days.map((d) => [d.date, d.total_tokens]));
+		return (date: string) => map.get(date) ?? 0;
+	});
+	const max = Math.max(
+		...dates.map((date) =>
+			byAgent.reduce((sum, get) => sum + get(date), 0),
+		),
+		1,
+	);
+	const fmt = (iso: string) =>
+		new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+			month: "short",
+			day: "numeric",
+		});
+	if (dates.length === 0) return null;
+
+	return (
+		<div className="flex flex-col gap-2">
+			<div className="flex items-center justify-end gap-4">
+				{series.map((agent, index) => (
+					<span
+						key={agent.agent}
+						className="flex items-center gap-1.5 text-[11px] text-muted"
+					>
+						<span
+							className={cn(
+								"size-2 rounded-[2px]",
+								SERIES_FILLS[index],
+							)}
+						/>
+						{nameOf(agent.agent)}
+					</span>
+				))}
+			</div>
+			<div
+				role="img"
+				aria-label={t("usageDailyActivity")}
+				className="flex h-24 items-end gap-px"
+			>
+				{dates.map((date) => {
+					const parts = byAgent.map((get) => get(date));
+					const total = parts.reduce((a, b) => a + b, 0);
+					return (
+						<div
+							key={date}
+							title={`${fmt(date)} · ${formatTokens(total)}`}
+							className="relative h-full flex-1"
+						>
+							<div className="absolute inset-x-0 bottom-0 flex flex-col-reverse overflow-hidden rounded-[2px]">
+								{parts.map((value, index) =>
+									value > 0 ? (
+										<div
+											key={series[index].agent}
+											className={SERIES_FILLS[index]}
+											style={{
+												height: `${Math.max((value / max) * CHART_HEIGHT_PX, 2)}px`,
+											}}
+										/>
+									) : null,
+								)}
+							</div>
+							{total === 0 && (
+								<div className="absolute inset-x-0 bottom-0 h-0.5 rounded-[2px] bg-foreground/8" />
+							)}
+						</div>
+					);
+				})}
+			</div>
+			<div className="flex justify-between text-[11px] text-muted">
+				<span>{fmt(dates[0])}</span>
+				<span>{fmt(dates[dates.length - 1])}</span>
+			</div>
+		</div>
+	);
+}
+
+/** One agent as a compact row: identity + headline numbers on the left,
+ *  quota meters and the token breakdown on the right. */
+function AgentSummaryRow({
 	usage,
 	name,
 	limits,
@@ -171,75 +346,90 @@ function UsageAgentCard({
 	const rows = BREAKDOWN.filter(({ field }) => (totals[field] as number) > 0);
 
 	return (
-		<div className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4">
-			<div className="flex items-center gap-2">
-				<AgentIcon id={usage.agent} name={name} size="xs" />
-				<span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
-					{name}
-				</span>
-				{cost && (
-					<span className="shrink-0 text-sm font-medium tabular-nums">
-						{cost}
+		<div className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4 sm:flex-row sm:items-start sm:gap-8">
+			<div className="flex w-full shrink-0 flex-col gap-2 sm:w-44">
+				<div className="flex items-center gap-2">
+					<AgentIcon id={usage.agent} name={name} size="xs" />
+					<span className="min-w-0 truncate text-sm font-medium text-foreground">
+						{name}
 					</span>
+				</div>
+				<div className="flex flex-col gap-0.5">
+					<span className="text-xl font-semibold tracking-tight tabular-nums">
+						{formatTokens(totals.total_tokens)}
+					</span>
+					<span className="text-xs text-muted">
+						{t("usageStatTotalTokens")}
+						{cost && ` · ${cost}`}
+					</span>
+				</div>
+			</div>
+
+			<div className="flex min-w-0 flex-1 flex-col gap-3">
+				{limits && limits.windows.length > 0 && (
+					<div className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-3">
+						{limits.windows.map((quota) => {
+							const pct = clampPct(quota.utilization_pct);
+							const label = t(quotaWindowLabelKey(quota.kind));
+							const reset = resetsIn(quota.resets_at);
+							return (
+								<div
+									key={quota.kind}
+									className="flex flex-col gap-0.5"
+								>
+									<div className="flex items-baseline justify-between gap-2 text-[11px]">
+										<span className="truncate text-muted">
+											{label}
+											{reset && (
+												<span
+													title={t("usageResetsIn", {
+														time: reset,
+													})}
+													className="text-foreground/40"
+												>
+													{" "}
+													· {reset}
+												</span>
+											)}
+										</span>
+										<span className="font-medium tabular-nums">
+											{Math.round(pct)}%
+										</span>
+									</div>
+									<Meter
+										aria-label={label}
+										value={pct}
+										color={meterColor(
+											pct,
+											alertThresholdPct,
+										)}
+										size="sm"
+									>
+										<Meter.Track>
+											<Meter.Fill />
+										</Meter.Track>
+									</Meter>
+								</div>
+							);
+						})}
+					</div>
+				)}
+				{rows.length > 0 && (
+					<dl className="flex flex-wrap gap-x-5 gap-y-1">
+						{rows.map(({ field, labelKey }) => (
+							<div
+								key={field}
+								className="flex items-baseline gap-1.5 text-[11px]"
+							>
+								<dt className="text-muted">{t(labelKey)}</dt>
+								<dd className="tabular-nums">
+									{formatTokens(totals[field] as number)}
+								</dd>
+							</div>
+						))}
+					</dl>
 				)}
 			</div>
-
-			<div className="flex items-baseline gap-1.5">
-				<span className="text-xl font-semibold tabular-nums">
-					{formatTokens(totals.total_tokens)}
-				</span>
-				<span className="text-xs text-muted">
-					{t("usageStatTotalTokens")}
-				</span>
-			</div>
-
-			{limits && limits.windows.length > 0 && (
-				<div className="flex flex-col gap-1.5 border-t border-border pt-3">
-					{limits.windows.map((quota) => {
-						const pct = clampPct(quota.utilization_pct);
-						const label = t(quotaWindowLabelKey(quota.kind));
-						return (
-							<div
-								key={quota.kind}
-								className="flex flex-col gap-0.5"
-							>
-								<div className="flex items-baseline justify-between text-[11px]">
-									<span className="text-muted">{label}</span>
-									<span className="font-medium tabular-nums">
-										{Math.round(pct)}%
-									</span>
-								</div>
-								<Meter
-									aria-label={label}
-									value={pct}
-									color={meterColor(pct, alertThresholdPct)}
-									size="sm"
-								>
-									<Meter.Track>
-										<Meter.Fill />
-									</Meter.Track>
-								</Meter>
-							</div>
-						);
-					})}
-				</div>
-			)}
-
-			{rows.length > 0 && (
-				<dl className="grid grid-cols-2 gap-x-3 gap-y-1 border-t border-border pt-3">
-					{rows.map(({ field, labelKey }) => (
-						<div
-							key={field}
-							className="flex items-baseline justify-between gap-1 text-[11px]"
-						>
-							<dt className="text-muted">{t(labelKey)}</dt>
-							<dd className="tabular-nums">
-								{formatTokens(totals[field] as number)}
-							</dd>
-						</div>
-					))}
-				</dl>
-			)}
 		</div>
 	);
 }
@@ -273,7 +463,7 @@ function StatusChip({
 				)}
 			/>
 			<span className="text-muted tabular-nums">
-				{version ?? "ccusage"}
+				{version ? shortCcusageVersion(version) : "ccusage"}
 			</span>
 			{updateVersion && (
 				<span className="text-accent">
