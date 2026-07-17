@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/core";
 import { EyeSlashIcon, PlusIcon } from "@heroicons/react/24/solid";
 import { Meter } from "@heroui/react";
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentIcon } from "../../lib/agent-icons";
 import { cn } from "../../lib/utils";
@@ -49,38 +49,9 @@ type SlotType = "window" | "stat";
  *  real data. */
 const PREVIEW_BAR_PCT = [62, 38, 84];
 
-/** Rows opt into view transitions under this name so drop / show / hide
- *  morphs the field between its old and new place (card ↔ drawer). */
-const rowTransitionName = (fieldId: string) => `usage-slot-${fieldId}`;
-
-/**
- * Run a layout mutation inside a view transition so rows glide to their new
- * position. Falls back to an instant update when the platform lacks the API
- * or the user prefers reduced motion (also keeps e2e deterministic).
- */
-function withLayoutTransition(mutate: () => void) {
-	// Feature-detect: WKWebView < Safari 18 has no startViewTransition.
-	const doc = document as Document & {
-		startViewTransition?: (update: () => Promise<void>) => unknown;
-	};
-	if (
-		!doc.startViewTransition ||
-		window.matchMedia("(prefers-reduced-motion: reduce)").matches
-	) {
-		mutate();
-		return;
-	}
-	doc.startViewTransition(() => {
-		mutate();
-		// The commit lands via react-query's optimistic update; two frames
-		// span the re-render so the browser snapshots the settled DOM.
-		return new Promise<void>((resolve) => {
-			requestAnimationFrame(() => {
-				requestAnimationFrame(() => resolve());
-			});
-		});
-	});
-}
+/** FLIP timing for rows gliding to their new place after a commit. */
+const FLIP_MS = 180;
+const FLIP_EASING = "cubic-bezier(0.2, 0, 0, 1)";
 
 export function InteractiveCardLayout({
 	windowFields,
@@ -101,6 +72,49 @@ export function InteractiveCardLayout({
 }) {
 	const { t } = useTranslation();
 	const [activeId, setActiveId] = useState<string | null>(null);
+
+	// FLIP: capture row positions right before a commit mutates the layout,
+	// then (in the layout effect below) animate each row from its old rect
+	// to its new one. Scoped to this container — unlike a view transition it
+	// never snapshots the page, so drops stay cheap.
+	const paneRef = useRef<HTMLDivElement>(null);
+	const flipRectsRef = useRef<Map<string, DOMRect> | null>(null);
+	const captureRects = () => {
+		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+			return;
+		}
+		const rects = new Map<string, DOMRect>();
+		for (const el of paneRef.current?.querySelectorAll<HTMLElement>(
+			"[data-flip-id]",
+		) ?? []) {
+			const id = el.dataset.flipId;
+			if (id) rects.set(id, el.getBoundingClientRect());
+		}
+		flipRectsRef.current = rects;
+	};
+	useLayoutEffect(() => {
+		const prev = flipRectsRef.current;
+		if (!prev) return;
+		flipRectsRef.current = null;
+		for (const el of paneRef.current?.querySelectorAll<HTMLElement>(
+			"[data-flip-id]",
+		) ?? []) {
+			const id = el.dataset.flipId;
+			const old = id ? prev.get(id) : undefined;
+			if (!old) continue;
+			const now = el.getBoundingClientRect();
+			const dx = old.left - now.left;
+			const dy = old.top - now.top;
+			if (dx === 0 && dy === 0) continue;
+			el.animate(
+				[
+					{ transform: `translate(${dx}px, ${dy}px)` },
+					{ transform: "none" },
+				],
+				{ duration: FLIP_MS, easing: FLIP_EASING },
+			);
+		}
+	});
 
 	const fieldById = new Map<string, LayoutField>(
 		[...windowFields, ...statFields].map((f) => [f.id, f]),
@@ -131,12 +145,11 @@ export function InteractiveCardLayout({
 	// shows a gap and never exceeds the cap.
 	const commit = (type: SlotType, shown: string[]) => {
 		const slots = slotsOf(type).map((_, i) => shown[i] ?? null);
-		withLayoutTransition(() =>
-			onCommit(
-				type === "window"
-					? { windowSlots: slots, statSlots }
-					: { windowSlots, statSlots: slots },
-			),
+		captureRects();
+		onCommit(
+			type === "window"
+				? { windowSlots: slots, statSlots }
+				: { windowSlots, statSlots: slots },
 		);
 	};
 
@@ -205,6 +218,7 @@ export function InteractiveCardLayout({
 			    size when it moves between them. Drag across (or use the eye /
 			    plus buttons) to show and hide. */}
 			<div
+				ref={paneRef}
 				className={cn(
 					"flex flex-col gap-4 sm:flex-row sm:items-start",
 					isDisabled && "pointer-events-none opacity-60",
@@ -298,7 +312,11 @@ export function InteractiveCardLayout({
 				</div>
 
 				<HiddenDrawer
-					active={activeId != null}
+					active={
+						activeId != null &&
+						activeType != null &&
+						shownOf(activeType).includes(activeId)
+					}
 					windows={{
 						fields: hiddenOf("window"),
 						atCap: shownWindows.length >= windowSlots.length,
@@ -312,7 +330,9 @@ export function InteractiveCardLayout({
 				/>
 			</div>
 
-			<DragOverlay dropAnimation={{ duration: 160 }}>
+			{/* No drop animation: the FLIP pass already glides the row from
+			    its old place, a second overlay flight would double-image. */}
+			<DragOverlay dropAnimation={null}>
 				{activeField && activeType ? (
 					<DragGhost field={activeField} type={activeType} />
 				) : null}
@@ -410,7 +430,7 @@ function PreviewBarRow({
 	return (
 		<div
 			ref={dropRef}
-			style={{ viewTransitionName: rowTransitionName(field.id) }}
+			data-flip-id={field.id}
 			className={cn(
 				"rounded-md transition-colors",
 				isOver && accepts && "ring-1 ring-accent",
@@ -468,7 +488,7 @@ function PreviewStatCell({
 	return (
 		<div
 			ref={dropRef}
-			style={{ viewTransitionName: rowTransitionName(field.id) }}
+			data-flip-id={field.id}
 			className={cn(
 				"rounded transition-colors",
 				isOver && accepts && "ring-1 ring-accent",
@@ -525,6 +545,9 @@ function HiddenDrawer({
 	stats: DrawerSection;
 }) {
 	const { t } = useTranslation();
+	// `active` is true only while dragging a field that sits on the card —
+	// hiding is the one thing dropping here can do, so the highlight never
+	// shows for a drawer row dragged over its own pane.
 	const { setNodeRef, isOver } = useDroppable({ id: "hidden-drawer" });
 	const empty = windows.fields.length === 0 && stats.fields.length === 0;
 	return (
@@ -597,7 +620,7 @@ function HiddenBarRow({
 		<div
 			ref={setNodeRef}
 			title={field.hint}
-			style={{ viewTransitionName: rowTransitionName(field.id) }}
+			data-flip-id={field.id}
 			{...(atCap ? {} : attributes)}
 			{...(atCap ? {} : listeners)}
 			className={cn(
@@ -643,7 +666,7 @@ function HiddenStatCell({
 		<div
 			ref={setNodeRef}
 			title={field.hint}
-			style={{ viewTransitionName: rowTransitionName(field.id) }}
+			data-flip-id={field.id}
 			{...(atCap ? {} : attributes)}
 			{...(atCap ? {} : listeners)}
 			className={cn(

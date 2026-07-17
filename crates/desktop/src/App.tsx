@@ -86,7 +86,9 @@ function App() {
 			setLocation(event.payload);
 		});
 		return () => {
-			unlisten.then((fn) => fn());
+			// Absent Tauri event bridge (plain browser / e2e mock): both the
+			// subscription and its teardown reject — nothing to clean up.
+			unlisten.then((fn) => fn()).catch(() => {});
 		};
 	}, [setLocation]);
 

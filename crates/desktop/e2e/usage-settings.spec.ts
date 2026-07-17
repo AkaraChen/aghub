@@ -146,6 +146,11 @@ test("layout editor moves a field between the card and the drawer", async ({
 	await expect(card.getByText("Total tokens")).toHaveCount(0);
 	await expect(drawer.getByText("Total tokens")).toBeVisible();
 
+	// dnd-kit registers a freshly mounted draggable in a passive effect;
+	// grabbing the row in that window is silently ignored, so give the
+	// drawer row a beat before pressing it.
+	await page.waitForTimeout(250);
+
 	// Drag it back: the append slot only exists mid-drag, so cross the
 	// activation distance first, then drop onto the dashed slot.
 	const source = drawer.getByText("Total tokens");
@@ -156,6 +161,8 @@ test("layout editor moves a field between the card and the drawer", async ({
 	await page.mouse.move(sx, sy);
 	await page.mouse.down();
 	await page.mouse.move(sx + 12, sy + 12, { steps: 3 });
+	// The drag engaged — the ghost overlay is on screen.
+	await expect(page.locator(".cursor-grabbing")).toBeVisible();
 
 	const slot = page.getByTestId("layout-empty-slot-stat");
 	await slot.waitFor();
