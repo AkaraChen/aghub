@@ -95,16 +95,19 @@ use aghub_api::dto::{
 	},
 };
 use aghub_cliproxy::{
+	AddGatewayCompatProviderRequest, AddGatewayUpstreamKeyRequest,
 	CreateExternalGatewayRequest, CreateManagedGatewayRequest,
 	GatewayApiKeysDto, GatewayAuthFileDto, GatewayAuthPollDto,
-	GatewayAuthPollStatus, GatewayAuthUrlDto, GatewayConfigFileDto,
-	GatewayInstanceDto, GatewayInstanceKind, GatewayInstanceStatus,
-	GatewayKeyUsageDto, GatewayOauthProvider, GatewayProvisionPhase,
-	GatewayProvisionStatusDto, GatewaySettingDto, GatewaySettingKind,
-	GatewaySettingValue, GatewaySettingsDto, GatewayUsageDto,
-	GatewayVersionDto, StartGatewayOauthRequest, StartGatewayProvisionRequest,
-	UpdateGatewayInstanceRequest, UpdateGatewaySettingRequest,
-	UploadGatewayAuthFileRequest,
+	GatewayAuthPollStatus, GatewayAuthUrlDto, GatewayCompatModelDto,
+	GatewayCompatProviderDto, GatewayConfigFileDto, GatewayInstanceDto,
+	GatewayInstanceKind, GatewayInstanceStatus, GatewayKeyUsageDto,
+	GatewayOauthProvider, GatewayProvisionPhase, GatewayProvisionStatusDto,
+	GatewaySettingDto, GatewaySettingKind, GatewaySettingValue,
+	GatewaySettingsDto, GatewayUpstreamKeyDto, GatewayUpstreamKeysDto,
+	GatewayUpstreamProvider, GatewayUsageDto, GatewayVersionDto,
+	ResetGatewayQuotaRequest, StartGatewayOauthRequest,
+	StartGatewayProvisionRequest, UpdateGatewayInstanceRequest,
+	UpdateGatewaySettingRequest, UploadGatewayAuthFileRequest,
 };
 use aghub_usage::{
 	AgentLimitsDto, AgentUsageDto, CcusageRuntimeCandidateDto,
@@ -378,6 +381,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<GatewayProvisionPhase>(&cfg)?;
 	export_type::<GatewayProvisionStatusDto>(&cfg)?;
 	export_type::<StartGatewayProvisionRequest>(&cfg)?;
+	export_type::<GatewayUpstreamProvider>(&cfg)?;
+	export_type::<GatewayUpstreamKeyDto>(&cfg)?;
+	export_type::<GatewayUpstreamKeysDto>(&cfg)?;
+	export_type::<AddGatewayUpstreamKeyRequest>(&cfg)?;
+	export_type::<GatewayCompatModelDto>(&cfg)?;
+	export_type::<GatewayCompatProviderDto>(&cfg)?;
+	export_type::<AddGatewayCompatProviderRequest>(&cfg)?;
+	export_type::<ResetGatewayQuotaRequest>(&cfg)?;
 	export_type::<GatewayVersionDto>(&cfg)?;
 	export_type::<GatewayConfigFileDto>(&cfg)?;
 

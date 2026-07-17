@@ -17,16 +17,18 @@ use rocket::serde::json::Json;
 use rocket::State;
 
 use aghub_cliproxy::{
-	bootstrap, provision, settings, CreateExternalGatewayRequest,
+	bootstrap, provision, settings, AddGatewayCompatProviderRequest,
+	AddGatewayUpstreamKeyRequest, CreateExternalGatewayRequest,
 	CreateManagedGatewayRequest, GatewayApiKeysDto, GatewayAuthFileDto,
-	GatewayAuthPollDto, GatewayAuthUrlDto, GatewayConfigFileDto, GatewayError,
-	GatewayInstanceDto, GatewayInstanceKind, GatewayInstanceRecord,
-	GatewayInstanceStatus, GatewayKeyUsageDto, GatewayProvisionPhase,
-	GatewayProvisionStatusDto, GatewaySettingDto, GatewaySettingsDto,
-	GatewayUsageDto, GatewayVersionDto, InstanceStore, ManagementClient,
-	StartGatewayOauthRequest, StartGatewayProvisionRequest,
-	UpdateGatewayInstanceRequest, UpdateGatewaySettingRequest,
-	UploadGatewayAuthFileRequest,
+	GatewayAuthPollDto, GatewayAuthUrlDto, GatewayCompatProviderDto,
+	GatewayConfigFileDto, GatewayError, GatewayInstanceDto,
+	GatewayInstanceKind, GatewayInstanceRecord, GatewayInstanceStatus,
+	GatewayKeyUsageDto, GatewayProvisionPhase, GatewayProvisionStatusDto,
+	GatewaySettingDto, GatewaySettingsDto, GatewayUpstreamKeysDto,
+	GatewayUpstreamProvider, GatewayUsageDto, GatewayVersionDto, InstanceStore,
+	ManagementClient, ResetGatewayQuotaRequest, StartGatewayOauthRequest,
+	StartGatewayProvisionRequest, UpdateGatewayInstanceRequest,
+	UpdateGatewaySettingRequest, UploadGatewayAuthFileRequest,
 };
 use aghub_inference::{
 	CreateInferenceProvider, InferenceProviderFormat,
@@ -828,6 +830,149 @@ pub async fn put_gateway_config_file(
 	let client = require_client(state, &record)?;
 	client
 		.put_config_yaml(&request.content)
+		.await
+		.map_err(ApiError::from)?;
+	Ok(rocket::response::status::NoContent)
+}
+
+// ---- upstream keys & relays ---------------------------------------------
+
+#[get("/gateway/instances/<id>/upstream-keys")]
+pub async fn list_gateway_upstream_keys(
+	_auth: ApiAuth,
+	state: &State<GatewayState>,
+	id: &str,
+) -> ApiResult<GatewayUpstreamKeysDto> {
+	let record = store(state).get(id).map_err(ApiError::from)?;
+	let client = require_client(state, &record)?;
+	Ok(Json(GatewayUpstreamKeysDto {
+		gemini: client
+			.upstream_keys(GatewayUpstreamProvider::Gemini)
+			.await
+			.map_err(ApiError::from)?,
+		claude: client
+			.upstream_keys(GatewayUpstreamProvider::Claude)
+			.await
+			.map_err(ApiError::from)?,
+		codex: client
+			.upstream_keys(GatewayUpstreamProvider::Codex)
+			.await
+			.map_err(ApiError::from)?,
+	}))
+}
+
+#[post("/gateway/instances/<id>/upstream-keys", data = "<request>")]
+pub async fn add_gateway_upstream_key(
+	_auth: ApiAuth,
+	state: &State<GatewayState>,
+	id: &str,
+	request: Json<AddGatewayUpstreamKeyRequest>,
+) -> ApiNoContent {
+	let record = store(state).get(id).map_err(ApiError::from)?;
+	let client = require_client(state, &record)?;
+	client
+		.add_upstream_key(
+			request.provider,
+			&request.api_key,
+			request.base_url.as_deref(),
+		)
+		.await
+		.map_err(ApiError::from)?;
+	Ok(rocket::response::status::NoContent)
+}
+
+#[delete("/gateway/instances/<id>/upstream-keys?<provider>&<api_key>")]
+pub async fn delete_gateway_upstream_key(
+	_auth: ApiAuth,
+	state: &State<GatewayState>,
+	id: &str,
+	provider: &str,
+	api_key: &str,
+) -> ApiNoContent {
+	let provider = match provider {
+		"gemini" => GatewayUpstreamProvider::Gemini,
+		"claude" => GatewayUpstreamProvider::Claude,
+		"codex" => GatewayUpstreamProvider::Codex,
+		other => {
+			return Err(ApiError::new(
+				Status::BadRequest,
+				format!("unknown upstream provider '{other}'"),
+				"INVALID_PARAM",
+			))
+		}
+	};
+	let record = store(state).get(id).map_err(ApiError::from)?;
+	let client = require_client(state, &record)?;
+	client
+		.delete_upstream_key(provider, api_key)
+		.await
+		.map_err(ApiError::from)?;
+	Ok(rocket::response::status::NoContent)
+}
+
+#[get("/gateway/instances/<id>/compat-providers")]
+pub async fn list_gateway_compat_providers(
+	_auth: ApiAuth,
+	state: &State<GatewayState>,
+	id: &str,
+) -> ApiResult<Vec<GatewayCompatProviderDto>> {
+	let record = store(state).get(id).map_err(ApiError::from)?;
+	let client = require_client(state, &record)?;
+	Ok(Json(
+		client.compat_providers().await.map_err(ApiError::from)?,
+	))
+}
+
+#[post("/gateway/instances/<id>/compat-providers", data = "<request>")]
+pub async fn add_gateway_compat_provider(
+	_auth: ApiAuth,
+	state: &State<GatewayState>,
+	id: &str,
+	request: Json<AddGatewayCompatProviderRequest>,
+) -> ApiNoContent {
+	let record = store(state).get(id).map_err(ApiError::from)?;
+	let client = require_client(state, &record)?;
+	let provider = GatewayCompatProviderDto {
+		name: request.name.clone(),
+		base_url: request.base_url.trim_end_matches('/').to_string(),
+		api_keys: vec![request.api_key.clone()],
+		models: request.models.clone(),
+		disabled: false,
+	};
+	client
+		.add_compat_provider(&provider)
+		.await
+		.map_err(ApiError::from)?;
+	Ok(rocket::response::status::NoContent)
+}
+
+#[delete("/gateway/instances/<id>/compat-providers?<name>")]
+pub async fn delete_gateway_compat_provider(
+	_auth: ApiAuth,
+	state: &State<GatewayState>,
+	id: &str,
+	name: &str,
+) -> ApiNoContent {
+	let record = store(state).get(id).map_err(ApiError::from)?;
+	let client = require_client(state, &record)?;
+	client
+		.delete_compat_provider(name)
+		.await
+		.map_err(ApiError::from)?;
+	Ok(rocket::response::status::NoContent)
+}
+
+#[post("/gateway/instances/<id>/accounts/reset-quota", data = "<request>")]
+pub async fn reset_gateway_account_quota(
+	_auth: ApiAuth,
+	state: &State<GatewayState>,
+	id: &str,
+	request: Json<ResetGatewayQuotaRequest>,
+) -> ApiNoContent {
+	let record = store(state).get(id).map_err(ApiError::from)?;
+	let client = require_client(state, &record)?;
+	client
+		.reset_quota(&request.auth_index)
 		.await
 		.map_err(ApiError::from)?;
 	Ok(rocket::response::status::NoContent)

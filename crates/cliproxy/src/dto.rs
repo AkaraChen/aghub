@@ -91,6 +91,9 @@ pub struct UpdateGatewayInstanceRequest {
 pub struct GatewayAuthFileDto {
 	#[serde(default)]
 	pub id: Option<String>,
+	/// Server-side credential handle, required by quota reset.
+	#[serde(default)]
+	pub auth_index: Option<String>,
 	pub name: String,
 	#[serde(default)]
 	pub provider: Option<String>,
@@ -224,6 +227,89 @@ pub struct UpdateGatewaySettingRequest {
 #[ts(export)]
 pub struct GatewayApiKeysDto {
 	pub keys: Vec<String>,
+}
+
+/// Which upstream key list a plain API key belongs to. Matches the
+/// management endpoints `gemini-api-key` / `claude-api-key` /
+/// `codex-api-key`.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "lowercase")]
+pub enum GatewayUpstreamProvider {
+	Gemini,
+	Claude,
+	Codex,
+}
+
+/// One upstream API key as the management API reports it (keys are
+/// echoed back verbatim by these endpoints).
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct GatewayUpstreamKeyDto {
+	pub api_key: String,
+	#[serde(default)]
+	pub base_url: Option<String>,
+	/// Server-side handle (quota reset target).
+	#[serde(default)]
+	pub auth_index: Option<String>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct GatewayUpstreamKeysDto {
+	pub gemini: Vec<GatewayUpstreamKeyDto>,
+	pub claude: Vec<GatewayUpstreamKeyDto>,
+	pub codex: Vec<GatewayUpstreamKeyDto>,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct AddGatewayUpstreamKeyRequest {
+	pub provider: GatewayUpstreamProvider,
+	pub api_key: String,
+	pub base_url: Option<String>,
+}
+
+/// Model alias entry inside an OpenAI-compatibility provider.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct GatewayCompatModelDto {
+	pub name: String,
+	#[serde(default)]
+	pub alias: Option<String>,
+}
+
+/// One `openai-compatibility` upstream (relay/aggregator). `api_keys`
+/// is write-mostly: the dedicated endpoint does not echo keys, so reads
+/// go through `GET /config` to stay lossless.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct GatewayCompatProviderDto {
+	pub name: String,
+	pub base_url: String,
+	#[serde(default)]
+	pub api_keys: Vec<String>,
+	#[serde(default)]
+	pub models: Vec<GatewayCompatModelDto>,
+	#[serde(default)]
+	pub disabled: bool,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct AddGatewayCompatProviderRequest {
+	pub name: String,
+	pub base_url: String,
+	pub api_key: String,
+	/// Optional model names exposed by the relay; empty = passthrough.
+	#[serde(default)]
+	pub models: Vec<GatewayCompatModelDto>,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct ResetGatewayQuotaRequest {
+	pub auth_index: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default, TS)]

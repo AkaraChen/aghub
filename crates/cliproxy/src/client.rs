@@ -12,7 +12,9 @@ use url::Url;
 
 use crate::dto::{
 	GatewayAuthFileDto, GatewayAuthPollDto, GatewayAuthUrlDto,
-	GatewayOauthProvider, GatewaySettingKind, GatewaySettingValue,
+	GatewayCompatModelDto, GatewayCompatProviderDto, GatewayOauthProvider,
+	GatewaySettingKind, GatewaySettingValue, GatewayUpstreamKeyDto,
+	GatewayUpstreamProvider,
 };
 use crate::error::{GatewayError, Result};
 use crate::settings::{response_key, GatewaySettingSpec};
@@ -36,6 +38,47 @@ struct ErrorBody {
 struct AuthFilesBody {
 	#[serde(default)]
 	files: Vec<GatewayAuthFileDto>,
+}
+
+/// Upstream key element as the management API speaks it (kebab-case).
+/// Kept separate from the snake_case DTO the aghub API serves.
+#[derive(serde::Serialize, Deserialize)]
+struct UpstreamKeyWire {
+	#[serde(rename = "api-key")]
+	api_key: String,
+	#[serde(rename = "base-url", skip_serializing_if = "Option::is_none")]
+	#[serde(default)]
+	base_url: Option<String>,
+	#[serde(rename = "auth-index", default, skip_serializing)]
+	auth_index: Option<String>,
+}
+
+#[derive(serde::Serialize, Deserialize)]
+struct CompatModelWire {
+	name: String,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	alias: Option<String>,
+}
+
+#[derive(serde::Serialize, Deserialize)]
+struct CompatProviderWire {
+	name: String,
+	#[serde(rename = "base-url")]
+	base_url: String,
+	#[serde(rename = "api-keys", default)]
+	api_keys: Vec<String>,
+	#[serde(default)]
+	models: Vec<CompatModelWire>,
+	#[serde(default)]
+	disabled: bool,
+}
+
+fn upstream_endpoint(provider: GatewayUpstreamProvider) -> &'static str {
+	match provider {
+		GatewayUpstreamProvider::Gemini => "gemini-api-key",
+		GatewayUpstreamProvider::Claude => "claude-api-key",
+		GatewayUpstreamProvider::Codex => "codex-api-key",
+	}
 }
 
 impl ManagementClient {
@@ -300,11 +343,144 @@ impl ManagementClient {
 
 	pub async fn latest_version(&self) -> Result<String> {
 		let body = self.get_json("latest-version").await?;
+		// Release tags come back with their `v` prefix ("v7.2.81");
+		// normalize so callers compare against the bare installed version.
 		Ok(body
 			.get("latest-version")
 			.and_then(|value| value.as_str())
 			.unwrap_or_default()
+			.trim_start_matches('v')
 			.to_string())
+	}
+
+	pub async fn upstream_keys(
+		&self,
+		provider: GatewayUpstreamProvider,
+	) -> Result<Vec<GatewayUpstreamKeyDto>> {
+		let endpoint = upstream_endpoint(provider);
+		let body = self.get_json(endpoint).await?;
+		let raw = body
+			.get(endpoint)
+			.cloned()
+			.unwrap_or(serde_json::Value::Array(Vec::new()));
+		let wire: Vec<UpstreamKeyWire> = serde_json::from_value(raw)?;
+		Ok(wire
+			.into_iter()
+			.map(|key| GatewayUpstreamKeyDto {
+				api_key: key.api_key,
+				base_url: key.base_url,
+				auth_index: key.auth_index,
+			})
+			.collect())
+	}
+
+	/// Append one key: these endpoints echo full elements on GET, so a
+	/// read-append-PUT roundtrip is lossless.
+	pub async fn add_upstream_key(
+		&self,
+		provider: GatewayUpstreamProvider,
+		api_key: &str,
+		base_url: Option<&str>,
+	) -> Result<()> {
+		let endpoint = upstream_endpoint(provider);
+		let mut wire: Vec<UpstreamKeyWire> = self
+			.upstream_keys(provider)
+			.await?
+			.into_iter()
+			.map(|key| UpstreamKeyWire {
+				api_key: key.api_key,
+				base_url: key.base_url,
+				auth_index: None,
+			})
+			.collect();
+		wire.push(UpstreamKeyWire {
+			api_key: api_key.to_string(),
+			base_url: base_url.map(str::to_string),
+			auth_index: None,
+		});
+		self.send(
+			self.http
+				.put(self.endpoint(endpoint)?)
+				.json(&serde_json::json!(wire)),
+		)
+		.await?;
+		Ok(())
+	}
+
+	pub async fn delete_upstream_key(
+		&self,
+		provider: GatewayUpstreamProvider,
+		api_key: &str,
+	) -> Result<()> {
+		self.send(
+			self.http
+				.delete(self.endpoint(upstream_endpoint(provider))?)
+				.query(&[("api-key", api_key)]),
+		)
+		.await?;
+		Ok(())
+	}
+
+	/// OpenAI-compatibility uplinks. Read through `GET /config`: the
+	/// dedicated endpoint strips `api-keys` from responses, so it cannot
+	/// feed a lossless read-modify-write.
+	pub async fn compat_providers(
+		&self,
+	) -> Result<Vec<GatewayCompatProviderDto>> {
+		let config = self.get_json("config").await?;
+		let raw = config
+			.get("openai-compatibility")
+			.cloned()
+			.unwrap_or(serde_json::Value::Array(Vec::new()));
+		let raw = if raw.is_null() {
+			serde_json::Value::Array(Vec::new())
+		} else {
+			raw
+		};
+		let wire: Vec<CompatProviderWire> = serde_json::from_value(raw)?;
+		Ok(wire.into_iter().map(compat_wire_to_dto).collect())
+	}
+
+	pub async fn add_compat_provider(
+		&self,
+		provider: &GatewayCompatProviderDto,
+	) -> Result<()> {
+		let mut wire: Vec<CompatProviderWire> = self
+			.compat_providers()
+			.await?
+			.into_iter()
+			.map(compat_dto_to_wire)
+			.collect();
+		wire.retain(|existing| existing.name != provider.name);
+		wire.push(compat_dto_to_wire(provider.clone()));
+		self.send(
+			self.http
+				.put(self.endpoint("openai-compatibility")?)
+				.json(&serde_json::json!(wire)),
+		)
+		.await?;
+		Ok(())
+	}
+
+	pub async fn delete_compat_provider(&self, name: &str) -> Result<()> {
+		self.send(
+			self.http
+				.delete(self.endpoint("openai-compatibility")?)
+				.query(&[("name", name)]),
+		)
+		.await?;
+		Ok(())
+	}
+
+	/// Clear the quota/cooldown state of one credential.
+	pub async fn reset_quota(&self, auth_index: &str) -> Result<()> {
+		self.send(
+			self.http
+				.post(self.endpoint("reset-quota")?)
+				.json(&serde_json::json!({ "auth_index": auth_index })),
+		)
+		.await?;
+		Ok(())
 	}
 
 	/// Model ids the gateway currently serves, from the OpenAI-compatible
@@ -348,6 +524,40 @@ impl ManagementClient {
 		models.sort();
 		models.dedup();
 		Ok(models)
+	}
+}
+
+fn compat_wire_to_dto(wire: CompatProviderWire) -> GatewayCompatProviderDto {
+	GatewayCompatProviderDto {
+		name: wire.name,
+		base_url: wire.base_url,
+		api_keys: wire.api_keys,
+		models: wire
+			.models
+			.into_iter()
+			.map(|model| GatewayCompatModelDto {
+				name: model.name,
+				alias: model.alias,
+			})
+			.collect(),
+		disabled: wire.disabled,
+	}
+}
+
+fn compat_dto_to_wire(dto: GatewayCompatProviderDto) -> CompatProviderWire {
+	CompatProviderWire {
+		name: dto.name,
+		base_url: dto.base_url,
+		api_keys: dto.api_keys,
+		models: dto
+			.models
+			.into_iter()
+			.map(|model| CompatModelWire {
+				name: model.name,
+				alias: model.alias,
+			})
+			.collect(),
+		disabled: dto.disabled,
 	}
 }
 
@@ -496,6 +706,41 @@ mod tests {
 		let (base, _) = spawn_mock(200, r#"{"api-keys":["k1","k2"]}"#);
 		let keys = client(&base).api_keys().await.expect("keys");
 		assert_eq!(keys, vec!["k1".to_string(), "k2".to_string()]);
+	}
+
+	#[tokio::test]
+	async fn latest_version_strips_tag_prefix() {
+		let (base, _) = spawn_mock(200, r#"{"latest-version":"v7.2.82"}"#);
+		let latest = client(&base).latest_version().await.expect("latest");
+		assert_eq!(latest, "7.2.82");
+	}
+
+	#[tokio::test]
+	async fn upstream_keys_map_kebab_wire_to_dto() {
+		let (base, _) = spawn_mock(
+			200,
+			r#"{"claude-api-key":[{"api-key":"sk-1","base-url":"https://r.io","proxy-url":"","models":null,"auth-index":"idx1"}]}"#,
+		);
+		let keys = client(&base)
+			.upstream_keys(GatewayUpstreamProvider::Claude)
+			.await
+			.expect("keys");
+		assert_eq!(keys.len(), 1);
+		assert_eq!(keys[0].api_key, "sk-1");
+		assert_eq!(keys[0].base_url.as_deref(), Some("https://r.io"));
+		assert_eq!(keys[0].auth_index.as_deref(), Some("idx1"));
+	}
+
+	#[tokio::test]
+	async fn delete_upstream_key_uses_api_key_query() {
+		let (base, seen) = spawn_mock(200, r#"{"status":"ok"}"#);
+		client(&base)
+			.delete_upstream_key(GatewayUpstreamProvider::Gemini, "AIza1")
+			.await
+			.expect("delete");
+		let request = seen.lock().expect("seen").clone();
+		assert!(request
+			.starts_with("DELETE /v0/management/gemini-api-key?api-key=AIza1"));
 	}
 
 	#[tokio::test]

@@ -8,6 +8,10 @@
  */
 export type GatewayAuthFileDto = {
 	id: string | null;
+	/**
+	 * Server-side credential handle, required by quota reset.
+	 */
+	auth_index: string | null;
 	name: string;
 	provider: string | null;
 	label: string | null;

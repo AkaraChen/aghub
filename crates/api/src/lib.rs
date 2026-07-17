@@ -379,6 +379,13 @@ fn build_rocket(
 				routes::gateway::get_gateway_config_file,
 				routes::gateway::put_gateway_config_file,
 				routes::gateway::gateway_usage,
+				routes::gateway::list_gateway_upstream_keys,
+				routes::gateway::add_gateway_upstream_key,
+				routes::gateway::delete_gateway_upstream_key,
+				routes::gateway::list_gateway_compat_providers,
+				routes::gateway::add_gateway_compat_provider,
+				routes::gateway::delete_gateway_compat_provider,
+				routes::gateway::reset_gateway_account_quota,
 			],
 		)
 		.register(
