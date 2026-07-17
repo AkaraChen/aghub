@@ -103,6 +103,16 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 		page.getByRole("button", { name: "Use global (80%)" }).first(),
 	).toBeVisible();
 
+	// A specific agent's editor only offers that agent's fields: Codex
+	// reports no Opus window, so switching the target drops it.
+	await expect(page.getByText("Weekly (Opus)")).toBeVisible();
+	await page.getByRole("button", { name: "Editing layout for" }).click();
+	await page.getByRole("option", { name: "Codex" }).click();
+	await expect(page.getByText("Weekly (Opus)")).toBeHidden();
+	await expect(page.getByText("Reasoning")).toBeVisible();
+	await page.getByRole("button", { name: "Editing layout for" }).click();
+	await page.getByRole("option", { name: "Default" }).click();
+
 	// Advanced knobs are collapsed by default and expand on demand.
 	await expect(page.getByText("Polling interval")).toBeHidden();
 	await page.getByRole("button", { name: "Advanced" }).click();

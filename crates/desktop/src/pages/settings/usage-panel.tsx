@@ -206,25 +206,44 @@ export default function UsagePanel() {
 		updateHome({ perAgent: next });
 	};
 
-	const windowFields: LayoutField[] = HOME_WINDOW_IDS.map((id) => ({
-		id,
-		label: t(HOME_WINDOW_LABEL_KEYS[id]),
-		hint: id === "weekly_opus" ? t("usageStatClaudeOnly") : undefined,
-	}));
-	const statFields: LayoutField[] = HOME_STAT_IDS.map((id) => {
-		const agentHint = HOME_STAT_AGENT_HINT[id];
-		return {
+	// A specific agent's editor only offers fields that agent reports;
+	// agent-exclusive fields stay in the shared default layout, marked with
+	// a hint, and the home card skips them where they don't apply.
+	const fieldAgent = (
+		id: HomeWindowId | HomeStatId,
+	): "claude" | "codex" | undefined => {
+		if (id === "weekly_opus") return "claude";
+		const stat = HOME_STAT_IDS.find((s) => s === id);
+		return stat ? HOME_STAT_AGENT_HINT[stat] : undefined;
+	};
+	const offeredTo = (id: HomeWindowId | HomeStatId) => {
+		const only = fieldAgent(id);
+		return layoutTarget === "default" || !only || only === layoutTarget;
+	};
+	const hintFor = (id: HomeWindowId | HomeStatId) => {
+		const only = fieldAgent(id);
+		return layoutTarget === "default" && only
+			? t(
+					only === "claude"
+						? "usageStatClaudeOnly"
+						: "usageStatCodexOnly",
+				)
+			: undefined;
+	};
+	const windowFields: LayoutField[] = HOME_WINDOW_IDS.filter(offeredTo).map(
+		(id) => ({
+			id,
+			label: t(HOME_WINDOW_LABEL_KEYS[id]),
+			hint: hintFor(id),
+		}),
+	);
+	const statFields: LayoutField[] = HOME_STAT_IDS.filter(offeredTo).map(
+		(id) => ({
 			id,
 			label: t(HOME_STAT_DEFINITIONS[id].labelKey),
-			hint: agentHint
-				? t(
-						agentHint === "claude"
-							? "usageStatClaudeOnly"
-							: "usageStatCodexOnly",
-					)
-				: undefined,
-		};
-	});
+			hint: hintFor(id),
+		}),
+	);
 
 	const layoutDisabled = !home.showUsageOnHome;
 
@@ -271,6 +290,16 @@ export default function UsagePanel() {
 									)}
 								/>
 								ccusage
+								<Button
+									isIconOnly
+									size="sm"
+									variant="ghost"
+									onPress={recheckStatus}
+									aria-label={t("usageStatusRecheck")}
+									className="size-6 text-muted"
+								>
+									<ArrowPathIcon className="size-3.5" />
+								</Button>
 							</span>
 							<span
 								className={cn(
@@ -303,15 +332,6 @@ export default function UsagePanel() {
 									</Button>
 								)
 							)}
-							<Button
-								isIconOnly
-								size="sm"
-								variant="ghost"
-								onPress={recheckStatus}
-								aria-label={t("usageStatusRecheck")}
-							>
-								<ArrowPathIcon className="size-4" />
-							</Button>
 						</div>
 					</div>
 					<SettingRow
@@ -816,11 +836,10 @@ function SettingNumber({
 			formatOptions={formatOptions}
 			isDisabled={isDisabled}
 			aria-label={ariaLabel}
-			className="w-36"
 		>
 			<NumberField.Group>
 				<NumberField.DecrementButton />
-				<NumberField.Input className="w-full min-w-0 text-center tabular-nums" />
+				<NumberField.Input className="w-16" />
 				<NumberField.IncrementButton />
 			</NumberField.Group>
 		</NumberField>

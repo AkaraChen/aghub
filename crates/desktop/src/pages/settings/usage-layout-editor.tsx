@@ -111,9 +111,12 @@ export function InteractiveCardLayout({
 	const slotsOf = (type: SlotType) =>
 		type === "window" ? windowSlots : statSlots;
 
-	// Shown fields in order.
+	// Shown fields in order. Slots may reference fields not offered to the
+	// current target (e.g. a Claude-only bar inside the shared default
+	// layout while editing Codex) — those render nowhere and drop out on
+	// the next commit.
 	const shownOf = (type: SlotType): string[] =>
-		slotsOf(type).filter((x): x is string => x != null);
+		slotsOf(type).filter((x): x is string => x != null && fieldById.has(x));
 
 	// Hidden fields: every field of a type not currently shown.
 	const hiddenOf = (type: SlotType): LayoutField[] => {
