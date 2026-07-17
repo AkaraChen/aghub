@@ -28,8 +28,6 @@ import { ThemeProvider } from "./providers/theme";
 import "./lib/i18n";
 
 const HomePage = lazy(() => import("./pages/home"));
-const GatewayPage = lazy(() => import("./pages/gateway"));
-const GatewayInstanceDetailPage = lazy(() => import("./pages/gateway/detail"));
 const InferenceProvidersPage = lazy(
 	() => import("./pages/inference-providers"),
 );
@@ -345,28 +343,6 @@ function App() {
 													fallback={<PageSkeleton />}
 												>
 													<InferenceProvidersPage />
-												</Suspense>
-											</ErrorBoundary>
-										</MainLayout>
-									</Route>
-									<Route path="/gateway">
-										<MainLayout>
-											<ErrorBoundary>
-												<Suspense
-													fallback={<PageSkeleton />}
-												>
-													<GatewayPage />
-												</Suspense>
-											</ErrorBoundary>
-										</MainLayout>
-									</Route>
-									<Route path="/gateway/:id">
-										<MainLayout>
-											<ErrorBoundary>
-												<Suspense
-													fallback={<PageSkeleton />}
-												>
-													<GatewayInstanceDetailPage />
 												</Suspense>
 											</ErrorBoundary>
 										</MainLayout>

@@ -7,7 +7,6 @@ import type {
 	CreateExternalGatewayRequest,
 	CreateManagedGatewayRequest,
 	GatewayInstanceDto,
-	GatewayProvisionStatusDto,
 	GatewaySettingValue,
 	UpdateGatewayInstanceRequest,
 	UploadGatewayAuthFileRequest,
@@ -31,30 +30,6 @@ export function gatewayInstanceListQueryOptions({
 		// Statuses move on their own (start/stop/health checks), so keep the
 		// list fresh.
 		staleTime: 5_000,
-	});
-}
-
-interface GatewayProvisionStatusQueryParams {
-	api: ApiClient;
-	enabled?: boolean;
-}
-
-export function gatewayProvisionStatusQueryOptions({
-	api,
-	enabled = true,
-}: GatewayProvisionStatusQueryParams) {
-	return queryOptions({
-		queryKey: queryKeys.gateway.provisionStatus(),
-		queryFn: () => api.gateway.provisionStatus(),
-		enabled,
-		staleTime: 0,
-		// Poll only while a download is actually in flight.
-		refetchInterval: (query) => {
-			const phase = query.state.data?.phase;
-			return phase === "downloading" || phase === "extracting"
-				? 1_000
-				: false;
-		},
 	});
 }
 
@@ -147,6 +122,12 @@ export async function invalidateGatewayInstanceQueries(
 ) {
 	await queryClient.invalidateQueries({
 		queryKey: queryKeys.gateway.instances(),
+	});
+	// The backend mirrors every instance into inference-provider entries
+	// (and imports models once it is running), so instance lifecycle
+	// changes must refresh that inventory too.
+	await queryClient.invalidateQueries({
+		queryKey: queryKeys.inferenceProviders.all(),
 	});
 }
 
@@ -276,31 +257,6 @@ export function stopGatewayInstanceMutationOptions({
 		mutationFn: (id: string) => api.gateway.stopInstance(id),
 		onSuccess: async (data) => {
 			await invalidateGatewayInstanceQueries(queryClient);
-			await onSuccess?.(data);
-		},
-	});
-}
-
-interface ProvisionGatewayMutationParams {
-	api: ApiClient;
-	queryClient: QueryClient;
-	onSuccess?: (data: GatewayProvisionStatusDto) => void | Promise<void>;
-}
-
-export function provisionGatewayMutationOptions({
-	api,
-	queryClient,
-	onSuccess,
-}: ProvisionGatewayMutationParams) {
-	return mutationOptions({
-		mutationFn: () => api.gateway.provision(),
-		onSuccess: async (data) => {
-			// Seed the status cache so the poller sees the in-flight phase
-			// immediately instead of waiting for the next refetch.
-			queryClient.setQueryData(queryKeys.gateway.provisionStatus(), data);
-			await queryClient.invalidateQueries({
-				queryKey: queryKeys.gateway.provisionStatus(),
-			});
 			await onSuccess?.(data);
 		},
 	});

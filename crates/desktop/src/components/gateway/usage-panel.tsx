@@ -8,7 +8,7 @@ import {
 	EmptyHeader,
 	EmptyMedia,
 	EmptyTitle,
-} from "../../components/ui/empty";
+} from "../ui/empty";
 import { useApi } from "../../hooks/use-api";
 import { gatewayUsageQueryOptions } from "../../requests/gateway";
 import { flattenGatewayUsage } from "./gateway-helpers";

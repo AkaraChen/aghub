@@ -21,7 +21,7 @@ import {
 	EmptyHeader,
 	EmptyMedia,
 	EmptyTitle,
-} from "../../components/ui/empty";
+} from "../ui/empty";
 import type {
 	GatewayAuthFileDto,
 	GatewayInstanceDto,

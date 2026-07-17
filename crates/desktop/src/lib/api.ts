@@ -59,6 +59,7 @@ import type {
 	CCPluginMarketResponse,
 	MarketSkill,
 	StartGatewayOauthRequest,
+	StartGatewayProvisionRequest,
 	UpdateGatewayInstanceRequest,
 	UpdateGatewaySettingRequest,
 	UploadGatewayAuthFileRequest,
@@ -1186,8 +1187,11 @@ export function createApi(baseUrl: string, token: string) {
 					.get(`gateway/instances/${encodeURIComponent(id)}/version`)
 					.json();
 			},
-			provision(): Promise<GatewayProvisionStatusDto> {
-				return client.post("gateway/provision").json();
+			provision(
+				body: StartGatewayProvisionRequest,
+			): Promise<GatewayProvisionStatusDto> {
+				// The route requires a JSON body even when no mirror is set.
+				return client.post("gateway/provision", { json: body }).json();
 			},
 			provisionStatus(): Promise<GatewayProvisionStatusDto> {
 				return client.get("gateway/provision/status").json();

@@ -134,7 +134,6 @@ export const queryKeys = {
 	gateway: {
 		all: () => ["gateway"] as const,
 		instances: () => ["gateway", "instances"] as const,
-		provisionStatus: () => ["gateway", "provision-status"] as const,
 		version: (instanceId: string) =>
 			["gateway", "version", instanceId] as const,
 		authFiles: (instanceId: string) =>

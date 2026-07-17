@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { GatewayOauthProvider } from "../../generated/dto";
 import { GATEWAY_OAUTH_PROVIDER_OPTIONS } from "./gateway-helpers";
-import { useGatewayOauth } from "./hooks/use-gateway-oauth";
+import { useGatewayOauth } from "../../hooks/use-gateway-oauth";
 
 interface AddGatewayAccountDialogProps {
 	instanceId: string;

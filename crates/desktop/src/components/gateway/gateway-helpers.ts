@@ -1,8 +1,10 @@
+import type { TFunction } from "i18next";
 import type {
 	GatewayInstanceStatus,
 	GatewayOauthProvider,
 	GatewayUsageDto,
 } from "../../generated/dto";
+import type { GatewayLaunchStage } from "../../hooks/use-gateway-launch";
 
 interface GatewayStatusDisplay {
 	labelKey: string;
@@ -101,6 +103,29 @@ export function flattenGatewayUsage(usage: GatewayUsageDto): GatewayUsageRow[] {
 			a.identifier.localeCompare(b.identifier),
 	);
 	return rows;
+}
+
+/**
+ * In-flight label for the launch button; the idle label is the
+ * caller's ("Install and start" vs plain "Install").
+ */
+export function gatewayLaunchLabel(
+	t: TFunction,
+	stage: GatewayLaunchStage,
+	progress: number | null,
+): string {
+	switch (stage) {
+		case "downloading":
+			return progress == null
+				? t("gatewayProvisionDownloading")
+				: t("gatewayDownloadingPercent", {
+						percent: Math.round(progress),
+					});
+		case "starting":
+			return t("gatewayLaunching");
+		default:
+			return t("gatewayLaunchPreparing");
+	}
 }
 
 export function formatGatewayModtime(modtime: string | null): string {

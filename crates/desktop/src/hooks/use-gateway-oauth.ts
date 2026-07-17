@@ -3,9 +3,9 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useRef } from "react";
 import { useTranslation } from "react-i18next";
-import type { GatewayOauthProvider } from "../../../generated/dto";
-import { useApi } from "../../../hooks/use-api";
-import { invalidateGatewayAuthFileQueries } from "../../../requests/gateway";
+import type { GatewayOauthProvider } from "../generated/dto";
+import { useApi } from "./use-api";
+import { invalidateGatewayAuthFileQueries } from "../requests/gateway";
 
 const OAUTH_POLL_INTERVAL_MS = 2_000;
 const OAUTH_POLL_TIMEOUT_MS = 120_000;

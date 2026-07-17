@@ -43,6 +43,7 @@ import { pinyin } from "pinyin-pro";
 import { type Key, useId, useMemo, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import { GatewaySection } from "../components/gateway/gateway-section";
 import { ListSearchHeader } from "../components/list-search-header";
 import { ResourceSectionHeader } from "../components/resource-section-header";
 import type {
@@ -2568,234 +2569,245 @@ export default function InferenceProvidersPage() {
 	}
 
 	return (
-		<div className="flex h-full">
-			<div className="relative flex w-80 shrink-0 flex-col border-r border-border">
-				<ListSearchHeader
-					searchValue={searchQuery}
-					onSearchChange={setSearchQuery}
-					placeholder={t("searchInferenceProviderResources")}
-					ariaLabel={t("searchInferenceProviderResources")}
-				>
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								aria-label={t("createInferenceProvider")}
-								onPress={() => {
-									setSelectedLatinName(null);
-									setPanel({ type: "create" });
-								}}
-							>
-								<PlusIcon className="size-4" />
-							</Button>
-						</Tooltip.Trigger>
-						<Tooltip.Content>{t("add")}</Tooltip.Content>
-					</Tooltip>
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								aria-label={t("refreshInferenceProviders")}
-								onPress={() => refetch()}
-							>
-								<ArrowPathIcon
-									className={cn(
-										"size-4",
-										isFetching && "animate-spin",
-									)}
-								/>
-							</Button>
-						</Tooltip.Trigger>
-						<Tooltip.Content>{t("refresh")}</Tooltip.Content>
-					</Tooltip>
-				</ListSearchHeader>
-
-				<div className="flex-1 overflow-y-auto">
-					<ResourceSectionHeader
-						title={t("codingAgents")}
-						count={filteredCodingAgents.length}
-						icon={<CpuChipIcon className="size-3.5" />}
-					/>
-					{filteredCodingAgents.length === 0 ? (
-						<div className="px-4 py-4 text-center">
-							<p className="text-sm text-muted">
-								{searchQuery.trim()
-									? t("noCodingAgentsMatch")
-									: t("noAgentsAvailable")}
-							</p>
-						</div>
-					) : (
-						<ListBox
-							aria-label={t("codingAgents")}
-							selectionMode="single"
-							selectionBehavior="replace"
-							selectedKeys={selectedAgentKeys}
-							onSelectionChange={(keys) => {
-								if (keys === "all") return;
-								const agentId = [...keys][0] as
-									CodingAgentId | undefined;
-								if (!agentId) return;
-								handleAgentClick(agentId);
-							}}
-							className="p-2"
-						>
-							{filteredCodingAgents.map((agent) => (
-								<ListBox.Item
-									key={agent.id}
-									id={agent.id}
-									textValue={agent.label}
-									className="data-selected:bg-surface"
+		<div className="flex h-full flex-col">
+			<GatewaySection />
+			<div className="flex min-h-0 flex-1">
+				<div className="relative flex w-80 shrink-0 flex-col border-r border-border">
+					<ListSearchHeader
+						searchValue={searchQuery}
+						onSearchChange={setSearchQuery}
+						placeholder={t("searchInferenceProviderResources")}
+						ariaLabel={t("searchInferenceProviderResources")}
+					>
+						<Tooltip delay={0}>
+							<Tooltip.Trigger>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									aria-label={t("createInferenceProvider")}
+									onPress={() => {
+										setSelectedLatinName(null);
+										setPanel({ type: "create" });
+									}}
 								>
-									<div className="flex min-w-0 items-center gap-2">
-										<AgentIcon
-											id={agent.id}
-											name={agent.label}
-											size="xs"
-											variant="ghost"
-										/>
-										<div className="min-w-0 flex-1">
-											<Label className="block truncate">
-												{agent.label}
-											</Label>
+									<PlusIcon className="size-4" />
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>{t("add")}</Tooltip.Content>
+						</Tooltip>
+						<Tooltip delay={0}>
+							<Tooltip.Trigger>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									aria-label={t("refreshInferenceProviders")}
+									onPress={() => refetch()}
+								>
+									<ArrowPathIcon
+										className={cn(
+											"size-4",
+											isFetching && "animate-spin",
+										)}
+									/>
+								</Button>
+							</Tooltip.Trigger>
+							<Tooltip.Content>{t("refresh")}</Tooltip.Content>
+						</Tooltip>
+					</ListSearchHeader>
+
+					<div className="flex-1 overflow-y-auto">
+						<ResourceSectionHeader
+							title={t("codingAgents")}
+							count={filteredCodingAgents.length}
+							icon={<CpuChipIcon className="size-3.5" />}
+						/>
+						{filteredCodingAgents.length === 0 ? (
+							<div className="px-4 py-4 text-center">
+								<p className="text-sm text-muted">
+									{searchQuery.trim()
+										? t("noCodingAgentsMatch")
+										: t("noAgentsAvailable")}
+								</p>
+							</div>
+						) : (
+							<ListBox
+								aria-label={t("codingAgents")}
+								selectionMode="single"
+								selectionBehavior="replace"
+								selectedKeys={selectedAgentKeys}
+								onSelectionChange={(keys) => {
+									if (keys === "all") return;
+									const agentId = [...keys][0] as
+										CodingAgentId | undefined;
+									if (!agentId) return;
+									handleAgentClick(agentId);
+								}}
+								className="p-2"
+							>
+								{filteredCodingAgents.map((agent) => (
+									<ListBox.Item
+										key={agent.id}
+										id={agent.id}
+										textValue={agent.label}
+										className="data-selected:bg-surface"
+									>
+										<div className="flex min-w-0 items-center gap-2">
+											<AgentIcon
+												id={agent.id}
+												name={agent.label}
+												size="xs"
+												variant="ghost"
+											/>
+											<div className="min-w-0 flex-1">
+												<Label className="block truncate">
+													{agent.label}
+												</Label>
+											</div>
 										</div>
-									</div>
-								</ListBox.Item>
-							))}
-						</ListBox>
+									</ListBox.Item>
+								))}
+							</ListBox>
+						)}
+
+						<ResourceSectionHeader
+							title={t("inferenceProviders")}
+							count={filteredProviders.length}
+							icon={<ServerIcon className="size-3.5" />}
+						/>
+						{filteredProviders.length === 0 ? (
+							<div className="px-4 py-4 text-center">
+								<p className="text-sm text-muted">
+									{providers.length === 0
+										? t("noInferenceProviders")
+										: t("noInferenceProvidersMatch")}
+								</p>
+							</div>
+						) : (
+							<ListBox
+								aria-label={t("inferenceProviders")}
+								selectionMode="single"
+								selectionBehavior="replace"
+								selectedKeys={selectedProviderKeys}
+								onSelectionChange={(keys) => {
+									if (keys === "all") return;
+									const latinName = [...keys][0];
+									if (!latinName) return;
+									handleProviderClick(String(latinName));
+								}}
+								className="p-2"
+							>
+								{filteredProviders.map((provider) => (
+									<ListBox.Item
+										key={provider.latin_name}
+										id={provider.latin_name}
+										textValue={`${provider.display_name} ${provider.latin_name}`}
+										className="data-selected:bg-surface"
+									>
+										<div className="flex min-w-0 items-center gap-2">
+											<ProviderIcon
+												format={provider.format}
+												logo={provider.preset}
+											/>
+											<div className="min-w-0 flex-1">
+												<Label className="block truncate">
+													{provider.display_name}
+												</Label>
+											</div>
+										</div>
+									</ListBox.Item>
+								))}
+							</ListBox>
+						)}
+					</div>
+				</div>
+
+				<div className="relative flex-1 overflow-hidden">
+					{resolvedPanel.type === "agent" &&
+						resolvedPanel.agentId === "opencode" && (
+							<OpenCodeInferenceProviderPanel
+								onEditInferenceProvider={
+									handleEditProviderByName
+								}
+							/>
+						)}
+
+					{resolvedPanel.type === "agent" &&
+						resolvedPanel.agentId === "codex" && (
+							<CodexInferenceProviderPanel
+								onEditInferenceProvider={
+									handleEditProviderByName
+								}
+							/>
+						)}
+
+					{resolvedPanel.type === "agent" &&
+						resolvedPanel.agentId === "claude" && (
+							<ClaudeInferenceProviderPanel
+								onEditInferenceProvider={
+									handleEditProviderByName
+								}
+							/>
+						)}
+
+					{resolvedPanel.type === "create" && (
+						<ProviderForm
+							mode="create"
+							providers={providers}
+							presets={presets}
+							isPresetsLoading={isPresetsLoading}
+							onCancel={() => setPanel({ type: "detail" })}
+							onSuccess={handleCreatedOrUpdated}
+						/>
 					)}
 
-					<ResourceSectionHeader
-						title={t("inferenceProviders")}
-						count={filteredProviders.length}
-						icon={<ServerIcon className="size-3.5" />}
-					/>
-					{filteredProviders.length === 0 ? (
-						<div className="px-4 py-4 text-center">
-							<p className="text-sm text-muted">
-								{providers.length === 0
-									? t("noInferenceProviders")
-									: t("noInferenceProvidersMatch")}
-							</p>
-						</div>
-					) : (
-						<ListBox
-							aria-label={t("inferenceProviders")}
-							selectionMode="single"
-							selectionBehavior="replace"
-							selectedKeys={selectedProviderKeys}
-							onSelectionChange={(keys) => {
-								if (keys === "all") return;
-								const latinName = [...keys][0];
-								if (!latinName) return;
-								handleProviderClick(String(latinName));
+					{resolvedPanel.type === "edit" && (
+						<ProviderForm
+							key={resolvedPanel.provider.latin_name}
+							mode="edit"
+							provider={resolvedPanel.provider}
+							providers={providers}
+							presets={presets}
+							isPresetsLoading={isPresetsLoading}
+							onCancel={() => setPanel({ type: "detail" })}
+							onSuccess={handleCreatedOrUpdated}
+						/>
+					)}
+
+					{resolvedPanel.type === "detail" && activeProvider && (
+						<ProviderDetail
+							key={activeProvider.latin_name}
+							provider={activeProvider}
+							onEdit={() =>
+								setPanel({
+									type: "edit",
+									provider: activeProvider,
+								})
+							}
+							onDeleted={() => {
+								setSelectedLatinName(null);
+								setPanel({ type: "detail" });
 							}}
-							className="p-2"
-						>
-							{filteredProviders.map((provider) => (
-								<ListBox.Item
-									key={provider.latin_name}
-									id={provider.latin_name}
-									textValue={`${provider.display_name} ${provider.latin_name}`}
-									className="data-selected:bg-surface"
-								>
-									<div className="flex min-w-0 items-center gap-2">
-										<ProviderIcon
-											format={provider.format}
-											logo={provider.preset}
-										/>
-										<div className="min-w-0 flex-1">
-											<Label className="block truncate">
-												{provider.display_name}
-											</Label>
-										</div>
-									</div>
-								</ListBox.Item>
-							))}
-						</ListBox>
+						/>
+					)}
+
+					{resolvedPanel.type === "detail" && !activeProvider && (
+						<div className="flex h-full flex-col items-center justify-center gap-4">
+							<div className="text-center">
+								<p className="mb-2 text-sm text-muted">
+									{t("noInferenceProviders")}
+								</p>
+							</div>
+							<Button
+								onPress={() => setPanel({ type: "create" })}
+							>
+								<PlusIcon className="mr-2 size-4" />
+								{t("createInferenceProvider")}
+							</Button>
+						</div>
 					)}
 				</div>
-			</div>
-
-			<div className="relative flex-1 overflow-hidden">
-				{resolvedPanel.type === "agent" &&
-					resolvedPanel.agentId === "opencode" && (
-						<OpenCodeInferenceProviderPanel
-							onEditInferenceProvider={handleEditProviderByName}
-						/>
-					)}
-
-				{resolvedPanel.type === "agent" &&
-					resolvedPanel.agentId === "codex" && (
-						<CodexInferenceProviderPanel
-							onEditInferenceProvider={handleEditProviderByName}
-						/>
-					)}
-
-				{resolvedPanel.type === "agent" &&
-					resolvedPanel.agentId === "claude" && (
-						<ClaudeInferenceProviderPanel
-							onEditInferenceProvider={handleEditProviderByName}
-						/>
-					)}
-
-				{resolvedPanel.type === "create" && (
-					<ProviderForm
-						mode="create"
-						providers={providers}
-						presets={presets}
-						isPresetsLoading={isPresetsLoading}
-						onCancel={() => setPanel({ type: "detail" })}
-						onSuccess={handleCreatedOrUpdated}
-					/>
-				)}
-
-				{resolvedPanel.type === "edit" && (
-					<ProviderForm
-						key={resolvedPanel.provider.latin_name}
-						mode="edit"
-						provider={resolvedPanel.provider}
-						providers={providers}
-						presets={presets}
-						isPresetsLoading={isPresetsLoading}
-						onCancel={() => setPanel({ type: "detail" })}
-						onSuccess={handleCreatedOrUpdated}
-					/>
-				)}
-
-				{resolvedPanel.type === "detail" && activeProvider && (
-					<ProviderDetail
-						key={activeProvider.latin_name}
-						provider={activeProvider}
-						onEdit={() =>
-							setPanel({
-								type: "edit",
-								provider: activeProvider,
-							})
-						}
-						onDeleted={() => {
-							setSelectedLatinName(null);
-							setPanel({ type: "detail" });
-						}}
-					/>
-				)}
-
-				{resolvedPanel.type === "detail" && !activeProvider && (
-					<div className="flex h-full flex-col items-center justify-center gap-4">
-						<div className="text-center">
-							<p className="mb-2 text-sm text-muted">
-								{t("noInferenceProviders")}
-							</p>
-						</div>
-						<Button onPress={() => setPanel({ type: "create" })}>
-							<PlusIcon className="mr-2 size-4" />
-							{t("createInferenceProvider")}
-						</Button>
-					</div>
-				)}
 			</div>
 		</div>
 	);
