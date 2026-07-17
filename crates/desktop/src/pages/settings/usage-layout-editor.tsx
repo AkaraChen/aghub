@@ -204,6 +204,16 @@ export function InteractiveCardLayout({
 
 	const shownWindows = shownOf("window");
 	const shownStats = shownOf("stat");
+	// The ghost mirrors its source: a bar dragged off the card keeps that
+	// slot's placeholder fill, one from the drawer keeps its empty track.
+	const activeBarIndex =
+		activeType === "window" && activeId
+			? shownWindows.indexOf(activeId)
+			: -1;
+	const activeBarPct =
+		activeBarIndex >= 0
+			? PREVIEW_BAR_PCT[activeBarIndex % PREVIEW_BAR_PCT.length]
+			: 0;
 
 	return (
 		<DndContext
@@ -334,7 +344,11 @@ export function InteractiveCardLayout({
 			    its old place, a second overlay flight would double-image. */}
 			<DragOverlay dropAnimation={null}>
 				{activeField && activeType ? (
-					<DragGhost field={activeField} type={activeType} />
+					<DragGhost
+						field={activeField}
+						type={activeType}
+						barPct={activeBarPct}
+					/>
 				) : null}
 			</DragOverlay>
 		</DndContext>
@@ -343,11 +357,20 @@ export function InteractiveCardLayout({
 
 /** The floating drag preview — the same shape and size as the row it left,
  *  which both panes share (bars span the row, stats fill half the grid). */
-function DragGhost({ field, type }: { field: LayoutField; type: SlotType }) {
+function DragGhost({
+	field,
+	type,
+	barPct,
+}: {
+	field: LayoutField;
+	type: SlotType;
+	/** Placeholder fill carried over from the source row; 0 = empty track. */
+	barPct: number;
+}) {
 	if (type === "window") {
 		return (
 			<div className="w-[296px] cursor-grabbing rounded-md border border-border bg-surface p-1 shadow-lg">
-				<BarBody label={field.label} pct={PREVIEW_BAR_PCT[0]} />
+				<BarBody label={field.label} pct={barPct} />
 			</div>
 		);
 	}

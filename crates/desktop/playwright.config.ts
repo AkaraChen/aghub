@@ -26,9 +26,11 @@ export default defineConfig({
 	webServer: {
 		command: "bun run dev",
 		url: "http://localhost:1420",
-		// Locally a dev server may already be running; CI must never adopt
-		// a stale one from a previous step.
-		reuseExistingServer: !process.env.CI,
+		// Never adopt whatever happens to listen on 1420 — a dev server from
+		// another checkout (e.g. a .claude/worktrees clone) serves different
+		// code and the suite silently tests that instead. If the port is
+		// taken, vite's strictPort fails loudly: stop that server first.
+		reuseExistingServer: false,
 		timeout: 60_000,
 	},
 });

@@ -12,7 +12,7 @@ import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useUsageSettings } from "../hooks/use-usage-settings";
 import { AgentIcon } from "../lib/agent-icons";
-import { DEFAULT_USAGE_SETTINGS } from "../lib/store";
+import { agentSettings, DEFAULT_USAGE_SETTINGS } from "../lib/store";
 import {
 	clampPct,
 	formatCost,
@@ -39,8 +39,11 @@ const FALLBACK_LABELS: Record<string, string> = {
 	codex: "Codex",
 };
 
+/** Totals fields that hold token counts (everything but the cost). */
+type TokenField = Exclude<keyof UsageTotalsDto, "cost_usd">;
+
 /** Token breakdown rows, in report order; zero-valued rows are dropped. */
-const BREAKDOWN: { field: keyof UsageTotalsDto; labelKey: string }[] = [
+const BREAKDOWN: { field: TokenField; labelKey: string }[] = [
 	{ field: "input_tokens", labelKey: "usageStatInputTokens" },
 	{ field: "output_tokens", labelKey: "usageStatOutputTokens" },
 	{ field: "cache_read_tokens", labelKey: "usageStatCacheRead" },
@@ -53,6 +56,23 @@ function toCompactYmd(date: Date): string {
 	const month = String(date.getMonth() + 1).padStart(2, "0");
 	const day = String(date.getDate()).padStart(2, "0");
 	return `${year}${month}${day}`;
+}
+
+/** Every "YYYY-MM-DD" in the page's window, oldest first — the report skips
+ *  idle days, so the strip fills them in to keep the time axis linear. */
+function windowDates(days: number): string[] {
+	const out: string[] = [];
+	const cursor = new Date();
+	cursor.setDate(cursor.getDate() - (days - 1));
+	for (let i = 0; i < days; i++) {
+		out.push(
+			`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(
+				cursor.getDate(),
+			).padStart(2, "0")}`,
+		);
+		cursor.setDate(cursor.getDate() + 1);
+	}
+	return out;
 }
 
 export default function UsagePage() {
@@ -102,7 +122,21 @@ export default function UsagePage() {
 		return map;
 	}, [limits]);
 
-	const agents = useMemo(() => report?.agents ?? [], [report]);
+	// Same gate as the home cards: agents the user untracked in settings
+	// don't appear anywhere on the page.
+	const agents = useMemo(
+		() =>
+			(report?.agents ?? []).filter(
+				(entry) => agentSettings(settings, entry.agent).tracked,
+			),
+		[report, settings],
+	);
+
+	// Per-agent alert threshold with the global value as fallback — the same
+	// resolution the home cards use.
+	const thresholdFor = (agent: string) =>
+		agentSettings(settings, agent).alertThresholdPct ??
+		settings.globalAlertThresholdPct;
 
 	// Cross-agent headline numbers; spend only when ccusage priced anything.
 	const summary = useMemo(() => {
@@ -198,9 +232,9 @@ export default function UsagePage() {
 									usage={entry}
 									name={displayName(entry.agent)}
 									limits={limitsByAgent.get(entry.agent)}
-									alertThresholdPct={
-										settings.globalAlertThresholdPct
-									}
+									alertThresholdPct={thresholdFor(
+										entry.agent,
+									)}
 								/>
 							))}
 						</section>
@@ -247,9 +281,7 @@ function CombinedDailyBars({
 		.filter((a) => a.days.some((d) => d.total_tokens > 0))
 		.slice(0, SERIES_FILLS.length);
 
-	const dates = Array.from(
-		new Set(series.flatMap((a) => a.days.map((d) => d.date))),
-	).sort();
+	const dates = windowDates(WINDOW_DAYS);
 	const byAgent = series.map((a) => {
 		const map = new Map(a.days.map((d) => [d.date, d.total_tokens]));
 		return (date: string) => map.get(date) ?? 0;
@@ -265,7 +297,7 @@ function CombinedDailyBars({
 			month: "short",
 			day: "numeric",
 		});
-	if (dates.length === 0) return null;
+	if (series.length === 0) return null;
 
 	return (
 		<div className="flex flex-col gap-2">
@@ -343,7 +375,7 @@ function AgentSummaryRow({
 	const { t } = useTranslation();
 	const { totals } = usage;
 	const cost = formatCost(totals.cost_usd);
-	const rows = BREAKDOWN.filter(({ field }) => (totals[field] as number) > 0);
+	const rows = BREAKDOWN.filter(({ field }) => totals[field] > 0);
 
 	return (
 		<div className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4 sm:flex-row sm:items-start sm:gap-8">
@@ -423,7 +455,7 @@ function AgentSummaryRow({
 							>
 								<dt className="text-muted">{t(labelKey)}</dt>
 								<dd className="tabular-nums">
-									{formatTokens(totals[field] as number)}
+									{formatTokens(totals[field])}
 								</dd>
 							</div>
 						))}
