@@ -1542,7 +1542,12 @@ export default {
 	gateway: "閘道",
 	gatewayLocalGateway: "本機閘道",
 	gatewayValueProp:
-		"把 Claude、Codex、Gemini 的訂閱帳號變成本機統一 API，供任意 coding agent 呼叫。",
+		"把 Claude、Codex、Gemini 的訂閱帳號變成本機統一 API，任何 agent 都能繫結使用。",
+	gatewayInstallLocal: "安裝本機閘道",
+	gatewaySetupFinePrint: "下載約 40 MB · 設定存放在 ~/.cli-proxy-api",
+	gatewayVersionUpToDate: "已是最新",
+	gatewayMirrorFootnote:
+		"鏡像條目「{{name}}」與「{{name}} (OpenAI)」在左側推理 Provider 分組，繫結 agent 在那裡進行。",
 	gatewayInstallAndStart: "安裝並啟動",
 	gatewayInstall: "安裝",
 	gatewayLaunchPreparing: "準備中…",
@@ -1550,8 +1555,6 @@ export default {
 	gatewayDownloadingPercent: "下載中 {{percent}}%",
 	gatewayLaunchReady: "閘道已就緒",
 	gatewayAccountsButton: "帳號",
-	gatewayMirrorHint:
-		"閘道已鏡像為下方清單中的同名 Provider 條目，模型清單自動匯入，繫結 agent 時直接選擇即可。",
 	gatewayInstallStatusTitle: "安裝與狀態",
 	gatewayNotInstalled: "未安裝",
 	gatewayMirrorTitle: "下載來源",

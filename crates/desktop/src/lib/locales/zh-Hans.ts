@@ -1546,7 +1546,12 @@ export default {
 	gateway: "网关",
 	gatewayLocalGateway: "本地网关",
 	gatewayValueProp:
-		"把 Claude、Codex、Gemini 的订阅账号变成本地统一 API，供任意 coding agent 调用。",
+		"把 Claude、Codex、Gemini 的订阅账号变成本机统一 API，任何 agent 都能绑定使用。",
+	gatewayInstallLocal: "安装本地网关",
+	gatewaySetupFinePrint: "下载约 40 MB · 配置存放在 ~/.cli-proxy-api",
+	gatewayVersionUpToDate: "已是最新",
+	gatewayMirrorFootnote:
+		"镜像条目「{{name}}」与「{{name}} (OpenAI)」在左侧推理 Provider 分组，绑定 agent 在那里进行。",
 	gatewayInstallAndStart: "安装并启动",
 	gatewayInstall: "安装",
 	gatewayLaunchPreparing: "准备中…",
@@ -1554,8 +1559,6 @@ export default {
 	gatewayDownloadingPercent: "下载中 {{percent}}%",
 	gatewayLaunchReady: "网关已就绪",
 	gatewayAccountsButton: "账号",
-	gatewayMirrorHint:
-		"网关已镜像为下方列表中的同名 Provider 条目，模型列表自动导入，绑定 agent 时直接选择即可。",
 	gatewayInstallStatusTitle: "安装与状态",
 	gatewayNotInstalled: "未安装",
 	gatewayMirrorTitle: "下载源",

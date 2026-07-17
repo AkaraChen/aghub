@@ -25,7 +25,7 @@ export const GATEWAY_STATUS_DISPLAY: Record<
 	},
 	starting: {
 		labelKey: "gatewayStatusStarting",
-		dotClass: "bg-accent",
+		dotClass: "animate-pulse bg-accent",
 	},
 	running: {
 		labelKey: "gatewayStatusRunning",
@@ -33,9 +33,19 @@ export const GATEWAY_STATUS_DISPLAY: Record<
 	},
 	unhealthy: {
 		labelKey: "gatewayStatusUnhealthy",
-		dotClass: "bg-danger",
+		dotClass: "bg-warning",
 	},
 };
+
+const URL_PROTOCOL_REGEX = /^[a-z][a-z0-9+.-]*:\/\//i;
+const TRAILING_SLASHES_REGEX = /\/+$/;
+
+/** `http://127.0.0.1:8317/` → `127.0.0.1:8317` for compact meta rows. */
+export function displayGatewayHost(baseUrl: string): string {
+	return baseUrl
+		.replace(URL_PROTOCOL_REGEX, "")
+		.replace(TRAILING_SLASHES_REGEX, "");
+}
 
 interface GatewayOauthProviderOption {
 	id: GatewayOauthProvider;

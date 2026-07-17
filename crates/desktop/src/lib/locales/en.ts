@@ -1558,7 +1558,13 @@ export default {
 	gateway: "Gateway",
 	gatewayLocalGateway: "Local gateway",
 	gatewayValueProp:
-		"Turn your Claude, Codex, and Gemini subscription accounts into one local API for any coding agent.",
+		"Turn your Claude, Codex, and Gemini subscription accounts into one local API any agent can bind to.",
+	gatewayInstallLocal: "Install local gateway",
+	gatewaySetupFinePrint:
+		"Downloads about 40 MB · config lives in ~/.cli-proxy-api",
+	gatewayVersionUpToDate: "Up to date",
+	gatewayMirrorFootnote:
+		'Mirrored entries "{{name}}" and "{{name}} (OpenAI)" live in the providers list on the left — bind agents there.',
 	gatewayInstallAndStart: "Install and start",
 	gatewayInstall: "Install",
 	gatewayLaunchPreparing: "Preparing…",
@@ -1566,8 +1572,6 @@ export default {
 	gatewayDownloadingPercent: "Downloading {{percent}}%",
 	gatewayLaunchReady: "Gateway is ready",
 	gatewayAccountsButton: "Accounts",
-	gatewayMirrorHint:
-		"The gateway shows up as two provider entries below (same name); models are imported automatically — pick them when binding an agent.",
 	gatewayInstallStatusTitle: "Installation & status",
 	gatewayNotInstalled: "Not installed",
 	gatewayMirrorTitle: "Download source",

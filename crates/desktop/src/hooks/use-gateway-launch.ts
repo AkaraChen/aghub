@@ -78,11 +78,13 @@ export function useGatewayLaunch() {
 				setStage("starting");
 				await api.gateway.startInstance(instance.id);
 			}
-			return start;
+			return instance;
 		},
-		onSuccess: (started) => {
+		onSuccess: (_instance, variables) => {
 			toast.success(
-				started ? t("gatewayLaunchReady") : t("gatewayProvisionReady"),
+				variables.start
+					? t("gatewayLaunchReady")
+					: t("gatewayProvisionReady"),
 			);
 		},
 		onError: (error) => {

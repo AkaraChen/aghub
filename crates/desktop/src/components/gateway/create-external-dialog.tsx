@@ -12,6 +12,7 @@ import {
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import type { GatewayInstanceDto } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
 import { createExternalGatewayMutationOptions } from "../../requests/gateway";
 
@@ -24,11 +25,13 @@ interface CreateExternalGatewayFormValues {
 interface CreateExternalGatewayDialogProps {
 	isOpen: boolean;
 	onClose: () => void;
+	onCreated?: (instance: GatewayInstanceDto) => void;
 }
 
 export function CreateExternalGatewayDialog({
 	isOpen,
 	onClose,
+	onCreated,
 }: CreateExternalGatewayDialogProps) {
 	const { t } = useTranslation();
 	const api = useApi();
@@ -52,10 +55,11 @@ export function CreateExternalGatewayDialog({
 		...createExternalGatewayMutationOptions({
 			api,
 			queryClient,
-			onSuccess: () => {
+			onSuccess: (instance) => {
 				toast.success(t("gatewayInstanceCreated"));
 				reset();
 				onClose();
+				onCreated?.(instance);
 			},
 		}),
 		onError: (error) => {
