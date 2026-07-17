@@ -16,6 +16,7 @@ path = "src/lib.rs"
 crate-type = [ "rlib" ]
 
 [dependencies]
+aghub-cliproxy = { path = "../cliproxy" }
 aghub-core = { path = "../core" }
 aghub-git = { path = "../git" }
 aghub-inference = { path = "../inference" }

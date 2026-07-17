@@ -192,6 +192,11 @@ fn build_rocket(
 		.attach(ApiLogFairing)
 		.attach(cors)
 		.manage(crate::state::GitCloneSessions::default())
+		.manage(crate::state::GatewayState {
+			app_data_dir: options.app_data_dir.clone(),
+			runtime: aghub_cliproxy::lifecycle::GatewayRuntime::new(),
+			provision: std::sync::Arc::new(std::sync::Mutex::new(None)),
+		})
 		.manage(crate::state::InferenceProviderState {
 			store: aghub_inference::InferenceProviderStore::new(
 				options.app_data_dir.clone(),
@@ -340,6 +345,29 @@ fn build_rocket(
 				routes::usage::install_ccusage_runtime,
 				routes::usage::update_ccusage_runtime,
 				routes::usage::refresh_ccusage_runtime,
+				routes::gateway::list_gateway_instances,
+				routes::gateway::create_managed_gateway,
+				routes::gateway::create_external_gateway,
+				routes::gateway::update_gateway_instance,
+				routes::gateway::delete_gateway_instance,
+				routes::gateway::start_gateway_instance,
+				routes::gateway::stop_gateway_instance,
+				routes::gateway::start_gateway_provision,
+				routes::gateway::gateway_provision_status,
+				routes::gateway::gateway_version,
+				routes::gateway::list_gateway_auth_files,
+				routes::gateway::upload_gateway_auth_file,
+				routes::gateway::download_gateway_auth_file,
+				routes::gateway::delete_gateway_auth_file,
+				routes::gateway::start_gateway_oauth,
+				routes::gateway::gateway_oauth_status,
+				routes::gateway::get_gateway_api_keys,
+				routes::gateway::put_gateway_api_keys,
+				routes::gateway::get_gateway_settings,
+				routes::gateway::put_gateway_setting,
+				routes::gateway::get_gateway_config_file,
+				routes::gateway::put_gateway_config_file,
+				routes::gateway::gateway_usage,
 			],
 		)
 		.register(
