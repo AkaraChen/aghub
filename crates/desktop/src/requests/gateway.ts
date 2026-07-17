@@ -9,7 +9,9 @@ import type {
 	CreateExternalGatewayRequest,
 	CreateManagedGatewayRequest,
 	GatewayInstanceDto,
+	GatewayOauthExcludedModelsDto,
 	GatewaySettingValue,
+	ImportGatewayVertexRequest,
 	UpdateGatewayInstanceRequest,
 	UploadGatewayAuthFileRequest,
 } from "../generated/dto";
@@ -140,6 +142,36 @@ export function gatewayCompatProvidersQueryOptions({
 	return queryOptions({
 		queryKey: queryKeys.gateway.compatProviders(instanceId),
 		queryFn: () => api.gateway.listCompatProviders(instanceId),
+		enabled,
+		staleTime: 5_000,
+	});
+}
+
+export function gatewayLogsQueryOptions({
+	api,
+	instanceId,
+	enabled = true,
+}: GatewayInstanceScopedQueryParams) {
+	return queryOptions({
+		queryKey: queryKeys.gateway.logs(instanceId),
+		queryFn: () => api.gateway.logs(instanceId),
+		enabled,
+		staleTime: 0,
+		// Follow the tail while the panel is mounted; stop polling once the
+		// endpoint errors (e.g. file logging disabled) instead of hammering it.
+		refetchInterval: (query) => (query.state.error ? false : 5_000),
+		retry: false,
+	});
+}
+
+export function gatewayOauthExcludedModelsQueryOptions({
+	api,
+	instanceId,
+	enabled = true,
+}: GatewayInstanceScopedQueryParams) {
+	return queryOptions({
+		queryKey: queryKeys.gateway.oauthExcludedModels(instanceId),
+		queryFn: () => api.gateway.getOauthExcludedModels(instanceId),
 		enabled,
 		staleTime: 5_000,
 	});
@@ -530,6 +562,72 @@ export function resetGatewayQuotaMutationOptions({
 	return mutationOptions({
 		mutationFn: ({ instanceId, authIndex }: ResetGatewayQuotaVariables) =>
 			api.gateway.resetQuota(instanceId, { auth_index: authIndex }),
+		onSuccess: async (_data, variables) => {
+			await invalidateGatewayAuthFileQueries(
+				queryClient,
+				variables.instanceId,
+			);
+			await onSuccess?.();
+		},
+	});
+}
+
+export function clearGatewayLogsMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: GatewayScopedMutationParams) {
+	return mutationOptions({
+		mutationFn: (instanceId: string) => api.gateway.clearLogs(instanceId),
+		onSuccess: async (_data, instanceId) => {
+			await queryClient.invalidateQueries({
+				queryKey: queryKeys.gateway.logs(instanceId),
+			});
+			await onSuccess?.();
+		},
+	});
+}
+
+interface UpdateGatewayOauthExcludedModelsVariables {
+	instanceId: string;
+	body: GatewayOauthExcludedModelsDto;
+}
+
+export function updateGatewayOauthExcludedModelsMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: GatewayScopedMutationParams) {
+	return mutationOptions({
+		mutationFn: ({
+			instanceId,
+			body,
+		}: UpdateGatewayOauthExcludedModelsVariables) =>
+			api.gateway.updateOauthExcludedModels(instanceId, body),
+		onSuccess: async (_data, variables) => {
+			await queryClient.invalidateQueries({
+				queryKey: queryKeys.gateway.oauthExcludedModels(
+					variables.instanceId,
+				),
+			});
+			await onSuccess?.();
+		},
+	});
+}
+
+interface ImportGatewayVertexVariables {
+	instanceId: string;
+	body: ImportGatewayVertexRequest;
+}
+
+export function importGatewayVertexMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: GatewayScopedMutationParams) {
+	return mutationOptions({
+		mutationFn: ({ instanceId, body }: ImportGatewayVertexVariables) =>
+			api.gateway.importVertex(instanceId, body),
 		onSuccess: async (_data, variables) => {
 			await invalidateGatewayAuthFileQueries(
 				queryClient,

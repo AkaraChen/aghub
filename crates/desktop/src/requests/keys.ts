@@ -150,6 +150,9 @@ export const queryKeys = {
 			["gateway", "upstream-keys", instanceId] as const,
 		compatProviders: (instanceId: string) =>
 			["gateway", "compat-providers", instanceId] as const,
+		logs: (instanceId: string) => ["gateway", "logs", instanceId] as const,
+		oauthExcludedModels: (instanceId: string) =>
+			["gateway", "oauth-excluded-models", instanceId] as const,
 	},
 	integrations: {
 		all: () => ["integrations"] as const,

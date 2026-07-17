@@ -20,6 +20,7 @@ import { GatewayAccountsDrawer } from "../../components/gateway/accounts-drawer"
 import { GatewayConfigPanel } from "../../components/gateway/config-panel";
 import { CreateExternalGatewayDialog } from "../../components/gateway/create-external-dialog";
 import { DeleteGatewayInstanceDialog } from "../../components/gateway/delete-instance-dialog";
+import { GatewayExcludedModelsPanel } from "../../components/gateway/excluded-models-panel";
 import { gatewayLaunchLabel } from "../../components/gateway/gateway-helpers";
 import {
 	GatewayNotRunningNotice,
@@ -206,6 +207,28 @@ function InstallStatusCard({
 						)}
 					</div>
 				</div>
+				{version && (
+					<div className="flex flex-col gap-0.5 text-xs text-muted">
+						<span>
+							{version.bin_source === "env"
+								? t("gatewayBinSourceEnv")
+								: version.bin_source === "downloaded"
+									? t("gatewayBinSourceDownloaded", {
+											version:
+												version.installed ??
+												version.pinned,
+										})
+									: t("gatewayNotInstalled")}
+						</span>
+						{version.system_bin && (
+							<span>
+								{t("gatewaySystemBinHint", {
+									path: version.system_bin,
+								})}
+							</span>
+						)}
+					</div>
+				)}
 				{managed && (
 					<div className="flex items-center justify-between gap-4">
 						<span className="text-sm text-foreground">
@@ -439,6 +462,24 @@ export default function GatewayPanel() {
 						) : (
 							<GatewayNotRunningNotice />
 						)}
+					</Card.Content>
+				</Card>
+			)}
+
+			{managed && managed.status === "running" && (
+				<Card variant="secondary">
+					<Card.Header>
+						<div>
+							<Card.Title>
+								{t("gatewayExcludedModelsTitle")}
+							</Card.Title>
+							<Card.Description>
+								{t("gatewayExcludedModelsDescription")}
+							</Card.Description>
+						</div>
+					</Card.Header>
+					<Card.Content>
+						<GatewayExcludedModelsPanel instanceId={managed.id} />
 					</Card.Content>
 				</Card>
 			)}

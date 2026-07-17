@@ -36,11 +36,14 @@ import type {
 	GatewayCompatProviderDto,
 	GatewayConfigFileDto,
 	GatewayInstanceDto,
+	GatewayLogsDto,
+	GatewayOauthExcludedModelsDto,
 	GatewayProvisionStatusDto,
 	GatewaySettingsDto,
 	GatewayUpstreamKeysDto,
 	GatewayUsageDto,
 	GatewayVersionDto,
+	ImportGatewayVertexRequest,
 	ResetGatewayQuotaRequest,
 	DeleteSkillByPathRequest,
 	DeleteSkillByPathResponse,
@@ -1386,6 +1389,47 @@ export function createApi(baseUrl: string, token: string) {
 					.post(
 						`gateway/instances/${encodeURIComponent(id)}/accounts/reset-quota`,
 						{ json: body },
+					)
+					.then(() => undefined);
+			},
+			logs(id: string): Promise<GatewayLogsDto> {
+				return client
+					.get(`gateway/instances/${encodeURIComponent(id)}/logs`)
+					.json();
+			},
+			clearLogs(id: string): Promise<void> {
+				return client
+					.delete(`gateway/instances/${encodeURIComponent(id)}/logs`)
+					.then(() => undefined);
+			},
+			getOauthExcludedModels(
+				id: string,
+			): Promise<GatewayOauthExcludedModelsDto> {
+				return client
+					.get(
+						`gateway/instances/${encodeURIComponent(id)}/oauth-excluded-models`,
+					)
+					.json();
+			},
+			updateOauthExcludedModels(
+				id: string,
+				body: GatewayOauthExcludedModelsDto,
+			): Promise<void> {
+				return client
+					.put(
+						`gateway/instances/${encodeURIComponent(id)}/oauth-excluded-models`,
+						{ json: body },
+					)
+					.then(() => undefined);
+			},
+			importVertex(
+				id: string,
+				body: ImportGatewayVertexRequest,
+			): Promise<void> {
+				return client
+					.post(
+						`gateway/instances/${encodeURIComponent(id)}/vertex-import`,
+						{ json: body, timeout: 30000 },
 					)
 					.then(() => undefined);
 			},

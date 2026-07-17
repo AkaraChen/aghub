@@ -1,9 +1,88 @@
-import { Button, Label, ListBox, Modal, Select, Spinner } from "@heroui/react";
-import { useState } from "react";
+import { ClipboardDocumentIcon } from "@heroicons/react/24/solid";
+import {
+	Button,
+	Label,
+	ListBox,
+	Modal,
+	Select,
+	Spinner,
+	toast,
+} from "@heroui/react";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { GatewayOauthProvider } from "../../generated/dto";
+import {
+	type GatewayOauthAuthInfo,
+	useGatewayOauth,
+} from "../../hooks/use-gateway-oauth";
 import { GATEWAY_OAUTH_PROVIDER_OPTIONS } from "./gateway-helpers";
-import { useGatewayOauth } from "../../hooks/use-gateway-oauth";
+import { UpstreamProviderIcon } from "./upstream-provider-icon";
+
+function formatCountdown(remainingMs: number): string {
+	const totalSeconds = Math.max(0, Math.floor(remainingMs / 1000));
+	const minutes = Math.floor(totalSeconds / 60);
+	const seconds = totalSeconds % 60;
+	return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function DeviceCodeWaiting({ authInfo }: { authInfo: GatewayOauthAuthInfo }) {
+	const { t } = useTranslation();
+	// Ticking clock for the expiry countdown — a real external time source,
+	// not derived state.
+	const [now, setNow] = useState(() => Date.now());
+
+	useEffect(() => {
+		const timer = setInterval(() => setNow(Date.now()), 1_000);
+		return () => clearInterval(timer);
+	}, []);
+
+	const handleCopy = async () => {
+		if (!authInfo.userCode) return;
+		try {
+			await writeText(authInfo.userCode);
+			toast.success(t("gatewayDeviceCodeCopied"));
+		} catch (error) {
+			console.error("Failed to copy device code:", error);
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: t("gatewayDeviceCodeCopyFailed"),
+			);
+		}
+	};
+
+	return (
+		<div className="flex flex-col items-center gap-3 py-4 text-center">
+			<p className="text-sm text-muted">{t("gatewayDeviceCodeHint")}</p>
+			<div className="flex items-center gap-2">
+				<span className="rounded-lg bg-surface-secondary px-4 py-2 font-mono text-2xl tracking-widest text-foreground select-all">
+					{authInfo.userCode}
+				</span>
+				<Button
+					isIconOnly
+					variant="secondary"
+					size="sm"
+					aria-label={t("gatewayDeviceCodeCopy")}
+					onPress={handleCopy}
+				>
+					<ClipboardDocumentIcon className="size-4" />
+				</Button>
+			</div>
+			{authInfo.expiresAt != null && (
+				<p className="text-xs text-muted tabular-nums">
+					{t("gatewayDeviceCodeExpiresIn", {
+						time: formatCountdown(authInfo.expiresAt - now),
+					})}
+				</p>
+			)}
+			<div className="flex items-center gap-2 text-sm text-muted">
+				<Spinner color="current" size="sm" />
+				{t("gatewayOauthWaiting")}
+			</div>
+		</div>
+	);
+}
 
 interface AddGatewayAccountDialogProps {
 	instanceId: string;
@@ -32,6 +111,9 @@ export function AddGatewayAccountDialog({
 		onClose();
 	};
 
+	const isDeviceFlow =
+		oauth.authInfo?.flow === "device" && oauth.authInfo.userCode !== null;
+
 	return (
 		<Modal.Backdrop
 			isOpen={isOpen}
@@ -47,12 +129,16 @@ export function AddGatewayAccountDialog({
 					</Modal.Header>
 					<Modal.Body className="p-2">
 						{oauth.isPending ? (
-							<div className="flex flex-col items-center gap-3 py-6 text-center">
-								<Spinner />
-								<p className="text-sm text-muted">
-									{t("gatewayOauthWaiting")}
-								</p>
-							</div>
+							isDeviceFlow && oauth.authInfo ? (
+								<DeviceCodeWaiting authInfo={oauth.authInfo} />
+							) : (
+								<div className="flex flex-col items-center gap-3 py-6 text-center">
+									<Spinner />
+									<p className="text-sm text-muted">
+										{t("gatewayOauthWaiting")}
+									</p>
+								</div>
+							)
 						) : (
 							<Select
 								className="w-full"
@@ -68,7 +154,14 @@ export function AddGatewayAccountDialog({
 								<Label>{t("gatewayOauthProviderLabel")}</Label>
 								<Select.Trigger>
 									<Select.Value>
-										{selectedOption?.label}
+										{selectedOption && (
+											<span className="flex items-center gap-2">
+												<UpstreamProviderIcon
+													logo={selectedOption.logo}
+												/>
+												{selectedOption.label}
+											</span>
+										)}
 									</Select.Value>
 									<Select.Indicator />
 								</Select.Trigger>
@@ -81,7 +174,12 @@ export function AddGatewayAccountDialog({
 													id={option.id}
 													textValue={option.label}
 												>
-													{option.label}
+													<span className="flex items-center gap-2">
+														<UpstreamProviderIcon
+															logo={option.logo}
+														/>
+														{option.label}
+													</span>
 													<ListBox.ItemIndicator />
 												</ListBox.Item>
 											),

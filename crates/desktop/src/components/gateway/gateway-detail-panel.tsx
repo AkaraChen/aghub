@@ -29,6 +29,7 @@ import {
 	gatewayLaunchLabel,
 } from "./gateway-helpers";
 import { GatewayNotRunningNotice } from "./gateway-status";
+import { GatewayLogsPanel } from "./logs-panel";
 import { GatewayUpstreamKeysPanel } from "./upstream-keys-panel";
 import { GatewayUsagePanel } from "./usage-panel";
 
@@ -265,6 +266,10 @@ export function GatewayDetailPanel({
 										{t("gatewayTabUsage")}
 										<Tabs.Indicator />
 									</Tabs.Tab>
+									<Tabs.Tab id="logs">
+										{t("gatewayTabLogs")}
+										<Tabs.Indicator />
+									</Tabs.Tab>
 								</Tabs.List>
 							</Tabs.ListContainer>
 							<Tabs.Panel id="accounts">
@@ -283,6 +288,9 @@ export function GatewayDetailPanel({
 							</Tabs.Panel>
 							<Tabs.Panel id="usage">
 								<GatewayUsagePanel instanceId={instance.id} />
+							</Tabs.Panel>
+							<Tabs.Panel id="logs">
+								<GatewayLogsPanel instanceId={instance.id} />
 							</Tabs.Panel>
 						</Tabs>
 					) : (

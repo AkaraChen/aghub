@@ -52,12 +52,16 @@ interface GatewayOauthProviderOption {
 	id: GatewayOauthProvider;
 	/** Brand name, shown verbatim in every locale. */
 	label: string;
+	/** File name under `@lobehub/icons-static-svg/icons/`. */
+	logo: string;
 }
 
 export const GATEWAY_OAUTH_PROVIDER_OPTIONS: GatewayOauthProviderOption[] = [
-	{ id: "anthropic", label: "Claude" },
-	{ id: "codex", label: "Codex" },
-	{ id: "antigravity", label: "Gemini (Antigravity)" },
+	{ id: "anthropic", label: "Claude", logo: "claude" },
+	{ id: "codex", label: "Codex", logo: "openai" },
+	{ id: "antigravity", label: "Gemini (Antigravity)", logo: "gemini" },
+	{ id: "kimi", label: "Kimi", logo: "kimi" },
+	{ id: "xai", label: "xAI (Grok)", logo: "grok" },
 ];
 
 const GATEWAY_SETTING_GROUP_LABEL_KEYS: Record<string, string> = {

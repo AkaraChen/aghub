@@ -1,5 +1,6 @@
 import {
 	ArrowPathIcon,
+	ArrowUpTrayIcon,
 	PaperAirplaneIcon,
 	PlusIcon,
 	TrashIcon,
@@ -15,7 +16,7 @@ import {
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
 	Empty,
@@ -32,6 +33,7 @@ import { useApi } from "../../hooks/use-api";
 import {
 	deleteGatewayAuthFileMutationOptions,
 	gatewayAuthFilesQueryOptions,
+	importGatewayVertexMutationOptions,
 	invalidateGatewayAuthFileQueries,
 	resetGatewayQuotaMutationOptions,
 } from "../../requests/gateway";
@@ -216,6 +218,7 @@ export function GatewayAccountsPanel({
 	const api = useApi();
 	const queryClient = useQueryClient();
 	const [isAddOpen, setIsAddOpen] = useState(false);
+	const vertexFileInputRef = useRef<HTMLInputElement>(null);
 	const [deleteTarget, setDeleteTarget] = useState<GatewayAuthFileDto | null>(
 		null,
 	);
@@ -308,6 +311,43 @@ export function GatewayAccountsPanel({
 		});
 	};
 
+	const importVertexMutation = useMutation({
+		...importGatewayVertexMutationOptions({
+			api,
+			queryClient,
+			onSuccess: () => {
+				toast.success(t("gatewayVertexImported"));
+			},
+		}),
+		onError: (error) => {
+			console.error("Failed to import Vertex service account:", error);
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: t("gatewayVertexImportFailed"),
+			);
+		},
+	});
+
+	const handleVertexFile = async (
+		event: React.ChangeEvent<HTMLInputElement>,
+	) => {
+		const file = event.target.files?.[0];
+		// Reset so picking the same file again re-triggers the change event.
+		event.target.value = "";
+		if (!file) return;
+		try {
+			const content = await file.text();
+			importVertexMutation.mutate({
+				instanceId: instance.id,
+				body: { file_name: file.name, content },
+			});
+		} catch (error) {
+			console.error("Failed to read Vertex service-account file:", error);
+			toast.danger(t("gatewayVertexReadFailed"));
+		}
+	};
+
 	if (isLoading) {
 		return (
 			<div className="flex h-32 items-center justify-center">
@@ -319,11 +359,22 @@ export function GatewayAccountsPanel({
 	return (
 		<div className="flex flex-col gap-3">
 			<div className="flex items-center justify-between gap-3">
-				{instance.kind === "managed" ? (
-					<>
-						<span className="text-sm text-muted">
-							{t("gatewayAccountsDescription")}
-						</span>
+				<span className="text-sm text-muted">
+					{instance.kind === "managed"
+						? t("gatewayAccountsDescription")
+						: t("gatewayAddAccountExternalHint")}
+				</span>
+				<div className="flex shrink-0 items-center gap-2">
+					<Button
+						variant="secondary"
+						size="sm"
+						isPending={importVertexMutation.isPending}
+						onPress={() => vertexFileInputRef.current?.click()}
+					>
+						<ArrowUpTrayIcon className="size-4" />
+						{t("gatewayImportVertex")}
+					</Button>
+					{instance.kind === "managed" && (
 						<Button
 							variant="secondary"
 							size="sm"
@@ -332,13 +383,18 @@ export function GatewayAccountsPanel({
 							<PlusIcon className="size-4" />
 							{t("gatewayAddAccount")}
 						</Button>
-					</>
-				) : (
-					<span className="text-sm text-muted">
-						{t("gatewayAddAccountExternalHint")}
-					</span>
-				)}
+					)}
+				</div>
 			</div>
+			{/* Reads the service-account JSON locally, so it works for
+			    external instances too (same principle as roaming). */}
+			<input
+				ref={vertexFileInputRef}
+				type="file"
+				accept=".json,application/json"
+				className="hidden"
+				onChange={handleVertexFile}
+			/>
 
 			{authFiles.length === 0 ? (
 				<Empty>
