@@ -1,14 +1,11 @@
-import {
-	ArrowTopRightOnSquareIcon,
-	FolderOpenIcon,
-} from "@heroicons/react/24/solid";
+import { ArrowPathIcon, FolderOpenIcon } from "@heroicons/react/24/solid";
 import {
 	Button,
 	Card,
 	Disclosure,
 	Input,
-	InputGroup,
 	ListBox,
+	NumberField,
 	Select,
 	Switch,
 	TextField,
@@ -17,7 +14,7 @@ import {
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
 	USAGE_SETTINGS_QUERY_KEY,
@@ -26,18 +23,9 @@ import {
 import { useApi } from "../../hooks/use-api";
 import { AgentIcon } from "../../lib/agent-icons";
 import { ccusageDiagnostics } from "../../lib/ccusage-diagnostics";
-import {
-	clampPct,
-	formatCost,
-	formatTokens,
-	shortCcusageVersion,
-} from "../../lib/usage-format";
+import { shortCcusageVersion } from "../../lib/usage-format";
 import { cn } from "../../lib/utils";
-import {
-	usageLimitsQueryOptions,
-	usageStatusQueryOptions,
-	usageSummaryQueryOptions,
-} from "../../requests/usage";
+import { usageStatusQueryOptions } from "../../requests/usage";
 import {
 	agentSettings,
 	DEFAULT_USAGE_SETTINGS,
@@ -109,35 +97,6 @@ export default function UsagePanel() {
 
 	const api = useApi();
 	const { data: status } = useQuery(usageStatusQueryOptions({ api }));
-	// Live values for the layout editor's card replica — same query params as
-	// the home page, so the cache is shared and this adds no extra fetches.
-	const previewRange = useMemo(() => {
-		const until = new Date();
-		const since = new Date(until);
-		since.setDate(since.getDate() - (current.home.windowDays - 1));
-		const fmt = (d: Date) =>
-			`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}${String(
-				d.getDate(),
-			).padStart(2, "0")}`;
-		return {
-			since: fmt(since),
-			until: fmt(until),
-			timezone:
-				current.timezone ||
-				new Intl.DateTimeFormat().resolvedOptions().timeZone,
-		};
-	}, [current.home.windowDays, current.timezone]);
-	const { data: previewReport } = useQuery(
-		usageSummaryQueryOptions({
-			api,
-			...previewRange,
-			offline: current.offlinePricing,
-			config: current.ccusageConfigPath,
-			timeoutSecs: current.requestTimeoutSecs,
-			args: current.extraArgs,
-		}),
-	);
-	const { data: previewLimits } = useQuery(usageLimitsQueryOptions({ api }));
 	const { data: diag } = useQuery({
 		queryKey: ["ccusage-diagnostics"],
 		queryFn: ccusageDiagnostics,
@@ -269,39 +228,13 @@ export default function UsagePanel() {
 
 	const layoutDisabled = !home.showUsageOnHome;
 
-	// The replica previews the target agent's real numbers, falling back to
-	// the first quota agent for the shared default layout.
+	// The replica is cosmetic only — it shows whose layout is being edited
+	// and renders fixed placeholders, never live data.
 	const previewAgentId =
 		layoutTarget === "default" ? USAGE_QUOTA_AGENTS[0] : layoutTarget;
-	const previewWindows = previewLimits?.agents.find(
-		(entry) => entry.agent === previewAgentId,
-	)?.windows;
-	const previewTotals = previewReport?.agents.find(
-		(entry) => entry.agent === previewAgentId,
-	)?.totals;
-	const previewWindowPct = (id: string): number | null => {
-		const pct = previewWindows?.find((w) => w.kind === id)?.utilization_pct;
-		return pct == null ? null : clampPct(pct);
-	};
-	const previewStatValue = (id: string): string | null => {
-		const statId = HOME_STAT_IDS.find((s) => s === id);
-		if (!statId) return null;
-		const source = HOME_STAT_DEFINITIONS[statId].source;
-		if (source.from === "window") {
-			const pct = previewWindowPct(source.window);
-			return pct == null ? null : `${Math.round(pct)}%`;
-		}
-		if (!previewTotals) return null;
-		const raw = previewTotals[source.field];
-		if (raw == null) return null;
-		return source.fmt === "cost" ? formatCost(raw) : formatTokens(raw);
-	};
 	const preview = {
 		agentId: previewAgentId,
 		agentName: AGENT_LABELS[previewAgentId] ?? previewAgentId,
-		windowPct: previewWindowPct,
-		statValue: previewStatValue,
-		alertThresholdPct: current.globalAlertThresholdPct,
 	};
 
 	const statusDescription =
@@ -351,8 +284,6 @@ export default function UsagePanel() {
 							</span>
 						</div>
 						<div className="flex shrink-0 items-center gap-2">
-							{/* Both actions open ccusage's npm page — the icon
-							    signals leaving the app. */}
 							{status && !status.reachable ? (
 								<Button
 									size="sm"
@@ -360,7 +291,6 @@ export default function UsagePanel() {
 									onPress={() => openUrl(CCUSAGE_NPM_URL)}
 								>
 									{t("usageStatusInstall")}
-									<ArrowTopRightOnSquareIcon className="size-3.5" />
 								</Button>
 							) : (
 								status?.update_available && (
@@ -370,16 +300,17 @@ export default function UsagePanel() {
 										onPress={() => openUrl(CCUSAGE_NPM_URL)}
 									>
 										{t("usageStatusUpdateAction")}
-										<ArrowTopRightOnSquareIcon className="size-3.5" />
 									</Button>
 								)
 							)}
 							<Button
+								isIconOnly
 								size="sm"
 								variant="ghost"
 								onPress={recheckStatus}
+								aria-label={t("usageStatusRecheck")}
 							>
-								{t("usageStatusRecheck")}
+								<ArrowPathIcon className="size-4" />
 							</Button>
 						</div>
 					</div>
@@ -401,14 +332,18 @@ export default function UsagePanel() {
 							/>
 						}
 					/>
-					{current.sidecar.autoDiscover && diag && (
-						<p
-							className="truncate font-mono text-[11px] text-muted"
-							title={diag.path}
-						>
-							{t("usageSidecarResolved", { path: diag.path })}
-						</p>
-					)}
+					{/* Only worth showing when discovery resolved an actual
+					    path — a bare binary name carries no information. */}
+					{current.sidecar.autoDiscover &&
+						diag &&
+						/[/\\]/.test(diag.path) && (
+							<p
+								className="truncate font-mono text-[11px] text-muted"
+								title={diag.path}
+							>
+								{t("usageSidecarResolved", { path: diag.path })}
+							</p>
+						)}
 					{!current.sidecar.autoDiscover && (
 						<PathField
 							label={t("usageSidecarPath")}
@@ -471,8 +406,12 @@ export default function UsagePanel() {
 								onChange={(d) => updateHome({ windowDays: d })}
 								isDisabled={!home.showUsageOnHome}
 								ariaLabel={t("usageHomeWindow")}
-								min={1}
-								suffix="d"
+								minValue={1}
+								formatOptions={{
+									style: "unit",
+									unit: "day",
+									unitDisplay: "narrow",
+								}}
 							/>
 						}
 					/>
@@ -553,15 +492,21 @@ export default function UsagePanel() {
 					<SettingRow
 						title={t("usageGlobalAlertThreshold")}
 						control={
+							// The store keeps 0–100; percent formatting wants 0–1.
 							<SettingNumber
-								value={current.globalAlertThresholdPct}
+								value={current.globalAlertThresholdPct / 100}
 								onChange={(pct) =>
-									update({ globalAlertThresholdPct: pct })
+									update({
+										globalAlertThresholdPct: Math.round(
+											pct * 100,
+										),
+									})
 								}
 								ariaLabel={t("usageGlobalAlertThreshold")}
-								min={0}
-								max={100}
-								suffix="%"
+								minValue={0}
+								maxValue={1}
+								step={0.05}
+								formatOptions={{ style: "percent" }}
 							/>
 						}
 					/>
@@ -666,8 +611,12 @@ export default function UsagePanel() {
 												})
 											}
 											ariaLabel={t("usagePollInterval")}
-											min={0}
-											suffix="s"
+											minValue={0}
+											formatOptions={{
+												style: "unit",
+												unit: "second",
+												unitDisplay: "narrow",
+											}}
 										/>
 									}
 								/>
@@ -716,8 +665,12 @@ export default function UsagePanel() {
 												})
 											}
 											ariaLabel={t("usageRequestTimeout")}
-											min={1}
-											suffix="s"
+											minValue={1}
+											formatOptions={{
+												style: "unit",
+												unit: "second",
+												unitDisplay: "narrow",
+											}}
 										/>
 									}
 								/>
@@ -830,47 +783,47 @@ function SettingSelect({
 	);
 }
 
-/** A compact, right-aligned free numeric input with an optional unit suffix. */
+/** A compact numeric setting; units and percentages come from the field's
+ *  Intl format options ("30d", "60s", "80%"), stepping from the buttons. */
 function SettingNumber({
 	value,
 	onChange,
 	ariaLabel,
-	min = 0,
-	max,
-	suffix,
+	minValue = 0,
+	maxValue,
+	step,
+	formatOptions,
 	isDisabled,
 }: {
 	value: number;
 	onChange: (n: number) => void;
 	ariaLabel: string;
-	min?: number;
-	max?: number;
-	suffix?: string;
+	minValue?: number;
+	maxValue?: number;
+	step?: number;
+	formatOptions?: Intl.NumberFormatOptions;
 	isDisabled?: boolean;
 }) {
 	return (
-		<TextField
-			variant="secondary"
-			value={String(value)}
-			onChange={(raw) => {
-				const n = Number(raw);
-				if (!Number.isFinite(n)) return;
-				const upper = max != null ? Math.min(max, n) : n;
-				onChange(Math.round(Math.max(min, upper)));
+		<NumberField
+			value={value}
+			onChange={(n) => {
+				if (Number.isFinite(n)) onChange(n);
 			}}
+			minValue={minValue}
+			maxValue={maxValue}
+			step={step}
+			formatOptions={formatOptions}
 			isDisabled={isDisabled}
 			aria-label={ariaLabel}
-			className="w-28"
+			className="w-36"
 		>
-			<InputGroup variant="secondary">
-				<InputGroup.Input
-					type="number"
-					inputMode="numeric"
-					className="w-full min-w-0 text-right tabular-nums"
-				/>
-				{suffix && <InputGroup.Suffix>{suffix}</InputGroup.Suffix>}
-			</InputGroup>
-		</TextField>
+			<NumberField.Group>
+				<NumberField.DecrementButton />
+				<NumberField.Input className="w-full min-w-0 text-center tabular-nums" />
+				<NumberField.IncrementButton />
+			</NumberField.Group>
+		</NumberField>
 	);
 }
 

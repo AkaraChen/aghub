@@ -85,11 +85,9 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await expect(page.getByText("Auto-discover ccusage")).toBeVisible();
 	await expect(page.getByText("Card layout", { exact: true })).toBeVisible();
 
-	// The card replica previews the target agent with live values from the
-	// mocked limits/summary (42% = the mocked 5h utilization), and the
-	// drawer lists what's hidden.
+	// The card replica shows the shown fields as placeholders (no live
+	// data), and the drawer lists what's hidden.
 	await expect(page.getByText("5-hour limit").first()).toBeVisible();
-	await expect(page.getByText("42%")).toBeVisible();
 	await expect(page.getByText("Total tokens").first()).toBeVisible();
 	await expect(page.getByText("Not shown", { exact: true })).toBeVisible();
 	await expect(page.getByText("Cache read", { exact: true })).toBeVisible();
