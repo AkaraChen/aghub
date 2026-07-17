@@ -24,8 +24,9 @@ use aghub_cliproxy::{
 	GatewayInstanceStatus, GatewayKeyUsageDto, GatewayProvisionPhase,
 	GatewayProvisionStatusDto, GatewaySettingDto, GatewaySettingsDto,
 	GatewayUsageDto, GatewayVersionDto, InstanceStore, ManagementClient,
-	StartGatewayOauthRequest, UpdateGatewayInstanceRequest,
-	UpdateGatewaySettingRequest, UploadGatewayAuthFileRequest,
+	StartGatewayOauthRequest, StartGatewayProvisionRequest,
+	UpdateGatewayInstanceRequest, UpdateGatewaySettingRequest,
+	UploadGatewayAuthFileRequest,
 };
 use aghub_inference::{
 	CreateInferenceProvider, InferenceProviderFormat,
@@ -171,6 +172,22 @@ async fn sync_inference_providers(
 	client: &ManagementClient,
 ) -> Result<(), ApiError> {
 	let gateway_key = ensure_gateway_key(client).await?;
+	// Model list import (official panel parity): populate the mirrored
+	// entries with what the gateway actually serves so bindings offer a
+	// picker instead of a blank field. Both entries get the full list —
+	// cross-protocol serving (e.g. Claude Code on a Gemini account) is the
+	// point of the gateway. Best-effort: an empty list only means manual
+	// model entry, so a failure is logged, not fatal.
+	let models = match client.list_models(&gateway_key).await {
+		Ok(models) => models,
+		Err(error) => {
+			log::warn!(
+				"gateway '{}': model list import failed: {error}",
+				record.name
+			);
+			Vec::new()
+		}
+	};
 	let inventory = inference_store(state);
 	let base = record.base_url.trim_end_matches('/').to_string();
 	let (anthropic_name, openai_name) = gateway_latin_names(record);
@@ -203,6 +220,8 @@ async fn sync_inference_providers(
 							display_name: Some(display_name),
 							api_base_url: Some(api_base_url),
 							api_key: Some(gateway_key.clone()),
+							models: (!models.is_empty())
+								.then(|| models.clone()),
 							..Default::default()
 						},
 					)
@@ -217,7 +236,7 @@ async fn sync_inference_providers(
 						api_base_url,
 						preset: Some(GATEWAY_PRESET.to_string()),
 						api_key: gateway_key.clone(),
-						models: Vec::new(),
+						models: models.clone(),
 					})
 					.map_err(ApiError::from)?;
 			}
@@ -460,10 +479,11 @@ pub async fn stop_gateway_instance(
 
 // ---- provisioning ------------------------------------------------------
 
-#[post("/gateway/provision")]
+#[post("/gateway/provision", data = "<request>")]
 pub async fn start_gateway_provision(
 	_auth: ApiAuth,
 	state: &State<GatewayState>,
+	request: Json<StartGatewayProvisionRequest>,
 ) -> ApiResult<GatewayProvisionStatusDto> {
 	{
 		let current = state.provision.lock().expect("provision lock");
@@ -487,12 +507,14 @@ pub async fn start_gateway_provision(
 	);
 	let task_slot = std::sync::Arc::clone(&slot);
 	let task_version = version.clone();
+	let mirror = request.mirror.clone();
 	tokio::spawn(async move {
 		let progress_slot = std::sync::Arc::clone(&task_slot);
 		let progress_version = task_version.clone();
 		let result = provision::provision(
 			&root,
 			&task_version,
+			mirror.as_deref(),
 			move |phase, progress| {
 				set_provision(
 					&progress_slot,

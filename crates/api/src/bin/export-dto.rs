@@ -102,8 +102,9 @@ use aghub_cliproxy::{
 	GatewayKeyUsageDto, GatewayOauthProvider, GatewayProvisionPhase,
 	GatewayProvisionStatusDto, GatewaySettingDto, GatewaySettingKind,
 	GatewaySettingValue, GatewaySettingsDto, GatewayUsageDto,
-	GatewayVersionDto, StartGatewayOauthRequest, UpdateGatewayInstanceRequest,
-	UpdateGatewaySettingRequest, UploadGatewayAuthFileRequest,
+	GatewayVersionDto, StartGatewayOauthRequest, StartGatewayProvisionRequest,
+	UpdateGatewayInstanceRequest, UpdateGatewaySettingRequest,
+	UploadGatewayAuthFileRequest,
 };
 use aghub_usage::{
 	AgentLimitsDto, AgentUsageDto, CcusageRuntimeCandidateDto,
@@ -376,6 +377,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<GatewayUsageDto>(&cfg)?;
 	export_type::<GatewayProvisionPhase>(&cfg)?;
 	export_type::<GatewayProvisionStatusDto>(&cfg)?;
+	export_type::<StartGatewayProvisionRequest>(&cfg)?;
 	export_type::<GatewayVersionDto>(&cfg)?;
 	export_type::<GatewayConfigFileDto>(&cfg)?;
 

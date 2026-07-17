@@ -27,10 +27,19 @@ const DEFAULT_DOWNLOAD_BASE: &str =
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
 const EXTRACT_TIMEOUT: Duration = Duration::from_secs(60);
 
-pub fn download_base() -> String {
-	std::env::var("AGHUB_CLIPROXY_DOWNLOAD_BASE")
-		.ok()
-		.filter(|value| !value.trim().is_empty())
+/// Release host resolution: explicit mirror (settings UI) → env override →
+/// GitHub. A mirror serves the same `releases/download/v…/asset` layout.
+pub fn download_base(mirror: Option<&str>) -> String {
+	mirror
+		.map(str::trim)
+		.filter(|value| !value.is_empty())
+		.map(|value| value.trim_end_matches('/').to_string())
+		.or_else(|| {
+			std::env::var("AGHUB_CLIPROXY_DOWNLOAD_BASE")
+				.ok()
+				.map(|value| value.trim().trim_end_matches('/').to_string())
+				.filter(|value| !value.is_empty())
+		})
 		.unwrap_or_else(|| DEFAULT_DOWNLOAD_BASE.to_string())
 }
 
@@ -121,10 +130,11 @@ fn find_executable(dir: &Path) -> Option<PathBuf> {
 pub async fn provision(
 	root: &Path,
 	version: &str,
+	mirror: Option<&str>,
 	progress: impl Fn(GatewayProvisionPhase, Option<u8>),
 ) -> Result<PathBuf> {
 	let asset = asset_name(version)?;
-	let base = download_base();
+	let base = download_base(mirror);
 	let http = reqwest::Client::builder()
 		.connect_timeout(Duration::from_secs(10))
 		.timeout(DOWNLOAD_TIMEOUT)

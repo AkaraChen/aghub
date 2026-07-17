@@ -243,6 +243,14 @@ pub struct GatewayUsageDto {
 	pub providers: HashMap<String, HashMap<String, GatewayKeyUsageDto>>,
 }
 
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct StartGatewayProvisionRequest {
+	/// Optional release-host mirror (same GitHub `releases/download`
+	/// layout); overrides the built-in host for this download only.
+	pub mirror: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "lowercase")]

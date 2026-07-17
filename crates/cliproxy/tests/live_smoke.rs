@@ -26,6 +26,7 @@ async fn provision_boot_and_manage() {
 	let bin = provision::provision(
 		root.path(),
 		provision::PINNED_VERSION,
+		None,
 		|phase, progress| {
 			eprintln!("provision: {phase:?} {progress:?}");
 		},

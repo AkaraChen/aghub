@@ -306,6 +306,49 @@ impl ManagementClient {
 			.unwrap_or_default()
 			.to_string())
 	}
+
+	/// Model ids the gateway currently serves, from the OpenAI-compatible
+	/// `/v1/models` (a proxy business endpoint, so it authenticates with a
+	/// gateway key, not the management key).
+	pub async fn list_models(&self, gateway_key: &str) -> Result<Vec<String>> {
+		let url = self.base_url.join("/v1/models").map_err(|error| {
+			GatewayError::Invalid(format!("invalid models URL: {error}"))
+		})?;
+		let response = self
+			.http
+			.get(url)
+			.bearer_auth(gateway_key)
+			.send()
+			.await
+			.map_err(|error| {
+				if error.is_connect() || error.is_timeout() {
+					GatewayError::Unreachable {
+						base_url: self.base_url.to_string(),
+						message: error.to_string(),
+					}
+				} else {
+					GatewayError::Http(error)
+				}
+			})?
+			.error_for_status()
+			.map_err(GatewayError::Http)?;
+		let body: serde_json::Value = response.json().await?;
+		let mut models: Vec<String> = body
+			.get("data")
+			.and_then(serde_json::Value::as_array)
+			.map(|entries| {
+				entries
+					.iter()
+					.filter_map(|entry| entry.get("id"))
+					.filter_map(serde_json::Value::as_str)
+					.map(str::to_string)
+					.collect()
+			})
+			.unwrap_or_default();
+		models.sort();
+		models.dedup();
+		Ok(models)
+	}
 }
 
 fn parse_setting_value(

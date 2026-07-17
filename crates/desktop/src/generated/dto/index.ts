@@ -167,6 +167,7 @@ export type { SkillTreeNodeResponse } from "./SkillTreeNodeResponse";
 export type { SkillTreeQuery } from "./SkillTreeQuery";
 export type { SkillsPathsDto } from "./SkillsPathsDto";
 export type { StartGatewayOauthRequest } from "./StartGatewayOauthRequest";
+export type { StartGatewayProvisionRequest } from "./StartGatewayProvisionRequest";
 export type { SubAgentCapabilitiesDto } from "./SubAgentCapabilitiesDto";
 export type { SubAgentResponse } from "./SubAgentResponse";
 export type { TargetDto } from "./TargetDto";
