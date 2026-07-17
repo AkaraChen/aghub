@@ -1546,8 +1546,7 @@ export default {
 	gatewayInstallLocal: "安裝本機閘道",
 	gatewaySetupFinePrint: "下載約 40 MB · 設定存放在 ~/.cli-proxy-api",
 	gatewayVersionUpToDate: "已是最新",
-	gatewayMirrorFootnote:
-		"鏡像條目「{{name}}」與「{{name}} (OpenAI)」在左側推理 Provider 分組，繫結 agent 在那裡進行。",
+	gatewayOpenSettings: "閘道設定…",
 	gatewayInstallAndStart: "安裝並啟動",
 	gatewayInstall: "安裝",
 	gatewayLaunchPreparing: "準備中…",

@@ -1550,8 +1550,7 @@ export default {
 	gatewayInstallLocal: "安装本地网关",
 	gatewaySetupFinePrint: "下载约 40 MB · 配置存放在 ~/.cli-proxy-api",
 	gatewayVersionUpToDate: "已是最新",
-	gatewayMirrorFootnote:
-		"镜像条目「{{name}}」与「{{name}} (OpenAI)」在左侧推理 Provider 分组，绑定 agent 在那里进行。",
+	gatewayOpenSettings: "网关设置…",
 	gatewayInstallAndStart: "安装并启动",
 	gatewayInstall: "安装",
 	gatewayLaunchPreparing: "准备中…",

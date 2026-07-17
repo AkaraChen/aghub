@@ -1563,8 +1563,7 @@ export default {
 	gatewaySetupFinePrint:
 		"Downloads about 40 MB · config lives in ~/.cli-proxy-api",
 	gatewayVersionUpToDate: "Up to date",
-	gatewayMirrorFootnote:
-		'Mirrored entries "{{name}}" and "{{name}} (OpenAI)" live in the providers list on the left — bind agents there.',
+	gatewayOpenSettings: "Gateway settings…",
 	gatewayInstallAndStart: "Install and start",
 	gatewayInstall: "Install",
 	gatewayLaunchPreparing: "Preparing…",

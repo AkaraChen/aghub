@@ -7,6 +7,7 @@ import { Button, Chip, Dropdown, Spinner, Tabs, toast } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useLocation } from "wouter";
 import type {
 	GatewayInstanceDto,
 	GatewayInstanceStatus,
@@ -53,6 +54,7 @@ export function GatewayDetailPanel({
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
+	const [, setLocation] = useLocation();
 	const [isDeleteOpen, setIsDeleteOpen] = useState(false);
 	const launch = useGatewayLaunch();
 
@@ -192,11 +194,21 @@ export function GatewayDetailPanel({
 							<Dropdown.Popover placement="bottom end">
 								<Dropdown.Menu
 									onAction={(key) => {
-										if (key === "delete") {
+										if (key === "settings") {
+											setLocation(
+												"/settings?tab=gateway",
+											);
+										} else if (key === "delete") {
 											setIsDeleteOpen(true);
 										}
 									}}
 								>
+									<Dropdown.Item
+										id="settings"
+										textValue={t("gatewayOpenSettings")}
+									>
+										{t("gatewayOpenSettings")}
+									</Dropdown.Item>
 									<Dropdown.Item
 										id="delete"
 										variant="danger"
@@ -272,10 +284,6 @@ export function GatewayDetailPanel({
 					)}
 				</div>
 			</div>
-
-			<p className="shrink-0 border-t border-border px-4 py-2 text-xs text-muted sm:px-6">
-				{t("gatewayMirrorFootnote", { name: instance.name })}
-			</p>
 
 			<DeleteGatewayInstanceDialog
 				instance={instance}
