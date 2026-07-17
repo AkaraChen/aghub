@@ -1,0 +1,27 @@
+[package]
+name = "aghub-cliproxy"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "CLIProxyAPI gateway integration: provision, lifecycle, management API client"
+
+[dependencies]
+chrono = { workspace = true }
+dirs = { workspace = true }
+keyring = { workspace = true }
+log = { workspace = true }
+reqwest = { workspace = true, features = [ "query" ] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_yaml = { workspace = true }
+sha2 = "0.10"
+thiserror = { workspace = true }
+tokio = { workspace = true, features = [ "fs", "io-util", "macros", "process", "rt", "sync", "time" ] }
+ts-rs = { workspace = true }
+url = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+tokio = { workspace = true, features = [ "rt-multi-thread" ] }

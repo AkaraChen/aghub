@@ -99,6 +99,7 @@ name = "aghub-api"
 version = "1.9.0-beta.1"
 dependencies = [
  "aghub-cc-plugins",
+ "aghub-cliproxy",
  "aghub-core",
  "aghub-git",
  "aghub-inference",
@@ -167,6 +168,27 @@ dependencies = [
  "tabled",
  "tempfile",
  "tokio",
+]
+
+[[package]]
+name = "aghub-cliproxy"
+version = "1.1.1"
+dependencies = [
+ "chrono",
+ "dirs 6.0.0",
+ "keyring",
+ "log",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "ts-rs",
+ "url",
+ "uuid",
 ]
 
 [[package]]
@@ -6663,6 +6685,7 @@ dependencies = [
  "rustls-platform-verifier",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "sync_wrapper",
  "tokio",
  "tokio-native-tls",
@@ -7258,6 +7281,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6662b5879511e06e8999a8a235d848113e942c9124f211511b16466ee2995f26"
 dependencies = [
  "serde_core",
+]
+
+[[package]]
+name = "serde_urlencoded"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d3491c14715ca2294c4d6a88f15e84739788c1d030eed8c110436aafdaa2f3fd"
+dependencies = [
+ "form_urlencoded",
+ "itoa",
+ "ryu",
+ "serde",
 ]
 
 [[package]]
