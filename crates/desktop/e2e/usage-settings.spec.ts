@@ -98,7 +98,15 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await expect(page.getByRole("button", { name: "Update" })).toBeVisible();
 	await expect(page.getByRole("button", { name: "Re-check" })).toBeVisible();
 
-	// Alerts: one row per agent with the resolved-global threshold select.
+	// Every report agent gets a tracking switch, not just the quota pair.
+	// (Structural locator: the HeroUI beta Switch renders no input/role, so
+	// its aria-label never reaches the DOM.)
+	const tracked = page.getByTestId("tracked-agents");
+	await expect(tracked.getByText("Gemini", { exact: true })).toBeVisible();
+	await expect(tracked.locator('[data-slot="switch"]')).toHaveCount(15);
+
+	// Alerts: one row per quota agent with the resolved-global threshold
+	// select (tracking lives in the card above).
 	await expect(
 		page.getByRole("button", { name: "Use global (80%)" }).first(),
 	).toBeVisible();

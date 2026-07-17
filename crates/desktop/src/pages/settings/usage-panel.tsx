@@ -20,6 +20,7 @@ import {
 	USAGE_SETTINGS_QUERY_KEY,
 	useUsageSettings,
 } from "../../hooks/use-usage-settings";
+import { useAgentAvailability } from "../../hooks/use-agent-availability";
 import { useApi } from "../../hooks/use-api";
 import { AgentIcon } from "../../lib/agent-icons";
 import { ccusageDiagnostics } from "../../lib/ccusage-diagnostics";
@@ -34,6 +35,7 @@ import {
 	HOME_WINDOW_IDS,
 	type HomeWindowId,
 	saveUsageSettings,
+	USAGE_AGENT_IDS,
 	USAGE_ALERT_THRESHOLDS_PCT,
 	USAGE_QUOTA_AGENTS,
 	type UsageSettings,
@@ -49,9 +51,24 @@ import {
 	type LayoutField,
 } from "./usage-layout-editor";
 
+/** Fallback names for report agents not in the local registry; installed
+ *  agents resolve their registry display name first. */
 const AGENT_LABELS: Record<string, string> = {
 	claude: "Claude",
 	codex: "Codex",
+	opencode: "OpenCode",
+	amp: "Amp",
+	droid: "Droid",
+	codebuff: "Codebuff",
+	hermes: "Hermes",
+	pi: "Pi",
+	goose: "Goose",
+	kilo: "Kilo",
+	copilot: "Copilot",
+	gemini: "Gemini",
+	kimi: "Kimi",
+	qwen: "Qwen",
+	openclaw: "OpenClaw",
 };
 
 const GLOBAL_THRESHOLD_KEY = "global";
@@ -91,9 +108,17 @@ const COMMON_TIMEZONES = [
 export default function UsagePanel() {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
+	const { availableAgents } = useAgentAvailability();
 
 	const { data: settings } = useUsageSettings();
 	const current = settings ?? DEFAULT_USAGE_SETTINGS;
+
+	// Registry display name when the agent is known locally, else the static
+	// label for report-only agents.
+	const agentName = (id: string) =>
+		availableAgents.find((a) => a.id === id)?.display_name ??
+		AGENT_LABELS[id] ??
+		id;
 
 	const api = useApi();
 	const { data: status } = useQuery(usageStatusQueryOptions({ api }));
@@ -497,8 +522,59 @@ export default function UsagePanel() {
 				</Card.Content>
 			</Card>
 
-			{/* Tracking & alert thresholds — global default plus per-agent
-			    overrides for the closed Claude/Codex set. */}
+			{/* Tracked agents — every agent ccusage can report; untracked ones
+			    disappear from the home cards and the usage page. */}
+			<Card className="p-0">
+				<Card.Content className="space-y-4 p-4">
+					<div className="space-y-0.5">
+						<span className="text-sm font-semibold text-(--foreground)">
+							{t("usageSettingsTrackedAgents")}
+						</span>
+						<span className="block text-xs text-muted">
+							{t("usageSettingsTrackedAgentsDescription")}
+						</span>
+					</div>
+					<div
+						data-testid="tracked-agents"
+						className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2"
+					>
+						{USAGE_AGENT_IDS.map((agent) => {
+							const config = agentSettings(current, agent);
+							return (
+								<div
+									key={agent}
+									className="flex items-center justify-between gap-4"
+								>
+									<span className="flex min-w-0 items-center gap-2 text-sm text-(--foreground)">
+										<AgentIcon
+											id={agent}
+											name={agentName(agent)}
+											size="xs"
+										/>
+										<span className="truncate">
+											{agentName(agent)}
+										</span>
+									</span>
+									<SettingSwitch
+										isSelected={config.tracked}
+										onChange={(checked) =>
+											updateAgent(agent, {
+												tracked: checked,
+											})
+										}
+										ariaLabel={t("usageAgentTracked", {
+											agent: agentName(agent),
+										})}
+									/>
+								</div>
+							);
+						})}
+					</div>
+				</Card.Content>
+			</Card>
+
+			{/* Alerts — the global threshold plus per-agent overrides for the
+			    quota agents (the only ones with rate-limit windows). */}
 			<Card className="p-0">
 				<Card.Content className="space-y-4 p-4">
 					<div className="space-y-0.5">
@@ -531,9 +607,8 @@ export default function UsagePanel() {
 						}
 					/>
 
-					{/* One row per agent: identity, threshold, tracking. The
-					    threshold select names the resolved global value, so no
-					    expanding sub-row is needed. */}
+					{/* One threshold row per quota agent; tracking lives in the
+					    card above, an untracked agent's select is just off. */}
 					{USAGE_QUOTA_AGENTS.map((agent) => {
 						const config = agentSettings(current, agent);
 						return (
@@ -544,55 +619,37 @@ export default function UsagePanel() {
 								<span className="flex items-center gap-2 text-sm font-medium text-(--foreground)">
 									<AgentIcon
 										id={agent}
-										name={AGENT_LABELS[agent]}
+										name={agentName(agent)}
 										size="xs"
 									/>
-									{AGENT_LABELS[agent]}
+									{agentName(agent)}
 								</span>
-								<div className="flex items-center gap-3">
-									<SettingSelect
-										value={
-											config.alertThresholdPct === null
-												? GLOBAL_THRESHOLD_KEY
-												: String(
-														config.alertThresholdPct,
-													)
-										}
-										onChange={(key) =>
-											updateAgent(agent, {
-												alertThresholdPct:
-													key === GLOBAL_THRESHOLD_KEY
-														? null
-														: Number(key),
-											})
-										}
-										isDisabled={!config.tracked}
-										ariaLabel={t("usageAgentAlert")}
-										options={[
-											{
-												id: GLOBAL_THRESHOLD_KEY,
-												label: t(
-													"usageAlertUseGlobal",
-													{
-														pct: current.globalAlertThresholdPct,
-													},
-												),
-											},
-											...THRESHOLD_OPTIONS,
-										]}
-									/>
-									<SettingSwitch
-										isSelected={config.tracked}
-										onChange={(checked) =>
-											updateAgent(agent, {
-												tracked: checked,
-											})
-										}
-										ariaLabel={t("usageAgentTracked", {
-											agent: AGENT_LABELS[agent],
-										})}
-									/>
-								</div>
+								<SettingSelect
+									value={
+										config.alertThresholdPct === null
+											? GLOBAL_THRESHOLD_KEY
+											: String(config.alertThresholdPct)
+									}
+									onChange={(key) =>
+										updateAgent(agent, {
+											alertThresholdPct:
+												key === GLOBAL_THRESHOLD_KEY
+													? null
+													: Number(key),
+										})
+									}
+									isDisabled={!config.tracked}
+									ariaLabel={t("usageAgentAlert")}
+									options={[
+										{
+											id: GLOBAL_THRESHOLD_KEY,
+											label: t("usageAlertUseGlobal", {
+												pct: current.globalAlertThresholdPct,
+											}),
+										},
+										...THRESHOLD_OPTIONS,
+									]}
+								/>
 							</div>
 						);
 					})}
@@ -694,6 +751,28 @@ export default function UsagePanel() {
 										/>
 									}
 								/>
+								<div className="flex flex-col gap-1">
+									<span className="text-sm font-medium text-(--foreground)">
+										{t("usageExtraArgs")}
+									</span>
+									<TextField
+										variant="secondary"
+										value={current.extraArgs}
+										onChange={(value) =>
+											update({ extraArgs: value })
+										}
+										aria-label={t("usageExtraArgs")}
+									>
+										<Input
+											variant="secondary"
+											placeholder="--jsonl --breakdown"
+											className="font-mono text-xs"
+										/>
+									</TextField>
+									<span className="text-xs text-muted">
+										{t("usageExtraArgsDescription")}
+									</span>
+								</div>
 							</Disclosure.Body>
 						</Disclosure.Content>
 					</Disclosure>

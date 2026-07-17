@@ -479,14 +479,19 @@ export default {
 	usageRequestTimeoutDescription:
 		"How long to wait for ccusage before giving up.",
 	usagePollInterval: "Polling interval",
-	usagePollIntervalDescription: "How often usage data refreshes.",
-	usagePollOff: "Off",
+	usagePollIntervalDescription:
+		"How often usage data refreshes; 0 disables polling.",
 	usageTimezone: "Timezone",
 	usageTimezoneDescription:
 		"IANA timezone for daily usage buckets. Empty uses the system timezone.",
 	usageGlobalAlertThreshold: "Global alert threshold",
 	usageAlertUseGlobal: "Use global ({{pct}}%)",
 	usageSettingsHomeCards: "Home cards",
+	usageSettingsTrackedAgents: "Tracked agents",
+	usageSettingsTrackedAgentsDescription:
+		"Untracked agents don't appear on the home cards or the usage page.",
+	usageExtraArgs: "Extra ccusage flags",
+	usageExtraArgsDescription: "Appended verbatim to every ccusage call.",
 	usageSettingsAlerts: "Alerts",
 	usageSettingsAlertsDescription:
 		"Warn when a rate-limit window passes its threshold.",

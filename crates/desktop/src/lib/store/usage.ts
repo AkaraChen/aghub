@@ -41,15 +41,12 @@ export interface UsageAgentSettings {
 	 * meaningful for {@link USAGE_QUOTA_AGENTS}.
 	 */
 	alertThresholdPct: number | null;
-	/** Per-agent ccusage config file (`--config`); empty uses the global one. */
-	configPath: string;
 }
 
-/** Per-agent settings default: tracked, global threshold, no config override. */
+/** Per-agent settings default: tracked, on the global threshold. */
 export const DEFAULT_AGENT_SETTINGS: UsageAgentSettings = {
 	tracked: true,
 	alertThresholdPct: null,
-	configPath: "",
 };
 
 /**
@@ -189,21 +186,10 @@ export const DEFAULT_USAGE_SETTINGS: UsageSettings = {
 	},
 };
 
-/** Poll-interval presets in ms; `0` disables polling. */
-export const USAGE_POLL_INTERVALS_MS = [
-	0, 30_000, 60_000, 300_000, 900_000,
-] as const;
-
 /** Alert-threshold presets, percent of a rate-limit window. */
 export const USAGE_ALERT_THRESHOLDS_PCT = [
 	50, 60, 70, 75, 80, 85, 90, 95,
 ] as const;
-
-/** Rolling-window presets (days) for the home summary query. */
-export const USAGE_WINDOW_DAYS_OPTIONS = [7, 14, 30, 90] as const;
-
-/** ccusage request-timeout presets, in seconds. */
-export const USAGE_TIMEOUT_SECS_OPTIONS = [15, 30, 60, 120, 300] as const;
 
 function clampPct(value: number): number {
 	if (!Number.isFinite(value))
@@ -226,10 +212,6 @@ function normalizeAgent(
 			typeof threshold === "number" && Number.isFinite(threshold)
 				? clampPct(threshold)
 				: null,
-		configPath:
-			typeof r.configPath === "string"
-				? r.configPath
-				: fallback.configPath,
 	};
 }
 

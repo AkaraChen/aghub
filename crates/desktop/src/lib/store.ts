@@ -72,10 +72,7 @@ export {
 	saveUsageSettings,
 	USAGE_AGENT_IDS,
 	USAGE_ALERT_THRESHOLDS_PCT,
-	USAGE_POLL_INTERVALS_MS,
 	USAGE_QUOTA_AGENTS,
-	USAGE_TIMEOUT_SECS_OPTIONS,
-	USAGE_WINDOW_DAYS_OPTIONS,
 } from "./store/usage";
 export type {
 	CardLayout,
