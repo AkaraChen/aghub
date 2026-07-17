@@ -478,7 +478,6 @@ export default {
 	usageRequestTimeout: "Request timeout",
 	usageRequestTimeoutDescription:
 		"How long to wait for ccusage before giving up.",
-	usageDashboardHint: "Used by the usage section on the home agent cards.",
 	usagePollInterval: "Polling interval",
 	usagePollIntervalDescription: "How often usage data refreshes.",
 	usagePollOff: "Off",
@@ -486,9 +485,13 @@ export default {
 	usageTimezoneDescription:
 		"IANA timezone for daily usage buckets. Empty uses the system timezone.",
 	usageGlobalAlertThreshold: "Global alert threshold",
-	usageGlobalAlertThresholdDescription:
-		"Warn when a rate-limit window passes this percentage.",
-	usageAlertUseGlobal: "Use global",
+	usageAlertUseGlobal: "Use global ({{pct}}%)",
+	usageSettingsHomeCards: "Home cards",
+	usageSettingsAlerts: "Alerts",
+	usageSettingsAlertsDescription:
+		"Warn when a rate-limit window passes its threshold.",
+	usageSettingsAdvanced: "Advanced",
+	usageStatusChecking: "Checking…",
 	usageAgentTracked: "Track {{agent}} usage",
 	usageAgentAlert: "Alert threshold",
 	usageHomeShow: "Show usage on home",
@@ -508,7 +511,6 @@ export default {
 	usageLayoutTargetDefault: "Default",
 	usageLayoutResetOverride: "Reset to default",
 	usageTimezoneSystem: "System default",
-	usageAgentAlertResolved: "Resolves to {{pct}}%",
 	usageStatTotalTokens: "Total tokens",
 	usageStatCost: "Spend",
 	usageStatInputTokens: "Input",
@@ -1344,6 +1346,9 @@ export default {
 	usageOpenSettings: "Open settings",
 	usageTotalSpend: "Total spend",
 	usageActiveDays: "Active days",
+	usageLayoutHiddenDrawer: "Not shown",
+	usageLayoutDrawerEmpty: "Drag a field here to hide it.",
+	usageLayoutEmptyCard: "Everything is hidden — add fields from the drawer.",
 	usageDailyActivity: "Daily usage by agent",
 	usageResetsIn: "Resets in {{time}}",
 	usageWindow5h: "5-hour limit",

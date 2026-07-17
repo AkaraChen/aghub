@@ -15,9 +15,12 @@ import {
 	useSensor,
 	useSensors,
 } from "@dnd-kit/core";
-import { Bars2Icon, EyeIcon, EyeSlashIcon } from "@heroicons/react/24/solid";
+import { EyeSlashIcon, PlusIcon } from "@heroicons/react/24/solid";
+import { Meter } from "@heroui/react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { AgentIcon } from "../../lib/agent-icons";
+import { meterColor } from "../../lib/usage-format";
 import { cn } from "../../lib/utils";
 
 /** A usage field (a rate-limit bar or a bottom stat). */
@@ -35,14 +38,20 @@ export interface CardLayoutModel {
 	statSlots: (string | null)[];
 }
 
-export interface LayoutLabels {
-	bars: string;
-	stats: string;
+/** Live values for the card replica, so the editor previews the real thing.
+ *  `null` means no data for that field — the replica falls back to a fixed
+ *  placeholder fill / an em dash. */
+export interface LayoutPreview {
+	agentId: string;
+	agentName: string;
+	windowPct: (id: string) => number | null;
+	statValue: (id: string) => string | null;
+	alertThresholdPct: number;
 }
 
 type SlotType = "window" | "stat";
 
-/** Fixed placeholder fills so a shown bar reads as a bar without implying data. */
+/** Fixed placeholder fills so a bar without data still reads as a bar. */
 const PREVIEW_BAR_PCT = [62, 38, 84];
 
 export function InteractiveCardLayout({
@@ -52,7 +61,7 @@ export function InteractiveCardLayout({
 	statSlots,
 	isDisabled,
 	onCommit,
-	labels,
+	preview,
 }: {
 	windowFields: LayoutField[];
 	statFields: LayoutField[];
@@ -60,8 +69,9 @@ export function InteractiveCardLayout({
 	statSlots: (string | null)[];
 	isDisabled?: boolean;
 	onCommit: (next: CardLayoutModel) => void;
-	labels: LayoutLabels;
+	preview: LayoutPreview;
 }) {
+	const { t } = useTranslation();
 	const [activeId, setActiveId] = useState<string | null>(null);
 
 	const fieldById = new Map<string, LayoutField>(
@@ -134,6 +144,11 @@ export function InteractiveCardLayout({
 		if (!over) return;
 		const id = String(active.id);
 		const type = typeOf(id);
+		// Dropping onto the drawer hides the field; onto a slot reorders/shows.
+		if (String(over.id) === "hidden-drawer") {
+			hide(id, type);
+			return;
+		}
 		const m = /^slot:(window|stat):(\d+)$/.exec(String(over.id));
 		if (m && m[1] === type) moveTo(id, type, Number(m[2]));
 	};
@@ -141,46 +156,8 @@ export function InteractiveCardLayout({
 	const activeField = activeId ? fieldById.get(activeId) : undefined;
 	const activeType = activeId ? typeOf(activeId) : null;
 
-	const section = (
-		type: SlotType,
-		label: string,
-		variant: "bar" | "stat",
-	) => {
-		const shown = shownOf(type);
-		const hidden = hiddenOf(type);
-		const full = shown.length >= slotsOf(type).length;
-		return (
-			<div className="flex flex-col gap-1.5">
-				<span className="text-[10px] font-medium tracking-wide text-muted uppercase">
-					{label}
-				</span>
-				{shown.map((id, index) => {
-					const field = fieldById.get(id);
-					if (!field) return null;
-					return (
-						<ShownRow
-							key={id}
-							field={field}
-							type={type}
-							index={index}
-							variant={variant}
-							accepts={activeType === type}
-							onHide={() => hide(id, type)}
-						/>
-					);
-				})}
-				{hidden.map((field) => (
-					<HiddenRow
-						key={field.id}
-						field={field}
-						variant={variant}
-						atCap={full}
-						onShow={() => show(field.id, type)}
-					/>
-				))}
-			</div>
-		);
-	};
+	const shownWindows = shownOf("window");
+	const shownStats = shownOf("stat");
 
 	return (
 		<DndContext
@@ -191,88 +168,133 @@ export function InteractiveCardLayout({
 			onDragEnd={onDragEnd}
 			onDragCancel={() => setActiveId(null)}
 		>
+			{/* The card replica beside the dashed drawer of hidden fields.
+			    Drag between the two (or use the eye / plus buttons) to show
+			    and hide. */}
 			<div
 				className={cn(
-					"flex flex-col gap-4 rounded-lg border border-border bg-surface-secondary p-3",
+					"flex flex-col gap-4 sm:flex-row sm:items-start",
 					isDisabled && "pointer-events-none opacity-60",
 				)}
 			>
-				{section("window", labels.bars, "bar")}
-				{section("stat", labels.stats, "stat")}
+				<div className="w-72 max-w-full shrink-0 rounded-lg border border-border bg-surface p-3">
+					<div className="flex items-center gap-2 pb-2">
+						<AgentIcon
+							id={preview.agentId}
+							name={preview.agentName}
+							size="xs"
+						/>
+						<span className="text-sm font-medium text-foreground">
+							{preview.agentName}
+						</span>
+					</div>
+					<div className="flex flex-col gap-1.5">
+						{shownWindows.map((id, index) => {
+							const field = fieldById.get(id);
+							if (!field) return null;
+							const live = preview.windowPct(id);
+							return (
+								<PreviewBarRow
+									key={id}
+									field={field}
+									index={index}
+									pct={
+										live ??
+										PREVIEW_BAR_PCT[
+											index % PREVIEW_BAR_PCT.length
+										]
+									}
+									live={live != null}
+									alertThresholdPct={
+										preview.alertThresholdPct
+									}
+									accepts={activeType === "window"}
+									onHide={() => hide(id, "window")}
+								/>
+							);
+						})}
+					</div>
+					{shownStats.length > 0 && (
+						<div
+							className={cn(
+								"grid grid-cols-2 gap-x-3 gap-y-1",
+								shownWindows.length > 0 &&
+									"mt-2 border-t border-border pt-2",
+							)}
+						>
+							{shownStats.map((id, index) => {
+								const field = fieldById.get(id);
+								if (!field) return null;
+								return (
+									<PreviewStatCell
+										key={id}
+										field={field}
+										index={index}
+										value={preview.statValue(id)}
+										accepts={activeType === "stat"}
+										onHide={() => hide(id, "stat")}
+									/>
+								);
+							})}
+						</div>
+					)}
+					{shownWindows.length === 0 && shownStats.length === 0 && (
+						<p className="py-3 text-center text-[11px] text-muted">
+							{t("usageLayoutEmptyCard")}
+						</p>
+					)}
+				</div>
+
+				<HiddenDrawer
+					active={activeId != null}
+					windows={{
+						fields: hiddenOf("window"),
+						atCap: shownWindows.length >= windowSlots.length,
+						onShow: (id) => show(id, "window"),
+					}}
+					stats={{
+						fields: hiddenOf("stat"),
+						atCap: shownStats.length >= statSlots.length,
+						onShow: (id) => show(id, "stat"),
+					}}
+				/>
 			</div>
 
 			<DragOverlay>
 				{activeField ? (
-					<FieldOverlay field={activeField} type={activeType} />
+					<div className="flex w-56 cursor-grabbing items-center gap-2 rounded-md border border-border bg-surface px-2 py-1.5 shadow-lg">
+						<span className="truncate text-[11px] text-muted">
+							{activeField.label}
+						</span>
+					</div>
 				) : null}
 			</DragOverlay>
 		</DndContext>
 	);
 }
 
-/** The icon + bar/stat body shared by shown and hidden rows, so a bar always
- *  reads as a bar and a stat as a stat. A shown bar is filled; a hidden one
- *  keeps the empty track. */
-function FieldBody({
+/** A quota bar on the replica: label + % + a real meter. Drag to reorder,
+ *  eye to hide (revealed on hover). */
+function PreviewBarRow({
 	field,
-	variant,
-	barPct,
-	shown,
-}: {
-	field: LayoutField;
-	variant: "bar" | "stat";
-	barPct?: number;
-	shown: boolean;
-}) {
-	return (
-		<>
-			<Bars2Icon className="size-3.5 shrink-0 text-muted" />
-			{variant === "bar" ? (
-				<div className="flex min-w-0 flex-1 flex-col gap-1">
-					<span className="truncate text-[11px] text-muted">
-						{field.label}
-					</span>
-					<div className="h-1.5 overflow-hidden rounded-full bg-foreground/10">
-						{barPct != null && (
-							<div
-								className="h-full rounded-full bg-foreground/25"
-								style={{ width: `${barPct}%` }}
-							/>
-						)}
-					</div>
-				</div>
-			) : (
-				<div className="flex min-w-0 flex-1 items-baseline justify-between gap-1 text-[11px]">
-					<span className="truncate text-muted">{field.label}</span>
-					{shown && (
-						<span className="text-foreground tabular-nums">—</span>
-					)}
-				</div>
-			)}
-		</>
-	);
-}
-
-/** A field shown on the card: a drop slot at its position, draggable to reorder,
- *  with an eye toggle to hide it. */
-function ShownRow({
-	field,
-	type,
 	index,
-	variant,
+	pct,
+	live,
+	alertThresholdPct,
 	accepts,
 	onHide,
 }: {
 	field: LayoutField;
-	type: SlotType;
 	index: number;
-	variant: "bar" | "stat";
+	pct: number;
+	live: boolean;
+	alertThresholdPct: number;
 	accepts: boolean;
 	onHide: () => void;
 }) {
 	const { t } = useTranslation();
 	const { setNodeRef: dropRef, isOver } = useDroppable({
-		id: `slot:${type}:${index}`,
+		id: `slot:window:${index}`,
 	});
 	const {
 		attributes,
@@ -294,44 +316,196 @@ function ShownRow({
 				{...attributes}
 				{...listeners}
 				className={cn(
-					"group/row flex cursor-grab touch-none items-center gap-2 rounded-md px-1.5 py-1 outline-none transition-colors hover:bg-foreground/[0.04]",
+					"group/row flex cursor-grab touch-none flex-col gap-0.5 rounded-md outline-none",
 					isDragging && "opacity-40",
 				)}
 			>
-				<FieldBody
-					field={field}
-					variant={variant}
-					barPct={PREVIEW_BAR_PCT[index % PREVIEW_BAR_PCT.length]}
-					shown
-				/>
-				<button
-					type="button"
-					onClick={onHide}
-					onPointerDown={(e) => e.stopPropagation()}
-					aria-label={t("usageLayoutHide", { label: field.label })}
-					className="shrink-0 text-muted transition-colors hover:text-foreground"
+				<div className="flex items-baseline justify-between gap-2 text-[11px]">
+					<span className="truncate text-muted">{field.label}</span>
+					<span className="flex shrink-0 items-center gap-1.5">
+						<span
+							className={cn(
+								"font-medium tabular-nums",
+								!live && "text-muted",
+							)}
+						>
+							{Math.round(pct)}%
+						</span>
+						<button
+							type="button"
+							onClick={onHide}
+							onPointerDown={(e) => e.stopPropagation()}
+							aria-label={t("usageLayoutHide", {
+								label: field.label,
+							})}
+							className="text-muted opacity-0 transition-opacity group-hover/row:opacity-100 hover:text-foreground focus-visible:opacity-100"
+						>
+							<EyeSlashIcon className="size-3.5" />
+						</button>
+					</span>
+				</div>
+				<Meter
+					aria-label={field.label}
+					value={pct}
+					{...(live
+						? { color: meterColor(pct, alertThresholdPct) }
+						: {})}
+					size="sm"
 				>
-					<EyeIcon className="size-4" />
-				</button>
+					<Meter.Track>
+						<Meter.Fill
+							className={cn(!live && "bg-foreground/25")}
+						/>
+					</Meter.Track>
+				</Meter>
 			</div>
 		</div>
 	);
 }
 
-/** A field not on the card: dimmed, draggable in, with an eye toggle to show it.
- *  Disabled once the card is at its cap for this type. */
-function HiddenRow({
+/** A bottom stat on the replica: label + value in the 2×2 grid. */
+function PreviewStatCell({
 	field,
-	variant,
-	atCap,
-	onShow,
+	index,
+	value,
+	accepts,
+	onHide,
 }: {
 	field: LayoutField;
-	variant: "bar" | "stat";
-	atCap: boolean;
-	onShow: () => void;
+	index: number;
+	value: string | null;
+	accepts: boolean;
+	onHide: () => void;
 }) {
 	const { t } = useTranslation();
+	const { setNodeRef: dropRef, isOver } = useDroppable({
+		id: `slot:stat:${index}`,
+	});
+	const {
+		attributes,
+		listeners,
+		setNodeRef: dragRef,
+		isDragging,
+	} = useDraggable({ id: field.id });
+	return (
+		<div
+			ref={dropRef}
+			className={cn(
+				"rounded transition-colors",
+				isOver && accepts && "ring-1 ring-accent",
+			)}
+		>
+			<div
+				ref={dragRef}
+				title={field.hint}
+				{...attributes}
+				{...listeners}
+				className={cn(
+					"group/cell flex cursor-grab touch-none items-baseline justify-between gap-1 text-[11px] outline-none",
+					isDragging && "opacity-40",
+				)}
+			>
+				<span className="truncate text-muted">{field.label}</span>
+				<span className="flex shrink-0 items-center gap-1">
+					<span className="text-foreground tabular-nums">
+						{value ?? "—"}
+					</span>
+					<button
+						type="button"
+						onClick={onHide}
+						onPointerDown={(e) => e.stopPropagation()}
+						aria-label={t("usageLayoutHide", {
+							label: field.label,
+						})}
+						className="text-muted opacity-0 transition-opacity group-hover/cell:opacity-100 hover:text-foreground focus-visible:opacity-100"
+					>
+						<EyeSlashIcon className="size-3" />
+					</button>
+				</span>
+			</div>
+		</div>
+	);
+}
+
+interface DrawerSection {
+	fields: LayoutField[];
+	atCap: boolean;
+	onShow: (id: string) => void;
+}
+
+/** The drawer pane beside the card: everything not shown, kept in the
+ *  field's own shape (a bar keeps its empty track). Also a drop target —
+ *  dragging a field onto it hides the field. */
+function HiddenDrawer({
+	active,
+	windows,
+	stats,
+}: {
+	/** A drag is in flight — highlight the drawer as a hide target. */
+	active: boolean;
+	windows: DrawerSection;
+	stats: DrawerSection;
+}) {
+	const { t } = useTranslation();
+	const { setNodeRef, isOver } = useDroppable({ id: "hidden-drawer" });
+	const empty = windows.fields.length === 0 && stats.fields.length === 0;
+	return (
+		<div
+			ref={setNodeRef}
+			className={cn(
+				"flex w-56 max-w-full flex-col gap-1 rounded-lg border border-dashed border-border p-3 transition-colors",
+				active && isOver && "border-accent bg-accent/5",
+			)}
+		>
+			<span className="pb-0.5 text-[11px] font-medium text-muted">
+				{t("usageLayoutHiddenDrawer")}
+			</span>
+			{empty ? (
+				<p className="py-3 text-center text-[11px] text-foreground/40">
+					{t("usageLayoutDrawerEmpty")}
+				</p>
+			) : (
+				<>
+					{windows.fields.map((field) => (
+						<HiddenBarRow
+							key={field.id}
+							field={field}
+							atCap={windows.atCap}
+							onShow={() => windows.onShow(field.id)}
+							showLabel={t("usageLayoutShow", {
+								label: field.label,
+							})}
+						/>
+					))}
+					{stats.fields.map((field) => (
+						<HiddenStatCell
+							key={field.id}
+							field={field}
+							atCap={stats.atCap}
+							onShow={() => stats.onShow(field.id)}
+							showLabel={t("usageLayoutShow", {
+								label: field.label,
+							})}
+						/>
+					))}
+				</>
+			)}
+		</div>
+	);
+}
+
+/** A hidden quota bar: label over an empty track, so it still reads as a bar. */
+function HiddenBarRow({
+	field,
+	atCap,
+	onShow,
+	showLabel,
+}: {
+	field: LayoutField;
+	atCap: boolean;
+	onShow: () => void;
+	showLabel: string;
+}) {
 	const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
 		id: field.id,
 		disabled: atCap,
@@ -343,45 +517,79 @@ function HiddenRow({
 			{...(atCap ? {} : attributes)}
 			{...(atCap ? {} : listeners)}
 			className={cn(
-				"flex items-center gap-2 rounded-md px-1.5 py-1 outline-none transition-opacity",
+				"group/hid flex items-center gap-2 rounded-md outline-none transition-opacity",
 				atCap
 					? "opacity-40"
-					: "cursor-grab touch-none opacity-60 hover:opacity-100",
+					: "cursor-grab touch-none opacity-70 hover:opacity-100",
 				isDragging && "opacity-40",
 			)}
 		>
-			<FieldBody field={field} variant={variant} shown={false} />
+			<div className="flex min-w-0 flex-1 flex-col gap-1">
+				<span className="flex items-baseline justify-between gap-2 text-[11px] text-muted">
+					<span className="truncate">{field.label}</span>
+					{field.hint && (
+						<span className="shrink-0 text-foreground/40">
+							{field.hint}
+						</span>
+					)}
+				</span>
+				<div className="h-1 rounded-full bg-foreground/10" />
+			</div>
 			<button
 				type="button"
 				onClick={onShow}
 				onPointerDown={(e) => e.stopPropagation()}
 				disabled={atCap}
-				aria-label={t("usageLayoutShow", { label: field.label })}
+				aria-label={showLabel}
 				className="shrink-0 text-muted transition-colors hover:text-accent disabled:cursor-not-allowed disabled:hover:text-muted"
 			>
-				<EyeSlashIcon className="size-4" />
+				<PlusIcon className="size-3.5" />
 			</button>
 		</div>
 	);
 }
 
-/** The drag preview — a solid card shaped like the field it carries (a bar row
- *  or a stat), so dragging never collapses the row into a floating pill. */
-function FieldOverlay({
+/** A hidden stat in the two-column drawer grid. */
+function HiddenStatCell({
 	field,
-	type,
+	atCap,
+	onShow,
+	showLabel,
 }: {
 	field: LayoutField;
-	type: SlotType | null;
+	atCap: boolean;
+	onShow: () => void;
+	showLabel: string;
 }) {
+	const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+		id: field.id,
+		disabled: atCap,
+	});
 	return (
-		<div className="flex w-48 cursor-grabbing items-center gap-2 rounded-md border border-border bg-surface px-2 py-1.5 shadow-lg">
-			<FieldBody
-				field={field}
-				variant={type === "window" ? "bar" : "stat"}
-				barPct={type === "window" ? 62 : undefined}
-				shown
-			/>
+		<div
+			ref={setNodeRef}
+			title={field.hint}
+			{...(atCap ? {} : attributes)}
+			{...(atCap ? {} : listeners)}
+			className={cn(
+				"flex items-center justify-between gap-1 rounded text-[11px] outline-none transition-opacity",
+				atCap
+					? "opacity-40"
+					: "cursor-grab touch-none opacity-70 hover:opacity-100",
+				isDragging && "opacity-40",
+			)}
+		>
+			<span className="truncate text-muted">{field.label}</span>
+			<button
+				type="button"
+				onClick={onShow}
+				onPointerDown={(e) => e.stopPropagation()}
+				disabled={atCap}
+				aria-label={showLabel}
+				className="shrink-0 text-muted transition-colors hover:text-accent disabled:cursor-not-allowed disabled:hover:text-muted"
+			>
+				<PlusIcon className="size-3" />
+			</button>
 		</div>
 	);
 }

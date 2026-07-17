@@ -81,22 +81,34 @@ test.beforeEach(async ({ page }) => {
 test("Usage settings panel and layout editor render", async ({ page }) => {
 	await page.goto("/settings?tab=usage");
 
-	// Sidecar card + the layout editor's two sections.
+	// Sidecar card + the layout editor's inspector block.
 	await expect(page.getByText("Auto-discover ccusage")).toBeVisible();
 	await expect(page.getByText("Card layout", { exact: true })).toBeVisible();
-	await expect(
-		page.getByText("Rate-limit bars", { exact: true }),
-	).toBeVisible();
-	await expect(page.getByText("Bottom stats", { exact: true })).toBeVisible();
-	// A bar field and a stat field render as rows in the editor.
-	await expect(page.getByText("5-hour limit").first()).toBeVisible();
-	await expect(page.getByText("Total tokens").first()).toBeVisible();
 
-	// Status card: inline update hint next to the version, plus the update +
-	// re-check actions.
+	// The card replica previews the target agent with live values from the
+	// mocked limits/summary (42% = the mocked 5h utilization), and the
+	// drawer lists what's hidden.
+	await expect(page.getByText("5-hour limit").first()).toBeVisible();
+	await expect(page.getByText("42%")).toBeVisible();
+	await expect(page.getByText("Total tokens").first()).toBeVisible();
+	await expect(page.getByText("Not shown", { exact: true })).toBeVisible();
+	await expect(page.getByText("Cache read", { exact: true })).toBeVisible();
+
+	// Sidecar status row: version + inline update hint in the description,
+	// plus the update + re-check actions.
 	await expect(page.getByText("20.0.17 available")).toBeVisible();
 	await expect(page.getByRole("button", { name: "Update" })).toBeVisible();
 	await expect(page.getByRole("button", { name: "Re-check" })).toBeVisible();
+
+	// Alerts: one row per agent with the resolved-global threshold select.
+	await expect(
+		page.getByRole("button", { name: "Use global (80%)" }).first(),
+	).toBeVisible();
+
+	// Advanced knobs are collapsed by default and expand on demand.
+	await expect(page.getByText("Polling interval")).toBeHidden();
+	await page.getByRole("button", { name: "Advanced" }).click();
+	await expect(page.getByText("Polling interval")).toBeVisible();
 
 	// Auto-discover is on by default, so the resolved binary (from the Tauri
 	// mock) shows as a hint under the toggle.
