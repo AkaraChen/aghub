@@ -4,6 +4,8 @@ import {
 	queryOptions,
 } from "@tanstack/react-query";
 import type {
+	AddGatewayCompatProviderRequest,
+	AddGatewayUpstreamKeyRequest,
 	CreateExternalGatewayRequest,
 	CreateManagedGatewayRequest,
 	GatewayInstanceDto,
@@ -114,6 +116,32 @@ export function gatewayUsageQueryOptions({
 		queryFn: () => api.gateway.usage(instanceId),
 		enabled,
 		staleTime: 15_000,
+	});
+}
+
+export function gatewayUpstreamKeysQueryOptions({
+	api,
+	instanceId,
+	enabled = true,
+}: GatewayInstanceScopedQueryParams) {
+	return queryOptions({
+		queryKey: queryKeys.gateway.upstreamKeys(instanceId),
+		queryFn: () => api.gateway.listUpstreamKeys(instanceId),
+		enabled,
+		staleTime: 5_000,
+	});
+}
+
+export function gatewayCompatProvidersQueryOptions({
+	api,
+	instanceId,
+	enabled = true,
+}: GatewayInstanceScopedQueryParams) {
+	return queryOptions({
+		queryKey: queryKeys.gateway.compatProviders(instanceId),
+		queryFn: () => api.gateway.listCompatProviders(instanceId),
+		enabled,
+		staleTime: 5_000,
 	});
 }
 
@@ -378,6 +406,135 @@ export function updateGatewaySettingMutationOptions({
 			await queryClient.invalidateQueries({
 				queryKey: queryKeys.gateway.settings(variables.instanceId),
 			});
+			await onSuccess?.();
+		},
+	});
+}
+
+interface AddGatewayUpstreamKeyVariables {
+	instanceId: string;
+	body: AddGatewayUpstreamKeyRequest;
+}
+
+interface GatewayScopedMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: () => void | Promise<void>;
+}
+
+export function addGatewayUpstreamKeyMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: GatewayScopedMutationParams) {
+	return mutationOptions({
+		mutationFn: ({ instanceId, body }: AddGatewayUpstreamKeyVariables) =>
+			api.gateway.addUpstreamKey(instanceId, body),
+		onSuccess: async (_data, variables) => {
+			await queryClient.invalidateQueries({
+				queryKey: queryKeys.gateway.upstreamKeys(variables.instanceId),
+			});
+			await onSuccess?.();
+		},
+	});
+}
+
+interface DeleteGatewayUpstreamKeyVariables {
+	instanceId: string;
+	provider: string;
+	apiKey: string;
+}
+
+export function deleteGatewayUpstreamKeyMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: GatewayScopedMutationParams) {
+	return mutationOptions({
+		mutationFn: ({
+			instanceId,
+			provider,
+			apiKey,
+		}: DeleteGatewayUpstreamKeyVariables) =>
+			api.gateway.deleteUpstreamKey(instanceId, provider, apiKey),
+		onSuccess: async (_data, variables) => {
+			await queryClient.invalidateQueries({
+				queryKey: queryKeys.gateway.upstreamKeys(variables.instanceId),
+			});
+			await onSuccess?.();
+		},
+	});
+}
+
+interface AddGatewayCompatProviderVariables {
+	instanceId: string;
+	body: AddGatewayCompatProviderRequest;
+}
+
+export function addGatewayCompatProviderMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: GatewayScopedMutationParams) {
+	return mutationOptions({
+		mutationFn: ({ instanceId, body }: AddGatewayCompatProviderVariables) =>
+			api.gateway.addCompatProvider(instanceId, body),
+		onSuccess: async (_data, variables) => {
+			await queryClient.invalidateQueries({
+				queryKey: queryKeys.gateway.compatProviders(
+					variables.instanceId,
+				),
+			});
+			await onSuccess?.();
+		},
+	});
+}
+
+interface DeleteGatewayCompatProviderVariables {
+	instanceId: string;
+	name: string;
+}
+
+export function deleteGatewayCompatProviderMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: GatewayScopedMutationParams) {
+	return mutationOptions({
+		mutationFn: ({
+			instanceId,
+			name,
+		}: DeleteGatewayCompatProviderVariables) =>
+			api.gateway.deleteCompatProvider(instanceId, name),
+		onSuccess: async (_data, variables) => {
+			await queryClient.invalidateQueries({
+				queryKey: queryKeys.gateway.compatProviders(
+					variables.instanceId,
+				),
+			});
+			await onSuccess?.();
+		},
+	});
+}
+
+interface ResetGatewayQuotaVariables {
+	instanceId: string;
+	authIndex: string;
+}
+
+export function resetGatewayQuotaMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: GatewayScopedMutationParams) {
+	return mutationOptions({
+		mutationFn: ({ instanceId, authIndex }: ResetGatewayQuotaVariables) =>
+			api.gateway.resetQuota(instanceId, { auth_index: authIndex }),
+		onSuccess: async (_data, variables) => {
+			await invalidateGatewayAuthFileQueries(
+				queryClient,
+				variables.instanceId,
+			);
 			await onSuccess?.();
 		},
 	});

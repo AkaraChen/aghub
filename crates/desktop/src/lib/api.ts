@@ -16,6 +16,8 @@ import type {
 	ClaudeProviderStateResponse,
 	CodeEditorType,
 	CodexProviderStateResponse,
+	AddGatewayCompatProviderRequest,
+	AddGatewayUpstreamKeyRequest,
 	CreateAgentProviderRequest,
 	CreateCredentialRequest,
 	CreateExternalGatewayRequest,
@@ -31,12 +33,15 @@ import type {
 	GatewayAuthFileDto,
 	GatewayAuthPollDto,
 	GatewayAuthUrlDto,
+	GatewayCompatProviderDto,
 	GatewayConfigFileDto,
 	GatewayInstanceDto,
 	GatewayProvisionStatusDto,
 	GatewaySettingsDto,
+	GatewayUpstreamKeysDto,
 	GatewayUsageDto,
 	GatewayVersionDto,
+	ResetGatewayQuotaRequest,
 	DeleteSkillByPathRequest,
 	DeleteSkillByPathResponse,
 	FetchInferenceProviderModelsRequest,
@@ -1314,6 +1319,75 @@ export function createApi(baseUrl: string, token: string) {
 				return client
 					.get(`gateway/instances/${encodeURIComponent(id)}/usage`)
 					.json();
+			},
+			listUpstreamKeys(id: string): Promise<GatewayUpstreamKeysDto> {
+				return client
+					.get(
+						`gateway/instances/${encodeURIComponent(id)}/upstream-keys`,
+					)
+					.json();
+			},
+			addUpstreamKey(
+				id: string,
+				body: AddGatewayUpstreamKeyRequest,
+			): Promise<void> {
+				return client
+					.post(
+						`gateway/instances/${encodeURIComponent(id)}/upstream-keys`,
+						{ json: body },
+					)
+					.then(() => undefined);
+			},
+			deleteUpstreamKey(
+				id: string,
+				provider: string,
+				apiKey: string,
+			): Promise<void> {
+				return client
+					.delete(
+						`gateway/instances/${encodeURIComponent(id)}/upstream-keys`,
+						{ searchParams: { provider, api_key: apiKey } },
+					)
+					.then(() => undefined);
+			},
+			listCompatProviders(
+				id: string,
+			): Promise<GatewayCompatProviderDto[]> {
+				return client
+					.get(
+						`gateway/instances/${encodeURIComponent(id)}/compat-providers`,
+					)
+					.json();
+			},
+			addCompatProvider(
+				id: string,
+				body: AddGatewayCompatProviderRequest,
+			): Promise<void> {
+				return client
+					.post(
+						`gateway/instances/${encodeURIComponent(id)}/compat-providers`,
+						{ json: body },
+					)
+					.then(() => undefined);
+			},
+			deleteCompatProvider(id: string, name: string): Promise<void> {
+				return client
+					.delete(
+						`gateway/instances/${encodeURIComponent(id)}/compat-providers`,
+						{ searchParams: { name } },
+					)
+					.then(() => undefined);
+			},
+			resetQuota(
+				id: string,
+				body: ResetGatewayQuotaRequest,
+			): Promise<void> {
+				return client
+					.post(
+						`gateway/instances/${encodeURIComponent(id)}/accounts/reset-quota`,
+						{ json: body },
+					)
+					.then(() => undefined);
 			},
 		},
 		plugins: {

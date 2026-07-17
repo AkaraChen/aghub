@@ -29,6 +29,7 @@ import {
 	gatewayLaunchLabel,
 } from "./gateway-helpers";
 import { GatewayNotRunningNotice } from "./gateway-status";
+import { GatewayUpstreamKeysPanel } from "./upstream-keys-panel";
 import { GatewayUsagePanel } from "./usage-panel";
 
 const STATUS_CHIP_COLOR: Record<
@@ -108,8 +109,8 @@ export function GatewayDetailPanel({
 	});
 
 	const installedVersion = instance.version ?? version?.installed ?? null;
-	const isUpToDate =
-		version?.latest != null && version.latest === version.installed;
+	const hasNewerVersion =
+		version?.latest != null && version.latest !== version.installed;
 
 	return (
 		<div className="flex h-full flex-col">
@@ -132,6 +133,18 @@ export function GatewayDetailPanel({
 						/>
 						{t(statusDisplay.labelKey)}
 					</Chip>
+					{installedVersion && (
+						<span className="shrink-0 text-xs text-muted tabular-nums">
+							v{installedVersion}
+						</span>
+					)}
+					{hasNewerVersion && version?.latest && (
+						<Chip size="sm" variant="soft" color="accent">
+							{t("gatewayNewVersion", {
+								version: version.latest,
+							})}
+						</Chip>
+					)}
 					<div className="ml-auto flex shrink-0 items-center gap-2">
 						{needsProvision && (
 							<Button
@@ -222,26 +235,10 @@ export function GatewayDetailPanel({
 					</div>
 				</div>
 
-				<div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted tabular-nums">
+				<div className="mt-1 text-xs text-muted">
 					<span className="font-mono">
 						{displayGatewayHost(instance.base_url)}
 					</span>
-					{installedVersion && (
-						<>
-							<span aria-hidden>·</span>
-							<span>v{installedVersion}</span>
-						</>
-					)}
-					{version?.latest && (
-						<>
-							<span aria-hidden>·</span>
-							<span>
-								{isUpToDate
-									? t("gatewayVersionUpToDate")
-									: `${t("gatewayVersionLatest")} v${version.latest}`}
-							</span>
-						</>
-					)}
 				</div>
 
 				<div className="mt-4">
@@ -254,6 +251,10 @@ export function GatewayDetailPanel({
 								>
 									<Tabs.Tab id="accounts">
 										{t("gatewayTabAccounts")}
+										<Tabs.Indicator />
+									</Tabs.Tab>
+									<Tabs.Tab id="upstream">
+										{t("gatewayTabUpstream")}
 										<Tabs.Indicator />
 									</Tabs.Tab>
 									<Tabs.Tab id="keys">
@@ -270,6 +271,11 @@ export function GatewayDetailPanel({
 								<GatewayAccountsPanel
 									instance={instance}
 									instances={instances}
+								/>
+							</Tabs.Panel>
+							<Tabs.Panel id="upstream">
+								<GatewayUpstreamKeysPanel
+									instanceId={instance.id}
 								/>
 							</Tabs.Panel>
 							<Tabs.Panel id="keys">

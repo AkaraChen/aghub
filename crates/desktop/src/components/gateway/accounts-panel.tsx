@@ -1,4 +1,5 @@
 import {
+	ArrowPathIcon,
 	PaperAirplaneIcon,
 	PlusIcon,
 	TrashIcon,
@@ -10,6 +11,7 @@ import {
 	Dropdown,
 	Spinner,
 	Table,
+	Tooltip,
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -31,6 +33,7 @@ import {
 	deleteGatewayAuthFileMutationOptions,
 	gatewayAuthFilesQueryOptions,
 	invalidateGatewayAuthFileQueries,
+	resetGatewayQuotaMutationOptions,
 } from "../../requests/gateway";
 import { AddGatewayAccountDialog } from "./add-account-dialog";
 import { formatGatewayModtime } from "./gateway-helpers";
@@ -39,13 +42,17 @@ function AccountsTable({
 	authFiles,
 	pushTargets,
 	isPushPending,
+	isResetQuotaPending,
 	onPush,
+	onResetQuota,
 	onDelete,
 }: {
 	authFiles: GatewayAuthFileDto[];
 	pushTargets: GatewayInstanceDto[];
 	isPushPending: boolean;
+	isResetQuotaPending: boolean;
 	onPush: (file: GatewayAuthFileDto, targetId: string) => void;
+	onResetQuota: (file: GatewayAuthFileDto) => void;
 	onDelete: (file: GatewayAuthFileDto) => void;
 }) {
 	const { t } = useTranslation();
@@ -149,6 +156,32 @@ function AccountsTable({
 												</Dropdown.Popover>
 											</Dropdown>
 										)}
+										{file.auth_index !== null && (
+											<Tooltip delay={0}>
+												<Tooltip.Trigger>
+													<Button
+														isIconOnly
+														variant="ghost"
+														size="sm"
+														className="text-muted"
+														aria-label={t(
+															"gatewayResetQuota",
+														)}
+														isDisabled={
+															isResetQuotaPending
+														}
+														onPress={() =>
+															onResetQuota(file)
+														}
+													>
+														<ArrowPathIcon className="size-4" />
+													</Button>
+												</Tooltip.Trigger>
+												<Tooltip.Content>
+													{t("gatewayResetQuota")}
+												</Tooltip.Content>
+											</Tooltip>
+										)}
 										<Button
 											isIconOnly
 											variant="ghost"
@@ -243,10 +276,36 @@ export function GatewayAccountsPanel({
 		},
 	});
 
+	const resetQuotaMutation = useMutation({
+		...resetGatewayQuotaMutationOptions({
+			api,
+			queryClient,
+			onSuccess: () => {
+				toast.success(t("gatewayQuotaReset"));
+			},
+		}),
+		onError: (error) => {
+			console.error("Failed to reset gateway quota:", error);
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: t("gatewayQuotaResetFailed"),
+			);
+		},
+	});
+
 	const handlePush = (file: GatewayAuthFileDto, targetId: string) => {
 		const target = pushTargets.find((item) => item.id === targetId);
 		if (!target) return;
 		pushMutation.mutate({ file, target });
+	};
+
+	const handleResetQuota = (file: GatewayAuthFileDto) => {
+		if (file.auth_index === null) return;
+		resetQuotaMutation.mutate({
+			instanceId: instance.id,
+			authIndex: file.auth_index,
+		});
 	};
 
 	if (isLoading) {
@@ -298,7 +357,9 @@ export function GatewayAccountsPanel({
 					authFiles={authFiles}
 					pushTargets={pushTargets}
 					isPushPending={pushMutation.isPending}
+					isResetQuotaPending={resetQuotaMutation.isPending}
 					onPush={handlePush}
+					onResetQuota={handleResetQuota}
 					onDelete={setDeleteTarget}
 				/>
 			)}

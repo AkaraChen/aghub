@@ -1,4 +1,5 @@
 import {
+	Accordion,
 	Alert,
 	Input,
 	NumberField,
@@ -201,38 +202,59 @@ export function GatewaySettingsPanel({
 				</Alert>
 			)}
 
-			{groups.map(({ group, settings }) => {
-				const labelKey = gatewaySettingGroupLabelKey(group);
-				return (
-					<section key={group} className="flex flex-col gap-1">
-						<h3 className="px-1 text-xs font-medium tracking-wider text-muted uppercase">
-							{labelKey ? t(labelKey) : group}
-						</h3>
-						<div className="flex flex-col divide-y divide-border rounded-lg border border-border bg-surface">
-							{settings.map((setting) => (
-								<div
-									key={setting.key}
-									className="flex items-center justify-between gap-4 px-3 py-2.5"
-								>
-									<div className="min-w-0">
-										<span className="block truncate font-mono text-sm text-foreground">
-											{setting.key}
-										</span>
-										{setting.value === null && (
-											<span className="text-xs text-muted">
-												{t("gatewaySettingUnavailable")}
-											</span>
-										)}
+			<Accordion
+				allowsMultipleExpanded
+				defaultExpandedKeys={groups[0] ? [groups[0].group] : []}
+				hideSeparator
+				className="rounded-lg border border-border bg-surface"
+			>
+				{groups.map(({ group, settings }) => {
+					const labelKey = gatewaySettingGroupLabelKey(group);
+					return (
+						<Accordion.Item key={group} id={group}>
+							<Accordion.Heading>
+								<Accordion.Trigger>
+									<span className="flex-1 text-left text-sm font-medium">
+										{labelKey ? t(labelKey) : group}
+									</span>
+									<span className="mx-2 text-xs text-muted">
+										{settings.length}
+									</span>
+									<Accordion.Indicator />
+								</Accordion.Trigger>
+							</Accordion.Heading>
+							<Accordion.Panel>
+								<Accordion.Body>
+									<div className="flex flex-col divide-y divide-border">
+										{settings.map((setting) => (
+											<div
+												key={setting.key}
+												className="flex items-center justify-between gap-4 py-2"
+											>
+												<div className="min-w-0">
+													<span className="block truncate font-mono text-sm text-foreground">
+														{setting.key}
+													</span>
+													{setting.value === null && (
+														<span className="text-xs text-muted">
+															{t(
+																"gatewaySettingUnavailable",
+															)}
+														</span>
+													)}
+												</div>
+												<div className="shrink-0">
+													{renderControl(setting)}
+												</div>
+											</div>
+										))}
 									</div>
-									<div className="shrink-0">
-										{renderControl(setting)}
-									</div>
-								</div>
-							))}
-						</div>
-					</section>
-				);
-			})}
+								</Accordion.Body>
+							</Accordion.Panel>
+						</Accordion.Item>
+					);
+				})}
+			</Accordion>
 		</div>
 	);
 }

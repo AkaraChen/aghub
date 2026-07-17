@@ -146,6 +146,10 @@ export const queryKeys = {
 			["gateway", "config-file", instanceId] as const,
 		usage: (instanceId: string) =>
 			["gateway", "usage", instanceId] as const,
+		upstreamKeys: (instanceId: string) =>
+			["gateway", "upstream-keys", instanceId] as const,
+		compatProviders: (instanceId: string) =>
+			["gateway", "compat-providers", instanceId] as const,
 	},
 	integrations: {
 		all: () => ["integrations"] as const,

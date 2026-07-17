@@ -46,7 +46,10 @@ import { type Key, useId, useMemo, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { GatewayDetailPanel } from "../components/gateway/gateway-detail-panel";
-import { GATEWAY_STATUS_DISPLAY } from "../components/gateway/gateway-helpers";
+import {
+	GATEWAY_MANAGED_PRESET,
+	GATEWAY_STATUS_DISPLAY,
+} from "../components/gateway/gateway-helpers";
 import { GatewaySetupPanel } from "../components/gateway/gateway-setup-panel";
 import { ListSearchHeader } from "../components/list-search-header";
 import { ResourceSectionHeader } from "../components/resource-section-header";
@@ -2156,6 +2159,9 @@ function ProviderDetail({
 	const [revealedKey, setRevealedKey] = useState<string | null>(null);
 	const [isCopying, setIsCopying] = useState(false);
 	const previewKey = provider.masked_api_key || "••••••••••••••••••••••••";
+	// Mirrored from a gateway instance: local edits would be overwritten on
+	// the next gateway sync, so mutating actions are disabled.
+	const isGatewayManaged = provider.preset === GATEWAY_MANAGED_PRESET;
 
 	const passwordMutation = useMutation({
 		mutationFn: (name: string) => api.inferenceProviders.getPassword(name),
@@ -2262,13 +2268,16 @@ function ProviderDetail({
 											aria-label={t(
 												"editInferenceProvider",
 											)}
+											isDisabled={isGatewayManaged}
 											onPress={onEdit}
 										>
 											<PencilIcon className="size-4" />
 										</Button>
 									</Tooltip.Trigger>
 									<Tooltip.Content>
-										{t("edit")}
+										{isGatewayManaged
+											? t("gatewayManagedProviderTooltip")
+											: t("edit")}
 									</Tooltip.Content>
 								</Tooltip>
 								<Tooltip delay={0}>
@@ -2281,6 +2290,7 @@ function ProviderDetail({
 											aria-label={t(
 												"deleteInferenceProvider",
 											)}
+											isDisabled={isGatewayManaged}
 											onPress={() =>
 												setIsDeleteOpen(true)
 											}
@@ -2289,13 +2299,20 @@ function ProviderDetail({
 										</Button>
 									</Tooltip.Trigger>
 									<Tooltip.Content>
-										{t("delete")}
+										{isGatewayManaged
+											? t("gatewayManagedProviderTooltip")
+											: t("delete")}
 									</Tooltip.Content>
 								</Tooltip>
 							</div>
 						</Card.Header>
 
 						<Card.Content className="flex flex-col gap-4">
+							{isGatewayManaged && (
+								<p className="text-xs text-muted">
+									{t("gatewayManagedProviderNotice")}
+								</p>
+							)}
 							<div className="grid gap-1.5 py-1">
 								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
 									{t("providerFormat")}
@@ -2713,7 +2730,7 @@ export default function InferenceProvidersPage() {
 													{instance.name}
 												</Label>
 												{instance.kind ===
-												"external" ? (
+													"external" && (
 													<Chip
 														size="sm"
 														variant="soft"
@@ -2722,11 +2739,7 @@ export default function InferenceProvidersPage() {
 															"gatewayKindExternal",
 														)}
 													</Chip>
-												) : instance.version ? (
-													<span className="shrink-0 font-mono text-xs text-muted">
-														v{instance.version}
-													</span>
-												) : null}
+												)}
 											</div>
 										</ListBox.Item>
 									))
@@ -2832,6 +2845,12 @@ export default function InferenceProvidersPage() {
 												{provider.display_name}
 											</Label>
 										</div>
+										{provider.preset ===
+											GATEWAY_MANAGED_PRESET && (
+											<Chip size="sm" variant="soft">
+												{t("gateway")}
+											</Chip>
+										)}
 									</div>
 								</ListBox.Item>
 							))}

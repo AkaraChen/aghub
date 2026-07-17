@@ -2,6 +2,7 @@ import type { TFunction } from "i18next";
 import type {
 	GatewayInstanceStatus,
 	GatewayOauthProvider,
+	GatewayUpstreamProvider,
 	GatewayUsageDto,
 } from "../../generated/dto";
 import type { GatewayLaunchStage } from "../../hooks/use-gateway-launch";
@@ -136,6 +137,35 @@ export function gatewayLaunchLabel(
 		default:
 			return t("gatewayLaunchPreparing");
 	}
+}
+
+/**
+ * `preset` marker the backend stamps on inference-provider entries it
+ * mirrors from gateway instances.
+ */
+export const GATEWAY_MANAGED_PRESET = "aghub-gateway";
+
+interface GatewayUpstreamProviderOption {
+	id: GatewayUpstreamProvider;
+	/** Brand name, shown verbatim in every locale. */
+	label: string;
+	/** File name under `@lobehub/icons-static-svg/icons/`. */
+	logo: string;
+}
+
+export const GATEWAY_UPSTREAM_PROVIDER_OPTIONS: GatewayUpstreamProviderOption[] =
+	[
+		{ id: "gemini", label: "Gemini", logo: "gemini" },
+		{ id: "claude", label: "Claude", logo: "claude" },
+		{ id: "codex", label: "Codex", logo: "openai" },
+	];
+
+/** `sk-abcdef…wxyz` style masking: first 6 + last 4, bullets between. */
+export function maskGatewayKey(key: string): string {
+	if (key.length <= 10) {
+		return "•".repeat(Math.max(key.length, 4));
+	}
+	return `${key.slice(0, 6)}•••${key.slice(-4)}`;
 }
 
 export function formatGatewayModtime(modtime: string | null): string {

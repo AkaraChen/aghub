@@ -234,12 +234,14 @@ function InstallStatusCard({
 						</Switch>
 					</div>
 				)}
+				<MirrorField />
 			</Card.Content>
 		</Card>
 	);
 }
 
-function MirrorCard() {
+/** "Download source" row inside the install & status card. */
+function MirrorField() {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const [draft, setDraft] = useState<string | null>(null);
@@ -248,7 +250,6 @@ function MirrorCard() {
 		queryKey: GATEWAY_MIRROR_QUERY_KEY,
 		queryFn: getGatewayMirror,
 	});
-
 	const value = draft ?? mirror ?? "";
 	const isDirty = draft !== null && draft.trim() !== (mirror ?? "");
 
@@ -274,37 +275,33 @@ function MirrorCard() {
 	});
 
 	return (
-		<Card variant="secondary">
-			<Card.Header>
-				<div>
-					<Card.Title>{t("gatewayMirrorTitle")}</Card.Title>
-					<Card.Description>
-						{t("gatewayMirrorDescription")}
-					</Card.Description>
-				</div>
-			</Card.Header>
-			<Card.Content>
-				<div className="flex items-center gap-2">
-					<Input
-						value={value}
-						onChange={(event) => setDraft(event.target.value)}
-						placeholder="https://mirror.example.com"
-						aria-label={t("gatewayMirrorTitle")}
-						variant="secondary"
-						className="min-w-0 flex-1 font-mono text-sm"
-					/>
-					<Button
-						size="sm"
-						className="shrink-0"
-						isDisabled={!isDirty}
-						isPending={saveMutation.isPending}
-						onPress={() => saveMutation.mutate(value)}
-					>
-						{t("save")}
-					</Button>
-				</div>
-			</Card.Content>
-		</Card>
+		<div className="flex flex-col gap-1">
+			<div className="flex items-center gap-2">
+				<span className="shrink-0 text-sm text-foreground">
+					{t("gatewayMirrorTitle")}
+				</span>
+				<Input
+					value={value}
+					onChange={(event) => setDraft(event.target.value)}
+					placeholder="https://mirror.example.com"
+					aria-label={t("gatewayMirrorTitle")}
+					variant="secondary"
+					className="min-w-0 flex-1 font-mono text-sm"
+				/>
+				<Button
+					size="sm"
+					className="shrink-0"
+					isDisabled={!isDirty}
+					isPending={saveMutation.isPending}
+					onPress={() => saveMutation.mutate(value)}
+				>
+					{t("save")}
+				</Button>
+			</div>
+			<p className="text-xs text-muted">
+				{t("gatewayMirrorDescription")}
+			</p>
+		</div>
 	);
 }
 
@@ -346,11 +343,11 @@ function RemoteInstancesCard({
 						{t("gatewayNoRemoteInstances")}
 					</p>
 				) : (
-					<div className="flex flex-col gap-2">
+					<div className="flex flex-col gap-1.5">
 						{externals.map((instance) => (
 							<div
 								key={instance.id}
-								className="flex min-w-0 items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2"
+								className="flex min-w-0 items-center gap-3 rounded-lg border border-border bg-surface px-3 py-1.5"
 							>
 								<GatewayStatusIndicator
 									status={instance.status}
@@ -424,9 +421,8 @@ export default function GatewayPanel() {
 	}
 
 	return (
-		<div className="flex flex-col gap-4">
+		<div className="flex flex-col gap-3">
 			<InstallStatusCard managed={managed} />
-			<MirrorCard />
 
 			{managed && (
 				<Card variant="secondary">
