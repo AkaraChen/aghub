@@ -54,6 +54,39 @@ type SlotType = "window" | "stat";
 /** Fixed placeholder fills so a bar without data still reads as a bar. */
 const PREVIEW_BAR_PCT = [62, 38, 84];
 
+/** Rows opt into view transitions under this name so drop / show / hide
+ *  morphs the field between its old and new place (card ↔ drawer). */
+const rowTransitionName = (fieldId: string) => `usage-slot-${fieldId}`;
+
+/**
+ * Run a layout mutation inside a view transition so rows glide to their new
+ * position. Falls back to an instant update when the platform lacks the API
+ * or the user prefers reduced motion (also keeps e2e deterministic).
+ */
+function withLayoutTransition(mutate: () => void) {
+	// Feature-detect: WKWebView < Safari 18 has no startViewTransition.
+	const doc = document as Document & {
+		startViewTransition?: (update: () => Promise<void>) => unknown;
+	};
+	if (
+		!doc.startViewTransition ||
+		window.matchMedia("(prefers-reduced-motion: reduce)").matches
+	) {
+		mutate();
+		return;
+	}
+	doc.startViewTransition(() => {
+		mutate();
+		// The commit lands via react-query's optimistic update; two frames
+		// span the re-render so the browser snapshots the settled DOM.
+		return new Promise<void>((resolve) => {
+			requestAnimationFrame(() => {
+				requestAnimationFrame(() => resolve());
+			});
+		});
+	});
+}
+
 export function InteractiveCardLayout({
 	windowFields,
 	statFields,
@@ -100,10 +133,12 @@ export function InteractiveCardLayout({
 	// shows a gap and never exceeds the cap.
 	const commit = (type: SlotType, shown: string[]) => {
 		const slots = slotsOf(type).map((_, i) => shown[i] ?? null);
-		onCommit(
-			type === "window"
-				? { windowSlots: slots, statSlots }
-				: { windowSlots, statSlots: slots },
+		withLayoutTransition(() =>
+			onCommit(
+				type === "window"
+					? { windowSlots: slots, statSlots }
+					: { windowSlots, statSlots: slots },
+			),
 		);
 	};
 
@@ -158,6 +193,12 @@ export function InteractiveCardLayout({
 
 	const shownWindows = shownOf("window");
 	const shownStats = shownOf("stat");
+	// Whether the dragged field currently sits on the card — the overlay
+	// mirrors the source's shape so the drag never changes size mid-air.
+	const activeOnCard =
+		activeId != null && activeType != null
+			? shownOf(activeType).includes(activeId)
+			: false;
 
 	return (
 		<DndContext
@@ -177,7 +218,10 @@ export function InteractiveCardLayout({
 					isDisabled && "pointer-events-none opacity-60",
 				)}
 			>
-				<div className="w-72 max-w-full shrink-0 rounded-lg border border-border bg-surface p-3">
+				<div
+					data-testid="layout-card-replica"
+					className="w-80 max-w-full shrink-0 rounded-lg border border-border bg-surface p-3 shadow-xs"
+				>
 					<div className="flex items-center gap-2 pb-2">
 						<AgentIcon
 							id={preview.agentId}
@@ -213,8 +257,21 @@ export function InteractiveCardLayout({
 								/>
 							);
 						})}
+						{/* An append slot appears while dragging a bar and
+						    the card still has room — dropping adds, nothing
+						    is swapped out. */}
+						{activeType === "window" &&
+							shownWindows.length < windowSlots.length && (
+								<EmptySlot
+									type="window"
+									index={shownWindows.length}
+									variant="bar"
+								/>
+							)}
 					</div>
-					{shownStats.length > 0 && (
+					{(shownStats.length > 0 ||
+						(activeType === "stat" &&
+							shownStats.length < statSlots.length)) && (
 						<div
 							className={cn(
 								"grid grid-cols-2 gap-x-3 gap-y-1",
@@ -236,13 +293,23 @@ export function InteractiveCardLayout({
 									/>
 								);
 							})}
+							{activeType === "stat" &&
+								shownStats.length < statSlots.length && (
+									<EmptySlot
+										type="stat"
+										index={shownStats.length}
+										variant="stat"
+									/>
+								)}
 						</div>
 					)}
-					{shownWindows.length === 0 && shownStats.length === 0 && (
-						<p className="py-3 text-center text-[11px] text-muted">
-							{t("usageLayoutEmptyCard")}
-						</p>
-					)}
+					{shownWindows.length === 0 &&
+						shownStats.length === 0 &&
+						activeType == null && (
+							<p className="py-3 text-center text-[11px] text-muted">
+								{t("usageLayoutEmptyCard")}
+							</p>
+						)}
 				</div>
 
 				<HiddenDrawer
@@ -260,16 +327,120 @@ export function InteractiveCardLayout({
 				/>
 			</div>
 
-			<DragOverlay>
-				{activeField ? (
-					<div className="flex w-56 cursor-grabbing items-center gap-2 rounded-md border border-border bg-surface px-2 py-1.5 shadow-lg">
-						<span className="truncate text-[11px] text-muted">
-							{activeField.label}
-						</span>
-					</div>
+			<DragOverlay dropAnimation={{ duration: 160 }}>
+				{activeField && activeType ? (
+					<DragGhost
+						field={activeField}
+						type={activeType}
+						onCard={activeOnCard}
+						pct={
+							activeType === "window"
+								? (preview.windowPct(activeField.id) ??
+									PREVIEW_BAR_PCT[0])
+								: null
+						}
+						value={
+							activeType === "stat"
+								? preview.statValue(activeField.id)
+								: null
+						}
+					/>
 				) : null}
 			</DragOverlay>
 		</DndContext>
+	);
+}
+
+/** The floating drag preview — the same shape and size as the row being
+ *  dragged (card bar / card stat / drawer row), lifted with a shadow. */
+function DragGhost({
+	field,
+	type,
+	onCard,
+	pct,
+	value,
+}: {
+	field: LayoutField;
+	type: SlotType;
+	onCard: boolean;
+	pct: number | null;
+	value: string | null;
+}) {
+	if (type === "window") {
+		return (
+			<div
+				className={cn(
+					"cursor-grabbing rounded-md border border-border bg-surface p-1.5 shadow-lg",
+					onCard ? "w-[296px]" : "w-[232px]",
+				)}
+			>
+				<div className="flex flex-col gap-0.5">
+					<div className="flex items-baseline justify-between gap-2 text-[11px]">
+						<span className="truncate text-muted">
+							{field.label}
+						</span>
+						{onCard && pct != null && (
+							<span className="font-medium tabular-nums">
+								{Math.round(pct)}%
+							</span>
+						)}
+					</div>
+					{onCard && pct != null ? (
+						<Meter aria-hidden value={pct} size="sm">
+							<Meter.Track>
+								<Meter.Fill />
+							</Meter.Track>
+						</Meter>
+					) : (
+						<div className="h-1 rounded-full bg-foreground/10" />
+					)}
+				</div>
+			</div>
+		);
+	}
+	return (
+		<div
+			className={cn(
+				"flex cursor-grabbing items-baseline justify-between gap-1 rounded-md border border-border bg-surface px-1.5 py-1 text-[11px] shadow-lg",
+				onCard ? "w-[142px]" : "w-[232px]",
+			)}
+		>
+			<span className="truncate text-muted">{field.label}</span>
+			{onCard && (
+				<span className="text-foreground tabular-nums">
+					{value ?? "—"}
+				</span>
+			)}
+		</div>
+	);
+}
+
+/** The append target while a matching drag is in flight: a dashed slot at
+ *  the end of the card's bars / stats. Dropping here adds the field. */
+function EmptySlot({
+	type,
+	index,
+	variant,
+}: {
+	type: SlotType;
+	index: number;
+	variant: "bar" | "stat";
+}) {
+	const { setNodeRef, isOver } = useDroppable({
+		id: `slot:${type}:${index}`,
+	});
+	return (
+		<div
+			ref={setNodeRef}
+			data-testid={`layout-empty-slot-${type}`}
+			className={cn(
+				"flex items-center justify-center rounded-md border border-dashed border-border text-foreground/40 transition-colors",
+				variant === "bar" ? "h-[34px]" : "h-5",
+				isOver && "border-accent bg-accent/5 text-accent",
+			)}
+		>
+			<PlusIcon className="size-3" />
+		</div>
 	);
 }
 
@@ -305,6 +476,7 @@ function PreviewBarRow({
 	return (
 		<div
 			ref={dropRef}
+			style={{ viewTransitionName: rowTransitionName(field.id) }}
 			className={cn(
 				"rounded-md transition-colors",
 				isOver && accepts && "ring-1 ring-accent",
@@ -317,7 +489,7 @@ function PreviewBarRow({
 				{...listeners}
 				className={cn(
 					"group/row flex cursor-grab touch-none flex-col gap-0.5 rounded-md outline-none",
-					isDragging && "opacity-40",
+					isDragging && "opacity-30",
 				)}
 			>
 				<div className="flex items-baseline justify-between gap-2 text-[11px]">
@@ -390,6 +562,7 @@ function PreviewStatCell({
 	return (
 		<div
 			ref={dropRef}
+			style={{ viewTransitionName: rowTransitionName(field.id) }}
 			className={cn(
 				"rounded transition-colors",
 				isOver && accepts && "ring-1 ring-accent",
@@ -402,7 +575,7 @@ function PreviewStatCell({
 				{...listeners}
 				className={cn(
 					"group/cell flex cursor-grab touch-none items-baseline justify-between gap-1 text-[11px] outline-none",
-					isDragging && "opacity-40",
+					isDragging && "opacity-30",
 				)}
 			>
 				<span className="truncate text-muted">{field.label}</span>
@@ -452,8 +625,9 @@ function HiddenDrawer({
 	return (
 		<div
 			ref={setNodeRef}
+			data-testid="layout-hidden-drawer"
 			className={cn(
-				"flex w-56 max-w-full flex-col gap-1 rounded-lg border border-dashed border-border p-3 transition-colors",
+				"flex w-64 max-w-full flex-col gap-1 rounded-lg border border-dashed border-border p-3 transition-colors",
 				active && isOver && "border-accent bg-accent/5",
 			)}
 		>
@@ -514,14 +688,15 @@ function HiddenBarRow({
 		<div
 			ref={setNodeRef}
 			title={field.hint}
+			style={{ viewTransitionName: rowTransitionName(field.id) }}
 			{...(atCap ? {} : attributes)}
 			{...(atCap ? {} : listeners)}
 			className={cn(
-				"group/hid flex items-center gap-2 rounded-md outline-none transition-opacity",
+				"group/hid -mx-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 outline-none transition-[opacity,background-color]",
 				atCap
 					? "opacity-40"
-					: "cursor-grab touch-none opacity-70 hover:opacity-100",
-				isDragging && "opacity-40",
+					: "cursor-grab touch-none opacity-70 hover:bg-foreground/[0.04] hover:opacity-100",
+				isDragging && "opacity-30",
 			)}
 		>
 			<div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -569,14 +744,15 @@ function HiddenStatCell({
 		<div
 			ref={setNodeRef}
 			title={field.hint}
+			style={{ viewTransitionName: rowTransitionName(field.id) }}
 			{...(atCap ? {} : attributes)}
 			{...(atCap ? {} : listeners)}
 			className={cn(
-				"flex items-center justify-between gap-1 rounded text-[11px] outline-none transition-opacity",
+				"-mx-1.5 flex items-center justify-between gap-1 rounded-md px-1.5 py-0.5 text-[11px] outline-none transition-[opacity,background-color]",
 				atCap
 					? "opacity-40"
-					: "cursor-grab touch-none opacity-70 hover:opacity-100",
-				isDragging && "opacity-40",
+					: "cursor-grab touch-none opacity-70 hover:bg-foreground/[0.04] hover:opacity-100",
+				isDragging && "opacity-30",
 			)}
 		>
 			<span className="truncate text-muted">{field.label}</span>

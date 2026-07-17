@@ -18,6 +18,14 @@
 	}
 }
 
+/* View transitions animate only elements that opt in with a
+ * view-transition-name (the usage layout editor's field rows); keep the
+ * root snapshot static so the rest of the page never cross-fades. */
+::view-transition-old(root),
+::view-transition-new(root) {
+	animation: none;
+}
+
 /* Respect the OS reduced-motion setting: collapse every transition and
  * animation to instant. Also how e2e stays deterministic — Playwright
  * forces reducedMotion, so animation never enters assertions. */

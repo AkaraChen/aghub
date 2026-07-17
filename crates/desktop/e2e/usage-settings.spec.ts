@@ -120,6 +120,49 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	});
 });
 
+test("layout editor moves a field between the card and the drawer", async ({
+	page,
+}) => {
+	await page.goto("/settings?tab=usage");
+
+	const card = page.getByTestId("layout-card-replica");
+	const drawer = page.getByTestId("layout-hidden-drawer");
+	await expect(card.getByText("Total tokens")).toBeVisible();
+
+	// Hide via the eye button (revealed on hover): the field leaves the
+	// card and lands in the drawer. exact — the dnd-kit draggable row is
+	// also a "button" whose accessible name contains these words.
+	await card
+		.getByRole("button", { name: "Remove Total tokens", exact: true })
+		.click();
+	await expect(card.getByText("Total tokens")).toHaveCount(0);
+	await expect(drawer.getByText("Total tokens")).toBeVisible();
+
+	// Drag it back: the append slot only exists mid-drag, so cross the
+	// activation distance first, then drop onto the dashed slot.
+	const source = drawer.getByText("Total tokens");
+	const s = await source.boundingBox();
+	if (!s) throw new Error("drag source missing");
+	const sx = s.x + s.width / 2;
+	const sy = s.y + s.height / 2;
+	await page.mouse.move(sx, sy);
+	await page.mouse.down();
+	await page.mouse.move(sx + 12, sy + 12, { steps: 3 });
+
+	const slot = page.getByTestId("layout-empty-slot-stat");
+	await slot.waitFor();
+	const t = await slot.boundingBox();
+	if (!t) throw new Error("append slot missing");
+	await page.mouse.move(t.x + t.width / 2, t.y + t.height / 2, {
+		steps: 10,
+	});
+	await page.mouse.move(t.x + t.width / 2 + 1, t.y + t.height / 2 + 1);
+	await page.mouse.up();
+
+	await expect(card.getByText("Total tokens")).toBeVisible();
+	await expect(drawer.getByText("Total tokens")).toHaveCount(0);
+});
+
 test("home agent card renders the customized usage block", async ({ page }) => {
 	await page.goto("/");
 
