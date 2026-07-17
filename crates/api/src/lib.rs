@@ -29,6 +29,11 @@ pub struct ApiOptions {
 	pub auth_token: Option<String>,
 	pub allowed_origins: Vec<String>,
 	pub allowed_origin_regexes: Vec<String>,
+	/// Gateway management-key storage; `None` uses the OS keyring. Tests
+	/// inject an in-memory store so results never depend on the host
+	/// keychain.
+	pub gateway_key_store:
+		Option<Box<dyn aghub_cliproxy::GatewayKeyStore + Send + Sync>>,
 }
 
 impl ApiOptions {
@@ -40,6 +45,7 @@ impl ApiOptions {
 			auth_token: None,
 			allowed_origins: default_allowed_origins(),
 			allowed_origin_regexes: default_allowed_origin_regexes(),
+			gateway_key_store: None,
 		}
 	}
 
@@ -67,6 +73,9 @@ impl ApiOptions {
 			token_was_generated,
 			allowed_origins: self.allowed_origins,
 			allowed_origin_regexes: self.allowed_origin_regexes,
+			gateway_key_store: self.gateway_key_store.unwrap_or_else(|| {
+				Box::new(aghub_cliproxy::NativeGatewayKeyStore)
+			}),
 		}
 	}
 }
@@ -97,6 +106,7 @@ struct ResolvedApiOptions {
 	token_was_generated: bool,
 	allowed_origins: Vec<String>,
 	allowed_origin_regexes: Vec<String>,
+	gateway_key_store: Box<dyn aghub_cliproxy::GatewayKeyStore + Send + Sync>,
 }
 
 struct ApiLogFairing;
@@ -196,6 +206,7 @@ fn build_rocket(
 			app_data_dir: options.app_data_dir.clone(),
 			runtime: aghub_cliproxy::lifecycle::GatewayRuntime::new(),
 			provision: std::sync::Arc::new(std::sync::Mutex::new(None)),
+			key_store: options.gateway_key_store,
 		})
 		.manage(crate::state::InferenceProviderState {
 			store: aghub_inference::InferenceProviderStore::new(
@@ -451,10 +462,45 @@ mod tests {
 
 	const TEST_AUTH_TOKEN: &str = "test-auth-token";
 
+	/// In-memory gateway key store so tests never read or write the host
+	/// OS keyring (whose contents vary per machine).
+	#[derive(Default)]
+	struct MemoryGatewayKeyStore {
+		keys: Mutex<std::collections::HashMap<String, String>>,
+	}
+
+	impl aghub_cliproxy::GatewayKeyStore for MemoryGatewayKeyStore {
+		fn get_key(
+			&self,
+			instance_id: &str,
+		) -> aghub_cliproxy::Result<Option<String>> {
+			Ok(self.keys.lock().expect("keys").get(instance_id).cloned())
+		}
+
+		fn set_key(
+			&self,
+			instance_id: &str,
+			key: &str,
+		) -> aghub_cliproxy::Result<()> {
+			self.keys
+				.lock()
+				.expect("keys")
+				.insert(instance_id.to_string(), key.to_string());
+			Ok(())
+		}
+
+		fn delete_key(&self, instance_id: &str) -> aghub_cliproxy::Result<()> {
+			self.keys.lock().expect("keys").remove(instance_id);
+			Ok(())
+		}
+	}
+
 	fn test_client(app_data_dir: &Path) -> Client {
 		let mut options = ApiOptions::new(0);
 		options.app_data_dir = Some(app_data_dir.to_path_buf());
 		options.auth_token = Some(TEST_AUTH_TOKEN.to_string());
+		options.gateway_key_store =
+			Some(Box::new(MemoryGatewayKeyStore::default()));
 		Client::tracked(build_rocket(
 			rocket::Config::default(),
 			options.resolve(),
@@ -3518,5 +3564,99 @@ mod tests {
 		assert!(error.contains("global"));
 		assert!(error.contains("project"));
 		assert!(error.contains("all"));
+	}
+
+	// Covers the offline half of the gateway surface: instance records,
+	// validation, and the not-provisioned guard. Anything past a live
+	// management API (settings, auth files, OAuth) is exercised by
+	// crates/cliproxy's ignored live_smoke test instead.
+	#[test]
+	fn route_gateway_managed_instance_lifecycle() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+
+		let response = get_auth(&client, "/api/v1/gateway/instances");
+		assert_eq!(response.status(), Status::Ok);
+		assert_eq!(response_json(response), json!([]));
+
+		let response = post_json(
+			&client,
+			"/api/v1/gateway/instances/managed",
+			json!({ "name": null, "port": null }),
+		);
+		assert_eq!(response.status(), Status::Created);
+		let body = response_json(response);
+		assert_eq!(body["name"], "Local Gateway");
+		assert_eq!(body["kind"], "managed");
+		assert_eq!(body["status"], "not_provisioned");
+		assert_eq!(body["base_url"], "http://127.0.0.1:8317");
+		let id = body["id"].as_str().expect("instance id").to_string();
+
+		// Only one managed instance may exist.
+		let response = post_json(
+			&client,
+			"/api/v1/gateway/instances/managed",
+			json!({ "name": "second", "port": null }),
+		);
+		assert_json_error(response, Status::Conflict, "RESOURCE_EXISTS");
+
+		let item_uri = format!("/api/v1/gateway/instances/{id}");
+		let start_uri = format!("/api/v1/gateway/instances/{id}/start");
+		let auth_files_uri =
+			format!("/api/v1/gateway/instances/{id}/auth-files");
+
+		// Starting before the binary is downloaded is a clear 422.
+		let response = post_json(&client, &start_uri, json!({}));
+		assert_json_error(
+			response,
+			Status::UnprocessableEntity,
+			"GATEWAY_NOT_PROVISIONED",
+		);
+
+		let response = put_json(
+			&client,
+			&item_uri,
+			json!({ "name": "Renamed", "auto_start": true }),
+		);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["name"], "Renamed");
+		assert_eq!(body["auto_start"], true);
+
+		// Managed instances own their address; only externals may edit it.
+		let response = put_json(
+			&client,
+			&item_uri,
+			json!({ "base_url": "http://10.0.0.1:8317" }),
+		);
+		assert_json_error(response, Status::BadRequest, "INVALID_PARAM");
+
+		// Instance-scoped resources require a stored management key.
+		let response = get_auth(&client, &auth_files_uri);
+		assert_json_error(
+			response,
+			Status::UnprocessableEntity,
+			"GATEWAY_KEY_MISSING",
+		);
+
+		let response = delete_auth(&client, &item_uri);
+		assert_eq!(response.status(), Status::NoContent);
+		let response = get_auth(&client, "/api/v1/gateway/instances");
+		assert_eq!(response_json(response), json!([]));
+
+		let response =
+			get_auth(&client, "/api/v1/gateway/instances/nope/auth-files");
+		assert_json_error(response, Status::NotFound, "RESOURCE_NOT_FOUND");
+	}
+
+	#[test]
+	fn route_gateway_provision_status_defaults_to_idle() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+		let response = get_auth(&client, "/api/v1/gateway/provision/status");
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["phase"], "idle");
+		assert!(body["version"].as_str().is_some());
 	}
 }

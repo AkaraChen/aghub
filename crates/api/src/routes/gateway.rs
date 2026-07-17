@@ -21,12 +21,11 @@ use aghub_cliproxy::{
 	CreateManagedGatewayRequest, GatewayApiKeysDto, GatewayAuthFileDto,
 	GatewayAuthPollDto, GatewayAuthUrlDto, GatewayConfigFileDto, GatewayError,
 	GatewayInstanceDto, GatewayInstanceKind, GatewayInstanceRecord,
-	GatewayInstanceStatus, GatewayKeyStore, GatewayKeyUsageDto,
-	GatewayProvisionPhase, GatewayProvisionStatusDto, GatewaySettingDto,
-	GatewaySettingsDto, GatewayUsageDto, GatewayVersionDto, InstanceStore,
-	ManagementClient, NativeGatewayKeyStore, StartGatewayOauthRequest,
-	UpdateGatewayInstanceRequest, UpdateGatewaySettingRequest,
-	UploadGatewayAuthFileRequest,
+	GatewayInstanceStatus, GatewayKeyUsageDto, GatewayProvisionPhase,
+	GatewayProvisionStatusDto, GatewaySettingDto, GatewaySettingsDto,
+	GatewayUsageDto, GatewayVersionDto, InstanceStore, ManagementClient,
+	StartGatewayOauthRequest, UpdateGatewayInstanceRequest,
+	UpdateGatewaySettingRequest, UploadGatewayAuthFileRequest,
 };
 use aghub_inference::{
 	CreateInferenceProvider, InferenceProviderFormat,
@@ -41,6 +40,20 @@ use crate::state::GatewayState;
 /// Marks inference inventory entries mirrored from gateway instances.
 const GATEWAY_PRESET: &str = "aghub-gateway";
 
+/// Keyring account for the managed instance's management key. Fixed (not
+/// per-instance): the key unlocks `~/.cli-proxy-api/config.yaml`, which
+/// outlives any instance record — CLIProxyAPI bcrypt-hashes the key in the
+/// file, so losing our plaintext copy would orphan the user's config after
+/// a delete/re-create cycle.
+const MANAGED_KEY_ID: &str = "managed-default";
+
+fn key_id(record: &GatewayInstanceRecord) -> &str {
+	match record.kind {
+		GatewayInstanceKind::Managed => MANAGED_KEY_ID,
+		GatewayInstanceKind::External => &record.id,
+	}
+}
+
 fn store(state: &State<GatewayState>) -> InstanceStore {
 	InstanceStore::new(&state.app_data_dir)
 }
@@ -50,18 +63,20 @@ fn inference_store(state: &State<GatewayState>) -> InferenceProviderStore {
 }
 
 fn management_client(
+	state: &State<GatewayState>,
 	record: &GatewayInstanceRecord,
 ) -> Result<Option<ManagementClient>, ApiError> {
-	let Some(key) = NativeGatewayKeyStore.get_key(&record.id)? else {
+	let Some(key) = state.key_store.get_key(key_id(record))? else {
 		return Ok(None);
 	};
 	Ok(Some(ManagementClient::new(&record.base_url, &key)?))
 }
 
 fn require_client(
+	state: &State<GatewayState>,
 	record: &GatewayInstanceRecord,
 ) -> Result<ManagementClient, ApiError> {
-	management_client(record)?.ok_or_else(|| {
+	management_client(state, record)?.ok_or_else(|| {
 		ApiError::new(
 			Status::UnprocessableEntity,
 			format!(
@@ -84,7 +99,7 @@ async fn instance_dto(
 	record: &GatewayInstanceRecord,
 ) -> GatewayInstanceDto {
 	let installed = binary_installed(state);
-	let status = match management_client(record) {
+	let status = match management_client(state, record) {
 		Ok(Some(client)) => {
 			state.runtime.status(record, installed, &client).await
 		}
@@ -130,12 +145,21 @@ async fn ensure_gateway_key(
 	Ok(generated)
 }
 
+/// Inventory latin names must be pure lowercase a-z (see
+/// `clean_latin_name` in the inference store), so the instance id's hex
+/// prefix is mapped 0-f → a-p to form a stable, letters-only slug.
 fn gateway_latin_names(record: &GatewayInstanceRecord) -> (String, String) {
-	let short = record.id.get(..8).unwrap_or(&record.id);
-	(
-		format!("gateway-{short}"),
-		format!("gateway-{short}-openai"),
-	)
+	let slug: String = record
+		.id
+		.chars()
+		.filter(char::is_ascii_hexdigit)
+		.take(8)
+		.map(|c| {
+			let value = c.to_digit(16).unwrap_or(0) as u8;
+			(b'a' + value) as char
+		})
+		.collect();
+	(format!("gateway{slug}"), format!("gateway{slug}openai"))
 }
 
 /// Mirror an instance into the inference inventory as two provider entries
@@ -294,7 +318,9 @@ pub async fn create_external_gateway(
 	store(state)
 		.insert(record.clone())
 		.map_err(ApiError::from)?;
-	NativeGatewayKeyStore.set_key(&record.id, &request.management_key)?;
+	state
+		.key_store
+		.set_key(key_id(&record), &request.management_key)?;
 	sync_inference_providers(state, &record, &client).await?;
 	Ok((Status::Created, Json(instance_dto(state, &record).await)))
 }
@@ -318,7 +344,7 @@ pub async fn update_gateway_instance(
 			record.base_url = base_url.trim_end_matches('/').to_string();
 		}
 		if let Some(key) = &request.management_key {
-			NativeGatewayKeyStore.set_key(&record.id, key)?;
+			state.key_store.set_key(key_id(&record), key)?;
 		}
 	} else if request.base_url.is_some() || request.management_key.is_some() {
 		return Err(ApiError::new(
@@ -333,7 +359,7 @@ pub async fn update_gateway_instance(
 		.map_err(ApiError::from)?;
 	// Keep the mirrored inventory entries in step when we can reach the
 	// instance; a rename alone should not fail on an offline gateway.
-	if let Ok(Some(client)) = management_client(&record) {
+	if let Ok(Some(client)) = management_client(state, &record) {
 		if client.ping().await.is_ok() {
 			sync_inference_providers(state, &record, &client).await?;
 		}
@@ -355,7 +381,11 @@ pub async fn delete_gateway_instance(
 	}
 	remove_inference_providers(state, &record)?;
 	store(state).remove(id).map_err(ApiError::from)?;
-	NativeGatewayKeyStore.delete_key(id)?;
+	// The managed key stays: it unlocks the user-owned config.yaml, which
+	// survives the instance record (re-creating the instance reuses both).
+	if record.kind == GatewayInstanceKind::External {
+		state.key_store.delete_key(&record.id)?;
+	}
 	Ok(rocket::response::status::NoContent)
 }
 
@@ -385,7 +415,7 @@ pub async fn start_gateway_instance(
 		))
 	})?;
 
-	let known_key = NativeGatewayKeyStore.get_key(&record.id)?;
+	let known_key = state.key_store.get_key(key_id(&record))?;
 	let outcome = bootstrap::ensure_config(
 		&bootstrap::default_config_dir(),
 		record.port.unwrap_or(bootstrap::DEFAULT_PORT),
@@ -393,7 +423,9 @@ pub async fn start_gateway_instance(
 	)
 	.map_err(ApiError::from)?;
 	if known_key.as_deref() != Some(outcome.management_key.as_str()) {
-		NativeGatewayKeyStore.set_key(&record.id, &outcome.management_key)?;
+		state
+			.key_store
+			.set_key(key_id(&record), &outcome.management_key)?;
 	}
 	// An existing config.yaml owns the port; follow it.
 	if record.port != Some(outcome.port) {
@@ -543,7 +575,7 @@ pub async fn gateway_version(
 	id: &str,
 ) -> ApiResult<GatewayVersionDto> {
 	let record = store(state).get(id).map_err(ApiError::from)?;
-	let latest = match management_client(&record)? {
+	let latest = match management_client(state, &record)? {
 		Some(client) => client.latest_version().await.ok(),
 		None => None,
 	};
@@ -564,7 +596,7 @@ pub async fn list_gateway_auth_files(
 	id: &str,
 ) -> ApiResult<Vec<GatewayAuthFileDto>> {
 	let record = store(state).get(id).map_err(ApiError::from)?;
-	let client = require_client(&record)?;
+	let client = require_client(state, &record)?;
 	Ok(Json(client.auth_files().await.map_err(ApiError::from)?))
 }
 
@@ -576,7 +608,7 @@ pub async fn upload_gateway_auth_file(
 	request: Json<UploadGatewayAuthFileRequest>,
 ) -> ApiNoContent {
 	let record = store(state).get(id).map_err(ApiError::from)?;
-	let client = require_client(&record)?;
+	let client = require_client(state, &record)?;
 	client
 		.upload_auth_file(&request.name, &request.content)
 		.await
@@ -594,7 +626,7 @@ pub async fn download_gateway_auth_file(
 	name: &str,
 ) -> ApiResult<UploadGatewayAuthFileRequest> {
 	let record = store(state).get(id).map_err(ApiError::from)?;
-	let client = require_client(&record)?;
+	let client = require_client(state, &record)?;
 	let content = client
 		.download_auth_file(name)
 		.await
@@ -613,7 +645,7 @@ pub async fn delete_gateway_auth_file(
 	name: &str,
 ) -> ApiNoContent {
 	let record = store(state).get(id).map_err(ApiError::from)?;
-	let client = require_client(&record)?;
+	let client = require_client(state, &record)?;
 	client
 		.delete_auth_file(name)
 		.await
@@ -629,7 +661,7 @@ pub async fn start_gateway_oauth(
 	request: Json<StartGatewayOauthRequest>,
 ) -> ApiResult<GatewayAuthUrlDto> {
 	let record = store(state).get(id).map_err(ApiError::from)?;
-	let client = require_client(&record)?;
+	let client = require_client(state, &record)?;
 	Ok(Json(
 		client
 			.auth_url(request.provider)
@@ -646,7 +678,7 @@ pub async fn gateway_oauth_status(
 	oauth_state: &str,
 ) -> ApiResult<GatewayAuthPollDto> {
 	let record = store(state).get(id).map_err(ApiError::from)?;
-	let client = require_client(&record)?;
+	let client = require_client(state, &record)?;
 	Ok(Json(
 		client
 			.auth_status(oauth_state)
@@ -664,7 +696,7 @@ pub async fn get_gateway_api_keys(
 	id: &str,
 ) -> ApiResult<GatewayApiKeysDto> {
 	let record = store(state).get(id).map_err(ApiError::from)?;
-	let client = require_client(&record)?;
+	let client = require_client(state, &record)?;
 	Ok(Json(GatewayApiKeysDto {
 		keys: client.api_keys().await.map_err(ApiError::from)?,
 	}))
@@ -678,7 +710,7 @@ pub async fn put_gateway_api_keys(
 	request: Json<GatewayApiKeysDto>,
 ) -> ApiResult<GatewayApiKeysDto> {
 	let record = store(state).get(id).map_err(ApiError::from)?;
-	let client = require_client(&record)?;
+	let client = require_client(state, &record)?;
 	client
 		.set_api_keys(&request.keys)
 		.await
@@ -697,7 +729,7 @@ pub async fn get_gateway_settings(
 	id: &str,
 ) -> ApiResult<GatewaySettingsDto> {
 	let record = store(state).get(id).map_err(ApiError::from)?;
-	let client = require_client(&record)?;
+	let client = require_client(state, &record)?;
 	let mut settings_out = Vec::new();
 	let mut warnings = Vec::new();
 	for spec in settings::GATEWAY_SETTINGS {
@@ -742,7 +774,7 @@ pub async fn put_gateway_setting(
 		)
 	})?;
 	let record = store(state).get(id).map_err(ApiError::from)?;
-	let client = require_client(&record)?;
+	let client = require_client(state, &record)?;
 	client
 		.set_setting(spec, &request.value)
 		.await
@@ -757,7 +789,7 @@ pub async fn get_gateway_config_file(
 	id: &str,
 ) -> ApiResult<GatewayConfigFileDto> {
 	let record = store(state).get(id).map_err(ApiError::from)?;
-	let client = require_client(&record)?;
+	let client = require_client(state, &record)?;
 	Ok(Json(GatewayConfigFileDto {
 		content: client.config_yaml().await.map_err(ApiError::from)?,
 	}))
@@ -771,7 +803,7 @@ pub async fn put_gateway_config_file(
 	request: Json<GatewayConfigFileDto>,
 ) -> ApiNoContent {
 	let record = store(state).get(id).map_err(ApiError::from)?;
-	let client = require_client(&record)?;
+	let client = require_client(state, &record)?;
 	client
 		.put_config_yaml(&request.content)
 		.await
@@ -786,7 +818,7 @@ pub async fn gateway_usage(
 	id: &str,
 ) -> ApiResult<GatewayUsageDto> {
 	let record = store(state).get(id).map_err(ApiError::from)?;
-	let client = require_client(&record)?;
+	let client = require_client(state, &record)?;
 	let providers: std::collections::HashMap<
 		String,
 		std::collections::HashMap<String, GatewayKeyUsageDto>,

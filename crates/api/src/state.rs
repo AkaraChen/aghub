@@ -216,11 +216,13 @@ mod tests {
 /// CLIProxyAPI gateway state. `runtime` owns the managed child process
 /// (kill_on_drop ties its lifetime to the server); `provision` is the
 /// shared progress slot the background download task writes and the status
-/// route reads.
+/// route reads; `key_store` holds management keys (OS keyring in
+/// production, in-memory in tests).
 pub struct GatewayState {
 	pub app_data_dir: PathBuf,
 	pub runtime: aghub_cliproxy::lifecycle::GatewayRuntime,
 	pub provision: std::sync::Arc<
 		Mutex<Option<aghub_cliproxy::GatewayProvisionStatusDto>>,
 	>,
+	pub key_store: Box<dyn aghub_cliproxy::GatewayKeyStore + Send + Sync>,
 }
