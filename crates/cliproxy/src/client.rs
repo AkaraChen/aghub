@@ -71,6 +71,20 @@ struct CompatProviderWire {
 	models: Vec<CompatModelWire>,
 	#[serde(default)]
 	disabled: bool,
+	#[serde(rename = "auth-index", default, skip_serializing)]
+	auth_index: Option<String>,
+}
+
+/// Logs tail as the management API speaks it (kebab-case fields,
+/// probed) — mapped to the snake_case DTO aghub serves.
+#[derive(Deserialize)]
+struct LogsWire {
+	#[serde(rename = "latest-timestamp", default)]
+	latest_timestamp: Option<i64>,
+	#[serde(rename = "line-count", default)]
+	line_count: u64,
+	#[serde(default)]
+	lines: Vec<String>,
 }
 
 fn upstream_endpoint(provider: GatewayUpstreamProvider) -> &'static str {
@@ -269,6 +283,8 @@ impl ManagementClient {
 			GatewayOauthProvider::Anthropic => "anthropic-auth-url",
 			GatewayOauthProvider::Codex => "codex-auth-url",
 			GatewayOauthProvider::Antigravity => "antigravity-auth-url",
+			GatewayOauthProvider::Kimi => "kimi-auth-url",
+			GatewayOauthProvider::Xai => "xai-auth-url",
 		};
 		let response = self
 			.send(
@@ -421,14 +437,16 @@ impl ManagementClient {
 		Ok(())
 	}
 
-	/// OpenAI-compatibility uplinks. Read through `GET /config`: the
-	/// dedicated endpoint strips `api-keys` from responses, so it cannot
-	/// feed a lossless read-modify-write.
+	/// OpenAI-compatibility uplinks. `api_keys` is write-only wire-wide:
+	/// keys move into the server's auth store on write (probed: neither
+	/// this endpoint nor `GET /config` echoes them) and stay associated
+	/// via a stable `auth-index`, so replaying entries without keys does
+	/// not lose them. Reads therefore return `api_keys` empty.
 	pub async fn compat_providers(
 		&self,
 	) -> Result<Vec<GatewayCompatProviderDto>> {
-		let config = self.get_json("config").await?;
-		let raw = config
+		let body = self.get_json("openai-compatibility").await?;
+		let raw = body
 			.get("openai-compatibility")
 			.cloned()
 			.unwrap_or(serde_json::Value::Array(Vec::new()));
@@ -467,6 +485,72 @@ impl ManagementClient {
 			self.http
 				.delete(self.endpoint("openai-compatibility")?)
 				.query(&[("name", name)]),
+		)
+		.await?;
+		Ok(())
+	}
+
+	/// Tail of the instance's file log. Errors with a management message
+	/// while `logging-to-file` is off; callers surface that as guidance.
+	pub async fn logs(&self) -> Result<crate::dto::GatewayLogsDto> {
+		let response = self.send(self.http.get(self.endpoint("logs")?)).await?;
+		let wire: LogsWire = response.json().await?;
+		Ok(crate::dto::GatewayLogsDto {
+			latest_timestamp: wire.latest_timestamp,
+			line_count: wire.line_count,
+			lines: wire.lines,
+		})
+	}
+
+	pub async fn clear_logs(&self) -> Result<()> {
+		self.send(self.http.delete(self.endpoint("logs")?)).await?;
+		Ok(())
+	}
+
+	/// provider id → excluded model names; upstream stores `null` for the
+	/// empty state.
+	pub async fn oauth_excluded_models(
+		&self,
+	) -> Result<std::collections::HashMap<String, Vec<String>>> {
+		let body = self.get_json("oauth-excluded-models").await?;
+		let raw = body
+			.get("oauth-excluded-models")
+			.cloned()
+			.unwrap_or(serde_json::Value::Null);
+		if raw.is_null() {
+			return Ok(std::collections::HashMap::new());
+		}
+		Ok(serde_json::from_value(raw)?)
+	}
+
+	pub async fn set_oauth_excluded_models(
+		&self,
+		providers: &std::collections::HashMap<String, Vec<String>>,
+	) -> Result<()> {
+		self.send(
+			self.http
+				.put(self.endpoint("oauth-excluded-models")?)
+				.json(providers),
+		)
+		.await?;
+		Ok(())
+	}
+
+	/// Import a Vertex service-account JSON (multipart `file` field).
+	pub async fn import_vertex(
+		&self,
+		file_name: &str,
+		content: &str,
+	) -> Result<()> {
+		let part = reqwest::multipart::Part::text(content.to_string())
+			.file_name(file_name.to_string())
+			.mime_str("application/json")
+			.map_err(GatewayError::Http)?;
+		let form = reqwest::multipart::Form::new().part("file", part);
+		self.send(
+			self.http
+				.post(self.endpoint("vertex/import")?)
+				.multipart(form),
 		)
 		.await?;
 		Ok(())
@@ -541,6 +625,7 @@ fn compat_wire_to_dto(wire: CompatProviderWire) -> GatewayCompatProviderDto {
 			})
 			.collect(),
 		disabled: wire.disabled,
+		auth_index: wire.auth_index,
 	}
 }
 
@@ -558,6 +643,7 @@ fn compat_dto_to_wire(dto: GatewayCompatProviderDto) -> CompatProviderWire {
 			})
 			.collect(),
 		disabled: dto.disabled,
+		auth_index: None,
 	}
 }
 

@@ -3,8 +3,9 @@ import type { GatewayCompatModelDto } from "./GatewayCompatModelDto";
 
 /**
  * One `openai-compatibility` upstream (relay/aggregator). `api_keys`
- * is write-mostly: the dedicated endpoint does not echo keys, so reads
- * go through `GET /config` to stay lossless.
+ * is write-only: on write the server moves keys into its auth store
+ * (associated via a stable `auth-index`), and no read path echoes
+ * them — reads always return `api_keys` empty.
  */
 export type GatewayCompatProviderDto = {
 	name: string;
@@ -12,4 +13,8 @@ export type GatewayCompatProviderDto = {
 	api_keys: Array<string>;
 	models: Array<GatewayCompatModelDto>;
 	disabled: boolean;
+	/**
+	 * Server-side handle for the relay's key association.
+	 */
+	auth_index: string | null;
 };

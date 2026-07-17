@@ -386,6 +386,11 @@ fn build_rocket(
 				routes::gateway::add_gateway_compat_provider,
 				routes::gateway::delete_gateway_compat_provider,
 				routes::gateway::reset_gateway_account_quota,
+				routes::gateway::gateway_logs,
+				routes::gateway::clear_gateway_logs,
+				routes::gateway::get_gateway_oauth_excluded_models,
+				routes::gateway::put_gateway_oauth_excluded_models,
+				routes::gateway::import_gateway_vertex,
 			],
 		)
 		.register(

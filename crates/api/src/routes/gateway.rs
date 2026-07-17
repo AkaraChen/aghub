@@ -23,12 +23,14 @@ use aghub_cliproxy::{
 	GatewayAuthPollDto, GatewayAuthUrlDto, GatewayCompatProviderDto,
 	GatewayConfigFileDto, GatewayError, GatewayInstanceDto,
 	GatewayInstanceKind, GatewayInstanceRecord, GatewayInstanceStatus,
-	GatewayKeyUsageDto, GatewayProvisionPhase, GatewayProvisionStatusDto,
-	GatewaySettingDto, GatewaySettingsDto, GatewayUpstreamKeysDto,
-	GatewayUpstreamProvider, GatewayUsageDto, GatewayVersionDto, InstanceStore,
-	ManagementClient, ResetGatewayQuotaRequest, StartGatewayOauthRequest,
-	StartGatewayProvisionRequest, UpdateGatewayInstanceRequest,
-	UpdateGatewaySettingRequest, UploadGatewayAuthFileRequest,
+	GatewayKeyUsageDto, GatewayLogsDto, GatewayOauthExcludedModelsDto,
+	GatewayProvisionPhase, GatewayProvisionStatusDto, GatewaySettingDto,
+	GatewaySettingsDto, GatewayUpstreamKeysDto, GatewayUpstreamProvider,
+	GatewayUsageDto, GatewayVersionDto, ImportGatewayVertexRequest,
+	InstanceStore, ManagementClient, ResetGatewayQuotaRequest,
+	StartGatewayOauthRequest, StartGatewayProvisionRequest,
+	UpdateGatewayInstanceRequest, UpdateGatewaySettingRequest,
+	UploadGatewayAuthFileRequest,
 };
 use aghub_inference::{
 	CreateInferenceProvider, InferenceProviderFormat,
@@ -603,11 +605,15 @@ pub async fn gateway_version(
 		Some(client) => client.latest_version().await.ok(),
 		None => None,
 	};
+	let root = store(state).root().to_path_buf();
 	Ok(Json(GatewayVersionDto {
 		installed: binary_installed(state)
 			.then(|| provision::PINNED_VERSION.to_string()),
 		pinned: provision::PINNED_VERSION.to_string(),
 		latest: latest.filter(|version| !version.is_empty()),
+		bin_source: provision::bin_source(&root, provision::PINNED_VERSION),
+		system_bin: provision::system_bin()
+			.map(|path| path.display().to_string()),
 	}))
 }
 
@@ -938,6 +944,7 @@ pub async fn add_gateway_compat_provider(
 		api_keys: vec![request.api_key.clone()],
 		models: request.models.clone(),
 		disabled: false,
+		auth_index: None,
 	};
 	client
 		.add_compat_provider(&provider)
@@ -957,6 +964,79 @@ pub async fn delete_gateway_compat_provider(
 	let client = require_client(state, &record)?;
 	client
 		.delete_compat_provider(name)
+		.await
+		.map_err(ApiError::from)?;
+	Ok(rocket::response::status::NoContent)
+}
+
+#[get("/gateway/instances/<id>/logs")]
+pub async fn gateway_logs(
+	_auth: ApiAuth,
+	state: &State<GatewayState>,
+	id: &str,
+) -> ApiResult<GatewayLogsDto> {
+	let record = store(state).get(id).map_err(ApiError::from)?;
+	let client = require_client(state, &record)?;
+	Ok(Json(client.logs().await.map_err(ApiError::from)?))
+}
+
+#[delete("/gateway/instances/<id>/logs")]
+pub async fn clear_gateway_logs(
+	_auth: ApiAuth,
+	state: &State<GatewayState>,
+	id: &str,
+) -> ApiNoContent {
+	let record = store(state).get(id).map_err(ApiError::from)?;
+	let client = require_client(state, &record)?;
+	client.clear_logs().await.map_err(ApiError::from)?;
+	Ok(rocket::response::status::NoContent)
+}
+
+#[get("/gateway/instances/<id>/oauth-excluded-models")]
+pub async fn get_gateway_oauth_excluded_models(
+	_auth: ApiAuth,
+	state: &State<GatewayState>,
+	id: &str,
+) -> ApiResult<GatewayOauthExcludedModelsDto> {
+	let record = store(state).get(id).map_err(ApiError::from)?;
+	let client = require_client(state, &record)?;
+	Ok(Json(GatewayOauthExcludedModelsDto {
+		providers: client
+			.oauth_excluded_models()
+			.await
+			.map_err(ApiError::from)?,
+	}))
+}
+
+#[put("/gateway/instances/<id>/oauth-excluded-models", data = "<request>")]
+pub async fn put_gateway_oauth_excluded_models(
+	_auth: ApiAuth,
+	state: &State<GatewayState>,
+	id: &str,
+	request: Json<GatewayOauthExcludedModelsDto>,
+) -> ApiNoContent {
+	let record = store(state).get(id).map_err(ApiError::from)?;
+	let client = require_client(state, &record)?;
+	client
+		.set_oauth_excluded_models(&request.providers)
+		.await
+		.map_err(ApiError::from)?;
+	Ok(rocket::response::status::NoContent)
+}
+
+/// Vertex service-account import ("account roaming" sibling: the JSON is
+/// picked locally and pushed to any instance).
+#[post("/gateway/instances/<id>/vertex-import", data = "<request>")]
+pub async fn import_gateway_vertex(
+	_auth: ApiAuth,
+	state: &State<GatewayState>,
+	id: &str,
+	request: Json<ImportGatewayVertexRequest>,
+) -> ApiNoContent {
+	let record = store(state).get(id).map_err(ApiError::from)?;
+	let client = require_client(state, &record)?;
+	client
+		.import_vertex(&request.file_name, &request.content)
 		.await
 		.map_err(ApiError::from)?;
 	Ok(rocket::response::status::NoContent)

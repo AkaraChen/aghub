@@ -83,7 +83,10 @@ fn version_dir(root: &Path, version: &str) -> PathBuf {
 }
 
 /// Locate the provisioned binary. `AGHUB_CLIPROXY_BIN` (dev/offline) wins
-/// over the versioned install directory.
+/// over the versioned install directory. A `cli-proxy-api` on PATH is
+/// deliberately NOT used here: package-manager installs are surfaced via
+/// [`system_bin`] as information only — silently running an unpinned
+/// binary would break the version contract.
 pub fn installed_bin(root: &Path, version: &str) -> Option<PathBuf> {
 	if let Some(explicit) = std::env::var_os("AGHUB_CLIPROXY_BIN") {
 		let path = PathBuf::from(explicit);
@@ -92,6 +95,28 @@ pub fn installed_bin(root: &Path, version: &str) -> Option<PathBuf> {
 		}
 	}
 	find_executable(&version_dir(root, version))
+}
+
+/// Where the binary `installed_bin` resolves to comes from.
+pub fn bin_source(root: &Path, version: &str) -> crate::dto::GatewayBinSource {
+	if std::env::var_os("AGHUB_CLIPROXY_BIN")
+		.map(PathBuf::from)
+		.filter(|path| path.is_file())
+		.is_some()
+	{
+		return crate::dto::GatewayBinSource::Env;
+	}
+	if find_executable(&version_dir(root, version)).is_some() {
+		return crate::dto::GatewayBinSource::Downloaded;
+	}
+	crate::dto::GatewayBinSource::None
+}
+
+/// A `cli-proxy-api` found on PATH (brew/pacman/manual installs), shown
+/// to macOS/Linux users who prefer their package manager. Opting in is
+/// explicit via `AGHUB_CLIPROXY_BIN`.
+pub fn system_bin() -> Option<PathBuf> {
+	which::which("cli-proxy-api").ok()
 }
 
 /// Pick the executable out of an extracted release directory: the sole
@@ -241,7 +266,18 @@ async fn extract(archive: &Path, dest: &Path) -> Result<()> {
 			GatewayError::Extract("tar timed out after 60s".to_string())
 		})?
 		.map_err(|error| {
-			GatewayError::Extract(format!("failed to spawn tar: {error}"))
+			// Windows only grew a bundled bsdtar in 10 1803; older hosts
+			// need the actionable hint, not a bare NotFound.
+			if cfg!(windows) && error.kind() == std::io::ErrorKind::NotFound {
+				GatewayError::Extract(
+					"tar.exe not found; Windows 10 1803+ ships it — on \
+					 older systems extract the archive manually and point \
+					 AGHUB_CLIPROXY_BIN at the binary"
+						.to_string(),
+				)
+			} else {
+				GatewayError::Extract(format!("failed to spawn tar: {error}"))
+			}
 		})?;
 	if !output.status.success() {
 		return Err(GatewayError::Extract(format!(

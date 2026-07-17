@@ -98,16 +98,18 @@ use aghub_cliproxy::{
 	AddGatewayCompatProviderRequest, AddGatewayUpstreamKeyRequest,
 	CreateExternalGatewayRequest, CreateManagedGatewayRequest,
 	GatewayApiKeysDto, GatewayAuthFileDto, GatewayAuthPollDto,
-	GatewayAuthPollStatus, GatewayAuthUrlDto, GatewayCompatModelDto,
-	GatewayCompatProviderDto, GatewayConfigFileDto, GatewayInstanceDto,
-	GatewayInstanceKind, GatewayInstanceStatus, GatewayKeyUsageDto,
+	GatewayAuthPollStatus, GatewayAuthUrlDto, GatewayBinSource,
+	GatewayCompatModelDto, GatewayCompatProviderDto, GatewayConfigFileDto,
+	GatewayInstanceDto, GatewayInstanceKind, GatewayInstanceStatus,
+	GatewayKeyUsageDto, GatewayLogsDto, GatewayOauthExcludedModelsDto,
 	GatewayOauthProvider, GatewayProvisionPhase, GatewayProvisionStatusDto,
 	GatewaySettingDto, GatewaySettingKind, GatewaySettingValue,
 	GatewaySettingsDto, GatewayUpstreamKeyDto, GatewayUpstreamKeysDto,
 	GatewayUpstreamProvider, GatewayUsageDto, GatewayVersionDto,
-	ResetGatewayQuotaRequest, StartGatewayOauthRequest,
-	StartGatewayProvisionRequest, UpdateGatewayInstanceRequest,
-	UpdateGatewaySettingRequest, UploadGatewayAuthFileRequest,
+	ImportGatewayVertexRequest, ResetGatewayQuotaRequest,
+	StartGatewayOauthRequest, StartGatewayProvisionRequest,
+	UpdateGatewayInstanceRequest, UpdateGatewaySettingRequest,
+	UploadGatewayAuthFileRequest,
 };
 use aghub_usage::{
 	AgentLimitsDto, AgentUsageDto, CcusageRuntimeCandidateDto,
@@ -389,6 +391,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<GatewayCompatProviderDto>(&cfg)?;
 	export_type::<AddGatewayCompatProviderRequest>(&cfg)?;
 	export_type::<ResetGatewayQuotaRequest>(&cfg)?;
+	export_type::<GatewayBinSource>(&cfg)?;
+	export_type::<GatewayLogsDto>(&cfg)?;
+	export_type::<GatewayOauthExcludedModelsDto>(&cfg)?;
+	export_type::<ImportGatewayVertexRequest>(&cfg)?;
 	export_type::<GatewayVersionDto>(&cfg)?;
 	export_type::<GatewayConfigFileDto>(&cfg)?;
 

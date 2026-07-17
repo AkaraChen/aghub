@@ -123,7 +123,8 @@ pub struct GatewayAuthFileDto {
 	pub failed: Option<u64>,
 }
 
-/// Providers CLIProxyAPI can OAuth into via the management API.
+/// Providers CLIProxyAPI can OAuth into via the management API (probed
+/// against the pinned release; kimi and xai use a device-code flow).
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "lowercase")]
@@ -131,6 +132,8 @@ pub enum GatewayOauthProvider {
 	Anthropic,
 	Codex,
 	Antigravity,
+	Kimi,
+	Xai,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -144,6 +147,16 @@ pub struct StartGatewayOauthRequest {
 pub struct GatewayAuthUrlDto {
 	pub url: String,
 	pub state: String,
+	/// "device" for device-code providers (kimi/xai); absent for plain
+	/// redirect flows.
+	#[serde(default)]
+	pub flow: Option<String>,
+	/// Device-flow code the user confirms on the opened page.
+	#[serde(default)]
+	pub user_code: Option<String>,
+	/// Device-flow validity window in seconds.
+	#[serde(default)]
+	pub expires_in: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
@@ -280,8 +293,9 @@ pub struct GatewayCompatModelDto {
 }
 
 /// One `openai-compatibility` upstream (relay/aggregator). `api_keys`
-/// is write-mostly: the dedicated endpoint does not echo keys, so reads
-/// go through `GET /config` to stay lossless.
+/// is write-only: on write the server moves keys into its auth store
+/// (associated via a stable `auth-index`), and no read path echoes
+/// them — reads always return `api_keys` empty.
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct GatewayCompatProviderDto {
@@ -293,6 +307,9 @@ pub struct GatewayCompatProviderDto {
 	pub models: Vec<GatewayCompatModelDto>,
 	#[serde(default)]
 	pub disabled: bool,
+	/// Server-side handle for the relay's key association.
+	#[serde(default)]
+	pub auth_index: Option<String>,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -359,6 +376,18 @@ pub struct GatewayProvisionStatusDto {
 	pub message: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "lowercase")]
+pub enum GatewayBinSource {
+	/// `AGHUB_CLIPROXY_BIN` env override.
+	Env,
+	/// aghub-provisioned versioned install.
+	Downloaded,
+	/// Nothing usable yet.
+	None,
+}
+
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
 pub struct GatewayVersionDto {
@@ -368,6 +397,39 @@ pub struct GatewayVersionDto {
 	pub pinned: String,
 	/// Latest release reported by the instance, when reachable.
 	pub latest: Option<String>,
+	/// Where the effective binary comes from.
+	pub bin_source: GatewayBinSource,
+	/// A `cli-proxy-api` found on PATH (informational: package-manager
+	/// installs are surfaced, never silently used — point
+	/// `AGHUB_CLIPROXY_BIN` at it to opt in).
+	pub system_bin: Option<String>,
+}
+
+/// `GET /v0/management/logs`: tail of the instance's file log.
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct GatewayLogsDto {
+	pub latest_timestamp: Option<i64>,
+	pub line_count: u64,
+	pub lines: Vec<String>,
+}
+
+/// Per-provider model blocklist for OAuth accounts
+/// (`oauth-excluded-models`): provider id → excluded model names
+/// (wildcards allowed upstream).
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct GatewayOauthExcludedModelsDto {
+	pub providers: HashMap<String, Vec<String>>,
+}
+
+/// Import a Google Vertex service-account JSON into the account pool.
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct ImportGatewayVertexRequest {
+	pub file_name: String,
+	/// Raw service-account JSON.
+	pub content: String,
 }
 
 /// Raw `config.yaml` passthrough for everything without a dedicated

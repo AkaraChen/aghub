@@ -87,8 +87,9 @@ impl GatewayRuntime {
 		}
 		let mut child = command.spawn().map_err(|error| {
 			GatewayError::Process(format!(
-				"failed to spawn {}: {error}",
-				bin.display()
+				"failed to spawn {}: {error}{}",
+				bin.display(),
+				spawn_hint(bin)
 			))
 		})?;
 		// Drain stderr into the app log: keeps the pipe from filling (which
@@ -205,4 +206,32 @@ impl GatewayRuntime {
 			GatewayInstanceStatus::NotProvisioned
 		}
 	}
+}
+
+/// Platform-specific diagnosis appended to spawn failures. aghub's own
+/// downloads never carry the quarantine xattr (it is set by browsers, not
+/// by direct HTTP writes), but a user-supplied `AGHUB_CLIPROXY_BIN`
+/// downloaded via a browser will — and Gatekeeper then blocks the exec
+/// with an opaque error.
+fn spawn_hint(bin: &std::path::Path) -> String {
+	#[cfg(target_os = "macos")]
+	{
+		let quarantined = std::process::Command::new("xattr")
+			.arg("-p")
+			.arg("com.apple.quarantine")
+			.arg(bin)
+			.output()
+			.map(|output| output.status.success())
+			.unwrap_or(false);
+		if quarantined {
+			return format!(
+				"; the binary carries the com.apple.quarantine attribute \
+				 (Gatekeeper). Clear it with: xattr -d \
+				 com.apple.quarantine {}",
+				bin.display()
+			);
+		}
+	}
+	let _ = bin;
+	String::new()
 }
