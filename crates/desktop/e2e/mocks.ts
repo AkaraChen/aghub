@@ -4,7 +4,7 @@ import type { Page } from "@playwright/test";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-const agentInfo = (id: string, displayName: string) => ({
+export const agentInfo = (id: string, displayName: string) => ({
 	id,
 	display_name: displayName,
 	capabilities: {

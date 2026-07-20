@@ -23,7 +23,8 @@ export function AgentIcon({
 	variant = "outline",
 }: AgentIconProps) {
 	const iconPath = `../assets/agent/${id}.svg`;
-	const svg = iconModules[iconPath];
+	const assetIconPath = `../assets/agent/${id.replaceAll("-", "_")}.svg`;
+	const svg = iconModules[iconPath] ?? iconModules[assetIconPath];
 	const fallbackText = name.charAt(0).toUpperCase();
 
 	const sizeClasses =
