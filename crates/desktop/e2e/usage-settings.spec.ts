@@ -91,6 +91,11 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await expect(page.getByText("Total tokens").first()).toBeVisible();
 	await expect(page.getByText("Not shown", { exact: true })).toBeVisible();
 	await expect(page.getByText("Cache read", { exact: true })).toBeVisible();
+	await expect(
+		page.locator(
+			'[data-testid="layout-card-replica"] [role="button"] button',
+		),
+	).toHaveCount(0);
 
 	// Sidecar status row: version + inline update hint in the description,
 	// plus the update + re-check actions.
@@ -121,6 +126,9 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await expect(page.getByText("Polling interval")).toBeHidden();
 	await page.getByRole("button", { name: "Advanced" }).click();
 	await expect(page.getByText("Polling interval")).toBeVisible();
+	await expect(
+		page.locator('[data-slot="number-field"]').first(),
+	).toHaveClass(/number-field--secondary/);
 
 	// Auto-discover is on by default, so the resolved binary (from the Tauri
 	// mock) shows as a hint under the toggle.
@@ -130,6 +138,32 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 		path: "artifacts/usage-settings-panel.png",
 		fullPage: true,
 	});
+});
+
+test("hidden layout rows use a surface hover instead of fading", async ({
+	page,
+}) => {
+	await page.goto("/settings?tab=usage");
+
+	const drawer = page.getByTestId("layout-hidden-drawer");
+	await page
+		.getByTestId("layout-card-replica")
+		.getByRole("button", { name: "Remove Total tokens", exact: true })
+		.click();
+	const row = drawer.getByTestId("layout-hidden-item-totalTokens");
+	const idleBackground = await row.evaluate(
+		(element) => getComputedStyle(element).backgroundColor,
+	);
+
+	await row.hover();
+	await expect
+		.poll(() =>
+			row.evaluate(
+				(element) => getComputedStyle(element).backgroundColor,
+			),
+		)
+		.not.toBe(idleBackground);
+	await expect(row).not.toHaveClass(/opacity-70/);
 });
 
 test("layout editor moves a field between the card and the drawer", async ({

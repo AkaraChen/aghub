@@ -16,7 +16,7 @@ import {
 } from "@dnd-kit/core";
 import { EyeSlashIcon, PlusIcon } from "@heroicons/react/24/solid";
 import { Button, Meter } from "@heroui/react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentIcon } from "../../lib/agent-icons";
 import { cn } from "../../lib/utils";
@@ -49,10 +49,6 @@ type SlotType = "window" | "stat";
  *  real data. */
 const PREVIEW_BAR_PCT = [62, 38, 84];
 
-/** FLIP timing for rows gliding to their new place after a commit. */
-const FLIP_MS = 200;
-const FLIP_EASING = "cubic-bezier(0.2, 0, 0, 1)";
-
 export function InteractiveCardLayout({
 	windowFields,
 	statFields,
@@ -73,62 +69,11 @@ export function InteractiveCardLayout({
 	const { t } = useTranslation();
 	const [activeId, setActiveId] = useState<string | null>(null);
 	const [activeWidth, setActiveWidth] = useState<number | null>(null);
+	const [reduceMotion] = useState(
+		() => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+	);
 	const layoutRef = useRef({ windowSlots, statSlots });
 	layoutRef.current = { windowSlots, statSlots };
-
-	// FLIP: capture row positions right before a commit mutates the layout,
-	// then (in the layout effect below) animate each row from its old rect
-	// to its new one. Scoped to this container — unlike a view transition it
-	// never snapshots the page, so drops stay cheap.
-	const paneRef = useRef<HTMLDivElement>(null);
-	const flipRectsRef = useRef<Map<string, DOMRect> | null>(null);
-	const flipAnimationsRef = useRef<Animation[]>([]);
-	const captureRects = () => {
-		if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-			return;
-		}
-		const rects = new Map<string, DOMRect>();
-		for (const el of paneRef.current?.querySelectorAll<HTMLElement>(
-			"[data-flip-id]",
-		) ?? []) {
-			const id = el.dataset.flipId;
-			if (id) rects.set(id, el.getBoundingClientRect());
-		}
-		flipRectsRef.current = rects;
-	};
-	useLayoutEffect(() => {
-		const prev = flipRectsRef.current;
-		if (!prev) return;
-		flipRectsRef.current = null;
-		for (const animation of flipAnimationsRef.current) animation.cancel();
-		flipAnimationsRef.current = [];
-		for (const el of paneRef.current?.querySelectorAll<HTMLElement>(
-			"[data-flip-id]",
-		) ?? []) {
-			const id = el.dataset.flipId;
-			const old = id ? prev.get(id) : undefined;
-			if (!old) continue;
-			const now = el.getBoundingClientRect();
-			const dx = old.left - now.left;
-			const dy = old.top - now.top;
-			if (dx === 0 && dy === 0) continue;
-			const animation = el.animate(
-				[
-					{ transform: `translate(${dx}px, ${dy}px)` },
-					{ transform: "none" },
-				],
-				{ duration: FLIP_MS, easing: FLIP_EASING },
-			);
-			flipAnimationsRef.current.push(animation);
-		}
-	});
-	useLayoutEffect(() => {
-		return () => {
-			for (const animation of flipAnimationsRef.current)
-				animation.cancel();
-			flipAnimationsRef.current = [];
-		};
-	}, []);
 
 	const fieldById = new Map<string, LayoutField>(
 		[...windowFields, ...statFields].map((f) => [f.id, f]),
@@ -168,7 +113,6 @@ export function InteractiveCardLayout({
 						windowSlots: layoutRef.current.windowSlots,
 						statSlots: slots,
 					};
-		captureRects();
 		layoutRef.current = next;
 		onCommit(next);
 	};
@@ -220,7 +164,7 @@ export function InteractiveCardLayout({
 		const type = typeOf(id);
 		// Dropping onto the drawer hides the field; onto a slot reorders/shows.
 		if (String(over.id) === "hidden-drawer") {
-			hide(id, type);
+			if (shownOf(type).includes(id)) hide(id, type);
 			return;
 		}
 		const m = /^slot:(window|stat):(\d+)$/.exec(String(over.id));
@@ -242,7 +186,6 @@ export function InteractiveCardLayout({
 		activeBarIndex >= 0
 			? PREVIEW_BAR_PCT[activeBarIndex % PREVIEW_BAR_PCT.length]
 			: 0;
-
 	return (
 		<DndContext
 			sensors={sensors}
@@ -254,7 +197,6 @@ export function InteractiveCardLayout({
 			{/* The card replica sits beside a flat drawer of hidden fields.
 			    Drag across or use the explicit eye / plus actions. */}
 			<div
-				ref={paneRef}
 				aria-disabled={isDisabled || undefined}
 				inert={isDisabled || undefined}
 				className={cn(
@@ -265,7 +207,7 @@ export function InteractiveCardLayout({
 			>
 				<div
 					data-testid="layout-card-replica"
-					className="w-full rounded-lg border border-border bg-surface p-3 shadow-xs"
+					className="w-full rounded-lg border border-border bg-surface p-3"
 				>
 					<div className="flex items-center gap-2 pb-2">
 						<AgentIcon
@@ -372,9 +314,7 @@ export function InteractiveCardLayout({
 				/>
 			</div>
 
-			{/* No drop animation: the FLIP pass already glides the row from
-			    its old place, a second overlay flight would double-image. */}
-			<DragOverlay dropAnimation={null}>
+			<DragOverlay dropAnimation={reduceMotion ? null : undefined}>
 				{activeField && activeType ? (
 					<DragGhost
 						field={activeField}
@@ -497,10 +437,10 @@ function PreviewBarRow({
 	return (
 		<div
 			ref={dropRef}
-			data-flip-id={field.id}
 			className={cn(
-				"rounded-md transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+				"group/layout-row -mx-1 flex items-center gap-2 rounded-md px-1 py-0.5 transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)] hover:bg-surface-secondary",
 				isOver && accepts && "ring-1 ring-accent",
+				isDragging && "opacity-30",
 			)}
 		>
 			<div
@@ -508,27 +448,23 @@ function PreviewBarRow({
 				title={field.hint}
 				{...attributes}
 				{...listeners}
-				className={cn(
-					"group/layout-row flex cursor-grab touch-none items-center gap-2 rounded-md outline-none",
-					isDragging && "opacity-30",
-				)}
+				className="flex min-w-0 flex-1 cursor-grab touch-none rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-focus"
 			>
 				<BarBody label={field.label} pct={pct} />
-				<Button
-					isIconOnly
-					isDisabled={isDisabled}
-					size="sm"
-					variant="ghost"
-					onPress={onHide}
-					onPointerDown={(e) => e.stopPropagation()}
-					aria-label={t("usageLayoutHide", {
-						label: field.label,
-					})}
-					className="size-6 shrink-0 text-muted transition-[color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] [@media(hover:hover)]:opacity-0 group-hover/layout-row:opacity-100 group-focus-within/layout-row:opacity-100"
-				>
-					<EyeSlashIcon className="size-3.5" />
-				</Button>
 			</div>
+			<Button
+				isIconOnly
+				isDisabled={isDisabled}
+				size="sm"
+				variant="ghost"
+				onPress={onHide}
+				aria-label={t("usageLayoutHide", {
+					label: field.label,
+				})}
+				className="size-6 shrink-0 text-muted transition-[color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] [@media(hover:hover)]:opacity-0 group-hover/layout-row:opacity-100 group-focus-within/layout-row:opacity-100"
+			>
+				<EyeSlashIcon className="size-3.5" />
+			</Button>
 		</div>
 	);
 }
@@ -561,10 +497,10 @@ function PreviewStatCell({
 	return (
 		<div
 			ref={dropRef}
-			data-flip-id={field.id}
 			className={cn(
-				"rounded transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+				"group/layout-row -mx-1 flex items-center gap-1 rounded px-1 transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)] hover:bg-surface-secondary",
 				isOver && accepts && "ring-1 ring-accent",
+				isDragging && "opacity-30",
 			)}
 		>
 			<div
@@ -572,30 +508,24 @@ function PreviewStatCell({
 				title={field.hint}
 				{...attributes}
 				{...listeners}
-				className={cn(
-					"group/layout-row flex cursor-grab touch-none items-baseline justify-between gap-1 text-[11px] outline-none",
-					isDragging && "opacity-30",
-				)}
+				className="flex min-w-0 flex-1 cursor-grab touch-none items-baseline justify-between gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-focus"
 			>
 				<span className="truncate text-muted">{field.label}</span>
-				<span className="flex shrink-0 items-center gap-1">
-					<span className="text-foreground tabular-nums">—</span>
-					<Button
-						isIconOnly
-						isDisabled={isDisabled}
-						size="sm"
-						variant="ghost"
-						onPress={onHide}
-						onPointerDown={(e) => e.stopPropagation()}
-						aria-label={t("usageLayoutHide", {
-							label: field.label,
-						})}
-						className="size-5 text-muted transition-[color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] [@media(hover:hover)]:opacity-0 group-hover/layout-row:opacity-100 group-focus-within/layout-row:opacity-100"
-					>
-						<EyeSlashIcon className="size-3" />
-					</Button>
-				</span>
+				<span className="shrink-0 text-foreground tabular-nums">—</span>
 			</div>
+			<Button
+				isIconOnly
+				isDisabled={isDisabled}
+				size="sm"
+				variant="ghost"
+				onPress={onHide}
+				aria-label={t("usageLayoutHide", {
+					label: field.label,
+				})}
+				className="size-5 shrink-0 text-muted transition-[color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] [@media(hover:hover)]:opacity-0 group-hover/layout-row:opacity-100 group-focus-within/layout-row:opacity-100"
+			>
+				<EyeSlashIcon className="size-3" />
+			</Button>
 		</div>
 	);
 }
@@ -635,7 +565,7 @@ function HiddenDrawer({
 			data-testid="layout-hidden-drawer"
 			className={cn(
 				"flex min-w-0 flex-col gap-1.5 border-t border-border pt-4 transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)] lg:border-t-0 lg:border-l lg:pt-0 lg:pl-5",
-				active && isOver && "border-accent",
+				active && isOver && "bg-accent-soft",
 			)}
 		>
 			<span className="pb-0.5 text-[11px] font-medium text-muted">
@@ -702,27 +632,31 @@ function HiddenBarRow({
 	});
 	return (
 		<div
-			ref={setNodeRef}
+			data-testid={`layout-hidden-item-${field.id}`}
 			className={cn(
-				"group/layout-row flex items-center gap-2 rounded-md outline-none transition-opacity duration-[var(--dur-fast)] ease-[var(--ease-out)]",
-				disabled
-					? "opacity-40"
-					: "cursor-grab touch-none opacity-70 hover:opacity-100",
+				"group/layout-row -mx-1 flex items-center gap-2 rounded-md px-1 py-1 outline-none transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+				disabled ? "opacity-40" : "hover:bg-surface-secondary",
 				isDragging && "opacity-30",
 			)}
-			title={field.hint}
-			data-flip-id={field.id}
-			{...(disabled ? {} : attributes)}
-			{...(disabled ? {} : listeners)}
 		>
-			<BarBody label={field.label} pct={0} />
+			<div
+				ref={setNodeRef}
+				title={field.hint}
+				{...(disabled ? {} : attributes)}
+				{...(disabled ? {} : listeners)}
+				className={cn(
+					"flex min-w-0 flex-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-focus",
+					!disabled && "cursor-grab touch-none",
+				)}
+			>
+				<BarBody label={field.label} pct={0} />
+			</div>
 			<Button
 				isIconOnly
 				isDisabled={disabled}
 				size="sm"
 				variant="ghost"
 				onPress={onShow}
-				onPointerDown={(e) => e.stopPropagation()}
 				aria-label={showLabel}
 				className="size-6 shrink-0 text-muted transition-[color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] [@media(hover:hover)]:opacity-0 group-hover/layout-row:opacity-100 group-focus-within/layout-row:opacity-100"
 			>
@@ -753,35 +687,39 @@ function HiddenStatCell({
 	});
 	return (
 		<div
-			ref={setNodeRef}
-			title={field.hint}
-			data-flip-id={field.id}
-			{...(disabled ? {} : attributes)}
-			{...(disabled ? {} : listeners)}
+			data-testid={`layout-hidden-item-${field.id}`}
 			className={cn(
-				"group/layout-row flex items-baseline justify-between gap-1 rounded text-[11px] outline-none transition-opacity duration-[var(--dur-fast)] ease-[var(--ease-out)]",
-				disabled
-					? "opacity-40"
-					: "cursor-grab touch-none opacity-70 hover:opacity-100",
+				"group/layout-row -mx-1 flex items-center gap-1 rounded px-1 py-0.5 text-[11px] outline-none transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+				disabled ? "opacity-40" : "hover:bg-surface-secondary",
 				isDragging && "opacity-30",
 			)}
 		>
-			<span className="truncate text-muted">{field.label}</span>
-			<span className="flex shrink-0 items-center gap-1">
-				<span className="text-foreground/40 tabular-nums">—</span>
-				<Button
-					isIconOnly
-					isDisabled={disabled}
-					size="sm"
-					variant="ghost"
-					onPress={onShow}
-					onPointerDown={(e) => e.stopPropagation()}
-					aria-label={showLabel}
-					className="size-5 text-muted transition-[color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] [@media(hover:hover)]:opacity-0 group-hover/layout-row:opacity-100 group-focus-within/layout-row:opacity-100"
-				>
-					<PlusIcon className="size-3" />
-				</Button>
-			</span>
+			<div
+				ref={setNodeRef}
+				title={field.hint}
+				{...(disabled ? {} : attributes)}
+				{...(disabled ? {} : listeners)}
+				className={cn(
+					"flex min-w-0 flex-1 items-baseline justify-between gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-focus",
+					!disabled && "cursor-grab touch-none",
+				)}
+			>
+				<span className="truncate text-muted">{field.label}</span>
+				<span className="shrink-0 text-foreground/40 tabular-nums">
+					—
+				</span>
+			</div>
+			<Button
+				isIconOnly
+				isDisabled={disabled}
+				size="sm"
+				variant="ghost"
+				onPress={onShow}
+				aria-label={showLabel}
+				className="size-5 shrink-0 text-muted transition-[color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] [@media(hover:hover)]:opacity-0 group-hover/layout-row:opacity-100 group-focus-within/layout-row:opacity-100"
+			>
+				<PlusIcon className="size-3" />
+			</Button>
 		</div>
 	);
 }

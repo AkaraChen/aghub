@@ -1,7 +1,11 @@
-import { ArrowPathIcon, FolderOpenIcon } from "@heroicons/react/24/solid";
+import {
+	ArrowPathIcon,
+	ChevronDownIcon,
+	ChevronUpIcon,
+	FolderOpenIcon,
+} from "@heroicons/react/24/solid";
 import {
 	Button,
-	Card,
 	Disclosure,
 	Input,
 	ListBox,
@@ -274,433 +278,425 @@ export default function UsagePanel() {
 				: (status.error ?? t("usageStatusUnreachable"));
 
 	return (
-		<Card className="p-0" variant="transparent">
-			<Card.Content className="divide-y divide-border p-0">
-				{/* ccusage sidecar — status, binary resolution, config file. */}
-				<section className="space-y-4 px-1 pb-5">
-					<div className="flex items-center justify-between gap-4">
-						<div className="space-y-0.5">
-							<span className="flex items-center gap-2 text-sm font-semibold text-(--foreground)">
-								<span
-									className={cn(
-										"size-2 rounded-full",
-										status === undefined
-											? "bg-muted"
-											: status.reachable
-												? "bg-success"
-												: "bg-danger",
-									)}
-								/>
-								ccusage
-								<Button
-									isIconOnly
-									isPending={isRechecking}
-									size="sm"
-									variant="ghost"
-									onPress={recheckStatus}
-									aria-label={t("usageStatusRecheck")}
-									className="size-6 text-muted"
-								>
-									{({ isPending }) => (
-										<ArrowPathIcon
-											className={cn(
-												"size-3.5",
-												isPending && "animate-spin",
-											)}
-										/>
-									)}
-								</Button>
-							</span>
+		<div className="divide-y divide-border">
+			{/* ccusage sidecar — status, binary resolution, config file. */}
+			<section className="space-y-4 px-1 pb-5">
+				<div className="flex items-center justify-between gap-4">
+					<div className="space-y-0.5">
+						<span className="flex items-center gap-2 text-sm font-semibold text-(--foreground)">
 							<span
 								className={cn(
-									"block text-xs tabular-nums",
-									status && !status.reachable
-										? "text-danger"
-										: "text-muted",
+									"size-2 rounded-full",
+									status === undefined
+										? "bg-muted"
+										: status.reachable
+											? "bg-success"
+											: "bg-danger",
 								)}
+							/>
+							ccusage
+							<Button
+								isIconOnly
+								isPending={isRechecking}
+								size="sm"
+								variant="ghost"
+								onPress={recheckStatus}
+								aria-label={t("usageStatusRecheck")}
+								className="size-6 text-muted"
 							>
-								{statusDescription}
-							</span>
-						</div>
-						<div className="flex shrink-0 items-center gap-2">
-							{status && !status.reachable ? (
+								{({ isPending }) => (
+									<ArrowPathIcon
+										className={cn(
+											"size-3.5",
+											isPending && "animate-spin",
+										)}
+									/>
+								)}
+							</Button>
+						</span>
+						<span
+							className={cn(
+								"block text-xs tabular-nums",
+								status && !status.reachable
+									? "text-danger"
+									: "text-muted",
+							)}
+						>
+							{statusDescription}
+						</span>
+					</div>
+					<div className="flex shrink-0 items-center gap-2">
+						{status && !status.reachable ? (
+							<Button
+								size="sm"
+								variant="secondary"
+								onPress={() => openUrl(CCUSAGE_NPM_URL)}
+							>
+								{t("usageStatusInstall")}
+							</Button>
+						) : (
+							status?.update_available && (
 								<Button
 									size="sm"
 									variant="secondary"
 									onPress={() => openUrl(CCUSAGE_NPM_URL)}
 								>
-									{t("usageStatusInstall")}
+									{t("usageStatusUpdateAction")}
 								</Button>
-							) : (
-								status?.update_available && (
-									<Button
-										size="sm"
-										variant="secondary"
-										onPress={() => openUrl(CCUSAGE_NPM_URL)}
-									>
-										{t("usageStatusUpdateAction")}
-									</Button>
-								)
-							)}
-						</div>
-					</div>
-					<SettingRow
-						title={t("usageSidecarAutoDiscover")}
-						description={t("usageSidecarAutoDiscoverDescription")}
-						control={
-							<SettingSwitch
-								isSelected={current.sidecar.autoDiscover}
-								onChange={(checked) =>
-									update({
-										sidecar: {
-											...current.sidecar,
-											autoDiscover: checked,
-										},
-									})
-								}
-								ariaLabel={t("usageSidecarAutoDiscover")}
-							/>
-						}
-					/>
-					{/* Only worth showing when discovery resolved an actual
-					    path — a bare binary name carries no information. */}
-					{current.sidecar.autoDiscover &&
-						diag &&
-						/[/\\]/.test(diag.path) && (
-							<p
-								className="truncate font-mono text-[11px] text-muted"
-								title={diag.path}
-							>
-								{t("usageSidecarResolved", { path: diag.path })}
-							</p>
+							)
 						)}
-					{!current.sidecar.autoDiscover && (
-						<PathField
-							label={t("usageSidecarPath")}
-							value={current.sidecar.binPath}
-							onChange={(value) =>
+					</div>
+				</div>
+				<SettingRow
+					title={t("usageSidecarAutoDiscover")}
+					description={t("usageSidecarAutoDiscoverDescription")}
+					control={
+						<SettingSwitch
+							isSelected={current.sidecar.autoDiscover}
+							onChange={(checked) =>
 								update({
 									sidecar: {
 										...current.sidecar,
-										binPath: value,
+										autoDiscover: checked,
 									},
 								})
 							}
-							placeholder={t("usageSidecarPathPlaceholder")}
-							hint={t("usageSidecarPathDescription")}
+							ariaLabel={t("usageSidecarAutoDiscover")}
 						/>
+					}
+				/>
+				{/* Only worth showing when discovery resolved an actual
+					    path — a bare binary name carries no information. */}
+				{current.sidecar.autoDiscover &&
+					diag &&
+					/[/\\]/.test(diag.path) && (
+						<p
+							className="truncate font-mono text-[11px] text-muted"
+							title={diag.path}
+						>
+							{t("usageSidecarResolved", { path: diag.path })}
+						</p>
 					)}
+				{!current.sidecar.autoDiscover && (
 					<PathField
-						label={t("usageConfigPath")}
-						value={current.ccusageConfigPath}
+						label={t("usageSidecarPath")}
+						value={current.sidecar.binPath}
 						onChange={(value) =>
-							update({ ccusageConfigPath: value })
+							update({
+								sidecar: {
+									...current.sidecar,
+									binPath: value,
+								},
+							})
 						}
-						placeholder={t("usageConfigPathPlaceholder")}
-						hint={t("usageConfigPathDescription")}
-						filters={[{ name: "JSON", extensions: ["json"] }]}
+						placeholder={t("usageSidecarPathPlaceholder")}
+						hint={t("usageSidecarPathDescription")}
 					/>
-				</section>
+				)}
+				<PathField
+					label={t("usageConfigPath")}
+					value={current.ccusageConfigPath}
+					onChange={(value) => update({ ccusageConfigPath: value })}
+					placeholder={t("usageConfigPathPlaceholder")}
+					hint={t("usageConfigPathDescription")}
+					filters={[{ name: "JSON", extensions: ["json"] }]}
+				/>
+			</section>
 
-				{/* Home cards — what the usage block on the home agent cards shows,
+			{/* Home cards — what the usage block on the home agent cards shows,
 			    plus the per-card layout editor. */}
-				<section className="space-y-4 px-1 py-5">
-					<div className="space-y-0.5">
-						<span className="text-sm font-semibold text-(--foreground)">
-							{t("usageSettingsHomeCards")}
-						</span>
-						<span className="block text-xs text-muted">
-							{t("usageHomeShowDescription")}
-						</span>
-					</div>
-					<SettingRow
-						title={t("usageHomeShow")}
-						control={
-							<SettingSwitch
-								isSelected={home.showUsageOnHome}
-								onChange={(checked) =>
-									updateHome({ showUsageOnHome: checked })
-								}
-								ariaLabel={t("usageHomeShow")}
-							/>
-						}
-					/>
-					<SettingRow
-						title={t("usageHomeWindow")}
-						description={t("usageHomeWindowDescription")}
-						control={
-							<SettingNumber
-								value={home.windowDays}
-								onChange={(d) => updateHome({ windowDays: d })}
-								isDisabled={!home.showUsageOnHome}
-								ariaLabel={t("usageHomeWindow")}
-								minValue={1}
-								formatOptions={{
-									style: "unit",
-									unit: "day",
-									unitDisplay: "narrow",
-								}}
-							/>
-						}
-					/>
-
-					{/* Card layout — target picker above the live card replica and
-					    its adjacent drawer of hidden fields. */}
-					<div className="space-y-3 border-t border-border pt-4">
-						<div className="flex items-center justify-between gap-3">
-							<div className="space-y-0.5">
-								<span className="text-sm font-medium text-(--foreground)">
-									{t("usageHomeLayout")}
-								</span>
-								<span className="block text-xs text-muted">
-									{t("usageHomeLayoutDescription")}
-								</span>
-							</div>
-							<div className="flex shrink-0 items-center gap-3">
-								{hasOverride && (
-									<Button
-										size="sm"
-										variant="ghost"
-										onPress={resetOverride}
-										className="h-7 px-2 text-xs text-muted"
-									>
-										{t("usageLayoutResetOverride")}
-									</Button>
-								)}
-								<SettingSelect
-									value={layoutTarget}
-									onChange={setLayoutTarget}
-									ariaLabel={t("usageLayoutTarget")}
-									options={[
-										{
-											id: "default",
-											label: t(
-												"usageLayoutTargetDefault",
-											),
-										},
-										...USAGE_QUOTA_AGENTS.map((id) => ({
-											id,
-											label: AGENT_LABELS[id] ?? id,
-										})),
-									]}
-								/>
-							</div>
-						</div>
-
-						<InteractiveCardLayout
-							windowFields={windowFields}
-							statFields={statFields}
-							windowSlots={editedLayout.windowSlots}
-							statSlots={editedLayout.statSlots}
-							isDisabled={layoutDisabled}
-							onCommit={onLayoutCommit}
-							preview={preview}
+			<section className="space-y-4 px-1 py-5">
+				<div className="space-y-0.5">
+					<span className="text-sm font-semibold text-(--foreground)">
+						{t("usageSettingsHomeCards")}
+					</span>
+					<span className="block text-xs text-muted">
+						{t("usageHomeShowDescription")}
+					</span>
+				</div>
+				<SettingRow
+					title={t("usageHomeShow")}
+					control={
+						<SettingSwitch
+							isSelected={home.showUsageOnHome}
+							onChange={(checked) =>
+								updateHome({ showUsageOnHome: checked })
+							}
+							ariaLabel={t("usageHomeShow")}
 						/>
-					</div>
-				</section>
+					}
+				/>
+				<SettingRow
+					title={t("usageHomeWindow")}
+					description={t("usageHomeWindowDescription")}
+					control={
+						<SettingNumber
+							value={home.windowDays}
+							onChange={(d) => updateHome({ windowDays: d })}
+							isDisabled={!home.showUsageOnHome}
+							ariaLabel={t("usageHomeWindow")}
+							minValue={1}
+							formatOptions={{
+								style: "unit",
+								unit: "day",
+								unitDisplay: "narrow",
+							}}
+						/>
+					}
+				/>
 
-				{/* Alerts — the global threshold plus per-agent overrides for the
-			    quota agents (the only ones with rate-limit windows). */}
-				<section className="space-y-4 px-1 py-5">
-					<div className="space-y-0.5">
-						<span className="text-sm font-semibold text-(--foreground)">
-							{t("usageSettingsAlerts")}
-						</span>
-						<span className="block text-xs text-muted">
-							{t("usageSettingsAlertsDescription")}
-						</span>
+				{/* Card layout — target picker above the live card replica and
+					    its adjacent drawer of hidden fields. */}
+				<div className="max-w-2xl space-y-3 border-t border-border pt-4">
+					<div className="flex items-center justify-between gap-3">
+						<div className="space-y-0.5">
+							<span className="text-sm font-medium text-(--foreground)">
+								{t("usageHomeLayout")}
+							</span>
+							<span className="block text-xs text-muted">
+								{t("usageHomeLayoutDescription")}
+							</span>
+						</div>
+						<div className="flex shrink-0 items-center gap-3">
+							{hasOverride && (
+								<Button
+									size="sm"
+									variant="ghost"
+									onPress={resetOverride}
+									className="h-7 px-2 text-xs text-muted"
+								>
+									{t("usageLayoutResetOverride")}
+								</Button>
+							)}
+							<SettingSelect
+								value={layoutTarget}
+								onChange={setLayoutTarget}
+								ariaLabel={t("usageLayoutTarget")}
+								options={[
+									{
+										id: "default",
+										label: t("usageLayoutTargetDefault"),
+									},
+									...USAGE_QUOTA_AGENTS.map((id) => ({
+										id,
+										label: AGENT_LABELS[id] ?? id,
+									})),
+								]}
+							/>
+						</div>
 					</div>
-					<SettingRow
-						title={t("usageGlobalAlertThreshold")}
-						control={
-							// The store keeps 0–100; percent formatting wants 0–1.
-							<SettingNumber
-								value={current.globalAlertThresholdPct / 100}
-								onChange={(pct) =>
-									update({
-										globalAlertThresholdPct: Math.round(
-											pct * 100,
-										),
+
+					<InteractiveCardLayout
+						windowFields={windowFields}
+						statFields={statFields}
+						windowSlots={editedLayout.windowSlots}
+						statSlots={editedLayout.statSlots}
+						isDisabled={layoutDisabled}
+						onCommit={onLayoutCommit}
+						preview={preview}
+					/>
+				</div>
+			</section>
+
+			{/* Alerts — the global threshold plus per-agent overrides for the
+			    quota agents (the only ones with rate-limit windows). */}
+			<section className="space-y-4 px-1 py-5">
+				<div className="space-y-0.5">
+					<span className="text-sm font-semibold text-(--foreground)">
+						{t("usageSettingsAlerts")}
+					</span>
+					<span className="block text-xs text-muted">
+						{t("usageSettingsAlertsDescription")}
+					</span>
+				</div>
+				<SettingRow
+					title={t("usageGlobalAlertThreshold")}
+					control={
+						// The store keeps 0–100; percent formatting wants 0–1.
+						<SettingNumber
+							value={current.globalAlertThresholdPct / 100}
+							onChange={(pct) =>
+								update({
+									globalAlertThresholdPct: Math.round(
+										pct * 100,
+									),
+								})
+							}
+							ariaLabel={t("usageGlobalAlertThreshold")}
+							minValue={0}
+							maxValue={1}
+							step={0.05}
+							formatOptions={{ style: "percent" }}
+						/>
+					}
+				/>
+
+				{/* One threshold row per quota agent. Agent enablement is
+					    managed centrally in Settings → Agents. */}
+				{USAGE_QUOTA_AGENTS.map((agent) => {
+					const config = agentSettings(current, agent);
+					return (
+						<div
+							key={agent}
+							className="flex items-center justify-between gap-4 border-t border-border pt-4"
+						>
+							<span className="flex items-center gap-2 text-sm font-medium text-(--foreground)">
+								<AgentIcon
+									id={agent}
+									name={agentName(agent)}
+									size="xs"
+								/>
+								{agentName(agent)}
+							</span>
+							<SettingSelect
+								value={
+									config.alertThresholdPct === null
+										? GLOBAL_THRESHOLD_KEY
+										: String(config.alertThresholdPct)
+								}
+								onChange={(key) =>
+									updateAgent(agent, {
+										alertThresholdPct:
+											key === GLOBAL_THRESHOLD_KEY
+												? null
+												: Number(key),
 									})
 								}
-								ariaLabel={t("usageGlobalAlertThreshold")}
-								minValue={0}
-								maxValue={1}
-								step={0.05}
-								formatOptions={{ style: "percent" }}
+								ariaLabel={t("usageAgentAlert")}
+								options={[
+									{
+										id: GLOBAL_THRESHOLD_KEY,
+										label: t("usageAlertUseGlobal", {
+											pct: current.globalAlertThresholdPct,
+										}),
+									},
+									...THRESHOLD_OPTIONS,
+								]}
 							/>
-						}
-					/>
+						</div>
+					);
+				})}
+			</section>
 
-					{/* One threshold row per quota agent. Agent enablement is
-					    managed centrally in Settings → Agents. */}
-					{USAGE_QUOTA_AGENTS.map((agent) => {
-						const config = agentSettings(current, agent);
-						return (
-							<div
-								key={agent}
-								className="flex items-center justify-between gap-4 border-t border-border pt-4"
-							>
-								<span className="flex items-center gap-2 text-sm font-medium text-(--foreground)">
-									<AgentIcon
-										id={agent}
-										name={agentName(agent)}
-										size="xs"
-									/>
-									{agentName(agent)}
-								</span>
-								<SettingSelect
-									value={
-										config.alertThresholdPct === null
-											? GLOBAL_THRESHOLD_KEY
-											: String(config.alertThresholdPct)
-									}
-									onChange={(key) =>
-										updateAgent(agent, {
-											alertThresholdPct:
-												key === GLOBAL_THRESHOLD_KEY
-													? null
-													: Number(key),
-										})
-									}
-									ariaLabel={t("usageAgentAlert")}
-									options={[
-										{
-											id: GLOBAL_THRESHOLD_KEY,
-											label: t("usageAlertUseGlobal", {
-												pct: current.globalAlertThresholdPct,
-											}),
-										},
-										...THRESHOLD_OPTIONS,
-									]}
-								/>
-							</div>
-						);
-					})}
-				</section>
-
-				{/* Advanced — low-frequency collection knobs, collapsed by default. */}
-				<section className="px-1 py-3">
-					<Disclosure>
-						<Disclosure.Heading>
-							<Button
-								slot="trigger"
-								variant="ghost"
-								className="w-full justify-between px-2 text-sm font-semibold"
-							>
-								{t("usageSettingsAdvanced")}
-								<Disclosure.Indicator />
-							</Button>
-						</Disclosure.Heading>
-						<Disclosure.Content>
-							<Disclosure.Body className="space-y-4 p-2 pt-3">
-								<SettingRow
-									title={t("usagePollInterval")}
-									description={t(
-										"usagePollIntervalDescription",
-									)}
-									control={
-										<SettingNumber
-											value={Math.round(
-												current.pollIntervalMs / 1000,
-											)}
-											onChange={(s) =>
-												update({
-													pollIntervalMs: s * 1000,
-												})
-											}
-											ariaLabel={t("usagePollInterval")}
-											minValue={0}
-											formatOptions={{
-												style: "unit",
-												unit: "second",
-												unitDisplay: "narrow",
-											}}
-										/>
-									}
-								/>
-								<SettingRow
-									title={t("usageTimezone")}
-									description={t("usageTimezoneDescription")}
-									control={
-										<SettingSelect
-											value={current.timezone}
-											onChange={(key) =>
-												update({ timezone: key })
-											}
-											ariaLabel={t("usageTimezone")}
-											options={timezoneOptions}
-										/>
-									}
-								/>
-								<SettingRow
-									title={t("usageOfflinePricing")}
-									description={t(
-										"usageOfflinePricingDescription",
-									)}
-									control={
-										<SettingSwitch
-											isSelected={current.offlinePricing}
-											onChange={(checked) =>
-												update({
-													offlinePricing: checked,
-												})
-											}
-											ariaLabel={t("usageOfflinePricing")}
-										/>
-									}
-								/>
-								<SettingRow
-									title={t("usageRequestTimeout")}
-									description={t(
-										"usageRequestTimeoutDescription",
-									)}
-									control={
-										<SettingNumber
-											value={current.requestTimeoutSecs}
-											onChange={(s) =>
-												update({
-													requestTimeoutSecs: s,
-												})
-											}
-											ariaLabel={t("usageRequestTimeout")}
-											minValue={1}
-											formatOptions={{
-												style: "unit",
-												unit: "second",
-												unitDisplay: "narrow",
-											}}
-										/>
-									}
-								/>
-								<div className="flex flex-col gap-1">
-									<span className="text-sm font-medium text-(--foreground)">
-										{t("usageExtraArgs")}
-									</span>
-									<TextField
-										variant="secondary"
-										value={current.extraArgs}
-										onChange={(value) =>
-											update({ extraArgs: value })
+			{/* Advanced — low-frequency collection knobs, collapsed by default. */}
+			<section className="px-1 py-3">
+				<Disclosure>
+					<Disclosure.Heading>
+						<Button
+							slot="trigger"
+							variant="ghost"
+							className="w-full justify-between px-2 text-sm font-semibold"
+						>
+							{t("usageSettingsAdvanced")}
+							<Disclosure.Indicator />
+						</Button>
+					</Disclosure.Heading>
+					<Disclosure.Content>
+						<Disclosure.Body className="space-y-4 p-2 pt-3">
+							<SettingRow
+								title={t("usagePollInterval")}
+								description={t("usagePollIntervalDescription")}
+								control={
+									<SettingNumber
+										value={Math.round(
+											current.pollIntervalMs / 1000,
+										)}
+										onChange={(s) =>
+											update({
+												pollIntervalMs: s * 1000,
+											})
 										}
-										aria-label={t("usageExtraArgs")}
-									>
-										<Input
-											variant="secondary"
-											placeholder="--jsonl --breakdown"
-											className="font-mono text-xs"
-										/>
-									</TextField>
-									<span className="text-xs text-muted">
-										{t("usageExtraArgsDescription")}
-									</span>
-								</div>
-							</Disclosure.Body>
-						</Disclosure.Content>
-					</Disclosure>
-				</section>
-			</Card.Content>
-		</Card>
+										ariaLabel={t("usagePollInterval")}
+										minValue={0}
+										formatOptions={{
+											style: "unit",
+											unit: "second",
+											unitDisplay: "narrow",
+										}}
+									/>
+								}
+							/>
+							<SettingRow
+								title={t("usageTimezone")}
+								description={t("usageTimezoneDescription")}
+								control={
+									<SettingSelect
+										value={current.timezone}
+										onChange={(key) =>
+											update({ timezone: key })
+										}
+										ariaLabel={t("usageTimezone")}
+										options={timezoneOptions}
+									/>
+								}
+							/>
+							<SettingRow
+								title={t("usageOfflinePricing")}
+								description={t(
+									"usageOfflinePricingDescription",
+								)}
+								control={
+									<SettingSwitch
+										isSelected={current.offlinePricing}
+										onChange={(checked) =>
+											update({
+												offlinePricing: checked,
+											})
+										}
+										ariaLabel={t("usageOfflinePricing")}
+									/>
+								}
+							/>
+							<SettingRow
+								title={t("usageRequestTimeout")}
+								description={t(
+									"usageRequestTimeoutDescription",
+								)}
+								control={
+									<SettingNumber
+										value={current.requestTimeoutSecs}
+										onChange={(s) =>
+											update({
+												requestTimeoutSecs: s,
+											})
+										}
+										ariaLabel={t("usageRequestTimeout")}
+										minValue={1}
+										formatOptions={{
+											style: "unit",
+											unit: "second",
+											unitDisplay: "narrow",
+										}}
+									/>
+								}
+							/>
+							<div className="flex flex-col gap-1">
+								<span className="text-sm font-medium text-(--foreground)">
+									{t("usageExtraArgs")}
+								</span>
+								<TextField
+									variant="secondary"
+									value={current.extraArgs}
+									onChange={(value) =>
+										update({ extraArgs: value })
+									}
+									aria-label={t("usageExtraArgs")}
+								>
+									<Input
+										variant="secondary"
+										placeholder="--jsonl --breakdown"
+										className="font-mono text-xs"
+									/>
+								</TextField>
+								<span className="text-xs text-muted">
+									{t("usageExtraArgsDescription")}
+								</span>
+							</div>
+						</Disclosure.Body>
+					</Disclosure.Content>
+				</Disclosure>
+			</section>
+		</div>
 	);
 }
 
@@ -827,6 +823,7 @@ function SettingNumber({
 }) {
 	return (
 		<NumberField
+			variant="secondary"
 			value={value}
 			onChange={(n) => {
 				if (Number.isFinite(n)) onChange(n);
@@ -838,10 +835,16 @@ function SettingNumber({
 			isDisabled={isDisabled}
 			aria-label={ariaLabel}
 		>
-			<NumberField.Group>
-				<NumberField.DecrementButton />
-				<NumberField.Input className="w-16" />
-				<NumberField.IncrementButton />
+			<NumberField.Group className="flex w-24">
+				<NumberField.Input className="min-w-0 flex-1 px-2.5 text-right tabular-nums" />
+				<div className="flex h-full w-6 shrink-0 flex-col border-l border-border">
+					<NumberField.IncrementButton className="h-1/2 w-full rounded-none border-0 p-0">
+						<ChevronUpIcon className="size-3" />
+					</NumberField.IncrementButton>
+					<NumberField.DecrementButton className="h-1/2 w-full rounded-none border-0 p-0">
+						<ChevronDownIcon className="size-3" />
+					</NumberField.DecrementButton>
+				</div>
 			</NumberField.Group>
 		</NumberField>
 	);

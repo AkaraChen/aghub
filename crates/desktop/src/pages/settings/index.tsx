@@ -19,19 +19,20 @@ export default function SettingsPage() {
 
 	return (
 		<div className="h-full overflow-y-auto">
-			<div className="w-full p-4 sm:p-6">
+			<div className="mx-auto w-full max-w-6xl p-4 sm:p-6">
 				<Tabs
+					className="min-w-0"
 					selectedKey={activeTab}
 					onSelectionChange={(key) => {
 						setSelectedTab(key as string);
 					}}
 				>
-					<div className="mb-2 flex items-center justify-between">
+					<div className="mb-2 flex min-w-0 flex-col items-start gap-3 lg:flex-row lg:items-center lg:justify-between">
 						<h2 className="text-xl font-semibold">
 							{t("settings")}
 						</h2>
 
-						<Tabs.ListContainer>
+						<Tabs.ListContainer className="max-w-full">
 							<Tabs.List
 								aria-label="Settings sections"
 								className="inline-flex w-auto"

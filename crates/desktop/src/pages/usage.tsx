@@ -1,4 +1,5 @@
-import { Button, Meter, Spinner } from "@heroui/react";
+import { Cog6ToothIcon } from "@heroicons/react/24/outline";
+import { Button, Meter, Spinner, Tooltip } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -184,7 +185,7 @@ export default function UsagePage() {
 							{t("usageWindowDaysLabel", { days: WINDOW_DAYS })}
 						</p>
 					</div>
-					<div className="flex max-w-full flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
+					<div className="flex max-w-full items-center gap-3 sm:shrink-0">
 						<UsageStatus
 							version={status?.version ?? null}
 							reachable={status?.reachable}
@@ -194,13 +195,23 @@ export default function UsagePage() {
 									: null
 							}
 						/>
-						<Button
-							size="sm"
-							variant="ghost"
-							onPress={() => setLocation("/settings?tab=usage")}
-						>
-							{t("usageOpenSettings")}
-						</Button>
+						<Tooltip delay={400}>
+							<Button
+								isIconOnly
+								size="sm"
+								variant="ghost"
+								onPress={() =>
+									setLocation("/settings?tab=usage")
+								}
+								aria-label={t("usageOpenSettings")}
+								className="size-8 shrink-0 text-muted"
+							>
+								<Cog6ToothIcon className="size-4" />
+							</Button>
+							<Tooltip.Content>
+								{t("usageOpenSettings")}
+							</Tooltip.Content>
+						</Tooltip>
 					</div>
 				</header>
 
@@ -242,7 +253,7 @@ export default function UsagePage() {
 
 						<section
 							aria-label={t("usage")}
-							className="flex flex-col gap-3"
+							className="divide-y divide-border border-y border-border"
 						>
 							{agents.map((entry) => (
 								<AgentSummaryRow
@@ -396,7 +407,7 @@ function AgentSummaryRow({
 	const rows = BREAKDOWN.filter(({ field }) => totals[field] > 0);
 
 	return (
-		<div className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4 sm:flex-row sm:items-start sm:gap-8">
+		<div className="flex flex-col gap-4 py-5 sm:flex-row sm:items-start sm:gap-8">
 			<div className="flex w-full shrink-0 flex-col gap-2 sm:w-44">
 				<div className="flex items-center gap-2">
 					<AgentIcon id={usage.agent} name={name} size="xs" />
@@ -532,16 +543,12 @@ function EmptyState({
 	onPress?: () => void;
 }) {
 	return (
-		<div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border py-16 text-center">
+		<div className="flex flex-col items-center gap-3 py-16 text-center">
 			<p className="text-sm text-muted">{message}</p>
 			{ctaLabel && onPress && (
-				<button
-					type="button"
-					onClick={onPress}
-					className="text-sm font-medium text-accent transition-colors hover:text-accent/80"
-				>
+				<Button size="sm" variant="secondary" onPress={onPress}>
 					{ctaLabel}
-				</button>
+				</Button>
 			)}
 		</div>
 	);
