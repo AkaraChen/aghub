@@ -53,9 +53,11 @@ export function AgentCard({ agent, isUpdating, onToggle }: AgentCardProps) {
 										name: agent.display_name,
 									})}
 								>
-									<Switch.Control>
-										<Switch.Thumb />
-									</Switch.Control>
+									<Switch.Content>
+										<Switch.Control>
+											<Switch.Thumb />
+										</Switch.Control>
+									</Switch.Content>
 								</Switch>
 							</span>
 						</Tooltip.Trigger>
