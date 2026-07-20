@@ -165,6 +165,69 @@ test("Usage settings uses the same surface level as Appearance", async ({
 		.toBe(appearanceBackground);
 });
 
+test("layout editor uses the available settings width", async ({ page }) => {
+	await page.goto("/settings?tab=usage");
+
+	const card = page.getByTestId("layout-card-replica");
+	const drawer = page.getByTestId("layout-hidden-drawer");
+	const grid = card.locator("..");
+	const surface = page
+		.locator('[data-slot="tabs-panel"]')
+		.locator(".surface--default");
+	const [gridBox, surfaceBox, cardBox, drawerBox] = await Promise.all([
+		grid.boundingBox(),
+		surface.boundingBox(),
+		card.boundingBox(),
+		drawer.boundingBox(),
+	]);
+
+	expect(gridBox).not.toBeNull();
+	expect(surfaceBox).not.toBeNull();
+	expect(cardBox).not.toBeNull();
+	expect(drawerBox).not.toBeNull();
+	expect(gridBox!.width / surfaceBox!.width).toBeGreaterThan(0.9);
+	expect(drawerBox!.width).toBeGreaterThan(cardBox!.width);
+
+	const [firstHiddenStat, thirdHiddenStat] = await Promise.all([
+		drawer.getByTestId("layout-hidden-item-cacheRead").boundingBox(),
+		drawer.getByTestId("layout-hidden-item-reasoning").boundingBox(),
+	]);
+	expect(firstHiddenStat).not.toBeNull();
+	expect(thirdHiddenStat).not.toBeNull();
+	expect(Math.abs(firstHiddenStat!.y - thirdHiddenStat!.y)).toBeLessThan(2);
+});
+
+test("numeric settings place step controls on either side", async ({
+	page,
+}) => {
+	await page.goto("/settings?tab=usage");
+
+	const input = page.locator('input[aria-label="Usage window"]');
+	const group = input.locator(
+		'xpath=ancestor::*[@data-slot="number-field-group"]',
+	);
+	const decrement = group.locator(
+		'[data-slot="number-field-decrement-button"]',
+	);
+	const increment = group.locator(
+		'[data-slot="number-field-increment-button"]',
+	);
+	const [groupBox, decrementBox, inputBox, incrementBox] = await Promise.all([
+		group.boundingBox(),
+		decrement.boundingBox(),
+		input.boundingBox(),
+		increment.boundingBox(),
+	]);
+
+	expect(groupBox).not.toBeNull();
+	expect(decrementBox).not.toBeNull();
+	expect(inputBox).not.toBeNull();
+	expect(incrementBox).not.toBeNull();
+	expect(groupBox!.width).toBeGreaterThanOrEqual(128);
+	expect(decrementBox!.x).toBeLessThan(inputBox!.x);
+	expect(incrementBox!.x).toBeGreaterThan(inputBox!.x);
+});
+
 test("hidden layout rows use a surface hover instead of fading", async ({
 	page,
 }) => {

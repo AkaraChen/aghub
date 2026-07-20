@@ -1,9 +1,4 @@
-import {
-	ArrowPathIcon,
-	ChevronDownIcon,
-	ChevronUpIcon,
-	FolderOpenIcon,
-} from "@heroicons/react/24/solid";
+import { ArrowPathIcon, FolderOpenIcon } from "@heroicons/react/24/solid";
 import {
 	Button,
 	Disclosure,
@@ -448,7 +443,7 @@ export default function UsagePanel() {
 
 				{/* Card layout — target picker above the live card replica and
 					    its adjacent drawer of hidden fields. */}
-				<div className="max-w-2xl space-y-3 border-t border-border pt-4">
+				<div className="w-full space-y-3 border-t border-border pt-4">
 					<div className="flex items-center justify-between gap-3">
 						<div className="space-y-0.5">
 							<span className="text-sm font-medium text-(--foreground)">
@@ -836,16 +831,10 @@ function SettingNumber({
 			isDisabled={isDisabled}
 			aria-label={ariaLabel}
 		>
-			<NumberField.Group className="flex w-24">
-				<NumberField.Input className="min-w-0 flex-1 px-2.5 text-right tabular-nums" />
-				<div className="flex h-full w-6 shrink-0 flex-col border-l border-border">
-					<NumberField.IncrementButton className="h-1/2 w-full rounded-none border-0 p-0">
-						<ChevronUpIcon className="size-3" />
-					</NumberField.IncrementButton>
-					<NumberField.DecrementButton className="h-1/2 w-full rounded-none border-0 p-0">
-						<ChevronDownIcon className="size-3" />
-					</NumberField.DecrementButton>
-				</div>
+			<NumberField.Group className="w-36">
+				<NumberField.DecrementButton />
+				<NumberField.Input className="text-center tabular-nums" />
+				<NumberField.IncrementButton />
 			</NumberField.Group>
 		</NumberField>
 	);

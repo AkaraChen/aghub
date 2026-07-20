@@ -200,7 +200,7 @@ export function InteractiveCardLayout({
 				aria-disabled={isDisabled || undefined}
 				inert={isDisabled || undefined}
 				className={cn(
-					"grid w-full grid-cols-1 gap-5 lg:grid-cols-[20rem_20rem] lg:items-start",
+					"grid w-full grid-cols-1 gap-5 lg:grid-cols-[20rem_minmax(0,1fr)] lg:items-start",
 					"transition-opacity duration-[var(--dur-fast)] ease-[var(--ease-out)]",
 					isDisabled && "opacity-55",
 				)}
@@ -590,7 +590,7 @@ function HiddenDrawer({
 						/>
 					))}
 					{stats.fields.length > 0 && (
-						<div className="grid grid-cols-2 gap-x-3 gap-y-1">
+						<div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-x-3 gap-y-1">
 							{stats.fields.map((field) => (
 								<HiddenStatCell
 									key={field.id}
