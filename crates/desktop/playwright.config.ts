@@ -3,6 +3,7 @@ import process from "node:process";
 import { defineConfig, devices } from "@playwright/test";
 
 const desktopPort = Number(process.env.AGHUB_E2E_PORT ?? "1420");
+const apiPort = Number(process.env.AGHUB_E2E_API_PORT ?? "45999");
 
 export default defineConfig({
 	testDir: "./e2e",
@@ -49,13 +50,17 @@ export default defineConfig({
 			// probe (not url): every route sits behind auth.
 			command:
 				"cargo run --quiet --manifest-path ../api/Cargo.toml --bin aghub-api",
-			port: 45999,
+			port: apiPort,
 			env: {
 				// Spread: playwright replaces (not merges) the child env, and
 				// cargo needs PATH & co.
 				...process.env,
-				AGHUB_API_PORT: "45999",
+				AGHUB_API_PORT: String(apiPort),
 				AGHUB_API_TOKEN: "e2e-token",
+				AGHUB_API_ALLOWED_ORIGIN: `http://localhost:${desktopPort}`,
+				AGHUB_API_DATA_DIR: path.resolve(
+					`test-results/api-data-${apiPort}`,
+				),
 				// cwd is this config's directory when playwright runs.
 				AGHUB_CCUSAGE_BIN: path.resolve(
 					"e2e/fixtures/fake-ccusage.mjs",

@@ -119,6 +119,7 @@ export const queryKeys = {
 	},
 	usage: {
 		all: () => ["usage"] as const,
+		summaries: () => ["usage", "summary"] as const,
 		summary: (
 			since: string | null,
 			until: string | null,
@@ -141,6 +142,7 @@ export const queryKeys = {
 			] as const,
 		limits: () => ["usage", "limits"] as const,
 		status: () => ["usage", "status"] as const,
+		runtime: () => ["usage", "runtime"] as const,
 	},
 	onboarding: {
 		all: () => ["onboarding"] as const,

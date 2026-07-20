@@ -39,7 +39,13 @@ libc = "0.2"
 ts-rs = "12.0.1"
 which = "8"
 log = "0.4.31"
+windows-sys = "0.61.2"
 futures = "0.3"
+base64 = "0.23"
+flate2 = "1.0"
+semver = "1.0.28"
+sha2 = "0.11"
+tar = "0.4"
 
 # CLI dependencies
 clap = { version = "4.5", features = [ "derive" ] }
@@ -48,7 +54,7 @@ anyhow = "1.0"
 colored = "3.0"
 
 # HTTP dependencies
-reqwest = { version = "0.13", features = [ "json" ] }
+reqwest = { version = "0.13", features = [ "json", "stream" ] }
 url = "2.5"
 
 # Async and shared platform dependencies

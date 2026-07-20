@@ -76,13 +76,22 @@ function windowDates(days: number): string[] {
 	return out;
 }
 
+function formatUsageDate(iso: string): string {
+	return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+		month: "short",
+		day: "numeric",
+	});
+}
+
 export default function UsagePage() {
 	const { t } = useTranslation();
 	const [, setLocation] = useLocation();
 	const api = useApi();
 	const { availableAgents } = useAgentAvailability();
-	const { data: usageSettings } = useUsageSettings();
+	const usageSettingsQuery = useUsageSettings();
+	const { data: usageSettings } = usageSettingsQuery;
 	const settings = usageSettings ?? DEFAULT_USAGE_SETTINGS;
+	const settingsReady = usageSettingsQuery.isSuccess;
 
 	const range = useMemo(() => {
 		const until = new Date();
@@ -97,7 +106,7 @@ export default function UsagePage() {
 		};
 	}, [settings.timezone]);
 
-	const { data: report, isLoading } = useQuery(
+	const { data: report, isLoading: isReportLoading } = useQuery(
 		usageSummaryQueryOptions({
 			api,
 			...range,
@@ -105,10 +114,19 @@ export default function UsagePage() {
 			config: settings.ccusageConfigPath,
 			timeoutSecs: settings.requestTimeoutSecs,
 			args: settings.extraArgs,
+			enabled: settingsReady,
 		}),
 	);
-	const { data: limits } = useQuery(usageLimitsQueryOptions({ api }));
-	const { data: status } = useQuery(usageStatusQueryOptions({ api }));
+	const { data: limits } = useQuery(
+		usageLimitsQueryOptions({ api, enabled: settingsReady }),
+	);
+	const statusQuery = useQuery(usageStatusQueryOptions({ api }));
+	const { data: status } = statusQuery;
+	const isLoading = usageSettingsQuery.isPending || isReportLoading;
+	const settingsError =
+		usageSettingsQuery.error instanceof Error
+			? usageSettingsQuery.error.message
+			: t("usageSettingsLoadError");
 
 	const displayName = useMemo(() => {
 		const byId = new Map(
@@ -123,15 +141,13 @@ export default function UsagePage() {
 		return map;
 	}, [limits]);
 
-	const usableAgentIds = useMemo(
-		() =>
-			new Set(
-				availableAgents
-					.filter((agent) => agent.isUsable)
-					.map((agent) => agent.id),
-			),
-		[availableAgents],
-	);
+	const usableAgentIds = useMemo(() => {
+		const ids = new Set<string>();
+		for (const agent of availableAgents) {
+			if (agent.isUsable) ids.add(agent.id);
+		}
+		return ids;
+	}, [availableAgents]);
 
 	// Agent visibility follows Settings → Agents, the application's single
 	// source of truth for installed and enabled agents.
@@ -188,7 +204,22 @@ export default function UsagePage() {
 					<div className="flex max-w-full items-center gap-1 sm:shrink-0">
 						<UsageStatus
 							version={status?.version ?? null}
-							reachable={status?.reachable}
+							reachable={
+								status?.reachable ??
+								(statusQuery.isError ? false : undefined)
+							}
+							isPending={statusQuery.isPending}
+							error={
+								status?.error ??
+								(statusQuery.error instanceof Error
+									? statusQuery.error.message
+									: undefined)
+							}
+							latestVersion={
+								status?.update_available
+									? status.latest_version
+									: null
+							}
 						/>
 						<Tooltip delay={400}>
 							<Button
@@ -214,9 +245,16 @@ export default function UsagePage() {
 					<div className="flex justify-center py-16">
 						<Spinner />
 					</div>
-				) : status && !status.reachable ? (
+				) : usageSettingsQuery.isError ? (
+					<EmptyState message={settingsError} />
+				) : statusQuery.isError || status?.reachable === false ? (
 					<EmptyState
-						message={status.error ?? t("usageStatusUnreachable")}
+						message={
+							status?.error ??
+							(statusQuery.error instanceof Error
+								? statusQuery.error.message
+								: t("usageStatusUnreachable"))
+						}
 						ctaLabel={t("usageOpenSettings")}
 						onPress={() => setLocation("/settings?tab=usage")}
 					/>
@@ -316,11 +354,6 @@ function CombinedDailyBars({
 		),
 		1,
 	);
-	const fmt = (iso: string) =>
-		new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
-			month: "short",
-			day: "numeric",
-		});
 	if (series.length === 0) return null;
 
 	return (
@@ -352,7 +385,7 @@ function CombinedDailyBars({
 					return (
 						<div
 							key={date}
-							title={`${fmt(date)} · ${formatTokens(total)}`}
+							title={`${formatUsageDate(date)} · ${formatTokens(total)}`}
 							className="relative h-full flex-1"
 						>
 							<div className="absolute inset-x-0 bottom-0 flex flex-col-reverse overflow-hidden rounded-[2px]">
@@ -376,8 +409,8 @@ function CombinedDailyBars({
 				})}
 			</div>
 			<div className="flex justify-between text-[11px] text-muted">
-				<span>{fmt(dates[0])}</span>
-				<span>{fmt(dates[dates.length - 1])}</span>
+				<span>{formatUsageDate(dates[0])}</span>
+				<span>{formatUsageDate(dates[dates.length - 1])}</span>
 			</div>
 		</div>
 	);
@@ -423,7 +456,7 @@ function AgentSummaryRow({
 
 			<div className="flex min-w-0 flex-1 flex-col gap-3">
 				{limits && limits.windows.length > 0 && (
-					<div className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-3">
+					<div className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
 						{limits.windows.map((quota) => {
 							const pct = clampPct(quota.utilization_pct);
 							const label = t(quotaWindowLabelKey(quota.kind));
@@ -434,8 +467,10 @@ function AgentSummaryRow({
 									className="flex flex-col gap-0.5"
 								>
 									<div className="flex items-baseline justify-between gap-2 text-[11px]">
-										<span className="truncate text-muted">
-											{label}
+										<span className="min-w-0 text-muted">
+											<span className="whitespace-nowrap">
+												{label}
+											</span>
 											{reset && (
 												<span
 													title={t("usageResetsIn", {
@@ -493,17 +528,28 @@ function AgentSummaryRow({
 function UsageStatus({
 	version,
 	reachable,
+	isPending,
+	error,
+	latestVersion,
 }: {
 	version: string | null;
 	reachable?: boolean;
+	isPending: boolean;
+	error?: string | null;
+	latestVersion?: string | null;
 }) {
 	const { t } = useTranslation();
 	return (
-		<div role="status" className="flex shrink-0 items-center gap-2 text-xs">
+		<div
+			role="status"
+			className="flex shrink-0 items-center gap-2 text-xs"
+			title={error ?? undefined}
+		>
 			<span
+				aria-hidden
 				className={cn(
 					"size-2 rounded-full",
-					reachable === undefined
+					isPending
 						? "bg-muted"
 						: reachable
 							? "bg-success"
@@ -511,12 +557,26 @@ function UsageStatus({
 				)}
 			/>
 			<span className="text-muted tabular-nums">
-				{reachable === undefined
+				{isPending
 					? t("usageStatusChecking")
-					: version
-						? shortCcusageVersion(version)
-						: "ccusage"}
+					: reachable === false
+						? t("usageStatusUnreachable")
+						: version
+							? shortCcusageVersion(version)
+							: "ccusage"}
 			</span>
+			{latestVersion && (
+				<>
+					<span aria-hidden className="text-muted">
+						·
+					</span>
+					<span className="shrink-0 text-accent tabular-nums">
+						{t("usageStatusUpdate", {
+							version: shortCcusageVersion(latestVersion),
+						})}
+					</span>
+				</>
+			)}
 		</div>
 	);
 }

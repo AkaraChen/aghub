@@ -3,7 +3,7 @@
 //! `generated/dto` via `crates/api/src/bin/export-dto.rs`. These types are the
 //! deliverable: every `pub` here has a TypeScript consumer.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 /// The ccusage agent id a usage/limits row belongs to (e.g. "claude", "codex",
@@ -36,9 +36,9 @@ pub struct UsageReportDto {
 	pub warnings: Vec<String>,
 }
 
-/// ccusage sidecar health + version, returned by `GET /api/v1/usage/status`.
-/// The resolved binary path + source (bundled / custom / PATH) come from a Tauri
-/// command instead — the API never returns raw filesystem paths.
+/// ccusage runtime health + version, returned by `GET /api/v1/usage/status`.
+/// Runtime selection and acquisition details are returned by
+/// `GET /api/v1/usage/runtime` without exposing local filesystem paths.
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
 pub struct UsageStatusDto {
@@ -52,6 +52,70 @@ pub struct UsageStatusDto {
 	pub latest_version: Option<String>,
 	/// `true` when `latest_version` is newer than the running `version`.
 	pub update_available: bool,
+	/// Where the active executable came from.
+	pub source: Option<CcusageRuntimeSource>,
+	/// Whether aghub can install this source into its application data directory.
+	pub can_install: bool,
+	/// Whether aghub owns the active executable and can replace it with a newer
+	/// version without modifying an external installation or the app bundle.
+	pub can_update: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CcusageRuntimeSource {
+	Auto,
+	Environment,
+	Manual,
+	Path,
+	Bun,
+	Npm,
+	Download,
+	Bundled,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct SetCcusageRuntimeRequest {
+	pub source: CcusageRuntimeSource,
+	pub path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct InstallCcusageRuntimeRequest {
+	pub source: CcusageRuntimeSource,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct CcusageRuntimeExecutableDto {
+	pub source: CcusageRuntimeSource,
+	pub version: String,
+	pub can_update: bool,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct CcusageRuntimeCandidateDto {
+	pub source: CcusageRuntimeSource,
+	pub available: bool,
+	pub installed: bool,
+	pub version: Option<String>,
+	pub can_install: bool,
+	pub can_update: bool,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct CcusageRuntimeDto {
+	pub preference: CcusageRuntimeSource,
+	pub active: Option<CcusageRuntimeExecutableDto>,
+	pub candidates: Vec<CcusageRuntimeCandidateDto>,
+	pub latest_version: Option<String>,
+	pub update_available: bool,
+	pub error: Option<String>,
 }
 
 #[derive(Debug, Serialize, TS)]

@@ -453,20 +453,43 @@ export default {
 	// Usage (ccusage)
 	usage: "Usage",
 	usageSettingsSaveError: "Failed to save usage settings",
+	usageSettingsLoadError: "Failed to load usage settings",
 	usageStatusUnreachable: "ccusage isn't reachable",
 	usageStatusUpdate: "{{version}} available",
 	usageStatusRecheck: "Re-check",
-	usageStatusPackagePage: "Open npm page",
-	usageSidecarAutoDiscover: "Auto-discover ccusage",
-	usageSidecarAutoDiscoverDescription:
-		"Use the bundled ccusage binary, falling back to one on your PATH.",
-	usageSidecarResolved: "Using {{path}}",
+	usageRuntimeSource: "Runtime source",
+	usageRuntimeSourceAuto: "Automatic",
+	usageRuntimeSourceEnvironment: "Environment override",
+	usageRuntimeSourceManual: "Custom binary",
+	usageRuntimeSourcePath: "System PATH",
+	usageRuntimeSourceBun: "Install with Bun",
+	usageRuntimeSourceNpm: "Install with npm",
+	usageRuntimeSourceDownload: "Direct download",
+	usageRuntimeSourceBundled: "Bundled fallback",
+	usageRuntimeAutoDescription:
+		"Uses the environment override or PATH first, then an app-managed install and the bundled fallback.",
+	usageRuntimeExternalDescription:
+		"Uses an existing ccusage installation without modifying it.",
+	usageRuntimeBundledDescription:
+		"Uses the read-only version shipped with this aghub release.",
+	usageRuntimeManagedInstalledDescription:
+		"Uses the copy installed in aghub's application data.",
+	usageRuntimeManagedInstallDescription:
+		"Installs a verified native ccusage binary in aghub's application data.",
+	usageRuntimeExternalManaged:
+		"This runtime is managed outside aghub. Updating it here installs a separate app-managed copy.",
+	usageRuntimeManualPath: "ccusage executable",
+	usageRuntimeManualPathPlaceholder: "Select a ccusage executable",
+	usageRuntimeManualDescription:
+		"Choose an existing executable. aghub will validate it before switching.",
+	usageRuntimeUse: "Use",
+	usageRuntimeInstall: "Install",
+	usageRuntimeInstallManaged: "Install latest in aghub",
+	usageRuntimeUpdate: "Update",
+	usageRuntimeInstalled: "ccusage installed",
+	usageRuntimeUpdated: "ccusage updated",
 	usagePathBrowse: "Browse",
 	usagePathReset: "Restore default",
-	usageSidecarPath: "Custom ccusage path",
-	usageSidecarPathDescription:
-		"Absolute path to a ccusage binary. Takes effect after restarting aghub.",
-	usageSidecarPathPlaceholder: "/usr/local/bin/ccusage",
 	usageConfigPath: "ccusage config file",
 	usageConfigPathPlaceholder: "/path/to/ccusage.json",
 	usageConfigPathDescription:
@@ -1352,6 +1375,19 @@ export default {
 	usageLayoutDrawerEmpty: "Drag a field here to hide it.",
 	usageLayoutEmptyCard:
 		"Everything is hidden — drag fields back from Not shown.",
+	usageLayoutDragInstructions:
+		"Press Space to pick up a field. Use the arrow keys to move it, Space to drop it, or Escape to cancel.",
+	usageLayoutAnnouncePickedUp: "Picked up {{field}}.",
+	usageLayoutAnnounceNoTarget: "{{field}} is not over a valid position.",
+	usageLayoutAnnounceHidden: "{{field}} will move to Not shown.",
+	usageLayoutAnnounceMoved: "Moving {{field}}.",
+	usageLayoutAnnouncePosition:
+		"{{field}} will move to position {{position}}.",
+	usageLayoutAnnounceInsertOverflow:
+		"{{field}} will move to position {{position}}. {{overflowed}} will move to Not shown.",
+	usageLayoutAnnounceDropped: "Placed {{field}}.",
+	usageLayoutAnnounceCancelled:
+		"Cancelled. {{field}} returned to its previous position.",
 	usageDailyActivity: "Daily usage by agent",
 	usageResetsIn: "Resets in {{time}}",
 	usageWindow5h: "5-hour limit",

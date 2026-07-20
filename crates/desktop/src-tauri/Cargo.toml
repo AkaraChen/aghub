@@ -17,11 +17,11 @@ crate-type = [ "staticlib", "cdylib", "rlib" ]
 dotenvy = "0.15.7"
 tauri-build = { version = "2", features = [  ] }
 ureq = "3"
-flate2 = "1.0"
-tar = "0.4"
+flate2 = { workspace = true }
+tar = { workspace = true }
 serde_json = "1"
-sha2 = "0.11"
-base64 = "0.23"
+sha2 = { workspace = true }
+base64 = { workspace = true }
 
 [dependencies]
 tauri = { workspace = true, features = [ "tray-icon" ] }
@@ -38,6 +38,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 aghub-api = { path = "../../api" }
 aghub-core = { path = "../../core" }
+aghub-usage = { path = "../../usage" }
 tokio = { workspace = true, features = [ "process", "rt", "time" ] }
 fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs", rev = "c4c45d503ea115a839aae718d02f79e7c7f0f673" }
 log = { workspace = true }

@@ -46,7 +46,7 @@ interface AgentOverviewCardProps {
 	usage?: AgentUsageDto;
 	/** Remaining rate-limit windows for this agent, when available. */
 	limits?: AgentLimitsDto;
-	/** How to render the usage block; defaults to showing everything. */
+	/** How to render the usage block; defaults to the shared card layout. */
 	usageDisplay?: AgentUsageDisplay;
 }
 
@@ -111,20 +111,18 @@ export function AgentOverviewCard({
 				</Card.Title>
 				{configPath && (
 					<Tooltip>
-						<Tooltip.Trigger>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								className="size-7 text-muted transition-colors hover:bg-accent/10 hover:text-accent focus-visible:bg-accent/10 focus-visible:text-accent"
-								aria-label={t("openAgentConfigFolder", {
-									name: agent.display_name,
-								})}
-								onPress={handleOpenConfigFolder}
-							>
-								<FolderOpenIcon className="size-3.5" />
-							</Button>
-						</Tooltip.Trigger>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							className="size-7 text-muted transition-colors hover:bg-accent/10 hover:text-accent focus-visible:bg-accent/10 focus-visible:text-accent"
+							aria-label={t("openAgentConfigFolder", {
+								name: agent.display_name,
+							})}
+							onPress={handleOpenConfigFolder}
+						>
+							<FolderOpenIcon className="size-3.5" />
+						</Button>
 						<Tooltip.Content>
 							{t("openConfigFolder")}
 						</Tooltip.Content>
@@ -207,17 +205,20 @@ function ResourceTile({
 			type="button"
 			onClick={onPress}
 			className={cn(
-				"group/tile flex flex-1 items-center justify-center rounded-full border border-border px-3 py-2 transition-colors dark:border-foreground/15",
-				"hover:border-accent hover:bg-accent focus-visible:border-accent focus-visible:bg-accent focus-visible:outline-none",
+				"group/tile relative flex flex-1 items-center justify-center rounded-md border border-border py-2 pr-8 pl-3 transition-colors dark:border-foreground/15",
+				"hover:border-accent/40 hover:bg-accent/10 focus-visible:border-accent/40 focus-visible:bg-accent/10 focus-visible:outline-none",
 			)}
 		>
-			<span className="text-xs text-muted transition-colors group-hover/tile:text-accent-foreground group-focus-visible/tile:text-accent-foreground">
+			<span className="text-xs text-muted transition-colors group-hover/tile:text-foreground group-focus-visible/tile:text-foreground">
 				{label}
 			</span>
-			<span className="pl-1.5 text-sm font-medium text-foreground tabular-nums transition-colors group-hover/tile:text-accent-foreground group-focus-visible/tile:text-accent-foreground">
+			<span className="pl-1.5 text-sm font-medium text-foreground tabular-nums">
 				{value}
 			</span>
-			<span className="flex max-w-0 items-center gap-0.5 overflow-hidden pl-1.5 text-accent-foreground whitespace-nowrap opacity-0 transition-all duration-200 group-hover/tile:max-w-20 group-hover/tile:opacity-100 group-focus-visible/tile:max-w-20 group-focus-visible/tile:opacity-100">
+			<span
+				aria-hidden
+				className="pointer-events-none absolute right-2.5 flex size-4 translate-x-1 items-center justify-center text-accent opacity-0 transition-[opacity,transform] duration-[var(--dur-fast)] ease-[var(--ease-out)] group-hover/tile:translate-x-0 group-hover/tile:opacity-100 group-focus-visible/tile:translate-x-0 group-focus-visible/tile:opacity-100 motion-reduce:translate-x-0 motion-reduce:transition-none"
+			>
 				<ArrowRightIcon className="size-3.5" />
 			</span>
 		</button>

@@ -115,11 +115,8 @@ pub struct InferenceProviderState {
 	pub store: InferenceProviderStore,
 }
 
-/// Path to the bundled `ccusage` sidecar binary, injected by the desktop shell.
-/// `None` in dev / standalone server: usage routes fall back to the
-/// `AGHUB_CCUSAGE_BIN` env var, then to `ccusage` on `PATH`.
 pub struct UsageState {
-	pub ccusage_bin: Option<PathBuf>,
+	pub runtime: Arc<aghub_usage::runtime::CcusageRuntime>,
 }
 
 #[cfg(test)]

@@ -63,12 +63,6 @@ export function projectLayout(
 	}
 
 	const targetIndex = Math.min(Number(slotMatch?.[2]), slots.length - 1);
-	if (!activeIsShown && shown.length >= slots.length) {
-		const next = [...shown];
-		next[targetIndex] = activeId;
-		return withSlots(origin, type, fillSlots(slots.length, next));
-	}
-
 	const rest = shown.filter((id) => id !== activeId);
 	const insertionIndex = Math.min(targetIndex, rest.length);
 	const next = [

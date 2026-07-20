@@ -20,30 +20,10 @@ fn find_available_port() -> Result<u16, String> {
 	Ok(port)
 }
 
-/// Resolve the bundled `ccusage` sidecar path to hand to the embedded API.
-///
-/// Resolution order:
-/// 1. `AGHUB_CCUSAGE_BIN` env var — explicit override, always wins (used in dev
-///    and as a prod escape hatch).
-/// 2. a user-configured path in Settings → Usage (`usageSettings.sidecar` with
-///    auto-discovery off) — read once at startup, so changing it needs a restart.
-/// 3. dev build (`tauri dev` / `cargo run`) — no sidecar is staged next to the
-///    executable, so return `None` and let the API fall back to `ccusage` on PATH.
-/// 4. packaged build — the sidecar ships beside the main executable as `ccusage`
-///    plus the platform's executable extension (Tauri strips the `-<triple>`
-///    suffix but keeps the extension at bundle time). We trust the computed path:
-///    if the fetch step was skipped the API surfaces a clear spawn error rather
-///    than us silently masking it with a PATH fallback.
-///
-/// `tauri::process::current_binary` is preferred over std's `current_exe`
-/// because it returns the real path under AppImage (not the temp mountpoint).
-fn resolve_ccusage_bin(app: &tauri::AppHandle) -> Option<PathBuf> {
-	if let Some(path) = std::env::var_os("AGHUB_CCUSAGE_BIN") {
-		return Some(PathBuf::from(path));
-	}
-	if let Some(path) = manual_ccusage_bin(app) {
-		return Some(path);
-	}
+/// Compute the read-only fallback shipped beside a packaged desktop build.
+/// Runtime source selection and validation belong to `aghub-usage`; this only
+/// supplies the bundle-specific candidate path that the API cannot derive.
+fn bundled_ccusage_bin(app: &tauri::AppHandle) -> Option<PathBuf> {
 	if cfg!(debug_assertions) {
 		return None;
 	}
@@ -56,10 +36,11 @@ fn resolve_ccusage_bin(app: &tauri::AppHandle) -> Option<PathBuf> {
 		})
 }
 
-/// A user-set ccusage path from the settings store (`usageSettings.sidecar`),
-/// honored only when auto-discovery is explicitly off and the path is non-empty.
-/// `None` falls through to the env / bundled-sidecar / PATH resolution above.
-fn manual_ccusage_bin(app: &tauri::AppHandle) -> Option<PathBuf> {
+/// Read the former frontend-owned sidecar setting once. The runtime persists it
+/// into `<app-data>/ccusage/runtime.json`; usage requests never read this store.
+fn legacy_ccusage_preference(
+	app: &tauri::AppHandle,
+) -> Option<aghub_usage::runtime::CcusageRuntimePreference> {
 	let store = app.store("store.json").ok()?;
 	let settings = store.get("usageSettings")?;
 	let sidecar = settings.get("sidecar")?;
@@ -70,25 +51,9 @@ fn manual_ccusage_bin(app: &tauri::AppHandle) -> Option<PathBuf> {
 	if path.is_empty() {
 		return None;
 	}
-	Some(PathBuf::from(path))
-}
-
-/// The ccusage binary the embedded API spawns (via `resolve_ccusage_bin`),
-/// falling back to the bare `ccusage` PATH lookup when nothing is staged. Shown
-/// as a hint under the Settings → Usage auto-discover toggle. Paths cross via
-/// IPC — the HTTP API never returns raw filesystem paths.
-#[derive(serde::Serialize)]
-pub struct CcusageDiagnostics {
-	pub path: String,
-}
-
-#[tauri::command]
-pub fn ccusage_diagnostics(app: tauri::AppHandle) -> CcusageDiagnostics {
-	let path =
-		resolve_ccusage_bin(&app).unwrap_or_else(|| PathBuf::from("ccusage"));
-	CcusageDiagnostics {
-		path: path.to_string_lossy().into_owned(),
-	}
+	Some(aghub_usage::runtime::CcusageRuntimePreference::Manual(
+		PathBuf::from(path),
+	))
 }
 
 #[tauri::command]
@@ -97,9 +62,10 @@ pub async fn start_server(
 	app: tauri::AppHandle,
 ) -> Result<ServerInfo, String> {
 	let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
-	let ccusage_bin = resolve_ccusage_bin(&app);
-	if ccusage_bin.is_none() {
-		warn!("ccusage sidecar not resolved; usage monitoring will fall back to AGHUB_CCUSAGE_BIN / PATH");
+	let bundled_ccusage_bin = bundled_ccusage_bin(&app);
+	let legacy_ccusage_preference = legacy_ccusage_preference(&app);
+	if bundled_ccusage_bin.is_none() {
+		warn!("bundled ccusage fallback is unavailable; runtime discovery will use configured external or app-data sources");
 	}
 	let server = {
 		let mut guard = state.server.lock().unwrap();
@@ -124,7 +90,8 @@ pub async fn start_server(
 		let mut options = ApiOptions::new(port);
 		options.app_data_dir = Some(app_data_dir);
 		options.auth_token = Some(token);
-		options.ccusage_bin = ccusage_bin;
+		options.ccusage_bundled_bin = bundled_ccusage_bin;
+		options.ccusage_legacy_preference = legacy_ccusage_preference;
 		if let Err(error) = start(options).await {
 			error!("embedded API server exited with error: {error}");
 		}

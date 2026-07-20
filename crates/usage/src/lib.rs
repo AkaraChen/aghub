@@ -13,14 +13,17 @@
 
 mod dto;
 pub use dto::*;
+pub mod runtime;
 
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
 use std::path::PathBuf;
+use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
 
 use futures::future::join_all;
 use serde::Deserialize;
+use tokio::io::{AsyncRead, AsyncReadExt};
 
 /// Default ccusage spawn timeout, in seconds; overridable per [`UsageQuery`].
 pub const DEFAULT_TIMEOUT_SECS: u64 = 30;
@@ -28,6 +31,10 @@ const CCUSAGE_TIMEOUT: Duration = Duration::from_secs(DEFAULT_TIMEOUT_SECS);
 /// Short cap for the `--version` probe (it runs beside the data fetches).
 const VERSION_TIMEOUT: Duration = Duration::from_secs(10);
 const LIMITS_TIMEOUT: Duration = Duration::from_secs(15);
+// Daily JSON is normally well below 8 MiB. These caps keep 15 parallel agent
+// probes under a known memory bound while retaining useful failure output.
+const MAX_CCUSAGE_STDOUT_BYTES: usize = 8 * 1024 * 1024;
+const MAX_CCUSAGE_STDERR_BYTES: usize = 64 * 1024;
 
 /// Options for a ccusage `daily` query. [`Default`] reproduces the previous
 /// hard-coded behaviour: cached offline pricing, no config override, 30s timeout.
@@ -77,8 +84,8 @@ pub const KNOWN_USAGE_AGENTS: &[&str] = &[
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// Locate the ccusage binary. Preference order: an explicit path injected by the
-/// caller (the desktop shell passes the bundled sidecar), then the
-/// `AGHUB_CCUSAGE_BIN` env var (dev), then `ccusage` on `PATH`.
+/// caller, then the `AGHUB_CCUSAGE_BIN` environment variable, then `ccusage` on
+/// `PATH`.
 pub fn resolve_ccusage_bin(explicit: Option<PathBuf>) -> OsString {
 	if let Some(path) = explicit {
 		return path.into_os_string();
@@ -92,25 +99,118 @@ async fn run_ccusage(
 	args: Vec<String>,
 	timeout: Duration,
 ) -> Result<Vec<u8>, String> {
+	run_ccusage_with_limits(
+		bin,
+		args,
+		timeout,
+		MAX_CCUSAGE_STDOUT_BYTES,
+		MAX_CCUSAGE_STDERR_BYTES,
+	)
+	.await
+}
+
+struct CapturedOutput {
+	bytes: Vec<u8>,
+	truncated: bool,
+}
+
+struct CcusageOutput {
+	status: ExitStatus,
+	stdout: CapturedOutput,
+	stderr: CapturedOutput,
+}
+
+async fn run_ccusage_with_limits(
+	bin: &OsStr,
+	args: Vec<String>,
+	timeout: Duration,
+	stdout_limit: usize,
+	stderr_limit: usize,
+) -> Result<Vec<u8>, String> {
 	let mut cmd = tokio::process::Command::new(bin);
-	cmd.kill_on_drop(true).args(&args);
+	cmd.kill_on_drop(true)
+		.args(&args)
+		.stdin(Stdio::null())
+		.stdout(Stdio::piped())
+		.stderr(Stdio::piped());
 	// Suppress the console window Windows would otherwise pop for the child when
 	// the spawning process (the desktop app) has none.
 	#[cfg(target_os = "windows")]
 	cmd.creation_flags(CREATE_NO_WINDOW);
-	let output = tokio::time::timeout(timeout, cmd.output())
-		.await
-		.map_err(|_| format!("ccusage timed out after {}s", timeout.as_secs()))?
-		.map_err(|e| format!("failed to spawn ccusage: {e}"))?;
+	runtime::process::prepare_command(&mut cmd);
+	let mut child = cmd
+		.spawn()
+		.map_err(|error| format!("failed to spawn ccusage: {error}"))?;
+	let child_tree = runtime::process::ChildTree::attach(&child);
+	let stdout = child.stdout.take().expect("ccusage stdout is piped");
+	let stderr = child.stderr.take().expect("ccusage stderr is piped");
+	let execution = async {
+		let (stdout, stderr, status) = tokio::join!(
+			read_capped(stdout, stdout_limit),
+			read_capped(stderr, stderr_limit),
+			child.wait(),
+		);
+		Ok::<_, std::io::Error>(CcusageOutput {
+			status: status?,
+			stdout: stdout?,
+			stderr: stderr?,
+		})
+	};
+	let output = match tokio::time::timeout(timeout, execution).await {
+		Ok(Ok(output)) => {
+			child_tree.disarm();
+			output
+		}
+		Ok(Err(error)) => {
+			return Err(format!("failed to read ccusage: {error}"));
+		}
+		Err(_) => {
+			child_tree.terminate(&mut child).await;
+			return Err(format!(
+				"ccusage timed out after {}s",
+				timeout.as_secs()
+			));
+		}
+	};
+	if output.stdout.truncated {
+		return Err(format!("ccusage output exceeded {stdout_limit} bytes"));
+	}
 	if !output.status.success() {
+		let suffix = output.stderr.truncated.then_some(" (truncated)");
 		return Err(format!(
-			"ccusage {:?} exited with {}: {}",
-			args,
+			"ccusage exited with {}: {}{}",
 			output.status,
-			String::from_utf8_lossy(&output.stderr)
+			String::from_utf8_lossy(&output.stderr.bytes),
+			suffix.unwrap_or_default(),
 		));
 	}
-	Ok(output.stdout)
+	Ok(output.stdout.bytes)
+}
+
+async fn read_capped(
+	mut reader: impl AsyncRead + Unpin,
+	limit: usize,
+) -> std::io::Result<CapturedOutput> {
+	let mut bytes = Vec::new();
+	let mut buffer = [0_u8; 8192];
+	loop {
+		let read = reader.read(&mut buffer).await?;
+		if read == 0 {
+			return Ok(CapturedOutput {
+				bytes,
+				truncated: false,
+			});
+		}
+		let remaining = limit.saturating_sub(bytes.len());
+		let retained = remaining.min(read);
+		bytes.extend_from_slice(&buffer[..retained]);
+		if retained < read {
+			return Ok(CapturedOutput {
+				bytes,
+				truncated: true,
+			});
+		}
+	}
 }
 
 /// `ccusage --version` → e.g. "ccusage 20.0.6"; "unknown" if it can't be read.
@@ -541,7 +641,7 @@ pub async fn summary(bin: &OsStr, query: &UsageQuery) -> UsageReportDto {
 	}
 }
 
-/// ccusage sidecar health + version, plus an npm-registry check for a newer
+/// ccusage executable health + version, plus an npm-registry check for a newer
 /// release. Backs `GET /api/v1/usage/status`. Each call is timed out.
 pub async fn status(bin: &OsStr) -> UsageStatusDto {
 	let (version, reachable, error) =
@@ -567,6 +667,9 @@ pub async fn status(bin: &OsStr) -> UsageStatusDto {
 		error,
 		latest_version,
 		update_available,
+		source: None,
+		can_install: false,
+		can_update: false,
 	}
 }
 
@@ -935,6 +1038,37 @@ pub async fn limits() -> UsageLimitsReportDto {
 mod tests {
 	use super::*;
 	use serde_json::json;
+
+	#[cfg(unix)]
+	#[tokio::test]
+	async fn rejects_ccusage_output_over_the_limit() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let root = tempfile::tempdir().unwrap();
+		let executable = root.path().join("ccusage");
+		std::fs::write(
+			&executable,
+			b"#!/bin/sh\nprintf 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'\n",
+		)
+		.unwrap();
+		std::fs::set_permissions(
+			&executable,
+			std::fs::Permissions::from_mode(0o755),
+		)
+		.unwrap();
+
+		let error = run_ccusage_with_limits(
+			executable.as_os_str(),
+			Vec::new(),
+			Duration::from_secs(1),
+			32,
+			32,
+		)
+		.await
+		.expect_err("oversized output rejected");
+
+		assert!(error.contains("output exceeded 32 bytes"));
+	}
 
 	#[test]
 	fn codex_window_reads_used_percent() {

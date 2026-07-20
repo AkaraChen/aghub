@@ -24,8 +24,11 @@ pub(crate) const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 pub struct ApiOptions {
 	pub port: u16,
 	pub app_data_dir: Option<PathBuf>,
-	/// Path to the bundled `ccusage` sidecar; `None` falls back to env/PATH.
-	pub ccusage_bin: Option<PathBuf>,
+	/// Read-only ccusage executable shipped beside a packaged desktop build.
+	pub ccusage_bundled_bin: Option<PathBuf>,
+	/// One-time migration input from the former Tauri-store sidecar setting.
+	pub ccusage_legacy_preference:
+		Option<aghub_usage::runtime::CcusageRuntimePreference>,
 	pub auth_token: Option<String>,
 	pub allowed_origins: Vec<String>,
 	pub allowed_origin_regexes: Vec<String>,
@@ -36,7 +39,8 @@ impl ApiOptions {
 		Self {
 			port,
 			app_data_dir: None,
-			ccusage_bin: None,
+			ccusage_bundled_bin: None,
+			ccusage_legacy_preference: None,
 			auth_token: None,
 			allowed_origins: default_allowed_origins(),
 			allowed_origin_regexes: default_allowed_origin_regexes(),
@@ -62,7 +66,8 @@ impl ApiOptions {
 			app_data_dir: self
 				.app_data_dir
 				.unwrap_or_else(default_app_data_dir),
-			ccusage_bin: self.ccusage_bin,
+			ccusage_bundled_bin: self.ccusage_bundled_bin,
+			ccusage_legacy_preference: self.ccusage_legacy_preference,
 			auth_token,
 			token_was_generated,
 			allowed_origins: self.allowed_origins,
@@ -92,7 +97,9 @@ fn default_allowed_origin_regexes() -> Vec<String> {
 struct ResolvedApiOptions {
 	port: u16,
 	app_data_dir: PathBuf,
-	ccusage_bin: Option<PathBuf>,
+	ccusage_bundled_bin: Option<PathBuf>,
+	ccusage_legacy_preference:
+		Option<aghub_usage::runtime::CcusageRuntimePreference>,
 	auth_token: String,
 	token_was_generated: bool,
 	allowed_origins: Vec<String>,
@@ -153,6 +160,11 @@ fn build_rocket(
 	config: rocket::Config,
 	options: ResolvedApiOptions,
 ) -> rocket::Rocket<rocket::Build> {
+	let usage_runtime = aghub_usage::runtime::CcusageRuntime::load(
+		options.app_data_dir.join("ccusage"),
+		options.ccusage_bundled_bin,
+		options.ccusage_legacy_preference,
+	);
 	let allowed_origins = rocket_cors::AllowedOrigins::some(
 		&options.allowed_origins,
 		&options.allowed_origin_regexes,
@@ -190,7 +202,7 @@ fn build_rocket(
 			),
 		})
 		.manage(crate::state::UsageState {
-			ccusage_bin: options.ccusage_bin,
+			runtime: usage_runtime,
 		})
 		.manage(crate::auth::ApiAuthState {
 			token: options.auth_token,
@@ -303,6 +315,11 @@ fn build_rocket(
 				routes::usage::usage_summary,
 				routes::usage::usage_limits,
 				routes::usage::usage_status,
+				routes::usage::ccusage_runtime,
+				routes::usage::set_ccusage_runtime,
+				routes::usage::install_ccusage_runtime,
+				routes::usage::update_ccusage_runtime,
+				routes::usage::refresh_ccusage_runtime,
 			],
 		)
 		.register(
@@ -565,10 +582,27 @@ mod tests {
 		let client = test_client(app_data_dir.path());
 		// The guard rejects before the handler runs, so no ccusage spawn / vendor
 		// call happens here.
-		for uri in ["/api/v1/usage/summary", "/api/v1/usage/limits"] {
+		for uri in [
+			"/api/v1/usage/summary",
+			"/api/v1/usage/limits",
+			"/api/v1/usage/runtime",
+		] {
 			let response = client.get(uri).dispatch();
 			assert_json_error(response, Status::Unauthorized, "UNAUTHORIZED");
 		}
+	}
+
+	#[test]
+	fn usage_runtime_mutation_rejects_remote_browser_origin() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+		let response = client
+			.post("/api/v1/usage/runtime/refresh")
+			.header(auth_header())
+			.header(Header::new("Origin", "https://evil.example"))
+			.dispatch();
+
+		assert_eq!(response.status(), Status::Forbidden);
 	}
 
 	#[test]

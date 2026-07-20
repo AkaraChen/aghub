@@ -35,6 +35,8 @@ export default function HomePage() {
 	const { availableAgents } = useAgentAvailability();
 	const { data: usageSettings } = useUsageSettings();
 	const settings = usageSettings ?? DEFAULT_USAGE_SETTINGS;
+	const usageEnabled =
+		usageSettings !== undefined && settings.home.showUsageOnHome;
 
 	const { data: skills = [] } = useQuery(
 		skillListQueryOptions({ api, scope: "global" }),
@@ -43,7 +45,7 @@ export default function HomePage() {
 		mcpListQueryOptions({ api, scope: "global" }),
 	);
 
-	const { showUsageOnHome, windowDays } = settings.home;
+	const { windowDays } = settings.home;
 	const { timezone } = settings;
 	const usageRange = useMemo(() => {
 		const until = new Date();
@@ -71,14 +73,14 @@ export default function HomePage() {
 			config: settings.ccusageConfigPath,
 			timeoutSecs: settings.requestTimeoutSecs,
 			args: settings.extraArgs,
-			enabled: showUsageOnHome,
+			enabled: usageEnabled,
 			refetchInterval,
 		}),
 	);
 	const { data: limitsReport } = useQuery(
 		usageLimitsQueryOptions({
 			api,
-			enabled: showUsageOnHome,
+			enabled: usageEnabled,
 			refetchInterval,
 		}),
 	);
@@ -178,8 +180,16 @@ export default function HomePage() {
 								agent={agent}
 								skillCount={counts?.skills ?? 0}
 								mcpCount={counts?.mcps ?? 0}
-								usage={usageByAgent.get(agent.id)}
-								limits={limitsByAgent.get(agent.id)}
+								usage={
+									usageEnabled
+										? usageByAgent.get(agent.id)
+										: undefined
+								}
+								limits={
+									usageEnabled
+										? limitsByAgent.get(agent.id)
+										: undefined
+								}
 								usageDisplay={usageDisplayFor(agent.id)}
 							/>
 						);

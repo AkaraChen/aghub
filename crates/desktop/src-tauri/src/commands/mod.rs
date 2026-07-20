@@ -14,6 +14,6 @@ pub use posthog::{
 	posthog_capture, posthog_get_config, posthog_get_distinct_id,
 	posthog_get_session_id, posthog_identify, posthog_set_enabled,
 };
-pub use server::{ccusage_diagnostics, start_server};
+pub use server::start_server;
 pub use updates::check_for_update;
 pub use window::minimize_to_tray;

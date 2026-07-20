@@ -1,4 +1,5 @@
 import { expect, type Page, test } from "@playwright/test";
+import type { CcusageRuntimeDto, UsageStatusDto } from "../src/generated/dto";
 import { installMocks } from "./mocks";
 
 /**
@@ -44,12 +45,15 @@ const limitsReport = {
 	warnings: [],
 };
 
-const statusReport = {
+const statusReport: UsageStatusDto = {
 	version: "ccusage 20.0.6",
 	reachable: true,
 	error: null,
 	latest_version: "20.0.17",
 	update_available: true,
+	source: "bundled",
+	can_install: true,
+	can_update: true,
 };
 
 test.beforeEach(async ({ page }) => {
@@ -81,8 +85,11 @@ test.beforeEach(async ({ page }) => {
 test("Usage settings panel and layout editor render", async ({ page }) => {
 	await page.goto("/settings?tab=usage");
 
-	// Sidecar card + the layout editor's inspector block.
-	await expect(page.getByText("Auto-discover ccusage")).toBeVisible();
+	// Runtime source + the layout editor's inspector block.
+	await expect(page.getByText("Runtime source")).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Runtime source" }),
+	).toContainText("Automatic");
 	await expect(page.getByText("Card layout", { exact: true })).toBeVisible();
 
 	// The default card starts with the weekly quota and the four useful
@@ -106,12 +113,9 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await expect(page.getByText("Cache read", { exact: true })).toBeVisible();
 	await expect(card.locator("button")).toHaveCount(0);
 
-	// Sidecar status row: version + inline update hint in the description,
-	// plus an external package-page action and re-check.
+	// Runtime status row: version + inline update hint in the description,
+	// plus re-check. Runtime actions have focused coverage below.
 	await expect(page.getByText("20.0.17 available")).toBeVisible();
-	await expect(
-		page.getByRole("button", { name: "Open npm page" }),
-	).toBeVisible();
 	await expect(page.getByRole("button", { name: "Re-check" })).toBeVisible();
 
 	// Agent enablement has one owner in Settings → Agents; Usage only keeps
@@ -141,14 +145,202 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 		page.locator('[data-slot="number-field"]').first(),
 	).toHaveClass(/number-field--secondary/);
 
-	// Auto-discover is on by default, so the resolved binary (from the Tauri
-	// mock) shows as a hint under the toggle.
-	await expect(page.getByText("/usr/local/bin/ccusage")).toBeVisible();
+	// Runtime paths stay behind the API boundary.
+	await expect(page.getByText("/usr/local/bin/ccusage")).toHaveCount(0);
+});
 
-	await page.screenshot({
-		path: "artifacts/usage-settings-panel.png",
-		fullPage: true,
+test("ccusage update uses the runtime endpoint", async ({ page }) => {
+	let updateRequests = 0;
+	await page.route("**/api/v1/usage/runtime/update", async (route) => {
+		updateRequests += 1;
+		expect(route.request().method()).toBe("POST");
+		await route.fallback();
 	});
+	await page.goto("/settings?tab=usage");
+
+	await page.getByRole("button", { name: "Update" }).click();
+	await expect.poll(() => updateRequests).toBe(1);
+	await expect(
+		page
+			.getByText("ccusage", { exact: true })
+			.locator("..")
+			.getByRole("status"),
+	).toHaveText("v20.0.17 · Install with Bun");
+	await expect(page.getByRole("button", { name: "Update" })).toHaveCount(0);
+	await expect(page).toHaveURL(/\/settings\?tab=usage$/);
+});
+
+test("runtime sources use selection and installation endpoints", async ({
+	page,
+}) => {
+	const selections: unknown[] = [];
+	const installs: unknown[] = [];
+	await page.route("**/api/v1/usage/runtime", async (route) => {
+		if (route.request().method() === "PUT") {
+			selections.push(route.request().postDataJSON());
+		}
+		await route.fallback();
+	});
+	await page.route("**/api/v1/usage/runtime/install", async (route) => {
+		installs.push(route.request().postDataJSON());
+		await route.fallback();
+	});
+	await page.goto("/settings?tab=usage");
+
+	const source = page.getByRole("button", { name: "Runtime source" });
+	await source.click();
+	await page.getByRole("option", { name: "Bundled fallback" }).click();
+	await page.getByRole("button", { name: "Use", exact: true }).click();
+	await expect
+		.poll(() => selections)
+		.toEqual([{ source: "bundled", path: null }]);
+	await expect(source).toContainText("Bundled fallback");
+
+	await source.click();
+	await page.getByRole("option", { name: "Direct download" }).click();
+	await page.getByRole("button", { name: "Install", exact: true }).click();
+	await expect.poll(() => installs).toEqual([{ source: "download" }]);
+	await expect(source).toContainText("Direct download");
+	await expect(
+		page
+			.getByText("ccusage", { exact: true })
+			.locator("..")
+			.getByRole("status"),
+	).toHaveText("v20.0.17 · Direct download");
+});
+
+test("re-check spins and remains pending until the probe settles", async ({
+	page,
+}) => {
+	await page.emulateMedia({ reducedMotion: "no-preference" });
+	let requestCount = 0;
+	let finishRecheck: () => void = () => undefined;
+	const recheckPending = new Promise<void>((resolve) => {
+		finishRecheck = () => resolve();
+	});
+	await page.route("**/api/v1/usage/runtime/refresh", async (route) => {
+		requestCount += 1;
+		await recheckPending;
+		await route.fallback();
+	});
+
+	try {
+		await page.goto("/settings?tab=usage");
+		const recheck = page.getByRole("button", { name: "Re-check" });
+		await expect(recheck).not.toHaveAttribute("data-pending", "true");
+
+		await recheck.click();
+		await expect.poll(() => requestCount).toBe(1);
+		await expect(recheck).toHaveAttribute("data-pending", "true");
+		await expect(recheck).toHaveAttribute("aria-disabled", "true");
+		await expect
+			.poll(() =>
+				recheck
+					.locator("svg")
+					.evaluate(
+						(element) => getComputedStyle(element).animationName,
+					),
+			)
+			.toContain("spin");
+
+		finishRecheck();
+		await expect(recheck).not.toHaveAttribute("data-pending", "true");
+		await expect
+			.poll(() =>
+				recheck
+					.locator("svg")
+					.evaluate(
+						(element) => getComputedStyle(element).animationName,
+					),
+			)
+			.toBe("none");
+	} finally {
+		finishRecheck();
+	}
+});
+
+test("re-check does not spin when reduced motion is requested", async ({
+	page,
+}) => {
+	await page.emulateMedia({ reducedMotion: "reduce" });
+	let finishRecheck: () => void = () => undefined;
+	const recheckPending = new Promise<void>((resolve) => {
+		finishRecheck = resolve;
+	});
+	await page.route("**/api/v1/usage/runtime/refresh", async (route) => {
+		await recheckPending;
+		await route.fallback();
+	});
+
+	try {
+		await page.goto("/settings?tab=usage");
+		const recheck = page.getByRole("button", { name: "Re-check" });
+		await recheck.click();
+		await expect(recheck).toHaveAttribute("data-pending", "true");
+		await expect
+			.poll(() =>
+				recheck
+					.locator("svg")
+					.evaluate(
+						(element) => getComputedStyle(element).animationName,
+					),
+			)
+			.toBe("none");
+	} finally {
+		finishRecheck();
+	}
+});
+
+test("failed re-check replaces the cached active runtime", async ({ page }) => {
+	let refreshFailed = false;
+	let runtimeGetCount = 0;
+	const unavailableRuntime: CcusageRuntimeDto = {
+		preference: "auto",
+		active: null,
+		candidates: [],
+		latest_version: null,
+		update_available: false,
+		error: "ccusage is unavailable after re-check",
+	};
+	await page.route("**/api/v1/usage/runtime", async (route) => {
+		if (route.request().method() !== "GET") {
+			await route.fallback();
+			return;
+		}
+		runtimeGetCount += 1;
+		if (!refreshFailed) {
+			await route.fallback();
+			return;
+		}
+		await route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify(unavailableRuntime),
+		});
+	});
+	await page.route("**/api/v1/usage/runtime/refresh", async (route) => {
+		refreshFailed = true;
+		await route.fulfill({
+			status: 500,
+			contentType: "application/json",
+			body: JSON.stringify({ error: "ccusage re-check failed" }),
+		});
+	});
+	await page.goto("/settings?tab=usage");
+
+	const runtimeSection = page
+		.getByText("ccusage", { exact: true })
+		.locator("xpath=ancestor::section");
+	const status = runtimeSection.getByRole("status");
+	const indicator = runtimeSection.locator("span.size-2.rounded-full");
+	await expect(status).toContainText("v20.0.6");
+	await expect(indicator).toHaveClass(/bg-success/);
+
+	await runtimeSection.getByRole("button", { name: "Re-check" }).click();
+	await expect.poll(() => runtimeGetCount).toBeGreaterThan(1);
+	await expect(status).toHaveText("ccusage is unavailable after re-check");
+	await expect(status).not.toContainText("20.0.6");
+	await expect(indicator).toHaveClass(/bg-danger/);
 });
 
 test("Usage settings uses the same surface level as Appearance", async ({
@@ -223,6 +415,11 @@ test("Agents panel lets Card variants own static surfaces", async ({
 
 test("layout editor uses the available settings width", async ({ page }) => {
 	await page.goto("/settings?tab=usage");
+	await page.setViewportSize({ width: 1600, height: 900 });
+	await expect(page.getByTestId("settings-content")).toHaveCSS(
+		"max-width",
+		"1024px",
+	);
 
 	const card = page.getByTestId("layout-card-replica");
 	const drawer = page.getByTestId("layout-hidden-drawer");
@@ -265,6 +462,53 @@ test("usage window uses a finite desktop picker", async ({ page }) => {
 	await expect(page.locator('input[aria-label="Usage window"]')).toHaveCount(
 		0,
 	);
+});
+
+test("advanced number steppers use the default horizontal anatomy", async ({
+	page,
+}) => {
+	await page.goto("/settings?tab=usage");
+	await page.getByRole("button", { name: "Advanced" }).click();
+
+	const fields = page.locator('[data-slot="number-field"]');
+	await expect(fields).toHaveCount(2);
+	for (let index = 0; index < 2; index += 1) {
+		const field = fields.nth(index);
+		const [group, input, increment, decrement] = await Promise.all([
+			field.locator('[data-slot="number-field-group"]').boundingBox(),
+			field.locator('[data-slot="number-field-input"]').boundingBox(),
+			field
+				.locator('[data-slot="number-field-increment-button"]')
+				.boundingBox(),
+			field
+				.locator('[data-slot="number-field-decrement-button"]')
+				.boundingBox(),
+		]);
+		if (!group || !input || !increment || !decrement) {
+			throw new Error("number stepper geometry missing");
+		}
+
+		expect(group.height).toBeCloseTo(36, 0);
+		expect(Math.abs(decrement.y - group.y)).toBeLessThan(2);
+		expect(Math.abs(input.y - group.y)).toBeLessThan(2);
+		expect(Math.abs(increment.y - group.y)).toBeLessThan(2);
+		expect(Math.abs(decrement.height - group.height)).toBeLessThan(2);
+		expect(Math.abs(input.height - group.height)).toBeLessThan(2);
+		expect(Math.abs(increment.height - group.height)).toBeLessThan(2);
+		expect(decrement.x).toBeLessThan(input.x);
+		expect(input.x).toBeLessThan(increment.x);
+		expect(increment.width).toBeGreaterThanOrEqual(24);
+		expect(increment.height).toBeGreaterThanOrEqual(24);
+		expect(decrement.width).toBeGreaterThanOrEqual(24);
+		expect(decrement.height).toBeGreaterThanOrEqual(24);
+		expect(Math.abs(decrement.x + decrement.width - input.x)).toBeLessThan(
+			2,
+		);
+		expect(Math.abs(input.x + input.width - increment.x)).toBeLessThan(2);
+		expect(
+			Math.abs(increment.x + increment.width - (group.x + group.width)),
+		).toBeLessThan(2);
+	}
 });
 
 test("finite pickers preserve stored custom values", async ({ page }) => {
@@ -338,6 +582,154 @@ test("layout rows are the complete drag targets", async ({ page }) => {
 	await page.keyboard.press("Escape");
 });
 
+test("wide short layout editor auto-scrolls toward the card target", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1100, height: 420 });
+	await page.goto("/settings?tab=usage");
+
+	const scroller = page.locator("main > div").first();
+	const card = page.getByTestId("layout-card-replica");
+	const drawer = page.getByTestId("layout-hidden-drawer");
+	const source = drawer.getByTestId("layout-hidden-item-reasoning");
+	const target = card.getByTestId("layout-slot-stat-0");
+	await source.evaluate((element) =>
+		element.scrollIntoView({ block: "center" }),
+	);
+	await nextBrowserPaint(page);
+	const initialScrollTop = await scroller.evaluate(
+		(element) => element.scrollTop,
+	);
+	expect(initialScrollTop).toBeGreaterThan(0);
+	const [sourceBox, targetBox] = await Promise.all([
+		source.boundingBox(),
+		target.boundingBox(),
+	]);
+	if (!sourceBox || !targetBox) throw new Error("drag endpoints missing");
+
+	await page.mouse.move(
+		sourceBox.x + sourceBox.width / 2,
+		sourceBox.y + sourceBox.height / 2,
+	);
+	await page.mouse.down();
+	await page.mouse.move(sourceBox.x - 12, sourceBox.y + 12, { steps: 3 });
+	await expect(page.locator("#root .cursor-grabbing")).toBeVisible();
+	await page.mouse.move(targetBox.x + targetBox.width / 2, 36, {
+		steps: 10,
+	});
+	await expect
+		.poll(() => scroller.evaluate((element) => element.scrollTop))
+		.toBeLessThan(initialScrollTop - 8);
+	await expect(target).toBeInViewport({ ratio: 1 });
+	const visibleTargetBox = await target.boundingBox();
+	if (!visibleTargetBox) throw new Error("drop target missing");
+	await page.mouse.move(
+		visibleTargetBox.x + visibleTargetBox.width / 2,
+		visibleTargetBox.y + visibleTargetBox.height / 2,
+		{ steps: 5 },
+	);
+	await expect(
+		card
+			.getByTestId("layout-stat-section")
+			.locator('[data-layout-type="stat"]'),
+	).toHaveText(["Reasoning", "Input", "Output", "Total tokens"]);
+	await page.mouse.up();
+	await expect(card.getByText("Reasoning", { exact: true })).toBeVisible();
+	await expect(drawer.getByText("Reasoning", { exact: true })).toHaveCount(0);
+});
+
+test("side-by-side horizontal dragging does not scroll the main pane early", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1600, height: 900 });
+	await page.goto("/settings?tab=usage");
+
+	const scroller = page.locator("main > div").first();
+	const card = page.getByTestId("layout-card-replica");
+	const drawer = page.getByTestId("layout-hidden-drawer");
+	const source = drawer.getByTestId("layout-hidden-item-cacheRead");
+	const target = card.getByTestId("layout-slot-stat-1");
+	const stats = card
+		.getByTestId("layout-stat-section")
+		.locator('[data-layout-type="stat"]');
+	await source.evaluate((element) =>
+		element.scrollIntoView({ block: "center" }),
+	);
+	await nextBrowserPaint(page);
+
+	const [scrollerBox, cardBox, drawerBox, sourceBox, targetBox] =
+		await Promise.all([
+			scroller.boundingBox(),
+			card.boundingBox(),
+			drawer.boundingBox(),
+			source.boundingBox(),
+			target.boundingBox(),
+		]);
+	if (!scrollerBox || !cardBox || !drawerBox || !sourceBox || !targetBox) {
+		throw new Error("side-by-side drag geometry missing");
+	}
+	expect(cardBox.x + cardBox.width).toBeLessThan(drawerBox.x);
+	expect(sourceBox.y).toBeGreaterThanOrEqual(scrollerBox.y - 1);
+	expect(sourceBox.y + sourceBox.height).toBeLessThanOrEqual(
+		scrollerBox.y + scrollerBox.height + 1,
+	);
+	expect(targetBox.y).toBeGreaterThanOrEqual(scrollerBox.y - 1);
+	expect(targetBox.y + targetBox.height).toBeLessThanOrEqual(
+		scrollerBox.y + scrollerBox.height + 1,
+	);
+	const initialScrollTop = await scroller.evaluate(
+		(element) => element.scrollTop,
+	);
+	const sourceCenter = {
+		x: sourceBox.x + sourceBox.width / 2,
+		y: sourceBox.y + sourceBox.height / 2,
+	};
+	const targetCenter = {
+		x: targetBox.x + targetBox.width / 2,
+		y: targetBox.y + targetBox.height / 2,
+	};
+
+	await page.mouse.move(sourceCenter.x, sourceCenter.y);
+	await page.mouse.down();
+	await page.mouse.move(sourceCenter.x - 12, sourceCenter.y, { steps: 3 });
+	await expect(page.locator("#root .cursor-grabbing")).toBeVisible();
+	await nextBrowserPaint(page);
+	expect(await scroller.evaluate((element) => element.scrollTop)).toBe(
+		initialScrollTop,
+	);
+
+	await page.mouse.move(
+		(sourceCenter.x + targetCenter.x) / 2,
+		sourceCenter.y,
+		{ steps: 5 },
+	);
+	await nextBrowserPaint(page);
+	expect(await scroller.evaluate((element) => element.scrollTop)).toBe(
+		initialScrollTop,
+	);
+
+	await page.mouse.move(targetCenter.x, targetCenter.y, { steps: 5 });
+	await expect(stats).toHaveText([
+		"Input",
+		"Cache read",
+		"Output",
+		"Total tokens",
+	]);
+	await nextBrowserPaint(page);
+	expect(await scroller.evaluate((element) => element.scrollTop)).toBe(
+		initialScrollTop,
+	);
+
+	await page.keyboard.press("Escape");
+	await page.mouse.up();
+	await expect(stats).toHaveText([
+		"Input",
+		"Output",
+		"Total tokens",
+		"Spend",
+	]);
+});
+
 test("keyboard dragging previews and cancels without losing focus", async ({
 	page,
 }) => {
@@ -358,6 +750,78 @@ test("keyboard dragging previews and cancels without losing focus", async ({
 	await expect(hiddenRow).toBeFocused();
 	await expect(card.getByText("Cache read", { exact: true })).toHaveCount(0);
 	await expect(drawer.getByText("Cache read", { exact: true })).toBeVisible();
+});
+
+test("keyboard dragging reaches an offscreen card slot in a wide short window", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1100, height: 420 });
+	await page.goto("/settings?tab=usage");
+
+	const scroller = page.locator("main > div").first();
+	const card = page.getByTestId("layout-card-replica");
+	const drawer = page.getByTestId("layout-hidden-drawer");
+	const source = drawer.getByTestId("layout-hidden-item-utilizationOpus");
+	const target = card.getByTestId("layout-slot-stat-1");
+	await source.evaluate((element) =>
+		element.scrollIntoView({ block: "center" }),
+	);
+	await nextBrowserPaint(page);
+	const [scrollerBox, targetBox] = await Promise.all([
+		scroller.boundingBox(),
+		target.boundingBox(),
+	]);
+	if (!scrollerBox || !targetBox) throw new Error("layout geometry missing");
+	const scrollOffset = targetBox.y + targetBox.height - scrollerBox.y + 8;
+	await scroller.evaluate(
+		(element, offset) => element.scrollBy({ top: offset }),
+		scrollOffset,
+	);
+	await nextBrowserPaint(page);
+
+	const hiddenTargetBox = await target.boundingBox();
+	const sourceBox = await source.boundingBox();
+	if (!hiddenTargetBox || !sourceBox)
+		throw new Error("keyboard drag endpoints missing");
+	expect(hiddenTargetBox.y + hiddenTargetBox.height).toBeLessThan(
+		scrollerBox.y,
+	);
+	expect(sourceBox.y).toBeGreaterThanOrEqual(scrollerBox.y);
+	expect(sourceBox.y + sourceBox.height).toBeLessThanOrEqual(
+		scrollerBox.y + scrollerBox.height,
+	);
+	const initialScrollTop = await scroller.evaluate(
+		(element) => element.scrollTop,
+	);
+
+	await source.focus();
+	await page.keyboard.press("Space");
+	await expect(page.locator("#root .cursor-grabbing")).toBeVisible();
+	await page.keyboard.press("ArrowLeft");
+	await nextBrowserPaint(page);
+
+	const reachedScrollTop = await scroller.evaluate(
+		(element) => element.scrollTop,
+	);
+	const reachedTargetBox = await target.boundingBox();
+	if (!reachedTargetBox) throw new Error("keyboard drop target missing");
+	expect(reachedScrollTop).toBeLessThan(initialScrollTop);
+	expect(reachedTargetBox.y).toBeGreaterThanOrEqual(scrollerBox.y - 1);
+	expect(reachedTargetBox.y + reachedTargetBox.height).toBeLessThanOrEqual(
+		scrollerBox.y + scrollerBox.height + 1,
+	);
+	await expect(
+		card
+			.getByTestId("layout-stat-section")
+			.locator('[data-layout-type="stat"]'),
+	).toHaveText(["Input", "Opus weekly", "Output", "Total tokens"]);
+
+	await page.keyboard.press("Escape");
+	await expect(source).toBeFocused();
+	await expect(card.getByText("Opus weekly", { exact: true })).toHaveCount(0);
+	await expect(
+		drawer.getByText("Opus weekly", { exact: true }),
+	).toBeVisible();
 });
 
 test("keyboard dragging follows the card grid", async ({ page }) => {
@@ -401,16 +865,23 @@ test("keyboard dragging follows the card grid", async ({ page }) => {
 	]);
 });
 
-test("layout editor replaces a full card slot from the drawer", async ({
+test("layout editor inserts at a full right slot and previews overflow", async ({
 	page,
 }) => {
 	await page.goto("/settings?tab=usage");
 
 	const card = page.getByTestId("layout-card-replica");
 	const drawer = page.getByTestId("layout-hidden-drawer");
+	const stats = card
+		.getByTestId("layout-stat-section")
+		.locator('[data-layout-type="stat"]');
 	const source = drawer.getByTestId("layout-hidden-item-cacheRead");
-	const target = card.getByTestId("layout-card-item-totalTokens");
+	const target = card.getByTestId("layout-slot-stat-1");
+	const liveRegion = page.locator(
+		'[id^="DndLiveRegion-"][role="status"][aria-live="assertive"]',
+	);
 	await target.scrollIntoViewIfNeeded();
+	await expect(liveRegion).toHaveCount(1);
 	const [sourceBox, targetBox] = await Promise.all([
 		source.boundingBox(),
 		target.boundingBox(),
@@ -429,28 +900,40 @@ test("layout editor replaces a full card slot from the drawer", async ({
 		targetBox.y + targetBox.height / 2,
 		{ steps: 10 },
 	);
-	// Projection is visible before the pointer is released. The displaced
-	// field moves to the drawer immediately, without a separate replace ring.
-	await expect(card.getByText("Cache read", { exact: true })).toBeVisible();
-	await expect(
-		drawer.getByText("Total tokens", { exact: true }),
-	).toBeVisible();
+	// Projection is visible before release. Inserting at the first row's right
+	// slot shifts following fields and overflows only the final field.
+	await expect(stats).toHaveText([
+		"Input",
+		"Cache read",
+		"Output",
+		"Total tokens",
+	]);
+	await expect(liveRegion).toHaveText(
+		"Cache read will move to position 2. Spend will move to Not shown.",
+	);
+	await expect(drawer.getByText("Spend", { exact: true })).toBeVisible();
+	await expect(drawer.getByText("Output", { exact: true })).toHaveCount(0);
 	await expect(card.locator("[data-drop-action]")).toHaveCount(0);
 	await expect(page.getByTestId(/layout-empty-slot/)).toHaveCount(0);
 	await page.keyboard.press("Escape");
+	await page.mouse.up();
 
-	await expect(card.getByText("Total tokens", { exact: true })).toBeVisible();
+	await expect(stats).toHaveText([
+		"Input",
+		"Output",
+		"Total tokens",
+		"Spend",
+	]);
 	await expect(card.getByText("Cache read", { exact: true })).toHaveCount(0);
 	await expect(drawer.getByText("Cache read", { exact: true })).toBeVisible();
-	await expect(drawer.getByText("Total tokens", { exact: true })).toHaveCount(
-		0,
-	);
+	await expect(drawer.getByText("Spend", { exact: true })).toHaveCount(0);
 
-	// A second drag is committed once on release.
+	// The same projection is committed once on release.
 	const sourceAfterCancel = drawer.getByTestId(
 		"layout-hidden-item-cacheRead",
 	);
-	const targetAfterCancel = card.getByTestId("layout-card-item-totalTokens");
+	const targetAfterCancel = card.getByTestId("layout-slot-stat-1");
+	await sourceAfterCancel.hover();
 	const [nextSourceBox, nextTargetBox] = await Promise.all([
 		sourceAfterCancel.boundingBox(),
 		targetAfterCancel.boundingBox(),
@@ -465,23 +948,71 @@ test("layout editor replaces a full card slot from the drawer", async ({
 	await page.mouse.move(nextSourceBox.x - 12, nextSourceBox.y + 12, {
 		steps: 3,
 	});
+	await expect(page.locator("#root .cursor-grabbing")).toBeVisible();
 	await page.mouse.move(
 		nextTargetBox.x + nextTargetBox.width / 2,
 		nextTargetBox.y + nextTargetBox.height / 2,
 		{ steps: 10 },
 	);
+	await expect(stats).toHaveText([
+		"Input",
+		"Cache read",
+		"Output",
+		"Total tokens",
+	]);
+	await expect(liveRegion).toHaveText(
+		"Cache read will move to position 2. Spend will move to Not shown.",
+	);
 	await page.mouse.up();
 
-	await expect(card.getByText("Cache read", { exact: true })).toBeVisible();
-	await expect(card.getByText("Total tokens", { exact: true })).toHaveCount(
-		0,
-	);
+	await expect(stats).toHaveText([
+		"Input",
+		"Cache read",
+		"Output",
+		"Total tokens",
+	]);
 	await expect(drawer.getByText("Cache read", { exact: true })).toHaveCount(
 		0,
 	);
-	await expect(card.getByText("Spend", { exact: true })).toBeVisible();
-	await expect(card.getByText("Input", { exact: true })).toBeVisible();
-	await expect(card.getByText("Output", { exact: true })).toBeVisible();
+	await expect(drawer.getByText("Spend", { exact: true })).toBeVisible();
+});
+
+test("drawer keeps complete side boundaries on hover without shifting", async ({
+	page,
+}) => {
+	await page.goto("/settings?tab=usage");
+
+	const drawer = page.getByTestId("layout-hidden-drawer");
+	const row = drawer.getByTestId("layout-hidden-item-cacheRead");
+	const before = await drawer.boundingBox();
+	const idleBorders = await drawer.evaluate((element) => {
+		const style = getComputedStyle(element);
+		return {
+			left: Number.parseFloat(style.borderLeftWidth),
+			right: Number.parseFloat(style.borderRightWidth),
+		};
+	});
+	if (!before) throw new Error("drawer geometry missing");
+	expect(idleBorders.left).toBeGreaterThan(0);
+	expect(idleBorders.right).toBeGreaterThan(0);
+	expect(idleBorders.right).toBe(idleBorders.left);
+
+	await row.hover();
+	const after = await drawer.boundingBox();
+	const hoverBorders = await drawer.evaluate((element) => {
+		const style = getComputedStyle(element);
+		return {
+			left: Number.parseFloat(style.borderLeftWidth),
+			right: Number.parseFloat(style.borderRightWidth),
+		};
+	});
+	if (!after) throw new Error("drawer geometry missing after hover");
+	expect(hoverBorders.left).toBeGreaterThan(0);
+	expect(hoverBorders.right).toBe(hoverBorders.left);
+	expect(after.x).toBeCloseTo(before.x, 1);
+	expect(after.y).toBeCloseTo(before.y, 1);
+	expect(after.width).toBeCloseTo(before.width, 1);
+	expect(after.height).toBeCloseTo(before.height, 1);
 });
 
 test("drawer uses a complete non-shifting drop outline", async ({ page }) => {
@@ -616,7 +1147,25 @@ test("layout editor moves a field between the card and the drawer", async ({
 });
 
 test("usage settings restore the complete default state", async ({ page }) => {
+	let releaseRuntimeReset: () => void = () => undefined;
+	const runtimeResetPending = new Promise<void>((resolve) => {
+		releaseRuntimeReset = resolve;
+	});
+	await page.route("**/api/v1/usage/runtime", async (route) => {
+		if (route.request().method() !== "PUT") {
+			await route.fallback();
+			return;
+		}
+		await runtimeResetPending;
+		await route.fallback();
+	});
 	await page.goto("/settings?tab=usage");
+	const restoreButton = page.getByRole("button", {
+		name: "Restore usage defaults",
+	});
+	await expect(restoreButton.locator("xpath=ancestor::section")).toHaveCount(
+		0,
+	);
 
 	const windowPicker = page.getByRole("button", { name: "Usage window" });
 	await windowPicker.click();
@@ -631,11 +1180,22 @@ test("usage settings restore the complete default state", async ({ page }) => {
 	await page.getByRole("button", { name: "Editing layout for" }).click();
 	await page.getByRole("option", { name: "Codex" }).click();
 
-	await page.getByRole("button", { name: "Restore usage defaults" }).click();
+	await restoreButton.click();
 	await expect(
 		page.getByRole("alertdialog", { name: "Restore usage defaults" }),
 	).toBeVisible();
-	await page.getByRole("button", { name: "Restore defaults" }).click();
+	const confirmRestore = page.getByRole("button", {
+		name: "Restore defaults",
+	});
+	await confirmRestore.click();
+	await expect(confirmRestore).toHaveAttribute("data-pending", "true");
+	await expect(
+		page.getByRole("alertdialog", { name: "Restore usage defaults" }),
+	).toBeVisible();
+	releaseRuntimeReset();
+	await expect(
+		page.getByRole("alertdialog", { name: "Restore usage defaults" }),
+	).toHaveCount(0);
 
 	await expect(homeSwitch).toBeChecked();
 	await expect(windowPicker).toContainText("30 days");
@@ -656,6 +1216,91 @@ test("usage settings restore the complete default state", async ({ page }) => {
 	]);
 });
 
+test("usage defaults dialog only blocks Escape while restoring", async ({
+	page,
+}) => {
+	let releaseRuntimeReset: () => void = () => undefined;
+	const runtimeResetPending = new Promise<void>((resolve) => {
+		releaseRuntimeReset = resolve;
+	});
+	await page.route("**/api/v1/usage/runtime", async (route) => {
+		if (route.request().method() !== "PUT") {
+			await route.fallback();
+			return;
+		}
+		await runtimeResetPending;
+		await route.fallback();
+	});
+	await page.goto("/settings?tab=usage");
+
+	const openDialog = page.getByRole("button", {
+		name: "Restore usage defaults",
+	});
+	const dialog = page.getByRole("alertdialog", {
+		name: "Restore usage defaults",
+	});
+	await openDialog.click();
+	const confirmRestore = dialog.getByRole("button", {
+		name: "Restore defaults",
+	});
+	await confirmRestore.click();
+	await expect(confirmRestore).toHaveAttribute("data-pending", "true");
+	await page.keyboard.press("Escape");
+	await expect(dialog).toBeVisible();
+	releaseRuntimeReset();
+	await expect(dialog).toHaveCount(0);
+
+	await openDialog.click();
+	await expect(dialog).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(dialog).toHaveCount(0);
+});
+
+test("usage defaults dialog stays open when runtime reset fails", async ({
+	page,
+}) => {
+	let rejectRuntimeReset: () => void = () => undefined;
+	const runtimeResetPending = new Promise<void>((resolve) => {
+		rejectRuntimeReset = resolve;
+	});
+	await page.route("**/api/v1/usage/runtime", async (route) => {
+		if (route.request().method() !== "PUT") {
+			await route.fallback();
+			return;
+		}
+		await runtimeResetPending;
+		await route.fulfill({
+			status: 500,
+			contentType: "application/json",
+			body: JSON.stringify({ error: "Runtime reset rejected" }),
+		});
+	});
+	await page.goto("/settings?tab=usage");
+	const windowPicker = page.getByRole("button", { name: "Usage window" });
+	await windowPicker.click();
+	await page.getByRole("option", { name: "90 days" }).click();
+	await expect(windowPicker).toContainText("90 days");
+
+	await page.getByRole("button", { name: "Restore usage defaults" }).click();
+	const dialog = page.getByRole("alertdialog", {
+		name: "Restore usage defaults",
+	});
+	const confirmRestore = dialog.getByRole("button", {
+		name: "Restore defaults",
+	});
+	await confirmRestore.click();
+	await expect(confirmRestore).toHaveAttribute("data-pending", "true");
+
+	rejectRuntimeReset();
+	await expect(confirmRestore).not.toHaveAttribute("data-pending", "true");
+	await expect(confirmRestore).toBeEnabled();
+	await expect(dialog).toBeVisible();
+	await expect(page.locator('[data-slot="toast"]')).toContainText(
+		"Runtime reset rejected",
+	);
+	await expect(windowPicker).toContainText("90 days");
+});
+
 test("card stats have no horizontal divider", async ({ page }) => {
 	await page.goto("/settings?tab=usage");
 	const statGrid = page.getByTestId("layout-stat-section");
@@ -668,13 +1313,19 @@ test("card stats have no horizontal divider", async ({ page }) => {
 		.toBe("0px");
 });
 
-test("usage header keeps ccusage status unboxed", async ({ page }) => {
+test("usage header keeps version and update hint together and unboxed", async ({
+	page,
+}) => {
 	await page.goto("/usage");
 
 	await expect(page.getByRole("toolbar", { name: "Usage" })).toHaveCount(0);
 	const status = page.getByRole("status");
+	const updateHint = status.getByText("v20.0.17 available", {
+		exact: true,
+	});
 	await expect(status).toContainText("20.0.6");
-	await expect(status).not.toContainText("20.0.17 available");
+	await expect(updateHint).toBeVisible();
+	await expect(updateHint.locator("xpath=ancestor::button")).toHaveCount(0);
 	const containerStyle = await status.locator("..").evaluate((element) => {
 		const style = getComputedStyle(element);
 		return {
@@ -684,6 +1335,23 @@ test("usage header keeps ccusage status unboxed", async ({ page }) => {
 	});
 	expect(containerStyle).toEqual({
 		backgroundColor: "rgba(0, 0, 0, 0)",
+		borderTopWidth: "0px",
+	});
+	const updateHintStyle = await updateHint.evaluate((element) => {
+		const style = getComputedStyle(element);
+		return {
+			backgroundColor: style.backgroundColor,
+			borderBottomWidth: style.borderBottomWidth,
+			borderLeftWidth: style.borderLeftWidth,
+			borderRightWidth: style.borderRightWidth,
+			borderTopWidth: style.borderTopWidth,
+		};
+	});
+	expect(updateHintStyle).toEqual({
+		backgroundColor: "rgba(0, 0, 0, 0)",
+		borderBottomWidth: "0px",
+		borderLeftWidth: "0px",
+		borderRightWidth: "0px",
 		borderTopWidth: "0px",
 	});
 	await expect(
@@ -697,7 +1365,7 @@ test("home does not animate optional usage before data exists", async ({
 }) => {
 	const emptyUsageReport = { ...usageReport, agents: [] };
 	const emptyLimitsReport = { ...limitsReport, agents: [] };
-	let releaseUsageRequests = () => undefined;
+	let releaseUsageRequests: () => void = () => undefined;
 	const usageRequestsPending = new Promise<void>((resolve) => {
 		releaseUsageRequests = () => resolve();
 	});
@@ -733,6 +1401,33 @@ test("home does not animate optional usage before data exists", async ({
 	}
 });
 
+test("home drops cached usage after show usage is turned off", async ({
+	page,
+}) => {
+	await page.goto("/");
+	const claudeCard = () =>
+		page
+			.getByRole("region", { name: "Your agents" })
+			.getByText("Claude", { exact: true })
+			.locator('xpath=ancestor::*[@data-slot="card"]');
+	await expect(claudeCard().getByText("71%", { exact: true })).toBeVisible();
+	await expect(claudeCard()).toHaveClass(/row-span-2/);
+
+	await page.getByRole("link", { name: "Settings" }).click();
+	await page.getByRole("tab", { name: "Usage" }).click();
+	const homeSwitch = page.getByRole("switch", {
+		name: "Show usage on home",
+	});
+	await homeSwitch
+		.locator('xpath=ancestor::*[@data-slot="switch-content"]')
+		.click();
+	await expect(homeSwitch).not.toBeChecked();
+
+	await page.getByRole("link", { name: "Home", exact: true }).click();
+	await expect(claudeCard().getByText("71%", { exact: true })).toHaveCount(0);
+	await expect(claudeCard()).not.toHaveClass(/row-span-2/);
+});
+
 test("home agent card renders the customized usage block", async ({ page }) => {
 	await page.goto("/");
 
@@ -744,8 +1439,34 @@ test("home agent card renders the customized usage block", async ({ page }) => {
 	// The default layout shows only the weekly quota bar.
 	await expect(page.getByText("42%")).toHaveCount(0);
 	await expect(page.getByText("71%")).toBeVisible();
+});
 
-	await page.screenshot({ path: "artifacts/home-usage-card.png" });
+test("home resource tile keeps its hover arrow readable on accent tint", async ({
+	page,
+}) => {
+	await page.goto("/");
+
+	const claudeCard = page
+		.getByRole("region", { name: "Your agents" })
+		.getByText("Claude", { exact: true })
+		.locator('xpath=ancestor::*[@data-slot="card"]');
+	const skillsTile = claudeCard.getByRole("button", { name: /Skills/ });
+	const arrow = skillsTile.locator('span[aria-hidden="true"]');
+	await skillsTile.hover();
+	await expect(arrow).toHaveCSS("opacity", "1");
+
+	const [arrowColor, accentColor] = await Promise.all([
+		arrow.evaluate((element) => getComputedStyle(element).color),
+		page.evaluate(() => {
+			const probe = document.createElement("span");
+			probe.style.color = "var(--accent)";
+			document.body.append(probe);
+			const color = getComputedStyle(probe).color;
+			probe.remove();
+			return color;
+		}),
+	]);
+	expect(arrowColor).toBe(accentColor);
 });
 
 async function nextBrowserPaint(page: Page) {

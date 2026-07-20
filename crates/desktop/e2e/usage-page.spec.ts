@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import type { UsageStatusDto } from "../src/generated/dto";
 import { installMocks } from "./mocks";
 
 /**
@@ -79,12 +80,15 @@ const limits = {
 	warnings: [],
 };
 
-const status = {
+const status: UsageStatusDto = {
 	version: "ccusage 20.0.6",
 	reachable: true,
 	error: null,
 	latest_version: "20.0.17",
 	update_available: true,
+	source: "bundled",
+	can_install: true,
+	can_update: true,
 };
 
 test.beforeEach(async ({ page }) => {
@@ -119,8 +123,32 @@ test("usage page shows summary, daily strip, and per-agent rows", async ({
 
 	await expect(page.getByRole("heading", { name: "Usage" })).toBeVisible();
 
-	// Status chip: version + inline update hint.
-	await expect(page.getByText("20.0.17 available")).toBeVisible();
+	// Version and update availability stay together as quiet, unboxed status
+	// text. Installation and update actions live in Settings.
+	const usageStatus = page.getByRole("status");
+	const updateHint = usageStatus.getByText("v20.0.17 available", {
+		exact: true,
+	});
+	await expect(usageStatus).toContainText("20.0.6");
+	await expect(updateHint).toBeVisible();
+	await expect(updateHint.locator("xpath=ancestor::button")).toHaveCount(0);
+	const updateHintStyle = await updateHint.evaluate((element) => {
+		const style = getComputedStyle(element);
+		return {
+			backgroundColor: style.backgroundColor,
+			borderBottomWidth: style.borderBottomWidth,
+			borderLeftWidth: style.borderLeftWidth,
+			borderRightWidth: style.borderRightWidth,
+			borderTopWidth: style.borderTopWidth,
+		};
+	});
+	expect(updateHintStyle).toEqual({
+		backgroundColor: "rgba(0, 0, 0, 0)",
+		borderBottomWidth: "0px",
+		borderLeftWidth: "0px",
+		borderRightWidth: "0px",
+		borderTopWidth: "0px",
+	});
 
 	// Cross-agent summary stats: spend total and active days (2 of the 3
 	// mocked days carry usage).
@@ -146,4 +174,48 @@ test("usage page shows summary, daily strip, and per-agent rows", async ({
 
 	// A usage-only agent (gemini) shows totals but no quota bars.
 	await expect(page.getByText("Gemini", { exact: true })).toBeVisible();
+});
+
+test("quota labels remain readable at an 800px desktop width", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 800, height: 650 });
+	await page.goto("/usage");
+
+	for (const name of ["5-hour limit", "Weekly limit"]) {
+		const label = page.getByText(name, { exact: true });
+		await expect(label).toBeVisible();
+		const geometry = await label.evaluate((element) => {
+			const header = element.closest(".justify-between");
+			const value = header?.lastElementChild;
+			if (
+				!(header instanceof HTMLElement) ||
+				!(value instanceof HTMLElement)
+			) {
+				throw new TypeError("quota label geometry missing");
+			}
+			const labelBox = element.getBoundingClientRect();
+			const textRange = document.createRange();
+			textRange.selectNodeContents(element);
+			const textBox = textRange.getBoundingClientRect();
+			return {
+				allocatedWidth: labelBox.width,
+				textWidth: textBox.width,
+				textRight: textBox.right,
+				valueLeft: value.getBoundingClientRect().left,
+			};
+		});
+		expect(
+			geometry.allocatedWidth + 0.5,
+			`${name} must not be visually clipped`,
+		).toBeGreaterThanOrEqual(geometry.textWidth);
+		expect(geometry.textRight).toBeLessThanOrEqual(geometry.valueLeft);
+	}
+
+	const pageScroller = page.locator("main > div").first();
+	const overflow = await pageScroller.evaluate((element) => ({
+		client: element.clientWidth,
+		scroll: element.scrollWidth,
+	}));
+	expect(overflow.scroll).toBeLessThanOrEqual(overflow.client);
 });

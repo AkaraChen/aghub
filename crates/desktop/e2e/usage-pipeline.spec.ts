@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import type { UsageStatusDto } from "../src/generated/dto";
+import { usageSummaryRequestTimeout } from "../src/lib/api";
 import { installMocks } from "./mocks";
 
 /**
@@ -7,12 +9,19 @@ import { installMocks } from "./mocks";
  * AGHUB_CCUSAGE_BIN pointing at e2e/fixtures/fake-ccusage.mjs), so genuine
  * ccusage JSON — camelCase fields, codex 20.0.14+ names, null costs — runs
  * through the Rust parsers into DTOs and onto the page. Only limits (an
- * OAuth endpoint, needs real credentials) and status (queries npm) stay
- * mocked.
+ * OAuth endpoint, needs real credentials) and runtime status stay mocked.
  */
 
+test("usage summary HTTP deadline includes the response grace period", () => {
+	expect(usageSummaryRequestTimeout()).toBe(45_000);
+	expect(usageSummaryRequestTimeout(30)).toBe(45_000);
+	expect(usageSummaryRequestTimeout(90)).toBe(105_000);
+	expect(usageSummaryRequestTimeout(120)).toBe(135_000);
+});
+
 test.beforeEach(async ({ page }) => {
-	await installMocks(page);
+	const mocks = await installMocks(page);
+	mocks.addAgent("codex", "Codex");
 	// Let the summary through to the real server, past installMocks'
 	// catch-all (later routes win; continue() sends it to the network).
 	await page.route("**/api/v1/usage/summary**", (route) => route.continue());
@@ -27,17 +36,21 @@ test.beforeEach(async ({ page }) => {
 			}),
 		}),
 	);
+	const status: UsageStatusDto = {
+		version: "ccusage 99.0.0-e2e",
+		reachable: true,
+		error: null,
+		latest_version: null,
+		update_available: false,
+		source: "environment",
+		can_install: true,
+		can_update: false,
+	};
 	await page.route("**/api/v1/usage/status**", (route) =>
 		route.fulfill({
 			status: 200,
 			contentType: "application/json",
-			body: JSON.stringify({
-				version: "ccusage 99.0.0-e2e",
-				reachable: true,
-				error: null,
-				latest_version: null,
-				update_available: false,
-			}),
+			body: JSON.stringify(status),
 		}),
 	);
 });

@@ -1,6 +1,6 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { installMocks } from "./mocks";
+import { e2eApiUrl, installMocks } from "./mocks";
 
 /**
  * Store-integrity regressions: group assignments must not outlive the
@@ -101,33 +101,30 @@ test("bulk transfers run sequentially, never in parallel", async ({ page }) => {
 	// parallel transfers all three overlap; sequential keeps the max at 1.
 	let inFlight = 0;
 	let maxInFlight = 0;
-	await page.route(
-		"http://localhost:45999/api/v1/skills/transfer",
-		async (route) => {
-			inFlight += 1;
-			maxInFlight = Math.max(maxInFlight, inFlight);
-			await new Promise((resolve) => setTimeout(resolve, 150));
-			inFlight -= 1;
-			const body = JSON.parse(route.request().postData() ?? "{}");
-			const results = (
-				(body.destinations ?? []) as Array<{ agent: string }>
-			).map((destination) => ({
-				name: body.source?.name ?? "",
-				agent: destination.agent,
-				success: true,
-				error: null,
-			}));
-			await route.fulfill({
-				status: 200,
-				contentType: "application/json",
-				body: JSON.stringify({
-					success_count: results.length,
-					failed_count: 0,
-					results,
-				}),
-			});
-		},
-	);
+	await page.route(e2eApiUrl("/skills/transfer"), async (route) => {
+		inFlight += 1;
+		maxInFlight = Math.max(maxInFlight, inFlight);
+		await new Promise((resolve) => setTimeout(resolve, 150));
+		inFlight -= 1;
+		const body = JSON.parse(route.request().postData() ?? "{}");
+		const results = (
+			(body.destinations ?? []) as Array<{ agent: string }>
+		).map((destination) => ({
+			name: body.source?.name ?? "",
+			agent: destination.agent,
+			success: true,
+			error: null,
+		}));
+		await route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({
+				success_count: results.length,
+				failed_count: 0,
+				results,
+			}),
+		});
+	});
 
 	await page.goto("/skills");
 	await expect(

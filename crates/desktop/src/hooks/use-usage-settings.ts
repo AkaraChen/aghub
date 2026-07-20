@@ -34,14 +34,13 @@ export function useUsageSettingsEditor() {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const query = useUsageSettings();
-	const saveQueueRef = useRef<Promise<void>>(Promise.resolve());
+	const saveQueueRef = useRef<Promise<void> | null>(null);
 	const persistedSettingsRef = useRef<UsageSettings | null>(null);
 
 	const mutation = useMutation({
 		mutationFn: ({ next }: UsageSettingsChange) => {
-			const save = saveQueueRef.current.then(() =>
-				saveUsageSettings(next),
-			);
+			const queuedSave = saveQueueRef.current ?? Promise.resolve();
+			const save = queuedSave.then(() => saveUsageSettings(next));
 			saveQueueRef.current = save.then(
 				() => undefined,
 				() => undefined,
@@ -69,21 +68,31 @@ export function useUsageSettingsEditor() {
 		},
 	});
 
-	const update = (apply: (current: UsageSettings) => UsageSettings) => {
+	const stageChange = (
+		apply: (current: UsageSettings) => UsageSettings,
+	): UsageSettingsChange => {
 		const previous =
 			queryClient.getQueryData<UsageSettings>(USAGE_SETTINGS_QUERY_KEY) ??
 			query.data ??
 			DEFAULT_USAGE_SETTINGS;
-		persistedSettingsRef.current ??= previous;
+		if (persistedSettingsRef.current === null) {
+			persistedSettingsRef.current = previous;
+		}
 		const next = apply(previous);
 		queryClient.setQueryData(USAGE_SETTINGS_QUERY_KEY, next);
-		mutation.mutate({ next, previous });
+		return { next, previous };
 	};
+	const update = (apply: (current: UsageSettings) => UsageSettings) => {
+		mutation.mutate(stageChange(apply));
+	};
+	const updateAsync = (apply: (current: UsageSettings) => UsageSettings) =>
+		mutation.mutateAsync(stageChange(apply));
 
 	return {
 		...query,
 		data: query.data ?? DEFAULT_USAGE_SETTINGS,
 		isSaving: mutation.isPending,
 		update,
+		updateAsync,
 	};
 }

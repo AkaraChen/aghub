@@ -102,16 +102,6 @@ export interface UsageHomeSettings {
 }
 
 export interface UsageSettings {
-	sidecar: {
-		/**
-		 * `true` lets the desktop shell resolve ccusage itself (bundled
-		 * sidecar, then PATH). `false` uses {@link binPath}. Read by the Rust
-		 * shell at startup — see `commands/server.rs::resolve_ccusage_bin`.
-		 */
-		autoDiscover: boolean;
-		/** Absolute path to a ccusage binary; used only when not auto-discovering. */
-		binPath: string;
-	};
 	/** Usage dashboard poll interval in ms; `0` disables polling. */
 	pollIntervalMs: number;
 	/** IANA timezone for daily usage buckets; empty uses the system timezone. */
@@ -164,7 +154,6 @@ export const DEFAULT_CARD_LAYOUT: CardLayout = {
 
 export function createDefaultUsageSettings(): UsageSettings {
 	return {
-		sidecar: { autoDiscover: true, binPath: "" },
 		pollIntervalMs: 60_000,
 		timezone: "",
 		offlinePricing: true,
@@ -257,15 +246,18 @@ function slotsFromLegacy<Id extends string>(
 	length: number,
 ): (Id | null)[] | null {
 	if (!Array.isArray(raw)) return null;
-	const visible = raw
-		.filter(
-			(x) =>
-				typeof x === "object" &&
-				x !== null &&
-				idSet.has((x as { id?: unknown }).id as Id) &&
-				(x as { visible?: unknown }).visible !== false,
-		)
-		.map((x) => (x as { id: Id }).id);
+	const visible: Id[] = [];
+	for (const value of raw) {
+		if (typeof value !== "object" || value === null) continue;
+		const item = value as { id?: unknown; visible?: unknown };
+		if (
+			typeof item.id === "string" &&
+			idSet.has(item.id as Id) &&
+			item.visible !== false
+		) {
+			visible.push(item.id as Id);
+		}
+	}
 	return normalizeSlots(visible, idSet, length);
 }
 
@@ -340,23 +332,10 @@ function normalizeUsageSettings(raw: unknown): UsageSettings {
 		string,
 		unknown
 	>;
-	const sidecar = (
-		typeof r.sidecar === "object" && r.sidecar !== null ? r.sidecar : {}
-	) as Record<string, unknown>;
 	const agents = (
 		typeof r.agents === "object" && r.agents !== null ? r.agents : {}
 	) as Record<string, unknown>;
 	return {
-		sidecar: {
-			autoDiscover:
-				typeof sidecar.autoDiscover === "boolean"
-					? sidecar.autoDiscover
-					: d.sidecar.autoDiscover,
-			binPath:
-				typeof sidecar.binPath === "string"
-					? sidecar.binPath
-					: d.sidecar.binPath,
-		},
 		pollIntervalMs:
 			typeof r.pollIntervalMs === "number" && r.pollIntervalMs >= 0
 				? r.pollIntervalMs

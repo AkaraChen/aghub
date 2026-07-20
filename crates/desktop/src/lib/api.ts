@@ -22,6 +22,8 @@ import type {
 	CreateMcpRequest,
 	CreateSkillRequest,
 	CreateSubAgentRequest,
+	CcusageRuntimeDto,
+	InstallCcusageRuntimeRequest,
 	CredentialResponse,
 	DeleteSkillByPathRequest,
 	DeleteSkillByPathResponse,
@@ -61,6 +63,7 @@ import type {
 	SkillDiffResponse,
 	SkillTreeNodeResponse,
 	SubAgentResponse,
+	SetCcusageRuntimeRequest,
 	ToolInfoDto,
 	TransferRequest,
 	CCPluginUninstallRequest,
@@ -99,6 +102,23 @@ export function getApiErrorCode(error: unknown) {
 	}
 	const body = error.data as ApiErrorBody;
 	return body.code;
+}
+
+// The backend caps local selection/refresh at 60 seconds and install/update at
+// five minutes. HTTP deadlines include time for the returned runtime snapshot.
+const RUNTIME_PROBE_REQUEST_TIMEOUT_MS = 90_000;
+const RUNTIME_INSTALL_REQUEST_TIMEOUT_MS = 330_000;
+const DEFAULT_USAGE_SUMMARY_TIMEOUT_SECS = 30;
+// The backend process deadline covers ccusage itself; reserve 15 seconds for
+// response normalization and transport before the client aborts the request.
+const USAGE_SUMMARY_RESPONSE_GRACE_MS = 15_000;
+
+export function usageSummaryRequestTimeout(timeoutSecs?: number) {
+	const processTimeoutSecs =
+		timeoutSecs !== undefined && timeoutSecs > 0
+			? timeoutSecs
+			: DEFAULT_USAGE_SUMMARY_TIMEOUT_SECS;
+	return processTimeoutSecs * 1_000 + USAGE_SUMMARY_RESPONSE_GRACE_MS;
 }
 
 export function createApi(baseUrl: string, token: string) {
@@ -650,7 +670,10 @@ export function createApi(baseUrl: string, token: string) {
 					searchParams.timeout_secs = String(params.timeoutSecs);
 				if (params.args) searchParams.args = params.args;
 				return client
-					.get("usage/summary", { searchParams, timeout: 60000 })
+					.get("usage/summary", {
+						searchParams,
+						timeout: usageSummaryRequestTimeout(params.timeoutSecs),
+					})
 					.json();
 			},
 			limits(): Promise<UsageLimitsReportDto> {
@@ -658,6 +681,43 @@ export function createApi(baseUrl: string, token: string) {
 			},
 			status(): Promise<UsageStatusDto> {
 				return client.get("usage/status", { timeout: 30000 }).json();
+			},
+			runtime(): Promise<CcusageRuntimeDto> {
+				return client.get("usage/runtime", { timeout: 30000 }).json();
+			},
+			setRuntime(
+				body: SetCcusageRuntimeRequest,
+			): Promise<CcusageRuntimeDto> {
+				return client
+					.put("usage/runtime", {
+						json: body,
+						timeout: RUNTIME_PROBE_REQUEST_TIMEOUT_MS,
+					})
+					.json();
+			},
+			installRuntime(
+				body: InstallCcusageRuntimeRequest,
+			): Promise<CcusageRuntimeDto> {
+				return client
+					.post("usage/runtime/install", {
+						json: body,
+						timeout: RUNTIME_INSTALL_REQUEST_TIMEOUT_MS,
+					})
+					.json();
+			},
+			updateRuntime(): Promise<CcusageRuntimeDto> {
+				return client
+					.post("usage/runtime/update", {
+						timeout: RUNTIME_INSTALL_REQUEST_TIMEOUT_MS,
+					})
+					.json();
+			},
+			refreshRuntime(): Promise<CcusageRuntimeDto> {
+				return client
+					.post("usage/runtime/refresh", {
+						timeout: RUNTIME_PROBE_REQUEST_TIMEOUT_MS,
+					})
+					.json();
 			},
 		},
 		integrations: {
