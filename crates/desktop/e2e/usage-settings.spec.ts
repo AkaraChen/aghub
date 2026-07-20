@@ -98,15 +98,11 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await expect(page.getByRole("button", { name: "Update" })).toBeVisible();
 	await expect(page.getByRole("button", { name: "Re-check" })).toBeVisible();
 
-	// Every report agent gets a tracking switch, not just the quota pair.
-	// (Structural locator: the HeroUI beta Switch renders no input/role, so
-	// its aria-label never reaches the DOM.)
-	const tracked = page.getByTestId("tracked-agents");
-	await expect(tracked.getByText("Gemini", { exact: true })).toBeVisible();
-	await expect(tracked.locator('[data-slot="switch"]')).toHaveCount(15);
+	// Agent enablement has one owner in Settings → Agents; Usage only keeps
+	// quota-specific alert overrides.
+	await expect(page.getByTestId("tracked-agents")).toHaveCount(0);
 
-	// Alerts: one row per quota agent with the resolved-global threshold
-	// select (tracking lives in the card above).
+	// Alerts: one row per quota agent with the resolved-global threshold.
 	await expect(
 		page.getByRole("button", { name: "Use global (80%)" }).first(),
 	).toBeVisible();
@@ -145,8 +141,8 @@ test("layout editor moves a field between the card and the drawer", async ({
 	const drawer = page.getByTestId("layout-hidden-drawer");
 	await expect(card.getByText("Total tokens")).toBeVisible();
 
-	// Hide via the eye button (revealed on hover): the field leaves the
-	// card and lands in the drawer. exact — the dnd-kit draggable row is
+	// Hide via the eye button: the field leaves the card and lands in the
+	// drawer. exact — the dnd-kit draggable row is
 	// also a "button" whose accessible name contains these words.
 	await card
 		.getByRole("button", { name: "Remove Total tokens", exact: true })
@@ -184,6 +180,20 @@ test("layout editor moves a field between the card and the drawer", async ({
 
 	await expect(card.getByText("Total tokens")).toBeVisible();
 	await expect(drawer.getByText("Total tokens")).toHaveCount(0);
+});
+
+test("usage header separates ccusage status from navigation", async ({
+	page,
+}) => {
+	await page.goto("/usage");
+
+	const status = page.getByRole("status");
+	await expect(status).toContainText("20.0.6");
+	await expect(status).toContainText("20.0.17 available");
+	await expect(
+		page.getByRole("button", { name: "Open settings" }),
+	).toBeVisible();
+	await expect(status.locator("button")).toHaveCount(0);
 });
 
 test("home agent card renders the customized usage block", async ({ page }) => {

@@ -33,8 +33,6 @@ export function isQuotaAgent(id: string): boolean {
 }
 
 export interface UsageAgentSettings {
-	/** Whether the usage surface polls and shows this agent. */
-	tracked: boolean;
 	/**
 	 * Per-agent alert threshold, percent of a rate-limit window (0–100). `null`
 	 * falls back to {@link UsageSettings.globalAlertThresholdPct}. Only
@@ -43,9 +41,8 @@ export interface UsageAgentSettings {
 	alertThresholdPct: number | null;
 }
 
-/** Per-agent settings default: tracked, on the global threshold. */
+/** Per-agent settings default: use the global alert threshold. */
 export const DEFAULT_AGENT_SETTINGS: UsageAgentSettings = {
-	tracked: true,
 	alertThresholdPct: null,
 };
 
@@ -197,17 +194,13 @@ function clampPct(value: number): number {
 	return Math.min(100, Math.max(0, Math.round(value)));
 }
 
-function normalizeAgent(
-	raw: unknown,
-	fallback: UsageAgentSettings,
-): UsageAgentSettings {
+function normalizeAgent(raw: unknown): UsageAgentSettings {
 	const r = (typeof raw === "object" && raw !== null ? raw : {}) as Record<
 		string,
 		unknown
 	>;
 	const threshold = r.alertThresholdPct;
 	return {
-		tracked: typeof r.tracked === "boolean" ? r.tracked : fallback.tracked,
 		alertThresholdPct:
 			typeof threshold === "number" && Number.isFinite(threshold)
 				? clampPct(threshold)
@@ -382,10 +375,7 @@ function normalizeUsageSettings(raw: unknown): UsageSettings {
 		// Sparse: always seed the quota agents, carry over any other stored ones.
 		agents: Object.fromEntries(
 			[...new Set([...USAGE_QUOTA_AGENTS, ...Object.keys(agents)])].map(
-				(id) => [
-					id,
-					normalizeAgent(agents[id], DEFAULT_AGENT_SETTINGS),
-				],
+				(id) => [id, normalizeAgent(agents[id])],
 			),
 		),
 		home: normalizeHome(r.home),

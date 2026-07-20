@@ -487,9 +487,6 @@ export default {
 	usageGlobalAlertThreshold: "Global alert threshold",
 	usageAlertUseGlobal: "Use global ({{pct}}%)",
 	usageSettingsHomeCards: "Home cards",
-	usageSettingsTrackedAgents: "Tracked agents",
-	usageSettingsTrackedAgentsDescription:
-		"Untracked agents don't appear on the home cards or the usage page.",
 	usageExtraArgs: "Extra ccusage flags",
 	usageExtraArgsDescription: "Appended verbatim to every ccusage call.",
 	usageSettingsAlerts: "Alerts",
@@ -497,7 +494,6 @@ export default {
 		"Warn when a rate-limit window passes its threshold.",
 	usageSettingsAdvanced: "Advanced",
 	usageStatusChecking: "Checking…",
-	usageAgentTracked: "Track {{agent}} usage",
 	usageAgentAlert: "Alert threshold",
 	usageHomeShow: "Show usage on home",
 	usageHomeShowDescription: "Show the usage block on the home agent cards.",

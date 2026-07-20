@@ -1,4 +1,4 @@
-import { Meter, Spinner } from "@heroui/react";
+import { Button, Meter, Spinner } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -122,14 +122,24 @@ export default function UsagePage() {
 		return map;
 	}, [limits]);
 
-	// Same gate as the home cards: agents the user untracked in settings
-	// don't appear anywhere on the page.
+	const usableAgentIds = useMemo(
+		() =>
+			new Set(
+				availableAgents
+					.filter((agent) => agent.isUsable)
+					.map((agent) => agent.id),
+			),
+		[availableAgents],
+	);
+
+	// Agent visibility follows Settings → Agents, the application's single
+	// source of truth for installed and enabled agents.
 	const agents = useMemo(
 		() =>
-			(report?.agents ?? []).filter(
-				(entry) => agentSettings(settings, entry.agent).tracked,
+			(report?.agents ?? []).filter((entry) =>
+				usableAgentIds.has(entry.agent),
 			),
-		[report, settings],
+		[report, usableAgentIds],
 	);
 
 	// Per-agent alert threshold with the global value as fallback — the same
@@ -165,7 +175,7 @@ export default function UsagePage() {
 	return (
 		<div className="h-full overflow-y-auto">
 			<div className="mx-auto w-full max-w-5xl p-4 sm:p-6">
-				<header className="mb-6 flex items-start justify-between gap-4">
+				<header className="mb-6 flex flex-col items-start justify-between gap-3 sm:flex-row sm:gap-4">
 					<div className="flex flex-col gap-1">
 						<h1 className="text-2xl font-semibold tracking-tight">
 							{t("usage")}
@@ -174,16 +184,24 @@ export default function UsagePage() {
 							{t("usageWindowDaysLabel", { days: WINDOW_DAYS })}
 						</p>
 					</div>
-					<StatusChip
-						version={status?.version ?? null}
-						reachable={status?.reachable}
-						updateVersion={
-							status?.update_available
-								? (status.latest_version ?? null)
-								: null
-						}
-						onPress={() => setLocation("/settings?tab=usage")}
-					/>
+					<div className="flex max-w-full flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
+						<UsageStatus
+							version={status?.version ?? null}
+							reachable={status?.reachable}
+							updateVersion={
+								status?.update_available
+									? (status.latest_version ?? null)
+									: null
+							}
+						/>
+						<Button
+							size="sm"
+							variant="ghost"
+							onPress={() => setLocation("/settings?tab=usage")}
+						>
+							{t("usageOpenSettings")}
+						</Button>
+					</div>
 				</header>
 
 				{isLoading ? (
@@ -466,24 +484,18 @@ function AgentSummaryRow({
 	);
 }
 
-function StatusChip({
+function UsageStatus({
 	version,
 	reachable,
 	updateVersion,
-	onPress,
 }: {
 	version: string | null;
 	reachable?: boolean;
 	updateVersion: string | null;
-	onPress: () => void;
 }) {
 	const { t } = useTranslation();
 	return (
-		<button
-			type="button"
-			onClick={onPress}
-			className="flex shrink-0 items-center gap-2 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs transition-colors hover:bg-foreground/[0.04]"
-		>
+		<div role="status" className="flex shrink-0 items-center gap-2 text-xs">
 			<span
 				className={cn(
 					"size-2 rounded-full",
@@ -495,14 +507,18 @@ function StatusChip({
 				)}
 			/>
 			<span className="text-muted tabular-nums">
-				{version ? shortCcusageVersion(version) : "ccusage"}
+				{reachable === undefined
+					? t("usageStatusChecking")
+					: version
+						? shortCcusageVersion(version)
+						: "ccusage"}
 			</span>
 			{updateVersion && (
 				<span className="text-accent">
 					{t("usageStatusUpdate", { version: updateVersion })}
 				</span>
 			)}
-		</button>
+		</div>
 	);
 }
 

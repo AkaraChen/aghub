@@ -9,17 +9,13 @@ import {
 	Select,
 	Switch,
 	TextField,
-	toast,
 } from "@heroui/react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-	USAGE_SETTINGS_QUERY_KEY,
-	useUsageSettings,
-} from "../../hooks/use-usage-settings";
+import { useUsageSettingsEditor } from "../../hooks/use-usage-settings";
 import { useAgentAvailability } from "../../hooks/use-agent-availability";
 import { useApi } from "../../hooks/use-api";
 import { AgentIcon } from "../../lib/agent-icons";
@@ -29,13 +25,10 @@ import { cn } from "../../lib/utils";
 import { usageStatusQueryOptions } from "../../requests/usage";
 import {
 	agentSettings,
-	DEFAULT_USAGE_SETTINGS,
 	HOME_STAT_IDS,
 	type HomeStatId,
 	HOME_WINDOW_IDS,
 	type HomeWindowId,
-	saveUsageSettings,
-	USAGE_AGENT_IDS,
 	USAGE_ALERT_THRESHOLDS_PCT,
 	USAGE_QUOTA_AGENTS,
 	type UsageSettings,
@@ -107,11 +100,9 @@ const COMMON_TIMEZONES = [
 
 export default function UsagePanel() {
 	const { t } = useTranslation();
-	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
 
-	const { data: settings } = useUsageSettings();
-	const current = settings ?? DEFAULT_USAGE_SETTINGS;
+	const { data: current, update: updateSettings } = useUsageSettingsEditor();
 
 	// Registry display name when the agent is known locally, else the static
 	// label for report-only agents.
@@ -121,70 +112,41 @@ export default function UsagePanel() {
 		id;
 
 	const api = useApi();
-	const { data: status } = useQuery(usageStatusQueryOptions({ api }));
-	const { data: diag } = useQuery({
+	const statusQuery = useQuery(usageStatusQueryOptions({ api }));
+	const diagnosticsQuery = useQuery({
 		queryKey: ["ccusage-diagnostics"],
 		queryFn: ccusageDiagnostics,
 		staleTime: Number.POSITIVE_INFINITY,
 	});
-	const recheckStatus = () => {
-		queryClient.invalidateQueries({ queryKey: ["usage", "status"] });
-		queryClient.invalidateQueries({ queryKey: ["ccusage-diagnostics"] });
+	const { data: status } = statusQuery;
+	const { data: diag } = diagnosticsQuery;
+	const isRechecking = statusQuery.isFetching || diagnosticsQuery.isFetching;
+	const recheckStatus = async () => {
+		await Promise.all([statusQuery.refetch(), diagnosticsQuery.refetch()]);
 	};
 
-	const mutation = useMutation({
-		mutationFn: saveUsageSettings,
-		// Optimistically reflect the change so controls feel instant; roll back
-		// on error and re-sync from the store afterwards.
-		onMutate: async (next) => {
-			await queryClient.cancelQueries({
-				queryKey: USAGE_SETTINGS_QUERY_KEY,
-			});
-			const previous = queryClient.getQueryData<UsageSettings>(
-				USAGE_SETTINGS_QUERY_KEY,
-			);
-			queryClient.setQueryData(USAGE_SETTINGS_QUERY_KEY, next);
-			return { previous };
-		},
-		onError: (error, _next, context) => {
-			if (context?.previous) {
-				queryClient.setQueryData(
-					USAGE_SETTINGS_QUERY_KEY,
-					context.previous,
-				);
-			}
-			toast.danger(
-				error instanceof Error
-					? error.message
-					: t("usageSettingsSaveError"),
-			);
-		},
-		onSettled: () => {
-			queryClient.invalidateQueries({
-				queryKey: USAGE_SETTINGS_QUERY_KEY,
-			});
-		},
-	});
-
 	const update = (patch: Partial<UsageSettings>) => {
-		mutation.mutate({ ...current, ...patch });
+		updateSettings((settings) => ({ ...settings, ...patch }));
 	};
 
 	const updateAgent = (
 		agent: string,
 		patch: Partial<UsageSettings["agents"][string]>,
 	) => {
-		mutation.mutate({
-			...current,
+		updateSettings((settings) => ({
+			...settings,
 			agents: {
-				...current.agents,
-				[agent]: { ...agentSettings(current, agent), ...patch },
+				...settings.agents,
+				[agent]: { ...agentSettings(settings, agent), ...patch },
 			},
-		});
+		}));
 	};
 
 	const updateHome = (patch: Partial<UsageSettings["home"]>) => {
-		mutation.mutate({ ...current, home: { ...current.home, ...patch } });
+		updateSettings((settings) => ({
+			...settings,
+			home: { ...settings.home, ...patch },
+		}));
 	};
 
 	const home = current.home;
@@ -210,25 +172,40 @@ export default function UsagePanel() {
 	];
 
 	// The editor works in fixed slots ((id | null)[]); persist them onto the
-	// selected target. saveUsageSettings re-normalizes, so the cast is safe.
+	// selected target. Store normalization validates the ids before writing.
 	const onLayoutCommit = (next: CardLayoutModel) => {
 		const layout = {
 			windowSlots: next.windowSlots as (HomeWindowId | null)[],
 			statSlots: next.statSlots as (HomeStatId | null)[],
 		};
 		if (layoutTarget === "default") {
-			updateHome({ default: layout });
+			updateSettings((settings) => ({
+				...settings,
+				home: { ...settings.home, default: layout },
+			}));
 		} else {
-			updateHome({
-				perAgent: { ...home.perAgent, [layoutTarget]: layout },
-			});
+			updateSettings((settings) => ({
+				...settings,
+				home: {
+					...settings.home,
+					perAgent: {
+						...settings.home.perAgent,
+						[layoutTarget]: layout,
+					},
+				},
+			}));
 		}
 	};
 
 	const resetOverride = () => {
-		const next = { ...home.perAgent };
-		delete next[layoutTarget];
-		updateHome({ perAgent: next });
+		updateSettings((settings) => {
+			const perAgent = { ...settings.home.perAgent };
+			delete perAgent[layoutTarget];
+			return {
+				...settings,
+				home: { ...settings.home, perAgent },
+			};
+		});
 	};
 
 	// A specific agent's editor only offers fields that agent reports;
@@ -297,10 +274,10 @@ export default function UsagePanel() {
 				: (status.error ?? t("usageStatusUnreachable"));
 
 	return (
-		<div className="space-y-4">
-			{/* ccusage sidecar — status, binary resolution, config file. */}
-			<Card className="p-0">
-				<Card.Content className="space-y-4 p-4">
+		<Card className="p-0" variant="transparent">
+			<Card.Content className="divide-y divide-border p-0">
+				{/* ccusage sidecar — status, binary resolution, config file. */}
+				<section className="space-y-4 px-1 pb-5">
 					<div className="flex items-center justify-between gap-4">
 						<div className="space-y-0.5">
 							<span className="flex items-center gap-2 text-sm font-semibold text-(--foreground)">
@@ -317,13 +294,21 @@ export default function UsagePanel() {
 								ccusage
 								<Button
 									isIconOnly
+									isPending={isRechecking}
 									size="sm"
 									variant="ghost"
 									onPress={recheckStatus}
 									aria-label={t("usageStatusRecheck")}
 									className="size-6 text-muted"
 								>
-									<ArrowPathIcon className="size-3.5" />
+									{({ isPending }) => (
+										<ArrowPathIcon
+											className={cn(
+												"size-3.5",
+												isPending && "animate-spin",
+											)}
+										/>
+									)}
 								</Button>
 							</span>
 							<span
@@ -415,13 +400,11 @@ export default function UsagePanel() {
 						hint={t("usageConfigPathDescription")}
 						filters={[{ name: "JSON", extensions: ["json"] }]}
 					/>
-				</Card.Content>
-			</Card>
+				</section>
 
-			{/* Home cards — what the usage block on the home agent cards shows,
+				{/* Home cards — what the usage block on the home agent cards shows,
 			    plus the per-card layout editor. */}
-			<Card className="p-0">
-				<Card.Content className="space-y-4 p-4">
+				<section className="space-y-4 px-1 py-5">
 					<div className="space-y-0.5">
 						<span className="text-sm font-semibold text-(--foreground)">
 							{t("usageSettingsHomeCards")}
@@ -461,9 +444,8 @@ export default function UsagePanel() {
 						}
 					/>
 
-					{/* Card layout — a full-width heading row (target picker on
-					    the right), then the editor's two panes on a canvas:
-					    the live card replica ↔ the drawer of hidden fields. */}
+					{/* Card layout — target picker above the live card replica and
+					    its adjacent drawer of hidden fields. */}
 					<div className="space-y-3 border-t border-border pt-4">
 						<div className="flex items-center justify-between gap-3">
 							<div className="space-y-0.5">
@@ -476,13 +458,14 @@ export default function UsagePanel() {
 							</div>
 							<div className="flex shrink-0 items-center gap-3">
 								{hasOverride && (
-									<button
-										type="button"
-										onClick={resetOverride}
-										className="text-xs text-muted transition-colors hover:text-accent"
+									<Button
+										size="sm"
+										variant="ghost"
+										onPress={resetOverride}
+										className="h-7 px-2 text-xs text-muted"
 									>
 										{t("usageLayoutResetOverride")}
-									</button>
+									</Button>
 								)}
 								<SettingSelect
 									value={layoutTarget}
@@ -504,79 +487,21 @@ export default function UsagePanel() {
 							</div>
 						</div>
 
-						{/* A shrink-wrapped canvas so the replica + drawer sit as
-						    one centered object instead of floating in a full-
-						    width well. */}
-						<div className="mx-auto w-fit max-w-full rounded-lg bg-surface-secondary p-4">
-							<InteractiveCardLayout
-								windowFields={windowFields}
-								statFields={statFields}
-								windowSlots={editedLayout.windowSlots}
-								statSlots={editedLayout.statSlots}
-								isDisabled={layoutDisabled}
-								onCommit={onLayoutCommit}
-								preview={preview}
-							/>
-						</div>
+						<InteractiveCardLayout
+							windowFields={windowFields}
+							statFields={statFields}
+							windowSlots={editedLayout.windowSlots}
+							statSlots={editedLayout.statSlots}
+							isDisabled={layoutDisabled}
+							onCommit={onLayoutCommit}
+							preview={preview}
+						/>
 					</div>
-				</Card.Content>
-			</Card>
+				</section>
 
-			{/* Tracked agents — every agent ccusage can report; untracked ones
-			    disappear from the home cards and the usage page. */}
-			<Card className="p-0">
-				<Card.Content className="space-y-4 p-4">
-					<div className="space-y-0.5">
-						<span className="text-sm font-semibold text-(--foreground)">
-							{t("usageSettingsTrackedAgents")}
-						</span>
-						<span className="block text-xs text-muted">
-							{t("usageSettingsTrackedAgentsDescription")}
-						</span>
-					</div>
-					<div
-						data-testid="tracked-agents"
-						className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2"
-					>
-						{USAGE_AGENT_IDS.map((agent) => {
-							const config = agentSettings(current, agent);
-							return (
-								<div
-									key={agent}
-									className="flex items-center justify-between gap-4"
-								>
-									<span className="flex min-w-0 items-center gap-2 text-sm text-(--foreground)">
-										<AgentIcon
-											id={agent}
-											name={agentName(agent)}
-											size="xs"
-										/>
-										<span className="truncate">
-											{agentName(agent)}
-										</span>
-									</span>
-									<SettingSwitch
-										isSelected={config.tracked}
-										onChange={(checked) =>
-											updateAgent(agent, {
-												tracked: checked,
-											})
-										}
-										ariaLabel={t("usageAgentTracked", {
-											agent: agentName(agent),
-										})}
-									/>
-								</div>
-							);
-						})}
-					</div>
-				</Card.Content>
-			</Card>
-
-			{/* Alerts — the global threshold plus per-agent overrides for the
+				{/* Alerts — the global threshold plus per-agent overrides for the
 			    quota agents (the only ones with rate-limit windows). */}
-			<Card className="p-0">
-				<Card.Content className="space-y-4 p-4">
+				<section className="space-y-4 px-1 py-5">
 					<div className="space-y-0.5">
 						<span className="text-sm font-semibold text-(--foreground)">
 							{t("usageSettingsAlerts")}
@@ -607,8 +532,8 @@ export default function UsagePanel() {
 						}
 					/>
 
-					{/* One threshold row per quota agent; tracking lives in the
-					    card above, an untracked agent's select is just off. */}
+					{/* One threshold row per quota agent. Agent enablement is
+					    managed centrally in Settings → Agents. */}
 					{USAGE_QUOTA_AGENTS.map((agent) => {
 						const config = agentSettings(current, agent);
 						return (
@@ -638,7 +563,6 @@ export default function UsagePanel() {
 													: Number(key),
 										})
 									}
-									isDisabled={!config.tracked}
 									ariaLabel={t("usageAgentAlert")}
 									options={[
 										{
@@ -653,12 +577,10 @@ export default function UsagePanel() {
 							</div>
 						);
 					})}
-				</Card.Content>
-			</Card>
+				</section>
 
-			{/* Advanced — low-frequency collection knobs, collapsed by default. */}
-			<Card className="p-0">
-				<Card.Content className="p-2">
+				{/* Advanced — low-frequency collection knobs, collapsed by default. */}
+				<section className="px-1 py-3">
 					<Disclosure>
 						<Disclosure.Heading>
 							<Button
@@ -776,9 +698,9 @@ export default function UsagePanel() {
 							</Disclosure.Body>
 						</Disclosure.Content>
 					</Disclosure>
-				</Card.Content>
-			</Card>
-		</div>
+				</section>
+			</Card.Content>
+		</Card>
 	);
 }
 
@@ -961,13 +883,14 @@ function PathField({
 					{label}
 				</span>
 				{value && (
-					<button
-						type="button"
-						onClick={() => onChange("")}
-						className="text-xs text-muted transition-colors hover:text-accent"
+					<Button
+						size="sm"
+						variant="ghost"
+						onPress={() => onChange("")}
+						className="h-7 px-2 text-xs text-muted"
 					>
 						{t("usagePathReset")}
-					</button>
+					</Button>
 				)}
 			</div>
 			<div className="flex items-center gap-2">

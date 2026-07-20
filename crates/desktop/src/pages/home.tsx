@@ -67,9 +67,8 @@ export default function HomePage() {
 	const refetchInterval =
 		settings.pollIntervalMs > 0 ? settings.pollIntervalMs : false;
 
-	// Usage is best-effort: only Claude/Codex report it, and an agent that
-	// isn't logged in lands in the report's `warnings` with no entry. Cards
-	// without an entry simply omit the usage section.
+	// Usage is best-effort: agents without local ccusage data land in the
+	// report's warnings with no entry. Cards without an entry omit the block.
 	const { data: usageReport, isLoading: isUsageLoading } = useQuery(
 		usageSummaryQueryOptions({
 			api,
@@ -120,20 +119,18 @@ export default function HomePage() {
 	const usageByAgent = useMemo(() => {
 		const map = new Map<string, AgentUsageDto>();
 		for (const entry of usageReport?.agents ?? []) {
-			if (!agentSettings(settings, entry.agent).tracked) continue;
 			map.set(entry.agent, entry);
 		}
 		return map;
-	}, [usageReport, settings]);
+	}, [usageReport]);
 
 	const limitsByAgent = useMemo(() => {
 		const map = new Map<string, AgentLimitsDto>();
 		for (const entry of limitsReport?.agents ?? []) {
-			if (!agentSettings(settings, entry.agent).tracked) continue;
 			map.set(entry.agent, entry);
 		}
 		return map;
-	}, [limitsReport, settings]);
+	}, [limitsReport]);
 
 	const usageDisplayFor = (agentId: string): AgentUsageDisplay => {
 		const agent = agentSettings(settings, agentId);
@@ -181,11 +178,7 @@ export default function HomePage() {
 				>
 					{sortedAgents.map((agent) => {
 						const counts = countsByAgent.get(agent.id);
-						// Only tracked usage agents carry a report — gate the
-						// skeleton on both, so others don't flash it.
-						const hasUsage =
-							USAGE_AGENT_ID_SET.has(agent.id) &&
-							agentSettings(settings, agent.id).tracked;
+						const hasUsage = USAGE_AGENT_ID_SET.has(agent.id);
 						return (
 							<AgentOverviewCard
 								key={agent.id}
