@@ -87,7 +87,7 @@
 		"knip": "^6.24.0",
 		"nano-staged": "^1.0.0",
 		"prettier": "^3.9.4",
-		"tailwindcss": "^4.3.1",
+		"tailwindcss": "^4.3.3",
 		"typescript": "~6.0.3",
 		"vite": "^8.1.3"
 	},
