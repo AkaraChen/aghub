@@ -189,11 +189,6 @@ export default function UsagePage() {
 						<UsageStatus
 							version={status?.version ?? null}
 							reachable={status?.reachable}
-							updateVersion={
-								status?.update_available
-									? (status.latest_version ?? null)
-									: null
-							}
 						/>
 						<Tooltip delay={400}>
 							<Button
@@ -498,11 +493,9 @@ function AgentSummaryRow({
 function UsageStatus({
 	version,
 	reachable,
-	updateVersion,
 }: {
 	version: string | null;
 	reachable?: boolean;
-	updateVersion: string | null;
 }) {
 	const { t } = useTranslation();
 	return (
@@ -524,11 +517,6 @@ function UsageStatus({
 						? shortCcusageVersion(version)
 						: "ccusage"}
 			</span>
-			{updateVersion && (
-				<span className="text-accent">
-					{t("usageStatusUpdate", { version: updateVersion })}
-				</span>
-			)}
 		</div>
 	);
 }

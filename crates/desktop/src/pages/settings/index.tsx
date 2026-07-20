@@ -19,7 +19,7 @@ export default function SettingsPage() {
 
 	return (
 		<div className="h-full overflow-y-auto">
-			<div className="mx-auto w-full max-w-6xl p-4 sm:p-6">
+			<div className="w-full p-4 sm:p-6">
 				<Tabs
 					className="min-w-0"
 					selectedKey={activeTab}

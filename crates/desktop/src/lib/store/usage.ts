@@ -141,19 +141,19 @@ export function agentSettings(
 
 const USAGE_SETTINGS_KEY = "usageSettings";
 
-/** Default bar slots — the three windows in order. */
+/** Default bar slots — one weekly quota row. */
 export const DEFAULT_WINDOW_SLOTS: (HomeWindowId | null)[] = [
-	"5h",
 	"weekly",
-	"weekly_opus",
+	null,
+	null,
 ];
 
-/** Default stat slots — tokens/cost/input/output fill the 2×2 corners. */
+/** Default stat slots — input/output first, then total tokens and spend. */
 export const DEFAULT_STAT_SLOTS: (HomeStatId | null)[] = [
-	"totalTokens",
-	"cost",
 	"inputTokens",
 	"outputTokens",
+	"totalTokens",
+	"cost",
 ];
 
 /** The default card layout, shared by every agent without an override. */
@@ -162,26 +162,33 @@ export const DEFAULT_CARD_LAYOUT: CardLayout = {
 	statSlots: DEFAULT_STAT_SLOTS,
 };
 
-export const DEFAULT_USAGE_SETTINGS: UsageSettings = {
-	sidecar: { autoDiscover: true, binPath: "" },
-	pollIntervalMs: 60_000,
-	timezone: "",
-	offlinePricing: true,
-	ccusageConfigPath: "",
-	requestTimeoutSecs: 30,
-	extraArgs: "",
-	globalAlertThresholdPct: 80,
-	agents: {
-		claude: { ...DEFAULT_AGENT_SETTINGS },
-		codex: { ...DEFAULT_AGENT_SETTINGS },
-	},
-	home: {
-		showUsageOnHome: true,
-		windowDays: 30,
-		default: DEFAULT_CARD_LAYOUT,
-		perAgent: {},
-	},
-};
+export function createDefaultUsageSettings(): UsageSettings {
+	return {
+		sidecar: { autoDiscover: true, binPath: "" },
+		pollIntervalMs: 60_000,
+		timezone: "",
+		offlinePricing: true,
+		ccusageConfigPath: "",
+		requestTimeoutSecs: 30,
+		extraArgs: "",
+		globalAlertThresholdPct: 80,
+		agents: {
+			claude: { ...DEFAULT_AGENT_SETTINGS },
+			codex: { ...DEFAULT_AGENT_SETTINGS },
+		},
+		home: {
+			showUsageOnHome: true,
+			windowDays: 30,
+			default: {
+				windowSlots: [...DEFAULT_WINDOW_SLOTS],
+				statSlots: [...DEFAULT_STAT_SLOTS],
+			},
+			perAgent: {},
+		},
+	};
+}
+
+export const DEFAULT_USAGE_SETTINGS = createDefaultUsageSettings();
 
 /** Alert-threshold presets, percent of a rate-limit window. */
 export const USAGE_ALERT_THRESHOLDS_PCT = [

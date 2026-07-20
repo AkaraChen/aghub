@@ -1,12 +1,13 @@
 import { ArrowPathIcon, FolderOpenIcon } from "@heroicons/react/24/solid";
 import {
+	AlertDialog,
 	Button,
+	Card,
 	Disclosure,
 	Input,
 	ListBox,
 	NumberField,
 	Select,
-	Surface,
 	Switch,
 	TextField,
 } from "@heroui/react";
@@ -25,6 +26,7 @@ import { cn } from "../../lib/utils";
 import { usageStatusQueryOptions } from "../../requests/usage";
 import {
 	agentSettings,
+	createDefaultUsageSettings,
 	HOME_STAT_IDS,
 	type HomeStatId,
 	HOME_WINDOW_IDS,
@@ -66,13 +68,15 @@ const AGENT_LABELS: Record<string, string> = {
 
 const GLOBAL_THRESHOLD_KEY = "global";
 
-/** ccusage's npm page — the target for the install / update actions. */
+/** ccusage's npm page — this UI does not install or update the package. */
 const CCUSAGE_NPM_URL = "https://www.npmjs.com/package/ccusage";
 
 const THRESHOLD_OPTIONS = USAGE_ALERT_THRESHOLDS_PCT.map((pct) => ({
 	id: String(pct),
 	label: `${pct}%`,
 }));
+
+const USAGE_WINDOW_DAYS = [7, 14, 30, 90] as const;
 
 /** A short, geographically-spread set of common IANA zones for the picker. */
 const COMMON_TIMEZONES = [
@@ -98,19 +102,64 @@ const COMMON_TIMEZONES = [
 	"Pacific/Auckland",
 ];
 
+type UsageSettingsUpdate = (
+	apply: (current: UsageSettings) => UsageSettings,
+) => void;
+
+interface UsageSectionProps {
+	current: UsageSettings;
+	updateSettings: UsageSettingsUpdate;
+}
+
 export default function UsagePanel() {
-	const { t } = useTranslation();
-	const { availableAgents } = useAgentAvailability();
-
 	const { data: current, update: updateSettings } = useUsageSettingsEditor();
+	const [isResetOpen, setIsResetOpen] = useState(false);
+	const [layoutTarget, setLayoutTarget] = useState("default");
 
-	// Registry display name when the agent is known locally, else the static
-	// label for report-only agents.
-	const agentName = (id: string) =>
-		availableAgents.find((a) => a.id === id)?.display_name ??
-		AGENT_LABELS[id] ??
-		id;
+	const restoreDefaults = () => {
+		updateSettings(() => createDefaultUsageSettings());
+		setLayoutTarget("default");
+		setIsResetOpen(false);
+	};
 
+	return (
+		<>
+			<Card className="gap-0 divide-y divide-border p-4">
+				<CcusageSection
+					current={current}
+					updateSettings={updateSettings}
+					onRestoreRequest={() => setIsResetOpen(true)}
+				/>
+				<HomeCardsSection
+					current={current}
+					updateSettings={updateSettings}
+					layoutTarget={layoutTarget}
+					onLayoutTargetChange={setLayoutTarget}
+				/>
+				<AlertsSection
+					current={current}
+					updateSettings={updateSettings}
+				/>
+				<AdvancedSection
+					current={current}
+					updateSettings={updateSettings}
+				/>
+			</Card>
+			<UsageDefaultsDialog
+				isOpen={isResetOpen}
+				onOpenChange={setIsResetOpen}
+				onRestore={restoreDefaults}
+			/>
+		</>
+	);
+}
+
+function CcusageSection({
+	current,
+	updateSettings,
+	onRestoreRequest,
+}: UsageSectionProps & { onRestoreRequest: () => void }) {
+	const { t } = useTranslation();
 	const api = useApi();
 	const statusQuery = useQuery(usageStatusQueryOptions({ api }));
 	const diagnosticsQuery = useQuery({
@@ -121,14 +170,349 @@ export default function UsagePanel() {
 	const { data: status } = statusQuery;
 	const { data: diag } = diagnosticsQuery;
 	const isRechecking = statusQuery.isFetching || diagnosticsQuery.isFetching;
-	const recheckStatus = async () => {
-		await Promise.all([statusQuery.refetch(), diagnosticsQuery.refetch()]);
-	};
-
 	const update = (patch: Partial<UsageSettings>) => {
 		updateSettings((settings) => ({ ...settings, ...patch }));
 	};
+	const recheckStatus = async () => {
+		await Promise.all([statusQuery.refetch(), diagnosticsQuery.refetch()]);
+	};
+	const installedVersion = status?.version
+		? shortCcusageVersion(status.version)
+		: "—";
+	const availableVersion =
+		status?.update_available && status.latest_version
+			? t("usageStatusUpdate", {
+					version: shortCcusageVersion(status.latest_version),
+				})
+			: "";
+	const statusDescription =
+		status === undefined
+			? t("usageStatusChecking")
+			: status.reachable
+				? [installedVersion, availableVersion]
+						.filter(Boolean)
+						.join(" · ")
+				: (status.error ?? t("usageStatusUnreachable"));
+	const showPackagePage =
+		(status !== undefined && !status.reachable) || status?.update_available;
 
+	return (
+		<section className="space-y-4 px-1 pb-5">
+			<div className="flex items-center justify-between gap-4">
+				<div className="space-y-0.5">
+					<span className="flex items-center gap-2 text-sm font-semibold text-(--foreground)">
+						<span
+							className={cn(
+								"size-2 rounded-full",
+								status === undefined
+									? "bg-muted"
+									: status.reachable
+										? "bg-success"
+										: "bg-danger",
+							)}
+						/>
+						ccusage
+						<Button
+							isIconOnly
+							isPending={isRechecking}
+							size="sm"
+							variant="ghost"
+							onPress={recheckStatus}
+							aria-label={t("usageStatusRecheck")}
+							className="size-6 text-muted"
+						>
+							{({ isPending }) => (
+								<ArrowPathIcon
+									className={cn(
+										"size-3.5",
+										isPending && "animate-spin",
+									)}
+								/>
+							)}
+						</Button>
+					</span>
+					<span
+						className={cn(
+							"block text-xs tabular-nums",
+							status && !status.reachable
+								? "text-danger"
+								: "text-muted",
+						)}
+					>
+						{statusDescription}
+					</span>
+				</div>
+				<div className="flex shrink-0 items-center gap-2">
+					<Button
+						size="sm"
+						variant="ghost"
+						onPress={onRestoreRequest}
+						className="text-muted"
+					>
+						{t("usageRestoreDefaults")}
+					</Button>
+					{showPackagePage && (
+						<Button
+							size="sm"
+							variant="secondary"
+							onPress={() => openUrl(CCUSAGE_NPM_URL)}
+						>
+							{t("usageStatusPackagePage")}
+						</Button>
+					)}
+				</div>
+			</div>
+			<SettingRow
+				title={t("usageSidecarAutoDiscover")}
+				description={t("usageSidecarAutoDiscoverDescription")}
+				control={
+					<SettingSwitch
+						isSelected={current.sidecar.autoDiscover}
+						onChange={(autoDiscover) =>
+							update({
+								sidecar: {
+									...current.sidecar,
+									autoDiscover,
+								},
+							})
+						}
+						ariaLabel={t("usageSidecarAutoDiscover")}
+					/>
+				}
+			/>
+			{current.sidecar.autoDiscover &&
+				diag &&
+				/[/\\]/.test(diag.path) && (
+					<p
+						className="truncate font-mono text-[11px] text-muted"
+						title={diag.path}
+					>
+						{t("usageSidecarResolved", { path: diag.path })}
+					</p>
+				)}
+			{!current.sidecar.autoDiscover && (
+				<PathField
+					label={t("usageSidecarPath")}
+					value={current.sidecar.binPath}
+					onChange={(binPath) =>
+						update({
+							sidecar: {
+								...current.sidecar,
+								binPath,
+							},
+						})
+					}
+					placeholder={t("usageSidecarPathPlaceholder")}
+					hint={t("usageSidecarPathDescription")}
+				/>
+			)}
+			<PathField
+				label={t("usageConfigPath")}
+				value={current.ccusageConfigPath}
+				onChange={(ccusageConfigPath) => update({ ccusageConfigPath })}
+				placeholder={t("usageConfigPathPlaceholder")}
+				hint={t("usageConfigPathDescription")}
+				filters={[{ name: "JSON", extensions: ["json"] }]}
+			/>
+		</section>
+	);
+}
+
+function HomeCardsSection({
+	current,
+	updateSettings,
+	layoutTarget,
+	onLayoutTargetChange,
+}: UsageSectionProps & {
+	layoutTarget: string;
+	onLayoutTargetChange: (target: string) => void;
+}) {
+	const { t } = useTranslation();
+	const home = current.home;
+	const editedLayout =
+		layoutTarget === "default"
+			? home.default
+			: (home.perAgent[layoutTarget] ?? home.default);
+	const hasOverride =
+		layoutTarget !== "default" && layoutTarget in home.perAgent;
+	const updateHome = (patch: Partial<UsageSettings["home"]>) => {
+		updateSettings((settings) => ({
+			...settings,
+			home: { ...settings.home, ...patch },
+		}));
+	};
+	const commitLayout = (next: CardLayoutModel) => {
+		const layout = {
+			windowSlots: next.windowSlots as (HomeWindowId | null)[],
+			statSlots: next.statSlots as (HomeStatId | null)[],
+		};
+		updateSettings((settings) => ({
+			...settings,
+			home:
+				layoutTarget === "default"
+					? { ...settings.home, default: layout }
+					: {
+							...settings.home,
+							perAgent: {
+								...settings.home.perAgent,
+								[layoutTarget]: layout,
+							},
+						},
+		}));
+	};
+	const resetOverride = () => {
+		updateSettings((settings) => {
+			const perAgent = { ...settings.home.perAgent };
+			delete perAgent[layoutTarget];
+			return {
+				...settings,
+				home: { ...settings.home, perAgent },
+			};
+		});
+	};
+	const offeredToTarget = (id: HomeWindowId | HomeStatId) => {
+		const agent = layoutFieldAgent(id);
+		return layoutTarget === "default" || !agent || agent === layoutTarget;
+	};
+	const fieldHint = (id: HomeWindowId | HomeStatId) => {
+		const agent = layoutFieldAgent(id);
+		return layoutTarget === "default" && agent
+			? t(
+					agent === "claude"
+						? "usageStatClaudeOnly"
+						: "usageStatCodexOnly",
+				)
+			: undefined;
+	};
+	const windowFields: LayoutField[] = HOME_WINDOW_IDS.filter(
+		offeredToTarget,
+	).map((id) => ({
+		id,
+		label: t(HOME_WINDOW_LABEL_KEYS[id]),
+		hint: fieldHint(id),
+	}));
+	const statFields: LayoutField[] = HOME_STAT_IDS.filter(offeredToTarget).map(
+		(id) => ({
+			id,
+			label: t(HOME_STAT_DEFINITIONS[id].labelKey),
+			hint: fieldHint(id),
+		}),
+	);
+	const previewAgentId =
+		layoutTarget === "default" ? USAGE_QUOTA_AGENTS[0] : layoutTarget;
+
+	return (
+		<section className="space-y-4 px-1 py-5">
+			<div className="space-y-0.5">
+				<span className="text-sm font-semibold text-(--foreground)">
+					{t("usageSettingsHomeCards")}
+				</span>
+				<span className="block text-xs text-muted">
+					{t("usageHomeShowDescription")}
+				</span>
+			</div>
+			<SettingRow
+				title={t("usageHomeShow")}
+				control={
+					<SettingSwitch
+						isSelected={home.showUsageOnHome}
+						onChange={(showUsageOnHome) =>
+							updateHome({ showUsageOnHome })
+						}
+						ariaLabel={t("usageHomeShow")}
+					/>
+				}
+			/>
+			<SettingRow
+				title={t("usageHomeWindow")}
+				description={t("usageHomeWindowDescription")}
+				control={
+					<SettingSelect
+						value={String(home.windowDays)}
+						onChange={(days) =>
+							updateHome({ windowDays: Number(days) })
+						}
+						isDisabled={!home.showUsageOnHome}
+						ariaLabel={t("usageHomeWindow")}
+						options={includeSelectedOption(
+							USAGE_WINDOW_DAYS.map((days) => ({
+								id: String(days),
+								label: t("usageWindowDaysOption", { days }),
+							})),
+							String(home.windowDays),
+							t("usageWindowDaysOption", {
+								days: home.windowDays,
+							}),
+						)}
+					/>
+				}
+			/>
+			<div className="w-full space-y-3 border-t border-border pt-4">
+				<div className="flex items-center justify-between gap-3">
+					<div className="space-y-0.5">
+						<span className="text-sm font-medium text-(--foreground)">
+							{t("usageHomeLayout")}
+						</span>
+						<span className="block text-xs text-muted">
+							{t("usageHomeLayoutDescription")}
+						</span>
+					</div>
+					<div className="flex shrink-0 items-center gap-3">
+						{hasOverride && (
+							<Button
+								size="sm"
+								variant="ghost"
+								onPress={resetOverride}
+								className="h-7 px-2 text-xs text-muted"
+							>
+								{t("usageLayoutResetOverride")}
+							</Button>
+						)}
+						<SettingSelect
+							value={layoutTarget}
+							onChange={onLayoutTargetChange}
+							ariaLabel={t("usageLayoutTarget")}
+							options={[
+								{
+									id: "default",
+									label: t("usageLayoutTargetDefault"),
+								},
+								...USAGE_QUOTA_AGENTS.map((id) => ({
+									id,
+									label: AGENT_LABELS[id] ?? id,
+								})),
+							]}
+						/>
+					</div>
+				</div>
+				<InteractiveCardLayout
+					windowFields={windowFields}
+					statFields={statFields}
+					windowSlots={editedLayout.windowSlots}
+					statSlots={editedLayout.statSlots}
+					isDisabled={!home.showUsageOnHome}
+					onCommit={commitLayout}
+					preview={{
+						agentId: previewAgentId,
+						agentName:
+							AGENT_LABELS[previewAgentId] ?? previewAgentId,
+					}}
+				/>
+			</div>
+		</section>
+	);
+}
+
+function AlertsSection({ current, updateSettings }: UsageSectionProps) {
+	const { t } = useTranslation();
+	const { availableAgents } = useAgentAvailability();
+	const agentName = (id: string) =>
+		availableAgents.find((agent) => agent.id === id)?.display_name ??
+		AGENT_LABELS[id] ??
+		id;
+	const update = (patch: Partial<UsageSettings>) => {
+		updateSettings((settings) => ({ ...settings, ...patch }));
+	};
 	const updateAgent = (
 		agent: string,
 		patch: Partial<UsageSettings["agents"][string]>,
@@ -142,26 +526,95 @@ export default function UsagePanel() {
 		}));
 	};
 
-	const updateHome = (patch: Partial<UsageSettings["home"]>) => {
-		updateSettings((settings) => ({
-			...settings,
-			home: { ...settings.home, ...patch },
-		}));
+	return (
+		<section className="space-y-4 px-1 py-5">
+			<div className="space-y-0.5">
+				<span className="text-sm font-semibold text-(--foreground)">
+					{t("usageSettingsAlerts")}
+				</span>
+				<span className="block text-xs text-muted">
+					{t("usageSettingsAlertsDescription")}
+				</span>
+			</div>
+			<SettingRow
+				title={t("usageGlobalAlertThreshold")}
+				control={
+					<SettingSelect
+						value={String(current.globalAlertThresholdPct)}
+						onChange={(globalAlertThresholdPct) =>
+							update({
+								globalAlertThresholdPct: Number(
+									globalAlertThresholdPct,
+								),
+							})
+						}
+						ariaLabel={t("usageGlobalAlertThreshold")}
+						options={includeSelectedOption(
+							THRESHOLD_OPTIONS,
+							String(current.globalAlertThresholdPct),
+							`${current.globalAlertThresholdPct}%`,
+						)}
+					/>
+				}
+			/>
+			{USAGE_QUOTA_AGENTS.map((agent) => {
+				const config = agentSettings(current, agent);
+				const selectedThreshold =
+					config.alertThresholdPct === null
+						? GLOBAL_THRESHOLD_KEY
+						: String(config.alertThresholdPct);
+				const thresholdOptions = [
+					{
+						id: GLOBAL_THRESHOLD_KEY,
+						label: t("usageAlertUseGlobal", {
+							pct: current.globalAlertThresholdPct,
+						}),
+					},
+					...THRESHOLD_OPTIONS,
+				];
+				const displayName = agentName(agent);
+				return (
+					<div
+						key={agent}
+						className="flex items-center justify-between gap-4 border-t border-border pt-4"
+					>
+						<span className="flex items-center gap-2 text-sm font-medium text-(--foreground)">
+							<AgentIcon
+								id={agent}
+								name={displayName}
+								size="xs"
+							/>
+							{displayName}
+						</span>
+						<SettingSelect
+							value={selectedThreshold}
+							onChange={(key) =>
+								updateAgent(agent, {
+									alertThresholdPct:
+										key === GLOBAL_THRESHOLD_KEY
+											? null
+											: Number(key),
+								})
+							}
+							ariaLabel={t("usageAgentAlert")}
+							options={includeSelectedOption(
+								thresholdOptions,
+								selectedThreshold,
+								`${config.alertThresholdPct}%`,
+							)}
+						/>
+					</div>
+				);
+			})}
+		</section>
+	);
+}
+
+function AdvancedSection({ current, updateSettings }: UsageSectionProps) {
+	const { t } = useTranslation();
+	const update = (patch: Partial<UsageSettings>) => {
+		updateSettings((settings) => ({ ...settings, ...patch }));
 	};
-
-	const home = current.home;
-
-	// Which card layout the editor edits: the shared default or an agent's
-	// override. Interaction state, so it lives here rather than in the store.
-	const [layoutTarget, setLayoutTarget] = useState<string>("default");
-	const editedLayout =
-		layoutTarget === "default"
-			? home.default
-			: (home.perAgent[layoutTarget] ?? home.default);
-	const hasOverride =
-		layoutTarget !== "default" && layoutTarget in home.perAgent;
-
-	// Keep a previously-set custom zone selectable even if it isn't common.
 	const timezoneIds =
 		current.timezone && !COMMON_TIMEZONES.includes(current.timezone)
 			? [current.timezone, ...COMMON_TIMEZONES]
@@ -171,534 +624,178 @@ export default function UsagePanel() {
 		...timezoneIds.map((id) => ({ id, label: id })),
 	];
 
-	// The editor works in fixed slots ((id | null)[]); persist them onto the
-	// selected target. Store normalization validates the ids before writing.
-	const onLayoutCommit = (next: CardLayoutModel) => {
-		const layout = {
-			windowSlots: next.windowSlots as (HomeWindowId | null)[],
-			statSlots: next.statSlots as (HomeStatId | null)[],
-		};
-		if (layoutTarget === "default") {
-			updateSettings((settings) => ({
-				...settings,
-				home: { ...settings.home, default: layout },
-			}));
-		} else {
-			updateSettings((settings) => ({
-				...settings,
-				home: {
-					...settings.home,
-					perAgent: {
-						...settings.home.perAgent,
-						[layoutTarget]: layout,
-					},
-				},
-			}));
-		}
-	};
-
-	const resetOverride = () => {
-		updateSettings((settings) => {
-			const perAgent = { ...settings.home.perAgent };
-			delete perAgent[layoutTarget];
-			return {
-				...settings,
-				home: { ...settings.home, perAgent },
-			};
-		});
-	};
-
-	// A specific agent's editor only offers fields that agent reports;
-	// agent-exclusive fields stay in the shared default layout, marked with
-	// a hint, and the home card skips them where they don't apply.
-	const fieldAgent = (
-		id: HomeWindowId | HomeStatId,
-	): "claude" | "codex" | undefined => {
-		if (id === "weekly_opus") return "claude";
-		const stat = HOME_STAT_IDS.find((s) => s === id);
-		return stat ? HOME_STAT_AGENT_HINT[stat] : undefined;
-	};
-	const offeredTo = (id: HomeWindowId | HomeStatId) => {
-		const only = fieldAgent(id);
-		return layoutTarget === "default" || !only || only === layoutTarget;
-	};
-	const hintFor = (id: HomeWindowId | HomeStatId) => {
-		const only = fieldAgent(id);
-		return layoutTarget === "default" && only
-			? t(
-					only === "claude"
-						? "usageStatClaudeOnly"
-						: "usageStatCodexOnly",
-				)
-			: undefined;
-	};
-	const windowFields: LayoutField[] = HOME_WINDOW_IDS.filter(offeredTo).map(
-		(id) => ({
-			id,
-			label: t(HOME_WINDOW_LABEL_KEYS[id]),
-			hint: hintFor(id),
-		}),
-	);
-	const statFields: LayoutField[] = HOME_STAT_IDS.filter(offeredTo).map(
-		(id) => ({
-			id,
-			label: t(HOME_STAT_DEFINITIONS[id].labelKey),
-			hint: hintFor(id),
-		}),
-	);
-
-	const layoutDisabled = !home.showUsageOnHome;
-
-	// The replica is cosmetic only — it shows whose layout is being edited
-	// and renders fixed placeholders, never live data.
-	const previewAgentId =
-		layoutTarget === "default" ? USAGE_QUOTA_AGENTS[0] : layoutTarget;
-	const preview = {
-		agentId: previewAgentId,
-		agentName: AGENT_LABELS[previewAgentId] ?? previewAgentId,
-	};
-
-	const statusDescription =
-		status === undefined
-			? t("usageStatusChecking")
-			: status.reachable
-				? `${status.version ? shortCcusageVersion(status.version) : "—"}${
-						status.update_available && status.latest_version
-							? ` · ${t("usageStatusUpdate", {
-									version: shortCcusageVersion(
-										status.latest_version,
-									),
-								})}`
-							: ""
-					}`
-				: (status.error ?? t("usageStatusUnreachable"));
-
 	return (
-		<Surface className="divide-y divide-border rounded-3xl p-4 shadow-surface">
-			{/* ccusage sidecar — status, binary resolution, config file. */}
-			<section className="space-y-4 px-1 pb-5">
-				<div className="flex items-center justify-between gap-4">
-					<div className="space-y-0.5">
-						<span className="flex items-center gap-2 text-sm font-semibold text-(--foreground)">
-							<span
-								className={cn(
-									"size-2 rounded-full",
-									status === undefined
-										? "bg-muted"
-										: status.reachable
-											? "bg-success"
-											: "bg-danger",
-								)}
-							/>
-							ccusage
-							<Button
-								isIconOnly
-								isPending={isRechecking}
-								size="sm"
-								variant="ghost"
-								onPress={recheckStatus}
-								aria-label={t("usageStatusRecheck")}
-								className="size-6 text-muted"
-							>
-								{({ isPending }) => (
-									<ArrowPathIcon
-										className={cn(
-											"size-3.5",
-											isPending && "animate-spin",
-										)}
-									/>
-								)}
-							</Button>
-						</span>
-						<span
-							className={cn(
-								"block text-xs tabular-nums",
-								status && !status.reachable
-									? "text-danger"
-									: "text-muted",
-							)}
-						>
-							{statusDescription}
-						</span>
-					</div>
-					<div className="flex shrink-0 items-center gap-2">
-						{status && !status.reachable ? (
-							<Button
-								size="sm"
-								variant="secondary"
-								onPress={() => openUrl(CCUSAGE_NPM_URL)}
-							>
-								{t("usageStatusInstall")}
-							</Button>
-						) : (
-							status?.update_available && (
-								<Button
-									size="sm"
-									variant="secondary"
-									onPress={() => openUrl(CCUSAGE_NPM_URL)}
-								>
-									{t("usageStatusUpdateAction")}
-								</Button>
-							)
-						)}
-					</div>
-				</div>
-				<SettingRow
-					title={t("usageSidecarAutoDiscover")}
-					description={t("usageSidecarAutoDiscoverDescription")}
-					control={
-						<SettingSwitch
-							isSelected={current.sidecar.autoDiscover}
-							onChange={(checked) =>
-								update({
-									sidecar: {
-										...current.sidecar,
-										autoDiscover: checked,
-									},
-								})
-							}
-							ariaLabel={t("usageSidecarAutoDiscover")}
-						/>
-					}
-				/>
-				{/* Only worth showing when discovery resolved an actual
-					    path — a bare binary name carries no information. */}
-				{current.sidecar.autoDiscover &&
-					diag &&
-					/[/\\]/.test(diag.path) && (
-						<p
-							className="truncate font-mono text-[11px] text-muted"
-							title={diag.path}
-						>
-							{t("usageSidecarResolved", { path: diag.path })}
-						</p>
-					)}
-				{!current.sidecar.autoDiscover && (
-					<PathField
-						label={t("usageSidecarPath")}
-						value={current.sidecar.binPath}
-						onChange={(value) =>
-							update({
-								sidecar: {
-									...current.sidecar,
-									binPath: value,
-								},
-							})
-						}
-						placeholder={t("usageSidecarPathPlaceholder")}
-						hint={t("usageSidecarPathDescription")}
-					/>
-				)}
-				<PathField
-					label={t("usageConfigPath")}
-					value={current.ccusageConfigPath}
-					onChange={(value) => update({ ccusageConfigPath: value })}
-					placeholder={t("usageConfigPathPlaceholder")}
-					hint={t("usageConfigPathDescription")}
-					filters={[{ name: "JSON", extensions: ["json"] }]}
-				/>
-			</section>
-
-			{/* Home cards — what the usage block on the home agent cards shows,
-			    plus the per-card layout editor. */}
-			<section className="space-y-4 px-1 py-5">
-				<div className="space-y-0.5">
-					<span className="text-sm font-semibold text-(--foreground)">
-						{t("usageSettingsHomeCards")}
-					</span>
-					<span className="block text-xs text-muted">
-						{t("usageHomeShowDescription")}
-					</span>
-				</div>
-				<SettingRow
-					title={t("usageHomeShow")}
-					control={
-						<SettingSwitch
-							isSelected={home.showUsageOnHome}
-							onChange={(checked) =>
-								updateHome({ showUsageOnHome: checked })
-							}
-							ariaLabel={t("usageHomeShow")}
-						/>
-					}
-				/>
-				<SettingRow
-					title={t("usageHomeWindow")}
-					description={t("usageHomeWindowDescription")}
-					control={
-						<SettingNumber
-							value={home.windowDays}
-							onChange={(d) => updateHome({ windowDays: d })}
-							isDisabled={!home.showUsageOnHome}
-							ariaLabel={t("usageHomeWindow")}
-							minValue={1}
-							formatOptions={{
-								style: "unit",
-								unit: "day",
-								unitDisplay: "narrow",
-							}}
-						/>
-					}
-				/>
-
-				{/* Card layout — target picker above the live card replica and
-					    its adjacent drawer of hidden fields. */}
-				<div className="w-full space-y-3 border-t border-border pt-4">
-					<div className="flex items-center justify-between gap-3">
-						<div className="space-y-0.5">
-							<span className="text-sm font-medium text-(--foreground)">
-								{t("usageHomeLayout")}
-							</span>
-							<span className="block text-xs text-muted">
-								{t("usageHomeLayoutDescription")}
-							</span>
-						</div>
-						<div className="flex shrink-0 items-center gap-3">
-							{hasOverride && (
-								<Button
-									size="sm"
-									variant="ghost"
-									onPress={resetOverride}
-									className="h-7 px-2 text-xs text-muted"
-								>
-									{t("usageLayoutResetOverride")}
-								</Button>
-							)}
-							<SettingSelect
-								value={layoutTarget}
-								onChange={setLayoutTarget}
-								ariaLabel={t("usageLayoutTarget")}
-								options={[
-									{
-										id: "default",
-										label: t("usageLayoutTargetDefault"),
-									},
-									...USAGE_QUOTA_AGENTS.map((id) => ({
-										id,
-										label: AGENT_LABELS[id] ?? id,
-									})),
-								]}
-							/>
-						</div>
-					</div>
-
-					<InteractiveCardLayout
-						windowFields={windowFields}
-						statFields={statFields}
-						windowSlots={editedLayout.windowSlots}
-						statSlots={editedLayout.statSlots}
-						isDisabled={layoutDisabled}
-						onCommit={onLayoutCommit}
-						preview={preview}
-					/>
-				</div>
-			</section>
-
-			{/* Alerts — the global threshold plus per-agent overrides for the
-			    quota agents (the only ones with rate-limit windows). */}
-			<section className="space-y-4 px-1 py-5">
-				<div className="space-y-0.5">
-					<span className="text-sm font-semibold text-(--foreground)">
-						{t("usageSettingsAlerts")}
-					</span>
-					<span className="block text-xs text-muted">
-						{t("usageSettingsAlertsDescription")}
-					</span>
-				</div>
-				<SettingRow
-					title={t("usageGlobalAlertThreshold")}
-					control={
-						// The store keeps 0–100; percent formatting wants 0–1.
-						<SettingNumber
-							value={current.globalAlertThresholdPct / 100}
-							onChange={(pct) =>
-								update({
-									globalAlertThresholdPct: Math.round(
-										pct * 100,
-									),
-								})
-							}
-							ariaLabel={t("usageGlobalAlertThreshold")}
-							minValue={0}
-							maxValue={1}
-							step={0.05}
-							formatOptions={{ style: "percent" }}
-						/>
-					}
-				/>
-
-				{/* One threshold row per quota agent. Agent enablement is
-					    managed centrally in Settings → Agents. */}
-				{USAGE_QUOTA_AGENTS.map((agent) => {
-					const config = agentSettings(current, agent);
-					return (
-						<div
-							key={agent}
-							className="flex items-center justify-between gap-4 border-t border-border pt-4"
-						>
-							<span className="flex items-center gap-2 text-sm font-medium text-(--foreground)">
-								<AgentIcon
-									id={agent}
-									name={agentName(agent)}
-									size="xs"
-								/>
-								{agentName(agent)}
-							</span>
-							<SettingSelect
-								value={
-									config.alertThresholdPct === null
-										? GLOBAL_THRESHOLD_KEY
-										: String(config.alertThresholdPct)
-								}
-								onChange={(key) =>
-									updateAgent(agent, {
-										alertThresholdPct:
-											key === GLOBAL_THRESHOLD_KEY
-												? null
-												: Number(key),
-									})
-								}
-								ariaLabel={t("usageAgentAlert")}
-								options={[
-									{
-										id: GLOBAL_THRESHOLD_KEY,
-										label: t("usageAlertUseGlobal", {
-											pct: current.globalAlertThresholdPct,
-										}),
-									},
-									...THRESHOLD_OPTIONS,
-								]}
-							/>
-						</div>
-					);
-				})}
-			</section>
-
-			{/* Advanced — low-frequency collection knobs, collapsed by default. */}
-			<section className="px-1 py-3">
-				<Disclosure>
-					<Disclosure.Heading>
-						<Button
-							slot="trigger"
-							variant="ghost"
-							className="w-full justify-between px-2 text-sm font-semibold"
-						>
-							{t("usageSettingsAdvanced")}
-							<Disclosure.Indicator />
-						</Button>
-					</Disclosure.Heading>
-					<Disclosure.Content>
-						<Disclosure.Body className="space-y-4 p-2 pt-3">
-							<SettingRow
-								title={t("usagePollInterval")}
-								description={t("usagePollIntervalDescription")}
-								control={
-									<SettingNumber
-										value={Math.round(
-											current.pollIntervalMs / 1000,
-										)}
-										onChange={(s) =>
-											update({
-												pollIntervalMs: s * 1000,
-											})
-										}
-										ariaLabel={t("usagePollInterval")}
-										minValue={0}
-										formatOptions={{
-											style: "unit",
-											unit: "second",
-											unitDisplay: "narrow",
-										}}
-									/>
-								}
-							/>
-							<SettingRow
-								title={t("usageTimezone")}
-								description={t("usageTimezoneDescription")}
-								control={
-									<SettingSelect
-										value={current.timezone}
-										onChange={(key) =>
-											update({ timezone: key })
-										}
-										ariaLabel={t("usageTimezone")}
-										options={timezoneOptions}
-									/>
-								}
-							/>
-							<SettingRow
-								title={t("usageOfflinePricing")}
-								description={t(
-									"usageOfflinePricingDescription",
-								)}
-								control={
-									<SettingSwitch
-										isSelected={current.offlinePricing}
-										onChange={(checked) =>
-											update({
-												offlinePricing: checked,
-											})
-										}
-										ariaLabel={t("usageOfflinePricing")}
-									/>
-								}
-							/>
-							<SettingRow
-								title={t("usageRequestTimeout")}
-								description={t(
-									"usageRequestTimeoutDescription",
-								)}
-								control={
-									<SettingNumber
-										value={current.requestTimeoutSecs}
-										onChange={(s) =>
-											update({
-												requestTimeoutSecs: s,
-											})
-										}
-										ariaLabel={t("usageRequestTimeout")}
-										minValue={1}
-										formatOptions={{
-											style: "unit",
-											unit: "second",
-											unitDisplay: "narrow",
-										}}
-									/>
-								}
-							/>
-							<div className="flex flex-col gap-1">
-								<span className="text-sm font-medium text-(--foreground)">
-									{t("usageExtraArgs")}
-								</span>
-								<TextField
-									variant="secondary"
-									value={current.extraArgs}
-									onChange={(value) =>
-										update({ extraArgs: value })
+		<section className="px-1 py-3">
+			<Disclosure>
+				<Disclosure.Heading>
+					<Button
+						slot="trigger"
+						variant="ghost"
+						className="w-full justify-between px-2 text-sm font-semibold"
+					>
+						{t("usageSettingsAdvanced")}
+						<Disclosure.Indicator />
+					</Button>
+				</Disclosure.Heading>
+				<Disclosure.Content>
+					<Disclosure.Body className="space-y-4 p-2 pt-3">
+						<SettingRow
+							title={t("usagePollInterval")}
+							description={t("usagePollIntervalDescription")}
+							control={
+								<SettingNumber
+									value={Math.round(
+										current.pollIntervalMs / 1000,
+									)}
+									onChange={(seconds) =>
+										update({
+											pollIntervalMs: seconds * 1000,
+										})
 									}
-									aria-label={t("usageExtraArgs")}
-								>
-									<Input
-										variant="secondary"
-										placeholder="--jsonl --breakdown"
-										className="font-mono text-xs"
-									/>
-								</TextField>
-								<span className="text-xs text-muted">
-									{t("usageExtraArgsDescription")}
-								</span>
-							</div>
-						</Disclosure.Body>
-					</Disclosure.Content>
-				</Disclosure>
-			</section>
-		</Surface>
+									ariaLabel={t("usagePollInterval")}
+									minValue={0}
+									formatOptions={{
+										style: "unit",
+										unit: "second",
+										unitDisplay: "narrow",
+									}}
+								/>
+							}
+						/>
+						<SettingRow
+							title={t("usageTimezone")}
+							description={t("usageTimezoneDescription")}
+							control={
+								<SettingSelect
+									value={current.timezone}
+									onChange={(timezone) =>
+										update({ timezone })
+									}
+									ariaLabel={t("usageTimezone")}
+									options={timezoneOptions}
+								/>
+							}
+						/>
+						<SettingRow
+							title={t("usageOfflinePricing")}
+							description={t("usageOfflinePricingDescription")}
+							control={
+								<SettingSwitch
+									isSelected={current.offlinePricing}
+									onChange={(offlinePricing) =>
+										update({ offlinePricing })
+									}
+									ariaLabel={t("usageOfflinePricing")}
+								/>
+							}
+						/>
+						<SettingRow
+							title={t("usageRequestTimeout")}
+							description={t("usageRequestTimeoutDescription")}
+							control={
+								<SettingNumber
+									value={current.requestTimeoutSecs}
+									onChange={(requestTimeoutSecs) =>
+										update({ requestTimeoutSecs })
+									}
+									ariaLabel={t("usageRequestTimeout")}
+									minValue={1}
+									formatOptions={{
+										style: "unit",
+										unit: "second",
+										unitDisplay: "narrow",
+									}}
+								/>
+							}
+						/>
+						<div className="flex flex-col gap-1">
+							<span className="text-sm font-medium text-(--foreground)">
+								{t("usageExtraArgs")}
+							</span>
+							<TextField
+								variant="secondary"
+								value={current.extraArgs}
+								onChange={(extraArgs) => update({ extraArgs })}
+								aria-label={t("usageExtraArgs")}
+							>
+								<Input
+									variant="secondary"
+									placeholder="--jsonl --breakdown"
+									className="font-mono text-xs"
+								/>
+							</TextField>
+							<span className="text-xs text-muted">
+								{t("usageExtraArgsDescription")}
+							</span>
+						</div>
+					</Disclosure.Body>
+				</Disclosure.Content>
+			</Disclosure>
+		</section>
 	);
+}
+
+function UsageDefaultsDialog({
+	isOpen,
+	onOpenChange,
+	onRestore,
+}: {
+	isOpen: boolean;
+	onOpenChange: (isOpen: boolean) => void;
+	onRestore: () => void;
+}) {
+	const { t } = useTranslation();
+	return (
+		<AlertDialog.Backdrop isOpen={isOpen} onOpenChange={onOpenChange}>
+			<AlertDialog.Container>
+				<AlertDialog.Dialog className="sm:max-w-[420px]">
+					<AlertDialog.CloseTrigger />
+					<AlertDialog.Header>
+						<AlertDialog.Heading>
+							{t("usageRestoreDefaults")}
+						</AlertDialog.Heading>
+					</AlertDialog.Header>
+					<AlertDialog.Body>
+						{t("usageRestoreDefaultsConfirm")}
+					</AlertDialog.Body>
+					<AlertDialog.Footer>
+						<Button
+							variant="tertiary"
+							onPress={() => onOpenChange(false)}
+						>
+							{t("cancel")}
+						</Button>
+						<Button variant="danger" onPress={onRestore}>
+							{t("usageRestoreDefaultsAction")}
+						</Button>
+					</AlertDialog.Footer>
+				</AlertDialog.Dialog>
+			</AlertDialog.Container>
+		</AlertDialog.Backdrop>
+	);
+}
+
+function layoutFieldAgent(
+	id: HomeWindowId | HomeStatId,
+): "claude" | "codex" | undefined {
+	if (id === "weekly_opus") return "claude";
+	const stat = HOME_STAT_IDS.find((candidate) => candidate === id);
+	return stat ? HOME_STAT_AGENT_HINT[stat] : undefined;
 }
 
 interface SelectOption {
 	id: string;
 	label: string;
+}
+
+function includeSelectedOption(
+	options: SelectOption[],
+	id: string,
+	label: string,
+): SelectOption[] {
+	return options.some((option) => option.id === id)
+		? options
+		: [{ id, label }, ...options];
 }
 
 /** Label + optional description on the left, a control on the right. */
@@ -746,9 +843,11 @@ function SettingSwitch({
 			isDisabled={isDisabled}
 			aria-label={ariaLabel}
 		>
-			<Switch.Control>
-				<Switch.Thumb />
-			</Switch.Control>
+			<Switch.Content aria-label={ariaLabel}>
+				<Switch.Control>
+					<Switch.Thumb />
+				</Switch.Control>
+			</Switch.Content>
 		</Switch>
 	);
 }

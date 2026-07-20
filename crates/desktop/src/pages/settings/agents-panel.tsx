@@ -98,26 +98,14 @@ export default function AgentsPanel() {
 					disallowEmptySelection
 					size="sm"
 				>
-					<ToggleButton
-						id="all"
-						variant="ghost"
-						className={"bg-surface"}
-					>
+					<ToggleButton id="all" variant="ghost">
 						{t("all")}
 					</ToggleButton>
-					<ToggleButton
-						id="enabled"
-						variant="ghost"
-						className={"bg-surface"}
-					>
+					<ToggleButton id="enabled" variant="ghost">
 						<ToggleButtonGroup.Separator />
 						{t("enabled")}
 					</ToggleButton>
-					<ToggleButton
-						id="disabled"
-						variant="ghost"
-						className={"bg-surface"}
-					>
+					<ToggleButton id="disabled" variant="ghost">
 						<ToggleButtonGroup.Separator />
 						{t("disabled")}
 					</ToggleButton>
@@ -125,7 +113,7 @@ export default function AgentsPanel() {
 			</div>
 
 			{/* Agents Card */}
-			<Card className="bg-surface" variant="transparent">
+			<Card>
 				<Card.Content>
 					{filteredAgents.length === 0 ? (
 						<div

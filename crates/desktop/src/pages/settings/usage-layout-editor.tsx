@@ -1,12 +1,13 @@
 import {
 	closestCenter,
+	type Collision,
 	type CollisionDetection,
 	DndContext,
 	DragOverlay,
 	type DragEndEvent,
-	type DraggableAttributes,
-	type DraggableSyntheticListeners,
+	type DragOverEvent,
 	type DragStartEvent,
+	type KeyboardCoordinateGetter,
 	KeyboardSensor,
 	PointerSensor,
 	pointerWithin,
@@ -16,39 +17,40 @@ import {
 	useSensor,
 	useSensors,
 } from "@dnd-kit/core";
-import { Bars2Icon, EyeSlashIcon, PlusIcon } from "@heroicons/react/24/solid";
-import { Button, Meter } from "@heroui/react";
-import { useRef, useState } from "react";
+import { Meter } from "@heroui/react";
+import { type ReactNode, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentIcon } from "../../lib/agent-icons";
 import { cn } from "../../lib/utils";
+import {
+	type CardLayoutModel,
+	compactLayout,
+	type LayoutSlotType,
+	layoutsEqual,
+	projectLayout,
+	shownIds,
+} from "./usage-layout-model";
 
-/** A usage field (a rate-limit bar or a bottom stat). */
+export type { CardLayoutModel } from "./usage-layout-model";
+
 export interface LayoutField {
 	id: string;
 	label: string;
 	hint?: string;
 }
 
-/** Fixed-length slot arrays the editor edits; `null` = an unused slot. Shown
- *  fields stay compacted to the front, so the count of non-null entries is how
- *  many appear on the card and the array length is the cap. */
-export interface CardLayoutModel {
-	windowSlots: (string | null)[];
-	statSlots: (string | null)[];
-}
-
-/** Whose card the replica represents — purely cosmetic; the preview never
- *  loads data, every bar and stat renders a fixed placeholder. */
 export interface LayoutPreview {
 	agentId: string;
 	agentName: string;
 }
 
-type SlotType = "window" | "stat";
+interface DragSession {
+	activeId: string;
+	type: LayoutSlotType;
+	origin: CardLayoutModel;
+	overId: string | null;
+}
 
-/** Fixed placeholder fills so a shown bar reads as a bar without implying
- *  real data. */
 const PREVIEW_BAR_PCT = [62, 38, 84];
 
 export function InteractiveCardLayout({
@@ -69,151 +71,129 @@ export function InteractiveCardLayout({
 	preview: LayoutPreview;
 }) {
 	const { t } = useTranslation();
-	const [activeId, setActiveId] = useState<string | null>(null);
-	const layoutRef = useRef({ windowSlots, statSlots });
-	layoutRef.current = { windowSlots, statSlots };
-
-	const fieldById = new Map<string, LayoutField>(
-		[...windowFields, ...statFields].map((f) => [f.id, f]),
+	const [session, setSession] = useState<DragSession | null>(null);
+	const sessionRef = useRef<DragSession | null>(null);
+	const fieldNodesRef = useRef(new Map<string, HTMLElement>());
+	const keyboardTargetRef = useRef<string | null>(null);
+	const fieldById = new Map(
+		[...windowFields, ...statFields].map((field) => [field.id, field]),
 	);
-	const windowIdSet = new Set(windowFields.map((f) => f.id));
-	const typeOf = (id: string): SlotType =>
-		windowIdSet.has(id) ? "window" : "stat";
-	const slotsOf = (type: SlotType) =>
-		type === "window"
-			? layoutRef.current.windowSlots
-			: layoutRef.current.statSlots;
+	const windowIds = new Set(windowFields.map((field) => field.id));
+	const statIds = new Set(statFields.map((field) => field.id));
+	const incomingLayout = compactLayout(
+		{ windowSlots, statSlots },
+		windowIds,
+		statIds,
+	);
+	const displayLayout = session
+		? projectLayout(
+				session.origin,
+				session.activeId,
+				session.type,
+				session.overId,
+			)
+		: incomingLayout;
 
-	// Shown fields in order. Slots may reference fields not offered to the
-	// current target (e.g. a Claude-only bar inside the shared default
-	// layout while editing Codex) — those render nowhere and drop out on
-	// the next commit.
-	const shownOf = (type: SlotType): string[] =>
-		slotsOf(type).filter((x): x is string => x != null && fieldById.has(x));
-
-	// Hidden fields: every field of a type not currently shown.
-	const hiddenOf = (type: SlotType): LayoutField[] => {
-		const shown = new Set(shownOf(type));
-		return (type === "window" ? windowFields : statFields).filter(
-			(f) => !shown.has(f.id),
-		);
+	const registerFieldNode = (id: string, node: HTMLElement | null) => {
+		if (node) fieldNodesRef.current.set(id, node);
+		else fieldNodesRef.current.delete(id);
 	};
-
-	// Shown fields stay compacted to the top. Commit takes an ordered list of
-	// shown ids and lays it back over the fixed slot count, so the card never
-	// shows a gap and never exceeds the cap.
-	const commit = (type: SlotType, shown: string[]) => {
-		const slots = slotsOf(type).map((_, i) => shown[i] ?? null);
-		const next =
-			type === "window"
-				? { windowSlots: slots, statSlots: layoutRef.current.statSlots }
-				: {
-						windowSlots: layoutRef.current.windowSlots,
-						statSlots: slots,
-					};
-		layoutRef.current = next;
-		onCommit(next);
+	const restoreFocus = (id: string) => {
+		requestAnimationFrame(() => fieldNodesRef.current.get(id)?.focus());
 	};
-
-	// A hidden field dropped onto a full card replaces that exact slot. Shown
-	// fields still reorder, and a card with room inserts at the drop position.
-	const placeAt = (id: string, type: SlotType, index: number) => {
-		const shown = shownOf(type);
-		if (!shown.includes(id) && shown.length >= slotsOf(type).length) {
-			const next = [...shown];
-			next[index] = id;
-			commit(type, next);
-			return;
-		}
-
-		const rest = shown.filter((x) => x !== id);
-		const at = Math.min(index, rest.length);
-		commit(type, [...rest.slice(0, at), id, ...rest.slice(at)]);
-	};
-
-	const hide = (id: string, type: SlotType) =>
-		commit(
-			type,
-			shownOf(type).filter((x) => x !== id),
-		);
-
-	const show = (id: string, type: SlotType) =>
-		commit(type, [...shownOf(type), id]);
-
-	// Discrete, non-overlapping slots: resolve to whatever is under the pointer.
-	const collisionDetection: CollisionDetection = (args) => {
-		const p = pointerWithin(args);
-		if (p.length > 0) return p;
-		const r = rectIntersection(args);
-		return r.length > 0 ? r : closestCenter(args);
-	};
+	const keyboardCoordinates: KeyboardCoordinateGetter = (event, args) =>
+		layoutKeyboardCoordinates(event, args, (id) => {
+			keyboardTargetRef.current = id;
+		});
+	const detectCollision: CollisionDetection = (args) =>
+		layoutCollisionDetection(args, keyboardTargetRef.current);
 
 	const sensors = useSensors(
 		useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-		useSensor(KeyboardSensor),
+		useSensor(KeyboardSensor, {
+			coordinateGetter: keyboardCoordinates,
+		}),
 	);
 
-	const clearActive = () => setActiveId(null);
-	const onDragStart = (e: DragStartEvent) => {
+	const startDrag = (event: DragStartEvent) => {
 		if (isDisabled) return;
-		setActiveId(String(e.active.id));
+		keyboardTargetRef.current = null;
+		const type = dataSlotType(event.active.data.current?.type);
+		if (!type) return;
+		const next = {
+			activeId: String(event.active.id),
+			type,
+			origin: incomingLayout,
+			overId: null,
+		};
+		sessionRef.current = next;
+		setSession(next);
 	};
-	const onDragEnd = (e: DragEndEvent) => {
-		clearActive();
-		const { active, over } = e;
-		if (!over) return;
-		const id = String(active.id);
-		const type = typeOf(id);
-		// Dropping onto the drawer hides the field; onto a slot reorders/shows.
-		if (String(over.id) === "hidden-drawer") {
-			if (shownOf(type).includes(id)) hide(id, type);
-			return;
-		}
-		const m = /^slot:(window|stat):(\d+)$/.exec(String(over.id));
-		if (m && m[1] === type) placeAt(id, type, Number(m[2]));
+	const updateDrag = (event: DragOverEvent) => {
+		const current = sessionRef.current;
+		if (!current) return;
+		const next = {
+			...current,
+			overId: event.over ? String(event.over.id) : null,
+		};
+		sessionRef.current = next;
+		setSession(next);
+	};
+	const cancelDrag = () => {
+		const current = sessionRef.current;
+		if (!current) return;
+		const { activeId } = current;
+		sessionRef.current = null;
+		keyboardTargetRef.current = null;
+		setSession(null);
+		restoreFocus(activeId);
+	};
+	const endDrag = (event: DragEndEvent) => {
+		const current = sessionRef.current;
+		if (!current) return;
+		const overId = event.over ? String(event.over.id) : current.overId;
+		const next = projectLayout(
+			current.origin,
+			current.activeId,
+			current.type,
+			overId,
+		);
+		const { activeId, origin } = current;
+		sessionRef.current = null;
+		keyboardTargetRef.current = null;
+		setSession(null);
+		if (!layoutsEqual(origin, next)) onCommit(next);
+		restoreFocus(activeId);
 	};
 
-	const activeField = activeId ? fieldById.get(activeId) : undefined;
-	const activeType = activeId ? typeOf(activeId) : null;
-
-	const shownWindows = shownOf("window");
-	const shownStats = shownOf("stat");
-	const activeIsShown =
-		activeId != null &&
-		activeType != null &&
-		shownOf(activeType).includes(activeId);
-	const replacementType =
-		activeType != null &&
-		!activeIsShown &&
-		shownOf(activeType).length >= slotsOf(activeType).length
-			? activeType
-			: null;
-	// The ghost mirrors its source: a bar dragged off the card keeps that
-	// slot's placeholder fill, one from the drawer keeps its empty track.
+	const shownWindows = shownIds(displayLayout, "window");
+	const shownStats = shownIds(displayLayout, "stat");
+	const hiddenWindows = hiddenFields(windowFields, shownWindows);
+	const hiddenStats = hiddenFields(statFields, shownStats);
+	const activeField = session ? fieldById.get(session.activeId) : undefined;
+	const activeStartedOnCard = session
+		? shownIds(session.origin, session.type).includes(session.activeId)
+		: false;
 	const activeBarIndex =
-		activeType === "window" && activeId
-			? shownWindows.indexOf(activeId)
+		session?.type === "window"
+			? shownIds(session.origin, "window").indexOf(session.activeId)
 			: -1;
-	const activeBarPct =
-		activeBarIndex >= 0
-			? PREVIEW_BAR_PCT[activeBarIndex % PREVIEW_BAR_PCT.length]
-			: 0;
+
 	return (
 		<DndContext
 			sensors={sensors}
-			collisionDetection={collisionDetection}
-			onDragStart={onDragStart}
-			onDragEnd={onDragEnd}
-			onDragCancel={clearActive}
+			collisionDetection={detectCollision}
+			onDragStart={startDrag}
+			onDragOver={updateDrag}
+			onDragEnd={endDrag}
+			onDragCancel={cancelDrag}
 		>
-			{/* The card replica sits beside a flat drawer of hidden fields.
-			    Drag across or use the explicit eye / plus actions. */}
 			<div
 				aria-disabled={isDisabled || undefined}
 				inert={isDisabled || undefined}
 				className={cn(
 					"grid w-full grid-cols-1 gap-5 lg:grid-cols-[20rem_minmax(0,1fr)] lg:items-start",
-					"transition-opacity duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+					"transition-opacity duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
 					isDisabled && "opacity-55",
 				)}
 			>
@@ -231,105 +211,118 @@ export function InteractiveCardLayout({
 							{preview.agentName}
 						</span>
 					</div>
-					<div className="flex flex-col gap-1.5">
+
+					<CardSection
+						type="window"
+						isDisabled={isDisabled}
+						className="flex min-h-7 flex-col gap-1.5 rounded-md"
+						data-testid="layout-window-section"
+					>
 						{shownWindows.map((id, index) => {
 							const field = fieldById.get(id);
 							if (!field) return null;
 							return (
-								<PreviewBarRow
-									key={id}
-									field={field}
+								<CardDropSlot
+									key={layoutSlotId("window", index)}
+									type="window"
 									index={index}
-									pct={
-										PREVIEW_BAR_PCT[
-											index % PREVIEW_BAR_PCT.length
-										]
-									}
-									accepts={activeType === "window"}
-									replaces={replacementType === "window"}
 									isDisabled={isDisabled}
-									onHide={() => hide(id, "window")}
-								/>
+								>
+									<DraggableFieldRow
+										field={field}
+										type="window"
+										isDisabled={isDisabled}
+										isActive={
+											session?.activeId === field.id
+										}
+										onNodeChange={registerFieldNode}
+										data-testid={`layout-card-item-${field.id}`}
+										className="-mx-1 flex items-center rounded-md px-1 py-0.5"
+									>
+										<BarBody
+											label={field.label}
+											pct={
+												PREVIEW_BAR_PCT[
+													index %
+														PREVIEW_BAR_PCT.length
+												]
+											}
+										/>
+									</DraggableFieldRow>
+								</CardDropSlot>
 							);
 						})}
-						{/* An append slot appears while dragging a bar and
-						    the card still has room — dropping adds, nothing
-						    is swapped out. */}
-						{activeType === "window" &&
-							shownWindows.length < windowSlots.length && (
-								<EmptySlot
-									type="window"
-									index={shownWindows.length}
-									variant="bar"
-								/>
-							)}
-					</div>
-					{(shownStats.length > 0 ||
-						(activeType === "stat" &&
-							shownStats.length < statSlots.length)) && (
-						<div
-							className={cn(
-								"grid grid-cols-2 gap-x-3 gap-y-1",
-								shownWindows.length > 0 &&
-									"mt-2 border-t border-border pt-2",
-							)}
-						>
-							{shownStats.map((id, index) => {
-								const field = fieldById.get(id);
-								if (!field) return null;
-								return (
-									<PreviewStatCell
-										key={id}
-										field={field}
-										index={index}
-										accepts={activeType === "stat"}
-										replaces={replacementType === "stat"}
-										isDisabled={isDisabled}
-										onHide={() => hide(id, "stat")}
-									/>
-								);
-							})}
-							{activeType === "stat" &&
-								shownStats.length < statSlots.length && (
-									<EmptySlot
-										type="stat"
-										index={shownStats.length}
-										variant="stat"
-									/>
-								)}
-						</div>
-					)}
-					{shownWindows.length === 0 &&
-						shownStats.length === 0 &&
-						activeType == null && (
-							<p className="py-3 text-center text-[11px] text-muted">
-								{t("usageLayoutEmptyCard")}
-							</p>
+					</CardSection>
+
+					<CardSection
+						type="stat"
+						isDisabled={isDisabled}
+						className={cn(
+							"grid min-h-5 grid-cols-2 gap-x-3 gap-y-1 rounded",
+							shownWindows.length > 0 && "mt-2",
 						)}
+						data-testid="layout-stat-section"
+					>
+						{shownStats.map((id, index) => {
+							const field = fieldById.get(id);
+							if (!field) return null;
+							return (
+								<CardDropSlot
+									key={layoutSlotId("stat", index)}
+									type="stat"
+									index={index}
+									isDisabled={isDisabled}
+								>
+									<DraggableFieldRow
+										field={field}
+										type="stat"
+										isDisabled={isDisabled}
+										isActive={
+											session?.activeId === field.id
+										}
+										onNodeChange={registerFieldNode}
+										data-testid={`layout-card-item-${field.id}`}
+										data-layout-type="stat"
+										className="-mx-1 flex min-w-0 items-center rounded px-1 py-0.5 text-[11px]"
+									>
+										<span className="truncate text-muted">
+											{field.label}
+										</span>
+									</DraggableFieldRow>
+								</CardDropSlot>
+							);
+						})}
+					</CardSection>
+
+					{shownWindows.length === 0 && shownStats.length === 0 && (
+						<p className="py-3 text-center text-[11px] text-muted">
+							{t("usageLayoutEmptyCard")}
+						</p>
+					)}
 				</div>
 
 				<HiddenDrawer
-					active={activeIsShown}
+					active={activeStartedOnCard}
 					isDisabled={isDisabled}
-					windows={{
-						fields: hiddenOf("window"),
-						atCap: shownWindows.length >= windowSlots.length,
-						onShow: (id) => show(id, "window"),
-					}}
-					stats={{
-						fields: hiddenOf("stat"),
-						atCap: shownStats.length >= statSlots.length,
-						onShow: (id) => show(id, "stat"),
-					}}
+					windows={hiddenWindows}
+					stats={hiddenStats}
+					activeId={session?.activeId ?? null}
+					onNodeChange={registerFieldNode}
 				/>
 			</div>
 
 			<DragOverlay adjustScale={false} dropAnimation={null}>
-				{activeField && activeType ? (
+				{activeField && session ? (
 					<DragGhost
 						field={activeField}
-						type={activeType}
-						barPct={activeBarPct}
+						type={session.type}
+						barPct={
+							activeBarIndex >= 0
+								? PREVIEW_BAR_PCT[
+										activeBarIndex % PREVIEW_BAR_PCT.length
+									]
+								: 0
+						}
 					/>
 				) : null}
 			</DragOverlay>
@@ -337,16 +330,197 @@ export function InteractiveCardLayout({
 	);
 }
 
-/** The floating drag preview uses the card's slot width, so crossing between
- *  the narrow card and the wider drawer does not resize the pointer target. */
+function CardSection({
+	type,
+	isDisabled,
+	className,
+	children,
+	...props
+}: {
+	type: LayoutSlotType;
+	isDisabled?: boolean;
+	className?: string;
+	children: ReactNode;
+} & React.HTMLAttributes<HTMLDivElement>) {
+	const { setNodeRef, isOver } = useDroppable({
+		id: `section:${type}`,
+		disabled: isDisabled,
+		data: { kind: "section", type },
+	});
+	return (
+		<div
+			{...props}
+			ref={setNodeRef}
+			className={cn(
+				className,
+				isOver && "bg-accent/5",
+				"transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
+			)}
+		>
+			{children}
+		</div>
+	);
+}
+
+function CardDropSlot({
+	type,
+	index,
+	isDisabled,
+	children,
+}: {
+	type: LayoutSlotType;
+	index: number;
+	isDisabled?: boolean;
+	children: ReactNode;
+}) {
+	const { setNodeRef } = useDroppable({
+		id: `slot:${type}:${index}`,
+		disabled: isDisabled,
+		data: { kind: "slot", type, index },
+	});
+	return <div ref={setNodeRef}>{children}</div>;
+}
+
+function DraggableFieldRow({
+	field,
+	type,
+	isDisabled,
+	isActive,
+	onNodeChange,
+	className,
+	children,
+	...props
+}: {
+	field: LayoutField;
+	type: LayoutSlotType;
+	isDisabled?: boolean;
+	isActive: boolean;
+	onNodeChange: (id: string, node: HTMLElement | null) => void;
+	className?: string;
+	children: ReactNode;
+} & Omit<React.HTMLAttributes<HTMLDivElement>, "title">) {
+	const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+		id: field.id,
+		disabled: isDisabled,
+		data: { kind: "field", type },
+	});
+	const setRowRef = (node: HTMLDivElement | null) => {
+		setNodeRef(node);
+		onNodeChange(field.id, node);
+	};
+	return (
+		<div
+			{...props}
+			{...attributes}
+			{...listeners}
+			ref={setRowRef}
+			title={field.hint}
+			aria-label={field.label}
+			className={cn(
+				"min-w-0 touch-none select-none outline-none",
+				"transition-[background-color,box-shadow,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
+				isDisabled
+					? "opacity-40"
+					: "cursor-grab hover:bg-surface-secondary active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface",
+				isDragging && isActive && "opacity-45",
+				className,
+			)}
+		>
+			{children}
+		</div>
+	);
+}
+
+function HiddenDrawer({
+	active,
+	isDisabled,
+	windows,
+	stats,
+	activeId,
+	onNodeChange,
+}: {
+	active: boolean;
+	isDisabled?: boolean;
+	windows: LayoutField[];
+	stats: LayoutField[];
+	activeId: string | null;
+	onNodeChange: (id: string, node: HTMLElement | null) => void;
+}) {
+	const { t } = useTranslation();
+	const { setNodeRef, isOver } = useDroppable({
+		id: "hidden-drawer",
+		disabled: isDisabled,
+		data: { kind: "drawer" },
+	});
+	const empty = windows.length === 0 && stats.length === 0;
+	return (
+		<div
+			ref={setNodeRef}
+			data-testid="layout-hidden-drawer"
+			className={cn(
+				"flex min-w-0 flex-col gap-1.5 rounded-lg border-t border-border pt-4 outline -outline-offset-1 outline-transparent",
+				"transition-[background-color,outline-color] duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
+				"lg:rounded-lg lg:border-t-0 lg:border-l lg:pt-0 lg:pl-5",
+				active && isOver && "bg-accent/5 outline-accent",
+			)}
+		>
+			<span className="pb-0.5 text-[11px] font-medium text-muted">
+				{t("usageLayoutHiddenDrawer")}
+			</span>
+			{empty ? (
+				<p className="py-3 text-center text-[11px] text-foreground/40">
+					{t("usageLayoutDrawerEmpty")}
+				</p>
+			) : (
+				<>
+					{windows.map((field) => (
+						<DraggableFieldRow
+							key={field.id}
+							field={field}
+							type="window"
+							isDisabled={isDisabled}
+							isActive={activeId === field.id}
+							onNodeChange={onNodeChange}
+							data-testid={`layout-hidden-item-${field.id}`}
+							className="-mx-1 flex items-center rounded-md px-1 py-0.5"
+						>
+							<BarBody label={field.label} pct={0} />
+						</DraggableFieldRow>
+					))}
+					{stats.length > 0 && (
+						<div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-x-3 gap-y-1">
+							{stats.map((field) => (
+								<DraggableFieldRow
+									key={field.id}
+									field={field}
+									type="stat"
+									isDisabled={isDisabled}
+									isActive={activeId === field.id}
+									onNodeChange={onNodeChange}
+									data-testid={`layout-hidden-item-${field.id}`}
+									data-layout-type="stat"
+									className="-mx-1 flex min-w-0 items-center rounded px-1 py-0.5 text-[11px]"
+								>
+									<span className="truncate text-muted">
+										{field.label}
+									</span>
+								</DraggableFieldRow>
+							))}
+						</div>
+					)}
+				</>
+			)}
+		</div>
+	);
+}
+
 function DragGhost({
 	field,
 	type,
 	barPct,
 }: {
 	field: LayoutField;
-	type: SlotType;
-	/** Placeholder fill carried over from the source row; 0 = empty track. */
+	type: LayoutSlotType;
 	barPct: number;
 }) {
 	if (type === "window") {
@@ -357,15 +531,12 @@ function DragGhost({
 		);
 	}
 	return (
-		<div className="flex w-36 cursor-grabbing items-baseline justify-between gap-1 rounded-md border border-border bg-overlay px-1.5 py-1 text-[11px] shadow-[var(--overlay-shadow)]">
-			<span className="truncate text-muted">{field.label}</span>
-			<span className="text-foreground tabular-nums">—</span>
+		<div className="w-36 cursor-grabbing truncate rounded-md border border-border bg-overlay px-1.5 py-1 text-[11px] text-muted shadow-[var(--overlay-shadow)]">
+			{field.label}
 		</div>
 	);
 }
 
-/** Label over a placeholder meter — the one bar shape used on the card, in
- *  the drawer, and in the drag ghost, so a bar never changes size. */
 function BarBody({ label, pct }: { label: string; pct: number }) {
 	return (
 		<div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -379,437 +550,166 @@ function BarBody({ label, pct }: { label: string; pct: number }) {
 	);
 }
 
-function LayoutDragHandle({
-	fieldLabel,
-	isDisabled,
-	attributes,
-	listeners,
-	setActivatorNodeRef,
-}: {
-	fieldLabel: string;
-	isDisabled?: boolean;
-	attributes: DraggableAttributes;
-	listeners: DraggableSyntheticListeners;
-	setActivatorNodeRef: (element: HTMLElement | null) => void;
-}) {
-	const { t } = useTranslation();
+function hiddenFields(fields: LayoutField[], shown: string[]): LayoutField[] {
+	const shownSet = new Set(shown);
+	return fields.filter((field) => !shownSet.has(field.id));
+}
+
+function layoutCollisionDetection(
+	args: Parameters<CollisionDetection>[0],
+	keyboardTargetId: string | null,
+): ReturnType<CollisionDetection> {
+	if (!args.pointerCoordinates && keyboardTargetId) {
+		return [{ id: keyboardTargetId }];
+	}
+	const activeType = dataSlotType(args.active.data.current?.type);
+	if (!activeType) return [];
+
+	const pointer = pointerWithin(args);
+	if (pointer.length > 0) return prioritizeOverlapping(pointer, activeType);
+
+	const intersecting = rectIntersection(args);
+	if (intersecting.length > 0) {
+		return prioritizeOverlapping(intersecting, activeType);
+	}
+
+	return firstCompatible(closestCenter(args), activeType);
+}
+
+function prioritizeOverlapping(
+	collisions: Collision[],
+	type: LayoutSlotType,
+): Collision[] {
+	const slot = collisions.find((collision) =>
+		String(collision.id).startsWith(`slot:${type}:`),
+	);
+	if (slot) return [slot];
+	const section = collisions.find(
+		(collision) => String(collision.id) === `section:${type}`,
+	);
+	if (section) return [section];
+	const drawer = collisions.find(
+		(collision) => String(collision.id) === "hidden-drawer",
+	);
+	return drawer ? [drawer] : [];
+}
+
+function firstCompatible(
+	collisions: Collision[],
+	type: LayoutSlotType,
+): Collision[] {
+	const collision = collisions.find((candidate) =>
+		isCompatibleTarget(String(candidate.id), type),
+	);
+	return collision ? [collision] : [];
+}
+
+function isCompatibleTarget(id: string, type: LayoutSlotType): boolean {
 	return (
-		<Button
-			ref={setActivatorNodeRef}
-			{...attributes}
-			{...listeners}
-			type="button"
-			isIconOnly
-			isDisabled={isDisabled}
-			size="sm"
-			variant="ghost"
-			aria-label={t("usageLayoutDrag", { label: fieldLabel })}
-			className="shrink-0 cursor-grab touch-none text-foreground/45 active:cursor-grabbing"
-		>
-			<Bars2Icon className="size-4" />
-		</Button>
+		id === "hidden-drawer" ||
+		id === `section:${type}` ||
+		id.startsWith(`slot:${type}:`)
 	);
 }
 
-function LayoutVisibilityAction({
-	action,
-	fieldLabel,
-	isDisabled,
-	onPress,
-}: {
-	action: "hide" | "show";
-	fieldLabel: string;
-	isDisabled?: boolean;
-	onPress: () => void;
-}) {
-	const { t } = useTranslation();
-	const label = t(action === "hide" ? "usageLayoutHide" : "usageLayoutShow", {
-		label: fieldLabel,
-	});
-	return (
-		<Button
-			type="button"
-			isIconOnly
-			isDisabled={isDisabled}
-			size="sm"
-			variant="ghost"
-			onPress={onPress}
-			aria-label={label}
-			className="shrink-0 text-muted transition-[color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] [@media(hover:hover)]:opacity-0 group-hover/layout-row:opacity-100 group-focus-within/layout-row:opacity-100"
-		>
-			{action === "hide" ? (
-				<EyeSlashIcon className="size-3.5" />
-			) : (
-				<PlusIcon className="size-3.5" />
-			)}
-		</Button>
+function layoutKeyboardCoordinates(
+	event: Parameters<KeyboardCoordinateGetter>[0],
+	{ currentCoordinates, context }: Parameters<KeyboardCoordinateGetter>[1],
+	onTarget: (id: string) => void,
+): ReturnType<KeyboardCoordinateGetter> {
+	const direction = keyboardDirection(event.code);
+	if (!direction) return;
+	const type = dataSlotType(context.active?.data.current?.type);
+	const sourceRect = context.over?.rect ?? context.draggingNodeRect;
+	if (!type || !sourceRect) return;
+	event.preventDefault();
+
+	const sourceCenter = rectCenter(sourceRect);
+	const compatibleTargets = [...context.droppableRects.entries()].filter(
+		([id]) => isCompatibleTarget(String(id), type),
 	);
+	const hasVisibleSlots = compatibleTargets.some(([id]) =>
+		String(id).startsWith(`slot:${type}:`),
+	);
+	const keyboardTargets = hasVisibleSlots
+		? compatibleTargets.filter(([id]) => String(id) !== `section:${type}`)
+		: compatibleTargets;
+	const candidates = keyboardTargets
+		.map(([id, rect]) => ({ id, rect, center: rectCenter(rect) }))
+		.filter(({ id, center }) => {
+			if (id === context.over?.id) return false;
+			const delta =
+				direction.axis === "x"
+					? center.x - sourceCenter.x
+					: center.y - sourceCenter.y;
+			return direction.sign * delta > 1;
+		})
+		.sort((left, right) => {
+			const leftPrimary =
+				direction.axis === "x"
+					? Math.abs(left.center.x - sourceCenter.x)
+					: Math.abs(left.center.y - sourceCenter.y);
+			const rightPrimary =
+				direction.axis === "x"
+					? Math.abs(right.center.x - sourceCenter.x)
+					: Math.abs(right.center.y - sourceCenter.y);
+			const leftSecondary =
+				direction.axis === "x"
+					? Math.abs(left.center.y - sourceCenter.y)
+					: Math.abs(left.center.x - sourceCenter.x);
+			const rightSecondary =
+				direction.axis === "x"
+					? Math.abs(right.center.y - sourceCenter.y)
+					: Math.abs(right.center.x - sourceCenter.x);
+			return (
+				leftPrimary +
+				leftSecondary * 0.35 -
+				(rightPrimary + rightSecondary * 0.35)
+			);
+		});
+	const target = candidates[0];
+	if (!target) return;
+	onTarget(String(target.id));
+	return {
+		x: currentCoordinates.x + target.center.x - sourceCenter.x,
+		y: currentCoordinates.y + target.center.y - sourceCenter.y,
+	};
 }
 
-/** The append target while a matching drag is in flight: a dashed slot at
- *  the end of the card's bars / stats. Dropping here adds the field. */
-function EmptySlot({
-	type,
-	index,
-	variant,
-}: {
-	type: SlotType;
-	index: number;
-	variant: "bar" | "stat";
-}) {
-	const { setNodeRef, isOver } = useDroppable({
-		id: `slot:${type}:${index}`,
-	});
-	return (
-		<div
-			ref={setNodeRef}
-			data-testid={`layout-empty-slot-${type}`}
-			className={cn(
-				"flex items-center justify-center rounded-md border border-dashed border-border text-foreground/40 transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]",
-				variant === "bar" ? "h-7" : "h-[18px]",
-				isOver && "border-accent bg-accent/5 text-accent",
-			)}
-		>
-			<PlusIcon className="size-3" />
-		</div>
-	);
+function layoutSlotId(type: LayoutSlotType, index: number): string {
+	return `slot:${type}:${index}`;
 }
 
-/** A quota bar on the replica. The handle drags; the eye only hides. */
-function PreviewBarRow({
-	field,
-	index,
-	pct,
-	accepts,
-	replaces,
-	isDisabled,
-	onHide,
-}: {
-	field: LayoutField;
-	index: number;
-	pct: number;
-	accepts: boolean;
-	replaces: boolean;
-	isDisabled?: boolean;
-	onHide: () => void;
-}) {
-	const { setNodeRef: dropRef, isOver } = useDroppable({
-		id: `slot:window:${index}`,
-		disabled: isDisabled,
-	});
-	const {
-		attributes,
-		listeners,
-		setNodeRef: dragRef,
-		setActivatorNodeRef,
-		isDragging,
-	} = useDraggable({ id: field.id, disabled: isDisabled });
-	const isDropTarget = isOver && accepts;
-	return (
-		<div
-			ref={dropRef}
-			data-drop-action={
-				isDropTarget ? (replaces ? "replace" : "move") : undefined
-			}
-			className={cn(
-				"group/layout-row -mx-1 flex items-center gap-1 rounded-md px-0.5 transition-[background-color,box-shadow,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)]",
-				!isDisabled && "hover:bg-surface-secondary",
-				isDropTarget &&
-					(replaces
-						? "bg-accent/10 ring-1 ring-accent"
-						: "ring-1 ring-accent"),
-				isDragging && "opacity-30",
-			)}
-		>
-			<div
-				ref={dragRef}
-				title={field.hint}
-				className="flex min-w-0 flex-1 items-center gap-1"
-			>
-				<LayoutDragHandle
-					fieldLabel={field.label}
-					isDisabled={isDisabled}
-					attributes={attributes}
-					listeners={listeners}
-					setActivatorNodeRef={setActivatorNodeRef}
-				/>
-				<BarBody label={field.label} pct={pct} />
-			</div>
-			<LayoutVisibilityAction
-				action="hide"
-				fieldLabel={field.label}
-				isDisabled={isDisabled}
-				onPress={onHide}
-			/>
-		</div>
-	);
+function dataSlotType(value: unknown): LayoutSlotType | null {
+	return value === "window" || value === "stat" ? value : null;
 }
 
-/** A bottom stat on the replica. */
-function PreviewStatCell({
-	field,
-	index,
-	accepts,
-	replaces,
-	isDisabled,
-	onHide,
-}: {
-	field: LayoutField;
-	index: number;
-	accepts: boolean;
-	replaces: boolean;
-	isDisabled?: boolean;
-	onHide: () => void;
-}) {
-	const { setNodeRef: dropRef, isOver } = useDroppable({
-		id: `slot:stat:${index}`,
-		disabled: isDisabled,
-	});
-	const {
-		attributes,
-		listeners,
-		setNodeRef: dragRef,
-		setActivatorNodeRef,
-		isDragging,
-	} = useDraggable({ id: field.id, disabled: isDisabled });
-	const isDropTarget = isOver && accepts;
-	return (
-		<div
-			ref={dropRef}
-			data-drop-action={
-				isDropTarget ? (replaces ? "replace" : "move") : undefined
-			}
-			className={cn(
-				"group/layout-row -mx-1 flex items-center gap-0.5 rounded px-0.5 text-[11px] transition-[background-color,box-shadow,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)]",
-				!isDisabled && "hover:bg-surface-secondary",
-				isDropTarget &&
-					(replaces
-						? "bg-accent/10 ring-1 ring-accent"
-						: "ring-1 ring-accent"),
-				isDragging && "opacity-30",
-			)}
-		>
-			<div
-				ref={dragRef}
-				title={field.hint}
-				className="flex min-w-0 flex-1 items-center gap-0.5"
-			>
-				<LayoutDragHandle
-					fieldLabel={field.label}
-					isDisabled={isDisabled}
-					attributes={attributes}
-					listeners={listeners}
-					setActivatorNodeRef={setActivatorNodeRef}
-				/>
-				<span className="min-w-0 flex-1 truncate text-muted">
-					{field.label}
-				</span>
-			</div>
-			<LayoutVisibilityAction
-				action="hide"
-				fieldLabel={field.label}
-				isDisabled={isDisabled}
-				onPress={onHide}
-			/>
-		</div>
-	);
+function keyboardDirection(code: string): {
+	axis: "x" | "y";
+	sign: -1 | 1;
+} | null {
+	switch (code) {
+		case "ArrowLeft":
+			return { axis: "x", sign: -1 };
+		case "ArrowRight":
+			return { axis: "x", sign: 1 };
+		case "ArrowUp":
+			return { axis: "y", sign: -1 };
+		case "ArrowDown":
+			return { axis: "y", sign: 1 };
+		default:
+			return null;
+	}
 }
 
-interface DrawerSection {
-	fields: LayoutField[];
-	atCap: boolean;
-	onShow: (id: string) => void;
-}
-
-/** The flat drawer beside the card: everything not shown, grouped like the
- *  preview. It is also a drop target; dropping a field here hides it. */
-function HiddenDrawer({
-	active,
-	isDisabled,
-	windows,
-	stats,
-}: {
-	/** A drag is in flight — highlight the drawer as a hide target. */
-	active: boolean;
-	isDisabled?: boolean;
-	windows: DrawerSection;
-	stats: DrawerSection;
+function rectCenter(rect: {
+	left: number;
+	top: number;
+	width: number;
+	height: number;
 }) {
-	const { t } = useTranslation();
-	// `active` is true only while dragging a field that sits on the card —
-	// hiding is the one thing dropping here can do, so the highlight never
-	// shows for a drawer row dragged over its own pane.
-	const { setNodeRef, isOver } = useDroppable({
-		id: "hidden-drawer",
-		disabled: isDisabled,
-	});
-	const empty = windows.fields.length === 0 && stats.fields.length === 0;
-	const hasReplacementChoices =
-		(windows.atCap && windows.fields.length > 0) ||
-		(stats.atCap && stats.fields.length > 0);
-	return (
-		<div
-			ref={setNodeRef}
-			data-testid="layout-hidden-drawer"
-			className={cn(
-				"flex min-w-0 flex-col gap-1.5 border-t border-border pt-4 transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)] lg:border-t-0 lg:border-l lg:pt-0 lg:pl-5",
-				active && isOver && "bg-accent-soft",
-			)}
-		>
-			<span className="pb-0.5 text-[11px] font-medium text-muted">
-				{t("usageLayoutHiddenDrawer")}
-			</span>
-			{hasReplacementChoices && (
-				<p className="pb-1 text-[11px] leading-4 text-muted">
-					{t("usageLayoutFullHint")}
-				</p>
-			)}
-			{empty ? (
-				<p className="py-3 text-center text-[11px] text-foreground/40">
-					{t("usageLayoutDrawerEmpty")}
-				</p>
-			) : (
-				<>
-					{windows.fields.map((field) => (
-						<HiddenBarRow
-							key={field.id}
-							field={field}
-							atCap={windows.atCap}
-							isDisabled={isDisabled}
-							onShow={() => windows.onShow(field.id)}
-						/>
-					))}
-					{stats.fields.length > 0 && (
-						<div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-x-3 gap-y-1">
-							{stats.fields.map((field) => (
-								<HiddenStatCell
-									key={field.id}
-									field={field}
-									atCap={stats.atCap}
-									isDisabled={isDisabled}
-									onShow={() => stats.onShow(field.id)}
-								/>
-							))}
-						</div>
-					)}
-				</>
-			)}
-		</div>
-	);
-}
-
-/** A hidden quota bar: the same full-width bar shape as on the card. */
-function HiddenBarRow({
-	field,
-	atCap,
-	isDisabled,
-	onShow,
-}: {
-	field: LayoutField;
-	atCap: boolean;
-	isDisabled?: boolean;
-	onShow: () => void;
-}) {
-	const {
-		attributes,
-		listeners,
-		setNodeRef,
-		setActivatorNodeRef,
-		isDragging,
-	} = useDraggable({
-		id: field.id,
-		disabled: isDisabled,
-	});
-	return (
-		<div
-			data-testid={`layout-hidden-item-${field.id}`}
-			className={cn(
-				"group/layout-row -mx-1 flex items-center gap-1 rounded-md px-0.5 outline-none transition-[background-color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)]",
-				isDisabled ? "opacity-40" : "hover:bg-surface-secondary",
-				isDragging && "opacity-30",
-			)}
-		>
-			<div
-				ref={setNodeRef}
-				title={field.hint}
-				className="flex min-w-0 flex-1 items-center gap-1"
-			>
-				<LayoutDragHandle
-					fieldLabel={field.label}
-					isDisabled={isDisabled}
-					attributes={attributes}
-					listeners={listeners}
-					setActivatorNodeRef={setActivatorNodeRef}
-				/>
-				<BarBody label={field.label} pct={0} />
-			</div>
-			{!atCap && (
-				<LayoutVisibilityAction
-					action="show"
-					fieldLabel={field.label}
-					isDisabled={isDisabled}
-					onPress={onShow}
-				/>
-			)}
-		</div>
-	);
-}
-
-/** A hidden stat: the same half-width cell shape as on the card. */
-function HiddenStatCell({
-	field,
-	atCap,
-	isDisabled,
-	onShow,
-}: {
-	field: LayoutField;
-	atCap: boolean;
-	isDisabled?: boolean;
-	onShow: () => void;
-}) {
-	const {
-		attributes,
-		listeners,
-		setNodeRef,
-		setActivatorNodeRef,
-		isDragging,
-	} = useDraggable({
-		id: field.id,
-		disabled: isDisabled,
-	});
-	return (
-		<div
-			data-testid={`layout-hidden-item-${field.id}`}
-			className={cn(
-				"group/layout-row -mx-1 flex items-center gap-0.5 rounded px-0.5 text-[11px] outline-none transition-[background-color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)]",
-				isDisabled ? "opacity-40" : "hover:bg-surface-secondary",
-				isDragging && "opacity-30",
-			)}
-		>
-			<div
-				ref={setNodeRef}
-				title={field.hint}
-				className="flex min-w-0 flex-1 items-center gap-0.5"
-			>
-				<LayoutDragHandle
-					fieldLabel={field.label}
-					isDisabled={isDisabled}
-					attributes={attributes}
-					listeners={listeners}
-					setActivatorNodeRef={setActivatorNodeRef}
-				/>
-				<span className="min-w-0 flex-1 truncate text-muted">
-					{field.label}
-				</span>
-			</div>
-			{!atCap && (
-				<LayoutVisibilityAction
-					action="show"
-					fieldLabel={field.label}
-					isDisabled={isDisabled}
-					onPress={onShow}
-				/>
-			)}
-		</div>
-	);
+	return {
+		x: rect.left + rect.width / 2,
+		y: rect.top + rect.height / 2,
+	};
 }

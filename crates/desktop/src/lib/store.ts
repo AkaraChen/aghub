@@ -60,6 +60,7 @@ export {
 	agentSettings,
 	CARD_STAT_SLOTS,
 	CARD_WINDOW_SLOTS,
+	createDefaultUsageSettings,
 	DEFAULT_AGENT_SETTINGS,
 	DEFAULT_CARD_LAYOUT,
 	DEFAULT_STAT_SLOTS,

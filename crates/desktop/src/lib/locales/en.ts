@@ -456,8 +456,7 @@ export default {
 	usageStatusUnreachable: "ccusage isn't reachable",
 	usageStatusUpdate: "{{version}} available",
 	usageStatusRecheck: "Re-check",
-	usageStatusUpdateAction: "Update",
-	usageStatusInstall: "Install",
+	usageStatusPackagePage: "Open npm page",
 	usageSidecarAutoDiscover: "Auto-discover ccusage",
 	usageSidecarAutoDiscoverDescription:
 		"Use the bundled ccusage binary, falling back to one on your PATH.",
@@ -493,6 +492,10 @@ export default {
 	usageSettingsAlertsDescription:
 		"Warn when a rate-limit window passes its threshold.",
 	usageSettingsAdvanced: "Advanced",
+	usageRestoreDefaults: "Restore usage defaults",
+	usageRestoreDefaultsConfirm:
+		"This resets every Usage preference and card layout. Your ccusage installation is not changed.",
+	usageRestoreDefaultsAction: "Restore defaults",
 	usageStatusChecking: "Checking…",
 	usageAgentAlert: "Alert threshold",
 	usageHomeShow: "Show usage on home",
@@ -503,12 +506,9 @@ export default {
 	usageWindowDaysOption: "{{days}} days",
 	usageHomeLayout: "Card layout",
 	usageHomeLayoutDescription:
-		"Reorder and choose which bars and stats each card shows.",
+		"Drag fields between the card and Not shown. The card updates before you drop.",
 	usageHomeWindowsLabel: "Rate-limit bars",
 	usageHomeStatsLabel: "Bottom stats",
-	usageLayoutHide: "Remove {{label}}",
-	usageLayoutShow: "Add {{label}}",
-	usageLayoutDrag: "Drag {{label}}",
 	usageLayoutTarget: "Editing layout for",
 	usageLayoutTargetDefault: "Default",
 	usageLayoutResetOverride: "Reset to default",
@@ -1349,10 +1349,9 @@ export default {
 	usageTotalSpend: "Total spend",
 	usageActiveDays: "Active days",
 	usageLayoutHiddenDrawer: "Not shown",
-	usageLayoutFullHint:
-		"Card is full. Drag a field onto a shown field to replace it.",
 	usageLayoutDrawerEmpty: "Drag a field here to hide it.",
-	usageLayoutEmptyCard: "Everything is hidden — add fields from the drawer.",
+	usageLayoutEmptyCard:
+		"Everything is hidden — drag fields back from Not shown.",
 	usageDailyActivity: "Daily usage by agent",
 	usageResetsIn: "Resets in {{time}}",
 	usageWindow5h: "5-hour limit",
