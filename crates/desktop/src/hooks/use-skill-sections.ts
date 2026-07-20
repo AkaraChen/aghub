@@ -26,11 +26,73 @@ export interface SourceGroup {
 	skills: SkillGroup[];
 }
 
-/** One entry in the loose list below custom groups: either an ungrouped
- * skill or a source cluster, sorted together as peers. */
-export type LooseEntry =
-	| { kind: "source"; group: SourceGroup }
+export type SkillSectionEntry =
+	| { kind: "source"; id: string; group: SourceGroup }
 	| { kind: "skill"; skill: SkillGroup };
+
+type SourceEntry = Extract<SkillSectionEntry, { kind: "source" }>;
+
+interface SkillSource {
+	source: string;
+	sourceType: string;
+	sourceUrl: string | null;
+}
+
+function createSectionEntries(
+	skills: SkillGroup[],
+	sources: Map<string, SkillSource>,
+	sortSkills: (a: SkillGroup, b: SkillGroup) => number,
+	isSkillStarred: (name: string) => boolean,
+	scopeId: string,
+): SkillSectionEntry[] {
+	const bySource = new Map<string, SourceGroup>();
+	const entries: SkillSectionEntry[] = [];
+
+	for (const skill of skills) {
+		const source = sources.get(skill.name);
+		if (!source) {
+			entries.push({ kind: "skill", skill });
+			continue;
+		}
+		const existing = bySource.get(source.source);
+		if (existing) {
+			existing.skills.push(skill);
+		} else {
+			bySource.set(source.source, { ...source, skills: [skill] });
+		}
+	}
+
+	for (const group of bySource.values()) {
+		if (group.skills.length === 1) {
+			entries.push({ kind: "skill", skill: group.skills[0] });
+		} else {
+			entries.push({
+				kind: "source",
+				id: `s:${scopeId}:${group.source}`,
+				group: {
+					...group,
+					skills: [...group.skills].sort(sortSkills),
+				},
+			});
+		}
+	}
+
+	const entryName = (entry: SkillSectionEntry) =>
+		entry.kind === "source"
+			? (entry.group.source.split("/").pop() ?? entry.group.source)
+			: entry.skill.name;
+	const entryStarred = (entry: SkillSectionEntry) =>
+		entry.kind === "source"
+			? entry.group.skills.some((skill) => isSkillStarred(skill.name))
+			: isSkillStarred(entry.skill.name);
+
+	return entries.sort((a, b) => {
+		const aStarred = entryStarred(a);
+		const bStarred = entryStarred(b);
+		if (aStarred !== bStarred) return aStarred ? -1 : 1;
+		return entryName(a).localeCompare(entryName(b));
+	});
+}
 
 interface UseSkillSectionsOptions {
 	skills: SkillResponse[];
@@ -136,7 +198,7 @@ export function useSkillSections({
 		[isSkillStarred],
 	);
 
-	const { customSections, unassignedByName } = useMemo(() => {
+	const { assignedSections, unassignedByName } = useMemo(() => {
 		const members = new Map<string, SkillGroup[]>();
 		const rest: SkillGroup[] = [];
 		const groupIds = new Set(groups.map((g) => g.id));
@@ -158,117 +220,67 @@ export function useSkillSections({
 				),
 			}))
 			.filter((section) => !searchQuery || section.skills.length > 0);
-		return { customSections: sections, unassignedByName: rest };
+		return { assignedSections: sections, unassignedByName: rest };
 	}, [filteredByName, groups, assignments, searchQuery, byStarredThenName]);
 
-	const { sourceGroups, ungroupedGroups } = useMemo(() => {
-		const findSkillSource = (
-			skillName: string,
-		): {
-			source: string;
-			sourceType: string;
-			sourceUrl: string | null;
-		} | null => {
-			const relevantEntries =
-				effectiveScope === "project"
-					? projectLock?.skills
-					: globalLock?.skills;
-			const entry = relevantEntries?.find((e) => e.name === skillName);
-			if (entry) {
-				return {
+	const sources = useMemo(() => {
+		const relevantEntries =
+			effectiveScope === "project"
+				? projectLock?.skills
+				: globalLock?.skills;
+		return new Map<string, SkillSource>(
+			(relevantEntries ?? []).map((entry) => [
+				entry.name,
+				{
 					source: entry.source,
 					sourceType: entry.sourceType,
-					// The project lock entry has no url field
+					// The project lock entry has no url field.
 					sourceUrl:
 						"sourceUrl" in entry ? (entry.sourceUrl ?? null) : null,
-				};
-			}
-			return null;
-		};
+				},
+			]),
+		);
+	}, [effectiveScope, globalLock, projectLock]);
 
-		const bySource = new Map<string, SourceGroup>();
-		const singleItems: SkillGroup[] = [];
-		const unknown: SkillGroup[] = [];
+	const customSections = useMemo(
+		() =>
+			assignedSections.map((section) => ({
+				...section,
+				entries: createSectionEntries(
+					section.skills,
+					sources,
+					byStarredThenName,
+					isSkillStarred,
+					`group:${section.group.id}`,
+				),
+			})),
+		[assignedSections, sources, byStarredThenName, isSkillStarred],
+	);
 
-		for (const group of unassignedByName) {
-			const sourceInfo = findSkillSource(group.name);
-			if (sourceInfo) {
-				const existing = bySource.get(sourceInfo.source);
-				if (existing) {
-					existing.skills.push(group);
-				} else {
-					bySource.set(sourceInfo.source, {
-						source: sourceInfo.source,
-						sourceType: sourceInfo.sourceType,
-						sourceUrl: sourceInfo.sourceUrl,
-						skills: [group],
-					});
-				}
-			} else {
-				unknown.push(group);
+	const looseEntries = useMemo(
+		() =>
+			createSectionEntries(
+				unassignedByName,
+				sources,
+				byStarredThenName,
+				isSkillStarred,
+				"loose",
+			),
+		[unassignedByName, sources, byStarredThenName, isSkillStarred],
+	);
+
+	const sourceEntries = useMemo(() => {
+		const entries: SourceEntry[] = [];
+		for (const section of customSections) {
+			for (const entry of section.entries) {
+				if (entry.kind === "source") entries.push(entry);
 			}
 		}
-
-		const multiItemGroups: SourceGroup[] = [];
-		for (const sg of bySource.values()) {
-			if (sg.skills.length === 1) {
-				singleItems.push(sg.skills[0]);
-			} else {
-				multiItemGroups.push(sg);
-			}
+		for (const entry of looseEntries) {
+			if (entry.kind === "source") entries.push(entry);
 		}
-
-		// Members within a cluster sort starred-first; the cluster's own
-		// position among the loose entries is decided in looseEntries below.
-		const sourceClusters = multiItemGroups.map((sg) => ({
-			...sg,
-			skills: [...sg.skills].sort(byStarredThenName),
-		}));
-
-		const rest = [...singleItems, ...unknown];
-
-		return {
-			sourceGroups: sourceClusters,
-			ungroupedGroups: rest,
-		};
-	}, [
-		unassignedByName,
-		globalLock,
-		effectiveScope,
-		projectLock,
-		byStarredThenName,
-	]);
-
-	// The loose region — source clusters and ungrouped skills — is one level:
-	// each entry sorts starred-first (a cluster counts as starred when any
-	// member is), then by name (a cluster by its repo/skill name, the last
-	// path segment). A source cluster is just a skill row with a dropdown.
-	const looseEntries = useMemo<LooseEntry[]>(() => {
-		const sourceName = (source: string) =>
-			source.split("/").pop() ?? source;
-		const entryStarred = (entry: LooseEntry) =>
-			entry.kind === "source"
-				? entry.group.skills.some((s) => isSkillStarred(s.name))
-				: isSkillStarred(entry.skill.name);
-		const entryName = (entry: LooseEntry) =>
-			entry.kind === "source"
-				? sourceName(entry.group.source)
-				: entry.skill.name;
-		const entries: LooseEntry[] = [
-			...sourceGroups.map(
-				(group) => ({ kind: "source", group }) as LooseEntry,
-			),
-			...ungroupedGroups.map(
-				(skill) => ({ kind: "skill", skill }) as LooseEntry,
-			),
-		];
-		return entries.sort((a, b) => {
-			const aStarred = entryStarred(a);
-			const bStarred = entryStarred(b);
-			if (aStarred !== bStarred) return aStarred ? -1 : 1;
-			return entryName(a).localeCompare(entryName(b));
-		});
-	}, [sourceGroups, ungroupedGroups, isSkillStarred]);
+		return entries;
+	}, [customSections, looseEntries]);
 
 	// Custom groups stay open (collapsedIds is opt-out); source clusters
 	// collapse by default (expandedSources is opt-in). The cluster holding
@@ -284,11 +296,13 @@ export function useSkillSections({
 	if (expandedSources === null && !isGroupingLoading) {
 		setExpandedSources(
 			new Set(
-				sourceGroups
-					.filter((sg) =>
-						sg.skills.some((s) => selectedKeys.has(s.name)),
+				sourceEntries
+					.filter((entry) =>
+						entry.group.skills.some((skill) =>
+							selectedKeys.has(skill.name),
+						),
 					)
-					.map((sg) => sg.source),
+					.map((entry) => entry.id),
 			),
 		);
 	}
@@ -303,13 +317,11 @@ export function useSkillSections({
 		setPrevSelectedKeys(selectedKeys);
 		if (selectedKeys.size === 1 && expandedSources !== null) {
 			const [only] = selectedKeys;
-			const holder = sourceGroups.find((sg) =>
-				sg.skills.some((s) => s.name === only),
+			const holder = sourceEntries.find((entry) =>
+				entry.group.skills.some((skill) => skill.name === only),
 			);
-			if (holder && !expandedSources.has(holder.source)) {
-				setExpandedSources(
-					new Set([...expandedSources, holder.source]),
-				);
+			if (holder && !expandedSources.has(holder.id)) {
+				setExpandedSources(new Set([...expandedSources, holder.id]));
 			}
 		}
 	}
@@ -320,11 +332,31 @@ export function useSkillSections({
 	const orderedEntries = useMemo<SelectionEntry[]>(() => {
 		const expandedAll = Boolean(searchQuery);
 		const entries: SelectionEntry[] = [];
+		const appendEntries = (sectionEntries: SkillSectionEntry[]) => {
+			for (const entry of sectionEntries) {
+				if (entry.kind === "skill") {
+					entries.push({ kind: "item", key: entry.skill.name });
+					continue;
+				}
+				const memberKeys = entry.group.skills.map(
+					(skill) => skill.name,
+				);
+				if (expandedAll || expandedSources?.has(entry.id)) {
+					for (const key of memberKeys)
+						entries.push({ kind: "item", key });
+				} else {
+					entries.push({
+						kind: "cluster",
+						id: entry.id,
+						memberKeys,
+					});
+				}
+			}
+		};
 		for (const section of customSections) {
 			const memberKeys = section.skills.map((g) => g.name);
 			if (expandedAll || !collapsedIds.has(`g:${section.group.id}`)) {
-				for (const key of memberKeys)
-					entries.push({ kind: "item", key });
+				appendEntries(section.entries);
 			} else {
 				entries.push({
 					kind: "cluster",
@@ -333,26 +365,7 @@ export function useSkillSections({
 				});
 			}
 		}
-		for (const entry of looseEntries) {
-			if (entry.kind === "skill") {
-				entries.push({ kind: "item", key: entry.skill.name });
-				continue;
-			}
-			const memberKeys = entry.group.skills.map((s) => s.name);
-			if (
-				expandedAll ||
-				(expandedSources?.has(entry.group.source) ?? false)
-			) {
-				for (const key of memberKeys)
-					entries.push({ kind: "item", key });
-			} else {
-				entries.push({
-					kind: "cluster",
-					id: `s:${entry.group.source}`,
-					memberKeys,
-				});
-			}
-		}
+		appendEntries(looseEntries);
 		return entries;
 	}, [
 		customSections,
@@ -367,11 +380,10 @@ export function useSkillSections({
 	const toggleCollapsed = (id: string) => {
 		if (isSearching) return;
 		if (id.startsWith("s:")) {
-			const source = id.slice(2);
 			setExpandedSources((prev) => {
 				const next = new Set(prev ?? []);
-				if (next.has(source)) next.delete(source);
-				else next.add(source);
+				if (next.has(id)) next.delete(id);
+				else next.add(id);
 				return next;
 			});
 			return;
@@ -387,7 +399,7 @@ export function useSkillSections({
 	const isExpanded = (id: string) =>
 		isSearching ||
 		(id.startsWith("s:")
-			? (expandedSources?.has(id.slice(2)) ?? false)
+			? (expandedSources?.has(id) ?? false)
 			: !collapsedIds.has(id));
 
 	return {

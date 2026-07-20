@@ -1,6 +1,35 @@
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { installMocks } from "./mocks";
+
+async function readRenderedTextMetrics(locator: Locator) {
+	return locator.evaluate((element) => {
+		const range = document.createRange();
+		range.selectNodeContents(element);
+		const text = range.getBoundingClientRect();
+		const box = element.getBoundingClientRect();
+		return {
+			boxLeft: box.left,
+			textLeft: text.left,
+			textAlign: getComputedStyle(element).textAlign,
+		};
+	});
+}
+
+async function readResourceRowGeometry(row: Locator, label: string) {
+	const icon = await row.locator("svg").first().boundingBox();
+	if (!icon) throw new Error(`${label} icon geometry missing`);
+	const text = await readRenderedTextMetrics(
+		row.getByText(label, { exact: true }),
+	);
+	return {
+		iconLeft: icon.x,
+		textLeft: text.textLeft,
+		textBoxLeft: text.boxLeft,
+		textAlign: text.textAlign,
+		gap: text.textLeft - (icon.x + icon.width),
+	};
+}
 
 /**
  * dnd-kit rides pointer events (PointerSensor, 8px activation), so drive
@@ -140,6 +169,154 @@ test("only the chevron toggles a cluster's expansion; the row never does", async
 	await expect(
 		page.getByRole("option", { name: "css-wizard" }),
 	).toBeVisible();
+});
+
+test("source cluster actions share one row hover surface", async ({ page }) => {
+	const section = page.getByTestId("group-section-github/AkaraChen/web-dev");
+	const header = section.locator('[data-slot="group-header"]');
+	const row = section.getByRole("button", {
+		name: "github/AkaraChen/web-dev",
+		exact: true,
+	});
+	const chevron = section.getByRole("button", {
+		name: "Expand or collapse github/AkaraChen/web-dev",
+	});
+
+	await expect(row.locator("button")).toHaveCount(0);
+	const restingBackground = await header.evaluate(
+		(element) => getComputedStyle(element).backgroundColor,
+	);
+	await chevron.hover();
+	await expect
+		.poll(() =>
+			header.evaluate(
+				(element) => getComputedStyle(element).backgroundColor,
+			),
+		)
+		.not.toBe(restingBackground);
+	expect(
+		await chevron.evaluate(
+			(element) => getComputedStyle(element).backgroundColor,
+		),
+	).toBe("rgba(0, 0, 0, 0)");
+	await row.hover();
+	await expect
+		.poll(() =>
+			header.evaluate(
+				(element) => getComputedStyle(element).backgroundColor,
+			),
+		)
+		.not.toBe(restingBackground);
+	expect(
+		await row.evaluate(
+			(element) => getComputedStyle(element).backgroundColor,
+		),
+	).toBe("rgba(0, 0, 0, 0)");
+	const rowBox = await row.boundingBox();
+	if (!rowBox) throw new Error("source cluster row missing");
+	await page.mouse.move(
+		rowBox.x + rowBox.width / 2,
+		rowBox.y + rowBox.height / 2,
+	);
+	await page.mouse.down();
+	await expect
+		.poll(() =>
+			row.evaluate((element) => getComputedStyle(element).transform),
+		)
+		.toBe("none");
+	await page.mouse.move(rowBox.x, rowBox.y + rowBox.height + 4);
+	await page.mouse.up();
+});
+
+test("custom group header stays left aligned on one hover surface", async ({
+	page,
+}) => {
+	await page.getByRole("button", { name: "Add skill" }).click();
+	await page.getByRole("menuitem", { name: "New group" }).click();
+	const dialog = page.getByRole("dialog", { name: "New group" });
+	await dialog.getByRole("textbox").fill("Frontend");
+	await dialog.getByRole("button", { name: "Save" }).click();
+
+	const section = page.getByTestId("group-section-Frontend");
+	const row = section.getByRole("button", {
+		name: "Select all in Frontend",
+	});
+	const toggle = section.getByRole("button", {
+		name: "Expand or collapse Frontend",
+	});
+	const label = row.getByText("Frontend", { exact: true });
+	const labelMetrics = await readRenderedTextMetrics(label);
+
+	expect(["left", "start"]).toContain(labelMetrics.textAlign);
+	expect(labelMetrics.textLeft).toBeCloseTo(labelMetrics.boxLeft, 1);
+	await expect(row.locator("button")).toHaveCount(0);
+	await expect(section.getByRole("button")).toHaveCount(2);
+
+	const header = section.locator('[data-slot="group-header"]');
+	const restingBackground = await header.evaluate(
+		(element) => getComputedStyle(element).backgroundColor,
+	);
+	await toggle.hover();
+	await expect
+		.poll(() =>
+			header.evaluate(
+				(element) => getComputedStyle(element).backgroundColor,
+			),
+		)
+		.not.toBe(restingBackground);
+	expect(
+		await toggle.evaluate(
+			(element) => getComputedStyle(element).backgroundColor,
+		),
+	).toBe("rgba(0, 0, 0, 0)");
+	await page.mouse.move(0, 0);
+	await expect
+		.poll(() =>
+			header.evaluate(
+				(element) => getComputedStyle(element).backgroundColor,
+			),
+		)
+		.toBe(restingBackground);
+	await row.hover();
+	await expect
+		.poll(() =>
+			header.evaluate(
+				(element) => getComputedStyle(element).backgroundColor,
+			),
+		)
+		.not.toBe(restingBackground);
+	expect(
+		await row.evaluate(
+			(element) => getComputedStyle(element).backgroundColor,
+		),
+	).toBe("rgba(0, 0, 0, 0)");
+});
+
+test("source clusters align with peer skills and indent only their members", async ({
+	page,
+}) => {
+	const sourceRow = page.getByRole("button", {
+		name: "github/AkaraChen/web-dev",
+		exact: true,
+	});
+	const skillRow = page.getByRole("option", { name: "solo-skill" });
+	const memberRow = page.getByRole("option", { name: "react-pro" });
+	const [source, skill, member] = await Promise.all([
+		readResourceRowGeometry(sourceRow, "github/AkaraChen/web-dev"),
+		readResourceRowGeometry(skillRow, "solo-skill"),
+		readResourceRowGeometry(memberRow, "react-pro"),
+	]);
+
+	expect(source.iconLeft).toBeCloseTo(skill.iconLeft, 1);
+	expect(member.iconLeft - source.iconLeft).toBeCloseTo(16, 1);
+	expect(["left", "start"]).toContain(source.textAlign);
+	expect(["left", "start"]).toContain(skill.textAlign);
+	expect(["left", "start"]).toContain(member.textAlign);
+	expect(source.textLeft).toBeCloseTo(source.textBoxLeft, 1);
+	expect(source.textLeft).toBeCloseTo(skill.textLeft, 1);
+	expect(member.textLeft - source.textLeft).toBeCloseTo(16, 1);
+	expect(source.gap).toBeCloseTo(skill.gap, 1);
+	expect(member.gap).toBeCloseTo(skill.gap, 1);
 });
 
 test("deselecting a multi-selection down to one item shows that item's detail", async ({
@@ -530,6 +707,107 @@ test("toolbar creates a group and context menu moves a skill into it", async ({
 	await expect(section.getByText("1", { exact: true })).toBeVisible();
 });
 
+test("moving a source cluster into a custom group preserves the cluster", async ({
+	page,
+}) => {
+	await page.getByRole("button", { name: "Add skill" }).click();
+	await page.getByRole("menuitem", { name: "New group" }).click();
+	const dialog = page.getByRole("dialog", { name: "New group" });
+	await dialog.getByRole("textbox").fill("Design");
+	await dialog.getByRole("button", { name: "Save" }).click();
+
+	await page
+		.getByRole("button", {
+			name: "github/AkaraChen/web-dev",
+			exact: true,
+		})
+		.click({ button: "right" });
+	await page
+		.getByRole("menu", { name: "Resource actions" })
+		.getByRole("menuitem", { name: "Design" })
+		.click();
+
+	const customGroup = page.getByTestId("group-section-Design");
+	const sourceCluster = customGroup.getByTestId(
+		"group-section-github/AkaraChen/web-dev",
+	);
+	const sourceRow = sourceCluster.getByRole("button", {
+		name: "github/AkaraChen/web-dev",
+		exact: true,
+	});
+	await expect(sourceRow).toBeVisible();
+	const customHeader = customGroup
+		.locator('[data-slot="group-header"]')
+		.first();
+	const sourceHeader = sourceCluster
+		.locator('[data-slot="group-header"]')
+		.first();
+	const [customHeaderBox, sourceHeaderBox] = await Promise.all([
+		customHeader.boundingBox(),
+		sourceHeader.boundingBox(),
+	]);
+	if (!customHeaderBox || !sourceHeaderBox) {
+		throw new Error("nested source cluster header geometry missing");
+	}
+	expect(
+		sourceHeaderBox.y - (customHeaderBox.y + customHeaderBox.height),
+	).toBe(8);
+	await sourceCluster
+		.getByRole("button", {
+			name: "Expand or collapse github/AkaraChen/web-dev",
+		})
+		.click();
+	await expect(
+		sourceCluster.getByRole("option", { name: "react-pro" }),
+	).toBeVisible();
+	await expect(
+		sourceCluster.getByRole("option", { name: "css-wizard" }),
+	).toBeVisible();
+
+	await page
+		.getByRole("option", { name: "solo-skill" })
+		.click({ button: "right" });
+	await page
+		.getByRole("menu", { name: "Resource actions" })
+		.getByRole("menuitem", { name: "Design" })
+		.click();
+
+	const skillRow = customGroup.getByRole("option", { name: "solo-skill" });
+	const memberRow = sourceCluster.getByRole("option", {
+		name: "react-pro",
+	});
+	const sourceMemberRows = sourceCluster.getByRole("option");
+	const firstMemberRow = sourceMemberRows.nth(0);
+	const secondMemberRow = sourceMemberRows.nth(1);
+	const [source, skill, member] = await Promise.all([
+		readResourceRowGeometry(sourceRow, "github/AkaraChen/web-dev"),
+		readResourceRowGeometry(skillRow, "solo-skill"),
+		readResourceRowGeometry(memberRow, "react-pro"),
+	]);
+
+	expect(source.iconLeft).toBeCloseTo(skill.iconLeft, 1);
+	expect(member.iconLeft - source.iconLeft).toBeCloseTo(16, 1);
+	expect(source.textLeft).toBeCloseTo(skill.textLeft, 1);
+	expect(member.textLeft - source.textLeft).toBeCloseTo(16, 1);
+	expect(source.gap).toBeCloseTo(skill.gap, 1);
+	expect(member.gap).toBeCloseTo(skill.gap, 1);
+
+	const [currentSourceHeaderBox, memberBox, secondMemberBox] =
+		await Promise.all([
+			sourceHeader.boundingBox(),
+			firstMemberRow.boundingBox(),
+			secondMemberRow.boundingBox(),
+		]);
+	if (!currentSourceHeaderBox || !memberBox || !secondMemberBox) {
+		throw new Error("nested source cluster geometry missing");
+	}
+	expect(
+		memberBox.y -
+			(currentSourceHeaderBox.y + currentSourceHeaderBox.height),
+	).toBe(8);
+	expect(secondMemberBox.y - (memberBox.y + memberBox.height)).toBe(4);
+});
+
 test("dragging a skill onto a group section assigns it", async ({ page }) => {
 	// Create the target group first
 	await page.getByRole("button", { name: "Add skill" }).click();
@@ -704,7 +982,9 @@ test("hovering a collapsed group while dragging springs it open", async ({
 	).toBeVisible();
 
 	// Collapse it, then hold another drag over its header
-	await page.getByRole("button", { name: "Spring", exact: true }).click();
+	await page
+		.getByRole("button", { name: "Expand or collapse Spring" })
+		.click();
 	await expect(page.getByRole("option", { name: "solo-skill" })).toBeHidden();
 	// Human pacing between the click and the next press — a synthetic
 	// press within ~50ms of the previous click can lose the sensor
@@ -762,7 +1042,9 @@ test("dropping below a spring-opened group still hits the right target", async (
 	).toBeVisible();
 
 	// Collapse Upper so the spring-load has something to pop open
-	await page.getByRole("button", { name: "Upper", exact: true }).click();
+	await page
+		.getByRole("button", { name: "Expand or collapse Upper" })
+		.click();
 	await expect(page.getByRole("option", { name: "solo-skill" })).toBeHidden();
 	await page.waitForTimeout(300);
 
@@ -974,7 +1256,7 @@ test("shift range sweeps a collapsed section it crosses", async ({ page }) => {
 
 	// Collapse G2 — its member react-pro now sits hidden between G1 and
 	// the loose rows
-	await page.getByRole("button", { name: "G2", exact: true }).click();
+	await page.getByRole("button", { name: "Expand or collapse G2" }).click();
 	await expect(page.getByRole("option", { name: "react-pro" })).toBeHidden();
 
 	// Anchor on css-wizard, shift-click solo-skill: BOTH collapsed

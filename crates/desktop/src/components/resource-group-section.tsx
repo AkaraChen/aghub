@@ -4,7 +4,7 @@ import {
 	Square2StackIcon,
 } from "@heroicons/react/24/solid";
 import { useDndContext, useDraggable, useDroppable } from "@dnd-kit/core";
-import { Chip } from "@heroui/react";
+import { Button, Chip } from "@heroui/react";
 import { type ReactNode, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
@@ -12,11 +12,6 @@ import { NEW_GROUP_DROP_ID } from "./list-dnd";
 
 /** How long a drag hovers a collapsed group before it springs open. */
 const SPRING_LOAD_MS = 600;
-
-// The same base classes HeroUI applies to a ListBox.Item, so a group
-// header is visually a list item (padding, radius, min-height, hover,
-// press-scale) rather than a full-width band.
-const LIST_ITEM_CLASS = "list-box-item list-box-item--default";
 
 interface ResourceGroupSectionProps {
 	title: string;
@@ -114,6 +109,26 @@ export function ResourceGroupSection({
 		measureDroppableContainers([...droppableContainers.keys()]);
 	};
 
+	const expansionButton = (
+		<Button
+			isIconOnly
+			size="sm"
+			variant="ghost"
+			onPress={onToggleExpanded}
+			className="size-5 min-h-0 w-5 shrink-0 rounded px-0 [--button-bg-hover:transparent] [--button-bg-pressed:transparent]"
+			aria-label={t("toggleGroupExpansion", { name: title })}
+			aria-expanded={isExpanded}
+		>
+			<ChevronRightIcon
+				className={cn(
+					"transition-transform duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+					subtle ? "size-3" : "size-4",
+					isExpanded && "rotate-90",
+				)}
+			/>
+		</Button>
+	);
+
 	return (
 		<div
 			ref={setDropRef}
@@ -133,121 +148,80 @@ export function ResourceGroupSection({
 			 * the exact rhythm of the skill rows around it */}
 			<div className={cn(subtle ? "px-2" : "px-2 pt-2")}>
 				<div
-					ref={setDragRef}
-					role="button"
-					tabIndex={0}
-					aria-pressed={isSelected}
-					{...listeners}
-					onClick={(event) => {
-						// A subtle cluster's row is a navigation surface —
-						// expansion belongs to the chevron alone (meta/ctrl
-						// still selects all).
-						if (subtle && !(event.metaKey || event.ctrlKey)) {
-							onRowClick?.();
-							return;
-						}
-						onSelectAll();
-					}}
-					onKeyDown={(event) => {
-						// Ignore keys bubbling up from the chevron button so
-						// Enter there only toggles, not select-all too.
-						if (event.target !== event.currentTarget) return;
-						if (event.key === "Enter" || event.key === " ") {
-							event.preventDefault();
-							if (subtle) onRowClick?.();
-							else onSelectAll();
-						}
-						if (event.key === "F2" && onRename) {
-							event.preventDefault();
-							onRename();
-						}
-					}}
-					onContextMenu={onContextMenu}
-					aria-label={
-						subtle ? title : t("selectAllInGroup", { name: title })
-					}
+					data-slot="group-header"
 					className={cn(
-						LIST_ITEM_CLASS,
-						"transition-[color,background-color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+						"flex min-h-9 w-full items-center rounded-2xl transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)] hover:bg-default motion-reduce:transition-none",
 						isSelected && "bg-surface",
-						isDropInert && "opacity-50",
 					)}
 				>
-					{subtle ? (
-						// The icon slot mirrors a skill row's book icon in
-						// weight; the expand cue sits at the trailing edge
-						<Square2StackIcon
-							aria-hidden
-							className="size-4 shrink-0 text-muted"
-						/>
-					) : (
-						<button
-							type="button"
-							onClick={(event) => {
-								event.stopPropagation();
-								onToggleExpanded();
-							}}
-							// Keep the drag sensor from swallowing the press
-							onPointerDown={(event) => event.stopPropagation()}
-							className="-ml-0.5 flex size-5 shrink-0 items-center justify-center rounded text-muted transition-colors hover:text-foreground"
-							aria-label={title}
-							aria-expanded={isExpanded}
-						>
-							<ChevronRightIcon
-								className={cn(
-									"size-4 transition-transform duration-[var(--dur-fast)] ease-[var(--ease-out)]",
-									isExpanded && "rotate-90",
-								)}
-							/>
-						</button>
-					)}
-					<span
-						className={cn(
-							"min-w-0 flex-1 truncate text-sm",
+					{!subtle && expansionButton}
+					<Button
+						ref={setDragRef}
+						variant="ghost"
+						size="sm"
+						aria-pressed={isSelected}
+						{...listeners}
+						onPress={(event) => {
+							// A subtle cluster's row is a navigation surface —
+							// expansion belongs to the chevron alone (meta/ctrl
+							// still selects all).
+							if (subtle && !(event.metaKey || event.ctrlKey)) {
+								onRowClick?.();
+								return;
+							}
+							onSelectAll();
+						}}
+						onKeyDown={(event) => {
+							if (event.key === "F2" && onRename) {
+								event.preventDefault();
+								onRename();
+							}
+						}}
+						onContextMenu={onContextMenu}
+						aria-label={
 							subtle
-								? "text-foreground"
-								: "font-medium text-foreground",
+								? title
+								: t("selectAllInGroup", { name: title })
+						}
+						className={cn(
+							"h-auto min-h-9 min-w-0 flex-1 justify-start gap-2 rounded-2xl px-2 py-1.5 text-sm font-normal whitespace-normal active:[transform:none] data-[pressed=true]:[transform:none] [--button-bg-hover:transparent] [--button-bg-pressed:transparent] [&_svg]:mx-0",
+							"transition-[color,background-color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
+							isDropInert && "opacity-50",
 						)}
 					>
-						{title}
-					</span>
-					{subtle ? (
-						// Count badge in the same voice as the agent-icons
-						// overflow bubble, then the expand toggle — the only
-						// surface that collapses/expands the cluster
-						<span className="flex shrink-0 items-center gap-1">
-							<span className="flex size-5 items-center justify-center rounded-full bg-default text-[10px] font-medium text-muted ring-1 ring-surface">
-								{count}
-							</span>
-							<button
-								type="button"
-								onClick={(event) => {
-									event.stopPropagation();
-									onToggleExpanded();
-								}}
-								// Keep the drag sensor from swallowing the press
-								onPointerDown={(event) =>
-									event.stopPropagation()
-								}
-								className="flex size-5 shrink-0 items-center justify-center rounded text-muted transition-colors hover:text-foreground"
-								aria-label={t("toggleGroupExpansion", {
-									name: title,
-								})}
-								aria-expanded={isExpanded}
-							>
-								<ChevronRightIcon
-									className={cn(
-										"size-3 transition-transform duration-[var(--dur-fast)] ease-[var(--ease-out)]",
-										isExpanded && "rotate-90",
-									)}
-								/>
-							</button>
+						{subtle ? (
+							// The icon slot mirrors a skill row's book icon in
+							// weight; the expand cue sits at the trailing edge
+							<Square2StackIcon
+								aria-hidden
+								className="size-4 shrink-0 text-muted"
+							/>
+						) : null}
+						<span
+							className={cn(
+								"min-w-0 flex-1 truncate text-left text-sm",
+								subtle
+									? "text-foreground"
+									: "font-medium text-foreground",
+							)}
+						>
+							{title}
 						</span>
-					) : (
-						<Chip size="sm" variant="secondary">
-							{count}
-						</Chip>
-					)}
+						{subtle ? (
+							// Count badge in the same voice as the agent-icons
+							// overflow bubble.
+							<span className="flex shrink-0 items-center">
+								<span className="flex size-5 items-center justify-center rounded-full bg-default text-[10px] font-medium text-muted ring-1 ring-surface">
+									{count}
+								</span>
+							</span>
+						) : (
+							<Chip size="sm" variant="secondary">
+								{count}
+							</Chip>
+						)}
+					</Button>
+					{subtle && expansionButton}
 				</div>
 			</div>
 			<div

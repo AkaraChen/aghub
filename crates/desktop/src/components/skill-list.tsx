@@ -11,7 +11,11 @@ import { useListSelection } from "../hooks/use-list-selection";
 import type { ResourceActionIntents } from "../hooks/use-resource-actions";
 import { useResourceActions } from "../hooks/use-resource-actions";
 import { useSkillGroups } from "../hooks/use-resource-groups";
-import type { SkillGroup, SkillSections } from "../hooks/use-skill-sections";
+import type {
+	SkillGroup,
+	SkillSectionEntry,
+	SkillSections,
+} from "../hooks/use-skill-sections";
 import { dragSelectionPayload } from "../lib/drag-payload";
 import type { ResourceGroup } from "../lib/store";
 import { cn } from "../lib/utils";
@@ -192,10 +196,10 @@ export const SkillList = memo(function SkillList({
 	const openSourceMenu = (
 		event: React.MouseEvent,
 		memberKeys: string[],
-		source: string,
+		sourceId: string,
 		sourceUrl: string | null,
 	) => {
-		ensureGroupSelected(memberKeys, `s:${source}`);
+		ensureGroupSelected(memberKeys, sourceId);
 		contextMenu.open(event, { type: "items", sourceUrl });
 	};
 
@@ -242,13 +246,96 @@ export const SkillList = memo(function SkillList({
 			onSelectionChange={createSelectionHandler(
 				sectionSkills.map((s) => s.name),
 			)}
-			// dense: a source cluster's members share the loose list rhythm
-			// (no extra top gap under the header row)
-			className={cn(dense ? "px-2 pb-1 pl-6" : "p-2 pl-6")}
+			className={cn(dense ? "px-2 pt-2 pb-0 pl-6" : "p-2 pl-6")}
 		>
 			{renderSkillItem}
 		</ListBox>
 	);
+
+	const renderEntryNodes = (
+		entries: SkillSectionEntry[],
+		keyPrefix: string,
+		listLabel: string,
+		isNested: boolean,
+	) => {
+		const nodes: ReactNode[] = [];
+		let skillRun: SkillGroup[] = [];
+		const flushSkillRun = () => {
+			if (skillRun.length === 0) return;
+			const runKeys = skillRun.map((skill) => skill.name);
+			nodes.push(
+				<ListBox
+					key={`${keyPrefix}:skills:${runKeys[0]}`}
+					aria-label={listLabel}
+					items={skillRun}
+					dependencies={[renderSkillItem]}
+					selectionMode="multiple"
+					selectionBehavior="toggle"
+					selectedKeys={selectedKeys}
+					onSelectionChange={createSelectionHandler(runKeys)}
+					className={isNested ? "px-2 pt-2 pb-0 pl-6" : "px-2 py-1"}
+				>
+					{renderSkillItem}
+				</ListBox>,
+			);
+			skillRun = [];
+		};
+
+		for (const entry of entries) {
+			if (entry.kind === "skill") {
+				skillRun.push(entry.skill);
+				continue;
+			}
+			flushSkillRun();
+			const sourceGroup = entry.group;
+			const memberKeys = sourceGroup.skills.map((skill) => skill.name);
+			const sourceSection = (
+				<ResourceGroupSection
+					key={entry.id}
+					subtle
+					title={sourceGroup.source}
+					count={sourceGroup.skills.length}
+					isExpanded={isExpanded(entry.id)}
+					isSelected={isGroupSelected(memberKeys)}
+					onToggleExpanded={() => toggleCollapsed(entry.id)}
+					onRowClick={() => {
+						if (isMultiSelectMode) {
+							selectGroup(memberKeys, entry.id);
+							return;
+						}
+						onSourceFocus?.(sourceGroup.source);
+					}}
+					onSelectAll={() => selectGroup(memberKeys, entry.id)}
+					onContextMenu={(event) =>
+						openSourceMenu(
+							event,
+							memberKeys,
+							entry.id,
+							sourceGroup.sourceUrl,
+						)
+					}
+					dragId={`header:${entry.id}`}
+					dragKeys={memberKeys}
+				>
+					{renderSectionListBox(
+						sourceGroup.source,
+						sourceGroup.skills,
+						true,
+					)}
+				</ResourceGroupSection>
+			);
+			nodes.push(
+				<div
+					key={entry.id}
+					className={isNested ? "pt-2 pl-4" : undefined}
+				>
+					{sourceSection}
+				</div>,
+			);
+		}
+		flushSkillRun();
+		return nodes;
+	};
 
 	const overlaysNode = (
 		<>
@@ -313,72 +400,7 @@ export const SkillList = memo(function SkillList({
 		);
 	}
 
-	// Walk the unified loose list, batching consecutive skill rows into one
-	// ListBox and rendering each source cluster as a subtle peer row.
-	const looseNodes: ReactNode[] = [];
-	let skillRun: SkillGroup[] = [];
-	const flushSkillRun = () => {
-		if (skillRun.length === 0) return;
-		const runKeys = skillRun.map((s) => s.name);
-		looseNodes.push(
-			<ListBox
-				key={`loose-${runKeys[0]}`}
-				aria-label="Skills"
-				items={skillRun}
-				dependencies={[renderSkillItem]}
-				selectionMode="multiple"
-				selectionBehavior="toggle"
-				selectedKeys={selectedKeys}
-				onSelectionChange={createSelectionHandler(runKeys)}
-				className="px-2 py-1"
-			>
-				{renderSkillItem}
-			</ListBox>,
-		);
-		skillRun = [];
-	};
-	for (const entry of looseEntries) {
-		if (entry.kind === "skill") {
-			skillRun.push(entry.skill);
-			continue;
-		}
-		flushSkillRun();
-		const sg = entry.group;
-		const memberKeys = sg.skills.map((s) => s.name);
-		looseNodes.push(
-			<ResourceGroupSection
-				key={sg.source}
-				subtle
-				title={sg.source}
-				count={sg.skills.length}
-				isExpanded={isExpanded(`s:${sg.source}`)}
-				isSelected={isGroupSelected(memberKeys)}
-				onToggleExpanded={() => toggleCollapsed(`s:${sg.source}`)}
-				onRowClick={() => {
-					// In multi-select mode the row is a selection surface:
-					// clicking it toggles the whole library in or out, same
-					// as meta-click.
-					if (isMultiSelectMode) {
-						selectGroup(memberKeys, `s:${sg.source}`);
-						return;
-					}
-					// Browsing, not selecting: the click focuses the library
-					// (its detail shows on the right); expansion belongs to
-					// the chevron alone.
-					onSourceFocus?.(sg.source);
-				}}
-				onSelectAll={() => selectGroup(memberKeys, `s:${sg.source}`)}
-				onContextMenu={(event) =>
-					openSourceMenu(event, memberKeys, sg.source, sg.sourceUrl)
-				}
-				dragId={`header:${sg.source}`}
-				dragKeys={memberKeys}
-			>
-				{renderSectionListBox(sg.source, sg.skills, true)}
-			</ResourceGroupSection>,
-		);
-	}
-	flushSkillRun();
+	const looseNodes = renderEntryNodes(looseEntries, "loose", "Skills", false);
 
 	return (
 		<div className="flex-1 overflow-y-auto">
@@ -405,11 +427,12 @@ export const SkillList = memo(function SkillList({
 						dragKeys={memberKeys}
 						onRename={() => setRenameTarget(section.group)}
 					>
-						{section.skills.length > 0 &&
-							renderSectionListBox(
-								section.group.name,
-								section.skills,
-							)}
+						{renderEntryNodes(
+							section.entries,
+							`group:${section.group.id}`,
+							section.group.name,
+							true,
+						)}
 					</ResourceGroupSection>
 				);
 			})}
