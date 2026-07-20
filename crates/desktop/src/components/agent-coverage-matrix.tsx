@@ -105,10 +105,11 @@ export function AgentCoverageMatrix({
 		if (targets.length === 0) return;
 
 		setPendingAgent(agentId);
+		let succeeded = 0;
 		let failed = 0;
 		for (const group of targets) {
 			try {
-				await reconcile.mutateAsync({
+				const result = await reconcile.mutateAsync({
 					source: {
 						agent: group.sourceAgent,
 						scope: group.sourceScope,
@@ -118,18 +119,21 @@ export function AgentCoverageMatrix({
 					added: mode === "install" ? [agentId] : null,
 					removed: mode === "uninstall" ? [agentId] : null,
 				});
+				succeeded += result.success_count;
+				failed += result.failed_count;
 			} catch {
 				failed += 1;
 			}
 		}
 		setPendingAgent(null);
+		const message = t("agentBatchResult", {
+			success: succeeded,
+			failed,
+		});
 		if (failed > 0) {
-			toast.danger(
-				t("agentBatchResult", {
-					success: targets.length - failed,
-					failed,
-				}),
-			);
+			toast.danger(message);
+		} else {
+			toast.success(message);
 		}
 	};
 
@@ -137,7 +141,7 @@ export function AgentCoverageMatrix({
 
 	return (
 		<div className="space-y-2 border-t border-separator pt-4">
-			<div className="flex items-center justify-between gap-2 px-1">
+			<div className="space-y-1 px-1">
 				<div className="flex items-center gap-1">
 					<p className="text-xs font-medium text-muted">
 						{t("agentCoverage")}
@@ -159,6 +163,9 @@ export function AgentCoverageMatrix({
 						</Tooltip.Content>
 					</Tooltip>
 				</div>
+				<p className="text-xs text-muted">
+					{t(onManage ? "matrixSummaryHint" : "matrixHint")}
+				</p>
 			</div>
 			<ul className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2">
 				{rows.map((agent) => {
@@ -196,12 +203,8 @@ export function AgentCoverageMatrix({
 								}}
 								className={cn(
 									"group flex w-full items-center gap-1.5 rounded-lg bg-surface px-2 py-1.5 text-left text-sm ring-1 ring-border transition-colors duration-[var(--dur-fast)] disabled:opacity-60",
-									// Fill encodes coverage; only the direct-editing
-									// variant previews uninstall on hover.
 									full
-										? onManage
-											? "bg-accent/10 ring-accent/30 hover:bg-accent/20"
-											: "bg-accent/10 ring-accent/30 hover:bg-danger/10 hover:ring-danger/30"
+										? "bg-accent/10 ring-accent/30 hover:bg-danger/10 hover:ring-danger/30"
 										: "hover:bg-accent/10 hover:ring-accent/30",
 								)}
 							>
@@ -226,9 +229,7 @@ export function AgentCoverageMatrix({
 										className={cn(
 											"shrink-0 text-[10px] font-medium tabular-nums",
 											full
-												? onManage
-													? "text-accent"
-													: "text-accent group-hover:text-danger"
+												? "text-accent group-hover:text-danger"
 												: "text-muted",
 										)}
 									>

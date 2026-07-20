@@ -944,6 +944,31 @@ test("the agent matrix shows coverage and installs the missing", async ({
 	await expect(page.getByTestId("matrix-row-cursor")).toContainText("2/2");
 });
 
+test("bulk and source details use the same agent coverage rows", async ({
+	page,
+}) => {
+	await page
+		.getByRole("button", { name: "github/AkaraChen/web-dev", exact: true })
+		.click();
+	const sourceRow = page.getByTestId("matrix-row-claude");
+	const sourceRowClass = await sourceRow.getAttribute("class");
+	await expect(
+		page.getByText("Click to install where missing; a full row uninstalls"),
+	).toBeVisible();
+
+	await page.getByRole("option", { name: "css-wizard" }).click();
+	await page
+		.getByRole("option", { name: "solo-skill" })
+		.click({ modifiers: ["ControlOrMeta"] });
+	const bulkRow = page.getByTestId("matrix-row-claude");
+	await expect(bulkRow).toHaveAttribute("class", sourceRowClass ?? "");
+	await expect(
+		page.getByText(
+			"Coverage across the selected items. Click an agent to manage it.",
+		),
+	).toBeVisible();
+});
+
 test("a fully covered matrix row asks before uninstalling", async ({
 	page,
 }) => {
@@ -1299,6 +1324,52 @@ test("clicking a cluster row opens its library page", async ({ page }) => {
 	// Selecting the whole library from its page opens the batch inspector
 	await page.getByRole("button", { name: "Select All", exact: true }).click();
 	await expect(page.getByText("2 items selected")).toBeVisible();
+});
+
+test("the library agent matrix explains direct edits and reports success", async ({
+	page,
+}) => {
+	await page
+		.getByRole("button", {
+			name: "github/AkaraChen/alpha-pack",
+			exact: true,
+		})
+		.click();
+
+	await expect(
+		page.getByText(
+			"Click to install where missing; a full row uninstalls",
+			{ exact: true },
+		),
+	).toBeVisible();
+	await page.getByTestId("matrix-row-cursor").click();
+	await expect(page.getByText("2 succeeded · 0 failed")).toBeVisible();
+	await expect(page.getByTestId("matrix-row-cursor")).toContainText("2/2");
+});
+
+test("the library agent matrix reports business failures", async ({ page }) => {
+	await page.route(
+		"http://localhost:45999/api/v1/skills/reconcile",
+		(route) =>
+			route.fulfill({
+				status: 200,
+				contentType: "application/json",
+				body: JSON.stringify({
+					success_count: 0,
+					failed_count: 1,
+					results: [],
+				}),
+			}),
+	);
+	await page
+		.getByRole("button", {
+			name: "github/AkaraChen/alpha-pack",
+			exact: true,
+		})
+		.click();
+
+	await page.getByTestId("matrix-row-cursor").click();
+	await expect(page.getByText("0 succeeded · 2 failed")).toBeVisible();
 });
 
 test("multi-select mode: clicking a cluster row toggles the library", async ({
