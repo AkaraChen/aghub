@@ -6,7 +6,10 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>aghub</title>
 		<script type="module">
-			if (import.meta.env.DEV) {
+			if (
+				import.meta.env.DEV &&
+				import.meta.env.VITE_DISABLE_REACT_GRAB !== "true"
+			) {
 				import("react-grab");
 			}
 		</script>

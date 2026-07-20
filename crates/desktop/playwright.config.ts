@@ -2,6 +2,8 @@ import path from "node:path";
 import process from "node:process";
 import { defineConfig, devices } from "@playwright/test";
 
+const desktopPort = Number(process.env.AGHUB_E2E_PORT ?? "1420");
+
 export default defineConfig({
 	testDir: "./e2e",
 	timeout: 30_000,
@@ -11,7 +13,7 @@ export default defineConfig({
 		? [["list"], ["html", { open: "never" }]]
 		: [["list"]],
 	use: {
-		baseURL: "http://localhost:1420",
+		baseURL: `http://localhost:${desktopPort}`,
 		locale: "en-US",
 		trace: "retain-on-failure",
 		// Animation never participates in assertions; the app honors this
@@ -26,11 +28,15 @@ export default defineConfig({
 	],
 	webServer: [
 		{
-			command: "bun run dev",
-			url: "http://localhost:1420",
-			// Never adopt whatever happens to listen on 1420 — a dev server
-			// from another checkout (e.g. a .claude/worktrees clone) serves
-			// different code and the suite silently tests that instead. If
+			command: `bun run dev -- --port ${desktopPort}`,
+			url: `http://localhost:${desktopPort}`,
+			env: {
+				...process.env,
+				VITE_DISABLE_REACT_GRAB: "true",
+			},
+			// Never adopt whatever happens to listen on the selected port — a
+			// dev server from another checkout (e.g. a .claude/worktrees clone)
+			// serves different code and the suite silently tests that instead. If
 			// the port is taken, vite's strictPort fails loudly: stop that
 			// server first.
 			reuseExistingServer: false,

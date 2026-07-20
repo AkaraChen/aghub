@@ -228,6 +228,95 @@ test("numeric settings place step controls on either side", async ({
 	expect(incrementBox!.x).toBeGreaterThan(inputBox!.x);
 });
 
+test("layout editor separates drag handles from visibility actions", async ({
+	page,
+}) => {
+	await page.goto("/settings?tab=usage");
+
+	const card = page.getByTestId("layout-card-replica");
+	const drawer = page.getByTestId("layout-hidden-drawer");
+	const dragHandle = card.getByRole("button", {
+		name: "Drag Total tokens",
+	});
+	const removeButton = card.getByRole("button", {
+		name: "Remove Total tokens",
+	});
+
+	await expect(dragHandle).toBeVisible();
+	await expect(removeButton).toBeVisible();
+	const [dragBox, removeBox] = await Promise.all([
+		dragHandle.boundingBox(),
+		removeButton.boundingBox(),
+	]);
+	expect(dragBox).not.toBeNull();
+	expect(removeBox).not.toBeNull();
+	expect(dragBox!.width).toBeGreaterThanOrEqual(32);
+	expect(dragBox!.height).toBeGreaterThanOrEqual(32);
+	expect(removeBox!.width).toBeGreaterThanOrEqual(32);
+	expect(removeBox!.height).toBeGreaterThanOrEqual(32);
+
+	await expect(
+		drawer.getByText(
+			"Card is full. Drag a field onto a shown field to replace it.",
+		),
+	).toBeVisible();
+	await expect(
+		drawer.getByRole("button", { name: "Drag Cache read" }),
+	).toBeEnabled();
+	await expect(
+		drawer.getByRole("button", { name: "Add Cache read" }),
+	).toHaveCount(0);
+	await expect(card.locator('[role="button"] button')).toHaveCount(0);
+});
+
+test("layout editor replaces a full card slot from the drawer", async ({
+	page,
+}) => {
+	await page.goto("/settings?tab=usage");
+
+	const card = page.getByTestId("layout-card-replica");
+	const drawer = page.getByTestId("layout-hidden-drawer");
+	const source = drawer.getByRole("button", { name: "Drag Cache read" });
+	const target = card.getByText("Total tokens", { exact: true });
+	await target.scrollIntoViewIfNeeded();
+	const [sourceBox, targetBox] = await Promise.all([
+		source.boundingBox(),
+		target.boundingBox(),
+	]);
+	if (!sourceBox || !targetBox) throw new Error("drag endpoints missing");
+
+	await page.mouse.move(
+		sourceBox.x + sourceBox.width / 2,
+		sourceBox.y + sourceBox.height / 2,
+	);
+	await page.mouse.down();
+	await page.mouse.move(sourceBox.x - 12, sourceBox.y + 12, { steps: 3 });
+	await expect(page.locator("#root .cursor-grabbing")).toBeVisible();
+	await page.mouse.move(
+		targetBox.x + targetBox.width / 2,
+		targetBox.y + targetBox.height / 2,
+		{ steps: 10 },
+	);
+	await expect(card.locator('[data-drop-action="replace"]')).toContainText(
+		"Total tokens",
+	);
+	await page.mouse.up();
+
+	await expect(card.getByText("Cache read", { exact: true })).toBeVisible();
+	await expect(card.getByText("Total tokens", { exact: true })).toHaveCount(
+		0,
+	);
+	await expect(
+		drawer.getByText("Total tokens", { exact: true }),
+	).toBeVisible();
+	await expect(drawer.getByText("Cache read", { exact: true })).toHaveCount(
+		0,
+	);
+	await expect(card.getByText("Spend", { exact: true })).toBeVisible();
+	await expect(card.getByText("Input", { exact: true })).toBeVisible();
+	await expect(card.getByText("Output", { exact: true })).toBeVisible();
+});
+
 test("hidden layout rows use a surface hover instead of fading", async ({
 	page,
 }) => {
@@ -264,8 +353,7 @@ test("layout editor moves a field between the card and the drawer", async ({
 	await expect(card.getByText("Total tokens")).toBeVisible();
 
 	// Hide via the eye button: the field leaves the card and lands in the
-	// drawer. exact — the dnd-kit draggable row is
-	// also a "button" whose accessible name contains these words.
+	// drawer.
 	await card
 		.getByRole("button", { name: "Remove Total tokens", exact: true })
 		.click();
@@ -279,7 +367,9 @@ test("layout editor moves a field between the card and the drawer", async ({
 
 	// Drag it back: the append slot only exists mid-drag, so cross the
 	// activation distance first, then drop onto the dashed slot.
-	const source = drawer.getByText("Total tokens");
+	const source = drawer.getByRole("button", {
+		name: "Drag Total tokens",
+	});
 	const s = await source.boundingBox();
 	if (!s) throw new Error("drag source missing");
 	const sx = s.x + s.width / 2;
@@ -288,7 +378,7 @@ test("layout editor moves a field between the card and the drawer", async ({
 	await page.mouse.down();
 	await page.mouse.move(sx + 12, sy + 12, { steps: 3 });
 	// The drag engaged — the ghost overlay is on screen.
-	await expect(page.locator(".cursor-grabbing")).toBeVisible();
+	await expect(page.locator("#root .cursor-grabbing")).toBeVisible();
 
 	const slot = page.getByTestId("layout-empty-slot-stat");
 	await slot.waitFor();

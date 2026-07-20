@@ -4,6 +4,8 @@ import {
 	DndContext,
 	DragOverlay,
 	type DragEndEvent,
+	type DraggableAttributes,
+	type DraggableSyntheticListeners,
 	type DragStartEvent,
 	KeyboardSensor,
 	PointerSensor,
@@ -14,7 +16,7 @@ import {
 	useSensor,
 	useSensors,
 } from "@dnd-kit/core";
-import { EyeSlashIcon, PlusIcon } from "@heroicons/react/24/solid";
+import { Bars2Icon, EyeSlashIcon, PlusIcon } from "@heroicons/react/24/solid";
 import { Button, Meter } from "@heroui/react";
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -68,10 +70,6 @@ export function InteractiveCardLayout({
 }) {
 	const { t } = useTranslation();
 	const [activeId, setActiveId] = useState<string | null>(null);
-	const [activeWidth, setActiveWidth] = useState<number | null>(null);
-	const [reduceMotion] = useState(
-		() => window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-	);
 	const layoutRef = useRef({ windowSlots, statSlots });
 	layoutRef.current = { windowSlots, statSlots };
 
@@ -117,10 +115,18 @@ export function InteractiveCardLayout({
 		onCommit(next);
 	};
 
-	// Insert `id` at visual position `index` among the shown fields (moving it
-	// there if it was already shown). Dropping past the end appends.
-	const moveTo = (id: string, type: SlotType, index: number) => {
-		const rest = shownOf(type).filter((x) => x !== id);
+	// A hidden field dropped onto a full card replaces that exact slot. Shown
+	// fields still reorder, and a card with room inserts at the drop position.
+	const placeAt = (id: string, type: SlotType, index: number) => {
+		const shown = shownOf(type);
+		if (!shown.includes(id) && shown.length >= slotsOf(type).length) {
+			const next = [...shown];
+			next[index] = id;
+			commit(type, next);
+			return;
+		}
+
+		const rest = shown.filter((x) => x !== id);
 		const at = Math.min(index, rest.length);
 		commit(type, [...rest.slice(0, at), id, ...rest.slice(at)]);
 	};
@@ -147,14 +153,10 @@ export function InteractiveCardLayout({
 		useSensor(KeyboardSensor),
 	);
 
-	const clearActive = () => {
-		setActiveId(null);
-		setActiveWidth(null);
-	};
+	const clearActive = () => setActiveId(null);
 	const onDragStart = (e: DragStartEvent) => {
 		if (isDisabled) return;
 		setActiveId(String(e.active.id));
-		setActiveWidth(e.active.rect.current.initial?.width ?? null);
 	};
 	const onDragEnd = (e: DragEndEvent) => {
 		clearActive();
@@ -168,7 +170,7 @@ export function InteractiveCardLayout({
 			return;
 		}
 		const m = /^slot:(window|stat):(\d+)$/.exec(String(over.id));
-		if (m && m[1] === type) moveTo(id, type, Number(m[2]));
+		if (m && m[1] === type) placeAt(id, type, Number(m[2]));
 	};
 
 	const activeField = activeId ? fieldById.get(activeId) : undefined;
@@ -176,6 +178,16 @@ export function InteractiveCardLayout({
 
 	const shownWindows = shownOf("window");
 	const shownStats = shownOf("stat");
+	const activeIsShown =
+		activeId != null &&
+		activeType != null &&
+		shownOf(activeType).includes(activeId);
+	const replacementType =
+		activeType != null &&
+		!activeIsShown &&
+		shownOf(activeType).length >= slotsOf(activeType).length
+			? activeType
+			: null;
 	// The ghost mirrors its source: a bar dragged off the card keeps that
 	// slot's placeholder fill, one from the drawer keeps its empty track.
 	const activeBarIndex =
@@ -234,6 +246,7 @@ export function InteractiveCardLayout({
 										]
 									}
 									accepts={activeType === "window"}
+									replaces={replacementType === "window"}
 									isDisabled={isDisabled}
 									onHide={() => hide(id, "window")}
 								/>
@@ -270,6 +283,7 @@ export function InteractiveCardLayout({
 										field={field}
 										index={index}
 										accepts={activeType === "stat"}
+										replaces={replacementType === "stat"}
 										isDisabled={isDisabled}
 										onHide={() => hide(id, "stat")}
 									/>
@@ -295,11 +309,7 @@ export function InteractiveCardLayout({
 				</div>
 
 				<HiddenDrawer
-					active={
-						activeId != null &&
-						activeType != null &&
-						shownOf(activeType).includes(activeId)
-					}
+					active={activeIsShown}
 					isDisabled={isDisabled}
 					windows={{
 						fields: hiddenOf("window"),
@@ -314,13 +324,12 @@ export function InteractiveCardLayout({
 				/>
 			</div>
 
-			<DragOverlay dropAnimation={reduceMotion ? null : undefined}>
+			<DragOverlay adjustScale={false} dropAnimation={null}>
 				{activeField && activeType ? (
 					<DragGhost
 						field={activeField}
 						type={activeType}
 						barPct={activeBarPct}
-						width={activeWidth}
 					/>
 				) : null}
 			</DragOverlay>
@@ -328,35 +337,27 @@ export function InteractiveCardLayout({
 	);
 }
 
-/** The floating drag preview — the same shape and size as the row it left,
- *  which both panes share (bars span the row, stats fill half the grid). */
+/** The floating drag preview uses the card's slot width, so crossing between
+ *  the narrow card and the wider drawer does not resize the pointer target. */
 function DragGhost({
 	field,
 	type,
 	barPct,
-	width,
 }: {
 	field: LayoutField;
 	type: SlotType;
 	/** Placeholder fill carried over from the source row; 0 = empty track. */
 	barPct: number;
-	width: number | null;
 }) {
 	if (type === "window") {
 		return (
-			<div
-				className="cursor-grabbing rounded-md bg-surface p-1 shadow-md"
-				style={width ? { width } : undefined}
-			>
+			<div className="w-72 max-w-[calc(100vw-2rem)] cursor-grabbing rounded-md border border-border bg-overlay p-1 shadow-[var(--overlay-shadow)]">
 				<BarBody label={field.label} pct={barPct} />
 			</div>
 		);
 	}
 	return (
-		<div
-			className="flex cursor-grabbing items-baseline justify-between gap-1 rounded-md bg-surface px-1.5 py-0.5 text-[11px] shadow-md"
-			style={width ? { width } : undefined}
-		>
+		<div className="flex w-36 cursor-grabbing items-baseline justify-between gap-1 rounded-md border border-border bg-overlay px-1.5 py-1 text-[11px] shadow-[var(--overlay-shadow)]">
 			<span className="truncate text-muted">{field.label}</span>
 			<span className="text-foreground tabular-nums">—</span>
 		</div>
@@ -369,12 +370,79 @@ function BarBody({ label, pct }: { label: string; pct: number }) {
 	return (
 		<div className="flex min-w-0 flex-1 flex-col gap-0.5">
 			<span className="truncate text-[11px] text-muted">{label}</span>
-			<Meter aria-hidden value={pct} size="sm">
+			<Meter aria-hidden aria-label={label} value={pct} size="sm">
 				<Meter.Track>
 					<Meter.Fill className="bg-foreground/25" />
 				</Meter.Track>
 			</Meter>
 		</div>
+	);
+}
+
+function LayoutDragHandle({
+	fieldLabel,
+	isDisabled,
+	attributes,
+	listeners,
+	setActivatorNodeRef,
+}: {
+	fieldLabel: string;
+	isDisabled?: boolean;
+	attributes: DraggableAttributes;
+	listeners: DraggableSyntheticListeners;
+	setActivatorNodeRef: (element: HTMLElement | null) => void;
+}) {
+	const { t } = useTranslation();
+	return (
+		<Button
+			ref={setActivatorNodeRef}
+			{...attributes}
+			{...listeners}
+			type="button"
+			isIconOnly
+			isDisabled={isDisabled}
+			size="sm"
+			variant="ghost"
+			aria-label={t("usageLayoutDrag", { label: fieldLabel })}
+			className="shrink-0 cursor-grab touch-none text-foreground/45 active:cursor-grabbing"
+		>
+			<Bars2Icon className="size-4" />
+		</Button>
+	);
+}
+
+function LayoutVisibilityAction({
+	action,
+	fieldLabel,
+	isDisabled,
+	onPress,
+}: {
+	action: "hide" | "show";
+	fieldLabel: string;
+	isDisabled?: boolean;
+	onPress: () => void;
+}) {
+	const { t } = useTranslation();
+	const label = t(action === "hide" ? "usageLayoutHide" : "usageLayoutShow", {
+		label: fieldLabel,
+	});
+	return (
+		<Button
+			type="button"
+			isIconOnly
+			isDisabled={isDisabled}
+			size="sm"
+			variant="ghost"
+			onPress={onPress}
+			aria-label={label}
+			className="shrink-0 text-muted transition-[color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] [@media(hover:hover)]:opacity-0 group-hover/layout-row:opacity-100 group-focus-within/layout-row:opacity-100"
+		>
+			{action === "hide" ? (
+				<EyeSlashIcon className="size-3.5" />
+			) : (
+				<PlusIcon className="size-3.5" />
+			)}
+		</Button>
 	);
 }
 
@@ -407,12 +475,13 @@ function EmptySlot({
 	);
 }
 
-/** A quota bar on the replica. Drag to reorder, eye to hide (on hover). */
+/** A quota bar on the replica. The handle drags; the eye only hides. */
 function PreviewBarRow({
 	field,
 	index,
 	pct,
 	accepts,
+	replaces,
 	isDisabled,
 	onHide,
 }: {
@@ -420,10 +489,10 @@ function PreviewBarRow({
 	index: number;
 	pct: number;
 	accepts: boolean;
+	replaces: boolean;
 	isDisabled?: boolean;
 	onHide: () => void;
 }) {
-	const { t } = useTranslation();
 	const { setNodeRef: dropRef, isOver } = useDroppable({
 		id: `slot:window:${index}`,
 		disabled: isDisabled,
@@ -432,39 +501,46 @@ function PreviewBarRow({
 		attributes,
 		listeners,
 		setNodeRef: dragRef,
+		setActivatorNodeRef,
 		isDragging,
 	} = useDraggable({ id: field.id, disabled: isDisabled });
+	const isDropTarget = isOver && accepts;
 	return (
 		<div
 			ref={dropRef}
+			data-drop-action={
+				isDropTarget ? (replaces ? "replace" : "move") : undefined
+			}
 			className={cn(
-				"group/layout-row -mx-1 flex items-center gap-2 rounded-md px-1 py-0.5 transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)] hover:bg-surface-secondary",
-				isOver && accepts && "ring-1 ring-accent",
+				"group/layout-row -mx-1 flex items-center gap-1 rounded-md px-0.5 transition-[background-color,box-shadow,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+				!isDisabled && "hover:bg-surface-secondary",
+				isDropTarget &&
+					(replaces
+						? "bg-accent/10 ring-1 ring-accent"
+						: "ring-1 ring-accent"),
 				isDragging && "opacity-30",
 			)}
 		>
 			<div
 				ref={dragRef}
 				title={field.hint}
-				{...attributes}
-				{...listeners}
-				className="flex min-w-0 flex-1 cursor-grab touch-none rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-focus"
+				className="flex min-w-0 flex-1 items-center gap-1"
 			>
+				<LayoutDragHandle
+					fieldLabel={field.label}
+					isDisabled={isDisabled}
+					attributes={attributes}
+					listeners={listeners}
+					setActivatorNodeRef={setActivatorNodeRef}
+				/>
 				<BarBody label={field.label} pct={pct} />
 			</div>
-			<Button
-				isIconOnly
+			<LayoutVisibilityAction
+				action="hide"
+				fieldLabel={field.label}
 				isDisabled={isDisabled}
-				size="sm"
-				variant="ghost"
 				onPress={onHide}
-				aria-label={t("usageLayoutHide", {
-					label: field.label,
-				})}
-				className="size-6 shrink-0 text-muted transition-[color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] [@media(hover:hover)]:opacity-0 group-hover/layout-row:opacity-100 group-focus-within/layout-row:opacity-100"
-			>
-				<EyeSlashIcon className="size-3.5" />
-			</Button>
+			/>
 		</div>
 	);
 }
@@ -474,16 +550,17 @@ function PreviewStatCell({
 	field,
 	index,
 	accepts,
+	replaces,
 	isDisabled,
 	onHide,
 }: {
 	field: LayoutField;
 	index: number;
 	accepts: boolean;
+	replaces: boolean;
 	isDisabled?: boolean;
 	onHide: () => void;
 }) {
-	const { t } = useTranslation();
 	const { setNodeRef: dropRef, isOver } = useDroppable({
 		id: `slot:stat:${index}`,
 		disabled: isDisabled,
@@ -492,40 +569,49 @@ function PreviewStatCell({
 		attributes,
 		listeners,
 		setNodeRef: dragRef,
+		setActivatorNodeRef,
 		isDragging,
 	} = useDraggable({ id: field.id, disabled: isDisabled });
+	const isDropTarget = isOver && accepts;
 	return (
 		<div
 			ref={dropRef}
+			data-drop-action={
+				isDropTarget ? (replaces ? "replace" : "move") : undefined
+			}
 			className={cn(
-				"group/layout-row -mx-1 flex items-center gap-1 rounded px-1 transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)] hover:bg-surface-secondary",
-				isOver && accepts && "ring-1 ring-accent",
+				"group/layout-row -mx-1 flex items-center gap-0.5 rounded px-0.5 text-[11px] transition-[background-color,box-shadow,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+				!isDisabled && "hover:bg-surface-secondary",
+				isDropTarget &&
+					(replaces
+						? "bg-accent/10 ring-1 ring-accent"
+						: "ring-1 ring-accent"),
 				isDragging && "opacity-30",
 			)}
 		>
 			<div
 				ref={dragRef}
 				title={field.hint}
-				{...attributes}
-				{...listeners}
-				className="flex min-w-0 flex-1 cursor-grab touch-none items-baseline justify-between gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-focus"
+				className="flex min-w-0 flex-1 items-center gap-0.5"
 			>
-				<span className="truncate text-muted">{field.label}</span>
+				<LayoutDragHandle
+					fieldLabel={field.label}
+					isDisabled={isDisabled}
+					attributes={attributes}
+					listeners={listeners}
+					setActivatorNodeRef={setActivatorNodeRef}
+				/>
+				<span className="min-w-0 flex-1 truncate text-muted">
+					{field.label}
+				</span>
 				<span className="shrink-0 text-foreground tabular-nums">—</span>
 			</div>
-			<Button
-				isIconOnly
+			<LayoutVisibilityAction
+				action="hide"
+				fieldLabel={field.label}
 				isDisabled={isDisabled}
-				size="sm"
-				variant="ghost"
 				onPress={onHide}
-				aria-label={t("usageLayoutHide", {
-					label: field.label,
-				})}
-				className="size-5 shrink-0 text-muted transition-[color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] [@media(hover:hover)]:opacity-0 group-hover/layout-row:opacity-100 group-focus-within/layout-row:opacity-100"
-			>
-				<EyeSlashIcon className="size-3" />
-			</Button>
+			/>
 		</div>
 	);
 }
@@ -559,6 +645,9 @@ function HiddenDrawer({
 		disabled: isDisabled,
 	});
 	const empty = windows.fields.length === 0 && stats.fields.length === 0;
+	const hasReplacementChoices =
+		(windows.atCap && windows.fields.length > 0) ||
+		(stats.atCap && stats.fields.length > 0);
 	return (
 		<div
 			ref={setNodeRef}
@@ -571,6 +660,11 @@ function HiddenDrawer({
 			<span className="pb-0.5 text-[11px] font-medium text-muted">
 				{t("usageLayoutHiddenDrawer")}
 			</span>
+			{hasReplacementChoices && (
+				<p className="pb-1 text-[11px] leading-4 text-muted">
+					{t("usageLayoutFullHint")}
+				</p>
+			)}
 			{empty ? (
 				<p className="py-3 text-center text-[11px] text-foreground/40">
 					{t("usageLayoutDrawerEmpty")}
@@ -584,9 +678,6 @@ function HiddenDrawer({
 							atCap={windows.atCap}
 							isDisabled={isDisabled}
 							onShow={() => windows.onShow(field.id)}
-							showLabel={t("usageLayoutShow", {
-								label: field.label,
-							})}
 						/>
 					))}
 					{stats.fields.length > 0 && (
@@ -598,9 +689,6 @@ function HiddenDrawer({
 									atCap={stats.atCap}
 									isDisabled={isDisabled}
 									onShow={() => stats.onShow(field.id)}
-									showLabel={t("usageLayoutShow", {
-										label: field.label,
-									})}
 								/>
 							))}
 						</div>
@@ -617,51 +705,53 @@ function HiddenBarRow({
 	atCap,
 	isDisabled,
 	onShow,
-	showLabel,
 }: {
 	field: LayoutField;
 	atCap: boolean;
 	isDisabled?: boolean;
 	onShow: () => void;
-	showLabel: string;
 }) {
-	const disabled = atCap || isDisabled;
-	const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+	const {
+		attributes,
+		listeners,
+		setNodeRef,
+		setActivatorNodeRef,
+		isDragging,
+	} = useDraggable({
 		id: field.id,
-		disabled,
+		disabled: isDisabled,
 	});
 	return (
 		<div
 			data-testid={`layout-hidden-item-${field.id}`}
 			className={cn(
-				"group/layout-row -mx-1 flex items-center gap-2 rounded-md px-1 py-1 outline-none transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]",
-				disabled ? "opacity-40" : "hover:bg-surface-secondary",
+				"group/layout-row -mx-1 flex items-center gap-1 rounded-md px-0.5 outline-none transition-[background-color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+				isDisabled ? "opacity-40" : "hover:bg-surface-secondary",
 				isDragging && "opacity-30",
 			)}
 		>
 			<div
 				ref={setNodeRef}
 				title={field.hint}
-				{...(disabled ? {} : attributes)}
-				{...(disabled ? {} : listeners)}
-				className={cn(
-					"flex min-w-0 flex-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-focus",
-					!disabled && "cursor-grab touch-none",
-				)}
+				className="flex min-w-0 flex-1 items-center gap-1"
 			>
+				<LayoutDragHandle
+					fieldLabel={field.label}
+					isDisabled={isDisabled}
+					attributes={attributes}
+					listeners={listeners}
+					setActivatorNodeRef={setActivatorNodeRef}
+				/>
 				<BarBody label={field.label} pct={0} />
 			</div>
-			<Button
-				isIconOnly
-				isDisabled={disabled}
-				size="sm"
-				variant="ghost"
-				onPress={onShow}
-				aria-label={showLabel}
-				className="size-6 shrink-0 text-muted transition-[color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] [@media(hover:hover)]:opacity-0 group-hover/layout-row:opacity-100 group-focus-within/layout-row:opacity-100"
-			>
-				<PlusIcon className="size-3.5" />
-			</Button>
+			{!atCap && (
+				<LayoutVisibilityAction
+					action="show"
+					fieldLabel={field.label}
+					isDisabled={isDisabled}
+					onPress={onShow}
+				/>
+			)}
 		</div>
 	);
 }
@@ -672,54 +762,58 @@ function HiddenStatCell({
 	atCap,
 	isDisabled,
 	onShow,
-	showLabel,
 }: {
 	field: LayoutField;
 	atCap: boolean;
 	isDisabled?: boolean;
 	onShow: () => void;
-	showLabel: string;
 }) {
-	const disabled = atCap || isDisabled;
-	const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+	const {
+		attributes,
+		listeners,
+		setNodeRef,
+		setActivatorNodeRef,
+		isDragging,
+	} = useDraggable({
 		id: field.id,
-		disabled,
+		disabled: isDisabled,
 	});
 	return (
 		<div
 			data-testid={`layout-hidden-item-${field.id}`}
 			className={cn(
-				"group/layout-row -mx-1 flex items-center gap-1 rounded px-1 py-0.5 text-[11px] outline-none transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]",
-				disabled ? "opacity-40" : "hover:bg-surface-secondary",
+				"group/layout-row -mx-1 flex items-center gap-0.5 rounded px-0.5 text-[11px] outline-none transition-[background-color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)]",
+				isDisabled ? "opacity-40" : "hover:bg-surface-secondary",
 				isDragging && "opacity-30",
 			)}
 		>
 			<div
 				ref={setNodeRef}
 				title={field.hint}
-				{...(disabled ? {} : attributes)}
-				{...(disabled ? {} : listeners)}
-				className={cn(
-					"flex min-w-0 flex-1 items-baseline justify-between gap-1 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-focus",
-					!disabled && "cursor-grab touch-none",
-				)}
+				className="flex min-w-0 flex-1 items-center gap-0.5"
 			>
-				<span className="truncate text-muted">{field.label}</span>
+				<LayoutDragHandle
+					fieldLabel={field.label}
+					isDisabled={isDisabled}
+					attributes={attributes}
+					listeners={listeners}
+					setActivatorNodeRef={setActivatorNodeRef}
+				/>
+				<span className="min-w-0 flex-1 truncate text-muted">
+					{field.label}
+				</span>
 				<span className="shrink-0 text-foreground/40 tabular-nums">
 					—
 				</span>
 			</div>
-			<Button
-				isIconOnly
-				isDisabled={disabled}
-				size="sm"
-				variant="ghost"
-				onPress={onShow}
-				aria-label={showLabel}
-				className="size-5 shrink-0 text-muted transition-[color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] [@media(hover:hover)]:opacity-0 group-hover/layout-row:opacity-100 group-focus-within/layout-row:opacity-100"
-			>
-				<PlusIcon className="size-3" />
-			</Button>
+			{!atCap && (
+				<LayoutVisibilityAction
+					action="show"
+					fieldLabel={field.label}
+					isDisabled={isDisabled}
+					onPress={onShow}
+				/>
+			)}
 		</div>
 	);
 }

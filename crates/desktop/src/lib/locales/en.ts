@@ -508,6 +508,7 @@ export default {
 	usageHomeStatsLabel: "Bottom stats",
 	usageLayoutHide: "Remove {{label}}",
 	usageLayoutShow: "Add {{label}}",
+	usageLayoutDrag: "Drag {{label}}",
 	usageLayoutTarget: "Editing layout for",
 	usageLayoutTargetDefault: "Default",
 	usageLayoutResetOverride: "Reset to default",
@@ -1348,6 +1349,8 @@ export default {
 	usageTotalSpend: "Total spend",
 	usageActiveDays: "Active days",
 	usageLayoutHiddenDrawer: "Not shown",
+	usageLayoutFullHint:
+		"Card is full. Drag a field onto a shown field to replace it.",
 	usageLayoutDrawerEmpty: "Drag a field here to hide it.",
 	usageLayoutEmptyCard: "Everything is hidden — add fields from the drawer.",
 	usageDailyActivity: "Daily usage by agent",
