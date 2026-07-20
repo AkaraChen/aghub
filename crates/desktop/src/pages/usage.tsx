@@ -1,5 +1,5 @@
 import { Cog6ToothIcon } from "@heroicons/react/24/outline";
-import { Button, Meter, Spinner, Toolbar, Tooltip } from "@heroui/react";
+import { Button, Meter, Spinner, Tooltip } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -185,11 +185,7 @@ export default function UsagePage() {
 							{t("usageWindowDaysLabel", { days: WINDOW_DAYS })}
 						</p>
 					</div>
-					<Toolbar
-						isAttached
-						aria-label={t("usage")}
-						className="max-w-full rounded-lg border border-border shadow-none sm:shrink-0"
-					>
+					<div className="flex max-w-full items-center gap-1 sm:shrink-0">
 						<UsageStatus
 							version={status?.version ?? null}
 							reachable={status?.reachable}
@@ -216,7 +212,7 @@ export default function UsagePage() {
 								{t("usageOpenSettings")}
 							</Tooltip.Content>
 						</Tooltip>
-					</Toolbar>
+					</div>
 				</header>
 
 				{isLoading ? (
@@ -510,10 +506,7 @@ function UsageStatus({
 }) {
 	const { t } = useTranslation();
 	return (
-		<div
-			role="status"
-			className="flex shrink-0 items-center gap-2 pl-2 text-xs"
-		>
+		<div role="status" className="flex shrink-0 items-center gap-2 text-xs">
 			<span
 				className={cn(
 					"size-2 rounded-full",

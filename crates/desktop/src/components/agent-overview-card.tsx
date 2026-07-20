@@ -1,5 +1,5 @@
 import { ArrowRightIcon, FolderOpenIcon } from "@heroicons/react/24/solid";
-import { Button, Card, Meter, Skeleton, toast, Tooltip } from "@heroui/react";
+import { Button, Card, Meter, toast, Tooltip } from "@heroui/react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
@@ -46,8 +46,6 @@ interface AgentOverviewCardProps {
 	usage?: AgentUsageDto;
 	/** Remaining rate-limit windows for this agent, when available. */
 	limits?: AgentLimitsDto;
-	/** Show the loading skeleton while the first usage/limits fetch is in flight. */
-	isUsageLoading?: boolean;
 	/** How to render the usage block; defaults to showing everything. */
 	usageDisplay?: AgentUsageDisplay;
 }
@@ -58,7 +56,6 @@ export function AgentOverviewCard({
 	mcpCount,
 	usage,
 	limits,
-	isUsageLoading,
 	usageDisplay = DEFAULT_USAGE_DISPLAY,
 }: AgentOverviewCardProps) {
 	const { t } = useTranslation();
@@ -98,7 +95,7 @@ export function AgentOverviewCard({
 		}
 	}
 
-	const tall = isUsageLoading || showQuota || showStats;
+	const tall = showQuota || showStats;
 
 	return (
 		<Card
@@ -149,49 +146,37 @@ export function AgentOverviewCard({
 								onPress={() => openResource("mcp")}
 							/>
 						</div>
-						{(isUsageLoading || showQuota || showStats) && (
+						{(showQuota || showStats) && (
 							<div className="flex flex-col gap-1.5">
-								{isUsageLoading ? (
-									<UsageSkeleton />
-								) : (
-									<>
-										{showQuota && (
-											<QuotaRow
-												windows={view.windows}
-												alertThresholdPct={
-													usageDisplay.alertThresholdPct
-												}
-											/>
+								{showQuota && (
+									<QuotaRow
+										windows={view.windows}
+										alertThresholdPct={
+											usageDisplay.alertThresholdPct
+										}
+									/>
+								)}
+								{showStats && (
+									<div className="grid grid-cols-2 gap-x-3 gap-y-1">
+										{statCellList.map(({ key, cell }) =>
+											cell ? (
+												<div
+													key={key}
+													className="flex items-baseline justify-between gap-1 text-[11px]"
+												>
+													<span className="text-muted">
+														{t(cell.labelKey)}
+													</span>
+													<span className="text-foreground tabular-nums">
+														{cell.value}
+													</span>
+												</div>
+											) : (
+												// Empty slot — hold the 2×2 position.
+												<div key={key} aria-hidden />
+											),
 										)}
-										{showStats && (
-											<div className="grid grid-cols-2 gap-x-3 gap-y-1">
-												{statCellList.map(
-													({ key, cell }) =>
-														cell ? (
-															<div
-																key={key}
-																className="flex items-baseline justify-between gap-1 text-[11px]"
-															>
-																<span className="text-muted">
-																	{t(
-																		cell.labelKey,
-																	)}
-																</span>
-																<span className="text-foreground tabular-nums">
-																	{cell.value}
-																</span>
-															</div>
-														) : (
-															// Empty slot — hold the 2×2 position.
-															<div
-																key={key}
-																aria-hidden
-															/>
-														),
-												)}
-											</div>
-										)}
-									</>
+									</div>
 								)}
 							</div>
 						)}
@@ -205,26 +190,6 @@ export function AgentOverviewCard({
 				)}
 			</Card.Content>
 		</Card>
-	);
-}
-
-function UsageSkeleton() {
-	return (
-		<div aria-hidden="true" className="flex flex-col gap-2">
-			{[0, 1].map((row) => (
-				<div key={row} className="flex flex-col gap-1">
-					<div className="flex items-baseline justify-between">
-						<Skeleton className="h-3 w-20 rounded" />
-						<Skeleton className="h-3 w-8 rounded" />
-					</div>
-					<Skeleton className="h-1.5 w-full rounded-full" />
-				</div>
-			))}
-			<div className="flex items-baseline justify-between">
-				<Skeleton className="h-3 w-24 rounded" />
-				<Skeleton className="h-3 w-10 rounded" />
-			</div>
-		</div>
 	);
 }
 

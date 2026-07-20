@@ -545,7 +545,7 @@ function PreviewBarRow({
 	);
 }
 
-/** A bottom stat on the replica: label + placeholder in the 2×2 grid. */
+/** A bottom stat on the replica. */
 function PreviewStatCell({
 	field,
 	index,
@@ -604,7 +604,6 @@ function PreviewStatCell({
 				<span className="min-w-0 flex-1 truncate text-muted">
 					{field.label}
 				</span>
-				<span className="shrink-0 text-foreground tabular-nums">—</span>
 			</div>
 			<LayoutVisibilityAction
 				action="hide"
@@ -801,9 +800,6 @@ function HiddenStatCell({
 				/>
 				<span className="min-w-0 flex-1 truncate text-muted">
 					{field.label}
-				</span>
-				<span className="shrink-0 text-foreground/40 tabular-nums">
-					—
 				</span>
 			</div>
 			{!atCap && (

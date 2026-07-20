@@ -12,11 +12,7 @@ import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useUsageSettings } from "../hooks/use-usage-settings";
 import { agentStatus } from "../lib/agent-status";
-import {
-	agentSettings,
-	DEFAULT_USAGE_SETTINGS,
-	USAGE_AGENT_IDS,
-} from "../lib/store";
+import { agentSettings, DEFAULT_USAGE_SETTINGS } from "../lib/store";
 import { cn } from "../lib/utils";
 import { mcpListQueryOptions } from "../requests/mcps";
 import { skillListQueryOptions } from "../requests/skills";
@@ -31,8 +27,6 @@ function toCompactYmd(date: Date): string {
 	const day = String(date.getDate()).padStart(2, "0");
 	return `${year}${month}${day}`;
 }
-
-const USAGE_AGENT_ID_SET = new Set<string>(USAGE_AGENT_IDS);
 
 export default function HomePage() {
 	const { t } = useTranslation();
@@ -69,7 +63,7 @@ export default function HomePage() {
 
 	// Usage is best-effort: agents without local ccusage data land in the
 	// report's warnings with no entry. Cards without an entry omit the block.
-	const { data: usageReport, isLoading: isUsageLoading } = useQuery(
+	const { data: usageReport } = useQuery(
 		usageSummaryQueryOptions({
 			api,
 			...usageRange,
@@ -81,7 +75,7 @@ export default function HomePage() {
 			refetchInterval,
 		}),
 	);
-	const { data: limitsReport, isLoading: isLimitsLoading } = useQuery(
+	const { data: limitsReport } = useQuery(
 		usageLimitsQueryOptions({
 			api,
 			enabled: showUsageOnHome,
@@ -178,7 +172,6 @@ export default function HomePage() {
 				>
 					{sortedAgents.map((agent) => {
 						const counts = countsByAgent.get(agent.id);
-						const hasUsage = USAGE_AGENT_ID_SET.has(agent.id);
 						return (
 							<AgentOverviewCard
 								key={agent.id}
@@ -187,10 +180,6 @@ export default function HomePage() {
 								mcpCount={counts?.mcps ?? 0}
 								usage={usageByAgent.get(agent.id)}
 								limits={limitsByAgent.get(agent.id)}
-								isUsageLoading={
-									hasUsage &&
-									(isUsageLoading || isLimitsLoading)
-								}
 								usageDisplay={usageDisplayFor(agent.id)}
 							/>
 						);

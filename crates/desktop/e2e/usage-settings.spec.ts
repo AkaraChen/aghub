@@ -89,6 +89,11 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	// data), and the drawer lists what's hidden.
 	await expect(page.getByText("5-hour limit").first()).toBeVisible();
 	await expect(page.getByText("Total tokens").first()).toBeVisible();
+	const totalTokensRow = page
+		.getByTestId("layout-card-replica")
+		.getByText("Total tokens", { exact: true })
+		.locator("..");
+	await expect(totalTokensRow.getByText("—", { exact: true })).toHaveCount(0);
 	await expect(page.getByText("Not shown", { exact: true })).toBeVisible();
 	await expect(page.getByText("Cache read", { exact: true })).toBeVisible();
 	await expect(
@@ -394,22 +399,69 @@ test("layout editor moves a field between the card and the drawer", async ({
 	await expect(drawer.getByText("Total tokens")).toHaveCount(0);
 });
 
-test("usage header separates ccusage status from navigation", async ({
-	page,
-}) => {
+test("usage header keeps ccusage status unboxed", async ({ page }) => {
 	await page.goto("/usage");
 
-	const toolbar = page.getByRole("toolbar", { name: "Usage" });
-	await expect(toolbar).toHaveClass(/toolbar--attached/);
-	await expect(toolbar).toHaveClass(/rounded-lg/);
-	await expect(toolbar).toHaveClass(/shadow-none/);
+	await expect(page.getByRole("toolbar", { name: "Usage" })).toHaveCount(0);
 	const status = page.getByRole("status");
 	await expect(status).toContainText("20.0.6");
 	await expect(status).toContainText("20.0.17 available");
+	const containerStyle = await status.locator("..").evaluate((element) => {
+		const style = getComputedStyle(element);
+		return {
+			backgroundColor: style.backgroundColor,
+			borderTopWidth: style.borderTopWidth,
+		};
+	});
+	expect(containerStyle).toEqual({
+		backgroundColor: "rgba(0, 0, 0, 0)",
+		borderTopWidth: "0px",
+	});
 	await expect(
 		page.getByRole("button", { name: "Open settings" }),
 	).toBeVisible();
 	await expect(status.locator("button")).toHaveCount(0);
+});
+
+test("home does not animate optional usage before data exists", async ({
+	page,
+}) => {
+	const emptyUsageReport = { ...usageReport, agents: [] };
+	const emptyLimitsReport = { ...limitsReport, agents: [] };
+	let releaseUsageRequests = () => undefined;
+	const usageRequestsPending = new Promise<void>((resolve) => {
+		releaseUsageRequests = () => resolve();
+	});
+	await page.route("**/api/v1/usage/summary**", async (route) => {
+		await usageRequestsPending;
+		await route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify(emptyUsageReport),
+		});
+	});
+	await page.route("**/api/v1/usage/limits**", async (route) => {
+		await usageRequestsPending;
+		await route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify(emptyLimitsReport),
+		});
+	});
+
+	try {
+		await page.goto("/");
+		const claudeCard = page
+			.getByText("Claude", { exact: true })
+			.locator('xpath=ancestor::*[@data-slot="card"]');
+		await expect(claudeCard).toBeVisible();
+		expect(await claudeCard.locator(".skeleton").count()).toBe(0);
+		expect(await claudeCard.getAttribute("class")).not.toContain(
+			"row-span-2",
+		);
+	} finally {
+		releaseUsageRequests();
+	}
 });
 
 test("home agent card renders the customized usage block", async ({ page }) => {
