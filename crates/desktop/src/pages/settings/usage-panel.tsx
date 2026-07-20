@@ -11,6 +11,7 @@ import {
 	ListBox,
 	NumberField,
 	Select,
+	Surface,
 	Switch,
 	TextField,
 } from "@heroui/react";
@@ -278,7 +279,7 @@ export default function UsagePanel() {
 				: (status.error ?? t("usageStatusUnreachable"));
 
 	return (
-		<div className="divide-y divide-border">
+		<Surface className="divide-y divide-border rounded-3xl p-4 shadow-surface">
 			{/* ccusage sidecar — status, binary resolution, config file. */}
 			<section className="space-y-4 px-1 pb-5">
 				<div className="flex items-center justify-between gap-4">
@@ -696,7 +697,7 @@ export default function UsagePanel() {
 					</Disclosure.Content>
 				</Disclosure>
 			</section>
-		</div>
+		</Surface>
 	);
 }
 

@@ -140,6 +140,31 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	});
 });
 
+test("Usage settings uses the same surface level as Appearance", async ({
+	page,
+}) => {
+	await page.goto("/settings?tab=appearance");
+	const appearanceSurface = page
+		.locator('[data-slot="tabs-panel"]')
+		.locator(".card--default");
+	const appearanceBackground = await appearanceSurface.evaluate(
+		(element) => getComputedStyle(element).backgroundColor,
+	);
+
+	await page.goto("/settings?tab=usage");
+	const usageSurface = page
+		.locator('[data-slot="tabs-panel"]')
+		.locator(".surface--default");
+	await expect(usageSurface).toBeVisible();
+	await expect
+		.poll(() =>
+			usageSurface.evaluate(
+				(element) => getComputedStyle(element).backgroundColor,
+			),
+		)
+		.toBe(appearanceBackground);
+});
+
 test("hidden layout rows use a surface hover instead of fading", async ({
 	page,
 }) => {
@@ -221,6 +246,10 @@ test("usage header separates ccusage status from navigation", async ({
 }) => {
 	await page.goto("/usage");
 
+	const toolbar = page.getByRole("toolbar", { name: "Usage" });
+	await expect(toolbar).toHaveClass(/toolbar--attached/);
+	await expect(toolbar).toHaveClass(/rounded-lg/);
+	await expect(toolbar).toHaveClass(/shadow-none/);
 	const status = page.getByRole("status");
 	await expect(status).toContainText("20.0.6");
 	await expect(status).toContainText("20.0.17 available");
