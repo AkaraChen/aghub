@@ -388,10 +388,10 @@ fn codex_to_agent(report: CcCodexReport) -> AgentUsageDto {
 
 // ---- generic agent shape (opencode, gemini, kimi, …) -----------------------
 //
-// Most ccusage agents share Claude's daily shape as a subset (no reasoning, a
-// `modelsUsed` name list rather than `modelBreakdowns`). This tolerant struct
-// parses any of them; an agent whose shape doesn't fit is a warning, and one
-// that reports no data is skipped — neither fails the whole report.
+// Most ccusage agents share Claude's summary fields. Some add metadata such as
+// credits/messageCount or omit model breakdowns. This tolerant struct parses
+// the common token/cost contract; an incompatible report becomes a warning,
+// and an agent with no data is skipped.
 
 #[derive(Deserialize)]
 struct CcAgentReport {
@@ -1161,82 +1161,97 @@ mod tests {
 	}
 
 	#[test]
-	fn claude_normalization_zeroes_reasoning_and_sums_model_tokens() {
-		let report = CcClaudeReport {
-			daily: vec![CcClaudeDay {
-				date: "2026-06-01".to_string(),
-				input_tokens: 100,
-				output_tokens: 50,
-				cache_creation_tokens: 5,
-				cache_read_tokens: 3,
-				total_tokens: 158,
-				total_cost: Some(1.25),
-				model_breakdowns: vec![CcClaudeModel {
-					model_name: "claude-opus-4".to_string(),
-					input_tokens: 100,
-					output_tokens: 50,
-					cache_creation_tokens: 5,
-					cache_read_tokens: 3,
-					cost: Some(1.25),
-				}],
+	fn claude_normalization_matches_ccusage_summary_json() {
+		let report: CcClaudeReport = serde_json::from_value(json!({
+			"daily": [{
+				"date": "2026-01-02",
+				"inputTokens": 1234,
+				"outputTokens": 567,
+				"cacheCreationTokens": 89,
+				"cacheReadTokens": 10,
+				"totalTokens": 1900,
+				"totalCost": 0.42,
+				"modelsUsed": [
+					"gpt-5.2-codex",
+					"claude-sonnet-4-20250514"
+				],
+				"modelBreakdowns": [{
+					"modelName": "gpt-5.2-codex",
+					"inputTokens": 900,
+					"outputTokens": 300,
+					"cacheCreationTokens": 50,
+					"cacheReadTokens": 10,
+					"cost": 0.3
+				}, {
+					"modelName": "claude-sonnet-4-20250514",
+					"inputTokens": 334,
+					"outputTokens": 267,
+					"cacheCreationTokens": 39,
+					"cacheReadTokens": 0,
+					"cost": 0.12
+				}]
 			}],
-			totals: CcClaudeTotals {
-				input_tokens: 100,
-				output_tokens: 50,
-				cache_creation_tokens: 5,
-				cache_read_tokens: 3,
-				total_tokens: 158,
-				total_cost: Some(1.25),
-			},
-		};
+			"totals": {
+				"inputTokens": 1234,
+				"outputTokens": 567,
+				"cacheCreationTokens": 89,
+				"cacheReadTokens": 10,
+				"totalTokens": 1900,
+				"totalCost": 0.42
+			}
+		}))
+		.unwrap();
 		let agent = claude_to_agent(report);
 		assert_eq!(agent.agent, UsageAgent::new("claude"));
 		assert_eq!(agent.totals.reasoning_tokens, 0);
-		let model = &agent.days[0].models[0];
-		assert_eq!(model.total_tokens, 158);
-		assert_eq!(model.cost_usd, Some(1.25));
+		assert_eq!(agent.totals.total_tokens, 1900);
+		assert_eq!(agent.days[0].models[0].total_tokens, 1260);
+		assert_eq!(agent.days[0].models[1].total_tokens, 640);
+		assert_eq!(agent.totals.cost_usd, Some(0.42));
 	}
 
 	#[test]
-	fn codex_normalization_maps_cached_input_and_drops_model_cost() {
-		let mut models = HashMap::new();
-		models.insert(
-			"gpt-5".to_string(),
-			CcCodexModel {
-				input_tokens: 200,
-				cache_read_tokens: 40,
-				cache_creation_tokens: 0,
-				output_tokens: 80,
-				reasoning_output_tokens: 20,
-				total_tokens: 340,
-			},
-		);
-		let report = CcCodexReport {
-			daily: vec![CcCodexDay {
-				date: "2026-06-01".to_string(),
-				input_tokens: 200,
-				cache_read_tokens: 40,
-				cache_creation_tokens: 0,
-				output_tokens: 80,
-				reasoning_output_tokens: 20,
-				total_tokens: 340,
-				cost_usd: Some(0.5),
-				models,
+	fn codex_normalization_matches_ccusage_daily_json() {
+		let report: CcCodexReport = serde_json::from_value(json!({
+			"daily": [{
+				"date": "2026-01-02",
+				"inputTokens": 100,
+				"cacheReadTokens": 110,
+				"cacheCreationTokens": 0,
+				"outputTokens": 15,
+				"reasoningOutputTokens": 2,
+				"totalTokens": 227,
+				"costUSD": 0.00040425,
+				"models": {
+					"gpt-5.3-codex": {
+						"inputTokens": 100,
+						"cacheReadTokens": 110,
+						"cacheCreationTokens": 0,
+						"outputTokens": 15,
+						"reasoningOutputTokens": 2,
+						"totalTokens": 227,
+						"isFallback": true
+					}
+				}
 			}],
-			totals: CcCodexTotals {
-				input_tokens: 200,
-				cache_read_tokens: 40,
-				cache_creation_tokens: 0,
-				output_tokens: 80,
-				reasoning_output_tokens: 20,
-				total_tokens: 340,
-				cost_usd: Some(0.5),
-			},
-		};
+			"totals": {
+				"inputTokens": 100,
+				"cacheReadTokens": 110,
+				"cacheCreationTokens": 0,
+				"outputTokens": 15,
+				"reasoningOutputTokens": 2,
+				"totalTokens": 227,
+				"costUSD": 0.00040425
+			}
+		}))
+		.unwrap();
 		let agent = codex_to_agent(report);
 		assert_eq!(agent.agent, UsageAgent::new("codex"));
 		assert_eq!(agent.totals.cache_creation_tokens, 0);
-		assert_eq!(agent.totals.cache_read_tokens, 40);
+		assert_eq!(agent.totals.cache_read_tokens, 110);
+		assert_eq!(agent.totals.reasoning_tokens, 2);
+		assert_eq!(agent.totals.total_tokens, 227);
+		assert_eq!(agent.days[0].models[0].model, "gpt-5.3-codex");
 		assert_eq!(agent.days[0].models[0].cost_usd, None);
 	}
 
@@ -1402,36 +1417,48 @@ mod tests {
 	}
 
 	#[test]
-	fn generic_agent_parses_claude_shaped_subset() {
-		// opencode / gemini / kimi shape: claude's fields minus reasoning and
-		// modelBreakdowns (they carry `modelsUsed` instead, which we ignore).
+	fn generic_agent_normalization_matches_ccusage_opencode_json() {
 		let raw = json!({
 			"daily": [{
-				"date": "2026-07-01",
+				"date": "2026-01-02",
 				"inputTokens": 100,
 				"outputTokens": 50,
-				"cacheCreationTokens": 0,
-				"cacheReadTokens": 20,
-				"totalTokens": 170,
+				"cacheCreationTokens": 10,
+				"cacheReadTokens": 5,
+				"totalTokens": 172,
 				"totalCost": 0.25,
-				"modelsUsed": ["gpt-x"]
+				"credits": 1.5,
+				"messageCount": 3,
+				"modelsUsed": [
+					"gpt-5.2-codex",
+					"claude-sonnet-4-20250514"
+				],
+				"modelBreakdowns": [{
+					"modelName": "gpt-5.2-codex",
+					"inputTokens": 100,
+					"outputTokens": 50,
+					"cacheCreationTokens": 10,
+					"cacheReadTokens": 5,
+					"cost": 0.25
+				}]
 			}],
 			"totals": {
 				"inputTokens": 100,
 				"outputTokens": 50,
-				"cacheCreationTokens": 0,
-				"cacheReadTokens": 20,
-				"totalTokens": 170,
+				"cacheCreationTokens": 10,
+				"cacheReadTokens": 5,
+				"totalTokens": 172,
 				"totalCost": 0.25
 			}
 		});
 		let report: CcAgentReport = serde_json::from_value(raw).unwrap();
 		let agent = generic_to_agent("opencode", report);
 		assert_eq!(agent.agent, UsageAgent::new("opencode"));
-		assert_eq!(agent.totals.total_tokens, 170);
+		assert_eq!(agent.totals.total_tokens, 172);
 		assert_eq!(agent.totals.cost_usd, Some(0.25));
 		assert_eq!(agent.totals.reasoning_tokens, 0);
-		assert!(agent.days[0].models.is_empty());
+		assert_eq!(agent.days[0].models[0].model, "gpt-5.2-codex");
+		assert_eq!(agent.days[0].models[0].total_tokens, 165);
 	}
 
 	#[test]

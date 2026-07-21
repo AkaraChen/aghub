@@ -626,6 +626,27 @@ mod tests {
 		);
 	}
 
+	#[test]
+	fn windows_ccusage_script_resolves_a_nested_optional_package() {
+		let root = tempfile::tempdir().unwrap();
+		let command_script = root.path().join("ccusage.cmd");
+		let native = root
+			.path()
+			.join("node_modules/ccusage/node_modules")
+			.join("@ccusage/ccusage-win32-arm64/bin/ccusage.exe");
+		std::fs::create_dir_all(native.parent().unwrap()).unwrap();
+		std::fs::write(&command_script, b"fixture").unwrap();
+		std::fs::write(&native, b"fixture").unwrap();
+
+		assert_eq!(
+			resolve_ccusage_command_script(
+				&command_script,
+				"@ccusage/ccusage-win32-arm64",
+			),
+			Some(native)
+		);
+	}
+
 	#[cfg(target_os = "macos")]
 	#[test]
 	fn includes_common_macos_gui_runner_paths() {

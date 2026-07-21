@@ -1,4 +1,4 @@
-use super::storage::{executable_file_name, prepare_staged_binary};
+use super::storage::prepare_staged_binary;
 use super::CcusageRuntimeError;
 use base64::Engine as _;
 use flate2::read::GzDecoder;
@@ -157,13 +157,20 @@ fn metadata_too_large() -> CcusageRuntimeError {
 
 pub(super) fn platform_package() -> Result<PlatformPackage, CcusageRuntimeError>
 {
-	let platform = match (std::env::consts::OS, std::env::consts::ARCH) {
-		("macos", "aarch64") => "darwin-arm64",
-		("macos", "x86_64") => "darwin-x64",
-		("linux", "aarch64") => "linux-arm64",
-		("linux", "x86_64") => "linux-x64",
-		("windows", "aarch64") => "win32-arm64",
-		("windows", "x86_64") => "win32-x64",
+	platform_package_for(std::env::consts::OS, std::env::consts::ARCH)
+}
+
+fn platform_package_for(
+	os: &str,
+	arch: &str,
+) -> Result<PlatformPackage, CcusageRuntimeError> {
+	let (platform, executable) = match (os, arch) {
+		("macos", "aarch64") => ("darwin-arm64", "ccusage"),
+		("macos", "x86_64") => ("darwin-x64", "ccusage"),
+		("linux", "aarch64") => ("linux-arm64", "ccusage"),
+		("linux", "x86_64") => ("linux-x64", "ccusage"),
+		("windows", "aarch64") => ("win32-arm64", "ccusage.exe"),
+		("windows", "x86_64") => ("win32-x64", "ccusage.exe"),
 		(os, arch) => {
 			return Err(CcusageRuntimeError::UnsupportedPlatform {
 				os: os.to_string(),
@@ -173,7 +180,7 @@ pub(super) fn platform_package() -> Result<PlatformPackage, CcusageRuntimeError>
 	};
 	Ok(PlatformPackage {
 		package_name: format!("@ccusage/ccusage-{platform}"),
-		archive_member: format!("package/bin/{}", executable_file_name()),
+		archive_member: format!("package/bin/{executable}"),
 	})
 }
 
@@ -306,6 +313,59 @@ mod tests {
 		assert!(matches!(
 			error,
 			CcusageRuntimeError::InvalidRegistryMetadata(_)
+		));
+	}
+
+	#[test]
+	fn matches_ccusage_native_package_matrix() {
+		let cases = [
+			(
+				"macos",
+				"aarch64",
+				"@ccusage/ccusage-darwin-arm64",
+				"package/bin/ccusage",
+			),
+			(
+				"macos",
+				"x86_64",
+				"@ccusage/ccusage-darwin-x64",
+				"package/bin/ccusage",
+			),
+			(
+				"linux",
+				"aarch64",
+				"@ccusage/ccusage-linux-arm64",
+				"package/bin/ccusage",
+			),
+			(
+				"linux",
+				"x86_64",
+				"@ccusage/ccusage-linux-x64",
+				"package/bin/ccusage",
+			),
+			(
+				"windows",
+				"aarch64",
+				"@ccusage/ccusage-win32-arm64",
+				"package/bin/ccusage.exe",
+			),
+			(
+				"windows",
+				"x86_64",
+				"@ccusage/ccusage-win32-x64",
+				"package/bin/ccusage.exe",
+			),
+		];
+
+		for (os, arch, package_name, archive_member) in cases {
+			let package = platform_package_for(os, arch).unwrap();
+			assert_eq!(package.package_name, package_name);
+			assert_eq!(package.archive_member, archive_member);
+		}
+		assert!(matches!(
+			platform_package_for("freebsd", "x86_64"),
+			Err(CcusageRuntimeError::UnsupportedPlatform { os, arch })
+				if os == "freebsd" && arch == "x86_64"
 		));
 	}
 

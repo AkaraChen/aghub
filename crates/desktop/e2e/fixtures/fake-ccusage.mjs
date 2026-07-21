@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 // A stand-in ccusage binary for the e2e pipeline test. Speaks the real CLI
 // surface the backend drives — `<agent> daily --json …` and `--version` —
-// and prints reports in ccusage's actual JSON shapes (camelCase fields;
-// codex uses the 20.0.14+ names), so the Rust parsers run against the same
-// format the real tool emits. Dates are relative so the strip always has
-// in-window data.
+// and prints reports aligned with ccusage's JSON snapshots at 31e084af
+// (camelCase fields; Codex uses cacheReadTokens/cacheCreationTokens). Dates
+// remain relative so the strip always has in-window data.
 
 import process from "node:process";
 
@@ -28,76 +27,96 @@ const claude = {
 	daily: [
 		{
 			date: ymd(2),
-			inputTokens: 400_000,
-			outputTokens: 120_000,
-			cacheCreationTokens: 10_000,
-			cacheReadTokens: 400_000,
-			totalTokens: 930_000,
-			totalCost: 9.5,
+			inputTokens: 1_234,
+			outputTokens: 567,
+			cacheCreationTokens: 89,
+			cacheReadTokens: 10,
+			totalTokens: 1_900,
+			totalCost: 0.42,
+			modelsUsed: ["gpt-5.2-codex", "claude-sonnet-4-20250514"],
 			modelBreakdowns: [
 				{
-					modelName: "claude-opus-4",
-					inputTokens: 400_000,
-					outputTokens: 120_000,
-					cacheCreationTokens: 10_000,
-					cacheReadTokens: 400_000,
-					cost: 9.5,
+					modelName: "gpt-5.2-codex",
+					inputTokens: 900,
+					outputTokens: 300,
+					cacheCreationTokens: 50,
+					cacheReadTokens: 10,
+					cost: 0.3,
+				},
+				{
+					modelName: "claude-sonnet-4-20250514",
+					inputTokens: 334,
+					outputTokens: 267,
+					cacheCreationTokens: 39,
+					cacheReadTokens: 0,
+					cost: 0.12,
 				},
 			],
 		},
-		{
-			date: ymd(1),
-			inputTokens: 5_000,
-			outputTokens: 3_000,
-			cacheCreationTokens: 0,
-			cacheReadTokens: 5_000,
-			totalTokens: 13_000,
-			// null cost: ccusage emits this for models it can't price.
-			totalCost: null,
-			modelBreakdowns: [],
-		},
 	],
 	totals: {
-		inputTokens: 405_000,
-		outputTokens: 123_000,
-		cacheCreationTokens: 10_000,
-		cacheReadTokens: 405_000,
-		totalTokens: 943_000,
-		totalCost: 12.5,
+		inputTokens: 1_234,
+		outputTokens: 567,
+		cacheCreationTokens: 89,
+		cacheReadTokens: 10,
+		totalTokens: 1_900,
+		totalCost: 0.42,
 	},
 };
 
 const codex = {
 	daily: [
 		{
-			date: ymd(1),
-			inputTokens: 200_000,
-			cacheReadTokens: 40_000,
+			date: ymd(2),
+			inputTokens: 100,
+			cacheReadTokens: 110,
 			cacheCreationTokens: 0,
-			outputTokens: 80_000,
-			reasoningOutputTokens: 20_000,
-			totalTokens: 340_000,
-			costUSD: 0.5,
+			outputTokens: 15,
+			reasoningOutputTokens: 2,
+			totalTokens: 227,
+			costUSD: 0.00040425,
 			models: {
-				"gpt-5": {
-					inputTokens: 200_000,
-					cacheReadTokens: 40_000,
+				"gpt-5.3-codex": {
+					inputTokens: 100,
+					cacheReadTokens: 110,
 					cacheCreationTokens: 0,
-					outputTokens: 80_000,
-					reasoningOutputTokens: 20_000,
-					totalTokens: 340_000,
+					outputTokens: 15,
+					reasoningOutputTokens: 2,
+					totalTokens: 227,
+					isFallback: true,
+				},
+			},
+		},
+		{
+			date: ymd(1),
+			inputTokens: 10,
+			cacheReadTokens: 0,
+			cacheCreationTokens: 0,
+			outputTokens: 2,
+			reasoningOutputTokens: 0,
+			totalTokens: 12,
+			costUSD: 0.0000065,
+			models: {
+				"gpt-5-mini": {
+					inputTokens: 10,
+					cacheReadTokens: 0,
+					cacheCreationTokens: 0,
+					outputTokens: 2,
+					reasoningOutputTokens: 0,
+					totalTokens: 12,
+					isFallback: false,
 				},
 			},
 		},
 	],
 	totals: {
-		inputTokens: 200_000,
-		cacheReadTokens: 40_000,
+		inputTokens: 110,
+		cacheReadTokens: 110,
 		cacheCreationTokens: 0,
-		outputTokens: 80_000,
-		reasoningOutputTokens: 20_000,
-		totalTokens: 340_000,
-		costUSD: 0.5,
+		outputTokens: 17,
+		reasoningOutputTokens: 2,
+		totalTokens: 239,
+		costUSD: 0.00041075,
 	},
 };
 
@@ -105,13 +124,34 @@ const droid = {
 	daily: [
 		{
 			date: ymd(1),
-			inputTokens: 1_000,
-			totalTokens: 1_000,
+			inputTokens: 100,
+			outputTokens: 50,
+			cacheCreationTokens: 10,
+			cacheReadTokens: 5,
+			totalTokens: 172,
+			totalCost: 0.25,
+			credits: 1.5,
+			messageCount: 3,
+			modelsUsed: ["gpt-5.2-codex", "claude-sonnet-4-20250514"],
+			modelBreakdowns: [
+				{
+					modelName: "gpt-5.2-codex",
+					inputTokens: 100,
+					outputTokens: 50,
+					cacheCreationTokens: 10,
+					cacheReadTokens: 5,
+					cost: 0.25,
+				},
+			],
 		},
 	],
 	totals: {
-		inputTokens: 1_000,
-		totalTokens: 1_000,
+		inputTokens: 100,
+		outputTokens: 50,
+		cacheCreationTokens: 10,
+		cacheReadTokens: 5,
+		totalTokens: 172,
+		totalCost: 0.25,
 	},
 };
 

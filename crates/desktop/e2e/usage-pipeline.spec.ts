@@ -6,9 +6,10 @@ import { installMocks } from "./mocks";
  * Real-pipeline smoke for usage: the summary request passes through to the
  * actual `aghub-api` server (booted by playwright's webServer with
  * AGHUB_CCUSAGE_BIN pointing at e2e/fixtures/fake-ccusage.mjs), so genuine
- * ccusage JSON — camelCase fields, codex 20.0.14+ names, null costs — runs
- * through the Rust parsers into DTOs and onto the page. Only limits (an
- * OAuth endpoint, needs real credentials) and runtime status stay mocked.
+ * ccusage JSON snapshots — camelCase fields, current Codex cache fields, and
+ * generic-agent model breakdowns — run through the Rust parsers into DTOs and
+ * onto the page. Only limits (an OAuth endpoint, needs real credentials) and
+ * runtime status stay mocked.
  */
 
 test.beforeEach(async ({ page }) => {
@@ -50,20 +51,31 @@ test("usage page renders real ccusage JSON parsed by the backend", async ({
 }) => {
 	await page.goto("/usage");
 
-	// Cross-agent summary from the fixture totals: 12.5 (claude) + 0.5
-	// (codex) spend, 943K + 340K tokens.
-	await expect(page.getByText("$13.00")).toBeVisible();
-	await expect(page.getByText("1.3M")).toBeVisible();
+	// Cross-agent summary from the upstream-aligned Claude, Codex, and Droid
+	// report samples.
+	await expect(page.getByText("$0.67")).toBeVisible();
+	await expect(page.getByText("2.3K")).toBeVisible();
 
-	// Claude's row carries its parsed totals (943K tokens, $12.50).
-	await expect(page.getByText("943K")).toBeVisible();
-	await expect(page.getByText("$12.50")).toBeVisible();
+	// Claude's row carries its parsed snapshot totals.
+	await expect(page.getByText("1.9K")).toBeVisible();
+	await expect(page.getByText("$0.42")).toBeVisible();
 
-	// Codex's 20.0.14+ field names made it through: reasoning and cache
-	// read tokens are non-zero breakdown rows.
-	await expect(page.getByText("Reasoning", { exact: true })).toBeVisible();
-	await expect(page.getByText("20K", { exact: true })).toBeVisible();
-	await expect(page.getByText("40K", { exact: true })).toBeVisible();
+	// Codex's current field names made it through: reasoning and cache-read
+	// tokens are non-zero breakdown rows.
+	const usage = page.getByLabel("Usage", { exact: true });
+	const codexRow = usage
+		.getByText("Codex", { exact: true })
+		.locator("..")
+		.locator("..")
+		.locator("..");
+	const reasoning = codexRow
+		.getByText("Reasoning", { exact: true })
+		.locator("..");
+	const cacheRead = codexRow
+		.getByText("Cache read", { exact: true })
+		.locator("..");
+	await expect(reasoning.getByText("2", { exact: true })).toBeVisible();
+	await expect(cacheRead.getByText("110", { exact: true })).toBeVisible();
 
 	// Day-level data landed too — the stacked strip has both agents.
 	const strip = page.getByRole("img", { name: "Daily usage by agent" });
