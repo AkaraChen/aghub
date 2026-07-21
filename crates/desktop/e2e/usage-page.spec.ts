@@ -5,10 +5,11 @@ import { installMocks } from "./mocks";
 /**
  * Dedicated /usage page smoke: cross-agent summary stats and the stacked
  * daily-activity strip up top, then one row per agent the summary reports,
- * with quota bars for the quota agents (claude/codex), a totals breakdown
- * that drops zero-valued rows, and the ccusage status chip. Boots through
- * the shared Tauri/API mocks.
+ * with a totals breakdown that drops zero-valued rows and the ccusage status
+ * chip. Boots through the shared Tauri/API mocks.
  */
+
+let limitsRequests = 0;
 
 const agent = (
 	id: string,
@@ -92,6 +93,7 @@ const status: UsageStatusDto = {
 };
 
 test.beforeEach(async ({ page }) => {
+	limitsRequests = 0;
 	await installMocks(page);
 	await page.route("**/api/v1/usage/summary**", (route) =>
 		route.fulfill({
@@ -100,13 +102,14 @@ test.beforeEach(async ({ page }) => {
 			body: JSON.stringify(summary),
 		}),
 	);
-	await page.route("**/api/v1/usage/limits**", (route) =>
-		route.fulfill({
+	await page.route("**/api/v1/usage/limits**", (route) => {
+		limitsRequests += 1;
+		return route.fulfill({
 			status: 200,
 			contentType: "application/json",
 			body: JSON.stringify(limits),
-		}),
-	);
+		});
+	});
 	await page.route("**/api/v1/usage/status**", (route) =>
 		route.fulfill({
 			status: 200,
@@ -164,53 +167,35 @@ test("usage page shows summary, daily strip, and per-agent rows", async ({
 		page.getByText("Claude", { exact: true }).first(),
 	).toBeVisible();
 
-	// A quota agent (claude) renders its rate-limit bars...
-	await expect(page.getByText("42%")).toBeVisible();
-	await expect(page.getByText("71%")).toBeVisible();
-	// ...and its cost (also in the summary stat → first()) + a non-zero
-	// breakdown row.
+	// This route is statistical. Quota windows remain on the home cards and in
+	// settings, while each row here keeps cost and token breakdowns only.
+	await expect(page.getByText("5-hour limit", { exact: true })).toHaveCount(
+		0,
+	);
+	await expect(page.getByText("Weekly limit", { exact: true })).toHaveCount(
+		0,
+	);
+	expect(limitsRequests).toBe(0);
 	await expect(page.getByText("$12.50").first()).toBeVisible();
 	await expect(page.getByText("Cache read", { exact: true })).toBeVisible();
 
-	// A usage-only agent (gemini) shows totals but no quota bars.
+	// A usage-only agent (gemini) uses the same statistical row.
 	await expect(page.getByText("Gemini", { exact: true })).toBeVisible();
 });
 
-test("quota labels remain readable at an 800px desktop width", async ({
+test("statistical rows stay within an 800px desktop width", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 800, height: 650 });
 	await page.goto("/usage");
 
-	for (const name of ["5-hour limit", "Weekly limit"]) {
-		const label = page.getByText(name, { exact: true });
-		await expect(label).toBeVisible();
-		const geometry = await label.evaluate((element) => {
-			const header = element.closest(".justify-between");
-			const value = header?.lastElementChild;
-			if (
-				!(header instanceof HTMLElement) ||
-				!(value instanceof HTMLElement)
-			) {
-				throw new TypeError("quota label geometry missing");
-			}
-			const labelBox = element.getBoundingClientRect();
-			const textRange = document.createRange();
-			textRange.selectNodeContents(element);
-			const textBox = textRange.getBoundingClientRect();
-			return {
-				allocatedWidth: labelBox.width,
-				textWidth: textBox.width,
-				textRight: textBox.right,
-				valueLeft: value.getBoundingClientRect().left,
-			};
-		});
-		expect(
-			geometry.allocatedWidth + 0.5,
-			`${name} must not be visually clipped`,
-		).toBeGreaterThanOrEqual(geometry.textWidth);
-		expect(geometry.textRight).toBeLessThanOrEqual(geometry.valueLeft);
-	}
+	await expect(page.getByText("5-hour limit", { exact: true })).toHaveCount(
+		0,
+	);
+	await expect(page.getByText("Weekly limit", { exact: true })).toHaveCount(
+		0,
+	);
+	await expect(page.getByText("Cache read", { exact: true })).toBeVisible();
 
 	const pageScroller = page.locator("main > div").first();
 	const overflow = await pageScroller.evaluate((element) => ({

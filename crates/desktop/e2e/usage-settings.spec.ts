@@ -89,7 +89,7 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await expect(page.getByText("Runtime source")).toBeVisible();
 	await expect(
 		page.getByRole("button", { name: "Runtime source" }),
-	).toContainText("Automatic");
+	).toContainText("Automatic selection");
 	await expect(page.getByText("Card layout", { exact: true })).toBeVisible();
 
 	// The default card starts with the weekly quota and the four useful
@@ -113,10 +113,27 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await expect(page.getByText("Cache read", { exact: true })).toBeVisible();
 	await expect(card.locator("button")).toHaveCount(0);
 
-	// Runtime status row: version + inline update hint in the description,
-	// plus re-check. Runtime actions have focused coverage below.
-	await expect(page.getByText("20.0.17 available")).toBeVisible();
-	await expect(page.getByRole("button", { name: "Re-check" })).toBeVisible();
+	// Runtime health stays separate from the current version and source.
+	const runtimeSection = page
+		.getByText("ccusage", { exact: true })
+		.locator("xpath=ancestor::section");
+	const runtimeStatus = runtimeSection.getByRole("status");
+	await expect(runtimeStatus).toHaveText("Update available");
+	await expect(runtimeStatus).not.toHaveClass(/truncate/);
+	await expect(
+		runtimeSection.getByText("v20.0.6", { exact: true }),
+	).toBeVisible();
+	await expect(
+		runtimeSection.getByText(/Using Bundled fallback/),
+	).toBeVisible();
+	await expect(
+		runtimeSection.getByRole("button", {
+			name: "Install v20.0.17 in aghub",
+		}),
+	).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Check again" }),
+	).toBeVisible();
 
 	// Agent enablement has one owner in Settings → Agents; Usage only keeps
 	// quota-specific alert overrides.
@@ -158,15 +175,24 @@ test("ccusage update uses the runtime endpoint", async ({ page }) => {
 	});
 	await page.goto("/settings?tab=usage");
 
-	await page.getByRole("button", { name: "Update" }).click();
+	await page
+		.getByRole("button", { name: "Install v20.0.17 in aghub" })
+		.click();
 	await expect.poll(() => updateRequests).toBe(1);
+	const runtimeSection = page
+		.getByText("ccusage", { exact: true })
+		.locator("xpath=ancestor::section");
+	await expect(runtimeSection.getByRole("status")).toHaveText("Up to date");
 	await expect(
-		page
-			.getByText("ccusage", { exact: true })
-			.locator("..")
-			.getByRole("status"),
-	).toHaveText("v20.0.17 · Install with Bun");
-	await expect(page.getByRole("button", { name: "Update" })).toHaveCount(0);
+		runtimeSection.getByText("v20.0.17", { exact: true }),
+	).toBeVisible();
+	await expect(
+		runtimeSection.getByText(/Using Bun-managed copy/),
+	).toBeVisible();
+	await expect(runtimeSection.getByText("Install with Bun")).toHaveCount(0);
+	await expect(page.getByRole("button", { name: /v20\.0\.17/ })).toHaveCount(
+		0,
+	);
 	await expect(page).toHaveURL(/\/settings\?tab=usage$/);
 });
 
@@ -190,23 +216,68 @@ test("runtime sources use selection and installation endpoints", async ({
 	const source = page.getByRole("button", { name: "Runtime source" });
 	await source.click();
 	await page.getByRole("option", { name: "Bundled fallback" }).click();
-	await page.getByRole("button", { name: "Use", exact: true }).click();
+	await page.getByRole("button", { name: "Use Bundled fallback" }).click();
 	await expect
 		.poll(() => selections)
 		.toEqual([{ source: "bundled", path: null }]);
 	await expect(source).toContainText("Bundled fallback");
 
 	await source.click();
-	await page.getByRole("option", { name: "Direct download" }).click();
-	await page.getByRole("button", { name: "Install", exact: true }).click();
+	await page.getByRole("option", { name: "Downloaded copy" }).click();
+	await page.getByRole("button", { name: "Install Downloaded copy" }).click();
 	await expect.poll(() => installs).toEqual([{ source: "download" }]);
-	await expect(source).toContainText("Direct download");
 	await expect(
-		page
-			.getByText("ccusage", { exact: true })
-			.locator("..")
-			.getByRole("status"),
-	).toHaveText("v20.0.17 · Direct download");
+		page.getByText(/Managed by aghub and can be updated here/),
+	).toBeVisible();
+	await expect(source).toContainText("Downloaded copy");
+});
+
+test("runtime source distinguishes the saved preference from an environment override", async ({
+	page,
+}) => {
+	const overriddenRuntime: CcusageRuntimeDto = {
+		preference: "bun",
+		active: {
+			source: "environment",
+			version: "20.0.18",
+			can_update: false,
+		},
+		candidates: [
+			{
+				source: "bun",
+				available: true,
+				installed: true,
+				version: "20.0.17",
+				can_install: true,
+				can_update: true,
+			},
+		],
+		latest_version: "20.0.18",
+		update_available: false,
+		error: null,
+	};
+	await page.route("**/api/v1/usage/runtime", (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify(overriddenRuntime),
+		}),
+	);
+	await page.goto("/settings?tab=usage");
+
+	await expect(
+		page.getByRole("button", { name: "Runtime source" }),
+	).toContainText("Bun-managed copy");
+	await expect(
+		page.getByText(
+			"Bun-managed copy is selected; currently using Environment variable.",
+		),
+	).toBeVisible();
+
+	const source = page.getByRole("button", { name: "Runtime source" });
+	await source.click();
+	await page.getByRole("option", { name: "Automatic selection" }).click();
+	await expect(page.getByText(/Using Environment variable/)).toBeVisible();
 });
 
 test("re-check spins and remains pending until the probe settles", async ({
@@ -226,13 +297,18 @@ test("re-check spins and remains pending until the probe settles", async ({
 
 	try {
 		await page.goto("/settings?tab=usage");
-		const recheck = page.getByRole("button", { name: "Re-check" });
+		const recheck = page.getByRole("button", { name: "Check again" });
+		const runtimeSection = recheck.locator("xpath=ancestor::section");
+		const status = runtimeSection.getByRole("status");
+		const indicator = runtimeSection.locator("span.size-2.rounded-full");
 		await expect(recheck).not.toHaveAttribute("data-pending", "true");
 
 		await recheck.click();
 		await expect.poll(() => requestCount).toBe(1);
 		await expect(recheck).toHaveAttribute("data-pending", "true");
 		await expect(recheck).toHaveAttribute("aria-disabled", "true");
+		await expect(status).toHaveText("Checking ccusage…");
+		await expect(indicator).toHaveClass(/bg-muted/);
 		await expect
 			.poll(() =>
 				recheck
@@ -245,6 +321,8 @@ test("re-check spins and remains pending until the probe settles", async ({
 
 		finishRecheck();
 		await expect(recheck).not.toHaveAttribute("data-pending", "true");
+		await expect(status).toHaveText("Update available");
+		await expect(indicator).toHaveClass(/bg-success/);
 		await expect
 			.poll(() =>
 				recheck
@@ -274,7 +352,7 @@ test("re-check does not spin when reduced motion is requested", async ({
 
 	try {
 		await page.goto("/settings?tab=usage");
-		const recheck = page.getByRole("button", { name: "Re-check" });
+		const recheck = page.getByRole("button", { name: "Check again" });
 		await recheck.click();
 		await expect(recheck).toHaveAttribute("data-pending", "true");
 		await expect
@@ -333,14 +411,130 @@ test("failed re-check replaces the cached active runtime", async ({ page }) => {
 		.locator("xpath=ancestor::section");
 	const status = runtimeSection.getByRole("status");
 	const indicator = runtimeSection.locator("span.size-2.rounded-full");
-	await expect(status).toContainText("v20.0.6");
+	await expect(status).toHaveText("Update available");
 	await expect(indicator).toHaveClass(/bg-success/);
 
-	await runtimeSection.getByRole("button", { name: "Re-check" }).click();
+	await runtimeSection.getByRole("button", { name: "Check again" }).click();
 	await expect.poll(() => runtimeGetCount).toBeGreaterThan(1);
-	await expect(status).toHaveText("ccusage is unavailable after re-check");
-	await expect(status).not.toContainText("20.0.6");
+	await expect(status).toHaveText("Unavailable");
+	await expect(
+		runtimeSection.getByText("ccusage is unavailable after re-check"),
+	).toBeVisible();
+	await expect(
+		runtimeSection.getByText("v20.0.6", { exact: true }),
+	).toHaveCount(0);
 	await expect(indicator).toHaveClass(/bg-danger/);
+});
+
+test("runtime errors override stale health without hiding its version", async ({
+	page,
+}) => {
+	let finishRecheck: () => void = () => undefined;
+	const recheckPending = new Promise<void>((resolve) => {
+		finishRecheck = resolve;
+	});
+	const staleRuntime: CcusageRuntimeDto = {
+		preference: "auto",
+		active: {
+			source: "bun",
+			version: "20.0.17",
+			can_update: true,
+		},
+		candidates: [],
+		latest_version: "20.0.17",
+		update_available: false,
+		error: "The last runtime probe timed out",
+	};
+	await page.route("**/api/v1/usage/runtime", (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify(staleRuntime),
+		}),
+	);
+	await page.route("**/api/v1/usage/runtime/refresh", async (route) => {
+		await recheckPending;
+		await route.fallback();
+	});
+
+	try {
+		await page.goto("/settings?tab=usage");
+
+		const runtimeSection = page
+			.getByText("ccusage", { exact: true })
+			.locator("xpath=ancestor::section");
+		const status = runtimeSection.getByRole("status");
+		const errorDetail = runtimeSection.getByText(
+			"The last runtime probe timed out",
+		);
+		await expect(status).toHaveText("Couldn't check ccusage");
+		await expect(
+			runtimeSection.getByText("v20.0.17", { exact: true }),
+		).toBeVisible();
+		await expect(errorDetail).toBeVisible();
+		await expect(
+			runtimeSection.locator("span.size-2.rounded-full"),
+		).toHaveClass(/bg-danger/);
+
+		await page.getByRole("button", { name: "Check again" }).click();
+		await expect(status).toHaveText("Checking ccusage…");
+		await expect(errorDetail).toBeHidden();
+
+		finishRecheck();
+		await expect(status).not.toHaveText("Checking ccusage…");
+	} finally {
+		finishRecheck();
+	}
+});
+
+test("runtime status and defaults footer fit a compact desktop", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 800, height: 650 });
+	await page.addInitScript(() => localStorage.setItem("theme", "light"));
+	await page.goto("/settings?tab=usage");
+
+	const runtimeSection = page
+		.getByText("ccusage", { exact: true })
+		.locator("xpath=ancestor::section");
+	await expect(runtimeSection.getByRole("status")).toBeVisible();
+	await expect(
+		runtimeSection.getByRole("button", {
+			name: "Install v20.0.17 in aghub",
+		}),
+	).toBeVisible();
+	await expect(page.getByTestId("usage-defaults-footer")).toBeVisible();
+	await expect
+		.poll(() =>
+			page.evaluate(
+				() =>
+					document.documentElement.scrollWidth -
+					document.documentElement.clientWidth,
+			),
+		)
+		.toBeLessThanOrEqual(1);
+	const defaultsFooter = page.getByTestId("usage-defaults-footer");
+	await defaultsFooter.scrollIntoViewIfNeeded();
+	await expect(
+		defaultsFooter.getByRole("button", {
+			name: "Restore usage defaults",
+		}),
+	).toBeEnabled();
+
+	await page.evaluate(() => document.documentElement.classList.add("dark"));
+	await expect(page.locator("html")).toHaveClass(/dark/);
+	await expect(defaultsFooter).toBeVisible();
+	await expect
+		.poll(() =>
+			page.evaluate(
+				() =>
+					document.documentElement.scrollWidth -
+					document.documentElement.clientWidth,
+			),
+		)
+		.toBeLessThanOrEqual(1);
+	await runtimeSection.scrollIntoViewIfNeeded();
+	await expect(runtimeSection.getByRole("status")).toBeVisible();
 });
 
 test("Usage settings uses the same surface level as Appearance", async ({
@@ -620,13 +814,29 @@ test("wide short layout editor auto-scrolls toward the card target", async ({
 	await expect
 		.poll(() => scroller.evaluate((element) => element.scrollTop))
 		.toBeLessThan(initialScrollTop - 8);
+	const viewportHeight = page.viewportSize()?.height ?? 420;
+	await page.mouse.move(
+		sourceBox.x + sourceBox.width / 2,
+		viewportHeight / 2,
+	);
+	await expect
+		.poll(async () => {
+			const before = await scroller.evaluate(
+				(element) => element.scrollTop,
+			);
+			await nextBrowserPaint(page);
+			const after = await scroller.evaluate(
+				(element) => element.scrollTop,
+			);
+			return Math.abs(after - before);
+		})
+		.toBeLessThanOrEqual(1);
 	await expect(target).toBeInViewport({ ratio: 1 });
 	const visibleTargetBox = await target.boundingBox();
 	if (!visibleTargetBox) throw new Error("drop target missing");
 	await page.mouse.move(
 		visibleTargetBox.x + visibleTargetBox.width / 2,
 		visibleTargetBox.y + visibleTargetBox.height / 2,
-		{ steps: 5 },
 	);
 	await expect(
 		card
@@ -1166,6 +1376,12 @@ test("usage settings restore the complete default state", async ({ page }) => {
 	await expect(restoreButton.locator("xpath=ancestor::section")).toHaveCount(
 		0,
 	);
+	await expect(
+		restoreButton.locator('xpath=ancestor::*[@data-slot="card-footer"]'),
+	).toHaveCount(1);
+	await expect(
+		page.getByText("Default settings", { exact: true }),
+	).toBeVisible();
 
 	const windowPicker = page.getByRole("button", { name: "Usage window" });
 	await windowPicker.click();

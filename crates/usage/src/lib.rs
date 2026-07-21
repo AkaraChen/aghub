@@ -1060,14 +1060,18 @@ mod tests {
 		let error = run_ccusage_with_limits(
 			executable.as_os_str(),
 			Vec::new(),
-			Duration::from_secs(1),
+			// This test covers output limits, so leave room for a loaded CI worker.
+			Duration::from_secs(5),
 			32,
 			32,
 		)
 		.await
 		.expect_err("oversized output rejected");
 
-		assert!(error.contains("output exceeded 32 bytes"));
+		assert!(
+			error.contains("output exceeded 32 bytes"),
+			"unexpected ccusage error: {error}"
+		);
 	}
 
 	#[test]

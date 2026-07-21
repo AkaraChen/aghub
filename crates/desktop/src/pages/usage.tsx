@@ -1,31 +1,22 @@
 import { Cog6ToothIcon } from "@heroicons/react/24/outline";
-import { Button, Meter, Spinner, Tooltip } from "@heroui/react";
+import { Button, Spinner, Tooltip } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import type {
-	AgentLimitsDto,
-	AgentUsageDto,
-	UsageTotalsDto,
-} from "../generated/dto";
+import type { AgentUsageDto, UsageTotalsDto } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useUsageSettings } from "../hooks/use-usage-settings";
 import { AgentIcon } from "../lib/agent-icons";
-import { agentSettings, DEFAULT_USAGE_SETTINGS } from "../lib/store";
+import { DEFAULT_USAGE_SETTINGS } from "../lib/store";
 import {
-	clampPct,
 	formatCost,
 	formatTokens,
-	meterColor,
-	quotaWindowLabelKey,
-	resetsIn,
 	shortCcusageVersion,
 } from "../lib/usage-format";
 import { cn } from "../lib/utils";
 import {
-	usageLimitsQueryOptions,
 	usageStatusQueryOptions,
 	usageSummaryQueryOptions,
 } from "../requests/usage";
@@ -117,9 +108,6 @@ export default function UsagePage() {
 			enabled: settingsReady,
 		}),
 	);
-	const { data: limits } = useQuery(
-		usageLimitsQueryOptions({ api, enabled: settingsReady }),
-	);
 	const statusQuery = useQuery(usageStatusQueryOptions({ api }));
 	const { data: status } = statusQuery;
 	const isLoading = usageSettingsQuery.isPending || isReportLoading;
@@ -134,12 +122,6 @@ export default function UsagePage() {
 		);
 		return (id: string) => byId.get(id) ?? FALLBACK_LABELS[id] ?? id;
 	}, [availableAgents]);
-
-	const limitsByAgent = useMemo(() => {
-		const map = new Map<string, AgentLimitsDto>();
-		for (const entry of limits?.agents ?? []) map.set(entry.agent, entry);
-		return map;
-	}, [limits]);
 
 	const usableAgentIds = useMemo(() => {
 		const ids = new Set<string>();
@@ -158,12 +140,6 @@ export default function UsagePage() {
 			),
 		[report, usableAgentIds],
 	);
-
-	// Per-agent alert threshold with the global value as fallback — the same
-	// resolution the home cards use.
-	const thresholdFor = (agent: string) =>
-		agentSettings(settings, agent).alertThresholdPct ??
-		settings.globalAlertThresholdPct;
 
 	// Cross-agent headline numbers; spend only when ccusage priced anything.
 	const summary = useMemo(() => {
@@ -293,10 +269,6 @@ export default function UsagePage() {
 									key={entry.agent}
 									usage={entry}
 									name={displayName(entry.agent)}
-									limits={limitsByAgent.get(entry.agent)}
-									alertThresholdPct={thresholdFor(
-										entry.agent,
-									)}
 								/>
 							))}
 						</section>
@@ -416,18 +388,14 @@ function CombinedDailyBars({
 	);
 }
 
-/** One agent as a compact row: identity + headline numbers on the left,
- *  quota meters and the token breakdown on the right. */
+/** One agent as a compact row: identity + headline numbers on the left and
+ *  the token breakdown on the right. */
 function AgentSummaryRow({
 	usage,
 	name,
-	limits,
-	alertThresholdPct,
 }: {
 	usage: AgentUsageDto;
 	name: string;
-	limits?: AgentLimitsDto;
-	alertThresholdPct: number;
 }) {
 	const { t } = useTranslation();
 	const { totals } = usage;
@@ -454,57 +422,7 @@ function AgentSummaryRow({
 				</div>
 			</div>
 
-			<div className="flex min-w-0 flex-1 flex-col gap-3">
-				{limits && limits.windows.length > 0 && (
-					<div className="grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2 lg:grid-cols-3">
-						{limits.windows.map((quota) => {
-							const pct = clampPct(quota.utilization_pct);
-							const label = t(quotaWindowLabelKey(quota.kind));
-							const reset = resetsIn(quota.resets_at);
-							return (
-								<div
-									key={quota.kind}
-									className="flex flex-col gap-0.5"
-								>
-									<div className="flex items-baseline justify-between gap-2 text-[11px]">
-										<span className="min-w-0 text-muted">
-											<span className="whitespace-nowrap">
-												{label}
-											</span>
-											{reset && (
-												<span
-													title={t("usageResetsIn", {
-														time: reset,
-													})}
-													className="text-foreground/40"
-												>
-													{" "}
-													· {reset}
-												</span>
-											)}
-										</span>
-										<span className="font-medium tabular-nums">
-											{Math.round(pct)}%
-										</span>
-									</div>
-									<Meter
-										aria-label={label}
-										value={pct}
-										color={meterColor(
-											pct,
-											alertThresholdPct,
-										)}
-										size="sm"
-									>
-										<Meter.Track>
-											<Meter.Fill />
-										</Meter.Track>
-									</Meter>
-								</div>
-							);
-						})}
-					</div>
-				)}
+			<div className="min-w-0 flex-1">
 				{rows.length > 0 && (
 					<dl className="flex flex-wrap gap-x-5 gap-y-1">
 						{rows.map(({ field, labelKey }) => (

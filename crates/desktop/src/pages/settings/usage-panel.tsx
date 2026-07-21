@@ -90,17 +90,6 @@ export default function UsagePanel() {
 
 	return (
 		<>
-			<div className="mb-2 flex justify-end px-1">
-				<Button
-					size="sm"
-					variant="ghost"
-					onPress={() => setIsResetOpen(true)}
-					isDisabled={isRestoreDisabled}
-					className="text-muted"
-				>
-					{t("usageRestoreDefaults")}
-				</Button>
-			</div>
 			<Card className="gap-0 divide-y divide-border p-4">
 				<UsageRuntimeSection />
 				<HomeCardsSection
@@ -117,6 +106,29 @@ export default function UsagePanel() {
 					current={current}
 					updateSettings={updateSettings}
 				/>
+				<Card.Footer
+					data-testid="usage-defaults-footer"
+					className="flex-col items-stretch justify-between gap-3 px-1 pt-4 sm:flex-row sm:items-center"
+				>
+					<div className="min-w-0 space-y-0.5">
+						<p className="text-sm font-medium text-(--foreground)">
+							{t("usageDefaultsHeading")}
+						</p>
+						<p className="text-xs text-muted">
+							{t("usageDefaultsDescription")}
+						</p>
+					</div>
+					<Button
+						size="sm"
+						variant="ghost"
+						onPress={() => setIsResetOpen(true)}
+						isDisabled={isRestoreDisabled}
+						aria-label={t("usageRestoreDefaults")}
+						className="shrink-0"
+					>
+						{t("usageRestoreDefaultsAction")}
+					</Button>
+				</Card.Footer>
 			</Card>
 			<UsageDefaultsDialog
 				isOpen={isResetOpen}

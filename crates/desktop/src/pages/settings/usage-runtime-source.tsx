@@ -1,4 +1,5 @@
 import { Button } from "@heroui/react";
+import type { TFunction } from "i18next";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type {
@@ -53,6 +54,7 @@ export function RuntimeSourceControls({
 	const hasChange =
 		selectedSource !== runtime.preference ||
 		(selectedSource === "manual" && manualPath.trim() !== "");
+	const selectedSourceLabel = t(sourceLabelKey(selectedSource));
 	const options = SELECTABLE_SOURCES.map((source) => {
 		const sourceCandidate = runtime.candidates.find(
 			(item) => item.source === source,
@@ -81,7 +83,12 @@ export function RuntimeSourceControls({
 		<div className="space-y-3">
 			<SettingRow
 				title={t("usageRuntimeSource")}
-				description={sourceDescription(selectedSource, candidate, t)}
+				description={sourceDescription(
+					selectedSource,
+					candidate,
+					runtime.active?.source,
+					t,
+				)}
 				control={
 					<div className="flex shrink-0 items-center gap-2">
 						<SettingSelect
@@ -103,8 +110,12 @@ export function RuntimeSourceControls({
 								onPress={applySelection}
 							>
 								{needsInstall
-									? t("usageRuntimeInstall")
-									: t("usageRuntimeUse")}
+									? t("usageRuntimeInstallSource", {
+											source: selectedSourceLabel,
+										})
+									: t("usageRuntimeUseSource", {
+											source: selectedSourceLabel,
+										})}
 							</Button>
 						)}
 					</div>
@@ -127,7 +138,7 @@ export function RuntimeSourceControls({
 							isDisabled={!manualPath.trim()}
 							onPress={applySelection}
 						>
-							{t("usageRuntimeUse")}
+							{t("usageRuntimeUseManual")}
 						</Button>
 					</div>
 				</div>
@@ -153,10 +164,23 @@ function sourceCanBeChosen(
 function sourceDescription(
 	source: CcusageRuntimeSource,
 	candidate: CcusageRuntimeCandidateDto | undefined,
-	t: (key: string) => string,
+	activeSource: CcusageRuntimeSource | undefined,
+	t: TFunction,
 ): string {
-	if (source === "auto") return t("usageRuntimeAutoDescription");
-	if (source === "path" || source === "manual") {
+	if (source === "auto") {
+		return activeSource
+			? t("usageRuntimeAutoActiveDescription", {
+					source: t(sourceLabelKey(activeSource)),
+				})
+			: t("usageRuntimeAutoDescription");
+	}
+	if (activeSource && activeSource !== source) {
+		return t("usageRuntimePreferenceActiveDescription", {
+			preference: t(sourceLabelKey(source)),
+			source: t(sourceLabelKey(activeSource)),
+		});
+	}
+	if (EXTERNAL_SOURCES.has(source)) {
 		return t("usageRuntimeExternalDescription");
 	}
 	if (source === "bundled") return t("usageRuntimeBundledDescription");
