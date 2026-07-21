@@ -50,6 +50,9 @@ export function RuntimeSourceControls({
 	const candidate = runtime.candidates.find(
 		(item) => item.source === selectedSource,
 	);
+	const describedActive =
+		selectedSource === runtime.preference ? runtime.active : null;
+	const executablePath = describedActive?.path ?? candidate?.path;
 	const needsInstall =
 		MANAGED_SOURCES.has(selectedSource) && candidate?.installed !== true;
 	const hasChange =
@@ -82,14 +85,28 @@ export function RuntimeSourceControls({
 		<div className="space-y-3" data-testid="usage-runtime-source-controls">
 			<SettingRow
 				title={t("usageRuntimeSource")}
-				description={sourceDescription(
-					selectedSource,
-					candidate,
-					selectedSource === runtime.preference
-						? runtime.active
-						: null,
-					t,
-				)}
+				description={
+					<span className="block min-w-0">
+						<span className="block">
+							{sourceDescription(
+								selectedSource,
+								candidate,
+								describedActive,
+								t,
+							)}
+						</span>
+						{executablePath && (
+							<code
+								dir="ltr"
+								title={executablePath}
+								data-testid="usage-runtime-path"
+								className="mt-0.5 block max-w-full truncate font-mono text-[11px]"
+							>
+								{executablePath}
+							</code>
+						)}
+					</span>
+				}
 				control={
 					<div className="flex flex-wrap items-center justify-end gap-2">
 						<SettingSelect

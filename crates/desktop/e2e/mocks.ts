@@ -200,6 +200,7 @@ const CCUSAGE_RUNTIME: CcusageRuntimeDto = {
 	preference: "auto",
 	active: {
 		source: "bundled",
+		path: "/Applications/aghub.app/Contents/Resources/ccusage",
 		version: "20.0.6",
 		can_update: true,
 	},
@@ -207,30 +208,35 @@ const CCUSAGE_RUNTIME: CcusageRuntimeDto = {
 		{
 			source: "path",
 			installed: false,
+			path: null,
 			version: null,
 			can_install: false,
 		},
 		{
 			source: "bun",
 			installed: false,
+			path: null,
 			version: null,
 			can_install: true,
 		},
 		{
 			source: "npm",
 			installed: false,
+			path: null,
 			version: null,
 			can_install: true,
 		},
 		{
 			source: "download",
 			installed: false,
+			path: null,
 			version: null,
 			can_install: true,
 		},
 		{
 			source: "bundled",
 			installed: true,
+			path: "/Applications/aghub.app/Contents/Resources/ccusage",
 			version: "20.0.6",
 			can_install: false,
 		},
@@ -409,6 +415,9 @@ export async function installMocks(page: Page) {
 					candidate.version
 						? {
 								source: body.source,
+								path:
+									candidate.path ??
+									`/tmp/e2e/ccusage/${body.source}/ccusage`,
 								version: candidate.version,
 								can_update: false,
 							}
@@ -436,11 +445,13 @@ export async function installMocks(page: Page) {
 					? "bun"
 					: requestedSource;
 			const installedVersion = ccusageRuntime.latest_version ?? "20.0.17";
+			const installedPath = `/tmp/e2e/ccusage/installations/${installedSource}/${installedVersion}/ccusage`;
 			ccusageRuntime = {
 				...ccusageRuntime,
 				preference: request?.source ?? ccusageRuntime.preference,
 				active: {
 					source: installedSource,
+					path: installedPath,
 					version: installedVersion,
 					can_update: true,
 				},
@@ -449,6 +460,7 @@ export async function installMocks(page: Page) {
 						? {
 								...candidate,
 								installed: true,
+								path: installedPath,
 								version: installedVersion,
 							}
 						: candidate,

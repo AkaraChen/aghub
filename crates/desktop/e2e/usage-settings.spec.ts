@@ -158,19 +158,23 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 		page.locator('[data-slot="number-field"]').first(),
 	).toHaveClass(/number-field--secondary/);
 
-	// Runtime paths stay behind the API boundary.
+	// Inactive candidates do not add their paths to the current-source summary.
 	await expect(page.getByText("/usr/local/bin/ccusage")).toHaveCount(0);
 });
 
 test("runtime source row owns version and availability metadata", async ({
 	page,
 }) => {
+	const activePath =
+		"/Users/test/Library/Application Support/aghub/ccusage/installations/bun/20.0.18/ccusage";
+	const systemPath = "/usr/local/bin/ccusage";
 	const runtime: CcusageRuntimeDto = {
 		preference: "bun",
 		active: {
 			source: "bun",
 			version: "20.0.18",
 			can_update: true,
+			path: activePath,
 		},
 		candidates: [
 			{
@@ -178,30 +182,35 @@ test("runtime source row owns version and availability metadata", async ({
 				installed: true,
 				version: "20.0.14",
 				can_install: false,
+				path: systemPath,
 			},
 			{
 				source: "bun",
 				installed: true,
 				version: "20.0.18",
 				can_install: true,
+				path: activePath,
 			},
 			{
 				source: "npm",
 				installed: false,
 				version: null,
 				can_install: true,
+				path: null,
 			},
 			{
 				source: "download",
 				installed: false,
 				version: null,
 				can_install: true,
+				path: null,
 			},
 			{
 				source: "bundled",
 				installed: false,
 				version: null,
 				can_install: false,
+				path: null,
 			},
 		],
 		latest_version: "20.0.18",
@@ -226,6 +235,13 @@ test("runtime source row owns version and availability metadata", async ({
 	await expect(
 		controls.getByText("v20.0.18 · Managed by aghub", { exact: true }),
 	).toBeVisible();
+	await expect(controls.getByTestId("usage-runtime-path")).toHaveText(
+		activePath,
+	);
+	await expect(controls.getByTestId("usage-runtime-path")).toHaveAttribute(
+		"title",
+		activePath,
+	);
 	await expect(runtimeSection.getByText(/v20\.0\.18/)).toHaveCount(1);
 	await expect(source).toContainText("Bun-managed copy");
 	await expect(source).not.toContainText("v20.0.18");
@@ -248,6 +264,10 @@ test("runtime source row owns version and availability metadata", async ({
 	);
 	await expect(bundledOption.locator('[data-slot="description"]')).toHaveText(
 		"Unavailable",
+	);
+	await pathOption.click();
+	await expect(controls.getByTestId("usage-runtime-path")).toHaveText(
+		systemPath,
 	);
 });
 
@@ -323,6 +343,7 @@ test("runtime source distinguishes the saved preference from an environment over
 		preference: "bun",
 		active: {
 			source: "environment",
+			path: "/opt/tools/ccusage",
 			version: "20.0.17",
 			can_update: false,
 		},
@@ -330,6 +351,7 @@ test("runtime source distinguishes the saved preference from an environment over
 			{
 				source: "bun",
 				installed: true,
+				path: "/tmp/e2e/ccusage/installations/bun/20.0.17/ccusage",
 				version: "20.0.17",
 				can_install: true,
 			},
@@ -528,6 +550,7 @@ test("runtime errors override stale health without hiding its version", async ({
 		preference: "auto",
 		active: {
 			source: "bun",
+			path: "/tmp/e2e/ccusage/installations/bun/20.0.17/ccusage",
 			version: "20.0.17",
 			can_update: true,
 		},

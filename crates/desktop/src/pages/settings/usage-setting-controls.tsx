@@ -22,7 +22,7 @@ export function SettingRow({
 	control,
 }: {
 	title: string;
-	description?: string;
+	description?: ReactNode;
 	control: ReactNode;
 }) {
 	return (
@@ -32,9 +32,7 @@ export function SettingRow({
 					{title}
 				</span>
 				{description && (
-					<span className="block text-xs text-muted">
-						{description}
-					</span>
+					<div className="text-xs text-muted">{description}</div>
 				)}
 			</div>
 			<div className="flex shrink-0 justify-end">{control}</div>

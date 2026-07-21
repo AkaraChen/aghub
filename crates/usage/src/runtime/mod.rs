@@ -781,8 +781,11 @@ impl CcusageRuntime {
 		acquisition: AcquisitionAvailability,
 	) -> CcusageRuntimeCandidateDto {
 		let active = active.filter(|active| active.source == source);
-		let version = if let Some(active) = active {
-			Some(active.version.clone())
+		let (version, path) = if let Some(active) = active {
+			(
+				Some(active.version.clone()),
+				Some(active.path.to_string_lossy().into_owned()),
+			)
 		} else {
 			let candidate = match source {
 				CcusageRuntimeSource::Path => match which::which("ccusage") {
@@ -835,12 +838,20 @@ impl CcusageRuntime {
 				}
 				_ => None,
 			};
-			candidate.map(|candidate| candidate.version)
+			candidate
+				.map(|candidate| {
+					(
+						candidate.version,
+						candidate.path.to_string_lossy().into_owned(),
+					)
+				})
+				.unzip()
 		};
 		let installed = version.is_some();
 		CcusageRuntimeCandidateDto {
 			source,
 			installed,
+			path,
 			version,
 			can_install: acquisition.can_install(source),
 		}
@@ -996,6 +1007,7 @@ fn executable_dto(
 ) -> CcusageRuntimeExecutableDto {
 	CcusageRuntimeExecutableDto {
 		source: active.source,
+		path: active.path.to_string_lossy().into_owned(),
 		version: active.version.clone(),
 		can_update,
 	}
@@ -1228,6 +1240,7 @@ mod tests {
 
 		let root = tempfile::tempdir().unwrap();
 		let executable = root.path().join("ccusage");
+		let executable_display = executable.to_string_lossy().into_owned();
 		std::fs::write(&executable, b"#!/bin/sh\nprintf 'ccusage 20.0.2\\n'\n")
 			.unwrap();
 		std::fs::set_permissions(
@@ -1260,6 +1273,20 @@ mod tests {
 				.as_ref()
 				.map(|active| active.version.as_str()),
 			Some("20.0.2")
+		);
+		assert_eq!(
+			described.active.as_ref().map(|active| active.path.as_str()),
+			Some(executable_display.as_str())
+		);
+		assert_eq!(
+			described
+				.candidates
+				.iter()
+				.find(|candidate| {
+					candidate.source == CcusageRuntimeSource::Path
+				})
+				.and_then(|candidate| candidate.path.as_deref()),
+			Some(executable_display.as_str())
 		);
 
 		std::fs::write(&executable, b"#!/bin/sh\nexit 1\n").unwrap();
@@ -1322,6 +1349,7 @@ mod tests {
 			)
 			.await;
 		assert!(!candidate.installed);
+		assert!(candidate.path.is_none());
 		assert!(candidate.can_install);
 	}
 }

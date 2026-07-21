@@ -3,6 +3,7 @@ import type { CcusageRuntimeSource } from "./CcusageRuntimeSource";
 
 export type CcusageRuntimeExecutableDto = {
 	source: CcusageRuntimeSource;
+	path: string;
 	version: string;
 	can_update: boolean;
 };

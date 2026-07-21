@@ -4,6 +4,7 @@ import type { CcusageRuntimeSource } from "./CcusageRuntimeSource";
 export type CcusageRuntimeCandidateDto = {
 	source: CcusageRuntimeSource;
 	installed: boolean;
+	path: string | null;
 	version: string | null;
 	can_install: boolean;
 };

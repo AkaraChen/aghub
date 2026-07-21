@@ -84,6 +84,7 @@ pub struct InstallCcusageRuntimeRequest {
 #[ts(export)]
 pub struct CcusageRuntimeExecutableDto {
 	pub source: CcusageRuntimeSource,
+	pub path: String,
 	pub version: String,
 	pub can_update: bool,
 }
@@ -93,6 +94,7 @@ pub struct CcusageRuntimeExecutableDto {
 pub struct CcusageRuntimeCandidateDto {
 	pub source: CcusageRuntimeSource,
 	pub installed: bool,
+	pub path: Option<String>,
 	pub version: Option<String>,
 	pub can_install: bool,
 }
