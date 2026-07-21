@@ -103,6 +103,9 @@ jobs:
               with:
                   bun-version: latest
 
+            - name: Setup sccache
+              uses: mozilla-actions/sccache-action@v0.0.10
+
             - name: Install frontend dependencies
               run: cd crates/desktop && bun install
 
