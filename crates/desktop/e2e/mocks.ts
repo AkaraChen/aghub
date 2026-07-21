@@ -206,43 +206,33 @@ const CCUSAGE_RUNTIME: CcusageRuntimeDto = {
 	candidates: [
 		{
 			source: "path",
-			available: false,
 			installed: false,
 			version: null,
 			can_install: false,
-			can_update: false,
 		},
 		{
 			source: "bun",
-			available: true,
 			installed: false,
 			version: null,
 			can_install: true,
-			can_update: false,
 		},
 		{
 			source: "npm",
-			available: true,
 			installed: false,
 			version: null,
 			can_install: true,
-			can_update: false,
 		},
 		{
 			source: "download",
-			available: true,
 			installed: false,
 			version: null,
 			can_install: true,
-			can_update: false,
 		},
 		{
 			source: "bundled",
-			available: true,
 			installed: true,
 			version: "20.0.6",
 			can_install: false,
-			can_update: true,
 		},
 	],
 	latest_version: "20.0.17",
@@ -420,7 +410,7 @@ export async function installMocks(page: Page) {
 						? {
 								source: body.source,
 								version: candidate.version,
-								can_update: candidate.can_update,
+								can_update: false,
 							}
 						: ccusageRuntime.active,
 			};
@@ -458,10 +448,8 @@ export async function installMocks(page: Page) {
 					candidate.source === installedSource
 						? {
 								...candidate,
-								available: true,
 								installed: true,
 								version: installedVersion,
-								can_update: true,
 							}
 						: candidate,
 				),

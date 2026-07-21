@@ -34,14 +34,9 @@ export function UsageRuntimeSection() {
 		refreshUsageRuntimeMutationOptions({ api, queryClient }),
 	);
 	const runtime = runtimeQuery.data;
-	const activeCandidate = runtime?.candidates.find(
-		(candidate) => candidate.source === runtime.active?.source,
-	);
 	const canInstall =
 		runtime?.candidates.some((candidate) => candidate.can_install) ?? false;
-	const canUpdate =
-		runtime?.active?.can_update === true ||
-		activeCandidate?.can_update === true;
+	const canUpdate = runtime?.active?.can_update === true;
 	const isOperating =
 		selectMutation.isPending ||
 		installMutation.isPending ||
@@ -88,7 +83,11 @@ export function UsageRuntimeSection() {
 
 	const showUpdate = runtime?.update_available && canUpdate;
 	const showManagedInstall =
-		runtime?.update_available && runtime.active && !canUpdate && canInstall;
+		runtime?.update_available &&
+		runtime.active &&
+		runtime.active.source !== "environment" &&
+		!canUpdate &&
+		canInstall;
 	const showInitialInstall = runtime && !runtime.active && canInstall;
 	const reportError = (error: Error) => toast.danger(error.message);
 

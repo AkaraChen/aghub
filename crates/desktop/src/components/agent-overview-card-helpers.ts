@@ -8,7 +8,7 @@ import type { HomeStatId, HomeWindowId } from "../lib/store/usage";
 import { clampPct, formatCost, formatTokens } from "../lib/usage-format";
 import { HOME_STAT_DEFINITIONS } from "../lib/usage-home-fields";
 
-export interface StatCell {
+interface StatCell {
 	id: HomeStatId;
 	labelKey: string;
 	/** Formatted value, or "—" when this agent reports nothing for it. */
@@ -16,7 +16,7 @@ export interface StatCell {
 	hasData: boolean;
 }
 
-export interface UsageView {
+interface UsageView {
 	/** Quota bars for slotted windows that have data, in slot order. */
 	windows: LimitWindowDto[];
 	/** Aligned to the stat slots; `null` is an empty slot kept in place. */

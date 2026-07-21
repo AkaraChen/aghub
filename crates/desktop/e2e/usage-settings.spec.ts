@@ -51,9 +51,6 @@ const statusReport: UsageStatusDto = {
 	error: null,
 	latest_version: "20.0.17",
 	update_available: true,
-	source: "bundled",
-	can_install: true,
-	can_update: true,
 };
 
 test.beforeEach(async ({ page }) => {
@@ -239,21 +236,19 @@ test("runtime source distinguishes the saved preference from an environment over
 		preference: "bun",
 		active: {
 			source: "environment",
-			version: "20.0.18",
+			version: "20.0.17",
 			can_update: false,
 		},
 		candidates: [
 			{
 				source: "bun",
-				available: true,
 				installed: true,
 				version: "20.0.17",
 				can_install: true,
-				can_update: true,
 			},
 		],
 		latest_version: "20.0.18",
-		update_available: false,
+		update_available: true,
 		error: null,
 	};
 	await page.route("**/api/v1/usage/runtime", (route) =>
@@ -273,6 +268,9 @@ test("runtime source distinguishes the saved preference from an environment over
 			"Bun-managed copy is selected; currently using Environment variable.",
 		),
 	).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Install v20.0.18 in aghub" }),
+	).toHaveCount(0);
 
 	const source = page.getByRole("button", { name: "Runtime source" });
 	await source.click();
@@ -742,6 +740,52 @@ test("finite pickers preserve stored custom values", async ({ page }) => {
 	await expect(
 		page.locator('button[aria-label="Alert threshold"]').first(),
 	).toContainText("82%");
+});
+
+test("usage settings clamp persisted ranges and reject invalid timezones", async ({
+	page,
+}) => {
+	await page.goto("/");
+	await page.evaluate(async () => {
+		type Invoke = <T>(
+			command: string,
+			args?: Record<string, unknown>,
+		) => Promise<T>;
+		const { invoke } = (
+			window as unknown as {
+				__TAURI_INTERNALS__: { invoke: Invoke };
+			}
+		).__TAURI_INTERNALS__;
+		const rid = await invoke<number>("plugin:store|load", {
+			path: "store.json",
+		});
+		await invoke("plugin:store|set", {
+			rid,
+			key: "usageSettings",
+			value: {
+				pollIntervalMs: 100_000_000,
+				timezone: "Mars/Olympus_Mons",
+				requestTimeoutSecs: 10_000,
+				home: { windowDays: 1_000 },
+			},
+		});
+	});
+	await page.getByRole("link", { name: "Settings" }).click();
+	await page.getByRole("tab", { name: "Usage" }).click();
+
+	await expect(
+		page.getByRole("button", { name: "Usage window" }),
+	).toContainText("365 days");
+	await page.getByRole("button", { name: "Advanced" }).click();
+	await expect(
+		page.locator('input[aria-label="Polling interval"]'),
+	).toHaveValue("86,400s");
+	await expect(
+		page.locator('input[aria-label="Request timeout"]'),
+	).toHaveValue("3,600s");
+	await expect(page.getByRole("button", { name: "Timezone" })).toContainText(
+		"System default",
+	);
 });
 
 test("layout rows are the complete drag targets", async ({ page }) => {
@@ -1527,53 +1571,6 @@ test("card stats have no horizontal divider", async ({ page }) => {
 			),
 		)
 		.toBe("0px");
-});
-
-test("usage header keeps version and update hint together and unboxed", async ({
-	page,
-}) => {
-	await page.goto("/usage");
-
-	await expect(page.getByRole("toolbar", { name: "Usage" })).toHaveCount(0);
-	const status = page.getByRole("status");
-	const updateHint = status.getByText("v20.0.17 available", {
-		exact: true,
-	});
-	await expect(status).toContainText("20.0.6");
-	await expect(updateHint).toBeVisible();
-	await expect(updateHint.locator("xpath=ancestor::button")).toHaveCount(0);
-	const containerStyle = await status.locator("..").evaluate((element) => {
-		const style = getComputedStyle(element);
-		return {
-			backgroundColor: style.backgroundColor,
-			borderTopWidth: style.borderTopWidth,
-		};
-	});
-	expect(containerStyle).toEqual({
-		backgroundColor: "rgba(0, 0, 0, 0)",
-		borderTopWidth: "0px",
-	});
-	const updateHintStyle = await updateHint.evaluate((element) => {
-		const style = getComputedStyle(element);
-		return {
-			backgroundColor: style.backgroundColor,
-			borderBottomWidth: style.borderBottomWidth,
-			borderLeftWidth: style.borderLeftWidth,
-			borderRightWidth: style.borderRightWidth,
-			borderTopWidth: style.borderTopWidth,
-		};
-	});
-	expect(updateHintStyle).toEqual({
-		backgroundColor: "rgba(0, 0, 0, 0)",
-		borderBottomWidth: "0px",
-		borderLeftWidth: "0px",
-		borderRightWidth: "0px",
-		borderTopWidth: "0px",
-	});
-	await expect(
-		page.getByRole("button", { name: "Open settings" }),
-	).toBeVisible();
-	await expect(status.locator("button")).toHaveCount(0);
 });
 
 test("home does not animate optional usage before data exists", async ({

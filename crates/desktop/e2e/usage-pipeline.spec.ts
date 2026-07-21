@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test";
 import type { UsageStatusDto } from "../src/generated/dto";
-import { usageSummaryRequestTimeout } from "../src/lib/api";
 import { installMocks } from "./mocks";
 
 /**
@@ -12,16 +11,10 @@ import { installMocks } from "./mocks";
  * OAuth endpoint, needs real credentials) and runtime status stay mocked.
  */
 
-test("usage summary HTTP deadline includes the response grace period", () => {
-	expect(usageSummaryRequestTimeout()).toBe(45_000);
-	expect(usageSummaryRequestTimeout(30)).toBe(45_000);
-	expect(usageSummaryRequestTimeout(90)).toBe(105_000);
-	expect(usageSummaryRequestTimeout(120)).toBe(135_000);
-});
-
 test.beforeEach(async ({ page }) => {
 	const mocks = await installMocks(page);
 	mocks.addAgent("codex", "Codex");
+	mocks.addAgent("factory", "Factory");
 	// Let the summary through to the real server, past installMocks'
 	// catch-all (later routes win; continue() sends it to the network).
 	await page.route("**/api/v1/usage/summary**", (route) => route.continue());
@@ -42,9 +35,6 @@ test.beforeEach(async ({ page }) => {
 		error: null,
 		latest_version: null,
 		update_available: false,
-		source: "environment",
-		can_install: true,
-		can_update: false,
 	};
 	await page.route("**/api/v1/usage/status**", (route) =>
 		route.fulfill({
@@ -78,4 +68,7 @@ test("usage page renders real ccusage JSON parsed by the backend", async ({
 	// Day-level data landed too — the stacked strip has both agents.
 	const strip = page.getByRole("img", { name: "Daily usage by agent" });
 	await expect(strip).toBeVisible();
+	await expect(
+		page.getByLabel("Usage", { exact: true }).getByText("Factory"),
+	).toBeVisible();
 });

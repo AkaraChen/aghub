@@ -454,6 +454,7 @@ export default {
 	usage: "Usage",
 	usageSettingsSaveError: "Failed to save usage settings",
 	usageSettingsLoadError: "Failed to load usage settings",
+	usageReportLoadError: "Failed to load usage report",
 	usageStatusUnreachable: "ccusage isn't reachable",
 	usageStatusUpdate: "{{version}} available",
 	usageStatusRecheck: "Check again",
@@ -525,8 +526,9 @@ export default {
 	usageGlobalAlertThreshold: "Global alert threshold",
 	usageAlertUseGlobal: "Use global ({{pct}}%)",
 	usageSettingsHomeCards: "Home cards",
-	usageExtraArgs: "Extra ccusage flags",
-	usageExtraArgsDescription: "Appended verbatim to every ccusage call.",
+	usageExtraArgs: "Additional ccusage arguments",
+	usageExtraArgsDescription:
+		"Separated by whitespace; individual argument values cannot contain spaces.",
 	usageSettingsAlerts: "Alerts",
 	usageSettingsAlertsDescription:
 		"Warn when a rate-limit window passes its threshold.",
@@ -549,8 +551,6 @@ export default {
 	usageHomeLayout: "Card layout",
 	usageHomeLayoutDescription:
 		"Drag fields between the card and Not shown. The card updates before you drop.",
-	usageHomeWindowsLabel: "Rate-limit bars",
-	usageHomeStatsLabel: "Bottom stats",
 	usageLayoutTarget: "Editing layout for",
 	usageLayoutTargetDefault: "Default",
 	usageLayoutResetOverride: "Reset to default",
@@ -1408,7 +1408,7 @@ export default {
 	usageLayoutAnnounceCancelled:
 		"Cancelled. {{field}} returned to its previous position.",
 	usageDailyActivity: "Daily usage by agent",
-	usageResetsIn: "Resets in {{time}}",
+	usageOtherAgents: "Other agents",
 	usageWindow5h: "5-hour limit",
 	usageWindowWeekly: "Weekly limit",
 	usageWindowWeeklyOpus: "Weekly (Opus)",

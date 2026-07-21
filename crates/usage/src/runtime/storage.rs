@@ -28,7 +28,12 @@ pub(super) fn load_preference(
 		}
 		Err(error) => return Err(error.into()),
 	};
-	let persisted: PersistedRuntime = serde_json::from_slice(&bytes)?;
+	let persisted: PersistedRuntime =
+		serde_json::from_slice(&bytes).map_err(|error| {
+			CcusageRuntimeError::InvalidRuntimeConfig(format!(
+				"failed to parse runtime.json: {error}"
+			))
+		})?;
 	if persisted.version != RUNTIME_CONFIG_VERSION {
 		return Err(CcusageRuntimeError::InvalidRuntimeConfig(format!(
 			"unsupported ccusage runtime config version {}",
@@ -50,7 +55,12 @@ pub(super) fn save_preference(
 			version: RUNTIME_CONFIG_VERSION,
 			preference: preference.clone(),
 		},
-	)?;
+	)
+	.map_err(|error| {
+		CcusageRuntimeError::InvalidRuntimeConfig(format!(
+			"failed to serialize runtime.json: {error}"
+		))
+	})?;
 	temp.write_all(b"\n")?;
 	temp.as_file().sync_all()?;
 	temp.persist(root.join("runtime.json"))

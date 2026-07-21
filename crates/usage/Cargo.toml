@@ -12,7 +12,6 @@ serde_json = { workspace = true }
 ts-rs = { workspace = true }
 dirs = { workspace = true }
 tokio = { workspace = true, features = [
-	"fs",
 	"io-util",
 	"process",
 	"sync",

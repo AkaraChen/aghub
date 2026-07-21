@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
+import { UsageDailyBars } from "../components/usage-daily-bars";
 import type { AgentUsageDto, UsageTotalsDto } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
@@ -15,6 +16,7 @@ import {
 	formatTokens,
 	shortCcusageVersion,
 } from "../lib/usage-format";
+import { buildUsageDateRange } from "../lib/usage-date-range";
 import { cn } from "../lib/utils";
 import {
 	usageStatusQueryOptions,
@@ -23,13 +25,6 @@ import {
 
 /** The page shows a fixed recent window; day-level tuning lives in settings. */
 const WINDOW_DAYS = 30;
-
-/** Pretty names for report agents that aren't installed locally (agent
- *  availability carries no display_name for them). */
-const FALLBACK_LABELS: Record<string, string> = {
-	claude: "Claude",
-	codex: "Codex",
-};
 
 /** Totals fields that hold token counts (everything but the cost). */
 type TokenField = Exclude<keyof UsageTotalsDto, "cost_usd">;
@@ -43,37 +38,6 @@ const BREAKDOWN: { field: TokenField; labelKey: string }[] = [
 	{ field: "reasoning_tokens", labelKey: "usageStatReasoning" },
 ];
 
-function toCompactYmd(date: Date): string {
-	const year = date.getFullYear();
-	const month = String(date.getMonth() + 1).padStart(2, "0");
-	const day = String(date.getDate()).padStart(2, "0");
-	return `${year}${month}${day}`;
-}
-
-/** Every "YYYY-MM-DD" in the page's window, oldest first — the report skips
- *  idle days, so the strip fills them in to keep the time axis linear. */
-function windowDates(days: number): string[] {
-	const out: string[] = [];
-	const cursor = new Date();
-	cursor.setDate(cursor.getDate() - (days - 1));
-	for (let i = 0; i < days; i++) {
-		out.push(
-			`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}-${String(
-				cursor.getDate(),
-			).padStart(2, "0")}`,
-		);
-		cursor.setDate(cursor.getDate() + 1);
-	}
-	return out;
-}
-
-function formatUsageDate(iso: string): string {
-	return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
-		month: "short",
-		day: "numeric",
-	});
-}
-
 export default function UsagePage() {
 	const { t } = useTranslation();
 	const [, setLocation] = useLocation();
@@ -84,43 +48,43 @@ export default function UsagePage() {
 	const settings = usageSettings ?? DEFAULT_USAGE_SETTINGS;
 	const settingsReady = usageSettingsQuery.isSuccess;
 
-	const range = useMemo(() => {
-		const until = new Date();
-		const since = new Date(until);
-		since.setDate(since.getDate() - (WINDOW_DAYS - 1));
-		return {
-			since: toCompactYmd(since),
-			until: toCompactYmd(until),
-			timezone:
-				settings.timezone ||
-				new Intl.DateTimeFormat().resolvedOptions().timeZone,
-		};
-	}, [settings.timezone]);
+	const range = buildUsageDateRange(WINDOW_DAYS, settings.timezone);
+	const refetchInterval =
+		settings.pollIntervalMs > 0 ? settings.pollIntervalMs : false;
 
-	const { data: report, isLoading: isReportLoading } = useQuery(
+	const reportQuery = useQuery(
 		usageSummaryQueryOptions({
 			api,
-			...range,
+			since: range.since,
+			until: range.until,
+			timezone: range.timezone,
 			offline: settings.offlinePricing,
 			config: settings.ccusageConfigPath,
 			timeoutSecs: settings.requestTimeoutSecs,
 			args: settings.extraArgs,
 			enabled: settingsReady,
+			refetchInterval,
 		}),
 	);
+	const { data: report } = reportQuery;
 	const statusQuery = useQuery(usageStatusQueryOptions({ api }));
 	const { data: status } = statusQuery;
-	const isLoading = usageSettingsQuery.isPending || isReportLoading;
+	const isLoading = usageSettingsQuery.isPending || reportQuery.isLoading;
 	const settingsError =
 		usageSettingsQuery.error instanceof Error
 			? usageSettingsQuery.error.message
 			: t("usageSettingsLoadError");
+	const reportError =
+		reportQuery.error instanceof Error
+			? reportQuery.error.message
+			: t("usageReportLoadError");
+	const emptyMessage = report?.warnings[0] ?? t("usageEmpty");
 
 	const displayName = useMemo(() => {
 		const byId = new Map(
 			availableAgents.map((a) => [a.id, a.display_name]),
 		);
-		return (id: string) => byId.get(id) ?? FALLBACK_LABELS[id] ?? id;
+		return (id: string) => byId.get(id) ?? id;
 	}, [availableAgents]);
 
 	const usableAgentIds = useMemo(() => {
@@ -234,8 +198,10 @@ export default function UsagePage() {
 						ctaLabel={t("usageOpenSettings")}
 						onPress={() => setLocation("/settings?tab=usage")}
 					/>
+				) : reportQuery.isError ? (
+					<EmptyState message={reportError} />
 				) : agents.length === 0 ? (
-					<EmptyState message={t("usageEmpty")} />
+					<EmptyState message={emptyMessage} />
 				) : (
 					<div className="flex flex-col gap-6">
 						<div className="flex flex-wrap items-baseline gap-x-10 gap-y-3">
@@ -255,8 +221,9 @@ export default function UsagePage() {
 							/>
 						</div>
 
-						<CombinedDailyBars
+						<UsageDailyBars
 							agents={agents}
+							dates={range.dates}
 							nameOf={displayName}
 						/>
 
@@ -286,104 +253,6 @@ function SummaryStat({ label, value }: { label: string; value: string }) {
 				{value}
 			</span>
 			<span className="text-xs text-muted">{label}</span>
-		</div>
-	);
-}
-
-/** Bar height of the daily strip; segments derive px heights from this. */
-const CHART_HEIGHT_PX = 96;
-
-/** Stacked fills by report order; neutral ink first, accent tint second. */
-const SERIES_FILLS = [
-	"bg-foreground/30",
-	"bg-accent/45",
-	"bg-foreground/15",
-	"bg-accent/25",
-];
-
-/** Daily totals of every agent with activity, as one stacked-bar strip —
- *  quiet monochrome + accent, no chart library. */
-function CombinedDailyBars({
-	agents,
-	nameOf,
-}: {
-	agents: AgentUsageDto[];
-	nameOf: (id: string) => string;
-}) {
-	const { t } = useTranslation();
-	const series = agents
-		.filter((a) => a.days.some((d) => d.total_tokens > 0))
-		.slice(0, SERIES_FILLS.length);
-
-	const dates = windowDates(WINDOW_DAYS);
-	const byAgent = series.map((a) => {
-		const map = new Map(a.days.map((d) => [d.date, d.total_tokens]));
-		return (date: string) => map.get(date) ?? 0;
-	});
-	const max = Math.max(
-		...dates.map((date) =>
-			byAgent.reduce((sum, get) => sum + get(date), 0),
-		),
-		1,
-	);
-	if (series.length === 0) return null;
-
-	return (
-		<div className="flex flex-col gap-2">
-			<div className="flex items-center justify-end gap-4">
-				{series.map((agent, index) => (
-					<span
-						key={agent.agent}
-						className="flex items-center gap-1.5 text-[11px] text-muted"
-					>
-						<span
-							className={cn(
-								"size-2 rounded-[2px]",
-								SERIES_FILLS[index],
-							)}
-						/>
-						{nameOf(agent.agent)}
-					</span>
-				))}
-			</div>
-			<div
-				role="img"
-				aria-label={t("usageDailyActivity")}
-				className="flex h-24 items-end gap-px"
-			>
-				{dates.map((date) => {
-					const parts = byAgent.map((get) => get(date));
-					const total = parts.reduce((a, b) => a + b, 0);
-					return (
-						<div
-							key={date}
-							title={`${formatUsageDate(date)} · ${formatTokens(total)}`}
-							className="relative h-full flex-1"
-						>
-							<div className="absolute inset-x-0 bottom-0 flex flex-col-reverse overflow-hidden rounded-[2px]">
-								{parts.map((value, index) =>
-									value > 0 ? (
-										<div
-											key={series[index].agent}
-											className={SERIES_FILLS[index]}
-											style={{
-												height: `${Math.max((value / max) * CHART_HEIGHT_PX, 2)}px`,
-											}}
-										/>
-									) : null,
-								)}
-							</div>
-							{total === 0 && (
-								<div className="absolute inset-x-0 bottom-0 h-0.5 rounded-[2px] bg-foreground/8" />
-							)}
-						</div>
-					);
-				})}
-			</div>
-			<div className="flex justify-between text-[11px] text-muted">
-				<span>{formatUsageDate(dates[0])}</span>
-				<span>{formatUsageDate(dates[dates.length - 1])}</span>
-			</div>
 		</div>
 	);
 }

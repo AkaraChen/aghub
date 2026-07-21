@@ -4,6 +4,7 @@ import {
 	queryOptions,
 } from "@tanstack/react-query";
 import type {
+	CcusageRuntimeDto,
 	InstallCcusageRuntimeRequest,
 	SetCcusageRuntimeRequest,
 } from "../generated/dto";
@@ -21,7 +22,10 @@ interface UsageSummaryQueryParams {
 	config?: string;
 	/** ccusage request timeout, in seconds. */
 	timeoutSecs?: number;
-	/** Raw extra ccusage flags appended verbatim; empty/undefined = none. */
+	/**
+	 * Additional ccusage arguments. The API splits on whitespace, so one value
+	 * cannot contain spaces.
+	 */
 	args?: string;
 	enabled?: boolean;
 	/** Background poll interval in ms; `false` (default) polls only on demand. */
@@ -134,16 +138,15 @@ async function invalidateUsageRuntimeState(queryClient: QueryClient) {
 	]);
 }
 
-export function setUsageRuntimeMutationOptions({
-	api,
+function usageRuntimeMutationOptions<TVariables>({
 	queryClient,
+	mutationFn,
 }: {
-	api: ApiClient;
 	queryClient: QueryClient;
+	mutationFn: (variables: TVariables) => Promise<CcusageRuntimeDto>;
 }) {
 	return mutationOptions({
-		mutationFn: (body: SetCcusageRuntimeRequest) =>
-			api.usage.setRuntime(body),
+		mutationFn,
 		onError: async () => {
 			await invalidateUsageRuntimeState(queryClient);
 		},
@@ -151,6 +154,20 @@ export function setUsageRuntimeMutationOptions({
 			queryClient.setQueryData(queryKeys.usage.runtime(), runtime);
 			await invalidateUsageRuntime(queryClient);
 		},
+	});
+}
+
+export function setUsageRuntimeMutationOptions({
+	api,
+	queryClient,
+}: {
+	api: ApiClient;
+	queryClient: QueryClient;
+}) {
+	return usageRuntimeMutationOptions({
+		queryClient,
+		mutationFn: (body: SetCcusageRuntimeRequest) =>
+			api.usage.setRuntime(body),
 	});
 }
 
@@ -161,16 +178,10 @@ export function installUsageRuntimeMutationOptions({
 	api: ApiClient;
 	queryClient: QueryClient;
 }) {
-	return mutationOptions({
+	return usageRuntimeMutationOptions({
+		queryClient,
 		mutationFn: (body: InstallCcusageRuntimeRequest) =>
 			api.usage.installRuntime(body),
-		onError: async () => {
-			await invalidateUsageRuntimeState(queryClient);
-		},
-		onSuccess: async (runtime) => {
-			queryClient.setQueryData(queryKeys.usage.runtime(), runtime);
-			await invalidateUsageRuntime(queryClient);
-		},
 	});
 }
 
@@ -181,15 +192,9 @@ export function updateUsageRuntimeMutationOptions({
 	api: ApiClient;
 	queryClient: QueryClient;
 }) {
-	return mutationOptions({
+	return usageRuntimeMutationOptions({
+		queryClient,
 		mutationFn: () => api.usage.updateRuntime(),
-		onError: async () => {
-			await invalidateUsageRuntimeState(queryClient);
-		},
-		onSuccess: async (runtime) => {
-			queryClient.setQueryData(queryKeys.usage.runtime(), runtime);
-			await invalidateUsageRuntime(queryClient);
-		},
 	});
 }
 
@@ -200,14 +205,8 @@ export function refreshUsageRuntimeMutationOptions({
 	api: ApiClient;
 	queryClient: QueryClient;
 }) {
-	return mutationOptions({
+	return usageRuntimeMutationOptions({
+		queryClient,
 		mutationFn: () => api.usage.refreshRuntime(),
-		onError: async () => {
-			await invalidateUsageRuntimeState(queryClient);
-		},
-		onSuccess: async (runtime) => {
-			queryClient.setQueryData(queryKeys.usage.runtime(), runtime);
-			await invalidateUsageRuntime(queryClient);
-		},
 	});
 }

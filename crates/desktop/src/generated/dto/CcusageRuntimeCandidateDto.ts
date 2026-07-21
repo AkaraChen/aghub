@@ -3,9 +3,7 @@ import type { CcusageRuntimeSource } from "./CcusageRuntimeSource";
 
 export type CcusageRuntimeCandidateDto = {
 	source: CcusageRuntimeSource;
-	available: boolean;
 	installed: boolean;
 	version: string | null;
 	can_install: boolean;
-	can_update: boolean;
 };

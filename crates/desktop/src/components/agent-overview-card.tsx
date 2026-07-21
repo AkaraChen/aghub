@@ -14,12 +14,7 @@ import { agentStatus } from "../lib/agent-status";
 import { AgentIcon } from "../lib/agent-icons";
 import { cn } from "../lib/utils";
 import { clampPct, meterColor, quotaWindowLabelKey } from "../lib/usage-format";
-import {
-	DEFAULT_STAT_SLOTS,
-	DEFAULT_WINDOW_SLOTS,
-	type HomeStatId,
-	type HomeWindowId,
-} from "../lib/store";
+import type { HomeStatId, HomeWindowId } from "../lib/store";
 import { buildUsage } from "./agent-overview-card-helpers";
 
 /** Home-card usage display preferences, resolved per agent by the home page. */
@@ -32,12 +27,6 @@ export interface AgentUsageDisplay {
 	statSlots: (HomeStatId | null)[];
 }
 
-const DEFAULT_USAGE_DISPLAY: AgentUsageDisplay = {
-	alertThresholdPct: 90,
-	windowSlots: DEFAULT_WINDOW_SLOTS,
-	statSlots: DEFAULT_STAT_SLOTS,
-};
-
 interface AgentOverviewCardProps {
 	agent: AvailableAgent;
 	skillCount: number;
@@ -46,8 +35,8 @@ interface AgentOverviewCardProps {
 	usage?: AgentUsageDto;
 	/** Remaining rate-limit windows for this agent, when available. */
 	limits?: AgentLimitsDto;
-	/** How to render the usage block; defaults to the shared card layout. */
-	usageDisplay?: AgentUsageDisplay;
+	/** How to render the usage block. */
+	usageDisplay: AgentUsageDisplay;
 }
 
 export function AgentOverviewCard({
@@ -56,7 +45,7 @@ export function AgentOverviewCard({
 	mcpCount,
 	usage,
 	limits,
-	usageDisplay = DEFAULT_USAGE_DISPLAY,
+	usageDisplay,
 }: AgentOverviewCardProps) {
 	const { t } = useTranslation();
 	const [, setLocation] = useLocation();

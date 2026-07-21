@@ -6,28 +6,12 @@ use super::{CcusageRuntimeError, CcusageRuntimeSource};
 use semver::Version;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
-use tokio::io::{AsyncRead, AsyncReadExt};
 
 const INSTALL_TIMEOUT: Duration = Duration::from_secs(180);
 const RUNNER_PROBE_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_ERROR_BYTES: usize = 4096;
 const MINIMUM_BUN_VERSION: Version = Version::new(1, 3, 0);
-
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-
-struct CapturedStream {
-	bytes: Vec<u8>,
-	truncated: bool,
-}
-
-struct ProcessOutput {
-	status: ExitStatus,
-	stdout: CapturedStream,
-	stderr: CapturedStream,
-}
 
 pub(super) async fn acquire_with_package_runner(
 	source: CcusageRuntimeSource,
@@ -41,15 +25,7 @@ pub(super) async fn acquire_with_package_runner(
 	let package_spec = format!("{}@{version}", platform.package_name);
 	let args = package_command_args(source, stage, &package_spec)?;
 	let mut command = runner.command();
-	command
-		.current_dir(stage)
-		.args(args)
-		.stdin(Stdio::null())
-		.stdout(Stdio::piped())
-		.stderr(Stdio::piped())
-		.kill_on_drop(true);
-	#[cfg(target_os = "windows")]
-	command.creation_flags(CREATE_NO_WINDOW);
+	command.current_dir(stage).args(args);
 	let output = run_command(&mut command, INSTALL_TIMEOUT, source).await?;
 	if !output.status.success() {
 		let captured = if output.stderr.bytes.is_empty() {
@@ -92,14 +68,7 @@ pub(super) async fn validate_package_runner(
 	runner: &PackageRunner,
 ) -> Result<(), CcusageRuntimeError> {
 	let mut command = runner.command();
-	command
-		.arg("--version")
-		.stdin(Stdio::null())
-		.stdout(Stdio::piped())
-		.stderr(Stdio::piped())
-		.kill_on_drop(true);
-	#[cfg(target_os = "windows")]
-	command.creation_flags(CREATE_NO_WINDOW);
+	command.arg("--version");
 	let output =
 		run_command(&mut command, RUNNER_PROBE_TIMEOUT, source).await?;
 	if output.stdout.truncated || output.stderr.truncated {
@@ -134,64 +103,36 @@ async fn run_command(
 	command: &mut tokio::process::Command,
 	timeout: Duration,
 	source: CcusageRuntimeSource,
-) -> Result<ProcessOutput, CcusageRuntimeError> {
-	process::prepare_command(command);
-	let mut child = command.spawn()?;
-	let child_tree = process::ChildTree::attach(&child);
-	let stdout = child.stdout.take();
-	let stderr = child.stderr.take();
-	let execution = async {
-		let (stdout, stderr, status) = tokio::join!(
-			drain_output(stdout, MAX_ERROR_BYTES),
-			drain_output(stderr, MAX_ERROR_BYTES),
-			child.wait(),
-		);
-		Ok::<_, std::io::Error>(ProcessOutput {
-			status: status?,
-			stdout: stdout?,
-			stderr: stderr?,
-		})
-	};
-	match tokio::time::timeout(timeout, execution).await {
-		Ok(Ok(output)) => {
-			child_tree.disarm();
-			Ok(output)
-		}
-		Ok(Err(error)) => Err(error.into()),
-		Err(_) => {
-			child_tree.terminate(&mut child).await;
-			Err(CcusageRuntimeError::InstallTimedOut(source))
-		}
+) -> Result<process::BoundedOutput, CcusageRuntimeError> {
+	match process::run_bounded(
+		command,
+		timeout,
+		MAX_ERROR_BYTES,
+		MAX_ERROR_BYTES,
+	)
+	.await
+	{
+		Ok(output) => Ok(output),
+		Err(error) => Err(package_process_error(source, error)),
 	}
 }
 
-async fn drain_output<R>(
-	reader: Option<R>,
-	limit: usize,
-) -> std::io::Result<CapturedStream>
-where
-	R: AsyncRead + Unpin,
-{
-	let Some(mut reader) = reader else {
-		return Ok(CapturedStream {
-			bytes: Vec::new(),
-			truncated: false,
-		});
-	};
-	let mut bytes = Vec::new();
-	let mut truncated = false;
-	let mut buffer = [0_u8; 8192];
-	loop {
-		let read = reader.read(&mut buffer).await?;
-		if read == 0 {
-			break;
+fn package_process_error(
+	source: CcusageRuntimeSource,
+	error: process::BoundedProcessError,
+) -> CcusageRuntimeError {
+	match error {
+		process::BoundedProcessError::Spawn(error)
+		| process::BoundedProcessError::Read(error) => {
+			CcusageRuntimeError::PackageInstallFailed {
+				provider: source,
+				message: error.to_string(),
+			}
 		}
-		let remaining = limit.saturating_sub(bytes.len());
-		let retained = remaining.min(read);
-		bytes.extend_from_slice(&buffer[..retained]);
-		truncated |= retained < read;
+		process::BoundedProcessError::TimedOut => {
+			CcusageRuntimeError::InstallTimedOut(source)
+		}
 	}
-	Ok(CapturedStream { bytes, truncated })
 }
 
 fn parse_runner_version(output: &[u8]) -> Result<Version, semver::Error> {
@@ -274,7 +215,7 @@ fn validate_staged_path(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use tokio::io::AsyncWriteExt;
+	use std::process::Stdio;
 
 	#[test]
 	fn package_installs_are_local_and_disable_scripts() {
@@ -309,16 +250,27 @@ mod tests {
 		);
 	}
 
-	#[tokio::test]
-	async fn drains_process_output_with_a_bounded_prefix() {
-		let (mut writer, reader) = tokio::io::duplex(512);
-		let write = tokio::spawn(async move {
-			writer.write_all(&vec![b'x'; 8192]).await.unwrap();
-		});
-		let captured = drain_output(Some(reader), 128).await.unwrap();
-		write.await.unwrap();
-		assert_eq!(captured.bytes.len(), 128);
-		assert!(captured.truncated);
+	#[test]
+	fn package_process_io_is_reported_as_provider_failure() {
+		for error in [
+			process::BoundedProcessError::Spawn(std::io::Error::new(
+				std::io::ErrorKind::NotFound,
+				"missing runner",
+			)),
+			process::BoundedProcessError::Read(std::io::Error::new(
+				std::io::ErrorKind::BrokenPipe,
+				"broken output",
+			)),
+		] {
+			let error = package_process_error(CcusageRuntimeSource::Bun, error);
+			assert!(matches!(
+				error,
+				CcusageRuntimeError::PackageInstallFailed {
+					provider: CcusageRuntimeSource::Bun,
+					..
+				}
+			));
+		}
 	}
 
 	#[cfg(unix)]

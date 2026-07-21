@@ -26,9 +26,6 @@ pub struct ApiOptions {
 	pub app_data_dir: Option<PathBuf>,
 	/// Read-only ccusage executable shipped beside a packaged desktop build.
 	pub ccusage_bundled_bin: Option<PathBuf>,
-	/// One-time migration input from the former Tauri-store sidecar setting.
-	pub ccusage_legacy_preference:
-		Option<aghub_usage::runtime::CcusageRuntimePreference>,
 	pub auth_token: Option<String>,
 	pub allowed_origins: Vec<String>,
 	pub allowed_origin_regexes: Vec<String>,
@@ -40,7 +37,6 @@ impl ApiOptions {
 			port,
 			app_data_dir: None,
 			ccusage_bundled_bin: None,
-			ccusage_legacy_preference: None,
 			auth_token: None,
 			allowed_origins: default_allowed_origins(),
 			allowed_origin_regexes: default_allowed_origin_regexes(),
@@ -67,7 +63,6 @@ impl ApiOptions {
 				.app_data_dir
 				.unwrap_or_else(default_app_data_dir),
 			ccusage_bundled_bin: self.ccusage_bundled_bin,
-			ccusage_legacy_preference: self.ccusage_legacy_preference,
 			auth_token,
 			token_was_generated,
 			allowed_origins: self.allowed_origins,
@@ -98,8 +93,6 @@ struct ResolvedApiOptions {
 	port: u16,
 	app_data_dir: PathBuf,
 	ccusage_bundled_bin: Option<PathBuf>,
-	ccusage_legacy_preference:
-		Option<aghub_usage::runtime::CcusageRuntimePreference>,
 	auth_token: String,
 	token_was_generated: bool,
 	allowed_origins: Vec<String>,
@@ -163,7 +156,6 @@ fn build_rocket(
 	let usage_runtime = aghub_usage::runtime::CcusageRuntime::load(
 		options.app_data_dir.join("ccusage"),
 		options.ccusage_bundled_bin,
-		options.ccusage_legacy_preference,
 	);
 	let allowed_origins = rocket_cors::AllowedOrigins::some(
 		&options.allowed_origins,

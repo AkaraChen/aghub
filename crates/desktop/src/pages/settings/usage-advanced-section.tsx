@@ -2,6 +2,10 @@ import { Button, Disclosure, Input, TextField } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import type { UsageSettings } from "../../lib/store";
 import {
+	USAGE_POLL_INTERVAL_MAX_SECS,
+	USAGE_REQUEST_TIMEOUT_MAX_SECS,
+} from "../../lib/store/usage";
+import {
 	PathField,
 	SettingNumber,
 	SettingRow,
@@ -91,6 +95,7 @@ export function AdvancedSection({
 									}
 									ariaLabel={t("usagePollInterval")}
 									minValue={0}
+									maxValue={USAGE_POLL_INTERVAL_MAX_SECS}
 									formatOptions={{
 										style: "unit",
 										unit: "second",
@@ -137,6 +142,7 @@ export function AdvancedSection({
 									}
 									ariaLabel={t("usageRequestTimeout")}
 									minValue={1}
+									maxValue={USAGE_REQUEST_TIMEOUT_MAX_SECS}
 									formatOptions={{
 										style: "unit",
 										unit: "second",
@@ -157,7 +163,6 @@ export function AdvancedSection({
 							>
 								<Input
 									variant="secondary"
-									placeholder="--jsonl --breakdown"
 									className="font-mono text-xs"
 								/>
 							</TextField>

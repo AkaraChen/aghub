@@ -29,7 +29,7 @@ export function formatCost(usd: number | null | undefined): string | null {
  */
 export function meterColor(
 	utilizationPct: number,
-	alertThresholdPct = 90,
+	alertThresholdPct: number,
 ): "success" | "warning" | "danger" {
 	if (utilizationPct >= alertThresholdPct) return "danger";
 	if (utilizationPct >= Math.max(0, alertThresholdPct - 20)) return "warning";
@@ -45,20 +45,6 @@ export function clampPct(value: number): number {
  *  is already carried by the surrounding UI. */
 export function shortCcusageVersion(version: string): string {
 	return `v${version.replace(/^ccusage\s+/, "").replace(/^v/, "")}`;
-}
-
-/**
- * Compact time until an ISO reset instant: `"18m"`, `"2h"`, `"4d"`.
- * `null` when the instant is missing or already past.
- */
-export function resetsIn(iso: string | null): string | null {
-	if (!iso) return null;
-	const ms = new Date(iso).getTime() - Date.now();
-	if (!Number.isFinite(ms) || ms <= 0) return null;
-	const hours = ms / 3_600_000;
-	if (hours < 1) return `${Math.max(1, Math.round(ms / 60_000))}m`;
-	if (hours < 48) return `${Math.round(hours)}h`;
-	return `${Math.round(hours / 24)}d`;
 }
 
 /** i18n key for a rate-limit window label. */

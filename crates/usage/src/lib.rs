@@ -17,24 +17,26 @@ pub mod runtime;
 
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
+use std::future::Future;
 use std::path::PathBuf;
-use std::process::{ExitStatus, Stdio};
 use std::time::Duration;
 
-use futures::future::join_all;
+use futures::stream::{self, StreamExt};
 use serde::Deserialize;
-use tokio::io::{AsyncRead, AsyncReadExt};
 
 /// Default ccusage spawn timeout, in seconds; overridable per [`UsageQuery`].
 pub const DEFAULT_TIMEOUT_SECS: u64 = 30;
+/// Upper bound accepted for a ccusage summary request.
+pub const MAX_TIMEOUT_SECS: u64 = 60 * 60;
 const CCUSAGE_TIMEOUT: Duration = Duration::from_secs(DEFAULT_TIMEOUT_SECS);
 /// Short cap for the `--version` probe (it runs beside the data fetches).
 const VERSION_TIMEOUT: Duration = Duration::from_secs(10);
 const LIMITS_TIMEOUT: Duration = Duration::from_secs(15);
-// Daily JSON is normally well below 8 MiB. These caps keep 15 parallel agent
-// probes under a known memory bound while retaining useful failure output.
+// Daily JSON is normally well below 8 MiB. These caps and the fan-out limit
+// keep usage probes under a known memory bound while retaining failure output.
 const MAX_CCUSAGE_STDOUT_BYTES: usize = 8 * 1024 * 1024;
 const MAX_CCUSAGE_STDERR_BYTES: usize = 64 * 1024;
+const MAX_CONCURRENT_AGENT_PROBES: usize = 4;
 
 /// Options for a ccusage `daily` query. [`Default`] reproduces the previous
 /// hard-coded behaviour: cached offline pricing, no config override, 30s timeout.
@@ -48,9 +50,9 @@ pub struct UsageQuery {
 	pub offline: bool,
 	/// Optional ccusage config file, passed as `--config`.
 	pub config: Option<PathBuf>,
-	/// Per-call spawn timeout.
+	/// Total summary deadline and per-process upper bound.
 	pub timeout: Duration,
-	/// Raw extra ccusage flags appended verbatim (power-user passthrough).
+	/// Extra ccusage arguments supplied as individual values.
 	pub extra_args: Vec<String>,
 }
 
@@ -68,20 +70,25 @@ impl Default for UsageQuery {
 	}
 }
 
-/// The ccusage agents aghub probes for local usage. ccusage supports this fixed
-/// set; each is queried with `<agent> daily --json`, and only those with data
-/// appear in the report. Extend this table as ccusage adds agents.
-pub const KNOWN_USAGE_AGENTS: &[&str] = &[
-	"claude", "codex", "opencode", "amp", "droid", "codebuff", "hermes", "pi",
-	"goose", "kilo", "copilot", "gemini", "kimi", "qwen", "openclaw",
+/// The ccusage command id and aghub agent id for each usage source. The two ids
+/// differ where ccusage still uses a product's former CLI name.
+const KNOWN_USAGE_AGENTS: &[(&str, &str)] = &[
+	("claude", "claude"),
+	("codex", "codex"),
+	("opencode", "opencode"),
+	("amp", "amp"),
+	("droid", "factory"),
+	("codebuff", "codebuff"),
+	("hermes", "hermes"),
+	("pi", "pi"),
+	("goose", "goose"),
+	("kilo", "kilocode"),
+	("copilot", "copilot"),
+	("gemini", "gemini"),
+	("kimi", "kimi"),
+	("qwen", "qwen"),
+	("openclaw", "openclaw"),
 ];
-
-/// Windows `CREATE_NO_WINDOW` process-creation flag. The desktop app runs
-/// without a console, so an unflagged child would flash a console window on
-/// every ccusage call; this suppresses it (same flag the api / cc-plugins
-/// crates pass to their own child processes).
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 /// Locate the ccusage binary. Preference order: an explicit path injected by the
 /// caller, then the `AGHUB_CCUSAGE_BIN` environment variable, then `ccusage` on
@@ -109,17 +116,6 @@ async fn run_ccusage(
 	.await
 }
 
-struct CapturedOutput {
-	bytes: Vec<u8>,
-	truncated: bool,
-}
-
-struct CcusageOutput {
-	status: ExitStatus,
-	stdout: CapturedOutput,
-	stderr: CapturedOutput,
-}
-
 async fn run_ccusage_with_limits(
 	bin: &OsStr,
 	args: Vec<String>,
@@ -128,44 +124,23 @@ async fn run_ccusage_with_limits(
 	stderr_limit: usize,
 ) -> Result<Vec<u8>, String> {
 	let mut cmd = tokio::process::Command::new(bin);
-	cmd.kill_on_drop(true)
-		.args(&args)
-		.stdin(Stdio::null())
-		.stdout(Stdio::piped())
-		.stderr(Stdio::piped());
-	// Suppress the console window Windows would otherwise pop for the child when
-	// the spawning process (the desktop app) has none.
-	#[cfg(target_os = "windows")]
-	cmd.creation_flags(CREATE_NO_WINDOW);
-	runtime::process::prepare_command(&mut cmd);
-	let mut child = cmd
-		.spawn()
-		.map_err(|error| format!("failed to spawn ccusage: {error}"))?;
-	let child_tree = runtime::process::ChildTree::attach(&child);
-	let stdout = child.stdout.take().expect("ccusage stdout is piped");
-	let stderr = child.stderr.take().expect("ccusage stderr is piped");
-	let execution = async {
-		let (stdout, stderr, status) = tokio::join!(
-			read_capped(stdout, stdout_limit),
-			read_capped(stderr, stderr_limit),
-			child.wait(),
-		);
-		Ok::<_, std::io::Error>(CcusageOutput {
-			status: status?,
-			stdout: stdout?,
-			stderr: stderr?,
-		})
-	};
-	let output = match tokio::time::timeout(timeout, execution).await {
-		Ok(Ok(output)) => {
-			child_tree.disarm();
-			output
+	cmd.args(&args);
+	let output = match runtime::process::run_bounded(
+		&mut cmd,
+		timeout,
+		stdout_limit,
+		stderr_limit,
+	)
+	.await
+	{
+		Ok(output) => output,
+		Err(runtime::process::BoundedProcessError::Spawn(error)) => {
+			return Err(format!("failed to spawn ccusage: {error}"));
 		}
-		Ok(Err(error)) => {
+		Err(runtime::process::BoundedProcessError::Read(error)) => {
 			return Err(format!("failed to read ccusage: {error}"));
 		}
-		Err(_) => {
-			child_tree.terminate(&mut child).await;
+		Err(runtime::process::BoundedProcessError::TimedOut) => {
 			return Err(format!(
 				"ccusage timed out after {}s",
 				timeout.as_secs()
@@ -185,32 +160,6 @@ async fn run_ccusage_with_limits(
 		));
 	}
 	Ok(output.stdout.bytes)
-}
-
-async fn read_capped(
-	mut reader: impl AsyncRead + Unpin,
-	limit: usize,
-) -> std::io::Result<CapturedOutput> {
-	let mut bytes = Vec::new();
-	let mut buffer = [0_u8; 8192];
-	loop {
-		let read = reader.read(&mut buffer).await?;
-		if read == 0 {
-			return Ok(CapturedOutput {
-				bytes,
-				truncated: false,
-			});
-		}
-		let remaining = limit.saturating_sub(bytes.len());
-		let retained = remaining.min(read);
-		bytes.extend_from_slice(&buffer[..retained]);
-		if retained < read {
-			return Ok(CapturedOutput {
-				bytes,
-				truncated: true,
-			});
-		}
-	}
 }
 
 /// `ccusage --version` → e.g. "ccusage 20.0.6"; "unknown" if it can't be read.
@@ -551,12 +500,13 @@ fn generic_to_agent(id: &str, report: CcAgentReport) -> AgentUsageDto {
 /// agent has no data (skip it); `Err` = the call or parse failed (a warning).
 async fn fetch_agent_usage(
 	bin: &OsStr,
-	id: &str,
+	ccusage_id: &str,
+	agent_id: &str,
 	args: Vec<String>,
 	timeout: Duration,
 ) -> Result<Option<AgentUsageDto>, String> {
 	let raw = run_ccusage(bin, args, timeout).await?;
-	let agent = match id {
+	let agent = match ccusage_id {
 		"claude" => {
 			let r: CcClaudeReport = serde_json::from_slice(&raw)
 				.map_err(|e| format!("parse claude usage json: {e}"))?;
@@ -569,8 +519,8 @@ async fn fetch_agent_usage(
 		}
 		_ => {
 			let r: CcAgentReport = serde_json::from_slice(&raw)
-				.map_err(|e| format!("parse {id} usage json: {e}"))?;
-			generic_to_agent(id, r)
+				.map_err(|e| format!("parse {ccusage_id} usage json: {e}"))?;
+			generic_to_agent(agent_id, r)
 		}
 	};
 	Ok((agent.totals.total_tokens > 0).then_some(agent))
@@ -616,13 +566,85 @@ fn build_ccusage_args(agent: &str, query: &UsageQuery) -> Vec<String> {
 /// with no data is skipped; neither fails the whole request, so the page still
 /// renders whatever is available.
 pub async fn summary(bin: &OsStr, query: &UsageQuery) -> UsageReportDto {
-	let probes = KNOWN_USAGE_AGENTS.iter().map(|&id| async move {
-		let args = build_ccusage_args(id, query);
-		(id, fetch_agent_usage(bin, id, args, query.timeout).await)
-	});
-	let (version, results) =
-		tokio::join!(ccusage_version(bin), join_all(probes));
+	let (version, (results, timed_out)) =
+		tokio::join!(ccusage_version(bin), probe_agent_usage(bin, query),);
+	usage_report(version, results, timed_out, query.timeout)
+}
 
+/// Build a summary when the caller has already probed the active runtime.
+pub async fn summary_with_version(
+	bin: &OsStr,
+	query: &UsageQuery,
+	version: &str,
+) -> UsageReportDto {
+	let (results, timed_out) = probe_agent_usage(bin, query).await;
+	usage_report(version.to_string(), results, timed_out, query.timeout)
+}
+
+async fn probe_agent_usage<'a>(
+	bin: &'a OsStr,
+	query: &'a UsageQuery,
+) -> (Vec<(String, Result<Option<AgentUsageDto>, String>)>, bool) {
+	let mut probes = Vec::with_capacity(KNOWN_USAGE_AGENTS.len());
+	for (index, &(ccusage_id, agent_id)) in
+		KNOWN_USAGE_AGENTS.iter().enumerate()
+	{
+		let ccusage_id = ccusage_id.to_string();
+		let agent_id = agent_id.to_string();
+		probes.push(async move {
+			let args = build_ccusage_args(&ccusage_id, query);
+			let result = fetch_agent_usage(
+				bin,
+				&ccusage_id,
+				&agent_id,
+				args,
+				query.timeout,
+			)
+			.await;
+			(index, (agent_id, result))
+		});
+	}
+	collect_agent_probes(probes, query.timeout).await
+}
+
+async fn collect_agent_probes<I, F, T>(
+	probes: I,
+	timeout: Duration,
+) -> (Vec<T>, bool)
+where
+	I: IntoIterator<Item = F>,
+	F: Future<Output = (usize, T)>,
+{
+	let deadline = tokio::time::Instant::now() + timeout;
+	let mut pending =
+		stream::iter(probes).buffer_unordered(MAX_CONCURRENT_AGENT_PROBES);
+	let mut completed = Vec::new();
+	loop {
+		match tokio::time::timeout_at(deadline, pending.next()).await {
+			Ok(Some(result)) => completed.push(result),
+			Ok(None) => break,
+			Err(_) => {
+				completed.sort_unstable_by_key(|(index, _)| *index);
+				return (
+					completed.into_iter().map(|(_, result)| result).collect(),
+					true,
+				);
+			}
+		}
+	}
+	completed.sort_unstable_by_key(|(index, _)| *index);
+	(
+		completed.into_iter().map(|(_, result)| result).collect(),
+		false,
+	)
+}
+
+fn usage_report(
+	version: String,
+	results: Vec<(String, Result<Option<AgentUsageDto>, String>)>,
+	timed_out: bool,
+	timeout: Duration,
+) -> UsageReportDto {
 	let mut agents = Vec::new();
 	let mut warnings = Vec::new();
 	for (id, res) in results {
@@ -632,6 +654,12 @@ pub async fn summary(bin: &OsStr, query: &UsageQuery) -> UsageReportDto {
 			Err(e) => warnings.push(format!("{id} usage unavailable: {e}")),
 		}
 	}
+	if timed_out {
+		warnings.push(format!(
+			"ccusage agent probes timed out after {}s",
+			timeout.as_secs()
+		));
+	}
 
 	UsageReportDto {
 		agents,
@@ -639,69 +667,6 @@ pub async fn summary(bin: &OsStr, query: &UsageQuery) -> UsageReportDto {
 		ccusage_version: version,
 		warnings,
 	}
-}
-
-/// ccusage executable health + version, plus an npm-registry check for a newer
-/// release. Backs `GET /api/v1/usage/status`. Each call is timed out.
-pub async fn status(bin: &OsStr) -> UsageStatusDto {
-	let (version, reachable, error) =
-		match run_ccusage(bin, vec!["--version".to_string()], VERSION_TIMEOUT)
-			.await
-		{
-			Ok(out) => {
-				let raw = String::from_utf8_lossy(&out).trim().to_string();
-				// "ccusage 20.0.6" -> "20.0.6"
-				let v = raw.rsplit(' ').next().unwrap_or(&raw).to_string();
-				(Some(v), true, None)
-			}
-			Err(e) => (None, false, Some(e)),
-		};
-	let latest_version = fetch_latest_ccusage_version().await;
-	let update_available = match (&version, &latest_version) {
-		(Some(cur), Some(latest)) => version_lt(cur, latest),
-		_ => false,
-	};
-	UsageStatusDto {
-		version,
-		reachable,
-		error,
-		latest_version,
-		update_available,
-		source: None,
-		can_install: false,
-		can_update: false,
-	}
-}
-
-/// Latest published `ccusage` version from the npm registry; `None` on any
-/// network/parse failure (the status panel just omits the update hint).
-async fn fetch_latest_ccusage_version() -> Option<String> {
-	let client = reqwest::Client::builder()
-		.timeout(LIMITS_TIMEOUT)
-		.build()
-		.ok()?;
-	let resp = client
-		.get("https://registry.npmjs.org/ccusage/latest")
-		.send()
-		.await
-		.ok()?;
-	if !resp.status().is_success() {
-		return None;
-	}
-	let json: serde_json::Value = resp.json().await.ok()?;
-	json.get("version")
-		.and_then(serde_json::Value::as_str)
-		.map(str::to_string)
-}
-
-/// Numeric-component "is `a` older than `b`" — enough for an update hint.
-fn version_lt(a: &str, b: &str) -> bool {
-	let parts = |s: &str| {
-		s.split('.')
-			.filter_map(|p| p.parse::<u64>().ok())
-			.collect::<Vec<_>>()
-	};
-	parts(a) < parts(b)
 }
 
 // ---- remaining-quota (limits) ----------------------------------------------
@@ -1038,6 +1003,8 @@ pub async fn limits() -> UsageLimitsReportDto {
 mod tests {
 	use super::*;
 	use serde_json::json;
+	use std::sync::atomic::{AtomicUsize, Ordering};
+	use std::sync::Arc;
 
 	#[cfg(unix)]
 	#[tokio::test]
@@ -1072,6 +1039,80 @@ mod tests {
 			error.contains("output exceeded 32 bytes"),
 			"unexpected ccusage error: {error}"
 		);
+	}
+
+	#[tokio::test]
+	async fn agent_probes_use_bounded_concurrency() {
+		let active = Arc::new(AtomicUsize::new(0));
+		let peak = Arc::new(AtomicUsize::new(0));
+		let probes = (0..12).map(|index| {
+			let active = active.clone();
+			let peak = peak.clone();
+			async move {
+				let current = active.fetch_add(1, Ordering::SeqCst) + 1;
+				peak.fetch_max(current, Ordering::SeqCst);
+				tokio::time::sleep(Duration::from_millis(10)).await;
+				active.fetch_sub(1, Ordering::SeqCst);
+				(index, index)
+			}
+		});
+
+		let (results, timed_out) =
+			collect_agent_probes(probes, Duration::from_secs(1)).await;
+		assert_eq!(results, (0..12).collect::<Vec<_>>());
+		assert!(!timed_out);
+		assert_eq!(peak.load(Ordering::SeqCst), MAX_CONCURRENT_AGENT_PROBES);
+	}
+
+	#[tokio::test]
+	async fn agent_probe_deadline_preserves_completed_results() {
+		let probes = (0..6).map(|index| async move {
+			if index != 0 {
+				std::future::pending::<()>().await;
+			}
+			(index, index)
+		});
+
+		let (results, timed_out) =
+			collect_agent_probes(probes, Duration::from_millis(20)).await;
+		assert_eq!(results, vec![0]);
+		assert!(timed_out);
+	}
+
+	#[test]
+	fn ccusage_cli_aliases_use_aghub_agent_ids() {
+		assert!(KNOWN_USAGE_AGENTS.contains(&("droid", "factory")));
+		assert!(KNOWN_USAGE_AGENTS.contains(&("kilo", "kilocode")));
+	}
+
+	#[cfg(unix)]
+	#[tokio::test]
+	async fn known_runtime_version_avoids_a_second_version_probe() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let root = tempfile::tempdir().unwrap();
+		let executable = root.path().join("ccusage");
+		let marker = root.path().join("version-probed");
+		let script = format!(
+			"#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf called > '{}'; fi\nexit 1\n",
+			marker.display()
+		);
+		std::fs::write(&executable, script).unwrap();
+		std::fs::set_permissions(
+			&executable,
+			std::fs::Permissions::from_mode(0o755),
+		)
+		.unwrap();
+
+		let report = summary_with_version(
+			executable.as_os_str(),
+			&UsageQuery::default(),
+			"ccusage 20.0.18",
+		)
+		.await;
+		assert_eq!(report.ccusage_version, "ccusage 20.0.18");
+		assert_eq!(report.warnings.len(), KNOWN_USAGE_AGENTS.len());
+		assert!(!marker.exists());
 	}
 
 	#[test]
@@ -1356,7 +1397,7 @@ mod tests {
 		assert_eq!(args[si + 1], "2026-06-01");
 		assert!(args.contains(&"--timezone".to_string()));
 		assert!(args.contains(&"Asia/Shanghai".to_string()));
-		// Passthrough flags are appended verbatim.
+		// Passthrough values retain their order.
 		assert_eq!(args.last().unwrap(), "--breakdown");
 	}
 
@@ -1402,14 +1443,6 @@ mod tests {
 				.unwrap();
 		let agent = generic_to_agent("qwen", report);
 		assert_eq!(agent.totals.total_tokens, 0);
-	}
-
-	#[test]
-	fn version_lt_compares_numeric_components() {
-		assert!(version_lt("20.0.6", "20.0.14"));
-		assert!(version_lt("20.0.6", "21.0.0"));
-		assert!(!version_lt("20.0.14", "20.0.6"));
-		assert!(!version_lt("20.0.6", "20.0.6"));
 	}
 
 	#[test]

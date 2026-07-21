@@ -2,12 +2,11 @@ import type { UsageTotalsDto } from "../generated/dto";
 import type { HomeStatId, HomeWindowId } from "./store/usage";
 
 /** Where a stat's value comes from and how it is formatted. */
-export type HomeStatSource =
+type HomeStatSource =
 	| { from: "totals"; field: keyof UsageTotalsDto; fmt: "tokens" | "cost" }
 	| { from: "window"; window: HomeWindowId; fmt: "pct" };
 
-export interface HomeStatDefinition {
-	id: HomeStatId;
+interface HomeStatDefinition {
 	labelKey: string;
 	source: HomeStatSource;
 }
@@ -18,32 +17,26 @@ export interface HomeStatDefinition {
  */
 export const HOME_STAT_DEFINITIONS: Record<HomeStatId, HomeStatDefinition> = {
 	totalTokens: {
-		id: "totalTokens",
 		labelKey: "usageStatTotalTokens",
 		source: { from: "totals", field: "total_tokens", fmt: "tokens" },
 	},
 	cost: {
-		id: "cost",
 		labelKey: "usageStatCost",
 		source: { from: "totals", field: "cost_usd", fmt: "cost" },
 	},
 	inputTokens: {
-		id: "inputTokens",
 		labelKey: "usageStatInputTokens",
 		source: { from: "totals", field: "input_tokens", fmt: "tokens" },
 	},
 	outputTokens: {
-		id: "outputTokens",
 		labelKey: "usageStatOutputTokens",
 		source: { from: "totals", field: "output_tokens", fmt: "tokens" },
 	},
 	cacheRead: {
-		id: "cacheRead",
 		labelKey: "usageStatCacheRead",
 		source: { from: "totals", field: "cache_read_tokens", fmt: "tokens" },
 	},
 	cacheCreation: {
-		id: "cacheCreation",
 		labelKey: "usageStatCacheCreation",
 		source: {
 			from: "totals",
@@ -52,22 +45,18 @@ export const HOME_STAT_DEFINITIONS: Record<HomeStatId, HomeStatDefinition> = {
 		},
 	},
 	reasoning: {
-		id: "reasoning",
 		labelKey: "usageStatReasoning",
 		source: { from: "totals", field: "reasoning_tokens", fmt: "tokens" },
 	},
 	utilization5h: {
-		id: "utilization5h",
 		labelKey: "usageStatUtil5h",
 		source: { from: "window", window: "5h", fmt: "pct" },
 	},
 	utilizationWeekly: {
-		id: "utilizationWeekly",
 		labelKey: "usageStatUtilWeekly",
 		source: { from: "window", window: "weekly", fmt: "pct" },
 	},
 	utilizationOpus: {
-		id: "utilizationOpus",
 		labelKey: "usageStatUtilOpus",
 		source: { from: "window", window: "weekly_opus", fmt: "pct" },
 	},

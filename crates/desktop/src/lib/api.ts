@@ -113,7 +113,7 @@ const DEFAULT_USAGE_SUMMARY_TIMEOUT_SECS = 30;
 // response normalization and transport before the client aborts the request.
 const USAGE_SUMMARY_RESPONSE_GRACE_MS = 15_000;
 
-export function usageSummaryRequestTimeout(timeoutSecs?: number) {
+function usageSummaryRequestTimeout(timeoutSecs?: number) {
 	const processTimeoutSecs =
 		timeoutSecs !== undefined && timeoutSecs > 0
 			? timeoutSecs
@@ -683,7 +683,11 @@ export function createApi(baseUrl: string, token: string) {
 				return client.get("usage/status", { timeout: 30000 }).json();
 			},
 			runtime(): Promise<CcusageRuntimeDto> {
-				return client.get("usage/runtime", { timeout: 30000 }).json();
+				return client
+					.get("usage/runtime", {
+						timeout: RUNTIME_PROBE_REQUEST_TIMEOUT_MS,
+					})
+					.json();
 			},
 			setRuntime(
 				body: SetCcusageRuntimeRequest,

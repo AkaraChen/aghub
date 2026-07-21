@@ -41,10 +41,9 @@ dependencies = [
 name = "aghub"
 version = "0.0.0"
 dependencies = [
- "aghub-api",
- "aghub-core",
- "aghub-usage",
- "base64 0.23.0",
+	"aghub-api",
+	"aghub-core",
+	"base64 0.23.0",
  "dotenvy",
  "fix-path-env",
  "flate2",

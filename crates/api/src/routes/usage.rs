@@ -35,7 +35,7 @@ pub struct UsageSummaryParams {
 	offline: Option<bool>,
 	config: Option<String>,
 	timeout_secs: Option<u64>,
-	/// Whitespace-separated power-user ccusage flags appended verbatim.
+	/// Whitespace-separated power-user ccusage arguments.
 	args: Option<String>,
 }
 
@@ -56,12 +56,7 @@ pub async fn usage_summary(
 		timezone: params.timezone,
 		offline: params.offline.unwrap_or(true),
 		config: params.config.map(PathBuf::from),
-		timeout: Duration::from_secs(
-			params
-				.timeout_secs
-				.filter(|s| *s > 0)
-				.unwrap_or(aghub_usage::DEFAULT_TIMEOUT_SECS),
-		),
+		timeout: Duration::from_secs(usage_timeout_secs(params.timeout_secs)),
 		extra_args: params
 			.args
 			.map(|s| s.split_whitespace().map(String::from).collect())
@@ -69,7 +64,13 @@ pub async fn usage_summary(
 	};
 	let report = match usage.runtime.snapshot().await {
 		Ok(executable) => {
-			aghub_usage::summary(executable.path.as_os_str(), &query).await
+			let version = format!("ccusage {}", executable.version());
+			aghub_usage::summary_with_version(
+				executable.path.as_os_str(),
+				&query,
+				&version,
+			)
+			.await
 		}
 		Err(error) => UsageReportDto {
 			agents: Vec::new(),
@@ -82,6 +83,13 @@ pub async fn usage_summary(
 		},
 	};
 	Json(report)
+}
+
+fn usage_timeout_secs(value: Option<u64>) -> u64 {
+	value
+		.filter(|seconds| *seconds > 0)
+		.unwrap_or(aghub_usage::DEFAULT_TIMEOUT_SECS)
+		.min(aghub_usage::MAX_TIMEOUT_SECS)
 }
 
 /// `GET /api/v1/usage/limits` — remaining rate-limit quota for Claude and Codex.
@@ -188,10 +196,19 @@ fn runtime_error(error: aghub_usage::runtime::CcusageRuntimeError) -> ApiError {
 		| CcusageRuntimeError::SourceNotInstalled(_) => {
 			(Status::Conflict, "CCUSAGE_RUNTIME_UNAVAILABLE")
 		}
-		CcusageRuntimeError::Http(_) => {
+		CcusageRuntimeError::PackageInstallFailed { .. } => {
+			(Status::BadGateway, "CCUSAGE_ACQUISITION_FAILED")
+		}
+		CcusageRuntimeError::Http(_)
+		| CcusageRuntimeError::ArchiveTooLarge
+		| CcusageRuntimeError::IntegrityMismatch
+		| CcusageRuntimeError::MissingArchiveMember(_)
+		| CcusageRuntimeError::InvalidArchiveMember(_)
+		| CcusageRuntimeError::InvalidRegistryMetadata(_) => {
 			(Status::BadGateway, "CCUSAGE_REGISTRY_UNAVAILABLE")
 		}
 		CcusageRuntimeError::InstallTimedOut(_)
+		| CcusageRuntimeError::VersionProbeTimedOut(_)
 		| CcusageRuntimeError::RuntimeOperationTimedOut => {
 			(Status::GatewayTimeout, "CCUSAGE_RUNTIME_TIMEOUT")
 		}
@@ -207,14 +224,54 @@ mod tests {
 	use aghub_usage::CcusageRuntimeSource;
 
 	#[test]
+	fn summary_timeout_is_bounded_at_the_api_boundary() {
+		assert_eq!(usage_timeout_secs(None), aghub_usage::DEFAULT_TIMEOUT_SECS);
+		assert_eq!(
+			usage_timeout_secs(Some(0)),
+			aghub_usage::DEFAULT_TIMEOUT_SECS
+		);
+		assert_eq!(usage_timeout_secs(Some(45)), 45);
+		assert_eq!(
+			usage_timeout_secs(Some(aghub_usage::MAX_TIMEOUT_SECS + 1)),
+			aghub_usage::MAX_TIMEOUT_SECS
+		);
+	}
+
+	#[test]
 	fn runtime_timeouts_map_to_gateway_timeout() {
 		for error in [
 			CcusageRuntimeError::InstallTimedOut(CcusageRuntimeSource::Npm),
+			CcusageRuntimeError::VersionProbeTimedOut(PathBuf::from("ccusage")),
 			CcusageRuntimeError::RuntimeOperationTimedOut,
 		] {
 			let response = runtime_error(error);
 			assert_eq!(response.status, Status::GatewayTimeout);
 			assert_eq!(response.body.code, "CCUSAGE_RUNTIME_TIMEOUT");
 		}
+	}
+
+	#[test]
+	fn acquisition_failures_map_to_bad_gateway() {
+		for error in [
+			CcusageRuntimeError::ArchiveTooLarge,
+			CcusageRuntimeError::IntegrityMismatch,
+			CcusageRuntimeError::MissingArchiveMember("ccusage".to_string()),
+			CcusageRuntimeError::InvalidArchiveMember("ccusage".to_string()),
+			CcusageRuntimeError::InvalidRegistryMetadata(
+				"invalid response".to_string(),
+			),
+		] {
+			let response = runtime_error(error);
+			assert_eq!(response.status, Status::BadGateway);
+			assert_eq!(response.body.code, "CCUSAGE_REGISTRY_UNAVAILABLE");
+		}
+
+		let response =
+			runtime_error(CcusageRuntimeError::PackageInstallFailed {
+				provider: CcusageRuntimeSource::Bun,
+				message: "install failed".to_string(),
+			});
+		assert_eq!(response.status, Status::BadGateway);
+		assert_eq!(response.body.code, "CCUSAGE_ACQUISITION_FAILED");
 	}
 }

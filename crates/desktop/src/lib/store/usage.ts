@@ -1,38 +1,9 @@
 import { getStore } from ".";
 
-/**
- * ccusage reports token usage for many agents; mirrors the backend
- * `KNOWN_USAGE_AGENTS`. Only some ({@link USAGE_QUOTA_AGENTS}) also expose an
- * OAuth rate-limit endpoint, so only those render quota bars + use thresholds.
- */
-export const USAGE_AGENT_IDS = [
-	"claude",
-	"codex",
-	"opencode",
-	"amp",
-	"droid",
-	"codebuff",
-	"hermes",
-	"pi",
-	"goose",
-	"kilo",
-	"copilot",
-	"gemini",
-	"kimi",
-	"qwen",
-	"openclaw",
-] as const;
-export type UsageAgentId = (typeof USAGE_AGENT_IDS)[number];
-
 /** Agents with an OAuth rate-limit endpoint — quota bars + alert thresholds. */
 export const USAGE_QUOTA_AGENTS = ["claude", "codex"] as const;
 
-/** Whether an agent id renders quota bars / uses an alert threshold. */
-export function isQuotaAgent(id: string): boolean {
-	return (USAGE_QUOTA_AGENTS as readonly string[]).includes(id);
-}
-
-export interface UsageAgentSettings {
+interface UsageAgentSettings {
 	/**
 	 * Per-agent alert threshold, percent of a rate-limit window (0–100). `null`
 	 * falls back to {@link UsageSettings.globalAlertThresholdPct}. Only
@@ -42,7 +13,7 @@ export interface UsageAgentSettings {
 }
 
 /** Per-agent settings default: use the global alert threshold. */
-export const DEFAULT_AGENT_SETTINGS: UsageAgentSettings = {
+const DEFAULT_AGENT_SETTINGS: UsageAgentSettings = {
 	alertThresholdPct: null,
 };
 
@@ -74,15 +45,15 @@ export const HOME_WINDOW_IDS = ["5h", "weekly", "weekly_opus"] as const;
 export type HomeWindowId = (typeof HOME_WINDOW_IDS)[number];
 
 /** Fixed bar slots on the card (a vertical stack). */
-export const CARD_WINDOW_SLOTS = 3;
+const CARD_WINDOW_SLOTS = 3;
 /** Fixed stat slots on the card (a 2×2 corner grid). */
-export const CARD_STAT_SLOTS = 4;
+const CARD_STAT_SLOTS = 4;
 
 /**
  * One card's fixed slot arrangement. Array index is the slot; `null` is an empty
  * slot kept in place. Fields not in a slot are the palette (derived, not stored).
  */
-export interface CardLayout {
+interface CardLayout {
 	/** Length {@link CARD_WINDOW_SLOTS}. */
 	windowSlots: (HomeWindowId | null)[];
 	/** Length {@link CARD_STAT_SLOTS}. */
@@ -90,7 +61,7 @@ export interface CardLayout {
 }
 
 /** How the usage block on the home agent cards is rendered. */
-export interface UsageHomeSettings {
+interface UsageHomeSettings {
 	/** Master switch for the usage block on home cards. */
 	showUsageOnHome: boolean;
 	/** Rolling window (days) for the summary query that feeds the home cards. */
@@ -112,7 +83,10 @@ export interface UsageSettings {
 	ccusageConfigPath: string;
 	/** ccusage request timeout, in seconds. */
 	requestTimeoutSecs: number;
-	/** Raw extra ccusage flags appended verbatim (power-user passthrough). */
+	/**
+	 * Additional ccusage arguments. The API splits on whitespace, so one value
+	 * cannot contain spaces.
+	 */
 	extraArgs: string;
 	/** Global alert threshold, percent of a rate-limit window (0–100). */
 	globalAlertThresholdPct: number;
@@ -131,26 +105,29 @@ export function agentSettings(
 
 const USAGE_SETTINGS_KEY = "usageSettings";
 
+/** TanStack Query polling accepts disabled (0) or a 1-second to 24-hour timer. */
+const USAGE_POLL_INTERVAL_MIN_MS = 1_000;
+export const USAGE_POLL_INTERVAL_MAX_SECS = 24 * 60 * 60;
+const USAGE_POLL_INTERVAL_MAX_MS = USAGE_POLL_INTERVAL_MAX_SECS * 1_000;
+
+/** The ccusage process timeout setting is limited to 1 second through 1 hour. */
+const USAGE_REQUEST_TIMEOUT_MIN_SECS = 1;
+export const USAGE_REQUEST_TIMEOUT_MAX_SECS = 60 * 60;
+
+/** Home summary queries cover between 1 day and 1 calendar year. */
+const USAGE_HOME_WINDOW_MIN_DAYS = 1;
+const USAGE_HOME_WINDOW_MAX_DAYS = 365;
+
 /** Default bar slots — one weekly quota row. */
-export const DEFAULT_WINDOW_SLOTS: (HomeWindowId | null)[] = [
-	"weekly",
-	null,
-	null,
-];
+const DEFAULT_WINDOW_SLOTS: (HomeWindowId | null)[] = ["weekly", null, null];
 
 /** Default stat slots — input/output first, then total tokens and spend. */
-export const DEFAULT_STAT_SLOTS: (HomeStatId | null)[] = [
+const DEFAULT_STAT_SLOTS: (HomeStatId | null)[] = [
 	"inputTokens",
 	"outputTokens",
 	"totalTokens",
 	"cost",
 ];
-
-/** The default card layout, shared by every agent without an override. */
-export const DEFAULT_CARD_LAYOUT: CardLayout = {
-	windowSlots: DEFAULT_WINDOW_SLOTS,
-	statSlots: DEFAULT_STAT_SLOTS,
-};
 
 export function createDefaultUsageSettings(): UsageSettings {
 	return {
@@ -208,6 +185,39 @@ function normalizeBool(value: unknown, fallback: boolean): boolean {
 	return typeof value === "boolean" ? value : fallback;
 }
 
+function normalizeFiniteInteger(
+	value: unknown,
+	fallback: number,
+	min: number,
+	max: number,
+): number {
+	if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+	return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+function normalizePollInterval(value: unknown, fallback: number): number {
+	if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+	if (value === 0) return 0;
+	return normalizeFiniteInteger(
+		value,
+		fallback,
+		USAGE_POLL_INTERVAL_MIN_MS,
+		USAGE_POLL_INTERVAL_MAX_MS,
+	);
+}
+
+function normalizeTimezone(value: unknown): string {
+	if (typeof value !== "string" || value === "") return "";
+	try {
+		new Intl.DateTimeFormat("en-US", {
+			timeZone: value,
+		}).resolvedOptions();
+		return value;
+	} catch {
+		return "";
+	}
+}
+
 const HOME_STAT_ID_SET = new Set<HomeStatId>(HOME_STAT_IDS);
 const HOME_WINDOW_ID_SET = new Set<HomeWindowId>(HOME_WINDOW_IDS);
 
@@ -236,58 +246,23 @@ function normalizeSlots<Id extends string>(
 	return out;
 }
 
-/**
- * Migrate the legacy `{ id, visible }[]` shape: visible ids in order fill the
- * leading slots; the rest fall to the palette. `null` if `raw` isn't that shape.
- */
-function slotsFromLegacy<Id extends string>(
-	raw: unknown,
-	idSet: ReadonlySet<Id>,
-	length: number,
-): (Id | null)[] | null {
-	if (!Array.isArray(raw)) return null;
-	const visible: Id[] = [];
-	for (const value of raw) {
-		if (typeof value !== "object" || value === null) continue;
-		const item = value as { id?: unknown; visible?: unknown };
-		if (
-			typeof item.id === "string" &&
-			idSet.has(item.id as Id) &&
-			item.visible !== false
-		) {
-			visible.push(item.id as Id);
-		}
-	}
-	return normalizeSlots(visible, idSet, length);
-}
-
-/** Normalize one card layout, migrating the older flat + `{id,visible}[]` shapes. */
+/** Normalize one fixed-slot card layout from the persisted store. */
 function normalizeLayout(raw: unknown): CardLayout {
 	const r = (typeof raw === "object" && raw !== null ? raw : {}) as Record<
 		string,
 		unknown
 	>;
 	return {
-		windowSlots:
-			r.windowSlots !== undefined
-				? normalizeSlots(
-						r.windowSlots,
-						HOME_WINDOW_ID_SET,
-						CARD_WINDOW_SLOTS,
-					)
-				: (slotsFromLegacy(
-						r.windows,
-						HOME_WINDOW_ID_SET,
-						CARD_WINDOW_SLOTS,
-					) ?? [...DEFAULT_WINDOW_SLOTS]),
-		statSlots:
-			r.statSlots !== undefined
-				? normalizeSlots(r.statSlots, HOME_STAT_ID_SET, CARD_STAT_SLOTS)
-				: (slotsFromLegacy(
-						r.stats,
-						HOME_STAT_ID_SET,
-						CARD_STAT_SLOTS,
-					) ?? [...DEFAULT_STAT_SLOTS]),
+		windowSlots: normalizeSlots(
+			r.windowSlots ?? DEFAULT_WINDOW_SLOTS,
+			HOME_WINDOW_ID_SET,
+			CARD_WINDOW_SLOTS,
+		),
+		statSlots: normalizeSlots(
+			r.statSlots ?? DEFAULT_STAT_SLOTS,
+			HOME_STAT_ID_SET,
+			CARD_STAT_SLOTS,
+		),
 	};
 }
 
@@ -297,12 +272,6 @@ function normalizeHome(raw: unknown): UsageHomeSettings {
 		string,
 		unknown
 	>;
-	// `default` present = new shape; otherwise migrate the old flat layout
-	// (home.windowSlots / home.stats) into the default.
-	const defaultLayout =
-		r.default !== undefined
-			? normalizeLayout(r.default)
-			: normalizeLayout(r);
 	const perAgent: Record<string, CardLayout> = {};
 	if (typeof r.perAgent === "object" && r.perAgent !== null) {
 		for (const [id, layout] of Object.entries(
@@ -313,17 +282,19 @@ function normalizeHome(raw: unknown): UsageHomeSettings {
 	}
 	return {
 		showUsageOnHome: normalizeBool(r.showUsageOnHome, d.showUsageOnHome),
-		windowDays:
-			typeof r.windowDays === "number" && r.windowDays > 0
-				? Math.round(r.windowDays)
-				: d.windowDays,
-		default: defaultLayout,
+		windowDays: normalizeFiniteInteger(
+			r.windowDays,
+			d.windowDays,
+			USAGE_HOME_WINDOW_MIN_DAYS,
+			USAGE_HOME_WINDOW_MAX_DAYS,
+		),
+		default: normalizeLayout(r.default),
 		perAgent,
 	};
 }
 
 /**
- * Merge a stored (possibly partial or legacy) value onto the defaults so the
+ * Merge a stored, possibly partial value onto the defaults so the
  * panel and the Rust reader always see a complete, well-typed shape.
  */
 function normalizeUsageSettings(raw: unknown): UsageSettings {
@@ -336,11 +307,11 @@ function normalizeUsageSettings(raw: unknown): UsageSettings {
 		typeof r.agents === "object" && r.agents !== null ? r.agents : {}
 	) as Record<string, unknown>;
 	return {
-		pollIntervalMs:
-			typeof r.pollIntervalMs === "number" && r.pollIntervalMs >= 0
-				? r.pollIntervalMs
-				: d.pollIntervalMs,
-		timezone: typeof r.timezone === "string" ? r.timezone : d.timezone,
+		pollIntervalMs: normalizePollInterval(
+			r.pollIntervalMs,
+			d.pollIntervalMs,
+		),
+		timezone: normalizeTimezone(r.timezone),
 		offlinePricing:
 			typeof r.offlinePricing === "boolean"
 				? r.offlinePricing
@@ -349,10 +320,12 @@ function normalizeUsageSettings(raw: unknown): UsageSettings {
 			typeof r.ccusageConfigPath === "string"
 				? r.ccusageConfigPath
 				: d.ccusageConfigPath,
-		requestTimeoutSecs:
-			typeof r.requestTimeoutSecs === "number" && r.requestTimeoutSecs > 0
-				? Math.round(r.requestTimeoutSecs)
-				: d.requestTimeoutSecs,
+		requestTimeoutSecs: normalizeFiniteInteger(
+			r.requestTimeoutSecs,
+			d.requestTimeoutSecs,
+			USAGE_REQUEST_TIMEOUT_MIN_SECS,
+			USAGE_REQUEST_TIMEOUT_MAX_SECS,
+		),
 		extraArgs: typeof r.extraArgs === "string" ? r.extraArgs : d.extraArgs,
 		globalAlertThresholdPct:
 			typeof r.globalAlertThresholdPct === "number"

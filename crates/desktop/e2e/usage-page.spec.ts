@@ -87,14 +87,14 @@ const status: UsageStatusDto = {
 	error: null,
 	latest_version: "20.0.17",
 	update_available: true,
-	source: "bundled",
-	can_install: true,
-	can_update: true,
 };
 
 test.beforeEach(async ({ page }) => {
 	limitsRequests = 0;
-	await installMocks(page);
+	const mocks = await installMocks(page);
+	mocks.addAgent("codex", "Codex");
+	mocks.addAgent("opencode", "OpenCode");
+	mocks.addAgent("factory", "Factory");
 	await page.route("**/api/v1/usage/summary**", (route) =>
 		route.fulfill({
 			status: 200,
@@ -203,4 +203,114 @@ test("statistical rows stay within an 800px desktop width", async ({
 		scroll: element.scrollWidth,
 	}));
 	expect(overflow.scroll).toBeLessThanOrEqual(overflow.client);
+});
+
+test("usage page reports summary failures instead of an empty report", async ({
+	page,
+}) => {
+	await page.route("**/api/v1/usage/summary**", (route) =>
+		route.fulfill({
+			status: 500,
+			contentType: "application/json",
+			body: JSON.stringify({ error: "ccusage report failed" }),
+		}),
+	);
+
+	await page.goto("/usage");
+
+	await expect(page.getByText("ccusage report failed")).toBeVisible();
+	await expect(page.getByText("No usage data yet.")).toHaveCount(0);
+});
+
+test("usage page shows a report warning when no agent data is available", async ({
+	page,
+}) => {
+	await page.route("**/api/v1/usage/summary**", (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({
+				...summary,
+				agents: [],
+				warnings: ["Claude usage unavailable: session expired"],
+			}),
+		}),
+	);
+
+	await page.goto("/usage");
+
+	await expect(
+		page.getByText("Claude usage unavailable: session expired"),
+	).toBeVisible();
+	await expect(page.getByText("No usage data yet.")).toHaveCount(0);
+});
+
+test("usage range follows the selected timezone and polling interval", async ({
+	page,
+}) => {
+	await page.clock.setFixedTime(new Date("2026-07-20T01:00:00Z"));
+	const summaryRequests: URL[] = [];
+	await page.route("**/api/v1/usage/summary**", async (route) => {
+		summaryRequests.push(new URL(route.request().url()));
+		await route.fallback();
+	});
+
+	await page.goto("/settings?tab=usage");
+	await page.getByRole("button", { name: "Advanced" }).click();
+	await page.getByRole("button", { name: "Timezone" }).click();
+	await page.getByRole("option", { name: "America/Los_Angeles" }).click();
+	const pollingInput = page.locator('input[aria-label="Polling interval"]');
+	await pollingInput.fill("1");
+	await pollingInput.press("Tab");
+	await page.getByRole("link", { name: "Usage", exact: true }).click();
+
+	await expect
+		.poll(() => summaryRequests.length, { timeout: 3_000 })
+		.toBeGreaterThanOrEqual(2);
+	const firstRequest = summaryRequests[0];
+	expect(firstRequest.searchParams.get("since")).toBe("20260620");
+	expect(firstRequest.searchParams.get("until")).toBe("20260719");
+	expect(firstRequest.searchParams.get("timezone")).toBe(
+		"America/Los_Angeles",
+	);
+});
+
+test("daily chart aggregates agents after the first three", async ({
+	page,
+}) => {
+	await page.clock.setFixedTime(new Date("2026-07-15T12:00:00Z"));
+	const totals = (total: number) => ({
+		input_tokens: total,
+		output_tokens: 0,
+		cache_creation_tokens: 0,
+		cache_read_tokens: 0,
+		reasoning_tokens: 0,
+		total_tokens: total,
+		cost_usd: null,
+	});
+	const agents = [
+		["claude", 10],
+		["gemini", 20],
+		["codex", 30],
+		["opencode", 40],
+		["factory", 50],
+	].map(([id, total]) =>
+		agent(String(id), totals(Number(total)), [
+			day("2026-07-15", Number(total)),
+		]),
+	);
+	await page.route("**/api/v1/usage/summary**", (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({ ...summary, agents }),
+		}),
+	);
+
+	await page.goto("/usage");
+
+	await expect(page.getByText("Other agents", { exact: true })).toBeVisible();
+	await expect(page.getByText("OpenCode", { exact: true })).toBeVisible();
+	await expect(page.getByText("Factory", { exact: true })).toBeVisible();
+	await expect(page.getByTitle(/Jul 15 · 150$/)).toBeVisible();
 });

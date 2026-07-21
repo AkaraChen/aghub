@@ -58,32 +58,16 @@ export {
 } from "./store/audit-acknowledgements";
 export {
 	agentSettings,
-	CARD_STAT_SLOTS,
-	CARD_WINDOW_SLOTS,
 	createDefaultUsageSettings,
-	DEFAULT_AGENT_SETTINGS,
-	DEFAULT_CARD_LAYOUT,
-	DEFAULT_STAT_SLOTS,
 	DEFAULT_USAGE_SETTINGS,
-	DEFAULT_WINDOW_SLOTS,
 	getUsageSettings,
 	HOME_STAT_IDS,
 	HOME_WINDOW_IDS,
-	isQuotaAgent,
 	saveUsageSettings,
-	USAGE_AGENT_IDS,
 	USAGE_ALERT_THRESHOLDS_PCT,
 	USAGE_QUOTA_AGENTS,
 } from "./store/usage";
-export type {
-	CardLayout,
-	HomeStatId,
-	HomeWindowId,
-	UsageAgentId,
-	UsageAgentSettings,
-	UsageHomeSettings,
-	UsageSettings,
-} from "./store/usage";
+export type { HomeStatId, HomeWindowId, UsageSettings } from "./store/usage";
 export type {
 	IntegrationPreferences,
 	OnboardingProgress,

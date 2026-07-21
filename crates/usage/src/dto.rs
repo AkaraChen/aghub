@@ -11,11 +11,10 @@ use ts_rs::TS;
 /// of which ("claude", "codex") also expose an OAuth rate-limit endpoint.
 #[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[ts(export)]
-#[serde(transparent)]
 pub struct UsageAgent(pub String);
 
 impl UsageAgent {
-	pub fn new(id: impl Into<String>) -> Self {
+	pub(crate) fn new(id: impl Into<String>) -> Self {
 		Self(id.into())
 	}
 }
@@ -52,13 +51,6 @@ pub struct UsageStatusDto {
 	pub latest_version: Option<String>,
 	/// `true` when `latest_version` is newer than the running `version`.
 	pub update_available: bool,
-	/// Where the active executable came from.
-	pub source: Option<CcusageRuntimeSource>,
-	/// Whether aghub can install this source into its application data directory.
-	pub can_install: bool,
-	/// Whether aghub owns the active executable and can replace it with a newer
-	/// version without modifying an external installation or the app bundle.
-	pub can_update: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -100,11 +92,9 @@ pub struct CcusageRuntimeExecutableDto {
 #[ts(export)]
 pub struct CcusageRuntimeCandidateDto {
 	pub source: CcusageRuntimeSource,
-	pub available: bool,
 	pub installed: bool,
 	pub version: Option<String>,
 	pub can_install: bool,
-	pub can_update: bool,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]

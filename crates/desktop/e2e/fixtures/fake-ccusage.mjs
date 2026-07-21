@@ -101,6 +101,20 @@ const codex = {
 	},
 };
 
+const droid = {
+	daily: [
+		{
+			date: ymd(1),
+			inputTokens: 1_000,
+			totalTokens: 1_000,
+		},
+	],
+	totals: {
+		inputTokens: 1_000,
+		totalTokens: 1_000,
+	},
+};
+
 /** Agents with no local data: ccusage still exits 0 with an empty report. */
 const empty = {
 	daily: [],
@@ -117,4 +131,5 @@ const empty = {
 const agent = args[0];
 if (agent === "claude") emit(JSON.stringify(claude));
 else if (agent === "codex") emit(JSON.stringify(codex));
+else if (agent === "droid") emit(JSON.stringify(droid));
 else emit(JSON.stringify(empty));

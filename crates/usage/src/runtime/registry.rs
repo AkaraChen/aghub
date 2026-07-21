@@ -130,7 +130,11 @@ async fn metadata_json<T: DeserializeOwned>(
 		let chunk = chunk?;
 		append_metadata_chunk(&mut bytes, &chunk, MAX_METADATA_BYTES as usize)?;
 	}
-	serde_json::from_slice(&bytes).map_err(Into::into)
+	serde_json::from_slice(&bytes).map_err(|error| {
+		CcusageRuntimeError::InvalidRegistryMetadata(format!(
+			"failed to parse registry response: {error}"
+		))
+	})
 }
 
 fn append_metadata_chunk(
@@ -221,7 +225,12 @@ fn extract_binary_with_limits(
 	binary_limit: u64,
 ) -> Result<(), CcusageRuntimeError> {
 	let decoder = GzDecoder::new(tarball);
-	let mut archive = tar::Archive::new(decoder.take(archive_limit + 1));
+	let mut decoded = Vec::new();
+	decoder.take(archive_limit + 1).read_to_end(&mut decoded)?;
+	if decoded.len() as u64 > archive_limit {
+		return Err(CcusageRuntimeError::ArchiveTooLarge);
+	}
+	let mut archive = tar::Archive::new(decoded.as_slice());
 	for entry in archive.entries()? {
 		let mut entry = entry?;
 		let path = entry.path()?;
@@ -343,10 +352,6 @@ mod tests {
 			1024,
 		)
 		.expect_err("archive exceeds decompression limit");
-		assert!(matches!(
-			error,
-			CcusageRuntimeError::Io(_)
-				| CcusageRuntimeError::MissingArchiveMember(_)
-		));
+		assert!(matches!(error, CcusageRuntimeError::ArchiveTooLarge));
 	}
 }

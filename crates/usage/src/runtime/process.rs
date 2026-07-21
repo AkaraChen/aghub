@@ -1,13 +1,103 @@
+use std::process::{ExitStatus, Stdio};
+use std::time::Duration;
+
+use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio::process::{Child, Command};
 
-pub(crate) fn prepare_command(command: &mut Command) {
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+pub(crate) struct CapturedStream {
+	pub(crate) bytes: Vec<u8>,
+	pub(crate) truncated: bool,
+}
+
+pub(crate) struct BoundedOutput {
+	pub(crate) status: ExitStatus,
+	pub(crate) stdout: CapturedStream,
+	pub(crate) stderr: CapturedStream,
+}
+
+pub(crate) enum BoundedProcessError {
+	Spawn(std::io::Error),
+	Read(std::io::Error),
+	TimedOut,
+}
+
+pub(crate) async fn run_bounded(
+	command: &mut Command,
+	timeout: Duration,
+	stdout_limit: usize,
+	stderr_limit: usize,
+) -> Result<BoundedOutput, BoundedProcessError> {
+	command
+		.stdin(Stdio::null())
+		.stdout(Stdio::piped())
+		.stderr(Stdio::piped())
+		.kill_on_drop(true);
+	#[cfg(target_os = "windows")]
+	command.creation_flags(CREATE_NO_WINDOW);
+	prepare_command(command);
+	let mut child = command.spawn().map_err(BoundedProcessError::Spawn)?;
+	let child_tree = ChildTree::attach(&child);
+	let stdout = child.stdout.take().expect("child stdout is piped");
+	let stderr = child.stderr.take().expect("child stderr is piped");
+	let execution = async {
+		let (stdout, stderr, status) = tokio::join!(
+			drain_output(stdout, stdout_limit),
+			drain_output(stderr, stderr_limit),
+			child.wait(),
+		);
+		Ok::<_, std::io::Error>(BoundedOutput {
+			status: status?,
+			stdout: stdout?,
+			stderr: stderr?,
+		})
+	};
+	match tokio::time::timeout(timeout, execution).await {
+		Ok(Ok(output)) => {
+			child_tree.disarm();
+			Ok(output)
+		}
+		Ok(Err(error)) => {
+			child_tree.terminate(&mut child).await;
+			Err(BoundedProcessError::Read(error))
+		}
+		Err(_) => {
+			child_tree.terminate(&mut child).await;
+			Err(BoundedProcessError::TimedOut)
+		}
+	}
+}
+
+async fn drain_output(
+	mut reader: impl AsyncRead + Unpin,
+	limit: usize,
+) -> std::io::Result<CapturedStream> {
+	let mut bytes = Vec::new();
+	let mut truncated = false;
+	let mut buffer = vec![0_u8; 8192];
+	loop {
+		let read = reader.read(&mut buffer).await?;
+		if read == 0 {
+			break;
+		}
+		let remaining = limit.saturating_sub(bytes.len());
+		let retained = remaining.min(read);
+		bytes.extend_from_slice(&buffer[..retained]);
+		truncated |= retained < read;
+	}
+	Ok(CapturedStream { bytes, truncated })
+}
+
+fn prepare_command(command: &mut Command) {
 	#[cfg(unix)]
 	command.process_group(0);
 	#[cfg(not(unix))]
 	let _ = command;
 }
 
-pub(crate) struct ChildTree {
+struct ChildTree {
 	#[cfg(unix)]
 	process_id: Option<u32>,
 	armed: bool,
@@ -16,7 +106,7 @@ pub(crate) struct ChildTree {
 }
 
 impl ChildTree {
-	pub(crate) fn attach(child: &Child) -> Self {
+	fn attach(child: &Child) -> Self {
 		#[cfg(not(any(unix, target_os = "windows")))]
 		let _ = child;
 		Self {
@@ -34,11 +124,11 @@ impl ChildTree {
 		}
 	}
 
-	pub(crate) fn disarm(mut self) {
+	fn disarm(mut self) {
 		self.armed = false;
 	}
 
-	pub(crate) async fn terminate(mut self, child: &mut Child) {
+	async fn terminate(mut self, child: &mut Child) {
 		self.stop_tree();
 		self.armed = false;
 		let _ = child.kill().await;
@@ -113,9 +203,8 @@ impl ProcessJob {
 		let process = child.raw_handle().ok_or_else(|| {
 			std::io::Error::other("ccusage child has no process handle")
 		})?;
-		let assigned = unsafe {
-			AssignProcessToJobObject(job.handle(), process as *mut c_void)
-		};
+		let assigned =
+			unsafe { AssignProcessToJobObject(job.handle(), process) };
 		if assigned == 0 {
 			return Err(std::io::Error::last_os_error());
 		}
@@ -136,5 +225,23 @@ impl Drop for ProcessJob {
 		unsafe {
 			CloseHandle(self.handle());
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use tokio::io::AsyncWriteExt;
+
+	#[tokio::test]
+	async fn drains_process_output_with_a_bounded_prefix() {
+		let (mut writer, reader) = tokio::io::duplex(512);
+		let write = tokio::spawn(async move {
+			writer.write_all(&vec![b'x'; 8192]).await.unwrap();
+		});
+		let captured = drain_output(reader, 128).await.unwrap();
+		write.await.unwrap();
+		assert_eq!(captured.bytes.len(), 128);
+		assert!(captured.truncated);
 	}
 }

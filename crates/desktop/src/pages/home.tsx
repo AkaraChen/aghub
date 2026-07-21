@@ -13,6 +13,7 @@ import { useApi } from "../hooks/use-api";
 import { useUsageSettings } from "../hooks/use-usage-settings";
 import { agentStatus } from "../lib/agent-status";
 import { agentSettings, DEFAULT_USAGE_SETTINGS } from "../lib/store";
+import { buildUsageDateRange } from "../lib/usage-date-range";
 import { cn } from "../lib/utils";
 import { mcpListQueryOptions } from "../requests/mcps";
 import { skillListQueryOptions } from "../requests/skills";
@@ -20,13 +21,6 @@ import {
 	usageLimitsQueryOptions,
 	usageSummaryQueryOptions,
 } from "../requests/usage";
-
-function toCompactYmd(date: Date): string {
-	const year = date.getFullYear();
-	const month = String(date.getMonth() + 1).padStart(2, "0");
-	const day = String(date.getDate()).padStart(2, "0");
-	return `${year}${month}${day}`;
-}
 
 export default function HomePage() {
 	const { t } = useTranslation();
@@ -47,18 +41,7 @@ export default function HomePage() {
 
 	const { windowDays } = settings.home;
 	const { timezone } = settings;
-	const usageRange = useMemo(() => {
-		const until = new Date();
-		const since = new Date(until);
-		since.setDate(since.getDate() - (windowDays - 1));
-		return {
-			since: toCompactYmd(since),
-			until: toCompactYmd(until),
-			timezone:
-				timezone ||
-				new Intl.DateTimeFormat().resolvedOptions().timeZone,
-		};
-	}, [windowDays, timezone]);
+	const usageRange = buildUsageDateRange(windowDays, timezone);
 
 	const refetchInterval =
 		settings.pollIntervalMs > 0 ? settings.pollIntervalMs : false;
@@ -68,7 +51,9 @@ export default function HomePage() {
 	const { data: usageReport } = useQuery(
 		usageSummaryQueryOptions({
 			api,
-			...usageRange,
+			since: usageRange.since,
+			until: usageRange.until,
+			timezone: usageRange.timezone,
 			offline: settings.offlinePricing,
 			config: settings.ccusageConfigPath,
 			timeoutSecs: settings.requestTimeoutSecs,

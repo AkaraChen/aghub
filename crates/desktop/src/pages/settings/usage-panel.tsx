@@ -28,10 +28,9 @@ export default function UsagePanel() {
 	const [isRestorePending, setIsRestorePending] = useState(false);
 	const [layoutTarget, setLayoutTarget] = useState("default");
 	const restoreInFlightRef = useRef(false);
-	const resetRuntimeMutation = useMutation({
-		...setUsageRuntimeMutationOptions({ api, queryClient }),
-		onError: (error) => toast.danger(error.message),
-	});
+	const resetRuntimeMutation = useMutation(
+		setUsageRuntimeMutationOptions({ api, queryClient }),
+	);
 	const isRestoreDisabled = isSettingsSaving || isRestorePending;
 
 	const restoreDefaults = async () => {
@@ -51,7 +50,12 @@ export default function UsagePanel() {
 					source: "auto",
 					path: null,
 				});
-			} catch {
+			} catch (error) {
+				toast.danger(
+					error instanceof Error
+						? error.message
+						: t("usageRuntimeStatusUnavailable"),
+				);
 				try {
 					await updateSettingsAsync(() => previousSettings);
 				} catch {

@@ -6,15 +6,10 @@ use super::{
 use semver::Version;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 use std::time::Duration;
-use tokio::io::{AsyncRead, AsyncReadExt};
 
 const VERSION_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_VERSION_OUTPUT_BYTES: usize = 4096;
-
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct PackageRunner {
@@ -61,8 +56,7 @@ pub(super) async fn resolve_preference(
 		.await;
 	}
 	if matches!(preference, CcusageRuntimePreference::Auto) {
-		let candidates = discover_auto_candidates(root, bundled).await;
-		return super::select_candidate(preference, &candidates);
+		return resolve_auto_candidate(root, bundled).await;
 	}
 
 	match preference {
@@ -100,14 +94,20 @@ pub(super) async fn resolve_preference(
 	}
 }
 
-pub(super) async fn discover_auto_candidates(
+async fn resolve_auto_candidate(
 	root: &Path,
 	bundled: Option<&Path>,
-) -> Vec<RuntimeCandidate> {
-	let mut paths = Vec::new();
-	let mut candidates = Vec::new();
+) -> Result<RuntimeCandidate, CcusageRuntimeError> {
 	if let Ok(path) = which::which("ccusage") {
-		paths.push((CcusageRuntimeSource::Path, path));
+		match candidate_from_path(CcusageRuntimeSource::Path, path.clone())
+			.await
+		{
+			Ok(candidate) => return Ok(candidate),
+			Err(error) => log::warn!(
+				"ignored unusable ccusage Path candidate at {}: {error}",
+				path.display()
+			),
+		}
 	}
 	for source in [
 		CcusageRuntimeSource::Bun,
@@ -115,7 +115,7 @@ pub(super) async fn discover_auto_candidates(
 		CcusageRuntimeSource::Download,
 	] {
 		match installed_candidate(root, source).await {
-			Ok(candidate) => candidates.push(candidate),
+			Ok(candidate) => return Ok(candidate),
 			Err(CcusageRuntimeError::SourceNotInstalled(_)) => {}
 			Err(error) => log::warn!(
 				"ignored unusable installed ccusage {source:?}: {error}"
@@ -123,19 +123,20 @@ pub(super) async fn discover_auto_candidates(
 		}
 	}
 	if let Some(path) = bundled.filter(|path| path.is_file()) {
-		paths.push((CcusageRuntimeSource::Bundled, path.to_path_buf()));
-	}
-
-	for (source, path) in paths {
-		match candidate_from_path(source, path.clone()).await {
-			Ok(candidate) => candidates.push(candidate),
+		match candidate_from_path(
+			CcusageRuntimeSource::Bundled,
+			path.to_path_buf(),
+		)
+		.await
+		{
+			Ok(candidate) => return Ok(candidate),
 			Err(error) => log::warn!(
-				"ignored unusable ccusage {source:?} candidate at {}: {error}",
+				"ignored unusable bundled ccusage candidate at {}: {error}",
 				path.display()
 			),
 		}
 	}
-	candidates
+	Err(CcusageRuntimeError::NoRuntime)
 }
 
 pub(super) async fn installed_candidate(
@@ -210,69 +211,46 @@ async fn probe_version_with_timeout(
 	timeout: Duration,
 ) -> Result<Version, CcusageRuntimeError> {
 	let mut command = tokio::process::Command::new(path);
-	command
-		.arg("--version")
-		.stdin(Stdio::null())
-		.stderr(Stdio::piped())
-		.stdout(Stdio::piped())
-		.kill_on_drop(true);
-	#[cfg(target_os = "windows")]
-	command.creation_flags(CREATE_NO_WINDOW);
-	super::process::prepare_command(&mut command);
-	let mut child =
-		command
-			.spawn()
-			.map_err(|error| CcusageRuntimeError::Spawn {
+	command.arg("--version");
+	let output = match super::process::run_bounded(
+		&mut command,
+		timeout,
+		MAX_VERSION_OUTPUT_BYTES,
+		MAX_VERSION_OUTPUT_BYTES,
+	)
+	.await
+	{
+		Ok(output) => output,
+		Err(
+			super::process::BoundedProcessError::Spawn(error)
+			| super::process::BoundedProcessError::Read(error),
+		) => {
+			return Err(CcusageRuntimeError::Spawn {
 				path: path.to_path_buf(),
 				error,
-			})?;
-	let child_tree = super::process::ChildTree::attach(&child);
-	let stdout = child.stdout.take().expect("ccusage stdout is piped");
-	let stderr = child.stderr.take().expect("ccusage stderr is piped");
-	let execution = async {
-		let (stdout, stderr, status) = tokio::join!(
-			read_limited(stdout, MAX_VERSION_OUTPUT_BYTES),
-			read_limited(stderr, MAX_VERSION_OUTPUT_BYTES),
-			child.wait(),
-		);
-		Ok::<_, std::io::Error>((status?, stdout?, stderr?))
+			});
+		}
+		Err(super::process::BoundedProcessError::TimedOut) => {
+			return Err(CcusageRuntimeError::VersionProbeTimedOut(
+				path.to_path_buf(),
+			));
+		}
 	};
-	let (status, stdout, stderr) =
-		match tokio::time::timeout(timeout, execution).await {
-			Ok(Ok(output)) => {
-				child_tree.disarm();
-				output
-			}
-			Ok(Err(error)) => {
-				return Err(CcusageRuntimeError::Spawn {
-					path: path.to_path_buf(),
-					error,
-				});
-			}
-			Err(_) => {
-				child_tree.terminate(&mut child).await;
-				return Err(CcusageRuntimeError::VersionProbeTimedOut(
-					path.to_path_buf(),
-				));
-			}
-		};
-	if stdout.len() > MAX_VERSION_OUTPUT_BYTES
-		|| stderr.len() > MAX_VERSION_OUTPUT_BYTES
-	{
+	if output.stdout.truncated || output.stderr.truncated {
 		return Err(CcusageRuntimeError::InvalidBinary(format!(
 			"{} --version produced too much output",
 			path.display()
 		)));
 	}
-	if !status.success() {
+	if !output.status.success() {
 		return Err(CcusageRuntimeError::InvalidBinary(format!(
 			"{} --version exited with {}: {}",
 			path.display(),
-			status,
-			String::from_utf8_lossy(&stderr).trim()
+			output.status,
+			String::from_utf8_lossy(&output.stderr.bytes).trim()
 		)));
 	}
-	let raw = String::from_utf8_lossy(&stdout);
+	let raw = String::from_utf8_lossy(&output.stdout.bytes);
 	let version = raw
 		.split_whitespace()
 		.last()
@@ -285,18 +263,6 @@ async fn probe_version_with_timeout(
 			raw.trim()
 		))
 	})
-}
-
-async fn read_limited(
-	reader: impl AsyncRead + Unpin,
-	limit: usize,
-) -> std::io::Result<Vec<u8>> {
-	let mut bytes = Vec::new();
-	reader
-		.take(limit as u64 + 1)
-		.read_to_end(&mut bytes)
-		.await?;
-	Ok(bytes)
 }
 
 pub(super) fn find_runner(

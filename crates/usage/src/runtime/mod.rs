@@ -18,12 +18,20 @@ use std::sync::{Arc, RwLock};
 use std::time::Duration;
 use thiserror::Error;
 
-// A runner may use its 180-second timeout. Five minutes still leaves a
-// fallback attempt without accumulating every Auto source's worst case.
 const RUNTIME_OPERATION_TIMEOUT: Duration = Duration::from_secs(5 * 60);
 // Selection and refresh only probe local executables. One minute bounds stale
 // installation scans while allowing several 10-second version probes.
 const RUNTIME_PROBE_OPERATION_TIMEOUT: Duration = Duration::from_secs(60);
+const RUNTIME_DESCRIBE_OPERATION_TIMEOUT: Duration = Duration::from_secs(60);
+// Auto gives package managers short attempts so the platform download still
+// has time for registry metadata, a 120-second transfer, and binary validation.
+const AUTO_PACKAGE_ATTEMPT_TIMEOUT: Duration = Duration::from_secs(45);
+const AUTO_DOWNLOAD_RESERVE: Duration = Duration::from_secs(155);
+const _: () = assert!(
+	AUTO_PACKAGE_ATTEMPT_TIMEOUT.as_secs() * 2
+		+ AUTO_DOWNLOAD_RESERVE.as_secs()
+		<= RUNTIME_OPERATION_TIMEOUT.as_secs()
+);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "source", content = "path", rename_all = "snake_case")]
@@ -38,7 +46,7 @@ pub enum CcusageRuntimePreference {
 }
 
 impl CcusageRuntimePreference {
-	pub fn source(&self) -> CcusageRuntimeSource {
+	pub(crate) fn source(&self) -> CcusageRuntimeSource {
 		match self {
 			Self::Auto => CcusageRuntimeSource::Auto,
 			Self::Manual(_) => CcusageRuntimeSource::Manual,
@@ -132,8 +140,6 @@ pub enum CcusageRuntimeError {
 	#[error(transparent)]
 	Io(#[from] std::io::Error),
 	#[error(transparent)]
-	Json(#[from] serde_json::Error),
-	#[error(transparent)]
 	Http(#[from] reqwest::Error),
 }
 
@@ -153,7 +159,7 @@ impl CcusageRuntimeError {
 			Self::PackageInstallFailed { provider, .. } => {
 				format!("{provider:?} could not install ccusage")
 			}
-			Self::Io(_) | Self::Json(_) => {
+			Self::Io(_) => {
 				"the ccusage runtime state could not be read or written"
 					.to_string()
 			}
@@ -164,17 +170,23 @@ impl CcusageRuntimeError {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct RuntimeCandidate {
-	pub source: CcusageRuntimeSource,
-	pub path: PathBuf,
-	pub version: String,
+struct RuntimeCandidate {
+	source: CcusageRuntimeSource,
+	path: PathBuf,
+	version: String,
 }
 
 #[derive(Clone, Debug)]
 pub struct CcusageExecutable {
-	pub source: CcusageRuntimeSource,
+	pub(crate) source: CcusageRuntimeSource,
 	pub path: PathBuf,
-	pub version: String,
+	pub(crate) version: String,
+}
+
+impl CcusageExecutable {
+	pub fn version(&self) -> &str {
+		&self.version
+	}
 }
 
 #[derive(Clone, Copy)]
@@ -210,11 +222,7 @@ pub struct CcusageRuntime {
 }
 
 impl CcusageRuntime {
-	pub fn load(
-		root: PathBuf,
-		bundled: Option<PathBuf>,
-		legacy_preference: Option<CcusageRuntimePreference>,
-	) -> Arc<Self> {
+	pub fn load(root: PathBuf, bundled: Option<PathBuf>) -> Arc<Self> {
 		let (stored, configuration_error) =
 			match storage::load_preference(&root) {
 				Ok(value) => (value, None),
@@ -225,24 +233,7 @@ impl CcusageRuntime {
 					(None, Some(error.client_message()))
 				}
 			};
-		let should_migrate = configuration_error.is_none()
-			&& stored.is_none()
-			&& legacy_preference.is_some();
-		let preference = stored
-			.or_else(|| {
-				configuration_error
-					.is_none()
-					.then_some(legacy_preference)
-					.flatten()
-			})
-			.unwrap_or(CcusageRuntimePreference::Auto);
-		if should_migrate {
-			if let Err(error) = storage::save_preference(&root, &preference) {
-				log::warn!(
-					"failed to migrate ccusage runtime preference: {error}"
-				);
-			}
-		}
+		let preference = stored.unwrap_or(CcusageRuntimePreference::Auto);
 		let registry = CcusageRegistry::new()
 			.inspect_err(|error| {
 				log::warn!(
@@ -261,7 +252,7 @@ impl CcusageRuntime {
 		})
 	}
 
-	pub fn preference(
+	fn preference(
 		&self,
 	) -> Result<CcusageRuntimePreference, CcusageRuntimeError> {
 		self.preference
@@ -288,20 +279,21 @@ impl CcusageRuntime {
 		&self,
 	) -> Result<CcusageRuntimeDto, CcusageRuntimeError> {
 		with_operation_timeout(RUNTIME_PROBE_OPERATION_TIMEOUT, async {
-			let _guard = self.operation.lock().await;
-			match self.resolve_current_preference().await {
-				Ok(candidate) => {
-					self.set_active(candidate)?;
-				}
-				Err(error) => {
-					self.clear_active()?;
-					return Err(error);
+			{
+				let _guard = self.operation.lock().await;
+				match self.resolve_current_preference().await {
+					Ok(candidate) => {
+						self.set_active(candidate)?;
+					}
+					Err(error) => {
+						self.clear_active()?;
+						return Err(error);
+					}
 				}
 			}
-			Ok(())
+			self.describe_inner().await
 		})
-		.await?;
-		self.describe().await
+		.await
 	}
 
 	pub async fn select(
@@ -310,38 +302,42 @@ impl CcusageRuntime {
 	) -> Result<CcusageRuntimeDto, CcusageRuntimeError> {
 		let preference = CcusageRuntimePreference::try_from(request)?;
 		with_operation_timeout(RUNTIME_PROBE_OPERATION_TIMEOUT, async {
-			let _guard = self.operation.lock().await;
-			let candidate = discovery::resolve_preference(
-				&self.root,
-				self.bundled.as_deref(),
-				&preference,
-			)
-			.await;
-			let candidate = match candidate {
-				Ok(candidate) => Some(candidate),
-				Err(_)
-					if matches!(preference, CcusageRuntimePreference::Auto) =>
-				{
-					None
+			{
+				let _guard = self.operation.lock().await;
+				let candidate = discovery::resolve_preference(
+					&self.root,
+					self.bundled.as_deref(),
+					&preference,
+				)
+				.await;
+				let candidate = match candidate {
+					Ok(candidate) => Some(candidate),
+					Err(_)
+						if matches!(
+							preference,
+							CcusageRuntimePreference::Auto
+						) =>
+					{
+						None
+					}
+					Err(error) => return Err(error),
+				};
+				storage::save_preference(&self.root, &preference)?;
+				*self
+					.preference
+					.write()
+					.map_err(|_| CcusageRuntimeError::StatePoisoned)? = preference;
+				self.clear_configuration_error()?;
+				match candidate {
+					Some(candidate) => {
+						self.set_active(candidate)?;
+					}
+					None => self.clear_active()?,
 				}
-				Err(error) => return Err(error),
-			};
-			storage::save_preference(&self.root, &preference)?;
-			*self
-				.preference
-				.write()
-				.map_err(|_| CcusageRuntimeError::StatePoisoned)? = preference;
-			self.clear_configuration_error()?;
-			match candidate {
-				Some(candidate) => {
-					self.set_active(candidate)?;
-				}
-				None => self.clear_active()?,
 			}
-			Ok(())
+			self.describe_inner().await
 		})
-		.await?;
-		self.describe().await
+		.await
 	}
 
 	pub async fn install(
@@ -349,81 +345,98 @@ impl CcusageRuntime {
 		request: InstallCcusageRuntimeRequest,
 	) -> Result<CcusageRuntimeDto, CcusageRuntimeError> {
 		with_operation_deadline(async {
-			let _guard = self.operation.lock().await;
-			let active_source =
-				if std::env::var_os("AGHUB_CCUSAGE_BIN").is_some() {
-					Some(self.resolve_current_preference().await?.source)
-				} else if let Some(active) = self.active_snapshot()? {
-					Some(active.source)
-				} else {
-					match self.resolve_current_preference().await {
-						Ok(candidate) => Some(candidate.source),
-						Err(error) => {
-							log::warn!(
-								"no active ccusage runtime before automatic installation: {error}"
-							);
-							None
+			{
+				let _guard = self.operation.lock().await;
+				let active_source =
+					if std::env::var_os("AGHUB_CCUSAGE_BIN").is_some() {
+						Some(self.resolve_current_preference().await?.source)
+					} else if let Some(active) = self.active_snapshot()? {
+						Some(active.source)
+					} else {
+						match self.resolve_current_preference().await {
+							Ok(candidate) => Some(candidate.source),
+							Err(error) => {
+								log::warn!(
+									"no active ccusage runtime before automatic installation: {error}"
+								);
+								None
+							}
 						}
-					}
-				};
-			if request.source == CcusageRuntimeSource::Auto {
-				self.install_preferred_locked(auto_install_preference(
-					active_source,
-				))
-				.await?;
-			} else {
-				let preference = preference_for_source(request.source)?;
-				self.install_locked(request.source, preference).await?;
+					};
+				if request.source == CcusageRuntimeSource::Auto {
+					self.install_preferred_locked(auto_install_preference(
+						active_source,
+					))
+					.await?;
+				} else {
+					let preference = preference_for_source(request.source)?;
+					self.install_locked(request.source, preference).await?;
+				}
 			}
-			Ok(())
+			self.describe_inner().await
 		})
-		.await?;
-		self.describe().await
+		.await
 	}
 
 	pub async fn update(
 		&self,
 	) -> Result<CcusageRuntimeDto, CcusageRuntimeError> {
 		with_operation_deadline(async {
-			let _guard = self.operation.lock().await;
-			let preference = self.preference()?;
-			let active = match self.active_snapshot()? {
-				Some(active) => active,
-				None => {
-					let candidate = self.resolve_current_preference().await?;
-					self.set_active(candidate)?
-				}
-			};
-			match active.source {
-				CcusageRuntimeSource::Bun
-				| CcusageRuntimeSource::Npm
-				| CcusageRuntimeSource::Download => {
-					self.install_locked(active.source, preference).await?;
-				}
-				CcusageRuntimeSource::Bundled => {
-					let preserved = if matches!(
-						&preference,
-						CcusageRuntimePreference::Auto
-					) {
-						Some(preference)
-					} else {
-						None
-					};
-					self.install_preferred_locked(preserved).await?;
-				}
-				_ => {
-					return Err(CcusageRuntimeError::SourceCannotUpdate(
-						active.source,
-					));
+			{
+				let _guard = self.operation.lock().await;
+				let preference = self.preference()?;
+				let active = match self.active_snapshot()? {
+					Some(active) => active,
+					None => {
+						let candidate =
+							self.resolve_current_preference().await?;
+						self.set_active(candidate)?
+					}
+				};
+				match active.source {
+					CcusageRuntimeSource::Bun
+					| CcusageRuntimeSource::Npm
+					| CcusageRuntimeSource::Download => {
+						self.install_locked(active.source, preference).await?;
+					}
+					CcusageRuntimeSource::Bundled => {
+						let preserved = if matches!(
+							&preference,
+							CcusageRuntimePreference::Auto
+						) {
+							Some(preference)
+						} else {
+							None
+						};
+						self.install_preferred_locked(preserved).await?;
+					}
+					_ => {
+						return Err(CcusageRuntimeError::SourceCannotUpdate(
+							active.source,
+						));
+					}
 				}
 			}
-			Ok(())
+			self.describe_inner().await
 		})
-		.await?;
-		self.describe().await
+		.await
 	}
 
 	pub async fn describe(
+		&self,
+	) -> Result<CcusageRuntimeDto, CcusageRuntimeError> {
+		self.describe_with_timeout(RUNTIME_DESCRIBE_OPERATION_TIMEOUT)
+			.await
+	}
+
+	async fn describe_with_timeout(
+		&self,
+		timeout: Duration,
+	) -> Result<CcusageRuntimeDto, CcusageRuntimeError> {
+		with_operation_timeout(timeout, self.describe_inner()).await
+	}
+
+	async fn describe_inner(
 		&self,
 	) -> Result<CcusageRuntimeDto, CcusageRuntimeError> {
 		let (snapshot, latest, acquisition) = tokio::join!(
@@ -444,7 +457,10 @@ impl CcusageRuntime {
 			);
 		let preference = self.preference()?;
 		let active_dto = active.as_deref().map(|active| {
-			executable_dto(active, self.can_update_active(active, acquisition))
+			executable_dto(
+				active,
+				source_can_update(active.source, acquisition),
+			)
 		});
 		Ok(CcusageRuntimeDto {
 			preference: preference.source(),
@@ -459,27 +475,15 @@ impl CcusageRuntime {
 	}
 
 	pub async fn status(&self) -> UsageStatusDto {
-		let (snapshot, latest, acquisition) = tokio::join!(
-			self.snapshot(),
-			self.latest_version(),
-			self.acquisition_availability(),
-		);
+		let (snapshot, latest) =
+			tokio::join!(self.snapshot(), self.latest_version());
 		let configuration_error = self
 			.configuration_error_message()
 			.unwrap_or_else(|error| Some(error.client_message()));
-		let (version, source, reachable, runtime_error, can_update) =
-			match snapshot {
-				Ok(active) => (
-					Some(active.version.clone()),
-					Some(active.source),
-					true,
-					None,
-					self.can_update_active(&active, acquisition),
-				),
-				Err(error) => {
-					(None, None, false, Some(error.client_message()), false)
-				}
-			};
+		let (version, reachable, runtime_error) = match snapshot {
+			Ok(active) => (Some(active.version.clone()), true, None),
+			Err(error) => (None, false, Some(error.client_message())),
+		};
 		let error = configuration_error.or(runtime_error);
 		let update_available = version
 			.as_deref()
@@ -491,9 +495,6 @@ impl CcusageRuntime {
 			error,
 			latest_version: latest.map(|version| version.to_string()),
 			update_available,
-			source,
-			can_install: acquisition.any(),
-			can_update,
 		}
 	}
 
@@ -659,10 +660,25 @@ impl CcusageRuntime {
 		for source in sources {
 			let preference =
 				acquisition_preference(preserved_preference.as_ref(), source)?;
-			match self
-				.install_version_locked(source, preference, registry, &version)
-				.await
-			{
+			let result = match auto_package_attempt_timeout(source) {
+				Some(timeout) => {
+					with_install_attempt_timeout(
+						source,
+						timeout,
+						self.install_version_locked(
+							source, preference, registry, &version,
+						),
+					)
+					.await
+				}
+				None => {
+					self.install_version_locked(
+						source, preference, registry, &version,
+					)
+					.await
+				}
+			};
+			match result {
 				Ok(()) => return Ok(()),
 				Err(error) => {
 					log::warn!(
@@ -824,11 +840,9 @@ impl CcusageRuntime {
 		let installed = version.is_some();
 		CcusageRuntimeCandidateDto {
 			source,
-			available: installed,
 			installed,
 			version,
 			can_install: acquisition.can_install(source),
-			can_update: installed && source_can_update(source, acquisition),
 		}
 	}
 
@@ -860,14 +874,6 @@ impl CcusageRuntime {
 			}
 		}
 	}
-
-	fn can_update_active(
-		&self,
-		active: &CcusageExecutable,
-		acquisition: AcquisitionAvailability,
-	) -> bool {
-		source_can_update(active.source, acquisition)
-	}
 }
 
 async fn with_operation_deadline<T>(
@@ -885,48 +891,25 @@ async fn with_operation_timeout<T>(
 		.map_err(|_| CcusageRuntimeError::RuntimeOperationTimedOut)?
 }
 
-pub fn select_candidate(
-	preference: &CcusageRuntimePreference,
-	candidates: &[RuntimeCandidate],
-) -> Result<RuntimeCandidate, CcusageRuntimeError> {
-	match preference {
-		CcusageRuntimePreference::Auto => candidates
-			.iter()
-			.min_by_key(|candidate| source_priority(candidate.source))
-			.cloned()
-			.ok_or(CcusageRuntimeError::NoRuntime),
-		CcusageRuntimePreference::Manual(path) => candidates
-			.iter()
-			.find(|candidate| {
-				candidate.source == CcusageRuntimeSource::Manual
-					&& candidate.path == *path
-			})
-			.cloned()
-			.ok_or(CcusageRuntimeError::SourceUnavailable(
-				CcusageRuntimeSource::Manual,
-			)),
-		preference => {
-			let source = preference.source();
-			candidates
-				.iter()
-				.find(|candidate| candidate.source == source)
-				.cloned()
-				.ok_or(CcusageRuntimeError::SourceUnavailable(source))
+fn auto_package_attempt_timeout(
+	source: CcusageRuntimeSource,
+) -> Option<Duration> {
+	match source {
+		CcusageRuntimeSource::Bun | CcusageRuntimeSource::Npm => {
+			Some(AUTO_PACKAGE_ATTEMPT_TIMEOUT)
 		}
+		_ => None,
 	}
 }
 
-fn source_priority(source: CcusageRuntimeSource) -> usize {
-	match source {
-		CcusageRuntimeSource::Environment => 0,
-		CcusageRuntimeSource::Path => 1,
-		CcusageRuntimeSource::Bun => 2,
-		CcusageRuntimeSource::Npm => 3,
-		CcusageRuntimeSource::Download => 4,
-		CcusageRuntimeSource::Bundled => 5,
-		CcusageRuntimeSource::Manual => 6,
-		CcusageRuntimeSource::Auto => 7,
-	}
+async fn with_install_attempt_timeout<T>(
+	source: CcusageRuntimeSource,
+	timeout: Duration,
+	operation: impl Future<Output = Result<T, CcusageRuntimeError>>,
+) -> Result<T, CcusageRuntimeError> {
+	tokio::time::timeout(timeout, operation)
+		.await
+		.map_err(|_| CcusageRuntimeError::InstallTimedOut(source))?
 }
 
 fn preference_for_source(
@@ -1029,40 +1012,6 @@ fn version_is_older(current: &str, latest: &Version) -> bool {
 mod tests {
 	use super::*;
 
-	fn candidate(source: CcusageRuntimeSource, path: &str) -> RuntimeCandidate {
-		RuntimeCandidate {
-			source,
-			path: PathBuf::from(path),
-			version: "20.0.1".to_string(),
-		}
-	}
-
-	#[test]
-	fn auto_prefers_path_then_owned_then_bundled() {
-		let candidates = vec![
-			candidate(CcusageRuntimeSource::Bundled, "/bundle/ccusage"),
-			candidate(CcusageRuntimeSource::Download, "/data/ccusage"),
-			candidate(CcusageRuntimeSource::Path, "/usr/bin/ccusage"),
-		];
-		let selected =
-			select_candidate(&CcusageRuntimePreference::Auto, &candidates)
-				.expect("auto source");
-		assert_eq!(selected.source, CcusageRuntimeSource::Path);
-	}
-
-	#[test]
-	fn explicit_source_failure_does_not_fall_back() {
-		let candidates =
-			vec![candidate(CcusageRuntimeSource::Bundled, "/bundle/ccusage")];
-		let result = select_candidate(
-			&CcusageRuntimePreference::Manual(PathBuf::from(
-				"/missing/ccusage",
-			)),
-			&candidates,
-		);
-		assert!(result.is_err());
-	}
-
 	#[test]
 	fn client_errors_do_not_expose_executable_paths() {
 		let error = CcusageRuntimeError::Spawn {
@@ -1128,6 +1077,40 @@ mod tests {
 	}
 
 	#[test]
+	fn auto_package_attempts_reserve_download_time() {
+		let package_budget =
+			[CcusageRuntimeSource::Bun, CcusageRuntimeSource::Npm]
+				.into_iter()
+				.map(|source| auto_package_attempt_timeout(source).unwrap())
+				.sum::<Duration>();
+		assert!(
+			package_budget + AUTO_DOWNLOAD_RESERVE <= RUNTIME_OPERATION_TIMEOUT
+		);
+		assert_eq!(
+			auto_package_attempt_timeout(CcusageRuntimeSource::Download),
+			None
+		);
+	}
+
+	#[tokio::test]
+	async fn package_attempt_timeout_keeps_the_provider() {
+		let error = with_install_attempt_timeout(
+			CcusageRuntimeSource::Npm,
+			Duration::from_millis(5),
+			async {
+				tokio::time::sleep(Duration::from_millis(50)).await;
+				Ok(())
+			},
+		)
+		.await
+		.expect_err("slow provider attempt rejected");
+		assert!(matches!(
+			error,
+			CcusageRuntimeError::InstallTimedOut(CcusageRuntimeSource::Npm)
+		));
+	}
+
+	#[test]
 	fn update_capability_tracks_the_required_acquisition_source() {
 		let availability = AcquisitionAvailability {
 			bun: false,
@@ -1164,6 +1147,44 @@ mod tests {
 
 	#[cfg(unix)]
 	#[tokio::test]
+	async fn describe_has_its_own_total_deadline() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let root = tempfile::tempdir().unwrap();
+		let executable = root.path().join("slow-ccusage");
+		std::fs::write(
+			&executable,
+			b"#!/bin/sh\nsleep 1\nprintf 'ccusage 20.0.1\\n'\n",
+		)
+		.unwrap();
+		std::fs::set_permissions(
+			&executable,
+			std::fs::Permissions::from_mode(0o755),
+		)
+		.unwrap();
+		let mut runtime =
+			CcusageRuntime::load(root.path().join("runtime"), None);
+		Arc::get_mut(&mut runtime).unwrap().registry = None;
+		runtime
+			.set_active(RuntimeCandidate {
+				source: CcusageRuntimeSource::Path,
+				path: executable,
+				version: "20.0.1".to_string(),
+			})
+			.unwrap();
+
+		let error = runtime
+			.describe_with_timeout(Duration::from_millis(10))
+			.await
+			.expect_err("slow describe rejected");
+		assert!(matches!(
+			error,
+			CcusageRuntimeError::RuntimeOperationTimedOut
+		));
+	}
+
+	#[cfg(unix)]
+	#[tokio::test]
 	async fn swapping_active_runtime_changes_the_next_snapshot() {
 		use std::os::unix::fs::PermissionsExt;
 
@@ -1179,8 +1200,7 @@ mod tests {
 			)
 			.unwrap();
 		}
-		let runtime =
-			CcusageRuntime::load(root.path().to_path_buf(), None, None);
+		let runtime = CcusageRuntime::load(root.path().to_path_buf(), None);
 		runtime
 			.set_active(RuntimeCandidate {
 				source: CcusageRuntimeSource::Path,
@@ -1215,11 +1235,8 @@ mod tests {
 			std::fs::Permissions::from_mode(0o755),
 		)
 		.unwrap();
-		let mut runtime = CcusageRuntime::load(
-			root.path().join("runtime"),
-			None,
-			Some(CcusageRuntimePreference::Manual(executable.clone())),
-		);
+		let mut runtime =
+			CcusageRuntime::load(root.path().join("runtime"), None);
 		Arc::get_mut(&mut runtime).unwrap().registry = None;
 		runtime
 			.set_active(RuntimeCandidate {
@@ -1259,8 +1276,7 @@ mod tests {
 	async fn malformed_runtime_config_does_not_fall_back() {
 		let root = tempfile::tempdir().unwrap();
 		std::fs::write(root.path().join("runtime.json"), b"not json").unwrap();
-		let mut runtime =
-			CcusageRuntime::load(root.path().to_path_buf(), None, None);
+		let mut runtime = CcusageRuntime::load(root.path().to_path_buf(), None);
 		let error = runtime.snapshot().await.expect_err("config error");
 		assert!(matches!(
 			error,
@@ -1293,8 +1309,7 @@ mod tests {
 		.unwrap();
 		std::fs::create_dir_all(path.parent().unwrap()).unwrap();
 		std::fs::write(path, b"not an executable").unwrap();
-		let runtime =
-			CcusageRuntime::load(root.path().to_path_buf(), None, None);
+		let runtime = CcusageRuntime::load(root.path().to_path_buf(), None);
 		let candidate = runtime
 			.candidate_dto(
 				CcusageRuntimeSource::Download,
@@ -1306,7 +1321,6 @@ mod tests {
 				},
 			)
 			.await;
-		assert!(!candidate.available);
 		assert!(!candidate.installed);
 		assert!(candidate.can_install);
 	}
