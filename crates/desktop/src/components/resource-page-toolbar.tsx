@@ -3,7 +3,7 @@ import {
 	FunnelIcon,
 	XMarkIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Dropdown, SearchField } from "@heroui/react";
+import { Button, ButtonGroup, Dropdown, SearchField } from "@heroui/react";
 import type { ReactNode } from "react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -96,18 +96,12 @@ function AgentFilterControl({ agentId, onChange }: AgentFilterControlProps) {
 		onChange(key === "__all__" ? null : String(key));
 	};
 
-	const handleClear = (event: React.MouseEvent | React.PointerEvent) => {
-		event.preventDefault();
-		event.stopPropagation();
-		onChange(null);
-	};
-
-	return (
+	const dropdown = (
 		<Dropdown>
 			<Button
 				size="sm"
 				variant={activeAgent ? "secondary" : "ghost"}
-				className={cn("shrink-0 gap-1.5 px-2", activeAgent && "pr-1")}
+				className="shrink-0 gap-1.5 px-2"
 				aria-label={
 					activeAgent
 						? t("agentFilterChangeLabel")
@@ -125,14 +119,7 @@ function AgentFilterControl({ agentId, onChange }: AgentFilterControlProps) {
 						<span className="max-w-32 truncate text-sm font-medium">
 							{activeAgent.display_name}
 						</span>
-						<button
-							type="button"
-							onPointerDown={handleClear}
-							aria-label={t("clearAgentFilter")}
-							className="rounded-full p-0.5 text-muted transition-colors hover:bg-default hover:text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40"
-						>
-							<XMarkIcon className="size-3.5" />
-						</button>
+						<ChevronDownIcon className="size-3 text-muted" />
 					</>
 				) : (
 					<>
@@ -182,5 +169,20 @@ function AgentFilterControl({ agentId, onChange }: AgentFilterControlProps) {
 				</Dropdown.Menu>
 			</Dropdown.Popover>
 		</Dropdown>
+	);
+
+	if (!activeAgent) return dropdown;
+
+	return (
+		<ButtonGroup size="sm" variant="secondary">
+			{dropdown}
+			<Button
+				isIconOnly
+				aria-label={t("clearAgentFilter")}
+				onPress={() => onChange(null)}
+			>
+				<XMarkIcon className="size-3.5" />
+			</Button>
+		</ButtonGroup>
 	);
 }
