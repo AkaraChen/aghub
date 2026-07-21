@@ -2,10 +2,11 @@ import {
 	ChevronRightIcon,
 	PlusIcon,
 	Square2StackIcon,
+	StarIcon,
 } from "@heroicons/react/24/solid";
 import { useDndContext, useDraggable, useDroppable } from "@dnd-kit/core";
 import { Button, Chip } from "@heroui/react";
-import { type ReactNode, useEffect, useRef } from "react";
+import { type ReactNode, useEffect, useId, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../lib/utils";
 import { NEW_GROUP_DROP_ID } from "./list-dnd";
@@ -38,6 +39,8 @@ interface ResourceGroupSectionProps {
 	 * page, or toggle the cluster selection in multi-select mode).
 	 * Expansion belongs to the chevron alone. */
 	onRowClick?: () => void;
+	/** Subtle source groups mirror the favorite state of their members. */
+	hasStarredMember?: boolean;
 	children?: ReactNode;
 }
 
@@ -62,9 +65,11 @@ export function ResourceGroupSection({
 	onRename,
 	subtle = false,
 	onRowClick,
+	hasStarredMember = false,
 	children,
 }: ResourceGroupSectionProps) {
 	const { t } = useTranslation();
+	const favoriteDescriptionId = useId();
 
 	const { setNodeRef: setDropRef, isOver } = useDroppable({
 		id: dropId ?? dragId,
@@ -183,6 +188,11 @@ export function ResourceGroupSection({
 								? title
 								: t("selectAllInGroup", { name: title })
 						}
+						aria-describedby={
+							subtle && hasStarredMember
+								? favoriteDescriptionId
+								: undefined
+						}
 						className={cn(
 							"h-auto min-h-9 min-w-0 flex-1 justify-start gap-2 rounded-2xl px-2 py-1.5 text-sm font-normal whitespace-normal active:[transform:none] data-[pressed=true]:[transform:none] [--button-bg-hover:transparent] [--button-bg-pressed:transparent] [&_svg]:mx-0",
 							"transition-[color,background-color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
@@ -192,10 +202,19 @@ export function ResourceGroupSection({
 						{subtle ? (
 							// The icon slot mirrors a skill row's book icon in
 							// weight; the expand cue sits at the trailing edge
-							<Square2StackIcon
-								aria-hidden
-								className="size-4 shrink-0 text-muted"
-							/>
+							<span className="relative inline-flex size-4 shrink-0 items-center justify-center">
+								<Square2StackIcon
+									aria-hidden
+									className="size-4 text-muted"
+								/>
+								{hasStarredMember && (
+									<StarIcon
+										aria-hidden
+										data-slot="source-favorite-indicator"
+										className="absolute -bottom-1 -left-1 size-2.5 text-warning"
+									/>
+								)}
+							</span>
 						) : null}
 						<span
 							className={cn(
@@ -223,6 +242,11 @@ export function ResourceGroupSection({
 					</Button>
 					{subtle && expansionButton}
 				</div>
+				{subtle && hasStarredMember && (
+					<span id={favoriteDescriptionId} className="sr-only">
+						{t("sourceContainsFavoriteSkill")}
+					</span>
+				)}
 			</div>
 			<div
 				className={cn(

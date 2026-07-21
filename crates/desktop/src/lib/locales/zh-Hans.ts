@@ -846,6 +846,7 @@ export default {
 	skillSyncedSuccessfully: "Skill 同步成功",
 	skillNotFoundInRepo: "在此分支的仓库中未找到此 Skill。",
 	skillFoundInRepo: "在仓库中找到 Skill",
+	sourceContainsFavoriteSkill: "包含已收藏的 Skill",
 	default: "默认",
 	showMore: "显示更多 ({{count}})",
 	showLess: "收起",

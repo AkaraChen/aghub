@@ -316,6 +316,9 @@ export const SkillList = memo(function SkillList({
 					}
 					dragId={`header:${entry.id}`}
 					dragKeys={memberKeys}
+					hasStarredMember={sourceGroup.skills.some((skill) =>
+						isSkillStarred(skill.name),
+					)}
 				>
 					{renderSectionListBox(
 						sourceGroup.source,

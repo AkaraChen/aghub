@@ -874,6 +874,7 @@ export default {
 	skillNotFoundInRepo:
 		"This skill was not found in the repository on this branch.",
 	skillFoundInRepo: "Skill found in repository",
+	sourceContainsFavoriteSkill: "Contains a favorite skill",
 	default: "Default",
 	showMore: "Show more ({{count}})",
 	showLess: "Show less",

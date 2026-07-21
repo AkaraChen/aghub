@@ -1222,6 +1222,17 @@ test("starring a member floats its whole source cluster up", async ({
 		.getByRole("menu", { name: "Resource actions" })
 		.getByRole("menuitem", { name: "Favorite" })
 		.click();
+	await expect(
+		page
+			.getByTestId("group-section-github/AkaraChen/web-dev")
+			.locator('[data-slot="source-favorite-indicator"]'),
+	).toBeVisible();
+	await expect(
+		page.getByRole("button", {
+			name: "github/AkaraChen/web-dev",
+			exact: true,
+		}),
+	).toHaveAccessibleDescription("Contains a favorite skill");
 
 	// web-dev now carries a starred skill, so its whole cluster floats to the
 	// top of the loose list — above the unstarred alpha-pack cluster AND the
