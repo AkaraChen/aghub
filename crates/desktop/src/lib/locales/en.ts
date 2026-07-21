@@ -467,7 +467,6 @@ export default {
 	usageRuntimeStatusCheckFailed: "Couldn't check ccusage",
 	usageRuntimeStatusUpdateAvailable: "Update available",
 	usageRuntimeStatusUpToDate: "Up to date",
-	usageRuntimeLatestVersion: "Latest {{version}}",
 	usageRuntimeSource: "Runtime source",
 	usageRuntimeSourceAuto: "Automatic selection",
 	usageRuntimeSourceEnvironment: "Environment variable",
@@ -477,21 +476,14 @@ export default {
 	usageRuntimeSourceNpm: "npm-managed copy",
 	usageRuntimeSourceDownload: "Downloaded copy",
 	usageRuntimeSourceBundled: "Bundled fallback",
+	usageRuntimeSourceInstallable: "Installable",
 	usageRuntimeAutoDescription:
-		"Checks the environment variable, system PATH, aghub-managed copy, then the bundled fallback.",
-	usageRuntimeAutoActiveDescription:
-		"Using {{source}}. Checks the environment variable and system PATH first.",
-	usageRuntimePreferenceActiveDescription:
-		"{{preference}} is selected; currently using {{source}}.",
-	usageRuntimeExternalDescription:
-		"Managed outside aghub; aghub won't modify or update it.",
-	usageRuntimeBundledDescription: "Bundled with aghub and read-only.",
-	usageRuntimeManagedInstalledDescription:
-		"Managed by aghub and can be updated here.",
-	usageRuntimeManagedInstallDescription:
-		"Installs a managed ccusage copy in aghub's application data.",
-	usageRuntimeExternalManaged:
-		"To update through aghub, install a separate app-managed copy.",
+		"Checks the environment variable, system PATH, an aghub-managed copy, then the bundled fallback.",
+	usageRuntimeActiveSourceDescription: "Using {{source}}",
+	usageRuntimeExternalDescription: "Managed outside aghub",
+	usageRuntimeBundledDescription: "Included with aghub",
+	usageRuntimeManagedInstalledDescription: "Managed by aghub",
+	usageRuntimeManagedInstallDescription: "Not installed",
 	usageRuntimeManualPath: "ccusage executable",
 	usageRuntimeManualPathPlaceholder: "Select a ccusage executable",
 	usageRuntimeManualDescription:

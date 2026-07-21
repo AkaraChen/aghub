@@ -71,9 +71,6 @@ export function UsageRuntimeSection() {
 	} else if (runtime?.active) {
 		statusKey = "usageRuntimeStatusReady";
 	}
-	const activeVersion = runtime?.active
-		? shortCcusageVersion(runtime.active.version)
-		: null;
 	const latestVersion = runtime?.latest_version
 		? shortCcusageVersion(runtime.latest_version)
 		: null;
@@ -97,8 +94,8 @@ export function UsageRuntimeSection() {
 			aria-labelledby="usage-runtime-heading"
 		>
 			<div className="flex items-start justify-between gap-3">
-				<div className="min-w-0 space-y-0.5">
-					<div className="flex items-center gap-2">
+				<div className="min-w-0">
+					<div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
 						<span
 							aria-hidden
 							className={cn(
@@ -118,12 +115,11 @@ export function UsageRuntimeSection() {
 						>
 							ccusage
 						</h3>
-					</div>
-					<div className="ml-4 flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs">
 						<span
 							role="status"
 							aria-live="polite"
 							className={cn(
+								"text-xs",
 								isStatusPending
 									? "text-muted"
 									: statusError || !runtime?.active
@@ -135,18 +131,6 @@ export function UsageRuntimeSection() {
 						>
 							{t(statusKey)}
 						</span>
-						{activeVersion && (
-							<span className="font-medium tabular-nums text-(--foreground)">
-								{activeVersion}
-							</span>
-						)}
-						{runtime?.update_available && latestVersion && (
-							<span className="tabular-nums text-accent">
-								{t("usageRuntimeLatestVersion", {
-									version: latestVersion,
-								})}
-							</span>
-						)}
 					</div>
 					{statusError && !isStatusPending && (
 						<p className="ml-4 mt-1 break-words text-xs text-danger">

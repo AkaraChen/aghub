@@ -17,6 +17,7 @@ export interface UsageSectionProps {
 export interface SelectOption {
 	id: string;
 	label: string;
+	description?: string;
 	isDisabled?: boolean;
 }
 

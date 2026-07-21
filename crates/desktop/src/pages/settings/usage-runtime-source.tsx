@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import type {
 	CcusageRuntimeCandidateDto,
 	CcusageRuntimeDto,
+	CcusageRuntimeExecutableDto,
 	CcusageRuntimeSource,
 } from "../../generated/dto";
 import { shortCcusageVersion } from "../../lib/usage-format";
@@ -59,12 +60,10 @@ export function RuntimeSourceControls({
 		const sourceCandidate = runtime.candidates.find(
 			(item) => item.source === source,
 		);
-		const label = t(sourceLabelKey(source));
 		return {
 			id: source,
-			label: sourceCandidate?.version
-				? `${label} · ${shortCcusageVersion(sourceCandidate.version)}`
-				: label,
+			label: t(sourceLabelKey(source)),
+			description: sourceOptionDescription(source, sourceCandidate, t),
 			isDisabled: !sourceCanBeChosen(source, runtime.candidates),
 		};
 	});
@@ -80,17 +79,19 @@ export function RuntimeSourceControls({
 	};
 
 	return (
-		<div className="space-y-3">
+		<div className="space-y-3" data-testid="usage-runtime-source-controls">
 			<SettingRow
 				title={t("usageRuntimeSource")}
 				description={sourceDescription(
 					selectedSource,
 					candidate,
-					runtime.active?.source,
+					selectedSource === runtime.preference
+						? runtime.active
+						: null,
 					t,
 				)}
 				control={
-					<div className="flex shrink-0 items-center gap-2">
+					<div className="flex flex-wrap items-center justify-end gap-2">
 						<SettingSelect
 							value={selectedSource}
 							onChange={(source) =>
@@ -143,13 +144,21 @@ export function RuntimeSourceControls({
 					</div>
 				</div>
 			)}
-			{runtime.active && EXTERNAL_SOURCES.has(runtime.active.source) && (
-				<p className="text-xs text-muted">
-					{t("usageRuntimeExternalManaged")}
-				</p>
-			)}
 		</div>
 	);
+}
+
+function sourceOptionDescription(
+	source: CcusageRuntimeSource,
+	candidate: CcusageRuntimeCandidateDto | undefined,
+	t: TFunction,
+): string | undefined {
+	if (candidate?.version) return shortCcusageVersion(candidate.version);
+	if (candidate?.can_install) return t("usageRuntimeSourceInstallable");
+	if (source !== "auto" && source !== "manual") {
+		return t("usageRuntimeStatusUnavailable");
+	}
+	return undefined;
 }
 
 function sourceCanBeChosen(
@@ -164,29 +173,56 @@ function sourceCanBeChosen(
 function sourceDescription(
 	source: CcusageRuntimeSource,
 	candidate: CcusageRuntimeCandidateDto | undefined,
-	activeSource: CcusageRuntimeSource | undefined,
+	active: CcusageRuntimeExecutableDto | null,
 	t: TFunction,
 ): string {
-	if (source === "auto") {
-		return activeSource
-			? t("usageRuntimeAutoActiveDescription", {
-					source: t(sourceLabelKey(activeSource)),
-				})
-			: t("usageRuntimeAutoDescription");
+	if (active && (source === "auto" || active.source !== source)) {
+		return joinMetadata(
+			t("usageRuntimeActiveSourceDescription", {
+				source: t(sourceLabelKey(active.source)),
+			}),
+			shortCcusageVersion(active.version),
+		);
 	}
-	if (activeSource && activeSource !== source) {
-		return t("usageRuntimePreferenceActiveDescription", {
-			preference: t(sourceLabelKey(source)),
-			source: t(sourceLabelKey(activeSource)),
-		});
+	if (source === "auto") return t("usageRuntimeAutoDescription");
+
+	const version =
+		active?.source === source
+			? shortCcusageVersion(active.version)
+			: candidate?.version
+				? shortCcusageVersion(candidate.version)
+				: undefined;
+	const isInstalled =
+		active?.source === source || candidate?.installed === true;
+	if (source === "manual") {
+		return joinMetadata(version, t("usageRuntimeExternalDescription"));
 	}
 	if (EXTERNAL_SOURCES.has(source)) {
-		return t("usageRuntimeExternalDescription");
+		return isInstalled
+			? joinMetadata(version, t("usageRuntimeExternalDescription"))
+			: t("usageRuntimeStatusUnavailable");
 	}
-	if (source === "bundled") return t("usageRuntimeBundledDescription");
-	return candidate?.installed
-		? t("usageRuntimeManagedInstalledDescription")
-		: t("usageRuntimeManagedInstallDescription");
+	if (source === "bundled") {
+		return isInstalled
+			? joinMetadata(version, t("usageRuntimeBundledDescription"))
+			: t("usageRuntimeStatusUnavailable");
+	}
+	if (isInstalled) {
+		return joinMetadata(
+			version,
+			t("usageRuntimeManagedInstalledDescription"),
+		);
+	}
+	return candidate?.can_install
+		? joinMetadata(
+				t("usageRuntimeManagedInstallDescription"),
+				t("usageRuntimeSourceInstallable"),
+			)
+		: t("usageRuntimeStatusUnavailable");
+}
+
+function joinMetadata(...parts: Array<string | undefined>): string {
+	return parts.filter((part): part is string => Boolean(part)).join(" · ");
 }
 
 function sourceLabelKey(source: CcusageRuntimeSource): string {

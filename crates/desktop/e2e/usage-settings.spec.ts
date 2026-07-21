@@ -110,7 +110,7 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await expect(page.getByText("Cache read", { exact: true })).toBeVisible();
 	await expect(card.locator("button")).toHaveCount(0);
 
-	// Runtime health stays separate from the current version and source.
+	// Runtime health stays separate from the source details.
 	const runtimeSection = page
 		.getByText("ccusage", { exact: true })
 		.locator("xpath=ancestor::section");
@@ -118,10 +118,9 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await expect(runtimeStatus).toHaveText("Update available");
 	await expect(runtimeStatus).not.toHaveClass(/truncate/);
 	await expect(
-		runtimeSection.getByText("v20.0.6", { exact: true }),
-	).toBeVisible();
-	await expect(
-		runtimeSection.getByText(/Using Bundled fallback/),
+		runtimeSection.getByText("Using Bundled fallback · v20.0.6", {
+			exact: true,
+		}),
 	).toBeVisible();
 	await expect(
 		runtimeSection.getByRole("button", {
@@ -163,6 +162,95 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await expect(page.getByText("/usr/local/bin/ccusage")).toHaveCount(0);
 });
 
+test("runtime source row owns version and availability metadata", async ({
+	page,
+}) => {
+	const runtime: CcusageRuntimeDto = {
+		preference: "bun",
+		active: {
+			source: "bun",
+			version: "20.0.18",
+			can_update: true,
+		},
+		candidates: [
+			{
+				source: "path",
+				installed: true,
+				version: "20.0.14",
+				can_install: false,
+			},
+			{
+				source: "bun",
+				installed: true,
+				version: "20.0.18",
+				can_install: true,
+			},
+			{
+				source: "npm",
+				installed: false,
+				version: null,
+				can_install: true,
+			},
+			{
+				source: "download",
+				installed: false,
+				version: null,
+				can_install: true,
+			},
+			{
+				source: "bundled",
+				installed: false,
+				version: null,
+				can_install: false,
+			},
+		],
+		latest_version: "20.0.18",
+		update_available: false,
+		error: null,
+	};
+	await page.route("**/api/v1/usage/runtime", (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify(runtime),
+		}),
+	);
+	await page.goto("/settings?tab=usage");
+
+	const runtimeSection = page
+		.getByText("ccusage", { exact: true })
+		.locator("xpath=ancestor::section");
+	const controls = page.getByTestId("usage-runtime-source-controls");
+	const source = page.getByRole("button", { name: "Runtime source" });
+	await expect(runtimeSection.getByRole("status")).toHaveText("Up to date");
+	await expect(
+		controls.getByText("v20.0.18 · Managed by aghub", { exact: true }),
+	).toBeVisible();
+	await expect(runtimeSection.getByText(/v20\.0\.18/)).toHaveCount(1);
+	await expect(source).toContainText("Bun-managed copy");
+	await expect(source).not.toContainText("v20.0.18");
+
+	await source.click();
+	const pathOption = page.getByRole("option", { name: /System PATH/ });
+	const bunOption = page.getByRole("option", { name: /Bun-managed copy/ });
+	const npmOption = page.getByRole("option", { name: /npm-managed copy/ });
+	const bundledOption = page.getByRole("option", {
+		name: /Bundled fallback/,
+	});
+	await expect(pathOption.locator('[data-slot="description"]')).toHaveText(
+		"v20.0.14",
+	);
+	await expect(bunOption.locator('[data-slot="description"]')).toHaveText(
+		"v20.0.18",
+	);
+	await expect(npmOption.locator('[data-slot="description"]')).toHaveText(
+		"Installable",
+	);
+	await expect(bundledOption.locator('[data-slot="description"]')).toHaveText(
+		"Unavailable",
+	);
+});
+
 test("ccusage update uses the runtime endpoint", async ({ page }) => {
 	let updateRequests = 0;
 	await page.route("**/api/v1/usage/runtime/update", async (route) => {
@@ -181,10 +269,9 @@ test("ccusage update uses the runtime endpoint", async ({ page }) => {
 		.locator("xpath=ancestor::section");
 	await expect(runtimeSection.getByRole("status")).toHaveText("Up to date");
 	await expect(
-		runtimeSection.getByText("v20.0.17", { exact: true }),
-	).toBeVisible();
-	await expect(
-		runtimeSection.getByText(/Using Bun-managed copy/),
+		runtimeSection.getByText("Using Bun-managed copy · v20.0.17", {
+			exact: true,
+		}),
 	).toBeVisible();
 	await expect(runtimeSection.getByText("Install with Bun")).toHaveCount(0);
 	await expect(page.getByRole("button", { name: /v20\.0\.17/ })).toHaveCount(
@@ -224,7 +311,7 @@ test("runtime sources use selection and installation endpoints", async ({
 	await page.getByRole("button", { name: "Install Downloaded copy" }).click();
 	await expect.poll(() => installs).toEqual([{ source: "download" }]);
 	await expect(
-		page.getByText(/Managed by aghub and can be updated here/),
+		page.getByText("v20.0.17 · Managed by aghub", { exact: true }),
 	).toBeVisible();
 	await expect(source).toContainText("Downloaded copy");
 });
@@ -264,9 +351,9 @@ test("runtime source distinguishes the saved preference from an environment over
 		page.getByRole("button", { name: "Runtime source" }),
 	).toContainText("Bun-managed copy");
 	await expect(
-		page.getByText(
-			"Bun-managed copy is selected; currently using Environment variable.",
-		),
+		page.getByText("Using Environment variable · v20.0.17", {
+			exact: true,
+		}),
 	).toBeVisible();
 	await expect(
 		page.getByRole("button", { name: "Install v20.0.18 in aghub" }),
@@ -275,7 +362,13 @@ test("runtime source distinguishes the saved preference from an environment over
 	const source = page.getByRole("button", { name: "Runtime source" });
 	await source.click();
 	await page.getByRole("option", { name: "Automatic selection" }).click();
-	await expect(page.getByText(/Using Environment variable/)).toBeVisible();
+	await expect(
+		page.getByText(
+			"Checks the environment variable, system PATH, an aghub-managed copy, then the bundled fallback.",
+			{ exact: true },
+		),
+	).toBeVisible();
+	await expect(page.getByText(/Using Environment variable/)).toHaveCount(0);
 });
 
 test("re-check spins and remains pending until the probe settles", async ({
@@ -467,7 +560,9 @@ test("runtime errors override stale health without hiding its version", async ({
 		);
 		await expect(status).toHaveText("Couldn't check ccusage");
 		await expect(
-			runtimeSection.getByText("v20.0.17", { exact: true }),
+			runtimeSection.getByText("Using Bun-managed copy · v20.0.17", {
+				exact: true,
+			}),
 		).toBeVisible();
 		await expect(errorDetail).toBeVisible();
 		await expect(
@@ -634,6 +729,16 @@ test("layout editor uses the available settings width", async ({ page }) => {
 	expect(gridBox!.width / surfaceBox!.width).toBeGreaterThan(0.9);
 	expect(drawerBox!.width).toBeGreaterThan(cardBox!.width);
 
+	const hiddenQuota = drawer.getByTestId("layout-hidden-item-5h");
+	const [hiddenQuotaBox, hiddenQuotaMeter] = await Promise.all([
+		hiddenQuota.boundingBox(),
+		hiddenQuota.locator('[data-slot="meter"]').boundingBox(),
+	]);
+	expect(hiddenQuotaBox).not.toBeNull();
+	expect(hiddenQuotaMeter).not.toBeNull();
+	expect(hiddenQuotaMeter!.width).toBeLessThanOrEqual(288.5);
+	expect(hiddenQuotaBox!.width - hiddenQuotaMeter!.width).toBeGreaterThan(80);
+
 	const [firstHiddenStat, thirdHiddenStat] = await Promise.all([
 		drawer.getByTestId("layout-hidden-item-cacheRead").boundingBox(),
 		drawer.getByTestId("layout-hidden-item-reasoning").boundingBox(),
@@ -641,6 +746,26 @@ test("layout editor uses the available settings width", async ({ page }) => {
 	expect(firstHiddenStat).not.toBeNull();
 	expect(thirdHiddenStat).not.toBeNull();
 	expect(Math.abs(firstHiddenStat!.y - thirdHiddenStat!.y)).toBeLessThan(2);
+
+	await page.setViewportSize({ width: 900, height: 900 });
+	const [narrowQuotaBox, narrowQuotaMeter] = await Promise.all([
+		hiddenQuota.boundingBox(),
+		hiddenQuota.locator('[data-slot="meter"]').boundingBox(),
+	]);
+	expect(narrowQuotaBox).not.toBeNull();
+	expect(narrowQuotaMeter).not.toBeNull();
+	expect(narrowQuotaMeter!.width / narrowQuotaBox!.width).toBeGreaterThan(
+		0.95,
+	);
+	await expect
+		.poll(() =>
+			page.evaluate(
+				() =>
+					document.documentElement.scrollWidth -
+					document.documentElement.clientWidth,
+			),
+		)
+		.toBeLessThanOrEqual(1);
 });
 
 test("usage window uses a finite desktop picker", async ({ page }) => {
@@ -793,7 +918,7 @@ test("layout rows are the complete drag targets", async ({ page }) => {
 
 	const card = page.getByTestId("layout-card-replica");
 	const drawer = page.getByTestId("layout-hidden-drawer");
-	const hiddenRow = drawer.getByTestId("layout-hidden-item-cacheRead");
+	const hiddenRow = drawer.getByTestId("layout-hidden-item-5h");
 	const cardRow = card.getByTestId("layout-card-item-totalTokens");
 
 	await expect(hiddenRow).toHaveAttribute("role", "button");
@@ -802,15 +927,17 @@ test("layout rows are the complete drag targets", async ({ page }) => {
 	await expect(card.locator("button")).toHaveCount(0);
 
 	await hiddenRow.scrollIntoViewIfNeeded();
-	const rowBox = await hiddenRow.boundingBox();
-	if (!rowBox) throw new Error("drag row missing");
-	await page.mouse.move(
-		rowBox.x + rowBox.width * 0.8,
-		rowBox.y + rowBox.height / 2,
-	);
+	const [rowBox, meterBox] = await Promise.all([
+		hiddenRow.boundingBox(),
+		hiddenRow.locator('[data-slot="meter"]').boundingBox(),
+	]);
+	if (!rowBox || !meterBox) throw new Error("drag row missing");
+	const dragStartX = rowBox.x + rowBox.width * 0.95;
+	expect(dragStartX).toBeGreaterThan(meterBox.x + meterBox.width);
+	await page.mouse.move(dragStartX, rowBox.y + rowBox.height / 2);
 	await page.mouse.down();
 	await page.mouse.move(
-		rowBox.x + rowBox.width * 0.65,
+		rowBox.x + rowBox.width * 0.8,
 		rowBox.y + rowBox.height / 2,
 		{
 			steps: 3,

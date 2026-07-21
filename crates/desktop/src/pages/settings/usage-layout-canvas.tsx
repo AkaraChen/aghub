@@ -350,7 +350,11 @@ function HiddenDrawer({
 							data-testid={`layout-hidden-item-${field.id}`}
 							className="-mx-1 flex items-center rounded-md px-1 py-0.5"
 						>
-							<BarBody label={field.label} pct={0} />
+							<BarBody
+								label={field.label}
+								pct={0}
+								className="lg:max-w-72"
+							/>
 						</DraggableFieldRow>
 					))}
 					{stats.length > 0 && (
@@ -403,9 +407,17 @@ function DragGhost({
 	);
 }
 
-function BarBody({ label, pct }: { label: string; pct: number }) {
+function BarBody({
+	label,
+	pct,
+	className,
+}: {
+	label: string;
+	pct: number;
+	className?: string;
+}) {
 	return (
-		<div className="flex min-w-0 flex-1 flex-col gap-0.5">
+		<div className={cn("flex min-w-0 flex-1 flex-col gap-0.5", className)}>
 			<span className="truncate text-[11px] text-muted">{label}</span>
 			<Meter aria-hidden aria-label={label} value={pct} size="sm">
 				<Meter.Track>

@@ -1,7 +1,9 @@
 import { FolderOpenIcon } from "@heroicons/react/24/solid";
 import {
 	Button,
+	Description,
 	Input,
+	Label,
 	ListBox,
 	NumberField,
 	Select,
@@ -90,7 +92,9 @@ export function SettingSelect({
 			className="min-w-32"
 		>
 			<Select.Trigger>
-				<Select.Value />
+				<Select.Value>
+					{({ selectedText }) => selectedText}
+				</Select.Value>
 				<Select.Indicator />
 			</Select.Trigger>
 			<Select.Popover>
@@ -102,7 +106,17 @@ export function SettingSelect({
 							textValue={opt.label}
 							isDisabled={opt.isDisabled}
 						>
-							{opt.label}
+							<div className="flex min-w-0 flex-1 items-baseline justify-between gap-5">
+								<Label className="min-w-0 truncate">
+									{opt.label}
+								</Label>
+								{opt.description && (
+									<Description className="shrink-0 tabular-nums">
+										{opt.description}
+									</Description>
+								)}
+							</div>
+							<ListBox.ItemIndicator />
 						</ListBox.Item>
 					))}
 				</ListBox>

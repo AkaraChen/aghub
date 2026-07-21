@@ -449,7 +449,6 @@ export default {
 	usageRuntimeStatusCheckFailed: "无法检查 ccusage",
 	usageRuntimeStatusUpdateAvailable: "有可用更新",
 	usageRuntimeStatusUpToDate: "已是最新版本",
-	usageRuntimeLatestVersion: "最新 {{version}}",
 	usageRuntimeSource: "运行来源",
 	usageRuntimeSourceAuto: "自动选择",
 	usageRuntimeSourceEnvironment: "环境变量",
@@ -459,20 +458,14 @@ export default {
 	usageRuntimeSourceNpm: "npm 管理副本",
 	usageRuntimeSourceDownload: "下载副本",
 	usageRuntimeSourceBundled: "内置备用版本",
+	usageRuntimeSourceInstallable: "可安装",
 	usageRuntimeAutoDescription:
 		"依次检查环境变量、系统 PATH、aghub 管理的副本和内置备用版本。",
-	usageRuntimeAutoActiveDescription:
-		"当前使用{{source}}；会优先检查环境变量和系统 PATH。",
-	usageRuntimePreferenceActiveDescription:
-		"已选择{{preference}}；当前实际使用{{source}}。",
-	usageRuntimeExternalDescription:
-		"由 aghub 外部管理；aghub 不会修改或更新它。",
-	usageRuntimeBundledDescription: "随 aghub 提供，只读。",
-	usageRuntimeManagedInstalledDescription: "由 aghub 管理，可在这里更新。",
-	usageRuntimeManagedInstallDescription:
-		"在 aghub 应用数据目录中安装由应用管理的 ccusage 副本。",
-	usageRuntimeExternalManaged:
-		"如需通过 aghub 更新，请另行安装一份由应用管理的副本。",
+	usageRuntimeActiveSourceDescription: "当前使用{{source}}",
+	usageRuntimeExternalDescription: "由 aghub 外部管理",
+	usageRuntimeBundledDescription: "随 aghub 提供",
+	usageRuntimeManagedInstalledDescription: "由 aghub 管理",
+	usageRuntimeManagedInstallDescription: "尚未安装",
 	usageRuntimeManualPath: "ccusage 可执行文件",
 	usageRuntimeManualPathPlaceholder: "选择 ccusage 可执行文件",
 	usageRuntimeManualDescription: "选择现有可执行文件，aghub 会先验证再切换。",
