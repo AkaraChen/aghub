@@ -1310,13 +1310,13 @@ export function createApi(baseUrl: string, token: string) {
 			updateConfigFile(
 				id: string,
 				body: GatewayConfigFileDto,
-			): Promise<GatewayConfigFileDto> {
+			): Promise<void> {
 				return client
 					.put(
 						`gateway/instances/${encodeURIComponent(id)}/config-file`,
 						{ json: body },
 					)
-					.json();
+					.then(() => undefined);
 			},
 			usage(id: string): Promise<GatewayUsageDto> {
 				return client

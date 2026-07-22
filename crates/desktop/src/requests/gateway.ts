@@ -405,6 +405,9 @@ export function updateGatewayApiKeysMutationOptions({
 			await queryClient.invalidateQueries({
 				queryKey: queryKeys.gateway.apiKeys(variables.instanceId),
 			});
+			await queryClient.invalidateQueries({
+				queryKey: queryKeys.inferenceProviders.all(),
+			});
 			await onSuccess?.();
 		},
 	});
@@ -663,6 +666,12 @@ export function updateGatewayConfigFileMutationOptions({
 		onSuccess: async (_data, variables) => {
 			await queryClient.invalidateQueries({
 				queryKey: queryKeys.gateway.configFile(variables.instanceId),
+			});
+			await queryClient.invalidateQueries({
+				queryKey: queryKeys.gateway.apiKeys(variables.instanceId),
+			});
+			await queryClient.invalidateQueries({
+				queryKey: queryKeys.inferenceProviders.all(),
 			});
 			await onSuccess?.();
 		},

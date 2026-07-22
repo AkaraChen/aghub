@@ -160,25 +160,23 @@ function AccountsTable({
 										)}
 										{file.auth_index !== null && (
 											<Tooltip delay={0}>
-												<Tooltip.Trigger>
-													<Button
-														isIconOnly
-														variant="ghost"
-														size="sm"
-														className="text-muted"
-														aria-label={t(
-															"gatewayResetQuota",
-														)}
-														isDisabled={
-															isResetQuotaPending
-														}
-														onPress={() =>
-															onResetQuota(file)
-														}
-													>
-														<ArrowPathIcon className="size-4" />
-													</Button>
-												</Tooltip.Trigger>
+												<Button
+													isIconOnly
+													variant="ghost"
+													size="sm"
+													className="text-muted"
+													aria-label={t(
+														"gatewayResetQuota",
+													)}
+													isDisabled={
+														isResetQuotaPending
+													}
+													onPress={() =>
+														onResetQuota(file)
+													}
+												>
+													<ArrowPathIcon className="size-4" />
+												</Button>
 												<Tooltip.Content>
 													{t("gatewayResetQuota")}
 												</Tooltip.Content>

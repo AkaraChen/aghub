@@ -26,7 +26,7 @@ export const GATEWAY_STATUS_DISPLAY: Record<
 	},
 	starting: {
 		labelKey: "gatewayStatusStarting",
-		dotClass: "animate-pulse bg-accent",
+		dotClass: "bg-accent",
 	},
 	running: {
 		labelKey: "gatewayStatusRunning",
