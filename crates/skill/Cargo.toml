@@ -19,6 +19,7 @@ walkdir = "2.5"
 chrono = { workspace = true }
 dirs = { workspace = true }
 ignore = "0.4"
+sha2 = "0.11"
 
 [dev-dependencies]
 tempfile = { workspace = true }

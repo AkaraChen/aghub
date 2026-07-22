@@ -1,5 +1,7 @@
 import {
 	BookOpenIcon,
+	ExclamationTriangleIcon,
+	QuestionMarkCircleIcon,
 	StarIcon as StarIconSolid,
 } from "@heroicons/react/24/solid";
 import { Label, ListBox, Spinner } from "@heroui/react";
@@ -38,6 +40,7 @@ type MenuTarget =
 interface SkillRowBodyProps {
 	skillGroup: SkillGroup;
 	starred: boolean;
+	copyStatus?: SkillCopyListStatus;
 	getDragKeys: (name: string) => string[];
 	onShiftPress: (name: string) => string[] | undefined;
 	onOpenMenu: (event: React.MouseEvent, name: string) => void;
@@ -52,10 +55,12 @@ interface SkillRowBodyProps {
 const SkillRowBody = memo(function SkillRowBody({
 	skillGroup,
 	starred,
+	copyStatus,
 	getDragKeys,
 	onShiftPress,
 	onOpenMenu,
 }: SkillRowBodyProps) {
+	const { t } = useTranslation();
 	return (
 		<DraggableItemBody
 			dragId={`item:${skillGroup.name}`}
@@ -64,9 +69,38 @@ const SkillRowBody = memo(function SkillRowBody({
 			onShiftPress={() => onShiftPress(skillGroup.name)}
 		>
 			<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
-				<BookOpenIcon className="size-4 text-muted" />
+				<BookOpenIcon aria-hidden className="size-4 text-muted" />
 				{starred && (
-					<StarIconSolid className="absolute -bottom-1 -left-1 size-2.5 text-warning" />
+					<StarIconSolid
+						aria-hidden
+						className="absolute -bottom-1 -left-1 size-2.5 text-warning"
+					/>
+				)}
+				{copyStatus === "conflict" && (
+					<span
+						role="img"
+						aria-label={t("skillCopiesDiffer")}
+						data-slot="skill-copy-conflict-indicator"
+						className="absolute -right-1 -bottom-1 size-2.5 text-warning"
+					>
+						<ExclamationTriangleIcon
+							aria-hidden
+							className="size-full"
+						/>
+					</span>
+				)}
+				{copyStatus === "unknown" && (
+					<span
+						role="img"
+						aria-label={t("skillCopyStatusUnknown")}
+						data-slot="skill-copy-unknown-indicator"
+						className="absolute -right-1 -bottom-1 size-2.5 text-muted"
+					>
+						<QuestionMarkCircleIcon
+							aria-hidden
+							className="size-full"
+						/>
+					</span>
 				)}
 			</div>
 			<Label className="flex-1 truncate">{skillGroup.name}</Label>
@@ -74,6 +108,8 @@ const SkillRowBody = memo(function SkillRowBody({
 		</DraggableItemBody>
 	);
 });
+
+export type SkillCopyListStatus = "conflict" | "unknown";
 
 interface SkillListProps {
 	/** The derivation pipeline's output — owned by the page (or wrapper)
@@ -88,6 +124,8 @@ interface SkillListProps {
 	onSourceFocus?: (source: string) => void;
 	/** The auto-seeded initial selection (first click commits, not cancels) */
 	seedKey?: string | null;
+	/** Comparison state for skill names with more than one physical copy. */
+	copyStatuses?: ReadonlyMap<string, SkillCopyListStatus>;
 }
 
 export const SkillList = memo(function SkillList({
@@ -98,6 +136,7 @@ export const SkillList = memo(function SkillList({
 	intents,
 	onSourceFocus,
 	seedKey,
+	copyStatuses,
 }: SkillListProps) {
 	const { t } = useTranslation();
 	const {
@@ -207,28 +246,39 @@ export const SkillList = memo(function SkillList({
 	// element by item identity + this function, so a selection change
 	// re-renders only the rows whose selected state flipped.
 	const renderSkillItem = useCallback(
-		(skillGroup: SkillGroup) => (
-			<ListBox.Item
-				id={skillGroup.name}
-				textValue={skillGroup.name}
-				className="data-selected:bg-surface transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]"
-				style={{
-					viewTransitionName: viewTransitionName(
-						"vts",
-						skillGroup.name,
-					),
-				}}
-			>
-				<SkillRowBody
-					skillGroup={skillGroup}
-					starred={isSkillStarred(skillGroup.name)}
-					getDragKeys={getDragKeys}
-					onShiftPress={handleRowShiftPress}
-					onOpenMenu={openItemMenu}
-				/>
-			</ListBox.Item>
-		),
-		[isSkillStarred, getDragKeys, handleRowShiftPress, openItemMenu],
+		(skillGroup: SkillGroup) => {
+			const copyStatus = copyStatuses?.get(skillGroup.name);
+			return (
+				<ListBox.Item
+					id={skillGroup.name}
+					textValue={skillGroup.name}
+					aria-label={skillGroup.name}
+					className="data-selected:bg-surface transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]"
+					style={{
+						viewTransitionName: viewTransitionName(
+							"vts",
+							skillGroup.name,
+						),
+					}}
+				>
+					<SkillRowBody
+						skillGroup={skillGroup}
+						starred={isSkillStarred(skillGroup.name)}
+						copyStatus={copyStatus}
+						getDragKeys={getDragKeys}
+						onShiftPress={handleRowShiftPress}
+						onOpenMenu={openItemMenu}
+					/>
+				</ListBox.Item>
+			);
+		},
+		[
+			isSkillStarred,
+			copyStatuses,
+			getDragKeys,
+			handleRowShiftPress,
+			openItemMenu,
+		],
 	);
 
 	const renderSectionListBox = (

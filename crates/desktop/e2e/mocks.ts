@@ -1,8 +1,16 @@
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import process from "node:process";
 import type { Page } from "@playwright/test";
+import type {
+	GitSyncRequest,
+	SkillCopyResolutionRequest,
+	SkillCopyStatusRequest,
+	SkillDiffRequest,
+	SkillDirectoryDiffResponse,
+	SkillResponse,
+} from "../src/generated/dto";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
+const here = path.join(process.cwd(), "e2e");
 
 export const agentInfo = (id: string, displayName: string) => ({
 	id,
@@ -59,11 +67,11 @@ const AVAILABILITY = [
 	},
 ];
 
-const skill = (name: string, agent = "claude") => ({
+const skill = (name: string, agent = "claude"): SkillResponse => ({
 	name,
 	enabled: true,
 	source_path: `/tmp/e2e/.${agent}/skills/${name}/SKILL.md`,
-	canonical_path: `/tmp/e2e/.${agent}/skills/${name}`,
+	canonical_path: null,
 	description: `${name} description`,
 	author: null,
 	version: null,
@@ -177,8 +185,63 @@ export async function installMocks(page: Page) {
 		...GLOBAL_LOCK,
 		skills: GLOBAL_LOCK.skills.map((entry) => ({ ...entry })),
 	};
+	const skillDiffs = new Map<string, SkillDirectoryDiffResponse>();
+	const skillDiffErrors = new Set<string>();
+	const skillDiffRequests: SkillDiffRequest[] = [];
+	let skillDiffDelayMs = 0;
+	const skillCopyStatuses = new Map<string, boolean>();
+	const skillCopyStatusRequests: SkillCopyStatusRequest[] = [];
+	const gitSyncRequests: GitSyncRequest[] = [];
+	const skillCopyResolutionRequests: SkillCopyResolutionRequest[] = [];
+	const skillDiffFor = (
+		request: SkillDiffRequest,
+		installedPath: string,
+	): SkillDirectoryDiffResponse | null => {
+		const referenceKey =
+			request.reference.kind === "git_scan"
+				? `git:${request.reference.skill_path}`
+				: request.reference.source_path;
+		const exactKey = `${installedPath}|${referenceKey}`;
+		if (
+			skillDiffErrors.has(exactKey) ||
+			skillDiffErrors.has(installedPath)
+		) {
+			return null;
+		}
+		return (
+			skillDiffs.get(exactKey) ??
+			skillDiffs.get(installedPath) ??
+			skillDiffs.get(referenceKey) ?? {
+				identical: true,
+				base_hash: "same",
+				target_hash: "same",
+				files: [],
+				files_omitted: 0,
+			}
+		);
+	};
+	const observedSkillHash = (sourcePath: string): string | undefined => {
+		for (let index = skillDiffRequests.length - 1; index >= 0; index -= 1) {
+			const request = skillDiffRequests[index];
+			if (!request) continue;
+			if (
+				request.reference.kind === "installed" &&
+				request.reference.source_path === sourcePath
+			) {
+				for (const installedPath of request.installed_paths) {
+					const comparison = skillDiffFor(request, installedPath);
+					if (comparison) return comparison.base_hash;
+				}
+			}
+			if (request.installed_paths.includes(sourcePath)) {
+				const comparison = skillDiffFor(request, sourcePath);
+				if (comparison) return comparison.target_hash;
+			}
+		}
+		return undefined;
+	};
 
-	await page.route("http://localhost:45999/api/v1/**", (route) => {
+	await page.route("http://localhost:45999/api/v1/**", async (route) => {
 		const url = new URL(route.request().url());
 		const p = url.pathname.replace("/api/v1", "");
 		const method = route.request().method();
@@ -187,6 +250,12 @@ export async function installMocks(page: Page) {
 				status: 200,
 				contentType: "application/json",
 				body: JSON.stringify(body),
+			});
+		const jsonError = (status: number, code: string, error: string) =>
+			route.fulfill({
+				status,
+				contentType: "application/json",
+				body: JSON.stringify({ code, error }),
 			});
 
 		if (p === "/agents") return json(AGENTS);
@@ -199,6 +268,34 @@ export async function installMocks(page: Page) {
 		if (p === "/skills/lock/project")
 			return json({ version: 1, skills: [], lastSelectedAgents: null });
 		if (p === "/skills/content") return json("# Skill\n\ncontent");
+		if (p === "/skills/diff" && method === "POST") {
+			const body = JSON.parse(
+				route.request().postData() ?? "{}",
+			) as SkillDiffRequest;
+			skillDiffRequests.push(body);
+			if (skillDiffDelayMs > 0) {
+				await new Promise((resolve) =>
+					setTimeout(resolve, skillDiffDelayMs),
+				);
+			}
+			const results = body.installed_paths.map((installedPath) =>
+				skillDiffFor(body, installedPath),
+			);
+			return json({ results });
+		}
+		if (p === "/skills/copies/status" && method === "POST") {
+			const body = JSON.parse(
+				route.request().postData() ?? "{}",
+			) as SkillCopyStatusRequest;
+			skillCopyStatusRequests.push(body);
+			return json({
+				results: body.groups.map((group) => ({
+					name: group.name,
+					has_differences: skillCopyStatuses.get(group.name) ?? false,
+					unavailable: 0,
+				})),
+			});
+		}
 		if (p === "/integrations/code-editors") return json([]);
 
 		if (p === "/skills/tree") {
@@ -233,7 +330,9 @@ export async function installMocks(page: Page) {
 		}
 
 		if (p === "/skills/git/scan" && method === "POST") {
-			// The repo holds the two installed members plus one new skill
+			const body = JSON.parse(route.request().postData() ?? "{}");
+			const isWebDev = String(body.url ?? "").includes("web-dev");
+			// Each source includes its installed members plus one new skill.
 			const entry = (name: string) => ({
 				name,
 				description: `${name} description`,
@@ -245,11 +344,17 @@ export async function installMocks(page: Page) {
 				session_id: "scan-session-1",
 				branches: ["main"],
 				current_branch: "main",
-				skills: [
-					entry("arch-lint"),
-					entry("api-forge"),
-					entry("fresh-skill"),
-				],
+				skills: isWebDev
+					? [
+							entry("react-pro"),
+							entry("css-wizard"),
+							entry("fresh-skill"),
+						]
+					: [
+							entry("arch-lint"),
+							entry("api-forge"),
+							entry("fresh-skill"),
+						],
 			});
 		}
 
@@ -271,6 +376,123 @@ export async function installMocks(page: Page) {
 				}
 			}
 			return json({ results });
+		}
+
+		if (p === "/skills/git/sync" && method === "POST") {
+			const body = JSON.parse(
+				route.request().postData() ?? "{}",
+			) as GitSyncRequest;
+			gitSyncRequests.push(body);
+			return json({ success: true, name: "react-pro", error: null });
+		}
+
+		if (p === "/skills/copies/resolve" && method === "POST") {
+			const body = JSON.parse(
+				route.request().postData() ?? "{}",
+			) as SkillCopyResolutionRequest;
+			skillCopyResolutionRequests.push(body);
+			const referenceKey =
+				body.reference.kind === "git_scan"
+					? `git:${body.reference.skill_path}`
+					: body.reference.source_path;
+			if (body.scope === "all" && !body.project_root) {
+				return jsonError(
+					400,
+					"MISSING_PARAM",
+					"project_root is required when scope=all",
+				);
+			}
+
+			const referenceHash = (() => {
+				if (body.reference.kind === "git_scan") {
+					const comparisonRequest = [...skillDiffRequests]
+						.reverse()
+						.find(
+							(request) =>
+								request.reference.kind === "git_scan" &&
+								request.reference.session_id ===
+									body.reference.session_id &&
+								request.reference.skill_path ===
+									body.reference.skill_path,
+						);
+					for (const installedPath of comparisonRequest?.installed_paths ??
+						[]) {
+						const comparison = comparisonRequest
+							? skillDiffFor(comparisonRequest, installedPath)
+							: null;
+						if (comparison) return comparison.base_hash;
+					}
+					return undefined;
+				}
+				return observedSkillHash(body.reference.source_path) ?? "same";
+			})();
+			if (referenceHash !== body.expected_reference_hash) {
+				return jsonError(
+					409,
+					"SKILL_COPY_CHANGED",
+					"A skill copy changed after comparison",
+				);
+			}
+			for (const target of body.targets) {
+				const currentHash =
+					observedSkillHash(target.source_path) ?? "same";
+				if (currentHash !== target.expected_hash) {
+					return jsonError(
+						409,
+						"SKILL_COPY_CHANGED",
+						"A skill copy changed after comparison",
+					);
+				}
+			}
+
+			const identical = {
+				identical: true,
+				base_hash: body.expected_reference_hash,
+				target_hash: body.expected_reference_hash,
+				files: [],
+				files_omitted: 0,
+			} satisfies SkillDirectoryDiffResponse;
+			for (const target of body.targets) {
+				const key = `${target.source_path}|${referenceKey}`;
+				if (body.reference.kind === "git_scan") {
+					skillDiffs.set(key, identical);
+				}
+			}
+			if (body.reference.kind === "installed") {
+				const unifiedPaths = new Set([
+					body.reference.source_path,
+					...body.targets.map((target) => target.source_path),
+				]);
+				for (const [key, diff] of skillDiffs) {
+					if (
+						!key.includes("|") &&
+						diff.target_hash === referenceHash
+					) {
+						unifiedPaths.add(key);
+					}
+				}
+				const gitComparisons = Array.from(skillDiffs.entries()).filter(
+					([key]) =>
+						key.startsWith(`${body.reference.source_path}|git:`),
+				);
+				for (const sourcePath of unifiedPaths) {
+					skillDiffs.set(sourcePath, identical);
+					for (const [key, diff] of gitComparisons) {
+						const suffix = key.slice(
+							body.reference.source_path.length,
+						);
+						skillDiffs.set(`${sourcePath}${suffix}`, diff);
+					}
+				}
+			}
+			return json({
+				name: "react-pro",
+				reference_hash: body.expected_reference_hash,
+				results: body.targets.map((target) => ({
+					source_path: target.source_path,
+					content_hash: body.expected_reference_hash,
+				})),
+			});
 		}
 
 		if (p === "/skills/reconcile" && method === "POST") {
@@ -336,8 +558,98 @@ export async function installMocks(page: Page) {
 	// Control handle so specs can mutate the mock state mid-test (e.g.
 	// simulate reinstalling a deleted skill, made visible by a refetch).
 	return {
+		getSkillCopyStatusRequestCount() {
+			return skillCopyStatusRequests.length;
+		},
+		getSkillCopyStatusRequests() {
+			return [...skillCopyStatusRequests];
+		},
+		setSkillCopyStatus(name: string, hasDifferences: boolean) {
+			skillCopyStatuses.set(name, hasDifferences);
+		},
+		getSkillCopyResolutionRequests() {
+			return [...skillCopyResolutionRequests];
+		},
+		getGitSyncRequests() {
+			return [...gitSyncRequests];
+		},
+		getSkillDiffRequests() {
+			return [...skillDiffRequests];
+		},
+		setSkillDiff(key: string, diff: SkillDirectoryDiffResponse) {
+			skillDiffs.set(key, diff);
+		},
+		setSkillDiffDelay(delayMs: number) {
+			skillDiffDelayMs = delayMs;
+		},
+		setSkillDiffError(key: string) {
+			skillDiffErrors.add(key);
+		},
 		addSkill(name: string, agent = "claude") {
 			skills.push(skill(name, agent));
+		},
+		setSkillSymlink(name: string, agent: string, canonicalPath: string) {
+			const item = skills.find(
+				(skill) => skill.name === name && skill.agent === agent,
+			);
+			if (!item) return;
+			item.canonical_path = canonicalPath;
+			item.locations?.forEach((location) => {
+				if (location.source_path === item.source_path) {
+					location.canonical_path = canonicalPath;
+				}
+			});
+		},
+		addProjectSkill(
+			name: string,
+			agent: string,
+			projectSourcePath: string,
+			globalSourcePaths: string[],
+		) {
+			const item = skill(name, agent);
+			item.source = "project";
+			item.source_path = projectSourcePath;
+			item.canonical_path = null;
+			item.locations = [
+				{
+					source_path: projectSourcePath,
+					source: "project",
+				},
+				...globalSourcePaths.map((sourcePath) => ({
+					source_path: sourcePath,
+					source: "global" as const,
+				})),
+			];
+			skills.push(item);
+		},
+		addSkillLocation(
+			name: string,
+			agent: string,
+			sourcePath: string,
+			canonicalPath?: string,
+		) {
+			const item = skills.find(
+				(skill) => skill.name === name && skill.agent === agent,
+			);
+			if (!item || !item.source_path || !item.source) return;
+			item.locations ??= [
+				{
+					source_path: item.source_path,
+					canonical_path: item.canonical_path ?? undefined,
+					source: item.source,
+				},
+			];
+			if (
+				!item.locations.some(
+					(location) => location.source_path === sourcePath,
+				)
+			) {
+				item.locations.push({
+					source_path: sourcePath,
+					canonical_path: canonicalPath,
+					source: item.source,
+				});
+			}
 		},
 	};
 }

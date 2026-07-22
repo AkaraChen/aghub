@@ -30,7 +30,10 @@ pub use aghub_agents::{
 pub mod testing;
 
 pub use adapters::{create_adapter, AgentAdapter};
-pub use all_agents::{load_all_agents, AgentResources};
+pub use all_agents::{
+	load_all_agent_skill_locations, load_all_agents, AgentResources,
+	AgentSkillLocations,
+};
 pub use manager::ConfigManager;
 pub use transfer::{
 	InstallScope, InstallTarget, OperationAction, OperationBatchResult,

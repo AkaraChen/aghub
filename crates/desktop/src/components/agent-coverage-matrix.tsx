@@ -96,7 +96,11 @@ export function AgentCoverageMatrix({
 	const installedCount = (agentId: string) =>
 		groups.filter((g) => g.installedAgents.includes(agentId)).length;
 
-	const run = async (agentId: string, mode: "install" | "uninstall") => {
+	const run = async (
+		agentId: string,
+		agentName: string,
+		mode: "install" | "uninstall",
+	) => {
 		const targets = groups.filter((g) =>
 			mode === "install"
 				? !g.installedAgents.includes(agentId)
@@ -107,6 +111,7 @@ export function AgentCoverageMatrix({
 		setPendingAgent(agentId);
 		let succeeded = 0;
 		let failed = 0;
+		const failedItems: string[] = [];
 		for (const group of targets) {
 			try {
 				const result = await reconcile.mutateAsync({
@@ -121,8 +126,27 @@ export function AgentCoverageMatrix({
 				});
 				succeeded += result.success_count;
 				failed += result.failed_count;
-			} catch {
+				const operationFailures = result.results.filter(
+					(operation) => !operation.success,
+				);
+				if (operationFailures.length > 0) {
+					failedItems.push(
+						...operationFailures.map((operation) =>
+							operation.error
+								? `${group.name} — ${operation.error}`
+								: group.name,
+						),
+					);
+				} else if (result.failed_count > 0) {
+					failedItems.push(group.name);
+				}
+			} catch (error) {
 				failed += 1;
+				failedItems.push(
+					error instanceof Error
+						? `${group.name} — ${error.message}`
+						: group.name,
+				);
 			}
 		}
 		setPendingAgent(null);
@@ -131,7 +155,12 @@ export function AgentCoverageMatrix({
 			failed,
 		});
 		if (failed > 0) {
-			toast.danger(message);
+			toast.danger(message, {
+				description: t("agentBatchFailures", {
+					agent: agentName,
+					items: failedItems.join("; "),
+				}),
+			});
 		} else {
 			toast.success(message);
 		}
@@ -198,7 +227,11 @@ export function AgentCoverageMatrix({
 											name: agent.display_name,
 										});
 									} else {
-										void run(agent.id, "install");
+										void run(
+											agent.id,
+											agent.display_name,
+											"install",
+										);
 									}
 								}}
 								className={cn(
@@ -273,7 +306,11 @@ export function AgentCoverageMatrix({
 								variant="danger"
 								onPress={() => {
 									if (confirmAgent) {
-										void run(confirmAgent.id, "uninstall");
+										void run(
+											confirmAgent.id,
+											confirmAgent.name,
+											"uninstall",
+										);
 										setConfirmAgent(null);
 									}
 								}}

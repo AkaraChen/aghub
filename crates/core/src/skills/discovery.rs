@@ -30,6 +30,38 @@ pub fn load_skills_from_dirs(dirs: &[PathBuf]) -> Vec<Skill> {
 	all_skills
 }
 
+/// Load every physical skill location from multiple directories.
+pub fn load_skill_locations_from_dirs(dirs: &[PathBuf]) -> Vec<Skill> {
+	let mut skills = Vec::new();
+	let mut seen_locations = std::collections::HashSet::new();
+	for dir in dirs {
+		for skill in load_skills_from_dir(dir) {
+			let location = skill_location_identity(&skill);
+			if location
+				.as_ref()
+				.is_some_and(|path| !seen_locations.insert(path.clone()))
+			{
+				continue;
+			}
+			skills.push(skill);
+		}
+	}
+	skills.sort_by(|a, b| a.name.cmp(&b.name));
+	skills
+}
+
+fn skill_location_identity(skill: &Skill) -> Option<PathBuf> {
+	let source = skill
+		.canonical_path
+		.as_deref()
+		.or(skill.source_path.as_deref())?;
+	let path = source
+		.strip_prefix("~/")
+		.and_then(|relative| dirs::home_dir().map(|home| home.join(relative)))
+		.unwrap_or_else(|| PathBuf::from(source));
+	Some(fs::canonicalize(&path).unwrap_or(path))
+}
+
 fn collect_skills(dir: &Path, skills: &mut Vec<Skill>) {
 	let Ok(entries) = fs::read_dir(dir) else {
 		return;
@@ -91,5 +123,77 @@ mod tests {
 		assert!(names.contains(&"skill-a"));
 		assert!(names.contains(&"skill-b"));
 		assert_eq!(skills.len(), 2);
+	}
+
+	#[test]
+	fn test_skill_locations_preserve_same_name_from_multiple_directories() {
+		let tmp = tempfile::tempdir().unwrap();
+		let primary = tmp.path().join("z-primary/demo");
+		let fallback = tmp.path().join("a-fallback/demo");
+		fs::create_dir_all(&primary).unwrap();
+		fs::create_dir_all(&fallback).unwrap();
+		for path in [&primary, &fallback] {
+			fs::write(
+				path.join("SKILL.md"),
+				"---\nname: demo\ndescription: Demo\n---\n",
+			)
+			.unwrap();
+		}
+
+		let roots =
+			[tmp.path().join("z-primary"), tmp.path().join("a-fallback")];
+		let skills = load_skill_locations_from_dirs(&roots);
+
+		assert_eq!(skills.len(), 2);
+		assert_ne!(skills[0].source_path, skills[1].source_path);
+		assert!(skills[0]
+			.source_path
+			.as_deref()
+			.is_some_and(|path| path.contains("z-primary")));
+
+		let effective = load_skills_from_dirs(&roots);
+		assert_eq!(effective.len(), 1);
+		assert!(effective[0]
+			.source_path
+			.as_deref()
+			.is_some_and(|path| path.contains("z-primary")));
+	}
+
+	#[test]
+	fn test_skill_locations_deduplicate_repeated_read_path() {
+		let tmp = tempfile::tempdir().unwrap();
+		let root = tmp.path().join("skills");
+		let skill = root.join("demo");
+		fs::create_dir_all(&skill).unwrap();
+		fs::write(
+			skill.join("SKILL.md"),
+			"---\nname: demo\ndescription: Demo\n---\n",
+		)
+		.unwrap();
+
+		let skills =
+			load_skill_locations_from_dirs(&[root.clone(), root.clone()]);
+
+		assert_eq!(skills.len(), 1);
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn test_skill_locations_deduplicate_symlinked_read_root() {
+		let tmp = tempfile::tempdir().unwrap();
+		let root = tmp.path().join("skills");
+		let alias = tmp.path().join("skills-alias");
+		let skill = root.join("demo");
+		fs::create_dir_all(&skill).unwrap();
+		fs::write(
+			skill.join("SKILL.md"),
+			"---\nname: demo\ndescription: Demo\n---\n",
+		)
+		.unwrap();
+		std::os::unix::fs::symlink(&root, &alias).unwrap();
+
+		let skills = load_skill_locations_from_dirs(&[root, alias]);
+
+		assert_eq!(skills.len(), 1);
 	}
 }

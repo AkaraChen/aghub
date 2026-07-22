@@ -1,7 +1,7 @@
 use crate::{
 	create_adapter,
 	errors::{ConfigError, Result},
-	manager::ConfigManager,
+	manager::{skill::copy_skill_directory_staged, ConfigManager},
 	models::{AgentType, McpServer, Skill, SubAgent},
 	registry,
 };
@@ -190,20 +190,88 @@ fn resolve_skill_root(skill: &Skill) -> Result<PathBuf> {
 	Ok(root)
 }
 
-fn copy_dir_recursive(from: &Path, to: &Path) -> Result<()> {
-	fs::create_dir_all(to)?;
-	for entry in fs::read_dir(from)? {
-		let entry = entry?;
-		let from_path = entry.path();
-		let to_path = to.join(entry.file_name());
-		let file_type = entry.file_type()?;
-		if file_type.is_dir() {
-			copy_dir_recursive(&from_path, &to_path)?;
-		} else {
-			fs::copy(&from_path, &to_path)?;
-		}
+fn validate_skill_directory(path: &Path, expected_name: &str) -> Result<()> {
+	let parsed = skill::parser::parse_skill_dir(path).map_err(|error| {
+		ConfigError::InvalidConfig(format!(
+			"Skill directory '{}' cannot be parsed: {error}",
+			path.display()
+		))
+	})?;
+	if parsed.name != expected_name {
+		return Err(ConfigError::InvalidConfig(format!(
+			"Skill directory '{}' contains '{}' instead of '{}'",
+			path.display(),
+			parsed.name,
+			expected_name
+		)));
 	}
 	Ok(())
+}
+
+fn skill_directory_matches(path: &Path, expected_name: &str) -> bool {
+	validate_skill_directory(path, expected_name).is_ok()
+}
+
+fn install_skill_directory(
+	source_root: &Path,
+	dest_root: &Path,
+	expected_name: &str,
+) -> Result<()> {
+	if skill_directory_matches(dest_root, expected_name) {
+		return Ok(());
+	}
+
+	let replace_existing = match fs::symlink_metadata(dest_root) {
+		Ok(metadata) if metadata.file_type().is_symlink() => {
+			return Err(ConfigError::InvalidConfig(format!(
+				"Refusing to replace skill symlink '{}'",
+				dest_root.display()
+			)));
+		}
+		Ok(metadata) if metadata.is_dir() => true,
+		Ok(_) => {
+			return Err(ConfigError::InvalidConfig(format!(
+				"Refusing to replace non-directory skill target '{}'",
+				dest_root.display()
+			)));
+		}
+		Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+		Err(error) => return Err(ConfigError::Io(error)),
+	};
+
+	let parent = dest_root.parent().ok_or_else(|| {
+		ConfigError::InvalidConfig(format!(
+			"Skill target '{}' has no parent",
+			dest_root.display()
+		))
+	})?;
+	fs::create_dir_all(parent)?;
+	let replacement_root = tempfile::Builder::new()
+		.prefix(".aghub-reconcile-")
+		.tempdir_in(parent)?;
+	let candidate = replacement_root.path().join("skill");
+	copy_skill_directory_staged(source_root, &candidate)?;
+	validate_skill_directory(&candidate, expected_name)?;
+
+	if !replace_existing {
+		fs::rename(&candidate, dest_root)?;
+		return validate_skill_directory(dest_root, expected_name);
+	}
+
+	let previous = replacement_root.path().join("previous");
+	fs::rename(dest_root, &previous)?;
+	if let Err(install_error) = fs::rename(&candidate, dest_root) {
+		if let Err(restore_error) = fs::rename(&previous, dest_root) {
+			return Err(ConfigError::InvalidConfig(format!(
+				"Failed to install skill at '{}': {install_error}; \
+				 failed to restore the previous directory: {restore_error}",
+				dest_root.display()
+			)));
+		}
+		return Err(ConfigError::Io(install_error));
+	}
+
+	validate_skill_directory(dest_root, expected_name)
 }
 
 fn skill_target_dir(target: &InstallTarget) -> Result<PathBuf> {
@@ -605,6 +673,7 @@ pub fn transfer_skill(
 ) -> Result<OperationBatchResult> {
 	let skill = load_source_skill(&source)?;
 	let source_root = resolve_skill_root(&skill)?;
+	validate_skill_directory(&source_root, &skill.name)?;
 	let safe_name = sanitize_name(&skill.name);
 	let destinations = unique_targets(destinations);
 	info!(
@@ -630,7 +699,7 @@ pub fn transfer_skill(
 				return Err(ConfigError::resource_exists("skill", &skill.name));
 			}
 
-			copy_dir_recursive(&source_root, &dest_root)
+			copy_skill_directory_staged(&source_root, &dest_root)
 		})();
 		log_operation_outcome(
 			"skill",
@@ -658,6 +727,7 @@ pub fn reconcile_skill(
 ) -> Result<OperationBatchResult> {
 	let skill = load_source_skill(&source)?;
 	let source_root = resolve_skill_root(&skill)?;
+	validate_skill_directory(&source_root, &skill.name)?;
 	let safe_name = sanitize_name(&skill.name);
 	info!(
 		"reconciling skill '{}' with {} added and {} removed agent(s)",
@@ -680,29 +750,8 @@ pub fn reconcile_skill(
 	// Process each unique directory
 	for (target_dir, agents) in dir_to_agents {
 		let dest_root = target_dir.join(&safe_name);
-		let already_exists = dest_root.exists();
-
-		// Copy once per directory (if doesn't exist)
-		if !already_exists {
-			if let Err(e) = copy_dir_recursive(&source_root, &dest_root) {
-				// If copy fails, all agents in this group fail
-				for agent in agents {
-					results.push(OperationResult {
-						target: InstallTarget {
-							agent,
-							scope: target_scope,
-							project_root: target_project_root.clone(),
-						},
-						action: OperationAction::Copy,
-						success: false,
-						error: Some(e.to_string()),
-					});
-				}
-				continue;
-			}
-		}
-
-		// All agents in this group succeed (skill is auto-discovered from dir)
+		let outcome =
+			install_skill_directory(&source_root, &dest_root, &skill.name);
 		for agent in agents {
 			results.push(OperationResult {
 				target: InstallTarget {
@@ -711,8 +760,8 @@ pub fn reconcile_skill(
 					project_root: target_project_root.clone(),
 				},
 				action: OperationAction::Copy,
-				success: true,
-				error: None,
+				success: outcome.is_ok(),
+				error: outcome.as_ref().err().map(ToString::to_string),
 			});
 		}
 	}
@@ -1246,6 +1295,95 @@ mod tests {
 		);
 		windsurf_manager.load().unwrap();
 		assert!(windsurf_manager.get_skill("shared-skill").is_some());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn reconcile_skill_rejects_broken_symlink_without_partial_install() {
+		let _guard = env_lock().lock().unwrap();
+		let temp = tempdir().unwrap();
+		let root = temp.path().join("project");
+		fs::create_dir_all(&root).unwrap();
+
+		let mut source_manager = ConfigManager::new(
+			create_adapter(AgentType::Claude),
+			false,
+			Some(&root),
+		);
+		source_manager.load().unwrap();
+		let mut skill = Skill::new("repo-helper");
+		skill.description = Some("Copies files".to_string());
+		source_manager.add_skill(skill).unwrap();
+		let source_skill = root.join(".claude/skills/repo-helper");
+		std::os::unix::fs::symlink(
+			source_skill.join("missing-resource"),
+			source_skill.join("broken-resource"),
+		)
+		.unwrap();
+
+		let source = ResourceLocator {
+			agent: AgentType::Claude,
+			scope: InstallScope::Project,
+			project_root: Some(root.clone()),
+			name: "repo-helper".to_string(),
+		};
+		let target = AgentType::Cursor;
+		let destination_skill = root.join(".cursor/skills/repo-helper");
+
+		for _ in 0..2 {
+			let result =
+				reconcile_skill(source.clone(), vec![target], vec![]).unwrap();
+
+			assert_eq!(result.failed_count(), 1);
+			assert!(!destination_skill.exists());
+			assert!(destination_skill.symlink_metadata().is_err());
+		}
+	}
+
+	#[test]
+	fn reconcile_skill_repairs_incomplete_existing_directory() {
+		let _guard = env_lock().lock().unwrap();
+		let temp = tempdir().unwrap();
+		let root = temp.path().join("project");
+		fs::create_dir_all(&root).unwrap();
+
+		let mut source_manager = ConfigManager::new(
+			create_adapter(AgentType::Claude),
+			false,
+			Some(&root),
+		);
+		source_manager.load().unwrap();
+		let mut skill = Skill::new("repo-helper");
+		skill.description = Some("Copies files".to_string());
+		source_manager.add_skill(skill).unwrap();
+
+		let destination_skill = root.join(".cursor/skills/repo-helper");
+		fs::create_dir_all(&destination_skill).unwrap();
+		fs::write(destination_skill.join("partial.txt"), "partial").unwrap();
+
+		let result = reconcile_skill(
+			ResourceLocator {
+				agent: AgentType::Claude,
+				scope: InstallScope::Project,
+				project_root: Some(root.clone()),
+				name: "repo-helper".to_string(),
+			},
+			vec![AgentType::Cursor],
+			vec![],
+		)
+		.unwrap();
+
+		assert_eq!(result.success_count(), 1);
+		assert!(destination_skill.join("SKILL.md").is_file());
+		assert!(!destination_skill.join("partial.txt").exists());
+
+		let mut dest_manager = ConfigManager::new(
+			create_adapter(AgentType::Cursor),
+			false,
+			Some(&root),
+		);
+		dest_manager.load().unwrap();
+		assert!(dest_manager.get_skill("repo-helper").is_some());
 	}
 
 	#[test]

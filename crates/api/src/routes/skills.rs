@@ -2,7 +2,7 @@ use aghub_cc_plugins::claude::ClaudePluginManager;
 use aghub_core::{
 	convert_skill, create_adapter,
 	errors::ConfigError,
-	load_all_agents,
+	load_all_agent_skill_locations,
 	models::{AgentType, ResourceScope, Skill},
 	registry, transfer,
 };
@@ -10,6 +10,7 @@ use rocket::http::Status;
 use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
 use skill::sanitize::sanitize_name;
+use skill::snapshot::FileDiffKind;
 use std::{
 	collections::{HashMap, HashSet},
 	path::{Component, Path, PathBuf},
@@ -29,7 +30,14 @@ use crate::{
 		GitScanSkillEntry, GitSyncRequest, GitSyncResponse,
 		GlobalSkillLockResponse, InstallSkillRequest, InstallSkillResponse,
 		LocalSkillLockEntryResponse, ProjectLockQuery,
-		ProjectSkillLockResponse, SkillContentQuery, SkillLockEntryResponse,
+		ProjectSkillLockResponse, SkillContentQuery,
+		SkillCopyResolutionRequest, SkillCopyResolutionResponse,
+		SkillCopyResolutionResult, SkillCopyStatusRequest,
+		SkillCopyStatusResponse, SkillCopyStatusResult,
+		SkillCopyStorageModeRequest, SkillDiffReferenceRequest,
+		SkillDiffRequest, SkillDiffResponse, SkillDirectoryDiffResponse,
+		SkillFileDiffKindResponse, SkillFileDiffResponse, SkillLinkResponse,
+		SkillLinkStatusResponse, SkillLocationResponse, SkillLockEntryResponse,
 		SkillResponse, SkillTreeNodeKind, SkillTreeNodeResponse,
 		SkillTreeQuery, UpdateSkillRequest, ValidationError,
 	},
@@ -49,6 +57,33 @@ const SKILL_PATH_OUTSIDE_ROOT: &str = "SKILL_PATH_OUTSIDE_ROOT";
 const SKILL_PATH_NOT_FOUND: &str = "SKILL_PATH_NOT_FOUND";
 const INVALID_SKILL_PATH: &str = "INVALID_SKILL_PATH";
 const SESSION_REMOTE_MISMATCH: &str = "SESSION_REMOTE_MISMATCH";
+const MAX_SKILL_DIFF_TARGETS: usize = 32;
+pub(crate) const MAX_SKILL_COPY_RESOLUTION_TARGETS: usize = 32;
+const MAX_SKILL_COPY_STATUS_GROUPS: usize = 256;
+const MAX_SKILL_COPY_STATUS_PATHS: usize = 1024;
+// A request may compare many small installations, but all hashing work shares
+// one input budget so a batch cannot multiply the per-directory limit.
+const MAX_SKILL_DIFF_BATCH_BYTES: u64 = 256 * 1024 * 1024;
+// Resolution hashes the live and frozen reference plus every target before
+// and after its backup move, fitting within twice the comparison budget.
+const MAX_SKILL_COPY_RESOLUTION_BATCH_BYTES: u64 =
+	MAX_SKILL_DIFF_BATCH_BYTES * 2;
+// Freezing and staging share one write budget so a multi-target resolution
+// cannot multiply a large reference into unbounded temporary disk usage.
+pub(crate) const MAX_SKILL_COPY_RESOLUTION_BATCH_WRITE_BYTES: u64 =
+	MAX_SKILL_COPY_RESOLUTION_BATCH_BYTES;
+// Keep copied trees aligned with the entry, buffer, and VCS exclusions used by
+// crates/skill/src/snapshot.rs when it defines a comparable skill version.
+const MAX_SKILL_COPY_ENTRIES: usize = 10_000;
+// A batch can compare every supported agent location while keeping response
+// text small enough for an interactive desktop view.
+const MAX_SKILL_DIFF_RESPONSE_PREVIEW_BYTES: usize = 4 * 1024 * 1024;
+// Each batch reads two or more directory trees. Two workers avoid saturating
+// local storage when multiple panels refresh together.
+static SKILL_DIFF_PERMITS: tokio::sync::Semaphore =
+	tokio::sync::Semaphore::const_new(2);
+static SKILL_COPY_RESOLUTION_PERMITS: tokio::sync::Semaphore =
+	tokio::sync::Semaphore::const_new(1);
 
 #[derive(rocket::FromForm)]
 pub(crate) struct SkillListParams {
@@ -279,7 +314,7 @@ fn known_skill_paths(
 	resource_scope: ResourceScope,
 	project_root: Option<&Path>,
 ) -> Vec<KnownSkillPath> {
-	load_all_agents(resource_scope, project_root)
+	load_all_agent_skill_locations(resource_scope, project_root)
 		.into_iter()
 		.flat_map(|resources| resources.skills)
 		.filter_map(|skill| {
@@ -590,48 +625,181 @@ fn get_skill_root(path: std::path::PathBuf) -> std::path::PathBuf {
 	}
 }
 
-fn copy_dir_recursive(
-	from: &std::path::Path,
-	to: &std::path::Path,
-) -> Result<(), ApiError> {
-	std::fs::create_dir_all(to)
-		.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
-	for entry in std::fs::read_dir(from)
-		.map_err(|e| ApiError::from(ConfigError::Io(e)))?
-	{
-		let entry = entry.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
-		let from_path = entry.path();
-		let to_path = to.join(entry.file_name());
-		let file_type = entry
-			.file_type()
-			.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
-		if file_type.is_dir() {
-			copy_dir_recursive(&from_path, &to_path)?;
-		} else {
-			std::fs::copy(&from_path, &to_path)
-				.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
+#[derive(Clone, Copy)]
+enum SkillLinkCopyMode<'a> {
+	PreserveWithin(&'a Path),
+	MaterializeWithin(&'a Path),
+}
+
+fn copy_skill_dir_with_budget(
+	from: &Path,
+	to: &Path,
+	remaining_bytes: &mut u64,
+	link_mode: SkillLinkCopyMode<'_>,
+) -> Result<u64, ApiError> {
+	let link_treatment = match link_mode {
+		SkillLinkCopyMode::PreserveWithin(root) => {
+			skill::copy::LinkTreatment::PreserveWithin(root)
+		}
+		SkillLinkCopyMode::MaterializeWithin(root) => {
+			skill::copy::LinkTreatment::MaterializeWithin(root)
+		}
+	};
+	skill::copy::copy_directory_with_budget(
+		from,
+		to,
+		remaining_bytes,
+		MAX_SKILL_COPY_ENTRIES,
+		link_treatment,
+	)
+	.map_err(map_skill_copy_error)
+}
+
+fn map_skill_copy_error(error: skill::copy::SkillCopyError) -> ApiError {
+	match error {
+		skill::copy::SkillCopyError::ByteLimit
+		| skill::copy::SkillCopyError::EntryLimit { .. } => skill_copy_write_limit(),
+		skill::copy::SkillCopyError::InvalidSource(message) => {
+			skill_path_error(Status::BadRequest, message, INVALID_SKILL_PATH)
+		}
+		skill::copy::SkillCopyError::Io(error) => {
+			ApiError::from(ConfigError::Io(error))
 		}
 	}
-	Ok(())
 }
 
+fn skill_copy_write_limit() -> ApiError {
+	ApiError::new(
+		Status::PayloadTooLarge,
+		"Skill copy exceeds its batch write limit",
+		"SKILL_COPY_WRITE_LIMIT",
+	)
+}
+
+#[cfg(test)]
 fn cleanup_path(path: &Path) {
-	if let Ok(metadata) = std::fs::symlink_metadata(path) {
-		let result = if metadata.file_type().is_symlink() {
-			std::fs::remove_file(path)
-		} else if metadata.is_dir() {
-			std::fs::remove_dir_all(path)
-		} else {
-			std::fs::remove_file(path)
-		};
-		let _ = result;
+	let _ = remove_path_if_exists(path);
+}
+
+fn remove_path_if_exists(path: &Path) -> std::io::Result<()> {
+	let metadata = match std::fs::symlink_metadata(path) {
+		Ok(metadata) => metadata,
+		Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+			return Ok(())
+		}
+		Err(error) => return Err(error),
+	};
+	if metadata.file_type().is_symlink() || !metadata.is_dir() {
+		std::fs::remove_file(path)
+	} else {
+		std::fs::remove_dir_all(path)
 	}
 }
 
-fn replace_skill_dir_staged(
+#[derive(Debug)]
+struct StagedSkillReplacement {
+	target: PathBuf,
+	staged: PathBuf,
+	backup: PathBuf,
+	target_exists: bool,
+}
+
+struct SkillCopyPathCleanupFailure {
+	path: PathBuf,
+	error: std::io::Error,
+}
+
+fn remove_skill_copy_temp(path: &Path) -> Option<SkillCopyPathCleanupFailure> {
+	remove_path_if_exists(path)
+		.err()
+		.map(|error| SkillCopyPathCleanupFailure {
+			path: path.to_path_buf(),
+			error,
+		})
+}
+
+fn finish_skill_copy_temp_cleanup(
+	error: ApiError,
+	failures: Vec<SkillCopyPathCleanupFailure>,
+) -> ApiError {
+	if failures.is_empty() {
+		return error;
+	}
+	let preserved = failures
+		.into_iter()
+		.map(|failure| {
+			format!("'{}' ({})", failure.path.display(), failure.error)
+		})
+		.collect::<Vec<_>>()
+		.join("; ");
+	ApiError::new(
+		Status::InternalServerError,
+		format!(
+			"Skill copy operation failed after '{}'; remove the preserved temporary paths: {preserved}",
+			error.body.error
+		),
+		"SKILL_COPY_TEMP_CLEANUP_FAILED",
+	)
+}
+
+#[cfg(test)]
+fn stage_skill_dir_replacement(
 	source_dir: &Path,
 	target_dir: &Path,
-) -> Result<(), ApiError> {
+) -> Result<StagedSkillReplacement, ApiError> {
+	stage_skill_dir_replacement_with(source_dir, target_dir, |from, to| {
+		let mut remaining_bytes = MAX_SKILL_COPY_RESOLUTION_BATCH_WRITE_BYTES;
+		copy_skill_dir_with_budget(
+			from,
+			to,
+			&mut remaining_bytes,
+			SkillLinkCopyMode::PreserveWithin(from),
+		)
+		.map(|_| ())
+	})
+}
+
+fn stage_skill_dir_replacement_with_budget(
+	source_dir: &Path,
+	target_dir: &Path,
+	remaining_bytes: &mut u64,
+) -> Result<StagedSkillReplacement, ApiError> {
+	stage_skill_dir_replacement_with(source_dir, target_dir, |from, to| {
+		copy_skill_dir_with_budget(
+			from,
+			to,
+			remaining_bytes,
+			SkillLinkCopyMode::PreserveWithin(from),
+		)
+		.map(|_| ())
+	})
+}
+
+fn stage_git_skill_dir_replacement(
+	repository_root: &Path,
+	source_dir: &Path,
+	target_dir: &Path,
+) -> Result<StagedSkillReplacement, ApiError> {
+	stage_skill_dir_replacement_with(source_dir, target_dir, |from, to| {
+		let mut remaining_bytes = MAX_SKILL_COPY_RESOLUTION_BATCH_WRITE_BYTES;
+		copy_skill_dir_with_budget(
+			from,
+			to,
+			&mut remaining_bytes,
+			SkillLinkCopyMode::MaterializeWithin(repository_root),
+		)
+		.map(|_| ())
+	})
+}
+
+fn stage_skill_dir_replacement_with<F>(
+	source_dir: &Path,
+	target_dir: &Path,
+	copy: F,
+) -> Result<StagedSkillReplacement, ApiError>
+where
+	F: FnOnce(&Path, &Path) -> Result<(), ApiError>,
+{
 	let parent = target_dir.parent().ok_or_else(|| {
 		skill_path_error(
 			Status::BadRequest,
@@ -647,41 +815,293 @@ fn replace_skill_dir_staged(
 	let staged = parent.join(format!(".aghub-tmp-{target_name}-{suffix}"));
 	let backup = parent.join(format!(".aghub-backup-{target_name}-{suffix}"));
 
-	cleanup_path(&staged);
-	cleanup_path(&backup);
-
-	copy_dir_recursive(source_dir, &staged).inspect_err(|_| {
-		cleanup_path(&staged);
-	})?;
-
-	if let Err(e) = skill::parser::parse(&staged) {
-		cleanup_path(&staged);
-		return Err(ApiError::new(
+	for path in [&staged, &backup] {
+		match std::fs::symlink_metadata(path) {
+			Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+			Err(error) => return Err(ApiError::from(ConfigError::Io(error))),
+			Ok(_) => {
+				return Err(ApiError::new(
+					Status::InternalServerError,
+					format!(
+						"Generated skill copy path already exists: '{}'",
+						path.display()
+					),
+					"SKILL_COPY_TEMP_PATH_COLLISION",
+				));
+			}
+		}
+	}
+	if let Err(error) = copy(source_dir, &staged) {
+		return Err(finish_skill_copy_temp_cleanup(
+			error,
+			remove_skill_copy_temp(&staged).into_iter().collect(),
+		));
+	}
+	if let Err(error) = skill::parser::parse(&staged) {
+		let parse_error = ApiError::new(
 			Status::BadRequest,
-			format!("Replacement skill is invalid: {e}"),
+			format!("Replacement skill is invalid: {error}"),
 			"SKILL_PARSE_FAILED",
+		);
+		return Err(finish_skill_copy_temp_cleanup(
+			parse_error,
+			remove_skill_copy_temp(&staged).into_iter().collect(),
 		));
 	}
 
-	let target_exists = std::fs::symlink_metadata(target_dir).is_ok();
-	if target_exists {
-		std::fs::rename(target_dir, &backup)
-			.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
+	Ok(StagedSkillReplacement {
+		target: target_dir.to_path_buf(),
+		staged,
+		backup,
+		target_exists: std::fs::symlink_metadata(target_dir).is_ok(),
+	})
+}
+
+fn stage_skill_copy_replacements_with_budget(
+	source_dir: &Path,
+	target_dirs: &[PathBuf],
+	source_bytes: u64,
+	remaining_bytes: &mut u64,
+) -> Result<Vec<StagedSkillReplacement>, ApiError> {
+	let projected_bytes = source_bytes
+		.checked_mul(target_dirs.len() as u64)
+		.ok_or_else(skill_copy_write_limit)?;
+	if projected_bytes > *remaining_bytes {
+		return Err(skill_copy_write_limit());
 	}
 
-	match std::fs::rename(&staged, target_dir) {
-		Ok(()) => {
-			cleanup_path(&backup);
-			Ok(())
-		}
-		Err(e) => {
-			if target_exists {
-				let _ = std::fs::rename(&backup, target_dir);
+	let mut replacements = Vec::with_capacity(target_dirs.len());
+	for target_dir in target_dirs {
+		let replacement = match stage_skill_dir_replacement_with_budget(
+			source_dir,
+			target_dir,
+			remaining_bytes,
+		) {
+			Ok(replacement) => replacement,
+			Err(error) => {
+				return Err(finish_skill_copy_temp_cleanup(
+					error,
+					cleanup_staged_skill_replacements(&replacements),
+				));
 			}
-			cleanup_path(&staged);
-			Err(ApiError::from(ConfigError::Io(e)))
+		};
+		replacements.push(replacement);
+	}
+	Ok(replacements)
+}
+
+fn cleanup_staged_skill_replacements(
+	replacements: &[StagedSkillReplacement],
+) -> Vec<SkillCopyPathCleanupFailure> {
+	replacements
+		.iter()
+		.filter_map(|replacement| remove_skill_copy_temp(&replacement.staged))
+		.collect()
+}
+
+struct SkillCopyRecoveryFailure {
+	target: PathBuf,
+	backup: Option<PathBuf>,
+	error: std::io::Error,
+}
+
+fn rollback_staged_skill_replacement(
+	replacement: &StagedSkillReplacement,
+	target_replaced: bool,
+) -> Result<(), SkillCopyRecoveryFailure> {
+	if target_replaced {
+		if let Err(error) = remove_path_if_exists(&replacement.target) {
+			return Err(SkillCopyRecoveryFailure {
+				target: replacement.target.clone(),
+				backup: replacement
+					.target_exists
+					.then(|| replacement.backup.clone()),
+				error,
+			});
 		}
 	}
+	if replacement.target_exists {
+		std::fs::rename(&replacement.backup, &replacement.target).map_err(
+			|error| SkillCopyRecoveryFailure {
+				target: replacement.target.clone(),
+				backup: Some(replacement.backup.clone()),
+				error,
+			},
+		)?;
+	}
+	Ok(())
+}
+
+fn apply_staged_skill_replacements(
+	replacements: &[StagedSkillReplacement],
+) -> Result<(), ApiError> {
+	apply_staged_skill_replacements_with_backup_check(replacements, |_, _| {
+		Ok(())
+	})
+}
+
+fn apply_staged_skill_replacements_with_backup_check<F>(
+	replacements: &[StagedSkillReplacement],
+	check_backup: F,
+) -> Result<(), ApiError>
+where
+	F: FnMut(usize, &StagedSkillReplacement) -> Result<(), ApiError>,
+{
+	apply_staged_skill_replacements_with_checks(
+		replacements,
+		check_backup,
+		remove_path_if_exists,
+	)
+}
+
+fn apply_staged_skill_replacements_with_checks<F, G>(
+	replacements: &[StagedSkillReplacement],
+	mut check_backup: F,
+	mut cleanup_backup: G,
+) -> Result<(), ApiError>
+where
+	F: FnMut(usize, &StagedSkillReplacement) -> Result<(), ApiError>,
+	G: FnMut(&Path) -> std::io::Result<()>,
+{
+	for (index, replacement) in replacements.iter().enumerate() {
+		let moved = if replacement.target_exists {
+			if let Err(error) =
+				std::fs::rename(&replacement.target, &replacement.backup)
+			{
+				return Err(finish_skill_copy_batch_failure(
+					ApiError::from(ConfigError::Io(error)),
+					replacements,
+					index,
+					false,
+				));
+			}
+			true
+		} else {
+			false
+		};
+
+		if let Err(error) = check_backup(index, replacement) {
+			return Err(finish_skill_copy_batch_failure(
+				error,
+				replacements,
+				index,
+				moved,
+			));
+		}
+
+		if let Err(error) =
+			std::fs::rename(&replacement.staged, &replacement.target)
+		{
+			return Err(finish_skill_copy_batch_failure(
+				ApiError::from(ConfigError::Io(error)),
+				replacements,
+				index,
+				moved,
+			));
+		}
+	}
+
+	let mut cleanup_failures = Vec::new();
+	for replacement in replacements {
+		if let Err(error) = cleanup_backup(&replacement.backup) {
+			cleanup_failures
+				.push(format!("'{}' ({error})", replacement.backup.display()));
+		}
+	}
+	if !cleanup_failures.is_empty() {
+		return Err(ApiError::new(
+			Status::InternalServerError,
+			format!(
+				"Skill copies were replaced, but backup cleanup failed. Remove the preserved backups: {}",
+				cleanup_failures.join("; ")
+			),
+			"SKILL_COPY_BACKUP_CLEANUP_FAILED",
+		));
+	}
+	Ok(())
+}
+
+fn finish_skill_copy_batch_failure(
+	error: ApiError,
+	replacements: &[StagedSkillReplacement],
+	activated: usize,
+	current_moved: bool,
+) -> ApiError {
+	let mut recovery_failures = Vec::new();
+	if current_moved {
+		if let Err(failure) =
+			rollback_staged_skill_replacement(&replacements[activated], false)
+		{
+			recovery_failures.push(failure);
+		}
+	}
+	for replacement in replacements[..activated].iter().rev() {
+		if let Err(failure) =
+			rollback_staged_skill_replacement(replacement, true)
+		{
+			recovery_failures.push(failure);
+		}
+	}
+	let temp_cleanup_failures = cleanup_staged_skill_replacements(replacements);
+
+	if recovery_failures.is_empty() {
+		return finish_skill_copy_temp_cleanup(error, temp_cleanup_failures);
+	}
+
+	let recovery_steps = recovery_failures
+		.into_iter()
+		.map(|failure| match failure.backup {
+			Some(backup) => format!(
+				"restore '{}' to '{}' ({})",
+				backup.display(),
+				failure.target.display(),
+				failure.error
+			),
+			None => format!(
+				"remove partial target '{}' ({})",
+				failure.target.display(),
+				failure.error
+			),
+		})
+		.chain(temp_cleanup_failures.into_iter().map(|failure| {
+			format!(
+				"remove temporary path '{}' ({})",
+				failure.path.display(),
+				failure.error
+			)
+		}))
+		.collect::<Vec<_>>()
+		.join("; ");
+	ApiError::new(
+		Status::InternalServerError,
+		format!(
+			"Skill copy rollback failed after '{}'; manual recovery: {recovery_steps}",
+			error.body.error
+		),
+		"SKILL_COPY_ROLLBACK_FAILED",
+	)
+}
+
+#[cfg(test)]
+fn replace_skill_dir_staged(
+	source_dir: &Path,
+	target_dir: &Path,
+) -> Result<(), ApiError> {
+	let replacement = stage_skill_dir_replacement(source_dir, target_dir)?;
+	apply_staged_skill_replacements(&[replacement])
+}
+
+fn replace_git_skill_dir_staged(
+	repository_root: &Path,
+	source_dir: &Path,
+	target_dir: &Path,
+) -> Result<(), ApiError> {
+	let replacement = stage_git_skill_dir_replacement(
+		repository_root,
+		source_dir,
+		target_dir,
+	)?;
+	apply_staged_skill_replacements(&[replacement])
 }
 
 fn resolve_git_install_target_dir(
@@ -694,6 +1114,7 @@ fn resolve_git_install_target_dir(
 }
 
 fn install_git_skill_to_dir(
+	repository_root: &std::path::Path,
 	full_path: &std::path::Path,
 	target_dir: &std::path::Path,
 ) -> Result<String, ApiError> {
@@ -708,9 +1129,17 @@ fn install_git_skill_to_dir(
 	let safe_name = sanitize_name(&skill.name);
 	let dest_root = target_dir.join(&safe_name);
 
-	if !dest_root.exists() {
-		let source_root = get_skill_root(full_path.to_path_buf());
-		copy_dir_recursive(&source_root, &dest_root)?;
+	match std::fs::symlink_metadata(&dest_root) {
+		Ok(_) => {}
+		Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+			let source_root = get_skill_root(full_path.to_path_buf());
+			replace_git_skill_dir_staged(
+				repository_root,
+				&source_root,
+				&dest_root,
+			)?;
+		}
+		Err(error) => return Err(ApiError::from(ConfigError::Io(error))),
 	}
 
 	Ok(skill.name)
@@ -905,6 +1334,34 @@ fn validate_existing_skill_target_dir(
 	Ok(target_dir)
 }
 
+fn existing_skill_entry_path(path: &Path) -> Result<PathBuf, ApiError> {
+	let name = path.file_name().ok_or_else(|| {
+		skill_path_error(
+			Status::BadRequest,
+			format!("Skill path '{}' has no file name", path.display()),
+			INVALID_SKILL_PATH,
+		)
+	})?;
+	let parent = canonical_existing_parent(path)?;
+	let entry = parent.join(name);
+	std::fs::symlink_metadata(&entry).map_err(|error| {
+		let (status, code) = if error.kind() == std::io::ErrorKind::NotFound {
+			(Status::NotFound, SKILL_PATH_NOT_FOUND)
+		} else {
+			(Status::BadRequest, INVALID_SKILL_PATH)
+		};
+		skill_path_error(
+			status,
+			format!(
+				"Failed to inspect skill path '{}': {error}",
+				entry.display()
+			),
+			code,
+		)
+	})?;
+	Ok(entry)
+}
+
 fn map_repo_discovery_error(error: skill::RepoDiscoveryError) -> ApiError {
 	match error {
 		skill::RepoDiscoveryError::NoSkillsFound
@@ -995,6 +1452,7 @@ fn detect_available_editor() -> Option<CodeEditorType> {
 }
 
 fn build_skill_tree_node(
+	root: &std::path::Path,
 	path: &std::path::Path,
 ) -> Result<SkillTreeNodeResponse, ApiError> {
 	let metadata = std::fs::symlink_metadata(path).map_err(|e| {
@@ -1004,18 +1462,28 @@ fn build_skill_tree_node(
 			"SKILL_PATH_NOT_FOUND",
 		)
 	})?;
-	if metadata.file_type().is_symlink() {
-		return Err(ApiError::new(
-			Status::BadRequest,
-			format!("Skill tree cannot include symlink '{}'", path.display()),
-			INVALID_SKILL_PATH,
-		));
-	}
-
 	let name = path
 		.file_name()
 		.map(|name| name.to_string_lossy().to_string())
 		.unwrap_or_else(|| path.display().to_string());
+	if metadata.file_type().is_symlink() {
+		let link = skill::link::inspect_skill_link(root, path)
+			.map(skill_link_response)
+			.map_err(|error| {
+				ApiError::new(
+					Status::BadRequest,
+					format!("Failed to inspect skill link: {error}"),
+					INVALID_SKILL_PATH,
+				)
+			})?;
+		return Ok(SkillTreeNodeResponse {
+			name,
+			path: path.display().to_string(),
+			kind: SkillTreeNodeKind::Symlink,
+			children: Vec::new(),
+			link: Some(link),
+		});
+	}
 
 	if metadata.is_dir() {
 		let mut entries: Vec<_> = std::fs::read_dir(path)
@@ -1045,7 +1513,7 @@ fn build_skill_tree_node(
 
 		let children = entries
 			.into_iter()
-			.map(|entry| build_skill_tree_node(&entry.path()))
+			.map(|entry| build_skill_tree_node(root, &entry.path()))
 			.collect::<Result<Vec<_>, _>>()?;
 
 		return Ok(SkillTreeNodeResponse {
@@ -1053,6 +1521,7 @@ fn build_skill_tree_node(
 			path: path.display().to_string(),
 			kind: SkillTreeNodeKind::Directory,
 			children,
+			link: None,
 		});
 	}
 
@@ -1061,7 +1530,28 @@ fn build_skill_tree_node(
 		path: path.display().to_string(),
 		kind: SkillTreeNodeKind::File,
 		children: Vec::new(),
+		link: None,
 	})
+}
+
+fn skill_link_response(link: skill::link::SkillLink) -> SkillLinkResponse {
+	SkillLinkResponse {
+		target: link.target,
+		status: match link.status {
+			skill::link::SkillLinkStatus::Valid => {
+				SkillLinkStatusResponse::Valid
+			}
+			skill::link::SkillLinkStatus::Broken => {
+				SkillLinkStatusResponse::Broken
+			}
+			skill::link::SkillLinkStatus::OutsideRoot => {
+				SkillLinkStatusResponse::OutsideRoot
+			}
+			skill::link::SkillLinkStatus::Unreadable => {
+				SkillLinkStatusResponse::Unreadable
+			}
+		},
+	}
 }
 
 fn check_skills_supported(
@@ -1354,20 +1844,46 @@ pub(crate) async fn list_all_agents_skills(
 		.await
 		.map(|manager| manager.list_plugins().to_vec())
 		.unwrap_or_default();
-	let items = load_all_agents(resource_scope, project_root.as_deref())
-		.into_iter()
-		.flat_map(|ar| {
-			let agent_id = ar.agent_id;
-			let plugins = &detected_plugins;
-			ar.skills.into_iter().filter_map(move |skill| {
-				if !include_managed && is_plugin_managed_skill(&skill, plugins)
-				{
-					return None;
+	let mut items = Vec::new();
+	for agent in
+		load_all_agent_skill_locations(resource_scope, project_root.as_deref())
+	{
+		let mut item_indices = HashMap::new();
+		let mut hidden_names = HashSet::new();
+		for skill in agent.skills {
+			if hidden_names.contains(&skill.name) {
+				continue;
+			}
+			let is_managed = is_plugin_managed_skill(&skill, &detected_plugins);
+			let (Some(source_path), Some(source)) =
+				(skill.source_path.clone(), skill.config_source)
+			else {
+				continue;
+			};
+			let location = SkillLocationResponse {
+				source_path,
+				canonical_path: skill.canonical_path.clone(),
+				source: source.into(),
+			};
+			if let Some(index) = item_indices.get(&skill.name).copied() {
+				if !include_managed && is_managed {
+					continue;
 				}
-				Some(SkillResponse::from_agent_skill(skill, agent_id))
-			})
-		})
-		.collect();
+				let item: &mut SkillResponse = &mut items[index];
+				item.locations.get_or_insert_with(Vec::new).push(location);
+				continue;
+			}
+			if !include_managed && is_managed {
+				hidden_names.insert(skill.name);
+				continue;
+			}
+			let mut response =
+				SkillResponse::from_agent_skill(skill, agent.agent_id);
+			response.locations = Some(vec![location]);
+			item_indices.insert(response.name.clone(), items.len());
+			items.push(response);
+		}
+	}
 	Ok(Json(items))
 }
 
@@ -1445,7 +1961,11 @@ pub async fn install_skill(
 
 	for skill in &selected_skills {
 		for (target_dir, agents) in &dir_groups {
-			match install_git_skill_to_dir(&skill.full_path, target_dir) {
+			match install_git_skill_to_dir(
+				temp_dir.path(),
+				&skill.full_path,
+				target_dir,
+			) {
 				Ok(skill_name) => {
 					installed_skill_names.insert(skill_name);
 					let _ = agents;
@@ -1587,8 +2107,806 @@ pub fn get_skill_tree(
 	let root = get_skill_root(path);
 	let canonical_root = canonical_existing(&root)?;
 	ensure_skill_tree_allowed(&canonical_root, &roots, &known)?;
-	let tree = build_skill_tree_node(&canonical_root)?;
+	let tree = build_skill_tree_node(&canonical_root, &canonical_root)?;
 	Ok(Json(tree))
+}
+
+#[post("/skills/diff", data = "<body>")]
+pub async fn diff_skill(
+	_auth: ApiAuth,
+	body: Json<SkillDiffRequest>,
+	sessions: &rocket::State<GitCloneSessions>,
+) -> ApiResult<SkillDiffResponse> {
+	let request = body.into_inner();
+	if !(1..=MAX_SKILL_DIFF_TARGETS).contains(&request.installed_paths.len()) {
+		return Err(ApiError::new(
+			Status::BadRequest,
+			format!(
+				"Skill diff requires 1 to {MAX_SKILL_DIFF_TARGETS} installed paths"
+			),
+			"SKILL_DIFF_TARGET_LIMIT",
+		));
+	}
+
+	enum PreparedSkillDiffReference {
+		Installed(String),
+		GitScan {
+			temp_path: PathBuf,
+			scanned_skill_paths: HashSet<String>,
+			skill_path: String,
+		},
+	}
+
+	let reference = match request.reference {
+		SkillDiffReferenceRequest::Installed { source_path } => {
+			PreparedSkillDiffReference::Installed(source_path)
+		}
+		SkillDiffReferenceRequest::GitScan {
+			session_id,
+			skill_path,
+		} => {
+			let (temp_path, scanned_skill_paths) = {
+				let map = sessions.sessions.lock().unwrap();
+				let session = map.get(&session_id).ok_or_else(|| {
+					ApiError::new(
+						Status::NotFound,
+						"Session not found or expired",
+						"SESSION_NOT_FOUND",
+					)
+				})?;
+				(
+					session.temp_dir.path().to_path_buf(),
+					session.scanned_skill_paths.clone(),
+				)
+			};
+			PreparedSkillDiffReference::GitScan {
+				temp_path,
+				scanned_skill_paths,
+				skill_path,
+			}
+		}
+	};
+	let scope = ScopeParams {
+		scope: request.scope,
+		project_root: request.project_root,
+	};
+	let installed_paths = request.installed_paths;
+
+	let permit = SKILL_DIFF_PERMITS
+		.acquire()
+		.await
+		.expect("static skill diff semaphore remains open");
+	let response = tokio::task::spawn_blocking(move || {
+		let _permit = permit;
+		let resolved = scope.resolve()?;
+		let (resource_scope, project_root) =
+			resolved_to_resource_scope(&resolved);
+		let roots = canonical_skill_roots_for_registered_agents(
+			resource_scope,
+			project_root.as_deref(),
+		)
+		.map_err(public_skill_diff_path_error)?;
+		let known = known_skill_paths(resource_scope, project_root.as_deref());
+		let (reference_dir, installed_reference) = match reference {
+			PreparedSkillDiffReference::Installed(source_path) => (
+				validated_diff_directory(&source_path, &roots, &known)?,
+				true,
+			),
+			PreparedSkillDiffReference::GitScan {
+				temp_path,
+				scanned_skill_paths,
+				skill_path,
+			} => {
+				let (_, path) = validate_scanned_skill_path(
+					&temp_path,
+					&scanned_skill_paths,
+					&skill_path,
+				)
+				.map_err(public_skill_diff_path_error)?;
+				(
+					canonical_existing(&get_skill_root(path))
+						.map_err(public_skill_diff_path_error)?,
+					false,
+				)
+			}
+		};
+		let mut seen_targets = HashSet::new();
+		let mut target_dirs = Vec::with_capacity(installed_paths.len());
+		for installed_path in installed_paths {
+			let target_dir =
+				match validated_diff_directory(&installed_path, &roots, &known)
+				{
+					Ok(path) => path,
+					Err(_) => {
+						target_dirs.push(None);
+						continue;
+					}
+				};
+			if installed_reference && target_dir == reference_dir {
+				return Err(ApiError::new(
+					Status::BadRequest,
+					"Skill diff reference cannot also be an installed target",
+					"DUPLICATE_SKILL_DIFF_REFERENCE",
+				));
+			}
+			if !seen_targets.insert(target_dir.clone()) {
+				return Err(ApiError::new(
+					Status::BadRequest,
+					"Skill diff installed paths must be unique",
+					"DUPLICATE_SKILL_DIFF_TARGET",
+				));
+			}
+			target_dirs.push(Some(target_dir));
+		}
+		compare_skill_diff_batch(&reference_dir, target_dirs)
+	})
+	.await
+	.map_err(|error| {
+		ApiError::new(
+			Status::InternalServerError,
+			format!("Skill diff task failed: {error}"),
+			"SKILL_DIFF_TASK_FAILED",
+		)
+	})??;
+
+	Ok(Json(response))
+}
+
+#[post("/skills/copies/status", data = "<body>")]
+pub async fn get_skill_copy_status(
+	_auth: ApiAuth,
+	body: Json<SkillCopyStatusRequest>,
+) -> ApiResult<SkillCopyStatusResponse> {
+	let request = body.into_inner();
+	if !(1..=MAX_SKILL_COPY_STATUS_GROUPS).contains(&request.groups.len()) {
+		return Err(ApiError::new(
+			Status::BadRequest,
+			format!(
+				"Skill copy status requires 1 to {MAX_SKILL_COPY_STATUS_GROUPS} groups"
+			),
+			"SKILL_COPY_STATUS_GROUP_LIMIT",
+		));
+	}
+	let path_count = request
+		.groups
+		.iter()
+		.map(|group| group.source_paths.len())
+		.sum::<usize>();
+	if path_count > MAX_SKILL_COPY_STATUS_PATHS
+		|| request.groups.iter().any(|group| {
+			!(2..=MAX_SKILL_DIFF_TARGETS).contains(&group.source_paths.len())
+		}) {
+		return Err(ApiError::new(
+			Status::BadRequest,
+			format!(
+				"Skill copy status accepts 2 to {MAX_SKILL_DIFF_TARGETS} paths per group and {MAX_SKILL_COPY_STATUS_PATHS} paths total"
+			),
+			"SKILL_COPY_STATUS_PATH_LIMIT",
+		));
+	}
+	let mut names = HashSet::with_capacity(request.groups.len());
+	if request
+		.groups
+		.iter()
+		.any(|group| group.name.is_empty() || !names.insert(group.name.clone()))
+	{
+		return Err(ApiError::new(
+			Status::BadRequest,
+			"Skill copy status group names must be unique and non-empty",
+			"INVALID_SKILL_COPY_STATUS_GROUP",
+		));
+	}
+
+	let scope = ScopeParams {
+		scope: request.scope,
+		project_root: request.project_root,
+	};
+	let groups = request.groups;
+	let permit = SKILL_DIFF_PERMITS
+		.acquire()
+		.await
+		.expect("static skill diff semaphore remains open");
+	let response =
+		tokio::task::spawn_blocking(move || -> Result<_, ApiError> {
+			let _permit = permit;
+			let resolved = scope.resolve()?;
+			let (resource_scope, project_root) =
+				resolved_to_resource_scope(&resolved);
+			let roots = canonical_skill_roots_for_registered_agents(
+				resource_scope,
+				project_root.as_deref(),
+			)
+			.map_err(public_skill_diff_path_error)?;
+			let known =
+				known_skill_paths(resource_scope, project_root.as_deref());
+			let mut remaining_snapshot_bytes = MAX_SKILL_DIFF_BATCH_BYTES;
+			let mut results = Vec::with_capacity(groups.len());
+
+			for group in groups {
+				let mut hashes = HashSet::new();
+				let mut seen_paths = HashSet::new();
+				let mut unavailable = 0;
+				for source_path in group.source_paths {
+					let directory = match validated_diff_directory(
+						&source_path,
+						&roots,
+						&known,
+					) {
+						Ok(directory) => directory,
+						Err(_) => {
+							unavailable += 1;
+							continue;
+						}
+					};
+					if !seen_paths.insert(directory.clone()) {
+						continue;
+					}
+					match skill::snapshot::snapshot_directory_with_budget(
+						&directory,
+						&mut remaining_snapshot_bytes,
+					) {
+						Ok(snapshot) => {
+							hashes.insert(snapshot.hash);
+						}
+						Err(error) => {
+							log_skill_diff_snapshot_error(error);
+							unavailable += 1;
+						}
+					}
+				}
+				results.push(SkillCopyStatusResult {
+					name: group.name,
+					has_differences: hashes.len() > 1,
+					unavailable,
+				});
+			}
+
+			Ok::<_, ApiError>(SkillCopyStatusResponse { results })
+		})
+		.await
+		.map_err(|error| {
+			ApiError::new(
+				Status::InternalServerError,
+				format!("Skill copy status task failed: {error}"),
+				"SKILL_COPY_STATUS_TASK_FAILED",
+			)
+		})??;
+
+	Ok(Json(response))
+}
+
+#[post("/skills/copies/resolve", data = "<body>")]
+pub async fn resolve_skill_copies(
+	_auth: ApiAuth,
+	body: Json<SkillCopyResolutionRequest>,
+	sessions: &rocket::State<GitCloneSessions>,
+) -> ApiResult<SkillCopyResolutionResponse> {
+	let request = body.into_inner();
+	if !(1..=MAX_SKILL_COPY_RESOLUTION_TARGETS).contains(&request.targets.len())
+	{
+		return Err(ApiError::new(
+			Status::BadRequest,
+			format!(
+				"Skill copy resolution requires 1 to {MAX_SKILL_COPY_RESOLUTION_TARGETS} targets"
+			),
+			"SKILL_COPY_TARGET_LIMIT",
+		));
+	}
+	if request.scope.as_deref() == Some("all") && request.project_root.is_none()
+	{
+		return Err(ApiError::new(
+			Status::BadRequest,
+			"project_root is required when resolving copies with scope=all",
+			"MISSING_PARAM",
+		));
+	}
+
+	enum PreparedReference {
+		Installed(String),
+		GitScan {
+			session_id: String,
+			temp_path: PathBuf,
+			scanned_skill_paths: HashSet<String>,
+			skill_path: String,
+		},
+	}
+
+	let reference = match request.reference {
+		SkillDiffReferenceRequest::Installed { source_path } => {
+			PreparedReference::Installed(source_path)
+		}
+		SkillDiffReferenceRequest::GitScan {
+			session_id,
+			skill_path,
+		} => {
+			let (temp_path, scanned_skill_paths) = {
+				let map = sessions.sessions.lock().unwrap();
+				let session = map.get(&session_id).ok_or_else(|| {
+					ApiError::new(
+						Status::NotFound,
+						"Session not found or expired",
+						"SESSION_NOT_FOUND",
+					)
+				})?;
+				(
+					session.temp_dir.path().to_path_buf(),
+					session.scanned_skill_paths.clone(),
+				)
+			};
+			PreparedReference::GitScan {
+				session_id,
+				temp_path,
+				scanned_skill_paths,
+				skill_path,
+			}
+		}
+	};
+	let scope = ScopeParams {
+		scope: request.scope,
+		project_root: request.project_root,
+	};
+	let expected_reference_hash = request.expected_reference_hash;
+	let storage_mode = request.storage_mode;
+	let targets = request.targets;
+
+	let permit = SKILL_COPY_RESOLUTION_PERMITS
+		.acquire()
+		.await
+		.expect("static skill copy resolution semaphore remains open");
+	let response = tokio::task::spawn_blocking(move || {
+		let _permit = permit;
+		let resolved = scope.resolve()?;
+		if !resolved.is_all() {
+			require_writable_scope(&resolved)?;
+		}
+		let (resource_scope, project_root) =
+			resolved_to_resource_scope(&resolved);
+		let roots = canonical_skill_roots_for_registered_agents(
+			resource_scope,
+			project_root.as_deref(),
+		)
+		.map_err(public_skill_copy_path_error)?;
+		let known = known_skill_paths(resource_scope, project_root.as_deref());
+		let (
+			reference_dir,
+			installed_reference,
+			materialize_root,
+			git_session_id,
+		) = match reference {
+			PreparedReference::Installed(source_path) => {
+				let requested = validate_existing_skill_target_dir(
+					&source_path,
+					&roots,
+					&known,
+				)
+				.map_err(public_skill_copy_path_error)?;
+				let canonical = canonical_existing(&requested)
+					.map_err(public_skill_copy_path_error)?;
+				let entry = existing_skill_entry_path(&requested)
+					.map_err(public_skill_copy_path_error)?;
+				let is_symlink = std::fs::symlink_metadata(&entry)
+					.map_err(|error| ApiError::from(ConfigError::Io(error)))?
+					.file_type()
+					.is_symlink();
+				(
+					canonical.clone(),
+					Some((entry, is_symlink)),
+					canonical,
+					None,
+				)
+			}
+			PreparedReference::GitScan {
+				session_id,
+				temp_path,
+				scanned_skill_paths,
+				skill_path,
+			} => {
+				let (_, path) = validate_scanned_skill_path(
+					&temp_path,
+					&scanned_skill_paths,
+					&skill_path,
+				)
+				.map_err(public_skill_copy_path_error)?;
+				let reference_dir = canonical_existing(&get_skill_root(path))
+					.map_err(public_skill_copy_path_error)?;
+				let materialize_root = canonical_existing(&temp_path)
+					.map_err(public_skill_copy_path_error)?;
+				(reference_dir, None, materialize_root, Some(session_id))
+			}
+		};
+		let mut remaining_snapshot_bytes =
+			MAX_SKILL_COPY_RESOLUTION_BATCH_BYTES;
+		let reference_hash = skill_copy_directory_hash(
+			&reference_dir,
+			&mut remaining_snapshot_bytes,
+		)?;
+		if reference_hash != expected_reference_hash {
+			return Err(skill_copy_changed());
+		}
+		let initial_reference_name = parse_skill_name(&reference_dir)?;
+
+		struct PreparedTarget {
+			source_path: String,
+			content_dir: PathBuf,
+			write_dir: PathBuf,
+			expected_hash: String,
+		}
+
+		let mut seen_targets = HashSet::new();
+		let mut prepared_targets = Vec::with_capacity(targets.len());
+		for target in targets {
+			let requested_dir = validate_existing_skill_target_dir(
+				&target.source_path,
+				&roots,
+				&known,
+			)
+			.map_err(public_skill_copy_path_error)?;
+			let content_dir = canonical_existing(&requested_dir)
+				.map_err(public_skill_copy_path_error)?;
+			let entry_dir = existing_skill_entry_path(&requested_dir)
+				.map_err(public_skill_copy_path_error)?;
+			let materializes_reference =
+				matches!(storage_mode, SkillCopyStorageModeRequest::Copy)
+					&& installed_reference.as_ref().is_some_and(
+						|(reference_entry, is_symlink)| {
+							*is_symlink && reference_entry == &entry_dir
+						},
+					);
+			if content_dir == reference_dir && !materializes_reference {
+				return Err(ApiError::new(
+					Status::BadRequest,
+					"Skill copy reference cannot also be a target",
+					"DUPLICATE_SKILL_COPY_REFERENCE",
+				));
+			}
+			let write_dir = match storage_mode {
+				SkillCopyStorageModeRequest::Preserve => content_dir.clone(),
+				SkillCopyStorageModeRequest::Copy => entry_dir,
+			};
+			if !materializes_reference
+				&& skill_copy_paths_overlap(&write_dir, &reference_dir)
+			{
+				return Err(skill_copy_path_overlap());
+			}
+			if !seen_targets.insert(write_dir.clone()) {
+				return Err(ApiError::new(
+					Status::BadRequest,
+					"Skill copy targets must be unique",
+					"DUPLICATE_SKILL_COPY_TARGET",
+				));
+			}
+			if prepared_targets.iter().any(|prepared: &PreparedTarget| {
+				skill_copy_paths_overlap(&write_dir, &prepared.write_dir)
+			}) {
+				return Err(skill_copy_path_overlap());
+			}
+			prepared_targets.push(PreparedTarget {
+				source_path: target.source_path,
+				content_dir,
+				write_dir,
+				expected_hash: target.expected_hash,
+			});
+		}
+
+		for target in &prepared_targets {
+			let target_hash = skill_copy_directory_hash(
+				&target.content_dir,
+				&mut remaining_snapshot_bytes,
+			)?;
+			if target_hash != target.expected_hash {
+				return Err(skill_copy_changed());
+			}
+			if parse_skill_name(&target.content_dir)? != initial_reference_name
+			{
+				return Err(skill_copy_name_mismatch());
+			}
+		}
+
+		let frozen_root = tempfile::tempdir()
+			.map_err(|error| ApiError::from(ConfigError::Io(error)))?;
+		let frozen_reference = frozen_root.path().join("skill");
+		let mut remaining_write_bytes =
+			MAX_SKILL_COPY_RESOLUTION_BATCH_WRITE_BYTES;
+		let link_mode = match storage_mode {
+			SkillCopyStorageModeRequest::Preserve => {
+				SkillLinkCopyMode::PreserveWithin(&reference_dir)
+			}
+			SkillCopyStorageModeRequest::Copy => {
+				SkillLinkCopyMode::MaterializeWithin(&materialize_root)
+			}
+		};
+		let frozen_bytes = copy_skill_dir_with_budget(
+			&reference_dir,
+			&frozen_reference,
+			&mut remaining_write_bytes,
+			link_mode,
+		)?;
+		let frozen_hash = skill_copy_directory_hash(
+			&frozen_reference,
+			&mut remaining_snapshot_bytes,
+		)?;
+		let current_reference_hash = skill_copy_directory_hash(
+			&reference_dir,
+			&mut remaining_snapshot_bytes,
+		)?;
+		if current_reference_hash != reference_hash {
+			return Err(skill_copy_changed());
+		}
+		let reference_name = parse_skill_name(&frozen_reference)?;
+		if reference_name != initial_reference_name {
+			return Err(skill_copy_changed());
+		}
+
+		let target_dirs = prepared_targets
+			.iter()
+			.map(|target| target.write_dir.clone())
+			.collect::<Vec<_>>();
+		let replacements = stage_skill_copy_replacements_with_budget(
+			&frozen_reference,
+			&target_dirs,
+			frozen_bytes,
+			&mut remaining_write_bytes,
+		)?;
+
+		apply_staged_skill_replacements_with_backup_check(
+			&replacements,
+			|index, replacement| {
+				let target = &prepared_targets[index];
+				let backup_content = canonical_existing(&replacement.backup)
+					.map_err(public_skill_copy_path_error)?;
+				let target_hash = skill_copy_directory_hash(
+					&backup_content,
+					&mut remaining_snapshot_bytes,
+				)?;
+				if target_hash != target.expected_hash {
+					return Err(skill_copy_changed());
+				}
+				if parse_skill_name(&backup_content)? != reference_name {
+					return Err(skill_copy_name_mismatch());
+				}
+				Ok(())
+			},
+		)?;
+		let mut results = Vec::with_capacity(prepared_targets.len());
+		for target in prepared_targets {
+			results.push(SkillCopyResolutionResult {
+				source_path: target.source_path,
+				content_hash: frozen_hash.clone(),
+			});
+		}
+
+		Ok((
+			SkillCopyResolutionResponse {
+				name: reference_name,
+				reference_hash,
+				results,
+			},
+			git_session_id,
+		))
+	})
+	.await
+	.map_err(|error| {
+		ApiError::new(
+			Status::InternalServerError,
+			format!("Skill copy resolution task failed: {error}"),
+			"SKILL_COPY_TASK_FAILED",
+		)
+	})??;
+
+	if let Some(session_id) = response.1 {
+		sessions.sessions.lock().unwrap().remove(&session_id);
+	}
+
+	Ok(Json(response.0))
+}
+
+fn parse_skill_name(path: &Path) -> Result<String, ApiError> {
+	skill::parser::parse(path)
+		.map(|skill| skill.name)
+		.map_err(|error| {
+			ApiError::new(
+				Status::BadRequest,
+				format!("Invalid skill copy: {error}"),
+				"SKILL_COPY_PARSE_FAILED",
+			)
+		})
+}
+
+fn skill_copy_directory_hash(
+	path: &Path,
+	remaining_bytes: &mut u64,
+) -> Result<String, ApiError> {
+	skill::snapshot::snapshot_directory_with_budget(path, remaining_bytes)
+		.map(|snapshot| encode_snapshot_hash(snapshot.hash))
+		.map_err(public_skill_copy_snapshot_error)
+}
+
+fn skill_copy_changed() -> ApiError {
+	ApiError::new(
+		Status::Conflict,
+		"A skill copy changed after comparison; compare again before resolving",
+		"SKILL_COPY_CHANGED",
+	)
+}
+
+fn skill_copy_name_mismatch() -> ApiError {
+	ApiError::new(
+		Status::BadRequest,
+		"Skill copies must have the same name",
+		"SKILL_COPY_NAME_MISMATCH",
+	)
+}
+
+fn skill_copy_paths_overlap(first: &Path, second: &Path) -> bool {
+	is_within(first, second) || is_within(second, first)
+}
+
+fn skill_copy_path_overlap() -> ApiError {
+	ApiError::new(
+		Status::BadRequest,
+		"Skill copy paths cannot contain one another",
+		"OVERLAPPING_SKILL_COPY_PATH",
+	)
+}
+
+fn public_skill_copy_snapshot_error(error: skill::SkillError) -> ApiError {
+	log::warn!("Skill copy snapshot failed: {error}");
+	ApiError::new(
+		Status::BadRequest,
+		"Skill copies could not be read",
+		"SKILL_COPY_SNAPSHOT_FAILED",
+	)
+}
+
+fn public_skill_copy_path_error(error: ApiError) -> ApiError {
+	let status = error.status;
+	let code = error.body.code;
+	log::warn!("Skill copy path validation failed: {}", error.body.error);
+	let message = match code {
+		SKILL_PATH_OUTSIDE_ROOT => "Skill path is outside configured roots",
+		SKILL_PATH_NOT_FOUND => "Skill path was not found",
+		INVALID_SKILL_PATH => "Skill path is invalid",
+		_ => "Skill path could not be resolved",
+	};
+	ApiError::new(status, message, code)
+}
+
+fn compare_skill_diff_batch(
+	reference_dir: &Path,
+	target_dirs: Vec<Option<PathBuf>>,
+) -> Result<SkillDiffResponse, ApiError> {
+	let mut remaining_snapshot_bytes = MAX_SKILL_DIFF_BATCH_BYTES;
+	let reference = skill::snapshot::snapshot_directory_with_budget(
+		reference_dir,
+		&mut remaining_snapshot_bytes,
+	)
+	.map_err(public_skill_diff_snapshot_error)?;
+	let mut results = Vec::with_capacity(target_dirs.len());
+	let mut remaining_preview_bytes = MAX_SKILL_DIFF_RESPONSE_PREVIEW_BYTES;
+	for target_dir in target_dirs {
+		let Some(target_dir) = target_dir else {
+			results.push(None);
+			continue;
+		};
+		let target = match skill::snapshot::snapshot_directory_with_budget(
+			&target_dir,
+			&mut remaining_snapshot_bytes,
+		) {
+			Ok(snapshot) => snapshot,
+			Err(error) => {
+				log_skill_diff_snapshot_error(error);
+				results.push(None);
+				continue;
+			}
+		};
+		let mut response = skill_directory_diff_response(
+			skill::snapshot::diff_snapshots(&reference, &target),
+		);
+		retain_skill_diff_previews(&mut response, &mut remaining_preview_bytes);
+		results.push(Some(response));
+	}
+
+	Ok(SkillDiffResponse { results })
+}
+
+fn validated_diff_directory(
+	source_path: &str,
+	roots: &[PathBuf],
+	known: &[KnownSkillPath],
+) -> Result<PathBuf, ApiError> {
+	let path = validate_existing_skill_target_dir(source_path, roots, known)
+		.map_err(public_skill_diff_path_error)?;
+	canonical_existing(&path).map_err(public_skill_diff_path_error)
+}
+
+fn skill_directory_diff_response(
+	diff: skill::snapshot::DirectoryDiff,
+) -> SkillDirectoryDiffResponse {
+	let files = diff
+		.files
+		.into_iter()
+		.map(|file| SkillFileDiffResponse {
+			path: file.path,
+			change: match file.kind {
+				FileDiffKind::Added => SkillFileDiffKindResponse::Added,
+				FileDiffKind::Removed => SkillFileDiffKindResponse::Removed,
+				FileDiffKind::Modified => SkillFileDiffKindResponse::Modified,
+			},
+			before: file.before,
+			after: file.after,
+			before_link: file.before_link.map(skill_link_response),
+			after_link: file.after_link.map(skill_link_response),
+			content_omitted: file.content_omitted,
+		})
+		.collect();
+
+	SkillDirectoryDiffResponse {
+		identical: diff.identical,
+		base_hash: encode_snapshot_hash(diff.base_hash),
+		target_hash: encode_snapshot_hash(diff.target_hash),
+		files,
+		files_omitted: diff.files_omitted,
+	}
+}
+
+fn retain_skill_diff_previews(
+	diff: &mut SkillDirectoryDiffResponse,
+	remaining_bytes: &mut usize,
+) {
+	for file in &mut diff.files {
+		if file.content_omitted {
+			file.before = None;
+			file.after = None;
+			continue;
+		}
+
+		let preview_bytes = file.before.as_ref().map_or(0, String::len)
+			+ file.after.as_ref().map_or(0, String::len);
+		if preview_bytes <= *remaining_bytes {
+			*remaining_bytes -= preview_bytes;
+			continue;
+		}
+
+		file.before = None;
+		file.after = None;
+		file.content_omitted = true;
+	}
+}
+
+fn public_skill_diff_snapshot_error(error: skill::SkillError) -> ApiError {
+	log_skill_diff_snapshot_error(error);
+	ApiError::new(
+		Status::BadRequest,
+		"Skill directories could not be compared",
+		"SKILL_DIFF_FAILED",
+	)
+}
+
+fn log_skill_diff_snapshot_error(error: skill::SkillError) {
+	log::warn!("Skill directory comparison failed: {error}");
+}
+
+fn public_skill_diff_path_error(error: ApiError) -> ApiError {
+	let status = error.status;
+	let code = error.body.code;
+	log::warn!("Skill diff path validation failed: {}", error.body.error);
+	let message = match code {
+		SKILL_PATH_OUTSIDE_ROOT => "Skill path is outside configured roots",
+		SKILL_PATH_NOT_FOUND => "Skill path was not found",
+		INVALID_SKILL_PATH => "Skill path is invalid",
+		_ => "Skill path could not be resolved",
+	};
+	ApiError::new(status, message, code)
+}
+
+fn encode_snapshot_hash(hash: [u8; 32]) -> String {
+	const HEX: &[u8; 16] = b"0123456789abcdef";
+	let mut encoded = String::with_capacity(hash.len() * 2);
+	for byte in hash {
+		encoded.push(HEX[(byte >> 4) as usize] as char);
+		encoded.push(HEX[(byte & 0x0f) as usize] as char);
+	}
+	encoded
 }
 
 #[get("/skills/lock/global")]
@@ -1952,7 +3270,7 @@ pub async fn git_install_skills(
 		let mut installed = false;
 
 		for (target_dir, agents) in &dir_groups {
-			match install_git_skill_to_dir(&full_path, target_dir) {
+			match install_git_skill_to_dir(&temp_path, &full_path, target_dir) {
 				Ok(skill_name) => {
 					installed = true;
 					for (agent_str, _) in agents {
@@ -2076,7 +3394,11 @@ pub async fn git_sync_skill(
 
 	// Replace each installation path
 	for target_dir in &target_dirs {
-		replace_skill_dir_staged(&cloned_skill_dir, target_dir)?;
+		replace_git_skill_dir_staged(
+			&temp_path,
+			&cloned_skill_dir,
+			target_dir,
+		)?;
 	}
 
 	// Remove session (drops TempDir, cleans up disk)
@@ -2292,27 +3614,224 @@ mod tests {
 
 	#[cfg(unix)]
 	#[test]
-	fn skill_tree_rejects_symlink_child() {
+	fn skill_tree_reports_broken_symlink_child() {
 		let temp = tempdir().unwrap();
 		let project = temp.path().join("project");
 		let skill_dir = project.join(".claude/skills/demo");
-		let outside_dir = temp.path().join("outside");
 		write_test_skill(&skill_dir, "demo", "visible body");
-		std::fs::create_dir_all(&outside_dir).unwrap();
-		std::fs::write(outside_dir.join("secret.txt"), "secret").unwrap();
-		std::os::unix::fs::symlink(&outside_dir, skill_dir.join("linked"))
-			.unwrap();
+		std::os::unix::fs::symlink(
+			"../missing.txt",
+			skill_dir.join("linked.txt"),
+		)
+		.unwrap();
 
-		let error = api_err(get_skill_tree(
+		let tree = api_ok(get_skill_tree(
 			ApiAuth,
 			SkillTreeQuery {
 				path: skill_dir.display().to_string(),
 				scope: Some("project".to_string()),
 				project_root: Some(project.display().to_string()),
 			},
-		));
+		))
+		.into_inner();
+		let link = tree
+			.children
+			.iter()
+			.find(|child| child.name == "linked.txt")
+			.unwrap();
 
-		assert_eq!(error.body.code, INVALID_SKILL_PATH);
+		assert!(matches!(link.kind, SkillTreeNodeKind::Symlink));
+		assert_eq!(link.link.as_ref().unwrap().target, "../missing.txt");
+		assert!(matches!(
+			link.link.as_ref().unwrap().status,
+			SkillLinkStatusResponse::Broken
+		));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn skill_tree_reports_valid_and_outside_symlink_children() {
+		let temp = tempdir().unwrap();
+		let project = temp.path().join("project");
+		let skill_dir = project.join(".claude/skills/demo");
+		let outside_file = project.join("outside.txt");
+		write_test_skill(&skill_dir, "demo", "visible body");
+		std::fs::write(skill_dir.join("target.txt"), "target").unwrap();
+		std::fs::write(&outside_file, "outside").unwrap();
+		std::os::unix::fs::symlink("target.txt", skill_dir.join("valid.txt"))
+			.unwrap();
+		std::os::unix::fs::symlink(
+			"../../../outside.txt",
+			skill_dir.join("outside.txt"),
+		)
+		.unwrap();
+
+		let tree = api_ok(get_skill_tree(
+			ApiAuth,
+			SkillTreeQuery {
+				path: skill_dir.display().to_string(),
+				scope: Some("project".to_string()),
+				project_root: Some(project.display().to_string()),
+			},
+		))
+		.into_inner();
+		let status = |name: &str| {
+			tree.children
+				.iter()
+				.find(|child| child.name == name)
+				.unwrap()
+				.link
+				.as_ref()
+				.unwrap()
+				.status
+				.clone()
+		};
+
+		assert!(matches!(
+			status("valid.txt"),
+			SkillLinkStatusResponse::Valid
+		));
+		assert!(matches!(
+			status("outside.txt"),
+			SkillLinkStatusResponse::OutsideRoot
+		));
+	}
+
+	#[test]
+	fn skill_diff_reports_modified_and_added_files() {
+		let temp = tempdir().unwrap();
+		let installed = temp.path().join("installed");
+		let comparison = temp.path().join("comparison");
+		write_test_skill(&installed, "demo", "old body");
+		write_test_skill(&comparison, "demo", "new body");
+		std::fs::write(comparison.join("notes.txt"), "new file").unwrap();
+
+		let response = skill_directory_diff_response(
+			skill::snapshot::compare_directories(&installed, &comparison)
+				.unwrap(),
+		);
+
+		assert!(!response.identical);
+		assert_eq!(response.base_hash.len(), 64);
+		assert_eq!(response.target_hash.len(), 64);
+		assert_eq!(response.files.len(), 2);
+		assert_eq!(response.files[0].path, "SKILL.md");
+		assert!(matches!(
+			response.files[0].change,
+			SkillFileDiffKindResponse::Modified
+		));
+		assert!(response.files[0]
+			.before
+			.as_deref()
+			.is_some_and(|content| content.contains("old body")));
+		assert!(response.files[0]
+			.after
+			.as_deref()
+			.is_some_and(|content| content.contains("new body")));
+		assert_eq!(response.files[1].path, "notes.txt");
+		assert!(matches!(
+			response.files[1].change,
+			SkillFileDiffKindResponse::Added
+		));
+	}
+
+	#[test]
+	fn skill_diff_reports_name_change() {
+		let temp = tempdir().unwrap();
+		let installed = temp.path().join("installed");
+		let comparison = temp.path().join("comparison");
+		write_test_skill(&installed, "first", "body");
+		write_test_skill(&comparison, "second", "body");
+
+		let response = skill_directory_diff_response(
+			skill::snapshot::compare_directories(&installed, &comparison)
+				.unwrap(),
+		);
+
+		assert!(!response.identical);
+		assert_eq!(response.files.len(), 1);
+		assert_eq!(response.files[0].path, "SKILL.md");
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn skill_diff_reports_link_target_status() {
+		let temp = tempdir().unwrap();
+		let installed = temp.path().join("installed");
+		let comparison = temp.path().join("comparison");
+		write_test_skill(&installed, "demo", "body");
+		write_test_skill(&comparison, "demo", "body");
+		std::fs::write(installed.join("target.txt"), "target").unwrap();
+		std::os::unix::fs::symlink("target.txt", installed.join("linked.txt"))
+			.unwrap();
+		std::os::unix::fs::symlink(
+			"missing.txt",
+			comparison.join("linked.txt"),
+		)
+		.unwrap();
+
+		let response = skill_directory_diff_response(
+			skill::snapshot::compare_directories(&installed, &comparison)
+				.unwrap(),
+		);
+		let link_diff = response
+			.files
+			.iter()
+			.find(|file| file.path == "linked.txt")
+			.unwrap();
+
+		assert!(matches!(
+			link_diff.before_link.as_ref().unwrap().status,
+			SkillLinkStatusResponse::Valid
+		));
+		assert_eq!(
+			link_diff.after_link.as_ref().unwrap().target,
+			"missing.txt"
+		);
+		assert!(matches!(
+			link_diff.after_link.as_ref().unwrap().status,
+			SkillLinkStatusResponse::Broken
+		));
+		assert!(!link_diff.content_omitted);
+	}
+
+	#[test]
+	fn skill_diff_bounds_serialized_text_previews() {
+		let mut response = SkillDirectoryDiffResponse {
+			identical: false,
+			base_hash: "base".to_string(),
+			target_hash: "target".to_string(),
+			files: vec![
+				SkillFileDiffResponse {
+					path: "kept.txt".to_string(),
+					change: SkillFileDiffKindResponse::Modified,
+					before: Some("aa".to_string()),
+					after: Some("bb".to_string()),
+					before_link: None,
+					after_link: None,
+					content_omitted: false,
+				},
+				SkillFileDiffResponse {
+					path: "omitted.txt".to_string(),
+					change: SkillFileDiffKindResponse::Modified,
+					before: Some("cc".to_string()),
+					after: Some("dd".to_string()),
+					before_link: None,
+					after_link: None,
+					content_omitted: false,
+				},
+			],
+			files_omitted: 0,
+		};
+		let mut remaining_bytes = 5;
+
+		retain_skill_diff_previews(&mut response, &mut remaining_bytes);
+
+		assert_eq!(remaining_bytes, 1);
+		assert!(!response.files[0].content_omitted);
+		assert!(response.files[1].content_omitted);
+		assert!(response.files[1].before.is_none());
+		assert!(response.files[1].after.is_none());
 	}
 
 	#[test]
@@ -2424,6 +3943,243 @@ mod tests {
 	}
 
 	#[test]
+	fn staged_skill_batch_rolls_back_after_activation_failure() {
+		let temp = tempdir().unwrap();
+		let source_dir = temp.path().join("source");
+		let first_target = temp.path().join("first-target");
+		let second_target = temp.path().join("second-target");
+		write_test_skill(&source_dir, "demo", "new body");
+		write_test_skill(&first_target, "demo", "first old body");
+		write_test_skill(&second_target, "demo", "second old body");
+		let first =
+			api_ok(stage_skill_dir_replacement(&source_dir, &first_target));
+		let second =
+			api_ok(stage_skill_dir_replacement(&source_dir, &second_target));
+		cleanup_path(&second.staged);
+
+		let error =
+			apply_staged_skill_replacements(&[first, second]).unwrap_err();
+
+		assert_eq!(error.body.code, "IO_ERROR");
+		let first_content =
+			std::fs::read_to_string(first_target.join("SKILL.md")).unwrap();
+		let second_content =
+			std::fs::read_to_string(second_target.join("SKILL.md")).unwrap();
+		assert!(first_content.contains("first old body"));
+		assert!(second_content.contains("second old body"));
+	}
+
+	#[test]
+	fn staged_skill_batch_keeps_other_targets_available() {
+		let temp = tempdir().unwrap();
+		let source = temp.path().join("source");
+		let targets = [
+			temp.path().join("first-target"),
+			temp.path().join("second-target"),
+			temp.path().join("third-target"),
+		];
+		write_test_skill(&source, "demo", "new body");
+		for (index, target) in targets.iter().enumerate() {
+			write_test_skill(target, "demo", &format!("old body {index}"));
+		}
+		let replacements = targets
+			.iter()
+			.map(|target| api_ok(stage_skill_dir_replacement(&source, target)))
+			.collect::<Vec<_>>();
+
+		api_ok(apply_staged_skill_replacements_with_backup_check(
+			&replacements,
+			|current, replacement| {
+				assert!(!replacement.target.exists());
+				for (index, target) in targets.iter().enumerate() {
+					if index != current {
+						assert!(target.exists());
+					}
+				}
+				Ok(())
+			},
+		));
+
+		for target in targets {
+			let content =
+				std::fs::read_to_string(target.join("SKILL.md")).unwrap();
+			assert!(content.contains("new body"));
+		}
+	}
+
+	#[test]
+	fn staged_skill_batch_reports_backup_cleanup_failure() {
+		let temp = tempdir().unwrap();
+		let source = temp.path().join("source");
+		let target = temp.path().join("target");
+		write_test_skill(&source, "demo", "new body");
+		write_test_skill(&target, "demo", "old body");
+		let replacement = api_ok(stage_skill_dir_replacement(&source, &target));
+		let backup = replacement.backup.clone();
+
+		let error = apply_staged_skill_replacements_with_checks(
+			&[replacement],
+			|_, _| Ok(()),
+			|_| {
+				Err(std::io::Error::new(
+					std::io::ErrorKind::PermissionDenied,
+					"backup is in use",
+				))
+			},
+		)
+		.unwrap_err();
+
+		assert_eq!(error.body.code, "SKILL_COPY_BACKUP_CLEANUP_FAILED");
+		assert!(error.body.error.contains(backup.to_string_lossy().as_ref()));
+		let content = std::fs::read_to_string(target.join("SKILL.md")).unwrap();
+		assert!(content.contains("new body"));
+		assert!(backup.exists());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn staged_skill_copy_reports_failed_temp_cleanup() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let temp = tempdir().unwrap();
+		let source = temp.path().join("source");
+		let parent = temp.path().join("targets");
+		let target = parent.join("demo");
+		write_test_skill(&source, "demo", "new body");
+		std::fs::create_dir_all(&parent).unwrap();
+		let mut staged_path = None;
+
+		let error =
+			stage_skill_dir_replacement_with(&source, &target, |_, staged| {
+				write_test_skill(staged, "demo", "partial body");
+				staged_path = Some(staged.to_path_buf());
+				std::fs::set_permissions(
+					&parent,
+					std::fs::Permissions::from_mode(0o500),
+				)
+				.unwrap();
+				Err(ApiError::new(
+					Status::InternalServerError,
+					"copy failed",
+					"COPY_FAILED",
+				))
+			})
+			.unwrap_err();
+
+		std::fs::set_permissions(
+			&parent,
+			std::fs::Permissions::from_mode(0o700),
+		)
+		.unwrap();
+		let staged_path = staged_path.unwrap();
+		assert_eq!(error.body.code, "SKILL_COPY_TEMP_CLEANUP_FAILED");
+		assert!(error
+			.body
+			.error
+			.contains(staged_path.to_string_lossy().as_ref()));
+		assert!(staged_path.exists());
+	}
+
+	#[test]
+	fn skill_copy_batch_write_budget_rejects_before_staging() {
+		let temp = tempdir().unwrap();
+		let source = temp.path().join("source");
+		let first_target = temp.path().join("first/demo");
+		let second_target = temp.path().join("second/demo");
+		write_test_skill(&source, "demo", "new body");
+		write_test_skill(&first_target, "demo", "first old body");
+		write_test_skill(&second_target, "demo", "second old body");
+		let source_bytes =
+			std::fs::metadata(source.join("SKILL.md")).unwrap().len();
+		let mut remaining_bytes = source_bytes * 2 - 1;
+
+		let error = stage_skill_copy_replacements_with_budget(
+			&source,
+			&[first_target.clone(), second_target.clone()],
+			source_bytes,
+			&mut remaining_bytes,
+		)
+		.unwrap_err();
+
+		assert_eq!(error.body.code, "SKILL_COPY_WRITE_LIMIT");
+		for parent in [
+			first_target.parent().unwrap(),
+			second_target.parent().unwrap(),
+		] {
+			assert!(!std::fs::read_dir(parent)
+				.unwrap()
+				.filter_map(Result::ok)
+				.any(|entry| entry
+					.file_name()
+					.to_string_lossy()
+					.starts_with(".aghub-tmp-")));
+		}
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn staged_skill_batch_reports_each_failed_recovery_path() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let temp = tempdir().unwrap();
+		let source = temp.path().join("source");
+		let first_target = temp.path().join("first/demo");
+		let second_target = temp.path().join("second/demo");
+		let failing_target = temp.path().join("third/demo");
+		write_test_skill(&source, "demo", "new body");
+		write_test_skill(&first_target, "demo", "first old body");
+		write_test_skill(&second_target, "demo", "second old body");
+		write_test_skill(&failing_target, "demo", "third old body");
+		let first = api_ok(stage_skill_dir_replacement(&source, &first_target));
+		let second =
+			api_ok(stage_skill_dir_replacement(&source, &second_target));
+		let failing =
+			api_ok(stage_skill_dir_replacement(&source, &failing_target));
+		let first_backup = first.backup.clone();
+		let second_backup = second.backup.clone();
+		cleanup_path(&failing.staged);
+
+		let error = apply_staged_skill_replacements_with_backup_check(
+			&[first, second, failing],
+			|index, _| {
+				if index == 2 {
+					for target in [&first_target, &second_target] {
+						std::fs::set_permissions(
+							target.parent().unwrap(),
+							std::fs::Permissions::from_mode(0o500),
+						)
+						.unwrap();
+					}
+				}
+				Ok(())
+			},
+		)
+		.unwrap_err();
+
+		for target in [&first_target, &second_target] {
+			std::fs::set_permissions(
+				target.parent().unwrap(),
+				std::fs::Permissions::from_mode(0o700),
+			)
+			.unwrap();
+		}
+		assert_eq!(error.body.code, "SKILL_COPY_ROLLBACK_FAILED");
+		assert!(error
+			.body
+			.error
+			.contains(first_backup.to_string_lossy().as_ref()));
+		assert!(error
+			.body
+			.error
+			.contains(second_backup.to_string_lossy().as_ref()));
+		assert!(first_backup.exists());
+		assert!(second_backup.exists());
+		let failing_content =
+			std::fs::read_to_string(failing_target.join("SKILL.md")).unwrap();
+		assert!(failing_content.contains("third old body"));
+	}
+
+	#[test]
 	fn git_sync_outside_source_path_is_rejected_and_not_deleted() {
 		let temp = tempdir().unwrap();
 		let project = temp.path().join("project");
@@ -2512,17 +4268,91 @@ mod tests {
 		)
 		.unwrap();
 
-		let result =
-			install_git_skill_to_dir(&source_dir.join("SKILL.md"), &target_dir)
-				.unwrap_or_else(|e| panic!("{}", e.body.error));
+		let result = install_git_skill_to_dir(
+			source_dir.parent().unwrap(),
+			&source_dir.join("SKILL.md"),
+			&target_dir,
+		)
+		.unwrap_or_else(|e| panic!("{}", e.body.error));
 		assert_eq!(result, "hello-skill");
 		assert!(target_dir.join("hello-skill/SKILL.md").exists());
 
-		let second =
-			install_git_skill_to_dir(&source_dir.join("SKILL.md"), &target_dir)
-				.unwrap_or_else(|e| panic!("{}", e.body.error));
+		let second = install_git_skill_to_dir(
+			source_dir.parent().unwrap(),
+			&source_dir.join("SKILL.md"),
+			&target_dir,
+		)
+		.unwrap_or_else(|e| panic!("{}", e.body.error));
 		assert_eq!(second, "hello-skill");
 		assert!(target_dir.join("hello-skill/SKILL.md").exists());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn git_install_materializes_file_link_within_repository() {
+		let temp = tempdir().unwrap();
+		let repository = temp.path().join("repository");
+		let source_dir = repository.join("skills/linked-skill");
+		let references = source_dir.join("references");
+		let target_dir = temp.path().join("target");
+		write_test_skill(&source_dir, "linked-skill", "body");
+		std::fs::create_dir_all(&references).unwrap();
+		std::fs::create_dir_all(repository.join("docs")).unwrap();
+		std::fs::write(repository.join("docs/example.html"), "example")
+			.unwrap();
+		std::os::unix::fs::symlink(
+			"../../../docs/example.html",
+			references.join("example.html"),
+		)
+		.unwrap();
+
+		install_git_skill_to_dir(
+			&repository,
+			&source_dir.join("SKILL.md"),
+			&target_dir,
+		)
+		.unwrap_or_else(|error| panic!("{}", error.body.error));
+		let installed = target_dir.join("linked-skill/references/example.html");
+
+		assert_eq!(std::fs::read_to_string(&installed).unwrap(), "example");
+		assert!(!std::fs::symlink_metadata(installed)
+			.unwrap()
+			.file_type()
+			.is_symlink());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn git_install_rejects_link_outside_repository_without_partial_skill() {
+		let temp = tempdir().unwrap();
+		let repository = temp.path().join("repository");
+		let source_dir = repository.join("skills/linked-skill");
+		let references = source_dir.join("references");
+		let target_dir = temp.path().join("target");
+		let outside_file = temp.path().join("outside.txt");
+		write_test_skill(&source_dir, "linked-skill", "body");
+		std::fs::create_dir_all(&references).unwrap();
+		std::fs::write(&outside_file, "outside").unwrap();
+		std::os::unix::fs::symlink(
+			&outside_file,
+			references.join("outside.txt"),
+		)
+		.unwrap();
+
+		let error = install_git_skill_to_dir(
+			&repository,
+			&source_dir.join("SKILL.md"),
+			&target_dir,
+		)
+		.unwrap_err();
+
+		assert_eq!(error.body.code, INVALID_SKILL_PATH);
+		assert!(!target_dir.join("linked-skill").exists());
+		assert!(std::fs::read_dir(&target_dir).unwrap().all(|entry| !entry
+			.unwrap()
+			.file_name()
+			.to_string_lossy()
+			.starts_with(".aghub-tmp-")));
 	}
 
 	#[test]

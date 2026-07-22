@@ -17,14 +17,19 @@ import {
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { isHTTPError } from "ky";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { GitScanSkillEntry } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
 import { CreateCredentialDialog } from "../pages/settings/components/create-credential-dialog";
 import { credentialsListQueryOptions } from "../requests/credentials";
-import { gitSyncSkillMutationOptions } from "../requests/skills";
-import type { SkillGroup } from "./skill-detail-helpers";
+import { resolveSkillCopiesMutationOptions } from "../requests/skills";
+import {
+	GithubSkillDrift,
+	type GithubSkillResolutionChoice,
+} from "./github-skill-drift";
+import { type SkillGroup, uniqueSkillLocations } from "./skill-detail-helpers";
 
 interface SyncGithubSkillDialogProps {
 	group: SkillGroup;
@@ -51,7 +56,7 @@ export function SyncGithubSkillDialog({
 	const queryClient = useQueryClient();
 
 	const [phase, setPhase] = useState<
-		"idle" | "scanning" | "scanned" | "syncing" | "done"
+		"idle" | "scanning" | "scanned" | "syncing"
 	>("idle");
 	const [isPrivateRepo, setIsPrivateRepo] = useState(false);
 	const [credentialId, setCredentialId] = useState<string>("");
@@ -62,6 +67,9 @@ export function SyncGithubSkillDialog({
 	const [scannedSkills, setScannedSkills] = useState<GitScanSkillEntry[]>([]);
 	const [scanError, setScanError] = useState<string | null>(null);
 	const [syncError, setSyncError] = useState<string | null>(null);
+	const [resolutionChoice, setResolutionChoice] =
+		useState<GithubSkillResolutionChoice | null>(null);
+	const [resolutionRevision, setResolutionRevision] = useState(0);
 	const [previewSkill, setPreviewSkill] = useState<GitScanSkillEntry | null>(
 		null,
 	);
@@ -73,8 +81,6 @@ export function SyncGithubSkillDialog({
 		}),
 	});
 
-	// Match the current skill in the scanned results by the known skillPath.
-	// Falls back to matching by skill name.
 	const normalizedSkillPath = skillPath
 		? skillPath.replace(BACKSLASH_RE, "/")
 		: null;
@@ -91,10 +97,10 @@ export function SyncGithubSkillDialog({
 			return s.name === group.items[0].name;
 		}) ?? null;
 
-	// All filesystem paths that need to be replaced on sync.
-	const sourcePaths = group.items
-		.map((item) => item.source_path)
-		.filter((p): p is string => Boolean(p));
+	const comparisonLocations = useMemo(
+		() => uniqueSkillLocations(group.items),
+		[group.items],
+	);
 	const syncScope =
 		projectPath && group.items.some((item) => item.source === "project")
 			? "all"
@@ -114,6 +120,8 @@ export function SyncGithubSkillDialog({
 			setBranches(data.branches);
 			setCurrentBranch(data.current_branch);
 			setScannedSkills(data.skills);
+			setResolutionChoice(null);
+			setResolutionRevision((revision) => revision + 1);
 			setPhase("scanned");
 		},
 		onError: (error) => {
@@ -123,14 +131,21 @@ export function SyncGithubSkillDialog({
 		},
 	});
 
-	const syncMutation = useMutation(
-		gitSyncSkillMutationOptions({
+	const resolutionMutation = useMutation(
+		resolveSkillCopiesMutationOptions({
 			api,
 			queryClient,
 			onSuccess: () => {
-				setPhase("done");
-				toast.success(t("skillSyncedSuccessfully"));
-				onClose();
+				setPhase("scanned");
+				setResolutionChoice(null);
+				setResolutionRevision((revision) => revision + 1);
+				toast.success(
+					t(
+						resolutionChoice?.kind === "local"
+							? "localSkillVersionRetained"
+							: "skillSyncedSuccessfully",
+					),
+				);
 			},
 		}),
 	);
@@ -147,22 +162,44 @@ export function SyncGithubSkillDialog({
 		scanMutation.mutate(branch);
 	};
 
-	const handleSync = () => {
-		if (!matchedSkill) return;
+	const handleResolve = () => {
+		if (!matchedSkill || !resolutionChoice?.canResolve) return;
+		if (
+			resolutionChoice.kind === "local" &&
+			resolutionChoice.targets.length === 0
+		) {
+			setResolutionChoice(null);
+			setResolutionRevision((revision) => revision + 1);
+			toast.success(t("localSkillVersionRetained"));
+			return;
+		}
 		setSyncError(null);
 		setPhase("syncing");
-		syncMutation.mutate(
+		resolutionMutation.mutate(
 			{
-				session_id: sessionId,
-				skill_path: matchedSkill.path,
-				source_paths: sourcePaths,
+				reference: resolutionChoice.reference,
+				expected_reference_hash: resolutionChoice.expectedReferenceHash,
+				storage_mode: resolutionChoice.storageMode,
+				targets: resolutionChoice.targets,
 				scope: syncScope,
 				project_root: projectPath ?? null,
 			},
 			{
 				onError: (error) => {
+					setResolutionChoice(null);
+					setResolutionRevision((revision) => revision + 1);
 					setSyncError(
-						error instanceof Error ? error.message : String(error),
+						t(
+							isHTTPError(error) && error.response.status === 409
+								? "skillCopiesChanged"
+								: "skillCopiesResolveFailed",
+							{
+								error:
+									error instanceof Error
+										? error.message
+										: String(error),
+							},
+						),
 					);
 					setPhase("scanned");
 				},
@@ -172,7 +209,6 @@ export function SyncGithubSkillDialog({
 
 	const handleClose = () => {
 		if (phase === "syncing") return;
-		// Reset all state when closing
 		setPhase("idle");
 		setIsPrivateRepo(false);
 		setCredentialId("");
@@ -182,6 +218,8 @@ export function SyncGithubSkillDialog({
 		setScannedSkills([]);
 		setScanError(null);
 		setSyncError(null);
+		setResolutionChoice(null);
+		setResolutionRevision(0);
 		onClose();
 	};
 
@@ -199,7 +237,6 @@ export function SyncGithubSkillDialog({
 						</Modal.Header>
 
 						<Modal.Body className="space-y-4 p-4">
-							{/* ── Source URL (read-only display) ── */}
 							<TextField className="w-full" isReadOnly>
 								<Label>{t("githubRepoUrl")}</Label>
 								<Input
@@ -209,7 +246,6 @@ export function SyncGithubSkillDialog({
 								/>
 							</TextField>
 
-							{/* ── Private repo toggle ── */}
 							<Checkbox
 								variant="secondary"
 								isSelected={isPrivateRepo}
@@ -227,7 +263,6 @@ export function SyncGithubSkillDialog({
 								</Checkbox.Content>
 							</Checkbox>
 
-							{/* ── Credential selector (shown when private) ── */}
 							{isPrivateRepo && (
 								<Select
 									className="w-full"
@@ -272,7 +307,6 @@ export function SyncGithubSkillDialog({
 								</Select>
 							)}
 
-							{/* ── Scan error ── */}
 							{scanError && (
 								<Alert status="danger">
 									<Alert.Indicator />
@@ -284,7 +318,6 @@ export function SyncGithubSkillDialog({
 								</Alert>
 							)}
 
-							{/* ── Sync error ── */}
 							{syncError && (
 								<Alert status="danger">
 									<Alert.Indicator />
@@ -296,7 +329,6 @@ export function SyncGithubSkillDialog({
 								</Alert>
 							)}
 
-							{/* ── Branch selector (post-scan) ── */}
 							{phase !== "idle" &&
 								phase !== "scanning" &&
 								branches.length > 0 && (
@@ -343,12 +375,11 @@ export function SyncGithubSkillDialog({
 									</Select>
 								)}
 
-							{/* ── Skill match result (post-scan) ── */}
 							{(phase === "scanned" || isSyncing) && (
 								<>
 									{matchedSkill ? (
 										<div>
-											<p className="mb-2 text-xs font-medium text-muted uppercase tracking-wide">
+											<p className="mb-2 text-sm font-medium text-foreground">
 												{t("skillFoundInRepo")}
 											</p>
 											<button
@@ -398,6 +429,30 @@ export function SyncGithubSkillDialog({
 												</div>
 												<EyeIcon className="mt-0.5 size-4 shrink-0 text-muted" />
 											</button>
+											<div className="mt-3">
+												<GithubSkillDrift
+													key={`${sessionId}:${matchedSkill.path}:${resolutionRevision}`}
+													sessionId={sessionId}
+													skillPath={
+														matchedSkill.path
+													}
+													locations={
+														comparisonLocations
+													}
+													scope={syncScope}
+													projectRoot={projectPath}
+													selection={resolutionChoice}
+													isDisabled={isSyncing}
+													onSelectionChange={(
+														choice,
+													) => {
+														setSyncError(null);
+														setResolutionChoice(
+															choice,
+														);
+													}}
+												/>
+											</div>
 										</div>
 									) : (
 										<div className="flex items-center gap-2 rounded-lg border border-border p-3">
@@ -410,7 +465,6 @@ export function SyncGithubSkillDialog({
 								</>
 							)}
 
-							{/* ── Scanning spinner ── */}
 							{phase === "scanning" && (
 								<div className="flex items-center justify-center gap-3 py-4">
 									<Spinner size="md" />
@@ -442,11 +496,12 @@ export function SyncGithubSkillDialog({
 								</Button>
 							) : (
 								<Button
-									onPress={handleSync}
+									onPress={handleResolve}
 									isDisabled={
 										!matchedSkill ||
 										isSyncing ||
-										isBranchSwitching
+										isBranchSwitching ||
+										!resolutionChoice?.canResolve
 									}
 								>
 									{isSyncing ? (
@@ -457,8 +512,13 @@ export function SyncGithubSkillDialog({
 											/>
 											{t("syncingSkill")}
 										</span>
+									) : resolutionChoice?.kind ===
+									  "repository" ? (
+										t("useRepositorySkillVersion")
+									) : resolutionChoice?.kind === "local" ? (
+										t("keepSelectedLocalSkillVersion")
 									) : (
-										t("confirm")
+										t("chooseVersionToKeep")
 									)}
 								</Button>
 							)}
@@ -467,7 +527,6 @@ export function SyncGithubSkillDialog({
 				</Modal.Container>
 			</Modal.Backdrop>
 
-			{/* ── Skill Preview Modal ── */}
 			<Modal.Backdrop
 				isOpen={previewSkill !== null}
 				onOpenChange={(open) => {
@@ -485,7 +544,7 @@ export function SyncGithubSkillDialog({
 						<Modal.Body className="space-y-3 p-4">
 							{previewSkill?.description && (
 								<div>
-									<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
+									<p className="mb-1 text-xs font-medium text-muted">
 										{t("description")}
 									</p>
 									<p className="text-sm text-foreground">
@@ -495,7 +554,7 @@ export function SyncGithubSkillDialog({
 							)}
 							{previewSkill?.version && (
 								<div>
-									<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
+									<p className="mb-1 text-xs font-medium text-muted">
 										{t("version")}
 									</p>
 									<p className="text-sm text-foreground">
@@ -505,7 +564,7 @@ export function SyncGithubSkillDialog({
 							)}
 							{previewSkill?.author && (
 								<div>
-									<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
+									<p className="mb-1 text-xs font-medium text-muted">
 										{t("author")}
 									</p>
 									<p className="text-sm text-foreground">
@@ -515,7 +574,7 @@ export function SyncGithubSkillDialog({
 							)}
 							{previewSkill?.path && (
 								<div>
-									<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
+									<p className="mb-1 text-xs font-medium text-muted">
 										{t("source")}
 									</p>
 									<p className="break-all font-mono text-xs text-muted">

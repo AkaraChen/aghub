@@ -22,14 +22,17 @@
 //! println!("Skill name: {}", skill.name);
 //! ```
 
+pub mod copy;
 pub mod error;
 pub mod install;
+pub mod link;
 pub mod lock;
 pub mod model;
 pub mod package;
 pub mod parser;
 pub mod sanitize;
 pub mod scan;
+pub mod snapshot;
 pub mod validator;
 
 // Re-export commonly used items

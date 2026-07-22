@@ -316,6 +316,16 @@ fn copy_import_source_staged(
 	Ok(())
 }
 
+pub(crate) fn copy_skill_directory_staged(
+	from: &Path,
+	target_dir: &Path,
+) -> Result<()> {
+	copy_import_source_staged(
+		&SkillImportSource::Directory(from.to_path_buf()),
+		target_dir,
+	)
+}
+
 fn find_unpacked_skill_root(
 	unpack_dir: &Path,
 	skill_name: &str,
