@@ -2,6 +2,6 @@
 import type { SkillLinkStatusResponse } from "./SkillLinkStatusResponse";
 
 export type SkillLinkResponse = {
-	target: string;
+	target?: string;
 	status: SkillLinkStatusResponse;
 };

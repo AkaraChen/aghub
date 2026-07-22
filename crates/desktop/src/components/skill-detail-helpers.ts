@@ -17,7 +17,7 @@ export interface LocationGroup {
 	key: string;
 	sourcePath: string;
 	installations: LocationInstallation[];
-	canonicalPath?: string | null;
+	isSymlink: boolean;
 }
 
 export interface SkillGroup {
@@ -27,7 +27,7 @@ export interface SkillGroup {
 
 export interface SkillSourceLocation {
 	sourcePath: string;
-	canonicalPath?: string | null;
+	isSymlink: boolean;
 	agents: string[];
 }
 
@@ -117,7 +117,7 @@ export function buildLocationGroups(
 		string,
 		{
 			installations: LocationInstallation[];
-			canonicalPath?: string;
+			isSymlink: boolean;
 		}
 	>();
 
@@ -130,7 +130,7 @@ export function buildLocationGroups(
 					? [
 							{
 								source_path: item.source_path,
-								canonical_path: item.canonical_path,
+								is_symlink: item.is_symlink,
 								source: item.source,
 							},
 						]
@@ -146,12 +146,13 @@ export function buildLocationGroups(
 
 			if (existing) {
 				existing.installations.push(installation);
+				existing.isSymlink ||= location.is_symlink;
 				continue;
 			}
 
 			map.set(location.source_path, {
 				installations: [installation],
-				canonicalPath: location.canonical_path ?? undefined,
+				isSymlink: location.is_symlink,
 			});
 		}
 	}
@@ -170,7 +171,7 @@ export function buildLocationGroups(
 
 				return a.source.localeCompare(b.source);
 			}),
-			canonicalPath: data.canonicalPath,
+			isSymlink: data.isSymlink,
 		}))
 		.sort((a, b) => a.sourcePath.localeCompare(b.sourcePath));
 }
@@ -185,14 +186,13 @@ export function uniqueSkillSourcePaths(items: SkillResponse[]): string[] {
 					? [
 							{
 								source_path: item.source_path,
-								canonical_path: item.canonical_path,
+								is_symlink: item.is_symlink,
 							},
 						]
 					: [];
 		for (const location of locations) {
-			const identity = location.canonical_path ?? location.source_path;
-			if (!paths.has(identity)) {
-				paths.set(identity, location.source_path);
+			if (!paths.has(location.source_path)) {
+				paths.set(location.source_path, location.source_path);
 			}
 		}
 	}
@@ -211,7 +211,7 @@ export function uniqueSkillLocations(
 					? [
 							{
 								source_path: item.source_path,
-								canonical_path: item.canonical_path,
+								is_symlink: item.is_symlink,
 							},
 						]
 					: [];
@@ -225,7 +225,7 @@ export function uniqueSkillLocations(
 			}
 			locations.set(location.source_path, {
 				sourcePath: location.source_path,
-				canonicalPath: location.canonical_path,
+				isSymlink: location.is_symlink,
 				agents: item.agent ? [item.agent] : [],
 			});
 		}

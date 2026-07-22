@@ -16,7 +16,7 @@ const skill = (name: string) => ({
 	name,
 	enabled: true,
 	source_path: `/tmp/e2e/.claude/skills/${name}/SKILL.md`,
-	canonical_path: `/tmp/e2e/.claude/skills/${name}`,
+	is_symlink: true,
 	description: `${name} description`,
 	author: null,
 	version: null,

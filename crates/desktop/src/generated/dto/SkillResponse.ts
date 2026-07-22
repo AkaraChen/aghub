@@ -6,7 +6,7 @@ export type SkillResponse = {
 	name: string;
 	enabled: boolean;
 	source_path: string | null;
-	canonical_path: string | null;
+	is_symlink: boolean;
 	description: string | null;
 	author: string | null;
 	version: string | null;

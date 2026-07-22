@@ -57,8 +57,10 @@ const SKILL_PATH_OUTSIDE_ROOT: &str = "SKILL_PATH_OUTSIDE_ROOT";
 const SKILL_PATH_NOT_FOUND: &str = "SKILL_PATH_NOT_FOUND";
 const INVALID_SKILL_PATH: &str = "INVALID_SKILL_PATH";
 const SESSION_REMOTE_MISMATCH: &str = "SESSION_REMOTE_MISMATCH";
-const MAX_SKILL_DIFF_TARGETS: usize = 32;
-pub(crate) const MAX_SKILL_COPY_RESOLUTION_TARGETS: usize = 32;
+pub(crate) const MAX_SKILL_DIFF_TARGETS: usize = 32;
+const MAX_SKILL_COPY_LOCATIONS: usize = MAX_SKILL_DIFF_TARGETS + 1;
+pub(crate) const MAX_SKILL_COPY_RESOLUTION_TARGETS: usize =
+	MAX_SKILL_COPY_LOCATIONS;
 const MAX_SKILL_COPY_STATUS_GROUPS: usize = 256;
 const MAX_SKILL_COPY_STATUS_PATHS: usize = 1024;
 // A request may compare many small installations, but all hashing work shares
@@ -1478,7 +1480,7 @@ fn build_skill_tree_node(
 			})?;
 		return Ok(SkillTreeNodeResponse {
 			name,
-			path: path.display().to_string(),
+			path: skill_tree_relative_path(root, path)?,
 			kind: SkillTreeNodeKind::Symlink,
 			children: Vec::new(),
 			link: Some(link),
@@ -1518,7 +1520,7 @@ fn build_skill_tree_node(
 
 		return Ok(SkillTreeNodeResponse {
 			name,
-			path: path.display().to_string(),
+			path: skill_tree_relative_path(root, path)?,
 			kind: SkillTreeNodeKind::Directory,
 			children,
 			link: None,
@@ -1527,16 +1529,33 @@ fn build_skill_tree_node(
 
 	Ok(SkillTreeNodeResponse {
 		name,
-		path: path.display().to_string(),
+		path: skill_tree_relative_path(root, path)?,
 		kind: SkillTreeNodeKind::File,
 		children: Vec::new(),
 		link: None,
 	})
 }
 
+fn skill_tree_relative_path(
+	root: &Path,
+	path: &Path,
+) -> Result<String, ApiError> {
+	let relative = path.strip_prefix(root).map_err(|error| {
+		ApiError::new(
+			Status::InternalServerError,
+			format!("Failed to build skill tree path: {error}"),
+			"SKILL_TREE_PATH_FAILED",
+		)
+	})?;
+	if relative.as_os_str().is_empty() {
+		return Ok(".".to_string());
+	}
+	Ok(relative.to_string_lossy().replace('\\', "/"))
+}
+
 fn skill_link_response(link: skill::link::SkillLink) -> SkillLinkResponse {
 	SkillLinkResponse {
-		target: link.target,
+		target: link.display_target,
 		status: match link.status {
 			skill::link::SkillLinkStatus::Valid => {
 				SkillLinkStatusResponse::Valid
@@ -1862,7 +1881,7 @@ pub(crate) async fn list_all_agents_skills(
 			};
 			let location = SkillLocationResponse {
 				source_path,
-				canonical_path: skill.canonical_path.clone(),
+				is_symlink: skill.canonical_path.is_some(),
 				source: source.into(),
 			};
 			if let Some(index) = item_indices.get(&skill.name).copied() {
@@ -2187,11 +2206,10 @@ pub async fn diff_skill(
 		)
 		.map_err(public_skill_diff_path_error)?;
 		let known = known_skill_paths(resource_scope, project_root.as_deref());
-		let (reference_dir, installed_reference) = match reference {
-			PreparedSkillDiffReference::Installed(source_path) => (
-				validated_diff_directory(&source_path, &roots, &known)?,
-				true,
-			),
+		let reference_dir = match reference {
+			PreparedSkillDiffReference::Installed(source_path) => {
+				validated_diff_directory(&source_path, &roots, &known)?
+			}
 			PreparedSkillDiffReference::GitScan {
 				temp_path,
 				scanned_skill_paths,
@@ -2203,14 +2221,10 @@ pub async fn diff_skill(
 					&skill_path,
 				)
 				.map_err(public_skill_diff_path_error)?;
-				(
-					canonical_existing(&get_skill_root(path))
-						.map_err(public_skill_diff_path_error)?,
-					false,
-				)
+				canonical_existing(&get_skill_root(path))
+					.map_err(public_skill_diff_path_error)?
 			}
 		};
-		let mut seen_targets = HashSet::new();
 		let mut target_dirs = Vec::with_capacity(installed_paths.len());
 		for installed_path in installed_paths {
 			let target_dir =
@@ -2222,20 +2236,6 @@ pub async fn diff_skill(
 						continue;
 					}
 				};
-			if installed_reference && target_dir == reference_dir {
-				return Err(ApiError::new(
-					Status::BadRequest,
-					"Skill diff reference cannot also be an installed target",
-					"DUPLICATE_SKILL_DIFF_REFERENCE",
-				));
-			}
-			if !seen_targets.insert(target_dir.clone()) {
-				return Err(ApiError::new(
-					Status::BadRequest,
-					"Skill diff installed paths must be unique",
-					"DUPLICATE_SKILL_DIFF_TARGET",
-				));
-			}
 			target_dirs.push(Some(target_dir));
 		}
 		compare_skill_diff_batch(&reference_dir, target_dirs)
@@ -2274,12 +2274,12 @@ pub async fn get_skill_copy_status(
 		.sum::<usize>();
 	if path_count > MAX_SKILL_COPY_STATUS_PATHS
 		|| request.groups.iter().any(|group| {
-			!(2..=MAX_SKILL_DIFF_TARGETS).contains(&group.source_paths.len())
+			!(2..=MAX_SKILL_COPY_LOCATIONS).contains(&group.source_paths.len())
 		}) {
 		return Err(ApiError::new(
 			Status::BadRequest,
 			format!(
-				"Skill copy status accepts 2 to {MAX_SKILL_DIFF_TARGETS} paths per group and {MAX_SKILL_COPY_STATUS_PATHS} paths total"
+				"Skill copy status accepts 2 to {MAX_SKILL_COPY_LOCATIONS} paths per group and {MAX_SKILL_COPY_STATUS_PATHS} paths total"
 			),
 			"SKILL_COPY_STATUS_PATH_LIMIT",
 		));
@@ -2467,12 +2467,8 @@ pub async fn resolve_skill_copies(
 		)
 		.map_err(public_skill_copy_path_error)?;
 		let known = known_skill_paths(resource_scope, project_root.as_deref());
-		let (
-			reference_dir,
-			installed_reference,
-			materialize_root,
-			git_session_id,
-		) = match reference {
+		let (reference_dir, materialize_root, git_session_id) = match reference
+		{
 			PreparedReference::Installed(source_path) => {
 				let requested = validate_existing_skill_target_dir(
 					&source_path,
@@ -2482,18 +2478,7 @@ pub async fn resolve_skill_copies(
 				.map_err(public_skill_copy_path_error)?;
 				let canonical = canonical_existing(&requested)
 					.map_err(public_skill_copy_path_error)?;
-				let entry = existing_skill_entry_path(&requested)
-					.map_err(public_skill_copy_path_error)?;
-				let is_symlink = std::fs::symlink_metadata(&entry)
-					.map_err(|error| ApiError::from(ConfigError::Io(error)))?
-					.file_type()
-					.is_symlink();
-				(
-					canonical.clone(),
-					Some((entry, is_symlink)),
-					canonical,
-					None,
-				)
+				(canonical.clone(), canonical, None)
 			}
 			PreparedReference::GitScan {
 				session_id,
@@ -2511,7 +2496,7 @@ pub async fn resolve_skill_copies(
 					.map_err(public_skill_copy_path_error)?;
 				let materialize_root = canonical_existing(&temp_path)
 					.map_err(public_skill_copy_path_error)?;
-				(reference_dir, None, materialize_root, Some(session_id))
+				(reference_dir, materialize_root, Some(session_id))
 			}
 		};
 		let mut remaining_snapshot_bytes =
@@ -2526,15 +2511,23 @@ pub async fn resolve_skill_copies(
 		let initial_reference_name = parse_skill_name(&reference_dir)?;
 
 		struct PreparedTarget {
-			source_path: String,
+			source_paths: Vec<(usize, String)>,
 			content_dir: PathBuf,
-			write_dir: PathBuf,
+			write_dir: Option<PathBuf>,
 			expected_hash: String,
+			write_is_symlink: bool,
 		}
 
-		let mut seen_targets = HashSet::new();
+		let mut seen_source_paths = HashSet::new();
 		let mut prepared_targets = Vec::with_capacity(targets.len());
-		for target in targets {
+		for (request_index, target) in targets.into_iter().enumerate() {
+			if !seen_source_paths.insert(target.source_path.clone()) {
+				return Err(ApiError::new(
+					Status::BadRequest,
+					"Skill copy targets must be unique",
+					"DUPLICATE_SKILL_COPY_TARGET",
+				));
+			}
 			let requested_dir = validate_existing_skill_target_dir(
 				&target.source_path,
 				&roots,
@@ -2545,46 +2538,63 @@ pub async fn resolve_skill_copies(
 				.map_err(public_skill_copy_path_error)?;
 			let entry_dir = existing_skill_entry_path(&requested_dir)
 				.map_err(public_skill_copy_path_error)?;
+			let entry_is_symlink = std::fs::symlink_metadata(&entry_dir)
+				.map_err(|error| ApiError::from(ConfigError::Io(error)))?
+				.file_type()
+				.is_symlink();
+			let write_dir = match storage_mode {
+				SkillCopyStorageModeRequest::Preserve
+					if content_dir == reference_dir =>
+				{
+					None
+				}
+				SkillCopyStorageModeRequest::Preserve => {
+					Some(content_dir.clone())
+				}
+				SkillCopyStorageModeRequest::Copy => Some(entry_dir),
+			};
 			let materializes_reference =
 				matches!(storage_mode, SkillCopyStorageModeRequest::Copy)
-					&& installed_reference.as_ref().is_some_and(
-						|(reference_entry, is_symlink)| {
-							*is_symlink && reference_entry == &entry_dir
-						},
-					);
-			if content_dir == reference_dir && !materializes_reference {
-				return Err(ApiError::new(
-					Status::BadRequest,
-					"Skill copy reference cannot also be a target",
-					"DUPLICATE_SKILL_COPY_REFERENCE",
-				));
+					&& content_dir == reference_dir;
+			if let Some(write_dir) = &write_dir {
+				if !materializes_reference
+					&& skill_copy_paths_overlap(write_dir, &reference_dir)
+				{
+					return Err(skill_copy_path_overlap());
+				}
 			}
-			let write_dir = match storage_mode {
-				SkillCopyStorageModeRequest::Preserve => content_dir.clone(),
-				SkillCopyStorageModeRequest::Copy => entry_dir,
-			};
-			if !materializes_reference
-				&& skill_copy_paths_overlap(&write_dir, &reference_dir)
-			{
-				return Err(skill_copy_path_overlap());
+			if let Some(existing) = prepared_targets.iter_mut().find(
+				|prepared: &&mut PreparedTarget| {
+					prepared.write_dir == write_dir
+						&& prepared.content_dir == content_dir
+				},
+			) {
+				if existing.expected_hash != target.expected_hash {
+					return Err(skill_copy_changed());
+				}
+				existing
+					.source_paths
+					.push((request_index, target.source_path));
+				continue;
 			}
-			if !seen_targets.insert(write_dir.clone()) {
-				return Err(ApiError::new(
-					Status::BadRequest,
-					"Skill copy targets must be unique",
-					"DUPLICATE_SKILL_COPY_TARGET",
-				));
-			}
-			if prepared_targets.iter().any(|prepared: &PreparedTarget| {
-				skill_copy_paths_overlap(&write_dir, &prepared.write_dir)
-			}) {
-				return Err(skill_copy_path_overlap());
+			if let Some(write_dir) = &write_dir {
+				if prepared_targets.iter().any(|prepared: &PreparedTarget| {
+					prepared.write_dir.as_ref().is_some_and(|prepared_dir| {
+						skill_copy_paths_overlap(write_dir, prepared_dir)
+					})
+				}) {
+					return Err(skill_copy_path_overlap());
+				}
 			}
 			prepared_targets.push(PreparedTarget {
-				source_path: target.source_path,
+				source_paths: vec![(request_index, target.source_path)],
 				content_dir,
 				write_dir,
 				expected_hash: target.expected_hash,
+				write_is_symlink: matches!(
+					storage_mode,
+					SkillCopyStorageModeRequest::Copy
+				) && entry_is_symlink,
 			});
 		}
 
@@ -2637,9 +2647,14 @@ pub async fn resolve_skill_copies(
 			return Err(skill_copy_changed());
 		}
 
-		let target_dirs = prepared_targets
+		let mut writable_targets = prepared_targets
 			.iter()
-			.map(|target| target.write_dir.clone())
+			.filter(|target| target.write_dir.is_some())
+			.collect::<Vec<_>>();
+		writable_targets.sort_by_key(|target| !target.write_is_symlink);
+		let target_dirs = writable_targets
+			.iter()
+			.filter_map(|target| target.write_dir.clone())
 			.collect::<Vec<_>>();
 		let replacements = stage_skill_copy_replacements_with_budget(
 			&frozen_reference,
@@ -2651,9 +2666,13 @@ pub async fn resolve_skill_copies(
 		apply_staged_skill_replacements_with_backup_check(
 			&replacements,
 			|index, replacement| {
-				let target = &prepared_targets[index];
-				let backup_content = canonical_existing(&replacement.backup)
-					.map_err(public_skill_copy_path_error)?;
+				let target = writable_targets[index];
+				let backup_content = if target.write_is_symlink {
+					target.content_dir.clone()
+				} else {
+					canonical_existing(&replacement.backup)
+						.map_err(public_skill_copy_path_error)?
+				};
 				let target_hash = skill_copy_directory_hash(
 					&backup_content,
 					&mut remaining_snapshot_bytes,
@@ -2667,13 +2686,20 @@ pub async fn resolve_skill_copies(
 				Ok(())
 			},
 		)?;
-		let mut results = Vec::with_capacity(prepared_targets.len());
+		let mut results = Vec::new();
 		for target in prepared_targets {
-			results.push(SkillCopyResolutionResult {
-				source_path: target.source_path,
-				content_hash: frozen_hash.clone(),
-			});
+			for (index, source_path) in target.source_paths {
+				results.push((
+					index,
+					SkillCopyResolutionResult {
+						source_path,
+						content_hash: frozen_hash.clone(),
+					},
+				));
+			}
 		}
+		results.sort_by_key(|(index, _)| *index);
+		let results = results.into_iter().map(|(_, result)| result).collect();
 
 		Ok((
 			SkillCopyResolutionResponse {
@@ -3641,7 +3667,7 @@ mod tests {
 			.unwrap();
 
 		assert!(matches!(link.kind, SkillTreeNodeKind::Symlink));
-		assert_eq!(link.link.as_ref().unwrap().target, "../missing.txt");
+		assert!(link.link.as_ref().unwrap().target.is_none());
 		assert!(matches!(
 			link.link.as_ref().unwrap().status,
 			SkillLinkStatusResponse::Broken
@@ -3695,6 +3721,19 @@ mod tests {
 			status("outside.txt"),
 			SkillLinkStatusResponse::OutsideRoot
 		));
+		let target = |name: &str| {
+			tree.children
+				.iter()
+				.find(|child| child.name == name)
+				.unwrap()
+				.link
+				.as_ref()
+				.unwrap()
+				.target
+				.clone()
+		};
+		assert_eq!(target("valid.txt").as_deref(), Some("target.txt"));
+		assert!(target("outside.txt").is_none());
 	}
 
 	#[test]
@@ -3784,10 +3823,7 @@ mod tests {
 			link_diff.before_link.as_ref().unwrap().status,
 			SkillLinkStatusResponse::Valid
 		));
-		assert_eq!(
-			link_diff.after_link.as_ref().unwrap().target,
-			"missing.txt"
-		);
+		assert!(link_diff.after_link.as_ref().unwrap().target.is_none());
 		assert!(matches!(
 			link_diff.after_link.as_ref().unwrap().status,
 			SkillLinkStatusResponse::Broken

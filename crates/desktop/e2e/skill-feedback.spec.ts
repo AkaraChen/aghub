@@ -69,7 +69,6 @@ test("a broken file link is shown inside the skill tree", async ({ page }) => {
 								kind: "symlink",
 								children: [],
 								link: {
-									target: "../../../docs/example.html",
 									status: "broken",
 								},
 							},
@@ -91,20 +90,15 @@ test("a broken file link is shown inside the skill tree", async ({ page }) => {
 	await page.getByRole("button", { name: /^Files/ }).click();
 
 	const link = page.locator('[data-skill-link-status="broken"]');
-	await expect(link).toContainText("../../../docs/example.html");
 	await expect(link).toContainText("Target not found");
 	await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
-test("a linked skill location shows its target and file-link health", async ({
+test("a linked skill location shows its link state and file-link health", async ({
 	page,
 }) => {
 	const mocks = await installMocks(page);
-	mocks.setSkillSymlink(
-		"solo-skill",
-		"claude",
-		"/tmp/e2e/.shared/skills/solo-skill/SKILL.md",
-	);
+	mocks.setSkillSymlink("solo-skill", "claude");
 
 	await page.route("**/api/v1/skills/tree**", (route) => {
 		const url = new URL(route.request().url());
@@ -152,7 +146,6 @@ test("a linked skill location shows its target and file-link health", async ({
 
 	const location = page.locator("[data-skill-location]").first();
 	await expect(location).toContainText("Symlink");
-	await expect(location).toContainText("/tmp/e2e/.shared/skills/solo-skill");
 	await expect(
 		location.locator('[data-skill-link-summary="healthy"]'),
 	).toContainText("1 file link");

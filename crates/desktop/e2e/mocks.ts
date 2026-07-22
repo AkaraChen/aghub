@@ -71,7 +71,7 @@ const skill = (name: string, agent = "claude"): SkillResponse => ({
 	name,
 	enabled: true,
 	source_path: `/tmp/e2e/.${agent}/skills/${name}/SKILL.md`,
-	canonical_path: null,
+	is_symlink: false,
 	description: `${name} description`,
 	author: null,
 	version: null,
@@ -588,15 +588,15 @@ export async function installMocks(page: Page) {
 		addSkill(name: string, agent = "claude") {
 			skills.push(skill(name, agent));
 		},
-		setSkillSymlink(name: string, agent: string, canonicalPath: string) {
+		setSkillSymlink(name: string, agent: string) {
 			const item = skills.find(
 				(skill) => skill.name === name && skill.agent === agent,
 			);
 			if (!item) return;
-			item.canonical_path = canonicalPath;
+			item.is_symlink = true;
 			item.locations?.forEach((location) => {
 				if (location.source_path === item.source_path) {
-					location.canonical_path = canonicalPath;
+					location.is_symlink = true;
 				}
 			});
 		},
@@ -609,25 +609,22 @@ export async function installMocks(page: Page) {
 			const item = skill(name, agent);
 			item.source = "project";
 			item.source_path = projectSourcePath;
-			item.canonical_path = null;
+			item.is_symlink = false;
 			item.locations = [
 				{
 					source_path: projectSourcePath,
+					is_symlink: false,
 					source: "project",
 				},
 				...globalSourcePaths.map((sourcePath) => ({
 					source_path: sourcePath,
+					is_symlink: false,
 					source: "global" as const,
 				})),
 			];
 			skills.push(item);
 		},
-		addSkillLocation(
-			name: string,
-			agent: string,
-			sourcePath: string,
-			canonicalPath?: string,
-		) {
+		addSkillLocation(name: string, agent: string, sourcePath: string) {
 			const item = skills.find(
 				(skill) => skill.name === name && skill.agent === agent,
 			);
@@ -635,7 +632,7 @@ export async function installMocks(page: Page) {
 			item.locations ??= [
 				{
 					source_path: item.source_path,
-					canonical_path: item.canonical_path ?? undefined,
+					is_symlink: item.is_symlink,
 					source: item.source,
 				},
 			];
@@ -646,7 +643,7 @@ export async function installMocks(page: Page) {
 			) {
 				item.locations.push({
 					source_path: sourcePath,
-					canonical_path: canonicalPath,
+					is_symlink: false,
 					source: item.source,
 				});
 			}

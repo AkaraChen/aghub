@@ -12,6 +12,7 @@ pub enum SkillLinkStatus {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SkillLink {
 	pub target: String,
+	pub display_target: Option<String>,
 	pub resolved_path: Option<PathBuf>,
 	pub status: SkillLinkStatus,
 }
@@ -34,9 +35,21 @@ pub fn inspect_skill_link(root: &Path, path: &Path) -> Result<SkillLink> {
 		}
 		Err(_) => (SkillLinkStatus::Unreadable, None),
 	};
+	let display_target = resolved_path
+		.as_deref()
+		.filter(|_| status == SkillLinkStatus::Valid)
+		.and_then(|resolved| resolved.strip_prefix(&canonical_root).ok())
+		.map(|relative| {
+			if relative.as_os_str().is_empty() {
+				".".to_string()
+			} else {
+				relative.to_string_lossy().replace('\\', "/")
+			}
+		});
 
 	Ok(SkillLink {
 		target: target.to_string_lossy().replace('\\', "/"),
+		display_target,
 		resolved_path,
 		status,
 	})
@@ -59,6 +72,7 @@ mod tests {
 		let link = inspect_skill_link(&root, &root.join("linked.txt")).unwrap();
 
 		assert_eq!(link.target, "target.txt");
+		assert_eq!(link.display_target.as_deref(), Some("target.txt"));
 		assert_eq!(link.status, SkillLinkStatus::Valid);
 		assert_eq!(
 			link.resolved_path,
@@ -77,6 +91,7 @@ mod tests {
 		let link = inspect_skill_link(&root, &root.join("linked.txt")).unwrap();
 
 		assert_eq!(link.status, SkillLinkStatus::Broken);
+		assert!(link.display_target.is_none());
 		assert!(link.resolved_path.is_none());
 	}
 
@@ -92,5 +107,6 @@ mod tests {
 		let link = inspect_skill_link(&root, &root.join("linked.txt")).unwrap();
 
 		assert_eq!(link.status, SkillLinkStatus::OutsideRoot);
+		assert!(link.display_target.is_none());
 	}
 }

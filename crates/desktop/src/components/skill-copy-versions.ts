@@ -1,4 +1,3 @@
-import * as pathe from "pathe";
 import type {
 	SkillCopyStorageModeRequest,
 	SkillDirectoryDiffResponse,
@@ -20,7 +19,7 @@ export interface SkillVersionCopy {
 	sourceId?: string;
 	agents?: string[];
 	sourcePath?: string;
-	canonicalPath?: string | null;
+	isSymlink?: boolean;
 }
 
 export interface SkillCopyVersion {
@@ -39,35 +38,18 @@ export function buildSkillCopyResolutionTargets(
 	referencePath: string | undefined,
 	storageMode: SkillCopyStorageModeRequest,
 ) {
-	const referenceCopy = versions
-		.flatMap((version) => version.copies)
-		.find((copy) => copy.sourcePath === referencePath);
-	const referenceIdentity =
-		referenceCopy?.canonicalPath ?? referenceCopy?.sourcePath;
 	const seen = new Set<string>();
 
 	return versions.flatMap((version) =>
 		version.copies.flatMap((copy) => {
 			if (!copy.sourcePath) return [];
-			const identity =
-				storageMode === "copy"
-					? copy.sourcePath
-					: (copy.canonicalPath ?? copy.sourcePath);
-			const selectedPhysicalCopy =
-				storageMode === "copy" &&
-				copy.sourcePath === referencePath &&
-				!copy.canonicalPath;
 			const selectedPreservedLocation =
-				storageMode === "preserve" && identity === referenceIdentity;
-			if (
-				selectedPhysicalCopy ||
-				selectedPreservedLocation ||
-				seen.has(identity)
-			) {
+				storageMode === "preserve" && copy.sourcePath === referencePath;
+			if (selectedPreservedLocation || seen.has(copy.sourcePath)) {
 				return [];
 			}
 
-			seen.add(identity);
+			seen.add(copy.sourcePath);
 			return [
 				{
 					source_path: copy.sourcePath,
@@ -91,10 +73,7 @@ export function skillCopyVersionLocation(
 		sourceId: copy.sourceId,
 		agents: copy.agents,
 		path: copy.label,
-		kind: copy.canonicalPath ? "symlink" : "copy",
-		target: copy.canonicalPath
-			? pathe.dirname(copy.canonicalPath)
-			: undefined,
+		kind: copy.isSymlink ? "symlink" : "copy",
 	};
 }
 
