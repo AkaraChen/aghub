@@ -3,7 +3,9 @@
 //! recorded here — the provision directory on disk is its single source of
 //! truth.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, OnceLock};
 
 use serde::{Deserialize, Serialize};
 
@@ -11,6 +13,11 @@ use crate::dto::GatewayInstanceKind;
 use crate::error::{GatewayError, Result};
 
 const KEYRING_SERVICE: &str = "aghub.gateway";
+
+fn instance_mutation_lock() -> &'static Mutex<()> {
+	static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+	LOCK.get_or_init(|| Mutex::new(()))
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GatewayInstanceRecord {
@@ -61,40 +68,71 @@ impl InstanceStore {
 	}
 
 	pub fn insert(&self, record: GatewayInstanceRecord) -> Result<()> {
-		let mut records = self.list()?;
-		if records.iter().any(|existing| existing.id == record.id) {
-			return Err(GatewayError::InstanceExists(record.id));
-		}
-		records.push(record);
-		self.save(&records)
+		self.mutate_records(|records| {
+			if records.iter().any(|existing| existing.id == record.id) {
+				return Err(GatewayError::InstanceExists(record.id));
+			}
+			records.push(record);
+			Ok(())
+		})
 	}
 
 	pub fn update(&self, record: GatewayInstanceRecord) -> Result<()> {
-		let mut records = self.list()?;
-		let slot = records
-			.iter_mut()
-			.find(|existing| existing.id == record.id)
-			.ok_or_else(|| GatewayError::InstanceNotFound(record.id.clone()))?;
-		*slot = record;
-		self.save(&records)
+		self.mutate_records(|records| {
+			let slot = records
+				.iter_mut()
+				.find(|existing| existing.id == record.id)
+				.ok_or_else(|| {
+					GatewayError::InstanceNotFound(record.id.clone())
+				})?;
+			*slot = record;
+			Ok(())
+		})
 	}
 
 	pub fn remove(&self, id: &str) -> Result<GatewayInstanceRecord> {
+		self.mutate_records(|records| {
+			let index = records
+				.iter()
+				.position(|record| record.id == id)
+				.ok_or_else(|| {
+					GatewayError::InstanceNotFound(id.to_string())
+				})?;
+			Ok(records.remove(index))
+		})
+	}
+
+	fn mutate_records<T>(
+		&self,
+		mutation: impl FnOnce(&mut Vec<GatewayInstanceRecord>) -> Result<T>,
+	) -> Result<T> {
+		let _guard = instance_mutation_lock()
+			.lock()
+			.unwrap_or_else(|poisoned| poisoned.into_inner());
 		let mut records = self.list()?;
-		let index = records
-			.iter()
-			.position(|record| record.id == id)
-			.ok_or_else(|| GatewayError::InstanceNotFound(id.to_string()))?;
-		let removed = records.remove(index);
+		let result = mutation(&mut records)?;
 		self.save(&records)?;
-		Ok(removed)
+		Ok(result)
 	}
 
 	fn save(&self, records: &[GatewayInstanceRecord]) -> Result<()> {
 		std::fs::create_dir_all(&self.root)?;
-		let tmp = self.root.join("instances.json.tmp");
-		std::fs::write(&tmp, serde_json::to_string_pretty(records)?)?;
-		std::fs::rename(&tmp, self.file())?;
+		let path = self.file();
+		let permissions = match path.metadata() {
+			Ok(metadata) => Some(metadata.permissions()),
+			Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+			Err(error) => return Err(error.into()),
+		};
+		let mut temporary = tempfile::Builder::new()
+			.prefix(".instances.")
+			.suffix(".json.tmp")
+			.tempfile_in(&self.root)?;
+		temporary
+			.write_all(serde_json::to_string_pretty(records)?.as_bytes())?;
+		if let Some(permissions) = permissions {
+			temporary.as_file().set_permissions(permissions)?;
+		}
+		temporary.persist(path).map_err(|error| error.error)?;
 		Ok(())
 	}
 }
@@ -181,5 +219,31 @@ mod tests {
 			store.get("a"),
 			Err(GatewayError::InstanceNotFound(_))
 		));
+	}
+
+	#[test]
+	fn concurrent_inserts_preserve_every_instance() {
+		const WRITER_COUNT: usize = 32;
+
+		let dir = tempfile::tempdir().expect("tempdir");
+		let barrier =
+			std::sync::Arc::new(std::sync::Barrier::new(WRITER_COUNT));
+		let mut writers = Vec::with_capacity(WRITER_COUNT);
+
+		for index in 0..WRITER_COUNT {
+			let root = dir.path().to_path_buf();
+			let barrier = barrier.clone();
+			writers.push(std::thread::spawn(move || {
+				barrier.wait();
+				InstanceStore::new(&root).insert(record(&index.to_string()))
+			}));
+		}
+
+		for writer in writers {
+			writer.join().expect("writer thread").expect("insert");
+		}
+
+		let records = InstanceStore::new(dir.path()).list().expect("list");
+		assert_eq!(records.len(), WRITER_COUNT);
 	}
 }

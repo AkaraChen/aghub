@@ -16,7 +16,9 @@ use aghub_cliproxy::dto::{
 };
 use aghub_cliproxy::lifecycle::GatewayRuntime;
 use aghub_cliproxy::store::GatewayInstanceRecord;
-use aghub_cliproxy::{bootstrap, provision, settings, ManagementClient};
+use aghub_cliproxy::{
+	bootstrap, provision, settings, GatewayError, ManagementClient,
+};
 
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "network + spawns a real CLIProxyAPI process"]
@@ -94,12 +96,22 @@ async fn provision_boot_and_manage() {
 	let yaml = client.config_yaml().await.expect("config.yaml download");
 	assert!(yaml.contains("remote-management"));
 
-	let latest = client.latest_version().await.expect("latest-version");
-	assert!(
-		!latest.starts_with('v'),
-		"latest_version must strip the tag prefix, got {latest}"
-	);
-	eprintln!("latest release reported: {latest}");
+	match client.latest_version().await {
+		Ok(latest) => {
+			assert!(
+				!latest.starts_with('v'),
+				"latest_version must strip the tag prefix, got {latest}"
+			);
+			eprintln!("latest release reported: {latest}");
+		}
+		Err(GatewayError::Management {
+			status: 502,
+			message,
+		}) if message.contains("API rate limit exceeded") => {
+			eprintln!("latest release check skipped: {message}");
+		}
+		Err(error) => panic!("latest-version: {error}"),
+	}
 
 	// -- upstream keys ---------------------------------------------------
 	client

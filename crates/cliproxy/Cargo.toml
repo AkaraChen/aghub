@@ -16,6 +16,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 sha2 = "0.10"
+tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "fs", "io-util", "macros", "process", "rt", "sync", "time" ] }
 ts-rs = { workspace = true }
@@ -24,5 +25,4 @@ uuid = { workspace = true }
 which = { workspace = true }
 
 [dev-dependencies]
-tempfile = { workspace = true }
 tokio = { workspace = true, features = [ "rt-multi-thread" ] }

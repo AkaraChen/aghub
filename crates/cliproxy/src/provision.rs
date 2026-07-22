@@ -1,6 +1,6 @@
 //! Binary provisioning: download a pinned CLIProxyAPI release, verify its
-//! sha256 against the published `checksums.txt`, extract, and locate the
-//! executable.
+//! sha256 against the checksum pinned from the published `checksums.txt`,
+//! extract, and locate the executable.
 //!
 //! Runtime download (instead of bundling via Tauri `externalBin`) keeps the
 //! app small and decouples aghub releases from CLIProxyAPI's near-daily
@@ -26,6 +26,59 @@ const DEFAULT_DOWNLOAD_BASE: &str =
 	"https://github.com/router-for-me/CLIProxyAPI/releases/download";
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
 const EXTRACT_TIMEOUT: Duration = Duration::from_secs(60);
+// v7.2.81's largest supported archive is 15,325,274 bytes. This leaves more
+// than four times that size for release growth without allowing unbounded data.
+const MAX_ARCHIVE_BYTES: u64 = 64 * 1024 * 1024;
+
+fn archive_size_after_chunk(downloaded: u64, chunk_size: usize) -> Result<u64> {
+	let chunk_size = u64::try_from(chunk_size).map_err(|_| {
+		GatewayError::Download(
+			"archive chunk size does not fit in u64".to_string(),
+		)
+	})?;
+	let size = downloaded.checked_add(chunk_size).ok_or_else(|| {
+		GatewayError::Download("archive download size overflowed".to_string())
+	})?;
+	if size > MAX_ARCHIVE_BYTES {
+		return Err(GatewayError::Download(
+			"archive exceeds the 64 MiB download limit".to_string(),
+		));
+	}
+	Ok(size)
+}
+
+/// SHA-256 values copied from the pinned release's published checksums.
+/// Bump these in the same change as [`PINNED_VERSION`].
+fn expected_checksum(version: &str, asset: &str) -> Result<&'static str> {
+	if version != PINNED_VERSION {
+		return Err(GatewayError::Download(format!(
+			"no trusted checksum is pinned for CLIProxyAPI v{version}"
+		)));
+	}
+	match asset {
+		"CLIProxyAPI_7.2.81_darwin_aarch64.tar.gz" => Ok(
+			"c48e80b51973f3102f7eac78c32be9bcfcde0dad48aa940d0bc2ee7052fa741a",
+		),
+		"CLIProxyAPI_7.2.81_darwin_amd64.tar.gz" => Ok(
+			"75af5e17e4d211422d1dadf37dbfe715c2c8acad5b9784afe25ed5394e238376",
+		),
+		"CLIProxyAPI_7.2.81_linux_aarch64.tar.gz" => Ok(
+			"861a8fd33f6f57945d29e632ab4cca826a69649bc37be1fbccfaef0fd019f889",
+		),
+		"CLIProxyAPI_7.2.81_linux_amd64.tar.gz" => Ok(
+			"9a21b417e76c94267f747357bb83f87c8e9fccd5b15cbf8c3a8b3de1418a6472",
+		),
+		"CLIProxyAPI_7.2.81_windows_aarch64.zip" => Ok(
+			"83e67f73ae622d1a1eb93655aca67521c68e6d1ba8e1713bdb36c8487819ad91",
+		),
+		"CLIProxyAPI_7.2.81_windows_amd64.zip" => Ok(
+			"46f1aeddc8eddaf6c4369e0e9c7307ca3348c6d846b59ad26f1d8d038e8fad6b",
+		),
+		_ => Err(GatewayError::Download(format!(
+			"no trusted checksum is pinned for {asset}"
+		))),
+	}
+}
 
 /// Release host resolution: explicit mirror (settings UI) → env override →
 /// GitHub. A mirror serves the same `releases/download/v…/asset` layout.
@@ -159,6 +212,7 @@ pub async fn provision(
 	progress: impl Fn(GatewayProvisionPhase, Option<u8>),
 ) -> Result<PathBuf> {
 	let asset = asset_name(version)?;
+	let expected = expected_checksum(version, &asset)?;
 	let base = download_base(mirror);
 	let http = reqwest::Client::builder()
 		.connect_timeout(Duration::from_secs(10))
@@ -166,33 +220,6 @@ pub async fn provision(
 		.build()?;
 
 	progress(GatewayProvisionPhase::Downloading, Some(0));
-	let checksums = http
-		.get(format!("{base}/v{version}/checksums.txt"))
-		.send()
-		.await?
-		.error_for_status()
-		.map_err(|error| {
-			GatewayError::Download(format!(
-				"checksums.txt for v{version}: {error}"
-			))
-		})?
-		.text()
-		.await?;
-	let expected = checksums
-		.lines()
-		.find_map(|line| {
-			let mut parts = line.split_whitespace();
-			let hash = parts.next()?;
-			let name = parts.next()?;
-			(name.trim_start_matches('*') == asset)
-				.then(|| hash.to_ascii_lowercase())
-		})
-		.ok_or_else(|| {
-			GatewayError::Download(format!(
-				"asset {asset} not listed in checksums.txt"
-			))
-		})?;
-
 	let response = http
 		.get(format!("{base}/v{version}/{asset}"))
 		.send()
@@ -200,18 +227,27 @@ pub async fn provision(
 		.error_for_status()
 		.map_err(|error| GatewayError::Download(format!("{asset}: {error}")))?;
 	let total = response.content_length();
+	if total.is_some_and(|size| size > MAX_ARCHIVE_BYTES) {
+		return Err(GatewayError::Download(format!(
+			"{asset} exceeds the 64 MiB download limit"
+		)));
+	}
 
 	let dir = version_dir(root, version);
 	std::fs::create_dir_all(&dir)?;
-	let archive_path = dir.join(&asset);
-	let mut file = tokio::fs::File::create(&archive_path).await?;
+	let temporary = tempfile::Builder::new()
+		.prefix(".download.")
+		.suffix(&format!(".{asset}"))
+		.tempfile_in(&dir)?;
+	let archive_path = temporary.path().to_path_buf();
+	let mut file = tokio::fs::File::from_std(temporary.reopen()?);
 	let mut hasher = sha2::Sha256::new();
 	let mut downloaded: u64 = 0;
 	let mut response = response;
 	while let Some(chunk) = response.chunk().await? {
+		downloaded = archive_size_after_chunk(downloaded, chunk.len())?;
 		hasher.update(&chunk);
 		tokio::io::AsyncWriteExt::write_all(&mut file, &chunk).await?;
-		downloaded += chunk.len() as u64;
 		if let Some(total) = total.filter(|total| *total > 0) {
 			let percent = ((downloaded * 100) / total).min(100) as u8;
 			progress(GatewayProvisionPhase::Downloading, Some(percent));
@@ -222,13 +258,12 @@ pub async fn provision(
 
 	let actual = format!("{:x}", hasher.finalize());
 	if actual != expected {
-		let _ = std::fs::remove_file(&archive_path);
 		return Err(GatewayError::ChecksumMismatch(asset));
 	}
 
 	progress(GatewayProvisionPhase::Extracting, None);
 	extract(&archive_path, &dir).await?;
-	let _ = std::fs::remove_file(&archive_path);
+	drop(temporary);
 
 	let bin = find_executable(&dir).ok_or_else(|| {
 		GatewayError::Extract(format!(
@@ -325,5 +360,19 @@ mod tests {
 		let found = installed_bin(dir.path(), "0.0.0");
 		std::env::remove_var("AGHUB_CLIPROXY_BIN");
 		assert_eq!(found, Some(bin));
+	}
+
+	#[test]
+	fn archive_size_limit_rejects_oversized_streams() {
+		assert!(archive_size_after_chunk(MAX_ARCHIVE_BYTES, 1).is_err());
+	}
+
+	#[test]
+	fn checksum_is_tied_to_the_pinned_version() {
+		let asset = asset_name(PINNED_VERSION).expect("asset name");
+		let checksum =
+			expected_checksum(PINNED_VERSION, &asset).expect("pinned checksum");
+		assert_eq!(checksum.len(), 64);
+		assert!(expected_checksum("7.2.82", &asset).is_err());
 	}
 }
