@@ -40,6 +40,12 @@ struct AuthFilesBody {
 	files: Vec<GatewayAuthFileDto>,
 }
 
+#[derive(Deserialize)]
+struct ApiKeysBody {
+	#[serde(rename = "api-keys")]
+	keys: Vec<String>,
+}
+
 /// Upstream key element as the management API speaks it (kebab-case).
 /// Kept separate from the snake_case DTO the aghub API serves.
 #[derive(serde::Serialize, Deserialize)]
@@ -309,11 +315,7 @@ impl ManagementClient {
 
 	pub async fn api_keys(&self) -> Result<Vec<String>> {
 		let body = self.get_json("api-keys").await?;
-		let keys = body
-			.get("api-keys")
-			.cloned()
-			.unwrap_or(serde_json::Value::Null);
-		Ok(serde_json::from_value(keys).unwrap_or_default())
+		Ok(serde_json::from_value::<ApiKeysBody>(body)?.keys)
 	}
 
 	pub async fn set_api_keys(&self, keys: &[String]) -> Result<()> {
@@ -390,8 +392,8 @@ impl ManagementClient {
 			.collect())
 	}
 
-	/// Append one key: these endpoints echo full elements on GET, so a
-	/// read-append-PUT roundtrip is lossless.
+	/// Append one key while retaining fields this UI does not edit, such as
+	/// proxy settings, headers, and excluded models.
 	pub async fn add_upstream_key(
 		&self,
 		provider: GatewayUpstreamProvider,
@@ -399,27 +401,23 @@ impl ManagementClient {
 		base_url: Option<&str>,
 	) -> Result<()> {
 		let endpoint = upstream_endpoint(provider);
-		let mut wire: Vec<UpstreamKeyWire> = self
-			.upstream_keys(provider)
-			.await?
-			.into_iter()
-			.map(|key| UpstreamKeyWire {
-				api_key: key.api_key,
-				base_url: key.base_url,
-				auth_index: None,
-			})
-			.collect();
-		wire.push(UpstreamKeyWire {
-			api_key: api_key.to_string(),
-			base_url: base_url.map(str::to_string),
-			auth_index: None,
-		});
-		self.send(
-			self.http
-				.put(self.endpoint(endpoint)?)
-				.json(&serde_json::json!(wire)),
-		)
-		.await?;
+		let body = self.get_json(endpoint).await?;
+		let mut entries = body
+			.get(endpoint)
+			.and_then(serde_json::Value::as_array)
+			.cloned()
+			.ok_or_else(|| {
+				GatewayError::Invalid(format!(
+					"{endpoint} returned an unexpected payload"
+				))
+			})?;
+		let mut entry = serde_json::json!({ "api-key": api_key });
+		if let Some(base_url) = base_url {
+			entry["base-url"] = serde_json::json!(base_url);
+		}
+		entries.push(entry);
+		self.send(self.http.put(self.endpoint(endpoint)?).json(&entries))
+			.await?;
 		Ok(())
 	}
 
@@ -463,18 +461,27 @@ impl ManagementClient {
 		&self,
 		provider: &GatewayCompatProviderDto,
 	) -> Result<()> {
-		let mut wire: Vec<CompatProviderWire> = self
-			.compat_providers()
-			.await?
-			.into_iter()
-			.map(compat_dto_to_wire)
-			.collect();
-		wire.retain(|existing| existing.name != provider.name);
-		wire.push(compat_dto_to_wire(provider.clone()));
+		let body = self.get_json("openai-compatibility").await?;
+		let mut entries = match body.get("openai-compatibility") {
+			Some(serde_json::Value::Array(entries)) => entries.clone(),
+			Some(serde_json::Value::Null) => Vec::new(),
+			_ => {
+				return Err(GatewayError::Invalid(
+					"openai-compatibility returned an unexpected payload"
+						.to_string(),
+				))
+			}
+		};
+		entries.retain(|entry| {
+			entry.get("name").and_then(serde_json::Value::as_str)
+				!= Some(provider.name.as_str())
+		});
+		entries
+			.push(serde_json::to_value(compat_dto_to_wire(provider.clone()))?);
 		self.send(
 			self.http
 				.put(self.endpoint("openai-compatibility")?)
-				.json(&serde_json::json!(wire)),
+				.json(&entries),
 		)
 		.await?;
 		Ok(())
@@ -795,6 +802,16 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn api_keys_rejects_a_missing_list() {
+		let (base, _) = spawn_mock(200, r#"{"status":"ok"}"#);
+		let error = client(&base)
+			.api_keys()
+			.await
+			.expect_err("missing api-keys must fail");
+		assert!(matches!(error, GatewayError::Json(_)));
+	}
+
+	#[tokio::test]
 	async fn latest_version_strips_tag_prefix() {
 		let (base, _) = spawn_mock(200, r#"{"latest-version":"v7.2.82"}"#);
 		let latest = client(&base).latest_version().await.expect("latest");
@@ -815,6 +832,62 @@ mod tests {
 		assert_eq!(keys[0].api_key, "sk-1");
 		assert_eq!(keys[0].base_url.as_deref(), Some("https://r.io"));
 		assert_eq!(keys[0].auth_index.as_deref(), Some("idx1"));
+	}
+
+	#[tokio::test]
+	async fn add_upstream_key_preserves_unmanaged_fields() {
+		let (base, seen) = spawn_mock(
+			200,
+			concat!(
+				r#"{"claude-api-key":[{"api-key":"existing","#,
+				r#""base-url":"https://r.io","#,
+				r#""headers":{"X-Team":"prod"},"#,
+				r#""proxy-url":"socks5://proxy","#,
+				r#""excluded-models":["old-model"]}]}"#
+			),
+		);
+		client(&base)
+			.add_upstream_key(
+				GatewayUpstreamProvider::Claude,
+				"new-key",
+				Some("https://new.example"),
+			)
+			.await
+			.expect("add key");
+		let request = seen.lock().expect("seen").clone();
+		assert!(request.contains(r#""headers":{"X-Team":"prod"}"#));
+		assert!(request.contains(r#""proxy-url":"socks5://proxy""#));
+		assert!(request.contains(r#""excluded-models":["old-model"]"#));
+	}
+
+	#[tokio::test]
+	async fn add_compat_provider_preserves_existing_provider_fields() {
+		let (base, seen) = spawn_mock(
+			200,
+			concat!(
+				r#"{"openai-compatibility":[{"name":"existing","#,
+				r#""base-url":"https://r.io","#,
+				r#""api-key-entries":[{"api-key":"old-key","#,
+				r#""auth-index":"idx1"}],"#,
+				r#""headers":{"X-Team":"prod"},"models":[]}]}"#
+			),
+		);
+		client(&base)
+			.add_compat_provider(&GatewayCompatProviderDto {
+				name: "new-provider".to_string(),
+				base_url: "https://new.example".to_string(),
+				api_keys: vec!["new-key".to_string()],
+				models: Vec::new(),
+				disabled: false,
+				auth_index: None,
+			})
+			.await
+			.expect("add provider");
+		let request = seen.lock().expect("seen").clone();
+		assert!(request.contains(
+			r#""api-key-entries":[{"api-key":"old-key","auth-index":"idx1"}]"#
+		));
+		assert!(request.contains(r#""headers":{"X-Team":"prod"}"#));
 	}
 
 	#[tokio::test]

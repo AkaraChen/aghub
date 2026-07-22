@@ -40,6 +40,7 @@ use aghub_inference::{
 
 use crate::auth::ApiAuth;
 use crate::error::{ApiCreated, ApiError, ApiNoContent, ApiResult};
+use crate::extractors::TrustedLocalOrigin;
 use crate::state::GatewayState;
 
 /// Marks inference inventory entries mirrored from gateway instances.
@@ -284,6 +285,7 @@ pub async fn list_gateway_instances(
 #[post("/gateway/instances/managed", data = "<request>")]
 pub async fn create_managed_gateway(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	request: Json<CreateManagedGatewayRequest>,
 ) -> ApiCreated<GatewayInstanceDto> {
@@ -321,6 +323,7 @@ pub async fn create_managed_gateway(
 #[post("/gateway/instances/external", data = "<request>")]
 pub async fn create_external_gateway(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	request: Json<CreateExternalGatewayRequest>,
 ) -> ApiCreated<GatewayInstanceDto> {
@@ -341,16 +344,48 @@ pub async fn create_external_gateway(
 	store(state)
 		.insert(record.clone())
 		.map_err(ApiError::from)?;
-	state
+	if let Err(error) = state
 		.key_store
-		.set_key(key_id(&record), &request.management_key)?;
-	sync_inference_providers(state, &record, &client).await?;
+		.set_key(key_id(&record), &request.management_key)
+	{
+		if let Err(cleanup) = store(state).remove(&record.id) {
+			log::error!(
+				"gateway '{}': failed to roll back instance record: {cleanup}",
+				record.name
+			);
+		}
+		return Err(ApiError::from(error));
+	}
+	if let Err(error) = sync_inference_providers(state, &record, &client).await
+	{
+		if let Err(cleanup) = remove_inference_providers(state, &record) {
+			log::error!(
+				"gateway '{}': failed to roll back inference providers: {}",
+				record.name,
+				cleanup.body.error
+			);
+		}
+		if let Err(cleanup) = store(state).remove(&record.id) {
+			log::error!(
+				"gateway '{}': failed to roll back instance record: {cleanup}",
+				record.name
+			);
+		}
+		if let Err(cleanup) = state.key_store.delete_key(key_id(&record)) {
+			log::error!(
+				"gateway '{}': failed to roll back management key: {cleanup}",
+				record.name
+			);
+		}
+		return Err(error);
+	}
 	Ok((Status::Created, Json(instance_dto(state, &record).await)))
 }
 
 #[put("/gateway/instances/<id>", data = "<request>")]
 pub async fn update_gateway_instance(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	id: &str,
 	request: Json<UpdateGatewayInstanceRequest>,
@@ -393,6 +428,7 @@ pub async fn update_gateway_instance(
 #[delete("/gateway/instances/<id>")]
 pub async fn delete_gateway_instance(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	id: &str,
 ) -> ApiNoContent {
@@ -417,6 +453,7 @@ pub async fn delete_gateway_instance(
 #[post("/gateway/instances/<id>/start")]
 pub async fn start_gateway_instance(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	id: &str,
 ) -> ApiResult<GatewayInstanceDto> {
@@ -473,6 +510,7 @@ pub async fn start_gateway_instance(
 #[post("/gateway/instances/<id>/stop")]
 pub async fn stop_gateway_instance(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	id: &str,
 ) -> ApiResult<GatewayInstanceDto> {
@@ -486,6 +524,7 @@ pub async fn stop_gateway_instance(
 #[post("/gateway/provision", data = "<request>")]
 pub async fn start_gateway_provision(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	request: Json<StartGatewayProvisionRequest>,
 ) -> ApiResult<GatewayProvisionStatusDto> {
@@ -633,6 +672,7 @@ pub async fn list_gateway_auth_files(
 #[post("/gateway/instances/<id>/auth-files", data = "<request>")]
 pub async fn upload_gateway_auth_file(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	id: &str,
 	request: Json<UploadGatewayAuthFileRequest>,
@@ -670,6 +710,7 @@ pub async fn download_gateway_auth_file(
 #[delete("/gateway/instances/<id>/auth-files?<name>")]
 pub async fn delete_gateway_auth_file(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	id: &str,
 	name: &str,
@@ -686,6 +727,7 @@ pub async fn delete_gateway_auth_file(
 #[post("/gateway/instances/<id>/oauth", data = "<request>")]
 pub async fn start_gateway_oauth(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	id: &str,
 	request: Json<StartGatewayOauthRequest>,
@@ -735,6 +777,7 @@ pub async fn get_gateway_api_keys(
 #[put("/gateway/instances/<id>/api-keys", data = "<request>")]
 pub async fn put_gateway_api_keys(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	id: &str,
 	request: Json<GatewayApiKeysDto>,
@@ -790,6 +833,7 @@ pub async fn get_gateway_settings(
 #[put("/gateway/instances/<id>/settings/<key..>", data = "<request>")]
 pub async fn put_gateway_setting(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	id: &str,
 	key: PathBuf,
@@ -828,6 +872,7 @@ pub async fn get_gateway_config_file(
 #[put("/gateway/instances/<id>/config-file", data = "<request>")]
 pub async fn put_gateway_config_file(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	id: &str,
 	request: Json<GatewayConfigFileDto>,
@@ -838,6 +883,7 @@ pub async fn put_gateway_config_file(
 		.put_config_yaml(&request.content)
 		.await
 		.map_err(ApiError::from)?;
+	sync_inference_providers(state, &record, &client).await?;
 	Ok(rocket::response::status::NoContent)
 }
 
@@ -870,6 +916,7 @@ pub async fn list_gateway_upstream_keys(
 #[post("/gateway/instances/<id>/upstream-keys", data = "<request>")]
 pub async fn add_gateway_upstream_key(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	id: &str,
 	request: Json<AddGatewayUpstreamKeyRequest>,
@@ -890,6 +937,7 @@ pub async fn add_gateway_upstream_key(
 #[delete("/gateway/instances/<id>/upstream-keys?<provider>&<api_key>")]
 pub async fn delete_gateway_upstream_key(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	id: &str,
 	provider: &str,
@@ -932,6 +980,7 @@ pub async fn list_gateway_compat_providers(
 #[post("/gateway/instances/<id>/compat-providers", data = "<request>")]
 pub async fn add_gateway_compat_provider(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	id: &str,
 	request: Json<AddGatewayCompatProviderRequest>,
@@ -956,6 +1005,7 @@ pub async fn add_gateway_compat_provider(
 #[delete("/gateway/instances/<id>/compat-providers?<name>")]
 pub async fn delete_gateway_compat_provider(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	id: &str,
 	name: &str,
@@ -983,6 +1033,7 @@ pub async fn gateway_logs(
 #[delete("/gateway/instances/<id>/logs")]
 pub async fn clear_gateway_logs(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	id: &str,
 ) -> ApiNoContent {
@@ -1011,6 +1062,7 @@ pub async fn get_gateway_oauth_excluded_models(
 #[put("/gateway/instances/<id>/oauth-excluded-models", data = "<request>")]
 pub async fn put_gateway_oauth_excluded_models(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	id: &str,
 	request: Json<GatewayOauthExcludedModelsDto>,
@@ -1029,6 +1081,7 @@ pub async fn put_gateway_oauth_excluded_models(
 #[post("/gateway/instances/<id>/vertex-import", data = "<request>")]
 pub async fn import_gateway_vertex(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	id: &str,
 	request: Json<ImportGatewayVertexRequest>,
@@ -1045,6 +1098,7 @@ pub async fn import_gateway_vertex(
 #[post("/gateway/instances/<id>/accounts/reset-quota", data = "<request>")]
 pub async fn reset_gateway_account_quota(
 	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
 	state: &State<GatewayState>,
 	id: &str,
 	request: Json<ResetGatewayQuotaRequest>,
