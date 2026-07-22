@@ -1,25 +1,18 @@
 import { Accordion } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
-import type { TFunction } from "i18next";
 import * as pathe from "pathe";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { SkillCopyStorageModeRequest } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
 import { skillDiffQueryOptions } from "../requests/skills";
 import {
-	buildSkillCopyResolutionTargets,
 	groupSkillCopyVersions,
 	skillCopyVersionLabel,
-	skillCopyVersionLocation,
 	skillDiffsContainLinks,
 	type SkillCopyVersion,
 } from "./skill-copy-versions";
-import {
-	formatAgentName,
-	type SkillSourceLocation,
-} from "./skill-detail-helpers";
-import type { SkillVersionChoice } from "./skill-resolution-controls";
+import type { SkillSourceLocation } from "./skill-detail-helpers";
 import {
 	SkillComparisonLoading,
 	SkillComparisonMatchAlert,
@@ -27,6 +20,14 @@ import {
 	SkillDriftHeading,
 } from "./skill-drift-status";
 import { SkillResolutionReview } from "./skill-version-diff-review";
+import {
+	githubLocalChoice,
+	githubLocationSource,
+	githubRepositoryChoice,
+	githubResolutionChoice,
+	type GithubSkillResolutionChoice,
+	useSynchronizedGithubSelection,
+} from "./github-skill-resolution";
 
 interface GithubSkillDriftProps {
 	sessionId: string;
@@ -39,24 +40,7 @@ interface GithubSkillDriftProps {
 	onSelectionChange: (selection: GithubSkillResolutionChoice | null) => void;
 }
 
-export interface GithubSkillResolutionChoice {
-	kind: "repository" | "local";
-	reference:
-		| {
-				kind: "installed";
-				source_path: string;
-		  }
-		| {
-				kind: "git_scan";
-				session_id: string;
-				skill_path: string;
-		  };
-	expectedReferenceHash: string;
-	storageMode: SkillCopyStorageModeRequest;
-	targets: Array<{ source_path: string; expected_hash: string }>;
-	locationCount: number;
-	canResolve: boolean;
-}
+export type { GithubSkillResolutionChoice } from "./github-skill-resolution";
 
 const REPOSITORY_DIFFERENCES_ID = "github-skill-differences";
 const REPOSITORY_COPY_ID = "repository";
@@ -115,11 +99,11 @@ export function GithubSkillDrift({
 				locations.map((location) => ({
 					id: location.sourcePath,
 					label: pathe.dirname(location.sourcePath),
-					source: locationSource(location),
+					source: githubLocationSource(location),
 					sourceId: location.agents[0],
 					agents: location.agents,
 					sourcePath: location.sourcePath,
-					canonicalPath: location.canonicalPath,
+					isSymlink: location.isSymlink,
 				})),
 				comparisonResults ?? [],
 			),
@@ -147,7 +131,7 @@ export function GithubSkillDrift({
 		selectedVersion?.hash === repositoryVersion?.hash;
 	const controlsDisabled = isDisabled || result.isFetching;
 	const hasLinks =
-		locations.some((location) => location.canonicalPath) ||
+		locations.some((location) => location.isSymlink) ||
 		skillDiffsContainLinks(comparisonResults);
 	const localCopiesUseOneNonRepositoryVersion =
 		unavailableCount === 0 &&
@@ -185,7 +169,7 @@ export function GithubSkillDrift({
 
 	const handleVersionSelection = (version: SkillCopyVersion) => {
 		if (!repositoryVersion || controlsDisabled) return;
-		const nextSelection = resolutionChoiceForVersion({
+		const nextSelection = githubResolutionChoice({
 			version,
 			repositoryVersion,
 			versions,
@@ -203,7 +187,7 @@ export function GithubSkillDrift({
 	) => {
 		setStorageMode(nextStorageMode);
 		if (!selectedVersion || !repositoryVersion || controlsDisabled) return;
-		const nextSelection = resolutionChoiceForVersion({
+		const nextSelection = githubResolutionChoice({
 			version: selectedVersion,
 			repositoryVersion,
 			versions,
@@ -273,12 +257,15 @@ export function GithubSkillDrift({
 										<SkillResolutionReview
 											choices={versions.map((version) =>
 												version === repositoryVersion
-													? repositoryChoice(
+													? githubRepositoryChoice(
 															version,
 															t,
 															skillPath,
 														)
-													: localChoice(version, t),
+													: githubLocalChoice(
+															version,
+															t,
+														),
 											)}
 											selectedChoiceId={
 												selectedVersion?.hash
@@ -353,211 +340,4 @@ export function GithubSkillDrift({
 			)}
 		</div>
 	);
-}
-
-function useSynchronizedGithubSelection({
-	selection,
-	selectedVersion,
-	repositoryVersion,
-	versions,
-	sessionId,
-	skillPath,
-	storageMode,
-	locationCount,
-	canResolve,
-	onSelectionChange,
-}: {
-	selection: GithubSkillResolutionChoice | null;
-	selectedVersion?: SkillCopyVersion;
-	repositoryVersion?: SkillCopyVersion;
-	versions: SkillCopyVersion[];
-	sessionId: string;
-	skillPath: string;
-	storageMode: SkillCopyStorageModeRequest;
-	locationCount: number;
-	canResolve: boolean;
-	onSelectionChange: (selection: GithubSkillResolutionChoice | null) => void;
-}) {
-	const currentSelection = useMemo(
-		() =>
-			selectedVersion && repositoryVersion
-				? resolutionChoiceForVersion({
-						version: selectedVersion,
-						repositoryVersion,
-						versions,
-						sessionId,
-						skillPath,
-						storageMode,
-						locationCount,
-						canResolve,
-					})
-				: null,
-		[
-			canResolve,
-			locationCount,
-			repositoryVersion,
-			selectedVersion,
-			sessionId,
-			skillPath,
-			storageMode,
-			versions,
-		],
-	);
-
-	useEffect(() => {
-		if (!selection) return;
-		if (
-			!currentSelection ||
-			!resolutionChoiceContentMatches(selection, currentSelection)
-		) {
-			onSelectionChange(null);
-			return;
-		}
-		if (selection.canResolve !== currentSelection.canResolve) {
-			onSelectionChange(currentSelection);
-		}
-	}, [currentSelection, onSelectionChange, selection]);
-}
-
-function resolutionChoiceForVersion({
-	version,
-	repositoryVersion,
-	versions,
-	sessionId,
-	skillPath,
-	storageMode,
-	locationCount,
-	canResolve,
-}: {
-	version: SkillCopyVersion;
-	repositoryVersion: SkillCopyVersion;
-	versions: SkillCopyVersion[];
-	sessionId: string;
-	skillPath: string;
-	storageMode: SkillCopyStorageModeRequest;
-	locationCount: number;
-	canResolve: boolean;
-}): GithubSkillResolutionChoice | null {
-	const repositorySelected = version === repositoryVersion;
-	const sourcePath = repositorySelected
-		? undefined
-		: version.copies.find((copy) => copy.sourcePath)?.sourcePath;
-	if (!repositorySelected && !sourcePath) return null;
-
-	return {
-		kind: repositorySelected ? "repository" : "local",
-		reference: repositorySelected
-			? {
-					kind: "git_scan",
-					session_id: sessionId,
-					skill_path: skillPath,
-				}
-			: {
-					kind: "installed",
-					source_path: sourcePath!,
-				},
-		expectedReferenceHash: version.hash,
-		storageMode,
-		targets: buildSkillCopyResolutionTargets(
-			versions,
-			sourcePath,
-			storageMode,
-		),
-		locationCount,
-		canResolve,
-	};
-}
-
-function resolutionChoiceContentMatches(
-	left: GithubSkillResolutionChoice,
-	right: GithubSkillResolutionChoice,
-): boolean {
-	if (
-		left.kind !== right.kind ||
-		left.expectedReferenceHash !== right.expectedReferenceHash ||
-		left.storageMode !== right.storageMode ||
-		left.locationCount !== right.locationCount ||
-		left.reference.kind !== right.reference.kind ||
-		left.targets.length !== right.targets.length
-	) {
-		return false;
-	}
-	if (
-		left.reference.kind === "installed" &&
-		right.reference.kind === "installed" &&
-		left.reference.source_path !== right.reference.source_path
-	) {
-		return false;
-	}
-	if (
-		left.reference.kind === "git_scan" &&
-		right.reference.kind === "git_scan" &&
-		(left.reference.session_id !== right.reference.session_id ||
-			left.reference.skill_path !== right.reference.skill_path)
-	) {
-		return false;
-	}
-	return left.targets.every(
-		(target, index) =>
-			target.source_path === right.targets[index]?.source_path &&
-			target.expected_hash === right.targets[index]?.expected_hash,
-	);
-}
-
-function repositoryChoice(
-	version: SkillCopyVersion,
-	t: TFunction,
-	skillPath: string,
-): SkillVersionChoice {
-	const matchingLocalCount = version.copies.filter(
-		(copy) => copy.sourcePath,
-	).length;
-	return {
-		id: version.hash,
-		locations: [
-			{
-				source: "GitHub",
-				path: skillPath,
-				kind: "repository",
-				target: version.hash.slice(0, 8),
-			},
-			...version.copies.flatMap((copy) =>
-				copy.sourcePath ? [skillCopyVersionLocation(copy)] : [],
-			),
-		],
-		status:
-			matchingLocalCount > 0
-				? t("repositoryVersionLocations", {
-						count: matchingLocalCount,
-					})
-				: t("repositoryVersionState"),
-		ariaLabel: t("keepRepositoryVersion"),
-	};
-}
-
-function localChoice(
-	version: SkillCopyVersion,
-	t: TFunction,
-): SkillVersionChoice {
-	const location = version.copies[0]?.label ?? version.hash.slice(0, 8);
-	return {
-		id: version.hash,
-		locations: version.copies.map(skillCopyVersionLocation),
-		status: t("skillVersionLocationUsage", {
-			count: version.copies.length,
-		}),
-		ariaLabel: t("keepVersionFrom", { location }),
-	};
-}
-
-function locationSource(location: SkillSourceLocation): string {
-	return location.agents.length > 0
-		? location.agents.map(formatAgentName).join(", ")
-		: pathe
-				.basename(
-					pathe.dirname(
-						pathe.dirname(pathe.dirname(location.sourcePath)),
-					),
-				)
-				.replace(/^\./, "");
 }

@@ -77,9 +77,7 @@ impl UpdateSkillRequest {
 #[ts(export)]
 pub struct SkillLocationResponse {
 	pub source_path: String,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	#[ts(optional)]
-	pub canonical_path: Option<String>,
+	pub is_symlink: bool,
 	pub source: ConfigSource,
 }
 
@@ -89,8 +87,7 @@ pub struct SkillResponse {
 	pub name: String,
 	pub enabled: bool,
 	pub source_path: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub canonical_path: Option<String>,
+	pub is_symlink: bool,
 	pub description: Option<String>,
 	pub author: Option<String>,
 	pub version: Option<String>,
@@ -126,7 +123,9 @@ pub enum SkillLinkStatusResponse {
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
 pub struct SkillLinkResponse {
-	pub target: String,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub target: Option<String>,
 	pub status: SkillLinkStatusResponse,
 }
 
@@ -297,7 +296,7 @@ impl From<&Skill> for SkillResponse {
 			name: s.name.clone(),
 			enabled: s.enabled,
 			source_path: s.source_path.clone(),
-			canonical_path: s.canonical_path.clone(),
+			is_symlink: s.canonical_path.is_some(),
 			description: s.description.clone(),
 			author: s.author.clone(),
 			version: s.version.clone(),

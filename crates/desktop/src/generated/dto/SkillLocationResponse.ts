@@ -3,6 +3,6 @@ import type { ConfigSource } from "./ConfigSource";
 
 export type SkillLocationResponse = {
 	source_path: string;
-	canonical_path?: string;
+	is_symlink: boolean;
 	source: ConfigSource;
 };

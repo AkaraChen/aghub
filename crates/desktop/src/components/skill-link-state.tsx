@@ -32,9 +32,16 @@ export function SkillLinkState({
 				className,
 			)}
 		>
-			<code className="min-w-0 truncate text-left" title={link.target}>
-				{link.target}
-			</code>
+			{link.target ? (
+				<code
+					className="min-w-0 truncate text-left"
+					title={link.target}
+				>
+					{link.target}
+				</code>
+			) : (
+				<span />
+			)}
 			<span
 				className={cn(
 					"flex shrink-0 items-center gap-1",

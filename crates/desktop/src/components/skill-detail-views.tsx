@@ -62,7 +62,7 @@ export function LocationRow({
 		() => (tree ? summarizeSkillLinks(tree) : null),
 		[tree],
 	);
-	const hasStorageStatus = Boolean(group.canonicalPath);
+	const hasStorageStatus = group.isSymlink;
 	const hasFileLinkStatus = Boolean(
 		treeUnavailable || (linkSummary && linkSummary.total > 0),
 	);
@@ -136,21 +136,13 @@ export function LocationRow({
 			</div>
 			{(hasStorageStatus || hasFileLinkStatus) && (
 				<div className="mt-2 space-y-1.5 border-t border-separator/60 pt-2">
-					{group.canonicalPath && (
+					{group.isSymlink && (
 						<div
 							data-skill-location-link="valid"
 							className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 text-xs text-muted"
 						>
 							<LinkIcon className="size-3.5" />
-							<div className="flex min-w-0 items-center gap-1.5">
-								<span className="shrink-0">{t("symlink")}</span>
-								<code
-									className="min-w-0 truncate"
-									title={pathe.dirname(group.canonicalPath)}
-								>
-									→ {pathe.dirname(group.canonicalPath)}
-								</code>
-							</div>
+							<span>{t("symlink")}</span>
 							<span>{t("skillLinkValid")}</span>
 						</div>
 					)}

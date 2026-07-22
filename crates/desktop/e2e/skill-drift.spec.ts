@@ -151,10 +151,28 @@ test("a changed file link shows both targets and their status", async ({
 	).toBeVisible();
 });
 
-test("a selected local version unifies every different local copy", async ({
+test("copy mode materializes every location including its reference", async ({
 	page,
 }) => {
 	const mocks = await installMocks(page);
+	const linkedCopyDiff: SkillDirectoryDiffResponse = {
+		...modifiedSkillDiff,
+		files: [
+			...modifiedSkillDiff.files,
+			{
+				path: "linked-notes.txt",
+				change: "modified",
+				before: null,
+				after: null,
+				before_link: { target: "notes.txt", status: "valid" },
+				after_link: {
+					target: "archive/notes.txt",
+					status: "valid",
+				},
+				content_omitted: false,
+			},
+		],
+	};
 	mocks.addSkillLocation(
 		"react-pro",
 		"claude",
@@ -162,11 +180,11 @@ test("a selected local version unifies every different local copy", async ({
 	);
 	mocks.setSkillDiff(
 		"/tmp/e2e/.cursor/skills/react-pro/SKILL.md",
-		modifiedSkillDiff,
+		linkedCopyDiff,
 	);
 	mocks.setSkillDiff(
 		"/tmp/e2e/.z-claude/skills/react-pro/SKILL.md",
-		modifiedSkillDiff,
+		linkedCopyDiff,
 	);
 	await page.goto("/skills");
 
@@ -176,6 +194,7 @@ test("a selected local version unifies every different local copy", async ({
 		.click();
 	await expect(page.locator("[data-skill-version-choice]")).toHaveCount(2);
 	await skillVersionRow(page, "/tmp/e2e/.cursor/skills/react-pro").click();
+	await page.getByText("Convert links to copies", { exact: true }).click();
 	await page
 		.getByRole("button", { name: "Use selected version in 3 locations" })
 		.click();
@@ -189,12 +208,17 @@ test("a selected local version unifies every different local copy", async ({
 					source_path: "/tmp/e2e/.cursor/skills/react-pro/SKILL.md",
 				},
 				expected_reference_hash: "target",
-				storage_mode: "preserve",
+				storage_mode: "copy",
 				targets: [
 					{
 						source_path:
 							"/tmp/e2e/.claude/skills/react-pro/SKILL.md",
 						expected_hash: "base",
+					},
+					{
+						source_path:
+							"/tmp/e2e/.cursor/skills/react-pro/SKILL.md",
+						expected_hash: "target",
 					},
 					{
 						source_path:
@@ -219,11 +243,7 @@ test("a linked local version can be retained and materialized as copies", async 
 }) => {
 	const mocks = await installMocks(page);
 	const linkedPath = "/tmp/e2e/.claude/skills/react-pro/SKILL.md";
-	mocks.setSkillSymlink(
-		"react-pro",
-		"claude",
-		"/tmp/e2e/.shared/skills/react-pro/SKILL.md",
-	);
+	mocks.setSkillSymlink("react-pro", "claude");
 	mocks.setSkillDiff(
 		"/tmp/e2e/.cursor/skills/react-pro/SKILL.md",
 		modifiedSkillDiff,
@@ -244,9 +264,6 @@ test("a linked local version can be retained and materialized as copies", async 
 	);
 	await expect(linkedVersion).toContainText("Claude");
 	await expect(linkedVersion).toContainText("Symlink");
-	await expect(linkedVersion).toContainText(
-		"/tmp/e2e/.shared/skills/react-pro",
-	);
 	await expect(page.locator("[data-skill-diff-file]")).toHaveCount(0);
 	await page.getByRole("button", { name: "Review file changes" }).click();
 	await expect(page.locator("[data-skill-diff-file]")).toHaveCount(1);

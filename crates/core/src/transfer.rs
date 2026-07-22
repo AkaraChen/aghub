@@ -1,7 +1,7 @@
 use crate::{
 	create_adapter,
 	errors::{ConfigError, Result},
-	manager::{skill::copy_skill_directory_staged, ConfigManager},
+	manager::ConfigManager,
 	models::{AgentType, McpServer, Skill, SubAgent},
 	registry,
 };
@@ -10,6 +10,11 @@ use skill::sanitize::sanitize_name;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+
+// Transfers use the same per-directory bounds as skill snapshots so one
+// installation cannot read or write more than an interactive comparison.
+const MAX_SKILL_TRANSFER_BYTES: u64 = 128 * 1024 * 1024;
+const MAX_SKILL_TRANSFER_ENTRIES: usize = 10_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum InstallScope {
@@ -212,6 +217,39 @@ fn skill_directory_matches(path: &Path, expected_name: &str) -> bool {
 	validate_skill_directory(path, expected_name).is_ok()
 }
 
+fn copy_skill_directory(from: &Path, to: &Path) -> Result<()> {
+	let mut remaining_bytes = MAX_SKILL_TRANSFER_BYTES;
+	skill::copy::copy_directory_with_budget(
+		from,
+		to,
+		&mut remaining_bytes,
+		MAX_SKILL_TRANSFER_ENTRIES,
+		skill::copy::LinkTreatment::PreserveWithin(from),
+	)
+	.map(|_| ())
+	.map_err(|error| match error {
+		skill::copy::SkillCopyError::Io(error) => ConfigError::Io(error),
+		other => ConfigError::InvalidConfig(other.to_string()),
+	})
+}
+
+fn copy_skill_directory_staged(from: &Path, target: &Path) -> Result<()> {
+	let parent = target.parent().ok_or_else(|| {
+		ConfigError::InvalidConfig(format!(
+			"Skill target '{}' has no parent",
+			target.display()
+		))
+	})?;
+	fs::create_dir_all(parent)?;
+	let staged_root = tempfile::Builder::new()
+		.prefix(".aghub-transfer-")
+		.tempdir_in(parent)?;
+	let candidate = staged_root.path().join("skill");
+	copy_skill_directory(from, &candidate)?;
+	fs::rename(candidate, target)?;
+	Ok(())
+}
+
 fn install_skill_directory(
 	source_root: &Path,
 	dest_root: &Path,
@@ -250,7 +288,7 @@ fn install_skill_directory(
 		.prefix(".aghub-reconcile-")
 		.tempdir_in(parent)?;
 	let candidate = replacement_root.path().join("skill");
-	copy_skill_directory_staged(source_root, &candidate)?;
+	copy_skill_directory(source_root, &candidate)?;
 	validate_skill_directory(&candidate, expected_name)?;
 
 	if !replace_existing {
@@ -942,6 +980,59 @@ mod tests {
 		assert!(dest_root
 			.join(".cursor/skills/repo-helper/assets/notes.txt")
 			.exists());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn transfer_skill_preserves_relative_file_link() {
+		let _guard = env_lock().lock().unwrap();
+		let temp = tempdir().unwrap();
+		let source_root = temp.path().join("source");
+		let dest_root = temp.path().join("dest");
+		fs::create_dir_all(&source_root).unwrap();
+		fs::create_dir_all(&dest_root).unwrap();
+
+		let mut source_manager = ConfigManager::new(
+			create_adapter(AgentType::Claude),
+			false,
+			Some(&source_root),
+		);
+		source_manager.load().unwrap();
+		source_manager.add_skill(Skill::new("repo-helper")).unwrap();
+		let source_skill = source_root.join(".claude/skills/repo-helper");
+		fs::write(source_skill.join("notes.txt"), "notes").unwrap();
+		std::os::unix::fs::symlink(
+			"notes.txt",
+			source_skill.join("linked-notes.txt"),
+		)
+		.unwrap();
+
+		let result = transfer_skill(
+			ResourceLocator {
+				agent: AgentType::Claude,
+				scope: InstallScope::Project,
+				project_root: Some(source_root),
+				name: "repo-helper".to_string(),
+			},
+			vec![InstallTarget {
+				agent: AgentType::Cursor,
+				scope: InstallScope::Project,
+				project_root: Some(dest_root.clone()),
+			}],
+		)
+		.unwrap();
+
+		assert_eq!(result.success_count(), 1);
+		let installed =
+			dest_root.join(".cursor/skills/repo-helper/linked-notes.txt");
+		assert!(fs::symlink_metadata(&installed)
+			.unwrap()
+			.file_type()
+			.is_symlink());
+		assert_eq!(
+			fs::read_link(installed).unwrap(),
+			PathBuf::from("notes.txt")
+		);
 	}
 
 	#[test]

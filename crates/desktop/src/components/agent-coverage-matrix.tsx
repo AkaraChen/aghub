@@ -176,17 +176,15 @@ export function AgentCoverageMatrix({
 						{t("agentCoverage")}
 					</p>
 					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								className="size-5 min-h-5 min-w-5 text-muted"
-								aria-label={t("agentCoverageHelp")}
-							>
-								<QuestionMarkCircleIcon className="size-3.5" />
-							</Button>
-						</Tooltip.Trigger>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							className="size-5 min-h-5 min-w-5 text-muted"
+							aria-label={t("agentCoverageHelp")}
+						>
+							<QuestionMarkCircleIcon className="size-3.5" />
+						</Button>
 						<Tooltip.Content>
 							{t(onManage ? "matrixSummaryHint" : "matrixHint")}
 						</Tooltip.Content>

@@ -87,7 +87,7 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 								(installation) => installation.agent,
 							),
 							sourcePath: baseline.sourcePath,
-							canonicalPath: baseline.canonicalPath,
+							isSymlink: baseline.isSymlink,
 						},
 						targets.map((target) => ({
 							id: target.sourcePath,
@@ -98,7 +98,7 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 								(installation) => installation.agent,
 							),
 							sourcePath: target.sourcePath,
-							canonicalPath: target.canonicalPath,
+							isSymlink: target.isSymlink,
 						})),
 						comparisonResults ?? [],
 					)
@@ -124,7 +124,7 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 			: activeVersion;
 	const reverseReviewedDiff = selectedVersion?.hash === baselineVersion?.hash;
 	const hasLinks =
-		comparableLocations.some((location) => location.canonicalPath) ||
+		comparableLocations.some((location) => location.isSymlink) ||
 		skillDiffsContainLinks(comparisonResults);
 	const resolution = useMutation(
 		resolveSkillCopiesMutationOptions({
