@@ -246,7 +246,7 @@ export const SkillList = memo(function SkillList({
 			onSelectionChange={createSelectionHandler(
 				sectionSkills.map((s) => s.name),
 			)}
-			className={cn(dense ? "px-2 pt-2 pb-0 pl-6" : "p-2 pl-6")}
+			className={cn(dense ? "px-2 pt-2 pb-0" : "p-2")}
 		>
 			{renderSkillItem}
 		</ListBox>
@@ -273,7 +273,7 @@ export const SkillList = memo(function SkillList({
 					selectionBehavior="toggle"
 					selectedKeys={selectedKeys}
 					onSelectionChange={createSelectionHandler(runKeys)}
-					className={isNested ? "px-2 pt-2 pb-0 pl-6" : "px-2 py-1"}
+					className={isNested ? "px-2 pt-2 pb-0" : "px-2 py-1"}
 				>
 					{renderSkillItem}
 				</ListBox>,
@@ -328,10 +328,7 @@ export const SkillList = memo(function SkillList({
 				</ResourceGroupSection>
 			);
 			nodes.push(
-				<div
-					key={entry.id}
-					className={isNested ? "pt-2 pl-4" : undefined}
-				>
+				<div key={entry.id} className={isNested ? "pt-2" : undefined}>
 					{sourceSection}
 				</div>,
 			);

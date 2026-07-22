@@ -228,7 +228,7 @@ test("source cluster actions share one row hover surface", async ({ page }) => {
 	await page.mouse.up();
 });
 
-test("custom group header stays left aligned on one hover surface", async ({
+test("custom group header stays left aligned without hover feedback", async ({
 	page,
 }) => {
 	await page.getByRole("button", { name: "Add skill" }).click();
@@ -257,34 +257,24 @@ test("custom group header stays left aligned on one hover surface", async ({
 		(element) => getComputedStyle(element).backgroundColor,
 	);
 	await toggle.hover();
-	await expect
-		.poll(() =>
-			header.evaluate(
-				(element) => getComputedStyle(element).backgroundColor,
-			),
-		)
-		.not.toBe(restingBackground);
+	await page.waitForTimeout(200);
+	expect(
+		await header.evaluate(
+			(element) => getComputedStyle(element).backgroundColor,
+		),
+	).toBe(restingBackground);
 	expect(
 		await toggle.evaluate(
 			(element) => getComputedStyle(element).backgroundColor,
 		),
 	).toBe("rgba(0, 0, 0, 0)");
-	await page.mouse.move(0, 0);
-	await expect
-		.poll(() =>
-			header.evaluate(
-				(element) => getComputedStyle(element).backgroundColor,
-			),
-		)
-		.toBe(restingBackground);
 	await row.hover();
-	await expect
-		.poll(() =>
-			header.evaluate(
-				(element) => getComputedStyle(element).backgroundColor,
-			),
-		)
-		.not.toBe(restingBackground);
+	await page.waitForTimeout(200);
+	expect(
+		await header.evaluate(
+			(element) => getComputedStyle(element).backgroundColor,
+		),
+	).toBe(restingBackground);
 	expect(
 		await row.evaluate(
 			(element) => getComputedStyle(element).backgroundColor,
@@ -292,7 +282,7 @@ test("custom group header stays left aligned on one hover surface", async ({
 	).toBe("rgba(0, 0, 0, 0)");
 });
 
-test("source clusters align with peer skills and indent only their members", async ({
+test("source clusters and their members align with peer skills", async ({
 	page,
 }) => {
 	const sourceRow = page.getByRole("button", {
@@ -308,13 +298,13 @@ test("source clusters align with peer skills and indent only their members", asy
 	]);
 
 	expect(source.iconLeft).toBeCloseTo(skill.iconLeft, 1);
-	expect(member.iconLeft - source.iconLeft).toBeCloseTo(16, 1);
+	expect(member.iconLeft).toBeCloseTo(source.iconLeft, 1);
 	expect(["left", "start"]).toContain(source.textAlign);
 	expect(["left", "start"]).toContain(skill.textAlign);
 	expect(["left", "start"]).toContain(member.textAlign);
 	expect(source.textLeft).toBeCloseTo(source.textBoxLeft, 1);
 	expect(source.textLeft).toBeCloseTo(skill.textLeft, 1);
-	expect(member.textLeft - source.textLeft).toBeCloseTo(16, 1);
+	expect(member.textLeft).toBeCloseTo(source.textLeft, 1);
 	expect(source.gap).toBeCloseTo(skill.gap, 1);
 	expect(member.gap).toBeCloseTo(skill.gap, 1);
 });
@@ -786,9 +776,9 @@ test("moving a source cluster into a custom group preserves the cluster", async 
 	]);
 
 	expect(source.iconLeft).toBeCloseTo(skill.iconLeft, 1);
-	expect(member.iconLeft - source.iconLeft).toBeCloseTo(16, 1);
+	expect(member.iconLeft).toBeCloseTo(source.iconLeft, 1);
 	expect(source.textLeft).toBeCloseTo(skill.textLeft, 1);
-	expect(member.textLeft - source.textLeft).toBeCloseTo(16, 1);
+	expect(member.textLeft).toBeCloseTo(source.textLeft, 1);
 	expect(source.gap).toBeCloseTo(skill.gap, 1);
 	expect(member.gap).toBeCloseTo(skill.gap, 1);
 

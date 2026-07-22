@@ -155,7 +155,9 @@ export function ResourceGroupSection({
 				<div
 					data-slot="group-header"
 					className={cn(
-						"flex min-h-9 w-full items-center rounded-2xl transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)] hover:bg-default motion-reduce:transition-none",
+						"flex min-h-9 w-full items-center rounded-2xl",
+						subtle &&
+							"transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)] hover:bg-default motion-reduce:transition-none",
 						isSelected && "bg-surface",
 					)}
 				>
