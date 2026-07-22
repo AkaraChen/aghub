@@ -30,6 +30,7 @@ export default {
 		"System prompt / instruction for this sub-agent...",
 	prompts: "Prompts",
 	noPrompts: "No prompts yet",
+	noPromptsMatch: "No prompts match your search",
 	noPromptsDescription: "Create your first prompt to get started.",
 	searchPrompts: "Search prompts...",
 	createPrompt: "Create prompt",

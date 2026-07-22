@@ -29,6 +29,7 @@ export default {
 	subAgentInstructionPlaceholder: "子代理的系統提示詞/指令...",
 	prompts: "提示詞",
 	noPrompts: "尚無提示詞",
+	noPromptsMatch: "沒有符合的提示詞",
 	noPromptsDescription: "建立你的第一個提示詞。",
 	searchPrompts: "搜尋提示詞...",
 	createPrompt: "新增提示詞",
