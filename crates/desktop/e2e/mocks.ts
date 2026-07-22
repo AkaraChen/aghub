@@ -193,6 +193,21 @@ const SUB_AGENTS = [
 	},
 ];
 
+const RULE_FILES = [
+	{
+		agent: "claude",
+		path: "~/.claude/CLAUDE.md",
+		source: "global",
+		exists: true,
+	},
+	{
+		agent: "gemini",
+		path: "~/.gemini/GEMINI.md",
+		source: "global",
+		exists: false,
+	},
+];
+
 const plugin = (id: string, name: string, enabled: boolean) => ({
 	id,
 	name,
@@ -283,6 +298,10 @@ export async function installMocks(page: Page) {
 	const availability = structuredClone(AVAILABILITY);
 	const mcps = MCPS.map((m) => ({ ...m }));
 	const skills = SKILLS.map((s) => ({ ...s }));
+	const ruleFiles = RULE_FILES.map((rule) => ({ ...rule }));
+	const ruleContent = new Map([
+		["~/.claude/CLAUDE.md", "# Existing rules\n"],
+	]);
 	const globalLock = {
 		...GLOBAL_LOCK,
 		skills: GLOBAL_LOCK.skills.map((entry) => ({ ...entry })),
@@ -369,6 +388,24 @@ export async function installMocks(page: Page) {
 		if (p === "/agents/all/skills") return json(skills);
 		if (p === "/agents/all/mcps") return json(mcps);
 		if (p === "/agents/all/sub-agents") return json(SUB_AGENTS);
+		if (p === "/agents/all/rules") return json(ruleFiles);
+		if (p === "/rules/content" && method === "GET") {
+			const path = url.searchParams.get("path") ?? "";
+			return json({
+				path,
+				content: ruleContent.get(path) ?? "",
+				exists: ruleContent.has(path),
+			});
+		}
+		if (p === "/rules/content" && method === "PUT") {
+			const body = JSON.parse(route.request().postData() ?? "{}");
+			const path = String(body.path ?? "");
+			const content = String(body.content ?? "");
+			ruleContent.set(path, content);
+			const rule = ruleFiles.find((item) => item.path === path);
+			if (rule) rule.exists = true;
+			return json({ path, content, exists: true });
+		}
 		if (p === "/plugins") return json(PLUGINS);
 		if (p === "/skills/lock/global") return json(globalLock);
 		if (p === "/skills/lock/project")

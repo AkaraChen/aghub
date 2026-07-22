@@ -3044,7 +3044,6 @@ mod tests {
 		assert_eq!(body.as_array().expect("sub-agent list").len(), 0);
 	}
 
-
 	fn rule_content_query(rule_path: &str, project_root: &Path) -> String {
 		let mut serializer =
 			url::form_urlencoded::Serializer::new(String::new());
@@ -3245,6 +3244,33 @@ mod tests {
 		let response = get_auth(&client, "/api/v1/prompts");
 		let body = response_json(response);
 		assert_eq!(body.as_array().expect("prompt list").len(), 0);
+	}
+
+	#[test]
+	fn route_rule_write_rejects_remote_browser_origin() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let client = test_client(app_data_dir.path());
+		let rule_file = project_dir.path().join("CLAUDE.md");
+
+		let response = client
+			.put("/api/v1/rules/content")
+			.header(auth_header())
+			.header(Header::new("Origin", "https://evil.example"))
+			.header(ContentType::JSON)
+			.body(
+				json!({
+					"path": rule_file.to_string_lossy(),
+					"content": "# Project rules\n",
+					"scope": "project",
+					"project_root": project_dir.path().to_string_lossy(),
+				})
+				.to_string(),
+			)
+			.dispatch();
+
+		assert_eq!(response.status(), Status::Forbidden);
+		assert!(!rule_file.exists());
 	}
 
 	#[test]

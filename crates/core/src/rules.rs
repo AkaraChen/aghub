@@ -8,6 +8,7 @@
 //! file I/O for reading and writing a single rule file.
 
 use std::collections::BTreeSet;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use aghub_agents::models::{ConfigSource, ResourceScope};
@@ -103,24 +104,74 @@ pub fn read_rule_file(path: &Path) -> std::io::Result<String> {
 	}
 }
 
+fn resolve_rule_write_target(path: &Path) -> std::io::Result<PathBuf> {
+	match path.canonicalize() {
+		Ok(target) => Ok(target),
+		Err(canonicalize_error)
+			if canonicalize_error.kind() == std::io::ErrorKind::NotFound =>
+		{
+			match path.symlink_metadata() {
+				Ok(metadata) if metadata.file_type().is_symlink() => {
+					let target = std::fs::read_link(path)?;
+					if target.is_absolute() {
+						Ok(target)
+					} else {
+						Ok(path
+							.parent()
+							.unwrap_or_else(|| Path::new("."))
+							.join(target))
+					}
+				}
+				Ok(_) => Err(canonicalize_error),
+				Err(metadata_error)
+					if metadata_error.kind()
+						== std::io::ErrorKind::NotFound =>
+				{
+					Ok(path.to_path_buf())
+				}
+				Err(metadata_error) => Err(metadata_error),
+			}
+		}
+		Err(error) => Err(error),
+	}
+}
+
 /// Write a rule file, creating parent directories as needed.
 ///
 /// Symlinked rule files (e.g. a CLAUDE.md linked into a dotfiles repo) are
 /// resolved so the target is updated in place, and the write replaces the
-/// file atomically (temp file + rename) so a crash cannot truncate a
+/// file atomically (temp file + rename) so an incomplete write cannot truncate a
 /// hand-authored file.
 pub fn write_rule_file(path: &Path, content: &str) -> std::io::Result<()> {
-	if let Some(parent) = path.parent() {
-		std::fs::create_dir_all(parent)?;
-	}
-	let target = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
+	let target = resolve_rule_write_target(path)?;
+	let parent = target.parent().unwrap_or_else(|| Path::new("."));
+	std::fs::create_dir_all(parent)?;
+	let existing_permissions = match target.metadata() {
+		Ok(metadata) => Some(metadata.permissions()),
+		Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+		Err(error) => return Err(error),
+	};
 	let file_name = target
 		.file_name()
 		.map(|name| name.to_string_lossy().into_owned())
 		.unwrap_or_else(|| "rule".to_string());
-	let tmp = target.with_file_name(format!(".{file_name}.tmp"));
-	std::fs::write(&tmp, content)?;
-	std::fs::rename(&tmp, &target)
+	let temporary_prefix = format!(".{file_name}.");
+	let mut temporary_builder = tempfile::Builder::new();
+	temporary_builder.prefix(&temporary_prefix).suffix(".tmp");
+	#[cfg(unix)]
+	if existing_permissions.is_none() {
+		use std::os::unix::fs::PermissionsExt;
+		temporary_builder.permissions(std::fs::Permissions::from_mode(0o666));
+	}
+	let mut temporary = temporary_builder.tempfile_in(parent)?;
+	temporary.write_all(content.as_bytes())?;
+	if let Some(permissions) = existing_permissions {
+		temporary.as_file().set_permissions(permissions)?;
+	}
+	temporary
+		.persist(&target)
+		.map(|_| ())
+		.map_err(|error| error.error)
 }
 
 /// Expand a leading `~/` to the user's home directory.
@@ -155,6 +206,52 @@ mod tests {
 		assert_eq!(read_rule_file(&path).unwrap(), "second");
 	}
 
+	#[test]
+	fn write_ignores_stale_shared_temp_path() {
+		let temp = tempfile::tempdir().unwrap();
+		let path = temp.path().join("CLAUDE.md");
+		std::fs::create_dir(temp.path().join(".CLAUDE.md.tmp")).unwrap();
+
+		write_rule_file(&path, "updated").unwrap();
+
+		assert_eq!(read_rule_file(&path).unwrap(), "updated");
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn write_preserves_existing_permissions() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let temp = tempfile::tempdir().unwrap();
+		let path = temp.path().join("CLAUDE.md");
+		std::fs::write(&path, "original").unwrap();
+		std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o640))
+			.unwrap();
+
+		write_rule_file(&path, "updated").unwrap();
+
+		let mode = path.metadata().unwrap().permissions().mode() & 0o777;
+		assert_eq!(mode, 0o640);
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn write_new_file_uses_normal_creation_permissions() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let temp = tempfile::tempdir().unwrap();
+		let expected = temp.path().join("expected.md");
+		let path = temp.path().join("CLAUDE.md");
+		std::fs::write(&expected, "expected").unwrap();
+
+		write_rule_file(&path, "created").unwrap();
+
+		let expected_mode =
+			expected.metadata().unwrap().permissions().mode() & 0o777;
+		let actual_mode = path.metadata().unwrap().permissions().mode() & 0o777;
+		assert_eq!(actual_mode, expected_mode);
+	}
+
 	#[cfg(unix)]
 	#[test]
 	fn write_updates_symlink_target_in_place() {
@@ -168,6 +265,20 @@ mod tests {
 		write_rule_file(&link, "updated").unwrap();
 
 		assert_eq!(std::fs::read_to_string(&target).unwrap(), "updated");
+		assert!(link.symlink_metadata().unwrap().file_type().is_symlink());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn write_creates_missing_symlink_target_in_place() {
+		let temp = tempfile::tempdir().unwrap();
+		let target = temp.path().join("dotfiles/CLAUDE.md");
+		let link = temp.path().join("CLAUDE.md");
+		std::os::unix::fs::symlink(&target, &link).unwrap();
+
+		write_rule_file(&link, "created").unwrap();
+
+		assert_eq!(std::fs::read_to_string(&target).unwrap(), "created");
 		assert!(link.symlink_metadata().unwrap().file_type().is_symlink());
 	}
 }

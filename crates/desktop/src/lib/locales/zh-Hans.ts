@@ -1493,7 +1493,8 @@ export default {
 	usageWindowWeeklyOpus: "每周（Opus）",
 	usageWindowWeeklySonnet: "每周（Sonnet）",
 	usageWindowOther: "用量额度",
-	globalSearchLabel: "搜索代理、技能、MCP 服务器、子代理、提示词与技能库",
+	globalSearchLabel:
+		"搜索代理、技能、MCP 服务器、子代理、提示词、规则与技能库",
 	globalSearchPlaceholder: "搜索…",
 	globalSearchNoResults: "无匹配结果",
 	globalSearchLibraryLoading: "正在搜索技能库…",
@@ -1501,7 +1502,7 @@ export default {
 	searchResultsTitle: "搜索结果",
 	searchResultsSubtitle: '"{{query}}" 的 {{count}} 条结果',
 	searchResultsEmptyHint:
-		"输入内容即可搜索代理、技能、MCP 服务器、子代理、提示词与技能库。",
+		"输入内容即可搜索代理、技能、MCP 服务器、子代理、提示词、规则与技能库。",
 	searchResultsShowMore: "再显示 {{count}} 条",
 	searchResultsShowLess: "收起",
 

@@ -1,102 +1,18 @@
 import { DocumentTextIcon } from "@heroicons/react/24/solid";
-import {
-	Alert,
-	Button,
-	Chip,
-	Label,
-	ListBox,
-	Spinner,
-	TextArea,
-	Tooltip,
-	toast,
-} from "@heroui/react";
-import {
-	useMutation,
-	useQuery,
-	useQueryClient,
-	useSuspenseQuery,
-} from "@tanstack/react-query";
+import { Chip, Description, Label, ListBox, Spinner } from "@heroui/react";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
-import { useMemo, useState } from "react";
+import { Suspense, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { AgentIcons } from "../../components/agent-icons";
 import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
-import type { RuleFileResponse } from "../../generated/dto";
-import { useAgentAvailability } from "../../hooks/use-agent-availability";
 import { useApi } from "../../hooks/use-api";
-import { AgentIcon } from "../../lib/agent-icons";
-import { cn, filterItemsByAgentIds, sortAgents } from "../../lib/utils";
-import {
-	ruleContentQueryOptions,
-	ruleListQueryOptions,
-	updateRuleContentMutationOptions,
-} from "../../requests/rules";
-
-interface RuleGroup {
-	path: string;
-	fileName: string;
-	exists: boolean;
-	items: RuleFileResponse[];
-}
+import { ruleListQueryOptions } from "../../requests/rules";
+import { RuleContentPanel, type RuleGroup } from "./rule-content-panel";
 
 function basename(path: string): string {
 	const segments = path.split(/[/\\]/);
 	return segments[segments.length - 1] || path;
-}
-
-function formatAgentName(agent: string): string {
-	return agent.charAt(0).toUpperCase() + agent.slice(1).toLowerCase();
-}
-
-function RuleAgentIcons({ items }: { items: RuleFileResponse[] }) {
-	const { allAgents, availableAgents } = useAgentAvailability();
-	const enabledAgentIds = useMemo(
-		() =>
-			new Set(
-				availableAgents
-					.filter((agent) => !agent.isDisabled)
-					.map((agent) => agent.id),
-			),
-		[availableAgents],
-	);
-	const agents = useMemo(() => {
-		const set = new Set<string>();
-		for (const item of filterItemsByAgentIds(items, enabledAgentIds)) {
-			if (item.agent) set.add(item.agent);
-		}
-		return sortAgents(Array.from(set), allAgents);
-	}, [items, enabledAgentIds, allAgents]);
-
-	if (agents.length === 0) return null;
-
-	return (
-		<div className="flex shrink-0 items-center -space-x-1">
-			{agents.slice(0, 3).map((agentId, idx) => (
-				<Tooltip key={agentId} delay={0}>
-					<Tooltip.Trigger>
-						<div
-							className="relative rounded-full bg-surface ring-1 ring-surface transition-transform hover:scale-110"
-							style={{ zIndex: 3 - idx }}
-						>
-							<AgentIcon
-								id={agentId}
-								name={formatAgentName(agentId)}
-								size="xs"
-								variant="ghost"
-							/>
-						</div>
-					</Tooltip.Trigger>
-					<Tooltip.Content>
-						{formatAgentName(agentId)}
-					</Tooltip.Content>
-				</Tooltip>
-			))}
-			{agents.length > 3 && (
-				<div className="relative z-0 flex size-5 items-center justify-center rounded-full bg-default text-[10px] font-medium text-muted ring-1 ring-surface">
-					+{agents.length - 3}
-				</div>
-			)}
-		</div>
-	);
 }
 
 export default function RulesPage() {
@@ -107,6 +23,18 @@ export default function RulesPage() {
 	});
 	const [searchQuery, setSearchQuery] = useState("");
 	const [selectedPath, setSelectedPath] = useQueryState("rule");
+	const [drafts, setDrafts] = useState<Record<string, string>>({});
+	const updateDraft = useCallback((path: string, value: string) => {
+		setDrafts((current) => ({ ...current, [path]: value }));
+	}, []);
+	const clearDraft = useCallback((path: string) => {
+		setDrafts((current) => {
+			if (!(path in current)) return current;
+			const next = { ...current };
+			delete next[path];
+			return next;
+		});
+	}, []);
 
 	const groups = useMemo(() => {
 		const map = new Map<string, RuleGroup>();
@@ -169,6 +97,10 @@ export default function RulesPage() {
 									{t("rulesEmptyDescription")}
 								</p>
 							</div>
+						) : filteredGroups.length === 0 ? (
+							<p className="p-6 text-center text-sm text-muted">
+								{t("noResults")}
+							</p>
 						) : (
 							<ListBox
 								aria-label={t("rules")}
@@ -197,13 +129,11 @@ export default function RulesPage() {
 												<Label className="truncate">
 													{group.fileName}
 												</Label>
-												<span className="truncate text-xs text-muted">
+												<Description className="truncate text-xs text-muted">
 													{group.path}
-												</span>
+												</Description>
 											</div>
-											<RuleAgentIcons
-												items={group.items}
-											/>
+											<AgentIcons items={group.items} />
 											<Chip
 												size="sm"
 												color={
@@ -227,7 +157,20 @@ export default function RulesPage() {
 				{/* Detail / editor panel */}
 				<div className="relative flex-1 overflow-hidden">
 					{activeGroup ? (
-						<RuleContentPanel group={activeGroup} />
+						<Suspense
+							fallback={
+								<div className="flex h-full items-center justify-center">
+									<Spinner />
+								</div>
+							}
+						>
+							<RuleContentPanel
+								group={activeGroup}
+								draft={drafts[activeGroup.path]}
+								onDraftChange={updateDraft}
+								onDraftSaved={clearDraft}
+							/>
+						</Suspense>
 					) : (
 						<div className="flex h-full flex-col items-center justify-center gap-4">
 							<p className="text-center text-sm text-muted">
@@ -236,111 +179,6 @@ export default function RulesPage() {
 						</div>
 					)}
 				</div>
-			</div>
-		</div>
-	);
-}
-
-function RuleContentPanel({ group }: { group: RuleGroup }) {
-	const api = useApi();
-	const { data: content, isLoading } = useQuery(
-		ruleContentQueryOptions({
-			api,
-			path: group.path,
-			scope: "global",
-			enabled: Boolean(group.path),
-		}),
-	);
-
-	if (isLoading || !content) {
-		return (
-			<div className="flex h-full items-center justify-center">
-				<Spinner />
-			</div>
-		);
-	}
-
-	return (
-		<RuleEditor
-			key={group.path}
-			group={group}
-			initialContent={content.content}
-		/>
-	);
-}
-
-function RuleEditor({
-	group,
-	initialContent,
-}: {
-	group: RuleGroup;
-	initialContent: string;
-}) {
-	const { t } = useTranslation();
-	const api = useApi();
-	const queryClient = useQueryClient();
-	const [draft, setDraft] = useState(() => initialContent);
-
-	const saveMutation = useMutation({
-		...updateRuleContentMutationOptions({
-			api,
-			queryClient,
-			onSuccess: () => {
-				toast.success(t("rulesSaved"));
-			},
-		}),
-		onError: (error) => {
-			toast.danger(
-				error instanceof Error ? error.message : t("rulesSaveFailed"),
-			);
-		},
-	});
-
-	const handleSave = () => {
-		saveMutation.mutate({
-			path: group.path,
-			content: draft,
-			scope: "global",
-			project_root: null,
-		});
-	};
-
-	return (
-		<div className="flex h-full flex-col">
-			<div className="flex items-start justify-between gap-4 border-b border-border p-4">
-				<div className="min-w-0">
-					<h2 className="truncate text-lg font-semibold text-foreground">
-						{group.fileName}
-					</h2>
-					<p className="truncate text-sm text-muted">{group.path}</p>
-				</div>
-				<Button
-					onPress={handleSave}
-					isDisabled={saveMutation.isPending}
-				>
-					{saveMutation.isPending ? t("saving") : t("save")}
-				</Button>
-			</div>
-
-			<div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
-				{!group.exists && (
-					<Alert status="accent">
-						<Alert.Indicator />
-						<Alert.Content>
-							<Alert.Description>
-								{t("rulesCreateOnSave")}
-							</Alert.Description>
-						</Alert.Content>
-					</Alert>
-				)}
-
-				<TextArea
-					value={draft}
-					onChange={(event) => setDraft(event.target.value)}
-					variant="secondary"
-					aria-label={group.fileName}
-					className={cn("flex-1 min-h-0 font-mono text-sm")}
-				/>
 			</div>
 		</div>
 	);

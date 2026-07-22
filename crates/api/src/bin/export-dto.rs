@@ -35,10 +35,6 @@ use aghub_api::dto::{
 	},
 	market::MarketSkill,
 	mcp::{CreateMcpRequest, McpResponse, TransportDto, UpdateMcpRequest},
-	rule::{
-		RuleContentQuery, RuleFileContentResponse, RuleFileResponse,
-		UpdateRuleContentRequest,
-	},
 	plugin::{
 		CCMarketplaceAddRequest, CCMarketplaceEntryResponse,
 		CCMarketplaceListResponse, CCMarketplaceMutationResponse,
@@ -62,6 +58,10 @@ use aghub_api::dto::{
 		CreatePromptRequest, ImportPromptBackupRequest, PromptBackupDto,
 		PromptBackupItemDto, PromptImportModeDto, PromptImportResultResponse,
 		PromptResponse, PromptStorageResponse, UpdatePromptRequest,
+	},
+	rule::{
+		RuleContentQuery, RuleFileContentResponse, RuleFileResponse,
+		UpdateRuleContentRequest,
 	},
 	skill::{
 		CreateSkillRequest, DeleteSkillByPathRequest,
