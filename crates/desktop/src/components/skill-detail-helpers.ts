@@ -2,6 +2,7 @@ import * as pathe from "pathe";
 import type {
 	AgentInfo,
 	ConfigSource,
+	SkillLinkStatusResponse,
 	SkillResponse,
 	SkillTreeNodeResponse,
 } from "../generated/dto";
@@ -23,6 +24,17 @@ export interface LocationGroup {
 export interface SkillGroup {
 	name: string;
 	items: SkillResponse[];
+}
+
+export interface SkillSourceLocation {
+	sourcePath: string;
+	canonicalPath?: string | null;
+	agents: string[];
+}
+
+export interface SkillLinkSummary {
+	total: number;
+	problems: number;
 }
 
 const SKILL_MARKDOWN_FILE = "SKILL.md";
@@ -48,9 +60,42 @@ export function hasSupplementarySkillFiles(
 export function countTreeFiles(node: SkillTreeNodeResponse): number {
 	return getNodeChildren(node).reduce(
 		(total, child) =>
-			total + (child.kind === "file" ? 1 : 0) + countTreeFiles(child),
+			total +
+			(child.kind === "directory" ? 0 : 1) +
+			countTreeFiles(child),
 		0,
 	);
+}
+
+export function summarizeSkillLinks(
+	node: SkillTreeNodeResponse,
+): SkillLinkSummary {
+	const statuses: Record<SkillLinkStatusResponse, number> = {
+		valid: 0,
+		broken: 0,
+		outside_root: 0,
+		unreadable: 0,
+	};
+
+	function visit(current: SkillTreeNodeResponse): void {
+		if (current.link) {
+			statuses[current.link.status] += 1;
+		}
+		for (const child of getNodeChildren(current)) {
+			visit(child);
+		}
+	}
+
+	visit(node);
+	const total = Object.values(statuses).reduce(
+		(sum, count) => sum + count,
+		0,
+	);
+
+	return {
+		total,
+		problems: total - statuses.valid,
+	};
 }
 
 export function getInstalledSkillAuditPaths(items: SkillResponse[]): string[] {
@@ -95,26 +140,38 @@ export function buildLocationGroups(
 	>();
 
 	for (const item of items) {
-		if (!item.source_path || !item.agent || !item.source) {
-			continue;
+		if (!item.agent) continue;
+		const locations =
+			item.locations && item.locations.length > 0
+				? item.locations
+				: item.source_path && item.source
+					? [
+							{
+								source_path: item.source_path,
+								canonical_path: item.canonical_path,
+								source: item.source,
+							},
+						]
+					: [];
+
+		for (const location of locations) {
+			const existing = map.get(location.source_path);
+			const installation = {
+				id: `${item.agent}:${location.source}`,
+				agent: item.agent,
+				source: location.source,
+			};
+
+			if (existing) {
+				existing.installations.push(installation);
+				continue;
+			}
+
+			map.set(location.source_path, {
+				installations: [installation],
+				canonicalPath: location.canonical_path ?? undefined,
+			});
 		}
-
-		const existing = map.get(item.source_path);
-		const installation = {
-			id: `${item.agent}:${item.source}`,
-			agent: item.agent,
-			source: item.source,
-		};
-
-		if (existing) {
-			existing.installations.push(installation);
-			continue;
-		}
-
-		map.set(item.source_path, {
-			installations: [installation],
-			canonicalPath: item.canonical_path ?? undefined,
-		});
 	}
 
 	return Array.from(map.entries())
@@ -134,4 +191,64 @@ export function buildLocationGroups(
 			canonicalPath: data.canonicalPath,
 		}))
 		.sort((a, b) => a.sourcePath.localeCompare(b.sourcePath));
+}
+
+export function uniqueSkillSourcePaths(items: SkillResponse[]): string[] {
+	const paths = new Map<string, string>();
+	for (const item of items) {
+		const locations =
+			item.locations && item.locations.length > 0
+				? item.locations
+				: item.source_path
+					? [
+							{
+								source_path: item.source_path,
+								canonical_path: item.canonical_path,
+							},
+						]
+					: [];
+		for (const location of locations) {
+			const identity = location.canonical_path ?? location.source_path;
+			if (!paths.has(identity)) {
+				paths.set(identity, location.source_path);
+			}
+		}
+	}
+	return Array.from(paths.values()).sort((a, b) => a.localeCompare(b));
+}
+
+export function uniqueSkillLocations(
+	items: SkillResponse[],
+): SkillSourceLocation[] {
+	const locations = new Map<string, SkillSourceLocation>();
+	for (const item of items) {
+		const itemLocations =
+			item.locations && item.locations.length > 0
+				? item.locations
+				: item.source_path
+					? [
+							{
+								source_path: item.source_path,
+								canonical_path: item.canonical_path,
+							},
+						]
+					: [];
+		for (const location of itemLocations) {
+			const existing = locations.get(location.source_path);
+			if (existing) {
+				if (item.agent && !existing.agents.includes(item.agent)) {
+					existing.agents.push(item.agent);
+				}
+				continue;
+			}
+			locations.set(location.source_path, {
+				sourcePath: location.source_path,
+				canonicalPath: location.canonical_path,
+				agents: item.agent ? [item.agent] : [],
+			});
+		}
+	}
+	return Array.from(locations.values()).sort((a, b) =>
+		a.sourcePath.localeCompare(b.sourcePath),
+	);
 }

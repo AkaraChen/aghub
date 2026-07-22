@@ -23,14 +23,17 @@
 //! ```
 
 pub mod content;
+pub mod copy;
 pub mod error;
 pub mod install;
+pub mod link;
 pub mod lock;
 pub mod model;
 pub mod package;
 pub mod parser;
 pub mod sanitize;
 pub mod scan;
+pub mod snapshot;
 pub mod validator;
 
 /// Maximum directory depth below a logical skill root.

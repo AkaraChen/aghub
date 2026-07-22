@@ -1,3 +1,8 @@
+import type {
+	SkillCopyStatusRequest,
+	SkillDiffRequest,
+} from "../generated/dto";
+
 export const queryKeys = {
 	plugins: {
 		all: () => ["plugins"] as const,
@@ -26,6 +31,10 @@ export const queryKeys = {
 			scope: "global" | "project" | "all" = "global",
 			projectRoot?: string,
 		) => ["skills", "content", path, scope, projectRoot ?? null] as const,
+		diff: (request: SkillDiffRequest | null) =>
+			["skills", "diff", request] as const,
+		copyStatus: (request: SkillCopyStatusRequest | null) =>
+			["skills", "copy-status", request] as const,
 		tree: (
 			path: string,
 			scope: "global" | "project" | "all" = "global",

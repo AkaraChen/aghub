@@ -14,7 +14,7 @@ import {
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import { Accordion, Button, Card, Chip, toast, Tooltip } from "@heroui/react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -49,8 +49,11 @@ import {
 	hasSupplementarySkillFiles,
 	type LocationGroup,
 	type SkillGroup,
+	summarizeSkillLinks,
 } from "./skill-detail-helpers";
 import { LocationRow, SkillTree } from "./skill-detail-views";
+import { SkillLinkSummary } from "./skill-link-state";
+import { SkillLocationDrift } from "./skill-location-drift";
 import { SyncGithubSkillDialog } from "./sync-github-skill-dialog";
 import { TransferDialog } from "./transfer-dialog";
 
@@ -126,7 +129,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		}),
 	});
 
-	const { data: skillTree } = useQuery({
+	const { data: skillTree, error: skillTreeError } = useQuery({
 		...skillTreeQueryOptions({
 			api,
 			path: skill.source_path ?? undefined,
@@ -226,6 +229,10 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		() => buildLocationGroups(visibleGroupItems, allAgents),
 		[visibleGroupItems, allAgents],
 	);
+	const copyLocationGroups = useMemo(
+		() => buildLocationGroups(group.items, allAgents),
+		[group.items, allAgents],
+	);
 
 	const displayedLocations =
 		showAllLocations || allLocationGroups.length <= 3
@@ -233,8 +240,52 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 			: allLocationGroups.slice(0, 2);
 	const hasMoreLocations = allLocationGroups.length > 3;
 	const hiddenLocationCount = allLocationGroups.length - 2;
+	const additionalDisplayedLocations = displayedLocations.filter(
+		(location) => location.sourcePath !== skill.source_path,
+	);
+	const additionalLocationTreeQueries = useQueries({
+		queries: additionalDisplayedLocations.map((location) => {
+			const includesProjectLocation = location.installations.some(
+				(installation) => installation.source === "project",
+			);
+			return skillTreeQueryOptions({
+				api,
+				path: location.sourcePath,
+				scope:
+					includesProjectLocation && projectPath
+						? "project"
+						: "global",
+				projectRoot: projectPath,
+				enabled: !includesProjectLocation || Boolean(projectPath),
+			});
+		}),
+	});
+	const locationTreeStateByPath = new Map<
+		string,
+		{
+			tree?: typeof skillTree;
+			unavailable: boolean;
+		}
+	>();
+	if (skill.source_path) {
+		locationTreeStateByPath.set(skill.source_path, {
+			tree: skillTree,
+			unavailable: Boolean(skillTreeError),
+		});
+	}
+	additionalDisplayedLocations.forEach((location, index) => {
+		const query = additionalLocationTreeQueries[index];
+		locationTreeStateByPath.set(location.sourcePath, {
+			tree: query?.data,
+			unavailable: Boolean(query?.error),
+		});
+	});
 	const resourceCount = useMemo(
 		() => (skillTree ? countTreeFiles(skillTree) : 0),
+		[skillTree],
+	);
+	const linkSummary = useMemo(
+		() => (skillTree ? summarizeSkillLinks(skillTree) : null),
 		[skillTree],
 	);
 	const hasSupplementaryFiles = useMemo(
@@ -418,35 +469,46 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 									</h3>
 									<div className="space-y-1.5">
 										{displayedLocations.map(
-											(locationGroup) => (
-												<LocationRow
-													key={locationGroup.key}
-													group={locationGroup}
-													onDelete={() =>
-														setLocationToDelete(
-															locationGroup,
-														)
-													}
-													editorAvailable={Boolean(
-														selectedEditor,
-													)}
-													onEditFolder={() => {
-														if (!selectedEditor)
-															return;
-														openInEditorMutation.mutate(
-															{
-																path: locationGroup.sourcePath,
-																editor: selectedEditor,
-															},
-														);
-													}}
-													onOpenFolder={() =>
-														openFolderMutation.mutate(
-															locationGroup.sourcePath,
-														)
-													}
-												/>
-											),
+											(locationGroup) => {
+												const treeState =
+													locationTreeStateByPath.get(
+														locationGroup.sourcePath,
+													);
+
+												return (
+													<LocationRow
+														key={locationGroup.key}
+														group={locationGroup}
+														tree={treeState?.tree}
+														treeUnavailable={
+															treeState?.unavailable
+														}
+														editorAvailable={Boolean(
+															selectedEditor,
+														)}
+														onDelete={() =>
+															setLocationToDelete(
+																locationGroup,
+															)
+														}
+														onEditFolder={() => {
+															if (!selectedEditor)
+																return;
+															openInEditorMutation.mutate(
+																{
+																	path: locationGroup.sourcePath,
+																	editor: selectedEditor,
+																},
+															);
+														}}
+														onOpenFolder={() =>
+															openFolderMutation.mutate(
+																locationGroup.sourcePath,
+															)
+														}
+													/>
+												);
+											},
 										)}
 									</div>
 									{hasMoreLocations && (
@@ -586,6 +648,13 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 						</Card.Content>
 					</Card>
 
+					<SkillLocationDrift
+						key={skill.name}
+						locations={copyLocationGroups}
+						scope={projectPath ? "all" : "global"}
+						projectRoot={projectPath}
+					/>
+
 					{skillContent && (
 						<Accordion variant="surface">
 							<Accordion.Item>
@@ -612,7 +681,8 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 						</Accordion>
 					)}
 
-					{skillTree && hasSupplementaryFiles && (
+					{(skillTreeError ||
+						(skillTree && hasSupplementaryFiles)) && (
 						<Accordion variant="surface">
 							<Accordion.Item>
 								<Accordion.Heading>
@@ -620,10 +690,21 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 										<div className="flex min-w-0 flex-1 flex-col items-start text-left">
 											<span>{t("skillFiles")}</span>
 											<span className="text-xs font-normal text-muted">
-												{t("skillFilesDescription", {
-													count: resourceCount,
-												})}
+												{skillTreeError
+													? t("skillFilesUnavailable")
+													: t(
+															"skillFilesDescription",
+															{
+																count: resourceCount,
+															},
+														)}
 											</span>
+											{linkSummary && (
+												<SkillLinkSummary
+													summary={linkSummary}
+													className="mt-0.5"
+												/>
+											)}
 										</div>
 										<Accordion.Indicator>
 											<ChevronDownIcon className="size-4" />
@@ -633,7 +714,14 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 								<Accordion.Panel>
 									<Accordion.Body>
 										<div className="space-y-3">
-											{selectedEditor && (
+											{skillTreeError && (
+												<p className="text-sm text-muted">
+													{t(
+														"skillFilesUnavailableDescription",
+													)}
+												</p>
+											)}
+											{selectedEditor && skillTree && (
 												<div className="flex justify-start">
 													<Button
 														variant="ghost"
@@ -652,7 +740,9 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 													</Button>
 												</div>
 											)}
-											<SkillTree root={skillTree} />
+											{skillTree && (
+												<SkillTree root={skillTree} />
+											)}
 										</div>
 									</Accordion.Body>
 								</Accordion.Panel>

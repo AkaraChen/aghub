@@ -16,6 +16,10 @@ import type {
 	InstallSkillResponse,
 	OperationBatchResponse,
 	ReconcileRequest,
+	SkillCopyResolutionRequest,
+	SkillCopyResolutionResponse,
+	SkillCopyStatusRequest,
+	SkillDiffRequest,
 	SkillResponse,
 	TransferRequest,
 } from "../generated/dto";
@@ -147,6 +151,68 @@ export function skillTreeQueryOptions({
 		queryFn: () => api.skills.getTree(path!, scope, projectRoot),
 		enabled: enabled && Boolean(path),
 		staleTime,
+		retry: false,
+	});
+}
+
+interface SkillDiffQueryParams {
+	api: ApiClient;
+	request?: SkillDiffRequest;
+	enabled?: boolean;
+}
+
+export function skillDiffQueryOptions({
+	api,
+	request,
+	enabled = true,
+}: SkillDiffQueryParams) {
+	return queryOptions({
+		queryKey: queryKeys.skills.diff(request ?? null),
+		queryFn: ({ signal }) => api.skills.diff(request!, signal),
+		enabled: enabled && Boolean(request),
+		staleTime: 0,
+		retry: false,
+	});
+}
+
+interface SkillCopyStatusQueryParams {
+	api: ApiClient;
+	request?: SkillCopyStatusRequest;
+	enabled?: boolean;
+}
+
+export function skillCopyStatusQueryOptions({
+	api,
+	request,
+	enabled = true,
+}: SkillCopyStatusQueryParams) {
+	return queryOptions({
+		queryKey: queryKeys.skills.copyStatus(request ?? null),
+		queryFn: () => api.skills.getCopyStatus(request!),
+		enabled: enabled && Boolean(request),
+		staleTime: 30_000,
+		retry: false,
+	});
+}
+
+interface ResolveSkillCopiesMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (data: SkillCopyResolutionResponse) => void | Promise<void>;
+}
+
+export function resolveSkillCopiesMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: ResolveSkillCopiesMutationParams) {
+	return mutationOptions({
+		mutationFn: (body: SkillCopyResolutionRequest) =>
+			api.skills.resolveCopies(body),
+		onSuccess: async (data) => {
+			await invalidateSkillQueries(queryClient);
+			await onSuccess?.(data);
+		},
 	});
 }
 

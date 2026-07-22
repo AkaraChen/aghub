@@ -53,6 +53,12 @@ import type {
 	ProjectSkillLockResponse,
 	ReconcileRequest,
 	SkillResponse,
+	SkillCopyResolutionRequest,
+	SkillCopyResolutionResponse,
+	SkillCopyStatusRequest,
+	SkillCopyStatusResponse,
+	SkillDiffRequest,
+	SkillDiffResponse,
 	SkillTreeNodeResponse,
 	SubAgentResponse,
 	ToolInfoDto,
@@ -76,6 +82,10 @@ interface ApiErrorBody {
 	error?: string;
 	code?: string;
 }
+
+// Directory comparisons may hash the API's bounded 256 MiB batch before
+// returning, so they need longer than Ky's default request timeout.
+const SKILL_DIFF_TIMEOUT_MS = 120_000;
 
 // The backend stops provider discovery after 15 seconds; this leaves time for
 // its response to cross the local HTTP boundary.
@@ -285,6 +295,38 @@ export function createApi(baseUrl: string, token: string) {
 								? { project_root: projectRoot }
 								: {}),
 						},
+					})
+					.json();
+			},
+			diff(
+				data: SkillDiffRequest,
+				signal?: AbortSignal,
+			): Promise<SkillDiffResponse> {
+				return client
+					.post("skills/diff", {
+						json: data,
+						signal,
+						timeout: SKILL_DIFF_TIMEOUT_MS,
+					})
+					.json();
+			},
+			resolveCopies(
+				data: SkillCopyResolutionRequest,
+			): Promise<SkillCopyResolutionResponse> {
+				return client
+					.post("skills/copies/resolve", {
+						json: data,
+						timeout: SKILL_DIFF_TIMEOUT_MS,
+					})
+					.json();
+			},
+			getCopyStatus(
+				data: SkillCopyStatusRequest,
+			): Promise<SkillCopyStatusResponse> {
+				return client
+					.post("skills/copies/status", {
+						json: data,
+						timeout: SKILL_DIFF_TIMEOUT_MS,
 					})
 					.json();
 			},

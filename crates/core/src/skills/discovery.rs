@@ -200,7 +200,6 @@ mod tests {
 
 		assert_eq!(skills.len(), 1);
 	}
-
 	#[cfg(unix)]
 	#[test]
 	fn direct_skill_symlink_is_discovered_without_recursive_traversal() {

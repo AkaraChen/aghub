@@ -31,8 +31,12 @@ import { PanelTransition } from "../../components/panel-transition";
 import { useListDnd } from "../../hooks/use-list-dnd";
 import { useListKeyboard } from "../../hooks/use-list-keyboard";
 import { SkillDetail } from "../../components/skill-detail";
+import { uniqueSkillSourcePaths } from "../../components/skill-detail-helpers";
 import { SourceDetailPanel } from "../../components/source-detail-panel";
-import { SkillList } from "../../components/skill-list";
+import {
+	SkillList,
+	type SkillCopyListStatus,
+} from "../../components/skill-list";
 import { useApi } from "../../hooks/use-api";
 import { useSkillGroups } from "../../hooks/use-resource-groups";
 import { visibleEntryKeys } from "../../hooks/use-list-selection";
@@ -41,6 +45,7 @@ import { cn } from "../../lib/utils";
 import {
 	globalSkillLockQueryOptions,
 	invalidateSkillQueries,
+	skillCopyStatusQueryOptions,
 	skillListQueryOptions,
 } from "../../requests/skills";
 
@@ -111,6 +116,58 @@ export default function SkillsPage() {
 		selectedKeys,
 	});
 	const groupedSkills = sections.groupedByName;
+	const allSkillGroups = useMemo(() => {
+		const byName = new Map<string, typeof skills>();
+		for (const skill of skills) {
+			const existing = byName.get(skill.name) ?? [];
+			byName.set(skill.name, [...existing, skill]);
+		}
+		return Array.from(byName.entries()).map(([name, items]) => ({
+			name,
+			items,
+			description:
+				items.find((item) => item.description)?.description ?? "",
+		}));
+	}, [skills]);
+	const allSkillGroupsByName = useMemo(
+		() => new Map(allSkillGroups.map((group) => [group.name, group])),
+		[allSkillGroups],
+	);
+	const copyStatusRequest = useMemo(() => {
+		const groups = allSkillGroups.flatMap((group) => {
+			const sourcePaths = uniqueSkillSourcePaths(group.items);
+			return sourcePaths.length > 1
+				? [{ name: group.name, source_paths: sourcePaths }]
+				: [];
+		});
+		return groups.length > 0
+			? {
+					groups,
+					scope: "global",
+					project_root: null,
+				}
+			: undefined;
+	}, [allSkillGroups]);
+	const { data: copyStatus, isError: isCopyStatusError } = useQuery(
+		skillCopyStatusQueryOptions({ api, request: copyStatusRequest }),
+	);
+	const copyStatuses = useMemo(() => {
+		const statuses = new Map<string, SkillCopyListStatus>();
+		if (isCopyStatusError) {
+			for (const group of copyStatusRequest?.groups ?? []) {
+				statuses.set(group.name, "unknown");
+			}
+			return statuses;
+		}
+		for (const result of copyStatus?.results ?? []) {
+			if (result.has_differences) {
+				statuses.set(result.name, "conflict");
+			} else if (result.unavailable > 0) {
+				statuses.set(result.name, "unknown");
+			}
+		}
+		return statuses;
+	}, [copyStatus, copyStatusRequest, isCopyStatusError]);
 	const visibleKeys = useMemo(
 		() => visibleEntryKeys(sections.orderedEntries),
 		[sections.orderedEntries],
@@ -144,8 +201,20 @@ export default function SkillsPage() {
 	const activeGroup = useMemo(() => {
 		if (deferredSelectedKeys.size !== 1) return null;
 		const [key] = deferredSelectedKeys;
-		return groupedSkills.find((g) => g.name === key) ?? null;
-	}, [deferredSelectedKeys, groupedSkills]);
+		const visibleGroup = groupedSkills.find((group) => group.name === key);
+		const completeGroup = allSkillGroupsByName.get(key);
+		if (!visibleGroup || !completeGroup) return visibleGroup ?? null;
+		const visibleItems = new Set(visibleGroup.items);
+		return {
+			...visibleGroup,
+			items: [
+				...visibleGroup.items,
+				...completeGroup.items.filter(
+					(item) => !visibleItems.has(item),
+				),
+			],
+		};
+	}, [allSkillGroupsByName, deferredSelectedKeys, groupedSkills]);
 
 	// 多选模式下被选中的所有 groups（用于批量删除）
 	const selectedGroups = useMemo(() => {
@@ -486,6 +555,7 @@ export default function SkillsPage() {
 								setPanelMode(null);
 							}}
 							seedKey={seedKey}
+							copyStatuses={copyStatuses}
 						/>
 					</div>
 

@@ -1,10 +1,11 @@
 use aghub_cc_plugins::claude::ClaudePluginManager;
 use aghub_core::{
-	convert_skill, create_adapter,
+	convert_skill,
 	errors::ConfigError,
-	load_all_agents,
+	load_all_skill_target_locations_with_options,
 	models::{AgentType, ResourceScope, Skill},
-	registry, transfer,
+	skills::SkillDiscoveryOptions,
+	transfer, SkillTarget,
 };
 use rocket::http::Status;
 use rocket::response::status::NoContent;
@@ -38,29 +39,68 @@ use crate::{
 		GitScanSkillEntry, GitSyncRequest, GitSyncResponse,
 		GlobalSkillLockResponse, InstallSkillRequest, InstallSkillResponse,
 		LocalSkillLockEntryResponse, ProjectLockQuery,
-		ProjectSkillLockResponse, SkillContentQuery, SkillLockEntryResponse,
-		SkillResponse, SkillTreeNodeKind, SkillTreeNodeResponse,
-		SkillTreeQuery, UpdateSkillRequest, ValidationError,
+		ProjectSkillLockResponse, SkillContentQuery, SkillHardLinkResponse,
+		SkillLinkResponse, SkillLinkStatusResponse, SkillLocationResponse,
+		SkillLockEntryResponse, SkillResponse, SkillTreeNodeKind,
+		SkillTreeNodeResponse, SkillTreeQuery, UpdateSkillRequest,
+		ValidationError,
 	},
 	dto::transfer::{
 		OperationBatchResponse, ReconcileRequest, TransferRequest,
 	},
 	error::{ApiCreated, ApiError, ApiNoContent, ApiResult},
-	extractors::{AgentParam, ScopeParams},
-	routes::{
-		build_manager_from_resolved, require_writable_scope,
-		resolved_to_resource_scope,
-	},
+	extractors::{ScopeParams, SkillTargetParam},
+	routes::{require_writable_scope, resolved_to_resource_scope},
 	state::{
 		GitCloneSession, GitCloneSessionInsertError, GitCloneSessionKind,
 		GitCloneSessionLease, GitCloneSessionProvenance, GitCloneSessions,
 	},
 };
 
+#[cfg(test)]
+use crate::dto::skill::{
+	SkillDirectoryDiffResponse, SkillFileDiffKindResponse,
+	SkillFileDiffResponse,
+};
+#[cfg(test)]
+use aghub_core::create_adapter;
+
 const SKILL_PATH_OUTSIDE_ROOT: &str = "SKILL_PATH_OUTSIDE_ROOT";
 const SKILL_PATH_NOT_FOUND: &str = "SKILL_PATH_NOT_FOUND";
 const INVALID_SKILL_PATH: &str = "INVALID_SKILL_PATH";
 const SESSION_REMOTE_MISMATCH: &str = "SESSION_REMOTE_MISMATCH";
+pub(crate) const MAX_SKILL_DIFF_TARGETS: usize = 32;
+const MAX_SKILL_COPY_LOCATIONS: usize = MAX_SKILL_DIFF_TARGETS + 1;
+pub(crate) const MAX_SKILL_COPY_RESOLUTION_TARGETS: usize =
+	MAX_SKILL_COPY_LOCATIONS;
+const MAX_SKILL_COPY_STATUS_GROUPS: usize = 256;
+const MAX_SKILL_COPY_STATUS_PATHS: usize = 1024;
+// A request may compare many small installations, but all hashing work shares
+// one input budget so a batch cannot multiply the per-directory limit.
+const MAX_SKILL_DIFF_BATCH_BYTES: u64 = 256 * 1024 * 1024;
+// Resolution hashes the live and frozen reference plus every target before
+// and after its backup move, fitting within twice the comparison budget.
+const MAX_SKILL_COPY_RESOLUTION_BATCH_BYTES: u64 =
+	MAX_SKILL_DIFF_BATCH_BYTES * 2;
+// Freezing and audit materialization share a preparation budget. Target
+// staging uses a separate budget so review work does not reduce the amount a
+// resolution may write to installed locations.
+const MAX_SKILL_COPY_RESOLUTION_PREPARATION_BYTES: u64 =
+	MAX_SKILL_COPY_RESOLUTION_BATCH_BYTES;
+pub(crate) const MAX_SKILL_COPY_RESOLUTION_BATCH_WRITE_BYTES: u64 =
+	MAX_SKILL_COPY_RESOLUTION_BATCH_BYTES;
+// Keep copied trees aligned with the entry, buffer, and VCS exclusions used by
+// crates/skill/src/snapshot.rs when it defines a comparable skill version.
+const MAX_SKILL_COPY_ENTRIES: usize = 10_000;
+// A batch can compare every supported agent location while keeping response
+// text small enough for an interactive desktop view.
+const MAX_SKILL_DIFF_RESPONSE_PREVIEW_BYTES: usize = 4 * 1024 * 1024;
+// Each batch reads two or more directory trees. Two workers avoid saturating
+// local storage when multiple panels refresh together.
+static SKILL_DIFF_PERMITS: tokio::sync::Semaphore =
+	tokio::sync::Semaphore::const_new(2);
+static SKILL_COPY_RESOLUTION_PERMITS: tokio::sync::Semaphore =
+	tokio::sync::Semaphore::const_new(1);
 const SESSION_KIND_MISMATCH: &str = "SESSION_KIND_MISMATCH";
 const SESSION_NOT_FOUND: &str = "SESSION_NOT_FOUND";
 const SESSION_LIMIT_REACHED: &str = "SESSION_LIMIT_REACHED";
@@ -115,6 +155,9 @@ pub(crate) struct SkillListParams {
 	scope: Option<String>,
 	project_root: Option<String>,
 	include_managed: Option<bool>,
+	include_project: Option<bool>,
+	include_nested: Option<bool>,
+	include_dependencies: Option<bool>,
 }
 
 impl SkillListParams {
@@ -131,272 +174,22 @@ impl SkillListParams {
 	fn include_managed(&self) -> bool {
 		self.include_managed.unwrap_or(false)
 	}
-}
 
-fn expand_tilde_path(path: &str) -> std::path::PathBuf {
-	if path.starts_with("~/") {
-		dirs::home_dir()
-			.map(|home| home.join(&path[2..]))
-			.unwrap_or_else(|| path.into())
-	} else {
-		path.into()
+	fn include_project(&self) -> bool {
+		self.include_project.unwrap_or(true)
+	}
+
+	fn discovery_options(&self) -> SkillDiscoveryOptions {
+		SkillDiscoveryOptions {
+			include_nested: self.include_nested.unwrap_or(true),
+			include_dependencies: self.include_dependencies.unwrap_or(true),
+		}
 	}
 }
 
-fn skill_path_error(
-	status: Status,
-	message: impl Into<String>,
-	code: &'static str,
-) -> ApiError {
-	ApiError::new(status, message, code)
-}
+mod locations;
 
-fn canonical_existing(path: &Path) -> Result<PathBuf, ApiError> {
-	if path.as_os_str().is_empty() {
-		return Err(skill_path_error(
-			Status::BadRequest,
-			"Skill path cannot be empty",
-			INVALID_SKILL_PATH,
-		));
-	}
-
-	std::fs::canonicalize(path).map_err(|e| {
-		let (status, code) = if e.kind() == std::io::ErrorKind::NotFound {
-			(Status::NotFound, SKILL_PATH_NOT_FOUND)
-		} else {
-			(Status::BadRequest, INVALID_SKILL_PATH)
-		};
-		skill_path_error(
-			status,
-			format!("Failed to resolve skill path '{}': {e}", path.display()),
-			code,
-		)
-	})
-}
-
-fn canonical_existing_parent(path: &Path) -> Result<PathBuf, ApiError> {
-	let parent = path.parent().ok_or_else(|| {
-		skill_path_error(
-			Status::BadRequest,
-			format!("Skill path '{}' has no parent", path.display()),
-			INVALID_SKILL_PATH,
-		)
-	})?;
-	canonical_existing(parent)
-}
-
-fn canonical_intended(path: &Path) -> Result<PathBuf, ApiError> {
-	if path.exists() {
-		return canonical_existing(path);
-	}
-
-	if path.as_os_str().is_empty() {
-		return Err(skill_path_error(
-			Status::BadRequest,
-			"Skill path cannot be empty",
-			INVALID_SKILL_PATH,
-		));
-	}
-
-	if path.components().any(|c| matches!(c, Component::ParentDir)) {
-		return Err(skill_path_error(
-			Status::BadRequest,
-			format!("Skill path '{}' contains '..'", path.display()),
-			INVALID_SKILL_PATH,
-		));
-	}
-
-	if let (Some(name), Ok(mut parent)) =
-		(path.file_name(), canonical_existing_parent(path))
-	{
-		parent.push(name);
-		return Ok(parent);
-	}
-
-	let mut missing = Vec::new();
-	let mut current = path;
-	while !current.exists() {
-		let Some(name) = current.file_name() else {
-			return Err(skill_path_error(
-				Status::NotFound,
-				format!(
-					"No existing parent found for skill path '{}'",
-					path.display()
-				),
-				SKILL_PATH_NOT_FOUND,
-			));
-		};
-		missing.push(name.to_os_string());
-		current = current.parent().ok_or_else(|| {
-			skill_path_error(
-				Status::NotFound,
-				format!(
-					"No existing parent found for skill path '{}'",
-					path.display()
-				),
-				SKILL_PATH_NOT_FOUND,
-			)
-		})?;
-	}
-
-	let mut resolved = canonical_existing(current)?;
-	for component in missing.iter().rev() {
-		resolved.push(component);
-	}
-	Ok(resolved)
-}
-
-fn is_within(child: &Path, root: &Path) -> bool {
-	child == root || child.starts_with(root)
-}
-
-fn canonical_skill_root(path: &Path) -> Result<PathBuf, ApiError> {
-	if path.exists() {
-		canonical_existing(path)
-	} else {
-		canonical_intended(path)
-	}
-}
-
-fn canonical_skill_roots_for_agent(
-	agent: AgentType,
-	resource_scope: ResourceScope,
-	project_root: Option<&Path>,
-) -> Result<Vec<PathBuf>, ApiError> {
-	let adapter = create_adapter(agent);
-	adapter
-		.get_skills_paths(project_root, resource_scope)
-		.into_iter()
-		.map(|path| canonical_skill_root(&path))
-		.collect()
-}
-
-fn canonical_skill_roots_for_registered_agents(
-	resource_scope: ResourceScope,
-	project_root: Option<&Path>,
-) -> Result<Vec<PathBuf>, ApiError> {
-	let mut roots = Vec::new();
-	for agent in AgentType::ALL {
-		roots.extend(canonical_skill_roots_for_agent(
-			*agent,
-			resource_scope,
-			project_root,
-		)?);
-	}
-	roots.sort();
-	roots.dedup();
-	Ok(roots)
-}
-
-fn ensure_path_under_roots(
-	path: &Path,
-	roots: &[PathBuf],
-) -> Result<(), ApiError> {
-	if roots.iter().any(|root| is_within(path, root)) {
-		return Ok(());
-	}
-
-	Err(skill_path_error(
-		Status::Forbidden,
-		format!(
-			"Skill path '{}' is outside configured roots",
-			path.display()
-		),
-		SKILL_PATH_OUTSIDE_ROOT,
-	))
-}
-
-fn requested_skill_dir(path: &Path) -> PathBuf {
-	if path.is_dir() {
-		return path.to_path_buf();
-	}
-
-	if path.is_file()
-		|| path.file_name().and_then(|name| name.to_str()) == Some("SKILL.md")
-	{
-		return get_parent_folder(path.to_path_buf());
-	}
-
-	path.to_path_buf()
-}
-
-fn remove_skill_dir_or_symlink(path: &Path) -> std::io::Result<()> {
-	let metadata = std::fs::symlink_metadata(path)?;
-	if metadata.file_type().is_symlink() {
-		std::fs::remove_file(path)
-	} else {
-		std::fs::remove_dir_all(path)
-	}
-}
-
-#[derive(Debug)]
-struct KnownSkillPath {
-	file: PathBuf,
-	dir: PathBuf,
-}
-
-fn known_skill_paths(
-	resource_scope: ResourceScope,
-	project_root: Option<&Path>,
-) -> Vec<KnownSkillPath> {
-	load_all_agents(resource_scope, project_root)
-		.into_iter()
-		.flat_map(|resources| resources.skills)
-		.filter_map(|skill| {
-			let source_path = skill
-				.canonical_path
-				.as_deref()
-				.or(skill.source_path.as_deref())?;
-			let expanded = expand_tilde_path(source_path);
-			let file = canonical_existing(&expanded).ok()?;
-			let dir =
-				canonical_existing(&requested_skill_dir(&expanded)).ok()?;
-			Some(KnownSkillPath { file, dir })
-		})
-		.collect()
-}
-
-fn ensure_skill_file_allowed(
-	file: &Path,
-	roots: &[PathBuf],
-	known: &[KnownSkillPath],
-) -> Result<(), ApiError> {
-	if roots.iter().any(|root| is_within(file, root))
-		|| known.iter().any(|path| path.file == file)
-	{
-		return Ok(());
-	}
-
-	Err(skill_path_error(
-		Status::Forbidden,
-		format!(
-			"Skill file '{}' is outside configured roots",
-			file.display()
-		),
-		SKILL_PATH_OUTSIDE_ROOT,
-	))
-}
-
-fn ensure_skill_tree_allowed(
-	dir: &Path,
-	roots: &[PathBuf],
-	known: &[KnownSkillPath],
-) -> Result<(), ApiError> {
-	if roots.iter().any(|root| is_within(dir, root))
-		|| known.iter().any(|path| is_within(dir, &path.dir))
-	{
-		return Ok(());
-	}
-
-	Err(skill_path_error(
-		Status::Forbidden,
-		format!(
-			"Skill directory '{}' is outside configured roots",
-			dir.display()
-		),
-		SKILL_PATH_OUTSIDE_ROOT,
-	))
-}
+use locations::*;
 
 async fn detect_plugin_for_path(path: &std::path::Path) -> Option<String> {
 	let plugins = ClaudePluginManager::new().await.ok()?;
@@ -522,11 +315,11 @@ pub fn transfer_skill_route(
 	body: Json<TransferRequest>,
 ) -> ApiResult<OperationBatchResponse> {
 	let req = body.into_inner();
-	let source = req.source.to_core()?;
+	let source = req.source.to_skill_core()?;
 	let destinations = req
 		.destinations
 		.iter()
-		.map(|target| target.to_core())
+		.map(|target| target.to_skill_core())
 		.collect::<Result<Vec<_>, _>>()?;
 	let result = transfer::transfer_skill(source, destinations)
 		.map_err(ApiError::from)?;
@@ -539,37 +332,37 @@ pub fn reconcile_skill_route(
 	body: Json<ReconcileRequest>,
 ) -> ApiResult<OperationBatchResponse> {
 	let req = body.into_inner();
-	let source = req.source.to_core()?;
+	let source = req.source.to_skill_core()?;
 
-	let added: Vec<AgentType> = req
+	let added: Vec<SkillTarget> = req
 		.added
 		.unwrap_or_default()
 		.iter()
-		.map(|agent_str| {
-			agent_str.parse().map_err(|_| {
+		.map(|target_id| {
+			target_id.parse().map_err(|_| {
 				ApiError::new(
 					rocket::http::Status::BadRequest,
-					format!("Unknown agent '{agent_str}'"),
+					format!("Unknown Skill target '{target_id}'"),
 					"INVALID_PARAM",
 				)
 			})
 		})
-		.collect::<Result<Vec<AgentType>, _>>()?;
+		.collect::<Result<Vec<SkillTarget>, _>>()?;
 
-	let removed: Vec<AgentType> = req
+	let removed: Vec<SkillTarget> = req
 		.removed
 		.unwrap_or_default()
 		.iter()
-		.map(|agent_str| {
-			agent_str.parse().map_err(|_| {
+		.map(|target_id| {
+			target_id.parse().map_err(|_| {
 				ApiError::new(
 					rocket::http::Status::BadRequest,
-					format!("Unknown agent '{agent_str}'"),
+					format!("Unknown Skill target '{target_id}'"),
 					"INVALID_PARAM",
 				)
 			})
 		})
-		.collect::<Result<Vec<AgentType>, _>>()?;
+		.collect::<Result<Vec<SkillTarget>, _>>()?;
 
 	let result = transfer::reconcile_skill(source, added, removed)
 		.map_err(ApiError::from)?;
@@ -732,107 +525,19 @@ fn get_skill_root(path: std::path::PathBuf) -> std::path::PathBuf {
 	}
 }
 
-fn copy_dir_recursive(
-	from: &std::path::Path,
-	to: &std::path::Path,
-) -> Result<(), ApiError> {
-	std::fs::create_dir_all(to)
-		.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
-	for entry in std::fs::read_dir(from)
-		.map_err(|e| ApiError::from(ConfigError::Io(e)))?
-	{
-		let entry = entry.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
-		let from_path = entry.path();
-		let to_path = to.join(entry.file_name());
-		let file_type = entry
-			.file_type()
-			.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
-		if file_type.is_dir() {
-			copy_dir_recursive(&from_path, &to_path)?;
-		} else {
-			std::fs::copy(&from_path, &to_path)
-				.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
-		}
-	}
-	Ok(())
-}
+mod copy;
 
-fn cleanup_path(path: &Path) {
-	if let Ok(metadata) = std::fs::symlink_metadata(path) {
-		let result = if metadata.file_type().is_symlink() {
-			std::fs::remove_file(path)
-		} else if metadata.is_dir() {
-			std::fs::remove_dir_all(path)
-		} else {
-			std::fs::remove_file(path)
-		};
-		let _ = result;
-	}
-}
-
-fn replace_skill_dir_staged(
-	source_dir: &Path,
-	target_dir: &Path,
-) -> Result<(), ApiError> {
-	let parent = target_dir.parent().ok_or_else(|| {
-		skill_path_error(
-			Status::BadRequest,
-			format!("Skill path '{}' has no parent", target_dir.display()),
-			INVALID_SKILL_PATH,
-		)
-	})?;
-	let target_name = target_dir
-		.file_name()
-		.and_then(|name| name.to_str())
-		.unwrap_or("skill");
-	let suffix = uuid::Uuid::new_v4().simple().to_string();
-	let staged = parent.join(format!(".aghub-tmp-{target_name}-{suffix}"));
-	let backup = parent.join(format!(".aghub-backup-{target_name}-{suffix}"));
-
-	cleanup_path(&staged);
-	cleanup_path(&backup);
-
-	copy_dir_recursive(source_dir, &staged).inspect_err(|_| {
-		cleanup_path(&staged);
-	})?;
-
-	if let Err(e) = skill::parser::parse(&staged) {
-		cleanup_path(&staged);
-		return Err(ApiError::new(
-			Status::BadRequest,
-			format!("Replacement skill is invalid: {e}"),
-			"SKILL_PARSE_FAILED",
-		));
-	}
-
-	let target_exists = std::fs::symlink_metadata(target_dir).is_ok();
-	if target_exists {
-		std::fs::rename(target_dir, &backup)
-			.map_err(|e| ApiError::from(ConfigError::Io(e)))?;
-	}
-
-	match std::fs::rename(&staged, target_dir) {
-		Ok(()) => {
-			cleanup_path(&backup);
-			Ok(())
-		}
-		Err(e) => {
-			if target_exists {
-				let _ = std::fs::rename(&backup, target_dir);
-			}
-			cleanup_path(&staged);
-			Err(ApiError::from(ConfigError::Io(e)))
-		}
-	}
-}
+use copy::*;
 
 fn resolve_git_install_target_dir(
-	agent_type: AgentType,
+	target: SkillTarget,
 	resource_scope: ResourceScope,
 	project_root: Option<&std::path::PathBuf>,
 ) -> Option<std::path::PathBuf> {
-	create_adapter(agent_type)
-		.target_skills_dir(project_root.map(|p| p.as_path()), resource_scope)
+	target.write_path(
+		resource_scope,
+		project_root.map(std::path::PathBuf::as_path),
+	)
 }
 
 fn install_git_skill_to_dir(
@@ -850,17 +555,21 @@ fn install_git_skill_to_dir(
 	let safe_name = sanitize_name(&skill.name);
 	let dest_root = target_dir.join(&safe_name);
 
-	if !dest_root.exists() {
-		let source_root = get_skill_root(full_path.to_path_buf());
-		copy_dir_recursive(&source_root, &dest_root)?;
+	match std::fs::symlink_metadata(&dest_root) {
+		Ok(_) => {}
+		Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+			let source_root = get_skill_root(full_path.to_path_buf());
+			replace_skill_dir_staged(&source_root, &dest_root)?;
+		}
+		Err(error) => return Err(ApiError::from(ConfigError::Io(error))),
 	}
 
 	Ok(skill.name)
 }
 
-type GitInstallAgentGroup = Vec<(String, AgentType)>;
+type GitInstallAgentGroup = Vec<(String, SkillTarget)>;
 type GitInstallGroups = HashMap<std::path::PathBuf, GitInstallAgentGroup>;
-type GitInstallInvalidAgent = (String, Option<AgentType>, String);
+type GitInstallInvalidAgent = (String, Option<SkillTarget>, String);
 const EMPTY_SKILLS_LOCK_DIGEST: &str =
 	"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
@@ -870,31 +579,32 @@ fn build_git_install_groups(
 	project_root: Option<&std::path::PathBuf>,
 ) -> (GitInstallGroups, Vec<GitInstallInvalidAgent>) {
 	let mut groups = HashMap::new();
+	let mut destination_dirs = HashMap::new();
 	let mut invalid = Vec::new();
 
 	for agent_str in agents {
-		let agent_type: AgentType = match agent_str.parse() {
-			Ok(agent) => agent,
+		let target: SkillTarget = match agent_str.parse() {
+			Ok(target) => target,
 			Err(_) => {
 				invalid.push((
 					agent_str.clone(),
 					None,
-					format!("Unknown agent '{agent_str}'"),
+					format!("Unknown Skill target '{agent_str}'"),
 				));
 				continue;
 			}
 		};
 
 		let Some(target_dir) = resolve_git_install_target_dir(
-			agent_type,
+			target,
 			resource_scope,
 			project_root,
 		) else {
 			invalid.push((
 				agent_str.clone(),
-				Some(agent_type),
+				Some(target),
 				format!(
-					"Agent '{}' does not support persistent skill creation \
+					"Skill target '{}' does not support persistent creation \
 					 in this scope",
 					agent_str
 				),
@@ -902,10 +612,20 @@ fn build_git_install_groups(
 			continue;
 		};
 
+		let identity = target
+			.write_path_identity(
+				resource_scope,
+				project_root.map(std::path::PathBuf::as_path),
+			)
+			.unwrap_or_else(|| target_dir.clone());
+		let destination_dir = destination_dirs
+			.entry(identity)
+			.or_insert(target_dir)
+			.clone();
 		groups
-			.entry(target_dir)
+			.entry(destination_dir)
 			.or_insert_with(Vec::new)
-			.push((agent_str.clone(), agent_type));
+			.push((agent_str.clone(), target));
 	}
 
 	(groups, invalid)
@@ -1172,6 +892,34 @@ fn validate_existing_skill_target_dir(
 	Ok(target_dir)
 }
 
+fn existing_skill_entry_path(path: &Path) -> Result<PathBuf, ApiError> {
+	let name = path.file_name().ok_or_else(|| {
+		skill_path_error(
+			Status::BadRequest,
+			format!("Skill path '{}' has no file name", path.display()),
+			INVALID_SKILL_PATH,
+		)
+	})?;
+	let parent = canonical_existing_parent(path)?;
+	let entry = parent.join(name);
+	std::fs::symlink_metadata(&entry).map_err(|error| {
+		let (status, code) = if error.kind() == std::io::ErrorKind::NotFound {
+			(Status::NotFound, SKILL_PATH_NOT_FOUND)
+		} else {
+			(Status::BadRequest, INVALID_SKILL_PATH)
+		};
+		skill_path_error(
+			status,
+			format!(
+				"Failed to inspect skill path '{}': {error}",
+				entry.display()
+			),
+			code,
+		)
+	})?;
+	Ok(entry)
+}
+
 fn map_repo_discovery_error(error: skill::RepoDiscoveryError) -> ApiError {
 	match error {
 		skill::RepoDiscoveryError::NoSkillsFound
@@ -1261,8 +1009,39 @@ fn detect_available_editor() -> Option<CodeEditorType> {
 	crate::editor_detection::detect_any_installed_editor()
 }
 
+fn build_skill_tree(root: &Path) -> Result<SkillTreeNodeResponse, ApiError> {
+	let mut hard_link_paths = HashMap::new();
+	let mut tree = build_skill_tree_node(root, root, &mut hard_link_paths)?;
+	let mut relationships = HashMap::new();
+	for mut paths in hard_link_paths.into_values() {
+		if paths.len() < 2 {
+			continue;
+		}
+		paths.sort();
+		for path in &paths {
+			relationships.insert(
+				path.clone(),
+				SkillHardLinkResponse {
+					peers: paths
+						.iter()
+						.filter(|peer| *peer != path)
+						.cloned()
+						.collect(),
+				},
+			);
+		}
+	}
+	apply_hard_link_relationships(&mut tree, &relationships);
+	Ok(tree)
+}
+
 fn build_skill_tree_node(
+	root: &std::path::Path,
 	path: &std::path::Path,
+	hard_link_paths: &mut HashMap<
+		skill::relationship::FileIdentity,
+		Vec<String>,
+	>,
 ) -> Result<SkillTreeNodeResponse, ApiError> {
 	let metadata = std::fs::symlink_metadata(path).map_err(|e| {
 		ApiError::new(
@@ -1271,18 +1050,29 @@ fn build_skill_tree_node(
 			"SKILL_PATH_NOT_FOUND",
 		)
 	})?;
-	if metadata.file_type().is_symlink() {
-		return Err(ApiError::new(
-			Status::BadRequest,
-			format!("Skill tree cannot include symlink '{}'", path.display()),
-			INVALID_SKILL_PATH,
-		));
-	}
-
 	let name = path
 		.file_name()
 		.map(|name| name.to_string_lossy().to_string())
 		.unwrap_or_else(|| path.display().to_string());
+	if metadata.file_type().is_symlink() {
+		let link = skill::link::inspect_skill_link(root, path)
+			.map(skill_link_response)
+			.map_err(|error| {
+				ApiError::new(
+					Status::BadRequest,
+					format!("Failed to inspect skill link: {error}"),
+					INVALID_SKILL_PATH,
+				)
+			})?;
+		return Ok(SkillTreeNodeResponse {
+			name,
+			path: skill_tree_relative_path(root, path)?,
+			kind: SkillTreeNodeKind::Symlink,
+			children: Vec::new(),
+			link: Some(link),
+			hard_link: None,
+		});
+	}
 
 	if metadata.is_dir() {
 		let mut entries: Vec<_> = std::fs::read_dir(path)
@@ -1312,36 +1102,115 @@ fn build_skill_tree_node(
 
 		let children = entries
 			.into_iter()
-			.map(|entry| build_skill_tree_node(&entry.path()))
+			.map(|entry| {
+				build_skill_tree_node(root, &entry.path(), hard_link_paths)
+			})
 			.collect::<Result<Vec<_>, _>>()?;
 
 		return Ok(SkillTreeNodeResponse {
 			name,
-			path: path.display().to_string(),
+			path: skill_tree_relative_path(root, path)?,
 			kind: SkillTreeNodeKind::Directory,
 			children,
+			link: None,
+			hard_link: None,
 		});
+	}
+	let relative_path = skill_tree_relative_path(root, path)?;
+	let hard_link_identity = skill::relationship::hard_link_identity(
+		path, &metadata,
+	)
+	.map_err(|error| {
+		ApiError::new(
+			Status::BadRequest,
+			format!("Failed to inspect skill hard links: {error}"),
+			INVALID_SKILL_PATH,
+		)
+	})?;
+	if let Some(identity) = hard_link_identity {
+		hard_link_paths
+			.entry(identity)
+			.or_default()
+			.push(relative_path.clone());
 	}
 
 	Ok(SkillTreeNodeResponse {
 		name,
-		path: path.display().to_string(),
+		path: relative_path,
 		kind: SkillTreeNodeKind::File,
 		children: Vec::new(),
+		link: None,
+		hard_link: None,
 	})
 }
 
+fn apply_hard_link_relationships(
+	node: &mut SkillTreeNodeResponse,
+	relationships: &HashMap<String, SkillHardLinkResponse>,
+) {
+	node.hard_link = relationships.get(&node.path).cloned();
+	for child in &mut node.children {
+		apply_hard_link_relationships(child, relationships);
+	}
+}
+
+fn skill_tree_relative_path(
+	root: &Path,
+	path: &Path,
+) -> Result<String, ApiError> {
+	let relative = path.strip_prefix(root).map_err(|error| {
+		ApiError::new(
+			Status::InternalServerError,
+			format!("Failed to build skill tree path: {error}"),
+			"SKILL_TREE_PATH_FAILED",
+		)
+	})?;
+	if relative.as_os_str().is_empty() {
+		return Ok(".".to_string());
+	}
+	Ok(relative.to_string_lossy().replace('\\', "/"))
+}
+
+fn skill_link_response(link: skill::link::SkillLink) -> SkillLinkResponse {
+	SkillLinkResponse {
+		target: link.display_target,
+		status: match link.status {
+			skill::link::SkillLinkStatus::Valid => {
+				SkillLinkStatusResponse::Valid
+			}
+			skill::link::SkillLinkStatus::Broken => {
+				SkillLinkStatusResponse::Broken
+			}
+			skill::link::SkillLinkStatus::OutsideRoot => {
+				SkillLinkStatusResponse::OutsideRoot
+			}
+			skill::link::SkillLinkStatus::Unreadable => {
+				SkillLinkStatusResponse::Unreadable
+			}
+		},
+	}
+}
+
+fn skill_hard_link_response(
+	hard_link: skill::snapshot::HardLink,
+) -> SkillHardLinkResponse {
+	SkillHardLinkResponse {
+		peers: hard_link.peers,
+	}
+}
+
 fn check_skills_supported(
-	agent: &AgentParam,
+	target: &SkillTargetParam,
 	scope: ResourceScope,
+	project_root: Option<&Path>,
 ) -> Result<(), ApiError> {
-	let descriptor = registry::get(agent.0);
-	if !descriptor.supports_skill_scope(scope) {
+	if !target.0.supports_read_scope(scope, project_root) {
 		return Err(ApiError::new(
 			Status::UnprocessableEntity,
 			format!(
-				"Agent '{}' does not support skills in {:?} scope",
-				descriptor.id, scope
+				"Skill target '{}' does not support {:?} scope",
+				target.0.id(),
+				scope
 			),
 			"UNSUPPORTED_OPERATION",
 		));
@@ -1350,23 +1219,51 @@ fn check_skills_supported(
 }
 
 fn check_skills_mutable(
-	agent: &AgentParam,
+	target: &SkillTargetParam,
 	scope: ResourceScope,
+	project_root: Option<&Path>,
 ) -> Result<(), ApiError> {
-	check_skills_supported(agent, scope)?;
+	if !target.0.supports_scope(scope, project_root) {
+		return Err(ApiError::new(
+			Status::UnprocessableEntity,
+			format!(
+				"Skill target '{}' cannot persist in {:?} scope",
+				target.0.id(),
+				scope
+			),
+			"UNSUPPORTED_OPERATION",
+		));
+	}
 	Ok(())
+}
+
+fn build_skill_manager_from_resolved(
+	target: &SkillTargetParam,
+	scope: &crate::extractors::ResolvedScope,
+) -> aghub_core::ConfigManager {
+	match scope {
+		crate::extractors::ResolvedScope::Global => {
+			target.0.manager(ResourceScope::GlobalOnly, None)
+		}
+		crate::extractors::ResolvedScope::Project { root } => {
+			target.0.manager(ResourceScope::ProjectOnly, Some(root))
+		}
+		crate::extractors::ResolvedScope::All { project_root } => target
+			.0
+			.manager(ResourceScope::Both, project_root.as_deref()),
+	}
 }
 
 #[get("/agents/<agent>/skills?<scope..>")]
 pub fn list_skills(
 	_auth: ApiAuth,
-	agent: AgentParam,
+	agent: SkillTargetParam,
 	scope: ScopeParams,
 ) -> ApiResult<Vec<SkillResponse>> {
 	let resolved = scope.resolve()?;
-	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
-	check_skills_supported(&agent, resource_scope)?;
-	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
+	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
+	check_skills_supported(&agent, resource_scope, project_root.as_deref())?;
+	let mut manager = build_skill_manager_from_resolved(&agent, &resolved);
 
 	if resolved.is_all() {
 		let (skills, _, _) =
@@ -1383,15 +1280,15 @@ pub fn list_skills(
 #[post("/agents/<agent>/skills?<scope..>", data = "<body>")]
 pub async fn create_skill(
 	_auth: ApiAuth,
-	agent: AgentParam,
+	agent: SkillTargetParam,
 	scope: ScopeParams,
 	body: Json<CreateSkillRequest>,
 ) -> ApiCreated<SkillResponse> {
 	let resolved = scope.resolve()?;
-	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
-	check_skills_mutable(&agent, resource_scope)?;
+	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
+	check_skills_mutable(&agent, resource_scope, project_root.as_deref())?;
 	require_writable_scope(&resolved)?;
-	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
+	let mut manager = build_skill_manager_from_resolved(&agent, &resolved);
 	match manager.load() {
 		Ok(_) => {}
 		Err(ConfigError::NotFound { .. }) => manager.init_empty_config(),
@@ -1406,7 +1303,7 @@ pub async fn create_skill(
 #[post("/agents/<agent>/skills/import?<scope..>", data = "<body>")]
 pub async fn import_skill(
 	_auth: ApiAuth,
-	agent: AgentParam,
+	agent: SkillTargetParam,
 	scope: ScopeParams,
 	body: Json<crate::dto::skill::ImportSkillRequest>,
 ) -> ApiResult<SkillResponse> {
@@ -1432,15 +1329,15 @@ pub async fn import_skill(
 }
 
 fn import_skill_blocking(
-	agent: AgentParam,
+	agent: SkillTargetParam,
 	scope: ScopeParams,
 	request: crate::dto::skill::ImportSkillRequest,
 ) -> Result<SkillResponse, ApiError> {
 	let resolved = scope.resolve()?;
 	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
-	check_skills_mutable(&agent, resource_scope)?;
+	check_skills_mutable(&agent, resource_scope, project_root.as_deref())?;
 	require_writable_scope(&resolved)?;
-	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
+	let mut manager = build_skill_manager_from_resolved(&agent, &resolved);
 	let import_path = expand_tilde_path(&request.path);
 	let audit = SkillImportReview::prepare(std::slice::from_ref(&import_path))?;
 	audit.require_authorized(
@@ -1498,14 +1395,14 @@ fn import_skill_blocking(
 #[get("/agents/<agent>/skills/<name>?<scope..>")]
 pub fn get_skill(
 	_auth: ApiAuth,
-	agent: AgentParam,
+	agent: SkillTargetParam,
 	name: &str,
 	scope: ScopeParams,
 ) -> ApiResult<SkillResponse> {
 	let resolved = scope.resolve()?;
-	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
-	check_skills_supported(&agent, resource_scope)?;
-	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
+	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
+	check_skills_supported(&agent, resource_scope, project_root.as_deref())?;
+	let mut manager = build_skill_manager_from_resolved(&agent, &resolved);
 
 	if resolved.is_all() {
 		let (skills, _, _) =
@@ -1527,16 +1424,16 @@ pub fn get_skill(
 #[put("/agents/<agent>/skills/<name>?<scope..>", data = "<body>")]
 pub async fn update_skill(
 	_auth: ApiAuth,
-	agent: AgentParam,
+	agent: SkillTargetParam,
 	name: &str,
 	scope: ScopeParams,
 	body: Json<UpdateSkillRequest>,
 ) -> ApiResult<SkillResponse> {
 	let resolved = scope.resolve()?;
-	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
-	check_skills_mutable(&agent, resource_scope)?;
+	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
+	check_skills_mutable(&agent, resource_scope, project_root.as_deref())?;
 	require_writable_scope(&resolved)?;
-	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
+	let mut manager = build_skill_manager_from_resolved(&agent, &resolved);
 	manager.load().map_err(ApiError::from)?;
 	let existing = manager
 		.get_skill(name)
@@ -1556,15 +1453,15 @@ pub async fn update_skill(
 #[delete("/agents/<agent>/skills/<name>?<scope..>")]
 pub async fn delete_skill(
 	_auth: ApiAuth,
-	agent: AgentParam,
+	agent: SkillTargetParam,
 	name: &str,
 	scope: ScopeParams,
 ) -> ApiNoContent {
 	let resolved = scope.resolve()?;
-	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
-	check_skills_mutable(&agent, resource_scope)?;
+	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
+	check_skills_mutable(&agent, resource_scope, project_root.as_deref())?;
 	require_writable_scope(&resolved)?;
-	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
+	let mut manager = build_skill_manager_from_resolved(&agent, &resolved);
 	match manager.load() {
 		Ok(_) => {}
 		Err(ConfigError::NotFound { .. }) => return Ok(NoContent),
@@ -1582,15 +1479,15 @@ pub async fn delete_skill(
 #[post("/agents/<agent>/skills/<name>/enable?<scope..>")]
 pub async fn enable_skill(
 	_auth: ApiAuth,
-	agent: AgentParam,
+	agent: SkillTargetParam,
 	name: &str,
 	scope: ScopeParams,
 ) -> ApiResult<SkillResponse> {
 	let resolved = scope.resolve()?;
-	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
-	check_skills_supported(&agent, resource_scope)?;
+	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
+	check_skills_supported(&agent, resource_scope, project_root.as_deref())?;
 	require_writable_scope(&resolved)?;
-	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
+	let mut manager = build_skill_manager_from_resolved(&agent, &resolved);
 	manager.load().map_err(ApiError::from)?;
 	if let Some(skill) = manager.get_skill(name) {
 		ensure_skill_not_plugin_managed(skill, "enable").await?;
@@ -1603,15 +1500,15 @@ pub async fn enable_skill(
 #[post("/agents/<agent>/skills/<name>/disable?<scope..>")]
 pub async fn disable_skill(
 	_auth: ApiAuth,
-	agent: AgentParam,
+	agent: SkillTargetParam,
 	name: &str,
 	scope: ScopeParams,
 ) -> ApiResult<SkillResponse> {
 	let resolved = scope.resolve()?;
-	let (resource_scope, _) = resolved_to_resource_scope(&resolved);
-	check_skills_supported(&agent, resource_scope)?;
+	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
+	check_skills_supported(&agent, resource_scope, project_root.as_deref())?;
 	require_writable_scope(&resolved)?;
-	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
+	let mut manager = build_skill_manager_from_resolved(&agent, &resolved);
 	manager.load().map_err(ApiError::from)?;
 	if let Some(skill) = manager.get_skill(name) {
 		ensure_skill_not_plugin_managed(skill, "disable").await?;
@@ -1672,25 +1569,64 @@ pub(crate) async fn list_all_agents_skills(
 ) -> ApiResult<Vec<SkillResponse>> {
 	let include_managed = params.include_managed();
 	let resolved = params.resolve_scope()?;
-	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
+	let (mut resource_scope, mut project_root) =
+		resolved_to_resource_scope(&resolved);
+	if !params.include_project() {
+		match resource_scope {
+			ResourceScope::ProjectOnly => return Ok(Json(Vec::new())),
+			ResourceScope::Both => {
+				resource_scope = ResourceScope::GlobalOnly;
+				project_root = None;
+			}
+			ResourceScope::GlobalOnly => {}
+		}
+	}
 	let detected_plugins = ClaudePluginManager::new()
 		.await
 		.map(|manager| manager.list_plugins().to_vec())
 		.unwrap_or_default();
-	let items = load_all_agents(resource_scope, project_root.as_deref())
-		.into_iter()
-		.flat_map(|ar| {
-			let agent_id = ar.agent_id;
-			let plugins = &detected_plugins;
-			ar.skills.into_iter().filter_map(move |skill| {
-				if !include_managed && is_plugin_managed_skill(&skill, plugins)
-				{
-					return None;
+	let mut items = Vec::new();
+	for target in load_all_skill_target_locations_with_options(
+		resource_scope,
+		project_root.as_deref(),
+		params.discovery_options(),
+	) {
+		let mut item_indices = HashMap::new();
+		let mut hidden_names = HashSet::new();
+		for skill in target.skills {
+			if hidden_names.contains(&skill.name) {
+				continue;
+			}
+			let is_managed = is_plugin_managed_skill(&skill, &detected_plugins);
+			let (Some(source_path), Some(source)) =
+				(skill.source_path.clone(), skill.config_source)
+			else {
+				continue;
+			};
+			let location = SkillLocationResponse {
+				source_path,
+				is_symlink: skill.canonical_path.is_some(),
+				source: source.into(),
+			};
+			if let Some(index) = item_indices.get(&skill.name).copied() {
+				if !include_managed && is_managed {
+					continue;
 				}
-				Some(SkillResponse::from_agent_skill(skill, agent_id))
-			})
-		})
-		.collect();
+				let item: &mut SkillResponse = &mut items[index];
+				item.locations.get_or_insert_with(Vec::new).push(location);
+				continue;
+			}
+			if !include_managed && is_managed {
+				hidden_names.insert(skill.name);
+				continue;
+			}
+			let mut response =
+				SkillResponse::from_agent_skill(skill, target.target_id);
+			response.locations = Some(vec![location]);
+			item_indices.insert(response.name.clone(), items.len());
+			items.push(response);
+		}
+	}
 	Ok(Json(items))
 }
 
@@ -2047,11 +1983,26 @@ pub fn get_skill_tree(
 
 	let path = expand_tilde_path(&query.path);
 	let root = get_skill_root(path);
+	let root_is_symlink = std::fs::symlink_metadata(&root)
+		.is_ok_and(|metadata| metadata.file_type().is_symlink());
+	let known_link_target = known_skill_link_target(&known, &root);
 	let canonical_root = canonical_existing(&root)?;
 	ensure_skill_tree_allowed(&canonical_root, &roots, &known)?;
-	let tree = build_skill_tree_node(&canonical_root)?;
+	let mut tree = build_skill_tree(&canonical_root)?;
+	if root_is_symlink || known_link_target.is_some() {
+		let target = known_link_target.as_deref().unwrap_or(&canonical_root);
+		tree.link = Some(SkillLinkResponse {
+			target: aghub_core::format_path_with_tilde(target),
+			status: SkillLinkStatusResponse::Valid,
+		});
+	}
 	Ok(Json(tree))
 }
+
+mod conflicts;
+pub use conflicts::{diff_skill, get_skill_copy_status, resolve_skill_copies};
+#[cfg(test)]
+use conflicts::{retain_skill_diff_previews, skill_directory_diff_response};
 
 #[get("/skills/lock/global")]
 pub fn get_global_skill_lock(
@@ -2848,29 +2799,344 @@ mod tests {
 		assert_eq!(error.body.code, SKILL_PATH_OUTSIDE_ROOT);
 	}
 
-	#[cfg(unix)]
 	#[test]
-	fn skill_tree_rejects_symlink_child() {
+	fn skill_tree_reports_hard_link_peers() {
 		let temp = tempdir().unwrap();
 		let project = temp.path().join("project");
 		let skill_dir = project.join(".claude/skills/demo");
-		let outside_dir = temp.path().join("outside");
 		write_test_skill(&skill_dir, "demo", "visible body");
-		std::fs::create_dir_all(&outside_dir).unwrap();
-		std::fs::write(outside_dir.join("secret.txt"), "secret").unwrap();
-		std::os::unix::fs::symlink(&outside_dir, skill_dir.join("linked"))
-			.unwrap();
+		let first = skill_dir.join("first.txt");
+		std::fs::write(&first, "shared").unwrap();
+		std::fs::hard_link(&first, skill_dir.join("second.txt")).unwrap();
 
-		let error = api_err(get_skill_tree(
+		let tree = api_ok(get_skill_tree(
 			ApiAuth,
 			SkillTreeQuery {
 				path: skill_dir.display().to_string(),
 				scope: Some("project".to_string()),
 				project_root: Some(project.display().to_string()),
 			},
-		));
+		))
+		.into_inner();
+		let first = tree
+			.children
+			.iter()
+			.find(|child| child.name == "first.txt")
+			.unwrap();
+		let second = tree
+			.children
+			.iter()
+			.find(|child| child.name == "second.txt")
+			.unwrap();
 
-		assert_eq!(error.body.code, INVALID_SKILL_PATH);
+		assert_eq!(first.hard_link.as_ref().unwrap().peers, vec!["second.txt"]);
+		assert_eq!(second.hard_link.as_ref().unwrap().peers, vec!["first.txt"]);
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn skill_tree_reports_root_symlink_target_and_contents() {
+		let temp = tempdir().unwrap();
+		let project = temp.path().join("project");
+		let target = project.join("shared/demo");
+		write_test_skill(&target, "demo", "visible body");
+		let link = project.join(".agents/skills/demo");
+		std::fs::create_dir_all(link.parent().unwrap()).unwrap();
+		std::os::unix::fs::symlink(&target, &link).unwrap();
+
+		let tree = api_ok(get_skill_tree(
+			ApiAuth,
+			SkillTreeQuery {
+				path: link.join("SKILL.md").display().to_string(),
+				scope: Some("project".to_string()),
+				project_root: Some(project.display().to_string()),
+			},
+		))
+		.into_inner();
+
+		assert_eq!(
+			tree.link.as_ref().and_then(|state| state.target.as_deref()),
+			Some(
+				std::fs::canonicalize(&target)
+					.unwrap()
+					.to_string_lossy()
+					.as_ref()
+			)
+		);
+		assert!(tree.children.iter().any(|child| child.name == "SKILL.md"));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn skill_tree_reports_linked_skills_root_target() {
+		let temp = tempdir().unwrap();
+		let project = temp.path().join("project");
+		let target = project.join(".agents/skills/demo");
+		write_test_skill(&target, "demo", "visible body");
+		let native_root = project.join(".claude/skills");
+		std::fs::create_dir_all(native_root.parent().unwrap()).unwrap();
+		std::os::unix::fs::symlink(
+			project.join(".agents/skills"),
+			&native_root,
+		)
+		.unwrap();
+
+		let tree = api_ok(get_skill_tree(
+			ApiAuth,
+			SkillTreeQuery {
+				path: native_root.join("demo/SKILL.md").display().to_string(),
+				scope: Some("project".to_string()),
+				project_root: Some(project.display().to_string()),
+			},
+		))
+		.into_inner();
+
+		assert_eq!(
+			tree.link.as_ref().and_then(|state| state.target.as_deref()),
+			Some(
+				std::fs::canonicalize(&target)
+					.unwrap()
+					.to_string_lossy()
+					.as_ref()
+			)
+		);
+		assert!(tree.children.iter().any(|child| child.name == "SKILL.md"));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn skill_tree_reports_broken_symlink_child() {
+		let temp = tempdir().unwrap();
+		let project = temp.path().join("project");
+		let skill_dir = project.join(".claude/skills/demo");
+		write_test_skill(&skill_dir, "demo", "visible body");
+		std::os::unix::fs::symlink(
+			"../missing.txt",
+			skill_dir.join("linked.txt"),
+		)
+		.unwrap();
+
+		let tree = api_ok(get_skill_tree(
+			ApiAuth,
+			SkillTreeQuery {
+				path: skill_dir.display().to_string(),
+				scope: Some("project".to_string()),
+				project_root: Some(project.display().to_string()),
+			},
+		))
+		.into_inner();
+		let link = tree
+			.children
+			.iter()
+			.find(|child| child.name == "linked.txt")
+			.unwrap();
+
+		assert!(matches!(link.kind, SkillTreeNodeKind::Symlink));
+		assert!(link.link.as_ref().unwrap().target.is_none());
+		assert!(matches!(
+			link.link.as_ref().unwrap().status,
+			SkillLinkStatusResponse::Broken
+		));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn skill_tree_reports_valid_and_outside_symlink_children() {
+		let temp = tempdir().unwrap();
+		let project = temp.path().join("project");
+		let skill_dir = project.join(".claude/skills/demo");
+		let outside_file = project.join("outside.txt");
+		write_test_skill(&skill_dir, "demo", "visible body");
+		std::fs::write(skill_dir.join("target.txt"), "target").unwrap();
+		std::fs::write(&outside_file, "outside").unwrap();
+		std::os::unix::fs::symlink("target.txt", skill_dir.join("valid.txt"))
+			.unwrap();
+		std::os::unix::fs::symlink(
+			"../../../outside.txt",
+			skill_dir.join("outside.txt"),
+		)
+		.unwrap();
+
+		let tree = api_ok(get_skill_tree(
+			ApiAuth,
+			SkillTreeQuery {
+				path: skill_dir.display().to_string(),
+				scope: Some("project".to_string()),
+				project_root: Some(project.display().to_string()),
+			},
+		))
+		.into_inner();
+		let status = |name: &str| {
+			tree.children
+				.iter()
+				.find(|child| child.name == name)
+				.unwrap()
+				.link
+				.as_ref()
+				.unwrap()
+				.status
+				.clone()
+		};
+
+		assert!(matches!(
+			status("valid.txt"),
+			SkillLinkStatusResponse::Valid
+		));
+		assert!(matches!(
+			status("outside.txt"),
+			SkillLinkStatusResponse::OutsideRoot
+		));
+		let target = |name: &str| {
+			tree.children
+				.iter()
+				.find(|child| child.name == name)
+				.unwrap()
+				.link
+				.as_ref()
+				.unwrap()
+				.target
+				.clone()
+		};
+		assert_eq!(target("valid.txt").as_deref(), Some("target.txt"));
+		assert!(target("outside.txt").is_none());
+	}
+
+	#[test]
+	fn skill_diff_reports_modified_and_added_files() {
+		let temp = tempdir().unwrap();
+		let installed = temp.path().join("installed");
+		let comparison = temp.path().join("comparison");
+		write_test_skill(&installed, "demo", "old body");
+		write_test_skill(&comparison, "demo", "new body");
+		std::fs::write(comparison.join("notes.txt"), "new file").unwrap();
+
+		let response = skill_directory_diff_response(
+			skill::snapshot::compare_directories(&installed, &comparison)
+				.unwrap(),
+		);
+
+		assert!(!response.identical);
+		assert_eq!(response.base_hash.len(), 64);
+		assert_eq!(response.target_hash.len(), 64);
+		assert_eq!(response.files.len(), 2);
+		assert_eq!(response.files[0].path, "SKILL.md");
+		assert!(matches!(
+			response.files[0].change,
+			SkillFileDiffKindResponse::Modified
+		));
+		assert!(response.files[0]
+			.before
+			.as_deref()
+			.is_some_and(|content| content.contains("old body")));
+		assert!(response.files[0]
+			.after
+			.as_deref()
+			.is_some_and(|content| content.contains("new body")));
+		assert_eq!(response.files[1].path, "notes.txt");
+		assert!(matches!(
+			response.files[1].change,
+			SkillFileDiffKindResponse::Added
+		));
+	}
+
+	#[test]
+	fn skill_diff_reports_name_change() {
+		let temp = tempdir().unwrap();
+		let installed = temp.path().join("installed");
+		let comparison = temp.path().join("comparison");
+		write_test_skill(&installed, "first", "body");
+		write_test_skill(&comparison, "second", "body");
+
+		let response = skill_directory_diff_response(
+			skill::snapshot::compare_directories(&installed, &comparison)
+				.unwrap(),
+		);
+
+		assert!(!response.identical);
+		assert_eq!(response.files.len(), 1);
+		assert_eq!(response.files[0].path, "SKILL.md");
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn skill_diff_reports_link_target_status() {
+		let temp = tempdir().unwrap();
+		let installed = temp.path().join("installed");
+		let comparison = temp.path().join("comparison");
+		write_test_skill(&installed, "demo", "body");
+		write_test_skill(&comparison, "demo", "body");
+		std::fs::write(installed.join("target.txt"), "target").unwrap();
+		std::os::unix::fs::symlink("target.txt", installed.join("linked.txt"))
+			.unwrap();
+		std::os::unix::fs::symlink(
+			"missing.txt",
+			comparison.join("linked.txt"),
+		)
+		.unwrap();
+
+		let response = skill_directory_diff_response(
+			skill::snapshot::compare_directories(&installed, &comparison)
+				.unwrap(),
+		);
+		let link_diff = response
+			.files
+			.iter()
+			.find(|file| file.path == "linked.txt")
+			.unwrap();
+
+		assert!(matches!(
+			link_diff.before_link.as_ref().unwrap().status,
+			SkillLinkStatusResponse::Valid
+		));
+		assert!(link_diff.after_link.as_ref().unwrap().target.is_none());
+		assert!(matches!(
+			link_diff.after_link.as_ref().unwrap().status,
+			SkillLinkStatusResponse::Broken
+		));
+		assert!(!link_diff.content_omitted);
+	}
+
+	#[test]
+	fn skill_diff_bounds_serialized_text_previews() {
+		let mut response = SkillDirectoryDiffResponse {
+			identical: false,
+			base_hash: "base".to_string(),
+			target_hash: "target".to_string(),
+			files: vec![
+				SkillFileDiffResponse {
+					path: "kept.txt".to_string(),
+					change: SkillFileDiffKindResponse::Modified,
+					before: Some("aa".to_string()),
+					after: Some("bb".to_string()),
+					before_link: None,
+					after_link: None,
+					before_hard_link: None,
+					after_hard_link: None,
+					content_omitted: false,
+				},
+				SkillFileDiffResponse {
+					path: "omitted.txt".to_string(),
+					change: SkillFileDiffKindResponse::Modified,
+					before: Some("cc".to_string()),
+					after: Some("dd".to_string()),
+					before_link: None,
+					after_link: None,
+					before_hard_link: None,
+					after_hard_link: None,
+					content_omitted: false,
+				},
+			],
+			files_omitted: 0,
+		};
+		let mut remaining_bytes = 5;
+
+		retain_skill_diff_previews(&mut response, &mut remaining_bytes);
+
+		assert_eq!(remaining_bytes, 1);
+		assert!(!response.files[0].content_omitted);
+		assert!(response.files[1].content_omitted);
+		assert!(response.files[1].before.is_none());
+		assert!(response.files[1].after.is_none());
 	}
 
 	#[test]
@@ -2982,6 +3248,243 @@ mod tests {
 	}
 
 	#[test]
+	fn staged_skill_batch_rolls_back_after_activation_failure() {
+		let temp = tempdir().unwrap();
+		let source_dir = temp.path().join("source");
+		let first_target = temp.path().join("first-target");
+		let second_target = temp.path().join("second-target");
+		write_test_skill(&source_dir, "demo", "new body");
+		write_test_skill(&first_target, "demo", "first old body");
+		write_test_skill(&second_target, "demo", "second old body");
+		let first =
+			api_ok(stage_skill_dir_replacement(&source_dir, &first_target));
+		let second =
+			api_ok(stage_skill_dir_replacement(&source_dir, &second_target));
+		cleanup_path(&second.staged);
+
+		let error =
+			apply_staged_skill_replacements(&[first, second]).unwrap_err();
+
+		assert_eq!(error.body.code, "IO_ERROR");
+		let first_content =
+			std::fs::read_to_string(first_target.join("SKILL.md")).unwrap();
+		let second_content =
+			std::fs::read_to_string(second_target.join("SKILL.md")).unwrap();
+		assert!(first_content.contains("first old body"));
+		assert!(second_content.contains("second old body"));
+	}
+
+	#[test]
+	fn staged_skill_batch_keeps_other_targets_available() {
+		let temp = tempdir().unwrap();
+		let source = temp.path().join("source");
+		let targets = [
+			temp.path().join("first-target"),
+			temp.path().join("second-target"),
+			temp.path().join("third-target"),
+		];
+		write_test_skill(&source, "demo", "new body");
+		for (index, target) in targets.iter().enumerate() {
+			write_test_skill(target, "demo", &format!("old body {index}"));
+		}
+		let replacements = targets
+			.iter()
+			.map(|target| api_ok(stage_skill_dir_replacement(&source, target)))
+			.collect::<Vec<_>>();
+
+		api_ok(apply_staged_skill_replacements_with_backup_check(
+			&replacements,
+			|current, replacement| {
+				assert!(!replacement.target.exists());
+				for (index, target) in targets.iter().enumerate() {
+					if index != current {
+						assert!(target.exists());
+					}
+				}
+				Ok(())
+			},
+		));
+
+		for target in targets {
+			let content =
+				std::fs::read_to_string(target.join("SKILL.md")).unwrap();
+			assert!(content.contains("new body"));
+		}
+	}
+
+	#[test]
+	fn staged_skill_batch_reports_backup_cleanup_failure() {
+		let temp = tempdir().unwrap();
+		let source = temp.path().join("source");
+		let target = temp.path().join("target");
+		write_test_skill(&source, "demo", "new body");
+		write_test_skill(&target, "demo", "old body");
+		let replacement = api_ok(stage_skill_dir_replacement(&source, &target));
+		let backup = replacement.backup.clone();
+
+		let error = apply_staged_skill_replacements_with_checks(
+			&[replacement],
+			|_, _| Ok(()),
+			|_| {
+				Err(std::io::Error::new(
+					std::io::ErrorKind::PermissionDenied,
+					"backup is in use",
+				))
+			},
+		)
+		.unwrap_err();
+
+		assert_eq!(error.body.code, "SKILL_COPY_BACKUP_CLEANUP_FAILED");
+		assert!(error.body.error.contains(backup.to_string_lossy().as_ref()));
+		let content = std::fs::read_to_string(target.join("SKILL.md")).unwrap();
+		assert!(content.contains("new body"));
+		assert!(backup.exists());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn staged_skill_copy_reports_failed_temp_cleanup() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let temp = tempdir().unwrap();
+		let source = temp.path().join("source");
+		let parent = temp.path().join("targets");
+		let target = parent.join("demo");
+		write_test_skill(&source, "demo", "new body");
+		std::fs::create_dir_all(&parent).unwrap();
+		let mut staged_path = None;
+
+		let error =
+			stage_skill_dir_replacement_with(&source, &target, |_, staged| {
+				write_test_skill(staged, "demo", "partial body");
+				staged_path = Some(staged.to_path_buf());
+				std::fs::set_permissions(
+					&parent,
+					std::fs::Permissions::from_mode(0o500),
+				)
+				.unwrap();
+				Err(ApiError::new(
+					Status::InternalServerError,
+					"copy failed",
+					"COPY_FAILED",
+				))
+			})
+			.unwrap_err();
+
+		std::fs::set_permissions(
+			&parent,
+			std::fs::Permissions::from_mode(0o700),
+		)
+		.unwrap();
+		let staged_path = staged_path.unwrap();
+		assert_eq!(error.body.code, "SKILL_COPY_TEMP_CLEANUP_FAILED");
+		assert!(error
+			.body
+			.error
+			.contains(staged_path.to_string_lossy().as_ref()));
+		assert!(staged_path.exists());
+	}
+
+	#[test]
+	fn skill_copy_batch_write_budget_rejects_before_staging() {
+		let temp = tempdir().unwrap();
+		let source = temp.path().join("source");
+		let first_target = temp.path().join("first/demo");
+		let second_target = temp.path().join("second/demo");
+		write_test_skill(&source, "demo", "new body");
+		write_test_skill(&first_target, "demo", "first old body");
+		write_test_skill(&second_target, "demo", "second old body");
+		let source_bytes =
+			std::fs::metadata(source.join("SKILL.md")).unwrap().len();
+		let mut remaining_bytes = source_bytes * 2 - 1;
+
+		let error = stage_skill_copy_replacements_with_budget(
+			&source,
+			&[first_target.clone(), second_target.clone()],
+			source_bytes,
+			&mut remaining_bytes,
+		)
+		.unwrap_err();
+
+		assert_eq!(error.body.code, "SKILL_COPY_WRITE_LIMIT");
+		for parent in [
+			first_target.parent().unwrap(),
+			second_target.parent().unwrap(),
+		] {
+			assert!(!std::fs::read_dir(parent)
+				.unwrap()
+				.filter_map(Result::ok)
+				.any(|entry| entry
+					.file_name()
+					.to_string_lossy()
+					.starts_with(".aghub-tmp-")));
+		}
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn staged_skill_batch_reports_each_failed_recovery_path() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let temp = tempdir().unwrap();
+		let source = temp.path().join("source");
+		let first_target = temp.path().join("first/demo");
+		let second_target = temp.path().join("second/demo");
+		let failing_target = temp.path().join("third/demo");
+		write_test_skill(&source, "demo", "new body");
+		write_test_skill(&first_target, "demo", "first old body");
+		write_test_skill(&second_target, "demo", "second old body");
+		write_test_skill(&failing_target, "demo", "third old body");
+		let first = api_ok(stage_skill_dir_replacement(&source, &first_target));
+		let second =
+			api_ok(stage_skill_dir_replacement(&source, &second_target));
+		let failing =
+			api_ok(stage_skill_dir_replacement(&source, &failing_target));
+		let first_backup = first.backup.clone();
+		let second_backup = second.backup.clone();
+		cleanup_path(&failing.staged);
+
+		let error = apply_staged_skill_replacements_with_backup_check(
+			&[first, second, failing],
+			|index, _| {
+				if index == 2 {
+					for target in [&first_target, &second_target] {
+						std::fs::set_permissions(
+							target.parent().unwrap(),
+							std::fs::Permissions::from_mode(0o500),
+						)
+						.unwrap();
+					}
+				}
+				Ok(())
+			},
+		)
+		.unwrap_err();
+
+		for target in [&first_target, &second_target] {
+			std::fs::set_permissions(
+				target.parent().unwrap(),
+				std::fs::Permissions::from_mode(0o700),
+			)
+			.unwrap();
+		}
+		assert_eq!(error.body.code, "SKILL_COPY_ROLLBACK_FAILED");
+		assert!(error
+			.body
+			.error
+			.contains(first_backup.to_string_lossy().as_ref()));
+		assert!(error
+			.body
+			.error
+			.contains(second_backup.to_string_lossy().as_ref()));
+		assert!(first_backup.exists());
+		assert!(second_backup.exists());
+		let failing_content =
+			std::fs::read_to_string(failing_target.join("SKILL.md")).unwrap();
+		assert!(failing_content.contains("third old body"));
+	}
+
+	#[test]
 	fn git_sync_outside_source_path_is_rejected_and_not_deleted() {
 		let temp = tempdir().unwrap();
 		let project = temp.path().join("project");
@@ -3045,16 +3548,101 @@ mod tests {
 	fn git_install_groups_agents_by_primary_target_dir() {
 		let project_root = std::path::PathBuf::from("/tmp/demo");
 		let (groups, invalid) = build_git_install_groups(
-			&["claude".into(), "opencode".into(), "codex".into()],
+			&[
+				"universal".into(),
+				"claude".into(),
+				"opencode".into(),
+				"codex".into(),
+			],
+			ResourceScope::ProjectOnly,
+			Some(&project_root),
+		);
+
+		assert_eq!(invalid.len(), 1);
+		assert_eq!(invalid[0].0, "codex");
+		assert_eq!(groups.len(), 3);
+		assert!(groups.contains_key(&project_root.join(".claude/skills")));
+		assert!(groups.contains_key(&project_root.join(".opencode/skills")));
+		assert!(groups.contains_key(&project_root.join(".agents/skills")));
+	}
+
+	#[test]
+	fn skill_list_params_keep_existing_discovery_scope_by_default() {
+		let params = SkillListParams {
+			scope: None,
+			project_root: None,
+			include_managed: None,
+			include_project: None,
+			include_nested: None,
+			include_dependencies: None,
+		};
+
+		assert!(params.include_project());
+		assert_eq!(
+			params.discovery_options(),
+			SkillDiscoveryOptions {
+				include_nested: true,
+				include_dependencies: true,
+			}
+		);
+	}
+
+	#[test]
+	fn skill_list_params_apply_explicit_discovery_scope() {
+		let params = SkillListParams {
+			scope: None,
+			project_root: None,
+			include_managed: None,
+			include_project: Some(false),
+			include_nested: Some(false),
+			include_dependencies: Some(false),
+		};
+
+		assert!(!params.include_project());
+		assert_eq!(
+			params.discovery_options(),
+			SkillDiscoveryOptions {
+				include_nested: false,
+				include_dependencies: false,
+			}
+		);
+	}
+
+	#[test]
+	fn git_install_keeps_universal_and_codex_targets_distinct() {
+		let home = dirs::home_dir().expect("test home directory");
+		let (groups, invalid) = build_git_install_groups(
+			&["universal".into(), "codex".into()],
+			ResourceScope::GlobalOnly,
+			None,
+		);
+
+		assert!(invalid.is_empty());
+		assert_eq!(groups.len(), 2);
+		assert!(groups.contains_key(&home.join(".agents/skills")));
+		assert!(groups.contains_key(&home.join(".codex/skills")));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn git_install_groups_linked_targets_by_physical_destination() {
+		let temp = tempdir().unwrap();
+		let project_root = temp.path().to_path_buf();
+		let universal_root = project_root.join(".agents/skills");
+		std::fs::create_dir_all(&universal_root).unwrap();
+		let native_root = project_root.join(".claude/skills");
+		std::fs::create_dir_all(native_root.parent().unwrap()).unwrap();
+		std::os::unix::fs::symlink(&universal_root, &native_root).unwrap();
+
+		let (groups, invalid) = build_git_install_groups(
+			&["universal".into(), "claude".into()],
 			ResourceScope::ProjectOnly,
 			Some(&project_root),
 		);
 
 		assert!(invalid.is_empty());
-		assert_eq!(groups.len(), 3);
-		assert!(groups.contains_key(&project_root.join(".claude/skills")));
-		assert!(groups.contains_key(&project_root.join(".opencode/skills")));
-		assert!(groups.contains_key(&project_root.join(".agents/skills")));
+		assert_eq!(groups.len(), 1);
+		assert_eq!(groups[&universal_root].len(), 2);
 	}
 
 	#[test]

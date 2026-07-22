@@ -270,6 +270,9 @@ fn build_rocket(
 				routes::skills::get_skill_content,
 				routes::skills::audit_skill,
 				routes::skills::get_skill_tree,
+				routes::skills::diff_skill,
+				routes::skills::get_skill_copy_status,
+				routes::skills::resolve_skill_copies,
 				routes::skills::get_global_skill_lock,
 				routes::skills::get_project_skill_lock,
 				routes::skills::delete_skill_by_path,
@@ -730,6 +733,1600 @@ mod tests {
 		let response = get_auth(&client, &uri);
 		assert_eq!(response.status(), Status::Ok);
 		assert_eq!(response_json(response), json!("# Body"));
+	}
+
+	#[test]
+	fn route_skill_list_preserves_same_agent_locations() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		write_import_skill(
+			&project_dir.path().join(".opencode/skills/demo"),
+			"demo",
+			"opencode copy",
+		);
+		write_import_skill(
+			&project_dir.path().join(".agents/skills/demo"),
+			"demo",
+			"agents copy",
+		);
+		let client = test_client(app_data_dir.path());
+		let uri = format!(
+			"/api/v1/agents/all/skills?{}",
+			project_query(project_dir.path())
+		);
+
+		let response = get_auth(&client, &uri);
+
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		let opencode_skills = body
+			.as_array()
+			.expect("skill list")
+			.iter()
+			.filter(|item| {
+				item["agent"] == "opencode" && item["name"] == "demo"
+			})
+			.collect::<Vec<_>>();
+		assert_eq!(opencode_skills.len(), 1);
+		let locations = opencode_skills[0]["locations"]
+			.as_array()
+			.expect("skill locations");
+		assert_eq!(locations.len(), 2);
+		assert_ne!(locations[0]["source_path"], locations[1]["source_path"]);
+		assert!(locations
+			.iter()
+			.all(|location| location["source"] == "project"));
+		assert!(locations[0]["source_path"]
+			.as_str()
+			.expect("source path")
+			.contains(".opencode/skills"));
+
+		let agent_uri = format!(
+			"/api/v1/agents/opencode/skills?{}",
+			project_query(project_dir.path())
+		);
+		let response = get_auth(&client, &agent_uri);
+		assert_eq!(response.status(), Status::Ok);
+		assert_eq!(
+			response_json(response)
+				.as_array()
+				.expect("agent skill list")
+				.len(),
+			1
+		);
+	}
+
+	#[test]
+	fn route_skill_diff_compares_project_locations() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let installed = project_dir.path().join(".claude/skills/demo");
+		let comparison = project_dir.path().join(".cursor/skills/demo");
+		let second_comparison = project_dir.path().join(".agents/skills/demo");
+		write_import_skill(&installed, "demo", "old instruction");
+		write_import_skill(&comparison, "demo", "new instruction");
+		write_import_skill(&second_comparison, "demo", "third instruction");
+		let client = test_client(app_data_dir.path());
+		let request = json!({
+			"reference": {
+				"kind": "installed",
+				"source_path": installed.join("SKILL.md"),
+			},
+			"installed_paths": [
+				comparison.join("SKILL.md"),
+				second_comparison.join("SKILL.md"),
+			],
+			"scope": "project",
+			"project_root": project_dir.path(),
+		});
+		let unauthorized = client
+			.post("/api/v1/skills/diff")
+			.header(ContentType::JSON)
+			.body(request.to_string())
+			.dispatch();
+		assert_json_error(unauthorized, Status::Unauthorized, "UNAUTHORIZED");
+
+		let response = post_json(&client, "/api/v1/skills/diff", request);
+
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["results"].as_array().expect("diff results").len(), 2);
+		assert_eq!(body["results"][0]["identical"], false);
+		assert_eq!(body["results"][0]["files"][0]["path"], "SKILL.md");
+		assert_eq!(body["results"][0]["files"][0]["change"], "modified");
+		assert!(body["results"][0]["files"][0]["after"]
+			.as_str()
+			.expect("first target preview")
+			.contains("new instruction"));
+		assert!(body["results"][1]["files"][0]["after"]
+			.as_str()
+			.expect("second target preview")
+			.contains("third instruction"));
+	}
+
+	#[test]
+	fn route_skill_copy_status_reports_hash_differences() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let same_claude = project_dir.path().join(".claude/skills/same");
+		let same_cursor = project_dir.path().join(".cursor/skills/same");
+		let drift_claude = project_dir.path().join(".claude/skills/drift");
+		let drift_cursor = project_dir.path().join(".cursor/skills/drift");
+		let unavailable = project_dir.path().join("elsewhere/drift");
+		write_import_skill(&same_claude, "same", "same instruction");
+		write_import_skill(&same_cursor, "same", "same instruction");
+		write_import_skill(&drift_claude, "drift", "old instruction");
+		write_import_skill(&drift_cursor, "drift", "new instruction");
+		write_import_skill(&unavailable, "drift", "new instruction");
+		let client = test_client(app_data_dir.path());
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/status",
+			json!({
+				"groups": [
+					{
+						"name": "same",
+						"source_paths": [
+							same_claude.join("SKILL.md"),
+							same_cursor.join("SKILL.md"),
+						],
+					},
+					{
+						"name": "drift",
+						"source_paths": [
+							drift_claude.join("SKILL.md"),
+							drift_cursor.join("SKILL.md"),
+							unavailable.join("SKILL.md"),
+						],
+					},
+				],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["results"][0]["name"], "same");
+		assert_eq!(body["results"][0]["has_differences"], false);
+		assert_eq!(body["results"][0]["unavailable"], 0);
+		assert_eq!(body["results"][1]["name"], "drift");
+		assert_eq!(body["results"][1]["has_differences"], true);
+		assert_eq!(body["results"][1]["unavailable"], 1);
+		assert!(!body.to_string().contains("hash"));
+	}
+
+	#[test]
+	fn route_skill_copy_status_limits_paths_per_group() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/status",
+			json!({
+				"groups": [{
+					"name": "demo",
+					"source_paths": ["only-one"],
+				}],
+				"scope": "global",
+			}),
+		);
+
+		assert_json_error(
+			response,
+			Status::BadRequest,
+			"SKILL_COPY_STATUS_PATH_LIMIT",
+		);
+	}
+
+	#[test]
+	fn route_skill_diff_reports_unmanaged_target_as_unavailable() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let installed = project_dir.path().join(".claude/skills/demo");
+		let comparison = project_dir.path().join(".cursor/skills/demo");
+		let unmanaged = project_dir.path().join("elsewhere/demo");
+		write_import_skill(&installed, "demo", "old instruction");
+		write_import_skill(&comparison, "demo", "new instruction");
+		write_import_skill(&unmanaged, "demo", "new instruction");
+		let client = test_client(app_data_dir.path());
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": installed.join("SKILL.md"),
+				},
+				"installed_paths": [
+					comparison.join("SKILL.md"),
+					unmanaged.join("SKILL.md"),
+				],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert!(!body["results"][0].is_null());
+		assert!(body["results"][1].is_null());
+		assert!(!body
+			.to_string()
+			.contains(&project_dir.path().to_string_lossy().to_string()));
+	}
+
+	#[test]
+	fn route_skill_diff_limits_batch_size() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let installed = project_dir.path().join(".claude/skills/demo");
+		write_import_skill(&installed, "demo", "instruction");
+		let client = test_client(app_data_dir.path());
+		let installed_path = installed.join("SKILL.md");
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": installed_path,
+				},
+				"installed_paths": vec![installed_path; 33],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_json_error(
+			response,
+			Status::BadRequest,
+			"SKILL_DIFF_TARGET_LIMIT",
+		);
+	}
+
+	#[test]
+	fn route_skill_diff_rejects_installed_reference_as_target() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let installed = project_dir.path().join(".claude/skills/demo");
+		write_import_skill(&installed, "demo", "instruction");
+		let client = test_client(app_data_dir.path());
+		let installed_path = installed.join("SKILL.md");
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": installed_path,
+				},
+				"installed_paths": [installed_path],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_json_error(
+			response,
+			Status::BadRequest,
+			"DUPLICATE_SKILL_DIFF_REFERENCE",
+		);
+	}
+
+	#[test]
+	fn route_skill_diff_compares_scanned_git_location() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let installed = project_dir.path().join(".claude/skills/demo");
+		write_import_skill(&installed, "demo", "old instruction");
+
+		let clone_dir = tempfile::tempdir().expect("clone dir");
+		let scanned = clone_dir.path().join("skills/demo");
+		write_import_skill(&scanned, "demo", "new instruction");
+		let client = test_client(app_data_dir.path());
+		let sessions = client
+			.rocket()
+			.state::<crate::state::GitCloneSessions>()
+			.expect("Git clone sessions");
+		sessions.sessions.lock().expect("session lock").insert(
+			"diff-session".to_string(),
+			crate::state::GitCloneSession {
+				temp_dir: clone_dir,
+				created_at: std::time::Instant::now(),
+				url: "https://github.com/example/skills.git".to_string(),
+				credential_token: None,
+				branches: vec!["main".to_string()],
+				current_branch: "main".to_string(),
+				scanned_skill_paths: std::collections::HashSet::from([
+					"skills/demo".to_string(),
+				]),
+			},
+		);
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "git_scan",
+					"session_id": "diff-session",
+					"skill_path": "skills/demo",
+				},
+				"installed_paths": [installed.join("SKILL.md")],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["results"][0]["identical"], false);
+		assert_eq!(body["results"][0]["files"][0]["path"], "SKILL.md");
+	}
+
+	#[test]
+	fn route_skill_copy_resolution_replaces_project_location() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let reference = project_dir.path().join(".claude/skills/demo");
+		let target = project_dir.path().join(".cursor/skills/demo");
+		write_import_skill(&reference, "demo", "reference instruction");
+		write_import_skill(&target, "demo", "target instruction");
+		let client = test_client(app_data_dir.path());
+
+		let diff = response_json(post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"installed_paths": [target.join("SKILL.md")],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+		let reference_hash = diff["results"][0]["base_hash"]
+			.as_str()
+			.expect("reference hash");
+		let target_hash = diff["results"][0]["target_hash"]
+			.as_str()
+			.expect("target hash");
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"expected_reference_hash": reference_hash,
+				"targets": [{
+					"source_path": target.join("SKILL.md"),
+					"expected_hash": target_hash,
+				}],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["name"], "demo");
+		assert_eq!(body["reference_hash"], reference_hash);
+		assert_eq!(body["results"].as_array().expect("results").len(), 1);
+		assert_eq!(
+			body["results"][0]["source_path"],
+			target.join("SKILL.md").to_string_lossy().as_ref()
+		);
+		assert_eq!(body["results"][0]["content_hash"], reference_hash);
+		let content = std::fs::read_to_string(target.join("SKILL.md"))
+			.expect("resolved target");
+		assert!(content.contains("reference instruction"));
+		assert!(!content.contains("target instruction"));
+	}
+
+	#[test]
+	fn route_skill_copy_resolution_accepts_explicit_combined_scope() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let reference = project_dir.path().join(".claude/skills/demo");
+		let target = project_dir.path().join(".cursor/skills/demo");
+		write_import_skill(&reference, "demo", "reference instruction");
+		write_import_skill(&target, "demo", "target instruction");
+		let client = test_client(app_data_dir.path());
+
+		let diff = response_json(post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"installed_paths": [target.join("SKILL.md")],
+				"scope": "all",
+				"project_root": project_dir.path(),
+			}),
+		));
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"expected_reference_hash": diff["results"][0]["base_hash"],
+				"targets": [{
+					"source_path": target.join("SKILL.md"),
+					"expected_hash": diff["results"][0]["target_hash"],
+				}],
+				"scope": "all",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_eq!(response.status(), Status::Ok);
+		let content = std::fs::read_to_string(target.join("SKILL.md"))
+			.expect("resolved target");
+		assert!(content.contains("reference instruction"));
+	}
+
+	#[test]
+	fn route_skill_copy_resolution_requires_project_for_combined_scope() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": "missing/SKILL.md",
+				},
+				"expected_reference_hash": "unused",
+				"targets": [{
+					"source_path": "also-missing/SKILL.md",
+					"expected_hash": "unused",
+				}],
+				"scope": "all",
+			}),
+		);
+
+		assert_json_error(response, Status::BadRequest, "MISSING_PARAM");
+	}
+
+	#[test]
+	fn route_skill_copy_resolution_rejects_target_within_reference() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let reference = project_dir.path().join(".claude/skills/demo");
+		let target = reference.join("nested");
+		write_import_skill(&reference, "demo", "reference instruction");
+		write_import_skill(&target, "demo", "nested target instruction");
+		let client = test_client(app_data_dir.path());
+
+		let diff = response_json(post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"installed_paths": [target.join("SKILL.md")],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"expected_reference_hash": diff["results"][0]["base_hash"],
+				"targets": [{
+					"source_path": target.join("SKILL.md"),
+					"expected_hash": diff["results"][0]["target_hash"],
+				}],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_json_error(
+			response,
+			Status::BadRequest,
+			"OVERLAPPING_SKILL_COPY_PATH",
+		);
+		let content = std::fs::read_to_string(target.join("SKILL.md"))
+			.expect("nested target remains");
+		assert!(content.contains("nested target instruction"));
+	}
+
+	#[test]
+	fn route_skill_copy_resolution_rejects_reference_within_target() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let target = project_dir.path().join(".claude/skills/demo");
+		let reference = target.join("nested");
+		write_import_skill(&target, "demo", "outer target instruction");
+		write_import_skill(&reference, "demo", "nested reference instruction");
+		let client = test_client(app_data_dir.path());
+
+		let diff = response_json(post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"installed_paths": [target.join("SKILL.md")],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"expected_reference_hash": diff["results"][0]["base_hash"],
+				"targets": [{
+					"source_path": target.join("SKILL.md"),
+					"expected_hash": diff["results"][0]["target_hash"],
+				}],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_json_error(
+			response,
+			Status::BadRequest,
+			"OVERLAPPING_SKILL_COPY_PATH",
+		);
+		let target_content = std::fs::read_to_string(target.join("SKILL.md"))
+			.expect("outer target remains");
+		assert!(target_content.contains("outer target instruction"));
+		let reference_content =
+			std::fs::read_to_string(reference.join("SKILL.md"))
+				.expect("nested reference remains");
+		assert!(reference_content.contains("nested reference instruction"));
+	}
+
+	#[test]
+	fn route_skill_copy_resolution_rejects_stale_batch_without_writes() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let reference = project_dir.path().join(".claude/skills/demo");
+		let first_target = project_dir.path().join(".cursor/skills/demo");
+		let stale_target = project_dir.path().join(".agents/skills/demo");
+		write_import_skill(&reference, "demo", "reference instruction");
+		write_import_skill(&first_target, "demo", "first target instruction");
+		write_import_skill(&stale_target, "demo", "stale target instruction");
+		let client = test_client(app_data_dir.path());
+
+		let diff = response_json(post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"installed_paths": [
+					first_target.join("SKILL.md"),
+					stale_target.join("SKILL.md"),
+				],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+		std::fs::write(stale_target.join("notes.txt"), "changed after diff")
+			.expect("stale target mutation");
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"expected_reference_hash": diff["results"][0]["base_hash"],
+				"targets": [
+					{
+						"source_path": first_target.join("SKILL.md"),
+						"expected_hash": diff["results"][0]["target_hash"],
+					},
+					{
+						"source_path": stale_target.join("SKILL.md"),
+						"expected_hash": diff["results"][1]["target_hash"],
+					},
+				],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_json_error(response, Status::Conflict, "SKILL_COPY_CHANGED");
+		let first_content =
+			std::fs::read_to_string(first_target.join("SKILL.md"))
+				.expect("first target remains");
+		assert!(first_content.contains("first target instruction"));
+		let stale_content =
+			std::fs::read_to_string(stale_target.join("SKILL.md"))
+				.expect("stale target remains");
+		assert!(stale_content.contains("stale target instruction"));
+		for parent in [
+			first_target.parent().expect("first target parent"),
+			stale_target.parent().expect("stale target parent"),
+		] {
+			let has_transaction_artifact = std::fs::read_dir(parent)
+				.expect("target parent entries")
+				.filter_map(Result::ok)
+				.any(|entry| {
+					let name = entry.file_name();
+					let name = name.to_string_lossy();
+					name.starts_with(".aghub-tmp-")
+						|| name.starts_with(".aghub-backup-")
+				});
+			assert!(!has_transaction_artifact);
+		}
+	}
+
+	#[test]
+	fn route_skill_copy_resolution_rejects_stale_reference_without_writes() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let reference = project_dir.path().join(".claude/skills/demo");
+		let target = project_dir.path().join(".cursor/skills/demo");
+		write_import_skill(&reference, "demo", "reference instruction");
+		write_import_skill(&target, "demo", "target instruction");
+		let client = test_client(app_data_dir.path());
+
+		let diff = response_json(post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"installed_paths": [target.join("SKILL.md")],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+		std::fs::write(reference.join("notes.txt"), "changed after diff")
+			.expect("reference mutation");
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"expected_reference_hash": diff["results"][0]["base_hash"],
+				"targets": [{
+					"source_path": target.join("SKILL.md"),
+					"expected_hash": diff["results"][0]["target_hash"],
+				}],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_json_error(response, Status::Conflict, "SKILL_COPY_CHANGED");
+		let content = std::fs::read_to_string(target.join("SKILL.md"))
+			.expect("unchanged target");
+		assert!(content.contains("target instruction"));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn route_skill_copy_resolution_preserves_target_symlink() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let reference = project_dir.path().join(".claude/skills/demo");
+		let canonical_target = project_dir.path().join(".agents/skills/demo");
+		let linked_target = project_dir.path().join(".cursor/skills/demo");
+		write_import_skill(&reference, "demo", "reference instruction");
+		write_import_skill(
+			&canonical_target,
+			"demo",
+			"canonical target instruction",
+		);
+		std::fs::create_dir_all(linked_target.parent().expect("linked parent"))
+			.expect("linked target parent");
+		std::os::unix::fs::symlink(&canonical_target, &linked_target)
+			.expect("target symlink");
+		let client = test_client(app_data_dir.path());
+
+		let diff = response_json(post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"installed_paths": [linked_target.join("SKILL.md")],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"expected_reference_hash": diff["results"][0]["base_hash"],
+				"targets": [{
+					"source_path": linked_target.join("SKILL.md"),
+					"expected_hash": diff["results"][0]["target_hash"],
+				}],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_eq!(response.status(), Status::Ok);
+		assert!(std::fs::symlink_metadata(&linked_target)
+			.expect("linked target metadata")
+			.file_type()
+			.is_symlink());
+		let content =
+			std::fs::read_to_string(canonical_target.join("SKILL.md"))
+				.expect("canonical target content");
+		assert!(content.contains("reference instruction"));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn route_skill_copy_resolution_materializes_target_symlink() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let reference = project_dir.path().join(".claude/skills/demo");
+		let canonical_target = project_dir.path().join(".agents/skills/demo");
+		let linked_target = project_dir.path().join(".cursor/skills/demo");
+		write_import_skill(&reference, "demo", "reference instruction");
+		write_import_skill(
+			&canonical_target,
+			"demo",
+			"canonical target instruction",
+		);
+		std::fs::create_dir_all(linked_target.parent().expect("linked parent"))
+			.expect("linked target parent");
+		std::os::unix::fs::symlink(&canonical_target, &linked_target)
+			.expect("target symlink");
+		let client = test_client(app_data_dir.path());
+
+		let diff = response_json(post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"installed_paths": [linked_target.join("SKILL.md")],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"expected_reference_hash": diff["results"][0]["base_hash"],
+				"storage_mode": "copy",
+				"targets": [{
+					"source_path": linked_target.join("SKILL.md"),
+					"expected_hash": diff["results"][0]["target_hash"],
+				}],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_eq!(response.status(), Status::Ok);
+		assert!(std::fs::symlink_metadata(&linked_target)
+			.expect("materialized target metadata")
+			.is_dir());
+		let content = std::fs::read_to_string(linked_target.join("SKILL.md"))
+			.expect("materialized target content");
+		assert!(content.contains("reference instruction"));
+		let canonical_content =
+			std::fs::read_to_string(canonical_target.join("SKILL.md"))
+				.expect("canonical target content");
+		assert!(canonical_content.contains("canonical target instruction"));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn route_skill_copy_resolution_materializes_selected_symlink() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let canonical_reference =
+			project_dir.path().join(".agents/skills/demo");
+		let linked_reference = project_dir.path().join(".claude/skills/demo");
+		let target = project_dir.path().join(".cursor/skills/demo");
+		write_import_skill(
+			&canonical_reference,
+			"demo",
+			"reference instruction",
+		);
+		write_import_skill(&target, "demo", "target instruction");
+		std::fs::create_dir_all(
+			linked_reference.parent().expect("linked reference parent"),
+		)
+		.expect("linked reference parent");
+		std::os::unix::fs::symlink(&canonical_reference, &linked_reference)
+			.expect("reference symlink");
+		let client = test_client(app_data_dir.path());
+
+		let diff = response_json(post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": linked_reference.join("SKILL.md"),
+				},
+				"installed_paths": [target.join("SKILL.md")],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": linked_reference.join("SKILL.md"),
+				},
+				"expected_reference_hash": diff["results"][0]["base_hash"],
+				"storage_mode": "copy",
+				"targets": [
+					{
+						"source_path": linked_reference.join("SKILL.md"),
+						"expected_hash": diff["results"][0]["base_hash"],
+					},
+					{
+						"source_path": target.join("SKILL.md"),
+						"expected_hash": diff["results"][0]["target_hash"],
+					},
+				],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_eq!(response.status(), Status::Ok);
+		assert!(std::fs::symlink_metadata(&linked_reference)
+			.expect("materialized reference metadata")
+			.is_dir());
+		let linked_content =
+			std::fs::read_to_string(linked_reference.join("SKILL.md"))
+				.expect("materialized reference content");
+		assert!(linked_content.contains("reference instruction"));
+		let target_content = std::fs::read_to_string(target.join("SKILL.md"))
+			.expect("target content");
+		assert!(target_content.contains("reference instruction"));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn route_skill_copy_resolution_preserves_file_symlink() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let reference = project_dir.path().join(".claude/skills/demo");
+		let target = project_dir.path().join(".cursor/skills/demo");
+		write_import_skill(&reference, "demo", "reference instruction");
+		write_import_skill(&target, "demo", "target instruction");
+		std::fs::write(reference.join("notes.txt"), "linked notes")
+			.expect("reference notes");
+		std::os::unix::fs::symlink(
+			"notes.txt",
+			reference.join("linked-notes.txt"),
+		)
+		.expect("reference file symlink");
+		let client = test_client(app_data_dir.path());
+
+		let diff = response_json(post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"installed_paths": [target.join("SKILL.md")],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"expected_reference_hash": diff["results"][0]["base_hash"],
+				"storage_mode": "preserve",
+				"targets": [{
+					"source_path": target.join("SKILL.md"),
+					"expected_hash": diff["results"][0]["target_hash"],
+				}],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_eq!(response.status(), Status::Ok);
+		let linked = target.join("linked-notes.txt");
+		assert!(std::fs::symlink_metadata(&linked)
+			.expect("resolved link metadata")
+			.file_type()
+			.is_symlink());
+		assert_eq!(
+			std::fs::read_to_string(linked).expect("resolved link content"),
+			"linked notes"
+		);
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn route_skill_copy_resolution_materializes_file_symlink() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let reference = project_dir.path().join(".claude/skills/demo");
+		let target = project_dir.path().join(".cursor/skills/demo");
+		write_import_skill(&reference, "demo", "reference instruction");
+		write_import_skill(&target, "demo", "target instruction");
+		std::fs::write(reference.join("notes.txt"), "linked notes")
+			.expect("reference notes");
+		std::os::unix::fs::symlink(
+			"notes.txt",
+			reference.join("linked-notes.txt"),
+		)
+		.expect("reference file symlink");
+		let client = test_client(app_data_dir.path());
+
+		let diff = response_json(post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"installed_paths": [target.join("SKILL.md")],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+
+		let response = response_json(post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"expected_reference_hash": diff["results"][0]["base_hash"],
+				"storage_mode": "copy",
+				"targets": [{
+					"source_path": target.join("SKILL.md"),
+					"expected_hash": diff["results"][0]["target_hash"],
+				}],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+
+		let linked = target.join("linked-notes.txt");
+		assert!(std::fs::symlink_metadata(&linked)
+			.expect("materialized link metadata")
+			.is_file());
+		assert_eq!(
+			std::fs::read_to_string(linked).expect("materialized link content"),
+			"linked notes"
+		);
+		assert_ne!(
+			response["reference_hash"],
+			response["results"][0]["content_hash"]
+		);
+	}
+
+	#[test]
+	fn route_skill_copy_resolution_accepts_scanned_git_reference() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let target = project_dir.path().join(".claude/skills/demo");
+		write_import_skill(&target, "demo", "installed instruction");
+		let clone_dir = tempfile::tempdir().expect("clone dir");
+		let reference = clone_dir.path().join("skills/demo");
+		write_import_skill(&reference, "demo", "repository instruction");
+		let client = test_client(app_data_dir.path());
+		let sessions = client
+			.rocket()
+			.state::<crate::state::GitCloneSessions>()
+			.expect("Git clone sessions");
+		sessions.sessions.lock().expect("session lock").insert(
+			"resolve-session".to_string(),
+			crate::state::GitCloneSession {
+				temp_dir: clone_dir,
+				created_at: std::time::Instant::now(),
+				url: "https://github.com/example/skills.git".to_string(),
+				credential_token: None,
+				branches: vec!["main".to_string()],
+				current_branch: "main".to_string(),
+				scanned_skill_paths: std::collections::HashSet::from([
+					"skills/demo".to_string(),
+				]),
+			},
+		);
+
+		let diff = response_json(post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "git_scan",
+					"session_id": "resolve-session",
+					"skill_path": "skills/demo",
+				},
+				"installed_paths": [target.join("SKILL.md")],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "git_scan",
+					"session_id": "resolve-session",
+					"skill_path": "skills/demo",
+				},
+				"expected_reference_hash": diff["results"][0]["base_hash"],
+				"targets": [{
+					"source_path": target.join("SKILL.md"),
+					"expected_hash": diff["results"][0]["target_hash"],
+				}],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_eq!(response.status(), Status::Ok);
+		let content = std::fs::read_to_string(target.join("SKILL.md"))
+			.expect("resolved target");
+		assert!(content.contains("repository instruction"));
+		assert!(!content.contains("installed instruction"));
+		assert!(!sessions
+			.sessions
+			.lock()
+			.expect("session lock")
+			.contains_key("resolve-session"));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn route_skill_copy_resolution_materializes_git_file_link() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let target = project_dir.path().join(".claude/skills/demo");
+		write_import_skill(&target, "demo", "installed instruction");
+		let clone_dir = tempfile::tempdir().expect("clone dir");
+		let reference = clone_dir.path().join("skills/demo");
+		write_import_skill(&reference, "demo", "repository instruction");
+		let shared = clone_dir.path().join("shared");
+		std::fs::create_dir_all(&shared).expect("shared directory");
+		std::fs::write(shared.join("notes.txt"), "repository notes")
+			.expect("shared notes");
+		std::os::unix::fs::symlink(
+			"../../shared/notes.txt",
+			reference.join("linked-notes.txt"),
+		)
+		.expect("repository file link");
+		let client = test_client(app_data_dir.path());
+		let sessions = client
+			.rocket()
+			.state::<crate::state::GitCloneSessions>()
+			.expect("Git clone sessions");
+		sessions.sessions.lock().expect("session lock").insert(
+			"linked-resolve-session".to_string(),
+			crate::state::GitCloneSession {
+				temp_dir: clone_dir,
+				created_at: std::time::Instant::now(),
+				url: "https://github.com/example/skills.git".to_string(),
+				credential_token: None,
+				branches: vec!["main".to_string()],
+				current_branch: "main".to_string(),
+				scanned_skill_paths: std::collections::HashSet::from([
+					"skills/demo".to_string(),
+				]),
+			},
+		);
+
+		let diff = response_json(post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "git_scan",
+					"session_id": "linked-resolve-session",
+					"skill_path": "skills/demo",
+				},
+				"installed_paths": [target.join("SKILL.md")],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+
+		let response = response_json(post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "git_scan",
+					"session_id": "linked-resolve-session",
+					"skill_path": "skills/demo",
+				},
+				"expected_reference_hash": diff["results"][0]["base_hash"],
+				"storage_mode": "copy",
+				"targets": [{
+					"source_path": target.join("SKILL.md"),
+					"expected_hash": diff["results"][0]["target_hash"],
+				}],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+
+		let linked = target.join("linked-notes.txt");
+		assert!(std::fs::symlink_metadata(&linked)
+			.expect("materialized repository link metadata")
+			.is_file());
+		assert_eq!(
+			std::fs::read_to_string(linked)
+				.expect("materialized repository link content"),
+			"repository notes"
+		);
+		assert_ne!(
+			response["reference_hash"],
+			response["results"][0]["content_hash"]
+		);
+		assert!(!sessions
+			.sessions
+			.lock()
+			.expect("session lock")
+			.contains_key("linked-resolve-session"));
+	}
+
+	#[test]
+	fn route_skill_copy_resolution_excludes_repository_metadata() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let target = project_dir.path().join(".claude/skills/demo");
+		write_import_skill(&target, "demo", "installed instruction");
+		let clone_dir = tempfile::tempdir().expect("clone dir");
+		write_import_skill(clone_dir.path(), "demo", "repository instruction");
+		for metadata_dir in [".git", ".hg", ".svn"] {
+			let path = clone_dir.path().join(metadata_dir);
+			std::fs::create_dir_all(&path).expect("metadata directory");
+			std::fs::write(path.join("marker"), metadata_dir)
+				.expect("metadata marker");
+		}
+		std::fs::create_dir_all(clone_dir.path().join("assets"))
+			.expect("asset directory");
+		std::fs::write(clone_dir.path().join("assets/keep.txt"), "keep")
+			.expect("skill asset");
+		let client = test_client(app_data_dir.path());
+		let sessions = client
+			.rocket()
+			.state::<crate::state::GitCloneSessions>()
+			.expect("Git clone sessions");
+		sessions.sessions.lock().expect("session lock").insert(
+			"root-resolve-session".to_string(),
+			crate::state::GitCloneSession {
+				temp_dir: clone_dir,
+				created_at: std::time::Instant::now(),
+				url: "https://github.com/example/root-skill.git".to_string(),
+				credential_token: None,
+				branches: vec!["main".to_string()],
+				current_branch: "main".to_string(),
+				scanned_skill_paths: std::collections::HashSet::from([
+					String::new(),
+				]),
+			},
+		);
+
+		let diff = response_json(post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "git_scan",
+					"session_id": "root-resolve-session",
+					"skill_path": "",
+				},
+				"installed_paths": [target.join("SKILL.md")],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "git_scan",
+					"session_id": "root-resolve-session",
+					"skill_path": "",
+				},
+				"expected_reference_hash": diff["results"][0]["base_hash"],
+				"targets": [{
+					"source_path": target.join("SKILL.md"),
+					"expected_hash": diff["results"][0]["target_hash"],
+				}],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_eq!(response.status(), Status::Ok);
+		assert_eq!(
+			std::fs::read_to_string(target.join("assets/keep.txt"))
+				.expect("copied asset"),
+			"keep"
+		);
+		for metadata_dir in [".git", ".hg", ".svn"] {
+			assert!(!target.join(metadata_dir).exists());
+		}
+	}
+
+	#[test]
+	fn route_skill_copy_resolution_rejects_projected_write_budget() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let reference = project_dir.path().join(".cursor/skills/demo");
+		write_import_skill(&reference, "demo", "reference instruction");
+		let asset_bytes =
+			crate::routes::skills::MAX_SKILL_COPY_RESOLUTION_BATCH_WRITE_BYTES
+				/ crate::routes::skills::MAX_SKILL_COPY_RESOLUTION_TARGETS
+					as u64 + 1;
+		std::fs::File::create(reference.join("large.bin"))
+			.expect("large asset")
+			.set_len(asset_bytes)
+			.expect("large asset length");
+		let target_root = project_dir.path().join(".claude/skills");
+		let targets = (0
+			..crate::routes::skills::MAX_SKILL_COPY_RESOLUTION_TARGETS)
+			.map(|index| {
+				let target = target_root.join(format!("demo-{index}"));
+				write_import_skill(&target, "demo", "target instruction");
+				target
+			})
+			.collect::<Vec<_>>();
+		let client = test_client(app_data_dir.path());
+		let installed_paths = targets
+			.iter()
+			.map(|target| target.join("SKILL.md"))
+			.collect::<Vec<_>>();
+
+		let diff = response_json(post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"installed_paths": installed_paths,
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+		let resolution_targets = targets
+			.iter()
+			.zip(diff["results"].as_array().expect("diff results"))
+			.map(|(target, result)| {
+				json!({
+					"source_path": target.join("SKILL.md"),
+					"expected_hash": result["target_hash"],
+				})
+			})
+			.collect::<Vec<_>>();
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"expected_reference_hash": diff["results"][0]["base_hash"],
+				"targets": resolution_targets,
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_json_error(
+			response,
+			Status::PayloadTooLarge,
+			"SKILL_COPY_WRITE_LIMIT",
+		);
+		assert!(!std::fs::read_dir(&target_root)
+			.expect("target root entries")
+			.filter_map(Result::ok)
+			.any(|entry| entry
+				.file_name()
+				.to_string_lossy()
+				.starts_with(".aghub-tmp-")));
+		for target in targets {
+			let content = std::fs::read_to_string(target.join("SKILL.md"))
+				.expect("unchanged target");
+			assert!(content.contains("target instruction"));
+		}
+	}
+
+	#[test]
+	fn route_skill_copy_resolution_rejects_different_skill_name() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let reference = project_dir.path().join(".claude/skills/demo");
+		let target = project_dir.path().join(".cursor/skills/other");
+		write_import_skill(&reference, "demo", "reference instruction");
+		write_import_skill(&target, "other", "other instruction");
+		let client = test_client(app_data_dir.path());
+
+		let diff = response_json(post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"installed_paths": [target.join("SKILL.md")],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"expected_reference_hash": diff["results"][0]["base_hash"],
+				"targets": [{
+					"source_path": target.join("SKILL.md"),
+					"expected_hash": diff["results"][0]["target_hash"],
+				}],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_json_error(
+			response,
+			Status::BadRequest,
+			"SKILL_COPY_NAME_MISMATCH",
+		);
+		let content = std::fs::read_to_string(target.join("SKILL.md"))
+			.expect("unchanged target");
+		assert!(content.contains("other instruction"));
+	}
+
+	#[test]
+	fn route_skill_copy_resolution_rejects_duplicate_target() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let reference = project_dir.path().join(".claude/skills/demo");
+		let target = project_dir.path().join(".cursor/skills/demo");
+		write_import_skill(&reference, "demo", "reference instruction");
+		write_import_skill(&target, "demo", "target instruction");
+		let client = test_client(app_data_dir.path());
+		let diff = response_json(post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"installed_paths": [target.join("SKILL.md")],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+		let duplicate = json!({
+			"source_path": target.join("SKILL.md"),
+			"expected_hash": diff["results"][0]["target_hash"],
+		});
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"expected_reference_hash": diff["results"][0]["base_hash"],
+				"targets": [duplicate.clone(), duplicate],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_json_error(
+			response,
+			Status::BadRequest,
+			"DUPLICATE_SKILL_COPY_TARGET",
+		);
+	}
+
+	#[test]
+	fn route_skill_copy_resolution_rejects_overlapping_targets() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let reference = project_dir.path().join(".claude/skills/demo");
+		let outer_target = project_dir.path().join(".cursor/skills/demo");
+		let nested_target = outer_target.join("nested");
+		write_import_skill(&reference, "demo", "reference instruction");
+		write_import_skill(&outer_target, "demo", "outer target instruction");
+		write_import_skill(&nested_target, "demo", "nested target instruction");
+		let client = test_client(app_data_dir.path());
+
+		let diff = response_json(post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"installed_paths": [
+					outer_target.join("SKILL.md"),
+					nested_target.join("SKILL.md"),
+				],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"expected_reference_hash": diff["results"][0]["base_hash"],
+				"targets": [
+					{
+						"source_path": outer_target.join("SKILL.md"),
+						"expected_hash": diff["results"][0]["target_hash"],
+					},
+					{
+						"source_path": nested_target.join("SKILL.md"),
+						"expected_hash": diff["results"][1]["target_hash"],
+					},
+				],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_json_error(
+			response,
+			Status::BadRequest,
+			"OVERLAPPING_SKILL_COPY_PATH",
+		);
+		let outer_content =
+			std::fs::read_to_string(outer_target.join("SKILL.md"))
+				.expect("outer target remains");
+		assert!(outer_content.contains("outer target instruction"));
+		let nested_content =
+			std::fs::read_to_string(nested_target.join("SKILL.md"))
+				.expect("nested target remains");
+		assert!(nested_content.contains("nested target instruction"));
+	}
+
+	#[test]
+	fn route_skill_copy_resolution_limits_target_count() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let client = test_client(app_data_dir.path());
+		let base_request = json!({
+			"reference": {
+				"kind": "installed",
+				"source_path": "missing/SKILL.md",
+			},
+			"expected_reference_hash": "unused",
+			"scope": "project",
+			"project_root": project_dir.path(),
+		});
+
+		let mut empty_request = base_request.clone();
+		empty_request["targets"] = json!([]);
+		let response =
+			post_json(&client, "/api/v1/skills/copies/resolve", empty_request);
+		assert_json_error(
+			response,
+			Status::BadRequest,
+			"SKILL_COPY_TARGET_LIMIT",
+		);
+
+		let mut oversized_request = base_request;
+		oversized_request["targets"] = json!(vec![
+			json!({
+				"source_path": "missing/SKILL.md",
+				"expected_hash": "unused",
+			});
+			33
+		]);
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			oversized_request,
+		);
+		assert_json_error(
+			response,
+			Status::BadRequest,
+			"SKILL_COPY_TARGET_LIMIT",
+		);
 	}
 
 	#[test]

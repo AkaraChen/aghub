@@ -2,6 +2,8 @@ import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import { installMocks } from "./mocks";
 
+let mockControl: Awaited<ReturnType<typeof installMocks>>;
+
 async function readRenderedTextMetrics(locator: Locator) {
 	return locator.evaluate((element) => {
 		const range = document.createRange();
@@ -77,7 +79,7 @@ async function dragOptionTo(
 }
 
 test.beforeEach(async ({ page }) => {
-	await installMocks(page);
+	mockControl = await installMocks(page);
 	await page.goto("/skills");
 	await expect(
 		page.getByRole("option", { name: "solo-skill" }),
@@ -1245,6 +1247,109 @@ test("starring a member floats its whole source cluster up", async ({
 		if (!solo) throw new Error("no solo-skill");
 		expect(web).toBeLessThan(solo.y);
 	}).toPass();
+});
+
+test("a skill row marks real content differences between copies", async ({
+	page,
+}) => {
+	await expect
+		.poll(() => mockControl.getSkillCopyStatusRequestCount())
+		.toBe(1);
+	expect(mockControl.getSkillCopyStatusRequests()).toEqual([
+		{
+			groups: [
+				{
+					name: "react-pro",
+					source_paths: [
+						"/tmp/e2e/.claude/skills/react-pro/SKILL.md",
+						"/tmp/e2e/.cursor/skills/react-pro/SKILL.md",
+					],
+				},
+			],
+			scope: "global",
+			project_root: null,
+		},
+	]);
+	const initialStatusRequests = mockControl.getSkillCopyStatusRequestCount();
+	mockControl.setSkillCopyStatus("react-pro", true);
+	await page.getByRole("button", { name: "Refresh skills" }).click();
+
+	const row = page.getByRole("option", { name: "react-pro" });
+	await expect(
+		row.locator('[data-slot="skill-copy-conflict-indicator"]'),
+	).toBeVisible();
+	await expect(
+		row.getByRole("img", {
+			name: "Skill copies contain different content",
+		}),
+	).toBeVisible();
+	await expect(row).toHaveAccessibleName("react-pro");
+	await expect(
+		page
+			.getByRole("option", { name: "solo-skill" })
+			.locator('[data-slot="skill-copy-conflict-indicator"]'),
+	).toHaveCount(0);
+	expect(mockControl.getSkillCopyStatusRequestCount()).toBe(
+		initialStatusRequests + 1,
+	);
+});
+
+test("a skill row marks an unavailable copy status as unknown", async ({
+	page,
+}) => {
+	await page.route("**/api/v1/skills/copies/status", (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({
+				results: [
+					{
+						name: "react-pro",
+						has_differences: false,
+						unavailable: 1,
+					},
+				],
+			}),
+		}),
+	);
+	await page.getByRole("button", { name: "Refresh skills" }).click();
+
+	const row = page.getByRole("option", { name: "react-pro" });
+	await expect(
+		row.locator('[data-slot="skill-copy-unknown-indicator"]'),
+	).toBeVisible();
+	await expect(row).toHaveAccessibleName("react-pro");
+	await expect(
+		row.getByRole("img", {
+			name: "Skill copy status could not be verified",
+		}),
+	).toBeVisible();
+});
+
+test("a skill row marks a failed copy status request as unknown", async ({
+	page,
+}) => {
+	await page.route("**/api/v1/skills/copies/status", (route) =>
+		route.fulfill({
+			status: 500,
+			contentType: "application/json",
+			body: JSON.stringify({
+				code: "status_failed",
+				error: "status failed",
+			}),
+		}),
+	);
+	await page.getByRole("button", { name: "Refresh skills" }).click();
+
+	const row = page.getByRole("option", { name: "react-pro" });
+	await expect(
+		row.locator('[data-slot="skill-copy-unknown-indicator"]'),
+	).toBeVisible();
+	await expect(
+		row.getByRole("img", {
+			name: "Skill copy status could not be verified",
+		}),
+	).toBeVisible();
 });
 
 test("source clusters collapse by default except the selected one", async ({
