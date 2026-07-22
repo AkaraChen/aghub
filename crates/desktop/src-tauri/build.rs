@@ -7,7 +7,7 @@ use std::time::Duration;
 use flate2::read::GzDecoder;
 
 // Download ccusage's prebuilt npm binary and stage it as the Tauri sidecar.
-const CCUSAGE_VERSION: &str = "20.0.6";
+const CCUSAGE_VERSION: &str = "20.0.18";
 
 fn ccusage_platform(triple: &str) -> Option<&'static str> {
 	Some(match triple {
