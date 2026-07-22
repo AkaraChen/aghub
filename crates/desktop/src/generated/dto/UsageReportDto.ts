@@ -4,10 +4,8 @@ import type { AgentUsageDto } from "./AgentUsageDto";
 /**
  * Unified usage report across agents, returned by `GET /api/v1/usage/summary`.
  *
- * ccusage emits a different JSON shape per agent (claude has cache-creation,
- * codex has reasoning, cost keys differ); this DTO is the normalized shape the
- * frontend consumes. The mapping from each ccusage shape lives in
- * `claude_to_agent` / `codex_to_agent`.
+ * ccusage emits specialized Claude and Codex shapes plus a shared shape for
+ * its other agents. This is the normalized shape the frontend consumes.
  */
 export type UsageReportDto = {
 	agents: Array<AgentUsageDto>;

@@ -58,7 +58,7 @@ export function SettingSwitch({
 			isDisabled={isDisabled}
 			aria-label={ariaLabel}
 		>
-			<Switch.Content aria-label={ariaLabel}>
+			<Switch.Content>
 				<Switch.Control>
 					<Switch.Thumb />
 				</Switch.Control>

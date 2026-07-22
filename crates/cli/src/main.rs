@@ -209,7 +209,7 @@ enum Commands {
 		#[command(subcommand)]
 		action: plugin::PluginAction,
 	},
-	/// Report token usage and rate-limit quota for Claude and Codex
+	/// Report ccusage token usage and Claude/Codex rate-limit quota
 	Usage {
 		#[command(subcommand)]
 		action: usage::UsageAction,

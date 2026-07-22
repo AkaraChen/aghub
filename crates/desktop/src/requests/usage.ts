@@ -67,9 +67,8 @@ export function usageSummaryQueryOptions({
 		enabled,
 		staleTime: 5 * 60_000,
 		refetchInterval,
-		// Usage is optional: the backend route only exists once #193 lands, and
-		// the report degrades per-agent on its own. Don't retry a missing
-		// endpoint — let the page hide the section instead of spinning.
+		// The report already degrades individual agent failures into warnings.
+		// Surface request-level failures instead of hiding them behind retries.
 		retry: false,
 	});
 }

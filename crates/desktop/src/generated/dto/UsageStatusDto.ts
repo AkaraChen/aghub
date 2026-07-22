@@ -3,7 +3,7 @@
 /**
  * ccusage runtime health + version, returned by `GET /api/v1/usage/status`.
  * Runtime selection and acquisition details are returned by
- * `GET /api/v1/usage/runtime` without exposing local filesystem paths.
+ * authenticated `GET /api/v1/usage/runtime`, including executable paths.
  */
 export type UsageStatusDto = {
 	/**

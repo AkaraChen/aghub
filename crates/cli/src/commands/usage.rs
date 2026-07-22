@@ -9,7 +9,7 @@ use clap::Subcommand;
 
 #[derive(Subcommand)]
 pub enum UsageAction {
-	/// Daily token and cost usage for Claude and Codex from local ccusage data
+	/// Daily token and cost usage for known agents from local ccusage data
 	Summary {
 		/// Start date, YYYY-MM-DD (passed through to ccusage)
 		#[arg(long)]

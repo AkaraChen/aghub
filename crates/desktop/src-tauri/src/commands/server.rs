@@ -43,7 +43,14 @@ pub async fn start_server(
 	let app_data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
 	let bundled_ccusage_bin = bundled_ccusage_bin(&app);
 	if bundled_ccusage_bin.is_none() {
-		warn!("bundled ccusage fallback is unavailable; runtime discovery will use configured external or app-data sources");
+		if cfg!(debug_assertions) {
+			debug!("development build has no bundled ccusage fallback");
+		} else {
+			warn!(
+				"bundled ccusage fallback is unavailable; runtime discovery \
+				will use configured external or app-data sources"
+			);
+		}
 	}
 	let server = {
 		let mut guard = state.server.lock().unwrap();

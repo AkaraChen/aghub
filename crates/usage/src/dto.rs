@@ -21,10 +21,8 @@ impl UsageAgent {
 
 /// Unified usage report across agents, returned by `GET /api/v1/usage/summary`.
 ///
-/// ccusage emits a different JSON shape per agent (claude has cache-creation,
-/// codex has reasoning, cost keys differ); this DTO is the normalized shape the
-/// frontend consumes. The mapping from each ccusage shape lives in
-/// `claude_to_agent` / `codex_to_agent`.
+/// ccusage emits specialized Claude and Codex shapes plus a shared shape for
+/// its other agents. This is the normalized shape the frontend consumes.
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
 pub struct UsageReportDto {
@@ -37,7 +35,7 @@ pub struct UsageReportDto {
 
 /// ccusage runtime health + version, returned by `GET /api/v1/usage/status`.
 /// Runtime selection and acquisition details are returned by
-/// `GET /api/v1/usage/runtime` without exposing local filesystem paths.
+/// authenticated `GET /api/v1/usage/runtime`, including executable paths.
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
 pub struct UsageStatusDto {

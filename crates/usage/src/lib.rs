@@ -8,8 +8,8 @@
 //!     agent's local credential store.
 //!
 //! ccusage is reused as-is (it owns parsing, dedup, pricing, format tracking);
-//! this crate is only the adapter layer. Claude and Codex emit different JSON
-//! shapes, so each has its own deserialization struct and mapping function.
+//! this crate adapts its specialized Claude and Codex reports plus the shared
+//! report shape used by the other known agents.
 
 mod dto;
 pub use dto::*;

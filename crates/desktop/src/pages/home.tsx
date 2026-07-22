@@ -124,7 +124,7 @@ export default function HomePage() {
 		};
 	};
 
-	// Claude and Codex carry usage telemetry, so surface them first — stable,
+	// Claude and Codex carry quota telemetry, so surface them first — stable,
 	// regardless of whether ccusage has data yet. The rest follow by name.
 	// Each card decides its own height (a usage section spans two grid rows),
 	// so the dense grid still packs short cards into a tall card's column.
