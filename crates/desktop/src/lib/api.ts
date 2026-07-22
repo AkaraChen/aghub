@@ -807,7 +807,12 @@ export function createApi(baseUrl: string, token: string) {
 				if (q) searchParams.q = q;
 				if (limit) searchParams.limit = String(limit);
 				if (registryUrl) searchParams.registry_url = registryUrl;
-				return client.get("mcp-market/search", { searchParams }).json();
+				return client
+					.get("mcp-market/search", {
+						searchParams,
+						timeout: 30_000,
+					})
+					.json();
 			},
 		},
 		usage: {

@@ -2,12 +2,14 @@
 //!
 //! Today it speaks to the official MCP Registry
 //! (`registry.modelcontextprotocol.io`), a public, no-auth read API designed for
-//! aggregator/client consumption. The output is normalized into source-neutral
-//! [`McpCatalogEntry`] values so additional sources (other registries, GitHub
-//! import) can be added behind the same surface later.
+//! aggregator/client consumption. Registry wire shapes are normalized into
+//! source-neutral [`McpCatalogEntry`] values before crossing the crate boundary.
 
 pub mod client;
 pub mod types;
 
 pub use client::{Client, ClientBuilder, ClientError};
-pub use types::{McpCatalogEntry, McpCatalogEnv};
+pub use types::{
+	McpCatalogArgument, McpCatalogEntry, McpCatalogInput, McpCatalogKeyValue,
+	McpCatalogTransport, McpCatalogValue,
+};

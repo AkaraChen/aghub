@@ -1,6 +1,7 @@
 import { TrashIcon } from "@heroicons/react/24/solid";
 import {
 	Button,
+	Description,
 	Input,
 	Label,
 	ListBox,
@@ -9,16 +10,29 @@ import {
 	TextField,
 	toast,
 } from "@heroui/react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useApi } from "../../hooks/use-api";
 import {
-	useAddMcpRegistry,
-	useMcpRegistries,
-	useRemoveMcpRegistry,
-} from "../../hooks/use-mcp-registries";
+	addMcpRegistryMutationOptions,
+	mcpRegistriesQueryOptions,
+	removeMcpRegistryMutationOptions,
+} from "../../requests/mcp-registries";
 
 const OFFICIAL = "official";
 const ADD_ACTION = "__add__";
+
+function normalizeRegistryUrl(value: string): string | null {
+	try {
+		const url = new URL(value);
+		if (!["http:", "https:"].includes(url.protocol)) return null;
+		if (url.username || url.password) return null;
+		return url.toString();
+	} catch {
+		return null;
+	}
+}
 
 interface McpSourceSelectorProps {
 	/** Called with the active registry URL, or null for the official registry. */
@@ -27,9 +41,15 @@ interface McpSourceSelectorProps {
 
 export function McpSourceSelector({ onChange }: McpSourceSelectorProps) {
 	const { t } = useTranslation();
-	const { data: registries = [] } = useMcpRegistries();
-	const addMutation = useAddMcpRegistry();
-	const removeMutation = useRemoveMcpRegistry();
+	const api = useApi();
+	const queryClient = useQueryClient();
+	const { data: registries = [] } = useQuery(mcpRegistriesQueryOptions());
+	const addMutation = useMutation(
+		addMcpRegistryMutationOptions({ api, queryClient }),
+	);
+	const removeMutation = useMutation(
+		removeMcpRegistryMutationOptions(queryClient),
+	);
 
 	const [selectedId, setSelectedId] = useState<string>(OFFICIAL);
 	const [addOpen, setAddOpen] = useState(false);
@@ -56,16 +76,15 @@ export function McpSourceSelector({ onChange }: McpSourceSelectorProps) {
 
 	const handleAdd = async () => {
 		const trimmedName = name.trim();
-		const trimmedUrl = url.trim();
-		if (!trimmedName || !trimmedUrl) return;
-		if (!/^https?:\/\//.test(trimmedUrl)) {
+		const normalizedUrl = normalizeRegistryUrl(url.trim());
+		if (!trimmedName || !normalizedUrl) {
 			toast.danger(t("marketMcpSourceUrlInvalid"));
 			return;
 		}
 		try {
 			const created = await addMutation.mutateAsync({
 				name: trimmedName,
-				url: trimmedUrl,
+				url: normalizedUrl,
 			});
 			setAddOpen(false);
 			setSelectedId(created.id);
@@ -133,22 +152,36 @@ export function McpSourceSelector({ onChange }: McpSourceSelectorProps) {
 					className="size-8 shrink-0 text-muted"
 					aria-label={t("marketMcpSourceRemove")}
 					onPress={handleRemove}
+					isDisabled={removeMutation.isPending}
+					isPending={removeMutation.isPending}
 				>
 					<TrashIcon className="size-4" />
 				</Button>
 			)}
 
-			<Modal.Backdrop isOpen={addOpen} onOpenChange={setAddOpen}>
+			<Modal.Backdrop
+				isOpen={addOpen}
+				onOpenChange={(open) => {
+					if (!addMutation.isPending) setAddOpen(open);
+				}}
+			>
 				<Modal.Container>
 					<Modal.Dialog className="max-w-md">
-						<Modal.CloseTrigger />
+						<Modal.CloseTrigger
+							isDisabled={addMutation.isPending}
+						/>
 						<Modal.Header>
 							<Modal.Heading>
 								{t("marketMcpSourceAddTitle")}
 							</Modal.Heading>
 						</Modal.Header>
 						<Modal.Body className="space-y-3 p-4">
-							<TextField className="w-full" variant="secondary">
+							<TextField
+								className="w-full"
+								variant="secondary"
+								name="registry-name"
+								isRequired
+							>
 								<Label>{t("name")}</Label>
 								<Input
 									value={name}
@@ -159,7 +192,13 @@ export function McpSourceSelector({ onChange }: McpSourceSelectorProps) {
 									variant="secondary"
 								/>
 							</TextField>
-							<TextField className="w-full" variant="secondary">
+							<TextField
+								className="w-full"
+								variant="secondary"
+								name="registry-url"
+								type="url"
+								isRequired
+							>
 								<Label>URL</Label>
 								<Input
 									value={url}
@@ -167,13 +206,17 @@ export function McpSourceSelector({ onChange }: McpSourceSelectorProps) {
 									placeholder="https://my-registry.example.com"
 									variant="secondary"
 								/>
-								<span className="text-xs text-muted">
+								<Description>
 									{t("marketMcpSourceUrlHint")}
-								</span>
+								</Description>
 							</TextField>
 						</Modal.Body>
 						<Modal.Footer>
-							<Button slot="close" variant="secondary">
+							<Button
+								slot="close"
+								variant="secondary"
+								isDisabled={addMutation.isPending}
+							>
 								{t("cancel")}
 							</Button>
 							<Button
@@ -183,6 +226,7 @@ export function McpSourceSelector({ onChange }: McpSourceSelectorProps) {
 									!url.trim() ||
 									addMutation.isPending
 								}
+								isPending={addMutation.isPending}
 							>
 								{t("add")}
 							</Button>

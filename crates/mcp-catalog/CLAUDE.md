@@ -5,11 +5,11 @@
 
 ## STRUCTURE
 
-```
+```text
 crates/mcp-catalog/src/
-├── lib.rs      # Public exports: Client, ClientBuilder, ClientError, McpCatalogEntry, McpCatalogEnv
+├── lib.rs      # Public client and catalog install-plan exports
 ├── client.rs   # Client, ClientBuilder — reqwest-based HTTP client
-└── types.rs    # McpCatalogEntry/McpCatalogEnv (domain output) + raw registry shapes + mapping
+└── types.rs    # Catalog install plan + raw registry shapes + mapping
 ```
 
 ## WHERE TO LOOK
@@ -30,13 +30,13 @@ let entries = client.search("github", 60).await?; // empty query => latest serve
 
 Today the only source is the official MCP Registry
 (`registry.modelcontextprotocol.io`, public/no-auth). Output is source-neutral
-(`McpCatalogEntry`) so additional sources (other registries, GitHub import) can
-be added behind the same surface. Override the registry base URL via
-`MCP_REGISTRY_URL`.
+(`McpCatalogEntry`) rather than exposing registry wire types. Override the
+registry base URL via `MCP_REGISTRY_URL`.
 
 ## ANTI-PATTERNS
 
 - NEVER derive ts-rs / wire DTOs here — wire contracts live in `aghub-api` (`dto/mcp_market.rs`), which maps `McpCatalogEntry` → `MarketMcpServer`.
 - NEVER hardcode a source base URL — use `MCP_REGISTRY_URL` for testing.
-- Only carry literal positional args into the install command; leave named/placeholder args and secrets for the user to complete.
+- Preserve argument, variable, and secret metadata in the install plan; resolve
+  user inputs at the client boundary.
 - When adding a second source, keep `McpCatalogEntry` source-neutral; do not add a `trait Source` until there is a real second implementation.

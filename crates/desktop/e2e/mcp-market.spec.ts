@@ -1,0 +1,65 @@
+import { expect, test } from "@playwright/test";
+import { installMocks } from "./mocks";
+
+let mocks: Awaited<ReturnType<typeof installMocks>>;
+
+test.beforeEach(async ({ page }) => {
+	mocks = await installMocks(page);
+	await page.goto("/market?tab=mcp");
+	await expect(page.getByText("Remote Demo")).toBeVisible();
+});
+
+test("install form enforces registry input and transport capability", async ({
+	page,
+}) => {
+	await page.getByRole("button", { name: "Add", exact: true }).click();
+	const dialog = page.getByRole("dialog", { name: "Install MCP server" });
+	await expect(dialog).toBeVisible();
+
+	await expect(dialog.getByText("Claude", { exact: true })).toBeVisible();
+	await expect(dialog.getByText("Gemini", { exact: true })).toBeHidden();
+
+	await dialog.getByText("Claude", { exact: true }).click();
+	await dialog.getByLabel("Tenant").fill("tenant-a");
+	const secret = dialog.getByLabel(/Authorization/);
+	await expect(secret).toHaveAttribute("type", "password");
+	await expect(
+		dialog.getByRole("button", { name: "Install", exact: true }),
+	).toBeDisabled();
+
+	await secret.fill("Bearer test-secret");
+	await expect(
+		dialog.getByRole("button", { name: "Install", exact: true }),
+	).toBeEnabled();
+	await expect(dialog.locator("pre")).not.toContainText("test-secret");
+});
+
+test("install resolves secret fields into the selected agent request", async ({
+	page,
+}) => {
+	await page.getByRole("button", { name: "Add", exact: true }).click();
+	const dialog = page.getByRole("dialog", { name: "Install MCP server" });
+	await dialog.getByText("Claude", { exact: true }).click();
+	await dialog.getByLabel("Tenant").fill("tenant-a");
+	await dialog.getByLabel(/Authorization/).fill("Bearer test-secret");
+	await dialog.getByRole("button", { name: "Install", exact: true }).click();
+	await expect(dialog.getByText("Installed successfully")).toBeVisible();
+
+	expect(mocks.mcpCreates).toHaveLength(1);
+	expect(mocks.mcpCreates[0]).toMatchObject({
+		agent: "claude",
+		body: {
+			name: "remote-demo",
+			transport: {
+				type: "streamable_http",
+				url: "https://tenant-a.example.test/mcp",
+				headers: { Authorization: "Bearer test-secret" },
+			},
+		},
+	});
+
+	await dialog.getByRole("button", { name: "Done" }).click();
+	await expect(
+		page.getByRole("button", { name: "Installed", exact: true }),
+	).toBeVisible();
+});

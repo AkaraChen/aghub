@@ -8,8 +8,10 @@ import type {
 	CcusageRuntimeSource,
 	CodexSkillDiscoveryResponse,
 	CodexVisibleCopyRequest,
+	CreateMcpRequest,
 	GitSyncRequest,
 	InstallCcusageRuntimeRequest,
+	McpResponse,
 	SetCcusageRuntimeRequest,
 	SkillCopyResolutionRequest,
 	SkillCopyStatusRequest,
@@ -57,12 +59,15 @@ export const agentInfo = (
 	},
 });
 
+const gemini = agentInfo("gemini", "Gemini", true);
+gemini.capabilities.mcp.remote = false;
+
 const AGENTS = [
 	agentInfo("claude", "Claude"),
 	agentInfo("cursor", "Cursor"),
 	// A third agent nothing is installed on, so bulk-manage tests can
 	// "add to a new agent" without touching claude/cursor coverage.
-	agentInfo("gemini", "Gemini", true),
+	gemini,
 ];
 
 const AVAILABILITY = [
@@ -182,7 +187,63 @@ const mcp = (name: string) => ({
 	agent: "claude",
 });
 
-const MCPS = [mcp("alpha-mcp"), mcp("beta-mcp")];
+const MCPS: McpResponse[] = [mcp("alpha-mcp"), mcp("beta-mcp")];
+
+const MARKET_MCPS = [
+	{
+		name: "io.github.acme/remote-demo",
+		display_name: "Remote Demo",
+		suggested_name: "remote-demo",
+		publisher: "io.github.acme",
+		description: "Remote registry fixture",
+		version: "1.0.0",
+		repository_url: "https://github.com/acme/remote-demo",
+		transport: {
+			type: "streamable_http",
+			url: {
+				template: "https://{tenant}.example.test/mcp",
+				variables: {
+					tenant: "remote.url.tenant",
+				},
+			},
+			headers: [
+				{
+					name: "Authorization",
+					value: {
+						template: "{value}",
+						variables: {
+							value: "header.0.authorization",
+						},
+					},
+				},
+			],
+		},
+		inputs: [
+			{
+				id: "remote.url.tenant",
+				label: "Tenant",
+				default: "mcp",
+				placeholder: null,
+				description: null,
+				is_required: true,
+				is_secret: false,
+				format: "string",
+				choices: [],
+			},
+			{
+				id: "header.0.authorization",
+				label: "Authorization",
+				default: null,
+				placeholder: null,
+				description: "API token",
+				is_required: true,
+				is_secret: true,
+				format: "string",
+				choices: [],
+			},
+		],
+	},
+];
 
 const SUB_AGENTS = [
 	{
@@ -390,6 +451,7 @@ export async function installMocks(page: Page) {
 		return undefined;
 	};
 	let ccusageRuntime: CcusageRuntimeDto = structuredClone(CCUSAGE_RUNTIME);
+	const mcpCreates: Array<{ agent: string; body: CreateMcpRequest }> = [];
 
 	await page.route(e2eApiUrl("/**"), async (route) => {
 		const url = new URL(route.request().url());
@@ -439,6 +501,7 @@ export async function installMocks(page: Page) {
 		}
 		if (p === "/skills/providers/codex") return json(codexProvidedSkills);
 		if (p === "/agents/all/mcps") return json(mcps);
+		if (p === "/mcp-market/search") return json(MARKET_MCPS);
 		if (p === "/agents/all/sub-agents") return json(SUB_AGENTS);
 		if (p === "/agents/all/rules") return json(ruleFiles);
 		if (p === "/prompts/storage") {
@@ -1024,6 +1087,25 @@ export async function installMocks(page: Page) {
 			return json(mcps[idx] ?? {});
 		}
 
+		const postMcp = p.match(/^\/agents\/([^/]+)\/mcps$/);
+		if (method === "POST" && postMcp) {
+			const body = JSON.parse(
+				route.request().postData() ?? "{}",
+			) as CreateMcpRequest;
+			const agent = postMcp[1] ?? "";
+			mcpCreates.push({ agent, body });
+			const created: McpResponse = {
+				name: body.name,
+				enabled: true,
+				transport: body.transport,
+				timeout: body.timeout,
+				source: "global",
+				agent,
+			};
+			mcps.push(created);
+			return json(created);
+		}
+
 		// An unmocked endpoint must fail loudly: an empty 200 would let
 		// the suite stay green while the real app errors on a renamed or
 		// missing route.
@@ -1057,6 +1139,7 @@ export async function installMocks(page: Page) {
 		getCodexVisibleCopyRequests() {
 			return [...codexVisibleCopyRequests];
 		},
+		mcpCreates,
 		getSkillTreeRequests() {
 			return [...skillTreeRequests];
 		},

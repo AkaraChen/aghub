@@ -12,3 +12,4 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 reqwest = { workspace = true }
 url = { workspace = true }
+tokio = { workspace = true, features = [ "net" ] }

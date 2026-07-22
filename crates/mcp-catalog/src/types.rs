@@ -1,8 +1,13 @@
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
-/// A normalized MCP catalog entry, reduced to the single install method the UI
-/// offers (a stdio package, otherwise a remote endpoint). Source-neutral so it
-/// can represent entries from registries other than the official one.
+// npx must not pause for an install prompt; OCI stdio servers need an
+// attached stdin and a disposable container for MCP's process lifetime.
+const NPM_RUNTIME_ARGS: &[&str] = &["-y"];
+const OCI_RUNTIME_ARGS: &[&str] = &["run", "-i", "--rm"];
+
+/// A normalized MCP catalog entry with one install method.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpCatalogEntry {
 	/// Source identifier (reverse-DNS for the official registry, unique).
@@ -16,27 +21,64 @@ pub struct McpCatalogEntry {
 	pub description: String,
 	pub version: String,
 	pub repository_url: Option<String>,
-	/// "stdio" | "sse" | "streamable_http".
-	pub transport: String,
-	/// stdio invocation (present when `transport == "stdio"`).
-	pub command: Option<String>,
-	pub args: Vec<String>,
-	pub env: Vec<McpCatalogEnv>,
-	/// remote endpoint (present when `transport != "stdio"`).
-	pub url: Option<String>,
-	pub headers: Vec<McpCatalogEnv>,
+	pub transport: McpCatalogTransport,
+	/// Values the user can configure before the install plan is resolved.
+	pub inputs: Vec<McpCatalogInput>,
 }
 
-/// A declared environment variable or HTTP header the user may need to fill in
-/// before the server will run.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct McpCatalogEnv {
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum McpCatalogTransport {
+	Stdio {
+		command: String,
+		args: Vec<McpCatalogArgument>,
+		env: Vec<McpCatalogKeyValue>,
+	},
+	Sse {
+		url: McpCatalogValue,
+		headers: Vec<McpCatalogKeyValue>,
+	},
+	StreamableHttp {
+		url: McpCatalogValue,
+		headers: Vec<McpCatalogKeyValue>,
+	},
+}
+
+/// One command-line argument. Named arguments are emitted as
+/// `<name>=<resolved value>`; positional arguments have no name.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpCatalogArgument {
+	pub name: Option<String>,
+	pub value: McpCatalogValue,
+}
+
+/// An environment variable or HTTP header in an install plan.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpCatalogKeyValue {
 	pub name: String,
-	/// Default or template value from the source, if any.
-	pub value: Option<String>,
+	pub value: McpCatalogValue,
+}
+
+/// A source value with references to configurable inputs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpCatalogValue {
+	pub template: String,
+	/// Template placeholder to input ID.
+	pub variables: BTreeMap<String, String>,
+}
+
+/// A value the user can configure before installation.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpCatalogInput {
+	pub id: String,
+	pub label: String,
+	pub default: Option<String>,
+	pub placeholder: Option<String>,
 	pub description: Option<String>,
 	pub is_required: bool,
 	pub is_secret: bool,
+	pub format: String,
+	pub choices: Vec<String>,
 }
 
 // --- Raw official-registry response shapes (subset of the published schema) ---
@@ -85,6 +127,8 @@ struct Package {
 	#[serde(default)]
 	identifier: String,
 	#[serde(default)]
+	version: String,
+	#[serde(default)]
 	runtime_hint: Option<String>,
 	#[serde(default)]
 	transport: Option<PackageTransport>,
@@ -108,23 +152,42 @@ struct Argument {
 	#[serde(rename = "type", default)]
 	arg_type: String,
 	#[serde(default)]
-	value: Option<String>,
+	name: Option<String>,
+	#[serde(default)]
+	value_hint: Option<String>,
+	#[serde(flatten)]
+	input: RegistryInput,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Default, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct RegistryEnvVar {
-	name: String,
+struct RegistryInput {
 	#[serde(default)]
 	value: Option<String>,
+	#[serde(default)]
+	default: Option<String>,
+	#[serde(default)]
+	placeholder: Option<String>,
 	#[serde(default)]
 	description: Option<String>,
 	#[serde(default)]
 	is_required: bool,
 	#[serde(default)]
 	is_secret: bool,
+	#[serde(default = "default_input_format")]
+	format: String,
 	#[serde(default)]
-	default: Option<String>,
+	choices: Vec<String>,
+	#[serde(default)]
+	variables: BTreeMap<String, RegistryInput>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RegistryEnvVar {
+	name: String,
+	#[serde(flatten)]
+	input: RegistryInput,
 }
 
 #[derive(Debug, Deserialize)]
@@ -135,20 +198,20 @@ struct Remote {
 	url: String,
 	#[serde(default)]
 	headers: Vec<RegistryHeader>,
+	#[serde(default)]
+	variables: BTreeMap<String, RegistryInput>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct RegistryHeader {
 	name: String,
-	#[serde(default)]
-	value: Option<String>,
-	#[serde(default)]
-	description: Option<String>,
-	#[serde(default)]
-	is_required: bool,
-	#[serde(default)]
-	is_secret: bool,
+	#[serde(flatten)]
+	input: RegistryInput,
+}
+
+fn default_input_format() -> String {
+	"string".to_string()
 }
 
 // --- Mapping ---
@@ -180,10 +243,16 @@ pub(crate) fn map_detail(detail: ServerDetail) -> Option<McpCatalogEntry> {
 		.map(str::to_string)
 		.unwrap_or_else(|| short.to_string());
 	let suggested_name = sanitize_name(short);
-	let repository_url = detail.repository.and_then(|repo| repo.url);
+	let repository_url = detail
+		.repository
+		.and_then(|repo| repo.url)
+		.filter(|url| is_http_url(url));
+	let mut inputs = Vec::new();
 
-	if let Some((command, args, env)) =
-		detail.packages.iter().find_map(stdio_install)
+	if let Some(transport) = detail
+		.packages
+		.iter()
+		.find_map(|package| stdio_install(package, &mut inputs))
 	{
 		return Some(McpCatalogEntry {
 			name: detail.name,
@@ -193,23 +262,15 @@ pub(crate) fn map_detail(detail: ServerDetail) -> Option<McpCatalogEntry> {
 			description: detail.description,
 			version: detail.version,
 			repository_url,
-			transport: "stdio".to_string(),
-			command: Some(command),
-			args,
-			env,
-			url: None,
-			headers: Vec::new(),
+			transport,
+			inputs,
 		});
 	}
 
-	if let Some(remote) = detail.remotes.into_iter().next() {
-		let transport = if remote.transport_type == "sse" {
-			"sse"
-		} else {
-			"streamable_http"
-		}
-		.to_string();
-		let headers = remote.headers.into_iter().map(map_header).collect();
+	if let Some(remote) = detail.remotes.into_iter().find(|remote| {
+		matches!(remote.transport_type.as_str(), "sse" | "streamable-http")
+	}) {
+		let transport = remote_install(remote, &mut inputs)?;
 		return Some(McpCatalogEntry {
 			name: detail.name,
 			display_name,
@@ -219,11 +280,7 @@ pub(crate) fn map_detail(detail: ServerDetail) -> Option<McpCatalogEntry> {
 			version: detail.version,
 			repository_url,
 			transport,
-			command: None,
-			args: Vec::new(),
-			env: Vec::new(),
-			url: Some(remote.url),
-			headers,
+			inputs,
 		});
 	}
 
@@ -234,7 +291,8 @@ pub(crate) fn map_detail(detail: ServerDetail) -> Option<McpCatalogEntry> {
 /// package or we cannot determine a launch command.
 fn stdio_install(
 	package: &Package,
-) -> Option<(String, Vec<String>, Vec<McpCatalogEnv>)> {
+	inputs: &mut Vec<McpCatalogInput>,
+) -> Option<McpCatalogTransport> {
 	let is_stdio = package
 		.transport
 		.as_ref()
@@ -243,42 +301,116 @@ fn stdio_install(
 	if !is_stdio {
 		return None;
 	}
+	if package.identifier.trim().is_empty() {
+		return None;
+	}
 
 	let command = package_command(package)?;
 
+	let default_args = default_runtime_args(package.registry_type.as_str());
 	let mut args = Vec::new();
-	for argument in &package.runtime_arguments {
-		if let Some(value) = positional_value(argument) {
-			args.push(value);
+	for value in default_args {
+		args.push(McpCatalogArgument {
+			name: None,
+			value: literal_value((*value).to_string()),
+		});
+	}
+	for (index, argument) in package.runtime_arguments.iter().enumerate() {
+		if let Some(argument) =
+			map_argument(argument, &format!("runtime.{index}"), index, inputs)
+		{
+			if argument.name.is_none()
+				&& argument.value.variables.is_empty()
+				&& default_args.contains(&argument.value.template.as_str())
+			{
+				continue;
+			}
+			args.push(argument);
 		}
 	}
-	if !package.identifier.is_empty() {
-		args.push(package.identifier.clone());
+	args.push(McpCatalogArgument {
+		name: None,
+		value: literal_value(package_reference(package)),
+	});
+	let package_args: Vec<_> = package
+		.package_arguments
+		.iter()
+		.enumerate()
+		.filter_map(|(index, argument)| {
+			map_argument(argument, &format!("package.{index}"), index, inputs)
+		})
+		.collect();
+	if package.registry_type == "nuget" && !package_args.is_empty() {
+		args.push(McpCatalogArgument {
+			name: None,
+			value: literal_value("--".to_string()),
+		});
 	}
-	for argument in &package.package_arguments {
-		if let Some(value) = positional_value(argument) {
-			args.push(value);
-		}
-	}
+	args.extend(package_args);
 
-	let env = package.environment_variables.iter().map(map_env).collect();
+	let env = package
+		.environment_variables
+		.iter()
+		.enumerate()
+		.map(|(index, env)| {
+			map_key_value(&env.name, &env.input, "env", index, inputs)
+		})
+		.collect();
 
-	Some((command, args, env))
+	Some(McpCatalogTransport::Stdio { command, args, env })
 }
 
-/// Only literal positional argument values are carried over — named args and
-/// placeholder hints are left for the user to complete.
-fn positional_value(argument: &Argument) -> Option<String> {
-	if argument.arg_type == "positional" || argument.arg_type.is_empty() {
-		argument
-			.value
-			.as_deref()
-			.map(str::trim)
-			.filter(|value| !value.is_empty())
-			.map(str::to_string)
-	} else {
-		None
+fn default_runtime_args(registry_type: &str) -> &'static [&'static str] {
+	match registry_type {
+		"npm" => NPM_RUNTIME_ARGS,
+		"oci" => OCI_RUNTIME_ARGS,
+		_ => &[],
 	}
+}
+
+fn package_reference(package: &Package) -> String {
+	let version = package.version.trim();
+	if version.is_empty()
+		|| !matches!(package.registry_type.as_str(), "npm" | "pypi" | "nuget")
+	{
+		package.identifier.clone()
+	} else {
+		format!("{}@{version}", package.identifier)
+	}
+}
+
+fn map_argument(
+	argument: &Argument,
+	id: &str,
+	index: usize,
+	inputs: &mut Vec<McpCatalogInput>,
+) -> Option<McpCatalogArgument> {
+	let (name, label) = match argument.arg_type.as_str() {
+		"named" => {
+			let name = argument
+				.name
+				.as_deref()
+				.map(str::trim)
+				.filter(|name| !name.is_empty())?;
+			(Some(name.to_string()), name.to_string())
+		}
+		"positional" | "" => {
+			let label = argument
+				.value_hint
+				.as_deref()
+				.map(str::trim)
+				.filter(|hint| !hint.is_empty())
+				.map(str::to_string)
+				.unwrap_or_else(|| format!("Argument {}", index + 1));
+			(None, label)
+		}
+		_ => return None,
+	};
+	let value = normalize_value(&argument.input, id, &label, inputs);
+	if value.template.is_empty() && value.variables.is_empty() {
+		return None;
+	}
+	Some(McpCatalogArgument { name, value })
 }
 
 fn package_command(package: &Package) -> Option<String> {
@@ -291,38 +423,179 @@ fn package_command(package: &Package) -> Option<String> {
 	match package.registry_type.as_str() {
 		"npm" => Some("npx".to_string()),
 		"pypi" => Some("uvx".to_string()),
+		"nuget" => Some("dnx".to_string()),
 		"oci" => Some("docker".to_string()),
 		_ => None,
 	}
 }
 
-fn map_env(env: &RegistryEnvVar) -> McpCatalogEnv {
-	McpCatalogEnv {
-		name: env.name.clone(),
-		value: env
-			.value
-			.as_deref()
-			.or(env.default.as_deref())
-			.filter(|value| !value.is_empty())
-			.map(str::to_string),
-		description: env
-			.description
-			.as_deref()
-			.filter(|value| !value.is_empty())
-			.map(str::to_string),
-		is_required: env.is_required,
-		is_secret: env.is_secret,
+fn remote_install(
+	remote: Remote,
+	inputs: &mut Vec<McpCatalogInput>,
+) -> Option<McpCatalogTransport> {
+	if remote.url.trim().is_empty() {
+		return None;
+	}
+	let url_input = RegistryInput {
+		value: Some(remote.url),
+		variables: remote.variables,
+		..RegistryInput::default()
+	};
+	let url = normalize_value(&url_input, "remote.url", "URL", inputs);
+	let headers = remote
+		.headers
+		.iter()
+		.enumerate()
+		.map(|(index, header)| {
+			map_key_value(&header.name, &header.input, "header", index, inputs)
+		})
+		.collect();
+	match remote.transport_type.as_str() {
+		"sse" => Some(McpCatalogTransport::Sse { url, headers }),
+		"streamable-http" => {
+			Some(McpCatalogTransport::StreamableHttp { url, headers })
+		}
+		_ => None,
 	}
 }
 
-fn map_header(header: RegistryHeader) -> McpCatalogEnv {
-	McpCatalogEnv {
-		name: header.name,
-		value: header.value.filter(|value| !value.is_empty()),
-		description: header.description.filter(|value| !value.is_empty()),
-		is_required: header.is_required,
-		is_secret: header.is_secret,
+fn map_key_value(
+	name: &str,
+	input: &RegistryInput,
+	kind: &str,
+	index: usize,
+	inputs: &mut Vec<McpCatalogInput>,
+) -> McpCatalogKeyValue {
+	let id = format!("{kind}.{index}.{}", sanitize_input_id(name));
+	McpCatalogKeyValue {
+		name: name.to_string(),
+		value: normalize_value(input, &id, name, inputs),
 	}
+}
+
+fn normalize_value(
+	input: &RegistryInput,
+	id: &str,
+	label: &str,
+	inputs: &mut Vec<McpCatalogInput>,
+) -> McpCatalogValue {
+	let mut template =
+		input.value.clone().unwrap_or_else(|| "{value}".to_string());
+	let mut variables = BTreeMap::new();
+	if input.value.is_none() {
+		push_input(inputs, id, label, input);
+		variables.insert("value".to_string(), id.to_string());
+	}
+
+	for (name, variable) in &input.variables {
+		let placeholder = format!("{{{name}}}");
+		if !template.contains(&placeholder) {
+			continue;
+		}
+		if let Some(value) = variable.value.as_deref() {
+			template = template.replace(&placeholder, value);
+		} else {
+			let variable_id = format!("{id}.{}", sanitize_input_id(name));
+			push_input(inputs, &variable_id, name, variable);
+			variables.insert(name.clone(), variable_id);
+		}
+	}
+	// Older catalog entries encode inputs as undeclared brace placeholders.
+	let unresolved: Vec<String> = placeholder_names(&template)
+		.into_iter()
+		.filter(|name| !variables.contains_key(name))
+		.collect();
+	for name in &unresolved {
+		let unresolved_id = if unresolved.len() == 1 {
+			id.to_string()
+		} else {
+			format!("{id}.{}", sanitize_input_id(name))
+		};
+		let unresolved_label = if unresolved.len() == 1 { label } else { name };
+		push_input(inputs, &unresolved_id, unresolved_label, input);
+		variables.insert(name.clone(), unresolved_id);
+	}
+
+	McpCatalogValue {
+		template,
+		variables,
+	}
+}
+
+fn placeholder_names(template: &str) -> Vec<String> {
+	let mut names = Vec::new();
+	let mut rest = template;
+	while let Some(open) = rest.find('{') {
+		rest = &rest[open + 1..];
+		let Some(close) = rest.find('}') else {
+			break;
+		};
+		let name = &rest[..close];
+		if !name.is_empty()
+			&& name.chars().all(|character| {
+				character.is_ascii_alphanumeric() || character == '_'
+			}) && !names.iter().any(|existing| existing == name)
+		{
+			names.push(name.to_string());
+		}
+		rest = &rest[close + 1..];
+	}
+	names
+}
+
+fn push_input(
+	inputs: &mut Vec<McpCatalogInput>,
+	id: &str,
+	label: &str,
+	input: &RegistryInput,
+) {
+	inputs.push(McpCatalogInput {
+		id: id.to_string(),
+		label: label.to_string(),
+		default: input.default.clone().filter(|value| !value.is_empty()),
+		placeholder: input
+			.placeholder
+			.clone()
+			.filter(|value| !value.is_empty()),
+		description: input
+			.description
+			.clone()
+			.filter(|value| !value.is_empty()),
+		is_required: input.is_required,
+		is_secret: input.is_secret,
+		format: input.format.clone(),
+		choices: input.choices.clone(),
+	});
+}
+
+fn literal_value(value: String) -> McpCatalogValue {
+	McpCatalogValue {
+		template: value,
+		variables: BTreeMap::new(),
+	}
+}
+
+fn sanitize_input_id(raw: &str) -> String {
+	raw.chars()
+		.map(|character| {
+			if character.is_ascii_alphanumeric()
+				|| matches!(character, '-' | '_')
+			{
+				character.to_ascii_lowercase()
+			} else {
+				'-'
+			}
+		})
+		.collect()
+}
+
+fn is_http_url(raw: &str) -> bool {
+	url::Url::parse(raw).is_ok_and(|url| {
+		matches!(url.scheme(), "http" | "https")
+			&& url.host_str().is_some()
+			&& url.username().is_empty()
+			&& url.password().is_none()
+	})
 }
 
 /// Reduce a source short name to a config-safe identifier.
@@ -359,6 +632,17 @@ mod tests {
 			.collect()
 	}
 
+	fn stdio(
+		server: &McpCatalogEntry,
+	) -> (&str, &[McpCatalogArgument], &[McpCatalogKeyValue]) {
+		match &server.transport {
+			McpCatalogTransport::Stdio { command, args, env } => {
+				(command, args, env)
+			}
+			_ => panic!("expected stdio transport"),
+		}
+	}
+
 	#[test]
 	fn maps_stdio_npm_package_with_env() {
 		let servers = parse(
@@ -390,19 +674,23 @@ mod tests {
 		assert_eq!(server.publisher, "com.pulsemcp");
 		assert_eq!(server.display_name, "remote-filesystem");
 		assert_eq!(server.suggested_name, "remote-filesystem");
-		assert_eq!(server.transport, "stdio");
-		assert_eq!(server.command.as_deref(), Some("npx"));
+		let (command, args, env) = stdio(server);
+		assert_eq!(command, "npx");
 		assert_eq!(
-			server.args,
-			vec!["-y".to_string(), "remote-filesystem-mcp-server".to_string()]
+			args.iter()
+				.map(|argument| argument.value.template.as_str())
+				.collect::<Vec<_>>(),
+			vec!["-y", "remote-filesystem-mcp-server@0.1.3"]
 		);
-		assert_eq!(server.env.len(), 4);
-		assert!(server.env[0].is_required);
-		assert!(server.env[1].is_secret);
-		// `value` template is carried through (registry KeyValueInput.value)
-		assert_eq!(server.env[2].value.as_deref(), Some("{your_api_key}"));
-		// `default` is used as a fallback when no `value` is present
-		assert_eq!(server.env[3].value.as_deref(), Some("us-east-1"));
+		assert_eq!(env.len(), 4);
+		assert_eq!(env[2].value.template, "{your_api_key}");
+		assert_eq!(server.inputs.len(), 4);
+		assert_eq!(server.inputs[0].label, "GCS_BUCKET");
+		assert!(server.inputs[0].is_required);
+		assert!(server.inputs[1].is_secret);
+		assert_eq!(server.inputs[2].label, "API_KEY");
+		assert!(server.inputs[2].is_secret);
+		assert_eq!(server.inputs[3].default.as_deref(), Some("us-east-1"));
 		assert_eq!(
 			server.repository_url.as_deref(),
 			Some("https://github.com/pulsemcp/mcp-servers")
@@ -428,15 +716,20 @@ mod tests {
 		assert_eq!(servers.len(), 1);
 		let server = &servers[0];
 		assert_eq!(server.display_name, "Example Server");
-		assert_eq!(server.transport, "streamable_http");
-		assert_eq!(
-			server.url.as_deref(),
-			Some("https://server.smithery.ai/example/mcp")
-		);
-		assert!(server.command.is_none());
-		assert_eq!(server.headers.len(), 1);
-		assert_eq!(server.headers[0].name, "Authorization");
-		assert!(server.headers[0].is_secret);
+		let (url, headers) = match &server.transport {
+			McpCatalogTransport::StreamableHttp { url, headers } => {
+				(url, headers)
+			}
+			_ => panic!("expected streamable HTTP transport"),
+		};
+		assert_eq!(url.template, "https://server.smithery.ai/example/mcp");
+		assert_eq!(headers.len(), 1);
+		assert_eq!(headers[0].name, "Authorization");
+		assert_eq!(headers[0].value.template, "Bearer {smithery_api_key}");
+		assert_eq!(server.inputs.len(), 1);
+		assert_eq!(server.inputs[0].label, "Authorization");
+		assert!(server.inputs[0].is_required);
+		assert!(server.inputs[0].is_secret);
 	}
 
 	#[test]
@@ -446,13 +739,188 @@ mod tests {
 				"name":"io.github.acme/py-server",
 				"description":"py",
 				"version":"2.0.0",
-				"packages":[{"registryType":"pypi","identifier":"acme-mcp","transport":{"type":"stdio"}}]
+				"packages":[{"registryType":"pypi","identifier":"acme-mcp","version":"2.0.0","transport":{"type":"stdio"}}]
 			},"_meta":{}}]}"#,
 		);
 
 		assert_eq!(servers.len(), 1);
-		assert_eq!(servers[0].command.as_deref(), Some("uvx"));
-		assert_eq!(servers[0].args, vec!["acme-mcp".to_string()]);
+		let (command, args, _) = stdio(&servers[0]);
+		assert_eq!(command, "uvx");
+		assert_eq!(args.len(), 1);
+		assert_eq!(args[0].value.template, "acme-mcp@2.0.0");
+	}
+
+	#[test]
+	fn adds_non_interactive_runtime_arguments() {
+		let npm = parse(
+			r#"{"servers":[{"server":{
+				"name":"io.github.acme/npm",
+				"description":"npm",
+				"version":"1.0.0",
+				"packages":[{"registryType":"npm","identifier":"acme-mcp","version":"1.2.3","transport":{"type":"stdio"}}]
+			},"_meta":{}}]}"#,
+		);
+		let oci = parse(
+			r#"{"servers":[{"server":{
+				"name":"io.github.acme/oci",
+				"description":"oci",
+				"version":"1.0.0",
+				"packages":[{"registryType":"oci","identifier":"ghcr.io/acme/mcp:1.0.0","transport":{"type":"stdio"}}]
+			},"_meta":{}}]}"#,
+		);
+
+		let (_, npm_args, _) = stdio(&npm[0]);
+		assert_eq!(
+			npm_args
+				.iter()
+				.map(|argument| argument.value.template.as_str())
+				.collect::<Vec<_>>(),
+			vec!["-y", "acme-mcp@1.2.3"],
+		);
+		let (_, oci_args, _) = stdio(&oci[0]);
+		assert_eq!(
+			oci_args
+				.iter()
+				.map(|argument| argument.value.template.as_str())
+				.collect::<Vec<_>>(),
+			vec!["run", "-i", "--rm", "ghcr.io/acme/mcp:1.0.0"],
+		);
+	}
+
+	#[test]
+	fn keeps_runtime_defaults_with_declared_arguments() {
+		let servers = parse(
+			r#"{"servers":[{"server":{
+				"name":"io.github.acme/oci",
+				"description":"oci",
+				"version":"1.0.0",
+				"packages":[{
+					"registryType":"oci",
+					"identifier":"ghcr.io/acme/mcp:1.0.0",
+					"transport":{"type":"stdio"},
+					"runtimeArguments":[{"type":"named","name":"--network","value":"host"}]
+				}]
+			},"_meta":{}}]}"#,
+		);
+
+		let (_, args, _) = stdio(&servers[0]);
+		assert_eq!(
+			args.iter()
+				.map(|argument| (
+					argument.name.as_deref(),
+					argument.value.template.as_str(),
+				))
+				.collect::<Vec<_>>(),
+			vec![
+				(None, "run"),
+				(None, "-i"),
+				(None, "--rm"),
+				(Some("--network"), "host"),
+				(None, "ghcr.io/acme/mcp:1.0.0"),
+			],
+		);
+	}
+
+	#[test]
+	fn builds_versioned_nuget_invocation() {
+		let servers = parse(
+			r#"{"servers":[{"server":{
+				"name":"io.github.acme/nuget",
+				"description":"nuget",
+				"version":"0.4.0-beta",
+				"packages":[{
+					"registryType":"nuget",
+					"identifier":"Acme.Mcp",
+					"version":"0.4.0-beta",
+					"transport":{"type":"stdio"},
+					"packageArguments":[{"type":"positional","value":"mcp"}]
+				}]
+			},"_meta":{}}]}"#,
+		);
+
+		let (command, args, _) = stdio(&servers[0]);
+		assert_eq!(command, "dnx");
+		assert_eq!(
+			args.iter()
+				.map(|argument| argument.value.template.as_str())
+				.collect::<Vec<_>>(),
+			vec!["Acme.Mcp@0.4.0-beta", "--", "mcp"],
+		);
+	}
+
+	#[test]
+	fn keeps_runtime_and_package_inputs_in_command_order() {
+		let servers = parse(
+			r#"{"servers":[{"server":{
+				"name":"io.github.acme/configurable",
+				"description":"configurable",
+				"version":"1.0.0",
+				"packages":[{
+					"registryType":"npm",
+					"identifier":"acme-mcp",
+					"runtimeHint":"npx",
+					"transport":{"type":"stdio"},
+					"runtimeArguments":[
+						{"type":"positional","value":"-y"},
+						{"type":"named","name":"--registry","default":"corp"}
+					],
+					"packageArguments":[
+						{"type":"positional","valueHint":"path","default":"/tmp/data","isRequired":true}
+					]
+				}]
+			},"_meta":{}}]}"#,
+		);
+
+		assert_eq!(servers.len(), 1);
+		let (_, args, _) = stdio(&servers[0]);
+		assert_eq!(
+			args.iter()
+				.map(|argument| (
+					argument.name.as_deref(),
+					argument.value.template.as_str(),
+				))
+				.collect::<Vec<_>>(),
+			vec![
+				(None, "-y"),
+				(Some("--registry"), "{value}"),
+				(None, "acme-mcp"),
+				(None, "{value}"),
+			],
+		);
+		assert_eq!(servers[0].inputs.len(), 2);
+		assert_eq!(servers[0].inputs[0].default.as_deref(), Some("corp"));
+		assert_eq!(servers[0].inputs[1].label, "path");
+		assert_eq!(servers[0].inputs[1].default.as_deref(), Some("/tmp/data"));
+		assert!(servers[0].inputs[1].is_required);
+	}
+
+	#[test]
+	fn keeps_remote_url_variables_configurable() {
+		let servers = parse(
+			r#"{"servers":[{"server":{
+				"name":"io.github.acme/remote",
+				"description":"remote",
+				"version":"1.0.0",
+				"remotes":[{
+					"type":"sse",
+					"url":"https://{tenant}.example.test/sse",
+					"variables":{"tenant":{"default":"acme","isRequired":true}}
+				}]
+			},"_meta":{}}]}"#,
+		);
+
+		let McpCatalogTransport::Sse { url, .. } = &servers[0].transport else {
+			panic!("expected SSE transport");
+		};
+		assert_eq!(url.template, "https://{tenant}.example.test/sse");
+		assert_eq!(
+			url.variables.get("tenant"),
+			Some(&"remote.url.tenant".to_string())
+		);
+		assert_eq!(servers[0].inputs.len(), 1);
+		assert_eq!(servers[0].inputs[0].label, "tenant");
+		assert_eq!(servers[0].inputs[0].default.as_deref(), Some("acme"));
+		assert!(servers[0].inputs[0].is_required);
 	}
 
 	#[test]
@@ -490,6 +958,22 @@ mod tests {
 				"version":"1.0.0",
 				"repository":{},
 				"packages":[{"registryType":"npm","identifier":"acme","runtimeHint":"npx","transport":{"type":"stdio"}}]
+			},"_meta":{}}]}"#,
+		);
+
+		assert_eq!(servers.len(), 1);
+		assert!(servers[0].repository_url.is_none());
+	}
+
+	#[test]
+	fn drops_unsafe_repository_url() {
+		let servers = parse(
+			r#"{"servers":[{"server":{
+				"name":"io.github.acme/unsafe-repo",
+				"description":"unsafe repository URL",
+				"version":"1.0.0",
+				"repository":{"url":"https://user:secret@example.test/repo"},
+				"packages":[{"registryType":"npm","identifier":"acme","transport":{"type":"stdio"}}]
 			},"_meta":{}}]}"#,
 		);
 

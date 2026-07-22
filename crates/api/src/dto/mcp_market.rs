@@ -1,45 +1,78 @@
-use mcp_catalog::{McpCatalogEntry, McpCatalogEnv};
+use std::collections::BTreeMap;
+
+use mcp_catalog::{
+	McpCatalogArgument, McpCatalogEntry, McpCatalogInput, McpCatalogKeyValue,
+	McpCatalogTransport, McpCatalogValue,
+};
 use serde::Serialize;
 use ts_rs::TS;
 
-/// A single MCP server entry from the marketplace, normalized into the one
-/// install method the UI offers (a stdio package, otherwise a remote endpoint).
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
 pub struct MarketMcpServer {
-	/// Registry identifier (reverse-DNS, unique). Used as the list key.
 	pub name: String,
-	/// Human-friendly label (`title` when present, else the short name).
 	pub display_name: String,
-	/// Config-safe name suggested for the installed server.
 	pub suggested_name: String,
-	/// Namespace prefix of `name` (the part before `/`).
 	pub publisher: String,
 	pub description: String,
 	pub version: String,
 	pub repository_url: Option<String>,
-	/// "stdio" | "sse" | "streamable_http".
-	pub transport: String,
-	/// stdio invocation (present when `transport == "stdio"`).
-	pub command: Option<String>,
-	pub args: Vec<String>,
-	pub env: Vec<MarketMcpEnv>,
-	/// remote endpoint (present when `transport != "stdio"`).
-	pub url: Option<String>,
-	pub headers: Vec<MarketMcpEnv>,
+	pub transport: MarketMcpTransport,
+	pub inputs: Vec<MarketMcpInput>,
 }
 
-/// A declared environment variable or HTTP header the user may need to fill in
-/// before the server will run.
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
-pub struct MarketMcpEnv {
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum MarketMcpTransport {
+	Stdio {
+		command: String,
+		args: Vec<MarketMcpArgument>,
+		env: Vec<MarketMcpKeyValue>,
+	},
+	Sse {
+		url: MarketMcpValue,
+		headers: Vec<MarketMcpKeyValue>,
+	},
+	StreamableHttp {
+		url: MarketMcpValue,
+		headers: Vec<MarketMcpKeyValue>,
+	},
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct MarketMcpArgument {
+	pub name: Option<String>,
+	pub value: MarketMcpValue,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct MarketMcpKeyValue {
 	pub name: String,
-	/// Default or template value from the registry, if any.
-	pub value: Option<String>,
+	pub value: MarketMcpValue,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct MarketMcpValue {
+	pub template: String,
+	pub variables: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct MarketMcpInput {
+	pub id: String,
+	pub label: String,
+	pub default: Option<String>,
+	pub placeholder: Option<String>,
 	pub description: Option<String>,
 	pub is_required: bool,
 	pub is_secret: bool,
+	pub format: String,
+	pub choices: Vec<String>,
 }
 
 impl From<McpCatalogEntry> for MarketMcpServer {
@@ -52,28 +85,73 @@ impl From<McpCatalogEntry> for MarketMcpServer {
 			description: entry.description,
 			version: entry.version,
 			repository_url: entry.repository_url,
-			transport: entry.transport,
-			command: entry.command,
-			args: entry.args,
-			env: entry.env.into_iter().map(MarketMcpEnv::from).collect(),
-			url: entry.url,
-			headers: entry
-				.headers
-				.into_iter()
-				.map(MarketMcpEnv::from)
-				.collect(),
+			transport: entry.transport.into(),
+			inputs: entry.inputs.into_iter().map(Into::into).collect(),
 		}
 	}
 }
 
-impl From<McpCatalogEnv> for MarketMcpEnv {
-	fn from(env: McpCatalogEnv) -> Self {
+impl From<McpCatalogTransport> for MarketMcpTransport {
+	fn from(transport: McpCatalogTransport) -> Self {
+		match transport {
+			McpCatalogTransport::Stdio { command, args, env } => Self::Stdio {
+				command,
+				args: args.into_iter().map(Into::into).collect(),
+				env: env.into_iter().map(Into::into).collect(),
+			},
+			McpCatalogTransport::Sse { url, headers } => Self::Sse {
+				url: url.into(),
+				headers: headers.into_iter().map(Into::into).collect(),
+			},
+			McpCatalogTransport::StreamableHttp { url, headers } => {
+				Self::StreamableHttp {
+					url: url.into(),
+					headers: headers.into_iter().map(Into::into).collect(),
+				}
+			}
+		}
+	}
+}
+
+impl From<McpCatalogArgument> for MarketMcpArgument {
+	fn from(argument: McpCatalogArgument) -> Self {
 		Self {
-			name: env.name,
-			value: env.value,
-			description: env.description,
-			is_required: env.is_required,
-			is_secret: env.is_secret,
+			name: argument.name,
+			value: argument.value.into(),
+		}
+	}
+}
+
+impl From<McpCatalogKeyValue> for MarketMcpKeyValue {
+	fn from(field: McpCatalogKeyValue) -> Self {
+		Self {
+			name: field.name,
+			value: field.value.into(),
+		}
+	}
+}
+
+impl From<McpCatalogValue> for MarketMcpValue {
+	fn from(value: McpCatalogValue) -> Self {
+		Self {
+			template: value.template,
+			variables: value.variables,
+		}
+	}
+}
+
+impl From<McpCatalogInput> for MarketMcpInput {
+	fn from(input: McpCatalogInput) -> Self {
+		Self {
+			id: input.id,
+			label: input.label,
+			default: input.default,
+			placeholder: input.placeholder,
+			description: input.description,
+			is_required: input.is_required,
+			is_secret: input.is_secret,
+			format: input.format,
+			choices: input.choices,
 		}
 	}
 }
