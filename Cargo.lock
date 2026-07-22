@@ -67,7 +67,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-agents"
-version = "1.1.1"
+version = "1.9.0-beta.1"
 dependencies = [
  "aghub-markdown",
  "dirs 6.0.0",
@@ -83,7 +83,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-api"
-version = "1.1.1"
+version = "1.9.0-beta.1"
 dependencies = [
  "aghub-cc-plugins",
  "aghub-core",
@@ -113,7 +113,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-cc-plugins"
-version = "1.1.1"
+version = "1.9.0-beta.1"
 dependencies = [
  "aghub-git",
  "anyhow",
@@ -135,7 +135,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-cli"
-version = "1.1.1"
+version = "1.9.0-beta.1"
 dependencies = [
  "aghub-agents",
  "aghub-cc-plugins",
@@ -155,7 +155,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-core"
-version = "1.1.1"
+version = "1.9.0-beta.1"
 dependencies = [
  "aghub-agents",
  "dirs 6.0.0",
@@ -172,7 +172,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-git"
-version = "1.1.1"
+version = "1.9.0-beta.1"
 dependencies = [
  "gix",
  "tempfile",
@@ -182,7 +182,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-inference"
-version = "1.1.1"
+version = "1.9.0-beta.1"
 dependencies = [
  "aghub-json",
  "dirs 6.0.0",
@@ -201,7 +201,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-json"
-version = "1.1.1"
+version = "1.9.0-beta.1"
 dependencies = [
  "jsonc-parser",
  "serde",
@@ -211,7 +211,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-markdown"
-version = "1.1.1"
+version = "1.9.0-beta.1"
 dependencies = [
  "serde",
  "serde_yaml",
@@ -220,7 +220,7 @@ dependencies = [
 
 [[package]]
 name = "aghub-usage"
-version = "1.1.1"
+version = "1.9.0-beta.1"
 dependencies = [
  "chrono",
  "dirs 6.0.0",
@@ -6983,7 +6983,7 @@ checksum = "b2aa850e253778c88a04c3d7323b043aeda9d3e30d5971937c1855769763678e"
 
 [[package]]
 name = "skill"
-version = "1.1.1"
+version = "1.9.0-beta.1"
 dependencies = [
  "chrono",
  "dirs 6.0.0",
@@ -7013,7 +7013,7 @@ dependencies = [
 
 [[package]]
 name = "skills-sh"
-version = "1.1.1"
+version = "1.9.0-beta.1"
 dependencies = [
  "reqwest",
  "serde",
