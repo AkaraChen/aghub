@@ -34,32 +34,41 @@ export async function getAnalyticsConsent(): Promise<AnalyticsConsent> {
 	return DEFAULT_CONSENT;
 }
 
-export async function setAnalyticsConsent(
+export async function acknowledgeAnalyticsConsent(
 	value: AnalyticsConsent,
-): Promise<AnalyticsConsent> {
+): Promise<void> {
 	const s = await getStore();
-	await s.set(ANALYTICS_CONSENT_KEY, value);
-	await s.save();
-	return value;
+	const previousConsent = await getAnalyticsConsent();
+	const previousAcked = await getConsentAcked();
+
+	try {
+		await s.set(ANALYTICS_CONSENT_KEY, value);
+		await s.set(ANALYTICS_CONSENT_ACK_KEY, true);
+		await s.save();
+	} catch (error) {
+		try {
+			await s.set(ANALYTICS_CONSENT_KEY, previousConsent);
+			await s.set(ANALYTICS_CONSENT_ACK_KEY, previousAcked);
+		} catch (rollbackError) {
+			throw new AggregateError(
+				[error, rollbackError],
+				"Failed to save or restore analytics consent",
+			);
+		}
+		throw error;
+	}
 }
 
 /**
  * Whether the user has explicitly acknowledged the consent prompt.
- * Distinct from `analyticsConsent` itself: a user upgrading from a
- * pre-consent build implicitly has `analyticsConsent === "granted"`
- * but `consentAcked === false`, which is what triggers the
- * one-time consent step in the welcome/upgrade wizard.
+ * Distinct from `analyticsConsent` itself so users upgrading from a
+ * pre-consent build see the one-time consent step even when a prior
+ * release already stored an analytics preference.
  */
 export async function getConsentAcked(): Promise<boolean> {
 	const s = await getStore();
 	const value = await s.get<boolean>(ANALYTICS_CONSENT_ACK_KEY);
 	return value === true;
-}
-
-export async function setConsentAcked(value: boolean): Promise<void> {
-	const s = await getStore();
-	await s.set(ANALYTICS_CONSENT_ACK_KEY, value);
-	await s.save();
 }
 
 const AUTO_CHECK_UPDATES_KEY = "autoCheckUpdates";

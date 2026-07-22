@@ -18,6 +18,7 @@
 		"lint": "eslint --fix .",
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
+		"test:unit": "vitest run src",
 		"generate:dto": "cargo run --manifest-path ../api/Cargo.toml --bin export-dto",
 		"typecheck": "node ./node_modules/@typescript/native/bin/tsc -p tsconfig.json --noEmit",
 		"test:e2e": "playwright test"
@@ -90,7 +91,8 @@
 		"prettier": "^3.9.4",
 		"tailwindcss": "^4.3.3",
 		"typescript": "~6.0.3",
-		"vite": "^8.1.3"
+		"vite": "^8.1.3",
+		"vitest": "^4.1.10"
 	},
 	"knip": {
 		"ignoreDependencies": [

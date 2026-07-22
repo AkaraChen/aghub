@@ -441,7 +441,8 @@ export default {
 	onboardingAnalyticsTitle: "Help improve aghub",
 	onboardingAnalyticsDescription:
 		"Share anonymous usage data and crash reports so we can fix bugs and prioritise features. You can change this any time in Settings.",
-	onboardingConsentSectionLabel: "Privacy",
+	onboardingFullscreen: "Open video in fullscreen",
+	onboardingSaveError: "Couldn't save your onboarding choices. Try again.",
 	settingsAnalyticsHeading: "Usage analytics",
 	settingsAnalyticsDescription:
 		"Send anonymous usage data and crash reports to help improve aghub. Disabling this stops both event capture and session replay.",

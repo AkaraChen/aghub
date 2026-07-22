@@ -4,13 +4,12 @@ export {
 	setLastSeenWhatsNewVersion,
 } from "./store/whats-new";
 export {
+	acknowledgeAnalyticsConsent,
 	type AnalyticsConsent,
 	getAnalyticsConsent,
 	getAutoCheckUpdates,
 	getConsentAcked,
-	setAnalyticsConsent,
 	setAutoCheckUpdates,
-	setConsentAcked,
 	getStore,
 	initStore,
 } from "./store/index";

@@ -421,7 +421,8 @@ export default {
 	onboardingAnalyticsTitle: "協助改進 aghub",
 	onboardingAnalyticsDescription:
 		"分享匿名使用資料和當機回報，協助我們修正錯誤並決定功能優先順序。可隨時在設定中更改。",
-	onboardingConsentSectionLabel: "隱私",
+	onboardingFullscreen: "全螢幕播放影片",
+	onboardingSaveError: "無法儲存導覽設定，請重試。",
 	settingsAnalyticsHeading: "使用統計",
 	settingsAnalyticsDescription:
 		"傳送匿名使用資料和當機回報以協助改進 aghub。關閉後將同時停止事件擷取和工作階段重播。",

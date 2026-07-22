@@ -5,10 +5,12 @@
 	const storeData = new Map(); // path -> Map<key, value>
 	const stores = new Map(); // rid -> Map<key, value>
 	let nextRid = 1;
+	const onboardingMode = new URLSearchParams(location.search).get(
+		"__e2eOnboarding",
+	);
+	const persistedStoreKey = `aghub-e2e-store:${onboardingMode ?? "default"}`;
 
-	// Pre-seeded store.json: onboarding done, analytics declined, so no
-	// welcome dialog or tour blocks the UI under test.
-	const seeded = new Map([
+	const defaultEntries = [
 		["version", 9],
 		[
 			"onboardingProgress",
@@ -28,13 +30,35 @@
 			"projects",
 			[{ id: "p1", name: "demo-project", path: "/tmp/e2e/demo" }],
 		],
-	]);
+	];
+	const persistedEntries = sessionStorage.getItem(persistedStoreKey);
+	const seeded = new Map(
+		persistedEntries ? JSON.parse(persistedEntries) : defaultEntries,
+	);
+	if (!persistedEntries && onboardingMode === "fresh") {
+		seeded.set("onboardingProgress", {
+			hasSeenWelcome: false,
+			completedTours: { productMap: false, projectWorkflow: false },
+		});
+		seeded.set("analyticsConsent", "denied");
+		seeded.set("analyticsConsentAcked", false);
+		seeded.delete("lastSeenWhatsNewVersion");
+	}
 	storeData.set("store.json", seeded);
+
+	function persistStore() {
+		sessionStorage.setItem(
+			persistedStoreKey,
+			JSON.stringify([...seeded.entries()]),
+		);
+	}
 
 	function invoke(cmd, args = {}) {
 		switch (cmd) {
 			case "start_server":
 				return Promise.resolve({ port: 45999, token: "e2e-token" });
+			case "plugin:app|version":
+				return Promise.resolve("1.9.0-beta.1");
 			case "posthog_get_config":
 				return Promise.resolve({ key: null, host: null });
 			case "posthog_get_distinct_id":
@@ -86,6 +110,8 @@
 				return Promise.resolve(m ? [...m.entries()] : []);
 			}
 			case "plugin:store|save":
+				persistStore();
+				return Promise.resolve(null);
 			case "plugin:store|clear":
 			case "plugin:store|reset":
 			case "plugin:store|reload":
@@ -107,6 +133,10 @@
 				);
 		}
 	}
+
+	window.__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+		unregisterListener: () => {},
+	};
 
 	window.__TAURI_INTERNALS__ = {
 		invoke,
