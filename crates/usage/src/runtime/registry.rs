@@ -109,9 +109,20 @@ impl CcusageRegistry {
 			}
 			bytes.extend_from_slice(&chunk);
 		}
-		verify_integrity(&bytes, &metadata.dist.integrity)?;
-		extract_binary(&bytes, &platform.archive_member, destination)?;
-		prepare_staged_binary(destination)
+		let integrity = metadata.dist.integrity;
+		let member = platform.archive_member;
+		let destination = destination.to_path_buf();
+		tokio::task::spawn_blocking(move || {
+			verify_integrity(&bytes, &integrity)?;
+			extract_binary(&bytes, &member, &destination)?;
+			prepare_staged_binary(&destination)
+		})
+		.await
+		.map_err(|error| {
+			CcusageRuntimeError::InvalidRegistryMetadata(format!(
+				"archive extraction task failed: {error}"
+			))
+		})?
 	}
 }
 
