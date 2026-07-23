@@ -10,7 +10,8 @@ import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useUsageSettings } from "../hooks/use-usage-settings";
 import { AgentIcon } from "../lib/agent-icons";
-import { DEFAULT_USAGE_SETTINGS } from "../lib/store";
+import { DEFAULT_USAGE_SETTINGS, trackedUsageAgents } from "../lib/store";
+import { USAGE_AGENT_LABELS } from "../lib/usage-agents";
 import {
 	formatCost,
 	formatTokens,
@@ -19,6 +20,7 @@ import {
 import { buildUsageDateRange } from "../lib/usage-date-range";
 import { cn } from "../lib/utils";
 import {
+	usageAgentsQueryOptions,
 	usageStatusQueryOptions,
 	usageSummaryQueryOptions,
 } from "../requests/usage";
@@ -51,6 +53,13 @@ export default function UsagePage() {
 	const range = buildUsageDateRange(WINDOW_DAYS, settings.timezone);
 	const refetchInterval =
 		settings.pollIntervalMs > 0 ? settings.pollIntervalMs : false;
+	const usageAgentsQuery = useQuery(
+		usageAgentsQueryOptions({ api, enabled: settingsReady }),
+	);
+	const trackedAgentIds = useMemo(
+		() => trackedUsageAgents(settings, usageAgentsQuery.data ?? []),
+		[settings, usageAgentsQuery.data],
+	);
 
 	const reportQuery = useQuery(
 		usageSummaryQueryOptions({
@@ -62,48 +71,41 @@ export default function UsagePage() {
 			config: settings.ccusageConfigPath,
 			timeoutSecs: settings.requestTimeoutSecs,
 			args: settings.extraArgs,
-			enabled: settingsReady,
+			agents: trackedAgentIds,
+			enabled: settingsReady && usageAgentsQuery.isSuccess,
 			refetchInterval,
 		}),
 	);
 	const { data: report } = reportQuery;
 	const statusQuery = useQuery(usageStatusQueryOptions({ api }));
 	const { data: status } = statusQuery;
-	const isLoading = usageSettingsQuery.isPending || reportQuery.isLoading;
+	const isLoading =
+		usageSettingsQuery.isPending ||
+		usageAgentsQuery.isPending ||
+		reportQuery.isLoading;
 	const settingsError =
 		usageSettingsQuery.error instanceof Error
 			? usageSettingsQuery.error.message
 			: t("usageSettingsLoadError");
 	const reportError =
-		reportQuery.error instanceof Error
-			? reportQuery.error.message
-			: t("usageReportLoadError");
-	const emptyMessage = report?.warnings[0] ?? t("usageEmpty");
+		usageAgentsQuery.error instanceof Error
+			? usageAgentsQuery.error.message
+			: reportQuery.error instanceof Error
+				? reportQuery.error.message
+				: t("usageReportLoadError");
+	const emptyMessage =
+		trackedAgentIds.length === 0
+			? t("usageNoTrackedAgents")
+			: (report?.warnings[0] ?? t("usageEmpty"));
 
 	const displayName = useMemo(() => {
 		const byId = new Map(
 			availableAgents.map((a) => [a.id, a.display_name]),
 		);
-		return (id: string) => byId.get(id) ?? id;
+		return (id: string) => byId.get(id) ?? USAGE_AGENT_LABELS[id] ?? id;
 	}, [availableAgents]);
 
-	const usableAgentIds = useMemo(() => {
-		const ids = new Set<string>();
-		for (const agent of availableAgents) {
-			if (agent.isUsable) ids.add(agent.id);
-		}
-		return ids;
-	}, [availableAgents]);
-
-	// Agent visibility follows Settings → Agents, the application's single
-	// source of truth for installed and enabled agents.
-	const agents = useMemo(
-		() =>
-			(report?.agents ?? []).filter((entry) =>
-				usableAgentIds.has(entry.agent),
-			),
-		[report, usableAgentIds],
-	);
+	const agents = useMemo(() => report?.agents ?? [], [report]);
 
 	// Cross-agent headline numbers; spend only when ccusage priced anything.
 	const summary = useMemo(() => {
@@ -198,7 +200,7 @@ export default function UsagePage() {
 						ctaLabel={t("usageOpenSettings")}
 						onPress={() => setLocation("/settings?tab=usage")}
 					/>
-				) : reportQuery.isError ? (
+				) : usageAgentsQuery.isError || reportQuery.isError ? (
 					<EmptyState message={reportError} />
 				) : agents.length === 0 ? (
 					<EmptyState message={emptyMessage} />

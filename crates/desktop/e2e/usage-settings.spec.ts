@@ -131,9 +131,14 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 		page.getByRole("button", { name: "Check again" }),
 	).toBeVisible();
 
-	// Agent enablement has one owner in Settings → Agents; Usage only keeps
-	// quota-specific alert overrides.
-	await expect(page.getByTestId("tracked-agents")).toHaveCount(0);
+	const trackedAgents = page.getByTestId("tracked-agents");
+	await expect(trackedAgents).toBeVisible();
+	await expect(
+		trackedAgents.getByRole("switch", { name: "Track Claude usage" }),
+	).toBeChecked();
+	await expect(
+		trackedAgents.getByRole("switch", { name: "Track KiloCode usage" }),
+	).toBeChecked();
 
 	// Alerts: one row per quota agent with the resolved-global threshold.
 	await expect(
@@ -148,6 +153,10 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await expect(page.getByText("Weekly (Opus)")).toBeHidden();
 	await expect(page.getByText("Reasoning")).toBeVisible();
 	await page.getByRole("button", { name: "Editing layout for" }).click();
+	await page.getByRole("option", { name: "Gemini" }).click();
+	await expect(card.getByText("Weekly limit", { exact: true })).toBeHidden();
+	await expect(page.getByText("Reasoning")).toBeHidden();
+	await page.getByRole("button", { name: "Editing layout for" }).click();
 	await page.getByRole("option", { name: "Default" }).click();
 
 	// Advanced knobs are collapsed by default and expand on demand.
@@ -160,6 +169,28 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 
 	// Inactive candidates do not add their paths to the current-source summary.
 	await expect(page.getByText("/usr/local/bin/ccusage")).toHaveCount(0);
+});
+
+test("tracked agent choices bound usage probes", async ({ page }) => {
+	await page.goto("/settings?tab=usage");
+	const kiloSwitch = page.getByRole("switch", {
+		name: "Track KiloCode usage",
+	});
+	await expect(kiloSwitch).toBeChecked();
+	await kiloSwitch.locator("xpath=ancestor::label").click();
+	await expect(kiloSwitch).not.toBeChecked();
+
+	const summaryRequest = page.waitForRequest((request) =>
+		new URL(request.url()).pathname.endsWith("/usage/summary"),
+	);
+	await page.getByRole("link", { name: "Usage", exact: true }).click();
+	const request = await summaryRequest;
+	const selected = new URL(request.url()).searchParams
+		.get("agents")
+		?.split(",");
+
+	expect(selected).toContain("claude");
+	expect(selected).not.toContain("kilocode");
 });
 
 test("runtime source row owns version and availability metadata", async ({

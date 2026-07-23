@@ -27,6 +27,8 @@ interface UsageSummaryQueryParams {
 	 * cannot contain spaces.
 	 */
 	args?: string;
+	/** Canonical aghub agent ids to probe. Empty disables all probes. */
+	agents?: readonly string[];
 	enabled?: boolean;
 	/** Background poll interval in ms; `false` (default) polls only on demand. */
 	refetchInterval?: number | false;
@@ -41,6 +43,7 @@ export function usageSummaryQueryOptions({
 	config,
 	timeoutSecs,
 	args,
+	agents,
 	enabled = true,
 	refetchInterval = false,
 }: UsageSummaryQueryParams) {
@@ -53,6 +56,7 @@ export function usageSummaryQueryOptions({
 			config || null,
 			timeoutSecs ?? null,
 			args || null,
+			agents?.join(",") ?? null,
 		),
 		queryFn: () =>
 			api.usage.summary({
@@ -63,6 +67,7 @@ export function usageSummaryQueryOptions({
 				config,
 				timeoutSecs,
 				args,
+				agents,
 			}),
 		enabled,
 		staleTime: 5 * 60_000,
@@ -73,8 +78,25 @@ export function usageSummaryQueryOptions({
 	});
 }
 
+export function usageAgentsQueryOptions({
+	api,
+	enabled = true,
+}: {
+	api: ApiClient;
+	enabled?: boolean;
+}) {
+	return queryOptions({
+		queryKey: queryKeys.usage.agents(),
+		queryFn: () => api.usage.agents(),
+		enabled,
+		staleTime: Number.POSITIVE_INFINITY,
+		retry: false,
+	});
+}
+
 interface UsageLimitsQueryParams {
 	api: ApiClient;
+	agents?: readonly string[];
 	enabled?: boolean;
 	/** Background poll interval in ms; `false` (default) polls only on demand. */
 	refetchInterval?: number | false;
@@ -82,12 +104,13 @@ interface UsageLimitsQueryParams {
 
 export function usageLimitsQueryOptions({
 	api,
+	agents,
 	enabled = true,
 	refetchInterval = false,
 }: UsageLimitsQueryParams) {
 	return queryOptions({
-		queryKey: queryKeys.usage.limits(),
-		queryFn: () => api.usage.limits(),
+		queryKey: queryKeys.usage.limits(agents?.join(",") ?? null),
+		queryFn: () => api.usage.limits(agents),
 		enabled,
 		staleTime: 60_000,
 		refetchInterval,

@@ -128,6 +128,7 @@ export const queryKeys = {
 			config: string | null,
 			timeoutSecs: number | null,
 			args: string | null,
+			agents: string | null,
 		) =>
 			[
 				"usage",
@@ -139,8 +140,10 @@ export const queryKeys = {
 				config,
 				timeoutSecs,
 				args,
+				agents,
 			] as const,
-		limits: () => ["usage", "limits"] as const,
+		agents: () => ["usage", "agents"] as const,
+		limits: (agents: string | null) => ["usage", "limits", agents] as const,
 		status: () => ["usage", "status"] as const,
 		runtime: () => ["usage", "runtime"] as const,
 	},

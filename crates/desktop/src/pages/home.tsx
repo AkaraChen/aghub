@@ -12,12 +12,18 @@ import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useUsageSettings } from "../hooks/use-usage-settings";
 import { agentStatus } from "../lib/agent-status";
-import { agentSettings, DEFAULT_USAGE_SETTINGS } from "../lib/store";
+import {
+	agentSettings,
+	DEFAULT_USAGE_SETTINGS,
+	trackedUsageAgents,
+	USAGE_QUOTA_AGENTS,
+} from "../lib/store";
 import { buildUsageDateRange } from "../lib/usage-date-range";
 import { cn } from "../lib/utils";
 import { mcpListQueryOptions } from "../requests/mcps";
 import { skillListQueryOptions } from "../requests/skills";
 import {
+	usageAgentsQueryOptions,
 	usageLimitsQueryOptions,
 	usageSummaryQueryOptions,
 } from "../requests/usage";
@@ -45,6 +51,20 @@ export default function HomePage() {
 
 	const refetchInterval =
 		settings.pollIntervalMs > 0 ? settings.pollIntervalMs : false;
+	const usageAgentsQuery = useQuery(
+		usageAgentsQueryOptions({ api, enabled: usageEnabled }),
+	);
+	const homeUsageAgentIds = useMemo(() => {
+		const supported = new Set(usageAgentsQuery.data ?? []);
+		const agentIds = availableAgents
+			.filter((agent) => agent.isUsable && supported.has(agent.id))
+			.map((agent) => agent.id);
+		return trackedUsageAgents(settings, agentIds);
+	}, [availableAgents, settings, usageAgentsQuery.data]);
+	const quotaAgentIds = useMemo(
+		() => trackedUsageAgents(settings, USAGE_QUOTA_AGENTS),
+		[settings],
+	);
 
 	// Usage is best-effort: agents without local ccusage data land in the
 	// report's warnings with no entry. Cards without an entry omit the block.
@@ -58,13 +78,15 @@ export default function HomePage() {
 			config: settings.ccusageConfigPath,
 			timeoutSecs: settings.requestTimeoutSecs,
 			args: settings.extraArgs,
-			enabled: usageEnabled,
+			agents: homeUsageAgentIds,
+			enabled: usageEnabled && usageAgentsQuery.isSuccess,
 			refetchInterval,
 		}),
 	);
 	const { data: limitsReport } = useQuery(
 		usageLimitsQueryOptions({
 			api,
+			agents: quotaAgentIds,
 			enabled: usageEnabled,
 			refetchInterval,
 		}),

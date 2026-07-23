@@ -495,6 +495,12 @@ export default {
 	usageGlobalAlertThreshold: "全域告警閾值",
 	usageAlertUseGlobal: "使用全域（{{pct}}%）",
 	usageSettingsHomeCards: "主頁卡片",
+	usageSettingsTrackedAgents: "用量來源",
+	usageSettingsTrackedAgentsDescription:
+		"選擇 aghub 要向 ccusage 查詢的 Agent；此設定同時控制 token 彙總和受支援的限額檢查。",
+	usageTrackedAgentsLoadError: "無法載入 ccusage Agent 來源",
+	usageAgentTracked: "追蹤 {{agent}} 用量",
+	usageNoTrackedAgents: "尚未啟用任何用量來源",
 	usageExtraArgs: "額外 ccusage 參數",
 	usageExtraArgsDescription: "以空白字元分隔；單一參數值不能包含空格。",
 	usageSettingsAlerts: "警示",

@@ -518,6 +518,12 @@ export default {
 	usageGlobalAlertThreshold: "Global alert threshold",
 	usageAlertUseGlobal: "Use global ({{pct}}%)",
 	usageSettingsHomeCards: "Home cards",
+	usageSettingsTrackedAgents: "Tracked agents",
+	usageSettingsTrackedAgentsDescription:
+		"Choose which ccusage sources aghub queries for token summaries and supported quota checks.",
+	usageTrackedAgentsLoadError: "Failed to load ccusage agent sources",
+	usageAgentTracked: "Track {{agent}} usage",
+	usageNoTrackedAgents: "No usage sources are enabled",
 	usageExtraArgs: "Additional ccusage arguments",
 	usageExtraArgsDescription:
 		"Separated by whitespace; individual argument values cannot contain spaces.",

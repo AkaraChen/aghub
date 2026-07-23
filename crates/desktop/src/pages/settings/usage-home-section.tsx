@@ -1,5 +1,8 @@
 import { Button } from "@heroui/react";
+import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
+import { useAgentAvailability } from "../../hooks/use-agent-availability";
+import { useApi } from "../../hooks/use-api";
 import {
 	HOME_STAT_IDS,
 	type HomeStatId,
@@ -13,6 +16,8 @@ import {
 	HOME_STAT_DEFINITIONS,
 	HOME_WINDOW_LABEL_KEYS,
 } from "../../lib/usage-home-fields";
+import { USAGE_AGENT_LABELS } from "../../lib/usage-agents";
+import { usageAgentsQueryOptions } from "../../requests/usage";
 import {
 	type CardLayoutModel,
 	InteractiveCardLayout,
@@ -25,7 +30,6 @@ import {
 } from "./usage-setting-controls";
 import {
 	includeSelectedOption,
-	USAGE_AGENT_LABELS,
 	type UsageSectionProps,
 } from "./usage-setting-model";
 
@@ -41,6 +45,9 @@ export function HomeCardsSection({
 	onLayoutTargetChange: (target: string) => void;
 }) {
 	const { t } = useTranslation();
+	const api = useApi();
+	const { availableAgents } = useAgentAvailability();
+	const usageAgentsQuery = useQuery(usageAgentsQueryOptions({ api }));
 	const home = current.home;
 	const editedLayout =
 		layoutTarget === "default"
@@ -84,6 +91,15 @@ export function HomeCardsSection({
 		});
 	};
 	const offeredToTarget = (id: HomeWindowId | HomeStatId) => {
+		if (
+			layoutTarget !== "default" &&
+			isHomeWindowId(id) &&
+			!USAGE_QUOTA_AGENTS.includes(
+				layoutTarget as (typeof USAGE_QUOTA_AGENTS)[number],
+			)
+		) {
+			return false;
+		}
 		const agent = layoutFieldAgent(id);
 		return layoutTarget === "default" || !agent || agent === layoutTarget;
 	};
@@ -113,6 +129,11 @@ export function HomeCardsSection({
 	);
 	const previewAgentId =
 		layoutTarget === "default" ? USAGE_QUOTA_AGENTS[0] : layoutTarget;
+	const layoutTargets = usageAgentsQuery.data ?? USAGE_QUOTA_AGENTS;
+	const agentName = (id: string) =>
+		availableAgents.find((agent) => agent.id === id)?.display_name ??
+		USAGE_AGENT_LABELS[id] ??
+		id;
 
 	return (
 		<section className="space-y-4 px-1 py-5">
@@ -190,9 +211,9 @@ export function HomeCardsSection({
 									id: "default",
 									label: t("usageLayoutTargetDefault"),
 								},
-								...USAGE_QUOTA_AGENTS.map((id) => ({
+								...layoutTargets.map((id) => ({
 									id,
-									label: USAGE_AGENT_LABELS[id] ?? id,
+									label: agentName(id),
 								})),
 							]}
 						/>
@@ -223,4 +244,8 @@ function layoutFieldAgent(
 	if (id === "weekly_opus") return "claude";
 	const stat = HOME_STAT_IDS.find((candidate) => candidate === id);
 	return stat ? HOME_STAT_AGENT_HINT[stat] : undefined;
+}
+
+function isHomeWindowId(id: HomeWindowId | HomeStatId): id is HomeWindowId {
+	return HOME_WINDOW_IDS.includes(id as HomeWindowId);
 }

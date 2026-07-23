@@ -7,10 +7,10 @@ import {
 	USAGE_QUOTA_AGENTS,
 	type UsageSettings,
 } from "../../lib/store";
+import { USAGE_AGENT_LABELS } from "../../lib/usage-agents";
 import { SettingRow, SettingSelect } from "./usage-setting-controls";
 import {
 	includeSelectedOption,
-	USAGE_AGENT_LABELS,
 	type UsageSectionProps,
 } from "./usage-setting-model";
 
@@ -115,6 +115,7 @@ export function AlertsSection({ current, updateSettings }: UsageSectionProps) {
 								})
 							}
 							ariaLabel={t("usageAgentAlert")}
+							isDisabled={!config.tracked}
 							options={includeSelectedOption(
 								thresholdOptions,
 								selectedThreshold,

@@ -77,6 +77,7 @@ import type {
 	CCPluginUpdateRequest,
 	CCPluginUpdateResponse,
 	UpdateSubAgentRequest,
+	UsageAgent,
 	UsageLimitsReportDto,
 	UsageReportDto,
 	UsageStatusDto,
@@ -657,6 +658,7 @@ export function createApi(baseUrl: string, token: string) {
 					config?: string;
 					timeoutSecs?: number;
 					args?: string;
+					agents?: readonly string[];
 				} = {},
 			): Promise<UsageReportDto> {
 				const searchParams: Record<string, string> = {};
@@ -669,6 +671,8 @@ export function createApi(baseUrl: string, token: string) {
 				if (params.timeoutSecs)
 					searchParams.timeout_secs = String(params.timeoutSecs);
 				if (params.args) searchParams.args = params.args;
+				if (params.agents !== undefined)
+					searchParams.agents = params.agents.join(",");
 				return client
 					.get("usage/summary", {
 						searchParams,
@@ -676,8 +680,19 @@ export function createApi(baseUrl: string, token: string) {
 					})
 					.json();
 			},
-			limits(): Promise<UsageLimitsReportDto> {
-				return client.get("usage/limits", { timeout: 30000 }).json();
+			agents(): Promise<UsageAgent[]> {
+				return client.get("usage/agents", { timeout: 30000 }).json();
+			},
+			limits(agents?: readonly string[]): Promise<UsageLimitsReportDto> {
+				return client
+					.get("usage/limits", {
+						searchParams:
+							agents === undefined
+								? undefined
+								: { agents: agents.join(",") },
+						timeout: 30000,
+					})
+					.json();
 			},
 			status(): Promise<UsageStatusDto> {
 				return client.get("usage/status", { timeout: 30000 }).json();

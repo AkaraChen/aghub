@@ -7,6 +7,7 @@ import { useUsageSettingsEditor } from "../../hooks/use-usage-settings";
 import { createDefaultUsageSettings } from "../../lib/store";
 import { setUsageRuntimeMutationOptions } from "../../requests/usage";
 import { AdvancedSection } from "./usage-advanced-section";
+import { TrackedAgentsSection } from "./usage-agents-section";
 import { AlertsSection } from "./usage-alerts-section";
 import { HomeCardsSection } from "./usage-home-section";
 import { UsageRuntimeSection } from "./usage-runtime-section";
@@ -101,6 +102,10 @@ export default function UsagePanel() {
 					updateSettings={updateSettings}
 					layoutTarget={layoutTarget}
 					onLayoutTargetChange={setLayoutTarget}
+				/>
+				<TrackedAgentsSection
+					current={current}
+					updateSettings={updateSettings}
 				/>
 				<AlertsSection
 					current={current}

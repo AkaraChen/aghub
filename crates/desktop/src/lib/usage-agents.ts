@@ -1,0 +1,17 @@
+export const USAGE_AGENT_LABELS: Record<string, string> = {
+	claude: "Claude",
+	codex: "Codex",
+	opencode: "OpenCode",
+	amp: "Amp",
+	factory: "Factory",
+	codebuff: "Codebuff",
+	hermes: "Hermes",
+	pi: "Pi",
+	goose: "Goose",
+	kilocode: "KiloCode",
+	copilot: "GitHub Copilot",
+	gemini: "Gemini",
+	kimi: "Kimi",
+	qwen: "Qwen",
+	openclaw: "OpenClaw",
+};

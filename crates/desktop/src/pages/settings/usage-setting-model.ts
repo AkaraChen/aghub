@@ -1,10 +1,5 @@
 import type { UsageSettings } from "../../lib/store";
 
-export const USAGE_AGENT_LABELS: Record<string, string> = {
-	claude: "Claude",
-	codex: "Codex",
-};
-
 type UsageSettingsUpdate = (
 	apply: (current: UsageSettings) => UsageSettings,
 ) => void;

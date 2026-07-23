@@ -4,6 +4,8 @@ import { getStore } from ".";
 export const USAGE_QUOTA_AGENTS = ["claude", "codex"] as const;
 
 interface UsageAgentSettings {
+	/** Include this source in summary and quota requests. */
+	tracked: boolean;
 	/**
 	 * Per-agent alert threshold, percent of a rate-limit window (0–100). `null`
 	 * falls back to {@link UsageSettings.globalAlertThresholdPct}. Only
@@ -14,6 +16,7 @@ interface UsageAgentSettings {
 
 /** Per-agent settings default: use the global alert threshold. */
 const DEFAULT_AGENT_SETTINGS: UsageAgentSettings = {
+	tracked: true,
 	alertThresholdPct: null,
 };
 
@@ -103,6 +106,13 @@ export function agentSettings(
 	return settings.agents[id] ?? DEFAULT_AGENT_SETTINGS;
 }
 
+export function trackedUsageAgents(
+	settings: UsageSettings,
+	agentIds: readonly string[],
+): string[] {
+	return agentIds.filter((id) => agentSettings(settings, id).tracked);
+}
+
 const USAGE_SETTINGS_KEY = "usageSettings";
 
 /** TanStack Query polling accepts disabled (0) or a 1-second to 24-hour timer. */
@@ -174,6 +184,10 @@ function normalizeAgent(raw: unknown): UsageAgentSettings {
 	>;
 	const threshold = r.alertThresholdPct;
 	return {
+		tracked:
+			typeof r.tracked === "boolean"
+				? r.tracked
+				: DEFAULT_AGENT_SETTINGS.tracked,
 		alertThresholdPct:
 			typeof threshold === "number" && Number.isFinite(threshold)
 				? clampPct(threshold)

@@ -84,6 +84,24 @@ const AVAILABILITY = [
 	},
 ];
 
+const USAGE_AGENTS = [
+	"claude",
+	"codex",
+	"opencode",
+	"amp",
+	"factory",
+	"codebuff",
+	"hermes",
+	"pi",
+	"goose",
+	"kilocode",
+	"copilot",
+	"gemini",
+	"kimi",
+	"qwen",
+	"openclaw",
+];
+
 const skill = (name: string, agent = "claude"): SkillResponse => ({
 	name,
 	enabled: true,
@@ -396,6 +414,7 @@ export async function installMocks(page: Page) {
 			});
 		}
 		if (p === "/integrations/code-editors") return json([]);
+		if (p === "/usage/agents") return json(USAGE_AGENTS);
 		if (p === "/usage/runtime" && method === "GET") {
 			return json(ccusageRuntime);
 		}
