@@ -19,6 +19,21 @@ fn instance_mutation_lock() -> &'static Mutex<()> {
 	LOCK.get_or_init(|| Mutex::new(()))
 }
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct GatewayProviderProjection {
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub anthropic_provider_id: Option<String>,
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub openai_provider_id: Option<String>,
+}
+
+impl GatewayProviderProjection {
+	fn is_empty(&self) -> bool {
+		self.anthropic_provider_id.is_none()
+			&& self.openai_provider_id.is_none()
+	}
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GatewayInstanceRecord {
 	pub id: String,
@@ -30,6 +45,11 @@ pub struct GatewayInstanceRecord {
 	pub port: Option<u16>,
 	pub auto_start: bool,
 	pub created_at: String,
+	#[serde(
+		default,
+		skip_serializing_if = "GatewayProviderProjection::is_empty"
+	)]
+	pub provider_projection: GatewayProviderProjection,
 }
 
 pub struct InstanceStore {
@@ -86,6 +106,23 @@ impl InstanceStore {
 					GatewayError::InstanceNotFound(record.id.clone())
 				})?;
 			*slot = record;
+			Ok(())
+		})
+	}
+
+	pub fn update_provider_projection(
+		&self,
+		id: &str,
+		projection: GatewayProviderProjection,
+	) -> Result<()> {
+		self.mutate_records(|records| {
+			let record = records
+				.iter_mut()
+				.find(|record| record.id == id)
+				.ok_or_else(|| {
+					GatewayError::InstanceNotFound(id.to_string())
+				})?;
+			record.provider_projection = projection;
 			Ok(())
 		})
 	}
@@ -194,6 +231,7 @@ mod tests {
 			port: None,
 			auto_start: false,
 			created_at: "2026-07-17T00:00:00Z".to_string(),
+			provider_projection: GatewayProviderProjection::default(),
 		}
 	}
 
@@ -245,5 +283,23 @@ mod tests {
 
 		let records = InstanceStore::new(dir.path()).list().expect("list");
 		assert_eq!(records.len(), WRITER_COUNT);
+	}
+
+	#[test]
+	fn old_instance_records_default_projection_provenance() {
+		let record: GatewayInstanceRecord = serde_json::from_str(
+			r#"{
+				"id": "legacy",
+				"name": "Legacy",
+				"kind": "external",
+				"base_url": "http://127.0.0.1:8317",
+				"port": null,
+				"auto_start": false,
+				"created_at": "2026-07-17T00:00:00Z"
+			}"#,
+		)
+		.expect("legacy record");
+
+		assert!(record.provider_projection.is_empty());
 	}
 }

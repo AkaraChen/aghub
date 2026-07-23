@@ -49,6 +49,7 @@ async fn provision_boot_and_manage() {
 		port: Some(port),
 		auto_start: false,
 		created_at: chrono::Utc::now().to_rfc3339(),
+		provider_projection: Default::default(),
 	};
 	let client =
 		ManagementClient::new(&record.base_url, &outcome.management_key)

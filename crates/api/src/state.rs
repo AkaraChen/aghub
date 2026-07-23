@@ -224,5 +224,6 @@ pub struct GatewayState {
 	pub provision: std::sync::Arc<
 		Mutex<Option<aghub_cliproxy::GatewayProvisionStatusDto>>,
 	>,
-	pub key_store: Box<dyn aghub_cliproxy::GatewayKeyStore + Send + Sync>,
+	pub key_store:
+		std::sync::Arc<dyn aghub_cliproxy::GatewayKeyStore + Send + Sync>,
 }

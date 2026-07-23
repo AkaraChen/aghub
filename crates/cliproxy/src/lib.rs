@@ -28,6 +28,6 @@ pub use dto::*;
 pub use error::{GatewayError, Result};
 pub use settings::{GatewaySettingSpec, GATEWAY_SETTINGS};
 pub use store::{
-	GatewayInstanceRecord, GatewayKeyStore, InstanceStore,
-	NativeGatewayKeyStore,
+	GatewayInstanceRecord, GatewayKeyStore, GatewayProviderProjection,
+	InstanceStore, NativeGatewayKeyStore,
 };

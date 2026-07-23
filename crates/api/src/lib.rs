@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use log::{debug, error, info, warn};
 use rocket::{
-	fairing::{Fairing, Info, Kind},
+	fairing::{AdHoc, Fairing, Info, Kind},
 	Data, Request, Response,
 };
 
@@ -15,6 +15,7 @@ pub mod dto;
 pub mod editor_detection;
 pub mod error;
 pub mod extractors;
+mod gateway_projection;
 pub mod routes;
 pub mod state;
 
@@ -171,6 +172,16 @@ fn build_rocket(
 		options.app_data_dir.join("ccusage"),
 		options.ccusage_bundled_bin,
 	);
+	let cliproxy_root =
+		aghub_cliproxy::InstanceStore::new(&options.app_data_dir)
+			.root()
+			.to_path_buf();
+	if let Err(error) = aghub_cliproxy::provision::reconcile_installation(
+		&cliproxy_root,
+		aghub_cliproxy::provision::PINNED_VERSION,
+	) {
+		warn!("gateway install reconciliation failed: {error}");
+	}
 	let allowed_origins = rocket_cors::AllowedOrigins::some(
 		&options.allowed_origins,
 		&options.allowed_origin_regexes,
@@ -206,7 +217,7 @@ fn build_rocket(
 			app_data_dir: options.app_data_dir.clone(),
 			runtime: aghub_cliproxy::lifecycle::GatewayRuntime::new(),
 			provision: std::sync::Arc::new(std::sync::Mutex::new(None)),
-			key_store: options.gateway_key_store,
+			key_store: std::sync::Arc::from(options.gateway_key_store),
 		})
 		.manage(crate::state::InferenceProviderState {
 			store: aghub_inference::InferenceProviderStore::new(
@@ -225,6 +236,35 @@ fn build_rocket(
 		.manage(crate::auth::ApiAuthState {
 			token: options.auth_token,
 		})
+		.attach(AdHoc::on_liftoff(
+			"gateway projection reconciliation",
+			|rocket| {
+				Box::pin(async move {
+					let Some(state) =
+						rocket.state::<crate::state::GatewayState>()
+					else {
+						return;
+					};
+					let app_data_dir = state.app_data_dir.clone();
+					let key_store = std::sync::Arc::clone(&state.key_store);
+					tokio::spawn(async move {
+						let report = crate::gateway_projection::
+							reconcile_gateway_providers(
+								&app_data_dir,
+								key_store.as_ref(),
+							)
+							.await;
+						for failure in report.failures {
+							warn!(
+								"gateway '{}' projection reconciliation \
+								 failed: {}",
+								failure.instance_id, failure.message
+							);
+						}
+					});
+				})
+			},
+		))
 		.mount(
 			"/api/v1",
 			routes![

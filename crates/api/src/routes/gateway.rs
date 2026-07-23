@@ -32,47 +32,25 @@ use aghub_cliproxy::{
 	UpdateGatewayInstanceRequest, UpdateGatewaySettingRequest,
 	UploadGatewayAuthFileRequest,
 };
-use aghub_inference::{
-	CreateInferenceProvider, InferenceProviderFormat,
-	InferenceProviderRepository, InferenceProviderStore,
-	UpdateInferenceProvider,
-};
 
 use crate::auth::ApiAuth;
 use crate::error::{ApiCreated, ApiError, ApiNoContent, ApiResult};
 use crate::extractors::TrustedLocalOrigin;
+use crate::gateway_projection;
 use crate::state::GatewayState;
-
-/// Marks inference inventory entries mirrored from gateway instances.
-const GATEWAY_PRESET: &str = "aghub-gateway";
-
-/// Keyring account for the managed instance's management key. Fixed (not
-/// per-instance): the key unlocks `~/.cli-proxy-api/config.yaml`, which
-/// outlives any instance record — CLIProxyAPI bcrypt-hashes the key in the
-/// file, so losing our plaintext copy would orphan the user's config after
-/// a delete/re-create cycle.
-const MANAGED_KEY_ID: &str = "managed-default";
-
-fn key_id(record: &GatewayInstanceRecord) -> &str {
-	match record.kind {
-		GatewayInstanceKind::Managed => MANAGED_KEY_ID,
-		GatewayInstanceKind::External => &record.id,
-	}
-}
 
 fn store(state: &State<GatewayState>) -> InstanceStore {
 	InstanceStore::new(&state.app_data_dir)
-}
-
-fn inference_store(state: &State<GatewayState>) -> InferenceProviderStore {
-	InferenceProviderStore::new(state.app_data_dir.clone())
 }
 
 fn management_client(
 	state: &State<GatewayState>,
 	record: &GatewayInstanceRecord,
 ) -> Result<Option<ManagementClient>, ApiError> {
-	let Some(key) = state.key_store.get_key(key_id(record))? else {
+	let Some(key) = state
+		.key_store
+		.get_key(gateway_projection::key_id(record))?
+	else {
 		return Ok(None);
 	};
 	Ok(Some(ManagementClient::new(&record.base_url, &key)?))
@@ -135,138 +113,6 @@ async fn instance_dto(
 	}
 }
 
-/// First key in the instance's `api-keys` is the credential agents use to
-/// call the gateway; create one when the list is empty.
-async fn ensure_gateway_key(
-	client: &ManagementClient,
-) -> Result<String, GatewayError> {
-	let keys = client.api_keys().await?;
-	if let Some(first) = keys.first() {
-		return Ok(first.clone());
-	}
-	let generated = format!("sk-aghub-{}", uuid::Uuid::new_v4().simple());
-	client
-		.set_api_keys(std::slice::from_ref(&generated))
-		.await?;
-	Ok(generated)
-}
-
-/// Inventory latin names must be pure lowercase a-z (see
-/// `clean_latin_name` in the inference store), so the instance id's hex
-/// prefix is mapped 0-f → a-p to form a stable, letters-only slug.
-fn gateway_latin_names(record: &GatewayInstanceRecord) -> (String, String) {
-	let slug: String = record
-		.id
-		.chars()
-		.filter(char::is_ascii_hexdigit)
-		.take(8)
-		.map(|c| {
-			let value = c.to_digit(16).unwrap_or(0) as u8;
-			(b'a' + value) as char
-		})
-		.collect();
-	(format!("gateway{slug}"), format!("gateway{slug}openai"))
-}
-
-/// Mirror an instance into the inference inventory as two provider entries
-/// (per-wire-format, see module docs). Existing per-agent bindings then
-/// handle the actual wiring; nothing here touches agent config files.
-async fn sync_inference_providers(
-	state: &State<GatewayState>,
-	record: &GatewayInstanceRecord,
-	client: &ManagementClient,
-) -> Result<(), ApiError> {
-	let gateway_key = ensure_gateway_key(client).await?;
-	// Model list import (official panel parity): populate the mirrored
-	// entries with what the gateway actually serves so bindings offer a
-	// picker instead of a blank field. Both entries get the full list —
-	// cross-protocol serving (e.g. Claude Code on a Gemini account) is the
-	// point of the gateway. Best-effort: an empty list only means manual
-	// model entry, so a failure is logged, not fatal.
-	let models = match client.list_models(&gateway_key).await {
-		Ok(models) => models,
-		Err(error) => {
-			log::warn!(
-				"gateway '{}': model list import failed: {error}",
-				record.name
-			);
-			Vec::new()
-		}
-	};
-	let inventory = inference_store(state);
-	let base = record.base_url.trim_end_matches('/').to_string();
-	let (anthropic_name, openai_name) = gateway_latin_names(record);
-	let entries = [
-		(
-			anthropic_name,
-			record.name.clone(),
-			InferenceProviderFormat::Anthropic,
-			base.clone(),
-		),
-		(
-			openai_name,
-			format!("{} (OpenAI)", record.name),
-			InferenceProviderFormat::OpenAiResponses,
-			format!("{base}/v1"),
-		),
-	];
-	for (latin_name, display_name, format, api_base_url) in entries {
-		let existing = inventory
-			.list()
-			.map_err(ApiError::from)?
-			.into_iter()
-			.find(|provider| provider.latin_name == latin_name);
-		match existing {
-			Some(provider) => {
-				inventory
-					.update(
-						&provider.id,
-						UpdateInferenceProvider {
-							display_name: Some(display_name),
-							api_base_url: Some(api_base_url),
-							api_key: Some(gateway_key.clone()),
-							models: (!models.is_empty())
-								.then(|| models.clone()),
-							..Default::default()
-						},
-					)
-					.map_err(ApiError::from)?;
-			}
-			None => {
-				inventory
-					.create(CreateInferenceProvider {
-						latin_name,
-						display_name,
-						format,
-						api_base_url,
-						preset: Some(GATEWAY_PRESET.to_string()),
-						api_key: gateway_key.clone(),
-						models: models.clone(),
-					})
-					.map_err(ApiError::from)?;
-			}
-		}
-	}
-	Ok(())
-}
-
-fn remove_inference_providers(
-	state: &State<GatewayState>,
-	record: &GatewayInstanceRecord,
-) -> Result<(), ApiError> {
-	let inventory = inference_store(state);
-	let (anthropic_name, openai_name) = gateway_latin_names(record);
-	for provider in inventory.list().map_err(ApiError::from)? {
-		let mirrored = provider.preset.as_deref() == Some(GATEWAY_PRESET)
-			&& (provider.latin_name == anthropic_name
-				|| provider.latin_name == openai_name);
-		if mirrored {
-			inventory.delete(&provider.id).map_err(ApiError::from)?;
-		}
-	}
-	Ok(())
-}
-
 // ---- instances --------------------------------------------------------
 
 #[get("/gateway/instances")]
@@ -313,6 +159,7 @@ pub async fn create_managed_gateway(
 		port: Some(port),
 		auto_start: false,
 		created_at: chrono::Utc::now().to_rfc3339(),
+		provider_projection: Default::default(),
 	};
 	store(state)
 		.insert(record.clone())
@@ -340,13 +187,14 @@ pub async fn create_external_gateway(
 		port: None,
 		auto_start: false,
 		created_at: chrono::Utc::now().to_rfc3339(),
+		provider_projection: Default::default(),
 	};
 	store(state)
 		.insert(record.clone())
 		.map_err(ApiError::from)?;
 	if let Err(error) = state
 		.key_store
-		.set_key(key_id(&record), &request.management_key)
+		.set_key(gateway_projection::key_id(&record), &request.management_key)
 	{
 		if let Err(cleanup) = store(state).remove(&record.id) {
 			log::error!(
@@ -356,28 +204,33 @@ pub async fn create_external_gateway(
 		}
 		return Err(ApiError::from(error));
 	}
-	if let Err(error) = sync_inference_providers(state, &record, &client).await
+	if let Err(error) = gateway_projection::sync_gateway_providers(
+		&state.app_data_dir,
+		&record,
+		&client,
+	)
+	.await
 	{
-		if let Err(cleanup) = remove_inference_providers(state, &record) {
+		if let Err(cleanup) = gateway_projection::remove_gateway_instance(
+			&state.app_data_dir,
+			&record.id,
+		) {
 			log::error!(
-				"gateway '{}': failed to roll back inference providers: {}",
+				"gateway '{}': failed to roll back instance projection: {}",
 				record.name,
-				cleanup.body.error
+				cleanup
 			);
 		}
-		if let Err(cleanup) = store(state).remove(&record.id) {
-			log::error!(
-				"gateway '{}': failed to roll back instance record: {cleanup}",
-				record.name
-			);
-		}
-		if let Err(cleanup) = state.key_store.delete_key(key_id(&record)) {
+		if let Err(cleanup) = state
+			.key_store
+			.delete_key(gateway_projection::key_id(&record))
+		{
 			log::error!(
 				"gateway '{}': failed to roll back management key: {cleanup}",
 				record.name
 			);
 		}
-		return Err(error);
+		return Err(ApiError::from(error));
 	}
 	Ok((Status::Created, Json(instance_dto(state, &record).await)))
 }
@@ -402,7 +255,9 @@ pub async fn update_gateway_instance(
 			record.base_url = base_url.trim_end_matches('/').to_string();
 		}
 		if let Some(key) = &request.management_key {
-			state.key_store.set_key(key_id(&record), key)?;
+			state
+				.key_store
+				.set_key(gateway_projection::key_id(&record), key)?;
 		}
 	} else if request.base_url.is_some() || request.management_key.is_some() {
 		return Err(ApiError::new(
@@ -419,7 +274,13 @@ pub async fn update_gateway_instance(
 	// instance; a rename alone should not fail on an offline gateway.
 	if let Ok(Some(client)) = management_client(state, &record) {
 		if client.ping().await.is_ok() {
-			sync_inference_providers(state, &record, &client).await?;
+			gateway_projection::sync_gateway_providers(
+				&state.app_data_dir,
+				&record,
+				&client,
+			)
+			.await
+			.map_err(ApiError::from)?;
 		}
 	}
 	Ok(Json(instance_dto(state, &record).await))
@@ -438,8 +299,8 @@ pub async fn delete_gateway_instance(
 		// keep running (the config stays the user's either way).
 		let _ = state.runtime.stop(&record).await;
 	}
-	remove_inference_providers(state, &record)?;
-	store(state).remove(id).map_err(ApiError::from)?;
+	gateway_projection::remove_gateway_instance(&state.app_data_dir, id)
+		.map_err(ApiError::from)?;
 	// The managed key stays: it unlocks the user-owned config.yaml, which
 	// survives the instance record (re-creating the instance reuses both).
 	if record.kind == GatewayInstanceKind::External {
@@ -475,17 +336,21 @@ pub async fn start_gateway_instance(
 		))
 	})?;
 
-	let known_key = state.key_store.get_key(key_id(&record))?;
+	let known_key = state
+		.key_store
+		.get_key(gateway_projection::key_id(&record))?;
+	let config_dir = bootstrap::default_config_dir().map_err(ApiError::from)?;
 	let outcome = bootstrap::ensure_config(
-		&bootstrap::default_config_dir(),
+		&config_dir,
 		record.port.unwrap_or(bootstrap::DEFAULT_PORT),
 		known_key.as_deref(),
 	)
 	.map_err(ApiError::from)?;
 	if known_key.as_deref() != Some(outcome.management_key.as_str()) {
-		state
-			.key_store
-			.set_key(key_id(&record), &outcome.management_key)?;
+		state.key_store.set_key(
+			gateway_projection::key_id(&record),
+			&outcome.management_key,
+		)?;
 	}
 	// An existing config.yaml owns the port; follow it.
 	if record.port != Some(outcome.port) {
@@ -503,7 +368,13 @@ pub async fn start_gateway_instance(
 		.start(&record, &bin, &outcome.config_path, &client)
 		.await
 		.map_err(ApiError::from)?;
-	sync_inference_providers(state, &record, &client).await?;
+	gateway_projection::sync_gateway_providers(
+		&state.app_data_dir,
+		&record,
+		&client,
+	)
+	.await
+	.map_err(ApiError::from)?;
 	Ok(Json(instance_dto(state, &record).await))
 }
 
@@ -528,26 +399,13 @@ pub async fn start_gateway_provision(
 	state: &State<GatewayState>,
 	request: Json<StartGatewayProvisionRequest>,
 ) -> ApiResult<GatewayProvisionStatusDto> {
-	{
-		let current = state.provision.lock().expect("provision lock");
-		if let Some(status) = current.as_ref() {
-			if status.phase == GatewayProvisionPhase::Downloading
-				|| status.phase == GatewayProvisionPhase::Extracting
-			{
-				return Ok(Json(status.clone()));
-			}
-		}
+	let version = provision::PINNED_VERSION.to_string();
+	let (status, started) = begin_provision(&state.provision, &version);
+	if !started {
+		return Ok(Json(status));
 	}
 	let root = store(state).root().to_path_buf();
 	let slot = std::sync::Arc::clone(&state.provision);
-	let version = provision::PINNED_VERSION.to_string();
-	set_provision(
-		&slot,
-		&version,
-		GatewayProvisionPhase::Downloading,
-		Some(0),
-		None,
-	);
 	let task_slot = std::sync::Arc::clone(&slot);
 	let task_version = version.clone();
 	let mirror = request.mirror.clone();
@@ -586,12 +444,6 @@ pub async fn start_gateway_provision(
 			),
 		}
 	});
-	let status = state
-		.provision
-		.lock()
-		.expect("provision lock")
-		.clone()
-		.expect("provision status just set");
 	Ok(Json(status))
 }
 
@@ -616,6 +468,28 @@ pub async fn gateway_provision_status(
 			message: None,
 		});
 	Ok(Json(status))
+}
+
+fn begin_provision(
+	slot: &std::sync::Arc<std::sync::Mutex<Option<GatewayProvisionStatusDto>>>,
+	version: &str,
+) -> (GatewayProvisionStatusDto, bool) {
+	let mut current = slot.lock().expect("provision lock");
+	if let Some(status) = current.as_ref() {
+		if status.phase == GatewayProvisionPhase::Downloading
+			|| status.phase == GatewayProvisionPhase::Extracting
+		{
+			return (status.clone(), false);
+		}
+	}
+	let status = GatewayProvisionStatusDto {
+		version: version.to_string(),
+		phase: GatewayProvisionPhase::Downloading,
+		progress: Some(0),
+		message: None,
+	};
+	*current = Some(status.clone());
+	(status, true)
 }
 
 fn set_provision(
@@ -789,7 +663,13 @@ pub async fn put_gateway_api_keys(
 		.await
 		.map_err(ApiError::from)?;
 	// Agents authenticate with the first key; keep the mirror in step.
-	sync_inference_providers(state, &record, &client).await?;
+	gateway_projection::sync_gateway_providers(
+		&state.app_data_dir,
+		&record,
+		&client,
+	)
+	.await
+	.map_err(ApiError::from)?;
 	Ok(Json(GatewayApiKeysDto {
 		keys: client.api_keys().await.map_err(ApiError::from)?,
 	}))
@@ -883,7 +763,13 @@ pub async fn put_gateway_config_file(
 		.put_config_yaml(&request.content)
 		.await
 		.map_err(ApiError::from)?;
-	sync_inference_providers(state, &record, &client).await?;
+	gateway_projection::sync_gateway_providers(
+		&state.app_data_dir,
+		&record,
+		&client,
+	)
+	.await
+	.map_err(ApiError::from)?;
 	Ok(rocket::response::status::NoContent)
 }
 
@@ -1125,4 +1011,34 @@ pub async fn gateway_usage(
 		std::collections::HashMap<String, GatewayKeyUsageDto>,
 	> = client.api_key_usage().await.map_err(ApiError::from)?;
 	Ok(Json(GatewayUsageDto { providers }))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn provision_begin_grants_one_concurrent_caller() {
+		const CALLER_COUNT: usize = 16;
+
+		let slot = std::sync::Arc::new(std::sync::Mutex::new(None));
+		let barrier =
+			std::sync::Arc::new(std::sync::Barrier::new(CALLER_COUNT));
+		let mut callers = Vec::with_capacity(CALLER_COUNT);
+		for _ in 0..CALLER_COUNT {
+			let slot = std::sync::Arc::clone(&slot);
+			let barrier = std::sync::Arc::clone(&barrier);
+			callers.push(std::thread::spawn(move || {
+				barrier.wait();
+				begin_provision(&slot, provision::PINNED_VERSION).1
+			}));
+		}
+		let started = callers
+			.into_iter()
+			.map(|caller| caller.join().expect("caller"))
+			.filter(|started| *started)
+			.count();
+
+		assert_eq!(started, 1);
+	}
 }

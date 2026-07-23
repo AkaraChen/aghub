@@ -7,6 +7,8 @@ use rocket::response::{self, Responder};
 use rocket::serde::json::serde_json;
 use serde::Serialize;
 
+use crate::gateway_projection::GatewayProjectionError;
+
 #[derive(Serialize)]
 pub struct ErrorBody {
 	pub error: String,
@@ -307,7 +309,8 @@ impl From<GatewayError> for ApiError {
 					"GATEWAY_DOWNLOAD_ERROR",
 				)
 			}
-			GatewayError::ConfigFile { .. } => ApiError::new(
+			GatewayError::HomeDirectoryUnavailable
+			| GatewayError::ConfigFile { .. } => ApiError::new(
 				Status::UnprocessableEntity,
 				e.to_string(),
 				"GATEWAY_CONFIG_ERROR",
@@ -322,6 +325,15 @@ impl From<GatewayError> for ApiError {
 			| GatewayError::Io(_)
 			| GatewayError::Json(_)
 			| GatewayError::Http(_) => ApiError::internal(e.to_string()),
+		}
+	}
+}
+
+impl From<GatewayProjectionError> for ApiError {
+	fn from(error: GatewayProjectionError) -> Self {
+		match error {
+			GatewayProjectionError::Gateway(error) => Self::from(error),
+			GatewayProjectionError::Inference(error) => Self::from(error),
 		}
 	}
 }
