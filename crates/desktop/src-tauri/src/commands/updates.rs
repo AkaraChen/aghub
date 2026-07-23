@@ -1,3 +1,5 @@
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::time::Duration;
 
 use semver::Version;
@@ -147,8 +149,10 @@ async fn github_auth_token() -> Option<String> {
 	}
 
 	let mut command = tokio::process::Command::new("gh");
+	#[cfg(windows)]
+	command.as_std_mut().creation_flags(crate::CREATE_NO_WINDOW);
 	command
-		.args(["auth", "token"])
+		.args(["auth", "token", "--hostname", "github.com"])
 		.env("GH_PROMPT_DISABLED", "1")
 		.kill_on_drop(true);
 	let output = tokio::time::timeout(GITHUB_AUTH_TIMEOUT, command.output())
