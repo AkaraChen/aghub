@@ -1,12 +1,14 @@
-import { Button, Checkbox, Label, Modal } from "@heroui/react";
+import { Button, Card, Checkbox, Label, Modal, Spinner } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import { AgentSelector } from "../../../components/agent-selector";
 import { InstallTargetSelector } from "../../../components/install-target-selector";
 import { ResultStatusItem } from "../../../components/result-status-item";
+import { SkillAudit } from "../../../components/skill-audit";
 import { SkillInfoCard } from "../../../components/skill-info-card";
-import type { MarketSkill } from "../../../generated/dto";
+import type { AuditReportDto, MarketSkill } from "../../../generated/dto";
 import type { InstallResult } from "../../../lib/install-utils";
 import type { Project } from "../../../lib/store";
+import type { InstallPhase } from "../hooks/use-skill-install";
 
 interface InstallModalProps {
 	isOpen: boolean;
@@ -14,7 +16,7 @@ interface InstallModalProps {
 	selectedAgents: Set<string>;
 	onSelectedAgentsChange: (agents: Set<string>) => void;
 	installResults: InstallResult[];
-	isInstalling: boolean;
+	phase: InstallPhase;
 	skillAgents: ReturnType<
 		typeof import("../hooks/use-skill-install").useSkillInstall
 	>["skillAgents"];
@@ -26,8 +28,11 @@ interface InstallModalProps {
 	selectedProjectId: string | null;
 	onSelectedProjectIdChange: (id: string | null) => void;
 	projects: Project[];
+	skillAuditReady: boolean;
+	audit: AuditReportDto | null;
 	onClose: () => void;
 	onInstall: () => void;
+	onConfirmInstall: () => void;
 }
 
 export function InstallModal({
@@ -36,7 +41,7 @@ export function InstallModal({
 	selectedAgents,
 	onSelectedAgentsChange,
 	installResults,
-	isInstalling,
+	phase,
 	skillAgents,
 	installAll,
 	onInstallAllChange,
@@ -46,16 +51,24 @@ export function InstallModal({
 	selectedProjectId,
 	onSelectedProjectIdChange,
 	projects,
+	skillAuditReady,
+	audit,
 	onClose,
 	onInstall,
+	onConfirmInstall,
 }: InstallModalProps) {
 	const { t } = useTranslation();
 
 	return (
-		<Modal.Backdrop isOpen={isOpen} onOpenChange={onClose}>
+		<Modal.Backdrop
+			isOpen={isOpen}
+			isDismissable={phase !== "installing"}
+			isKeyboardDismissDisabled={phase === "installing"}
+			onOpenChange={onClose}
+		>
 			<Modal.Container>
 				<Modal.Dialog className="max-w-md">
-					<Modal.CloseTrigger />
+					<Modal.CloseTrigger isDisabled={phase === "installing"} />
 					<Modal.Header>
 						<Modal.Heading>{t("installSkill")}</Modal.Heading>
 					</Modal.Header>
@@ -71,7 +84,7 @@ export function InstallModal({
 							/>
 						)}
 
-						{installResults.length === 0 && (
+						{phase === "picker" && (
 							<div className="space-y-4">
 								<p className="text-sm text-muted">
 									{t("selectAgentsForSkill")}
@@ -93,15 +106,19 @@ export function InstallModal({
 									}
 									variant="secondary"
 								>
-									<Checkbox.Control>
-										<Checkbox.Indicator />
-									</Checkbox.Control>
-									<Checkbox.Content className="flex flex-col items-start gap-0.5">
-										<Label className="text-sm font-medium">
-											{t("installAllSkills")}
-										</Label>
-										<span className="text-xs text-muted">
-											{t("installAllSkillsDescription")}
+									<Checkbox.Content>
+										<Checkbox.Control>
+											<Checkbox.Indicator />
+										</Checkbox.Control>
+										<span className="flex flex-col items-start gap-0.5">
+											<Label className="text-sm font-medium">
+												{t("installAllSkills")}
+											</Label>
+											<span className="text-xs text-muted">
+												{t(
+													"installAllSkillsDescription",
+												)}
+											</span>
 										</span>
 									</Checkbox.Content>
 								</Checkbox>
@@ -121,29 +138,70 @@ export function InstallModal({
 							</div>
 						)}
 
-						{installResults.length > 0 && (
-							<div className="space-y-3">
-								{installResults.map((result) => (
-									<ResultStatusItem
-										key={result.agentId}
-										displayName={result.displayName}
-										status={result.status}
-										statusText={
-											result.status === "pending"
-												? t("installing")
-												: result.status === "success"
-													? t("installSuccess")
-													: ""
-										}
-										error={result.error}
-									/>
-								))}
-							</div>
+						{phase !== "picker" &&
+							(phase === "auditing" || audit) && (
+								<Card variant="secondary" className="mb-4">
+									<Card.Content className="space-y-3">
+										<p className="text-sm font-medium text-foreground">
+											{t("securityAudit")}
+										</p>
+										{phase === "auditing" ? (
+											<div className="flex items-center justify-center gap-3 py-6 text-sm text-muted">
+												<Spinner size="sm" />
+												{t("auditing")}
+											</div>
+										) : (
+											audit && (
+												<>
+													{phase === "review" && (
+														<p className="text-sm text-danger">
+															{t(
+																"auditBlockedHint",
+															)}
+														</p>
+													)}
+													<SkillAudit
+														report={audit}
+														embedded
+													/>
+												</>
+											)
+										)}
+									</Card.Content>
+								</Card>
+							)}
+
+						{(phase === "installing" || phase === "done") && (
+							<Card variant="secondary">
+								<Card.Content className="space-y-3">
+									<p className="text-sm font-medium text-foreground">
+										{phase === "done"
+											? t("installComplete")
+											: t("installingSkills")}
+									</p>
+									{installResults.map((result) => (
+										<ResultStatusItem
+											key={result.agentId}
+											displayName={result.displayName}
+											status={result.status}
+											statusText={
+												result.status === "pending"
+													? t("installing")
+													: result.status ===
+														  "success"
+														? t("installSuccess")
+														: ""
+											}
+											error={result.error}
+										/>
+									))}
+								</Card.Content>
+							</Card>
 						)}
 					</Modal.Body>
 
 					<Modal.Footer>
-						{installResults.length === 0 && (
+						{phase === "picker" && (
 							<>
 								<Button slot="close" variant="secondary">
 									{t("cancel")}
@@ -152,17 +210,39 @@ export function InstallModal({
 									onPress={onInstall}
 									isDisabled={
 										selectedAgents.size === 0 ||
-										isInstalling ||
+										!skillAuditReady ||
 										(installToProject && !selectedProjectId)
 									}
 								>
-									{isInstalling
-										? t("installing")
-										: t("install")}
+									{t("install")}
 								</Button>
 							</>
 						)}
-						{installResults.length > 0 && (
+						{phase === "auditing" && (
+							<>
+								<Button slot="close" variant="secondary">
+									{t("cancel")}
+								</Button>
+								<Button isDisabled>{t("auditing")}</Button>
+							</>
+						)}
+						{phase === "review" && (
+							<>
+								<Button slot="close" variant="secondary">
+									{t("cancel")}
+								</Button>
+								<Button
+									variant="danger"
+									onPress={onConfirmInstall}
+								>
+									{t("installAnyway")}
+								</Button>
+							</>
+						)}
+						{phase === "installing" && (
+							<Button isDisabled>{t("installing")}</Button>
+						)}
+						{phase === "done" && (
 							<Button slot="close" variant="secondary">
 								{t("done")}
 							</Button>

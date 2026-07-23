@@ -15,9 +15,14 @@
 		"__e2eOnboarding",
 	);
 	const persistedStoreKey = `aghub-e2e-store:${onboardingMode ?? "default"}`;
+	const initialDeepLink = new URLSearchParams(window.location.search).get(
+		"e2eDeepLink",
+	);
 
 	const defaultEntries = [
-		["version", 9],
+		["version", 10],
+		["skillAuditEnabled", true],
+		["trustedSkills", []],
 		[
 			"onboardingProgress",
 			{
@@ -83,7 +88,9 @@
 			case "plugin:autostart|is_enabled":
 				return Promise.resolve(false);
 			case "plugin:deep-link|get_current":
-				return Promise.resolve(null);
+				return Promise.resolve(
+					initialDeepLink ? [initialDeepLink] : null,
+				);
 			case "plugin:menu|new": {
 				const rid = nextMenuRid++;
 				return Promise.resolve([

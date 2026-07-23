@@ -626,6 +626,106 @@ export default {
 	selectFileOrFolder: "选择包含 SKILL.md 的文件或文件夹",
 	skillImported: "技能导入成功",
 	importError: "技能导入失败: {{error}}",
+	installAnyway: "仍要安装",
+	auditBlockedHint: "该技能未通过安全审计。请查看下列发现,确认后仍要安装。",
+	auditSyncBlockedHint:
+		"该技能未通过安全审计。请查看下列发现，确认后仍要同步。",
+	auditing: "审计中",
+	securityAudit: "安全审计",
+	auditFailed: "安全审计未能完成。在审计成功前无法导入。",
+	auditVerdictBenign: "良性",
+	auditVerdictSuspicious: "可疑",
+	auditVerdictMalicious: "恶意",
+	auditSeverityInfo: "信息",
+	auditSeverityLow: "低",
+	auditSeverityMedium: "中",
+	auditSeverityHigh: "高",
+	auditSeverityCritical: "严重",
+	auditCategoryCredentialExfil: "凭据外泄",
+	auditCategoryDataExfil: "数据外泄",
+	auditCategoryCommandInjection: "命令注入",
+	auditCategoryPromptInjection: "提示注入",
+	auditCategoryToolChaining: "工具链滥用",
+	auditCategoryPersistence: "持久化",
+	auditCategoryHostTamper: "主机篡改",
+	auditCategoryObfuscation: "混淆",
+	auditCategoryOther: "其他",
+	auditSummaryBenign: "未发现可疑行为",
+	auditSummarySuspicious: "发现可疑行为,建议查看下方详情",
+	auditSummaryMalicious: "发现恶意行为,请谨慎安装",
+	auditSummarySuspiciousInstalled: "此技能存在可疑行为",
+	auditSummaryMaliciousInstalled: "此技能存在恶意行为",
+	auditTrusted: "已信任",
+	auditTrustedHint: "已信任此技能,审计警告已忽略",
+	trustSkill: "信任此技能",
+	untrustSkill: "取消信任",
+	security: "安全",
+	trustedSkills: "信任的技能",
+	automaticSkillAudit: "自动扫描技能安全风险",
+	automaticSkillAuditDescription:
+		"在变更前和已安装技能中显示扫描结果。每次写入前仍会执行最终安全检查。",
+	skillAuditEnabled: "已开启自动技能扫描",
+	skillAuditDisabled: "已关闭自动技能扫描",
+	skillAuditPreferenceError: "无法更新技能扫描设置",
+	trustedSkillsDescription: "这些技能的安全审计警告已被忽略。",
+	noTrustedSkills: "暂无信任的技能",
+	auditFindingCount_other: "{{count}} 项",
+	auditEvidence_aghub_credential_file_exfil:
+		"读取 .ssh/.env/凭据文件并通过网络外发",
+	auditEvidence_aghub_download_pipe_execute:
+		"下载远程脚本并直接管道进 shell 执行",
+	auditEvidence_aghub_reverse_shell:
+		"建立反向 shell(socket 连接 + dup2/exec)",
+	auditEvidence_aghub_raw_ip_payload: "连接或从硬编码的裸 IP 地址拉取内容",
+	auditEvidence_aghub_external_payload_instruction:
+		"文档指示下载并运行外部二进制/脚本",
+	auditEvidence_aghub_known_exfil_host:
+		"引用了已知的一次性外发/粘贴/webhook 主机",
+	auditEvidence_aghub_reads_secret: "读取凭据文件或窃取密钥/环境变量",
+	auditEvidence_aghub_network_egress: "向网络端点发送数据",
+	auditEvidence_clawhub_host_platform_tamper:
+		"修改 agent 自身源码并重新构建(供应链自感染)",
+	auditEvidence_clawhub_memory_credential_storage:
+		"指示 agent 把令牌/密钥存进记忆或对话",
+	auditEvidence_clawhub_remote_recipe_fetch:
+		"运行时从远程端点拉取可变指令/配方",
+	auditEvidence_clawhub_mnemonic_argv: "把助记词/私钥作为命令行参数传递",
+	auditEvidence_clawhub_confirmation_bypass:
+		"用魔术令牌跳过危险命令的人工确认",
+	auditEvidence_clawhub_autonomous_answer_egress:
+		"自主循环向应答/提现端点发送数据",
+	auditEvidence_autonomy_abuse_generic: "绕过用户控制的无界自主行为",
+	auditEvidence_prompt_injection_unicode_steganography:
+		"隐藏的 Unicode 字符,用于隐形提示注入/隐写",
+	auditEvidence_sql_injection_generic:
+		"SQL 注入特征(关键字、永真式、数据库函数)",
+	auditEvidence_script_injection_generic: "恶意脚本注入特征",
+	auditEvidence_tool_chaining_abuse_generic:
+		"可疑的工具链调用,可能导致数据外泄",
+	auditEvidence_prompt_injection_generic:
+		"用于覆盖或强制恶意工具调用的提示词",
+	auditEvidence_command_injection_generic:
+		"命令注入特征(shell 操作符、系统命令、网络工具)",
+	auditEvidence_system_manipulation_generic: "系统篡改、提权与破坏性文件操作",
+	auditEvidence_capability_inflation_generic:
+		"通过能力膨胀操纵 skill 发现协议",
+	auditEvidence_code_execution_generic: "对不可信输入执行危险代码",
+	auditEvidence_embedded_elf_binary: "skill 包内嵌入 ELF 可执行文件头",
+	auditEvidence_embedded_pe_executable:
+		"skill 包内嵌入 PE(Windows)可执行文件头",
+	auditEvidence_embedded_macho_binary:
+		"skill 包内嵌入 Mach-O(macOS)可执行文件头",
+	auditEvidence_embedded_shebang_in_binary: "二进制内容中嵌入 shebang 脚本头",
+	auditEvidence_credential_harvesting_generic:
+		"可能泄露 API key、密码、令牌、证书等敏感信息",
+	auditEvidence_indirect_prompt_injection_generic:
+		"通过外部来源的指令操纵进行间接提示注入",
+	auditEvidence_coercive_injection_generic: "工具描述字段中的胁迫式提示注入",
+	auditEvidence_injection_invisible_chars: "隐藏的零宽或双向控制字符",
+	auditEvidence_injection_prompt_override: "针对 agent 的提示词覆盖语句",
+	auditEvidence_injection_hidden_comment: "隐藏在 HTML 注释中的指令",
+	auditEvidence_aghub_dataflow_chain:
+		"读取机密并外发到网络 — 可能的数据外泄链",
 	selectedPath: "已选路径",
 	file: "文件",
 	folder: "文件夹",
@@ -697,6 +797,7 @@ export default {
 	validationCommandRequired: "请输入命令。",
 	validationUrlRequired: "请输入 URL。",
 	validationUrlInvalid: "请输入有效的 URL。",
+	validationUrlHttpsOnly: "仅支持 HTTPS 链接。",
 	validationUrlProtocol: "URL 必须以 http:// 或 https:// 开头。",
 	validationTimeoutPositiveInteger: "超时时间必须是正整数。",
 	validationAgentsRequired: "请至少选择一个代理。",
@@ -878,6 +979,7 @@ export default {
 	syncFromSource: "从来源同步",
 	syncSkill: "同步 Skill",
 	syncingSkill: "同步中...",
+	syncAnyway: "仍要同步",
 	skillSyncedSuccessfully: "Skill 同步成功",
 	skillNotFoundInRepo: "在此分支的仓库中未找到此 Skill。",
 	skillFoundInRepo: "在仓库中找到 Skill",

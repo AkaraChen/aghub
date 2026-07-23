@@ -9,6 +9,7 @@ import {
 	LinkIcon,
 	MagnifyingGlassIcon,
 	PlusIcon,
+	ShieldCheckIcon,
 	StarIcon as StarIconSolid,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
@@ -21,7 +22,9 @@ import { siGithub } from "simple-icons";
 import { useLocation } from "wouter";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
+import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
 import { useFavorites } from "../hooks/use-favorites";
+import { useTrustedSkills } from "../hooks/use-trusted-skills";
 import { useCurrentCodeEditor } from "../hooks/use-integrations";
 import { cn, filterItemsByAgentIds } from "../lib/utils";
 import { openWithEditorMutationOptions } from "../requests/integrations";
@@ -29,10 +32,12 @@ import {
 	globalSkillLockQueryOptions,
 	openSkillFolderMutationOptions,
 	projectSkillLockQueryOptions,
+	skillAuditQueryOptions,
 	skillContentQueryOptions,
 	skillTreeQueryOptions,
 } from "../requests/skills";
 import { ManageSkillAgentsDialog } from "./manage-skill-agents-dialog";
+import { SkillAudit, SkillAuditBadge } from "./skill-audit";
 import {
 	DeleteSkillDialog,
 	DeleteSkillLocationDialog,
@@ -40,6 +45,7 @@ import {
 import {
 	buildLocationGroups,
 	countTreeFiles,
+	getInstalledSkillAuditPaths,
 	hasSupplementarySkillFiles,
 	type LocationGroup,
 	type SkillGroup,
@@ -60,6 +66,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const [, setLocation] = useLocation();
 	const { allAgents, availableAgents } = useAgentAvailability();
 	const api = useApi();
+	const { skillAuditEnabled, skillAuditReady } = useSkillAuditPreference();
 
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [locationToDelete, setLocationToDelete] =
@@ -71,9 +78,11 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 
 	const { isSkillStarred, toggleSkillStar } = useFavorites();
 	const isStarred = isSkillStarred(group.items[0].name);
+	const { isSkillTrusted, setSkillTrusted } = useTrustedSkills();
 	const { selectedEditor } = useCurrentCodeEditor();
 
 	const skill = group.items[0];
+	const auditPaths = getInstalledSkillAuditPaths(group.items);
 	const primaryScope = skill.source ?? "global";
 	const skillQueryScope =
 		primaryScope === "project" && projectPath ? "project" : "global";
@@ -125,6 +134,18 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 			enabled: skillQueryEnabled,
 		}),
 	});
+
+	const { data: auditedSkill } = useQuery({
+		...skillAuditQueryOptions({
+			api,
+			paths: auditPaths,
+			enabled: skillAuditReady && skillAuditEnabled,
+		}),
+	});
+	const skillAudit = skillAuditEnabled ? auditedSkill : undefined;
+	const isTrusted = skillAudit
+		? isSkillTrusted(skill.name, skillAudit.assessment_digest)
+		: false;
 
 	const currentSkillSource = useMemo(() => {
 		const skillItem = group.items[0];
@@ -219,9 +240,28 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 					<Card>
 						<Card.Header className="flex flex-row items-start justify-between gap-3">
 							<div className="min-w-0 flex-1 select-text">
-								<h2 className="text-xl font-semibold text-foreground truncate">
-									{skill.name}
-								</h2>
+								<div className="flex items-center gap-1.5">
+									<h2 className="text-xl font-semibold text-foreground truncate">
+										{skill.name}
+									</h2>
+									{skillAudit &&
+										(isTrusted ? (
+											<span
+												role="img"
+												className="inline-flex size-4 shrink-0"
+												aria-label={t("auditTrusted")}
+											>
+												<ShieldCheckIcon
+													aria-hidden
+													className="size-4 shrink-0 text-success"
+												/>
+											</span>
+										) : (
+											<SkillAuditBadge
+												report={skillAudit}
+											/>
+										))}
+								</div>
 								{skill.description && (
 									<Card.Description className="mt-2">
 										{skill.description}
@@ -296,6 +336,54 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 						</Card.Header>
 
 						<Card.Content className="flex flex-col gap-6">
+							{skillAudit &&
+								skillAudit.verdict !== "benign" &&
+								(isTrusted ? (
+									<div className="flex items-center justify-between gap-3 rounded-lg border border-separator bg-surface-secondary px-3 py-2">
+										<span className="flex items-center gap-2 text-sm text-muted">
+											<ShieldCheckIcon className="size-4 shrink-0 text-success" />
+											{t("auditTrustedHint")}
+										</span>
+										<Button
+											variant="ghost"
+											size="sm"
+											onPress={() =>
+												setSkillTrusted(
+													skill.name,
+													skillAudit.assessment_digest,
+													false,
+												)
+											}
+										>
+											{t("untrustSkill")}
+										</Button>
+									</div>
+								) : (
+									<div className="space-y-2">
+										<SkillAudit
+											key={skillAudit.assessment_digest}
+											report={skillAudit}
+											embedded
+											installed
+										/>
+										<div className="flex justify-end">
+											<Button
+												variant="secondary"
+												size="sm"
+												onPress={() =>
+													setSkillTrusted(
+														skill.name,
+														skillAudit.assessment_digest,
+														true,
+													)
+												}
+											>
+												{t("trustSkill")}
+											</Button>
+										</div>
+									</div>
+								))}
+
 							{skill.tools.length > 0 && (
 								<div className="space-y-3">
 									<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
@@ -332,14 +420,19 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 															locationGroup,
 														)
 													}
-													onEditFolder={() =>
+													editorAvailable={Boolean(
+														selectedEditor,
+													)}
+													onEditFolder={() => {
+														if (!selectedEditor)
+															return;
 														openInEditorMutation.mutate(
 															{
 																path: locationGroup.sourcePath,
-																editor: selectedEditor!,
+																editor: selectedEditor,
 															},
-														)
-													}
+														);
+													}}
 													onOpenFolder={() =>
 														openFolderMutation.mutate(
 															locationGroup.sourcePath,

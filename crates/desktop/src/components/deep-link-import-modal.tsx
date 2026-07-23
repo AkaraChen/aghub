@@ -1,11 +1,16 @@
-import { Alert, Button, Card, Modal } from "@heroui/react";
+import { Alert, Button, Card, Checkbox, Modal, Spinner } from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { TransportDto } from "../generated/dto";
+import type { InstallSkillRequest, TransportDto } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
+import {
+	auditDisposition,
+	useAuditedMutation,
+} from "../hooks/use-audited-skill-run";
 import { useInstallTarget } from "../hooks/use-install-target";
+import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
 import { supportsMcp, supportsSkillMutation } from "../lib/agent-capabilities";
 import {
 	type DeepLinkImportIntent,
@@ -17,6 +22,7 @@ import { capture } from "../lib/analytics";
 import { AgentSelector } from "./agent-selector";
 import { InstallTargetSelector } from "./install-target-selector";
 import { ResultStatusItem } from "./result-status-item";
+import { SkillAudit } from "./skill-audit";
 import { SkillInfoCard } from "./skill-info-card";
 
 interface DeepLinkImportModalProps {
@@ -24,11 +30,26 @@ interface DeepLinkImportModalProps {
 	onComplete: () => void;
 }
 
-interface InstallVariables {
-	intent: DeepLinkImportIntent;
+interface McpInstallVariables {
+	intent: Extract<DeepLinkImportIntent, { kind: "mcp-config-install" }>;
 	selectedAgents: Set<string>;
 	installToProject: boolean;
 	selectedProject: { id: string; path: string } | null;
+}
+
+/**
+ * The skill install runs in two visible phases so the audit precedes any write:
+ * `auditing` (clone + audit) → either install straight away (Benign) or `review`
+ * (non-benign requires confirmation of the reviewed digest) → `installing` →
+ * `done`. MCP installs stay on the plain mutation and skip the audit card.
+ */
+interface SkillMarketCandidate {
+	readonly source: string;
+	readonly name: string;
+	readonly agents: readonly string[];
+	readonly scope: "global" | "project";
+	readonly projectPath: string | null;
+	readonly pendingResults: readonly InstallResult[];
 }
 
 function transportLabel(transport: TransportDto): string {
@@ -79,6 +100,7 @@ export function DeepLinkImportModal({
 	const queryClient = useQueryClient();
 	const api = useApi();
 	const { availableAgents } = useAgentAvailability();
+	const { skillAuditEnabled, skillAuditReady } = useSkillAuditPreference();
 	const {
 		projects,
 		installToProject,
@@ -122,38 +144,12 @@ export function DeepLinkImportModal({
 			: new Set();
 	}, [compatibleAgents]);
 
-	const installMutation = useMutation<
+	const mcpInstallMutation = useMutation<
 		InstallResult[],
 		Error,
-		InstallVariables,
-		{ pendingResults: InstallResult[] }
+		McpInstallVariables
 	>({
-		mutationFn: async (variables: InstallVariables) => {
-			const pendingResults = buildPendingResults(
-				variables.selectedAgents,
-				compatibleAgents,
-			);
-
-			if (variables.intent.kind === "skill-market-install") {
-				const response = await api.skills.install({
-					source: variables.intent.source,
-					agents: Array.from(variables.selectedAgents),
-					skills: [variables.intent.name],
-					scope: variables.installToProject ? "project" : "global",
-					project_path: variables.selectedProject?.path ?? null,
-					install_all: false,
-				});
-
-				return pendingResults.map((result) => ({
-					...result,
-					status: (response.success ? "success" : "error") as
-						"success" | "error",
-					error: response.success
-						? undefined
-						: t("skillInstallFailed"),
-				}));
-			}
-
+		mutationFn: async (variables: McpInstallVariables) => {
 			const scope = variables.installToProject ? "project" : "global";
 			const projectRoot = variables.selectedProject?.path;
 			const body = {
@@ -168,52 +164,175 @@ export function DeepLinkImportModal({
 				),
 			);
 
-			return pendingResults.map((result) => ({
-				...result,
-				status: "success" as const,
-			}));
-		},
-		onMutate: (variables) => {
-			const pendingResults = buildPendingResults(
+			return buildPendingResults(
 				variables.selectedAgents,
 				compatibleAgents,
-			);
-			return { pendingResults };
+			).map((result) => ({ ...result, status: "success" as const }));
 		},
-		onSuccess: (_data, variables) => {
-			if (intent?.kind === "skill-market-install") {
-				queryClient.invalidateQueries({
+		onSuccess: (_results, variables) => {
+			queryClient.invalidateQueries({ queryKey: queryKeys.mcps.all() });
+			capture("deep link imported", {
+				import_kind: "mcp",
+				agents: Array.from(variables.selectedAgents),
+				scope: variables.installToProject ? "project" : "global",
+			});
+		},
+	});
+
+	const isSkillInstall = intent?.kind === "skill-market-install";
+
+	const createSkillCandidate = (
+		skillIntent: Extract<
+			DeepLinkImportIntent,
+			{ kind: "skill-market-install" }
+		>,
+	): SkillMarketCandidate => ({
+		source: skillIntent.source,
+		name: skillIntent.name,
+		agents: Array.from(selectedAgents),
+		scope: installToProject ? "project" : "global",
+		projectPath: selectedProject?.path ?? null,
+		pendingResults: buildPendingResults(selectedAgents, compatibleAgents),
+	});
+
+	const buildSkillRequest = (
+		candidate: SkillMarketCandidate,
+		overrides: Partial<InstallSkillRequest>,
+	): InstallSkillRequest => ({
+		source: candidate.source,
+		agents: [...candidate.agents],
+		skills: [candidate.name],
+		scope: candidate.scope,
+		project_path: candidate.projectPath,
+		install_all: false,
+		expected_content_digest: null,
+		confirmed_assessment_digest: null,
+		session_id: null,
+		audit_only: false,
+		...overrides,
+	});
+
+	const skillInstall = useAuditedMutation<
+		SkillMarketCandidate,
+		InstallResult[]
+	>({
+		audit: async (candidate, signal) => {
+			const response = await api.skills.install(
+				buildSkillRequest(candidate, { audit_only: true }),
+				signal,
+			);
+			if (!response.audit) throw new Error(t("auditFailed"));
+			return auditDisposition(
+				response.audit,
+				response.session_id ?? null,
+				response.audit_confirmation_required,
+			);
+		},
+		write: async (
+			{ candidate, report, sessionId, confirmedAssessmentDigest },
+			signal,
+		) => {
+			const response = await api.skills.install(
+				buildSkillRequest(candidate, {
+					expected_content_digest: report?.content_digest ?? null,
+					confirmed_assessment_digest: confirmedAssessmentDigest,
+					session_id: sessionId,
+					audit_only: false,
+				}),
+				signal,
+			);
+			if (
+				!response.success &&
+				response.audit_confirmation_required &&
+				response.audit
+			) {
+				const disposition = auditDisposition(
+					response.audit,
+					response.session_id ?? null,
+					response.audit_confirmation_required,
+				);
+				if (disposition.kind !== "review") {
+					throw new Error(t("auditFailed"));
+				}
+				return disposition;
+			}
+			if (response.success) {
+				await queryClient.invalidateQueries({
 					queryKey: queryKeys.skills.all(),
 				});
 				capture("deep link imported", {
 					import_kind: "skill",
-					agents: Array.from(variables.selectedAgents),
-					scope: variables.installToProject ? "project" : "global",
-				});
-			} else {
-				queryClient.invalidateQueries({
-					queryKey: queryKeys.mcps.all(),
-				});
-				capture("deep link imported", {
-					import_kind: "mcp",
-					agents: Array.from(variables.selectedAgents),
-					scope: variables.installToProject ? "project" : "global",
+					agents: [...candidate.agents],
+					scope: candidate.scope,
 				});
 			}
+			return {
+				kind: "done",
+				result: candidate.pendingResults.map((result) => ({
+					...result,
+					status: response.success
+						? ("success" as const)
+						: ("error" as const),
+					error: response.success
+						? undefined
+						: t("skillInstallFailed"),
+				})),
+				report:
+					skillAuditEnabled || response.audit_confirmation_required
+						? (response.audit ?? null)
+						: report,
+				sessionId: response.session_id ?? sessionId,
+			};
 		},
 	});
 
-	const handleInstall = () => {
-		if (!intent || installMutation.isPending) {
+	const runSkillAudit = () => {
+		if (
+			!intent ||
+			intent.kind !== "skill-market-install" ||
+			!skillAuditReady
+		) {
 			return;
 		}
 
-		installMutation.mutate({
+		const candidate = createSkillCandidate(intent);
+		if (!skillAuditEnabled) {
+			skillInstall.start(candidate, {
+				kind: "allow",
+				report: null,
+				sessionId: null,
+			});
+			return;
+		}
+		skillInstall.start(candidate);
+	};
+
+	const handleInstall = () => {
+		if (!intent) {
+			return;
+		}
+		if (intent.kind === "skill-market-install") {
+			if (skillInstall.isBusy) return;
+			runSkillAudit();
+			return;
+		}
+		if (mcpInstallMutation.isPending || mcpInstallMutation.isSuccess) {
+			return;
+		}
+		mcpInstallMutation.mutate({
 			intent,
 			selectedAgents,
 			installToProject,
 			selectedProject,
 		});
+	};
+
+	const resetSkillState = () => {
+		skillInstall.reset();
+	};
+
+	const handleConfirmSkillInstall = () => {
+		skillInstall.confirm();
 	};
 
 	const handleClose = () => {
@@ -223,7 +342,8 @@ export function DeepLinkImportModal({
 		}
 		setSelectedAgents(new Set());
 		setHasExecutableConsent(false);
-		installMutation.reset();
+		mcpInstallMutation.reset();
+		resetSkillState();
 		resetInstallTarget();
 		onComplete();
 	};
@@ -234,26 +354,81 @@ export function DeepLinkImportModal({
 		} else if (isOpen && intent) {
 			setSelectedAgents(defaultSelectedAgents);
 			setHasExecutableConsent(false);
+			mcpInstallMutation.reset();
+			resetSkillState();
 			resetInstallTarget();
 		}
 	};
 
-	const results =
-		installMutation.data ?? installMutation.context?.pendingResults ?? [];
-	const isInstalling = installMutation.isPending;
-	const error = installMutation.error?.message ?? null;
+	const skillPhase =
+		skillInstall.state.tag === "idle"
+			? "idle"
+			: skillInstall.state.tag === "auditing"
+				? "auditing"
+				: skillInstall.state.tag === "review"
+					? "review"
+					: skillInstall.state.tag === "writing"
+						? "installing"
+						: skillInstall.state.tag === "failed" &&
+							  skillInstall.state.stage === "audit"
+							? "idle"
+							: "done";
+	const audit =
+		skillInstall.state.tag === "review" ||
+		skillInstall.state.tag === "writing" ||
+		skillInstall.state.tag === "done"
+			? skillInstall.state.report
+			: null;
+	const isInstalling = isSkillInstall
+		? skillPhase === "installing"
+		: mcpInstallMutation.isPending;
+	const mcpResults = mcpInstallMutation.data ?? [];
+	const skillFailure =
+		skillInstall.state.tag === "failed" ? skillInstall.state : null;
+	const results: InstallResult[] = isSkillInstall
+		? skillInstall.state.tag === "done"
+			? skillInstall.state.result
+			: skillInstall.state.tag === "writing"
+				? [...skillInstall.state.candidate.pendingResults]
+				: skillFailure
+					? skillFailure.candidate.pendingResults.map((result) => ({
+							...result,
+							status: "error",
+							error: skillFailure.error.message,
+						}))
+					: []
+		: mcpResults;
+	const error =
+		(isSkillInstall
+			? skillFailure?.error.message
+			: mcpInstallMutation.error?.message) ?? null;
 	const requiresExecutableConsent =
 		intent?.kind === "mcp-config-install" &&
 		intent.transport.type === "stdio";
+	// The audit card surfaces the moment the skill flow starts: a spinner while
+	// the audit is in flight, the verdict once it lands. It stays through the
+	// install card so both steps are shown at once.
+	const showAuditCard =
+		isSkillInstall &&
+		skillPhase !== "idle" &&
+		(skillAuditEnabled || skillPhase === "review");
+	const showInstallCard =
+		isSkillInstall &&
+		(skillPhase === "installing" || skillPhase === "done");
+	const showPicker = isSkillInstall
+		? skillPhase === "idle"
+		: mcpResults.length === 0 && !mcpInstallMutation.isPending;
 
 	return (
 		<Modal.Backdrop
 			isOpen={Boolean(intent)}
+			isDismissable={!isInstalling}
+			isKeyboardDismissDisabled={isInstalling}
 			onOpenChange={handleModalOpenChange}
 		>
 			<Modal.Container>
 				<Modal.Dialog className="max-w-md">
-					<Modal.CloseTrigger />
+					<Modal.CloseTrigger isDisabled={isInstalling} />
 					<Modal.Header>
 						<Modal.Heading>{t("reviewImport")}</Modal.Heading>
 					</Modal.Header>
@@ -409,27 +584,82 @@ export function DeepLinkImportModal({
 									</Card.Content>
 								</Card>
 								{requiresExecutableConsent &&
-									results.length === 0 && (
-										<label className="flex gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
-											<input
-												type="checkbox"
-												checked={hasExecutableConsent}
-												onChange={(event) =>
-													setHasExecutableConsent(
-														event.currentTarget
-															.checked,
-													)
-												}
-											/>
-											<span>
+									mcpResults.length === 0 && (
+										<Checkbox
+											variant="secondary"
+											isSelected={hasExecutableConsent}
+											onChange={setHasExecutableConsent}
+										>
+											<Checkbox.Content className="text-sm">
+												<Checkbox.Control>
+													<Checkbox.Indicator />
+												</Checkbox.Control>
 												{t("confirmExecutableMcp")}
-											</span>
-										</label>
+											</Checkbox.Content>
+										</Checkbox>
 									)}
 							</div>
 						)}
 
-						{results.length === 0 && (
+						{showAuditCard && (
+							<Card variant="secondary">
+								<Card.Content className="space-y-3">
+									<p className="text-sm font-medium text-foreground">
+										{t("securityAudit")}
+									</p>
+									{skillPhase === "auditing" && !audit ? (
+										<div className="flex items-center justify-center gap-3 py-6 text-sm text-muted">
+											<Spinner size="sm" />
+											{t("auditing")}
+										</div>
+									) : (
+										audit && (
+											<>
+												{skillPhase === "review" && (
+													<p className="text-sm text-danger">
+														{t("auditBlockedHint")}
+													</p>
+												)}
+												<SkillAudit
+													report={audit}
+													embedded
+												/>
+											</>
+										)
+									)}
+								</Card.Content>
+							</Card>
+						)}
+
+						{showInstallCard && (
+							<Card variant="secondary">
+								<Card.Content className="space-y-3">
+									<p className="text-sm font-medium text-foreground">
+										{skillPhase === "done"
+											? t("installComplete")
+											: t("installingSkills")}
+									</p>
+									{results.map((result) => (
+										<ResultStatusItem
+											key={result.agentId}
+											displayName={result.displayName}
+											status={result.status}
+											statusText={
+												result.status === "pending"
+													? t("installing")
+													: result.status ===
+														  "success"
+														? t("installSuccess")
+														: ""
+											}
+											error={result.error}
+										/>
+									))}
+								</Card.Content>
+							</Card>
+						)}
+
+						{showPicker && (
 							<div className="space-y-4">
 								<p className="text-sm text-muted">
 									{intent?.kind === "mcp-config-install"
@@ -460,9 +690,9 @@ export function DeepLinkImportModal({
 							</div>
 						)}
 
-						{results.length > 0 && (
+						{!isSkillInstall && mcpResults.length > 0 && (
 							<div className="space-y-3">
-								{results.map((result) => (
+								{mcpResults.map((result) => (
 									<ResultStatusItem
 										key={result.agentId}
 										displayName={result.displayName}
@@ -482,7 +712,51 @@ export function DeepLinkImportModal({
 					</Modal.Body>
 
 					<Modal.Footer>
-						{results.length === 0 ? (
+						{isSkillInstall ? (
+							skillPhase === "review" ? (
+								<>
+									<Button slot="close" variant="secondary">
+										{t("cancel")}
+									</Button>
+									<Button
+										variant="danger"
+										onPress={handleConfirmSkillInstall}
+									>
+										{t("installAnyway")}
+									</Button>
+								</>
+							) : skillPhase === "auditing" ? (
+								<>
+									<Button slot="close" variant="secondary">
+										{t("cancel")}
+									</Button>
+									<Button isDisabled>{t("auditing")}</Button>
+								</>
+							) : skillPhase === "installing" ? (
+								<Button isDisabled>{t("installing")}</Button>
+							) : skillPhase === "done" ? (
+								<Button slot="close" variant="secondary">
+									{t("done")}
+								</Button>
+							) : (
+								<>
+									<Button slot="close" variant="secondary">
+										{t("cancel")}
+									</Button>
+									<Button
+										onPress={handleInstall}
+										isDisabled={
+											selectedAgents.size === 0 ||
+											!skillAuditReady ||
+											(installToProject &&
+												!selectedProject)
+										}
+									>
+										{t("install")}
+									</Button>
+								</>
+							)
+						) : mcpResults.length === 0 ? (
 							<>
 								<Button slot="close" variant="secondary">
 									{t("cancel")}
