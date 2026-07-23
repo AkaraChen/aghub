@@ -3,10 +3,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
 import { isHTTPError } from "ky";
 import * as pathe from "pathe";
-import { useMemo, useState } from "react";
+import { useMemo, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { SkillCopyStorageModeRequest } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
+import type { ApiClient } from "../requests/client";
 import {
 	resolveSkillCopiesMutationOptions,
 	skillDiffQueryOptions,
@@ -25,6 +25,10 @@ import {
 	SkillComparisonUnavailableAlert,
 	SkillDriftHeading,
 } from "./skill-drift-status";
+import {
+	INITIAL_SKILL_RESOLUTION_VIEW,
+	skillResolutionViewReducer,
+} from "./skill-resolution-state";
 import { SkillResolutionReview } from "./skill-version-diff-review";
 
 interface SkillLocationDriftProps {
@@ -35,24 +39,14 @@ interface SkillLocationDriftProps {
 
 const LOCATION_DIFFERENCES_ID = "skill-location-differences";
 
-export function SkillLocationDrift(props: SkillLocationDriftProps) {
-	const { locations, scope, projectRoot } = props;
-	const { t } = useTranslation();
-	const api = useApi();
-	const queryClient = useQueryClient();
-	const [isExpanded, setIsExpanded] = useState(false);
-	const [activeVersionHash, setActiveVersionHash] = useState<string | null>(
-		null,
-	);
-	const [selectedVersionHash, setSelectedVersionHash] = useState<
-		string | null
-	>(null);
-	const [storageMode, setStorageMode] =
-		useState<SkillCopyStorageModeRequest>("preserve");
-	const [showFileChanges, setShowFileChanges] = useState(false);
-	const comparableLocations = locations;
-	const baseline = comparableLocations[0];
-	const targets = comparableLocations.slice(1);
+function useSkillLocationVersions({
+	api,
+	locations,
+	scope,
+	projectRoot,
+}: SkillLocationDriftProps & { api: ApiClient }) {
+	const baseline = locations[0];
+	const targets = useMemo(() => locations.slice(1), [locations]);
 	const result = useQuery(
 		skillDiffQueryOptions({
 			api,
@@ -105,12 +99,40 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 				: { versions: [], unavailable: [] },
 		[baseline, comparisonResults, targets],
 	);
-	const versions = groupedVersions.versions;
+
+	return {
+		baseline,
+		targets,
+		result,
+		versions: groupedVersions.versions,
+		unavailableCount: result.isError
+			? targets.length
+			: groupedVersions.unavailable.length,
+		hasLinks:
+			locations.some((location) => location.isSymlink) ||
+			skillDiffsContainLinks(comparisonResults),
+	};
+}
+
+export function SkillLocationDrift(props: SkillLocationDriftProps) {
+	const { locations, scope, projectRoot } = props;
+	const { t } = useTranslation();
+	const api = useApi();
+	const queryClient = useQueryClient();
+	const [view, dispatchView] = useReducer(
+		skillResolutionViewReducer,
+		INITIAL_SKILL_RESOLUTION_VIEW,
+	);
+	const [selectedVersionHash, setSelectedVersionHash] = useState<
+		string | null
+	>(null);
+	const { isExpanded, activeVersionHash, storageMode, showFileChanges } =
+		view;
+	const comparableLocations = locations;
+	const { baseline, targets, result, versions, unavailableCount, hasLinks } =
+		useSkillLocationVersions({ ...props, api });
 	const baselineVersion = versions[0];
 	const comparisonVersions = versions.slice(1);
-	const unavailableCount = result.isError
-		? targets.length
-		: groupedVersions.unavailable.length;
 	const activeVersion =
 		comparisonVersions.find(
 			(version) => version.hash === activeVersionHash,
@@ -123,16 +145,16 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 			? selectedVersion
 			: activeVersion;
 	const reverseReviewedDiff = selectedVersion?.hash === baselineVersion?.hash;
-	const hasLinks =
-		comparableLocations.some((location) => location.isSymlink) ||
-		skillDiffsContainLinks(comparisonResults);
 	const resolution = useMutation(
 		resolveSkillCopiesMutationOptions({
 			api,
 			queryClient,
 			onSuccess: () => {
 				setSelectedVersionHash(null);
-				setStorageMode("preserve");
+				dispatchView({
+					type: "set-storage-mode",
+					storageMode: "preserve",
+				});
 				toast.success(t("skillCopiesUnified"));
 			},
 		}),
@@ -210,13 +232,14 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 					}
 					onExpandedChange={(keys) => {
 						const expanded = keys.has(LOCATION_DIFFERENCES_ID);
-						setIsExpanded(expanded);
-						setShowFileChanges(false);
-						setStorageMode("preserve");
-						setActiveVersionHash(
+						dispatchView(
 							expanded
-								? (comparisonVersions[0]?.hash ?? null)
-								: null,
+								? {
+										type: "expand",
+										activeVersionHash:
+											comparisonVersions[0]?.hash ?? null,
+									}
+								: { type: "collapse" },
 						);
 						if (!expanded) setSelectedVersionHash(null);
 					}}
@@ -250,15 +273,30 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 													hash !==
 													baselineVersion.hash
 												) {
-													setActiveVersionHash(hash);
+													dispatchView({
+														type: "set-active-version",
+														activeVersionHash: hash,
+													});
 												}
 											}}
 											hasLinks={hasLinks}
 											storageMode={storageMode}
-											onStorageModeChange={setStorageMode}
+											onStorageModeChange={(
+												storageMode,
+											) =>
+												dispatchView({
+													type: "set-storage-mode",
+													storageMode,
+												})
+											}
 											showFileChanges={showFileChanges}
-											onShowFileChangesChange={
-												setShowFileChanges
+											onShowFileChangesChange={(
+												showFileChanges,
+											) =>
+												dispatchView({
+													type: "set-file-changes",
+													showFileChanges,
+												})
 											}
 											isDisabled={isReviewing}
 											comparisonVersions={
@@ -273,8 +311,13 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 												activeVersion?.hash ??
 												reviewedVersion.hash
 											}
-											onActiveVersionChange={
-												setActiveVersionHash
+											onActiveVersionChange={(
+												activeVersionHash,
+											) =>
+												dispatchView({
+													type: "set-active-version",
+													activeVersionHash,
+												})
 											}
 											diff={reviewedVersion.comparison}
 											diffKey={reviewedVersion.hash}
