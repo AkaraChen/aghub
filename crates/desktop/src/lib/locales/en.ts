@@ -442,6 +442,8 @@ export default {
 	onboardingAnalyticsDescription:
 		"Share anonymous usage data and crash reports so we can fix bugs and prioritise features. You can change this any time in Settings.",
 	onboardingFullscreen: "Open video in fullscreen",
+	onboardingLoadError:
+		"Couldn't load your onboarding progress. You can reopen Welcome from Settings.",
 	onboardingSaveError: "Couldn't save your onboarding choices. Try again.",
 	settingsAnalyticsHeading: "Usage analytics",
 	settingsAnalyticsDescription:

@@ -422,6 +422,7 @@ export default {
 	onboardingAnalyticsDescription:
 		"分享匿名使用資料和當機回報，協助我們修正錯誤並決定功能優先順序。可隨時在設定中更改。",
 	onboardingFullscreen: "全螢幕播放影片",
+	onboardingLoadError: "無法載入導覽進度。你仍可從設定中重新開啟歡迎頁。",
 	onboardingSaveError: "無法儲存導覽設定，請重試。",
 	settingsAnalyticsHeading: "使用統計",
 	settingsAnalyticsDescription:

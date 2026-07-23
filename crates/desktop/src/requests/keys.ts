@@ -94,4 +94,8 @@ export const queryKeys = {
 		) => ["usage", "summary", since, until, timezone] as const,
 		limits: () => ["usage", "limits"] as const,
 	},
+	onboarding: {
+		all: () => ["onboarding"] as const,
+		bootstrap: () => ["onboarding", "bootstrap"] as const,
+	},
 };

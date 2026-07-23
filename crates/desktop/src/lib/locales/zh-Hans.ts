@@ -423,6 +423,7 @@ export default {
 	onboardingAnalyticsDescription:
 		"分享匿名使用数据和崩溃报告，帮助我们修复 bug 并确定功能优先级。可随时在设置中更改。",
 	onboardingFullscreen: "全屏播放视频",
+	onboardingLoadError: "无法加载引导进度。你仍可从设置中重新打开欢迎页。",
 	onboardingSaveError: "无法保存引导设置，请重试。",
 	settingsAnalyticsHeading: "使用统计",
 	settingsAnalyticsDescription:

@@ -1,43 +1,78 @@
 import { Button, Modal, toast } from "@heroui/react";
-import { getVersion } from "@tauri-apps/api/app";
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useOnboardingTours } from "../hooks/use-onboarding-tours";
 import { applyAnalyticsConsent, capture } from "../lib/analytics";
 import { ONBOARDING_EVENT, type OnboardingCommand } from "../lib/onboarding";
 import {
-	buildWizardSteps,
 	createWizardState,
 	getWizardAcknowledgements,
 	onboardingWizardReducer,
 	WIZARD_FEATURE_STEPS,
 } from "../lib/onboarding-wizard";
+import { saveOnboardingCompletion } from "../lib/store";
+import { resolveWhatsNewLocale } from "../lib/whats-new";
 import {
-	getConsentAcked,
-	getAnalyticsConsent,
-	getLastSeenWhatsNewVersion,
-	getOnboardingProgress,
-	saveOnboardingCompletion,
-} from "../lib/store";
-import {
-	pendingWhatsNew,
-	resolveWhatsNewLocale,
-	WHATS_NEW_ENTRIES,
-} from "../lib/whats-new";
+	type OnboardingBootstrap,
+	onboardingBootstrapQueryOptions,
+} from "../requests/onboarding";
 import { OnboardingWizard } from "./onboarding-wizard";
 
 type OverlayMode = "welcome" | null;
 
 export function OnboardingController() {
+	const { t } = useTranslation();
+	const bootstrapQuery = useQuery(onboardingBootstrapQueryOptions());
+	const reportedBootstrapErrorRef = useRef(false);
+
+	useEffect(() => {
+		if (!bootstrapQuery.error || reportedBootstrapErrorRef.current) {
+			return;
+		}
+
+		reportedBootstrapErrorRef.current = true;
+		console.error(
+			"Failed to load onboarding progress:",
+			bootstrapQuery.error,
+		);
+		toast.danger(t("onboardingLoadError"));
+	}, [bootstrapQuery.error, t]);
+
+	if (bootstrapQuery.isPending) {
+		return null;
+	}
+
+	return (
+		<OnboardingControllerContent
+			bootstrap={
+				bootstrapQuery.data ?? {
+					analyticsOptIn: true,
+					steps: [],
+					versionToAcknowledge: null,
+				}
+			}
+		/>
+	);
+}
+
+function OnboardingControllerContent({
+	bootstrap,
+}: {
+	bootstrap: OnboardingBootstrap;
+}) {
 	const { i18n, t } = useTranslation();
-	const [isReady, setIsReady] = useState(false);
-	const [overlayMode, setOverlayMode] = useState<OverlayMode>(null);
-	const [analyticsOptIn, setAnalyticsOptIn] = useState(true);
+	const [overlayMode, setOverlayMode] = useState<OverlayMode>(() =>
+		bootstrap.steps.length > 0 ? "welcome" : null,
+	);
+	const [analyticsOptIn, setAnalyticsOptIn] = useState(
+		bootstrap.analyticsOptIn,
+	);
 	const [isDismissing, setIsDismissing] = useState(false);
 	const [wizard, dispatchWizard] = useReducer(
 		onboardingWizardReducer,
-		undefined,
-		() => createWizardState(),
+		bootstrap,
+		(value) => createWizardState(value.steps, value.versionToAcknowledge),
 	);
 	const { currentStep, steps: wizardSteps } = wizard;
 	const includedFeatureSteps = wizardSteps.some(
@@ -130,53 +165,6 @@ export function OnboardingController() {
 	});
 
 	useEffect(() => {
-		let isMounted = true;
-
-		void (async () => {
-			const [progress, consentAcked, consent, lastSeen, version] =
-				await Promise.all([
-					getOnboardingProgress(),
-					getConsentAcked(),
-					getAnalyticsConsent(),
-					getLastSeenWhatsNewVersion(),
-					getVersion(),
-				]);
-			if (!isMounted) return;
-
-			const whatsNewEntries = pendingWhatsNew(
-				lastSeen,
-				version,
-				WHATS_NEW_ENTRIES,
-			);
-			const steps = buildWizardSteps({
-				hasSeenWelcome: progress.hasSeenWelcome,
-				consentAcked,
-				whatsNewEntries,
-			});
-
-			if (!isMounted) return;
-
-			setAnalyticsOptIn(consent === "granted");
-			setIsReady(true);
-
-			if (steps.length > 0) {
-				dispatchWizard({
-					type: "open",
-					steps,
-					versionToAcknowledge: progress.hasSeenWelcome
-						? null
-						: version,
-				});
-				setOverlayMode("welcome");
-			}
-		})();
-
-		return () => {
-			isMounted = false;
-		};
-	}, []);
-
-	useEffect(() => {
 		const listener = (event: Event) => {
 			handleCommand((event as CustomEvent<OnboardingCommand>).detail);
 		};
@@ -187,10 +175,6 @@ export function OnboardingController() {
 			window.removeEventListener(ONBOARDING_EVENT, listener);
 		};
 	}, []);
-
-	if (!isReady) {
-		return null;
-	}
 
 	return (
 		<Modal.Backdrop
