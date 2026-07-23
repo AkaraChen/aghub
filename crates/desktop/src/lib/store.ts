@@ -9,7 +9,9 @@ export {
 	getAnalyticsConsent,
 	getAutoCheckUpdates,
 	getConsentAcked,
+	getUpdateChannel,
 	setAutoCheckUpdates,
+	setUpdateChannel,
 	getStore,
 	initStore,
 } from "./store/index";
@@ -48,6 +50,7 @@ export type {
 	ResourceGroup,
 	SidebarItemId,
 	SidebarItemPreference,
+	UpdateChannel,
 } from "./store/types";
 export {
 	CURRENT_VERSION,

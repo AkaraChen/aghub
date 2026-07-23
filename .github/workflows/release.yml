@@ -360,6 +360,58 @@ jobs:
                   test "$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq '[.assets[].name] | index("latest.json") != null')" = "true"
                   test "$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq '.prerelease')" = "${{ needs.prepare.outputs.prerelease }}"
 
+    publish-beta-channel:
+        name: Publish Beta Update Channel
+        needs: build-tauri
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        env:
+            GH_TOKEN: ${{ github.token }}
+            RELEASE_TAG: ${{ github.event.inputs.version || github.ref_name }}
+        steps:
+            - name: Download updater manifest
+              run: |
+                  mkdir -p "$RUNNER_TEMP/update-channel"
+                  gh release download "$RELEASE_TAG" \
+                    --repo "$GITHUB_REPOSITORY" \
+                    --pattern latest.json \
+                    --dir "$RUNNER_TEMP/update-channel"
+
+            - name: Update beta channel manifest
+              shell: bash
+              run: |
+                  if ! gh api \
+                    "repos/$GITHUB_REPOSITORY/git/ref/heads/beta-channel" \
+                    >/dev/null 2>&1; then
+                    gh api \
+                      --method POST \
+                      "repos/$GITHUB_REPOSITORY/git/refs" \
+                      -f ref="refs/heads/beta-channel" \
+                      -f sha="$GITHUB_SHA"
+                  fi
+
+                  current_sha="$(
+                    gh api \
+                      "repos/$GITHUB_REPOSITORY/contents/latest.json?ref=beta-channel" \
+                      --jq .sha 2>/dev/null || true
+                  )"
+                  encoded_manifest="$(
+                    base64 -w 0 "$RUNNER_TEMP/update-channel/latest.json"
+                  )"
+
+                  args=(
+                    --method PUT
+                    "repos/$GITHUB_REPOSITORY/contents/latest.json"
+                    -f message="chore(release): update beta channel to $RELEASE_TAG"
+                    -f content="$encoded_manifest"
+                    -f branch="beta-channel"
+                  )
+                  if [[ -n "$current_sha" ]]; then
+                    args+=(-f sha="$current_sha")
+                  fi
+                  gh api "${args[@]}"
+
     publish-homebrew:
         name: Update Homebrew Tap
         needs: [prepare, publish-release]

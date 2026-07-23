@@ -23,6 +23,8 @@ export interface ResourceGroup {
 	name: string;
 }
 
+export type UpdateChannel = "stable" | "beta";
+
 export const SIDEBAR_ITEM_IDS = ["home", "market"] as const;
 
 export type SidebarItemId = (typeof SIDEBAR_ITEM_IDS)[number];

@@ -421,6 +421,13 @@ export default {
 	settingsAutoCheckUpdatesEnabled: "Automatic update checks enabled",
 	settingsAutoCheckUpdatesDisabled: "Automatic update checks disabled",
 	settingsAutoCheckUpdatesError: "Failed to update automatic update checks",
+	settingsBetaUpdatesHeading: "Receive beta updates",
+	settingsBetaUpdatesDescription:
+		"Include prerelease builds in automatic and manual update checks. Turning this off returns to stable releases without downgrading the installed app.",
+	settingsBetaUpdatesToggleLabel: "Receive beta updates",
+	settingsBetaUpdatesEnabled: "Beta updates enabled",
+	settingsBetaUpdatesDisabled: "Beta updates disabled",
+	settingsBetaUpdatesError: "Failed to update the release channel",
 	openSettings: "Open Settings",
 	onboardingDescription:
 		"Replay the welcome screen or either guided tour any time.",

@@ -404,6 +404,13 @@ export default {
 	settingsAutoCheckUpdatesEnabled: "已开启自动检查更新",
 	settingsAutoCheckUpdatesDisabled: "已关闭自动检查更新",
 	settingsAutoCheckUpdatesError: "更新自动检查更新设置失败",
+	settingsBetaUpdatesHeading: "接收 Beta 版更新",
+	settingsBetaUpdatesDescription:
+		"自动和手动检查更新时也接收预发布版本。关闭后会回到稳定版通道，但不会降级当前已安装的应用。",
+	settingsBetaUpdatesToggleLabel: "接收 Beta 版更新",
+	settingsBetaUpdatesEnabled: "已开启 Beta 版更新",
+	settingsBetaUpdatesDisabled: "已关闭 Beta 版更新",
+	settingsBetaUpdatesError: "更新发布通道失败",
 	openSettings: "打开设置",
 	onboardingDescription: "随时重新打开欢迎页或任一引导流程。",
 

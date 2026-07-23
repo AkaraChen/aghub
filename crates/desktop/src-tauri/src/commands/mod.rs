@@ -2,6 +2,7 @@ pub mod agents;
 pub mod logging;
 pub mod posthog;
 pub mod server;
+pub mod updates;
 pub mod window;
 
 pub use agents::agent_config_dir;
@@ -14,4 +15,5 @@ pub use posthog::{
 	posthog_get_session_id, posthog_identify, posthog_set_enabled,
 };
 pub use server::start_server;
+pub use updates::check_for_update;
 pub use window::minimize_to_tray;

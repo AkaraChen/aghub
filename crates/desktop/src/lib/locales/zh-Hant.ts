@@ -403,6 +403,13 @@ export default {
 	settingsAutoCheckUpdatesEnabled: "已開啟自動檢查更新",
 	settingsAutoCheckUpdatesDisabled: "已關閉自動檢查更新",
 	settingsAutoCheckUpdatesError: "更新自動檢查更新設定失敗",
+	settingsBetaUpdatesHeading: "接收 Beta 版更新",
+	settingsBetaUpdatesDescription:
+		"自動和手動檢查更新時也接收預發佈版本。關閉後會回到穩定版通道，但不會降級目前已安裝的應用程式。",
+	settingsBetaUpdatesToggleLabel: "接收 Beta 版更新",
+	settingsBetaUpdatesEnabled: "已開啟 Beta 版更新",
+	settingsBetaUpdatesDisabled: "已關閉 Beta 版更新",
+	settingsBetaUpdatesError: "更新發佈通道失敗",
 	openSettings: "開啟設定",
 	onboardingDescription: "隨時重新開啟歡迎頁或任一導覽流程。",
 

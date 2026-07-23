@@ -1,39 +1,9 @@
 import { toast } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
-import { check, type Update } from "@tauri-apps/plugin-updater";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { getAutoCheckUpdates } from "../lib/store";
-
-const AUTO_UPDATE_CHECK_KEY = ["auto-update-check"] as const;
-const SESSION_STORAGE_KEY = "aghub-auto-update-check-session";
-
-interface AutoUpdateCheckResult {
-	update: Update | null;
-}
-
-async function runAutoUpdateCheck(): Promise<AutoUpdateCheckResult> {
-	if (typeof window !== "undefined") {
-		try {
-			if (window.sessionStorage.getItem(SESSION_STORAGE_KEY)) {
-				return { update: null };
-			}
-			window.sessionStorage.setItem(SESSION_STORAGE_KEY, "1");
-		} catch {
-			// sessionStorage may be unavailable; fall through and let
-			// the preference gate handle dedupe within this session.
-		}
-	}
-
-	const enabled = await getAutoCheckUpdates();
-	if (!enabled) {
-		return { update: null };
-	}
-
-	const update = await check();
-	return { update };
-}
+import { startupUpdateQueryOptions } from "../requests/updates";
 
 /**
  * Runs a single background `check()` on app startup, gated by the
@@ -55,19 +25,13 @@ export function AutoUpdateChecker() {
 	const [, setLocation] = useLocation();
 	const surfacedRef = useRef(false);
 
-	const { data } = useQuery<AutoUpdateCheckResult>({
-		queryKey: AUTO_UPDATE_CHECK_KEY,
-		queryFn: runAutoUpdateCheck,
-		staleTime: Infinity,
-		gcTime: Infinity,
-		retry: false,
-	});
+	const { data: update } = useQuery(startupUpdateQueryOptions());
 
 	useEffect(() => {
-		if (!data?.update || surfacedRef.current) return;
+		if (!update || surfacedRef.current) return;
 		surfacedRef.current = true;
 
-		toast.success(t("updateAvailable", { version: data.update.version }), {
+		toast.success(t("updateAvailable", { version: update.version }), {
 			description: t("clickToCheckUpdates"),
 			actionProps: {
 				onPress: () => setLocation("/settings"),
@@ -75,7 +39,7 @@ export function AutoUpdateChecker() {
 				children: t("openSettings"),
 			},
 		});
-	}, [data, setLocation, t]);
+	}, [setLocation, t, update]);
 
 	return null;
 }

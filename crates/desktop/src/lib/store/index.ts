@@ -1,5 +1,6 @@
 import { Store } from "@tauri-apps/plugin-store";
 import { migrate } from "./migrations";
+import type { UpdateChannel } from "./types";
 
 let store: Store | null = null;
 
@@ -89,6 +90,24 @@ export async function getAutoCheckUpdates(): Promise<boolean> {
 export async function setAutoCheckUpdates(value: boolean): Promise<boolean> {
 	const s = await getStore();
 	await s.set(AUTO_CHECK_UPDATES_KEY, value);
+	await s.save();
+	return value;
+}
+
+const UPDATE_CHANNEL_KEY = "updateChannel";
+const DEFAULT_UPDATE_CHANNEL: UpdateChannel = "stable";
+
+export async function getUpdateChannel(): Promise<UpdateChannel> {
+	const s = await getStore();
+	const value = await s.get<UpdateChannel>(UPDATE_CHANNEL_KEY);
+	return value === "beta" ? "beta" : DEFAULT_UPDATE_CHANNEL;
+}
+
+export async function setUpdateChannel(
+	value: UpdateChannel,
+): Promise<UpdateChannel> {
+	const s = await getStore();
+	await s.set(UPDATE_CHANNEL_KEY, value);
 	await s.save();
 	return value;
 }
