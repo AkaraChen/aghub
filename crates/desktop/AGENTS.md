@@ -117,6 +117,17 @@ From `tauri.conf.json`:
 
 - NEVER use `useEffect` to sync state, use `useMemo` and `handleXXX` instead.
 
+## RELEASE NOTES
+
+- Product copy lives in `../../release-notes/v<version>.yml`; include English,
+  Simplified Chinese, and Traditional Chinese in the same manifest.
+- Run `bun run release-notes:generate` after editing a manifest and commit the
+  generated `src/generated/release-notes.json`. Do not edit that JSON by hand.
+- Run `bun run release-notes:check` before tagging. The release workflow also
+  checks that Cargo, Tauri, and desktop package versions match the manifest.
+- GitHub Release bodies use the manifest first and append the `git-cliff`
+  output as a technical changes section.
+
 ## NOTES
 
 - Tauri backend (`src-tauri/src/`) calls into `aghub-core` crate

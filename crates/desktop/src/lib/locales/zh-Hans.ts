@@ -435,18 +435,10 @@ export default {
 	settingsAutostartEnabled: "已启用开机自启动",
 	settingsAutostartDisabled: "已关闭开机自启动",
 	settingsAutostartError: "更新开机自启动失败",
+	whatsNewWizardTitle: "Aghub 新功能",
+	whatsNewWizardSubtitle: "快速了解此版本包含的改动。",
 	whatsNewSectionLabel: "{{version}} 的新功能",
-	whatsNewV02Title: "插件、隐私与体验打磨",
-	whatsNewV02Subtitle: "上一版本以来的一系列升级，点击查看详情。",
-	whatsNewV02PluginsTitle: "支持 Claude Code 插件",
-	whatsNewV02PluginsDescription:
-		"在「市场」标签页中浏览并安装 Claude Code 插件 —— 与技能、MCP 服务的安装流程一致。",
-	whatsNewV02AnalyticsTitle: "数据采集由你做主",
-	whatsNewV02AnalyticsDescription:
-		"设置中新增隐私开关，可随时停用使用数据采集和会话回放。",
-	whatsNewV02PolishTitle: "侧边栏与搜索优化",
-	whatsNewV02PolishDescription:
-		"导航更清晰、全局搜索更快，并修复了多处性能问题。",
+	whatsNewKnownIssues: "已知问题",
 	onboardingSkip: "跳过",
 	onboardingBack: "返回",
 	onboardingNext: "下一步",

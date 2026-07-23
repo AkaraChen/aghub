@@ -1,0 +1,42 @@
+version: 1.9.0-beta.1
+channel: beta
+title:
+    en: Plugins, privacy, and desktop updates
+    zh-Hans: 插件、隐私与桌面体验更新
+    zh-Hant: 外掛、隱私與桌面體驗更新
+summary:
+    en: This beta validates the new release and What's New flow before the next stable release.
+    zh-Hans: 此测试版用于验证新的发布流程与“新功能”体验，为后续稳定版本做准备。
+    zh-Hant: 此測試版用於驗證新的發布流程與「新功能」體驗，為後續穩定版本做準備。
+highlights:
+    - id: claude-code-plugins
+      icon: puzzle
+      title:
+          en: Claude Code plugin support
+          zh-Hans: 支持 Claude Code 插件
+          zh-Hant: 支援 Claude Code 外掛
+      description:
+          en: Install, manage, and browse Claude Code plugins from the desktop app.
+          zh-Hans: 直接在桌面应用中安装、管理和浏览 Claude Code 插件。
+          zh-Hant: 直接在桌面應用程式中安裝、管理和瀏覽 Claude Code 外掛。
+    - id: analytics-control
+      icon: shield
+      title:
+          en: Analytics stays under your control
+          zh-Hans: 数据采集由你决定
+          zh-Hant: 資料蒐集由你決定
+      description:
+          en: Choose during onboarding whether to share anonymous usage data, and change the preference later in Settings.
+          zh-Hans: 在首次引导中选择是否分享匿名使用数据，并可随时在设置中修改。
+          zh-Hant: 在首次引導中選擇是否分享匿名使用資料，並可隨時在設定中修改。
+    - id: navigation-updates
+      icon: sparkles
+      title:
+          en: Sidebar and search updates
+          zh-Hans: 侧边栏与搜索更新
+          zh-Hant: 側邊欄與搜尋更新
+      description:
+          en: Updated navigation and search make agents and resources easier to find.
+          zh-Hans: 更新后的导航和搜索让代理及资源更容易找到。
+          zh-Hant: 更新後的導覽和搜尋讓代理及資源更容易找到。
+knownIssues: []

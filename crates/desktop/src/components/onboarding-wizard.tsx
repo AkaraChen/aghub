@@ -15,7 +15,11 @@ import type {
 	WizardStep,
 } from "../lib/onboarding-wizard";
 import { cn } from "../lib/utils";
-import type { WhatsNewItem } from "../lib/whats-new";
+import {
+	getWhatsNewCopy,
+	type WhatsNewIcon,
+	type WhatsNewLocale,
+} from "../lib/whats-new";
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
@@ -26,6 +30,7 @@ interface OnboardingWizardProps {
 	onSelectStep: (step: number) => void;
 	analyticsOptIn: boolean;
 	onAnalyticsOptInChange: (value: boolean) => void;
+	whatsNewLocale: WhatsNewLocale;
 	t: Translate;
 }
 
@@ -35,11 +40,11 @@ const FEATURE_ICONS: Record<FeatureStepId, ReactNode> = {
 	projects: <FolderIcon className="size-5" />,
 };
 
-const WHATS_NEW_ICONS = {
+const WHATS_NEW_ICONS: Record<WhatsNewIcon, ReactNode> = {
 	sparkles: <SparklesIcon className="size-5" />,
 	puzzle: <PuzzlePieceIcon className="size-5" />,
 	shield: <ShieldCheckIcon className="size-5" />,
-} as const;
+};
 
 export function OnboardingWizard({
 	step,
@@ -48,6 +53,7 @@ export function OnboardingWizard({
 	onSelectStep,
 	analyticsOptIn,
 	onAnalyticsOptInChange,
+	whatsNewLocale,
 	t,
 }: OnboardingWizardProps) {
 	if (step.type === "feature") {
@@ -116,6 +122,7 @@ export function OnboardingWizard({
 	}
 
 	if (step.type === "whats-new") {
+		const copy = getWhatsNewCopy(step.entry, whatsNewLocale);
 		return (
 			<div className="space-y-3">
 				<div className="space-y-1">
@@ -124,30 +131,45 @@ export function OnboardingWizard({
 							version: step.entry.version,
 						})}
 					</p>
-					<h3 className="text-lg font-semibold">
-						{t(step.entry.titleKey)}
-					</h3>
-					<p className="text-sm text-muted">
-						{t(step.entry.subtitleKey)}
-					</p>
+					<h3 className="text-lg font-semibold">{copy.title}</h3>
+					<p className="text-sm text-muted">{copy.summary}</p>
 				</div>
 				<ul className="divide-y divide-border">
-					{step.entry.items.map((item: WhatsNewItem) => (
-						<li key={item.titleKey} className="flex gap-3 py-3">
+					{copy.highlights.map((item) => (
+						<li key={item.id} className="flex gap-3 py-3">
 							<div className="shrink-0 pt-0.5 text-muted">
-								{WHATS_NEW_ICONS[item.iconKey]}
+								{WHATS_NEW_ICONS[item.icon]}
 							</div>
 							<div className="min-w-0 space-y-1">
 								<p className="text-sm font-semibold">
-									{t(item.titleKey)}
+									{item.title}
 								</p>
 								<p className="text-xs leading-5 text-muted">
-									{t(item.descriptionKey)}
+									{item.description}
 								</p>
 							</div>
 						</li>
 					))}
 				</ul>
+				{copy.knownIssues.length > 0 && (
+					<div className="space-y-2 border-t border-border pt-3">
+						<h4 className="text-sm font-semibold">
+							{t("whatsNewKnownIssues")}
+						</h4>
+						<ul className="space-y-2">
+							{copy.knownIssues.map((issue) => (
+								<li key={issue.id}>
+									<p className="text-sm font-medium">
+										{issue.title}
+									</p>
+									<p className="text-xs leading-5 text-muted">
+										{issue.description}
+									</p>
+								</li>
+							))}
+						</ul>
+					</div>
+				)}
 			</div>
 		);
 	}

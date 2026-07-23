@@ -3,8 +3,7 @@ import { getVersion } from "@tauri-apps/api/app";
 import { useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useOnboardingTours } from "../hooks/use-onboarding-tours";
-import { capture } from "../lib/analytics";
-import { saveAnalyticsPreference } from "../lib/analytics-preference";
+import { applyAnalyticsConsent, capture } from "../lib/analytics";
 import { ONBOARDING_EVENT, type OnboardingCommand } from "../lib/onboarding";
 import {
 	buildWizardSteps,
@@ -18,16 +17,19 @@ import {
 	getAnalyticsConsent,
 	getLastSeenWhatsNewVersion,
 	getOnboardingProgress,
-	setLastSeenWhatsNewVersion,
-	updateOnboardingProgress,
+	saveOnboardingCompletion,
 } from "../lib/store";
-import { pendingWhatsNew, WHATS_NEW_ENTRIES } from "../lib/whats-new";
+import {
+	pendingWhatsNew,
+	resolveWhatsNewLocale,
+	WHATS_NEW_ENTRIES,
+} from "../lib/whats-new";
 import { OnboardingWizard } from "./onboarding-wizard";
 
 type OverlayMode = "welcome" | null;
 
 export function OnboardingController() {
-	const { t } = useTranslation();
+	const { i18n, t } = useTranslation();
 	const [isReady, setIsReady] = useState(false);
 	const [overlayMode, setOverlayMode] = useState<OverlayMode>(null);
 	const [analyticsOptIn, setAnalyticsOptIn] = useState(true);
@@ -40,6 +42,9 @@ export function OnboardingController() {
 	const { currentStep, steps: wizardSteps } = wizard;
 	const includedFeatureSteps = wizardSteps.some(
 		(step) => step.type === "feature",
+	);
+	const includesWhatsNew = wizardSteps.some(
+		(step) => step.type === "whats-new",
 	);
 	const activeStep = wizardSteps[currentStep];
 	const dismissInFlightRef = useRef(false);
@@ -58,16 +63,24 @@ export function OnboardingController() {
 		const acknowledgements = getWizardAcknowledgements(wizard);
 
 		try {
+			await saveOnboardingCompletion({
+				analyticsConsent: acknowledgements.consentWasSeen
+					? analyticsOptIn
+						? "granted"
+						: "denied"
+					: null,
+				lastSeenWhatsNewVersion: acknowledgements.latestWhatsNewVersion,
+			});
 			if (acknowledgements.consentWasSeen) {
-				await saveAnalyticsPreference(analyticsOptIn);
+				try {
+					await applyAnalyticsConsent(analyticsOptIn);
+				} catch (error) {
+					console.error(
+						"Failed to apply analytics preference:",
+						error,
+					);
+				}
 			}
-
-			const lastSeenVersion = acknowledgements.latestWhatsNewVersion;
-			if (lastSeenVersion) {
-				await setLastSeenWhatsNewVersion(lastSeenVersion);
-			}
-
-			await updateOnboardingProgress({ hasSeenWelcome: true });
 			if (includedFeatureSteps) {
 				capture("onboarding completed");
 			}
@@ -194,10 +207,14 @@ export function OnboardingController() {
 					<Modal.Header>
 						<div className="space-y-1">
 							<Modal.Heading>
-								{t("onboardingWizardTitle")}
+								{includesWhatsNew
+									? t("whatsNewWizardTitle")
+									: t("onboardingWizardTitle")}
 							</Modal.Heading>
 							<p className="text-sm text-muted">
-								{t("onboardingWizardSubtitle")}
+								{includesWhatsNew
+									? t("whatsNewWizardSubtitle")
+									: t("onboardingWizardSubtitle")}
 							</p>
 						</div>
 					</Modal.Header>
@@ -213,6 +230,9 @@ export function OnboardingController() {
 								}
 								analyticsOptIn={analyticsOptIn}
 								onAnalyticsOptInChange={setAnalyticsOptIn}
+								whatsNewLocale={resolveWhatsNewLocale(
+									i18n.resolvedLanguage ?? i18n.language,
+								)}
 								t={t}
 							/>
 						)}

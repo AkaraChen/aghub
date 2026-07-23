@@ -75,13 +75,13 @@ test("upgrade notes are acknowledged after the user sees them", async ({
 	page,
 }) => {
 	await page.goto(upgradeLaunchPath);
-	const wizard = page.getByRole("dialog", { name: "Welcome to Aghub" });
+	const wizard = page.getByRole("dialog", { name: "What's New in Aghub" });
 
 	await expect(wizard).toBeVisible();
-	await expect(wizard.getByText("What's new in 0.2.0")).toBeVisible();
+	await expect(wizard.getByText("What's new in 1.9.0-beta.1")).toBeVisible();
 	await expect(
 		wizard.getByRole("heading", {
-			name: "Plugins, privacy, and polish",
+			name: "Plugins, privacy, and desktop updates",
 		}),
 	).toBeVisible();
 

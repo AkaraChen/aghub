@@ -19,6 +19,7 @@ export {
 } from "./store/integrations";
 export {
 	getOnboardingProgress,
+	saveOnboardingCompletion,
 	updateOnboardingProgress,
 } from "./store/onboarding";
 export {

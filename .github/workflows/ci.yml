@@ -62,7 +62,7 @@ jobs:
               run: cargo fetch
 
             - name: Install frontend dependencies
-              run: cd crates/desktop && bun install
+              run: cd crates/desktop && bun install --frozen-lockfile
 
             - name: Install root dependencies
               run: bun install
@@ -78,6 +78,14 @@ jobs:
 
             - name: Test
               run: just test
+
+            - name: Test desktop release notes
+              if: matrix.os == 'ubuntu-latest'
+              working-directory: crates/desktop
+              run: |
+                  bun run release-notes:check
+                  bun run test:unit
+                  bun run test:release-notes
 
             - name: Build
               run: |

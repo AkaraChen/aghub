@@ -10,9 +10,19 @@ import {
 
 const release: WhatsNewEntry = {
 	version: "1.0.0",
-	titleKey: "releaseTitle",
-	subtitleKey: "releaseSubtitle",
-	items: [],
+	channel: "stable",
+	title: {
+		en: "Release title",
+		"zh-Hans": "版本标题",
+		"zh-Hant": "版本標題",
+	},
+	summary: {
+		en: "Release summary",
+		"zh-Hans": "版本摘要",
+		"zh-Hant": "版本摘要",
+	},
+	highlights: [],
+	knownIssues: [],
 };
 
 describe("buildWizardSteps", () => {

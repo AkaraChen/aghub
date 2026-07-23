@@ -454,19 +454,11 @@ export default {
 	settingsAutostartEnabled: "Startup launch enabled",
 	settingsAutostartDisabled: "Startup launch disabled",
 	settingsAutostartError: "Failed to update startup launch",
+	whatsNewWizardTitle: "What's New in Aghub",
+	whatsNewWizardSubtitle:
+		"A quick look at the changes included with this version.",
 	whatsNewSectionLabel: "What's new in {{version}}",
-	whatsNewV02Title: "Plugins, privacy, and polish",
-	whatsNewV02Subtitle:
-		"A grab bag of upgrades since the last release. Tap through to see what's changed.",
-	whatsNewV02PluginsTitle: "Claude Code plugin support",
-	whatsNewV02PluginsDescription:
-		"Browse and install Claude Code plugins from the Market tab — same flow you'd expect for skills and MCP servers.",
-	whatsNewV02AnalyticsTitle: "You're in control of analytics",
-	whatsNewV02AnalyticsDescription:
-		"A new privacy switch in Settings lets you opt out of usage data and session replay any time.",
-	whatsNewV02PolishTitle: "Sidebar and search refinements",
-	whatsNewV02PolishDescription:
-		"Cleaner navigation, faster global search, and a few quiet performance fixes throughout the app.",
+	whatsNewKnownIssues: "Known issues",
 	onboardingSkip: "Skip",
 	onboardingBack: "Back",
 	onboardingNext: "Next",

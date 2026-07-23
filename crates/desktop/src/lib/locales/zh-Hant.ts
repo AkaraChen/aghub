@@ -434,18 +434,10 @@ export default {
 	settingsAutostartEnabled: "已啟用開機自動啟動",
 	settingsAutostartDisabled: "已關閉開機自動啟動",
 	settingsAutostartError: "更新開機自動啟動失敗",
+	whatsNewWizardTitle: "Aghub 新功能",
+	whatsNewWizardSubtitle: "快速瞭解此版本包含的變更。",
 	whatsNewSectionLabel: "{{version}} 的新功能",
-	whatsNewV02Title: "外掛、隱私與體驗精修",
-	whatsNewV02Subtitle: "上一個版本以來的一系列升級，點擊查看詳情。",
-	whatsNewV02PluginsTitle: "支援 Claude Code 外掛",
-	whatsNewV02PluginsDescription:
-		"在「市集」分頁中瀏覽並安裝 Claude Code 外掛 —— 與技能、MCP 伺服器的安裝流程一致。",
-	whatsNewV02AnalyticsTitle: "資料蒐集由你決定",
-	whatsNewV02AnalyticsDescription:
-		"設定中新增隱私開關，可隨時關閉使用資料蒐集與工作階段重播。",
-	whatsNewV02PolishTitle: "側邊欄與搜尋優化",
-	whatsNewV02PolishDescription:
-		"導覽更清晰、全域搜尋更快速，並修復了多處效能問題。",
+	whatsNewKnownIssues: "已知問題",
 	onboardingSkip: "跳過",
 	onboardingBack: "返回",
 	onboardingNext: "下一步",
