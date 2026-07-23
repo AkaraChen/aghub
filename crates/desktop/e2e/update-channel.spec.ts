@@ -3,6 +3,8 @@ import { installMocks } from "./mocks";
 
 interface UpdateTestState {
 	clearUpdateChecks: () => void;
+	deferUpdateCheck: () => void;
+	finishUpdateCheck: () => void;
 	finishUpdateInstall: () => void;
 	getStoreValue: (key: string) => unknown;
 	getUpdateChecks: () => string[];
@@ -102,5 +104,63 @@ test("download action stays legible in dark mode while pending", async ({
 				__AGHUB_E2E__: UpdateTestState;
 			}
 		).__AGHUB_E2E__.finishUpdateInstall(),
+	);
+});
+
+test("check action stays legible in dark mode while pending", async ({
+	page,
+}, testInfo) => {
+	await page.addInitScript(() => localStorage.setItem("theme", "dark"));
+	await page.goto("/settings?tab=application");
+	await expect(page.locator("html")).toHaveClass(/dark/);
+	await page.evaluate(() =>
+		(
+			window as unknown as {
+				__AGHUB_E2E__: UpdateTestState;
+			}
+		).__AGHUB_E2E__.deferUpdateCheck(),
+	);
+
+	await page.getByRole("button", { name: "Check for Updates" }).click();
+
+	const pendingButton = page.getByRole("button", {
+		name: "Checking for updates...",
+	});
+	await expect(pendingButton).toHaveAttribute("data-pending", "true");
+	await expect(pendingButton.locator('[data-slot="spinner"]')).toBeVisible();
+	await expect(pendingButton).toHaveCSS("opacity", "1");
+	await page.screenshot({
+		path: testInfo.outputPath("check-pending-dark.png"),
+	});
+
+	await page.evaluate(() =>
+		(
+			window as unknown as {
+				__AGHUB_E2E__: UpdateTestState;
+			}
+		).__AGHUB_E2E__.finishUpdateCheck(),
+	);
+	await expect(
+		page.getByRole("button", { name: "Check Again" }),
+	).toBeVisible();
+
+	await page.evaluate(() =>
+		(
+			window as unknown as {
+				__AGHUB_E2E__: UpdateTestState;
+			}
+		).__AGHUB_E2E__.deferUpdateCheck(),
+	);
+	await page.getByRole("button", { name: "Check Again" }).click();
+	await expect(pendingButton).toHaveAttribute("data-pending", "true");
+	await expect(pendingButton.locator('[data-slot="spinner"]')).toBeVisible();
+	await expect(pendingButton).toHaveCSS("opacity", "1");
+
+	await page.evaluate(() =>
+		(
+			window as unknown as {
+				__AGHUB_E2E__: UpdateTestState;
+			}
+		).__AGHUB_E2E__.finishUpdateCheck(),
 	);
 });

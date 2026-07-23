@@ -194,6 +194,9 @@ export default function ApplicationPanel() {
 	const hasError = checkMutation.isError || downloadMutation.isError;
 	const errorMessage =
 		checkMutation.error?.message || downloadMutation.error?.message;
+	const checkButtonLabel = hasCheckedForUpdates
+		? t("checkAgain")
+		: t("checkForUpdates");
 
 	const teamMembers = [
 		{
@@ -273,32 +276,31 @@ export default function ApplicationPanel() {
 							</span>
 						</div>
 						<div className="flex gap-2">
-							{!hasCheckedForUpdates && (
+							{!availableUpdate && (
 								<Button
 									variant="secondary"
 									size="sm"
+									className="data-[pending]:opacity-100"
 									onPress={handleCheckUpdates}
+									isPending={isChecking}
 									isDisabled={
-										isChecking ||
 										isDownloading ||
 										updateChannelMutation.isPending
 									}
 								>
-									{t("checkForUpdates")}
-								</Button>
-							)}
-							{hasCheckedForUpdates && !availableUpdate && (
-								<Button
-									variant="secondary"
-									size="sm"
-									onPress={handleCheckUpdates}
-									isDisabled={
-										isChecking ||
-										isDownloading ||
-										updateChannelMutation.isPending
-									}
-								>
-									{t("checkAgain")}
+									{({ isPending }) => (
+										<>
+											{isPending && (
+												<Spinner
+													color="current"
+													size="sm"
+												/>
+											)}
+											{isPending
+												? t("checkingForUpdates")
+												: checkButtonLabel}
+										</>
+									)}
 								</Button>
 							)}
 							{availableUpdate && (

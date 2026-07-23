@@ -6,6 +6,8 @@
 	const stores = new Map(); // rid -> Map<key, value>
 	const updateChecks = [];
 	let availableUpdate = null;
+	let shouldDeferUpdateCheck = false;
+	let resolveUpdateCheck = null;
 	let resolveUpdateInstall = null;
 	let nextRid = 1;
 	let nextMenuRid = 1_000;
@@ -151,6 +153,11 @@
 				});
 			case "check_for_update":
 				updateChecks.push(args.channel);
+				if (shouldDeferUpdateCheck) {
+					return new Promise((resolve) => {
+						resolveUpdateCheck = resolve;
+					});
+				}
 				return Promise.resolve(availableUpdate);
 			default:
 				if (cmd.startsWith("plugin:event|")) return Promise.resolve(0);
@@ -182,6 +189,14 @@
 	window.__AGHUB_E2E__ = {
 		clearUpdateChecks() {
 			updateChecks.length = 0;
+		},
+		deferUpdateCheck() {
+			shouldDeferUpdateCheck = true;
+		},
+		finishUpdateCheck() {
+			resolveUpdateCheck?.(availableUpdate);
+			resolveUpdateCheck = null;
+			shouldDeferUpdateCheck = false;
 		},
 		finishUpdateInstall() {
 			resolveUpdateInstall?.(null);
