@@ -101,6 +101,10 @@ struct ResolvedApiOptions {
 
 struct ApiLogFairing;
 
+fn request_log_path(uri: &rocket::http::uri::Origin<'_>) -> String {
+	uri.path().to_string()
+}
+
 #[rocket::async_trait]
 impl Fairing for ApiLogFairing {
 	fn info(&self) -> Info {
@@ -114,7 +118,7 @@ impl Fairing for ApiLogFairing {
 		info!(
 			"api request started: {} {}",
 			request.method(),
-			request.uri()
+			request_log_path(request.uri())
 		);
 	}
 
@@ -128,21 +132,21 @@ impl Fairing for ApiLogFairing {
 			error!(
 				"api request failed: {} {} -> {}",
 				request.method(),
-				request.uri(),
+				request_log_path(request.uri()),
 				status
 			);
 		} else if status.class().is_client_error() {
 			warn!(
 				"api request returned client error: {} {} -> {}",
 				request.method(),
-				request.uri(),
+				request_log_path(request.uri()),
 				status
 			);
 		} else {
 			debug!(
 				"api request completed: {} {} -> {}",
 				request.method(),
-				request.uri(),
+				request_log_path(request.uri()),
 				status
 			);
 		}
@@ -354,8 +358,10 @@ pub async fn start(options: ApiOptions) -> Result<(), Box<rocket::Error>> {
 
 #[cfg(test)]
 mod tests {
-	use super::{build_rocket, default_app_data_dir, ApiOptions};
-	use rocket::http::{ContentType, Header, Status};
+	use super::{
+		build_rocket, default_app_data_dir, request_log_path, ApiOptions,
+	};
+	use rocket::http::{uri::Origin, ContentType, Header, Status};
 	use rocket::local::blocking::{Client, LocalResponse};
 	use serde_json::{json, Value};
 	use std::ffi::OsString;
@@ -533,6 +539,16 @@ mod tests {
 
 		assert_ne!(first, second);
 		assert!(first.len() >= 32);
+	}
+
+	#[test]
+	fn request_log_path_omits_query() {
+		let uri = Origin::parse(
+			"/api/v1/usage/summary?config=%2FUsers%2Fuser%2Fprivate.json",
+		)
+		.expect("request uri");
+
+		assert_eq!(request_log_path(&uri), "/api/v1/usage/summary");
 	}
 
 	#[test]
