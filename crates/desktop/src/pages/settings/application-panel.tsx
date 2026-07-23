@@ -1,4 +1,4 @@
-import { Avatar, Button, Card, Switch, toast } from "@heroui/react";
+import { Avatar, Button, Card, Spinner, Switch, toast } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getName, getVersion } from "@tauri-apps/api/app";
 import {
@@ -305,13 +305,24 @@ export default function ApplicationPanel() {
 								<Button
 									variant="primary"
 									size="sm"
+									className="data-[pending]:opacity-100"
 									onPress={handleDownloadAndInstall}
-									isDisabled={
-										isDownloading ||
-										updateChannelMutation.isPending
-									}
+									isPending={isDownloading}
+									isDisabled={updateChannelMutation.isPending}
 								>
-									{t("downloadAndInstall")}
+									{({ isPending }) => (
+										<>
+											{isPending && (
+												<Spinner
+													color="current"
+													size="sm"
+												/>
+											)}
+											{isPending
+												? t("downloadingUpdate")
+												: t("downloadAndInstall")}
+										</>
+									)}
 								</Button>
 							)}
 						</div>
