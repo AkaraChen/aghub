@@ -72,7 +72,11 @@ export function GatewayDetailPanel({
 	const isRunning = instance.status === "running";
 
 	const { data: version } = useQuery(
-		gatewayVersionQueryOptions({ api, instanceId: instance.id }),
+		gatewayVersionQueryOptions({
+			api,
+			instanceId: instance.id,
+			enabled: isManaged,
+		}),
 	);
 
 	const startMutation = useMutation({

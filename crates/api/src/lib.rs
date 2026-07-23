@@ -3858,6 +3858,85 @@ mod tests {
 	}
 
 	#[test]
+	fn route_external_gateway_rejects_managed_only_operations() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let record = aghub_cliproxy::GatewayInstanceRecord {
+			id: "external".to_string(),
+			name: "External".to_string(),
+			kind: aghub_cliproxy::GatewayInstanceKind::External,
+			base_url: "http://127.0.0.1:8317".to_string(),
+			port: None,
+			auto_start: false,
+			created_at: "2026-07-24T00:00:00Z".to_string(),
+			provider_projection: Default::default(),
+		};
+		aghub_cliproxy::InstanceStore::new(app_data_dir.path())
+			.insert(record)
+			.expect("external instance");
+		let client = test_client(app_data_dir.path());
+		let item_uri = "/api/v1/gateway/instances/external";
+
+		let response =
+			put_json(&client, item_uri, json!({ "auto_start": true }));
+		assert_json_error(
+			response,
+			Status::UnprocessableEntity,
+			"GATEWAY_MANAGED_ONLY",
+		);
+		let response = post_json(
+			&client,
+			"/api/v1/gateway/instances/external/start",
+			json!({}),
+		);
+		assert_json_error(
+			response,
+			Status::UnprocessableEntity,
+			"GATEWAY_MANAGED_ONLY",
+		);
+		let response = post_json(
+			&client,
+			"/api/v1/gateway/instances/external/stop",
+			json!({}),
+		);
+		assert_json_error(
+			response,
+			Status::UnprocessableEntity,
+			"GATEWAY_MANAGED_ONLY",
+		);
+		let response =
+			get_auth(&client, "/api/v1/gateway/instances/external/version");
+		assert_json_error(
+			response,
+			Status::UnprocessableEntity,
+			"GATEWAY_MANAGED_ONLY",
+		);
+		let response = post_json(
+			&client,
+			"/api/v1/gateway/instances/external/oauth",
+			json!({ "provider": "codex" }),
+		);
+		assert_json_error(
+			response,
+			Status::UnprocessableEntity,
+			"GATEWAY_MANAGED_ONLY",
+		);
+		let response = get_auth(
+			&client,
+			"/api/v1/gateway/instances/external/oauth/status?oauth_state=test",
+		);
+		assert_json_error(
+			response,
+			Status::UnprocessableEntity,
+			"GATEWAY_MANAGED_ONLY",
+		);
+
+		let stored = aghub_cliproxy::InstanceStore::new(app_data_dir.path())
+			.get("external")
+			.expect("stored instance");
+		assert!(!stored.auto_start);
+	}
+
+	#[test]
 	fn route_gateway_provision_status_defaults_to_idle() {
 		let app_data_dir = tempfile::tempdir().expect("app data dir");
 		let client = test_client(app_data_dir.path());

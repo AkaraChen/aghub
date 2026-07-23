@@ -73,6 +73,20 @@ fn require_client(
 	})
 }
 
+fn require_managed_instance(
+	record: &GatewayInstanceRecord,
+	operation: &str,
+) -> Result<(), ApiError> {
+	if record.kind == GatewayInstanceKind::Managed {
+		return Ok(());
+	}
+	Err(ApiError::new(
+		Status::UnprocessableEntity,
+		format!("{operation} is only available for managed gateway instances"),
+		"GATEWAY_MANAGED_ONLY",
+	))
+}
+
 fn binary_installed(state: &State<GatewayState>) -> bool {
 	provision::installed_bin(store(state).root(), provision::PINNED_VERSION)
 		.is_some()
@@ -235,6 +249,9 @@ pub async fn update_gateway_instance(
 	request: Json<UpdateGatewayInstanceRequest>,
 ) -> ApiResult<GatewayInstanceDto> {
 	let mut record = store(state).get(id).map_err(ApiError::from)?;
+	if request.auto_start.is_some() {
+		require_managed_instance(&record, "auto-start")?;
+	}
 	if let Some(name) = &request.name {
 		record.name = name.clone();
 	}
@@ -311,13 +328,7 @@ pub async fn start_gateway_instance(
 	id: &str,
 ) -> ApiResult<GatewayInstanceDto> {
 	let mut record = store(state).get(id).map_err(ApiError::from)?;
-	if record.kind != GatewayInstanceKind::Managed {
-		return Err(ApiError::new(
-			Status::BadRequest,
-			"external instances are started where they run",
-			"INVALID_PARAM",
-		));
-	}
+	require_managed_instance(&record, "process start")?;
 	let bin = provision::installed_bin(
 		store(state).root(),
 		provision::PINNED_VERSION,
@@ -378,6 +389,7 @@ pub async fn stop_gateway_instance(
 	id: &str,
 ) -> ApiResult<GatewayInstanceDto> {
 	let record = store(state).get(id).map_err(ApiError::from)?;
+	require_managed_instance(&record, "process stop")?;
 	state.runtime.stop(&record).await.map_err(ApiError::from)?;
 	Ok(Json(instance_dto(state, &record).await))
 }
@@ -506,6 +518,7 @@ pub async fn gateway_version(
 	id: &str,
 ) -> ApiResult<GatewayVersionDto> {
 	let record = store(state).get(id).map_err(ApiError::from)?;
+	require_managed_instance(&record, "binary version lookup")?;
 	let latest = match management_client(state, &record)? {
 		Some(client) => client.latest_version().await.ok(),
 		None => None,
@@ -599,6 +612,7 @@ pub async fn start_gateway_oauth(
 	request: Json<StartGatewayOauthRequest>,
 ) -> ApiResult<GatewayAuthUrlDto> {
 	let record = store(state).get(id).map_err(ApiError::from)?;
+	require_managed_instance(&record, "OAuth login")?;
 	let client = require_client(state, &record)?;
 	Ok(Json(
 		client
@@ -616,6 +630,7 @@ pub async fn gateway_oauth_status(
 	oauth_state: &str,
 ) -> ApiResult<GatewayAuthPollDto> {
 	let record = store(state).get(id).map_err(ApiError::from)?;
+	require_managed_instance(&record, "OAuth status lookup")?;
 	let client = require_client(state, &record)?;
 	Ok(Json(
 		client

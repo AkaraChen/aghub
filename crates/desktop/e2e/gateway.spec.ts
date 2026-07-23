@@ -125,3 +125,48 @@ test("account actions do not nest interactive tooltip triggers", async ({
 		reset.locator("xpath=ancestor::*[@role='button']"),
 	).toHaveCount(0);
 });
+
+test("external gateways do not query the managed binary version", async ({
+	page,
+}) => {
+	let versionRequests = 0;
+	let resolveAuthFilesRequest: (() => void) | undefined;
+	const authFilesRequested = new Promise<void>((resolve) => {
+		resolveAuthFilesRequest = resolve;
+	});
+	await page.route("http://localhost:45999/api/v1/**", (route) => {
+		const url = new URL(route.request().url());
+		const path = url.pathname.replace("/api/v1", "");
+
+		if (path === "/gateway/instances") {
+			return json(route, [
+				{
+					...instance("running"),
+					name: "External Gateway",
+					kind: "external",
+					port: null,
+					version: null,
+					auto_start: false,
+				},
+			]);
+		}
+		if (path === "/inference/providers" || path === "/inference/presets") {
+			return json(route, []);
+		}
+		if (path === "/gateway/instances/gateway-1/version") {
+			versionRequests += 1;
+			return json(route, { error: "managed endpoint" }, 422);
+		}
+		if (path === "/gateway/instances/gateway-1/auth-files") {
+			resolveAuthFilesRequest?.();
+			return json(route, []);
+		}
+		return json(route, { error: `unhandled ${path}` }, 404);
+	});
+
+	await page.goto("/inference-providers");
+	await page.getByRole("option", { name: "External Gateway" }).click();
+	await authFilesRequested;
+
+	expect(versionRequests).toBe(0);
+});
