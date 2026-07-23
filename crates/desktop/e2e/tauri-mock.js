@@ -5,6 +5,7 @@
 	const storeData = new Map(); // path -> Map<key, value>
 	const stores = new Map(); // rid -> Map<key, value>
 	let nextRid = 1;
+	let nextMenuRid = 1_000;
 	const onboardingMode = new URLSearchParams(location.search).get(
 		"__e2eOnboarding",
 	);
@@ -44,6 +45,9 @@
 		seeded.set("analyticsConsentAcked", false);
 		seeded.delete("lastSeenWhatsNewVersion");
 	}
+	if (!persistedEntries && onboardingMode === "upgrade") {
+		seeded.set("lastSeenWhatsNewVersion", "0.1.0");
+	}
 	storeData.set("store.json", seeded);
 
 	function persistStore() {
@@ -57,6 +61,8 @@
 		switch (cmd) {
 			case "start_server":
 				return Promise.resolve({ port: 45999, token: "e2e-token" });
+			case "plugin:app|name":
+				return Promise.resolve("aghub");
 			case "plugin:app|version":
 				return Promise.resolve("1.9.0-beta.1");
 			case "posthog_get_config":
@@ -67,6 +73,20 @@
 				return Promise.resolve("e2e-session-id");
 			case "posthog_set_enabled":
 			case "posthog_capture":
+			case "plugin:log|log":
+				return Promise.resolve(null);
+			case "plugin:autostart|is_enabled":
+				return Promise.resolve(false);
+			case "plugin:deep-link|get_current":
+				return Promise.resolve(null);
+			case "plugin:menu|new": {
+				const rid = nextMenuRid++;
+				return Promise.resolve([
+					rid,
+					args.options?.id ?? `e2e-menu-${rid}`,
+				]);
+			}
+			case "plugin:menu|set_as_app_menu":
 				return Promise.resolve(null);
 			case "plugin:store|load":
 			case "plugin:store|get_store": {

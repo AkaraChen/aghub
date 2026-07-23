@@ -119,7 +119,7 @@ export function OnboardingWizard({
 		return (
 			<div className="space-y-3">
 				<div className="space-y-1">
-					<p className="text-xs font-medium uppercase tracking-wider text-accent">
+					<p className="text-xs text-muted">
 						{t("whatsNewSectionLabel", {
 							version: step.entry.version,
 						})}
@@ -162,22 +162,20 @@ export function OnboardingWizard({
 					{t("onboardingAnalyticsDescription")}
 				</p>
 			</div>
-			<div className="rounded-xl border border-border bg-surface-secondary/50 p-4">
-				<Checkbox
-					variant="secondary"
-					isSelected={analyticsOptIn}
-					onChange={onAnalyticsOptInChange}
-				>
+			<Checkbox
+				variant="primary"
+				isSelected={analyticsOptIn}
+				onChange={onAnalyticsOptInChange}
+			>
+				<Checkbox.Content>
 					<Checkbox.Control>
 						<Checkbox.Indicator />
 					</Checkbox.Control>
-					<Checkbox.Content>
-						<p className="text-sm font-medium">
-							{t("settingsAnalyticsToggleLabel")}
-						</p>
-					</Checkbox.Content>
-				</Checkbox>
-			</div>
+					<span className="text-sm font-medium">
+						{t("settingsAnalyticsToggleLabel")}
+					</span>
+				</Checkbox.Content>
+			</Checkbox>
 		</div>
 	);
 }

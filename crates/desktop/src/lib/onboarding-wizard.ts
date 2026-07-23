@@ -72,20 +72,29 @@ export interface WizardState {
 	steps: WizardStep[];
 	currentStep: number;
 	highestReachedStep: number;
+	versionToAcknowledge: string | null;
 }
 
 export type WizardAction =
-	| { type: "open"; steps: WizardStep[] }
+	| {
+			type: "open";
+			steps: WizardStep[];
+			versionToAcknowledge: string | null;
+	  }
 	| { type: "select"; step: number }
 	| { type: "next" }
 	| { type: "previous" }
 	| { type: "reset" };
 
-export function createWizardState(steps: WizardStep[] = []): WizardState {
+export function createWizardState(
+	steps: WizardStep[] = [],
+	versionToAcknowledge: string | null = null,
+): WizardState {
 	return {
 		steps,
 		currentStep: 0,
 		highestReachedStep: steps.length > 0 ? 0 : -1,
+		versionToAcknowledge,
 	};
 }
 
@@ -106,7 +115,7 @@ export function onboardingWizardReducer(
 ): WizardState {
 	switch (action.type) {
 		case "open":
-			return createWizardState(action.steps);
+			return createWizardState(action.steps, action.versionToAcknowledge);
 		case "select":
 			return selectWizardStep(state, action.step);
 		case "next":
@@ -127,6 +136,7 @@ export function getWizardAcknowledgements(state: WizardState) {
 
 	return {
 		consentWasSeen: reachedSteps.some((step) => step.type === "consent"),
-		latestWhatsNewVersion: latestWhatsNewVersion ?? null,
+		latestWhatsNewVersion:
+			latestWhatsNewVersion ?? state.versionToAcknowledge,
 	};
 }

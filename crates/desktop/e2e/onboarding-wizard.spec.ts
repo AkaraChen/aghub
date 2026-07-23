@@ -4,6 +4,7 @@ import { installMocks } from "./mocks";
 test.describe.configure({ timeout: 60_000 });
 
 const freshLaunchPath = "/mcp?__e2eOnboarding=fresh";
+const upgradeLaunchPath = "/mcp?__e2eOnboarding=upgrade";
 
 test.beforeEach(async ({ page }) => {
 	await installMocks(page);
@@ -62,7 +63,50 @@ test("fresh launch keeps release notes out of onboarding and persists consent", 
 	await expect(consent).toBeChecked();
 	await wizard.getByRole("button", { name: "Get Started" }).click();
 	await expect(wizard).toBeHidden();
+	await expect(
+		page.getByText("Everything starts in the sidebar"),
+	).toBeVisible();
 
 	await page.reload({ waitUntil: "domcontentloaded" });
 	await expect(wizard).toHaveCount(0);
+});
+
+test("upgrade notes are acknowledged after the user sees them", async ({
+	page,
+}) => {
+	await page.goto(upgradeLaunchPath);
+	const wizard = page.getByRole("dialog", { name: "Welcome to Aghub" });
+
+	await expect(wizard).toBeVisible();
+	await expect(wizard.getByText("What's new in 0.2.0")).toBeVisible();
+	await expect(
+		wizard.getByRole("heading", {
+			name: "Plugins, privacy, and polish",
+		}),
+	).toBeVisible();
+
+	await wizard.getByRole("button", { name: "Start Working" }).click();
+	await expect(wizard).toBeHidden();
+
+	await page.reload({ waitUntil: "domcontentloaded" });
+	await expect(wizard).toHaveCount(0);
+});
+
+test("manual welcome replay preserves the release-note watermark", async ({
+	page,
+}) => {
+	await page.goto("/settings?tab=application");
+	await page.getByRole("button", { name: "Show Welcome" }).click();
+
+	const wizard = page.getByRole("dialog", { name: "Welcome to Aghub" });
+	await expect(wizard).toBeVisible();
+	await wizard.getByRole("button", { name: "Close" }).click();
+	await expect(wizard).toBeHidden();
+
+	const watermark = await page.evaluate(() => {
+		const stored = sessionStorage.getItem("aghub-e2e-store:default");
+		if (!stored) return null;
+		return new Map(JSON.parse(stored)).get("lastSeenWhatsNewVersion");
+	});
+	expect(watermark).toBe("99.99.99");
 });

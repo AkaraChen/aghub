@@ -5,6 +5,7 @@ import {
 	createWizardState,
 	getWizardAcknowledgements,
 	onboardingWizardReducer,
+	WIZARD_FEATURE_STEPS,
 } from "./onboarding-wizard";
 
 const release: WhatsNewEntry = {
@@ -45,6 +46,28 @@ describe("buildWizardSteps", () => {
 });
 
 describe("onboardingWizardReducer", () => {
+	it("only acknowledges the app version for the first-run session", () => {
+		const firstRun = onboardingWizardReducer(createWizardState(), {
+			type: "open",
+			steps: [...WIZARD_FEATURE_STEPS],
+			versionToAcknowledge: "1.9.0-beta.1",
+		});
+		const manualReplay = onboardingWizardReducer(firstRun, {
+			type: "open",
+			steps: [...WIZARD_FEATURE_STEPS],
+			versionToAcknowledge: null,
+		});
+
+		expect(getWizardAcknowledgements(firstRun)).toEqual({
+			consentWasSeen: false,
+			latestWhatsNewVersion: "1.9.0-beta.1",
+		});
+		expect(getWizardAcknowledgements(manualReplay)).toEqual({
+			consentWasSeen: false,
+			latestWhatsNewVersion: null,
+		});
+	});
+
 	it("remembers the furthest step reached after navigating back", () => {
 		const steps = buildWizardSteps({
 			hasSeenWelcome: true,

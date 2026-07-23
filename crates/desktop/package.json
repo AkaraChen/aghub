@@ -46,6 +46,7 @@
 		"@tauri-apps/plugin-updater": "^2.10.1",
 		"bowser": "2.14.1",
 		"clsx": "^2.1.1",
+		"compare-versions": "^6.1.1",
 		"dotenv": "^17.0.0",
 		"driver.js": "^1.4.0",
 		"fuse.js": "^7.4.2",

@@ -21,7 +21,7 @@ import {
 	setLastSeenWhatsNewVersion,
 	updateOnboardingProgress,
 } from "../lib/store";
-import { pendingWhatsNew } from "../lib/whats-new";
+import { pendingWhatsNew, WHATS_NEW_ENTRIES } from "../lib/whats-new";
 import { OnboardingWizard } from "./onboarding-wizard";
 
 type OverlayMode = "welcome" | null;
@@ -43,7 +43,6 @@ export function OnboardingController() {
 	);
 	const activeStep = wizardSteps[currentStep];
 	const dismissInFlightRef = useRef(false);
-	const currentVersionRef = useRef<string | null>(null);
 	const {
 		destroyActiveTour,
 		startProductTour,
@@ -63,15 +62,15 @@ export function OnboardingController() {
 				await saveAnalyticsPreference(analyticsOptIn);
 			}
 
-			const lastSeenVersion =
-				acknowledgements.latestWhatsNewVersion ??
-				(includedFeatureSteps ? currentVersionRef.current : null);
+			const lastSeenVersion = acknowledgements.latestWhatsNewVersion;
 			if (lastSeenVersion) {
 				await setLastSeenWhatsNewVersion(lastSeenVersion);
 			}
 
 			await updateOnboardingProgress({ hasSeenWelcome: true });
-			capture("onboarding completed");
+			if (includedFeatureSteps) {
+				capture("onboarding completed");
+			}
 			setOverlayMode(null);
 			dispatchWizard({ type: "reset" });
 			return true;
@@ -98,6 +97,7 @@ export function OnboardingController() {
 			dispatchWizard({
 				type: "open",
 				steps: [...WIZARD_FEATURE_STEPS],
+				versionToAcknowledge: null,
 			});
 			setOverlayMode("welcome");
 			return;
@@ -130,7 +130,11 @@ export function OnboardingController() {
 				]);
 			if (!isMounted) return;
 
-			const whatsNewEntries = pendingWhatsNew(lastSeen, version);
+			const whatsNewEntries = pendingWhatsNew(
+				lastSeen,
+				version,
+				WHATS_NEW_ENTRIES,
+			);
 			const steps = buildWizardSteps({
 				hasSeenWelcome: progress.hasSeenWelcome,
 				consentAcked,
@@ -139,12 +143,17 @@ export function OnboardingController() {
 
 			if (!isMounted) return;
 
-			currentVersionRef.current = version;
 			setAnalyticsOptIn(consent === "granted");
 			setIsReady(true);
 
 			if (steps.length > 0) {
-				dispatchWizard({ type: "open", steps });
+				dispatchWizard({
+					type: "open",
+					steps,
+					versionToAcknowledge: progress.hasSeenWelcome
+						? null
+						: version,
+				});
 				setOverlayMode("welcome");
 			}
 		})();
