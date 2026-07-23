@@ -22,7 +22,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use futures::stream::{self, StreamExt};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
 /// Default ccusage spawn timeout, in seconds; overridable per [`UsageQuery`].
 pub const DEFAULT_TIMEOUT_SECS: u64 = 30;
@@ -395,28 +395,38 @@ fn codex_to_agent(report: CcCodexReport) -> AgentUsageDto {
 
 #[derive(Deserialize)]
 struct CcAgentReport {
-	#[serde(default)]
 	daily: Vec<CcAgentDay>,
-	#[serde(default)]
+	// ccusage uses null for known no-data sources; omitting the key is drift.
+	#[serde(deserialize_with = "deserialize_agent_totals")]
 	totals: Option<CcAgentTotals>,
 }
 
+fn deserialize_agent_totals<'de, D>(
+	deserializer: D,
+) -> Result<Option<CcAgentTotals>, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	Option::deserialize(deserializer)
+}
+
 #[derive(Deserialize, Default)]
-#[serde(rename_all = "camelCase", default)]
+#[serde(rename_all = "camelCase")]
 struct CcAgentTotals {
 	input_tokens: u64,
 	output_tokens: u64,
 	cache_creation_tokens: u64,
 	#[serde(alias = "cachedInputTokens")]
 	cache_read_tokens: u64,
+	#[serde(default)]
 	reasoning_output_tokens: u64,
 	total_tokens: u64,
-	#[serde(alias = "costUSD")]
+	#[serde(default, alias = "costUSD")]
 	total_cost: Option<f64>,
 }
 
-#[derive(Deserialize, Default)]
-#[serde(rename_all = "camelCase", default)]
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct CcAgentDay {
 	date: String,
 	input_tokens: u64,
@@ -424,15 +434,17 @@ struct CcAgentDay {
 	cache_creation_tokens: u64,
 	#[serde(alias = "cachedInputTokens")]
 	cache_read_tokens: u64,
+	#[serde(default)]
 	reasoning_output_tokens: u64,
 	total_tokens: u64,
-	#[serde(alias = "costUSD")]
+	#[serde(default, alias = "costUSD")]
 	total_cost: Option<f64>,
+	#[serde(default)]
 	model_breakdowns: Vec<CcAgentModel>,
 }
 
-#[derive(Deserialize, Default)]
-#[serde(rename_all = "camelCase", default)]
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct CcAgentModel {
 	model_name: String,
 	input_tokens: u64,
@@ -440,8 +452,11 @@ struct CcAgentModel {
 	cache_creation_tokens: u64,
 	#[serde(alias = "cachedInputTokens")]
 	cache_read_tokens: u64,
+	#[serde(default)]
 	reasoning_output_tokens: u64,
+	#[serde(default)]
 	total_tokens: u64,
+	#[serde(default)]
 	cost: Option<f64>,
 }
 
@@ -1459,6 +1474,43 @@ mod tests {
 		assert_eq!(agent.totals.reasoning_tokens, 0);
 		assert_eq!(agent.days[0].models[0].model, "gpt-5.2-codex");
 		assert_eq!(agent.days[0].models[0].total_tokens, 165);
+	}
+
+	#[test]
+	fn generic_agent_rejects_missing_required_report_fields() {
+		let missing_totals =
+			serde_json::from_value::<CcAgentReport>(json!({ "daily": [] }));
+		assert!(missing_totals.is_err());
+
+		let missing_day_date = serde_json::from_value::<CcAgentReport>(json!({
+			"daily": [{
+				"inputTokens": 100,
+				"outputTokens": 50,
+				"cacheCreationTokens": 10,
+				"cacheReadTokens": 5,
+				"totalTokens": 165
+			}],
+			"totals": {
+				"inputTokens": 100,
+				"outputTokens": 50,
+				"cacheCreationTokens": 10,
+				"cacheReadTokens": 5,
+				"totalTokens": 165
+			}
+		}));
+		assert!(missing_day_date.is_err());
+
+		let missing_total_tokens =
+			serde_json::from_value::<CcAgentReport>(json!({
+				"daily": [],
+				"totals": {
+					"inputTokens": 100,
+					"outputTokens": 50,
+					"cacheCreationTokens": 10,
+					"cacheReadTokens": 5
+				}
+			}));
+		assert!(missing_total_tokens.is_err());
 	}
 
 	#[test]
