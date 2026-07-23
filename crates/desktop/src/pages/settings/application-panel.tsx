@@ -8,6 +8,7 @@ import {
 } from "@tauri-apps/plugin-autostart";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { saveAnalyticsPreference } from "../../lib/analytics-preference";
 import { dispatchOnboardingCommand } from "../../lib/onboarding";
@@ -125,6 +126,17 @@ export default function ApplicationPanel() {
 		mutationFn: checkForUpdate,
 	});
 
+	useEffect(() => {
+		const update = checkMutation.data;
+		if (!update) return;
+
+		return () => {
+			update.close().catch((error) => {
+				console.error("Failed to close update resource:", error);
+			});
+		};
+	}, [checkMutation.data]);
+
 	const updateChannelMutation = useMutation({
 		...setUpdateChannelMutationOptions({
 			queryClient,
@@ -149,6 +161,7 @@ export default function ApplicationPanel() {
 	const downloadMutation = useMutation({
 		mutationFn: installUpdate,
 		onSuccess: () => {
+			checkMutation.reset();
 			toast.success(t("updateInstalledSuccess"), {
 				timeout: 0,
 				actionProps: {
