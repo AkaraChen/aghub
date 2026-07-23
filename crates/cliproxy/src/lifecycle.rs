@@ -116,7 +116,6 @@ impl GatewayRuntime {
 			.kill_on_drop(true);
 		#[cfg(windows)]
 		{
-			use std::os::windows::process::CommandExt;
 			command.creation_flags(CREATE_NO_WINDOW);
 		}
 		let mut child = command.spawn().map_err(|error| {
