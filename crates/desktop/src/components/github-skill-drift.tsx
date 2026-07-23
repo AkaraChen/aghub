@@ -1,7 +1,7 @@
 import { Accordion } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import * as pathe from "pathe";
-import { useMemo, useState } from "react";
+import { useMemo, useReducer } from "react";
 import { useTranslation } from "react-i18next";
 import type { SkillCopyStorageModeRequest } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
@@ -19,6 +19,10 @@ import {
 	SkillComparisonUnavailableAlert,
 	SkillDriftHeading,
 } from "./skill-drift-status";
+import {
+	INITIAL_SKILL_RESOLUTION_VIEW,
+	skillResolutionViewReducer,
+} from "./skill-resolution-state";
 import { SkillResolutionReview } from "./skill-version-diff-review";
 import {
 	githubLocalChoice,
@@ -45,25 +49,18 @@ export type { GithubSkillResolutionChoice } from "./github-skill-resolution";
 const REPOSITORY_DIFFERENCES_ID = "github-skill-differences";
 const REPOSITORY_COPY_ID = "repository";
 
-export function GithubSkillDrift({
+function useGithubSkillDriftVersions({
 	sessionId,
 	skillPath,
 	locations,
 	scope,
 	projectRoot,
-	selection,
-	isDisabled = false,
-	onSelectionChange,
-}: GithubSkillDriftProps) {
-	const { t } = useTranslation();
+	repositoryLabel,
+}: Pick<
+	GithubSkillDriftProps,
+	"sessionId" | "skillPath" | "locations" | "scope" | "projectRoot"
+> & { repositoryLabel: string }) {
 	const api = useApi();
-	const [isExpanded, setIsExpanded] = useState(false);
-	const [activeVersionHash, setActiveVersionHash] = useState<string | null>(
-		null,
-	);
-	const [storageMode, setStorageMode] =
-		useState<SkillCopyStorageModeRequest>("preserve");
-	const [showFileChanges, setShowFileChanges] = useState(false);
 	const sourcePaths = useMemo(
 		() => locations.map((location) => location.sourcePath),
 		[locations],
@@ -93,7 +90,7 @@ export function GithubSkillDrift({
 			groupSkillCopyVersions(
 				{
 					id: REPOSITORY_COPY_ID,
-					label: t("repositoryVersion"),
+					label: repositoryLabel,
 					source: "GitHub",
 				},
 				locations.map((location) => ({
@@ -107,7 +104,7 @@ export function GithubSkillDrift({
 				})),
 				comparisonResults ?? [],
 			),
-		[comparisonResults, locations, t],
+		[comparisonResults, locations, repositoryLabel],
 	);
 	const versions = groupedVersions.versions;
 	const repositoryVersion = versions[0];
@@ -115,6 +112,59 @@ export function GithubSkillDrift({
 	const unavailableCount = result.isError
 		? sourcePaths.length
 		: groupedVersions.unavailable.length;
+
+	return {
+		result,
+		sourcePaths,
+		versions,
+		repositoryVersion,
+		localVersions,
+		unavailableCount,
+		hasLinks:
+			locations.some((location) => location.isSymlink) ||
+			skillDiffsContainLinks(comparisonResults),
+		localCopiesUseOneNonRepositoryVersion:
+			unavailableCount === 0 &&
+			localVersions.length === 1 &&
+			(repositoryVersion?.copies.some((copy) => copy.sourcePath) ??
+				false) === false,
+	};
+}
+
+export function GithubSkillDrift({
+	sessionId,
+	skillPath,
+	locations,
+	scope,
+	projectRoot,
+	selection,
+	isDisabled = false,
+	onSelectionChange,
+}: GithubSkillDriftProps) {
+	const { t } = useTranslation();
+	const [view, dispatchView] = useReducer(
+		skillResolutionViewReducer,
+		INITIAL_SKILL_RESOLUTION_VIEW,
+	);
+	const { isExpanded, activeVersionHash, storageMode, showFileChanges } =
+		view;
+	const {
+		result,
+		sourcePaths,
+		versions,
+		repositoryVersion,
+		localVersions,
+		unavailableCount,
+		hasLinks,
+		localCopiesUseOneNonRepositoryVersion,
+	} = useGithubSkillDriftVersions({
+		sessionId,
+		skillPath,
+		locations,
+		scope,
+		projectRoot,
+		repositoryLabel: t("repositoryVersion"),
+	});
 	const activeVersion =
 		localVersions.find((version) => version.hash === activeVersionHash) ??
 		localVersions[0];
@@ -130,14 +180,6 @@ export function GithubSkillDrift({
 	const reverseReviewedDiff =
 		selectedVersion?.hash === repositoryVersion?.hash;
 	const controlsDisabled = isDisabled || result.isFetching;
-	const hasLinks =
-		locations.some((location) => location.isSymlink) ||
-		skillDiffsContainLinks(comparisonResults);
-	const localCopiesUseOneNonRepositoryVersion =
-		unavailableCount === 0 &&
-		localVersions.length === 1 &&
-		(repositoryVersion?.copies.some((copy) => copy.sourcePath) ?? false) ===
-			false;
 	useSynchronizedGithubSelection({
 		selection,
 		selectedVersion,
@@ -185,7 +227,10 @@ export function GithubSkillDrift({
 	const handleStorageModeChange = (
 		nextStorageMode: SkillCopyStorageModeRequest,
 	) => {
-		setStorageMode(nextStorageMode);
+		dispatchView({
+			type: "set-storage-mode",
+			storageMode: nextStorageMode,
+		});
 		if (!selectedVersion || !repositoryVersion || controlsDisabled) return;
 		const nextSelection = githubResolutionChoice({
 			version: selectedVersion,
@@ -222,11 +267,14 @@ export function GithubSkillDrift({
 					}
 					onExpandedChange={(keys) => {
 						const expanded = keys.has(REPOSITORY_DIFFERENCES_ID);
-						setIsExpanded(expanded);
-						setShowFileChanges(false);
-						setStorageMode("preserve");
-						setActiveVersionHash(
-							expanded ? (localVersions[0]?.hash ?? null) : null,
+						dispatchView(
+							expanded
+								? {
+										type: "expand",
+										activeVersionHash:
+											localVersions[0]?.hash ?? null,
+									}
+								: { type: "collapse" },
 						);
 						if (!expanded) {
 							onSelectionChange(null);
@@ -280,9 +328,11 @@ export function GithubSkillDrift({
 														version.hash !==
 														repositoryVersion.hash
 													) {
-														setActiveVersionHash(
-															version.hash,
-														);
+														dispatchView({
+															type: "set-active-version",
+															activeVersionHash:
+																version.hash,
+														});
 													}
 													handleVersionSelection(
 														version,
@@ -295,8 +345,13 @@ export function GithubSkillDrift({
 												handleStorageModeChange
 											}
 											showFileChanges={showFileChanges}
-											onShowFileChangesChange={
-												setShowFileChanges
+											onShowFileChangesChange={(
+												showFileChanges,
+											) =>
+												dispatchView({
+													type: "set-file-changes",
+													showFileChanges,
+												})
 											}
 											isDisabled={controlsDisabled}
 											comparisonVersions={localVersions}
@@ -309,8 +364,13 @@ export function GithubSkillDrift({
 												activeVersion?.hash ??
 												reviewedLocalVersion.hash
 											}
-											onActiveVersionChange={
-												setActiveVersionHash
+											onActiveVersionChange={(
+												activeVersionHash,
+											) =>
+												dispatchView({
+													type: "set-active-version",
+													activeVersionHash,
+												})
 											}
 											diff={
 												reviewedLocalVersion.comparison
