@@ -12,6 +12,7 @@ const GITHUB_API_ACCEPT: &str = "application/vnd.github+json";
 const GITHUB_API_VERSION: &str = "2022-11-28";
 const UPDATE_MANIFEST_ASSET: &str = "latest.json";
 const UPDATER_USER_AGENT: &str = "aghub-updater";
+const GITHUB_AUTH_TIMEOUT: Duration = Duration::from_secs(5);
 const UPDATE_CHECK_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -106,16 +107,22 @@ fn update_manifest_url(
 	})
 }
 
-async fn beta_update_endpoint() -> Result<Url, UpdateSourceError> {
+async fn beta_update_endpoint(
+	auth_token: Option<&str>,
+) -> Result<Url, UpdateSourceError> {
 	let client = reqwest::Client::builder()
 		.timeout(UPDATE_CHECK_TIMEOUT)
 		.user_agent(UPDATER_USER_AGENT)
 		.build()
 		.map_err(UpdateSourceError::Github)?;
-	let releases = client
+	let mut request = client
 		.get(GITHUB_RELEASES_API)
 		.header("Accept", GITHUB_API_ACCEPT)
-		.header("X-GitHub-Api-Version", GITHUB_API_VERSION)
+		.header("X-GitHub-Api-Version", GITHUB_API_VERSION);
+	if let Some(token) = auth_token {
+		request = request.bearer_auth(token);
+	}
+	let releases = request
 		.send()
 		.await
 		.map_err(UpdateSourceError::Github)?
@@ -127,6 +134,33 @@ async fn beta_update_endpoint() -> Result<Url, UpdateSourceError> {
 	let release = select_update_release(&releases)
 		.ok_or(UpdateSourceError::MissingManifest)?;
 	update_manifest_url(release)
+}
+
+async fn github_auth_token() -> Option<String> {
+	for variable in ["GH_TOKEN", "GITHUB_TOKEN"] {
+		if let Ok(token) = std::env::var(variable) {
+			let token = token.trim();
+			if !token.is_empty() {
+				return Some(token.to_string());
+			}
+		}
+	}
+
+	let mut command = tokio::process::Command::new("gh");
+	command
+		.args(["auth", "token"])
+		.env("GH_PROMPT_DISABLED", "1")
+		.kill_on_drop(true);
+	let output = tokio::time::timeout(GITHUB_AUTH_TIMEOUT, command.output())
+		.await
+		.ok()?
+		.ok()?;
+	if !output.status.success() {
+		return None;
+	}
+	let token = String::from_utf8(output.stdout).ok()?;
+	let token = token.trim();
+	(!token.is_empty()).then(|| token.to_string())
 }
 
 #[derive(Serialize)]
@@ -147,7 +181,8 @@ pub async fn check_for_update(
 ) -> Result<Option<UpdateMetadata>, String> {
 	let mut updater = webview.updater_builder().timeout(UPDATE_CHECK_TIMEOUT);
 	if matches!(channel, UpdateChannel::Beta) {
-		let endpoint = beta_update_endpoint()
+		let auth_token = github_auth_token().await;
+		let endpoint = beta_update_endpoint(auth_token.as_deref())
 			.await
 			.map_err(|error| error.to_string())?;
 		updater = updater
