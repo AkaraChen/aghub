@@ -292,7 +292,9 @@ fn validated_install_bin(dir: &Path, version: &str) -> Option<PathBuf> {
 		&std::fs::read(dir.join(INSTALL_MANIFEST)).ok()?,
 	)
 	.ok()?;
+	let expected_asset = asset_name(version).ok()?;
 	if manifest.version != version
+		|| manifest.asset != expected_asset
 		|| expected_checksum(version, &manifest.asset).ok()? != manifest.sha256
 	{
 		return None;
@@ -798,6 +800,34 @@ mod tests {
 			installed_bin(dir.path(), PINNED_VERSION),
 			Some(destination.join("cli-proxy-api"))
 		);
+	}
+
+	#[test]
+	fn installed_bin_rejects_other_platform_manifest() {
+		let dir = tempfile::tempdir().expect("tempdir");
+		let install = committed_install(dir.path());
+		let current_asset = asset_name(PINNED_VERSION).expect("asset name");
+		let other_asset = if current_asset.contains("_linux_") {
+			"CLIProxyAPI_7.2.81_darwin_amd64.tar.gz"
+		} else {
+			"CLIProxyAPI_7.2.81_linux_amd64.tar.gz"
+		};
+		let checksum =
+			expected_checksum(PINNED_VERSION, other_asset).expect("checksum");
+		write_install_manifest(
+			&install,
+			PINNED_VERSION,
+			other_asset,
+			checksum,
+			Path::new("cli-proxy-api"),
+		)
+		.expect("manifest");
+		let destination = version_dir(dir.path(), PINNED_VERSION);
+		std::fs::create_dir_all(destination.parent().expect("bin root"))
+			.expect("bin root");
+		std::fs::rename(install, &destination).expect("commit");
+
+		assert_eq!(installed_bin(dir.path(), PINNED_VERSION), None);
 	}
 
 	#[test]
