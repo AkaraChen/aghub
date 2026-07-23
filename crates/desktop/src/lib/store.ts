@@ -48,10 +48,10 @@ export {
 	setStarredSkills,
 } from "./store/stars";
 export {
-	getTrustedSkills,
-	setTrustedSkills,
-	type TrustedSkill,
-} from "./store/trust";
+	type AcknowledgedSkillAssessment,
+	getAcknowledgedSkillAssessments,
+	setAcknowledgedSkillAssessments,
+} from "./store/audit-acknowledgements";
 export type {
 	IntegrationPreferences,
 	OnboardingProgress,

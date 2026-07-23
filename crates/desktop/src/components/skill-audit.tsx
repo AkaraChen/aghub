@@ -76,7 +76,6 @@ interface SkillAuditProps {
 	report: AuditReportDto;
 	className?: string;
 	embedded?: boolean;
-	/** Use present-tense summaries for an installed skill. */
 	installed?: boolean;
 }
 

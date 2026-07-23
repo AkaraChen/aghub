@@ -22,7 +22,7 @@
 	const defaultEntries = [
 		["version", 10],
 		["skillAuditEnabled", true],
-		["trustedSkills", []],
+		["acknowledgedSkillAssessments", []],
 		[
 			"onboardingProgress",
 			{

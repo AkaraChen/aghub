@@ -10,6 +10,7 @@ import { useTranslation } from "react-i18next";
 import { AgentIcons } from "./agent-icons";
 import type { AuditReportDto, VerdictDto } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
+import { useAuditAcknowledgements } from "../hooks/use-audit-acknowledgements";
 import { useFavorites } from "../hooks/use-favorites";
 import { useListSelection } from "../hooks/use-list-selection";
 import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
@@ -21,7 +22,6 @@ import type {
 	SkillSectionEntry,
 	SkillSections,
 } from "../hooks/use-skill-sections";
-import { useTrustedSkills } from "../hooks/use-trusted-skills";
 import { dragSelectionPayload } from "../lib/drag-payload";
 import type { ResourceGroup } from "../lib/store";
 import { cn } from "../lib/utils";
@@ -116,7 +116,6 @@ interface SkillListProps {
 	selectedKeys: Set<string>;
 	onSelectionChange: (keys: Set<string>) => void;
 	isMultiSelectMode?: boolean;
-	/** Audit every listed skill and flag the non-benign ones inline. */
 	showAuditStatus?: boolean;
 	/** Dialog intents owned by the page (delete/transfer/agents/new group) */
 	intents: ResourceActionIntents;
@@ -149,7 +148,7 @@ export const SkillList = memo(function SkillList({
 	} = sections;
 
 	const { isSkillStarred, setSkillsStarred } = useFavorites();
-	const { isSkillTrusted } = useTrustedSkills();
+	const { isAssessmentAcknowledged } = useAuditAcknowledgements();
 	const { renameGroup, deleteGroup } = useSkillGroups();
 
 	const [renameTarget, setRenameTarget] = useState<ResourceGroup | null>(
@@ -159,10 +158,7 @@ export const SkillList = memo(function SkillList({
 		null,
 	);
 
-	// Audit every visible same-name group once. Canonical paths collapse agent
-	// aliases that point at the same files, while distinct installations remain
-	// part of the combined report shared with the detail view.
-	const auditTargets: { name: string; paths: string[] }[] = [];
+	const auditPathsByName = new Map<string, Set<string>>();
 	if (showAuditStatus && skillAuditReady && skillAuditEnabled) {
 		const visibleGroups: SkillGroup[] = [];
 		for (const section of customSections) {
@@ -177,14 +173,20 @@ export const SkillList = memo(function SkillList({
 		}
 		for (const group of visibleGroups) {
 			const paths = getInstalledSkillAuditPaths(group.items);
-			if (paths.length > 0) {
-				auditTargets.push({ name: group.name, paths });
+			if (paths.length === 0) continue;
+			const groupedPaths =
+				auditPathsByName.get(group.name) ?? new Set<string>();
+			for (const path of paths) {
+				groupedPaths.add(path);
 			}
+			auditPathsByName.set(group.name, groupedPaths);
 		}
 	}
-	// combine + react-query's structural sharing keep this map referentially
-	// stable across selection changes, so a verdict re-renders only its own
-	// memoized row — never the whole list on every select.
+	const auditTargets = Array.from(auditPathsByName, ([name, paths]) => ({
+		name,
+		paths: [...paths].sort(),
+	}));
+	// Stable combine output prevents selection changes from updating every row.
 	const auditByName = useQueries({
 		queries: auditTargets.map((target) =>
 			skillAuditQueryOptions({
@@ -205,17 +207,15 @@ export const SkillList = memo(function SkillList({
 		},
 	});
 
-	// A row shows its verdict unless the user has trusted the skill. Both
-	// inputs are stable, so this can sit in renderSkillItem's deps without
-	// re-rendering every row when the selection moves.
 	const getRowVerdict = useCallback(
 		(name: string): VerdictDto | undefined => {
 			const report = auditByName[name];
-			return report && !isSkillTrusted(name, report.assessment_digest)
+			return report &&
+				!isAssessmentAcknowledged(name, report.assessment_digest)
 				? report.verdict
 				: undefined;
 		},
-		[auditByName, isSkillTrusted],
+		[auditByName, isAssessmentAcknowledged],
 	);
 
 	const {

@@ -1,9 +1,13 @@
 import type { Store } from "@tauri-apps/plugin-store";
 
-export async function migrateV9ToV10(store: Store): Promise<void> {
-	const trustedSkills = await store.get<unknown>("trustedSkills");
-	if (!Array.isArray(trustedSkills)) {
-		await store.set("trustedSkills", []);
+type MigrationStore = Pick<Store, "get" | "set">;
+
+export async function migrateV9ToV10(store: MigrationStore): Promise<void> {
+	const assessments = await store.get<unknown>(
+		"acknowledgedSkillAssessments",
+	);
+	if (!Array.isArray(assessments)) {
+		await store.set("acknowledgedSkillAssessments", []);
 	}
 
 	const skillAuditEnabled = await store.get<unknown>("skillAuditEnabled");

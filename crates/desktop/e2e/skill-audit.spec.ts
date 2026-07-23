@@ -83,7 +83,7 @@ test("a grouped skill is audited across every installed path", async ({
 	).toBeVisible();
 });
 
-test("trust is invalidated when the same skill returns a new content digest", async ({
+test("a hidden warning returns when the skill assessment changes", async ({
 	page,
 }) => {
 	await installMocks(page);
@@ -109,27 +109,27 @@ test("trust is invalidated when the same skill returns a new content digest", as
 	);
 
 	await page.goto("/skills");
-	const trustButton = page.getByRole("button", {
-		name: "Trust this skill",
+	const acknowledgeButton = page.getByRole("button", {
+		name: "Hide this warning",
 	});
-	await expect(trustButton).toBeVisible();
-	const detailCard = trustButton.locator(
+	await expect(acknowledgeButton).toBeVisible();
+	const detailCard = acknowledgeButton.locator(
 		"xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' card ')][1]",
 	);
 	await expect(detailCard.locator(".card.card--transparent")).toHaveCount(1);
 	await expect(detailCard.locator(".card.card--secondary")).toHaveCount(0);
-	await trustButton.click();
+	await acknowledgeButton.click();
 	await expect(
-		page.getByText("You trusted this skill — audit warnings are hidden"),
+		page.getByText("This warning is hidden for the current assessment"),
 	).toBeVisible();
 
 	const auditCount = auditedDigests.length;
 	contentDigest = "d".repeat(64);
 	await page.getByRole("button", { name: "Refresh skills" }).click();
 	await expect.poll(() => auditedDigests.length).toBeGreaterThan(auditCount);
-	await expect(trustButton).toBeVisible();
+	await expect(acknowledgeButton).toBeVisible();
 	await expect(
-		page.getByText("You trusted this skill — audit warnings are hidden"),
+		page.getByText("This warning is hidden for the current assessment"),
 	).toBeHidden();
 	expect(auditedDigests.at(-1)).toBe(contentDigest);
 });
