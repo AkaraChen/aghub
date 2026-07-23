@@ -14,12 +14,12 @@ crates/mcp-catalog/src/
 
 ## WHERE TO LOOK
 
-| Task                      | File                                  |
-| ------------------------- | ------------------------------------- |
-| Search a source           | `src/client.rs` — `Client::search()`  |
-| Registry→entry mapping    | `src/types.rs` — `map_detail()`       |
-| Output types              | `src/types.rs`                        |
-| Custom base URL           | `ClientBuilder::api_url()`            |
+| Task                   | File                                 |
+| ---------------------- | ------------------------------------ |
+| Search a source        | `src/client.rs` — `Client::search()` |
+| Registry→entry mapping | `src/types.rs` — `map_detail()`      |
+| Output types           | `src/types.rs`                       |
+| Custom base URL        | `ClientBuilder::api_url()`           |
 
 ## USAGE
 
