@@ -24,7 +24,6 @@ import { getAnalyticsConsent } from "./store";
  */
 
 const SERVICE_NAME = "aghub-desktop";
-
 const TRAILING_SLASHES = /\/+$/;
 
 let logger: Logger | null = null;
@@ -89,6 +88,14 @@ interface LogAttributes {
 	[key: string]: string | number | boolean | undefined;
 }
 
+function definedLogAttributes(attributes?: LogAttributes) {
+	const defined: Record<string, string | number | boolean> = {};
+	for (const [key, value] of Object.entries(attributes ?? {})) {
+		if (value !== undefined) defined[key] = value;
+	}
+	return defined;
+}
+
 function emit(
 	severity: SeverityNumber,
 	severityText: string,
@@ -100,7 +107,7 @@ function emit(
 		severityNumber: severity,
 		severityText,
 		body,
-		attributes: attributes as Record<string, string | number | boolean>,
+		attributes: definedLogAttributes(attributes),
 	});
 }
 

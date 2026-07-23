@@ -10,13 +10,12 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { check } from "@tauri-apps/plugin-updater";
 import { useTranslation } from "react-i18next";
-import { applyAnalyticsConsent } from "../../lib/analytics";
+import { saveAnalyticsPreference } from "../../lib/analytics-preference";
 import { dispatchOnboardingCommand } from "../../lib/onboarding";
 import { isWindows } from "../../lib/platform";
 import {
 	getAnalyticsConsent,
 	getAutoCheckUpdates,
-	setAnalyticsConsent,
 	setAutoCheckUpdates,
 } from "../../lib/store";
 
@@ -55,8 +54,7 @@ export default function ApplicationPanel() {
 
 	const analyticsMutation = useMutation({
 		mutationFn: async (enabled: boolean) => {
-			await setAnalyticsConsent(enabled ? "granted" : "denied");
-			await applyAnalyticsConsent(enabled);
+			await saveAnalyticsPreference(enabled);
 			return enabled;
 		},
 		onSuccess: () => {

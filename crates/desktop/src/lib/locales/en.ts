@@ -441,6 +441,10 @@ export default {
 	onboardingAnalyticsTitle: "Help improve aghub",
 	onboardingAnalyticsDescription:
 		"Share anonymous usage data and crash reports so we can fix bugs and prioritise features. You can change this any time in Settings.",
+	onboardingFullscreen: "Open video in fullscreen",
+	onboardingLoadError:
+		"Couldn't load your onboarding progress. You can reopen Welcome from Settings.",
+	onboardingSaveError: "Couldn't save your onboarding choices. Try again.",
 	settingsAnalyticsHeading: "Usage analytics",
 	settingsAnalyticsDescription:
 		"Send anonymous usage data and crash reports to help improve aghub. Disabling this stops both event capture and session replay.",
@@ -452,6 +456,11 @@ export default {
 	settingsAutostartEnabled: "Startup launch enabled",
 	settingsAutostartDisabled: "Startup launch disabled",
 	settingsAutostartError: "Failed to update startup launch",
+	whatsNewWizardTitle: "What's New in Aghub",
+	whatsNewWizardSubtitle:
+		"A quick look at the changes included with this version.",
+	whatsNewSectionLabel: "What's new in {{version}}",
+	whatsNewKnownIssues: "Known issues",
 	onboardingSkip: "Skip",
 	onboardingBack: "Back",
 	onboardingNext: "Next",

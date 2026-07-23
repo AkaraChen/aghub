@@ -422,6 +422,9 @@ export default {
 	onboardingAnalyticsTitle: "帮助改进 aghub",
 	onboardingAnalyticsDescription:
 		"分享匿名使用数据和崩溃报告，帮助我们修复 bug 并确定功能优先级。可随时在设置中更改。",
+	onboardingFullscreen: "全屏播放视频",
+	onboardingLoadError: "无法加载引导进度。你仍可从设置中重新打开欢迎页。",
+	onboardingSaveError: "无法保存引导设置，请重试。",
 	settingsAnalyticsHeading: "使用统计",
 	settingsAnalyticsDescription:
 		"发送匿名使用数据和崩溃报告以帮助改进 aghub。关闭后将同时停止事件采集和会话回放。",
@@ -433,6 +436,10 @@ export default {
 	settingsAutostartEnabled: "已启用开机自启动",
 	settingsAutostartDisabled: "已关闭开机自启动",
 	settingsAutostartError: "更新开机自启动失败",
+	whatsNewWizardTitle: "Aghub 新功能",
+	whatsNewWizardSubtitle: "快速了解此版本包含的改动。",
+	whatsNewSectionLabel: "{{version}} 的新功能",
+	whatsNewKnownIssues: "已知问题",
 	onboardingSkip: "跳过",
 	onboardingBack: "返回",
 	onboardingNext: "下一步",

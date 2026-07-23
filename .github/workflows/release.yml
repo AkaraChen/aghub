@@ -7,54 +7,116 @@ on:
     workflow_dispatch:
         inputs:
             version:
-                description: "Version tag (e.g., v1.0.0)"
+                description: "Existing version tag (for example, v1.9.0-beta.1)"
                 required: true
                 type: string
-            prerelease:
-                description: "Create as pre-release"
-                required: false
-                type: boolean
-                default: true
+
+env:
+    RELEASE_TAG: ${{ github.event.inputs.version || github.ref_name }}
+
+concurrency:
+    group: release-${{ github.event.inputs.version || github.ref_name }}
+    cancel-in-progress: false
 
 jobs:
-    changelog:
-        name: Generate Changelog
+    prepare:
+        name: Prepare Release
         runs-on: ubuntu-latest
         permissions:
-            contents: write
+            contents: read
+        outputs:
+            commit_sha: ${{ steps.release.outputs.commit_sha }}
+            prerelease: ${{ steps.release.outputs.prerelease }}
+            published_at: ${{ steps.release.outputs.published_at }}
+            version: ${{ steps.release.outputs.version }}
         steps:
-            - name: Checkout
+            - name: Checkout release tag
               uses: actions/checkout@v7
               with:
                   fetch-depth: 0
-            - name: Generate Changelog
+                  ref: ${{ format('refs/tags/{0}', env.RELEASE_TAG) }}
+
+            - name: Resolve release metadata
+              id: release
+              shell: bash
+              run: |
+                  if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+                      echo "Invalid release tag: $RELEASE_TAG" >&2
+                      exit 1
+                  fi
+
+                  VERSION="${RELEASE_TAG#v}"
+                  COMMIT_SHA="$(git rev-list -n 1 "$RELEASE_TAG")"
+                  if [[ "$(git rev-parse HEAD)" != "$COMMIT_SHA" ]]; then
+                      echo "Checkout does not match $RELEASE_TAG" >&2
+                      exit 1
+                  fi
+
+                  PREVIOUS_TAG="$(git describe --tags --abbrev=0 "${RELEASE_TAG}^")"
+                  PRERELEASE=false
+                  if [[ "$VERSION" == *-* ]]; then
+                      PRERELEASE=true
+                  fi
+
+                  echo "commit_sha=$COMMIT_SHA" >> "$GITHUB_OUTPUT"
+                  echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+                  echo "published_at=$(git show -s --format=%cI "$COMMIT_SHA")" >> "$GITHUB_OUTPUT"
+                  echo "range=${PREVIOUS_TAG}..${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
+                  echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: latest
+
+            - name: Install release tooling
+              working-directory: crates/desktop
+              run: bun install --frozen-lockfile
+
+            - name: Check bundled release notes
+              working-directory: crates/desktop
+              run: bun run release-notes:check
+
+            - name: Generate technical changelog
               uses: orhun/git-cliff-action@v4
-              id: git-cliff
               with:
                   config: cliff.toml
-                  args: -vv --latest --strip header
+                  args: ${{ steps.release.outputs.range }} -vv --strip header
               env:
                   OUTPUT: CHANGES.md
                   GITHUB_REPO: ${{ github.repository }}
 
-            - name: Create GitHub Release
-              uses: softprops/action-gh-release@v3
+            - name: Render release notes
+              working-directory: crates/desktop
+              env:
+                  RELEASE_VERSION: ${{ steps.release.outputs.version }}
+              run: >-
+                  bun run release-notes:render --
+                  --version "$RELEASE_VERSION"
+                  --changelog ../../CHANGES.md
+                  --output ../../release-body.md
+
+            - name: Verify release notes
+              shell: bash
+              run: test -s release-body.md
+
+            - name: Upload release metadata
+              uses: actions/upload-artifact@v7
               with:
-                  tag_name: ${{ github.event.inputs.version || github.ref_name }}
-                  name: "aghub ${{ github.event.inputs.version || github.ref_name }}"
-                  body_path: CHANGES.md
-                  draft: false
-                  prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
+                  name: release-metadata
+                  path: release-body.md
+                  if-no-files-found: error
+                  retention-days: 7
 
     build-tauri:
-        needs: changelog
+        needs: prepare
         name: Build Desktop (${{ matrix.target }})
         runs-on: ${{ matrix.os }}
         env:
             SCCACHE_GHA_ENABLED: "true"
             RUSTC_WRAPPER: "sccache"
         permissions:
-            contents: write
+            contents: read
         strategy:
             fail-fast: false
             matrix:
@@ -73,9 +135,12 @@ jobs:
                       prerelease_args: --bundles nsis
 
         steps:
-            - uses: actions/checkout@v7
+            - name: Checkout release tag
+              uses: actions/checkout@v7
+              with:
+                  ref: ${{ format('refs/tags/{0}', env.RELEASE_TAG) }}
 
-            - name: Install Linux Dependencies
+            - name: Install Linux dependencies
               if: matrix.os == 'ubuntu-22.04'
               run: |
                   sudo apt-get update
@@ -89,10 +154,10 @@ jobs:
             - name: Setup sccache
               uses: mozilla-actions/sccache-action@v0.0.10
 
-            - name: Rust Cache
+            - name: Rust cache
               uses: Swatinem/rust-cache@v2
 
-            - name: Cargo Fetch
+            - name: Cargo fetch
               run: cargo fetch
 
             - name: Setup Bun
@@ -101,31 +166,12 @@ jobs:
                   bun-version: latest
 
             - name: Install frontend dependencies
-              run: |
-                  cd crates/desktop
-                  bun install
-
-            - name: Sync Version
-              shell: bash
-              env:
-                  VERSION: ${{ github.event.inputs.version || github.ref_name }}
-              run: |
-                  VERSION="${VERSION#v}"
-                  echo "Syncing version across files: $VERSION"
-                  if [[ "${{ matrix.os }}" == "macos"* ]]; then
-                    sed -i '' "s/^version = .*/version = \"$VERSION\"/" Cargo.toml
-                    sed -i '' "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" crates/desktop/package.json
-                    sed -i '' "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" crates/desktop/src-tauri/tauri.conf.json || true
-                  else
-                    sed -i "s/^version = .*/version = \"$VERSION\"/" Cargo.toml
-                    sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" crates/desktop/package.json
-                    sed -i "s/\"version\": \".*\"/\"version\": \"$VERSION\"/" crates/desktop/src-tauri/tauri.conf.json || true
-                  fi
+              working-directory: crates/desktop
+              run: bun install --frozen-lockfile
 
             - name: Build Tauri
               uses: tauri-apps/tauri-action@v1
               env:
-                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
                   APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
                   APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
                   APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
@@ -135,47 +181,54 @@ jobs:
                   TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
                   TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
               with:
-                  tagName: ${{ github.event.inputs.version || github.ref_name }}
-                  releaseName: "aghub ${{ github.event.inputs.version || github.ref_name }}"
-                  releaseDraft: false
-                  prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
                   args: >-
                       --target ${{ matrix.target }}
-                      ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease && matrix.prerelease_args || '' }}
-                  uploadUpdaterJson: true
+                      ${{ needs.prepare.outputs.prerelease == 'true' && matrix.prerelease_args || '' }}
                   projectPath: crates/desktop
+                  uploadUpdaterJson: false
 
-            - name: Prepare Generic Artifact
+            - name: Prepare generic artifact
               shell: bash
               run: |
                   if [ "${{ matrix.target }}" = "x86_64-pc-windows-msvc" ]; then
                       find target -type f -name "*setup.exe" -exec cp {} aghub-windows-setup.exe \;
-                      echo "GENERIC_ASSET=aghub-windows-setup.exe" >> $GITHUB_ENV
+                      echo "GENERIC_ASSET=aghub-windows-setup.exe" >> "$GITHUB_ENV"
                   elif [ "${{ matrix.target }}" = "x86_64-unknown-linux-gnu" ]; then
                       find target -type f -name "*.AppImage" -exec cp {} aghub-linux.AppImage \;
-                      echo "GENERIC_ASSET=aghub-linux.AppImage" >> $GITHUB_ENV
+                      echo "GENERIC_ASSET=aghub-linux.AppImage" >> "$GITHUB_ENV"
                   elif [ "${{ matrix.target }}" = "x86_64-apple-darwin" ]; then
                       find target -type f -name "*.dmg" -exec cp {} aghub_mac_intel.dmg \;
-                      echo "GENERIC_ASSET=aghub_mac_intel.dmg" >> $GITHUB_ENV
+                      echo "GENERIC_ASSET=aghub_mac_intel.dmg" >> "$GITHUB_ENV"
                   elif [ "${{ matrix.target }}" = "aarch64-apple-darwin" ]; then
                       find target -type f -name "*.dmg" -exec cp {} aghub_mac_arm.dmg \;
-                      echo "GENERIC_ASSET=aghub_mac_arm.dmg" >> $GITHUB_ENV
+                      echo "GENERIC_ASSET=aghub_mac_arm.dmg" >> "$GITHUB_ENV"
                   fi
 
-            - name: Upload Generic Release Asset
-              uses: softprops/action-gh-release@v3
+            - name: Upload desktop artifacts
+              uses: actions/upload-artifact@v7
               with:
-                  tag_name: ${{ github.event.inputs.version || github.ref_name }}
-                  files: ${{ env.GENERIC_ASSET }}
+                  name: desktop-${{ matrix.target }}
+                  path: |
+                      target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+                      target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
+                      target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz.sig
+                      target/${{ matrix.target }}/release/bundle/deb/*
+                      target/${{ matrix.target }}/release/bundle/rpm/*
+                      target/${{ matrix.target }}/release/bundle/appimage/*
+                      target/${{ matrix.target }}/release/bundle/nsis/*
+                      ${{ env.GENERIC_ASSET }}
+                  if-no-files-found: error
+                  retention-days: 7
 
     build-cli:
+        needs: prepare
         name: Build CLI (${{ matrix.target }})
         runs-on: ${{ matrix.os }}
         env:
             SCCACHE_GHA_ENABLED: "true"
             RUSTC_WRAPPER: "sccache"
         permissions:
-            contents: write
+            contents: read
         strategy:
             fail-fast: false
             matrix:
@@ -190,7 +243,10 @@ jobs:
                       target: x86_64-pc-windows-msvc
 
         steps:
-            - uses: actions/checkout@v7
+            - name: Checkout release tag
+              uses: actions/checkout@v7
+              with:
+                  ref: ${{ format('refs/tags/{0}', env.RELEASE_TAG) }}
 
             - name: Install Rust toolchain
               uses: dtolnay/rust-toolchain@stable
@@ -200,23 +256,11 @@ jobs:
             - name: Setup sccache
               uses: mozilla-actions/sccache-action@v0.0.10
 
-            - name: Rust Cache
+            - name: Rust cache
               uses: Swatinem/rust-cache@v2
 
-            - name: Cargo Fetch
+            - name: Cargo fetch
               run: cargo fetch
-
-            - name: Sync Version
-              shell: bash
-              env:
-                  VERSION: ${{ github.event.inputs.version || github.ref_name }}
-              run: |
-                  VERSION="${VERSION#v}"
-                  if [[ "${{ matrix.os }}" == "macos"* ]]; then
-                    sed -i '' "s/^version = .*/version = \"$VERSION\"/" Cargo.toml
-                  else
-                    sed -i "s/^version = .*/version = \"$VERSION\"/" Cargo.toml
-                  fi
 
             - name: Build CLI
               run: cargo build --release -p aghub-cli --target ${{ matrix.target }}
@@ -232,47 +276,118 @@ jobs:
               run: |
                   Compress-Archive -Path target/${{ matrix.target }}/release/aghub-cli.exe -DestinationPath aghub-cli-${{ matrix.target }}.zip
 
-            - name: Upload CLI to Release
+            - name: Upload CLI artifacts
+              uses: actions/upload-artifact@v7
+              with:
+                  name: cli-${{ matrix.target }}
+                  path: aghub-cli-*
+                  if-no-files-found: error
+                  retention-days: 7
+
+    publish-release:
+        needs: [prepare, build-tauri, build-cli]
+        name: Publish Release
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+        steps:
+            - name: Checkout release tag
+              uses: actions/checkout@v7
+              with:
+                  ref: ${{ format('refs/tags/{0}', env.RELEASE_TAG) }}
+
+            - name: Setup Bun
+              uses: oven-sh/setup-bun@v2
+              with:
+                  bun-version: latest
+
+            - name: Install release tooling
+              working-directory: crates/desktop
+              run: bun install --frozen-lockfile
+
+            - name: Download release metadata
+              uses: actions/download-artifact@v8
+              with:
+                  name: release-metadata
+                  path: release-metadata
+
+            - name: Download desktop artifacts
+              uses: actions/download-artifact@v8
+              with:
+                  pattern: desktop-*
+                  path: release-inputs
+
+            - name: Download CLI artifacts
+              uses: actions/download-artifact@v8
+              with:
+                  pattern: cli-*
+                  path: release-inputs
+
+            - name: Prepare release assets
+              working-directory: crates/desktop
+              env:
+                  RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+                  RELEASE_PUBLISHED_AT: ${{ needs.prepare.outputs.published_at }}
+              run: >-
+                  bun run release-assets:prepare --
+                  --source ../../release-inputs
+                  --output ../../release-assets
+                  --version "$RELEASE_VERSION"
+                  --tag "$RELEASE_TAG"
+                  --repository "$GITHUB_REPOSITORY"
+                  --published-at "$RELEASE_PUBLISHED_AT"
+                  --notes ../../release-metadata/release-body.md
+
+            - name: Create or update GitHub Release
               uses: softprops/action-gh-release@v3
               with:
-                  tag_name: ${{ github.event.inputs.version || github.ref_name }}
-                  prerelease: ${{ github.event_name == 'workflow_dispatch' && inputs.prerelease || false }}
-                  files: aghub-cli-*
+                  tag_name: ${{ env.RELEASE_TAG }}
+                  target_commitish: ${{ needs.prepare.outputs.commit_sha }}
+                  name: aghub ${{ env.RELEASE_TAG }}
+                  body_path: release-metadata/release-body.md
+                  draft: false
+                  prerelease: ${{ needs.prepare.outputs.prerelease }}
+                  make_latest: ${{ needs.prepare.outputs.prerelease == 'true' && 'false' || 'true' }}
+                  files: release-assets/*
+                  fail_on_unmatched_files: true
+
+            - name: Verify published release
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              shell: bash
+              run: |
+                  test -n "$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq '.body')"
+                  test "$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq '[.assets[].name] | index("latest.json") != null')" = "true"
+                  test "$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/$RELEASE_TAG" --jq '.prerelease')" = "${{ needs.prepare.outputs.prerelease }}"
 
     publish-homebrew:
         name: Update Homebrew Tap
-        needs: [build-tauri, build-cli]
+        needs: [prepare, publish-release]
+        if: needs.prepare.outputs.prerelease == 'false'
         runs-on: ubuntu-latest
         env:
             RELEASE_TAG: ${{ github.event.inputs.version || github.ref_name }}
         steps:
-            - name: Validate release tag
-              shell: bash
-              run: |
-                  if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
-                      echo "Invalid release tag: $RELEASE_TAG" >&2
-                      exit 1
-                  fi
-
             - name: Checkout Homebrew Tap
               uses: actions/checkout@v7
               with:
-                  repository: "Fldicoahkiin/homebrew-tap"
+                  repository: Fldicoahkiin/homebrew-tap
                   token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
                   path: tap
 
-            - name: Update Formula and Cask
+            - name: Update formula and cask
               env:
-                  VERSION: ${{ env.RELEASE_TAG }}
+                  VERSION: ${{ needs.prepare.outputs.version }}
               run: |
-                  VERSION="${VERSION#v}"
-                  echo "Updating for version: ${VERSION}"
-
-                  # Download CLI assets to compute checksums
-                  echo "Downloading CLI assets..."
-                  wget -q "https://github.com/AkaraChen/aghub/releases/download/v${VERSION}/aghub-cli-x86_64-apple-darwin.tar.gz" -O aghub-cli_mac_intel.tar.gz || echo "Failed to download x86_64 CLI"
-                  wget -q "https://github.com/AkaraChen/aghub/releases/download/v${VERSION}/aghub-cli-aarch64-apple-darwin.tar.gz" -O aghub-cli_mac_arm.tar.gz || echo "Failed to download aarch64 CLI"
-                  wget -q "https://github.com/AkaraChen/aghub/releases/download/v${VERSION}/aghub-cli-x86_64-unknown-linux-gnu.tar.gz" -O aghub-cli_linux.tar.gz || echo "Failed to download linux CLI"
+                  curl --fail --location --retry 3 --connect-timeout 15 --max-time 300 \
+                    "https://github.com/AkaraChen/aghub/releases/download/v${VERSION}/aghub-cli-x86_64-apple-darwin.tar.gz" \
+                    --output aghub-cli_mac_intel.tar.gz
+                  curl --fail --location --retry 3 --connect-timeout 15 --max-time 300 \
+                    "https://github.com/AkaraChen/aghub/releases/download/v${VERSION}/aghub-cli-aarch64-apple-darwin.tar.gz" \
+                    --output aghub-cli_mac_arm.tar.gz
+                  curl --fail --location --retry 3 --connect-timeout 15 --max-time 300 \
+                    "https://github.com/AkaraChen/aghub/releases/download/v${VERSION}/aghub-cli-x86_64-unknown-linux-gnu.tar.gz" \
+                    --output aghub-cli_linux.tar.gz
 
                   AGENT_MAC_INTEL_SHA=$(sha256sum aghub-cli_mac_intel.tar.gz | awk '{print $1}')
                   AGENT_MAC_ARM_SHA=$(sha256sum aghub-cli_mac_arm.tar.gz | awk '{print $1}')
@@ -312,10 +427,12 @@ jobs:
                   end
                   INNEREOF
 
-                  # Download Desktop assets to compute checksums
-                  echo "Downloading Desktop App assets..."
-                  wget -q "https://github.com/AkaraChen/aghub/releases/download/v${VERSION}/aghub_${VERSION}_x64.dmg" -O aghub_mac_intel.dmg || echo "Failed to download x64 dmg"
-                  wget -q "https://github.com/AkaraChen/aghub/releases/download/v${VERSION}/aghub_${VERSION}_aarch64.dmg" -O aghub_mac_arm.dmg || echo "Failed to download aarch64 dmg"
+                  curl --fail --location --retry 3 --connect-timeout 15 --max-time 300 \
+                    "https://github.com/AkaraChen/aghub/releases/download/v${VERSION}/aghub_${VERSION}_x64.dmg" \
+                    --output aghub_mac_intel.dmg
+                  curl --fail --location --retry 3 --connect-timeout 15 --max-time 300 \
+                    "https://github.com/AkaraChen/aghub/releases/download/v${VERSION}/aghub_${VERSION}_aarch64.dmg" \
+                    --output aghub_mac_arm.dmg
 
                   AGHUB_MAC_INTEL_SHA=$(sha256sum aghub_mac_intel.dmg | awk '{print $1}')
                   AGHUB_MAC_ARM_SHA=$(sha256sum aghub_mac_arm.dmg | awk '{print $1}')
@@ -344,9 +461,9 @@ jobs:
                   end
                   INNEREOF
 
-            - name: Commit and Push
+            - name: Commit and push
+              working-directory: tap
               run: |
-                  cd tap
                   git config user.name "github-actions[bot]"
                   git config user.email "github-actions[bot]@users.noreply.github.com"
                   git add aghub-cli.rb Casks/aghub.rb

@@ -1,418 +1,152 @@
-import {
-	ArrowsPointingOutIcon,
-	BookOpenIcon,
-	FolderIcon,
-	ServerIcon,
-} from "@heroicons/react/24/solid";
-import { Button, Checkbox, Modal, Spinner } from "@heroui/react";
-import { type Driver, type DriveStep, driver } from "driver.js";
-import "driver.js/dist/driver.css";
-import {
-	startTransition,
-	useEffect,
-	useEffectEvent,
-	useRef,
-	useState,
-} from "react";
+import { Button, Modal, toast } from "@heroui/react";
+import { useQuery } from "@tanstack/react-query";
+import { useEffect, useEffectEvent, useReducer, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useLocation } from "wouter";
-import { useProjects } from "../hooks/use-projects";
-import { ONBOARDING_EVENT, type OnboardingCommand } from "../lib/onboarding";
+import { useOnboardingTours } from "../hooks/use-onboarding-tours";
 import { applyAnalyticsConsent, capture } from "../lib/analytics";
+import { ONBOARDING_EVENT, type OnboardingCommand } from "../lib/onboarding";
 import {
-	getOnboardingProgress,
-	setAnalyticsConsent,
-	updateOnboardingProgress,
-} from "../lib/store";
-import { cn } from "../lib/utils";
+	createWizardState,
+	getWizardAcknowledgements,
+	onboardingWizardReducer,
+	WIZARD_FEATURE_STEPS,
+} from "../lib/onboarding-wizard";
+import { saveOnboardingCompletion } from "../lib/store";
+import { resolveWhatsNewLocale } from "../lib/whats-new";
+import {
+	type OnboardingBootstrap,
+	onboardingBootstrapQueryOptions,
+} from "../requests/onboarding";
+import { OnboardingWizard } from "./onboarding-wizard";
 
 type OverlayMode = "welcome" | null;
 
-const TOUR_CLASS = "aghub-tour-popover";
-const TOUR_WAIT_MS = 5000;
-
-const WIZARD_STEPS = [
-	{
-		id: "mcp",
-		icon: <ServerIcon className="size-5" />,
-		titleKey: "onboardingStepMcpTitle",
-		descriptionKey: "onboardingStepMcpDescription",
-	},
-	{
-		id: "skills",
-		icon: <BookOpenIcon className="size-5" />,
-		titleKey: "onboardingStepSkillsTitle",
-		descriptionKey: "onboardingStepSkillsDescription",
-	},
-	{
-		id: "projects",
-		icon: <FolderIcon className="size-5" />,
-		titleKey: "onboardingStepProjectsTitle",
-		descriptionKey: "onboardingStepProjectsDescription",
-	},
-] as const;
-
-function waitForElement(selector: string, timeoutMs = TOUR_WAIT_MS) {
-	return new Promise<HTMLElement | null>((resolve) => {
-		const deadline = Date.now() + timeoutMs;
-
-		const tick = () => {
-			const element = document.querySelector<HTMLElement>(selector);
-			if (element) {
-				resolve(element);
-				return;
-			}
-
-			if (Date.now() >= deadline) {
-				resolve(null);
-				return;
-			}
-
-			window.setTimeout(tick, 80);
-		};
-
-		tick();
-	});
-}
-
 export function OnboardingController() {
 	const { t } = useTranslation();
-	const [location, setLocation] = useLocation();
-	const { data: projects = [] } = useProjects();
-	const [isReady, setIsReady] = useState(false);
-	const [overlayMode, setOverlayMode] = useState<OverlayMode>(null);
-	const [currentStep, setCurrentStep] = useState(0);
-	const [pendingProjectTour, setPendingProjectTour] = useState(false);
-	// Pre-checked: opt-in by default for first-time users. Persisted +
-	// applied (Rust + posthog-js) when the user dismisses the dialog.
-	const [analyticsOptIn, setAnalyticsOptIn] = useState(true);
-	const activeDriverRef = useRef<Driver | null>(null);
-	const previousProjectIdsRef = useRef<string[]>([]);
+	const bootstrapQuery = useQuery(onboardingBootstrapQueryOptions());
+	const reportedBootstrapErrorRef = useRef(false);
 
-	const destroyActiveDriver = () => {
-		activeDriverRef.current?.destroy();
-		activeDriverRef.current = null;
-	};
-
-	const saveProgress = async (updates: {
-		hasSeenWelcome?: boolean;
-		completedTours?: {
-			productMap?: boolean;
-			projectWorkflow?: boolean;
-		};
-	}) => {
-		await updateOnboardingProgress(updates);
-	};
-
-	const ensureRoute = async (path: string, selector: string) => {
-		if (location !== path) {
-			startTransition(() => {
-				setLocation(path);
-			});
-		}
-
-		return waitForElement(selector);
-	};
-
-	async function startProjectWorkflowTour(projectId?: string) {
-		const targetProjectId = projectId ?? projects[0]?.id;
-		if (!targetProjectId) {
-			void startProjectSetupGuide();
+	useEffect(() => {
+		if (!bootstrapQuery.error || reportedBootstrapErrorRef.current) {
 			return;
 		}
 
-		setOverlayMode(null);
-		setPendingProjectTour(false);
-		destroyActiveDriver();
-
-		const projectRoot = await ensureRoute(
-			`/projects/${targetProjectId}`,
-			'[data-tour="project-resources"]',
+		reportedBootstrapErrorRef.current = true;
+		console.error(
+			"Failed to load onboarding progress:",
+			bootstrapQuery.error,
 		);
+		toast.danger(t("onboardingLoadError"));
+	}, [bootstrapQuery.error, t]);
 
-		if (!projectRoot) {
-			return;
-		}
-
-		const finishProjectTour = () => {
-			void saveProgress({
-				hasSeenWelcome: true,
-				completedTours: {
-					projectWorkflow: true,
-				},
-			});
-		};
-
-		const steps: DriveStep[] = [
-			{
-				element: '[data-tour="project-resources"]',
-				popover: {
-					title: t("onboardingProjectResourcesTitle"),
-					description: t("onboardingProjectResourcesDescription"),
-					side: "right",
-					align: "start",
-				},
-			},
-			{
-				element: '[data-tour="project-search"]',
-				popover: {
-					title: t("onboardingProjectSearchTitle"),
-					description: t("onboardingProjectSearchDescription"),
-					side: "right",
-					align: "start",
-				},
-			},
-			{
-				element: '[data-tour="project-add-resource"]',
-				popover: {
-					title: t("onboardingProjectAddTitle"),
-					description: t("onboardingProjectAddDescription"),
-					side: "bottom",
-					align: "end",
-				},
-			},
-			{
-				element: '[data-tour="project-detail-panel"]',
-				popover: {
-					title: t("onboardingProjectDetailTitle"),
-					description: t("onboardingProjectDetailDescription"),
-					side: "left",
-					align: "start",
-				},
-			},
-			{
-				element: '[data-tour="project-multi-select"]',
-				popover: {
-					title: t("onboardingProjectBulkTitle"),
-					description: t("onboardingProjectBulkDescription"),
-					side: "bottom",
-					align: "end",
-					doneBtnText: t("onboardingFinish"),
-					onNextClick: (_element: any, _step: any, opts: any) => {
-						finishProjectTour();
-						opts.driver.destroy();
-					},
-				},
-			},
-		];
-
-		const driverObj = driver({
-			animate: true,
-			allowClose: true,
-			allowKeyboardControl: true,
-			overlayColor: "rgba(12, 18, 28, 0.54)",
-			overlayOpacity: 0.54,
-			popoverClass: TOUR_CLASS,
-			showButtons: ["previous", "next", "close"],
-			showProgress: true,
-			progressText: t("onboardingProgressText"),
-			nextBtnText: t("next"),
-			prevBtnText: t("back"),
-			doneBtnText: t("done"),
-			stagePadding: 10,
-			stageRadius: 14,
-			onDestroyed: () => {
-				activeDriverRef.current = null;
-			},
-			onCloseClick: (_element: any, _step: any, opts: any) => {
-				opts.driver.destroy();
-			},
-			steps,
-		});
-
-		activeDriverRef.current = driverObj;
-		driverObj.drive();
+	if (bootstrapQuery.isPending) {
+		return null;
 	}
 
-	async function startProjectSetupGuide() {
-		if (projects.length > 0) {
-			await startProjectWorkflowTour(projects[0]?.id);
-			return;
-		}
-
-		setOverlayMode(null);
-		setPendingProjectTour(true);
-		destroyActiveDriver();
-
-		const addProjectButton = await waitForElement(
-			'[data-tour="project-add"]',
-		);
-
-		if (!addProjectButton) {
-			return;
-		}
-
-		const driverObj = driver({
-			animate: true,
-			allowClose: true,
-			allowKeyboardControl: true,
-			overlayColor: "rgba(12, 18, 28, 0.52)",
-			overlayOpacity: 0.52,
-			popoverClass: TOUR_CLASS,
-			showButtons: ["next", "close"],
-			nextBtnText: t("done"),
-			doneBtnText: t("done"),
-			stagePadding: 10,
-			stageRadius: 14,
-			onDestroyed: () => {
-				activeDriverRef.current = null;
-			},
-			onCloseClick: (_element: any, _step: any, opts: any) => {
-				opts.driver.destroy();
-			},
-			steps: [
-				{
-					element: '[data-tour="project-add"]',
-					popover: {
-						title: t("onboardingProjectSetupTitle"),
-						description: t("onboardingProjectSetupDescription"),
-						side: "right",
-						align: "start",
-						doneBtnText: t("done"),
-						onNextClick: (_element: any, _step: any, opts: any) => {
-							opts.driver.destroy();
-						},
-					},
-				},
-			],
-		});
-
-		activeDriverRef.current = driverObj;
-		driverObj.drive();
-	}
-
-	const startProductTour = async () => {
-		setOverlayMode(null);
-		setPendingProjectTour(false);
-		destroyActiveDriver();
-
-		const sidebar = await ensureRoute("/mcp", '[data-tour="sidebar"]');
-		if (!sidebar) {
-			return;
-		}
-
-		const finishProductTour = () => {
-			void saveProgress({
-				hasSeenWelcome: true,
-				completedTours: {
-					productMap: true,
-				},
-			});
-
-			if (projects.length > 0) {
-				void startProjectWorkflowTour(projects[0]?.id);
-				return;
+	return (
+		<OnboardingControllerContent
+			bootstrap={
+				bootstrapQuery.data ?? {
+					analyticsOptIn: true,
+					steps: [],
+					versionToAcknowledge: null,
+				}
 			}
+		/>
+	);
+}
 
-			void startProjectSetupGuide();
-		};
+function OnboardingControllerContent({
+	bootstrap,
+}: {
+	bootstrap: OnboardingBootstrap;
+}) {
+	const { i18n, t } = useTranslation();
+	const [overlayMode, setOverlayMode] = useState<OverlayMode>(() =>
+		bootstrap.steps.length > 0 ? "welcome" : null,
+	);
+	const [analyticsOptIn, setAnalyticsOptIn] = useState(
+		bootstrap.analyticsOptIn,
+	);
+	const [isDismissing, setIsDismissing] = useState(false);
+	const [wizard, dispatchWizard] = useReducer(
+		onboardingWizardReducer,
+		bootstrap,
+		(value) => createWizardState(value.steps, value.versionToAcknowledge),
+	);
+	const { currentStep, steps: wizardSteps } = wizard;
+	const includedFeatureSteps = wizardSteps.some(
+		(step) => step.type === "feature",
+	);
+	const includesWhatsNew = wizardSteps.some(
+		(step) => step.type === "whats-new",
+	);
+	const activeStep = wizardSteps[currentStep];
+	const dismissInFlightRef = useRef(false);
+	const {
+		destroyActiveTour,
+		startProductTour,
+		startProjectSetupGuide,
+		startProjectWorkflowTour,
+	} = useOnboardingTours(() => setOverlayMode(null));
 
-		const steps: DriveStep[] = [
-			{
-				element: '[data-tour="sidebar"]',
-				popover: {
-					title: t("onboardingSidebarTitle"),
-					description: t("onboardingSidebarDescription"),
-					side: "right",
-					align: "start",
-				},
-			},
-			{
-				element: '[data-tour="nav-mcp"]',
-				popover: {
-					title: t("onboardingMcpTitle"),
-					description: t("onboardingMcpDescription"),
-					side: "right",
-					align: "center",
-				},
-			},
-			{
-				element: '[data-tour="nav-skills"]',
-				popover: {
-					title: t("onboardingSkillsTitle"),
-					description: t("onboardingSkillsDescription"),
-					side: "right",
-					align: "center",
-				},
-			},
-			{
-				element: '[data-tour="nav-settings"]',
-				popover: {
-					title: t("onboardingSettingsTitle"),
-					description: t("onboardingSettingsDescription"),
-					side: "right",
-					align: "center",
-					doneBtnText: t("onboardingContinue"),
-					onNextClick: (_element: any, _step: any, opts: any) => {
-						finishProductTour();
-						opts.driver.destroy();
-					},
-				},
-			},
-		];
-		const availableSteps = steps.filter((step) => {
-			if (typeof step.element !== "string") {
-				return true;
-			}
+	const dismissWelcome = async (): Promise<boolean> => {
+		if (dismissInFlightRef.current) return false;
 
-			return document.querySelector(step.element) !== null;
-		});
+		dismissInFlightRef.current = true;
+		setIsDismissing(true);
+		const acknowledgements = getWizardAcknowledgements(wizard);
 
-		const driverObj = driver({
-			animate: true,
-			allowClose: true,
-			allowKeyboardControl: true,
-			overlayColor: "rgba(12, 18, 28, 0.54)",
-			overlayOpacity: 0.54,
-			popoverClass: TOUR_CLASS,
-			showButtons: ["previous", "next", "close"],
-			showProgress: true,
-			progressText: t("onboardingProgressText"),
-			nextBtnText: t("next"),
-			prevBtnText: t("back"),
-			doneBtnText: t("done"),
-			stagePadding: 10,
-			stageRadius: 14,
-			onDestroyed: () => {
-				activeDriverRef.current = null;
-			},
-			onCloseClick: (_element: any, _step: any, opts: any) => {
-				opts.driver.destroy();
-			},
-			steps: availableSteps,
-		});
-
-		activeDriverRef.current = driverObj;
-		driverObj.drive();
-	};
-
-	const dismissWelcome = async () => {
-		setOverlayMode(null);
-		setCurrentStep(0);
-		// Persist the user's consent choice and apply it before any
-		// further captures fire. The default is opt-in (state was
-		// initialised to true) so most users land in `granted`.
-		const consent = analyticsOptIn ? "granted" : "denied";
 		try {
-			await setAnalyticsConsent(consent);
-			await applyAnalyticsConsent(analyticsOptIn);
+			await saveOnboardingCompletion({
+				analyticsConsent: acknowledgements.consentWasSeen
+					? analyticsOptIn
+						? "granted"
+						: "denied"
+					: null,
+				lastSeenWhatsNewVersion: acknowledgements.latestWhatsNewVersion,
+			});
+			if (acknowledgements.consentWasSeen) {
+				try {
+					await applyAnalyticsConsent(analyticsOptIn);
+				} catch (error) {
+					console.error(
+						"Failed to apply analytics preference:",
+						error,
+					);
+				}
+			}
+			if (includedFeatureSteps) {
+				capture("onboarding completed");
+			}
+			setOverlayMode(null);
+			dispatchWizard({ type: "reset" });
+			return true;
 		} catch (error) {
-			console.error("Failed to persist analytics consent:", error);
+			console.error("Failed to save onboarding progress:", error);
+			toast.danger(t("onboardingSaveError"));
+			return false;
+		} finally {
+			dismissInFlightRef.current = false;
+			setIsDismissing(false);
 		}
-		capture("onboarding completed");
-		await saveProgress({
-			hasSeenWelcome: true,
-		});
 	};
 
-	const continueWithNewProject = useEffectEvent((projectId: string) => {
-		void startProjectWorkflowTour(projectId);
-	});
+	const finishWelcome = async () => {
+		const dismissed = await dismissWelcome();
+		if (dismissed && includedFeatureSteps) {
+			await startProductTour();
+		}
+	};
 
 	const handleCommand = useEffectEvent((command: OnboardingCommand) => {
 		if (command.type === "show-welcome") {
-			destroyActiveDriver();
-			setCurrentStep(0);
+			destroyActiveTour();
+			dispatchWizard({
+				type: "open",
+				steps: [...WIZARD_FEATURE_STEPS],
+				versionToAcknowledge: null,
+			});
 			setOverlayMode("welcome");
 			return;
 		}
@@ -431,27 +165,6 @@ export function OnboardingController() {
 	});
 
 	useEffect(() => {
-		let isMounted = true;
-
-		void getOnboardingProgress().then((progress) => {
-			if (!isMounted) {
-				return;
-			}
-
-			setIsReady(true);
-			if (!progress.hasSeenWelcome) {
-				setOverlayMode("welcome");
-			}
-		});
-
-		return () => {
-			isMounted = false;
-			activeDriverRef.current?.destroy();
-			activeDriverRef.current = null;
-		};
-	}, []);
-
-	useEffect(() => {
 		const listener = (event: Event) => {
 			handleCommand((event as CustomEvent<OnboardingCommand>).detail);
 		};
@@ -463,143 +176,68 @@ export function OnboardingController() {
 		};
 	}, []);
 
-	useEffect(() => {
-		const previousProjectIds = previousProjectIdsRef.current;
-		const newProject = projects.find(
-			(project) => !previousProjectIds.includes(project.id),
-		);
-
-		if (pendingProjectTour && newProject) {
-			continueWithNewProject(newProject.id);
-		}
-
-		previousProjectIdsRef.current = projects.map((project) => project.id);
-	}, [pendingProjectTour, projects]);
-
-	if (!isReady) {
-		return null;
-	}
-
 	return (
 		<Modal.Backdrop
 			isOpen={overlayMode === "welcome"}
 			onOpenChange={(isOpen) => {
-				if (!isOpen) {
+				if (!isOpen && !dismissInFlightRef.current) {
 					void dismissWelcome();
 				}
 			}}
 		>
 			<Modal.Container>
 				<Modal.Dialog className="w-[calc(100vw-3rem)] max-w-4xl">
-					<Modal.CloseTrigger />
+					<Modal.CloseTrigger isDisabled={isDismissing} />
 					<Modal.Header>
 						<div className="space-y-1">
 							<Modal.Heading>
-								{t("onboardingWizardTitle")}
+								{includesWhatsNew
+									? t("whatsNewWizardTitle")
+									: t("onboardingWizardTitle")}
 							</Modal.Heading>
 							<p className="text-sm text-muted">
-								{t("onboardingWizardSubtitle")}
+								{includesWhatsNew
+									? t("whatsNewWizardSubtitle")
+									: t("onboardingWizardSubtitle")}
 							</p>
 						</div>
 					</Modal.Header>
 
 					<Modal.Body className="space-y-5 px-6 pb-2 pt-0">
-						{/* Two-column layout */}
-						<div className="grid gap-5 sm:grid-cols-[2fr_3fr]">
-							{/* Left: Feature list */}
-							<div className="flex flex-col justify-center gap-1.5">
-								{WIZARD_STEPS.map((step, index) => (
-									<button
-										key={step.id}
-										type="button"
-										className={cn(
-											"flex gap-3 rounded-xl p-3 text-left transition-colors",
-											index === currentStep
-												? "bg-surface-secondary"
-												: "bg-transparent hover:bg-surface-secondary/30",
-										)}
-										onClick={() => setCurrentStep(index)}
-									>
-										<div
-											className={cn(
-												"flex size-9 shrink-0 items-center justify-center rounded-lg transition-colors",
-												index === currentStep
-													? "bg-foreground text-background"
-													: "bg-surface/40 text-muted/30",
-											)}
-										>
-											{step.icon}
-										</div>
-										<div className="min-w-0 space-y-1">
-											<p
-												className={cn(
-													"text-sm font-semibold transition-colors",
-													index === currentStep
-														? "text-foreground"
-														: "text-muted/40",
-												)}
-											>
-												{t(step.titleKey)}
-											</p>
-											{index === currentStep && (
-												<p className="text-xs leading-5 text-muted">
-													{t(step.descriptionKey)}
-												</p>
-											)}
-										</div>
-									</button>
-								))}
-							</div>
-
-							{/* Right: Illustration */}
-							<WizardIllustration
-								stepId={WIZARD_STEPS[currentStep].id}
+						{activeStep && (
+							<OnboardingWizard
+								step={activeStep}
+								steps={wizardSteps}
+								currentStep={currentStep}
+								onSelectStep={(step) =>
+									dispatchWizard({ type: "select", step })
+								}
+								analyticsOptIn={analyticsOptIn}
+								onAnalyticsOptInChange={setAnalyticsOptIn}
+								whatsNewLocale={resolveWhatsNewLocale(
+									i18n.resolvedLanguage ?? i18n.language,
+								)}
+								t={t}
 							/>
-						</div>
-
-						{/* Analytics consent — opt-in by default. */}
-						<div className="rounded-lg border border-border bg-surface-secondary/50 p-3">
-							<Checkbox
-								variant="secondary"
-								isSelected={analyticsOptIn}
-								onChange={setAnalyticsOptIn}
-							>
-								<Checkbox.Control>
-									<Checkbox.Indicator />
-								</Checkbox.Control>
-								<Checkbox.Content>
-									<div className="space-y-0.5">
-										<p className="text-sm font-medium">
-											{t("onboardingAnalyticsTitle")}
-										</p>
-										<p className="text-xs leading-5 text-muted">
-											{t(
-												"onboardingAnalyticsDescription",
-											)}
-										</p>
-									</div>
-								</Checkbox.Content>
-							</Checkbox>
-						</div>
+						)}
 					</Modal.Body>
 
 					<Modal.Footer>
 						<Button
 							variant="outline"
 							className="flex-1"
-							isDisabled={currentStep === 0}
-							onPress={() =>
-								setCurrentStep((s) => Math.max(0, s - 1))
-							}
+							isDisabled={currentStep === 0 || isDismissing}
+							onPress={() => dispatchWizard({ type: "previous" })}
 						>
 							{t("onboardingBack")}
 						</Button>
 
-						{currentStep < WIZARD_STEPS.length - 1 ? (
+						{currentStep < wizardSteps.length - 1 ? (
 							<Button
 								variant="primary"
 								className="flex-1"
-								onPress={() => setCurrentStep((s) => s + 1)}
+								isDisabled={isDismissing}
+								onPress={() => dispatchWizard({ type: "next" })}
 							>
 								{t("onboardingNext")}
 							</Button>
@@ -607,74 +245,17 @@ export function OnboardingController() {
 							<Button
 								variant="primary"
 								className="flex-1"
-								onPress={() => {
-									void dismissWelcome();
-									void startProductTour();
-								}}
+								isPending={isDismissing}
+								onPress={() => void finishWelcome()}
 							>
-								{t("onboardingGetStarted")}
+								{includedFeatureSteps
+									? t("onboardingGetStarted")
+									: t("onboardingFinish")}
 							</Button>
 						)}
 					</Modal.Footer>
 				</Modal.Dialog>
 			</Modal.Container>
 		</Modal.Backdrop>
-	);
-}
-
-const WIZARD_VIDEOS: Record<string, string> = {
-	mcp: "https://cdn.jsdelivr.net/gh/AkaraChen/aghub-docs@main/public/mcp.mp4",
-	skills: "https://cdn.jsdelivr.net/gh/AkaraChen/aghub-docs@main/public/skills.mp4",
-	projects:
-		"https://cdn.jsdelivr.net/gh/AkaraChen/aghub-docs@main/public/project.mp4",
-};
-
-function WizardIllustration({ stepId }: { stepId: string }) {
-	const videoSrc = WIZARD_VIDEOS[stepId];
-	const [isLoading, setIsLoading] = useState(true);
-	const videoRef = useRef<HTMLVideoElement>(null);
-
-	const handleFullscreen = () => {
-		const video = videoRef.current;
-		if (!video) return;
-		if (document.fullscreenElement) {
-			void document.exitFullscreen();
-		} else {
-			void video.requestFullscreen();
-		}
-	};
-
-	return (
-		<div className="group relative flex min-h-80 items-center justify-center overflow-hidden rounded-2xl border border-border bg-surface-secondary/60">
-			{isLoading && (
-				<div className="absolute inset-0 flex items-center justify-center">
-					<Spinner size="lg" />
-				</div>
-			)}
-			{videoSrc && (
-				<video
-					ref={videoRef}
-					key={stepId}
-					className={cn(
-						"size-full object-cover transition-opacity",
-						isLoading ? "opacity-0" : "opacity-100",
-					)}
-					src={videoSrc}
-					autoPlay
-					loop
-					muted
-					playsInline
-					onCanPlay={() => setIsLoading(false)}
-					onLoadStart={() => setIsLoading(true)}
-				/>
-			)}
-			<button
-				type="button"
-				className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-lg bg-foreground/70 text-background opacity-0 backdrop-blur-sm transition-opacity hover:bg-foreground/90 group-hover:opacity-100"
-				onClick={handleFullscreen}
-			>
-				<ArrowsPointingOutIcon className="size-4" />
-			</button>
-		</div>
 	);
 }

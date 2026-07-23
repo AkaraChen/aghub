@@ -47,6 +47,10 @@ function logFailure(action: string, error: unknown) {
 	console.warn(`[analytics] ${action} failed`, error);
 }
 
+function isPosthogLoaded() {
+	return Reflect.get(posthog, "__loaded") === true;
+}
+
 /**
  * Initialize posthog-js for replay + autocapture, bootstrapped with
  * the Rust-owned distinct_id so JS-side replays attach to the same
@@ -139,12 +143,7 @@ export async function applyAnalyticsConsent(granted: boolean) {
 	if (!key || !host) return;
 
 	if (granted) {
-		// posthog-js may not have been initialized at boot if consent
-		// was denied. Run the full init now.
-		// posthog.__loaded indicates a previous init() succeeded.
-		// biome-ignore lint/suspicious/noExplicitAny: posthog-js exposes __loaded for this case
-		const initialized = (posthog as any).__loaded === true;
-		if (!initialized) {
+		if (!isPosthogLoaded()) {
 			await initBrowserPosthog();
 		} else {
 			posthog.opt_in_capturing();
