@@ -300,11 +300,22 @@ impl CcusageRuntime {
 		&self,
 		request: SetCcusageRuntimeRequest,
 	) -> Result<CcusageRuntimeDto, CcusageRuntimeError> {
+		let environment_override =
+			std::env::var_os("AGHUB_CCUSAGE_BIN").map(PathBuf::from);
+		self.select_with_environment_override(request, environment_override)
+			.await
+	}
+
+	async fn select_with_environment_override(
+		&self,
+		request: SetCcusageRuntimeRequest,
+		environment_override: Option<PathBuf>,
+	) -> Result<CcusageRuntimeDto, CcusageRuntimeError> {
 		let preference = CcusageRuntimePreference::try_from(request)?;
 		with_operation_timeout(RUNTIME_PROBE_OPERATION_TIMEOUT, async {
 			{
 				let _guard = self.operation.lock().await;
-				let candidate = discovery::resolve_preference(
+				let candidate = discovery::validate_preference(
 					&self.root,
 					self.bundled.as_deref(),
 					&preference,
@@ -321,6 +332,12 @@ impl CcusageRuntime {
 						None
 					}
 					Err(error) => return Err(error),
+				};
+				let candidate = match environment_override {
+					Some(path) => Some(
+						discovery::resolve_environment_override(path).await?,
+					),
+					None => candidate,
 				};
 				storage::save_preference(&self.root, &preference)?;
 				*self
@@ -1322,6 +1339,47 @@ mod tests {
 		assert_eq!(
 			storage::load_preference(root.path()).unwrap(),
 			Some(CcusageRuntimePreference::Auto)
+		);
+	}
+
+	#[cfg(unix)]
+	#[tokio::test]
+	async fn selection_rejects_invalid_manual_path_under_environment_override()
+	{
+		use std::os::unix::fs::PermissionsExt;
+
+		let root = tempfile::tempdir().unwrap();
+		let environment_binary = root.path().join("environment-ccusage");
+		std::fs::write(
+			&environment_binary,
+			b"#!/bin/sh\nprintf 'ccusage 20.0.18\\n'\n",
+		)
+		.unwrap();
+		std::fs::set_permissions(
+			&environment_binary,
+			std::fs::Permissions::from_mode(0o755),
+		)
+		.unwrap();
+		let runtime = CcusageRuntime::load(root.path().join("runtime"), None);
+		let result = runtime
+			.select_with_environment_override(
+				SetCcusageRuntimeRequest {
+					source: CcusageRuntimeSource::Manual,
+					path: Some(
+						root.path()
+							.join("missing-ccusage")
+							.to_string_lossy()
+							.into_owned(),
+					),
+				},
+				Some(environment_binary),
+			)
+			.await;
+
+		assert!(matches!(result, Err(CcusageRuntimeError::InvalidBinary(_))));
+		assert_eq!(
+			storage::load_preference(&root.path().join("runtime")).unwrap(),
+			None
 		);
 	}
 

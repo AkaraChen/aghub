@@ -49,12 +49,17 @@ pub(super) async fn resolve_preference(
 	preference: &CcusageRuntimePreference,
 ) -> Result<RuntimeCandidate, CcusageRuntimeError> {
 	if let Some(path) = std::env::var_os("AGHUB_CCUSAGE_BIN") {
-		return candidate_from_path(
-			CcusageRuntimeSource::Environment,
-			resolve_environment_path(PathBuf::from(path))?,
-		)
-		.await;
+		return resolve_environment_override(PathBuf::from(path)).await;
 	}
+
+	validate_preference(root, bundled, preference).await
+}
+
+pub(super) async fn validate_preference(
+	root: &Path,
+	bundled: Option<&Path>,
+	preference: &CcusageRuntimePreference,
+) -> Result<RuntimeCandidate, CcusageRuntimeError> {
 	if matches!(preference, CcusageRuntimePreference::Auto) {
 		return resolve_auto_candidate(root, bundled).await;
 	}
@@ -92,6 +97,16 @@ pub(super) async fn resolve_preference(
 		}
 		CcusageRuntimePreference::Auto => unreachable!(),
 	}
+}
+
+pub(super) async fn resolve_environment_override(
+	path: PathBuf,
+) -> Result<RuntimeCandidate, CcusageRuntimeError> {
+	candidate_from_path(
+		CcusageRuntimeSource::Environment,
+		resolve_environment_path(path)?,
+	)
+	.await
 }
 
 async fn resolve_auto_candidate(
