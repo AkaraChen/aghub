@@ -198,7 +198,10 @@ export function skillCopyStatusQueryOptions({
 interface ResolveSkillCopiesMutationParams {
 	api: ApiClient;
 	queryClient: QueryClient;
-	onSuccess?: (data: SkillCopyResolutionResponse) => void | Promise<void>;
+	onSuccess?: (
+		data: SkillCopyResolutionResponse,
+		variables: SkillCopyResolutionRequest,
+	) => void | Promise<void>;
 }
 
 export function resolveSkillCopiesMutationOptions({
@@ -209,16 +212,50 @@ export function resolveSkillCopiesMutationOptions({
 	return mutationOptions({
 		mutationFn: (body: SkillCopyResolutionRequest) =>
 			api.skills.resolveCopies(body),
-		onSuccess: async (data) => {
-			await invalidateSkillQueries(queryClient);
-			await onSuccess?.(data);
+		onSuccess: async (data, variables) => {
+			const consumedSessionId =
+				variables.reference.kind === "git_scan"
+					? variables.reference.session_id
+					: undefined;
+			if (consumedSessionId) {
+				await onSuccess?.(data, variables);
+			}
+			await invalidateSkillQueries(queryClient, consumedSessionId);
+			if (!consumedSessionId) {
+				await onSuccess?.(data, variables);
+			}
 		},
 	});
 }
 
-export async function invalidateSkillQueries(queryClient: QueryClient) {
+function isGitScanDiffForSession(
+	queryKey: readonly unknown[],
+	sessionId: string,
+) {
+	if (queryKey[0] !== "skills" || queryKey[1] !== "diff") return false;
+	const request = queryKey[2];
+	if (!request || typeof request !== "object") return false;
+	const reference = (request as { reference?: unknown }).reference;
+	if (!reference || typeof reference !== "object") return false;
+	const gitReference = reference as {
+		kind?: unknown;
+		session_id?: unknown;
+	};
+	return (
+		gitReference.kind === "git_scan" &&
+		gitReference.session_id === sessionId
+	);
+}
+
+export async function invalidateSkillQueries(
+	queryClient: QueryClient,
+	consumedGitScanSessionId?: string,
+) {
 	await queryClient.invalidateQueries({
 		queryKey: queryKeys.skills.all(),
+		predicate: ({ queryKey }) =>
+			!consumedGitScanSessionId ||
+			!isGitScanDiffForSession(queryKey, consumedGitScanSessionId),
 	});
 	await Promise.all([
 		queryClient.refetchQueries({
@@ -230,6 +267,13 @@ export async function invalidateSkillQueries(queryClient: QueryClient) {
 			type: "active",
 		}),
 	]);
+	if (consumedGitScanSessionId) {
+		queryClient.removeQueries({
+			queryKey: queryKeys.skills.all(),
+			predicate: ({ queryKey }) =>
+				isGitScanDiffForSession(queryKey, consumedGitScanSessionId),
+		});
+	}
 }
 
 interface CreateSkillVariables {
