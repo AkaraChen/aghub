@@ -9,6 +9,7 @@ description = "CLIProxyAPI gateway integration: provision, lifecycle, management
 [dependencies]
 chrono = { workspace = true }
 dirs = { workspace = true }
+flate2 = "1.0"
 keyring = { workspace = true }
 log = { workspace = true }
 reqwest = { workspace = true, features = [ "multipart", "query" ] }
@@ -16,6 +17,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
 sha2 = "0.10"
+tar = "0.4"
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = [ "fs", "io-util", "macros", "process", "rt", "sync", "time" ] }
@@ -23,6 +25,7 @@ ts-rs = { workspace = true }
 url = { workspace = true }
 uuid = { workspace = true }
 which = { workspace = true }
+zip = "8.0"
 
 [dev-dependencies]
 tokio = { workspace = true, features = [ "rt-multi-thread" ] }

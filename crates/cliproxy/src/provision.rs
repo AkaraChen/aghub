@@ -6,12 +6,14 @@
 //! app small and decouples aghub releases from CLIProxyAPI's near-daily
 //! cadence. `AGHUB_CLIPROXY_DOWNLOAD_BASE` overrides the release host for
 //! mirrors; `AGHUB_CLIPROXY_BIN` bypasses provisioning entirely with a
-//! local binary. Extraction shells out to `tar`, which handles `.tar.gz`
-//! everywhere and `.zip` on Windows (bsdtar).
+//! local binary. Archives are unpacked in-process into a staging directory
+//! and only become visible after the verified install is committed.
 
-use std::path::{Path, PathBuf};
+use std::io::{Read, Write};
+use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
 
+use serde::{Deserialize, Serialize};
 use sha2::Digest;
 
 use crate::dto::GatewayProvisionPhase;
@@ -25,10 +27,29 @@ pub const PINNED_VERSION: &str = "7.2.81";
 const DEFAULT_DOWNLOAD_BASE: &str =
 	"https://github.com/router-for-me/CLIProxyAPI/releases/download";
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
-const EXTRACT_TIMEOUT: Duration = Duration::from_secs(60);
 // v7.2.81's largest supported archive is 15,325,274 bytes. This leaves more
 // than four times that size for release growth without allowing unbounded data.
 const MAX_ARCHIVE_BYTES: u64 = 64 * 1024 * 1024;
+// v7.2.81 expands to less than 40 MiB and contains fewer than 20 entries.
+// These limits leave room for release growth while bounding decompression.
+const MAX_EXTRACTED_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_ARCHIVE_ENTRIES: usize = 256;
+const MAX_ARCHIVE_PATH_DEPTH: usize = 16;
+const INSTALL_MANIFEST: &str = ".aghub-install.json";
+
+#[derive(Debug, Serialize, Deserialize)]
+struct InstallManifest {
+	version: String,
+	asset: String,
+	sha256: String,
+	executable: PathBuf,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ArchiveFormat {
+	TarGz,
+	Zip,
+}
 
 fn archive_size_after_chunk(downloaded: u64, chunk_size: usize) -> Result<u64> {
 	let chunk_size = u64::try_from(chunk_size).map_err(|_| {
@@ -45,6 +66,22 @@ fn archive_size_after_chunk(downloaded: u64, chunk_size: usize) -> Result<u64> {
 		));
 	}
 	Ok(size)
+}
+
+fn next_download_percent(
+	downloaded: u64,
+	total: u64,
+	last_percent: &mut u8,
+) -> Option<u8> {
+	if total == 0 {
+		return None;
+	}
+	let percent = ((downloaded * 100) / total).min(100) as u8;
+	if percent == *last_percent {
+		return None;
+	}
+	*last_percent = percent;
+	Some(percent)
 }
 
 /// SHA-256 values copied from the pinned release's published checksums.
@@ -135,6 +172,18 @@ fn version_dir(root: &Path, version: &str) -> PathBuf {
 	root.join("bin").join(version)
 }
 
+fn archive_format(asset: &str) -> Result<ArchiveFormat> {
+	if asset.ends_with(".tar.gz") {
+		return Ok(ArchiveFormat::TarGz);
+	}
+	if asset.ends_with(".zip") {
+		return Ok(ArchiveFormat::Zip);
+	}
+	Err(GatewayError::Extract(format!(
+		"unsupported release archive format: {asset}"
+	)))
+}
+
 /// Locate the provisioned binary. `AGHUB_CLIPROXY_BIN` (dev/offline) wins
 /// over the versioned install directory. A `cli-proxy-api` on PATH is
 /// deliberately NOT used here: package-manager installs are surfaced via
@@ -147,7 +196,7 @@ pub fn installed_bin(root: &Path, version: &str) -> Option<PathBuf> {
 			return Some(path);
 		}
 	}
-	find_executable(&version_dir(root, version))
+	validated_install_bin(&version_dir(root, version), version)
 }
 
 /// Where the binary `installed_bin` resolves to comes from.
@@ -159,7 +208,7 @@ pub fn bin_source(root: &Path, version: &str) -> crate::dto::GatewayBinSource {
 	{
 		return crate::dto::GatewayBinSource::Env;
 	}
-	if find_executable(&version_dir(root, version)).is_some() {
+	if validated_install_bin(&version_dir(root, version), version).is_some() {
 		return crate::dto::GatewayBinSource::Downloaded;
 	}
 	crate::dto::GatewayBinSource::None
@@ -177,10 +226,14 @@ pub fn system_bin() -> Option<PathBuf> {
 fn find_executable(dir: &Path) -> Option<PathBuf> {
 	const SKIP_EXTENSIONS: &[&str] =
 		&["txt", "md", "yaml", "yml", "example", "json", "license"];
-	let entries = std::fs::read_dir(dir).ok()?;
-	let mut candidates: Vec<PathBuf> = entries
-		.filter_map(|entry| entry.ok().map(|entry| entry.path()))
-		.filter(|path| path.is_file())
+	let mut files = Vec::new();
+	collect_regular_files(dir, 0, &mut files).ok()?;
+	let mut candidates: Vec<PathBuf> = files
+		.into_iter()
+		.filter(|path| {
+			path.file_name()
+				.is_some_and(|name| name != INSTALL_MANIFEST)
+		})
 		.filter(|path| {
 			let extension = path
 				.extension()
@@ -203,6 +256,53 @@ fn find_executable(dir: &Path) -> Option<PathBuf> {
 	candidates.into_iter().next()
 }
 
+fn collect_regular_files(
+	dir: &Path,
+	depth: usize,
+	files: &mut Vec<PathBuf>,
+) -> std::io::Result<()> {
+	if depth > MAX_ARCHIVE_PATH_DEPTH {
+		return Ok(());
+	}
+	for entry in std::fs::read_dir(dir)? {
+		let entry = entry?;
+		let file_type = entry.file_type()?;
+		if file_type.is_symlink() {
+			continue;
+		}
+		if file_type.is_dir() {
+			collect_regular_files(&entry.path(), depth + 1, files)?;
+		} else if file_type.is_file() {
+			files.push(entry.path());
+		}
+	}
+	Ok(())
+}
+
+fn validated_install_bin(dir: &Path, version: &str) -> Option<PathBuf> {
+	let manifest: InstallManifest = serde_json::from_slice(
+		&std::fs::read(dir.join(INSTALL_MANIFEST)).ok()?,
+	)
+	.ok()?;
+	if manifest.version != version
+		|| expected_checksum(version, &manifest.asset).ok()? != manifest.sha256
+	{
+		return None;
+	}
+	if manifest.executable.as_os_str().is_empty()
+		|| manifest
+			.executable
+			.components()
+			.any(|component| !matches!(component, Component::Normal(_)))
+	{
+		return None;
+	}
+	let binary = dir.join(manifest.executable);
+	let metadata = std::fs::symlink_metadata(&binary).ok()?;
+	(metadata.file_type().is_file() && !metadata.file_type().is_symlink())
+		.then_some(binary)
+}
+
 /// Download + verify + extract `version` under `<root>/bin/<version>/`.
 /// `progress` receives phase transitions and download percentage.
 pub async fn provision(
@@ -213,6 +313,11 @@ pub async fn provision(
 ) -> Result<PathBuf> {
 	let asset = asset_name(version)?;
 	let expected = expected_checksum(version, &asset)?;
+	reconcile_installation(root, version)?;
+	if let Some(binary) = installed_bin(root, version) {
+		progress(GatewayProvisionPhase::Ready, None);
+		return Ok(binary);
+	}
 	let base = download_base(mirror);
 	let http = reqwest::Client::builder()
 		.connect_timeout(Duration::from_secs(10))
@@ -233,24 +338,31 @@ pub async fn provision(
 		)));
 	}
 
-	let dir = version_dir(root, version);
-	std::fs::create_dir_all(&dir)?;
+	let bin_root = root.join("bin");
+	std::fs::create_dir_all(&bin_root)?;
+	let staging = tempfile::Builder::new()
+		.prefix(&format!(".{version}.staging."))
+		.tempdir_in(&bin_root)?;
 	let temporary = tempfile::Builder::new()
 		.prefix(".download.")
 		.suffix(&format!(".{asset}"))
-		.tempfile_in(&dir)?;
+		.tempfile_in(staging.path())?;
 	let archive_path = temporary.path().to_path_buf();
 	let mut file = tokio::fs::File::from_std(temporary.reopen()?);
 	let mut hasher = sha2::Sha256::new();
 	let mut downloaded: u64 = 0;
+	let mut last_percent = 0;
 	let mut response = response;
 	while let Some(chunk) = response.chunk().await? {
 		downloaded = archive_size_after_chunk(downloaded, chunk.len())?;
 		hasher.update(&chunk);
 		tokio::io::AsyncWriteExt::write_all(&mut file, &chunk).await?;
 		if let Some(total) = total.filter(|total| *total > 0) {
-			let percent = ((downloaded * 100) / total).min(100) as u8;
-			progress(GatewayProvisionPhase::Downloading, Some(percent));
+			if let Some(percent) =
+				next_download_percent(downloaded, total, &mut last_percent)
+			{
+				progress(GatewayProvisionPhase::Downloading, Some(percent));
+			}
 		}
 	}
 	tokio::io::AsyncWriteExt::flush(&mut file).await?;
@@ -262,13 +374,15 @@ pub async fn provision(
 	}
 
 	progress(GatewayProvisionPhase::Extracting, None);
-	extract(&archive_path, &dir).await?;
+	let payload = staging.path().join("payload");
+	std::fs::create_dir(&payload)?;
+	extract(&archive_path, &payload, archive_format(&asset)?).await?;
 	drop(temporary);
 
-	let bin = find_executable(&dir).ok_or_else(|| {
+	let bin = find_executable(&payload).ok_or_else(|| {
 		GatewayError::Extract(format!(
 			"no executable found in extracted release at {}",
-			dir.display()
+			payload.display()
 		))
 	})?;
 	#[cfg(unix)]
@@ -276,57 +390,346 @@ pub async fn provision(
 		use std::os::unix::fs::PermissionsExt;
 		std::fs::set_permissions(&bin, std::fs::Permissions::from_mode(0o755))?;
 	}
+	let executable = bin.strip_prefix(&payload).map_err(|error| {
+		GatewayError::Extract(format!(
+			"executable escaped the staging directory: {error}"
+		))
+	})?;
+	write_install_manifest(&payload, version, &asset, expected, executable)?;
+	commit_install(&payload, &version_dir(root, version), version)?;
+	let bin = validated_install_bin(&version_dir(root, version), version)
+		.ok_or_else(|| {
+			GatewayError::Extract(
+				"committed install failed manifest validation".to_string(),
+			)
+		})?;
 	progress(GatewayProvisionPhase::Ready, None);
 	Ok(bin)
 }
 
-/// `tar -xf` handles `.tar.gz` on macOS/Linux and both formats on Windows
-/// 10+ (bsdtar).
-async fn extract(archive: &Path, dest: &Path) -> Result<()> {
-	let mut command = tokio::process::Command::new("tar");
-	command
-		.arg("-xf")
-		.arg(archive)
-		.arg("-C")
-		.arg(dest)
-		.kill_on_drop(true);
-	#[cfg(windows)]
-	{
-		use std::os::windows::process::CommandExt;
-		command.creation_flags(crate::lifecycle::CREATE_NO_WINDOW);
+fn write_install_manifest(
+	dir: &Path,
+	version: &str,
+	asset: &str,
+	checksum: &str,
+	executable: &Path,
+) -> Result<()> {
+	let manifest = InstallManifest {
+		version: version.to_string(),
+		asset: asset.to_string(),
+		sha256: checksum.to_string(),
+		executable: executable.to_path_buf(),
+	};
+	let mut file = std::fs::File::create(dir.join(INSTALL_MANIFEST))?;
+	serde_json::to_writer_pretty(&mut file, &manifest)?;
+	file.write_all(b"\n")?;
+	file.sync_all()?;
+	Ok(())
+}
+
+#[cfg(unix)]
+fn sync_directory(path: &Path) -> std::io::Result<()> {
+	std::fs::File::open(path)?.sync_all()
+}
+
+#[cfg(not(unix))]
+fn sync_directory(_path: &Path) -> std::io::Result<()> {
+	Ok(())
+}
+
+fn commit_install(
+	payload: &Path,
+	destination: &Path,
+	version: &str,
+) -> Result<()> {
+	let parent = destination.parent().ok_or_else(|| {
+		GatewayError::Extract("install destination has no parent".to_string())
+	})?;
+	let backup = parent.join(format!(
+		".{version}.replaced.{}",
+		uuid::Uuid::new_v4().simple()
+	));
+	let had_destination = destination.exists();
+	if had_destination {
+		std::fs::rename(destination, &backup)?;
 	}
-	let output = tokio::time::timeout(EXTRACT_TIMEOUT, command.output())
-		.await
-		.map_err(|_| {
-			GatewayError::Extract("tar timed out after 60s".to_string())
-		})?
-		.map_err(|error| {
-			// Windows only grew a bundled bsdtar in 10 1803; older hosts
-			// need the actionable hint, not a bare NotFound.
-			if cfg!(windows) && error.kind() == std::io::ErrorKind::NotFound {
-				GatewayError::Extract(
-					"tar.exe not found; Windows 10 1803+ ships it — on \
-					 older systems extract the archive manually and point \
-					 AGHUB_CLIPROXY_BIN at the binary"
-						.to_string(),
-				)
-			} else {
-				GatewayError::Extract(format!("failed to spawn tar: {error}"))
-			}
-		})?;
-	if !output.status.success() {
+	if let Err(error) = std::fs::rename(payload, destination) {
+		if had_destination {
+			let _ = std::fs::rename(&backup, destination);
+			let _ = sync_directory(parent);
+		}
 		return Err(GatewayError::Extract(format!(
-			"tar exited with {}: {}",
-			output.status,
-			String::from_utf8_lossy(&output.stderr)
+			"failed to commit extracted release: {error}"
 		)));
 	}
+	sync_directory(parent)?;
+	if had_destination {
+		if let Err(error) = std::fs::remove_dir_all(&backup) {
+			log::warn!(
+				"failed to remove replaced gateway install at {}: {error}",
+				backup.display()
+			);
+		}
+	}
+	sync_directory(parent)?;
+	Ok(())
+}
+
+/// Remove abandoned staging directories and recover a previously committed
+/// install if a process stopped between the two rename operations.
+pub fn reconcile_installation(root: &Path, version: &str) -> Result<()> {
+	let bin_root = root.join("bin");
+	if !bin_root.exists() {
+		return Ok(());
+	}
+	let destination = version_dir(root, version);
+	let staging_prefix = format!(".{version}.staging.");
+	let backup_prefix = format!(".{version}.replaced.");
+	let mut backups = Vec::new();
+	for entry in std::fs::read_dir(&bin_root)? {
+		let entry = entry?;
+		if !entry.file_type()?.is_dir() {
+			continue;
+		}
+		let name = entry.file_name();
+		let name = name.to_string_lossy();
+		if name.starts_with(&staging_prefix) {
+			std::fs::remove_dir_all(entry.path())?;
+		} else if name.starts_with(&backup_prefix) {
+			backups.push(entry.path());
+		}
+	}
+	if validated_install_bin(&destination, version).is_some() {
+		for backup in backups {
+			std::fs::remove_dir_all(backup)?;
+		}
+		sync_directory(&bin_root)?;
+		return Ok(());
+	}
+	let recoverable = backups
+		.iter()
+		.find(|backup| validated_install_bin(backup, version).is_some())
+		.cloned();
+	if let Some(backup) = recoverable {
+		if destination.exists() {
+			std::fs::remove_dir_all(&destination)?;
+		}
+		std::fs::rename(&backup, &destination)?;
+	}
+	for backup in backups {
+		if backup.exists() {
+			std::fs::remove_dir_all(backup)?;
+		}
+	}
+	sync_directory(&bin_root)?;
+	Ok(())
+}
+
+async fn extract(
+	archive: &Path,
+	dest: &Path,
+	format: ArchiveFormat,
+) -> Result<()> {
+	let archive = archive.to_path_buf();
+	let dest = dest.to_path_buf();
+	tokio::task::spawn_blocking(move || match format {
+		ArchiveFormat::TarGz => extract_tar_gz(&archive, &dest),
+		ArchiveFormat::Zip => extract_zip(&archive, &dest),
+	})
+	.await
+	.map_err(|error| {
+		GatewayError::Extract(format!(
+			"archive extraction task failed: {error}"
+		))
+	})?
+}
+
+fn extract_tar_gz(archive: &Path, dest: &Path) -> Result<()> {
+	let file = std::fs::File::open(archive)?;
+	let decoder = flate2::read::GzDecoder::new(file);
+	let mut archive = tar::Archive::new(decoder);
+	let mut extracted = 0_u64;
+	for (index, entry) in archive.entries()?.enumerate() {
+		if index >= MAX_ARCHIVE_ENTRIES {
+			return Err(GatewayError::Extract(format!(
+				"archive exceeds the {MAX_ARCHIVE_ENTRIES}-entry limit"
+			)));
+		}
+		let mut entry = entry.map_err(|error| {
+			GatewayError::Extract(format!("invalid tar entry: {error}"))
+		})?;
+		let entry_type = entry.header().entry_type();
+		if !entry_type.is_file() && !entry_type.is_dir() {
+			return Err(GatewayError::Extract(format!(
+				"unsupported tar entry type for {}",
+				entry.path()?.display()
+			)));
+		}
+		let relative = safe_archive_path(&entry.path()?)?;
+		let target = dest.join(relative);
+		if entry_type.is_dir() {
+			std::fs::create_dir_all(target)?;
+			continue;
+		}
+		let size = entry.size();
+		extracted = checked_extracted_size(extracted, size)?;
+		write_archive_file(&mut entry, &target, size)?;
+	}
+	Ok(())
+}
+
+fn extract_zip(archive: &Path, dest: &Path) -> Result<()> {
+	let file = std::fs::File::open(archive)?;
+	let mut archive = zip::ZipArchive::new(file).map_err(|error| {
+		GatewayError::Extract(format!("invalid zip archive: {error}"))
+	})?;
+	if archive.len() > MAX_ARCHIVE_ENTRIES {
+		return Err(GatewayError::Extract(format!(
+			"archive exceeds the {MAX_ARCHIVE_ENTRIES}-entry limit"
+		)));
+	}
+	let mut extracted = 0_u64;
+	for index in 0..archive.len() {
+		let mut entry = archive.by_index(index).map_err(|error| {
+			GatewayError::Extract(format!("invalid zip entry: {error}"))
+		})?;
+		if let Some(mode) = entry.unix_mode() {
+			let file_type = mode & 0o170000;
+			let expected = if entry.is_dir() { 0o040000 } else { 0o100000 };
+			if file_type != 0 && file_type != expected {
+				return Err(GatewayError::Extract(format!(
+					"unsupported zip entry type for {}",
+					entry.name()
+				)));
+			}
+		}
+		let relative = safe_archive_name(entry.name())?;
+		let target = dest.join(relative);
+		if entry.is_dir() {
+			std::fs::create_dir_all(target)?;
+			continue;
+		}
+		let size = entry.size();
+		extracted = checked_extracted_size(extracted, size)?;
+		write_archive_file(&mut entry, &target, size)?;
+	}
+	Ok(())
+}
+
+fn safe_archive_path(path: &Path) -> Result<PathBuf> {
+	let name = path.to_str().ok_or_else(|| {
+		GatewayError::Extract("archive entry path is not UTF-8".to_string())
+	})?;
+	safe_archive_name(name)
+}
+
+fn safe_archive_name(name: &str) -> Result<PathBuf> {
+	if name.is_empty()
+		|| name.starts_with('/')
+		|| name.contains('\\')
+		|| name.contains('\0')
+	{
+		return Err(GatewayError::Extract(format!(
+			"unsafe archive path: {name:?}"
+		)));
+	}
+	let mut path = PathBuf::new();
+	for part in name.split('/') {
+		if part.is_empty() {
+			continue;
+		}
+		if part == "." {
+			continue;
+		}
+		if part == ".." || part.contains(':') {
+			return Err(GatewayError::Extract(format!(
+				"unsafe archive path: {name:?}"
+			)));
+		}
+		path.push(part);
+		if path.components().count() > MAX_ARCHIVE_PATH_DEPTH {
+			return Err(GatewayError::Extract(format!(
+				"archive path exceeds the {MAX_ARCHIVE_PATH_DEPTH}-level \
+				 limit: {name:?}"
+			)));
+		}
+	}
+	if path.as_os_str().is_empty()
+		|| path
+			.components()
+			.any(|component| !matches!(component, Component::Normal(_)))
+	{
+		return Err(GatewayError::Extract(format!(
+			"unsafe archive path: {name:?}"
+		)));
+	}
+	Ok(path)
+}
+
+fn checked_extracted_size(current: u64, entry_size: u64) -> Result<u64> {
+	let total = current.checked_add(entry_size).ok_or_else(|| {
+		GatewayError::Extract("extracted size overflowed".to_string())
+	})?;
+	if total > MAX_EXTRACTED_BYTES {
+		return Err(GatewayError::Extract(format!(
+			"archive exceeds the {} MiB extraction limit",
+			MAX_EXTRACTED_BYTES / (1024 * 1024)
+		)));
+	}
+	Ok(total)
+}
+
+fn write_archive_file(
+	reader: &mut impl Read,
+	target: &Path,
+	expected_size: u64,
+) -> Result<()> {
+	let parent = target.parent().ok_or_else(|| {
+		GatewayError::Extract(format!(
+			"archive target has no parent: {}",
+			target.display()
+		))
+	})?;
+	std::fs::create_dir_all(parent)?;
+	let mut output = std::fs::OpenOptions::new()
+		.write(true)
+		.create_new(true)
+		.open(target)?;
+	let actual =
+		std::io::copy(&mut reader.take(expected_size + 1), &mut output)?;
+	if actual != expected_size {
+		return Err(GatewayError::Extract(format!(
+			"archive entry size mismatch for {}: expected {expected_size}, \
+			 wrote {actual}",
+			target.display()
+		)));
+	}
+	output.sync_all()?;
 	Ok(())
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	fn committed_install(dir: &Path) -> PathBuf {
+		let install = dir.join("payload");
+		std::fs::create_dir_all(&install).expect("install directory");
+		let binary = install.join("cli-proxy-api");
+		std::fs::write(&binary, "binary").expect("binary");
+		let asset = asset_name(PINNED_VERSION).expect("asset name");
+		let checksum =
+			expected_checksum(PINNED_VERSION, &asset).expect("checksum");
+		write_install_manifest(
+			&install,
+			PINNED_VERSION,
+			&asset,
+			checksum,
+			Path::new("cli-proxy-api"),
+		)
+		.expect("manifest");
+		install
+	}
 
 	#[test]
 	fn asset_name_matches_release_convention() {
@@ -363,8 +766,102 @@ mod tests {
 	}
 
 	#[test]
+	fn installed_bin_rejects_uncommitted_directory() {
+		let dir = tempfile::tempdir().expect("tempdir");
+		let install = version_dir(dir.path(), PINNED_VERSION);
+		std::fs::create_dir_all(&install).expect("install directory");
+		std::fs::write(install.join("cli-proxy-api"), "partial")
+			.expect("partial binary");
+
+		assert_eq!(installed_bin(dir.path(), PINNED_VERSION), None);
+	}
+
+	#[test]
+	fn installed_bin_accepts_committed_directory() {
+		let dir = tempfile::tempdir().expect("tempdir");
+		let install = committed_install(dir.path());
+		let destination = version_dir(dir.path(), PINNED_VERSION);
+		std::fs::create_dir_all(destination.parent().expect("bin root"))
+			.expect("bin root");
+		std::fs::rename(install, &destination).expect("commit");
+
+		assert_eq!(
+			installed_bin(dir.path(), PINNED_VERSION),
+			Some(destination.join("cli-proxy-api"))
+		);
+	}
+
+	#[test]
+	fn archive_paths_reject_cross_platform_escapes() {
+		assert!(safe_archive_name("../escape").is_err());
+		assert!(safe_archive_name("dir/../../escape").is_err());
+		assert!(safe_archive_name("/absolute").is_err());
+		assert!(safe_archive_name(r"dir\..\escape").is_err());
+		assert!(safe_archive_name("C:/escape").is_err());
+	}
+
+	#[test]
+	fn tar_links_are_rejected() {
+		let dir = tempfile::tempdir().expect("tempdir");
+		let archive_path = dir.path().join("release.tar.gz");
+		let file = std::fs::File::create(&archive_path).expect("archive");
+		let encoder =
+			flate2::write::GzEncoder::new(file, flate2::Compression::default());
+		let mut archive = tar::Builder::new(encoder);
+		let mut header = tar::Header::new_gnu();
+		header.set_entry_type(tar::EntryType::Symlink);
+		header.set_size(0);
+		header.set_mode(0o777);
+		header.set_link_name("../outside").expect("link target");
+		header.set_cksum();
+		archive
+			.append_data(&mut header, "cli-proxy-api", std::io::empty())
+			.expect("symlink entry");
+		archive.into_inner().expect("tar").finish().expect("gzip");
+		let output = dir.path().join("output");
+		std::fs::create_dir(&output).expect("output");
+
+		assert!(extract_tar_gz(&archive_path, &output).is_err());
+		assert!(!output.join("cli-proxy-api").exists());
+	}
+
+	#[test]
+	fn reconciliation_recovers_committed_backup() {
+		let dir = tempfile::tempdir().expect("tempdir");
+		let bin_root = dir.path().join("bin");
+		std::fs::create_dir(&bin_root).expect("bin root");
+		let backup = bin_root.join(format!(".{PINNED_VERSION}.replaced.test"));
+		std::fs::rename(committed_install(dir.path()), &backup)
+			.expect("backup");
+		let staging = bin_root.join(format!(".{PINNED_VERSION}.staging.test"));
+		std::fs::create_dir(&staging).expect("staging");
+
+		reconcile_installation(dir.path(), PINNED_VERSION).expect("reconcile");
+
+		assert!(installed_bin(dir.path(), PINNED_VERSION).is_some());
+		assert!(!backup.exists());
+		assert!(!staging.exists());
+	}
+
+	#[test]
 	fn archive_size_limit_rejects_oversized_streams() {
 		assert!(archive_size_after_chunk(MAX_ARCHIVE_BYTES, 1).is_err());
+	}
+
+	#[test]
+	fn download_progress_only_emits_changed_percentages() {
+		let mut last_percent = 0;
+
+		assert_eq!(next_download_percent(1, 1_000, &mut last_percent), None);
+		assert_eq!(
+			next_download_percent(10, 1_000, &mut last_percent),
+			Some(1)
+		);
+		assert_eq!(next_download_percent(19, 1_000, &mut last_percent), None);
+		assert_eq!(
+			next_download_percent(20, 1_000, &mut last_percent),
+			Some(2)
+		);
 	}
 
 	#[test]

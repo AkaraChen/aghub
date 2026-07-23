@@ -34,6 +34,9 @@ pub enum GatewayError {
 	#[error("gateway process error: {0}")]
 	Process(String),
 
+	#[error("home directory is unavailable; cannot locate CLIProxyAPI config")]
+	HomeDirectoryUnavailable,
+
 	#[error("config file error at {path}: {message}")]
 	ConfigFile { path: PathBuf, message: String },
 

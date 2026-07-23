@@ -6,7 +6,8 @@
 //! aghub run that crashed, or a user-started process), it is *adopted*:
 //! reported as running, never respawned, and `stop` refuses politely.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::sync::Mutex as StdMutex;
 use std::time::{Duration, Instant};
 
 use tokio::sync::Mutex;
@@ -32,11 +33,26 @@ struct RunningChild {
 	started_at: Instant,
 }
 
+struct StartingGuard<'a> {
+	id: String,
+	starting: &'a StdMutex<HashSet<String>>,
+}
+
+impl Drop for StartingGuard<'_> {
+	fn drop(&mut self) {
+		self.starting
+			.lock()
+			.unwrap_or_else(|poisoned| poisoned.into_inner())
+			.remove(&self.id);
+	}
+}
+
 /// Held in the API server's managed state; children are `kill_on_drop`, so
 /// gateway processes die with the app even on abnormal exits.
 #[derive(Default)]
 pub struct GatewayRuntime {
 	running: Mutex<HashMap<String, RunningChild>>,
+	starting: StdMutex<HashSet<String>>,
 }
 
 impl GatewayRuntime {
@@ -53,13 +69,31 @@ impl GatewayRuntime {
 		config_path: &std::path::Path,
 		client: &ManagementClient,
 	) -> Result<()> {
-		let mut running = self.running.lock().await;
-		if let Some(entry) = running.get_mut(&record.id) {
-			if entry.child.try_wait()?.is_none() {
-				return Ok(());
+		{
+			let mut running = self.running.lock().await;
+			if let Some(entry) = running.get_mut(&record.id) {
+				if entry.child.try_wait()?.is_none() {
+					return Ok(());
+				}
+				running.remove(&record.id);
 			}
-			running.remove(&record.id);
 		}
+		{
+			let mut starting = self
+				.starting
+				.lock()
+				.unwrap_or_else(|poisoned| poisoned.into_inner());
+			if !starting.insert(record.id.clone()) {
+				return Err(GatewayError::Process(format!(
+					"gateway '{}' is already starting",
+					record.name
+				)));
+			}
+		}
+		let _starting = StartingGuard {
+			id: record.id.clone(),
+			starting: &self.starting,
+		};
 		// Adoption probe: something on this port already speaks our
 		// management key — a leftover from a crashed aghub run or a
 		// user-started process. Claim it instead of double-spawning.
@@ -126,7 +160,7 @@ impl GatewayRuntime {
 			tokio::time::sleep(READY_POLL_INTERVAL).await;
 		}
 
-		running.insert(
+		self.running.lock().await.insert(
 			record.id.clone(),
 			RunningChild {
 				child,
@@ -138,8 +172,8 @@ impl GatewayRuntime {
 
 	/// Stop the child we spawned. Adopted processes are not ours to kill.
 	pub async fn stop(&self, record: &GatewayInstanceRecord) -> Result<()> {
-		let mut running = self.running.lock().await;
-		match running.remove(&record.id) {
+		let entry = self.running.lock().await.remove(&record.id);
+		match entry {
 			Some(mut entry) => {
 				entry.child.kill().await.map_err(|error| {
 					GatewayError::Process(format!(
@@ -148,11 +182,21 @@ impl GatewayRuntime {
 				})?;
 				Ok(())
 			}
-			None => Err(GatewayError::Process(
-				"this gateway process was not started by aghub; stop it \
-				 where it was started"
-					.to_string(),
-			)),
+			None => {
+				let starting = self
+					.starting
+					.lock()
+					.unwrap_or_else(|poisoned| poisoned.into_inner())
+					.contains(&record.id);
+				let message = if starting {
+					"this gateway is still starting; wait for startup to \
+					 finish before stopping it"
+				} else {
+					"this gateway process was not started by aghub; stop it \
+					 where it was started"
+				};
+				Err(GatewayError::Process(message.to_string()))
+			}
 		}
 	}
 
@@ -168,6 +212,14 @@ impl GatewayRuntime {
 			} else {
 				GatewayInstanceStatus::Unhealthy
 			};
+		}
+		if self
+			.starting
+			.lock()
+			.unwrap_or_else(|poisoned| poisoned.into_inner())
+			.contains(&record.id)
+		{
+			return GatewayInstanceStatus::Starting;
 		}
 
 		// Snapshot child liveness under the lock, then probe without it.
@@ -234,4 +286,89 @@ fn spawn_hint(bin: &std::path::Path) -> String {
 	}
 	let _ = bin;
 	String::new()
+}
+
+#[cfg(test)]
+mod tests {
+	use std::path::Path;
+	use std::sync::Arc;
+
+	use tokio::io::AsyncWriteExt;
+
+	use super::*;
+
+	async fn ping_server(
+		delay: Duration,
+		accepted: Option<tokio::sync::oneshot::Sender<()>>,
+	) -> String {
+		let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+			.await
+			.expect("listener");
+		let address = listener.local_addr().expect("address");
+		tokio::spawn(async move {
+			let (mut socket, _) = listener.accept().await.expect("accept");
+			if let Some(accepted) = accepted {
+				let _ = accepted.send(());
+			}
+			tokio::time::sleep(delay).await;
+			socket
+				.write_all(
+					b"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\n\
+					  content-length: 2\r\nconnection: close\r\n\r\n{}",
+				)
+				.await
+				.expect("response");
+		});
+		format!("http://{address}")
+	}
+
+	fn record(base_url: String) -> GatewayInstanceRecord {
+		GatewayInstanceRecord {
+			id: "managed".to_string(),
+			name: "Managed".to_string(),
+			kind: GatewayInstanceKind::Managed,
+			base_url,
+			port: Some(8317),
+			auto_start: false,
+			created_at: "2026-07-23T00:00:00Z".to_string(),
+			provider_projection: Default::default(),
+		}
+	}
+
+	#[tokio::test]
+	async fn status_does_not_wait_for_start_probe() {
+		let (accepted_tx, accepted_rx) = tokio::sync::oneshot::channel();
+		let slow_url =
+			ping_server(Duration::from_secs(1), Some(accepted_tx)).await;
+		let fast_url = ping_server(Duration::ZERO, None).await;
+		let runtime = Arc::new(GatewayRuntime::new());
+		let start_record = record(slow_url.clone());
+		let status_record = record(fast_url.clone());
+		let start_runtime = Arc::clone(&runtime);
+		let start = tokio::spawn(async move {
+			let client =
+				ManagementClient::new(&slow_url, "key").expect("client");
+			start_runtime
+				.start(
+					&start_record,
+					Path::new("unused"),
+					Path::new("unused"),
+					&client,
+				)
+				.await
+		});
+		accepted_rx.await.expect("start probe accepted");
+		let status_client =
+			ManagementClient::new(&fast_url, "key").expect("client");
+
+		let status = tokio::time::timeout(
+			Duration::from_millis(250),
+			runtime.status(&status_record, false, &status_client),
+		)
+		.await
+		.expect("status should not wait for a different request");
+
+		assert_eq!(status, GatewayInstanceStatus::Starting);
+		start.await.expect("start task").expect("adopted");
+	}
 }

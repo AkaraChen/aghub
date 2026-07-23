@@ -9,6 +9,7 @@
 //! anything else goes through the management API, which does its own
 //! persistence.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use crate::error::{GatewayError, Result};
@@ -25,10 +26,10 @@ pub struct BootstrapOutcome {
 	pub port: u16,
 }
 
-pub fn default_config_dir() -> PathBuf {
+pub fn default_config_dir() -> Result<PathBuf> {
 	dirs::home_dir()
-		.unwrap_or_else(std::env::temp_dir)
-		.join(".cli-proxy-api")
+		.map(|home| home.join(".cli-proxy-api"))
+		.ok_or(GatewayError::HomeDirectoryUnavailable)
 }
 
 fn generate_key(prefix: &str) -> String {
@@ -47,14 +48,15 @@ pub fn ensure_config(
 		let management_key = generate_key("");
 		let gateway_key = generate_key("sk-aghub-");
 		std::fs::create_dir_all(config_dir)?;
-		std::fs::write(
+		write_config_atomic(
 			&config_path,
-			render_initial_config(
+			&render_initial_config(
 				config_dir,
 				port,
 				&management_key,
 				&gateway_key,
 			),
+			false,
 		)?;
 		return Ok(BootstrapOutcome {
 			config_path,
@@ -122,12 +124,85 @@ pub fn ensure_config(
 		appended.push('\n');
 	}
 	appended.push_str(&render_management_block(&management_key));
-	std::fs::write(&config_path, appended)?;
+	write_config_atomic(&config_path, &appended, true)?;
 	Ok(BootstrapOutcome {
 		config_path,
 		management_key,
 		port: file_port,
 	})
+}
+
+fn write_config_atomic(
+	path: &Path,
+	content: &str,
+	replace: bool,
+) -> Result<()> {
+	let target = match std::fs::symlink_metadata(path) {
+		Ok(metadata) if metadata.file_type().is_symlink() => {
+			match std::fs::canonicalize(path) {
+				Ok(target) => target,
+				Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+					let target = std::fs::read_link(path)?;
+					if target.is_absolute() {
+						target
+					} else {
+						path.parent()
+							.unwrap_or_else(|| Path::new("."))
+							.join(target)
+					}
+				}
+				Err(error) => return Err(error.into()),
+			}
+		}
+		Ok(_) => path.to_path_buf(),
+		Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+			path.to_path_buf()
+		}
+		Err(error) => return Err(error.into()),
+	};
+	let parent = target.parent().ok_or_else(|| GatewayError::ConfigFile {
+		path: target.clone(),
+		message: "config path has no parent directory".to_string(),
+	})?;
+	std::fs::create_dir_all(parent)?;
+	let permissions = match target.metadata() {
+		Ok(metadata) => Some(metadata.permissions()),
+		Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+		Err(error) => return Err(error.into()),
+	};
+	let mut temporary = tempfile::Builder::new()
+		.prefix(".config.")
+		.suffix(".yaml.tmp")
+		.tempfile_in(parent)?;
+	temporary.write_all(content.as_bytes())?;
+	if let Some(permissions) = permissions {
+		temporary.as_file().set_permissions(permissions)?;
+	} else {
+		set_private_permissions(temporary.as_file())?;
+	}
+	temporary.as_file().sync_all()?;
+	if replace {
+		temporary.persist(&target).map_err(|error| error.error)?;
+	} else {
+		temporary
+			.persist_noclobber(&target)
+			.map_err(|error| error.error)?;
+	}
+	#[cfg(unix)]
+	std::fs::File::open(parent)?.sync_all()?;
+	Ok(())
+}
+
+#[cfg(unix)]
+fn set_private_permissions(file: &std::fs::File) -> std::io::Result<()> {
+	use std::os::unix::fs::PermissionsExt;
+
+	file.set_permissions(std::fs::Permissions::from_mode(0o600))
+}
+
+#[cfg(not(unix))]
+fn set_private_permissions(_file: &std::fs::File) -> std::io::Result<()> {
+	Ok(())
 }
 
 fn render_initial_config(
@@ -184,6 +259,22 @@ mod tests {
 		);
 	}
 
+	#[cfg(unix)]
+	#[test]
+	fn fresh_config_is_private() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let dir = tempfile::tempdir().expect("tempdir");
+		let outcome =
+			ensure_config(dir.path(), DEFAULT_PORT, None).expect("bootstrap");
+		let mode = std::fs::metadata(outcome.config_path)
+			.expect("config metadata")
+			.permissions()
+			.mode() & 0o777;
+
+		assert_eq!(mode, 0o600);
+	}
+
 	#[test]
 	fn existing_config_without_block_gets_appended_untouched() {
 		let dir = tempfile::tempdir().expect("tempdir");
@@ -198,6 +289,63 @@ mod tests {
 			.expect("config");
 		assert!(raw.starts_with(original), "user content must be untouched");
 		assert!(raw.contains("secret-key"));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn existing_symlink_is_preserved_with_target_permissions() {
+		use std::os::unix::fs::{symlink, PermissionsExt};
+
+		let dir = tempfile::tempdir().expect("tempdir");
+		let config_dir = dir.path().join("config");
+		std::fs::create_dir(&config_dir).expect("config dir");
+		let target = dir.path().join("dotfiles-config.yaml");
+		std::fs::write(&target, "port: 9000\n").expect("target");
+		std::fs::set_permissions(
+			&target,
+			std::fs::Permissions::from_mode(0o640),
+		)
+		.expect("permissions");
+		let config_path = config_dir.join("config.yaml");
+		symlink(&target, &config_path).expect("symlink");
+
+		ensure_config(&config_dir, DEFAULT_PORT, None).expect("bootstrap");
+
+		assert!(std::fs::symlink_metadata(&config_path)
+			.expect("link metadata")
+			.file_type()
+			.is_symlink());
+		let mode = std::fs::metadata(&target)
+			.expect("target metadata")
+			.permissions()
+			.mode() & 0o777;
+		assert_eq!(mode, 0o640);
+		assert!(std::fs::read_to_string(target)
+			.expect("target content")
+			.contains("remote-management"));
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn dangling_symlink_target_is_created_in_place() {
+		use std::os::unix::fs::symlink;
+
+		let dir = tempfile::tempdir().expect("tempdir");
+		let config_dir = dir.path().join("config");
+		std::fs::create_dir(&config_dir).expect("config dir");
+		let target = dir.path().join("dotfiles/config.yaml");
+		let config_path = config_dir.join("config.yaml");
+		symlink(&target, &config_path).expect("symlink");
+
+		ensure_config(&config_dir, DEFAULT_PORT, None).expect("bootstrap");
+
+		assert!(std::fs::symlink_metadata(&config_path)
+			.expect("link metadata")
+			.file_type()
+			.is_symlink());
+		assert!(std::fs::read_to_string(target)
+			.expect("target content")
+			.contains("remote-management"));
 	}
 
 	#[test]
