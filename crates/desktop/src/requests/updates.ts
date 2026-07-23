@@ -15,6 +15,9 @@ import {
 import { queryKeys } from "./keys";
 
 const UPDATE_CHECK_SESSION_KEY = "aghub-auto-update-check-session";
+// Installer bundles can take longer than manifest checks on slower
+// connections, while still needing a bounded request lifetime.
+const UPDATE_DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1000;
 
 type UpdateMetadata = ConstructorParameters<typeof Update>[0];
 
@@ -24,6 +27,12 @@ export async function checkForUpdate(): Promise<Update | null> {
 		channel,
 	});
 	return metadata ? new Update(metadata) : null;
+}
+
+export async function installUpdate(update: Update): Promise<void> {
+	await update.downloadAndInstall(undefined, {
+		timeout: UPDATE_DOWNLOAD_TIMEOUT_MS,
+	});
 }
 
 async function checkForStartupUpdate(): Promise<Update | null> {

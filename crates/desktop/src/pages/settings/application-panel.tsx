@@ -8,7 +8,6 @@ import {
 } from "@tauri-apps/plugin-autostart";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
-import type { Update } from "@tauri-apps/plugin-updater";
 import { useTranslation } from "react-i18next";
 import { saveAnalyticsPreference } from "../../lib/analytics-preference";
 import { dispatchOnboardingCommand } from "../../lib/onboarding";
@@ -17,6 +16,7 @@ import { getAnalyticsConsent } from "../../lib/store";
 import {
 	autoCheckUpdatesQueryOptions,
 	checkForUpdate,
+	installUpdate,
 	setAutoCheckUpdatesMutationOptions,
 	setUpdateChannelMutationOptions,
 	updateChannelQueryOptions,
@@ -147,9 +147,7 @@ export default function ApplicationPanel() {
 	});
 
 	const downloadMutation = useMutation({
-		mutationFn: async (update: Update) => {
-			await update.downloadAndInstall();
-		},
+		mutationFn: installUpdate,
 		onSuccess: () => {
 			toast.success(t("updateInstalledSuccess"), {
 				timeout: 0,

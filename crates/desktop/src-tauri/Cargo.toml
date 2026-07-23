@@ -47,6 +47,9 @@ posthog-rs = "0.19.1"
 uuid = { workspace = true }
 tauri-plugin-autostart = "2.5.1"
 sys-locale = "0.3.2"
+reqwest = { workspace = true }
+semver = "1.0.28"
+thiserror = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
