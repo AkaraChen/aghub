@@ -25,13 +25,13 @@ export function AutoUpdateChecker() {
 	const [, setLocation] = useLocation();
 	const surfacedRef = useRef(false);
 
-	const { data: update } = useQuery(startupUpdateQueryOptions());
+	const { data: updateVersion } = useQuery(startupUpdateQueryOptions());
 
 	useEffect(() => {
-		if (!update || surfacedRef.current) return;
+		if (!updateVersion || surfacedRef.current) return;
 		surfacedRef.current = true;
 
-		toast.success(t("updateAvailable", { version: update.version }), {
+		toast.success(t("updateAvailable", { version: updateVersion }), {
 			description: t("clickToCheckUpdates"),
 			actionProps: {
 				onPress: () => setLocation("/settings"),
@@ -39,7 +39,7 @@ export function AutoUpdateChecker() {
 				children: t("openSettings"),
 			},
 		});
-	}, [setLocation, t, update]);
+	}, [setLocation, t, updateVersion]);
 
 	return null;
 }

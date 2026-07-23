@@ -35,7 +35,7 @@ export async function installUpdate(update: Update): Promise<void> {
 	});
 }
 
-async function checkForStartupUpdate(): Promise<Update | null> {
+async function checkForStartupUpdate(): Promise<string | null> {
 	if (typeof window !== "undefined") {
 		try {
 			if (window.sessionStorage.getItem(UPDATE_CHECK_SESSION_KEY)) {
@@ -52,7 +52,11 @@ async function checkForStartupUpdate(): Promise<Update | null> {
 		return null;
 	}
 
-	return checkForUpdate();
+	const update = await checkForUpdate();
+	if (!update) return null;
+	const version = update.version;
+	await update.close();
+	return version;
 }
 
 export function startupUpdateQueryOptions() {

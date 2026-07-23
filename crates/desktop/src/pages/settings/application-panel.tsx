@@ -265,7 +265,11 @@ export default function ApplicationPanel() {
 									variant="secondary"
 									size="sm"
 									onPress={handleCheckUpdates}
-									isDisabled={isChecking || isDownloading}
+									isDisabled={
+										isChecking ||
+										isDownloading ||
+										updateChannelMutation.isPending
+									}
 								>
 									{t("checkForUpdates")}
 								</Button>
@@ -275,7 +279,11 @@ export default function ApplicationPanel() {
 									variant="secondary"
 									size="sm"
 									onPress={handleCheckUpdates}
-									isDisabled={isChecking || isDownloading}
+									isDisabled={
+										isChecking ||
+										isDownloading ||
+										updateChannelMutation.isPending
+									}
 								>
 									{t("checkAgain")}
 								</Button>
@@ -285,7 +293,10 @@ export default function ApplicationPanel() {
 									variant="primary"
 									size="sm"
 									onPress={handleDownloadAndInstall}
-									isDisabled={isDownloading}
+									isDisabled={
+										isDownloading ||
+										updateChannelMutation.isPending
+									}
 								>
 									{t("downloadAndInstall")}
 								</Button>
@@ -341,7 +352,9 @@ export default function ApplicationPanel() {
 							}
 							isDisabled={
 								isChannelLoading ||
-								updateChannelMutation.isPending
+								updateChannelMutation.isPending ||
+								isChecking ||
+								isDownloading
 							}
 							aria-label={t("settingsBetaUpdatesToggleLabel")}
 						>
