@@ -292,7 +292,7 @@ mod tests {
 	use std::path::Path;
 	use std::sync::Arc;
 
-	use tokio::io::AsyncWriteExt;
+	use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 	use super::*;
 
@@ -306,6 +306,15 @@ mod tests {
 		let address = listener.local_addr().expect("address");
 		tokio::spawn(async move {
 			let (mut socket, _) = listener.accept().await.expect("accept");
+			let mut request = Vec::new();
+			loop {
+				let bytes =
+					socket.read_buf(&mut request).await.expect("request");
+				assert!(bytes > 0, "request closed before headers");
+				if request.windows(4).any(|bytes| bytes == b"\r\n\r\n") {
+					break;
+				}
+			}
 			if let Some(accepted) = accepted {
 				let _ = accepted.send(());
 			}
@@ -317,6 +326,7 @@ mod tests {
 				)
 				.await
 				.expect("response");
+			socket.shutdown().await.expect("shutdown");
 		});
 		format!("http://{address}")
 	}
