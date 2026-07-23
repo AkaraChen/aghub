@@ -98,4 +98,10 @@ export const queryKeys = {
 		all: () => ["onboarding"] as const,
 		bootstrap: () => ["onboarding", "bootstrap"] as const,
 	},
+	updates: {
+		all: () => ["updates"] as const,
+		autoCheck: () => ["updates", "auto-check"] as const,
+		channel: () => ["updates", "channel"] as const,
+		startup: () => ["updates", "startup"] as const,
+	},
 };

@@ -1,4 +1,4 @@
-import { Avatar, Button, Card, Switch, toast } from "@heroui/react";
+import { Avatar, Button, Card, Spinner, Switch, toast } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getName, getVersion } from "@tauri-apps/api/app";
 import {
@@ -8,16 +8,20 @@ import {
 } from "@tauri-apps/plugin-autostart";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { relaunch } from "@tauri-apps/plugin-process";
-import { check } from "@tauri-apps/plugin-updater";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { saveAnalyticsPreference } from "../../lib/analytics-preference";
 import { dispatchOnboardingCommand } from "../../lib/onboarding";
 import { isWindows } from "../../lib/platform";
+import { getAnalyticsConsent } from "../../lib/store";
 import {
-	getAnalyticsConsent,
-	getAutoCheckUpdates,
-	setAutoCheckUpdates,
-} from "../../lib/store";
+	autoCheckUpdatesQueryOptions,
+	checkForUpdate,
+	installUpdate,
+	setAutoCheckUpdatesMutationOptions,
+	setUpdateChannelMutationOptions,
+	updateChannelQueryOptions,
+} from "../../requests/updates";
 
 export default function ApplicationPanel() {
 	const { t } = useTranslation();
@@ -47,10 +51,9 @@ export default function ApplicationPanel() {
 		});
 
 	const { data: autoCheckUpdates = true, isPending: isAutoCheckLoading } =
-		useQuery({
-			queryKey: ["auto-check-updates"],
-			queryFn: getAutoCheckUpdates,
-		});
+		useQuery(autoCheckUpdatesQueryOptions());
+	const { data: updateChannel = "stable", isPending: isChannelLoading } =
+		useQuery(updateChannelQueryOptions());
 
 	const analyticsMutation = useMutation({
 		mutationFn: async (enabled: boolean) => {
@@ -100,20 +103,16 @@ export default function ApplicationPanel() {
 	});
 
 	const autoCheckUpdatesMutation = useMutation({
-		mutationFn: async (enabled: boolean) => {
-			await setAutoCheckUpdates(enabled);
-			return enabled;
-		},
-		onSuccess: (enabled) => {
-			queryClient.invalidateQueries({
-				queryKey: ["auto-check-updates"],
-			});
-			toast.success(
-				enabled
-					? t("settingsAutoCheckUpdatesEnabled")
-					: t("settingsAutoCheckUpdatesDisabled"),
-			);
-		},
+		...setAutoCheckUpdatesMutationOptions({
+			queryClient,
+			onSuccess: (enabled) => {
+				toast.success(
+					enabled
+						? t("settingsAutoCheckUpdatesEnabled")
+						: t("settingsAutoCheckUpdatesDisabled"),
+				);
+			},
+		}),
 		onError: (error) => {
 			toast.danger(
 				error instanceof Error
@@ -124,27 +123,45 @@ export default function ApplicationPanel() {
 	});
 
 	const checkMutation = useMutation({
-		mutationFn: async () => {
-			const update = await check();
-			if (update) {
-				return {
-					available: true,
-					version: update.version,
-					currentVersion: update.currentVersion,
-				};
-			}
-			return { available: false };
+		mutationFn: checkForUpdate,
+	});
+
+	useEffect(() => {
+		const update = checkMutation.data;
+		if (!update) return;
+
+		return () => {
+			update.close().catch((error) => {
+				console.error("Failed to close update resource:", error);
+			});
+		};
+	}, [checkMutation.data]);
+
+	const updateChannelMutation = useMutation({
+		...setUpdateChannelMutationOptions({
+			queryClient,
+			onSuccess: (channel) => {
+				checkMutation.reset();
+				toast.success(
+					channel === "beta"
+						? t("settingsBetaUpdatesEnabled")
+						: t("settingsBetaUpdatesDisabled"),
+				);
+			},
+		}),
+		onError: (error) => {
+			toast.danger(
+				error instanceof Error
+					? error.message
+					: t("settingsBetaUpdatesError"),
+			);
 		},
 	});
 
 	const downloadMutation = useMutation({
-		mutationFn: async () => {
-			const update = await check();
-			if (!update) throw new Error("No update available");
-
-			await update.downloadAndInstall();
-		},
+		mutationFn: installUpdate,
 		onSuccess: () => {
+			checkMutation.reset();
 			toast.success(t("updateInstalledSuccess"), {
 				timeout: 0,
 				actionProps: {
@@ -165,15 +182,21 @@ export default function ApplicationPanel() {
 	};
 
 	const handleDownloadAndInstall = () => {
-		downloadMutation.mutate();
+		if (checkMutation.data) {
+			downloadMutation.mutate(checkMutation.data);
+		}
 	};
 
-	const updateCheckResult = checkMutation.data;
+	const availableUpdate = checkMutation.data ?? null;
+	const hasCheckedForUpdates = checkMutation.data !== undefined;
 	const isChecking = checkMutation.isPending;
 	const isDownloading = downloadMutation.isPending;
 	const hasError = checkMutation.isError || downloadMutation.isError;
 	const errorMessage =
 		checkMutation.error?.message || downloadMutation.error?.message;
+	const checkButtonLabel = hasCheckedForUpdates
+		? t("checkAgain")
+		: t("checkForUpdates");
 
 	const teamMembers = [
 		{
@@ -235,53 +258,73 @@ export default function ApplicationPanel() {
 								{!isChecking &&
 									!isDownloading &&
 									!hasError &&
-									updateCheckResult?.available &&
+									availableUpdate &&
 									t("updateAvailable", {
-										version: updateCheckResult.version,
+										version: availableUpdate.version,
 									})}
 								{!isChecking &&
 									!isDownloading &&
 									!hasError &&
-									updateCheckResult &&
-									!updateCheckResult.available &&
+									hasCheckedForUpdates &&
+									!availableUpdate &&
 									t("noUpdatesAvailable")}
 								{!isChecking &&
 									!isDownloading &&
 									!hasError &&
-									!updateCheckResult &&
+									!hasCheckedForUpdates &&
 									t("clickToCheckUpdates")}
 							</span>
 						</div>
 						<div className="flex gap-2">
-							{!updateCheckResult && (
+							{!availableUpdate && (
 								<Button
 									variant="secondary"
 									size="sm"
+									className="data-[pending]:opacity-100"
 									onPress={handleCheckUpdates}
-									isDisabled={isChecking || isDownloading}
+									isPending={isChecking}
+									isDisabled={
+										isDownloading ||
+										updateChannelMutation.isPending
+									}
 								>
-									{t("checkForUpdates")}
+									{({ isPending }) => (
+										<>
+											{isPending && (
+												<Spinner
+													color="current"
+													size="sm"
+												/>
+											)}
+											{isPending
+												? t("checkingForUpdates")
+												: checkButtonLabel}
+										</>
+									)}
 								</Button>
 							)}
-							{updateCheckResult &&
-								!updateCheckResult.available && (
-									<Button
-										variant="secondary"
-										size="sm"
-										onPress={handleCheckUpdates}
-										isDisabled={isChecking || isDownloading}
-									>
-										{t("checkAgain")}
-									</Button>
-								)}
-							{updateCheckResult?.available && (
+							{availableUpdate && (
 								<Button
 									variant="primary"
 									size="sm"
+									className="data-[pending]:opacity-100"
 									onPress={handleDownloadAndInstall}
-									isDisabled={isDownloading}
+									isPending={isDownloading}
+									isDisabled={updateChannelMutation.isPending}
 								>
-									{t("downloadAndInstall")}
+									{({ isPending }) => (
+										<>
+											{isPending && (
+												<Spinner
+													color="current"
+													size="sm"
+												/>
+											)}
+											{isPending
+												? t("downloadingUpdate")
+												: t("downloadAndInstall")}
+										</>
+									)}
 								</Button>
 							)}
 						</div>
@@ -309,9 +352,43 @@ export default function ApplicationPanel() {
 								"settingsAutoCheckUpdatesToggleLabel",
 							)}
 						>
-							<Switch.Control>
-								<Switch.Thumb />
-							</Switch.Control>
+							<Switch.Content>
+								<Switch.Control>
+									<Switch.Thumb />
+								</Switch.Control>
+							</Switch.Content>
+						</Switch>
+					</div>
+
+					<div className="flex items-center justify-between gap-4">
+						<div className="space-y-0.5">
+							<span className="text-sm font-medium text-(--foreground)">
+								{t("settingsBetaUpdatesHeading")}
+							</span>
+							<span className="block text-xs text-muted">
+								{t("settingsBetaUpdatesDescription")}
+							</span>
+						</div>
+						<Switch
+							isSelected={updateChannel === "beta"}
+							onChange={(checked) =>
+								updateChannelMutation.mutate(
+									checked ? "beta" : "stable",
+								)
+							}
+							isDisabled={
+								isChannelLoading ||
+								updateChannelMutation.isPending ||
+								isChecking ||
+								isDownloading
+							}
+							aria-label={t("settingsBetaUpdatesToggleLabel")}
+						>
+							<Switch.Content>
+								<Switch.Control>
+									<Switch.Thumb />
+								</Switch.Control>
+							</Switch.Content>
 						</Switch>
 					</div>
 
@@ -332,9 +409,11 @@ export default function ApplicationPanel() {
 							isDisabled={analyticsMutation.isPending}
 							aria-label={t("settingsAnalyticsToggleLabel")}
 						>
-							<Switch.Control>
-								<Switch.Thumb />
-							</Switch.Control>
+							<Switch.Content>
+								<Switch.Control>
+									<Switch.Thumb />
+								</Switch.Control>
+							</Switch.Content>
 						</Switch>
 					</div>
 
@@ -359,9 +438,11 @@ export default function ApplicationPanel() {
 								}
 								aria-label={t("settingsAutostartToggleLabel")}
 							>
-								<Switch.Control>
-									<Switch.Thumb />
-								</Switch.Control>
+								<Switch.Content>
+									<Switch.Control>
+										<Switch.Thumb />
+									</Switch.Control>
+								</Switch.Content>
 							</Switch>
 						</div>
 					) : null}

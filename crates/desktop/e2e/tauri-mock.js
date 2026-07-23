@@ -4,6 +4,11 @@
 (() => {
 	const storeData = new Map(); // path -> Map<key, value>
 	const stores = new Map(); // rid -> Map<key, value>
+	const updateChecks = [];
+	let availableUpdate = null;
+	let shouldDeferUpdateCheck = false;
+	let resolveUpdateCheck = null;
+	let resolveUpdateInstall = null;
 	let nextRid = 1;
 	let nextMenuRid = 1_000;
 	const onboardingMode = new URLSearchParams(location.search).get(
@@ -142,6 +147,18 @@
 			case "plugin:updater|check":
 				// No update available
 				return Promise.resolve(null);
+			case "plugin:updater|download_and_install":
+				return new Promise((resolve) => {
+					resolveUpdateInstall = resolve;
+				});
+			case "check_for_update":
+				updateChecks.push(args.channel);
+				if (shouldDeferUpdateCheck) {
+					return new Promise((resolve) => {
+						resolveUpdateCheck = resolve;
+					});
+				}
+				return Promise.resolve(availableUpdate);
 			default:
 				if (cmd.startsWith("plugin:event|")) return Promise.resolve(0);
 				// An unknown command must fail loudly: silently resolving
@@ -168,5 +185,36 @@
 		},
 		plugins: {},
 		convertFileSrc: (p) => p,
+	};
+	window.__AGHUB_E2E__ = {
+		clearUpdateChecks() {
+			updateChecks.length = 0;
+		},
+		deferUpdateCheck() {
+			shouldDeferUpdateCheck = true;
+		},
+		finishUpdateCheck() {
+			resolveUpdateCheck?.(availableUpdate);
+			resolveUpdateCheck = null;
+			shouldDeferUpdateCheck = false;
+		},
+		finishUpdateInstall() {
+			resolveUpdateInstall?.(null);
+			resolveUpdateInstall = null;
+		},
+		getStoreValue(key) {
+			return seeded.get(key);
+		},
+		getUpdateChecks() {
+			return [...updateChecks];
+		},
+		setAvailableUpdate() {
+			availableUpdate = {
+				rid: nextRid++,
+				currentVersion: "1.9.0-beta.1",
+				version: "2.0.0-beta.1",
+				rawJson: {},
+			};
+		},
 	};
 })();

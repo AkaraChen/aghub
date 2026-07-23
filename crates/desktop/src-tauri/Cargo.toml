@@ -38,7 +38,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 aghub-api = { path = "../../api" }
 aghub-core = { path = "../../core" }
-tokio = { workspace = true, features = [ "rt" ] }
+tokio = { workspace = true, features = [ "process", "rt", "time" ] }
 fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs", rev = "c4c45d503ea115a839aae718d02f79e7c7f0f673" }
 log = { workspace = true }
 time = { version = "0.3", features = [ "formatting", "local-offset" ] }
@@ -47,6 +47,9 @@ posthog-rs = "0.19.1"
 uuid = { workspace = true }
 tauri-plugin-autostart = "2.5.1"
 sys-locale = "0.3.2"
+reqwest = { workspace = true }
+semver = "1.0.28"
+thiserror = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
