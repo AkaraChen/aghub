@@ -17,7 +17,8 @@ use std::time::Duration;
 
 use aghub_usage::{
 	CcusageRuntimeDto, InstallCcusageRuntimeRequest, SetCcusageRuntimeRequest,
-	UsageLimitsReportDto, UsageQuery, UsageReportDto, UsageStatusDto,
+	UsageAgent, UsageLimitsReportDto, UsageQuery, UsageReportDto,
+	UsageStatusDto,
 };
 
 use crate::auth::ApiAuth;
@@ -32,6 +33,8 @@ pub struct UsageSummaryParams {
 	since: Option<String>,
 	until: Option<String>,
 	timezone: Option<String>,
+	/// Comma-separated canonical aghub agent ids. Empty selects no agents.
+	agents: Option<String>,
 	offline: Option<bool>,
 	config: Option<String>,
 	timeout_secs: Option<u64>,
@@ -49,11 +52,13 @@ pub async fn usage_summary(
 	_auth: ApiAuth,
 	usage: &State<UsageState>,
 	params: UsageSummaryParams,
-) -> Json<UsageReportDto> {
+) -> ApiResult<UsageReportDto> {
+	let agents = parse_usage_agents(params.agents)?;
 	let query = UsageQuery {
 		since: params.since,
 		until: params.until,
 		timezone: params.timezone,
+		agents,
 		offline: params.offline.unwrap_or(true),
 		config: params.config.map(PathBuf::from),
 		timeout: Duration::from_secs(usage_timeout_secs(params.timeout_secs)),
@@ -82,7 +87,29 @@ pub async fn usage_summary(
 			)],
 		},
 	};
-	Json(report)
+	Ok(Json(report))
+}
+
+fn parse_usage_agents(
+	value: Option<String>,
+) -> Result<Option<Vec<String>>, ApiError> {
+	let Some(value) = value else {
+		return Ok(None);
+	};
+	let mut agents = Vec::new();
+	for id in value.split(',').map(str::trim).filter(|id| !id.is_empty()) {
+		if !aghub_usage::is_known_usage_agent(id) {
+			return Err(ApiError::new(
+				Status::UnprocessableEntity,
+				format!("Unknown usage agent: {id}"),
+				"USAGE_UNKNOWN_AGENT",
+			));
+		}
+		if !agents.iter().any(|agent| agent == id) {
+			agents.push(id.to_string());
+		}
+	}
+	Ok(Some(agents))
 }
 
 fn usage_timeout_secs(value: Option<u64>) -> u64 {
@@ -92,10 +119,26 @@ fn usage_timeout_secs(value: Option<u64>) -> u64 {
 		.min(aghub_usage::MAX_TIMEOUT_SECS)
 }
 
+#[get("/usage/agents")]
+pub fn usage_agents(_auth: ApiAuth) -> Json<Vec<UsageAgent>> {
+	Json(aghub_usage::known_usage_agents())
+}
+
+#[derive(rocket::FromForm)]
+pub struct UsageLimitsParams {
+	agents: Option<String>,
+}
+
 /// `GET /api/v1/usage/limits` — remaining rate-limit quota for Claude and Codex.
-#[get("/usage/limits")]
-pub async fn usage_limits(_auth: ApiAuth) -> Json<UsageLimitsReportDto> {
-	Json(aghub_usage::limits().await)
+#[get("/usage/limits?<params..>")]
+pub async fn usage_limits(
+	_auth: ApiAuth,
+	params: UsageLimitsParams,
+) -> ApiResult<UsageLimitsReportDto> {
+	let agents = parse_usage_agents(params.agents)?;
+	Ok(Json(
+		aghub_usage::limits_for_agents(agents.as_deref()).await,
+	))
 }
 
 /// `GET /api/v1/usage/status` — ccusage version, health, and update hint.
@@ -235,6 +278,28 @@ mod tests {
 			usage_timeout_secs(Some(aghub_usage::MAX_TIMEOUT_SECS + 1)),
 			aghub_usage::MAX_TIMEOUT_SECS
 		);
+	}
+
+	#[test]
+	fn summary_agent_filter_distinguishes_omitted_and_empty_values() {
+		assert_eq!(parse_usage_agents(None).ok(), Some(None));
+		assert_eq!(
+			parse_usage_agents(Some(String::new())).ok(),
+			Some(Some(Vec::new()))
+		);
+		assert_eq!(
+			parse_usage_agents(Some("kilocode,claude".to_string())).ok(),
+			Some(Some(vec!["kilocode".to_string(), "claude".to_string()]))
+		);
+	}
+
+	#[test]
+	fn summary_agent_filter_rejects_unknown_ids() {
+		let error =
+			parse_usage_agents(Some("claude,unknown-agent".to_string()))
+				.unwrap_err();
+		assert_eq!(error.status, Status::UnprocessableEntity);
+		assert_eq!(error.body.code, "USAGE_UNKNOWN_AGENT");
 	}
 
 	#[test]

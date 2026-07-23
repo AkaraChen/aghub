@@ -309,6 +309,7 @@ fn build_rocket(
 				routes::plugins::prune_plugins,
 				routes::plugins::validate_plugin,
 				routes::usage::usage_summary,
+				routes::usage::usage_agents,
 				routes::usage::usage_limits,
 				routes::usage::usage_status,
 				routes::usage::ccusage_runtime,

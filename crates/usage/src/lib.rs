@@ -45,6 +45,9 @@ pub struct UsageQuery {
 	pub since: Option<String>,
 	pub until: Option<String>,
 	pub timezone: Option<String>,
+	/// Canonical aghub agent ids to probe. `None` probes every known source;
+	/// an empty list probes none.
+	pub agents: Option<Vec<String>>,
 	/// `true` uses ccusage's cached pricing (`--offline`); `false` fetches live
 	/// pricing (`--no-offline`).
 	pub offline: bool,
@@ -62,6 +65,7 @@ impl Default for UsageQuery {
 			since: None,
 			until: None,
 			timezone: None,
+			agents: None,
 			offline: true,
 			config: None,
 			timeout: CCUSAGE_TIMEOUT,
@@ -89,6 +93,32 @@ const KNOWN_USAGE_AGENTS: &[(&str, &str)] = &[
 	("qwen", "qwen"),
 	("openclaw", "openclaw"),
 ];
+
+pub fn known_usage_agents() -> Vec<UsageAgent> {
+	KNOWN_USAGE_AGENTS
+		.iter()
+		.map(|(_, agent_id)| UsageAgent::new(*agent_id))
+		.collect()
+}
+
+pub fn is_known_usage_agent(id: &str) -> bool {
+	KNOWN_USAGE_AGENTS
+		.iter()
+		.any(|(_, agent_id)| *agent_id == id)
+}
+
+fn selected_usage_agents(
+	selected: Option<&[String]>,
+) -> impl Iterator<Item = (&'static str, &'static str)> + '_ {
+	KNOWN_USAGE_AGENTS
+		.iter()
+		.copied()
+		.filter(move |(_, agent_id)| {
+			selected
+				.map(|ids| ids.iter().any(|id| id == agent_id))
+				.unwrap_or(true)
+		})
+}
 
 /// Locate the ccusage binary. Preference order: an explicit path injected by the
 /// caller, then the `AGHUB_CCUSAGE_BIN` environment variable, then `ccusage` on
@@ -601,8 +631,8 @@ async fn probe_agent_usage<'a>(
 	query: &'a UsageQuery,
 ) -> (Vec<(String, Result<Option<AgentUsageDto>, String>)>, bool) {
 	let mut probes = Vec::with_capacity(KNOWN_USAGE_AGENTS.len());
-	for (index, &(ccusage_id, agent_id)) in
-		KNOWN_USAGE_AGENTS.iter().enumerate()
+	for (index, (ccusage_id, agent_id)) in
+		selected_usage_agents(query.agents.as_deref()).enumerate()
 	{
 		let ccusage_id = ccusage_id.to_string();
 		let agent_id = agent_id.to_string();
@@ -855,13 +885,18 @@ fn claude_windows(usage: ClaudeOauthUsage) -> Vec<LimitWindowDto> {
 	]
 	.into_iter()
 	.filter_map(|(kind, w)| {
-		w.map(|w| LimitWindowDto {
-			kind,
-			// Anthropic's /api/oauth/usage reports `utilization` already as a
-			// 0-100 percent (confirmed against a live response), matching the
-			// DTO contract; clamp defensively in case it ever returns otherwise.
-			utilization_pct: w.utilization.clamp(0.0, 100.0),
-			resets_at: w.resets_at,
+		w.map(|w| {
+			if !(0.0..=100.0).contains(&w.utilization) {
+				log::warn!(
+					"claude usage returned out-of-range utilization: {}",
+					w.utilization
+				);
+			}
+			LimitWindowDto {
+				kind,
+				utilization_pct: w.utilization.clamp(0.0, 100.0),
+				resets_at: w.resets_at,
+			}
 		})
 	})
 	.collect()
@@ -993,18 +1028,48 @@ async fn fetch_codex_limits() -> Result<AgentLimitsDto, String> {
 /// Degrades like [`summary`]: a not-logged-in or failing agent becomes a
 /// `warnings` entry instead of failing the whole request.
 pub async fn limits() -> UsageLimitsReportDto {
-	let (claude_res, codex_res) =
-		tokio::join!(fetch_claude_limits(), fetch_codex_limits());
+	limits_for_agents(None).await
+}
+
+pub async fn limits_for_agents(
+	selected: Option<&[String]>,
+) -> UsageLimitsReportDto {
+	let include_claude = selected
+		.map(|ids| ids.iter().any(|id| id == "claude"))
+		.unwrap_or(true);
+	let include_codex = selected
+		.map(|ids| ids.iter().any(|id| id == "codex"))
+		.unwrap_or(true);
+	let (claude_res, codex_res) = tokio::join!(
+		async {
+			if include_claude {
+				Some(fetch_claude_limits().await)
+			} else {
+				None
+			}
+		},
+		async {
+			if include_codex {
+				Some(fetch_codex_limits().await)
+			} else {
+				None
+			}
+		}
+	);
 
 	let mut agents = Vec::new();
 	let mut warnings = Vec::new();
-	match claude_res {
-		Ok(agent) => agents.push(agent),
-		Err(e) => warnings.push(format!("claude limits unavailable: {e}")),
+	if let Some(result) = claude_res {
+		match result {
+			Ok(agent) => agents.push(agent),
+			Err(e) => warnings.push(format!("claude limits unavailable: {e}")),
+		}
 	}
-	match codex_res {
-		Ok(agent) => agents.push(agent),
-		Err(e) => warnings.push(format!("codex limits unavailable: {e}")),
+	if let Some(result) = codex_res {
+		match result {
+			Ok(agent) => agents.push(agent),
+			Err(e) => warnings.push(format!("codex limits unavailable: {e}")),
+		}
 	}
 
 	UsageLimitsReportDto {
@@ -1098,6 +1163,43 @@ mod tests {
 	fn ccusage_cli_aliases_use_aghub_agent_ids() {
 		assert!(KNOWN_USAGE_AGENTS.contains(&("droid", "factory")));
 		assert!(KNOWN_USAGE_AGENTS.contains(&("kilo", "kilocode")));
+	}
+
+	#[test]
+	fn selected_usage_agents_use_canonical_aghub_ids() {
+		let selected = vec!["kilocode".to_string(), "claude".to_string()];
+		let agents = selected_usage_agents(Some(&selected)).collect::<Vec<_>>();
+
+		assert_eq!(agents, vec![("claude", "claude"), ("kilo", "kilocode")]);
+	}
+
+	#[test]
+	fn an_empty_usage_agent_selection_disables_all_probes() {
+		assert_eq!(selected_usage_agents(Some(&[])).count(), 0);
+		assert_eq!(
+			selected_usage_agents(None).count(),
+			KNOWN_USAGE_AGENTS.len()
+		);
+	}
+
+	#[tokio::test]
+	async fn empty_agent_selections_do_not_spawn_usage_sources() {
+		let query = UsageQuery {
+			agents: Some(Vec::new()),
+			..UsageQuery::default()
+		};
+		let summary = summary_with_version(
+			OsStr::new("missing-ccusage"),
+			&query,
+			"ccusage test",
+		)
+		.await;
+		assert!(summary.agents.is_empty());
+		assert!(summary.warnings.is_empty());
+
+		let limits = limits_for_agents(Some(&[])).await;
+		assert!(limits.agents.is_empty());
+		assert!(limits.warnings.is_empty());
 	}
 
 	#[cfg(unix)]
@@ -1413,6 +1515,7 @@ mod tests {
 			since: Some("2026-06-01".to_string()),
 			until: Some("2026-06-30".to_string()),
 			timezone: Some("Asia/Shanghai".to_string()),
+			agents: None,
 			offline: false,
 			config: Some(PathBuf::from("/tmp/cc.json")),
 			timeout: Duration::from_secs(5),
