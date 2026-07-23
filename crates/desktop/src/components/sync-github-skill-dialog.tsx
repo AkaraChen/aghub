@@ -135,15 +135,24 @@ export function SyncGithubSkillDialog({
 		resolveSkillCopiesMutationOptions({
 			api,
 			queryClient,
-			onSuccess: () => {
-				setPhase("scanned");
+			onSuccess: (_, variables) => {
+				const repositoryResolved =
+					variables.reference.kind === "git_scan";
+				setPhase(repositoryResolved ? "idle" : "scanned");
 				setResolutionChoice(null);
-				setResolutionRevision((revision) => revision + 1);
+				if (repositoryResolved) {
+					setSessionId("");
+					setBranches([]);
+					setCurrentBranch("");
+					setScannedSkills([]);
+				} else {
+					setResolutionRevision((revision) => revision + 1);
+				}
 				toast.success(
 					t(
-						resolutionChoice?.kind === "local"
-							? "localSkillVersionRetained"
-							: "skillSyncedSuccessfully",
+						repositoryResolved
+							? "skillSyncedSuccessfully"
+							: "localSkillVersionRetained",
 					),
 				);
 			},

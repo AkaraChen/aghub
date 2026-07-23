@@ -598,10 +598,10 @@ test("the repository version updates every different discovered copy", async ({
 			},
 		]);
 	await expect(
-		page.getByRole("status").filter({
-			hasText: "Repository content matches",
-		}),
+		page.getByRole("button", { name: "Scan", exact: true }),
 	).toBeVisible();
+	expect(mocks.hasGitScanSession("scan-session-1")).toBe(false);
+	expect(mocks.getExpiredGitSessionRequestCount()).toBe(0);
 });
 
 test("a changed repository disables stale choices until comparison refreshes", async ({

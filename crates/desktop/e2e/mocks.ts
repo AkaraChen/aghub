@@ -193,6 +193,8 @@ export async function installMocks(page: Page) {
 	const skillCopyStatusRequests: SkillCopyStatusRequest[] = [];
 	const gitSyncRequests: GitSyncRequest[] = [];
 	const skillCopyResolutionRequests: SkillCopyResolutionRequest[] = [];
+	const gitScanSessions = new Set<string>();
+	let expiredGitSessionRequestCount = 0;
 	const skillDiffFor = (
 		request: SkillDiffRequest,
 		installedPath: string,
@@ -273,6 +275,17 @@ export async function installMocks(page: Page) {
 				route.request().postData() ?? "{}",
 			) as SkillDiffRequest;
 			skillDiffRequests.push(body);
+			if (
+				body.reference.kind === "git_scan" &&
+				!gitScanSessions.has(body.reference.session_id)
+			) {
+				expiredGitSessionRequestCount += 1;
+				return jsonError(
+					404,
+					"SESSION_NOT_FOUND",
+					"Session not found or expired",
+				);
+			}
 			if (skillDiffDelayMs > 0) {
 				await new Promise((resolve) =>
 					setTimeout(resolve, skillDiffDelayMs),
@@ -332,6 +345,10 @@ export async function installMocks(page: Page) {
 		if (p === "/skills/git/scan" && method === "POST") {
 			const body = JSON.parse(route.request().postData() ?? "{}");
 			const isWebDev = String(body.url ?? "").includes("web-dev");
+			if (body.session_id) {
+				gitScanSessions.delete(String(body.session_id));
+			}
+			gitScanSessions.add("scan-session-1");
 			// Each source includes its installed members plus one new skill.
 			const entry = (name: string) => ({
 				name,
@@ -375,6 +392,7 @@ export async function installMocks(page: Page) {
 					results.push({ name, agent, success: true, error: null });
 				}
 			}
+			gitScanSessions.delete(String(body.session_id));
 			return json({ results });
 		}
 
@@ -383,6 +401,7 @@ export async function installMocks(page: Page) {
 				route.request().postData() ?? "{}",
 			) as GitSyncRequest;
 			gitSyncRequests.push(body);
+			gitScanSessions.delete(body.session_id);
 			return json({ success: true, name: "react-pro", error: null });
 		}
 
@@ -391,6 +410,17 @@ export async function installMocks(page: Page) {
 				route.request().postData() ?? "{}",
 			) as SkillCopyResolutionRequest;
 			skillCopyResolutionRequests.push(body);
+			if (
+				body.reference.kind === "git_scan" &&
+				!gitScanSessions.has(body.reference.session_id)
+			) {
+				expiredGitSessionRequestCount += 1;
+				return jsonError(
+					404,
+					"SESSION_NOT_FOUND",
+					"Session not found or expired",
+				);
+			}
 			const referenceKey =
 				body.reference.kind === "git_scan"
 					? `git:${body.reference.skill_path}`
@@ -485,6 +515,9 @@ export async function installMocks(page: Page) {
 					}
 				}
 			}
+			if (body.reference.kind === "git_scan") {
+				gitScanSessions.delete(body.reference.session_id);
+			}
 			return json({
 				name: "react-pro",
 				reference_hash: body.expected_reference_hash,
@@ -569,6 +602,12 @@ export async function installMocks(page: Page) {
 		},
 		getSkillCopyResolutionRequests() {
 			return [...skillCopyResolutionRequests];
+		},
+		getExpiredGitSessionRequestCount() {
+			return expiredGitSessionRequestCount;
+		},
+		hasGitScanSession(sessionId: string) {
+			return gitScanSessions.has(sessionId);
 		},
 		getGitSyncRequests() {
 			return [...gitSyncRequests];
