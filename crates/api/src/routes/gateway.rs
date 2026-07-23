@@ -203,7 +203,9 @@ pub async fn create_external_gateway(
 		if let Err(cleanup) = gateway_projection::remove_gateway_instance(
 			&state.app_data_dir,
 			&record.id,
-		) {
+		)
+		.await
+		{
 			log::error!(
 				"gateway '{}': failed to roll back instance projection: {}",
 				record.name,
@@ -289,6 +291,7 @@ pub async fn delete_gateway_instance(
 		let _ = state.runtime.stop(&record).await;
 	}
 	gateway_projection::remove_gateway_instance(&state.app_data_dir, id)
+		.await
 		.map_err(ApiError::from)?;
 	// The managed key stays: it unlocks the user-owned config.yaml, which
 	// survives the instance record (re-creating the instance reuses both).

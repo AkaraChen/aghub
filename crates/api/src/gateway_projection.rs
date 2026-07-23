@@ -1,5 +1,5 @@
 use std::path::Path;
-use std::sync::{Mutex, OnceLock};
+use std::sync::OnceLock;
 
 use aghub_cliproxy::{
 	GatewayError, GatewayInstanceKind, GatewayInstanceRecord, GatewayKeyStore,
@@ -10,6 +10,7 @@ use aghub_inference::{
 	InferenceProviderFormat, InferenceProviderRepository,
 	InferenceProviderStore, UpdateInferenceProvider,
 };
+use tokio::sync::Mutex;
 
 const GATEWAY_PRESET: &str = "aghub-gateway";
 const MANAGED_KEY_ID: &str = "managed-default";
@@ -258,6 +259,7 @@ pub(crate) async fn sync_gateway_providers(
 	record: &GatewayInstanceRecord,
 	client: &ManagementClient,
 ) -> Result<GatewayProviderProjection, GatewayProjectionError> {
+	let _guard = projection_mutation_lock().lock().await;
 	let gateway_key = ensure_gateway_key(client).await?;
 	let models = match client.list_models(&gateway_key).await {
 		Ok(models) => Some(models),
@@ -269,9 +271,6 @@ pub(crate) async fn sync_gateway_providers(
 			None
 		}
 	};
-	let _guard = projection_mutation_lock()
-		.lock()
-		.unwrap_or_else(|poisoned| poisoned.into_inner());
 	let instance_store = InstanceStore::new(app_data_dir);
 	let records = instance_store.list()?;
 	let current = records
@@ -309,13 +308,11 @@ fn provider_belongs_to_record(
 	provider_owner_id(provider, records) == Some(record.id.as_str())
 }
 
-pub(crate) fn remove_gateway_instance(
+pub(crate) async fn remove_gateway_instance(
 	app_data_dir: &Path,
 	id: &str,
 ) -> Result<GatewayInstanceRecord, GatewayProjectionError> {
-	let _guard = projection_mutation_lock()
-		.lock()
-		.unwrap_or_else(|poisoned| poisoned.into_inner());
+	let _guard = projection_mutation_lock().lock().await;
 	let instance_store = InstanceStore::new(app_data_dir);
 	let records = instance_store.list()?;
 	let record = records
@@ -331,12 +328,10 @@ pub(crate) fn remove_gateway_instance(
 	Ok(instance_store.remove(id)?)
 }
 
-fn remove_orphaned_providers(
+async fn remove_orphaned_providers(
 	app_data_dir: &Path,
 ) -> Result<(), GatewayProjectionError> {
-	let _guard = projection_mutation_lock()
-		.lock()
-		.unwrap_or_else(|poisoned| poisoned.into_inner());
+	let _guard = projection_mutation_lock().lock().await;
 	let records = InstanceStore::new(app_data_dir).list()?;
 	let inventory = InferenceProviderStore::new(app_data_dir.to_path_buf());
 	for provider in inventory.list()? {
@@ -355,7 +350,7 @@ pub(crate) async fn reconcile_gateway_providers(
 ) -> GatewayProjectionReport {
 	let instance_store = InstanceStore::new(app_data_dir);
 	let mut report = GatewayProjectionReport::default();
-	if let Err(error) = remove_orphaned_providers(app_data_dir) {
+	if let Err(error) = remove_orphaned_providers(app_data_dir).await {
 		report.failures.push(GatewayProjectionFailure {
 			instance_id: "inventory".to_string(),
 			message: error.to_string(),
