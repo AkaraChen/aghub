@@ -287,8 +287,7 @@ export async function installMocks(page: Page) {
 				});
 			}
 
-			// Install semantics: skip already-installed skills, add new
-			// ones to the list AND the lock. Only the second phase writes.
+			// The write phase updates both the list and lock.
 			const results = [];
 			for (const skillPath of body.skill_paths ?? []) {
 				const name = String(skillPath).split("/").pop() ?? "";

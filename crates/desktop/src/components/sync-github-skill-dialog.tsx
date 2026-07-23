@@ -24,12 +24,10 @@ import type {
 	GitScanResponse,
 	GitScanSkillEntry,
 } from "../generated/dto";
+import { auditDisposition } from "../hooks/audited-mutation";
 import { useApi } from "../hooks/use-api";
-import {
-	auditDisposition,
-	useAuditedMutation,
-	useAuditedSkillRun,
-} from "../hooks/use-audited-skill-run";
+import { useAuditedMutation } from "../hooks/use-audited-mutation";
+import { useAuditedSkillRun } from "../hooks/use-audited-skill-run";
 import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
 import { CreateCredentialDialog } from "../pages/settings/components/create-credential-dialog";
 import { credentialsListQueryOptions } from "../requests/credentials";

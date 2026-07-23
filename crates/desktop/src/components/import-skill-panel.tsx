@@ -17,13 +17,11 @@ import { useMemo } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import type { ImportSkillRequest } from "../generated/dto";
+import { auditDisposition } from "../hooks/audited-mutation";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
+import { useAuditedMutation } from "../hooks/use-audited-mutation";
 import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
-import {
-	auditDisposition,
-	useAuditedMutation,
-} from "../hooks/use-audited-skill-run";
 import { supportsSkillMutation } from "../lib/agent-capabilities";
 import {
 	invalidateSkillQueries,
@@ -154,8 +152,6 @@ export function ImportSkillPanel({
 			? localImport.state.error.message
 			: null;
 
-	// A pending or failed audit blocks submission. The backend re-audits before
-	// writing and rejects stale content or assessment identities.
 	const auditPending =
 		(skillAuditEnabled && Boolean(auditPath) && auditFetching) ||
 		localImport.state.tag === "auditing";
@@ -163,8 +159,6 @@ export function ImportSkillPanel({
 		skillAuditEnabled && Boolean(auditPath) && auditError != null;
 	const requiresConfirmation = visibleAudit?.confirmation_required ?? false;
 
-	// The audit card appears once a path is picked and any audit activity starts;
-	// the install card opens alongside it on submit and stays through completion.
 	const showAuditCard =
 		Boolean(auditPath) &&
 		((skillAuditEnabled && (auditPending || auditFailed)) ||

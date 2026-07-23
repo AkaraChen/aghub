@@ -31,13 +31,13 @@ import type {
 	GitInstallResultEntry,
 	GitScanSkillEntry,
 } from "../generated/dto";
+import { auditDisposition } from "../hooks/audited-mutation";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
+import { useAuditedMutation } from "../hooks/use-audited-mutation";
 import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
 import {
 	type AuditedSkillRun,
-	auditDisposition,
-	useAuditedMutation,
 	useAuditedSkillRun,
 } from "../hooks/use-audited-skill-run";
 import { supportsSkillMutation } from "../lib/agent-capabilities";
@@ -495,7 +495,6 @@ export function ImportGithubSkillPanel({
 		setCard3Open((v) => !v);
 	};
 
-	// Card 4 toggle: only when it has been reached
 	const handleCard4Toggle = () => {
 		if (!cardReached(4, phase)) return;
 		setCard4Open((v) => !v);
@@ -523,7 +522,6 @@ export function ImportGithubSkillPanel({
 	const successCount = installResults.filter((r) => r.success).length;
 	const failCount = installResults.filter((r) => !r.success).length;
 
-	// Derived disabled / active states
 	const card1Active = phase === "scanning";
 	const card2Active = phase === "selecting";
 	const showAuditStep = skillAuditEnabled || phase === "review";
@@ -539,14 +537,12 @@ export function ImportGithubSkillPanel({
 	return (
 		<div className="h-full w-full overflow-y-auto p-4 sm:p-6">
 			<div className="space-y-3">
-				{/* ── Panel title ── */}
 				<div className="mb-5">
 					<h1 className="text-xl font-semibold text-foreground">
 						{t("importFromGitRepository")}
 					</h1>
 				</div>
 
-				{/* ── Card 1: Repository & Credential ── */}
 				<Card
 					className={cn(
 						!card1Active && "opacity-60",
@@ -826,7 +822,6 @@ export function ImportGithubSkillPanel({
 					</div>
 				</Card>
 
-				{/* ── Card 2: Select Skills + Target Agent ── */}
 				<Card
 					className={cn(
 						!card2Active && "opacity-60",
@@ -1138,7 +1133,6 @@ export function ImportGithubSkillPanel({
 					</div>
 				</Card>
 
-				{/* ── Card 3: Security audit ── */}
 				{showAuditStep && (
 					<Card
 						className={cn(
@@ -1240,7 +1234,6 @@ export function ImportGithubSkillPanel({
 					</Card>
 				)}
 
-				{/* ── Card 4: Install progress / results ── */}
 				<Card
 					className={cn(
 						!card4Active && "opacity-60",
@@ -1394,7 +1387,6 @@ export function ImportGithubSkillPanel({
 				</Card>
 			</div>
 
-			{/* ── Skill Preview Modal ── */}
 			<Modal.Backdrop
 				isOpen={previewSkill !== null}
 				onOpenChange={(open) => {
@@ -1412,7 +1404,7 @@ export function ImportGithubSkillPanel({
 						<Modal.Body className="space-y-3 p-4">
 							{previewSkill?.description && (
 								<div>
-									<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
+									<p className="mb-1 text-xs font-medium text-muted">
 										{t("description")}
 									</p>
 									<p className="text-sm text-foreground">
@@ -1422,7 +1414,7 @@ export function ImportGithubSkillPanel({
 							)}
 							{previewSkill?.version && (
 								<div>
-									<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
+									<p className="mb-1 text-xs font-medium text-muted">
 										{t("version")}
 									</p>
 									<p className="text-sm text-foreground">
@@ -1432,7 +1424,7 @@ export function ImportGithubSkillPanel({
 							)}
 							{previewSkill?.author && (
 								<div>
-									<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
+									<p className="mb-1 text-xs font-medium text-muted">
 										{t("author")}
 									</p>
 									<p className="text-sm text-foreground">
@@ -1442,7 +1434,7 @@ export function ImportGithubSkillPanel({
 							)}
 							{previewSkill?.path && (
 								<div>
-									<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
+									<p className="mb-1 text-xs font-medium text-muted">
 										{t("source")}
 									</p>
 									<p className="break-all font-mono text-xs text-muted">

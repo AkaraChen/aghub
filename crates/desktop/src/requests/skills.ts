@@ -129,9 +129,7 @@ export function skillAuditQueryOptions({
 		queryFn: () => api.skills.audit({ paths: auditPaths }),
 		enabled: enabled && auditPaths.length > 0,
 		staleTime,
-		// Auditing is deterministic (read files + scan); a failure such as a stale
-		// source_path won't pass on retry, and the skill list audits every skill
-		// at once, so don't multiply dead requests.
+		// File-system failures are not transient; retries multiply list scans.
 		retry: false,
 	});
 }

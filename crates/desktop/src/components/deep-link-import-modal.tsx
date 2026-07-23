@@ -3,12 +3,10 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { InstallSkillRequest, TransportDto } from "../generated/dto";
+import { auditDisposition } from "../hooks/audited-mutation";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
-import {
-	auditDisposition,
-	useAuditedMutation,
-} from "../hooks/use-audited-skill-run";
+import { useAuditedMutation } from "../hooks/use-audited-mutation";
 import { useInstallTarget } from "../hooks/use-install-target";
 import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
 import { supportsMcp, supportsSkillMutation } from "../lib/agent-capabilities";
@@ -37,12 +35,6 @@ interface McpInstallVariables {
 	selectedProject: { id: string; path: string } | null;
 }
 
-/**
- * The skill install runs in two visible phases so the audit precedes any write:
- * `auditing` (clone + audit) → either install straight away (Benign) or `review`
- * (non-benign requires confirmation of the reviewed digest) → `installing` →
- * `done`. MCP installs stay on the plain mutation and skip the audit card.
- */
 interface SkillMarketCandidate {
 	readonly source: string;
 	readonly name: string;
@@ -405,9 +397,6 @@ export function DeepLinkImportModal({
 	const requiresExecutableConsent =
 		intent?.kind === "mcp-config-install" &&
 		intent.transport.type === "stdio";
-	// The audit card surfaces the moment the skill flow starts: a spinner while
-	// the audit is in flight, the verdict once it lands. It stays through the
-	// install card so both steps are shown at once.
 	const showAuditCard =
 		isSkillInstall &&
 		skillPhase !== "idle" &&

@@ -2,14 +2,12 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { InstallSkillRequest, MarketSkill } from "../../../generated/dto";
+import { auditDisposition } from "../../../hooks/audited-mutation";
 import { useAgentAvailability } from "../../../hooks/use-agent-availability";
 import { useApi } from "../../../hooks/use-api";
+import { useAuditedMutation } from "../../../hooks/use-audited-mutation";
 import { useInstallTarget } from "../../../hooks/use-install-target";
 import { useSkillAuditPreference } from "../../../hooks/use-skill-audit-preference";
-import {
-	auditDisposition,
-	useAuditedMutation,
-} from "../../../hooks/use-audited-skill-run";
 import { supportsSkillMutation } from "../../../lib/agent-capabilities";
 import {
 	buildPendingResults,
@@ -18,12 +16,6 @@ import {
 import { invalidateSkillQueries } from "../../../requests/skills";
 import { capture, captureException } from "../../../lib/analytics";
 
-/**
- * Install runs in two phases so the audit is a visible step before anything is
- * written: `auditing` (clone + audit) → either install straight away (Benign)
- * or `review` (non-benign requires confirmation of the reviewed digest) →
- * `installing`.
- */
 export type InstallPhase =
 	"picker" | "auditing" | "review" | "installing" | "done";
 
