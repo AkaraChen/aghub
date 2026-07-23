@@ -190,13 +190,21 @@ fn archive_format(asset: &str) -> Result<ArchiveFormat> {
 /// [`system_bin`] as information only — silently running an unpinned
 /// binary would break the version contract.
 pub fn installed_bin(root: &Path, version: &str) -> Option<PathBuf> {
-	if let Some(explicit) = std::env::var_os("AGHUB_CLIPROXY_BIN") {
-		let path = PathBuf::from(explicit);
-		if path.is_file() {
-			return Some(path);
-		}
-	}
-	validated_install_bin(&version_dir(root, version), version)
+	resolve_installed_bin(
+		root,
+		version,
+		std::env::var_os("AGHUB_CLIPROXY_BIN").map(PathBuf::from),
+	)
+}
+
+fn resolve_installed_bin(
+	root: &Path,
+	version: &str,
+	explicit: Option<PathBuf>,
+) -> Option<PathBuf> {
+	explicit
+		.filter(|path| path.is_file())
+		.or_else(|| validated_install_bin(&version_dir(root, version), version))
 }
 
 /// Where the binary `installed_bin` resolves to comes from.
@@ -755,13 +763,14 @@ mod tests {
 	}
 
 	#[test]
-	fn installed_bin_honors_env_override() {
+	fn installed_bin_prefers_explicit_binary() {
 		let dir = tempfile::tempdir().expect("tempdir");
 		let bin = dir.path().join("custom-cliproxy");
 		std::fs::write(&bin, "bin").unwrap();
-		std::env::set_var("AGHUB_CLIPROXY_BIN", &bin);
-		let found = installed_bin(dir.path(), "0.0.0");
-		std::env::remove_var("AGHUB_CLIPROXY_BIN");
+
+		let found =
+			resolve_installed_bin(dir.path(), "0.0.0", Some(bin.clone()));
+
 		assert_eq!(found, Some(bin));
 	}
 
