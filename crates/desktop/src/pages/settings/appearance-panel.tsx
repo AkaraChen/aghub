@@ -12,6 +12,7 @@ import {
 } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import { useTheme } from "../../hooks/use-theme";
+import SidebarPanel from "./sidebar-panel";
 
 export default function AppearancePanel() {
 	const { t, i18n } = useTranslation();
@@ -25,7 +26,6 @@ export default function AppearancePanel() {
 		<div className="space-y-4">
 			<Card className="p-0">
 				<Card.Content className="space-y-4 p-4">
-					{/* Theme Setting */}
 					<div className="flex items-center justify-between">
 						<div className="space-y-0.5">
 							<span className="text-sm font-medium text-(--foreground)">
@@ -63,7 +63,6 @@ export default function AppearancePanel() {
 						</ToggleButtonGroup>
 					</div>
 
-					{/* Language Setting */}
 					<div className="flex items-center justify-between">
 						<div className="space-y-0.5">
 							<span className="text-sm font-medium text-(--foreground)">
@@ -110,6 +109,8 @@ export default function AppearancePanel() {
 					</div>
 				</Card.Content>
 			</Card>
+
+			<SidebarPanel />
 		</div>
 	);
 }

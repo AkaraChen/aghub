@@ -1,13 +1,6 @@
-import {
-	BookOpenIcon,
-	Cog6ToothIcon,
-	CpuChipIcon,
-	KeyIcon,
-	PuzzlePieceIcon,
-	ServerIcon,
-} from "@heroicons/react/24/solid";
+import { Cog6ToothIcon } from "@heroicons/react/24/solid";
 import { Surface } from "@heroui/react";
-import { useEffect } from "react";
+import { Fragment, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, useLocation, useSearch } from "wouter";
 import { useSidebarNavigation } from "../hooks/use-sidebar-navigation";
@@ -15,7 +8,10 @@ import {
 	setStickyAgentFilter,
 	useStickyAgentFilter,
 } from "../hooks/use-sticky-agent-filter";
-import { isSidebarHrefActive } from "../lib/sidebar-navigation";
+import {
+	isAgentFilterSidebarHref,
+	isSidebarHrefActive,
+} from "../lib/sidebar-navigation";
 import { cn } from "../lib/utils";
 import { GlobalSearch } from "./global-search";
 import { ProjectList } from "./project-list";
@@ -41,14 +37,6 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 	);
 }
 
-const RESOURCE_HREFS = ["/skills", "/mcp", "/sub-agents"] as const;
-
-function isOnResourcePage(pathname: string) {
-	return RESOURCE_HREFS.some(
-		(href) => pathname === href || pathname.startsWith(`${href}/`),
-	);
-}
-
 function withAgent(href: string, agent: string | null) {
 	if (!agent) return href;
 	return `${href}?agent=${encodeURIComponent(agent)}`;
@@ -58,13 +46,13 @@ export function AppSidebar() {
 	const { t } = useTranslation();
 	const [pathname] = useLocation();
 	const search = useSearch();
-	const { visibleSidebarItems } = useSidebarNavigation();
+	const { visibleSidebarSections } = useSidebarNavigation();
 	const stickyAgent = useStickyAgentFilter();
 
 	// On a resource page, the URL is the source of truth for the active filter,
 	// so mirror it into the sticky store. On non-resource pages we leave the
 	// sticky value alone so it survives the round-trip.
-	const onResource = isOnResourcePage(pathname);
+	const onResource = isAgentFilterSidebarHref(pathname);
 	const urlAgent = new URLSearchParams(search).get("agent") || null;
 	useEffect(() => {
 		if (onResource) {
@@ -78,9 +66,6 @@ export function AppSidebar() {
 	// resets both the URL and the sticky store.
 	const carriedAgent = stickyAgent;
 
-	const homeItem = visibleSidebarItems.find((item) => item.id === "home");
-	const marketItem = visibleSidebarItems.find((item) => item.id === "market");
-
 	return (
 		<Surface
 			variant="secondary"
@@ -91,120 +76,51 @@ export function AppSidebar() {
 				<GlobalSearch />
 
 				<div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto pr-0.5">
-					<nav className="flex flex-col gap-0.5">
-						{homeItem && (
-							<Link
-								key={homeItem.id}
-								href={homeItem.href}
-								data-tour={homeItem.tour}
-								className={navItemClasses(
-									isSidebarHrefActive(
-										pathname,
-										homeItem.href,
-									),
-								)}
+					{visibleSidebarSections.map((section, index) => (
+						<Fragment key={section.id}>
+							{index > 0 ? <Separator /> : null}
+							<section
+								className="flex flex-col gap-1"
+								data-tour={section.tour}
 							>
-								<homeItem.icon className="size-4" />
-								<span>{t(homeItem.labelKey)}</span>
-							</Link>
-						)}
-						{marketItem && (
-							<Link
-								key={marketItem.id}
-								href={marketItem.href}
-								data-tour={marketItem.tour}
-								className={navItemClasses(
-									isSidebarHrefActive(
-										pathname,
-										marketItem.href,
-									),
-								)}
-							>
-								<marketItem.icon className="size-4" />
-								<span>{t(marketItem.labelKey)}</span>
-							</Link>
-						)}
-					</nav>
+								{section.navigationLabelKey ? (
+									<SectionLabel>
+										{t(section.navigationLabelKey)}
+									</SectionLabel>
+								) : null}
+								<nav
+									aria-label={t(section.labelKey)}
+									className="flex flex-col gap-0.5"
+								>
+									{section.items.map((item) => {
+										const Icon = item.icon;
+										const href = item.carriesAgentFilter
+											? withAgent(item.href, carriedAgent)
+											: item.href;
 
-					<Separator />
+										return (
+											<Link
+												key={item.id}
+												href={href}
+												data-tour={item.tour}
+												className={navItemClasses(
+													isSidebarHrefActive(
+														pathname,
+														item.href,
+													),
+												)}
+											>
+												<Icon className="size-4" />
+												<span>{t(item.labelKey)}</span>
+											</Link>
+										);
+									})}
+								</nav>
+							</section>
+						</Fragment>
+					))}
 
-					<section
-						className="flex flex-col gap-1"
-						data-tour="resources-section"
-					>
-						<SectionLabel>{t("resources")}</SectionLabel>
-						<nav className="flex flex-col gap-0.5">
-							{(
-								[
-									{
-										href: "/skills",
-										labelKey: "skills",
-										Icon: BookOpenIcon,
-										carriesAgentFilter: true,
-									},
-									{
-										href: "/mcp",
-										labelKey: "mcpServers",
-										Icon: ServerIcon,
-										carriesAgentFilter: true,
-									},
-									{
-										href: "/sub-agents",
-										labelKey: "subAgents",
-										Icon: CpuChipIcon,
-										carriesAgentFilter: true,
-									},
-									{
-										href: "/cc-plugins",
-										labelKey: "claudeCodePlugins",
-										Icon: PuzzlePieceIcon,
-										carriesAgentFilter: false,
-									},
-								] as const
-							).map(
-								({
-									href,
-									labelKey,
-									Icon,
-									carriesAgentFilter,
-								}) => (
-									<Link
-										key={href}
-										href={
-											carriesAgentFilter
-												? withAgent(href, carriedAgent)
-												: href
-										}
-										className={navItemClasses(
-											isSidebarHrefActive(pathname, href),
-										)}
-									>
-										<Icon className="size-4" />
-										<span>{t(labelKey)}</span>
-									</Link>
-								),
-							)}
-						</nav>
-					</section>
-
-					<Separator />
-
-					<nav className="flex flex-col gap-0.5">
-						<Link
-							href="/inference-providers"
-							className={navItemClasses(
-								isSidebarHrefActive(
-									pathname,
-									"/inference-providers",
-								),
-							)}
-						>
-							<KeyIcon className="size-4" />
-							<span>{t("inferenceProviders")}</span>
-						</Link>
-					</nav>
-
-					<Separator />
+					{visibleSidebarSections.length > 0 ? <Separator /> : null}
 
 					<div data-tour="project-section">
 						<ProjectList />

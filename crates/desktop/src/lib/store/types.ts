@@ -25,7 +25,15 @@ export interface ResourceGroup {
 
 export type UpdateChannel = "stable" | "beta";
 
-export const SIDEBAR_ITEM_IDS = ["home", "market"] as const;
+export const SIDEBAR_ITEM_IDS = [
+	"home",
+	"market",
+	"skills",
+	"mcp",
+	"subAgents",
+	"ccPlugins",
+	"inferenceProviders",
+] as const;
 
 export type SidebarItemId = (typeof SIDEBAR_ITEM_IDS)[number];
 
