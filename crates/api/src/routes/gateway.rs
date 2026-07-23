@@ -135,17 +135,6 @@ pub async fn create_managed_gateway(
 	state: &State<GatewayState>,
 	request: Json<CreateManagedGatewayRequest>,
 ) -> ApiCreated<GatewayInstanceDto> {
-	let instances = store(state).list().map_err(ApiError::from)?;
-	if instances
-		.iter()
-		.any(|record| record.kind == GatewayInstanceKind::Managed)
-	{
-		return Err(ApiError::new(
-			Status::Conflict,
-			"a managed gateway instance already exists",
-			"RESOURCE_EXISTS",
-		));
-	}
 	let port = request.port.unwrap_or(bootstrap::DEFAULT_PORT);
 	let record = GatewayInstanceRecord {
 		id: uuid::Uuid::new_v4().to_string(),

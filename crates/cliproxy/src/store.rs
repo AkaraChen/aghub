@@ -92,6 +92,14 @@ impl InstanceStore {
 			if records.iter().any(|existing| existing.id == record.id) {
 				return Err(GatewayError::InstanceExists(record.id));
 			}
+			if record.kind == GatewayInstanceKind::Managed
+				&& records.iter().any(|existing| {
+					existing.kind == GatewayInstanceKind::Managed
+				}) {
+				return Err(GatewayError::InstanceExists(
+					"managed".to_string(),
+				));
+			}
 			records.push(record);
 			Ok(())
 		})
@@ -283,6 +291,33 @@ mod tests {
 
 		let records = InstanceStore::new(dir.path()).list().expect("list");
 		assert_eq!(records.len(), WRITER_COUNT);
+	}
+
+	#[test]
+	fn concurrent_managed_inserts_allow_one_instance() {
+		const CALLER_COUNT: usize = 16;
+
+		let dir = tempfile::tempdir().expect("tempdir");
+		let barrier =
+			std::sync::Arc::new(std::sync::Barrier::new(CALLER_COUNT));
+		let mut callers = Vec::with_capacity(CALLER_COUNT);
+		for index in 0..CALLER_COUNT {
+			let root = dir.path().to_path_buf();
+			let barrier = std::sync::Arc::clone(&barrier);
+			callers.push(std::thread::spawn(move || {
+				let mut candidate = record(&format!("managed-{index}"));
+				candidate.kind = GatewayInstanceKind::Managed;
+				barrier.wait();
+				InstanceStore::new(&root).insert(candidate)
+			}));
+		}
+		let inserted = callers
+			.into_iter()
+			.map(|caller| caller.join().expect("caller"))
+			.filter(Result::is_ok)
+			.count();
+
+		assert_eq!(inserted, 1);
 	}
 
 	#[test]
