@@ -104,6 +104,14 @@ rule credential_harvesting_generic{
         $api_credentials_openai_project or
         $api_credentials_anthropic or
         $key_certificate_content or
+        $ai_model_credential_names or
+        $credential_theft_actions or
+        $network_credential_transfer or
+        $env_var_theft or
+        $leak_param or
+        $dump_creds or
+        $base64_credential_encoding or
+        $whatsapp_exploit or
         (
             not $python_imports and
             not $python_type_hints and
@@ -117,35 +125,11 @@ rule credential_harvesting_generic{
             not $negation_context and
             not $security_doc_context and
             (
-            // Specific credential file access
-            $credential_file_access or
+                // Specific credential file access
+                $credential_file_access or
 
-            // Hardcoded credential paths
-            $hardcoded_credential_paths or
-
-            // AI model API keys with actual values
-            $ai_model_credential_names or
-
-            // Credential theft actions
-            $credential_theft_actions or
-
-            // Network credential transfer
-            $network_credential_transfer or
-
-            // Environment variable theft
-            $env_var_theft or
-
-            // Exfiltration attempts
-            $leak_param or
-
-            // Credential dumping
-            $dump_creds or
-
-            // Base64 credential encoding
-            $base64_credential_encoding or
-
-            // WhatsApp exploit
-            $whatsapp_exploit
+                // Hardcoded credential paths
+                $hardcoded_credential_paths
             )
         )
 }

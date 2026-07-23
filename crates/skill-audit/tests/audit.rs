@@ -408,6 +408,10 @@ fn high_confidence_rules_ignore_unrelated_benign_markers() {
 			"security audit\nAKIA1234567890ABCDEF",
 			"credential_harvesting_generic",
 		),
+		(
+			"security audit\nsteal api key",
+			"credential_harvesting_generic",
+		),
 	] {
 		let report = audit(&input(body));
 		assert!(
