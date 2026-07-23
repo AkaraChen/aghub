@@ -1,4 +1,5 @@
 use crate::link::{inspect_skill_link, SkillLinkStatus};
+use crate::SkillError;
 use std::collections::HashSet;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -8,8 +9,27 @@ const REPOSITORY_METADATA_DIRS: &[&str] = &[".git", ".hg", ".svn"];
 
 #[derive(Debug, thiserror::Error)]
 pub enum SkillCopyError {
-	#[error("{0}")]
-	InvalidSource(String),
+	#[error("Skill copy source is not a directory: {path:?}")]
+	SourceNotDirectory { path: PathBuf },
+	#[error("Skill copy contains a link cycle at {path:?}")]
+	LinkCycle { path: PathBuf },
+	#[error("Skill copy does not support source entry {path:?}")]
+	UnsupportedEntry { path: PathBuf },
+	#[error("Failed to inspect skill source link {path:?}: {source}")]
+	LinkInspection { path: PathBuf, source: SkillError },
+	#[error("Skill source contains a {status:?} symbolic link at {path:?}")]
+	InvalidLink {
+		path: PathBuf,
+		status: SkillLinkStatus,
+	},
+	#[error("Skill copy cannot preserve absolute symbolic link {path:?}")]
+	AbsoluteLink { path: PathBuf },
+	#[error("Skill source link could not be resolved at {path:?}")]
+	UnresolvedLink { path: PathBuf },
+	#[error(
+		"Skill source link does not resolve to a file or directory at {path:?}"
+	)]
+	UnsupportedLinkTarget { path: PathBuf },
 	#[error("Skill copy exceeds the {max_entries}-entry limit")]
 	EntryLimit { max_entries: usize },
 	#[error("Skill copy exceeds its byte limit")]
@@ -33,10 +53,9 @@ pub fn copy_directory_with_budget(
 ) -> Result<u64, SkillCopyError> {
 	let metadata = std::fs::symlink_metadata(from)?;
 	if metadata.file_type().is_symlink() || !metadata.is_dir() {
-		return Err(SkillCopyError::InvalidSource(format!(
-			"Skill copy source '{}' is not a directory",
-			from.display()
-		)));
+		return Err(SkillCopyError::SourceNotDirectory {
+			path: from.to_path_buf(),
+		});
 	}
 
 	let initial_bytes = *remaining_bytes;
@@ -66,10 +85,9 @@ fn copy_directory_entries(
 ) -> Result<(), SkillCopyError> {
 	let canonical_from = std::fs::canonicalize(from)?;
 	if !active_directories.insert(canonical_from.clone()) {
-		return Err(SkillCopyError::InvalidSource(format!(
-			"Skill copy contains a link cycle at '{}'",
-			from.display()
-		)));
+		return Err(SkillCopyError::LinkCycle {
+			path: from.to_path_buf(),
+		});
 	}
 
 	for entry in std::fs::read_dir(from)? {
@@ -116,10 +134,7 @@ fn copy_directory_entries(
 			continue;
 		}
 		if !file_type.is_file() {
-			return Err(SkillCopyError::InvalidSource(format!(
-				"Skill copy only supports files and directories: '{}'",
-				from_path.display()
-			)));
+			return Err(SkillCopyError::UnsupportedEntry { path: from_path });
 		}
 		copy_file(&from_path, &to_path, remaining_bytes)?;
 	}
@@ -142,37 +157,37 @@ fn copy_link(
 		| LinkTreatment::MaterializeWithin(root) => root,
 	};
 	let link = inspect_skill_link(allowed_root, from).map_err(|error| {
-		SkillCopyError::InvalidSource(format!(
-			"Failed to inspect skill source link '{}': {error}",
-			from.display()
-		))
+		SkillCopyError::LinkInspection {
+			path: from.to_path_buf(),
+			source: error,
+		}
 	})?;
 	if link.status != SkillLinkStatus::Valid {
-		return Err(SkillCopyError::InvalidSource(format!(
-			"Skill source contains a {} symbolic link '{}'",
-			link_status_name(link.status),
-			from.display()
-		)));
+		return Err(SkillCopyError::InvalidLink {
+			path: from.to_path_buf(),
+			status: link.status,
+		});
 	}
 
 	if matches!(link_treatment, LinkTreatment::PreserveWithin(_)) {
 		let target = std::fs::read_link(from)?;
 		if target.is_absolute() {
-			return Err(SkillCopyError::InvalidSource(format!(
-				"Skill copy cannot preserve absolute symbolic link '{}'",
-				from.display()
-			)));
+			return Err(SkillCopyError::AbsoluteLink {
+				path: from.to_path_buf(),
+			});
 		}
-		charge_bytes(target.to_string_lossy().len(), remaining_bytes)?;
+		charge_bytes(
+			target.as_os_str().as_encoded_bytes().len(),
+			remaining_bytes,
+		)?;
 		return create_symlink(&target, to, link.resolved_path.as_deref());
 	}
 
-	let resolved = link.resolved_path.ok_or_else(|| {
-		SkillCopyError::InvalidSource(format!(
-			"Skill source link '{}' could not be resolved",
-			from.display()
-		))
-	})?;
+	let resolved =
+		link.resolved_path
+			.ok_or_else(|| SkillCopyError::UnresolvedLink {
+				path: from.to_path_buf(),
+			})?;
 	let metadata = std::fs::symlink_metadata(&resolved)?;
 	if metadata.is_dir() {
 		std::fs::create_dir(to)?;
@@ -190,10 +205,9 @@ fn copy_link(
 		return copy_file(&resolved, to, remaining_bytes);
 	}
 
-	Err(SkillCopyError::InvalidSource(format!(
-		"Skill source link '{}' does not resolve to a file or directory",
-		from.display()
-	)))
+	Err(SkillCopyError::UnsupportedLinkTarget {
+		path: from.to_path_buf(),
+	})
 }
 
 #[cfg(unix)]
@@ -212,11 +226,8 @@ fn create_symlink(
 	path: &Path,
 	resolved: Option<&Path>,
 ) -> Result<(), SkillCopyError> {
-	let resolved = resolved.ok_or_else(|| {
-		SkillCopyError::InvalidSource(format!(
-			"Skill source link '{}' could not be resolved",
-			path.display()
-		))
+	let resolved = resolved.ok_or_else(|| SkillCopyError::UnresolvedLink {
+		path: path.to_path_buf(),
 	})?;
 	if std::fs::metadata(resolved)?.is_dir() {
 		std::os::windows::fs::symlink_dir(target, path)?;
@@ -274,15 +285,6 @@ fn charge_bytes(
 	}
 	*remaining_bytes -= count as u64;
 	Ok(())
-}
-
-fn link_status_name(status: SkillLinkStatus) -> &'static str {
-	match status {
-		SkillLinkStatus::Valid => "valid",
-		SkillLinkStatus::Broken => "broken",
-		SkillLinkStatus::OutsideRoot => "out-of-root",
-		SkillLinkStatus::Unreadable => "unreadable",
-	}
 }
 
 #[cfg(all(test, unix))]
@@ -347,5 +349,33 @@ mod tests {
 			std::fs::read_to_string(target.join("linked.txt")).unwrap(),
 			"notes"
 		);
+	}
+
+	#[test]
+	fn rejects_broken_link_with_typed_error() {
+		let temp = tempdir().unwrap();
+		let source = temp.path().join("source");
+		let target = temp.path().join("target");
+		std::fs::create_dir_all(&source).unwrap();
+		let link = source.join("linked.txt");
+		std::os::unix::fs::symlink("missing.txt", &link).unwrap();
+		let mut remaining = 1024;
+
+		let error = copy_directory_with_budget(
+			&source,
+			&target,
+			&mut remaining,
+			10,
+			LinkTreatment::PreserveWithin(&source),
+		)
+		.unwrap_err();
+
+		assert!(matches!(
+			error,
+			SkillCopyError::InvalidLink {
+				path,
+				status: SkillLinkStatus::Broken,
+			} if path == link
+		));
 	}
 }

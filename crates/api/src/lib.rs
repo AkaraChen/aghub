@@ -2042,6 +2042,89 @@ mod tests {
 
 	#[cfg(unix)]
 	#[test]
+	fn route_skill_copy_resolution_hides_git_clone_path_in_error() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let target = project_dir.path().join(".claude/skills/demo");
+		write_import_skill(&target, "demo", "installed instruction");
+		let clone_dir = tempfile::tempdir().expect("clone dir");
+		let clone_root = clone_dir.path().to_string_lossy().into_owned();
+		let reference = clone_dir.path().join("skills/demo");
+		write_import_skill(&reference, "demo", "repository instruction");
+		std::os::unix::fs::symlink(
+			"missing.txt",
+			reference.join("broken-link.txt"),
+		)
+		.expect("broken repository link");
+		let client = test_client(app_data_dir.path());
+		let sessions = client
+			.rocket()
+			.state::<crate::state::GitCloneSessions>()
+			.expect("Git clone sessions");
+		sessions.sessions.lock().expect("session lock").insert(
+			"broken-link-session".to_string(),
+			crate::state::GitCloneSession {
+				temp_dir: clone_dir,
+				created_at: std::time::Instant::now(),
+				url: "https://github.com/example/skills.git".to_string(),
+				credential_token: None,
+				branches: vec!["main".to_string()],
+				current_branch: "main".to_string(),
+				scanned_skill_paths: std::collections::HashSet::from([
+					"skills/demo".to_string(),
+				]),
+			},
+		);
+
+		let diff = response_json(post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "git_scan",
+					"session_id": "broken-link-session",
+					"skill_path": "skills/demo",
+				},
+				"installed_paths": [target.join("SKILL.md")],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		));
+
+		let response = post_json(
+			&client,
+			"/api/v1/skills/copies/resolve",
+			json!({
+				"reference": {
+					"kind": "git_scan",
+					"session_id": "broken-link-session",
+					"skill_path": "skills/demo",
+				},
+				"expected_reference_hash": diff["results"][0]["base_hash"],
+				"targets": [{
+					"source_path": target.join("SKILL.md"),
+					"expected_hash": diff["results"][0]["target_hash"],
+				}],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_eq!(response.status(), Status::BadRequest);
+		let body = response_json(response);
+		assert_eq!(body["code"], "INVALID_SKILL_PATH");
+		assert_eq!(
+			body["error"],
+			"Skill source contains a broken symbolic link"
+		);
+		assert!(!body["error"]
+			.as_str()
+			.expect("copy error")
+			.contains(&clone_root));
+	}
+
+	#[cfg(unix)]
+	#[test]
 	fn route_skill_copy_resolution_materializes_git_file_link() {
 		let app_data_dir = tempfile::tempdir().expect("app data dir");
 		let project_dir = tempfile::tempdir().expect("project dir");
