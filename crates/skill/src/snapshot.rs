@@ -7,8 +7,10 @@ use std::io::Read;
 use std::path::Path;
 use walkdir::{DirEntry, WalkDir};
 
-const SNAPSHOT_DOMAIN: &[u8] = b"aghub-skill-snapshot-v2\0";
-const SYMLINK_SNAPSHOT_DOMAIN: &[u8] = b"aghub-skill-symlink-v1\0";
+const SNAPSHOT_DOMAIN: &[u8] = b"aghub-skill-snapshot-v3\0";
+const DIRECTORY_SNAPSHOT_DOMAIN: &[u8] = b"aghub-skill-snapshot-directory-v3\0";
+const FILE_SNAPSHOT_DOMAIN: &[u8] = b"aghub-skill-snapshot-file-v3\0";
+const SYMLINK_SNAPSHOT_DOMAIN: &[u8] = b"aghub-skill-snapshot-symlink-v3\0";
 const REPOSITORY_METADATA_DIRS: &[&str] = &[".git", ".hg", ".svn"];
 const FILE_READ_BUFFER_BYTES: usize = 64 * 1024;
 // Interactive comparisons are bounded so a skill cannot monopolize the
@@ -21,7 +23,7 @@ const TEXT_PREVIEW_LIMIT_LINES: usize = 2_000;
 const TOTAL_TEXT_PREVIEW_LIMIT_BYTES: usize = 2 * 1024 * 1024;
 
 #[derive(Debug, Clone)]
-struct SnapshotFile {
+struct SnapshotEntry {
 	hash: [u8; 32],
 	preview: Option<String>,
 	link: Option<SkillLink>,
@@ -30,7 +32,7 @@ struct SnapshotFile {
 #[derive(Debug, Clone)]
 pub struct SkillDirectorySnapshot {
 	pub hash: [u8; 32],
-	files: BTreeMap<String, SnapshotFile>,
+	entries: BTreeMap<String, SnapshotEntry>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -89,7 +91,7 @@ pub fn snapshot_directory_with_budget(
 		)));
 	}
 
-	let mut files = BTreeMap::new();
+	let mut entries = BTreeMap::new();
 	let mut entry_count = 0;
 	let mut total_bytes = 0;
 	let mut preview_bytes = 0;
@@ -115,14 +117,20 @@ pub fn snapshot_directory_with_budget(
 		}
 
 		let file_type = entry.file_type();
+		let relative = relative_snapshot_path(root, entry.path())?;
 		if file_type.is_symlink() {
-			let relative = relative_snapshot_path(root, entry.path())?;
 			let link = inspect_skill_link(root, entry.path())?;
-			let file = snapshot_link(link, &mut total_bytes, remaining_bytes)?;
-			files.insert(relative, file);
+			let snapshot = snapshot_link(
+				entry.path(),
+				link,
+				&mut total_bytes,
+				remaining_bytes,
+			)?;
+			entries.insert(relative, snapshot);
 			continue;
 		}
 		if file_type.is_dir() {
+			entries.insert(relative, snapshot_directory_entry());
 			continue;
 		}
 		if !file_type.is_file() {
@@ -132,28 +140,27 @@ pub fn snapshot_directory_with_budget(
 			)));
 		}
 
-		let relative = relative_snapshot_path(root, entry.path())?;
-		let file = snapshot_file(
+		let snapshot = snapshot_file(
 			entry.path(),
 			&mut total_bytes,
 			remaining_bytes,
 			&mut preview_bytes,
 		)?;
-		files.insert(relative, file);
+		entries.insert(relative, snapshot);
 	}
 
 	let mut hasher = Sha256::new();
 	hasher.update(SNAPSHOT_DOMAIN);
-	for (path, file) in &files {
+	for (path, entry) in &entries {
 		let path_bytes = path.as_bytes();
 		hasher.update((path_bytes.len() as u64).to_be_bytes());
 		hasher.update(path_bytes);
-		hasher.update(file.hash);
+		hasher.update(entry.hash);
 	}
 
 	Ok(SkillDirectorySnapshot {
 		hash: hasher.finalize().into(),
-		files,
+		entries,
 	})
 }
 
@@ -162,17 +169,17 @@ pub fn diff_snapshots(
 	target: &SkillDirectorySnapshot,
 ) -> DirectoryDiff {
 	let paths = base
-		.files
+		.entries
 		.keys()
-		.chain(target.files.keys())
+		.chain(target.entries.keys())
 		.cloned()
 		.collect::<BTreeSet<_>>();
 	let mut files = Vec::new();
 	let mut files_omitted = 0;
 
 	for path in paths {
-		let before_file = base.files.get(&path);
-		let after_file = target.files.get(&path);
+		let before_file = base.entries.get(&path);
+		let after_file = target.entries.get(&path);
 		let kind = match (before_file, after_file) {
 			(Some(before), Some(after)) if before.hash == after.hash => {
 				continue
@@ -256,9 +263,11 @@ fn snapshot_file(
 	total_bytes: &mut u64,
 	remaining_bytes: &mut u64,
 	preview_bytes: &mut usize,
-) -> Result<SnapshotFile> {
+) -> Result<SnapshotEntry> {
 	let mut source = std::fs::File::open(path)?;
 	let mut hasher = Sha256::new();
+	hasher.update(FILE_SNAPSHOT_DOMAIN);
+	hasher.update([executable_flag(&source.metadata()?)]);
 	let mut buffer = [0; FILE_READ_BUFFER_BYTES];
 	let mut preview = Some(Vec::new());
 	let mut preview_lines = 1;
@@ -301,19 +310,32 @@ fn snapshot_file(
 		*preview_bytes += content.len();
 	}
 
-	Ok(SnapshotFile {
+	Ok(SnapshotEntry {
 		hash: hasher.finalize().into(),
 		preview,
 		link: None,
 	})
 }
 
+fn snapshot_directory_entry() -> SnapshotEntry {
+	let mut hasher = Sha256::new();
+	hasher.update(DIRECTORY_SNAPSHOT_DOMAIN);
+	SnapshotEntry {
+		hash: hasher.finalize().into(),
+		preview: None,
+		link: None,
+	}
+}
+
 fn snapshot_link(
+	path: &Path,
 	link: SkillLink,
 	total_bytes: &mut u64,
 	remaining_bytes: &mut u64,
-) -> Result<SnapshotFile> {
-	charge_snapshot_bytes(link.target.len(), total_bytes, remaining_bytes)?;
+) -> Result<SnapshotEntry> {
+	let target = std::fs::read_link(path)?;
+	let target_bytes = target.as_os_str().as_encoded_bytes();
+	charge_snapshot_bytes(target_bytes.len(), total_bytes, remaining_bytes)?;
 	let mut hasher = Sha256::new();
 	hasher.update(SYMLINK_SNAPSHOT_DOMAIN);
 	hasher.update([match link.status {
@@ -322,13 +344,26 @@ fn snapshot_link(
 		SkillLinkStatus::OutsideRoot => 2,
 		SkillLinkStatus::Unreadable => 3,
 	}]);
-	hasher.update(link.target.as_bytes());
+	hasher.update((target_bytes.len() as u64).to_be_bytes());
+	hasher.update(target_bytes);
 
-	Ok(SnapshotFile {
+	Ok(SnapshotEntry {
 		hash: hasher.finalize().into(),
 		preview: None,
 		link: Some(link),
 	})
+}
+
+#[cfg(unix)]
+fn executable_flag(metadata: &std::fs::Metadata) -> u8 {
+	use std::os::unix::fs::PermissionsExt;
+
+	u8::from(metadata.permissions().mode() & 0o111 != 0)
+}
+
+#[cfg(not(unix))]
+fn executable_flag(_metadata: &std::fs::Metadata) -> u8 {
+	0
 }
 
 fn charge_snapshot_bytes(
@@ -525,6 +560,22 @@ mod tests {
 	}
 
 	#[test]
+	fn snapshot_hash_includes_empty_directories() {
+		let temp = tempdir().unwrap();
+		let base = temp.path().join("base");
+		let target = temp.path().join("target");
+		std::fs::create_dir_all(&base).unwrap();
+		std::fs::create_dir_all(target.join("empty")).unwrap();
+
+		let diff = compare_directories(&base, &target).unwrap();
+
+		assert!(!diff.identical);
+		assert_eq!(diff.files.len(), 1);
+		assert_eq!(diff.files[0].path, "empty");
+		assert_eq!(diff.files[0].kind, FileDiffKind::Added);
+	}
+
+	#[test]
 	fn snapshots_share_a_read_budget() {
 		let temp = tempdir().unwrap();
 		let first = temp.path().join("first");
@@ -562,6 +613,98 @@ mod tests {
 
 		assert!(diff.identical);
 		assert!(diff.files.is_empty());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn snapshot_hash_distinguishes_file_from_symlink() {
+		let temp = tempdir().unwrap();
+		let base = temp.path().join("base");
+		let target = temp.path().join("target");
+		std::fs::create_dir_all(&base).unwrap();
+		std::fs::create_dir_all(&target).unwrap();
+		std::fs::write(base.join("target.txt"), "target").unwrap();
+		std::fs::write(target.join("target.txt"), "target").unwrap();
+		let mut legacy_link_hash_input = b"aghub-skill-symlink-v1\0".to_vec();
+		legacy_link_hash_input.push(0);
+		legacy_link_hash_input.extend_from_slice(b"target.txt");
+		std::fs::write(base.join("entry"), legacy_link_hash_input).unwrap();
+		std::os::unix::fs::symlink("target.txt", target.join("entry")).unwrap();
+
+		let diff = compare_directories(&base, &target).unwrap();
+
+		assert!(!diff.identical);
+		assert_eq!(
+			diff.files
+				.iter()
+				.find(|file| file.path == "entry")
+				.unwrap()
+				.kind,
+			FileDiffKind::Modified
+		);
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn snapshot_hash_includes_executable_flag() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let temp = tempdir().unwrap();
+		let base = temp.path().join("base");
+		let target = temp.path().join("target");
+		std::fs::create_dir_all(&base).unwrap();
+		std::fs::create_dir_all(&target).unwrap();
+		let base_file = base.join("run.sh");
+		let target_file = target.join("run.sh");
+		std::fs::write(&base_file, "#!/bin/sh\n").unwrap();
+		std::fs::write(&target_file, "#!/bin/sh\n").unwrap();
+		std::fs::set_permissions(
+			&base_file,
+			std::fs::Permissions::from_mode(0o644),
+		)
+		.unwrap();
+		std::fs::set_permissions(
+			&target_file,
+			std::fs::Permissions::from_mode(0o755),
+		)
+		.unwrap();
+
+		let diff = compare_directories(&base, &target).unwrap();
+
+		assert!(!diff.identical);
+		assert_eq!(diff.files.len(), 1);
+		assert_eq!(diff.files[0].kind, FileDiffKind::Modified);
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn snapshot_hash_uses_raw_symlink_target_bytes() {
+		use std::ffi::OsString;
+		use std::os::unix::ffi::OsStringExt;
+
+		let temp = tempdir().unwrap();
+		let base = temp.path().join("base");
+		let target = temp.path().join("target");
+		std::fs::create_dir_all(&base).unwrap();
+		std::fs::create_dir_all(&target).unwrap();
+		std::os::unix::fs::symlink(
+			OsString::from_vec(vec![0xff]),
+			base.join("linked"),
+		)
+		.unwrap();
+		std::os::unix::fs::symlink(
+			OsString::from_vec(vec![0xfe]),
+			target.join("linked"),
+		)
+		.unwrap();
+
+		let diff = compare_directories(&base, &target).unwrap();
+
+		assert!(!diff.identical);
+		assert_eq!(
+			diff.files[0].before_link.as_ref().unwrap().target,
+			diff.files[0].after_link.as_ref().unwrap().target
+		);
 	}
 
 	#[cfg(unix)]
