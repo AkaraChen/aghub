@@ -3,6 +3,7 @@ use crate::{
 	manager::ConfigManager,
 	models::{ConfigSource, McpServer, ResourceScope, Skill, SubAgent},
 	registry,
+	skills::load_skill_locations_from_dirs,
 };
 use log::{debug, warn};
 use std::path::Path;
@@ -13,6 +14,86 @@ pub struct AgentResources {
 	pub skills: Vec<Skill>,
 	pub mcps: Vec<McpServer>,
 	pub sub_agents: Vec<SubAgent>,
+}
+
+/// Physical skill locations loaded for a single agent.
+pub struct AgentSkillLocations {
+	pub agent_id: &'static str,
+	pub skills: Vec<Skill>,
+}
+
+/// Load every skill location for all registered agents without deduplicating
+/// skills that share a name.
+pub fn load_all_agent_skill_locations(
+	scope: ResourceScope,
+	project_root: Option<&Path>,
+) -> Vec<AgentSkillLocations> {
+	registry::iter_all()
+		.map(|descriptor| {
+			let adapter: Box<dyn AgentAdapter> = Box::new(descriptor);
+			let mut skills = Vec::new();
+
+			match scope {
+				ResourceScope::GlobalOnly => extend_skill_locations(
+					adapter.as_ref(),
+					None,
+					ResourceScope::GlobalOnly,
+					ConfigSource::Global,
+					&mut skills,
+				),
+				ResourceScope::ProjectOnly => extend_skill_locations(
+					adapter.as_ref(),
+					project_root,
+					ResourceScope::ProjectOnly,
+					ConfigSource::Project,
+					&mut skills,
+				),
+				ResourceScope::Both => {
+					if project_root.is_some() {
+						extend_skill_locations(
+							adapter.as_ref(),
+							project_root,
+							ResourceScope::ProjectOnly,
+							ConfigSource::Project,
+							&mut skills,
+						);
+					}
+					extend_skill_locations(
+						adapter.as_ref(),
+						None,
+						ResourceScope::GlobalOnly,
+						ConfigSource::Global,
+						&mut skills,
+					);
+				}
+			}
+
+			AgentSkillLocations {
+				agent_id: descriptor.id,
+				skills,
+			}
+		})
+		.collect()
+}
+
+fn extend_skill_locations(
+	adapter: &dyn AgentAdapter,
+	project_root: Option<&Path>,
+	scope: ResourceScope,
+	source: ConfigSource,
+	skills: &mut Vec<Skill>,
+) {
+	if !adapter.supports_skill_scope(scope) {
+		return;
+	}
+
+	let paths = adapter.get_skills_paths(project_root, scope);
+	skills.extend(load_skill_locations_from_dirs(&paths).into_iter().map(
+		|mut skill| {
+			skill.config_source = Some(source);
+			skill
+		},
+	));
 }
 
 /// Load resources for all registered agents.

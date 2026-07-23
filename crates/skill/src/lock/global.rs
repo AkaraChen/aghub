@@ -1,7 +1,7 @@
 use chrono::Utc;
 use std::collections::BTreeMap;
 
-use super::{io, types};
+use super::{io, mutation_guard, types};
 
 pub use io::{get_skill_lock_path, read_skill_lock, write_skill_lock};
 pub use types::{DismissedPrompts, SkillLockEntry, SkillLockFile};
@@ -9,33 +9,24 @@ pub use types::{DismissedPrompts, SkillLockEntry, SkillLockFile};
 /// Add or update a skill entry in the lock file.
 pub fn add_skill_to_lock(
 	skill_name: &str,
-	mut entry: SkillLockEntry,
+	entry: SkillLockEntry,
 ) -> std::io::Result<()> {
-	let mut lock = read_skill_lock();
-	let now = Utc::now().to_rfc3339();
-
-	if let Some(existing) = lock.skills.get(skill_name) {
-		// Preserve the original installedAt timestamp
-		entry.installed_at = existing.installed_at.clone();
-	} else {
-		entry.installed_at = now.clone();
-	}
-	entry.updated_at = now;
-
-	lock.skills.insert(skill_name.to_string(), entry);
-	write_skill_lock(&lock)
+	mutate_skill_lock(|lock| {
+		let mut entry = entry;
+		let now = Utc::now().to_rfc3339();
+		entry.installed_at = lock
+			.skills
+			.get(skill_name)
+			.map(|existing| existing.installed_at.clone())
+			.unwrap_or_else(|| now.clone());
+		entry.updated_at = now;
+		lock.skills.insert(skill_name.to_string(), entry);
+	})
 }
 
 /// Remove a skill from the lock file.
 pub fn remove_skill_from_lock(skill_name: &str) -> std::io::Result<bool> {
-	let mut lock = read_skill_lock();
-
-	if lock.skills.remove(skill_name).is_some() {
-		write_skill_lock(&lock)?;
-		Ok(true)
-	} else {
-		Ok(false)
-	}
+	mutate_skill_lock(|lock| lock.skills.remove(skill_name).is_some())
 }
 
 /// Get a skill entry from the lock file.
@@ -79,18 +70,17 @@ pub fn is_prompt_dismissed(prompt_key: &str) -> bool {
 
 /// Mark a prompt as dismissed.
 pub fn dismiss_prompt(prompt_key: &str) -> std::io::Result<()> {
-	let mut lock = read_skill_lock();
-	if lock.dismissed.is_none() {
-		lock.dismissed = Some(DismissedPrompts::default());
-	}
-
-	if let Some(ref mut dismissed) = lock.dismissed {
-		if prompt_key == "findSkillsPrompt" {
-			dismissed.find_skills_prompt = Some(true);
+	mutate_skill_lock(|lock| {
+		if lock.dismissed.is_none() {
+			lock.dismissed = Some(DismissedPrompts::default());
 		}
-	}
 
-	write_skill_lock(&lock)
+		if let Some(ref mut dismissed) = lock.dismissed {
+			if prompt_key == "findSkillsPrompt" {
+				dismissed.find_skills_prompt = Some(true);
+			}
+		}
+	})
 }
 
 /// Get the last selected agents.
@@ -101,9 +91,24 @@ pub fn get_last_selected_agents() -> Option<Vec<String>> {
 
 /// Save the selected agents to the lock file.
 pub fn save_selected_agents(agents: Vec<String>) -> std::io::Result<()> {
-	let mut lock = read_skill_lock();
-	lock.last_selected_agents = Some(agents);
-	write_skill_lock(&lock)
+	mutate_skill_lock(|lock| lock.last_selected_agents = Some(agents))
+}
+
+pub(crate) fn mutate_skill_lock<T>(
+	mutate: impl FnOnce(&mut SkillLockFile) -> T,
+) -> std::io::Result<T> {
+	try_mutate_skill_lock(|lock| Ok(mutate(lock)))
+}
+
+pub(crate) fn try_mutate_skill_lock<T>(
+	mutate: impl FnOnce(&mut SkillLockFile) -> std::io::Result<T>,
+) -> std::io::Result<T> {
+	let path = io::get_skill_lock_path();
+	let _guard = mutation_guard(&path)?;
+	let mut lock = io::read_skill_lock_for_update(&path)?;
+	let result = mutate(&mut lock)?;
+	io::write_json_atomic(&path, &lock)?;
+	Ok(result)
 }
 
 #[cfg(test)]
@@ -137,6 +142,21 @@ mod tests {
 		let stored = lock.skills.get("new-skill").unwrap();
 		assert!(!stored.installed_at.is_empty());
 		assert!(!stored.updated_at.is_empty());
+	}
+
+	#[test]
+	fn mutation_replaces_an_older_global_lock_version() {
+		let _guard = TestLockGuard::new();
+		let path = get_skill_lock_path();
+		std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+		std::fs::write(&path, r#"{"version":2,"skills":{},"dismissed":null}"#)
+			.unwrap();
+
+		add_skill_to_lock("new-skill", test_entry()).unwrap();
+
+		let lock = read_skill_lock();
+		assert_eq!(lock.version, SkillLockFile::current_version());
+		assert!(lock.skills.contains_key("new-skill"));
 	}
 
 	#[test]

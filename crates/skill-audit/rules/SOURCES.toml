@@ -1,0 +1,104 @@
+version = 1
+
+[[sources]]
+id = "cisco-ai-defense/skill-scanner"
+repository = "https://github.com/cisco-ai-defense/skill-scanner"
+revision = "543ecf42167e8c0404e73c1e4d748bf43663b786"
+license = "Apache-2.0"
+source_root = "skill_scanner/data/packs/core/yara"
+
+[[sources.files]]
+local = "cisco/autonomy_abuse_generic.yara"
+upstream = "autonomy_abuse_generic.yara"
+upstream_blob = "cc26b3ca55286ae56de91915d885a275644133a3"
+modified = false
+
+[[sources.files]]
+local = "cisco/capability_inflation_generic.yara"
+upstream = "capability_inflation_generic.yara"
+upstream_blob = "8bdd352daa372c8f242631e7681ee3eb01947769"
+modified = false
+
+[[sources.files]]
+local = "cisco/code_execution_generic.yara"
+upstream = "code_execution_generic.yara"
+upstream_blob = "b3ac0bec7a704ada694020d92578cd0b28cca624"
+modified = true
+
+[[sources.files]]
+local = "cisco/coercive_injection_generic.yara"
+upstream = "coercive_injection_generic.yara"
+upstream_blob = "b29bde00d180faf257f0c1695265cd6706228310"
+modified = false
+
+[[sources.files]]
+local = "cisco/command_injection_generic.yara"
+upstream = "command_injection_generic.yara"
+upstream_blob = "ae42a78ddb3912992b28aea1bb4ca4b5d81a2d5c"
+modified = false
+
+[[sources.files]]
+local = "cisco/credential_harvesting_generic.yara"
+upstream = "credential_harvesting_generic.yara"
+upstream_blob = "8374d448c7203527f87c381d25dd3f6f7d2922bd"
+modified = true
+
+[[sources.files]]
+local = "cisco/embedded_binary_detection.yara"
+upstream = "embedded_binary_detection.yara"
+upstream_blob = "d23e14eb9cdf81cbc26ff2baef5ead63e62a1db9"
+modified = true
+
+[[sources.files]]
+local = "cisco/indirect_prompt_injection_generic.yara"
+upstream = "indirect_prompt_injection_generic.yara"
+upstream_blob = "4b9bdcabb1f58679134c67fef047f8c8fa0999de"
+modified = false
+
+[[sources.files]]
+local = "cisco/prompt_injection_generic.yara"
+upstream = "prompt_injection_generic.yara"
+upstream_blob = "50a9e1d5cb3a0717355767a9cc7a8db834a2dc50"
+modified = true
+
+[[sources.files]]
+local = "cisco/prompt_injection_unicode_steganography.yara"
+upstream = "prompt_injection_unicode_steganography.yara"
+upstream_blob = "bc1a6d674b48760387038ffcbc12572388135837"
+modified = false
+
+[[sources.files]]
+local = "cisco/script_injection_generic.yara"
+upstream = "script_injection_generic.yara"
+upstream_blob = "402d241924308893848e02d599a461fad01692e0"
+modified = true
+
+[[sources.files]]
+local = "cisco/sql_injection_generic.yara"
+upstream = "sql_injection_generic.yara"
+upstream_blob = "aad11bbdda3e6d8c545a63cf44952696f5ed13bc"
+modified = false
+
+[[sources.files]]
+local = "cisco/system_manipulation_generic.yara"
+upstream = "system_manipulation_generic.yara"
+upstream_blob = "1bfa1394724aefc69fab853b0892df74800251fe"
+modified = true
+
+[[sources.files]]
+local = "cisco/tool_chaining_abuse_generic.yara"
+upstream = "tool_chaining_abuse_generic.yara"
+upstream_blob = "a7474e02b11b916d3b70dd95fc2839e9083fc57c"
+modified = true
+
+[[sources]]
+id = "openclaw/clawhub"
+repository = "https://github.com/openclaw/clawhub"
+revision = "cc16d7fbd9244da6736220e1d7cacb69c02a5a31"
+license = "MIT"
+
+[[sources.files]]
+local = "clawhub/agent_specific.yara"
+upstream = "convex/lib/moderationEngine.ts"
+upstream_blob = "5b0529e2e20432db9d7dc6264d2eed0ed8c76e80"
+modified = true

@@ -283,6 +283,33 @@ fn test_source_path_update_targets_original_directory() {
 }
 
 #[test]
+fn skill_update_retains_extension_frontmatter() {
+	let test =
+		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
+			.unwrap();
+	let skill_dir = test.skills_dir().join("extension-skill");
+	std::fs::create_dir_all(&skill_dir).unwrap();
+	std::fs::write(
+		skill_dir.join("SKILL.md"),
+		"---\nname: extension-skill\ndescription: Before\nlicense: MIT\ncompatibility: macOS\ncustom:\n  owner: akara\n---\nBefore body\n",
+	)
+	.unwrap();
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+	let mut updated = manager.get_skill("extension-skill").unwrap().clone();
+	updated.description = Some("After".to_string());
+
+	manager.update_skill("extension-skill", updated).unwrap();
+
+	let content = std::fs::read_to_string(skill_dir.join("SKILL.md")).unwrap();
+	assert!(content.contains("description: After"));
+	assert!(content.contains("license: MIT"));
+	assert!(content.contains("compatibility: macOS"));
+	assert!(content.contains("owner: akara"));
+	assert!(content.contains("Before body"));
+}
+
+#[test]
 fn test_rename_skill_migrates_sanitized_directory() {
 	let test =
 		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
@@ -310,6 +337,222 @@ fn test_rename_skill_migrates_sanitized_directory() {
 			.unwrap();
 	assert!(content.contains("beta-skill"));
 	assert!(content.contains("renamed"));
+}
+
+#[test]
+fn add_skill_rejects_an_existing_sanitized_target() {
+	let test =
+		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
+			.unwrap();
+	let occupied = test.skills_dir().join("skill-name");
+	write_import_skill(&occupied, "occupied", "original body");
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+
+	let error = manager
+		.add_skill(aghub_core::Skill::new("skill@name"))
+		.unwrap_err();
+	assert!(matches!(
+		error,
+		aghub_core::ConfigError::ResourceExists { .. }
+	));
+	let content = std::fs::read_to_string(occupied.join("SKILL.md")).unwrap();
+	assert!(content.contains("original body"));
+	assert!(content.contains("name: occupied"));
+}
+
+#[test]
+fn skill_rename_rejects_an_existing_sanitized_target() {
+	let test =
+		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
+			.unwrap();
+	test.create_test_skill("source-skill", Some("source"))
+		.unwrap();
+	let occupied = test.skills_dir().join("target-name");
+	write_import_skill(&occupied, "occupied", "occupied body");
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+	let mut renamed = manager.get_skill("source-skill").unwrap().clone();
+	renamed.name = "target@name".to_string();
+
+	let error = manager.update_skill("source-skill", renamed).unwrap_err();
+	assert!(matches!(
+		error,
+		aghub_core::ConfigError::ResourceExists { .. }
+	));
+	let source = std::fs::read_to_string(
+		test.skills_dir().join("source-skill/SKILL.md"),
+	)
+	.unwrap();
+	assert!(source.contains("name: source-skill"));
+	let target = std::fs::read_to_string(occupied.join("SKILL.md")).unwrap();
+	assert!(target.contains("occupied body"));
+}
+
+#[test]
+fn skill_update_waits_for_the_target_transaction() {
+	let test =
+		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
+			.unwrap();
+	test.create_test_skill("locked-skill", Some("original"))
+		.unwrap();
+
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+	let mut updated = manager.get_skill("locked-skill").unwrap().clone();
+	updated.description = Some("updated".to_string());
+	let target = test.skills_dir().join("locked-skill");
+	let transaction =
+		skill::lock::lock_skill_paths([target.as_path()]).unwrap();
+	let (started_tx, started_rx) = std::sync::mpsc::channel();
+	let (finished_tx, finished_rx) = std::sync::mpsc::channel();
+	let skills_dir = test.skills_dir().to_path_buf();
+	let config_path = test.config_path().to_path_buf();
+	let update = std::thread::spawn(move || {
+		aghub_core::adapter::set_skills_path_override(
+			"claude",
+			Some(skills_dir),
+		);
+		aghub_core::adapter::set_mcp_path_override("claude", Some(config_path));
+		started_tx.send(()).unwrap();
+		let result = manager.update_skill("locked-skill", updated);
+		finished_tx.send(()).unwrap();
+		result
+	});
+
+	started_rx.recv().unwrap();
+	assert!(
+		finished_rx
+			.recv_timeout(std::time::Duration::from_millis(100))
+			.is_err(),
+		"skill update completed while its target transaction was held"
+	);
+	drop(transaction);
+	finished_rx
+		.recv_timeout(std::time::Duration::from_secs(5))
+		.unwrap();
+	update.join().unwrap().unwrap();
+
+	let content = std::fs::read_to_string(target.join("SKILL.md")).unwrap();
+	assert!(content.contains("description: updated"));
+}
+
+#[test]
+fn skill_update_rejects_a_stale_loaded_document() {
+	let test =
+		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
+			.unwrap();
+	test.create_test_skill("stale-skill", Some("original"))
+		.unwrap();
+	let mut stale_manager = test.create_manager();
+	stale_manager.load().unwrap();
+	let mut fresh_manager = test.create_manager();
+	fresh_manager.load().unwrap();
+
+	let mut fresh = fresh_manager.get_skill("stale-skill").unwrap().clone();
+	fresh.content = Some("\nbody written by fresh manager\n".to_string());
+	fresh_manager.update_skill("stale-skill", fresh).unwrap();
+
+	let mut stale = stale_manager.get_skill("stale-skill").unwrap().clone();
+	stale.description = Some("stale description".to_string());
+	let error = stale_manager
+		.update_skill("stale-skill", stale)
+		.unwrap_err();
+
+	assert!(matches!(
+		error,
+		aghub_core::ConfigError::ResourceChanged { .. }
+	));
+	let content =
+		std::fs::read_to_string(test.skills_dir().join("stale-skill/SKILL.md"))
+			.unwrap();
+	assert!(content.contains("body written by fresh manager"));
+	assert!(!content.contains("stale description"));
+}
+
+#[test]
+fn skill_delete_rejects_a_replacement_at_the_loaded_path() {
+	let test =
+		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
+			.unwrap();
+	test.create_test_skill("replaceable", Some("original"))
+		.unwrap();
+	let mut stale_manager = test.create_manager();
+	stale_manager.load().unwrap();
+	let mut fresh_manager = test.create_manager();
+	fresh_manager.load().unwrap();
+	fresh_manager.remove_skill("replaceable").unwrap();
+	let replacement = test.skills_dir().join("replaceable");
+	write_import_skill(&replacement, "different-skill", "replacement body");
+
+	let error = stale_manager.remove_skill("replaceable").unwrap_err();
+
+	assert!(matches!(
+		error,
+		aghub_core::ConfigError::ResourceChanged { .. }
+	));
+	let content =
+		std::fs::read_to_string(replacement.join("SKILL.md")).unwrap();
+	assert!(content.contains("replacement body"));
+}
+
+#[test]
+fn skill_mutation_does_not_overwrite_a_newer_mcp_config() {
+	let test =
+		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
+			.unwrap();
+	test.create_test_skill("mcp-race", Some("original"))
+		.unwrap();
+	let mut stale_manager = test.create_manager();
+	stale_manager.load().unwrap();
+	let mut fresh_manager = test.create_manager();
+	fresh_manager.load().unwrap();
+	fresh_manager
+		.add_mcp(aghub_core::McpServer::new(
+			"late-mcp",
+			aghub_core::McpTransport::stdio("node", Vec::new()),
+		))
+		.unwrap();
+
+	let mut skill = stale_manager.get_skill("mcp-race").unwrap().clone();
+	skill.description = Some("updated".to_string());
+	stale_manager.update_skill("mcp-race", skill).unwrap();
+
+	let mut reloaded = test.create_manager();
+	reloaded.load().unwrap();
+	assert!(reloaded.get_mcp("late-mcp").is_some());
+}
+
+#[test]
+fn skill_create_and_rename_reject_unloadable_names() {
+	let test =
+		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
+			.unwrap();
+	test.create_test_skill("valid-skill", Some("original"))
+		.unwrap();
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+	let invalid_name = "a".repeat(65);
+
+	let add_error = manager
+		.add_skill(aghub_core::Skill::new(&invalid_name))
+		.unwrap_err();
+	assert!(matches!(
+		add_error,
+		aghub_core::ConfigError::InvalidConfig(_)
+	));
+	assert!(!test.skills_dir().join(&invalid_name).exists());
+
+	let mut renamed = manager.get_skill("valid-skill").unwrap().clone();
+	renamed.name = invalid_name.clone();
+	let rename_error =
+		manager.update_skill("valid-skill", renamed).unwrap_err();
+	assert!(matches!(
+		rename_error,
+		aghub_core::ConfigError::InvalidConfig(_)
+	));
+	assert!(test.skills_dir().join("valid-skill").exists());
+	assert!(!test.skills_dir().join(invalid_name).exists());
 }
 
 #[test]
@@ -387,6 +630,108 @@ fn skill_import_directory_preserves_body_and_resources() {
 			.count(),
 		1
 	);
+}
+
+#[test]
+fn skill_import_snapshot_does_not_reread_changed_source() {
+	let test =
+		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
+			.unwrap();
+	let source_dir = test.temp_dir().join("source/snapshot-skill");
+	write_import_skill(&source_dir, "snapshot-skill", "captured body");
+	let snapshot =
+		aghub_core::SkillImportSnapshot::capture(&source_dir).unwrap();
+
+	write_import_skill(&source_dir, "snapshot-skill", "changed body");
+	std::fs::write(source_dir.join("late.txt"), "changed after review")
+		.unwrap();
+
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+	manager.add_skill_from_snapshot(&snapshot).unwrap();
+
+	let target_dir = test.skills_dir().join("snapshot-skill");
+	let target_content =
+		std::fs::read_to_string(target_dir.join("SKILL.md")).unwrap();
+	assert!(target_content.contains("captured body"));
+	assert!(!target_content.contains("changed body"));
+	assert!(!target_dir.join("late.txt").exists());
+}
+
+#[test]
+fn skill_import_commit_failure_rolls_back_the_installed_skill() {
+	let test =
+		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
+			.unwrap();
+	let source_dir = test.temp_dir().join("source/commit-failure");
+	write_import_skill(&source_dir, "commit-failure", "reviewed body");
+	let snapshot =
+		aghub_core::SkillImportSnapshot::capture(&source_dir).unwrap();
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+
+	let error = manager
+		.add_skill_from_snapshot_with_commit(&snapshot, |skill, installed| {
+			assert_eq!(skill.name, "commit-failure");
+			let content =
+				std::fs::read_to_string(installed.join("SKILL.md")).unwrap();
+			assert!(content.contains("reviewed body"));
+			Err("injected commit failure")
+		})
+		.unwrap_err();
+	assert!(matches!(
+		error,
+		aghub_core::manager::skill::SkillImportCommitError::Commit(
+			"injected commit failure"
+		)
+	));
+	assert!(!test.skills_dir().join("commit-failure").exists());
+
+	let mut reloaded = test.create_manager();
+	reloaded.load().unwrap();
+	assert!(reloaded.get_skill("commit-failure").is_none());
+}
+
+#[test]
+fn standalone_snapshot_keeps_reviewed_document_and_resources() {
+	let test =
+		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
+			.unwrap();
+	let source_dir = test.temp_dir().join("source/standalone-snapshot");
+	std::fs::create_dir_all(source_dir.join("scripts")).unwrap();
+	let skill_path = source_dir.join("instructions.md");
+	std::fs::write(
+		&skill_path,
+		"---\nname: standalone-snapshot\ndescription: test\n---\nreviewed body",
+	)
+	.unwrap();
+	std::fs::write(source_dir.join("scripts/setup.sh"), "reviewed script")
+		.unwrap();
+	std::fs::write(source_dir.join("unrelated.txt"), "not installed").unwrap();
+	let snapshot =
+		aghub_core::SkillImportSnapshot::capture(&skill_path).unwrap();
+
+	std::fs::write(
+		&skill_path,
+		"---\nname: standalone-snapshot\ndescription: test\n---\nchanged body",
+	)
+	.unwrap();
+	std::fs::write(source_dir.join("scripts/setup.sh"), "changed script")
+		.unwrap();
+
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+	manager.add_skill_from_snapshot(&snapshot).unwrap();
+
+	let target_dir = test.skills_dir().join("standalone-snapshot");
+	let skill_content =
+		std::fs::read_to_string(target_dir.join("SKILL.md")).unwrap();
+	let script_content =
+		std::fs::read_to_string(target_dir.join("scripts/setup.sh")).unwrap();
+	assert!(skill_content.contains("reviewed body"));
+	assert!(!skill_content.contains("changed body"));
+	assert_eq!(script_content, "reviewed script");
+	assert!(!target_dir.join("unrelated.txt").exists());
 }
 
 #[test]
@@ -480,7 +825,7 @@ fn skill_import_directory_rejects_symlinked_file() {
 	assert!(matches!(
 		error,
 		aghub_core::ConfigError::InvalidConfig(message)
-			if message.contains("symlink")
+			if message.contains("symbolic link")
 	));
 	assert!(!test.skills_dir().join("link-skill").exists());
 }
@@ -539,6 +884,33 @@ fn skill_import_package_preserves_body_and_resources() {
 	assert!(target_dir.join("scripts/setup.sh").exists());
 	assert!(target_dir.join("references/guide.md").exists());
 	assert!(target_dir.join("assets/logo.txt").exists());
+}
+
+#[test]
+fn package_snapshot_keeps_reviewed_archive_bytes() {
+	let test =
+		aghub_core::testing::TestConfig::new(aghub_core::AgentType::Claude)
+			.unwrap();
+	let source_dir = test.temp_dir().join("source/package-snapshot");
+	write_import_skill(&source_dir, "package-snapshot", "reviewed body");
+	let package_path = test.temp_dir().join("package-snapshot.skill");
+	skill::package::pack(&source_dir, &package_path).unwrap();
+	let snapshot =
+		aghub_core::SkillImportSnapshot::capture(&package_path).unwrap();
+
+	write_import_skill(&source_dir, "package-snapshot", "changed body");
+	skill::package::pack(&source_dir, &package_path).unwrap();
+
+	let mut manager = test.create_manager();
+	manager.load().unwrap();
+	manager.add_skill_from_snapshot(&snapshot).unwrap();
+
+	let content = std::fs::read_to_string(
+		test.skills_dir().join("package-snapshot/SKILL.md"),
+	)
+	.unwrap();
+	assert!(content.contains("reviewed body"));
+	assert!(!content.contains("changed body"));
 }
 
 #[test]

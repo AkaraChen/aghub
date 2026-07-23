@@ -2,6 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+use super::{io, mutation_guard};
+
 const LOCAL_LOCK_FILE: &str = "skills-lock.json";
 const CURRENT_VERSION: u32 = 1;
 
@@ -71,28 +73,16 @@ pub fn get_local_lock_path(cwd: Option<&Path>) -> PathBuf {
 pub fn read_local_lock(cwd: Option<&Path>) -> LocalSkillLockFile {
 	let lock_path = get_local_lock_path(cwd);
 
-	match std::fs::read_to_string(&lock_path) {
-		Ok(content) => {
-			// Try to parse, return empty on any error
-			match serde_json::from_str::<LocalSkillLockFile>(&content) {
-				Ok(lock) => {
-					// Check version
-					if lock.version < CURRENT_VERSION {
-						LocalSkillLockFile::new()
-					} else {
-						lock
-					}
-				}
-				Err(_) => {
-					// Corrupted JSON (merge conflict markers, etc.)
-					LocalSkillLockFile::new()
-				}
+	match io::read_json::<LocalSkillLockFile>(&lock_path) {
+		Ok(lock) => {
+			// Check version
+			if lock.version < CURRENT_VERSION {
+				LocalSkillLockFile::new()
+			} else {
+				lock
 			}
 		}
-		Err(_) => {
-			// File doesn't exist
-			LocalSkillLockFile::new()
-		}
+		Err(_) => LocalSkillLockFile::new(),
 	}
 }
 
@@ -103,10 +93,8 @@ pub fn write_local_lock(
 	cwd: Option<&Path>,
 ) -> std::io::Result<()> {
 	let lock_path = get_local_lock_path(cwd);
-
-	// BTreeMap is already sorted by key
-	let content = serde_json::to_string_pretty(lock)? + "\n";
-	std::fs::write(lock_path, content)
+	let _guard = mutation_guard(&lock_path)?;
+	io::write_json_atomic(&lock_path, lock)
 }
 
 /// Add or update a skill entry in the local lock file.
@@ -115,9 +103,9 @@ pub fn add_skill_to_local_lock(
 	entry: LocalSkillLockEntry,
 	cwd: Option<&Path>,
 ) -> std::io::Result<()> {
-	let mut lock = read_local_lock(cwd);
-	lock.skills.insert(skill_name.to_string(), entry);
-	write_local_lock(&lock, cwd)
+	mutate_local_lock(cwd, |lock| {
+		lock.skills.insert(skill_name.to_string(), entry);
+	})
 }
 
 /// Remove a skill from the local lock file.
@@ -126,14 +114,34 @@ pub fn remove_skill_from_local_lock(
 	skill_name: &str,
 	cwd: Option<&Path>,
 ) -> std::io::Result<bool> {
-	let mut lock = read_local_lock(cwd);
+	mutate_local_lock(cwd, |lock| lock.skills.remove(skill_name).is_some())
+}
 
-	if lock.skills.remove(skill_name).is_some() {
-		write_local_lock(&lock, cwd)?;
-		Ok(true)
-	} else {
-		Ok(false)
+pub(crate) fn mutate_local_lock<T>(
+	cwd: Option<&Path>,
+	mutate: impl FnOnce(&mut LocalSkillLockFile) -> T,
+) -> std::io::Result<T> {
+	try_mutate_local_lock(cwd, |lock| Ok(mutate(lock)))
+}
+
+pub(crate) fn try_mutate_local_lock<T>(
+	cwd: Option<&Path>,
+	mutate: impl FnOnce(&mut LocalSkillLockFile) -> std::io::Result<T>,
+) -> std::io::Result<T> {
+	let path = get_local_lock_path(cwd);
+	let _guard = mutation_guard(&path)?;
+	let mut lock: LocalSkillLockFile = io::read_json_for_update(&path)?;
+	if lock.version < CURRENT_VERSION {
+		lock = LocalSkillLockFile::new();
+	} else if lock.version > CURRENT_VERSION {
+		return Err(std::io::Error::new(
+			std::io::ErrorKind::InvalidData,
+			format!("Unsupported project skill lock version {}", lock.version),
+		));
 	}
+	let result = mutate(&mut lock)?;
+	io::write_json_atomic(&path, &lock)?;
+	Ok(result)
 }
 
 #[cfg(test)]
@@ -283,6 +291,32 @@ mod tests {
 		assert!(lock.skills.contains_key("new-skill"));
 		let entry = lock.skills.get("new-skill").unwrap();
 		assert_eq!(entry.computed_hash, "hash123");
+	}
+
+	#[test]
+	fn mutation_replaces_an_older_project_lock_version() {
+		let dir = TempDir::new().unwrap();
+		fs::write(
+			dir.path().join("skills-lock.json"),
+			r#"{"version":0,"skills":{}}"#,
+		)
+		.unwrap();
+
+		add_skill_to_local_lock(
+			"new-skill",
+			LocalSkillLockEntry {
+				source: "org/repo".to_string(),
+				ref_name: None,
+				source_type: "github".to_string(),
+				computed_hash: "hash123".to_string(),
+			},
+			Some(dir.path()),
+		)
+		.unwrap();
+
+		let lock = read_local_lock(Some(dir.path()));
+		assert_eq!(lock.version, CURRENT_VERSION);
+		assert!(lock.skills.contains_key("new-skill"));
 	}
 
 	#[test]

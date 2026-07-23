@@ -5,6 +5,10 @@ export type GitScanRequest = {
 	credential_id: string | null;
 	branch: string | null;
 	/**
+	 * Skip security analysis while retaining the private scan clone.
+	 */
+	skip_audit?: boolean | null;
+	/**
 	 * When re-scanning (e.g. branch switch), pass the existing
 	 * session ID so the old clone is replaced.
 	 */

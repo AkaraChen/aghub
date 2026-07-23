@@ -7,4 +7,23 @@ export type InstallSkillRequest = {
 	scope: string;
 	project_path: string | null;
 	install_all: boolean | null;
+	/**
+	 * Content identity returned by a prior review, when one was shown.
+	 */
+	expected_content_digest?: string | null;
+	/**
+	 * Assessment identity explicitly confirmed for a blocked review.
+	 */
+	confirmed_assessment_digest?: string | null;
+	/**
+	 * Reuse a clone cached from a prior blocked attempt (the "install anyway"
+	 * retry) instead of cloning the source again.
+	 */
+	session_id?: string | null;
+	/**
+	 * Audit-only phase: clone + audit and return the verdict + `session_id`
+	 * WITHOUT installing, so the desktop can show the result first and call
+	 * back to install (reusing the session). Nothing is written to disk.
+	 */
+	audit_only?: boolean | null;
 };

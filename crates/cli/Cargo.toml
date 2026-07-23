@@ -16,6 +16,7 @@ aghub-agents = { path = "../agents" }
 aghub-cc-plugins = { path = "../cc-plugins" }
 aghub-usage = { path = "../usage" }
 skill = { path = "../skill" }
+skill-audit = { path = "../skill-audit", features = [ "from-path" ] }
 
 clap = { workspace = true }
 tabled = { workspace = true }
