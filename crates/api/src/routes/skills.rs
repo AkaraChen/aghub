@@ -658,15 +658,65 @@ fn copy_skill_dir_with_budget(
 }
 
 fn map_skill_copy_error(error: skill::copy::SkillCopyError) -> ApiError {
+	log::warn!("Skill copy failed: {error}");
 	match error {
 		skill::copy::SkillCopyError::ByteLimit
 		| skill::copy::SkillCopyError::EntryLimit { .. } => skill_copy_write_limit(),
-		skill::copy::SkillCopyError::InvalidSource(message) => {
-			skill_path_error(Status::BadRequest, message, INVALID_SKILL_PATH)
+		skill::copy::SkillCopyError::SourceNotDirectory { .. } => {
+			skill_copy_invalid_source("Skill copy source is not a directory")
+		}
+		skill::copy::SkillCopyError::LinkCycle { .. } => {
+			skill_copy_invalid_source("Skill copy contains a link cycle")
+		}
+		skill::copy::SkillCopyError::UnsupportedEntry { .. } => {
+			skill_copy_invalid_source(
+				"Skill copy only supports files and directories",
+			)
+		}
+		skill::copy::SkillCopyError::LinkInspection { .. } => {
+			skill_copy_invalid_source(
+				"Skill source contains a link that could not be inspected",
+			)
+		}
+		skill::copy::SkillCopyError::InvalidLink { status, .. } => {
+			skill_copy_invalid_source(format!(
+				"Skill source contains a {} symbolic link",
+				skill_link_status_name(status)
+			))
+		}
+		skill::copy::SkillCopyError::AbsoluteLink { .. } => {
+			skill_copy_invalid_source(
+				"Skill copy cannot preserve an absolute symbolic link",
+			)
+		}
+		skill::copy::SkillCopyError::UnresolvedLink { .. } => {
+			skill_copy_invalid_source(
+				"Skill source contains a link that could not be resolved",
+			)
+		}
+		skill::copy::SkillCopyError::UnsupportedLinkTarget { .. } => {
+			skill_copy_invalid_source(
+				"Skill source link does not resolve to a file or directory",
+			)
 		}
 		skill::copy::SkillCopyError::Io(error) => {
 			ApiError::from(ConfigError::Io(error))
 		}
+	}
+}
+
+fn skill_copy_invalid_source(message: impl Into<String>) -> ApiError {
+	ApiError::new(Status::BadRequest, message, INVALID_SKILL_PATH)
+}
+
+fn skill_link_status_name(
+	status: skill::link::SkillLinkStatus,
+) -> &'static str {
+	match status {
+		skill::link::SkillLinkStatus::Valid => "valid",
+		skill::link::SkillLinkStatus::Broken => "broken",
+		skill::link::SkillLinkStatus::OutsideRoot => "out-of-root",
+		skill::link::SkillLinkStatus::Unreadable => "unreadable",
 	}
 }
 
