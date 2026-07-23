@@ -199,7 +199,6 @@ fn build_rocket(
 		})
 		.manage(crate::state::PromptState {
 			app_data_dir: options.app_data_dir,
-			write_lock: std::sync::Mutex::new(()),
 		})
 		.manage(crate::state::UsageState {
 			runtime: usage_runtime,

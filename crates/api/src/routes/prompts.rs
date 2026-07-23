@@ -44,7 +44,6 @@ pub fn create_prompt(
 	state: &State<PromptState>,
 	body: Json<CreatePromptRequest>,
 ) -> ApiCreated<PromptResponse> {
-	let _guard = lock(state);
 	let prompt = store(state).create(body.into_inner().into())?;
 	Ok((Status::Created, Json(prompt.into())))
 }
@@ -57,7 +56,6 @@ pub fn update_prompt(
 	id: &str,
 	body: Json<UpdatePromptRequest>,
 ) -> ApiResult<PromptResponse> {
-	let _guard = lock(state);
 	let prompt = store(state).update(id, body.into_inner().into())?;
 	Ok(Json(prompt.into()))
 }
@@ -69,16 +67,6 @@ pub fn delete_prompt(
 	state: &State<PromptState>,
 	id: &str,
 ) -> ApiNoContent {
-	let _guard = lock(state);
 	store(state).delete(id)?;
 	Ok(NoContent)
-}
-
-/// Hold the mutation lock, recovering from a poisoned mutex rather than
-/// propagating the panic.
-fn lock(state: &State<PromptState>) -> std::sync::MutexGuard<'_, ()> {
-	state
-		.write_lock
-		.lock()
-		.unwrap_or_else(|poisoned| poisoned.into_inner())
 }

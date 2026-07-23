@@ -2,10 +2,10 @@
 //!
 //! All prompts live in a single `prompts.json` array under the app data
 //! directory. Mutations rewrite the file atomically (temp file + rename).
-//! Concurrent read-modify-write is the caller's responsibility — the API
-//! layer serializes mutations with a lock.
 
+use std::io::Write;
 use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::error::{PromptError, Result};
@@ -13,6 +13,11 @@ use crate::model::{NewPrompt, Prompt, PromptUpdate};
 
 /// File name holding the prompt array under the app data directory.
 pub const PROMPTS_FILE: &str = "prompts.json";
+
+fn prompt_mutation_lock() -> &'static Mutex<()> {
+	static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+	LOCK.get_or_init(|| Mutex::new(()))
+}
 
 /// Prompt library rooted at an app data directory.
 #[derive(Debug, Clone)]
@@ -61,56 +66,85 @@ impl PromptStore {
 			updated_at: now,
 		};
 
-		let mut prompts = self.list()?;
-		prompts.push(prompt.clone());
-		self.write(&prompts)?;
-		Ok(prompt)
+		self.mutate_prompts(|prompts| {
+			prompts.push(prompt.clone());
+			Ok(prompt)
+		})
 	}
 
 	pub fn update(&self, id: &str, input: PromptUpdate) -> Result<Prompt> {
-		let mut prompts = self.list()?;
-		let index = prompts
-			.iter()
-			.position(|prompt| prompt.id == id)
-			.ok_or_else(|| PromptError::NotFound(id.to_string()))?;
+		self.mutate_prompts(|prompts| {
+			let index = prompts
+				.iter()
+				.position(|prompt| prompt.id == id)
+				.ok_or_else(|| PromptError::NotFound(id.to_string()))?;
 
-		let mut prompt = prompts[index].clone();
-		if let Some(title) = input.title {
-			prompt.title = clean_title(&title)?;
-		}
-		if let Some(description) = input.description {
-			prompt.description = clean_description(Some(description));
-		}
-		if let Some(content) = input.content {
-			prompt.content = content;
-		}
-		if let Some(tags) = input.tags {
-			prompt.tags = clean_tags(tags);
-		}
-		prompt.updated_at = now_millis();
+			let mut prompt = prompts[index].clone();
+			if let Some(title) = input.title {
+				prompt.title = clean_title(&title)?;
+			}
+			if let Some(description) = input.description {
+				prompt.description = clean_description(Some(description));
+			}
+			if let Some(content) = input.content {
+				prompt.content = content;
+			}
+			if let Some(tags) = input.tags {
+				prompt.tags = clean_tags(tags);
+			}
+			prompt.updated_at = now_millis();
 
-		prompts[index] = prompt.clone();
-		self.write(&prompts)?;
-		Ok(prompt)
+			prompts[index] = prompt.clone();
+			Ok(prompt)
+		})
 	}
 
 	pub fn delete(&self, id: &str) -> Result<Prompt> {
+		self.mutate_prompts(|prompts| {
+			let index = prompts
+				.iter()
+				.position(|prompt| prompt.id == id)
+				.ok_or_else(|| PromptError::NotFound(id.to_string()))?;
+			Ok(prompts.remove(index))
+		})
+	}
+
+	fn mutate_prompts<T>(
+		&self,
+		mutation: impl FnOnce(&mut Vec<Prompt>) -> Result<T>,
+	) -> Result<T> {
+		let _guard = prompt_mutation_lock()
+			.lock()
+			.unwrap_or_else(|poisoned| poisoned.into_inner());
 		let mut prompts = self.list()?;
-		let index = prompts
-			.iter()
-			.position(|prompt| prompt.id == id)
-			.ok_or_else(|| PromptError::NotFound(id.to_string()))?;
-		let removed = prompts.remove(index);
+		let result = mutation(&mut prompts)?;
 		self.write(&prompts)?;
-		Ok(removed)
+		Ok(result)
 	}
 
 	fn write(&self, prompts: &[Prompt]) -> Result<()> {
 		std::fs::create_dir_all(&self.dir)?;
+		let path = self.file_path();
+		let existing_permissions = match path.metadata() {
+			Ok(metadata) => Some(metadata.permissions()),
+			Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+			Err(error) => return Err(error.into()),
+		};
 		let json = serde_json::to_string_pretty(prompts)?;
-		let tmp = self.dir.join(format!("{PROMPTS_FILE}.tmp"));
-		std::fs::write(&tmp, json)?;
-		std::fs::rename(&tmp, self.file_path())?;
+		let mut temporary_builder = tempfile::Builder::new();
+		temporary_builder.prefix(".prompts.").suffix(".json.tmp");
+		#[cfg(unix)]
+		if existing_permissions.is_none() {
+			use std::os::unix::fs::PermissionsExt;
+			temporary_builder
+				.permissions(std::fs::Permissions::from_mode(0o666));
+		}
+		let mut temporary = temporary_builder.tempfile_in(&self.dir)?;
+		temporary.write_all(json.as_bytes())?;
+		if let Some(permissions) = existing_permissions {
+			temporary.as_file().set_permissions(permissions)?;
+		}
+		temporary.persist(path).map_err(|error| error.error)?;
 		Ok(())
 	}
 }
@@ -262,5 +296,92 @@ mod tests {
 		let removed = store.delete(&prompt.id).unwrap();
 		assert_eq!(removed.id, prompt.id);
 		assert!(store.list().unwrap().is_empty());
+	}
+
+	#[test]
+	fn concurrent_updates_preserve_every_prompt() {
+		const WRITER_COUNT: usize = 32;
+
+		let (temp, store) = store();
+		let prompts = (0..WRITER_COUNT)
+			.map(|index| {
+				store
+					.create(new_prompt(&format!("Prompt {index}")))
+					.unwrap()
+			})
+			.collect::<Vec<_>>();
+		let barrier =
+			std::sync::Arc::new(std::sync::Barrier::new(WRITER_COUNT));
+		let mut writers = Vec::with_capacity(WRITER_COUNT);
+
+		for (index, prompt) in prompts.iter().enumerate() {
+			let root = temp.path().to_path_buf();
+			let prompt_id = prompt.id.clone();
+			let barrier = barrier.clone();
+			writers.push(std::thread::spawn(move || {
+				barrier.wait();
+				PromptStore::new(root).update(
+					&prompt_id,
+					PromptUpdate {
+						content: Some(format!("Updated {index}")),
+						..Default::default()
+					},
+				)
+			}));
+		}
+
+		for writer in writers {
+			writer.join().unwrap().unwrap();
+		}
+
+		let stored = store.list().unwrap();
+		for (index, prompt) in prompts.iter().enumerate() {
+			let updated =
+				stored.iter().find(|stored| stored.id == prompt.id).unwrap();
+			assert_eq!(updated.content, format!("Updated {index}"));
+		}
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn update_preserves_file_permissions() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let (_temp, store) = store();
+		let prompt = store.create(new_prompt("Greeting")).unwrap();
+		let path = store.file_path();
+		std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+			.unwrap();
+
+		store
+			.update(
+				&prompt.id,
+				PromptUpdate {
+					content: Some("Updated".to_string()),
+					..Default::default()
+				},
+			)
+			.unwrap();
+
+		let mode = path.metadata().unwrap().permissions().mode() & 0o777;
+		assert_eq!(mode, 0o600);
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn create_uses_normal_file_permissions() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let (temp, store) = store();
+		let expected = temp.path().join("expected.json");
+		std::fs::write(&expected, "expected").unwrap();
+
+		store.create(new_prompt("Greeting")).unwrap();
+
+		let expected_mode =
+			expected.metadata().unwrap().permissions().mode() & 0o777;
+		let actual_mode =
+			store.file_path().metadata().unwrap().permissions().mode() & 0o777;
+		assert_eq!(actual_mode, expected_mode);
 	}
 }

@@ -117,9 +117,6 @@ pub struct InferenceProviderState {
 
 pub struct PromptState {
 	pub app_data_dir: PathBuf,
-	/// Serializes prompt mutations so concurrent read-modify-write of
-	/// `prompts.json` cannot lose updates.
-	pub write_lock: Mutex<()>,
 }
 
 pub struct UsageState {
