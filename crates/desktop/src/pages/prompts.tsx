@@ -56,8 +56,11 @@ export default function PromptsPage() {
 	}, [sortedPrompts, searchQuery]);
 
 	const selectedPrompt = useMemo(
-		() => prompts.find((prompt) => prompt.id === selectedId) ?? null,
-		[prompts, selectedId],
+		() =>
+			sortedPrompts.find((prompt) => prompt.id === selectedId) ??
+			sortedPrompts[0] ??
+			null,
+		[sortedPrompts, selectedId],
 	);
 
 	const createMutation = useMutation({
@@ -148,7 +151,7 @@ export default function PromptsPage() {
 					<div className="flex-1 overflow-y-auto">
 						<PromptList
 							prompts={filteredPrompts}
-							selectedId={selectedId}
+							selectedId={selectedPrompt?.id ?? null}
 							hasSearch={Boolean(searchQuery.trim())}
 							onSelect={(id) => void handleSelect(id)}
 						/>

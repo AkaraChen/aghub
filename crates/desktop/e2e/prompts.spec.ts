@@ -12,6 +12,45 @@ const PROMPT = {
 	updated_at: 2,
 };
 
+const OLDER_PROMPT = {
+	...PROMPT,
+	id: "prompt-older",
+	title: "Draft release notes",
+	created_at: 0,
+	updated_at: 1,
+};
+
+test("selects a valid deep link or falls back to the newest prompt", async ({
+	page,
+}) => {
+	await installMocks(page);
+	await page.route(
+		"http://localhost:45999/api/v1/prompts**",
+		async (route) => {
+			return route.fulfill({
+				status: 200,
+				contentType: "application/json",
+				body: JSON.stringify([OLDER_PROMPT, PROMPT]),
+			});
+		},
+	);
+
+	await page.goto("/prompts");
+	await expect(
+		page.getByRole("heading", { name: PROMPT.title }),
+	).toBeVisible();
+
+	await page.goto("/prompts?prompt=missing");
+	await expect(
+		page.getByRole("heading", { name: PROMPT.title }),
+	).toBeVisible();
+
+	await page.goto(`/prompts?prompt=${OLDER_PROMPT.id}`);
+	await expect(
+		page.getByRole("heading", { name: OLDER_PROMPT.title }),
+	).toBeVisible();
+});
+
 test("keeps delete confirmation open while deletion is pending and after failure", async ({
 	page,
 }) => {
