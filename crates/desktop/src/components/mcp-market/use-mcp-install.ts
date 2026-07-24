@@ -1,6 +1,9 @@
 import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
 import { useReducer, useRef, useState } from "react";
-import type { MarketMcpServer } from "../../generated/dto";
+import type {
+	MarketMcpInstallMethod,
+	MarketMcpServer,
+} from "../../generated/dto";
 import { useAgentAvailability } from "../../hooks/use-agent-availability";
 import { useApi } from "../../hooks/use-api";
 import { useInstallTarget } from "../../hooks/use-install-target";
@@ -14,21 +17,24 @@ import {
 	type InstallResult,
 } from "../../lib/install-utils";
 import {
+	buildMcpInventory,
+	installedLocationsForServer,
+	type MarketMcpInstalledLocation,
+} from "../../lib/mcp-market-inventory";
+import {
 	buildMarketMcpRequest,
 	initialMcpFieldValues,
 	invalidMcpInputIds,
-	marketMcpMatchesTransport,
 } from "../../lib/mcp-market-utils";
-import { getMcpMergeKey } from "../../lib/utils";
 import {
 	createMcpMutationOptions,
 	mcpListQueryOptions,
 } from "../../requests/mcps";
-import type { McpGroup } from "../mcp-detail";
 
 interface InstallDialogState {
 	isOpen: boolean;
 	server: MarketMcpServer | null;
+	methodId: string | null;
 	selectedAgents: Set<string>;
 	fieldValues: Record<string, string>;
 	results: InstallResult[];
@@ -37,6 +43,7 @@ interface InstallDialogState {
 
 type InstallDialogAction =
 	| { type: "open"; server: MarketMcpServer }
+	| { type: "select_method"; method: MarketMcpInstallMethod }
 	| { type: "select_agents"; agents: Set<string> }
 	| { type: "set_field"; id: string; value: string }
 	| { type: "start"; results: InstallResult[] }
@@ -46,6 +53,7 @@ type InstallDialogAction =
 const CLOSED_INSTALL_DIALOG: InstallDialogState = {
 	isOpen: false,
 	server: null,
+	methodId: null,
 	selectedAgents: new Set(),
 	fieldValues: {},
 	results: [],
@@ -57,12 +65,23 @@ function installDialogReducer(
 	action: InstallDialogAction,
 ): InstallDialogState {
 	switch (action.type) {
-		case "open":
+		case "open": {
+			const method = action.server.install_methods[0] ?? null;
 			return {
 				...CLOSED_INSTALL_DIALOG,
 				isOpen: true,
 				server: action.server,
-				fieldValues: initialMcpFieldValues(action.server),
+				methodId: method?.id ?? null,
+				fieldValues: method ? initialMcpFieldValues(method) : {},
+			};
+		}
+		case "select_method":
+			return {
+				...state,
+				methodId: action.method.id,
+				selectedAgents: new Set(),
+				fieldValues: initialMcpFieldValues(action.method),
+				results: [],
 			};
 		case "select_agents":
 			return { ...state, selectedAgents: action.agents };
@@ -105,13 +124,27 @@ export function useMcpInstall() {
 		CLOSED_INSTALL_DIALOG,
 	);
 	const dialogSessionRef = useRef(0);
-	const [manageGroup, setManageGroup] = useState<McpGroup | null>(null);
+	const [manageLocation, setManageLocation] =
+		useState<MarketMcpInstalledLocation | null>(null);
+	const [manageLocations, setManageLocations] = useState<
+		MarketMcpInstalledLocation[]
+	>([]);
 	const [isManageOpen, setIsManageOpen] = useState(false);
+	const [isLocationPickerOpen, setIsLocationPickerOpen] = useState(false);
 
 	const scope = installToProject ? "project" : "global";
-	const selectedTransport = dialog.server
-		? buildMarketMcpRequest(dialog.server, dialog.fieldValues).transport
-		: undefined;
+	const selectedMethod =
+		dialog.server?.install_methods.find(
+			(method) => method.id === dialog.methodId,
+		) ?? null;
+	const selectedTransport =
+		dialog.server && selectedMethod
+			? buildMarketMcpRequest(
+					dialog.server,
+					selectedMethod,
+					dialog.fieldValues,
+				).transport
+			: undefined;
 	const mcpAgents = availableAgents.filter(
 		(agent) =>
 			agent.isUsable &&
@@ -135,11 +168,13 @@ export function useMcpInstall() {
 			),
 		],
 	});
-	const installedMcps = installedQueries.flatMap((query) => query.data ?? []);
-	const installedForServer = (server: MarketMcpServer) =>
-		installedMcps.filter((mcp) =>
-			marketMcpMatchesTransport(server, mcp.transport),
-		);
+	const inventory = buildMcpInventory(
+		installedQueries[0]?.data ?? [],
+		projects,
+		installedQueries.slice(1).map((query) => query.data ?? []),
+	);
+	const locationsForServer = (server: MarketMcpServer) =>
+		installedLocationsForServer(server, inventory);
 
 	const handleInstallClick = (server: MarketMcpServer) => {
 		dialogSessionRef.current += 1;
@@ -147,27 +182,34 @@ export function useMcpInstall() {
 		resetInstallTarget();
 	};
 
-	const handleManageClick = (server: MarketMcpServer) => {
-		const items = installedForServer(server);
-		if (items.length === 0) return;
-		setManageGroup({
-			mergeKey: getMcpMergeKey(items[0].transport),
-			transport: items[0].transport,
-			items,
-		});
+	const openManageLocation = (location: MarketMcpInstalledLocation) => {
+		setManageLocation(location);
+		setIsLocationPickerOpen(false);
 		setIsManageOpen(true);
+	};
+
+	const handleManageClick = (server: MarketMcpServer) => {
+		const locations = locationsForServer(server);
+		if (locations.length === 0) return;
+		if (locations.length === 1 && locations[0]) {
+			openManageLocation(locations[0]);
+			return;
+		}
+		setManageLocations(locations);
+		setIsLocationPickerOpen(true);
 	};
 
 	const handleInstall = async () => {
 		const server = dialog.server;
-		if (!server || selectedAgents.size === 0) return;
+		const method = selectedMethod;
+		if (!server || !method || selectedAgents.size === 0) return;
 		if (installToProject && !selectedProjectId) return;
-		if (invalidMcpInputIds(server, dialog.fieldValues).size > 0) return;
+		if (invalidMcpInputIds(method, dialog.fieldValues).size > 0) return;
 
 		const session = dialogSessionRef.current;
 		const pending = buildPendingResults(selectedAgents, availableAgents);
 		dispatch({ type: "start", results: pending });
-		const body = buildMarketMcpRequest(server, dialog.fieldValues);
+		const body = buildMarketMcpRequest(server, method, dialog.fieldValues);
 		const projectRoot = selectedProject?.path;
 
 		const settled = await Promise.all(
@@ -199,7 +241,8 @@ export function useMcpInstall() {
 		if (settled.every((result) => result.status === "success")) {
 			capture("mcp installed from market", {
 				server: server.name,
-				transport: server.transport.type,
+				method: method.id,
+				transport: method.transport.type,
 				agents: Array.from(selectedAgents),
 				scope,
 			});
@@ -216,6 +259,9 @@ export function useMcpInstall() {
 	return {
 		installModalOpen: dialog.isOpen,
 		selectedServer: dialog.server,
+		selectedMethod,
+		setSelectedMethod: (method: MarketMcpInstallMethod) =>
+			dispatch({ type: "select_method", method }),
 		selectedAgents,
 		setSelectedAgents: (agents: Set<string>) =>
 			dispatch({ type: "select_agents", agents }),
@@ -235,12 +281,20 @@ export function useMcpInstall() {
 		setSelectedProjectId,
 		projects,
 		isInstalled: (server: MarketMcpServer) =>
-			installedForServer(server).length > 0,
-		manageGroup,
+			locationsForServer(server).length > 0,
+		manageGroup: manageLocation?.group ?? null,
+		manageProjectPath: manageLocation?.target.projectRoot ?? undefined,
+		manageLocations,
 		isManageOpen,
+		isLocationPickerOpen,
 		handleInstallClick,
 		handleManageClick,
-		handleCloseManage: () => setIsManageOpen(false),
+		handleManageLocationSelect: openManageLocation,
+		handleCloseLocationPicker: () => setIsLocationPickerOpen(false),
+		handleCloseManage: () => {
+			setIsManageOpen(false);
+			setManageLocation(null);
+		},
 		handleInstall,
 		handleCloseInstallModal,
 	};

@@ -6,7 +6,11 @@ import type { AvailableAgent } from "../contexts/agent-availability";
 import type { McpResponse } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
-import { supportsMcp, supportsMcpScope } from "../lib/agent-capabilities";
+import {
+	supportsMcp,
+	supportsMcpScope,
+	supportsMcpTransport,
+} from "../lib/agent-capabilities";
 import { cn } from "../lib/utils";
 import { reconcileMcpsMutationOptions } from "../requests/mcps";
 import { type AgentDiffLabel, AgentList, type AgentState } from "./agent-list";
@@ -104,9 +108,12 @@ export function ManageAgentsDialog({
 				(a) =>
 					a?.isUsable &&
 					supportsRequirements(a) &&
-					supportsMcpScope(a, projectPath ? "project" : "global"),
+					supportsMcpScope(a, projectPath ? "project" : "global") &&
+					groups.every((group) =>
+						supportsMcpTransport(a, group.transport),
+					),
 			),
-		[availableAgents, projectPath, supportsRequirements],
+		[availableAgents, groups, projectPath, supportsRequirements],
 	);
 
 	const [prevIsOpen, setPrevIsOpen] = useState(isOpen);

@@ -1,6 +1,7 @@
 import type {
 	CreateMcpRequest,
 	MarketMcpInput,
+	MarketMcpInstallMethod,
 	MarketMcpKeyValue,
 	MarketMcpServer,
 	MarketMcpValue,
@@ -8,19 +9,19 @@ import type {
 } from "../generated/dto";
 
 export function initialMcpFieldValues(
-	server: MarketMcpServer,
+	method: MarketMcpInstallMethod,
 ): Record<string, string> {
 	return Object.fromEntries(
-		server.inputs.map((input) => [input.id, input.default ?? ""]),
+		method.inputs.map((input) => [input.id, input.default ?? ""]),
 	);
 }
 
 export function invalidMcpInputIds(
-	server: MarketMcpServer,
+	method: MarketMcpInstallMethod,
 	values: Record<string, string>,
 ): Set<string> {
 	return new Set(
-		server.inputs
+		method.inputs
 			.filter((input) => !isInputValid(input, values[input.id] ?? ""))
 			.map((input) => input.id),
 	);
@@ -40,11 +41,11 @@ function isInputValid(input: MarketMcpInput, value: string): boolean {
 }
 
 export function redactedMcpFieldValues(
-	server: MarketMcpServer,
+	method: MarketMcpInstallMethod,
 	values: Record<string, string>,
 ): Record<string, string> {
 	const redacted = { ...values };
-	for (const input of server.inputs) {
+	for (const input of method.inputs) {
 		if (input.is_secret && redacted[input.id]) {
 			redacted[input.id] = "••••••••";
 		}
@@ -79,10 +80,10 @@ function collectKeyValues(
 }
 
 function buildTransport(
-	server: MarketMcpServer,
+	method: MarketMcpInstallMethod,
 	values: Record<string, string>,
 ): TransportDto {
-	const transport = server.transport;
+	const transport = method.transport;
 	if (transport.type === "stdio") {
 		const args = transport.args.flatMap((argument) => {
 			const value = resolveValue(argument.value, values);
@@ -108,11 +109,12 @@ function buildTransport(
 
 export function buildMarketMcpRequest(
 	server: MarketMcpServer,
+	method: MarketMcpInstallMethod,
 	values: Record<string, string>,
 ): CreateMcpRequest {
 	return {
 		name: server.suggested_name,
-		transport: buildTransport(server, values),
+		transport: buildTransport(method, values),
 		timeout: null,
 	};
 }
@@ -162,11 +164,11 @@ function containsOrderedArguments(
 	return expectedIndex === expected.length;
 }
 
-export function marketMcpMatchesTransport(
-	server: MarketMcpServer,
+export function marketMcpMethodMatchesTransport(
+	method: MarketMcpInstallMethod,
 	installed: TransportDto,
 ): boolean {
-	const market = server.transport;
+	const market = method.transport;
 	if (market.type !== installed.type) return false;
 	if (market.type === "stdio" && installed.type === "stdio") {
 		if (market.command !== installed.command) return false;

@@ -22,6 +22,7 @@ export function McpMarketCard({
 }: McpMarketCardProps) {
 	const { t } = useTranslation();
 	const repositoryUrl = server.repository_url;
+	const firstMethod = server.install_methods[0];
 
 	return (
 		<Card
@@ -63,7 +64,13 @@ export function McpMarketCard({
 				</p>
 				<div className="mt-auto flex items-center justify-between gap-2 pt-1">
 					<span className="text-xs text-muted">
-						{mcpTransportLabel(server.transport.type)}
+						{server.install_methods.length > 1
+							? t("marketMcpMethodCount", {
+									count: server.install_methods.length,
+								})
+							: firstMethod
+								? mcpTransportLabel(firstMethod.transport.type)
+								: null}
 					</span>
 					<Button
 						variant={installed ? "secondary" : "tertiary"}

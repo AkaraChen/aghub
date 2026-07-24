@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
 
 use mcp_catalog::{
-	McpCatalogArgument, McpCatalogEntry, McpCatalogInput, McpCatalogKeyValue,
-	McpCatalogTransport, McpCatalogValue,
+	McpCatalogArgument, McpCatalogEntry, McpCatalogInput,
+	McpCatalogInstallMethod, McpCatalogKeyValue, McpCatalogTransport,
+	McpCatalogValue,
 };
 use serde::Serialize;
 use ts_rs::TS;
@@ -17,6 +18,16 @@ pub struct MarketMcpServer {
 	pub description: String,
 	pub version: String,
 	pub repository_url: Option<String>,
+	/// Registry base URL that supplied this entry.
+	pub catalog_url: String,
+	pub install_methods: Vec<MarketMcpInstallMethod>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct MarketMcpInstallMethod {
+	pub id: String,
+	pub label: String,
 	pub transport: MarketMcpTransport,
 	pub inputs: Vec<MarketMcpInput>,
 }
@@ -75,8 +86,8 @@ pub struct MarketMcpInput {
 	pub choices: Vec<String>,
 }
 
-impl From<McpCatalogEntry> for MarketMcpServer {
-	fn from(entry: McpCatalogEntry) -> Self {
+impl MarketMcpServer {
+	pub fn from_catalog(entry: McpCatalogEntry, catalog_url: String) -> Self {
 		Self {
 			name: entry.name,
 			display_name: entry.display_name,
@@ -85,8 +96,23 @@ impl From<McpCatalogEntry> for MarketMcpServer {
 			description: entry.description,
 			version: entry.version,
 			repository_url: entry.repository_url,
-			transport: entry.transport.into(),
-			inputs: entry.inputs.into_iter().map(Into::into).collect(),
+			catalog_url,
+			install_methods: entry
+				.install_methods
+				.into_iter()
+				.map(Into::into)
+				.collect(),
+		}
+	}
+}
+
+impl From<McpCatalogInstallMethod> for MarketMcpInstallMethod {
+	fn from(method: McpCatalogInstallMethod) -> Self {
+		Self {
+			id: method.id,
+			label: method.label,
+			transport: method.transport.into(),
+			inputs: method.inputs.into_iter().map(Into::into).collect(),
 		}
 	}
 }

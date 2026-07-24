@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 const NPM_RUNTIME_ARGS: &[&str] = &["-y"];
 const OCI_RUNTIME_ARGS: &[&str] = &["run", "-i", "--rm"];
 
-/// A normalized MCP catalog entry with one install method.
+/// A normalized MCP catalog entry with every supported install method.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpCatalogEntry {
 	/// Source identifier (reverse-DNS for the official registry, unique).
@@ -21,6 +21,16 @@ pub struct McpCatalogEntry {
 	pub description: String,
 	pub version: String,
 	pub repository_url: Option<String>,
+	pub install_methods: Vec<McpCatalogInstallMethod>,
+}
+
+/// One registry-declared way to install or connect to an MCP server.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpCatalogInstallMethod {
+	/// Stable within a catalog entry across server version updates.
+	pub id: String,
+	/// Human-readable package or remote transport label.
+	pub label: String,
 	pub transport: McpCatalogTransport,
 	/// Values the user can configure before the install plan is resolved.
 	pub inputs: Vec<McpCatalogInput>,
@@ -247,52 +257,31 @@ pub(crate) fn map_detail(detail: ServerDetail) -> Option<McpCatalogEntry> {
 		.repository
 		.and_then(|repo| repo.url)
 		.filter(|url| is_http_url(url));
-	let mut inputs = Vec::new();
-
-	if let Some(transport) = detail
-		.packages
-		.iter()
-		.find_map(|package| stdio_install(package, &mut inputs))
-	{
-		return Some(McpCatalogEntry {
-			name: detail.name,
-			display_name,
-			suggested_name,
-			publisher,
-			description: detail.description,
-			version: detail.version,
-			repository_url,
-			transport,
-			inputs,
-		});
+	let mut install_methods: Vec<_> =
+		detail.packages.iter().filter_map(stdio_install).collect();
+	install_methods
+		.extend(detail.remotes.into_iter().filter_map(remote_install));
+	let mut seen_ids = std::collections::HashSet::new();
+	install_methods.retain(|method| seen_ids.insert(method.id.clone()));
+	if install_methods.is_empty() {
+		return None;
 	}
 
-	if let Some(remote) = detail.remotes.into_iter().find(|remote| {
-		matches!(remote.transport_type.as_str(), "sse" | "streamable-http")
-	}) {
-		let transport = remote_install(remote, &mut inputs)?;
-		return Some(McpCatalogEntry {
-			name: detail.name,
-			display_name,
-			suggested_name,
-			publisher,
-			description: detail.description,
-			version: detail.version,
-			repository_url,
-			transport,
-			inputs,
-		});
-	}
-
-	None
+	Some(McpCatalogEntry {
+		name: detail.name,
+		display_name,
+		suggested_name,
+		publisher,
+		description: detail.description,
+		version: detail.version,
+		repository_url,
+		install_methods,
+	})
 }
 
 /// Build a stdio invocation for a package, or `None` if it is not a stdio
 /// package or we cannot determine a launch command.
-fn stdio_install(
-	package: &Package,
-	inputs: &mut Vec<McpCatalogInput>,
-) -> Option<McpCatalogTransport> {
+fn stdio_install(package: &Package) -> Option<McpCatalogInstallMethod> {
 	let is_stdio = package
 		.transport
 		.as_ref()
@@ -305,6 +294,7 @@ fn stdio_install(
 		return None;
 	}
 
+	let mut inputs = Vec::new();
 	let command = package_command(package)?;
 
 	let default_args = default_runtime_args(package.registry_type.as_str());
@@ -316,9 +306,12 @@ fn stdio_install(
 		});
 	}
 	for (index, argument) in package.runtime_arguments.iter().enumerate() {
-		if let Some(argument) =
-			map_argument(argument, &format!("runtime.{index}"), index, inputs)
-		{
+		if let Some(argument) = map_argument(
+			argument,
+			&format!("runtime.{index}"),
+			index,
+			&mut inputs,
+		) {
 			if argument.name.is_none()
 				&& argument.value.variables.is_empty()
 				&& default_args.contains(&argument.value.template.as_str())
@@ -337,7 +330,12 @@ fn stdio_install(
 		.iter()
 		.enumerate()
 		.filter_map(|(index, argument)| {
-			map_argument(argument, &format!("package.{index}"), index, inputs)
+			map_argument(
+				argument,
+				&format!("package.{index}"),
+				index,
+				&mut inputs,
+			)
 		})
 		.collect();
 	if package.registry_type == "nuget" && !package_args.is_empty() {
@@ -353,11 +351,31 @@ fn stdio_install(
 		.iter()
 		.enumerate()
 		.map(|(index, env)| {
-			map_key_value(&env.name, &env.input, "env", index, inputs)
+			map_key_value(&env.name, &env.input, "env", index, &mut inputs)
 		})
 		.collect();
 
-	Some(McpCatalogTransport::Stdio { command, args, env })
+	Some(McpCatalogInstallMethod {
+		id: format!(
+			"{}:{}",
+			package.registry_type.to_ascii_lowercase(),
+			package.identifier
+		),
+		label: package_method_label(package),
+		transport: McpCatalogTransport::Stdio { command, args, env },
+		inputs,
+	})
+}
+
+fn package_method_label(package: &Package) -> String {
+	let registry = match package.registry_type.as_str() {
+		"npm" => "npm",
+		"pypi" => "PyPI",
+		"nuget" => "NuGet",
+		"oci" => "OCI",
+		other => other,
+	};
+	format!("{registry} · {}", package.identifier)
 }
 
 fn default_runtime_args(registry_type: &str) -> &'static [&'static str] {
@@ -429,34 +447,51 @@ fn package_command(package: &Package) -> Option<String> {
 	}
 }
 
-fn remote_install(
-	remote: Remote,
-	inputs: &mut Vec<McpCatalogInput>,
-) -> Option<McpCatalogTransport> {
+fn remote_install(remote: Remote) -> Option<McpCatalogInstallMethod> {
 	if remote.url.trim().is_empty() {
 		return None;
 	}
+	let id = format!("{}:{}", remote.transport_type, remote.url);
+	let transport_label = match remote.transport_type.as_str() {
+		"sse" => "SSE",
+		"streamable-http" => "Streamable HTTP",
+		_ => return None,
+	};
+	let label = format!("{transport_label} · {}", remote.url);
+	let mut inputs = Vec::new();
 	let url_input = RegistryInput {
 		value: Some(remote.url),
 		variables: remote.variables,
 		..RegistryInput::default()
 	};
-	let url = normalize_value(&url_input, "remote.url", "URL", inputs);
+	let url = normalize_value(&url_input, "remote.url", "URL", &mut inputs);
 	let headers = remote
 		.headers
 		.iter()
 		.enumerate()
 		.map(|(index, header)| {
-			map_key_value(&header.name, &header.input, "header", index, inputs)
+			map_key_value(
+				&header.name,
+				&header.input,
+				"header",
+				index,
+				&mut inputs,
+			)
 		})
 		.collect();
-	match remote.transport_type.as_str() {
-		"sse" => Some(McpCatalogTransport::Sse { url, headers }),
+	let transport = match remote.transport_type.as_str() {
+		"sse" => McpCatalogTransport::Sse { url, headers },
 		"streamable-http" => {
-			Some(McpCatalogTransport::StreamableHttp { url, headers })
+			McpCatalogTransport::StreamableHttp { url, headers }
 		}
-		_ => None,
-	}
+		_ => unreachable!("remote transport checked above"),
+	};
+	Some(McpCatalogInstallMethod {
+		id,
+		label,
+		transport,
+		inputs,
+	})
 }
 
 fn map_key_value(
@@ -635,7 +670,7 @@ mod tests {
 	fn stdio(
 		server: &McpCatalogEntry,
 	) -> (&str, &[McpCatalogArgument], &[McpCatalogKeyValue]) {
-		match &server.transport {
+		match &server.install_methods[0].transport {
 			McpCatalogTransport::Stdio { command, args, env } => {
 				(command, args, env)
 			}
@@ -684,13 +719,14 @@ mod tests {
 		);
 		assert_eq!(env.len(), 4);
 		assert_eq!(env[2].value.template, "{your_api_key}");
-		assert_eq!(server.inputs.len(), 4);
-		assert_eq!(server.inputs[0].label, "GCS_BUCKET");
-		assert!(server.inputs[0].is_required);
-		assert!(server.inputs[1].is_secret);
-		assert_eq!(server.inputs[2].label, "API_KEY");
-		assert!(server.inputs[2].is_secret);
-		assert_eq!(server.inputs[3].default.as_deref(), Some("us-east-1"));
+		let inputs = &server.install_methods[0].inputs;
+		assert_eq!(inputs.len(), 4);
+		assert_eq!(inputs[0].label, "GCS_BUCKET");
+		assert!(inputs[0].is_required);
+		assert!(inputs[1].is_secret);
+		assert_eq!(inputs[2].label, "API_KEY");
+		assert!(inputs[2].is_secret);
+		assert_eq!(inputs[3].default.as_deref(), Some("us-east-1"));
 		assert_eq!(
 			server.repository_url.as_deref(),
 			Some("https://github.com/pulsemcp/mcp-servers")
@@ -716,7 +752,8 @@ mod tests {
 		assert_eq!(servers.len(), 1);
 		let server = &servers[0];
 		assert_eq!(server.display_name, "Example Server");
-		let (url, headers) = match &server.transport {
+		let method = &server.install_methods[0];
+		let (url, headers) = match &method.transport {
 			McpCatalogTransport::StreamableHttp { url, headers } => {
 				(url, headers)
 			}
@@ -726,10 +763,10 @@ mod tests {
 		assert_eq!(headers.len(), 1);
 		assert_eq!(headers[0].name, "Authorization");
 		assert_eq!(headers[0].value.template, "Bearer {smithery_api_key}");
-		assert_eq!(server.inputs.len(), 1);
-		assert_eq!(server.inputs[0].label, "Authorization");
-		assert!(server.inputs[0].is_required);
-		assert!(server.inputs[0].is_secret);
+		assert_eq!(method.inputs.len(), 1);
+		assert_eq!(method.inputs[0].label, "Authorization");
+		assert!(method.inputs[0].is_required);
+		assert!(method.inputs[0].is_secret);
 	}
 
 	#[test]
@@ -887,11 +924,12 @@ mod tests {
 				(None, "{value}"),
 			],
 		);
-		assert_eq!(servers[0].inputs.len(), 2);
-		assert_eq!(servers[0].inputs[0].default.as_deref(), Some("corp"));
-		assert_eq!(servers[0].inputs[1].label, "path");
-		assert_eq!(servers[0].inputs[1].default.as_deref(), Some("/tmp/data"));
-		assert!(servers[0].inputs[1].is_required);
+		let inputs = &servers[0].install_methods[0].inputs;
+		assert_eq!(inputs.len(), 2);
+		assert_eq!(inputs[0].default.as_deref(), Some("corp"));
+		assert_eq!(inputs[1].label, "path");
+		assert_eq!(inputs[1].default.as_deref(), Some("/tmp/data"));
+		assert!(inputs[1].is_required);
 	}
 
 	#[test]
@@ -909,7 +947,8 @@ mod tests {
 			},"_meta":{}}]}"#,
 		);
 
-		let McpCatalogTransport::Sse { url, .. } = &servers[0].transport else {
+		let method = &servers[0].install_methods[0];
+		let McpCatalogTransport::Sse { url, .. } = &method.transport else {
 			panic!("expected SSE transport");
 		};
 		assert_eq!(url.template, "https://{tenant}.example.test/sse");
@@ -917,10 +956,42 @@ mod tests {
 			url.variables.get("tenant"),
 			Some(&"remote.url.tenant".to_string())
 		);
-		assert_eq!(servers[0].inputs.len(), 1);
-		assert_eq!(servers[0].inputs[0].label, "tenant");
-		assert_eq!(servers[0].inputs[0].default.as_deref(), Some("acme"));
-		assert!(servers[0].inputs[0].is_required);
+		assert_eq!(method.inputs.len(), 1);
+		assert_eq!(method.inputs[0].label, "tenant");
+		assert_eq!(method.inputs[0].default.as_deref(), Some("acme"));
+		assert!(method.inputs[0].is_required);
+	}
+
+	#[test]
+	fn keeps_all_supported_install_methods() {
+		let servers = parse(
+			r#"{"servers":[{"server":{
+				"name":"io.github.acme/multi-method",
+				"description":"multiple install methods",
+				"version":"1.0.0",
+				"packages":[
+					{"registryType":"npm","identifier":"acme-mcp","version":"1.0.0","transport":{"type":"stdio"}},
+					{"registryType":"pypi","identifier":"acme-mcp","version":"1.0.0","transport":{"type":"stdio"}}
+				],
+				"remotes":[{
+					"type":"streamable-http",
+					"url":"https://mcp.example.test"
+				}]
+			},"_meta":{}}]}"#,
+		);
+
+		assert_eq!(servers.len(), 1);
+		assert_eq!(servers[0].install_methods.len(), 3);
+		assert_eq!(servers[0].install_methods[0].id, "npm:acme-mcp");
+		assert_eq!(servers[0].install_methods[1].id, "pypi:acme-mcp");
+		assert_eq!(
+			servers[0].install_methods[2].id,
+			"streamable-http:https://mcp.example.test"
+		);
+		assert_eq!(
+			servers[0].install_methods[2].label,
+			"Streamable HTTP · https://mcp.example.test"
+		);
 	}
 
 	#[test]

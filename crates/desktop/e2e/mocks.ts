@@ -198,48 +198,81 @@ const MARKET_MCPS = [
 		description: "Remote registry fixture",
 		version: "1.0.0",
 		repository_url: "https://github.com/acme/remote-demo",
-		transport: {
-			type: "streamable_http",
-			url: {
-				template: "https://{tenant}.example.test/mcp",
-				variables: {
-					tenant: "remote.url.tenant",
-				},
-			},
-			headers: [
-				{
-					name: "Authorization",
-					value: {
-						template: "{value}",
+		catalog_url: "https://registry.modelcontextprotocol.io/",
+		install_methods: [
+			{
+				id: "streamable-http:https://{tenant}.example.test/mcp",
+				label: "Streamable HTTP · https://{tenant}.example.test/mcp",
+				transport: {
+					type: "streamable_http",
+					url: {
+						template: "https://{tenant}.example.test/mcp",
 						variables: {
-							value: "header.0.authorization",
+							tenant: "remote.url.tenant",
 						},
 					},
+					headers: [
+						{
+							name: "Authorization",
+							value: {
+								template: "{value}",
+								variables: {
+									value: "header.0.authorization",
+								},
+							},
+						},
+					],
 				},
-			],
-		},
-		inputs: [
-			{
-				id: "remote.url.tenant",
-				label: "Tenant",
-				default: "mcp",
-				placeholder: null,
-				description: null,
-				is_required: true,
-				is_secret: false,
-				format: "string",
-				choices: [],
+				inputs: [
+					{
+						id: "remote.url.tenant",
+						label: "Tenant",
+						default: "mcp",
+						placeholder: null,
+						description: null,
+						is_required: true,
+						is_secret: false,
+						format: "string",
+						choices: [],
+					},
+					{
+						id: "header.0.authorization",
+						label: "Authorization",
+						default: null,
+						placeholder: null,
+						description: "API token",
+						is_required: true,
+						is_secret: true,
+						format: "string",
+						choices: [],
+					},
+				],
 			},
 			{
-				id: "header.0.authorization",
-				label: "Authorization",
-				default: null,
-				placeholder: null,
-				description: "API token",
-				is_required: true,
-				is_secret: true,
-				format: "string",
-				choices: [],
+				id: "npm:@acme/remote-demo",
+				label: "npm · @acme/remote-demo",
+				transport: {
+					type: "stdio",
+					command: "npx",
+					args: [
+						{
+							name: null,
+							value: {
+								template: "-y",
+								variables: {},
+							},
+						},
+						{
+							name: null,
+							value: {
+								template: "@acme/remote-demo@1.0.0",
+								variables: {},
+							},
+						},
+					],
+					env: [],
+				},
+				inputs: [],
 			},
 		],
 	},
@@ -360,6 +393,7 @@ export async function installMocks(page: Page) {
 	const agents = structuredClone(AGENTS);
 	const availability = structuredClone(AVAILABILITY);
 	const mcps = MCPS.map((m) => ({ ...m }));
+	const projectMcps: McpResponse[] = [];
 	const skills = SKILLS.map((s) => ({ ...s }));
 	const ruleFiles = RULE_FILES.map((rule) => ({ ...rule }));
 	const ruleContent = new Map([
@@ -452,6 +486,7 @@ export async function installMocks(page: Page) {
 	};
 	let ccusageRuntime: CcusageRuntimeDto = structuredClone(CCUSAGE_RUNTIME);
 	const mcpCreates: Array<{ agent: string; body: CreateMcpRequest }> = [];
+	const mcpReconciles: unknown[] = [];
 
 	await page.route(e2eApiUrl("/**"), async (route) => {
 		const url = new URL(route.request().url());
@@ -500,7 +535,13 @@ export async function installMocks(page: Page) {
 			return json(body);
 		}
 		if (p === "/skills/providers/codex") return json(codexProvidedSkills);
-		if (p === "/agents/all/mcps") return json(mcps);
+		if (p === "/agents/all/mcps") {
+			return json(
+				url.searchParams.get("scope") === "project"
+					? projectMcps
+					: mcps,
+			);
+		}
 		if (p === "/mcp-market/search") return json(MARKET_MCPS);
 		if (p === "/agents/all/sub-agents") return json(SUB_AGENTS);
 		if (p === "/agents/all/rules") return json(ruleFiles);
@@ -1063,6 +1104,18 @@ export async function installMocks(page: Page) {
 			});
 		}
 
+		if (p === "/mcps/reconcile" && method === "POST") {
+			const body = JSON.parse(route.request().postData() ?? "{}");
+			mcpReconciles.push(body);
+			const changed =
+				(body.added?.length ?? 0) + (body.removed?.length ?? 0);
+			return json({
+				success_count: changed,
+				failed_count: 0,
+				results: [],
+			});
+		}
+
 		const deleteSkill = p.match(/^\/agents\/([^/]+)\/skills\/(.+)$/);
 		if (method === "DELETE" && deleteSkill) {
 			const agent = deleteSkill[1] ?? "";
@@ -1094,15 +1147,19 @@ export async function installMocks(page: Page) {
 			) as CreateMcpRequest;
 			const agent = postMcp[1] ?? "";
 			mcpCreates.push({ agent, body });
+			const scope =
+				url.searchParams.get("scope") === "project"
+					? "project"
+					: "global";
 			const created: McpResponse = {
 				name: body.name,
 				enabled: true,
 				transport: body.transport,
 				timeout: body.timeout,
-				source: "global",
+				source: scope,
 				agent,
 			};
-			mcps.push(created);
+			(scope === "project" ? projectMcps : mcps).push(created);
 			return json(created);
 		}
 
@@ -1140,6 +1197,22 @@ export async function installMocks(page: Page) {
 			return [...codexVisibleCopyRequests];
 		},
 		mcpCreates,
+		mcpReconciles,
+		addMarketMcp(scope: "global" | "project") {
+			(scope === "project" ? projectMcps : mcps).push({
+				name: "remote-demo",
+				enabled: true,
+				transport: {
+					type: "streamable_http",
+					url: "https://mcp.example.test/mcp",
+					headers: { Authorization: "Bearer stored" },
+					timeout: null,
+				},
+				timeout: null,
+				source: scope,
+				agent: "claude",
+			});
+		},
 		getSkillTreeRequests() {
 			return [...skillTreeRequests];
 		},

@@ -10,6 +10,7 @@ pub mod types;
 
 pub use client::{Client, ClientBuilder, ClientError};
 pub use types::{
-	McpCatalogArgument, McpCatalogEntry, McpCatalogInput, McpCatalogKeyValue,
-	McpCatalogTransport, McpCatalogValue,
+	McpCatalogArgument, McpCatalogEntry, McpCatalogInput,
+	McpCatalogInstallMethod, McpCatalogKeyValue, McpCatalogTransport,
+	McpCatalogValue,
 };

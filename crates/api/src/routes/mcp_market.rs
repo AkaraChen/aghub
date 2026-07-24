@@ -57,8 +57,14 @@ pub async fn search_mcp_market(
 			"MCP_MARKET_SEARCH_ERROR",
 		)
 	})?;
+	let catalog_url = client.registry_url().to_string();
 
 	Ok(Json(
-		entries.into_iter().map(MarketMcpServer::from).collect(),
+		entries
+			.into_iter()
+			.map(|entry| {
+				MarketMcpServer::from_catalog(entry, catalog_url.clone())
+			})
+			.collect(),
 	))
 }

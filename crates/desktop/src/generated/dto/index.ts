@@ -98,6 +98,7 @@ export type { LimitWindowKind } from "./LimitWindowKind";
 export type { LocalSkillLockEntryResponse } from "./LocalSkillLockEntryResponse";
 export type { MarketMcpArgument } from "./MarketMcpArgument";
 export type { MarketMcpInput } from "./MarketMcpInput";
+export type { MarketMcpInstallMethod } from "./MarketMcpInstallMethod";
 export type { MarketMcpKeyValue } from "./MarketMcpKeyValue";
 export type { MarketMcpServer } from "./MarketMcpServer";
 export type { MarketMcpTransport } from "./MarketMcpTransport";

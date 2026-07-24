@@ -1488,6 +1488,9 @@ export default {
 	marketMcpInstalled: "已安装",
 	marketMcpGoToPage: "前往 MCP 页面",
 	marketMcpInstallTitle: "安装 MCP 服务器",
+	marketMcpInstallMethod: "安装方式",
+	marketMcpMethodCount: "{{count}} 种安装方式",
+	marketMcpChooseLocation: "选择已安装位置",
 	marketMcpViewSource: "查看源码",
 	marketMcpOpenSourceError: "无法打开源码仓库。",
 	marketMcpInputs: "配置",
@@ -1506,7 +1509,7 @@ export default {
 	marketMcpSourceUrlHint:
 		"须在公开 HTTP(S) 端点上提供官方 MCP Registry API。",
 	marketMcpSourceUrlInvalid: "请输入 http(s) URL。",
-	marketMcpSelectAgents: "选择要安装到哪些 agent。",
+	marketMcpSelectAgents: "选择要安装到哪些代理。",
 	marketMcpSecretPlaceholder: "输入值…",
 	yourAgents: "你的代理",
 	allAgents: "全部代理",

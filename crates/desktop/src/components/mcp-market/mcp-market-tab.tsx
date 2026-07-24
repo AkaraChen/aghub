@@ -21,6 +21,7 @@ import { mcpMarketSearchQueryOptions } from "../../requests/mcp-market";
 import { ManageAgentsDialog } from "../manage-agents-dialog";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
 import { McpInstallModal } from "./mcp-install-modal";
+import { McpInstalledLocationModal } from "./mcp-installed-location-modal";
 import { McpMarketCard } from "./mcp-market-card";
 import { McpSourceSelector } from "./mcp-source-selector";
 import { mcpTransportLabel } from "./mcp-transport";
@@ -58,7 +59,11 @@ export function McpMarketTab() {
 	const filteredServers =
 		typeFilter === ALL_TYPES
 			? servers
-			: servers.filter((server) => server.transport.type === typeFilter);
+			: servers.filter((server) =>
+					server.install_methods.some(
+						(method) => method.transport.type === typeFilter,
+					),
+				);
 	const visibleServers = filteredServers
 		.map((server) => ({
 			server,
@@ -213,6 +218,8 @@ export function McpMarketTab() {
 			<McpInstallModal
 				isOpen={install.installModalOpen}
 				server={install.selectedServer}
+				selectedMethod={install.selectedMethod}
+				onMethodChange={install.setSelectedMethod}
 				selectedAgents={install.selectedAgents}
 				onSelectedAgentsChange={install.setSelectedAgents}
 				fieldValues={install.fieldValues}
@@ -230,10 +237,18 @@ export function McpMarketTab() {
 				onInstall={install.handleInstall}
 			/>
 
+			<McpInstalledLocationModal
+				isOpen={install.isLocationPickerOpen}
+				locations={install.manageLocations}
+				onSelect={install.handleManageLocationSelect}
+				onClose={install.handleCloseLocationPicker}
+			/>
+
 			<ManageAgentsDialog
 				groups={install.manageGroup ? [install.manageGroup] : []}
 				isOpen={install.isManageOpen}
 				onClose={install.handleCloseManage}
+				projectPath={install.manageProjectPath}
 				requiredCapabilities={["mcp"]}
 			/>
 		</div>

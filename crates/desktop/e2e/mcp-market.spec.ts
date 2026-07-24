@@ -20,7 +20,7 @@ test("install form enforces registry input and transport capability", async ({
 	await expect(dialog.getByText("Gemini", { exact: true })).toBeHidden();
 
 	await dialog.getByText("Claude", { exact: true }).click();
-	await dialog.getByLabel("Tenant").fill("tenant-a");
+	await dialog.getByRole("textbox", { name: /Tenant/ }).fill("tenant-a");
 	const secret = dialog.getByLabel(/Authorization/);
 	await expect(secret).toHaveAttribute("type", "password");
 	await expect(
@@ -40,7 +40,7 @@ test("install resolves secret fields into the selected agent request", async ({
 	await page.getByRole("button", { name: "Add", exact: true }).click();
 	const dialog = page.getByRole("dialog", { name: "Install MCP server" });
 	await dialog.getByText("Claude", { exact: true }).click();
-	await dialog.getByLabel("Tenant").fill("tenant-a");
+	await dialog.getByRole("textbox", { name: /Tenant/ }).fill("tenant-a");
 	await dialog.getByLabel(/Authorization/).fill("Bearer test-secret");
 	await dialog.getByRole("button", { name: "Install", exact: true }).click();
 	await expect(dialog.getByText("Installed successfully")).toBeVisible();
@@ -62,4 +62,59 @@ test("install resolves secret fields into the selected agent request", async ({
 	await expect(
 		page.getByRole("button", { name: "Installed", exact: true }),
 	).toBeVisible();
+});
+
+test("switches between registry install methods", async ({ page }) => {
+	await page.getByRole("button", { name: "Add", exact: true }).click();
+	const dialog = page.getByRole("dialog", { name: "Install MCP server" });
+
+	await expect(dialog.getByText("Gemini", { exact: true })).toBeHidden();
+	await dialog.getByLabel("Install method").click();
+	await page.getByRole("option", { name: "npm · @acme/remote-demo" }).click();
+
+	await expect(dialog.getByRole("textbox", { name: /Tenant/ })).toBeHidden();
+	await expect(dialog.getByText("Gemini", { exact: true })).toBeVisible();
+	await dialog.getByText("Gemini", { exact: true }).click();
+	await dialog.getByRole("button", { name: "Install", exact: true }).click();
+	await expect(dialog.getByText("Installed successfully")).toBeVisible();
+
+	expect(mocks.mcpCreates.at(-1)).toMatchObject({
+		agent: "gemini",
+		body: {
+			name: "remote-demo",
+			transport: {
+				type: "stdio",
+				command: "npx",
+				args: ["-y", "@acme/remote-demo@1.0.0"],
+			},
+		},
+	});
+});
+
+test("manages the selected project installation", async ({ page }) => {
+	mocks.addMarketMcp("global");
+	mocks.addMarketMcp("project");
+	await page.reload();
+
+	await page.getByRole("button", { name: "Installed", exact: true }).click();
+	const locationDialog = page.getByRole("dialog", {
+		name: "Choose an installed location",
+	});
+	await expect(locationDialog).toBeVisible();
+	await locationDialog.getByRole("button", { name: /demo-project/ }).click();
+
+	const manageDialog = page.getByRole("dialog", { name: "Manage Agents" });
+	await expect(manageDialog).toBeVisible();
+	await manageDialog.locator("label").filter({ hasText: "Cursor" }).click();
+	await manageDialog.getByRole("button", { name: "Apply changes" }).click();
+
+	expect(mocks.mcpReconciles.at(-1)).toMatchObject({
+		source: {
+			agent: "claude",
+			scope: "project",
+			project_root: "/tmp/e2e/demo",
+			name: "remote-demo",
+		},
+		added: ["cursor"],
+	});
 });

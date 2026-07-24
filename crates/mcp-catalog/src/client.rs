@@ -255,6 +255,11 @@ impl Client {
 		ClientBuilder::new().build()
 	}
 
+	/// Normalized registry base URL used by this client.
+	pub fn registry_url(&self) -> &str {
+		self.base_url.as_str()
+	}
+
 	/// Create a client honoring the `MCP_REGISTRY_URL` environment override.
 	pub fn from_env() -> Result<Self, ClientError> {
 		let mut builder = ClientBuilder::new();
