@@ -638,31 +638,32 @@ mod tests {
 	fn gateway_with_invalid_api_keys() -> String {
 		let listener = TcpListener::bind("127.0.0.1:0").expect("bind gateway");
 		let address = listener.local_addr().expect("gateway address");
-		std::thread::spawn(move || {
-			for _ in 0..2 {
-				let (mut stream, _) =
-					listener.accept().expect("gateway request");
-				let mut buffer = [0_u8; 4096];
-				let size = stream.read(&mut buffer).expect("read request");
-				let request = String::from_utf8_lossy(&buffer[..size]);
-				let body = if request.contains(" /v0/management/config ") {
-					r#"{"debug":false}"#
-				} else {
-					r#"{"status":"ok"}"#
-				};
-				let response = format!(
-					concat!(
-						"HTTP/1.1 200 OK\r\n",
-						"content-type: application/json\r\n",
-						"content-length: {}\r\n",
-						"connection: close\r\n\r\n{}"
-					),
-					body.len(),
-					body
-				);
-				stream
-					.write_all(response.as_bytes())
-					.expect("write response");
+		std::thread::spawn(move || loop {
+			let (mut stream, _) = listener.accept().expect("gateway request");
+			let mut buffer = [0_u8; 4096];
+			let size = stream.read(&mut buffer).expect("read request");
+			let request = String::from_utf8_lossy(&buffer[..size]);
+			let is_api_keys = request.contains(" /v0/management/api-keys ");
+			let body = if request.contains(" /v0/management/config ") {
+				r#"{"debug":false}"#
+			} else {
+				r#"{"status":"ok"}"#
+			};
+			let response = format!(
+				concat!(
+					"HTTP/1.1 200 OK\r\n",
+					"content-type: application/json\r\n",
+					"content-length: {}\r\n",
+					"connection: close\r\n\r\n{}"
+				),
+				body.len(),
+				body
+			);
+			stream
+				.write_all(response.as_bytes())
+				.expect("write response");
+			if is_api_keys {
+				break;
 			}
 		});
 		format!("http://{address}")
