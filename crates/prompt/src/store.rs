@@ -113,9 +113,9 @@ impl PromptStore {
 		&self,
 		mutation: impl FnOnce(&mut Vec<Prompt>) -> Result<T>,
 	) -> Result<T> {
-		let _guard = prompt_mutation_lock()
-			.lock()
-			.unwrap_or_else(|poisoned| poisoned.into_inner());
+		let _guard = prompt_mutation_lock().lock().map_err(|_| {
+			std::io::Error::other("prompt mutation lock poisoned")
+		})?;
 		let mut prompts = self.list()?;
 		let result = mutation(&mut prompts)?;
 		self.write(&prompts)?;
