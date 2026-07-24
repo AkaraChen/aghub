@@ -100,6 +100,10 @@ export default {
 		"This file does not exist yet — it will be created on save.",
 	rulesSaved: "Rule file saved",
 	rulesSaveFailed: "Failed to save rule file",
+	rulesChangedOnDisk:
+		"This file changed outside aghub. Reload it or overwrite it with your draft.",
+	rulesReloadFromDisk: "Reload from disk",
+	rulesOverwriteDisk: "Overwrite disk file",
 	searchRules: "Search rules...",
 	claudeCodePlugins: "Claude Code Plugins",
 	plugins: "Plugins",

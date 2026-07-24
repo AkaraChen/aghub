@@ -4,4 +4,5 @@ export type RuleFileContentResponse = {
 	path: string;
 	content: string;
 	exists: boolean;
+	revision: string;
 };

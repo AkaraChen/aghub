@@ -165,6 +165,7 @@ export default function RulesPage() {
 							}
 						>
 							<RuleContentPanel
+								key={activeGroup.path}
 								group={activeGroup}
 								draft={drafts[activeGroup.path]}
 								onDraftChange={updateDraft}

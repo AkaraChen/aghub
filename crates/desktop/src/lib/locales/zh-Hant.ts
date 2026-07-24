@@ -96,6 +96,10 @@ export default {
 	rulesCreateOnSave: "該檔案尚不存在——儲存時將自動建立。",
 	rulesSaved: "規則檔案已儲存",
 	rulesSaveFailed: "儲存規則檔案失敗",
+	rulesChangedOnDisk:
+		"該檔案已在 aghub 外部更改。請重新載入磁碟內容，或用目前草稿覆蓋。",
+	rulesReloadFromDisk: "重新載入磁碟內容",
+	rulesOverwriteDisk: "用草稿覆蓋",
 	searchRules: "搜尋規則...",
 	claudeCodePlugins: "Claude Code 外掛",
 	plugins: "外掛",

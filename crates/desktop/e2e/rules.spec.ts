@@ -1,8 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { installMocks } from "./mocks";
 
+let mocks: Awaited<ReturnType<typeof installMocks>>;
+
 test.beforeEach(async ({ page }) => {
-	await installMocks(page);
+	mocks = await installMocks(page);
 	await page.goto("/rules");
 	await expect(
 		page.getByRole("option", { name: /CLAUDE\.md/ }),
@@ -25,6 +27,37 @@ test("rule drafts survive file switches and persist after save", async ({
 	await expect(page.getByText("Rule file saved")).toBeVisible();
 	await page.reload({ waitUntil: "domcontentloaded" });
 	await expect(editor).toHaveValue("# Unsaved draft\n");
+});
+
+test("external edits preserve the draft until the user resolves the conflict", async ({
+	page,
+}) => {
+	await page.getByRole("option", { name: /CLAUDE\.md/ }).click();
+	const editor = page.getByRole("textbox", { name: "CLAUDE.md" });
+	await editor.fill("# Stale draft\n");
+	mocks.setRuleContent("~/.claude/CLAUDE.md", "# External edit\n");
+
+	await page.getByRole("button", { name: "Save" }).click();
+	await expect(
+		page.getByText("This file changed outside aghub", { exact: false }),
+	).toBeVisible();
+	await expect(editor).toHaveValue("# Stale draft\n");
+	expect(mocks.getRuleContent("~/.claude/CLAUDE.md")).toBe(
+		"# External edit\n",
+	);
+
+	await page.getByRole("button", { name: "Reload from disk" }).click();
+	await expect(editor).toHaveValue("# External edit\n");
+
+	await editor.fill("# Draft to keep\n");
+	mocks.setRuleContent("~/.claude/CLAUDE.md", "# Second external edit\n");
+	await page.getByRole("button", { name: "Save" }).click();
+	await page.getByRole("button", { name: "Overwrite disk file" }).click();
+
+	await expect(page.getByText("Rule file saved")).toBeVisible();
+	expect(mocks.getRuleContent("~/.claude/CLAUDE.md")).toBe(
+		"# Draft to keep\n",
+	);
 });
 
 test("saving a missing rule creates it and search reports no matches", async ({

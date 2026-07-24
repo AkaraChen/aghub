@@ -4,8 +4,13 @@ import {
 	useQueryClient,
 	useSuspenseQuery,
 } from "@tanstack/react-query";
+import { isHTTPError } from "ky";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { RuleFileResponse } from "../../generated/dto";
+import type {
+	RuleFileContentResponse,
+	RuleFileResponse,
+} from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
 import {
 	ruleContentQueryOptions,
@@ -33,19 +38,27 @@ export function RuleContentPanel({
 	onDraftSaved,
 }: RuleContentPanelProps) {
 	const api = useApi();
-	const { data: content } = useSuspenseQuery(
+	const { data: content, refetch } = useSuspenseQuery(
 		ruleContentQueryOptions({
 			api,
 			path: group.path,
 			scope: "global",
 		}),
 	);
+	const refreshContent = async (): Promise<RuleFileContentResponse> => {
+		const result = await refetch();
+		if (result.error) throw result.error;
+		if (!result.data) throw new Error("Rule file response was empty");
+		return result.data;
+	};
 
 	return (
 		<RuleEditor
 			group={group}
 			initialContent={content.content}
+			revision={content.revision}
 			draft={draft ?? content.content}
+			refreshContent={refreshContent}
 			onDraftChange={onDraftChange}
 			onDraftSaved={onDraftSaved}
 		/>
@@ -55,30 +68,43 @@ export function RuleContentPanel({
 function RuleEditor({
 	group,
 	initialContent,
+	revision,
 	draft,
+	refreshContent,
 	onDraftChange,
 	onDraftSaved,
 }: {
 	group: RuleGroup;
 	initialContent: string;
+	revision: string;
 	draft: string;
+	refreshContent: () => Promise<RuleFileContentResponse>;
 	onDraftChange: (path: string, value: string) => void;
 	onDraftSaved: (path: string) => void;
 }) {
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
+	const [hasConflict, setHasConflict] = useState(false);
+	const [conflictAction, setConflictAction] = useState<
+		"reload" | "overwrite" | null
+	>(null);
 
 	const saveMutation = useMutation({
 		...updateRuleContentMutationOptions({
 			api,
 			queryClient,
 			onSuccess: () => {
+				setHasConflict(false);
 				onDraftSaved(group.path);
 				toast.success(t("rulesSaved"));
 			},
 		}),
 		onError: (error) => {
+			if (isRuleFileChanged(error)) {
+				setHasConflict(true);
+				return;
+			}
 			toast.danger(
 				error instanceof Error ? error.message : t("rulesSaveFailed"),
 			);
@@ -89,9 +115,50 @@ function RuleEditor({
 		saveMutation.mutate({
 			path: group.path,
 			content: draft,
+			expected_revision: revision,
 			scope: "global",
 			project_root: null,
 		});
+	};
+
+	const handleReload = async () => {
+		setConflictAction("reload");
+		try {
+			await refreshContent();
+			onDraftSaved(group.path);
+			setHasConflict(false);
+		} catch (error) {
+			toast.danger(
+				error instanceof Error ? error.message : t("rulesSaveFailed"),
+			);
+		} finally {
+			setConflictAction(null);
+		}
+	};
+
+	const handleOverwrite = async () => {
+		setConflictAction("overwrite");
+		let latest: RuleFileContentResponse;
+		try {
+			latest = await refreshContent();
+		} catch (error) {
+			toast.danger(
+				error instanceof Error ? error.message : t("rulesSaveFailed"),
+			);
+			setConflictAction(null);
+			return;
+		}
+
+		await saveMutation
+			.mutateAsync({
+				path: group.path,
+				content: draft,
+				expected_revision: latest.revision,
+				scope: "global",
+				project_root: null,
+			})
+			.catch(() => undefined);
+		setConflictAction(null);
 	};
 
 	return (
@@ -105,7 +172,7 @@ function RuleEditor({
 				</div>
 				<Button
 					onPress={handleSave}
-					isDisabled={draft === initialContent}
+					isDisabled={draft === initialContent || hasConflict}
 					isPending={saveMutation.isPending}
 				>
 					{t("save")}
@@ -124,6 +191,37 @@ function RuleEditor({
 					</Alert>
 				)}
 
+				{hasConflict && (
+					<Alert status="warning">
+						<Alert.Indicator />
+						<Alert.Content>
+							<Alert.Description>
+								{t("rulesChangedOnDisk")}
+							</Alert.Description>
+							<div className="mt-3 flex flex-wrap gap-2">
+								<Button
+									size="sm"
+									variant="secondary"
+									onPress={handleReload}
+									isDisabled={conflictAction !== null}
+									isPending={conflictAction === "reload"}
+								>
+									{t("rulesReloadFromDisk")}
+								</Button>
+								<Button
+									size="sm"
+									variant="secondary"
+									onPress={handleOverwrite}
+									isDisabled={conflictAction !== null}
+									isPending={conflictAction === "overwrite"}
+								>
+									{t("rulesOverwriteDisk")}
+								</Button>
+							</div>
+						</Alert.Content>
+					</Alert>
+				)}
+
 				<TextArea
 					value={draft}
 					onChange={(event) =>
@@ -136,4 +234,12 @@ function RuleEditor({
 			</div>
 		</div>
 	);
+}
+
+function isRuleFileChanged(error: unknown) {
+	if (!isHTTPError(error) || !error.data || typeof error.data !== "object") {
+		return false;
+	}
+
+	return (error.data as { code?: unknown }).code === "RULE_FILE_CHANGED";
 }

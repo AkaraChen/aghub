@@ -38,6 +38,7 @@ pub struct RuleFileContentResponse {
 	pub path: String,
 	pub content: String,
 	pub exists: bool,
+	pub revision: String,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -45,6 +46,9 @@ pub struct RuleFileContentResponse {
 pub struct UpdateRuleContentRequest {
 	pub path: String,
 	pub content: String,
+	#[serde(default)]
+	#[ts(optional)]
+	pub expected_revision: Option<String>,
 	pub scope: Option<String>,
 	pub project_root: Option<String>,
 }

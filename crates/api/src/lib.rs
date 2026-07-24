@@ -3086,23 +3086,52 @@ mod tests {
 		let body = response_json(response);
 		assert_eq!(body["content"], "");
 		assert_eq!(body["exists"], false);
+		let initial_revision = body["revision"]
+			.as_str()
+			.expect("rule revision")
+			.to_string();
 
 		let response = put_json(
 			&client,
 			"/api/v1/rules/content",
 			json!({
-				"path": rule_path,
+				"path": rule_path.clone(),
 				"content": "# Project rules\n",
+				"expected_revision": initial_revision,
 				"scope": "project",
 				"project_root": project_dir.path().to_string_lossy(),
 			}),
 		);
 		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		let saved_revision = body["revision"]
+			.as_str()
+			.expect("saved rule revision")
+			.to_string();
 
 		let rule_file = project_dir.path().join("CLAUDE.md");
 		let persisted =
 			std::fs::read_to_string(&rule_file).expect("persisted rule file");
 		assert!(persisted.contains("# Project rules"));
+
+		std::fs::write(&rule_file, "# External edit\n")
+			.expect("external rule edit");
+		let response = put_json(
+			&client,
+			"/api/v1/rules/content",
+			json!({
+				"path": rule_path,
+				"content": "# Stale draft\n",
+				"expected_revision": saved_revision,
+				"scope": "project",
+				"project_root": project_dir.path().to_string_lossy(),
+			}),
+		);
+		assert_json_error(response, Status::Conflict, "RULE_FILE_CHANGED");
+		assert_eq!(
+			std::fs::read_to_string(&rule_file).expect("external rule content"),
+			"# External edit\n"
+		);
 
 		let response = get_auth(&client, &list_uri);
 		let body = response_json(response);

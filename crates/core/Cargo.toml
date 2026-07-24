@@ -17,6 +17,7 @@ tempfile = { workspace = true }
 skill = { path = "../skill" }
 which = { workspace = true }
 log = { workspace = true }
+sha2 = "0.11"
 
 [dev-dependencies]
 aghub-agents = { path = "../agents" }

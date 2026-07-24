@@ -370,9 +370,9 @@ export async function installMocks(page: Page) {
 		const url = new URL(route.request().url());
 		const p = url.pathname.replace("/api/v1", "");
 		const method = route.request().method();
-		const json = (body: unknown) =>
+		const json = (body: unknown, status = 200) =>
 			route.fulfill({
-				status: 200,
+				status,
 				contentType: "application/json",
 				body: JSON.stringify(body),
 			});
@@ -395,16 +395,35 @@ export async function installMocks(page: Page) {
 				path,
 				content: ruleContent.get(path) ?? "",
 				exists: ruleContent.has(path),
+				revision: ruleRevision(ruleContent, path),
 			});
 		}
 		if (p === "/rules/content" && method === "PUT") {
 			const body = JSON.parse(route.request().postData() ?? "{}");
 			const path = String(body.path ?? "");
 			const content = String(body.content ?? "");
+			if (
+				body.expected_revision !== null &&
+				body.expected_revision !== undefined &&
+				body.expected_revision !== ruleRevision(ruleContent, path)
+			) {
+				return json(
+					{
+						error: "Rule file changed after it was loaded",
+						code: "RULE_FILE_CHANGED",
+					},
+					409,
+				);
+			}
 			ruleContent.set(path, content);
 			const rule = ruleFiles.find((item) => item.path === path);
 			if (rule) rule.exists = true;
-			return json({ path, content, exists: true });
+			return json({
+				path,
+				content,
+				exists: true,
+				revision: ruleRevision(ruleContent, path),
+			});
 		}
 		if (p === "/plugins") return json(PLUGINS);
 		if (p === "/skills/lock/global") return json(globalLock);
@@ -991,5 +1010,20 @@ export async function installMocks(page: Page) {
 				});
 			}
 		},
+		setRuleContent(path: string, content: string) {
+			ruleContent.set(path, content);
+			const rule = ruleFiles.find((item) => item.path === path);
+			if (rule) rule.exists = true;
+		},
+		getRuleContent(path: string) {
+			return ruleContent.get(path);
+		},
 	};
+}
+
+function ruleRevision(ruleContent: Map<string, string>, path: string) {
+	return JSON.stringify({
+		exists: ruleContent.has(path),
+		content: ruleContent.get(path) ?? "",
+	});
 }

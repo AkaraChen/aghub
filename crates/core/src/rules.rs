@@ -8,13 +8,19 @@
 //! file I/O for reading and writing a single rule file.
 
 use std::collections::BTreeSet;
+use std::fmt::Write as _;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard};
 
 use aghub_agents::models::{ConfigSource, ResourceScope};
 use aghub_agents::AgentDescriptor;
+use sha2::{Digest, Sha256};
+use thiserror::Error;
 
 use crate::registry;
+
+static RULE_WRITE_LOCK: Mutex<()> = Mutex::new(());
 
 /// A single instruction/rule file location for one agent.
 #[derive(Debug, Clone)]
@@ -92,15 +98,87 @@ pub fn known_rule_paths(
 		.collect()
 }
 
+#[derive(Debug, Clone)]
+pub struct RuleFileSnapshot {
+	pub content: String,
+	pub exists: bool,
+	pub revision: String,
+}
+
+#[derive(Debug, Error)]
+pub enum RuleWriteError {
+	#[error("rule file changed after it was read")]
+	Changed,
+	#[error(transparent)]
+	Io(#[from] std::io::Error),
+}
+
+fn rule_write_lock() -> std::io::Result<MutexGuard<'static, ()>> {
+	RULE_WRITE_LOCK
+		.lock()
+		.map_err(|_| std::io::Error::other("rule write lock poisoned"))
+}
+
+fn rule_revision(
+	path: &Path,
+	content: &str,
+	exists: bool,
+) -> std::io::Result<String> {
+	let mut hasher = Sha256::new();
+	hasher.update(b"aghub-rule-v1\0");
+	hasher.update(if exists { b"present\0" } else { b"missing\0" });
+
+	match path.symlink_metadata() {
+		Ok(metadata) if metadata.file_type().is_symlink() => {
+			hasher.update(b"symlink\0");
+			let target = std::fs::read_link(path)?;
+			hasher.update(target.as_os_str().as_encoded_bytes());
+			hasher.update(b"\0");
+		}
+		Ok(_) => hasher.update(b"file\0"),
+		Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+			hasher.update(b"absent\0");
+		}
+		Err(error) => return Err(error),
+	}
+
+	hasher.update(content.as_bytes());
+	let mut revision = String::from("sha256:");
+	for byte in hasher.finalize() {
+		write!(&mut revision, "{byte:02x}")
+			.expect("writing to a string cannot fail");
+	}
+	Ok(revision)
+}
+
+pub fn read_rule_file_snapshot(
+	path: &Path,
+) -> std::io::Result<RuleFileSnapshot> {
+	let (content, exists) = match std::fs::read_to_string(path) {
+		Ok(content) => (content, true),
+		Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+			(String::new(), false)
+		}
+		Err(error) => return Err(error),
+	};
+	let revision = rule_revision(path, &content, exists)?;
+
+	Ok(RuleFileSnapshot {
+		content,
+		exists,
+		revision,
+	})
+}
+
 /// Read a rule file. A missing file is not an error — it reads as empty so the
 /// editor can create it on first save.
 pub fn read_rule_file(path: &Path) -> std::io::Result<String> {
 	match std::fs::read_to_string(path) {
 		Ok(content) => Ok(content),
-		Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+		Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
 			Ok(String::new())
 		}
-		Err(err) => Err(err),
+		Err(error) => Err(error),
 	}
 }
 
@@ -143,6 +221,11 @@ fn resolve_rule_write_target(path: &Path) -> std::io::Result<PathBuf> {
 /// file atomically (temp file + rename) so an incomplete write cannot truncate a
 /// hand-authored file.
 pub fn write_rule_file(path: &Path, content: &str) -> std::io::Result<()> {
+	let _guard = rule_write_lock()?;
+	write_rule_file_unlocked(path, content)
+}
+
+fn write_rule_file_unlocked(path: &Path, content: &str) -> std::io::Result<()> {
 	let target = resolve_rule_write_target(path)?;
 	let parent = target.parent().unwrap_or_else(|| Path::new("."));
 	std::fs::create_dir_all(parent)?;
@@ -174,6 +257,21 @@ pub fn write_rule_file(path: &Path, content: &str) -> std::io::Result<()> {
 		.map_err(|error| error.error)
 }
 
+pub fn write_rule_file_if_unchanged(
+	path: &Path,
+	content: &str,
+	expected_revision: Option<&str>,
+) -> Result<RuleFileSnapshot, RuleWriteError> {
+	let _guard = rule_write_lock()?;
+	let current = read_rule_file_snapshot(path)?;
+	if expected_revision.is_some_and(|revision| revision != current.revision) {
+		return Err(RuleWriteError::Changed);
+	}
+
+	write_rule_file_unlocked(path, content)?;
+	Ok(read_rule_file_snapshot(path)?)
+}
+
 /// Expand a leading `~/` to the user's home directory.
 pub fn expand_tilde(path: &str) -> PathBuf {
 	if let Some(rest) = path.strip_prefix("~/") {
@@ -192,7 +290,10 @@ pub fn display_path(path: &Path) -> String {
 
 #[cfg(test)]
 mod tests {
-	use super::{read_rule_file, write_rule_file};
+	use super::{
+		read_rule_file, read_rule_file_snapshot, write_rule_file,
+		write_rule_file_if_unchanged, RuleWriteError,
+	};
 
 	#[test]
 	fn write_creates_then_replaces() {
@@ -204,6 +305,25 @@ mod tests {
 
 		write_rule_file(&path, "second").unwrap();
 		assert_eq!(read_rule_file(&path).unwrap(), "second");
+	}
+
+	#[test]
+	fn conditional_write_rejects_an_external_edit() {
+		let temp = tempfile::tempdir().unwrap();
+		let path = temp.path().join("CLAUDE.md");
+		std::fs::write(&path, "loaded").unwrap();
+		let loaded = read_rule_file_snapshot(&path).unwrap();
+		std::fs::write(&path, "external").unwrap();
+
+		let error = write_rule_file_if_unchanged(
+			&path,
+			"stale draft",
+			Some(&loaded.revision),
+		)
+		.unwrap_err();
+
+		assert!(matches!(error, RuleWriteError::Changed));
+		assert_eq!(read_rule_file(&path).unwrap(), "external");
 	}
 
 	#[test]

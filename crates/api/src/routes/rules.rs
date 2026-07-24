@@ -17,6 +17,7 @@ use crate::{
 };
 
 const RULE_PATH_NOT_ALLOWED: &str = "RULE_PATH_NOT_ALLOWED";
+const RULE_FILE_CHANGED: &str = "RULE_FILE_CHANGED";
 
 /// Reject any path that is not one of the rule files an agent declares for the
 /// scope. Keeps reads and writes confined to managed instruction files.
@@ -86,7 +87,7 @@ pub fn get_rule_content(
 	let path = rules::expand_tilde(&query.path);
 	ensure_rule_path_allowed(&path, scope, project_root.as_deref())?;
 
-	let content = rules::read_rule_file(&path).map_err(|err| {
+	let snapshot = rules::read_rule_file_snapshot(&path).map_err(|err| {
 		ApiError::new(
 			Status::InternalServerError,
 			format!("Failed to read rule file: {err}"),
@@ -96,8 +97,9 @@ pub fn get_rule_content(
 
 	Ok(Json(RuleFileContentResponse {
 		path: rules::display_path(&path),
-		exists: path.is_file(),
-		content,
+		content: snapshot.content,
+		exists: snapshot.exists,
+		revision: snapshot.revision,
 	}))
 }
 
@@ -119,17 +121,28 @@ pub fn update_rule_content(
 	let path = rules::expand_tilde(&request.path);
 	ensure_rule_path_allowed(&path, scope, project_root.as_deref())?;
 
-	rules::write_rule_file(&path, &request.content).map_err(|err| {
-		ApiError::new(
+	let snapshot = rules::write_rule_file_if_unchanged(
+		&path,
+		&request.content,
+		request.expected_revision.as_deref(),
+	)
+	.map_err(|error| match error {
+		rules::RuleWriteError::Changed => ApiError::new(
+			Status::Conflict,
+			"Rule file changed after it was loaded",
+			RULE_FILE_CHANGED,
+		),
+		rules::RuleWriteError::Io(error) => ApiError::new(
 			Status::InternalServerError,
-			format!("Failed to write rule file: {err}"),
+			format!("Failed to write rule file: {error}"),
 			"RULE_FILE_WRITE_FAILED",
-		)
+		),
 	})?;
 
 	Ok(Json(RuleFileContentResponse {
 		path: rules::display_path(&path),
-		exists: true,
-		content: request.content,
+		content: snapshot.content,
+		exists: snapshot.exists,
+		revision: snapshot.revision,
 	}))
 }
