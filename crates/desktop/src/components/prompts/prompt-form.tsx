@@ -81,7 +81,7 @@ export function PromptForm({
 
 	return (
 		<div className="h-full w-full overflow-y-auto p-4 sm:p-6">
-			<Card>
+			<Card variant="secondary">
 				<Card.Header>
 					<Card.Title
 						render={(props) => <h2 {...props} />}

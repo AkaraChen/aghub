@@ -189,12 +189,28 @@ test("creates, searches, edits, and deletes a prompt", async ({ page }) => {
 	await expect(
 		page.getByRole("option", { name: new RegExp(PROMPT.title) }),
 	).toBeVisible();
+	await search.fill("report concrete findings");
+	await expect(
+		page.getByRole("option", { name: new RegExp(PROMPT.title) }),
+	).toBeVisible();
 	await search.fill("no matching prompt");
 	await expect(page.getByText("No prompts match your search")).toBeVisible();
 	await expect(
 		page.getByText("Create your first prompt to get started."),
 	).toBeHidden();
-	await search.fill("");
+
+	await page.goto("/mcp");
+	const globalSearch = page.getByRole("combobox", {
+		name: /Search agents/,
+	});
+	await globalSearch.fill("report concrete findings");
+	const globalResults = page.getByRole("listbox", {
+		name: /Search agents/,
+	});
+	await globalResults
+		.getByRole("option", { name: new RegExp(PROMPT.title) })
+		.click();
+	await expect(page).toHaveURL(/\/prompts\?prompt=created-prompt/);
 
 	await page.getByRole("button", { name: "Edit prompt" }).click();
 	await page

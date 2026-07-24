@@ -28,7 +28,12 @@ import {
 type Mode = "view" | "create" | "edit";
 
 function matchesQuery(prompt: PromptResponse, query: string): boolean {
-	const haystack = [prompt.title, prompt.description ?? "", ...prompt.tags]
+	const haystack = [
+		prompt.title,
+		prompt.description ?? "",
+		prompt.content,
+		...prompt.tags,
+	]
 		.join(" ")
 		.toLowerCase();
 	return haystack.includes(query);

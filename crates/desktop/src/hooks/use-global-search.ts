@@ -147,6 +147,7 @@ export function useGlobalSearch({
 					{ name: "title", weight: 2 },
 					{ name: "tags", weight: 1 },
 					{ name: "description", weight: 1 },
+					{ name: "content", weight: 0.5 },
 				],
 				threshold: 0.4,
 				ignoreLocation: true,
