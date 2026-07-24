@@ -2,7 +2,7 @@
 
 ## Contexts
 
-- **Gateway(网关)** — 托管/连接 CLIProxyAPI 实例:进程生命周期、账号池、上游/下游 Key、网关用量。代码:`crates/cliproxy`(规划)、`crates/api/src/routes/gateway.rs`(规划)、desktop 网关页(规划)
+- **Gateway(网关)** — 托管/连接 CLIProxyAPI 实例:进程生命周期、账号池、上游/下游 Key、网关用量。代码:`crates/cliproxy`、`crates/api/src/routes/gateway.rs`、desktop 网关组件
 - **Inference(推理供应商)** — 供应商库存与 agent 原生配置写入。代码:`crates/inference`
 - **Usage(用量)** — ccusage 一次性采集与展示。代码:`crates/usage`
 
@@ -33,5 +33,5 @@ _Avoid_:切换(cc-switch 语汇,语义不同)
 
 ## Decisions
 
-- 2026-07-17:v1 同时支持**托管实例**与**外部实例**(用户拍板,否决了「v1 只托管」的收窄方案)。client 层统一抽象为「地址 + management key」。详见 `docs/adr/0001`。
-- 2026-07-17:接线目标遵循 CLIProxyAPI 原生模型——per-agent 各自绑定实例,无网关级编排(用户拍板,否决了「单一使用中实例」方案)。详见 `docs/adr/0002`。
+- 2026-07-17:v1 同时支持**托管实例**与**外部实例**(用户拍板,否决了「v1 只托管」的收窄方案)。client 层统一抽象为「地址 + management key」。详见 [ADR 0001](docs/adr/0001-gateway-managed-and-external-instances.md)。
+- 2026-07-17:接线目标遵循 CLIProxyAPI 原生模型——per-agent 各自绑定实例,无网关级编排(用户拍板,否决了「单一使用中实例」方案)。详见 [ADR 0002](docs/adr/0002-wiring-reuses-inference-bindings.md)。
