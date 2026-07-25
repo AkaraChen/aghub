@@ -75,6 +75,14 @@ interface ApiErrorBody {
 	code?: string;
 }
 
+export function getApiErrorCode(error: unknown) {
+	if (!isHTTPError(error) || !error.data || typeof error.data !== "object") {
+		return undefined;
+	}
+	const body = error.data as ApiErrorBody;
+	return body.code;
+}
+
 export function createApi(baseUrl: string, token: string) {
 	const client = ky.create({
 		prefix: baseUrl,

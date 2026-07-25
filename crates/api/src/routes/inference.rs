@@ -330,32 +330,123 @@ struct ModelListItem {
 	id: String,
 }
 
-fn model_list_url(api_base_url: &str) -> Result<Url, ApiError> {
-	let mut url = Url::parse(api_base_url.trim()).map_err(|error| {
-		ApiError::new(
-			Status::BadRequest,
-			format!("invalid API Base URL: {error}"),
-			"INVALID_PARAM",
-		)
-	})?;
-	if !matches!(url.scheme(), "http" | "https") || url.cannot_be_a_base() {
+fn inferred_api_base_url_scheme(value: &str) -> &'static str {
+	let Ok(url) = Url::parse(&format!("http://{value}")) else {
+		return "https";
+	};
+	match url.host() {
+		Some(url::Host::Domain(host))
+			if host.eq_ignore_ascii_case("localhost") =>
+		{
+			"http"
+		}
+		Some(url::Host::Ipv4(address))
+			if address.is_loopback() || address.is_unspecified() =>
+		{
+			"http"
+		}
+		Some(url::Host::Ipv6(address)) if address.is_loopback() => "http",
+		_ => "https",
+	}
+}
+
+fn parse_api_base_url(api_base_url: &str) -> Result<Url, ApiError> {
+	let value = api_base_url.trim();
+	if value.is_empty() {
 		return Err(ApiError::new(
 			Status::BadRequest,
-			"API Base URL must use HTTP or HTTPS",
+			"API Base URL is required",
 			"INVALID_PARAM",
 		));
 	}
-	let path = url.path().trim_end_matches('/');
-	let model_path = if path.is_empty() {
-		"/v1/models".to_string()
-	} else if path.ends_with("/models") {
-		path.to_string()
+	let candidate = if value.contains("://") {
+		value.to_string()
 	} else {
-		format!("{path}/models")
+		format!("{}://{value}", inferred_api_base_url_scheme(value))
+	};
+	let mut url = Url::parse(&candidate).map_err(|_| {
+		ApiError::new(
+			Status::BadRequest,
+			"API Base URL is invalid",
+			"INVALID_PARAM",
+		)
+	})?;
+	if !matches!(url.scheme(), "http" | "https")
+		|| url.cannot_be_a_base()
+		|| url.host().is_none()
+		|| !url.username().is_empty()
+		|| url.password().is_some()
+	{
+		return Err(ApiError::new(
+			Status::BadRequest,
+			"API Base URL must be an HTTP or HTTPS URL without credentials",
+			"INVALID_PARAM",
+		));
+	}
+	let path = url.path().trim_end_matches('/').to_string();
+	url.set_path(if path.is_empty() { "/" } else { &path });
+	url.set_fragment(None);
+	Ok(url)
+}
+
+fn strip_request_endpoint_suffix(path: &str) -> &str {
+	const SUFFIXES: [&str; 5] = [
+		"/chat/completions",
+		"/completions",
+		"/responses",
+		"/messages",
+		"/models",
+	];
+	for suffix in SUFFIXES {
+		if let Some(base) = path.strip_suffix(suffix) {
+			return base;
+		}
+	}
+	path
+}
+
+fn normalized_provider_api_base_url(
+	api_base_url: &str,
+) -> Result<Url, ApiError> {
+	let mut url = parse_api_base_url(api_base_url)?;
+	let api_path =
+		strip_request_endpoint_suffix(url.path().trim_end_matches('/'))
+			.to_string();
+	url.set_path(if api_path.is_empty() { "/" } else { &api_path });
+	Ok(url)
+}
+
+fn model_list_url(api_base_url: &str) -> Result<Url, ApiError> {
+	let mut url = normalized_provider_api_base_url(api_base_url)?;
+	let api_path = url.path().trim_end_matches('/');
+	let model_path = if api_path.is_empty() {
+		"/v1/models".to_string()
+	} else {
+		format!("{api_path}/models")
 	};
 	url.set_path(&model_path);
 	url.set_fragment(None);
 	Ok(url)
+}
+
+fn can_reuse_provider_api_key(
+	provider: &InferenceProvider,
+	format: InferenceProviderFormatDto,
+	api_base_url: &str,
+) -> bool {
+	if provider.format != format.into() {
+		return false;
+	}
+	let Ok(saved_url) =
+		normalized_provider_api_base_url(&provider.api_base_url)
+	else {
+		return false;
+	};
+	let Ok(requested_url) = normalized_provider_api_base_url(api_base_url)
+	else {
+		return false;
+	};
+	saved_url == requested_url
 }
 
 fn parse_model_list_response(body: &str) -> serde_json::Result<Vec<String>> {
@@ -436,6 +527,7 @@ pub async fn fetch_inference_provider_models(
 	body: Json<FetchInferenceProviderModelsRequest>,
 ) -> ApiResult<Vec<String>> {
 	let body = body.into_inner();
+	let provider_store = store(state);
 	let provided_api_key = body
 		.api_key
 		.as_deref()
@@ -445,7 +537,19 @@ pub async fn fetch_inference_provider_models(
 	let api_key = match (provided_api_key, body.provider_id.as_deref()) {
 		(Some(api_key), _) => Some(api_key),
 		(None, Some(id)) => {
-			store(state).get_api_key(id).map_err(ApiError::from)?
+			let provider = provider_store.get(id).map_err(ApiError::from)?;
+			if !can_reuse_provider_api_key(
+				&provider,
+				body.format,
+				&body.api_base_url,
+			) {
+				return Err(ApiError::new(
+					Status::UnprocessableEntity,
+					"enter the API key again after changing the URL or format",
+					"CREDENTIAL_SCOPE_MISMATCH",
+				));
+			}
+			provider_store.get_api_key(id).map_err(ApiError::from)?
 		}
 		(None, None) => None,
 	}
@@ -1198,7 +1302,11 @@ pub fn clear_codex_state(
 
 #[cfg(test)]
 mod tests {
-	use super::{model_list_url, parse_model_list_response};
+	use super::{
+		can_reuse_provider_api_key, model_list_url, parse_model_list_response,
+	};
+	use crate::dto::inference::InferenceProviderFormatDto;
+	use aghub_inference::{InferenceProvider, InferenceProviderFormat};
 
 	#[test]
 	fn model_list_url_appends_v1_for_origin_only_base_url() {
@@ -1220,6 +1328,35 @@ mod tests {
 	}
 
 	#[test]
+	fn model_list_url_accepts_host_without_scheme() {
+		let Ok(url) = model_list_url("api.example.com/v1") else {
+			panic!("host without scheme should be normalized");
+		};
+
+		assert_eq!(url.as_str(), "https://api.example.com/v1/models");
+	}
+
+	#[test]
+	fn model_list_url_uses_https_for_non_local_hosts() {
+		let Ok(url) = model_list_url("localhost.example.com/v1") else {
+			panic!("remote host should be normalized");
+		};
+
+		assert_eq!(url.as_str(), "https://localhost.example.com/v1/models");
+	}
+
+	#[test]
+	fn model_list_url_replaces_request_endpoint_suffix() {
+		let Ok(url) =
+			model_list_url("https://api.example.com/v1/chat/completions")
+		else {
+			panic!("request endpoint URL should be accepted");
+		};
+
+		assert_eq!(url.as_str(), "https://api.example.com/v1/models");
+	}
+
+	#[test]
 	fn model_list_response_is_sorted_and_deduplicated() {
 		let models = parse_model_list_response(
 			r#"{"data":[{"id":"zeta"},{"id":"alpha"},{"id":"zeta"}]}"#,
@@ -1227,5 +1364,35 @@ mod tests {
 		.unwrap();
 
 		assert_eq!(models, ["alpha", "zeta"]);
+	}
+
+	#[test]
+	fn saved_api_key_is_reused_only_for_the_saved_endpoint_and_format() {
+		let provider = InferenceProvider {
+			id: "provider-id".to_string(),
+			latin_name: "example".to_string(),
+			display_name: "Example".to_string(),
+			format: InferenceProviderFormat::OpenAiResponses,
+			api_base_url: "https://api.example.com/v1/responses".to_string(),
+			preset: None,
+			masked_api_key: "••••".to_string(),
+			models: Vec::new(),
+		};
+
+		assert!(can_reuse_provider_api_key(
+			&provider,
+			InferenceProviderFormatDto::OpenAiResponses,
+			"api.example.com/v1/",
+		));
+		assert!(!can_reuse_provider_api_key(
+			&provider,
+			InferenceProviderFormatDto::OpenAiResponses,
+			"https://other.example.com/v1",
+		));
+		assert!(!can_reuse_provider_api_key(
+			&provider,
+			InferenceProviderFormatDto::OpenAiCompletions,
+			"https://api.example.com/v1",
+		));
 	}
 }

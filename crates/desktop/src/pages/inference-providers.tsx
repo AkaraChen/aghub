@@ -21,6 +21,7 @@ import {
 	Button,
 	Card,
 	Checkbox,
+	ErrorMessage,
 	FieldError,
 	Fieldset,
 	Form,
@@ -49,6 +50,8 @@ import type {
 } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
 import { AgentIcon } from "../lib/agent-icons";
+import { getApiErrorCode } from "../lib/api";
+import { normalizeInferenceProviderApiBaseUrl } from "../lib/inference-provider-url";
 import { cn } from "../lib/utils";
 import { ClaudeInferenceProviderPanel } from "./inference-providers/claude-panel";
 import { CodexInferenceProviderPanel } from "./inference-providers/codex-panel";
@@ -130,6 +133,22 @@ const VENDORED_PROVIDER_LOGO_URL_BY_ID = new Map(
 		return [fileName.replace(SVG_FILE_EXTENSION_REGEX, ""), url];
 	}),
 );
+
+function fetchProviderModelsErrorKey(code: string | undefined) {
+	switch (code) {
+		case "INVALID_PARAM":
+			return "fetchProviderModelsInvalidApiBaseUrl";
+		case "MISSING_CREDENTIAL":
+		case "CREDENTIAL_SCOPE_MISMATCH":
+			return "fetchProviderModelsRequiresChangedApiKey";
+		case "UPSTREAM_REQUEST_FAILED":
+			return "fetchProviderModelsRequestFailed";
+		case "UPSTREAM_RESPONSE_FAILED":
+			return "fetchProviderModelsInvalidResponse";
+		default:
+			return "fetchProviderModelsUnknownError";
+	}
+}
 
 function makeLatinNameSuggestion(value: string) {
 	return pinyin(value, { toneType: "none", type: "array" })
@@ -390,6 +409,9 @@ function ProviderModelsEditor({
 		[],
 	);
 	const [isFetching, setIsFetching] = useState(false);
+	const [fetchErrorMessage, setFetchErrorMessage] = useState<string | null>(
+		null,
+	);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isBatchDeleteOpen, setIsBatchDeleteOpen] = useState(false);
 	const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
@@ -482,8 +504,13 @@ function ProviderModelsEditor({
 	const handleFetch = async () => {
 		if (!onFetchModels) return;
 		setIsFetching(true);
+		setFetchErrorMessage(null);
 		try {
 			const fetched = await onFetchModels();
+			if (fetched.length === 0) {
+				setFetchErrorMessage(t("fetchProviderModelsNoModels"));
+				return;
+			}
 			const existing = new Set(
 				value.map((model) => model.name.trim()).filter(Boolean),
 			);
@@ -508,11 +535,10 @@ function ProviderModelsEditor({
 			}
 		} catch (error) {
 			console.error("Failed to fetch provider models:", error);
-			const reason =
-				error instanceof Error && error.message
-					? error.message
-					: t("fetchProviderModelsUnknownError");
-			toast.danger(t("fetchProviderModelsFailed", { reason }));
+			const reason = t(
+				fetchProviderModelsErrorKey(getApiErrorCode(error)),
+			);
+			setFetchErrorMessage(t("fetchProviderModelsFailed", { reason }));
 		} finally {
 			setIsFetching(false);
 		}
@@ -583,7 +609,7 @@ function ProviderModelsEditor({
 	const fetchModelsButton = onFetchModels ? (
 		<Button
 			type="button"
-			variant="tertiary"
+			variant="secondary"
 			size="sm"
 			isPending={isFetching}
 			isDisabled={!canFetchModels}
@@ -607,27 +633,18 @@ function ProviderModelsEditor({
 	return (
 		<>
 			<div className="grid gap-2">
-				<div className="flex items-start justify-between gap-3">
+				<div className="flex flex-wrap items-start justify-between gap-2">
 					<div className="grid gap-0.5">
 						<Label>{t("providerModels")}</Label>
+						<p className="text-xs text-muted">
+							{t("providerModelsDescription")}
+						</p>
 					</div>
-					<div className="flex shrink-0 items-center gap-2">
-						{fetchModelsButton &&
-							(fetchModelsDisabledReason ? (
-								<Tooltip delay={0}>
-									<Tooltip.Trigger>
-										{fetchModelsButton}
-									</Tooltip.Trigger>
-									<Tooltip.Content>
-										{fetchModelsDisabledReason}
-									</Tooltip.Content>
-								</Tooltip>
-							) : (
-								fetchModelsButton
-							))}
+					<div className="flex shrink-0 flex-wrap items-center gap-2">
+						{fetchModelsButton}
 						<Button
 							type="button"
-							variant="secondary"
+							variant="tertiary"
 							size="sm"
 							onPress={handleAdd}
 						>
@@ -636,6 +653,15 @@ function ProviderModelsEditor({
 						</Button>
 					</div>
 				</div>
+
+				{fetchModelsDisabledReason && (
+					<p className="text-xs text-muted">
+						{fetchModelsDisabledReason}
+					</p>
+				)}
+				{fetchErrorMessage && (
+					<ErrorMessage>{fetchErrorMessage}</ErrorMessage>
+				)}
 
 				<SearchField
 					value={searchQuery}
@@ -770,9 +796,7 @@ function ProviderModelsEditor({
 					)}
 				</div>
 
-				{errorMessage && (
-					<p className="text-sm text-danger">{errorMessage}</p>
-				)}
+				{errorMessage && <ErrorMessage>{errorMessage}</ErrorMessage>}
 			</div>
 
 			<AlertDialog.Backdrop
@@ -956,21 +980,40 @@ function ProviderForm({
 	};
 
 	const [showApiKey, setShowApiKey] = useState(false);
+	const normalizedApiBaseUrl =
+		normalizeInferenceProviderApiBaseUrl(apiBaseUrl);
+	const savedApiBaseUrl = provider
+		? normalizeInferenceProviderApiBaseUrl(provider.api_base_url)
+		: null;
+	const canReuseSavedApiKey = Boolean(
+		provider &&
+		format === provider.format &&
+		normalizedApiBaseUrl &&
+		savedApiBaseUrl &&
+		normalizedApiBaseUrl === savedApiBaseUrl,
+	);
 	const canFetchModels = Boolean(
-		apiBaseUrl.trim() && (mode === "edit" || apiKey.trim()),
+		normalizedApiBaseUrl && (apiKey.trim() || canReuseSavedApiKey),
 	);
 	const fetchModelsDisabledReason = !apiBaseUrl.trim()
 		? t("fetchProviderModelsRequiresApiBaseUrl")
-		: mode === "create" && !apiKey.trim()
-			? t("fetchProviderModelsRequiresApiKey")
-			: undefined;
+		: !normalizedApiBaseUrl
+			? t("fetchProviderModelsInvalidApiBaseUrl")
+			: !apiKey.trim() && !canReuseSavedApiKey
+				? mode === "edit"
+					? t("fetchProviderModelsRequiresChangedApiKey")
+					: t("fetchProviderModelsRequiresApiKey")
+				: undefined;
 
 	const handleFetchModels = async () => {
+		if (!normalizedApiBaseUrl) {
+			throw new Error(t("fetchProviderModelsInvalidApiBaseUrl"));
+		}
 		return api.inferenceProviders.fetchModels({
 			format,
-			api_base_url: apiBaseUrl.trim(),
+			api_base_url: normalizedApiBaseUrl,
 			api_key: apiKey.trim() || null,
-			provider_id: provider?.id ?? null,
+			provider_id: canReuseSavedApiKey ? (provider?.id ?? null) : null,
 		});
 	};
 
@@ -1050,9 +1093,23 @@ function ProviderForm({
 		setIsSavingProvider(true);
 		const displayName = values.displayName.trim();
 		const latinName = values.latinName.trim();
-		const apiBaseUrl = values.apiBaseUrl.trim();
+		const apiBaseUrl = normalizeInferenceProviderApiBaseUrl(
+			values.apiBaseUrl,
+		);
 		const apiKey = values.apiKey.trim();
 		const models = normalizeModelNames(values.models);
+		if (!apiBaseUrl) {
+			setError(
+				"apiBaseUrl",
+				{
+					type: "validate",
+					message: t("validationProviderApiBaseUrlInvalid"),
+				},
+				{ shouldFocus: true },
+			);
+			setIsSavingProvider(false);
+			return;
+		}
 		if (models.length === 0) {
 			setIsSavingProvider(false);
 			return;
@@ -1556,12 +1613,20 @@ function ProviderForm({
 											required: t(
 												"validationProviderApiBaseUrlRequired",
 											),
-											validate: (value) =>
-												value.trim()
+											validate: (value) => {
+												if (!value.trim()) {
+													return t(
+														"validationProviderApiBaseUrlRequired",
+													);
+												}
+												return normalizeInferenceProviderApiBaseUrl(
+													value,
+												)
 													? true
 													: t(
-															"validationProviderApiBaseUrlRequired",
-														),
+															"validationProviderApiBaseUrlInvalid",
+														);
+											},
 										}}
 										render={({ field, fieldState }) => (
 											<TextField
@@ -1599,16 +1664,30 @@ function ProviderForm({
 													</span>
 												</Label>
 												<Input
+													type="url"
 													value={field.value}
 													onChange={(event) =>
 														field.onChange(
 															event.target.value,
 														)
 													}
-													onBlur={field.onBlur}
+													onBlur={() => {
+														const normalized =
+															normalizeInferenceProviderApiBaseUrl(
+																field.value,
+															);
+														if (normalized) {
+															field.onChange(
+																normalized,
+															);
+														}
+														field.onBlur();
+													}}
 													placeholder={t(
 														"providerApiBaseUrlPlaceholder",
 													)}
+													autoComplete="url"
+													spellCheck={false}
 													variant="secondary"
 												/>
 												{fieldState.error && (
@@ -1765,8 +1844,12 @@ function ProviderForm({
 															isIconOnly
 															aria-label={
 																showApiKey
-																	? "Hide"
-																	: "Show"
+																	? t(
+																			"hideProviderApiKey",
+																		)
+																	: t(
+																			"revealProviderApiKey",
+																		)
 															}
 															size="sm"
 															variant="ghost"

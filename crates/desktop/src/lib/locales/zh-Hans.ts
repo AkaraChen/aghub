@@ -293,13 +293,13 @@ export default {
 	providerFormat: "格式",
 	providerApiBaseUrl: "API Base URL",
 	providerApiBaseUrlHelp:
-		"对于 OpenAI Responses 和 OpenAI-compatible Provider，像 https://api.example.com 这样的裸域名写入 OpenCode 时会变成 https://api.example.com/v1；已经包含路径的 URL 会保持原样。",
+		"可粘贴 API 根地址，或完整的 /chat/completions、/responses、/messages 端点。未填写协议时 aghub 会自动补全，并保存为 API 根地址。",
 	providerApiBaseUrlPlaceholder: "https://api.openai.com/v1",
 	providerApiKey: "API Key",
 	providerApiKeyPlaceholder: "sk-...",
 	providerApiKeyEditPlaceholder: "留空以保持当前 key",
 	providerModels: "模型",
-	providerModelsDescription: "每个模型只需要填写名称。",
+	providerModelsDescription: "从当前 Provider 获取，或手动添加模型 ID。",
 	providerModelName: "模型名称",
 	providerModelNamePlaceholder: "例如：gpt-5.4-mini",
 	addProviderModel: "添加模型",
@@ -314,6 +314,14 @@ export default {
 	fetchProviderModelsRequiresApiBaseUrl:
 		"请先填写 API Base URL，再获取模型。",
 	fetchProviderModelsRequiresApiKey: "请先填写 API Key，再获取模型。",
+	fetchProviderModelsInvalidApiBaseUrl: "请输入有效的 HTTP(S) API Base URL。",
+	fetchProviderModelsRequiresChangedApiKey:
+		"API URL 或格式已更改，请重新输入 API Key 后再获取模型。",
+	fetchProviderModelsRequestFailed:
+		"无法连接 Provider，或 Provider 拒绝了请求。",
+	fetchProviderModelsInvalidResponse: "Provider 返回了不支持的模型列表格式。",
+	fetchProviderModelsNoModels:
+		"Provider 没有返回模型。请手动添加模型 ID，或检查模型列表端点。",
 	providerPresetFormatChanged:
 		"格式已不同于预设，请查看 Provider 文档并按需更新 API URL。",
 	noProviderModels: "暂无模型。",
@@ -361,6 +369,7 @@ export default {
 	validationProviderLatinNameDuplicate:
 		"Provider ID “{{providerId}}” 已被现有 Provider 使用。请把 ID 改成能区分来源的值，例如 “{{exampleId}}”，或删除已有的 “{{providerId}}” Provider 后再保存。",
 	validationProviderApiBaseUrlRequired: "请输入 API base URL。",
+	validationProviderApiBaseUrlInvalid: "请输入有效的 HTTP(S) API base URL。",
 	validationProviderApiKeyRequired: "请输入 API key。",
 	validationProviderModelsRequired: "请至少选择一个模型。",
 	validationProviderModelNameUnique: "模型名称不能重复。",

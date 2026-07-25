@@ -307,13 +307,14 @@ export default {
 	providerFormat: "Format",
 	providerApiBaseUrl: "API Base URL",
 	providerApiBaseUrlHelp:
-		"For OpenAI Responses and OpenAI-compatible providers, a bare origin such as https://api.example.com is written to OpenCode as https://api.example.com/v1. URLs that already include a path are kept as entered.",
+		"Paste an API root or a full /chat/completions, /responses, or /messages endpoint. aghub adds a scheme when omitted and stores the API root.",
 	providerApiBaseUrlPlaceholder: "https://api.openai.com/v1",
 	providerApiKey: "API Key",
 	providerApiKeyPlaceholder: "sk-...",
 	providerApiKeyEditPlaceholder: "Leave empty to keep current key",
 	providerModels: "Models",
-	providerModelsDescription: "Each model only needs a name.",
+	providerModelsDescription:
+		"Fetch from this provider or add model IDs manually.",
 	providerModelName: "Model name",
 	providerModelNamePlaceholder: "e.g., gpt-5.4-mini",
 	addProviderModel: "Add model",
@@ -329,6 +330,15 @@ export default {
 		"Enter an API Base URL before fetching models.",
 	fetchProviderModelsRequiresApiKey:
 		"Enter an API key before fetching models.",
+	fetchProviderModelsInvalidApiBaseUrl: "Enter a valid HTTP(S) API Base URL.",
+	fetchProviderModelsRequiresChangedApiKey:
+		"The API URL or format changed. Enter the API key again before fetching models.",
+	fetchProviderModelsRequestFailed:
+		"The provider could not be reached or rejected the request.",
+	fetchProviderModelsInvalidResponse:
+		"The provider returned an unsupported model list.",
+	fetchProviderModelsNoModels:
+		"The provider returned no models. Add model IDs manually or check its model endpoint.",
 	providerPresetFormatChanged:
 		"Format changed from the preset. Check the provider docs and update the API URL if needed.",
 	noProviderModels: "No models configured.",
@@ -377,6 +387,7 @@ export default {
 	validationProviderLatinNameDuplicate:
 		"Provider ID “{{providerId}}” is already used by an existing provider. Change the ID so it identifies the source, for example “{{exampleId}}”, or delete the existing “{{providerId}}” provider before saving.",
 	validationProviderApiBaseUrlRequired: "Enter an API base URL.",
+	validationProviderApiBaseUrlInvalid: "Enter a valid HTTP(S) API base URL.",
 	validationProviderApiKeyRequired: "Enter an API key.",
 	validationProviderModelsRequired: "Select at least one model.",
 	validationProviderModelNameUnique: "Model names must be unique.",
