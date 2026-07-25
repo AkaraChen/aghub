@@ -17,14 +17,15 @@ use crate::auth::ApiAuth;
 use crate::dto::inference::{
 	AgentProviderResponse, ClaudeProviderStateResponse,
 	CodexProviderStateResponse, CreateAgentProviderRequest,
-	CreateInferenceProviderRequest, InferenceProviderFormatDto,
-	InferenceProviderPasswordResponse, InferenceProviderPresetResponse,
-	InferenceProviderResponse, UpdateAgentProviderRequest,
-	UpdateCodexActiveProfileRequest, UpdateCodexProfileProviderRequest,
-	UpdateInferenceProviderRequest,
+	CreateInferenceProviderRequest, FetchInferenceProviderModelsRequest,
+	InferenceProviderFormatDto, InferenceProviderPasswordResponse,
+	InferenceProviderPresetResponse, InferenceProviderResponse,
+	UpdateAgentProviderRequest, UpdateCodexActiveProfileRequest,
+	UpdateCodexProfileProviderRequest, UpdateInferenceProviderRequest,
 };
 use crate::error::{ApiCreated, ApiError, ApiNoContent, ApiResult};
 use crate::state::InferenceProviderState;
+use url::Url;
 
 fn store(state: &State<InferenceProviderState>) -> InferenceProviderStore {
 	InferenceProviderStore::new(state.app_data_dir.clone())
@@ -317,6 +318,148 @@ pub async fn list_inference_provider_presets(
 		Ok(presets) if !presets.is_empty() => Json(presets),
 		_ => Json(vendored_models_dev_presets().to_vec()),
 	}
+}
+
+#[derive(Deserialize)]
+struct ModelListResponse {
+	data: Vec<ModelListItem>,
+}
+
+#[derive(Deserialize)]
+struct ModelListItem {
+	id: String,
+}
+
+fn model_list_url(api_base_url: &str) -> Result<Url, ApiError> {
+	let mut url = Url::parse(api_base_url.trim()).map_err(|error| {
+		ApiError::new(
+			Status::BadRequest,
+			format!("invalid API Base URL: {error}"),
+			"INVALID_PARAM",
+		)
+	})?;
+	if !matches!(url.scheme(), "http" | "https") || url.cannot_be_a_base() {
+		return Err(ApiError::new(
+			Status::BadRequest,
+			"API Base URL must use HTTP or HTTPS",
+			"INVALID_PARAM",
+		));
+	}
+	let path = url.path().trim_end_matches('/');
+	let model_path = if path.is_empty() {
+		"/v1/models".to_string()
+	} else if path.ends_with("/models") {
+		path.to_string()
+	} else {
+		format!("{path}/models")
+	};
+	url.set_path(&model_path);
+	url.set_fragment(None);
+	Ok(url)
+}
+
+fn parse_model_list_response(body: &str) -> serde_json::Result<Vec<String>> {
+	let mut models = serde_json::from_str::<ModelListResponse>(body)?
+		.data
+		.into_iter()
+		.map(|model| model.id.trim().to_string())
+		.filter(|model| !model.is_empty())
+		.collect::<Vec<_>>();
+	models.sort();
+	models.dedup();
+	Ok(models)
+}
+
+async fn request_provider_models(
+	format: InferenceProviderFormatDto,
+	api_base_url: &str,
+	api_key: &str,
+) -> Result<Vec<String>, ApiError> {
+	let mut url = model_list_url(api_base_url)?;
+	if matches!(format, InferenceProviderFormatDto::Anthropic)
+		&& !url.query_pairs().any(|(key, _)| key == "limit")
+	{
+		url.query_pairs_mut().append_pair("limit", "1000");
+	}
+
+	let client = reqwest::Client::builder()
+		.timeout(Duration::from_secs(15))
+		.build()
+		.map_err(|error| ApiError::internal(error.to_string()))?;
+	let request = match format {
+		InferenceProviderFormatDto::Anthropic => client
+			.get(url.clone())
+			.header("x-api-key", api_key)
+			.header("anthropic-version", "2023-06-01"),
+		InferenceProviderFormatDto::OpenAiCompletions
+		| InferenceProviderFormatDto::OpenAiResponses => {
+			client.get(url.clone()).bearer_auth(api_key)
+		}
+	};
+	let response = request.send().await.map_err(|error| {
+		ApiError::new(
+			Status::BadGateway,
+			format!("failed to fetch models: {}", error.without_url()),
+			"UPSTREAM_REQUEST_FAILED",
+		)
+	})?;
+	let status = response.status();
+	let body = response.text().await.map_err(|error| {
+		ApiError::new(
+			Status::BadGateway,
+			format!("failed to read model list: {}", error.without_url()),
+			"UPSTREAM_RESPONSE_FAILED",
+		)
+	})?;
+
+	if !status.is_success() {
+		return Err(ApiError::new(
+			Status::BadGateway,
+			format!("model list endpoint returned HTTP {status}"),
+			"UPSTREAM_REQUEST_FAILED",
+		));
+	}
+
+	parse_model_list_response(&body).map_err(|error| {
+		ApiError::new(
+			Status::BadGateway,
+			format!("model list endpoint returned invalid JSON: {error}"),
+			"UPSTREAM_RESPONSE_FAILED",
+		)
+	})
+}
+
+#[post("/inference/providers/models", data = "<body>")]
+pub async fn fetch_inference_provider_models(
+	_auth: ApiAuth,
+	state: &State<InferenceProviderState>,
+	body: Json<FetchInferenceProviderModelsRequest>,
+) -> ApiResult<Vec<String>> {
+	let body = body.into_inner();
+	let provided_api_key = body
+		.api_key
+		.as_deref()
+		.map(str::trim)
+		.filter(|key| !key.is_empty())
+		.map(str::to_string);
+	let api_key = match (provided_api_key, body.provider_id.as_deref()) {
+		(Some(api_key), _) => Some(api_key),
+		(None, Some(id)) => {
+			store(state).get_api_key(id).map_err(ApiError::from)?
+		}
+		(None, None) => None,
+	}
+	.ok_or_else(|| {
+		ApiError::new(
+			Status::UnprocessableEntity,
+			"an API key is required to fetch models",
+			"MISSING_CREDENTIAL",
+		)
+	})?;
+	let models =
+		request_provider_models(body.format, &body.api_base_url, &api_key)
+			.await?;
+	Ok(Json(models))
 }
 
 #[get("/inference/agents/opencode/providers")]
@@ -1051,4 +1194,38 @@ pub fn clear_codex_state(
 		.clear_active_provider(&store)
 		.map_err(ApiError::from)?;
 	Ok(NoContent)
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{model_list_url, parse_model_list_response};
+
+	#[test]
+	fn model_list_url_appends_v1_for_origin_only_base_url() {
+		let Ok(url) = model_list_url("https://api.example.com") else {
+			panic!("valid API Base URL should be accepted");
+		};
+
+		assert_eq!(url.as_str(), "https://api.example.com/v1/models");
+	}
+
+	#[test]
+	fn model_list_url_preserves_existing_api_path() {
+		let Ok(url) = model_list_url("https://api.example.com/coding/v1/")
+		else {
+			panic!("valid API Base URL should be accepted");
+		};
+
+		assert_eq!(url.as_str(), "https://api.example.com/coding/v1/models");
+	}
+
+	#[test]
+	fn model_list_response_is_sorted_and_deduplicated() {
+		let models = parse_model_list_response(
+			r#"{"data":[{"id":"zeta"},{"id":"alpha"},{"id":"zeta"}]}"#,
+		)
+		.unwrap();
+
+		assert_eq!(models, ["alpha", "zeta"]);
+	}
 }

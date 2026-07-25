@@ -311,7 +311,9 @@ export default {
 		"没有新模型需要添加（已配置 {{total}} 个）",
 	fetchProviderModelsFailed: "获取模型失败：{{reason}}",
 	fetchProviderModelsUnknownError: "端点不支持",
-	fetchProviderModelsRequiresPreset: "请先选择一个预设，再获取模型。",
+	fetchProviderModelsRequiresApiBaseUrl:
+		"请先填写 API Base URL，再获取模型。",
+	fetchProviderModelsRequiresApiKey: "请先填写 API Key，再获取模型。",
 	providerPresetFormatChanged:
 		"格式已不同于预设，请查看 Provider 文档并按需更新 API URL。",
 	noProviderModels: "暂无模型。",

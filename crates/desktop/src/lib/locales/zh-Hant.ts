@@ -310,7 +310,9 @@ export default {
 	fetchProviderModelsSuccessNoNew: "沒有新模型需新增（已設定 {{total}} 個）",
 	fetchProviderModelsFailed: "擷取模型失敗：{{reason}}",
 	fetchProviderModelsUnknownError: "端點不支援",
-	fetchProviderModelsRequiresPreset: "請先選擇一個預設，再擷取模型。",
+	fetchProviderModelsRequiresApiBaseUrl:
+		"請先填寫 API Base URL，再擷取模型。",
+	fetchProviderModelsRequiresApiKey: "請先填寫 API Key，再擷取模型。",
 	providerPresetFormatChanged:
 		"格式已不同於預設，請查看 Provider 文件並視需要更新 API URL。",
 	noProviderModels: "尚無模型。",

@@ -325,8 +325,10 @@ export default {
 		"No new models to add ({{total}} already configured)",
 	fetchProviderModelsFailed: "Failed to fetch models: {{reason}}",
 	fetchProviderModelsUnknownError: "endpoint not supported",
-	fetchProviderModelsRequiresPreset:
-		"Choose a preset before fetching models.",
+	fetchProviderModelsRequiresApiBaseUrl:
+		"Enter an API Base URL before fetching models.",
+	fetchProviderModelsRequiresApiKey:
+		"Enter an API key before fetching models.",
 	providerPresetFormatChanged:
 		"Format changed from the preset. Check the provider docs and update the API URL if needed.",
 	noProviderModels: "No models configured.",

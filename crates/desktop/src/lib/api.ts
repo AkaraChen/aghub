@@ -23,6 +23,7 @@ import type {
 	CredentialResponse,
 	DeleteSkillByPathRequest,
 	DeleteSkillByPathResponse,
+	FetchInferenceProviderModelsRequest,
 	GitInstallRequest,
 	GitInstallResponse,
 	GitScanRequest,
@@ -569,6 +570,13 @@ export function createApi(baseUrl: string, token: string) {
 			},
 			listPresets(): Promise<InferenceProviderPresetResponse[]> {
 				return client.get("inference/presets").json();
+			},
+			fetchModels(
+				body: FetchInferenceProviderModelsRequest,
+			): Promise<string[]> {
+				return client
+					.post("inference/providers/models", { json: body })
+					.json();
 			},
 			listOpenCode(): Promise<AgentProviderResponse[]> {
 				return client.get("inference/agents/opencode/providers").json();

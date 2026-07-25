@@ -39,7 +39,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Fuse from "fuse.js";
 import { pinyin } from "pinyin-pro";
 import { type Key, useMemo, useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { ListSearchHeader } from "../components/list-search-header";
 import { ResourceSectionHeader } from "../components/resource-section-header";
@@ -852,6 +852,9 @@ function ProviderForm({
 			models: toProviderModelFormValues(provider?.models ?? []),
 		},
 	});
+	const apiBaseUrl = useWatch({ control, name: "apiBaseUrl" });
+	const apiKey = useWatch({ control, name: "apiKey" });
+	const format = useWatch({ control, name: "format" });
 
 	const [selectedPresetId, setSelectedPresetId] = useState<string | null>(
 		provider?.preset ?? null,
@@ -953,16 +956,22 @@ function ProviderForm({
 	};
 
 	const [showApiKey, setShowApiKey] = useState(false);
-	const canFetchModels = Boolean(selectedPreset);
-	const fetchModelsDisabledReason = selectedPreset
-		? undefined
-		: t("fetchProviderModelsRequiresPreset");
+	const canFetchModels = Boolean(
+		apiBaseUrl.trim() && (mode === "edit" || apiKey.trim()),
+	);
+	const fetchModelsDisabledReason = !apiBaseUrl.trim()
+		? t("fetchProviderModelsRequiresApiBaseUrl")
+		: mode === "create" && !apiKey.trim()
+			? t("fetchProviderModelsRequiresApiKey")
+			: undefined;
 
 	const handleFetchModels = async () => {
-		if (!selectedPreset) {
-			throw new Error(t("fetchProviderModelsRequiresPreset"));
-		}
-		return selectedPreset.models;
+		return api.inferenceProviders.fetchModels({
+			format,
+			api_base_url: apiBaseUrl.trim(),
+			api_key: apiKey.trim() || null,
+			provider_id: provider?.id ?? null,
+		});
 	};
 
 	const createMutation = useMutation({
