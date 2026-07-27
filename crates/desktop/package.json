@@ -82,7 +82,7 @@
 		"@playwright/test": "^1.61.1",
 		"@tailwindcss/vite": "^4.2.2",
 		"@tauri-apps/cli": "^2.11.4",
-		"@types/node": "^26.1.1",
+		"@types/node": "^26.1.2",
 		"@types/react": "^19.2.16",
 		"@types/react-dom": "^19.1.6",
 		"@typescript/native": "npm:typescript@^7.0.2",
