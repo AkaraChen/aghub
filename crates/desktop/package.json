@@ -33,7 +33,7 @@
 		"@heroicons/react": "^2.2.0",
 		"@heroui/react": "3.2.2",
 		"@heroui/styles": "3.2.2",
-		"@lobehub/icons-static-svg": "^1.91.0",
+		"@lobehub/icons-static-svg": "^1.94.0",
 		"@opentelemetry/api-logs": "^0.219.0",
 		"@opentelemetry/exporter-logs-otlp-http": "^0.219.0",
 		"@opentelemetry/resources": "^2.9.0",
