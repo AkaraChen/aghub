@@ -75,6 +75,10 @@ interface ApiErrorBody {
 	code?: string;
 }
 
+// The backend stops provider discovery after 15 seconds; this leaves time for
+// its response to cross the local HTTP boundary.
+const PROVIDER_MODEL_DISCOVERY_TIMEOUT_MS = 20_000;
+
 export function getApiErrorCode(error: unknown) {
 	if (!isHTTPError(error) || !error.data || typeof error.data !== "object") {
 		return undefined;
@@ -583,7 +587,10 @@ export function createApi(baseUrl: string, token: string) {
 				body: FetchInferenceProviderModelsRequest,
 			): Promise<string[]> {
 				return client
-					.post("inference/providers/models", { json: body })
+					.post("inference/providers/models", {
+						json: body,
+						timeout: PROVIDER_MODEL_DISCOVERY_TIMEOUT_MS,
+					})
 					.json();
 			},
 			listOpenCode(): Promise<AgentProviderResponse[]> {

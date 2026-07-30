@@ -316,8 +316,12 @@ export default {
 	fetchProviderModelsInvalidApiBaseUrl: "請輸入有效的 HTTP(S) API Base URL。",
 	fetchProviderModelsRequiresChangedApiKey:
 		"API URL 或格式已變更，請重新輸入 API Key 後再擷取模型。",
+	fetchProviderModelsNetworkError:
+		"無法連線 aghub 本機服務，請檢查桌面後端是否正在執行。",
+	fetchProviderModelsTimeout: "Provider 模型請求逾時，請重試。",
 	fetchProviderModelsRequestFailed:
 		"無法連線 Provider，或 Provider 拒絕了請求。",
+	fetchProviderModelsResponseTooLarge: "Provider 回傳的模型清單過大。",
 	fetchProviderModelsInvalidResponse: "Provider 回傳了不支援的模型清單格式。",
 	fetchProviderModelsNoModels:
 		"Provider 沒有回傳模型。請手動新增模型 ID，或檢查模型清單端點。",
@@ -370,6 +374,8 @@ export default {
 	validationProviderApiBaseUrlRequired: "請輸入 API base URL。",
 	validationProviderApiBaseUrlInvalid: "請輸入有效的 HTTP(S) API base URL。",
 	validationProviderApiKeyRequired: "請輸入 API key。",
+	validationProviderApiKeyRequiredForScopeChange:
+		"API URL 或格式已變更，請重新輸入 API key 後再儲存。",
 	validationProviderModelsRequired: "請至少選擇一個模型。",
 	validationProviderModelNameUnique: "模型名稱不能重複。",
 	inferenceFormatAnthropic: "Anthropic",

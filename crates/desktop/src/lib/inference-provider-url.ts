@@ -10,6 +10,7 @@ function inferredApiBaseUrlScheme(value: string) {
 	try {
 		const hostname = new URL(`http://${value}`).hostname.toLowerCase();
 		return hostname === "localhost" ||
+			hostname.endsWith(".localhost") ||
 			hostname === "0.0.0.0" ||
 			hostname === "[::1]" ||
 			hostname === "::1" ||

@@ -39,7 +39,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Fuse from "fuse.js";
 import { pinyin } from "pinyin-pro";
-import { type Key, useMemo, useState } from "react";
+import { type Key, useId, useMemo, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { ListSearchHeader } from "../components/list-search-header";
@@ -50,11 +50,14 @@ import type {
 } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
 import { AgentIcon } from "../lib/agent-icons";
-import { getApiErrorCode } from "../lib/api";
 import { normalizeInferenceProviderApiBaseUrl } from "../lib/inference-provider-url";
 import { cn } from "../lib/utils";
 import { ClaudeInferenceProviderPanel } from "./inference-providers/claude-panel";
 import { CodexInferenceProviderPanel } from "./inference-providers/codex-panel";
+import {
+	type ProviderModelDiscoveryErrorCode,
+	useProviderModelDiscovery,
+} from "./inference-providers/model-discovery";
 import { OpenCodeInferenceProviderPanel } from "./inference-providers/opencode-panel";
 import {
 	createInferenceProviderMutationOptions,
@@ -134,17 +137,26 @@ const VENDORED_PROVIDER_LOGO_URL_BY_ID = new Map(
 	}),
 );
 
-function fetchProviderModelsErrorKey(code: string | undefined) {
+function fetchProviderModelsErrorKey(code: ProviderModelDiscoveryErrorCode) {
 	switch (code) {
-		case "INVALID_PARAM":
+		case "invalid_api_base_url":
 			return "fetchProviderModelsInvalidApiBaseUrl";
-		case "MISSING_CREDENTIAL":
-		case "CREDENTIAL_SCOPE_MISMATCH":
+		case "credential_scope":
 			return "fetchProviderModelsRequiresChangedApiKey";
-		case "UPSTREAM_REQUEST_FAILED":
+		case "missing_credential":
+			return "fetchProviderModelsRequiresApiKey";
+		case "network":
+			return "fetchProviderModelsNetworkError";
+		case "timeout":
+			return "fetchProviderModelsTimeout";
+		case "upstream_request":
 			return "fetchProviderModelsRequestFailed";
-		case "UPSTREAM_RESPONSE_FAILED":
+		case "response_too_large":
+			return "fetchProviderModelsResponseTooLarge";
+		case "response_invalid":
 			return "fetchProviderModelsInvalidResponse";
+		case "empty_response":
+			return "fetchProviderModelsNoModels";
 		default:
 			return "fetchProviderModelsUnknownError";
 	}
@@ -392,6 +404,8 @@ function ProviderModelsEditor({
 	onBlur,
 	errorMessage,
 	onFetchModels,
+	isFetching = false,
+	fetchErrorCode,
 	canFetchModels = false,
 	fetchModelsDisabledReason,
 }: {
@@ -399,18 +413,17 @@ function ProviderModelsEditor({
 	onChange: (value: ProviderModelFormValue[]) => void;
 	onBlur: () => void;
 	errorMessage?: string;
-	onFetchModels?: () => Promise<string[]>;
+	onFetchModels?: () => void;
+	isFetching?: boolean;
+	fetchErrorCode?: ProviderModelDiscoveryErrorCode | null;
 	canFetchModels?: boolean;
 	fetchModelsDisabledReason?: string;
 }) {
 	const { t } = useTranslation();
+	const fetchMessageId = useId();
 	const emptyModel = useMemo(
 		() => createProviderModelFormValue("", true),
 		[],
-	);
-	const [isFetching, setIsFetching] = useState(false);
-	const [fetchErrorMessage, setFetchErrorMessage] = useState<string | null>(
-		null,
 	);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isBatchDeleteOpen, setIsBatchDeleteOpen] = useState(false);
@@ -501,49 +514,6 @@ function ProviderModelsEditor({
 		setIsBatchDeleteOpen(false);
 	};
 
-	const handleFetch = async () => {
-		if (!onFetchModels) return;
-		setIsFetching(true);
-		setFetchErrorMessage(null);
-		try {
-			const fetched = await onFetchModels();
-			if (fetched.length === 0) {
-				setFetchErrorMessage(t("fetchProviderModelsNoModels"));
-				return;
-			}
-			const existing = new Set(
-				value.map((model) => model.name.trim()).filter(Boolean),
-			);
-			const additions = fetched
-				.filter((name) => !existing.has(name))
-				.map((name) => createProviderModelFormValue(name));
-			const baseline = value.filter((model) => model.name.trim());
-			onChange([...baseline, ...additions]);
-			if (additions.length === 0) {
-				toast.success(
-					t("fetchProviderModelsSuccessNoNew", {
-						total: fetched.length,
-					}),
-				);
-			} else {
-				toast.success(
-					t("fetchProviderModelsSuccess", {
-						added: additions.length,
-						total: fetched.length,
-					}),
-				);
-			}
-		} catch (error) {
-			console.error("Failed to fetch provider models:", error);
-			const reason = t(
-				fetchProviderModelsErrorKey(getApiErrorCode(error)),
-			);
-			setFetchErrorMessage(t("fetchProviderModelsFailed", { reason }));
-		} finally {
-			setIsFetching(false);
-		}
-	};
-
 	const handleRemove = (id: string) => {
 		onChange(value.filter((model) => model.id !== id));
 	};
@@ -612,8 +582,13 @@ function ProviderModelsEditor({
 			variant="secondary"
 			size="sm"
 			isPending={isFetching}
-			isDisabled={!canFetchModels}
-			onPress={handleFetch}
+			isDisabled={!canFetchModels || isFetching}
+			aria-describedby={
+				fetchModelsDisabledReason || fetchErrorCode
+					? fetchMessageId
+					: undefined
+			}
+			onPress={onFetchModels}
 		>
 			{({ isPending }) => (
 				<>
@@ -655,12 +630,26 @@ function ProviderModelsEditor({
 				</div>
 
 				{fetchModelsDisabledReason && (
-					<p className="text-xs text-muted">
+					<p id={fetchMessageId} className="text-xs text-muted">
 						{fetchModelsDisabledReason}
 					</p>
 				)}
-				{fetchErrorMessage && (
-					<ErrorMessage>{fetchErrorMessage}</ErrorMessage>
+				{fetchErrorCode && (
+					<ErrorMessage
+						id={fetchMessageId}
+						role="alert"
+						aria-live="assertive"
+					>
+						{fetchErrorCode === "empty_response"
+							? t("fetchProviderModelsNoModels")
+							: t("fetchProviderModelsFailed", {
+									reason: t(
+										fetchProviderModelsErrorKey(
+											fetchErrorCode,
+										),
+									),
+								})}
+					</ErrorMessage>
 				)}
 
 				<SearchField
@@ -859,7 +848,9 @@ function ProviderForm({
 	const api = useApi();
 	const queryClient = useQueryClient();
 	const {
+		clearErrors,
 		control,
+		getValues,
 		handleSubmit,
 		setError,
 		setValue,
@@ -879,6 +870,20 @@ function ProviderForm({
 	const apiBaseUrl = useWatch({ control, name: "apiBaseUrl" });
 	const apiKey = useWatch({ control, name: "apiKey" });
 	const format = useWatch({ control, name: "format" });
+	const normalizedApiBaseUrl =
+		normalizeInferenceProviderApiBaseUrl(apiBaseUrl);
+	const savedApiBaseUrl = provider
+		? normalizeInferenceProviderApiBaseUrl(provider.api_base_url)
+		: null;
+	const currentCredentialScope = normalizedApiBaseUrl
+		? `${format}:${normalizedApiBaseUrl}`
+		: null;
+	const savedCredentialScope =
+		provider && savedApiBaseUrl
+			? `${provider.format}:${savedApiBaseUrl}`
+			: null;
+	const credentialScopeChanged =
+		mode === "edit" && currentCredentialScope !== savedCredentialScope;
 
 	const [selectedPresetId, setSelectedPresetId] = useState<string | null>(
 		provider?.preset ?? null,
@@ -889,6 +894,10 @@ function ProviderForm({
 	const [isSyncPromptOpen, setIsSyncPromptOpen] = useState(false);
 	const [isSavingProvider, setIsSavingProvider] = useState(false);
 	const [hasEditedLatinName, setHasEditedLatinName] = useState(false);
+	const [typedApiKeyScope, setTypedApiKeyScope] = useState<string | null>(
+		null,
+	);
+	const modelDiscovery = useProviderModelDiscovery();
 	const selectedPreset = useMemo(
 		() => presets.find((preset) => preset.id === selectedPresetId) ?? null,
 		[presets, selectedPresetId],
@@ -919,6 +928,8 @@ function ProviderForm({
 		});
 
 	const handleApplyPreset = (preset: InferenceProviderPresetResponse) => {
+		modelDiscovery.invalidate();
+		clearErrors("apiKey");
 		setValue("displayName", preset.name, { shouldDirty: true });
 		if (!hasEditedLatinName && mode === "create") {
 			setValue("latinName", makeLatinNameSuggestion(preset.id), {
@@ -955,6 +966,10 @@ function ProviderForm({
 		) {
 			toast.warning(t("providerPresetFormatChanged"));
 		}
+		if (nextFormat !== currentFormat) {
+			modelDiscovery.invalidate();
+			clearErrors("apiKey");
+		}
 		onChange(nextFormat);
 	};
 
@@ -979,42 +994,109 @@ function ProviderForm({
 		onChange(value);
 	};
 
+	const handleApiBaseUrlChange = (
+		value: string,
+		onChange: (value: string) => void,
+	) => {
+		if (
+			normalizeInferenceProviderApiBaseUrl(value) !== normalizedApiBaseUrl
+		) {
+			modelDiscovery.invalidate();
+			clearErrors("apiKey");
+		}
+		onChange(value);
+	};
+
+	const handleApiKeyChange = (
+		value: string,
+		onChange: (value: string) => void,
+	) => {
+		modelDiscovery.invalidate();
+		setTypedApiKeyScope(value.trim() ? currentCredentialScope : null);
+		onChange(value);
+	};
+
 	const [showApiKey, setShowApiKey] = useState(false);
-	const normalizedApiBaseUrl =
-		normalizeInferenceProviderApiBaseUrl(apiBaseUrl);
-	const savedApiBaseUrl = provider
-		? normalizeInferenceProviderApiBaseUrl(provider.api_base_url)
-		: null;
+	const canUseTypedApiKey = Boolean(
+		apiKey.trim() &&
+		currentCredentialScope &&
+		typedApiKeyScope === currentCredentialScope,
+	);
 	const canReuseSavedApiKey = Boolean(
+		!apiKey.trim() &&
 		provider &&
-		format === provider.format &&
-		normalizedApiBaseUrl &&
-		savedApiBaseUrl &&
-		normalizedApiBaseUrl === savedApiBaseUrl,
+		currentCredentialScope &&
+		currentCredentialScope === savedCredentialScope,
 	);
 	const canFetchModels = Boolean(
-		normalizedApiBaseUrl && (apiKey.trim() || canReuseSavedApiKey),
+		normalizedApiBaseUrl &&
+		(canUseTypedApiKey || canReuseSavedApiKey) &&
+		!modelDiscovery.isPending,
 	);
 	const fetchModelsDisabledReason = !apiBaseUrl.trim()
 		? t("fetchProviderModelsRequiresApiBaseUrl")
 		: !normalizedApiBaseUrl
 			? t("fetchProviderModelsInvalidApiBaseUrl")
-			: !apiKey.trim() && !canReuseSavedApiKey
-				? mode === "edit"
+			: !canUseTypedApiKey && !canReuseSavedApiKey
+				? apiKey.trim() || mode === "edit"
 					? t("fetchProviderModelsRequiresChangedApiKey")
 					: t("fetchProviderModelsRequiresApiKey")
 				: undefined;
 
 	const handleFetchModels = async () => {
 		if (!normalizedApiBaseUrl) {
-			throw new Error(t("fetchProviderModelsInvalidApiBaseUrl"));
+			return;
 		}
-		return api.inferenceProviders.fetchModels({
-			format,
-			api_base_url: normalizedApiBaseUrl,
-			api_key: apiKey.trim() || null,
-			provider_id: canReuseSavedApiKey ? (provider?.id ?? null) : null,
+		const modelKeysAtRequest = new Set(
+			getValues("models")
+				.map((model) => model.name.trim().toLowerCase())
+				.filter(Boolean),
+		);
+		const credentialSource = canUseTypedApiKey ? "provided" : "saved";
+		const fetched = await modelDiscovery.run(() =>
+			api.inferenceProviders.fetchModels({
+				format,
+				api_base_url: normalizedApiBaseUrl,
+				api_key: canUseTypedApiKey ? apiKey.trim() : null,
+				provider_id:
+					credentialSource === "saved"
+						? (provider?.id ?? null)
+						: null,
+			}),
+		);
+		if (!fetched) return;
+
+		const currentModels = getValues("models");
+		const existing = new Set(
+			currentModels
+				.map((model) => model.name.trim().toLowerCase())
+				.filter(Boolean),
+		);
+		const additions: ProviderModelFormValue[] = [];
+		for (const name of fetched) {
+			const key = name.trim().toLowerCase();
+			if (existing.has(key) || modelKeysAtRequest.has(key)) continue;
+			existing.add(key);
+			additions.push(createProviderModelFormValue(name));
+		}
+		setValue("models", [...currentModels, ...additions], {
+			shouldDirty: additions.length > 0,
+			shouldValidate: true,
 		});
+		if (additions.length === 0) {
+			toast.success(
+				t("fetchProviderModelsSuccessNoNew", {
+					total: fetched.length,
+				}),
+			);
+		} else {
+			toast.success(
+				t("fetchProviderModelsSuccess", {
+					added: additions.length,
+					total: fetched.length,
+				}),
+			);
+		}
 	};
 
 	const createMutation = useMutation({
@@ -1032,11 +1114,12 @@ function ProviderForm({
 
 	const activeError =
 		mode === "create" ? createMutation.error : updateMutation.error;
-	const isPending =
+	const isSubmitPending =
 		createMutation.isPending ||
 		updateMutation.isPending ||
 		isSubmitting ||
 		isSavingProvider;
+	const isFormBusy = isSubmitPending || modelDiscovery.isPending;
 
 	const findAgentProviderSyncTargets = async (
 		inferenceProviderId: string,
@@ -1425,7 +1508,14 @@ function ProviderForm({
 					<Card.Content>
 						<Form
 							validationBehavior="aria"
-							onSubmit={handleSubmit(onSubmit)}
+							aria-busy={isFormBusy}
+							onSubmit={(event) => {
+								if (modelDiscovery.isPending) {
+									event.preventDefault();
+									return;
+								}
+								void handleSubmit(onSubmit)(event);
+							}}
 						>
 							<Fieldset>
 								<Fieldset.Group>
@@ -1667,8 +1757,9 @@ function ProviderForm({
 													type="url"
 													value={field.value}
 													onChange={(event) =>
-														field.onChange(
+														handleApiBaseUrlChange(
 															event.target.value,
+															field.onChange,
 														)
 													}
 													onBlur={() => {
@@ -1677,8 +1768,9 @@ function ProviderForm({
 																field.value,
 															);
 														if (normalized) {
-															field.onChange(
+															handleApiBaseUrlChange(
 																normalized,
+																field.onChange,
 															);
 														}
 														field.onBlur();
@@ -1771,20 +1863,37 @@ function ProviderForm({
 										control={control}
 										rules={{
 											validate: (value) => {
-												if (mode === "edit")
+												if (
+													value.trim() &&
+													currentCredentialScope &&
+													typedApiKeyScope ===
+														currentCredentialScope
+												) {
 													return true;
-												return value.trim()
-													? true
-													: t(
-															"validationProviderApiKeyRequired",
-														);
+												}
+												if (
+													mode === "edit" &&
+													!value.trim() &&
+													!credentialScopeChanged
+												) {
+													return true;
+												}
+												return t(
+													value.trim() ||
+														credentialScopeChanged
+														? "validationProviderApiKeyRequiredForScopeChange"
+														: "validationProviderApiKeyRequired",
+												);
 											},
 										}}
 										render={({ field, fieldState }) => (
 											<TextField
 												className="w-full"
 												variant="secondary"
-												isRequired={mode === "create"}
+												isRequired={
+													mode === "create" ||
+													credentialScopeChanged
+												}
 												validationBehavior="aria"
 												isInvalid={Boolean(
 													fieldState.error,
@@ -1823,14 +1932,16 @@ function ProviderForm({
 														}
 														value={field.value}
 														onChange={(event) =>
-															field.onChange(
+															handleApiKeyChange(
 																event.target
 																	.value,
+																field.onChange,
 															)
 														}
 														onBlur={field.onBlur}
 														placeholder={
-															mode === "create"
+															mode === "create" ||
+															credentialScopeChanged
 																? t(
 																		"providerApiKeyPlaceholder",
 																	)
@@ -1911,6 +2022,12 @@ function ProviderForm({
 												onFetchModels={
 													handleFetchModels
 												}
+												isFetching={
+													modelDiscovery.isPending
+												}
+												fetchErrorCode={
+													modelDiscovery.errorCode
+												}
 												canFetchModels={canFetchModels}
 												fetchModelsDisabledReason={
 													fetchModelsDisabledReason
@@ -1926,11 +2043,15 @@ function ProviderForm({
 									type="button"
 									variant="tertiary"
 									onPress={onCancel}
-									isDisabled={isPending}
+									isDisabled={isFormBusy}
 								>
 									{t("cancel")}
 								</Button>
-								<Button type="submit" isPending={isPending}>
+								<Button
+									type="submit"
+									isPending={isSubmitPending}
+									isDisabled={isFormBusy}
+								>
 									{mode === "create"
 										? t("create")
 										: t("save")}
@@ -1944,7 +2065,7 @@ function ProviderForm({
 			<AlertDialog.Backdrop
 				isOpen={isSyncPromptOpen}
 				onOpenChange={(open) => {
-					if (isPending) return;
+					if (isFormBusy) return;
 					setIsSyncPromptOpen(open);
 					if (!open) setPendingEditValues(null);
 				}}
@@ -1972,7 +2093,7 @@ function ProviderForm({
 						<AlertDialog.Footer>
 							<Button
 								variant="tertiary"
-								isDisabled={isPending}
+								isDisabled={isFormBusy}
 								onPress={() => {
 									setIsSyncPromptOpen(false);
 									setPendingEditValues(null);
@@ -1982,13 +2103,13 @@ function ProviderForm({
 							</Button>
 							<Button
 								variant="secondary"
-								isDisabled={isPending}
+								isDisabled={isFormBusy}
 								onPress={() => handleConfirmEditSave(false)}
 							>
 								{t("saveWithoutAgentSync")}
 							</Button>
 							<Button
-								isPending={isPending}
+								isPending={isSubmitPending}
 								onPress={() => handleConfirmEditSave(true)}
 							>
 								{t("saveAndSyncAgentProviders")}

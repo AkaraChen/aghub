@@ -333,8 +333,14 @@ export default {
 	fetchProviderModelsInvalidApiBaseUrl: "Enter a valid HTTP(S) API Base URL.",
 	fetchProviderModelsRequiresChangedApiKey:
 		"The API URL or format changed. Enter the API key again before fetching models.",
+	fetchProviderModelsNetworkError:
+		"aghub could not reach its local service. Check whether the desktop backend is running.",
+	fetchProviderModelsTimeout:
+		"The provider model request timed out. Try again.",
 	fetchProviderModelsRequestFailed:
 		"The provider could not be reached or rejected the request.",
+	fetchProviderModelsResponseTooLarge:
+		"The provider returned a model list that is too large.",
 	fetchProviderModelsInvalidResponse:
 		"The provider returned an unsupported model list.",
 	fetchProviderModelsNoModels:
@@ -389,6 +395,8 @@ export default {
 	validationProviderApiBaseUrlRequired: "Enter an API base URL.",
 	validationProviderApiBaseUrlInvalid: "Enter a valid HTTP(S) API base URL.",
 	validationProviderApiKeyRequired: "Enter an API key.",
+	validationProviderApiKeyRequiredForScopeChange:
+		"The API URL or format changed. Enter the API key again before saving.",
 	validationProviderModelsRequired: "Select at least one model.",
 	validationProviderModelNameUnique: "Model names must be unique.",
 	inferenceFormatAnthropic: "Anthropic",

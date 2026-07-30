@@ -14,6 +14,11 @@ describe("normalizeInferenceProviderApiBaseUrl", () => {
 		expect(
 			normalizeInferenceProviderApiBaseUrl("localhost:11434/v1/models"),
 		).toBe("http://localhost:11434/v1");
+		expect(
+			normalizeInferenceProviderApiBaseUrl(
+				"models.internal.localhost:11434/v1/models",
+			),
+		).toBe("http://models.internal.localhost:11434/v1");
 	});
 
 	it("uses HTTPS for non-local hosts beginning with localhost", () => {
