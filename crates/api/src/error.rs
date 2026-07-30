@@ -1,5 +1,5 @@
 use aghub_core::errors::ConfigError;
-use aghub_inference::InferenceProviderError;
+use aghub_inference::{InferenceProviderError, ModelDiscoveryError};
 use rocket::http::{ContentType, Status};
 use rocket::response::{self, Responder};
 use rocket::serde::json::serde_json;
@@ -102,6 +102,8 @@ impl From<InferenceProviderError> for ApiError {
 			| InferenceProviderError::EmptyAgentProviderId
 			| InferenceProviderError::EmptyModelName
 			| InferenceProviderError::EmptyApiBaseUrl
+			| InferenceProviderError::InvalidApiBaseUrl
+			| InferenceProviderError::UnsupportedApiBaseUrl
 			| InferenceProviderError::EmptyApiKey
 			| InferenceProviderError::InvalidFormat(_)
 			| InferenceProviderError::InvalidLatinName(_)
@@ -112,6 +114,13 @@ impl From<InferenceProviderError> for ApiError {
 				e.to_string(),
 				"INVALID_PARAM",
 			),
+			InferenceProviderError::CredentialScopeChangeRequiresApiKey => {
+				ApiError::new(
+					Status::UnprocessableEntity,
+					e.to_string(),
+					"CREDENTIAL_SCOPE_MISMATCH",
+				)
+			}
 			InferenceProviderError::InvalidAgentProviderConfig {
 				agent_id,
 				message,
@@ -148,10 +157,55 @@ impl From<InferenceProviderError> for ApiError {
 			),
 			InferenceProviderError::Io(_)
 			| InferenceProviderError::Database(_)
-			| InferenceProviderError::AppDataDir(_) => ApiError::new(
+			| InferenceProviderError::AppDataDir(_)
+			| InferenceProviderError::CredentialStateUnavailable => ApiError::new(
 				Status::InternalServerError,
 				e.to_string(),
 				"INFERENCE_PROVIDER_STORE_ERROR",
+			),
+		}
+	}
+}
+
+impl From<ModelDiscoveryError> for ApiError {
+	fn from(error: ModelDiscoveryError) -> Self {
+		match error {
+			ModelDiscoveryError::EmptyApiBaseUrl
+			| ModelDiscoveryError::InvalidApiBaseUrl
+			| ModelDiscoveryError::UnsupportedApiBaseUrl => ApiError::new(
+				Status::BadRequest,
+				error.to_string(),
+				"INVALID_PARAM",
+			),
+			ModelDiscoveryError::Client(_) => {
+				ApiError::internal(error.to_string())
+			}
+			ModelDiscoveryError::Timeout => ApiError::new(
+				Status::GatewayTimeout,
+				error.to_string(),
+				"UPSTREAM_TIMEOUT",
+			),
+			ModelDiscoveryError::Request(_)
+			| ModelDiscoveryError::UpstreamStatus(_) => ApiError::new(
+				Status::BadGateway,
+				error.to_string(),
+				"UPSTREAM_REQUEST_FAILED",
+			),
+			ModelDiscoveryError::ResponseTooLarge { .. }
+			| ModelDiscoveryError::TooManyModels { .. }
+			| ModelDiscoveryError::ModelIdTooLong { .. }
+			| ModelDiscoveryError::TooManyPages { .. } => ApiError::new(
+				Status::BadGateway,
+				error.to_string(),
+				"UPSTREAM_RESPONSE_TOO_LARGE",
+			),
+			ModelDiscoveryError::ReadResponse(_)
+			| ModelDiscoveryError::InvalidResponse(_)
+			| ModelDiscoveryError::MissingPaginationCursor
+			| ModelDiscoveryError::RepeatedPaginationCursor => ApiError::new(
+				Status::BadGateway,
+				error.to_string(),
+				"UPSTREAM_RESPONSE_FAILED",
 			),
 		}
 	}
@@ -177,3 +231,49 @@ pub type ApiResult<T> = Result<rocket::serde::json::Json<T>, ApiError>;
 pub type ApiCreated<T> =
 	Result<(Status, rocket::serde::json::Json<T>), ApiError>;
 pub type ApiNoContent = Result<rocket::response::status::NoContent, ApiError>;
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn model_discovery_timeout_maps_to_gateway_timeout() {
+		let error = ApiError::from(ModelDiscoveryError::Timeout);
+
+		assert_eq!(error.status, Status::GatewayTimeout);
+		assert_eq!(error.body.code, "UPSTREAM_TIMEOUT");
+	}
+
+	#[test]
+	fn model_response_limits_have_a_stable_error_code() {
+		for source in [
+			ModelDiscoveryError::ResponseTooLarge { limit: 1024 },
+			ModelDiscoveryError::TooManyModels { limit: 1000 },
+			ModelDiscoveryError::ModelIdTooLong { limit: 512 },
+			ModelDiscoveryError::TooManyPages { limit: 10 },
+		] {
+			let error = ApiError::from(source);
+
+			assert_eq!(error.status, Status::BadGateway);
+			assert_eq!(error.body.code, "UPSTREAM_RESPONSE_TOO_LARGE");
+		}
+	}
+
+	#[test]
+	fn invalid_model_discovery_url_maps_to_bad_request() {
+		let error = ApiError::from(ModelDiscoveryError::InvalidApiBaseUrl);
+
+		assert_eq!(error.status, Status::BadRequest);
+		assert_eq!(error.body.code, "INVALID_PARAM");
+	}
+
+	#[test]
+	fn credential_scope_change_maps_to_unprocessable_entity() {
+		let error = ApiError::from(
+			InferenceProviderError::CredentialScopeChangeRequiresApiKey,
+		);
+
+		assert_eq!(error.status, Status::UnprocessableEntity);
+		assert_eq!(error.body.code, "CREDENTIAL_SCOPE_MISMATCH");
+	}
+}

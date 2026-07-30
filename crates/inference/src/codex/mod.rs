@@ -288,10 +288,29 @@ impl CodexProviderAdapter {
 			all_providers.iter().find(|p| p.id == provider_id)
 		{
 			if binding.source == AgentProviderSource::Custom {
-				if let Some(api_key) =
-					self.api_key_for_binding(store, &provider_id)?
-				{
-					upsert_provider(&mut config, binding, Some(&api_key))?;
+				let binding_row = store
+					.list_agent_bindings(AGENT_ID)?
+					.into_iter()
+					.find(|row| row.id == provider_id);
+				if let Some(row) = binding_row {
+					let (provider, api_key) =
+						store.get_with_api_key(&row.inference_provider_id)?;
+					let credential = if api_key.is_some() {
+						AgentProviderCredential::Inline
+					} else {
+						AgentProviderCredential::None
+					};
+					let current_binding = AgentProviderBinding::from_inventory(
+						row.id,
+						&provider,
+						credential,
+						AgentProviderSource::Custom,
+					)?;
+					upsert_provider(
+						&mut config,
+						&current_binding,
+						api_key.as_deref(),
+					)?;
 				} else {
 					upsert_provider(&mut config, binding, None)?;
 				}
@@ -566,19 +585,6 @@ impl CodexProviderAdapter {
 		}
 
 		Ok(providers)
-	}
-
-	/// Helper to get API key for a binding provider.
-	fn api_key_for_binding<C: CredentialStore>(
-		&self,
-		store: &InferenceProviderStore<C>,
-		provider_id: &str,
-	) -> Result<Option<String>> {
-		let binding_rows = store.list_agent_bindings(AGENT_ID)?;
-		if let Some(row) = binding_rows.iter().find(|r| r.id == provider_id) {
-			return store.get_api_key(&row.inference_provider_id);
-		}
-		Ok(None)
 	}
 
 	fn sync_active_model_catalog(

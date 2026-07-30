@@ -186,7 +186,9 @@ fn build_rocket(
 			sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
 		})
 		.manage(crate::state::InferenceProviderState {
-			app_data_dir: options.app_data_dir,
+			store: aghub_inference::InferenceProviderStore::new(
+				options.app_data_dir,
+			),
 		})
 		.manage(crate::state::UsageState {
 			ccusage_bin: options.ccusage_bin,

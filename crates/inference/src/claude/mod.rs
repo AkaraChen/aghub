@@ -31,8 +31,7 @@ use crate::error::Result;
 use crate::model::InferenceProvider;
 use crate::store::{
 	AgentProviderBindingModelUpdate, AgentProviderBindingModels,
-	AgentProviderBindingRow, InferenceProviderRepository,
-	InferenceProviderStore,
+	AgentProviderBindingRow, InferenceProviderStore,
 };
 
 pub(super) const AGENT_ID: &str = "claude";
@@ -244,8 +243,8 @@ impl ClaudeProviderAdapter {
 	) -> Result<Option<AgentProviderBindingRow>> {
 		let current = self.load_config_state()?;
 		for row in rows {
-			let provider = store.get(&row.inference_provider_id)?;
-			let api_key = store.get_api_key(&provider.id)?;
+			let (provider, api_key) =
+				store.get_with_api_key(&row.inference_provider_id)?;
 			let base_url_matches = provider.api_base_url
 				== current.api_base_url.as_deref().unwrap_or_default();
 			let model_matches =
@@ -428,8 +427,9 @@ impl ClaudeProviderAdapter {
 				)
 			})?;
 
-		let provider = store.get(&row.inference_provider_id)?;
-		let api_key = store.get_api_key(&provider.id)?.ok_or_else(|| {
+		let (provider, api_key) =
+			store.get_with_api_key(&row.inference_provider_id)?;
+		let api_key = api_key.ok_or_else(|| {
 			crate::error::InferenceProviderError::NotFound(provider.id.clone())
 		})?;
 		let update = clean_model_update(&provider, update)?;

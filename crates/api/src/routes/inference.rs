@@ -1,9 +1,9 @@
 use aghub_inference::AgentProviderBindingModelUpdate;
 use aghub_inference::{
-	AgentProviderAdapter, AgentProviderBinding, ClaudeModelRouting,
-	ClaudeProviderAdapter, CodexProviderAdapter, InferenceProvider,
-	InferenceProviderRepository, InferenceProviderStore,
-	OpenCodeProviderAdapter,
+	discover_models, provider_credential_scope_matches, AgentProviderAdapter,
+	AgentProviderBinding, ClaudeModelRouting, ClaudeProviderAdapter,
+	CodexProviderAdapter, InferenceProvider, InferenceProviderRepository,
+	InferenceProviderStore, ModelDiscoveryRequest, OpenCodeProviderAdapter,
 };
 use rocket::http::Status;
 use rocket::response::status::NoContent;
@@ -25,10 +25,9 @@ use crate::dto::inference::{
 };
 use crate::error::{ApiCreated, ApiError, ApiNoContent, ApiResult};
 use crate::state::InferenceProviderState;
-use url::Url;
 
 fn store(state: &State<InferenceProviderState>) -> InferenceProviderStore {
-	InferenceProviderStore::new(state.app_data_dir.clone())
+	state.store.clone()
 }
 
 fn find_by_latin_name(
@@ -65,20 +64,18 @@ fn get_inventory_provider(
 	store: &InferenceProviderStore,
 	id: &str,
 ) -> Result<(InferenceProvider, String), ApiError> {
-	let provider = store.get(id).map_err(ApiError::from)?;
-	let api_key = store
-		.get_api_key(&provider.id)
-		.map_err(ApiError::from)?
-		.ok_or_else(|| {
-			ApiError::new(
-				Status::UnprocessableEntity,
-				format!(
-					"inference provider '{}' has no stored API key",
-					provider.display_name
-				),
-				"MISSING_CREDENTIAL",
-			)
-		})?;
+	let (provider, api_key) =
+		store.get_with_api_key(id).map_err(ApiError::from)?;
+	let api_key = api_key.ok_or_else(|| {
+		ApiError::new(
+			Status::UnprocessableEntity,
+			format!(
+				"inference provider '{}' has no stored API key",
+				provider.display_name
+			),
+			"MISSING_CREDENTIAL",
+		)
+	})?;
 	Ok((provider, api_key))
 }
 
@@ -89,16 +86,7 @@ fn same_api_base_url(left: &str, right: &str) -> bool {
 fn inventory_providers_with_api_keys(
 	store: &InferenceProviderStore,
 ) -> Result<Vec<(InferenceProvider, String)>, ApiError> {
-	let mut providers = Vec::new();
-	for provider in store.list().map_err(ApiError::from)? {
-		let Some(api_key) =
-			store.get_api_key(&provider.id).map_err(ApiError::from)?
-		else {
-			continue;
-		};
-		providers.push((provider, api_key));
-	}
-	Ok(providers)
+	store.list_with_api_keys().map_err(ApiError::from)
 }
 
 fn opencode_inventory_providers_with_api_keys(
@@ -320,206 +308,6 @@ pub async fn list_inference_provider_presets(
 	}
 }
 
-#[derive(Deserialize)]
-struct ModelListResponse {
-	data: Vec<ModelListItem>,
-}
-
-#[derive(Deserialize)]
-struct ModelListItem {
-	id: String,
-}
-
-fn inferred_api_base_url_scheme(value: &str) -> &'static str {
-	let Ok(url) = Url::parse(&format!("http://{value}")) else {
-		return "https";
-	};
-	match url.host() {
-		Some(url::Host::Domain(host))
-			if host.eq_ignore_ascii_case("localhost") =>
-		{
-			"http"
-		}
-		Some(url::Host::Ipv4(address))
-			if address.is_loopback() || address.is_unspecified() =>
-		{
-			"http"
-		}
-		Some(url::Host::Ipv6(address)) if address.is_loopback() => "http",
-		_ => "https",
-	}
-}
-
-fn parse_api_base_url(api_base_url: &str) -> Result<Url, ApiError> {
-	let value = api_base_url.trim();
-	if value.is_empty() {
-		return Err(ApiError::new(
-			Status::BadRequest,
-			"API Base URL is required",
-			"INVALID_PARAM",
-		));
-	}
-	let candidate = if value.contains("://") {
-		value.to_string()
-	} else {
-		format!("{}://{value}", inferred_api_base_url_scheme(value))
-	};
-	let mut url = Url::parse(&candidate).map_err(|_| {
-		ApiError::new(
-			Status::BadRequest,
-			"API Base URL is invalid",
-			"INVALID_PARAM",
-		)
-	})?;
-	if !matches!(url.scheme(), "http" | "https")
-		|| url.cannot_be_a_base()
-		|| url.host().is_none()
-		|| !url.username().is_empty()
-		|| url.password().is_some()
-	{
-		return Err(ApiError::new(
-			Status::BadRequest,
-			"API Base URL must be an HTTP or HTTPS URL without credentials",
-			"INVALID_PARAM",
-		));
-	}
-	let path = url.path().trim_end_matches('/').to_string();
-	url.set_path(if path.is_empty() { "/" } else { &path });
-	url.set_fragment(None);
-	Ok(url)
-}
-
-fn strip_request_endpoint_suffix(path: &str) -> &str {
-	const SUFFIXES: [&str; 5] = [
-		"/chat/completions",
-		"/completions",
-		"/responses",
-		"/messages",
-		"/models",
-	];
-	for suffix in SUFFIXES {
-		if let Some(base) = path.strip_suffix(suffix) {
-			return base;
-		}
-	}
-	path
-}
-
-fn normalized_provider_api_base_url(
-	api_base_url: &str,
-) -> Result<Url, ApiError> {
-	let mut url = parse_api_base_url(api_base_url)?;
-	let api_path =
-		strip_request_endpoint_suffix(url.path().trim_end_matches('/'))
-			.to_string();
-	url.set_path(if api_path.is_empty() { "/" } else { &api_path });
-	Ok(url)
-}
-
-fn model_list_url(api_base_url: &str) -> Result<Url, ApiError> {
-	let mut url = normalized_provider_api_base_url(api_base_url)?;
-	let api_path = url.path().trim_end_matches('/');
-	let model_path = if api_path.is_empty() {
-		"/v1/models".to_string()
-	} else {
-		format!("{api_path}/models")
-	};
-	url.set_path(&model_path);
-	url.set_fragment(None);
-	Ok(url)
-}
-
-fn can_reuse_provider_api_key(
-	provider: &InferenceProvider,
-	format: InferenceProviderFormatDto,
-	api_base_url: &str,
-) -> bool {
-	if provider.format != format.into() {
-		return false;
-	}
-	let Ok(saved_url) =
-		normalized_provider_api_base_url(&provider.api_base_url)
-	else {
-		return false;
-	};
-	let Ok(requested_url) = normalized_provider_api_base_url(api_base_url)
-	else {
-		return false;
-	};
-	saved_url == requested_url
-}
-
-fn parse_model_list_response(body: &str) -> serde_json::Result<Vec<String>> {
-	let mut models = serde_json::from_str::<ModelListResponse>(body)?
-		.data
-		.into_iter()
-		.map(|model| model.id.trim().to_string())
-		.filter(|model| !model.is_empty())
-		.collect::<Vec<_>>();
-	models.sort();
-	models.dedup();
-	Ok(models)
-}
-
-async fn request_provider_models(
-	format: InferenceProviderFormatDto,
-	api_base_url: &str,
-	api_key: &str,
-) -> Result<Vec<String>, ApiError> {
-	let mut url = model_list_url(api_base_url)?;
-	if matches!(format, InferenceProviderFormatDto::Anthropic)
-		&& !url.query_pairs().any(|(key, _)| key == "limit")
-	{
-		url.query_pairs_mut().append_pair("limit", "1000");
-	}
-
-	let client = reqwest::Client::builder()
-		.timeout(Duration::from_secs(15))
-		.build()
-		.map_err(|error| ApiError::internal(error.to_string()))?;
-	let request = match format {
-		InferenceProviderFormatDto::Anthropic => client
-			.get(url.clone())
-			.header("x-api-key", api_key)
-			.header("anthropic-version", "2023-06-01"),
-		InferenceProviderFormatDto::OpenAiCompletions
-		| InferenceProviderFormatDto::OpenAiResponses => {
-			client.get(url.clone()).bearer_auth(api_key)
-		}
-	};
-	let response = request.send().await.map_err(|error| {
-		ApiError::new(
-			Status::BadGateway,
-			format!("failed to fetch models: {}", error.without_url()),
-			"UPSTREAM_REQUEST_FAILED",
-		)
-	})?;
-	let status = response.status();
-	let body = response.text().await.map_err(|error| {
-		ApiError::new(
-			Status::BadGateway,
-			format!("failed to read model list: {}", error.without_url()),
-			"UPSTREAM_RESPONSE_FAILED",
-		)
-	})?;
-
-	if !status.is_success() {
-		return Err(ApiError::new(
-			Status::BadGateway,
-			format!("model list endpoint returned HTTP {status}"),
-			"UPSTREAM_REQUEST_FAILED",
-		));
-	}
-
-	parse_model_list_response(&body).map_err(|error| {
-		ApiError::new(
-			Status::BadGateway,
-			format!("model list endpoint returned invalid JSON: {error}"),
-			"UPSTREAM_RESPONSE_FAILED",
-		)
-	})
-}
-
 #[post("/inference/providers/models", data = "<body>")]
 pub async fn fetch_inference_provider_models(
 	_auth: ApiAuth,
@@ -537,10 +325,12 @@ pub async fn fetch_inference_provider_models(
 	let api_key = match (provided_api_key, body.provider_id.as_deref()) {
 		(Some(api_key), _) => Some(api_key),
 		(None, Some(id)) => {
-			let provider = provider_store.get(id).map_err(ApiError::from)?;
-			if !can_reuse_provider_api_key(
+			let (provider, api_key) = provider_store
+				.get_with_api_key(id)
+				.map_err(ApiError::from)?;
+			if !provider_credential_scope_matches(
 				&provider,
-				body.format,
+				body.format.into(),
 				&body.api_base_url,
 			) {
 				return Err(ApiError::new(
@@ -549,7 +339,7 @@ pub async fn fetch_inference_provider_models(
 					"CREDENTIAL_SCOPE_MISMATCH",
 				));
 			}
-			provider_store.get_api_key(id).map_err(ApiError::from)?
+			api_key
 		}
 		(None, None) => None,
 	}
@@ -560,9 +350,13 @@ pub async fn fetch_inference_provider_models(
 			"MISSING_CREDENTIAL",
 		)
 	})?;
-	let models =
-		request_provider_models(body.format, &body.api_base_url, &api_key)
-			.await?;
+	let models = discover_models(ModelDiscoveryRequest {
+		format: body.format.into(),
+		api_base_url: &body.api_base_url,
+		api_key: &api_key,
+	})
+	.await
+	.map_err(ApiError::from)?;
 	Ok(Json(models))
 }
 
@@ -893,19 +687,19 @@ pub fn get_inference_provider_password(
 ) -> ApiResult<InferenceProviderPasswordResponse> {
 	let store = store(state);
 	let provider = find_by_latin_name(&store, latin_name)?;
-	let api_key = store
-		.get_api_key(&provider.id)
-		.map_err(ApiError::from)?
-		.ok_or_else(|| {
-			ApiError::new(
-				Status::NotFound,
-				format!(
-					"inference provider '{}' has no stored API key",
-					provider.display_name
-				),
-				"RESOURCE_NOT_FOUND",
-			)
-		})?;
+	let (provider, api_key) = store
+		.get_with_api_key(&provider.id)
+		.map_err(ApiError::from)?;
+	let api_key = api_key.ok_or_else(|| {
+		ApiError::new(
+			Status::NotFound,
+			format!(
+				"inference provider '{}' has no stored API key",
+				provider.display_name
+			),
+			"RESOURCE_NOT_FOUND",
+		)
+	})?;
 
 	Ok(Json(InferenceProviderPasswordResponse {
 		latin_name: provider.latin_name,
@@ -988,15 +782,16 @@ fn remove_opencode_provider_references(
 	store: &InferenceProviderStore,
 	provider: &InferenceProvider,
 ) -> Result<(), ApiError> {
-	let Some(api_key) =
-		store.get_api_key(&provider.id).map_err(ApiError::from)?
-	else {
+	let (provider, api_key) = store
+		.get_with_api_key(&provider.id)
+		.map_err(ApiError::from)?;
+	let Some(api_key) = api_key else {
 		return Ok(());
 	};
 
 	let adapter = opencode_adapter()?;
 	let inventory = vec![(
-		OpenCodeProviderAdapter::normalize_inventory_provider(provider),
+		OpenCodeProviderAdapter::normalize_inventory_provider(&provider),
 		api_key,
 	)];
 	let mut provider_ids = Vec::new();
@@ -1181,11 +976,8 @@ pub fn update_claude_provider(
 		let row = store
 			.get_agent_binding("claude", id)
 			.map_err(ApiError::from)?;
-		let provider = store
-			.get(&row.inference_provider_id)
-			.map_err(ApiError::from)?;
 		store
-			.set_api_key(&provider.id, api_key)
+			.set_api_key(&row.inference_provider_id, api_key)
 			.map_err(ApiError::from)?;
 	}
 	adapter
@@ -1215,8 +1007,8 @@ pub fn sync_claude_provider(
 	let row = store
 		.get_agent_binding("claude", id)
 		.map_err(ApiError::from)?;
-	let provider = store
-		.get(&row.inference_provider_id)
+	let (provider, api_key) = store
+		.get_with_api_key(&row.inference_provider_id)
 		.map_err(ApiError::from)?;
 	let was_active = adapter
 		.derive_active_provider_id(&store)
@@ -1228,19 +1020,16 @@ pub fn sync_claude_provider(
 		.map_err(ApiError::from)?;
 
 	if was_active {
-		let api_key = store
-			.get_api_key(&provider.id)
-			.map_err(ApiError::from)?
-			.ok_or_else(|| {
-				ApiError::new(
-					Status::UnprocessableEntity,
-					format!(
-						"inference provider '{}' has no stored API key",
-						provider.display_name
-					),
-					"MISSING_CREDENTIAL",
-				)
-			})?;
+		let api_key = api_key.ok_or_else(|| {
+			ApiError::new(
+				Status::UnprocessableEntity,
+				format!(
+					"inference provider '{}' has no stored API key",
+					provider.display_name
+				),
+				"MISSING_CREDENTIAL",
+			)
+		})?;
 
 		adapter
 			.sync_active_binding_models(
@@ -1298,101 +1087,4 @@ pub fn clear_codex_state(
 		.clear_active_provider(&store)
 		.map_err(ApiError::from)?;
 	Ok(NoContent)
-}
-
-#[cfg(test)]
-mod tests {
-	use super::{
-		can_reuse_provider_api_key, model_list_url, parse_model_list_response,
-	};
-	use crate::dto::inference::InferenceProviderFormatDto;
-	use aghub_inference::{InferenceProvider, InferenceProviderFormat};
-
-	#[test]
-	fn model_list_url_appends_v1_for_origin_only_base_url() {
-		let Ok(url) = model_list_url("https://api.example.com") else {
-			panic!("valid API Base URL should be accepted");
-		};
-
-		assert_eq!(url.as_str(), "https://api.example.com/v1/models");
-	}
-
-	#[test]
-	fn model_list_url_preserves_existing_api_path() {
-		let Ok(url) = model_list_url("https://api.example.com/coding/v1/")
-		else {
-			panic!("valid API Base URL should be accepted");
-		};
-
-		assert_eq!(url.as_str(), "https://api.example.com/coding/v1/models");
-	}
-
-	#[test]
-	fn model_list_url_accepts_host_without_scheme() {
-		let Ok(url) = model_list_url("api.example.com/v1") else {
-			panic!("host without scheme should be normalized");
-		};
-
-		assert_eq!(url.as_str(), "https://api.example.com/v1/models");
-	}
-
-	#[test]
-	fn model_list_url_uses_https_for_non_local_hosts() {
-		let Ok(url) = model_list_url("localhost.example.com/v1") else {
-			panic!("remote host should be normalized");
-		};
-
-		assert_eq!(url.as_str(), "https://localhost.example.com/v1/models");
-	}
-
-	#[test]
-	fn model_list_url_replaces_request_endpoint_suffix() {
-		let Ok(url) =
-			model_list_url("https://api.example.com/v1/chat/completions")
-		else {
-			panic!("request endpoint URL should be accepted");
-		};
-
-		assert_eq!(url.as_str(), "https://api.example.com/v1/models");
-	}
-
-	#[test]
-	fn model_list_response_is_sorted_and_deduplicated() {
-		let models = parse_model_list_response(
-			r#"{"data":[{"id":"zeta"},{"id":"alpha"},{"id":"zeta"}]}"#,
-		)
-		.unwrap();
-
-		assert_eq!(models, ["alpha", "zeta"]);
-	}
-
-	#[test]
-	fn saved_api_key_is_reused_only_for_the_saved_endpoint_and_format() {
-		let provider = InferenceProvider {
-			id: "provider-id".to_string(),
-			latin_name: "example".to_string(),
-			display_name: "Example".to_string(),
-			format: InferenceProviderFormat::OpenAiResponses,
-			api_base_url: "https://api.example.com/v1/responses".to_string(),
-			preset: None,
-			masked_api_key: "••••".to_string(),
-			models: Vec::new(),
-		};
-
-		assert!(can_reuse_provider_api_key(
-			&provider,
-			InferenceProviderFormatDto::OpenAiResponses,
-			"api.example.com/v1/",
-		));
-		assert!(!can_reuse_provider_api_key(
-			&provider,
-			InferenceProviderFormatDto::OpenAiResponses,
-			"https://other.example.com/v1",
-		));
-		assert!(!can_reuse_provider_api_key(
-			&provider,
-			InferenceProviderFormatDto::OpenAiCompletions,
-			"https://api.example.com/v1",
-		));
-	}
 }
