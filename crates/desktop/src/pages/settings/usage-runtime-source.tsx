@@ -119,6 +119,8 @@ export function RuntimeSourceControls({
 							ariaLabel={t("usageRuntimeSource")}
 							options={options}
 							isDisabled={isPending}
+							className="w-52"
+							popoverClassName="w-64 max-w-[calc(100vw-2rem)]"
 						/>
 						{hasChange && selectedSource !== "manual" && (
 							<Button
@@ -128,9 +130,11 @@ export function RuntimeSourceControls({
 								onPress={applySelection}
 							>
 								{needsInstall
-									? t("usageRuntimeInstallSource", {
-											source: selectedSourceLabel,
-										})
+									? selectedSource === "download"
+										? t("usageRuntimeDownloadSource")
+										: t("usageRuntimeInstallSource", {
+												source: selectedSourceLabel,
+											})
 									: t("usageRuntimeUseSource", {
 											source: selectedSourceLabel,
 										})}
@@ -170,9 +174,10 @@ function sourceOptionDescription(
 	candidate: CcusageRuntimeCandidateDto | undefined,
 	t: TFunction,
 ): string | undefined {
+	if (source === "auto") return t("usageRuntimeSourceRecommended");
 	if (candidate?.version) return shortCcusageVersion(candidate.version);
 	if (candidate?.can_install) return t("usageRuntimeSourceInstallable");
-	if (source !== "auto" && source !== "manual") {
+	if (source !== "manual") {
 		return t("usageRuntimeStatusUnavailable");
 	}
 	return undefined;

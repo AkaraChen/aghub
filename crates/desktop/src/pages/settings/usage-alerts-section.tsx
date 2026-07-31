@@ -24,6 +24,11 @@ const THRESHOLD_OPTIONS = USAGE_ALERT_THRESHOLDS_PCT.map((pct) => ({
 export function AlertsSection({ current, updateSettings }: UsageSectionProps) {
 	const { t } = useTranslation();
 	const { availableAgents } = useAgentAvailability();
+	const enabledAgentIds = new Set(
+		availableAgents
+			.filter((agent) => agent.isUsable)
+			.map((agent) => agent.id),
+	);
 	const agentName = (id: string) =>
 		availableAgents.find((agent) => agent.id === id)?.display_name ??
 		USAGE_AGENT_LABELS[id] ??
@@ -115,7 +120,7 @@ export function AlertsSection({ current, updateSettings }: UsageSectionProps) {
 								})
 							}
 							ariaLabel={t("usageAgentAlert")}
-							isDisabled={!config.tracked}
+							isDisabled={!enabledAgentIds.has(agent)}
 							options={includeSelectedOption(
 								thresholdOptions,
 								selectedThreshold,

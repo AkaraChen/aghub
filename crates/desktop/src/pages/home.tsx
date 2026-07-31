@@ -15,7 +15,6 @@ import { agentStatus } from "../lib/agent-status";
 import {
 	agentSettings,
 	DEFAULT_USAGE_SETTINGS,
-	trackedUsageAgents,
 	USAGE_QUOTA_AGENTS,
 } from "../lib/store";
 import { buildUsageDateRange } from "../lib/usage-date-range";
@@ -59,12 +58,16 @@ export default function HomePage() {
 		const agentIds = availableAgents
 			.filter((agent) => agent.isUsable && supported.has(agent.id))
 			.map((agent) => agent.id);
-		return trackedUsageAgents(settings, agentIds);
-	}, [availableAgents, settings, usageAgentsQuery.data]);
-	const quotaAgentIds = useMemo(
-		() => trackedUsageAgents(settings, USAGE_QUOTA_AGENTS),
-		[settings],
-	);
+		return agentIds;
+	}, [availableAgents, usageAgentsQuery.data]);
+	const quotaAgentIds = useMemo(() => {
+		const enabledAgentIds = new Set(
+			availableAgents
+				.filter((agent) => agent.isUsable)
+				.map((agent) => agent.id),
+		);
+		return USAGE_QUOTA_AGENTS.filter((id) => enabledAgentIds.has(id));
+	}, [availableAgents]);
 
 	// Usage is best-effort: agents without local ccusage data land in the
 	// report's warnings with no entry. Cards without an entry omit the block.

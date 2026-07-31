@@ -13,6 +13,7 @@ import {
 import { open } from "@tauri-apps/plugin-dialog";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
+import { cn } from "../../lib/utils";
 import type { SelectOption } from "./usage-setting-model";
 
 /** Label + optional description on the left, a control on the right. */
@@ -73,12 +74,16 @@ export function SettingSelect({
 	ariaLabel,
 	options,
 	isDisabled,
+	className,
+	popoverClassName,
 }: {
 	value: string;
 	onChange: (key: string) => void;
 	ariaLabel: string;
 	options: SelectOption[];
 	isDisabled?: boolean;
+	className?: string;
+	popoverClassName?: string;
 }) {
 	return (
 		<Select
@@ -87,7 +92,7 @@ export function SettingSelect({
 			onChange={(key) => onChange(String(key))}
 			isDisabled={isDisabled}
 			aria-label={ariaLabel}
-			className="min-w-32"
+			className={cn("min-w-32", className)}
 		>
 			<Select.Trigger>
 				<Select.Value>
@@ -95,7 +100,7 @@ export function SettingSelect({
 				</Select.Value>
 				<Select.Indicator />
 			</Select.Trigger>
-			<Select.Popover>
+			<Select.Popover className={popoverClassName}>
 				<ListBox>
 					{options.map((opt) => (
 						<ListBox.Item
@@ -104,7 +109,7 @@ export function SettingSelect({
 							textValue={opt.label}
 							isDisabled={opt.isDisabled}
 						>
-							<div className="flex min-w-0 flex-1 items-baseline justify-between gap-5">
+							<div className="flex min-w-0 flex-1 items-baseline justify-between gap-4 pr-8">
 								<Label className="min-w-0 truncate">
 									{opt.label}
 								</Label>

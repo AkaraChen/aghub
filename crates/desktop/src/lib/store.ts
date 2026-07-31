@@ -64,7 +64,6 @@ export {
 	HOME_STAT_IDS,
 	HOME_WINDOW_IDS,
 	saveUsageSettings,
-	trackedUsageAgents,
 	USAGE_ALERT_THRESHOLDS_PCT,
 	USAGE_QUOTA_AGENTS,
 } from "./store/usage";

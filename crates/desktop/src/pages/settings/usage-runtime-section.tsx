@@ -93,9 +93,18 @@ export function UsageRuntimeSection() {
 			className="space-y-4 px-1 pb-5"
 			aria-labelledby="usage-runtime-heading"
 		>
-			<div className="flex items-start justify-between gap-3">
-				<div className="min-w-0">
-					<div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+				<div className="min-w-0 space-y-1">
+					<h3
+						id="usage-runtime-heading"
+						className="text-sm font-semibold text-(--foreground)"
+					>
+						<span>ccusage</span> {t("usageRuntimeHeadingSuffix")}
+					</h3>
+					<p className="text-xs text-muted">
+						{t("usageRuntimeDescription")}
+					</p>
+					<div className="flex min-w-0 items-center gap-2 pt-1">
 						<span
 							aria-hidden
 							className={cn(
@@ -109,12 +118,6 @@ export function UsageRuntimeSection() {
 											: "bg-warning",
 							)}
 						/>
-						<h3
-							id="usage-runtime-heading"
-							className="text-sm font-semibold text-(--foreground)"
-						>
-							ccusage
-						</h3>
 						<span
 							role="status"
 							aria-live="polite"
@@ -133,12 +136,12 @@ export function UsageRuntimeSection() {
 						</span>
 					</div>
 					{statusError && !isStatusPending && (
-						<p className="ml-4 mt-1 break-words text-xs text-danger">
+						<p className="break-words pl-4 text-xs text-danger">
 							{statusError}
 						</p>
 					)}
 				</div>
-				<div className="flex shrink-0 items-center gap-2">
+				<div className="flex shrink-0 flex-wrap items-center gap-1 sm:justify-end">
 					{showUpdate && (
 						<Button
 							size="sm"

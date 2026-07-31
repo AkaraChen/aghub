@@ -1,26 +1,12 @@
 import { describe, expect, it } from "vitest";
-import {
-	agentSettings,
-	createDefaultUsageSettings,
-	trackedUsageAgents,
-} from "./usage";
+import { agentSettings, createDefaultUsageSettings } from "./usage";
 
-describe("usage tracking settings", () => {
-	it("tracks agents by default for existing stores", () => {
+describe("usage agent settings", () => {
+	it("uses the global alert threshold by default", () => {
 		const settings = createDefaultUsageSettings();
-
-		expect(agentSettings(settings, "kilocode").tracked).toBe(true);
-	});
-
-	it("filters probes using the persisted per-agent choice", () => {
-		const settings = createDefaultUsageSettings();
-		settings.agents.kilocode = {
-			alertThresholdPct: null,
-			tracked: false,
-		};
 
 		expect(
-			trackedUsageAgents(settings, ["claude", "kilocode", "opencode"]),
-		).toEqual(["claude", "opencode"]);
+			agentSettings(settings, "kilocode").alertThresholdPct,
+		).toBeNull();
 	});
 });

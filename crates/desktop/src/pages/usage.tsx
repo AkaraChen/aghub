@@ -10,7 +10,7 @@ import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useUsageSettings } from "../hooks/use-usage-settings";
 import { AgentIcon } from "../lib/agent-icons";
-import { DEFAULT_USAGE_SETTINGS, trackedUsageAgents } from "../lib/store";
+import { DEFAULT_USAGE_SETTINGS } from "../lib/store";
 import { USAGE_AGENT_LABELS } from "../lib/usage-agents";
 import {
 	formatCost,
@@ -56,9 +56,13 @@ export default function UsagePage() {
 	const usageAgentsQuery = useQuery(
 		usageAgentsQueryOptions({ api, enabled: settingsReady }),
 	);
-	const trackedAgentIds = useMemo(
-		() => trackedUsageAgents(settings, usageAgentsQuery.data ?? []),
-		[settings, usageAgentsQuery.data],
+	const enabledAgentIds = new Set(
+		availableAgents
+			.filter((agent) => agent.isUsable)
+			.map((agent) => agent.id),
+	);
+	const enabledUsageAgentIds = (usageAgentsQuery.data ?? []).filter((id) =>
+		enabledAgentIds.has(id),
 	);
 
 	const reportQuery = useQuery(
@@ -71,7 +75,7 @@ export default function UsagePage() {
 			config: settings.ccusageConfigPath,
 			timeoutSecs: settings.requestTimeoutSecs,
 			args: settings.extraArgs,
-			agents: trackedAgentIds,
+			agents: enabledUsageAgentIds,
 			enabled: settingsReady && usageAgentsQuery.isSuccess,
 			refetchInterval,
 		}),
@@ -94,8 +98,8 @@ export default function UsagePage() {
 				? reportQuery.error.message
 				: t("usageReportLoadError");
 	const emptyMessage =
-		trackedAgentIds.length === 0
-			? t("usageNoTrackedAgents")
+		enabledUsageAgentIds.length === 0
+			? t("usageNoEnabledAgents")
 			: (report?.warnings[0] ?? t("usageEmpty"));
 
 	const displayName = useMemo(() => {

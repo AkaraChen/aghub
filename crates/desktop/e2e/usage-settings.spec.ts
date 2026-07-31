@@ -82,11 +82,14 @@ test.beforeEach(async ({ page }) => {
 test("Usage settings panel and layout editor render", async ({ page }) => {
 	await page.goto("/settings?tab=usage");
 
-	// Runtime source + the layout editor's inspector block.
-	await expect(page.getByText("Runtime source")).toBeVisible();
+	// Runtime controls and the layout editor's inspector block.
+	await expect(page.getByText("ccusage runtime")).toBeVisible();
 	await expect(
-		page.getByRole("button", { name: "Runtime source" }),
-	).toContainText("Automatic selection");
+		page.getByText("Reads local token and cost data for the Usage page."),
+	).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "ccusage source" }),
+	).toContainText("Automatic");
 	await expect(page.getByText("Card layout", { exact: true })).toBeVisible();
 
 	// The default card starts with the weekly quota and the four useful
@@ -118,27 +121,20 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await expect(runtimeStatus).toHaveText("Update available");
 	await expect(runtimeStatus).not.toHaveClass(/truncate/);
 	await expect(
-		runtimeSection.getByText("Using Bundled fallback · v20.0.6", {
+		runtimeSection.getByText("Running Bundled · v20.0.6", {
 			exact: true,
 		}),
 	).toBeVisible();
 	await expect(
 		runtimeSection.getByRole("button", {
-			name: "Install v20.0.17 in aghub",
+			name: "Install v20.0.17",
 		}),
 	).toBeVisible();
 	await expect(
 		page.getByRole("button", { name: "Check again" }),
 	).toBeVisible();
 
-	const trackedAgents = page.getByTestId("tracked-agents");
-	await expect(trackedAgents).toBeVisible();
-	await expect(
-		trackedAgents.getByRole("switch", { name: "Track Claude usage" }),
-	).toBeChecked();
-	await expect(
-		trackedAgents.getByRole("switch", { name: "Track KiloCode usage" }),
-	).toBeChecked();
+	await expect(page.getByTestId("tracked-agents")).toHaveCount(0);
 
 	// Alerts: one row per quota agent with the resolved-global threshold.
 	await expect(
@@ -171,14 +167,12 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await expect(page.getByText("/usr/local/bin/ccusage")).toHaveCount(0);
 });
 
-test("tracked agent choices bound usage probes", async ({ page }) => {
-	await page.goto("/settings?tab=usage");
-	const kiloSwitch = page.getByRole("switch", {
-		name: "Track KiloCode usage",
-	});
-	await expect(kiloSwitch).toBeChecked();
-	await kiloSwitch.locator("xpath=ancestor::label").click();
-	await expect(kiloSwitch).not.toBeChecked();
+test("agent enablement bounds usage probes", async ({ page }) => {
+	await page.goto("/settings?tab=agents");
+	const claudeSwitch = page.getByRole("switch", { name: "Toggle Claude" });
+	await expect(claudeSwitch).toBeChecked();
+	await claudeSwitch.locator("xpath=ancestor::label").click();
+	await expect(claudeSwitch).not.toBeChecked();
 
 	const summaryRequest = page.waitForRequest((request) =>
 		new URL(request.url()).pathname.endsWith("/usage/summary"),
@@ -189,8 +183,8 @@ test("tracked agent choices bound usage probes", async ({ page }) => {
 		.get("agents")
 		?.split(",");
 
-	expect(selected).toContain("claude");
-	expect(selected).not.toContain("kilocode");
+	expect(selected).not.toContain("claude");
+	expect(selected).toContain("gemini");
 });
 
 test("runtime source row owns version and availability metadata", async ({
@@ -261,7 +255,7 @@ test("runtime source row owns version and availability metadata", async ({
 		.getByText("ccusage", { exact: true })
 		.locator("xpath=ancestor::section");
 	const controls = page.getByTestId("usage-runtime-source-controls");
-	const source = page.getByRole("button", { name: "Runtime source" });
+	const source = page.getByRole("button", { name: "ccusage source" });
 	await expect(runtimeSection.getByRole("status")).toHaveText("Up to date");
 	await expect(
 		controls.getByText("v20.0.18 · Managed by aghub", { exact: true }),
@@ -274,15 +268,15 @@ test("runtime source row owns version and availability metadata", async ({
 		activePath,
 	);
 	await expect(runtimeSection.getByText(/v20\.0\.18/)).toHaveCount(1);
-	await expect(source).toContainText("Bun-managed copy");
+	await expect(source).toContainText("Bun");
 	await expect(source).not.toContainText("v20.0.18");
 
 	await source.click();
 	const pathOption = page.getByRole("option", { name: /System PATH/ });
-	const bunOption = page.getByRole("option", { name: /Bun-managed copy/ });
-	const npmOption = page.getByRole("option", { name: /npm-managed copy/ });
+	const bunOption = page.getByRole("option", { name: "Bun v20.0.18" });
+	const npmOption = page.getByRole("option", { name: /^npm/ });
 	const bundledOption = page.getByRole("option", {
-		name: /Bundled fallback/,
+		name: /Bundled/,
 	});
 	await expect(pathOption.locator('[data-slot="description"]')).toHaveText(
 		"v20.0.14",
@@ -296,6 +290,21 @@ test("runtime source row owns version and availability metadata", async ({
 	await expect(bundledOption.locator('[data-slot="description"]')).toHaveText(
 		"Unavailable",
 	);
+	const menu = page.locator('[data-slot="select-popover"]');
+	await expect(menu).toBeVisible();
+	const menuBox = await menu.boundingBox();
+	expect(menuBox?.width).toBeLessThanOrEqual(320);
+	const bunDescriptionBox = await bunOption
+		.locator('[data-slot="description"]')
+		.boundingBox();
+	const bunIndicatorBox = await bunOption
+		.locator('[data-slot="list-box-item-indicator"]')
+		.boundingBox();
+	expect(bunDescriptionBox).not.toBeNull();
+	expect(bunIndicatorBox).not.toBeNull();
+	expect(
+		(bunDescriptionBox?.x ?? 0) + (bunDescriptionBox?.width ?? 0),
+	).toBeLessThanOrEqual((bunIndicatorBox?.x ?? 0) - 8);
 	await pathOption.click();
 	await expect(controls.getByTestId("usage-runtime-path")).toHaveText(
 		systemPath,
@@ -311,16 +320,14 @@ test("ccusage update uses the runtime endpoint", async ({ page }) => {
 	});
 	await page.goto("/settings?tab=usage");
 
-	await page
-		.getByRole("button", { name: "Install v20.0.17 in aghub" })
-		.click();
+	await page.getByRole("button", { name: "Install v20.0.17" }).click();
 	await expect.poll(() => updateRequests).toBe(1);
 	const runtimeSection = page
 		.getByText("ccusage", { exact: true })
 		.locator("xpath=ancestor::section");
 	await expect(runtimeSection.getByRole("status")).toHaveText("Up to date");
 	await expect(
-		runtimeSection.getByText("Using Bun-managed copy · v20.0.17", {
+		runtimeSection.getByText("Running Bun · v20.0.17", {
 			exact: true,
 		}),
 	).toBeVisible();
@@ -348,23 +355,23 @@ test("runtime sources use selection and installation endpoints", async ({
 	});
 	await page.goto("/settings?tab=usage");
 
-	const source = page.getByRole("button", { name: "Runtime source" });
+	const source = page.getByRole("button", { name: "ccusage source" });
 	await source.click();
-	await page.getByRole("option", { name: "Bundled fallback" }).click();
-	await page.getByRole("button", { name: "Use Bundled fallback" }).click();
+	await page.getByRole("option", { name: "Bundled" }).click();
+	await page.getByRole("button", { name: "Use Bundled" }).click();
 	await expect
 		.poll(() => selections)
 		.toEqual([{ source: "bundled", path: null }]);
-	await expect(source).toContainText("Bundled fallback");
+	await expect(source).toContainText("Bundled");
 
 	await source.click();
-	await page.getByRole("option", { name: "Downloaded copy" }).click();
-	await page.getByRole("button", { name: "Install Downloaded copy" }).click();
+	await page.getByRole("option", { name: "Direct download" }).click();
+	await page.getByRole("button", { name: "Download and use" }).click();
 	await expect.poll(() => installs).toEqual([{ source: "download" }]);
 	await expect(
 		page.getByText("v20.0.17 · Managed by aghub", { exact: true }),
 	).toBeVisible();
-	await expect(source).toContainText("Downloaded copy");
+	await expect(source).toContainText("Direct download");
 });
 
 test("runtime source distinguishes the saved preference from an environment override", async ({
@@ -401,27 +408,27 @@ test("runtime source distinguishes the saved preference from an environment over
 	await page.goto("/settings?tab=usage");
 
 	await expect(
-		page.getByRole("button", { name: "Runtime source" }),
-	).toContainText("Bun-managed copy");
+		page.getByRole("button", { name: "ccusage source" }),
+	).toContainText("Bun");
 	await expect(
-		page.getByText("Using Environment variable · v20.0.17", {
+		page.getByText("Running Environment override · v20.0.17", {
 			exact: true,
 		}),
 	).toBeVisible();
 	await expect(
-		page.getByRole("button", { name: "Install v20.0.18 in aghub" }),
+		page.getByRole("button", { name: "Install v20.0.18" }),
 	).toHaveCount(0);
 
-	const source = page.getByRole("button", { name: "Runtime source" });
+	const source = page.getByRole("button", { name: "ccusage source" });
 	await source.click();
-	await page.getByRole("option", { name: "Automatic selection" }).click();
+	await page.getByRole("option", { name: "Automatic" }).click();
 	await expect(
 		page.getByText(
-			"Checks the environment variable, system PATH, an aghub-managed copy, then the bundled fallback.",
+			"Uses the first available ccusage runtime. Choose a source to override it.",
 			{ exact: true },
 		),
 	).toBeVisible();
-	await expect(page.getByText(/Using Environment variable/)).toHaveCount(0);
+	await expect(page.getByText(/Running Environment override/)).toHaveCount(0);
 });
 
 test("re-check spins and remains pending until the probe settles", async ({
@@ -614,7 +621,7 @@ test("runtime errors override stale health without hiding its version", async ({
 		);
 		await expect(status).toHaveText("Couldn't check ccusage");
 		await expect(
-			runtimeSection.getByText("Using Bun-managed copy · v20.0.17", {
+			runtimeSection.getByText("Running Bun · v20.0.17", {
 				exact: true,
 			}),
 		).toBeVisible();
@@ -647,7 +654,7 @@ test("runtime status and defaults footer fit a compact desktop", async ({
 	await expect(runtimeSection.getByRole("status")).toBeVisible();
 	await expect(
 		runtimeSection.getByRole("button", {
-			name: "Install v20.0.17 in aghub",
+			name: "Install v20.0.17",
 		}),
 	).toBeVisible();
 	await expect(page.getByTestId("usage-defaults-footer")).toBeVisible();
