@@ -1,6 +1,6 @@
 import { Button } from "@heroui/react";
 import type { TFunction } from "i18next";
-import { useState } from "react";
+import { useState, type FC, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type {
 	CcusageRuntimeCandidateDto,
@@ -9,7 +9,7 @@ import type {
 	CcusageRuntimeSource,
 } from "../../generated/dto";
 import { shortCcusageVersion } from "../../lib/usage-format";
-import { PathField, SettingRow, SettingSelect } from "./usage-setting-controls";
+import { PathField, SettingSelect } from "./usage-setting-controls";
 
 const MANAGED_SOURCES: ReadonlySet<CcusageRuntimeSource> = new Set([
 	"bun",
@@ -31,17 +31,21 @@ const SELECTABLE_SOURCES: CcusageRuntimeSource[] = [
 	"manual",
 ];
 
-export function RuntimeSourceControls({
-	runtime,
-	isPending,
-	onSelect,
-	onInstall,
-}: {
+interface RuntimeSourceControlsProps {
 	runtime: CcusageRuntimeDto;
 	isPending: boolean;
+	actions: ReactNode;
 	onSelect: (source: CcusageRuntimeSource, path: string | null) => void;
 	onInstall: (source: CcusageRuntimeSource) => void;
-}) {
+}
+
+export const RuntimeSourceControls: FC<RuntimeSourceControlsProps> = ({
+	runtime,
+	isPending,
+	actions,
+	onSelect,
+	onInstall,
+}) => {
 	const { t } = useTranslation();
 	const [selectedSource, setSelectedSource] = useState<CcusageRuntimeSource>(
 		runtime.preference,
@@ -58,6 +62,13 @@ export function RuntimeSourceControls({
 	const hasChange =
 		selectedSource !== runtime.preference ||
 		(selectedSource === "manual" && manualPath.trim() !== "");
+	const metadata = sourceMetadata(
+		selectedSource,
+		candidate,
+		describedActive,
+		hasChange,
+		t,
+	);
 	const selectedSourceLabel = t(sourceLabelKey(selectedSource));
 	const options = SELECTABLE_SOURCES.map((source) => {
 		const sourceCandidate = runtime.candidates.find(
@@ -82,69 +93,59 @@ export function RuntimeSourceControls({
 	};
 
 	return (
-		<div className="space-y-3" data-testid="usage-runtime-source-controls">
-			<SettingRow
-				title={t("usageRuntimeSource")}
-				description={
-					<span className="block min-w-0">
-						<span className="block">
-							{sourceDescription(
-								selectedSource,
-								candidate,
-								describedActive,
-								t,
-							)}
-						</span>
-						{executablePath && (
-							<code
-								dir="ltr"
-								title={executablePath}
-								data-testid="usage-runtime-path"
-								className="mt-0.5 block max-w-full truncate font-mono text-[11px]"
-							>
-								{executablePath}
-							</code>
-						)}
-					</span>
-				}
-				control={
-					<div className="flex flex-wrap items-center justify-end gap-2">
-						<SettingSelect
-							value={selectedSource}
-							onChange={(source) =>
-								setSelectedSource(
-									source as CcusageRuntimeSource,
-								)
-							}
-							ariaLabel={t("usageRuntimeSource")}
-							options={options}
-							isDisabled={isPending}
-							className="w-52"
-							popoverClassName="w-64 max-w-[calc(100vw-2rem)]"
-						/>
-						{hasChange && selectedSource !== "manual" && (
-							<Button
-								size="sm"
-								variant="secondary"
-								isPending={isPending}
-								onPress={applySelection}
-							>
-								{needsInstall
-									? selectedSource === "download"
-										? t("usageRuntimeDownloadSource")
-										: t("usageRuntimeInstallSource", {
-												source: selectedSourceLabel,
-											})
-									: t("usageRuntimeUseSource", {
-											source: selectedSourceLabel,
-										})}
-							</Button>
-						)}
-					</div>
-				}
-			/>
+		<>
+			<div
+				className="flex flex-wrap items-center gap-2 sm:justify-end"
+				data-testid="usage-runtime-source-controls"
+			>
+				<SettingSelect
+					value={selectedSource}
+					onChange={(source) =>
+						setSelectedSource(source as CcusageRuntimeSource)
+					}
+					ariaLabel={t("usageRuntimeSource")}
+					options={options}
+					isDisabled={isPending}
+					className="w-44"
+					popoverClassName="w-64 max-w-[calc(100vw-2rem)]"
+				/>
+				{hasChange && selectedSource !== "manual" && (
+					<Button
+						size="sm"
+						variant="secondary"
+						isPending={isPending}
+						onPress={applySelection}
+					>
+						{needsInstall
+							? selectedSource === "download"
+								? t("usageRuntimeDownloadSource")
+								: t("usageRuntimeInstallSource", {
+										source: selectedSourceLabel,
+									})
+							: t("usageRuntimeUseSource", {
+									source: selectedSourceLabel,
+								})}
+					</Button>
+				)}
+				{actions}
+			</div>
+			<div className="col-span-full flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-muted">
+				<span data-testid="usage-runtime-source-metadata">
+					{metadata}
+				</span>
+				{executablePath && (
+					<code
+						dir="ltr"
+						title={executablePath}
+						data-testid="usage-runtime-path"
+						className="min-w-0 flex-1 truncate font-mono text-[11px]"
+					>
+						{executablePath}
+					</code>
+				)}
+			</div>
 			{selectedSource === "manual" && (
-				<div className="space-y-2">
+				<div className="col-span-full space-y-2">
 					<PathField
 						label={t("usageRuntimeManualPath")}
 						value={manualPath}
@@ -165,8 +166,19 @@ export function RuntimeSourceControls({
 					</div>
 				</div>
 			)}
-		</div>
+		</>
 	);
+};
+
+function sourceMetadata(
+	source: CcusageRuntimeSource,
+	candidate: CcusageRuntimeCandidateDto | undefined,
+	active: CcusageRuntimeExecutableDto | null,
+	hasChange: boolean,
+	t: TFunction,
+): string {
+	if (!hasChange && active) return t(sourceLabelKey(active.source));
+	return sourceDescription(source, candidate, active, t);
 }
 
 function sourceOptionDescription(

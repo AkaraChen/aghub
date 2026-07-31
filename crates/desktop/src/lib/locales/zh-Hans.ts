@@ -440,8 +440,6 @@ export default {
 	usageStatusUnreachable: "ccusage 不可达",
 	usageStatusUpdate: "有新版 {{version}}",
 	usageStatusRecheck: "重新检查",
-	usageRuntimeHeadingSuffix: "运行环境",
-	usageRuntimeDescription: "为“用量”页面读取本机 token 和费用数据。",
 	usageRuntimeStatusReady: "运行正常",
 	usageRuntimeStatusChecking: "正在检查 ccusage…",
 	usageRuntimeStatusInstalling: "正在安装 ccusage…",

@@ -458,9 +458,6 @@ export default {
 	usageStatusUnreachable: "ccusage isn't reachable",
 	usageStatusUpdate: "{{version}} available",
 	usageStatusRecheck: "Check again",
-	usageRuntimeHeadingSuffix: "runtime",
-	usageRuntimeDescription:
-		"Reads local token and cost data for the Usage page.",
 	usageRuntimeStatusReady: "Running",
 	usageRuntimeStatusChecking: "Checking ccusage…",
 	usageRuntimeStatusInstalling: "Installing ccusage…",

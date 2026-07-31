@@ -83,10 +83,10 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await page.goto("/settings?tab=usage");
 
 	// Runtime controls and the layout editor's inspector block.
-	await expect(page.getByText("ccusage runtime")).toBeVisible();
+	await expect(page.getByRole("heading", { name: "ccusage" })).toBeVisible();
 	await expect(
 		page.getByText("Reads local token and cost data for the Usage page."),
-	).toBeVisible();
+	).toHaveCount(0);
 	await expect(
 		page.getByRole("button", { name: "ccusage source" }),
 	).toContainText("Automatic");
@@ -121,10 +121,11 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await expect(runtimeStatus).toHaveText("Update available");
 	await expect(runtimeStatus).not.toHaveClass(/truncate/);
 	await expect(
-		runtimeSection.getByText("Running Bundled · v20.0.6", {
-			exact: true,
-		}),
-	).toBeVisible();
+		runtimeSection.getByTestId("usage-runtime-version"),
+	).toHaveText("v20.0.6");
+	await expect(
+		runtimeSection.getByTestId("usage-runtime-source-metadata"),
+	).toHaveText("Bundled");
 	await expect(
 		runtimeSection.getByRole("button", {
 			name: "Install v20.0.17",
@@ -254,22 +255,35 @@ test("runtime source row owns version and availability metadata", async ({
 	const runtimeSection = page
 		.getByText("ccusage", { exact: true })
 		.locator("xpath=ancestor::section");
-	const controls = page.getByTestId("usage-runtime-source-controls");
 	const source = page.getByRole("button", { name: "ccusage source" });
-	await expect(runtimeSection.getByRole("status")).toHaveText("Up to date");
+	const summary = runtimeSection.getByTestId("usage-runtime-summary");
+	const version = summary.getByTestId("usage-runtime-version");
+	const status = summary.getByRole("status");
+	await expect(version).toHaveText("v20.0.18");
+	await expect(status).toHaveText("Up to date");
 	await expect(
-		controls.getByText("v20.0.18 · Managed by aghub", { exact: true }),
-	).toBeVisible();
-	await expect(controls.getByTestId("usage-runtime-path")).toHaveText(
+		runtimeSection.getByTestId("usage-runtime-source-metadata"),
+	).toHaveText("Bun");
+	await expect(runtimeSection.getByTestId("usage-runtime-path")).toHaveText(
 		activePath,
 	);
-	await expect(controls.getByTestId("usage-runtime-path")).toHaveAttribute(
-		"title",
-		activePath,
-	);
+	await expect(
+		runtimeSection.getByTestId("usage-runtime-path"),
+	).toHaveAttribute("title", activePath);
 	await expect(runtimeSection.getByText(/v20\.0\.18/)).toHaveCount(1);
 	await expect(source).toContainText("Bun");
 	await expect(source).not.toContainText("v20.0.18");
+	const [versionBox, statusBox, sourceBox] = await Promise.all([
+		version.boundingBox(),
+		status.boundingBox(),
+		source.boundingBox(),
+	]);
+	expect(versionBox).not.toBeNull();
+	expect(statusBox).not.toBeNull();
+	expect(sourceBox).not.toBeNull();
+	expect(versionBox!.x + versionBox!.width).toBeLessThanOrEqual(statusBox!.x);
+	expect(Math.abs(versionBox!.y - statusBox!.y)).toBeLessThan(3);
+	expect(Math.abs(sourceBox!.y - statusBox!.y)).toBeLessThan(16);
 
 	await source.click();
 	const pathOption = page.getByRole("option", { name: /System PATH/ });
@@ -306,7 +320,7 @@ test("runtime source row owns version and availability metadata", async ({
 		(bunDescriptionBox?.x ?? 0) + (bunDescriptionBox?.width ?? 0),
 	).toBeLessThanOrEqual((bunIndicatorBox?.x ?? 0) - 8);
 	await pathOption.click();
-	await expect(controls.getByTestId("usage-runtime-path")).toHaveText(
+	await expect(runtimeSection.getByTestId("usage-runtime-path")).toHaveText(
 		systemPath,
 	);
 });
@@ -327,10 +341,11 @@ test("ccusage update uses the runtime endpoint", async ({ page }) => {
 		.locator("xpath=ancestor::section");
 	await expect(runtimeSection.getByRole("status")).toHaveText("Up to date");
 	await expect(
-		runtimeSection.getByText("Running Bun · v20.0.17", {
-			exact: true,
-		}),
-	).toBeVisible();
+		runtimeSection.getByTestId("usage-runtime-version"),
+	).toHaveText("v20.0.17");
+	await expect(
+		runtimeSection.getByTestId("usage-runtime-source-metadata"),
+	).toHaveText("Bun");
 	await expect(runtimeSection.getByText("Install with Bun")).toHaveCount(0);
 	await expect(page.getByRole("button", { name: /v20\.0\.17/ })).toHaveCount(
 		0,
@@ -368,9 +383,12 @@ test("runtime sources use selection and installation endpoints", async ({
 	await page.getByRole("option", { name: "Direct download" }).click();
 	await page.getByRole("button", { name: "Download and use" }).click();
 	await expect.poll(() => installs).toEqual([{ source: "download" }]);
-	await expect(
-		page.getByText("v20.0.17 · Managed by aghub", { exact: true }),
-	).toBeVisible();
+	await expect(page.getByTestId("usage-runtime-version")).toHaveText(
+		"v20.0.17",
+	);
+	await expect(page.getByTestId("usage-runtime-source-metadata")).toHaveText(
+		"Direct download",
+	);
 	await expect(source).toContainText("Direct download");
 });
 
@@ -410,11 +428,12 @@ test("runtime source distinguishes the saved preference from an environment over
 	await expect(
 		page.getByRole("button", { name: "ccusage source" }),
 	).toContainText("Bun");
-	await expect(
-		page.getByText("Running Environment override · v20.0.17", {
-			exact: true,
-		}),
-	).toBeVisible();
+	await expect(page.getByTestId("usage-runtime-version")).toHaveText(
+		"v20.0.17",
+	);
+	await expect(page.getByTestId("usage-runtime-source-metadata")).toHaveText(
+		"Environment override",
+	);
 	await expect(
 		page.getByRole("button", { name: "Install v20.0.18" }),
 	).toHaveCount(0);
@@ -428,7 +447,9 @@ test("runtime source distinguishes the saved preference from an environment over
 			{ exact: true },
 		),
 	).toBeVisible();
-	await expect(page.getByText(/Running Environment override/)).toHaveCount(0);
+	await expect(
+		page.getByTestId("usage-runtime-source-metadata"),
+	).not.toHaveText("Environment override");
 });
 
 test("re-check spins and remains pending until the probe settles", async ({
@@ -621,10 +642,11 @@ test("runtime errors override stale health without hiding its version", async ({
 		);
 		await expect(status).toHaveText("Couldn't check ccusage");
 		await expect(
-			runtimeSection.getByText("Running Bun · v20.0.17", {
-				exact: true,
-			}),
-		).toBeVisible();
+			runtimeSection.getByTestId("usage-runtime-version"),
+		).toHaveText("v20.0.17");
+		await expect(
+			runtimeSection.getByTestId("usage-runtime-source-metadata"),
+		).toHaveText("Bun");
 		await expect(errorDetail).toBeVisible();
 		await expect(
 			runtimeSection.locator("span.size-2.rounded-full"),

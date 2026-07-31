@@ -439,8 +439,6 @@ export default {
 	usageStatusUnreachable: "ccusage 不可達",
 	usageStatusUpdate: "有新版 {{version}}",
 	usageStatusRecheck: "重新檢查",
-	usageRuntimeHeadingSuffix: "執行環境",
-	usageRuntimeDescription: "為「用量」頁面讀取本機 token 和費用資料。",
 	usageRuntimeStatusReady: "執行正常",
 	usageRuntimeStatusChecking: "正在檢查 ccusage…",
 	usageRuntimeStatusInstalling: "正在安裝 ccusage…",
