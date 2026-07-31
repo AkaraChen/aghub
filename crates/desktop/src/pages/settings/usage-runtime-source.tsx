@@ -98,17 +98,7 @@ export const RuntimeSourceControls: FC<RuntimeSourceControlsProps> = ({
 				className="flex flex-wrap items-center gap-2 sm:justify-end"
 				data-testid="usage-runtime-source-controls"
 			>
-				<SettingSelect
-					value={selectedSource}
-					onChange={(source) =>
-						setSelectedSource(source as CcusageRuntimeSource)
-					}
-					ariaLabel={t("usageRuntimeSource")}
-					options={options}
-					isDisabled={isPending}
-					className="w-44"
-					popoverClassName="w-64 max-w-[calc(100vw-2rem)]"
-				/>
+				{actions}
 				{hasChange && selectedSource !== "manual" && (
 					<Button
 						size="sm"
@@ -127,7 +117,17 @@ export const RuntimeSourceControls: FC<RuntimeSourceControlsProps> = ({
 								})}
 					</Button>
 				)}
-				{actions}
+				<SettingSelect
+					value={selectedSource}
+					onChange={(source) =>
+						setSelectedSource(source as CcusageRuntimeSource)
+					}
+					ariaLabel={t("usageRuntimeSource")}
+					options={options}
+					isDisabled={isPending}
+					className="w-40"
+					popoverClassName="w-64 max-w-[calc(100vw-2rem)]"
+				/>
 			</div>
 			<div className="col-span-full flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-muted">
 				<span data-testid="usage-runtime-source-metadata">

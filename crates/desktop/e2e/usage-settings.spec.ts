@@ -131,9 +131,24 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 			name: "Update to v20.0.17",
 		}),
 	).toBeVisible();
+	const runtimeSummary = runtimeSection.getByTestId("usage-runtime-summary");
+	const updateButton = runtimeSection.getByRole("button", {
+		name: "Update to v20.0.17",
+	});
+	const sourceSelect = runtimeSection.getByRole("button", {
+		name: "ccusage source",
+	});
 	await expect(
-		page.getByRole("button", { name: "Check again" }),
+		runtimeSummary.getByRole("button", { name: "Check again" }),
 	).toBeVisible();
+	const [updateBox, sourceBox] = await Promise.all([
+		updateButton.boundingBox(),
+		sourceSelect.boundingBox(),
+	]);
+	expect(updateBox).not.toBeNull();
+	expect(sourceBox).not.toBeNull();
+	expect(updateBox!.x + updateBox!.width).toBeLessThanOrEqual(sourceBox!.x);
+	expect(sourceBox!.width).toBeLessThanOrEqual(160);
 
 	await expect(page.getByTestId("tracked-agents")).toHaveCount(0);
 
@@ -351,6 +366,80 @@ test("ccusage update uses the runtime endpoint", async ({ page }) => {
 		0,
 	);
 	await expect(page).toHaveURL(/\/settings\?tab=usage$/);
+});
+
+test("package-managed PATH runtime updates without changing location", async ({
+	page,
+}) => {
+	const executable = "/Users/test/.bun/bin/ccusage";
+	let updateRequests = 0;
+	let runtime: CcusageRuntimeDto = {
+		preference: "auto",
+		active: {
+			source: "path",
+			path: executable,
+			version: "20.0.14",
+			can_update: true,
+		},
+		candidates: [
+			{
+				source: "path",
+				installed: true,
+				path: executable,
+				version: "20.0.14",
+				can_install: false,
+			},
+			{
+				source: "bun",
+				installed: false,
+				path: null,
+				version: null,
+				can_install: true,
+			},
+		],
+		latest_version: "20.0.19",
+		update_available: true,
+		error: null,
+	};
+	await page.route("**/api/v1/usage/runtime", (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify(runtime),
+		}),
+	);
+	await page.route("**/api/v1/usage/runtime/update", (route) => {
+		updateRequests += 1;
+		runtime = {
+			...runtime,
+			active: {
+				...runtime.active!,
+				version: "20.0.19",
+			},
+			candidates: runtime.candidates.map((candidate) =>
+				candidate.source === "path"
+					? { ...candidate, version: "20.0.19" }
+					: candidate,
+			),
+			update_available: false,
+		};
+		return route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify(runtime),
+		});
+	});
+	await page.goto("/settings?tab=usage");
+
+	await page.getByRole("button", { name: "Update to v20.0.19" }).click();
+	await expect.poll(() => updateRequests).toBe(1);
+	await expect(page.getByTestId("usage-runtime-version")).toHaveText(
+		"v20.0.19",
+	);
+	await expect(page.getByTestId("usage-runtime-source-metadata")).toHaveText(
+		"System PATH",
+	);
+	await expect(page.getByTestId("usage-runtime-path")).toHaveText(executable);
 });
 
 test("runtime sources use selection and installation endpoints", async ({

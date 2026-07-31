@@ -99,6 +99,89 @@ pub(super) async fn validate_package_runner(
 	Ok(())
 }
 
+pub(super) async fn runner_owns_global_install(
+	source: CcusageRuntimeSource,
+	runner: &PackageRunner,
+	executable: &Path,
+) -> Result<bool, CcusageRuntimeError> {
+	let args = match source {
+		CcusageRuntimeSource::Bun => ["pm", "bin", "-g"],
+		CcusageRuntimeSource::Npm => ["root", "--global", ""],
+		_ => return Ok(false),
+	};
+	let mut command = runner.command();
+	command.args(args.into_iter().filter(|arg| !arg.is_empty()));
+	let output =
+		run_command(&mut command, RUNNER_PROBE_TIMEOUT, source).await?;
+	if output.stdout.truncated || output.stderr.truncated {
+		return Err(CcusageRuntimeError::InvalidBinary(format!(
+			"{} global path query produced too much output",
+			runner.program().display()
+		)));
+	}
+	if !output.status.success() {
+		let stderr = String::from_utf8_lossy(&output.stderr.bytes);
+		return Err(CcusageRuntimeError::PackageInstallFailed {
+			provider: source,
+			message: stderr.trim().to_string(),
+		});
+	}
+	let location = String::from_utf8_lossy(&output.stdout.bytes)
+		.lines()
+		.map(str::trim)
+		.rfind(|line| !line.is_empty())
+		.map(PathBuf::from)
+		.ok_or_else(|| {
+			CcusageRuntimeError::InvalidBinary(format!(
+				"{} returned an empty global package path",
+				runner.program().display()
+			))
+		})?;
+
+	match source {
+		CcusageRuntimeSource::Bun => {
+			Ok(["ccusage", "ccusage.exe", "ccusage.cmd", "ccusage.bat"]
+				.into_iter()
+				.map(|name| location.join(name))
+				.any(|candidate| {
+					paths_refer_to_same_file(executable, &candidate)
+				}))
+		}
+		CcusageRuntimeSource::Npm => {
+			Ok(path_is_within(executable, &location.join("ccusage")))
+		}
+		_ => Ok(false),
+	}
+}
+
+pub(super) async fn update_global_package(
+	source: CcusageRuntimeSource,
+	runner: &PackageRunner,
+	version: &Version,
+) -> Result<(), CcusageRuntimeError> {
+	validate_package_runner(source, runner).await?;
+	let args = global_package_update_args(source, version)?;
+	let mut command = runner.command();
+	command.args(args);
+	let output = run_command(&mut command, INSTALL_TIMEOUT, source).await?;
+	if !output.status.success() {
+		let captured = if output.stderr.bytes.is_empty() {
+			&output.stdout
+		} else {
+			&output.stderr
+		};
+		let mut message = String::from_utf8_lossy(&captured.bytes).to_string();
+		if captured.truncated {
+			message.push_str("\noutput truncated");
+		}
+		return Err(CcusageRuntimeError::PackageInstallFailed {
+			provider: source,
+			message: message.trim().to_string(),
+		});
+	}
+	Ok(())
+}
+
 async fn run_command(
 	command: &mut tokio::process::Command,
 	timeout: Duration,
@@ -185,6 +268,49 @@ fn package_command_args(
 	}
 }
 
+fn global_package_update_args(
+	source: CcusageRuntimeSource,
+	version: &Version,
+) -> Result<Vec<String>, CcusageRuntimeError> {
+	let package_spec = format!("ccusage@{version}");
+	match source {
+		CcusageRuntimeSource::Bun => Ok(vec![
+			"add".to_string(),
+			"--global".to_string(),
+			"--ignore-scripts".to_string(),
+			"--exact".to_string(),
+			package_spec,
+		]),
+		CcusageRuntimeSource::Npm => Ok(vec![
+			"install".to_string(),
+			"--global".to_string(),
+			"--ignore-scripts".to_string(),
+			"--save-exact".to_string(),
+			"--fund=false".to_string(),
+			"--audit=false".to_string(),
+			package_spec,
+		]),
+		_ => Err(CcusageRuntimeError::SourceCannotUpdate(source)),
+	}
+}
+
+fn paths_refer_to_same_file(left: &Path, right: &Path) -> bool {
+	if left == right {
+		return true;
+	}
+	left.canonicalize()
+		.ok()
+		.zip(right.canonicalize().ok())
+		.is_some_and(|(left, right)| left == right)
+}
+
+fn path_is_within(path: &Path, root: &Path) -> bool {
+	path.canonicalize()
+		.ok()
+		.zip(root.canonicalize().ok())
+		.is_some_and(|(path, root)| path.starts_with(root))
+}
+
 fn validate_staged_path(
 	stage: &Path,
 	candidate: &Path,
@@ -248,6 +374,82 @@ mod tests {
 			parse_runner_version(b"npm v11.4.0\n").unwrap(),
 			Version::new(11, 4, 0)
 		);
+	}
+
+	#[cfg(unix)]
+	#[tokio::test]
+	async fn recognizes_bun_global_installation() {
+		use std::os::unix::fs::{symlink, PermissionsExt};
+
+		let root = tempfile::tempdir().unwrap();
+		let bin = root.path().join("bun-bin");
+		let package = root.path().join("node_modules/ccusage/src/cli.js");
+		let runner = root.path().join("bun");
+		fs::create_dir_all(&bin).unwrap();
+		fs::create_dir_all(package.parent().unwrap()).unwrap();
+		fs::write(&package, b"fixture").unwrap();
+		symlink(&package, bin.join("ccusage")).unwrap();
+		fs::write(
+			&runner,
+			format!("#!/bin/sh\nprintf '%s\\n' '{}'\n", bin.display()),
+		)
+		.unwrap();
+		fs::set_permissions(&runner, fs::Permissions::from_mode(0o755))
+			.unwrap();
+
+		assert!(runner_owns_global_install(
+			CcusageRuntimeSource::Bun,
+			&PackageRunner::direct(runner),
+			&bin.join("ccusage"),
+		)
+		.await
+		.unwrap());
+	}
+
+	#[cfg(unix)]
+	#[tokio::test]
+	async fn recognizes_npm_global_installation() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let root = tempfile::tempdir().unwrap();
+		let package_root = root.path().join("lib/node_modules");
+		let executable = package_root.join("ccusage/src/cli.js");
+		let runner = root.path().join("npm");
+		fs::create_dir_all(executable.parent().unwrap()).unwrap();
+		fs::write(&executable, b"fixture").unwrap();
+		fs::write(
+			&runner,
+			format!("#!/bin/sh\nprintf '%s\\n' '{}'\n", package_root.display()),
+		)
+		.unwrap();
+		fs::set_permissions(&runner, fs::Permissions::from_mode(0o755))
+			.unwrap();
+
+		assert!(runner_owns_global_install(
+			CcusageRuntimeSource::Npm,
+			&PackageRunner::direct(runner),
+			&executable,
+		)
+		.await
+		.unwrap());
+	}
+
+	#[test]
+	fn global_updates_use_the_selected_package_runner() {
+		let version = Version::new(20, 0, 19);
+		let bun =
+			global_package_update_args(CcusageRuntimeSource::Bun, &version)
+				.unwrap();
+		let npm =
+			global_package_update_args(CcusageRuntimeSource::Npm, &version)
+				.unwrap();
+
+		assert_eq!(bun[0], "add");
+		assert!(bun.iter().any(|arg| arg == "--global"));
+		assert!(bun.iter().any(|arg| arg == "ccusage@20.0.19"));
+		assert_eq!(npm[0], "install");
+		assert!(npm.iter().any(|arg| arg == "--global"));
+		assert!(npm.iter().any(|arg| arg == "ccusage@20.0.19"));
 	}
 
 	#[test]

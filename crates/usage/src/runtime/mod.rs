@@ -410,16 +410,22 @@ impl CcusageRuntime {
 						self.set_active(candidate)?
 					}
 				};
+				let availability = self.acquisition_availability().await;
+				let update_source = update_source(&active, availability)
+					.await
+					.ok_or(CcusageRuntimeError::SourceCannotUpdate(
+						active.source,
+					))?;
 				log::info!(
-					"updating ccusage runtime from {source:?} {version}",
+					"updating ccusage runtime from {source:?} {version} with {update_source:?}",
 					source = active.source,
-					version = active.version
+					version = active.version,
 				);
 				match active.source {
 					CcusageRuntimeSource::Bun
 					| CcusageRuntimeSource::Npm
 					| CcusageRuntimeSource::Download => {
-						self.install_locked(active.source, preference).await?;
+						self.install_locked(update_source, preference).await?;
 					}
 					CcusageRuntimeSource::Bundled => {
 						let preserved = if matches!(
@@ -432,11 +438,13 @@ impl CcusageRuntime {
 						};
 						self.install_preferred_locked(preserved).await?;
 					}
-					_ => {
-						return Err(CcusageRuntimeError::SourceCannotUpdate(
-							active.source,
-						));
+					CcusageRuntimeSource::Environment
+					| CcusageRuntimeSource::Manual
+					| CcusageRuntimeSource::Path => {
+						self.update_external_locked(update_source, &active)
+							.await?;
 					}
+					CcusageRuntimeSource::Auto => unreachable!(),
 				}
 			}
 			Ok(())
@@ -494,12 +502,13 @@ impl CcusageRuntime {
 				|(active, latest)| version_is_older(&active.version, latest),
 			);
 		let preference = self.preference()?;
-		let active_dto = active.as_deref().map(|active| {
-			executable_dto(
+		let active_dto = match active.as_deref() {
+			Some(active) => Some(executable_dto(
 				active,
-				source_can_update(active.source, acquisition),
-			)
-		});
+				update_source(active, acquisition).await.is_some(),
+			)),
+			None => None,
+		};
 		Ok(CcusageRuntimeDto {
 			preference: preference.source(),
 			active: active_dto,
@@ -620,6 +629,33 @@ impl CcusageRuntime {
 		let version = registry.latest_version().await?;
 		self.install_version_locked(source, preference, registry, &version)
 			.await
+	}
+
+	async fn update_external_locked(
+		&self,
+		source: CcusageRuntimeSource,
+		active: &CcusageExecutable,
+	) -> Result<(), CcusageRuntimeError> {
+		let registry = self.registry.as_ref().ok_or_else(|| {
+			CcusageRuntimeError::InvalidRegistryMetadata(
+				"registry client is unavailable".to_string(),
+			)
+		})?;
+		let version = registry.latest_version().await?;
+		let runner = discovery::find_runner(source)
+			.ok_or(CcusageRuntimeError::SourceUnavailable(source))?;
+		acquisition::update_global_package(source, &runner, &version).await?;
+		let candidate =
+			discovery::candidate_from_path(active.source, active.path.clone())
+				.await?;
+		if candidate.version != version.to_string() {
+			return Err(CcusageRuntimeError::InvalidBinary(format!(
+				"updated ccusage version {} does not match requested {version}",
+				candidate.version
+			)));
+		}
+		self.set_active(candidate)?;
+		Ok(())
 	}
 
 	async fn install_version_locked(
@@ -1005,7 +1041,7 @@ fn auto_install_preference(
 	}
 }
 
-fn source_can_update(
+fn managed_source_can_update(
 	source: CcusageRuntimeSource,
 	availability: AcquisitionAvailability,
 ) -> bool {
@@ -1016,6 +1052,55 @@ fn source_can_update(
 		CcusageRuntimeSource::Bundled => availability.any(),
 		_ => false,
 	}
+}
+
+async fn update_source(
+	active: &CcusageExecutable,
+	availability: AcquisitionAvailability,
+) -> Option<CcusageRuntimeSource> {
+	if managed_source_can_update(active.source, availability) {
+		return match active.source {
+			CcusageRuntimeSource::Bundled => acquisition_sources(
+				availability.bun,
+				availability.npm,
+				availability.download,
+			)
+			.into_iter()
+			.next(),
+			_ => Some(active.source),
+		};
+	}
+	if !matches!(
+		active.source,
+		CcusageRuntimeSource::Environment
+			| CcusageRuntimeSource::Manual
+			| CcusageRuntimeSource::Path
+	) {
+		return None;
+	}
+
+	for source in [CcusageRuntimeSource::Bun, CcusageRuntimeSource::Npm] {
+		if !availability.can_install(source) {
+			continue;
+		}
+		let Some(runner) = discovery::find_runner(source) else {
+			continue;
+		};
+		match acquisition::runner_owns_global_install(
+			source,
+			&runner,
+			&active.path,
+		)
+		.await
+		{
+			Ok(true) => return Some(source),
+			Ok(false) => {}
+			Err(error) => log::debug!(
+				"failed to identify ccusage {source:?} global installation: {error}"
+			),
+		}
+	}
+	None
 }
 
 fn is_owned_source(source: CcusageRuntimeSource) -> bool {
@@ -1167,23 +1252,32 @@ mod tests {
 	}
 
 	#[test]
-	fn update_capability_tracks_the_required_acquisition_source() {
+	fn managed_update_capability_tracks_the_acquisition_source() {
 		let availability = AcquisitionAvailability {
 			bun: false,
 			npm: true,
 			download: true,
 		};
-		assert!(!source_can_update(CcusageRuntimeSource::Bun, availability));
-		assert!(source_can_update(CcusageRuntimeSource::Npm, availability));
-		assert!(source_can_update(
+		assert!(!managed_source_can_update(
+			CcusageRuntimeSource::Bun,
+			availability
+		));
+		assert!(managed_source_can_update(
+			CcusageRuntimeSource::Npm,
+			availability
+		));
+		assert!(managed_source_can_update(
 			CcusageRuntimeSource::Download,
 			availability,
 		));
-		assert!(source_can_update(
+		assert!(managed_source_can_update(
 			CcusageRuntimeSource::Bundled,
 			availability,
 		));
-		assert!(!source_can_update(CcusageRuntimeSource::Path, availability));
+		assert!(!managed_source_can_update(
+			CcusageRuntimeSource::Path,
+			availability
+		));
 	}
 
 	#[tokio::test]

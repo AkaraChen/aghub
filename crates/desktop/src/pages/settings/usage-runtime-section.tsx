@@ -131,33 +131,6 @@ export function UsageRuntimeSection() {
 						: t("usageRuntimeInstall")}
 				</Button>
 			)}
-			<Tooltip delay={400}>
-				<Button
-					isIconOnly
-					isPending={refreshMutation.isPending}
-					isDisabled={isOperating && !refreshMutation.isPending}
-					size="sm"
-					variant="ghost"
-					onPress={() =>
-						refreshMutation.mutate(undefined, {
-							onError: reportError,
-						})
-					}
-					aria-label={t("usageStatusRecheck")}
-					className="text-muted"
-				>
-					{({ isPending }) => (
-						<ArrowPathIcon
-							className={cn(
-								"size-3.5",
-								isPending &&
-									"animate-spin motion-reduce:animate-none",
-							)}
-						/>
-					)}
-				</Button>
-				<Tooltip.Content>{t("usageStatusRecheck")}</Tooltip.Content>
-			</Tooltip>
 		</>
 	);
 
@@ -213,6 +186,33 @@ export function UsageRuntimeSection() {
 				>
 					{t(statusKey)}
 				</span>
+				<Tooltip delay={400}>
+					<Button
+						isIconOnly
+						isPending={refreshMutation.isPending}
+						isDisabled={isOperating && !refreshMutation.isPending}
+						size="sm"
+						variant="ghost"
+						onPress={() =>
+							refreshMutation.mutate(undefined, {
+								onError: reportError,
+							})
+						}
+						aria-label={t("usageStatusRecheck")}
+						className="text-muted"
+					>
+						{({ isPending }) => (
+							<ArrowPathIcon
+								className={cn(
+									"size-3.5",
+									isPending &&
+										"animate-spin motion-reduce:animate-none",
+								)}
+							/>
+						)}
+					</Button>
+					<Tooltip.Content>{t("usageStatusRecheck")}</Tooltip.Content>
+				</Tooltip>
 			</div>
 
 			{runtime ? (
