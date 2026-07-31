@@ -21,6 +21,7 @@ import {
 	Button,
 	Card,
 	Checkbox,
+	Description,
 	ErrorMessage,
 	FieldError,
 	Fieldset,
@@ -50,7 +51,10 @@ import type {
 } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
 import { AgentIcon } from "../lib/agent-icons";
-import { normalizeInferenceProviderApiBaseUrl } from "../lib/inference-provider-url";
+import {
+	normalizeInferenceProviderApiBaseUrl,
+	previewInferenceProviderRequestUrl,
+} from "../lib/inference-provider-url";
 import { cn } from "../lib/utils";
 import { ClaudeInferenceProviderPanel } from "./inference-providers/claude-panel";
 import { CodexInferenceProviderPanel } from "./inference-providers/codex-panel";
@@ -58,6 +62,7 @@ import {
 	type ProviderModelDiscoveryErrorCode,
 	useProviderModelDiscovery,
 } from "./inference-providers/model-discovery";
+import { inferModelVendor } from "./inference-providers/model-vendors";
 import { OpenCodeInferenceProviderPanel } from "./inference-providers/opencode-panel";
 import {
 	createInferenceProviderMutationOptions,
@@ -177,6 +182,20 @@ function makeLatinNameSuggestion(value: string) {
 
 function makeProviderIdConflictExample(providerId: string) {
 	return `${providerId}custom`;
+}
+
+function ProviderFieldHelp({ label }: { label: string }) {
+	return (
+		<Tooltip delay={0}>
+			<Tooltip.Trigger
+				aria-label={label}
+				className="relative top-0.5 inline-flex size-4 items-center justify-center text-muted"
+			>
+				<QuestionMarkCircleIcon className="size-4" />
+			</Tooltip.Trigger>
+			<Tooltip.Content className="max-w-72">{label}</Tooltip.Content>
+		</Tooltip>
+	);
 }
 
 const CODING_AGENT_OPTIONS: CodingAgentOption[] = [
@@ -377,19 +396,16 @@ function groupProviderModels(
 	const buckets = new Map<string, ProviderModelGroup>();
 	for (const model of models) {
 		const name = model.name.trim();
-		const slashIndex = name.indexOf("/");
-		const isPrefixed = slashIndex > 0 && slashIndex < name.length - 1;
-		const key = isPrefixed
-			? name.slice(0, slashIndex)
-			: UNCATEGORIZED_GROUP_KEY;
+		const vendor = inferModelVendor(name);
+		const key = vendor ? `vendor:${vendor.key}` : UNCATEGORIZED_GROUP_KEY;
 		const existing = buckets.get(key);
 		if (existing) {
 			existing.items.push(model);
 		} else {
 			buckets.set(key, {
 				key,
-				label: isPrefixed ? key : "",
-				isUncategorized: !isPrefixed,
+				label: vendor?.label ?? "",
+				isUncategorized: !vendor,
 				items: [model],
 			});
 		}
@@ -489,6 +505,10 @@ function ProviderModelsEditor({
 	};
 
 	const handleAdd = () => {
+		if (value.length === 0) {
+			onChange([emptyModel, createProviderModelFormValue("", true)]);
+			return;
+		}
 		onChange([...value, createProviderModelFormValue("", true)]);
 	};
 
@@ -551,9 +571,11 @@ function ProviderModelsEditor({
 					onChange={(selected) => toggleSelected(model.id, selected)}
 					className="shrink-0"
 				>
-					<Checkbox.Control>
-						<Checkbox.Indicator />
-					</Checkbox.Control>
+					<Checkbox.Content>
+						<Checkbox.Control>
+							<Checkbox.Indicator />
+						</Checkbox.Control>
+					</Checkbox.Content>
 				</Checkbox>
 				<Input
 					value={model.name}
@@ -676,30 +698,35 @@ function ProviderModelsEditor({
 				</SearchField>
 
 				<div className="flex min-h-8 items-center justify-between gap-3 px-1">
-					<Checkbox
-						variant="secondary"
-						aria-label={
-							allFilteredSelected
-								? t("deselectAllProviderModels")
-								: t("selectAllProviderModels")
-						}
-						isSelected={allFilteredSelected}
-						isIndeterminate={someFilteredSelected}
-						isDisabled={filteredModels.length === 0}
-						onChange={handleToggleAllFiltered}
-					>
-						<Checkbox.Control>
-							<Checkbox.Indicator />
-						</Checkbox.Control>
-						<Checkbox.Content>
-							<span className="text-xs text-muted">
-								{t("selectedProviderModelsCount", {
-									selected: totalSelectedCount,
-									total: value.length,
-								})}
-							</span>
-						</Checkbox.Content>
-					</Checkbox>
+					<div className="flex items-center gap-2">
+						<Checkbox
+							variant="secondary"
+							aria-label={
+								allFilteredSelected
+									? t("deselectAllProviderModels")
+									: t("selectAllProviderModels")
+							}
+							isSelected={allFilteredSelected}
+							isIndeterminate={someFilteredSelected}
+							isDisabled={filteredModels.length === 0}
+							onChange={handleToggleAllFiltered}
+						>
+							<Checkbox.Content>
+								<Checkbox.Control>
+									<Checkbox.Indicator />
+								</Checkbox.Control>
+								<span className="text-sm">
+									{t("selectAllProviderModelsLabel")}
+								</span>
+							</Checkbox.Content>
+						</Checkbox>
+						<span className="text-xs text-muted">
+							{t("selectedProviderModelsCount", {
+								selected: totalSelectedCount,
+								total: value.length,
+							})}
+						</span>
+					</div>
 					{totalSelectedCount > 0 && (
 						<Button
 							type="button"
@@ -878,6 +905,10 @@ function ProviderForm({
 	const format = useWatch({ control, name: "format" });
 	const normalizedApiBaseUrl =
 		normalizeInferenceProviderApiBaseUrl(apiBaseUrl);
+	const requestEndpointPreview = previewInferenceProviderRequestUrl(
+		apiBaseUrl,
+		format,
+	);
 	const savedApiBaseUrl = provider
 		? normalizeInferenceProviderApiBaseUrl(provider.api_base_url)
 		: null;
@@ -899,7 +930,7 @@ function ProviderForm({
 		useState<InferenceProviderFormValues | null>(null);
 	const [isSyncPromptOpen, setIsSyncPromptOpen] = useState(false);
 	const [isSavingProvider, setIsSavingProvider] = useState(false);
-	const [hasEditedLatinName, setHasEditedLatinName] = useState(false);
+	const [isLatinNameAutomatic, setIsLatinNameAutomatic] = useState(true);
 	const [typedApiKeyScope, setTypedApiKeyScope] = useState<string | null>(
 		null,
 	);
@@ -937,7 +968,7 @@ function ProviderForm({
 		modelDiscovery.invalidate();
 		clearErrors("apiKey");
 		setValue("displayName", preset.name, { shouldDirty: true });
-		if (!hasEditedLatinName && mode === "create") {
+		if (mode === "create" && isLatinNameAutomatic) {
 			setValue("latinName", makeLatinNameSuggestion(preset.id), {
 				shouldDirty: true,
 				shouldValidate: true,
@@ -984,7 +1015,7 @@ function ProviderForm({
 		onChange: (value: string) => void,
 	) => {
 		onChange(value);
-		if (!hasEditedLatinName && mode === "create") {
+		if (mode === "create" && isLatinNameAutomatic) {
 			setValue("latinName", makeLatinNameSuggestion(value), {
 				shouldDirty: true,
 				shouldValidate: true,
@@ -996,7 +1027,7 @@ function ProviderForm({
 		value: string,
 		onChange: (value: string) => void,
 	) => {
-		setHasEditedLatinName(true);
+		setIsLatinNameAutomatic(!value.trim());
 		onChange(value);
 	};
 
@@ -1041,7 +1072,7 @@ function ProviderForm({
 		!modelDiscovery.isPending,
 	);
 	const fetchModelsDisabledReason = !apiBaseUrl.trim()
-		? t("fetchProviderModelsRequiresApiBaseUrl")
+		? undefined
 		: !normalizedApiBaseUrl
 			? t("fetchProviderModelsInvalidApiBaseUrl")
 			: hasStaleTypedApiKey
@@ -1546,31 +1577,18 @@ function ProviderForm({
 													fieldState.error,
 												)}
 											>
-												<Label>
-													<span className="inline-flex items-center gap-1">
+												<div className="inline-flex items-center gap-1">
+													<Label>
 														{t(
 															"providerDisplayName",
 														)}
-														<Tooltip delay={0}>
-															<Tooltip.Trigger>
-																<span
-																	tabIndex={0}
-																	aria-label={t(
-																		"providerDisplayNameHelp",
-																	)}
-																	className="relative top-0.5 inline-flex size-4 items-center justify-center text-muted"
-																>
-																	<QuestionMarkCircleIcon className="size-4" />
-																</span>
-															</Tooltip.Trigger>
-															<Tooltip.Content className="max-w-72">
-																{t(
-																	"providerDisplayNameHelp",
-																)}
-															</Tooltip.Content>
-														</Tooltip>
-													</span>
-												</Label>
+													</Label>
+													<ProviderFieldHelp
+														label={t(
+															"providerDisplayNameHelp",
+														)}
+													/>
+												</div>
 												<Input
 													value={field.value}
 													onChange={(event) =>
@@ -1583,6 +1601,9 @@ function ProviderForm({
 													placeholder={t(
 														"providerNamePlaceholder",
 													)}
+													spellCheck={false}
+													autoCorrect="off"
+													autoCapitalize="none"
 													variant="secondary"
 												/>
 												{fieldState.error && (
@@ -1644,33 +1665,18 @@ function ProviderForm({
 														fieldState.error,
 													)}
 												>
-													<Label>
-														<span className="inline-flex items-center gap-1">
+													<div className="inline-flex items-center gap-1">
+														<Label>
 															{t(
 																"providerLatinName",
 															)}
-															<Tooltip delay={0}>
-																<Tooltip.Trigger>
-																	<span
-																		tabIndex={
-																			0
-																		}
-																		aria-label={t(
-																			"providerLatinNameHelp",
-																		)}
-																		className="relative top-0.5 inline-flex size-4 items-center justify-center text-muted"
-																	>
-																		<QuestionMarkCircleIcon className="size-4" />
-																	</span>
-																</Tooltip.Trigger>
-																<Tooltip.Content className="max-w-72">
-																	{t(
-																		"providerLatinNameHelp",
-																	)}
-																</Tooltip.Content>
-															</Tooltip>
-														</span>
-													</Label>
+														</Label>
+														<ProviderFieldHelp
+															label={t(
+																"providerLatinNameHelp",
+															)}
+														/>
+													</div>
 													<Input
 														value={field.value}
 														onChange={(event) =>
@@ -1731,31 +1737,18 @@ function ProviderForm({
 													fieldState.error,
 												)}
 											>
-												<Label>
-													<span className="inline-flex items-center gap-1">
+												<div className="inline-flex items-center gap-1">
+													<Label>
 														{t(
 															"providerApiBaseUrl",
 														)}
-														<Tooltip delay={0}>
-															<Tooltip.Trigger>
-																<span
-																	tabIndex={0}
-																	aria-label={t(
-																		"providerApiBaseUrlHelp",
-																	)}
-																	className="relative top-0.5 inline-flex size-4 items-center justify-center text-muted"
-																>
-																	<QuestionMarkCircleIcon className="size-4" />
-																</span>
-															</Tooltip.Trigger>
-															<Tooltip.Content className="max-w-72">
-																{t(
-																	"providerApiBaseUrlHelp",
-																)}
-															</Tooltip.Content>
-														</Tooltip>
-													</span>
-												</Label>
+													</Label>
+													<ProviderFieldHelp
+														label={t(
+															"providerApiBaseUrlHelp",
+														)}
+													/>
+												</div>
 												<Input
 													type="url"
 													value={field.value}
@@ -1785,6 +1778,18 @@ function ProviderForm({
 													spellCheck={false}
 													variant="secondary"
 												/>
+												{requestEndpointPreview && (
+													<Description>
+														{t(
+															"providerApiEndpointPreview",
+														)}{" "}
+														<span className="break-all font-mono">
+															{
+																requestEndpointPreview
+															}
+														</span>
+													</Description>
+												)}
 												{fieldState.error && (
 													<FieldError>
 														{

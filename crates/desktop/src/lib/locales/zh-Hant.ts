@@ -269,7 +269,7 @@ export default {
 	searchProviderPresets: "搜尋預設",
 	searchProviderPresetsPlaceholder: "依 Provider、URL 或模型搜尋...",
 	noProviderPresetsMatch: "沒有符合的預設",
-	providerGetApiKey: "取得 API Key →",
+	providerGetApiKey: "取得 API Key",
 	createInferenceProviderDescription:
 		"新增一個推理端點，並安全儲存它的 API key。",
 	editInferenceProvider: "編輯 Provider",
@@ -284,22 +284,23 @@ export default {
 	providerName: "名稱",
 	providerDisplayName: "Display Name",
 	providerDisplayNameHelp:
-		"这里只在 aghub 裡顯示。可以安全填寫任何可讀名稱，包括空格、符號或非英文字元。",
+		"只會顯示在 aghub 中，可使用空格、符號和非英文字元。",
 	providerNamePlaceholder: "例如：OpenAI",
 	providerLatinName: "Provider ID",
 	providerLatinNameHelp:
-		"會作為 provider key 寫入各個 agent 的設定檔。只能使用小寫 a-z，確保所有支援的 agent 都能安全讀取。",
+		"會作為 Provider Key 寫入 Agent 設定檔，只能包含小寫 a-z。",
 	providerLatinNamePlaceholder: "例如：openai",
 	providerFormat: "格式",
 	providerApiBaseUrl: "API Base URL",
 	providerApiBaseUrlHelp:
-		"可貼上 API 根網址，或完整的 /chat/completions、/responses、/messages 端點。未填寫協定時 aghub 會自動補齊，並儲存為 API 根網址。",
+		"可填寫 Base URL，也可貼上完整的 /chat/completions、/responses 或 /messages 請求網址。省略通訊協定時，aghub 會自動補齊，並儲存正規化後的 Base URL。",
 	providerApiBaseUrlPlaceholder: "https://api.openai.com/v1",
+	providerApiEndpointPreview: "請求網址預覽：",
 	providerApiKey: "API Key",
 	providerApiKeyPlaceholder: "sk-...",
 	providerApiKeyEditPlaceholder: "留空以保持目前 key",
 	providerModels: "模型",
-	providerModelsDescription: "從目前 Provider 擷取，或手動新增模型 ID。",
+	providerModelsDescription: "從 API 擷取模型 ID，或手動新增。",
 	providerModelName: "模型名稱",
 	providerModelNamePlaceholder: "例如：gpt-5.4-mini",
 	addProviderModel: "新增模型",
@@ -309,30 +310,30 @@ export default {
 		"已新增 {{added}} 個模型（共回傳 {{total}} 個）",
 	fetchProviderModelsSuccessNoNew: "沒有新模型需新增（已設定 {{total}} 個）",
 	fetchProviderModelsFailed: "擷取模型失敗：{{reason}}",
-	fetchProviderModelsUnknownError: "端點不支援",
-	fetchProviderModelsRequiresApiBaseUrl:
-		"請先填寫 API Base URL，再擷取模型。",
+	fetchProviderModelsUnknownError: "未知錯誤",
 	fetchProviderModelsRequiresApiKey: "請先填寫 API Key，再擷取模型。",
 	fetchProviderModelsInvalidApiBaseUrl: "請輸入有效的 HTTP(S) API Base URL。",
 	fetchProviderModelsRequiresChangedApiKey:
-		"先前輸入或儲存的 API Key 僅用於原 API URL 與格式。請輸入目前設定使用的 API Key。",
+		"API URL 或格式已變更。請重新輸入 API Key 後再擷取模型。",
 	fetchProviderModelsNetworkError:
-		"無法連線 aghub 本機服務，請檢查桌面後端是否正在執行。",
-	fetchProviderModelsTimeout: "Provider 模型請求逾時，請重試。",
+		"無法連線 aghub 本機服務。請確認桌面後端正在執行。",
+	fetchProviderModelsTimeout: "Provider 擷取模型清單逾時，請重試。",
 	fetchProviderModelsAccessDenied:
-		"Provider 拒絕了模型清單請求。請輸入或更換 API Key，並檢查權限或訂閱狀態。",
+		"Provider 拒絕了模型清單請求。請檢查 API Key 及其權限。",
 	fetchProviderModelsDiscoveryUnsupported:
-		"找不到模型清單介面。請檢查 API Base URL，或手動新增模型 ID。",
+		"找不到模型清單端點。請檢查 API Base URL，或手動新增模型 ID。",
 	fetchProviderModelsRateLimited:
-		"Provider 限制了模型清單請求。請稍後重試或檢查額度。",
+		"模型清單請求受到速率限制。請稍後重試，或檢查 Provider 額度。",
 	fetchProviderModelsRequestFailed:
-		"Provider 的模型清單請求失敗。現有模型仍可使用，也可手動新增模型 ID。",
-	fetchProviderModelsResponseTooLarge: "Provider 回傳的模型清單過大。",
-	fetchProviderModelsInvalidResponse: "Provider 回傳了不支援的模型清單格式。",
+		"Provider 擷取模型清單失敗。請稍後重試，或手動新增模型 ID。",
+	fetchProviderModelsResponseTooLarge:
+		"模型清單過大，無法匯入。請手動新增需要的模型 ID。",
+	fetchProviderModelsInvalidResponse:
+		"Provider 回傳的模型清單格式不受支援，請手動新增模型 ID。",
 	fetchProviderModelsNoModels:
-		"Provider 沒有回傳模型。請手動新增模型 ID，或檢查模型清單端點。",
+		"Provider 沒有回傳模型。請檢查 API Base URL，或手動新增模型 ID。",
 	providerPresetFormatChanged:
-		"格式已不同於預設，請查看 Provider 文件並視需要更新 API URL。",
+		"目前格式與預設不同。請確認 API Base URL 支援該格式。",
 	noProviderModels: "尚無模型。",
 	noProviderModelsMatch: "沒有相符的模型。",
 	providerModelGroupUncategorized: "未分類",
@@ -342,6 +343,7 @@ export default {
 	searchProviderModelsPlaceholder: "搜尋模型…",
 	selectAllProviderModels: "全選目前可見模型",
 	deselectAllProviderModels: "取消全選目前可見模型",
+	selectAllProviderModelsLabel: "全選",
 	selectProviderModel: '選擇 "{{name}}"',
 	selectedProviderModelsCount: "已選 {{selected}} / {{total}}",
 	deleteSelectedProviderModels: "刪除所選 ({{count}})",
@@ -377,11 +379,11 @@ export default {
 	validationProviderLatinNameInvalid: "Provider ID 只能包含小寫 a-z。",
 	validationProviderLatinNameDuplicate:
 		"Provider ID「{{providerId}}」已被既有 Provider 使用。請把 ID 改成能區分來源的值，例如「{{exampleId}}」，或刪除既有的「{{providerId}}」Provider 後再儲存。",
-	validationProviderApiBaseUrlRequired: "請輸入 API base URL。",
-	validationProviderApiBaseUrlInvalid: "請輸入有效的 HTTP(S) API base URL。",
+	validationProviderApiBaseUrlRequired: "請輸入 API Base URL。",
+	validationProviderApiBaseUrlInvalid: "請輸入有效的 HTTP(S) API Base URL。",
 	validationProviderApiKeyRequired: "請輸入 API key。",
 	validationProviderApiKeyRequiredForScopeChange:
-		"先前輸入或儲存的 API Key 僅用於原 API URL 與格式。請輸入目前設定使用的 API Key。",
+		"API URL 或格式已變更。請重新輸入 API Key 後再儲存。",
 	validationProviderModelsRequired: "請至少選擇一個模型。",
 	validationProviderModelNameUnique: "模型名稱不能重複。",
 	inferenceFormatAnthropic: "Anthropic",

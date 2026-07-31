@@ -1,3 +1,5 @@
+import type { InferenceProviderFormatDto } from "../generated/dto";
+
 const PROVIDER_REQUEST_ENDPOINT_SUFFIXES = [
 	"/chat/completions",
 	"/completions",
@@ -5,6 +7,15 @@ const PROVIDER_REQUEST_ENDPOINT_SUFFIXES = [
 	"/messages",
 	"/models",
 ] as const;
+
+const PROVIDER_REQUEST_ENDPOINT_BY_FORMAT: Record<
+	InferenceProviderFormatDto,
+	string
+> = {
+	anthropic: "/messages",
+	openai_completions: "/chat/completions",
+	openai_responses: "/responses",
+};
 
 function inferredApiBaseUrlScheme(value: string) {
 	try {
@@ -57,4 +68,17 @@ export function normalizeInferenceProviderApiBaseUrl(value: string) {
 	} catch {
 		return null;
 	}
+}
+
+export function previewInferenceProviderRequestUrl(
+	value: string,
+	format: InferenceProviderFormatDto,
+) {
+	const normalized = normalizeInferenceProviderApiBaseUrl(value);
+	if (!normalized) return null;
+
+	const url = new URL(normalized);
+	const apiPath = url.pathname.replace(/\/+$/, "") || "/v1";
+	url.pathname = `${apiPath}${PROVIDER_REQUEST_ENDPOINT_BY_FORMAT[format]}`;
+	return url.toString();
 }
