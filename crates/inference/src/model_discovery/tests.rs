@@ -137,7 +137,7 @@ fn request<'a>(
 	ModelDiscoveryRequest {
 		format,
 		api_base_url,
-		api_key: "secret",
+		api_key: Some("secret"),
 	}
 }
 
@@ -259,6 +259,40 @@ async fn response_models_are_sorted_and_deduplicated() {
 		requests[0].headers.get("authorization").map(String::as_str),
 		Some("Bearer secret")
 	);
+}
+
+#[tokio::test]
+async fn missing_or_blank_api_key_omits_authentication_headers() {
+	for api_key in [None, Some("   ")] {
+		for format in [
+			InferenceProviderFormat::OpenAiResponses,
+			InferenceProviderFormat::Anthropic,
+		] {
+			let (base_url, requests) =
+				spawn_server(vec![TestResponse::json(r#"{"data":[]}"#)]);
+			let models = discover_models(ModelDiscoveryRequest {
+				format,
+				api_base_url: &base_url,
+				api_key,
+			})
+			.await
+			.unwrap();
+
+			assert!(models.is_empty());
+			let requests = requests.recv().unwrap();
+			assert!(!requests[0].headers.contains_key("authorization"));
+			assert!(!requests[0].headers.contains_key("x-api-key"));
+			if format == InferenceProviderFormat::Anthropic {
+				assert_eq!(
+					requests[0]
+						.headers
+						.get("anthropic-version")
+						.map(String::as_str),
+					Some("2023-06-01")
+				);
+			}
+		}
+	}
 }
 
 #[tokio::test]

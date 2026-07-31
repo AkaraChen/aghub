@@ -31,8 +31,8 @@ pub struct ModelDiscoveryRequest<'a> {
 	/// Provider API base URL.
 	pub api_base_url: &'a str,
 
-	/// API key sent only to the requested endpoint.
-	pub api_key: &'a str,
+	/// Optional API key sent only to the requested endpoint.
+	pub api_key: Option<&'a str>,
 }
 
 /// Errors returned while discovering provider models.
@@ -157,19 +157,19 @@ async fn discover_models_with_client(
 ) -> Result<Vec<String>, ModelDiscoveryError> {
 	let url = model_list_url(request.api_base_url)
 		.map_err(ModelDiscoveryError::from)?;
+	let api_key = request
+		.api_key
+		.map(str::trim)
+		.filter(|value| !value.is_empty());
 	match request.format {
 		InferenceProviderFormat::Anthropic => {
-			discover_anthropic_models(client, url, request.api_key).await
+			discover_anthropic_models(client, url, api_key).await
 		}
 		InferenceProviderFormat::OpenAiCompletions
 		| InferenceProviderFormat::OpenAiResponses => {
-			let response = request_model_page(
-				client,
-				request.format,
-				url,
-				request.api_key,
-			)
-			.await?;
+			let response =
+				request_model_page(client, request.format, url, api_key)
+					.await?;
 			let mut models = Vec::new();
 			append_models(&mut models, response.data)?;
 			sort_and_deduplicate(&mut models);
@@ -181,7 +181,7 @@ async fn discover_models_with_client(
 async fn discover_anthropic_models(
 	client: &Client,
 	mut url: Url,
-	api_key: &str,
+	api_key: Option<&str>,
 ) -> Result<Vec<String>, ModelDiscoveryError> {
 	remove_query_pair(&mut url, "after_id");
 	remove_query_pair(&mut url, "before_id");
@@ -238,16 +238,24 @@ async fn request_model_page(
 	client: &Client,
 	format: InferenceProviderFormat,
 	url: Url,
-	api_key: &str,
+	api_key: Option<&str>,
 ) -> Result<ModelListResponse, ModelDiscoveryError> {
 	let request = match format {
-		InferenceProviderFormat::Anthropic => client
-			.get(url)
-			.header("x-api-key", api_key)
-			.header("anthropic-version", "2023-06-01"),
+		InferenceProviderFormat::Anthropic => {
+			let request =
+				client.get(url).header("anthropic-version", "2023-06-01");
+			match api_key {
+				Some(api_key) => request.header("x-api-key", api_key),
+				None => request,
+			}
+		}
 		InferenceProviderFormat::OpenAiCompletions
 		| InferenceProviderFormat::OpenAiResponses => {
-			client.get(url).bearer_auth(api_key)
+			let request = client.get(url);
+			match api_key {
+				Some(api_key) => request.bearer_auth(api_key),
+				None => request,
+			}
 		}
 	};
 	let response = request

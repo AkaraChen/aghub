@@ -4,10 +4,13 @@ import { getApiErrorCode } from "../../lib/api";
 
 export type ProviderModelDiscoveryErrorCode =
 	| "credential_scope"
+	| "access_denied"
+	| "discovery_unsupported"
 	| "empty_response"
 	| "invalid_api_base_url"
 	| "missing_credential"
 	| "network"
+	| "rate_limited"
 	| "response_invalid"
 	| "response_too_large"
 	| "timeout"
@@ -35,6 +38,12 @@ export function providerModelDiscoveryErrorCode(
 			return "missing_credential";
 		case "CREDENTIAL_SCOPE_MISMATCH":
 			return "credential_scope";
+		case "UPSTREAM_ACCESS_DENIED":
+			return "access_denied";
+		case "MODEL_DISCOVERY_UNSUPPORTED":
+			return "discovery_unsupported";
+		case "UPSTREAM_RATE_LIMITED":
+			return "rate_limited";
 		case "UPSTREAM_TIMEOUT":
 			return "timeout";
 		case "UPSTREAM_REQUEST_FAILED":

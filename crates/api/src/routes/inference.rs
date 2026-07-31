@@ -5,6 +5,7 @@ use aghub_inference::{
 	CodexProviderAdapter, InferenceProvider, InferenceProviderRepository,
 	InferenceProviderStore, ModelDiscoveryRequest, OpenCodeProviderAdapter,
 };
+use log::warn;
 use rocket::http::Status;
 use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
@@ -328,11 +329,12 @@ pub async fn fetch_inference_provider_models(
 			let (provider, api_key) = provider_store
 				.get_with_api_key(id)
 				.map_err(ApiError::from)?;
-			if !provider_credential_scope_matches(
-				&provider,
-				body.format.into(),
-				&body.api_base_url,
-			) {
+			if api_key.is_some()
+				&& !provider_credential_scope_matches(
+					&provider,
+					body.format.into(),
+					&body.api_base_url,
+				) {
 				return Err(ApiError::new(
 					Status::UnprocessableEntity,
 					"enter the API key again after changing the URL or format",
@@ -342,21 +344,17 @@ pub async fn fetch_inference_provider_models(
 			api_key
 		}
 		(None, None) => None,
-	}
-	.ok_or_else(|| {
-		ApiError::new(
-			Status::UnprocessableEntity,
-			"an API key is required to fetch models",
-			"MISSING_CREDENTIAL",
-		)
-	})?;
+	};
 	let models = discover_models(ModelDiscoveryRequest {
 		format: body.format.into(),
 		api_base_url: &body.api_base_url,
-		api_key: &api_key,
+		api_key: api_key.as_deref(),
 	})
 	.await
-	.map_err(ApiError::from)?;
+	.map_err(|error| {
+		warn!("provider model discovery failed: {error}");
+		ApiError::from(error)
+	})?;
 	Ok(Json(models))
 }
 

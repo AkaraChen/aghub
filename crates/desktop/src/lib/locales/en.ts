@@ -332,13 +332,19 @@ export default {
 		"Enter an API key before fetching models.",
 	fetchProviderModelsInvalidApiBaseUrl: "Enter a valid HTTP(S) API Base URL.",
 	fetchProviderModelsRequiresChangedApiKey:
-		"The API URL or format changed. Enter the API key again before fetching models.",
+		"The API key was entered or saved for the previous API URL and format. Enter the API key for this configuration.",
 	fetchProviderModelsNetworkError:
 		"aghub could not reach its local service. Check whether the desktop backend is running.",
 	fetchProviderModelsTimeout:
 		"The provider model request timed out. Try again.",
+	fetchProviderModelsAccessDenied:
+		"The provider denied the model list request. Enter or replace the API key, then check its permissions or subscription.",
+	fetchProviderModelsDiscoveryUnsupported:
+		"The model list endpoint was not found. Check the API Base URL, or add model IDs manually.",
+	fetchProviderModelsRateLimited:
+		"The provider limited model discovery. Try again later or check its quota.",
 	fetchProviderModelsRequestFailed:
-		"The provider could not be reached or rejected the request.",
+		"The provider model list request failed. Existing models can still be used, or add model IDs manually.",
 	fetchProviderModelsResponseTooLarge:
 		"The provider returned a model list that is too large.",
 	fetchProviderModelsInvalidResponse:
@@ -396,7 +402,7 @@ export default {
 	validationProviderApiBaseUrlInvalid: "Enter a valid HTTP(S) API base URL.",
 	validationProviderApiKeyRequired: "Enter an API key.",
 	validationProviderApiKeyRequiredForScopeChange:
-		"The API URL or format changed. Enter the API key again before saving.",
+		"The API key was entered or saved for the previous API URL and format. Enter the API key for this configuration.",
 	validationProviderModelsRequired: "Select at least one model.",
 	validationProviderModelNameUnique: "Model names must be unique.",
 	inferenceFormatAnthropic: "Anthropic",

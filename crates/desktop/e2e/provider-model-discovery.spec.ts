@@ -102,7 +102,7 @@ test("fetches models from the current provider form without a preset", async ({
 
 	const apiBaseUrl = page.getByRole("textbox", { name: "API Base URL" });
 	await apiBaseUrl.fill("api.example.com/v1/chat/completions");
-	await expect(fetchModels).toBeDisabled();
+	await expect(fetchModels).toBeEnabled();
 
 	await page.getByRole("textbox", { name: "API Key" }).fill("test-key");
 	await expect(apiBaseUrl).toHaveValue("https://api.example.com/v1");
@@ -126,6 +126,44 @@ test("fetches models from the current provider form without a preset", async ({
 	).toBeVisible();
 });
 
+test("fetches models anonymously when the API key is empty", async ({
+	page,
+}) => {
+	let modelsRequest: unknown;
+	await installProviderDiscoveryMocks(page, {
+		onFetchModels: async (route) => {
+			modelsRequest = route.request().postDataJSON();
+			await route.fulfill({ json: ["public-model"] });
+		},
+	});
+
+	await page.goto("/inference-providers");
+	await page.getByRole("button", { name: "Add Provider" }).first().click();
+	await page
+		.getByRole("textbox", { name: "API Base URL" })
+		.fill("https://public.example.com");
+
+	const fetchModels = page.locator("button").filter({
+		hasText: /^Fetch models$/,
+	});
+	await expect(fetchModels).toBeEnabled();
+	await fetchModels.click();
+
+	await expect
+		.poll(() => modelsRequest)
+		.toEqual({
+			format: "openai_responses",
+			api_base_url: "https://public.example.com",
+			api_key: null,
+			provider_id: null,
+		});
+	await expect(page.getByRole("textbox", { name: "Model name" })).toHaveValue(
+		"public-model",
+	);
+	await page.getByRole("button", { name: "Create" }).click();
+	await expect(page.getByText("Enter an API key.")).toBeVisible();
+});
+
 test("does not save a create-form key under a different URL", async ({
 	page,
 }) => {
@@ -147,7 +185,7 @@ test("does not save a create-form key under a different URL", async ({
 
 	await expect(
 		page.getByText(
-			"The API URL or format changed. Enter the API key again before saving.",
+			"The API key was entered or saved for the previous API URL and format. Enter the API key for this configuration.",
 		),
 	).toBeVisible();
 });
@@ -193,26 +231,48 @@ test("requires the API key again after the provider URL changes", async ({
 			provider_id: "provider-id",
 		});
 
+	const apiBaseUrl = page.getByRole("textbox", { name: "API Base URL" });
+	modelsRequest = undefined;
+	await apiBaseUrl.fill("https://other.example.com/v1");
+	await expect(fetchModels).toBeEnabled();
+	await fetchModels.click();
+	await expect
+		.poll(() => modelsRequest)
+		.toEqual({
+			format: "openai_responses",
+			api_base_url: "https://other.example.com/v1",
+			api_key: null,
+			provider_id: null,
+		});
+	await page.getByRole("button", { name: "Save" }).click();
+	await expect(
+		page.getByText(
+			"The API key was entered or saved for the previous API URL and format. Enter the API key for this configuration.",
+		),
+	).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "Update agent configs?" }),
+	).toHaveCount(0);
+
+	await apiBaseUrl.fill("https://api.example.com/v1");
 	await page.getByRole("textbox", { name: "API Key" }).fill("old-scope-key");
-	await page
-		.getByRole("textbox", { name: "API Base URL" })
-		.fill("https://other.example.com/v1");
+	await apiBaseUrl.fill("https://other.example.com/v1");
 	await expect(fetchModels).toBeDisabled();
 	await expect(
 		page.getByText(
-			"The API URL or format changed. Enter the API key again before fetching models.",
+			"The API key was entered or saved for the previous API URL and format. Enter the API key for this configuration.",
 		),
 	).toBeVisible();
 	const disabledReasonId = await fetchModels.getAttribute("aria-describedby");
 	expect(disabledReasonId).toBeTruthy();
 	await expect(page.locator(`[id="${disabledReasonId}"]`)).toContainText(
-		"The API URL or format changed.",
+		"The API key was entered or saved for the previous API URL and format.",
 	);
 
 	await page.getByRole("button", { name: "Save" }).click();
 	await expect(
 		page.getByText(
-			"The API URL or format changed. Enter the API key again before saving.",
+			"The API key was entered or saved for the previous API URL and format. Enter the API key for this configuration.",
 		),
 	).toBeVisible();
 	await expect(
@@ -223,12 +283,10 @@ test("requires the API key again after the provider URL changes", async ({
 	await expect(apiKey).toHaveAttribute("aria-required", "true");
 	await expect(apiKey).toHaveAttribute("placeholder", "sk-...");
 
-	await page
-		.getByRole("textbox", { name: "API Base URL" })
-		.fill("https://api.example.com/v1");
+	await apiBaseUrl.fill("https://api.example.com/v1");
 	await expect(
 		page.getByText(
-			"The API URL or format changed. Enter the API key again before saving.",
+			"The API key was entered or saved for the previous API URL and format. Enter the API key for this configuration.",
 		),
 	).toHaveCount(0);
 	await expect(apiKey).not.toHaveAttribute("aria-required", "true");
@@ -238,12 +296,20 @@ test("requires the API key again after the provider URL changes", async ({
 	);
 	await expect(fetchModels).toBeEnabled();
 
-	await page
-		.getByRole("textbox", { name: "API Base URL" })
-		.fill("https://other.example.com/v1");
+	await apiBaseUrl.fill("https://other.example.com/v1");
 	await expect(apiKey).toHaveAttribute("aria-required", "true");
 	await apiKey.fill("replacement-key");
 	await expect(fetchModels).toBeEnabled();
+	modelsRequest = undefined;
+	await fetchModels.click();
+	await expect
+		.poll(() => modelsRequest)
+		.toEqual({
+			format: "openai_responses",
+			api_base_url: "https://other.example.com/v1",
+			api_key: "replacement-key",
+			provider_id: null,
+		});
 });
 
 test("ignores a delayed response after the request scope changes", async ({
@@ -323,7 +389,7 @@ test("requires a new key when a legacy provider URL is replaced", async ({
 
 	await expect(
 		page.getByText(
-			"The API URL or format changed. Enter the API key again before saving.",
+			"The API key was entered or saved for the previous API URL and format. Enter the API key for this configuration.",
 		),
 	).toBeVisible();
 	await expect(
@@ -510,3 +576,63 @@ test("announces a discovery error and clears it after the scope changes", async 
 		"alert",
 	);
 });
+
+for (const upstreamFailure of [
+	{
+		code: "UPSTREAM_ACCESS_DENIED",
+		responseStatus: 422,
+		status: 401,
+		apiKey: "",
+		message:
+			"The provider denied the model list request. Enter or replace the API key, then check its permissions or subscription.",
+	},
+	{
+		code: "MODEL_DISCOVERY_UNSUPPORTED",
+		responseStatus: 422,
+		status: 404,
+		apiKey: "test-key",
+		message:
+			"The model list endpoint was not found. Check the API Base URL, or add model IDs manually.",
+	},
+	{
+		code: "UPSTREAM_RATE_LIMITED",
+		responseStatus: 429,
+		status: 429,
+		apiKey: "test-key",
+		message:
+			"The provider limited model discovery. Try again later or check its quota.",
+	},
+]) {
+	test(`explains upstream model discovery HTTP ${upstreamFailure.status}`, async ({
+		page,
+	}) => {
+		await installProviderDiscoveryMocks(page, {
+			onFetchModels: async (route) => {
+				await route.fulfill({
+					status: upstreamFailure.responseStatus,
+					json: {
+						code: upstreamFailure.code,
+						error: `model list endpoint returned HTTP ${upstreamFailure.status}`,
+					},
+				});
+			},
+		});
+		await openCreateProviderForm(
+			page,
+			"https://api.example.com/v1",
+			upstreamFailure.apiKey,
+		);
+		const modelName = page.getByRole("textbox", { name: "Model name" });
+		await modelName.fill("manual-model");
+
+		await page
+			.locator("button")
+			.filter({ hasText: /^Fetch models$/ })
+			.click();
+
+		await expect(page.getByRole("alert")).toContainText(
+			`Failed to fetch models: ${upstreamFailure.message}`,
+		);
+		await expect(modelName).toHaveValue("manual-model");
+	});
+}

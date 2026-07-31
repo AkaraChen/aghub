@@ -316,12 +316,18 @@ export default {
 	fetchProviderModelsRequiresApiKey: "请先填写 API Key，再获取模型。",
 	fetchProviderModelsInvalidApiBaseUrl: "请输入有效的 HTTP(S) API Base URL。",
 	fetchProviderModelsRequiresChangedApiKey:
-		"API URL 或格式已更改，请重新输入 API Key 后再获取模型。",
+		"此前输入或保存的 API Key 仅用于原 API URL 和格式。请输入当前配置使用的 API Key。",
 	fetchProviderModelsNetworkError:
 		"无法连接 aghub 本地服务，请检查桌面后端是否正在运行。",
 	fetchProviderModelsTimeout: "Provider 模型请求超时，请重试。",
+	fetchProviderModelsAccessDenied:
+		"Provider 拒绝了模型列表请求。请输入或更换 API Key，并检查权限或订阅状态。",
+	fetchProviderModelsDiscoveryUnsupported:
+		"未找到模型列表接口。请检查 API Base URL，或手动添加模型 ID。",
+	fetchProviderModelsRateLimited:
+		"Provider 限制了模型列表请求。请稍后重试或检查额度。",
 	fetchProviderModelsRequestFailed:
-		"无法连接 Provider，或 Provider 拒绝了请求。",
+		"Provider 的模型列表请求失败。现有模型仍可使用，也可手动添加模型 ID。",
 	fetchProviderModelsResponseTooLarge: "Provider 返回的模型列表过大。",
 	fetchProviderModelsInvalidResponse: "Provider 返回了不支持的模型列表格式。",
 	fetchProviderModelsNoModels:
@@ -376,7 +382,7 @@ export default {
 	validationProviderApiBaseUrlInvalid: "请输入有效的 HTTP(S) API base URL。",
 	validationProviderApiKeyRequired: "请输入 API key。",
 	validationProviderApiKeyRequiredForScopeChange:
-		"API URL 或格式已更改，请重新输入 API key 后再保存。",
+		"此前输入或保存的 API Key 仅用于原 API URL 和格式。请输入当前配置使用的 API Key。",
 	validationProviderModelsRequired: "请至少选择一个模型。",
 	validationProviderModelNameUnique: "模型名称不能重复。",
 	inferenceFormatAnthropic: "Anthropic",

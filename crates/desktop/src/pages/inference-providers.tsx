@@ -139,6 +139,10 @@ const VENDORED_PROVIDER_LOGO_URL_BY_ID = new Map(
 
 function fetchProviderModelsErrorKey(code: ProviderModelDiscoveryErrorCode) {
 	switch (code) {
+		case "access_denied":
+			return "fetchProviderModelsAccessDenied";
+		case "discovery_unsupported":
+			return "fetchProviderModelsDiscoveryUnsupported";
 		case "invalid_api_base_url":
 			return "fetchProviderModelsInvalidApiBaseUrl";
 		case "credential_scope":
@@ -147,6 +151,8 @@ function fetchProviderModelsErrorKey(code: ProviderModelDiscoveryErrorCode) {
 			return "fetchProviderModelsRequiresApiKey";
 		case "network":
 			return "fetchProviderModelsNetworkError";
+		case "rate_limited":
+			return "fetchProviderModelsRateLimited";
 		case "timeout":
 			return "fetchProviderModelsTimeout";
 		case "upstream_request":
@@ -1028,19 +1034,18 @@ function ProviderForm({
 		currentCredentialScope &&
 		currentCredentialScope === savedCredentialScope,
 	);
+	const hasStaleTypedApiKey = Boolean(apiKey.trim() && !canUseTypedApiKey);
 	const canFetchModels = Boolean(
 		normalizedApiBaseUrl &&
-		(canUseTypedApiKey || canReuseSavedApiKey) &&
+		!hasStaleTypedApiKey &&
 		!modelDiscovery.isPending,
 	);
 	const fetchModelsDisabledReason = !apiBaseUrl.trim()
 		? t("fetchProviderModelsRequiresApiBaseUrl")
 		: !normalizedApiBaseUrl
 			? t("fetchProviderModelsInvalidApiBaseUrl")
-			: !canUseTypedApiKey && !canReuseSavedApiKey
-				? apiKey.trim() || mode === "edit"
-					? t("fetchProviderModelsRequiresChangedApiKey")
-					: t("fetchProviderModelsRequiresApiKey")
+			: hasStaleTypedApiKey
+				? t("fetchProviderModelsRequiresChangedApiKey")
 				: undefined;
 
 	const handleFetchModels = async () => {
@@ -1052,16 +1057,14 @@ function ProviderForm({
 				.map((model) => model.name.trim().toLowerCase())
 				.filter(Boolean),
 		);
-		const credentialSource = canUseTypedApiKey ? "provided" : "saved";
 		const fetched = await modelDiscovery.run(() =>
 			api.inferenceProviders.fetchModels({
 				format,
 				api_base_url: normalizedApiBaseUrl,
 				api_key: canUseTypedApiKey ? apiKey.trim() : null,
-				provider_id:
-					credentialSource === "saved"
-						? (provider?.id ?? null)
-						: null,
+				provider_id: canReuseSavedApiKey
+					? (provider?.id ?? null)
+					: null,
 			}),
 		);
 		if (!fetched) return;

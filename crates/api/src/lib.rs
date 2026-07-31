@@ -539,6 +539,28 @@ mod tests {
 	}
 
 	#[test]
+	fn provider_model_discovery_allows_anonymous_requests() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+		let response = post_json(
+			&client,
+			"/api/v1/inference/providers/models",
+			json!({
+				"format": "openai_responses",
+				"api_base_url": "http://127.0.0.1:1",
+				"api_key": null,
+				"provider_id": null,
+			}),
+		);
+
+		assert_json_error(
+			response,
+			Status::BadGateway,
+			"UPSTREAM_REQUEST_FAILED",
+		);
+	}
+
+	#[test]
 	fn plugin_install_rejects_remote_browser_origin() {
 		let client = test_client(&default_app_data_dir());
 

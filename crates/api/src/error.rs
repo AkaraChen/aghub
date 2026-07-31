@@ -185,12 +185,30 @@ impl From<ModelDiscoveryError> for ApiError {
 				error.to_string(),
 				"UPSTREAM_TIMEOUT",
 			),
-			ModelDiscoveryError::Request(_)
-			| ModelDiscoveryError::UpstreamStatus(_) => ApiError::new(
+			ModelDiscoveryError::Request(_) => ApiError::new(
 				Status::BadGateway,
 				error.to_string(),
 				"UPSTREAM_REQUEST_FAILED",
 			),
+			ModelDiscoveryError::UpstreamStatus(status) => {
+				let (response_status, code) = match status {
+					reqwest::StatusCode::UNAUTHORIZED
+					| reqwest::StatusCode::PAYMENT_REQUIRED
+					| reqwest::StatusCode::FORBIDDEN => {
+						(Status::UnprocessableEntity, "UPSTREAM_ACCESS_DENIED")
+					}
+					reqwest::StatusCode::NOT_FOUND
+					| reqwest::StatusCode::METHOD_NOT_ALLOWED => (
+						Status::UnprocessableEntity,
+						"MODEL_DISCOVERY_UNSUPPORTED",
+					),
+					reqwest::StatusCode::TOO_MANY_REQUESTS => {
+						(Status::TooManyRequests, "UPSTREAM_RATE_LIMITED")
+					}
+					_ => (Status::BadGateway, "UPSTREAM_REQUEST_FAILED"),
+				};
+				ApiError::new(response_status, error.to_string(), code)
+			}
 			ModelDiscoveryError::ResponseTooLarge { .. }
 			| ModelDiscoveryError::TooManyModels { .. }
 			| ModelDiscoveryError::ModelIdTooLong { .. }
@@ -256,6 +274,53 @@ mod tests {
 
 			assert_eq!(error.status, Status::BadGateway);
 			assert_eq!(error.body.code, "UPSTREAM_RESPONSE_TOO_LARGE");
+		}
+	}
+
+	#[test]
+	fn upstream_model_statuses_have_actionable_error_codes() {
+		for (status, response_status, code) in [
+			(
+				reqwest::StatusCode::UNAUTHORIZED,
+				Status::UnprocessableEntity,
+				"UPSTREAM_ACCESS_DENIED",
+			),
+			(
+				reqwest::StatusCode::FORBIDDEN,
+				Status::UnprocessableEntity,
+				"UPSTREAM_ACCESS_DENIED",
+			),
+			(
+				reqwest::StatusCode::PAYMENT_REQUIRED,
+				Status::UnprocessableEntity,
+				"UPSTREAM_ACCESS_DENIED",
+			),
+			(
+				reqwest::StatusCode::NOT_FOUND,
+				Status::UnprocessableEntity,
+				"MODEL_DISCOVERY_UNSUPPORTED",
+			),
+			(
+				reqwest::StatusCode::METHOD_NOT_ALLOWED,
+				Status::UnprocessableEntity,
+				"MODEL_DISCOVERY_UNSUPPORTED",
+			),
+			(
+				reqwest::StatusCode::TOO_MANY_REQUESTS,
+				Status::TooManyRequests,
+				"UPSTREAM_RATE_LIMITED",
+			),
+			(
+				reqwest::StatusCode::INTERNAL_SERVER_ERROR,
+				Status::BadGateway,
+				"UPSTREAM_REQUEST_FAILED",
+			),
+		] {
+			let error =
+				ApiError::from(ModelDiscoveryError::UpstreamStatus(status));
+
+			assert_eq!(error.status, response_status);
+			assert_eq!(error.body.code, code);
 		}
 	}
 
