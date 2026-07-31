@@ -14,8 +14,6 @@ import {
 } from "../../requests/usage";
 import { RuntimeSourceControls } from "./usage-runtime-source";
 
-const MANAGED_SOURCES = new Set(["bun", "npm", "download"]);
-
 export function UsageRuntimeSection() {
 	const { t } = useTranslation();
 	const api = useApi();
@@ -77,10 +75,6 @@ export function UsageRuntimeSection() {
 	const activeVersion = runtime?.active?.version
 		? shortCcusageVersion(runtime.active.version)
 		: null;
-	const activeIsManaged = runtime?.active
-		? MANAGED_SOURCES.has(runtime.active.source)
-		: false;
-
 	const showUpdate = runtime?.update_available && canUpdate;
 	const showManagedInstall =
 		runtime?.update_available &&
@@ -107,12 +101,9 @@ export function UsageRuntimeSection() {
 					}
 				>
 					{latestVersion
-						? t(
-								activeIsManaged
-									? "usageRuntimeUpdateTo"
-									: "usageRuntimeInstallVersion",
-								{ version: latestVersion },
-							)
+						? t("usageRuntimeUpdateTo", {
+								version: latestVersion,
+							})
 						: t("usageRuntimeUpdate")}
 				</Button>
 			)}

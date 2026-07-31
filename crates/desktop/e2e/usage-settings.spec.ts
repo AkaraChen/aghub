@@ -128,7 +128,7 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	).toHaveText("Bundled");
 	await expect(
 		runtimeSection.getByRole("button", {
-			name: "Install v20.0.17",
+			name: "Update to v20.0.17",
 		}),
 	).toBeVisible();
 	await expect(
@@ -334,7 +334,7 @@ test("ccusage update uses the runtime endpoint", async ({ page }) => {
 	});
 	await page.goto("/settings?tab=usage");
 
-	await page.getByRole("button", { name: "Install v20.0.17" }).click();
+	await page.getByRole("button", { name: "Update to v20.0.17" }).click();
 	await expect.poll(() => updateRequests).toBe(1);
 	const runtimeSection = page
 		.getByText("ccusage", { exact: true })
@@ -676,7 +676,7 @@ test("runtime status and defaults footer fit a compact desktop", async ({
 	await expect(runtimeSection.getByRole("status")).toBeVisible();
 	await expect(
 		runtimeSection.getByRole("button", {
-			name: "Install v20.0.17",
+			name: "Update to v20.0.17",
 		}),
 	).toBeVisible();
 	await expect(page.getByTestId("usage-defaults-footer")).toBeVisible();

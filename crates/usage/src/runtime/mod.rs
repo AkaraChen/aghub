@@ -398,7 +398,7 @@ impl CcusageRuntime {
 	pub async fn update(
 		&self,
 	) -> Result<CcusageRuntimeDto, CcusageRuntimeError> {
-		with_operation_deadline(async {
+		let result = with_operation_deadline(async {
 			{
 				let _guard = self.operation.lock().await;
 				let preference = self.preference()?;
@@ -410,6 +410,11 @@ impl CcusageRuntime {
 						self.set_active(candidate)?
 					}
 				};
+				log::info!(
+					"updating ccusage runtime from {source:?} {version}",
+					source = active.source,
+					version = active.version
+				);
 				match active.source {
 					CcusageRuntimeSource::Bun
 					| CcusageRuntimeSource::Npm
@@ -434,9 +439,25 @@ impl CcusageRuntime {
 					}
 				}
 			}
-			self.describe_inner().await
+			Ok(())
 		})
-		.await
+		.await;
+		if let Err(error) = &result {
+			log::warn!("ccusage runtime update failed: {error}");
+		}
+		result?;
+
+		let runtime = self.describe_inner().await.inspect_err(|error| {
+			log::warn!("ccusage runtime updated but refresh failed: {error}");
+		})?;
+		if let Some(active) = &runtime.active {
+			log::info!(
+				"ccusage runtime updated with {source:?} to {version}",
+				source = active.source,
+				version = active.version
+			);
+		}
+		Ok(runtime)
 	}
 
 	pub async fn describe(
@@ -611,6 +632,9 @@ impl CcusageRuntime {
 		if !is_owned_source(source) {
 			return Err(CcusageRuntimeError::SourceCannotInstall(source));
 		}
+		log::info!(
+			"ccusage acquisition started: source={source:?}, version={version}"
+		);
 		let stage = storage::create_stage(&self.root)?;
 		let staged_binary = match source {
 			CcusageRuntimeSource::Bun | CcusageRuntimeSource::Npm => {
@@ -655,6 +679,9 @@ impl CcusageRuntime {
 		self.clear_configuration_error()?;
 		let active = self.resolve_current_preference().await?;
 		self.set_active(active)?;
+		log::info!(
+			"ccusage acquisition completed: source={source:?}, version={version}"
+		);
 		Ok(())
 	}
 
