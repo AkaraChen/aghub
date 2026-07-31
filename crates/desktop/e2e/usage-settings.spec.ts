@@ -797,8 +797,11 @@ test("layout editor uses the available settings width", async ({ page }) => {
 	]);
 	expect(hiddenQuotaBox).not.toBeNull();
 	expect(hiddenQuotaMeter).not.toBeNull();
+	expect(hiddenQuotaBox!.width).toBeLessThanOrEqual(288.5);
 	expect(hiddenQuotaMeter!.width).toBeLessThanOrEqual(288.5);
-	expect(hiddenQuotaBox!.width - hiddenQuotaMeter!.width).toBeGreaterThan(80);
+	expect(hiddenQuotaMeter!.width / hiddenQuotaBox!.width).toBeGreaterThan(
+		0.9,
+	);
 
 	const [firstHiddenStat, thirdHiddenStat] = await Promise.all([
 		drawer.getByTestId("layout-hidden-item-cacheRead").boundingBox(),
@@ -986,15 +989,21 @@ test("layout rows are the complete drag targets", async ({ page }) => {
 	await expect(cardRow).toHaveAttribute("role", "button");
 	await expect(hiddenRow.locator("button")).toHaveCount(0);
 	await expect(card.locator("button")).toHaveCount(0);
+	const draggableBorders = await page
+		.locator('[aria-roledescription="draggable"]')
+		.evaluateAll((elements) =>
+			elements.map((element) => {
+				const style = getComputedStyle(element);
+				return `${style.borderTopWidth} ${style.borderTopStyle}`;
+			}),
+		);
+	expect(draggableBorders.length).toBeGreaterThan(0);
+	expect(new Set(draggableBorders)).toEqual(new Set(["1px dashed"]));
 
 	await hiddenRow.scrollIntoViewIfNeeded();
-	const [rowBox, meterBox] = await Promise.all([
-		hiddenRow.boundingBox(),
-		hiddenRow.locator('[data-slot="meter"]').boundingBox(),
-	]);
-	if (!rowBox || !meterBox) throw new Error("drag row missing");
-	const dragStartX = rowBox.x + rowBox.width * 0.95;
-	expect(dragStartX).toBeGreaterThan(meterBox.x + meterBox.width);
+	const rowBox = await hiddenRow.boundingBox();
+	if (!rowBox) throw new Error("drag row missing");
+	const dragStartX = rowBox.x + rowBox.width - 3;
 	await page.mouse.move(dragStartX, rowBox.y + rowBox.height / 2);
 	await page.mouse.down();
 	await page.mouse.move(

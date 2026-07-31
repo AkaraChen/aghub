@@ -98,7 +98,7 @@ export function UsageLayoutCanvas({
 										isActive={drag?.activeId === field.id}
 										onNodeChange={onNodeChange}
 										data-testid={`layout-card-item-${field.id}`}
-										className="-mx-1 flex items-center rounded-md px-1 py-0.5"
+										className="flex items-center rounded-md px-1 py-0.5"
 									>
 										<BarBody
 											label={field.label}
@@ -142,7 +142,7 @@ export function UsageLayoutCanvas({
 										onNodeChange={onNodeChange}
 										data-testid={`layout-card-item-${field.id}`}
 										data-layout-type="stat"
-										className="-mx-1 flex min-w-0 items-center rounded px-1 py-0.5 text-[11px]"
+										className="flex min-w-0 items-center rounded px-1 py-0.5 text-[11px]"
 									>
 										<span className="truncate text-muted">
 											{field.label}
@@ -284,7 +284,7 @@ function DraggableFieldRow({
 			title={field.hint}
 			aria-label={field.label}
 			className={cn(
-				"min-w-0 touch-none select-none outline-none",
+				"min-w-0 touch-none select-none border border-dashed border-border outline-none",
 				"transition-[background-color,box-shadow,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
 				isDisabled
 					? "opacity-40"
@@ -348,13 +348,9 @@ function HiddenDrawer({
 							isActive={activeId === field.id}
 							onNodeChange={onNodeChange}
 							data-testid={`layout-hidden-item-${field.id}`}
-							className="-mx-1 flex items-center rounded-md px-1 py-0.5"
+							className="flex w-full max-w-72 items-center rounded-md px-1 py-0.5"
 						>
-							<BarBody
-								label={field.label}
-								pct={0}
-								className="lg:max-w-72"
-							/>
+							<BarBody label={field.label} pct={0} />
 						</DraggableFieldRow>
 					))}
 					{stats.length > 0 && (
@@ -369,7 +365,7 @@ function HiddenDrawer({
 									onNodeChange={onNodeChange}
 									data-testid={`layout-hidden-item-${field.id}`}
 									data-layout-type="stat"
-									className="-mx-1 flex min-w-0 items-center rounded px-1 py-0.5 text-[11px]"
+									className="flex min-w-0 items-center rounded px-1 py-0.5 text-[11px]"
 								>
 									<span className="truncate text-muted">
 										{field.label}
