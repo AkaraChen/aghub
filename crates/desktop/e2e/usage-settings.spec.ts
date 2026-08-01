@@ -1035,10 +1035,10 @@ test("finite pickers preserve stored custom values", async ({ page }) => {
 		page.getByRole("button", { name: "Usage window" }),
 	).toContainText("45 days");
 	await expect(
-		page.getByRole("button", { name: "Global alert threshold" }),
+		page.getByRole("button", { name: "Global warning level" }),
 	).toContainText("83%");
 	await expect(
-		page.locator('button[aria-label="Alert threshold"]').first(),
+		page.locator('button[aria-label="Warning level"]').first(),
 	).toContainText("82%");
 });
 

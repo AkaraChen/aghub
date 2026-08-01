@@ -1,18 +1,18 @@
 import { getStore } from ".";
 
-/** Agents with an OAuth rate-limit endpoint — quota bars + alert thresholds. */
+/** Agents with an OAuth rate-limit endpoint — quota bars + warning levels. */
 export const USAGE_QUOTA_AGENTS = ["claude", "codex"] as const;
 
 interface UsageAgentSettings {
 	/**
-	 * Per-agent alert threshold, percent of a rate-limit window (0–100). `null`
+	 * Per-agent warning level, percent of a rate-limit window (0–100). `null`
 	 * falls back to {@link UsageSettings.globalAlertThresholdPct}. Only
 	 * meaningful for {@link USAGE_QUOTA_AGENTS}.
 	 */
 	alertThresholdPct: number | null;
 }
 
-/** Per-agent settings default: use the global alert threshold. */
+/** Per-agent settings default: use the global warning level. */
 const DEFAULT_AGENT_SETTINGS: UsageAgentSettings = {
 	alertThresholdPct: null,
 };
@@ -88,7 +88,7 @@ export interface UsageSettings {
 	 * cannot contain spaces.
 	 */
 	extraArgs: string;
-	/** Global alert threshold, percent of a rate-limit window (0–100). */
+	/** Global warning level, percent of a rate-limit window (0–100). */
 	globalAlertThresholdPct: number;
 	/** Sparse per-agent overrides; missing agents use {@link DEFAULT_AGENT_SETTINGS}. */
 	agents: Record<string, UsageAgentSettings>;

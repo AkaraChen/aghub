@@ -19,7 +19,7 @@ import { buildUsage } from "./agent-overview-card-helpers";
 
 /** Home-card usage display preferences, resolved per agent by the home page. */
 export interface AgentUsageDisplay {
-	/** Effective alert threshold for this agent's quota bars (0–100). */
+	/** Effective warning level for this agent's quota bars (0–100). */
 	alertThresholdPct: number;
 	/** Fixed bar slots; `null` = empty slot. */
 	windowSlots: (HomeWindowId | null)[];

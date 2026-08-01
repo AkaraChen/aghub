@@ -517,16 +517,16 @@ export default {
 	usageTimezone: "Timezone",
 	usageTimezoneDescription:
 		"IANA timezone for daily usage buckets. Empty uses the system timezone.",
-	usageGlobalAlertThreshold: "Global alert threshold",
+	usageGlobalAlertThreshold: "Global warning level",
 	usageAlertUseGlobal: "Use global ({{pct}}%)",
 	usageSettingsHomeCards: "Home cards",
 	usageNoEnabledAgents: "No enabled agents support usage tracking",
 	usageExtraArgs: "Additional ccusage arguments",
 	usageExtraArgsDescription:
 		"Separated by whitespace; individual argument values cannot contain spaces.",
-	usageSettingsAlerts: "Alerts",
+	usageSettingsAlerts: "Quota warnings",
 	usageSettingsAlertsDescription:
-		"Warn when a rate-limit window passes its threshold.",
+		"Change quota meters to warning colors when a rate-limit window reaches its level.",
 	usageSettingsAdvanced: "Advanced",
 	usageDefaultsHeading: "Default settings",
 	usageDefaultsDescription:
@@ -536,7 +536,7 @@ export default {
 		"This resets every Usage preference and card layout. Your ccusage installation is not changed.",
 	usageRestoreDefaultsAction: "Restore defaults",
 	usageStatusChecking: "Checking…",
-	usageAgentAlert: "Alert threshold",
+	usageAgentAlert: "Warning level",
 	usageHomeShow: "Show usage on home",
 	usageHomeShowDescription: "Show the usage block on the home agent cards.",
 	usageHomeWindow: "Usage window",
