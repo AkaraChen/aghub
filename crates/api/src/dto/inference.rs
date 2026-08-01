@@ -155,6 +155,15 @@ pub struct InferenceProviderPresetResponse {
 	pub description: Option<String>,
 }
 
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct FetchInferenceProviderModelsRequest {
+	pub format: InferenceProviderFormatDto,
+	pub api_base_url: String,
+	pub api_key: Option<String>,
+	pub provider_id: Option<String>,
+}
+
 #[derive(Debug, Clone, Copy, Serialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]

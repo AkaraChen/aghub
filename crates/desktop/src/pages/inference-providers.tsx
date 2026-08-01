@@ -21,6 +21,8 @@ import {
 	Button,
 	Card,
 	Checkbox,
+	Description,
+	ErrorMessage,
 	FieldError,
 	Fieldset,
 	Form,
@@ -38,8 +40,8 @@ import {
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Fuse from "fuse.js";
 import { pinyin } from "pinyin-pro";
-import { type Key, useMemo, useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { type Key, useId, useMemo, useState } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import { ListSearchHeader } from "../components/list-search-header";
 import { ResourceSectionHeader } from "../components/resource-section-header";
@@ -49,9 +51,18 @@ import type {
 } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
 import { AgentIcon } from "../lib/agent-icons";
+import {
+	normalizeInferenceProviderApiBaseUrl,
+	previewInferenceProviderRequestUrl,
+} from "../lib/inference-provider-url";
 import { cn } from "../lib/utils";
 import { ClaudeInferenceProviderPanel } from "./inference-providers/claude-panel";
 import { CodexInferenceProviderPanel } from "./inference-providers/codex-panel";
+import {
+	type ProviderModelDiscoveryErrorCode,
+	useProviderModelDiscovery,
+} from "./inference-providers/model-discovery";
+import { inferModelVendor } from "./inference-providers/model-vendors";
 import { OpenCodeInferenceProviderPanel } from "./inference-providers/opencode-panel";
 import {
 	createInferenceProviderMutationOptions,
@@ -131,6 +142,37 @@ const VENDORED_PROVIDER_LOGO_URL_BY_ID = new Map(
 	}),
 );
 
+function fetchProviderModelsErrorKey(code: ProviderModelDiscoveryErrorCode) {
+	switch (code) {
+		case "access_denied":
+			return "fetchProviderModelsAccessDenied";
+		case "discovery_unsupported":
+			return "fetchProviderModelsDiscoveryUnsupported";
+		case "invalid_api_base_url":
+			return "fetchProviderModelsInvalidApiBaseUrl";
+		case "credential_scope":
+			return "fetchProviderModelsRequiresChangedApiKey";
+		case "missing_credential":
+			return "fetchProviderModelsRequiresApiKey";
+		case "network":
+			return "fetchProviderModelsNetworkError";
+		case "rate_limited":
+			return "fetchProviderModelsRateLimited";
+		case "timeout":
+			return "fetchProviderModelsTimeout";
+		case "upstream_request":
+			return "fetchProviderModelsRequestFailed";
+		case "response_too_large":
+			return "fetchProviderModelsResponseTooLarge";
+		case "response_invalid":
+			return "fetchProviderModelsInvalidResponse";
+		case "empty_response":
+			return "fetchProviderModelsNoModels";
+		default:
+			return "fetchProviderModelsUnknownError";
+	}
+}
+
 function makeLatinNameSuggestion(value: string) {
 	return pinyin(value, { toneType: "none", type: "array" })
 		.join("")
@@ -140,6 +182,20 @@ function makeLatinNameSuggestion(value: string) {
 
 function makeProviderIdConflictExample(providerId: string) {
 	return `${providerId}custom`;
+}
+
+function ProviderFieldHelp({ label }: { label: string }) {
+	return (
+		<Tooltip delay={0}>
+			<Tooltip.Trigger
+				aria-label={label}
+				className="relative top-0.5 inline-flex size-4 items-center justify-center text-muted"
+			>
+				<QuestionMarkCircleIcon className="size-4" />
+			</Tooltip.Trigger>
+			<Tooltip.Content className="max-w-72">{label}</Tooltip.Content>
+		</Tooltip>
+	);
 }
 
 const CODING_AGENT_OPTIONS: CodingAgentOption[] = [
@@ -340,19 +396,16 @@ function groupProviderModels(
 	const buckets = new Map<string, ProviderModelGroup>();
 	for (const model of models) {
 		const name = model.name.trim();
-		const slashIndex = name.indexOf("/");
-		const isPrefixed = slashIndex > 0 && slashIndex < name.length - 1;
-		const key = isPrefixed
-			? name.slice(0, slashIndex)
-			: UNCATEGORIZED_GROUP_KEY;
+		const vendor = inferModelVendor(name);
+		const key = vendor ? `vendor:${vendor.key}` : UNCATEGORIZED_GROUP_KEY;
 		const existing = buckets.get(key);
 		if (existing) {
 			existing.items.push(model);
 		} else {
 			buckets.set(key, {
 				key,
-				label: isPrefixed ? key : "",
-				isUncategorized: !isPrefixed,
+				label: vendor?.label ?? "",
+				isUncategorized: !vendor,
 				items: [model],
 			});
 		}
@@ -373,6 +426,8 @@ function ProviderModelsEditor({
 	onBlur,
 	errorMessage,
 	onFetchModels,
+	isFetching = false,
+	fetchErrorCode,
 	canFetchModels = false,
 	fetchModelsDisabledReason,
 }: {
@@ -380,16 +435,18 @@ function ProviderModelsEditor({
 	onChange: (value: ProviderModelFormValue[]) => void;
 	onBlur: () => void;
 	errorMessage?: string;
-	onFetchModels?: () => Promise<string[]>;
+	onFetchModels?: () => void;
+	isFetching?: boolean;
+	fetchErrorCode?: ProviderModelDiscoveryErrorCode | null;
 	canFetchModels?: boolean;
 	fetchModelsDisabledReason?: string;
 }) {
 	const { t } = useTranslation();
+	const fetchMessageId = useId();
 	const emptyModel = useMemo(
 		() => createProviderModelFormValue("", true),
 		[],
 	);
-	const [isFetching, setIsFetching] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [isBatchDeleteOpen, setIsBatchDeleteOpen] = useState(false);
 	const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
@@ -448,6 +505,10 @@ function ProviderModelsEditor({
 	};
 
 	const handleAdd = () => {
+		if (value.length === 0) {
+			onChange([emptyModel, createProviderModelFormValue("", true)]);
+			return;
+		}
 		onChange([...value, createProviderModelFormValue("", true)]);
 	};
 
@@ -477,45 +538,6 @@ function ProviderModelsEditor({
 		const remaining = value.filter((model) => !model.selected);
 		onChange(remaining);
 		setIsBatchDeleteOpen(false);
-	};
-
-	const handleFetch = async () => {
-		if (!onFetchModels) return;
-		setIsFetching(true);
-		try {
-			const fetched = await onFetchModels();
-			const existing = new Set(
-				value.map((model) => model.name.trim()).filter(Boolean),
-			);
-			const additions = fetched
-				.filter((name) => !existing.has(name))
-				.map((name) => createProviderModelFormValue(name));
-			const baseline = value.filter((model) => model.name.trim());
-			onChange([...baseline, ...additions]);
-			if (additions.length === 0) {
-				toast.success(
-					t("fetchProviderModelsSuccessNoNew", {
-						total: fetched.length,
-					}),
-				);
-			} else {
-				toast.success(
-					t("fetchProviderModelsSuccess", {
-						added: additions.length,
-						total: fetched.length,
-					}),
-				);
-			}
-		} catch (error) {
-			console.error("Failed to fetch provider models:", error);
-			const reason =
-				error instanceof Error && error.message
-					? error.message
-					: t("fetchProviderModelsUnknownError");
-			toast.danger(t("fetchProviderModelsFailed", { reason }));
-		} finally {
-			setIsFetching(false);
-		}
 	};
 
 	const handleRemove = (id: string) => {
@@ -549,9 +571,11 @@ function ProviderModelsEditor({
 					onChange={(selected) => toggleSelected(model.id, selected)}
 					className="shrink-0"
 				>
-					<Checkbox.Control>
-						<Checkbox.Indicator />
-					</Checkbox.Control>
+					<Checkbox.Content>
+						<Checkbox.Control>
+							<Checkbox.Indicator />
+						</Checkbox.Control>
+					</Checkbox.Content>
 				</Checkbox>
 				<Input
 					value={model.name}
@@ -583,11 +607,16 @@ function ProviderModelsEditor({
 	const fetchModelsButton = onFetchModels ? (
 		<Button
 			type="button"
-			variant="tertiary"
+			variant="secondary"
 			size="sm"
 			isPending={isFetching}
-			isDisabled={!canFetchModels}
-			onPress={handleFetch}
+			isDisabled={!canFetchModels || isFetching}
+			aria-describedby={
+				fetchModelsDisabledReason || fetchErrorCode
+					? fetchMessageId
+					: undefined
+			}
+			onPress={onFetchModels}
 		>
 			{({ isPending }) => (
 				<>
@@ -607,27 +636,18 @@ function ProviderModelsEditor({
 	return (
 		<>
 			<div className="grid gap-2">
-				<div className="flex items-start justify-between gap-3">
+				<div className="flex flex-wrap items-start justify-between gap-2">
 					<div className="grid gap-0.5">
 						<Label>{t("providerModels")}</Label>
+						<p className="text-xs text-muted">
+							{t("providerModelsDescription")}
+						</p>
 					</div>
-					<div className="flex shrink-0 items-center gap-2">
-						{fetchModelsButton &&
-							(fetchModelsDisabledReason ? (
-								<Tooltip delay={0}>
-									<Tooltip.Trigger>
-										{fetchModelsButton}
-									</Tooltip.Trigger>
-									<Tooltip.Content>
-										{fetchModelsDisabledReason}
-									</Tooltip.Content>
-								</Tooltip>
-							) : (
-								fetchModelsButton
-							))}
+					<div className="flex shrink-0 flex-wrap items-center gap-2">
+						{fetchModelsButton}
 						<Button
 							type="button"
-							variant="secondary"
+							variant="tertiary"
 							size="sm"
 							onPress={handleAdd}
 						>
@@ -636,6 +656,29 @@ function ProviderModelsEditor({
 						</Button>
 					</div>
 				</div>
+
+				{fetchModelsDisabledReason && (
+					<p id={fetchMessageId} className="text-xs text-muted">
+						{fetchModelsDisabledReason}
+					</p>
+				)}
+				{fetchErrorCode && (
+					<ErrorMessage
+						id={fetchMessageId}
+						role="alert"
+						aria-live="assertive"
+					>
+						{fetchErrorCode === "empty_response"
+							? t("fetchProviderModelsNoModels")
+							: t("fetchProviderModelsFailed", {
+									reason: t(
+										fetchProviderModelsErrorKey(
+											fetchErrorCode,
+										),
+									),
+								})}
+					</ErrorMessage>
+				)}
 
 				<SearchField
 					value={searchQuery}
@@ -655,30 +698,35 @@ function ProviderModelsEditor({
 				</SearchField>
 
 				<div className="flex min-h-8 items-center justify-between gap-3 px-1">
-					<Checkbox
-						variant="secondary"
-						aria-label={
-							allFilteredSelected
-								? t("deselectAllProviderModels")
-								: t("selectAllProviderModels")
-						}
-						isSelected={allFilteredSelected}
-						isIndeterminate={someFilteredSelected}
-						isDisabled={filteredModels.length === 0}
-						onChange={handleToggleAllFiltered}
-					>
-						<Checkbox.Control>
-							<Checkbox.Indicator />
-						</Checkbox.Control>
-						<Checkbox.Content>
-							<span className="text-xs text-muted">
-								{t("selectedProviderModelsCount", {
-									selected: totalSelectedCount,
-									total: value.length,
-								})}
-							</span>
-						</Checkbox.Content>
-					</Checkbox>
+					<div className="flex items-center gap-2">
+						<Checkbox
+							variant="secondary"
+							aria-label={
+								allFilteredSelected
+									? t("deselectAllProviderModels")
+									: t("selectAllProviderModels")
+							}
+							isSelected={allFilteredSelected}
+							isIndeterminate={someFilteredSelected}
+							isDisabled={filteredModels.length === 0}
+							onChange={handleToggleAllFiltered}
+						>
+							<Checkbox.Content>
+								<Checkbox.Control>
+									<Checkbox.Indicator />
+								</Checkbox.Control>
+								<span className="text-sm">
+									{t("selectAllProviderModelsLabel")}
+								</span>
+							</Checkbox.Content>
+						</Checkbox>
+						<span className="text-xs text-muted">
+							{t("selectedProviderModelsCount", {
+								selected: totalSelectedCount,
+								total: value.length,
+							})}
+						</span>
+					</div>
 					{totalSelectedCount > 0 && (
 						<Button
 							type="button"
@@ -770,9 +818,7 @@ function ProviderModelsEditor({
 					)}
 				</div>
 
-				{errorMessage && (
-					<p className="text-sm text-danger">{errorMessage}</p>
-				)}
+				{errorMessage && <ErrorMessage>{errorMessage}</ErrorMessage>}
 			</div>
 
 			<AlertDialog.Backdrop
@@ -835,7 +881,9 @@ function ProviderForm({
 	const api = useApi();
 	const queryClient = useQueryClient();
 	const {
+		clearErrors,
 		control,
+		getValues,
 		handleSubmit,
 		setError,
 		setValue,
@@ -852,6 +900,27 @@ function ProviderForm({
 			models: toProviderModelFormValues(provider?.models ?? []),
 		},
 	});
+	const apiBaseUrl = useWatch({ control, name: "apiBaseUrl" });
+	const apiKey = useWatch({ control, name: "apiKey" });
+	const format = useWatch({ control, name: "format" });
+	const normalizedApiBaseUrl =
+		normalizeInferenceProviderApiBaseUrl(apiBaseUrl);
+	const requestEndpointPreview = previewInferenceProviderRequestUrl(
+		apiBaseUrl,
+		format,
+	);
+	const savedApiBaseUrl = provider
+		? normalizeInferenceProviderApiBaseUrl(provider.api_base_url)
+		: null;
+	const currentCredentialScope = normalizedApiBaseUrl
+		? `${format}:${normalizedApiBaseUrl}`
+		: null;
+	const savedCredentialScope =
+		provider && savedApiBaseUrl
+			? `${provider.format}:${savedApiBaseUrl}`
+			: null;
+	const credentialScopeChanged =
+		mode === "edit" && currentCredentialScope !== savedCredentialScope;
 
 	const [selectedPresetId, setSelectedPresetId] = useState<string | null>(
 		provider?.preset ?? null,
@@ -861,7 +930,11 @@ function ProviderForm({
 		useState<InferenceProviderFormValues | null>(null);
 	const [isSyncPromptOpen, setIsSyncPromptOpen] = useState(false);
 	const [isSavingProvider, setIsSavingProvider] = useState(false);
-	const [hasEditedLatinName, setHasEditedLatinName] = useState(false);
+	const [isLatinNameAutomatic, setIsLatinNameAutomatic] = useState(true);
+	const [typedApiKeyScope, setTypedApiKeyScope] = useState<string | null>(
+		null,
+	);
+	const modelDiscovery = useProviderModelDiscovery();
 	const selectedPreset = useMemo(
 		() => presets.find((preset) => preset.id === selectedPresetId) ?? null,
 		[presets, selectedPresetId],
@@ -892,8 +965,10 @@ function ProviderForm({
 		});
 
 	const handleApplyPreset = (preset: InferenceProviderPresetResponse) => {
+		modelDiscovery.invalidate();
+		clearErrors("apiKey");
 		setValue("displayName", preset.name, { shouldDirty: true });
-		if (!hasEditedLatinName && mode === "create") {
+		if (mode === "create" && isLatinNameAutomatic) {
 			setValue("latinName", makeLatinNameSuggestion(preset.id), {
 				shouldDirty: true,
 				shouldValidate: true,
@@ -928,6 +1003,10 @@ function ProviderForm({
 		) {
 			toast.warning(t("providerPresetFormatChanged"));
 		}
+		if (nextFormat !== currentFormat) {
+			modelDiscovery.invalidate();
+			clearErrors("apiKey");
+		}
 		onChange(nextFormat);
 	};
 
@@ -936,7 +1015,7 @@ function ProviderForm({
 		onChange: (value: string) => void,
 	) => {
 		onChange(value);
-		if (!hasEditedLatinName && mode === "create") {
+		if (mode === "create" && isLatinNameAutomatic) {
 			setValue("latinName", makeLatinNameSuggestion(value), {
 				shouldDirty: true,
 				shouldValidate: true,
@@ -948,21 +1027,110 @@ function ProviderForm({
 		value: string,
 		onChange: (value: string) => void,
 	) => {
-		setHasEditedLatinName(true);
+		setIsLatinNameAutomatic(!value.trim());
+		onChange(value);
+	};
+
+	const handleApiBaseUrlChange = (
+		value: string,
+		onChange: (value: string) => void,
+	) => {
+		if (
+			normalizeInferenceProviderApiBaseUrl(value) !== normalizedApiBaseUrl
+		) {
+			modelDiscovery.invalidate();
+			clearErrors("apiKey");
+		}
+		onChange(value);
+	};
+
+	const handleApiKeyChange = (
+		value: string,
+		onChange: (value: string) => void,
+	) => {
+		modelDiscovery.invalidate();
+		setTypedApiKeyScope(value.trim() ? currentCredentialScope : null);
 		onChange(value);
 	};
 
 	const [showApiKey, setShowApiKey] = useState(false);
-	const canFetchModels = Boolean(selectedPreset);
-	const fetchModelsDisabledReason = selectedPreset
+	const canUseTypedApiKey = Boolean(
+		apiKey.trim() &&
+		currentCredentialScope &&
+		typedApiKeyScope === currentCredentialScope,
+	);
+	const canReuseSavedApiKey = Boolean(
+		!apiKey.trim() &&
+		provider &&
+		currentCredentialScope &&
+		currentCredentialScope === savedCredentialScope,
+	);
+	const hasStaleTypedApiKey = Boolean(apiKey.trim() && !canUseTypedApiKey);
+	const canFetchModels = Boolean(
+		normalizedApiBaseUrl &&
+		!hasStaleTypedApiKey &&
+		!modelDiscovery.isPending,
+	);
+	const fetchModelsDisabledReason = !apiBaseUrl.trim()
 		? undefined
-		: t("fetchProviderModelsRequiresPreset");
+		: !normalizedApiBaseUrl
+			? t("fetchProviderModelsInvalidApiBaseUrl")
+			: hasStaleTypedApiKey
+				? t("fetchProviderModelsRequiresChangedApiKey")
+				: undefined;
 
 	const handleFetchModels = async () => {
-		if (!selectedPreset) {
-			throw new Error(t("fetchProviderModelsRequiresPreset"));
+		if (!normalizedApiBaseUrl) {
+			return;
 		}
-		return selectedPreset.models;
+		const modelKeysAtRequest = new Set(
+			getValues("models")
+				.map((model) => model.name.trim().toLowerCase())
+				.filter(Boolean),
+		);
+		const fetched = await modelDiscovery.run(() =>
+			api.inferenceProviders.fetchModels({
+				format,
+				api_base_url: normalizedApiBaseUrl,
+				api_key: canUseTypedApiKey ? apiKey.trim() : null,
+				provider_id: canReuseSavedApiKey
+					? (provider?.id ?? null)
+					: null,
+			}),
+		);
+		if (!fetched) return;
+
+		const currentModels = getValues("models");
+		const existing = new Set(
+			currentModels
+				.map((model) => model.name.trim().toLowerCase())
+				.filter(Boolean),
+		);
+		const additions: ProviderModelFormValue[] = [];
+		for (const name of fetched) {
+			const key = name.trim().toLowerCase();
+			if (existing.has(key) || modelKeysAtRequest.has(key)) continue;
+			existing.add(key);
+			additions.push(createProviderModelFormValue(name));
+		}
+		setValue("models", [...currentModels, ...additions], {
+			shouldDirty: additions.length > 0,
+			shouldValidate: true,
+		});
+		if (additions.length === 0) {
+			toast.success(
+				t("fetchProviderModelsSuccessNoNew", {
+					total: fetched.length,
+				}),
+			);
+		} else {
+			toast.success(
+				t("fetchProviderModelsSuccess", {
+					added: additions.length,
+					total: fetched.length,
+				}),
+			);
+		}
 	};
 
 	const createMutation = useMutation({
@@ -980,11 +1148,12 @@ function ProviderForm({
 
 	const activeError =
 		mode === "create" ? createMutation.error : updateMutation.error;
-	const isPending =
+	const isSubmitPending =
 		createMutation.isPending ||
 		updateMutation.isPending ||
 		isSubmitting ||
 		isSavingProvider;
+	const isFormBusy = isSubmitPending || modelDiscovery.isPending;
 
 	const findAgentProviderSyncTargets = async (
 		inferenceProviderId: string,
@@ -1041,9 +1210,23 @@ function ProviderForm({
 		setIsSavingProvider(true);
 		const displayName = values.displayName.trim();
 		const latinName = values.latinName.trim();
-		const apiBaseUrl = values.apiBaseUrl.trim();
+		const apiBaseUrl = normalizeInferenceProviderApiBaseUrl(
+			values.apiBaseUrl,
+		);
 		const apiKey = values.apiKey.trim();
 		const models = normalizeModelNames(values.models);
+		if (!apiBaseUrl) {
+			setError(
+				"apiBaseUrl",
+				{
+					type: "validate",
+					message: t("validationProviderApiBaseUrlInvalid"),
+				},
+				{ shouldFocus: true },
+			);
+			setIsSavingProvider(false);
+			return;
+		}
 		if (models.length === 0) {
 			setIsSavingProvider(false);
 			return;
@@ -1359,7 +1542,14 @@ function ProviderForm({
 					<Card.Content>
 						<Form
 							validationBehavior="aria"
-							onSubmit={handleSubmit(onSubmit)}
+							aria-busy={isFormBusy}
+							onSubmit={(event) => {
+								if (modelDiscovery.isPending) {
+									event.preventDefault();
+									return;
+								}
+								void handleSubmit(onSubmit)(event);
+							}}
 						>
 							<Fieldset>
 								<Fieldset.Group>
@@ -1387,31 +1577,18 @@ function ProviderForm({
 													fieldState.error,
 												)}
 											>
-												<Label>
-													<span className="inline-flex items-center gap-1">
+												<div className="inline-flex items-center gap-1">
+													<Label>
 														{t(
 															"providerDisplayName",
 														)}
-														<Tooltip delay={0}>
-															<Tooltip.Trigger>
-																<span
-																	tabIndex={0}
-																	aria-label={t(
-																		"providerDisplayNameHelp",
-																	)}
-																	className="relative top-0.5 inline-flex size-4 items-center justify-center text-muted"
-																>
-																	<QuestionMarkCircleIcon className="size-4" />
-																</span>
-															</Tooltip.Trigger>
-															<Tooltip.Content className="max-w-72">
-																{t(
-																	"providerDisplayNameHelp",
-																)}
-															</Tooltip.Content>
-														</Tooltip>
-													</span>
-												</Label>
+													</Label>
+													<ProviderFieldHelp
+														label={t(
+															"providerDisplayNameHelp",
+														)}
+													/>
+												</div>
 												<Input
 													value={field.value}
 													onChange={(event) =>
@@ -1424,6 +1601,9 @@ function ProviderForm({
 													placeholder={t(
 														"providerNamePlaceholder",
 													)}
+													spellCheck={false}
+													autoCorrect="off"
+													autoCapitalize="none"
 													variant="secondary"
 												/>
 												{fieldState.error && (
@@ -1485,33 +1665,18 @@ function ProviderForm({
 														fieldState.error,
 													)}
 												>
-													<Label>
-														<span className="inline-flex items-center gap-1">
+													<div className="inline-flex items-center gap-1">
+														<Label>
 															{t(
 																"providerLatinName",
 															)}
-															<Tooltip delay={0}>
-																<Tooltip.Trigger>
-																	<span
-																		tabIndex={
-																			0
-																		}
-																		aria-label={t(
-																			"providerLatinNameHelp",
-																		)}
-																		className="relative top-0.5 inline-flex size-4 items-center justify-center text-muted"
-																	>
-																		<QuestionMarkCircleIcon className="size-4" />
-																	</span>
-																</Tooltip.Trigger>
-																<Tooltip.Content className="max-w-72">
-																	{t(
-																		"providerLatinNameHelp",
-																	)}
-																</Tooltip.Content>
-															</Tooltip>
-														</span>
-													</Label>
+														</Label>
+														<ProviderFieldHelp
+															label={t(
+																"providerLatinNameHelp",
+															)}
+														/>
+													</div>
 													<Input
 														value={field.value}
 														onChange={(event) =>
@@ -1547,12 +1712,20 @@ function ProviderForm({
 											required: t(
 												"validationProviderApiBaseUrlRequired",
 											),
-											validate: (value) =>
-												value.trim()
+											validate: (value) => {
+												if (!value.trim()) {
+													return t(
+														"validationProviderApiBaseUrlRequired",
+													);
+												}
+												return normalizeInferenceProviderApiBaseUrl(
+													value,
+												)
 													? true
 													: t(
-															"validationProviderApiBaseUrlRequired",
-														),
+															"validationProviderApiBaseUrlInvalid",
+														);
+											},
 										}}
 										render={({ field, fieldState }) => (
 											<TextField
@@ -1564,44 +1737,59 @@ function ProviderForm({
 													fieldState.error,
 												)}
 											>
-												<Label>
-													<span className="inline-flex items-center gap-1">
+												<div className="inline-flex items-center gap-1">
+													<Label>
 														{t(
 															"providerApiBaseUrl",
 														)}
-														<Tooltip delay={0}>
-															<Tooltip.Trigger>
-																<span
-																	tabIndex={0}
-																	aria-label={t(
-																		"providerApiBaseUrlHelp",
-																	)}
-																	className="relative top-0.5 inline-flex size-4 items-center justify-center text-muted"
-																>
-																	<QuestionMarkCircleIcon className="size-4" />
-																</span>
-															</Tooltip.Trigger>
-															<Tooltip.Content className="max-w-72">
-																{t(
-																	"providerApiBaseUrlHelp",
-																)}
-															</Tooltip.Content>
-														</Tooltip>
-													</span>
-												</Label>
+													</Label>
+													<ProviderFieldHelp
+														label={t(
+															"providerApiBaseUrlHelp",
+														)}
+													/>
+												</div>
 												<Input
+													type="url"
 													value={field.value}
 													onChange={(event) =>
-														field.onChange(
+														handleApiBaseUrlChange(
 															event.target.value,
+															field.onChange,
 														)
 													}
-													onBlur={field.onBlur}
+													onBlur={() => {
+														const normalized =
+															normalizeInferenceProviderApiBaseUrl(
+																field.value,
+															);
+														if (normalized) {
+															handleApiBaseUrlChange(
+																normalized,
+																field.onChange,
+															);
+														}
+														field.onBlur();
+													}}
 													placeholder={t(
 														"providerApiBaseUrlPlaceholder",
 													)}
+													autoComplete="url"
+													spellCheck={false}
 													variant="secondary"
 												/>
+												{requestEndpointPreview && (
+													<Description>
+														{t(
+															"providerApiEndpointPreview",
+														)}{" "}
+														<span className="break-all font-mono">
+															{
+																requestEndpointPreview
+															}
+														</span>
+													</Description>
+												)}
 												{fieldState.error && (
 													<FieldError>
 														{
@@ -1683,20 +1871,37 @@ function ProviderForm({
 										control={control}
 										rules={{
 											validate: (value) => {
-												if (mode === "edit")
+												if (
+													value.trim() &&
+													currentCredentialScope &&
+													typedApiKeyScope ===
+														currentCredentialScope
+												) {
 													return true;
-												return value.trim()
-													? true
-													: t(
-															"validationProviderApiKeyRequired",
-														);
+												}
+												if (
+													mode === "edit" &&
+													!value.trim() &&
+													!credentialScopeChanged
+												) {
+													return true;
+												}
+												return t(
+													value.trim() ||
+														credentialScopeChanged
+														? "validationProviderApiKeyRequiredForScopeChange"
+														: "validationProviderApiKeyRequired",
+												);
 											},
 										}}
 										render={({ field, fieldState }) => (
 											<TextField
 												className="w-full"
 												variant="secondary"
-												isRequired={mode === "create"}
+												isRequired={
+													mode === "create" ||
+													credentialScopeChanged
+												}
 												validationBehavior="aria"
 												isInvalid={Boolean(
 													fieldState.error,
@@ -1735,14 +1940,16 @@ function ProviderForm({
 														}
 														value={field.value}
 														onChange={(event) =>
-															field.onChange(
+															handleApiKeyChange(
 																event.target
 																	.value,
+																field.onChange,
 															)
 														}
 														onBlur={field.onBlur}
 														placeholder={
-															mode === "create"
+															mode === "create" ||
+															credentialScopeChanged
 																? t(
 																		"providerApiKeyPlaceholder",
 																	)
@@ -1756,8 +1963,12 @@ function ProviderForm({
 															isIconOnly
 															aria-label={
 																showApiKey
-																	? "Hide"
-																	: "Show"
+																	? t(
+																			"hideProviderApiKey",
+																		)
+																	: t(
+																			"revealProviderApiKey",
+																		)
 															}
 															size="sm"
 															variant="ghost"
@@ -1819,6 +2030,12 @@ function ProviderForm({
 												onFetchModels={
 													handleFetchModels
 												}
+												isFetching={
+													modelDiscovery.isPending
+												}
+												fetchErrorCode={
+													modelDiscovery.errorCode
+												}
 												canFetchModels={canFetchModels}
 												fetchModelsDisabledReason={
 													fetchModelsDisabledReason
@@ -1834,11 +2051,15 @@ function ProviderForm({
 									type="button"
 									variant="tertiary"
 									onPress={onCancel}
-									isDisabled={isPending}
+									isDisabled={isFormBusy}
 								>
 									{t("cancel")}
 								</Button>
-								<Button type="submit" isPending={isPending}>
+								<Button
+									type="submit"
+									isPending={isSubmitPending}
+									isDisabled={isFormBusy}
+								>
 									{mode === "create"
 										? t("create")
 										: t("save")}
@@ -1852,7 +2073,7 @@ function ProviderForm({
 			<AlertDialog.Backdrop
 				isOpen={isSyncPromptOpen}
 				onOpenChange={(open) => {
-					if (isPending) return;
+					if (isFormBusy) return;
 					setIsSyncPromptOpen(open);
 					if (!open) setPendingEditValues(null);
 				}}
@@ -1880,7 +2101,7 @@ function ProviderForm({
 						<AlertDialog.Footer>
 							<Button
 								variant="tertiary"
-								isDisabled={isPending}
+								isDisabled={isFormBusy}
 								onPress={() => {
 									setIsSyncPromptOpen(false);
 									setPendingEditValues(null);
@@ -1890,13 +2111,13 @@ function ProviderForm({
 							</Button>
 							<Button
 								variant="secondary"
-								isDisabled={isPending}
+								isDisabled={isFormBusy}
 								onPress={() => handleConfirmEditSave(false)}
 							>
 								{t("saveWithoutAgentSync")}
 							</Button>
 							<Button
-								isPending={isPending}
+								isPending={isSubmitPending}
 								onPress={() => handleConfirmEditSave(true)}
 							>
 								{t("saveAndSyncAgentProviders")}

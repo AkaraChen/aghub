@@ -1,3 +1,4 @@
+use aghub_inference::InferenceProviderStore;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -24,7 +25,7 @@ pub struct GitCloneSessions {
 }
 
 pub struct InferenceProviderState {
-	pub app_data_dir: PathBuf,
+	pub store: InferenceProviderStore,
 }
 
 /// Path to the bundled `ccusage` sidecar binary, injected by the desktop shell.

@@ -10,7 +10,9 @@ pub mod codex;
 pub mod credentials;
 pub mod error;
 pub mod model;
+pub mod model_discovery;
 pub mod opencode;
+mod provider_endpoint;
 pub mod store;
 
 pub use agent::{
@@ -33,7 +35,11 @@ pub use model::{
 	CreateInferenceProvider, InferenceProvider, InferenceProviderFormat,
 	UpdateInferenceProvider,
 };
+pub use model_discovery::{
+	discover_models, ModelDiscoveryError, ModelDiscoveryRequest,
+};
 pub use opencode::OpenCodeProviderAdapter;
+pub use provider_endpoint::provider_credential_scope_matches;
 pub use store::{
 	AgentProviderBindingModelUpdate, AgentProviderBindingModels,
 	AgentProviderBindingRow, InferenceProviderRepository,
