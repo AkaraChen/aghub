@@ -10,4 +10,7 @@ export type SkillCopyResolutionRequest = {
 	targets: Array<SkillCopyResolutionTargetRequest>;
 	scope: string | null;
 	project_root: string | null;
+	expected_content_digest?: string | null;
+	confirmed_assessment_digest?: string | null;
+	audit_only?: boolean | null;
 };

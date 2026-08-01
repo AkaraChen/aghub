@@ -243,6 +243,12 @@ pub struct SkillCopyResolutionRequest {
 	pub targets: Vec<SkillCopyResolutionTargetRequest>,
 	pub scope: Option<String>,
 	pub project_root: Option<String>,
+	#[ts(optional = nullable)]
+	pub expected_content_digest: Option<String>,
+	#[ts(optional = nullable)]
+	pub confirmed_assessment_digest: Option<String>,
+	#[ts(optional = nullable)]
+	pub audit_only: Option<bool>,
 }
 
 #[derive(Debug, Default, Deserialize, TS)]
@@ -274,6 +280,10 @@ pub struct SkillCopyResolutionResponse {
 	pub name: String,
 	pub reference_hash: String,
 	pub results: Vec<SkillCopyResolutionResult>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional = nullable)]
+	pub audit: Option<crate::dto::audit::AuditReportDto>,
+	pub audit_confirmation_required: bool,
 }
 
 impl From<Skill> for SkillResponse {

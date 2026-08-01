@@ -532,6 +532,30 @@ export async function installMocks(page: Page) {
 					);
 				}
 			}
+			const audit =
+				body.reference.kind === "git_scan"
+					? benignAudit(`e2e:resolve:${referenceKey}`)
+					: null;
+			if (
+				audit &&
+				body.expected_content_digest &&
+				body.expected_content_digest !== audit.content_digest
+			) {
+				return jsonError(
+					409,
+					"SKILL_AUDIT_CONTENT_CHANGED",
+					"Skill content changed after security review",
+				);
+			}
+			if (body.audit_only) {
+				return json({
+					name: "react-pro",
+					reference_hash: body.expected_reference_hash,
+					results: [],
+					audit,
+					audit_confirmation_required: false,
+				});
+			}
 
 			const identical = {
 				identical: true,
@@ -583,6 +607,8 @@ export async function installMocks(page: Page) {
 					source_path: target.source_path,
 					content_hash: body.expected_reference_hash,
 				})),
+				audit,
+				audit_confirmation_required: false,
 			});
 		}
 

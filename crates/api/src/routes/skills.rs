@@ -81,8 +81,11 @@ const MAX_SKILL_DIFF_BATCH_BYTES: u64 = 256 * 1024 * 1024;
 // and after its backup move, fitting within twice the comparison budget.
 const MAX_SKILL_COPY_RESOLUTION_BATCH_BYTES: u64 =
 	MAX_SKILL_DIFF_BATCH_BYTES * 2;
-// Freezing and staging share one write budget so a multi-target resolution
-// cannot multiply a large reference into unbounded temporary disk usage.
+// Freezing and audit materialization share a preparation budget. Target
+// staging uses a separate budget so review work does not reduce the amount a
+// resolution may write to installed locations.
+const MAX_SKILL_COPY_RESOLUTION_PREPARATION_BYTES: u64 =
+	MAX_SKILL_COPY_RESOLUTION_BATCH_BYTES;
 pub(crate) const MAX_SKILL_COPY_RESOLUTION_BATCH_WRITE_BYTES: u64 =
 	MAX_SKILL_COPY_RESOLUTION_BATCH_BYTES;
 // Keep copied trees aligned with the entry, buffer, and VCS exclusions used by

@@ -176,7 +176,6 @@ fn finish_skill_copy_temp_cleanup(
 	)
 }
 
-#[cfg(test)]
 pub(super) fn stage_skill_dir_replacement(
 	source_dir: &Path,
 	target_dir: &Path,
@@ -204,23 +203,6 @@ fn stage_skill_dir_replacement_with_budget(
 			to,
 			remaining_bytes,
 			SkillLinkCopyMode::PreserveWithin(from),
-		)
-		.map(|_| ())
-	})
-}
-
-fn stage_git_skill_dir_replacement(
-	repository_root: &Path,
-	source_dir: &Path,
-	target_dir: &Path,
-) -> Result<StagedSkillReplacement, ApiError> {
-	stage_skill_dir_replacement_with(source_dir, target_dir, |from, to| {
-		let mut remaining_bytes = MAX_SKILL_COPY_RESOLUTION_BATCH_WRITE_BYTES;
-		copy_skill_dir_with_budget(
-			from,
-			to,
-			&mut remaining_bytes,
-			SkillLinkCopyMode::MaterializeWithin(repository_root),
 		)
 		.map(|_| ())
 	})
@@ -516,24 +498,10 @@ fn finish_skill_copy_batch_failure(
 	)
 }
 
-#[cfg(test)]
 pub(super) fn replace_skill_dir_staged(
 	source_dir: &Path,
 	target_dir: &Path,
 ) -> Result<(), ApiError> {
 	let replacement = stage_skill_dir_replacement(source_dir, target_dir)?;
-	apply_staged_skill_replacements(&[replacement])
-}
-
-pub(super) fn replace_git_skill_dir_staged(
-	repository_root: &Path,
-	source_dir: &Path,
-	target_dir: &Path,
-) -> Result<(), ApiError> {
-	let replacement = stage_git_skill_dir_replacement(
-		repository_root,
-		source_dir,
-		target_dir,
-	)?;
 	apply_staged_skill_replacements(&[replacement])
 }

@@ -565,36 +565,45 @@ test("the repository version updates every different discovered copy", async ({
 	await repositoryVersionRow(page).click();
 	await page.getByRole("button", { name: "Use repository version" }).click();
 
+	const expectedResolution = {
+		reference: {
+			kind: "git_scan" as const,
+			session_id: "scan-session-1",
+			skill_path: "skills/react-pro",
+		},
+		expected_reference_hash: "base",
+		storage_mode: "preserve" as const,
+		targets: [
+			{
+				source_path: "/tmp/e2e/.cursor/skills/react-pro/SKILL.md",
+				expected_hash: "base",
+			},
+			{
+				source_path: "/tmp/e2e/.claude/skills/react-pro/SKILL.md",
+				expected_hash: "target",
+			},
+			{
+				source_path: "/tmp/e2e/.z-claude/skills/react-pro/SKILL.md",
+				expected_hash: "target",
+			},
+		],
+		scope: "global" as const,
+		project_root: null,
+	};
 	await expect
 		.poll(() => mocks.getSkillCopyResolutionRequests())
 		.toEqual([
 			{
-				reference: {
-					kind: "git_scan",
-					session_id: "scan-session-1",
-					skill_path: "skills/react-pro",
-				},
-				expected_reference_hash: "base",
-				storage_mode: "preserve",
-				targets: [
-					{
-						source_path:
-							"/tmp/e2e/.cursor/skills/react-pro/SKILL.md",
-						expected_hash: "base",
-					},
-					{
-						source_path:
-							"/tmp/e2e/.claude/skills/react-pro/SKILL.md",
-						expected_hash: "target",
-					},
-					{
-						source_path:
-							"/tmp/e2e/.z-claude/skills/react-pro/SKILL.md",
-						expected_hash: "target",
-					},
-				],
-				scope: "global",
-				project_root: null,
+				...expectedResolution,
+				expected_content_digest: null,
+				confirmed_assessment_digest: null,
+				audit_only: true,
+			},
+			{
+				...expectedResolution,
+				expected_content_digest: "e2e:resolve:git:skills/react-pro",
+				confirmed_assessment_digest: null,
+				audit_only: false,
 			},
 		]);
 	await expect(
@@ -695,6 +704,9 @@ test("keeping a local version leaves the repository difference visible", async (
 			],
 			scope: "global",
 			project_root: null,
+			expected_content_digest: null,
+			confirmed_assessment_digest: null,
+			audit_only: false,
 		},
 	]);
 

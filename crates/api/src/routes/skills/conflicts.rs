@@ -26,11 +26,14 @@ use super::{
 	apply_staged_skill_replacements_with_backup_check, canonical_existing,
 	canonical_skill_roots_for_registered_agents, copy_skill_dir_with_budget,
 	existing_skill_entry_path, get_skill_root, is_within, known_skill_paths,
-	skill_link_response, stage_skill_copy_replacements_with_budget,
+	lease_git_session, should_return_audit_review, skill_link_response,
+	stage_skill_copy_replacements_with_budget,
 	validate_existing_skill_target_dir, validate_scanned_skill_path,
-	KnownSkillPath, SkillLinkCopyMode, INVALID_SKILL_PATH,
-	MAX_SKILL_COPY_LOCATIONS, MAX_SKILL_COPY_RESOLUTION_BATCH_BYTES,
+	GitCloneSessionKind, KnownSkillPath, SkillImportReview, SkillLinkCopyMode,
+	INVALID_SKILL_PATH, MAX_SKILL_COPY_LOCATIONS,
+	MAX_SKILL_COPY_RESOLUTION_BATCH_BYTES,
 	MAX_SKILL_COPY_RESOLUTION_BATCH_WRITE_BYTES,
+	MAX_SKILL_COPY_RESOLUTION_PREPARATION_BYTES,
 	MAX_SKILL_COPY_RESOLUTION_TARGETS, MAX_SKILL_COPY_STATUS_GROUPS,
 	MAX_SKILL_COPY_STATUS_PATHS, MAX_SKILL_DIFF_BATCH_BYTES,
 	MAX_SKILL_DIFF_RESPONSE_PREVIEW_BYTES, MAX_SKILL_DIFF_TARGETS,
@@ -58,8 +61,7 @@ pub async fn diff_skill(
 	enum PreparedSkillDiffReference {
 		Installed(String),
 		GitScan {
-			temp_path: PathBuf,
-			scanned_skill_paths: HashSet<String>,
+			session: crate::state::GitCloneSessionLease,
 			skill_path: String,
 		},
 	}
@@ -72,23 +74,13 @@ pub async fn diff_skill(
 			session_id,
 			skill_path,
 		} => {
-			let (temp_path, scanned_skill_paths) = {
-				let map = sessions.sessions.lock().unwrap();
-				let session = map.get(&session_id).ok_or_else(|| {
-					ApiError::new(
-						Status::NotFound,
-						"Session not found or expired",
-						"SESSION_NOT_FOUND",
-					)
-				})?;
-				(
-					session.temp_dir.path().to_path_buf(),
-					session.scanned_skill_paths.clone(),
-				)
-			};
+			let session = lease_git_session(
+				sessions,
+				&session_id,
+				GitCloneSessionKind::GitScan,
+			)?;
 			PreparedSkillDiffReference::GitScan {
-				temp_path,
-				scanned_skill_paths,
+				session,
 				skill_path,
 			}
 		}
@@ -119,13 +111,12 @@ pub async fn diff_skill(
 				validated_diff_directory(&source_path, &roots, &known)?
 			}
 			PreparedSkillDiffReference::GitScan {
-				temp_path,
-				scanned_skill_paths,
+				session,
 				skill_path,
 			} => {
 				let (_, path) = validate_scanned_skill_path(
-					&temp_path,
-					&scanned_skill_paths,
+					session.temp_dir.path(),
+					&session.scanned_skill_paths,
 					&skill_path,
 				)
 				.map_err(public_skill_diff_path_error)?;
@@ -313,8 +304,7 @@ pub async fn resolve_skill_copies(
 		Installed(String),
 		GitScan {
 			session_id: String,
-			temp_path: PathBuf,
-			scanned_skill_paths: HashSet<String>,
+			session: crate::state::GitCloneSessionLease,
 			skill_path: String,
 		},
 	}
@@ -327,24 +317,14 @@ pub async fn resolve_skill_copies(
 			session_id,
 			skill_path,
 		} => {
-			let (temp_path, scanned_skill_paths) = {
-				let map = sessions.sessions.lock().unwrap();
-				let session = map.get(&session_id).ok_or_else(|| {
-					ApiError::new(
-						Status::NotFound,
-						"Session not found or expired",
-						"SESSION_NOT_FOUND",
-					)
-				})?;
-				(
-					session.temp_dir.path().to_path_buf(),
-					session.scanned_skill_paths.clone(),
-				)
-			};
+			let session = lease_git_session(
+				sessions,
+				&session_id,
+				GitCloneSessionKind::GitScan,
+			)?;
 			PreparedReference::GitScan {
 				session_id,
-				temp_path,
-				scanned_skill_paths,
+				session,
 				skill_path,
 			}
 		}
@@ -356,6 +336,9 @@ pub async fn resolve_skill_copies(
 	let expected_reference_hash = request.expected_reference_hash;
 	let storage_mode = request.storage_mode;
 	let targets = request.targets;
+	let expected_content_digest = request.expected_content_digest;
+	let confirmed_assessment_digest = request.confirmed_assessment_digest;
+	let audit_only = request.audit_only.unwrap_or(false);
 
 	let permit = SKILL_COPY_RESOLUTION_PERMITS
 		.acquire()
@@ -390,20 +373,20 @@ pub async fn resolve_skill_copies(
 			}
 			PreparedReference::GitScan {
 				session_id,
-				temp_path,
-				scanned_skill_paths,
+				session,
 				skill_path,
 			} => {
 				let (_, path) = validate_scanned_skill_path(
-					&temp_path,
-					&scanned_skill_paths,
+					session.temp_dir.path(),
+					&session.scanned_skill_paths,
 					&skill_path,
 				)
 				.map_err(public_skill_copy_path_error)?;
 				let reference_dir = canonical_existing(&get_skill_root(path))
 					.map_err(public_skill_copy_path_error)?;
-				let materialize_root = canonical_existing(&temp_path)
-					.map_err(public_skill_copy_path_error)?;
+				let materialize_root =
+					canonical_existing(session.temp_dir.path())
+						.map_err(public_skill_copy_path_error)?;
 				(reference_dir, materialize_root, Some(session_id))
 			}
 		};
@@ -523,8 +506,8 @@ pub async fn resolve_skill_copies(
 		let frozen_root = tempfile::tempdir()
 			.map_err(|error| ApiError::from(ConfigError::Io(error)))?;
 		let frozen_reference = frozen_root.path().join("skill");
-		let mut remaining_write_bytes =
-			MAX_SKILL_COPY_RESOLUTION_BATCH_WRITE_BYTES;
+		let mut remaining_preparation_bytes =
+			MAX_SKILL_COPY_RESOLUTION_PREPARATION_BYTES;
 		let link_mode = match storage_mode {
 			SkillCopyStorageModeRequest::Preserve => {
 				SkillLinkCopyMode::PreserveWithin(&reference_dir)
@@ -536,7 +519,7 @@ pub async fn resolve_skill_copies(
 		let frozen_bytes = copy_skill_dir_with_budget(
 			&reference_dir,
 			&frozen_reference,
-			&mut remaining_write_bytes,
+			&mut remaining_preparation_bytes,
 			link_mode,
 		)?;
 		let frozen_hash = skill_copy_directory_hash(
@@ -554,6 +537,44 @@ pub async fn resolve_skill_copies(
 		if reference_name != initial_reference_name {
 			return Err(skill_copy_changed());
 		}
+		let audit = if git_session_id.is_some() {
+			let audit_root = tempfile::tempdir()
+				.map_err(|error| ApiError::from(ConfigError::Io(error)))?;
+			let audit_reference = audit_root.path().join("skill");
+			copy_skill_dir_with_budget(
+				&frozen_reference,
+				&audit_reference,
+				&mut remaining_preparation_bytes,
+				SkillLinkCopyMode::MaterializeWithin(&frozen_reference),
+			)?;
+			Some(SkillImportReview::prepare(&[audit_reference])?)
+		} else {
+			None
+		};
+		let audit_confirmation_required = audit
+			.as_ref()
+			.is_some_and(SkillImportReview::confirmation_required);
+		let return_review = match &audit {
+			Some(review) => should_return_audit_review(
+				review,
+				audit_only,
+				expected_content_digest.as_deref(),
+				confirmed_assessment_digest.as_deref(),
+			)?,
+			None => audit_only,
+		};
+		if return_review {
+			return Ok((
+				SkillCopyResolutionResponse {
+					name: reference_name,
+					reference_hash,
+					results: Vec::new(),
+					audit: audit.map(|review| review.report.into()),
+					audit_confirmation_required,
+				},
+				None,
+			));
+		}
 
 		let mut writable_targets = prepared_targets
 			.iter()
@@ -564,6 +585,8 @@ pub async fn resolve_skill_copies(
 			.iter()
 			.filter_map(|target| target.write_dir.clone())
 			.collect::<Vec<_>>();
+		let mut remaining_write_bytes =
+			MAX_SKILL_COPY_RESOLUTION_BATCH_WRITE_BYTES;
 		let replacements = stage_skill_copy_replacements_with_budget(
 			&frozen_reference,
 			&target_dirs,
@@ -614,6 +637,8 @@ pub async fn resolve_skill_copies(
 				name: reference_name,
 				reference_hash,
 				results,
+				audit: audit.map(|review| review.report.into()),
+				audit_confirmation_required,
 			},
 			git_session_id,
 		))
@@ -628,7 +653,7 @@ pub async fn resolve_skill_copies(
 	})??;
 
 	if let Some(session_id) = response.1 {
-		sessions.sessions.lock().unwrap().remove(&session_id);
+		sessions.remove(&session_id);
 	}
 
 	Ok(Json(response.0))
