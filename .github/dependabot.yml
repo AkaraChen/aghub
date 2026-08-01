@@ -14,6 +14,11 @@ updates:
       directory: "/crates/desktop"
       schedule:
           interval: "weekly"
+      # TypeScript 7.0 has no compiler API; ESLint uses 6.x while builds use the
+      # @typescript/native alias in package.json.
+      ignore:
+          - dependency-name: "typescript"
+            update-types: ["version-update:semver-major"]
       # Keep @heroui/react and @heroui/styles in lockstep: react bundles a pinned
       # @heroui/styles, so bumping either alone skews the JS-emitted classes vs the
       # loaded CSS. Group them so every heroui bump moves both packages together.
