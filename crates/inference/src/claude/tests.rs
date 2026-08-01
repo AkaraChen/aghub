@@ -11,7 +11,7 @@ use crate::credentials::CredentialStore;
 use crate::model::{
 	CreateInferenceProvider, InferenceProvider, InferenceProviderFormat,
 };
-use crate::store::InferenceProviderStore;
+use crate::store::{InferenceProviderRepository, InferenceProviderStore};
 
 fn adapter(temp: &tempfile::TempDir) -> ClaudeProviderAdapter {
 	ClaudeProviderAdapter::new(temp.path().join("settings.json"))

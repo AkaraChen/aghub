@@ -1,11 +1,14 @@
 //! SQLite-backed CRUD storage for inference providers.
 
 use std::collections::HashSet;
+use std::fmt::Write as _;
 use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
+use sha2::{Digest, Sha256};
 use sqlx::sqlite::{SqliteConnectOptions, SqliteConnection};
-use sqlx::{ConnectOptions, Row};
+use sqlx::{ConnectOptions, Connection, Row};
 
 use crate::agent::{
 	AgentProviderBinding, AgentProviderCredential, AgentProviderSource,
@@ -15,6 +18,9 @@ use crate::error::{InferenceProviderError, Result};
 use crate::model::{
 	CreateInferenceProvider, InferenceProvider, InferenceProviderFormat,
 	UpdateInferenceProvider,
+};
+use crate::provider_endpoint::{
+	normalize_provider_api_base_url, provider_credential_scope_matches,
 };
 
 /// SQLite database file name under the app data directory.
@@ -59,6 +65,7 @@ pub trait InferenceProviderRepository {
 pub struct InferenceProviderStore<C = NativeCredentialStore> {
 	app_data_dir: PathBuf,
 	credentials: C,
+	credential_state: Arc<RwLock<()>>,
 }
 
 impl InferenceProviderStore<NativeCredentialStore> {
@@ -90,6 +97,7 @@ impl<C> InferenceProviderStore<C> {
 		Self {
 			app_data_dir: app_data_dir.into(),
 			credentials,
+			credential_state: Arc::new(RwLock::new(())),
 		}
 	}
 
@@ -124,6 +132,166 @@ impl<C> InferenceProviderStore<C> {
 }
 
 impl<C: CredentialStore> InferenceProviderStore<C> {
+	fn read_credential_state(&self) -> Result<RwLockReadGuard<'_, ()>> {
+		self.credential_state
+			.read()
+			.map_err(|_| InferenceProviderError::CredentialStateUnavailable)
+	}
+
+	fn write_credential_state(&self) -> Result<RwLockWriteGuard<'_, ()>> {
+		self.credential_state
+			.write()
+			.map_err(|_| InferenceProviderError::CredentialStateUnavailable)
+	}
+
+	/// Read provider metadata and its key as one credential snapshot.
+	pub fn get_with_api_key(
+		&self,
+		id: &str,
+	) -> Result<(InferenceProvider, Option<String>)> {
+		let _credential_state = self.read_credential_state()?;
+		let mut snapshot = self.provider_credential_snapshot(id)?;
+		if credential_snapshot_is_legacy(&snapshot) {
+			self.checkpoint_legacy_credentials()?;
+			snapshot = self.provider_credential_snapshot(id)?;
+		}
+		let (provider, fingerprint) = snapshot;
+		let api_key =
+			self.verified_api_key(&provider, fingerprint.as_deref())?;
+		Ok((provider, api_key))
+	}
+
+	/// List provider metadata and stored keys as one credential snapshot.
+	pub fn list_with_api_keys(
+		&self,
+	) -> Result<Vec<(InferenceProvider, String)>> {
+		let _credential_state = self.read_credential_state()?;
+		let mut snapshots = self.provider_credential_snapshots()?;
+		if snapshots.iter().any(credential_snapshot_is_legacy) {
+			self.checkpoint_legacy_credentials()?;
+			snapshots = self.provider_credential_snapshots()?;
+		}
+		let mut providers_with_keys = Vec::new();
+		for (provider, fingerprint) in snapshots {
+			let Some(api_key) =
+				self.verified_api_key(&provider, fingerprint.as_deref())?
+			else {
+				continue;
+			};
+			providers_with_keys.push((provider, api_key));
+		}
+		Ok(providers_with_keys)
+	}
+
+	fn provider_credential_snapshot(
+		&self,
+		id: &str,
+	) -> Result<(InferenceProvider, Option<String>)> {
+		self.block_on(async {
+			let mut conn = self.open_db().await?;
+			let mut transaction = conn.begin().await?;
+			let snapshot =
+				Self::fetch_by_id_with_credential(&mut transaction, id).await?;
+			transaction.commit().await?;
+			Ok(snapshot)
+		})
+	}
+
+	fn provider_credential_snapshots(
+		&self,
+	) -> Result<Vec<(InferenceProvider, Option<String>)>> {
+		self.block_on(async {
+			let mut conn = self.open_db().await?;
+			let mut transaction = conn.begin().await?;
+			let rows = sqlx::query(
+				"SELECT id, latin_name, display_name, format, api_base_url, \
+					 preset, masked_api_key, credential_fingerprint \
+				 FROM inference_providers ORDER BY rowid",
+			)
+			.fetch_all(&mut *transaction)
+			.await?;
+			let mut snapshots = Vec::with_capacity(rows.len());
+			for row in rows {
+				let (mut provider, fingerprint) =
+					map_provider_credential_row(row)?;
+				provider.models =
+					Self::fetch_model_names(&mut transaction, &provider.id)
+						.await?;
+				snapshots.push((provider, fingerprint));
+			}
+			transaction.commit().await?;
+			Ok(snapshots)
+		})
+	}
+
+	fn checkpoint_legacy_credentials(&self) -> Result<()> {
+		self.block_on(async {
+			let mut conn = self.open_db().await?;
+			let mut transaction = conn.begin_with("BEGIN IMMEDIATE").await?;
+			let rows = sqlx::query(
+				"SELECT id, masked_api_key, credential_fingerprint \
+				 FROM inference_providers",
+			)
+			.fetch_all(&mut *transaction)
+			.await?;
+			for row in rows {
+				let id: String = row.try_get("id")?;
+				let masked_api_key: String = row.try_get("masked_api_key")?;
+				let fingerprint: Option<String> =
+					row.try_get("credential_fingerprint")?;
+				if fingerprint.is_some() || masked_api_key.is_empty() {
+					continue;
+				}
+				match self.credentials.get_api_key(&id)? {
+					Some(api_key) => {
+						sqlx::query(
+							"UPDATE inference_providers \
+							 SET credential_fingerprint = ? WHERE id = ?",
+						)
+						.bind(api_key_fingerprint(&api_key))
+						.bind(&id)
+						.execute(&mut *transaction)
+						.await?;
+					}
+					None => {
+						sqlx::query(
+							"UPDATE inference_providers \
+							 SET masked_api_key = '' WHERE id = ?",
+						)
+						.bind(&id)
+						.execute(&mut *transaction)
+						.await?;
+					}
+				}
+			}
+			transaction.commit().await?;
+			Ok(())
+		})
+	}
+
+	fn verified_api_key(
+		&self,
+		provider: &InferenceProvider,
+		fingerprint: Option<&str>,
+	) -> Result<Option<String>> {
+		if provider.masked_api_key.is_empty() {
+			return Ok(None);
+		}
+		let api_key = self.credentials.get_api_key(&provider.id)?;
+		match (api_key.as_deref(), fingerprint) {
+			(Some(api_key), Some(fingerprint))
+				if api_key_fingerprint(api_key) != fingerprint =>
+			{
+				return Err(InferenceProviderError::CredentialStateUnavailable);
+			}
+			(None, Some(_)) => {
+				return Err(InferenceProviderError::CredentialStateUnavailable);
+			}
+			_ => {}
+		}
+		Ok(api_key)
+	}
+
 	async fn open_db(&self) -> Result<SqliteConnection> {
 		let db_path = self.file_path();
 		if let Some(parent) = db_path.parent() {
@@ -160,6 +328,24 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 			.ok_or_else(|| InferenceProviderError::NotFound(id.to_string()))?;
 		provider.models = Self::fetch_model_names(conn, &provider.id).await?;
 		Ok(provider)
+	}
+
+	async fn fetch_by_id_with_credential(
+		conn: &mut SqliteConnection,
+		id: &str,
+	) -> Result<(InferenceProvider, Option<String>)> {
+		let row = sqlx::query(
+			"SELECT id, latin_name, display_name, format, api_base_url, \
+				 preset, masked_api_key, credential_fingerprint \
+			 FROM inference_providers WHERE id = ?",
+		)
+		.bind(id)
+		.fetch_optional(&mut *conn)
+		.await?
+		.ok_or_else(|| InferenceProviderError::NotFound(id.to_string()))?;
+		let (mut provider, fingerprint) = map_provider_credential_row(row)?;
+		provider.models = Self::fetch_model_names(conn, &provider.id).await?;
+		Ok((provider, fingerprint))
 	}
 
 	async fn check_latin_name_unique(
@@ -212,6 +398,56 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 			.collect()
 	}
 
+	async fn fetch_credential_fingerprint(
+		conn: &mut SqliteConnection,
+		provider_id: &str,
+	) -> Result<Option<String>> {
+		let row = sqlx::query(
+			"SELECT credential_fingerprint \
+			 FROM inference_providers WHERE id = ?",
+		)
+		.bind(provider_id)
+		.fetch_optional(conn)
+		.await?
+		.ok_or_else(|| {
+			InferenceProviderError::NotFound(provider_id.to_string())
+		})?;
+		row.try_get("credential_fingerprint").map_err(Into::into)
+	}
+
+	async fn checkpoint_legacy_credential(
+		conn: &mut SqliteConnection,
+		provider: &InferenceProvider,
+		api_key: Option<&str>,
+	) -> Result<()> {
+		if Self::fetch_credential_fingerprint(conn, &provider.id)
+			.await?
+			.is_some()
+			|| provider.masked_api_key.is_empty()
+		{
+			return Ok(());
+		}
+		if let Some(api_key) = api_key {
+			sqlx::query(
+				"UPDATE inference_providers \
+				 SET credential_fingerprint = ? WHERE id = ?",
+			)
+			.bind(api_key_fingerprint(api_key))
+			.bind(&provider.id)
+			.execute(conn)
+			.await?;
+		} else {
+			sqlx::query(
+				"UPDATE inference_providers \
+				 SET masked_api_key = '' WHERE id = ?",
+			)
+			.bind(&provider.id)
+			.execute(conn)
+			.await?;
+		}
+		Ok(())
+	}
+
 	async fn replace_models(
 		conn: &mut SqliteConnection,
 		provider_id: &str,
@@ -252,6 +488,19 @@ fn map_row(row: sqlx::sqlite::SqliteRow) -> Result<InferenceProvider> {
 	})
 }
 
+fn map_provider_credential_row(
+	row: sqlx::sqlite::SqliteRow,
+) -> Result<(InferenceProvider, Option<String>)> {
+	let fingerprint = row.try_get("credential_fingerprint")?;
+	Ok((map_row(row)?, fingerprint))
+}
+
+fn credential_snapshot_is_legacy(
+	snapshot: &(InferenceProvider, Option<String>),
+) -> bool {
+	!snapshot.0.masked_api_key.is_empty() && snapshot.1.is_none()
+}
+
 impl<C: CredentialStore> InferenceProviderRepository
 	for InferenceProviderStore<C>
 {
@@ -287,9 +536,11 @@ impl<C: CredentialStore> InferenceProviderRepository
 		&self,
 		input: CreateInferenceProvider,
 	) -> Result<InferenceProvider> {
+		let _credential_state = self.write_credential_state()?;
 		let latin_name = clean_latin_name(&input.latin_name)?;
 		let display_name = clean_display_name(&input.display_name)?;
-		let api_base_url = clean_api_base_url(&input.api_base_url)?;
+		let api_base_url = normalize_provider_api_base_url(&input.api_base_url)
+			.map_err(InferenceProviderError::from)?;
 		let preset = clean_optional_preset(input.preset.as_deref());
 		let models = clean_model_names(&input.models)?;
 		ensure_api_key(&input.api_key)?;
@@ -312,11 +563,12 @@ impl<C: CredentialStore> InferenceProviderRepository
 			self.credentials.set_api_key(&provider.id, &input.api_key)?;
 
 			let result: Result<()> = async {
+				let mut transaction = conn.begin().await?;
 				sqlx::query(
 					"INSERT INTO inference_providers \
                      (id, latin_name, display_name, format, api_base_url, \
-                      preset, masked_api_key) \
-                     VALUES (?, ?, ?, ?, ?, ?, ?)",
+                      preset, masked_api_key, credential_fingerprint) \
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
 				)
 				.bind(&provider.id)
 				.bind(&provider.latin_name)
@@ -325,21 +577,22 @@ impl<C: CredentialStore> InferenceProviderRepository
 				.bind(&provider.api_base_url)
 				.bind(&provider.preset)
 				.bind(&provider.masked_api_key)
-				.execute(&mut conn)
+				.bind(api_key_fingerprint(&input.api_key))
+				.execute(&mut *transaction)
 				.await?;
-				Self::replace_models(&mut conn, &provider.id, &provider.models)
-					.await?;
+				Self::replace_models(
+					&mut transaction,
+					&provider.id,
+					&provider.models,
+				)
+				.await?;
+				transaction.commit().await?;
 				Ok(())
 			}
 			.await;
 
 			if let Err(error) = result {
 				let _ = self.credentials.delete_api_key(&provider.id);
-				let _ =
-					sqlx::query("DELETE FROM inference_providers WHERE id = ?")
-						.bind(&provider.id)
-						.execute(&mut conn)
-						.await;
 				return Err(error);
 			}
 
@@ -352,15 +605,35 @@ impl<C: CredentialStore> InferenceProviderRepository
 		id: &str,
 		input: UpdateInferenceProvider,
 	) -> Result<InferenceProvider> {
+		let _credential_state = self.write_credential_state()?;
 		let models = input
 			.models
 			.as_ref()
 			.map(|models| clean_model_names(models))
 			.transpose()?;
+		let api_base_url = input
+			.api_base_url
+			.as_deref()
+			.map(normalize_provider_api_base_url)
+			.transpose()?;
 
 		self.block_on(async {
 			let mut conn = self.open_db().await?;
 			let mut provider = Self::fetch_by_id(&mut conn, id).await?;
+			let requested_format = input.format.unwrap_or(provider.format);
+			let requested_api_base_url =
+				api_base_url.as_deref().unwrap_or(&provider.api_base_url);
+			if (input.format.is_some() || api_base_url.is_some())
+				&& input.api_key.is_none()
+				&& !provider_credential_scope_matches(
+					&provider,
+					requested_format,
+					requested_api_base_url,
+				) {
+				return Err(
+					InferenceProviderError::CredentialScopeChangeRequiresApiKey,
+				);
+			}
 
 			if let Some(ref latin_name) = input.latin_name {
 				let latin_name = clean_latin_name(latin_name)?;
@@ -377,8 +650,8 @@ impl<C: CredentialStore> InferenceProviderRepository
 				provider.format = format;
 			}
 
-			if let Some(ref api_base_url) = input.api_base_url {
-				provider.api_base_url = clean_api_base_url(api_base_url)?;
+			if let Some(api_base_url) = api_base_url {
+				provider.api_base_url = api_base_url;
 			}
 
 			if let Some(ref preset) = input.preset {
@@ -389,22 +662,32 @@ impl<C: CredentialStore> InferenceProviderRepository
 				provider.models = models;
 			}
 
-			let previous_api_key = match input.api_key.as_ref() {
-				Some(api_key) => {
-					ensure_api_key(api_key)?;
-					let previous = self.credentials.get_api_key(id)?;
-					self.credentials.set_api_key(id, api_key)?;
-					provider.masked_api_key = mask_api_key(api_key);
-					Some(previous)
-				}
-				None => None,
-			};
+			let (previous_api_key, credential_fingerprint) =
+				match input.api_key.as_ref() {
+					Some(api_key) => {
+						ensure_api_key(api_key)?;
+						let previous = self.credentials.get_api_key(id)?;
+						Self::checkpoint_legacy_credential(
+							&mut conn,
+							&provider,
+							previous.as_deref(),
+						)
+						.await?;
+						self.credentials.set_api_key(id, api_key)?;
+						provider.masked_api_key = mask_api_key(api_key);
+						(Some(previous), Some(api_key_fingerprint(api_key)))
+					}
+					None => (None, None),
+				};
 
 			let result: Result<()> = async {
+				let mut transaction = conn.begin().await?;
 				sqlx::query(
 					"UPDATE inference_providers \
                      SET latin_name = ?, display_name = ?, format = ?, \
-                         api_base_url = ?, preset = ?, masked_api_key = ? \
+                         api_base_url = ?, preset = ?, masked_api_key = ?, \
+                         credential_fingerprint = \
+                             COALESCE(?, credential_fingerprint) \
                      WHERE id = ?",
 				)
 				.bind(&provider.latin_name)
@@ -413,26 +696,33 @@ impl<C: CredentialStore> InferenceProviderRepository
 				.bind(&provider.api_base_url)
 				.bind(&provider.preset)
 				.bind(&provider.masked_api_key)
+				.bind(credential_fingerprint.as_deref())
 				.bind(id)
-				.execute(&mut conn)
+				.execute(&mut *transaction)
 				.await?;
 				if input.models.is_some() {
-					Self::replace_models(&mut conn, id, &provider.models)
-						.await?;
+					Self::replace_models(
+						&mut transaction,
+						id,
+						&provider.models,
+					)
+					.await?;
 				}
+				transaction.commit().await?;
 				Ok(())
 			}
 			.await;
 
 			if let Err(error) = result {
 				if let Some(previous) = previous_api_key {
-					match previous {
-						Some(key) => {
-							let _ = self.credentials.set_api_key(id, &key);
-						}
-						None => {
-							let _ = self.credentials.delete_api_key(id);
-						}
+					let compensation = match previous {
+						Some(key) => self.credentials.set_api_key(id, &key),
+						None => self.credentials.delete_api_key(id),
+					};
+					if compensation.is_err() {
+						return Err(
+							InferenceProviderError::CredentialStateUnavailable,
+						);
 					}
 				}
 				return Err(error);
@@ -443,10 +733,17 @@ impl<C: CredentialStore> InferenceProviderRepository
 	}
 
 	fn delete(&self, id: &str) -> Result<InferenceProvider> {
+		let _credential_state = self.write_credential_state()?;
 		self.block_on(async {
 			let mut conn = self.open_db().await?;
 			let provider = Self::fetch_by_id(&mut conn, id).await?;
 			let previous_api_key = self.credentials.get_api_key(id)?;
+			Self::checkpoint_legacy_credential(
+				&mut conn,
+				&provider,
+				previous_api_key.as_deref(),
+			)
+			.await?;
 
 			self.credentials.delete_api_key(id)?;
 
@@ -458,7 +755,11 @@ impl<C: CredentialStore> InferenceProviderRepository
 
 			if let Err(error) = result {
 				if let Some(key) = previous_api_key {
-					let _ = self.credentials.set_api_key(id, &key);
+					if self.credentials.set_api_key(id, &key).is_err() {
+						return Err(
+							InferenceProviderError::CredentialStateUnavailable,
+						);
+					}
 				}
 				return Err(error.into());
 			}
@@ -468,35 +769,44 @@ impl<C: CredentialStore> InferenceProviderRepository
 	}
 
 	fn get_api_key(&self, id: &str) -> Result<Option<String>> {
-		self.get(id)?;
-		self.credentials.get_api_key(id)
+		self.get_with_api_key(id).map(|(_, api_key)| api_key)
 	}
 
 	fn set_api_key(&self, id: &str, api_key: &str) -> Result<()> {
+		let _credential_state = self.write_credential_state()?;
 		ensure_api_key(api_key)?;
 		self.block_on(async {
 			let mut conn = self.open_db().await?;
-			Self::fetch_by_id(&mut conn, id).await?;
+			let provider = Self::fetch_by_id(&mut conn, id).await?;
 			let previous = self.credentials.get_api_key(id)?;
+			Self::checkpoint_legacy_credential(
+				&mut conn,
+				&provider,
+				previous.as_deref(),
+			)
+			.await?;
 			self.credentials.set_api_key(id, api_key)?;
 
 			let result = sqlx::query(
-				"UPDATE inference_providers SET masked_api_key = ? \
+				"UPDATE inference_providers \
+				 SET masked_api_key = ?, credential_fingerprint = ? \
                  WHERE id = ?",
 			)
 			.bind(mask_api_key(api_key))
+			.bind(api_key_fingerprint(api_key))
 			.bind(id)
 			.execute(&mut conn)
 			.await;
 
 			if let Err(error) = result {
-				match previous {
-					Some(key) => {
-						let _ = self.credentials.set_api_key(id, &key);
-					}
-					None => {
-						let _ = self.credentials.delete_api_key(id);
-					}
+				let compensation = match previous {
+					Some(key) => self.credentials.set_api_key(id, &key),
+					None => self.credentials.delete_api_key(id),
+				};
+				if compensation.is_err() {
+					return Err(
+						InferenceProviderError::CredentialStateUnavailable,
+					);
 				}
 				return Err(error.into());
 			}
@@ -506,14 +816,22 @@ impl<C: CredentialStore> InferenceProviderRepository
 	}
 
 	fn delete_api_key(&self, id: &str) -> Result<()> {
+		let _credential_state = self.write_credential_state()?;
 		self.block_on(async {
 			let mut conn = self.open_db().await?;
-			Self::fetch_by_id(&mut conn, id).await?;
+			let provider = Self::fetch_by_id(&mut conn, id).await?;
 			let previous = self.credentials.get_api_key(id)?;
+			Self::checkpoint_legacy_credential(
+				&mut conn,
+				&provider,
+				previous.as_deref(),
+			)
+			.await?;
 			self.credentials.delete_api_key(id)?;
 
 			let result = sqlx::query(
-				"UPDATE inference_providers SET masked_api_key = '' \
+				"UPDATE inference_providers \
+				 SET masked_api_key = '', credential_fingerprint = NULL \
                  WHERE id = ?",
 			)
 			.bind(id)
@@ -522,7 +840,11 @@ impl<C: CredentialStore> InferenceProviderRepository
 
 			if let Err(error) = result {
 				if let Some(key) = previous {
-					let _ = self.credentials.set_api_key(id, &key);
+					if self.credentials.set_api_key(id, &key).is_err() {
+						return Err(
+							InferenceProviderError::CredentialStateUnavailable,
+						);
+					}
 				}
 				return Err(error.into());
 			}
@@ -614,13 +936,16 @@ fn mask_api_key(api_key: &str) -> String {
 	format!("{prefix}{}{suffix}", "*".repeat(mask_len))
 }
 
-fn clean_api_base_url(api_base_url: &str) -> Result<String> {
-	let api_base_url = api_base_url.trim();
-	if api_base_url.is_empty() {
-		Err(InferenceProviderError::EmptyApiBaseUrl)
-	} else {
-		Ok(api_base_url.to_string())
+fn api_key_fingerprint(api_key: &str) -> String {
+	// The database fingerprint detects keyring writes that outlive a failed
+	// metadata transaction without storing the credential itself.
+	let digest = Sha256::digest(api_key.as_bytes());
+	let mut fingerprint = String::with_capacity(digest.len() * 2);
+	for byte in digest {
+		write!(&mut fingerprint, "{byte:02x}")
+			.expect("writing to a String cannot fail");
 	}
+	fingerprint
 }
 
 // ============================================================================
@@ -963,8 +1288,8 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 		&self,
 		row: &AgentProviderBindingRow,
 	) -> Result<AgentProviderBinding> {
-		let provider = self.get(&row.inference_provider_id)?;
-		let api_key = self.credentials.get_api_key(&provider.id)?;
+		let (provider, api_key) =
+			self.get_with_api_key(&row.inference_provider_id)?;
 
 		AgentProviderBinding::from_inventory(
 			row.id.clone(),
@@ -983,7 +1308,9 @@ impl<C: CredentialStore> InferenceProviderStore<C> {
 #[cfg(test)]
 mod tests {
 	use std::collections::HashMap;
-	use std::sync::{Arc, Mutex};
+	use std::sync::atomic::{AtomicBool, Ordering};
+	use std::sync::{mpsc, Arc, Barrier, Mutex};
+	use std::time::Duration;
 
 	use super::*;
 	use crate::model::InferenceProviderFormat;
@@ -1009,6 +1336,84 @@ mod tests {
 		fn delete_api_key(&self, provider_id: &str) -> Result<()> {
 			self.values.lock().unwrap().remove(provider_id);
 			Ok(())
+		}
+	}
+
+	#[derive(Debug, Clone)]
+	struct PausingCredentialStore {
+		values: MemoryCredentialStore,
+		replacement_written: Arc<Barrier>,
+		resume_update: Arc<Barrier>,
+	}
+
+	impl CredentialStore for PausingCredentialStore {
+		fn get_api_key(&self, provider_id: &str) -> Result<Option<String>> {
+			self.values.get_api_key(provider_id)
+		}
+
+		fn set_api_key(&self, provider_id: &str, api_key: &str) -> Result<()> {
+			self.values.set_api_key(provider_id, api_key)?;
+			if api_key == "replacement-key" {
+				self.replacement_written.wait();
+				self.resume_update.wait();
+			}
+			Ok(())
+		}
+
+		fn delete_api_key(&self, provider_id: &str) -> Result<()> {
+			self.values.delete_api_key(provider_id)
+		}
+	}
+
+	#[derive(Debug, Clone)]
+	struct PausingReadCredentialStore {
+		values: MemoryCredentialStore,
+		pause_next_read: Arc<AtomicBool>,
+		read_started: Arc<Barrier>,
+		resume_read: Arc<Barrier>,
+	}
+
+	impl CredentialStore for PausingReadCredentialStore {
+		fn get_api_key(&self, provider_id: &str) -> Result<Option<String>> {
+			if self.pause_next_read.swap(false, Ordering::SeqCst) {
+				self.read_started.wait();
+				self.resume_read.wait();
+			}
+			self.values.get_api_key(provider_id)
+		}
+
+		fn set_api_key(&self, provider_id: &str, api_key: &str) -> Result<()> {
+			self.values.set_api_key(provider_id, api_key)
+		}
+
+		fn delete_api_key(&self, provider_id: &str) -> Result<()> {
+			self.values.delete_api_key(provider_id)
+		}
+	}
+
+	#[derive(Debug, Clone)]
+	struct RejectingCredentialStore {
+		values: MemoryCredentialStore,
+		rejected_api_key: Arc<Mutex<Option<String>>>,
+	}
+
+	impl CredentialStore for RejectingCredentialStore {
+		fn get_api_key(&self, provider_id: &str) -> Result<Option<String>> {
+			self.values.get_api_key(provider_id)
+		}
+
+		fn set_api_key(&self, provider_id: &str, api_key: &str) -> Result<()> {
+			if self.rejected_api_key.lock().unwrap().as_deref() == Some(api_key)
+			{
+				return Err(InferenceProviderError::Keyring(
+					"credential write rejected".to_string(),
+				));
+			}
+			self.values.set_api_key(provider_id, api_key)
+		}
+
+		fn delete_api_key(&self, provider_id: &str) -> Result<()> {
+			self.values.delete_api_key(provider_id)
 		}
 	}
 
@@ -1168,7 +1573,7 @@ mod tests {
 					.fetch_one(&mut conn)
 					.await
 					.unwrap();
-			assert_eq!(version, 10);
+			assert_eq!(version, 11);
 
 			let trigger_count: i64 = sqlx::query_scalar(
 				"SELECT COUNT(*) FROM sqlite_master
@@ -1332,6 +1737,473 @@ mod tests {
 	}
 
 	#[test]
+	fn test_update_provider_scope_requires_new_api_key() {
+		let (_temp, store) = store();
+		let provider = create_provider(&store, "openai");
+
+		for (format, api_base_url) in [
+			(Some(InferenceProviderFormat::Anthropic), None),
+			(None, Some("https://gateway.example.com/v1".to_string())),
+		] {
+			let error = store
+				.update(
+					&provider.id,
+					UpdateInferenceProvider {
+						latin_name: None,
+						display_name: None,
+						format,
+						api_base_url,
+						preset: None,
+						api_key: None,
+						models: None,
+					},
+				)
+				.unwrap_err();
+
+			assert!(matches!(
+				error,
+				InferenceProviderError::CredentialScopeChangeRequiresApiKey
+			));
+			assert_eq!(
+				store.get_api_key(&provider.id).unwrap(),
+				Some("secret".to_string())
+			);
+			assert_eq!(store.get(&provider.id).unwrap(), provider);
+		}
+	}
+
+	#[test]
+	fn test_update_provider_can_keep_key_for_unchanged_scope() {
+		let (_temp, store) = store();
+		let provider = create_provider(&store, "openai");
+
+		let updated = store
+			.update(
+				&provider.id,
+				UpdateInferenceProvider {
+					latin_name: None,
+					display_name: Some("OpenAI Team".to_string()),
+					format: Some(InferenceProviderFormat::OpenAiResponses),
+					api_base_url: Some(
+						" https://api.openai.com/v1 ".to_string(),
+					),
+					preset: None,
+					api_key: None,
+					models: None,
+				},
+			)
+			.unwrap();
+
+		assert_eq!(updated.display_name, "OpenAI Team");
+		assert_eq!(
+			store.get_api_key(&provider.id).unwrap(),
+			Some("secret".to_string())
+		);
+	}
+
+	#[test]
+	fn test_update_rolls_back_metadata_models_and_api_key_together() {
+		let (_temp, store) = store();
+		let provider = store
+			.create(CreateInferenceProvider {
+				latin_name: "openai".to_string(),
+				display_name: "OpenAI".to_string(),
+				format: InferenceProviderFormat::OpenAiResponses,
+				api_base_url: "https://api.openai.com/v1".to_string(),
+				preset: None,
+				api_key: "first-key".to_string(),
+				models: vec!["first-model".to_string()],
+			})
+			.unwrap();
+		store.block_on(async {
+			let mut conn = store.open_db().await.unwrap();
+			sqlx::query(
+				"CREATE TRIGGER reject_model_update \
+				 BEFORE INSERT ON inference_models \
+				 BEGIN SELECT RAISE(FAIL, 'model update rejected'); END",
+			)
+			.execute(&mut conn)
+			.await
+			.unwrap();
+		});
+
+		let result = store.update(
+			&provider.id,
+			UpdateInferenceProvider {
+				latin_name: None,
+				display_name: Some("Changed".to_string()),
+				format: None,
+				api_base_url: Some("https://other.example.com/v1".to_string()),
+				preset: None,
+				api_key: Some("replacement-key".to_string()),
+				models: Some(vec!["second-model".to_string()]),
+			},
+		);
+
+		assert!(result.is_err());
+		assert_eq!(store.get(&provider.id).unwrap(), provider);
+		assert_eq!(
+			store.get_api_key(&provider.id).unwrap().as_deref(),
+			Some("first-key")
+		);
+	}
+
+	#[test]
+	fn test_failed_key_compensation_quarantines_the_credential() {
+		let temp = tempfile::tempdir().unwrap();
+		let rejected_api_key = Arc::new(Mutex::new(None));
+		let store = InferenceProviderStore::with_credentials(
+			temp.path(),
+			RejectingCredentialStore {
+				values: MemoryCredentialStore::default(),
+				rejected_api_key: rejected_api_key.clone(),
+			},
+		);
+		let provider = store
+			.create(CreateInferenceProvider {
+				latin_name: "openai".to_string(),
+				display_name: "OpenAI".to_string(),
+				format: InferenceProviderFormat::OpenAiResponses,
+				api_base_url: "https://api.openai.com/v1".to_string(),
+				preset: None,
+				api_key: "first-key".to_string(),
+				models: vec!["first-model".to_string()],
+			})
+			.unwrap();
+		*rejected_api_key.lock().unwrap() = Some("first-key".to_string());
+		store.block_on(async {
+			let mut conn = store.open_db().await.unwrap();
+			sqlx::query(
+				"CREATE TRIGGER reject_model_update \
+				 BEFORE INSERT ON inference_models \
+				 BEGIN SELECT RAISE(FAIL, 'model update rejected'); END",
+			)
+			.execute(&mut conn)
+			.await
+			.unwrap();
+		});
+
+		let result = store.update(
+			&provider.id,
+			UpdateInferenceProvider {
+				latin_name: None,
+				display_name: None,
+				format: None,
+				api_base_url: Some("https://other.example.com/v1".to_string()),
+				preset: None,
+				api_key: Some("replacement-key".to_string()),
+				models: Some(vec!["second-model".to_string()]),
+			},
+		);
+
+		assert!(matches!(
+			result,
+			Err(InferenceProviderError::CredentialStateUnavailable)
+		));
+		assert_eq!(store.get(&provider.id).unwrap(), provider);
+		assert!(matches!(
+			store.get_with_api_key(&provider.id),
+			Err(InferenceProviderError::CredentialStateUnavailable)
+		));
+	}
+
+	#[test]
+	fn test_failed_provider_delete_quarantines_legacy_credential() {
+		let temp = tempfile::tempdir().unwrap();
+		let rejected_api_key = Arc::new(Mutex::new(None));
+		let store = InferenceProviderStore::with_credentials(
+			temp.path(),
+			RejectingCredentialStore {
+				values: MemoryCredentialStore::default(),
+				rejected_api_key: rejected_api_key.clone(),
+			},
+		);
+		let provider = store
+			.create(CreateInferenceProvider {
+				latin_name: "openai".to_string(),
+				display_name: "OpenAI".to_string(),
+				format: InferenceProviderFormat::OpenAiResponses,
+				api_base_url: "https://api.openai.com/v1".to_string(),
+				preset: None,
+				api_key: "first-key".to_string(),
+				models: Vec::new(),
+			})
+			.unwrap();
+		store.block_on(async {
+			let mut conn = store.open_db().await.unwrap();
+			sqlx::query(
+				"UPDATE inference_providers \
+				 SET credential_fingerprint = NULL WHERE id = ?",
+			)
+			.bind(&provider.id)
+			.execute(&mut conn)
+			.await
+			.unwrap();
+			sqlx::query(
+				"CREATE TRIGGER reject_provider_delete \
+				 BEFORE DELETE ON inference_providers \
+				 BEGIN SELECT RAISE(FAIL, 'provider delete rejected'); END",
+			)
+			.execute(&mut conn)
+			.await
+			.unwrap();
+		});
+		*rejected_api_key.lock().unwrap() = Some("first-key".to_string());
+
+		assert!(matches!(
+			store.delete(&provider.id),
+			Err(InferenceProviderError::CredentialStateUnavailable)
+		));
+		assert!(matches!(
+			store.get_with_api_key(&provider.id),
+			Err(InferenceProviderError::CredentialStateUnavailable)
+		));
+	}
+
+	#[test]
+	fn test_failed_api_key_delete_quarantines_legacy_credential() {
+		let temp = tempfile::tempdir().unwrap();
+		let rejected_api_key = Arc::new(Mutex::new(None));
+		let store = InferenceProviderStore::with_credentials(
+			temp.path(),
+			RejectingCredentialStore {
+				values: MemoryCredentialStore::default(),
+				rejected_api_key: rejected_api_key.clone(),
+			},
+		);
+		let provider = store
+			.create(CreateInferenceProvider {
+				latin_name: "openai".to_string(),
+				display_name: "OpenAI".to_string(),
+				format: InferenceProviderFormat::OpenAiResponses,
+				api_base_url: "https://api.openai.com/v1".to_string(),
+				preset: None,
+				api_key: "first-key".to_string(),
+				models: Vec::new(),
+			})
+			.unwrap();
+		store.block_on(async {
+			let mut conn = store.open_db().await.unwrap();
+			sqlx::query(
+				"UPDATE inference_providers \
+				 SET credential_fingerprint = NULL WHERE id = ?",
+			)
+			.bind(&provider.id)
+			.execute(&mut conn)
+			.await
+			.unwrap();
+			sqlx::query(
+				"CREATE TRIGGER reject_api_key_delete \
+				 BEFORE UPDATE OF masked_api_key ON inference_providers \
+				 WHEN NEW.masked_api_key = '' \
+				 BEGIN SELECT RAISE(FAIL, 'key delete rejected'); END",
+			)
+			.execute(&mut conn)
+			.await
+			.unwrap();
+		});
+		*rejected_api_key.lock().unwrap() = Some("first-key".to_string());
+
+		assert!(matches!(
+			store.delete_api_key(&provider.id),
+			Err(InferenceProviderError::CredentialStateUnavailable)
+		));
+		assert!(matches!(
+			store.get_with_api_key(&provider.id),
+			Err(InferenceProviderError::CredentialStateUnavailable)
+		));
+	}
+
+	#[test]
+	fn test_legacy_credential_without_fingerprint_remains_readable() {
+		let (_temp, store) = store();
+		let provider = create_provider(&store, "openai");
+		store.block_on(async {
+			let mut conn = store.open_db().await.unwrap();
+			sqlx::query(
+				"UPDATE inference_providers \
+				 SET credential_fingerprint = NULL WHERE id = ?",
+			)
+			.bind(&provider.id)
+			.execute(&mut conn)
+			.await
+			.unwrap();
+		});
+
+		assert_eq!(
+			store.get_api_key(&provider.id).unwrap().as_deref(),
+			Some("secret")
+		);
+	}
+
+	#[test]
+	fn test_scope_update_and_credential_snapshot_are_serialized() {
+		const SNAPSHOT_WAIT: Duration = Duration::from_millis(100);
+
+		let temp = tempfile::tempdir().unwrap();
+		let replacement_written = Arc::new(Barrier::new(2));
+		let resume_update = Arc::new(Barrier::new(2));
+		let store = InferenceProviderStore::with_credentials(
+			temp.path(),
+			PausingCredentialStore {
+				values: MemoryCredentialStore::default(),
+				replacement_written: replacement_written.clone(),
+				resume_update: resume_update.clone(),
+			},
+		);
+		let provider = store
+			.create(CreateInferenceProvider {
+				latin_name: "openai".to_string(),
+				display_name: "OpenAI".to_string(),
+				format: InferenceProviderFormat::OpenAiResponses,
+				api_base_url: "https://api.example.com/v1".to_string(),
+				preset: None,
+				api_key: "first-key".to_string(),
+				models: Vec::new(),
+			})
+			.unwrap();
+
+		let update_store = store.clone();
+		let provider_id = provider.id.clone();
+		let update = std::thread::spawn(move || {
+			update_store.update(
+				&provider_id,
+				UpdateInferenceProvider {
+					latin_name: None,
+					display_name: None,
+					format: None,
+					api_base_url: Some(
+						"https://other.example.com/v1".to_string(),
+					),
+					preset: None,
+					api_key: Some("replacement-key".to_string()),
+					models: None,
+				},
+			)
+		});
+		replacement_written.wait();
+
+		let snapshot_store = store.clone();
+		let provider_id = provider.id.clone();
+		let (snapshot_tx, snapshot_rx) = mpsc::channel();
+		let snapshot_started = Arc::new(Barrier::new(2));
+		let reader_started = snapshot_started.clone();
+		std::thread::spawn(move || {
+			reader_started.wait();
+			snapshot_tx
+				.send(snapshot_store.get_with_api_key(&provider_id))
+				.unwrap();
+		});
+		snapshot_started.wait();
+		let early_snapshot = snapshot_rx.recv_timeout(SNAPSHOT_WAIT);
+
+		resume_update.wait();
+		let updated = update.join().unwrap().unwrap();
+		let snapshot_was_blocked = early_snapshot.is_err();
+		let (snapshot_provider, snapshot_key) = early_snapshot
+			.unwrap_or_else(|_| snapshot_rx.recv().unwrap())
+			.unwrap();
+
+		assert!(snapshot_was_blocked);
+		assert_eq!(snapshot_provider, updated);
+		assert_eq!(snapshot_key.as_deref(), Some("replacement-key"));
+	}
+
+	#[test]
+	fn test_legacy_snapshot_is_checkpointed_across_store_instances() {
+		const UPDATE_WAIT: Duration = Duration::from_millis(100);
+
+		let temp = tempfile::tempdir().unwrap();
+		let pause_next_read = Arc::new(AtomicBool::new(false));
+		let read_started = Arc::new(Barrier::new(2));
+		let resume_read = Arc::new(Barrier::new(2));
+		let credentials = PausingReadCredentialStore {
+			values: MemoryCredentialStore::default(),
+			pause_next_read: pause_next_read.clone(),
+			read_started: read_started.clone(),
+			resume_read: resume_read.clone(),
+		};
+		let reader = InferenceProviderStore::with_credentials(
+			temp.path(),
+			credentials.clone(),
+		);
+		let writer =
+			InferenceProviderStore::with_credentials(temp.path(), credentials);
+		let provider = reader
+			.create(CreateInferenceProvider {
+				latin_name: "openai".to_string(),
+				display_name: "OpenAI".to_string(),
+				format: InferenceProviderFormat::OpenAiResponses,
+				api_base_url: "https://api.example.com/v1".to_string(),
+				preset: None,
+				api_key: "first-key".to_string(),
+				models: Vec::new(),
+			})
+			.unwrap();
+		reader.block_on(async {
+			let mut conn = reader.open_db().await.unwrap();
+			sqlx::query(
+				"UPDATE inference_providers \
+				 SET credential_fingerprint = NULL WHERE id = ?",
+			)
+			.bind(&provider.id)
+			.execute(&mut conn)
+			.await
+			.unwrap();
+		});
+
+		pause_next_read.store(true, Ordering::SeqCst);
+		let reader_id = provider.id.clone();
+		let read =
+			std::thread::spawn(move || reader.get_with_api_key(&reader_id));
+		read_started.wait();
+
+		let writer_id = provider.id.clone();
+		let (update_tx, update_rx) = mpsc::channel();
+		std::thread::spawn(move || {
+			update_tx
+				.send(writer.update(
+					&writer_id,
+					UpdateInferenceProvider {
+						latin_name: None,
+						display_name: None,
+						format: None,
+						api_base_url: Some(
+							"https://other.example.com/v1".to_string(),
+						),
+						preset: None,
+						api_key: Some("replacement-key".to_string()),
+						models: None,
+					},
+				))
+				.unwrap();
+		});
+		let early_update = update_rx.recv_timeout(UPDATE_WAIT);
+		let update_was_blocked = early_update.is_err();
+
+		resume_read.wait();
+		let read_result = read.join().unwrap();
+		let updated = early_update
+			.unwrap_or_else(|_| update_rx.recv().unwrap())
+			.unwrap();
+
+		assert!(update_was_blocked);
+		match read_result {
+			Ok((read_provider, Some(api_key))) => {
+				let old_snapshot = read_provider.api_base_url
+					== "https://api.example.com/v1"
+					&& api_key == "first-key";
+				let updated_snapshot = read_provider.api_base_url
+					== updated.api_base_url
+					&& api_key == "replacement-key";
+				assert!(old_snapshot || updated_snapshot);
+			}
+			Err(InferenceProviderError::CredentialStateUnavailable) => {}
+			result => panic!("unexpected credential snapshot: {result:?}"),
+		}
+	}
+
+	#[test]
 	fn test_delete_provider_and_api_key() {
 		let (_temp, store) = store();
 		let provider = store
@@ -1440,6 +2312,69 @@ mod tests {
 			.unwrap_err();
 
 		assert!(matches!(error, InferenceProviderError::EmptyApiBaseUrl));
+	}
+
+	#[test]
+	fn test_create_normalizes_provider_api_base_url() {
+		let (_temp, store) = store();
+
+		let provider = store
+			.create(CreateInferenceProvider {
+				latin_name: "openai".to_string(),
+				display_name: "OpenAI".to_string(),
+				format: InferenceProviderFormat::OpenAiResponses,
+				api_base_url: " api.example.com/v1/chat/completions "
+					.to_string(),
+				preset: None,
+				api_key: "secret".to_string(),
+				models: Vec::new(),
+			})
+			.unwrap();
+
+		assert_eq!(provider.api_base_url, "https://api.example.com/v1");
+	}
+
+	#[test]
+	fn test_create_rejects_unsupported_provider_api_base_url() {
+		for (latin_name, api_base_url) in [
+			("ftp", "ftp://api.example.com/v1"),
+			("userinfo", "https://user:secret@api.example.com/v1"),
+		] {
+			let (_temp, store) = store();
+			let result = store.create(CreateInferenceProvider {
+				latin_name: latin_name.to_string(),
+				display_name: latin_name.to_string(),
+				format: InferenceProviderFormat::OpenAiResponses,
+				api_base_url: api_base_url.to_string(),
+				preset: None,
+				api_key: "secret".to_string(),
+				models: Vec::new(),
+			});
+
+			assert!(result.is_err());
+		}
+	}
+
+	#[test]
+	fn test_update_rejects_unsupported_provider_api_base_url() {
+		let (_temp, store) = store();
+		let provider = create_provider(&store, "openai");
+
+		let result = store.update(
+			&provider.id,
+			UpdateInferenceProvider {
+				latin_name: None,
+				display_name: None,
+				format: None,
+				api_base_url: Some("ftp://api.example.com/v1".to_string()),
+				preset: None,
+				api_key: Some("replacement".to_string()),
+				models: None,
+			},
+		);
+
+		assert!(result.is_err());
+		assert_eq!(store.get(&provider.id).unwrap(), provider);
 	}
 
 	#[test]

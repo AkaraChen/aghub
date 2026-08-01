@@ -84,10 +84,12 @@ fn fetch_ccusage_sidecar() {
 	// A configured agent gives the otherwise-unbounded registry/tarball fetches
 	// connect/read timeouts, so an unreachable or stalled registry fails the
 	// build instead of hanging it forever (ureq sets no default timeout).
-	let agent = ureq::AgentBuilder::new()
-		.timeout_connect(Duration::from_secs(30))
-		.timeout_read(Duration::from_secs(120))
-		.build();
+	let agent: ureq::Agent = ureq::Agent::config_builder()
+		.timeout_connect(Some(Duration::from_secs(30)))
+		.timeout_recv_response(Some(Duration::from_secs(120)))
+		.timeout_recv_body(Some(Duration::from_secs(120)))
+		.build()
+		.into();
 
 	// Read the tarball URL and Subresource Integrity hash from the registry
 	// rather than hardcoding either. The hash ships with the package metadata,
@@ -96,11 +98,12 @@ fn fetch_ccusage_sidecar() {
 	let meta_url = format!("https://registry.npmjs.org/{pkg}");
 	let meta_resp = agent
 		.get(&meta_url)
-		.set("Accept", "application/vnd.npm.install-v1+json")
+		.header("Accept", "application/vnd.npm.install-v1+json")
 		.call()
 		.unwrap_or_else(|e| panic!("fetch {meta_url} failed: {e}"));
 	let mut meta_bytes = Vec::new();
 	meta_resp
+		.into_body()
 		.into_reader()
 		.read_to_end(&mut meta_bytes)
 		.expect("read ccusage registry metadata");
@@ -120,7 +123,8 @@ fn fetch_ccusage_sidecar() {
 		.call()
 		.unwrap_or_else(|e| panic!("download {url} failed: {e}"));
 	let mut tarball = Vec::new();
-	resp.into_reader()
+	resp.into_body()
+		.into_reader()
 		.read_to_end(&mut tarball)
 		.expect("read ccusage tarball");
 

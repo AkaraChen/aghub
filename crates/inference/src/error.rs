@@ -15,6 +15,10 @@ pub enum InferenceProviderError {
 	#[error("keyring error: {0}")]
 	Keyring(String),
 
+	/// Provider metadata and credentials could not be read consistently.
+	#[error("inference provider credential state is unavailable")]
+	CredentialStateUnavailable,
+
 	/// Provider latin names must not be empty.
 	#[error("provider latin name cannot be empty")]
 	EmptyName,
@@ -31,9 +35,21 @@ pub enum InferenceProviderError {
 	#[error("provider API key cannot be empty")]
 	EmptyApiKey,
 
+	/// Changing a credential's provider scope requires a replacement key.
+	#[error("provider API key is required after changing the URL or format")]
+	CredentialScopeChangeRequiresApiKey,
+
 	/// API base URLs must not be empty.
 	#[error("provider API base URL cannot be empty")]
 	EmptyApiBaseUrl,
+
+	/// API base URLs must be parseable.
+	#[error("provider API base URL is invalid")]
+	InvalidApiBaseUrl,
+
+	/// API base URLs must be HTTP(S) endpoints without embedded credentials.
+	#[error("provider API base URL must be an HTTP or HTTPS URL without credentials")]
+	UnsupportedApiBaseUrl,
 
 	/// Provider latin name is already in use.
 	#[error("provider already exists: {0}")]
