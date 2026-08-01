@@ -8,20 +8,28 @@ import {
 	Form,
 	Input,
 	Label,
+	Spinner,
 	TextField,
 } from "@heroui/react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { open } from "@tauri-apps/plugin-dialog";
-import { useMemo, useState } from "react";
-import { Controller, useForm } from "react-hook-form";
+import { useMemo } from "react";
+import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import type { ImportSkillRequest } from "../generated/dto";
+import { auditDisposition } from "../hooks/audited-mutation";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
+import { useAuditedMutation } from "../hooks/use-audited-mutation";
+import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
 import { supportsSkillMutation } from "../lib/agent-capabilities";
-import { importSkillMutationOptions } from "../requests/skills";
+import {
+	invalidateSkillQueries,
+	skillAuditQueryOptions,
+} from "../requests/skills";
 import { capture } from "../lib/analytics";
 import { AgentSelector } from "./agent-selector";
+import { SkillAudit } from "./skill-audit";
 
 interface ImportSkillPanelProps {
 	onDone: () => void;
@@ -33,6 +41,12 @@ interface ImportSkillFormValues {
 	selectedAgents: string[];
 }
 
+interface LocalImportCandidate {
+	readonly path: string;
+	readonly agents: readonly string[];
+	readonly projectPath?: string;
+}
+
 export function ImportSkillPanel({
 	onDone,
 	projectPath,
@@ -41,6 +55,7 @@ export function ImportSkillPanel({
 	const api = useApi();
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
+	const { skillAuditEnabled, skillAuditReady } = useSkillAuditPreference();
 
 	const skillAgents = useMemo(
 		() =>
@@ -54,8 +69,6 @@ export function ImportSkillPanel({
 			),
 		[availableAgents, projectPath],
 	);
-
-	const [error, setError] = useState<string | null>(null);
 
 	const {
 		control,
@@ -71,44 +84,130 @@ export function ImportSkillPanel({
 		},
 	});
 
-	const importMutation = useMutation({
-		...importSkillMutationOptions({
-			api,
-			queryClient,
-		}),
-		onError: (error) => {
-			const errorMessage =
-				error instanceof Error ? error.message : String(error);
-			setError(errorMessage);
+	const importPath = useWatch({ control, name: "importPath" });
+	const auditPath = importPath?.trim() || undefined;
+	const auditQuery = skillAuditQueryOptions({
+		api,
+		paths: auditPath ? [auditPath] : [],
+		enabled: skillAuditReady && skillAuditEnabled,
+	});
+	const {
+		data: skillAudit,
+		error: auditError,
+		isFetching: auditFetching,
+	} = useQuery(auditQuery);
+
+	const localImport = useAuditedMutation<LocalImportCandidate, true>({
+		audit: async (candidate, signal) => {
+			const report = await api.skills.audit(
+				{ paths: [candidate.path] },
+				signal,
+			);
+			return auditDisposition(report, null);
+		},
+		write: async (
+			{ candidate, report, confirmedAssessmentDigest },
+			signal,
+		) => {
+			const body: ImportSkillRequest = {
+				path: candidate.path,
+				expected_content_digest: report?.content_digest ?? null,
+				confirmed_assessment_digest: confirmedAssessmentDigest,
+			};
+			await Promise.all(
+				candidate.agents.map((agent) =>
+					api.skills.import(
+						agent,
+						body,
+						candidate.projectPath,
+						signal,
+					),
+				),
+			);
+			await invalidateSkillQueries(queryClient);
+			capture("skill imported", {
+				agents: [...candidate.agents],
+				scope: candidate.projectPath ? "project" : "global",
+			});
+			return {
+				kind: "done",
+				result: true,
+				report: skillAuditEnabled ? report : null,
+				sessionId: null,
+			};
 		},
 	});
 
-	const handleImportClick = async (values: ImportSkillFormValues) => {
-		const body: ImportSkillRequest = {
-			path: values.importPath.trim(),
-		};
+	const mutationAudit =
+		localImport.state.tag === "review" ||
+		localImport.state.tag === "writing" ||
+		localImport.state.tag === "done"
+			? localImport.state.report
+			: null;
+	const visibleAudit = mutationAudit ?? skillAudit ?? null;
+	const installed = localImport.state.tag === "done";
+	const isImporting = localImport.isBusy;
+	const error =
+		localImport.state.tag === "failed"
+			? localImport.state.error.message
+			: null;
 
-		try {
-			await Promise.all(
-				values.selectedAgents.map((agent) =>
-					importMutation.mutateAsync({
-						agent,
-						body,
-						projectPath,
-					}),
-				),
-			);
-			capture("skill imported", {
-				agents: values.selectedAgents,
-				scope: projectPath ? "project" : "global",
-			});
-			onDone();
-		} catch {
-			// Error is handled by onError callback
+	const auditPending =
+		(skillAuditEnabled && Boolean(auditPath) && auditFetching) ||
+		localImport.state.tag === "auditing";
+	const auditFailed =
+		skillAuditEnabled && Boolean(auditPath) && auditError != null;
+	const requiresConfirmation = visibleAudit?.confirmation_required ?? false;
+
+	const showAuditCard =
+		Boolean(auditPath) &&
+		((skillAuditEnabled && (auditPending || auditFailed)) ||
+			visibleAudit != null ||
+			localImport.state.tag === "review");
+	const showInstallCard = isImporting || installed;
+
+	const handleImportClick = (values: ImportSkillFormValues) => {
+		if (
+			!skillAuditReady ||
+			auditPending ||
+			auditFailed ||
+			(skillAuditEnabled && !skillAudit)
+		) {
+			return;
 		}
+		if (localImport.state.tag === "review") {
+			localImport.confirm();
+			return;
+		}
+
+		const candidate: LocalImportCandidate = {
+			path: values.importPath.trim(),
+			agents: [...values.selectedAgents],
+			projectPath,
+		};
+		const disposition =
+			skillAuditEnabled && visibleAudit
+				? auditDisposition(visibleAudit, null)
+				: {
+						kind: "allow" as const,
+						report: null,
+						sessionId: null,
+					};
+		localImport.start(
+			candidate,
+			disposition,
+			disposition.kind === "review",
+		);
+	};
+
+	const handleDone = () => {
+		if (isImporting) return;
+		localImport.reset();
+		onDone();
 	};
 
 	const handleSelectFile = async () => {
+		if (isImporting) return;
 		const selected = await open({
 			directory: false,
 			multiple: false,
@@ -121,6 +220,7 @@ export function ImportSkillPanel({
 			],
 		});
 		if (selected && !Array.isArray(selected)) {
+			localImport.reset();
 			setValue("importPath", selected, {
 				shouldDirty: true,
 				shouldValidate: true,
@@ -129,8 +229,10 @@ export function ImportSkillPanel({
 	};
 
 	const handleSelectFolder = async () => {
+		if (isImporting) return;
 		const selected = await open({ directory: true, multiple: false });
 		if (selected && !Array.isArray(selected)) {
+			localImport.reset();
 			setValue("importPath", selected, {
 				shouldDirty: true,
 				shouldValidate: true,
@@ -202,6 +304,7 @@ export function ImportSkillPanel({
 													<Button
 														type="button"
 														variant="secondary"
+														isDisabled={isImporting}
 														onPress={
 															handleSelectFile
 														}
@@ -215,6 +318,7 @@ export function ImportSkillPanel({
 													<Button
 														type="button"
 														variant="secondary"
+														isDisabled={isImporting}
 														onPress={
 															handleSelectFolder
 														}
@@ -237,6 +341,68 @@ export function ImportSkillPanel({
 								/>
 							</Fieldset.Group>
 						</Fieldset>
+
+						{showAuditCard && (
+							<Card variant="secondary">
+								<Card.Content className="space-y-3">
+									<p className="text-sm font-medium text-foreground">
+										{t("securityAudit")}
+									</p>
+									{auditPending ? (
+										<div className="flex items-center justify-center gap-3 py-6 text-sm text-muted">
+											<Spinner size="sm" />
+											{t("auditing")}
+										</div>
+									) : auditFailed ? (
+										<Alert status="danger">
+											<Alert.Indicator />
+											<Alert.Content>
+												<Alert.Description>
+													{t("auditFailed")}
+												</Alert.Description>
+											</Alert.Content>
+										</Alert>
+									) : (
+										visibleAudit && (
+											<>
+												{requiresConfirmation && (
+													<p className="text-sm text-danger">
+														{t("auditBlockedHint")}
+													</p>
+												)}
+												<SkillAudit
+													key={auditPath}
+													report={visibleAudit}
+													embedded
+												/>
+											</>
+										)
+									)}
+								</Card.Content>
+							</Card>
+						)}
+
+						{showInstallCard && (
+							<Card variant="secondary">
+								<Card.Content className="space-y-3">
+									<p className="text-sm font-medium text-foreground">
+										{installed
+											? t("installComplete")
+											: t("installingSkills")}
+									</p>
+									{isImporting ? (
+										<div className="flex items-center justify-center gap-3 py-6 text-sm text-muted">
+											<Spinner size="sm" />
+											{t("importing")}
+										</div>
+									) : (
+										<p className="text-sm text-muted">
+											{t("installSuccess")}
+										</p>
+									)}
+								</Card.Content>
+							</Card>
+						)}
 
 						<Fieldset>
 							<Fieldset.Group>
@@ -264,6 +430,7 @@ export function ImportSkillPanel({
 												"noAgentsAvailableHelp",
 											)}
 											variant="secondary"
+											isDisabled={isImporting}
 											errorMessage={
 												fieldState.error?.message
 											}
@@ -274,25 +441,47 @@ export function ImportSkillPanel({
 						</Fieldset>
 
 						<div className="flex justify-end gap-2 pt-2">
-							<Button
-								type="button"
-								variant="secondary"
-								onPress={onDone}
-							>
-								{t("cancel")}
-							</Button>
-							<Button
-								type="submit"
-								isDisabled={
-									importMutation.isPending ||
-									isSubmitting ||
-									skillAgents.length === 0
-								}
-							>
-								{importMutation.isPending
-									? t("importing")
-									: t("import")}
-							</Button>
+							{installed ? (
+								<Button type="button" onPress={handleDone}>
+									{t("done")}
+								</Button>
+							) : (
+								<>
+									<Button
+										type="button"
+										variant="secondary"
+										isDisabled={isImporting}
+										onPress={handleDone}
+									>
+										{t("cancel")}
+									</Button>
+									<Button
+										type="submit"
+										variant={
+											requiresConfirmation
+												? "danger"
+												: "primary"
+										}
+										isDisabled={
+											isImporting ||
+											isSubmitting ||
+											skillAgents.length === 0 ||
+											!skillAuditReady ||
+											auditPending ||
+											auditFailed ||
+											(skillAuditEnabled && !skillAudit)
+										}
+									>
+										{isImporting
+											? t("importing")
+											: auditPending
+												? t("auditing")
+												: requiresConfirmation
+													? t("installAnyway")
+													: t("import")}
+									</Button>
+								</>
+							)}
 						</div>
 					</Form>
 				</Card.Content>

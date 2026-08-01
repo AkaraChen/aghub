@@ -3,6 +3,8 @@ import type {
 	AgentAvailabilityDto,
 	AgentInfo,
 	AgentProviderResponse,
+	AuditReportDto,
+	AuditRequest,
 	CCMarketplaceAddRequest,
 	CCMarketplaceListResponse,
 	CCMarketplaceMutationResponse,
@@ -202,6 +204,7 @@ export function createApi(baseUrl: string, token: string) {
 				agent: string,
 				data: ImportSkillRequest,
 				projectRoot?: string,
+				signal?: AbortSignal,
 			): Promise<SkillResponse> => {
 				const scope = projectRoot ? "project" : "global";
 				return client
@@ -213,12 +216,32 @@ export function createApi(baseUrl: string, token: string) {
 								: {}),
 						},
 						json: data,
+						signal,
 					})
 					.json();
 			},
-			install(data: InstallSkillRequest): Promise<InstallSkillResponse> {
+			install(
+				data: InstallSkillRequest,
+				signal?: AbortSignal,
+			): Promise<InstallSkillResponse> {
 				return client
-					.post("skills/install", { json: data, timeout: 300000 })
+					.post("skills/install", {
+						json: data,
+						timeout: 300000,
+						signal,
+					})
+					.json();
+			},
+			audit(
+				data: AuditRequest,
+				signal?: AbortSignal,
+			): Promise<AuditReportDto> {
+				return client
+					.post("skills/audit", {
+						json: data,
+						timeout: 60000,
+						signal,
+					})
 					.json();
 			},
 			delete(
@@ -307,16 +330,33 @@ export function createApi(baseUrl: string, token: string) {
 			): Promise<DeleteSkillByPathResponse> {
 				return client.delete("skills/by-path", { json: body }).json();
 			},
-			gitScan(data: GitScanRequest): Promise<GitScanResponse> {
+			gitScan(
+				data: GitScanRequest,
+				signal?: AbortSignal,
+			): Promise<GitScanResponse> {
 				return client
-					.post("skills/git/scan", { json: data, timeout: 120000 })
+					.post("skills/git/scan", {
+						json: data,
+						timeout: 120000,
+						signal,
+					})
 					.json();
 			},
-			gitInstall(data: GitInstallRequest): Promise<GitInstallResponse> {
-				return client.post("skills/git/install", { json: data }).json();
+			gitInstall(
+				data: GitInstallRequest,
+				signal?: AbortSignal,
+			): Promise<GitInstallResponse> {
+				return client
+					.post("skills/git/install", { json: data, signal })
+					.json();
 			},
-			gitSync(data: GitSyncRequest): Promise<GitSyncResponse> {
-				return client.post("skills/git/sync", { json: data }).json();
+			gitSync(
+				data: GitSyncRequest,
+				signal?: AbortSignal,
+			): Promise<GitSyncResponse> {
+				return client
+					.post("skills/git/sync", { json: data, signal })
+					.json();
 			},
 		},
 		mcps: {

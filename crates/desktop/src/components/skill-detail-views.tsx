@@ -33,11 +33,13 @@ export function LocationRow({
 	onDelete,
 	onOpenFolder,
 	onEditFolder,
+	editorAvailable,
 }: {
 	group: LocationGroup;
 	onDelete: () => void;
 	onOpenFolder: () => void;
 	onEditFolder: () => void;
+	editorAvailable: boolean;
 }) {
 	const { t } = useTranslation();
 	const folderPath = useMemo(
@@ -111,6 +113,7 @@ export function LocationRow({
 						size="sm"
 						className="size-8 text-muted"
 						aria-label={t("editInEditor")}
+						isDisabled={!editorAvailable}
 						onPress={onEditFolder}
 					>
 						<CodeBracketIcon className="size-4" />

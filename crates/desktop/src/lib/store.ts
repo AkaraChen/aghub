@@ -37,12 +37,21 @@ export {
 } from "./store/projects";
 export { getSidebarItems, saveSidebarItems } from "./store/sidebar";
 export {
+	getSkillAuditEnabled,
+	setSkillAuditEnabled,
+} from "./store/skill-audit";
+export {
 	getStarredMcps,
 	getStarredSkills,
 	migrateStarredMcp,
 	setStarredMcps,
 	setStarredSkills,
 } from "./store/stars";
+export {
+	type AcknowledgedSkillAssessment,
+	getAcknowledgedSkillAssessments,
+	setAcknowledgedSkillAssessments,
+} from "./store/audit-acknowledgements";
 export type {
 	IntegrationPreferences,
 	OnboardingProgress,

@@ -56,7 +56,7 @@ export default function SkillsSearchPage() {
 		selectedAgents,
 		setSelectedAgents,
 		installResults,
-		isInstalling,
+		phase,
 		skillAgents,
 		installAll,
 		setInstallAll,
@@ -66,8 +66,11 @@ export default function SkillsSearchPage() {
 		selectedProjectId,
 		setSelectedProjectId,
 		projects,
+		skillAuditReady,
+		audit,
 		handleInstallClick,
 		handleInstall,
+		handleConfirmInstall,
 		handleCloseInstallModal,
 	} = useSkillInstall();
 
@@ -239,7 +242,7 @@ export default function SkillsSearchPage() {
 				selectedAgents={selectedAgents}
 				onSelectedAgentsChange={setSelectedAgents}
 				installResults={installResults}
-				isInstalling={isInstalling}
+				phase={phase}
 				skillAgents={skillAgents}
 				installAll={installAll}
 				onInstallAllChange={setInstallAll}
@@ -249,8 +252,11 @@ export default function SkillsSearchPage() {
 				selectedProjectId={selectedProjectId}
 				onSelectedProjectIdChange={setSelectedProjectId}
 				projects={projects}
+				skillAuditReady={skillAuditReady}
+				audit={audit}
 				onClose={handleCloseInstallModal}
 				onInstall={handleInstall}
+				onConfirmInstall={handleConfirmInstall}
 			/>
 		</div>
 	);

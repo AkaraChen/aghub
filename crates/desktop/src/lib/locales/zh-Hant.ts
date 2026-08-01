@@ -625,6 +625,108 @@ export default {
 	selectFileOrFolder: "選擇包含 SKILL.md 的檔案或資料夾",
 	skillImported: "技能匯入成功",
 	importError: "技能匯入失敗：{{error}}",
+	installAnyway: "仍要安裝",
+	auditBlockedHint: "此技能未通過安全審計。請查看下列發現,確認後仍要安裝。",
+	auditSyncBlockedHint:
+		"此技能未通過安全審計。請查看下列發現，確認後仍要同步。",
+	auditing: "審計中",
+	securityAudit: "安全審計",
+	auditFailed: "安全審計未能完成。在審計成功前無法匯入。",
+	auditVerdictBenign: "良性",
+	auditVerdictSuspicious: "可疑",
+	auditVerdictMalicious: "惡意",
+	auditSeverityInfo: "資訊",
+	auditSeverityLow: "低",
+	auditSeverityMedium: "中",
+	auditSeverityHigh: "高",
+	auditSeverityCritical: "嚴重",
+	auditCategoryCredentialExfil: "憑證外洩",
+	auditCategoryDataExfil: "資料外洩",
+	auditCategoryCommandInjection: "命令注入",
+	auditCategoryPromptInjection: "提示注入",
+	auditCategoryToolChaining: "工具鏈濫用",
+	auditCategoryPersistence: "持久化",
+	auditCategoryHostTamper: "主機竄改",
+	auditCategoryObfuscation: "混淆",
+	auditCategoryOther: "其他",
+	auditSummaryBenign: "未發現可疑行為",
+	auditSummarySuspicious: "發現可疑行為,建議查看下方詳情",
+	auditSummaryMalicious: "發現惡意行為,請謹慎安裝",
+	auditSummarySuspiciousInstalled: "此技能存在可疑行為",
+	auditSummaryMaliciousInstalled: "此技能存在惡意行為",
+	auditAcknowledged: "已隱藏警告",
+	auditAcknowledgedHint: "已隱藏目前掃描結果的警告",
+	acknowledgeAudit: "隱藏此警告",
+	restoreAuditWarning: "重新顯示警告",
+	security: "安全",
+	acknowledgedAudits: "已隱藏的審計警告",
+	automaticSkillAudit: "自動掃描技能安全風險",
+	automaticSkillAuditDescription:
+		"在變更前和已安裝技能中顯示掃描結果。每次寫入前仍會執行最終安全檢查。",
+	skillAuditEnabled: "已開啟自動技能掃描",
+	skillAuditDisabled: "已關閉自動技能掃描",
+	skillAuditPreferenceError: "無法更新技能掃描設定",
+	auditAcknowledgementError: "無法更新警告顯示狀態",
+	acknowledgedAuditsDescription:
+		"僅隱藏與目前掃描結果完全相符的警告。技能內容或掃描規則變更後會重新顯示。",
+	noAcknowledgedAudits: "暫無已隱藏的警告",
+	auditFindingCount_other: "{{count}} 項",
+	auditEvidence_aghub_credential_file_exfil:
+		"讀取 .ssh/.env/憑證檔案並透過網路外發",
+	auditEvidence_aghub_download_pipe_execute:
+		"下載遠端腳本並直接管道進 shell 執行",
+	auditEvidence_aghub_reverse_shell:
+		"建立反向 shell(socket 連線 + dup2/exec)",
+	auditEvidence_aghub_raw_ip_payload: "連線或從硬編碼的裸 IP 位址拉取內容",
+	auditEvidence_aghub_external_payload_instruction:
+		"文件指示下載並執行外部二進位/腳本",
+	auditEvidence_aghub_known_exfil_host:
+		"引用了已知的一次性外發/貼上/webhook 主機",
+	auditEvidence_aghub_reads_secret: "讀取憑證檔案或竊取金鑰/環境變數",
+	auditEvidence_aghub_network_egress: "向網路端點傳送資料",
+	auditEvidence_clawhub_host_platform_tamper:
+		"修改 agent 自身原始碼並重新建置(供應鏈自感染)",
+	auditEvidence_clawhub_memory_credential_storage:
+		"指示 agent 把權杖/金鑰存進記憶或對話",
+	auditEvidence_clawhub_remote_recipe_fetch:
+		"執行時從遠端端點拉取可變指令/配方",
+	auditEvidence_clawhub_mnemonic_argv: "把助記詞/私鑰作為命令列參數傳遞",
+	auditEvidence_clawhub_confirmation_bypass:
+		"用魔術權杖跳過危險命令的人工確認",
+	auditEvidence_clawhub_autonomous_answer_egress:
+		"自主迴圈向應答/提現端點傳送資料",
+	auditEvidence_autonomy_abuse_generic: "繞過使用者控制的無界自主行為",
+	auditEvidence_prompt_injection_unicode_steganography:
+		"隱藏的 Unicode 字元,用於隱形提示注入/隱寫",
+	auditEvidence_sql_injection_generic:
+		"SQL 注入特徵(關鍵字、永真式、資料庫函式)",
+	auditEvidence_script_injection_generic: "惡意腳本注入特徵",
+	auditEvidence_tool_chaining_abuse_generic:
+		"可疑的工具鏈呼叫,可能導致資料外洩",
+	auditEvidence_prompt_injection_generic:
+		"用於覆寫或強制惡意工具呼叫的提示詞",
+	auditEvidence_command_injection_generic:
+		"命令注入特徵(shell 運算子、系統命令、網路工具)",
+	auditEvidence_system_manipulation_generic: "系統竄改、提權與破壞性檔案操作",
+	auditEvidence_capability_inflation_generic:
+		"透過能力膨脹操縱 skill 探索協定",
+	auditEvidence_code_execution_generic: "對不可信輸入執行危險程式碼",
+	auditEvidence_embedded_elf_binary: "skill 套件內嵌入 ELF 可執行檔頭",
+	auditEvidence_embedded_pe_executable:
+		"skill 套件內嵌入 PE(Windows)可執行檔頭",
+	auditEvidence_embedded_macho_binary:
+		"skill 套件內嵌入 Mach-O(macOS)可執行檔頭",
+	auditEvidence_embedded_shebang_in_binary: "二進位內容中嵌入 shebang 腳本頭",
+	auditEvidence_credential_harvesting_generic:
+		"可能洩漏 API key、密碼、權杖、憑證等敏感資訊",
+	auditEvidence_indirect_prompt_injection_generic:
+		"透過外部來源的指令操縱進行間接提示注入",
+	auditEvidence_coercive_injection_generic: "工具描述欄位中的脅迫式提示注入",
+	auditEvidence_injection_invisible_chars: "隱藏的零寬或雙向控制字元",
+	auditEvidence_injection_prompt_override: "針對 agent 的提示詞覆寫語句",
+	auditEvidence_injection_hidden_comment: "隱藏在 HTML 註解中的指令",
+	auditEvidence_aghub_dataflow_chain:
+		"讀取機密並外發到網路 — 可能的資料外洩鏈",
 	selectedPath: "已選路徑",
 	file: "檔案",
 	folder: "資料夾",
@@ -696,6 +798,7 @@ export default {
 	validationCommandRequired: "請輸入指令。",
 	validationUrlRequired: "請輸入 URL。",
 	validationUrlInvalid: "請輸入有效的 URL。",
+	validationUrlHttpsOnly: "僅支援 HTTPS 連結。",
 	validationUrlProtocol: "URL 必須以 http:// 或 https:// 開頭。",
 	validationTimeoutPositiveInteger: "逾時時間必須是正整數。",
 	validationAgentsRequired: "請至少選擇一個代理。",
@@ -872,6 +975,7 @@ export default {
 	syncFromSource: "從來源同步",
 	syncSkill: "同步 Skill",
 	syncingSkill: "同步中...",
+	syncAnyway: "仍要同步",
 	skillSyncedSuccessfully: "Skill 同步成功",
 	skillNotFoundInRepo: "在此分支的儲存庫中未找到此 Skill。",
 	skillFoundInRepo: "在儲存庫中找到 Skill",

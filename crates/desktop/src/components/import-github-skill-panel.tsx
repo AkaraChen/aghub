@@ -31,14 +31,22 @@ import type {
 	GitInstallResultEntry,
 	GitScanSkillEntry,
 } from "../generated/dto";
+import { auditDisposition } from "../hooks/audited-mutation";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
+import { useAuditedMutation } from "../hooks/use-audited-mutation";
+import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
+import {
+	type AuditedSkillRun,
+	useAuditedSkillRun,
+} from "../hooks/use-audited-skill-run";
 import { supportsSkillMutation } from "../lib/agent-capabilities";
 import { cn } from "../lib/utils";
 import { CreateCredentialDialog } from "../pages/settings/components/create-credential-dialog";
 import { credentialsListQueryOptions } from "../requests/credentials";
-import { gitInstallSkillsMutationOptions } from "../requests/skills";
+import { invalidateSkillQueries } from "../requests/skills";
 import { AgentSelector } from "./agent-selector";
+import { SkillAudit } from "./skill-audit";
 
 interface ImportGithubSkillPanelProps {
 	onDone: () => void;
@@ -56,15 +64,41 @@ interface InputFormValues {
 	selectedAgents: string[];
 }
 
-type Phase = "scanning" | "selecting" | "installing" | "done";
+interface GitInstallCandidate {
+	readonly sessionId: string;
+	readonly url: string;
+	readonly credentialId: string | null;
+	readonly branch: string;
+	readonly skillPaths: readonly string[];
+	readonly agents: readonly string[];
+	readonly scope: "global" | "project";
+	readonly projectRoot: string | null;
+}
+
+interface GitBranchScanCandidate {
+	readonly branch: string;
+	readonly sessionId: string;
+	readonly url: string;
+}
+
+type Phase =
+	"scanning" | "selecting" | "auditing" | "review" | "installing" | "done";
 
 // Which cards have been reached at least once for a given phase
-function cardReached(card: 1 | 2 | 3, phase: Phase): boolean {
-	const order: Phase[] = ["scanning", "selecting", "installing", "done"];
-	const thresholds: Record<1 | 2 | 3, Phase> = {
+function cardReached(card: 1 | 2 | 3 | 4, phase: Phase): boolean {
+	const order: Phase[] = [
+		"scanning",
+		"selecting",
+		"auditing",
+		"review",
+		"installing",
+		"done",
+	];
+	const thresholds: Record<1 | 2 | 3 | 4, Phase> = {
 		1: "scanning",
 		2: "selecting",
-		3: "installing",
+		3: "auditing",
+		4: "installing",
 	};
 	return order.indexOf(phase) >= order.indexOf(thresholds[card]);
 }
@@ -78,6 +112,9 @@ export function ImportGithubSkillPanel({
 	const api = useApi();
 	const queryClient = useQueryClient();
 	const { availableAgents } = useAgentAvailability();
+	const { skillAuditEnabled, skillAuditReady } = useSkillAuditPreference();
+	const { beginAuditedSkillRun, invalidateAuditedSkillRun } =
+		useAuditedSkillRun();
 
 	const skillAgents = useMemo(
 		() =>
@@ -92,10 +129,11 @@ export function ImportGithubSkillPanel({
 		[availableAgents, projectPath],
 	);
 
-	const [phase, setPhase] = useState<Phase>("scanning");
+	const [basePhase, setBasePhase] = useState<Phase>("scanning");
 	const [card1Open, setCard1Open] = useState(true);
 	const [card2Open, setCard2Open] = useState(false);
 	const [card3Open, setCard3Open] = useState(false);
+	const [card4Open, setCard4Open] = useState(false);
 	const [isPrivateRepo, setIsPrivateRepo] = useState(false);
 	const [isAddTokenOpen, setIsAddTokenOpen] = useState(false);
 	const [scannedSkills, setScannedSkills] = useState<GitScanSkillEntry[]>([]);
@@ -105,11 +143,7 @@ export function ImportGithubSkillPanel({
 	const [sessionId, setSessionId] = useState<string>("");
 	const [branches, setBranches] = useState<string[]>([]);
 	const [currentBranch, setCurrentBranch] = useState<string>("");
-	const [installResults, setInstallResults] = useState<
-		GitInstallResultEntry[]
-	>([]);
 	const [scanError, setScanError] = useState<string | null>(null);
-	const [installError, setInstallError] = useState<string | null>(null);
 	const [previewSkill, setPreviewSkill] = useState<GitScanSkillEntry | null>(
 		null,
 	);
@@ -135,17 +169,151 @@ export function ImportGithubSkillPanel({
 	});
 
 	const urlValue = useWatch({ control, name: "url" });
+	const credentialIdValue = useWatch({ control, name: "credentialId" });
+
+	const buildInstallBase = (candidate: GitInstallCandidate) => ({
+		session_id: candidate.sessionId,
+		skill_paths: [...candidate.skillPaths],
+		agents: [...candidate.agents],
+		scope: candidate.scope,
+		project_root: candidate.projectRoot,
+	});
+
+	const gitInstall = useAuditedMutation<
+		GitInstallCandidate,
+		GitInstallResultEntry[]
+	>({
+		recover: async (candidate, error, signal) => {
+			if (error.kind !== "session_expired") return candidate;
+			const scan = await api.skills.gitScan(
+				{
+					url: candidate.url,
+					credential_id: candidate.credentialId,
+					branch: candidate.branch,
+					session_id: null,
+					skip_audit: true,
+				},
+				signal,
+			);
+			return { ...candidate, sessionId: scan.session_id };
+		},
+		audit: async (candidate, signal) => {
+			const response = await api.skills.gitInstall(
+				{
+					...buildInstallBase(candidate),
+					expected_content_digest: null,
+					confirmed_assessment_digest: null,
+					audit_only: true,
+				},
+				signal,
+			);
+			if (!response.audit) throw new Error(t("auditFailed"));
+			return auditDisposition(
+				response.audit,
+				candidate.sessionId,
+				response.audit_confirmation_required,
+			);
+		},
+		write: async (
+			{ candidate, report, confirmedAssessmentDigest },
+			signal,
+		) => {
+			setCard4Open(true);
+			const response = await api.skills.gitInstall(
+				{
+					...buildInstallBase(candidate),
+					expected_content_digest: report?.content_digest ?? null,
+					confirmed_assessment_digest: confirmedAssessmentDigest,
+					audit_only: false,
+				},
+				signal,
+			);
+			if (
+				response.results.length === 0 &&
+				response.audit_confirmation_required &&
+				response.audit
+			) {
+				const disposition = auditDisposition(
+					response.audit,
+					candidate.sessionId,
+					response.audit_confirmation_required,
+				);
+				if (disposition.kind !== "review") {
+					throw new Error(t("auditFailed"));
+				}
+				return disposition;
+			}
+			await invalidateSkillQueries(queryClient);
+			return {
+				kind: "done",
+				result: response.results,
+				report:
+					skillAuditEnabled || response.audit_confirmation_required
+						? (response.audit ?? null)
+						: report,
+				sessionId: candidate.sessionId,
+			};
+		},
+	});
+
+	const phase: Phase =
+		gitInstall.state.tag === "idle"
+			? basePhase
+			: gitInstall.state.tag === "auditing"
+				? "auditing"
+				: gitInstall.state.tag === "review"
+					? "review"
+					: gitInstall.state.tag === "writing"
+						? "installing"
+						: gitInstall.state.tag === "done"
+							? "done"
+							: "selecting";
+	const auditReport =
+		gitInstall.state.tag === "review" ||
+		gitInstall.state.tag === "writing" ||
+		gitInstall.state.tag === "done"
+			? gitInstall.state.report
+			: null;
+	const installResults =
+		gitInstall.state.tag === "done" ? gitInstall.state.result : [];
+	const installError =
+		gitInstall.state.tag === "failed"
+			? gitInstall.state.error.message
+			: null;
+	const visibleCard2Open =
+		gitInstall.state.tag === "review"
+			? false
+			: gitInstall.state.tag === "failed"
+				? true
+				: card2Open;
+	const visibleCard3Open =
+		gitInstall.state.tag === "review"
+			? true
+			: gitInstall.state.tag === "failed"
+				? false
+				: card3Open;
+	const visibleCard4Open =
+		gitInstall.state.tag === "writing"
+			? true
+			: gitInstall.state.tag === "auditing" ||
+				  gitInstall.state.tag === "review" ||
+				  gitInstall.state.tag === "failed"
+				? false
+				: card4Open;
 
 	const scanMutation = useMutation({
-		mutationFn: (values: InputFormValues) =>
+		mutationFn: (run: AuditedSkillRun<InputFormValues>) =>
 			api.skills.gitScan({
-				url: values.url.trim(),
-				credential_id: values.credentialId || null,
+				url: run.candidate.url.trim(),
+				credential_id: run.candidate.credentialId || null,
 				branch: null,
 				session_id: null,
+				skip_audit: !skillAuditEnabled,
 			}),
-		onSuccess: (data) => {
+		onSuccess: (data, run) => {
+			if (!run.isCurrent()) return;
 			setScanError(null);
+			gitInstall.reset();
 			setScannedSkills(data.skills);
 			setSessionId(data.session_id);
 			setBranches(data.branches);
@@ -153,9 +321,10 @@ export function ImportGithubSkillPanel({
 			setSelectedPaths(new Set(data.skills.map((s) => s.path)));
 			setCard1Open(false);
 			setCard2Open(true);
-			setPhase("selecting");
+			setBasePhase("selecting");
 		},
-		onError: (error) => {
+		onError: (error, run) => {
+			if (!run.isCurrent()) return;
 			const message =
 				error instanceof Error ? error.message : String(error);
 			setScanError(message);
@@ -166,21 +335,28 @@ export function ImportGithubSkillPanel({
 	});
 
 	const branchScanMutation = useMutation({
-		mutationFn: (branch: string) =>
+		mutationFn: (run: AuditedSkillRun<GitBranchScanCandidate>) =>
 			api.skills.gitScan({
-				url: urlValue.trim(),
+				url: run.candidate.url,
 				credential_id: null,
-				branch,
-				session_id: sessionId,
+				branch: run.candidate.branch,
+				session_id: run.candidate.sessionId,
+				skip_audit: !skillAuditEnabled,
 			}),
-		onSuccess: (data) => {
+		onSuccess: (data, run) => {
+			if (!run.isCurrent()) return;
+			gitInstall.reset();
 			setScannedSkills(data.skills);
 			setSessionId(data.session_id);
 			setCurrentBranch(data.current_branch);
 			setSelectedPaths(new Set(data.skills.map((s) => s.path)));
-			// Keep existing branches list (cached from initial scan)
+			setCard2Open(true);
+			setCard3Open(false);
+			setCard4Open(false);
+			setBasePhase("selecting");
 		},
-		onError: (error) => {
+		onError: (error, run) => {
+			if (!run.isCurrent()) return;
 			const message =
 				error instanceof Error ? error.message : String(error);
 			toast.danger(t("scanFailed"), {
@@ -189,50 +365,85 @@ export function ImportGithubSkillPanel({
 		},
 	});
 
-	const installMutation = useMutation(
-		gitInstallSkillsMutationOptions({
-			api,
-			queryClient,
-			onSuccess: async (data) => {
-				setInstallError(null);
-				setInstallResults(data.results);
-				setCard2Open(false);
-				setCard3Open(true);
-				setPhase("done");
-			},
-		}),
-	);
-
 	const handleScan = (values: InputFormValues) => {
+		if (!skillAuditReady) return;
 		setScanError(null);
-		scanMutation.mutate(values);
+		const run = beginAuditedSkillRun({
+			...values,
+			selectedAgents: [...values.selectedAgents],
+		});
+		scanMutation.mutate(run);
 	};
 
+	const handleBranchScan = (branch: string) => {
+		if (
+			!skillAuditReady ||
+			phase !== "selecting" ||
+			branch === currentBranch
+		) {
+			return;
+		}
+		dropAuditReview();
+		setCard2Open(true);
+		setCard3Open(false);
+		setCard4Open(false);
+		setBasePhase("selecting");
+		const run = beginAuditedSkillRun<GitBranchScanCandidate>({
+			branch,
+			sessionId,
+			url: urlValue.trim(),
+		});
+		branchScanMutation.mutate(run);
+	};
+
+	const createInstallCandidate = (agents: string[]): GitInstallCandidate => ({
+		sessionId,
+		url: urlValue.trim(),
+		credentialId: credentialIdValue || null,
+		branch: currentBranch,
+		skillPaths: Array.from(selectedPaths).sort(),
+		agents: [...agents],
+		scope: projectPath ? "project" : "global",
+		projectRoot: projectPath ?? null,
+	});
+
 	const handleInstall = (agents: string[]) => {
-		setInstallError(null);
+		if (!sessionId || !skillAuditReady) return;
+		const candidate = createInstallCandidate(agents);
 		setCard2Open(false);
+		setCard4Open(false);
+		if (!skillAuditEnabled) {
+			setCard3Open(false);
+			gitInstall.start(candidate, {
+				kind: "allow",
+				report: null,
+				sessionId: candidate.sessionId,
+			});
+			return;
+		}
 		setCard3Open(true);
-		setPhase("installing");
-		installMutation.mutate(
-			{
-				session_id: sessionId,
-				skill_paths: Array.from(selectedPaths),
-				agents,
-				scope: projectPath ? "project" : "global",
-				project_root: projectPath ?? null,
-			},
-			{
-				onError: (error) => {
-					setInstallError(
-						error instanceof Error ? error.message : String(error),
-					);
-					setPhase("selecting");
-				},
-			},
-		);
+		gitInstall.start(candidate);
+	};
+
+	const handleConfirmInstall = () => {
+		setCard4Open(true);
+		gitInstall.confirm();
+	};
+
+	function dropAuditReview() {
+		invalidateAuditedSkillRun();
+		gitInstall.reset();
+	}
+
+	const handleDone = () => {
+		if (phase === "installing") return;
+		dropAuditReview();
+		onDone();
 	};
 
 	const handleImportAnother = () => {
+		if (phase === "installing") return;
+		dropAuditReview();
 		reset();
 		setIsPrivateRepo(false);
 		setScannedSkills([]);
@@ -240,36 +451,34 @@ export function ImportGithubSkillPanel({
 		setSessionId("");
 		setBranches([]);
 		setCurrentBranch("");
-		setInstallResults([]);
 		setScanError(null);
-		setInstallError(null);
 		setCard1Open(true);
 		setCard2Open(false);
 		setCard3Open(false);
-		setPhase("scanning");
+		setCard4Open(false);
+		setBasePhase("scanning");
 		scanMutation.reset();
 		branchScanMutation.reset();
-		installMutation.reset();
 	};
 
 	// Card 1 toggle: re-opening resets everything back to scanning
 	const handleCard1Toggle = () => {
+		if (phase === "installing") return;
 		if (!card1Open) {
+			dropAuditReview();
 			// Reset all downstream state
 			setScannedSkills([]);
 			setSelectedPaths(new Set());
 			setSessionId("");
 			setBranches([]);
 			setCurrentBranch("");
-			setInstallResults([]);
 			setScanError(null);
-			setInstallError(null);
 			setCard2Open(false);
 			setCard3Open(false);
-			setPhase("scanning");
+			setCard4Open(false);
+			setBasePhase("scanning");
 			scanMutation.reset();
 			branchScanMutation.reset();
-			installMutation.reset();
 		}
 		setCard1Open((v) => !v);
 	};
@@ -286,7 +495,13 @@ export function ImportGithubSkillPanel({
 		setCard3Open((v) => !v);
 	};
 
+	const handleCard4Toggle = () => {
+		if (!cardReached(4, phase)) return;
+		setCard4Open((v) => !v);
+	};
+
 	const togglePath = (path: string) => {
+		dropAuditReview();
 		setSelectedPaths((prev) => {
 			const next = new Set(prev);
 			if (next.has(path)) next.delete(path);
@@ -295,33 +510,39 @@ export function ImportGithubSkillPanel({
 		});
 	};
 
-	const selectAll = () =>
+	const selectAll = () => {
+		dropAuditReview();
 		setSelectedPaths(new Set(scannedSkills.map((s) => s.path)));
-	const deselectAll = () => setSelectedPaths(new Set());
+	};
+	const deselectAll = () => {
+		dropAuditReview();
+		setSelectedPaths(new Set());
+	};
 
 	const successCount = installResults.filter((r) => r.success).length;
 	const failCount = installResults.filter((r) => !r.success).length;
 
-	// Derived disabled / active states
 	const card1Active = phase === "scanning";
 	const card2Active = phase === "selecting";
-	const card3Active = phase === "installing" || phase === "done";
+	const showAuditStep = skillAuditEnabled || phase === "review";
+	const card3Active =
+		(skillAuditEnabled && phase === "auditing") || phase === "review";
+	const card4Active = phase === "installing" || phase === "done";
 	const isBranchSwitching = branchScanMutation.isPending;
 
 	const card2Reached = cardReached(2, phase);
-	const card3Reached = cardReached(3, phase);
+	const card3Reached = showAuditStep && cardReached(3, phase);
+	const card4Reached = cardReached(4, phase);
 
 	return (
 		<div className="h-full w-full overflow-y-auto p-4 sm:p-6">
 			<div className="space-y-3">
-				{/* ── Panel title ── */}
 				<div className="mb-5">
 					<h1 className="text-xl font-semibold text-foreground">
 						{t("importFromGitRepository")}
 					</h1>
 				</div>
 
-				{/* ── Card 1: Repository & Credential ── */}
 				<Card
 					className={cn(
 						!card1Active && "opacity-60",
@@ -330,9 +551,13 @@ export function ImportGithubSkillPanel({
 				>
 					<button
 						type="button"
-						className="flex w-full items-center justify-between text-left"
+						className={cn(
+							"flex w-full items-center justify-between text-left",
+							phase === "installing" && "cursor-not-allowed",
+						)}
 						onClick={handleCard1Toggle}
 						aria-expanded={card1Open}
+						disabled={phase === "installing"}
 					>
 						<div className="min-w-0">
 							<h2 className="text-base font-semibold text-foreground">
@@ -400,9 +625,13 @@ export function ImportGithubSkillPanel({
 																u.protocol !==
 																"https:"
 															)
-																return "Only HTTPS URLs are supported";
+																return t(
+																	"validationUrlHttpsOnly",
+																);
 														} catch {
-															return "Please enter a valid URL";
+															return t(
+																"validationUrlInvalid",
+															);
 														}
 														return true;
 													},
@@ -460,10 +689,10 @@ export function ImportGithubSkillPanel({
 												setValue("credentialId", "");
 										}}
 									>
-										<Checkbox.Control>
-											<Checkbox.Indicator />
-										</Checkbox.Control>
 										<Checkbox.Content>
+											<Checkbox.Control>
+												<Checkbox.Indicator />
+											</Checkbox.Control>
 											<Label>{t("privateRepo")}</Label>
 										</Checkbox.Content>
 									</Checkbox>
@@ -560,7 +789,8 @@ export function ImportGithubSkillPanel({
 										<Button
 											type="button"
 											variant="secondary"
-											onPress={onDone}
+											isDisabled={phase === "installing"}
+											onPress={handleDone}
 										>
 											{t("cancel")}
 										</Button>
@@ -569,6 +799,7 @@ export function ImportGithubSkillPanel({
 											isDisabled={
 												scanMutation.isPending ||
 												isSubmitting ||
+												!skillAuditReady ||
 												skillAgents.length === 0
 											}
 										>
@@ -591,39 +822,35 @@ export function ImportGithubSkillPanel({
 					</div>
 				</Card>
 
-				{/* ── Card 2: Select Skills + Target Agent ── */}
 				<Card
 					className={cn(
 						!card2Active && "opacity-60",
-						!card2Open && "!pb-0",
+						!visibleCard2Open && "!pb-0",
 					)}
 				>
-					<button
-						type="button"
-						className={cn(
-							"flex w-full items-center justify-between text-left",
-							!card2Reached && "cursor-not-allowed",
-						)}
-						onClick={handleCard2Toggle}
-						aria-expanded={card2Open}
-						disabled={!card2Reached}
-					>
-						<div className="min-w-0">
+					<div className="flex w-full items-center justify-between gap-3">
+						<button
+							type="button"
+							className={cn(
+								"flex min-w-0 flex-1 flex-col text-left",
+								!card2Reached && "cursor-not-allowed",
+							)}
+							onClick={handleCard2Toggle}
+							aria-expanded={visibleCard2Open}
+							disabled={!card2Reached}
+						>
 							<h2 className="text-base font-semibold text-foreground">
 								{t("selectSkillsToInstall")}
 							</h2>
-							{!card2Open && card2Reached && (
+							{!visibleCard2Open && card2Reached && (
 								<p className="mt-0.5 text-xs text-muted">
 									{selectedPaths.size} {t("skillsSelected")}
 								</p>
 							)}
-						</div>
-						<div className="ml-3 flex shrink-0 items-center gap-3">
+						</button>
+						<div className="flex shrink-0 items-center gap-3">
 							{card2Active && (
-								<div
-									className="flex gap-1"
-									onClick={(e) => e.stopPropagation()}
-								>
+								<div className="flex gap-1">
 									<Button
 										variant="ghost"
 										size="sm"
@@ -642,21 +869,35 @@ export function ImportGithubSkillPanel({
 									</Button>
 								</div>
 							)}
-							<span className="text-muted">
+							<button
+								type="button"
+								className={cn(
+									"text-muted",
+									!card2Reached && "cursor-not-allowed",
+								)}
+								onClick={handleCard2Toggle}
+								disabled={!card2Reached}
+								aria-hidden
+								tabIndex={-1}
+							>
 								<ChevronDownIcon
 									className={cn(
 										"size-4 transition-transform duration-300",
-										card2Open ? "rotate-0" : "-rotate-90",
+										visibleCard2Open
+											? "rotate-0"
+											: "-rotate-90",
 									)}
 								/>
-							</span>
+							</button>
 						</div>
-					</button>
+					</div>
 
 					<div
 						className={cn(
 							"grid transition-[grid-template-rows] duration-300 ease-out",
-							card2Open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+							visibleCard2Open
+								? "grid-rows-[1fr]"
+								: "grid-rows-[0fr]",
 						)}
 					>
 						<div className="overflow-hidden px-0.5">
@@ -678,12 +919,12 @@ export function ImportGithubSkillPanel({
 										className="w-full"
 										variant="secondary"
 										selectedKey={currentBranch}
-										isDisabled={isBranchSwitching}
+										isDisabled={
+											phase !== "selecting" ||
+											isBranchSwitching
+										}
 										onSelectionChange={(key) => {
-											const branch = String(key);
-											if (branch === currentBranch)
-												return;
-											branchScanMutation.mutate(branch);
+											handleBranchScan(String(key));
 										}}
 									>
 										<Label>{t("branch")}</Label>
@@ -725,76 +966,79 @@ export function ImportGithubSkillPanel({
 								) : (
 									<div className="space-y-2">
 										{scannedSkills.map((skill) => (
-											<button
+											<div
 												key={skill.path}
-												type="button"
-												onClick={() => {
-													if (
-														phase === "selecting" &&
-														!isBranchSwitching
-													)
-														togglePath(skill.path);
-												}}
-												disabled={
-													phase !== "selecting" ||
-													isBranchSwitching
-												}
-												className="flex w-full items-start gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:bg-surface-secondary disabled:cursor-not-allowed disabled:opacity-60 data-[selected=true]:border-accent/30 data-[selected=true]:bg-accent/5"
-												data-selected={selectedPaths.has(
-													skill.path,
-												)}
+												className="space-y-1.5"
 											>
-												<Checkbox
-													isSelected={selectedPaths.has(
+												<div
+													className={cn(
+														"flex items-start gap-3 rounded-lg border border-border p-3 transition-colors hover:bg-surface-secondary data-[selected=true]:border-accent/30 data-[selected=true]:bg-accent/5",
+														(phase !==
+															"selecting" ||
+															isBranchSwitching) &&
+															"opacity-60",
+													)}
+													data-selected={selectedPaths.has(
 														skill.path,
 													)}
-													isDisabled={
-														phase !== "selecting" ||
-														isBranchSwitching
-													}
-													onChange={() =>
-														togglePath(skill.path)
-													}
-													aria-label={skill.name}
 												>
-													<Checkbox.Control>
-														<Checkbox.Indicator />
-													</Checkbox.Control>
-												</Checkbox>
-												<div className="min-w-0 flex-1">
-													<div className="flex flex-wrap items-center gap-2">
-														<BookOpenIcon className="size-4 shrink-0 text-muted" />
-														<span className="font-medium text-foreground">
-															{skill.name}
-														</span>
-														{skill.version && (
-															<Chip
-																size="sm"
-																variant="secondary"
-															>
-																v{skill.version}
-															</Chip>
+													<Checkbox
+														className="min-w-0 flex-1 items-start gap-3"
+														isSelected={selectedPaths.has(
+															skill.path,
 														)}
-														{skill.author && (
-															<Chip
-																size="sm"
-																variant="secondary"
-															>
-																{skill.author}
-															</Chip>
-														)}
-													</div>
-													{skill.description && (
-														<p className="mt-1 text-sm text-muted">
-															{skill.description}
-														</p>
-													)}
-												</div>
-												<div
-													onClick={(e) =>
-														e.stopPropagation()
-													}
-												>
+														isDisabled={
+															phase !==
+																"selecting" ||
+															isBranchSwitching
+														}
+														onChange={() =>
+															togglePath(
+																skill.path,
+															)
+														}
+														aria-label={skill.name}
+													>
+														<Checkbox.Content className="min-w-0 flex-1">
+															<Checkbox.Control>
+																<Checkbox.Indicator />
+															</Checkbox.Control>
+															<div className="flex flex-wrap items-center gap-2">
+																<BookOpenIcon className="size-4 shrink-0 text-muted" />
+																<span className="font-medium text-foreground">
+																	{skill.name}
+																</span>
+																{skill.version && (
+																	<Chip
+																		size="sm"
+																		variant="secondary"
+																	>
+																		v
+																		{
+																			skill.version
+																		}
+																	</Chip>
+																)}
+																{skill.author && (
+																	<Chip
+																		size="sm"
+																		variant="secondary"
+																	>
+																		{
+																			skill.author
+																		}
+																	</Chip>
+																)}
+															</div>
+															{skill.description && (
+																<p className="mt-1 text-sm text-muted">
+																	{
+																		skill.description
+																	}
+																</p>
+															)}
+														</Checkbox.Content>
+													</Checkbox>
 													<Button
 														variant="ghost"
 														size="sm"
@@ -811,7 +1055,14 @@ export function ImportGithubSkillPanel({
 														<EyeIcon className="size-4" />
 													</Button>
 												</div>
-											</button>
+												{skillAuditEnabled &&
+													skill.audit && (
+														<SkillAudit
+															report={skill.audit}
+															embedded
+														/>
+													)}
+											</div>
 										))}
 									</div>
 								)}
@@ -840,6 +1091,10 @@ export function ImportGithubSkillPanel({
 												"noAgentsAvailableHelp",
 											)}
 											variant="secondary"
+											isDisabled={
+												phase !== "selecting" ||
+												isBranchSwitching
+											}
 											errorMessage={
 												fieldState.error?.message
 											}
@@ -858,6 +1113,7 @@ export function ImportGithubSkillPanel({
 										<Button
 											isDisabled={
 												selectedPaths.size === 0 ||
+												!skillAuditReady ||
 												isBranchSwitching
 											}
 											onPress={() => {
@@ -877,30 +1133,132 @@ export function ImportGithubSkillPanel({
 					</div>
 				</Card>
 
-				{/* ── Card 3: Install progress / results ── */}
+				{showAuditStep && (
+					<Card
+						className={cn(
+							!card3Active && "opacity-60",
+							!visibleCard3Open && "!pb-0",
+						)}
+					>
+						<button
+							type="button"
+							className={cn(
+								"flex w-full items-center justify-between text-left",
+								!card3Reached && "cursor-not-allowed",
+							)}
+							onClick={handleCard3Toggle}
+							aria-expanded={visibleCard3Open}
+							disabled={!card3Reached}
+						>
+							<div className="min-w-0">
+								<h2 className="text-base font-semibold text-foreground">
+									{t("securityAudit")}
+								</h2>
+							</div>
+							<span className="ml-3 shrink-0 text-muted">
+								<ChevronDownIcon
+									className={cn(
+										"size-4 transition-transform duration-300",
+										visibleCard3Open
+											? "rotate-0"
+											: "-rotate-90",
+									)}
+								/>
+							</span>
+						</button>
+
+						<div
+							className={cn(
+								"grid transition-[grid-template-rows] duration-300 ease-out",
+								visibleCard3Open
+									? "grid-rows-[1fr]"
+									: "grid-rows-[0fr]",
+							)}
+						>
+							<div className="overflow-hidden px-0.5">
+								<Card.Content className="space-y-4 pt-0">
+									{phase === "auditing" ? (
+										<div className="flex flex-col items-center gap-3 py-6">
+											<Spinner size="lg" />
+											<p className="text-sm text-muted">
+												{t("auditing")}
+											</p>
+										</div>
+									) : (
+										<>
+											{auditReport && (
+												<SkillAudit
+													report={auditReport}
+													embedded
+												/>
+											)}
+											{phase === "review" && (
+												<div className="space-y-3">
+													<p className="text-sm text-danger">
+														{t("auditBlockedHint")}
+													</p>
+													<div className="flex justify-end gap-2 pt-2">
+														<Button
+															variant="secondary"
+															onPress={() => {
+																setCard2Open(
+																	true,
+																);
+																setCard3Open(
+																	false,
+																);
+																dropAuditReview();
+																setBasePhase(
+																	"selecting",
+																);
+															}}
+														>
+															{t("back")}
+														</Button>
+														<Button
+															variant="danger"
+															onPress={
+																handleConfirmInstall
+															}
+														>
+															{t("installAnyway")}
+														</Button>
+													</div>
+												</div>
+											)}
+										</>
+									)}
+								</Card.Content>
+							</div>
+						</div>
+					</Card>
+				)}
+
 				<Card
 					className={cn(
-						!card3Active && "opacity-60",
-						!card3Open && "!pb-0",
+						!card4Active && "opacity-60",
+						!visibleCard4Open && "!pb-0",
 					)}
 				>
 					<button
 						type="button"
 						className={cn(
 							"flex w-full items-center justify-between text-left",
-							!card3Reached && "cursor-not-allowed",
+							!card4Reached && "cursor-not-allowed",
 						)}
-						onClick={handleCard3Toggle}
-						aria-expanded={card3Open}
-						disabled={!card3Reached}
+						onClick={handleCard4Toggle}
+						aria-expanded={visibleCard4Open}
+						disabled={!card4Reached}
 					>
 						<div className="min-w-0">
 							<h2 className="text-base font-semibold text-foreground">
 								{phase === "done"
 									? t("installComplete")
-									: t("installingSkills")}
+									: phase === "installing"
+										? t("installingSkills")
+										: t("installSkill")}
 							</h2>
-							{!card3Open && phase === "done" && (
+							{!visibleCard4Open && phase === "done" && (
 								<p className="mt-0.5 text-xs text-muted">
 									{successCount}{" "}
 									{t("installed").toLowerCase()}
@@ -913,7 +1271,9 @@ export function ImportGithubSkillPanel({
 							<ChevronDownIcon
 								className={cn(
 									"size-4 transition-transform duration-300",
-									card3Open ? "rotate-0" : "-rotate-90",
+									visibleCard4Open
+										? "rotate-0"
+										: "-rotate-90",
 								)}
 							/>
 						</span>
@@ -922,11 +1282,13 @@ export function ImportGithubSkillPanel({
 					<div
 						className={cn(
 							"grid transition-[grid-template-rows] duration-300 ease-out",
-							card3Open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+							visibleCard4Open
+								? "grid-rows-[1fr]"
+								: "grid-rows-[0fr]",
 						)}
 					>
 						<div className="overflow-hidden px-0.5">
-							<Card.Content className="pt-0">
+							<Card.Content className="space-y-4 pt-0">
 								{phase === "installing" ? (
 									<div className="flex flex-col items-center gap-3 py-6">
 										<Spinner size="lg" />
@@ -1012,7 +1374,7 @@ export function ImportGithubSkillPanel({
 												>
 													{t("importAnother")}
 												</Button>
-												<Button onPress={onDone}>
+												<Button onPress={handleDone}>
 													{t("done")}
 												</Button>
 											</div>
@@ -1025,7 +1387,6 @@ export function ImportGithubSkillPanel({
 				</Card>
 			</div>
 
-			{/* ── Skill Preview Modal ── */}
 			<Modal.Backdrop
 				isOpen={previewSkill !== null}
 				onOpenChange={(open) => {
@@ -1043,7 +1404,7 @@ export function ImportGithubSkillPanel({
 						<Modal.Body className="space-y-3 p-4">
 							{previewSkill?.description && (
 								<div>
-									<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
+									<p className="mb-1 text-xs font-medium text-muted">
 										{t("description")}
 									</p>
 									<p className="text-sm text-foreground">
@@ -1053,7 +1414,7 @@ export function ImportGithubSkillPanel({
 							)}
 							{previewSkill?.version && (
 								<div>
-									<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
+									<p className="mb-1 text-xs font-medium text-muted">
 										{t("version")}
 									</p>
 									<p className="text-sm text-foreground">
@@ -1063,7 +1424,7 @@ export function ImportGithubSkillPanel({
 							)}
 							{previewSkill?.author && (
 								<div>
-									<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
+									<p className="mb-1 text-xs font-medium text-muted">
 										{t("author")}
 									</p>
 									<p className="text-sm text-foreground">
@@ -1073,7 +1434,7 @@ export function ImportGithubSkillPanel({
 							)}
 							{previewSkill?.path && (
 								<div>
-									<p className="mb-1 text-xs font-medium text-muted uppercase tracking-wide">
+									<p className="mb-1 text-xs font-medium text-muted">
 										{t("source")}
 									</p>
 									<p className="break-all font-mono text-xs text-muted">
