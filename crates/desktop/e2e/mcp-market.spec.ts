@@ -34,6 +34,14 @@ test("install form enforces registry input and transport capability", async ({
 	await expect(dialog.locator("pre")).not.toContainText("test-secret");
 });
 
+test("uses the same card surface as the agent overview", async ({ page }) => {
+	const card = page
+		.locator('[data-slot="card"]')
+		.filter({ hasText: "Remote Demo" });
+
+	await expect(card).toHaveClass(/card--default/);
+});
+
 test("install resolves secret fields into the selected agent request", async ({
 	page,
 }) => {

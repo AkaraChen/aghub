@@ -25,10 +25,7 @@ export function McpMarketCard({
 	const firstMethod = server.install_methods[0];
 
 	return (
-		<Card
-			variant="secondary"
-			className="flex h-full flex-col gap-0 overflow-hidden p-3 dark:shadow-[0_2px_4px_0_#0000004d,0_1px_2px_0_#00000066,0_0_1px_0_#00000066]"
-		>
+		<Card className="flex h-full flex-col gap-0 overflow-hidden p-3 !rounded-lg">
 			<Card.Header className="flex flex-row items-center gap-2 p-0">
 				<div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-surface">
 					<ServerIcon className="size-4 text-muted" />
