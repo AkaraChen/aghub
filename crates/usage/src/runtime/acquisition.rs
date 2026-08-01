@@ -105,12 +105,12 @@ pub(super) async fn runner_owns_global_install(
 	executable: &Path,
 ) -> Result<bool, CcusageRuntimeError> {
 	let args = match source {
-		CcusageRuntimeSource::Bun => ["pm", "bin", "-g"],
-		CcusageRuntimeSource::Npm => ["root", "--global", ""],
+		CcusageRuntimeSource::Bun => &["pm", "bin", "-g"][..],
+		CcusageRuntimeSource::Npm => &["prefix", "--global"][..],
 		_ => return Ok(false),
 	};
 	let mut command = runner.command();
-	command.args(args.into_iter().filter(|arg| !arg.is_empty()));
+	command.args(args);
 	let output =
 		run_command(&mut command, RUNNER_PROBE_TIMEOUT, source).await?;
 	if output.stdout.truncated || output.stderr.truncated {
@@ -138,20 +138,16 @@ pub(super) async fn runner_owns_global_install(
 			))
 		})?;
 
-	match source {
-		CcusageRuntimeSource::Bun => {
-			Ok(["ccusage", "ccusage.exe", "ccusage.cmd", "ccusage.bat"]
-				.into_iter()
-				.map(|name| location.join(name))
-				.any(|candidate| {
-					paths_refer_to_same_file(executable, &candidate)
-				}))
-		}
-		CcusageRuntimeSource::Npm => {
-			Ok(path_is_within(executable, &location.join("ccusage")))
-		}
-		_ => Ok(false),
-	}
+	let command_directory = match source {
+		CcusageRuntimeSource::Bun => location,
+		CcusageRuntimeSource::Npm if cfg!(target_os = "windows") => location,
+		CcusageRuntimeSource::Npm => location.join("bin"),
+		_ => return Ok(false),
+	};
+	Ok(["ccusage", "ccusage.exe", "ccusage.cmd", "ccusage.bat"]
+		.into_iter()
+		.map(|name| command_directory.join(name))
+		.any(|candidate| paths_refer_to_same_file(executable, &candidate)))
 }
 
 pub(super) async fn update_global_package(
@@ -304,13 +300,6 @@ fn paths_refer_to_same_file(left: &Path, right: &Path) -> bool {
 		.is_some_and(|(left, right)| left == right)
 }
 
-fn path_is_within(path: &Path, root: &Path) -> bool {
-	path.canonicalize()
-		.ok()
-		.zip(root.canonicalize().ok())
-		.is_some_and(|(path, root)| path.starts_with(root))
-}
-
 fn validate_staged_path(
 	stage: &Path,
 	candidate: &Path,
@@ -408,18 +397,50 @@ mod tests {
 
 	#[cfg(unix)]
 	#[tokio::test]
-	async fn recognizes_npm_global_installation() {
+	async fn recognizes_bun_global_command_wrapper() {
 		use std::os::unix::fs::PermissionsExt;
 
 		let root = tempfile::tempdir().unwrap();
-		let package_root = root.path().join("lib/node_modules");
-		let executable = package_root.join("ccusage/src/cli.js");
-		let runner = root.path().join("npm");
-		fs::create_dir_all(executable.parent().unwrap()).unwrap();
-		fs::write(&executable, b"fixture").unwrap();
+		let bin = root.path().join("bun-bin");
+		let command = bin.join("ccusage.cmd");
+		let runner = root.path().join("bun");
+		fs::create_dir_all(&bin).unwrap();
+		fs::write(&command, b"fixture").unwrap();
 		fs::write(
 			&runner,
-			format!("#!/bin/sh\nprintf '%s\\n' '{}'\n", package_root.display()),
+			format!("#!/bin/sh\nprintf '%s\\n' '{}'\n", bin.display()),
+		)
+		.unwrap();
+		fs::set_permissions(&runner, fs::Permissions::from_mode(0o755))
+			.unwrap();
+
+		assert!(runner_owns_global_install(
+			CcusageRuntimeSource::Bun,
+			&PackageRunner::direct(runner),
+			&command,
+		)
+		.await
+		.unwrap());
+	}
+
+	#[cfg(unix)]
+	#[tokio::test]
+	async fn recognizes_npm_global_installation() {
+		use std::os::unix::fs::{symlink, PermissionsExt};
+
+		let root = tempfile::tempdir().unwrap();
+		let prefix = root.path().join("npm-prefix");
+		let package_root = prefix.join("lib/node_modules");
+		let executable = package_root.join("ccusage/src/cli.js");
+		let command = prefix.join("bin/ccusage");
+		let runner = root.path().join("npm");
+		fs::create_dir_all(executable.parent().unwrap()).unwrap();
+		fs::create_dir_all(command.parent().unwrap()).unwrap();
+		fs::write(&executable, b"fixture").unwrap();
+		symlink(&executable, &command).unwrap();
+		fs::write(
+			&runner,
+			format!("#!/bin/sh\nprintf '%s\\n' '{}'\n", prefix.display()),
 		)
 		.unwrap();
 		fs::set_permissions(&runner, fs::Permissions::from_mode(0o755))
@@ -429,6 +450,34 @@ mod tests {
 			CcusageRuntimeSource::Npm,
 			&PackageRunner::direct(runner),
 			&executable,
+		)
+		.await
+		.unwrap());
+	}
+
+	#[cfg(unix)]
+	#[tokio::test]
+	async fn recognizes_npm_global_command_wrapper() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let root = tempfile::tempdir().unwrap();
+		let prefix = root.path().join("npm-prefix");
+		let command = prefix.join("bin/ccusage");
+		let runner = root.path().join("npm");
+		fs::create_dir_all(command.parent().unwrap()).unwrap();
+		fs::write(&command, b"fixture").unwrap();
+		fs::write(
+			&runner,
+			format!("#!/bin/sh\nprintf '%s\\n' '{}'\n", prefix.display()),
+		)
+		.unwrap();
+		fs::set_permissions(&runner, fs::Permissions::from_mode(0o755))
+			.unwrap();
+
+		assert!(runner_owns_global_install(
+			CcusageRuntimeSource::Npm,
+			&PackageRunner::direct(runner),
+			&command,
 		)
 		.await
 		.unwrap());

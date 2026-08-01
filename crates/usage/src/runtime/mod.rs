@@ -1070,14 +1070,25 @@ async fn update_source(
 			_ => Some(active.source),
 		};
 	}
-	if !matches!(
-		active.source,
-		CcusageRuntimeSource::Environment
-			| CcusageRuntimeSource::Manual
-			| CcusageRuntimeSource::Path
-	) {
+	if !is_updateable_external_source(active.source) {
 		return None;
 	}
+	let discovered_command = if active.source == CcusageRuntimeSource::Path {
+		let command = which::which("ccusage").ok()?;
+		match discovery::candidate_from_path(
+			CcusageRuntimeSource::Path,
+			command.clone(),
+		)
+		.await
+		{
+			Ok(candidate) if candidate.path == active.path => Some(command),
+			_ => None,
+		}
+	} else {
+		None
+	};
+	let ownership_path =
+		package_ownership_path(active.source, &active.path, discovered_command);
 
 	for source in [CcusageRuntimeSource::Bun, CcusageRuntimeSource::Npm] {
 		if !availability.can_install(source) {
@@ -1089,7 +1100,7 @@ async fn update_source(
 		match acquisition::runner_owns_global_install(
 			source,
 			&runner,
-			&active.path,
+			&ownership_path,
 		)
 		.await
 		{
@@ -1101,6 +1112,24 @@ async fn update_source(
 		}
 	}
 	None
+}
+
+fn is_updateable_external_source(source: CcusageRuntimeSource) -> bool {
+	matches!(
+		source,
+		CcusageRuntimeSource::Manual | CcusageRuntimeSource::Path
+	)
+}
+
+fn package_ownership_path(
+	source: CcusageRuntimeSource,
+	executable: &std::path::Path,
+	discovered_command: Option<PathBuf>,
+) -> PathBuf {
+	if source == CcusageRuntimeSource::Path {
+		return discovered_command.unwrap_or_else(|| executable.to_path_buf());
+	}
+	executable.to_path_buf()
 }
 
 fn is_owned_source(source: CcusageRuntimeSource) -> bool {
@@ -1278,6 +1307,31 @@ mod tests {
 			CcusageRuntimeSource::Path,
 			availability
 		));
+	}
+
+	#[test]
+	fn environment_override_remains_read_only() {
+		assert!(!is_updateable_external_source(
+			CcusageRuntimeSource::Environment
+		));
+		assert!(is_updateable_external_source(CcusageRuntimeSource::Manual));
+		assert!(is_updateable_external_source(CcusageRuntimeSource::Path));
+	}
+
+	#[test]
+	fn path_updates_check_the_discovered_command_wrapper() {
+		let native =
+			PathBuf::from("C:/npm/node_modules/@ccusage/bin/ccusage.exe");
+		let command = PathBuf::from("C:/npm/ccusage.cmd");
+
+		assert_eq!(
+			package_ownership_path(
+				CcusageRuntimeSource::Path,
+				&native,
+				Some(command.clone()),
+			),
+			command
+		);
 	}
 
 	#[tokio::test]
