@@ -335,13 +335,13 @@ export function gitSyncSkillMutationOptions({
 }: GitSyncSkillMutationParams) {
 	return mutationOptions({
 		mutationFn: (body: GitSyncRequest) => api.skills.gitSync(body),
-		onSuccess: async (data, variables) => {
+		onSuccess: async (data) => {
 			if (!data.success) {
 				await onSuccess?.(data);
 				return;
 			}
 			await onSuccess?.(data);
-			await invalidateSkillQueries(queryClient, variables.session_id);
+			await invalidateSkillQueries(queryClient);
 		},
 	});
 }
