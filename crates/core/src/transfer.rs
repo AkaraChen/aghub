@@ -356,7 +356,7 @@ fn find_skill_locations_in_agents(
 
 		for dir in skills_dirs {
 			let skill_path = dir.join(&safe_name);
-			if skill_path.exists() {
+			if fs::symlink_metadata(&skill_path).is_ok() {
 				locations.push((skill_path, *agent));
 			}
 		}
@@ -814,7 +814,15 @@ pub fn reconcile_skill(
 
 	// Process each actual location for deletion
 	for (skill_path, agent) in skill_locations {
-		let delete_error = match fs::remove_dir_all(&skill_path) {
+		let delete_result =
+			fs::symlink_metadata(&skill_path).and_then(|metadata| {
+				if metadata.file_type().is_symlink() {
+					fs::remove_file(&skill_path)
+				} else {
+					fs::remove_dir_all(&skill_path)
+				}
+			});
+		let delete_error = match delete_result {
 			Ok(()) => None,
 			Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
 			Err(e) => Some(e),
@@ -1074,6 +1082,42 @@ mod tests {
 		);
 		manager.load().unwrap();
 		assert!(manager.get_skill("repo-helper").is_none());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn reconcile_skill_removes_broken_target_symlink() {
+		let _guard = env_lock().lock().unwrap();
+		let temp = tempdir().unwrap();
+		let root = temp.path().join("project");
+		fs::create_dir_all(&root).unwrap();
+
+		let mut manager = ConfigManager::new(
+			create_adapter(AgentType::OpenCode),
+			false,
+			Some(&root),
+		);
+		manager.load().unwrap();
+		manager.add_skill(Skill::new("repo-helper")).unwrap();
+		let target = root.join(".cursor/skills/repo-helper");
+		fs::create_dir_all(target.parent().unwrap()).unwrap();
+		std::os::unix::fs::symlink("missing", &target).unwrap();
+
+		let result = reconcile_skill(
+			ResourceLocator {
+				agent: AgentType::OpenCode,
+				scope: InstallScope::Project,
+				project_root: Some(root),
+				name: "repo-helper".to_string(),
+			},
+			vec![],
+			vec![AgentType::Cursor],
+		)
+		.unwrap();
+
+		assert_eq!(result.results.len(), 1);
+		assert!(result.results[0].success);
+		assert!(target.symlink_metadata().is_err());
 	}
 
 	#[test]
