@@ -269,7 +269,7 @@ export default {
 	searchProviderPresets: "搜索预设",
 	searchProviderPresetsPlaceholder: "按 Provider、URL 或模型搜索...",
 	noProviderPresetsMatch: "没有匹配的预设",
-	providerGetApiKey: "获取 API Key →",
+	providerGetApiKey: "获取 API Key",
 	createInferenceProviderDescription:
 		"添加一个推理端点，并安全存储它的 API key。",
 	editInferenceProvider: "编辑 Provider",
@@ -284,22 +284,23 @@ export default {
 	providerName: "名称",
 	providerDisplayName: "Display Name",
 	providerDisplayNameHelp:
-		"这里只在 aghub 里展示。可以安全填写任何可读名称，包括空格、符号或非英文字符。",
+		"仅在 aghub 中显示，可使用空格、符号和非英文字符。",
 	providerNamePlaceholder: "例如：OpenAI",
 	providerLatinName: "Provider ID",
 	providerLatinNameHelp:
-		"会作为 provider key 写入各个 agent 的配置文件。只能使用小写 a-z，确保所有支持的 agent 都能安全读取。",
+		"会作为 Provider Key 写入 Agent 配置文件，只能包含小写 a-z。",
 	providerLatinNamePlaceholder: "例如：openai",
 	providerFormat: "格式",
 	providerApiBaseUrl: "API Base URL",
 	providerApiBaseUrlHelp:
-		"对于 OpenAI Responses 和 OpenAI-compatible Provider，像 https://api.example.com 这样的裸域名写入 OpenCode 时会变成 https://api.example.com/v1；已经包含路径的 URL 会保持原样。",
+		"可填写 Base URL，也可粘贴完整的 /chat/completions、/responses 或 /messages 请求地址。省略协议时，aghub 会自动补全，并保存规范化后的 Base URL。",
 	providerApiBaseUrlPlaceholder: "https://api.openai.com/v1",
+	providerApiEndpointPreview: "请求地址预览：",
 	providerApiKey: "API Key",
 	providerApiKeyPlaceholder: "sk-...",
 	providerApiKeyEditPlaceholder: "留空以保持当前 key",
 	providerModels: "模型",
-	providerModelsDescription: "每个模型只需要填写名称。",
+	providerModelsDescription: "从 API 获取模型 ID，或手动添加。",
 	providerModelName: "模型名称",
 	providerModelNamePlaceholder: "例如：gpt-5.4-mini",
 	addProviderModel: "添加模型",
@@ -310,10 +311,30 @@ export default {
 	fetchProviderModelsSuccessNoNew:
 		"没有新模型需要添加（已配置 {{total}} 个）",
 	fetchProviderModelsFailed: "获取模型失败：{{reason}}",
-	fetchProviderModelsUnknownError: "端点不支持",
-	fetchProviderModelsRequiresPreset: "请先选择一个预设，再获取模型。",
+	fetchProviderModelsUnknownError: "未知错误",
+	fetchProviderModelsRequiresApiKey: "请先填写 API Key，再获取模型。",
+	fetchProviderModelsInvalidApiBaseUrl: "请输入有效的 HTTP(S) API Base URL。",
+	fetchProviderModelsRequiresChangedApiKey:
+		"API URL 或格式已更改。请重新输入 API Key 后再获取模型。",
+	fetchProviderModelsNetworkError:
+		"无法连接 aghub 本地服务。请确认桌面后端正在运行。",
+	fetchProviderModelsTimeout: "Provider 获取模型列表超时，请重试。",
+	fetchProviderModelsAccessDenied:
+		"Provider 拒绝了模型列表请求。请检查 API Key 及其权限。",
+	fetchProviderModelsDiscoveryUnsupported:
+		"未找到模型列表接口。请检查 API Base URL，或手动添加模型 ID。",
+	fetchProviderModelsRateLimited:
+		"模型列表请求受到速率限制。请稍后重试，或检查 Provider 额度。",
+	fetchProviderModelsRequestFailed:
+		"Provider 获取模型列表失败。请稍后重试，或手动添加模型 ID。",
+	fetchProviderModelsResponseTooLarge:
+		"模型列表过大，无法导入。请手动添加需要的模型 ID。",
+	fetchProviderModelsInvalidResponse:
+		"Provider 返回的模型列表格式不受支持，请手动添加模型 ID。",
+	fetchProviderModelsNoModels:
+		"Provider 没有返回模型。请检查 API Base URL，或手动添加模型 ID。",
 	providerPresetFormatChanged:
-		"格式已不同于预设，请查看 Provider 文档并按需更新 API URL。",
+		"当前格式与预设不同。请确认 API Base URL 支持该格式。",
 	noProviderModels: "暂无模型。",
 	noProviderModelsMatch: "没有匹配的模型。",
 	providerModelGroupUncategorized: "未分类",
@@ -323,6 +344,7 @@ export default {
 	searchProviderModelsPlaceholder: "搜索模型…",
 	selectAllProviderModels: "全选当前可见模型",
 	deselectAllProviderModels: "取消全选当前可见模型",
+	selectAllProviderModelsLabel: "全选",
 	selectProviderModel: '选择 "{{name}}"',
 	selectedProviderModelsCount: "已选 {{selected}} / {{total}}",
 	deleteSelectedProviderModels: "删除所选 ({{count}})",
@@ -358,8 +380,11 @@ export default {
 	validationProviderLatinNameInvalid: "Provider ID 只能包含小写 a-z。",
 	validationProviderLatinNameDuplicate:
 		"Provider ID “{{providerId}}” 已被现有 Provider 使用。请把 ID 改成能区分来源的值，例如 “{{exampleId}}”，或删除已有的 “{{providerId}}” Provider 后再保存。",
-	validationProviderApiBaseUrlRequired: "请输入 API base URL。",
+	validationProviderApiBaseUrlRequired: "请输入 API Base URL。",
+	validationProviderApiBaseUrlInvalid: "请输入有效的 HTTP(S) API Base URL。",
 	validationProviderApiKeyRequired: "请输入 API key。",
+	validationProviderApiKeyRequiredForScopeChange:
+		"API URL 或格式已更改。请重新输入 API Key 后再保存。",
 	validationProviderModelsRequired: "请至少选择一个模型。",
 	validationProviderModelNameUnique: "模型名称不能重复。",
 	inferenceFormatAnthropic: "Anthropic",

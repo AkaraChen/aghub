@@ -186,7 +186,9 @@ fn build_rocket(
 			sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
 		})
 		.manage(crate::state::InferenceProviderState {
-			app_data_dir: options.app_data_dir,
+			store: aghub_inference::InferenceProviderStore::new(
+				options.app_data_dir,
+			),
 		})
 		.manage(crate::state::UsageState {
 			ccusage_bin: options.ccusage_bin,
@@ -239,6 +241,7 @@ fn build_rocket(
 				routes::credentials::delete_credential,
 				routes::inference::list_inference_providers,
 				routes::inference::list_inference_provider_presets,
+				routes::inference::fetch_inference_provider_models,
 				routes::inference::list_opencode_providers,
 				routes::inference::list_codex_providers,
 				routes::inference::get_codex_state,
@@ -533,6 +536,28 @@ mod tests {
 			let response = client.get(uri).dispatch();
 			assert_json_error(response, Status::Unauthorized, "UNAUTHORIZED");
 		}
+	}
+
+	#[test]
+	fn provider_model_discovery_allows_anonymous_requests() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+		let response = post_json(
+			&client,
+			"/api/v1/inference/providers/models",
+			json!({
+				"format": "openai_responses",
+				"api_base_url": "http://127.0.0.1:1",
+				"api_key": null,
+				"provider_id": null,
+			}),
+		);
+
+		assert_json_error(
+			response,
+			Status::BadGateway,
+			"UPSTREAM_REQUEST_FAILED",
+		);
 	}
 
 	#[test]

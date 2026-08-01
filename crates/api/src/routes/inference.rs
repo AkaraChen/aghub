@@ -1,10 +1,11 @@
 use aghub_inference::AgentProviderBindingModelUpdate;
 use aghub_inference::{
-	AgentProviderAdapter, AgentProviderBinding, ClaudeModelRouting,
-	ClaudeProviderAdapter, CodexProviderAdapter, InferenceProvider,
-	InferenceProviderRepository, InferenceProviderStore,
-	OpenCodeProviderAdapter,
+	discover_models, provider_credential_scope_matches, AgentProviderAdapter,
+	AgentProviderBinding, ClaudeModelRouting, ClaudeProviderAdapter,
+	CodexProviderAdapter, InferenceProvider, InferenceProviderRepository,
+	InferenceProviderStore, ModelDiscoveryRequest, OpenCodeProviderAdapter,
 };
+use log::warn;
 use rocket::http::Status;
 use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
@@ -17,17 +18,17 @@ use crate::auth::ApiAuth;
 use crate::dto::inference::{
 	AgentProviderResponse, ClaudeProviderStateResponse,
 	CodexProviderStateResponse, CreateAgentProviderRequest,
-	CreateInferenceProviderRequest, InferenceProviderFormatDto,
-	InferenceProviderPasswordResponse, InferenceProviderPresetResponse,
-	InferenceProviderResponse, UpdateAgentProviderRequest,
-	UpdateCodexActiveProfileRequest, UpdateCodexProfileProviderRequest,
-	UpdateInferenceProviderRequest,
+	CreateInferenceProviderRequest, FetchInferenceProviderModelsRequest,
+	InferenceProviderFormatDto, InferenceProviderPasswordResponse,
+	InferenceProviderPresetResponse, InferenceProviderResponse,
+	UpdateAgentProviderRequest, UpdateCodexActiveProfileRequest,
+	UpdateCodexProfileProviderRequest, UpdateInferenceProviderRequest,
 };
 use crate::error::{ApiCreated, ApiError, ApiNoContent, ApiResult};
 use crate::state::InferenceProviderState;
 
 fn store(state: &State<InferenceProviderState>) -> InferenceProviderStore {
-	InferenceProviderStore::new(state.app_data_dir.clone())
+	state.store.clone()
 }
 
 fn find_by_latin_name(
@@ -64,20 +65,18 @@ fn get_inventory_provider(
 	store: &InferenceProviderStore,
 	id: &str,
 ) -> Result<(InferenceProvider, String), ApiError> {
-	let provider = store.get(id).map_err(ApiError::from)?;
-	let api_key = store
-		.get_api_key(&provider.id)
-		.map_err(ApiError::from)?
-		.ok_or_else(|| {
-			ApiError::new(
-				Status::UnprocessableEntity,
-				format!(
-					"inference provider '{}' has no stored API key",
-					provider.display_name
-				),
-				"MISSING_CREDENTIAL",
-			)
-		})?;
+	let (provider, api_key) =
+		store.get_with_api_key(id).map_err(ApiError::from)?;
+	let api_key = api_key.ok_or_else(|| {
+		ApiError::new(
+			Status::UnprocessableEntity,
+			format!(
+				"inference provider '{}' has no stored API key",
+				provider.display_name
+			),
+			"MISSING_CREDENTIAL",
+		)
+	})?;
 	Ok((provider, api_key))
 }
 
@@ -88,16 +87,7 @@ fn same_api_base_url(left: &str, right: &str) -> bool {
 fn inventory_providers_with_api_keys(
 	store: &InferenceProviderStore,
 ) -> Result<Vec<(InferenceProvider, String)>, ApiError> {
-	let mut providers = Vec::new();
-	for provider in store.list().map_err(ApiError::from)? {
-		let Some(api_key) =
-			store.get_api_key(&provider.id).map_err(ApiError::from)?
-		else {
-			continue;
-		};
-		providers.push((provider, api_key));
-	}
-	Ok(providers)
+	store.list_with_api_keys().map_err(ApiError::from)
 }
 
 fn opencode_inventory_providers_with_api_keys(
@@ -317,6 +307,55 @@ pub async fn list_inference_provider_presets(
 		Ok(presets) if !presets.is_empty() => Json(presets),
 		_ => Json(vendored_models_dev_presets().to_vec()),
 	}
+}
+
+#[post("/inference/providers/models", data = "<body>")]
+pub async fn fetch_inference_provider_models(
+	_auth: ApiAuth,
+	state: &State<InferenceProviderState>,
+	body: Json<FetchInferenceProviderModelsRequest>,
+) -> ApiResult<Vec<String>> {
+	let body = body.into_inner();
+	let provider_store = store(state);
+	let provided_api_key = body
+		.api_key
+		.as_deref()
+		.map(str::trim)
+		.filter(|key| !key.is_empty())
+		.map(str::to_string);
+	let api_key = match (provided_api_key, body.provider_id.as_deref()) {
+		(Some(api_key), _) => Some(api_key),
+		(None, Some(id)) => {
+			let (provider, api_key) = provider_store
+				.get_with_api_key(id)
+				.map_err(ApiError::from)?;
+			if api_key.is_some()
+				&& !provider_credential_scope_matches(
+					&provider,
+					body.format.into(),
+					&body.api_base_url,
+				) {
+				return Err(ApiError::new(
+					Status::UnprocessableEntity,
+					"enter the API key again after changing the URL or format",
+					"CREDENTIAL_SCOPE_MISMATCH",
+				));
+			}
+			api_key
+		}
+		(None, None) => None,
+	};
+	let models = discover_models(ModelDiscoveryRequest {
+		format: body.format.into(),
+		api_base_url: &body.api_base_url,
+		api_key: api_key.as_deref(),
+	})
+	.await
+	.map_err(|error| {
+		warn!("provider model discovery failed: {error}");
+		ApiError::from(error)
+	})?;
+	Ok(Json(models))
 }
 
 #[get("/inference/agents/opencode/providers")]
@@ -646,19 +685,19 @@ pub fn get_inference_provider_password(
 ) -> ApiResult<InferenceProviderPasswordResponse> {
 	let store = store(state);
 	let provider = find_by_latin_name(&store, latin_name)?;
-	let api_key = store
-		.get_api_key(&provider.id)
-		.map_err(ApiError::from)?
-		.ok_or_else(|| {
-			ApiError::new(
-				Status::NotFound,
-				format!(
-					"inference provider '{}' has no stored API key",
-					provider.display_name
-				),
-				"RESOURCE_NOT_FOUND",
-			)
-		})?;
+	let (provider, api_key) = store
+		.get_with_api_key(&provider.id)
+		.map_err(ApiError::from)?;
+	let api_key = api_key.ok_or_else(|| {
+		ApiError::new(
+			Status::NotFound,
+			format!(
+				"inference provider '{}' has no stored API key",
+				provider.display_name
+			),
+			"RESOURCE_NOT_FOUND",
+		)
+	})?;
 
 	Ok(Json(InferenceProviderPasswordResponse {
 		latin_name: provider.latin_name,
@@ -741,15 +780,16 @@ fn remove_opencode_provider_references(
 	store: &InferenceProviderStore,
 	provider: &InferenceProvider,
 ) -> Result<(), ApiError> {
-	let Some(api_key) =
-		store.get_api_key(&provider.id).map_err(ApiError::from)?
-	else {
+	let (provider, api_key) = store
+		.get_with_api_key(&provider.id)
+		.map_err(ApiError::from)?;
+	let Some(api_key) = api_key else {
 		return Ok(());
 	};
 
 	let adapter = opencode_adapter()?;
 	let inventory = vec![(
-		OpenCodeProviderAdapter::normalize_inventory_provider(provider),
+		OpenCodeProviderAdapter::normalize_inventory_provider(&provider),
 		api_key,
 	)];
 	let mut provider_ids = Vec::new();
@@ -934,11 +974,8 @@ pub fn update_claude_provider(
 		let row = store
 			.get_agent_binding("claude", id)
 			.map_err(ApiError::from)?;
-		let provider = store
-			.get(&row.inference_provider_id)
-			.map_err(ApiError::from)?;
 		store
-			.set_api_key(&provider.id, api_key)
+			.set_api_key(&row.inference_provider_id, api_key)
 			.map_err(ApiError::from)?;
 	}
 	adapter
@@ -968,8 +1005,8 @@ pub fn sync_claude_provider(
 	let row = store
 		.get_agent_binding("claude", id)
 		.map_err(ApiError::from)?;
-	let provider = store
-		.get(&row.inference_provider_id)
+	let (provider, api_key) = store
+		.get_with_api_key(&row.inference_provider_id)
 		.map_err(ApiError::from)?;
 	let was_active = adapter
 		.derive_active_provider_id(&store)
@@ -981,19 +1018,16 @@ pub fn sync_claude_provider(
 		.map_err(ApiError::from)?;
 
 	if was_active {
-		let api_key = store
-			.get_api_key(&provider.id)
-			.map_err(ApiError::from)?
-			.ok_or_else(|| {
-				ApiError::new(
-					Status::UnprocessableEntity,
-					format!(
-						"inference provider '{}' has no stored API key",
-						provider.display_name
-					),
-					"MISSING_CREDENTIAL",
-				)
-			})?;
+		let api_key = api_key.ok_or_else(|| {
+			ApiError::new(
+				Status::UnprocessableEntity,
+				format!(
+					"inference provider '{}' has no stored API key",
+					provider.display_name
+				),
+				"MISSING_CREDENTIAL",
+			)
+		})?;
 
 		adapter
 			.sync_active_binding_models(
