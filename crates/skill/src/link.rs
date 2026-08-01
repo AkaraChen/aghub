@@ -11,7 +11,7 @@ pub enum SkillLinkStatus {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SkillLink {
-	pub target: String,
+	pub target: PathBuf,
 	pub display_target: Option<String>,
 	pub resolved_path: Option<PathBuf>,
 	pub status: SkillLinkStatus,
@@ -48,7 +48,7 @@ pub fn inspect_skill_link(root: &Path, path: &Path) -> Result<SkillLink> {
 		});
 
 	Ok(SkillLink {
-		target: target.to_string_lossy().replace('\\', "/"),
+		target,
 		display_target,
 		resolved_path,
 		status,
@@ -71,7 +71,7 @@ mod tests {
 
 		let link = inspect_skill_link(&root, &root.join("linked.txt")).unwrap();
 
-		assert_eq!(link.target, "target.txt");
+		assert_eq!(link.target, PathBuf::from("target.txt"));
 		assert_eq!(link.display_target.as_deref(), Some("target.txt"));
 		assert_eq!(link.status, SkillLinkStatus::Valid);
 		assert_eq!(

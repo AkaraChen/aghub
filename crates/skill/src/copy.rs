@@ -170,7 +170,7 @@ fn copy_link(
 	}
 
 	if matches!(link_treatment, LinkTreatment::PreserveWithin(_)) {
-		let target = std::fs::read_link(from)?;
+		let target = &link.target;
 		if target.is_absolute() {
 			return Err(SkillCopyError::AbsoluteLink {
 				path: from.to_path_buf(),
@@ -180,7 +180,7 @@ fn copy_link(
 			target.as_os_str().as_encoded_bytes().len(),
 			remaining_bytes,
 		)?;
-		return create_symlink(&target, to, link.resolved_path.as_deref());
+		return create_symlink(target, to, link.resolved_path.as_deref());
 	}
 
 	let resolved =

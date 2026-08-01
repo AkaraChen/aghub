@@ -120,12 +120,8 @@ pub fn snapshot_directory_with_budget(
 		let relative = relative_snapshot_path(root, entry.path())?;
 		if file_type.is_symlink() {
 			let link = inspect_skill_link(root, entry.path())?;
-			let snapshot = snapshot_link(
-				entry.path(),
-				link,
-				&mut total_bytes,
-				remaining_bytes,
-			)?;
+			let snapshot =
+				snapshot_link(link, &mut total_bytes, remaining_bytes)?;
 			entries.insert(relative, snapshot);
 			continue;
 		}
@@ -328,13 +324,11 @@ fn snapshot_directory_entry() -> SnapshotEntry {
 }
 
 fn snapshot_link(
-	path: &Path,
 	link: SkillLink,
 	total_bytes: &mut u64,
 	remaining_bytes: &mut u64,
 ) -> Result<SnapshotEntry> {
-	let target = std::fs::read_link(path)?;
-	let target_bytes = target.as_os_str().as_encoded_bytes();
+	let target_bytes = link.target.as_os_str().as_encoded_bytes();
 	charge_snapshot_bytes(target_bytes.len(), total_bytes, remaining_bytes)?;
 	let mut hasher = Sha256::new();
 	hasher.update(SYMLINK_SNAPSHOT_DOMAIN);
@@ -701,10 +695,45 @@ mod tests {
 		let diff = compare_directories(&base, &target).unwrap();
 
 		assert!(!diff.identical);
-		assert_eq!(
+		assert_ne!(
 			diff.files[0].before_link.as_ref().unwrap().target,
 			diff.files[0].after_link.as_ref().unwrap().target
 		);
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn snapshot_link_uses_the_inspected_target() {
+		let temp = tempdir().unwrap();
+		let root = temp.path().join("skill");
+		let link_path = root.join("linked.txt");
+		std::fs::create_dir_all(&root).unwrap();
+		std::fs::write(root.join("first.txt"), "first").unwrap();
+		std::fs::write(root.join("second.txt"), "second").unwrap();
+		std::os::unix::fs::symlink("first.txt", &link_path).unwrap();
+		let inspected = inspect_skill_link(&root, &link_path).unwrap();
+
+		std::fs::remove_file(&link_path).unwrap();
+		std::os::unix::fs::symlink("second.txt", &link_path).unwrap();
+		let mut observed_bytes = 0;
+		let mut observed_budget = MAX_SNAPSHOT_BYTES;
+		let observed =
+			snapshot_link(inspected, &mut observed_bytes, &mut observed_budget)
+				.unwrap();
+
+		std::fs::remove_file(&link_path).unwrap();
+		std::os::unix::fs::symlink("first.txt", &link_path).unwrap();
+		let expected_link = inspect_skill_link(&root, &link_path).unwrap();
+		let mut expected_bytes = 0;
+		let mut expected_budget = MAX_SNAPSHOT_BYTES;
+		let expected = snapshot_link(
+			expected_link,
+			&mut expected_bytes,
+			&mut expected_budget,
+		)
+		.unwrap();
+
+		assert_eq!(observed.hash, expected.hash);
 	}
 
 	#[cfg(unix)]
@@ -730,8 +759,14 @@ mod tests {
 			.unwrap();
 
 		assert_eq!(link_diff.kind, FileDiffKind::Modified);
-		assert_eq!(link_diff.before_link.as_ref().unwrap().target, "first.txt");
-		assert_eq!(link_diff.after_link.as_ref().unwrap().target, "second.txt");
+		assert_eq!(
+			link_diff.before_link.as_ref().unwrap().target,
+			std::path::PathBuf::from("first.txt")
+		);
+		assert_eq!(
+			link_diff.after_link.as_ref().unwrap().target,
+			std::path::PathBuf::from("second.txt")
+		);
 		assert!(!link_diff.content_omitted);
 	}
 }
