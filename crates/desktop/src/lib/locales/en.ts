@@ -388,17 +388,12 @@ export default {
 	// Application
 	application: "About",
 	sidebar: "Sidebar",
-	sidebarDescription:
-		"Choose which primary pages appear in the sidebar and set their order.",
-	resetSidebar: "Reset Sidebar",
-	sidebarMinimumVisibleHint:
-		"Keep at least one primary page visible so aghub always has a landing page.",
+	sidebarDescription: "Choose which pages appear in each sidebar section.",
+	resetSidebar: "Restore defaults",
+	sidebarPrimarySection: "Main",
+	sidebarProviderSection: "Inference",
 	sidebarSaveError: "Failed to update sidebar settings",
 	sidebarResetError: "Failed to reset sidebar settings",
-	moveUp: "Move up",
-	moveDown: "Move down",
-	moveSidebarItemUp: "Move {{name}} up",
-	moveSidebarItemDown: "Move {{name}} down",
 	appName: "App Name",
 	updates: "Updates",
 	checkForUpdates: "Check for Updates",

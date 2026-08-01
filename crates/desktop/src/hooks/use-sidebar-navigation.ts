@@ -1,42 +1,49 @@
-import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
-import { DEFAULT_SIDEBAR_ITEMS, getSidebarItems } from "../lib/store";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { DEFAULT_SIDEBAR_ITEMS, type SidebarItemId } from "../lib/store";
 import {
-	getDefaultSidebarHref,
 	normalizeSidebarItems,
-	resolveSidebarItems,
+	resolveSidebarSections,
 } from "../lib/sidebar-navigation";
-
-const SIDEBAR_NAVIGATION_QUERY_KEY = ["sidebar-navigation"];
+import {
+	saveSidebarItemsMutationOptions,
+	sidebarItemsQueryOptions,
+} from "../requests/sidebar";
 
 export function useSidebarNavigation() {
-	const { data, isLoading } = useQuery({
-		queryKey: SIDEBAR_NAVIGATION_QUERY_KEY,
-		queryFn: getSidebarItems,
-	});
+	const queryClient = useQueryClient();
+	const { data, isPending } = useQuery(sidebarItemsQueryOptions());
+	const saveMutation = useMutation(
+		saveSidebarItemsMutationOptions({ queryClient }),
+	);
+	const resolvedSidebarSections = data ? resolveSidebarSections(data) : [];
+	const visibleSidebarSections = resolvedSidebarSections
+		.map((section) => ({
+			...section,
+			items: section.items.filter((item) => item.visible),
+		}))
+		.filter((section) => section.items.length > 0);
 
-	const sidebarItems = useMemo(
-		() => normalizeSidebarItems(data ?? DEFAULT_SIDEBAR_ITEMS),
-		[data],
-	);
-	const resolvedSidebarItems = useMemo(
-		() => resolveSidebarItems(sidebarItems),
-		[sidebarItems],
-	);
-	const visibleSidebarItems = useMemo(
-		() => resolvedSidebarItems.filter((item) => item.visible),
-		[resolvedSidebarItems],
-	);
-	const defaultHref = useMemo(
-		() => getDefaultSidebarHref(sidebarItems),
-		[sidebarItems],
-	);
+	async function setItemVisibility(id: SidebarItemId, visible: boolean) {
+		const current = normalizeSidebarItems(
+			await queryClient.ensureQueryData(sidebarItemsQueryOptions()),
+		);
+		const next = current.map((item) =>
+			item.id === id ? { ...item, visible } : item,
+		);
+
+		await saveMutation.mutateAsync(next);
+	}
+
+	async function resetSidebarItems() {
+		await saveMutation.mutateAsync(DEFAULT_SIDEBAR_ITEMS);
+	}
 
 	return {
-		defaultHref,
-		isLoading,
-		resolvedSidebarItems,
-		sidebarItems,
-		visibleSidebarItems,
+		isHydrating: isPending,
+		isSaving: saveMutation.isPending,
+		resetSidebarItems,
+		resolvedSidebarSections,
+		setItemVisibility,
+		visibleSidebarSections,
 	};
 }
