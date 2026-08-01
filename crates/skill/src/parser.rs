@@ -2,10 +2,12 @@
 
 use crate::error::{Result, SkillError};
 use crate::model::{Skill, SkillSource};
-use std::fs::File;
-use std::io::Read;
 use std::path::{Path, PathBuf};
-use zip::ZipArchive;
+
+const MAX_SKILL_NAME_BYTES: usize = 64;
+const MAX_SKILL_DESCRIPTION_BYTES: usize = 1024;
+const MAX_SKILL_COMPATIBILITY_BYTES: usize = 500;
+const MAX_SKILL_METADATA_VALUE_BYTES: usize = 4096;
 
 /// Parse a .skill file (zip format).
 ///
@@ -20,48 +22,13 @@ use zip::ZipArchive;
 /// * `SkillError::Zip` - If zip reading fails
 /// * `SkillError::Parse` - If SKILL.md parsing fails
 pub fn parse_skill_file(path: &Path) -> Result<Skill> {
-	if !path.exists() {
-		return Err(SkillError::NotFound(format!(
-			"Skill file not found: {}",
-			path.display()
-		)));
-	}
-
-	let file = File::open(path)?;
-	let mut archive = ZipArchive::new(file)?;
-
-	// Find SKILL.md in the archive
-	let mut skill_md_content: Option<String> = None;
-	let mut skill_root: Option<String> = None;
-
-	for i in 0..archive.len() {
-		let mut file = archive.by_index(i)?;
-		let name = file.name().to_string();
-
-		if name.ends_with("SKILL.md") || name.ends_with("skill.md") {
-			let mut content = String::new();
-			file.read_to_string(&mut content)?;
-			skill_md_content = Some(content);
-			// Get the parent directory of SKILL.md as skill root
-			skill_root = Path::new(&name)
-				.parent()
-				.map(|p| p.to_string_lossy().to_string());
-			break;
-		}
-	}
-
-	let content =
-		skill_md_content.ok_or_else(|| SkillError::MissingSkillMd {
-			path: path.to_path_buf(),
-		})?;
+	let mut package = crate::package::open_skill_archive(path)?;
+	let content = package.read_skill_md()?;
+	let resource_paths = package.skill_files();
 
 	let mut skill = parse_skill_md(&content)?;
 	skill.source = SkillSource::SkillFile(path.to_path_buf());
-
-	// Scan directory structure if we have a skill root
-	if let Some(root) = skill_root {
-		scan_archive_structure(&mut archive, &root, &mut skill)?;
-	}
+	scan_archive_structure(&resource_paths, &mut skill);
 
 	Ok(skill)
 }
@@ -76,39 +43,19 @@ pub fn parse_zip(path: &Path) -> Result<Skill> {
 
 /// Scan the archive structure and populate skill resource lists.
 fn scan_archive_structure(
-	archive: &mut ZipArchive<File>,
-	root: &str,
+	resource_paths: &[(usize, String)],
 	skill: &mut Skill,
-) -> Result<()> {
-	let root_prefix = if root.is_empty() {
-		String::new()
-	} else {
-		format!("{root}/")
-	};
-
-	for i in 0..archive.len() {
-		let file = archive.by_index(i)?;
-		let name = file.name();
-
-		// Skip directories and files outside the skill root
-		if !name.starts_with(&root_prefix) || name.ends_with('/') {
-			continue;
-		}
-
-		// Get the relative path from skill root
-		let relative = &name[root_prefix.len()..];
-
+) {
+	for (_, relative) in resource_paths {
 		// Categorize files
 		if relative.starts_with("scripts/") {
-			skill.scripts.push(relative.to_string());
+			skill.scripts.push(relative.clone());
 		} else if relative.starts_with("references/") {
-			skill.references.push(relative.to_string());
+			skill.references.push(relative.clone());
 		} else if relative.starts_with("assets/") {
-			skill.assets.push(relative.to_string());
+			skill.assets.push(relative.clone());
 		}
 	}
-
-	Ok(())
 }
 
 /// Parse a skill directory.
@@ -137,15 +84,7 @@ pub fn parse_skill_dir(path: &Path) -> Result<Skill> {
 		)));
 	}
 
-	// Find and read SKILL.md
-	let skill_md =
-		skills_ref::parser::find_skill_md(path).ok_or_else(|| {
-			SkillError::MissingSkillMd {
-				path: path.to_path_buf(),
-			}
-		})?;
-
-	let content = std::fs::read_to_string(&skill_md)?;
+	let (content, _) = crate::content::read_directory_skill_md(path)?;
 	let mut skill = parse_skill_md(&content)?;
 	skill.source = SkillSource::Directory(path.to_path_buf());
 
@@ -201,6 +140,16 @@ pub fn parse_skill_md(content: &str) -> Result<Skill> {
 			.ok_or_else(|| {
 				SkillError::Parse("Missing required field: name".to_string())
 			})?;
+	if name.len() > MAX_SKILL_NAME_BYTES {
+		return Err(SkillError::Validation(format!(
+			"Skill name exceeds the {MAX_SKILL_NAME_BYTES}-byte limit"
+		)));
+	}
+	if name.chars().any(is_unsafe_metadata_character) {
+		return Err(SkillError::Validation(
+			"Skill name contains control or format characters".to_string(),
+		));
+	}
 
 	let description = metadata
 		.get("description")
@@ -208,6 +157,11 @@ pub fn parse_skill_md(content: &str) -> Result<Skill> {
 		.ok_or_else(|| {
 			SkillError::Parse("Missing required field: description".to_string())
 		})?;
+	if description.len() > MAX_SKILL_DESCRIPTION_BYTES {
+		return Err(SkillError::Validation(format!(
+				"Skill description exceeds the {MAX_SKILL_DESCRIPTION_BYTES}-byte limit"
+			)));
+	}
 
 	// Extract optional fields
 	let license = metadata
@@ -219,31 +173,53 @@ pub fn parse_skill_md(content: &str) -> Result<Skill> {
 		.get("compatibility")
 		.and_then(|v| v.as_str())
 		.map(String::from);
+	validate_optional_metadata_bytes(
+		"compatibility",
+		compatibility.as_deref(),
+		MAX_SKILL_COMPATIBILITY_BYTES,
+	)?;
 
 	let allowed_tools = metadata
 		.get("allowed-tools")
 		.and_then(|v| v.as_str())
 		.map(String::from);
+	validate_optional_metadata_bytes(
+		"allowed-tools",
+		allowed_tools.as_deref(),
+		MAX_SKILL_METADATA_VALUE_BYTES,
+	)?;
 
 	let author = metadata
 		.get("author")
 		.and_then(|v| v.as_str())
 		.map(String::from);
+	validate_optional_metadata_bytes(
+		"author",
+		author.as_deref(),
+		MAX_SKILL_METADATA_VALUE_BYTES,
+	)?;
 
-	let version = metadata.get("version").map(|v| {
-		if let Some(s) = v.as_str() {
-			s.to_string()
-		} else if let Some(n) = v.as_f64() {
-			n.to_string()
-		} else if let Some(n) = v.as_i64() {
-			n.to_string()
-		} else {
-			serde_yaml::to_string(v)
-				.unwrap_or_default()
-				.trim()
-				.to_string()
-		}
-	});
+	let version = metadata
+		.get("version")
+		.map(|v| {
+			if let Some(s) = v.as_str() {
+				Ok(s.to_string())
+			} else if let Some(n) = v.as_f64() {
+				Ok(n.to_string())
+			} else if let Some(n) = v.as_i64() {
+				Ok(n.to_string())
+			} else {
+				Err(SkillError::Validation(
+					"Skill version must be a string or number".to_string(),
+				))
+			}
+		})
+		.transpose()?;
+	validate_optional_metadata_bytes(
+		"version",
+		version.as_deref(),
+		MAX_SKILL_METADATA_VALUE_BYTES,
+	)?;
 
 	Ok(Skill {
 		name: name.to_string(),
@@ -259,6 +235,96 @@ pub fn parse_skill_md(content: &str) -> Result<Skill> {
 		references: Vec::new(),
 		assets: Vec::new(),
 	})
+}
+
+/// Change the `name` field while retaining the remaining frontmatter and body.
+pub fn rename_skill_md(content: &str, name: &str) -> Result<String> {
+	let (mut metadata, body) =
+		aghub_markdown::parse::<serde_yaml::Mapping>(content)
+			.map_err(|error| SkillError::Parse(error.to_string()))?;
+	metadata.insert(
+		serde_yaml::Value::String("name".to_string()),
+		serde_yaml::Value::String(name.to_string()),
+	);
+	let renamed = aghub_markdown::render(&metadata, body)
+		.map_err(|error| SkillError::Parse(error.to_string()))?;
+	let parsed = parse_skill_md(&renamed)?;
+	if parsed.name != name {
+		return Err(SkillError::Validation(
+			"Renamed skill has an unexpected name".to_string(),
+		));
+	}
+	Ok(renamed)
+}
+
+/// Update aghub-owned fields while retaining extension frontmatter fields.
+pub fn update_skill_md(
+	content: &str,
+	name: &str,
+	description: &str,
+	author: Option<&str>,
+	version: Option<&str>,
+	allowed_tools: Option<&str>,
+	body: Option<&str>,
+) -> Result<String> {
+	let (mut metadata, existing_body) =
+		aghub_markdown::parse::<serde_yaml::Mapping>(content)
+			.map_err(|error| SkillError::Parse(error.to_string()))?;
+	metadata.insert(
+		serde_yaml::Value::String("name".to_string()),
+		serde_yaml::Value::String(name.to_string()),
+	);
+	metadata.insert(
+		serde_yaml::Value::String("description".to_string()),
+		serde_yaml::Value::String(description.replace('\n', " ")),
+	);
+	update_optional_metadata(&mut metadata, "author", author);
+	update_optional_metadata(&mut metadata, "version", version);
+	update_optional_metadata(&mut metadata, "allowed-tools", allowed_tools);
+	let updated =
+		aghub_markdown::render(&metadata, body.unwrap_or(existing_body))
+			.map_err(|error| SkillError::Parse(error.to_string()))?;
+	parse_skill_md(&updated)?;
+	Ok(updated)
+}
+
+fn update_optional_metadata(
+	metadata: &mut serde_yaml::Mapping,
+	key: &str,
+	value: Option<&str>,
+) {
+	let key = serde_yaml::Value::String(key.to_string());
+	if let Some(value) = value {
+		metadata.insert(key, serde_yaml::Value::String(value.to_string()));
+	} else {
+		metadata.remove(&key);
+	}
+}
+
+fn validate_optional_metadata_bytes(
+	field: &str,
+	value: Option<&str>,
+	max_bytes: usize,
+) -> Result<()> {
+	if value.is_some_and(|value| value.len() > max_bytes) {
+		return Err(SkillError::Validation(format!(
+			"Skill {field} exceeds the {max_bytes}-byte limit"
+		)));
+	}
+	Ok(())
+}
+
+fn is_unsafe_metadata_character(character: char) -> bool {
+	character.is_control()
+		|| matches!(
+			character,
+			'\u{061C}'
+				| '\u{200B}'..='\u{200F}'
+				| '\u{202A}'..='\u{202E}'
+				| '\u{2060}'..='\u{206F}'
+				| '\u{FEFF}'
+				| '\u{E0000}'..='\u{E007F}'
+		)
 }
 
 /// Auto-detect format and parse skill.
@@ -291,7 +357,7 @@ pub fn parse(path: &Path) -> Result<Skill> {
 		|| path.file_name() == Some("SKILL.md".as_ref())
 	{
 		// Parse as single SKILL.md file
-		let content = std::fs::read_to_string(path)?;
+		let content = crate::content::read_standalone_skill_md(path)?;
 		let mut skill = parse_skill_md(&content)?;
 		skill.source = SkillSource::SkillMd(path.to_path_buf());
 		Ok(skill)
@@ -356,6 +422,37 @@ mod tests {
 		assert_eq!(skill.license, Some("MIT".to_string()));
 		assert_eq!(skill.scripts.len(), 1);
 		assert_eq!(skill.references.len(), 1);
+	}
+
+	#[test]
+	fn parse_rejects_oversized_skill_md() {
+		let temp_dir = TempDir::new().unwrap();
+		let skill_md = temp_dir.path().join("SKILL.md");
+		let manifest = std::fs::File::create(&skill_md).unwrap();
+		manifest
+			.set_len(crate::MAX_SKILL_CONTENT_BYTES as u64 + 1)
+			.unwrap();
+
+		assert!(parse(&skill_md).is_err());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn parse_skill_dir_rejects_symlinked_skill_md() {
+		use std::os::unix::fs::symlink;
+
+		let temp_dir = TempDir::new().unwrap();
+		let skill_dir = temp_dir.path().join("linked-skill");
+		std::fs::create_dir_all(&skill_dir).unwrap();
+		let manifest = temp_dir.path().join("outside.md");
+		std::fs::write(
+			&manifest,
+			"---\nname: linked\ndescription: linked\n---\n",
+		)
+		.unwrap();
+		symlink(&manifest, skill_dir.join("SKILL.md")).unwrap();
+
+		assert!(parse_skill_dir(&skill_dir).is_err());
 	}
 
 	#[test]
@@ -432,5 +529,138 @@ mod tests {
 		let skill = parse_skill_md(content).unwrap();
 		assert_eq!(skill.name, "valid-skill");
 		assert_eq!(skill.description, "A valid skill");
+	}
+
+	#[test]
+	fn parse_skill_md_rejects_terminal_control_in_name() {
+		let content = "---\nname: \"unsafe\\u001b]52;c;payload\\u0007\"\ndescription: A valid skill\n---\n";
+
+		assert!(matches!(
+			parse_skill_md(content),
+			Err(SkillError::Validation(_))
+		));
+	}
+
+	#[test]
+	fn parse_skill_md_rejects_names_over_spec_limit() {
+		let content = format!(
+			"---\nname: {}\ndescription: A valid skill\n---\n",
+			"a".repeat(65)
+		);
+
+		assert!(matches!(
+			parse_skill_md(&content),
+			Err(SkillError::Validation(_))
+		));
+	}
+
+	#[test]
+	fn parse_skill_md_keeps_supported_extension_fields() {
+		let content = "---\nname: valid-skill\ndescription: A valid skill\nauthor: Akara\nversion: 1.0.0\n---\n";
+
+		let skill = parse_skill_md(content).unwrap();
+		assert_eq!(skill.author.as_deref(), Some("Akara"));
+		assert_eq!(skill.version.as_deref(), Some("1.0.0"));
+	}
+
+	#[test]
+	fn parse_skill_md_rejects_oversized_response_metadata() {
+		let content = format!(
+			"---\nname: valid-skill\ndescription: A valid skill\nauthor: {}\n---\n",
+			"a".repeat(MAX_SKILL_METADATA_VALUE_BYTES + 1)
+		);
+
+		assert!(matches!(
+			parse_skill_md(&content),
+			Err(SkillError::Validation(_))
+		));
+	}
+
+	#[test]
+	fn parse_skill_md_rejects_structured_version() {
+		let content = "---\nname: valid-skill\ndescription: A valid skill\nversion:\n  payload: value\n---\n";
+
+		assert!(matches!(
+			parse_skill_md(content),
+			Err(SkillError::Validation(_))
+		));
+	}
+
+	#[test]
+	fn rename_skill_md_retains_extension_fields_and_body() {
+		let content = "---\nname: old-name\ndescription: Demo\nlicense: MIT\ncompatibility: macOS\ncustom:\n  owner: akara\n---\n# Instructions\n";
+
+		let renamed = rename_skill_md(content, "new-name").unwrap();
+		let (metadata, body) =
+			aghub_markdown::parse::<serde_yaml::Mapping>(&renamed).unwrap();
+
+		assert_eq!(
+			metadata.get("name").and_then(serde_yaml::Value::as_str),
+			Some("new-name")
+		);
+		assert_eq!(
+			metadata.get("license").and_then(serde_yaml::Value::as_str),
+			Some("MIT")
+		);
+		assert_eq!(
+			metadata
+				.get("compatibility")
+				.and_then(serde_yaml::Value::as_str),
+			Some("macOS")
+		);
+		assert!(metadata.get("custom").is_some());
+		assert_eq!(body, "# Instructions\n");
+	}
+
+	#[test]
+	fn update_skill_md_retains_unowned_frontmatter_fields() {
+		let content = "---\nname: demo\ndescription: Before\nlicense: MIT\ncompatibility: macOS\ncustom:\n  owner: akara\n---\n# Before\n";
+
+		let updated = update_skill_md(
+			content,
+			"renamed",
+			"After",
+			Some("Eric"),
+			None,
+			Some("Read,Write"),
+			Some("# After\n"),
+		)
+		.unwrap();
+		let (metadata, body) =
+			aghub_markdown::parse::<serde_yaml::Mapping>(&updated).unwrap();
+
+		assert_eq!(
+			metadata.get("name").and_then(serde_yaml::Value::as_str),
+			Some("renamed")
+		);
+		assert_eq!(
+			metadata
+				.get("description")
+				.and_then(serde_yaml::Value::as_str),
+			Some("After")
+		);
+		assert_eq!(
+			metadata.get("license").and_then(serde_yaml::Value::as_str),
+			Some("MIT")
+		);
+		assert_eq!(
+			metadata
+				.get("compatibility")
+				.and_then(serde_yaml::Value::as_str),
+			Some("macOS")
+		);
+		assert!(metadata.get("custom").is_some());
+		assert_eq!(
+			metadata.get("author").and_then(serde_yaml::Value::as_str),
+			Some("Eric")
+		);
+		assert_eq!(
+			metadata
+				.get("allowed-tools")
+				.and_then(serde_yaml::Value::as_str),
+			Some("Read,Write")
+		);
+		assert!(!metadata.contains_key("version"));
+		assert_eq!(body, "# After\n");
 	}
 }

@@ -128,6 +128,10 @@ enum Commands {
 		/// For skill: Comma-separated list of tool names
 		#[arg(long, value_delimiter = ',')]
 		tools: Vec<String>,
+
+		/// For skill: skip the security audit's block on a malicious verdict
+		#[arg(long)]
+		force_unsafe: bool,
 	},
 	/// Update an existing resource
 	Update {
@@ -314,7 +318,7 @@ fn main() -> Result<()> {
 	}
 
 	// Execute command
-	match cli.command {
+	let result = match cli.command {
 		Commands::Get { resource } => get::execute(&manager, resource),
 		Commands::Add {
 			resource,
@@ -329,6 +333,7 @@ fn main() -> Result<()> {
 			author,
 			version,
 			tools,
+			force_unsafe,
 		} => add::execute(
 			&mut manager,
 			resource,
@@ -343,6 +348,7 @@ fn main() -> Result<()> {
 			author,
 			version,
 			tools,
+			force_unsafe,
 		),
 		Commands::Update {
 			resource,
@@ -394,7 +400,17 @@ fn main() -> Result<()> {
 		Commands::Usage { .. } => {
 			unreachable!("usage is dispatched before agent resolution")
 		}
+	};
+
+	// A Malicious audit verdict blocks the install with exit code 2; every other
+	// error keeps the default exit code.
+	if let Err(err) = &result {
+		if err.downcast_ref::<add::AuditBlocked>().is_some() {
+			eprintln!("{err}");
+			std::process::exit(2);
+		}
 	}
+	result
 }
 
 // Handle --agent all: list resources for every registered agent

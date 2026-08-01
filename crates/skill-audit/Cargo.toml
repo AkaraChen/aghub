@@ -1,0 +1,25 @@
+[package]
+name = "skill-audit"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Security audit for AI agent skills: static YARA rules + prompt-injection detection"
+
+[dependencies]
+pulldown-cmark = "0.13"
+scraper = "0.27"
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = "0.10"
+thiserror = { workspace = true }
+yara-x = { workspace = true }
+skill = { path = "../skill", optional = true }
+
+[features]
+# Build an AuditInput from an on-disk skill through the skill crate.
+from-path = ["dep:skill"]
+
+[dev-dependencies]
+tempfile = { workspace = true }

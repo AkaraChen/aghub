@@ -17,8 +17,8 @@ import { matrixGroup } from "../../components/agent-coverage-matrix";
 import { BulkActionsPanel } from "../../components/bulk-actions-panel";
 import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
 import { CreateSkillPanel } from "../../components/create-skill-panel";
-import { ImportSkillPanel } from "../../components/import-skill-panel";
 import { ImportGithubSkillPanel } from "../../components/import-github-skill-panel";
+import { ImportSkillPanel } from "../../components/import-skill-panel";
 import { ManageSkillAgentsDialog } from "../../components/manage-skill-agents-dialog";
 import { GroupNameDialog } from "../../components/resource-group-dialogs";
 import { ResourcePageToolbar } from "../../components/resource-page-toolbar";
@@ -78,7 +78,7 @@ export default function SkillsPage() {
 	});
 
 	const [panelMode, setPanelMode] = useState<
-		"create" | "import" | "update-source" | null
+		"create" | "import" | "update-source" | "import-github" | null
 	>(null);
 
 	// The library page: set when a source cluster row is clicked; any
@@ -257,6 +257,11 @@ export default function SkillsPage() {
 	const handleImportSkill = () => {
 		handleSelectionChange(new Set());
 		setPanelMode("import");
+	};
+
+	const handleImportGithub = () => {
+		handleSelectionChange(new Set());
+		setPanelMode("import-github");
 	};
 
 	const actionIntents = {
@@ -462,6 +467,8 @@ export default function SkillsPage() {
 										handleCreateSkill();
 									} else if (key === "import") {
 										handleImportSkill();
+									} else if (key === "import-github") {
+										handleImportGithub();
 									} else if (key === "create-group") {
 										setCreateGroupKeys([]);
 									}
@@ -478,6 +485,12 @@ export default function SkillsPage() {
 									textValue={t("importFromFile")}
 								>
 									{t("importFromFile")}
+								</Dropdown.Item>
+								<Dropdown.Item
+									id="import-github"
+									textValue={t("importFromGitRepository")}
+								>
+									{t("importFromGitRepository")}
 								</Dropdown.Item>
 								<Dropdown.Item
 									id="create-group"
@@ -532,6 +545,7 @@ export default function SkillsPage() {
 							selectedKeys={selectedKeys}
 							onSelectionChange={handleSelectionChange}
 							isMultiSelectMode={isMultiSelectMode}
+							showAuditStatus={true}
 							intents={actionIntents}
 							onSourceFocus={(source) => {
 								// Focusing a library replaces whatever panel is
@@ -559,6 +573,10 @@ export default function SkillsPage() {
 								/>
 							) : panelMode === "import" ? (
 								<ImportSkillPanel
+									onDone={() => setPanelMode(null)}
+								/>
+							) : panelMode === "import-github" ? (
+								<ImportGithubSkillPanel
 									onDone={() => setPanelMode(null)}
 								/>
 							) : panelMode === "update-source" ? (

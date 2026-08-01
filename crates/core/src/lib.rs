@@ -34,7 +34,7 @@ pub use all_agents::{
 	load_all_agent_skill_locations, load_all_agents, AgentResources,
 	AgentSkillLocations,
 };
-pub use manager::ConfigManager;
+pub use manager::{skill::SkillImportSnapshot, ConfigManager};
 pub use transfer::{
 	InstallScope, InstallTarget, OperationAction, OperationBatchResult,
 	OperationResult, ResourceLocator,

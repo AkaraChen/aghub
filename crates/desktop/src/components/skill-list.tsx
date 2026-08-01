@@ -2,14 +2,20 @@ import {
 	BookOpenIcon,
 	ExclamationTriangleIcon,
 	QuestionMarkCircleIcon,
+	ShieldExclamationIcon,
 	StarIcon as StarIconSolid,
 } from "@heroicons/react/24/solid";
 import { Label, ListBox, Spinner } from "@heroui/react";
+import { useQueries } from "@tanstack/react-query";
 import { memo, type ReactNode, useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentIcons } from "./agent-icons";
+import type { AuditReportDto, VerdictDto } from "../generated/dto";
+import { useApi } from "../hooks/use-api";
+import { useAuditAcknowledgements } from "../hooks/use-audit-acknowledgements";
 import { useFavorites } from "../hooks/use-favorites";
 import { useListSelection } from "../hooks/use-list-selection";
+import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
 import type { ResourceActionIntents } from "../hooks/use-resource-actions";
 import { useResourceActions } from "../hooks/use-resource-actions";
 import { useSkillGroups } from "../hooks/use-resource-groups";
@@ -22,11 +28,13 @@ import { dragSelectionPayload } from "../lib/drag-payload";
 import type { ResourceGroup } from "../lib/store";
 import { cn } from "../lib/utils";
 import { viewTransitionName } from "../lib/view-transition";
+import { skillAuditQueryOptions } from "../requests/skills";
 import { ContextMenu, useContextMenu } from "./context-menu";
 import { customGroupMenu, resourceItemsMenu } from "./resource-menu-items";
 import { DraggableItemBody } from "./draggable-item-body";
 import { groupDropId, UNGROUPED_DROP_ID } from "./list-dnd";
 import { DeleteGroupDialog, GroupNameDialog } from "./resource-group-dialogs";
+import { getInstalledSkillAuditPaths } from "./skill-detail-helpers";
 import {
 	DropRegion,
 	NewGroupDropZone,
@@ -41,6 +49,7 @@ interface SkillRowBodyProps {
 	skillGroup: SkillGroup;
 	starred: boolean;
 	copyStatus?: SkillCopyListStatus;
+	verdict?: VerdictDto;
 	getDragKeys: (name: string) => string[];
 	onShiftPress: (name: string) => string[] | undefined;
 	onOpenMenu: (event: React.MouseEvent, name: string) => void;
@@ -56,6 +65,7 @@ const SkillRowBody = memo(function SkillRowBody({
 	skillGroup,
 	starred,
 	copyStatus,
+	verdict,
 	getDragKeys,
 	onShiftPress,
 	onOpenMenu,
@@ -69,7 +79,29 @@ const SkillRowBody = memo(function SkillRowBody({
 			onShiftPress={() => onShiftPress(skillGroup.name)}
 		>
 			<div className="relative inline-flex size-4 shrink-0 items-center justify-center">
-				<BookOpenIcon aria-hidden className="size-4 text-muted" />
+				{verdict ? (
+					<span
+						role="img"
+						className="inline-flex size-4 shrink-0"
+						aria-label={t(
+							verdict === "malicious"
+								? "auditVerdictMalicious"
+								: "auditVerdictSuspicious",
+						)}
+					>
+						<ShieldExclamationIcon
+							aria-hidden
+							className={cn(
+								"size-4",
+								verdict === "malicious"
+									? "text-danger"
+									: "text-warning",
+							)}
+						/>
+					</span>
+				) : (
+					<BookOpenIcon aria-hidden className="size-4 text-muted" />
+				)}
 				{starred && (
 					<StarIconSolid
 						aria-hidden
@@ -118,6 +150,7 @@ interface SkillListProps {
 	selectedKeys: Set<string>;
 	onSelectionChange: (keys: Set<string>) => void;
 	isMultiSelectMode?: boolean;
+	showAuditStatus?: boolean;
 	/** Dialog intents owned by the page (delete/transfer/agents/new group) */
 	intents: ResourceActionIntents;
 	/** A source cluster row was clicked — the page shows its library page */
@@ -133,12 +166,15 @@ export const SkillList = memo(function SkillList({
 	selectedKeys,
 	onSelectionChange,
 	isMultiSelectMode = false,
+	showAuditStatus = false,
 	intents,
 	onSourceFocus,
 	seedKey,
 	copyStatuses,
 }: SkillListProps) {
 	const { t } = useTranslation();
+	const api = useApi();
+	const { skillAuditEnabled, skillAuditReady } = useSkillAuditPreference();
 	const {
 		customSections,
 		looseEntries,
@@ -149,6 +185,7 @@ export const SkillList = memo(function SkillList({
 	} = sections;
 
 	const { isSkillStarred, setSkillsStarred } = useFavorites();
+	const { isAssessmentAcknowledged } = useAuditAcknowledgements();
 	const { renameGroup, deleteGroup } = useSkillGroups();
 
 	const [renameTarget, setRenameTarget] = useState<ResourceGroup | null>(
@@ -157,6 +194,67 @@ export const SkillList = memo(function SkillList({
 	const [deleteTarget, setDeleteTarget] = useState<ResourceGroup | null>(
 		null,
 	);
+
+	const auditPathsByName = new Map<string, Set<string>>();
+	if (showAuditStatus && skillAuditReady && skillAuditEnabled) {
+		const visibleGroups: SkillGroup[] = [];
+		for (const section of customSections) {
+			visibleGroups.push(...section.skills);
+		}
+		for (const entry of looseEntries) {
+			if (entry.kind === "skill") {
+				visibleGroups.push(entry.skill);
+			} else {
+				visibleGroups.push(...entry.group.skills);
+			}
+		}
+		for (const group of visibleGroups) {
+			const paths = getInstalledSkillAuditPaths(group.items);
+			if (paths.length === 0) continue;
+			const groupedPaths =
+				auditPathsByName.get(group.name) ?? new Set<string>();
+			for (const path of paths) {
+				groupedPaths.add(path);
+			}
+			auditPathsByName.set(group.name, groupedPaths);
+		}
+	}
+	const auditTargets = Array.from(auditPathsByName, ([name, paths]) => ({
+		name,
+		paths: [...paths].sort(),
+	}));
+	// Stable combine output prevents selection changes from updating every row.
+	const auditByName = useQueries({
+		queries: auditTargets.map((target) =>
+			skillAuditQueryOptions({
+				api,
+				paths: target.paths,
+				staleTime: 5 * 60_000,
+			}),
+		),
+		combine: (results) => {
+			const map: Record<string, AuditReportDto> = {};
+			results.forEach((result, index) => {
+				const report = result.data;
+				if (report && report.verdict !== "benign") {
+					map[auditTargets[index].name] = report;
+				}
+			});
+			return map;
+		},
+	});
+
+	const getRowVerdict = useCallback(
+		(name: string): VerdictDto | undefined => {
+			const report = auditByName[name];
+			return report &&
+				!isAssessmentAcknowledged(name, report.assessment_digest)
+				? report.verdict
+				: undefined;
+		},
+		[auditByName, isAssessmentAcknowledged],
+	);
+
 	const {
 		createSelectionHandler,
 		selectGroup,
@@ -265,6 +363,7 @@ export const SkillList = memo(function SkillList({
 						skillGroup={skillGroup}
 						starred={isSkillStarred(skillGroup.name)}
 						copyStatus={copyStatus}
+						verdict={getRowVerdict(skillGroup.name)}
 						getDragKeys={getDragKeys}
 						onShiftPress={handleRowShiftPress}
 						onOpenMenu={openItemMenu}
@@ -275,6 +374,7 @@ export const SkillList = memo(function SkillList({
 		[
 			isSkillStarred,
 			copyStatuses,
+			getRowVerdict,
 			getDragKeys,
 			handleRowShiftPress,
 			openItemMenu,

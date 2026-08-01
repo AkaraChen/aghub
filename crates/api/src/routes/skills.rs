@@ -13,12 +13,21 @@ use skill::sanitize::sanitize_name;
 use std::{
 	collections::{HashMap, HashSet},
 	path::{Component, Path, PathBuf},
+	sync::{
+		atomic::{AtomicBool, Ordering},
+		Arc, LazyLock,
+	},
 	time::Duration,
 };
 use tokio::time::timeout;
 
 use crate::{
+	audit_gate::{
+		AuditBudget, AuditReview, AuditSource, SkillImportReview,
+		MAX_AUDIT_PATHS,
+	},
 	auth::ApiAuth,
+	dto::audit::{AuditReportDto, AuditRequest},
 	dto::integrations::{
 		CodeEditorType, EditSkillFolderRequest, OpenSkillFolderRequest,
 	},
@@ -43,7 +52,10 @@ use crate::{
 		build_manager_from_resolved, require_writable_scope,
 		resolved_to_resource_scope,
 	},
-	state::{GitCloneSession, GitCloneSessions},
+	state::{
+		GitCloneSession, GitCloneSessionInsertError, GitCloneSessionKind,
+		GitCloneSessionLease, GitCloneSessionProvenance, GitCloneSessions,
+	},
 };
 
 #[cfg(test)]
@@ -85,6 +97,54 @@ static SKILL_DIFF_PERMITS: tokio::sync::Semaphore =
 	tokio::sync::Semaphore::const_new(2);
 static SKILL_COPY_RESOLUTION_PERMITS: tokio::sync::Semaphore =
 	tokio::sync::Semaphore::const_new(1);
+const SESSION_KIND_MISMATCH: &str = "SESSION_KIND_MISMATCH";
+const SESSION_NOT_FOUND: &str = "SESSION_NOT_FOUND";
+const SESSION_LIMIT_REACHED: &str = "SESSION_LIMIT_REACHED";
+const GIT_NETWORK_TIMEOUT: Duration = Duration::from_secs(300);
+const GIT_CLONE_DEPTH: u32 = 1;
+const MAX_GIT_NETWORK_OPERATIONS: usize = 4;
+const MAX_GIT_CLONE_ENTRIES: usize = 200_000;
+const MAX_GIT_CLONE_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_GIT_REMOTE_OUTPUT_BYTES: usize = 1024 * 1024;
+const MAX_GIT_REMOTE_BRANCHES: usize = 2_048;
+const MAX_SKILL_INSTALL_RESULTS: usize = 64;
+const MAX_GIT_INSTALL_AGENTS: usize = 64;
+const MAX_GIT_INSTALL_RESPONSE_ENTRIES: usize =
+	MAX_AUDIT_PATHS * MAX_GIT_INSTALL_AGENTS;
+static SKILL_SCAN_PERMITS: tokio::sync::Semaphore =
+	tokio::sync::Semaphore::const_new(2);
+static GIT_NETWORK_PERMITS: LazyLock<Arc<tokio::sync::Semaphore>> =
+	LazyLock::new(|| {
+		Arc::new(tokio::sync::Semaphore::new(MAX_GIT_NETWORK_OPERATIONS))
+	});
+static SKILL_MUTATION_PERMITS: tokio::sync::Semaphore =
+	tokio::sync::Semaphore::const_new(1);
+
+struct GitNetworkCancellation {
+	requested: Arc<AtomicBool>,
+}
+
+impl GitNetworkCancellation {
+	fn new() -> Self {
+		Self {
+			requested: Arc::new(AtomicBool::new(false)),
+		}
+	}
+
+	fn child_flag(&self) -> Arc<AtomicBool> {
+		Arc::clone(&self.requested)
+	}
+
+	fn request(&self) {
+		self.requested.store(true, Ordering::Release);
+	}
+}
+
+impl Drop for GitNetworkCancellation {
+	fn drop(&mut self) {
+		self.request();
+	}
+}
 
 #[derive(rocket::FromForm)]
 pub(crate) struct SkillListParams {
@@ -120,33 +180,115 @@ async fn detect_plugin_for_path(path: &std::path::Path) -> Option<String> {
 		.map(|plugin| plugin.display_name.clone())
 }
 
+fn acquire_git_network_permit(
+) -> Result<tokio::sync::OwnedSemaphorePermit, ApiError> {
+	GIT_NETWORK_PERMITS
+		.clone()
+		.try_acquire_owned()
+		.map_err(|_| {
+			ApiError::new(
+				Status::TooManyRequests,
+				"Too many Git network operations are already running",
+				"GIT_NETWORK_BUSY",
+			)
+		})
+}
+
 async fn list_branches_for_scan<F>(
 	cached_branches: Option<Vec<String>>,
 	fetcher: F,
 ) -> Result<Vec<String>, ApiError>
 where
-	F: FnOnce() -> aghub_git::Result<Vec<String>> + Send + 'static,
+	F: FnOnce(&AtomicBool) -> aghub_git::Result<Vec<String>> + Send + 'static,
+{
+	list_branches_for_scan_with_timeout(
+		cached_branches,
+		GIT_NETWORK_TIMEOUT,
+		fetcher,
+	)
+	.await
+}
+
+async fn list_branches_for_scan_with_timeout<F>(
+	cached_branches: Option<Vec<String>>,
+	request_timeout: Duration,
+	fetcher: F,
+) -> Result<Vec<String>, ApiError>
+where
+	F: FnOnce(&AtomicBool) -> aghub_git::Result<Vec<String>> + Send + 'static,
 {
 	if let Some(cached) = cached_branches {
 		return Ok(cached);
 	}
+	let permit = acquire_git_network_permit()?;
+	let cancellation = GitNetworkCancellation::new();
+	let task_cancellation = cancellation.child_flag();
+	let mut task = tokio::task::spawn_blocking(move || {
+		let _permit = permit;
+		fetcher(&task_cancellation)
+	});
 
-	tokio::task::spawn_blocking(fetcher)
-		.await
-		.map_err(|e| {
-			ApiError::new(
-				Status::InternalServerError,
-				format!("Branch listing task panicked: {e}"),
-				"BRANCHES_ERROR",
-			)
-		})?
-		.map_err(|e| {
-			ApiError::new(
+	match timeout(request_timeout, &mut task).await {
+		Ok(Ok(Ok(branches))) => Ok(branches),
+		Ok(Ok(Err(error))) => match error {
+			limit @ aghub_git::GitError::RemoteBranchLimit
+			| limit @ aghub_git::GitError::RemoteOutputLimit => Err(ApiError::new(
+				Status::PayloadTooLarge,
+				format!("Remote branch listing exceeded its limit: {limit}"),
+				"BRANCHES_LIMIT",
+			)),
+			aghub_git::GitError::TimedOut | aghub_git::GitError::Cancelled => {
+				Err(ApiError::new(
+					Status::RequestTimeout,
+					"Remote branch listing timed out after 5 minutes",
+					"BRANCHES_TIMEOUT",
+				))
+			}
+			other => Err(ApiError::new(
 				Status::BadRequest,
-				format!("Failed to list remote branches: {e}"),
+				format!("Failed to list remote branches: {other}"),
 				"BRANCHES_ERROR",
-			)
-		})
+			)),
+		},
+		Ok(Err(error)) => Err(ApiError::new(
+			Status::InternalServerError,
+			format!("Branch listing task panicked: {error}"),
+			"BRANCHES_ERROR",
+		)),
+		Err(_) => {
+			cancellation.request();
+			let _ = task.await;
+			Err(ApiError::new(
+				Status::RequestTimeout,
+				"Remote branch listing timed out after 5 minutes",
+				"BRANCHES_TIMEOUT",
+			))
+		}
+	}
+}
+
+fn git_clone_api_error(
+	error: aghub_git::GitError,
+	failure_context: &str,
+	timeout_message: &str,
+	timeout_code: &'static str,
+) -> ApiError {
+	match error {
+		limit @ aghub_git::GitError::CloneEntryLimit { .. }
+		| limit @ aghub_git::GitError::CloneByteLimit { .. } => ApiError::new(
+			Status::PayloadTooLarge,
+			format!("Cloned repository exceeded its limit: {limit}"),
+			"GIT_CLONE_LIMIT",
+		),
+		aghub_git::GitError::TimedOut | aghub_git::GitError::Cancelled => {
+			ApiError::new(Status::RequestTimeout, timeout_message, timeout_code)
+		}
+		other => ApiError::new(
+			Status::BadRequest,
+			format!("{failure_context}: {other}"),
+			"CLONE_FAILED",
+		),
+	}
 }
 
 #[post("/skills/transfer", data = "<body>")]
@@ -379,7 +521,6 @@ fn resolve_git_install_target_dir(
 }
 
 fn install_git_skill_to_dir(
-	repository_root: &std::path::Path,
 	full_path: &std::path::Path,
 	target_dir: &std::path::Path,
 ) -> Result<String, ApiError> {
@@ -398,11 +539,7 @@ fn install_git_skill_to_dir(
 		Ok(_) => {}
 		Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
 			let source_root = get_skill_root(full_path.to_path_buf());
-			replace_git_skill_dir_staged(
-				repository_root,
-				&source_root,
-				&dest_root,
-			)?;
+			replace_skill_dir_staged(&source_root, &dest_root)?;
 		}
 		Err(error) => return Err(ApiError::from(ConfigError::Io(error))),
 	}
@@ -513,6 +650,131 @@ fn ensure_session_remote_matches(
 		"Git scan session belongs to a different remote",
 		SESSION_REMOTE_MISMATCH,
 	))
+}
+
+fn lease_git_session(
+	sessions: &GitCloneSessions,
+	session_id: &str,
+	expected_kind: GitCloneSessionKind,
+) -> Result<GitCloneSessionLease, ApiError> {
+	let session = sessions.lease(session_id).ok_or_else(|| {
+		ApiError::new(
+			Status::NotFound,
+			"Session not found or expired",
+			SESSION_NOT_FOUND,
+		)
+	})?;
+	if session.provenance.kind != expected_kind {
+		return Err(ApiError::new(
+			Status::BadRequest,
+			"Session belongs to a different workflow",
+			SESSION_KIND_MISMATCH,
+		));
+	}
+	Ok(session)
+}
+
+fn insert_git_session(
+	sessions: &GitCloneSessions,
+	session_id: String,
+	session: GitCloneSession,
+) -> Result<(), ApiError> {
+	sessions
+		.insert(session_id, session)
+		.map_err(|error| match error {
+			GitCloneSessionInsertError::CapacityExceeded => ApiError::new(
+				Status::ServiceUnavailable,
+				"Too many active Git sessions",
+				SESSION_LIMIT_REACHED,
+			),
+		})
+}
+
+fn check_git_install_cardinality(
+	skill_paths: usize,
+	agents: usize,
+) -> Result<(), ApiError> {
+	if skill_paths > MAX_AUDIT_PATHS {
+		return Err(ApiError::new(
+			Status::PayloadTooLarge,
+			format!(
+				"Git skill install accepts at most {MAX_AUDIT_PATHS} skill paths"
+			),
+			"GIT_INSTALL_SKILL_LIMIT",
+		));
+	}
+	if agents > MAX_GIT_INSTALL_AGENTS {
+		return Err(ApiError::new(
+			Status::PayloadTooLarge,
+			format!(
+				"Git skill install accepts at most {MAX_GIT_INSTALL_AGENTS} agents"
+			),
+			"GIT_INSTALL_AGENT_LIMIT",
+		));
+	}
+
+	let response_entries =
+		skill_paths.checked_mul(agents).ok_or_else(|| {
+			ApiError::new(
+				Status::PayloadTooLarge,
+				"Git skill install response exceeds its entry limit",
+				"GIT_INSTALL_RESULT_LIMIT",
+			)
+		})?;
+	if response_entries > MAX_GIT_INSTALL_RESPONSE_ENTRIES {
+		return Err(ApiError::new(
+			Status::PayloadTooLarge,
+			"Git skill install response exceeds its entry limit",
+			"GIT_INSTALL_RESULT_LIMIT",
+		));
+	}
+
+	Ok(())
+}
+
+fn should_return_audit_review(
+	review: &SkillImportReview,
+	audit_only: bool,
+	expected_content_digest: Option<&str>,
+	confirmed_assessment_digest: Option<&str>,
+) -> Result<bool, ApiError> {
+	if audit_only {
+		return Ok(true);
+	}
+	match review.require_authorized(
+		expected_content_digest,
+		confirmed_assessment_digest,
+	) {
+		Ok(()) => Ok(false),
+		Err(error)
+			if error.body.code == "SKILL_AUDIT_CONFIRMATION_REQUIRED" =>
+		{
+			Ok(true)
+		}
+		Err(error) => Err(error),
+	}
+}
+
+fn installed_skill_audit_path(path: PathBuf) -> Result<PathBuf, ApiError> {
+	let is_instruction_file = path
+		.file_name()
+		.and_then(|name| name.to_str())
+		.is_some_and(|name| name.eq_ignore_ascii_case("skill.md"));
+	let root = if is_instruction_file {
+		get_parent_folder(path)
+	} else {
+		path
+	};
+	std::fs::canonicalize(&root).map_err(|error| {
+		ApiError::new(
+			Status::BadRequest,
+			format!(
+				"Cannot resolve skill '{}' for audit: {error}",
+				root.display()
+			),
+			"SKILL_AUDIT_READ_FAILED",
+		)
+	})
 }
 
 fn normalize_scanned_skill_path(path: &str) -> Result<String, ApiError> {
@@ -909,39 +1171,95 @@ pub async fn create_skill(
 }
 
 #[post("/agents/<agent>/skills/import?<scope..>", data = "<body>")]
-pub fn import_skill(
+pub async fn import_skill(
 	_auth: ApiAuth,
 	agent: AgentParam,
 	scope: ScopeParams,
 	body: Json<crate::dto::skill::ImportSkillRequest>,
 ) -> ApiResult<SkillResponse> {
+	let request = body.into_inner();
+	let permit = SKILL_MUTATION_PERMITS
+		.acquire()
+		.await
+		.expect("static skill mutation semaphore remains open");
+	let response = tokio::task::spawn_blocking(move || {
+		let _permit = permit;
+		import_skill_blocking(agent, scope, request)
+	})
+	.await
+	.map_err(|error| {
+		ApiError::new(
+			Status::InternalServerError,
+			format!("Skill import task failed: {error}"),
+			"SKILL_IMPORT_TASK_FAILED",
+		)
+	})??;
+
+	Ok(Json(response))
+}
+
+fn import_skill_blocking(
+	agent: AgentParam,
+	scope: ScopeParams,
+	request: crate::dto::skill::ImportSkillRequest,
+) -> Result<SkillResponse, ApiError> {
 	let resolved = scope.resolve()?;
 	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
 	check_skills_mutable(&agent, resource_scope)?;
 	require_writable_scope(&resolved)?;
 	let mut manager = build_manager_from_resolved(&agent, &resolved)?;
-	let request = body.into_inner();
+	let import_path = expand_tilde_path(&request.path);
+	let audit = SkillImportReview::prepare(std::slice::from_ref(&import_path))?;
+	audit.require_authorized(
+		request.expected_content_digest.as_deref(),
+		request.confirmed_assessment_digest.as_deref(),
+	)?;
 
 	// Load configuration before adding skill
 	manager.load().map_err(ApiError::from)?;
 
-	let imported = manager
-		.add_skill_from_path(std::path::Path::new(&request.path))
-		.map_err(ApiError::from)?;
-	write_skill_install_lock(
-		&imported.name,
-		resource_scope,
-		project_root.as_deref(),
-		&skill::InstallLockSource {
-			source: request.path.clone(),
-			source_type: "local".to_string(),
-			source_url: request.path,
-			ref_name: None,
+	let lock_source = skill::InstallLockSource {
+		source: request.path.clone(),
+		source_type: "local".to_string(),
+		source_url: request.path,
+		ref_name: None,
+	};
+	let imported = match manager.add_skill_from_snapshot_with_commit(
+		audit.snapshot(&import_path),
+		|imported, _| {
+			write_skill_install_lock(
+				&imported.name,
+				resource_scope,
+				project_root.as_deref(),
+				&lock_source,
+				None,
+			)
 		},
-		None,
-	)?;
+	) {
+		Ok(imported) => imported,
+		Err(aghub_core::manager::skill::SkillImportCommitError::Import(
+			error,
+		)) => return Err(ApiError::from(error)),
+		Err(aghub_core::manager::skill::SkillImportCommitError::Commit(
+			error,
+		)) => return Err(error),
+		Err(aghub_core::manager::skill::SkillImportCommitError::Rollback {
+			commit,
+			rollback,
+			skill_name,
+		}) => {
+			return Err(ApiError::new(
+				Status::InternalServerError,
+				format!(
+					"{}; failed to roll back imported skill '{}': {rollback}",
+					commit.body.error, skill_name
+				),
+				"SKILL_IMPORT_ROLLBACK_FAILED",
+			));
+		}
+	};
 
-	Ok(Json(SkillResponse::from(&imported)))
+	Ok(SkillResponse::from(&imported))
 }
 
 #[get("/agents/<agent>/skills/<name>?<scope..>")]
@@ -1173,8 +1491,18 @@ pub(crate) async fn list_all_agents_skills(
 pub async fn install_skill(
 	_auth: ApiAuth,
 	body: Json<InstallSkillRequest>,
+	sessions: &rocket::State<GitCloneSessions>,
 ) -> ApiResult<InstallSkillResponse> {
 	let req = body.into_inner();
+	if req.skills.len() > MAX_SKILL_INSTALL_RESULTS {
+		return Err(ApiError::new(
+			Status::PayloadTooLarge,
+			format!(
+				"Skill install accepts at most {MAX_SKILL_INSTALL_RESULTS} selections"
+			),
+			"SKILL_INSTALL_RESULT_LIMIT",
+		));
+	}
 	let resource_scope = parse_install_scope(&req.scope)?;
 
 	let project_root = req.project_path.as_ref().map(std::path::PathBuf::from);
@@ -1189,49 +1517,138 @@ pub async fn install_skill(
 	let source = aghub_git::resolve_remote_source(&req.source)
 		.map_err(map_remote_source_error)?;
 	let clone_url = source.clone_url.clone();
-	let lock_source = install_lock_source_from_resolved(&source, None);
-
-	let clone_url_for_task = clone_url.clone();
-	let temp_dir = match timeout(
-		Duration::from_secs(300),
-		tokio::task::spawn_blocking(move || {
-			aghub_git::clone_to_temp(aghub_git::CloneOptions::new(
-				&clone_url_for_task,
-			))
-		}),
-	)
-	.await
+	let mut pending_temp_dir = None;
+	let mut session_lease = None;
+	let (temp_path, session_id, lock_source) = if let Some(session_id) =
+		req.session_id.clone()
 	{
-		Ok(Ok(Ok(temp_dir))) => temp_dir,
-		Ok(Ok(Err(e))) => {
-			return Err(ApiError::new(
-				Status::BadRequest,
-				format!("Failed to clone skill source: {e}"),
-				"CLONE_FAILED",
-			));
-		}
-		Ok(Err(e)) => {
-			return Err(ApiError::new(
-				Status::InternalServerError,
-				format!("Clone task panicked: {e}"),
-				"CLONE_ERROR",
-			));
-		}
-		Err(_) => {
-			return Err(ApiError::new(
-				Status::RequestTimeout,
-				"Skills installation timed out after 5 minutes".to_string(),
-				"SKILLS_INSTALL_TIMEOUT",
-			));
-		}
+		let session = lease_git_session(
+			sessions,
+			&session_id,
+			GitCloneSessionKind::MarketInstall,
+		)?;
+		ensure_session_remote_matches(&clone_url, &session.provenance.source)?;
+		let session_source =
+			aghub_git::resolve_remote_source(&session.provenance.source)
+				.map_err(map_remote_source_error)?;
+		let path = session.temp_dir.path().to_path_buf();
+		session_lease = Some(session);
+		(
+			path,
+			session_id,
+			install_lock_source_from_resolved(&session_source, None),
+		)
+	} else {
+		let clone_url_for_task = clone_url.clone();
+		let permit = acquire_git_network_permit()?;
+		let cancellation = GitNetworkCancellation::new();
+		let task_cancellation = cancellation.child_flag();
+		let mut clone_task = tokio::task::spawn_blocking(move || {
+			let _permit = permit;
+			let depth = std::num::NonZeroU32::new(GIT_CLONE_DEPTH)
+				.expect("Git clone depth is non-zero");
+			let options = aghub_git::CloneOptions::new(&clone_url_for_task)
+				.with_depth(depth);
+			aghub_git::clone_to_temp_bounded(
+				options,
+				aghub_git::CloneLimits::new(
+					GIT_NETWORK_TIMEOUT,
+					MAX_GIT_CLONE_ENTRIES,
+					MAX_GIT_CLONE_BYTES,
+				),
+				&task_cancellation,
+			)
+		});
+		let temp_dir = match timeout(GIT_NETWORK_TIMEOUT, &mut clone_task).await
+		{
+			Ok(Ok(Ok(temp_dir))) => temp_dir,
+			Ok(Ok(Err(error))) => {
+				return Err(git_clone_api_error(
+					error,
+					"Failed to clone skill source",
+					"Skills installation timed out after 5 minutes",
+					"SKILLS_INSTALL_TIMEOUT",
+				));
+			}
+			Ok(Err(error)) => {
+				return Err(ApiError::new(
+					Status::InternalServerError,
+					format!("Clone task panicked: {error}"),
+					"CLONE_ERROR",
+				));
+			}
+			Err(_) => {
+				cancellation.request();
+				let _ = clone_task.await;
+				return Err(ApiError::new(
+					Status::RequestTimeout,
+					"Skills installation timed out after 5 minutes",
+					"SKILLS_INSTALL_TIMEOUT",
+				));
+			}
+		};
+		let path = temp_dir.path().to_path_buf();
+		let session_id = uuid::Uuid::new_v4().to_string();
+		pending_temp_dir = Some(temp_dir);
+		(
+			path,
+			session_id,
+			install_lock_source_from_resolved(&source, None),
+		)
 	};
 
 	let selected_skills = skill::discover_repo_skills(
-		temp_dir.path(),
+		&temp_path,
 		&req.skills,
 		req.install_all.unwrap_or(false),
 	)
 	.map_err(map_repo_discovery_error)?;
+	let audit_sources = selected_skills
+		.iter()
+		.map(|skill| {
+			AuditSource::new(
+				skill.full_path.clone(),
+				PathBuf::from(&skill.relative_dir),
+			)
+		})
+		.collect::<Vec<_>>();
+	let audit = SkillImportReview::prepare_sources(&audit_sources)?;
+	let audit_confirmation_required = audit.confirmation_required();
+	if should_return_audit_review(
+		&audit,
+		req.audit_only.unwrap_or(false),
+		req.expected_content_digest.as_deref(),
+		req.confirmed_assessment_digest.as_deref(),
+	)? {
+		if let Some(temp_dir) = pending_temp_dir.take() {
+			insert_git_session(
+				sessions,
+				session_id.clone(),
+				GitCloneSession {
+					temp_dir,
+					created_at: std::time::Instant::now(),
+					provenance: GitCloneSessionProvenance {
+						kind: GitCloneSessionKind::MarketInstall,
+						source: clone_url,
+						reference: None,
+					},
+					credential_token: None,
+					branches: Vec::new(),
+					scanned_skill_paths: HashSet::new(),
+				},
+			)?;
+		}
+		return Ok(Json(InstallSkillResponse {
+			success: false,
+			audit: Some(audit.report.into()),
+			audit_confirmation_required,
+			session_id: Some(session_id),
+		}));
+	}
+	let _permit = SKILL_MUTATION_PERMITS
+		.acquire()
+		.await
+		.expect("static skill mutation semaphore remains open");
 	let (dir_groups, invalid_agents) = build_git_install_groups(
 		&req.agents,
 		resource_scope,
@@ -1242,12 +1659,9 @@ pub async fn install_skill(
 	let mut installed_skill_names = std::collections::HashSet::new();
 
 	for skill in &selected_skills {
+		let reviewed_path = audit.snapshot(&skill.full_path).path();
 		for (target_dir, agents) in &dir_groups {
-			match install_git_skill_to_dir(
-				temp_dir.path(),
-				&skill.full_path,
-				target_dir,
-			) {
+			match install_git_skill_to_dir(reviewed_path, target_dir) {
 				Ok(skill_name) => {
 					installed_skill_names.insert(skill_name);
 					let _ = agents;
@@ -1272,8 +1686,17 @@ pub async fn install_skill(
 	}
 
 	let success = !has_errors && !installed_skill_names.is_empty();
+	if session_lease.is_some() {
+		sessions.remove(&session_id);
+	}
+	drop(session_lease);
 
-	Ok(Json(InstallSkillResponse { success }))
+	Ok(Json(InstallSkillResponse {
+		success,
+		audit: Some(audit.report.into()),
+		audit_confirmation_required,
+		session_id: None,
+	}))
 }
 
 #[post("/skills/open", format = "json", data = "<request>")]
@@ -1366,6 +1789,36 @@ pub fn get_skill_content(
 	})?;
 
 	Ok(Json(skill.content))
+}
+
+#[post("/skills/audit", data = "<req>")]
+pub async fn audit_skill(
+	_auth: ApiAuth,
+	req: Json<AuditRequest>,
+) -> ApiResult<AuditReportDto> {
+	let paths = req
+		.paths
+		.iter()
+		.map(|path| installed_skill_audit_path(expand_tilde_path(path)))
+		.collect::<Result<Vec<_>, _>>()?;
+	let permit = SKILL_SCAN_PERMITS
+		.acquire()
+		.await
+		.expect("static skill scan semaphore remains open");
+	let report = tokio::task::spawn_blocking(move || {
+		let _permit = permit;
+		AuditReview::inspect(&paths)
+			.map(|audit| AuditReportDto::from(audit.report))
+	})
+	.await
+	.map_err(|error| {
+		ApiError::new(
+			Status::InternalServerError,
+			format!("Skill audit task failed: {error}"),
+			"SKILL_AUDIT_TASK_FAILED",
+		)
+	})??;
+	Ok(Json(report))
 }
 
 #[get("/skills/tree?<query..>")]
@@ -1478,22 +1931,25 @@ pub async fn git_scan_skills(
 	sessions: &rocket::State<GitCloneSessions>,
 ) -> ApiResult<GitScanResponse> {
 	let req = body.into_inner();
+	let resolved_source = aghub_git::resolve_remote_source(&req.url)
+		.map_err(map_remote_source_error)?;
+	let canonical_url = resolved_source.clone_url.clone();
 
 	let session_reuse = if let Some(ref sid) = req.session_id {
-		let map = sessions.sessions.lock().unwrap();
-		map.get(sid).map(|session| {
-			(
-				session.url.clone(),
-				session.credential_token.clone(),
-				session.branches.clone(),
-			)
-		})
+		Some(lease_git_session(
+			sessions,
+			sid,
+			GitCloneSessionKind::GitScan,
+		)?)
 	} else {
 		None
 	};
 
-	if let Some((session_url, _, _)) = &session_reuse {
-		ensure_session_remote_matches(&req.url, session_url)?;
+	if let Some(session) = &session_reuse {
+		ensure_session_remote_matches(
+			&canonical_url,
+			&session.provenance.source,
+		)?;
 	}
 
 	let credential_token: Option<String> =
@@ -1518,22 +1974,26 @@ pub async fn git_scan_skills(
 		} else {
 			session_reuse
 				.as_ref()
-				.and_then(|(_, token, _)| token.clone())
+				.and_then(|session| session.credential_token.clone())
 		};
 
-	let cached_branches: Option<Vec<String>> =
-		session_reuse.map(|(_, _, branches)| branches);
+	let cached_branches = session_reuse
+		.as_ref()
+		.map(|session| session.branches.clone());
 
 	if credential_token.is_some() {
-		require_github_credential_url(&req.url)?;
+		require_github_credential_url(&canonical_url)?;
 	}
 
-	let url = req.url.clone();
+	let url = canonical_url.clone();
 	let branch = req.branch.clone();
 	let token_for_clone = credential_token.clone();
+	let permit = acquire_git_network_permit()?;
+	let cancellation = GitNetworkCancellation::new();
+	let task_cancellation = cancellation.child_flag();
 
-	// Clone repo in a blocking thread (gix is synchronous)
-	let temp_dir = tokio::task::spawn_blocking(move || {
+	let mut clone_task = tokio::task::spawn_blocking(move || {
+		let _permit = permit;
 		let mut options = aghub_git::CloneOptions::new(&url);
 		if let Some(token) = token_for_clone {
 			options = options.with_credentials("x-access-token", token);
@@ -1541,35 +2001,66 @@ pub async fn git_scan_skills(
 		if let Some(ref branch) = branch {
 			options = options.with_branch(branch);
 		}
-		aghub_git::clone_to_temp(options)
-	})
-	.await
-	.map_err(|e| {
-		ApiError::new(
-			Status::InternalServerError,
-			format!("Clone task panicked: {e}"),
-			"CLONE_ERROR",
+		let depth = std::num::NonZeroU32::new(GIT_CLONE_DEPTH)
+			.expect("Git clone depth is non-zero");
+		options = options.with_depth(depth);
+		aghub_git::clone_to_temp_bounded(
+			options,
+			aghub_git::CloneLimits::new(
+				GIT_NETWORK_TIMEOUT,
+				MAX_GIT_CLONE_ENTRIES,
+				MAX_GIT_CLONE_BYTES,
+			),
+			&task_cancellation,
 		)
-	})?
-	.map_err(|e| {
-		ApiError::new(
-			Status::BadRequest,
-			format!("Failed to clone repository: {e}"),
-			"CLONE_FAILED",
-		)
-	})?;
+	});
+	let temp_dir = match timeout(GIT_NETWORK_TIMEOUT, &mut clone_task).await {
+		Ok(Ok(Ok(temp_dir))) => temp_dir,
+		Ok(Ok(Err(error))) => {
+			return Err(git_clone_api_error(
+				error,
+				"Failed to clone repository",
+				"Repository scan timed out after 5 minutes",
+				"GIT_SCAN_TIMEOUT",
+			));
+		}
+		Ok(Err(error)) => {
+			return Err(ApiError::new(
+				Status::InternalServerError,
+				format!("Clone task panicked: {error}"),
+				"CLONE_ERROR",
+			));
+		}
+		Err(_) => {
+			cancellation.request();
+			let _ = clone_task.await;
+			return Err(ApiError::new(
+				Status::RequestTimeout,
+				"Repository scan timed out after 5 minutes",
+				"GIT_SCAN_TIMEOUT",
+			));
+		}
+	};
 
 	// List remote branches (use cache from previous session if
 	// available to avoid an extra network call on branch switch)
-	let branch_url = req.url.clone();
+	let branch_url = canonical_url.clone();
 	let credential_token_for_branches = credential_token.clone();
-	let branches = list_branches_for_scan(cached_branches, move || {
+	let branches = list_branches_for_scan(cached_branches, move |cancelled| {
 		let options = match credential_token_for_branches {
 			Some(token) => aghub_git::RemoteOptions::new(&branch_url)
 				.with_credentials("x-access-token", token),
 			None => aghub_git::RemoteOptions::new(&branch_url),
 		};
-		aghub_git::list_remote_branches(options)
+		aghub_git::list_remote_branches_bounded(
+			options,
+			aghub_git::RemoteLimits::new(
+				GIT_NETWORK_TIMEOUT,
+				MAX_GIT_REMOTE_OUTPUT_BYTES,
+				MAX_GIT_REMOTE_BRANCHES,
+			),
+			cancelled,
+		)
 	})
 	.await?;
 
@@ -1594,32 +2085,52 @@ pub async fn git_scan_skills(
 		respect_gitignore: true,
 	};
 	let temp_path = temp_dir.path().to_path_buf();
-	let skill_paths =
-		skill::scan::scan_skills(&temp_path, scan_options, vec![]).map_err(
-			|e| {
-				ApiError::new(
-					Status::InternalServerError,
-					format!("Failed to scan repository for skills: {e:?}"),
-					"SCAN_ERROR",
-				)
-			},
-		)?;
+	let skill_paths = skill::scan::scan_skills_with_limit(
+		&temp_path,
+		scan_options,
+		vec![],
+		MAX_AUDIT_PATHS,
+	)
+	.map_err(|error| match error {
+		skill::scan::ScanError::ResultLimitExceeded(limit)
+		| skill::scan::ScanError::EntryLimitExceeded(limit) => ApiError::new(
+			Status::PayloadTooLarge,
+			format!("Repository scan exceeds its {limit}-item limit"),
+			"SKILL_SCAN_RESULT_LIMIT",
+		),
+		error => ApiError::new(
+			Status::InternalServerError,
+			format!("Failed to scan repository for skills: {error:?}"),
+			"SCAN_ERROR",
+		),
+	})?;
 
 	// Parse each skill to extract metadata
 	let mut skills = Vec::new();
 	let mut scanned_skill_paths = HashSet::new();
+	let mut audit_budget = AuditBudget::default();
+	let skip_audit = req.skip_audit.unwrap_or(false);
 	for path in &skill_paths {
 		match skill::parser::parse(path) {
 			Ok(parsed) => {
 				let relative =
 					normalize_scanned_skill_path_from_file(path, &temp_path)?;
 				scanned_skill_paths.insert(relative.clone());
+				let audit = if skip_audit {
+					None
+				} else {
+					Some(AuditReview::inspect_with_budget(
+						std::slice::from_ref(path),
+						&mut audit_budget,
+					)?)
+				};
 				skills.push(GitScanSkillEntry {
 					name: parsed.name,
 					description: parsed.description,
 					author: parsed.author,
 					version: parsed.version,
 					path: relative,
+					audit: audit.map(|audit| audit.report.into()),
 				});
 			}
 			Err(_) => {
@@ -1630,30 +2141,29 @@ pub async fn git_scan_skills(
 
 	// Remove old session if re-scanning
 	if let Some(ref old_sid) = req.session_id {
-		let mut map = sessions.sessions.lock().unwrap();
-		map.remove(old_sid);
+		sessions.remove(old_sid);
 	}
 
 	// Store the temp dir in session map so it persists until install
 	let session_id = uuid::Uuid::new_v4().to_string();
-	{
-		let mut map = sessions.sessions.lock().unwrap();
-		// Purge sessions older than 30 minutes
-		let cutoff = std::time::Duration::from_secs(30 * 60);
-		map.retain(|_, s| s.created_at.elapsed() < cutoff);
-		map.insert(
-			session_id.clone(),
-			GitCloneSession {
-				temp_dir,
-				created_at: std::time::Instant::now(),
-				url: req.url,
-				credential_token,
-				branches: branches.clone(),
-				current_branch: current_branch.clone(),
-				scanned_skill_paths,
+	insert_git_session(
+		sessions,
+		session_id.clone(),
+		GitCloneSession {
+			temp_dir,
+			created_at: std::time::Instant::now(),
+			provenance: GitCloneSessionProvenance {
+				kind: GitCloneSessionKind::GitScan,
+				source: canonical_url,
+				reference: (!current_branch.is_empty())
+					.then(|| current_branch.clone()),
 			},
-		);
-	}
+			credential_token,
+			branches: branches.clone(),
+			scanned_skill_paths,
+		},
+	)?;
+	drop(session_reuse);
 
 	Ok(Json(GitScanResponse {
 		session_id,
@@ -1694,27 +2204,28 @@ pub async fn git_install_skills(
 	sessions: &rocket::State<GitCloneSessions>,
 ) -> ApiResult<GitInstallResponse> {
 	let req = body.into_inner();
+	check_git_install_cardinality(req.skill_paths.len(), req.agents.len())?;
+	let _permit = SKILL_MUTATION_PERMITS
+		.acquire()
+		.await
+		.expect("static skill mutation semaphore remains open");
 
 	// Extract temp dir path and source metadata from session
+	let session = lease_git_session(
+		sessions,
+		&req.session_id,
+		GitCloneSessionKind::GitScan,
+	)?;
 	let (temp_path, source, scanned_skill_paths) = {
-		let map = sessions.sessions.lock().unwrap();
-		let session = map.get(&req.session_id).ok_or_else(|| {
-			ApiError::new(
-				Status::NotFound,
-				"Session not found or expired",
-				"SESSION_NOT_FOUND",
-			)
-		})?;
-		let ref_name = if session.current_branch.is_empty() {
-			None
-		} else {
-			Some(session.current_branch.clone())
-		};
-		let resolved = aghub_git::resolve_remote_source(&session.url)
-			.map_err(map_remote_source_error)?;
+		let resolved =
+			aghub_git::resolve_remote_source(&session.provenance.source)
+				.map_err(map_remote_source_error)?;
 		(
 			session.temp_dir.path().to_path_buf(),
-			install_lock_source_from_resolved(&resolved, ref_name),
+			install_lock_source_from_resolved(
+				&resolved,
+				session.provenance.reference.clone(),
+			),
 			session.scanned_skill_paths.clone(),
 		)
 	};
@@ -1754,12 +2265,33 @@ pub async fn git_install_skills(
 			)
 		})
 		.collect::<Result<Vec<_>, _>>()?;
+	let audit_sources = selected_paths
+		.iter()
+		.map(|(relative_dir, full_path)| {
+			AuditSource::new(full_path.clone(), PathBuf::from(relative_dir))
+		})
+		.collect::<Vec<_>>();
+	let audit = SkillImportReview::prepare_sources(&audit_sources)?;
+	let audit_confirmation_required = audit.confirmation_required();
+	if should_return_audit_review(
+		&audit,
+		req.audit_only.unwrap_or(false),
+		req.expected_content_digest.as_deref(),
+		req.confirmed_assessment_digest.as_deref(),
+	)? {
+		return Ok(Json(GitInstallResponse {
+			results: Vec::new(),
+			audit: Some(audit.report.into()),
+			audit_confirmation_required,
+		}));
+	}
 
-	for (relative_dir, full_path) in selected_paths {
+	for (relative_dir, full_path) in &selected_paths {
 		let mut installed = false;
+		let reviewed_path = audit.snapshot(full_path).path();
 
 		for (target_dir, agents) in &dir_groups {
-			match install_git_skill_to_dir(&temp_path, &full_path, target_dir) {
+			match install_git_skill_to_dir(reviewed_path, target_dir) {
 				Ok(skill_name) => {
 					installed = true;
 					for (agent_str, _) in agents {
@@ -1785,7 +2317,7 @@ pub async fn git_install_skills(
 		}
 
 		if installed {
-			let parsed_name = skill::parser::parse(&full_path)
+			let parsed_name = skill::parser::parse(reviewed_path)
 				.ok()
 				.map(|skill| skill.name);
 			if let Some(skill_name) = parsed_name {
@@ -1794,19 +2326,21 @@ pub async fn git_install_skills(
 					resource_scope,
 					project_root.as_deref(),
 					&source,
-					Some(skill::lock_skill_file_path(&relative_dir)),
+					Some(skill::lock_skill_file_path(relative_dir)),
 				)?;
 			}
 		}
 	}
 
 	// Remove session (drops TempDir, cleans up disk)
-	{
-		let mut map = sessions.sessions.lock().unwrap();
-		map.remove(&req.session_id);
-	}
+	sessions.remove(&req.session_id);
+	drop(session);
 
-	Ok(Json(GitInstallResponse { results }))
+	Ok(Json(GitInstallResponse {
+		results,
+		audit: Some(audit.report.into()),
+		audit_confirmation_required,
+	}))
 }
 
 /// Replace existing skill installations in-place from a previously-scanned
@@ -1821,22 +2355,19 @@ pub async fn git_sync_skill(
 	sessions: &rocket::State<GitCloneSessions>,
 ) -> ApiResult<GitSyncResponse> {
 	let req = body.into_inner();
+	let _permit = SKILL_MUTATION_PERMITS
+		.acquire()
+		.await
+		.expect("static skill mutation semaphore remains open");
 
 	// Retrieve temp dir from session (keep session alive until end)
-	let (temp_path, scanned_skill_paths) = {
-		let map = sessions.sessions.lock().unwrap();
-		let session = map.get(&req.session_id).ok_or_else(|| {
-			ApiError::new(
-				Status::NotFound,
-				"Session not found or expired",
-				"SESSION_NOT_FOUND",
-			)
-		})?;
-		(
-			session.temp_dir.path().to_path_buf(),
-			session.scanned_skill_paths.clone(),
-		)
-	};
+	let session = lease_git_session(
+		sessions,
+		&req.session_id,
+		GitCloneSessionKind::GitScan,
+	)?;
+	let temp_path = session.temp_dir.path().to_path_buf();
+	let scanned_skill_paths = session.scanned_skill_paths.clone();
 
 	// Full path of the SKILL.md (or skill dir) inside the clone
 	let (_, cloned_skill_path) = validate_scanned_skill_path(
@@ -1856,9 +2387,27 @@ pub async fn git_sync_skill(
 			"SKILL_PATH_NOT_FOUND",
 		));
 	}
+	let audit =
+		SkillImportReview::prepare(std::slice::from_ref(&cloned_skill_dir))?;
+	let audit_confirmation_required = audit.confirmation_required();
+	if should_return_audit_review(
+		&audit,
+		req.audit_only.unwrap_or(false),
+		req.expected_content_digest.as_deref(),
+		req.confirmed_assessment_digest.as_deref(),
+	)? {
+		return Ok(Json(GitSyncResponse {
+			success: false,
+			audit: Some(audit.report.into()),
+			audit_confirmation_required,
+			name: None,
+			error: None,
+		}));
+	}
+	let reviewed_skill_dir = audit.snapshot(&cloned_skill_dir).path();
 
 	// Parse skill name from the cloned copy
-	let skill_name: Option<String> = skill::parser::parse(&cloned_skill_path)
+	let skill_name: Option<String> = skill::parser::parse(reviewed_skill_dir)
 		.ok()
 		.map(|p| p.name);
 
@@ -1883,21 +2432,17 @@ pub async fn git_sync_skill(
 
 	// Replace each installation path
 	for target_dir in &target_dirs {
-		replace_git_skill_dir_staged(
-			&temp_path,
-			&cloned_skill_dir,
-			target_dir,
-		)?;
+		replace_skill_dir_staged(reviewed_skill_dir, target_dir)?;
 	}
 
 	// Remove session (drops TempDir, cleans up disk)
-	{
-		let mut map = sessions.sessions.lock().unwrap();
-		map.remove(&req.session_id);
-	}
+	sessions.remove(&req.session_id);
+	drop(session);
 
 	Ok(Json(GitSyncResponse {
 		success: true,
+		audit: Some(audit.report.into()),
+		audit_confirmation_required,
 		name: skill_name,
 		error: None,
 	}))
@@ -2767,91 +3312,17 @@ mod tests {
 		)
 		.unwrap();
 
-		let result = install_git_skill_to_dir(
-			source_dir.parent().unwrap(),
-			&source_dir.join("SKILL.md"),
-			&target_dir,
-		)
-		.unwrap_or_else(|e| panic!("{}", e.body.error));
+		let result =
+			install_git_skill_to_dir(&source_dir.join("SKILL.md"), &target_dir)
+				.unwrap_or_else(|e| panic!("{}", e.body.error));
 		assert_eq!(result, "hello-skill");
 		assert!(target_dir.join("hello-skill/SKILL.md").exists());
 
-		let second = install_git_skill_to_dir(
-			source_dir.parent().unwrap(),
-			&source_dir.join("SKILL.md"),
-			&target_dir,
-		)
-		.unwrap_or_else(|e| panic!("{}", e.body.error));
+		let second =
+			install_git_skill_to_dir(&source_dir.join("SKILL.md"), &target_dir)
+				.unwrap_or_else(|e| panic!("{}", e.body.error));
 		assert_eq!(second, "hello-skill");
 		assert!(target_dir.join("hello-skill/SKILL.md").exists());
-	}
-
-	#[cfg(unix)]
-	#[test]
-	fn git_install_materializes_file_link_within_repository() {
-		let temp = tempdir().unwrap();
-		let repository = temp.path().join("repository");
-		let source_dir = repository.join("skills/linked-skill");
-		let references = source_dir.join("references");
-		let target_dir = temp.path().join("target");
-		write_test_skill(&source_dir, "linked-skill", "body");
-		std::fs::create_dir_all(&references).unwrap();
-		std::fs::create_dir_all(repository.join("docs")).unwrap();
-		std::fs::write(repository.join("docs/example.html"), "example")
-			.unwrap();
-		std::os::unix::fs::symlink(
-			"../../../docs/example.html",
-			references.join("example.html"),
-		)
-		.unwrap();
-
-		install_git_skill_to_dir(
-			&repository,
-			&source_dir.join("SKILL.md"),
-			&target_dir,
-		)
-		.unwrap_or_else(|error| panic!("{}", error.body.error));
-		let installed = target_dir.join("linked-skill/references/example.html");
-
-		assert_eq!(std::fs::read_to_string(&installed).unwrap(), "example");
-		assert!(!std::fs::symlink_metadata(installed)
-			.unwrap()
-			.file_type()
-			.is_symlink());
-	}
-
-	#[cfg(unix)]
-	#[test]
-	fn git_install_rejects_link_outside_repository_without_partial_skill() {
-		let temp = tempdir().unwrap();
-		let repository = temp.path().join("repository");
-		let source_dir = repository.join("skills/linked-skill");
-		let references = source_dir.join("references");
-		let target_dir = temp.path().join("target");
-		let outside_file = temp.path().join("outside.txt");
-		write_test_skill(&source_dir, "linked-skill", "body");
-		std::fs::create_dir_all(&references).unwrap();
-		std::fs::write(&outside_file, "outside").unwrap();
-		std::os::unix::fs::symlink(
-			&outside_file,
-			references.join("outside.txt"),
-		)
-		.unwrap();
-
-		let error = install_git_skill_to_dir(
-			&repository,
-			&source_dir.join("SKILL.md"),
-			&target_dir,
-		)
-		.unwrap_err();
-
-		assert_eq!(error.body.code, INVALID_SKILL_PATH);
-		assert!(!target_dir.join("linked-skill").exists());
-		assert!(std::fs::read_dir(&target_dir).unwrap().all(|entry| !entry
-			.unwrap()
-			.file_name()
-			.to_string_lossy()
-			.starts_with(".aghub-tmp-")));
 	}
 
 	#[test]
@@ -2899,7 +3370,7 @@ mod tests {
 		let branches = runtime
 			.block_on(list_branches_for_scan(
 				Some(vec!["main".to_string()]),
-				|| panic!("fetcher should not be called"),
+				|_| panic!("fetcher should not be called"),
 			))
 			.unwrap_or_else(|e| panic!("{}", e.body.error));
 		assert_eq!(branches, vec!["main".to_string()]);
@@ -2909,7 +3380,7 @@ mod tests {
 	fn list_branches_for_scan_propagates_fetch_errors() {
 		let runtime = tokio::runtime::Runtime::new().unwrap();
 		let error = runtime
-			.block_on(list_branches_for_scan(None, || {
+			.block_on(list_branches_for_scan(None, |_| {
 				Err(aghub_git::GitError::clone_failed("boom"))
 			}))
 			.unwrap_err();

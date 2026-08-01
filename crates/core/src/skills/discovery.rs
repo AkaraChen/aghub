@@ -69,24 +69,28 @@ fn collect_skills(dir: &Path, skills: &mut Vec<Skill>) {
 
 	for entry in entries.flatten() {
 		let path = entry.path();
-		if !path.is_dir() {
+		let Ok(file_type) = entry.file_type() else {
+			continue;
+		};
+		if file_type.is_symlink() {
+			if let Ok(skill_pkg) = skill::parser::parse_skill_dir(&path) {
+				let mut skill = crate::convert_skill(skill_pkg);
+				if let Ok(resolved) = fs::canonicalize(&path) {
+					let canonical = resolved.join("SKILL.md");
+					skill.canonical_path =
+						crate::format_path_with_tilde(&canonical);
+				}
+				skills.push(skill);
+			}
+			continue;
+		}
+		if !file_type.is_dir() {
 			continue;
 		}
 
 		match skill::parser::parse_skill_dir(&path) {
 			Ok(skill_pkg) => {
-				let mut skill = crate::convert_skill(skill_pkg);
-				// Detect symlink and record canonical path
-				if let Ok(meta) = path.symlink_metadata() {
-					if meta.file_type().is_symlink() {
-						if let Ok(resolved) = fs::canonicalize(&path) {
-							let canonical = resolved.join("SKILL.md");
-							skill.canonical_path =
-								crate::format_path_with_tilde(&canonical);
-						}
-					}
-				}
-				skills.push(skill);
+				skills.push(crate::convert_skill(skill_pkg));
 			}
 			Err(_) => collect_skills(&path, skills),
 		}
@@ -195,5 +199,51 @@ mod tests {
 		let skills = load_skill_locations_from_dirs(&[root, alias]);
 
 		assert_eq!(skills.len(), 1);
+	}
+	#[cfg(unix)]
+	#[test]
+	fn direct_skill_symlink_is_discovered_without_recursive_traversal() {
+		let tmp = tempfile::tempdir().unwrap();
+		let root = tmp.path().join("skills");
+		let external = tmp.path().join("external/demo");
+		fs::create_dir_all(&root).unwrap();
+		fs::create_dir_all(&external).unwrap();
+		fs::write(
+			external.join("SKILL.md"),
+			"---\nname: demo\ndescription: Demo\n---\n",
+		)
+		.unwrap();
+		std::os::unix::fs::symlink(&external, root.join("demo")).unwrap();
+
+		let skills = load_skills_from_dir(&root);
+
+		assert_eq!(skills.len(), 1);
+		assert_eq!(skills[0].name, "demo");
+		assert!(skills[0].canonical_path.is_some());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn nested_symlink_directory_is_not_traversed() {
+		let tmp = tempfile::tempdir().unwrap();
+		let root = tmp.path().join("skills");
+		let external = tmp.path().join("external/group/demo");
+		fs::create_dir_all(&root).unwrap();
+		fs::create_dir_all(&external).unwrap();
+		fs::write(
+			external.join("SKILL.md"),
+			"---\nname: demo\ndescription: Demo\n---\n",
+		)
+		.unwrap();
+		std::os::unix::fs::symlink(
+			tmp.path().join("external/group"),
+			root.join("group"),
+		)
+		.unwrap();
+		std::os::unix::fs::symlink(&root, root.join("cycle")).unwrap();
+
+		let skills = load_skills_from_dir(&root);
+
+		assert!(skills.is_empty());
 	}
 }

@@ -19,6 +19,12 @@ pub struct CreateSkillRequest {
 #[ts(export)]
 pub struct ImportSkillRequest {
 	pub path: String,
+	/// Content identity returned by a prior review, when one was shown.
+	#[ts(optional = nullable)]
+	pub expected_content_digest: Option<String>,
+	/// Assessment identity explicitly confirmed for a blocked review.
+	#[ts(optional = nullable)]
+	pub confirmed_assessment_digest: Option<String>,
 }
 
 impl From<CreateSkillRequest> for Skill {
@@ -311,12 +317,37 @@ pub struct InstallSkillRequest {
 	pub scope: String,
 	pub project_path: Option<String>,
 	pub install_all: Option<bool>,
+	/// Content identity returned by a prior review, when one was shown.
+	#[ts(optional = nullable)]
+	pub expected_content_digest: Option<String>,
+	/// Assessment identity explicitly confirmed for a blocked review.
+	#[ts(optional = nullable)]
+	pub confirmed_assessment_digest: Option<String>,
+	/// Reuse a clone cached from a prior blocked attempt (the "install anyway"
+	/// retry) instead of cloning the source again.
+	#[ts(optional = nullable)]
+	pub session_id: Option<String>,
+	/// Audit-only phase: clone + audit and return the verdict + `session_id`
+	/// WITHOUT installing, so the desktop can show the result first and call
+	/// back to install (reusing the session). Nothing is written to disk.
+	#[ts(optional = nullable)]
+	pub audit_only: Option<bool>,
 }
 
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
 pub struct InstallSkillResponse {
 	pub success: bool,
+	/// Security-audit report for the selected content.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional = nullable)]
+	pub audit: Option<crate::dto::audit::AuditReportDto>,
+	/// Whether this report needs an exact digest confirmation before writing.
+	pub audit_confirmation_required: bool,
+	/// Pass this back to reuse the already-cloned source after review.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional = nullable)]
+	pub session_id: Option<String>,
 }
 
 /// Response for a single global skill lock entry
@@ -396,6 +427,9 @@ pub struct GitScanRequest {
 	pub url: String,
 	pub credential_id: Option<String>,
 	pub branch: Option<String>,
+	/// Skip security analysis while retaining the private scan clone.
+	#[ts(optional = nullable)]
+	pub skip_audit: Option<bool>,
 	/// When re-scanning (e.g. branch switch), pass the existing
 	/// session ID so the old clone is replaced.
 	pub session_id: Option<String>,
@@ -409,6 +443,10 @@ pub struct GitScanSkillEntry {
 	pub author: Option<String>,
 	pub version: Option<String>,
 	pub path: String,
+	/// Security-audit report, omitted when analysis was skipped.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional = nullable)]
+	pub audit: Option<crate::dto::audit::AuditReportDto>,
 }
 
 #[derive(Debug, Serialize, TS)]
@@ -428,6 +466,16 @@ pub struct GitInstallRequest {
 	pub agents: Vec<String>,
 	pub scope: String,
 	pub project_root: Option<String>,
+	/// Content identity returned by a prior review, when one was shown.
+	#[ts(optional = nullable)]
+	pub expected_content_digest: Option<String>,
+	/// Assessment identity explicitly confirmed for a blocked review.
+	#[ts(optional = nullable)]
+	pub confirmed_assessment_digest: Option<String>,
+	/// Audit-only phase: audit the selected skills and return the worst verdict
+	/// without installing, so the import UI can show "auditing" before "installing".
+	#[ts(optional = nullable)]
+	pub audit_only: Option<bool>,
 }
 
 /// Request to sync (update in-place) an existing skill from a git session.
@@ -441,6 +489,15 @@ pub struct GitSyncRequest {
 	pub source_paths: Vec<String>,
 	pub scope: Option<String>,
 	pub project_root: Option<String>,
+	/// Content identity returned by a prior review, when one was shown.
+	#[ts(optional = nullable)]
+	pub expected_content_digest: Option<String>,
+	/// Assessment identity explicitly confirmed for a blocked review.
+	#[ts(optional = nullable)]
+	pub confirmed_assessment_digest: Option<String>,
+	/// Audit without replacing the installed copies.
+	#[ts(optional = nullable)]
+	pub audit_only: Option<bool>,
 }
 
 /// Response for a git sync operation.
@@ -448,9 +505,16 @@ pub struct GitSyncRequest {
 #[ts(export)]
 pub struct GitSyncResponse {
 	pub success: bool,
+	/// Security-audit report for the selected content.
 	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional = nullable)]
+	pub audit: Option<crate::dto::audit::AuditReportDto>,
+	pub audit_confirmation_required: bool,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional = nullable)]
 	pub name: Option<String>,
 	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional = nullable)]
 	pub error: Option<String>,
 }
 
@@ -467,6 +531,12 @@ pub struct GitInstallResultEntry {
 #[ts(export)]
 pub struct GitInstallResponse {
 	pub results: Vec<GitInstallResultEntry>,
+	/// Combined security-audit report for the selected content.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional = nullable)]
+	pub audit: Option<crate::dto::audit::AuditReportDto>,
+	/// Whether this report needs an exact digest confirmation before writing.
+	pub audit_confirmation_required: bool,
 }
 
 #[derive(Debug, Serialize, TS)]

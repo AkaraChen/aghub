@@ -1,22 +1,11 @@
-//! Git clone library with credential injection from environment variables.
+//! Git clone and remote inspection library.
 //!
-//! This library provides functionality to clone git repositories into
-//! temporary directories with credentials automatically injected from
-//! environment variables.
-//!
-//! # Environment Variables
-//!
-//! - `GIT_USERNAME`: Git username for authentication
-//! - `GIT_PASSWORD`: Git password or personal access token
+//! Credentials must be passed explicitly in [`CloneOptions`].
 //!
 //! # Example
 //!
 //! ```rust,no_run
 //! use aghub_git::{clone_to_temp, CloneOptions};
-//!
-//! // Set credentials via environment (or set them before running)
-//! std::env::set_var("GIT_USERNAME", "myuser");
-//! std::env::set_var("GIT_PASSWORD", "mytoken");
 //!
 //! // Clone a repository
 //! let temp_dir = clone_to_temp(
@@ -41,16 +30,25 @@
 //! ```
 
 pub mod clone;
+mod command;
 pub mod credentials;
 pub mod error;
 pub mod remote;
+pub mod repository;
 pub mod source;
 
 // Re-export commonly used items
-pub use clone::{clone_to_path, clone_to_temp, CloneOptions};
+pub use clone::{
+	clone_to_path, clone_to_path_bounded, clone_to_temp, clone_to_temp_bounded,
+	clone_to_temp_with_interrupt, CloneLimits, CloneOptions,
+};
 pub use credentials::{inject_credentials, read_credentials, Credentials};
 pub use error::{GitError, Result};
-pub use remote::{list_remote_branches, RemoteOptions};
+pub use remote::{
+	list_remote_branches, list_remote_branches_bounded, RemoteLimits,
+	RemoteOptions,
+};
+pub use repository::current_branch;
 pub use source::{
 	normalize_repo_source_from_url, resolve_remote_source, RemoteSourceType,
 	ResolvedRemoteSource, SourceError,

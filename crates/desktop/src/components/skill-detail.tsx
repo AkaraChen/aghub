@@ -4,6 +4,7 @@ import {
 	ChevronDownIcon,
 	ChevronUpIcon,
 	CodeBracketIcon,
+	EyeSlashIcon,
 	GlobeAltIcon,
 	HashtagIcon,
 	LinkIcon,
@@ -12,7 +13,7 @@ import {
 	StarIcon as StarIconSolid,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
-import { Accordion, Button, Card, Chip, Tooltip } from "@heroui/react";
+import { Accordion, Button, Card, Chip, toast, Tooltip } from "@heroui/react";
 import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useMemo, useState } from "react";
@@ -21,6 +22,8 @@ import { siGithub } from "simple-icons";
 import { useLocation } from "wouter";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
+import { useAuditAcknowledgements } from "../hooks/use-audit-acknowledgements";
+import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
 import { useFavorites } from "../hooks/use-favorites";
 import { useCurrentCodeEditor } from "../hooks/use-integrations";
 import { cn, filterItemsByAgentIds } from "../lib/utils";
@@ -29,10 +32,12 @@ import {
 	globalSkillLockQueryOptions,
 	openSkillFolderMutationOptions,
 	projectSkillLockQueryOptions,
+	skillAuditQueryOptions,
 	skillContentQueryOptions,
 	skillTreeQueryOptions,
 } from "../requests/skills";
 import { ManageSkillAgentsDialog } from "./manage-skill-agents-dialog";
+import { SkillAudit, SkillAuditBadge } from "./skill-audit";
 import {
 	DeleteSkillDialog,
 	DeleteSkillLocationDialog,
@@ -40,6 +45,7 @@ import {
 import {
 	buildLocationGroups,
 	countTreeFiles,
+	getInstalledSkillAuditPaths,
 	hasSupplementarySkillFiles,
 	type LocationGroup,
 	type SkillGroup,
@@ -63,6 +69,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const [, setLocation] = useLocation();
 	const { allAgents, availableAgents } = useAgentAvailability();
 	const api = useApi();
+	const { skillAuditEnabled, skillAuditReady } = useSkillAuditPreference();
 
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [locationToDelete, setLocationToDelete] =
@@ -74,9 +81,12 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 
 	const { isSkillStarred, toggleSkillStar } = useFavorites();
 	const isStarred = isSkillStarred(group.items[0].name);
+	const { isAssessmentAcknowledged, setAssessmentAcknowledged } =
+		useAuditAcknowledgements();
 	const { selectedEditor } = useCurrentCodeEditor();
 
 	const skill = group.items[0];
+	const auditPaths = getInstalledSkillAuditPaths(group.items);
 	const primaryScope = skill.source ?? "global";
 	const skillQueryScope =
 		primaryScope === "project" && projectPath ? "project" : "global";
@@ -128,6 +138,26 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 			enabled: skillQueryEnabled,
 		}),
 	});
+
+	const { data: auditedSkill } = useQuery({
+		...skillAuditQueryOptions({
+			api,
+			paths: auditPaths,
+			enabled: skillAuditReady && skillAuditEnabled,
+		}),
+	});
+	const skillAudit = skillAuditEnabled ? auditedSkill : undefined;
+	const isAuditAcknowledged = skillAudit
+		? isAssessmentAcknowledged(skill.name, skillAudit.assessment_digest)
+		: false;
+	const updateAuditAcknowledgement = (acknowledged: boolean) => {
+		if (!skillAudit) return;
+		void setAssessmentAcknowledged(
+			skill.name,
+			skillAudit.assessment_digest,
+			acknowledged,
+		).catch(() => toast.danger(t("auditAcknowledgementError")));
+	};
 
 	const currentSkillSource = useMemo(() => {
 		const skillItem = group.items[0];
@@ -270,9 +300,30 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 					<Card>
 						<Card.Header className="flex flex-row items-start justify-between gap-3">
 							<div className="min-w-0 flex-1 select-text">
-								<h2 className="text-xl font-semibold text-foreground truncate">
-									{skill.name}
-								</h2>
+								<div className="flex items-center gap-1.5">
+									<h2 className="text-xl font-semibold text-foreground truncate">
+										{skill.name}
+									</h2>
+									{skillAudit &&
+										(isAuditAcknowledged ? (
+											<span
+												role="img"
+												className="inline-flex size-4 shrink-0"
+												aria-label={t(
+													"auditAcknowledged",
+												)}
+											>
+												<EyeSlashIcon
+													aria-hidden
+													className="size-4 shrink-0 text-muted"
+												/>
+											</span>
+										) : (
+											<SkillAuditBadge
+												report={skillAudit}
+											/>
+										))}
+								</div>
 								{skill.description && (
 									<Card.Description className="mt-2">
 										{skill.description}
@@ -347,6 +398,50 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 						</Card.Header>
 
 						<Card.Content className="flex flex-col gap-6">
+							{skillAudit &&
+								skillAudit.verdict !== "benign" &&
+								(isAuditAcknowledged ? (
+									<div className="flex items-center justify-between gap-3 rounded-lg border border-separator bg-surface-secondary px-3 py-2">
+										<span className="flex items-center gap-2 text-sm text-muted">
+											<EyeSlashIcon className="size-4 shrink-0" />
+											{t("auditAcknowledgedHint")}
+										</span>
+										<Button
+											variant="ghost"
+											size="sm"
+											onPress={() =>
+												updateAuditAcknowledgement(
+													false,
+												)
+											}
+										>
+											{t("restoreAuditWarning")}
+										</Button>
+									</div>
+								) : (
+									<div className="space-y-2">
+										<SkillAudit
+											key={skillAudit.assessment_digest}
+											report={skillAudit}
+											embedded
+											installed
+										/>
+										<div className="flex justify-end">
+											<Button
+												variant="secondary"
+												size="sm"
+												onPress={() =>
+													updateAuditAcknowledgement(
+														true,
+													)
+												}
+											>
+												{t("acknowledgeAudit")}
+											</Button>
+										</div>
+									</div>
+								))}
+
 							{skill.tools.length > 0 && (
 								<div className="space-y-3">
 									<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
@@ -388,19 +483,24 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 														treeUnavailable={
 															treeState?.unavailable
 														}
+														editorAvailable={Boolean(
+															selectedEditor,
+														)}
 														onDelete={() =>
 															setLocationToDelete(
 																locationGroup,
 															)
 														}
-														onEditFolder={() =>
+														onEditFolder={() => {
+															if (!selectedEditor)
+																return;
 															openInEditorMutation.mutate(
 																{
 																	path: locationGroup.sourcePath,
-																	editor: selectedEditor!,
+																	editor: selectedEditor,
 																},
-															)
-														}
+															);
+														}}
 														onOpenFolder={() =>
 															openFolderMutation.mutate(
 																locationGroup.sourcePath,

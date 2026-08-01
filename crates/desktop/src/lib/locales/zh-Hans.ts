@@ -269,7 +269,7 @@ export default {
 	searchProviderPresets: "搜索预设",
 	searchProviderPresetsPlaceholder: "按 Provider、URL 或模型搜索...",
 	noProviderPresetsMatch: "没有匹配的预设",
-	providerGetApiKey: "获取 API Key →",
+	providerGetApiKey: "获取 API Key",
 	createInferenceProviderDescription:
 		"添加一个推理端点，并安全存储它的 API key。",
 	editInferenceProvider: "编辑 Provider",
@@ -284,22 +284,23 @@ export default {
 	providerName: "名称",
 	providerDisplayName: "Display Name",
 	providerDisplayNameHelp:
-		"这里只在 aghub 里展示。可以安全填写任何可读名称，包括空格、符号或非英文字符。",
+		"仅在 aghub 中显示，可使用空格、符号和非英文字符。",
 	providerNamePlaceholder: "例如：OpenAI",
 	providerLatinName: "Provider ID",
 	providerLatinNameHelp:
-		"会作为 provider key 写入各个 agent 的配置文件。只能使用小写 a-z，确保所有支持的 agent 都能安全读取。",
+		"会作为 Provider Key 写入 Agent 配置文件，只能包含小写 a-z。",
 	providerLatinNamePlaceholder: "例如：openai",
 	providerFormat: "格式",
 	providerApiBaseUrl: "API Base URL",
 	providerApiBaseUrlHelp:
-		"对于 OpenAI Responses 和 OpenAI-compatible Provider，像 https://api.example.com 这样的裸域名写入 OpenCode 时会变成 https://api.example.com/v1；已经包含路径的 URL 会保持原样。",
+		"可填写 Base URL，也可粘贴完整的 /chat/completions、/responses 或 /messages 请求地址。省略协议时，aghub 会自动补全，并保存规范化后的 Base URL。",
 	providerApiBaseUrlPlaceholder: "https://api.openai.com/v1",
+	providerApiEndpointPreview: "请求地址预览：",
 	providerApiKey: "API Key",
 	providerApiKeyPlaceholder: "sk-...",
 	providerApiKeyEditPlaceholder: "留空以保持当前 key",
 	providerModels: "模型",
-	providerModelsDescription: "每个模型只需要填写名称。",
+	providerModelsDescription: "从 API 获取模型 ID，或手动添加。",
 	providerModelName: "模型名称",
 	providerModelNamePlaceholder: "例如：gpt-5.4-mini",
 	addProviderModel: "添加模型",
@@ -310,10 +311,30 @@ export default {
 	fetchProviderModelsSuccessNoNew:
 		"没有新模型需要添加（已配置 {{total}} 个）",
 	fetchProviderModelsFailed: "获取模型失败：{{reason}}",
-	fetchProviderModelsUnknownError: "端点不支持",
-	fetchProviderModelsRequiresPreset: "请先选择一个预设，再获取模型。",
+	fetchProviderModelsUnknownError: "未知错误",
+	fetchProviderModelsRequiresApiKey: "请先填写 API Key，再获取模型。",
+	fetchProviderModelsInvalidApiBaseUrl: "请输入有效的 HTTP(S) API Base URL。",
+	fetchProviderModelsRequiresChangedApiKey:
+		"API URL 或格式已更改。请重新输入 API Key 后再获取模型。",
+	fetchProviderModelsNetworkError:
+		"无法连接 aghub 本地服务。请确认桌面后端正在运行。",
+	fetchProviderModelsTimeout: "Provider 获取模型列表超时，请重试。",
+	fetchProviderModelsAccessDenied:
+		"Provider 拒绝了模型列表请求。请检查 API Key 及其权限。",
+	fetchProviderModelsDiscoveryUnsupported:
+		"未找到模型列表接口。请检查 API Base URL，或手动添加模型 ID。",
+	fetchProviderModelsRateLimited:
+		"模型列表请求受到速率限制。请稍后重试，或检查 Provider 额度。",
+	fetchProviderModelsRequestFailed:
+		"Provider 获取模型列表失败。请稍后重试，或手动添加模型 ID。",
+	fetchProviderModelsResponseTooLarge:
+		"模型列表过大，无法导入。请手动添加需要的模型 ID。",
+	fetchProviderModelsInvalidResponse:
+		"Provider 返回的模型列表格式不受支持，请手动添加模型 ID。",
+	fetchProviderModelsNoModels:
+		"Provider 没有返回模型。请检查 API Base URL，或手动添加模型 ID。",
 	providerPresetFormatChanged:
-		"格式已不同于预设，请查看 Provider 文档并按需更新 API URL。",
+		"当前格式与预设不同。请确认 API Base URL 支持该格式。",
 	noProviderModels: "暂无模型。",
 	noProviderModelsMatch: "没有匹配的模型。",
 	providerModelGroupUncategorized: "未分类",
@@ -323,6 +344,7 @@ export default {
 	searchProviderModelsPlaceholder: "搜索模型…",
 	selectAllProviderModels: "全选当前可见模型",
 	deselectAllProviderModels: "取消全选当前可见模型",
+	selectAllProviderModelsLabel: "全选",
 	selectProviderModel: '选择 "{{name}}"',
 	selectedProviderModelsCount: "已选 {{selected}} / {{total}}",
 	deleteSelectedProviderModels: "删除所选 ({{count}})",
@@ -358,8 +380,11 @@ export default {
 	validationProviderLatinNameInvalid: "Provider ID 只能包含小写 a-z。",
 	validationProviderLatinNameDuplicate:
 		"Provider ID “{{providerId}}” 已被现有 Provider 使用。请把 ID 改成能区分来源的值，例如 “{{exampleId}}”，或删除已有的 “{{providerId}}” Provider 后再保存。",
-	validationProviderApiBaseUrlRequired: "请输入 API base URL。",
+	validationProviderApiBaseUrlRequired: "请输入 API Base URL。",
+	validationProviderApiBaseUrlInvalid: "请输入有效的 HTTP(S) API Base URL。",
 	validationProviderApiKeyRequired: "请输入 API key。",
+	validationProviderApiKeyRequiredForScopeChange:
+		"API URL 或格式已更改。请重新输入 API Key 后再保存。",
 	validationProviderModelsRequired: "请至少选择一个模型。",
 	validationProviderModelNameUnique: "模型名称不能重复。",
 	inferenceFormatAnthropic: "Anthropic",
@@ -611,6 +636,108 @@ export default {
 	selectFileOrFolder: "选择包含 SKILL.md 的文件或文件夹",
 	skillImported: "技能导入成功",
 	importError: "技能导入失败: {{error}}",
+	installAnyway: "仍要安装",
+	auditBlockedHint: "该技能未通过安全审计。请查看下列发现,确认后仍要安装。",
+	auditSyncBlockedHint:
+		"该技能未通过安全审计。请查看下列发现，确认后仍要同步。",
+	auditing: "审计中",
+	securityAudit: "安全审计",
+	auditFailed: "安全审计未能完成。在审计成功前无法导入。",
+	auditVerdictBenign: "良性",
+	auditVerdictSuspicious: "可疑",
+	auditVerdictMalicious: "恶意",
+	auditSeverityInfo: "信息",
+	auditSeverityLow: "低",
+	auditSeverityMedium: "中",
+	auditSeverityHigh: "高",
+	auditSeverityCritical: "严重",
+	auditCategoryCredentialExfil: "凭据外泄",
+	auditCategoryDataExfil: "数据外泄",
+	auditCategoryCommandInjection: "命令注入",
+	auditCategoryPromptInjection: "提示注入",
+	auditCategoryToolChaining: "工具链滥用",
+	auditCategoryPersistence: "持久化",
+	auditCategoryHostTamper: "主机篡改",
+	auditCategoryObfuscation: "混淆",
+	auditCategoryOther: "其他",
+	auditSummaryBenign: "未发现可疑行为",
+	auditSummarySuspicious: "发现可疑行为,建议查看下方详情",
+	auditSummaryMalicious: "发现恶意行为,请谨慎安装",
+	auditSummarySuspiciousInstalled: "此技能存在可疑行为",
+	auditSummaryMaliciousInstalled: "此技能存在恶意行为",
+	auditAcknowledged: "已隐藏警告",
+	auditAcknowledgedHint: "已隐藏当前扫描结果的警告",
+	acknowledgeAudit: "隐藏此警告",
+	restoreAuditWarning: "重新显示警告",
+	security: "安全",
+	acknowledgedAudits: "已隐藏的审计警告",
+	automaticSkillAudit: "自动扫描技能安全风险",
+	automaticSkillAuditDescription:
+		"在变更前和已安装技能中显示扫描结果。每次写入前仍会执行最终安全检查。",
+	skillAuditEnabled: "已开启自动技能扫描",
+	skillAuditDisabled: "已关闭自动技能扫描",
+	skillAuditPreferenceError: "无法更新技能扫描设置",
+	auditAcknowledgementError: "无法更新警告显示状态",
+	acknowledgedAuditsDescription:
+		"仅隐藏与当前扫描结果完全匹配的警告。技能内容或扫描规则变化后会重新显示。",
+	noAcknowledgedAudits: "暂无已隐藏的警告",
+	auditFindingCount_other: "{{count}} 项",
+	auditEvidence_aghub_credential_file_exfil:
+		"读取 .ssh/.env/凭据文件并通过网络外发",
+	auditEvidence_aghub_download_pipe_execute:
+		"下载远程脚本并直接管道进 shell 执行",
+	auditEvidence_aghub_reverse_shell:
+		"建立反向 shell(socket 连接 + dup2/exec)",
+	auditEvidence_aghub_raw_ip_payload: "连接或从硬编码的裸 IP 地址拉取内容",
+	auditEvidence_aghub_external_payload_instruction:
+		"文档指示下载并运行外部二进制/脚本",
+	auditEvidence_aghub_known_exfil_host:
+		"引用了已知的一次性外发/粘贴/webhook 主机",
+	auditEvidence_aghub_reads_secret: "读取凭据文件或窃取密钥/环境变量",
+	auditEvidence_aghub_network_egress: "向网络端点发送数据",
+	auditEvidence_clawhub_host_platform_tamper:
+		"修改 agent 自身源码并重新构建(供应链自感染)",
+	auditEvidence_clawhub_memory_credential_storage:
+		"指示 agent 把令牌/密钥存进记忆或对话",
+	auditEvidence_clawhub_remote_recipe_fetch:
+		"运行时从远程端点拉取可变指令/配方",
+	auditEvidence_clawhub_mnemonic_argv: "把助记词/私钥作为命令行参数传递",
+	auditEvidence_clawhub_confirmation_bypass:
+		"用魔术令牌跳过危险命令的人工确认",
+	auditEvidence_clawhub_autonomous_answer_egress:
+		"自主循环向应答/提现端点发送数据",
+	auditEvidence_autonomy_abuse_generic: "绕过用户控制的无界自主行为",
+	auditEvidence_prompt_injection_unicode_steganography:
+		"隐藏的 Unicode 字符,用于隐形提示注入/隐写",
+	auditEvidence_sql_injection_generic:
+		"SQL 注入特征(关键字、永真式、数据库函数)",
+	auditEvidence_script_injection_generic: "恶意脚本注入特征",
+	auditEvidence_tool_chaining_abuse_generic:
+		"可疑的工具链调用,可能导致数据外泄",
+	auditEvidence_prompt_injection_generic:
+		"用于覆盖或强制恶意工具调用的提示词",
+	auditEvidence_command_injection_generic:
+		"命令注入特征(shell 操作符、系统命令、网络工具)",
+	auditEvidence_system_manipulation_generic: "系统篡改、提权与破坏性文件操作",
+	auditEvidence_capability_inflation_generic:
+		"通过能力膨胀操纵 skill 发现协议",
+	auditEvidence_code_execution_generic: "对不可信输入执行危险代码",
+	auditEvidence_embedded_elf_binary: "skill 包内嵌入 ELF 可执行文件头",
+	auditEvidence_embedded_pe_executable:
+		"skill 包内嵌入 PE(Windows)可执行文件头",
+	auditEvidence_embedded_macho_binary:
+		"skill 包内嵌入 Mach-O(macOS)可执行文件头",
+	auditEvidence_embedded_shebang_in_binary: "二进制内容中嵌入 shebang 脚本头",
+	auditEvidence_credential_harvesting_generic:
+		"可能泄露 API key、密码、令牌、证书等敏感信息",
+	auditEvidence_indirect_prompt_injection_generic:
+		"通过外部来源的指令操纵进行间接提示注入",
+	auditEvidence_coercive_injection_generic: "工具描述字段中的胁迫式提示注入",
+	auditEvidence_injection_invisible_chars: "隐藏的零宽或双向控制字符",
+	auditEvidence_injection_prompt_override: "针对 agent 的提示词覆盖语句",
+	auditEvidence_injection_hidden_comment: "隐藏在 HTML 注释中的指令",
+	auditEvidence_aghub_dataflow_chain:
+		"读取机密并外发到网络 — 可能的数据外泄链",
 	selectedPath: "已选路径",
 	file: "文件",
 	folder: "文件夹",
@@ -682,6 +809,7 @@ export default {
 	validationCommandRequired: "请输入命令。",
 	validationUrlRequired: "请输入 URL。",
 	validationUrlInvalid: "请输入有效的 URL。",
+	validationUrlHttpsOnly: "仅支持 HTTPS 链接。",
 	validationUrlProtocol: "URL 必须以 http:// 或 https:// 开头。",
 	validationTimeoutPositiveInteger: "超时时间必须是正整数。",
 	validationAgentsRequired: "请至少选择一个代理。",
@@ -863,6 +991,7 @@ export default {
 	syncFromSource: "从来源同步",
 	syncSkill: "同步 Skill",
 	syncingSkill: "同步中...",
+	syncAnyway: "仍要同步",
 	skillSyncedSuccessfully: "Skill 同步成功",
 	skillNotFoundInRepo: "在此分支的仓库中未找到此 Skill。",
 	skillFoundInRepo: "在仓库中找到 Skill",

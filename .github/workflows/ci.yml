@@ -48,12 +48,12 @@ jobs:
               run: bun i -g @antfu/ni
 
             - name: Install just
-              uses: taiki-e/install-action@v2
+              uses: taiki-e/install-action@v2.85.4
               with:
                   tool: just
 
             - name: Setup sccache
-              uses: mozilla-actions/sccache-action@v0.0.10
+              uses: mozilla-actions/sccache-action@v0.0.11
 
             - name: Rust Cache
               uses: Swatinem/rust-cache@v2

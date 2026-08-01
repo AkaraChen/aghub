@@ -8,6 +8,12 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use thiserror::Error;
 
+/// Maximum filesystem entries visited by a bounded repository scan.
+///
+/// This permits large monorepos while bounding work before any skill payload
+/// is selected for the separate per-skill content limits.
+pub const MAX_SKILL_SCAN_ENTRIES: usize = 100_000;
+
 /// Options for skill scanning
 #[derive(Debug, Clone)]
 pub struct ScanOptions {
@@ -39,6 +45,12 @@ pub enum ScanError {
 
 	#[error("Permission denied: {0}")]
 	PermissionDenied(PathBuf),
+
+	#[error("Skill scan exceeds the {0}-result limit")]
+	ResultLimitExceeded(usize),
+
+	#[error("Skill scan exceeds the {0}-entry traversal limit")]
+	EntryLimitExceeded(usize),
 }
 
 /// Scan for skill directories containing SKILL.md files.
@@ -63,17 +75,45 @@ pub fn scan_skills(
 	options: ScanOptions,
 	priority_dirs: Vec<PathBuf>,
 ) -> Result<Vec<PathBuf>, ScanError> {
+	scan_skills_inner(base_path, options, priority_dirs, None, None)
+}
+
+/// Scan for skills and fail when the candidate count exceeds a limit.
+pub fn scan_skills_with_limit(
+	base_path: &Path,
+	options: ScanOptions,
+	priority_dirs: Vec<PathBuf>,
+	max_results: usize,
+) -> Result<Vec<PathBuf>, ScanError> {
+	scan_skills_inner(
+		base_path,
+		options,
+		priority_dirs,
+		Some(max_results),
+		Some(MAX_SKILL_SCAN_ENTRIES),
+	)
+}
+
+fn scan_skills_inner(
+	base_path: &Path,
+	options: ScanOptions,
+	priority_dirs: Vec<PathBuf>,
+	max_results: Option<usize>,
+	max_entries: Option<usize>,
+) -> Result<Vec<PathBuf>, ScanError> {
 	if !base_path.exists() {
 		return Err(ScanError::PathNotFound(base_path.to_path_buf()));
 	}
 
 	let mut skill_dirs = Vec::new();
 	let mut seen_names = HashSet::new();
+	let mut visited_entries = 0;
 
 	// 1. Check if base_path itself is a skill
 	if has_skill_md(base_path) {
 		if let Some(name) = extract_skill_name(base_path) {
 			skill_dirs.push(base_path.to_path_buf());
+			ensure_result_limit(skill_dirs.len(), max_results)?;
 			seen_names.insert(name);
 
 			// Return early if not full_depth
@@ -86,16 +126,35 @@ pub fn scan_skills(
 	// 2. Scan priority directories
 	for dir in priority_dirs {
 		if dir.exists() && dir.is_dir() {
-			scan_priority_dir(&dir, &mut skill_dirs, &mut seen_names)?;
+			scan_priority_dir(
+				&dir,
+				&mut skill_dirs,
+				&mut seen_names,
+				max_results,
+				max_entries,
+				&mut visited_entries,
+			)?;
 		}
 	}
 
 	// 3. Fallback to recursive search if nothing found or full_depth requested
 	if skill_dirs.is_empty() || options.full_depth {
 		let recursive_dirs = if options.respect_gitignore {
-			scan_with_gitignore(base_path, options.max_depth)
+			scan_with_gitignore(
+				base_path,
+				options.max_depth,
+				max_results,
+				max_entries,
+				&mut visited_entries,
+			)?
 		} else {
-			scan_recursive_basic(base_path, options.max_depth)
+			scan_recursive_basic(
+				base_path,
+				options.max_depth,
+				max_results,
+				max_entries,
+				&mut visited_entries,
+			)?
 		};
 
 		for dir in recursive_dirs {
@@ -103,6 +162,7 @@ pub fn scan_skills(
 				if !seen_names.contains(&name) {
 					seen_names.insert(name);
 					skill_dirs.push(dir);
+					ensure_result_limit(skill_dirs.len(), max_results)?;
 				}
 			}
 		}
@@ -124,9 +184,7 @@ fn has_skill_md(dir: &Path) -> bool {
 /// - Frontmatter cannot be parsed
 /// - Name field is missing or not a string
 fn extract_skill_name(dir: &Path) -> Option<String> {
-	let skill_md = skills_ref::parser::find_skill_md(dir)?;
-
-	let content = std::fs::read_to_string(&skill_md).ok()?;
+	let (content, _) = crate::content::read_directory_skill_md(dir).ok()?;
 
 	let (metadata, _) = skills_ref::parser::parse_frontmatter(&content).ok()?;
 
@@ -144,6 +202,9 @@ fn scan_priority_dir(
 	dir: &Path,
 	skill_dirs: &mut Vec<PathBuf>,
 	seen_names: &mut HashSet<String>,
+	max_results: Option<usize>,
+	max_entries: Option<usize>,
+	visited_entries: &mut usize,
 ) -> Result<(), ScanError> {
 	let entries = std::fs::read_dir(dir).map_err(|e| {
 		if e.kind() == std::io::ErrorKind::PermissionDenied {
@@ -154,6 +215,7 @@ fn scan_priority_dir(
 	})?;
 
 	for entry in entries {
+		record_scan_entry(visited_entries, max_entries)?;
 		let entry = entry.map_err(|e| {
 			if e.kind() == std::io::ErrorKind::PermissionDenied {
 				ScanError::PermissionDenied(dir.to_path_buf())
@@ -164,11 +226,14 @@ fn scan_priority_dir(
 
 		let path = entry.path();
 
-		if path.is_dir() && has_skill_md(&path) {
+		if entry.file_type().is_ok_and(|file_type| file_type.is_dir())
+			&& has_skill_md(&path)
+		{
 			if let Some(name) = extract_skill_name(&path) {
 				if !seen_names.contains(&name) {
 					seen_names.insert(name);
 					skill_dirs.push(path);
+					ensure_result_limit(skill_dirs.len(), max_results)?;
 				}
 			}
 		}
@@ -181,7 +246,13 @@ fn scan_priority_dir(
 ///
 /// Uses the `ignore` crate (ripgrep's gitignore library) to properly
 /// respect .gitignore patterns, nested gitignore files, and global excludes.
-fn scan_with_gitignore(base_path: &Path, max_depth: usize) -> Vec<PathBuf> {
+fn scan_with_gitignore(
+	base_path: &Path,
+	max_depth: usize,
+	max_results: Option<usize>,
+	max_entries: Option<usize>,
+	visited_entries: &mut usize,
+) -> Result<Vec<PathBuf>, ScanError> {
 	use ignore::WalkBuilder;
 
 	let mut skill_dirs = Vec::new();
@@ -195,20 +266,36 @@ fn scan_with_gitignore(base_path: &Path, max_depth: usize) -> Vec<PathBuf> {
 		.git_exclude(true) // Respect .git/info/exclude
 		.build();
 
-	for entry in walker.flatten() {
+	for entry in walker {
+		record_scan_entry(visited_entries, max_entries)?;
+		let Ok(entry) = entry else {
+			continue;
+		};
 		let path = entry.path();
-		if path.is_dir() && has_skill_md(path) {
+		if path != base_path
+			&& entry
+				.file_type()
+				.is_some_and(|file_type| file_type.is_dir())
+			&& has_skill_md(path)
+		{
 			skill_dirs.push(path.to_path_buf());
+			ensure_result_limit(skill_dirs.len(), max_results)?;
 		}
 	}
 
-	skill_dirs
+	Ok(skill_dirs)
 }
 
 /// Basic recursive directory scan without gitignore filtering.
 ///
 /// Used when gitignore filtering is disabled.
-fn scan_recursive_basic(base_path: &Path, max_depth: usize) -> Vec<PathBuf> {
+fn scan_recursive_basic(
+	base_path: &Path,
+	max_depth: usize,
+	max_results: Option<usize>,
+	max_entries: Option<usize>,
+	visited_entries: &mut usize,
+) -> Result<Vec<PathBuf>, ScanError> {
 	use walkdir::WalkDir;
 
 	let mut skill_dirs = Vec::new();
@@ -217,15 +304,45 @@ fn scan_recursive_basic(base_path: &Path, max_depth: usize) -> Vec<PathBuf> {
 		.max_depth(max_depth)
 		.into_iter()
 		.filter_entry(|e| e.depth() <= max_depth)
-		.flatten()
 	{
+		record_scan_entry(visited_entries, max_entries)?;
+		let Ok(entry) = entry else {
+			continue;
+		};
 		let path = entry.path();
-		if path.is_dir() && has_skill_md(path) {
+		if path != base_path && entry.file_type().is_dir() && has_skill_md(path)
+		{
 			skill_dirs.push(path.to_path_buf());
+			ensure_result_limit(skill_dirs.len(), max_results)?;
 		}
 	}
 
-	skill_dirs
+	Ok(skill_dirs)
+}
+
+fn record_scan_entry(
+	visited_entries: &mut usize,
+	max_entries: Option<usize>,
+) -> Result<(), ScanError> {
+	*visited_entries += 1;
+	if let Some(limit) = max_entries {
+		if *visited_entries > limit {
+			return Err(ScanError::EntryLimitExceeded(limit));
+		}
+	}
+	Ok(())
+}
+
+fn ensure_result_limit(
+	result_count: usize,
+	max_results: Option<usize>,
+) -> Result<(), ScanError> {
+	if let Some(limit) = max_results {
+		if result_count > limit {
+			return Err(ScanError::ResultLimitExceeded(limit));
+		}
+	}
+	Ok(())
 }
 
 #[cfg(test)]
@@ -304,6 +421,78 @@ mod tests {
 
 		let name = extract_skill_name(&skill_dir);
 		assert_eq!(name, None);
+	}
+
+	#[test]
+	fn extract_skill_name_rejects_oversized_manifest() {
+		let temp = TempDir::new().unwrap();
+		let skill_dir = temp.path().join("oversized-skill");
+		std::fs::create_dir_all(&skill_dir).unwrap();
+		let manifest =
+			std::fs::File::create(skill_dir.join("SKILL.md")).unwrap();
+		manifest
+			.set_len(crate::MAX_SKILL_CONTENT_BYTES as u64 + 1)
+			.unwrap();
+
+		assert_eq!(extract_skill_name(&skill_dir), None);
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn extract_skill_name_rejects_symlinked_manifest() {
+		use std::os::unix::fs::symlink;
+
+		let temp = TempDir::new().unwrap();
+		let skill_dir = temp.path().join("linked-skill");
+		std::fs::create_dir_all(&skill_dir).unwrap();
+		let manifest = temp.path().join("outside.md");
+		std::fs::write(
+			&manifest,
+			"---\nname: linked\ndescription: linked\n---\n",
+		)
+		.unwrap();
+		symlink(&manifest, skill_dir.join("SKILL.md")).unwrap();
+
+		assert_eq!(extract_skill_name(&skill_dir), None);
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn scan_does_not_discover_symlinked_skill_directories() {
+		use std::os::unix::fs::symlink;
+
+		let temp = TempDir::new().unwrap();
+		let repository = temp.path().join("repository");
+		let outside = temp.path().join("outside");
+		std::fs::create_dir(&repository).unwrap();
+		create_test_skill(&outside, "external-skill");
+		symlink(
+			outside.join("external-skill"),
+			repository.join("linked-skill"),
+		)
+		.unwrap();
+
+		for respect_gitignore in [true, false] {
+			let skills = scan_skills(
+				&repository,
+				ScanOptions {
+					full_depth: true,
+					respect_gitignore,
+					..Default::default()
+				},
+				vec![],
+			)
+			.unwrap();
+			assert!(skills.is_empty());
+		}
+
+		let priority_skills = scan_skills(
+			&repository,
+			ScanOptions::default(),
+			vec![repository.clone()],
+		)
+		.unwrap();
+		assert!(priority_skills.is_empty());
 	}
 
 	#[test]
@@ -798,6 +987,87 @@ mod tests {
 		assert_eq!(options.max_depth, 5);
 		assert!(!options.full_depth);
 		assert!(options.respect_gitignore);
+	}
+
+	#[test]
+	fn scan_stops_when_the_result_limit_is_exceeded() {
+		let temp = TempDir::new().unwrap();
+		for name in ["one", "two", "three"] {
+			create_test_skill(temp.path(), name);
+		}
+
+		let result = scan_skills_with_limit(
+			temp.path(),
+			ScanOptions {
+				full_depth: true,
+				..Default::default()
+			},
+			vec![],
+			2,
+		);
+
+		assert!(matches!(result, Err(ScanError::ResultLimitExceeded(2))));
+	}
+
+	#[test]
+	fn bounded_scan_stops_when_gitignore_traversal_limit_is_exceeded() {
+		let temp = TempDir::new().unwrap();
+		for name in ["one", "two", "three"] {
+			std::fs::create_dir(temp.path().join(name)).unwrap();
+		}
+
+		let result = scan_skills_inner(
+			temp.path(),
+			ScanOptions {
+				full_depth: true,
+				..Default::default()
+			},
+			vec![],
+			Some(1),
+			Some(2),
+		);
+
+		assert!(matches!(result, Err(ScanError::EntryLimitExceeded(2))));
+	}
+
+	#[test]
+	fn bounded_scan_stops_when_basic_traversal_limit_is_exceeded() {
+		let temp = TempDir::new().unwrap();
+		for name in ["one", "two", "three"] {
+			std::fs::create_dir(temp.path().join(name)).unwrap();
+		}
+
+		let result = scan_skills_inner(
+			temp.path(),
+			ScanOptions {
+				full_depth: true,
+				respect_gitignore: false,
+				..Default::default()
+			},
+			vec![],
+			Some(1),
+			Some(2),
+		);
+
+		assert!(matches!(result, Err(ScanError::EntryLimitExceeded(2))));
+	}
+
+	#[test]
+	fn bounded_scan_stops_when_priority_traversal_limit_is_exceeded() {
+		let temp = TempDir::new().unwrap();
+		for name in ["one", "two", "three"] {
+			std::fs::create_dir(temp.path().join(name)).unwrap();
+		}
+
+		let result = scan_skills_inner(
+			temp.path(),
+			ScanOptions::default(),
+			vec![temp.path().to_path_buf()],
+			Some(1),
+			Some(2),
+		);
+
+		assert!(matches!(result, Err(ScanError::EntryLimitExceeded(2))));
 	}
 
 	#[test]

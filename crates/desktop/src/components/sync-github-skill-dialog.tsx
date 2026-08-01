@@ -20,16 +20,25 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isHTTPError } from "ky";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { GitScanSkillEntry } from "../generated/dto";
+import type {
+	GitScanRequest,
+	GitScanResponse,
+	GitScanSkillEntry,
+} from "../generated/dto";
+import { auditDisposition } from "../hooks/audited-mutation";
 import { useApi } from "../hooks/use-api";
+import { useAuditedMutation } from "../hooks/use-audited-mutation";
+import { useAuditedSkillRun } from "../hooks/use-audited-skill-run";
+import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
 import { CreateCredentialDialog } from "../pages/settings/components/create-credential-dialog";
 import { credentialsListQueryOptions } from "../requests/credentials";
-import { resolveSkillCopiesMutationOptions } from "../requests/skills";
+import { invalidateSkillQueries } from "../requests/skills";
 import {
 	GithubSkillDrift,
 	type GithubSkillResolutionChoice,
 } from "./github-skill-drift";
 import { type SkillGroup, uniqueSkillLocations } from "./skill-detail-helpers";
+import { SkillAudit } from "./skill-audit";
 
 interface SyncGithubSkillDialogProps {
 	group: SkillGroup;
@@ -39,6 +48,12 @@ interface SyncGithubSkillDialogProps {
 	isOpen: boolean;
 	onClose: () => void;
 	projectPath?: string;
+}
+
+interface SyncCandidate {
+	readonly resolution: GithubSkillResolutionChoice;
+	readonly scope: "global" | "all";
+	readonly projectRoot: string | null;
 }
 
 const ADD_TOKEN_SENTINEL = "__add_token__";
@@ -54,10 +69,13 @@ export function SyncGithubSkillDialog({
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
+	const { skillAuditEnabled, skillAuditReady } = useSkillAuditPreference();
+	const { beginAuditedSkillRun, invalidateAuditedSkillRun } =
+		useAuditedSkillRun();
 
-	const [phase, setPhase] = useState<
-		"idle" | "scanning" | "scanned" | "syncing"
-	>("idle");
+	const [basePhase, setBasePhase] = useState<"idle" | "scanning" | "scanned">(
+		"idle",
+	);
 	const [isPrivateRepo, setIsPrivateRepo] = useState(false);
 	const [credentialId, setCredentialId] = useState<string>("");
 	const [isAddTokenOpen, setIsAddTokenOpen] = useState(false);
@@ -107,71 +125,183 @@ export function SyncGithubSkillDialog({
 			: "global";
 
 	const scanMutation = useMutation({
-		mutationFn: (branch?: string) =>
-			api.skills.gitScan({
-				url: sourceUrl,
-				credential_id: credentialId || null,
-				branch: branch ?? null,
-				session_id: branch ? sessionId : null,
-			}),
-		onSuccess: (data) => {
-			setScanError(null);
-			setSessionId(data.session_id);
-			setBranches(data.branches);
-			setCurrentBranch(data.current_branch);
-			setScannedSkills(data.skills);
+		mutationFn: (request: GitScanRequest) => api.skills.gitScan(request),
+	});
+
+	const syncMutation = useAuditedMutation<SyncCandidate, true>({
+		audit: async (candidate, signal) => {
+			const response = await api.skills.resolveCopies(
+				{
+					reference: candidate.resolution.reference,
+					expected_reference_hash:
+						candidate.resolution.expectedReferenceHash,
+					storage_mode: candidate.resolution.storageMode,
+					targets: candidate.resolution.targets,
+					scope: candidate.scope,
+					project_root: candidate.projectRoot,
+					expected_content_digest: null,
+					confirmed_assessment_digest: null,
+					audit_only: true,
+				},
+				signal,
+			);
+			if (!response.audit) throw new Error(t("auditFailed"));
+			return auditDisposition(
+				response.audit,
+				candidate.resolution.reference.kind === "git_scan"
+					? candidate.resolution.reference.session_id
+					: null,
+				response.audit_confirmation_required,
+			);
+		},
+		write: async (
+			{ candidate, report, confirmedAssessmentDigest },
+			signal,
+		) => {
+			const response = await api.skills.resolveCopies(
+				{
+					reference: candidate.resolution.reference,
+					expected_reference_hash:
+						candidate.resolution.expectedReferenceHash,
+					storage_mode: candidate.resolution.storageMode,
+					targets: candidate.resolution.targets,
+					scope: candidate.scope,
+					project_root: candidate.projectRoot,
+					expected_content_digest: report?.content_digest ?? null,
+					confirmed_assessment_digest: confirmedAssessmentDigest,
+					audit_only: false,
+				},
+				signal,
+			);
+			if (response.audit_confirmation_required && response.audit) {
+				const disposition = auditDisposition(
+					response.audit,
+					candidate.resolution.reference.kind === "git_scan"
+						? candidate.resolution.reference.session_id
+						: null,
+					response.audit_confirmation_required,
+				);
+				if (disposition.kind !== "review") {
+					throw new Error(t("auditFailed"));
+				}
+				return disposition;
+			}
+			const repositoryResolved =
+				candidate.resolution.kind === "repository";
+			const consumedSessionId =
+				candidate.resolution.reference.kind === "git_scan"
+					? candidate.resolution.reference.session_id
+					: undefined;
+			await invalidateSkillQueries(queryClient, consumedSessionId);
+			setResolutionChoice(null);
+			if (repositoryResolved) {
+				setBasePhase("idle");
+				setSessionId("");
+				setBranches([]);
+				setCurrentBranch("");
+				setScannedSkills([]);
+				onClose();
+			} else {
+				setBasePhase("scanned");
+				setResolutionRevision((revision) => revision + 1);
+			}
+			toast.success(
+				t(
+					repositoryResolved
+						? "skillSyncedSuccessfully"
+						: "localSkillVersionRetained",
+				),
+			);
+			return {
+				kind: "done",
+				result: true,
+				report: response.audit ?? report,
+				sessionId: consumedSessionId ?? null,
+			};
+		},
+		onFailure: (error) => {
 			setResolutionChoice(null);
 			setResolutionRevision((revision) => revision + 1);
-			setPhase("scanned");
-		},
-		onError: (error) => {
-			const msg = error instanceof Error ? error.message : String(error);
-			setScanError(msg);
-			setPhase("idle");
+			setSyncError(
+				t(
+					isHTTPError(error) && error.response.status === 409
+						? "skillCopiesChanged"
+						: "skillCopiesResolveFailed",
+					{
+						error:
+							error instanceof Error
+								? error.message
+								: String(error),
+					},
+				),
+			);
 		},
 	});
 
-	const resolutionMutation = useMutation(
-		resolveSkillCopiesMutationOptions({
-			api,
-			queryClient,
-			onSuccess: (_, variables) => {
-				const repositoryResolved =
-					variables.reference.kind === "git_scan";
-				setPhase(repositoryResolved ? "idle" : "scanned");
-				setResolutionChoice(null);
-				if (repositoryResolved) {
-					setSessionId("");
-					setBranches([]);
-					setCurrentBranch("");
-					setScannedSkills([]);
-				} else {
-					setResolutionRevision((revision) => revision + 1);
-				}
-				toast.success(
-					t(
-						repositoryResolved
-							? "skillSyncedSuccessfully"
-							: "localSkillVersionRetained",
-					),
-				);
-			},
-		}),
-	);
+	const phase =
+		syncMutation.state.tag === "auditing"
+			? "auditing"
+			: syncMutation.state.tag === "review"
+				? "review"
+				: syncMutation.state.tag === "writing"
+					? "syncing"
+					: basePhase;
+	const auditReport =
+		syncMutation.state.tag === "review" ||
+		syncMutation.state.tag === "writing"
+			? syncMutation.state.report
+			: null;
+	const mutationError =
+		syncMutation.state.tag === "failed"
+			? syncMutation.state.error.message
+			: null;
 
-	const handleScan = () => {
+	const applyScanResult = (data: GitScanResponse) => {
+		setScanError(null);
+		setSessionId(data.session_id);
+		setBranches(data.branches);
+		setCurrentBranch(data.current_branch);
+		setScannedSkills(data.skills);
+		setResolutionChoice(null);
+		setResolutionRevision((revision) => revision + 1);
+		syncMutation.reset();
+		setBasePhase("scanned");
+	};
+
+	const scan = async (branch: string | null) => {
+		if (!skillAuditReady) return;
+		const run = beginAuditedSkillRun(branch);
 		setScanError(null);
 		setSyncError(null);
-		setPhase("scanning");
-		scanMutation.mutate(undefined);
+		syncMutation.reset();
+		if (!branch) setBasePhase("scanning");
+		try {
+			const data = await scanMutation.mutateAsync({
+				url: sourceUrl,
+				credential_id: credentialId || null,
+				branch,
+				session_id: branch ? sessionId : null,
+				skip_audit: !skillAuditEnabled,
+			});
+			if (!run.isCurrent()) return;
+			applyScanResult(data);
+		} catch (error) {
+			if (!run.isCurrent()) return;
+			setScanError(
+				error instanceof Error ? error.message : String(error),
+			);
+			if (!branch) setBasePhase("idle");
+		}
 	};
+
+	const handleScan = () => void scan(null);
 
 	const handleBranchChange = (branch: string) => {
-		if (branch === currentBranch) return;
-		scanMutation.mutate(branch);
+		if (phase !== "scanned" || branch === currentBranch) return;
+		void scan(branch);
 	};
 
-	const handleResolve = () => {
+	const handleResolve = async () => {
 		if (!matchedSkill || !resolutionChoice?.canResolve) return;
 		if (
 			resolutionChoice.kind === "local" &&
@@ -183,42 +313,30 @@ export function SyncGithubSkillDialog({
 			return;
 		}
 		setSyncError(null);
-		setPhase("syncing");
-		resolutionMutation.mutate(
-			{
-				reference: resolutionChoice.reference,
-				expected_reference_hash: resolutionChoice.expectedReferenceHash,
-				storage_mode: resolutionChoice.storageMode,
-				targets: resolutionChoice.targets,
-				scope: syncScope,
-				project_root: projectPath ?? null,
-			},
-			{
-				onError: (error) => {
-					setResolutionChoice(null);
-					setResolutionRevision((revision) => revision + 1);
-					setSyncError(
-						t(
-							isHTTPError(error) && error.response.status === 409
-								? "skillCopiesChanged"
-								: "skillCopiesResolveFailed",
-							{
-								error:
-									error instanceof Error
-										? error.message
-										: String(error),
-							},
-						),
-					);
-					setPhase("scanned");
-				},
-			},
-		);
+		const candidate: SyncCandidate = {
+			resolution: resolutionChoice,
+			scope: syncScope,
+			projectRoot: projectPath ?? null,
+		};
+		if (skillAuditEnabled && resolutionChoice.kind === "repository") {
+			await syncMutation.start(candidate);
+			return;
+		}
+		await syncMutation.start(candidate, {
+			kind: "allow",
+			report: null,
+			sessionId:
+				resolutionChoice.reference.kind === "git_scan"
+					? resolutionChoice.reference.session_id
+					: null,
+		});
 	};
 
 	const handleClose = () => {
-		if (phase === "syncing") return;
-		setPhase("idle");
+		if (phase === "auditing" || phase === "syncing") return;
+		invalidateAuditedSkillRun();
+		syncMutation.reset();
+		setBasePhase("idle");
 		setIsPrivateRepo(false);
 		setCredentialId("");
 		setSessionId("");
@@ -233,7 +351,8 @@ export function SyncGithubSkillDialog({
 	};
 
 	const isBranchSwitching = scanMutation.isPending && phase === "scanned";
-	const isSyncing = phase === "syncing";
+	const isSyncing = phase === "auditing" || phase === "syncing";
+	const visibleSyncError = mutationError ?? syncError;
 
 	return (
 		<>
@@ -264,10 +383,10 @@ export function SyncGithubSkillDialog({
 									if (!checked) setCredentialId("");
 								}}
 							>
-								<Checkbox.Control>
-									<Checkbox.Indicator />
-								</Checkbox.Control>
 								<Checkbox.Content>
+									<Checkbox.Control>
+										<Checkbox.Indicator />
+									</Checkbox.Control>
 									<Label>{t("privateRepo")}</Label>
 								</Checkbox.Content>
 							</Checkbox>
@@ -327,12 +446,12 @@ export function SyncGithubSkillDialog({
 								</Alert>
 							)}
 
-							{syncError && (
-								<Alert status="danger">
+							{visibleSyncError && (
+								<Alert role="alert" status="danger">
 									<Alert.Indicator />
 									<Alert.Content>
 										<Alert.Description>
-											{syncError}
+											{visibleSyncError}
 										</Alert.Description>
 									</Alert.Content>
 								</Alert>
@@ -346,7 +465,8 @@ export function SyncGithubSkillDialog({
 										variant="secondary"
 										selectedKey={currentBranch}
 										isDisabled={
-											isBranchSwitching || isSyncing
+											phase !== "scanned" ||
+											isBranchSwitching
 										}
 										onSelectionChange={(key) =>
 											handleBranchChange(String(key))
@@ -384,7 +504,9 @@ export function SyncGithubSkillDialog({
 									</Select>
 								)}
 
-							{(phase === "scanned" || isSyncing) && (
+							{(phase === "scanned" ||
+								phase === "review" ||
+								isSyncing) && (
 								<>
 									{matchedSkill ? (
 										<div>
@@ -451,7 +573,10 @@ export function SyncGithubSkillDialog({
 													scope={syncScope}
 													projectRoot={projectPath}
 													selection={resolutionChoice}
-													isDisabled={isSyncing}
+													isDisabled={
+														isSyncing ||
+														phase === "review"
+													}
 													onSelectionChange={(
 														choice,
 													) => {
@@ -474,6 +599,16 @@ export function SyncGithubSkillDialog({
 								</>
 							)}
 
+							{auditReport && (
+								<div className="space-y-3">
+									{phase === "review" && (
+										<p className="text-sm text-danger">
+											{t("auditSyncBlockedHint")}
+										</p>
+									)}
+									<SkillAudit report={auditReport} />
+								</div>
+							)}
 							{phase === "scanning" && (
 								<div className="flex items-center justify-center gap-3 py-4">
 									<Spinner size="md" />
@@ -497,17 +632,28 @@ export function SyncGithubSkillDialog({
 								<Button
 									onPress={handleScan}
 									isDisabled={
+										!skillAuditReady ||
 										scanMutation.isPending ||
 										(isPrivateRepo && !credentialId)
 									}
 								>
 									{t("scanRepo")}
 								</Button>
+							) : phase === "auditing" ? (
+								<Button isDisabled>{t("auditing")}</Button>
+							) : phase === "review" ? (
+								<Button
+									variant="danger"
+									onPress={() => void syncMutation.confirm()}
+								>
+									{t("syncAnyway")}
+								</Button>
 							) : (
 								<Button
-									onPress={handleResolve}
+									onPress={() => void handleResolve()}
 									isDisabled={
 										!matchedSkill ||
+										!skillAuditReady ||
 										isSyncing ||
 										isBranchSwitching ||
 										!resolutionChoice?.canResolve

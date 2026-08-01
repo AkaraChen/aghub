@@ -3,6 +3,8 @@ import type {
 	AgentAvailabilityDto,
 	AgentInfo,
 	AgentProviderResponse,
+	AuditReportDto,
+	AuditRequest,
 	CCMarketplaceAddRequest,
 	CCMarketplaceListResponse,
 	CCMarketplaceMutationResponse,
@@ -23,6 +25,7 @@ import type {
 	CredentialResponse,
 	DeleteSkillByPathRequest,
 	DeleteSkillByPathResponse,
+	FetchInferenceProviderModelsRequest,
 	GitInstallRequest,
 	GitInstallResponse,
 	GitScanRequest,
@@ -83,6 +86,18 @@ interface ApiErrorBody {
 // Directory comparisons may hash the API's bounded 256 MiB batch before
 // returning, so they need longer than Ky's default request timeout.
 const SKILL_DIFF_TIMEOUT_MS = 120_000;
+
+// The backend stops provider discovery after 15 seconds; this leaves time for
+// its response to cross the local HTTP boundary.
+const PROVIDER_MODEL_DISCOVERY_TIMEOUT_MS = 20_000;
+
+export function getApiErrorCode(error: unknown) {
+	if (!isHTTPError(error) || !error.data || typeof error.data !== "object") {
+		return undefined;
+	}
+	const body = error.data as ApiErrorBody;
+	return body.code;
+}
 
 export function createApi(baseUrl: string, token: string) {
 	const client = ky.create({
@@ -199,6 +214,7 @@ export function createApi(baseUrl: string, token: string) {
 				agent: string,
 				data: ImportSkillRequest,
 				projectRoot?: string,
+				signal?: AbortSignal,
 			): Promise<SkillResponse> => {
 				const scope = projectRoot ? "project" : "global";
 				return client
@@ -210,12 +226,32 @@ export function createApi(baseUrl: string, token: string) {
 								: {}),
 						},
 						json: data,
+						signal,
 					})
 					.json();
 			},
-			install(data: InstallSkillRequest): Promise<InstallSkillResponse> {
+			install(
+				data: InstallSkillRequest,
+				signal?: AbortSignal,
+			): Promise<InstallSkillResponse> {
 				return client
-					.post("skills/install", { json: data, timeout: 300000 })
+					.post("skills/install", {
+						json: data,
+						timeout: 300000,
+						signal,
+					})
+					.json();
+			},
+			audit(
+				data: AuditRequest,
+				signal?: AbortSignal,
+			): Promise<AuditReportDto> {
+				return client
+					.post("skills/audit", {
+						json: data,
+						timeout: 60000,
+						signal,
+					})
 					.json();
 			},
 			delete(
@@ -276,10 +312,12 @@ export function createApi(baseUrl: string, token: string) {
 			},
 			resolveCopies(
 				data: SkillCopyResolutionRequest,
+				signal?: AbortSignal,
 			): Promise<SkillCopyResolutionResponse> {
 				return client
 					.post("skills/copies/resolve", {
 						json: data,
+						signal,
 						timeout: SKILL_DIFF_TIMEOUT_MS,
 					})
 					.json();
@@ -336,16 +374,33 @@ export function createApi(baseUrl: string, token: string) {
 			): Promise<DeleteSkillByPathResponse> {
 				return client.delete("skills/by-path", { json: body }).json();
 			},
-			gitScan(data: GitScanRequest): Promise<GitScanResponse> {
+			gitScan(
+				data: GitScanRequest,
+				signal?: AbortSignal,
+			): Promise<GitScanResponse> {
 				return client
-					.post("skills/git/scan", { json: data, timeout: 120000 })
+					.post("skills/git/scan", {
+						json: data,
+						timeout: 120000,
+						signal,
+					})
 					.json();
 			},
-			gitInstall(data: GitInstallRequest): Promise<GitInstallResponse> {
-				return client.post("skills/git/install", { json: data }).json();
+			gitInstall(
+				data: GitInstallRequest,
+				signal?: AbortSignal,
+			): Promise<GitInstallResponse> {
+				return client
+					.post("skills/git/install", { json: data, signal })
+					.json();
 			},
-			gitSync(data: GitSyncRequest): Promise<GitSyncResponse> {
-				return client.post("skills/git/sync", { json: data }).json();
+			gitSync(
+				data: GitSyncRequest,
+				signal?: AbortSignal,
+			): Promise<GitSyncResponse> {
+				return client
+					.post("skills/git/sync", { json: data, signal })
+					.json();
 			},
 		},
 		mcps: {
@@ -611,6 +666,16 @@ export function createApi(baseUrl: string, token: string) {
 			},
 			listPresets(): Promise<InferenceProviderPresetResponse[]> {
 				return client.get("inference/presets").json();
+			},
+			fetchModels(
+				body: FetchInferenceProviderModelsRequest,
+			): Promise<string[]> {
+				return client
+					.post("inference/providers/models", {
+						json: body,
+						timeout: PROVIDER_MODEL_DISCOVERY_TIMEOUT_MS,
+					})
+					.json();
 			},
 			listOpenCode(): Promise<AgentProviderResponse[]> {
 				return client.get("inference/agents/opencode/providers").json();

@@ -283,7 +283,7 @@ export default {
 	searchProviderPresets: "Search presets",
 	searchProviderPresetsPlaceholder: "Search by provider, URL, or model...",
 	noProviderPresetsMatch: "No presets match",
-	providerGetApiKey: "Get API key →",
+	providerGetApiKey: "Get API key",
 	createInferenceProviderDescription:
 		"Add an inference endpoint and store its API key securely.",
 	editInferenceProvider: "Edit Provider",
@@ -298,22 +298,24 @@ export default {
 	providerName: "Name",
 	providerDisplayName: "Display Name",
 	providerDisplayNameHelp:
-		"This is only shown in aghub. It is safe to use any readable name, including spaces, symbols, or non-English characters.",
+		"Shown only in aghub. Spaces, symbols, and non-English characters are allowed.",
 	providerNamePlaceholder: "e.g., OpenAI",
 	providerLatinName: "Provider ID",
 	providerLatinNameHelp:
-		"Used as the provider key written into agent config files. Use lowercase a-z only so every supported agent can read it safely.",
+		"Written to agent config files as the provider key. Use lowercase a-z only.",
 	providerLatinNamePlaceholder: "e.g., openai",
 	providerFormat: "Format",
 	providerApiBaseUrl: "API Base URL",
 	providerApiBaseUrlHelp:
-		"For OpenAI Responses and OpenAI-compatible providers, a bare origin such as https://api.example.com is written to OpenCode as https://api.example.com/v1. URLs that already include a path are kept as entered.",
+		"Enter a Base URL or paste a full /chat/completions, /responses, or /messages URL. If the scheme is omitted, aghub adds it and saves the normalized Base URL.",
 	providerApiBaseUrlPlaceholder: "https://api.openai.com/v1",
+	providerApiEndpointPreview: "Request URL preview:",
 	providerApiKey: "API Key",
 	providerApiKeyPlaceholder: "sk-...",
 	providerApiKeyEditPlaceholder: "Leave empty to keep current key",
 	providerModels: "Models",
-	providerModelsDescription: "Each model only needs a name.",
+	providerModelsDescription:
+		"Fetch model IDs from the API or add them manually.",
 	providerModelName: "Model name",
 	providerModelNamePlaceholder: "e.g., gpt-5.4-mini",
 	addProviderModel: "Add model",
@@ -324,11 +326,32 @@ export default {
 	fetchProviderModelsSuccessNoNew:
 		"No new models to add ({{total}} already configured)",
 	fetchProviderModelsFailed: "Failed to fetch models: {{reason}}",
-	fetchProviderModelsUnknownError: "endpoint not supported",
-	fetchProviderModelsRequiresPreset:
-		"Choose a preset before fetching models.",
+	fetchProviderModelsUnknownError: "unexpected error",
+	fetchProviderModelsRequiresApiKey:
+		"Enter an API key before fetching models.",
+	fetchProviderModelsInvalidApiBaseUrl: "Enter a valid HTTP(S) API Base URL.",
+	fetchProviderModelsRequiresChangedApiKey:
+		"The API URL or format changed. Re-enter the API key before fetching models.",
+	fetchProviderModelsNetworkError:
+		"Cannot reach the local aghub service. Check that the desktop backend is running.",
+	fetchProviderModelsTimeout:
+		"The provider timed out while listing models. Try again.",
+	fetchProviderModelsAccessDenied:
+		"The provider rejected the model list request. Check the API key and its permissions.",
+	fetchProviderModelsDiscoveryUnsupported:
+		"The model list endpoint was not found. Check the API Base URL, or add model IDs manually.",
+	fetchProviderModelsRateLimited:
+		"The model list request was rate-limited. Try again later or check the provider quota.",
+	fetchProviderModelsRequestFailed:
+		"The provider failed while listing models. Try again later or add model IDs manually.",
+	fetchProviderModelsResponseTooLarge:
+		"The provider model list is too large to import. Add the required model IDs manually.",
+	fetchProviderModelsInvalidResponse:
+		"The provider returned the model list in an unsupported format. Add model IDs manually.",
+	fetchProviderModelsNoModels:
+		"The provider returned no models. Check the API Base URL or add model IDs manually.",
 	providerPresetFormatChanged:
-		"Format changed from the preset. Check the provider docs and update the API URL if needed.",
+		"This format differs from the preset. Check that the API Base URL supports it.",
 	noProviderModels: "No models configured.",
 	noProviderModelsMatch: "No models match your search.",
 	providerModelGroupUncategorized: "Uncategorized",
@@ -338,6 +361,7 @@ export default {
 	searchProviderModelsPlaceholder: "Search models…",
 	selectAllProviderModels: "Select all visible models",
 	deselectAllProviderModels: "Deselect all visible models",
+	selectAllProviderModelsLabel: "Select all",
 	selectProviderModel: 'Select "{{name}}"',
 	selectedProviderModelsCount: "{{selected}} of {{total}} selected",
 	deleteSelectedProviderModels: "Delete selected ({{count}})",
@@ -374,8 +398,11 @@ export default {
 		"Provider ID must contain only lowercase a-z.",
 	validationProviderLatinNameDuplicate:
 		"Provider ID “{{providerId}}” is already used by an existing provider. Change the ID so it identifies the source, for example “{{exampleId}}”, or delete the existing “{{providerId}}” provider before saving.",
-	validationProviderApiBaseUrlRequired: "Enter an API base URL.",
+	validationProviderApiBaseUrlRequired: "Enter an API Base URL.",
+	validationProviderApiBaseUrlInvalid: "Enter a valid HTTP(S) API Base URL.",
 	validationProviderApiKeyRequired: "Enter an API key.",
+	validationProviderApiKeyRequiredForScopeChange:
+		"The API URL or format changed. Re-enter the API key before saving.",
 	validationProviderModelsRequired: "Select at least one model.",
 	validationProviderModelNameUnique: "Model names must be unique.",
 	inferenceFormatAnthropic: "Anthropic",
@@ -636,6 +663,56 @@ export default {
 	selectFileOrFolder: "Select a file or folder containing SKILL.md",
 	skillImported: "Skill imported successfully",
 	importError: "Failed to import skill: {{error}}",
+	installAnyway: "Install anyway",
+	auditBlockedHint:
+		"This skill did not pass the security audit. Review the findings, then confirm to install anyway.",
+	auditSyncBlockedHint:
+		"This skill did not pass the security audit. Review the findings, then confirm to sync anyway.",
+	auditing: "Auditing",
+	securityAudit: "Security audit",
+	auditFailed:
+		"Security audit could not be completed. Import is blocked until the audit succeeds.",
+	auditVerdictBenign: "Benign",
+	auditVerdictSuspicious: "Suspicious",
+	auditVerdictMalicious: "Malicious",
+	auditSeverityInfo: "Info",
+	auditSeverityLow: "Low",
+	auditSeverityMedium: "Medium",
+	auditSeverityHigh: "High",
+	auditSeverityCritical: "Critical",
+	auditCategoryCredentialExfil: "Credential exfiltration",
+	auditCategoryDataExfil: "Data exfiltration",
+	auditCategoryCommandInjection: "Command injection",
+	auditCategoryPromptInjection: "Prompt injection",
+	auditCategoryToolChaining: "Tool chaining",
+	auditCategoryPersistence: "Persistence",
+	auditCategoryHostTamper: "Host tampering",
+	auditCategoryObfuscation: "Obfuscation",
+	auditCategoryOther: "Other",
+	auditSummaryBenign: "No suspicious behavior found",
+	auditSummarySuspicious:
+		"Suspicious behavior found — review the findings below",
+	auditSummaryMalicious: "Malicious behavior found — install with caution",
+	auditSummarySuspiciousInstalled: "This skill shows suspicious behavior",
+	auditSummaryMaliciousInstalled: "This skill shows malicious behavior",
+	auditAcknowledged: "Warning hidden",
+	auditAcknowledgedHint: "This warning is hidden for the current assessment",
+	acknowledgeAudit: "Hide this warning",
+	restoreAuditWarning: "Show warning",
+	security: "Security",
+	acknowledgedAudits: "Hidden audit warnings",
+	automaticSkillAudit: "Automatic skill security scans",
+	automaticSkillAuditDescription:
+		"Show findings before changes and on installed skills. A final safety check still runs before every write.",
+	skillAuditEnabled: "Automatic skill scans enabled",
+	skillAuditDisabled: "Automatic skill scans disabled",
+	skillAuditPreferenceError: "Failed to update the skill scan setting",
+	auditAcknowledgementError: "Failed to update the hidden warning",
+	acknowledgedAuditsDescription:
+		"Warnings stay hidden only for the matching assessment. Skill or scanner changes show them again.",
+	noAcknowledgedAudits: "No hidden warnings",
+	auditFindingCount_one: "{{count}} finding",
+	auditFindingCount_other: "{{count}} findings",
 	selectedPath: "Selected Path",
 	file: "File",
 	folder: "Folder",
@@ -710,6 +787,7 @@ export default {
 	validationCommandRequired: "Enter a command.",
 	validationUrlRequired: "Enter a URL.",
 	validationUrlInvalid: "Enter a valid URL.",
+	validationUrlHttpsOnly: "Only HTTPS URLs are supported.",
 	validationUrlProtocol: "URL must start with http:// or https://.",
 	validationTimeoutPositiveInteger:
 		"Timeout must be a positive whole number.",
@@ -894,6 +972,7 @@ export default {
 	syncFromSource: "Sync from source",
 	syncSkill: "Sync Skill",
 	syncingSkill: "Syncing...",
+	syncAnyway: "Sync anyway",
 	skillSyncedSuccessfully: "Skill synced successfully",
 	skillNotFoundInRepo:
 		"This skill was not found in the repository on this branch.",

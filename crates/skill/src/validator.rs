@@ -80,10 +80,7 @@ pub fn validate(path: &Path) -> Vec<String> {
 	} else if path_str.ends_with(".skill") || path_str.ends_with(".zip") {
 		validate_skill_file(path)
 	} else if path_str.ends_with(".md") {
-		// Validate single SKILL.md file
-		match crate::parser::parse_skill_md(
-			&std::fs::read_to_string(path).unwrap_or_default(),
-		) {
+		match crate::parser::parse(path) {
 			Ok(skill) => validate_skill(&skill),
 			Err(e) => vec![e.to_string()],
 		}
@@ -258,6 +255,26 @@ mod tests {
 		crate::package::pack(&skill_dir, &skill_file).unwrap();
 		let errors = validate(&skill_file);
 		assert!(errors.is_empty());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn validate_rejects_a_symlinked_skill_document() {
+		use std::os::unix::fs::symlink;
+
+		let temp_dir = TempDir::new().unwrap();
+		let outside = temp_dir.path().join("outside.md");
+		let linked = temp_dir.path().join("linked.md");
+		std::fs::write(
+			&outside,
+			"---\nname: linked\ndescription: Linked skill\n---\n",
+		)
+		.unwrap();
+		symlink(&outside, &linked).unwrap();
+
+		let errors = validate(&linked);
+
+		assert!(errors.iter().any(|error| error.contains("symbolic link")));
 	}
 
 	// --- Path traversal tests (ported from subpath-traversal.test.ts) ---

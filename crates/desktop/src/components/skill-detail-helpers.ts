@@ -1,3 +1,4 @@
+import * as pathe from "pathe";
 import type {
 	AgentInfo,
 	ConfigSource,
@@ -95,6 +96,23 @@ export function summarizeSkillLinks(
 		total,
 		problems: total - statuses.valid,
 	};
+}
+
+export function getInstalledSkillAuditPaths(items: SkillResponse[]): string[] {
+	return Array.from(
+		new Set(
+			items.flatMap((item) =>
+				item.source_path
+					? [
+							pathe.basename(item.source_path).toLowerCase() ===
+							"skill.md"
+								? pathe.dirname(item.source_path)
+								: item.source_path,
+						]
+					: [],
+			),
+		),
+	).sort();
 }
 
 export function formatAgentName(agent: string): string {

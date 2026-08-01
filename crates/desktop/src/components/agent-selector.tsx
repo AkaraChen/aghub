@@ -14,6 +14,7 @@ interface AgentSelectorProps {
 	showSelectedIcon?: boolean;
 	variant?: "default" | "secondary";
 	errorMessage?: string;
+	isDisabled?: boolean;
 }
 
 export function AgentSelector({
@@ -26,6 +27,7 @@ export function AgentSelector({
 	showSelectedIcon = false,
 	variant,
 	errorMessage,
+	isDisabled = false,
 }: AgentSelectorProps) {
 	const { t } = useTranslation();
 
@@ -50,9 +52,9 @@ export function AgentSelector({
 			<TagGroup
 				selectionMode="multiple"
 				selectedKeys={selectedKeys}
-				onSelectionChange={(keys: "all" | Set<Key>) =>
-					onSelectionChange(keys as Set<string>)
-				}
+				onSelectionChange={(keys: "all" | Set<Key>) => {
+					if (!isDisabled) onSelectionChange(keys as Set<string>);
+				}}
 				variant="surface"
 			>
 				{label && <Label>{label}</Label>}
@@ -63,6 +65,8 @@ export function AgentSelector({
 							<Tag
 								key={agent.id}
 								id={agent.id}
+								textValue={agent.display_name}
+								isDisabled={isDisabled}
 								className={cn(
 									variant === "secondary" &&
 										"bg-surface-secondary",

@@ -50,12 +50,12 @@ async function dragOptionTo(
 	await expect(page.locator(".modal__backdrop")).toHaveCount(0);
 
 	const source = page.getByRole("option", { name: optionText });
+	await source.hover();
 	const s = await source.boundingBox();
 	if (!s) throw new Error("drag source missing");
 	const sx = s.x + s.width / 2;
 	const sy = s.y + s.height / 2;
 
-	await page.mouse.move(sx, sy);
 	await page.mouse.down();
 	await page.mouse.move(sx + 12, sy + 12, { steps: 3 });
 
@@ -66,9 +66,16 @@ async function dragOptionTo(
 	const tx = t.x + t.width / 2;
 	const ty = t.y + t.height / 2;
 	await page.mouse.move(tx, ty, { steps: 10 });
-	// A distinct final move so dnd-kit registers the over-target before drop
+	// A distinct final move, then wait until dnd-kit exposes the target's
+	// existing over-state styles before releasing the pointer.
 	await page.mouse.move(tx + 1, ty + 1);
+	await expect(target).toHaveClass(/(?:ring-1|border-accent)/);
 	await page.mouse.up();
+	if (targetTestId.startsWith("group-section-")) {
+		await expect(
+			target.getByRole("option", { name: optionText }),
+		).toBeVisible();
+	}
 }
 
 test.beforeEach(async ({ page }) => {

@@ -94,6 +94,20 @@ const SKILLS = [
 	skill("api-forge"),
 ];
 
+const benignAudit = (contentDigest: string) => ({
+	verdict: "benign" as const,
+	confidence: "high" as const,
+	findings: [],
+	summary: "No unsafe behavior found",
+	engine_version: "e2e",
+	content_digest: contentDigest,
+	assessment_digest: `assessment:${contentDigest}`,
+	confirmation_required: false,
+});
+
+const auditDigest = (paths: unknown) =>
+	`e2e:${Array.isArray(paths) ? [...paths].map(String).sort().join("|") : ""}`;
+
 const lockEntry = (name: string, source: string) => ({
 	name,
 	source,
@@ -311,6 +325,11 @@ export async function installMocks(page: Page) {
 		}
 		if (p === "/integrations/code-editors") return json([]);
 
+		if (p === "/skills/audit" && method === "POST") {
+			const body = JSON.parse(route.request().postData() ?? "{}");
+			return json(benignAudit(auditDigest(body.paths)));
+		}
+
 		if (p === "/skills/tree") {
 			const treePath = url.searchParams.get("path") ?? "";
 			const base = treePath.split("/").filter(Boolean).pop() ?? "skill";
@@ -356,6 +375,7 @@ export async function installMocks(page: Page) {
 				author: null,
 				version: null,
 				path: `skills/${name}`,
+				audit: body.skip_audit ? null : benignAudit(`e2e:scan:${name}`),
 			});
 			return json({
 				session_id: "scan-session-1",
@@ -376,9 +396,19 @@ export async function installMocks(page: Page) {
 		}
 
 		if (p === "/skills/git/install" && method === "POST") {
-			// Install semantics: skip already-installed skills, add new
-			// ones to the list AND the lock
 			const body = JSON.parse(route.request().postData() ?? "{}");
+			const audit = body.skip_audit
+				? null
+				: benignAudit(auditDigest(body.skill_paths));
+			if (body.audit_only) {
+				return json({
+					results: [],
+					audit,
+					audit_confirmation_required: false,
+				});
+			}
+
+			// The write phase updates both the list and lock.
 			const results = [];
 			for (const skillPath of body.skill_paths ?? []) {
 				const name = String(skillPath).split("/").pop() ?? "";
@@ -393,7 +423,35 @@ export async function installMocks(page: Page) {
 				}
 			}
 			gitScanSessions.delete(String(body.session_id));
-			return json({ results });
+			return json({
+				results,
+				audit,
+				audit_confirmation_required: false,
+			});
+		}
+
+		if (p === "/skills/install" && method === "POST") {
+			const body = JSON.parse(route.request().postData() ?? "{}");
+			return json({
+				success: true,
+				audit: body.skip_audit
+					? null
+					: benignAudit(auditDigest(body.skills)),
+				audit_confirmation_required: false,
+				session_id: body.audit_only ? "skills-sh-session-1" : null,
+			});
+		}
+
+		const importSkill = p.match(/^\/agents\/([^/]+)\/skills\/import$/);
+		if (method === "POST" && importSkill) {
+			const agent = importSkill[1] ?? "claude";
+			const body = JSON.parse(route.request().postData() ?? "{}");
+			const importedName =
+				String(body.path ?? "skill")
+					.split("/")
+					.filter(Boolean)
+					.pop() ?? "skill";
+			return json(skill(importedName, agent));
 		}
 
 		if (p === "/skills/git/sync" && method === "POST") {

@@ -10,6 +10,10 @@ use aghub_api::dto::{
 		ScopeSupportDto, SkillCapabilitiesDto, SkillsPathsDto,
 		SubAgentCapabilitiesDto,
 	},
+	audit::{
+		AuditReportDto, AuditRequest, CategoryDto, ConfidenceDto, FindingDto,
+		FindingSourceDto, SeverityDto, VerdictDto,
+	},
 	common::ConfigSource,
 	credential::{CreateCredentialRequest, CredentialResponse},
 	inference::{
@@ -19,11 +23,11 @@ use aghub_api::dto::{
 		AgentProviderSourceDto, ClaudeProviderStateResponse,
 		CodexProfileResponse, CodexProviderStateResponse,
 		CreateAgentProviderRequest, CreateInferenceProviderRequest,
-		InferenceProviderFormatDto, InferenceProviderPasswordResponse,
-		InferenceProviderPresetResponse, InferenceProviderResponse,
-		UpdateAgentProviderRequest, UpdateClaudeProviderRequest,
-		UpdateCodexActiveProfileRequest, UpdateCodexProfileProviderRequest,
-		UpdateInferenceProviderRequest,
+		FetchInferenceProviderModelsRequest, InferenceProviderFormatDto,
+		InferenceProviderPasswordResponse, InferenceProviderPresetResponse,
+		InferenceProviderResponse, UpdateAgentProviderRequest,
+		UpdateClaudeProviderRequest, UpdateCodexActiveProfileRequest,
+		UpdateCodexProfileProviderRequest, UpdateInferenceProviderRequest,
 	},
 	integrations::{
 		CodeEditorType, EditSkillFolderRequest, OpenSkillFolderRequest,
@@ -177,6 +181,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<InferenceProviderResponse>(&cfg)?;
 	export_type::<InferenceProviderPasswordResponse>(&cfg)?;
 	export_type::<InferenceProviderPresetResponse>(&cfg)?;
+	export_type::<FetchInferenceProviderModelsRequest>(&cfg)?;
 	export_type::<CodeEditorType>(&cfg)?;
 	export_type::<ToolInfoDto>(&cfg)?;
 	export_type::<ToolPreferencesDto>(&cfg)?;
@@ -278,6 +283,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<CCPluginValidateRequest>(&cfg)?;
 	export_type::<CCPluginValidateResponse>(&cfg)?;
 
+	export_type::<VerdictDto>(&cfg)?;
+	export_type::<ConfidenceDto>(&cfg)?;
+	export_type::<SeverityDto>(&cfg)?;
+	export_type::<CategoryDto>(&cfg)?;
+	export_type::<FindingSourceDto>(&cfg)?;
+	export_type::<FindingDto>(&cfg)?;
+	export_type::<AuditReportDto>(&cfg)?;
+	export_type::<AuditRequest>(&cfg)?;
 	export_type::<UsageAgent>(&cfg)?;
 	export_type::<UsageModelDto>(&cfg)?;
 	export_type::<UsageDayDto>(&cfg)?;

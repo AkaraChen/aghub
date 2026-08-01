@@ -13,6 +13,10 @@ pub enum GitError {
 	#[error("Git clone failed: {0}")]
 	CloneFailed(String),
 
+	/// Local repository metadata could not be inspected.
+	#[error("Git repository inspection failed: {0}")]
+	RepositoryInspection(String),
+
 	/// Invalid URL format.
 	#[error("Invalid URL: {0}")]
 	InvalidUrl(String),
@@ -28,6 +32,39 @@ pub enum GitError {
 	/// Not an HTTPS URL.
 	#[error("Not an HTTPS URL: {0}")]
 	NotHttps(String),
+
+	/// Remote advertised more branch data than the caller can safely retain.
+	#[error("Remote branch advertisement exceeds its configured limit")]
+	RemoteBranchLimit,
+
+	/// Remote command produced more output than the caller can retain.
+	#[error("Remote branch output exceeds its configured byte limit")]
+	RemoteOutputLimit,
+
+	/// Clone created more filesystem entries than allowed.
+	#[error("Clone exceeds its {limit}-entry limit")]
+	CloneEntryLimit { limit: usize },
+
+	/// Clone wrote more bytes than allowed.
+	#[error("Clone exceeds its {limit}-byte limit")]
+	CloneByteLimit { limit: u64 },
+
+	/// The caller cancelled the operation.
+	#[error("Git operation was cancelled")]
+	Cancelled,
+
+	/// The operation exceeded its deadline.
+	#[error("Git operation timed out")]
+	TimedOut,
+
+	/// The controlled Git child returned a failing status.
+	#[error("Git {operation} failed with status {status}")]
+	CommandFailed {
+		/// Operation being performed.
+		operation: &'static str,
+		/// Process exit status or signal description.
+		status: String,
+	},
 
 	/// Clone destination error.
 	#[error("Clone destination error at {path}: {reason}")]

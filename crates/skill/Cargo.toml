@@ -8,6 +8,7 @@ repository.workspace = true
 description = "Skill packaging and parsing library for .skill/.zip files"
 
 [dependencies]
+aghub-markdown = { path = "../markdown" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_yaml = { workspace = true }
@@ -19,7 +20,12 @@ walkdir = "2.5"
 chrono = { workspace = true }
 dirs = { workspace = true }
 ignore = "0.4"
+libc = { workspace = true }
 sha2 = "0.11"
+unicode-normalization = "0.1"
+
+[target.'cfg(unix)'.dependencies]
+rustix = { version = "1.1", features = ["fs"] }
 
 [dev-dependencies]
 tempfile = { workspace = true }

@@ -474,6 +474,7 @@ export function UnifiedResourceList({
 											handleSkillSelectionChange
 										}
 										isMultiSelectMode={isMultiSelectMode}
+										showAuditStatus
 										intents={skillIntents}
 									/>
 									<DragOverlay dropAnimation={null}>

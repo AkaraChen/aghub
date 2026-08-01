@@ -114,6 +114,30 @@ export function skillContentQueryOptions({
 	});
 }
 
+interface SkillAuditQueryParams {
+	api: ApiClient;
+	paths?: string[];
+	enabled?: boolean;
+	staleTime?: number;
+}
+
+export function skillAuditQueryOptions({
+	api,
+	paths = [],
+	enabled = true,
+	staleTime = 60_000,
+}: SkillAuditQueryParams) {
+	const auditPaths = [...new Set(paths.filter(Boolean))].sort();
+	return queryOptions({
+		queryKey: queryKeys.skills.audit(auditPaths),
+		queryFn: () => api.skills.audit({ paths: auditPaths }),
+		enabled: enabled && auditPaths.length > 0,
+		staleTime,
+		// File-system failures are not transient; retries multiply list scans.
+		retry: false,
+	});
+}
+
 export function skillTreeQueryOptions({
 	api,
 	path,
@@ -325,8 +349,10 @@ export function installSkillMutationOptions({
 }: InstallSkillMutationParams) {
 	return mutationOptions({
 		mutationFn: (body: InstallSkillRequest) => api.skills.install(body),
-		onSuccess: async (data) => {
-			await invalidateSkillQueries(queryClient);
+		onSuccess: async (data, variables) => {
+			if (!variables.audit_only) {
+				await invalidateSkillQueries(queryClient);
+			}
 			await onSuccess?.(data);
 		},
 	});
@@ -419,8 +445,10 @@ export function gitInstallSkillsMutationOptions({
 }: GitInstallSkillsMutationParams) {
 	return mutationOptions({
 		mutationFn: (body: GitInstallRequest) => api.skills.gitInstall(body),
-		onSuccess: async (data) => {
-			await invalidateSkillQueries(queryClient);
+		onSuccess: async (data, variables) => {
+			if (!variables.audit_only) {
+				await invalidateSkillQueries(queryClient);
+			}
 			await onSuccess?.(data);
 		},
 	});
@@ -446,8 +474,12 @@ export function gitSyncSkillMutationOptions({
 	return mutationOptions({
 		mutationFn: (body: GitSyncRequest) => api.skills.gitSync(body),
 		onSuccess: async (data) => {
-			await invalidateSkillQueries(queryClient);
+			if (!data.success) {
+				await onSuccess?.(data);
+				return;
+			}
 			await onSuccess?.(data);
+			await invalidateSkillQueries(queryClient);
 		},
 	});
 }

@@ -6,6 +6,7 @@ members = [
 	"crates/api",
 	"crates/skills-sh",
 	"crates/skill",
+	"crates/skill-audit",
 	"crates/git",
 	"crates/json",
 	"crates/markdown",
@@ -66,6 +67,9 @@ predicates = "3.1"
 
 # YAML parsing
 serde_yaml = "0.9"
+
+# Skill security audit — crates.io 1.14 sub-crates are out of sync.
+yara-x = { git = "https://github.com/VirusTotal/yara-x", rev = "e0096cd41fe16be76ca5321618ac880d1894b086", default-features = false, features = [ "constant-folding", "exact-atoms", "fast-regexp" ] }
 
 # TOML parsing
 toml = "1.0"
