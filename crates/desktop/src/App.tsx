@@ -1,5 +1,6 @@
 import { Spinner, Toast, toast } from "@heroui/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
 	getCurrent as getCurrentDeepLinks,
@@ -82,13 +83,33 @@ function App() {
 	}, []);
 
 	useEffect(() => {
-		const unlisten = listen<string>("navigate", (event) => {
+		if (!isTauri()) {
+			return;
+		}
+
+		let isMounted = true;
+		let unlistenNavigate: (() => void) | null = null;
+
+		void listen<string>("navigate", (event) => {
 			setLocation(event.payload);
-		});
+		})
+			.then((unlisten) => {
+				if (isMounted) {
+					unlistenNavigate = unlisten;
+				} else {
+					unlisten();
+				}
+			})
+			.catch((error) => {
+				console.error(
+					"Failed to subscribe to navigation events:",
+					error,
+				);
+			});
+
 		return () => {
-			// Absent Tauri event bridge (plain browser / e2e mock): both the
-			// subscription and its teardown reject — nothing to clean up.
-			unlisten.then((fn) => fn()).catch(() => {});
+			isMounted = false;
+			unlistenNavigate?.();
 		};
 	}, [setLocation]);
 
