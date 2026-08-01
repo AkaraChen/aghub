@@ -1856,7 +1856,8 @@ mod tests {
 		let skill_file = temp_dir.path().join("depth.skill");
 		let nested = (0..MAX_SKILL_CONTENT_DEPTH)
 			.map(|index| format!("level-{index}"))
-			.collect::<PathBuf>();
+			.collect::<Vec<_>>()
+			.join("/");
 		let nested_dir = skill_dir.join(&nested);
 		std::fs::create_dir_all(&nested_dir).unwrap();
 		std::fs::write(nested_dir.join("payload.txt"), "payload").unwrap();
@@ -1865,9 +1866,10 @@ mod tests {
 		pack(&skill_dir, &skill_file).unwrap();
 		let content = crate::content::read_skill_content(&skill_file).unwrap();
 
-		assert!(content.resources.iter().any(|resource| {
-			resource.path == format!("{}/payload.txt", nested.to_string_lossy())
-		}));
+		assert!(content
+			.resources
+			.iter()
+			.any(|resource| resource.path == format!("{nested}/payload.txt")));
 	}
 
 	#[test]
