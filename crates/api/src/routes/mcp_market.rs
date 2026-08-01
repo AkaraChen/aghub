@@ -28,8 +28,8 @@ fn custom_registry_client(url: &str) -> Result<Client, ApiError> {
 }
 
 /// Search an MCP registry. Defaults to the official registry; `registry_url`
-/// points at a custom registry that implements the same API (self-hosted /
-/// sub-registry). An empty `q` returns the latest servers.
+/// points at a public registry that implements the same API. An empty `q`
+/// returns the latest servers.
 #[get("/mcp-market/search?<q>&<limit>&<registry_url>")]
 pub async fn search_mcp_market(
 	_auth: ApiAuth,

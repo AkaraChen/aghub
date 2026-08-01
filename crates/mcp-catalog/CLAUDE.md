@@ -8,8 +8,9 @@
 ```text
 crates/mcp-catalog/src/
 ├── lib.rs              # Public exports
-├── client.rs           # HTTP, URL validation, DNS policy
+├── client.rs           # Registry request lifecycle and response limits
 ├── model.rs            # Source-neutral catalog model
+├── network.rs          # URL validation and DNS policy
 ├── registry.rs         # Official Registry v0.1 wire types
 ├── normalize.rs        # Registry-to-catalog mapping
 └── normalize/tests.rs  # Mapping fixtures

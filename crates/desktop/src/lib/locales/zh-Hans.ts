@@ -1510,7 +1510,7 @@ export default {
 	marketMcpSourceAdd: "添加自定义源…",
 	marketMcpSourceRemove: "移除此源",
 	marketMcpSourceAddTitle: "添加 MCP registry 源",
-	marketMcpSourceNamePlaceholder: "例如：内部 registry",
+	marketMcpSourceNamePlaceholder: "例如：自定义 registry",
 	marketMcpSourceUrlHint:
 		"须在公开 HTTP(S) 端点上提供官方 MCP Registry API。",
 	marketMcpSourceUrlInvalid: "请输入 http(s) URL。",

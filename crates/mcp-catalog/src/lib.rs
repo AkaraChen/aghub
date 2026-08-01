@@ -7,6 +7,7 @@
 
 pub mod client;
 mod model;
+mod network;
 mod normalize;
 mod registry;
 

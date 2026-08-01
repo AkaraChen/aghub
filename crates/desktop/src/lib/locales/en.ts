@@ -1515,7 +1515,7 @@ export default {
 	marketMcpSourceAdd: "Add custom source…",
 	marketMcpSourceRemove: "Remove this source",
 	marketMcpSourceAddTitle: "Add MCP registry source",
-	marketMcpSourceNamePlaceholder: "e.g. Internal registry",
+	marketMcpSourceNamePlaceholder: "e.g. Custom registry",
 	marketMcpSourceUrlHint:
 		"Must expose the official MCP Registry API on a public HTTP(S) endpoint.",
 	marketMcpSourceUrlInvalid: "Enter an http(s) URL.",

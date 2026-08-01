@@ -42,6 +42,25 @@ test("uses the same card surface as the agent overview", async ({ page }) => {
 	await expect(card).toHaveClass(/card--default/);
 });
 
+test("adds and selects a public custom registry", async ({ page }) => {
+	await page
+		.getByRole("button", { name: "Official registry Source" })
+		.click();
+	await page.getByRole("option", { name: "Add custom source…" }).click();
+
+	const dialog = page.getByRole("dialog", {
+		name: "Add MCP registry source",
+	});
+	await dialog.getByLabel("Name").fill("Team registry");
+	await dialog.getByLabel("URL").fill("https://registry.example.test");
+	await dialog.getByRole("button", { name: "Add", exact: true }).click();
+
+	await expect(dialog).toBeHidden();
+	await expect(
+		page.getByRole("button", { name: "Team registry Source" }),
+	).toBeVisible();
+});
+
 test("install resolves secret fields into the selected agent request", async ({
 	page,
 }) => {
