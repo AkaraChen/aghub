@@ -265,7 +265,12 @@ impl CcusageRuntime {
 		&self,
 	) -> Result<Arc<CcusageExecutable>, CcusageRuntimeError> {
 		if let Some(active) = self.active_snapshot()? {
-			return self.reprobe_active(active).await;
+			match self.reprobe_active(active).await {
+				Ok(active) => return Ok(active),
+				Err(error) => log::warn!(
+					"cached ccusage runtime is unavailable; resolving the saved source: {error}"
+				),
+			}
 		}
 		let _guard = self.operation.lock().await;
 		if let Some(active) = self.active_snapshot()? {
@@ -1423,6 +1428,46 @@ mod tests {
 		let next = runtime.snapshot().await.unwrap();
 		assert_eq!(held_by_request.path, old_path);
 		assert_eq!(next.path, new_path);
+	}
+
+	#[cfg(unix)]
+	#[tokio::test]
+	async fn cached_runtime_failure_resolves_saved_source() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let root = tempfile::tempdir().unwrap();
+		let runtime_root = root.path().join("runtime");
+		let stale = root.path().join("stale-ccusage");
+		let bundled = root.path().join("bundled-ccusage");
+		std::fs::write(&stale, b"#!/bin/sh\nexit 1\n").unwrap();
+		std::fs::write(&bundled, b"#!/bin/sh\nprintf 'ccusage 20.0.3\\n'\n")
+			.unwrap();
+		for path in [&stale, &bundled] {
+			std::fs::set_permissions(
+				path,
+				std::fs::Permissions::from_mode(0o755),
+			)
+			.unwrap();
+		}
+		storage::save_preference(
+			&runtime_root,
+			&CcusageRuntimePreference::Bundled,
+		)
+		.unwrap();
+		let runtime = CcusageRuntime::load(runtime_root, Some(bundled.clone()));
+		runtime
+			.set_active(RuntimeCandidate {
+				source: CcusageRuntimeSource::Path,
+				path: stale,
+				version: "20.0.2".to_string(),
+			})
+			.unwrap();
+
+		let current = runtime.snapshot().await.unwrap();
+
+		assert_eq!(current.source, CcusageRuntimeSource::Bundled);
+		assert_eq!(current.path, bundled);
+		assert_eq!(current.version, "20.0.3");
 	}
 
 	#[cfg(unix)]
