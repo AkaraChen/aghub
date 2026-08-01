@@ -1,8 +1,4 @@
-import {
-	ArrowPathIcon,
-	MagnifyingGlassIcon,
-	ServerIcon,
-} from "@heroicons/react/24/solid";
+import { ArrowPathIcon, MagnifyingGlassIcon } from "@heroicons/react/24/solid";
 import {
 	Button,
 	ListBox,
@@ -19,7 +15,13 @@ import { useApi } from "../../hooks/use-api";
 import { cn } from "../../lib/utils";
 import { mcpMarketSearchQueryOptions } from "../../requests/mcp-market";
 import { ManageAgentsDialog } from "../manage-agents-dialog";
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "../ui/empty";
+import {
+	Empty,
+	EmptyDescription,
+	EmptyHeader,
+	EmptyMedia,
+	EmptyTitle,
+} from "../ui/empty";
 import { McpInstallModal } from "./mcp-install-modal";
 import { McpInstalledLocationModal } from "./mcp-installed-location-modal";
 import { McpMarketCard } from "./mcp-market-card";
@@ -70,7 +72,8 @@ export function McpMarketTab() {
 			installed: install.isInstalled(server),
 		}))
 		.sort((a, b) => Number(a.installed) - Number(b.installed));
-	const showInitialSpinner = isFetching && servers.length === 0;
+	const showInitialSpinner =
+		(isFetching && servers.length === 0) || install.isInventoryPending;
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -164,18 +167,39 @@ export function McpMarketTab() {
 				<div className="flex flex-1 items-center justify-center py-12">
 					<Empty className="border-0">
 						<EmptyHeader>
-							<EmptyMedia>
-								<ServerIcon className="size-8 text-muted" />
-							</EmptyMedia>
-							<EmptyTitle className="text-sm font-normal text-muted">
-								{t("marketMcpLoadError")}
+							<EmptyTitle className="text-base">
+								{t("marketMcpLoadErrorTitle")}
 							</EmptyTitle>
+							<EmptyDescription>
+								{t("marketMcpLoadErrorDescription")}
+							</EmptyDescription>
 						</EmptyHeader>
 						<Button
 							variant="secondary"
 							size="sm"
 							className="mt-2"
 							onPress={() => void refetch()}
+						>
+							{t("retry")}
+						</Button>
+					</Empty>
+				</div>
+			) : install.isInventoryError ? (
+				<div className="flex flex-1 items-center justify-center py-12">
+					<Empty className="border-0">
+						<EmptyHeader>
+							<EmptyTitle className="text-base">
+								{t("marketMcpInventoryErrorTitle")}
+							</EmptyTitle>
+							<EmptyDescription>
+								{t("marketMcpInventoryErrorDescription")}
+							</EmptyDescription>
+						</EmptyHeader>
+						<Button
+							variant="secondary"
+							size="sm"
+							className="mt-2"
+							onPress={() => void install.refetchInventory()}
 						>
 							{t("retry")}
 						</Button>

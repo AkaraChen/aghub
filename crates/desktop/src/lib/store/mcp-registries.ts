@@ -13,6 +13,8 @@ export async function addMcpRegistry(
 ): Promise<McpRegistrySource> {
 	const store = await getStore();
 	const sources = (await store.get<McpRegistrySource[]>(KEY)) ?? [];
+	const existing = sources.find((item) => item.url === source.url);
+	if (existing) return existing;
 	const created: McpRegistrySource = { ...source, id: crypto.randomUUID() };
 	await store.set(KEY, [...sources, created]);
 	await store.save();

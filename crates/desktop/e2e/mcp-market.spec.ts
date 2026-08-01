@@ -118,3 +118,23 @@ test("manages the selected project installation", async ({ page }) => {
 		added: ["cursor"],
 	});
 });
+
+test("does not offer installation while the local MCP inventory failed", async ({
+	page,
+}) => {
+	mocks.setMcpListError(true);
+	await page.reload();
+
+	await expect(
+		page.getByText("Couldn't check installed MCP servers."),
+	).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Add", exact: true }),
+	).toBeHidden();
+
+	mocks.setMcpListError(false);
+	await page.getByRole("button", { name: "Retry" }).click();
+	await expect(
+		page.getByRole("button", { name: "Add", exact: true }),
+	).toBeVisible();
+});

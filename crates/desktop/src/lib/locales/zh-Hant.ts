@@ -1479,7 +1479,13 @@ export default {
 	marketClaudePluginsLearnMore: "了解外掛",
 	marketMcpSearchLabel: "搜尋 MCP 伺服器",
 	marketMcpSearchPlaceholder: "搜尋 MCP 伺服器，按 Enter 確認…",
-	marketMcpLoadError: "無法連線 MCP registry。",
+	marketMcpLoadError: "無法載入 MCP 市集。",
+	marketMcpLoadErrorTitle: "無法載入 MCP 市集",
+	marketMcpLoadErrorDescription:
+		"請檢查網路連線，或切換 Registry 來源後重試。",
+	marketMcpInventoryErrorTitle: "無法檢查已安裝的 MCP 伺服器。",
+	marketMcpInventoryErrorDescription:
+		"安裝操作已暫停，避免重複新增現有伺服器。",
 	marketMcpAdd: "新增",
 	marketMcpInstalled: "已安裝",
 	marketMcpGoToPage: "前往 MCP 頁面",

@@ -138,6 +138,7 @@ function valueMatchesTemplate(
 	}
 	if (literals.length === 0) return installedValue === value.template;
 	literals.push(value.template.slice(literalStart));
+	if (literals.every((literal) => literal.length === 0)) return false;
 
 	if (!installedValue.startsWith(literals[0] ?? "")) return false;
 	let offset = literals[0]?.length ?? 0;
@@ -151,6 +152,19 @@ function valueMatchesTemplate(
 		installedValue.length - suffix.length >= offset &&
 		installedValue.endsWith(suffix)
 	);
+}
+
+function packageIdentifier(method: MarketMcpInstallMethod): string | null {
+	if (method.transport.type !== "stdio") return null;
+	const separator = method.id.indexOf(":");
+	if (separator === -1) return null;
+	const registry = method.id.slice(0, separator);
+	if (!["npm", "pypi", "nuget"].includes(registry)) return null;
+	return method.id.slice(separator + 1) || null;
+}
+
+function argumentMatchesPackage(argument: string, identifier: string): boolean {
+	return argument === identifier || argument.startsWith(`${identifier}@`);
 }
 
 function containsOrderedArguments(
@@ -172,10 +186,21 @@ export function marketMcpMethodMatchesTransport(
 	if (market.type !== installed.type) return false;
 	if (market.type === "stdio" && installed.type === "stdio") {
 		if (market.command !== installed.command) return false;
+		const identifier = packageIdentifier(method);
+		if (
+			identifier &&
+			!installed.args.some((argument) =>
+				argumentMatchesPackage(argument, identifier),
+			)
+		) {
+			return false;
+		}
 		const fixedArguments = market.args.flatMap((argument) => {
 			if (Object.keys(argument.value.variables).length > 0) return [];
 			const value = argument.value.template;
 			if (!value.trim()) return [];
+			if (identifier && argumentMatchesPackage(value, identifier))
+				return [];
 			return [argument.name ? `${argument.name}=${value}` : value];
 		});
 		return containsOrderedArguments(installed.args, fixedArguments);

@@ -1483,7 +1483,12 @@ export default {
 	marketClaudePluginsLearnMore: "了解插件",
 	marketMcpSearchLabel: "搜索 MCP 服务器",
 	marketMcpSearchPlaceholder: "搜索 MCP 服务器，回车确认…",
-	marketMcpLoadError: "无法连接 MCP registry。",
+	marketMcpLoadError: "无法加载 MCP 市场。",
+	marketMcpLoadErrorTitle: "无法加载 MCP 市场",
+	marketMcpLoadErrorDescription: "请检查网络连接，或切换 Registry 源后重试。",
+	marketMcpInventoryErrorTitle: "无法检查已安装的 MCP 服务器。",
+	marketMcpInventoryErrorDescription:
+		"安装操作已暂停，避免重复添加现有服务器。",
 	marketMcpAdd: "添加",
 	marketMcpInstalled: "已安装",
 	marketMcpGoToPage: "前往 MCP 页面",

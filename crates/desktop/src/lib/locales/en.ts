@@ -1487,7 +1487,13 @@ export default {
 	marketClaudePluginsLearnMore: "Learn about plugins",
 	marketMcpSearchLabel: "Search MCP servers",
 	marketMcpSearchPlaceholder: "Search MCP servers, then press Enter…",
-	marketMcpLoadError: "Couldn't reach the MCP registry.",
+	marketMcpLoadError: "Couldn't load the MCP marketplace.",
+	marketMcpLoadErrorTitle: "Couldn't load the MCP marketplace",
+	marketMcpLoadErrorDescription:
+		"Check your connection or choose another Registry source, then retry.",
+	marketMcpInventoryErrorTitle: "Couldn't check installed MCP servers.",
+	marketMcpInventoryErrorDescription:
+		"Install actions are paused so an existing server isn't added twice.",
 	marketMcpAdd: "Add",
 	marketMcpInstalled: "Installed",
 	marketMcpGoToPage: "Go to MCP servers",

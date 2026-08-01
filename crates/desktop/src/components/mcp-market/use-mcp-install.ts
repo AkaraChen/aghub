@@ -168,6 +168,10 @@ export function useMcpInstall() {
 			),
 		],
 	});
+	const isInventoryPending = installedQueries.some(
+		(query) => query.isPending,
+	);
+	const isInventoryError = installedQueries.some((query) => query.isError);
 	const inventory = buildMcpInventory(
 		installedQueries[0]?.data ?? [],
 		projects,
@@ -280,6 +284,10 @@ export function useMcpInstall() {
 		selectedProjectId,
 		setSelectedProjectId,
 		projects,
+		isInventoryPending,
+		isInventoryError,
+		refetchInventory: () =>
+			Promise.all(installedQueries.map((query) => query.refetch())),
 		isInstalled: (server: MarketMcpServer) =>
 			locationsForServer(server).length > 0,
 		manageGroup: manageLocation?.group ?? null,

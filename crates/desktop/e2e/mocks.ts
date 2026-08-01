@@ -487,6 +487,7 @@ export async function installMocks(page: Page) {
 	let ccusageRuntime: CcusageRuntimeDto = structuredClone(CCUSAGE_RUNTIME);
 	const mcpCreates: Array<{ agent: string; body: CreateMcpRequest }> = [];
 	const mcpReconciles: unknown[] = [];
+	let mcpListError = false;
 
 	await page.route(e2eApiUrl("/**"), async (route) => {
 		const url = new URL(route.request().url());
@@ -536,6 +537,13 @@ export async function installMocks(page: Page) {
 		}
 		if (p === "/skills/providers/codex") return json(codexProvidedSkills);
 		if (p === "/agents/all/mcps") {
+			if (mcpListError) {
+				return route.fulfill({
+					status: 500,
+					contentType: "application/json",
+					body: JSON.stringify({ error: "MCP inventory failed" }),
+				});
+			}
 			return json(
 				url.searchParams.get("scope") === "project"
 					? projectMcps
@@ -1198,6 +1206,9 @@ export async function installMocks(page: Page) {
 		},
 		mcpCreates,
 		mcpReconciles,
+		setMcpListError(value: boolean) {
+			mcpListError = value;
+		},
 		addMarketMcp(scope: "global" | "project") {
 			(scope === "project" ? projectMcps : mcps).push({
 				name: "remote-demo",
