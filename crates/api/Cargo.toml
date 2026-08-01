@@ -22,6 +22,7 @@ aghub-inference = { path = "../inference" }
 aghub-cc-plugins = { path = "../cc-plugins" }
 aghub-usage = { path = "../usage" }
 skill = { path = "../skill" }
+skill-audit = { path = "../skill-audit", features = [ "from-path" ] }
 skills-sh = { path = "../skills-sh" }
 rocket = { version = "0.5", features = [ "json" ] }
 rocket_cors = "0.6.0"

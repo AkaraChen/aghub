@@ -29,11 +29,17 @@ pub struct ResolvedRemoteSource {
 }
 
 impl ResolvedRemoteSource {
+	pub fn identity(&self) -> String {
+		canonical_remote_identity(&self.source_url)
+			.unwrap_or_else(|| self.source_url.clone())
+	}
+
 	pub fn lock_source(&self) -> String {
-		if self.source_url.starts_with("git@") {
-			self.source_url.clone()
-		} else {
-			self.source.clone()
+		match self.source_type {
+			RemoteSourceType::Github | RemoteSourceType::Gitlab => {
+				self.source.clone()
+			}
+			RemoteSourceType::Git => self.identity(),
 		}
 	}
 }
@@ -44,6 +50,27 @@ pub enum SourceError {
 	Unsupported(String),
 	#[error("Invalid GitHub shorthand '{0}'")]
 	InvalidGithubShorthand(String),
+	#[error("Remote URL must not contain embedded credentials or query data")]
+	EmbeddedCredentials,
+}
+
+fn validate_http_remote(parsed: &Url) -> Result<(), SourceError> {
+	if !parsed.username().is_empty()
+		|| parsed.password().is_some()
+		|| parsed.query().is_some()
+		|| parsed.fragment().is_some()
+	{
+		return Err(SourceError::EmbeddedCredentials);
+	}
+	Ok(())
+}
+
+fn canonical_remote_identity(source_url: &str) -> Option<String> {
+	let parsed = Url::parse(source_url).ok()?;
+	let host = parsed.host_str()?.to_ascii_lowercase();
+	let port = parsed.port_or_known_default()?;
+	let path = normalize_repo_path(Path::new(parsed.path()))?;
+	Some(format!("{}://{host}:{port}/{path}", parsed.scheme()))
 }
 
 fn normalize_repo_path(path: &Path) -> Option<String> {
@@ -60,7 +87,7 @@ fn normalize_repo_path(path: &Path) -> Option<String> {
 	}
 
 	if let Some(last) = segments.last_mut() {
-		*last = last.trim_end_matches(".git").to_string();
+		*last = last.strip_suffix(".git").unwrap_or(last).to_string();
 		if last.is_empty() {
 			return None;
 		}
@@ -118,7 +145,7 @@ fn parse_github_repo_shorthand(
 	}
 
 	if let Some(last) = segments.last_mut() {
-		*last = last.trim_end_matches(".git").to_string();
+		*last = last.strip_suffix(".git").unwrap_or(last).to_string();
 		if last.is_empty() {
 			return Err(SourceError::InvalidGithubShorthand(
 				source.to_string(),
@@ -175,6 +202,7 @@ pub fn resolve_remote_source(
 	if let Ok(parsed) = Url::parse(trimmed) {
 		match parsed.scheme() {
 			"http" | "https" => {
+				validate_http_remote(&parsed)?;
 				let source = normalize_repo_source_from_url(parsed.as_str())
 					.unwrap_or_else(|| parsed.to_string());
 				return Ok(ResolvedRemoteSource {
@@ -272,5 +300,59 @@ mod tests {
 		.unwrap();
 		assert_eq!(source.source, "vercel-labs/agent-skills");
 		assert_eq!(source.source_type, RemoteSourceType::Github);
+	}
+
+	#[test]
+	fn rejects_https_urls_with_embedded_credentials() {
+		let result = resolve_remote_source(
+			"https://user:token@example.com/owner/repo.git",
+		);
+
+		assert!(matches!(result, Err(SourceError::EmbeddedCredentials)));
+	}
+
+	#[test]
+	fn rejects_https_urls_with_query_data() {
+		let result =
+			resolve_remote_source("https://example.com/owner/repo.git?token=x");
+
+		assert!(matches!(result, Err(SourceError::EmbeddedCredentials)));
+	}
+
+	#[test]
+	fn generic_remote_identity_includes_host_and_effective_port() {
+		let first =
+			resolve_remote_source("https://a.example/owner/repo.git").unwrap();
+		let second =
+			resolve_remote_source("https://b.example/owner/repo.git").unwrap();
+		let explicit_port =
+			resolve_remote_source("https://a.example:443/owner/repo.git")
+				.unwrap();
+
+		assert_ne!(first.identity(), second.identity());
+		assert_eq!(first.identity(), explicit_port.identity());
+		assert_eq!(first.lock_source(), first.identity());
+	}
+
+	#[test]
+	fn remote_identity_removes_only_one_git_suffix() {
+		let repository =
+			resolve_remote_source("https://a.example/owner/repo.git").unwrap();
+		let repository_named_git =
+			resolve_remote_source("https://a.example/owner/repo.git.git")
+				.unwrap();
+
+		assert_ne!(repository.identity(), repository_named_git.identity());
+	}
+
+	#[test]
+	fn github_shorthand_removes_only_one_git_suffix() {
+		let repository = resolve_remote_source("owner/repo.git").unwrap();
+		let repository_named_git =
+			resolve_remote_source("owner/repo.git.git").unwrap();
+
+		assert_eq!(repository.source, "owner/repo");
+		assert_eq!(repository_named_git.source, "owner/repo.git");
+		assert_ne!(repository.identity(), repository_named_git.identity());
 	}
 }

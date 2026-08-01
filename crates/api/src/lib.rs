@@ -9,6 +9,7 @@ use rocket::{
 	Data, Request, Response,
 };
 
+pub(crate) mod audit_gate;
 pub mod auth;
 pub mod dto;
 pub mod editor_detection;
@@ -182,9 +183,7 @@ fn build_rocket(
 	rocket::custom(config)
 		.attach(ApiLogFairing)
 		.attach(cors)
-		.manage(crate::state::GitCloneSessions {
-			sessions: std::sync::Mutex::new(std::collections::HashMap::new()),
-		})
+		.manage(crate::state::GitCloneSessions::default())
 		.manage(crate::state::InferenceProviderState {
 			store: aghub_inference::InferenceProviderStore::new(
 				options.app_data_dir,
@@ -269,6 +268,7 @@ fn build_rocket(
 				routes::skills::open_skill_folder,
 				routes::skills::edit_skill_folder,
 				routes::skills::get_skill_content,
+				routes::skills::audit_skill,
 				routes::skills::get_skill_tree,
 				routes::skills::get_global_skill_lock,
 				routes::skills::get_project_skill_lock,

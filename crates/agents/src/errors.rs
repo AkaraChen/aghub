@@ -19,6 +19,9 @@ pub enum ConfigError {
 	#[error("Resource already exists: {resource_type} '{name}'")]
 	ResourceExists { resource_type: String, name: String },
 
+	#[error("Resource changed since it was loaded: {resource_type} '{name}'")]
+	ResourceChanged { resource_type: String, name: String },
+
 	#[error("Agent validation failed: {0}")]
 	ValidationFailed(String),
 
@@ -49,6 +52,16 @@ impl ConfigError {
 		name: impl Into<String>,
 	) -> Self {
 		Self::ResourceExists {
+			resource_type: resource_type.into(),
+			name: name.into(),
+		}
+	}
+
+	pub fn resource_changed(
+		resource_type: impl Into<String>,
+		name: impl Into<String>,
+	) -> Self {
+		Self::ResourceChanged {
 			resource_type: resource_type.into(),
 			name: name.into(),
 		}

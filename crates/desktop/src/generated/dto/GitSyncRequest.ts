@@ -15,4 +15,16 @@ export type GitSyncRequest = {
 	source_paths: Array<string>;
 	scope: string | null;
 	project_root: string | null;
+	/**
+	 * Content identity returned by a prior review, when one was shown.
+	 */
+	expected_content_digest?: string | null;
+	/**
+	 * Assessment identity explicitly confirmed for a blocked review.
+	 */
+	confirmed_assessment_digest?: string | null;
+	/**
+	 * Audit without replacing the installed copies.
+	 */
+	audit_only?: boolean | null;
 };

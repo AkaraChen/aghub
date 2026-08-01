@@ -63,6 +63,14 @@ impl From<ConfigError> for ApiError {
 				format!("{resource_type} '{name}' already exists"),
 				"RESOURCE_EXISTS",
 			),
+			ConfigError::ResourceChanged {
+				resource_type,
+				name,
+			} => ApiError::new(
+				Status::Conflict,
+				format!("{resource_type} '{name}' changed since it was loaded"),
+				"RESOURCE_CHANGED",
+			),
 			ConfigError::NotFound { path } => ApiError::new(
 				Status::NotFound,
 				format!("Config file not found: {}", path.display()),

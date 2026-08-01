@@ -336,8 +336,12 @@ export function gitSyncSkillMutationOptions({
 	return mutationOptions({
 		mutationFn: (body: GitSyncRequest) => api.skills.gitSync(body),
 		onSuccess: async (data) => {
-			await invalidateSkillQueries(queryClient);
+			if (!data.success) {
+				await onSuccess?.(data);
+				return;
+			}
 			await onSuccess?.(data);
+			await invalidateSkillQueries(queryClient);
 		},
 	});
 }

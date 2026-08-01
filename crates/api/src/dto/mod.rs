@@ -1,4 +1,5 @@
 pub mod agents;
+pub mod audit;
 pub mod common;
 pub mod credential;
 pub mod inference;

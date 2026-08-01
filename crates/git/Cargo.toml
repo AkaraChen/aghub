@@ -8,15 +8,26 @@ repository.workspace = true
 description = "Git clone with credential injection from environment variables"
 
 [dependencies]
+base64 = "0.22"
 gix = { version = "0.85", default-features = false, features = [
 	"blocking-network-client",
 	"worktree-mutation",
 	"blocking-http-transport-reqwest-native-tls",
 	"sha1",
 ] }
+libc = { workspace = true }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
 url = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+	"Win32_Foundation",
+	"Win32_Security",
+	"Win32_System_Diagnostics_ToolHelp",
+	"Win32_System_JobObjects",
+	"Win32_System_Threading",
+] }
 
 [dev-dependencies]
 tempfile = { workspace = true }

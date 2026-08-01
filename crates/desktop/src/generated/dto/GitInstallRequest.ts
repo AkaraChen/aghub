@@ -6,4 +6,17 @@ export type GitInstallRequest = {
 	agents: Array<string>;
 	scope: string;
 	project_root: string | null;
+	/**
+	 * Content identity returned by a prior review, when one was shown.
+	 */
+	expected_content_digest?: string | null;
+	/**
+	 * Assessment identity explicitly confirmed for a blocked review.
+	 */
+	confirmed_assessment_digest?: string | null;
+	/**
+	 * Audit-only phase: audit the selected skills and return the worst verdict
+	 * without installing, so the import UI can show "auditing" before "installing".
+	 */
+	audit_only?: boolean | null;
 };
