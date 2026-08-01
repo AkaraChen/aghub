@@ -11,13 +11,17 @@ use reqwest::{
 	Client as HttpClient, Url,
 };
 
-use crate::types::{entry_from_value, McpCatalogEntry, ServerListResponse};
+use crate::{
+	model::McpCatalogEntry, normalize::map_detail, registry::ServerListResponse,
+};
 
 const DEFAULT_API_URL: &str = "https://registry.modelcontextprotocol.io/";
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
 const SERVERS_PATH: &str = "v0.1/servers";
 const MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 const MAX_ERROR_BYTES: usize = 2048;
+const TRANSPARENT_PROXY_IPV4_RANGE: (Ipv4Addr, u32) =
+	(Ipv4Addr::new(198, 18, 0, 0), 15);
 
 // IANA special-purpose ranges and transition prefixes that can encode a
 // non-public IPv4 destination.
@@ -154,7 +158,10 @@ impl Resolve for PublicDnsResolver {
 					format!("registry host did not resolve: {host}"),
 				)) as _);
 			}
-			if addresses.iter().any(|address| !is_public_ip(address.ip())) {
+			if addresses
+				.iter()
+				.any(|address| !is_safe_resolved_ip(address.ip()))
+			{
 				return Err(Box::new(io::Error::new(
 					io::ErrorKind::PermissionDenied,
 					format!(
@@ -222,6 +229,22 @@ fn is_public_ip(address: IpAddr) -> bool {
 		IpAddr::V4(address) => is_public_ipv4(address),
 		IpAddr::V6(address) => is_public_ipv6(address),
 	}
+}
+
+fn is_safe_resolved_ip(address: IpAddr) -> bool {
+	is_public_ip(address) || is_transparent_proxy_ipv4(address)
+}
+
+// Transparent proxies on macOS can map public DNS names into the RFC 2544
+// benchmark range. This exception is only used after domain resolution;
+// literal URLs in the same range still fail `validate_registry_url`.
+fn is_transparent_proxy_ipv4(address: IpAddr) -> bool {
+	let IpAddr::V4(address) = address else {
+		return false;
+	};
+	let (network, prefix) = TRANSPARENT_PROXY_IPV4_RANGE;
+	let mask = u32::MAX.checked_shl(32 - prefix).unwrap_or(0);
+	u32::from(address) & mask == u32::from(network) & mask
 }
 
 fn is_public_ipv4(address: Ipv4Addr) -> bool {
@@ -292,10 +315,8 @@ impl Client {
 		let mut response = self.http.get(url).send().await?;
 		if !response.status().is_success() {
 			let status = response.status().as_u16();
-			let message = read_body(&mut response, MAX_ERROR_BYTES)
-				.await
-				.map(|body| String::from_utf8_lossy(&body).into_owned())
-				.unwrap_or_default();
+			let body = read_body(&mut response, MAX_ERROR_BYTES).await?;
+			let message = String::from_utf8_lossy(&body).into_owned();
 			return Err(ClientError::Api { status, message });
 		}
 
@@ -304,7 +325,7 @@ impl Client {
 		Ok(body
 			.servers
 			.into_iter()
-			.filter_map(entry_from_value)
+			.filter_map(|entry| map_detail(entry.server))
 			.collect())
 	}
 }
@@ -404,5 +425,26 @@ mod tests {
 				"accepted unsafe URL: {url}",
 			);
 		}
+	}
+
+	#[test]
+	fn domain_resolution_accepts_transparent_proxy_address() {
+		assert!(is_safe_resolved_ip(IpAddr::V4(Ipv4Addr::new(
+			198, 18, 12, 78,
+		))));
+	}
+
+	#[test]
+	fn direct_transparent_proxy_address_remains_unsafe() {
+		let result =
+			ClientBuilder::new().api_url("https://198.18.12.78").build();
+		assert!(matches!(result, Err(ClientError::UnsafeUrl(_))));
+	}
+
+	#[test]
+	fn domain_resolution_still_rejects_private_address() {
+		assert!(!is_safe_resolved_ip(IpAddr::V4(Ipv4Addr::new(
+			192, 168, 1, 10,
+		))));
 	}
 }

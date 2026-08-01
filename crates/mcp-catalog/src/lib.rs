@@ -6,10 +6,12 @@
 //! source-neutral [`McpCatalogEntry`] values before crossing the crate boundary.
 
 pub mod client;
-pub mod types;
+mod model;
+mod normalize;
+mod registry;
 
 pub use client::{Client, ClientBuilder, ClientError};
-pub use types::{
+pub use model::{
 	McpCatalogArgument, McpCatalogEntry, McpCatalogInput,
 	McpCatalogInstallMethod, McpCatalogKeyValue, McpCatalogTransport,
 	McpCatalogValue,

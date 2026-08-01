@@ -7,9 +7,12 @@
 
 ```text
 crates/mcp-catalog/src/
-├── lib.rs      # Public client and catalog install-plan exports
-├── client.rs   # Client, ClientBuilder — reqwest-based HTTP client
-└── types.rs    # Catalog install plan + raw registry shapes + mapping
+├── lib.rs              # Public exports
+├── client.rs           # HTTP, URL validation, DNS policy
+├── model.rs            # Source-neutral catalog model
+├── registry.rs         # Official Registry v0.1 wire types
+├── normalize.rs        # Registry-to-catalog mapping
+└── normalize/tests.rs  # Mapping fixtures
 ```
 
 ## WHERE TO LOOK
@@ -17,8 +20,9 @@ crates/mcp-catalog/src/
 | Task                   | File                                 |
 | ---------------------- | ------------------------------------ |
 | Search a source        | `src/client.rs` — `Client::search()` |
-| Registry→entry mapping | `src/types.rs` — `map_detail()`      |
-| Output types           | `src/types.rs`                       |
+| Registry→entry mapping | `src/normalize.rs` — `map_detail()`  |
+| Output types           | `src/model.rs`                       |
+| Registry wire schema   | `src/registry.rs`                    |
 | Custom base URL        | `ClientBuilder::api_url()`           |
 
 ## USAGE

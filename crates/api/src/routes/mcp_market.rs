@@ -9,6 +9,24 @@ use crate::error::ApiError;
 const DEFAULT_LIMIT: usize = 60;
 const MAX_LIMIT: usize = 100;
 
+fn custom_registry_client(url: &str) -> Result<Client, ApiError> {
+	ClientBuilder::new()
+		.api_url(url)
+		.build()
+		.map_err(|error| match error {
+			ClientError::Url(_) | ClientError::UnsafeUrl(_) => ApiError::new(
+				Status::BadRequest,
+				error.to_string(),
+				"MCP_MARKET_INVALID_SOURCE",
+			),
+			_ => ApiError::new(
+				Status::InternalServerError,
+				error.to_string(),
+				"MCP_MARKET_CLIENT_ERROR",
+			),
+		})
+}
+
 /// Search an MCP registry. Defaults to the official registry; `registry_url`
 /// points at a custom registry that implements the same API (self-hosted /
 /// sub-registry). An empty `q` returns the latest servers.
@@ -21,24 +39,7 @@ pub async fn search_mcp_market(
 ) -> Result<Json<Vec<MarketMcpServer>>, ApiError> {
 	let custom = registry_url.map(str::trim).filter(|url| !url.is_empty());
 	let client = match custom {
-		Some(url) => {
-			ClientBuilder::new().api_url(url).build().map_err(|error| {
-				match error {
-					ClientError::Url(_) | ClientError::UnsafeUrl(_) => {
-						ApiError::new(
-							Status::BadRequest,
-							error.to_string(),
-							"MCP_MARKET_INVALID_SOURCE",
-						)
-					}
-					_ => ApiError::new(
-						Status::InternalServerError,
-						error.to_string(),
-						"MCP_MARKET_CLIENT_ERROR",
-					),
-				}
-			})?
-		}
+		Some(url) => custom_registry_client(url)?,
 		None => Client::from_env().map_err(|error| {
 			ApiError::new(
 				Status::InternalServerError,
@@ -67,4 +68,25 @@ pub async fn search_mcp_market(
 			})
 			.collect(),
 	))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn invalid_custom_registry_is_a_client_error() {
+		let error = custom_registry_client("file:///tmp/registry").unwrap_err();
+
+		assert_eq!(error.status, Status::BadRequest);
+		assert_eq!(error.body.code, "MCP_MARKET_INVALID_SOURCE");
+	}
+
+	#[test]
+	fn private_custom_registry_is_a_client_error() {
+		let error = custom_registry_client("http://127.0.0.1").unwrap_err();
+
+		assert_eq!(error.status, Status::BadRequest);
+		assert_eq!(error.body.code, "MCP_MARKET_INVALID_SOURCE");
+	}
 }
