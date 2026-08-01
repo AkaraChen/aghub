@@ -1,4 +1,4 @@
-import { useMutation, useQueries, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useReducer, useRef, useState } from "react";
 import type {
 	MarketMcpInstallMethod,
@@ -16,20 +16,14 @@ import {
 	buildPendingResults,
 	type InstallResult,
 } from "../../lib/install-utils";
-import {
-	buildMcpInventory,
-	installedLocationsForServer,
-	type MarketMcpInstalledLocation,
-} from "../../lib/mcp-market-inventory";
+import type { MarketMcpInstalledLocation } from "../../lib/mcp-market-inventory";
 import {
 	buildMarketMcpRequest,
 	initialMcpFieldValues,
 	invalidMcpInputIds,
 } from "../../lib/mcp-market-utils";
-import {
-	createMcpMutationOptions,
-	mcpListQueryOptions,
-} from "../../requests/mcps";
+import { createMcpMutationOptions } from "../../requests/mcps";
+import { useMcpInventory } from "./use-mcp-inventory";
 
 interface InstallDialogState {
 	isOpen: boolean;
@@ -156,29 +150,7 @@ export function useMcpInstall() {
 		[...dialog.selectedAgents].filter((id) => usableAgentIds.has(id)),
 	);
 
-	const installedQueries = useQueries({
-		queries: [
-			mcpListQueryOptions({ api, scope: "global" }),
-			...projects.map((project) =>
-				mcpListQueryOptions({
-					api,
-					scope: "project",
-					projectRoot: project.path,
-				}),
-			),
-		],
-	});
-	const isInventoryPending = installedQueries.some(
-		(query) => query.isPending,
-	);
-	const isInventoryError = installedQueries.some((query) => query.isError);
-	const inventory = buildMcpInventory(
-		installedQueries[0]?.data ?? [],
-		projects,
-		installedQueries.slice(1).map((query) => query.data ?? []),
-	);
-	const locationsForServer = (server: MarketMcpServer) =>
-		installedLocationsForServer(server, inventory);
+	const inventory = useMcpInventory(projects);
 
 	const handleInstallClick = (server: MarketMcpServer) => {
 		dialogSessionRef.current += 1;
@@ -193,7 +165,7 @@ export function useMcpInstall() {
 	};
 
 	const handleManageClick = (server: MarketMcpServer) => {
-		const locations = locationsForServer(server);
+		const locations = inventory.locationsForServer(server);
 		if (locations.length === 0) return;
 		if (locations.length === 1 && locations[0]) {
 			openManageLocation(locations[0]);
@@ -284,12 +256,11 @@ export function useMcpInstall() {
 		selectedProjectId,
 		setSelectedProjectId,
 		projects,
-		isInventoryPending,
-		isInventoryError,
-		refetchInventory: () =>
-			Promise.all(installedQueries.map((query) => query.refetch())),
+		isInventoryPending: inventory.isPending,
+		isInventoryError: inventory.isError,
+		refetchInventory: inventory.refetch,
 		isInstalled: (server: MarketMcpServer) =>
-			locationsForServer(server).length > 0,
+			inventory.locationsForServer(server).length > 0,
 		manageGroup: manageLocation?.group ?? null,
 		manageProjectPath: manageLocation?.target.projectRoot ?? undefined,
 		manageLocations,
