@@ -1,7 +1,7 @@
 # DESKTOP CRATE KNOWLEDGE BASE
 
 **Crate**: `aghub-desktop` — Tauri v2 desktop application\
-**Stack**: React 19 + TypeScript 5.8 + HeroUI v3 + Tailwind CSS v4\
+**Stack**: React 19 + TypeScript 6 tooling / TypeScript 7 native compiler + HeroUI v3 + Tailwind CSS v4\
 **Package Manager**: bun (REQUIRED)
 
 ## STRUCTURE
@@ -53,6 +53,7 @@ bun run start        # Tauri dev mode
 
 # Building
 bun run build        # Production build
+bun run typecheck    # Type-check with the TypeScript 7 native compiler
 
 # Tauri-specific
 bun run tauri dev    # Tauri dev with hot reload
@@ -72,6 +73,14 @@ bun run tauri build  # Build Tauri app
 - **ALWAYS check HeroUI v3 docs** before implementing
 - Tailwind v4 utility classes
 - Strict TypeScript (`strict: true`, `noUnusedLocals: true`)
+
+### TypeScript
+
+- Keep `typescript` on 6.x for ESLint and other compiler API consumers
+- Use the `@typescript/native` 7.x alias through `bun run build` and
+  `bun run typecheck`
+- Do not replace the 6.x tooling dependency with the native compiler; it does
+  not expose the compiler API required by ESLint
 
 ### Vite Configuration
 
