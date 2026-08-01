@@ -181,6 +181,38 @@ test("usage page shows summary, daily strip, and per-agent rows", async ({
 
 	// A usage-only agent (gemini) uses the same statistical row.
 	await expect(page.getByText("Gemini", { exact: true })).toBeVisible();
+
+	const agentCards = page.getByTestId("usage-agent-card");
+	await expect(agentCards).toHaveCount(2);
+	await expect(agentCards.first()).toHaveAttribute("data-slot", "card");
+	const pageSurface = agentCards
+		.first()
+		.locator(
+			"xpath=ancestor::*[contains(@class, 'surface--secondary')][1]",
+		);
+	const [cardBackground, pageBackground] = await Promise.all([
+		agentCards
+			.first()
+			.evaluate((element) => getComputedStyle(element).backgroundColor),
+		pageSurface.evaluate(
+			(element) => getComputedStyle(element).backgroundColor,
+		),
+	]);
+	expect(cardBackground).not.toBe(pageBackground);
+
+	const borderBeforeHover = await agentCards
+		.first()
+		.evaluate((element) => getComputedStyle(element).borderTopColor);
+	await agentCards.first().hover();
+	await expect
+		.poll(() =>
+			agentCards
+				.first()
+				.evaluate(
+					(element) => getComputedStyle(element).borderTopColor,
+				),
+		)
+		.not.toBe(borderBeforeHover);
 });
 
 test("statistical rows stay within an 800px desktop width", async ({

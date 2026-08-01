@@ -1,5 +1,5 @@
 import { Cog6ToothIcon } from "@heroicons/react/24/outline";
-import { Button, Spinner, Tooltip } from "@heroui/react";
+import { Button, Card, Spinner, Tooltip } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -235,7 +235,7 @@ export default function UsagePage() {
 
 						<section
 							aria-label={t("usage")}
-							className="divide-y divide-border border-y border-border"
+							className="flex flex-col gap-3"
 						>
 							{agents.map((entry) => (
 								<AgentSummaryRow
@@ -278,43 +278,50 @@ function AgentSummaryRow({
 	const rows = BREAKDOWN.filter(({ field }) => totals[field] > 0);
 
 	return (
-		<div className="flex flex-col gap-4 py-5 sm:flex-row sm:items-start sm:gap-8">
-			<div className="flex w-full shrink-0 flex-col gap-2 sm:w-44">
-				<div className="flex items-center gap-2">
-					<AgentIcon id={usage.agent} name={name} size="xs" />
-					<span className="min-w-0 truncate text-sm font-medium text-foreground">
-						{name}
-					</span>
+		<Card
+			data-testid="usage-agent-card"
+			className="gap-0 border border-transparent p-5 transition-colors duration-[var(--dur-fast)] hover:border-border motion-reduce:transition-none"
+		>
+			<Card.Content className="flex flex-col gap-4 p-0 sm:flex-row sm:items-start sm:gap-8">
+				<div className="flex w-full shrink-0 flex-col gap-2 sm:w-44">
+					<div className="flex items-center gap-2">
+						<AgentIcon id={usage.agent} name={name} size="xs" />
+						<span className="min-w-0 truncate text-sm font-medium text-foreground">
+							{name}
+						</span>
+					</div>
+					<div className="flex flex-col gap-0.5">
+						<span className="text-xl font-semibold tracking-tight tabular-nums">
+							{formatTokens(totals.total_tokens)}
+						</span>
+						<span className="text-xs text-muted">
+							{t("usageStatTotalTokens")}
+							{cost && ` · ${cost}`}
+						</span>
+					</div>
 				</div>
-				<div className="flex flex-col gap-0.5">
-					<span className="text-xl font-semibold tracking-tight tabular-nums">
-						{formatTokens(totals.total_tokens)}
-					</span>
-					<span className="text-xs text-muted">
-						{t("usageStatTotalTokens")}
-						{cost && ` · ${cost}`}
-					</span>
-				</div>
-			</div>
 
-			<div className="min-w-0 flex-1">
-				{rows.length > 0 && (
-					<dl className="flex flex-wrap gap-x-5 gap-y-1">
-						{rows.map(({ field, labelKey }) => (
-							<div
-								key={field}
-								className="flex items-baseline gap-1.5 text-[11px]"
-							>
-								<dt className="text-muted">{t(labelKey)}</dt>
-								<dd className="tabular-nums">
-									{formatTokens(totals[field])}
-								</dd>
-							</div>
-						))}
-					</dl>
-				)}
-			</div>
-		</div>
+				<div className="min-w-0 flex-1">
+					{rows.length > 0 && (
+						<dl className="flex flex-wrap gap-x-5 gap-y-1">
+							{rows.map(({ field, labelKey }) => (
+								<div
+									key={field}
+									className="flex items-baseline gap-1.5 text-[11px]"
+								>
+									<dt className="text-muted">
+										{t(labelKey)}
+									</dt>
+									<dd className="tabular-nums">
+										{formatTokens(totals[field])}
+									</dd>
+								</div>
+							))}
+						</dl>
+					)}
+				</div>
+			</Card.Content>
+		</Card>
 	);
 }
 
