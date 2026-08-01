@@ -173,7 +173,11 @@ export function SyncGithubSkillDialog({
 				},
 				signal,
 			);
-			if (response.audit_confirmation_required && response.audit) {
+			if (
+				response.results.length === 0 &&
+				response.audit_confirmation_required &&
+				response.audit
+			) {
 				const disposition = auditDisposition(
 					response.audit,
 					candidate.resolution.reference.kind === "git_scan"
@@ -352,7 +356,7 @@ export function SyncGithubSkillDialog({
 
 	const isBranchSwitching = scanMutation.isPending && phase === "scanned";
 	const isSyncing = phase === "auditing" || phase === "syncing";
-	const visibleSyncError = mutationError ?? syncError;
+	const visibleSyncError = syncError ?? mutationError;
 
 	return (
 		<>
