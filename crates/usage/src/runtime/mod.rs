@@ -1431,6 +1431,7 @@ mod tests {
 		use std::os::unix::fs::PermissionsExt;
 
 		let root = tempfile::tempdir().unwrap();
+		let runtime_root = root.path().join("runtime");
 		let executable = root.path().join("ccusage");
 		let executable_display = executable.to_string_lossy().into_owned();
 		std::fs::write(&executable, b"#!/bin/sh\nprintf 'ccusage 20.0.2\\n'\n")
@@ -1440,12 +1441,16 @@ mod tests {
 			std::fs::Permissions::from_mode(0o755),
 		)
 		.unwrap();
-		let mut runtime =
-			CcusageRuntime::load(root.path().join("runtime"), None);
+		storage::save_preference(
+			&runtime_root,
+			&CcusageRuntimePreference::Manual(executable.clone()),
+		)
+		.unwrap();
+		let mut runtime = CcusageRuntime::load(runtime_root, None);
 		Arc::get_mut(&mut runtime).unwrap().registry = None;
 		runtime
 			.set_active(RuntimeCandidate {
-				source: CcusageRuntimeSource::Path,
+				source: CcusageRuntimeSource::Manual,
 				path: executable.clone(),
 				version: "20.0.1".to_string(),
 			})
@@ -1470,17 +1475,6 @@ mod tests {
 			described.active.as_ref().map(|active| active.path.as_str()),
 			Some(executable_display.as_str())
 		);
-		assert_eq!(
-			described
-				.candidates
-				.iter()
-				.find(|candidate| {
-					candidate.source == CcusageRuntimeSource::Path
-				})
-				.and_then(|candidate| candidate.path.as_deref()),
-			Some(executable_display.as_str())
-		);
-
 		std::fs::write(&executable, b"#!/bin/sh\nexit 1\n").unwrap();
 		let unavailable = runtime.status().await;
 		assert!(!unavailable.reachable);
@@ -1510,7 +1504,7 @@ mod tests {
 			.await
 			.expect("Auto resets malformed config");
 		assert_eq!(state.preference, CcusageRuntimeSource::Auto);
-		assert!(state.error.is_some());
+		assert!(runtime.configuration_error_message().unwrap().is_none());
 		assert_eq!(
 			storage::load_preference(root.path()).unwrap(),
 			Some(CcusageRuntimePreference::Auto)

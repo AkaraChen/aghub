@@ -124,10 +124,19 @@ fn selected_usage_agents(
 /// caller, then the `AGHUB_CCUSAGE_BIN` environment variable, then `ccusage` on
 /// `PATH`.
 pub fn resolve_ccusage_bin(explicit: Option<PathBuf>) -> OsString {
-	if let Some(path) = explicit {
-		return path.into_os_string();
-	}
-	std::env::var_os("AGHUB_CCUSAGE_BIN")
+	resolve_ccusage_bin_with_environment(
+		explicit,
+		std::env::var_os("AGHUB_CCUSAGE_BIN"),
+	)
+}
+
+fn resolve_ccusage_bin_with_environment(
+	explicit: Option<PathBuf>,
+	environment: Option<OsString>,
+) -> OsString {
+	explicit
+		.map(PathBuf::into_os_string)
+		.or(environment)
 		.unwrap_or_else(|| OsString::from("ccusage"))
 }
 
@@ -1488,13 +1497,17 @@ mod tests {
 
 	#[test]
 	fn resolve_ccusage_bin_falls_back_to_env_then_default() {
-		// No other test in this crate touches AGHUB_CCUSAGE_BIN, so mutating it
-		// here is race-free.
-		std::env::remove_var("AGHUB_CCUSAGE_BIN");
-		assert_eq!(resolve_ccusage_bin(None), OsString::from("ccusage"));
-		std::env::set_var("AGHUB_CCUSAGE_BIN", "/from/env");
-		assert_eq!(resolve_ccusage_bin(None), OsString::from("/from/env"));
-		std::env::remove_var("AGHUB_CCUSAGE_BIN");
+		assert_eq!(
+			resolve_ccusage_bin_with_environment(None, None),
+			OsString::from("ccusage")
+		);
+		assert_eq!(
+			resolve_ccusage_bin_with_environment(
+				None,
+				Some(OsString::from("/from/env")),
+			),
+			OsString::from("/from/env")
+		);
 	}
 
 	#[test]
