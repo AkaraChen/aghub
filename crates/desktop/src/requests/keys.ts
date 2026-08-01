@@ -85,6 +85,10 @@ export const queryKeys = {
 		all: () => ["market"] as const,
 		search: (query: string) => ["market", "search", query] as const,
 	},
+	sidebar: {
+		all: () => ["sidebar"] as const,
+		items: () => ["sidebar", "items"] as const,
+	},
 	usage: {
 		all: () => ["usage"] as const,
 		summary: (
