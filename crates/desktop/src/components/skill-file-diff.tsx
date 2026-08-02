@@ -135,30 +135,56 @@ function SkillLinkChange({ file }: { file: SkillFileDiffResponse }) {
 		<div
 			role="region"
 			aria-label={t("diffForFile", { path: file.path })}
-			className="mt-2 grid divide-y divide-separator/60 border-t border-separator/60 sm:grid-cols-2 sm:divide-x sm:divide-y-0"
+			className="mt-2 space-y-2 border-t border-separator/60 px-1 pt-3"
 		>
-			<SkillLinkVersion link={file.before_link} />
-			<SkillLinkVersion link={file.after_link} />
+			<SkillLinkVersion
+				side="before"
+				marker="−"
+				link={file.before_link}
+				exists={file.change !== "added"}
+			/>
+			<SkillLinkVersion
+				side="after"
+				marker="+"
+				link={file.after_link}
+				exists={file.change !== "removed"}
+			/>
 		</div>
 	);
 }
 
 function SkillLinkVersion({
+	side,
+	marker,
 	link,
+	exists,
 }: {
+	side: "before" | "after";
+	marker: "−" | "+";
 	link: SkillFileDiffResponse["before_link"];
+	exists: boolean;
 }) {
 	const { t } = useTranslation();
 
 	return (
-		<div className="min-w-0 px-1 pt-3 sm:px-3">
-			{link ? (
-				<SkillLinkState link={link} />
-			) : (
-				<span className="text-xs text-muted">
-					{t("diffVersionAbsent")}
+		<div
+			data-skill-file-version={side}
+			className="grid min-w-0 grid-cols-[1rem_minmax(0,1fr)] items-start gap-2 text-xs"
+		>
+			<span
+				className="text-center font-medium text-muted"
+				aria-hidden="true"
+			>
+				{marker}
+			</span>
+			<div className="grid min-w-0 gap-1 sm:grid-cols-[5.5rem_minmax(0,1fr)] sm:items-center sm:gap-3">
+				<span className="text-foreground">
+					{link
+						? t("symlink")
+						: t(exists ? "diffRegularFile" : "diffVersionAbsent")}
 				</span>
-			)}
+				{link && <SkillLinkState link={link} />}
+			</div>
 		</div>
 	);
 }

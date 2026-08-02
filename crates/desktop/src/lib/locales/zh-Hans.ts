@@ -1041,6 +1041,7 @@ export default {
 	diffFileRemoved: "删除",
 	diffFileModified: "修改",
 	diffVersionAbsent: "不存在",
+	diffRegularFile: "普通文件",
 	diffPreviewUnavailable: "此文件无法显示文本差异预览。",
 	diffPreviewTruncated: "为保持差异视图响应，已省略此文件的文本预览。",
 	diffFilesOmitted: "另有 {{count}} 个发生变化的文件未显示。",

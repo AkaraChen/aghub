@@ -51,7 +51,11 @@ import {
 	type SkillGroup,
 	summarizeSkillLinks,
 } from "./skill-detail-helpers";
-import { LocationRow, SkillTree } from "./skill-detail-views";
+import {
+	LocationRow,
+	SkillFilesUnavailableAlert,
+	SkillTree,
+} from "./skill-detail-views";
 import { SkillLinkSummary } from "./skill-link-state";
 import { SkillLocationDrift } from "./skill-location-drift";
 import { SyncGithubSkillDialog } from "./sync-github-skill-dialog";
@@ -129,7 +133,12 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		}),
 	});
 
-	const { data: skillTree, error: skillTreeError } = useQuery({
+	const {
+		data: skillTree,
+		error: skillTreeError,
+		isFetching: isSkillTreeFetching,
+		refetch: refetchSkillTree,
+	} = useQuery({
 		...skillTreeQueryOptions({
 			api,
 			path: skill.source_path ?? undefined,
@@ -265,12 +274,23 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		{
 			tree?: typeof skillTree;
 			unavailable: boolean;
+			isFetching: boolean;
+			retry: () => Promise<void>;
 		}
 	>();
 	if (skill.source_path) {
 		locationTreeStateByPath.set(skill.source_path, {
 			tree: skillTree,
 			unavailable: Boolean(skillTreeError),
+			isFetching: isSkillTreeFetching,
+			retry: async () => {
+				const refreshed = await refetchSkillTree();
+				if (refreshed.isError) {
+					toast.warning(t("skillFilesUnavailable"), {
+						description: t("skillFilesUnavailableDescription"),
+					});
+				}
+			},
 		});
 	}
 	additionalDisplayedLocations.forEach((location, index) => {
@@ -278,6 +298,15 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		locationTreeStateByPath.set(location.sourcePath, {
 			tree: query?.data,
 			unavailable: Boolean(query?.error),
+			isFetching: Boolean(query?.isFetching),
+			retry: async () => {
+				const refreshed = await query?.refetch();
+				if (refreshed?.isError) {
+					toast.warning(t("skillFilesUnavailable"), {
+						description: t("skillFilesUnavailableDescription"),
+					});
+				}
+			},
 		});
 	});
 	const resourceCount = useMemo(
@@ -482,6 +511,16 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 														tree={treeState?.tree}
 														treeUnavailable={
 															treeState?.unavailable
+														}
+														isRetrying={
+															treeState?.isFetching
+														}
+														onRetry={
+															treeState
+																? () => {
+																		void treeState.retry();
+																	}
+																: undefined
 														}
 														editorAvailable={Boolean(
 															selectedEditor,
@@ -715,11 +754,19 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 									<Accordion.Body>
 										<div className="space-y-3">
 											{skillTreeError && (
-												<p className="text-sm text-muted">
-													{t(
-														"skillFilesUnavailableDescription",
-													)}
-												</p>
+												<SkillFilesUnavailableAlert
+													isRetrying={
+														isSkillTreeFetching
+													}
+													onRetry={() => {
+														void locationTreeStateByPath
+															.get(
+																skill.source_path ??
+																	"",
+															)
+															?.retry();
+													}}
+												/>
 											)}
 											{selectedEditor && skillTree && (
 												<div className="flex justify-start">

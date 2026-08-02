@@ -1031,6 +1031,7 @@ export default {
 	diffFileRemoved: "Removed",
 	diffFileModified: "Modified",
 	diffVersionAbsent: "Not present",
+	diffRegularFile: "Regular file",
 	diffPreviewUnavailable: "Text preview is unavailable for this file.",
 	diffPreviewTruncated:
 		"Text preview was omitted to keep the diff responsive.",

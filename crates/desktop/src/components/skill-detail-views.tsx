@@ -1,12 +1,11 @@
 import {
 	CodeBracketIcon,
 	DocumentIcon,
-	ExclamationTriangleIcon,
 	FolderIcon,
 	LinkIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Tooltip } from "@heroui/react";
+import { Alert, Button, Tooltip } from "@heroui/react";
 import * as pathe from "pathe";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -43,7 +42,9 @@ export function LocationRow({
 	onDelete,
 	onOpenFolder,
 	onEditFolder,
+	onRetry,
 	editorAvailable,
+	isRetrying = false,
 }: {
 	group: LocationGroup;
 	tree?: SkillTreeNodeResponse;
@@ -51,7 +52,9 @@ export function LocationRow({
 	onDelete: () => void;
 	onOpenFolder: () => void;
 	onEditFolder: () => void;
+	onRetry?: () => void;
 	editorAvailable: boolean;
+	isRetrying?: boolean;
 }) {
 	const { t } = useTranslation();
 	const folderPath = useMemo(
@@ -64,7 +67,7 @@ export function LocationRow({
 	);
 	const hasStorageStatus = group.isSymlink;
 	const hasFileLinkStatus = Boolean(
-		treeUnavailable || (linkSummary && linkSummary.total > 0),
+		treeUnavailable || (linkSummary && linkSummary.problems > 0),
 	);
 
 	return (
@@ -139,26 +142,17 @@ export function LocationRow({
 					{group.isSymlink && (
 						<div
 							data-skill-location-link="valid"
-							className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1.5 text-xs text-muted"
+							className="flex min-w-0 items-center gap-1.5 text-xs text-muted"
 						>
 							<LinkIcon className="size-3.5" />
 							<span>{t("symlink")}</span>
-							<span>{t("skillLinkValid")}</span>
 						</div>
 					)}
 					{treeUnavailable ? (
-						<div
-							role="alert"
-							data-skill-link-summary="unavailable"
-							className="flex items-center gap-1.5 text-xs text-muted"
-						>
-							<ExclamationTriangleIcon className="size-3.5 shrink-0 text-warning" />
-							<span className="text-foreground">
-								{t("skillFilesUnavailable")}
-							</span>
-							<span aria-hidden="true">·</span>
-							<span>{t("skillFilesUnavailableDescription")}</span>
-						</div>
+						<SkillFilesUnavailableAlert
+							onRetry={onRetry}
+							isRetrying={isRetrying}
+						/>
 					) : (
 						linkSummary && (
 							<SkillLinkSummary summary={linkSummary} />
@@ -167,6 +161,42 @@ export function LocationRow({
 				</div>
 			)}
 		</div>
+	);
+}
+
+export function SkillFilesUnavailableAlert({
+	onRetry,
+	isRetrying = false,
+}: {
+	onRetry?: () => void;
+	isRetrying?: boolean;
+}) {
+	const { t } = useTranslation();
+
+	return (
+		<Alert
+			status="warning"
+			role="alert"
+			data-skill-link-summary="unavailable"
+		>
+			<Alert.Indicator />
+			<Alert.Content>
+				<Alert.Title>{t("skillFilesUnavailable")}</Alert.Title>
+				<Alert.Description>
+					{t("skillFilesUnavailableDescription")}
+				</Alert.Description>
+			</Alert.Content>
+			{onRetry && (
+				<Button
+					variant="ghost"
+					size="sm"
+					isPending={isRetrying}
+					onPress={onRetry}
+				>
+					{t("checkAgain")}
+				</Button>
+			)}
+		</Alert>
 	);
 }
 

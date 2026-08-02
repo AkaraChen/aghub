@@ -2,7 +2,7 @@ import {
 	ChevronDownIcon,
 	ExclamationTriangleIcon,
 } from "@heroicons/react/24/solid";
-import { Accordion, Alert, Spinner } from "@heroui/react";
+import { Accordion, Alert, Button, Spinner } from "@heroui/react";
 
 export function SkillComparisonLoading({ label }: { label: string }) {
 	return (
@@ -34,9 +34,15 @@ export function SkillComparisonMatchAlert({
 export function SkillComparisonUnavailableAlert({
 	title,
 	description,
+	actionLabel,
+	isPending = false,
+	onAction,
 }: {
 	title: string;
 	description: string;
+	actionLabel?: string;
+	isPending?: boolean;
+	onAction?: () => void;
 }) {
 	return (
 		<Alert status="warning" role="status">
@@ -45,6 +51,16 @@ export function SkillComparisonUnavailableAlert({
 				<Alert.Title>{title}</Alert.Title>
 				<Alert.Description>{description}</Alert.Description>
 			</Alert.Content>
+			{actionLabel && onAction && (
+				<Button
+					variant="ghost"
+					size="sm"
+					isPending={isPending}
+					onPress={onAction}
+				>
+					{actionLabel}
+				</Button>
+			)}
 		</Alert>
 	);
 }

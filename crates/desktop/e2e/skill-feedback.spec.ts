@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { installMocks } from "./mocks";
 
-test("a skill tree client error is shown without retrying", async ({
+test("a skill tree client error is shown once and can be retried", async ({
 	page,
 }) => {
 	await installMocks(page);
@@ -28,12 +28,21 @@ test("a skill tree client error is shown without retrying", async ({
 	await page.getByRole("option", { name: "solo-skill" }).click();
 
 	const status = page.getByRole("alert");
+	await expect(status).toHaveAttribute("data-slot", "alert-root");
 	await expect(status).toContainText("Files unavailable");
 	await expect(status).toContainText(
 		"Aghub couldn't inspect this copy's files.",
 	);
 	await expect(status).not.toContainText("Symbolic links are not supported");
 	await expect.poll(() => treeRequests).toBe(1);
+
+	await status.getByRole("button", { name: "Check Again" }).click();
+	await expect.poll(() => treeRequests).toBe(2);
+	const toast = page.locator('[data-slot="toast"]');
+	await expect(toast).toContainText("Files unavailable");
+	await expect(toast).toContainText(
+		"Aghub couldn't inspect this copy's files.",
+	);
 });
 
 test("a broken file link is shown inside the skill tree", async ({ page }) => {
@@ -148,10 +157,8 @@ test("a linked skill location shows its link state and file-link health", async 
 	await expect(location).toContainText("Symlink");
 	await expect(
 		location.locator('[data-skill-link-summary="healthy"]'),
-	).toContainText("1 file link");
-	await expect(
-		location.locator('[data-skill-link-summary="healthy"]'),
-	).toContainText("All available");
+	).toHaveCount(0);
+	await expect(location).not.toContainText("Link available");
 });
 
 test("a partial agent coverage failure identifies the skill and agent", async ({

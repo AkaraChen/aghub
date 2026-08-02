@@ -49,11 +49,10 @@ test("different local copies show a file and line diff", async ({ page }) => {
 	await expect(
 		page.getByRole("button", { name: /Compare and unify local copies/ }),
 	).toBeVisible();
-	await expect(
-		page
-			.getByRole("status")
-			.filter({ hasText: "Some skill copies could not be compared" }),
-	).toBeVisible();
+	const unavailableCopies = page
+		.getByRole("status")
+		.filter({ hasText: "Some skill copies could not be compared" });
+	await expect(unavailableCopies).toHaveAttribute("data-slot", "alert-root");
 	const localRequests = mocks
 		.getSkillDiffRequests()
 		.filter((request) => request.reference.kind === "installed");
@@ -72,6 +71,13 @@ test("different local copies show a file and line diff", async ({ page }) => {
 			project_root: null,
 		},
 	]);
+	await unavailableCopies
+		.getByRole("button", { name: "Check Again" })
+		.click();
+	const retryToast = page.locator('[data-slot="toast"]');
+	await expect(retryToast).toContainText(
+		"Some skill copies could not be compared",
+	);
 
 	await expect(page.locator('[data-diff-kind="removed"]')).toHaveCount(0);
 	await page
@@ -119,6 +125,17 @@ test("a changed file link shows both targets and their status", async ({
 				},
 				content_omitted: false,
 			},
+			{
+				path: "references/materialized.html",
+				change: "modified",
+				before: null,
+				after: null,
+				before_link: {
+					target: "../../../docs/materialized.html",
+					status: "valid",
+				},
+				content_omitted: false,
+			},
 		],
 		files_omitted: 0,
 	});
@@ -130,18 +147,33 @@ test("a changed file link shows both targets and their status", async ({
 		.click();
 	await page.getByRole("button", { name: "Review file changes" }).click();
 
+	const changedLink = page
+		.locator("[data-skill-diff-file]")
+		.filter({ hasText: "references/example.html" });
 	await expect(
-		page.locator('[data-skill-link-status="valid"]'),
+		changedLink.locator('[data-skill-link-status="valid"]'),
 	).toContainText("../../../docs/example.html");
 	await expect(
-		page.locator('[data-skill-link-status="broken"]'),
+		changedLink.locator('[data-skill-link-status="broken"]'),
 	).toContainText("../../../docs/missing.html");
 	await expect(
-		page.locator('[data-skill-link-status="valid"]'),
+		changedLink.locator('[data-skill-link-status="valid"]'),
 	).toContainText("Link available");
 	await expect(
-		page.locator('[data-skill-link-status="broken"]'),
+		changedLink.locator('[data-skill-link-status="broken"]'),
 	).toContainText("Target not found");
+	const materializedFile = page
+		.locator("[data-skill-diff-file]")
+		.filter({ hasText: "references/materialized.html" });
+	await expect(
+		materializedFile.locator('[data-skill-file-version="before"]'),
+	).toContainText("Symlink");
+	await expect(
+		materializedFile.locator('[data-skill-file-version="before"]'),
+	).toContainText("../../../docs/materialized.html");
+	await expect(
+		materializedFile.locator('[data-skill-file-version="after"]'),
+	).toContainText("Regular file");
 	await expect(page.locator("[data-diff-kind]")).toHaveCount(0);
 	await expect(
 		page.getByText("Keep current links", { exact: true }),
