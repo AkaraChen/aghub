@@ -35,8 +35,11 @@ interface RuntimeSourceControlsProps {
 	runtime: CcusageRuntimeDto;
 	isPending: boolean;
 	actions: ReactNode;
-	onSelect: (source: CcusageRuntimeSource, path: string | null) => void;
-	onInstall: (source: CcusageRuntimeSource) => void;
+	onSelect: (
+		source: CcusageRuntimeSource,
+		path: string | null,
+	) => Promise<unknown>;
+	onInstall: (source: CcusageRuntimeSource) => Promise<unknown>;
 }
 
 export const RuntimeSourceControls: FC<RuntimeSourceControlsProps> = ({
@@ -57,8 +60,6 @@ export const RuntimeSourceControls: FC<RuntimeSourceControlsProps> = ({
 	const describedActive =
 		selectedSource === runtime.preference ? runtime.active : null;
 	const executablePath = describedActive?.path ?? candidate?.path;
-	const needsInstall =
-		MANAGED_SOURCES.has(selectedSource) && candidate?.installed !== true;
 	const hasChange =
 		selectedSource !== runtime.preference ||
 		(selectedSource === "manual" && manualPath.trim() !== "");
@@ -69,7 +70,6 @@ export const RuntimeSourceControls: FC<RuntimeSourceControlsProps> = ({
 		hasChange,
 		t,
 	);
-	const selectedSourceLabel = t(sourceLabelKey(selectedSource));
 	const options = SELECTABLE_SOURCES.map((source) => {
 		const sourceCandidate = runtime.candidates.find(
 			(item) => item.source === source,
@@ -81,15 +81,32 @@ export const RuntimeSourceControls: FC<RuntimeSourceControlsProps> = ({
 			isDisabled: !sourceCanBeChosen(source, runtime.candidates),
 		};
 	});
-	const applySelection = () => {
-		if (needsInstall) {
-			onInstall(selectedSource);
-			return;
-		}
-		onSelect(
-			selectedSource,
-			selectedSource === "manual" ? manualPath.trim() : null,
+	const handleSourceChange = async (value: string) => {
+		const source = value as CcusageRuntimeSource;
+		setSelectedSource(source);
+		if (source === "manual") return;
+		const sourceCandidate = runtime.candidates.find(
+			(item) => item.source === source,
 		);
+		try {
+			if (
+				MANAGED_SOURCES.has(source) &&
+				sourceCandidate?.installed !== true
+			) {
+				await onInstall(source);
+			} else {
+				await onSelect(source, null);
+			}
+		} catch {
+			setSelectedSource(runtime.preference);
+		}
+	};
+	const applyManualPath = async () => {
+		try {
+			await onSelect("manual", manualPath.trim());
+		} catch {
+			setSelectedSource(runtime.preference);
+		}
 	};
 
 	return (
@@ -99,29 +116,9 @@ export const RuntimeSourceControls: FC<RuntimeSourceControlsProps> = ({
 				data-testid="usage-runtime-source-controls"
 			>
 				{actions}
-				{hasChange && selectedSource !== "manual" && (
-					<Button
-						size="sm"
-						variant="secondary"
-						isPending={isPending}
-						onPress={applySelection}
-					>
-						{needsInstall
-							? selectedSource === "download"
-								? t("usageRuntimeDownloadSource")
-								: t("usageRuntimeInstallSource", {
-										source: selectedSourceLabel,
-									})
-							: t("usageRuntimeUseSource", {
-									source: selectedSourceLabel,
-								})}
-					</Button>
-				)}
 				<SettingSelect
 					value={selectedSource}
-					onChange={(source) =>
-						setSelectedSource(source as CcusageRuntimeSource)
-					}
+					onChange={(source) => void handleSourceChange(source)}
 					ariaLabel={t("usageRuntimeSource")}
 					options={options}
 					isDisabled={isPending}
@@ -159,7 +156,7 @@ export const RuntimeSourceControls: FC<RuntimeSourceControlsProps> = ({
 							variant="secondary"
 							isPending={isPending}
 							isDisabled={!manualPath.trim()}
-							onPress={applySelection}
+							onPress={() => void applyManualPath()}
 						>
 							{t("usageRuntimeUseManual")}
 						</Button>

@@ -25,6 +25,7 @@ import {
 	compactLayout,
 	layoutsEqual,
 	projectLayout,
+	setLayoutFieldVisible,
 	shownIds,
 } from "./usage-layout-model";
 import type {
@@ -231,6 +232,15 @@ export function InteractiveCardLayout({
 
 	const shownWindows = shownIds(displayLayout, "window");
 	const shownStats = shownIds(displayLayout, "stat");
+	const handleVisibilityChange = (
+		id: string,
+		type: "window" | "stat",
+		isVisible: boolean,
+	) => {
+		if (isDisabled || session) return;
+		const next = setLayoutFieldVisible(incomingLayout, id, type, isVisible);
+		if (!layoutsEqual(incomingLayout, next)) onCommit(next);
+	};
 	const fieldLabel = (id: string) => fieldById.get(id)?.label ?? id;
 	const announceTarget = (activeId: string, overId: string | null) => {
 		const field = fieldLabel(activeId);
@@ -309,10 +319,13 @@ export function InteractiveCardLayout({
 				fieldById={fieldById}
 				shownWindows={shownWindows}
 				shownStats={shownStats}
+				windowCapacity={displayLayout.windowSlots.length}
+				statCapacity={displayLayout.statSlots.length}
 				drag={session}
 				isDisabled={isDisabled}
 				preview={preview}
 				onNodeChange={registerFieldNode}
+				onVisibilityChange={handleVisibilityChange}
 			/>
 		</DndContext>
 	);

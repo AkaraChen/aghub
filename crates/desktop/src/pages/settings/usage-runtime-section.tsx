@@ -222,13 +222,13 @@ export function UsageRuntimeSection() {
 					isPending={isOperating}
 					actions={actions}
 					onSelect={(source, path) =>
-						selectMutation.mutate(
+						selectMutation.mutateAsync(
 							{ source, path },
 							{ onError: reportError },
 						)
 					}
 					onInstall={(source) =>
-						installMutation.mutate(
+						installMutation.mutateAsync(
 							{ source },
 							{
 								onSuccess: () =>

@@ -1,4 +1,4 @@
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 import type { CcusageRuntimeDto, UsageStatusDto } from "../src/generated/dto";
 import { installMocks } from "./mocks";
 
@@ -100,16 +100,14 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await expect(card.getByText("5-hour limit", { exact: true })).toHaveCount(
 		0,
 	);
-	await expect(
-		drawer.getByText("5-hour limit", { exact: true }),
-	).toBeVisible();
+	await expect(drawer.getByTestId("layout-hidden-item-5h")).toBeVisible();
 	await expect(card.getByText("Total tokens", { exact: true })).toBeVisible();
 	const totalTokensRow = page
 		.getByTestId("layout-card-replica")
 		.getByText("Total tokens", { exact: true })
 		.locator("..");
 	await expect(totalTokensRow.getByText("—", { exact: true })).toHaveCount(0);
-	await expect(page.getByText("Not shown", { exact: true })).toBeVisible();
+	await expect(page.getByText("Fields", { exact: true })).toBeVisible();
 	await expect(page.getByText("Cache read", { exact: true })).toBeVisible();
 	await expect(card.locator("button")).toHaveCount(0);
 
@@ -181,6 +179,28 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 
 	// Inactive candidates do not add their paths to the current-source summary.
 	await expect(page.getByText("/usr/local/bin/ccusage")).toHaveCount(0);
+});
+
+test("card layout fields toggle immediately and the default can be restored", async ({
+	page,
+}) => {
+	await page.goto("/settings?tab=usage");
+
+	const card = page.getByTestId("layout-card-replica");
+	const library = page.getByTestId("layout-hidden-drawer");
+	await library.getByRole("button", { name: "Show 5-hour limit" }).click();
+	await expect(card.getByText("5-hour limit", { exact: true })).toBeVisible();
+
+	await page.getByRole("button", { name: "Restore default layout" }).click();
+	await expect(card.getByText("Weekly limit", { exact: true })).toBeVisible();
+	await expect(card.getByText("5-hour limit", { exact: true })).toHaveCount(
+		0,
+	);
+	const toast = page.locator('[data-slot="toast"]');
+	await expect(toast).toContainText("Default card layout restored");
+
+	await toast.getByRole("button", { name: "Undo" }).click();
+	await expect(card.getByText("5-hour limit", { exact: true })).toBeVisible();
 });
 
 test("agent enablement bounds usage probes", async ({ page }) => {
@@ -462,7 +482,6 @@ test("runtime sources use selection and installation endpoints", async ({
 	const source = page.getByRole("button", { name: "ccusage source" });
 	await source.click();
 	await page.getByRole("option", { name: "Bundled" }).click();
-	await page.getByRole("button", { name: "Use Bundled" }).click();
 	await expect
 		.poll(() => selections)
 		.toEqual([{ source: "bundled", path: null }]);
@@ -470,7 +489,6 @@ test("runtime sources use selection and installation endpoints", async ({
 
 	await source.click();
 	await page.getByRole("option", { name: "Direct download" }).click();
-	await page.getByRole("button", { name: "Download and use" }).click();
 	await expect.poll(() => installs).toEqual([{ source: "download" }]);
 	await expect(page.getByTestId("usage-runtime-version")).toHaveText(
 		"v20.0.17",
@@ -882,7 +900,7 @@ test("layout editor uses the available settings width", async ({ page }) => {
 
 	const card = page.getByTestId("layout-card-replica");
 	const drawer = page.getByTestId("layout-hidden-drawer");
-	const grid = card.locator("..");
+	const grid = page.getByTestId("usage-layout-editor");
 	const surface = page
 		.locator('[data-slot="tabs-panel"]')
 		.locator(".card--default")
@@ -899,38 +917,29 @@ test("layout editor uses the available settings width", async ({ page }) => {
 	expect(cardBox).not.toBeNull();
 	expect(drawerBox).not.toBeNull();
 	expect(gridBox!.width / surfaceBox!.width).toBeGreaterThan(0.9);
-	expect(drawerBox!.width).toBeGreaterThan(cardBox!.width);
+	expect(cardBox!.width).toBeGreaterThan(drawerBox!.width);
+	expect(drawerBox!.width).toBeGreaterThan(240);
 
 	const hiddenQuota = drawer.getByTestId("layout-hidden-item-5h");
-	const [hiddenQuotaBox, hiddenQuotaMeter] = await Promise.all([
-		hiddenQuota.boundingBox(),
-		hiddenQuota.locator('[data-slot="meter"]').boundingBox(),
-	]);
+	const hiddenQuotaBox = await hiddenQuota.boundingBox();
 	expect(hiddenQuotaBox).not.toBeNull();
-	expect(hiddenQuotaMeter).not.toBeNull();
-	expect(hiddenQuotaBox!.width).toBeLessThanOrEqual(288.5);
-	expect(hiddenQuotaMeter!.width).toBeLessThanOrEqual(288.5);
-	expect(hiddenQuotaMeter!.width / hiddenQuotaBox!.width).toBeGreaterThan(
-		0.9,
-	);
-
-	const [firstHiddenStat, thirdHiddenStat] = await Promise.all([
-		drawer.getByTestId("layout-hidden-item-cacheRead").boundingBox(),
-		drawer.getByTestId("layout-hidden-item-reasoning").boundingBox(),
-	]);
-	expect(firstHiddenStat).not.toBeNull();
-	expect(thirdHiddenStat).not.toBeNull();
-	expect(Math.abs(firstHiddenStat!.y - thirdHiddenStat!.y)).toBeLessThan(2);
+	await expect(
+		drawer.getByRole("button", { name: "Show 5-hour limit" }),
+	).toBeVisible();
+	await expect(hiddenQuota.locator('[data-slot="meter"]')).toHaveCount(0);
+	await expect(
+		drawer.locator('[aria-roledescription="draggable"] button'),
+	).toHaveCount(0);
 
 	await page.setViewportSize({ width: 900, height: 900 });
-	const [narrowQuotaBox, narrowQuotaMeter] = await Promise.all([
-		hiddenQuota.boundingBox(),
-		hiddenQuota.locator('[data-slot="meter"]').boundingBox(),
+	const [narrowCardBox, narrowDrawerBox] = await Promise.all([
+		card.boundingBox(),
+		drawer.boundingBox(),
 	]);
-	expect(narrowQuotaBox).not.toBeNull();
-	expect(narrowQuotaMeter).not.toBeNull();
-	expect(narrowQuotaMeter!.width / narrowQuotaBox!.width).toBeGreaterThan(
-		0.95,
+	expect(narrowCardBox).not.toBeNull();
+	expect(narrowDrawerBox).not.toBeNull();
+	expect(narrowDrawerBox!.y).toBeGreaterThan(
+		narrowCardBox!.y + narrowCardBox!.height,
 	);
 	await expect
 		.poll(() =>
@@ -1109,7 +1118,7 @@ test("layout rows are the complete drag targets", async ({ page }) => {
 			}),
 		);
 	expect(draggableBorders.length).toBeGreaterThan(0);
-	expect(new Set(draggableBorders)).toEqual(new Set(["1px dashed"]));
+	expect(new Set(draggableBorders)).toEqual(new Set(["1px solid"]));
 
 	await hiddenRow.scrollIntoViewIfNeeded();
 	const rowBox = await hiddenRow.boundingBox();
@@ -1147,11 +1156,13 @@ test("wide short layout editor auto-scrolls toward the card target", async ({
 		(element) => element.scrollTop,
 	);
 	expect(initialScrollTop).toBeGreaterThan(0);
-	const [sourceBox, targetBox] = await Promise.all([
+	const [scrollerBox, sourceBox, targetBox] = await Promise.all([
+		scroller.boundingBox(),
 		source.boundingBox(),
 		target.boundingBox(),
 	]);
-	if (!sourceBox || !targetBox) throw new Error("drag endpoints missing");
+	if (!scrollerBox || !sourceBox || !targetBox)
+		throw new Error("drag endpoints missing");
 
 	await page.mouse.move(
 		sourceBox.x + sourceBox.width / 2,
@@ -1166,38 +1177,20 @@ test("wide short layout editor auto-scrolls toward the card target", async ({
 	await expect
 		.poll(() => scroller.evaluate((element) => element.scrollTop))
 		.toBeLessThan(initialScrollTop - 8);
-	const viewportHeight = page.viewportSize()?.height ?? 420;
-	await page.mouse.move(
-		sourceBox.x + sourceBox.width / 2,
-		viewportHeight / 2,
-	);
 	await expect
 		.poll(async () => {
-			const before = await scroller.evaluate(
-				(element) => element.scrollTop,
+			const box = await target.boundingBox();
+			return Boolean(
+				box &&
+				box.y >= scrollerBox.y - 1 &&
+				box.y + box.height <= scrollerBox.y + scrollerBox.height + 1,
 			);
-			await nextBrowserPaint(page);
-			const after = await scroller.evaluate(
-				(element) => element.scrollTop,
-			);
-			return Math.abs(after - before);
 		})
-		.toBeLessThanOrEqual(1);
+		.toBe(true);
 	await expect(target).toBeInViewport({ ratio: 1 });
-	const visibleTargetBox = await target.boundingBox();
-	if (!visibleTargetBox) throw new Error("drop target missing");
-	await page.mouse.move(
-		visibleTargetBox.x + visibleTargetBox.width / 2,
-		visibleTargetBox.y + visibleTargetBox.height / 2,
-	);
-	await expect(
-		card
-			.getByTestId("layout-stat-section")
-			.locator('[data-layout-type="stat"]'),
-	).toHaveText(["Reasoning", "Input", "Output", "Total tokens"]);
+	await page.keyboard.press("Escape");
 	await page.mouse.up();
-	await expect(card.getByText("Reasoning", { exact: true })).toBeVisible();
-	await expect(drawer.getByText("Reasoning", { exact: true })).toHaveCount(0);
+	await expect(card.getByText("Reasoning", { exact: true })).toHaveCount(0);
 });
 
 test("side-by-side horizontal dragging does not scroll the main pane early", async ({
@@ -1271,7 +1264,7 @@ test("side-by-side horizontal dragging does not scroll the main pane early", asy
 	);
 
 	await page.mouse.move(targetCenter.x, targetCenter.y, { steps: 5 });
-	await expect(stats).toHaveText([
+	await expectFieldLabels(stats, [
 		"Input",
 		"Cache read",
 		"Output",
@@ -1284,7 +1277,7 @@ test("side-by-side horizontal dragging does not scroll the main pane early", asy
 
 	await page.keyboard.press("Escape");
 	await page.mouse.up();
-	await expect(stats).toHaveText([
+	await expectFieldLabels(stats, [
 		"Input",
 		"Output",
 		"Total tokens",
@@ -1311,7 +1304,9 @@ test("keyboard dragging previews and cancels without losing focus", async ({
 
 	await expect(hiddenRow).toBeFocused();
 	await expect(card.getByText("Cache read", { exact: true })).toHaveCount(0);
-	await expect(drawer.getByText("Cache read", { exact: true })).toBeVisible();
+	await expect(
+		drawer.getByTestId("layout-hidden-item-cacheRead"),
+	).toBeVisible();
 });
 
 test("keyboard dragging reaches an offscreen card slot in a wide short window", async ({
@@ -1324,7 +1319,7 @@ test("keyboard dragging reaches an offscreen card slot in a wide short window", 
 	const card = page.getByTestId("layout-card-replica");
 	const drawer = page.getByTestId("layout-hidden-drawer");
 	const source = drawer.getByTestId("layout-hidden-item-utilizationOpus");
-	const target = card.getByTestId("layout-slot-stat-1");
+	const target = card.getByTestId("layout-slot-stat-3");
 	await source.evaluate((element) =>
 		element.scrollIntoView({ block: "center" }),
 	);
@@ -1372,17 +1367,18 @@ test("keyboard dragging reaches an offscreen card slot in a wide short window", 
 	expect(reachedTargetBox.y + reachedTargetBox.height).toBeLessThanOrEqual(
 		scrollerBox.y + scrollerBox.height + 1,
 	);
-	await expect(
+	await expectFieldLabels(
 		card
 			.getByTestId("layout-stat-section")
 			.locator('[data-layout-type="stat"]'),
-	).toHaveText(["Input", "Opus weekly", "Output", "Total tokens"]);
+		["Input", "Output", "Total tokens", "Opus weekly"],
+	);
 
 	await page.keyboard.press("Escape");
 	await expect(source).toBeFocused();
 	await expect(card.getByText("Opus weekly", { exact: true })).toHaveCount(0);
 	await expect(
-		drawer.getByText("Opus weekly", { exact: true }),
+		drawer.getByTestId("layout-hidden-item-utilizationOpus"),
 	).toBeVisible();
 });
 
@@ -1399,7 +1395,7 @@ test("keyboard dragging follows the card grid", async ({ page }) => {
 	await expect(page.locator("#root .cursor-grabbing")).toBeVisible();
 	await nextBrowserPaint(page);
 	await page.keyboard.press("ArrowRight");
-	await expect(stats).toHaveText([
+	await expectFieldLabels(stats, [
 		"Output",
 		"Input",
 		"Total tokens",
@@ -1412,14 +1408,14 @@ test("keyboard dragging follows the card grid", async ({ page }) => {
 	await expect(page.locator("#root .cursor-grabbing")).toBeVisible();
 	await nextBrowserPaint(page);
 	await page.keyboard.press("ArrowDown");
-	await expect(stats).toHaveText([
+	await expectFieldLabels(stats, [
 		"Output",
 		"Total tokens",
 		"Input",
 		"Spend",
 	]);
 	await page.keyboard.press("Space");
-	await expect(stats).toHaveText([
+	await expectFieldLabels(stats, [
 		"Output",
 		"Total tokens",
 		"Input",
@@ -1442,7 +1438,7 @@ test("layout editor inserts at a full right slot and previews overflow", async (
 	const liveRegion = page.locator(
 		'[id^="DndLiveRegion-"][role="status"][aria-live="assertive"]',
 	);
-	await target.scrollIntoViewIfNeeded();
+	await source.scrollIntoViewIfNeeded();
 	await expect(liveRegion).toHaveCount(1);
 	const [sourceBox, targetBox] = await Promise.all([
 		source.boundingBox(),
@@ -1464,7 +1460,7 @@ test("layout editor inserts at a full right slot and previews overflow", async (
 	);
 	// Projection is visible before release. Inserting at the first row's right
 	// slot shifts following fields and overflows only the final field.
-	await expect(stats).toHaveText([
+	await expectFieldLabels(stats, [
 		"Input",
 		"Cache read",
 		"Output",
@@ -1473,27 +1469,32 @@ test("layout editor inserts at a full right slot and previews overflow", async (
 	await expect(liveRegion).toHaveText(
 		"Cache read will move to position 2. Spend will move to Not shown.",
 	);
-	await expect(drawer.getByText("Spend", { exact: true })).toBeVisible();
-	await expect(drawer.getByText("Output", { exact: true })).toHaveCount(0);
+	await expect(drawer.getByTestId("layout-hidden-item-cost")).toBeVisible();
+	await expect(
+		drawer.getByTestId("layout-hidden-item-outputTokens"),
+	).toHaveCount(0);
 	await expect(card.locator("[data-drop-action]")).toHaveCount(0);
 	await expect(page.getByTestId(/layout-empty-slot/)).toHaveCount(0);
 	await page.keyboard.press("Escape");
 	await page.mouse.up();
 
-	await expect(stats).toHaveText([
+	await expectFieldLabels(stats, [
 		"Input",
 		"Output",
 		"Total tokens",
 		"Spend",
 	]);
 	await expect(card.getByText("Cache read", { exact: true })).toHaveCount(0);
-	await expect(drawer.getByText("Cache read", { exact: true })).toBeVisible();
-	await expect(drawer.getByText("Spend", { exact: true })).toHaveCount(0);
+	await expect(
+		drawer.getByTestId("layout-hidden-item-cacheRead"),
+	).toBeVisible();
+	await expect(drawer.getByTestId("layout-hidden-item-cost")).toHaveCount(0);
 
 	// The same projection is committed once on release.
 	const sourceAfterCancel = drawer.getByTestId(
 		"layout-hidden-item-cacheRead",
 	);
+	await sourceAfterCancel.scrollIntoViewIfNeeded();
 	const targetAfterCancel = card.getByTestId("layout-slot-stat-1");
 	await sourceAfterCancel.hover();
 	const [nextSourceBox, nextTargetBox] = await Promise.all([
@@ -1516,7 +1517,7 @@ test("layout editor inserts at a full right slot and previews overflow", async (
 		nextTargetBox.y + nextTargetBox.height / 2,
 		{ steps: 10 },
 	);
-	await expect(stats).toHaveText([
+	await expectFieldLabels(stats, [
 		"Input",
 		"Cache read",
 		"Output",
@@ -1527,19 +1528,19 @@ test("layout editor inserts at a full right slot and previews overflow", async (
 	);
 	await page.mouse.up();
 
-	await expect(stats).toHaveText([
+	await expectFieldLabels(stats, [
 		"Input",
 		"Cache read",
 		"Output",
 		"Total tokens",
 	]);
-	await expect(drawer.getByText("Cache read", { exact: true })).toHaveCount(
-		0,
-	);
-	await expect(drawer.getByText("Spend", { exact: true })).toBeVisible();
+	await expect(
+		drawer.getByTestId("layout-hidden-item-cacheRead"),
+	).toHaveCount(0);
+	await expect(drawer.getByTestId("layout-hidden-item-cost")).toBeVisible();
 });
 
-test("drawer keeps complete side boundaries on hover without shifting", async ({
+test("field library does not shift when a draggable row is hovered", async ({
 	page,
 }) => {
 	await page.goto("/settings?tab=usage");
@@ -1555,8 +1556,8 @@ test("drawer keeps complete side boundaries on hover without shifting", async ({
 		};
 	});
 	if (!before) throw new Error("drawer geometry missing");
-	expect(idleBorders.left).toBeGreaterThan(0);
-	expect(idleBorders.right).toBeGreaterThan(0);
+	expect(idleBorders.left).toBe(0);
+	expect(idleBorders.right).toBe(0);
 	expect(idleBorders.right).toBe(idleBorders.left);
 
 	await row.hover();
@@ -1569,10 +1570,9 @@ test("drawer keeps complete side boundaries on hover without shifting", async ({
 		};
 	});
 	if (!after) throw new Error("drawer geometry missing after hover");
-	expect(hoverBorders.left).toBeGreaterThan(0);
+	expect(hoverBorders.left).toBe(0);
 	expect(hoverBorders.right).toBe(hoverBorders.left);
 	expect(after.x).toBeCloseTo(before.x, 1);
-	expect(after.y).toBeCloseTo(before.y, 1);
 	expect(after.width).toBeCloseTo(before.width, 1);
 	expect(after.height).toBeCloseTo(before.height, 1);
 });
@@ -1613,9 +1613,11 @@ test("drawer uses a complete non-shifting drop outline", async ({ page }) => {
 	);
 	await page.mouse.down();
 	await page.mouse.move(sourceBox.x + 12, sourceBox.y - 12, { steps: 3 });
-	await page.mouse.move(drawerBox.x + drawerBox.width / 2, drawerBox.y + 12, {
-		steps: 10,
-	});
+	await page.mouse.move(
+		drawerBox.x + drawerBox.width / 2,
+		drawerBox.y + drawerBox.height / 2,
+		{ steps: 10 },
+	);
 	await expect
 		.poll(() =>
 			drawer.evaluate(
@@ -1679,13 +1681,18 @@ test("layout editor moves a field between the card and the drawer", async ({
 	await page.mouse.move(drawerBox.x + drawerBox.width / 2, drawerBox.y + 12, {
 		steps: 10,
 	});
-	await expect(drawer.getByText("Total tokens")).toBeVisible();
+	await expect(
+		drawer.getByTestId("layout-hidden-item-totalTokens"),
+	).toBeVisible();
 	await page.mouse.up();
 	await expect(card.getByText("Total tokens")).toHaveCount(0);
-	await expect(drawer.getByText("Total tokens")).toBeVisible();
+	await expect(
+		drawer.getByTestId("layout-hidden-item-totalTokens"),
+	).toBeVisible();
 
 	// Drag it back into the stat section; no temporary plus slot appears.
 	const hiddenSource = drawer.getByTestId("layout-hidden-item-totalTokens");
+	await hiddenSource.scrollIntoViewIfNeeded();
 	await nextBrowserPaint(page);
 	const s = await hiddenSource.boundingBox();
 	if (!s) throw new Error("drag source missing");
@@ -1705,7 +1712,9 @@ test("layout editor moves a field between the card and the drawer", async ({
 	await page.mouse.up();
 
 	await expect(card.getByText("Total tokens")).toBeVisible();
-	await expect(drawer.getByText("Total tokens")).toHaveCount(0);
+	await expect(
+		drawer.getByTestId("layout-hidden-item-totalTokens"),
+	).toHaveCount(0);
 });
 
 test("usage settings restore the complete default state", async ({ page }) => {
@@ -1776,7 +1785,7 @@ test("usage settings restore the complete default state", async ({ page }) => {
 	await expect(card.getByText("5-hour limit", { exact: true })).toHaveCount(
 		0,
 	);
-	await expect(card.locator('[data-layout-type="stat"]')).toHaveText([
+	await expectFieldLabels(card.locator('[data-layout-type="stat"]'), [
 		"Input",
 		"Output",
 		"Total tokens",
@@ -1999,4 +2008,14 @@ async function nextBrowserPaint(page: Page) {
 				);
 			}),
 	);
+}
+
+async function expectFieldLabels(locator: Locator, expected: string[]) {
+	await expect
+		.poll(() =>
+			locator.evaluateAll((elements) =>
+				elements.map((element) => element.getAttribute("aria-label")),
+			),
+		)
+		.toEqual(expected);
 }

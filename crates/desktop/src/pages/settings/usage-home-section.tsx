@@ -1,4 +1,5 @@
-import { Button } from "@heroui/react";
+import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
+import { Button, toast } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../../hooks/use-agent-availability";
@@ -9,6 +10,7 @@ import {
 	HOME_WINDOW_IDS,
 	type HomeWindowId,
 	USAGE_QUOTA_AGENTS,
+	createDefaultUsageSettings,
 	type UsageSettings,
 } from "../../lib/store";
 import {
@@ -23,6 +25,7 @@ import {
 	InteractiveCardLayout,
 	type LayoutField,
 } from "./usage-layout-editor";
+import { layoutsEqual } from "./usage-layout-model";
 import {
 	SettingRow,
 	SettingSelect,
@@ -55,6 +58,11 @@ export function HomeCardsSection({
 			: (home.perAgent[layoutTarget] ?? home.default);
 	const hasOverride =
 		layoutTarget !== "default" && layoutTarget in home.perAgent;
+	const defaultLayout = createDefaultUsageSettings().home.default;
+	const canResetLayout =
+		layoutTarget === "default"
+			? !layoutsEqual(editedLayout, defaultLayout)
+			: hasOverride;
 	const updateHome = (patch: Partial<UsageSettings["home"]>) => {
 		updateSettings((settings) => ({
 			...settings,
@@ -80,14 +88,55 @@ export function HomeCardsSection({
 						},
 		}));
 	};
-	const resetOverride = () => {
+	const resetLayout = () => {
+		const resetTarget = layoutTarget;
+		const previousLayout = {
+			windowSlots: [...editedLayout.windowSlots],
+			statSlots: [...editedLayout.statSlots],
+		};
 		updateSettings((settings) => {
+			if (resetTarget === "default") {
+				return {
+					...settings,
+					home: {
+						...settings.home,
+						default: {
+							windowSlots: [...defaultLayout.windowSlots],
+							statSlots: [...defaultLayout.statSlots],
+						},
+					},
+				};
+			}
 			const perAgent = { ...settings.home.perAgent };
-			delete perAgent[layoutTarget];
+			delete perAgent[resetTarget];
 			return {
 				...settings,
 				home: { ...settings.home, perAgent },
 			};
+		});
+		const toastId = toast.success(t("usageLayoutDefaultRestored"), {
+			actionProps: {
+				children: t("usageUndo"),
+				onPress: () => {
+					updateSettings((settings) => ({
+						...settings,
+						home:
+							resetTarget === "default"
+								? {
+										...settings.home,
+										default: previousLayout,
+									}
+								: {
+										...settings.home,
+										perAgent: {
+											...settings.home.perAgent,
+											[resetTarget]: previousLayout,
+										},
+									},
+					}));
+					toast.close(toastId);
+				},
+			},
 		});
 	};
 	const offeredToTarget = (id: HomeWindowId | HomeStatId) => {
@@ -181,58 +230,70 @@ export function HomeCardsSection({
 					/>
 				}
 			/>
-			<div className="w-full space-y-3 border-t border-border pt-4">
-				<div className="flex items-center justify-between gap-3">
-					<div className="space-y-0.5">
-						<span className="text-sm font-medium text-(--foreground)">
-							{t("usageHomeLayout")}
-						</span>
-						<span className="block text-xs text-muted">
-							{t("usageHomeLayoutDescription")}
-						</span>
-					</div>
-					<div className="flex shrink-0 items-center gap-3">
-						{hasOverride && (
+			<div className="w-full border-t border-border pt-4">
+				<div className="overflow-hidden rounded-lg border border-border">
+					<div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+						<div className="min-w-0 space-y-0.5">
+							<span className="text-sm font-medium text-(--foreground)">
+								{t("usageHomeLayout")}
+							</span>
+							<span className="block text-xs text-muted">
+								{t("usageHomeLayoutDescription")}
+							</span>
+						</div>
+						<div className="flex shrink-0 items-center gap-2">
+							<SettingSelect
+								value={layoutTarget}
+								onChange={onLayoutTargetChange}
+								ariaLabel={t("usageLayoutTarget")}
+								options={[
+									{
+										id: "default",
+										label: t("usageLayoutTargetDefault"),
+									},
+									...layoutTargets.map((id) => ({
+										id,
+										label: agentName(id),
+									})),
+								]}
+							/>
 							<Button
 								size="sm"
 								variant="ghost"
-								onPress={resetOverride}
-								className="h-7 px-2 text-xs text-muted"
+								onPress={resetLayout}
+								isDisabled={
+									!home.showUsageOnHome || !canResetLayout
+								}
+								className="h-8 px-2 text-xs text-muted"
 							>
-								{t("usageLayoutResetOverride")}
+								<ArrowUturnLeftIcon className="size-3.5" />
+								{t(
+									layoutTarget === "default"
+										? "usageLayoutRestoreDefault"
+										: "usageLayoutUseDefault",
+								)}
 							</Button>
-						)}
-						<SettingSelect
-							value={layoutTarget}
-							onChange={onLayoutTargetChange}
-							ariaLabel={t("usageLayoutTarget")}
-							options={[
-								{
-									id: "default",
-									label: t("usageLayoutTargetDefault"),
-								},
-								...layoutTargets.map((id) => ({
-									id,
-									label: agentName(id),
-								})),
-							]}
-						/>
+						</div>
+					</div>
+					<InteractiveCardLayout
+						windowFields={windowFields}
+						statFields={statFields}
+						windowSlots={editedLayout.windowSlots}
+						statSlots={editedLayout.statSlots}
+						isDisabled={!home.showUsageOnHome}
+						onCommit={commitLayout}
+						preview={{
+							agentId: previewAgentId,
+							agentName:
+								USAGE_AGENT_LABELS[previewAgentId] ??
+								previewAgentId,
+						}}
+					/>
+					<div className="flex flex-col gap-1 border-t border-border px-4 py-2.5 text-[11px] text-muted sm:flex-row sm:items-center sm:justify-between">
+						<span>{t("usageLayoutAutosaveHint")}</span>
+						<span>{t("usageLayoutKeyboardHint")}</span>
 					</div>
 				</div>
-				<InteractiveCardLayout
-					windowFields={windowFields}
-					statFields={statFields}
-					windowSlots={editedLayout.windowSlots}
-					statSlots={editedLayout.statSlots}
-					isDisabled={!home.showUsageOnHome}
-					onCommit={commitLayout}
-					preview={{
-						agentId: previewAgentId,
-						agentName:
-							USAGE_AGENT_LABELS[previewAgentId] ??
-							previewAgentId,
-					}}
-				/>
 			</div>
 		</section>
 	);

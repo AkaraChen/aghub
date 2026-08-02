@@ -83,6 +83,29 @@ export function layoutsEqual(
 	);
 }
 
+export function setLayoutFieldVisible(
+	layout: CardLayoutModel,
+	id: string,
+	type: LayoutSlotType,
+	isVisible: boolean,
+): CardLayoutModel {
+	const slots = slotsFor(layout, type);
+	const shown = shownIds(layout, type);
+	if (isVisible) {
+		if (shown.includes(id) || shown.length >= slots.length) return layout;
+		return withSlots(layout, type, fillSlots(slots.length, [...shown, id]));
+	}
+	if (!shown.includes(id)) return layout;
+	return withSlots(
+		layout,
+		type,
+		fillSlots(
+			slots.length,
+			shown.filter((shownId) => shownId !== id),
+		),
+	);
+}
+
 function compactSlots(
 	slots: (string | null)[],
 	knownIds: ReadonlySet<string>,
