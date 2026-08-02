@@ -188,7 +188,11 @@ test("card layout fields toggle immediately and the default can be restored", as
 
 	const card = page.getByTestId("layout-card-replica");
 	const library = page.getByTestId("layout-hidden-drawer");
-	await library.getByRole("button", { name: "Show 5-hour limit" }).click();
+	const fiveHourField = library.getByRole("checkbox", {
+		name: "5-hour limit",
+	});
+	await fiveHourField.focus();
+	await fiveHourField.press("Space");
 	await expect(card.getByText("5-hour limit", { exact: true })).toBeVisible();
 
 	await page.getByRole("button", { name: "Restore default layout" }).click();
@@ -201,6 +205,29 @@ test("card layout fields toggle immediately and the default can be restored", as
 
 	await toast.getByRole("button", { name: "Undo" }).click();
 	await expect(card.getByText("5-hour limit", { exact: true })).toBeVisible();
+});
+
+test("card layout editor uses HeroUI surface and control anatomy", async ({
+	page,
+}) => {
+	await page.goto("/settings?tab=usage");
+
+	const editor = page.getByTestId("usage-layout-editor");
+	const card = page.getByTestId("layout-card-replica");
+	const library = page.getByTestId("layout-hidden-drawer");
+	await expect(editor).toHaveAttribute("data-slot", "surface");
+	await expect(card).toHaveAttribute("data-slot", "card");
+	await expect(card.locator('[data-slot="card-header"]')).toBeVisible();
+	await expect(card.locator('[data-slot="card-content"]')).toBeVisible();
+	await expect(
+		page.getByRole("toolbar", { name: "Card layout actions" }),
+	).toBeVisible();
+	await expect(
+		library.getByRole("checkbox", { name: "Weekly limit" }),
+	).toBeChecked();
+	await expect(
+		library.getByRole("checkbox", { name: "5-hour limit" }),
+	).not.toBeChecked();
 });
 
 test("agent enablement bounds usage probes", async ({ page }) => {
@@ -856,9 +883,9 @@ test("Usage settings uses the same surface level as Appearance", async ({
 		)
 		.toBe("rgba(0, 0, 0, 0)");
 	await expect(usagePanel.locator(".surface--default")).toHaveCount(0);
-	await expect(usageCard.locator('[data-slot="card-content"]')).toHaveCount(
-		0,
-	);
+	await expect(
+		usageCard.locator(':scope > [data-slot="card-content"]'),
+	).toHaveCount(0);
 });
 
 test("Agents panel lets Card variants own static surfaces", async ({
@@ -924,7 +951,7 @@ test("layout editor uses the available settings width", async ({ page }) => {
 	const hiddenQuotaBox = await hiddenQuota.boundingBox();
 	expect(hiddenQuotaBox).not.toBeNull();
 	await expect(
-		drawer.getByRole("button", { name: "Show 5-hour limit" }),
+		drawer.getByRole("checkbox", { name: "5-hour limit" }),
 	).toBeVisible();
 	await expect(hiddenQuota.locator('[data-slot="meter"]')).toHaveCount(0);
 	await expect(

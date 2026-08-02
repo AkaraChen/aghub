@@ -1,5 +1,5 @@
 import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
-import { Button, toast } from "@heroui/react";
+import { Button, toast, Toolbar } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../../hooks/use-agent-availability";
@@ -231,69 +231,66 @@ export function HomeCardsSection({
 				}
 			/>
 			<div className="w-full border-t border-border pt-4">
-				<div className="overflow-hidden rounded-lg border border-border">
-					<div className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-						<div className="min-w-0 space-y-0.5">
-							<span className="text-sm font-medium text-(--foreground)">
-								{t("usageHomeLayout")}
-							</span>
-							<span className="block text-xs text-muted">
-								{t("usageHomeLayoutDescription")}
-							</span>
-						</div>
-						<div className="flex shrink-0 items-center gap-2">
-							<SettingSelect
-								value={layoutTarget}
-								onChange={onLayoutTargetChange}
-								ariaLabel={t("usageLayoutTarget")}
-								options={[
-									{
-										id: "default",
-										label: t("usageLayoutTargetDefault"),
-									},
-									...layoutTargets.map((id) => ({
-										id,
-										label: agentName(id),
-									})),
-								]}
-							/>
-							<Button
-								size="sm"
-								variant="ghost"
-								onPress={resetLayout}
-								isDisabled={
-									!home.showUsageOnHome || !canResetLayout
-								}
-								className="h-8 px-2 text-xs text-muted"
-							>
-								<ArrowUturnLeftIcon className="size-3.5" />
-								{t(
-									layoutTarget === "default"
-										? "usageLayoutRestoreDefault"
-										: "usageLayoutUseDefault",
-								)}
-							</Button>
-						</div>
+				<div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+					<div className="min-w-0 space-y-0.5">
+						<span className="text-sm font-medium text-(--foreground)">
+							{t("usageHomeLayout")}
+						</span>
+						<span className="block text-xs text-muted">
+							{t("usageHomeLayoutDescription")}
+						</span>
 					</div>
-					<InteractiveCardLayout
-						windowFields={windowFields}
-						statFields={statFields}
-						windowSlots={editedLayout.windowSlots}
-						statSlots={editedLayout.statSlots}
-						isDisabled={!home.showUsageOnHome}
-						onCommit={commitLayout}
-						preview={{
-							agentId: previewAgentId,
-							agentName:
-								USAGE_AGENT_LABELS[previewAgentId] ??
-								previewAgentId,
-						}}
-					/>
-					<div className="flex flex-col gap-1 border-t border-border px-4 py-2.5 text-[11px] text-muted sm:flex-row sm:items-center sm:justify-between">
-						<span>{t("usageLayoutAutosaveHint")}</span>
-						<span>{t("usageLayoutKeyboardHint")}</span>
-					</div>
+					<Toolbar
+						aria-label={t("usageLayoutActions")}
+						className="flex shrink-0 items-center gap-2"
+					>
+						<SettingSelect
+							value={layoutTarget}
+							onChange={onLayoutTargetChange}
+							ariaLabel={t("usageLayoutTarget")}
+							options={[
+								{
+									id: "default",
+									label: t("usageLayoutTargetDefault"),
+								},
+								...layoutTargets.map((id) => ({
+									id,
+									label: agentName(id),
+								})),
+							]}
+						/>
+						<Button
+							size="sm"
+							variant="ghost"
+							onPress={resetLayout}
+							isDisabled={
+								!home.showUsageOnHome || !canResetLayout
+							}
+							className="px-2 text-xs text-muted"
+						>
+							<ArrowUturnLeftIcon className="size-3.5" />
+							{t(
+								layoutTarget === "default"
+									? "usageLayoutRestoreDefault"
+									: "usageLayoutUseDefault",
+							)}
+						</Button>
+					</Toolbar>
 				</div>
+				<InteractiveCardLayout
+					windowFields={windowFields}
+					statFields={statFields}
+					windowSlots={editedLayout.windowSlots}
+					statSlots={editedLayout.statSlots}
+					isDisabled={!home.showUsageOnHome}
+					onCommit={commitLayout}
+					preview={{
+						agentId: previewAgentId,
+						agentName:
+							USAGE_AGENT_LABELS[previewAgentId] ??
+							previewAgentId,
+					}}
+				/>
 			</div>
 		</section>
 	);

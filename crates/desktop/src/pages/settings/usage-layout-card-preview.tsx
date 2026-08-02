@@ -1,5 +1,5 @@
 import { useDroppable } from "@dnd-kit/core";
-import { Meter } from "@heroui/react";
+import { Card, Meter } from "@heroui/react";
 import type { HTMLAttributes, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { AgentIcon } from "../../lib/agent-icons";
@@ -46,113 +46,108 @@ export function UsageLayoutCardPreview({
 }) {
 	const { t } = useTranslation();
 	return (
-		<div className="min-w-0 p-4 lg:border-r lg:border-border">
-			<div className="mb-3 flex items-center justify-between gap-3">
-				<span className="text-[11px] font-medium text-muted">
-					{t("usageLayoutLivePreview")}
-				</span>
-				<span className="truncate text-[11px] text-muted">
-					{t("usageLayoutPreviewAgent", {
-						agent: preview.agentName,
-					})}
-				</span>
-			</div>
-			<div
+		<div className="min-w-0 p-3 lg:border-r lg:border-border">
+			<Card
 				data-testid="layout-card-replica"
-				className="min-h-80 w-full rounded-md border border-border bg-surface p-3"
+				className="min-h-60 w-full p-3 !rounded-lg"
 			>
-				<div className="flex items-center gap-2 border-b border-border pb-3">
+				<Card.Header className="flex flex-row items-center gap-2 p-0">
 					<AgentIcon
 						id={preview.agentId}
 						name={preview.agentName}
 						size="xs"
 					/>
-					<span className="text-sm font-medium text-foreground">
+					<Card.Title className="text-sm font-medium">
 						{preview.agentName}
-					</span>
-				</div>
-
-				<CardSection
-					type="window"
-					isDisabled={isDisabled}
-					className="mt-3 flex min-h-8 flex-col gap-1.5 rounded-md"
-					data-testid="layout-window-section"
-				>
-					{shownWindows.map((id, index) => {
-						const field = fieldById.get(id);
-						if (!field) return null;
-						return (
-							<CardDropSlot
-								key={layoutSlotId("window", index)}
-								type="window"
-								index={index}
-								isDisabled={isDisabled}
-							>
-								<LayoutDraggableField
-									field={field}
+					</Card.Title>
+				</Card.Header>
+				<Card.Content className="flex flex-1 flex-col p-0 pt-2">
+					<CardSection
+						type="window"
+						isDisabled={isDisabled}
+						className="flex min-h-8 flex-col gap-1.5 rounded-md"
+						data-testid="layout-window-section"
+					>
+						{shownWindows.map((id, index) => {
+							const field = fieldById.get(id);
+							if (!field) return null;
+							return (
+								<CardDropSlot
+									key={layoutSlotId("window", index)}
 									type="window"
+									index={index}
 									isDisabled={isDisabled}
-									isActive={drag?.activeId === field.id}
-									onNodeChange={onNodeChange}
-									data-testid={`layout-card-item-${field.id}`}
-									className="flex items-center rounded-md px-1.5 py-1"
 								>
-									<PreviewBar
-										label={field.label}
-										pct={
-											PREVIEW_BAR_PCT[
-												index % PREVIEW_BAR_PCT.length
-											]
-										}
-									/>
-								</LayoutDraggableField>
-							</CardDropSlot>
-						);
-					})}
-				</CardSection>
+									<LayoutDraggableField
+										field={field}
+										type="window"
+										isDisabled={isDisabled}
+										isActive={drag?.activeId === field.id}
+										onNodeChange={onNodeChange}
+										data-testid={`layout-card-item-${field.id}`}
+										className="flex items-center rounded-md px-1.5 py-1"
+									>
+										<PreviewBar
+											label={field.label}
+											pct={
+												PREVIEW_BAR_PCT[
+													index %
+														PREVIEW_BAR_PCT.length
+												]
+											}
+										/>
+									</LayoutDraggableField>
+								</CardDropSlot>
+							);
+						})}
+					</CardSection>
 
-				<CardSection
-					type="stat"
-					isDisabled={isDisabled}
-					className={cn(
-						"grid min-h-8 grid-cols-2 gap-x-3 gap-y-1 rounded-md",
-						shownWindows.length > 0 && "mt-3",
-					)}
-					data-testid="layout-stat-section"
-				>
-					{shownStats.map((id, index) => {
-						const field = fieldById.get(id);
-						if (!field) return null;
-						return (
-							<CardDropSlot
-								key={layoutSlotId("stat", index)}
-								type="stat"
-								index={index}
-								isDisabled={isDisabled}
-							>
-								<LayoutDraggableField
-									field={field}
+					<CardSection
+						type="stat"
+						isDisabled={isDisabled}
+						className={cn(
+							"grid min-h-8 grid-cols-2 gap-x-3 gap-y-1 rounded-md",
+							shownWindows.length > 0 && "mt-2",
+						)}
+						data-testid="layout-stat-section"
+					>
+						{shownStats.map((id, index) => {
+							const field = fieldById.get(id);
+							if (!field) return null;
+							return (
+								<CardDropSlot
+									key={layoutSlotId("stat", index)}
 									type="stat"
+									index={index}
 									isDisabled={isDisabled}
-									isActive={drag?.activeId === field.id}
-									onNodeChange={onNodeChange}
-									data-testid={`layout-card-item-${field.id}`}
-									data-layout-type="stat"
-									className="flex min-w-0 items-center rounded-md px-1.5 py-1 text-[11px]"
 								>
-									<StatBody field={field} />
-								</LayoutDraggableField>
-							</CardDropSlot>
-						);
-					})}
-				</CardSection>
+									<LayoutDraggableField
+										field={field}
+										type="stat"
+										isDisabled={isDisabled}
+										isActive={drag?.activeId === field.id}
+										onNodeChange={onNodeChange}
+										data-testid={`layout-card-item-${field.id}`}
+										data-layout-type="stat"
+										className="flex min-w-0 items-center rounded-md px-1.5 py-1 text-[11px]"
+									>
+										<StatBody field={field} />
+									</LayoutDraggableField>
+								</CardDropSlot>
+							);
+						})}
+					</CardSection>
 
-				{shownWindows.length === 0 && shownStats.length === 0 && (
-					<p className="py-3 text-center text-[11px] text-muted">
-						{t("usageLayoutEmptyCard")}
-					</p>
-				)}
-			</div>
+					{shownWindows.length === 0 && shownStats.length === 0 && (
+						<p className="py-3 text-center text-[11px] text-muted">
+							{t("usageLayoutEmptyCard")}
+						</p>
+					)}
+				</Card.Content>
+			</Card>
+			<p className="mt-2 text-right text-[11px] text-muted">
+				{t("usageLayoutKeyboardHint")}
+			</p>
 		</div>
 	);
 }

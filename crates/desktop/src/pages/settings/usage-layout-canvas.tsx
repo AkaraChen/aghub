@@ -1,4 +1,5 @@
 import { DragOverlay } from "@dnd-kit/core";
+import { Surface } from "@heroui/react";
 import { cn } from "../../lib/utils";
 import {
 	LayoutDragGhost,
@@ -57,12 +58,13 @@ export function UsageLayoutCanvas({
 
 	return (
 		<>
-			<div
+			<Surface
+				variant="secondary"
 				data-testid="usage-layout-editor"
 				aria-disabled={isDisabled || undefined}
 				inert={isDisabled || undefined}
 				className={cn(
-					"grid w-full grid-cols-1 lg:grid-cols-[minmax(0,1fr)_17rem]",
+					"grid w-full grid-cols-1 overflow-hidden rounded-lg border border-border lg:grid-cols-[minmax(0,1fr)_16rem]",
 					"transition-opacity duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
 					isDisabled && "opacity-55",
 				)}
@@ -89,7 +91,7 @@ export function UsageLayoutCanvas({
 					onNodeChange={onNodeChange}
 					onVisibilityChange={onVisibilityChange}
 				/>
-			</div>
+			</Surface>
 
 			<DragOverlay adjustScale={false} dropAnimation={null}>
 				{activeField && drag ? (
