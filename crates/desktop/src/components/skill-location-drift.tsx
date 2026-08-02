@@ -160,6 +160,22 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 		}),
 	);
 	const isReviewing = result.isFetching || resolution.isPending;
+	const handleRetryComparison = () => {
+		void result.refetch().then((refreshed) => {
+			const refreshedUnavailableCount = refreshed.isError
+				? targets.length
+				: (refreshed.data?.results.filter(
+						(comparison) => comparison === null,
+					).length ?? 0);
+			if (refreshedUnavailableCount > 0) {
+				toast.warning(t("skillComparisonUnavailable"), {
+					description: t("skillComparisonUnavailableDescription", {
+						count: refreshedUnavailableCount,
+					}),
+				});
+			}
+		});
+	};
 
 	const handleResolve = () => {
 		if (!selectedVersion || unavailableCount > 0 || result.isFetching)
@@ -219,6 +235,9 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 					description={t("skillComparisonUnavailableDescription", {
 						count: unavailableCount,
 					})}
+					actionLabel={t("checkAgain")}
+					isPending={result.isFetching}
+					onAction={handleRetryComparison}
 				/>
 			)}
 

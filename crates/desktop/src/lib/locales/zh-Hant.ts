@@ -1035,6 +1035,7 @@ export default {
 	diffFileRemoved: "刪除",
 	diffFileModified: "修改",
 	diffVersionAbsent: "不存在",
+	diffRegularFile: "一般檔案",
 	diffPreviewUnavailable: "此檔案無法顯示文字差異預覽。",
 	diffPreviewTruncated: "為保持差異檢視回應，已省略此檔案的文字預覽。",
 	diffFilesOmitted: "另有 {{count}} 個發生變更的檔案未顯示。",
@@ -1067,7 +1068,7 @@ export default {
 	showLess: "收起",
 	skillContent: "內容",
 	noContent: "暫無內容",
-	symlink: "符號連結",
+	symlink: "軟連結",
 	symlinkTarget: "→ {{target}}",
 
 	// Env Editor
