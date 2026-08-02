@@ -6,6 +6,7 @@ import { initializeIntegrationPreferences } from "./initialize-integration-prefe
 import { initializeOnboardingProgress } from "./initialize-onboarding-progress";
 import { initializeProjects } from "./initialize-projects";
 import { initializeSidebarItems } from "./initialize-sidebar-items";
+import { initializeSkillCopyCheck } from "./initialize-skill-copy-check";
 import { initializeSkillAuditPreferences } from "./initialize-skill-audit-preferences";
 import { initializeStarredResources } from "./initialize-starred-resources";
 import { normalizeUpdateChannel } from "./normalize-update-channel";
@@ -54,6 +55,10 @@ export async function migrate(store: Store): Promise<void> {
 
 	if (version < 10) {
 		await initializeSkillAuditPreferences(store);
+	}
+
+	if (version < 11) {
+		await initializeSkillCopyCheck(store);
 	}
 
 	await store.set("version", CURRENT_VERSION);

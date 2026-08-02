@@ -39,6 +39,7 @@ import {
 } from "../../components/skill-list";
 import { useApi } from "../../hooks/use-api";
 import { useSkillGroups } from "../../hooks/use-resource-groups";
+import { useSkillCopyCheckPreference } from "../../hooks/use-skill-copy-check-preference";
 import { visibleEntryKeys } from "../../hooks/use-list-selection";
 import { useSkillSections } from "../../hooks/use-skill-sections";
 import { cn } from "../../lib/utils";
@@ -76,6 +77,12 @@ export default function SkillsPage() {
 	const { data: globalLock } = useQuery({
 		...globalSkillLockQueryOptions({ api, enabled: true }),
 	});
+	const { skillCopyCheckPreference, skillCopyCheckReady } =
+		useSkillCopyCheckPreference();
+	const automaticallyCheckCopies =
+		skillCopyCheckReady &&
+		skillCopyCheckPreference.enabled &&
+		skillCopyCheckPreference.mode === "automatic";
 
 	const [panelMode, setPanelMode] = useState<
 		"create" | "import" | "update-source" | "import-github" | null
@@ -149,10 +156,15 @@ export default function SkillsPage() {
 			: undefined;
 	}, [allSkillGroups]);
 	const { data: copyStatus, isError: isCopyStatusError } = useQuery(
-		skillCopyStatusQueryOptions({ api, request: copyStatusRequest }),
+		skillCopyStatusQueryOptions({
+			api,
+			request: copyStatusRequest,
+			enabled: automaticallyCheckCopies,
+		}),
 	);
 	const copyStatuses = useMemo(() => {
 		const statuses = new Map<string, SkillCopyListStatus>();
+		if (!automaticallyCheckCopies) return statuses;
 		if (isCopyStatusError) {
 			for (const group of copyStatusRequest?.groups ?? []) {
 				statuses.set(group.name, "unknown");
@@ -167,7 +179,12 @@ export default function SkillsPage() {
 			}
 		}
 		return statuses;
-	}, [copyStatus, copyStatusRequest, isCopyStatusError]);
+	}, [
+		automaticallyCheckCopies,
+		copyStatus,
+		copyStatusRequest,
+		isCopyStatusError,
+	]);
 	const visibleKeys = useMemo(
 		() => visibleEntryKeys(sections.orderedEntries),
 		[sections.orderedEntries],

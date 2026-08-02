@@ -3,7 +3,13 @@ import {
 	type QueryClient,
 	queryOptions,
 } from "@tanstack/react-query";
-import { getSkillAuditEnabled, setSkillAuditEnabled } from "../lib/store";
+import {
+	getSkillAuditEnabled,
+	getSkillCopyCheckPreference,
+	setSkillAuditEnabled,
+	setSkillCopyCheckPreference,
+	type SkillCopyCheckPreference,
+} from "../lib/store";
 import { queryKeys } from "./keys";
 
 export function skillAuditPreferenceQueryOptions() {
@@ -34,6 +40,46 @@ export function setSkillAuditPreferenceMutationOptions(
 				});
 			}
 			await onSuccess?.(enabled);
+		},
+	});
+}
+
+export function skillCopyCheckPreferenceQueryOptions() {
+	return queryOptions({
+		queryKey: queryKeys.preferences.skillCopyCheck(),
+		queryFn: getSkillCopyCheckPreference,
+		staleTime: Number.POSITIVE_INFINITY,
+	});
+}
+
+export function setSkillCopyCheckPreferenceMutationOptions(
+	queryClient: QueryClient,
+	onSuccess?: (preference: SkillCopyCheckPreference) => void | Promise<void>,
+) {
+	return mutationOptions({
+		mutationFn: setSkillCopyCheckPreference,
+		onSuccess: async (preference) => {
+			queryClient.setQueryData(
+				queryKeys.preferences.skillCopyCheck(),
+				preference,
+			);
+			if (!preference.enabled || preference.mode === "manual") {
+				await Promise.all([
+					queryClient.cancelQueries({
+						queryKey: queryKeys.skills.diffs(),
+					}),
+					queryClient.cancelQueries({
+						queryKey: queryKeys.skills.copyStatuses(),
+					}),
+				]);
+				queryClient.removeQueries({
+					queryKey: queryKeys.skills.diffs(),
+				});
+				queryClient.removeQueries({
+					queryKey: queryKeys.skills.copyStatuses(),
+				});
+			}
+			await onSuccess?.(preference);
 		},
 	});
 }

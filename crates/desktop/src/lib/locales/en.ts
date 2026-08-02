@@ -707,6 +707,19 @@ export default {
 	skillAuditEnabled: "Automatic skill scans enabled",
 	skillAuditDisabled: "Automatic skill scans disabled",
 	skillAuditPreferenceError: "Failed to update the skill scan setting",
+	skillCopyCheck: "Skill change checks",
+	skillCopyCheckDescription:
+		"Check matching copies for content differences and file relationship problems.",
+	skillCopyCheckMode: "When to check",
+	skillCopyCheckModeDescription:
+		"Check while browsing skills, or only when requested from a skill detail.",
+	skillCopyCheckWriteHint:
+		"Turning this off stops background checks. A copy is still verified before it is replaced.",
+	skillCopyCheckPreferenceError:
+		"Failed to update the copy difference setting",
+	automatic: "Automatic",
+	manual: "Manual",
+	checkSkillCopyDifferences: "Check changes",
 	auditAcknowledgementError: "Failed to update the hidden warning",
 	acknowledgedAuditsDescription:
 		"Warnings stay hidden only for the matching assessment. Skill or scanner changes show them again.",

@@ -20,8 +20,9 @@
 	);
 
 	const defaultEntries = [
-		["version", 10],
+		["version", 11],
 		["skillAuditEnabled", true],
+		["skillCopyCheck", { enabled: true, mode: "automatic" }],
 		["acknowledgedSkillAssessments", []],
 		[
 			"onboardingProgress",

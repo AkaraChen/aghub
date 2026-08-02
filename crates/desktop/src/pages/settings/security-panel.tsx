@@ -13,9 +13,8 @@ export default function SecurityPanel() {
 	const queryClient = useQueryClient();
 	const { acknowledgedAssessments, setAssessmentAcknowledged } =
 		useAuditAcknowledgements();
-	const { data: skillAuditEnabled = true, isPending } = useQuery(
-		skillAuditPreferenceQueryOptions(),
-	);
+	const { data: skillAuditEnabled = true, isPending: isAuditPending } =
+		useQuery(skillAuditPreferenceQueryOptions());
 	const preferenceMutation = useMutation({
 		...setSkillAuditPreferenceMutationOptions(queryClient, (enabled) => {
 			toast.success(
@@ -49,7 +48,9 @@ export default function SecurityPanel() {
 					</div>
 					<Switch
 						aria-label={t("automaticSkillAudit")}
-						isDisabled={isPending || preferenceMutation.isPending}
+						isDisabled={
+							isAuditPending || preferenceMutation.isPending
+						}
 						isSelected={skillAuditEnabled}
 						onChange={(checked) =>
 							preferenceMutation.mutate(checked)
