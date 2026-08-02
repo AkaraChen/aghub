@@ -677,6 +677,17 @@ export default {
 	skillAuditEnabled: "已开启自动技能扫描",
 	skillAuditDisabled: "已关闭自动技能扫描",
 	skillAuditPreferenceError: "无法更新技能扫描设置",
+	skillCopyCheck: "Skill 变更检查",
+	skillCopyCheckDescription: "检查同名副本的内容差异和文件关系问题。",
+	skillCopyCheckMode: "检查时机",
+	skillCopyCheckModeDescription:
+		"浏览 Skill 时自动检查，或仅在详情中手动检查。",
+	skillCopyCheckWriteHint:
+		"关闭后不再后台检查；替换副本前仍会校验即将写入的内容。",
+	skillCopyCheckPreferenceError: "无法更新副本差异检查设置",
+	automatic: "自动",
+	manual: "手动",
+	checkSkillCopyDifferences: "检查变更",
 	auditAcknowledgementError: "无法更新警告显示状态",
 	acknowledgedAuditsDescription:
 		"仅隐藏与当前扫描结果完全匹配的警告。技能内容或扫描规则变化后会重新显示。",

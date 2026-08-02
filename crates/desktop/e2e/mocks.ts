@@ -202,6 +202,7 @@ export async function installMocks(page: Page) {
 	const skillDiffs = new Map<string, SkillDirectoryDiffResponse>();
 	const skillDiffErrors = new Set<string>();
 	const skillDiffRequests: SkillDiffRequest[] = [];
+	const skillTreeRequests: string[] = [];
 	let skillDiffDelayMs = 0;
 	const skillCopyStatuses = new Map<string, boolean>();
 	const skillCopyStatusRequests: SkillCopyStatusRequest[] = [];
@@ -332,6 +333,7 @@ export async function installMocks(page: Page) {
 
 		if (p === "/skills/tree") {
 			const treePath = url.searchParams.get("path") ?? "";
+			skillTreeRequests.push(treePath);
 			const base = treePath.split("/").filter(Boolean).pop() ?? "skill";
 			return json({
 				name: base,
@@ -675,6 +677,9 @@ export async function installMocks(page: Page) {
 	// Control handle so specs can mutate the mock state mid-test (e.g.
 	// simulate reinstalling a deleted skill, made visible by a refetch).
 	return {
+		getSkillTreeRequests() {
+			return [...skillTreeRequests];
+		},
 		getSkillCopyStatusRequestCount() {
 			return skillCopyStatusRequests.length;
 		},

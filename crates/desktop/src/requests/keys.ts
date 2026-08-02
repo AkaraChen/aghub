@@ -33,8 +33,10 @@ export const queryKeys = {
 		) => ["skills", "content", path, scope, projectRoot ?? null] as const,
 		diff: (request: SkillDiffRequest | null) =>
 			["skills", "diff", request] as const,
+		diffs: () => ["skills", "diff"] as const,
 		copyStatus: (request: SkillCopyStatusRequest | null) =>
 			["skills", "copy-status", request] as const,
+		copyStatuses: () => ["skills", "copy-status"] as const,
 		tree: (
 			path: string,
 			scope: "global" | "project" | "all" = "global",
@@ -52,6 +54,7 @@ export const queryKeys = {
 	preferences: {
 		all: () => ["preferences"] as const,
 		skillAudit: () => ["preferences", "skill-audit"] as const,
+		skillCopyCheck: () => ["preferences", "skill-copy-check"] as const,
 	},
 	mcps: {
 		all: () => ["mcps"] as const,

@@ -23,6 +23,7 @@ import { useLocation } from "wouter";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useAuditAcknowledgements } from "../hooks/use-audit-acknowledgements";
+import { useSkillCopyCheckPreference } from "../hooks/use-skill-copy-check-preference";
 import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
 import { useFavorites } from "../hooks/use-favorites";
 import { useCurrentCodeEditor } from "../hooks/use-integrations";
@@ -74,6 +75,8 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const { allAgents, availableAgents } = useAgentAvailability();
 	const api = useApi();
 	const { skillAuditEnabled, skillAuditReady } = useSkillAuditPreference();
+	const { skillCopyCheckPreference, skillCopyCheckReady } =
+		useSkillCopyCheckPreference();
 
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [locationToDelete, setLocationToDelete] =
@@ -82,6 +85,9 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const [transferDialogOpen, setTransferDialogOpen] = useState(false);
 	const [manageDialogOpen, setManageDialogOpen] = useState(false);
 	const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+	const [manualCopyCheckKey, setManualCopyCheckKey] = useState<string | null>(
+		null,
+	);
 
 	const { isSkillStarred, toggleSkillStar } = useFavorites();
 	const isStarred = isSkillStarred(group.items[0].name);
@@ -242,6 +248,15 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		() => buildLocationGroups(group.items, allAgents),
 		[group.items, allAgents],
 	);
+	const copyCheckKey = copyLocationGroups
+		.map((location) => location.sourcePath)
+		.join("\n");
+	const manualCopyCheckRequested = manualCopyCheckKey === copyCheckKey;
+	const copyCheckEnabled =
+		skillCopyCheckReady &&
+		skillCopyCheckPreference.enabled &&
+		(skillCopyCheckPreference.mode === "automatic" ||
+			manualCopyCheckRequested);
 
 	const displayedLocations =
 		showAllLocations || allLocationGroups.length <= 3
@@ -265,7 +280,9 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 						? "project"
 						: "global",
 				projectRoot: projectPath,
-				enabled: !includesProjectLocation || Boolean(projectPath),
+				enabled:
+					copyCheckEnabled &&
+					(!includesProjectLocation || Boolean(projectPath)),
 			});
 		}),
 	});
@@ -296,9 +313,9 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	additionalDisplayedLocations.forEach((location, index) => {
 		const query = additionalLocationTreeQueries[index];
 		locationTreeStateByPath.set(location.sourcePath, {
-			tree: query?.data,
-			unavailable: Boolean(query?.error),
-			isFetching: Boolean(query?.isFetching),
+			tree: copyCheckEnabled ? query?.data : undefined,
+			unavailable: copyCheckEnabled && Boolean(query?.error),
+			isFetching: copyCheckEnabled && Boolean(query?.isFetching),
 			retry: async () => {
 				const refreshed = await query?.refetch();
 				if (refreshed?.isError) {
@@ -692,6 +709,16 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 						locations={copyLocationGroups}
 						scope={projectPath ? "all" : "global"}
 						projectRoot={projectPath}
+						isCheckEnabled={copyCheckEnabled}
+						canRequestCheck={
+							skillCopyCheckReady &&
+							skillCopyCheckPreference.enabled &&
+							skillCopyCheckPreference.mode === "manual" &&
+							!manualCopyCheckRequested
+						}
+						onRequestCheck={() =>
+							setManualCopyCheckKey(copyCheckKey)
+						}
 					/>
 
 					{skillContent && (

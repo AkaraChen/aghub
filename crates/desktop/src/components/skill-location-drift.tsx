@@ -35,6 +35,9 @@ interface SkillLocationDriftProps {
 	locations: LocationGroup[];
 	scope: "global" | "project" | "all";
 	projectRoot?: string;
+	isCheckEnabled: boolean;
+	canRequestCheck: boolean;
+	onRequestCheck: () => void;
 }
 
 const LOCATION_DIFFERENCES_ID = "skill-location-differences";
@@ -44,7 +47,8 @@ function useSkillLocationVersions({
 	locations,
 	scope,
 	projectRoot,
-}: SkillLocationDriftProps & { api: ApiClient }) {
+	enabled,
+}: SkillLocationDriftProps & { api: ApiClient; enabled: boolean }) {
 	const baseline = locations[0];
 	const targets = useMemo(() => locations.slice(1), [locations]);
 	const result = useQuery(
@@ -64,10 +68,10 @@ function useSkillLocationVersions({
 							project_root: projectRoot ?? null,
 						}
 					: undefined,
-			enabled: Boolean(baseline && targets.length > 0),
+			enabled: enabled && Boolean(baseline && targets.length > 0),
 		}),
 	);
-	const comparisonResults = result.data?.results;
+	const comparisonResults = enabled ? result.data?.results : undefined;
 	const groupedVersions = useMemo(
 		() =>
 			baseline
@@ -115,7 +119,14 @@ function useSkillLocationVersions({
 }
 
 export function SkillLocationDrift(props: SkillLocationDriftProps) {
-	const { locations, scope, projectRoot } = props;
+	const {
+		locations,
+		scope,
+		projectRoot,
+		isCheckEnabled,
+		canRequestCheck,
+		onRequestCheck,
+	} = props;
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
@@ -130,7 +141,7 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 		view;
 	const comparableLocations = locations;
 	const { baseline, targets, result, versions, unavailableCount, hasLinks } =
-		useSkillLocationVersions({ ...props, api });
+		useSkillLocationVersions({ ...props, api, enabled: isCheckEnabled });
 	const baselineVersion = versions[0];
 	const comparisonVersions = versions.slice(1);
 	const activeVersion =
@@ -224,6 +235,16 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 	};
 
 	if (!baseline || targets.length === 0) return null;
+	if (canRequestCheck) {
+		return (
+			<div className="flex justify-end">
+				<Button variant="secondary" onPress={onRequestCheck}>
+					{t("checkSkillCopyDifferences")}
+				</Button>
+			</div>
+		);
+	}
+	if (!isCheckEnabled) return null;
 	if (result.isPending) return null;
 	if (versions.length <= 1 && unavailableCount === 0) return null;
 

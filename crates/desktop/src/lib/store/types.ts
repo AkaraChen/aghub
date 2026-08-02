@@ -25,6 +25,18 @@ export interface ResourceGroup {
 
 export type UpdateChannel = "stable" | "beta";
 
+export type SkillCopyCheckMode = "automatic" | "manual";
+
+export interface SkillCopyCheckPreference {
+	enabled: boolean;
+	mode: SkillCopyCheckMode;
+}
+
+export const DEFAULT_SKILL_COPY_CHECK: SkillCopyCheckPreference = {
+	enabled: true,
+	mode: "automatic",
+};
+
 export const SIDEBAR_ITEM_IDS = [
 	"home",
 	"market",
@@ -42,7 +54,7 @@ export interface SidebarItemPreference {
 	visible: boolean;
 }
 
-export const CURRENT_VERSION = 10;
+export const CURRENT_VERSION = 11;
 
 export const DEFAULT_ONBOARDING_PROGRESS: OnboardingProgress = {
 	hasSeenWelcome: false,
