@@ -141,9 +141,11 @@ function FieldGroup({
 							{isVisible ? (
 								<span
 									title={field.hint}
-									className="truncate px-1 text-[11px] text-foreground"
+									className="flex min-w-0 items-center rounded-md border border-transparent px-1 py-0.5 text-[11px] text-foreground"
 								>
-									{field.label}
+									<span className="truncate">
+										{field.label}
+									</span>
 								</span>
 							) : (
 								<LayoutDraggableField
@@ -151,6 +153,7 @@ function FieldGroup({
 									type={type}
 									isDisabled={isDisabled}
 									isActive={activeId === field.id}
+									showHandle={false}
 									onNodeChange={onNodeChange}
 									data-testid={`layout-hidden-item-${field.id}`}
 									data-layout-type={type}

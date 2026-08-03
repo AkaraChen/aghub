@@ -10,6 +10,7 @@ export function LayoutDraggableField({
 	type,
 	isDisabled,
 	isActive,
+	showHandle = true,
 	onNodeChange,
 	className,
 	children,
@@ -19,6 +20,7 @@ export function LayoutDraggableField({
 	type: LayoutSlotType;
 	isDisabled?: boolean;
 	isActive: boolean;
+	showHandle?: boolean;
 	onNodeChange: (id: string, node: HTMLElement | null) => void;
 	className?: string;
 	children: ReactNode;
@@ -50,7 +52,9 @@ export function LayoutDraggableField({
 				className,
 			)}
 		>
-			<Bars3Icon className="mr-1.5 size-3.5 shrink-0 text-muted/60" />
+			{showHandle && (
+				<Bars3Icon className="mr-1.5 size-3.5 shrink-0 text-muted/60" />
+			)}
 			{children}
 		</div>
 	);

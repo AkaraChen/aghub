@@ -992,6 +992,10 @@ test("layout editor uses the available settings width", async ({ page }) => {
 		drawer.getByRole("checkbox", { name: "5-hour limit" }),
 	).toBeVisible();
 	await expect(hiddenQuota.locator('[data-slot="meter"]')).toHaveCount(0);
+	await expect(hiddenQuota.locator("svg")).toHaveCount(0);
+	await expect(
+		card.getByTestId("layout-card-item-totalTokens").locator("svg"),
+	).toHaveCount(1);
 	await expect(
 		drawer.locator('[aria-roledescription="draggable"] button'),
 	).toHaveCount(0);
