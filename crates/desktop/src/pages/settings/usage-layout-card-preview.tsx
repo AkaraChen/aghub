@@ -46,7 +46,7 @@ export function UsageLayoutCardPreview({
 }) {
 	const { t } = useTranslation();
 	return (
-		<div className="min-w-0 p-3 lg:border-r lg:border-border">
+		<div className="min-w-0">
 			<Card
 				data-testid="layout-card-replica"
 				className="min-h-60 w-full p-3 !rounded-lg"

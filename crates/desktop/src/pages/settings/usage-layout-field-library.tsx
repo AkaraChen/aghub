@@ -1,5 +1,5 @@
 import { useDroppable } from "@dnd-kit/core";
-import { Checkbox, Separator } from "@heroui/react";
+import { Checkbox, Separator, Surface } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../../lib/utils";
 import { LayoutDraggableField } from "./usage-layout-draggable-field";
@@ -42,16 +42,18 @@ export function UsageLayoutFieldLibrary({
 		data: { kind: "drawer" },
 	});
 	return (
-		<aside
+		<Surface
+			variant="secondary"
 			ref={setNodeRef}
 			data-testid="layout-hidden-drawer"
+			data-layout-field-library
 			className={cn(
-				"flex min-w-0 flex-col outline -outline-offset-1 outline-transparent",
+				"flex min-w-0 flex-col overflow-hidden rounded-lg border border-border outline -outline-offset-1 outline-transparent lg:h-66",
 				"transition-[background-color,outline-color] duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
 				active && isOver && "bg-accent/5 outline-accent",
 			)}
 		>
-			<div className="border-b border-border px-3 py-3">
+			<div className="shrink-0 px-3 py-3">
 				<span className="text-xs font-medium text-foreground">
 					{t("usageLayoutFields")}
 				</span>
@@ -59,31 +61,36 @@ export function UsageLayoutFieldLibrary({
 					{t("usageLayoutFieldsDescription")}
 				</p>
 			</div>
-			<Separator variant="secondary" />
-			<FieldGroup
-				title={t("usageLayoutQuotaFields")}
-				type="window"
-				fields={windowFields}
-				shown={shownWindows}
-				capacity={windowCapacity}
-				isDisabled={isDisabled}
-				activeId={activeId}
-				onNodeChange={onNodeChange}
-				onVisibilityChange={onVisibilityChange}
-			/>
-			<Separator variant="secondary" />
-			<FieldGroup
-				title={t("usageLayoutStatFields")}
-				type="stat"
-				fields={statFields}
-				shown={shownStats}
-				capacity={statCapacity}
-				isDisabled={isDisabled}
-				activeId={activeId}
-				onNodeChange={onNodeChange}
-				onVisibilityChange={onVisibilityChange}
-			/>
-		</aside>
+			<Separator className="shrink-0" variant="secondary" />
+			<div
+				data-layout-field-scrollport
+				className="min-h-0 flex-1 overflow-y-auto"
+			>
+				<FieldGroup
+					title={t("usageLayoutQuotaFields")}
+					type="window"
+					fields={windowFields}
+					shown={shownWindows}
+					capacity={windowCapacity}
+					isDisabled={isDisabled}
+					activeId={activeId}
+					onNodeChange={onNodeChange}
+					onVisibilityChange={onVisibilityChange}
+				/>
+				<Separator variant="secondary" />
+				<FieldGroup
+					title={t("usageLayoutStatFields")}
+					type="stat"
+					fields={statFields}
+					shown={shownStats}
+					capacity={statCapacity}
+					isDisabled={isDisabled}
+					activeId={activeId}
+					onNodeChange={onNodeChange}
+					onVisibilityChange={onVisibilityChange}
+				/>
+			</div>
+		</Surface>
 	);
 }
 

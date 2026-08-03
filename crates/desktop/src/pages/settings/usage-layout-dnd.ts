@@ -98,7 +98,22 @@ export function layoutKeyboardCoordinates(
 				(rightPrimary + rightSecondary * 0.35)
 			);
 		});
-	const target = candidates[0];
+	const cardSlots = keyboardTargets.filter(([id]) =>
+		String(id).startsWith(`slot:${type}:`),
+	);
+	const trailingCardSlot = cardSlots[cardSlots.length - 1];
+	const movesFromFieldLibraryToCard =
+		direction.axis === "x" &&
+		direction.sign === -1 &&
+		context.activeNode?.closest("[data-layout-field-library]");
+	const target =
+		movesFromFieldLibraryToCard && trailingCardSlot
+			? {
+					id: trailingCardSlot[0],
+					rect: trailingCardSlot[1],
+					center: rectCenter(trailingCardSlot[1]),
+				}
+			: candidates[0];
 	if (!target) return;
 	// KeyboardSensor only scrolls along the pressed arrow's axis, while a
 	// directional grid move can resolve to a slot on another row.

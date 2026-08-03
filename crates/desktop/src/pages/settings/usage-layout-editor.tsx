@@ -46,11 +46,18 @@ const LAYOUT_MOVE_EASING = "cubic-bezier(0.2, 0, 0, 1)";
 // Keep page scrolling at the viewport edge so crossing the side-by-side
 // editor does not move the settings page unexpectedly.
 const LAYOUT_AUTO_SCROLL_EDGE_RATIO = 0.08;
+const LAYOUT_AUTO_SCROLL_ACCELERATION = 1;
 const LAYOUT_AUTO_SCROLL = {
+	acceleration: LAYOUT_AUTO_SCROLL_ACCELERATION,
 	threshold: {
 		x: LAYOUT_AUTO_SCROLL_EDGE_RATIO,
 		y: LAYOUT_AUTO_SCROLL_EDGE_RATIO,
 	},
+	canScroll: (element: Element) =>
+		!(
+			element instanceof HTMLElement &&
+			element.hasAttribute("data-layout-field-scrollport")
+		),
 };
 
 export function InteractiveCardLayout({
@@ -296,7 +303,6 @@ export function InteractiveCardLayout({
 				field: fieldLabel(String(active.id)),
 			}),
 	};
-
 	return (
 		<DndContext
 			autoScroll={LAYOUT_AUTO_SCROLL}

@@ -215,7 +215,8 @@ test("card layout editor uses HeroUI surface and control anatomy", async ({
 	const editor = page.getByTestId("usage-layout-editor");
 	const card = page.getByTestId("layout-card-replica");
 	const library = page.getByTestId("layout-hidden-drawer");
-	await expect(editor).toHaveAttribute("data-slot", "surface");
+	await expect(editor).not.toHaveAttribute("data-slot", "surface");
+	await expect(library).toHaveAttribute("data-slot", "surface");
 	await expect(card).toHaveAttribute("data-slot", "card");
 	await expect(card.locator('[data-slot="card-header"]')).toBeVisible();
 	await expect(card.locator('[data-slot="card-content"]')).toBeVisible();
@@ -917,6 +918,33 @@ test("Agents panel lets Card variants own static surfaces", async ({
 		.toBe(idleBackground);
 });
 
+test("layout editor avoids unused space below the preview", async ({
+	page,
+}) => {
+	await page.goto("/settings?tab=usage");
+	await page.setViewportSize({ width: 1600, height: 900 });
+
+	const editor = page.getByTestId("usage-layout-editor");
+	const card = page.getByTestId("layout-card-replica");
+	const previewPane = card.locator("..");
+	const library = page.getByTestId("layout-hidden-drawer");
+	const [cardBox, previewPaneBox, libraryBox] = await Promise.all([
+		card.boundingBox(),
+		previewPane.boundingBox(),
+		library.boundingBox(),
+	]);
+
+	expect(cardBox).not.toBeNull();
+	expect(previewPaneBox).not.toBeNull();
+	expect(libraryBox).not.toBeNull();
+	expect(previewPaneBox!.height - cardBox!.height).toBeLessThan(40);
+	expect(Math.abs(libraryBox!.height - previewPaneBox!.height)).toBeLessThan(
+		8,
+	);
+	await expect(editor).not.toHaveAttribute("data-slot", "surface");
+	await expect(library).toHaveAttribute("data-slot", "surface");
+});
+
 test("layout editor uses the available settings width", async ({ page }) => {
 	await page.goto("/settings?tab=usage");
 	await page.setViewportSize({ width: 1600, height: 900 });
@@ -1583,8 +1611,8 @@ test("field library does not shift when a draggable row is hovered", async ({
 		};
 	});
 	if (!before) throw new Error("drawer geometry missing");
-	expect(idleBorders.left).toBe(0);
-	expect(idleBorders.right).toBe(0);
+	expect(idleBorders.left).toBe(1);
+	expect(idleBorders.right).toBe(1);
 	expect(idleBorders.right).toBe(idleBorders.left);
 
 	await row.hover();
@@ -1597,7 +1625,7 @@ test("field library does not shift when a draggable row is hovered", async ({
 		};
 	});
 	if (!after) throw new Error("drawer geometry missing after hover");
-	expect(hoverBorders.left).toBe(0);
+	expect(hoverBorders.left).toBe(1);
 	expect(hoverBorders.right).toBe(hoverBorders.left);
 	expect(after.x).toBeCloseTo(before.x, 1);
 	expect(after.width).toBeCloseTo(before.width, 1);
