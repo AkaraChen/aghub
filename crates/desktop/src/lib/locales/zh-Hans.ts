@@ -528,7 +528,6 @@ export default {
 	usageLayoutUseDefault: "使用默认布局",
 	usageLayoutDefaultRestored: "默认卡片布局已恢复",
 	usageUndo: "撤销",
-	usageLayoutKeyboardHint: "空格键拾取 · 方向键移动",
 	usageLayoutFields: "字段",
 	usageLayoutFieldsDescription: "勾选要显示的字段，或将隐藏字段拖入预览。",
 	usageLayoutQuotaFields: "额度",

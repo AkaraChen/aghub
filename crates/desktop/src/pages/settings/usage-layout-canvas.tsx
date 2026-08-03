@@ -1,4 +1,5 @@
 import { DragOverlay } from "@dnd-kit/core";
+import type { CSSProperties } from "react";
 import { cn } from "../../lib/utils";
 import {
 	LayoutDragGhost,
@@ -12,6 +13,19 @@ import type {
 	LayoutField,
 	LayoutPreview,
 } from "./usage-layout-types";
+
+interface UsageLayoutStyle extends CSSProperties {
+	"--usage-home-card-height": string;
+	"--usage-home-card-width": string;
+}
+
+// The home grid's 72rem container has 3rem horizontal padding and three
+// 0.625rem gaps at four columns. Tall usage cards span two 6.5rem rows and the
+// row gap.
+const USAGE_LAYOUT_STYLE: UsageLayoutStyle = {
+	"--usage-home-card-height": "13.625rem",
+	"--usage-home-card-width": "16.78125rem",
+};
 
 interface UsageLayoutCanvasProps {
 	windowFields: LayoutField[];
@@ -61,8 +75,9 @@ export function UsageLayoutCanvas({
 				data-testid="usage-layout-editor"
 				aria-disabled={isDisabled || undefined}
 				inert={isDisabled || undefined}
+				style={USAGE_LAYOUT_STYLE}
 				className={cn(
-					"grid w-full grid-cols-1 items-start gap-3 lg:grid-cols-[minmax(0,1fr)_16rem]",
+					"grid w-full grid-cols-1 items-start gap-3 lg:grid-cols-[var(--usage-home-card-width)_minmax(0,1fr)]",
 					"transition-opacity duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
 					isDisabled && "opacity-55",
 				)}

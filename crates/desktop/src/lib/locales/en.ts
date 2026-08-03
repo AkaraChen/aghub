@@ -553,7 +553,6 @@ export default {
 	usageLayoutUseDefault: "Use default layout",
 	usageLayoutDefaultRestored: "Default card layout restored",
 	usageUndo: "Undo",
-	usageLayoutKeyboardHint: "Space to pick up · Arrow keys to move",
 	usageLayoutFields: "Fields",
 	usageLayoutFieldsDescription:
 		"Select fields to show. Drag hidden fields into the preview.",

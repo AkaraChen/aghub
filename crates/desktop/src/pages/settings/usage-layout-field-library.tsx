@@ -48,24 +48,21 @@ export function UsageLayoutFieldLibrary({
 			data-testid="layout-hidden-drawer"
 			data-layout-field-library
 			className={cn(
-				"flex min-w-0 flex-col overflow-hidden rounded-lg border border-border outline -outline-offset-1 outline-transparent lg:h-66",
+				"flex min-w-0 flex-col overflow-hidden rounded-lg border border-border outline -outline-offset-1 outline-transparent lg:min-h-[var(--usage-home-card-height)]",
 				"transition-[background-color,outline-color] duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
 				active && isOver && "bg-accent/5 outline-accent",
 			)}
 		>
-			<div className="shrink-0 px-3 py-3">
-				<span className="text-xs font-medium text-foreground">
+			<div className="flex min-w-0 shrink-0 items-baseline gap-2 px-3 py-2">
+				<span className="shrink-0 text-xs font-medium text-foreground">
 					{t("usageLayoutFields")}
 				</span>
-				<p className="mt-0.5 text-[11px] leading-4 text-muted">
+				<p className="min-w-0 truncate text-[11px] leading-4 text-muted">
 					{t("usageLayoutFieldsDescription")}
 				</p>
 			</div>
 			<Separator className="shrink-0" variant="secondary" />
-			<div
-				data-layout-field-scrollport
-				className="min-h-0 flex-1 overflow-y-auto"
-			>
+			<div className="min-w-0 flex-1">
 				<FieldGroup
 					title={t("usageLayoutQuotaFields")}
 					type="window"
@@ -120,27 +117,31 @@ function FieldGroup({
 	) => void;
 }) {
 	const shownSet = new Set(shown);
+	const columns =
+		type === "window"
+			? "grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]"
+			: "grid-cols-[repeat(auto-fit,minmax(8rem,1fr))]";
 	return (
-		<div>
-			<div className="flex items-center justify-between gap-2 px-3 pb-1 pt-3 text-[10px] font-medium uppercase tracking-wide text-muted">
+		<div className="min-w-0">
+			<div className="flex items-center justify-between gap-2 px-3 pb-1 pt-2 text-[11px] font-medium text-muted">
 				<span>{title}</span>
 				<span className="tabular-nums">
 					{shown.length}/{capacity}
 				</span>
 			</div>
-			<div className="pb-2">
+			<div className={cn("grid gap-x-1 px-2 pb-2", columns)}>
 				{fields.map((field) => {
 					const isVisible = shownSet.has(field.id);
 					return (
 						<div
 							key={field.id}
 							data-visibility={isVisible ? "shown" : "hidden"}
-							className="grid min-h-8 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-2"
+							className="grid min-h-7 grid-cols-[minmax(0,1fr)_auto] items-center gap-1 px-1"
 						>
 							{isVisible ? (
 								<span
 									title={field.hint}
-									className="truncate px-1.5 text-xs text-foreground"
+									className="truncate px-1 text-[11px] text-foreground"
 								>
 									{field.label}
 								</span>
@@ -153,7 +154,7 @@ function FieldGroup({
 									onNodeChange={onNodeChange}
 									data-testid={`layout-hidden-item-${field.id}`}
 									data-layout-type={type}
-									className="flex min-w-0 items-center rounded-md px-1 py-0.5 text-xs"
+									className="flex min-w-0 items-center rounded-md px-1 py-0.5 text-[11px]"
 								>
 									<span className="truncate text-muted">
 										{field.label}

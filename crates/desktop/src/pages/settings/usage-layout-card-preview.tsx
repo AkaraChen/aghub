@@ -46,10 +46,10 @@ export function UsageLayoutCardPreview({
 }) {
 	const { t } = useTranslation();
 	return (
-		<div className="min-w-0">
+		<div className="min-w-0 w-full max-w-[var(--usage-home-card-width)]">
 			<Card
 				data-testid="layout-card-replica"
-				className="min-h-60 w-full p-3 !rounded-lg"
+				className="h-[var(--usage-home-card-height)] w-full p-3 !rounded-lg"
 			>
 				<Card.Header className="flex flex-row items-center gap-2 p-0">
 					<AgentIcon
@@ -145,9 +145,6 @@ export function UsageLayoutCardPreview({
 					)}
 				</Card.Content>
 			</Card>
-			<p className="mt-2 text-right text-[11px] text-muted">
-				{t("usageLayoutKeyboardHint")}
-			</p>
 		</div>
 	);
 }

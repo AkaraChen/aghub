@@ -918,7 +918,7 @@ test("Agents panel lets Card variants own static surfaces", async ({
 		.toBe(idleBackground);
 });
 
-test("layout editor avoids unused space below the preview", async ({
+test("layout editor keeps the home-card size without field scrolling", async ({
 	page,
 }) => {
 	await page.goto("/settings?tab=usage");
@@ -926,21 +926,31 @@ test("layout editor avoids unused space below the preview", async ({
 
 	const editor = page.getByTestId("usage-layout-editor");
 	const card = page.getByTestId("layout-card-replica");
-	const previewPane = card.locator("..");
 	const library = page.getByTestId("layout-hidden-drawer");
-	const [cardBox, previewPaneBox, libraryBox] = await Promise.all([
+	const finalField = library.getByRole("checkbox", {
+		name: "Opus weekly",
+	});
+	const [cardBox, libraryBox, finalFieldBox] = await Promise.all([
 		card.boundingBox(),
-		previewPane.boundingBox(),
 		library.boundingBox(),
+		finalField.boundingBox(),
 	]);
 
 	expect(cardBox).not.toBeNull();
-	expect(previewPaneBox).not.toBeNull();
 	expect(libraryBox).not.toBeNull();
-	expect(previewPaneBox!.height - cardBox!.height).toBeLessThan(40);
-	expect(Math.abs(libraryBox!.height - previewPaneBox!.height)).toBeLessThan(
-		8,
+	expect(finalFieldBox).not.toBeNull();
+	expect(cardBox!.width).toBeCloseTo(268.5, 1);
+	expect(cardBox!.height).toBe(218);
+	expect(libraryBox!.width).toBeGreaterThan(cardBox!.width);
+	expect(finalFieldBox!.y + finalFieldBox!.height).toBeLessThanOrEqual(
+		libraryBox!.y + libraryBox!.height + 1,
 	);
+	await expect(library.locator("[data-layout-field-scrollport]")).toHaveCount(
+		0,
+	);
+	await expect(
+		editor.getByText("Space to pick up · Arrow keys to move"),
+	).toHaveCount(0);
 	await expect(editor).not.toHaveAttribute("data-slot", "surface");
 	await expect(library).toHaveAttribute("data-slot", "surface");
 });
@@ -972,8 +982,8 @@ test("layout editor uses the available settings width", async ({ page }) => {
 	expect(cardBox).not.toBeNull();
 	expect(drawerBox).not.toBeNull();
 	expect(gridBox!.width / surfaceBox!.width).toBeGreaterThan(0.9);
-	expect(cardBox!.width).toBeGreaterThan(drawerBox!.width);
-	expect(drawerBox!.width).toBeGreaterThan(240);
+	expect(cardBox!.width).toBeLessThan(drawerBox!.width);
+	expect(drawerBox!.width).toBeGreaterThan(600);
 
 	const hiddenQuota = drawer.getByTestId("layout-hidden-item-5h");
 	const hiddenQuotaBox = await hiddenQuota.boundingBox();

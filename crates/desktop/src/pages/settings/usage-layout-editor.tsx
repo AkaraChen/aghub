@@ -53,11 +53,6 @@ const LAYOUT_AUTO_SCROLL = {
 		x: LAYOUT_AUTO_SCROLL_EDGE_RATIO,
 		y: LAYOUT_AUTO_SCROLL_EDGE_RATIO,
 	},
-	canScroll: (element: Element) =>
-		!(
-			element instanceof HTMLElement &&
-			element.hasAttribute("data-layout-field-scrollport")
-		),
 };
 
 export function InteractiveCardLayout({

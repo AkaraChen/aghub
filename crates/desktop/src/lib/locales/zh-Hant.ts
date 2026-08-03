@@ -527,7 +527,6 @@ export default {
 	usageLayoutUseDefault: "使用預設佈局",
 	usageLayoutDefaultRestored: "預設卡片佈局已恢復",
 	usageUndo: "復原",
-	usageLayoutKeyboardHint: "空白鍵拾取 · 方向鍵移動",
 	usageLayoutFields: "欄位",
 	usageLayoutFieldsDescription: "勾選要顯示的欄位，或將隱藏欄位拖入預覽。",
 	usageLayoutQuotaFields: "額度",
