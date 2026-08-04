@@ -49,8 +49,9 @@ export function UsageLayoutCardPreview({
 }) {
 	const { t } = useTranslation();
 	return (
-		<div className="min-w-0 w-full max-w-[var(--usage-home-card-width)]">
+		<div className="mx-auto min-w-0 w-full max-w-[var(--usage-home-card-width)] lg:mx-0">
 			<Card
+				variant="tertiary"
 				data-testid="layout-card-replica"
 				className="h-[var(--usage-home-card-height)] w-full p-3 !rounded-lg"
 			>

@@ -458,6 +458,30 @@ test("card layout editor uses HeroUI surface and control anatomy", async ({
 	await expect(card).toHaveAttribute("data-slot", "card");
 	await expect(card.locator('[data-slot="card-header"]')).toBeVisible();
 	await expect(card.locator('[data-slot="card-content"]')).toBeVisible();
+	const outerCard = card.locator("xpath=ancestor::*[@data-slot='card'][1]");
+	const [cardBackground, outerBackground, libraryBackground] =
+		await Promise.all([
+			card.evaluate(
+				(element) => getComputedStyle(element).backgroundColor,
+			),
+			outerCard.evaluate(
+				(element) => getComputedStyle(element).backgroundColor,
+			),
+			library.evaluate(
+				(element) => getComputedStyle(element).backgroundColor,
+			),
+		]);
+	const tertiaryBackground = await card.evaluate(() => {
+		const probe = document.createElement("span");
+		probe.className = "bg-surface-tertiary";
+		document.body.append(probe);
+		const color = getComputedStyle(probe).backgroundColor;
+		probe.remove();
+		return color;
+	});
+	expect(cardBackground).toBe(tertiaryBackground);
+	expect(cardBackground).not.toBe(outerBackground);
+	expect(cardBackground).not.toBe(libraryBackground);
 	await expect(
 		page.getByRole("toolbar", { name: "Card layout actions" }),
 	).toBeVisible();
@@ -467,6 +491,19 @@ test("card layout editor uses HeroUI surface and control anatomy", async ({
 	await expect(
 		library.getByRole("checkbox", { name: "5-hour limit" }),
 	).not.toBeChecked();
+
+	await page.setViewportSize({ width: 800, height: 650 });
+	const [compactEditorBox, compactCardBox] = await Promise.all([
+		editor.boundingBox(),
+		card.boundingBox(),
+	]);
+	if (!compactEditorBox || !compactCardBox) {
+		throw new Error("compact layout geometry missing");
+	}
+	expect(compactCardBox.x + compactCardBox.width / 2).toBeCloseTo(
+		compactEditorBox.x + compactEditorBox.width / 2,
+		1,
+	);
 });
 
 test("agent enablement bounds usage probes", async ({ page }) => {
