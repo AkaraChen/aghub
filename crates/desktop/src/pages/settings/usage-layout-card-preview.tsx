@@ -5,11 +5,13 @@ import { useTranslation } from "react-i18next";
 import { AgentIcon } from "../../lib/agent-icons";
 import { cn } from "../../lib/utils";
 import { layoutSlotId } from "./usage-layout-dnd";
-import { LayoutDraggableField } from "./usage-layout-draggable-field";
+import {
+	LayoutDraggableField,
+	LayoutFieldDragHandle,
+} from "./usage-layout-draggable-field";
 import type { LayoutSlotType } from "./usage-layout-model";
 import type {
 	LayoutDragPreview,
-	LayoutDragSource,
 	LayoutField,
 	LayoutPreview,
 } from "./usage-layout-types";
@@ -158,35 +160,32 @@ export function UsageLayoutCardPreview({
 
 export function LayoutDragGhost({
 	field,
-	source,
 	type,
 	barPct,
 }: {
 	field: LayoutField;
-	source: LayoutDragSource;
 	type: LayoutSlotType;
 	barPct: number;
 }) {
-	if (source === "library") {
-		return (
-			<div
-				data-testid="layout-field-drag-ghost"
-				className="w-44 cursor-grabbing truncate rounded-md border border-border bg-overlay px-2 py-1.5 text-[11px] text-foreground shadow-[var(--overlay-shadow)]"
-			>
-				{field.label}
-			</div>
-		);
-	}
 	if (type === "window") {
 		return (
-			<div className="w-72 max-w-[calc(100vw-2rem)] cursor-grabbing rounded-md border border-border bg-overlay p-1 shadow-[var(--overlay-shadow)]">
+			<div
+				data-testid="layout-card-drag-ghost"
+				className="flex h-full w-full min-w-0 max-w-[calc(100vw-2rem)] cursor-grabbing select-none items-center rounded-md border border-border bg-surface-secondary px-1.5 py-1 shadow-[var(--overlay-shadow)]"
+			>
+				<LayoutFieldDragHandle />
 				<PreviewBar label={field.label} pct={barPct} />
 			</div>
 		);
 	}
 	return (
-		<div className="w-36 cursor-grabbing truncate rounded-md border border-border bg-overlay px-1.5 py-1 text-[11px] text-muted shadow-[var(--overlay-shadow)]">
-			{field.label}
+		<div
+			data-testid="layout-card-drag-ghost"
+			data-layout-type="stat"
+			className="flex h-full w-full min-w-0 cursor-grabbing select-none items-center rounded-md border border-border bg-surface-secondary px-1.5 py-1 text-[11px] shadow-[var(--overlay-shadow)]"
+		>
+			<LayoutFieldDragHandle />
+			<StatBody field={field} />
 		</div>
 	);
 }

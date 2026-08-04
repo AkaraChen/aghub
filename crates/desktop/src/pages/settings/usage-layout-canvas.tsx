@@ -6,7 +6,10 @@ import {
 	PREVIEW_BAR_PCT,
 	UsageLayoutCardPreview,
 } from "./usage-layout-card-preview";
-import { UsageLayoutFieldLibrary } from "./usage-layout-field-library";
+import {
+	LayoutFieldDragGhost,
+	UsageLayoutFieldLibrary,
+} from "./usage-layout-field-library";
 import { shownIds, type LayoutSlotType } from "./usage-layout-model";
 import type {
 	LayoutDragPreview,
@@ -62,6 +65,9 @@ export function UsageLayoutCanvas({
 }: UsageLayoutCanvasProps) {
 	const activeField = drag ? fieldById.get(drag.activeId) : undefined;
 	const activeStartedOnCard = drag?.source === "card";
+	const activeWasVisible = drag
+		? shownIds(drag.origin, drag.type).includes(drag.activeId)
+		: false;
 	const activeBarIndex =
 		drag?.type === "window"
 			? shownIds(drag.origin, "window").indexOf(drag.activeId)
@@ -106,10 +112,14 @@ export function UsageLayoutCanvas({
 			</div>
 
 			<DragOverlay adjustScale={false} dropAnimation={null}>
-				{activeField && drag ? (
+				{activeField && drag?.source === "library" ? (
+					<LayoutFieldDragGhost
+						field={activeField}
+						isVisible={activeWasVisible}
+					/>
+				) : activeField && drag ? (
 					<LayoutDragGhost
 						field={activeField}
-						source={drag.source}
 						type={drag.type}
 						barPct={
 							activeBarIndex >= 0

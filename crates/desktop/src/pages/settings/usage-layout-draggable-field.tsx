@@ -50,8 +50,12 @@ export function LayoutDraggableField({
 				className,
 			)}
 		>
-			<Bars3Icon className="mr-1.5 size-3.5 shrink-0 text-muted/60" />
+			<LayoutFieldDragHandle />
 			{children}
 		</div>
 	);
+}
+
+export function LayoutFieldDragHandle() {
+	return <Bars3Icon className="mr-1.5 size-3.5 shrink-0 text-muted/60" />;
 }

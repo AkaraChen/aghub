@@ -1,4 +1,5 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { CheckIcon } from "@heroicons/react/24/outline";
 import { Checkbox, Separator, Surface } from "@heroui/react";
 import type {
 	KeyboardEvent as ReactKeyboardEvent,
@@ -13,6 +14,10 @@ import type { LayoutSlotType } from "./usage-layout-model";
 import type { LayoutField } from "./usage-layout-types";
 
 const FIELD_LIBRARY_DRAG_ID_PREFIX = "field-library:";
+const FIELD_LIBRARY_ITEM_LAYOUT =
+	"grid min-h-7 touch-none select-none grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-md border px-1";
+const FIELD_LIBRARY_ITEM_LABEL =
+	"flex min-w-0 items-center rounded-md border border-transparent px-1 py-0.5 text-[11px]";
 
 export function UsageLayoutFieldLibrary({
 	active,
@@ -100,6 +105,46 @@ export function UsageLayoutFieldLibrary({
 				/>
 			</div>
 		</Surface>
+	);
+}
+
+export function LayoutFieldDragGhost({
+	field,
+	isVisible,
+}: {
+	field: LayoutField;
+	isVisible: boolean;
+}) {
+	return (
+		<div
+			aria-hidden
+			data-testid="layout-field-drag-ghost"
+			data-visibility={isVisible ? "shown" : "hidden"}
+			className={cn(
+				FIELD_LIBRARY_ITEM_LAYOUT,
+				"h-full w-full cursor-grabbing border-border bg-surface",
+			)}
+		>
+			<div
+				className={cn(
+					FIELD_LIBRARY_ITEM_LABEL,
+					isVisible ? "text-foreground" : "text-muted",
+				)}
+			>
+				<span className="truncate">{field.label}</span>
+			</div>
+			<span
+				data-testid="layout-field-drag-visibility"
+				className="relative inline-flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-md bg-default"
+			>
+				{isVisible && (
+					<>
+						<span className="absolute inset-0 bg-accent-soft" />
+						<CheckIcon className="relative size-3 stroke-[2.5] text-accent-soft-foreground" />
+					</>
+				)}
+			</span>
+		</div>
 	);
 }
 
@@ -280,9 +325,11 @@ function FieldLibraryItem({
 			onClickCapture={handleItemClickCapture}
 			onClick={handleItemClick}
 			className={cn(
-				"grid min-h-7 touch-none select-none grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-md px-1",
-				"transition-[background-color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
-				!isDisabled && "cursor-grab hover:bg-default",
+				FIELD_LIBRARY_ITEM_LAYOUT,
+				"border-transparent",
+				"transition-[background-color,border-color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
+				!isDisabled &&
+					"cursor-grab hover:border-border hover:bg-surface",
 				isDragging && isActive && "opacity-45",
 			)}
 		>
@@ -295,7 +342,8 @@ function FieldLibraryItem({
 				data-testid={`${isVisible ? "layout-shown-item" : "layout-hidden-item"}-${field.id}`}
 				data-layout-type={type}
 				className={cn(
-					"flex min-w-0 items-center rounded-md border border-transparent px-1 py-0.5 text-[11px] outline-none",
+					FIELD_LIBRARY_ITEM_LABEL,
+					"outline-none",
 					isDisabled
 						? "opacity-40"
 						: "cursor-grab active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface",
@@ -314,8 +362,8 @@ function FieldLibraryItem({
 				}
 			>
 				<Checkbox.Content>
-					<Checkbox.Control>
-						<Checkbox.Indicator />
+					<Checkbox.Control className="before:bg-accent-soft hover:before:bg-accent-soft-hover">
+						<Checkbox.Indicator className="**:data-[slot=checkbox-default-indicator--checkmark]:text-accent-soft-foreground" />
 					</Checkbox.Control>
 				</Checkbox.Content>
 			</Checkbox>

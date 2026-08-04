@@ -238,19 +238,81 @@ test("field library items toggle and drag from the whole tile", async ({
 		const style = getComputedStyle(element);
 		return {
 			backgroundColor: style.backgroundColor,
-			outlineStyle: style.outlineStyle,
 		};
 	});
 	await fiveHourTile.hover();
-	const hoverStyle = await fiveHourTile.evaluate((element) => {
-		const style = getComputedStyle(element);
+	const hoverTokens = await fiveHourTile.evaluate(() => {
+		const tokenColor = (
+			className: string,
+			property: "backgroundColor" | "borderColor",
+		) => {
+			const probe = document.createElement("span");
+			probe.className = className;
+			document.body.append(probe);
+			const color = getComputedStyle(probe)[property];
+			probe.remove();
+			return color;
+		};
 		return {
-			backgroundColor: style.backgroundColor,
-			outlineStyle: style.outlineStyle,
+			expectedBackground: tokenColor("bg-surface", "backgroundColor"),
+			expectedBorder: tokenColor("border border-border", "borderColor"),
 		};
 	});
-	expect(hoverStyle.backgroundColor).not.toBe(idleStyle.backgroundColor);
-	expect(hoverStyle.outlineStyle).toBe("none");
+	await expect
+		.poll(() =>
+			fiveHourTile.evaluate(
+				(element) => getComputedStyle(element).backgroundColor,
+			),
+		)
+		.toBe(hoverTokens.expectedBackground);
+	await expect
+		.poll(() =>
+			fiveHourTile.evaluate(
+				(element) => getComputedStyle(element).borderStyle,
+			),
+		)
+		.toBe("solid");
+	await expect
+		.poll(() =>
+			fiveHourTile.evaluate(
+				(element) => getComputedStyle(element).borderColor,
+			),
+		)
+		.toBe(hoverTokens.expectedBorder);
+	expect(hoverTokens.expectedBackground).not.toBe(idleStyle.backgroundColor);
+
+	const selectedVisual = await totalTokensTile
+		.locator('[data-slot="checkbox-control"]')
+		.evaluate((control) => {
+			const tokenColor = (
+				className: string,
+				property: "backgroundColor" | "color",
+			) => {
+				const probe = document.createElement("span");
+				probe.className = className;
+				document.body.append(probe);
+				const color = getComputedStyle(probe)[property];
+				probe.remove();
+				return color;
+			};
+			const checkmark = control.querySelector(
+				'[data-slot="checkbox-default-indicator--checkmark"]',
+			);
+			if (!checkmark) throw new Error("checkbox checkmark missing");
+			return {
+				fill: getComputedStyle(control, "::before").backgroundColor,
+				checkmark: getComputedStyle(checkmark).color,
+				expectedFill: tokenColor("bg-accent-soft", "backgroundColor"),
+				expectedCheckmark: tokenColor(
+					"text-accent-soft-foreground",
+					"color",
+				),
+				accentFill: tokenColor("bg-accent", "backgroundColor"),
+			};
+		});
+	expect(selectedVisual.fill).toBe(selectedVisual.expectedFill);
+	expect(selectedVisual.fill).not.toBe(selectedVisual.accentFill);
+	expect(selectedVisual.checkmark).toBe(selectedVisual.expectedCheckmark);
 
 	const tileBox = await totalTokensTile.boundingBox();
 	if (!tileBox) throw new Error("field tile missing");
@@ -267,6 +329,15 @@ test("field library items toggle and drag from the whole tile", async ({
 		.getByTestId("layout-field-drag-ghost")
 		.boundingBox();
 	if (!totalTokensGhostBox) throw new Error("stat drag ghost missing");
+	expect(totalTokensGhostBox.width).toBeCloseTo(tileBox.width, 1);
+	expect(totalTokensGhostBox.height).toBeCloseTo(tileBox.height, 1);
+	await expect(page.getByTestId("layout-field-drag-ghost")).toHaveAttribute(
+		"data-visibility",
+		"shown",
+	);
+	await expect(
+		page.getByTestId("layout-field-drag-visibility").locator("svg"),
+	).toHaveCount(1);
 	await page.keyboard.press("Escape");
 	await page.mouse.up();
 	await expect(totalTokensCheckbox).toBeChecked();
@@ -292,7 +363,15 @@ test("field library items toggle and drag from the whole tile", async ({
 		.getByTestId("layout-field-drag-ghost")
 		.boundingBox();
 	if (!fiveHourGhostBox) throw new Error("quota drag ghost missing");
-	expect(fiveHourGhostBox.width).toBe(totalTokensGhostBox.width);
+	expect(fiveHourGhostBox.width).toBeCloseTo(fiveHourTileBox.width, 1);
+	expect(fiveHourGhostBox.height).toBeCloseTo(fiveHourTileBox.height, 1);
+	await expect(page.getByTestId("layout-field-drag-ghost")).toHaveAttribute(
+		"data-visibility",
+		"hidden",
+	);
+	await expect(
+		page.getByTestId("layout-field-drag-visibility").locator("svg"),
+	).toHaveCount(0);
 	await page.keyboard.press("Escape");
 	await page.mouse.up();
 	const checkboxControlBox = await totalTokensTile
@@ -1906,6 +1985,17 @@ test("layout editor moves a field between the card and the drawer", async ({
 	);
 	await page.mouse.down();
 	await page.mouse.move(sourceBox.x + 12, sourceBox.y - 12, { steps: 3 });
+	await expect(page.locator("#root .cursor-grabbing")).toBeVisible();
+	const cardGhost = page.getByTestId("layout-card-drag-ghost");
+	const cardGhostBox = await cardGhost.boundingBox();
+	if (!cardGhostBox) throw new Error("card drag ghost missing");
+	expect(cardGhostBox.width).toBeCloseTo(sourceBox.width, 1);
+	expect(cardGhostBox.height).toBeCloseTo(sourceBox.height, 1);
+	await expect(
+		cardGhost.getByText("Total tokens", { exact: true }),
+	).toBeVisible();
+	await expect(cardGhost.getByText("1.43M", { exact: true })).toBeVisible();
+	await expect(cardGhost.locator("svg")).toHaveCount(1);
 	await page.mouse.move(drawerBox.x + drawerBox.width / 2, drawerBox.y + 12, {
 		steps: 10,
 	});
