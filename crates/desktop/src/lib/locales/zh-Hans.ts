@@ -529,7 +529,7 @@ export default {
 	usageLayoutDefaultRestored: "默认卡片布局已恢复",
 	usageUndo: "撤销",
 	usageLayoutFields: "字段",
-	usageLayoutFieldsDescription: "勾选要显示的字段，或将隐藏字段拖入预览。",
+	usageLayoutFieldsDescription: "点击字段显示或隐藏，拖拽可调整位置。",
 	usageLayoutQuotaFields: "额度",
 	usageLayoutStatFields: "统计",
 	usageTimezoneSystem: "跟随系统",

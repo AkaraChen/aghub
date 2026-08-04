@@ -13,6 +13,7 @@ export interface LayoutPreview {
 
 export interface LayoutDragPreview {
 	activeId: string;
+	sourceNodeId: string;
 	type: LayoutSlotType;
 	origin: CardLayoutModel;
 }

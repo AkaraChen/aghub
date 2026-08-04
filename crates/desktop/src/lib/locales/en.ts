@@ -555,7 +555,7 @@ export default {
 	usageUndo: "Undo",
 	usageLayoutFields: "Fields",
 	usageLayoutFieldsDescription:
-		"Select fields to show. Drag hidden fields into the preview.",
+		"Click a field to show or hide it. Drag it to change its position.",
 	usageLayoutQuotaFields: "Quota",
 	usageLayoutStatFields: "Statistics",
 	usageTimezoneSystem: "System default",

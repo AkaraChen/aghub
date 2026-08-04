@@ -207,6 +207,117 @@ test("card layout fields toggle immediately and the default can be restored", as
 	await expect(card.getByText("5-hour limit", { exact: true })).toBeVisible();
 });
 
+test("field library items toggle and drag from the whole tile", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1600, height: 900 });
+	await page.goto("/settings?tab=usage");
+
+	const card = page.getByTestId("layout-card-replica");
+	const library = page.getByTestId("layout-hidden-drawer");
+	const totalTokensTile = library
+		.locator('[data-visibility="shown"]')
+		.filter({ hasText: /^Total tokens$/ });
+	const totalTokensCheckbox = library.getByRole("checkbox", {
+		name: "Total tokens",
+	});
+	const fiveHourTile = library.getByTestId("layout-field-item-5h");
+	const fiveHourCheckbox = library.getByRole("checkbox", {
+		name: "5-hour limit",
+	});
+	await fiveHourTile.getByText("5-hour limit", { exact: true }).click();
+	await expect(fiveHourCheckbox).toBeChecked();
+	await expect(card.getByText("5-hour limit", { exact: true })).toBeVisible();
+	await fiveHourTile.getByText("5-hour limit", { exact: true }).click();
+	await expect(fiveHourCheckbox).not.toBeChecked();
+	await expect(card.getByText("5-hour limit", { exact: true })).toHaveCount(
+		0,
+	);
+
+	const tileBox = await totalTokensTile.boundingBox();
+	if (!tileBox) throw new Error("field tile missing");
+
+	await page.mouse.move(tileBox.x + 2, tileBox.y + tileBox.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(tileBox.x + 14, tileBox.y + tileBox.height / 2, {
+		steps: 3,
+	});
+	await expect(page.locator("#root .cursor-grabbing")).toBeVisible();
+	await page.keyboard.press("Escape");
+	await page.mouse.up();
+	await expect(totalTokensCheckbox).toBeChecked();
+	await expect(card.getByText("Total tokens", { exact: true })).toBeVisible();
+	const checkboxControlBox = await totalTokensTile
+		.locator('[data-slot="checkbox-control"]')
+		.boundingBox();
+	if (!checkboxControlBox) throw new Error("checkbox control missing");
+	await page.mouse.move(
+		checkboxControlBox.x + checkboxControlBox.width / 2,
+		checkboxControlBox.y + checkboxControlBox.height / 2,
+	);
+	await page.mouse.down();
+	await page.mouse.move(
+		checkboxControlBox.x + checkboxControlBox.width / 2 - 12,
+		checkboxControlBox.y + checkboxControlBox.height / 2,
+		{ steps: 3 },
+	);
+	await expect(page.locator("#root .cursor-grabbing")).toBeVisible();
+	await page.keyboard.press("Escape");
+	await page.mouse.up();
+	await expect(totalTokensCheckbox).toBeChecked();
+
+	await totalTokensTile.locator('[data-slot="checkbox-control"]').click();
+	await expect(totalTokensCheckbox).not.toBeChecked();
+	await library.getByTestId("layout-hidden-item-totalTokens").click();
+	await expect(totalTokensCheckbox).toBeChecked();
+
+	await totalTokensTile.getByText("Total tokens", { exact: true }).click();
+	await expect(totalTokensCheckbox).not.toBeChecked();
+	await expect(card.getByText("Total tokens", { exact: true })).toHaveCount(
+		0,
+	);
+
+	await library.getByTestId("layout-hidden-item-totalTokens").click();
+	await expect(totalTokensCheckbox).toBeChecked();
+	await expect(card.getByText("Total tokens", { exact: true })).toBeVisible();
+
+	const restoredTileBox = await totalTokensTile.boundingBox();
+	const firstStatSlot = card.getByTestId("layout-slot-stat-0");
+	const firstStatSlotBox = await firstStatSlot.boundingBox();
+	if (!restoredTileBox || !firstStatSlotBox) {
+		throw new Error("field drag endpoints missing");
+	}
+	await page.mouse.move(
+		restoredTileBox.x + 2,
+		restoredTileBox.y + restoredTileBox.height / 2,
+	);
+	await page.mouse.down();
+	await page.mouse.move(
+		restoredTileBox.x + 14,
+		restoredTileBox.y + restoredTileBox.height / 2,
+		{ steps: 3 },
+	);
+	await page.mouse.move(
+		firstStatSlotBox.x + firstStatSlotBox.width / 2,
+		firstStatSlotBox.y + firstStatSlotBox.height / 2,
+		{ steps: 8 },
+	);
+	await page.mouse.up();
+	await expectFieldLabels(
+		card
+			.getByTestId("layout-stat-section")
+			.locator('[data-layout-type="stat"]'),
+		["Total tokens", "Input", "Output", "Spend"],
+	);
+
+	await page.emulateMedia({ reducedMotion: "reduce" });
+	const reducedTransitionDuration = await totalTokensTile.evaluate(
+		(element) =>
+			Number.parseFloat(getComputedStyle(element).transitionDuration),
+	);
+	expect(reducedTransitionDuration).toBeLessThanOrEqual(0.00001);
+});
+
 test("card layout editor uses HeroUI surface and control anatomy", async ({
 	page,
 }) => {
@@ -1651,7 +1762,7 @@ test("drawer uses a complete non-shifting drop outline", async ({ page }) => {
 
 	const card = page.getByTestId("layout-card-replica");
 	const drawer = page.getByTestId("layout-hidden-drawer");
-	const row = drawer.getByTestId("layout-hidden-item-cacheRead");
+	const row = drawer.getByTestId("layout-field-item-cacheRead");
 	const idleOutlineColor = await drawer.evaluate(
 		(element) => getComputedStyle(element).outlineColor,
 	);

@@ -18,6 +18,7 @@ import {
 	dataSlotType,
 	layoutCollisionDetection,
 	layoutKeyboardCoordinates,
+	LAYOUT_POINTER_DRAG_DISTANCE_PX,
 	prefersReducedMotion,
 } from "./usage-layout-dnd";
 import {
@@ -114,7 +115,9 @@ export function InteractiveCardLayout({
 		animateNextLayoutRef.current = false;
 		if (shouldAnimate && !prefersReducedMotion()) {
 			for (const [id, nextRect] of nextRects) {
-				if (id === session?.activeId) continue;
+				if (id === session?.activeId || id === session?.sourceNodeId) {
+					continue;
+				}
 				const previousRect = fieldRectsRef.current.get(id);
 				const node = fieldNodesRef.current.get(id);
 				if (!previousRect || !node) continue;
@@ -159,8 +162,13 @@ export function InteractiveCardLayout({
 		if (node) fieldNodesRef.current.set(id, node);
 		else fieldNodesRef.current.delete(id);
 	};
-	const restoreFocus = (id: string) => {
-		requestAnimationFrame(() => fieldNodesRef.current.get(id)?.focus());
+	const restoreFocus = (id: string, fallbackId: string) => {
+		requestAnimationFrame(() =>
+			(
+				fieldNodesRef.current.get(id) ??
+				fieldNodesRef.current.get(fallbackId)
+			)?.focus(),
+		);
 	};
 	const keyboardCoordinates: KeyboardCoordinateGetter = (event, args) =>
 		layoutKeyboardCoordinates(event, args, (id) => {
@@ -168,9 +176,15 @@ export function InteractiveCardLayout({
 		});
 	const detectCollision: CollisionDetection = (args) =>
 		layoutCollisionDetection(args, keyboardTargetRef.current);
+	const dragFieldId = (active: DragStartEvent["active"]) => {
+		const fieldId = active.data.current?.fieldId;
+		return typeof fieldId === "string" ? fieldId : String(active.id);
+	};
 
 	const sensors = useSensors(
-		useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+		useSensor(PointerSensor, {
+			activationConstraint: { distance: LAYOUT_POINTER_DRAG_DISTANCE_PX },
+		}),
 		useSensor(KeyboardSensor, {
 			coordinateGetter: keyboardCoordinates,
 			scrollBehavior: "auto",
@@ -183,10 +197,11 @@ export function InteractiveCardLayout({
 		const type = dataSlotType(event.active.data.current?.type);
 		if (!type) return;
 		const next = {
-			activeId: String(event.active.id),
+			activeId: dragFieldId(event.active),
 			type,
 			origin: incomingLayout,
 			overId: null,
+			sourceNodeId: String(event.active.id),
 		};
 		sessionRef.current = next;
 		setSession(next);
@@ -206,12 +221,12 @@ export function InteractiveCardLayout({
 	const cancelDrag = () => {
 		const current = sessionRef.current;
 		if (!current) return;
-		const { activeId } = current;
+		const { activeId, sourceNodeId } = current;
 		animateNextLayoutRef.current = true;
 		sessionRef.current = null;
 		keyboardTargetRef.current = null;
 		setSession(null);
-		restoreFocus(activeId);
+		restoreFocus(sourceNodeId, activeId);
 	};
 	const endDrag = (event: DragEndEvent) => {
 		const current = sessionRef.current;
@@ -223,13 +238,13 @@ export function InteractiveCardLayout({
 			current.type,
 			overId,
 		);
-		const { activeId, origin } = current;
+		const { activeId, origin, sourceNodeId } = current;
 		animateNextLayoutRef.current = true;
 		sessionRef.current = null;
 		keyboardTargetRef.current = null;
 		setSession(null);
 		if (!layoutsEqual(origin, next)) onCommit(next);
-		restoreFocus(activeId);
+		restoreFocus(sourceNodeId, activeId);
 	};
 
 	const shownWindows = shownIds(displayLayout, "window");
@@ -281,21 +296,21 @@ export function InteractiveCardLayout({
 	const announcements: Announcements = {
 		onDragStart: ({ active }) =>
 			t("usageLayoutAnnouncePickedUp", {
-				field: fieldLabel(String(active.id)),
+				field: fieldLabel(dragFieldId(active)),
 			}),
 		onDragOver: ({ active, over }) =>
-			announceTarget(String(active.id), over ? String(over.id) : null),
+			announceTarget(dragFieldId(active), over ? String(over.id) : null),
 		onDragEnd: ({ active, over }) =>
 			over
 				? t("usageLayoutAnnounceDropped", {
-						field: fieldLabel(String(active.id)),
+						field: fieldLabel(dragFieldId(active)),
 					})
 				: t("usageLayoutAnnounceCancelled", {
-						field: fieldLabel(String(active.id)),
+						field: fieldLabel(dragFieldId(active)),
 					}),
 		onDragCancel: ({ active }) =>
 			t("usageLayoutAnnounceCancelled", {
-				field: fieldLabel(String(active.id)),
+				field: fieldLabel(dragFieldId(active)),
 			}),
 	};
 	return (

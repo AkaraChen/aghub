@@ -8,6 +8,8 @@ import {
 } from "@dnd-kit/core";
 import type { LayoutSlotType } from "./usage-layout-model";
 
+export const LAYOUT_POINTER_DRAG_DISTANCE_PX = 8;
+
 export function layoutCollisionDetection(
 	args: Parameters<CollisionDetection>[0],
 	keyboardTargetId: string | null,

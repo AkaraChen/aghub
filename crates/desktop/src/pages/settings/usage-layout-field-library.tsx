@@ -1,13 +1,22 @@
-import { useDroppable } from "@dnd-kit/core";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { Checkbox, Separator, Surface } from "@heroui/react";
+import type {
+	KeyboardEvent as ReactKeyboardEvent,
+	MouseEvent as ReactMouseEvent,
+	PointerEvent as ReactPointerEvent,
+} from "react";
+import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../../lib/utils";
-import { LayoutDraggableField } from "./usage-layout-draggable-field";
+import { LAYOUT_POINTER_DRAG_DISTANCE_PX } from "./usage-layout-dnd";
 import type { LayoutSlotType } from "./usage-layout-model";
 import type { LayoutField } from "./usage-layout-types";
 
+const FIELD_LIBRARY_DRAG_ID_PREFIX = "field-library:";
+
 export function UsageLayoutFieldLibrary({
 	active,
+	activeSourceId,
 	isDisabled,
 	windowFields,
 	statFields,
@@ -20,6 +29,7 @@ export function UsageLayoutFieldLibrary({
 	onVisibilityChange,
 }: {
 	active: boolean;
+	activeSourceId: string | null;
 	isDisabled?: boolean;
 	windowFields: LayoutField[];
 	statFields: LayoutField[];
@@ -71,6 +81,7 @@ export function UsageLayoutFieldLibrary({
 					capacity={windowCapacity}
 					isDisabled={isDisabled}
 					activeId={activeId}
+					activeSourceId={activeSourceId}
 					onNodeChange={onNodeChange}
 					onVisibilityChange={onVisibilityChange}
 				/>
@@ -83,6 +94,7 @@ export function UsageLayoutFieldLibrary({
 					capacity={statCapacity}
 					isDisabled={isDisabled}
 					activeId={activeId}
+					activeSourceId={activeSourceId}
 					onNodeChange={onNodeChange}
 					onVisibilityChange={onVisibilityChange}
 				/>
@@ -99,6 +111,7 @@ function FieldGroup({
 	capacity,
 	isDisabled,
 	activeId,
+	activeSourceId,
 	onNodeChange,
 	onVisibilityChange,
 }: {
@@ -109,6 +122,7 @@ function FieldGroup({
 	capacity: number;
 	isDisabled?: boolean;
 	activeId: string | null;
+	activeSourceId: string | null;
 	onNodeChange: (id: string, node: HTMLElement | null) => void;
 	onVisibilityChange: (
 		id: string,
@@ -130,66 +144,179 @@ function FieldGroup({
 				</span>
 			</div>
 			<div className={cn("grid gap-x-1 px-2 pb-2", columns)}>
-				{fields.map((field) => {
-					const isVisible = shownSet.has(field.id);
-					return (
-						<div
-							key={field.id}
-							data-visibility={isVisible ? "shown" : "hidden"}
-							className="grid min-h-7 grid-cols-[minmax(0,1fr)_auto] items-center gap-1 px-1"
-						>
-							{isVisible ? (
-								<span
-									title={field.hint}
-									className="flex min-w-0 items-center rounded-md border border-transparent px-1 py-0.5 text-[11px] text-foreground"
-								>
-									<span className="truncate">
-										{field.label}
-									</span>
-								</span>
-							) : (
-								<LayoutDraggableField
-									field={field}
-									type={type}
-									isDisabled={isDisabled}
-									isActive={activeId === field.id}
-									showHandle={false}
-									onNodeChange={onNodeChange}
-									data-testid={`layout-hidden-item-${field.id}`}
-									data-layout-type={type}
-									className="flex min-w-0 items-center rounded-md px-1 py-0.5 text-[11px]"
-								>
-									<span className="truncate text-muted">
-										{field.label}
-									</span>
-								</LayoutDraggableField>
-							)}
-							<Checkbox
-								variant="secondary"
-								aria-label={field.label}
-								isSelected={isVisible}
-								isDisabled={
-									isDisabled ||
-									(!isVisible && shown.length >= capacity)
-								}
-								onChange={(isSelected) =>
-									onVisibilityChange(
-										field.id,
-										type,
-										isSelected,
-									)
-								}
-							>
-								<Checkbox.Content>
-									<Checkbox.Control>
-										<Checkbox.Indicator />
-									</Checkbox.Control>
-								</Checkbox.Content>
-							</Checkbox>
-						</div>
-					);
-				})}
+				{fields.map((field) => (
+					<FieldLibraryItem
+						key={field.id}
+						field={field}
+						type={type}
+						isVisible={shownSet.has(field.id)}
+						isDisabled={isDisabled}
+						isVisibilityDisabled={
+							shown.length >= capacity && !shownSet.has(field.id)
+						}
+						isActive={activeId === field.id}
+						activeSourceId={activeSourceId}
+						onNodeChange={onNodeChange}
+						onVisibilityChange={onVisibilityChange}
+					/>
+				))}
 			</div>
+		</div>
+	);
+}
+
+function FieldLibraryItem({
+	field,
+	type,
+	isVisible,
+	isDisabled,
+	isVisibilityDisabled,
+	isActive,
+	activeSourceId,
+	onNodeChange,
+	onVisibilityChange,
+}: {
+	field: LayoutField;
+	type: LayoutSlotType;
+	isVisible: boolean;
+	isDisabled?: boolean;
+	isVisibilityDisabled: boolean;
+	isActive: boolean;
+	activeSourceId: string | null;
+	onNodeChange: (id: string, node: HTMLElement | null) => void;
+	onVisibilityChange: (
+		id: string,
+		type: LayoutSlotType,
+		isVisible: boolean,
+	) => void;
+}) {
+	const shownDragId = `${FIELD_LIBRARY_DRAG_ID_PREFIX}${field.id}`;
+	// Shown fields also render in the card. Their library copy uses a distinct
+	// ID and keeps it while a library drag changes the preview visibility.
+	const dragId =
+		isActive && activeSourceId === shownDragId
+			? shownDragId
+			: isVisible
+				? shownDragId
+				: field.id;
+	const {
+		attributes,
+		listeners,
+		setActivatorNodeRef,
+		setNodeRef,
+		isDragging,
+	} = useDraggable({
+		id: dragId,
+		disabled: isDisabled,
+		data: { kind: "field", type, fieldId: field.id },
+	});
+	const { onKeyDown, onPointerDown, ...pointerListeners } = listeners ?? {};
+	const pointerGestureRef = useRef<{
+		pointerId: number;
+		x: number;
+		y: number;
+		didDrag: boolean;
+	} | null>(null);
+	const checkboxDisabled = isDisabled || isVisibilityDisabled;
+	const setKeyboardNodeRef = (node: HTMLDivElement | null) => {
+		setActivatorNodeRef(node);
+		onNodeChange(dragId, node);
+	};
+	const handleDragKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
+		onKeyDown?.(event);
+	};
+	const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+		pointerGestureRef.current = {
+			pointerId: event.pointerId,
+			x: event.clientX,
+			y: event.clientY,
+			didDrag: false,
+		};
+		onPointerDown?.(event);
+	};
+	const handlePointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+		const gesture = pointerGestureRef.current;
+		if (
+			!gesture ||
+			gesture.pointerId !== event.pointerId ||
+			gesture.didDrag
+		) {
+			return;
+		}
+		gesture.didDrag =
+			Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) >=
+			LAYOUT_POINTER_DRAG_DISTANCE_PX;
+	};
+	const handleItemClickCapture = (event: ReactMouseEvent<HTMLDivElement>) => {
+		if (event.detail > 0 && pointerGestureRef.current?.didDrag) {
+			event.preventDefault();
+			event.stopPropagation();
+			pointerGestureRef.current = null;
+		}
+	};
+	const handleItemClick = (event: ReactMouseEvent<HTMLDivElement>) => {
+		pointerGestureRef.current = null;
+		if (checkboxDisabled) return;
+		if (
+			event.target instanceof Element &&
+			event.target.closest('[data-slot="checkbox-content"]')
+		) {
+			return;
+		}
+		onVisibilityChange(field.id, type, !isVisible);
+	};
+
+	return (
+		<div
+			ref={setNodeRef}
+			{...pointerListeners}
+			onPointerDownCapture={handlePointerDown}
+			onPointerMoveCapture={handlePointerMove}
+			data-testid={`layout-field-item-${field.id}`}
+			data-visibility={isVisible ? "shown" : "hidden"}
+			onClickCapture={handleItemClickCapture}
+			onClick={handleItemClick}
+			className={cn(
+				"grid min-h-7 touch-none select-none grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-md px-1 outline -outline-offset-1 outline-transparent",
+				"transition-[background-color,outline-color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
+				!isDisabled &&
+					"cursor-grab hover:bg-surface-secondary hover:outline-border",
+				isDragging && isActive && "opacity-45",
+			)}
+		>
+			<div
+				{...attributes}
+				ref={setKeyboardNodeRef}
+				onKeyDown={handleDragKeyDown}
+				title={field.hint}
+				aria-label={field.label}
+				data-testid={`${isVisible ? "layout-shown-item" : "layout-hidden-item"}-${field.id}`}
+				data-layout-type={type}
+				className={cn(
+					"flex min-w-0 items-center rounded-md border border-transparent px-1 py-0.5 text-[11px] outline-none",
+					isDisabled
+						? "opacity-40"
+						: "cursor-grab active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface",
+					isVisible ? "text-foreground" : "text-muted",
+				)}
+			>
+				<span className="truncate">{field.label}</span>
+			</div>
+			<Checkbox
+				variant="secondary"
+				aria-label={field.label}
+				isSelected={isVisible}
+				isDisabled={checkboxDisabled}
+				onChange={(isSelected) =>
+					onVisibilityChange(field.id, type, isSelected)
+				}
+			>
+				<Checkbox.Content>
+					<Checkbox.Control>
+						<Checkbox.Indicator />
+					</Checkbox.Control>
+				</Checkbox.Content>
+			</Checkbox>
 		</div>
 	);
 }

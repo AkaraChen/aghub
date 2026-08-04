@@ -528,7 +528,7 @@ export default {
 	usageLayoutDefaultRestored: "預設卡片佈局已恢復",
 	usageUndo: "復原",
 	usageLayoutFields: "欄位",
-	usageLayoutFieldsDescription: "勾選要顯示的欄位，或將隱藏欄位拖入預覽。",
+	usageLayoutFieldsDescription: "點擊欄位顯示或隱藏，拖曳可調整位置。",
 	usageLayoutQuotaFields: "額度",
 	usageLayoutStatFields: "統計",
 	usageTimezoneSystem: "跟隨系統",

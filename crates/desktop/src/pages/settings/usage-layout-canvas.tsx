@@ -93,6 +93,7 @@ export function UsageLayoutCanvas({
 				/>
 				<UsageLayoutFieldLibrary
 					active={activeStartedOnCard}
+					activeSourceId={drag?.sourceNodeId ?? null}
 					isDisabled={isDisabled}
 					windowFields={windowFields}
 					statFields={statFields}
