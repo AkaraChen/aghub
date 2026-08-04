@@ -215,9 +215,9 @@ test("field library items toggle and drag from the whole tile", async ({
 
 	const card = page.getByTestId("layout-card-replica");
 	const library = page.getByTestId("layout-hidden-drawer");
-	const totalTokensTile = library
-		.locator('[data-visibility="shown"]')
-		.filter({ hasText: /^Total tokens$/ });
+	const totalTokensTile = library.getByTestId(
+		"layout-field-item-totalTokens",
+	);
 	const totalTokensCheckbox = library.getByRole("checkbox", {
 		name: "Total tokens",
 	});
@@ -233,6 +233,24 @@ test("field library items toggle and drag from the whole tile", async ({
 	await expect(card.getByText("5-hour limit", { exact: true })).toHaveCount(
 		0,
 	);
+	await page.mouse.move(0, 0);
+	const idleStyle = await fiveHourTile.evaluate((element) => {
+		const style = getComputedStyle(element);
+		return {
+			backgroundColor: style.backgroundColor,
+			outlineStyle: style.outlineStyle,
+		};
+	});
+	await fiveHourTile.hover();
+	const hoverStyle = await fiveHourTile.evaluate((element) => {
+		const style = getComputedStyle(element);
+		return {
+			backgroundColor: style.backgroundColor,
+			outlineStyle: style.outlineStyle,
+		};
+	});
+	expect(hoverStyle.backgroundColor).not.toBe(idleStyle.backgroundColor);
+	expect(hoverStyle.outlineStyle).toBe("none");
 
 	const tileBox = await totalTokensTile.boundingBox();
 	if (!tileBox) throw new Error("field tile missing");
@@ -243,10 +261,40 @@ test("field library items toggle and drag from the whole tile", async ({
 		steps: 3,
 	});
 	await expect(page.locator("#root .cursor-grabbing")).toBeVisible();
+	await expect(totalTokensCheckbox).toBeChecked();
+	await expect(card.getByText("Total tokens", { exact: true })).toBeVisible();
+	const totalTokensGhostBox = await page
+		.getByTestId("layout-field-drag-ghost")
+		.boundingBox();
+	if (!totalTokensGhostBox) throw new Error("stat drag ghost missing");
 	await page.keyboard.press("Escape");
 	await page.mouse.up();
 	await expect(totalTokensCheckbox).toBeChecked();
 	await expect(card.getByText("Total tokens", { exact: true })).toBeVisible();
+
+	const fiveHourTileBox = await fiveHourTile.boundingBox();
+	if (!fiveHourTileBox) throw new Error("quota field tile missing");
+	await page.mouse.move(
+		fiveHourTileBox.x + 2,
+		fiveHourTileBox.y + fiveHourTileBox.height / 2,
+	);
+	await page.mouse.down();
+	await page.mouse.move(
+		fiveHourTileBox.x + 14,
+		fiveHourTileBox.y + fiveHourTileBox.height / 2,
+		{ steps: 3 },
+	);
+	await expect(fiveHourCheckbox).not.toBeChecked();
+	await expect(card.getByText("5-hour limit", { exact: true })).toHaveCount(
+		0,
+	);
+	const fiveHourGhostBox = await page
+		.getByTestId("layout-field-drag-ghost")
+		.boundingBox();
+	if (!fiveHourGhostBox) throw new Error("quota drag ghost missing");
+	expect(fiveHourGhostBox.width).toBe(totalTokensGhostBox.width);
+	await page.keyboard.press("Escape");
+	await page.mouse.up();
 	const checkboxControlBox = await totalTokensTile
 		.locator('[data-slot="checkbox-control"]')
 		.boundingBox();

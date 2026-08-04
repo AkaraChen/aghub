@@ -26,7 +26,7 @@ export function LayoutDraggableField({
 	const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
 		id: field.id,
 		disabled: isDisabled,
-		data: { kind: "field", type },
+		data: { kind: "field", source: "card", type },
 	});
 	const setRowRef = (node: HTMLDivElement | null) => {
 		setNodeRef(node);

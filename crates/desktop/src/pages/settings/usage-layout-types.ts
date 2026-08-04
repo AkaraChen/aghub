@@ -11,9 +11,12 @@ export interface LayoutPreview {
 	agentName: string;
 }
 
+export type LayoutDragSource = "card" | "library";
+
 export interface LayoutDragPreview {
 	activeId: string;
 	sourceNodeId: string;
+	source: LayoutDragSource;
 	type: LayoutSlotType;
 	origin: CardLayoutModel;
 }

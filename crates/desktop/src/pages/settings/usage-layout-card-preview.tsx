@@ -9,6 +9,7 @@ import { LayoutDraggableField } from "./usage-layout-draggable-field";
 import type { LayoutSlotType } from "./usage-layout-model";
 import type {
 	LayoutDragPreview,
+	LayoutDragSource,
 	LayoutField,
 	LayoutPreview,
 } from "./usage-layout-types";
@@ -82,7 +83,10 @@ export function UsageLayoutCardPreview({
 										field={field}
 										type="window"
 										isDisabled={isDisabled}
-										isActive={drag?.activeId === field.id}
+										isActive={
+											drag?.source === "card" &&
+											drag.activeId === field.id
+										}
 										onNodeChange={onNodeChange}
 										data-testid={`layout-card-item-${field.id}`}
 										className="flex items-center rounded-md px-1.5 py-1"
@@ -125,7 +129,10 @@ export function UsageLayoutCardPreview({
 										field={field}
 										type="stat"
 										isDisabled={isDisabled}
-										isActive={drag?.activeId === field.id}
+										isActive={
+											drag?.source === "card" &&
+											drag.activeId === field.id
+										}
 										onNodeChange={onNodeChange}
 										data-testid={`layout-card-item-${field.id}`}
 										data-layout-type="stat"
@@ -151,13 +158,25 @@ export function UsageLayoutCardPreview({
 
 export function LayoutDragGhost({
 	field,
+	source,
 	type,
 	barPct,
 }: {
 	field: LayoutField;
+	source: LayoutDragSource;
 	type: LayoutSlotType;
 	barPct: number;
 }) {
+	if (source === "library") {
+		return (
+			<div
+				data-testid="layout-field-drag-ghost"
+				className="w-44 cursor-grabbing truncate rounded-md border border-border bg-overlay px-2 py-1.5 text-[11px] text-foreground shadow-[var(--overlay-shadow)]"
+			>
+				{field.label}
+			</div>
+		);
+	}
 	if (type === "window") {
 		return (
 			<div className="w-72 max-w-[calc(100vw-2rem)] cursor-grabbing rounded-md border border-border bg-overlay p-1 shadow-[var(--overlay-shadow)]">

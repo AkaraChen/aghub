@@ -191,8 +191,6 @@ function FieldLibraryItem({
 	) => void;
 }) {
 	const shownDragId = `${FIELD_LIBRARY_DRAG_ID_PREFIX}${field.id}`;
-	// Shown fields also render in the card. Their library copy uses a distinct
-	// ID and keeps it while a library drag changes the preview visibility.
 	const dragId =
 		isActive && activeSourceId === shownDragId
 			? shownDragId
@@ -208,7 +206,12 @@ function FieldLibraryItem({
 	} = useDraggable({
 		id: dragId,
 		disabled: isDisabled,
-		data: { kind: "field", type, fieldId: field.id },
+		data: {
+			kind: "field",
+			source: "library",
+			type,
+			fieldId: field.id,
+		},
 	});
 	const { onKeyDown, onPointerDown, ...pointerListeners } = listeners ?? {};
 	const pointerGestureRef = useRef<{
@@ -277,10 +280,9 @@ function FieldLibraryItem({
 			onClickCapture={handleItemClickCapture}
 			onClick={handleItemClick}
 			className={cn(
-				"grid min-h-7 touch-none select-none grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-md px-1 outline -outline-offset-1 outline-transparent",
-				"transition-[background-color,outline-color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
-				!isDisabled &&
-					"cursor-grab hover:bg-surface-secondary hover:outline-border",
+				"grid min-h-7 touch-none select-none grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-md px-1",
+				"transition-[background-color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
+				!isDisabled && "cursor-grab hover:bg-default",
 				isDragging && isActive && "opacity-45",
 			)}
 		>

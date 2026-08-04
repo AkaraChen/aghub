@@ -61,9 +61,7 @@ export function UsageLayoutCanvas({
 	onVisibilityChange,
 }: UsageLayoutCanvasProps) {
 	const activeField = drag ? fieldById.get(drag.activeId) : undefined;
-	const activeStartedOnCard = drag
-		? shownIds(drag.origin, drag.type).includes(drag.activeId)
-		: false;
+	const activeStartedOnCard = drag?.source === "card";
 	const activeBarIndex =
 		drag?.type === "window"
 			? shownIds(drag.origin, "window").indexOf(drag.activeId)
@@ -111,6 +109,7 @@ export function UsageLayoutCanvas({
 				{activeField && drag ? (
 					<LayoutDragGhost
 						field={activeField}
+						source={drag.source}
 						type={drag.type}
 						barPct={
 							activeBarIndex >= 0

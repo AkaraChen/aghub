@@ -56,6 +56,12 @@ const LAYOUT_AUTO_SCROLL = {
 	},
 };
 
+function sessionOverId(session: DragSession, overId: string | null) {
+	return session.source === "library" && overId === "hidden-drawer"
+		? null
+		: overId;
+}
+
 export function InteractiveCardLayout({
 	windowFields,
 	statFields,
@@ -195,13 +201,15 @@ export function InteractiveCardLayout({
 		if (isDisabled) return;
 		keyboardTargetRef.current = null;
 		const type = dataSlotType(event.active.data.current?.type);
-		if (!type) return;
+		const source = event.active.data.current?.source;
+		if (!type || (source !== "card" && source !== "library")) return;
 		const next = {
 			activeId: dragFieldId(event.active),
 			type,
 			origin: incomingLayout,
 			overId: null,
 			sourceNodeId: String(event.active.id),
+			source,
 		};
 		sessionRef.current = next;
 		setSession(next);
@@ -209,9 +217,10 @@ export function InteractiveCardLayout({
 	const updateDrag = (event: DragOverEvent) => {
 		const current = sessionRef.current;
 		if (!current) return;
+		const detectedOverId = event.over ? String(event.over.id) : null;
 		const next = {
 			...current,
-			overId: event.over ? String(event.over.id) : null,
+			overId: sessionOverId(current, detectedOverId),
 		};
 		if (next.overId === current.overId) return;
 		animateNextLayoutRef.current = true;
@@ -231,7 +240,10 @@ export function InteractiveCardLayout({
 	const endDrag = (event: DragEndEvent) => {
 		const current = sessionRef.current;
 		if (!current) return;
-		const overId = event.over ? String(event.over.id) : current.overId;
+		const detectedOverId = event.over
+			? String(event.over.id)
+			: current.overId;
+		const overId = sessionOverId(current, detectedOverId);
 		const next = projectLayout(
 			current.origin,
 			current.activeId,
@@ -261,11 +273,12 @@ export function InteractiveCardLayout({
 	const fieldLabel = (id: string) => fieldById.get(id)?.label ?? id;
 	const announceTarget = (activeId: string, overId: string | null) => {
 		const field = fieldLabel(activeId);
+		const current = sessionRef.current;
+		if (current) overId = sessionOverId(current, overId);
 		if (!overId) return t("usageLayoutAnnounceNoTarget", { field });
 		if (overId === "hidden-drawer") {
 			return t("usageLayoutAnnounceHidden", { field });
 		}
-		const current = sessionRef.current;
 		if (!current) return t("usageLayoutAnnounceMoved", { field });
 		const slotMatch = /^slot:(?:window|stat):(\d+)$/.exec(overId);
 		const position = slotMatch
