@@ -314,6 +314,24 @@ test("field library items toggle and drag from the whole tile", async ({
 	expect(selectedVisual.fill).not.toBe(selectedVisual.accentFill);
 	expect(selectedVisual.checkmark).toBe(selectedVisual.expectedCheckmark);
 
+	for (const [fieldId, label] of [
+		["weekly", "Weekly limit"],
+		["totalTokens", "Total tokens"],
+	] as const) {
+		const fieldTile = library.getByTestId(`layout-field-item-${fieldId}`);
+		const [controlBox, labelBox] = await Promise.all([
+			fieldTile.locator('[data-slot="checkbox-control"]').boundingBox(),
+			fieldTile.getByText(label, { exact: true }).boundingBox(),
+		]);
+		if (!controlBox || !labelBox) {
+			throw new Error(`${label} field geometry missing`);
+		}
+		expect(controlBox.x + controlBox.width).toBeLessThan(labelBox.x);
+		expect(
+			labelBox.x - (controlBox.x + controlBox.width),
+		).toBeLessThanOrEqual(12);
+	}
+
 	const tileBox = await totalTokensTile.boundingBox();
 	if (!tileBox) throw new Error("field tile missing");
 

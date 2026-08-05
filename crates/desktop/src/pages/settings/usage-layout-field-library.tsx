@@ -15,7 +15,7 @@ import type { LayoutField } from "./usage-layout-types";
 
 const FIELD_LIBRARY_DRAG_ID_PREFIX = "field-library:";
 const FIELD_LIBRARY_ITEM_LAYOUT =
-	"grid min-h-7 touch-none select-none grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-md border px-1";
+	"grid min-h-7 touch-none select-none grid-cols-[auto_minmax(0,1fr)] items-center gap-1 rounded-md border px-1";
 const FIELD_LIBRARY_ITEM_LABEL =
 	"flex min-w-0 items-center rounded-md border border-transparent px-1 py-0.5 text-[11px]";
 
@@ -125,14 +125,6 @@ export function LayoutFieldDragGhost({
 				"h-full w-full cursor-grabbing border-border bg-surface",
 			)}
 		>
-			<div
-				className={cn(
-					FIELD_LIBRARY_ITEM_LABEL,
-					isVisible ? "text-foreground" : "text-muted",
-				)}
-			>
-				<span className="truncate">{field.label}</span>
-			</div>
 			<span
 				data-testid="layout-field-drag-visibility"
 				className="relative inline-flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-md bg-default"
@@ -144,6 +136,14 @@ export function LayoutFieldDragGhost({
 					</>
 				)}
 			</span>
+			<div
+				className={cn(
+					FIELD_LIBRARY_ITEM_LABEL,
+					isVisible ? "text-foreground" : "text-muted",
+				)}
+			>
+				<span className="truncate">{field.label}</span>
+			</div>
 		</div>
 	);
 }
@@ -333,6 +333,21 @@ function FieldLibraryItem({
 				isDragging && isActive && "opacity-45",
 			)}
 		>
+			<Checkbox
+				variant="secondary"
+				aria-label={field.label}
+				isSelected={isVisible}
+				isDisabled={checkboxDisabled}
+				onChange={(isSelected) =>
+					onVisibilityChange(field.id, type, isSelected)
+				}
+			>
+				<Checkbox.Content>
+					<Checkbox.Control className="before:bg-accent-soft hover:before:bg-accent-soft-hover">
+						<Checkbox.Indicator className="**:data-[slot=checkbox-default-indicator--checkmark]:text-accent-soft-foreground" />
+					</Checkbox.Control>
+				</Checkbox.Content>
+			</Checkbox>
 			<div
 				{...attributes}
 				ref={setKeyboardNodeRef}
@@ -352,21 +367,6 @@ function FieldLibraryItem({
 			>
 				<span className="truncate">{field.label}</span>
 			</div>
-			<Checkbox
-				variant="secondary"
-				aria-label={field.label}
-				isSelected={isVisible}
-				isDisabled={checkboxDisabled}
-				onChange={(isSelected) =>
-					onVisibilityChange(field.id, type, isSelected)
-				}
-			>
-				<Checkbox.Content>
-					<Checkbox.Control className="before:bg-accent-soft hover:before:bg-accent-soft-hover">
-						<Checkbox.Indicator className="**:data-[slot=checkbox-default-indicator--checkmark]:text-accent-soft-foreground" />
-					</Checkbox.Control>
-				</Checkbox.Content>
-			</Checkbox>
 		</div>
 	);
 }
