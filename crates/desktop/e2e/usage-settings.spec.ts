@@ -101,6 +101,11 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 		0,
 	);
 	await expect(drawer.getByTestId("layout-hidden-item-5h")).toBeVisible();
+	await expect(drawer.locator('[data-layout-type="window"]')).toHaveText([
+		"Weekly limit",
+		"5-hour limit",
+		"Weekly (Opus)",
+	]);
 	await expect(card.getByText("Total tokens", { exact: true })).toBeVisible();
 	for (const sampleValue of ["62%", "1.43M", "$12.50", "400K", "120K"]) {
 		await expect(card.getByText(sampleValue, { exact: true })).toHaveCount(
@@ -313,6 +318,16 @@ test("field library items toggle and drag from the whole tile", async ({
 	expect(selectedVisual.fill).toBe(selectedVisual.expectedFill);
 	expect(selectedVisual.fill).not.toBe(selectedVisual.accentFill);
 	expect(selectedVisual.checkmark).toBe(selectedVisual.expectedCheckmark);
+	const [cardLabelColor, libraryLabelColor] = await Promise.all([
+		card
+			.getByTestId("layout-card-item-totalTokens")
+			.getByText("Total tokens", { exact: true })
+			.evaluate((element) => getComputedStyle(element).color),
+		totalTokensTile
+			.getByText("Total tokens", { exact: true })
+			.evaluate((element) => getComputedStyle(element).color),
+	]);
+	expect(libraryLabelColor).toBe(cardLabelColor);
 
 	for (const [fieldId, label] of [
 		["weekly", "Weekly limit"],
@@ -333,7 +348,10 @@ test("field library items toggle and drag from the whole tile", async ({
 	}
 
 	const tileBox = await totalTokensTile.boundingBox();
-	if (!tileBox) throw new Error("field tile missing");
+	const tileLabelBox = await totalTokensTile
+		.getByText("Total tokens", { exact: true })
+		.boundingBox();
+	if (!tileBox || !tileLabelBox) throw new Error("field tile missing");
 
 	await page.mouse.move(tileBox.x + 2, tileBox.y + tileBox.height / 2);
 	await page.mouse.down();
@@ -346,16 +364,38 @@ test("field library items toggle and drag from the whole tile", async ({
 	const totalTokensGhostBox = await page
 		.getByTestId("layout-field-drag-ghost")
 		.boundingBox();
-	if (!totalTokensGhostBox) throw new Error("stat drag ghost missing");
+	const totalTokensGhostLabelBox = await page
+		.getByTestId("layout-field-drag-ghost")
+		.getByText("Total tokens", { exact: true })
+		.boundingBox();
+	if (!totalTokensGhostBox || !totalTokensGhostLabelBox) {
+		throw new Error("stat drag ghost missing");
+	}
 	expect(totalTokensGhostBox.width).toBeCloseTo(tileBox.width, 1);
 	expect(totalTokensGhostBox.height).toBeCloseTo(tileBox.height, 1);
+	expect(
+		Math.abs(
+			totalTokensGhostLabelBox.x -
+				totalTokensGhostBox.x -
+				(tileLabelBox.x - tileBox.x),
+		),
+	).toBeLessThanOrEqual(1);
 	await expect(page.getByTestId("layout-field-drag-ghost")).toHaveAttribute(
 		"data-visibility",
 		"shown",
 	);
 	await expect(
-		page.getByTestId("layout-field-drag-visibility").locator("svg"),
-	).toHaveCount(1);
+		page
+			.getByTestId("layout-field-drag-ghost")
+			.getByTestId("layout-field-drag-handle"),
+	).toBeVisible();
+	await expect
+		.poll(() =>
+			page
+				.getByTestId("layout-field-drag-ghost")
+				.evaluate((element) => getComputedStyle(element).boxShadow),
+		)
+		.not.toBe("none");
 	await page.keyboard.press("Escape");
 	await page.mouse.up();
 	await expect(totalTokensCheckbox).toBeChecked();
@@ -388,8 +428,10 @@ test("field library items toggle and drag from the whole tile", async ({
 		"hidden",
 	);
 	await expect(
-		page.getByTestId("layout-field-drag-visibility").locator("svg"),
-	).toHaveCount(0);
+		page
+			.getByTestId("layout-field-drag-ghost")
+			.getByTestId("layout-field-drag-handle"),
+	).toBeVisible();
 	await page.keyboard.press("Escape");
 	await page.mouse.up();
 	const checkboxControlBox = await totalTokensTile
@@ -2029,11 +2071,15 @@ test("layout editor moves a field between the card and the drawer", async ({
 	// Drag the complete row to the drawer to hide it.
 	const source = card.getByTestId("layout-card-item-totalTokens");
 	await source.hover();
-	const [sourceBox, drawerBox] = await Promise.all([
+	const [sourceBox, sourceLabelBox, drawerBox] = await Promise.all([
 		source.boundingBox(),
+		source.getByText("Total tokens", { exact: true }).boundingBox(),
 		drawer.boundingBox(),
 	]);
-	if (!sourceBox || !drawerBox) throw new Error("drag endpoints missing");
+	if (!sourceBox || !sourceLabelBox || !drawerBox) {
+		throw new Error("drag endpoints missing");
+	}
+	const sourceLabelOffset = sourceLabelBox.x - sourceBox.x;
 	await page.mouse.move(
 		sourceBox.x + sourceBox.width / 2,
 		sourceBox.y + sourceBox.height / 2,
@@ -2057,6 +2103,18 @@ test("layout editor moves a field between the card and the drawer", async ({
 	await expect(
 		drawer.getByTestId("layout-hidden-item-totalTokens"),
 	).toBeVisible();
+	const droppedTile = drawer.getByTestId("layout-field-item-totalTokens");
+	const [droppedTileBox, droppedLabelBox] = await Promise.all([
+		droppedTile.boundingBox(),
+		droppedTile.getByText("Total tokens", { exact: true }).boundingBox(),
+	]);
+	if (!droppedTileBox || !droppedLabelBox) {
+		throw new Error("dropped field geometry missing");
+	}
+	expect(droppedTileBox.height).toBeCloseTo(sourceBox.height, 1);
+	expect(
+		Math.abs(droppedLabelBox.x - droppedTileBox.x - sourceLabelOffset),
+	).toBeLessThanOrEqual(1);
 	await page.mouse.up();
 	await expect(card.getByText("Total tokens")).toHaveCount(0);
 	await expect(

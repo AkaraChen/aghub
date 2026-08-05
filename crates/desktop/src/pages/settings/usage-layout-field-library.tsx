@@ -1,5 +1,4 @@
 import { useDraggable, useDroppable } from "@dnd-kit/core";
-import { CheckIcon } from "@heroicons/react/24/outline";
 import { Checkbox, Separator, Surface } from "@heroui/react";
 import type {
 	KeyboardEvent as ReactKeyboardEvent,
@@ -10,14 +9,15 @@ import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../../lib/utils";
 import { LAYOUT_POINTER_DRAG_DISTANCE_PX } from "./usage-layout-dnd";
+import { LayoutFieldDragHandle } from "./usage-layout-draggable-field";
 import type { LayoutSlotType } from "./usage-layout-model";
 import type { LayoutField } from "./usage-layout-types";
 
 const FIELD_LIBRARY_DRAG_ID_PREFIX = "field-library:";
 const FIELD_LIBRARY_ITEM_LAYOUT =
-	"grid min-h-7 touch-none select-none grid-cols-[auto_minmax(0,1fr)] items-center gap-1 rounded-md border px-1";
+	"grid min-h-7 touch-none select-none grid-cols-[auto_minmax(0,1fr)] items-center gap-1.5 rounded-md border px-1.5";
 const FIELD_LIBRARY_ITEM_LABEL =
-	"flex min-w-0 items-center rounded-md border border-transparent px-1 py-0.5 text-[11px]";
+	"flex min-w-0 items-center rounded-md border border-transparent py-0.5 text-[11px]";
 
 export function UsageLayoutFieldLibrary({
 	active,
@@ -122,26 +122,11 @@ export function LayoutFieldDragGhost({
 			data-visibility={isVisible ? "shown" : "hidden"}
 			className={cn(
 				FIELD_LIBRARY_ITEM_LAYOUT,
-				"h-full w-full cursor-grabbing border-border bg-surface",
+				"h-full w-full cursor-grabbing gap-0 border-border bg-surface shadow-[var(--overlay-shadow)]",
 			)}
 		>
-			<span
-				data-testid="layout-field-drag-visibility"
-				className="relative inline-flex size-4 shrink-0 items-center justify-center overflow-hidden rounded-md bg-default"
-			>
-				{isVisible && (
-					<>
-						<span className="absolute inset-0 bg-accent-soft" />
-						<CheckIcon className="relative size-3 stroke-[2.5] text-accent-soft-foreground" />
-					</>
-				)}
-			</span>
-			<div
-				className={cn(
-					FIELD_LIBRARY_ITEM_LABEL,
-					isVisible ? "text-foreground" : "text-muted",
-				)}
-			>
+			<LayoutFieldDragHandle />
+			<div className={cn(FIELD_LIBRARY_ITEM_LABEL, "text-muted")}>
 				<span className="truncate">{field.label}</span>
 			</div>
 		</div>
@@ -362,7 +347,7 @@ function FieldLibraryItem({
 					isDisabled
 						? "opacity-40"
 						: "cursor-grab active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface",
-					isVisible ? "text-foreground" : "text-muted",
+					isVisible ? "text-muted" : "text-muted/60",
 				)}
 			>
 				<span className="truncate">{field.label}</span>

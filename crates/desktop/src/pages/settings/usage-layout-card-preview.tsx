@@ -151,7 +151,7 @@ export function LayoutDragGhost({
 		return (
 			<div
 				data-testid="layout-card-drag-ghost"
-				className="flex h-full w-full min-w-0 max-w-[calc(100vw-2rem)] cursor-grabbing select-none items-center rounded-md border border-border bg-surface-secondary px-1.5 py-1 shadow-[var(--overlay-shadow)]"
+				className="flex h-full w-full min-w-0 max-w-[calc(100vw-2rem)] cursor-grabbing select-none items-center rounded-md border border-border bg-surface px-1.5 py-1 shadow-[var(--overlay-shadow)]"
 			>
 				<LayoutFieldDragHandle />
 				<PreviewBar label={field.label} />
@@ -162,7 +162,7 @@ export function LayoutDragGhost({
 		<div
 			data-testid="layout-card-drag-ghost"
 			data-layout-type="stat"
-			className="flex h-full w-full min-w-0 cursor-grabbing select-none items-center rounded-md border border-border bg-surface-secondary px-1.5 py-1 text-[11px] shadow-[var(--overlay-shadow)]"
+			className="flex h-full w-full min-w-0 cursor-grabbing select-none items-center rounded-md border border-border bg-surface px-1.5 py-1 text-[11px] shadow-[var(--overlay-shadow)]"
 		>
 			<LayoutFieldDragHandle />
 			<StatBody field={field} />

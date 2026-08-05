@@ -41,11 +41,11 @@ export function LayoutDraggableField({
 			title={field.hint}
 			aria-label={field.label}
 			className={cn(
-				"min-w-0 touch-none select-none border border-transparent outline-none",
-				"transition-[background-color,box-shadow,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
+				"min-h-7 min-w-0 touch-none select-none border border-transparent outline-none",
+				"transition-[background-color,border-color,box-shadow,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
 				isDisabled
 					? "opacity-40"
-					: "cursor-grab hover:border-border hover:bg-surface-secondary active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface",
+					: "cursor-grab hover:border-border hover:bg-surface active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface",
 				isDragging && isActive && "opacity-45",
 				className,
 			)}
@@ -57,5 +57,10 @@ export function LayoutDraggableField({
 }
 
 export function LayoutFieldDragHandle() {
-	return <Bars3Icon className="mr-1.5 size-3.5 shrink-0 text-muted/60" />;
+	return (
+		<Bars3Icon
+			data-testid="layout-field-drag-handle"
+			className="mr-1.5 size-4 shrink-0 text-muted/60"
+		/>
+	);
 }

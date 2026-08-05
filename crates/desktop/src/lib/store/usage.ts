@@ -41,7 +41,7 @@ export type HomeStatId = (typeof HOME_STAT_IDS)[number];
  * `LimitWindowKind` minus `weekly_sonnet`, which the backend omits for nearly
  * everyone and the card has always filtered out.
  */
-export const HOME_WINDOW_IDS = ["5h", "weekly", "weekly_opus"] as const;
+export const HOME_WINDOW_IDS = ["weekly", "5h", "weekly_opus"] as const;
 export type HomeWindowId = (typeof HOME_WINDOW_IDS)[number];
 
 /** Fixed bar slots on the card (a vertical stack). */
