@@ -134,7 +134,7 @@ export function AgentOverviewCard({
 							/>
 						</div>
 						{(showQuota || showStats) && (
-							<div className="flex flex-col gap-1.5">
+							<div className="flex flex-1 flex-col gap-1.5">
 								{showQuota && (
 									<QuotaRow
 										windows={view.windows}
@@ -144,7 +144,10 @@ export function AgentOverviewCard({
 									/>
 								)}
 								{showStats && (
-									<div className="grid grid-cols-2 gap-x-3 gap-y-1">
+									<div
+										data-testid="agent-usage-stat-grid"
+										className="mt-auto grid grid-cols-2 gap-x-3 gap-y-1"
+									>
 										{statCellList.map(({ key, cell }) =>
 											cell ? (
 												<div

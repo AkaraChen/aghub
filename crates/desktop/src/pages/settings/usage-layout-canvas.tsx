@@ -3,7 +3,6 @@ import type { CSSProperties } from "react";
 import { cn } from "../../lib/utils";
 import {
 	LayoutDragGhost,
-	PREVIEW_BAR_PCT,
 	UsageLayoutCardPreview,
 } from "./usage-layout-card-preview";
 import {
@@ -68,11 +67,6 @@ export function UsageLayoutCanvas({
 	const activeWasVisible = drag
 		? shownIds(drag.origin, drag.type).includes(drag.activeId)
 		: false;
-	const activeBarIndex =
-		drag?.type === "window"
-			? shownIds(drag.origin, "window").indexOf(drag.activeId)
-			: -1;
-
 	return (
 		<>
 			<div
@@ -118,17 +112,7 @@ export function UsageLayoutCanvas({
 						isVisible={activeWasVisible}
 					/>
 				) : activeField && drag ? (
-					<LayoutDragGhost
-						field={activeField}
-						type={drag.type}
-						barPct={
-							activeBarIndex >= 0
-								? PREVIEW_BAR_PCT[
-										activeBarIndex % PREVIEW_BAR_PCT.length
-									]
-								: 0
-						}
-					/>
+					<LayoutDragGhost field={activeField} type={drag.type} />
 				) : null}
 			</DragOverlay>
 		</>

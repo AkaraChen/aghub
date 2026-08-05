@@ -16,19 +16,8 @@ import type {
 	LayoutPreview,
 } from "./usage-layout-types";
 
-export const PREVIEW_BAR_PCT = [62, 38, 84];
-const PREVIEW_STAT_VALUES: Readonly<Record<string, string>> = {
-	totalTokens: "1.43M",
-	cost: "$12.50",
-	inputTokens: "400K",
-	outputTokens: "120K",
-	cacheRead: "900K",
-	cacheCreation: "10K",
-	reasoning: "84K",
-	utilization5h: "42%",
-	utilizationWeekly: "71%",
-	utilizationOpus: "18%",
-};
+// A fixed midpoint fill shows the quota track without implying live usage.
+const PREVIEW_BAR_VALUE = 50;
 
 export function UsageLayoutCardPreview({
 	fieldById,
@@ -94,15 +83,7 @@ export function UsageLayoutCardPreview({
 										data-testid={`layout-card-item-${field.id}`}
 										className="flex items-center rounded-md px-1.5 py-1"
 									>
-										<PreviewBar
-											label={field.label}
-											pct={
-												PREVIEW_BAR_PCT[
-													index %
-														PREVIEW_BAR_PCT.length
-												]
-											}
-										/>
+										<PreviewBar label={field.label} />
 									</LayoutDraggableField>
 								</CardDropSlot>
 							);
@@ -162,11 +143,9 @@ export function UsageLayoutCardPreview({
 export function LayoutDragGhost({
 	field,
 	type,
-	barPct,
 }: {
 	field: LayoutField;
 	type: LayoutSlotType;
-	barPct: number;
 }) {
 	if (type === "window") {
 		return (
@@ -175,7 +154,7 @@ export function LayoutDragGhost({
 				className="flex h-full w-full min-w-0 max-w-[calc(100vw-2rem)] cursor-grabbing select-none items-center rounded-md border border-border bg-surface-secondary px-1.5 py-1 shadow-[var(--overlay-shadow)]"
 			>
 				<LayoutFieldDragHandle />
-				<PreviewBar label={field.label} pct={barPct} />
+				<PreviewBar label={field.label} />
 			</div>
 		);
 	}
@@ -251,16 +230,16 @@ function CardDropSlot({
 	);
 }
 
-function PreviewBar({ label, pct }: { label: string; pct: number }) {
+function PreviewBar({ label }: { label: string }) {
 	return (
 		<div className="flex min-w-0 flex-1 flex-col gap-0.5">
-			<div className="flex items-baseline justify-between gap-2 text-[11px]">
-				<span className="truncate text-muted">{label}</span>
-				<span className="shrink-0 tabular-nums text-foreground">
-					{pct}%
-				</span>
-			</div>
-			<Meter aria-hidden aria-label={label} value={pct} size="sm">
+			<span className="truncate text-[11px] text-muted">{label}</span>
+			<Meter
+				aria-hidden
+				aria-label={label}
+				value={PREVIEW_BAR_VALUE}
+				size="sm"
+			>
 				<Meter.Track>
 					<Meter.Fill className="bg-foreground/25" />
 				</Meter.Track>
@@ -271,11 +250,8 @@ function PreviewBar({ label, pct }: { label: string; pct: number }) {
 
 function StatBody({ field }: { field: LayoutField }) {
 	return (
-		<div className="flex min-w-0 flex-1 items-baseline justify-between gap-2">
+		<div className="flex min-w-0 flex-1 items-baseline">
 			<span className="truncate text-muted">{field.label}</span>
-			<span className="shrink-0 tabular-nums text-foreground">
-				{PREVIEW_STAT_VALUES[field.id] ?? "—"}
-			</span>
 		</div>
 	);
 }

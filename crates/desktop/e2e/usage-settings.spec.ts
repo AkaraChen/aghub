@@ -102,11 +102,11 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	);
 	await expect(drawer.getByTestId("layout-hidden-item-5h")).toBeVisible();
 	await expect(card.getByText("Total tokens", { exact: true })).toBeVisible();
-	const totalTokensRow = page
-		.getByTestId("layout-card-replica")
-		.getByText("Total tokens", { exact: true })
-		.locator("..");
-	await expect(totalTokensRow.getByText("—", { exact: true })).toHaveCount(0);
+	for (const sampleValue of ["62%", "1.43M", "$12.50", "400K", "120K"]) {
+		await expect(card.getByText(sampleValue, { exact: true })).toHaveCount(
+			0,
+		);
+	}
 	await expect(page.getByText("Fields", { exact: true })).toBeVisible();
 	await expect(page.getByText("Cache read", { exact: true })).toBeVisible();
 	await expect(card.locator("button")).toHaveCount(0);
@@ -2031,7 +2031,7 @@ test("layout editor moves a field between the card and the drawer", async ({
 	await expect(
 		cardGhost.getByText("Total tokens", { exact: true }),
 	).toBeVisible();
-	await expect(cardGhost.getByText("1.43M", { exact: true })).toBeVisible();
+	await expect(cardGhost.getByText("1.43M", { exact: true })).toHaveCount(0);
 	await expect(cardGhost.locator("svg")).toHaveCount(1);
 	await page.mouse.move(drawerBox.x + drawerBox.width / 2, drawerBox.y + 12, {
 		steps: 10,
@@ -2316,14 +2316,37 @@ test("home drops cached usage after show usage is turned off", async ({
 test("home agent card renders the customized usage block", async ({ page }) => {
 	await page.goto("/");
 
-	const claudeCard = page
+	const claudeTitle = page
 		.getByRole("region", { name: "Your agents" })
 		.getByText("Claude", { exact: true });
-	await expect(claudeCard).toBeVisible();
+	await expect(claudeTitle).toBeVisible();
+	const claudeCard = claudeTitle.locator(
+		'xpath=ancestor::*[@data-slot="card"]',
+	);
 
-	// The default layout shows only the weekly quota bar.
+	// The default layout shows only the weekly quota bar; stats keep their
+	// fixed 2×2 positions at the bottom of the card.
 	await expect(page.getByText("42%")).toHaveCount(0);
 	await expect(page.getByText("71%")).toBeVisible();
+
+	const cardContent = claudeCard.locator(
+		':scope > [data-slot="card-content"]',
+	);
+	const statGrid = claudeCard.getByTestId("agent-usage-stat-grid");
+	await expect(statGrid).toBeVisible();
+	const [contentBox, statGridBox] = await Promise.all([
+		cardContent.boundingBox(),
+		statGrid.boundingBox(),
+	]);
+	expect(contentBox).not.toBeNull();
+	expect(statGridBox).not.toBeNull();
+	expect(
+		Math.abs(
+			contentBox!.y +
+				contentBox!.height -
+				(statGridBox!.y + statGridBox!.height),
+		),
+	).toBeLessThanOrEqual(1);
 });
 
 test("home resource tile keeps its hover arrow readable on accent tint", async ({
