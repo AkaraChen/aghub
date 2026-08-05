@@ -10,13 +10,13 @@ describe("skillResolutionViewReducer", () => {
 			INITIAL_SKILL_RESOLUTION_VIEW,
 			{
 				type: "expand",
-				activeVersionHash: "version-b",
+				activeVersionId: "version-b",
 			},
 		);
 
 		expect(state).toEqual({
 			isExpanded: true,
-			activeVersionHash: "version-b",
+			activeVersionId: "version-b",
 			storageMode: "preserve",
 			showFileChanges: false,
 		});
@@ -39,7 +39,7 @@ describe("skillResolutionViewReducer", () => {
 	it("resets transient review choices when collapsed", () => {
 		const openState = {
 			isExpanded: true,
-			activeVersionHash: "version-b",
+			activeVersionId: "version-b",
 			storageMode: "copy" as const,
 			showFileChanges: true,
 		};

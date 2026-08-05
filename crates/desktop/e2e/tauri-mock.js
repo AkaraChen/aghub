@@ -20,9 +20,18 @@
 	);
 
 	const defaultEntries = [
-		["version", 11],
+		["version", 12],
 		["skillAuditEnabled", true],
-		["skillCopyCheck", { enabled: true, mode: "automatic" }],
+		[
+			"skillPreferences",
+			{
+				enabled: true,
+				mode: "automatic",
+				groupIdenticalCopies: true,
+				warnOnConflicts: true,
+				baselineAgent: "claude",
+			},
+		],
 		["acknowledgedSkillAssessments", []],
 		[
 			"onboardingProgress",

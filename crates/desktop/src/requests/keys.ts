@@ -54,7 +54,7 @@ export const queryKeys = {
 	preferences: {
 		all: () => ["preferences"] as const,
 		skillAudit: () => ["preferences", "skill-audit"] as const,
-		skillCopyCheck: () => ["preferences", "skill-copy-check"] as const,
+		skills: () => ["preferences", "skills"] as const,
 	},
 	mcps: {
 		all: () => ["mcps"] as const,

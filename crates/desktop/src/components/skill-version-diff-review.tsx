@@ -58,8 +58,8 @@ interface SkillVersionDiffReviewProps {
 	isDisabled: boolean;
 	comparisonVersions: SkillCopyVersion[];
 	showVersionPicker: boolean;
-	activeVersionHash: string;
-	onActiveVersionChange: (hash: string) => void;
+	activeVersionId: string;
+	onActiveVersionChange: (id: string) => void;
 	diff?: SkillDirectoryDiffResponse;
 	diffKey: string;
 	baseLabel: string;
@@ -73,7 +73,7 @@ export function SkillVersionDiffReview({
 	isDisabled,
 	comparisonVersions,
 	showVersionPicker,
-	activeVersionHash,
+	activeVersionId,
 	onActiveVersionChange,
 	diff,
 	diffKey,
@@ -111,7 +111,7 @@ export function SkillVersionDiffReview({
 							isDetached
 							size="sm"
 							isDisabled={isDisabled}
-							selectedKeys={[activeVersionHash]}
+							selectedKeys={[activeVersionId]}
 							onSelectionChange={(keys) => {
 								const key = keys.values().next().value;
 								if (key !== undefined) {
@@ -122,8 +122,8 @@ export function SkillVersionDiffReview({
 						>
 							{comparisonVersions.map((version) => (
 								<ToggleButton
-									key={version.hash}
-									id={version.hash}
+									key={version.id}
+									id={version.id}
 									size="sm"
 									variant="ghost"
 									className={({ isSelected }) =>

@@ -11,6 +11,7 @@ import { migrateV7ToV8 } from "./v7-to-v8";
 import { migrateV8ToV9 } from "./v8-to-v9";
 import { migrateV9ToV10 } from "./v9-to-v10";
 import { migrateV10ToV11 } from "./v10-to-v11";
+import { migrateSkillPreferences } from "./skill-preferences";
 
 export async function migrate(store: Store): Promise<void> {
 	const version = (await store.get<number>("version")) ?? 0;
@@ -59,6 +60,10 @@ export async function migrate(store: Store): Promise<void> {
 
 	if (version < 11) {
 		await migrateV10ToV11(store);
+	}
+
+	if (version < 12) {
+		await migrateSkillPreferences(store);
 	}
 
 	await store.set("version", CURRENT_VERSION);

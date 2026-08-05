@@ -5,13 +5,21 @@ interface SkillCopyPreferenceTestState {
 	getStoreValue: (key: string) => unknown;
 }
 
-function storedPreference() {
+function storedPreferences() {
 	return (
 		window as unknown as {
 			__AGHUB_E2E__: SkillCopyPreferenceTestState;
 		}
-	).__AGHUB_E2E__.getStoreValue("skillCopyCheck");
+	).__AGHUB_E2E__.getStoreValue("skillPreferences");
 }
+
+const DEFAULT_PREFERENCES = {
+	enabled: true,
+	mode: "automatic",
+	groupIdenticalCopies: true,
+	warnOnConflicts: true,
+	baselineAgent: "claude",
+};
 
 test("manual copy checks run only when requested from skill details", async ({
 	page,
@@ -25,8 +33,8 @@ test("manual copy checks run only when requested from skill details", async ({
 	await expect(copyCheckSwitch).toBeChecked();
 	await page.getByRole("radio", { name: "Manual" }).click();
 	await expect
-		.poll(() => page.evaluate(storedPreference))
-		.toEqual({ enabled: true, mode: "manual" });
+		.poll(() => page.evaluate(storedPreferences))
+		.toEqual({ ...DEFAULT_PREFERENCES, mode: "manual" });
 
 	await page.getByRole("link", { name: "Skills", exact: true }).click();
 	await page.getByRole("option", { name: "react-pro" }).click();
@@ -59,8 +67,8 @@ test("disabled copy checks issue no scan requests", async ({ page }) => {
 	await copyCheckSwitch.press("Space");
 	await expect(copyCheckSwitch).not.toBeChecked();
 	await expect
-		.poll(() => page.evaluate(storedPreference))
-		.toEqual({ enabled: false, mode: "automatic" });
+		.poll(() => page.evaluate(storedPreferences))
+		.toEqual({ ...DEFAULT_PREFERENCES, enabled: false });
 
 	await page.getByRole("link", { name: "Skills", exact: true }).click();
 	await page.getByRole("option", { name: "react-pro" }).click();
@@ -72,4 +80,33 @@ test("disabled copy checks issue no scan requests", async ({ page }) => {
 	expect(mocks.getSkillTreeRequests()).toEqual([
 		"/tmp/e2e/.claude/skills/react-pro/SKILL.md",
 	]);
+});
+
+test("duplicate display and comparison source preferences are stored", async ({
+	page,
+}) => {
+	await installMocks(page);
+	await page.goto("/settings?tab=skills");
+
+	await page
+		.getByRole("switch", { name: /Group matching copies/ })
+		.press("Space");
+	await page
+		.getByRole("switch", { name: /Flag content conflicts/ })
+		.press("Space");
+	await page
+		.getByRole("button", {
+			name: /Claude .*Default comparison source/,
+		})
+		.click();
+	await page.getByRole("option", { name: /Codex/ }).click();
+
+	await expect
+		.poll(() => page.evaluate(storedPreferences))
+		.toEqual({
+			...DEFAULT_PREFERENCES,
+			groupIdenticalCopies: false,
+			warnOnConflicts: false,
+			baselineAgent: "codex",
+		});
 });
