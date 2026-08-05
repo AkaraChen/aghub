@@ -6,6 +6,7 @@ import type {
 	SkillResponse,
 	SkillTreeNodeResponse,
 } from "../generated/dto";
+import type { SkillBaselineAgent } from "../lib/store";
 import { sortAgents } from "../lib/utils";
 
 export interface LocationInstallation {
@@ -192,6 +193,21 @@ export function buildLocationGroups(
 			isSymlink: data.isSymlink,
 		}))
 		.sort((a, b) => a.sourcePath.localeCompare(b.sourcePath));
+}
+
+export function sortLocationGroupsByBaselineAgent(
+	locations: LocationGroup[],
+	baselineAgent: SkillBaselineAgent,
+): LocationGroup[] {
+	return [...locations].sort((a, b) => {
+		const aHasBaseline = a.installations.some(
+			(installation) => installation.agent === baselineAgent,
+		);
+		const bHasBaseline = b.installations.some(
+			(installation) => installation.agent === baselineAgent,
+		);
+		return Number(bHasBaseline) - Number(aHasBaseline);
+	});
 }
 
 export function uniqueSkillSourcePaths(items: SkillResponse[]): string[] {

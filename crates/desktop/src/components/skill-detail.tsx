@@ -23,7 +23,7 @@ import { useLocation } from "wouter";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useAuditAcknowledgements } from "../hooks/use-audit-acknowledgements";
-import { useSkillCopyCheckPreference } from "../hooks/use-skill-copy-check-preference";
+import { useSkillPreferences } from "../hooks/use-skill-preferences";
 import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
 import { useFavorites } from "../hooks/use-favorites";
 import { useCurrentCodeEditor } from "../hooks/use-integrations";
@@ -48,6 +48,7 @@ import {
 	countTreeFiles,
 	getInstalledSkillAuditPaths,
 	hasSupplementarySkillFiles,
+	sortLocationGroupsByBaselineAgent,
 	type LocationGroup,
 	type SkillGroup,
 	summarizeSkillLinks,
@@ -75,8 +76,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const { allAgents, availableAgents } = useAgentAvailability();
 	const api = useApi();
 	const { skillAuditEnabled, skillAuditReady } = useSkillAuditPreference();
-	const { skillCopyCheckPreference, skillCopyCheckReady } =
-		useSkillCopyCheckPreference();
+	const { skillPreferences, skillPreferencesReady } = useSkillPreferences();
 
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [locationToDelete, setLocationToDelete] =
@@ -241,22 +241,29 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	);
 
 	const allLocationGroups = useMemo(
-		() => buildLocationGroups(visibleGroupItems, allAgents),
-		[visibleGroupItems, allAgents],
+		() =>
+			sortLocationGroupsByBaselineAgent(
+				buildLocationGroups(visibleGroupItems, allAgents),
+				skillPreferences.baselineAgent,
+			),
+		[visibleGroupItems, allAgents, skillPreferences.baselineAgent],
 	);
 	const copyLocationGroups = useMemo(
-		() => buildLocationGroups(group.items, allAgents),
-		[group.items, allAgents],
+		() =>
+			sortLocationGroupsByBaselineAgent(
+				buildLocationGroups(group.items, allAgents),
+				skillPreferences.baselineAgent,
+			),
+		[group.items, allAgents, skillPreferences.baselineAgent],
 	);
 	const copyCheckKey = copyLocationGroups
 		.map((location) => location.sourcePath)
 		.join("\n");
 	const manualCopyCheckRequested = manualCopyCheckKey === copyCheckKey;
 	const copyCheckEnabled =
-		skillCopyCheckReady &&
-		skillCopyCheckPreference.enabled &&
-		(skillCopyCheckPreference.mode === "automatic" ||
-			manualCopyCheckRequested);
+		skillPreferencesReady &&
+		skillPreferences.enabled &&
+		(skillPreferences.mode === "automatic" || manualCopyCheckRequested);
 
 	const displayedLocations =
 		showAllLocations || allLocationGroups.length <= 3
@@ -711,13 +718,16 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 						projectRoot={projectPath}
 						isCheckEnabled={copyCheckEnabled}
 						canRequestCheck={
-							skillCopyCheckReady &&
-							skillCopyCheckPreference.enabled &&
-							skillCopyCheckPreference.mode === "manual" &&
+							skillPreferencesReady &&
+							skillPreferences.enabled &&
+							skillPreferences.mode === "manual" &&
 							!manualCopyCheckRequested
 						}
 						onRequestCheck={() =>
 							setManualCopyCheckKey(copyCheckKey)
+						}
+						groupIdenticalCopies={
+							skillPreferences.groupIdenticalCopies
 						}
 					/>
 

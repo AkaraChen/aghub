@@ -158,7 +158,7 @@ export function githubRepositoryChoice(
 		(copy) => copy.sourcePath,
 	).length;
 	return {
-		id: version.hash,
+		id: version.id,
 		locations: [
 			{
 				source: "GitHub",
@@ -186,7 +186,7 @@ export function githubLocalChoice(
 ): SkillVersionChoice {
 	const location = version.copies[0]?.label ?? version.hash.slice(0, 8);
 	return {
-		id: version.hash,
+		id: version.id,
 		locations: version.copies.map(skillCopyVersionLocation),
 		status: t("skillVersionLocationUsage", {
 			count: version.copies.length,

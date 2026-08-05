@@ -11,6 +11,7 @@ import { initializeSkillAuditPreferences } from "./initialize-skill-audit-prefer
 import { initializeStarredResources } from "./initialize-starred-resources";
 import { normalizeUpdateChannel } from "./normalize-update-channel";
 import { resetSidebarItems } from "./reset-sidebar-items";
+import { initializeSkillPreferences } from "./skill-preferences";
 
 export async function migrate(store: Store): Promise<void> {
 	const version = (await store.get<number>("version")) ?? 0;
@@ -59,6 +60,10 @@ export async function migrate(store: Store): Promise<void> {
 
 	if (version < 11) {
 		await initializeSkillCopyCheck(store);
+	}
+
+	if (version < 12) {
+		await initializeSkillPreferences(store);
 	}
 
 	await store.set("version", CURRENT_VERSION);

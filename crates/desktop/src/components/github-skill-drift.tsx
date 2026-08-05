@@ -146,8 +146,7 @@ export function GithubSkillDrift({
 		skillResolutionViewReducer,
 		INITIAL_SKILL_RESOLUTION_VIEW,
 	);
-	const { isExpanded, activeVersionHash, storageMode, showFileChanges } =
-		view;
+	const { isExpanded, activeVersionId, storageMode, showFileChanges } = view;
 	const {
 		result,
 		sourcePaths,
@@ -166,7 +165,7 @@ export function GithubSkillDrift({
 		repositoryLabel: t("repositoryVersion"),
 	});
 	const activeVersion =
-		localVersions.find((version) => version.hash === activeVersionHash) ??
+		localVersions.find((version) => version.id === activeVersionId) ??
 		localVersions[0];
 	const selectedVersion = selection
 		? versions.find(
@@ -271,8 +270,8 @@ export function GithubSkillDrift({
 							expanded
 								? {
 										type: "expand",
-										activeVersionHash:
-											localVersions[0]?.hash ?? null,
+										activeVersionId:
+											localVersions[0]?.id ?? null,
 									}
 								: { type: "collapse" },
 						);
@@ -316,12 +315,12 @@ export function GithubSkillDrift({
 														),
 											)}
 											selectedChoiceId={
-												selectedVersion?.hash
+												selectedVersion?.id
 											}
-											onChoiceChange={(hash) => {
+											onChoiceChange={(id) => {
 												const version = versions.find(
 													(candidate) =>
-														candidate.hash === hash,
+														candidate.id === id,
 												);
 												if (version) {
 													if (
@@ -330,8 +329,8 @@ export function GithubSkillDrift({
 													) {
 														dispatchView({
 															type: "set-active-version",
-															activeVersionHash:
-																version.hash,
+															activeVersionId:
+																version.id,
 														});
 													}
 													handleVersionSelection(
@@ -360,22 +359,22 @@ export function GithubSkillDrift({
 												selectedVersion.hash ===
 													repositoryVersion.hash
 											}
-											activeVersionHash={
-												activeVersion?.hash ??
-												reviewedLocalVersion.hash
+											activeVersionId={
+												activeVersion?.id ??
+												reviewedLocalVersion.id
 											}
 											onActiveVersionChange={(
-												activeVersionHash,
+												activeVersionId,
 											) =>
 												dispatchView({
 													type: "set-active-version",
-													activeVersionHash,
+													activeVersionId,
 												})
 											}
 											diff={
 												reviewedLocalVersion.comparison
 											}
-											diffKey={reviewedLocalVersion.hash}
+											diffKey={reviewedLocalVersion.id}
 											baseLabel={
 												reverseReviewedDiff
 													? skillCopyVersionLabel(

@@ -39,7 +39,7 @@ import {
 } from "../../components/skill-list";
 import { useApi } from "../../hooks/use-api";
 import { useSkillGroups } from "../../hooks/use-resource-groups";
-import { useSkillCopyCheckPreference } from "../../hooks/use-skill-copy-check-preference";
+import { useSkillPreferences } from "../../hooks/use-skill-preferences";
 import { visibleEntryKeys } from "../../hooks/use-list-selection";
 import { useSkillSections } from "../../hooks/use-skill-sections";
 import { cn } from "../../lib/utils";
@@ -77,12 +77,12 @@ export default function SkillsPage() {
 	const { data: globalLock } = useQuery({
 		...globalSkillLockQueryOptions({ api, enabled: true }),
 	});
-	const { skillCopyCheckPreference, skillCopyCheckReady } =
-		useSkillCopyCheckPreference();
+	const { skillPreferences, skillPreferencesReady } = useSkillPreferences();
 	const automaticallyCheckCopies =
-		skillCopyCheckReady &&
-		skillCopyCheckPreference.enabled &&
-		skillCopyCheckPreference.mode === "automatic";
+		skillPreferencesReady &&
+		skillPreferences.enabled &&
+		skillPreferences.mode === "automatic" &&
+		skillPreferences.warnOnConflicts;
 
 	const [panelMode, setPanelMode] = useState<
 		"create" | "import" | "update-source" | "import-github" | null

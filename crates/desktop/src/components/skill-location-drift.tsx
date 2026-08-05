@@ -38,6 +38,7 @@ interface SkillLocationDriftProps {
 	isCheckEnabled: boolean;
 	canRequestCheck: boolean;
 	onRequestCheck: () => void;
+	groupIdenticalCopies: boolean;
 }
 
 const LOCATION_DIFFERENCES_ID = "skill-location-differences";
@@ -48,6 +49,7 @@ function useSkillLocationVersions({
 	scope,
 	projectRoot,
 	enabled,
+	groupIdenticalCopies,
 }: SkillLocationDriftProps & { api: ApiClient; enabled: boolean }) {
 	const baseline = locations[0];
 	const targets = useMemo(() => locations.slice(1), [locations]);
@@ -99,9 +101,10 @@ function useSkillLocationVersions({
 							isSymlink: target.isSymlink,
 						})),
 						comparisonResults ?? [],
+						groupIdenticalCopies,
 					)
 				: { versions: [], unavailable: [] },
-		[baseline, comparisonResults, targets],
+		[baseline, comparisonResults, groupIdenticalCopies, targets],
 	);
 
 	return {
@@ -134,34 +137,32 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 		skillResolutionViewReducer,
 		INITIAL_SKILL_RESOLUTION_VIEW,
 	);
-	const [selectedVersionHash, setSelectedVersionHash] = useState<
-		string | null
-	>(null);
-	const { isExpanded, activeVersionHash, storageMode, showFileChanges } =
-		view;
+	const [selectedVersionId, setSelectedVersionId] = useState<string | null>(
+		null,
+	);
+	const { isExpanded, activeVersionId, storageMode, showFileChanges } = view;
 	const comparableLocations = locations;
 	const { baseline, targets, result, versions, unavailableCount, hasLinks } =
 		useSkillLocationVersions({ ...props, api, enabled: isCheckEnabled });
 	const baselineVersion = versions[0];
 	const comparisonVersions = versions.slice(1);
 	const activeVersion =
-		comparisonVersions.find(
-			(version) => version.hash === activeVersionHash,
-		) ?? comparisonVersions[0];
+		comparisonVersions.find((version) => version.id === activeVersionId) ??
+		comparisonVersions[0];
 	const selectedVersion = versions.find(
-		(version) => version.hash === selectedVersionHash,
+		(version) => version.id === selectedVersionId,
 	);
 	const reviewedVersion =
-		selectedVersion && selectedVersion.hash !== baselineVersion?.hash
+		selectedVersion && selectedVersion.id !== baselineVersion?.id
 			? selectedVersion
 			: activeVersion;
-	const reverseReviewedDiff = selectedVersion?.hash === baselineVersion?.hash;
+	const reverseReviewedDiff = selectedVersion?.id === baselineVersion?.id;
 	const resolution = useMutation(
 		resolveSkillCopiesMutationOptions({
 			api,
 			queryClient,
 			onSuccess: () => {
-				setSelectedVersionHash(null);
+				setSelectedVersionId(null);
 				dispatchView({
 					type: "set-storage-mode",
 					storageMode: "preserve",
@@ -214,7 +215,7 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 			},
 			{
 				onError: (error) => {
-					setSelectedVersionHash(null);
+					setSelectedVersionId(null);
 					void result.refetch();
 					toast.danger(
 						t(
@@ -276,12 +277,12 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 							expanded
 								? {
 										type: "expand",
-										activeVersionHash:
-											comparisonVersions[0]?.hash ?? null,
+										activeVersionId:
+											comparisonVersions[0]?.id ?? null,
 									}
 								: { type: "collapse" },
 						);
-						if (!expanded) setSelectedVersionHash(null);
+						if (!expanded) setSelectedVersionId(null);
 					}}
 				>
 					<Accordion.Item id={LOCATION_DIFFERENCES_ID}>
@@ -305,17 +306,14 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 												versionChoice(version, t),
 											)}
 											selectedChoiceId={
-												selectedVersion?.hash
+												selectedVersion?.id
 											}
-											onChoiceChange={(hash) => {
-												setSelectedVersionHash(hash);
-												if (
-													hash !==
-													baselineVersion.hash
-												) {
+											onChoiceChange={(id) => {
+												setSelectedVersionId(id);
+												if (id !== baselineVersion.id) {
 													dispatchView({
 														type: "set-active-version",
-														activeVersionHash: hash,
+														activeVersionId: id,
 													});
 												}
 											}}
@@ -344,23 +342,23 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 											}
 											showVersionPicker={
 												!selectedVersion ||
-												selectedVersion.hash ===
-													baselineVersion.hash
+												selectedVersion.id ===
+													baselineVersion.id
 											}
-											activeVersionHash={
-												activeVersion?.hash ??
-												reviewedVersion.hash
+											activeVersionId={
+												activeVersion?.id ??
+												reviewedVersion.id
 											}
 											onActiveVersionChange={(
-												activeVersionHash,
+												activeVersionId,
 											) =>
 												dispatchView({
 													type: "set-active-version",
-													activeVersionHash,
+													activeVersionId,
 												})
 											}
 											diff={reviewedVersion.comparison}
-											diffKey={reviewedVersion.hash}
+											diffKey={reviewedVersion.id}
 											baseLabel={
 												reverseReviewedDiff
 													? skillCopyVersionLabel(
@@ -423,7 +421,7 @@ function versionChoice(
 ): SkillVersionChoice {
 	const location = version.copies[0]?.label ?? version.hash.slice(0, 8);
 	return {
-		id: version.hash,
+		id: version.id,
 		locations: version.copies.map(skillCopyVersionLocation),
 		status: t("skillVersionLocationUsage", {
 			count: version.copies.length,

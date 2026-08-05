@@ -676,14 +676,22 @@ export default {
 	skillAuditEnabled: "已開啟自動技能掃描",
 	skillAuditDisabled: "已關閉自動技能掃描",
 	skillAuditPreferenceError: "無法更新技能掃描設定",
-	skillCopyCheck: "Skill 變更檢查",
-	skillCopyCheckDescription: "檢查同名副本的內容差異和檔案關係問題。",
-	skillCopyCheckMode: "檢查時機",
-	skillCopyCheckModeDescription:
-		"瀏覽 Skill 時自動檢查，或僅在詳情中手動檢查。",
-	skillCopyCheckWriteHint:
-		"關閉後不再背景檢查；取代副本前仍會驗證即將寫入的內容。",
-	skillCopyCheckPreferenceError: "無法更新副本差異檢查設定",
+	skillChangeChecks: "Skill 變更檢查",
+	skillChangeChecksDescription: "檢查同名副本的內容差異和檔案關係問題。",
+	skillChangeCheckTiming: "檢查時機",
+	duplicateSkillManagement: "重複 Skill 管理",
+	duplicateSkillManagementDescription:
+		"控制相同內容的顯示方式，以及內容不同時是否提醒。",
+	groupIdenticalSkillCopies: "合併顯示相同副本",
+	groupIdenticalSkillCopiesDescription:
+		"內容相同的安裝位置顯示為一個版本，不修改檔案。",
+	warnOnSkillConflicts: "提醒內容衝突",
+	warnOnSkillConflictsDescription:
+		"在 Skill 清單標記內容不同或無法讀取的副本。",
+	skillBaselineLocation: "預設基準位置",
+	skillBaselineLocationDescription:
+		"同名副本內容不同時，先以這裡的安裝位置作為比較基準；統一前仍需確認。",
+	skillPreferencesError: "無法更新 Skill 設定",
 	automatic: "自動",
 	manual: "手動",
 	checkSkillCopyDifferences: "檢查變更",

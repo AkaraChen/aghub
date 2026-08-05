@@ -5,10 +5,10 @@ import {
 } from "@tanstack/react-query";
 import {
 	getSkillAuditEnabled,
-	getSkillCopyCheckPreference,
+	getSkillPreferences,
 	setSkillAuditEnabled,
-	setSkillCopyCheckPreference,
-	type SkillCopyCheckPreference,
+	setSkillPreferences,
+	type SkillPreferences,
 } from "../lib/store";
 import { queryKeys } from "./keys";
 
@@ -44,26 +44,26 @@ export function setSkillAuditPreferenceMutationOptions(
 	});
 }
 
-export function skillCopyCheckPreferenceQueryOptions() {
+export function skillPreferencesQueryOptions() {
 	return queryOptions({
-		queryKey: queryKeys.preferences.skillCopyCheck(),
-		queryFn: getSkillCopyCheckPreference,
+		queryKey: queryKeys.preferences.skills(),
+		queryFn: getSkillPreferences,
 		staleTime: Number.POSITIVE_INFINITY,
 	});
 }
 
-export function setSkillCopyCheckPreferenceMutationOptions(
+export function setSkillPreferencesMutationOptions(
 	queryClient: QueryClient,
-	onSuccess?: (preference: SkillCopyCheckPreference) => void | Promise<void>,
+	onSuccess?: (preferences: SkillPreferences) => void | Promise<void>,
 ) {
 	return mutationOptions({
-		mutationFn: setSkillCopyCheckPreference,
-		onSuccess: async (preference) => {
+		mutationFn: setSkillPreferences,
+		onSuccess: async (preferences) => {
 			queryClient.setQueryData(
-				queryKeys.preferences.skillCopyCheck(),
-				preference,
+				queryKeys.preferences.skills(),
+				preferences,
 			);
-			if (!preference.enabled || preference.mode === "manual") {
+			if (!preferences.enabled || preferences.mode === "manual") {
 				await Promise.all([
 					queryClient.cancelQueries({
 						queryKey: queryKeys.skills.diffs(),
@@ -79,7 +79,15 @@ export function setSkillCopyCheckPreferenceMutationOptions(
 					queryKey: queryKeys.skills.copyStatuses(),
 				});
 			}
-			await onSuccess?.(preference);
+			if (!preferences.warnOnConflicts) {
+				await queryClient.cancelQueries({
+					queryKey: queryKeys.skills.copyStatuses(),
+				});
+				queryClient.removeQueries({
+					queryKey: queryKeys.skills.copyStatuses(),
+				});
+			}
+			await onSuccess?.(preferences);
 		},
 	});
 }

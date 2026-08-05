@@ -23,6 +23,7 @@ export interface SkillVersionCopy {
 }
 
 export interface SkillCopyVersion {
+	id: string;
 	hash: string;
 	copies: SkillVersionCopy[];
 	comparison?: SkillDirectoryDiffResponse;
@@ -93,6 +94,7 @@ export function groupSkillCopyVersions(
 	reference: SkillVersionCopy,
 	targets: SkillVersionCopy[],
 	comparisons: Array<SkillDirectoryDiffResponse | null>,
+	groupIdenticalCopies = true,
 ): SkillCopyVersions {
 	const firstComparison = comparisons.find(
 		(comparison): comparison is SkillDirectoryDiffResponse =>
@@ -106,12 +108,15 @@ export function groupSkillCopyVersions(
 	}
 
 	const baseline: SkillCopyVersion = {
+		id: groupIdenticalCopies ? firstComparison.base_hash : reference.id,
 		hash: firstComparison.base_hash,
 		copies: [reference],
 	};
-	const versions = new Map<string, SkillCopyVersion>([
-		[baseline.hash, baseline],
-	]);
+	const versions = [baseline];
+	const versionsByHash = new Map<string, SkillCopyVersion>();
+	if (groupIdenticalCopies) {
+		versionsByHash.set(baseline.hash, baseline);
+	}
 	const unavailable: SkillVersionCopy[] = [];
 
 	for (const [index, target] of targets.entries()) {
@@ -121,15 +126,20 @@ export function groupSkillCopyVersions(
 			continue;
 		}
 
-		const existing = versions.get(comparison.target_hash);
+		const existing = versionsByHash.get(comparison.target_hash);
 		if (existing) {
 			existing.copies.push(target);
 		} else {
-			versions.set(comparison.target_hash, {
+			const version = {
+				id: groupIdenticalCopies ? comparison.target_hash : target.id,
 				hash: comparison.target_hash,
 				copies: [target],
 				comparison,
-			});
+			};
+			versions.push(version);
+			if (groupIdenticalCopies) {
+				versionsByHash.set(comparison.target_hash, version);
+			}
 		}
 
 		if (!comparison.identical && !baseline.comparison) {
@@ -138,7 +148,7 @@ export function groupSkillCopyVersions(
 	}
 
 	return {
-		versions: Array.from(versions.values()),
+		versions,
 		unavailable,
 	};
 }

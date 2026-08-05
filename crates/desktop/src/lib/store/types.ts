@@ -37,6 +37,34 @@ export const DEFAULT_SKILL_COPY_CHECK: SkillCopyCheckPreference = {
 	mode: "automatic",
 };
 
+export type SkillBaselineAgent = "claude" | "codex";
+
+export interface SkillPreferences extends SkillCopyCheckPreference {
+	groupIdenticalCopies: boolean;
+	warnOnConflicts: boolean;
+	baselineAgent: SkillBaselineAgent;
+}
+
+export const DEFAULT_SKILL_PREFERENCES: SkillPreferences = {
+	...DEFAULT_SKILL_COPY_CHECK,
+	groupIdenticalCopies: true,
+	warnOnConflicts: true,
+	baselineAgent: "claude",
+};
+
+export function isSkillPreferences(value: unknown): value is SkillPreferences {
+	if (!value || typeof value !== "object") return false;
+	const preference = value as Partial<SkillPreferences>;
+	return (
+		typeof preference.enabled === "boolean" &&
+		(preference.mode === "automatic" || preference.mode === "manual") &&
+		typeof preference.groupIdenticalCopies === "boolean" &&
+		typeof preference.warnOnConflicts === "boolean" &&
+		(preference.baselineAgent === "claude" ||
+			preference.baselineAgent === "codex")
+	);
+}
+
 export const SIDEBAR_ITEM_IDS = [
 	"home",
 	"market",
@@ -54,7 +82,7 @@ export interface SidebarItemPreference {
 	visible: boolean;
 }
 
-export const CURRENT_VERSION = 11;
+export const CURRENT_VERSION = 12;
 
 export const DEFAULT_ONBOARDING_PROGRESS: OnboardingProgress = {
 	hasSeenWelcome: false,

@@ -707,16 +707,23 @@ export default {
 	skillAuditEnabled: "Automatic skill scans enabled",
 	skillAuditDisabled: "Automatic skill scans disabled",
 	skillAuditPreferenceError: "Failed to update the skill scan setting",
-	skillCopyCheck: "Skill change checks",
-	skillCopyCheckDescription:
+	skillChangeChecks: "Skill change checks",
+	skillChangeChecksDescription:
 		"Check matching copies for content differences and file relationship problems.",
-	skillCopyCheckMode: "When to check",
-	skillCopyCheckModeDescription:
-		"Check while browsing skills, or only when requested from a skill detail.",
-	skillCopyCheckWriteHint:
-		"Turning this off stops background checks. A copy is still verified before it is replaced.",
-	skillCopyCheckPreferenceError:
-		"Failed to update the copy difference setting",
+	skillChangeCheckTiming: "When to check",
+	duplicateSkillManagement: "Duplicate Skill management",
+	duplicateSkillManagementDescription:
+		"Control how matching copies are shown and whether differing content is flagged.",
+	groupIdenticalSkillCopies: "Group matching copies",
+	groupIdenticalSkillCopiesDescription:
+		"Show locations with the same content as one version without changing files.",
+	warnOnSkillConflicts: "Flag content conflicts",
+	warnOnSkillConflictsDescription:
+		"Mark copies with different or unreadable content in the Skill list.",
+	skillBaselineLocation: "Default comparison source",
+	skillBaselineLocationDescription:
+		"Use this installed location as the initial comparison source when copies differ. Changes still require confirmation.",
+	skillPreferencesError: "Failed to update Skill settings",
 	automatic: "Automatic",
 	manual: "Manual",
 	checkSkillCopyDifferences: "Check changes",
