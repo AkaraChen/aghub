@@ -155,7 +155,7 @@ pub fn snapshot_directory_with_budget(
 			&mut preview_bytes,
 		)?;
 		if let Some(identity) =
-			hard_link_identity(&std::fs::metadata(entry.path())?)
+			hard_link_identity(entry.path(), &std::fs::metadata(entry.path())?)?
 		{
 			hard_link_paths
 				.entry(identity)

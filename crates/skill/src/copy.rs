@@ -194,7 +194,9 @@ fn copy_regular_file(
 	state: &mut CopyState<'_, '_>,
 ) -> Result<(), SkillCopyError> {
 	if matches!(state.link_treatment, LinkTreatment::PreserveWithin(_)) {
-		if let Some(identity) = hard_link_identity(&std::fs::metadata(from)?) {
+		if let Some(identity) =
+			hard_link_identity(from, &std::fs::metadata(from)?)?
+		{
 			if let Some(existing) = state.hard_link_targets.get(&identity) {
 				std::fs::hard_link(existing, to)?;
 				return Ok(());
@@ -316,12 +318,18 @@ mod hard_link_tests {
 		)
 		.unwrap();
 
+		let first_path = target.join("first.txt");
+		let second_path = target.join("second.txt");
 		let first = hard_link_identity(
-			&std::fs::metadata(target.join("first.txt")).unwrap(),
-		);
+			&first_path,
+			&std::fs::metadata(&first_path).unwrap(),
+		)
+		.unwrap();
 		let second = hard_link_identity(
-			&std::fs::metadata(target.join("second.txt")).unwrap(),
-		);
+			&second_path,
+			&std::fs::metadata(&second_path).unwrap(),
+		)
+		.unwrap();
 		assert!(first.is_some());
 		assert_eq!(first, second);
 	}
@@ -342,16 +350,22 @@ mod hard_link_tests {
 		)
 		.unwrap();
 
+		let first_path = target.join("first.txt");
+		let second_path = target.join("second.txt");
 		assert_eq!(
 			hard_link_identity(
-				&std::fs::metadata(target.join("first.txt")).unwrap(),
-			),
+				&first_path,
+				&std::fs::metadata(&first_path).unwrap(),
+			)
+			.unwrap(),
 			None
 		);
 		assert_eq!(
 			hard_link_identity(
-				&std::fs::metadata(target.join("second.txt")).unwrap(),
-			),
+				&second_path,
+				&std::fs::metadata(&second_path).unwrap(),
+			)
+			.unwrap(),
 			None
 		);
 	}
