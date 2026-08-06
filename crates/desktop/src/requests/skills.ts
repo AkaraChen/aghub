@@ -24,6 +24,10 @@ import type {
 	TransferRequest,
 } from "../generated/dto";
 import type { ApiClient } from "./client";
+import {
+	getSkillPreferences,
+	type SkillDiscoveryPreferences,
+} from "../lib/store";
 import { queryKeys } from "./keys";
 
 interface SkillListQueryParams {
@@ -32,6 +36,7 @@ interface SkillListQueryParams {
 	projectRoot?: string;
 	enabled?: boolean;
 	staleTime?: number;
+	discovery?: SkillDiscoveryPreferences;
 }
 
 export function skillListQueryOptions({
@@ -40,10 +45,20 @@ export function skillListQueryOptions({
 	projectRoot,
 	enabled = true,
 	staleTime = 30_000,
+	discovery,
 }: SkillListQueryParams) {
 	return queryOptions({
-		queryKey: queryKeys.skills.list(scope, projectRoot),
-		queryFn: () => api.skills.listAll(scope, projectRoot),
+		queryKey: queryKeys.skills.list(scope, projectRoot, discovery),
+		queryFn: async () => {
+			const effectiveDiscovery =
+				discovery ?? (await getSkillPreferences()).discovery;
+			return api.skills.listAll(
+				scope,
+				projectRoot,
+				false,
+				effectiveDiscovery,
+			);
+		},
 		enabled,
 		staleTime,
 	});

@@ -4,7 +4,11 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
-import { supportsSkillMutation } from "../lib/agent-capabilities";
+import { supportsIndividualSkillTarget } from "../lib/agent-capabilities";
+import {
+	skillTargetIds,
+	UNIVERSAL_SKILL_TARGET_ID,
+} from "../lib/skill-targets";
 import type { Scope } from "../lib/skills-path-group";
 import { cn } from "../lib/utils";
 import { reconcileSkillsMutationOptions } from "../requests/skills";
@@ -45,9 +49,9 @@ export function ManageSkillAgentsDialog({
 			groups.map(
 				(group) =>
 					new Set(
-						(group?.items ?? [])
-							.map((item) => item.agent)
-							.filter((agent): agent is string => agent != null),
+						(group?.items ?? []).flatMap((item) =>
+							Array.from(skillTargetIds(item)),
+						),
 					),
 			),
 		[groups],
@@ -87,7 +91,7 @@ export function ManageSkillAgentsDialog({
 	const usableAgents = useMemo(
 		() =>
 			(availableAgents ?? []).filter(
-				(a) => a?.isUsable && supportsSkillMutation(a, scope),
+				(a) => a?.isUsable && supportsIndividualSkillTarget(a, scope),
 			),
 		[availableAgents, scope],
 	);
@@ -122,28 +126,31 @@ export function ManageSkillAgentsDialog({
 
 	const diffLabels = useMemo((): Record<string, AgentDiffLabel> => {
 		const labels: Record<string, AgentDiffLabel> = {};
-		for (const agent of usableAgents) {
+		for (const id of [
+			UNIVERSAL_SKILL_TARGET_ID,
+			...usableAgents.map((agent) => agent.id),
+		]) {
 			// Still in its initial indeterminate state: Apply leaves every
 			// item untouched for this agent.
-			if (indeterminateAgents.has(agent.id)) {
-				labels[agent.id] = "partial";
+			if (indeterminateAgents.has(id)) {
+				labels[id] = "partial";
 				continue;
 			}
 			const installedInAll = installedAgentIdsByGroup.every((installed) =>
-				installed.has(agent.id),
+				installed.has(id),
 			);
 			const installedInAny = installedAgentIdsByGroup.some((installed) =>
-				installed.has(agent.id),
+				installed.has(id),
 			);
-			const isSelected = selectedSet.has(agent.id);
+			const isSelected = selectedSet.has(id);
 			if (isSelected && !installedInAll) {
-				labels[agent.id] = "adding";
+				labels[id] = "adding";
 			} else if (!isSelected && installedInAny) {
-				labels[agent.id] = "removing";
+				labels[id] = "removing";
 			} else if (isSelected && installedInAll) {
-				labels[agent.id] = "installed";
+				labels[id] = "installed";
 			} else {
-				labels[agent.id] = "unconfigured";
+				labels[id] = "unconfigured";
 			}
 		}
 		return labels;
@@ -248,15 +255,21 @@ export function ManageSkillAgentsDialog({
 				const primary = plan.group.items[0];
 				if (!primary?.name) continue;
 
-				const primaryAgent = primary.agent ?? "claude";
+				const primaryTargets = skillTargetIds(primary);
+				const primaryAgent =
+					primary.agent && primaryTargets.has(primary.agent)
+						? primary.agent
+						: primaryTargets.has(UNIVERSAL_SKILL_TARGET_ID)
+							? UNIVERSAL_SKILL_TARGET_ID
+							: (primary.agent ?? "claude");
 				const sourceAgentItem =
-					plan.group.items.find(
-						(item) => item.agent === primaryAgent,
+					plan.group.items.find((item) =>
+						skillTargetIds(item).has(primaryAgent),
 					) ?? primary;
 
 				const result = await reconcileMutation.mutateAsync({
 					source: {
-						agent: sourceAgentItem.agent ?? "claude",
+						agent: primaryAgent,
 						scope:
 							sourceAgentItem.source === "project"
 								? "project"
@@ -344,16 +357,15 @@ export function ManageSkillAgentsDialog({
 							>
 								<SkillsAgentList
 									agents={usableAgents}
+									scope={scope}
 									selectedKeys={selectedAgents}
 									indeterminateKeys={indeterminateAgents}
 									onSelectionChange={handleSelectionChange}
-									scope={scope}
 									agentStates={agentStates}
 									diffLabels={diffLabels}
 									disabled={isApplying}
 									disabledAgents={disabledAgents}
 									label={t("selectAgentsForSkill")}
-									emptyMessage={t("noTargetAgents")}
 								/>
 							</div>
 						)}

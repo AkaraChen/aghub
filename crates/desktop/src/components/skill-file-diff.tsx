@@ -5,6 +5,7 @@ import type {
 	SkillFileDiffResponse,
 } from "../generated/dto";
 import { cn } from "../lib/utils";
+import { SkillHardLinkState } from "./skill-hard-link-state";
 import { SkillLinkState } from "./skill-link-state";
 
 // Bounds the LCS matrix used for line highlighting before the render budget
@@ -101,34 +102,63 @@ function SkillFileChange({ file, lines, previewOmitted }: PreparedFileDiff) {
 				</span>
 			</header>
 			{file.before_link || file.after_link ? (
-				<SkillLinkChange file={file} />
-			) : file.content_omitted || previewOmitted ? (
-				<p className="mt-2 border-t border-separator/60 px-1 pt-3 text-xs text-muted">
-					{t(
-						previewOmitted
-							? "diffPreviewTruncated"
-							: "diffPreviewUnavailable",
-					)}
-				</p>
+				<SkillFileRelationshipChange file={file} />
 			) : (
-				<div
-					role="region"
-					aria-label={t("diffForFile", { path: file.path })}
-					className="mt-2 max-h-72 overflow-auto border-t border-separator/60 pt-2 font-mono text-xs"
-				>
-					{lines.map((line) => (
-						<DiffLineRow
-							key={`${line.kind}:${line.oldLine ?? "-"}:${line.newLine ?? "-"}`}
-							line={line}
-						/>
-					))}
-				</div>
+				<>
+					{(file.before_hard_link || file.after_hard_link) && (
+						<SkillFileRelationshipChange file={file} />
+					)}
+					<SkillFileContentChange
+						file={file}
+						lines={lines}
+						previewOmitted={previewOmitted}
+					/>
+				</>
 			)}
 		</section>
 	);
 }
 
-function SkillLinkChange({ file }: { file: SkillFileDiffResponse }) {
+function SkillFileContentChange({
+	file,
+	lines,
+	previewOmitted,
+}: PreparedFileDiff) {
+	const { t } = useTranslation();
+
+	if (file.content_omitted || previewOmitted) {
+		return (
+			<p className="mt-2 border-t border-separator/60 px-1 pt-3 text-xs text-muted">
+				{t(
+					previewOmitted
+						? "diffPreviewTruncated"
+						: "diffPreviewUnavailable",
+				)}
+			</p>
+		);
+	}
+
+	return (
+		<div
+			role="region"
+			aria-label={t("diffForFile", { path: file.path })}
+			className="mt-2 max-h-72 overflow-auto border-t border-separator/60 pt-2 font-mono text-xs"
+		>
+			{lines.map((line) => (
+				<DiffLineRow
+					key={`${line.kind}:${line.oldLine ?? "-"}:${line.newLine ?? "-"}`}
+					line={line}
+				/>
+			))}
+		</div>
+	);
+}
+
+function SkillFileRelationshipChange({
+	file,
+}: {
+	file: SkillFileDiffResponse;
+}) {
 	const { t } = useTranslation();
 
 	return (
@@ -137,31 +167,35 @@ function SkillLinkChange({ file }: { file: SkillFileDiffResponse }) {
 			aria-label={t("diffForFile", { path: file.path })}
 			className="mt-2 space-y-2 border-t border-separator/60 px-1 pt-3"
 		>
-			<SkillLinkVersion
+			<SkillFileRelationshipVersion
 				side="before"
 				marker="−"
 				link={file.before_link}
+				hardLink={file.before_hard_link}
 				exists={file.change !== "added"}
 			/>
-			<SkillLinkVersion
+			<SkillFileRelationshipVersion
 				side="after"
 				marker="+"
 				link={file.after_link}
+				hardLink={file.after_hard_link}
 				exists={file.change !== "removed"}
 			/>
 		</div>
 	);
 }
 
-function SkillLinkVersion({
+function SkillFileRelationshipVersion({
 	side,
 	marker,
 	link,
+	hardLink,
 	exists,
 }: {
 	side: "before" | "after";
 	marker: "−" | "+";
 	link: SkillFileDiffResponse["before_link"];
+	hardLink: SkillFileDiffResponse["before_hard_link"];
 	exists: boolean;
 }) {
 	const { t } = useTranslation();
@@ -181,9 +215,16 @@ function SkillLinkVersion({
 				<span className="text-foreground">
 					{link
 						? t("symlink")
-						: t(exists ? "diffRegularFile" : "diffVersionAbsent")}
+						: hardLink
+							? t("hardLink")
+							: t(
+									exists
+										? "diffRegularFile"
+										: "diffVersionAbsent",
+								)}
 				</span>
 				{link && <SkillLinkState link={link} />}
+				{hardLink && <SkillHardLinkState hardLink={hardLink} />}
 			</div>
 		</div>
 	);
@@ -239,6 +280,8 @@ function reverseFileDiff(file: SkillFileDiffResponse): SkillFileDiffResponse {
 		after: file.before,
 		before_link: file.after_link,
 		after_link: file.before_link,
+		before_hard_link: file.after_hard_link,
+		after_hard_link: file.before_hard_link,
 	};
 }
 

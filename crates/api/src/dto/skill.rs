@@ -131,6 +131,12 @@ pub struct SkillLinkResponse {
 
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
+pub struct SkillHardLinkResponse {
+	pub peers: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
 pub struct SkillTreeNodeResponse {
 	pub name: String,
 	pub path: String,
@@ -139,6 +145,9 @@ pub struct SkillTreeNodeResponse {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub link: Option<SkillLinkResponse>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub hard_link: Option<SkillHardLinkResponse>,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -185,6 +194,12 @@ pub struct SkillFileDiffResponse {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub after_link: Option<SkillLinkResponse>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub before_hard_link: Option<SkillHardLinkResponse>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub after_hard_link: Option<SkillHardLinkResponse>,
 	pub content_omitted: bool,
 }
 

@@ -1,5 +1,6 @@
 use aghub_core::models::AgentType;
 use aghub_core::paths::find_project_root;
+use aghub_core::SkillTarget;
 use rocket::http::Status;
 use rocket::request::FromParam;
 use std::path::PathBuf;
@@ -13,6 +14,16 @@ impl<'r> FromParam<'r> for AgentParam {
 
 	fn from_param(param: &'r str) -> Result<Self, Self::Error> {
 		param.parse::<AgentType>().map(AgentParam)
+	}
+}
+
+pub struct SkillTargetParam(pub SkillTarget);
+
+impl<'r> FromParam<'r> for SkillTargetParam {
+	type Error = String;
+
+	fn from_param(param: &'r str) -> Result<Self, Self::Error> {
+		param.parse::<SkillTarget>().map(SkillTargetParam)
 	}
 }
 

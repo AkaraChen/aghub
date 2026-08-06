@@ -1,6 +1,7 @@
 use crate::link::{inspect_skill_link, SkillLinkStatus};
+use crate::relationship::{hard_link_identity, FileIdentity};
 use crate::SkillError;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
@@ -44,6 +45,15 @@ pub enum LinkTreatment<'a> {
 	MaterializeWithin(&'a Path),
 }
 
+struct CopyState<'budget, 'root> {
+	remaining_bytes: &'budget mut u64,
+	max_entries: usize,
+	entry_count: usize,
+	link_treatment: LinkTreatment<'root>,
+	active_directories: HashSet<PathBuf>,
+	hard_link_targets: HashMap<FileIdentity, PathBuf>,
+}
+
 pub fn copy_directory_with_budget(
 	from: &Path,
 	to: &Path,
@@ -59,32 +69,26 @@ pub fn copy_directory_with_budget(
 	}
 
 	let initial_bytes = *remaining_bytes;
-	let mut entry_count = 0;
-	let mut active_directories = HashSet::new();
-	std::fs::create_dir_all(to)?;
-	copy_directory_entries(
-		from,
-		to,
+	let mut state = CopyState {
 		remaining_bytes,
 		max_entries,
-		&mut entry_count,
+		entry_count: 0,
 		link_treatment,
-		&mut active_directories,
-	)?;
-	Ok(initial_bytes - *remaining_bytes)
+		active_directories: HashSet::new(),
+		hard_link_targets: HashMap::new(),
+	};
+	std::fs::create_dir_all(to)?;
+	copy_directory_entries(from, to, &mut state)?;
+	Ok(initial_bytes - *state.remaining_bytes)
 }
 
 fn copy_directory_entries(
 	from: &Path,
 	to: &Path,
-	remaining_bytes: &mut u64,
-	max_entries: usize,
-	entry_count: &mut usize,
-	link_treatment: LinkTreatment<'_>,
-	active_directories: &mut HashSet<PathBuf>,
+	state: &mut CopyState<'_, '_>,
 ) -> Result<(), SkillCopyError> {
 	let canonical_from = std::fs::canonicalize(from)?;
-	if !active_directories.insert(canonical_from.clone()) {
+	if !state.active_directories.insert(canonical_from.clone()) {
 		return Err(SkillCopyError::LinkCycle {
 			path: from.to_path_buf(),
 		});
@@ -100,59 +104,41 @@ fn copy_directory_entries(
 			continue;
 		}
 
-		*entry_count = entry_count.saturating_add(1);
-		if *entry_count > max_entries {
-			return Err(SkillCopyError::EntryLimit { max_entries });
+		state.entry_count = state.entry_count.saturating_add(1);
+		if state.entry_count > state.max_entries {
+			return Err(SkillCopyError::EntryLimit {
+				max_entries: state.max_entries,
+			});
 		}
 
 		let from_path = entry.path();
 		let to_path = to.join(&name);
 		let file_type = entry.file_type()?;
 		if file_type.is_symlink() {
-			copy_link(
-				&from_path,
-				&to_path,
-				remaining_bytes,
-				max_entries,
-				entry_count,
-				link_treatment,
-				active_directories,
-			)?;
+			copy_link(&from_path, &to_path, state)?;
 			continue;
 		}
 		if file_type.is_dir() {
 			std::fs::create_dir(&to_path)?;
-			copy_directory_entries(
-				&from_path,
-				&to_path,
-				remaining_bytes,
-				max_entries,
-				entry_count,
-				link_treatment,
-				active_directories,
-			)?;
+			copy_directory_entries(&from_path, &to_path, state)?;
 			continue;
 		}
 		if !file_type.is_file() {
 			return Err(SkillCopyError::UnsupportedEntry { path: from_path });
 		}
-		copy_file(&from_path, &to_path, remaining_bytes)?;
+		copy_regular_file(&from_path, &to_path, state)?;
 	}
 
-	active_directories.remove(&canonical_from);
+	state.active_directories.remove(&canonical_from);
 	Ok(())
 }
 
 fn copy_link(
 	from: &Path,
 	to: &Path,
-	remaining_bytes: &mut u64,
-	max_entries: usize,
-	entry_count: &mut usize,
-	link_treatment: LinkTreatment<'_>,
-	active_directories: &mut HashSet<PathBuf>,
+	state: &mut CopyState<'_, '_>,
 ) -> Result<(), SkillCopyError> {
-	let allowed_root = match link_treatment {
+	let allowed_root = match state.link_treatment {
 		LinkTreatment::PreserveWithin(root)
 		| LinkTreatment::MaterializeWithin(root) => root,
 	};
@@ -169,7 +155,7 @@ fn copy_link(
 		});
 	}
 
-	if matches!(link_treatment, LinkTreatment::PreserveWithin(_)) {
+	if matches!(state.link_treatment, LinkTreatment::PreserveWithin(_)) {
 		let target = &link.target;
 		if target.is_absolute() {
 			return Err(SkillCopyError::AbsoluteLink {
@@ -178,7 +164,7 @@ fn copy_link(
 		}
 		charge_bytes(
 			target.as_os_str().as_encoded_bytes().len(),
-			remaining_bytes,
+			state.remaining_bytes,
 		)?;
 		return create_symlink(target, to, link.resolved_path.as_deref());
 	}
@@ -191,23 +177,35 @@ fn copy_link(
 	let metadata = std::fs::symlink_metadata(&resolved)?;
 	if metadata.is_dir() {
 		std::fs::create_dir(to)?;
-		return copy_directory_entries(
-			&resolved,
-			to,
-			remaining_bytes,
-			max_entries,
-			entry_count,
-			link_treatment,
-			active_directories,
-		);
+		return copy_directory_entries(&resolved, to, state);
 	}
 	if metadata.is_file() {
-		return copy_file(&resolved, to, remaining_bytes);
+		return copy_file(&resolved, to, state.remaining_bytes);
 	}
 
 	Err(SkillCopyError::UnsupportedLinkTarget {
 		path: from.to_path_buf(),
 	})
+}
+
+fn copy_regular_file(
+	from: &Path,
+	to: &Path,
+	state: &mut CopyState<'_, '_>,
+) -> Result<(), SkillCopyError> {
+	if matches!(state.link_treatment, LinkTreatment::PreserveWithin(_)) {
+		if let Some(identity) = hard_link_identity(&std::fs::metadata(from)?) {
+			if let Some(existing) = state.hard_link_targets.get(&identity) {
+				std::fs::hard_link(existing, to)?;
+				return Ok(());
+			}
+			copy_file(from, to, state.remaining_bytes)?;
+			state.hard_link_targets.insert(identity, to.to_path_buf());
+			return Ok(());
+		}
+	}
+
+	copy_file(from, to, state.remaining_bytes)
 }
 
 #[cfg(unix)]
@@ -285,6 +283,78 @@ fn charge_bytes(
 	}
 	*remaining_bytes -= count as u64;
 	Ok(())
+}
+
+#[cfg(test)]
+mod hard_link_tests {
+	use super::*;
+	use crate::relationship::hard_link_identity;
+	use tempfile::tempdir;
+
+	fn linked_source(root: &Path) -> PathBuf {
+		let source = root.join("source");
+		std::fs::create_dir_all(&source).unwrap();
+		let first = source.join("first.txt");
+		std::fs::write(&first, "shared").unwrap();
+		std::fs::hard_link(&first, source.join("second.txt")).unwrap();
+		source
+	}
+
+	#[test]
+	fn preserve_mode_keeps_hard_linked_files_related() {
+		let temp = tempdir().unwrap();
+		let source = linked_source(temp.path());
+		let target = temp.path().join("target");
+		let mut remaining = 1024;
+
+		copy_directory_with_budget(
+			&source,
+			&target,
+			&mut remaining,
+			10,
+			LinkTreatment::PreserveWithin(&source),
+		)
+		.unwrap();
+
+		let first = hard_link_identity(
+			&std::fs::metadata(target.join("first.txt")).unwrap(),
+		);
+		let second = hard_link_identity(
+			&std::fs::metadata(target.join("second.txt")).unwrap(),
+		);
+		assert!(first.is_some());
+		assert_eq!(first, second);
+	}
+
+	#[test]
+	fn materialize_mode_creates_independent_files() {
+		let temp = tempdir().unwrap();
+		let source = linked_source(temp.path());
+		let target = temp.path().join("target");
+		let mut remaining = 1024;
+
+		copy_directory_with_budget(
+			&source,
+			&target,
+			&mut remaining,
+			10,
+			LinkTreatment::MaterializeWithin(&source),
+		)
+		.unwrap();
+
+		assert_eq!(
+			hard_link_identity(
+				&std::fs::metadata(target.join("first.txt")).unwrap(),
+			),
+			None
+		);
+		assert_eq!(
+			hard_link_identity(
+				&std::fs::metadata(target.join("second.txt")).unwrap(),
+			),
+			None
+		);
+	}
 }
 
 #[cfg(all(test, unix))]

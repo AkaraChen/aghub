@@ -5,6 +5,7 @@ import { useMemo, useReducer } from "react";
 import { useTranslation } from "react-i18next";
 import type { SkillCopyStorageModeRequest } from "../generated/dto";
 import { useApi } from "../hooks/use-api";
+import { useSkillPreferences } from "../hooks/use-skill-preferences";
 import { skillDiffQueryOptions } from "../requests/skills";
 import {
 	groupSkillCopyVersions,
@@ -20,7 +21,7 @@ import {
 	SkillDriftHeading,
 } from "./skill-drift-status";
 import {
-	INITIAL_SKILL_RESOLUTION_VIEW,
+	createSkillResolutionViewState,
 	skillResolutionViewReducer,
 } from "./skill-resolution-state";
 import { SkillResolutionReview } from "./skill-version-diff-review";
@@ -142,9 +143,11 @@ export function GithubSkillDrift({
 	onSelectionChange,
 }: GithubSkillDriftProps) {
 	const { t } = useTranslation();
+	const { skillPreferences } = useSkillPreferences();
 	const [view, dispatchView] = useReducer(
 		skillResolutionViewReducer,
-		INITIAL_SKILL_RESOLUTION_VIEW,
+		skillPreferences.defaultStorageMode,
+		createSkillResolutionViewState,
 	);
 	const { isExpanded, activeVersionId, storageMode, showFileChanges } = view;
 	const {

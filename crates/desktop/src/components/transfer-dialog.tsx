@@ -14,7 +14,7 @@ import { useProjects } from "../hooks/use-projects";
 import {
 	supportsMcpScope,
 	supportsMcpTransport,
-	supportsSkillMutation,
+	supportsIndividualSkillTarget,
 	supportsSubAgentScope,
 } from "../lib/agent-capabilities";
 import { cn } from "../lib/utils";
@@ -29,11 +29,16 @@ import {
 	transferSkillsMutationOptions,
 } from "../requests/skills";
 import {
+	skillTargetIds,
+	UNIVERSAL_SKILL_TARGET_ID,
+} from "../lib/skill-targets";
+import {
 	invalidateSubAgentQueries,
 	subAgentListQueryOptions,
 	transferSubAgentsMutationOptions,
 } from "../requests/sub-agents";
 import { type AgentDiffLabel, AgentList, type AgentState } from "./agent-list";
+import { SkillsAgentList } from "./skills-agent-list";
 
 type ResourceKind = "mcp" | "skill" | "sub_agent";
 type DestinationScope =
@@ -138,6 +143,11 @@ export function TransferDialog({
 				scope,
 				projectRoot,
 				enabled: isOpen,
+				discovery: {
+					projectSkills: true,
+					embeddedSkills: false,
+					dependencySkills: false,
+				},
 			});
 		}),
 	});
@@ -156,11 +166,16 @@ export function TransferDialog({
 			}
 			const namesByAgent = new Map<string, Set<string>>();
 			for (const entry of data) {
-				if (entry.agent && itemNames.has(entry.name)) {
+				if (!itemNames.has(entry.name)) continue;
+				const targetIds =
+					resourceType === "skill" && "is_symlink" in entry
+						? skillTargetIds(entry)
+						: new Set(entry.agent ? [entry.agent] : []);
+				for (const targetId of targetIds) {
 					const names =
-						namesByAgent.get(entry.agent) ?? new Set<string>();
+						namesByAgent.get(targetId) ?? new Set<string>();
 					names.add(entry.name);
-					namesByAgent.set(entry.agent, names);
+					namesByAgent.set(targetId, names);
 				}
 			}
 			const agentSet = new Set<string>();
@@ -172,7 +187,7 @@ export function TransferDialog({
 			map.set(dest.type === "global" ? "global" : dest.path, agentSet);
 		});
 		return map;
-	}, [availableDestinations, destinationQueries, items]);
+	}, [availableDestinations, destinationQueries, items, resourceType]);
 
 	const selectedScope = useMemo<DestinationScope | null>(() => {
 		if (!selectedScopeKey) return null;
@@ -203,8 +218,8 @@ export function TransferDialog({
 						);
 					}
 					return (
-						supportsSkillMutation(agent, "global") ||
-						supportsSkillMutation(agent, "project")
+						supportsIndividualSkillTarget(agent, "global") ||
+						supportsIndividualSkillTarget(agent, "project")
 					);
 				}
 
@@ -221,7 +236,7 @@ export function TransferDialog({
 					return supportsSubAgentScope(agent, selectedScope.type);
 				}
 
-				return supportsSkillMutation(agent, selectedScope.type);
+				return supportsIndividualSkillTarget(agent, selectedScope.type);
 			}),
 		[availableAgents, items, resourceType, selectedScope],
 	);
@@ -242,19 +257,26 @@ export function TransferDialog({
 
 	const diffLabels = useMemo((): Record<string, AgentDiffLabel> => {
 		const labels: Record<string, AgentDiffLabel> = {};
-		for (const agent of usableAgents) {
-			const isInstalled = installedInDestination.has(agent.id);
-			const isSelected = selectedAgents.includes(agent.id);
+		const targetIds =
+			resourceType === "skill"
+				? [
+						UNIVERSAL_SKILL_TARGET_ID,
+						...usableAgents.map((agent) => agent.id),
+					]
+				: usableAgents.map((agent) => agent.id);
+		for (const targetId of targetIds) {
+			const isInstalled = installedInDestination.has(targetId);
+			const isSelected = selectedAgents.includes(targetId);
 			if (isInstalled) {
-				labels[agent.id] = "installed";
+				labels[targetId] = "installed";
 			} else if (isSelected) {
-				labels[agent.id] = "adding";
+				labels[targetId] = "adding";
 			} else {
-				labels[agent.id] = "unconfigured";
+				labels[targetId] = "unconfigured";
 			}
 		}
 		return labels;
-	}, [usableAgents, installedInDestination, selectedAgents]);
+	}, [usableAgents, installedInDestination, selectedAgents, resourceType]);
 
 	const destinationLabel = useMemo(() => {
 		if (!selectedScope) return "";
@@ -509,6 +531,30 @@ export function TransferDialog({
 												>
 													<ArrowPathIcon className="size-5 animate-spin text-muted" />
 												</div>
+											) : resourceType === "skill" ? (
+												<SkillsAgentList
+													agents={usableAgents}
+													scope={selectedScope.type}
+													selectedKeys={
+														selectedAgents
+													}
+													onSelectionChange={
+														handleAgentSelectionChange
+													}
+													agentStates={agentStates}
+													diffLabels={diffLabels}
+													disabled={isApplying}
+													disabledAgents={
+														installedInDestination
+													}
+													label={t(
+														"selectAgentsForCopy",
+														{
+															destination:
+																destinationLabel,
+														},
+													)}
+												/>
 											) : (
 												<AgentList
 													agents={usableAgents}

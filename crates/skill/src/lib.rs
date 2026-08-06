@@ -31,6 +31,7 @@ pub mod lock;
 pub mod model;
 pub mod package;
 pub mod parser;
+pub mod relationship;
 pub mod sanitize;
 pub mod scan;
 pub mod snapshot;

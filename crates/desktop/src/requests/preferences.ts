@@ -87,6 +87,9 @@ export function setSkillPreferencesMutationOptions(
 					queryKey: queryKeys.skills.copyStatuses(),
 				});
 			}
+			await queryClient.invalidateQueries({
+				queryKey: queryKeys.skills.lists(),
+			});
 			await onSuccess?.(preferences);
 		},
 	});

@@ -8,12 +8,10 @@ import * as pathe from "pathe";
 import { useTranslation } from "react-i18next";
 import { useApi } from "../hooks/use-api";
 import { useSkillGroups } from "../hooks/use-resource-groups";
+import type { AgentInfo } from "../generated/dto";
+import { formatSkillTargetName } from "../lib/skill-targets";
 import { invalidateSkillQueries } from "../requests/skills";
-import {
-	formatAgentName,
-	type LocationGroup,
-	type SkillGroup,
-} from "./skill-detail-helpers";
+import type { LocationGroup, SkillGroup } from "./skill-detail-helpers";
 
 interface DeleteSkillLocationDialogProps {
 	item: LocationGroup | null;
@@ -31,6 +29,7 @@ interface DeleteSkillLocationDialogProps {
 
 interface DeleteSkillDialogProps {
 	group: SkillGroup;
+	agents: AgentInfo[];
 	isOpen: boolean;
 	onClose: () => void;
 	projectPath?: string;
@@ -98,9 +97,15 @@ export function DeleteSkillLocationDialog({
 	const folderPath = item ? pathe.dirname(item.sourcePath) : "";
 	const agentNames =
 		item?.installations.length === 1
-			? formatAgentName(item.installations[0].agent)
+			? formatSkillTargetName(
+					t,
+					item.installations[0].agent,
+					item.installations[0].displayName,
+				)
 			: (item?.installations
-					.map((i) => formatAgentName(i.agent))
+					.map((i) =>
+						formatSkillTargetName(t, i.agent, i.displayName),
+					)
 					.join(", ") ?? "");
 	const isMultiAgent = (item?.installations.length ?? 0) > 1;
 
@@ -183,6 +188,7 @@ export function DeleteSkillLocationDialog({
 
 export function DeleteSkillDialog({
 	group,
+	agents,
 	isOpen,
 	onClose,
 	projectPath,
@@ -193,6 +199,9 @@ export function DeleteSkillDialog({
 	const { pruneAssignments } = useSkillGroups();
 
 	const skill = group.items[0];
+	const agentNames = new Map(
+		agents.map((agent) => [agent.id, agent.display_name]),
+	);
 
 	const deleteMutation = useMutation({
 		mutationFn: async () => {
@@ -305,8 +314,12 @@ export function DeleteSkillDialog({
 												<XCircleIcon className="size-4 shrink-0 text-danger" />
 												<span className="text-foreground">
 													{item.agent
-														? formatAgentName(
+														? formatSkillTargetName(
+																t,
 																item.agent,
+																agentNames.get(
+																	item.agent,
+																),
 															)
 														: t("default")}
 												</span>
@@ -340,8 +353,12 @@ export function DeleteSkillDialog({
 												<XCircleIcon className="size-4 shrink-0 text-danger" />
 												<span className="text-foreground">
 													{item.agent
-														? formatAgentName(
+														? formatSkillTargetName(
+																t,
 																item.agent,
+																agentNames.get(
+																	item.agent,
+																),
 															)
 														: t("default")}
 												</span>

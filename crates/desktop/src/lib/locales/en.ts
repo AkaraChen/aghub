@@ -600,7 +600,6 @@ export default {
 	skillFilesUnavailable: "Files unavailable",
 	skillFilesUnavailableDescription:
 		"Aghub couldn't inspect this copy's files.",
-	skillLinkValid: "Link available",
 	skillLinkBroken: "Target not found",
 	skillLinkOutsideRoot: "Target outside Skill",
 	skillLinkUnreadable: "Target unavailable",
@@ -707,25 +706,71 @@ export default {
 	skillAuditEnabled: "Automatic skill scans enabled",
 	skillAuditDisabled: "Automatic skill scans disabled",
 	skillAuditPreferenceError: "Failed to update the skill scan setting",
-	skillChangeChecks: "Skill change checks",
+	skillInstallation: "Installation location",
+	skillInstallationDescription:
+		"New Skills use the universal directory by default. Native Agent directories remain available.",
+	universalAgentTarget: "Universal agents",
+	universalAgentTargetSummary: "Universal agents ({{agents}})",
+	defaultLabel: "Default",
+	universalAgentTargetPathHint:
+		"Agents with universal-directory support read the same Skill",
+	nativeAgentTargets: "Agent native directories",
+	nativeAgentTargetsDescription:
+		"Choose an agent's documented directory while installing. Only selected locations are written.",
+	skillStorageNotice:
+		"AGHub manages the actual installation locations without keeping another master copy.",
+	skillContentChecks: "Copies and differences",
+	skillContentChecksDescription:
+		"Control when matching Skills are compared, grouped, and flagged for conflicting content.",
+	skillChangeChecks: "Change checks",
 	skillChangeChecksDescription:
-		"Check matching copies for content differences and file relationship problems.",
+		"Automatic checks run in lists and details. Manual checks run only when requested.",
 	skillChangeCheckTiming: "When to check",
 	duplicateSkillManagement: "Duplicate Skill management",
 	duplicateSkillManagementDescription:
 		"Control how matching copies are shown and whether differing content is flagged.",
-	groupIdenticalSkillCopies: "Group matching copies",
+	groupIdenticalSkillCopies: "Show matching content once",
 	groupIdenticalSkillCopiesDescription:
-		"Show locations with the same content as one version without changing files.",
+		"Matching content is grouped in comparisons without changing files.",
 	warnOnSkillConflicts: "Flag content conflicts",
 	warnOnSkillConflictsDescription:
-		"Mark copies with different or unreadable content in the Skill list.",
-	skillBaselineLocation: "Default comparison source",
-	skillBaselineLocationDescription:
-		"Use this installed location as the initial comparison source when copies differ. Changes still require confirmation.",
+		"Mark copies with different or unavailable content in the Skill list.",
+	unreadableSkillCopies: "Unreadable copies",
+	unreadableSkillCopiesDescription:
+		"Exclude them from unification and report the failure in details and notifications.",
+	alwaysReported: "Always reported",
+	skillFileRelationships: "Unification method",
+	skillFileRelationshipsDescription:
+		"Choose the default file-writing method when one version replaces the other locations.",
+	defaultSkillFileHandling: "When writing to other locations",
+	defaultSkillFileHandlingDescription:
+		"The comparison view preselects this option. You can change it before applying.",
+	preserveFileRelationships: "Keep the current storage method",
+	preserveFileRelationshipsDescription:
+		"Soft links keep their targets, and hard-link groups keep sharing the same disk content.",
+	copySkillFileContents: "Write independent files",
+	copySkillFileContentsDescription:
+		"Write the selected version separately to every location without retaining soft or hard links.",
+	skillDiscoveryScope: "Skill sources",
+	skillDiscoveryScopeDescription:
+		"Installed locations are always read. Choose whether to search the current project and its dependencies.",
+	installedSkillLocations: "Installed Skills",
+	installedSkillLocationsDescription:
+		"Read the universal directory and each native agent directory still in use.",
+	alwaysScanned: "Always read",
+	projectSkillLocations: "Project Skills",
+	projectSkillLocationsDescription:
+		"Read .agents/skills and native agent directories at the project root.",
+	embeddedRepositorySkills: "Skill collections",
+	embeddedRepositorySkillsDescription:
+		"Continue into collection directories that are not Skills themselves.",
+	dependencyPackageSkills: "Skills in dependencies",
+	dependencyPackageSkillsDescription:
+		"Continue into dependency package directories to find Skills. Disabled by default.",
 	skillPreferencesError: "Failed to update Skill settings",
 	automatic: "Automatic",
 	manual: "Manual",
+	off: "Off",
 	checkSkillCopyDifferences: "Check changes",
 	auditAcknowledgementError: "Failed to update the hidden warning",
 	acknowledgedAuditsDescription:
@@ -1029,13 +1074,13 @@ export default {
 	versionSelected: "Selected",
 	skillCopyStorage: "Storage after unifying",
 	skillCopyStorageDescription:
-		"Keep directory and file links, or write each one as an independent copy.",
+		"Keep symlink targets and hard-link relationships, or write independent copies.",
 	preserveSkillLinks: "Keep current links",
 	preserveSkillLinksDescription:
-		"Symlinks stay linked; regular copies stay independent.",
+		"Keep symlink targets and shared hard-link relationships.",
 	convertSkillLinksToCopies: "Convert links to copies",
 	convertSkillLinksToCopiesDescription:
-		"Write linked directories and files as independent local copies.",
+		"Write linked content as unrelated local files.",
 	keepVersionFrom: "Keep version from {{location}}",
 	skillCopyVersion: "Version {{index}}",
 	skillCopyVersionLocations_one: "1 location",
@@ -1092,6 +1137,7 @@ export default {
 	noContent: "No content",
 	symlink: "Symlink",
 	symlinkTarget: "→ {{target}}",
+	hardLink: "Hard link",
 
 	// Env Editor
 	envEditor: {

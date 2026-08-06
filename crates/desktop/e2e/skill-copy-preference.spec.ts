@@ -18,7 +18,12 @@ const DEFAULT_PREFERENCES = {
 	mode: "automatic",
 	groupIdenticalCopies: true,
 	warnOnConflicts: true,
-	baselineAgent: "claude",
+	defaultStorageMode: "preserve",
+	discovery: {
+		projectSkills: true,
+		embeddedSkills: true,
+		dependencySkills: false,
+	},
 };
 
 test("manual copy checks run only when requested from skill details", async ({
@@ -27,10 +32,6 @@ test("manual copy checks run only when requested from skill details", async ({
 	const mocks = await installMocks(page);
 	await page.goto("/settings?tab=skills");
 
-	const copyCheckSwitch = page.getByRole("switch", {
-		name: "Skill change checks",
-	});
-	await expect(copyCheckSwitch).toBeChecked();
 	await page.getByRole("radio", { name: "Manual" }).click();
 	await expect
 		.poll(() => page.evaluate(storedPreferences))
@@ -61,11 +62,7 @@ test("disabled copy checks issue no scan requests", async ({ page }) => {
 	const mocks = await installMocks(page);
 	await page.goto("/settings?tab=skills");
 
-	const copyCheckSwitch = page.getByRole("switch", {
-		name: "Skill change checks",
-	});
-	await copyCheckSwitch.press("Space");
-	await expect(copyCheckSwitch).not.toBeChecked();
+	await page.getByRole("radio", { name: "Off" }).click();
 	await expect
 		.poll(() => page.evaluate(storedPreferences))
 		.toEqual({ ...DEFAULT_PREFERENCES, enabled: false });
@@ -82,24 +79,28 @@ test("disabled copy checks issue no scan requests", async ({ page }) => {
 	]);
 });
 
-test("duplicate display and comparison source preferences are stored", async ({
+test("skill installation, copy, and discovery preferences are stored", async ({
 	page,
 }) => {
 	await installMocks(page);
 	await page.goto("/settings?tab=skills");
 
+	await expect(
+		page.getByText("~/.agents/skills", { exact: true }),
+	).toBeVisible();
 	await page
-		.getByRole("switch", { name: /Group matching copies/ })
+		.getByRole("switch", { name: /Show matching content once/ })
 		.press("Space");
 	await page
 		.getByRole("switch", { name: /Flag content conflicts/ })
 		.press("Space");
+	await page.getByText("Write independent files", { exact: true }).click();
+	await page.getByRole("checkbox", { name: /Project Skills/ }).press("Space");
 	await page
-		.getByRole("button", {
-			name: /Claude .*Default comparison source/,
+		.getByRole("checkbox", {
+			name: /Skills in dependencies/,
 		})
-		.click();
-	await page.getByRole("option", { name: /Codex/ }).click();
+		.press("Space");
 
 	await expect
 		.poll(() => page.evaluate(storedPreferences))
@@ -107,6 +108,11 @@ test("duplicate display and comparison source preferences are stored", async ({
 			...DEFAULT_PREFERENCES,
 			groupIdenticalCopies: false,
 			warnOnConflicts: false,
-			baselineAgent: "codex",
+			defaultStorageMode: "copy",
+			discovery: {
+				projectSkills: false,
+				embeddedSkills: true,
+				dependencySkills: true,
+			},
 		});
 });

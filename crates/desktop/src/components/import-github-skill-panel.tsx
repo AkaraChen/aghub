@@ -40,13 +40,13 @@ import {
 	type AuditedSkillRun,
 	useAuditedSkillRun,
 } from "../hooks/use-audited-skill-run";
-import { supportsSkillMutation } from "../lib/agent-capabilities";
+import { supportsIndividualSkillTarget } from "../lib/agent-capabilities";
 import { cn } from "../lib/utils";
 import { CreateCredentialDialog } from "../pages/settings/components/create-credential-dialog";
 import { credentialsListQueryOptions } from "../requests/credentials";
 import { invalidateSkillQueries } from "../requests/skills";
-import { AgentSelector } from "./agent-selector";
 import { SkillAudit } from "./skill-audit";
+import { SkillTargetSelector } from "./skill-target-selector";
 
 interface ImportGithubSkillPanelProps {
 	onDone: () => void;
@@ -121,7 +121,7 @@ export function ImportGithubSkillPanel({
 			availableAgents.filter(
 				(a) =>
 					a.isUsable &&
-					supportsSkillMutation(
+					supportsIndividualSkillTarget(
 						a,
 						projectPath ? "project" : "global",
 					),
@@ -164,7 +164,7 @@ export function ImportGithubSkillPanel({
 		defaultValues: {
 			url: initialUrl ?? "",
 			credentialId: "",
-			selectedAgents: skillAgents[0] ? [skillAgents[0].id] : [],
+			selectedAgents: ["universal"],
 		},
 	});
 
@@ -1077,19 +1077,18 @@ export function ImportGithubSkillPanel({
 												: t("validationAgentsRequired"),
 									}}
 									render={({ field, fieldState }) => (
-										<AgentSelector
+										<SkillTargetSelector
 											agents={skillAgents}
+											scope={
+												projectPath
+													? "project"
+													: "global"
+											}
 											selectedKeys={new Set(field.value)}
 											onSelectionChange={(keys) =>
 												field.onChange([...keys])
 											}
 											label={t("targetAgent")}
-											emptyMessage={t(
-												"noAgentsAvailable",
-											)}
-											emptyHelpText={t(
-												"noAgentsAvailableHelp",
-											)}
 											variant="secondary"
 											isDisabled={
 												phase !== "selecting" ||

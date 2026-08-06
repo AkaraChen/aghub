@@ -29,7 +29,12 @@
 				mode: "automatic",
 				groupIdenticalCopies: true,
 				warnOnConflicts: true,
-				baselineAgent: "claude",
+				defaultStorageMode: "preserve",
+				discovery: {
+					projectSkills: true,
+					embeddedSkills: true,
+					dependencySkills: false,
+				},
 			},
 		],
 		["acknowledgedSkillAssessments", []],

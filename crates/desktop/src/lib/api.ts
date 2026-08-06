@@ -77,6 +77,7 @@ import type {
 	UsageLimitsReportDto,
 	UsageReportDto,
 } from "../generated/dto";
+import type { SkillDiscoveryPreferences } from "./store";
 
 interface ApiErrorBody {
 	error?: string;
@@ -176,12 +177,23 @@ export function createApi(baseUrl: string, token: string) {
 				scope: "global" | "project" | "all" = "global",
 				projectRoot?: string,
 				includeManaged = false,
+				discovery?: SkillDiscoveryPreferences,
 			): Promise<SkillResponse[]> {
 				return client
 					.get("agents/all/skills", {
 						searchParams: {
 							scope,
 							include_managed: includeManaged.toString(),
+							...(discovery
+								? {
+										include_project:
+											discovery.projectSkills.toString(),
+										include_nested:
+											discovery.embeddedSkills.toString(),
+										include_dependencies:
+											discovery.dependencySkills.toString(),
+									}
+								: {}),
 							...(projectRoot
 								? { project_root: projectRoot }
 								: {}),

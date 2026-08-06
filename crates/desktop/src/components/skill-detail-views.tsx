@@ -3,6 +3,7 @@ import {
 	DocumentIcon,
 	FolderIcon,
 	LinkIcon,
+	RectangleStackIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import { Alert, Button, Tooltip } from "@heroui/react";
@@ -10,13 +11,14 @@ import * as pathe from "pathe";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { SkillTreeNodeResponse } from "../generated/dto";
+import { formatSkillTargetName } from "../lib/skill-targets";
 import { cn } from "../lib/utils";
 import {
-	formatAgentName,
 	getNodeChildren,
 	type LocationGroup,
 	summarizeSkillLinks,
 } from "./skill-detail-helpers";
+import { SkillHardLinkState } from "./skill-hard-link-state";
 import { SkillLinkState, SkillLinkSummary } from "./skill-link-state";
 
 export function SkillTree({ root }: { root: SkillTreeNodeResponse }) {
@@ -65,6 +67,7 @@ export function LocationRow({
 		() => (tree ? summarizeSkillLinks(tree) : null),
 		[tree],
 	);
+	const rootLink = tree?.link;
 	const hasStorageStatus = group.isSymlink;
 	const hasFileLinkStatus = Boolean(
 		treeUnavailable || (linkSummary && linkSummary.problems > 0),
@@ -88,7 +91,11 @@ export function LocationRow({
 						{Array.from(
 							new Set(
 								group.installations.map((installation) =>
-									formatAgentName(installation.agent),
+									formatSkillTargetName(
+										t,
+										installation.agent,
+										installation.displayName,
+									),
 								),
 							),
 						).join(", ")}
@@ -141,11 +148,24 @@ export function LocationRow({
 				<div className="mt-2 space-y-1.5 border-t border-separator/60 pt-2">
 					{group.isSymlink && (
 						<div
-							data-skill-location-link="valid"
+							data-skill-location-link={
+								rootLink?.status ?? "valid"
+							}
 							className="flex min-w-0 items-center gap-1.5 text-xs text-muted"
 						>
-							<LinkIcon className="size-3.5" />
-							<span>{t("symlink")}</span>
+							<LinkIcon className="size-3.5 shrink-0" />
+							<span className="shrink-0">{t("symlink")}</span>
+							{rootLink?.target && (
+								<>
+									<span aria-hidden="true">·</span>
+									<code
+										className="min-w-0 truncate"
+										title={rootLink.target}
+									>
+										{rootLink.target}
+									</code>
+								</>
+							)}
 						</div>
 					)}
 					{treeUnavailable ? (
@@ -222,6 +242,7 @@ function TreeNodeRow({
 }: {
 	node: SkillTreeNodeResponse & { depth?: number };
 }) {
+	const { t } = useTranslation();
 	const link = node.link;
 
 	return (
@@ -243,12 +264,25 @@ function TreeNodeRow({
 								: "text-warning",
 						)}
 					/>
+				) : node.hard_link ? (
+					<RectangleStackIcon className="mt-0.5 size-4 shrink-0 text-muted" />
 				) : (
 					<DocumentIcon className="mt-0.5 size-4 shrink-0 text-muted" />
 				)}
 				<div className="min-w-0 flex-1">
 					<span className="block truncate">{node.name}</span>
 					{link && <SkillLinkState link={link} />}
+					{node.hard_link && (
+						<div className="flex min-w-0 items-center gap-1.5">
+							<span className="shrink-0 text-xs text-muted">
+								{t("hardLink")}
+							</span>
+							<SkillHardLinkState
+								hardLink={node.hard_link}
+								className="flex-1"
+							/>
+						</div>
+					)}
 				</div>
 			</div>
 		</div>

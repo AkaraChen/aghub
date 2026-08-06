@@ -3,6 +3,7 @@ import type { SkillCopyStorageModeRequest } from "../generated/dto";
 export interface SkillResolutionViewState {
 	isExpanded: boolean;
 	activeVersionId: string | null;
+	defaultStorageMode: SkillCopyStorageModeRequest;
 	storageMode: SkillCopyStorageModeRequest;
 	showFileChanges: boolean;
 }
@@ -20,9 +21,20 @@ export type SkillResolutionViewAction =
 export const INITIAL_SKILL_RESOLUTION_VIEW: SkillResolutionViewState = {
 	isExpanded: false,
 	activeVersionId: null,
+	defaultStorageMode: "preserve",
 	storageMode: "preserve",
 	showFileChanges: false,
 };
+
+export function createSkillResolutionViewState(
+	defaultStorageMode: SkillCopyStorageModeRequest,
+): SkillResolutionViewState {
+	return {
+		...INITIAL_SKILL_RESOLUTION_VIEW,
+		defaultStorageMode,
+		storageMode: defaultStorageMode,
+	};
+}
 
 export function skillResolutionViewReducer(
 	state: SkillResolutionViewState,
@@ -31,13 +43,14 @@ export function skillResolutionViewReducer(
 	switch (action.type) {
 		case "expand":
 			return {
+				...state,
 				isExpanded: true,
 				activeVersionId: action.activeVersionId,
-				storageMode: "preserve",
+				storageMode: state.defaultStorageMode,
 				showFileChanges: false,
 			};
 		case "collapse":
-			return INITIAL_SKILL_RESOLUTION_VIEW;
+			return createSkillResolutionViewState(state.defaultStorageMode);
 		case "set-active-version":
 			return {
 				...state,

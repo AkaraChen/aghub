@@ -1,10 +1,10 @@
 import { Button, Card, Checkbox, Label, Modal, Spinner } from "@heroui/react";
 import { useTranslation } from "react-i18next";
-import { AgentSelector } from "../../../components/agent-selector";
 import { InstallTargetSelector } from "../../../components/install-target-selector";
 import { ResultStatusItem } from "../../../components/result-status-item";
 import { SkillAudit } from "../../../components/skill-audit";
 import { SkillInfoCard } from "../../../components/skill-info-card";
+import { SkillTargetSelector } from "../../../components/skill-target-selector";
 import type { AuditReportDto, MarketSkill } from "../../../generated/dto";
 import type { InstallResult } from "../../../lib/install-utils";
 import type { Project } from "../../../lib/store";
@@ -89,11 +89,13 @@ export function InstallModal({
 								<p className="text-sm text-muted">
 									{t("selectAgentsForSkill")}
 								</p>
-								<AgentSelector
+								<SkillTargetSelector
 									agents={skillAgents}
+									scope={
+										installToProject ? "project" : "global"
+									}
 									selectedKeys={selectedAgents}
 									onSelectionChange={onSelectedAgentsChange}
-									emptyMessage={t("noTargetAgents")}
 									showSelectedIcon
 									variant="secondary"
 								/>

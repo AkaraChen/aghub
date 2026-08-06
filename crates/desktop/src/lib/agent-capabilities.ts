@@ -1,4 +1,5 @@
 import type { AgentInfo, TransportDto } from "../generated/dto";
+import { isUniversalSkillPath } from "./skill-targets";
 
 export type AgentScope = "global" | "project";
 
@@ -46,6 +47,18 @@ export function supportsSkillMutation(
 	return scope === "global"
 		? agent.capabilities.skills.mutable_global
 		: agent.capabilities.skills.mutable_project;
+}
+
+export function supportsIndividualSkillTarget(
+	agent: Pick<AgentInfo, "capabilities" | "skills_paths">,
+	scope: AgentScope,
+): boolean {
+	if (!supportsSkillMutation(agent, scope)) return false;
+	const writePath =
+		scope === "global"
+			? agent.skills_paths.global_write
+			: agent.skills_paths.project_write;
+	return Boolean(writePath && !isUniversalSkillPath(writePath));
 }
 
 export function supportsSubAgent(

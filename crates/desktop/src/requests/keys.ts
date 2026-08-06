@@ -2,6 +2,7 @@ import type {
 	SkillCopyStatusRequest,
 	SkillDiffRequest,
 } from "../generated/dto";
+import type { SkillDiscoveryPreferences } from "../lib/store";
 
 export const queryKeys = {
 	plugins: {
@@ -25,7 +26,15 @@ export const queryKeys = {
 		list: (
 			scope: "global" | "project" | "all" = "global",
 			projectRoot?: string,
-		) => ["skills", "list", scope, projectRoot ?? null] as const,
+			discovery?: SkillDiscoveryPreferences,
+		) =>
+			[
+				"skills",
+				"list",
+				scope,
+				projectRoot ?? null,
+				discovery ?? "stored-preferences",
+			] as const,
 		content: (
 			path: string,
 			scope: "global" | "project" | "all" = "global",

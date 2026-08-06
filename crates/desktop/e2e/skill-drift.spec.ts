@@ -158,7 +158,7 @@ test("a changed file link shows both targets and their status", async ({
 	).toContainText("../../../docs/missing.html");
 	await expect(
 		changedLink.locator('[data-skill-link-status="valid"]'),
-	).toContainText("Link available");
+	).not.toContainText("Link available");
 	await expect(
 		changedLink.locator('[data-skill-link-status="broken"]'),
 	).toContainText("Target not found");
@@ -181,6 +181,48 @@ test("a changed file link shows both targets and their status", async ({
 	await expect(
 		page.getByText("Convert links to copies", { exact: true }),
 	).toBeVisible();
+});
+
+test("a hard-link change keeps the file content diff visible", async ({
+	page,
+}) => {
+	const mocks = await installMocks(page);
+	mocks.setSkillDiff("/tmp/e2e/.cursor/skills/react-pro/SKILL.md", {
+		identical: false,
+		base_hash: "base",
+		target_hash: "target",
+		files: [
+			{
+				path: "templates/input.json",
+				change: "modified",
+				before: "old value\n",
+				after: "new value\n",
+				before_hard_link: {
+					peers: ["templates/default.json"],
+				},
+				after_hard_link: {
+					peers: ["templates/shared.json"],
+				},
+				content_omitted: false,
+			},
+		],
+		files_omitted: 0,
+	});
+	await page.goto("/skills");
+
+	await page.getByRole("option", { name: "react-pro" }).click();
+	await page
+		.getByRole("button", { name: /Compare and unify local copies/ })
+		.click();
+	await page.getByRole("button", { name: "Review file changes" }).click();
+
+	await expect(page.locator("[data-skill-hard-link]")).toHaveCount(2);
+	await expect(page.locator('[data-diff-kind="removed"]')).toContainText(
+		"old value",
+	);
+	await expect(page.locator('[data-diff-kind="added"]')).toContainText(
+		"new value",
+	);
 });
 
 test("copy mode materializes every location including its reference", async ({

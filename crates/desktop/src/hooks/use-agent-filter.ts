@@ -8,7 +8,11 @@ import { setStickyAgentFilter } from "./use-sticky-agent-filter";
  * into the sticky store so the sidebar can restore the filter across
  * navigations. `filtered` narrows a list to the selected agent.
  */
-export function useAgentFilter<T extends { agent: string | null }>(items: T[]) {
+export function useAgentFilter<T extends { agent: string | null }>(
+	items: T[],
+	matchesAgent: (item: T, agentId: string) => boolean = (item, agentId) =>
+		item.agent === agentId,
+) {
 	const [agentId, setAgentIdRaw] = useQueryState("agent");
 
 	function setAgentId(next: string | null) {
@@ -18,8 +22,10 @@ export function useAgentFilter<T extends { agent: string | null }>(items: T[]) {
 
 	const filtered = useMemo(
 		() =>
-			agentId ? items.filter((item) => item.agent === agentId) : items,
-		[items, agentId],
+			agentId
+				? items.filter((item) => matchesAgent(item, agentId))
+				: items,
+		[items, agentId, matchesAgent],
 	);
 
 	return { agentId, setAgentId, filtered };

@@ -15,7 +15,7 @@ function memoryStore(entries: Array<[string, unknown]> = []) {
 }
 
 describe("initializeSkillPreferences", () => {
-	it("adds duplicate and baseline preferences", async () => {
+	it("adds installation, comparison, and discovery preferences", async () => {
 		const { store, values } = memoryStore();
 
 		await initializeSkillPreferences(store);
@@ -40,10 +40,7 @@ describe("initializeSkillPreferences", () => {
 	});
 
 	it("preserves a valid current preference", async () => {
-		const preferences = {
-			...DEFAULT_SKILL_PREFERENCES,
-			baselineAgent: "codex" as const,
-		};
+		const preferences = { ...DEFAULT_SKILL_PREFERENCES };
 		const { store, values } = memoryStore([
 			["skillPreferences", preferences],
 		]);
@@ -51,5 +48,28 @@ describe("initializeSkillPreferences", () => {
 		await initializeSkillPreferences(store);
 
 		expect(values.get("skillPreferences")).toBe(preferences);
+	});
+
+	it("migrates the previous comparison baseline preference", async () => {
+		const { store, values } = memoryStore([
+			[
+				"skillPreferences",
+				{
+					enabled: true,
+					mode: "manual",
+					groupIdenticalCopies: false,
+					warnOnConflicts: true,
+					baselineAgent: "codex",
+				},
+			],
+		]);
+
+		await initializeSkillPreferences(store);
+
+		expect(values.get("skillPreferences")).toEqual({
+			...DEFAULT_SKILL_PREFERENCES,
+			mode: "manual",
+			groupIdenticalCopies: false,
+		});
 	});
 });

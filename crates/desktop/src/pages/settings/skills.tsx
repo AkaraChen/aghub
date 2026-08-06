@@ -11,7 +11,13 @@ import {
 	useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
-import { useDeferredValue, useMemo, useRef, useState } from "react";
+import {
+	useCallback,
+	useDeferredValue,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { matrixGroup } from "../../components/agent-coverage-matrix";
 import { BulkActionsPanel } from "../../components/bulk-actions-panel";
@@ -38,11 +44,18 @@ import {
 	type SkillCopyListStatus,
 } from "../../components/skill-list";
 import { useApi } from "../../hooks/use-api";
+import { useAgentAvailability } from "../../hooks/use-agent-availability";
 import { useSkillGroups } from "../../hooks/use-resource-groups";
 import { useSkillPreferences } from "../../hooks/use-skill-preferences";
 import { visibleEntryKeys } from "../../hooks/use-list-selection";
 import { useSkillSections } from "../../hooks/use-skill-sections";
 import { cn } from "../../lib/utils";
+import {
+	isUniversalSkillPath,
+	skillSourceTargetId,
+	skillTargetIds,
+	UNIVERSAL_SKILL_TARGET_ID,
+} from "../../lib/skill-targets";
 import {
 	globalSkillLockQueryOptions,
 	invalidateSkillQueries,
@@ -56,6 +69,7 @@ export default function SkillsPage() {
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
+	const { allAgents } = useAgentAvailability();
 	const { data: skills, isFetching } = useSuspenseQuery({
 		...skillListQueryOptions({ api, scope: "global" }),
 	});
@@ -91,12 +105,36 @@ export default function SkillsPage() {
 	// The library page: set when a source cluster row is clicked; any
 	// selection change or blank-area escape drops back out of it.
 	const [focusedSource, setFocusedSource] = useState<string | null>(null);
+	const universalReaders = useMemo(
+		() =>
+			new Set(
+				allAgents
+					.filter((agent) =>
+						agent.skills_paths.global_read.some(
+							isUniversalSkillPath,
+						),
+					)
+					.map((agent) => agent.id),
+			),
+		[allAgents],
+	);
+	const skillMatchesAgent = useCallback(
+		(skill: (typeof skills)[number], agentId: string) => {
+			const targets = skillTargetIds(skill);
+			return (
+				targets.has(agentId) ||
+				(targets.has(UNIVERSAL_SKILL_TARGET_ID) &&
+					universalReaders.has(agentId))
+			);
+		},
+		[universalReaders],
+	);
 
 	const {
 		agentId: agentFilter,
 		setAgentId,
 		filtered: filteredSkills,
-	} = useAgentFilter(skills);
+	} = useAgentFilter(skills, skillMatchesAgent);
 
 	// Selection is the single source of truth — it drives the list
 	// highlight, the detail panel, and bulk actions. Seed it with the
@@ -392,8 +430,8 @@ export default function SkillsPage() {
 			return matrixGroup(
 				member.name,
 				member.name,
-				items[0]?.agent,
-				items.map((item) => item.agent),
+				items[0] ? skillSourceTargetId(items[0]) : null,
+				items.flatMap((item) => Array.from(skillTargetIds(item))),
 			);
 		});
 		return {
@@ -618,16 +656,20 @@ export default function SkillsPage() {
 									matrixGroups={selectedGroups.map((g) => ({
 										key: g.name,
 										name: g.name,
-										sourceAgent:
-											g.items[0].agent ?? "claude",
+										sourceAgent: skillSourceTargetId(
+											g.items[0],
+										),
 										// Global-scope page
 										sourceScope: "global" as const,
-										installedAgents: g.items
-											.map((item) => item.agent)
-											.filter(
-												(agent): agent is string =>
-													agent != null,
+										installedAgents: Array.from(
+											new Set(
+												g.items.flatMap((item) =>
+													Array.from(
+														skillTargetIds(item),
+													),
+												),
 											),
+										),
 									}))}
 									onDeselectAll={() =>
 										handleSelectionChange(new Set())
@@ -757,7 +799,7 @@ export default function SkillsPage() {
 							resourceType="skill"
 							items={selectedGroups.map((g) => ({
 								name: g.name,
-								sourceAgent: g.items[0].agent ?? "claude",
+								sourceAgent: skillSourceTargetId(g.items[0]),
 							}))}
 							sourceScope="global"
 						/>

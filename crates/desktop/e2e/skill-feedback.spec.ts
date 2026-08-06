@@ -121,6 +121,10 @@ test("a linked skill location shows its link state and file-link health", async 
 				name: "solo-skill",
 				path: treePath,
 				kind: "directory",
+				link: {
+					target: "~/Developer/shared-skills/solo-skill",
+					status: "valid",
+				},
 				children: [
 					{
 						name: "SKILL.md",
@@ -154,7 +158,11 @@ test("a linked skill location shows its link state and file-link health", async 
 	await page.getByRole("option", { name: "solo-skill" }).click();
 
 	const location = page.locator("[data-skill-location]").first();
-	await expect(location).toContainText("Symlink");
+	const rootLink = location.locator("[data-skill-location-link='valid']");
+	await expect(rootLink).toContainText("Symlink");
+	await expect(rootLink).toContainText(
+		"~/Developer/shared-skills/solo-skill",
+	);
 	await expect(
 		location.locator('[data-skill-link-summary="healthy"]'),
 	).toHaveCount(0);

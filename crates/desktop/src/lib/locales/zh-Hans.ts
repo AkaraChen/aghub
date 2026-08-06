@@ -577,7 +577,6 @@ export default {
 	skillFilesDescription: "此技能包中共有 {{count}} 个项目",
 	skillFilesUnavailable: "无法读取文件",
 	skillFilesUnavailableDescription: "Aghub 无法读取此副本的文件。",
-	skillLinkValid: "链接可用",
 	skillLinkBroken: "目标不存在",
 	skillLinkOutsideRoot: "目标位于 Skill 外",
 	skillLinkUnreadable: "无法解析目标",
@@ -677,24 +676,69 @@ export default {
 	skillAuditEnabled: "已开启自动技能扫描",
 	skillAuditDisabled: "已关闭自动技能扫描",
 	skillAuditPreferenceError: "无法更新技能扫描设置",
-	skillChangeChecks: "Skill 变更检查",
-	skillChangeChecksDescription: "检查同名副本的内容差异和文件关系问题。",
+	skillInstallation: "安装位置",
+	skillInstallationDescription:
+		"默认写入通用目录；需要单独管理时仍可选择 Agent 的原生目录。",
+	universalAgentTarget: "通用 Agent",
+	universalAgentTargetSummary: "通用 Agent（{{agents}}）",
+	defaultLabel: "默认",
+	universalAgentTargetPathHint: "支持通用目录的 Agent 读取同一份 Skill",
+	nativeAgentTargets: "Agent 原生目录",
+	nativeAgentTargetsDescription:
+		"安装时可按需选择某个 Agent 的官方目录；只写入明确选中的位置。",
+	skillStorageNotice: "AGHub 直接管理真实安装目录，不额外保存一份主副本。",
+	skillContentChecks: "副本与差异",
+	skillContentChecksDescription:
+		"控制同名 Skill 的比较时机、相同版本分组和内容冲突提示。",
+	skillChangeChecks: "变更检查",
+	skillChangeChecksDescription:
+		"自动会在列表和详情中检查；手动仅在请求时运行。",
 	skillChangeCheckTiming: "检查时机",
 	duplicateSkillManagement: "重复 Skill 管理",
 	duplicateSkillManagementDescription:
 		"控制相同内容的展示方式，以及内容不同时是否提醒。",
-	groupIdenticalSkillCopies: "合并显示相同副本",
+	groupIdenticalSkillCopies: "相同内容只显示一次",
 	groupIdenticalSkillCopiesDescription:
-		"内容相同的安装位置显示为一个版本，不修改文件。",
-	warnOnSkillConflicts: "提醒内容冲突",
+		"比较结果中，相同内容归为一组，不修改任何文件。",
+	warnOnSkillConflicts: "标记内容冲突",
 	warnOnSkillConflictsDescription:
-		"在 Skill 列表标记内容不同或无法读取的副本。",
-	skillBaselineLocation: "默认基准位置",
-	skillBaselineLocationDescription:
-		"同名副本内容不同时，先以这里的安装位置作为对比基准；统一前仍需确认。",
+		"在 Skill 列表标记内容不同或无法比较的副本。",
+	unreadableSkillCopies: "无法读取的副本",
+	unreadableSkillCopiesDescription:
+		"不参与版本统一，并在详情与通知中显示失败原因。",
+	alwaysReported: "始终提示",
+	skillFileRelationships: "统一方式",
+	skillFileRelationshipsDescription:
+		"选择一个版本统一其他位置时，设置默认的文件写入方式。",
+	defaultSkillFileHandling: "写入其他位置时",
+	defaultSkillFileHandlingDescription:
+		"差异界面会预选此项，执行统一前仍可更改。",
+	preserveFileRelationships: "保留当前存储方式",
+	preserveFileRelationshipsDescription:
+		"软链接继续指向原目标，硬链接组继续共用同一份磁盘内容。",
+	copySkillFileContents: "写入独立文件",
+	copySkillFileContentsDescription:
+		"将选定版本分别写入各个位置，不保留软链接或硬链接关系。",
+	skillDiscoveryScope: "Skill 来源",
+	skillDiscoveryScopeDescription:
+		"已安装目录始终读取；选择是否继续查找当前项目及其依赖。",
+	installedSkillLocations: "已安装 Skill",
+	installedSkillLocationsDescription:
+		"读取通用目录以及每个 Agent 仍在使用的原生目录。",
+	alwaysScanned: "始终读取",
+	projectSkillLocations: "项目 Skill",
+	projectSkillLocationsDescription:
+		"读取项目根目录下的 .agents/skills 与 Agent 原生目录。",
+	embeddedRepositorySkills: "Skill 集合",
+	embeddedRepositorySkillsDescription:
+		"在本身不是 Skill 的集合目录中继续查找子 Skill。",
+	dependencyPackageSkills: "依赖包中的 Skill",
+	dependencyPackageSkillsDescription:
+		"继续查找依赖包目录中的 Skill；默认关闭。",
 	skillPreferencesError: "无法更新 Skill 设置",
 	automatic: "自动",
 	manual: "手动",
+	off: "关闭",
 	checkSkillCopyDifferences: "检查变更",
 	auditAcknowledgementError: "无法更新警告显示状态",
 	acknowledgedAuditsDescription:
@@ -1040,12 +1084,11 @@ export default {
 	keepThisVersion: "保留",
 	versionSelected: "已选择",
 	skillCopyStorage: "统一后的存储方式",
-	skillCopyStorageDescription:
-		"保留目录和文件中的软链接，或把它们写成独立副本。",
+	skillCopyStorageDescription: "保留软链接指向和硬链接关系，或写成独立副本。",
 	preserveSkillLinks: "保留现有链接",
-	preserveSkillLinksDescription: "软链接继续指向原目录，普通副本保持独立。",
+	preserveSkillLinksDescription: "沿用软链接指向和硬链接共享关系。",
 	convertSkillLinksToCopies: "将链接转为副本",
-	convertSkillLinksToCopiesDescription: "把目录链接和文件链接写成独立副本。",
+	convertSkillLinksToCopiesDescription: "将链接关系写成互不关联的文件。",
 	keepVersionFrom: "保留 {{location}} 的版本",
 	skillCopyVersion: "版本 {{index}}",
 	skillCopyVersionLocations: "{{count}} 个位置",
@@ -1095,6 +1138,7 @@ export default {
 	noContent: "暂无内容",
 	symlink: "软链接",
 	symlinkTarget: "→ {{target}}",
+	hardLink: "硬链接",
 
 	// Env Editor
 	envEditor: {

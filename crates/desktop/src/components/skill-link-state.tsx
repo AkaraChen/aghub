@@ -7,8 +7,8 @@ import type {
 import { cn } from "../lib/utils";
 import type { SkillLinkSummary as SkillLinkSummaryData } from "./skill-detail-helpers";
 
-const STATUS_LABELS: Record<SkillLinkStatusResponse, string> = {
-	valid: "skillLinkValid",
+const STATUS_LABELS: Record<SkillLinkStatusResponse, string | null> = {
+	valid: null,
 	broken: "skillLinkBroken",
 	outside_root: "skillLinkOutsideRoot",
 	unreadable: "skillLinkUnreadable",
@@ -22,13 +22,16 @@ export function SkillLinkState({
 	className?: string;
 }) {
 	const { t } = useTranslation();
-	const hasProblem = link.status !== "valid";
+	const statusLabel = STATUS_LABELS[link.status];
+	const hasProblem = statusLabel !== null;
 
 	return (
 		<div
 			data-skill-link-status={link.status}
 			className={cn(
-				"grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 text-xs text-muted",
+				"min-w-0 text-xs text-muted",
+				hasProblem &&
+					"grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3",
 				className,
 			)}
 		>
@@ -42,15 +45,12 @@ export function SkillLinkState({
 			) : (
 				<span />
 			)}
-			<span
-				className={cn(
-					"flex shrink-0 items-center gap-1",
-					hasProblem && "text-warning",
-				)}
-			>
-				{hasProblem && <ExclamationTriangleIcon className="size-3.5" />}
-				{t(STATUS_LABELS[link.status])}
-			</span>
+			{statusLabel && (
+				<span className="flex shrink-0 items-center gap-1 text-warning">
+					<ExclamationTriangleIcon className="size-3.5" />
+					{t(statusLabel)}
+				</span>
+			)}
 		</div>
 	);
 }

@@ -6,6 +6,7 @@ import * as pathe from "pathe";
 import { useMemo, useReducer, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useApi } from "../hooks/use-api";
+import { formatSkillTargetName } from "../lib/skill-targets";
 import type { ApiClient } from "../requests/client";
 import {
 	resolveSkillCopiesMutationOptions,
@@ -19,14 +20,14 @@ import {
 	skillDiffsContainLinks,
 	type SkillCopyVersion,
 } from "./skill-copy-versions";
-import { formatAgentName, type LocationGroup } from "./skill-detail-helpers";
+import type { LocationGroup } from "./skill-detail-helpers";
 import type { SkillVersionChoice } from "./skill-resolution-controls";
 import {
 	SkillComparisonUnavailableAlert,
 	SkillDriftHeading,
 } from "./skill-drift-status";
 import {
-	INITIAL_SKILL_RESOLUTION_VIEW,
+	createSkillResolutionViewState,
 	skillResolutionViewReducer,
 } from "./skill-resolution-state";
 import { SkillResolutionReview } from "./skill-version-diff-review";
@@ -39,6 +40,7 @@ interface SkillLocationDriftProps {
 	canRequestCheck: boolean;
 	onRequestCheck: () => void;
 	groupIdenticalCopies: boolean;
+	defaultStorageMode: "preserve" | "copy";
 }
 
 const LOCATION_DIFFERENCES_ID = "skill-location-differences";
@@ -50,7 +52,12 @@ function useSkillLocationVersions({
 	projectRoot,
 	enabled,
 	groupIdenticalCopies,
-}: SkillLocationDriftProps & { api: ApiClient; enabled: boolean }) {
+	t,
+}: SkillLocationDriftProps & {
+	api: ApiClient;
+	enabled: boolean;
+	t: TFunction;
+}) {
 	const baseline = locations[0];
 	const targets = useMemo(() => locations.slice(1), [locations]);
 	const result = useQuery(
@@ -81,7 +88,7 @@ function useSkillLocationVersions({
 						{
 							id: baseline.sourcePath,
 							label: pathe.dirname(baseline.sourcePath),
-							source: locationSource(baseline),
+							source: locationSource(baseline, t),
 							sourceId: baseline.installations[0]?.agent,
 							agents: baseline.installations.map(
 								(installation) => installation.agent,
@@ -92,7 +99,7 @@ function useSkillLocationVersions({
 						targets.map((target) => ({
 							id: target.sourcePath,
 							label: pathe.dirname(target.sourcePath),
-							source: locationSource(target),
+							source: locationSource(target, t),
 							sourceId: target.installations[0]?.agent,
 							agents: target.installations.map(
 								(installation) => installation.agent,
@@ -104,7 +111,7 @@ function useSkillLocationVersions({
 						groupIdenticalCopies,
 					)
 				: { versions: [], unavailable: [] },
-		[baseline, comparisonResults, groupIdenticalCopies, targets],
+		[baseline, comparisonResults, groupIdenticalCopies, t, targets],
 	);
 
 	return {
@@ -135,7 +142,8 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 	const queryClient = useQueryClient();
 	const [view, dispatchView] = useReducer(
 		skillResolutionViewReducer,
-		INITIAL_SKILL_RESOLUTION_VIEW,
+		props.defaultStorageMode,
+		createSkillResolutionViewState,
 	);
 	const [selectedVersionId, setSelectedVersionId] = useState<string | null>(
 		null,
@@ -143,7 +151,12 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 	const { isExpanded, activeVersionId, storageMode, showFileChanges } = view;
 	const comparableLocations = locations;
 	const { baseline, targets, result, versions, unavailableCount, hasLinks } =
-		useSkillLocationVersions({ ...props, api, enabled: isCheckEnabled });
+		useSkillLocationVersions({
+			...props,
+			api,
+			enabled: isCheckEnabled,
+			t,
+		});
 	const baselineVersion = versions[0];
 	const comparisonVersions = versions.slice(1);
 	const activeVersion =
@@ -165,7 +178,7 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 				setSelectedVersionId(null);
 				dispatchView({
 					type: "set-storage-mode",
-					storageMode: "preserve",
+					storageMode: props.defaultStorageMode,
 				});
 				toast.success(t("skillCopiesUnified"));
 			},
@@ -430,9 +443,15 @@ function versionChoice(
 	};
 }
 
-function locationSource(location: LocationGroup): string {
+function locationSource(location: LocationGroup, t: TFunction): string {
 	return location.installations
-		.map((installation) => formatAgentName(installation.agent))
+		.map((installation) =>
+			formatSkillTargetName(
+				t,
+				installation.agent,
+				installation.displayName,
+			),
+		)
 		.filter((agent, index, agents) => agents.indexOf(agent) === index)
 		.join(", ");
 }

@@ -1,5 +1,5 @@
 use aghub_core::{
-	create_adapter, load_all_agent_skill_locations,
+	create_adapter, load_all_skill_target_locations,
 	models::{AgentType, ResourceScope},
 };
 use rocket::http::Status;
@@ -212,29 +212,55 @@ pub(super) fn remove_skill_dir_or_symlink(path: &Path) -> std::io::Result<()> {
 
 #[derive(Debug)]
 pub(super) struct KnownSkillPath {
+	source_file: PathBuf,
+	source_dir: PathBuf,
 	file: PathBuf,
 	dir: PathBuf,
+	link_target: Option<PathBuf>,
 }
 
 pub(super) fn known_skill_paths(
 	resource_scope: ResourceScope,
 	project_root: Option<&Path>,
 ) -> Vec<KnownSkillPath> {
-	load_all_agent_skill_locations(resource_scope, project_root)
+	load_all_skill_target_locations(resource_scope, project_root)
 		.into_iter()
 		.flat_map(|resources| resources.skills)
 		.filter_map(|skill| {
-			let source_path = skill
+			let source_file = expand_tilde_path(skill.source_path.as_deref()?);
+			let source_dir = requested_skill_dir(&source_file);
+			let target_file = skill
 				.canonical_path
 				.as_deref()
-				.or(skill.source_path.as_deref())?;
-			let expanded = expand_tilde_path(source_path);
-			let file = canonical_existing(&expanded).ok()?;
+				.map(expand_tilde_path)
+				.unwrap_or_else(|| source_file.clone());
+			let file = canonical_existing(&target_file).ok()?;
 			let dir =
-				canonical_existing(&requested_skill_dir(&expanded)).ok()?;
-			Some(KnownSkillPath { file, dir })
+				canonical_existing(&requested_skill_dir(&target_file)).ok()?;
+			let link_target =
+				skill.canonical_path.as_ref().map(|_| dir.clone());
+			Some(KnownSkillPath {
+				source_file,
+				source_dir,
+				file,
+				dir,
+				link_target,
+			})
 		})
 		.collect()
+}
+
+pub(super) fn known_skill_link_target(
+	known: &[KnownSkillPath],
+	requested_dir: &Path,
+) -> Option<PathBuf> {
+	known
+		.iter()
+		.find(|path| {
+			path.source_dir == requested_dir
+				|| path.source_file == requested_dir.join("SKILL.md")
+		})
+		.and_then(|path| path.link_target.clone())
 }
 
 pub(super) fn ensure_skill_file_allowed(

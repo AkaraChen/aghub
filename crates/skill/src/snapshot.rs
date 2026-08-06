@@ -1,16 +1,18 @@
 use crate::error::Result;
 use crate::link::{inspect_skill_link, SkillLink, SkillLinkStatus};
+use crate::relationship::{hard_link_identity, FileIdentity};
 use crate::SkillError;
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::io::Read;
 use std::path::Path;
 use walkdir::{DirEntry, WalkDir};
 
-const SNAPSHOT_DOMAIN: &[u8] = b"aghub-skill-snapshot-v3\0";
+const SNAPSHOT_DOMAIN: &[u8] = b"aghub-skill-snapshot-v4\0";
 const DIRECTORY_SNAPSHOT_DOMAIN: &[u8] = b"aghub-skill-snapshot-directory-v3\0";
 const FILE_SNAPSHOT_DOMAIN: &[u8] = b"aghub-skill-snapshot-file-v3\0";
 const SYMLINK_SNAPSHOT_DOMAIN: &[u8] = b"aghub-skill-snapshot-symlink-v3\0";
+const HARD_LINK_SNAPSHOT_DOMAIN: &[u8] = b"aghub-skill-snapshot-hard-link-v4\0";
 const REPOSITORY_METADATA_DIRS: &[&str] = &[".git", ".hg", ".svn"];
 const FILE_READ_BUFFER_BYTES: usize = 64 * 1024;
 // Interactive comparisons are bounded so a skill cannot monopolize the
@@ -27,6 +29,12 @@ struct SnapshotEntry {
 	hash: [u8; 32],
 	preview: Option<String>,
 	link: Option<SkillLink>,
+	hard_link: Option<HardLink>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HardLink {
+	pub peers: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -50,6 +58,8 @@ pub struct FileDiff {
 	pub after: Option<String>,
 	pub before_link: Option<SkillLink>,
 	pub after_link: Option<SkillLink>,
+	pub before_hard_link: Option<HardLink>,
+	pub after_hard_link: Option<HardLink>,
 	pub content_omitted: bool,
 }
 
@@ -95,6 +105,8 @@ pub fn snapshot_directory_with_budget(
 	let mut entry_count = 0;
 	let mut total_bytes = 0;
 	let mut preview_bytes = 0;
+	let mut hard_link_paths: HashMap<FileIdentity, Vec<String>> =
+		HashMap::new();
 	// The BTreeMap below determines hash order without buffering each directory.
 	for entry in WalkDir::new(root)
 		.follow_links(false)
@@ -142,8 +154,17 @@ pub fn snapshot_directory_with_budget(
 			remaining_bytes,
 			&mut preview_bytes,
 		)?;
+		if let Some(identity) =
+			hard_link_identity(&std::fs::metadata(entry.path())?)
+		{
+			hard_link_paths
+				.entry(identity)
+				.or_default()
+				.push(relative.clone());
+		}
 		entries.insert(relative, snapshot);
 	}
+	apply_hard_link_groups(&mut entries, hard_link_paths);
 
 	let mut hasher = Sha256::new();
 	hasher.update(SNAPSHOT_DOMAIN);
@@ -194,6 +215,10 @@ pub fn diff_snapshots(
 		let after = after_file.and_then(|file| file.preview.clone());
 		let before_link = before_file.and_then(|file| file.link.clone());
 		let after_link = after_file.and_then(|file| file.link.clone());
+		let before_hard_link =
+			before_file.and_then(|file| file.hard_link.clone());
+		let after_hard_link =
+			after_file.and_then(|file| file.hard_link.clone());
 		let content_omitted = before_file
 			.is_some_and(|file| file.link.is_none() && file.preview.is_none())
 			|| after_file.is_some_and(|file| {
@@ -206,6 +231,8 @@ pub fn diff_snapshots(
 			after,
 			before_link,
 			after_link,
+			before_hard_link,
+			after_hard_link,
 			content_omitted,
 		});
 	}
@@ -252,6 +279,40 @@ fn relative_snapshot_path(root: &Path, path: &Path) -> Result<String> {
 		parts.push(value);
 	}
 	Ok(parts.join("/"))
+}
+
+fn apply_hard_link_groups(
+	entries: &mut BTreeMap<String, SnapshotEntry>,
+	groups: HashMap<FileIdentity, Vec<String>>,
+) {
+	for mut paths in groups.into_values() {
+		if paths.len() < 2 {
+			continue;
+		}
+		paths.sort();
+		for path in &paths {
+			let Some(entry) = entries.get_mut(path) else {
+				continue;
+			};
+			let mut hasher = Sha256::new();
+			hasher.update(HARD_LINK_SNAPSHOT_DOMAIN);
+			hasher.update(entry.hash);
+			hasher.update((paths.len() as u64).to_be_bytes());
+			for member in &paths {
+				let bytes = member.as_bytes();
+				hasher.update((bytes.len() as u64).to_be_bytes());
+				hasher.update(bytes);
+			}
+			entry.hash = hasher.finalize().into();
+			entry.hard_link = Some(HardLink {
+				peers: paths
+					.iter()
+					.filter(|member| *member != path)
+					.cloned()
+					.collect(),
+			});
+		}
+	}
 }
 
 fn snapshot_file(
@@ -310,6 +371,7 @@ fn snapshot_file(
 		hash: hasher.finalize().into(),
 		preview,
 		link: None,
+		hard_link: None,
 	})
 }
 
@@ -320,6 +382,7 @@ fn snapshot_directory_entry() -> SnapshotEntry {
 		hash: hasher.finalize().into(),
 		preview: None,
 		link: None,
+		hard_link: None,
 	}
 }
 
@@ -345,6 +408,7 @@ fn snapshot_link(
 		hash: hasher.finalize().into(),
 		preview: None,
 		link: Some(link),
+		hard_link: None,
 	})
 }
 
@@ -587,6 +651,48 @@ mod tests {
 
 		assert_eq!(remaining_bytes, 0);
 		assert!(error.to_string().contains("byte budget"));
+	}
+
+	#[test]
+	fn directory_diff_reports_hard_link_relationship_changes() {
+		let temp = tempdir().unwrap();
+		let base = temp.path().join("base");
+		let target = temp.path().join("target");
+		std::fs::create_dir_all(&base).unwrap();
+		std::fs::create_dir_all(&target).unwrap();
+		std::fs::write(base.join("first.txt"), "same").unwrap();
+		std::fs::write(base.join("second.txt"), "same").unwrap();
+		std::fs::write(target.join("first.txt"), "same").unwrap();
+		std::fs::hard_link(target.join("first.txt"), target.join("second.txt"))
+			.unwrap();
+
+		let diff = compare_directories(&base, &target).unwrap();
+
+		assert!(!diff.identical);
+		assert_eq!(diff.files.len(), 2);
+		for file in diff.files {
+			assert!(file.before_hard_link.is_none());
+			assert_eq!(file.after_hard_link.unwrap().peers.len(), 1);
+		}
+	}
+
+	#[test]
+	fn matching_hard_link_groups_are_identical() {
+		let temp = tempdir().unwrap();
+		let base = temp.path().join("base");
+		let target = temp.path().join("target");
+		std::fs::create_dir_all(&base).unwrap();
+		std::fs::create_dir_all(&target).unwrap();
+		for root in [&base, &target] {
+			std::fs::write(root.join("first.txt"), "same").unwrap();
+			std::fs::hard_link(root.join("first.txt"), root.join("second.txt"))
+				.unwrap();
+		}
+
+		let diff = compare_directories(&base, &target).unwrap();
+
+		assert!(diff.identical);
+		assert!(diff.files.is_empty());
 	}
 
 	#[cfg(unix)]

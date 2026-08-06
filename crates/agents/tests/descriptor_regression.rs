@@ -681,13 +681,13 @@ fn test_skills_capabilities_scopes_project() {
 fn test_skills_capabilities_universal() {
 	let expected: [(AgentType, bool); 22] = [
 		(AgentType::Claude, false),
-		(AgentType::Codex, false),
+		(AgentType::Codex, true),
 		(AgentType::Openclaw, false),
-		(AgentType::OpenCode, false),
-		(AgentType::Gemini, false),
-		(AgentType::Cline, false),
-		(AgentType::Copilot, false),
-		(AgentType::Cursor, false),
+		(AgentType::OpenCode, true),
+		(AgentType::Gemini, true),
+		(AgentType::Cline, true),
+		(AgentType::Copilot, true),
+		(AgentType::Cursor, true),
 		(AgentType::Antigravity, false),
 		(AgentType::Kiro, false),
 		(AgentType::Windsurf, false),
@@ -701,7 +701,7 @@ fn test_skills_capabilities_universal() {
 		(AgentType::AugmentCode, false),
 		(AgentType::KiloCode, false),
 		(AgentType::Amp, true), // Amp has universal skills
-		(AgentType::Warp, false),
+		(AgentType::Warp, true),
 	];
 
 	for (agent_type, desc) in all_descriptors() {
@@ -810,7 +810,7 @@ fn test_global_skill_paths() {
 		(AgentType::Claude, Some(&[".claude/skills"])),
 		(
 			AgentType::Codex,
-			Some(&[".codex/skills", ".agents/skills", "/etc/codex/skills"]),
+			Some(&[".codex/skills", "/etc/codex/skills", ".agents/skills"]),
 		),
 		(AgentType::Openclaw, Some(&[".openclaw/skills"])),
 		(
@@ -821,12 +821,23 @@ fn test_global_skill_paths() {
 				".agents/skills",
 			]),
 		),
-		(AgentType::Gemini, Some(&[".gemini/skills"])),
+		(
+			AgentType::Gemini,
+			Some(&[".gemini/skills", ".agents/skills"]),
+		),
 		(AgentType::Cline, Some(&[".agents/skills"])),
-		(AgentType::Copilot, Some(&[".copilot/skills"])),
+		(
+			AgentType::Copilot,
+			Some(&[".copilot/skills", ".agents/skills"]),
+		),
 		(
 			AgentType::Cursor,
-			Some(&[".cursor/skills", ".claude/skills", ".codex/skills"]),
+			Some(&[
+				".cursor/skills",
+				".claude/skills",
+				".codex/skills",
+				".agents/skills",
+			]),
 		),
 		(
 			AgentType::Antigravity,
@@ -840,16 +851,16 @@ fn test_global_skill_paths() {
 		(AgentType::RooCode, Some(&[".roo/skills"])),
 		(
 			AgentType::Kimi,
-			Some(&[".config/agents/skills", ".config/agents/skills"]),
-		), // universal=true adds extra path
+			Some(&[".config/agents/skills", ".agents/skills"]),
+		),
 		(AgentType::Mistral, Some(&[".vibe/skills"])),
 		(AgentType::Pi, Some(&[".pi/agent/skills"])),
 		(AgentType::AugmentCode, None),
 		(AgentType::KiloCode, Some(&[".kilocode/skills"])),
 		(
 			AgentType::Amp,
-			Some(&[".config/agents/skills", ".config/agents/skills"]),
-		), // universal=true adds extra path
+			Some(&[".config/agents/skills", ".agents/skills"]),
+		),
 		(AgentType::Warp, Some(&[".agents/skills"])),
 	];
 
@@ -881,12 +892,11 @@ fn test_global_skill_paths() {
 						);
 					} else if agent_type == AgentType::Codex {
 						// /etc/codex/skills is a Unix-only system path
-						let mut expected_paths = vec![
-							home().join(".codex/skills"),
-							home().join(".agents/skills"),
-						];
+						let mut expected_paths =
+							vec![home().join(".codex/skills")];
 						#[cfg(not(target_os = "windows"))]
 						expected_paths.push(PathBuf::from("/etc/codex/skills"));
+						expected_paths.push(home().join(".agents/skills"));
 						assert_eq!(
 							actual, expected_paths,
 							"global_skill_read_paths mismatch for {:?}",
@@ -949,12 +959,12 @@ fn test_project_skill_paths() {
 		(AgentType::Zed, None), // Zed has no skills
 		(AgentType::JetBrainsAi, None),
 		(AgentType::RooCode, Some(&[".roo/skills"])),
-		(AgentType::Kimi, Some(&[".agents/skills", ".agents/skills"])), // universal=true adds extra .agents/skills
+		(AgentType::Kimi, Some(&[".agents/skills"])),
 		(AgentType::Mistral, Some(&[".vibe/skills"])),
 		(AgentType::Pi, Some(&[".pi/skills"])),
 		(AgentType::AugmentCode, None),
 		(AgentType::KiloCode, Some(&[".kilocode/skills"])),
-		(AgentType::Amp, Some(&[".agents/skills", ".agents/skills"])), // universal=true adds extra .agents/skills
+		(AgentType::Amp, Some(&[".agents/skills"])),
 		(AgentType::Warp, Some(&[".agents/skills"])),
 	];
 

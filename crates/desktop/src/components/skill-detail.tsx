@@ -27,6 +27,7 @@ import { useSkillPreferences } from "../hooks/use-skill-preferences";
 import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
 import { useFavorites } from "../hooks/use-favorites";
 import { useCurrentCodeEditor } from "../hooks/use-integrations";
+import { skillSourceTargetId } from "../lib/skill-targets";
 import { cn, filterItemsByAgentIds } from "../lib/utils";
 import { openWithEditorMutationOptions } from "../requests/integrations";
 import {
@@ -48,7 +49,6 @@ import {
 	countTreeFiles,
 	getInstalledSkillAuditPaths,
 	hasSupplementarySkillFiles,
-	sortLocationGroupsByBaselineAgent,
 	type LocationGroup,
 	type SkillGroup,
 	summarizeSkillLinks,
@@ -241,20 +241,12 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	);
 
 	const allLocationGroups = useMemo(
-		() =>
-			sortLocationGroupsByBaselineAgent(
-				buildLocationGroups(visibleGroupItems, allAgents),
-				skillPreferences.baselineAgent,
-			),
-		[visibleGroupItems, allAgents, skillPreferences.baselineAgent],
+		() => buildLocationGroups(visibleGroupItems, allAgents),
+		[visibleGroupItems, allAgents],
 	);
 	const copyLocationGroups = useMemo(
-		() =>
-			sortLocationGroupsByBaselineAgent(
-				buildLocationGroups(group.items, allAgents),
-				skillPreferences.baselineAgent,
-			),
-		[group.items, allAgents, skillPreferences.baselineAgent],
+		() => buildLocationGroups(group.items, allAgents),
+		[group.items, allAgents],
 	);
 	const copyCheckKey = copyLocationGroups
 		.map((location) => location.sourcePath)
@@ -729,6 +721,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 						groupIdenticalCopies={
 							skillPreferences.groupIdenticalCopies
 						}
+						defaultStorageMode={skillPreferences.defaultStorageMode}
 					/>
 
 					{skillContent && (
@@ -838,6 +831,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 
 			<DeleteSkillDialog
 				group={group}
+				agents={allAgents}
 				isOpen={deleteDialogOpen}
 				onClose={() => setDeleteDialogOpen(false)}
 				projectPath={projectPath}
@@ -862,7 +856,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 				items={[
 					{
 						name: skill.name,
-						sourceAgent: skill.agent ?? "claude",
+						sourceAgent: skillSourceTargetId(skill),
 					},
 				]}
 				sourceScope={primaryScope}

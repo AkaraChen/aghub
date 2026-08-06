@@ -8,7 +8,7 @@ import { useApi } from "../../../hooks/use-api";
 import { useAuditedMutation } from "../../../hooks/use-audited-mutation";
 import { useInstallTarget } from "../../../hooks/use-install-target";
 import { useSkillAuditPreference } from "../../../hooks/use-skill-audit-preference";
-import { supportsSkillMutation } from "../../../lib/agent-capabilities";
+import { supportsIndividualSkillTarget } from "../../../lib/agent-capabilities";
 import {
 	buildPendingResults,
 	type InstallResult,
@@ -49,14 +49,17 @@ export function useSkillInstall() {
 		null,
 	);
 	const [selectedAgents, setSelectedAgents] = useState<Set<string>>(
-		() => new Set(),
+		() => new Set(["universal"]),
 	);
 	const [installAll, setInstallAll] = useState(false);
 
 	const skillAgents = availableAgents.filter(
 		(a) =>
 			a.isUsable &&
-			supportsSkillMutation(a, installToProject ? "project" : "global"),
+			supportsIndividualSkillTarget(
+				a,
+				installToProject ? "project" : "global",
+			),
 	);
 
 	const buildRequest = (
@@ -89,7 +92,11 @@ export function useSkillInstall() {
 		installAll,
 		scope: installToProject ? "project" : "global",
 		projectPath: selectedProject?.path ?? null,
-		pendingResults: buildPendingResults(selectedAgents, availableAgents),
+		pendingResults: buildPendingResults(
+			selectedAgents,
+			availableAgents,
+			t("universalAgentTarget"),
+		),
 	});
 
 	const install = useAuditedMutation<SkillInstallCandidate, InstallResult[]>({

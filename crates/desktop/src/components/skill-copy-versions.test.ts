@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { SkillDirectoryDiffResponse } from "../generated/dto";
-import { groupSkillCopyVersions } from "./skill-copy-versions";
+import {
+	groupSkillCopyVersions,
+	skillDiffsContainLinks,
+} from "./skill-copy-versions";
 
 function comparison(
 	baseHash: string,
@@ -46,5 +49,21 @@ describe("groupSkillCopyVersions", () => {
 			[targets[0]],
 			[targets[1]],
 		]);
+	});
+});
+
+describe("skillDiffsContainLinks", () => {
+	it("recognizes hard-link relationship changes", () => {
+		const changed = comparison("before", "after");
+		changed.files.push({
+			path: "templates/input.json",
+			change: "modified",
+			before: null,
+			after: null,
+			before_hard_link: { peers: ["templates/default.json"] },
+			content_omitted: false,
+		});
+
+		expect(skillDiffsContainLinks([changed])).toBe(true);
 	});
 });

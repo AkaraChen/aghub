@@ -6,12 +6,12 @@ import type {
 	SkillResponse,
 	SkillTreeNodeResponse,
 } from "../generated/dto";
-import type { SkillBaselineAgent } from "../lib/store";
 import { sortAgents } from "../lib/utils";
 
 export interface LocationInstallation {
 	id: string;
 	agent: string;
+	displayName: string;
 	source: ConfigSource;
 }
 
@@ -131,6 +131,9 @@ export function buildLocationGroups(
 	const agentOrder = new Map(
 		sortedAgents.map((agent, index) => [agent, index]),
 	);
+	const agentNames = new Map(
+		allAgents.map((agent) => [agent.id, agent.display_name]),
+	);
 
 	const map = new Map<
 		string,
@@ -160,6 +163,7 @@ export function buildLocationGroups(
 			const installation = {
 				id: `${item.agent}:${location.source}`,
 				agent: item.agent,
+				displayName: agentNames.get(item.agent) ?? item.agent,
 				source: location.source,
 			};
 
@@ -193,21 +197,6 @@ export function buildLocationGroups(
 			isSymlink: data.isSymlink,
 		}))
 		.sort((a, b) => a.sourcePath.localeCompare(b.sourcePath));
-}
-
-export function sortLocationGroupsByBaselineAgent(
-	locations: LocationGroup[],
-	baselineAgent: SkillBaselineAgent,
-): LocationGroup[] {
-	return [...locations].sort((a, b) => {
-		const aHasBaseline = a.installations.some(
-			(installation) => installation.agent === baselineAgent,
-		);
-		const bHasBaseline = b.installations.some(
-			(installation) => installation.agent === baselineAgent,
-		);
-		return Number(bHasBaseline) - Number(aHasBaseline);
-	});
 }
 
 export function uniqueSkillSourcePaths(items: SkillResponse[]): string[] {

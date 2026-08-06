@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	createSkillResolutionViewState,
 	INITIAL_SKILL_RESOLUTION_VIEW,
 	skillResolutionViewReducer,
 } from "./skill-resolution-state";
@@ -17,6 +18,7 @@ describe("skillResolutionViewReducer", () => {
 		expect(state).toEqual({
 			isExpanded: true,
 			activeVersionId: "version-b",
+			defaultStorageMode: "preserve",
 			storageMode: "preserve",
 			showFileChanges: false,
 		});
@@ -40,6 +42,7 @@ describe("skillResolutionViewReducer", () => {
 		const openState = {
 			isExpanded: true,
 			activeVersionId: "version-b",
+			defaultStorageMode: "preserve" as const,
 			storageMode: "copy" as const,
 			showFileChanges: true,
 		};
@@ -49,5 +52,22 @@ describe("skillResolutionViewReducer", () => {
 				type: "collapse",
 			}),
 		).toEqual(INITIAL_SKILL_RESOLUTION_VIEW);
+	});
+
+	it("uses the configured file handling when a review opens and resets", () => {
+		const initial = createSkillResolutionViewState("copy");
+		const opened = skillResolutionViewReducer(initial, {
+			type: "expand",
+			activeVersionId: "version-b",
+		});
+		const changed = skillResolutionViewReducer(opened, {
+			type: "set-storage-mode",
+			storageMode: "preserve",
+		});
+
+		expect(opened.storageMode).toBe("copy");
+		expect(
+			skillResolutionViewReducer(changed, { type: "collapse" }),
+		).toEqual(initial);
 	});
 });

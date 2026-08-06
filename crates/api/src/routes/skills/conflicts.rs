@@ -26,8 +26,8 @@ use super::{
 	apply_staged_skill_replacements_with_backup_check, canonical_existing,
 	canonical_skill_roots_for_registered_agents, copy_skill_dir_with_budget,
 	existing_skill_entry_path, get_skill_root, is_within, known_skill_paths,
-	lease_git_session, should_return_audit_review, skill_link_response,
-	stage_skill_copy_replacements_with_budget,
+	lease_git_session, should_return_audit_review, skill_hard_link_response,
+	skill_link_response, stage_skill_copy_replacements_with_budget,
 	validate_existing_skill_target_dir, validate_scanned_skill_path,
 	GitCloneSessionKind, KnownSkillPath, SkillImportReview, SkillLinkCopyMode,
 	INVALID_SKILL_PATH, MAX_SKILL_COPY_LOCATIONS,
@@ -795,6 +795,10 @@ pub(super) fn skill_directory_diff_response(
 			after: file.after,
 			before_link: file.before_link.map(skill_link_response),
 			after_link: file.after_link.map(skill_link_response),
+			before_hard_link: file
+				.before_hard_link
+				.map(skill_hard_link_response),
+			after_hard_link: file.after_hard_link.map(skill_hard_link_response),
 			content_omitted: file.content_omitted,
 		})
 		.collect();

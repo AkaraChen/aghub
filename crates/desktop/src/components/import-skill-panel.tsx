@@ -22,14 +22,14 @@ import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useAuditedMutation } from "../hooks/use-audited-mutation";
 import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
-import { supportsSkillMutation } from "../lib/agent-capabilities";
+import { supportsIndividualSkillTarget } from "../lib/agent-capabilities";
 import {
 	invalidateSkillQueries,
 	skillAuditQueryOptions,
 } from "../requests/skills";
 import { capture } from "../lib/analytics";
-import { AgentSelector } from "./agent-selector";
 import { SkillAudit } from "./skill-audit";
+import { SkillTargetSelector } from "./skill-target-selector";
 
 interface ImportSkillPanelProps {
 	onDone: () => void;
@@ -62,7 +62,7 @@ export function ImportSkillPanel({
 			availableAgents.filter(
 				(a) =>
 					a.isUsable &&
-					supportsSkillMutation(
+					supportsIndividualSkillTarget(
 						a,
 						projectPath ? "project" : "global",
 					),
@@ -80,7 +80,7 @@ export function ImportSkillPanel({
 		reValidateMode: "onChange",
 		defaultValues: {
 			importPath: "",
-			selectedAgents: skillAgents[0] ? [skillAgents[0].id] : [],
+			selectedAgents: ["universal"],
 		},
 	});
 
@@ -416,19 +416,18 @@ export function ImportSkillPanel({
 												: t("validationAgentsRequired"),
 									}}
 									render={({ field, fieldState }) => (
-										<AgentSelector
+										<SkillTargetSelector
 											agents={skillAgents}
+											scope={
+												projectPath
+													? "project"
+													: "global"
+											}
 											selectedKeys={new Set(field.value)}
 											onSelectionChange={(keys) =>
 												field.onChange([...keys])
 											}
 											label={t("targetAgent")}
-											emptyMessage={t(
-												"noAgentsAvailable",
-											)}
-											emptyHelpText={t(
-												"noAgentsAvailableHelp",
-											)}
 											variant="secondary"
 											isDisabled={isImporting}
 											errorMessage={

@@ -32,6 +32,8 @@ pub type SaveSubAgentsFn =
 pub type OptionalPathFn = fn() -> Option<PathBuf>;
 pub type OptionalProjectPathFn = fn(&Path) -> Option<PathBuf>;
 
+pub const UNIVERSAL_SKILL_TARGET_ID: &str = "universal";
+
 #[derive(Debug, Clone, Copy)]
 pub struct ScopeSupport {
 	pub global: bool,
@@ -179,15 +181,13 @@ impl AgentDescriptor {
 	}
 
 	pub fn global_skill_read_paths(&self) -> Vec<PathBuf> {
-		let mut dirs = Vec::new();
-
-		if let Some(paths) = self.global_skill_paths {
-			dirs.extend((paths.read)());
-		}
+		let mut dirs = self.native_global_skill_read_paths();
 
 		if self.capabilities.skills.universal {
 			if let Some(path) = get_universal_skills_path() {
-				dirs.push(path);
+				if !dirs.contains(&path) {
+					dirs.push(path);
+				}
 			}
 		}
 
@@ -198,17 +198,51 @@ impl AgentDescriptor {
 		&self,
 		project_root: &Path,
 	) -> Vec<PathBuf> {
-		let mut dirs = Vec::new();
-
-		if let Some(paths) = self.project_skill_paths {
-			dirs.extend((paths.read)(project_root));
-		}
+		let mut dirs = self.native_project_skill_read_paths(project_root);
 
 		if self.capabilities.skills.universal {
-			dirs.push(project_root.join(".agents/skills"));
+			let path = get_universal_project_skills_path(project_root);
+			if !dirs.contains(&path) {
+				dirs.push(path);
+			}
 		}
 
 		dirs
+	}
+
+	pub fn native_global_skill_read_paths(&self) -> Vec<PathBuf> {
+		self.global_skill_paths
+			.map(|paths| (paths.read)())
+			.unwrap_or_default()
+	}
+
+	pub fn native_project_skill_read_paths(
+		&self,
+		project_root: &Path,
+	) -> Vec<PathBuf> {
+		self.project_skill_paths
+			.map(|paths| (paths.read)(project_root))
+			.unwrap_or_default()
+	}
+
+	pub fn native_skill_read_paths(
+		&self,
+		project_root: Option<&Path>,
+		scope: ResourceScope,
+	) -> Vec<PathBuf> {
+		let mut paths = Vec::new();
+
+		if scope == ResourceScope::ProjectOnly || scope == ResourceScope::Both {
+			if let Some(root) = project_root {
+				paths.extend(self.native_project_skill_read_paths(root));
+			}
+		}
+
+		if scope == ResourceScope::GlobalOnly || scope == ResourceScope::Both {
+			paths.extend(self.native_global_skill_read_paths());
+		}
+
+		paths
 	}
 
 	pub fn skill_read_paths(
@@ -260,12 +294,13 @@ impl AgentDescriptor {
 	}
 }
 
-/// Get the universal skills directory path following XDG config spec
+/// Get the global directory shared by Agent Skills compatible tools.
 pub fn get_universal_skills_path() -> Option<PathBuf> {
-	std::env::var_os("XDG_CONFIG_HOME")
-		.map(PathBuf::from)
-		.or_else(|| dirs::home_dir().map(|h| h.join(".config")))
-		.map(|path| path.join("agents/skills"))
+	dirs::home_dir().map(|home| home.join(".agents/skills"))
+}
+
+pub fn get_universal_project_skills_path(project_root: &Path) -> PathBuf {
+	project_root.join(".agents/skills")
 }
 
 pub fn load_mcps_from_file(
@@ -458,5 +493,20 @@ pub mod mcp_strategy {
 	}
 	pub fn serialize_none(_: &AgentConfig, _: Option<&str>) -> Result<String> {
 		Ok(String::new())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn universal_skills_use_the_home_agents_directory() {
+		let home = dirs::home_dir().expect("test home directory");
+
+		assert_eq!(
+			get_universal_skills_path(),
+			Some(home.join(".agents/skills"))
+		);
 	}
 }

@@ -122,15 +122,16 @@ export function SkillResolutionControls({
 										</Table.Cell>
 										<Table.Cell className="px-2 text-center">
 											{({ isSelected }) => (
-												<CheckCircleIcon
+												<span
 													aria-hidden
-													className={cn(
-														"mx-auto size-4",
-														isSelected
-															? "text-accent"
-															: "text-muted/30",
+													className="mx-auto block size-4"
+												>
+													{isSelected ? (
+														<CheckCircleIcon className="size-4 text-accent" />
+													) : (
+														<span className="block size-4 rounded-full border border-separator" />
 													)}
-												/>
+												</span>
 											)}
 										</Table.Cell>
 									</Table.Row>

@@ -739,6 +739,77 @@ mod tests {
 	}
 
 	#[test]
+	fn route_skill_crud_persists_the_universal_project_target() {
+		let _path_guard = hide_cli_path();
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let client = test_client(app_data_dir.path());
+		let query = project_query(project_dir.path());
+		let collection_uri = format!("/api/v1/agents/universal/skills?{query}");
+		let item_uri =
+			format!("/api/v1/agents/universal/skills/universal-route?{query}");
+
+		let response = post_json(
+			&client,
+			&collection_uri,
+			json!({
+				"name": "universal-route",
+				"description": "shared target",
+				"author": null,
+				"version": null,
+				"content": "# Shared",
+				"tools": [],
+			}),
+		);
+		assert_eq!(response.status(), Status::Created);
+
+		let skill_file = project_dir
+			.path()
+			.join(".agents/skills/universal-route/SKILL.md");
+		assert!(skill_file.is_file());
+		assert!(!project_dir
+			.path()
+			.join(".codex/skills/universal-route")
+			.exists());
+
+		let response = delete_auth(&client, &item_uri);
+		assert_eq!(response.status(), Status::NoContent);
+		assert!(!skill_file.exists());
+	}
+
+	#[test]
+	fn route_skill_create_does_not_fall_back_to_the_universal_target() {
+		let _path_guard = hide_cli_path();
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let client = test_client(app_data_dir.path());
+		let query = project_query(project_dir.path());
+		let collection_uri = format!("/api/v1/agents/codex/skills?{query}");
+
+		let response = post_json(
+			&client,
+			&collection_uri,
+			json!({
+				"name": "codex-private",
+				"description": "Codex target",
+				"author": null,
+				"version": null,
+				"content": "# Codex",
+				"tools": [],
+			}),
+		);
+		assert_eq!(response.status(), Status::UnprocessableEntity);
+		assert!(!project_dir
+			.path()
+			.join(".agents/skills/codex-private")
+			.exists());
+		assert!(!project_dir
+			.path()
+			.join(".codex/skills/codex-private")
+			.exists());
+	}
+
+	#[test]
 	fn route_skill_content_requires_auth() {
 		let app_data_dir = tempfile::tempdir().expect("app data dir");
 		let project_dir = tempfile::tempdir().expect("project dir");
@@ -765,7 +836,7 @@ mod tests {
 	}
 
 	#[test]
-	fn route_skill_list_preserves_same_agent_locations() {
+	fn route_skill_list_keeps_universal_and_native_locations_distinct() {
 		let app_data_dir = tempfile::tempdir().expect("app data dir");
 		let project_dir = tempfile::tempdir().expect("project dir");
 		write_import_skill(
@@ -797,18 +868,34 @@ mod tests {
 			})
 			.collect::<Vec<_>>();
 		assert_eq!(opencode_skills.len(), 1);
-		let locations = opencode_skills[0]["locations"]
+		let native_locations = opencode_skills[0]["locations"]
 			.as_array()
 			.expect("skill locations");
-		assert_eq!(locations.len(), 2);
-		assert_ne!(locations[0]["source_path"], locations[1]["source_path"]);
-		assert!(locations
+		assert_eq!(native_locations.len(), 1);
+		assert!(native_locations
 			.iter()
 			.all(|location| location["source"] == "project"));
-		assert!(locations[0]["source_path"]
+		assert!(native_locations[0]["source_path"]
 			.as_str()
 			.expect("source path")
 			.contains(".opencode/skills"));
+		let universal_skills = body
+			.as_array()
+			.expect("skill list")
+			.iter()
+			.filter(|item| {
+				item["agent"] == "universal" && item["name"] == "demo"
+			})
+			.collect::<Vec<_>>();
+		assert_eq!(universal_skills.len(), 1);
+		let universal_locations = universal_skills[0]["locations"]
+			.as_array()
+			.expect("universal skill locations");
+		assert_eq!(universal_locations.len(), 1);
+		assert!(universal_locations[0]["source_path"]
+			.as_str()
+			.expect("source path")
+			.contains(".agents/skills"));
 
 		let agent_uri = format!(
 			"/api/v1/agents/opencode/skills?{}",
@@ -871,6 +958,62 @@ mod tests {
 			.as_str()
 			.expect("second target preview")
 			.contains("third instruction"));
+	}
+
+	#[test]
+	fn route_skill_diff_reports_hard_link_relationship_changes() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let reference = project_dir.path().join(".claude/skills/demo");
+		let target = project_dir.path().join(".cursor/skills/demo");
+		write_import_skill(&reference, "demo", "instruction");
+		write_import_skill(&target, "demo", "instruction");
+
+		let reference_templates = reference.join("templates");
+		std::fs::create_dir_all(&reference_templates)
+			.expect("reference templates");
+		let reference_default = reference_templates.join("default.json");
+		std::fs::write(&reference_default, "{}").expect("reference default");
+		std::fs::hard_link(
+			&reference_default,
+			reference_templates.join("input.json"),
+		)
+		.expect("reference hard link");
+
+		let target_templates = target.join("templates");
+		std::fs::create_dir_all(&target_templates).expect("target templates");
+		std::fs::write(target_templates.join("default.json"), "{}")
+			.expect("target default");
+		std::fs::write(target_templates.join("input.json"), "{}")
+			.expect("target input");
+
+		let client = test_client(app_data_dir.path());
+		let response = post_json(
+			&client,
+			"/api/v1/skills/diff",
+			json!({
+				"reference": {
+					"kind": "installed",
+					"source_path": reference.join("SKILL.md"),
+				},
+				"installed_paths": [target.join("SKILL.md")],
+				"scope": "project",
+				"project_root": project_dir.path(),
+			}),
+		);
+
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		let files = body["results"][0]["files"].as_array().expect("diff files");
+		let input = files
+			.iter()
+			.find(|file| file["path"] == "templates/input.json")
+			.expect("input relationship diff");
+		assert_eq!(
+			input["before_hard_link"]["peers"],
+			json!(["templates/default.json"])
+		);
+		assert!(input.get("after_hard_link").is_none());
 	}
 
 	#[cfg(unix)]

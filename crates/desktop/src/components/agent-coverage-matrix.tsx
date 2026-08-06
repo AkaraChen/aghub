@@ -8,12 +8,18 @@ import { useApi } from "../hooks/use-api";
 import type { ResourceKind } from "../hooks/use-resource-actions";
 import {
 	supportsMcpScope,
-	supportsSkillMutation,
+	supportsIndividualSkillTarget,
 } from "../lib/agent-capabilities";
 import { AgentIcon } from "../lib/agent-icons";
+import {
+	formatUniversalSkillTargetMembers,
+	getUniversalSkillTargetLabel,
+	UNIVERSAL_SKILL_TARGET_ID,
+} from "../lib/skill-targets";
 import { cn } from "../lib/utils";
 import { reconcileMcpsMutationOptions } from "../requests/mcps";
 import { reconcileSkillsMutationOptions } from "../requests/skills";
+import { UniversalSkillTargetIcon } from "./universal-skill-target-icon";
 
 export interface MatrixGroup {
 	key: string;
@@ -61,10 +67,10 @@ export function AgentCoverageMatrix({
 	groups,
 	onManage,
 }: AgentCoverageMatrixProps) {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
-	const { availableAgents } = useAgentAvailability();
+	const { allAgents, availableAgents } = useAgentAvailability();
 
 	const skillReconcile = useMutation(
 		reconcileSkillsMutationOptions({ api, queryClient }),
@@ -75,17 +81,35 @@ export function AgentCoverageMatrix({
 	const reconcile = kind === "skill" ? skillReconcile : mcpReconcile;
 
 	const scope = groups[0]?.sourceScope ?? "global";
-	const rows = useMemo(
-		() =>
-			availableAgents.filter(
+	const rows = useMemo(() => {
+		const agents = availableAgents
+			.filter(
 				(agent) =>
 					agent.isUsable &&
 					(kind === "skill"
-						? supportsSkillMutation(agent, scope)
+						? supportsIndividualSkillTarget(agent, scope)
 						: supportsMcpScope(agent, scope)),
-			),
-		[availableAgents, kind, scope],
-	);
+			)
+			.map((agent) => ({
+				id: agent.id,
+				displayName: agent.display_name,
+				universal: false,
+			}));
+		if (kind !== "skill") return agents;
+		const members = formatUniversalSkillTargetMembers(
+			allAgents,
+			i18n.language,
+			scope,
+		);
+		return [
+			{
+				id: UNIVERSAL_SKILL_TARGET_ID,
+				displayName: getUniversalSkillTargetLabel(t, members),
+				universal: true,
+			},
+			...agents,
+		];
+	}, [availableAgents, allAgents, i18n.language, kind, scope, t]);
 
 	const [pendingAgent, setPendingAgent] = useState<string | null>(null);
 	const [confirmAgent, setConfirmAgent] = useState<{
@@ -195,22 +219,22 @@ export function AgentCoverageMatrix({
 				</p>
 			</div>
 			<ul className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2">
-				{rows.map((agent) => {
-					const installed = installedCount(agent.id);
+				{rows.map((target) => {
+					const installed = installedCount(target.id);
 					const total = groups.length;
 					const full = installed === total;
 					const none = installed === 0;
-					const isPending = pendingAgent === agent.id;
+					const isPending = pendingAgent === target.id;
 					return (
-						<li key={agent.id}>
+						<li key={target.id}>
 							<button
 								type="button"
-								data-testid={`matrix-row-${agent.id}`}
+								data-testid={`matrix-row-${target.id}`}
 								disabled={pendingAgent !== null}
 								aria-label={
 									onManage
 										? t("agentCoverageRow", {
-												agent: agent.display_name,
+												agent: target.displayName,
 												installed,
 												total,
 											})
@@ -221,13 +245,13 @@ export function AgentCoverageMatrix({
 										onManage();
 									} else if (full) {
 										setConfirmAgent({
-											id: agent.id,
-											name: agent.display_name,
+											id: target.id,
+											name: target.displayName,
 										});
 									} else {
 										void run(
-											agent.id,
-											agent.display_name,
+											target.id,
+											target.displayName,
 											"install",
 										);
 									}
@@ -239,19 +263,23 @@ export function AgentCoverageMatrix({
 										: "hover:bg-accent/10 hover:ring-accent/30",
 								)}
 							>
-								<AgentIcon
-									id={agent.id}
-									name={agent.display_name}
-									size="xs"
-									variant="ghost"
-								/>
+								{target.universal ? (
+									<UniversalSkillTargetIcon size="xs" />
+								) : (
+									<AgentIcon
+										id={target.id}
+										name={target.displayName}
+										size="xs"
+										variant="ghost"
+									/>
+								)}
 								<span
 									className={cn(
 										"min-w-0 flex-1 truncate",
 										none && "text-muted",
 									)}
 								>
-									{agent.display_name}
+									{target.displayName}
 								</span>
 								{isPending ? (
 									<Spinner size="sm" color="current" />

@@ -31,13 +31,16 @@ pub mod testing;
 
 pub use adapters::{create_adapter, AgentAdapter};
 pub use all_agents::{
-	load_all_agent_skill_locations, load_all_agents, AgentResources,
-	AgentSkillLocations,
+	load_all_agents, load_all_skill_target_locations,
+	load_all_skill_target_locations_with_options, AgentResources,
+	SkillTargetLocations,
 };
 pub use manager::{skill::SkillImportSnapshot, ConfigManager};
+pub use skills::SkillTarget;
 pub use transfer::{
 	InstallScope, InstallTarget, OperationAction, OperationBatchResult,
-	OperationResult, ResourceLocator,
+	OperationResult, ResourceLocator, SkillInstallTarget,
+	SkillOperationBatchResult, SkillOperationResult, SkillResourceLocator,
 };
 
 /// Convert a skill::Skill to core::models::Skill
@@ -82,7 +85,7 @@ pub fn convert_skill(skill_pkg: skill::Skill) -> models::Skill {
 }
 
 /// Format a skill path with ~ prefix for home directory
-pub(crate) fn format_path_with_tilde(path: &std::path::Path) -> Option<String> {
+pub fn format_path_with_tilde(path: &std::path::Path) -> Option<String> {
 	let home = dirs::home_dir()?;
 	if path.starts_with(&home) {
 		let relative = path.strip_prefix(&home).ok()?;

@@ -84,7 +84,11 @@ export function skillDiffsContainLinks(
 	return Boolean(
 		comparisons?.some((comparison) =>
 			comparison?.files.some(
-				(file) => file.before_link || file.after_link,
+				(file) =>
+					file.before_link ||
+					file.after_link ||
+					file.before_hard_link ||
+					file.after_hard_link,
 			),
 		),
 	);

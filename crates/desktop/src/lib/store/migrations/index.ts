@@ -62,7 +62,7 @@ export async function migrate(store: Store): Promise<void> {
 		await initializeSkillCopyCheck(store);
 	}
 
-	if (version < 12) {
+	if (version < 13) {
 		await initializeSkillPreferences(store);
 	}
 

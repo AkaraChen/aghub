@@ -4,6 +4,8 @@ use crate::{
 	manager::ConfigManager,
 	models::{AgentType, McpServer, Skill, SubAgent},
 	registry,
+	skills::target::ensure_skill_target_not_linked,
+	SkillTarget,
 };
 use log::{info, warn};
 use skill::sanitize::sanitize_name;
@@ -35,6 +37,65 @@ pub struct ResourceLocator {
 	pub scope: InstallScope,
 	pub project_root: Option<PathBuf>,
 	pub name: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkillInstallTarget {
+	pub target: SkillTarget,
+	pub scope: InstallScope,
+	pub project_root: Option<PathBuf>,
+}
+
+impl From<InstallTarget> for SkillInstallTarget {
+	fn from(value: InstallTarget) -> Self {
+		Self {
+			target: SkillTarget::Agent(value.agent),
+			scope: value.scope,
+			project_root: value.project_root,
+		}
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct SkillResourceLocator {
+	pub target: SkillTarget,
+	pub scope: InstallScope,
+	pub project_root: Option<PathBuf>,
+	pub name: String,
+}
+
+impl From<ResourceLocator> for SkillResourceLocator {
+	fn from(value: ResourceLocator) -> Self {
+		Self {
+			target: SkillTarget::Agent(value.agent),
+			scope: value.scope,
+			project_root: value.project_root,
+			name: value.name,
+		}
+	}
+}
+
+#[derive(Debug, Clone)]
+pub struct SkillOperationResult {
+	pub target: SkillInstallTarget,
+	pub action: OperationAction,
+	pub success: bool,
+	pub error: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct SkillOperationBatchResult {
+	pub results: Vec<SkillOperationResult>,
+}
+
+impl SkillOperationBatchResult {
+	pub fn success_count(&self) -> usize {
+		self.results.iter().filter(|result| result.success).count()
+	}
+
+	pub fn failed_count(&self) -> usize {
+		self.results.iter().filter(|result| !result.success).count()
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -125,17 +186,23 @@ fn load_source_mcp(source: &ResourceLocator) -> Result<McpServer> {
 	})
 }
 
-fn load_source_skill(source: &ResourceLocator) -> Result<Skill> {
-	let mut manager = build_manager(&InstallTarget {
-		agent: source.agent,
-		scope: source.scope,
-		project_root: source.project_root.clone(),
-	});
+fn load_skill_source(source: &SkillResourceLocator) -> Result<Skill> {
+	let mut manager = source.target.manager(
+		install_scope_resource_scope(source.scope),
+		source.project_root.as_deref(),
+	);
 	manager.load()?;
 	manager
 		.get_skill(&source.name)
 		.cloned()
 		.ok_or_else(|| ConfigError::resource_not_found("skill", &source.name))
+}
+
+fn install_scope_resource_scope(scope: InstallScope) -> crate::ResourceScope {
+	match scope {
+		InstallScope::Global => crate::ResourceScope::GlobalOnly,
+		InstallScope::Project => crate::ResourceScope::ProjectOnly,
+	}
 }
 
 fn ensure_loaded(manager: &mut ConfigManager) -> Result<()> {
@@ -312,76 +379,79 @@ fn install_skill_directory(
 	validate_skill_directory(dest_root, expected_name)
 }
 
-fn skill_target_dir(target: &InstallTarget) -> Result<PathBuf> {
-	let adapter = create_adapter(target.agent);
-	let dir = adapter.target_skills_dir(
-		target.project_root.as_deref(),
-		match target.scope {
-			InstallScope::Global => crate::models::ResourceScope::GlobalOnly,
-			InstallScope::Project => crate::models::ResourceScope::ProjectOnly,
-		},
-	);
-
-	dir.ok_or_else(|| {
-		ConfigError::unsupported_operation(
-			"persist",
-			"skill",
-			registry::get(target.agent).id,
+fn skill_target_dir(target: &SkillInstallTarget) -> Result<PathBuf> {
+	target
+		.target
+		.write_path(
+			install_scope_resource_scope(target.scope),
+			target.project_root.as_deref(),
 		)
-	})
+		.ok_or_else(|| {
+			ConfigError::unsupported_operation(
+				"persist",
+				"skill",
+				target.target.id(),
+			)
+		})
 }
 
-/// Find where a skill actually exists in each agent's skills directories.
-/// Returns (skill_path, agent) pairs for locations where the skill exists.
-/// TODO: Only find one, maybe we should remove all?
-fn find_skill_locations_in_agents(
-	skill_name: &str,
-	agents: &[AgentType],
-	scope: InstallScope,
-	project_root: Option<&PathBuf>,
-) -> Vec<(PathBuf, AgentType)> {
-	let safe_name = sanitize_name(skill_name);
-	let mut locations = Vec::new();
-
-	for agent in agents {
-		let adapter = create_adapter(*agent);
-		let resource_scope = match scope {
-			InstallScope::Global => crate::models::ResourceScope::GlobalOnly,
-			InstallScope::Project => crate::models::ResourceScope::ProjectOnly,
-		};
-		let skills_dirs = adapter.get_skills_paths(
-			project_root.map(|p| p.as_path()),
-			resource_scope,
-		);
-
-		for dir in skills_dirs {
-			let skill_path = dir.join(&safe_name);
-			if fs::symlink_metadata(&skill_path).is_ok() {
-				locations.push((skill_path, *agent));
-			}
+fn unique_skill_targets(
+	targets: Vec<SkillInstallTarget>,
+) -> Vec<SkillInstallTarget> {
+	let mut seen = HashSet::new();
+	let mut unique = Vec::new();
+	for target in targets {
+		let resource_scope = install_scope_resource_scope(target.scope);
+		let key = target
+			.target
+			.write_path_identity(resource_scope, target.project_root.as_deref())
+			.map(|path| format!("{:?}|{}", target.scope, path.display()))
+			.unwrap_or_else(|| {
+				format!(
+					"{}|{:?}|{}",
+					target.target.id(),
+					target.scope,
+					target
+						.project_root
+						.as_ref()
+						.map(|path| path.display().to_string())
+						.unwrap_or_default()
+				)
+			});
+		if seen.insert(key) {
+			unique.push(target);
 		}
 	}
-
-	locations
+	unique
 }
 
-fn group_agents_by_target_dir(
-	agents: &[AgentType],
-	scope: InstallScope,
-	project_root: Option<&PathBuf>,
-) -> HashMap<PathBuf, Vec<AgentType>> {
-	let mut dir_to_agents: HashMap<PathBuf, Vec<AgentType>> = HashMap::new();
-	for agent in agents {
-		let target = InstallTarget {
-			agent: *agent,
-			scope,
-			project_root: project_root.cloned(),
-		};
-		if let Ok(target_dir) = skill_target_dir(&target) {
-			dir_to_agents.entry(target_dir).or_default().push(*agent);
-		}
+fn log_skill_operation_outcome(
+	name: &str,
+	action: OperationAction,
+	target: &SkillInstallTarget,
+	outcome: &Result<()>,
+) {
+	let target_scope = match target.scope {
+		InstallScope::Global => "global",
+		InstallScope::Project => "project",
+	};
+	match outcome {
+		Ok(()) => info!(
+			"{} skill '{}' for target '{}' in {} scope succeeded",
+			action,
+			name,
+			target.target.id(),
+			target_scope
+		),
+		Err(error) => warn!(
+			"{} skill '{}' for target '{}' in {} scope failed: {}",
+			action,
+			name,
+			target.target.id(),
+			target_scope,
+			error
+		),
 	}
-	dir_to_agents
 }
 
 fn unique_targets(targets: Vec<InstallTarget>) -> Vec<InstallTarget> {
@@ -705,15 +775,22 @@ pub fn reconcile_sub_agent(
 	Ok(OperationBatchResult { results })
 }
 
-pub fn transfer_skill(
-	source: ResourceLocator,
-	destinations: Vec<InstallTarget>,
-) -> Result<OperationBatchResult> {
-	let skill = load_source_skill(&source)?;
+pub fn transfer_skill<S, D>(
+	source: S,
+	destinations: Vec<D>,
+) -> Result<SkillOperationBatchResult>
+where
+	S: Into<SkillResourceLocator>,
+	D: Into<SkillInstallTarget>,
+{
+	let source = source.into();
+	let skill = load_skill_source(&source)?;
 	let source_root = resolve_skill_root(&skill)?;
 	validate_skill_directory(&source_root, &skill.name)?;
 	let safe_name = sanitize_name(&skill.name);
-	let destinations = unique_targets(destinations);
+	let destinations = unique_skill_targets(
+		destinations.into_iter().map(Into::into).collect(),
+	);
 	info!(
 		"transferring skill '{}' from '{}' to {} destination(s)",
 		skill.name,
@@ -724,9 +801,18 @@ pub fn transfer_skill(
 
 	for target in destinations {
 		let outcome = (|| -> Result<()> {
-			validate_target(&target)?;
+			if target.scope == InstallScope::Project
+				&& target.project_root.is_none()
+			{
+				return Err(ConfigError::InvalidConfig(
+					"project_root is required for project targets".to_string(),
+				));
+			}
 			let target_dir = skill_target_dir(&target)?;
-			let mut manager = build_manager(&target);
+			let mut manager = target.target.manager(
+				install_scope_resource_scope(target.scope),
+				target.project_root.as_deref(),
+			);
 			ensure_loaded(&mut manager)?;
 			if manager.get_skill(&skill.name).is_some() {
 				return Err(ConfigError::resource_exists("skill", &skill.name));
@@ -739,15 +825,14 @@ pub fn transfer_skill(
 
 			copy_skill_directory_staged(&source_root, &dest_root)
 		})();
-		log_operation_outcome(
-			"skill",
+		log_skill_operation_outcome(
 			&skill.name,
 			OperationAction::Copy,
 			&target,
 			&outcome,
 		);
 
-		results.push(OperationResult {
+		results.push(SkillOperationResult {
 			target,
 			action: OperationAction::Copy,
 			success: outcome.is_ok(),
@@ -755,15 +840,22 @@ pub fn transfer_skill(
 		});
 	}
 
-	Ok(OperationBatchResult { results })
+	Ok(SkillOperationBatchResult { results })
 }
 
-pub fn reconcile_skill(
-	source: ResourceLocator,
-	added: Vec<AgentType>,
-	removed: Vec<AgentType>,
-) -> Result<OperationBatchResult> {
-	let skill = load_source_skill(&source)?;
+pub fn reconcile_skill<S, T>(
+	source: S,
+	added: Vec<T>,
+	removed: Vec<T>,
+) -> Result<SkillOperationBatchResult>
+where
+	S: Into<SkillResourceLocator>,
+	T: Into<SkillTarget>,
+{
+	let source = source.into();
+	let added = added.into_iter().map(Into::into).collect::<Vec<_>>();
+	let removed = removed.into_iter().map(Into::into).collect::<Vec<_>>();
+	let skill = load_skill_source(&source)?;
 	let source_root = resolve_skill_root(&skill)?;
 	validate_skill_directory(&source_root, &skill.name)?;
 	let safe_name = sanitize_name(&skill.name);
@@ -778,25 +870,64 @@ pub fn reconcile_skill(
 	let target_scope = source.scope;
 	let target_project_root = source.project_root.clone();
 
-	// Group agents by target directory to avoid redundant copies
-	let dir_to_agents = group_agents_by_target_dir(
-		&added,
-		target_scope,
-		target_project_root.as_ref(),
-	);
+	let mut dir_to_targets: HashMap<PathBuf, (PathBuf, Vec<SkillTarget>)> =
+		HashMap::new();
+	for target in added {
+		let install_target = SkillInstallTarget {
+			target,
+			scope: target_scope,
+			project_root: target_project_root.clone(),
+		};
+		match skill_target_dir(&install_target) {
+			Ok(target_dir) => {
+				let identity = target
+					.write_path_identity(
+						install_scope_resource_scope(target_scope),
+						target_project_root.as_deref(),
+					)
+					.unwrap_or_else(|| target_dir.clone());
+				dir_to_targets
+					.entry(identity)
+					.or_insert_with(|| (target_dir, Vec::new()))
+					.1
+					.push(target);
+			}
+			Err(error) => {
+				let outcome = Err(error);
+				log_skill_operation_outcome(
+					&skill.name,
+					OperationAction::Copy,
+					&install_target,
+					&outcome,
+				);
+				results.push(SkillOperationResult {
+					target: install_target,
+					action: OperationAction::Copy,
+					success: false,
+					error: outcome.err().map(|error| error.to_string()),
+				});
+			}
+		}
+	}
 
-	// Process each unique directory
-	for (target_dir, agents) in dir_to_agents {
+	for (_, (target_dir, targets)) in dir_to_targets {
 		let dest_root = target_dir.join(&safe_name);
 		let outcome =
 			install_skill_directory(&source_root, &dest_root, &skill.name);
-		for agent in agents {
-			results.push(OperationResult {
-				target: InstallTarget {
-					agent,
-					scope: target_scope,
-					project_root: target_project_root.clone(),
-				},
+		for target in targets {
+			let install_target = SkillInstallTarget {
+				target,
+				scope: target_scope,
+				project_root: target_project_root.clone(),
+			};
+			log_skill_operation_outcome(
+				&skill.name,
+				OperationAction::Copy,
+				&install_target,
+				&outcome,
+			);
+			results.push(SkillOperationResult {
+				target: install_target,
 				action: OperationAction::Copy,
 				success: outcome.is_ok(),
 				error: outcome.as_ref().err().map(ToString::to_string),
@@ -804,43 +935,54 @@ pub fn reconcile_skill(
 		}
 	}
 
-	// Find actual locations of the skill in removed agents' directories
-	let skill_locations = find_skill_locations_in_agents(
-		&skill.name,
-		&removed,
-		target_scope,
-		target_project_root.as_ref(),
-	);
-
-	// Process each actual location for deletion
-	for (skill_path, agent) in skill_locations {
-		let delete_result =
-			fs::symlink_metadata(&skill_path).and_then(|metadata| {
-				if metadata.file_type().is_symlink() {
-					fs::remove_file(&skill_path)
-				} else {
-					fs::remove_dir_all(&skill_path)
-				}
-			});
-		let delete_error = match delete_result {
-			Ok(()) => None,
-			Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
-			Err(e) => Some(e),
+	for target in removed {
+		let install_target = SkillInstallTarget {
+			target,
+			scope: target_scope,
+			project_root: target_project_root.clone(),
 		};
-
-		results.push(OperationResult {
-			target: InstallTarget {
-				agent,
-				scope: target_scope,
-				project_root: target_project_root.clone(),
-			},
+		let outcome = (|| -> Result<()> {
+			let target_dir = skill_target_dir(&install_target)?;
+			ensure_skill_target_not_linked(
+				&target_dir,
+				install_scope_resource_scope(install_target.scope),
+				install_target.project_root.as_deref(),
+			)?;
+			let skill_path = target_dir.join(&safe_name);
+			let metadata = match fs::symlink_metadata(&skill_path) {
+				Ok(metadata) => metadata,
+				Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+					return Ok(());
+				}
+				Err(error) => return Err(ConfigError::Io(error)),
+			};
+			if metadata.file_type().is_symlink() {
+				fs::remove_file(&skill_path)?;
+			} else if metadata.is_dir() {
+				fs::remove_dir_all(&skill_path)?;
+			} else {
+				return Err(ConfigError::InvalidConfig(format!(
+					"Refusing to remove non-directory skill target '{}'",
+					skill_path.display()
+				)));
+			}
+			Ok(())
+		})();
+		log_skill_operation_outcome(
+			&skill.name,
+			OperationAction::Delete,
+			&install_target,
+			&outcome,
+		);
+		results.push(SkillOperationResult {
+			target: install_target,
 			action: OperationAction::Delete,
-			success: delete_error.is_none(),
-			error: delete_error.as_ref().map(|e| e.to_string()),
+			success: outcome.is_ok(),
+			error: outcome.err().map(|error| error.to_string()),
 		});
 	}
 
-	Ok(OperationBatchResult { results })
+	Ok(SkillOperationBatchResult { results })
 }
 
 #[cfg(test)]
@@ -853,6 +995,54 @@ mod tests {
 	fn env_lock() -> &'static Mutex<()> {
 		static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 		LOCK.get_or_init(|| Mutex::new(()))
+	}
+
+	#[test]
+	fn shared_skill_targets_are_deduplicated_by_destination() {
+		let root = PathBuf::from("/project");
+		let targets = unique_skill_targets(vec![
+			SkillInstallTarget {
+				target: SkillTarget::Universal,
+				scope: InstallScope::Project,
+				project_root: Some(root.clone()),
+			},
+			SkillInstallTarget {
+				target: SkillTarget::Agent(AgentType::Cline),
+				scope: InstallScope::Project,
+				project_root: Some(root),
+			},
+		]);
+
+		assert_eq!(targets.len(), 1);
+		assert_eq!(targets[0].target, SkillTarget::Universal);
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn linked_skill_targets_are_deduplicated_by_destination() {
+		let temp = tempdir().unwrap();
+		let root = temp.path();
+		let universal_root = root.join(".agents/skills");
+		fs::create_dir_all(&universal_root).unwrap();
+		let native_root = root.join(".claude/skills");
+		fs::create_dir_all(native_root.parent().unwrap()).unwrap();
+		std::os::unix::fs::symlink(&universal_root, &native_root).unwrap();
+
+		let targets = unique_skill_targets(vec![
+			SkillInstallTarget {
+				target: SkillTarget::Universal,
+				scope: InstallScope::Project,
+				project_root: Some(root.to_path_buf()),
+			},
+			SkillInstallTarget {
+				target: SkillTarget::Agent(AgentType::Claude),
+				scope: InstallScope::Project,
+				project_root: Some(root.to_path_buf()),
+			},
+		]);
+
+		assert_eq!(targets.len(), 1);
+		assert_eq!(targets[0].target, SkillTarget::Universal);
 	}
 
 	#[test]
@@ -1082,6 +1272,103 @@ mod tests {
 		);
 		manager.load().unwrap();
 		assert!(manager.get_skill("repo-helper").is_none());
+	}
+
+	#[test]
+	fn reconcile_native_target_does_not_remove_universal_skill() {
+		let _guard = env_lock().lock().unwrap();
+		let temp = tempdir().unwrap();
+		let root = temp.path().join("project");
+		fs::create_dir_all(&root).unwrap();
+
+		let mut universal = SkillTarget::Universal
+			.manager(crate::ResourceScope::ProjectOnly, Some(&root));
+		universal.load().unwrap();
+		universal.add_skill(Skill::new("repo-helper")).unwrap();
+
+		let result = reconcile_skill(
+			SkillResourceLocator {
+				target: SkillTarget::Universal,
+				scope: InstallScope::Project,
+				project_root: Some(root.clone()),
+				name: "repo-helper".to_string(),
+			},
+			Vec::<SkillTarget>::new(),
+			vec![SkillTarget::Agent(AgentType::OpenCode)],
+		)
+		.unwrap();
+
+		assert_eq!(result.results.len(), 1);
+		assert!(result.results[0].success);
+		assert!(root.join(".agents/skills/repo-helper/SKILL.md").is_file());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn reconcile_rejects_removal_through_linked_skills_root() {
+		let _guard = env_lock().lock().unwrap();
+		let temp = tempdir().unwrap();
+		let root = temp.path().join("project");
+		fs::create_dir_all(&root).unwrap();
+
+		let mut universal = SkillTarget::Universal
+			.manager(crate::ResourceScope::ProjectOnly, Some(&root));
+		universal.load().unwrap();
+		universal.add_skill(Skill::new("repo-helper")).unwrap();
+		let native_root = root.join(".claude/skills");
+		fs::create_dir_all(native_root.parent().unwrap()).unwrap();
+		std::os::unix::fs::symlink(root.join(".agents/skills"), &native_root)
+			.unwrap();
+
+		let result = reconcile_skill(
+			SkillResourceLocator {
+				target: SkillTarget::Universal,
+				scope: InstallScope::Project,
+				project_root: Some(root.clone()),
+				name: "repo-helper".to_string(),
+			},
+			Vec::<SkillTarget>::new(),
+			vec![SkillTarget::Agent(AgentType::Claude)],
+		)
+		.unwrap();
+
+		assert_eq!(result.failed_count(), 1);
+		assert!(root.join(".agents/skills/repo-helper/SKILL.md").is_file());
+	}
+
+	#[test]
+	fn reconcile_reports_unsupported_native_target() {
+		let _guard = env_lock().lock().unwrap();
+		let temp = tempdir().unwrap();
+		let root = temp.path().join("project");
+		fs::create_dir_all(&root).unwrap();
+
+		let mut source = ConfigManager::new(
+			create_adapter(AgentType::Claude),
+			false,
+			Some(&root),
+		);
+		source.load().unwrap();
+		source.add_skill(Skill::new("repo-helper")).unwrap();
+
+		let result = reconcile_skill(
+			ResourceLocator {
+				agent: AgentType::Claude,
+				scope: InstallScope::Project,
+				project_root: Some(root),
+				name: "repo-helper".to_string(),
+			},
+			vec![SkillTarget::Agent(AgentType::Codex)],
+			Vec::<SkillTarget>::new(),
+		)
+		.unwrap();
+
+		assert_eq!(result.results.len(), 1);
+		assert_eq!(result.failed_count(), 1);
+		assert!(result.results[0]
+			.error
+			.as_deref()
+			.is_some_and(|error| error.contains("Cannot persist skill")));
 	}
 
 	#[cfg(unix)]
