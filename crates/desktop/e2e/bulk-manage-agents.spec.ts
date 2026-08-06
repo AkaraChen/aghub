@@ -34,12 +34,12 @@ async function openBulkManageDialog(page: Page): Promise<Locator> {
 	return dialog;
 }
 
-// The checkbox row is a <label>; the hidden input carries the state, the
-// label is the clickable surface.
-const agentRow = (dialog: Locator, name: string) =>
-	dialog.locator("label").filter({ hasText: name });
 const agentCheckbox = (dialog: Locator, name: string) =>
-	dialog.getByRole("checkbox", { name: new RegExp(name) });
+	dialog.getByRole("checkbox", { name: new RegExp(`^${name}\\b`) });
+const agentRow = (dialog: Locator, name: string) =>
+	agentCheckbox(dialog, name).locator(
+		'xpath=ancestor::*[@data-slot="checkbox"][1]',
+	);
 
 test.beforeEach(async ({ page }) => {
 	await installMocks(page);
