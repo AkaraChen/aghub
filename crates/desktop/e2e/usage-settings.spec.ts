@@ -167,10 +167,16 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 	await page.getByRole("option", { name: "Codex" }).click();
 	await expect(page.getByText("Weekly (Opus)")).toBeHidden();
 	await expect(page.getByText("Reasoning")).toBeVisible();
+	await expect(drawer.getByText("5h used", { exact: true })).toBeVisible();
+	await expect(
+		drawer.getByText("Weekly used", { exact: true }),
+	).toBeVisible();
 	await page.getByRole("button", { name: "Editing layout for" }).click();
 	await page.getByRole("option", { name: "Gemini" }).click();
 	await expect(card.getByText("Weekly limit", { exact: true })).toBeHidden();
 	await expect(page.getByText("Reasoning")).toBeHidden();
+	await expect(drawer.getByText("5h used", { exact: true })).toBeHidden();
+	await expect(drawer.getByText("Weekly used", { exact: true })).toBeHidden();
 	await page.getByRole("button", { name: "Editing layout for" }).click();
 	await page.getByRole("option", { name: "Default" }).click();
 

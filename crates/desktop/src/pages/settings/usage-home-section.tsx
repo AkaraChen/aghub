@@ -140,9 +140,12 @@ export function HomeCardsSection({
 		});
 	};
 	const offeredToTarget = (id: HomeWindowId | HomeStatId) => {
+		const usesQuotaWindow =
+			isHomeWindowId(id) ||
+			HOME_STAT_DEFINITIONS[id].source.from === "window";
 		if (
 			layoutTarget !== "default" &&
-			isHomeWindowId(id) &&
+			usesQuotaWindow &&
 			!USAGE_QUOTA_AGENTS.includes(
 				layoutTarget as (typeof USAGE_QUOTA_AGENTS)[number],
 			)
