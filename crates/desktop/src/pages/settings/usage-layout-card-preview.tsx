@@ -5,10 +5,7 @@ import { useTranslation } from "react-i18next";
 import { AgentIcon } from "../../lib/agent-icons";
 import { cn } from "../../lib/utils";
 import { layoutSlotId } from "./usage-layout-dnd";
-import {
-	LayoutDraggableField,
-	LayoutFieldDragHandle,
-} from "./usage-layout-draggable-field";
+import { LayoutDraggableField } from "./usage-layout-draggable-field";
 import type { LayoutSlotType } from "./usage-layout-model";
 import type {
 	LayoutDragPreview,
@@ -81,9 +78,12 @@ export function UsageLayoutCardPreview({
 										}
 										onNodeChange={onNodeChange}
 										data-testid={`layout-card-item-${field.id}`}
-										className="flex items-center rounded-md px-1.5 py-1"
+										className="flex items-center px-1.5 py-1"
 									>
-										<PreviewBar label={field.label} />
+										<UsageLayoutCardFieldContent
+											field={field}
+											type="window"
+										/>
 									</LayoutDraggableField>
 								</CardDropSlot>
 							);
@@ -120,9 +120,12 @@ export function UsageLayoutCardPreview({
 										onNodeChange={onNodeChange}
 										data-testid={`layout-card-item-${field.id}`}
 										data-layout-type="stat"
-										className="flex min-w-0 items-center rounded-md px-1.5 py-1 text-[11px]"
+										className="flex min-w-0 items-center px-1.5 py-1 text-[11px]"
 									>
-										<StatBody field={field} />
+										<UsageLayoutCardFieldContent
+											field={field}
+											type="stat"
+										/>
 									</LayoutDraggableField>
 								</CardDropSlot>
 							);
@@ -140,7 +143,7 @@ export function UsageLayoutCardPreview({
 	);
 }
 
-export function LayoutDragGhost({
+export function UsageLayoutCardFieldContent({
 	field,
 	type,
 }: {
@@ -149,23 +152,26 @@ export function LayoutDragGhost({
 }) {
 	if (type === "window") {
 		return (
-			<div
-				data-testid="layout-card-drag-ghost"
-				className="flex h-full w-full min-w-0 max-w-[calc(100vw-2rem)] cursor-grabbing select-none items-center rounded-md border border-border bg-surface px-1.5 py-1 shadow-[var(--overlay-shadow)]"
-			>
-				<LayoutFieldDragHandle />
-				<PreviewBar label={field.label} />
+			<div className="flex min-w-0 flex-1 flex-col gap-0.5">
+				<span className="truncate text-[11px] text-muted">
+					{field.label}
+				</span>
+				<Meter
+					aria-hidden
+					aria-label={field.label}
+					value={PREVIEW_BAR_VALUE}
+					size="sm"
+				>
+					<Meter.Track>
+						<Meter.Fill className="bg-foreground/25" />
+					</Meter.Track>
+				</Meter>
 			</div>
 		);
 	}
 	return (
-		<div
-			data-testid="layout-card-drag-ghost"
-			data-layout-type="stat"
-			className="flex h-full w-full min-w-0 cursor-grabbing select-none items-center rounded-md border border-border bg-surface px-1.5 py-1 text-[11px] shadow-[var(--overlay-shadow)]"
-		>
-			<LayoutFieldDragHandle />
-			<StatBody field={field} />
+		<div className="flex min-w-0 flex-1 items-baseline">
+			<span className="truncate text-muted">{field.label}</span>
 		</div>
 	);
 }
@@ -226,32 +232,6 @@ function CardDropSlot({
 			className="scroll-m-8"
 		>
 			{children}
-		</div>
-	);
-}
-
-function PreviewBar({ label }: { label: string }) {
-	return (
-		<div className="flex min-w-0 flex-1 flex-col gap-0.5">
-			<span className="truncate text-[11px] text-muted">{label}</span>
-			<Meter
-				aria-hidden
-				aria-label={label}
-				value={PREVIEW_BAR_VALUE}
-				size="sm"
-			>
-				<Meter.Track>
-					<Meter.Fill className="bg-foreground/25" />
-				</Meter.Track>
-			</Meter>
-		</div>
-	);
-}
-
-function StatBody({ field }: { field: LayoutField }) {
-	return (
-		<div className="flex min-w-0 flex-1 items-baseline">
-			<span className="truncate text-muted">{field.label}</span>
 		</div>
 	);
 }

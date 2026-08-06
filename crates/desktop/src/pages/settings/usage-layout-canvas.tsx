@@ -1,14 +1,12 @@
 import { DragOverlay } from "@dnd-kit/core";
 import type { CSSProperties } from "react";
 import { cn } from "../../lib/utils";
+import { UsageLayoutCardPreview } from "./usage-layout-card-preview";
 import {
-	LayoutDragGhost,
-	UsageLayoutCardPreview,
-} from "./usage-layout-card-preview";
-import {
-	LayoutFieldDragGhost,
-	UsageLayoutFieldLibrary,
-} from "./usage-layout-field-library";
+	type LayoutFieldPresentation,
+	UsageLayoutDragPreview,
+} from "./usage-layout-drag-preview";
+import { UsageLayoutFieldLibrary } from "./usage-layout-field-library";
 import { shownIds, type LayoutSlotType } from "./usage-layout-model";
 import type {
 	LayoutDragPreview,
@@ -28,6 +26,20 @@ const USAGE_LAYOUT_STYLE: UsageLayoutStyle = {
 	"--usage-home-card-height": "13.625rem",
 	"--usage-home-card-width": "16.78125rem",
 };
+
+function dragFieldPresentation(
+	drag: LayoutDragPreview | null,
+): LayoutFieldPresentation | null {
+	if (!drag) return null;
+	if (drag.overId === "hidden-drawer") return "library";
+	if (
+		drag.overId?.startsWith("slot:") ||
+		drag.overId?.startsWith("section:")
+	) {
+		return "card";
+	}
+	return drag.source;
+}
 
 interface UsageLayoutCanvasProps {
 	windowFields: LayoutField[];
@@ -67,6 +79,7 @@ export function UsageLayoutCanvas({
 	const activeWasVisible = drag
 		? shownIds(drag.origin, drag.type).includes(drag.activeId)
 		: false;
+	const dragPresentation = dragFieldPresentation(drag);
 	return (
 		<>
 			<div
@@ -106,13 +119,14 @@ export function UsageLayoutCanvas({
 			</div>
 
 			<DragOverlay adjustScale={false} dropAnimation={null}>
-				{activeField && drag?.source === "library" ? (
-					<LayoutFieldDragGhost
+				{activeField && drag && dragPresentation ? (
+					<UsageLayoutDragPreview
 						field={activeField}
+						type={drag.type}
+						source={drag.source}
+						presentation={dragPresentation}
 						isVisible={activeWasVisible}
 					/>
-				) : activeField && drag ? (
-					<LayoutDragGhost field={activeField} type={drag.type} />
 				) : null}
 			</DragOverlay>
 		</>

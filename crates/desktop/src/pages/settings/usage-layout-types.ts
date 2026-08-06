@@ -15,6 +15,7 @@ export type LayoutDragSource = "card" | "library";
 
 export interface LayoutDragPreview {
 	activeId: string;
+	overId: string | null;
 	sourceNodeId: string;
 	source: LayoutDragSource;
 	type: LayoutSlotType;

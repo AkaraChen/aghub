@@ -38,9 +38,7 @@ import type {
 export type { CardLayoutModel } from "./usage-layout-model";
 export type { LayoutField, LayoutPreview } from "./usage-layout-types";
 
-interface DragSession extends LayoutDragPreview {
-	overId: string | null;
-}
+type DragSession = LayoutDragPreview;
 
 const LAYOUT_MOVE_DURATION_MS = 140;
 const LAYOUT_MOVE_EASING = "cubic-bezier(0.2, 0, 0, 1)";

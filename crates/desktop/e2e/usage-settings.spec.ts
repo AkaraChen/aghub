@@ -362,10 +362,10 @@ test("field library items toggle and drag from the whole tile", async ({
 	await expect(totalTokensCheckbox).toBeChecked();
 	await expect(card.getByText("Total tokens", { exact: true })).toBeVisible();
 	const totalTokensGhostBox = await page
-		.getByTestId("layout-field-drag-ghost")
+		.getByTestId("layout-field-drag-preview")
 		.boundingBox();
 	const totalTokensGhostLabelBox = await page
-		.getByTestId("layout-field-drag-ghost")
+		.getByTestId("layout-field-library-presentation")
 		.getByText("Total tokens", { exact: true })
 		.boundingBox();
 	if (!totalTokensGhostBox || !totalTokensGhostLabelBox) {
@@ -380,19 +380,19 @@ test("field library items toggle and drag from the whole tile", async ({
 				(tileLabelBox.x - tileBox.x),
 		),
 	).toBeLessThanOrEqual(1);
-	await expect(page.getByTestId("layout-field-drag-ghost")).toHaveAttribute(
+	await expect(page.getByTestId("layout-field-drag-preview")).toHaveAttribute(
 		"data-visibility",
 		"shown",
 	);
 	await expect(
 		page
-			.getByTestId("layout-field-drag-ghost")
-			.getByTestId("layout-field-drag-handle"),
+			.getByTestId("layout-field-library-presentation")
+			.getByTestId("layout-field-visibility-state"),
 	).toBeVisible();
 	await expect
 		.poll(() =>
 			page
-				.getByTestId("layout-field-drag-ghost")
+				.getByTestId("layout-field-drag-preview")
 				.evaluate((element) => getComputedStyle(element).boxShadow),
 		)
 		.not.toBe("none");
@@ -418,19 +418,19 @@ test("field library items toggle and drag from the whole tile", async ({
 		0,
 	);
 	const fiveHourGhostBox = await page
-		.getByTestId("layout-field-drag-ghost")
+		.getByTestId("layout-field-drag-preview")
 		.boundingBox();
 	if (!fiveHourGhostBox) throw new Error("quota drag ghost missing");
 	expect(fiveHourGhostBox.width).toBeCloseTo(fiveHourTileBox.width, 1);
 	expect(fiveHourGhostBox.height).toBeCloseTo(fiveHourTileBox.height, 1);
-	await expect(page.getByTestId("layout-field-drag-ghost")).toHaveAttribute(
+	await expect(page.getByTestId("layout-field-drag-preview")).toHaveAttribute(
 		"data-visibility",
 		"hidden",
 	);
 	await expect(
 		page
-			.getByTestId("layout-field-drag-ghost")
-			.getByTestId("layout-field-drag-handle"),
+			.getByTestId("layout-field-library-presentation")
+			.getByTestId("layout-field-visibility-state"),
 	).toBeVisible();
 	await page.keyboard.press("Escape");
 	await page.mouse.up();
@@ -1541,6 +1541,116 @@ test("layout rows are the complete drag targets", async ({ page }) => {
 	await page.keyboard.press("Escape");
 });
 
+test("drag preview transitions between field library and card contexts", async ({
+	page,
+}) => {
+	await page.setViewportSize({ width: 1600, height: 900 });
+	await page.emulateMedia({ reducedMotion: "no-preference" });
+	await page.goto("/settings?tab=usage");
+
+	const card = page.getByTestId("layout-card-replica");
+	const library = page.getByTestId("layout-hidden-drawer");
+	const librarySource = library.getByTestId("layout-field-item-5h");
+	const cardTarget = card.getByTestId("layout-window-section");
+	const [librarySourceBox, cardTargetBox] = await Promise.all([
+		librarySource.boundingBox(),
+		cardTarget.boundingBox(),
+	]);
+	if (!librarySourceBox || !cardTargetBox) {
+		throw new Error("library-to-card drag endpoints missing");
+	}
+
+	await page.mouse.move(
+		librarySourceBox.x + librarySourceBox.width / 2,
+		librarySourceBox.y + librarySourceBox.height / 2,
+	);
+	await page.mouse.down();
+	await page.mouse.move(librarySourceBox.x - 12, librarySourceBox.y + 12, {
+		steps: 3,
+	});
+	const preview = page.getByTestId("layout-field-drag-preview");
+	await expect(preview).toHaveAttribute("data-source", "library");
+	await expect(preview).toHaveAttribute("data-presentation", "library");
+	await expect(
+		preview.getByTestId("layout-field-library-presentation"),
+	).toHaveCSS("opacity", "1");
+	const motion = await preview.evaluate((element) => {
+		const previewStyle = getComputedStyle(element);
+		const presentation = element.querySelector(
+			'[data-testid="layout-field-library-presentation"]',
+		);
+		if (!presentation) throw new Error("drag presentation missing");
+		const presentationStyle = getComputedStyle(presentation);
+		return {
+			boxShadow: previewStyle.boxShadow,
+			transitionDuration: presentationStyle.transitionDuration,
+			transitionProperty: presentationStyle.transitionProperty,
+		};
+	});
+	expect(motion.boxShadow).not.toBe("none");
+	expect(motion.transitionDuration).toContain("0.12s");
+	expect(motion.transitionProperty).toContain("opacity");
+	expect(motion.transitionProperty).toContain("transform");
+	await page.mouse.move(
+		cardTargetBox.x + cardTargetBox.width / 2,
+		cardTargetBox.y + cardTargetBox.height / 2,
+		{ steps: 10 },
+	);
+	await expect(preview).toHaveAttribute("data-presentation", "card");
+	await expect(
+		preview.getByTestId("layout-field-card-presentation"),
+	).toHaveCSS("opacity", "1");
+	await expect(
+		preview.getByTestId("layout-field-library-presentation"),
+	).toHaveCSS("opacity", "0");
+	await page.keyboard.press("Escape");
+	await page.mouse.up();
+	await page.reload();
+	await page.emulateMedia({ reducedMotion: "reduce" });
+
+	const cardSource = card.getByTestId("layout-card-item-totalTokens");
+	const [cardSourceBox, libraryBox] = await Promise.all([
+		cardSource.boundingBox(),
+		library.boundingBox(),
+	]);
+	if (!cardSourceBox || !libraryBox) {
+		throw new Error("card-to-library drag endpoints missing");
+	}
+	await page.mouse.move(
+		cardSourceBox.x + cardSourceBox.width / 2,
+		cardSourceBox.y + cardSourceBox.height / 2,
+	);
+	await page.mouse.down();
+	await page.mouse.move(cardSourceBox.x + 12, cardSourceBox.y - 12, {
+		steps: 3,
+	});
+	await expect(preview).toHaveAttribute("data-source", "card");
+	await expect(preview).toHaveAttribute("data-presentation", "card");
+	const reducedMotionDurationMs = await preview
+		.getByTestId("layout-field-card-presentation")
+		.evaluate(
+			(element) =>
+				Number.parseFloat(
+					getComputedStyle(element).transitionDuration,
+				) * 1000,
+		);
+	expect(reducedMotionDurationMs).toBeLessThanOrEqual(0.1);
+	await page.mouse.move(
+		libraryBox.x + libraryBox.width / 2,
+		libraryBox.y + 12,
+		{ steps: 10 },
+	);
+	await expect(preview).toHaveAttribute("data-presentation", "library");
+	await expect(
+		preview.getByTestId("layout-field-library-presentation"),
+	).toHaveCSS("opacity", "1");
+	await expect(
+		preview.getByTestId("layout-field-card-presentation"),
+	).toHaveCSS("opacity", "0");
+	await page.keyboard.press("Escape");
+	await page.mouse.up();
+});
+
 test("wide short layout editor auto-scrolls toward the card target", async ({
 	page,
 }) => {
@@ -2087,16 +2197,19 @@ test("layout editor moves a field between the card and the drawer", async ({
 	await page.mouse.down();
 	await page.mouse.move(sourceBox.x + 12, sourceBox.y - 12, { steps: 3 });
 	await expect(page.locator("#root .cursor-grabbing")).toBeVisible();
-	const cardGhost = page.getByTestId("layout-card-drag-ghost");
+	const cardGhost = page.getByTestId("layout-field-drag-preview");
 	const cardGhostBox = await cardGhost.boundingBox();
 	if (!cardGhostBox) throw new Error("card drag ghost missing");
 	expect(cardGhostBox.width).toBeCloseTo(sourceBox.width, 1);
 	expect(cardGhostBox.height).toBeCloseTo(sourceBox.height, 1);
+	const cardPresentation = cardGhost.getByTestId(
+		"layout-field-card-presentation",
+	);
 	await expect(
-		cardGhost.getByText("Total tokens", { exact: true }),
+		cardPresentation.getByText("Total tokens", { exact: true }),
 	).toBeVisible();
 	await expect(cardGhost.getByText("1.43M", { exact: true })).toHaveCount(0);
-	await expect(cardGhost.locator("svg")).toHaveCount(1);
+	await expect(cardPresentation.locator("svg")).toHaveCount(1);
 	await page.mouse.move(drawerBox.x + drawerBox.width / 2, drawerBox.y + 12, {
 		steps: 10,
 	});

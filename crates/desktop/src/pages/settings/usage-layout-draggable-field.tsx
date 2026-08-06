@@ -5,6 +5,11 @@ import { cn } from "../../lib/utils";
 import type { LayoutSlotType } from "./usage-layout-model";
 import type { LayoutField } from "./usage-layout-types";
 
+export const LAYOUT_FIELD_SHELL =
+	"min-h-7 min-w-0 touch-none select-none rounded-md border";
+export const LAYOUT_FIELD_STATE_TRANSITION =
+	"transition-[background-color,border-color,box-shadow,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none";
+
 export function LayoutDraggableField({
 	field,
 	type,
@@ -40,13 +45,15 @@ export function LayoutDraggableField({
 			ref={setRowRef}
 			title={field.hint}
 			aria-label={field.label}
+			data-layout-field-shell
 			className={cn(
-				"min-h-7 min-w-0 touch-none select-none border border-transparent outline-none",
-				"transition-[background-color,border-color,box-shadow,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
+				LAYOUT_FIELD_SHELL,
+				LAYOUT_FIELD_STATE_TRANSITION,
+				"border-transparent outline-none",
 				isDisabled
 					? "opacity-40"
 					: "cursor-grab hover:border-border hover:bg-surface active:cursor-grabbing focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface",
-				isDragging && isActive && "opacity-45",
+				isDragging && isActive && "opacity-30",
 				className,
 			)}
 		>

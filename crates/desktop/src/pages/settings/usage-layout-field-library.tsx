@@ -9,13 +9,16 @@ import { useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "../../lib/utils";
 import { LAYOUT_POINTER_DRAG_DISTANCE_PX } from "./usage-layout-dnd";
-import { LayoutFieldDragHandle } from "./usage-layout-draggable-field";
+import {
+	LAYOUT_FIELD_SHELL,
+	LAYOUT_FIELD_STATE_TRANSITION,
+} from "./usage-layout-draggable-field";
 import type { LayoutSlotType } from "./usage-layout-model";
 import type { LayoutField } from "./usage-layout-types";
 
 const FIELD_LIBRARY_DRAG_ID_PREFIX = "field-library:";
 const FIELD_LIBRARY_ITEM_LAYOUT =
-	"grid min-h-7 touch-none select-none grid-cols-[auto_minmax(0,1fr)] items-center gap-1.5 rounded-md border px-1.5";
+	"grid grid-cols-[auto_minmax(0,1fr)] items-center gap-1.5 px-1.5";
 const FIELD_LIBRARY_ITEM_LABEL =
 	"flex min-w-0 items-center rounded-md border border-transparent py-0.5 text-[11px]";
 
@@ -105,31 +108,6 @@ export function UsageLayoutFieldLibrary({
 				/>
 			</div>
 		</Surface>
-	);
-}
-
-export function LayoutFieldDragGhost({
-	field,
-	isVisible,
-}: {
-	field: LayoutField;
-	isVisible: boolean;
-}) {
-	return (
-		<div
-			aria-hidden
-			data-testid="layout-field-drag-ghost"
-			data-visibility={isVisible ? "shown" : "hidden"}
-			className={cn(
-				FIELD_LIBRARY_ITEM_LAYOUT,
-				"h-full w-full cursor-grabbing gap-0 border-border bg-surface shadow-[var(--overlay-shadow)]",
-			)}
-		>
-			<LayoutFieldDragHandle />
-			<div className={cn(FIELD_LIBRARY_ITEM_LABEL, "text-muted")}>
-				<span className="truncate">{field.label}</span>
-			</div>
-		</div>
 	);
 }
 
@@ -307,15 +285,17 @@ function FieldLibraryItem({
 			onPointerMoveCapture={handlePointerMove}
 			data-testid={`layout-field-item-${field.id}`}
 			data-visibility={isVisible ? "shown" : "hidden"}
+			data-layout-field-shell
 			onClickCapture={handleItemClickCapture}
 			onClick={handleItemClick}
 			className={cn(
+				LAYOUT_FIELD_SHELL,
 				FIELD_LIBRARY_ITEM_LAYOUT,
 				"border-transparent",
-				"transition-[background-color,border-color,opacity] duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
+				LAYOUT_FIELD_STATE_TRANSITION,
 				!isDisabled &&
 					"cursor-grab hover:border-border hover:bg-surface",
-				isDragging && isActive && "opacity-45",
+				isDragging && isActive && "opacity-30",
 			)}
 		>
 			<Checkbox
