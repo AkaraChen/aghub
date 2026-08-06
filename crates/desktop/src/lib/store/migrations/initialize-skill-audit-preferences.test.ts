@@ -1,6 +1,6 @@
 import type { Store } from "@tauri-apps/plugin-store";
 import { describe, expect, it } from "vitest";
-import { migrateV9ToV10 } from "./v9-to-v10";
+import { initializeSkillAuditPreferences } from "./initialize-skill-audit-preferences";
 
 function memoryStore(entries: Array<[string, unknown]> = []) {
 	const values = new Map(entries);
@@ -13,11 +13,11 @@ function memoryStore(entries: Array<[string, unknown]> = []) {
 	return { store, values };
 }
 
-describe("migrateV9ToV10", () => {
+describe("initializeSkillAuditPreferences", () => {
 	it("initializes skill audit preferences", async () => {
 		const { store, values } = memoryStore();
 
-		await migrateV9ToV10(store);
+		await initializeSkillAuditPreferences(store);
 
 		expect(values.get("acknowledgedSkillAssessments")).toEqual([]);
 		expect(values.get("skillAuditEnabled")).toBe(true);
@@ -32,7 +32,7 @@ describe("migrateV9ToV10", () => {
 			["skillAuditEnabled", false],
 		]);
 
-		await migrateV9ToV10(store);
+		await initializeSkillAuditPreferences(store);
 
 		expect(values.get("acknowledgedSkillAssessments")).toBe(assessments);
 		expect(values.get("skillAuditEnabled")).toBe(false);
