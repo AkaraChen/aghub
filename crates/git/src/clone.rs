@@ -341,7 +341,9 @@ mod tests {
 		let started = Instant::now();
 		loop {
 			if let Ok(value) = std::fs::read_to_string(path) {
-				return value.trim().parse().unwrap();
+				if let Ok(pid) = value.trim().parse() {
+					return pid;
+				}
 			}
 			assert!(
 				started.elapsed() < TEST_PROCESS_START_TIMEOUT,
@@ -461,6 +463,7 @@ mkdir -p "$destination"
 	#[test]
 	fn cancellation_kills_and_waits_for_fake_git() {
 		let root = tempfile::TempDir::new().unwrap();
+		std::fs::File::create(root.path().join("pid")).unwrap();
 		let script = write_script(
 			root.path(),
 			r#"
