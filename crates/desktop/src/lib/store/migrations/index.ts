@@ -1,15 +1,15 @@
 import type { Store } from "@tauri-apps/plugin-store";
 import { CURRENT_VERSION } from "../types";
-import { migrateV0ToV1 } from "./v0-to-v1";
-import { migrateV1ToV2 } from "./v1-to-v2";
-import { migrateV2ToV3 } from "./v2-to-v3";
-import { migrateV3ToV4 } from "./v3-to-v4";
-import { migrateV4ToV5 } from "./v4-to-v5";
-import { migrateV5ToV6 } from "./v5-to-v6";
-import { migrateV6ToV7 } from "./v6-to-v7";
-import { migrateV7ToV8 } from "./v7-to-v8";
-import { migrateV8ToV9 } from "./v8-to-v9";
-import { migrateV9ToV10 } from "./v9-to-v10";
+import { initializeAutoCheckUpdates } from "./initialize-auto-check-updates";
+import { initializeDisabledAgents } from "./initialize-disabled-agents";
+import { initializeIntegrationPreferences } from "./initialize-integration-preferences";
+import { initializeOnboardingProgress } from "./initialize-onboarding-progress";
+import { initializeProjects } from "./initialize-projects";
+import { initializeSidebarItems } from "./initialize-sidebar-items";
+import { initializeSkillAuditPreferences } from "./initialize-skill-audit-preferences";
+import { initializeStarredResources } from "./initialize-starred-resources";
+import { normalizeUpdateChannel } from "./normalize-update-channel";
+import { resetSidebarItems } from "./reset-sidebar-items";
 
 export async function migrate(store: Store): Promise<void> {
 	const version = (await store.get<number>("version")) ?? 0;
@@ -17,43 +17,43 @@ export async function migrate(store: Store): Promise<void> {
 	if (version === CURRENT_VERSION) return;
 
 	if (version < 1) {
-		await migrateV0ToV1(store);
+		await initializeProjects(store);
 	}
 
 	if (version < 2) {
-		await migrateV1ToV2(store);
+		await initializeDisabledAgents(store);
 	}
 
 	if (version < 3) {
-		await migrateV2ToV3(store);
+		await initializeIntegrationPreferences(store);
 	}
 
 	if (version < 4) {
-		await migrateV3ToV4(store);
+		await initializeStarredResources(store);
 	}
 
 	if (version < 5) {
-		await migrateV4ToV5(store);
+		await initializeOnboardingProgress(store);
 	}
 
 	if (version < 6) {
-		await migrateV5ToV6(store);
+		await initializeSidebarItems(store);
 	}
 
 	if (version < 7) {
-		await migrateV6ToV7(store);
+		await initializeAutoCheckUpdates(store);
 	}
 
 	if (version < 8) {
-		await migrateV7ToV8(store);
+		await resetSidebarItems(store);
 	}
 
 	if (version < 9) {
-		await migrateV8ToV9(store);
+		await normalizeUpdateChannel(store);
 	}
 
 	if (version < 10) {
-		await migrateV9ToV10(store);
+		await initializeSkillAuditPreferences(store);
 	}
 
 	await store.set("version", CURRENT_VERSION);
