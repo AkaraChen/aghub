@@ -59,7 +59,7 @@
 		"i18next-browser-languagedetector": "^8.2.1",
 		"immer": "^11.1.15",
 		"ky": "^2.0.0",
-		"nuqs": "^2.9.4",
+		"nuqs": "^2.9.5",
 		"pathe": "^2.0.3",
 		"pinyin-pro": "^3.28.1",
 		"posthog-js": "^1.378.1",
