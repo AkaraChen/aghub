@@ -706,19 +706,8 @@ export default {
 	skillAuditEnabled: "Automatic skill scans enabled",
 	skillAuditDisabled: "Automatic skill scans disabled",
 	skillAuditPreferenceError: "Failed to update the skill scan setting",
-	skillInstallation: "Installation location",
-	skillInstallationDescription:
-		"New Skills use the universal directory by default. Native Agent directories remain available.",
 	universalAgentTarget: "Universal agents",
 	universalAgentTargetSummary: "Universal agents ({{agents}})",
-	defaultLabel: "Default",
-	universalAgentTargetPathHint:
-		"Agents with universal-directory support read the same Skill",
-	nativeAgentTargets: "Agent native directories",
-	nativeAgentTargetsDescription:
-		"Choose an agent's documented directory while installing. Only selected locations are written.",
-	skillStorageNotice:
-		"AGHub manages the actual installation locations without keeping another master copy.",
 	skillContentChecks: "Copies and differences",
 	skillContentChecksDescription:
 		"Control when matching Skills are compared, grouped, and flagged for conflicting content.",
@@ -735,10 +724,6 @@ export default {
 	warnOnSkillConflicts: "Flag content conflicts",
 	warnOnSkillConflictsDescription:
 		"Mark copies with different or unavailable content in the Skill list.",
-	unreadableSkillCopies: "Unreadable copies",
-	unreadableSkillCopiesDescription:
-		"Exclude them from unification and report the failure in details and notifications.",
-	alwaysReported: "Always reported",
 	skillFileRelationships: "Unification method",
 	skillFileRelationshipsDescription:
 		"Choose the default file-writing method when one version replaces the other locations.",
@@ -754,10 +739,6 @@ export default {
 	skillDiscoveryScope: "Skill sources",
 	skillDiscoveryScopeDescription:
 		"Installed locations are always read. Choose whether to search the current project and its dependencies.",
-	installedSkillLocations: "Installed Skills",
-	installedSkillLocationsDescription:
-		"Read the universal directory and each native agent directory still in use.",
-	alwaysScanned: "Always read",
 	projectSkillLocations: "Project Skills",
 	projectSkillLocationsDescription:
 		"Read .agents/skills and native agent directories at the project root.",

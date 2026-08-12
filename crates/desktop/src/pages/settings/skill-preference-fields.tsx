@@ -1,4 +1,11 @@
-import { Card, Checkbox, Radio, Switch } from "@heroui/react";
+import {
+	Card,
+	Checkbox,
+	Description,
+	Label,
+	Radio,
+	Switch,
+} from "@heroui/react";
 import type { ReactNode } from "react";
 
 export function SkillPreferenceSection({
@@ -13,18 +20,18 @@ export function SkillPreferenceSection({
 	children: ReactNode;
 }) {
 	return (
-		<Card className="min-w-0 gap-0 overflow-hidden p-0">
+		<Card className="min-w-0 gap-0 p-0">
 			<Card.Header className="flex flex-row items-start gap-3 border-b border-separator p-4">
 				<div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
 					{icon}
 				</div>
 				<div className="min-w-0 space-y-1">
-					<h3 className="text-sm font-medium text-foreground">
+					<Card.Title className="text-sm font-medium text-foreground">
 						{title}
-					</h3>
-					<p className="text-xs leading-5 text-muted">
+					</Card.Title>
+					<Card.Description className="text-xs leading-5 text-muted">
 						{description}
-					</p>
+					</Card.Description>
 				</div>
 			</Card.Header>
 			<Card.Content className="min-w-0 space-y-4 p-4">
@@ -44,7 +51,7 @@ export function SkillPreferenceChoice({
 	children: ReactNode;
 }) {
 	return (
-		<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+		<div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
 			<div className="min-w-0 space-y-0.5">
 				<SkillPreferenceLabel>{title}</SkillPreferenceLabel>
 				<p className="text-xs text-muted">{description}</p>
@@ -72,22 +79,20 @@ export function SkillPreferenceRadio({
 	return (
 		<Radio
 			value={value}
-			className="w-full items-start rounded-xl border border-separator bg-surface-secondary p-3"
+			className="flex w-full min-w-0 flex-col items-stretch rounded-xl border border-separator bg-surface-secondary p-3"
 		>
-			<Radio.Content className="min-w-0 items-start gap-2.5">
+			<Radio.Content className="flex min-w-0 items-center gap-2.5">
 				<Radio.Control className="mt-0.5 shrink-0">
 					<Radio.Indicator />
 				</Radio.Control>
-				<span className="mt-0.5 shrink-0 text-muted">{icon}</span>
-				<span className="min-w-0 space-y-0.5">
-					<span className="block text-sm text-foreground">
-						{label}
-					</span>
-					<span className="block text-xs leading-4 text-muted">
-						{description}
-					</span>
-				</span>
+				<span className="shrink-0 text-muted">{icon}</span>
+				<Label className="min-w-0 text-sm text-foreground">
+					{label}
+				</Label>
 			</Radio.Content>
+			<Description className="mt-1 block pl-12 text-xs leading-4 text-muted">
+				{description}
+			</Description>
 		</Radio>
 	);
 }
@@ -110,21 +115,19 @@ export function SkillPreferenceSwitch({
 			isSelected={selected}
 			isDisabled={disabled}
 			onChange={onChange}
-			className="w-full py-3"
+			className="flex w-full min-w-0 flex-col py-3"
 		>
 			<Switch.Content className="w-full items-center justify-between gap-4">
-				<span className="min-w-0 space-y-0.5">
-					<span className="block text-sm text-foreground">
-						{label}
-					</span>
-					<span className="block text-xs text-muted">
-						{description}
-					</span>
-				</span>
+				<Label className="min-w-0 text-sm text-foreground">
+					{label}
+				</Label>
 				<Switch.Control className="shrink-0">
 					<Switch.Thumb />
 				</Switch.Control>
 			</Switch.Content>
+			<Description className="mt-0.5 ml-0 block pl-0 pr-12 text-xs text-muted">
+				{description}
+			</Description>
 		</Switch>
 	);
 }
@@ -149,22 +152,20 @@ export function SkillDiscoveryCheckbox({
 			isSelected={selected}
 			isDisabled={disabled}
 			onChange={onChange}
-			className="w-full items-start px-3 py-3"
+			className="flex w-full min-w-0 flex-col items-stretch px-3 py-3"
 		>
-			<Checkbox.Control className="shrink-0">
-				<Checkbox.Indicator />
-			</Checkbox.Control>
-			<Checkbox.Content className="min-w-0 items-start gap-2.5">
-				<span className="mt-0.5 shrink-0 text-muted">{icon}</span>
-				<span className="min-w-0 space-y-0.5">
-					<span className="block text-sm text-foreground">
-						{label}
-					</span>
-					<span className="block text-xs leading-4 text-muted">
-						{description}
-					</span>
-				</span>
+			<Checkbox.Content className="flex min-w-0 items-center gap-2.5">
+				<Checkbox.Control className="shrink-0">
+					<Checkbox.Indicator />
+				</Checkbox.Control>
+				<span className="shrink-0 text-muted">{icon}</span>
+				<Label className="min-w-0 text-sm text-foreground">
+					{label}
+				</Label>
 			</Checkbox.Content>
+			<Description className="mt-1 block pl-12 text-xs leading-4 text-muted">
+				{description}
+			</Description>
 		</Checkbox>
 	);
 }

@@ -79,28 +79,39 @@ test("disabled copy checks issue no scan requests", async ({ page }) => {
 	]);
 });
 
-test("skill installation, copy, and discovery preferences are stored", async ({
+test("skill copy and discovery preferences are compact and stored", async ({
 	page,
 }) => {
 	await installMocks(page);
+	await page.setViewportSize({ width: 1024, height: 768 });
 	await page.goto("/settings?tab=skills");
 
-	await expect(
-		page.getByText("~/.agents/skills", { exact: true }),
-	).toBeVisible();
+	const panel = page.getByRole("tabpanel", { name: "Skills" });
+	await expect(panel).toBeVisible();
+	await expect(page.getByText("Installation location")).toHaveCount(0);
+	expect(
+		await panel.evaluate(
+			(element) => element.scrollWidth <= element.clientWidth,
+		),
+	).toBe(true);
 	await page
 		.getByRole("switch", { name: /Show matching content once/ })
 		.press("Space");
 	await page
 		.getByRole("switch", { name: /Flag content conflicts/ })
 		.press("Space");
-	await page.getByText("Write independent files", { exact: true }).click();
-	await page.getByRole("checkbox", { name: /Project Skills/ }).press("Space");
 	await page
-		.getByRole("checkbox", {
-			name: /Skills in dependencies/,
-		})
-		.press("Space");
+		.locator('[data-slot="radio-content"]')
+		.filter({ hasText: "Write independent files" })
+		.click();
+	await page
+		.locator('[data-slot="checkbox-content"]')
+		.filter({ hasText: "Project Skills" })
+		.click();
+	await page
+		.locator('[data-slot="checkbox-content"]')
+		.filter({ hasText: "Skills in dependencies" })
+		.click();
 
 	await expect
 		.poll(() => page.evaluate(storedPreferences))

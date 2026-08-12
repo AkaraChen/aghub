@@ -675,17 +675,8 @@ export default {
 	skillAuditEnabled: "已開啟自動技能掃描",
 	skillAuditDisabled: "已關閉自動技能掃描",
 	skillAuditPreferenceError: "無法更新技能掃描設定",
-	skillInstallation: "安裝位置",
-	skillInstallationDescription:
-		"預設寫入通用目錄；需要單獨管理時仍可選擇 Agent 的原生目錄。",
 	universalAgentTarget: "通用 Agent",
 	universalAgentTargetSummary: "通用 Agent（{{agents}}）",
-	defaultLabel: "預設",
-	universalAgentTargetPathHint: "支援通用目錄的 Agent 讀取同一份 Skill",
-	nativeAgentTargets: "Agent 原生目錄",
-	nativeAgentTargetsDescription:
-		"安裝時可按需選擇某個 Agent 的官方目錄；只寫入明確選中的位置。",
-	skillStorageNotice: "AGHub 直接管理實際安裝目錄，不額外保存一份主副本。",
 	skillContentChecks: "副本與差異",
 	skillContentChecksDescription:
 		"控制同名 Skill 的比較時機、相同版本分組和內容衝突提示。",
@@ -702,10 +693,6 @@ export default {
 	warnOnSkillConflicts: "標記內容衝突",
 	warnOnSkillConflictsDescription:
 		"在 Skill 清單標記內容不同或無法比較的副本。",
-	unreadableSkillCopies: "無法讀取的副本",
-	unreadableSkillCopiesDescription:
-		"不參與版本統一，並在詳情與通知中顯示失敗原因。",
-	alwaysReported: "始終提示",
 	skillFileRelationships: "統一方式",
 	skillFileRelationshipsDescription:
 		"選擇一個版本統一其他位置時，設定預設的檔案寫入方式。",
@@ -721,10 +708,6 @@ export default {
 	skillDiscoveryScope: "Skill 來源",
 	skillDiscoveryScopeDescription:
 		"已安裝目錄始終讀取；選擇是否繼續尋找目前專案及其相依項目。",
-	installedSkillLocations: "已安裝 Skill",
-	installedSkillLocationsDescription:
-		"讀取通用目錄以及每個 Agent 仍在使用的原生目錄。",
-	alwaysScanned: "始終讀取",
 	projectSkillLocations: "專案 Skill",
 	projectSkillLocationsDescription:
 		"讀取專案根目錄下的 .agents/skills 與 Agent 原生目錄。",

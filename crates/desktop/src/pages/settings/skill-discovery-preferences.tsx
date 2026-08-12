@@ -3,7 +3,7 @@ import {
 	FolderOpenIcon,
 	RectangleStackIcon,
 } from "@heroicons/react/24/solid";
-import { Chip, Surface } from "@heroui/react";
+import { Surface } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import type { SkillPreferences } from "../../lib/store";
 import {
@@ -30,26 +30,6 @@ export function SkillDiscoveryPreferences({
 			description={t("skillDiscoveryScopeDescription")}
 			icon={<FolderOpenIcon className="size-4" />}
 		>
-			<Surface variant="secondary" className="min-w-0 rounded-xl p-3">
-				<div className="flex min-w-0 items-start gap-3">
-					<div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface text-muted">
-						<FolderOpenIcon className="size-4" />
-					</div>
-					<div className="min-w-0 flex-1 space-y-0.5">
-						<div className="flex items-center gap-2">
-							<p className="text-sm font-medium text-foreground">
-								{t("installedSkillLocations")}
-							</p>
-							<Chip size="sm" variant="tertiary">
-								{t("alwaysScanned")}
-							</Chip>
-						</div>
-						<p className="text-xs leading-5 text-muted">
-							{t("installedSkillLocationsDescription")}
-						</p>
-					</div>
-				</div>
-			</Surface>
 			<Surface
 				variant="secondary"
 				className="divide-y divide-separator rounded-xl"
