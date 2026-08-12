@@ -324,10 +324,12 @@ export function createApi(baseUrl: string, token: string) {
 			},
 			resolveCopies(
 				data: SkillCopyResolutionRequest,
+				signal?: AbortSignal,
 			): Promise<SkillCopyResolutionResponse> {
 				return client
 					.post("skills/copies/resolve", {
 						json: data,
+						signal,
 						timeout: SKILL_DIFF_TIMEOUT_MS,
 					})
 					.json();
