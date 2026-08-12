@@ -676,6 +676,8 @@ export default {
 	skillAuditEnabled: "已开启自动技能扫描",
 	skillAuditDisabled: "已关闭自动技能扫描",
 	skillAuditPreferenceError: "无法更新技能扫描设置",
+	skillManagement: "Skill 管理",
+	skillSecurity: "Skill 安全",
 	universalAgentTarget: "通用 Agent",
 	universalAgentTargetSummary: "通用 Agent（{{agents}}）",
 	skillContentChecks: "副本与差异",

@@ -725,6 +725,18 @@ test("switching branches discards the previous audit and session", async ({
 	});
 });
 
+test("legacy Security settings link opens Skill security", async ({ page }) => {
+	await installMocks(page);
+	await page.goto("/settings?tab=security");
+
+	await expect(
+		page.getByRole("tab", { name: "Skills", exact: true }),
+	).toHaveAttribute("aria-selected", "true");
+	await expect(
+		page.getByRole("heading", { name: "Skill security", exact: true }),
+	).toBeVisible();
+});
+
 test("disabling automatic scans skips preview but keeps write-time assessment", async ({
 	page,
 }) => {
@@ -744,7 +756,13 @@ test("disabling automatic scans skips preview but keeps write-time assessment", 
 		}
 	});
 
-	await page.goto("/settings?tab=security");
+	await page.goto("/settings?tab=skills");
+	await expect(
+		page.getByRole("tab", { name: "Security", exact: true }),
+	).toHaveCount(0);
+	await expect(
+		page.getByRole("heading", { name: "Skill security", exact: true }),
+	).toBeVisible();
 	const scanSwitch = page.getByRole("switch", {
 		name: "Automatic skill security scans",
 	});

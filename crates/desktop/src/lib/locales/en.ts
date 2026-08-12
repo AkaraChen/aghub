@@ -706,6 +706,8 @@ export default {
 	skillAuditEnabled: "Automatic skill scans enabled",
 	skillAuditDisabled: "Automatic skill scans disabled",
 	skillAuditPreferenceError: "Failed to update the skill scan setting",
+	skillManagement: "Skill management",
+	skillSecurity: "Skill security",
 	universalAgentTarget: "Universal agents",
 	universalAgentTargetSummary: "Universal agents ({{agents}})",
 	skillContentChecks: "Copies and differences",
