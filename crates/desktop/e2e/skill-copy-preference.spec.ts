@@ -89,6 +89,10 @@ test("skill copy and discovery preferences are compact and stored", async ({
 	const panel = page.getByRole("tabpanel", { name: "Skills" });
 	await expect(panel).toBeVisible();
 	await expect(page.getByText("Installation location")).toHaveCount(0);
+	await expect(panel.locator('[data-slot="card-header"]')).toHaveCount(0);
+	await expect(
+		panel.locator('[data-slot="card"] [data-slot="surface"]'),
+	).toHaveCount(0);
 	expect(
 		await panel.evaluate(
 			(element) => element.scrollWidth <= element.clientWidth,

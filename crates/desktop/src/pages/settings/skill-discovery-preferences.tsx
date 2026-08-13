@@ -3,7 +3,6 @@ import {
 	FolderOpenIcon,
 	RectangleStackIcon,
 } from "@heroicons/react/24/solid";
-import { Surface } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import type { SkillPreferences } from "../../lib/store";
 import {
@@ -28,12 +27,8 @@ export function SkillDiscoveryPreferences({
 		<SkillPreferenceSection
 			title={t("skillDiscoveryScope")}
 			description={t("skillDiscoveryScopeDescription")}
-			icon={<FolderOpenIcon className="size-4" />}
 		>
-			<Surface
-				variant="secondary"
-				className="divide-y divide-separator rounded-xl"
-			>
+			<div className="divide-y divide-separator">
 				<SkillDiscoveryCheckbox
 					label={t("projectSkillLocations")}
 					description={t("projectSkillLocationsDescription")}
@@ -87,7 +82,7 @@ export function SkillDiscoveryPreferences({
 						})
 					}
 				/>
-			</Surface>
+			</div>
 		</SkillPreferenceSection>
 	);
 }

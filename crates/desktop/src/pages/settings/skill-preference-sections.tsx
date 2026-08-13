@@ -1,14 +1,5 @@
-import {
-	DocumentDuplicateIcon,
-	LinkIcon,
-	MagnifyingGlassIcon,
-} from "@heroicons/react/24/solid";
-import {
-	RadioGroup,
-	Surface,
-	ToggleButton,
-	ToggleButtonGroup,
-} from "@heroui/react";
+import { DocumentDuplicateIcon, LinkIcon } from "@heroicons/react/24/solid";
+import { RadioGroup, ToggleButton, ToggleButtonGroup } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import type { SkillCopyCheckMode, SkillPreferences } from "../../lib/store";
 import {
@@ -38,7 +29,6 @@ export function SkillRelationshipPreferences({
 		<SkillPreferenceSection
 			title={t("skillFileRelationships")}
 			description={t("skillFileRelationshipsDescription")}
-			icon={<DocumentDuplicateIcon className="size-4" />}
 		>
 			<div className="space-y-2">
 				<SkillPreferenceLabel>
@@ -93,7 +83,6 @@ export function SkillContentPreferences({
 		<SkillPreferenceSection
 			title={t("skillContentChecks")}
 			description={t("skillContentChecksDescription")}
-			icon={<MagnifyingGlassIcon className="size-4" />}
 		>
 			<SkillPreferenceChoice
 				title={t("skillChangeCheckTiming")}
@@ -139,10 +128,7 @@ export function SkillContentPreferences({
 				<p className="text-xs text-muted">
 					{t("duplicateSkillManagementDescription")}
 				</p>
-				<Surface
-					variant="secondary"
-					className="divide-y divide-separator rounded-xl px-3"
-				>
+				<div className="divide-y divide-separator px-1">
 					<SkillPreferenceSwitch
 						label={t("groupIdenticalSkillCopies")}
 						description={t("groupIdenticalSkillCopiesDescription")}
@@ -161,7 +147,7 @@ export function SkillContentPreferences({
 							onChange({ ...preferences, warnOnConflicts })
 						}
 					/>
-				</Surface>
+				</div>
 			</div>
 		</SkillPreferenceSection>
 	);

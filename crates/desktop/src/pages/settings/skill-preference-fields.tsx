@@ -11,30 +11,21 @@ import type { ReactNode } from "react";
 export function SkillPreferenceSection({
 	title,
 	description,
-	icon,
 	children,
 }: {
 	title: string;
 	description: string;
-	icon: ReactNode;
 	children: ReactNode;
 }) {
 	return (
-		<Card className="min-w-0 gap-0 p-0">
-			<Card.Header className="flex flex-row items-start gap-3 border-b border-separator p-4">
-				<div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-secondary text-muted">
-					{icon}
-				</div>
-				<div className="min-w-0 space-y-1">
-					<Card.Title className="text-sm font-medium text-foreground">
-						{title}
-					</Card.Title>
-					<Card.Description className="text-xs leading-5 text-muted">
-						{description}
-					</Card.Description>
-				</div>
-			</Card.Header>
+		<Card className="min-w-0 p-0">
 			<Card.Content className="min-w-0 space-y-4 p-4">
+				<div className="min-w-0 space-y-0.5">
+					<h3 className="text-sm font-medium text-foreground">
+						{title}
+					</h3>
+					<p className="text-xs text-muted">{description}</p>
+				</div>
 				{children}
 			</Card.Content>
 		</Card>
