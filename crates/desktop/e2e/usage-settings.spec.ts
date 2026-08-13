@@ -1375,6 +1375,75 @@ test("usage window uses a finite desktop picker", async ({ page }) => {
 	);
 });
 
+test("usage report range offers recent, all-time, and custom dates", async ({
+	page,
+}) => {
+	await page.goto("/settings?tab=usage");
+
+	const picker = page.getByRole("button", { name: "Usage time range" });
+	await expect(picker).toContainText("Last 30 days");
+	await picker.click();
+	await expect(page.getByRole("option", { name: "All time" })).toBeVisible();
+	await expect(
+		page.getByRole("option", { name: "Custom range" }),
+	).toBeVisible();
+	await page.getByRole("option", { name: "All time" }).click();
+	await expect(picker).toContainText("All time");
+
+	await picker.click();
+	await page.getByRole("option", { name: "Custom range" }).click();
+	await expect(
+		page.locator('[data-testid="usage-custom-date-range"]'),
+	).toBeVisible();
+	await page.locator('[data-slot="date-range-picker-trigger"]').click();
+	await expect(
+		page.locator('[data-slot="date-range-picker-popover"]'),
+	).toBeVisible();
+	await page.keyboard.press("Escape");
+	await page.setViewportSize({ width: 800, height: 650 });
+	const customRange = page.getByTestId("usage-custom-date-range");
+	const settingsCard = customRange.locator(
+		"xpath=ancestor::*[@data-slot='card'][1]",
+	);
+	const [customRangeBox, settingsCardBox] = await Promise.all([
+		customRange.boundingBox(),
+		settingsCard.boundingBox(),
+	]);
+	if (!customRangeBox || !settingsCardBox) {
+		throw new Error("custom range geometry missing");
+	}
+	expect(customRangeBox.x).toBeGreaterThanOrEqual(settingsCardBox.x);
+	expect(customRangeBox.x + customRangeBox.width).toBeLessThanOrEqual(
+		settingsCardBox.x + settingsCardBox.width,
+	);
+});
+
+test("usage setting rows restore their surface hover feedback", async ({
+	page,
+}) => {
+	await page.goto("/settings?tab=usage");
+
+	for (const testId of [
+		"usage-runtime-row",
+		"usage-home-window-row",
+		"usage-layout-actions-row",
+		"usage-defaults-footer",
+	]) {
+		const row = page.getByTestId(testId);
+		const idleBackground = await row.evaluate(
+			(element) => getComputedStyle(element).backgroundColor,
+		);
+		await row.hover();
+		await expect
+			.poll(() =>
+				row.evaluate(
+					(element) => getComputedStyle(element).backgroundColor,
+				),
+			)
+			.not.toBe(idleBackground);
+	}
+});
+
 test("advanced number steppers use the default horizontal anatomy", async ({
 	page,
 }) => {

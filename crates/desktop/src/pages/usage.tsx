@@ -17,16 +17,16 @@ import {
 	formatTokens,
 	shortCcusageVersion,
 } from "../lib/usage-format";
-import { buildUsageDateRange } from "../lib/usage-date-range";
+import {
+	buildUsageReportDateRange,
+	usageReportDates,
+} from "../lib/usage-date-range";
 import { cn } from "../lib/utils";
 import {
 	usageAgentsQueryOptions,
 	usageStatusQueryOptions,
 	usageSummaryQueryOptions,
 } from "../requests/usage";
-
-/** The page shows a fixed recent window; day-level tuning lives in settings. */
-const WINDOW_DAYS = 30;
 
 /** Totals fields that hold token counts (everything but the cost). */
 type TokenField = Exclude<keyof UsageTotalsDto, "cost_usd">;
@@ -41,7 +41,7 @@ const BREAKDOWN: { field: TokenField; labelKey: string }[] = [
 ];
 
 export default function UsagePage() {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 	const [, setLocation] = useLocation();
 	const api = useApi();
 	const { availableAgents } = useAgentAvailability();
@@ -50,7 +50,10 @@ export default function UsagePage() {
 	const settings = usageSettings ?? DEFAULT_USAGE_SETTINGS;
 	const settingsReady = usageSettingsQuery.isSuccess;
 
-	const range = buildUsageDateRange(WINDOW_DAYS, settings.timezone);
+	const range = buildUsageReportDateRange(
+		settings.reportRange,
+		settings.timezone,
+	);
 	const refetchInterval =
 		settings.pollIntervalMs > 0 ? settings.pollIntervalMs : false;
 	const usageAgentsQuery = useQuery(
@@ -110,6 +113,16 @@ export default function UsagePage() {
 	}, [availableAgents]);
 
 	const agents = useMemo(() => report?.agents ?? [], [report]);
+	const chartDates =
+		settings.reportRange.mode === "all"
+			? usageReportDates(agents)
+			: range.dates;
+	const rangeLabel =
+		settings.reportRange.mode === "last30"
+			? t("usageReportRangeLast30")
+			: settings.reportRange.mode === "all"
+				? t("usageReportRangeAll")
+				: `${formatReportDate(settings.reportRange.since, i18n.language)} – ${formatReportDate(settings.reportRange.until, i18n.language)}`;
 
 	// Cross-agent headline numbers; spend only when ccusage priced anything.
 	const summary = useMemo(() => {
@@ -143,9 +156,7 @@ export default function UsagePage() {
 						<h1 className="text-2xl font-semibold tracking-tight">
 							{t("usage")}
 						</h1>
-						<p className="text-sm text-muted">
-							{t("usageWindowDaysLabel", { days: WINDOW_DAYS })}
-						</p>
+						<p className="text-sm text-muted">{rangeLabel}</p>
 					</div>
 					<div className="flex max-w-full items-center gap-1 sm:shrink-0">
 						<UsageStatus
@@ -210,7 +221,10 @@ export default function UsagePage() {
 					<EmptyState message={emptyMessage} />
 				) : (
 					<div className="flex flex-col gap-6">
-						<div className="flex flex-wrap items-baseline gap-x-10 gap-y-3">
+						<div
+							data-testid="usage-summary-strip"
+							className="-mx-3 flex w-fit max-w-full flex-wrap items-baseline gap-x-10 gap-y-3 rounded-xl px-3 py-2 transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)] hover:bg-surface motion-reduce:transition-none"
+						>
 							<SummaryStat
 								label={t("usageStatTotalTokens")}
 								value={formatTokens(summary.tokens)}
@@ -223,13 +237,17 @@ export default function UsagePage() {
 							)}
 							<SummaryStat
 								label={t("usageActiveDays")}
-								value={`${summary.activeDays} / ${WINDOW_DAYS}`}
+								value={
+									settings.reportRange.mode === "all"
+										? String(summary.activeDays)
+										: `${summary.activeDays} / ${chartDates.length}`
+								}
 							/>
 						</div>
 
 						<UsageDailyBars
 							agents={agents}
-							dates={range.dates}
+							dates={chartDates}
 							nameOf={displayName}
 						/>
 
@@ -250,6 +268,15 @@ export default function UsagePage() {
 			</div>
 		</div>
 	);
+}
+
+function formatReportDate(iso: string, locale: string): string {
+	return new Intl.DateTimeFormat(locale, {
+		year: "numeric",
+		month: "short",
+		day: "numeric",
+		timeZone: "UTC",
+	}).format(new Date(`${iso}T00:00:00Z`));
 }
 
 function SummaryStat({ label, value }: { label: string; value: string }) {

@@ -157,6 +157,20 @@ test("usage page shows summary, daily strip, and per-agent rows", async ({
 	// mocked days carry usage).
 	await expect(page.getByText("Total spend")).toBeVisible();
 	await expect(page.getByText("2 / 30")).toBeVisible();
+	for (const testId of ["usage-summary-strip", "usage-chart-legend"]) {
+		const surface = page.getByTestId(testId);
+		const idleBackground = await surface.evaluate(
+			(element) => getComputedStyle(element).backgroundColor,
+		);
+		await surface.hover();
+		await expect
+			.poll(() =>
+				surface.evaluate(
+					(element) => getComputedStyle(element).backgroundColor,
+				),
+			)
+			.not.toBe(idleBackground);
+	}
 
 	// The stacked daily strip renders with a legend entry for the one agent
 	// that has day-level data ("Claude" also appears on its row → first()).
@@ -305,6 +319,28 @@ test("usage range follows the selected timezone and polling interval", async ({
 	expect(firstRequest.searchParams.get("timezone")).toBe(
 		"America/Los_Angeles",
 	);
+});
+
+test("all-time usage omits date bounds and removes the active-day denominator", async ({
+	page,
+}) => {
+	const summaryRequests: URL[] = [];
+	await page.route("**/api/v1/usage/summary**", async (route) => {
+		summaryRequests.push(new URL(route.request().url()));
+		await route.fallback();
+	});
+	await page.goto("/settings?tab=usage");
+	await page.getByRole("button", { name: "Usage time range" }).click();
+	await page.getByRole("option", { name: "All time" }).click();
+	await page.getByRole("link", { name: "Usage", exact: true }).click();
+
+	await expect(page.getByText("All time", { exact: true })).toBeVisible();
+	await expect(page.getByText("2", { exact: true }).first()).toBeVisible();
+	await expect(page.getByText("2 / 30", { exact: true })).toHaveCount(0);
+	await expect.poll(() => summaryRequests.length).toBeGreaterThan(0);
+	const request = summaryRequests[0];
+	expect(request.searchParams.has("since")).toBe(false);
+	expect(request.searchParams.has("until")).toBe(false);
 });
 
 test("daily chart aggregates agents after the first three", async ({

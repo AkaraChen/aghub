@@ -136,7 +136,8 @@ export function UsageRuntimeSection() {
 
 	return (
 		<section
-			className="grid grid-cols-1 items-center gap-x-2 gap-y-2 px-1 pb-5 sm:grid-cols-[minmax(0,1fr)_auto]"
+			data-testid="usage-runtime-row"
+			className="grid grid-cols-1 items-center gap-x-2 gap-y-2 rounded-lg px-1 pb-5 transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)] hover:bg-surface-secondary motion-reduce:transition-none sm:grid-cols-[minmax(0,1fr)_auto]"
 			aria-labelledby="usage-runtime-heading"
 		>
 			<div

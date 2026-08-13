@@ -12,6 +12,7 @@ import { initializeStarredResources } from "./initialize-starred-resources";
 import { normalizeUpdateChannel } from "./normalize-update-channel";
 import { resetSidebarItems } from "./reset-sidebar-items";
 import { initializeSkillPreferences } from "./skill-preferences";
+import { initializeUsageReportRange } from "./initialize-usage-report-range";
 
 export async function migrate(store: Store): Promise<void> {
 	const version = (await store.get<number>("version")) ?? 0;
@@ -64,6 +65,10 @@ export async function migrate(store: Store): Promise<void> {
 
 	if (version < 13) {
 		await initializeSkillPreferences(store);
+	}
+
+	if (version < 14) {
+		await initializeUsageReportRange(store);
 	}
 
 	await store.set("version", CURRENT_VERSION);

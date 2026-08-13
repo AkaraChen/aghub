@@ -9,6 +9,7 @@ import { setUsageRuntimeMutationOptions } from "../../requests/usage";
 import { AdvancedSection } from "./usage-advanced-section";
 import { AlertsSection } from "./usage-alerts-section";
 import { HomeCardsSection } from "./usage-home-section";
+import { UsageReportSection } from "./usage-report-section";
 import { UsageRuntimeSection } from "./usage-runtime-section";
 
 export default function UsagePanel() {
@@ -96,6 +97,10 @@ export default function UsagePanel() {
 		<>
 			<Card className="gap-0 divide-y divide-border p-4">
 				<UsageRuntimeSection />
+				<UsageReportSection
+					current={current}
+					updateSettings={updateSettings}
+				/>
 				<HomeCardsSection
 					current={current}
 					updateSettings={updateSettings}
@@ -112,7 +117,7 @@ export default function UsagePanel() {
 				/>
 				<Card.Footer
 					data-testid="usage-defaults-footer"
-					className="flex-col items-stretch justify-between gap-3 px-1 pt-4 sm:flex-row sm:items-center"
+					className="flex-col items-stretch justify-between gap-3 rounded-lg px-1 pt-4 transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)] hover:bg-surface-secondary motion-reduce:transition-none sm:flex-row sm:items-center"
 				>
 					<div className="min-w-0 space-y-0.5">
 						<p className="text-sm font-medium text-(--foreground)">

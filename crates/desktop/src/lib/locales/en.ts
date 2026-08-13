@@ -519,6 +519,16 @@ export default {
 		"IANA timezone for daily usage buckets. Empty uses the system timezone.",
 	usageGlobalAlertThreshold: "Global warning level",
 	usageAlertUseGlobal: "Use global ({{pct}}%)",
+	usageSettingsReport: "Usage page",
+	usageSettingsReportDescription:
+		"Set the period used by the summary, activity chart, and agent totals.",
+	usageReportRange: "Usage time range",
+	usageReportRangeDescription:
+		"Choose the date range summarized on the Usage page.",
+	usageReportRangeLast30: "Last 30 days",
+	usageReportRangeAll: "All time",
+	usageReportRangeCustom: "Custom range",
+	usageReportCustomDates: "Custom usage dates",
 	usageSettingsHomeCards: "Home cards",
 	usageNoEnabledAgents: "No enabled agents support usage tracking",
 	usageExtraArgs: "Additional ccusage arguments",

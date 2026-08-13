@@ -66,8 +66,15 @@ export {
 	saveUsageSettings,
 	USAGE_ALERT_THRESHOLDS_PCT,
 	USAGE_QUOTA_AGENTS,
+	USAGE_REPORT_RANGE_MODES,
 } from "./store/usage";
-export type { HomeStatId, HomeWindowId, UsageSettings } from "./store/usage";
+export type {
+	HomeStatId,
+	HomeWindowId,
+	UsageReportRangeMode,
+	UsageReportRangeSettings,
+	UsageSettings,
+} from "./store/usage";
 export type {
 	IntegrationPreferences,
 	OnboardingProgress,

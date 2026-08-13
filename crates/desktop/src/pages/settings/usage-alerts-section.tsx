@@ -8,6 +8,7 @@ import {
 	type UsageSettings,
 } from "../../lib/store";
 import { USAGE_AGENT_LABELS } from "../../lib/usage-agents";
+import { cn } from "../../lib/utils";
 import { SettingRow, SettingSelect } from "./usage-setting-controls";
 import {
 	includeSelectedOption,
@@ -99,7 +100,12 @@ export function AlertsSection({ current, updateSettings }: UsageSectionProps) {
 				return (
 					<div
 						key={agent}
-						className="flex items-center justify-between gap-4 border-t border-border pt-4"
+						data-disabled={!enabledAgentIds.has(agent) || undefined}
+						className={cn(
+							"-mx-2 flex items-center justify-between gap-4 rounded-lg border-t border-border px-2 py-3 transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
+							enabledAgentIds.has(agent) &&
+								"hover:bg-surface-secondary",
+						)}
 					>
 						<span className="flex items-center gap-2 text-sm font-medium text-(--foreground)">
 							<AgentIcon

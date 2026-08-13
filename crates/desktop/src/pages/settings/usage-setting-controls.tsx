@@ -21,13 +21,24 @@ export function SettingRow({
 	title,
 	description,
 	control,
+	isDisabled = false,
+	testId,
 }: {
 	title: string;
 	description?: ReactNode;
 	control: ReactNode;
+	isDisabled?: boolean;
+	testId?: string;
 }) {
 	return (
-		<div className="flex flex-col items-stretch gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+		<div
+			data-testid={testId}
+			data-disabled={isDisabled || undefined}
+			className={cn(
+				"-mx-2 flex flex-col items-stretch gap-2 rounded-lg px-2 py-2 transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none sm:flex-row sm:items-center sm:justify-between sm:gap-4",
+				!isDisabled && "hover:bg-surface-secondary",
+			)}
+		>
 			<div className="min-w-0 space-y-0.5">
 				<span className="text-sm font-medium text-(--foreground)">
 					{title}

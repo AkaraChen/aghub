@@ -60,7 +60,10 @@ export function UsageDailyBars({
 
 	return (
 		<div className="flex flex-col gap-2">
-			<div className="flex items-center justify-end gap-4">
+			<div
+				data-testid="usage-chart-legend"
+				className="flex w-fit self-end items-center gap-4 rounded-lg px-2 py-1 transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)] hover:bg-surface motion-reduce:transition-none"
+			>
 				{series.map((item, index) => (
 					<span
 						key={item.id}

@@ -72,6 +72,17 @@ interface UsageHomeSettings {
 	perAgent: Record<string, CardLayout>;
 }
 
+export const USAGE_REPORT_RANGE_MODES = ["last30", "all", "custom"] as const;
+export type UsageReportRangeMode = (typeof USAGE_REPORT_RANGE_MODES)[number];
+
+export interface UsageReportRangeSettings {
+	mode: UsageReportRangeMode;
+	/** Inclusive ISO date used when {@link mode} is `custom`. */
+	since: string;
+	/** Inclusive ISO date used when {@link mode} is `custom`. */
+	until: string;
+}
+
 export interface UsageSettings {
 	/** Usage dashboard poll interval in ms; `0` disables polling. */
 	pollIntervalMs: number;
@@ -92,6 +103,8 @@ export interface UsageSettings {
 	globalAlertThresholdPct: number;
 	/** Sparse per-agent overrides; missing agents use {@link DEFAULT_AGENT_SETTINGS}. */
 	agents: Record<string, UsageAgentSettings>;
+	/** Date range shown on the dedicated Usage page. */
+	reportRange: UsageReportRangeSettings;
 	home: UsageHomeSettings;
 }
 
@@ -141,6 +154,11 @@ export function createDefaultUsageSettings(): UsageSettings {
 		agents: {
 			claude: { ...DEFAULT_AGENT_SETTINGS },
 			codex: { ...DEFAULT_AGENT_SETTINGS },
+		},
+		reportRange: {
+			mode: "last30",
+			since: "",
+			until: "",
 		},
 		home: {
 			showUsageOnHome: true,
@@ -220,6 +238,35 @@ function normalizeTimezone(value: unknown): string {
 
 const HOME_STAT_ID_SET = new Set<HomeStatId>(HOME_STAT_IDS);
 const HOME_WINDOW_ID_SET = new Set<HomeWindowId>(HOME_WINDOW_IDS);
+const USAGE_REPORT_RANGE_MODE_SET = new Set<UsageReportRangeMode>(
+	USAGE_REPORT_RANGE_MODES,
+);
+
+function isIsoDate(value: unknown): value is string {
+	if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+		return false;
+	}
+	const date = new Date(`${value}T00:00:00Z`);
+	return (
+		!Number.isNaN(date.valueOf()) && date.toISOString().startsWith(value)
+	);
+}
+
+function normalizeReportRange(raw: unknown): UsageReportRangeSettings {
+	const d = DEFAULT_USAGE_SETTINGS.reportRange;
+	const r = (typeof raw === "object" && raw !== null ? raw : {}) as Record<
+		string,
+		unknown
+	>;
+	const mode = USAGE_REPORT_RANGE_MODE_SET.has(r.mode as UsageReportRangeMode)
+		? (r.mode as UsageReportRangeMode)
+		: d.mode;
+	if (mode !== "custom") return { mode, since: "", until: "" };
+	if (!isIsoDate(r.since) || !isIsoDate(r.until) || r.since > r.until) {
+		return { ...d };
+	}
+	return { mode, since: r.since, until: r.until };
+}
 
 /**
  * Coerce a stored slot list to a fixed-length `(id | null)[]`: keep known ids in
@@ -337,6 +384,7 @@ function normalizeUsageSettings(raw: unknown): UsageSettings {
 				(id) => [id, normalizeAgent(agents[id])],
 			),
 		),
+		reportRange: normalizeReportRange(r.reportRange),
 		home: normalizeHome(r.home),
 	};
 }

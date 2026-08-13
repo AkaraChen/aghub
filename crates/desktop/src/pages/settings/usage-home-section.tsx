@@ -210,8 +210,10 @@ export function HomeCardsSection({
 				}
 			/>
 			<SettingRow
+				testId="usage-home-window-row"
 				title={t("usageHomeWindow")}
 				description={t("usageHomeWindowDescription")}
+				isDisabled={!home.showUsageOnHome}
 				control={
 					<SettingSelect
 						value={String(home.windowDays)}
@@ -234,7 +236,10 @@ export function HomeCardsSection({
 				}
 			/>
 			<div className="w-full border-t border-border pt-4">
-				<div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+				<div
+					data-testid="usage-layout-actions-row"
+					className="-mx-2 mb-1 flex flex-col gap-3 rounded-lg px-2 py-2 transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)] hover:bg-surface-secondary motion-reduce:transition-none sm:flex-row sm:items-center sm:justify-between"
+				>
 					<div className="min-w-0 space-y-0.5">
 						<span className="text-sm font-medium text-(--foreground)">
 							{t("usageHomeLayout")}
