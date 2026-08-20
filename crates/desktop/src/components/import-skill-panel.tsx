@@ -418,11 +418,6 @@ export function ImportSkillPanel({
 									render={({ field, fieldState }) => (
 										<SkillTargetSelector
 											agents={skillAgents}
-											scope={
-												projectPath
-													? "project"
-													: "global"
-											}
 											selectedKeys={new Set(field.value)}
 											onSelectionChange={(keys) =>
 												field.onChange([...keys])

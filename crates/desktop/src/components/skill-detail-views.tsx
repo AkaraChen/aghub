@@ -145,7 +145,14 @@ export function LocationRow({
 				</div>
 			</div>
 			{(hasStorageStatus || hasFileLinkStatus) && (
-				<div className="mt-2 space-y-1.5 border-t border-separator/60 pt-2">
+				<div
+					className={cn(
+						"space-y-1.5",
+						hasStorageStatus
+							? "mt-1.5"
+							: "mt-2 border-t border-separator/60 pt-2",
+					)}
+				>
 					{group.isSymlink && (
 						<div
 							data-skill-location-link={

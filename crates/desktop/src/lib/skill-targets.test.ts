@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SkillResponse } from "../generated/dto";
 import {
-	formatUniversalSkillTargetMembers,
 	skillSourceTargetId,
 	skillTargetIds,
 	UNIVERSAL_SKILL_TARGET_ID,
@@ -63,57 +62,6 @@ describe("skillTargetIds", () => {
 
 		expect(skillTargetIds(installed)).toEqual(
 			new Set([UNIVERSAL_SKILL_TARGET_ID]),
-		);
-	});
-});
-
-describe("formatUniversalSkillTargetMembers", () => {
-	it("lists only agents that read the universal directory", () => {
-		const agents = [
-			{
-				display_name: "Codex",
-				skills_paths: {
-					global_read: ["~/.agents/skills"],
-					project_read: [".agents/skills"],
-				},
-			},
-			{
-				display_name: "Claude",
-				skills_paths: {
-					global_read: ["~/.claude/skills"],
-					project_read: [".claude/skills"],
-				},
-			},
-			{
-				display_name: "OpenCode",
-				skills_paths: {
-					global_read: ["~/.agents/skills"],
-					project_read: [".agents/skills"],
-				},
-			},
-		];
-
-		expect(formatUniversalSkillTargetMembers(agents, "en")).toBe(
-			"Codex & OpenCode",
-		);
-	});
-
-	it("uses the selected scope when directory support differs", () => {
-		const agents = [
-			{
-				display_name: "Antigravity",
-				skills_paths: {
-					global_read: ["~/.gemini/antigravity/skills"],
-					project_read: [".agents/skills"],
-				},
-			},
-		];
-
-		expect(formatUniversalSkillTargetMembers(agents, "en", "global")).toBe(
-			"",
-		);
-		expect(formatUniversalSkillTargetMembers(agents, "en", "project")).toBe(
-			"Antigravity",
 		);
 	});
 });

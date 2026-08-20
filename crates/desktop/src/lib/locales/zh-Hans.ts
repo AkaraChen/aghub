@@ -679,7 +679,6 @@ export default {
 	skillManagement: "Skill 管理",
 	skillSecurity: "Skill 安全",
 	universalAgentTarget: "通用 Agent",
-	universalAgentTargetSummary: "通用 Agent（{{agents}}）",
 	skillContentChecks: "副本与差异",
 	skillContentChecksDescription:
 		"控制同名 Skill 的比较时机、相同版本分组和内容冲突提示。",

@@ -3,43 +3,6 @@ import type { SkillResponse } from "../generated/dto";
 
 export const UNIVERSAL_SKILL_TARGET_ID = "universal";
 
-interface UniversalSkillAgent {
-	display_name: string;
-	skills_paths: {
-		global_read: string[];
-		project_read: string[];
-	};
-}
-
-export function formatUniversalSkillTargetMembers(
-	agents: readonly UniversalSkillAgent[],
-	language: string,
-	scope: "global" | "project" = "global",
-): string {
-	return new Intl.ListFormat(language, {
-		style: "short",
-		type: "conjunction",
-	}).format(
-		agents
-			.filter((agent) =>
-				(scope === "global"
-					? agent.skills_paths.global_read
-					: agent.skills_paths.project_read
-				).some(isUniversalSkillPath),
-			)
-			.map((agent) => agent.display_name),
-	);
-}
-
-export function getUniversalSkillTargetLabel(
-	t: TFunction,
-	members: string,
-): string {
-	return members
-		? t("universalAgentTargetSummary", { agents: members })
-		: t("universalAgentTarget");
-}
-
 export function formatSkillTargetName(
 	t: TFunction,
 	targetId: string,

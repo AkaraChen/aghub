@@ -27,7 +27,10 @@ import { useSkillPreferences } from "../hooks/use-skill-preferences";
 import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
 import { useFavorites } from "../hooks/use-favorites";
 import { useCurrentCodeEditor } from "../hooks/use-integrations";
-import { skillSourceTargetId } from "../lib/skill-targets";
+import {
+	skillSourceTargetId,
+	UNIVERSAL_SKILL_TARGET_ID,
+} from "../lib/skill-targets";
 import { cn, filterItemsByAgentIds } from "../lib/utils";
 import { openWithEditorMutationOptions } from "../requests/integrations";
 import {
@@ -226,15 +229,15 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		return null;
 	}, [currentSkillSource]);
 
-	const enabledAgentIds = useMemo(
-		() =>
-			new Set(
-				availableAgents
-					.filter((agent) => !agent.isDisabled)
-					.map((agent) => agent.id),
-			),
-		[availableAgents],
-	);
+	const enabledAgentIds = useMemo(() => {
+		const ids = new Set(
+			availableAgents
+				.filter((agent) => !agent.isDisabled)
+				.map((agent) => agent.id),
+		);
+		ids.add(UNIVERSAL_SKILL_TARGET_ID);
+		return ids;
+	}, [availableAgents]);
 	const visibleGroupItems = useMemo(
 		() => filterItemsByAgentIds(group.items, enabledAgentIds),
 		[group.items, enabledAgentIds],

@@ -11,11 +11,7 @@ import {
 	supportsIndividualSkillTarget,
 } from "../lib/agent-capabilities";
 import { AgentIcon } from "../lib/agent-icons";
-import {
-	formatUniversalSkillTargetMembers,
-	getUniversalSkillTargetLabel,
-	UNIVERSAL_SKILL_TARGET_ID,
-} from "../lib/skill-targets";
+import { UNIVERSAL_SKILL_TARGET_ID } from "../lib/skill-targets";
 import { cn } from "../lib/utils";
 import { reconcileMcpsMutationOptions } from "../requests/mcps";
 import { reconcileSkillsMutationOptions } from "../requests/skills";
@@ -67,10 +63,10 @@ export function AgentCoverageMatrix({
 	groups,
 	onManage,
 }: AgentCoverageMatrixProps) {
-	const { t, i18n } = useTranslation();
+	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
-	const { allAgents, availableAgents } = useAgentAvailability();
+	const { availableAgents } = useAgentAvailability();
 
 	const skillReconcile = useMutation(
 		reconcileSkillsMutationOptions({ api, queryClient }),
@@ -96,20 +92,15 @@ export function AgentCoverageMatrix({
 				universal: false,
 			}));
 		if (kind !== "skill") return agents;
-		const members = formatUniversalSkillTargetMembers(
-			allAgents,
-			i18n.language,
-			scope,
-		);
 		return [
 			{
 				id: UNIVERSAL_SKILL_TARGET_ID,
-				displayName: getUniversalSkillTargetLabel(t, members),
+				displayName: t("universalAgentTarget"),
 				universal: true,
 			},
 			...agents,
 		];
-	}, [availableAgents, allAgents, i18n.language, kind, scope, t]);
+	}, [availableAgents, kind, scope, t]);
 
 	const [pendingAgent, setPendingAgent] = useState<string | null>(null);
 	const [confirmAgent, setConfirmAgent] = useState<{

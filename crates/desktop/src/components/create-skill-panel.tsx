@@ -305,11 +305,6 @@ export function CreateSkillPanel({
 									render={({ field, fieldState }) => (
 										<SkillTargetSelector
 											agents={skillAgents}
-											scope={
-												projectPath
-													? "project"
-													: "global"
-											}
 											selectedKeys={new Set(field.value)}
 											onSelectionChange={(keys) =>
 												field.onChange([...keys])

@@ -15,9 +15,7 @@ test("Skill installs default to the universal target and keep native targets", a
 	const dialog = page.getByRole("dialog", { name: "Review import" });
 	const targetGrid = dialog.getByRole("grid");
 	const targets = targetGrid.getByRole("row");
-	await expect(targets.first()).toHaveAccessibleName(
-		"Universal agents (Gemini)",
-	);
+	await expect(targets.first()).toHaveAccessibleName("Universal agents");
 	await expect(
 		targets.first().getByTestId("universal-skill-target-icon"),
 	).toBeVisible();
@@ -47,9 +45,7 @@ test("native Skill targets stay separate from the universal directory", async ({
 
 	const dialog = page.getByRole("dialog", { name: "Review import" });
 	const targetGrid = dialog.getByRole("grid");
-	await targetGrid
-		.getByRole("row", { name: "Universal agents (Gemini)" })
-		.click();
+	await targetGrid.getByRole("row", { name: "Universal agents" }).click();
 	await targetGrid.getByRole("row", { name: "Claude", exact: true }).click();
 	await dialog.getByRole("button", { name: "Install", exact: true }).click();
 
@@ -72,6 +68,12 @@ test("a Skill in the universal directory does not select native targets", async 
 	await page.goto("/skills");
 
 	await page.getByRole("option", { name: "shared-skill" }).click();
+	const location = page.locator("[data-skill-location]");
+	await expect(location).toHaveCount(1);
+	await expect(location).toContainText(
+		"/tmp/e2e/.agents/skills/shared-skill",
+	);
+	await expect(location).toContainText("Universal agents");
 	await page.getByRole("button", { name: "Add to Agent" }).click();
 	const dialog = page.getByRole("dialog", { name: "Manage Agents" });
 

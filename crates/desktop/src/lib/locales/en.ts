@@ -709,7 +709,6 @@ export default {
 	skillManagement: "Skill management",
 	skillSecurity: "Skill security",
 	universalAgentTarget: "Universal agents",
-	universalAgentTargetSummary: "Universal agents ({{agents}})",
 	skillContentChecks: "Copies and differences",
 	skillContentChecksDescription:
 		"Control when matching Skills are compared, grouped, and flagged for conflicting content.",

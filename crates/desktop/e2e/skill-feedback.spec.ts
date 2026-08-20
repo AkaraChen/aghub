@@ -163,6 +163,16 @@ test("a linked skill location shows its link state and file-link health", async 
 	await expect(rootLink).toContainText(
 		"~/Developer/shared-skills/solo-skill",
 	);
+	const targetName = location.getByText("Claude", { exact: true });
+	const [targetBox, rootLinkBox] = await Promise.all([
+		targetName.boundingBox(),
+		rootLink.boundingBox(),
+	]);
+	expect(targetBox).not.toBeNull();
+	expect(rootLinkBox).not.toBeNull();
+	expect(
+		rootLinkBox!.y - (targetBox!.y + targetBox!.height),
+	).toBeLessThanOrEqual(10);
 	await expect(
 		location.locator('[data-skill-link-summary="healthy"]'),
 	).toHaveCount(0);

@@ -6,13 +6,8 @@ import {
 import { Checkbox, CheckboxGroup, Description, Label } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import type { AvailableAgent } from "../contexts/agent-availability";
-import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { AgentIcon } from "../lib/agent-icons";
-import {
-	formatUniversalSkillTargetMembers,
-	getUniversalSkillTargetLabel,
-	UNIVERSAL_SKILL_TARGET_ID,
-} from "../lib/skill-targets";
+import { UNIVERSAL_SKILL_TARGET_ID } from "../lib/skill-targets";
 import { cn } from "../lib/utils";
 import { UniversalSkillTargetIcon } from "./universal-skill-target-icon";
 
@@ -27,7 +22,6 @@ interface AgentState {
 
 interface SkillsAgentListProps {
 	agents: AvailableAgent[];
-	scope?: "global" | "project";
 	selectedKeys: string[];
 	indeterminateKeys?: Set<string>;
 	onSelectionChange: (keys: string[]) => void;
@@ -83,7 +77,6 @@ const EMPTY_SET = new Set<string>();
 
 export function SkillsAgentList({
 	agents,
-	scope = "global",
 	selectedKeys,
 	indeterminateKeys = EMPTY_SET,
 	onSelectionChange,
@@ -93,17 +86,11 @@ export function SkillsAgentList({
 	disabledAgents = EMPTY_SET,
 	label,
 }: SkillsAgentListProps) {
-	const { t, i18n } = useTranslation();
-	const { allAgents } = useAgentAvailability();
-	const universalMembers = formatUniversalSkillTargetMembers(
-		allAgents,
-		i18n.language,
-		scope,
-	);
+	const { t } = useTranslation();
 	const targets = [
 		{
 			id: UNIVERSAL_SKILL_TARGET_ID,
-			displayName: getUniversalSkillTargetLabel(t, universalMembers),
+			displayName: t("universalAgentTarget"),
 			universal: true,
 		},
 		...agents.map((agent) => ({

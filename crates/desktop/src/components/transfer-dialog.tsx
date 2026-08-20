@@ -534,7 +534,6 @@ export function TransferDialog({
 											) : resourceType === "skill" ? (
 												<SkillsAgentList
 													agents={usableAgents}
-													scope={selectedScope.type}
 													selectedKeys={
 														selectedAgents
 													}

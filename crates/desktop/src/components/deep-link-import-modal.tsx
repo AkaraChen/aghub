@@ -670,11 +670,6 @@ export function DeepLinkImportModal({
 								{isSkillInstall ? (
 									<SkillTargetSelector
 										agents={compatibleAgents}
-										scope={
-											installToProject
-												? "project"
-												: "global"
-										}
 										selectedKeys={selectedAgents}
 										onSelectionChange={
 											setSelectedAgentOverride

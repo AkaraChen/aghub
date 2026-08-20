@@ -357,7 +357,6 @@ export function ManageSkillAgentsDialog({
 							>
 								<SkillsAgentList
 									agents={usableAgents}
-									scope={scope}
 									selectedKeys={selectedAgents}
 									indeterminateKeys={indeterminateAgents}
 									onSelectionChange={handleSelectionChange}

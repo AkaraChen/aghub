@@ -3,19 +3,13 @@ import { FieldError, Label, Tag, TagGroup } from "@heroui/react";
 import type { Key } from "react";
 import { useTranslation } from "react-i18next";
 import type { AgentInfo } from "../generated/dto";
-import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { AgentIcon } from "../lib/agent-icons";
-import {
-	formatUniversalSkillTargetMembers,
-	getUniversalSkillTargetLabel,
-	UNIVERSAL_SKILL_TARGET_ID,
-} from "../lib/skill-targets";
+import { UNIVERSAL_SKILL_TARGET_ID } from "../lib/skill-targets";
 import { cn } from "../lib/utils";
 import { UniversalSkillTargetIcon } from "./universal-skill-target-icon";
 
 interface SkillTargetSelectorProps {
 	agents: Array<Pick<AgentInfo, "id" | "display_name">>;
-	scope?: "global" | "project";
 	selectedKeys: Set<string>;
 	onSelectionChange: (keys: Set<string>) => void;
 	label?: string;
@@ -27,7 +21,6 @@ interface SkillTargetSelectorProps {
 
 export function SkillTargetSelector({
 	agents,
-	scope = "global",
 	selectedKeys,
 	onSelectionChange,
 	label,
@@ -36,14 +29,8 @@ export function SkillTargetSelector({
 	errorMessage,
 	isDisabled = false,
 }: SkillTargetSelectorProps) {
-	const { t, i18n } = useTranslation();
-	const { allAgents } = useAgentAvailability();
-	const universalMembers = formatUniversalSkillTargetMembers(
-		allAgents,
-		i18n.language,
-		scope,
-	);
-	const universalLabel = getUniversalSkillTargetLabel(t, universalMembers);
+	const { t } = useTranslation();
+	const universalLabel = t("universalAgentTarget");
 	const targetIds = [
 		UNIVERSAL_SKILL_TARGET_ID,
 		...agents.map((agent) => agent.id),

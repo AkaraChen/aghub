@@ -91,9 +91,6 @@ export function InstallModal({
 								</p>
 								<SkillTargetSelector
 									agents={skillAgents}
-									scope={
-										installToProject ? "project" : "global"
-									}
 									selectedKeys={selectedAgents}
 									onSelectionChange={onSelectedAgentsChange}
 									showSelectedIcon
