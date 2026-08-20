@@ -131,3 +131,113 @@ test("skill copy and discovery preferences are compact and stored", async ({
 			},
 		});
 });
+
+test("skill preference controls share one compact row layout", async ({
+	page,
+}) => {
+	await installMocks(page);
+	await page.setViewportSize({ width: 1024, height: 768 });
+	await page.goto("/settings?tab=skills");
+	await page.addStyleTag({
+		content:
+			"*, *::before, *::after { transition-duration: 0s !important; }",
+	});
+
+	const timingLabel = page.getByText("When to check", { exact: true });
+	const automatic = page.getByRole("radio", { name: "Automatic" });
+	const [timingBox, automaticBox] = await Promise.all([
+		timingLabel.boundingBox(),
+		automatic.boundingBox(),
+	]);
+
+	expect(timingBox).not.toBeNull();
+	expect(automaticBox).not.toBeNull();
+	expect(automaticBox?.x).toBeGreaterThan(timingBox?.x ?? 0);
+	expect(
+		Math.abs(
+			(automaticBox?.y ?? 0) +
+				(automaticBox?.height ?? 0) / 2 -
+				((timingBox?.y ?? 0) + (timingBox?.height ?? 0) / 2),
+		),
+	).toBeLessThanOrEqual(timingBox?.height ?? 0);
+
+	const storageChoice = page
+		.locator('[data-slot="radio"]')
+		.filter({ hasText: "Keep the current storage method" });
+	await expect(storageChoice).toHaveCSS("border-top-width", "1px");
+
+	const projectSkills = page
+		.locator('[data-slot="checkbox"]')
+		.filter({ hasText: "Project Skills" });
+	await expect(projectSkills).toHaveClass(/checkbox--secondary/);
+	await expect(projectSkills).toHaveCSS("border-top-width", "1px");
+
+	const [radioRadius, checkboxRadius, radioBackground] = await Promise.all([
+		storageChoice.evaluate(
+			(element) => getComputedStyle(element).borderTopLeftRadius,
+		),
+		projectSkills.evaluate(
+			(element) => getComputedStyle(element).borderTopLeftRadius,
+		),
+		storageChoice.evaluate(
+			(element) => getComputedStyle(element).backgroundColor,
+		),
+	]);
+	expect(radioRadius).not.toBe("0px");
+	expect(checkboxRadius).toBe(radioRadius);
+	expect(radioBackground).not.toBe("rgba(0, 0, 0, 0)");
+
+	await storageChoice.hover();
+	await expect
+		.poll(() =>
+			storageChoice.evaluate(
+				(element) => getComputedStyle(element).backgroundColor,
+			),
+		)
+		.not.toBe(radioBackground);
+	const radioHoverColor = await storageChoice.evaluate(
+		(element) => getComputedStyle(element).backgroundColor,
+	);
+	await projectSkills.hover();
+	await expect
+		.poll(() =>
+			projectSkills.evaluate(
+				(element) => getComputedStyle(element).backgroundColor,
+			),
+		)
+		.toBe(radioHoverColor);
+
+	const matchingContentSwitch = page
+		.locator('[data-slot="switch"]')
+		.filter({ hasText: "Show matching content once" });
+	const conflictingContentSwitch = page
+		.locator('[data-slot="switch"]')
+		.filter({ hasText: "Flag content conflicts" });
+	await expect(matchingContentSwitch).toHaveCSS("border-bottom-width", "0px");
+	await expect(conflictingContentSwitch).toHaveCSS("border-top-width", "0px");
+
+	const storageChoices = page
+		.getByRole("radiogroup", {
+			name: "When writing to other locations",
+		})
+		.locator('[data-slot="radio"]');
+	const skillSources = page.locator('[data-slot="checkbox"]');
+	const [firstStorageBox, secondStorageBox, firstSourceBox, secondSourceBox] =
+		await Promise.all([
+			storageChoices.nth(0).boundingBox(),
+			storageChoices.nth(1).boundingBox(),
+			skillSources.nth(0).boundingBox(),
+			skillSources.nth(1).boundingBox(),
+		]);
+	expect(firstStorageBox).not.toBeNull();
+	expect(secondStorageBox).not.toBeNull();
+	expect(firstSourceBox).not.toBeNull();
+	expect(secondSourceBox).not.toBeNull();
+	const storageGap =
+		(secondStorageBox?.y ?? 0) -
+		((firstStorageBox?.y ?? 0) + (firstStorageBox?.height ?? 0));
+	const sourceGap =
+		(secondSourceBox?.y ?? 0) -
+		((firstSourceBox?.y ?? 0) + (firstSourceBox?.height ?? 0));
+	expect(storageGap).toBe(sourceGap);
+});

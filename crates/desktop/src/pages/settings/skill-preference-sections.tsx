@@ -128,7 +128,7 @@ export function SkillContentPreferences({
 				<p className="text-xs text-muted">
 					{t("duplicateSkillManagementDescription")}
 				</p>
-				<div className="divide-y divide-separator px-1">
+				<div className="px-1">
 					<SkillPreferenceSwitch
 						label={t("groupIdenticalSkillCopies")}
 						description={t("groupIdenticalSkillCopiesDescription")}

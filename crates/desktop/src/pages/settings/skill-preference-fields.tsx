@@ -42,8 +42,8 @@ export function SkillPreferenceChoice({
 	children: ReactNode;
 }) {
 	return (
-		<div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-			<div className="min-w-0 space-y-0.5">
+		<div className="flex min-w-0 items-center justify-between gap-4">
+			<div className="min-w-0 flex-1 space-y-0.5">
 				<SkillPreferenceLabel>{title}</SkillPreferenceLabel>
 				<p className="text-xs text-muted">{description}</p>
 			</div>
@@ -70,7 +70,7 @@ export function SkillPreferenceRadio({
 	return (
 		<Radio
 			value={value}
-			className="flex w-full min-w-0 flex-col items-stretch rounded-xl border border-separator bg-surface-secondary p-3"
+			className="!mt-0 flex w-full min-w-0 flex-col items-stretch rounded-xl border border-border bg-surface-secondary/60 px-3 py-3 transition-colors hover:bg-surface-secondary data-[selected=true]:border-accent/30 data-[selected=true]:bg-accent/5 data-[selected=true]:hover:bg-accent/10"
 		>
 			<Radio.Content className="flex min-w-0 items-center gap-2.5">
 				<Radio.Control className="mt-0.5 shrink-0">
@@ -143,7 +143,8 @@ export function SkillDiscoveryCheckbox({
 			isSelected={selected}
 			isDisabled={disabled}
 			onChange={onChange}
-			className="flex w-full min-w-0 flex-col items-stretch px-3 py-3"
+			variant="secondary"
+			className="flex w-full min-w-0 flex-col items-stretch rounded-xl border border-border bg-surface-secondary/60 px-3 py-3 transition-colors hover:bg-surface-secondary data-[selected=true]:border-accent/30 data-[selected=true]:bg-accent/5 data-[selected=true]:hover:bg-accent/10"
 		>
 			<Checkbox.Content className="flex min-w-0 items-center gap-2.5">
 				<Checkbox.Control className="shrink-0">

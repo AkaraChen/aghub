@@ -28,7 +28,7 @@ export function SkillDiscoveryPreferences({
 			title={t("skillDiscoveryScope")}
 			description={t("skillDiscoveryScopeDescription")}
 		>
-			<div className="divide-y divide-separator">
+			<div className="grid gap-2">
 				<SkillDiscoveryCheckbox
 					label={t("projectSkillLocations")}
 					description={t("projectSkillLocationsDescription")}
