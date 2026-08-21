@@ -209,6 +209,7 @@ export default function PromptsPage() {
 
 					{mode === "view" && selectedPrompt && (
 						<PromptDetail
+							key={selectedPrompt.id}
 							prompt={selectedPrompt}
 							onEdit={() => setMode("edit")}
 							onDelete={() =>

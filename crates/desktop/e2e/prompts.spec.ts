@@ -121,6 +121,42 @@ test("keeps delete confirmation open while deletion is pending and after failure
 	await expect(deleteButton).toBeEnabled();
 });
 
+test("closes delete confirmation before showing the next prompt", async ({
+	page,
+}) => {
+	await installMocks(page);
+	const prompts = [PROMPT, OLDER_PROMPT];
+
+	await page.route(
+		"http://localhost:45999/api/v1/prompts**",
+		async (route) => {
+			const request = route.request();
+			if (request.method() === "DELETE") {
+				const id = new URL(request.url()).pathname.split("/").pop();
+				const index = prompts.findIndex((prompt) => prompt.id === id);
+				if (index !== -1) prompts.splice(index, 1);
+				return route.fulfill({ status: 204 });
+			}
+
+			return route.fulfill({
+				status: 200,
+				contentType: "application/json",
+				body: JSON.stringify(prompts),
+			});
+		},
+	);
+
+	await page.goto(`/prompts?prompt=${PROMPT.id}`);
+	await page.getByRole("button", { name: "Delete prompt" }).click();
+	const dialog = page.getByRole("alertdialog", { name: "Delete prompt" });
+	await dialog.getByRole("button", { name: "Delete prompt" }).click();
+
+	await expect(dialog).toBeHidden();
+	await expect(
+		page.getByRole("heading", { name: OLDER_PROMPT.title }),
+	).toBeVisible();
+});
+
 test("creates, searches, edits, and deletes a prompt", async ({ page }) => {
 	await installMocks(page);
 	const prompts: (typeof PROMPT)[] = [];
