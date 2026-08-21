@@ -1,5 +1,90 @@
-import { expect, test } from "@playwright/test";
-import { installMocks } from "./mocks";
+import { expect, test, type Page } from "@playwright/test";
+import { agentInfo, installMocks } from "./mocks";
+
+const importTargetAgents = [
+	agentInfo("claude", "Claude"),
+	agentInfo("codex", "OpenAI Codex", true),
+	agentInfo("openclaw", "OpenClaw"),
+	agentInfo("opencode", "OpenCode", true),
+	agentInfo("gemini", "Gemini CLI", true),
+];
+
+const importTargetAvailability = importTargetAgents.map((agent) => ({
+	id: agent.id,
+	has_global_directory: true,
+	has_cli: true,
+	is_available: true,
+}));
+
+async function scanRepository(page: Page) {
+	await page
+		.getByRole("textbox", { name: "Repository URL" })
+		.fill("https://github.com/AkaraChen/alpha-pack");
+	await page.getByRole("button", { name: "Scan", exact: true }).click();
+	await expect(page.getByText("fresh-skill description")).toBeVisible();
+}
+
+async function expectSharedTargets(page: Page) {
+	const targetGrid = page.getByRole("grid");
+	await expect(
+		targetGrid.getByRole("row", { name: "Universal agents" }),
+	).toBeVisible();
+	await expect(
+		targetGrid.getByRole("row", { name: "Claude", exact: true }),
+	).toBeVisible();
+	await expect(
+		targetGrid.getByRole("row", { name: "OpenClaw", exact: true }),
+	).toBeVisible();
+	await expect(
+		targetGrid.getByRole("row", { name: "OpenAI Codex", exact: true }),
+	).toBeVisible();
+	await expect(
+		targetGrid.getByRole("row", { name: "OpenCode", exact: true }),
+	).toBeVisible();
+	await expect(
+		targetGrid.getByRole("row", { name: "Gemini CLI", exact: true }),
+	).toBeVisible();
+
+	const universalTop = await targetGrid
+		.getByRole("row", { name: "Universal agents" })
+		.evaluate((element) => element.offsetTop);
+	const claudeTop = await targetGrid
+		.getByRole("row", { name: "Claude", exact: true })
+		.evaluate((element) => element.offsetTop);
+	expect(universalTop).toBe(claudeTop);
+}
+
+test.describe("GitHub import targets", () => {
+	test.beforeEach(async ({ page }) => {
+		await installMocks(page);
+		await page.route("http://localhost:45999/api/v1/agents", (route) =>
+			route.fulfill({ json: importTargetAgents }),
+		);
+		await page.route(
+			"http://localhost:45999/api/v1/agents/availability",
+			(route) => route.fulfill({ json: importTargetAvailability }),
+		);
+	});
+
+	test("market uses universal targets", async ({ page }) => {
+		await page.goto("/market");
+		await page
+			.getByRole("tab", { name: "Import Skills from GitHub" })
+			.click();
+		await scanRepository(page);
+		await expectSharedTargets(page);
+	});
+
+	test("skills uses the same universal targets", async ({ page }) => {
+		await page.goto("/skills");
+		await page.getByRole("button", { name: "Add skill" }).click();
+		await page
+			.getByRole("menuitem", { name: "Import Remote Source" })
+			.click();
+		await scanRepository(page);
+		await expectSharedTargets(page);
+	});
+});
 
 test("Skill installs default to the universal target and keep native targets", async ({
 	page,

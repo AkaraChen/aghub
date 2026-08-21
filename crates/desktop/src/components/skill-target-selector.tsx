@@ -58,19 +58,16 @@ export function SkillTargetSelector({
 						textValue={universalLabel}
 						isDisabled={isDisabled}
 						className={cn(
-							"w-full min-w-0 max-w-full justify-start",
 							variant === "secondary" && "bg-surface-secondary",
 							errorMessage && "border border-danger",
 						)}
 					>
 						<UniversalSkillTargetIcon size="xs" />
-						<span className="min-w-0 flex-1 truncate whitespace-nowrap">
-							{universalLabel}
-						</span>
+						<span>{universalLabel}</span>
 						{showSelectedIcon &&
 							selectedKeys.has(UNIVERSAL_SKILL_TARGET_ID) && (
 								<PlusIcon
-									className="size-3 shrink-0"
+									className="size-3"
 									aria-hidden="true"
 								/>
 							)}

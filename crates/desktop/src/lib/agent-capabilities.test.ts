@@ -5,6 +5,7 @@ import { supportsIndividualSkillTarget } from "./agent-capabilities";
 function agentWithWritePaths(
 	globalWrite: string | null,
 	projectWrite: string | null,
+	universal = true,
 ): AgentInfo {
 	return {
 		id: "test",
@@ -12,7 +13,7 @@ function agentWithWritePaths(
 		capabilities: {
 			skills: {
 				scopes: { global: true, project: true },
-				universal: true,
+				universal,
 				mutable_global: Boolean(globalWrite),
 				mutable_project: Boolean(projectWrite),
 			},
@@ -35,6 +36,17 @@ function agentWithWritePaths(
 
 describe("supportsIndividualSkillTarget", () => {
 	it("keeps a distinct native directory available", () => {
+		const agent = agentWithWritePaths(
+			"~/.claude/skills",
+			".claude/skills",
+			false,
+		);
+
+		expect(supportsIndividualSkillTarget(agent, "global")).toBe(true);
+		expect(supportsIndividualSkillTarget(agent, "project")).toBe(true);
+	});
+
+	it("keeps a distinct native directory for universal readers", () => {
 		const agent = agentWithWritePaths("~/.codex/skills", ".codex/skills");
 
 		expect(supportsIndividualSkillTarget(agent, "global")).toBe(true);
