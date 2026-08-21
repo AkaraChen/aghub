@@ -44,15 +44,10 @@ fn global_skills_paths() -> Vec<PathBuf> {
 	vec![
 		home.join(".config/opencode/skills"),
 		home.join(".claude/skills"),
-		home.join(".agents/skills"),
 	]
 }
 fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
-	vec![
-		root.join(".opencode/skills"),
-		root.join(".claude/skills"),
-		root.join(".agents/skills"),
-	]
+	vec![root.join(".opencode/skills"), root.join(".claude/skills")]
 }
 
 fn global_skill_write_path() -> Option<PathBuf> {
@@ -113,7 +108,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 				global: true,
 				project: true,
 			},
-			universal: false,
+			universal: true,
 		},
 		mcp: McpCapabilities {
 			scopes: ScopeSupport {

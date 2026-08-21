@@ -27,15 +27,14 @@ pub fn list_agents(_auth: ApiAuth) -> Json<Vec<AgentInfo>> {
 	let agents = registry::iter_all()
 		.map(|d| {
 			let project_root = Path::new("");
-			let project_read = d
-				.project_skill_paths
-				.map(|paths| {
-					(paths.read)(project_root)
-						.into_iter()
-						.map(format_path)
-						.collect()
-				})
-				.unwrap_or_default();
+			let project_read = if d.capabilities.skills.scopes.project {
+				d.project_skill_read_paths(project_root)
+					.into_iter()
+					.map(format_path)
+					.collect()
+			} else {
+				Vec::new()
+			};
 			let project_write = d
 				.project_skill_paths
 				.and_then(|paths| (paths.write)(project_root))
@@ -68,7 +67,7 @@ pub fn list_agents(_auth: ApiAuth) -> Json<Vec<AgentInfo>> {
 								aghub_core::models::ResourceScope::GlobalOnly,
 							)
 							.is_some(),
-						mutable_project: d.project_skill_paths.is_some(),
+						mutable_project: project_write.is_some(),
 					},
 					mcp: McpCapabilitiesDto {
 						scopes: ScopeSupportDto {
@@ -130,5 +129,21 @@ mod tests {
 		assert!(!pi.capabilities.mcp.stdio);
 		assert!(!pi.capabilities.mcp.remote);
 		assert!(pi.capabilities.skills.scopes.global);
+	}
+
+	#[test]
+	fn list_agents_exposes_universal_project_skill_paths() {
+		let agents = list_agents(ApiAuth).into_inner();
+		let codex = agents
+			.into_iter()
+			.find(|agent| agent.id == "codex")
+			.expect("Codex agent should be listed");
+
+		assert!(codex
+			.skills_paths
+			.project_read
+			.iter()
+			.any(|path| path == ".agents/skills"));
+		assert!(codex.skills_paths.project_write.is_none());
 	}
 }

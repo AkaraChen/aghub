@@ -1,5 +1,9 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
+import type {
+	SkillCopyResolutionRequest,
+	SkillDirectoryDiffResponse,
+} from "../src/generated/dto";
 import { installMocks } from "./mocks";
 
 const REVIEW_DIGEST = "a".repeat(64);
@@ -390,50 +394,49 @@ test("a suspicious allowed local audit does not ask for confirmation", async ({
 test("Git sync audits first and confirms the same content digest before writing", async ({
 	page,
 }) => {
-	await installMocks(page);
-	await page.route(
-		"http://localhost:45999/api/v1/skills/git/scan",
-		async (route) => {
-			await route.fulfill({
-				status: 200,
-				contentType: "application/json",
-				body: JSON.stringify({
-					session_id: "sync-session-1",
-					branches: ["main"],
-					current_branch: "main",
-					skills: [
-						{
-							name: "react-pro",
-							description: "react-pro from source",
-							author: null,
-							version: null,
-							path: "skills/react-pro",
-							audit: suspiciousAudit,
-						},
-					],
-				}),
-			});
+	const mocks = await installMocks(page);
+	const changedCopy = {
+		identical: false,
+		base_hash: "repository",
+		target_hash: "local",
+		files: [],
+		files_omitted: 0,
+	} satisfies SkillDirectoryDiffResponse;
+	mocks.setSkillDiff(
+		"/tmp/e2e/.claude/skills/react-pro/SKILL.md|git:skills/react-pro",
+		changedCopy,
+	);
+	mocks.setSkillDiff(
+		"/tmp/e2e/.cursor/skills/react-pro/SKILL.md|git:skills/react-pro",
+		{
+			...changedCopy,
+			identical: true,
+			target_hash: "repository",
 		},
 	);
 
-	const requests: Array<Record<string, unknown>> = [];
+	const requests: SkillCopyResolutionRequest[] = [];
 	await page.route(
-		"http://localhost:45999/api/v1/skills/git/sync",
+		"http://localhost:45999/api/v1/skills/copies/resolve",
 		async (route) => {
-			const body = route.request().postDataJSON() as Record<
-				string,
-				unknown
-			>;
+			const body = route
+				.request()
+				.postDataJSON() as SkillCopyResolutionRequest;
 			requests.push(body);
 			await route.fulfill({
 				status: 200,
 				contentType: "application/json",
 				body: JSON.stringify({
-					success: body.audit_only !== true,
-					audit: suspiciousAudit,
-					audit_confirmation_required: body.audit_only === true,
 					name: "react-pro",
-					error: null,
+					reference_hash: body.expected_reference_hash,
+					results: body.audit_only
+						? []
+						: body.targets.map((target) => ({
+								source_path: target.source_path,
+								content_hash: body.expected_reference_hash,
+							})),
+					audit: suspiciousAudit,
+					audit_confirmation_required: true,
 				}),
 			});
 		},
@@ -447,8 +450,19 @@ test("Git sync audits first and confirms the same content digest before writing"
 	const dialog = page.getByRole("dialog", { name: "Sync Skill" });
 	await expect(dialog).toBeVisible();
 	await dialog.getByRole("button", { name: "Scan", exact: true }).click();
-	await expect(dialog.getByText("react-pro from source")).toBeVisible();
-	await dialog.getByRole("button", { name: "Confirm" }).click();
+	await expect(dialog.getByText("react-pro description")).toBeVisible();
+	await dialog
+		.getByRole("button", {
+			name: /Compare repository and local versions/,
+		})
+		.click();
+	await dialog
+		.locator("[data-skill-version-choice]")
+		.filter({ hasText: "GitHub" })
+		.click();
+	await dialog
+		.getByRole("button", { name: "Use repository version" })
+		.click();
 	await expect(dialog.getByText("Suspicious", { exact: true })).toBeVisible();
 
 	const sourcePaths = [
@@ -460,9 +474,18 @@ test("Git sync audits first and confirms the same content digest before writing"
 		audit_only: true,
 		expected_content_digest: null,
 		confirmed_assessment_digest: null,
-		session_id: "sync-session-1",
-		skill_path: "skills/react-pro",
-		source_paths: sourcePaths,
+		reference: {
+			kind: "git_scan",
+			session_id: "scan-session-1",
+			skill_path: "skills/react-pro",
+		},
+		expected_reference_hash: "repository",
+		targets: expect.arrayContaining(
+			sourcePaths.map((source_path) => ({
+				source_path,
+				expected_hash: expect.any(String),
+			})),
+		),
 	});
 
 	await dialog
@@ -473,9 +496,12 @@ test("Git sync audits first and confirms the same content digest before writing"
 		audit_only: false,
 		expected_content_digest: REVIEW_DIGEST,
 		confirmed_assessment_digest: REVIEW_ASSESSMENT_DIGEST,
-		session_id: "sync-session-1",
-		skill_path: "skills/react-pro",
-		source_paths: sourcePaths,
+		reference: {
+			kind: "git_scan",
+			session_id: "scan-session-1",
+			skill_path: "skills/react-pro",
+		},
+		expected_reference_hash: "repository",
 	});
 });
 
@@ -699,6 +725,18 @@ test("switching branches discards the previous audit and session", async ({
 	});
 });
 
+test("legacy Security settings link opens Skill security", async ({ page }) => {
+	await installMocks(page);
+	await page.goto("/settings?tab=security");
+
+	await expect(
+		page.getByRole("tab", { name: "Skills", exact: true }),
+	).toHaveAttribute("aria-selected", "true");
+	await expect(
+		page.getByRole("heading", { name: "Skill security", exact: true }),
+	).toBeVisible();
+});
+
 test("disabling automatic scans skips preview but keeps write-time assessment", async ({
 	page,
 }) => {
@@ -718,7 +756,13 @@ test("disabling automatic scans skips preview but keeps write-time assessment", 
 		}
 	});
 
-	await page.goto("/settings?tab=security");
+	await page.goto("/settings?tab=skills");
+	await expect(
+		page.getByRole("tab", { name: "Security", exact: true }),
+	).toHaveCount(0);
+	await expect(
+		page.getByRole("heading", { name: "Skill security", exact: true }),
+	).toBeVisible();
 	const scanSwitch = page.getByRole("switch", {
 		name: "Automatic skill security scans",
 	});

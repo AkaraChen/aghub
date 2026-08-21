@@ -1,7 +1,9 @@
 use aghub_core::transfer::{
 	InstallScope, InstallTarget, OperationAction, OperationBatchResult,
-	OperationResult, ResourceLocator,
+	OperationResult, ResourceLocator, SkillInstallTarget,
+	SkillOperationBatchResult, SkillOperationResult, SkillResourceLocator,
 };
+use aghub_core::SkillTarget;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use ts_rs::TS;
@@ -58,6 +60,22 @@ impl TargetDto {
 			project_root: self.project_root.as_deref().map(PathBuf::from),
 		})
 	}
+
+	pub fn to_skill_core(&self) -> Result<SkillInstallTarget, ApiError> {
+		let target = self.agent.parse::<SkillTarget>().map_err(|_| {
+			ApiError::new(
+				rocket::http::Status::BadRequest,
+				format!("Unknown Skill target '{}'", self.agent),
+				"INVALID_PARAM",
+			)
+		})?;
+
+		Ok(SkillInstallTarget {
+			target,
+			scope: self.scope.into(),
+			project_root: self.project_root.as_deref().map(PathBuf::from),
+		})
+	}
 }
 
 #[derive(Debug, Clone, Deserialize, TS)]
@@ -81,6 +99,23 @@ impl ResourceLocatorDto {
 
 		Ok(ResourceLocator {
 			agent,
+			scope: self.scope.into(),
+			project_root: self.project_root.as_deref().map(PathBuf::from),
+			name: self.name.clone(),
+		})
+	}
+
+	pub fn to_skill_core(&self) -> Result<SkillResourceLocator, ApiError> {
+		let target = self.agent.parse::<SkillTarget>().map_err(|_| {
+			ApiError::new(
+				rocket::http::Status::BadRequest,
+				format!("Unknown Skill target '{}'", self.agent),
+				"INVALID_PARAM",
+			)
+		})?;
+
+		Ok(SkillResourceLocator {
+			target,
 			scope: self.scope.into(),
 			project_root: self.project_root.as_deref().map(PathBuf::from),
 			name: self.name.clone(),
@@ -149,6 +184,22 @@ impl From<OperationResult> for OperationResultDto {
 	}
 }
 
+impl From<SkillOperationResult> for OperationResultDto {
+	fn from(value: SkillOperationResult) -> Self {
+		OperationResultDto {
+			agent: value.target.target.id().to_string(),
+			scope: value.target.scope.into(),
+			project_root: value
+				.target
+				.project_root
+				.map(|path| path.to_string_lossy().to_string()),
+			action: value.action.into(),
+			success: value.success,
+			error: value.error,
+		}
+	}
+}
+
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
 pub struct OperationBatchResponse {
@@ -159,6 +210,16 @@ pub struct OperationBatchResponse {
 
 impl From<OperationBatchResult> for OperationBatchResponse {
 	fn from(value: OperationBatchResult) -> Self {
+		OperationBatchResponse {
+			success_count: value.success_count(),
+			failed_count: value.failed_count(),
+			results: value.results.into_iter().map(Into::into).collect(),
+		}
+	}
+}
+
+impl From<SkillOperationBatchResult> for OperationBatchResponse {
+	fn from(value: SkillOperationBatchResult) -> Self {
 		OperationBatchResponse {
 			success_count: value.success_count(),
 			failed_count: value.failed_count(),

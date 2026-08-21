@@ -75,12 +75,19 @@ impl UpdateSkillRequest {
 
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
+pub struct SkillLocationResponse {
+	pub source_path: String,
+	pub is_symlink: bool,
+	pub source: ConfigSource,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct SkillResponse {
 	pub name: String,
 	pub enabled: bool,
 	pub source_path: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub canonical_path: Option<String>,
+	pub is_symlink: bool,
 	pub description: Option<String>,
 	pub author: Option<String>,
 	pub version: Option<String>,
@@ -89,6 +96,9 @@ pub struct SkillResponse {
 	pub source: Option<ConfigSource>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub agent: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub locations: Option<Vec<SkillLocationResponse>>,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -97,6 +107,32 @@ pub struct SkillResponse {
 pub enum SkillTreeNodeKind {
 	File,
 	Directory,
+	Symlink,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillLinkStatusResponse {
+	Valid,
+	Broken,
+	OutsideRoot,
+	Unreadable,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct SkillLinkResponse {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub target: Option<String>,
+	pub status: SkillLinkStatusResponse,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct SkillHardLinkResponse {
+	pub peers: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, TS)]
@@ -106,6 +142,163 @@ pub struct SkillTreeNodeResponse {
 	pub path: String,
 	pub kind: SkillTreeNodeKind,
 	pub children: Vec<SkillTreeNodeResponse>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub link: Option<SkillLinkResponse>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub hard_link: Option<SkillHardLinkResponse>,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct SkillDiffRequest {
+	pub reference: SkillDiffReferenceRequest,
+	pub installed_paths: Vec<String>,
+	pub scope: Option<String>,
+	pub project_root: Option<String>,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SkillDiffReferenceRequest {
+	Installed {
+		source_path: String,
+	},
+	GitScan {
+		session_id: String,
+		skill_path: String,
+	},
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillFileDiffKindResponse {
+	Added,
+	Removed,
+	Modified,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct SkillFileDiffResponse {
+	pub path: String,
+	pub change: SkillFileDiffKindResponse,
+	pub before: Option<String>,
+	pub after: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub before_link: Option<SkillLinkResponse>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub after_link: Option<SkillLinkResponse>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub before_hard_link: Option<SkillHardLinkResponse>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub after_hard_link: Option<SkillHardLinkResponse>,
+	pub content_omitted: bool,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct SkillDirectoryDiffResponse {
+	pub identical: bool,
+	pub base_hash: String,
+	pub target_hash: String,
+	pub files: Vec<SkillFileDiffResponse>,
+	pub files_omitted: usize,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct SkillDiffResponse {
+	pub results: Vec<Option<SkillDirectoryDiffResponse>>,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct SkillCopyStatusGroupRequest {
+	pub name: String,
+	pub source_paths: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct SkillCopyStatusRequest {
+	pub groups: Vec<SkillCopyStatusGroupRequest>,
+	pub scope: Option<String>,
+	pub project_root: Option<String>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct SkillCopyStatusResult {
+	pub name: String,
+	pub has_differences: bool,
+	pub unavailable: usize,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct SkillCopyStatusResponse {
+	pub results: Vec<SkillCopyStatusResult>,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct SkillCopyResolutionRequest {
+	pub reference: SkillDiffReferenceRequest,
+	pub expected_reference_hash: String,
+	#[serde(default)]
+	pub storage_mode: SkillCopyStorageModeRequest,
+	pub targets: Vec<SkillCopyResolutionTargetRequest>,
+	pub scope: Option<String>,
+	pub project_root: Option<String>,
+	#[ts(optional = nullable)]
+	pub expected_content_digest: Option<String>,
+	#[ts(optional = nullable)]
+	pub confirmed_assessment_digest: Option<String>,
+	#[ts(optional = nullable)]
+	pub audit_only: Option<bool>,
+}
+
+#[derive(Debug, Default, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillCopyStorageModeRequest {
+	#[default]
+	Preserve,
+	Copy,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct SkillCopyResolutionTargetRequest {
+	pub source_path: String,
+	pub expected_hash: String,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct SkillCopyResolutionResult {
+	pub source_path: String,
+	pub content_hash: String,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct SkillCopyResolutionResponse {
+	pub name: String,
+	pub reference_hash: String,
+	pub results: Vec<SkillCopyResolutionResult>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional = nullable)]
+	pub audit: Option<crate::dto::audit::AuditReportDto>,
+	pub audit_confirmation_required: bool,
 }
 
 impl From<Skill> for SkillResponse {
@@ -128,13 +321,14 @@ impl From<&Skill> for SkillResponse {
 			name: s.name.clone(),
 			enabled: s.enabled,
 			source_path: s.source_path.clone(),
-			canonical_path: s.canonical_path.clone(),
+			is_symlink: s.canonical_path.is_some(),
 			description: s.description.clone(),
 			author: s.author.clone(),
 			version: s.version.clone(),
 			tools: s.tools.clone(),
 			source: s.config_source.map(Into::into),
 			agent: None,
+			locations: None,
 		}
 	}
 }

@@ -9,7 +9,10 @@ import { useApi } from "../hooks/use-api";
 import { useAuditedMutation } from "../hooks/use-audited-mutation";
 import { useInstallTarget } from "../hooks/use-install-target";
 import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
-import { supportsMcp, supportsSkillMutation } from "../lib/agent-capabilities";
+import {
+	supportsIndividualSkillTarget,
+	supportsMcp,
+} from "../lib/agent-capabilities";
 import {
 	type DeepLinkImportIntent,
 	formatTransportSummary,
@@ -22,6 +25,7 @@ import { InstallTargetSelector } from "./install-target-selector";
 import { ResultStatusItem } from "./result-status-item";
 import { SkillAudit } from "./skill-audit";
 import { SkillInfoCard } from "./skill-info-card";
+import { SkillTargetSelector } from "./skill-target-selector";
 
 interface DeepLinkImportModalProps {
 	intent: DeepLinkImportIntent | null;
@@ -104,9 +108,8 @@ export function DeepLinkImportModal({
 		resetInstallTarget,
 	} = useInstallTarget();
 
-	const [selectedAgents, setSelectedAgents] = useState<Set<string>>(
-		() => new Set(),
-	);
+	const [selectedAgentOverride, setSelectedAgentOverride] =
+		useState<Set<string> | null>(null);
 	const [hasExecutableConsent, setHasExecutableConsent] = useState(false);
 
 	const compatibleAgents = useMemo(() => {
@@ -118,7 +121,7 @@ export function DeepLinkImportModal({
 			return availableAgents.filter(
 				(agent) =>
 					agent.isUsable &&
-					supportsSkillMutation(
+					supportsIndividualSkillTarget(
 						agent,
 						installToProject ? "project" : "global",
 					),
@@ -131,10 +134,15 @@ export function DeepLinkImportModal({
 	}, [availableAgents, installToProject, intent]);
 
 	const defaultSelectedAgents = useMemo<Set<string>>(() => {
+		if (intent?.kind === "skill-market-install") {
+			return new Set(["universal"]);
+		}
 		return compatibleAgents[0]
 			? new Set([compatibleAgents[0].id])
 			: new Set();
-	}, [compatibleAgents]);
+	}, [compatibleAgents, intent]);
+
+	const selectedAgents = selectedAgentOverride ?? defaultSelectedAgents;
 
 	const mcpInstallMutation = useMutation<
 		InstallResult[],
@@ -184,7 +192,11 @@ export function DeepLinkImportModal({
 		agents: Array.from(selectedAgents),
 		scope: installToProject ? "project" : "global",
 		projectPath: selectedProject?.path ?? null,
-		pendingResults: buildPendingResults(selectedAgents, compatibleAgents),
+		pendingResults: buildPendingResults(
+			selectedAgents,
+			compatibleAgents,
+			t("universalAgentTarget"),
+		),
 	});
 
 	const buildSkillRequest = (
@@ -332,7 +344,7 @@ export function DeepLinkImportModal({
 			onComplete();
 			return;
 		}
-		setSelectedAgents(new Set());
+		setSelectedAgentOverride(null);
 		setHasExecutableConsent(false);
 		mcpInstallMutation.reset();
 		resetSkillState();
@@ -344,7 +356,7 @@ export function DeepLinkImportModal({
 		if (!isOpen) {
 			handleClose();
 		} else if (isOpen && intent) {
-			setSelectedAgents(defaultSelectedAgents);
+			setSelectedAgentOverride(null);
 			setHasExecutableConsent(false);
 			mcpInstallMutation.reset();
 			resetSkillState();
@@ -655,15 +667,30 @@ export function DeepLinkImportModal({
 										? t("selectAgentsForMcp")
 										: t("selectAgentsForSkill")}
 								</p>
-								<AgentSelector
-									agents={compatibleAgents}
-									selectedKeys={selectedAgents}
-									onSelectionChange={setSelectedAgents}
-									label={t("targetAgent")}
-									emptyMessage={t("noTargetAgents")}
-									showSelectedIcon
-									variant="secondary"
-								/>
+								{isSkillInstall ? (
+									<SkillTargetSelector
+										agents={compatibleAgents}
+										selectedKeys={selectedAgents}
+										onSelectionChange={
+											setSelectedAgentOverride
+										}
+										label={t("targetAgent")}
+										showSelectedIcon
+										variant="secondary"
+									/>
+								) : (
+									<AgentSelector
+										agents={compatibleAgents}
+										selectedKeys={selectedAgents}
+										onSelectionChange={
+											setSelectedAgentOverride
+										}
+										label={t("targetAgent")}
+										emptyMessage={t("noTargetAgents")}
+										showSelectedIcon
+										variant="secondary"
+									/>
+								)}
 								<InstallTargetSelector
 									installToProject={installToProject}
 									onInstallToProjectChange={

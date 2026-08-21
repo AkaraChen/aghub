@@ -7427,6 +7427,7 @@ dependencies = [
  "thiserror 2.0.19",
  "unicode-normalization",
  "walkdir",
+ "windows-sys 0.61.2",
  "zip 8.6.0",
 ]
 

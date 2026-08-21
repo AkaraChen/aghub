@@ -8,12 +8,14 @@ import { useApi } from "../hooks/use-api";
 import type { ResourceKind } from "../hooks/use-resource-actions";
 import {
 	supportsMcpScope,
-	supportsSkillMutation,
+	supportsIndividualSkillTarget,
 } from "../lib/agent-capabilities";
 import { AgentIcon } from "../lib/agent-icons";
+import { UNIVERSAL_SKILL_TARGET_ID } from "../lib/skill-targets";
 import { cn } from "../lib/utils";
 import { reconcileMcpsMutationOptions } from "../requests/mcps";
 import { reconcileSkillsMutationOptions } from "../requests/skills";
+import { UniversalSkillTargetIcon } from "./universal-skill-target-icon";
 
 export interface MatrixGroup {
 	key: string;
@@ -75,17 +77,30 @@ export function AgentCoverageMatrix({
 	const reconcile = kind === "skill" ? skillReconcile : mcpReconcile;
 
 	const scope = groups[0]?.sourceScope ?? "global";
-	const rows = useMemo(
-		() =>
-			availableAgents.filter(
+	const rows = useMemo(() => {
+		const agents = availableAgents
+			.filter(
 				(agent) =>
 					agent.isUsable &&
 					(kind === "skill"
-						? supportsSkillMutation(agent, scope)
+						? supportsIndividualSkillTarget(agent, scope)
 						: supportsMcpScope(agent, scope)),
-			),
-		[availableAgents, kind, scope],
-	);
+			)
+			.map((agent) => ({
+				id: agent.id,
+				displayName: agent.display_name,
+				universal: false,
+			}));
+		if (kind !== "skill") return agents;
+		return [
+			{
+				id: UNIVERSAL_SKILL_TARGET_ID,
+				displayName: t("universalAgentTarget"),
+				universal: true,
+			},
+			...agents,
+		];
+	}, [availableAgents, kind, scope, t]);
 
 	const [pendingAgent, setPendingAgent] = useState<string | null>(null);
 	const [confirmAgent, setConfirmAgent] = useState<{
@@ -96,7 +111,11 @@ export function AgentCoverageMatrix({
 	const installedCount = (agentId: string) =>
 		groups.filter((g) => g.installedAgents.includes(agentId)).length;
 
-	const run = async (agentId: string, mode: "install" | "uninstall") => {
+	const run = async (
+		agentId: string,
+		agentName: string,
+		mode: "install" | "uninstall",
+	) => {
 		const targets = groups.filter((g) =>
 			mode === "install"
 				? !g.installedAgents.includes(agentId)
@@ -107,6 +126,7 @@ export function AgentCoverageMatrix({
 		setPendingAgent(agentId);
 		let succeeded = 0;
 		let failed = 0;
+		const failedItems: string[] = [];
 		for (const group of targets) {
 			try {
 				const result = await reconcile.mutateAsync({
@@ -121,8 +141,27 @@ export function AgentCoverageMatrix({
 				});
 				succeeded += result.success_count;
 				failed += result.failed_count;
-			} catch {
+				const operationFailures = result.results.filter(
+					(operation) => !operation.success,
+				);
+				if (operationFailures.length > 0) {
+					failedItems.push(
+						...operationFailures.map((operation) =>
+							operation.error
+								? `${group.name} — ${operation.error}`
+								: group.name,
+						),
+					);
+				} else if (result.failed_count > 0) {
+					failedItems.push(group.name);
+				}
+			} catch (error) {
 				failed += 1;
+				failedItems.push(
+					error instanceof Error
+						? `${group.name} — ${error.message}`
+						: group.name,
+				);
 			}
 		}
 		setPendingAgent(null);
@@ -131,7 +170,12 @@ export function AgentCoverageMatrix({
 			failed,
 		});
 		if (failed > 0) {
-			toast.danger(message);
+			toast.danger(message, {
+				description: t("agentBatchFailures", {
+					agent: agentName,
+					items: failedItems.join("; "),
+				}),
+			});
 		} else {
 			toast.success(message);
 		}
@@ -147,17 +191,15 @@ export function AgentCoverageMatrix({
 						{t("agentCoverage")}
 					</p>
 					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								className="size-5 min-h-5 min-w-5 text-muted"
-								aria-label={t("agentCoverageHelp")}
-							>
-								<QuestionMarkCircleIcon className="size-3.5" />
-							</Button>
-						</Tooltip.Trigger>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							className="size-5 min-h-5 min-w-5 text-muted"
+							aria-label={t("agentCoverageHelp")}
+						>
+							<QuestionMarkCircleIcon className="size-3.5" />
+						</Button>
 						<Tooltip.Content>
 							{t(onManage ? "matrixSummaryHint" : "matrixHint")}
 						</Tooltip.Content>
@@ -168,22 +210,22 @@ export function AgentCoverageMatrix({
 				</p>
 			</div>
 			<ul className="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2">
-				{rows.map((agent) => {
-					const installed = installedCount(agent.id);
+				{rows.map((target) => {
+					const installed = installedCount(target.id);
 					const total = groups.length;
 					const full = installed === total;
 					const none = installed === 0;
-					const isPending = pendingAgent === agent.id;
+					const isPending = pendingAgent === target.id;
 					return (
-						<li key={agent.id}>
+						<li key={target.id}>
 							<button
 								type="button"
-								data-testid={`matrix-row-${agent.id}`}
+								data-testid={`matrix-row-${target.id}`}
 								disabled={pendingAgent !== null}
 								aria-label={
 									onManage
 										? t("agentCoverageRow", {
-												agent: agent.display_name,
+												agent: target.displayName,
 												installed,
 												total,
 											})
@@ -194,11 +236,15 @@ export function AgentCoverageMatrix({
 										onManage();
 									} else if (full) {
 										setConfirmAgent({
-											id: agent.id,
-											name: agent.display_name,
+											id: target.id,
+											name: target.displayName,
 										});
 									} else {
-										void run(agent.id, "install");
+										void run(
+											target.id,
+											target.displayName,
+											"install",
+										);
 									}
 								}}
 								className={cn(
@@ -208,19 +254,23 @@ export function AgentCoverageMatrix({
 										: "hover:bg-accent/10 hover:ring-accent/30",
 								)}
 							>
-								<AgentIcon
-									id={agent.id}
-									name={agent.display_name}
-									size="xs"
-									variant="ghost"
-								/>
+								{target.universal ? (
+									<UniversalSkillTargetIcon size="xs" />
+								) : (
+									<AgentIcon
+										id={target.id}
+										name={target.displayName}
+										size="xs"
+										variant="ghost"
+									/>
+								)}
 								<span
 									className={cn(
 										"min-w-0 flex-1 truncate",
 										none && "text-muted",
 									)}
 								>
-									{agent.display_name}
+									{target.displayName}
 								</span>
 								{isPending ? (
 									<Spinner size="sm" color="current" />
@@ -273,7 +323,11 @@ export function AgentCoverageMatrix({
 								variant="danger"
 								onPress={() => {
 									if (confirmAgent) {
-										void run(confirmAgent.id, "uninstall");
+										void run(
+											confirmAgent.id,
+											confirmAgent.name,
+											"uninstall",
+										);
 										setConfirmAgent(null);
 									}
 								}}

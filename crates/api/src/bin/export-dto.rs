@@ -61,9 +61,18 @@ use aghub_api::dto::{
 		GitScanSkillEntry, GitSyncRequest, GitSyncResponse,
 		GlobalSkillLockResponse, ImportSkillRequest, InstallSkillRequest,
 		InstallSkillResponse, LocalSkillLockEntryResponse, ProjectLockQuery,
-		ProjectSkillLockResponse, SkillContentQuery, SkillLockEntryResponse,
-		SkillResponse, SkillTreeNodeKind, SkillTreeNodeResponse,
-		SkillTreeQuery, UpdateSkillRequest, ValidationError,
+		ProjectSkillLockResponse, SkillContentQuery,
+		SkillCopyResolutionRequest, SkillCopyResolutionResponse,
+		SkillCopyResolutionResult, SkillCopyResolutionTargetRequest,
+		SkillCopyStatusGroupRequest, SkillCopyStatusRequest,
+		SkillCopyStatusResponse, SkillCopyStatusResult,
+		SkillCopyStorageModeRequest, SkillDiffReferenceRequest,
+		SkillDiffRequest, SkillDiffResponse, SkillDirectoryDiffResponse,
+		SkillFileDiffKindResponse, SkillFileDiffResponse,
+		SkillHardLinkResponse, SkillLinkResponse, SkillLinkStatusResponse,
+		SkillLocationResponse, SkillLockEntryResponse, SkillResponse,
+		SkillTreeNodeKind, SkillTreeNodeResponse, SkillTreeQuery,
+		UpdateSkillRequest, ValidationError,
 	},
 	sub_agent::{
 		CreateSubAgentRequest, SubAgentResponse, UpdateSubAgentRequest,
@@ -188,9 +197,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<CreateSkillRequest>(&cfg)?;
 	export_type::<ImportSkillRequest>(&cfg)?;
 	export_type::<UpdateSkillRequest>(&cfg)?;
+	export_type::<SkillLocationResponse>(&cfg)?;
 	export_type::<SkillResponse>(&cfg)?;
+	export_type::<SkillLinkStatusResponse>(&cfg)?;
+	export_type::<SkillLinkResponse>(&cfg)?;
+	export_type::<SkillHardLinkResponse>(&cfg)?;
 	export_type::<SkillTreeNodeKind>(&cfg)?;
 	export_type::<SkillTreeNodeResponse>(&cfg)?;
+	export_type::<SkillDiffReferenceRequest>(&cfg)?;
+	export_type::<SkillDiffRequest>(&cfg)?;
+	export_type::<SkillFileDiffKindResponse>(&cfg)?;
+	export_type::<SkillFileDiffResponse>(&cfg)?;
+	export_type::<SkillDirectoryDiffResponse>(&cfg)?;
+	export_type::<SkillDiffResponse>(&cfg)?;
+	export_type::<SkillCopyStatusGroupRequest>(&cfg)?;
+	export_type::<SkillCopyStatusRequest>(&cfg)?;
+	export_type::<SkillCopyStatusResult>(&cfg)?;
+	export_type::<SkillCopyStatusResponse>(&cfg)?;
+	export_type::<SkillCopyResolutionTargetRequest>(&cfg)?;
+	export_type::<SkillCopyStorageModeRequest>(&cfg)?;
+	export_type::<SkillCopyResolutionRequest>(&cfg)?;
+	export_type::<SkillCopyResolutionResult>(&cfg)?;
+	export_type::<SkillCopyResolutionResponse>(&cfg)?;
 	export_type::<InstallSkillRequest>(&cfg)?;
 	export_type::<InstallSkillResponse>(&cfg)?;
 	export_type::<SkillLockEntryResponse>(&cfg)?;

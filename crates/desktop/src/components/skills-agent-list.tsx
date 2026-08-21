@@ -7,8 +7,9 @@ import { Checkbox, CheckboxGroup, Description, Label } from "@heroui/react";
 import { useTranslation } from "react-i18next";
 import type { AvailableAgent } from "../contexts/agent-availability";
 import { AgentIcon } from "../lib/agent-icons";
-import type { Scope } from "../lib/skills-path-group";
+import { UNIVERSAL_SKILL_TARGET_ID } from "../lib/skill-targets";
 import { cn } from "../lib/utils";
+import { UniversalSkillTargetIcon } from "./universal-skill-target-icon";
 
 type AgentStatus = "idle" | "pending" | "success" | "error";
 type AgentDiffLabel =
@@ -24,13 +25,11 @@ interface SkillsAgentListProps {
 	selectedKeys: string[];
 	indeterminateKeys?: Set<string>;
 	onSelectionChange: (keys: string[]) => void;
-	scope: Scope;
 	agentStates?: Record<string, AgentState>;
 	diffLabels?: Record<string, AgentDiffLabel>;
 	disabled?: boolean;
 	disabledAgents?: Set<string>;
 	label?: string;
-	emptyMessage?: string;
 }
 
 function DiffLabelDisplay({ diffLabel }: { diffLabel: AgentDiffLabel }) {
@@ -81,23 +80,25 @@ export function SkillsAgentList({
 	selectedKeys,
 	indeterminateKeys = EMPTY_SET,
 	onSelectionChange,
-	scope: _scope,
 	agentStates = {},
 	diffLabels = {},
 	disabled = false,
 	disabledAgents = EMPTY_SET,
 	label,
-	emptyMessage,
 }: SkillsAgentListProps) {
 	const { t } = useTranslation();
-
-	if (agents.length === 0) {
-		return (
-			<p className="text-sm text-muted">
-				{emptyMessage || t("noAgentsAvailable")}
-			</p>
-		);
-	}
+	const targets = [
+		{
+			id: UNIVERSAL_SKILL_TARGET_ID,
+			displayName: t("universalAgentTarget"),
+			universal: true,
+		},
+		...agents.map((agent) => ({
+			id: agent.id,
+			displayName: agent.display_name,
+			universal: false,
+		})),
+	];
 
 	return (
 		<CheckboxGroup
@@ -108,20 +109,20 @@ export function SkillsAgentList({
 		>
 			{label && <Label className="sr-only">{label}</Label>}
 			<div className="flex flex-col gap-1">
-				{agents.map((agent) => {
-					const state = agentStates[agent.id];
-					const diffLabel = diffLabels[agent.id];
-					const isDisabled = disabledAgents.has(agent.id);
+				{targets.map((target) => {
+					const state = agentStates[target.id];
+					const diffLabel = diffLabels[target.id];
+					const isDisabled = disabledAgents.has(target.id);
 
 					return (
 						<Checkbox
-							key={agent.id}
-							value={agent.id}
-							isIndeterminate={indeterminateKeys.has(agent.id)}
+							key={target.id}
+							value={target.id}
+							isIndeterminate={indeterminateKeys.has(target.id)}
 							isDisabled={isDisabled}
 							variant="secondary"
 							className={cn(
-								"group relative flex w-full flex-col items-stretch gap-2 rounded-2xl bg-surface px-3 py-2.5 transition-all",
+								"group relative flex w-full flex-col items-stretch gap-2 rounded-2xl bg-surface px-3 py-2.5 transition-colors",
 								"data-[selected=true]:bg-accent/10",
 							)}
 						>
@@ -129,15 +130,19 @@ export function SkillsAgentList({
 								<Checkbox.Indicator />
 							</Checkbox.Control>
 							<Checkbox.Content className="flex flex-row items-start justify-start gap-3">
-								<AgentIcon
-									id={agent.id}
-									name={agent.display_name}
-									size="sm"
-									variant="ghost"
-								/>
-								<div className="flex flex-1 flex-col gap-0.5">
-									<Label className="truncate text-sm">
-										{agent.display_name}
+								{target.universal ? (
+									<UniversalSkillTargetIcon />
+								) : (
+									<AgentIcon
+										id={target.id}
+										name={target.displayName}
+										size="sm"
+										variant="ghost"
+									/>
+								)}
+								<div className="min-w-0 flex flex-1 flex-col gap-0.5">
+									<Label className="truncate whitespace-nowrap text-sm">
+										{target.displayName}
 									</Label>
 									{state?.status === "pending" && (
 										<span

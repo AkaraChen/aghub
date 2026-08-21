@@ -11,7 +11,13 @@ import {
 	useSuspenseQuery,
 } from "@tanstack/react-query";
 import { useQueryState } from "nuqs";
-import { useDeferredValue, useMemo, useRef, useState } from "react";
+import {
+	useCallback,
+	useDeferredValue,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { matrixGroup } from "../../components/agent-coverage-matrix";
 import { BulkActionsPanel } from "../../components/bulk-actions-panel";
@@ -31,16 +37,29 @@ import { PanelTransition } from "../../components/panel-transition";
 import { useListDnd } from "../../hooks/use-list-dnd";
 import { useListKeyboard } from "../../hooks/use-list-keyboard";
 import { SkillDetail } from "../../components/skill-detail";
+import { uniqueSkillSourcePaths } from "../../components/skill-detail-helpers";
 import { SourceDetailPanel } from "../../components/source-detail-panel";
-import { SkillList } from "../../components/skill-list";
+import {
+	SkillList,
+	type SkillCopyListStatus,
+} from "../../components/skill-list";
 import { useApi } from "../../hooks/use-api";
+import { useAgentAvailability } from "../../hooks/use-agent-availability";
 import { useSkillGroups } from "../../hooks/use-resource-groups";
+import { useSkillPreferences } from "../../hooks/use-skill-preferences";
 import { visibleEntryKeys } from "../../hooks/use-list-selection";
 import { useSkillSections } from "../../hooks/use-skill-sections";
 import { cn } from "../../lib/utils";
 import {
+	isUniversalSkillPath,
+	skillSourceTargetId,
+	skillTargetIds,
+	UNIVERSAL_SKILL_TARGET_ID,
+} from "../../lib/skill-targets";
+import {
 	globalSkillLockQueryOptions,
 	invalidateSkillQueries,
+	skillCopyStatusQueryOptions,
 	skillListQueryOptions,
 } from "../../requests/skills";
 
@@ -50,6 +69,7 @@ export default function SkillsPage() {
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
+	const { allAgents } = useAgentAvailability();
 	const { data: skills, isFetching } = useSuspenseQuery({
 		...skillListQueryOptions({ api, scope: "global" }),
 	});
@@ -71,6 +91,12 @@ export default function SkillsPage() {
 	const { data: globalLock } = useQuery({
 		...globalSkillLockQueryOptions({ api, enabled: true }),
 	});
+	const { skillPreferences, skillPreferencesReady } = useSkillPreferences();
+	const automaticallyCheckCopies =
+		skillPreferencesReady &&
+		skillPreferences.enabled &&
+		skillPreferences.mode === "automatic" &&
+		skillPreferences.warnOnConflicts;
 
 	const [panelMode, setPanelMode] = useState<
 		"create" | "import" | "update-source" | "import-github" | null
@@ -79,12 +105,36 @@ export default function SkillsPage() {
 	// The library page: set when a source cluster row is clicked; any
 	// selection change or blank-area escape drops back out of it.
 	const [focusedSource, setFocusedSource] = useState<string | null>(null);
+	const universalReaders = useMemo(
+		() =>
+			new Set(
+				allAgents
+					.filter((agent) =>
+						agent.skills_paths.global_read.some(
+							isUniversalSkillPath,
+						),
+					)
+					.map((agent) => agent.id),
+			),
+		[allAgents],
+	);
+	const skillMatchesAgent = useCallback(
+		(skill: (typeof skills)[number], agentId: string) => {
+			const targets = skillTargetIds(skill);
+			return (
+				targets.has(agentId) ||
+				(targets.has(UNIVERSAL_SKILL_TARGET_ID) &&
+					universalReaders.has(agentId))
+			);
+		},
+		[universalReaders],
+	);
 
 	const {
 		agentId: agentFilter,
 		setAgentId,
 		filtered: filteredSkills,
-	} = useAgentFilter(skills);
+	} = useAgentFilter(skills, skillMatchesAgent);
 
 	// Selection is the single source of truth — it drives the list
 	// highlight, the detail panel, and bulk actions. Seed it with the
@@ -111,6 +161,68 @@ export default function SkillsPage() {
 		selectedKeys,
 	});
 	const groupedSkills = sections.groupedByName;
+	const allSkillGroups = useMemo(() => {
+		const byName = new Map<string, typeof skills>();
+		for (const skill of skills) {
+			const existing = byName.get(skill.name) ?? [];
+			byName.set(skill.name, [...existing, skill]);
+		}
+		return Array.from(byName.entries()).map(([name, items]) => ({
+			name,
+			items,
+			description:
+				items.find((item) => item.description)?.description ?? "",
+		}));
+	}, [skills]);
+	const allSkillGroupsByName = useMemo(
+		() => new Map(allSkillGroups.map((group) => [group.name, group])),
+		[allSkillGroups],
+	);
+	const copyStatusRequest = useMemo(() => {
+		const groups = allSkillGroups.flatMap((group) => {
+			const sourcePaths = uniqueSkillSourcePaths(group.items);
+			return sourcePaths.length > 1
+				? [{ name: group.name, source_paths: sourcePaths }]
+				: [];
+		});
+		return groups.length > 0
+			? {
+					groups,
+					scope: "global",
+					project_root: null,
+				}
+			: undefined;
+	}, [allSkillGroups]);
+	const { data: copyStatus, isError: isCopyStatusError } = useQuery(
+		skillCopyStatusQueryOptions({
+			api,
+			request: copyStatusRequest,
+			enabled: automaticallyCheckCopies,
+		}),
+	);
+	const copyStatuses = useMemo(() => {
+		const statuses = new Map<string, SkillCopyListStatus>();
+		if (!automaticallyCheckCopies) return statuses;
+		if (isCopyStatusError) {
+			for (const group of copyStatusRequest?.groups ?? []) {
+				statuses.set(group.name, "unknown");
+			}
+			return statuses;
+		}
+		for (const result of copyStatus?.results ?? []) {
+			if (result.has_differences) {
+				statuses.set(result.name, "conflict");
+			} else if (result.unavailable > 0) {
+				statuses.set(result.name, "unknown");
+			}
+		}
+		return statuses;
+	}, [
+		automaticallyCheckCopies,
+		copyStatus,
+		copyStatusRequest,
+		isCopyStatusError,
+	]);
 	const visibleKeys = useMemo(
 		() => visibleEntryKeys(sections.orderedEntries),
 		[sections.orderedEntries],
@@ -144,8 +256,20 @@ export default function SkillsPage() {
 	const activeGroup = useMemo(() => {
 		if (deferredSelectedKeys.size !== 1) return null;
 		const [key] = deferredSelectedKeys;
-		return groupedSkills.find((g) => g.name === key) ?? null;
-	}, [deferredSelectedKeys, groupedSkills]);
+		const visibleGroup = groupedSkills.find((group) => group.name === key);
+		const completeGroup = allSkillGroupsByName.get(key);
+		if (!visibleGroup || !completeGroup) return visibleGroup ?? null;
+		const visibleItems = new Set(visibleGroup.items);
+		return {
+			...visibleGroup,
+			items: [
+				...visibleGroup.items,
+				...completeGroup.items.filter(
+					(item) => !visibleItems.has(item),
+				),
+			],
+		};
+	}, [allSkillGroupsByName, deferredSelectedKeys, groupedSkills]);
 
 	// 多选模式下被选中的所有 groups（用于批量删除）
 	const selectedGroups = useMemo(() => {
@@ -306,8 +430,8 @@ export default function SkillsPage() {
 			return matrixGroup(
 				member.name,
 				member.name,
-				items[0]?.agent,
-				items.map((item) => item.agent),
+				items[0] ? skillSourceTargetId(items[0]) : null,
+				items.flatMap((item) => Array.from(skillTargetIds(item))),
 			);
 		});
 		return {
@@ -486,6 +610,7 @@ export default function SkillsPage() {
 								setPanelMode(null);
 							}}
 							seedKey={seedKey}
+							copyStatuses={copyStatuses}
 						/>
 					</div>
 
@@ -531,16 +656,20 @@ export default function SkillsPage() {
 									matrixGroups={selectedGroups.map((g) => ({
 										key: g.name,
 										name: g.name,
-										sourceAgent:
-											g.items[0].agent ?? "claude",
+										sourceAgent: skillSourceTargetId(
+											g.items[0],
+										),
 										// Global-scope page
 										sourceScope: "global" as const,
-										installedAgents: g.items
-											.map((item) => item.agent)
-											.filter(
-												(agent): agent is string =>
-													agent != null,
+										installedAgents: Array.from(
+											new Set(
+												g.items.flatMap((item) =>
+													Array.from(
+														skillTargetIds(item),
+													),
+												),
 											),
+										),
 									}))}
 									onDeselectAll={() =>
 										handleSelectionChange(new Set())
@@ -670,7 +799,7 @@ export default function SkillsPage() {
 							resourceType="skill"
 							items={selectedGroups.map((g) => ({
 								name: g.name,
-								sourceAgent: g.items[0].agent ?? "claude",
+								sourceAgent: skillSourceTargetId(g.items[0]),
 							}))}
 							sourceScope="global"
 						/>

@@ -53,6 +53,12 @@ import type {
 	ProjectSkillLockResponse,
 	ReconcileRequest,
 	SkillResponse,
+	SkillCopyResolutionRequest,
+	SkillCopyResolutionResponse,
+	SkillCopyStatusRequest,
+	SkillCopyStatusResponse,
+	SkillDiffRequest,
+	SkillDiffResponse,
 	SkillTreeNodeResponse,
 	SubAgentResponse,
 	ToolInfoDto,
@@ -71,11 +77,16 @@ import type {
 	UsageLimitsReportDto,
 	UsageReportDto,
 } from "../generated/dto";
+import type { SkillDiscoveryPreferences } from "./store";
 
 interface ApiErrorBody {
 	error?: string;
 	code?: string;
 }
+
+// Directory comparisons may hash the API's bounded 256 MiB batch before
+// returning, so they need longer than Ky's default request timeout.
+const SKILL_DIFF_TIMEOUT_MS = 120_000;
 
 // The backend stops provider discovery after 15 seconds; this leaves time for
 // its response to cross the local HTTP boundary.
@@ -166,12 +177,23 @@ export function createApi(baseUrl: string, token: string) {
 				scope: "global" | "project" | "all" = "global",
 				projectRoot?: string,
 				includeManaged = false,
+				discovery?: SkillDiscoveryPreferences,
 			): Promise<SkillResponse[]> {
 				return client
 					.get("agents/all/skills", {
 						searchParams: {
 							scope,
 							include_managed: includeManaged.toString(),
+							...(discovery
+								? {
+										include_project:
+											discovery.projectSkills.toString(),
+										include_nested:
+											discovery.embeddedSkills.toString(),
+										include_dependencies:
+											discovery.dependencySkills.toString(),
+									}
+								: {}),
 							...(projectRoot
 								? { project_root: projectRoot }
 								: {}),
@@ -285,6 +307,40 @@ export function createApi(baseUrl: string, token: string) {
 								? { project_root: projectRoot }
 								: {}),
 						},
+					})
+					.json();
+			},
+			diff(
+				data: SkillDiffRequest,
+				signal?: AbortSignal,
+			): Promise<SkillDiffResponse> {
+				return client
+					.post("skills/diff", {
+						json: data,
+						signal,
+						timeout: SKILL_DIFF_TIMEOUT_MS,
+					})
+					.json();
+			},
+			resolveCopies(
+				data: SkillCopyResolutionRequest,
+				signal?: AbortSignal,
+			): Promise<SkillCopyResolutionResponse> {
+				return client
+					.post("skills/copies/resolve", {
+						json: data,
+						signal,
+						timeout: SKILL_DIFF_TIMEOUT_MS,
+					})
+					.json();
+			},
+			getCopyStatus(
+				data: SkillCopyStatusRequest,
+			): Promise<SkillCopyStatusResponse> {
+				return client
+					.post("skills/copies/status", {
+						json: data,
+						timeout: SKILL_DIFF_TIMEOUT_MS,
 					})
 					.json();
 			},

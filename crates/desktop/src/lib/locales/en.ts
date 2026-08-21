@@ -597,6 +597,17 @@ export default {
 	editInEditor: "Edit in editor",
 	skillFiles: "Files",
 	skillFilesDescription: "{{count}} items available in this skill bundle",
+	skillFilesUnavailable: "Files unavailable",
+	skillFilesUnavailableDescription:
+		"Aghub couldn't inspect this copy's files.",
+	skillLinkBroken: "Target not found",
+	skillLinkOutsideRoot: "Target outside Skill",
+	skillLinkUnreadable: "Target unavailable",
+	skillFileLinkCount_one: "{{count}} file link",
+	skillFileLinkCount_other: "{{count}} file links",
+	skillLinkAllAvailable: "All available",
+	skillLinkNeedsAttention_one: "{{count}} needs attention",
+	skillLinkNeedsAttention_other: "{{count}} need attention",
 	createSkill: "Create Skill",
 	addLocalSkill: "Add Local Skill",
 	createLocalSkill: "Create New Skill",
@@ -636,6 +647,7 @@ export default {
 	uninstallFromAgentConfirm:
 		'Uninstall {{count}} selected items from "{{agent}}"? They will be removed from that agent.',
 	agentBatchResult: "{{success}} succeeded · {{failed}} failed",
+	agentBatchFailures: "Could not update {{agent}}: {{items}}",
 	favoriteAll: "Favorite all",
 	installedOn: "Installed {{date}}",
 	updatedOn: "Updated {{date}}",
@@ -694,6 +706,54 @@ export default {
 	skillAuditEnabled: "Automatic skill scans enabled",
 	skillAuditDisabled: "Automatic skill scans disabled",
 	skillAuditPreferenceError: "Failed to update the skill scan setting",
+	skillManagement: "Skill management",
+	skillSecurity: "Skill security",
+	universalAgentTarget: "Universal agents",
+	skillContentChecks: "Copies and differences",
+	skillContentChecksDescription:
+		"Control when matching Skills are compared, grouped, and flagged for conflicting content.",
+	skillChangeChecks: "Change checks",
+	skillChangeChecksDescription:
+		"Automatic checks run in lists and details. Manual checks run only when requested.",
+	skillChangeCheckTiming: "When to check",
+	duplicateSkillManagement: "Duplicate Skill management",
+	duplicateSkillManagementDescription:
+		"Control how matching copies are shown and whether differing content is flagged.",
+	groupIdenticalSkillCopies: "Show matching content once",
+	groupIdenticalSkillCopiesDescription:
+		"Matching content is grouped in comparisons without changing files.",
+	warnOnSkillConflicts: "Flag content conflicts",
+	warnOnSkillConflictsDescription:
+		"Mark copies with different or unavailable content in the Skill list.",
+	skillFileRelationships: "Unification method",
+	skillFileRelationshipsDescription:
+		"Choose the default file-writing method when one version replaces the other locations.",
+	defaultSkillFileHandling: "When writing to other locations",
+	defaultSkillFileHandlingDescription:
+		"The comparison view preselects this option. You can change it before applying.",
+	preserveFileRelationships: "Keep the current storage method",
+	preserveFileRelationshipsDescription:
+		"Soft links keep their targets, and hard-link groups keep sharing the same disk content.",
+	copySkillFileContents: "Write independent files",
+	copySkillFileContentsDescription:
+		"Write the selected version separately to every location without retaining soft or hard links.",
+	skillDiscoveryScope: "Skill sources",
+	skillDiscoveryScopeDescription:
+		"Installed locations are always read. Choose whether to search the current project and its dependencies.",
+	projectSkillLocations: "Project Skills",
+	projectSkillLocationsDescription:
+		"Read .agents/skills and native agent directories at the project root.",
+	embeddedRepositorySkills: "Skill collections",
+	embeddedRepositorySkillsDescription:
+		"Continue into collection directories that are not Skills themselves.",
+	dependencyPackageSkills: "Skills in dependencies",
+	dependencyPackageSkillsDescription:
+		"Continue into dependency package directories to find Skills. Disabled by default.",
+	skillPreferencesError: "Failed to update Skill settings",
+	automatic: "Automatic",
+	manual: "Manual",
+	off: "Off",
+	checkSkillCopyDifferences: "Check changes",
 	auditAcknowledgementError: "Failed to update the hidden warning",
 	acknowledgedAuditsDescription:
 		"Warnings stay hidden only for the matching assessment. Skill or scanner changes show them again.",
@@ -965,6 +1025,93 @@ export default {
 		"This skill was not found in the repository on this branch.",
 	skillFoundInRepo: "Skill found in repository",
 	sourceContainsFavoriteSkill: "Contains a favorite skill",
+	skillCopiesDiffer: "Skill copies contain different content",
+	skillComparisonUnavailable: "Some skill copies could not be compared",
+	skillComparisonUnavailableDescription:
+		"{{count}} locations could not be read. Resolve them before unifying the copies.",
+	skillLocationDifferences: "Compare and unify local copies",
+	skillLocationDifferencesDescription:
+		"{{versionCount}} versions across {{locationCount}} locations",
+	chooseVersionToKeep: "Choose the version to keep",
+	chooseVersionToCompare: "Choose a version to compare",
+	skillVersionSource: "Source",
+	skillVersionLocation: "Location and relationship",
+	skillVersionRepositorySource: "Repository source",
+	skillVersionSymlink: "Symlink",
+	skillVersionIndependentCopy: "Independent copy",
+	skillVersionLocationCount_one: "1 location",
+	skillVersionLocationCount_other: "{{count}} locations",
+	skillVersionRepositoryCount_one: "1 repository source",
+	skillVersionRepositoryCount_other: "{{count}} repository sources",
+	skillVersionSymlinkCount_one: "1 symlink",
+	skillVersionSymlinkCount_other: "{{count}} symlinks",
+	skillVersionCopyCount_one: "1 independent copy",
+	skillVersionCopyCount_other: "{{count}} independent copies",
+	skillVersionLocationUsage_one: "Used in 1 location",
+	skillVersionLocationUsage_other: "Used in {{count}} locations",
+	repositoryVersionState: "Remote version",
+	reviewFileChanges: "Review file changes",
+	hideFileChanges: "Hide file changes",
+	keepThisVersion: "Keep",
+	versionSelected: "Selected",
+	skillCopyStorage: "Storage after unifying",
+	skillCopyStorageDescription:
+		"Keep symlink targets and hard-link relationships, or write independent copies.",
+	preserveSkillLinks: "Keep current links",
+	preserveSkillLinksDescription:
+		"Keep symlink targets and shared hard-link relationships.",
+	convertSkillLinksToCopies: "Convert links to copies",
+	convertSkillLinksToCopiesDescription:
+		"Write linked content as unrelated local files.",
+	keepVersionFrom: "Keep version from {{location}}",
+	skillCopyVersion: "Version {{index}}",
+	skillCopyVersionLocations_one: "1 location",
+	skillCopyVersionLocations_other: "{{count}} locations",
+	useSelectedSkillVersion: "Use selected version in {{count}} locations",
+	unifyingSkillCopies: "Unifying copies...",
+	skillCopiesUnified: "Local skill copies now use the selected version",
+	skillCopiesChanged:
+		"A skill copy changed while you were reviewing it. Review the refreshed differences and choose again. {{error}}",
+	skillCopiesResolveFailed:
+		"The skill copies could not be unified. Review the files before trying again. {{error}}",
+	diffFileAdded: "Added",
+	diffFileRemoved: "Removed",
+	diffFileModified: "Modified",
+	diffVersionAbsent: "Not present",
+	diffRegularFile: "Regular file",
+	diffPreviewUnavailable: "Text preview is unavailable for this file.",
+	diffPreviewTruncated:
+		"Text preview was omitted to keep the diff responsive.",
+	diffFilesOmitted_one: "1 additional changed file is not shown.",
+	diffFilesOmitted_other: "{{count}} additional changed files are not shown.",
+	diffForFile: "Diff for {{path}}",
+	comparingRepositoryContent: "Comparing repository content...",
+	repositoryContentMatches: "Repository content matches",
+	repositoryContentMatchesDescription:
+		"The selected branch matches every local location.",
+	repositoryContentDiffers:
+		"Repository and local copies contain different content",
+	repositoryContentDiffersDescription:
+		"Found {{versionCount}} versions across the repository and {{locationCount}} local locations. Select which content every local copy should use.",
+	repositoryComparisonUnavailable: "Repository comparison unavailable",
+	repositoryComparisonUnavailableDescription:
+		"{{count}} local locations could not be read. Resolve them before unifying the copies.",
+	repositoryDifferences: "Compare repository and local versions",
+	repositoryDifferencesDescription:
+		"{{versionCount}} versions · {{locationCount}} local locations",
+	repositoryVersion: "Repository version",
+	keepRepositoryVersion: "Keep repository version",
+	repositoryVersionLocations_one: "Matches 1 local location",
+	repositoryVersionLocations_other: "Matches {{count}} local locations",
+	localSkillVersion: "Local version {{index}}",
+	useRepositorySkillVersion: "Use repository version",
+	keepSelectedLocalSkillVersion: "Keep selected local version",
+	localSkillVersionRetained: "Local version retained",
+	localCopiesUseLocalVersion:
+		"Local copies match each other, but not the repository",
+	localCopiesUseLocalVersionSummary:
+		"Local copies share one version; the repository has another.",
+	skillCopyStatusUnknown: "Skill copy status could not be verified",
 	default: "Default",
 	showMore: "Show more ({{count}})",
 	showLess: "Show less",
@@ -972,6 +1119,7 @@ export default {
 	noContent: "No content",
 	symlink: "Symlink",
 	symlinkTarget: "→ {{target}}",
+	hardLink: "Hard link",
 
 	// Env Editor
 	envEditor: {

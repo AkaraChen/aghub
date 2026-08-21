@@ -45,6 +45,8 @@ describe("migrate", () => {
 			"updateChannel",
 			"acknowledgedSkillAssessments",
 			"skillAuditEnabled",
+			"skillCopyCheck",
+			"skillPreferences",
 			"version",
 		]);
 		expect(values.get("version")).toBe(CURRENT_VERSION);

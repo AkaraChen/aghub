@@ -3,6 +3,7 @@ import Fuse from "fuse.js";
 import { useCallback, useMemo, useState } from "react";
 import type { SkillResponse } from "../generated/dto";
 import { filterItemsByAgentIds } from "../lib/utils";
+import { UNIVERSAL_SKILL_TARGET_ID } from "../lib/skill-targets";
 import {
 	globalSkillLockQueryOptions,
 	projectSkillLockQueryOptions,
@@ -118,15 +119,15 @@ export function useSkillSections({
 	const api = useApi();
 	const { availableAgents } = useAgentAvailability();
 	const effectiveScope = projectPath ? "project" : "global";
-	const enabledAgentIds = useMemo(
-		() =>
-			new Set(
-				availableAgents
-					.filter((agent) => !agent.isDisabled)
-					.map((agent) => agent.id),
-			),
-		[availableAgents],
-	);
+	const enabledAgentIds = useMemo(() => {
+		const ids = new Set(
+			availableAgents
+				.filter((agent) => !agent.isDisabled)
+				.map((agent) => agent.id),
+		);
+		ids.add(UNIVERSAL_SKILL_TARGET_ID);
+		return ids;
+	}, [availableAgents]);
 	const visibleSkills = useMemo(
 		() => filterItemsByAgentIds(skills, enabledAgentIds),
 		[skills, enabledAgentIds],

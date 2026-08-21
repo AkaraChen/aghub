@@ -41,6 +41,10 @@ export {
 	setSkillAuditEnabled,
 } from "./store/skill-audit";
 export {
+	getSkillPreferences,
+	setSkillPreferences,
+} from "./store/skill-preferences";
+export {
 	getStarredMcps,
 	getStarredSkills,
 	migrateStarredMcp,
@@ -57,6 +61,11 @@ export type {
 	OnboardingProgress,
 	Project,
 	ResourceGroup,
+	SkillCopyCheckMode,
+	SkillCopyCheckPreference,
+	SkillDiscoveryPreferences,
+	SkillPreferences,
+	SkillStorageMode,
 	SidebarItemId,
 	SidebarItemPreference,
 	UpdateChannel,
@@ -65,4 +74,6 @@ export {
 	CURRENT_VERSION,
 	DEFAULT_ONBOARDING_PROGRESS,
 	DEFAULT_SIDEBAR_ITEMS,
+	DEFAULT_SKILL_COPY_CHECK,
+	DEFAULT_SKILL_PREFERENCES,
 } from "./store/types";

@@ -14,7 +14,7 @@ import {
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import { Accordion, Button, Card, Chip, toast, Tooltip } from "@heroui/react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -23,9 +23,14 @@ import { useLocation } from "wouter";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useAuditAcknowledgements } from "../hooks/use-audit-acknowledgements";
+import { useSkillPreferences } from "../hooks/use-skill-preferences";
 import { useSkillAuditPreference } from "../hooks/use-skill-audit-preference";
 import { useFavorites } from "../hooks/use-favorites";
 import { useCurrentCodeEditor } from "../hooks/use-integrations";
+import {
+	skillSourceTargetId,
+	UNIVERSAL_SKILL_TARGET_ID,
+} from "../lib/skill-targets";
 import { cn, filterItemsByAgentIds } from "../lib/utils";
 import { openWithEditorMutationOptions } from "../requests/integrations";
 import {
@@ -49,8 +54,15 @@ import {
 	hasSupplementarySkillFiles,
 	type LocationGroup,
 	type SkillGroup,
+	summarizeSkillLinks,
 } from "./skill-detail-helpers";
-import { LocationRow, SkillTree } from "./skill-detail-views";
+import {
+	LocationRow,
+	SkillFilesUnavailableAlert,
+	SkillTree,
+} from "./skill-detail-views";
+import { SkillLinkSummary } from "./skill-link-state";
+import { SkillLocationDrift } from "./skill-location-drift";
 import { SyncGithubSkillDialog } from "./sync-github-skill-dialog";
 import { TransferDialog } from "./transfer-dialog";
 
@@ -67,6 +79,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const { allAgents, availableAgents } = useAgentAvailability();
 	const api = useApi();
 	const { skillAuditEnabled, skillAuditReady } = useSkillAuditPreference();
+	const { skillPreferences, skillPreferencesReady } = useSkillPreferences();
 
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 	const [locationToDelete, setLocationToDelete] =
@@ -75,6 +88,9 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const [transferDialogOpen, setTransferDialogOpen] = useState(false);
 	const [manageDialogOpen, setManageDialogOpen] = useState(false);
 	const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+	const [manualCopyCheckKey, setManualCopyCheckKey] = useState<string | null>(
+		null,
+	);
 
 	const { isSkillStarred, toggleSkillStar } = useFavorites();
 	const isStarred = isSkillStarred(group.items[0].name);
@@ -126,7 +142,12 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		}),
 	});
 
-	const { data: skillTree } = useQuery({
+	const {
+		data: skillTree,
+		error: skillTreeError,
+		isFetching: isSkillTreeFetching,
+		refetch: refetchSkillTree,
+	} = useQuery({
 		...skillTreeQueryOptions({
 			api,
 			path: skill.source_path ?? undefined,
@@ -208,15 +229,15 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		return null;
 	}, [currentSkillSource]);
 
-	const enabledAgentIds = useMemo(
-		() =>
-			new Set(
-				availableAgents
-					.filter((agent) => !agent.isDisabled)
-					.map((agent) => agent.id),
-			),
-		[availableAgents],
-	);
+	const enabledAgentIds = useMemo(() => {
+		const ids = new Set(
+			availableAgents
+				.filter((agent) => !agent.isDisabled)
+				.map((agent) => agent.id),
+		);
+		ids.add(UNIVERSAL_SKILL_TARGET_ID);
+		return ids;
+	}, [availableAgents]);
 	const visibleGroupItems = useMemo(
 		() => filterItemsByAgentIds(group.items, enabledAgentIds),
 		[group.items, enabledAgentIds],
@@ -226,6 +247,18 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		() => buildLocationGroups(visibleGroupItems, allAgents),
 		[visibleGroupItems, allAgents],
 	);
+	const copyLocationGroups = useMemo(
+		() => buildLocationGroups(group.items, allAgents),
+		[group.items, allAgents],
+	);
+	const copyCheckKey = copyLocationGroups
+		.map((location) => location.sourcePath)
+		.join("\n");
+	const manualCopyCheckRequested = manualCopyCheckKey === copyCheckKey;
+	const copyCheckEnabled =
+		skillPreferencesReady &&
+		skillPreferences.enabled &&
+		(skillPreferences.mode === "automatic" || manualCopyCheckRequested);
 
 	const displayedLocations =
 		showAllLocations || allLocationGroups.length <= 3
@@ -233,8 +266,74 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 			: allLocationGroups.slice(0, 2);
 	const hasMoreLocations = allLocationGroups.length > 3;
 	const hiddenLocationCount = allLocationGroups.length - 2;
+	const additionalDisplayedLocations = displayedLocations.filter(
+		(location) => location.sourcePath !== skill.source_path,
+	);
+	const additionalLocationTreeQueries = useQueries({
+		queries: additionalDisplayedLocations.map((location) => {
+			const includesProjectLocation = location.installations.some(
+				(installation) => installation.source === "project",
+			);
+			return skillTreeQueryOptions({
+				api,
+				path: location.sourcePath,
+				scope:
+					includesProjectLocation && projectPath
+						? "project"
+						: "global",
+				projectRoot: projectPath,
+				enabled:
+					copyCheckEnabled &&
+					(!includesProjectLocation || Boolean(projectPath)),
+			});
+		}),
+	});
+	const locationTreeStateByPath = new Map<
+		string,
+		{
+			tree?: typeof skillTree;
+			unavailable: boolean;
+			isFetching: boolean;
+			retry: () => Promise<void>;
+		}
+	>();
+	if (skill.source_path) {
+		locationTreeStateByPath.set(skill.source_path, {
+			tree: skillTree,
+			unavailable: Boolean(skillTreeError),
+			isFetching: isSkillTreeFetching,
+			retry: async () => {
+				const refreshed = await refetchSkillTree();
+				if (refreshed.isError) {
+					toast.warning(t("skillFilesUnavailable"), {
+						description: t("skillFilesUnavailableDescription"),
+					});
+				}
+			},
+		});
+	}
+	additionalDisplayedLocations.forEach((location, index) => {
+		const query = additionalLocationTreeQueries[index];
+		locationTreeStateByPath.set(location.sourcePath, {
+			tree: copyCheckEnabled ? query?.data : undefined,
+			unavailable: copyCheckEnabled && Boolean(query?.error),
+			isFetching: copyCheckEnabled && Boolean(query?.isFetching),
+			retry: async () => {
+				const refreshed = await query?.refetch();
+				if (refreshed?.isError) {
+					toast.warning(t("skillFilesUnavailable"), {
+						description: t("skillFilesUnavailableDescription"),
+					});
+				}
+			},
+		});
+	});
 	const resourceCount = useMemo(
 		() => (skillTree ? countTreeFiles(skillTree) : 0),
+		[skillTree],
+	);
+	const linkSummary = useMemo(
+		() => (skillTree ? summarizeSkillLinks(skillTree) : null),
 		[skillTree],
 	);
 	const hasSupplementaryFiles = useMemo(
@@ -418,35 +517,56 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 									</h3>
 									<div className="space-y-1.5">
 										{displayedLocations.map(
-											(locationGroup) => (
-												<LocationRow
-													key={locationGroup.key}
-													group={locationGroup}
-													onDelete={() =>
-														setLocationToDelete(
-															locationGroup,
-														)
-													}
-													editorAvailable={Boolean(
-														selectedEditor,
-													)}
-													onEditFolder={() => {
-														if (!selectedEditor)
-															return;
-														openInEditorMutation.mutate(
-															{
-																path: locationGroup.sourcePath,
-																editor: selectedEditor,
-															},
-														);
-													}}
-													onOpenFolder={() =>
-														openFolderMutation.mutate(
-															locationGroup.sourcePath,
-														)
-													}
-												/>
-											),
+											(locationGroup) => {
+												const treeState =
+													locationTreeStateByPath.get(
+														locationGroup.sourcePath,
+													);
+
+												return (
+													<LocationRow
+														key={locationGroup.key}
+														group={locationGroup}
+														tree={treeState?.tree}
+														treeUnavailable={
+															treeState?.unavailable
+														}
+														isRetrying={
+															treeState?.isFetching
+														}
+														onRetry={
+															treeState
+																? () => {
+																		void treeState.retry();
+																	}
+																: undefined
+														}
+														editorAvailable={Boolean(
+															selectedEditor,
+														)}
+														onDelete={() =>
+															setLocationToDelete(
+																locationGroup,
+															)
+														}
+														onEditFolder={() => {
+															if (!selectedEditor)
+																return;
+															openInEditorMutation.mutate(
+																{
+																	path: locationGroup.sourcePath,
+																	editor: selectedEditor,
+																},
+															);
+														}}
+														onOpenFolder={() =>
+															openFolderMutation.mutate(
+																locationGroup.sourcePath,
+															)
+														}
+													/>
+												);
+											},
 										)}
 									</div>
 									{hasMoreLocations && (
@@ -586,6 +706,27 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 						</Card.Content>
 					</Card>
 
+					<SkillLocationDrift
+						key={skill.name}
+						locations={copyLocationGroups}
+						scope={projectPath ? "all" : "global"}
+						projectRoot={projectPath}
+						isCheckEnabled={copyCheckEnabled}
+						canRequestCheck={
+							skillPreferencesReady &&
+							skillPreferences.enabled &&
+							skillPreferences.mode === "manual" &&
+							!manualCopyCheckRequested
+						}
+						onRequestCheck={() =>
+							setManualCopyCheckKey(copyCheckKey)
+						}
+						groupIdenticalCopies={
+							skillPreferences.groupIdenticalCopies
+						}
+						defaultStorageMode={skillPreferences.defaultStorageMode}
+					/>
+
 					{skillContent && (
 						<Accordion variant="surface">
 							<Accordion.Item>
@@ -612,7 +753,8 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 						</Accordion>
 					)}
 
-					{skillTree && hasSupplementaryFiles && (
+					{(skillTreeError ||
+						(skillTree && hasSupplementaryFiles)) && (
 						<Accordion variant="surface">
 							<Accordion.Item>
 								<Accordion.Heading>
@@ -620,10 +762,21 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 										<div className="flex min-w-0 flex-1 flex-col items-start text-left">
 											<span>{t("skillFiles")}</span>
 											<span className="text-xs font-normal text-muted">
-												{t("skillFilesDescription", {
-													count: resourceCount,
-												})}
+												{skillTreeError
+													? t("skillFilesUnavailable")
+													: t(
+															"skillFilesDescription",
+															{
+																count: resourceCount,
+															},
+														)}
 											</span>
+											{linkSummary && (
+												<SkillLinkSummary
+													summary={linkSummary}
+													className="mt-0.5"
+												/>
+											)}
 										</div>
 										<Accordion.Indicator>
 											<ChevronDownIcon className="size-4" />
@@ -633,7 +786,22 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 								<Accordion.Panel>
 									<Accordion.Body>
 										<div className="space-y-3">
-											{selectedEditor && (
+											{skillTreeError && (
+												<SkillFilesUnavailableAlert
+													isRetrying={
+														isSkillTreeFetching
+													}
+													onRetry={() => {
+														void locationTreeStateByPath
+															.get(
+																skill.source_path ??
+																	"",
+															)
+															?.retry();
+													}}
+												/>
+											)}
+											{selectedEditor && skillTree && (
 												<div className="flex justify-start">
 													<Button
 														variant="ghost"
@@ -652,7 +820,9 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 													</Button>
 												</div>
 											)}
-											<SkillTree root={skillTree} />
+											{skillTree && (
+												<SkillTree root={skillTree} />
+											)}
 										</div>
 									</Accordion.Body>
 								</Accordion.Panel>
@@ -664,6 +834,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 
 			<DeleteSkillDialog
 				group={group}
+				agents={allAgents}
 				isOpen={deleteDialogOpen}
 				onClose={() => setDeleteDialogOpen(false)}
 				projectPath={projectPath}
@@ -688,7 +859,7 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 				items={[
 					{
 						name: skill.name,
-						sourceAgent: skill.agent ?? "claude",
+						sourceAgent: skillSourceTargetId(skill),
 					},
 				]}
 				sourceScope={primaryScope}

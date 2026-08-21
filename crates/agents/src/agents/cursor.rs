@@ -51,7 +51,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 				global: true,
 				project: true,
 			},
-			universal: false,
+			universal: true,
 		},
 		mcp: McpCapabilities {
 			scopes: ScopeSupport {

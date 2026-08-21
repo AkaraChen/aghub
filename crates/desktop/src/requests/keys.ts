@@ -1,3 +1,9 @@
+import type {
+	SkillCopyStatusRequest,
+	SkillDiffRequest,
+} from "../generated/dto";
+import type { SkillDiscoveryPreferences } from "../lib/store";
+
 export const queryKeys = {
 	plugins: {
 		all: () => ["plugins"] as const,
@@ -20,12 +26,26 @@ export const queryKeys = {
 		list: (
 			scope: "global" | "project" | "all" = "global",
 			projectRoot?: string,
-		) => ["skills", "list", scope, projectRoot ?? null] as const,
+			discovery?: SkillDiscoveryPreferences,
+		) =>
+			[
+				"skills",
+				"list",
+				scope,
+				projectRoot ?? null,
+				discovery ?? "stored-preferences",
+			] as const,
 		content: (
 			path: string,
 			scope: "global" | "project" | "all" = "global",
 			projectRoot?: string,
 		) => ["skills", "content", path, scope, projectRoot ?? null] as const,
+		diff: (request: SkillDiffRequest | null) =>
+			["skills", "diff", request] as const,
+		diffs: () => ["skills", "diff"] as const,
+		copyStatus: (request: SkillCopyStatusRequest | null) =>
+			["skills", "copy-status", request] as const,
+		copyStatuses: () => ["skills", "copy-status"] as const,
 		tree: (
 			path: string,
 			scope: "global" | "project" | "all" = "global",
@@ -43,6 +63,7 @@ export const queryKeys = {
 	preferences: {
 		all: () => ["preferences"] as const,
 		skillAudit: () => ["preferences", "skill-audit"] as const,
+		skills: () => ["preferences", "skills"] as const,
 	},
 	mcps: {
 		all: () => ["mcps"] as const,

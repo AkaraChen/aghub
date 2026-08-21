@@ -3,6 +3,7 @@ use crate::{
 	convert_skill,
 	errors::{ConfigError, Result},
 	models::Skill,
+	skills::target::ensure_skill_target_not_linked,
 };
 use log::{debug, info, warn};
 use skill::{sanitize::sanitize_name, SkillSource};
@@ -185,8 +186,18 @@ fn remove_skill_path(
 ) -> Result<()> {
 	if is_symlink {
 		let Some(parent) = path.parent() else {
-			return Ok(());
+			return Err(ConfigError::InvalidConfig(format!(
+				"Linked Skill path '{}' has no parent",
+				path.display()
+			)));
 		};
+		if path
+			.symlink_metadata()
+			.is_ok_and(|metadata| metadata.file_type().is_symlink())
+		{
+			std::fs::remove_file(path)?;
+			return Ok(());
+		}
 		let is_link = parent
 			.symlink_metadata()
 			.map(|m| m.file_type().is_symlink())
@@ -202,8 +213,12 @@ fn remove_skill_path(
 					),
 				))
 			})?;
+			return Ok(());
 		}
-		return Ok(());
+		return Err(ConfigError::InvalidConfig(format!(
+			"Linked Skill path '{}' no longer points through its recorded link",
+			path.display()
+		)));
 	}
 
 	let Some(parent) = path.parent() else {
@@ -1154,9 +1169,18 @@ impl ConfigManager {
 		let file_path = if let Some(sp) = &existing_skill.source_path {
 			Some(resolve_source_path(sp))
 		} else {
-			target_dir.map(|dir| dir.join(&safe_name).join("SKILL.md"))
+			target_dir
+				.as_ref()
+				.map(|dir| dir.join(&safe_name).join("SKILL.md"))
 		};
 		let is_symlink = existing_skill.canonical_path.is_some();
+		if let Some(target_dir) = target_dir.as_deref() {
+			ensure_skill_target_not_linked(
+				target_dir,
+				self.scope,
+				self.project_root.as_deref(),
+			)?;
+		}
 		let transaction_paths = file_path
 			.as_deref()
 			.map(skill::lock::skill_transaction_path)
@@ -1514,6 +1538,55 @@ fn format_skill(skill: &Skill, existing_body: Option<&str>) -> String {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[cfg(unix)]
+	#[test]
+	fn linked_skills_root_cannot_remove_one_shared_skill() {
+		let temp = tempfile::tempdir().unwrap();
+		let shared_root = temp.path().join(".agents/skills");
+		let shared_skill = shared_root.join("shared-skill");
+		std::fs::create_dir_all(&shared_skill).unwrap();
+		std::fs::write(
+			shared_skill.join("SKILL.md"),
+			"---\nname: shared-skill\ndescription: Shared\n---\n",
+		)
+		.unwrap();
+		let native_root = temp.path().join(".claude/skills");
+		std::fs::create_dir_all(native_root.parent().unwrap()).unwrap();
+		std::os::unix::fs::symlink(&shared_root, &native_root).unwrap();
+
+		let result = remove_skill_path(
+			&native_root.join("shared-skill/SKILL.md"),
+			"shared-skill",
+			true,
+		);
+
+		assert!(result.is_err());
+		assert!(shared_skill.join("SKILL.md").is_file());
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn direct_skill_link_removal_keeps_shared_content() {
+		let temp = tempfile::tempdir().unwrap();
+		let shared_skill = temp.path().join("shared/shared-skill");
+		std::fs::create_dir_all(&shared_skill).unwrap();
+		std::fs::write(
+			shared_skill.join("SKILL.md"),
+			"---\nname: shared-skill\ndescription: Shared\n---\n",
+		)
+		.unwrap();
+		let native_root = temp.path().join(".claude/skills");
+		std::fs::create_dir_all(&native_root).unwrap();
+		let entry = native_root.join("shared-skill");
+		std::os::unix::fs::symlink(&shared_skill, &entry).unwrap();
+
+		remove_skill_path(&entry.join("SKILL.md"), "shared-skill", true)
+			.unwrap();
+
+		assert!(entry.symlink_metadata().is_err());
+		assert!(shared_skill.join("SKILL.md").is_file());
+	}
 
 	#[test]
 	fn test_format_skill_preserves_body() {

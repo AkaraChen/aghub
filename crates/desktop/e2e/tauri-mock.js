@@ -20,8 +20,23 @@
 	);
 
 	const defaultEntries = [
-		["version", 10],
+		["version", 12],
 		["skillAuditEnabled", true],
+		[
+			"skillPreferences",
+			{
+				enabled: true,
+				mode: "automatic",
+				groupIdenticalCopies: true,
+				warnOnConflicts: true,
+				defaultStorageMode: "preserve",
+				discovery: {
+					projectSkills: true,
+					embeddedSkills: true,
+					dependencySkills: false,
+				},
+			},
+		],
 		["acknowledgedSkillAssessments", []],
 		[
 			"onboardingProgress",

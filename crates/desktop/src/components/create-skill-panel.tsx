@@ -18,10 +18,10 @@ import { useTranslation } from "react-i18next";
 import type { CreateSkillRequest } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
-import { supportsSkillMutation } from "../lib/agent-capabilities";
+import { supportsIndividualSkillTarget } from "../lib/agent-capabilities";
 import { createSkillMutationOptions } from "../requests/skills";
 import { capture } from "../lib/analytics";
-import { AgentSelector } from "./agent-selector";
+import { SkillTargetSelector } from "./skill-target-selector";
 
 interface CreateSkillPanelProps {
 	onDone: () => void;
@@ -51,7 +51,7 @@ export function CreateSkillPanel({
 			availableAgents.filter(
 				(a) =>
 					a.isUsable &&
-					supportsSkillMutation(
+					supportsIndividualSkillTarget(
 						a,
 						projectPath ? "project" : "global",
 					),
@@ -74,7 +74,7 @@ export function CreateSkillPanel({
 			author: "",
 			content: "",
 			toolsInput: "",
-			selectedAgents: skillAgents[0] ? [skillAgents[0].id] : [],
+			selectedAgents: ["universal"],
 		},
 	});
 
@@ -303,19 +303,13 @@ export function CreateSkillPanel({
 												: t("validationAgentsRequired"),
 									}}
 									render={({ field, fieldState }) => (
-										<AgentSelector
+										<SkillTargetSelector
 											agents={skillAgents}
 											selectedKeys={new Set(field.value)}
 											onSelectionChange={(keys) =>
 												field.onChange([...keys])
 											}
 											label={t("targetAgent")}
-											emptyMessage={t(
-												"noAgentsAvailable",
-											)}
-											emptyHelpText={t(
-												"noAgentsAvailableHelp",
-											)}
 											variant="secondary"
 											errorMessage={
 												fieldState.error?.message

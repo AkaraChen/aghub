@@ -12,7 +12,7 @@ fn global_skills_paths() -> Vec<PathBuf> {
 	let Some(home) = home_dir() else {
 		return Vec::new();
 	};
-	let paths = vec![home.join(".codex/skills"), home.join(".agents/skills")];
+	let paths = vec![home.join(".codex/skills")];
 	#[cfg(not(target_os = "windows"))]
 	let paths = {
 		let mut p = paths;
@@ -23,7 +23,8 @@ fn global_skills_paths() -> Vec<PathBuf> {
 }
 
 fn project_skills_paths(root: &Path) -> Vec<PathBuf> {
-	vec![root.join(".agents/skills")]
+	let _ = root;
+	Vec::new()
 }
 
 fn global_skill_write_path() -> Option<PathBuf> {
@@ -31,7 +32,8 @@ fn global_skill_write_path() -> Option<PathBuf> {
 }
 
 fn project_skill_write_path(root: &Path) -> Option<PathBuf> {
-	Some(root.join(".agents/skills"))
+	let _ = root;
+	None
 }
 
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
@@ -50,7 +52,7 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 				global: true,
 				project: true,
 			},
-			universal: false,
+			universal: true,
 		},
 		mcp: McpCapabilities {
 			scopes: ScopeSupport {
