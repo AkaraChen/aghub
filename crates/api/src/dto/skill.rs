@@ -79,6 +79,40 @@ pub struct SkillLocationResponse {
 	pub source_path: String,
 	pub is_symlink: bool,
 	pub source: ConfigSource,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub provider: Option<SkillProviderResponse>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillProviderKindResponse {
+	Plugin,
+	System,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct SkillProviderResponse {
+	pub kind: SkillProviderKindResponse,
+	pub qualified_name: String,
+	pub managed: bool,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct SkillProviderLoadErrorResponse {
+	pub cwd: String,
+	pub path: String,
+	pub message: String,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct CodexSkillDiscoveryResponse {
+	pub skills: Vec<SkillResponse>,
+	pub errors: Vec<SkillProviderLoadErrorResponse>,
 }
 
 #[derive(Debug, Serialize, TS)]

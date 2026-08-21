@@ -11,6 +11,7 @@ use rocket::{
 
 pub(crate) mod audit_gate;
 pub mod auth;
+pub(crate) mod codex_skills;
 pub mod dto;
 pub mod editor_detection;
 pub mod error;
@@ -217,6 +218,7 @@ fn build_rocket(
 				routes::agents::check_availability,
 				routes::market::search_skill_market,
 				routes::skills::list_all_agents_skills,
+				routes::skills::list_codex_provider_skills,
 				routes::skills::list_skills,
 				routes::skills::create_skill,
 				routes::skills::import_skill,

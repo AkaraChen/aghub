@@ -28,22 +28,26 @@ use crate::{
 		MAX_AUDIT_PATHS,
 	},
 	auth::ApiAuth,
+	codex_skills::{
+		CodexSkillCatalog, CodexSkillOrigin, CodexSkillScope, CodexSkillsClient,
+	},
 	dto::audit::{AuditReportDto, AuditRequest},
 	dto::integrations::{
 		CodeEditorType, EditSkillFolderRequest, OpenSkillFolderRequest,
 	},
 	dto::skill::{
-		CreateSkillRequest, DeleteSkillByPathRequest,
-		DeleteSkillByPathResponse, GitInstallRequest, GitInstallResponse,
-		GitInstallResultEntry, GitScanRequest, GitScanResponse,
-		GitScanSkillEntry, GitSyncRequest, GitSyncResponse,
+		CodexSkillDiscoveryResponse, CreateSkillRequest,
+		DeleteSkillByPathRequest, DeleteSkillByPathResponse, GitInstallRequest,
+		GitInstallResponse, GitInstallResultEntry, GitScanRequest,
+		GitScanResponse, GitScanSkillEntry, GitSyncRequest, GitSyncResponse,
 		GlobalSkillLockResponse, InstallSkillRequest, InstallSkillResponse,
 		LocalSkillLockEntryResponse, ProjectLockQuery,
 		ProjectSkillLockResponse, SkillContentQuery, SkillHardLinkResponse,
 		SkillLinkResponse, SkillLinkStatusResponse, SkillLocationResponse,
-		SkillLockEntryResponse, SkillResponse, SkillTreeNodeKind,
-		SkillTreeNodeResponse, SkillTreeQuery, UpdateSkillRequest,
-		ValidationError,
+		SkillLockEntryResponse, SkillProviderKindResponse,
+		SkillProviderLoadErrorResponse, SkillProviderResponse, SkillResponse,
+		SkillTreeNodeKind, SkillTreeNodeResponse, SkillTreeQuery,
+		UpdateSkillRequest, ValidationError,
 	},
 	dto::transfer::{
 		OperationBatchResponse, ReconcileRequest, TransferRequest,
@@ -57,6 +61,8 @@ use crate::{
 	},
 };
 
+#[cfg(test)]
+use crate::codex_skills::{CodexSkillLoadError, CodexSkillRecord};
 #[cfg(test)]
 use crate::dto::skill::{
 	SkillDirectoryDiffResponse, SkillFileDiffKindResponse,
@@ -1606,6 +1612,7 @@ pub(crate) async fn list_all_agents_skills(
 				source_path,
 				is_symlink: skill.canonical_path.is_some(),
 				source: source.into(),
+				provider: None,
 			};
 			if let Some(index) = item_indices.get(&skill.name).copied() {
 				if !include_managed && is_managed {
@@ -1627,6 +1634,114 @@ pub(crate) async fn list_all_agents_skills(
 		}
 	}
 	Ok(Json(items))
+}
+
+#[get("/skills/providers/codex?<project_root>")]
+pub(crate) async fn list_codex_provider_skills(
+	_auth: ApiAuth,
+	project_root: Option<String>,
+) -> ApiResult<CodexSkillDiscoveryResponse> {
+	let cwd = match project_root {
+		Some(path) => expand_tilde_path(&path),
+		None => dirs::home_dir().ok_or_else(|| {
+			ApiError::new(
+				Status::InternalServerError,
+				"Cannot determine the home directory for Codex Skill discovery",
+				"HOME_DIR_UNAVAILABLE",
+			)
+		})?,
+	};
+	if !cwd.is_dir() {
+		return Err(ApiError::new(
+			Status::BadRequest,
+			format!(
+				"Codex Skill discovery root is not a directory: {}",
+				cwd.display()
+			),
+			"INVALID_PROJECT_ROOT",
+		));
+	}
+
+	let client = CodexSkillsClient::new().map_err(|error| {
+		ApiError::new(
+			Status::ServiceUnavailable,
+			format!("Cannot start Codex Skill discovery: {error}"),
+			"CODEX_SKILL_DISCOVERY_UNAVAILABLE",
+		)
+	})?;
+	let catalog = client
+		.list_skills(std::slice::from_ref(&cwd))
+		.await
+		.map_err(|error| {
+			ApiError::new(
+				Status::ServiceUnavailable,
+				format!("Cannot read Codex Skills: {error}"),
+				"CODEX_SKILL_DISCOVERY_UNAVAILABLE",
+			)
+		})?;
+
+	Ok(Json(codex_skill_discovery_response(catalog)))
+}
+
+fn codex_skill_discovery_response(
+	catalog: CodexSkillCatalog,
+) -> CodexSkillDiscoveryResponse {
+	let skills = catalog
+		.skills
+		.into_iter()
+		.filter(|skill| skill.enabled)
+		.filter_map(|skill| {
+			let kind = match skill.origin {
+				CodexSkillOrigin::Standalone => return None,
+				CodexSkillOrigin::Plugin { .. } => {
+					SkillProviderKindResponse::Plugin
+				}
+				CodexSkillOrigin::System => SkillProviderKindResponse::System,
+			};
+			let source = match skill.scope {
+				CodexSkillScope::Repo => {
+					crate::dto::common::ConfigSource::Project
+				}
+				CodexSkillScope::User
+				| CodexSkillScope::System
+				| CodexSkillScope::Admin => crate::dto::common::ConfigSource::Global,
+			};
+			let source_path = aghub_core::format_path_with_tilde(&skill.path)?;
+			let provider = SkillProviderResponse {
+				kind,
+				qualified_name: skill.qualified_name,
+				managed: true,
+			};
+			Some(SkillResponse {
+				name: skill.base_name,
+				enabled: skill.enabled,
+				source_path: Some(source_path.clone()),
+				is_symlink: false,
+				description: Some(skill.description),
+				author: None,
+				version: None,
+				tools: Vec::new(),
+				source: Some(source),
+				agent: Some("codex".to_string()),
+				locations: Some(vec![SkillLocationResponse {
+					source_path,
+					is_symlink: false,
+					source,
+					provider: Some(provider),
+				}]),
+			})
+		})
+		.collect();
+	let errors = catalog
+		.errors
+		.into_iter()
+		.map(|error| SkillProviderLoadErrorResponse {
+			cwd: error.cwd,
+			path: error.path,
+			message: error.message,
+		})
+		.collect();
+	CodexSkillDiscoveryResponse { skills, errors }
 }
 
 #[post("/skills/install", data = "<body>")]
@@ -1903,10 +2018,8 @@ pub fn get_skill_content(
 	}
 	.resolve()?;
 	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
-	let roots = canonical_skill_roots_for_registered_agents(
-		resource_scope,
-		project_root.as_deref(),
-	)?;
+	let roots =
+		canonical_skill_read_roots(resource_scope, project_root.as_deref())?;
 	let known = known_skill_paths(resource_scope, project_root.as_deref());
 
 	let path = expand_tilde_path(&query.path);
@@ -1974,10 +2087,8 @@ pub fn get_skill_tree(
 	}
 	.resolve()?;
 	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
-	let roots = canonical_skill_roots_for_registered_agents(
-		resource_scope,
-		project_root.as_deref(),
-	)?;
+	let roots =
+		canonical_skill_read_roots(resource_scope, project_root.as_deref())?;
 	let known = known_skill_paths(resource_scope, project_root.as_deref());
 
 	let path = expand_tilde_path(&query.path);
@@ -2637,6 +2748,81 @@ mod tests {
 			Ok(_) => panic!("expected API error"),
 			Err(error) => error,
 		}
+	}
+
+	#[test]
+	fn codex_provider_discovery_keeps_managed_origins_and_partial_errors() {
+		let catalog = CodexSkillCatalog {
+			skills: vec![
+				CodexSkillRecord {
+					qualified_name: "agents-sdk".to_string(),
+					base_name: "agents-sdk".to_string(),
+					description: "Standalone".to_string(),
+					path: "/home/user/.agents/skills/agents-sdk/SKILL.md".into(),
+					scope: CodexSkillScope::User,
+					enabled: true,
+					origin: CodexSkillOrigin::Standalone,
+					visible_from: vec!["/workspace".into()],
+				},
+				CodexSkillRecord {
+					qualified_name: "cloudflare:agents-sdk".to_string(),
+					base_name: "agents-sdk".to_string(),
+					description: "Plugin".to_string(),
+					path: "/home/user/.codex/plugins/cache/cloudflare/skills/agents-sdk/SKILL.md".into(),
+					scope: CodexSkillScope::User,
+					enabled: true,
+					origin: CodexSkillOrigin::Plugin {
+						namespace: "cloudflare".to_string(),
+					},
+					visible_from: vec!["/workspace".into()],
+				},
+				CodexSkillRecord {
+					qualified_name: "openai-docs".to_string(),
+					base_name: "openai-docs".to_string(),
+					description: "System".to_string(),
+					path: "/app/system/skills/openai-docs/SKILL.md".into(),
+					scope: CodexSkillScope::System,
+					enabled: true,
+					origin: CodexSkillOrigin::System,
+					visible_from: vec!["/workspace".into()],
+				},
+				CodexSkillRecord {
+					qualified_name: "cloudflare:disabled".to_string(),
+					base_name: "disabled".to_string(),
+					description: "Disabled plugin Skill".to_string(),
+					path: "/home/user/.codex/plugins/cache/cloudflare/skills/disabled/SKILL.md".into(),
+					scope: CodexSkillScope::User,
+					enabled: false,
+					origin: CodexSkillOrigin::Plugin {
+						namespace: "cloudflare".to_string(),
+					},
+					visible_from: vec!["/workspace".into()],
+				},
+			],
+			errors: vec![CodexSkillLoadError {
+				cwd: "/workspace".to_string(),
+				path: "/workspace/broken/SKILL.md".to_string(),
+				message: "invalid frontmatter".to_string(),
+			}],
+		};
+
+		let response = codex_skill_discovery_response(catalog);
+
+		assert_eq!(response.skills.len(), 2);
+		assert_eq!(response.errors.len(), 1);
+		let plugin = response
+			.skills
+			.iter()
+			.find(|skill| skill.name == "agents-sdk")
+			.unwrap();
+		let provider = plugin.locations.as_ref().unwrap()[0]
+			.provider
+			.as_ref()
+			.unwrap();
+		assert_eq!(provider.qualified_name, "cloudflare:agents-sdk");
+		assert!(provider.managed);
+		assert!(plugin.source_path.as_deref().unwrap().ends_with("SKILL.md"));
+		assert_eq!(response.errors[0].message, "invalid frontmatter");
 	}
 
 	#[test]

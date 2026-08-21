@@ -53,6 +53,7 @@ export type { ClaudeProviderStateResponse } from "./ClaudeProviderStateResponse"
 export type { CodeEditorType } from "./CodeEditorType";
 export type { CodexProfileResponse } from "./CodexProfileResponse";
 export type { CodexProviderStateResponse } from "./CodexProviderStateResponse";
+export type { CodexSkillDiscoveryResponse } from "./CodexSkillDiscoveryResponse";
 export type { ConfidenceDto } from "./ConfidenceDto";
 export type { ConfigSource } from "./ConfigSource";
 export type { CreateAgentProviderRequest } from "./CreateAgentProviderRequest";
@@ -140,6 +141,9 @@ export type { SkillLinkResponse } from "./SkillLinkResponse";
 export type { SkillLinkStatusResponse } from "./SkillLinkStatusResponse";
 export type { SkillLocationResponse } from "./SkillLocationResponse";
 export type { SkillLockEntryResponse } from "./SkillLockEntryResponse";
+export type { SkillProviderKindResponse } from "./SkillProviderKindResponse";
+export type { SkillProviderLoadErrorResponse } from "./SkillProviderLoadErrorResponse";
+export type { SkillProviderResponse } from "./SkillProviderResponse";
 export type { SkillResponse } from "./SkillResponse";
 export type { SkillTreeNodeKind } from "./SkillTreeNodeKind";
 export type { SkillTreeNodeResponse } from "./SkillTreeNodeResponse";

@@ -66,10 +66,10 @@ use aghub_api::dto::{
 		UpdateRuleVersionPreferencesRequest,
 	},
 	skill::{
-		CreateSkillRequest, DeleteSkillByPathRequest,
-		DeleteSkillByPathResponse, GitInstallRequest, GitInstallResponse,
-		GitInstallResultEntry, GitScanRequest, GitScanResponse,
-		GitScanSkillEntry, GitSyncRequest, GitSyncResponse,
+		CodexSkillDiscoveryResponse, CreateSkillRequest,
+		DeleteSkillByPathRequest, DeleteSkillByPathResponse, GitInstallRequest,
+		GitInstallResponse, GitInstallResultEntry, GitScanRequest,
+		GitScanResponse, GitScanSkillEntry, GitSyncRequest, GitSyncResponse,
 		GlobalSkillLockResponse, ImportSkillRequest, InstallSkillRequest,
 		InstallSkillResponse, LocalSkillLockEntryResponse, ProjectLockQuery,
 		ProjectSkillLockResponse, SkillContentQuery,
@@ -81,9 +81,11 @@ use aghub_api::dto::{
 		SkillDiffRequest, SkillDiffResponse, SkillDirectoryDiffResponse,
 		SkillFileDiffKindResponse, SkillFileDiffResponse,
 		SkillHardLinkResponse, SkillLinkResponse, SkillLinkStatusResponse,
-		SkillLocationResponse, SkillLockEntryResponse, SkillResponse,
-		SkillTreeNodeKind, SkillTreeNodeResponse, SkillTreeQuery,
-		UpdateSkillRequest, ValidationError,
+		SkillLocationResponse, SkillLockEntryResponse,
+		SkillProviderKindResponse, SkillProviderLoadErrorResponse,
+		SkillProviderResponse, SkillResponse, SkillTreeNodeKind,
+		SkillTreeNodeResponse, SkillTreeQuery, UpdateSkillRequest,
+		ValidationError,
 	},
 	sub_agent::{
 		CreateSubAgentRequest, SubAgentResponse, UpdateSubAgentRequest,
@@ -211,6 +213,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<ImportSkillRequest>(&cfg)?;
 	export_type::<UpdateSkillRequest>(&cfg)?;
 	export_type::<SkillLocationResponse>(&cfg)?;
+	export_type::<SkillProviderKindResponse>(&cfg)?;
+	export_type::<SkillProviderResponse>(&cfg)?;
+	export_type::<SkillProviderLoadErrorResponse>(&cfg)?;
+	export_type::<CodexSkillDiscoveryResponse>(&cfg)?;
 	export_type::<SkillResponse>(&cfg)?;
 	export_type::<SkillLinkStatusResponse>(&cfg)?;
 	export_type::<SkillLinkResponse>(&cfg)?;

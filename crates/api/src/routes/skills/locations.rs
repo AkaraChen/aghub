@@ -169,6 +169,28 @@ pub(super) fn canonical_skill_roots_for_registered_agents(
 	Ok(roots)
 }
 
+pub(super) fn canonical_skill_read_roots(
+	resource_scope: ResourceScope,
+	project_root: Option<&Path>,
+) -> Result<Vec<PathBuf>, ApiError> {
+	let mut roots = canonical_skill_roots_for_registered_agents(
+		resource_scope,
+		project_root,
+	)?;
+	if let Some(home) = dirs::home_dir() {
+		append_existing_root(&mut roots, &home.join(".codex/plugins"));
+	}
+	roots.sort();
+	roots.dedup();
+	Ok(roots)
+}
+
+fn append_existing_root(roots: &mut Vec<PathBuf>, path: &Path) {
+	if let Ok(root) = std::fs::canonicalize(path) {
+		roots.push(root);
+	}
+}
+
 pub(super) fn ensure_path_under_roots(
 	path: &Path,
 	roots: &[PathBuf],
@@ -303,4 +325,22 @@ pub(super) fn ensure_skill_tree_allowed(
 		),
 		SKILL_PATH_OUTSIDE_ROOT,
 	))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use tempfile::tempdir;
+
+	#[test]
+	fn appends_existing_codex_plugin_cache_as_read_only_root() {
+		let temp = tempdir().unwrap();
+		let plugins = temp.path().join(".codex/plugins");
+		std::fs::create_dir_all(&plugins).unwrap();
+		let mut roots = Vec::new();
+
+		append_existing_root(&mut roots, &plugins);
+
+		assert_eq!(roots, vec![std::fs::canonicalize(plugins).unwrap()]);
+	}
 }

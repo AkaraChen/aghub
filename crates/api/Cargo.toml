@@ -16,6 +16,7 @@ path = "src/lib.rs"
 crate-type = [ "rlib" ]
 
 [dependencies]
+anyhow = { workspace = true }
 aghub-core = { path = "../core" }
 aghub-git = { path = "../git" }
 aghub-inference = { path = "../inference" }
@@ -27,7 +28,7 @@ skill-audit = { path = "../skill-audit", features = [ "from-path" ] }
 skills-sh = { path = "../skills-sh" }
 rocket = { version = "0.5", features = [ "json" ] }
 rocket_cors = "0.6.0"
-tokio = { workspace = true, features = [ "rt-multi-thread", "macros", "process", "time" ] }
+tokio = { workspace = true, features = [ "rt-multi-thread", "macros", "process", "time", "io-util" ] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

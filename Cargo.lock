@@ -104,6 +104,7 @@ dependencies = [
  "aghub-inference",
  "aghub-prompt",
  "aghub-usage",
+ "anyhow",
  "chrono",
  "dirs 6.0.0",
  "keyring",

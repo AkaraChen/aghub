@@ -24,10 +24,11 @@ use crate::{
 
 use super::{
 	apply_staged_skill_replacements_with_backup_check, canonical_existing,
-	canonical_skill_roots_for_registered_agents, copy_skill_dir_with_budget,
-	existing_skill_entry_path, get_skill_root, is_within, known_skill_paths,
-	lease_git_session, should_return_audit_review, skill_hard_link_response,
-	skill_link_response, stage_skill_copy_replacements_with_budget,
+	canonical_skill_read_roots, canonical_skill_roots_for_registered_agents,
+	copy_skill_dir_with_budget, existing_skill_entry_path, get_skill_root,
+	is_within, known_skill_paths, lease_git_session,
+	should_return_audit_review, skill_hard_link_response, skill_link_response,
+	stage_skill_copy_replacements_with_budget,
 	validate_existing_skill_target_dir, validate_scanned_skill_path,
 	GitCloneSessionKind, KnownSkillPath, SkillImportReview, SkillLinkCopyMode,
 	INVALID_SKILL_PATH, MAX_SKILL_COPY_LOCATIONS,
@@ -100,11 +101,9 @@ pub async fn diff_skill(
 		let resolved = scope.resolve()?;
 		let (resource_scope, project_root) =
 			resolved_to_resource_scope(&resolved);
-		let roots = canonical_skill_roots_for_registered_agents(
-			resource_scope,
-			project_root.as_deref(),
-		)
-		.map_err(public_skill_diff_path_error)?;
+		let roots =
+			canonical_skill_read_roots(resource_scope, project_root.as_deref())
+				.map_err(public_skill_diff_path_error)?;
 		let known = known_skill_paths(resource_scope, project_root.as_deref());
 		let reference_dir = match reference {
 			PreparedSkillDiffReference::Installed(source_path) => {
@@ -211,7 +210,7 @@ pub async fn get_skill_copy_status(
 			let resolved = scope.resolve()?;
 			let (resource_scope, project_root) =
 				resolved_to_resource_scope(&resolved);
-			let roots = canonical_skill_roots_for_registered_agents(
+			let roots = canonical_skill_read_roots(
 				resource_scope,
 				project_root.as_deref(),
 			)
@@ -352,18 +351,21 @@ pub async fn resolve_skill_copies(
 		}
 		let (resource_scope, project_root) =
 			resolved_to_resource_scope(&resolved);
-		let roots = canonical_skill_roots_for_registered_agents(
+		let writable_roots = canonical_skill_roots_for_registered_agents(
 			resource_scope,
 			project_root.as_deref(),
 		)
 		.map_err(public_skill_copy_path_error)?;
+		let readable_roots =
+			canonical_skill_read_roots(resource_scope, project_root.as_deref())
+				.map_err(public_skill_copy_path_error)?;
 		let known = known_skill_paths(resource_scope, project_root.as_deref());
 		let (reference_dir, materialize_root, git_session_id) = match reference
 		{
 			PreparedReference::Installed(source_path) => {
 				let requested = validate_existing_skill_target_dir(
 					&source_path,
-					&roots,
+					&readable_roots,
 					&known,
 				)
 				.map_err(public_skill_copy_path_error)?;
@@ -421,7 +423,7 @@ pub async fn resolve_skill_copies(
 			}
 			let requested_dir = validate_existing_skill_target_dir(
 				&target.source_path,
-				&roots,
+				&writable_roots,
 				&known,
 			)
 			.map_err(public_skill_copy_path_error)?;
