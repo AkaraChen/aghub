@@ -939,6 +939,17 @@ export default {
 	projectSkillLocations: "專案 Skill",
 	projectSkillLocationsDescription:
 		"讀取專案根目錄下的 .agents/skills 與 Agent 原生目錄。",
+	agentProvidedSkills: "Agent 提供的 Skill",
+	agentProvidedSkillsDescription:
+		"讀取 Codex 內建或 Codex 外掛提供的 Skill；這些內容由 Codex 管理。",
+	codexSkillDiscoveryIncomplete: "Codex Skill 未全部讀取",
+	codexSkillDiscoveryUnavailable:
+		"無法從 Codex 讀取 Skill，其他來源仍可使用。",
+	codexSkillDiscoveryPartial_one: "1 個 Skill 無法讀取，其他結果仍可使用。",
+	codexSkillDiscoveryPartial_other:
+		"{{count}} 個 Skill 無法讀取，其他結果仍可使用。",
+	codexPluginSkill: "Codex 外掛",
+	codexSystemSkill: "Codex 內建",
 	embeddedRepositorySkills: "Skill 集合",
 	embeddedRepositorySkillsDescription:
 		"在本身不是 Skill 的集合目錄中繼續尋找子 Skill。",

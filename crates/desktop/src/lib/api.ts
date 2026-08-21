@@ -16,6 +16,7 @@ import type {
 	ClaudeProviderStateResponse,
 	CodeEditorType,
 	CodexProviderStateResponse,
+	CodexSkillDiscoveryResponse,
 	CreateAgentProviderRequest,
 	CreateCredentialRequest,
 	CreateInferenceProviderRequest,
@@ -234,6 +235,18 @@ export function createApi(baseUrl: string, token: string) {
 								? { project_root: projectRoot }
 								: {}),
 						},
+					})
+					.json();
+			},
+			listCodexProvided(
+				projectRoot?: string,
+			): Promise<CodexSkillDiscoveryResponse> {
+				return client
+					.get("skills/providers/codex", {
+						searchParams: projectRoot
+							? { project_root: projectRoot }
+							: undefined,
+						timeout: 25_000,
 					})
 					.json();
 			},

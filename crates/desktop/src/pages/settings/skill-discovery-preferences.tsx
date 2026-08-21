@@ -1,5 +1,6 @@
 import {
 	ArchiveBoxIcon,
+	CubeTransparentIcon,
 	FolderOpenIcon,
 	RectangleStackIcon,
 } from "@heroicons/react/24/solid";
@@ -41,6 +42,22 @@ export function SkillDiscoveryPreferences({
 							discovery: {
 								...preferences.discovery,
 								projectSkills,
+							},
+						})
+					}
+				/>
+				<SkillDiscoveryCheckbox
+					label={t("agentProvidedSkills")}
+					description={t("agentProvidedSkillsDescription")}
+					icon={<CubeTransparentIcon className="size-4" />}
+					selected={preferences.discovery.agentProvidedSkills}
+					disabled={isDisabled}
+					onChange={(agentProvidedSkills) =>
+						onChange({
+							...preferences,
+							discovery: {
+								...preferences.discovery,
+								agentProvidedSkills,
 							},
 						})
 					}

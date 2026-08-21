@@ -940,6 +940,17 @@ export default {
 	projectSkillLocations: "项目 Skill",
 	projectSkillLocationsDescription:
 		"读取项目根目录下的 .agents/skills 与 Agent 原生目录。",
+	agentProvidedSkills: "Agent 提供的 Skill",
+	agentProvidedSkillsDescription:
+		"读取 Codex 自带或 Codex 插件提供的 Skill；这些内容由 Codex 管理。",
+	codexSkillDiscoveryIncomplete: "Codex Skill 未全部读取",
+	codexSkillDiscoveryUnavailable:
+		"无法从 Codex 读取 Skill，其他来源仍可使用。",
+	codexSkillDiscoveryPartial_one: "1 个 Skill 无法读取，其他结果仍可使用。",
+	codexSkillDiscoveryPartial_other:
+		"{{count}} 个 Skill 无法读取，其他结果仍可使用。",
+	codexPluginSkill: "Codex 插件",
+	codexSystemSkill: "Codex 自带",
 	embeddedRepositorySkills: "Skill 集合",
 	embeddedRepositorySkillsDescription:
 		"在本身不是 Skill 的集合目录中继续查找子 Skill。",

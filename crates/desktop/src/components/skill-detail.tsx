@@ -99,6 +99,10 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const { selectedEditor } = useCurrentCodeEditor();
 
 	const skill = group.items[0];
+	const isProviderManagedSkill = Boolean(
+		skill.locations?.length &&
+		skill.locations.every((location) => location.provider?.managed),
+	);
 	const auditPaths = getInstalledSkillAuditPaths(group.items);
 	const primaryScope = skill.source ?? "global";
 	const skillQueryScope =
@@ -425,23 +429,25 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 											: t("starSkill")}
 									</Tooltip.Content>
 								</Tooltip>
-								<Tooltip delay={0}>
-									<Button
-										isIconOnly
-										variant="ghost"
-										size="md"
-										className="text-muted hover:text-danger min-w-[44px] min-h-[44px]"
-										aria-label={t("deleteSkill")}
-										onPress={() =>
-											setDeleteDialogOpen(true)
-										}
-									>
-										<TrashIcon className="size-4" />
-									</Button>
-									<Tooltip.Content>
-										{t("deleteSkill")}
-									</Tooltip.Content>
-								</Tooltip>
+								{!isProviderManagedSkill && (
+									<Tooltip delay={0}>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="md"
+											className="text-muted hover:text-danger min-w-[44px] min-h-[44px]"
+											aria-label={t("deleteSkill")}
+											onPress={() =>
+												setDeleteDialogOpen(true)
+											}
+										>
+											<TrashIcon className="size-4" />
+										</Button>
+										<Tooltip.Content>
+											{t("deleteSkill")}
+										</Tooltip.Content>
+									</Tooltip>
+								)}
 							</div>
 						</Card.Header>
 
@@ -687,22 +693,28 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 								</div>
 							)}
 
-							<Card.Footer className="pt-4 border-t border-separator flex flex-wrap gap-3">
-								<Button
-									variant="secondary"
-									onPress={() => setTransferDialogOpen(true)}
-								>
-									<PlusIcon className="size-4" />
-									{t("transfer")}
-								</Button>
-								<Button
-									variant="primary"
-									onPress={() => setManageDialogOpen(true)}
-								>
-									<PlusIcon className="size-4" />
-									{t("addToAgent")}
-								</Button>
-							</Card.Footer>
+							{!isProviderManagedSkill && (
+								<Card.Footer className="pt-4 border-t border-separator flex flex-wrap gap-3">
+									<Button
+										variant="secondary"
+										onPress={() =>
+											setTransferDialogOpen(true)
+										}
+									>
+										<PlusIcon className="size-4" />
+										{t("transfer")}
+									</Button>
+									<Button
+										variant="primary"
+										onPress={() =>
+											setManageDialogOpen(true)
+										}
+									>
+										<PlusIcon className="size-4" />
+										{t("addToAgent")}
+									</Button>
+								</Card.Footer>
+							)}
 						</Card.Content>
 					</Card>
 
@@ -801,25 +813,27 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 													}}
 												/>
 											)}
-											{selectedEditor && skillTree && (
-												<div className="flex justify-start">
-													<Button
-														variant="ghost"
-														size="sm"
-														onPress={() =>
-															openInEditorMutation.mutate(
-																{
-																	path: skillTree.path,
-																	editor: selectedEditor!,
-																},
-															)
-														}
-													>
-														<CodeBracketIcon className="size-4" />
-														{t("editInEditor")}
-													</Button>
-												</div>
-											)}
+											{selectedEditor &&
+												!isProviderManagedSkill &&
+												skillTree && (
+													<div className="flex justify-start">
+														<Button
+															variant="ghost"
+															size="sm"
+															onPress={() =>
+																openInEditorMutation.mutate(
+																	{
+																		path: skillTree.path,
+																		editor: selectedEditor!,
+																	},
+																)
+															}
+														>
+															<CodeBracketIcon className="size-4" />
+															{t("editInEditor")}
+														</Button>
+													</div>
+												)}
 											{skillTree && (
 												<SkillTree root={skillTree} />
 											)}

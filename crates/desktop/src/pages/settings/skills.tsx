@@ -4,7 +4,7 @@ import {
 	BookOpenIcon,
 	PlusIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Dropdown, Kbd, Menu } from "@heroui/react";
+import { Alert, Button, Dropdown, Kbd, Menu } from "@heroui/react";
 import {
 	useQuery,
 	useQueryClient,
@@ -57,6 +57,7 @@ import {
 	UNIVERSAL_SKILL_TARGET_ID,
 } from "../../lib/skill-targets";
 import {
+	codexProvidedSkillsQueryOptions,
 	globalSkillLockQueryOptions,
 	invalidateSkillQueries,
 	skillCopyStatusQueryOptions,
@@ -69,10 +70,11 @@ export default function SkillsPage() {
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
-	const { allAgents } = useAgentAvailability();
-	const { data: skills, isFetching } = useSuspenseQuery({
-		...skillListQueryOptions({ api, scope: "global" }),
-	});
+	const { allAgents, availableAgents } = useAgentAvailability();
+	const { data: installedSkills, isFetching: isInstalledSkillsFetching } =
+		useSuspenseQuery({
+			...skillListQueryOptions({ api, scope: "global" }),
+		});
 	const [searchQuery, setSearchQuery] = useState("");
 	const [selectedName, setSelectedName] = useQueryState("skill");
 	const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
@@ -92,6 +94,36 @@ export default function SkillsPage() {
 		...globalSkillLockQueryOptions({ api, enabled: true }),
 	});
 	const { skillPreferences, skillPreferencesReady } = useSkillPreferences();
+	const includeCodexProvidedSkills =
+		skillPreferencesReady && skillPreferences.discovery.agentProvidedSkills;
+	const codexCliAvailable = Boolean(
+		availableAgents.find((agent) => agent.id === "codex")?.availability
+			.has_cli,
+	);
+	const codexProvidedSkillsQuery = useQuery(
+		codexProvidedSkillsQueryOptions({
+			api,
+			enabled: includeCodexProvidedSkills && codexCliAvailable,
+		}),
+	);
+	const skills = useMemo(
+		() => [
+			...installedSkills,
+			...(includeCodexProvidedSkills && codexCliAvailable
+				? (codexProvidedSkillsQuery.data?.skills ?? [])
+				: []),
+		],
+		[
+			codexProvidedSkillsQuery.data?.skills,
+			codexCliAvailable,
+			includeCodexProvidedSkills,
+			installedSkills,
+		],
+	);
+	const isFetching =
+		isInstalledSkillsFetching || codexProvidedSkillsQuery.isFetching;
+	const codexProviderLoadErrorCount =
+		codexProvidedSkillsQuery.data?.errors.length ?? 0;
 	const automaticallyCheckCopies =
 		skillPreferencesReady &&
 		skillPreferences.enabled &&
@@ -174,6 +206,24 @@ export default function SkillsPage() {
 				items.find((item) => item.description)?.description ?? "",
 		}));
 	}, [skills]);
+	const providerManagedSkillNames = useMemo(
+		() =>
+			new Set(
+				allSkillGroups.flatMap((group) =>
+					group.items.length > 0 &&
+					group.items.every(
+						(item) =>
+							Boolean(item.locations?.length) &&
+							item.locations!.every(
+								(location) => location.provider?.managed,
+							),
+					)
+						? [group.name]
+						: [],
+				),
+			),
+		[allSkillGroups],
+	);
 	const allSkillGroupsByName = useMemo(
 		() => new Map(allSkillGroups.map((group) => [group.name, group])),
 		[allSkillGroups],
@@ -275,6 +325,9 @@ export default function SkillsPage() {
 	const selectedGroups = useMemo(() => {
 		return groupedSkills.filter((g) => deferredSelectedKeys.has(g.name));
 	}, [deferredSelectedKeys, groupedSkills]);
+	const selectionCanWrite = [...selectedKeys].every(
+		(key) => !providerManagedSkillNames.has(key),
+	);
 
 	const handleSelectionChange = (keys: Set<string>) => {
 		setSelectedKeys(keys);
@@ -320,9 +373,15 @@ export default function SkillsPage() {
 	};
 
 	const actionIntents = {
-		onRequestDelete: () => setIsBulkDeleteDialogOpen(true),
-		onRequestAddToAgent: () => setIsManageDialogOpen(true),
-		onRequestTransfer: () => setIsTransferDialogOpen(true),
+		onRequestDelete: () => {
+			if (selectionCanWrite) setIsBulkDeleteDialogOpen(true);
+		},
+		onRequestAddToAgent: () => {
+			if (selectionCanWrite) setIsManageDialogOpen(true);
+		},
+		onRequestTransfer: () => {
+			if (selectionCanWrite) setIsTransferDialogOpen(true);
+		},
 		onRequestCreateGroup: () => setCreateGroupKeys([...selectedKeys]),
 	};
 
@@ -572,6 +631,37 @@ export default function SkillsPage() {
 						/>
 					</Button>
 				</ResourcePageToolbar>
+				{includeCodexProvidedSkills &&
+				codexCliAvailable &&
+				(codexProvidedSkillsQuery.isError ||
+					codexProviderLoadErrorCount > 0) ? (
+					<div className="shrink-0 px-3 pt-2">
+						<Alert status="warning">
+							<Alert.Indicator />
+							<Alert.Content>
+								<Alert.Title>
+									{t("codexSkillDiscoveryIncomplete")}
+								</Alert.Title>
+								<Alert.Description>
+									{codexProvidedSkillsQuery.isError
+										? t("codexSkillDiscoveryUnavailable")
+										: t("codexSkillDiscoveryPartial", {
+												count: codexProviderLoadErrorCount,
+											})}
+								</Alert.Description>
+							</Alert.Content>
+							<Button
+								size="sm"
+								variant="tertiary"
+								onPress={() =>
+									void codexProvidedSkillsQuery.refetch()
+								}
+							>
+								{t("retry")}
+							</Button>
+						</Alert>
+					</div>
+				) : null}
 				<div className="flex min-h-0 flex-1">
 					{/* Skills List Panel */}
 					<div
@@ -611,6 +701,7 @@ export default function SkillsPage() {
 							}}
 							seedKey={seedKey}
 							copyStatuses={copyStatuses}
+							readOnlyKeys={providerManagedSkillNames}
 						/>
 					</div>
 
@@ -652,6 +743,7 @@ export default function SkillsPage() {
 											sourceByName.get(g.name),
 									}))}
 									intents={actionIntents}
+									canWrite={selectionCanWrite}
 									sourceContext={sourceContext}
 									matrixGroups={selectedGroups.map((g) => ({
 										key: g.name,

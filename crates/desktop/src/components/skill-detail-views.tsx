@@ -72,6 +72,43 @@ export function LocationRow({
 	const hasFileLinkStatus = Boolean(
 		treeUnavailable || (linkSummary && linkSummary.problems > 0),
 	);
+	const providerInstallations = useMemo(
+		() =>
+			Array.from(
+				new Map(
+					group.installations.flatMap((installation) =>
+						installation.provider
+							? [
+									[
+										installation.provider.qualified_name,
+										installation.provider,
+									] as const,
+								]
+							: [],
+					),
+				).values(),
+			),
+		[group.installations],
+	);
+	const installedAgentNames = useMemo(
+		() =>
+			Array.from(
+				new Set(
+					group.installations.flatMap((installation) =>
+						installation.provider
+							? []
+							: [
+									formatSkillTargetName(
+										t,
+										installation.agent,
+										installation.displayName,
+									),
+								],
+					),
+				),
+			).join(", "),
+		[group.installations, t],
+	);
 
 	return (
 		<div
@@ -87,48 +124,67 @@ export function LocationRow({
 					>
 						{folderPath}
 					</p>
-					<p className="mt-0.5 text-[11px] text-muted">
-						{Array.from(
-							new Set(
-								group.installations.map((installation) =>
-									formatSkillTargetName(
-										t,
-										installation.agent,
-										installation.displayName,
-									),
-								),
-							),
-						).join(", ")}
-					</p>
+					{installedAgentNames && (
+						<p className="mt-0.5 text-[11px] text-muted">
+							{installedAgentNames}
+						</p>
+					)}
+					{providerInstallations.map((provider) => (
+						<p
+							key={provider.qualified_name}
+							className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted"
+						>
+							<span className="shrink-0">
+								{t(
+									provider.kind === "plugin"
+										? "codexPluginSkill"
+										: "codexSystemSkill",
+								)}
+							</span>
+							<span aria-hidden="true">·</span>
+							<code
+								className="min-w-0 truncate"
+								title={provider.qualified_name}
+							>
+								{provider.qualified_name}
+							</code>
+						</p>
+					))}
 				</div>
 				<div className="flex shrink-0 items-center gap-1">
-					<Tooltip delay={0}>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							className="size-8 text-muted hover:text-danger"
-							aria-label={t("delete")}
-							onPress={onDelete}
-						>
-							<TrashIcon className="size-4" />
-						</Button>
-						<Tooltip.Content>{t("delete")}</Tooltip.Content>
-					</Tooltip>
-					<Tooltip delay={0}>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							className="size-8 text-muted"
-							aria-label={t("editInEditor")}
-							isDisabled={!editorAvailable}
-							onPress={onEditFolder}
-						>
-							<CodeBracketIcon className="size-4" />
-						</Button>
-						<Tooltip.Content>{t("editInEditor")}</Tooltip.Content>
-					</Tooltip>
+					{!group.managed && (
+						<>
+							<Tooltip delay={0}>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									className="size-8 text-muted hover:text-danger"
+									aria-label={t("delete")}
+									onPress={onDelete}
+								>
+									<TrashIcon className="size-4" />
+								</Button>
+								<Tooltip.Content>{t("delete")}</Tooltip.Content>
+							</Tooltip>
+							<Tooltip delay={0}>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									className="size-8 text-muted"
+									aria-label={t("editInEditor")}
+									isDisabled={!editorAvailable}
+									onPress={onEditFolder}
+								>
+									<CodeBracketIcon className="size-4" />
+								</Button>
+								<Tooltip.Content>
+									{t("editInEditor")}
+								</Tooltip.Content>
+							</Tooltip>
+						</>
+					)}
 					<Tooltip delay={0}>
 						<Button
 							isIconOnly

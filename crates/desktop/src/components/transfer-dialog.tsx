@@ -147,6 +147,7 @@ export function TransferDialog({
 					projectSkills: true,
 					embeddedSkills: false,
 					dependencySkills: false,
+					agentProvidedSkills: false,
 				},
 			});
 		}),

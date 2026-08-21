@@ -1,0 +1,224 @@
+import { expect, test } from "@playwright/test";
+import type {
+	CodexSkillDiscoveryResponse,
+	SkillDirectoryDiffResponse,
+	SkillProviderKindResponse,
+	SkillResponse,
+} from "../src/generated/dto";
+import { installMocks } from "./mocks";
+
+const pluginPath =
+	"/tmp/e2e/.codex/plugins/cache/cloudflare/skills/react-pro/SKILL.md";
+
+function codexProvidedSkill(
+	name: string,
+	kind: SkillProviderKindResponse,
+	qualifiedName: string,
+	path: string,
+): SkillResponse {
+	return {
+		name,
+		enabled: true,
+		source_path: path,
+		is_symlink: false,
+		description: `${qualifiedName} description`,
+		author: null,
+		version: null,
+		tools: [],
+		source: "global",
+		agent: "codex",
+		locations: [
+			{
+				source_path: path,
+				is_symlink: false,
+				source: "global",
+				provider: {
+					kind,
+					qualified_name: qualifiedName,
+					managed: true,
+				},
+			},
+		],
+	};
+}
+
+function discovery(
+	skills: SkillResponse[],
+	errors: CodexSkillDiscoveryResponse["errors"] = [],
+): CodexSkillDiscoveryResponse {
+	return { skills, errors };
+}
+
+const changedPluginCopy: SkillDirectoryDiffResponse = {
+	identical: false,
+	base_hash: "installed-hash",
+	target_hash: "plugin-hash",
+	files: [
+		{
+			path: "SKILL.md",
+			change: "modified",
+			before: "# Installed\n",
+			after: "# Plugin\n",
+			content_omitted: false,
+		},
+	],
+	files_omitted: 0,
+};
+
+test("provider-only Skills expose their source without write actions", async ({
+	page,
+}) => {
+	const mocks = await installMocks(page);
+	mocks.setCodexProvidedSkills(
+		discovery([
+			codexProvidedSkill(
+				"openai-docs",
+				"system",
+				"openai-docs",
+				"/tmp/e2e/.codex/skills/.system/openai-docs/SKILL.md",
+			),
+		]),
+	);
+	await page.goto("/skills");
+
+	const row = page.getByRole("option", { name: "openai-docs" });
+	await row.click();
+	await expect(page.getByText("Bundled with Codex")).toBeVisible();
+	await expect(page.getByTitle("openai-docs", { exact: true })).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: "Delete Skill" }),
+	).toHaveCount(0);
+	await expect(page.getByRole("button", { name: "Transfer" })).toHaveCount(0);
+	await expect(
+		page.getByRole("button", { name: "Add to Agent" }),
+	).toHaveCount(0);
+	await expect(
+		page.getByRole("button", { name: "Edit in Editor" }),
+	).toHaveCount(0);
+
+	await row.click({ button: "right" });
+	await expect(
+		page.getByRole("menuitem", { name: "Favorite" }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("menuitem", { name: "Add to Agent" }),
+	).toHaveCount(0);
+	await expect(page.getByRole("menuitem", { name: "Copy" })).toHaveCount(0);
+	await expect(page.getByRole("menuitem", { name: "Delete" })).toHaveCount(0);
+
+	await page.keyboard.press("Escape");
+	await page.getByRole("option", { name: "react-pro" }).click();
+	await row.click({ button: "right" });
+	await expect(
+		page.getByRole("menuitem", { name: "Add to Agent" }),
+	).toHaveCount(0);
+	await expect(page.getByRole("menuitem", { name: "Delete" })).toHaveCount(0);
+});
+
+test("a plugin copy can be compared but is never a resolution target", async ({
+	page,
+}) => {
+	const mocks = await installMocks(page);
+	mocks.setCodexProvidedSkills(
+		discovery([
+			codexProvidedSkill(
+				"react-pro",
+				"plugin",
+				"cloudflare:react-pro",
+				pluginPath,
+			),
+		]),
+	);
+	mocks.setSkillDiff(pluginPath, changedPluginCopy);
+	await page.goto("/skills");
+
+	await page.getByRole("option", { name: "react-pro" }).click();
+	await page
+		.getByRole("button", { name: /Compare and unify local copies/ })
+		.click();
+	const pluginVersion = page
+		.locator("[data-skill-version-choice]")
+		.filter({ hasText: "cloudflare:react-pro" });
+	await expect(pluginVersion).toBeVisible();
+	await pluginVersion.click();
+	await page.getByRole("button", { name: /Use selected version/ }).click();
+
+	await expect
+		.poll(() => mocks.getSkillCopyResolutionRequests().length)
+		.toBe(1);
+	const request = mocks.getSkillCopyResolutionRequests()[0];
+	expect(request?.reference).toEqual({
+		kind: "installed",
+		source_path: pluginPath,
+	});
+	expect(request?.targets.map((target) => target.source_path).sort()).toEqual(
+		[
+			"/tmp/e2e/.claude/skills/react-pro/SKILL.md",
+			"/tmp/e2e/.cursor/skills/react-pro/SKILL.md",
+		],
+	);
+	expect(
+		request?.targets.some((target) => target.source_path === pluginPath),
+	).toBe(false);
+});
+
+test("partial Codex discovery keeps Skills visible and uses one warning", async ({
+	page,
+}) => {
+	const mocks = await installMocks(page);
+	mocks.setCodexProvidedSkills(
+		discovery(
+			[
+				codexProvidedSkill(
+					"openai-docs",
+					"system",
+					"openai-docs",
+					"/tmp/e2e/.codex/skills/.system/openai-docs/SKILL.md",
+				),
+			],
+			[
+				{
+					cwd: "/tmp/e2e",
+					path: "/tmp/e2e/broken/SKILL.md",
+					message: "invalid frontmatter",
+				},
+			],
+		),
+	);
+	await page.goto("/skills");
+
+	await expect(
+		page.getByRole("option", { name: "openai-docs" }),
+	).toBeVisible();
+	const warning = page
+		.locator('[data-slot="alert-root"]')
+		.filter({ hasText: "Some Codex Skills were not read" });
+	await expect(warning).toHaveCount(1);
+	await expect(warning).toContainText("1 Skill could not be read");
+});
+
+test("Agent-provided Skills can be excluded from discovery", async ({
+	page,
+}) => {
+	const mocks = await installMocks(page);
+	mocks.setCodexProvidedSkills(
+		discovery([
+			codexProvidedSkill(
+				"openai-docs",
+				"system",
+				"openai-docs",
+				"/tmp/e2e/.codex/skills/.system/openai-docs/SKILL.md",
+			),
+		]),
+	);
+	await page.goto("/settings?tab=skills");
+
+	await page
+		.locator('[data-slot="checkbox-content"]')
+		.filter({ hasText: "Agent-provided Skills" })
+		.click();
+	await page.getByRole("link", { name: "Skills", exact: true }).click();
+	await expect(page.getByRole("option", { name: "openai-docs" })).toHaveCount(
+		0,
+	);
+});

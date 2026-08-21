@@ -23,6 +23,7 @@ const DEFAULT_PREFERENCES = {
 		projectSkills: true,
 		embeddedSkills: true,
 		dependencySkills: false,
+		agentProvidedSkills: true,
 	},
 };
 
@@ -128,6 +129,7 @@ test("skill copy and discovery preferences are compact and stored", async ({
 				projectSkills: false,
 				embeddedSkills: true,
 				dependencySkills: true,
+				agentProvidedSkills: true,
 			},
 		});
 });

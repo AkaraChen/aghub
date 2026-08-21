@@ -159,6 +159,8 @@ interface SkillListProps {
 	seedKey?: string | null;
 	/** Comparison state for skill names with more than one physical copy. */
 	copyStatuses?: ReadonlyMap<string, SkillCopyListStatus>;
+	/** Skill names that Codex owns and AGHub must not modify. */
+	readOnlyKeys?: ReadonlySet<string>;
 }
 
 export const SkillList = memo(function SkillList({
@@ -171,6 +173,7 @@ export const SkillList = memo(function SkillList({
 	onSourceFocus,
 	seedKey,
 	copyStatuses,
+	readOnlyKeys = new Set(),
 }: SkillListProps) {
 	const { t } = useTranslation();
 	const api = useApi();
@@ -274,6 +277,7 @@ export const SkillList = memo(function SkillList({
 		kind: "skill",
 		selectedKeys,
 		intents,
+		canWrite: [...selectedKeys].every((key) => !readOnlyKeys.has(key)),
 	});
 
 	// The header reflects its members: selected once every member is in
@@ -504,6 +508,10 @@ export const SkillList = memo(function SkillList({
 							onAddToAgent: intents.onRequestAddToAgent,
 							onFavoriteAll: (keys) =>
 								void setSkillsStarred(keys, true),
+							canWrite:
+								contextMenu.state.context.memberKeys.every(
+									(key) => !readOnlyKeys.has(key),
+								),
 							onRename: setRenameTarget,
 							onDelete: setDeleteTarget,
 						})

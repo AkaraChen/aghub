@@ -64,6 +64,28 @@ export function skillListQueryOptions({
 	});
 }
 
+interface CodexProvidedSkillsQueryParams {
+	api: ApiClient;
+	projectRoot?: string;
+	enabled?: boolean;
+	staleTime?: number;
+}
+
+export function codexProvidedSkillsQueryOptions({
+	api,
+	projectRoot,
+	enabled = true,
+	staleTime = 60_000,
+}: CodexProvidedSkillsQueryParams) {
+	return queryOptions({
+		queryKey: queryKeys.skills.providers.codex(projectRoot),
+		queryFn: () => api.skills.listCodexProvided(projectRoot),
+		enabled,
+		staleTime,
+		retry: false,
+	});
+}
+
 interface GlobalSkillLockQueryParams {
 	api: ApiClient;
 	enabled?: boolean;

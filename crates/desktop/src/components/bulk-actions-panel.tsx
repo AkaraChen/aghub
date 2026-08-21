@@ -35,6 +35,8 @@ interface BulkActionsPanelProps {
 	onRemoveItem: (key: string) => void;
 	/** Per-item agent coverage, for the in-place matrix */
 	matrixGroups: MatrixGroup[];
+	/** False when the selection contains an Agent-managed Skill. */
+	canWrite?: boolean;
 }
 
 /**
@@ -53,12 +55,14 @@ export function BulkActionsPanel({
 	onDeselectAll,
 	onRemoveItem,
 	matrixGroups,
+	canWrite = true,
 }: BulkActionsPanelProps) {
 	const { t } = useTranslation();
 	const actions = useResourceActions({
 		kind,
 		selectedKeys: new Set(items.map((item) => item.key)),
 		intents,
+		canWrite,
 	});
 
 	// Roster sections: items grouped by their source badge. A source with
@@ -192,20 +196,24 @@ export function BulkActionsPanel({
 							))}
 						</div>
 
-						<AgentCoverageMatrix
-							kind={kind}
-							groups={matrixGroups}
-							onManage={actions.requestAddToAgent}
-						/>
+						{actions.canWrite && (
+							<AgentCoverageMatrix
+								kind={kind}
+								groups={matrixGroups}
+								onManage={actions.requestAddToAgent}
+							/>
+						)}
 
 						<Card.Footer className="pt-4 border-t border-separator flex flex-wrap gap-3">
-							<Button
-								variant="secondary"
-								onPress={actions.requestTransfer}
-							>
-								<ACTION_ICONS.transfer className="size-4" />
-								{t("transfer")}
-							</Button>
+							{actions.canWrite && (
+								<Button
+									variant="secondary"
+									onPress={actions.requestTransfer}
+								>
+									<ACTION_ICONS.transfer className="size-4" />
+									{t("transfer")}
+								</Button>
+							)}
 							<Button
 								variant="secondary"
 								onPress={() => void actions.toggleFavorite()}
@@ -285,13 +293,17 @@ export function BulkActionsPanel({
 									{t("removeFromGroup")}
 								</Button>
 							)}
-							<Button
-								variant="danger"
-								onPress={actions.requestDelete}
-							>
-								<ACTION_ICONS.delete className="size-4" />
-								{t("deleteCount", { count: items.length })}
-							</Button>
+							{actions.canWrite && (
+								<Button
+									variant="danger"
+									onPress={actions.requestDelete}
+								>
+									<ACTION_ICONS.delete className="size-4" />
+									{t("deleteCount", {
+										count: items.length,
+									})}
+								</Button>
+							)}
 						</Card.Footer>
 					</Card.Content>
 				</Card>

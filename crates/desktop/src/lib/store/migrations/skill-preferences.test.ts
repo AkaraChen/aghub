@@ -72,4 +72,40 @@ describe("initializeSkillPreferences", () => {
 			groupIdenticalCopies: false,
 		});
 	});
+
+	it("adds Agent-provided discovery without resetting current choices", async () => {
+		const { store, values } = memoryStore([
+			[
+				"skillPreferences",
+				{
+					enabled: false,
+					mode: "manual",
+					groupIdenticalCopies: false,
+					warnOnConflicts: false,
+					defaultStorageMode: "copy",
+					discovery: {
+						projectSkills: false,
+						embeddedSkills: true,
+						dependencySkills: true,
+					},
+				},
+			],
+		]);
+
+		await initializeSkillPreferences(store);
+
+		expect(values.get("skillPreferences")).toEqual({
+			enabled: false,
+			mode: "manual",
+			groupIdenticalCopies: false,
+			warnOnConflicts: false,
+			defaultStorageMode: "copy",
+			discovery: {
+				projectSkills: false,
+				embeddedSkills: true,
+				dependencySkills: true,
+				agentProvidedSkills: true,
+			},
+		});
+	});
 });

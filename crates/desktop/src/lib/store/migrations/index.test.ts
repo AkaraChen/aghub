@@ -64,4 +64,32 @@ describe("migrate", () => {
 		expect(writes).toEqual(firstRunWrites);
 		expect(getSaveCount()).toBe(1);
 	});
+
+	it("adds Agent-provided Skill discovery at version 14", async () => {
+		const { store, values, writes } = memoryStore([
+			["version", 13],
+			[
+				"skillPreferences",
+				{
+					enabled: true,
+					mode: "automatic",
+					groupIdenticalCopies: true,
+					warnOnConflicts: true,
+					defaultStorageMode: "preserve",
+					discovery: {
+						projectSkills: true,
+						embeddedSkills: true,
+						dependencySkills: false,
+					},
+				},
+			],
+		]);
+
+		await migrate(store);
+
+		expect(writes).toEqual(["skillPreferences", "version"]);
+		expect(values.get("skillPreferences")).toMatchObject({
+			discovery: { agentProvidedSkills: true },
+		});
+	});
 });

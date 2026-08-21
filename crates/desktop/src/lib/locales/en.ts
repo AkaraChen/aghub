@@ -987,6 +987,18 @@ export default {
 	projectSkillLocations: "Project Skills",
 	projectSkillLocationsDescription:
 		"Read .agents/skills and native agent directories at the project root.",
+	agentProvidedSkills: "Agent-provided Skills",
+	agentProvidedSkillsDescription:
+		"Read Skills bundled with Codex or supplied by Codex plugins. Codex manages these files.",
+	codexSkillDiscoveryIncomplete: "Some Codex Skills were not read",
+	codexSkillDiscoveryUnavailable:
+		"AGHub could not read Skills from Codex. Other sources remain available.",
+	codexSkillDiscoveryPartial_one:
+		"1 Skill could not be read. Other results remain available.",
+	codexSkillDiscoveryPartial_other:
+		"{{count}} Skills could not be read. Other results remain available.",
+	codexPluginSkill: "Codex plugin",
+	codexSystemSkill: "Bundled with Codex",
 	embeddedRepositorySkills: "Skill collections",
 	embeddedRepositorySkillsDescription:
 		"Continue into collection directories that are not Skills themselves.",

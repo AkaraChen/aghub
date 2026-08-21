@@ -35,6 +35,10 @@ export const queryKeys = {
 				projectRoot ?? null,
 				discovery ?? "stored-preferences",
 			] as const,
+		providers: {
+			codex: (projectRoot?: string) =>
+				["skills", "providers", "codex", projectRoot ?? null] as const,
+		},
 		content: (
 			path: string,
 			scope: "global" | "project" | "all" = "global",

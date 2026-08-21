@@ -6,6 +6,7 @@ import type { Page } from "@playwright/test";
 import type {
 	CcusageRuntimeDto,
 	CcusageRuntimeSource,
+	CodexSkillDiscoveryResponse,
 	GitSyncRequest,
 	InstallCcusageRuntimeRequest,
 	SetCcusageRuntimeRequest,
@@ -319,6 +320,10 @@ export async function installMocks(page: Page) {
 		max_versions_per_file: 20,
 	};
 	let clearedRuleVersionCount = 0;
+	let codexProvidedSkills: CodexSkillDiscoveryResponse = {
+		skills: [],
+		errors: [],
+	};
 	const globalLock = {
 		...GLOBAL_LOCK,
 		skills: GLOBAL_LOCK.skills.map((entry) => ({ ...entry })),
@@ -403,6 +408,7 @@ export async function installMocks(page: Page) {
 		if (p === "/agents") return json(agents);
 		if (p === "/agents/availability") return json(availability);
 		if (p === "/agents/all/skills") return json(skills);
+		if (p === "/skills/providers/codex") return json(codexProvidedSkills);
 		if (p === "/agents/all/mcps") return json(mcps);
 		if (p === "/agents/all/sub-agents") return json(SUB_AGENTS);
 		if (p === "/agents/all/rules") return json(ruleFiles);
@@ -983,6 +989,20 @@ export async function installMocks(page: Page) {
 	// Control handle so specs can mutate the mock state mid-test (e.g.
 	// simulate reinstalling a deleted skill, made visible by a refetch).
 	return {
+		setCodexProvidedSkills(response: CodexSkillDiscoveryResponse) {
+			codexProvidedSkills = response;
+			if (!agents.some((item) => item.id === "codex")) {
+				agents.push(agentInfo("codex", "OpenAI Codex"));
+			}
+			if (!availability.some((item) => item.id === "codex")) {
+				availability.push({
+					id: "codex",
+					has_global_directory: true,
+					has_cli: true,
+					is_available: true,
+				});
+			}
+		},
 		getSkillTreeRequests() {
 			return [...skillTreeRequests];
 		},

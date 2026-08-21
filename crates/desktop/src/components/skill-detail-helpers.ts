@@ -3,6 +3,7 @@ import type {
 	AgentInfo,
 	ConfigSource,
 	SkillLinkStatusResponse,
+	SkillProviderResponse,
 	SkillResponse,
 	SkillTreeNodeResponse,
 } from "../generated/dto";
@@ -13,6 +14,7 @@ export interface LocationInstallation {
 	agent: string;
 	displayName: string;
 	source: ConfigSource;
+	provider?: SkillProviderResponse;
 }
 
 export interface LocationGroup {
@@ -20,6 +22,7 @@ export interface LocationGroup {
 	sourcePath: string;
 	installations: LocationInstallation[];
 	isSymlink: boolean;
+	managed: boolean;
 }
 
 export interface SkillGroup {
@@ -161,10 +164,11 @@ export function buildLocationGroups(
 		for (const location of locations) {
 			const existing = map.get(location.source_path);
 			const installation = {
-				id: `${item.agent}:${location.source}`,
+				id: `${item.agent}:${location.source}:${location.provider?.qualified_name ?? "installed"}`,
 				agent: item.agent,
 				displayName: agentNames.get(item.agent) ?? item.agent,
 				source: location.source,
+				provider: location.provider,
 			};
 
 			if (existing) {
@@ -195,6 +199,11 @@ export function buildLocationGroups(
 				return a.source.localeCompare(b.source);
 			}),
 			isSymlink: data.isSymlink,
+			managed:
+				data.installations.length > 0 &&
+				data.installations.every(
+					(installation) => installation.provider?.managed,
+				),
 		}))
 		.sort((a, b) => a.sourcePath.localeCompare(b.sourcePath));
 }
@@ -235,10 +244,12 @@ export function uniqueSkillLocations(
 							{
 								source_path: item.source_path,
 								is_symlink: item.is_symlink,
+								provider: undefined,
 							},
 						]
 					: [];
 		for (const location of itemLocations) {
+			if (location.provider?.managed) continue;
 			const existing = locations.get(location.source_path);
 			if (existing) {
 				if (item.agent && !existing.agents.includes(item.agent)) {

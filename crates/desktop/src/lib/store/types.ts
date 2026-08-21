@@ -43,6 +43,7 @@ export interface SkillDiscoveryPreferences {
 	projectSkills: boolean;
 	embeddedSkills: boolean;
 	dependencySkills: boolean;
+	agentProvidedSkills: boolean;
 }
 
 export interface SkillPreferences extends SkillCopyCheckPreference {
@@ -61,6 +62,7 @@ export const DEFAULT_SKILL_PREFERENCES: SkillPreferences = {
 		projectSkills: true,
 		embeddedSkills: true,
 		dependencySkills: false,
+		agentProvidedSkills: true,
 	},
 };
 
@@ -77,7 +79,8 @@ export function isSkillPreferences(value: unknown): value is SkillPreferences {
 		Boolean(preference.discovery) &&
 		typeof preference.discovery?.projectSkills === "boolean" &&
 		typeof preference.discovery?.embeddedSkills === "boolean" &&
-		typeof preference.discovery?.dependencySkills === "boolean"
+		typeof preference.discovery?.dependencySkills === "boolean" &&
+		typeof preference.discovery?.agentProvidedSkills === "boolean"
 	);
 }
 
