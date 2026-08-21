@@ -200,6 +200,7 @@ export function PromptDetail({
 								variant="danger"
 								size="md"
 								isPending={isDeleting}
+								isDisabled={isDeleting}
 								className="min-w-30"
 								onPress={onDelete}
 							>
