@@ -87,10 +87,12 @@ test("global search opens a rule file", async ({ page }) => {
 	await expect(page.getByRole("option", { name: "alpha-mcp" })).toBeVisible();
 
 	await page
-		.getByRole("combobox", { name: "Search agents and resources" })
+		.getByRole("combobox", {
+			name: "Search agents, skills, MCP servers, sub-agents, rules, and library",
+		})
 		.fill("CLAUDE");
 	const results = page.getByRole("listbox", {
-		name: "Search agents and resources",
+		name: "Search agents, skills, MCP servers, sub-agents, rules, and library",
 	});
 	await results.getByRole("option", { name: /CLAUDE\.md/ }).click();
 

@@ -89,7 +89,7 @@ export default {
 		"导入完成：新增 {{added}} 条，更新 {{updated}} 条，移除 {{removed}} 条，共 {{total}} 条。",
 	rules: "规则",
 	rulesEmptyTitle: "暂无规则文件",
-	rulesEmptyDescription: "当前范围还没有受管理的规则文件。",
+	rulesEmptyDescription: "没有找到可管理的规则文件。",
 	rulesFileExists: "已存在",
 	rulesFileMissing: "未创建",
 	rulesSelectFile: "选择一个规则文件以查看或编辑。",
@@ -97,7 +97,7 @@ export default {
 	rulesSaved: "规则文件已保存",
 	rulesSaveFailed: "保存规则文件失败",
 	rulesChangedOnDisk:
-		"该文件已在 aghub 外部更改。请重新载入磁盘内容，或用当前草稿覆盖。",
+		"该文件已在 AGHub 外部更改。请重新载入磁盘内容，或用当前草稿覆盖。",
 	rulesReloadFromDisk: "重新载入磁盘内容",
 	rulesOverwriteDisk: "用草稿覆盖",
 	searchRules: "搜索规则...",
@@ -1506,7 +1506,7 @@ export default {
 	searchResultsTitle: "搜索结果",
 	searchResultsSubtitle: '"{{query}}" 的 {{count}} 条结果',
 	searchResultsEmptyHint:
-		"输入内容即可搜索代理、技能、MCP 服务器、子代理、提示词、规则与技能库。",
+		"搜索代理、技能、MCP 服务器、子代理、提示词、规则与技能库。",
 	searchResultsShowMore: "再显示 {{count}} 条",
 	searchResultsShowLess: "收起",
 

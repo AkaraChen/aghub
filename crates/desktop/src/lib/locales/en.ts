@@ -92,7 +92,7 @@ export default {
 		"Import complete: {{added}} added, {{updated}} updated, {{removed}} removed, {{total}} in total.",
 	rules: "Rules",
 	rulesEmptyTitle: "No rule files",
-	rulesEmptyDescription: "The selected scope has no managed rule files yet.",
+	rulesEmptyDescription: "No managed rule files were found.",
 	rulesFileExists: "Exists",
 	rulesFileMissing: "Not created",
 	rulesSelectFile: "Select a rule file to view or edit it.",
@@ -101,7 +101,7 @@ export default {
 	rulesSaved: "Rule file saved",
 	rulesSaveFailed: "Failed to save rule file",
 	rulesChangedOnDisk:
-		"This file changed outside aghub. Reload it or overwrite it with your draft.",
+		"This file changed outside AGHub. Reload it or overwrite it with your draft.",
 	rulesReloadFromDisk: "Reload from disk",
 	rulesOverwriteDisk: "Overwrite disk file",
 	searchRules: "Search rules...",
@@ -1514,7 +1514,7 @@ export default {
 	searchResultsTitle: "Search results",
 	searchResultsSubtitle: '{{count}} results for "{{query}}"',
 	searchResultsEmptyHint:
-		"Type something to search across your agents, skills, MCP servers, sub-agents, prompts, rules, and the library.",
+		"Search your agents, skills, MCP servers, sub-agents, prompts, rules, and library.",
 	searchResultsShowMore: "Show {{count}} more",
 	searchResultsShowLess: "Show less",
 

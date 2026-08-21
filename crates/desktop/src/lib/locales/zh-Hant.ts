@@ -89,7 +89,7 @@ export default {
 		"匯入完成：新增 {{added}} 條，更新 {{updated}} 條，移除 {{removed}} 條，共 {{total}} 條。",
 	rules: "規則",
 	rulesEmptyTitle: "尚無規則檔案",
-	rulesEmptyDescription: "目前範圍還沒有受管理的規則檔案。",
+	rulesEmptyDescription: "沒有找到可管理的規則檔案。",
 	rulesFileExists: "已存在",
 	rulesFileMissing: "未建立",
 	rulesSelectFile: "選擇一個規則檔案以檢視或編輯。",
@@ -97,7 +97,7 @@ export default {
 	rulesSaved: "規則檔案已儲存",
 	rulesSaveFailed: "儲存規則檔案失敗",
 	rulesChangedOnDisk:
-		"該檔案已在 aghub 外部更改。請重新載入磁碟內容，或用目前草稿覆蓋。",
+		"該檔案已在 AGHub 外部更改。請重新載入磁碟內容，或用目前草稿覆蓋。",
 	rulesReloadFromDisk: "重新載入磁碟內容",
 	rulesOverwriteDisk: "用草稿覆蓋",
 	searchRules: "搜尋規則...",
@@ -1502,7 +1502,7 @@ export default {
 	searchResultsTitle: "搜尋結果",
 	searchResultsSubtitle: '"{{query}}" 的 {{count}} 條結果',
 	searchResultsEmptyHint:
-		"輸入內容即可搜尋代理、技能、MCP 伺服器、子代理、提示詞、規則與技能庫。",
+		"搜尋代理、技能、MCP 伺服器、子代理、提示詞、規則與技能庫。",
 	searchResultsShowMore: "再顯示 {{count}} 條",
 	searchResultsShowLess: "收起",
 
