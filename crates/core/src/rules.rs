@@ -172,7 +172,8 @@ pub fn read_rule_file_snapshot(
 
 /// Read a rule file. A missing file is not an error — it reads as empty so the
 /// editor can create it on first save.
-pub fn read_rule_file(path: &Path) -> std::io::Result<String> {
+#[cfg(test)]
+fn read_rule_file(path: &Path) -> std::io::Result<String> {
 	match std::fs::read_to_string(path) {
 		Ok(content) => Ok(content),
 		Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -220,7 +221,8 @@ fn resolve_rule_write_target(path: &Path) -> std::io::Result<PathBuf> {
 /// resolved so the target is updated in place, and the write replaces the
 /// file atomically (temp file + rename) so an incomplete write cannot truncate a
 /// hand-authored file.
-pub fn write_rule_file(path: &Path, content: &str) -> std::io::Result<()> {
+#[cfg(test)]
+fn write_rule_file(path: &Path, content: &str) -> std::io::Result<()> {
 	let _guard = rule_write_lock()?;
 	write_rule_file_unlocked(path, content)
 }
