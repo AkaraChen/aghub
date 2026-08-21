@@ -170,8 +170,8 @@ pub fn read_rule_file_snapshot(
 	})
 }
 
-/// Read a rule file. A missing file is not an error — it reads as empty so the
-/// editor can create it on first save.
+/// Read a rule file. A missing file is not an error — it reads as empty so
+/// the editor can create it on first save.
 #[cfg(test)]
 fn read_rule_file(path: &Path) -> std::io::Result<String> {
 	match std::fs::read_to_string(path) {
@@ -219,8 +219,8 @@ fn resolve_rule_write_target(path: &Path) -> std::io::Result<PathBuf> {
 ///
 /// Symlinked rule files (e.g. a CLAUDE.md linked into a dotfiles repo) are
 /// resolved so the target is updated in place, and the write replaces the
-/// file atomically (temp file + rename) so an incomplete write cannot truncate a
-/// hand-authored file.
+/// file atomically (temp file + rename) so an incomplete write cannot
+/// truncate a hand-authored file.
 #[cfg(test)]
 fn write_rule_file(path: &Path, content: &str) -> std::io::Result<()> {
 	let _guard = rule_write_lock()?;
