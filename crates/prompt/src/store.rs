@@ -12,7 +12,7 @@ use crate::error::{PromptError, Result};
 use crate::model::{NewPrompt, Prompt, PromptUpdate};
 
 /// File name holding the prompt array under the app data directory.
-pub const PROMPTS_FILE: &str = "prompts.json";
+const PROMPTS_FILE: &str = "prompts.json";
 
 fn prompt_mutation_lock() -> &'static Mutex<()> {
 	static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -32,7 +32,7 @@ impl PromptStore {
 		}
 	}
 
-	pub fn file_path(&self) -> PathBuf {
+	fn file_path(&self) -> PathBuf {
 		self.dir.join(PROMPTS_FILE)
 	}
 
