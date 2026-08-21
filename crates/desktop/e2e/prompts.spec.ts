@@ -20,6 +20,9 @@ const OLDER_PROMPT = {
 	updated_at: 1,
 };
 
+const GLOBAL_SEARCH_LABEL =
+	"Search agents, skills, MCP servers, sub-agents, prompts, and library";
+
 test("selects a valid deep link or falls back to the newest prompt", async ({
 	page,
 }) => {
@@ -201,11 +204,11 @@ test("creates, searches, edits, and deletes a prompt", async ({ page }) => {
 
 	await page.goto("/mcp");
 	const globalSearch = page.getByRole("combobox", {
-		name: /Search agents/,
+		name: GLOBAL_SEARCH_LABEL,
 	});
 	await globalSearch.fill("report concrete findings");
 	const globalResults = page.getByRole("listbox", {
-		name: /Search agents/,
+		name: GLOBAL_SEARCH_LABEL,
 	});
 	await globalResults
 		.getByRole("option", { name: new RegExp(PROMPT.title) })

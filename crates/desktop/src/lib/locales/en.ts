@@ -1458,7 +1458,8 @@ export default {
 	usageWindowWeeklyOpus: "Weekly (Opus)",
 	usageWindowWeeklySonnet: "Weekly (Sonnet)",
 	usageWindowOther: "Usage limit",
-	globalSearchLabel: "Search agents, skills, MCP servers, and library",
+	globalSearchLabel:
+		"Search agents, skills, MCP servers, sub-agents, prompts, and library",
 	globalSearchPlaceholder: "Search…",
 	globalSearchNoResults: "No matches",
 	globalSearchLibraryLoading: "Searching library…",
@@ -1466,7 +1467,7 @@ export default {
 	searchResultsTitle: "Search results",
 	searchResultsSubtitle: '{{count}} results for "{{query}}"',
 	searchResultsEmptyHint:
-		"Type something to search across your agents, skills, MCP servers, sub-agents, and the library.",
+		"Type something to search across your agents, skills, MCP servers, sub-agents, prompts, and the library.",
 	searchResultsShowMore: "Show {{count}} more",
 	searchResultsShowLess: "Show less",
 
