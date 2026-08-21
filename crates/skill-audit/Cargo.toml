@@ -12,7 +12,7 @@ pulldown-cmark = "0.13"
 scraper = "0.27"
 serde = { workspace = true }
 serde_json = { workspace = true }
-sha2 = "0.10"
+sha2 = "0.11"
 thiserror = { workspace = true }
 yara-x = { workspace = true }
 skill = { path = "../skill", optional = true }
