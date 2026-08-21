@@ -48,7 +48,7 @@ jobs:
               run: bun i -g @antfu/ni
 
             - name: Install just
-              uses: taiki-e/install-action@v2.85.10
+              uses: taiki-e/install-action@v2.85.13
               with:
                   tool: just
 
