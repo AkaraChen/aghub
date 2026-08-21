@@ -25,6 +25,7 @@ test("stored sidebar preferences preserve visibility but not order", () => {
 		{ id: "skills", visible: false },
 		{ id: "mcp", visible: true },
 		{ id: "subAgents", visible: true },
+		{ id: "prompts", visible: true },
 		{ id: "ccPlugins", visible: true },
 		{ id: "inferenceProviders", visible: true },
 	]);
@@ -37,7 +38,7 @@ test("stored sidebar preferences preserve visibility but not order", () => {
 		{ id: "primary", items: ["home", "market", "usage"] },
 		{
 			id: "resources",
-			items: ["skills", "mcp", "subAgents", "ccPlugins"],
+			items: ["skills", "mcp", "subAgents", "prompts", "ccPlugins"],
 		},
 		{ id: "providers", items: ["inferenceProviders"] },
 	]);
@@ -83,6 +84,7 @@ test("appearance controls update grouped sidebar visibility", async ({
 		"Skills",
 		"MCP Servers",
 		"Sub-agents",
+		"Prompts",
 		"Claude Code Plugins",
 	]) {
 		await toggleSidebarItem(panel, name);
