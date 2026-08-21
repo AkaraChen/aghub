@@ -317,7 +317,7 @@ fn build_rocket(
 		)
 }
 
-pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
+pub async fn start(options: ApiOptions) -> Result<(), Box<rocket::Error>> {
 	let resolved = options.resolve();
 	if resolved.token_was_generated {
 		eprintln!("AGHUB_API_TOKEN={}", resolved.auth_token);
@@ -338,7 +338,7 @@ pub async fn start(options: ApiOptions) -> Result<(), rocket::Error> {
 		.map(|_| ())
 		.map_err(|error| {
 			error!("aghub API server exited with error: {error}");
-			error
+			Box::new(error)
 		})
 }
 
