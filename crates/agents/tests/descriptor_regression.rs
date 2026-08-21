@@ -999,3 +999,58 @@ fn test_project_skill_paths() {
 		}
 	}
 }
+
+#[test]
+fn test_fixed_rule_paths() {
+	use aghub_agents::agents;
+
+	let root = PathBuf::from("/project");
+	let cases = [
+		(
+			&agents::claude::DESCRIPTOR,
+			vec![home().join(".claude/CLAUDE.md")],
+			vec![root.join("CLAUDE.md")],
+		),
+		(
+			&agents::codex::DESCRIPTOR,
+			vec![home().join(".codex/AGENTS.md")],
+			vec![root.join("AGENTS.md")],
+		),
+		(
+			&agents::opencode::DESCRIPTOR,
+			vec![home().join(".config/opencode/AGENTS.md")],
+			vec![root.join("AGENTS.md")],
+		),
+		(
+			&agents::gemini::DESCRIPTOR,
+			vec![home().join(".gemini/GEMINI.md")],
+			vec![root.join("GEMINI.md")],
+		),
+		(
+			&agents::copilot::DESCRIPTOR,
+			vec![home().join(".copilot/copilot-instructions.md")],
+			vec![
+				root.join(".github/copilot-instructions.md"),
+				root.join("AGENTS.md"),
+			],
+		),
+		(
+			&agents::amp::DESCRIPTOR,
+			vec![
+				home().join(".config/amp/AGENTS.md"),
+				home().join(".config/AGENTS.md"),
+			],
+			vec![root.join("AGENTS.md")],
+		),
+	];
+
+	for (descriptor, global, project) in cases {
+		assert_eq!(descriptor.global_rule_paths(), global, "{}", descriptor.id);
+		assert_eq!(
+			descriptor.project_rule_paths(&root),
+			project,
+			"{}",
+			descriptor.id
+		);
+	}
+}
