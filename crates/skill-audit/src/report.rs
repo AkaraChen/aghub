@@ -3,6 +3,7 @@
 use crate::input::AuditInput;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
+use std::fmt::Write;
 
 const CONTENT_DIGEST_DOMAIN: &[u8] = b"aghub-skill-audit-content-v1";
 const COMBINED_DIGEST_DOMAIN: &[u8] = b"aghub-skill-audit-combined-v1";
@@ -268,7 +269,7 @@ pub(crate) fn content_digest(input: &AuditInput) -> String {
 		hash_part(&mut hasher, path.as_bytes());
 		hash_part(&mut hasher, bytes);
 	}
-	format!("{:x}", hasher.finalize())
+	finalize_digest(hasher)
 }
 
 pub(crate) fn assessment_digest(
@@ -303,7 +304,7 @@ fn assessment_digest_with_versions(
 	hash_part(&mut hasher, policy_version);
 	hash_part(&mut hasher, verdict_token(verdict));
 	hash_findings(&mut hasher, findings);
-	format!("{:x}", hasher.finalize())
+	finalize_digest(hasher)
 }
 
 fn hash_findings(hasher: &mut Sha256, findings: &[Finding]) {
@@ -334,7 +335,17 @@ fn combined_content_digest(reports: &[AuditReport]) -> String {
 	for report in reports {
 		hash_part(&mut hasher, report.content_digest.as_bytes());
 	}
-	format!("{:x}", hasher.finalize())
+	finalize_digest(hasher)
+}
+
+fn finalize_digest(hasher: Sha256) -> String {
+	let digest = hasher.finalize();
+	let mut encoded = String::with_capacity(digest.len() * 2);
+	for byte in digest {
+		write!(&mut encoded, "{byte:02x}")
+			.expect("writing to a String cannot fail");
+	}
+	encoded
 }
 
 pub(crate) fn hash_part(hasher: &mut Sha256, bytes: &[u8]) {
