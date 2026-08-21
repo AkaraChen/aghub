@@ -149,12 +149,14 @@ test("bulk transfers run sequentially, never in parallel", async ({ page }) => {
 	await dialog.getByRole("button", { name: "Select destination" }).click();
 	await page.getByRole("option", { name: "demo-project" }).click();
 
-	// Gemini has nothing installed, so it is always selectable. The label
-	// is the clickable surface — the input itself sits under HeroUI's
-	// custom checkbox visuals.
-	await dialog.locator("label").filter({ hasText: "Gemini" }).click();
+	// Project-scoped transfers use the shared target exposed by agents that
+	// read the universal Skill directory.
+	await dialog
+		.locator("label")
+		.filter({ hasText: "Universal agents" })
+		.click();
 	await expect(
-		dialog.getByRole("checkbox", { name: "Gemini" }),
+		dialog.getByRole("checkbox", { name: "Universal agents" }),
 	).toBeChecked();
 	await dialog.getByRole("button", { name: "Copy", exact: true }).click();
 
