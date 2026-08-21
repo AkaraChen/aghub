@@ -260,11 +260,11 @@ fn write_rule_file_unlocked(path: &Path, content: &str) -> std::io::Result<()> {
 pub fn write_rule_file_if_unchanged(
 	path: &Path,
 	content: &str,
-	expected_revision: Option<&str>,
+	expected_revision: &str,
 ) -> Result<RuleFileSnapshot, RuleWriteError> {
 	let _guard = rule_write_lock()?;
 	let current = read_rule_file_snapshot(path)?;
-	if expected_revision.is_some_and(|revision| revision != current.revision) {
+	if expected_revision != current.revision {
 		return Err(RuleWriteError::Changed);
 	}
 
@@ -318,7 +318,7 @@ mod tests {
 		let error = write_rule_file_if_unchanged(
 			&path,
 			"stale draft",
-			Some(&loaded.revision),
+			&loaded.revision,
 		)
 		.unwrap_err();
 

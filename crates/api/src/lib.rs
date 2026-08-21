@@ -3154,6 +3154,7 @@ mod tests {
 			json!({
 				"path": project_dir.path().join("evil.txt").to_string_lossy(),
 				"content": "x",
+				"expected_revision": "sha256:unused",
 				"scope": "project",
 				"project_root": project_dir.path().to_string_lossy(),
 			}),
@@ -3273,6 +3274,28 @@ mod tests {
 		let response = get_auth(&client, "/api/v1/prompts");
 		let body = response_json(response);
 		assert_eq!(body.as_array().expect("prompt list").len(), 0);
+	}
+
+	#[test]
+	fn route_rule_write_requires_revision() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let client = test_client(app_data_dir.path());
+		let rule_file = project_dir.path().join("CLAUDE.md");
+
+		let response = put_json(
+			&client,
+			"/api/v1/rules/content",
+			json!({
+				"path": rule_file.to_string_lossy(),
+				"content": "# Project rules\n",
+				"scope": "project",
+				"project_root": project_dir.path().to_string_lossy(),
+			}),
+		);
+
+		assert_eq!(response.status(), Status::UnprocessableEntity);
+		assert!(!rule_file.exists());
 	}
 
 	#[test]

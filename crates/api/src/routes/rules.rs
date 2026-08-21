@@ -124,7 +124,7 @@ pub fn update_rule_content(
 	let snapshot = rules::write_rule_file_if_unchanged(
 		&path,
 		&request.content,
-		request.expected_revision.as_deref(),
+		&request.expected_revision,
 	)
 	.map_err(|error| match error {
 		rules::RuleWriteError::Changed => ApiError::new(

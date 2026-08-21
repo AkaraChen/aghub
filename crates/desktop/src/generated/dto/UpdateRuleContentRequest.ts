@@ -3,7 +3,7 @@
 export type UpdateRuleContentRequest = {
 	path: string;
 	content: string;
-	expected_revision?: string;
+	expected_revision: string;
 	scope: string | null;
 	project_root: string | null;
 };

@@ -46,9 +46,7 @@ pub struct RuleFileContentResponse {
 pub struct UpdateRuleContentRequest {
 	pub path: String,
 	pub content: String,
-	#[serde(default)]
-	#[ts(optional)]
-	pub expected_revision: Option<String>,
+	pub expected_revision: String,
 	pub scope: Option<String>,
 	pub project_root: Option<String>,
 }
