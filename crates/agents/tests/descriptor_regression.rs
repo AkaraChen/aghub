@@ -1013,8 +1013,11 @@ fn test_fixed_rule_paths() {
 		),
 		(
 			&agents::codex::DESCRIPTOR,
-			vec![home().join(".codex/AGENTS.md")],
-			vec![root.join("AGENTS.md")],
+			vec![
+				home().join(".codex/AGENTS.override.md"),
+				home().join(".codex/AGENTS.md"),
+			],
+			vec![root.join("AGENTS.override.md"), root.join("AGENTS.md")],
 		),
 		(
 			&agents::opencode::DESCRIPTOR,
