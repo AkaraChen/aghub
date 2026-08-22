@@ -113,8 +113,15 @@ export default {
 	ruleVersionHistoryDescription:
 		"aghub 保留近期檔案內容，便於還原至先前的規則。",
 	ruleVersionStorageLocation: "儲存位置",
-	ruleVersionRetention: "保留數量",
-	ruleVersionRetentionValue: "每個規則檔案保留 {{count}} 個版本",
+	ruleVersionAutomaticRecording: "自動記錄上一版本",
+	ruleVersionAutomaticRecordingDescription:
+		"每次在 aghub 儲存規則修改前，記錄目前檔案內容。",
+	ruleVersionRetention: "每個規則檔案保留數量",
+	ruleVersionRetentionDescription: "超過此數量後刪除最早的版本。",
+	ruleVersionRetentionError: "請輸入 {{min}} 至 {{max}} 之間的數值。",
+	saveRuleVersionPreferences: "儲存版本設定",
+	ruleVersionPreferencesSaved: "版本設定已儲存",
+	ruleVersionPreferencesSaveFailed: "儲存版本設定失敗",
 	ruleVersionDataUnavailable: "無法讀取路徑",
 	clearRuleVersions: "清空版本記錄",
 	clearRuleVersionsDescription: "刪除已儲存的規則版本，不修改目前規則檔案。",

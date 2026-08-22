@@ -8,6 +8,21 @@ use crate::dto::common::ConfigSource;
 #[ts(export)]
 pub struct RuleVersionStorageResponse {
 	pub file_path: String,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct RuleVersionPreferencesResponse {
+	pub enabled: bool,
+	pub max_versions_per_file: usize,
+	pub min_versions_per_file: usize,
+	pub max_supported_versions_per_file: usize,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct UpdateRuleVersionPreferencesRequest {
+	pub enabled: bool,
 	pub max_versions_per_file: usize,
 }
 

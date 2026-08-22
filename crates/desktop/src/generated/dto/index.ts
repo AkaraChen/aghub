@@ -112,6 +112,7 @@ export type { ResourceLocatorDto } from "./ResourceLocatorDto";
 export type { RuleContentQuery } from "./RuleContentQuery";
 export type { RuleFileContentResponse } from "./RuleFileContentResponse";
 export type { RuleFileResponse } from "./RuleFileResponse";
+export type { RuleVersionPreferencesResponse } from "./RuleVersionPreferencesResponse";
 export type { RuleVersionResponse } from "./RuleVersionResponse";
 export type { RuleVersionStorageResponse } from "./RuleVersionStorageResponse";
 export type { ScopeSupportDto } from "./ScopeSupportDto";
@@ -159,6 +160,7 @@ export type { UpdateInferenceProviderRequest } from "./UpdateInferenceProviderRe
 export type { UpdateMcpRequest } from "./UpdateMcpRequest";
 export type { UpdatePromptRequest } from "./UpdatePromptRequest";
 export type { UpdateRuleContentRequest } from "./UpdateRuleContentRequest";
+export type { UpdateRuleVersionPreferencesRequest } from "./UpdateRuleVersionPreferencesRequest";
 export type { UpdateSkillRequest } from "./UpdateSkillRequest";
 export type { UpdateSubAgentRequest } from "./UpdateSubAgentRequest";
 export type { UsageAgent } from "./UsageAgent";

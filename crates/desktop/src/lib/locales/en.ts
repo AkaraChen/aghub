@@ -119,8 +119,16 @@ export default {
 	ruleVersionHistoryDescription:
 		"aghub keeps recent file contents so you can restore an earlier rule.",
 	ruleVersionStorageLocation: "Storage location",
-	ruleVersionRetention: "Retention",
-	ruleVersionRetentionValue: "{{count}} versions per rule file",
+	ruleVersionAutomaticRecording: "Save previous versions automatically",
+	ruleVersionAutomaticRecordingDescription:
+		"Record the current file before aghub saves a change.",
+	ruleVersionRetention: "Versions per rule file",
+	ruleVersionRetentionDescription:
+		"The oldest versions are removed after this limit.",
+	ruleVersionRetentionError: "Enter a value from {{min}} to {{max}}.",
+	saveRuleVersionPreferences: "Save version settings",
+	ruleVersionPreferencesSaved: "Version settings saved",
+	ruleVersionPreferencesSaveFailed: "Failed to save version settings",
 	ruleVersionDataUnavailable: "Path unavailable",
 	clearRuleVersions: "Clear version history",
 	clearRuleVersionsDescription:

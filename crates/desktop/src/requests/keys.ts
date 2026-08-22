@@ -99,6 +99,7 @@ export const queryKeys = {
 	rules: {
 		all: () => ["rules"] as const,
 		storage: () => ["rules", "storage"] as const,
+		preferences: () => ["rules", "preferences"] as const,
 		lists: () => ["rules", "list"] as const,
 		list: (
 			scope: "global" | "project" | "all" = "global",

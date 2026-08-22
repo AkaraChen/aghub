@@ -5,7 +5,9 @@ import {
 } from "@tanstack/react-query";
 import type {
 	RuleFileContentResponse,
+	RuleVersionPreferencesResponse,
 	UpdateRuleContentRequest,
+	UpdateRuleVersionPreferencesRequest,
 } from "../generated/dto";
 import type { ApiClient } from "./client";
 import { queryKeys } from "./keys";
@@ -78,6 +80,17 @@ export function ruleVersionStorageQueryOptions({ api }: { api: ApiClient }) {
 	});
 }
 
+export function ruleVersionPreferencesQueryOptions({
+	api,
+}: {
+	api: ApiClient;
+}) {
+	return queryOptions({
+		queryKey: queryKeys.rules.preferences(),
+		queryFn: () => api.rules.preferences(),
+	});
+}
+
 export async function invalidateRuleQueries(queryClient: QueryClient) {
 	await queryClient.invalidateQueries({ queryKey: queryKeys.rules.all() });
 }
@@ -109,13 +122,47 @@ export function updateRuleContentMutationOptions({
 export function clearRuleVersionsMutationOptions({
 	api,
 	queryClient,
+	onSuccess,
 }: {
 	api: ApiClient;
 	queryClient: QueryClient;
+	onSuccess?: () => void | Promise<void>;
 }) {
 	return mutationOptions({
 		mutationFn: () => api.rules.clearVersions(),
-		onSuccess: () =>
-			queryClient.invalidateQueries({ queryKey: queryKeys.rules.all() }),
+		onSuccess: async () => {
+			await queryClient.invalidateQueries({
+				queryKey: queryKeys.rules.all(),
+			});
+			await onSuccess?.();
+		},
+	});
+}
+
+export function updateRuleVersionPreferencesMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (
+		preferences: RuleVersionPreferencesResponse,
+	) => void | Promise<void>;
+}) {
+	return mutationOptions({
+		mutationFn: (body: UpdateRuleVersionPreferencesRequest) =>
+			api.rules.updatePreferences(body),
+		onSuccess: async (preferences: RuleVersionPreferencesResponse) => {
+			queryClient.setQueryData(
+				queryKeys.rules.preferences(),
+				preferences,
+			);
+			await queryClient.invalidateQueries({
+				queryKey: queryKeys.rules.all(),
+				predicate: (query) => query.queryKey[1] === "versions",
+			});
+			await onSuccess?.(preferences);
+		},
 	});
 }

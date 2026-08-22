@@ -187,7 +187,36 @@ test("settings keep prompt data and rule versions together", async ({
 			"C:\\Users\\demo\\AppData\\Roaming\\aghub\\rule-versions.json",
 		),
 	).toBeVisible();
-	await expect(page.getByText("20 versions per rule file")).toBeVisible();
+
+	const automaticHistory = page.getByRole("switch", {
+		name: "Save previous versions automatically",
+	});
+	await expect(automaticHistory).toBeChecked();
+	const retention = page.getByRole("textbox", {
+		name: "Versions per rule file",
+	});
+	await expect(retention).toHaveValue("20");
+	await retention.fill("7");
+	await page.getByRole("button", { name: "Save version settings" }).click();
+	await expect(page.getByText("Version settings saved")).toBeVisible();
+	expect(mocks.getRuleVersionPreferences()).toEqual({
+		enabled: true,
+		max_versions_per_file: 7,
+	});
+	await expect(retention).toHaveValue("7");
+
+	await page
+		.locator('[data-slot="switch-content"]', {
+			has: automaticHistory,
+		})
+		.click();
+	await expect(automaticHistory).not.toBeChecked();
+	await expect(retention).toBeDisabled();
+	await page.getByRole("button", { name: "Save version settings" }).click();
+	expect(mocks.getRuleVersionPreferences()).toEqual({
+		enabled: false,
+		max_versions_per_file: 7,
+	});
 
 	await page.getByRole("button", { name: "Clear version history" }).click();
 	const dialog = page.getByRole("alertdialog", {

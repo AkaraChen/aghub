@@ -1,7 +1,10 @@
 use std::path::Path;
 
 use aghub_core::models::ResourceScope;
-use aghub_core::rule_versions::{RuleVersionStore, MAX_RULE_VERSIONS_PER_FILE};
+use aghub_core::rule_versions::{
+	RuleVersionPreferences, RuleVersionStore, MAX_RULE_VERSIONS_PER_FILE,
+	MIN_RULE_VERSIONS_PER_FILE,
+};
 use aghub_core::{registry, rules};
 use log::warn;
 use rocket::http::Status;
@@ -13,8 +16,9 @@ use crate::{
 	auth::ApiAuth,
 	dto::rule::{
 		RuleContentQuery, RuleFileContentResponse, RuleFileResponse,
-		RuleVersionResponse, RuleVersionStorageResponse,
-		UpdateRuleContentRequest,
+		RuleVersionPreferencesResponse, RuleVersionResponse,
+		RuleVersionStorageResponse, UpdateRuleContentRequest,
+		UpdateRuleVersionPreferencesRequest,
 	},
 	error::{ApiError, ApiNoContent, ApiResult},
 	extractors::{AgentParam, ScopeParams, TrustedLocalOrigin},
@@ -153,8 +157,70 @@ pub fn get_rule_version_storage(
 			.file_path()
 			.to_string_lossy()
 			.into_owned(),
-		max_versions_per_file: MAX_RULE_VERSIONS_PER_FILE,
 	})
+}
+
+#[get("/rules/versions/preferences")]
+pub fn get_rule_version_preferences(
+	_auth: ApiAuth,
+	state: &State<RuleState>,
+) -> ApiResult<RuleVersionPreferencesResponse> {
+	let preferences = version_store(state).preferences().map_err(|error| {
+		ApiError::new(
+			Status::InternalServerError,
+			format!("Failed to read rule version preferences: {error}"),
+			"RULE_VERSION_PREFERENCES_READ_FAILED",
+		)
+	})?;
+	Ok(Json(rule_version_preferences_response(preferences)))
+}
+
+#[put("/rules/versions/preferences", format = "json", data = "<body>")]
+pub fn update_rule_version_preferences(
+	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
+	state: &State<RuleState>,
+	body: Json<UpdateRuleVersionPreferencesRequest>,
+) -> ApiResult<RuleVersionPreferencesResponse> {
+	let request = body.into_inner();
+	if !(MIN_RULE_VERSIONS_PER_FILE..=MAX_RULE_VERSIONS_PER_FILE)
+		.contains(&request.max_versions_per_file)
+	{
+		return Err(ApiError::new(
+			Status::BadRequest,
+			format!(
+				"max_versions_per_file must be between {} and {}",
+				MIN_RULE_VERSIONS_PER_FILE, MAX_RULE_VERSIONS_PER_FILE
+			),
+			"INVALID_PARAM",
+		));
+	}
+
+	let preferences = RuleVersionPreferences {
+		enabled: request.enabled,
+		max_versions_per_file: request.max_versions_per_file,
+	};
+	version_store(state)
+		.set_preferences(preferences)
+		.map_err(|error| {
+			ApiError::new(
+				Status::InternalServerError,
+				format!("Failed to save rule version preferences: {error}"),
+				"RULE_VERSION_PREFERENCES_WRITE_FAILED",
+			)
+		})?;
+	Ok(Json(rule_version_preferences_response(preferences)))
+}
+
+fn rule_version_preferences_response(
+	preferences: RuleVersionPreferences,
+) -> RuleVersionPreferencesResponse {
+	RuleVersionPreferencesResponse {
+		enabled: preferences.enabled,
+		max_versions_per_file: preferences.max_versions_per_file,
+		min_versions_per_file: MIN_RULE_VERSIONS_PER_FILE,
+		max_supported_versions_per_file: MAX_RULE_VERSIONS_PER_FILE,
+	}
 }
 
 #[delete("/rules/versions")]

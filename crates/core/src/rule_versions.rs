@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
@@ -10,7 +11,9 @@ use crate::rules::RuleFileSnapshot;
 
 const RULE_VERSIONS_FILE: &str = "rule-versions.json";
 /// Rule versions retain full file bodies, so bound each file's recovery list.
-pub const MAX_RULE_VERSIONS_PER_FILE: usize = 20;
+pub const DEFAULT_RULE_VERSIONS_PER_FILE: usize = 20;
+pub const MIN_RULE_VERSIONS_PER_FILE: usize = 1;
+pub const MAX_RULE_VERSIONS_PER_FILE: usize = 100;
 
 fn rule_version_lock() -> &'static Mutex<()> {
 	static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -25,12 +28,44 @@ pub struct RuleVersion {
 	pub created_at: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuleVersionPreferences {
+	pub enabled: bool,
+	pub max_versions_per_file: usize,
+}
+
+impl Default for RuleVersionPreferences {
+	fn default() -> Self {
+		Self {
+			enabled: true,
+			max_versions_per_file: DEFAULT_RULE_VERSIONS_PER_FILE,
+		}
+	}
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct RuleVersionData {
+	#[serde(default)]
+	preferences: RuleVersionPreferences,
+	#[serde(default)]
+	versions: Vec<RuleVersion>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum StoredRuleVersionData {
+	Current(RuleVersionData),
+	Legacy(Vec<RuleVersion>),
+}
+
 #[derive(Debug, Error)]
 pub enum RuleVersionError {
 	#[error(transparent)]
 	Io(#[from] std::io::Error),
 	#[error(transparent)]
 	Json(#[from] serde_json::Error),
+	#[error("rule version retention {value} is outside the supported range")]
+	InvalidPreferences { value: usize },
 }
 
 pub type Result<T> = std::result::Result<T, RuleVersionError>;
@@ -55,18 +90,46 @@ impl RuleVersionStore {
 		let _guard = rule_version_lock()
 			.lock()
 			.map_err(|_| std::io::Error::other("rule version lock poisoned"))?;
-		self.write(&[])
+		let mut data = match self.read_data() {
+			Ok(data) => data,
+			Err(
+				RuleVersionError::Json(_)
+				| RuleVersionError::InvalidPreferences { .. },
+			) => RuleVersionData::default(),
+			Err(error) => return Err(error),
+		};
+		data.versions.clear();
+		self.write_data(&data)
 	}
 
 	pub fn list(&self, path: &Path) -> Result<Vec<RuleVersion>> {
 		let mut versions = self
-			.read_all()?
+			.read_data()?
+			.versions
 			.into_iter()
 			.filter(|version| version.path == path)
 			.collect::<Vec<_>>();
 		versions.sort_by_key(|version| version.created_at);
 		versions.reverse();
 		Ok(versions)
+	}
+
+	pub fn preferences(&self) -> Result<RuleVersionPreferences> {
+		Ok(self.read_data()?.preferences)
+	}
+
+	pub fn set_preferences(
+		&self,
+		preferences: RuleVersionPreferences,
+	) -> Result<()> {
+		validate_preferences(preferences)?;
+		let _guard = rule_version_lock()
+			.lock()
+			.map_err(|_| std::io::Error::other("rule version lock poisoned"))?;
+		let mut data = self.read_data()?;
+		data.preferences = preferences;
+		prune_versions(&mut data.versions, preferences.max_versions_per_file);
+		self.write_data(&data)
 	}
 
 	pub fn record(
@@ -81,8 +144,11 @@ impl RuleVersionStore {
 		let _guard = rule_version_lock()
 			.lock()
 			.map_err(|_| std::io::Error::other("rule version lock poisoned"))?;
-		let mut versions = self.read_all()?;
-		if let Some(existing) = versions.iter().find(|version| {
+		let mut data = self.read_data()?;
+		if !data.preferences.enabled {
+			return Ok(None);
+		}
+		if let Some(existing) = data.versions.iter().find(|version| {
 			version.path == path && version.revision == snapshot.revision
 		}) {
 			return Ok(Some(existing.clone()));
@@ -94,7 +160,70 @@ impl RuleVersionStore {
 			revision: snapshot.revision.clone(),
 			created_at: now_millis(),
 		};
-		versions.push(version.clone());
+		data.versions.push(version.clone());
+		prune_versions(
+			&mut data.versions,
+			data.preferences.max_versions_per_file,
+		);
+		self.write_data(&data)?;
+		Ok(Some(version))
+	}
+
+	fn read_data(&self) -> Result<RuleVersionData> {
+		match std::fs::read_to_string(self.file_path()) {
+			Ok(content) => {
+				let data = match serde_json::from_str(&content)? {
+					StoredRuleVersionData::Current(data) => data,
+					StoredRuleVersionData::Legacy(versions) => {
+						RuleVersionData {
+							versions,
+							..RuleVersionData::default()
+						}
+					}
+				};
+				validate_preferences(data.preferences)?;
+				Ok(data)
+			}
+			Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+				Ok(RuleVersionData::default())
+			}
+			Err(error) => Err(error.into()),
+		}
+	}
+
+	fn write_data(&self, data: &RuleVersionData) -> Result<()> {
+		std::fs::create_dir_all(&self.dir)?;
+		let path = self.file_path();
+		let json = serde_json::to_string_pretty(data)?;
+		let mut temporary = tempfile::Builder::new()
+			.prefix(".rule-versions.")
+			.suffix(".json.tmp")
+			.tempfile_in(&self.dir)?;
+		temporary.write_all(json.as_bytes())?;
+		temporary.persist(path).map_err(|error| error.error)?;
+		Ok(())
+	}
+}
+
+fn validate_preferences(preferences: RuleVersionPreferences) -> Result<()> {
+	if (MIN_RULE_VERSIONS_PER_FILE..=MAX_RULE_VERSIONS_PER_FILE)
+		.contains(&preferences.max_versions_per_file)
+	{
+		Ok(())
+	} else {
+		Err(RuleVersionError::InvalidPreferences {
+			value: preferences.max_versions_per_file,
+		})
+	}
+}
+
+fn prune_versions(versions: &mut Vec<RuleVersion>, max_versions: usize) {
+	let paths = versions
+		.iter()
+		.map(|version| version.path.clone())
+		.collect::<BTreeSet<_>>();
+	let mut remove_indices = Vec::new();
+	for path in paths {
 		let mut path_indices = versions
 			.iter()
 			.enumerate()
@@ -104,43 +233,16 @@ impl RuleVersionStore {
 			})
 			.collect::<Vec<_>>();
 		path_indices.sort_by_key(|(_, created_at)| *created_at);
-		let remove_count = path_indices
-			.len()
-			.saturating_sub(MAX_RULE_VERSIONS_PER_FILE);
-		let mut remove_indices = path_indices
-			.into_iter()
-			.take(remove_count)
-			.map(|(index, _)| index)
-			.collect::<Vec<_>>();
-		remove_indices.sort_unstable_by(|left, right| right.cmp(left));
-		for index in remove_indices {
-			versions.remove(index);
-		}
-		self.write(&versions)?;
-		Ok(Some(version))
+		remove_indices.extend(
+			path_indices
+				.iter()
+				.take(path_indices.len().saturating_sub(max_versions))
+				.map(|(index, _)| *index),
+		);
 	}
-
-	fn read_all(&self) -> Result<Vec<RuleVersion>> {
-		match std::fs::read_to_string(self.file_path()) {
-			Ok(content) => Ok(serde_json::from_str(&content)?),
-			Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-				Ok(Vec::new())
-			}
-			Err(error) => Err(error.into()),
-		}
-	}
-
-	fn write(&self, versions: &[RuleVersion]) -> Result<()> {
-		std::fs::create_dir_all(&self.dir)?;
-		let path = self.file_path();
-		let json = serde_json::to_string_pretty(versions)?;
-		let mut temporary = tempfile::Builder::new()
-			.prefix(".rule-versions.")
-			.suffix(".json.tmp")
-			.tempfile_in(&self.dir)?;
-		temporary.write_all(json.as_bytes())?;
-		temporary.persist(path).map_err(|error| error.error)?;
-		Ok(())
+	remove_indices.sort_unstable_by(|left, right| right.cmp(left));
+	for index in remove_indices {
+		versions.remove(index);
 	}
 }
 
@@ -214,7 +316,7 @@ mod tests {
 		let store = RuleVersionStore::new(temp.path());
 		let path = temp.path().join("CLAUDE.md");
 
-		for index in 0..=MAX_RULE_VERSIONS_PER_FILE {
+		for index in 0..=DEFAULT_RULE_VERSIONS_PER_FILE {
 			store
 				.record(
 					&path,
@@ -227,9 +329,75 @@ mod tests {
 		}
 
 		let versions = store.list(&path).unwrap();
-		assert_eq!(versions.len(), MAX_RULE_VERSIONS_PER_FILE);
+		assert_eq!(versions.len(), DEFAULT_RULE_VERSIONS_PER_FILE);
 		assert_eq!(versions.first().unwrap().content, "version 20");
 		assert_eq!(versions.last().unwrap().content, "version 1");
+	}
+
+	#[test]
+	fn saved_preferences_control_recording_and_retention() {
+		let temp = tempfile::tempdir().unwrap();
+		let store = RuleVersionStore::new(temp.path());
+		let path = temp.path().join("CLAUDE.md");
+
+		for index in 0..4 {
+			store
+				.record(
+					&path,
+					&snapshot(
+						&format!("version {index}"),
+						&format!("revision {index}"),
+					),
+				)
+				.unwrap();
+		}
+
+		store
+			.set_preferences(RuleVersionPreferences {
+				enabled: true,
+				max_versions_per_file: 2,
+			})
+			.unwrap();
+		let versions = store.list(&path).unwrap();
+		assert_eq!(versions.len(), 2);
+		assert_eq!(versions[0].content, "version 3");
+		assert_eq!(versions[1].content, "version 2");
+
+		store
+			.set_preferences(RuleVersionPreferences {
+				enabled: false,
+				max_versions_per_file: 2,
+			})
+			.unwrap();
+		assert!(store
+			.record(&path, &snapshot("not recorded", "revision 4"))
+			.unwrap()
+			.is_none());
+		assert_eq!(store.list(&path).unwrap().len(), 2);
+	}
+
+	#[test]
+	fn legacy_history_uses_default_preferences() {
+		let temp = tempfile::tempdir().unwrap();
+		let store = RuleVersionStore::new(temp.path());
+		let path = temp.path().join("CLAUDE.md");
+		let legacy = vec![RuleVersion {
+			path: path.clone(),
+			content: "legacy".to_string(),
+			revision: "one".to_string(),
+			created_at: 1,
+		}];
+		std::fs::write(
+			store.file_path(),
+			serde_json::to_string(&legacy).unwrap(),
+		)
+		.unwrap();
+
+		assert_eq!(
+			store.preferences().unwrap(),
+			RuleVersionPreferences::default()
+		);
+		assert_eq!(store.list(&path).unwrap().len(), 1);
 	}
 
 	#[test]

@@ -63,9 +63,11 @@ import type {
 	ReconcileRequest,
 	RuleFileContentResponse,
 	RuleFileResponse,
+	RuleVersionPreferencesResponse,
 	RuleVersionResponse,
 	RuleVersionStorageResponse,
 	UpdateRuleContentRequest,
+	UpdateRuleVersionPreferencesRequest,
 	SkillResponse,
 	SkillCopyResolutionRequest,
 	SkillCopyResolutionResponse,
@@ -687,6 +689,16 @@ export function createApi(baseUrl: string, token: string) {
 		rules: {
 			storage(): Promise<RuleVersionStorageResponse> {
 				return client.get("rules/versions/storage").json();
+			},
+			preferences(): Promise<RuleVersionPreferencesResponse> {
+				return client.get("rules/versions/preferences").json();
+			},
+			updatePreferences(
+				body: UpdateRuleVersionPreferencesRequest,
+			): Promise<RuleVersionPreferencesResponse> {
+				return client
+					.put("rules/versions/preferences", { json: body })
+					.json();
 			},
 			listAll(
 				scope: "global" | "project" | "all" = "global",

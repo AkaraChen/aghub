@@ -314,6 +314,10 @@ export async function installMocks(page: Page) {
 			],
 		],
 	]);
+	let ruleVersionPreferences = {
+		enabled: true,
+		max_versions_per_file: 20,
+	};
 	let clearedRuleVersionCount = 0;
 	const globalLock = {
 		...GLOBAL_LOCK,
@@ -413,7 +417,34 @@ export async function installMocks(page: Page) {
 			return json({
 				file_path:
 					"C:\\Users\\demo\\AppData\\Roaming\\aghub\\rule-versions.json",
-				max_versions_per_file: 20,
+			});
+		}
+		if (p === "/rules/versions/preferences" && method === "GET") {
+			return json({
+				...ruleVersionPreferences,
+				min_versions_per_file: 1,
+				max_supported_versions_per_file: 100,
+			});
+		}
+		if (p === "/rules/versions/preferences" && method === "PUT") {
+			const body = JSON.parse(route.request().postData() ?? "{}");
+			ruleVersionPreferences = {
+				enabled: Boolean(body.enabled),
+				max_versions_per_file: Number(body.max_versions_per_file),
+			};
+			for (const [path, versions] of ruleVersions) {
+				ruleVersions.set(
+					path,
+					versions.slice(
+						0,
+						ruleVersionPreferences.max_versions_per_file,
+					),
+				);
+			}
+			return json({
+				...ruleVersionPreferences,
+				min_versions_per_file: 1,
+				max_supported_versions_per_file: 100,
 			});
 		}
 		if (p === "/rules/versions" && method === "DELETE") {
@@ -452,14 +483,24 @@ export async function installMocks(page: Page) {
 				);
 			}
 			const currentContent = ruleContent.get(path);
-			if (currentContent !== undefined && currentContent !== content) {
+			if (
+				ruleVersionPreferences.enabled &&
+				currentContent !== undefined &&
+				currentContent !== content
+			) {
 				const versions = ruleVersions.get(path) ?? [];
 				versions.unshift({
 					content: currentContent,
 					revision: ruleRevision(ruleContent, path),
 					created_at: Date.now(),
 				});
-				ruleVersions.set(path, versions);
+				ruleVersions.set(
+					path,
+					versions.slice(
+						0,
+						ruleVersionPreferences.max_versions_per_file,
+					),
+				);
 			}
 			ruleContent.set(path, content);
 			const rule = ruleFiles.find((item) => item.path === path);
@@ -1066,6 +1107,9 @@ export async function installMocks(page: Page) {
 		},
 		getClearedRuleVersionCount() {
 			return clearedRuleVersionCount;
+		},
+		getRuleVersionPreferences() {
+			return { ...ruleVersionPreferences };
 		},
 	};
 }

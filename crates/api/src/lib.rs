@@ -258,8 +258,10 @@ fn build_rocket(
 				routes::rules::list_rules,
 				routes::rules::get_rule_content,
 				routes::rules::get_rule_version_storage,
+				routes::rules::get_rule_version_preferences,
 				routes::rules::list_rule_versions,
 				routes::rules::clear_rule_versions,
+				routes::rules::update_rule_version_preferences,
 				routes::rules::update_rule_content,
 				routes::integrations::list_code_editors,
 				routes::integrations::open_with_editor,
@@ -3387,7 +3389,6 @@ mod tests {
 				.to_string_lossy()
 				.as_ref()
 		);
-		assert_eq!(body["max_versions_per_file"], 20);
 
 		let response = delete_auth(&client, "/api/v1/rules/versions");
 		assert_eq!(response.status(), Status::NoContent);
@@ -3398,7 +3399,49 @@ mod tests {
 			.expect("cleared rule history"),
 		)
 		.expect("valid rule history");
-		assert_eq!(versions, json!([]));
+		assert_eq!(versions["versions"], json!([]));
+	}
+
+	#[test]
+	fn route_rule_version_preferences_are_validated_and_persisted() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+
+		let response = get_auth(&client, "/api/v1/rules/versions/preferences");
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["enabled"], true);
+		assert_eq!(body["max_versions_per_file"], 20);
+		assert_eq!(body["min_versions_per_file"], 1);
+		assert_eq!(body["max_supported_versions_per_file"], 100);
+
+		let invalid = put_json(
+			&client,
+			"/api/v1/rules/versions/preferences",
+			json!({
+				"enabled": true,
+				"max_versions_per_file": 0,
+			}),
+		);
+		assert_json_error(invalid, Status::BadRequest, "INVALID_PARAM");
+
+		let response = put_json(
+			&client,
+			"/api/v1/rules/versions/preferences",
+			json!({
+				"enabled": false,
+				"max_versions_per_file": 7,
+			}),
+		);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["enabled"], false);
+		assert_eq!(body["max_versions_per_file"], 7);
+
+		let response = get_auth(&client, "/api/v1/rules/versions/preferences");
+		let body = response_json(response);
+		assert_eq!(body["enabled"], false);
+		assert_eq!(body["max_versions_per_file"], 7);
 	}
 
 	#[test]
