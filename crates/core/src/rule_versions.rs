@@ -9,6 +9,8 @@ use thiserror::Error;
 use crate::rules::RuleFileSnapshot;
 
 const RULE_VERSIONS_FILE: &str = "rule-versions.json";
+/// Rule versions retain full file bodies, so bound each file's recovery list.
+pub const MAX_RULE_VERSIONS_PER_FILE: usize = 20;
 
 fn rule_version_lock() -> &'static Mutex<()> {
 	static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -86,6 +88,27 @@ impl RuleVersionStore {
 			created_at: now_millis(),
 		};
 		versions.push(version.clone());
+		let mut path_indices = versions
+			.iter()
+			.enumerate()
+			.filter_map(|(index, candidate)| {
+				(candidate.path == path)
+					.then_some((index, candidate.created_at))
+			})
+			.collect::<Vec<_>>();
+		path_indices.sort_by_key(|(_, created_at)| *created_at);
+		let remove_count = path_indices
+			.len()
+			.saturating_sub(MAX_RULE_VERSIONS_PER_FILE);
+		let mut remove_indices = path_indices
+			.into_iter()
+			.take(remove_count)
+			.map(|(index, _)| index)
+			.collect::<Vec<_>>();
+		remove_indices.sort_unstable_by(|left, right| right.cmp(left));
+		for index in remove_indices {
+			versions.remove(index);
+		}
 		self.write(&versions)?;
 		Ok(Some(version))
 	}
@@ -176,5 +199,29 @@ mod tests {
 
 		assert!(store.record(&path, &missing).unwrap().is_none());
 		assert!(store.list(&path).unwrap().is_empty());
+	}
+
+	#[test]
+	fn keeps_only_the_most_recent_versions_for_each_rule_file() {
+		let temp = tempfile::tempdir().unwrap();
+		let store = RuleVersionStore::new(temp.path());
+		let path = temp.path().join("CLAUDE.md");
+
+		for index in 0..=MAX_RULE_VERSIONS_PER_FILE {
+			store
+				.record(
+					&path,
+					&snapshot(
+						&format!("version {index}"),
+						&format!("revision {index}"),
+					),
+				)
+				.unwrap();
+		}
+
+		let versions = store.list(&path).unwrap();
+		assert_eq!(versions.len(), MAX_RULE_VERSIONS_PER_FILE);
+		assert_eq!(versions.first().unwrap().content, "version 20");
+		assert_eq!(versions.last().unwrap().content, "version 1");
 	}
 }

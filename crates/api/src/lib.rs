@@ -3328,6 +3328,46 @@ mod tests {
 	}
 
 	#[test]
+	fn route_rule_write_survives_corrupted_version_history() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let client = test_client(app_data_dir.path());
+		let rule_file = project_dir.path().join("CLAUDE.md");
+		std::fs::write(&rule_file, "# Loaded rules\n").expect("initial rule");
+		let content_query = rule_content_query(
+			&rule_file.to_string_lossy(),
+			project_dir.path(),
+		);
+		let content_uri = format!("/api/v1/rules/content?{content_query}");
+		let response = get_auth(&client, &content_uri);
+		let body = response_json(response);
+		let revision = body["revision"]
+			.as_str()
+			.expect("rule revision")
+			.to_string();
+		std::fs::write(app_data_dir.path().join("rule-versions.json"), "{")
+			.expect("corrupted rule history");
+
+		let response = put_json(
+			&client,
+			"/api/v1/rules/content",
+			json!({
+				"path": rule_file.to_string_lossy(),
+				"content": "# Updated rules\n",
+				"expected_revision": revision,
+				"scope": "project",
+				"project_root": project_dir.path().to_string_lossy(),
+			}),
+		);
+
+		assert_eq!(response.status(), Status::Ok);
+		assert_eq!(
+			std::fs::read_to_string(rule_file).expect("updated rule"),
+			"# Updated rules\n"
+		);
+	}
+
+	#[test]
 	fn route_rule_write_rejects_remote_browser_origin() {
 		let app_data_dir = tempfile::tempdir().expect("app data dir");
 		let project_dir = tempfile::tempdir().expect("project dir");

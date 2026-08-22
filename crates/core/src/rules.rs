@@ -19,6 +19,7 @@ use sha2::{Digest, Sha256};
 use thiserror::Error;
 
 use crate::registry;
+use crate::rule_versions::{RuleVersionError, RuleVersionStore};
 
 static RULE_WRITE_LOCK: Mutex<()> = Mutex::new(());
 
@@ -111,6 +112,12 @@ pub enum RuleWriteError {
 	Changed,
 	#[error(transparent)]
 	Io(#[from] std::io::Error),
+}
+
+#[derive(Debug)]
+pub struct RuleWriteOutcome {
+	pub snapshot: RuleFileSnapshot,
+	pub version_error: Option<RuleVersionError>,
 }
 
 fn rule_write_lock() -> std::io::Result<MutexGuard<'static, ()>> {
@@ -274,6 +281,32 @@ pub fn write_rule_file_if_unchanged(
 	Ok(read_rule_file_snapshot(path)?)
 }
 
+pub fn write_rule_file_with_version(
+	path: &Path,
+	content: &str,
+	expected_revision: &str,
+	version_store: &RuleVersionStore,
+) -> Result<RuleWriteOutcome, RuleWriteError> {
+	let _guard = rule_write_lock()?;
+	let current = read_rule_file_snapshot(path)?;
+	if expected_revision != current.revision {
+		return Err(RuleWriteError::Changed);
+	}
+
+	write_rule_file_unlocked(path, content)?;
+	let snapshot = read_rule_file_snapshot(path)?;
+	let version_error = if current.content != content {
+		version_store.record(path, &current).err()
+	} else {
+		None
+	};
+
+	Ok(RuleWriteOutcome {
+		snapshot,
+		version_error,
+	})
+}
+
 /// Expand a leading `~/` to the user's home directory.
 pub fn expand_tilde(path: &str) -> PathBuf {
 	if let Some(rest) = path.strip_prefix("~/") {
@@ -294,8 +327,10 @@ pub fn display_path(path: &Path) -> String {
 mod tests {
 	use super::{
 		read_rule_file, read_rule_file_snapshot, write_rule_file,
-		write_rule_file_if_unchanged, RuleWriteError,
+		write_rule_file_if_unchanged, write_rule_file_with_version,
+		RuleWriteError,
 	};
+	use crate::rule_versions::RuleVersionStore;
 
 	#[test]
 	fn write_creates_then_replaces() {
@@ -326,6 +361,51 @@ mod tests {
 
 		assert!(matches!(error, RuleWriteError::Changed));
 		assert_eq!(read_rule_file(&path).unwrap(), "external");
+	}
+
+	#[test]
+	fn versioned_write_does_not_record_a_rejected_edit() {
+		let temp = tempfile::tempdir().unwrap();
+		let history = tempfile::tempdir().unwrap();
+		let path = temp.path().join("CLAUDE.md");
+		let store = RuleVersionStore::new(history.path());
+		std::fs::write(&path, "loaded").unwrap();
+		let loaded = read_rule_file_snapshot(&path).unwrap();
+		std::fs::write(&path, "external").unwrap();
+
+		let error = write_rule_file_with_version(
+			&path,
+			"stale draft",
+			&loaded.revision,
+			&store,
+		)
+		.unwrap_err();
+
+		assert!(matches!(error, RuleWriteError::Changed));
+		assert!(store.list(&path).unwrap().is_empty());
+		assert_eq!(read_rule_file(&path).unwrap(), "external");
+	}
+
+	#[test]
+	fn version_history_failure_does_not_block_a_rule_write() {
+		let temp = tempfile::tempdir().unwrap();
+		let history = tempfile::tempdir().unwrap();
+		let path = temp.path().join("CLAUDE.md");
+		let store = RuleVersionStore::new(history.path());
+		std::fs::write(&path, "loaded").unwrap();
+		std::fs::write(history.path().join("rule-versions.json"), "{").unwrap();
+		let loaded = read_rule_file_snapshot(&path).unwrap();
+
+		let outcome = write_rule_file_with_version(
+			&path,
+			"updated",
+			&loaded.revision,
+			&store,
+		)
+		.unwrap();
+
+		assert_eq!(read_rule_file(&path).unwrap(), "updated");
+		assert!(outcome.version_error.is_some());
 	}
 
 	#[test]

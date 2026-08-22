@@ -3,6 +3,7 @@ use std::path::Path;
 use aghub_core::models::ResourceScope;
 use aghub_core::rule_versions::RuleVersionStore;
 use aghub_core::{registry, rules};
+use log::warn;
 use rocket::http::Status;
 use rocket::serde::json::Json;
 use rocket::State;
@@ -156,36 +157,11 @@ pub fn update_rule_content(
 
 	let path = rules::expand_tilde(&request.path);
 	ensure_rule_path_allowed(&path, scope, project_root.as_deref())?;
-	let current = rules::read_rule_file_snapshot(&path).map_err(|error| {
-		ApiError::new(
-			Status::InternalServerError,
-			format!("Failed to read rule file: {error}"),
-			"RULE_FILE_READ_FAILED",
-		)
-	})?;
-	if current.revision != request.expected_revision {
-		return Err(ApiError::new(
-			Status::Conflict,
-			"Rule file changed after it was loaded",
-			RULE_FILE_CHANGED,
-		));
-	}
-	if current.content != request.content {
-		RuleVersionStore::new(&state.app_data_dir)
-			.record(&path, &current)
-			.map_err(|error| {
-				ApiError::new(
-					Status::InternalServerError,
-					format!("Failed to record rule version: {error}"),
-					"RULE_VERSION_WRITE_FAILED",
-				)
-			})?;
-	}
-
-	let snapshot = rules::write_rule_file_if_unchanged(
+	let outcome = rules::write_rule_file_with_version(
 		&path,
 		&request.content,
 		&request.expected_revision,
+		&RuleVersionStore::new(&state.app_data_dir),
 	)
 	.map_err(|error| match error {
 		rules::RuleWriteError::Changed => ApiError::new(
@@ -199,6 +175,13 @@ pub fn update_rule_content(
 			"RULE_FILE_WRITE_FAILED",
 		),
 	})?;
+	if let Some(error) = outcome.version_error {
+		warn!(
+			"rule saved without recording a version for '{}': {error}",
+			rules::display_path(&path)
+		);
+	}
+	let snapshot = outcome.snapshot;
 
 	Ok(Json(RuleFileContentResponse {
 		path: rules::display_path(&path),
