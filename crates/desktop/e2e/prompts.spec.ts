@@ -23,7 +23,7 @@ const OLDER_PROMPT = {
 };
 
 const GLOBAL_SEARCH_LABEL =
-	"Search agents, skills, MCP servers, sub-agents, prompts, and library";
+	"Search agents, skills, MCP servers, sub-agents, prompts, rules, and library";
 const WINDOWS_PROMPT_STORAGE_PATH =
 	"C:\\Users\\Ada\\AppData\\Roaming\\com.akrc.aghub\\prompts.json";
 
@@ -419,7 +419,7 @@ test("exports and merges a versioned prompt backup from settings", async ({
 
 	await page.setViewportSize({ width: 1920, height: 1080 });
 	await page.goto("/settings?tab=prompts");
-	await expect(page.getByRole("tab", { name: "Prompts" })).toHaveCSS(
+	await expect(page.getByRole("tab", { name: "Prompts & Rules" })).toHaveCSS(
 		"white-space",
 		"nowrap",
 	);
@@ -431,7 +431,10 @@ test("exports and merges a versioned prompt backup from settings", async ({
 	await expect(
 		page.getByRole("region", { name: "Library overview" }),
 	).toHaveCount(0);
-	const storage = page.getByRole("region", { name: "Storage location" });
+	const dataPanel = page.getByTestId("prompt-data-panel");
+	const storage = dataPanel.getByRole("region", {
+		name: "Storage location",
+	});
 	await expect(storage).toBeVisible();
 	await expect(page.getByText(WINDOWS_PROMPT_STORAGE_PATH)).toBeVisible();
 	const categories = page.getByRole("region", { name: "Categories" });
@@ -456,7 +459,6 @@ test("exports and merges a versioned prompt backup from settings", async ({
 	await expect(
 		page.getByRole("heading", { name: "Backup and restore" }),
 	).toBeVisible();
-	const dataPanel = page.getByTestId("prompt-data-panel");
 	const libraryCard = dataPanel.locator('[data-slot="card"]');
 	await expect(libraryCard).toHaveCount(1);
 	await expect(

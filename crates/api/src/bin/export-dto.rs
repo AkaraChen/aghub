@@ -61,7 +61,8 @@ use aghub_api::dto::{
 	},
 	rule::{
 		RuleContentQuery, RuleFileContentResponse, RuleFileResponse,
-		RuleVersionResponse, UpdateRuleContentRequest,
+		RuleVersionResponse, RuleVersionStorageResponse,
+		UpdateRuleContentRequest,
 	},
 	skill::{
 		CreateSkillRequest, DeleteSkillByPathRequest,
@@ -274,6 +275,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<RuleContentQuery>(&cfg)?;
 	export_type::<RuleFileContentResponse>(&cfg)?;
 	export_type::<RuleVersionResponse>(&cfg)?;
+	export_type::<RuleVersionStorageResponse>(&cfg)?;
 	export_type::<UpdateRuleContentRequest>(&cfg)?;
 	export_type::<CCPluginResponse>(&cfg)?;
 	export_type::<CCPluginScopeResponse>(&cfg)?;

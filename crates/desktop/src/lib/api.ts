@@ -64,6 +64,7 @@ import type {
 	RuleFileContentResponse,
 	RuleFileResponse,
 	RuleVersionResponse,
+	RuleVersionStorageResponse,
 	UpdateRuleContentRequest,
 	SkillResponse,
 	SkillCopyResolutionRequest,
@@ -684,6 +685,9 @@ export function createApi(baseUrl: string, token: string) {
 			},
 		},
 		rules: {
+			storage(): Promise<RuleVersionStorageResponse> {
+				return client.get("rules/versions/storage").json();
+			},
 			listAll(
 				scope: "global" | "project" | "all" = "global",
 				projectRoot?: string,
@@ -737,6 +741,9 @@ export function createApi(baseUrl: string, token: string) {
 						},
 					})
 					.json();
+			},
+			clearVersions(): Promise<void> {
+				return client.delete("rules/versions").then(() => undefined);
 			},
 		},
 		market: {

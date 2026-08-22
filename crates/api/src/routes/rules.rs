@@ -1,10 +1,11 @@
 use std::path::Path;
 
 use aghub_core::models::ResourceScope;
-use aghub_core::rule_versions::RuleVersionStore;
+use aghub_core::rule_versions::{RuleVersionStore, MAX_RULE_VERSIONS_PER_FILE};
 use aghub_core::{registry, rules};
 use log::warn;
 use rocket::http::Status;
+use rocket::response::status::NoContent;
 use rocket::serde::json::Json;
 use rocket::State;
 
@@ -12,9 +13,10 @@ use crate::{
 	auth::ApiAuth,
 	dto::rule::{
 		RuleContentQuery, RuleFileContentResponse, RuleFileResponse,
-		RuleVersionResponse, UpdateRuleContentRequest,
+		RuleVersionResponse, RuleVersionStorageResponse,
+		UpdateRuleContentRequest,
 	},
-	error::{ApiError, ApiResult},
+	error::{ApiError, ApiNoContent, ApiResult},
 	extractors::{AgentParam, ScopeParams, TrustedLocalOrigin},
 	routes::{require_writable_scope, resolved_to_resource_scope},
 	state::RuleState,
@@ -22,6 +24,10 @@ use crate::{
 
 const RULE_PATH_NOT_ALLOWED: &str = "RULE_PATH_NOT_ALLOWED";
 const RULE_FILE_CHANGED: &str = "RULE_FILE_CHANGED";
+
+fn version_store(state: &State<RuleState>) -> RuleVersionStore {
+	RuleVersionStore::new(&state.app_data_dir)
+}
 
 /// Reject any path that is not one of the rule files an agent declares for the
 /// scope. Keeps reads and writes confined to managed instruction files.
@@ -122,21 +128,49 @@ pub fn list_rule_versions(
 	let path = rules::expand_tilde(&query.path);
 	ensure_rule_path_allowed(&path, scope, project_root.as_deref())?;
 
-	let versions = RuleVersionStore::new(&state.app_data_dir)
-		.list(&path)
-		.map_err(|error| {
-			ApiError::new(
-				Status::InternalServerError,
-				format!("Failed to read rule versions: {error}"),
-				"RULE_VERSION_READ_FAILED",
-			)
-		})?;
+	let versions = version_store(state).list(&path).map_err(|error| {
+		ApiError::new(
+			Status::InternalServerError,
+			format!("Failed to read rule versions: {error}"),
+			"RULE_VERSION_READ_FAILED",
+		)
+	})?;
 	Ok(Json(
 		versions
 			.into_iter()
 			.map(RuleVersionResponse::from)
 			.collect(),
 	))
+}
+
+#[get("/rules/versions/storage")]
+pub fn get_rule_version_storage(
+	_auth: ApiAuth,
+	state: &State<RuleState>,
+) -> Json<RuleVersionStorageResponse> {
+	Json(RuleVersionStorageResponse {
+		file_path: version_store(state)
+			.file_path()
+			.to_string_lossy()
+			.into_owned(),
+		max_versions_per_file: MAX_RULE_VERSIONS_PER_FILE,
+	})
+}
+
+#[delete("/rules/versions")]
+pub fn clear_rule_versions(
+	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
+	state: &State<RuleState>,
+) -> ApiNoContent {
+	version_store(state).clear().map_err(|error| {
+		ApiError::new(
+			Status::InternalServerError,
+			format!("Failed to clear rule versions: {error}"),
+			"RULE_VERSION_CLEAR_FAILED",
+		)
+	})?;
+	Ok(NoContent)
 }
 
 #[put("/rules/content", format = "json", data = "<body>")]
@@ -161,7 +195,7 @@ pub fn update_rule_content(
 		&path,
 		&request.content,
 		&request.expected_revision,
-		&RuleVersionStore::new(&state.app_data_dir),
+		&version_store(state),
 	)
 	.map_err(|error| match error {
 		rules::RuleWriteError::Changed => ApiError::new(

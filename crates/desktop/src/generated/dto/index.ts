@@ -113,6 +113,7 @@ export type { RuleContentQuery } from "./RuleContentQuery";
 export type { RuleFileContentResponse } from "./RuleFileContentResponse";
 export type { RuleFileResponse } from "./RuleFileResponse";
 export type { RuleVersionResponse } from "./RuleVersionResponse";
+export type { RuleVersionStorageResponse } from "./RuleVersionStorageResponse";
 export type { ScopeSupportDto } from "./ScopeSupportDto";
 export type { SetCcusageRuntimeRequest } from "./SetCcusageRuntimeRequest";
 export type { SeverityDto } from "./SeverityDto";

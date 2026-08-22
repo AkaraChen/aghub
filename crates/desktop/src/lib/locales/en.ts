@@ -29,6 +29,7 @@ export default {
 	subAgentInstructionPlaceholder:
 		"System prompt / instruction for this sub-agent...",
 	prompts: "Prompts",
+	promptsAndRules: "Prompts & Rules",
 	noPrompts: "No prompts yet",
 	noPromptsMatch: "No prompts match your search",
 	noPromptsDescription: "Create your first prompt to get started.",
@@ -109,6 +110,22 @@ export default {
 		"No previous versions yet. Saved content appears here after the next change.",
 	rulesRestoreVersion: "Use this version",
 	searchRules: "Search rules...",
+	ruleVersionHistory: "Rule version history",
+	ruleVersionHistoryDescription:
+		"aghub keeps recent file contents so you can restore an earlier rule.",
+	ruleVersionStorageLocation: "Storage location",
+	ruleVersionRetention: "Retention",
+	ruleVersionRetentionValue: "{{count}} versions per rule file",
+	ruleVersionDataUnavailable: "Path unavailable",
+	clearRuleVersions: "Clear version history",
+	clearRuleVersionsDescription:
+		"Remove saved rule versions without changing the current rule files.",
+	clearRuleVersionsConfirmTitle: "Clear rule version history?",
+	clearRuleVersionsConfirmDescription:
+		"Saved versions will be removed. Current rule files will not change.",
+	clearRuleVersionsConfirmAction: "Clear history",
+	ruleVersionsCleared: "Rule version history cleared",
+	ruleVersionsClearFailed: "Failed to clear rule version history",
 	claudeCodePlugins: "Claude Code Plugins",
 	plugins: "Plugins",
 	pluginsDescription:

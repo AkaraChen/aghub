@@ -257,7 +257,9 @@ fn build_rocket(
 				routes::rules::list_all_rules,
 				routes::rules::list_rules,
 				routes::rules::get_rule_content,
+				routes::rules::get_rule_version_storage,
 				routes::rules::list_rule_versions,
+				routes::rules::clear_rule_versions,
 				routes::rules::update_rule_content,
 				routes::integrations::list_code_editors,
 				routes::integrations::open_with_editor,
@@ -3365,6 +3367,38 @@ mod tests {
 			std::fs::read_to_string(rule_file).expect("updated rule"),
 			"# Updated rules\n"
 		);
+	}
+
+	#[test]
+	fn route_rule_version_storage_can_be_cleared() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+		std::fs::write(app_data_dir.path().join("rule-versions.json"), "{")
+			.expect("corrupted rule history");
+
+		let response = get_auth(&client, "/api/v1/rules/versions/storage");
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(
+			body["file_path"],
+			app_data_dir
+				.path()
+				.join("rule-versions.json")
+				.to_string_lossy()
+				.as_ref()
+		);
+		assert_eq!(body["max_versions_per_file"], 20);
+
+		let response = delete_auth(&client, "/api/v1/rules/versions");
+		assert_eq!(response.status(), Status::NoContent);
+		let versions: serde_json::Value = serde_json::from_str(
+			&std::fs::read_to_string(
+				app_data_dir.path().join("rule-versions.json"),
+			)
+			.expect("cleared rule history"),
+		)
+		.expect("valid rule history");
+		assert_eq!(versions, json!([]));
 	}
 
 	#[test]

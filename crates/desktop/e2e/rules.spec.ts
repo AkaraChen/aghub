@@ -143,11 +143,11 @@ test("global search opens a rule file", async ({ page }) => {
 
 	await page
 		.getByRole("combobox", {
-			name: "Search agents, skills, MCP servers, sub-agents, rules, and library",
+			name: "Search agents, skills, MCP servers, sub-agents, prompts, rules, and library",
 		})
 		.fill("CLAUDE");
 	const results = page.getByRole("listbox", {
-		name: "Search agents, skills, MCP servers, sub-agents, rules, and library",
+		name: "Search agents, skills, MCP servers, sub-agents, prompts, rules, and library",
 	});
 	await results.getByRole("option", { name: /CLAUDE\.md/ }).click();
 
@@ -155,4 +155,35 @@ test("global search opens a rule file", async ({ page }) => {
 	await expect(
 		page.getByRole("heading", { name: "CLAUDE.md" }),
 	).toBeVisible();
+});
+
+test("settings keep prompt data and rule versions together", async ({
+	page,
+}) => {
+	await page.goto("/settings?tab=prompts");
+
+	await expect(
+		page.getByRole("tab", { name: "Prompts & Rules" }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "Local prompt library" }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "Rule version history" }),
+	).toBeVisible();
+	await expect(
+		page.getByText(
+			"C:\\Users\\demo\\AppData\\Roaming\\aghub\\rule-versions.json",
+		),
+	).toBeVisible();
+	await expect(page.getByText("20 versions per rule file")).toBeVisible();
+
+	await page.getByRole("button", { name: "Clear version history" }).click();
+	const dialog = page.getByRole("alertdialog", {
+		name: "Clear rule version history?",
+	});
+	await expect(dialog).toBeVisible();
+	await dialog.getByRole("button", { name: "Clear history" }).click();
+	await expect(page.getByText("Rule version history cleared")).toBeVisible();
+	expect(mocks.getClearedRuleVersionCount()).toBe(1);
 });

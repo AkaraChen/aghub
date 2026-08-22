@@ -71,6 +71,13 @@ export function ruleVersionsQueryOptions({
 	});
 }
 
+export function ruleVersionStorageQueryOptions({ api }: { api: ApiClient }) {
+	return queryOptions({
+		queryKey: queryKeys.rules.storage(),
+		queryFn: () => api.rules.storage(),
+	});
+}
+
 export async function invalidateRuleQueries(queryClient: QueryClient) {
 	await queryClient.invalidateQueries({ queryKey: queryKeys.rules.all() });
 }
@@ -96,5 +103,19 @@ export function updateRuleContentMutationOptions({
 			await invalidateRuleQueries(queryClient);
 			await onSuccess?.(data, variables);
 		},
+	});
+}
+
+export function clearRuleVersionsMutationOptions({
+	api,
+	queryClient,
+}: {
+	api: ApiClient;
+	queryClient: QueryClient;
+}) {
+	return mutationOptions({
+		mutationFn: () => api.rules.clearVersions(),
+		onSuccess: () =>
+			queryClient.invalidateQueries({ queryKey: queryKeys.rules.all() }),
 	});
 }

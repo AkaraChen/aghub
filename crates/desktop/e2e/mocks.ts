@@ -314,6 +314,7 @@ export async function installMocks(page: Page) {
 			],
 		],
 	]);
+	let clearedRuleVersionCount = 0;
 	const globalLock = {
 		...GLOBAL_LOCK,
 		skills: GLOBAL_LOCK.skills.map((entry) => ({ ...entry })),
@@ -401,6 +402,25 @@ export async function installMocks(page: Page) {
 		if (p === "/agents/all/mcps") return json(mcps);
 		if (p === "/agents/all/sub-agents") return json(SUB_AGENTS);
 		if (p === "/agents/all/rules") return json(ruleFiles);
+		if (p === "/prompts/storage") {
+			return json({
+				file_path:
+					"C:\\Users\\demo\\AppData\\Roaming\\aghub\\prompts.json",
+			});
+		}
+		if (p === "/prompts") return json([]);
+		if (p === "/rules/versions/storage" && method === "GET") {
+			return json({
+				file_path:
+					"C:\\Users\\demo\\AppData\\Roaming\\aghub\\rule-versions.json",
+				max_versions_per_file: 20,
+			});
+		}
+		if (p === "/rules/versions" && method === "DELETE") {
+			ruleVersions.clear();
+			clearedRuleVersionCount += 1;
+			return route.fulfill({ status: 204 });
+		}
 		if (p === "/rules/content" && method === "GET") {
 			const path = url.searchParams.get("path") ?? "";
 			return json({
@@ -1043,6 +1063,9 @@ export async function installMocks(page: Page) {
 		},
 		getRuleContent(path: string) {
 			return ruleContent.get(path);
+		},
+		getClearedRuleVersionCount() {
+			return clearedRuleVersionCount;
 		},
 	};
 }

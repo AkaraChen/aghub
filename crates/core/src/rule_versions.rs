@@ -47,8 +47,15 @@ impl RuleVersionStore {
 		}
 	}
 
-	fn file_path(&self) -> PathBuf {
+	pub fn file_path(&self) -> PathBuf {
 		self.dir.join(RULE_VERSIONS_FILE)
+	}
+
+	pub fn clear(&self) -> Result<()> {
+		let _guard = rule_version_lock()
+			.lock()
+			.map_err(|_| std::io::Error::other("rule version lock poisoned"))?;
+		self.write(&[])
 	}
 
 	pub fn list(&self, path: &Path) -> Result<Vec<RuleVersion>> {
@@ -223,5 +230,16 @@ mod tests {
 		assert_eq!(versions.len(), MAX_RULE_VERSIONS_PER_FILE);
 		assert_eq!(versions.first().unwrap().content, "version 20");
 		assert_eq!(versions.last().unwrap().content, "version 1");
+	}
+
+	#[test]
+	fn clears_all_rule_versions_even_when_the_store_is_invalid() {
+		let temp = tempfile::tempdir().unwrap();
+		let store = RuleVersionStore::new(temp.path());
+		std::fs::write(store.file_path(), "{").unwrap();
+
+		store.clear().unwrap();
+
+		assert!(store.list(Path::new("CLAUDE.md")).unwrap().is_empty());
 	}
 }

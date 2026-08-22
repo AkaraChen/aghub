@@ -6,6 +6,13 @@ use crate::dto::common::ConfigSource;
 
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
+pub struct RuleVersionStorageResponse {
+	pub file_path: String,
+	pub max_versions_per_file: usize,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct RuleFileResponse {
 	pub agent: String,
 	pub path: String,
