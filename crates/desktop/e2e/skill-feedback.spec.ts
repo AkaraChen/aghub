@@ -31,7 +31,7 @@ test("a skill tree client error is shown once and can be retried", async ({
 	await expect(status).toHaveAttribute("data-slot", "alert-root");
 	await expect(status).toContainText("Files unavailable");
 	await expect(status).toContainText(
-		"Aghub couldn't inspect this copy's files.",
+		"aghub couldn't inspect this copy's files.",
 	);
 	await expect(status).not.toContainText("Symbolic links are not supported");
 	await expect.poll(() => treeRequests).toBe(1);
@@ -41,7 +41,7 @@ test("a skill tree client error is shown once and can be retried", async ({
 	const toast = page.locator('[data-slot="toast"]');
 	await expect(toast).toContainText("Files unavailable");
 	await expect(toast).toContainText(
-		"Aghub couldn't inspect this copy's files.",
+		"aghub couldn't inspect this copy's files.",
 	);
 });
 

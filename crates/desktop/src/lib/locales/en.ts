@@ -65,7 +65,7 @@ export default {
 	allCategories: "All categories",
 	uncategorized: "Uncategorized",
 	promptLocalLibrary: "Local prompt library",
-	promptLocalLibraryDescription: "AGHub stores this library on this device.",
+	promptLocalLibraryDescription: "aghub stores this library on this device.",
 	promptLibraryOverview: "Library overview",
 	promptStorageLocation: "Storage location",
 	promptCategories: "Categories",
@@ -80,7 +80,7 @@ export default {
 	promptBackupExported: "Prompt backup exported",
 	promptBackupExportError: "Failed to export prompt backup",
 	promptBackupImportError: "Failed to import prompt backup",
-	promptBackupInvalid: "This file is not an AGHub prompt backup.",
+	promptBackupInvalid: "This file is not an aghub prompt backup.",
 	promptBackupContains: "This backup contains {{count}} prompts.",
 	promptBackupImportMode: "Import behavior",
 	mergePromptBackup: "Merge with local library",
@@ -247,7 +247,7 @@ export default {
 	codexProviderSyncError: "Failed to update Codex provider",
 	codexBuiltInProvider: "Built-in provider",
 	codexBuiltInProviderInfo:
-		"No Aghub OpenAI Responses provider has the same API Base URL and API key. This was likely added directly in Codex.",
+		"No aghub OpenAI Responses provider has the same API Base URL and API key. This was likely added directly in Codex.",
 	codexProviderExternalTooltip:
 		"Defined in config.toml — remove it from the file to delete",
 	codexActiveProfile: "Active Profile",
@@ -261,7 +261,7 @@ export default {
 	codexLoginProviderInfo: "Uses Codex's own OpenAI login credentials.",
 	codexConfigProvider: "Config provider",
 	codexConfigProviderInfo:
-		"This provider comes from Codex config.toml and does not currently match an Aghub inference provider.",
+		"This provider comes from Codex config.toml and does not currently match an aghub inference provider.",
 	codexCustomProviders: "Custom Providers",
 	noCodexCustomProviders: "No custom Codex providers configured.",
 	codexNoProfiles: "No Codex profiles configured.",
@@ -649,7 +649,7 @@ export default {
 		"Replay the welcome screen or either guided tour any time.",
 
 	// Onboarding — Wizard
-	onboardingWizardTitle: "Welcome to Aghub",
+	onboardingWizardTitle: "Welcome to aghub",
 	onboardingWizardSubtitle:
 		"Manage AI agent configs, MCP servers, and skills from one place.",
 	onboardingStepMcpTitle: "MCP Servers",
@@ -679,7 +679,7 @@ export default {
 	settingsAutostartEnabled: "Startup launch enabled",
 	settingsAutostartDisabled: "Startup launch disabled",
 	settingsAutostartError: "Failed to update startup launch",
-	whatsNewWizardTitle: "What's New in Aghub",
+	whatsNewWizardTitle: "What's New in aghub",
 	whatsNewWizardSubtitle:
 		"A quick look at the changes included with this version.",
 	whatsNewSectionLabel: "What's new in {{version}}",
@@ -793,7 +793,7 @@ export default {
 	skillFilesDescription: "{{count}} items available in this skill bundle",
 	skillFilesUnavailable: "Files unavailable",
 	skillFilesUnavailableDescription:
-		"Aghub couldn't inspect this copy's files.",
+		"aghub couldn't inspect this copy's files.",
 	skillLinkBroken: "Target not found",
 	skillLinkOutsideRoot: "Target outside Skill",
 	skillLinkUnreadable: "Target unavailable",

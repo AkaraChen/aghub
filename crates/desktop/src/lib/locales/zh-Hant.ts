@@ -63,7 +63,7 @@ export default {
 	allCategories: "全部分類",
 	uncategorized: "未分類",
 	promptLocalLibrary: "本機提示詞庫",
-	promptLocalLibraryDescription: "提示詞儲存在本機，由 AGHub 直接讀取。",
+	promptLocalLibraryDescription: "提示詞儲存在本機，由 aghub 直接讀取。",
 	promptLibraryOverview: "資料概覽",
 	promptStorageLocation: "儲存位置",
 	promptCategories: "分類",
@@ -78,7 +78,7 @@ export default {
 	promptBackupExported: "提示詞備份已匯出",
 	promptBackupExportError: "匯出提示詞備份失敗",
 	promptBackupImportError: "匯入提示詞備份失敗",
-	promptBackupInvalid: "所選檔案不是 AGHub 提示詞備份。",
+	promptBackupInvalid: "所選檔案不是 aghub 提示詞備份。",
 	promptBackupContains: "此備份包含 {{count}} 條提示詞。",
 	promptBackupImportMode: "匯入方式",
 	mergePromptBackup: "合併到本機提示詞庫",
@@ -236,7 +236,7 @@ export default {
 	codexProviderSyncError: "更新 Codex Provider 失敗",
 	codexBuiltInProvider: "內建 provider",
 	codexBuiltInProviderInfo:
-		"未在 Aghub OpenAI Responses Provider 中找到相同 API Base URL 和 API key，疑似使用者直接在 Codex 裡新增。",
+		"未在 aghub OpenAI Responses Provider 中找到相同 API Base URL 和 API key，疑似使用者直接在 Codex 裡新增。",
 	codexProviderExternalTooltip: "在 config.toml 中定義 — 需手動編輯檔案刪除",
 	codexActiveProfile: "目前 Profile",
 	codexProfileProvider: "Profile Provider",
@@ -249,7 +249,7 @@ export default {
 	codexLoginProviderInfo: "使用 Codex 自己的 OpenAI 登入憑據。",
 	codexConfigProvider: "設定檔 provider",
 	codexConfigProviderInfo:
-		"這個 provider 來自 Codex config.toml，暫未匹配到 Aghub 推理 Provider。",
+		"這個 provider 來自 Codex config.toml，暫未匹配到 aghub 推理 Provider。",
 	codexCustomProviders: "自訂 Provider",
 	noCodexCustomProviders: "暫無自訂 Codex Provider。",
 	codexNoProfiles: "暫無 Codex profile。",
@@ -617,7 +617,7 @@ export default {
 	onboardingDescription: "隨時重新開啟歡迎頁或任一導覽流程。",
 
 	// Onboarding — Wizard
-	onboardingWizardTitle: "歡迎使用 Aghub",
+	onboardingWizardTitle: "歡迎使用 aghub",
 	onboardingWizardSubtitle: "在一個地方管理 AI Agent 設定、MCP 服務和技能。",
 	onboardingStepMcpTitle: "MCP 服務",
 	onboardingStepMcpDescription:
@@ -645,7 +645,7 @@ export default {
 	settingsAutostartEnabled: "已啟用開機自動啟動",
 	settingsAutostartDisabled: "已關閉開機自動啟動",
 	settingsAutostartError: "更新開機自動啟動失敗",
-	whatsNewWizardTitle: "Aghub 新功能",
+	whatsNewWizardTitle: "aghub 新功能",
 	whatsNewWizardSubtitle: "快速瞭解此版本包含的變更。",
 	whatsNewSectionLabel: "{{version}} 的新功能",
 	whatsNewKnownIssues: "已知問題",
@@ -757,7 +757,7 @@ export default {
 	skillFiles: "檔案",
 	skillFilesDescription: "此技能套件中共有 {{count}} 個項目",
 	skillFilesUnavailable: "無法讀取檔案",
-	skillFilesUnavailableDescription: "Aghub 無法讀取此副本的檔案。",
+	skillFilesUnavailableDescription: "aghub 無法讀取此副本的檔案。",
 	skillLinkBroken: "目標不存在",
 	skillLinkOutsideRoot: "目標位於 Skill 外",
 	skillLinkUnreadable: "無法解析目標",

@@ -426,7 +426,7 @@ test("exports and merges a versioned prompt backup from settings", async ({
 	await expect(page.getByRole("tab", { name: "Appearance" })).toBeVisible();
 	await expect(page.getByRole("tab", { name: "About" })).toBeVisible();
 	await expect(
-		page.getByText("AGHub stores this library on this device."),
+		page.getByText("aghub stores this library on this device."),
 	).toBeVisible();
 	const overview = page.getByRole("region", { name: "Library overview" });
 	await expect(overview).toBeVisible();
