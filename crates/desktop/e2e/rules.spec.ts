@@ -11,6 +11,18 @@ test.beforeEach(async ({ page }) => {
 	).toBeVisible();
 });
 
+test("puts the agent identity before the rule file and names missing files accurately", async ({
+	page,
+}) => {
+	await expect(
+		page.getByRole("option", { name: /^Claude.*CLAUDE\.md/ }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("option", { name: /GEMINI\.md.*Not created/ }),
+	).toBeVisible();
+	await expect(page.getByText("Disabled", { exact: true })).toHaveCount(0);
+});
+
 test("rule editor fills its content area without native resizing", async ({
 	page,
 }) => {

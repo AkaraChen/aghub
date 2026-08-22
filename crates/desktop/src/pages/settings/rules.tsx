@@ -124,7 +124,7 @@ export default function RulesPage() {
 										className="data-selected:bg-surface"
 									>
 										<div className="flex w-full items-center gap-2">
-											<DocumentTextIcon className="size-4 shrink-0 text-muted" />
+											<AgentIcons items={group.items} />
 											<div className="flex min-w-0 flex-1 flex-col">
 												<Label className="truncate">
 													{group.fileName}
@@ -133,7 +133,6 @@ export default function RulesPage() {
 													{group.path}
 												</Description>
 											</div>
-											<AgentIcons items={group.items} />
 											<Chip
 												size="sm"
 												color={
