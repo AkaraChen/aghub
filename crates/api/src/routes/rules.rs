@@ -1,19 +1,22 @@
 use std::path::Path;
 
 use aghub_core::models::ResourceScope;
+use aghub_core::rule_versions::RuleVersionStore;
 use aghub_core::{registry, rules};
 use rocket::http::Status;
 use rocket::serde::json::Json;
+use rocket::State;
 
 use crate::{
 	auth::ApiAuth,
 	dto::rule::{
 		RuleContentQuery, RuleFileContentResponse, RuleFileResponse,
-		UpdateRuleContentRequest,
+		RuleVersionResponse, UpdateRuleContentRequest,
 	},
 	error::{ApiError, ApiResult},
 	extractors::{AgentParam, ScopeParams, TrustedLocalOrigin},
 	routes::{require_writable_scope, resolved_to_resource_scope},
+	state::RuleState,
 };
 
 const RULE_PATH_NOT_ALLOWED: &str = "RULE_PATH_NOT_ALLOWED";
@@ -103,10 +106,43 @@ pub fn get_rule_content(
 	}))
 }
 
+#[get("/rules/versions?<query..>")]
+pub fn list_rule_versions(
+	_auth: ApiAuth,
+	state: &State<RuleState>,
+	query: RuleContentQuery,
+) -> ApiResult<Vec<RuleVersionResponse>> {
+	let resolved = ScopeParams {
+		scope: query.scope.clone(),
+		project_root: query.project_root.clone(),
+	}
+	.resolve()?;
+	let (scope, project_root) = resolved_to_resource_scope(&resolved);
+	let path = rules::expand_tilde(&query.path);
+	ensure_rule_path_allowed(&path, scope, project_root.as_deref())?;
+
+	let versions = RuleVersionStore::new(&state.app_data_dir)
+		.list(&path)
+		.map_err(|error| {
+			ApiError::new(
+				Status::InternalServerError,
+				format!("Failed to read rule versions: {error}"),
+				"RULE_VERSION_READ_FAILED",
+			)
+		})?;
+	Ok(Json(
+		versions
+			.into_iter()
+			.map(RuleVersionResponse::from)
+			.collect(),
+	))
+}
+
 #[put("/rules/content", format = "json", data = "<body>")]
 pub fn update_rule_content(
 	_auth: ApiAuth,
 	_origin: TrustedLocalOrigin,
+	state: &State<RuleState>,
 	body: Json<UpdateRuleContentRequest>,
 ) -> ApiResult<RuleFileContentResponse> {
 	let request = body.into_inner();
@@ -120,6 +156,31 @@ pub fn update_rule_content(
 
 	let path = rules::expand_tilde(&request.path);
 	ensure_rule_path_allowed(&path, scope, project_root.as_deref())?;
+	let current = rules::read_rule_file_snapshot(&path).map_err(|error| {
+		ApiError::new(
+			Status::InternalServerError,
+			format!("Failed to read rule file: {error}"),
+			"RULE_FILE_READ_FAILED",
+		)
+	})?;
+	if current.revision != request.expected_revision {
+		return Err(ApiError::new(
+			Status::Conflict,
+			"Rule file changed after it was loaded",
+			RULE_FILE_CHANGED,
+		));
+	}
+	if current.content != request.content {
+		RuleVersionStore::new(&state.app_data_dir)
+			.record(&path, &current)
+			.map_err(|error| {
+				ApiError::new(
+					Status::InternalServerError,
+					format!("Failed to record rule version: {error}"),
+					"RULE_VERSION_WRITE_FAILED",
+				)
+			})?;
+	}
 
 	let snapshot = rules::write_rule_file_if_unchanged(
 		&path,

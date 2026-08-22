@@ -302,6 +302,18 @@ export async function installMocks(page: Page) {
 	const ruleContent = new Map([
 		["~/.claude/CLAUDE.md", "# Existing rules\n"],
 	]);
+	const ruleVersions = new Map([
+		[
+			"~/.claude/CLAUDE.md",
+			[
+				{
+					content: "# Previous rules\n",
+					revision: "e2e:previous",
+					created_at: Date.UTC(2026, 6, 1, 8, 0),
+				},
+			],
+		],
+	]);
 	const globalLock = {
 		...GLOBAL_LOCK,
 		skills: GLOBAL_LOCK.skills.map((entry) => ({ ...entry })),
@@ -398,6 +410,10 @@ export async function installMocks(page: Page) {
 				revision: ruleRevision(ruleContent, path),
 			});
 		}
+		if (p === "/rules/versions" && method === "GET") {
+			const path = url.searchParams.get("path") ?? "";
+			return json(ruleVersions.get(path) ?? []);
+		}
 		if (p === "/rules/content" && method === "PUT") {
 			const body = JSON.parse(route.request().postData() ?? "{}");
 			const path = String(body.path ?? "");
@@ -414,6 +430,16 @@ export async function installMocks(page: Page) {
 					},
 					409,
 				);
+			}
+			const currentContent = ruleContent.get(path);
+			if (currentContent !== undefined && currentContent !== content) {
+				const versions = ruleVersions.get(path) ?? [];
+				versions.unshift({
+					content: currentContent,
+					revision: ruleRevision(ruleContent, path),
+					created_at: Date.now(),
+				});
+				ruleVersions.set(path, versions);
 			}
 			ruleContent.set(path, content);
 			const rule = ruleFiles.find((item) => item.path === path);

@@ -1,4 +1,5 @@
-import { Alert, Button, TextArea, toast } from "@heroui/react";
+import { ClockIcon } from "@heroicons/react/24/solid";
+import { Alert, Button, TextArea, Tooltip, toast } from "@heroui/react";
 import {
 	useMutation,
 	useQueryClient,
@@ -16,6 +17,7 @@ import {
 	ruleContentQueryOptions,
 	updateRuleContentMutationOptions,
 } from "../../requests/rules";
+import { RuleVersionDialog } from "./rule-version-dialog";
 
 export interface RuleGroup {
 	path: string;
@@ -89,6 +91,7 @@ function RuleEditor({
 	const [conflictAction, setConflictAction] = useState<
 		"reload" | "overwrite" | null
 	>(null);
+	const [historyOpen, setHistoryOpen] = useState(false);
 
 	const saveMutation = useMutation({
 		...updateRuleContentMutationOptions({
@@ -170,13 +173,28 @@ function RuleEditor({
 					</h2>
 					<p className="truncate text-sm text-muted">{group.path}</p>
 				</div>
-				<Button
-					onPress={handleSave}
-					isDisabled={draft === initialContent || hasConflict}
-					isPending={saveMutation.isPending}
-				>
-					{t("save")}
-				</Button>
+				<div className="flex items-center gap-1">
+					<Tooltip delay={0}>
+						<Button
+							isIconOnly
+							variant="ghost"
+							aria-label={t("rulesVersionHistory")}
+							onPress={() => setHistoryOpen(true)}
+						>
+							<ClockIcon className="size-4" />
+						</Button>
+						<Tooltip.Content>
+							{t("rulesVersionHistory")}
+						</Tooltip.Content>
+					</Tooltip>
+					<Button
+						onPress={handleSave}
+						isDisabled={draft === initialContent || hasConflict}
+						isPending={saveMutation.isPending}
+					>
+						{t("save")}
+					</Button>
+				</div>
 			</div>
 
 			<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4">
@@ -233,6 +251,16 @@ function RuleEditor({
 					className="min-h-0 flex-1 resize-none overflow-auto font-mono text-sm"
 				/>
 			</div>
+
+			<RuleVersionDialog
+				path={group.path}
+				isOpen={historyOpen}
+				onOpenChange={setHistoryOpen}
+				onRestore={(version) => {
+					onDraftChange(group.path, version.content);
+					setHistoryOpen(false);
+				}}
+			/>
 		</div>
 	);
 }

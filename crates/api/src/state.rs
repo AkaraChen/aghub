@@ -119,6 +119,10 @@ pub struct PromptState {
 	pub app_data_dir: PathBuf,
 }
 
+pub struct RuleState {
+	pub app_data_dir: PathBuf,
+}
+
 pub struct UsageState {
 	pub runtime: Arc<aghub_usage::runtime::CcusageRuntime>,
 }

@@ -23,6 +23,22 @@ test("puts the agent identity before the rule file and names missing files accur
 	await expect(page.getByText("Disabled", { exact: true })).toHaveCount(0);
 });
 
+test("opens saved rule versions and restores one through the editor", async ({
+	page,
+}) => {
+	await page.getByRole("option", { name: /CLAUDE\.md/ }).click();
+	await page.getByRole("button", { name: "Version history" }).click();
+
+	const dialog = page.getByRole("dialog", { name: "Version history" });
+	await expect(dialog.getByText("# Previous rules")).toBeVisible();
+	await dialog.getByRole("button", { name: "Use this version" }).click();
+
+	await expect(page.getByRole("textbox", { name: "CLAUDE.md" })).toHaveValue(
+		"# Previous rules\n",
+	);
+	await expect(dialog).toBeHidden();
+});
+
 test("rule editor fills its content area without native resizing", async ({
 	page,
 }) => {

@@ -57,6 +57,20 @@ export function ruleContentQueryOptions({
 	});
 }
 
+export function ruleVersionsQueryOptions({
+	api,
+	path,
+	scope = "global",
+	projectRoot,
+	enabled = true,
+}: RuleContentQueryParams) {
+	return queryOptions({
+		queryKey: queryKeys.rules.versions(path, scope, projectRoot),
+		queryFn: () => api.rules.listVersions(path, scope, projectRoot),
+		enabled,
+	});
+}
+
 export async function invalidateRuleQueries(queryClient: QueryClient) {
 	await queryClient.invalidateQueries({ queryKey: queryKeys.rules.all() });
 }

@@ -104,6 +104,10 @@ export default {
 		"This file changed outside AGHub. Reload it or overwrite it with your draft.",
 	rulesReloadFromDisk: "Reload from disk",
 	rulesOverwriteDisk: "Overwrite disk file",
+	rulesVersionHistory: "Version history",
+	rulesNoVersions:
+		"No previous versions yet. Saved content appears here after the next change.",
+	rulesRestoreVersion: "Use this version",
 	searchRules: "Search rules...",
 	claudeCodePlugins: "Claude Code Plugins",
 	plugins: "Plugins",

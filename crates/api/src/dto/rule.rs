@@ -41,6 +41,24 @@ pub struct RuleFileContentResponse {
 	pub revision: String,
 }
 
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct RuleVersionResponse {
+	pub content: String,
+	pub revision: String,
+	pub created_at: u64,
+}
+
+impl From<aghub_core::rule_versions::RuleVersion> for RuleVersionResponse {
+	fn from(version: aghub_core::rule_versions::RuleVersion) -> Self {
+		Self {
+			content: version.content,
+			revision: version.revision,
+			created_at: version.created_at,
+		}
+	}
+}
+
 #[derive(Debug, Deserialize, TS)]
 #[ts(export)]
 pub struct UpdateRuleContentRequest {

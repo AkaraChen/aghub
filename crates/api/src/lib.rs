@@ -198,6 +198,9 @@ fn build_rocket(
 			),
 		})
 		.manage(crate::state::PromptState {
+			app_data_dir: options.app_data_dir.clone(),
+		})
+		.manage(crate::state::RuleState {
 			app_data_dir: options.app_data_dir,
 		})
 		.manage(crate::state::UsageState {
@@ -254,6 +257,7 @@ fn build_rocket(
 				routes::rules::list_all_rules,
 				routes::rules::list_rules,
 				routes::rules::get_rule_content,
+				routes::rules::list_rule_versions,
 				routes::rules::update_rule_content,
 				routes::integrations::list_code_editors,
 				routes::integrations::open_with_editor,
@@ -3113,6 +3117,31 @@ mod tests {
 		let persisted =
 			std::fs::read_to_string(&rule_file).expect("persisted rule file");
 		assert!(persisted.contains("# Project rules"));
+
+		let response = put_json(
+			&client,
+			"/api/v1/rules/content",
+			json!({
+				"path": rule_path.clone(),
+				"content": "# Updated project rules\n",
+				"expected_revision": saved_revision,
+				"scope": "project",
+				"project_root": project_dir.path().to_string_lossy(),
+			}),
+		);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		let saved_revision = body["revision"]
+			.as_str()
+			.expect("updated rule revision")
+			.to_string();
+
+		let versions_uri = format!("/api/v1/rules/versions?{content_query}");
+		let response = get_auth(&client, &versions_uri);
+		assert_eq!(response.status(), Status::Ok);
+		let versions = response_json(response);
+		assert_eq!(versions.as_array().expect("rule versions").len(), 1);
+		assert_eq!(versions[0]["content"], "# Project rules\n");
 
 		std::fs::write(&rule_file, "# External edit\n")
 			.expect("external rule edit");

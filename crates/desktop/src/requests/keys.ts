@@ -108,6 +108,11 @@ export const queryKeys = {
 			scope: "global" | "project" | "all" = "global",
 			projectRoot?: string,
 		) => ["rules", "content", path, scope, projectRoot ?? null] as const,
+		versions: (
+			path: string,
+			scope: "global" | "project" | "all" = "global",
+			projectRoot?: string,
+		) => ["rules", "versions", path, scope, projectRoot ?? null] as const,
 	},
 	credentials: {
 		all: () => ["credentials"] as const,
