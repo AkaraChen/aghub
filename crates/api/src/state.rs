@@ -1,6 +1,5 @@
 use aghub_inference::InferenceProviderStore;
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tempfile::TempDir;

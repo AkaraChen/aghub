@@ -41,9 +41,9 @@ dependencies = [
 name = "aghub"
 version = "0.0.0"
 dependencies = [
-	"aghub-api",
-	"aghub-core",
-	"base64 0.23.0",
+ "aghub-api",
+ "aghub-core",
+ "base64 0.23.0",
  "dotenvy",
  "fix-path-env",
  "flate2",
@@ -241,7 +241,7 @@ dependencies = [
 name = "aghub-usage"
 version = "1.9.0-beta.1"
 dependencies = [
- "base64 0.22.1",
+ "base64 0.23.0",
  "chrono",
  "dirs 6.0.0",
  "flate2",
@@ -256,7 +256,7 @@ dependencies = [
  "sha2 0.11.0",
  "tar",
  "tempfile",
- "thiserror 2.0.19",
+ "thiserror 2.0.20",
  "tokio",
  "ts-rs",
  "which",
