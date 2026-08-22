@@ -1,5 +1,4 @@
-import { ClockIcon } from "@heroicons/react/24/solid";
-import { Alert, Button, TextArea, Tooltip, toast } from "@heroui/react";
+import { Alert, Button, TextArea, toast } from "@heroui/react";
 import {
 	useMutation,
 	useQueryClient,
@@ -173,20 +172,7 @@ function RuleEditor({
 					</h2>
 					<p className="truncate text-sm text-muted">{group.path}</p>
 				</div>
-				<div className="flex items-center gap-1">
-					<Tooltip delay={0}>
-						<Button
-							isIconOnly
-							variant="ghost"
-							aria-label={t("rulesVersionHistory")}
-							onPress={() => setHistoryOpen(true)}
-						>
-							<ClockIcon className="size-4" />
-						</Button>
-						<Tooltip.Content>
-							{t("rulesVersionHistory")}
-						</Tooltip.Content>
-					</Tooltip>
+				<div className="flex items-center">
 					<Button
 						onPress={handleSave}
 						isDisabled={draft === initialContent || hasConflict}
@@ -198,6 +184,16 @@ function RuleEditor({
 			</div>
 
 			<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4">
+				<RuleVersionDialog
+					path={group.path}
+					isOpen={historyOpen}
+					onOpenChange={setHistoryOpen}
+					onRestore={(version) => {
+						onDraftChange(group.path, version.content);
+						setHistoryOpen(false);
+					}}
+				/>
+
 				{!group.exists && (
 					<Alert status="accent">
 						<Alert.Indicator />
@@ -251,16 +247,6 @@ function RuleEditor({
 					className="min-h-0 flex-1 resize-none overflow-auto font-mono text-sm"
 				/>
 			</div>
-
-			<RuleVersionDialog
-				path={group.path}
-				isOpen={historyOpen}
-				onOpenChange={setHistoryOpen}
-				onRestore={(version) => {
-					onDraftChange(group.path, version.content);
-					setHistoryOpen(false);
-				}}
-			/>
 		</div>
 	);
 }

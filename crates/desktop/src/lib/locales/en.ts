@@ -108,6 +108,11 @@ export default {
 	rulesVersionHistory: "Version history",
 	rulesNoVersions:
 		"No previous versions yet. Saved content appears here after the next change.",
+	rulesLatestVersion: "Latest snapshot",
+	rulesVersionCount_one: "{{count}} version",
+	rulesVersionCount_other: "{{count}} versions",
+	rulesNoSavedVersions: "No saved versions",
+	rulesOpenVersionHistory: "View history",
 	rulesRestoreVersion: "Use this version",
 	searchRules: "Search rules...",
 	ruleVersionHistory: "Rule version history",

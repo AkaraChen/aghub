@@ -21,13 +21,24 @@ test("puts the agent identity before the rule file and names missing files accur
 		page.getByRole("option", { name: /GEMINI\.md.*Not created/ }),
 	).toBeVisible();
 	await expect(page.getByText("Disabled", { exact: true })).toHaveCount(0);
+
+	await page.getByRole("option", { name: /GEMINI\.md/ }).click();
+	await expect(
+		page.getByRole("region", { name: "Version history" }),
+	).toContainText("No saved versions");
 });
 
 test("opens saved rule versions and restores one through the editor", async ({
 	page,
 }) => {
 	await page.getByRole("option", { name: /CLAUDE\.md/ }).click();
-	await page.getByRole("button", { name: "Version history" }).click();
+	const history = page.getByRole("region", { name: "Version history" });
+	await expect(history).toContainText("Latest");
+	await expect(history).toContainText("1 version");
+	await expect(
+		history.locator('time[datetime="2026-07-01T08:00:00.000Z"]'),
+	).toBeVisible();
+	await history.getByRole("button", { name: "View history" }).click();
 
 	const dialog = page.getByRole("dialog", { name: "Version history" });
 	await expect(dialog.getByText("# Previous rules")).toBeVisible();
