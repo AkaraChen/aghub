@@ -74,6 +74,7 @@ export default function AgentsPanel() {
     "
 			>
 				<SearchField
+					aria-label={t("searchAgentsLabel")}
 					value={agentSearch}
 					onChange={setAgentSearch}
 					className="
@@ -88,6 +89,7 @@ export default function AgentsPanel() {
 					</SearchField.Group>
 				</SearchField>
 				<ToggleButtonGroup
+					aria-label={t("agentStatusFilterLabel")}
 					selectedKeys={[agentFilter]}
 					onSelectionChange={(keys) =>
 						setAgentFilter(

@@ -1240,6 +1240,15 @@ test("Agents panel lets Card variants own static surfaces", async ({
 	const agentCard = outerCard.locator(".card--secondary").first();
 	await expect(outerCard).toBeVisible();
 	await expect(agentCard).toBeVisible();
+	await expect(
+		page.getByRole("searchbox", { name: "Search agents", exact: true }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("radiogroup", {
+			name: "Filter agents by status",
+			exact: true,
+		}),
+	).toBeVisible();
 	await expect(outerCard).not.toHaveClass(/card--transparent/);
 	await expect(agentCard).not.toHaveClass(/transition-all/);
 	await expect(
