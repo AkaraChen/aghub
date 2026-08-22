@@ -15,6 +15,18 @@ const STORED_ITEMS = [
 	{ id: "removed-item", visible: false },
 ] as unknown as SidebarItemPreference[];
 
+const CUSTOMIZABLE_SIDEBAR_ITEMS = [
+	"Home",
+	"Market",
+	"Usage",
+	"Skills",
+	"MCP Servers",
+	"Sub-agents",
+	"Prompts",
+	"Claude Code Plugins",
+	"Inference Providers",
+] as const;
+
 test("stored sidebar preferences preserve visibility but not order", () => {
 	const items = normalizeSidebarItems(STORED_ITEMS);
 
@@ -60,7 +72,12 @@ test("appearance controls update grouped sidebar visibility", async ({
 	const sidebar = page.getByRole("complementary");
 	const panel = page.getByRole("group", { name: "Sidebar" });
 
-	await expect(panel.getByRole("checkbox")).toHaveCount(8);
+	await expect(panel.getByRole("checkbox")).toHaveCount(
+		CUSTOMIZABLE_SIDEBAR_ITEMS.length,
+	);
+	for (const name of CUSTOMIZABLE_SIDEBAR_ITEMS) {
+		await expect(panel.getByRole("checkbox", { name })).toBeVisible();
+	}
 	await toggleSidebarItem(panel, "Market");
 	await expect(sidebar.getByRole("link", { name: "Market" })).toHaveCount(0);
 	await expect(sidebar.getByRole("link", { name: "Settings" })).toBeVisible();
