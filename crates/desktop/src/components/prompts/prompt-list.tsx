@@ -56,26 +56,23 @@ export function PromptList({
 					key={prompt.id}
 					id={prompt.id}
 					textValue={prompt.title}
-					className="data-selected:bg-surface"
+					className="transition-colors duration-150 motion-reduce:transition-none data-[hovered=true]:bg-default data-[selected=true]:bg-surface data-[hovered=true]:data-[selected=true]:bg-default"
 				>
 					<div className="flex w-full flex-col gap-1 overflow-hidden">
-						<span className="truncate font-medium">
-							{prompt.title}
-						</span>
+						<div className="flex min-w-0 items-baseline gap-2">
+							<span className="min-w-0 truncate font-medium">
+								{prompt.title}
+							</span>
+							{prompt.category && (
+								<span className="shrink-0 text-xs text-muted">
+									{prompt.category}
+								</span>
+							)}
+						</div>
 						{prompt.description && (
 							<p className="truncate text-xs text-muted">
 								{prompt.description}
 							</p>
-						)}
-						{prompt.category && (
-							<Chip
-								size="sm"
-								variant="soft"
-								color="accent"
-								className="w-fit"
-							>
-								{prompt.category}
-							</Chip>
 						)}
 						{prompt.tags.length > 0 && (
 							<div className="flex flex-wrap gap-1">

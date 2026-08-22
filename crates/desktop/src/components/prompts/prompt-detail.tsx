@@ -39,7 +39,7 @@ export function PromptDetail({
 		<>
 			<div className="h-full overflow-y-auto">
 				<div className="w-full p-4 sm:p-6">
-					<Card variant="secondary">
+					<Card>
 						<Card.Header className="flex flex-row items-start justify-between gap-3">
 							<div className="min-w-0 flex-1">
 								<Card.Title

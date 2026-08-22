@@ -6,9 +6,12 @@ import {
 	Form,
 	Input,
 	Label,
+	Tag,
+	TagGroup,
 	TextArea,
 	TextField,
 } from "@heroui/react";
+import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { useTranslation } from "react-i18next";
 import type { PromptResponse } from "../../generated/dto";
@@ -26,7 +29,7 @@ interface PromptFormFields {
 	description: string;
 	category: string;
 	content: string;
-	tags: string;
+	tags: string[];
 }
 
 interface PromptFormProps {
@@ -39,11 +42,78 @@ interface PromptFormProps {
 	onCancel: () => void;
 }
 
-function parseTags(value: string): string[] {
-	return value
-		.split(",")
-		.map((tag) => tag.trim())
-		.filter((tag) => tag.length > 0);
+interface PromptTagFieldProps {
+	value: string[];
+	onChange: (tags: string[]) => void;
+	onBlur: () => void;
+}
+
+function PromptTagField({ value, onChange, onBlur }: PromptTagFieldProps) {
+	const { t } = useTranslation();
+	const [draft, setDraft] = useState("");
+
+	const addTag = (input: string) => {
+		const tag = input.trim();
+		if (tag && !value.includes(tag)) onChange([...value, tag]);
+		setDraft("");
+	};
+
+	return (
+		<div className="flex max-w-md flex-col gap-2">
+			<TextField variant="secondary" validationBehavior="aria">
+				<Label>{t("promptTags")}</Label>
+				<Input
+					value={draft}
+					onChange={(event) => setDraft(event.target.value)}
+					onKeyDown={(event) => {
+						if (event.key === "Enter" || event.key === ",") {
+							event.preventDefault();
+							addTag(draft);
+							return;
+						}
+						if (
+							event.key === "Backspace" &&
+							draft.length === 0 &&
+							value.length > 0
+						) {
+							onChange(value.slice(0, -1));
+						}
+					}}
+					onBlur={() => {
+						if (draft.trim()) addTag(draft);
+						onBlur();
+					}}
+					placeholder={t("promptTagsPlaceholder")}
+					variant="secondary"
+					spellCheck={false}
+					autoCapitalize="none"
+				/>
+			</TextField>
+			{value.length > 0 && (
+				<TagGroup
+					aria-label={t("promptTags")}
+					size="sm"
+					variant="surface"
+					onRemove={(keys) =>
+						onChange(value.filter((tag) => !keys.has(tag)))
+					}
+				>
+					<TagGroup.List>
+						{value.map((tag) => (
+							<Tag key={tag} id={tag} textValue={tag}>
+								{tag}
+								<Tag.RemoveButton
+									aria-label={t("removePromptTag", {
+										tag,
+									})}
+								/>
+							</Tag>
+						))}
+					</TagGroup.List>
+				</TagGroup>
+			)}
+		</div>
+	);
 }
 
 export function PromptForm({
@@ -68,7 +138,7 @@ export function PromptForm({
 			description: initial?.description ?? "",
 			category: initial?.category ?? "",
 			content: initial?.content ?? "",
-			tags: initial ? initial.tags.join(", ") : "",
+			tags: initial?.tags ?? [],
 		},
 	});
 
@@ -79,7 +149,7 @@ export function PromptForm({
 			description: values.description.trim(),
 			category: values.category.trim(),
 			content: values.content,
-			tags: parseTags(values.tags),
+			tags: values.tags,
 		});
 	};
 
@@ -242,26 +312,11 @@ export function PromptForm({
 									name="tags"
 									control={control}
 									render={({ field }) => (
-										<TextField
-											className="w-full"
-											variant="secondary"
-											validationBehavior="aria"
-										>
-											<Label>{t("promptTags")}</Label>
-											<Input
-												value={field.value}
-												onChange={(event) =>
-													field.onChange(
-														event.target.value,
-													)
-												}
-												onBlur={field.onBlur}
-												placeholder={t(
-													"promptTagsPlaceholder",
-												)}
-												variant="secondary"
-											/>
-										</TextField>
+										<PromptTagField
+											value={field.value}
+											onChange={field.onChange}
+											onBlur={field.onBlur}
+										/>
 									)}
 								/>
 							</Fieldset.Group>

@@ -11,6 +11,8 @@ import SecurityPanel from "./security-panel";
 import SkillPreferencesPanel from "./skill-preferences-panel";
 import UsagePanel from "./usage-panel";
 
+const settingsTabClassName = "whitespace-nowrap";
+
 export default function SettingsPage() {
 	const { t } = useTranslation();
 	const [selectedTab, setSelectedTab] = useQueryState("tab", {
@@ -41,35 +43,59 @@ export default function SettingsPage() {
 								aria-label="Settings sections"
 								className="inline-flex w-auto"
 							>
-								<Tabs.Tab id="appearance">
+								<Tabs.Tab
+									id="appearance"
+									className={settingsTabClassName}
+								>
 									{t("appearance")}
 									<Tabs.Indicator />
 								</Tabs.Tab>
-								<Tabs.Tab id="agents">
+								<Tabs.Tab
+									id="agents"
+									className={settingsTabClassName}
+								>
 									{t("agentManagement")}
 									<Tabs.Indicator />
 								</Tabs.Tab>
-								<Tabs.Tab id="integrations">
+								<Tabs.Tab
+									id="integrations"
+									className={settingsTabClassName}
+								>
 									{t("integrations")}
 									<Tabs.Indicator />
 								</Tabs.Tab>
-								<Tabs.Tab id="skills">
+								<Tabs.Tab
+									id="skills"
+									className={settingsTabClassName}
+								>
 									{t("skills")}
 									<Tabs.Indicator />
 								</Tabs.Tab>
-								<Tabs.Tab id="prompts">
+								<Tabs.Tab
+									id="prompts"
+									className={settingsTabClassName}
+								>
 									{t("prompts")}
 									<Tabs.Indicator />
 								</Tabs.Tab>
-								<Tabs.Tab id="logs">
+								<Tabs.Tab
+									id="logs"
+									className={settingsTabClassName}
+								>
 									{t("logs")}
 									<Tabs.Indicator />
 								</Tabs.Tab>
-								<Tabs.Tab id="usage">
+								<Tabs.Tab
+									id="usage"
+									className={settingsTabClassName}
+								>
 									{t("usage")}
 									<Tabs.Indicator />
 								</Tabs.Tab>
-								<Tabs.Tab id="application">
+								<Tabs.Tab
+									id="application"
+									className={settingsTabClassName}
+								>
 									{t("application")}
 									<Tabs.Indicator />
 								</Tabs.Tab>

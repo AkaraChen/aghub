@@ -90,23 +90,21 @@ export default function PromptDataPanel() {
 	return (
 		<>
 			<Card className="p-0">
-				<Card.Content className="flex items-center justify-between gap-4 p-4">
-					<div className="flex min-w-0 items-center gap-3">
-						<div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-secondary text-muted">
-							<DocumentTextIcon className="size-5" />
-						</div>
-						<div className="min-w-0 space-y-0.5">
+				<Card.Content className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
+					<div className="min-w-0 space-y-0.5">
+						<div className="flex items-center gap-2">
+							<DocumentTextIcon className="size-4 shrink-0 text-muted" />
 							<p className="text-sm font-medium text-foreground">
 								{t("promptLocalLibrary")}
 							</p>
-							<p className="text-xs text-muted">
-								{t("promptLocalLibraryDescription", {
-									count: prompts.length,
-								})}
-							</p>
 						</div>
+						<p className="text-xs text-muted">
+							{t("promptLocalLibraryDescription", {
+								count: prompts.length,
+							})}
+						</p>
 					</div>
-					<div className="flex shrink-0 items-center gap-2">
+					<div className="flex shrink-0 flex-wrap items-center gap-2">
 						<Button
 							variant="secondary"
 							onPress={() => void chooseBackup()}

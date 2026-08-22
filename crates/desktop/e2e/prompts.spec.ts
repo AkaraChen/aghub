@@ -56,6 +56,49 @@ test("selects a valid deep link or falls back to the newest prompt", async ({
 	).toBeVisible();
 });
 
+test("keeps prompt list metadata inline and preserves hover feedback", async ({
+	page,
+}) => {
+	await installMocks(page);
+	await page.route(
+		"http://localhost:45999/api/v1/prompts**",
+		async (route) => {
+			return route.fulfill({
+				status: 200,
+				contentType: "application/json",
+				body: JSON.stringify([OLDER_PROMPT, PROMPT]),
+			});
+		},
+	);
+
+	await page.goto(`/prompts?prompt=${PROMPT.id}`);
+	const selectedPrompt = page.getByRole("option", {
+		name: new RegExp(PROMPT.title),
+	});
+	const title = selectedPrompt.getByText(PROMPT.title, { exact: true });
+	const category = selectedPrompt.getByText(PROMPT.category, { exact: true });
+	const [titleBox, categoryBox] = await Promise.all([
+		title.boundingBox(),
+		category.boundingBox(),
+	]);
+
+	expect(titleBox).not.toBeNull();
+	expect(categoryBox).not.toBeNull();
+	expect(Math.abs(titleBox!.y - categoryBox!.y)).toBeLessThanOrEqual(6);
+
+	const backgroundBeforeHover = await selectedPrompt.evaluate(
+		(element) => getComputedStyle(element).backgroundColor,
+	);
+	await selectedPrompt.hover();
+	await expect
+		.poll(() =>
+			selectedPrompt.evaluate(
+				(element) => getComputedStyle(element).backgroundColor,
+			),
+		)
+		.not.toBe(backgroundBeforeHover);
+});
+
 test("keeps delete confirmation open while deletion is pending and after failure", async ({
 	page,
 }) => {
@@ -221,7 +264,21 @@ test("creates, searches, edits, and deletes a prompt", async ({ page }) => {
 		.fill(PROMPT.description);
 	await page.getByRole("textbox", { name: "Category" }).fill(PROMPT.category);
 	await page.getByRole("textbox", { name: "Content" }).fill(PROMPT.content);
-	await page.getByRole("textbox", { name: "Tags" }).fill("review, merge");
+	const tags = page.getByRole("textbox", { name: "Tags" });
+	await tags.fill("review");
+	await tags.press("Enter");
+	await expect(
+		page.getByRole("button", { name: "Remove tag review" }),
+	).toBeVisible();
+	await tags.fill("merge");
+	await tags.press("Enter");
+	await page.getByRole("button", { name: "Remove tag review" }).click();
+	await expect(
+		page.getByRole("button", { name: "Remove tag review" }),
+	).toBeHidden();
+	await tags.fill("review");
+	await tags.press("Enter");
+	await expect(tags).toHaveValue("");
 	await page.getByRole("button", { name: "Create", exact: true }).click();
 	await expect(
 		page.getByRole("heading", { name: PROMPT.title }),
@@ -346,7 +403,14 @@ test("exports and merges a versioned prompt backup from settings", async ({
 		},
 	);
 
+	await page.setViewportSize({ width: 1920, height: 1080 });
 	await page.goto("/settings?tab=prompts");
+	await expect(page.getByRole("tab", { name: "Prompts" })).toHaveCSS(
+		"white-space",
+		"nowrap",
+	);
+	await expect(page.getByRole("tab", { name: "Appearance" })).toBeVisible();
+	await expect(page.getByRole("tab", { name: "About" })).toBeVisible();
 	await expect(
 		page.getByText("1 prompts are stored on this device."),
 	).toBeVisible();
