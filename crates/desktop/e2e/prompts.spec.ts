@@ -426,9 +426,31 @@ test("exports and merges a versioned prompt backup from settings", async ({
 	await expect(page.getByRole("tab", { name: "Appearance" })).toBeVisible();
 	await expect(page.getByRole("tab", { name: "About" })).toBeVisible();
 	await expect(
-		page.getByText("1 prompts are stored on this device."),
+		page.getByText("AGHub stores this library on this device."),
+	).toBeVisible();
+	const overview = page.getByRole("region", { name: "Library overview" });
+	await expect(overview).toBeVisible();
+	await expect(overview.getByText("Prompts", { exact: true })).toBeVisible();
+	await expect(
+		overview.getByText("Categories", { exact: true }),
+	).toBeVisible();
+	await expect(overview.getByText("Tags", { exact: true })).toBeVisible();
+	expect(await overview.locator("dd").allTextContents()).toEqual([
+		"1",
+		"1",
+		"1",
+	]);
+	await expect(
+		page.getByRole("heading", { name: "Storage location" }),
 	).toBeVisible();
 	await expect(page.getByText(WINDOWS_PROMPT_STORAGE_PATH)).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "Categories" }),
+	).toBeVisible();
+	await expect(page.getByText("Workflow · 1")).toBeVisible();
+	await expect(
+		page.getByRole("heading", { name: "Backup and restore" }),
+	).toBeVisible();
 
 	const downloadPromise = page.waitForEvent("download");
 	await page.getByRole("button", { name: "Export backup" }).click();

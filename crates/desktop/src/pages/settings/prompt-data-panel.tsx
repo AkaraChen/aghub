@@ -6,6 +6,7 @@ import {
 import {
 	Button,
 	Card,
+	Chip,
 	Description,
 	Label,
 	Modal,
@@ -36,6 +37,28 @@ export default function PromptDataPanel() {
 	const [importMode, setImportMode] = useState<PromptImportModeDto>("merge");
 	const { data: prompts = [] } = useQuery(promptListQueryOptions({ api }));
 	const storageQuery = useQuery(promptStorageQueryOptions({ api }));
+	const categoryCounts = Array.from(
+		prompts
+			.reduce((counts, prompt) => {
+				if (prompt.category) {
+					counts.set(
+						prompt.category,
+						(counts.get(prompt.category) ?? 0) + 1,
+					);
+				}
+				return counts;
+			}, new Map<string, number>())
+			.entries(),
+	).sort(([left], [right]) => left.localeCompare(right));
+	const uncategorizedCount = prompts.filter(
+		(prompt) => !prompt.category,
+	).length;
+	const tagCount = new Set(prompts.flatMap((prompt) => prompt.tags)).size;
+	const libraryStats = [
+		{ label: t("prompts"), value: prompts.length },
+		{ label: t("promptCategories"), value: categoryCounts.length },
+		{ label: t("promptTags"), value: tagCount },
+	];
 
 	const exportMutation = useMutation({
 		mutationFn: async () => {
@@ -91,34 +114,116 @@ export default function PromptDataPanel() {
 
 	return (
 		<>
-			<Card className="p-0">
-				<Card.Content className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between">
-					<div className="min-w-0 space-y-0.5">
-						<div className="flex items-center gap-2">
+			<div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+				<Card className="p-0">
+					<Card.Header className="border-b border-separator p-4">
+						<div className="flex min-w-0 items-start gap-2">
 							<DocumentTextIcon className="size-4 shrink-0 text-muted" />
-							<p className="text-sm font-medium text-foreground">
-								{t("promptLocalLibrary")}
-							</p>
+							<div className="min-w-0 space-y-0.5">
+								<Card.Title>
+									{t("promptLocalLibrary")}
+								</Card.Title>
+								<Card.Description>
+									{t("promptLocalLibraryDescription")}
+								</Card.Description>
+							</div>
 						</div>
-						<p className="text-xs text-muted">
-							{t("promptLocalLibraryDescription", {
-								count: prompts.length,
-							})}
-						</p>
-						<dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 text-xs">
-							<dt className="text-muted">
-								{t("promptDataFile")}
-							</dt>
-							<dd className="min-w-0 break-all font-mono text-foreground">
+					</Card.Header>
+					<Card.Content className="divide-y divide-separator p-0">
+						<section
+							aria-labelledby="prompt-library-overview-heading"
+							className="space-y-3 p-4"
+						>
+							<h4
+								id="prompt-library-overview-heading"
+								className="text-sm font-medium text-foreground"
+							>
+								{t("promptLibraryOverview")}
+							</h4>
+							<dl className="grid grid-cols-3 gap-3">
+								{libraryStats.map((stat) => (
+									<div key={stat.label} className="min-w-0">
+										<dt className="text-xs text-muted">
+											{stat.label}
+										</dt>
+										<dd className="text-lg font-medium tabular-nums text-foreground">
+											{stat.value}
+										</dd>
+									</div>
+								))}
+							</dl>
+						</section>
+
+						<section
+							aria-labelledby="prompt-storage-heading"
+							className="space-y-2 p-4"
+						>
+							<h4
+								id="prompt-storage-heading"
+								className="text-sm font-medium text-foreground"
+							>
+								{t("promptStorageLocation")}
+							</h4>
+							<p className="break-all font-mono text-xs text-muted">
 								{storageQuery.isPending
 									? t("loading")
 									: storageQuery.isError
 										? t("promptDataFileUnavailable")
 										: storageQuery.data.file_path}
-							</dd>
-						</dl>
-					</div>
-					<div className="flex shrink-0 flex-wrap items-center gap-2">
+							</p>
+						</section>
+
+						<section
+							aria-labelledby="prompt-categories-heading"
+							className="space-y-2 p-4"
+						>
+							<h4
+								id="prompt-categories-heading"
+								className="text-sm font-medium text-foreground"
+							>
+								{t("promptCategories")}
+							</h4>
+							{categoryCounts.length > 0 ||
+							uncategorizedCount > 0 ? (
+								<div className="flex flex-wrap gap-2">
+									{categoryCounts.map(([category, count]) => (
+										<Chip
+											key={category}
+											size="sm"
+											variant="soft"
+										>
+											{t("promptCategoryUsage", {
+												category,
+												count,
+											})}
+										</Chip>
+									))}
+									{uncategorizedCount > 0 && (
+										<Chip size="sm" variant="soft">
+											{t("promptCategoryUsage", {
+												category: t("uncategorized"),
+												count: uncategorizedCount,
+											})}
+										</Chip>
+									)}
+								</div>
+							) : (
+								<p className="text-xs text-muted">
+									{t("promptNoCategories")}
+								</p>
+							)}
+						</section>
+					</Card.Content>
+				</Card>
+
+				<Card className="p-0">
+					<Card.Header className="p-4">
+						<Card.Title>{t("promptBackupAndRestore")}</Card.Title>
+						<Card.Description>
+							{t("promptBackupDescription")}
+						</Card.Description>
+					</Card.Header>
+					<Card.Footer className="flex flex-wrap gap-2 border-t border-separator p-4">
 						<Button
 							variant="secondary"
 							onPress={() => void chooseBackup()}
@@ -133,9 +238,9 @@ export default function PromptDataPanel() {
 							<ArrowDownTrayIcon className="size-4" />
 							{t("exportPromptBackup")}
 						</Button>
-					</div>
-				</Card.Content>
-			</Card>
+					</Card.Footer>
+				</Card>
+			</div>
 
 			<Modal.Backdrop
 				isOpen={backup !== null}
