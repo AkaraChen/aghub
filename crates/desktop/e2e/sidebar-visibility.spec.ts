@@ -21,6 +21,7 @@ test("stored sidebar preferences preserve visibility but not order", () => {
 	expect(items).toEqual([
 		{ id: "home", visible: true },
 		{ id: "market", visible: false },
+		{ id: "usage", visible: true },
 		{ id: "skills", visible: false },
 		{ id: "mcp", visible: true },
 		{ id: "subAgents", visible: true },
@@ -33,7 +34,7 @@ test("stored sidebar preferences preserve visibility but not order", () => {
 			items: section.items.map((item) => item.id),
 		})),
 	).toEqual([
-		{ id: "primary", items: ["home", "market"] },
+		{ id: "primary", items: ["home", "market", "usage"] },
 		{
 			id: "resources",
 			items: ["skills", "mcp", "subAgents", "ccPlugins"],
@@ -58,7 +59,7 @@ test("appearance controls update grouped sidebar visibility", async ({
 	const sidebar = page.getByRole("complementary");
 	const panel = page.getByRole("group", { name: "Sidebar" });
 
-	await expect(panel.getByRole("checkbox")).toHaveCount(7);
+	await expect(panel.getByRole("checkbox")).toHaveCount(8);
 	await toggleSidebarItem(panel, "Market");
 	await expect(sidebar.getByRole("link", { name: "Market" })).toHaveCount(0);
 	await expect(sidebar.getByRole("link", { name: "Settings" })).toBeVisible();

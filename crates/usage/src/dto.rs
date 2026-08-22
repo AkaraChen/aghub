@@ -3,25 +3,26 @@
 //! `generated/dto` via `crates/api/src/bin/export-dto.rs`. These types are the
 //! deliverable: every `pub` here has a TypeScript consumer.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-/// Which agent a usage/limits row belongs to. Only Claude and Codex expose the
-/// local data these reports read, so the set is closed.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, TS)]
+/// The ccusage agent id a usage/limits row belongs to (e.g. "claude", "codex",
+/// "opencode"). Open set: ccusage reports token usage for many agents, only some
+/// of which ("claude", "codex") also expose an OAuth rate-limit endpoint.
+#[derive(Debug, Clone, PartialEq, Serialize, TS)]
 #[ts(export)]
-#[serde(rename_all = "lowercase")]
-pub enum UsageAgent {
-	Claude,
-	Codex,
+pub struct UsageAgent(pub String);
+
+impl UsageAgent {
+	pub(crate) fn new(id: impl Into<String>) -> Self {
+		Self(id.into())
+	}
 }
 
 /// Unified usage report across agents, returned by `GET /api/v1/usage/summary`.
 ///
-/// ccusage emits a different JSON shape per agent (claude has cache-creation,
-/// codex has reasoning, cost keys differ); this DTO is the normalized shape the
-/// frontend consumes. The mapping from each ccusage shape lives in
-/// `claude_to_agent` / `codex_to_agent`.
+/// ccusage emits specialized Claude and Codex shapes plus a shared shape for
+/// its other agents. This is the normalized shape the frontend consumes.
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
 pub struct UsageReportDto {
@@ -30,6 +31,81 @@ pub struct UsageReportDto {
 	pub ccusage_version: String,
 	/// Non-fatal notes (e.g. an agent had no data, a model had no pricing).
 	pub warnings: Vec<String>,
+}
+
+/// ccusage runtime health + version, returned by `GET /api/v1/usage/status`.
+/// Runtime selection and acquisition details are returned by
+/// authenticated `GET /api/v1/usage/runtime`, including executable paths.
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct UsageStatusDto {
+	/// `ccusage --version` output, or `null` when it could not run.
+	pub version: Option<String>,
+	/// Whether `ccusage --version` succeeded.
+	pub reachable: bool,
+	/// Error text when `reachable` is false.
+	pub error: Option<String>,
+	/// Latest ccusage version on npm, when the registry check succeeded.
+	pub latest_version: Option<String>,
+	/// `true` when `latest_version` is newer than the running `version`.
+	pub update_available: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum CcusageRuntimeSource {
+	Auto,
+	Environment,
+	Manual,
+	Path,
+	Bun,
+	Npm,
+	Download,
+	Bundled,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct SetCcusageRuntimeRequest {
+	pub source: CcusageRuntimeSource,
+	pub path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct InstallCcusageRuntimeRequest {
+	pub source: CcusageRuntimeSource,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct CcusageRuntimeExecutableDto {
+	pub source: CcusageRuntimeSource,
+	pub path: String,
+	pub version: String,
+	pub can_update: bool,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct CcusageRuntimeCandidateDto {
+	pub source: CcusageRuntimeSource,
+	pub installed: bool,
+	pub path: Option<String>,
+	pub version: Option<String>,
+	pub can_install: bool,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct CcusageRuntimeDto {
+	pub preference: CcusageRuntimeSource,
+	pub active: Option<CcusageRuntimeExecutableDto>,
+	pub candidates: Vec<CcusageRuntimeCandidateDto>,
+	pub latest_version: Option<String>,
+	pub update_available: bool,
+	pub error: Option<String>,
 }
 
 #[derive(Debug, Serialize, TS)]

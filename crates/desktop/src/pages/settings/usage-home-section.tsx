@@ -1,0 +1,317 @@
+import { ArrowUturnLeftIcon } from "@heroicons/react/24/outline";
+import { Button, toast, Toolbar } from "@heroui/react";
+import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import { useAgentAvailability } from "../../hooks/use-agent-availability";
+import { useApi } from "../../hooks/use-api";
+import {
+	HOME_STAT_IDS,
+	type HomeStatId,
+	HOME_WINDOW_IDS,
+	type HomeWindowId,
+	USAGE_QUOTA_AGENTS,
+	createDefaultUsageSettings,
+	type UsageSettings,
+} from "../../lib/store";
+import {
+	HOME_STAT_AGENT_HINT,
+	HOME_STAT_DEFINITIONS,
+	HOME_WINDOW_LABEL_KEYS,
+} from "../../lib/usage-home-fields";
+import { USAGE_AGENT_LABELS } from "../../lib/usage-agents";
+import { usageAgentsQueryOptions } from "../../requests/usage";
+import {
+	type CardLayoutModel,
+	InteractiveCardLayout,
+	type LayoutField,
+} from "./usage-layout-editor";
+import { layoutsEqual } from "./usage-layout-model";
+import {
+	SettingRow,
+	SettingSelect,
+	SettingSwitch,
+} from "./usage-setting-controls";
+import {
+	includeSelectedOption,
+	type UsageSectionProps,
+} from "./usage-setting-model";
+
+const USAGE_WINDOW_DAYS = [7, 14, 30, 90] as const;
+
+export function HomeCardsSection({
+	current,
+	updateSettings,
+	layoutTarget,
+	onLayoutTargetChange,
+}: UsageSectionProps & {
+	layoutTarget: string;
+	onLayoutTargetChange: (target: string) => void;
+}) {
+	const { t } = useTranslation();
+	const api = useApi();
+	const { availableAgents } = useAgentAvailability();
+	const usageAgentsQuery = useQuery(usageAgentsQueryOptions({ api }));
+	const home = current.home;
+	const editedLayout =
+		layoutTarget === "default"
+			? home.default
+			: (home.perAgent[layoutTarget] ?? home.default);
+	const hasOverride =
+		layoutTarget !== "default" && layoutTarget in home.perAgent;
+	const defaultLayout = createDefaultUsageSettings().home.default;
+	const canResetLayout =
+		layoutTarget === "default"
+			? !layoutsEqual(editedLayout, defaultLayout)
+			: hasOverride;
+	const updateHome = (patch: Partial<UsageSettings["home"]>) => {
+		updateSettings((settings) => ({
+			...settings,
+			home: { ...settings.home, ...patch },
+		}));
+	};
+	const commitLayout = (next: CardLayoutModel) => {
+		const layout = {
+			windowSlots: next.windowSlots as (HomeWindowId | null)[],
+			statSlots: next.statSlots as (HomeStatId | null)[],
+		};
+		updateSettings((settings) => ({
+			...settings,
+			home:
+				layoutTarget === "default"
+					? { ...settings.home, default: layout }
+					: {
+							...settings.home,
+							perAgent: {
+								...settings.home.perAgent,
+								[layoutTarget]: layout,
+							},
+						},
+		}));
+	};
+	const resetLayout = () => {
+		const resetTarget = layoutTarget;
+		const previousLayout = {
+			windowSlots: [...editedLayout.windowSlots],
+			statSlots: [...editedLayout.statSlots],
+		};
+		updateSettings((settings) => {
+			if (resetTarget === "default") {
+				return {
+					...settings,
+					home: {
+						...settings.home,
+						default: {
+							windowSlots: [...defaultLayout.windowSlots],
+							statSlots: [...defaultLayout.statSlots],
+						},
+					},
+				};
+			}
+			const perAgent = { ...settings.home.perAgent };
+			delete perAgent[resetTarget];
+			return {
+				...settings,
+				home: { ...settings.home, perAgent },
+			};
+		});
+		const toastId = toast.success(t("usageLayoutDefaultRestored"), {
+			actionProps: {
+				children: t("usageUndo"),
+				onPress: () => {
+					updateSettings((settings) => ({
+						...settings,
+						home:
+							resetTarget === "default"
+								? {
+										...settings.home,
+										default: previousLayout,
+									}
+								: {
+										...settings.home,
+										perAgent: {
+											...settings.home.perAgent,
+											[resetTarget]: previousLayout,
+										},
+									},
+					}));
+					toast.close(toastId);
+				},
+			},
+		});
+	};
+	const offeredToTarget = (id: HomeWindowId | HomeStatId) => {
+		const usesQuotaWindow =
+			isHomeWindowId(id) ||
+			HOME_STAT_DEFINITIONS[id].source.from === "window";
+		if (
+			layoutTarget !== "default" &&
+			usesQuotaWindow &&
+			!USAGE_QUOTA_AGENTS.includes(
+				layoutTarget as (typeof USAGE_QUOTA_AGENTS)[number],
+			)
+		) {
+			return false;
+		}
+		const agent = layoutFieldAgent(id);
+		return layoutTarget === "default" || !agent || agent === layoutTarget;
+	};
+	const fieldHint = (id: HomeWindowId | HomeStatId) => {
+		const agent = layoutFieldAgent(id);
+		return layoutTarget === "default" && agent
+			? t(
+					agent === "claude"
+						? "usageStatClaudeOnly"
+						: "usageStatCodexOnly",
+				)
+			: undefined;
+	};
+	const windowFields: LayoutField[] = HOME_WINDOW_IDS.filter(
+		offeredToTarget,
+	).map((id) => ({
+		id,
+		label: t(HOME_WINDOW_LABEL_KEYS[id]),
+		hint: fieldHint(id),
+	}));
+	const statFields: LayoutField[] = HOME_STAT_IDS.filter(offeredToTarget).map(
+		(id) => ({
+			id,
+			label: t(HOME_STAT_DEFINITIONS[id].labelKey),
+			hint: fieldHint(id),
+		}),
+	);
+	const previewAgentId =
+		layoutTarget === "default" ? USAGE_QUOTA_AGENTS[0] : layoutTarget;
+	const layoutTargets = usageAgentsQuery.data ?? USAGE_QUOTA_AGENTS;
+	const agentName = (id: string) =>
+		availableAgents.find((agent) => agent.id === id)?.display_name ??
+		USAGE_AGENT_LABELS[id] ??
+		id;
+
+	return (
+		<section className="space-y-4 px-1 py-5">
+			<div className="space-y-0.5">
+				<span className="text-sm font-semibold text-(--foreground)">
+					{t("usageSettingsHomeCards")}
+				</span>
+				<span className="block text-xs text-muted">
+					{t("usageHomeShowDescription")}
+				</span>
+			</div>
+			<SettingRow
+				title={t("usageHomeShow")}
+				control={
+					<SettingSwitch
+						isSelected={home.showUsageOnHome}
+						onChange={(showUsageOnHome) =>
+							updateHome({ showUsageOnHome })
+						}
+						ariaLabel={t("usageHomeShow")}
+					/>
+				}
+			/>
+			<SettingRow
+				testId="usage-home-window-row"
+				title={t("usageHomeWindow")}
+				description={t("usageHomeWindowDescription")}
+				isDisabled={!home.showUsageOnHome}
+				control={
+					<SettingSelect
+						value={String(home.windowDays)}
+						onChange={(days) =>
+							updateHome({ windowDays: Number(days) })
+						}
+						isDisabled={!home.showUsageOnHome}
+						ariaLabel={t("usageHomeWindow")}
+						options={includeSelectedOption(
+							USAGE_WINDOW_DAYS.map((days) => ({
+								id: String(days),
+								label: t("usageWindowDaysOption", { days }),
+							})),
+							String(home.windowDays),
+							t("usageWindowDaysOption", {
+								days: home.windowDays,
+							}),
+						)}
+					/>
+				}
+			/>
+			<div className="w-full border-t border-border pt-4">
+				<div
+					data-testid="usage-layout-actions-row"
+					className="-mx-2 mb-1 flex flex-col gap-3 rounded-lg px-2 py-2 transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)] hover:bg-surface-secondary motion-reduce:transition-none sm:flex-row sm:items-center sm:justify-between"
+				>
+					<div className="min-w-0 space-y-0.5">
+						<span className="text-sm font-medium text-(--foreground)">
+							{t("usageHomeLayout")}
+						</span>
+						<span className="block text-xs text-muted">
+							{t("usageHomeLayoutDescription")}
+						</span>
+					</div>
+					<Toolbar
+						aria-label={t("usageLayoutActions")}
+						className="flex shrink-0 items-center gap-2"
+					>
+						<SettingSelect
+							value={layoutTarget}
+							onChange={onLayoutTargetChange}
+							ariaLabel={t("usageLayoutTarget")}
+							options={[
+								{
+									id: "default",
+									label: t("usageLayoutTargetDefault"),
+								},
+								...layoutTargets.map((id) => ({
+									id,
+									label: agentName(id),
+								})),
+							]}
+						/>
+						<Button
+							size="sm"
+							variant="ghost"
+							onPress={resetLayout}
+							isDisabled={
+								!home.showUsageOnHome || !canResetLayout
+							}
+							className="px-2 text-xs text-muted"
+						>
+							<ArrowUturnLeftIcon className="size-3.5" />
+							{t(
+								layoutTarget === "default"
+									? "usageLayoutRestoreDefault"
+									: "usageLayoutUseDefault",
+							)}
+						</Button>
+					</Toolbar>
+				</div>
+				<InteractiveCardLayout
+					windowFields={windowFields}
+					statFields={statFields}
+					windowSlots={editedLayout.windowSlots}
+					statSlots={editedLayout.statSlots}
+					isDisabled={!home.showUsageOnHome}
+					onCommit={commitLayout}
+					preview={{
+						agentId: previewAgentId,
+						agentName:
+							USAGE_AGENT_LABELS[previewAgentId] ??
+							previewAgentId,
+					}}
+				/>
+			</div>
+		</section>
+	);
+}
+
+function layoutFieldAgent(
+	id: HomeWindowId | HomeStatId,
+): "claude" | "codex" | undefined {
+	if (id === "weekly_opus") return "claude";
+	const stat = HOME_STAT_IDS.find((candidate) => candidate === id);
+	return stat ? HOME_STAT_AGENT_HINT[stat] : undefined;
+}
+
+function isHomeWindowId(id: HomeWindowId | HomeStatId): id is HomeWindowId {
+	return HOME_WINDOW_IDS.includes(id as HomeWindowId);
+}

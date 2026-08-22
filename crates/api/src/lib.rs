@@ -24,8 +24,8 @@ pub(crate) const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 pub struct ApiOptions {
 	pub port: u16,
 	pub app_data_dir: Option<PathBuf>,
-	/// Path to the bundled `ccusage` sidecar; `None` falls back to env/PATH.
-	pub ccusage_bin: Option<PathBuf>,
+	/// Read-only ccusage executable shipped beside a packaged desktop build.
+	pub ccusage_bundled_bin: Option<PathBuf>,
 	pub auth_token: Option<String>,
 	pub allowed_origins: Vec<String>,
 	pub allowed_origin_regexes: Vec<String>,
@@ -36,7 +36,7 @@ impl ApiOptions {
 		Self {
 			port,
 			app_data_dir: None,
-			ccusage_bin: None,
+			ccusage_bundled_bin: None,
 			auth_token: None,
 			allowed_origins: default_allowed_origins(),
 			allowed_origin_regexes: default_allowed_origin_regexes(),
@@ -62,7 +62,7 @@ impl ApiOptions {
 			app_data_dir: self
 				.app_data_dir
 				.unwrap_or_else(default_app_data_dir),
-			ccusage_bin: self.ccusage_bin,
+			ccusage_bundled_bin: self.ccusage_bundled_bin,
 			auth_token,
 			token_was_generated,
 			allowed_origins: self.allowed_origins,
@@ -92,7 +92,7 @@ fn default_allowed_origin_regexes() -> Vec<String> {
 struct ResolvedApiOptions {
 	port: u16,
 	app_data_dir: PathBuf,
-	ccusage_bin: Option<PathBuf>,
+	ccusage_bundled_bin: Option<PathBuf>,
 	auth_token: String,
 	token_was_generated: bool,
 	allowed_origins: Vec<String>,
@@ -100,6 +100,10 @@ struct ResolvedApiOptions {
 }
 
 struct ApiLogFairing;
+
+fn request_log_path(uri: &rocket::http::uri::Origin<'_>) -> String {
+	uri.path().to_string()
+}
 
 #[rocket::async_trait]
 impl Fairing for ApiLogFairing {
@@ -114,7 +118,7 @@ impl Fairing for ApiLogFairing {
 		info!(
 			"api request started: {} {}",
 			request.method(),
-			request.uri()
+			request_log_path(request.uri())
 		);
 	}
 
@@ -128,21 +132,21 @@ impl Fairing for ApiLogFairing {
 			error!(
 				"api request failed: {} {} -> {}",
 				request.method(),
-				request.uri(),
+				request_log_path(request.uri()),
 				status
 			);
 		} else if status.class().is_client_error() {
 			warn!(
 				"api request returned client error: {} {} -> {}",
 				request.method(),
-				request.uri(),
+				request_log_path(request.uri()),
 				status
 			);
 		} else {
 			debug!(
 				"api request completed: {} {} -> {}",
 				request.method(),
-				request.uri(),
+				request_log_path(request.uri()),
 				status
 			);
 		}
@@ -153,6 +157,10 @@ fn build_rocket(
 	config: rocket::Config,
 	options: ResolvedApiOptions,
 ) -> rocket::Rocket<rocket::Build> {
+	let usage_runtime = aghub_usage::runtime::CcusageRuntime::load(
+		options.app_data_dir.join("ccusage"),
+		options.ccusage_bundled_bin,
+	);
 	let allowed_origins = rocket_cors::AllowedOrigins::some(
 		&options.allowed_origins,
 		&options.allowed_origin_regexes,
@@ -190,7 +198,7 @@ fn build_rocket(
 			),
 		})
 		.manage(crate::state::UsageState {
-			ccusage_bin: options.ccusage_bin,
+			runtime: usage_runtime,
 		})
 		.manage(crate::auth::ApiAuthState {
 			token: options.auth_token,
@@ -301,7 +309,14 @@ fn build_rocket(
 				routes::plugins::prune_plugins,
 				routes::plugins::validate_plugin,
 				routes::usage::usage_summary,
+				routes::usage::usage_agents,
 				routes::usage::usage_limits,
+				routes::usage::usage_status,
+				routes::usage::ccusage_runtime,
+				routes::usage::set_ccusage_runtime,
+				routes::usage::install_ccusage_runtime,
+				routes::usage::update_ccusage_runtime,
+				routes::usage::refresh_ccusage_runtime,
 			],
 		)
 		.register(
@@ -344,8 +359,10 @@ pub async fn start(options: ApiOptions) -> Result<(), Box<rocket::Error>> {
 
 #[cfg(test)]
 mod tests {
-	use super::{build_rocket, default_app_data_dir, ApiOptions};
-	use rocket::http::{ContentType, Header, Status};
+	use super::{
+		build_rocket, default_app_data_dir, request_log_path, ApiOptions,
+	};
+	use rocket::http::{uri::Origin, ContentType, Header, Status};
 	use rocket::local::blocking::{Client, LocalResponse};
 	use serde_json::{json, Value};
 	use std::ffi::OsString;
@@ -526,6 +543,16 @@ mod tests {
 	}
 
 	#[test]
+	fn request_log_path_omits_query() {
+		let uri = Origin::parse(
+			"/api/v1/usage/summary?config=%2FUsers%2Fuser%2Fprivate.json",
+		)
+		.expect("request uri");
+
+		assert_eq!(request_log_path(&uri), "/api/v1/usage/summary");
+	}
+
+	#[test]
 	fn auth_missing_token_returns_unauthorized_json() {
 		let app_data_dir = tempfile::tempdir().expect("app data dir");
 		let client = test_client(app_data_dir.path());
@@ -564,10 +591,27 @@ mod tests {
 		let client = test_client(app_data_dir.path());
 		// The guard rejects before the handler runs, so no ccusage spawn / vendor
 		// call happens here.
-		for uri in ["/api/v1/usage/summary", "/api/v1/usage/limits"] {
+		for uri in [
+			"/api/v1/usage/summary",
+			"/api/v1/usage/limits",
+			"/api/v1/usage/runtime",
+		] {
 			let response = client.get(uri).dispatch();
 			assert_json_error(response, Status::Unauthorized, "UNAUTHORIZED");
 		}
+	}
+
+	#[test]
+	fn usage_runtime_mutation_rejects_remote_browser_origin() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+		let response = client
+			.post("/api/v1/usage/runtime/refresh")
+			.header(auth_header())
+			.header(Header::new("Origin", "https://evil.example"))
+			.dispatch();
+
+		assert_eq!(response.status(), Status::Forbidden);
 	}
 
 	#[test]

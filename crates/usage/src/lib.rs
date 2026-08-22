@@ -8,68 +8,202 @@
 //!     agent's local credential store.
 //!
 //! ccusage is reused as-is (it owns parsing, dedup, pricing, format tracking);
-//! this crate is only the adapter layer. Claude and Codex emit different JSON
-//! shapes, so each has its own deserialization struct and mapping function.
+//! this crate adapts its specialized Claude and Codex reports plus the shared
+//! report shape used by the other known agents.
 
 mod dto;
 pub use dto::*;
+pub mod runtime;
 
 use std::collections::HashMap;
 use std::ffi::{OsStr, OsString};
+use std::future::Future;
 use std::path::PathBuf;
 use std::time::Duration;
 
-use serde::Deserialize;
+use futures::stream::{self, StreamExt};
+use serde::{Deserialize, Deserializer};
 
-const CCUSAGE_TIMEOUT: Duration = Duration::from_secs(30);
+/// Default ccusage spawn timeout, in seconds; overridable per [`UsageQuery`].
+pub const DEFAULT_TIMEOUT_SECS: u64 = 30;
+/// Upper bound accepted for a ccusage summary request.
+pub const MAX_TIMEOUT_SECS: u64 = 60 * 60;
+const CCUSAGE_TIMEOUT: Duration = Duration::from_secs(DEFAULT_TIMEOUT_SECS);
+/// Short cap for the `--version` probe (it runs beside the data fetches).
+const VERSION_TIMEOUT: Duration = Duration::from_secs(10);
 const LIMITS_TIMEOUT: Duration = Duration::from_secs(15);
+// Daily JSON is normally well below 8 MiB. These caps and the fan-out limit
+// keep usage probes under a known memory bound while retaining failure output.
+const MAX_CCUSAGE_STDOUT_BYTES: usize = 8 * 1024 * 1024;
+const MAX_CCUSAGE_STDERR_BYTES: usize = 64 * 1024;
+const MAX_CONCURRENT_AGENT_PROBES: usize = 4;
 
-/// Windows `CREATE_NO_WINDOW` process-creation flag. The desktop app runs
-/// without a console, so an unflagged child would flash a console window on
-/// every ccusage call; this suppresses it (same flag the api / cc-plugins
-/// crates pass to their own child processes).
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+/// Options for a ccusage `daily` query. [`Default`] reproduces the previous
+/// hard-coded behaviour: cached offline pricing, no config override, 30s timeout.
+#[derive(Debug, Clone)]
+pub struct UsageQuery {
+	pub since: Option<String>,
+	pub until: Option<String>,
+	pub timezone: Option<String>,
+	/// Canonical aghub agent ids to probe. `None` probes every known source;
+	/// an empty list probes none.
+	pub agents: Option<Vec<String>>,
+	/// `true` uses ccusage's cached pricing (`--offline`); `false` fetches live
+	/// pricing (`--no-offline`).
+	pub offline: bool,
+	/// Optional ccusage config file, passed as `--config`.
+	pub config: Option<PathBuf>,
+	/// Total summary deadline and per-process upper bound.
+	pub timeout: Duration,
+	/// Extra ccusage arguments supplied as individual values.
+	pub extra_args: Vec<String>,
+}
+
+impl Default for UsageQuery {
+	fn default() -> Self {
+		Self {
+			since: None,
+			until: None,
+			timezone: None,
+			agents: None,
+			offline: true,
+			config: None,
+			timeout: CCUSAGE_TIMEOUT,
+			extra_args: Vec::new(),
+		}
+	}
+}
+
+/// The ccusage command id and aghub agent id for each usage source. The two ids
+/// differ where ccusage still uses a product's former CLI name.
+const KNOWN_USAGE_AGENTS: &[(&str, &str)] = &[
+	("claude", "claude"),
+	("codex", "codex"),
+	("opencode", "opencode"),
+	("amp", "amp"),
+	("droid", "factory"),
+	("codebuff", "codebuff"),
+	("hermes", "hermes"),
+	("pi", "pi"),
+	("goose", "goose"),
+	("kilo", "kilocode"),
+	("copilot", "copilot"),
+	("gemini", "gemini"),
+	("kimi", "kimi"),
+	("qwen", "qwen"),
+	("openclaw", "openclaw"),
+];
+
+pub fn known_usage_agents() -> Vec<UsageAgent> {
+	KNOWN_USAGE_AGENTS
+		.iter()
+		.map(|(_, agent_id)| UsageAgent::new(*agent_id))
+		.collect()
+}
+
+pub fn is_known_usage_agent(id: &str) -> bool {
+	KNOWN_USAGE_AGENTS
+		.iter()
+		.any(|(_, agent_id)| *agent_id == id)
+}
+
+fn selected_usage_agents(
+	selected: Option<&[String]>,
+) -> impl Iterator<Item = (&'static str, &'static str)> + '_ {
+	KNOWN_USAGE_AGENTS
+		.iter()
+		.copied()
+		.filter(move |(_, agent_id)| {
+			selected
+				.map(|ids| ids.iter().any(|id| id == agent_id))
+				.unwrap_or(true)
+		})
+}
 
 /// Locate the ccusage binary. Preference order: an explicit path injected by the
-/// caller (the desktop shell passes the bundled sidecar), then the
-/// `AGHUB_CCUSAGE_BIN` env var (dev), then `ccusage` on `PATH`.
+/// caller, then the `AGHUB_CCUSAGE_BIN` environment variable, then `ccusage` on
+/// `PATH`.
 pub fn resolve_ccusage_bin(explicit: Option<PathBuf>) -> OsString {
-	if let Some(path) = explicit {
-		return path.into_os_string();
-	}
-	std::env::var_os("AGHUB_CCUSAGE_BIN")
+	resolve_ccusage_bin_with_environment(
+		explicit,
+		std::env::var_os("AGHUB_CCUSAGE_BIN"),
+	)
+}
+
+fn resolve_ccusage_bin_with_environment(
+	explicit: Option<PathBuf>,
+	environment: Option<OsString>,
+) -> OsString {
+	explicit
+		.map(PathBuf::into_os_string)
+		.or(environment)
 		.unwrap_or_else(|| OsString::from("ccusage"))
 }
 
 async fn run_ccusage(
 	bin: &OsStr,
 	args: Vec<String>,
+	timeout: Duration,
+) -> Result<Vec<u8>, String> {
+	run_ccusage_with_limits(
+		bin,
+		args,
+		timeout,
+		MAX_CCUSAGE_STDOUT_BYTES,
+		MAX_CCUSAGE_STDERR_BYTES,
+	)
+	.await
+}
+
+async fn run_ccusage_with_limits(
+	bin: &OsStr,
+	args: Vec<String>,
+	timeout: Duration,
+	stdout_limit: usize,
+	stderr_limit: usize,
 ) -> Result<Vec<u8>, String> {
 	let mut cmd = tokio::process::Command::new(bin);
-	cmd.kill_on_drop(true).args(&args);
-	// Suppress the console window Windows would otherwise pop for the child when
-	// the spawning process (the desktop app) has none.
-	#[cfg(target_os = "windows")]
-	cmd.creation_flags(CREATE_NO_WINDOW);
-	let output = tokio::time::timeout(CCUSAGE_TIMEOUT, cmd.output())
-		.await
-		.map_err(|_| "ccusage timed out after 30s".to_string())?
-		.map_err(|e| format!("failed to spawn ccusage: {e}"))?;
+	cmd.args(&args);
+	let output = match runtime::process::run_bounded(
+		&mut cmd,
+		timeout,
+		stdout_limit,
+		stderr_limit,
+	)
+	.await
+	{
+		Ok(output) => output,
+		Err(runtime::process::BoundedProcessError::Spawn(error)) => {
+			return Err(format!("failed to spawn ccusage: {error}"));
+		}
+		Err(runtime::process::BoundedProcessError::Read(error)) => {
+			return Err(format!("failed to read ccusage: {error}"));
+		}
+		Err(runtime::process::BoundedProcessError::TimedOut) => {
+			return Err(format!(
+				"ccusage timed out after {}s",
+				timeout.as_secs()
+			));
+		}
+	};
+	if output.stdout.truncated {
+		return Err(format!("ccusage output exceeded {stdout_limit} bytes"));
+	}
 	if !output.status.success() {
+		let suffix = output.stderr.truncated.then_some(" (truncated)");
 		return Err(format!(
-			"ccusage {:?} exited with {}: {}",
-			args,
+			"ccusage exited with {}: {}{}",
 			output.status,
-			String::from_utf8_lossy(&output.stderr)
+			String::from_utf8_lossy(&output.stderr.bytes),
+			suffix.unwrap_or_default(),
 		));
 	}
-	Ok(output.stdout)
+	Ok(output.stdout.bytes)
 }
 
 /// `ccusage --version` → e.g. "ccusage 20.0.6"; "unknown" if it can't be read.
 async fn ccusage_version(bin: &OsStr) -> String {
-	run_ccusage(bin, vec!["--version".to_string()])
+	run_ccusage(bin, vec!["--version".to_string()], VERSION_TIMEOUT)
 		.await
 		.ok()
 		.and_then(|out| String::from_utf8(out).ok())
@@ -225,7 +359,7 @@ fn claude_to_agent(report: CcClaudeReport) -> AgentUsageDto {
 		.collect();
 
 	AgentUsageDto {
-		agent: UsageAgent::Claude,
+		agent: UsageAgent::new("claude"),
 		days,
 		totals: UsageTotalsDto {
 			input_tokens: report.totals.input_tokens,
@@ -277,7 +411,7 @@ fn codex_to_agent(report: CcCodexReport) -> AgentUsageDto {
 		.collect();
 
 	AgentUsageDto {
-		agent: UsageAgent::Codex,
+		agent: UsageAgent::new("codex"),
 		days,
 		totals: UsageTotalsDto {
 			input_tokens: report.totals.input_tokens,
@@ -291,74 +425,294 @@ fn codex_to_agent(report: CcCodexReport) -> AgentUsageDto {
 	}
 }
 
-async fn fetch_claude_usage(
-	bin: &OsStr,
-	args: Vec<String>,
-) -> Result<AgentUsageDto, String> {
-	let raw = run_ccusage(bin, args).await?;
-	let report: CcClaudeReport = serde_json::from_slice(&raw)
-		.map_err(|e| format!("parse claude usage json: {e}"))?;
-	Ok(claude_to_agent(report))
+// ---- generic agent shape (opencode, gemini, kimi, …) -----------------------
+//
+// Most ccusage agents share Claude's summary fields. Some add metadata such as
+// credits/messageCount or omit model breakdowns. This tolerant struct parses
+// the common token/cost contract; an incompatible report becomes a warning,
+// and an agent with no data is skipped.
+
+#[derive(Deserialize)]
+struct CcAgentReport {
+	daily: Vec<CcAgentDay>,
+	// ccusage uses null for known no-data sources; omitting the key is drift.
+	#[serde(deserialize_with = "deserialize_agent_totals")]
+	totals: Option<CcAgentTotals>,
 }
 
-async fn fetch_codex_usage(
-	bin: &OsStr,
-	args: Vec<String>,
-) -> Result<AgentUsageDto, String> {
-	let raw = run_ccusage(bin, args).await?;
-	let report: CcCodexReport = serde_json::from_slice(&raw)
-		.map_err(|e| format!("parse codex usage json: {e}"))?;
-	Ok(codex_to_agent(report))
+fn deserialize_agent_totals<'de, D>(
+	deserializer: D,
+) -> Result<Option<CcAgentTotals>, D::Error>
+where
+	D: Deserializer<'de>,
+{
+	Option::deserialize(deserializer)
 }
 
-/// Daily token/cost usage for Claude and Codex.
-///
-/// Degrades gracefully: if one agent's ccusage call fails (not installed, no
-/// data, malformed output) it is reported in `warnings` instead of failing the
-/// whole request, so the home page can still render whatever is available.
-pub async fn summary(
+#[derive(Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct CcAgentTotals {
+	input_tokens: u64,
+	output_tokens: u64,
+	cache_creation_tokens: u64,
+	#[serde(alias = "cachedInputTokens")]
+	cache_read_tokens: u64,
+	#[serde(default)]
+	reasoning_output_tokens: u64,
+	total_tokens: u64,
+	#[serde(default, alias = "costUSD")]
+	total_cost: Option<f64>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CcAgentDay {
+	date: String,
+	input_tokens: u64,
+	output_tokens: u64,
+	cache_creation_tokens: u64,
+	#[serde(alias = "cachedInputTokens")]
+	cache_read_tokens: u64,
+	#[serde(default)]
+	reasoning_output_tokens: u64,
+	total_tokens: u64,
+	#[serde(default, alias = "costUSD")]
+	total_cost: Option<f64>,
+	#[serde(default)]
+	model_breakdowns: Vec<CcAgentModel>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CcAgentModel {
+	model_name: String,
+	input_tokens: u64,
+	output_tokens: u64,
+	cache_creation_tokens: u64,
+	#[serde(alias = "cachedInputTokens")]
+	cache_read_tokens: u64,
+	#[serde(default)]
+	reasoning_output_tokens: u64,
+	#[serde(default)]
+	total_tokens: u64,
+	#[serde(default)]
+	cost: Option<f64>,
+}
+
+fn generic_to_agent(id: &str, report: CcAgentReport) -> AgentUsageDto {
+	let days = report
+		.daily
+		.into_iter()
+		.map(|d| UsageDayDto {
+			date: d.date,
+			input_tokens: d.input_tokens,
+			output_tokens: d.output_tokens,
+			cache_creation_tokens: d.cache_creation_tokens,
+			cache_read_tokens: d.cache_read_tokens,
+			reasoning_tokens: d.reasoning_output_tokens,
+			total_tokens: d.total_tokens,
+			cost_usd: d.total_cost,
+			models: d
+				.model_breakdowns
+				.into_iter()
+				.map(|m| UsageModelDto {
+					total_tokens: if m.total_tokens > 0 {
+						m.total_tokens
+					} else {
+						m.input_tokens
+							+ m.output_tokens + m.cache_creation_tokens
+							+ m.cache_read_tokens
+					},
+					model: m.model_name,
+					input_tokens: m.input_tokens,
+					output_tokens: m.output_tokens,
+					cache_creation_tokens: m.cache_creation_tokens,
+					cache_read_tokens: m.cache_read_tokens,
+					reasoning_tokens: m.reasoning_output_tokens,
+					cost_usd: m.cost,
+				})
+				.collect(),
+		})
+		.collect();
+	let totals = report.totals.unwrap_or_default();
+	AgentUsageDto {
+		agent: UsageAgent::new(id),
+		days,
+		totals: UsageTotalsDto {
+			input_tokens: totals.input_tokens,
+			output_tokens: totals.output_tokens,
+			cache_creation_tokens: totals.cache_creation_tokens,
+			cache_read_tokens: totals.cache_read_tokens,
+			reasoning_tokens: totals.reasoning_output_tokens,
+			total_tokens: totals.total_tokens,
+			cost_usd: totals.total_cost,
+		},
+	}
+}
+
+/// Fetch + normalize one agent's daily usage. `Ok(None)` = ccusage ran but the
+/// agent has no data (skip it); `Err` = the call or parse failed (a warning).
+async fn fetch_agent_usage(
 	bin: &OsStr,
-	since: Option<String>,
-	until: Option<String>,
-	timezone: Option<String>,
-) -> UsageReportDto {
-	let build_args = |agent: &str| -> Vec<String> {
-		let mut args = vec![
-			agent.to_string(),
-			"daily".to_string(),
-			"--json".to_string(),
-			"--offline".to_string(),
-		];
-		if let Some(s) = &since {
-			args.push("--since".to_string());
-			args.push(s.clone());
+	ccusage_id: &str,
+	agent_id: &str,
+	args: Vec<String>,
+	timeout: Duration,
+) -> Result<Option<AgentUsageDto>, String> {
+	let raw = run_ccusage(bin, args, timeout).await?;
+	let agent = match ccusage_id {
+		"claude" => {
+			let r: CcClaudeReport = serde_json::from_slice(&raw)
+				.map_err(|e| format!("parse claude usage json: {e}"))?;
+			claude_to_agent(r)
 		}
-		if let Some(u) = &until {
-			args.push("--until".to_string());
-			args.push(u.clone());
+		"codex" => {
+			let r: CcCodexReport = serde_json::from_slice(&raw)
+				.map_err(|e| format!("parse codex usage json: {e}"))?;
+			codex_to_agent(r)
 		}
-		if let Some(tz) = &timezone {
-			args.push("--timezone".to_string());
-			args.push(tz.clone());
+		_ => {
+			let r: CcAgentReport = serde_json::from_slice(&raw)
+				.map_err(|e| format!("parse {ccusage_id} usage json: {e}"))?;
+			generic_to_agent(agent_id, r)
 		}
-		args
 	};
+	Ok((agent.totals.total_tokens > 0).then_some(agent))
+}
 
-	let (version, claude_res, codex_res) = tokio::join!(
-		ccusage_version(bin),
-		fetch_claude_usage(bin, build_args("claude")),
-		fetch_codex_usage(bin, build_args("codex")),
-	);
+/// Build the ccusage argv for one agent's `daily` report from a [`UsageQuery`].
+fn build_ccusage_args(agent: &str, query: &UsageQuery) -> Vec<String> {
+	let mut args = vec![
+		agent.to_string(),
+		"daily".to_string(),
+		"--json".to_string(),
+		if query.offline {
+			"--offline"
+		} else {
+			"--no-offline"
+		}
+		.to_string(),
+	];
+	if let Some(cfg) = &query.config {
+		args.push("--config".to_string());
+		args.push(cfg.to_string_lossy().into_owned());
+	}
+	if let Some(s) = &query.since {
+		args.push("--since".to_string());
+		args.push(s.clone());
+	}
+	if let Some(u) = &query.until {
+		args.push("--until".to_string());
+		args.push(u.clone());
+	}
+	if let Some(tz) = &query.timezone {
+		args.push("--timezone".to_string());
+		args.push(tz.clone());
+	}
+	args.extend(query.extra_args.iter().cloned());
+	args
+}
 
+/// Daily token/cost usage across every ccusage agent that has local data.
+///
+/// Probes [`KNOWN_USAGE_AGENTS`] concurrently. Degrades gracefully: an agent
+/// that isn't installed or whose output is malformed lands in `warnings`; one
+/// with no data is skipped; neither fails the whole request, so the page still
+/// renders whatever is available.
+pub async fn summary(bin: &OsStr, query: &UsageQuery) -> UsageReportDto {
+	let (version, (results, timed_out)) =
+		tokio::join!(ccusage_version(bin), probe_agent_usage(bin, query),);
+	usage_report(version, results, timed_out, query.timeout)
+}
+
+/// Build a summary when the caller has already probed the active runtime.
+pub async fn summary_with_version(
+	bin: &OsStr,
+	query: &UsageQuery,
+	version: &str,
+) -> UsageReportDto {
+	let (results, timed_out) = probe_agent_usage(bin, query).await;
+	usage_report(version.to_string(), results, timed_out, query.timeout)
+}
+
+async fn probe_agent_usage<'a>(
+	bin: &'a OsStr,
+	query: &'a UsageQuery,
+) -> (Vec<(String, Result<Option<AgentUsageDto>, String>)>, bool) {
+	let mut probes = Vec::with_capacity(KNOWN_USAGE_AGENTS.len());
+	for (index, (ccusage_id, agent_id)) in
+		selected_usage_agents(query.agents.as_deref()).enumerate()
+	{
+		let ccusage_id = ccusage_id.to_string();
+		let agent_id = agent_id.to_string();
+		probes.push(async move {
+			let args = build_ccusage_args(&ccusage_id, query);
+			let result = fetch_agent_usage(
+				bin,
+				&ccusage_id,
+				&agent_id,
+				args,
+				query.timeout,
+			)
+			.await;
+			(index, (agent_id, result))
+		});
+	}
+	collect_agent_probes(probes, query.timeout).await
+}
+
+async fn collect_agent_probes<I, F, T>(
+	probes: I,
+	timeout: Duration,
+) -> (Vec<T>, bool)
+where
+	I: IntoIterator<Item = F>,
+	F: Future<Output = (usize, T)>,
+{
+	let deadline = tokio::time::Instant::now() + timeout;
+	let mut pending =
+		stream::iter(probes).buffer_unordered(MAX_CONCURRENT_AGENT_PROBES);
+	let mut completed = Vec::new();
+	loop {
+		match tokio::time::timeout_at(deadline, pending.next()).await {
+			Ok(Some(result)) => completed.push(result),
+			Ok(None) => break,
+			Err(_) => {
+				completed.sort_unstable_by_key(|(index, _)| *index);
+				return (
+					completed.into_iter().map(|(_, result)| result).collect(),
+					true,
+				);
+			}
+		}
+	}
+	completed.sort_unstable_by_key(|(index, _)| *index);
+	(
+		completed.into_iter().map(|(_, result)| result).collect(),
+		false,
+	)
+}
+
+fn usage_report(
+	version: String,
+	results: Vec<(String, Result<Option<AgentUsageDto>, String>)>,
+	timed_out: bool,
+	timeout: Duration,
+) -> UsageReportDto {
 	let mut agents = Vec::new();
 	let mut warnings = Vec::new();
-	match claude_res {
-		Ok(agent) => agents.push(agent),
-		Err(e) => warnings.push(format!("claude usage unavailable: {e}")),
+	for (id, res) in results {
+		match res {
+			Ok(Some(agent)) => agents.push(agent),
+			Ok(None) => {}
+			Err(e) => warnings.push(format!("{id} usage unavailable: {e}")),
+		}
 	}
-	match codex_res {
-		Ok(agent) => agents.push(agent),
-		Err(e) => warnings.push(format!("codex usage unavailable: {e}")),
+	if timed_out {
+		warnings.push(format!(
+			"ccusage agent probes timed out after {}s",
+			timeout.as_secs()
+		));
 	}
 
 	UsageReportDto {
@@ -524,7 +878,7 @@ async fn fetch_claude_limits() -> Result<AgentLimitsDto, String> {
 	}
 
 	Ok(AgentLimitsDto {
-		agent: UsageAgent::Claude,
+		agent: UsageAgent::new("claude"),
 		windows,
 	})
 }
@@ -540,13 +894,18 @@ fn claude_windows(usage: ClaudeOauthUsage) -> Vec<LimitWindowDto> {
 	]
 	.into_iter()
 	.filter_map(|(kind, w)| {
-		w.map(|w| LimitWindowDto {
-			kind,
-			// Anthropic's /api/oauth/usage reports `utilization` already as a
-			// 0-100 percent (confirmed against a live response), matching the
-			// DTO contract; clamp defensively in case it ever returns otherwise.
-			utilization_pct: w.utilization.clamp(0.0, 100.0),
-			resets_at: w.resets_at,
+		w.map(|w| {
+			if !(0.0..=100.0).contains(&w.utilization) {
+				log::warn!(
+					"claude usage returned out-of-range utilization: {}",
+					w.utilization
+				);
+			}
+			LimitWindowDto {
+				kind,
+				utilization_pct: w.utilization.clamp(0.0, 100.0),
+				resets_at: w.resets_at,
+			}
 		})
 	})
 	.collect()
@@ -668,7 +1027,7 @@ async fn fetch_codex_limits() -> Result<AgentLimitsDto, String> {
 	}
 
 	Ok(AgentLimitsDto {
-		agent: UsageAgent::Codex,
+		agent: UsageAgent::new("codex"),
 		windows,
 	})
 }
@@ -678,18 +1037,48 @@ async fn fetch_codex_limits() -> Result<AgentLimitsDto, String> {
 /// Degrades like [`summary`]: a not-logged-in or failing agent becomes a
 /// `warnings` entry instead of failing the whole request.
 pub async fn limits() -> UsageLimitsReportDto {
-	let (claude_res, codex_res) =
-		tokio::join!(fetch_claude_limits(), fetch_codex_limits());
+	limits_for_agents(None).await
+}
+
+pub async fn limits_for_agents(
+	selected: Option<&[String]>,
+) -> UsageLimitsReportDto {
+	let include_claude = selected
+		.map(|ids| ids.iter().any(|id| id == "claude"))
+		.unwrap_or(true);
+	let include_codex = selected
+		.map(|ids| ids.iter().any(|id| id == "codex"))
+		.unwrap_or(true);
+	let (claude_res, codex_res) = tokio::join!(
+		async {
+			if include_claude {
+				Some(fetch_claude_limits().await)
+			} else {
+				None
+			}
+		},
+		async {
+			if include_codex {
+				Some(fetch_codex_limits().await)
+			} else {
+				None
+			}
+		}
+	);
 
 	let mut agents = Vec::new();
 	let mut warnings = Vec::new();
-	match claude_res {
-		Ok(agent) => agents.push(agent),
-		Err(e) => warnings.push(format!("claude limits unavailable: {e}")),
+	if let Some(result) = claude_res {
+		match result {
+			Ok(agent) => agents.push(agent),
+			Err(e) => warnings.push(format!("claude limits unavailable: {e}")),
+		}
 	}
-	match codex_res {
-		Ok(agent) => agents.push(agent),
-		Err(e) => warnings.push(format!("codex limits unavailable: {e}")),
+	if let Some(result) = codex_res {
+		match result {
+			Ok(agent) => agents.push(agent),
+			Err(e) => warnings.push(format!("codex limits unavailable: {e}")),
+		}
 	}
 
 	UsageLimitsReportDto {
@@ -703,6 +1092,154 @@ pub async fn limits() -> UsageLimitsReportDto {
 mod tests {
 	use super::*;
 	use serde_json::json;
+	use std::sync::atomic::{AtomicUsize, Ordering};
+	use std::sync::Arc;
+
+	#[cfg(unix)]
+	#[tokio::test]
+	async fn rejects_ccusage_output_over_the_limit() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let root = tempfile::tempdir().unwrap();
+		let executable = root.path().join("ccusage");
+		std::fs::write(
+			&executable,
+			b"#!/bin/sh\nprintf 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'\n",
+		)
+		.unwrap();
+		std::fs::set_permissions(
+			&executable,
+			std::fs::Permissions::from_mode(0o755),
+		)
+		.unwrap();
+
+		let error = run_ccusage_with_limits(
+			executable.as_os_str(),
+			Vec::new(),
+			// This test covers output limits, so leave room for a loaded CI worker.
+			Duration::from_secs(5),
+			32,
+			32,
+		)
+		.await
+		.expect_err("oversized output rejected");
+
+		assert!(
+			error.contains("output exceeded 32 bytes"),
+			"unexpected ccusage error: {error}"
+		);
+	}
+
+	#[tokio::test]
+	async fn agent_probes_use_bounded_concurrency() {
+		let active = Arc::new(AtomicUsize::new(0));
+		let peak = Arc::new(AtomicUsize::new(0));
+		let probes = (0..12).map(|index| {
+			let active = active.clone();
+			let peak = peak.clone();
+			async move {
+				let current = active.fetch_add(1, Ordering::SeqCst) + 1;
+				peak.fetch_max(current, Ordering::SeqCst);
+				tokio::time::sleep(Duration::from_millis(10)).await;
+				active.fetch_sub(1, Ordering::SeqCst);
+				(index, index)
+			}
+		});
+
+		let (results, timed_out) =
+			collect_agent_probes(probes, Duration::from_secs(1)).await;
+		assert_eq!(results, (0..12).collect::<Vec<_>>());
+		assert!(!timed_out);
+		assert_eq!(peak.load(Ordering::SeqCst), MAX_CONCURRENT_AGENT_PROBES);
+	}
+
+	#[tokio::test]
+	async fn agent_probe_deadline_preserves_completed_results() {
+		let probes = (0..6).map(|index| async move {
+			if index != 0 {
+				std::future::pending::<()>().await;
+			}
+			(index, index)
+		});
+
+		let (results, timed_out) =
+			collect_agent_probes(probes, Duration::from_millis(20)).await;
+		assert_eq!(results, vec![0]);
+		assert!(timed_out);
+	}
+
+	#[test]
+	fn ccusage_cli_aliases_use_aghub_agent_ids() {
+		assert!(KNOWN_USAGE_AGENTS.contains(&("droid", "factory")));
+		assert!(KNOWN_USAGE_AGENTS.contains(&("kilo", "kilocode")));
+	}
+
+	#[test]
+	fn selected_usage_agents_use_canonical_aghub_ids() {
+		let selected = vec!["kilocode".to_string(), "claude".to_string()];
+		let agents = selected_usage_agents(Some(&selected)).collect::<Vec<_>>();
+
+		assert_eq!(agents, vec![("claude", "claude"), ("kilo", "kilocode")]);
+	}
+
+	#[test]
+	fn an_empty_usage_agent_selection_disables_all_probes() {
+		assert_eq!(selected_usage_agents(Some(&[])).count(), 0);
+		assert_eq!(
+			selected_usage_agents(None).count(),
+			KNOWN_USAGE_AGENTS.len()
+		);
+	}
+
+	#[tokio::test]
+	async fn empty_agent_selections_do_not_spawn_usage_sources() {
+		let query = UsageQuery {
+			agents: Some(Vec::new()),
+			..UsageQuery::default()
+		};
+		let summary = summary_with_version(
+			OsStr::new("missing-ccusage"),
+			&query,
+			"ccusage test",
+		)
+		.await;
+		assert!(summary.agents.is_empty());
+		assert!(summary.warnings.is_empty());
+
+		let limits = limits_for_agents(Some(&[])).await;
+		assert!(limits.agents.is_empty());
+		assert!(limits.warnings.is_empty());
+	}
+
+	#[cfg(unix)]
+	#[tokio::test]
+	async fn known_runtime_version_avoids_a_second_version_probe() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let root = tempfile::tempdir().unwrap();
+		let executable = root.path().join("ccusage");
+		let marker = root.path().join("version-probed");
+		let script = format!(
+			"#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf called > '{}'; fi\nexit 1\n",
+			marker.display()
+		);
+		std::fs::write(&executable, script).unwrap();
+		std::fs::set_permissions(
+			&executable,
+			std::fs::Permissions::from_mode(0o755),
+		)
+		.unwrap();
+
+		let report = summary_with_version(
+			executable.as_os_str(),
+			&UsageQuery::default(),
+			"ccusage 20.0.18",
+		)
+		.await;
+		assert_eq!(report.ccusage_version, "ccusage 20.0.18");
+		assert_eq!(report.warnings.len(), KNOWN_USAGE_AGENTS.len());
+		assert!(!marker.exists());
+	}
 
 	#[test]
 	fn codex_window_reads_used_percent() {
@@ -750,82 +1287,97 @@ mod tests {
 	}
 
 	#[test]
-	fn claude_normalization_zeroes_reasoning_and_sums_model_tokens() {
-		let report = CcClaudeReport {
-			daily: vec![CcClaudeDay {
-				date: "2026-06-01".to_string(),
-				input_tokens: 100,
-				output_tokens: 50,
-				cache_creation_tokens: 5,
-				cache_read_tokens: 3,
-				total_tokens: 158,
-				total_cost: Some(1.25),
-				model_breakdowns: vec![CcClaudeModel {
-					model_name: "claude-opus-4".to_string(),
-					input_tokens: 100,
-					output_tokens: 50,
-					cache_creation_tokens: 5,
-					cache_read_tokens: 3,
-					cost: Some(1.25),
-				}],
+	fn claude_normalization_matches_ccusage_summary_json() {
+		let report: CcClaudeReport = serde_json::from_value(json!({
+			"daily": [{
+				"date": "2026-01-02",
+				"inputTokens": 1234,
+				"outputTokens": 567,
+				"cacheCreationTokens": 89,
+				"cacheReadTokens": 10,
+				"totalTokens": 1900,
+				"totalCost": 0.42,
+				"modelsUsed": [
+					"gpt-5.2-codex",
+					"claude-sonnet-4-20250514"
+				],
+				"modelBreakdowns": [{
+					"modelName": "gpt-5.2-codex",
+					"inputTokens": 900,
+					"outputTokens": 300,
+					"cacheCreationTokens": 50,
+					"cacheReadTokens": 10,
+					"cost": 0.3
+				}, {
+					"modelName": "claude-sonnet-4-20250514",
+					"inputTokens": 334,
+					"outputTokens": 267,
+					"cacheCreationTokens": 39,
+					"cacheReadTokens": 0,
+					"cost": 0.12
+				}]
 			}],
-			totals: CcClaudeTotals {
-				input_tokens: 100,
-				output_tokens: 50,
-				cache_creation_tokens: 5,
-				cache_read_tokens: 3,
-				total_tokens: 158,
-				total_cost: Some(1.25),
-			},
-		};
+			"totals": {
+				"inputTokens": 1234,
+				"outputTokens": 567,
+				"cacheCreationTokens": 89,
+				"cacheReadTokens": 10,
+				"totalTokens": 1900,
+				"totalCost": 0.42
+			}
+		}))
+		.unwrap();
 		let agent = claude_to_agent(report);
-		assert_eq!(agent.agent, UsageAgent::Claude);
+		assert_eq!(agent.agent, UsageAgent::new("claude"));
 		assert_eq!(agent.totals.reasoning_tokens, 0);
-		let model = &agent.days[0].models[0];
-		assert_eq!(model.total_tokens, 158);
-		assert_eq!(model.cost_usd, Some(1.25));
+		assert_eq!(agent.totals.total_tokens, 1900);
+		assert_eq!(agent.days[0].models[0].total_tokens, 1260);
+		assert_eq!(agent.days[0].models[1].total_tokens, 640);
+		assert_eq!(agent.totals.cost_usd, Some(0.42));
 	}
 
 	#[test]
-	fn codex_normalization_maps_cached_input_and_drops_model_cost() {
-		let mut models = HashMap::new();
-		models.insert(
-			"gpt-5".to_string(),
-			CcCodexModel {
-				input_tokens: 200,
-				cache_read_tokens: 40,
-				cache_creation_tokens: 0,
-				output_tokens: 80,
-				reasoning_output_tokens: 20,
-				total_tokens: 340,
-			},
-		);
-		let report = CcCodexReport {
-			daily: vec![CcCodexDay {
-				date: "2026-06-01".to_string(),
-				input_tokens: 200,
-				cache_read_tokens: 40,
-				cache_creation_tokens: 0,
-				output_tokens: 80,
-				reasoning_output_tokens: 20,
-				total_tokens: 340,
-				cost_usd: Some(0.5),
-				models,
+	fn codex_normalization_matches_ccusage_daily_json() {
+		let report: CcCodexReport = serde_json::from_value(json!({
+			"daily": [{
+				"date": "2026-01-02",
+				"inputTokens": 100,
+				"cacheReadTokens": 110,
+				"cacheCreationTokens": 0,
+				"outputTokens": 15,
+				"reasoningOutputTokens": 2,
+				"totalTokens": 227,
+				"costUSD": 0.00040425,
+				"models": {
+					"gpt-5.3-codex": {
+						"inputTokens": 100,
+						"cacheReadTokens": 110,
+						"cacheCreationTokens": 0,
+						"outputTokens": 15,
+						"reasoningOutputTokens": 2,
+						"totalTokens": 227,
+						"isFallback": true
+					}
+				}
 			}],
-			totals: CcCodexTotals {
-				input_tokens: 200,
-				cache_read_tokens: 40,
-				cache_creation_tokens: 0,
-				output_tokens: 80,
-				reasoning_output_tokens: 20,
-				total_tokens: 340,
-				cost_usd: Some(0.5),
-			},
-		};
+			"totals": {
+				"inputTokens": 100,
+				"cacheReadTokens": 110,
+				"cacheCreationTokens": 0,
+				"outputTokens": 15,
+				"reasoningOutputTokens": 2,
+				"totalTokens": 227,
+				"costUSD": 0.00040425
+			}
+		}))
+		.unwrap();
 		let agent = codex_to_agent(report);
-		assert_eq!(agent.agent, UsageAgent::Codex);
+		assert_eq!(agent.agent, UsageAgent::new("codex"));
 		assert_eq!(agent.totals.cache_creation_tokens, 0);
-		assert_eq!(agent.totals.cache_read_tokens, 40);
+		assert_eq!(agent.totals.cache_read_tokens, 110);
+		assert_eq!(agent.totals.reasoning_tokens, 2);
+		assert_eq!(agent.totals.total_tokens, 227);
+		assert_eq!(agent.days[0].models[0].model, "gpt-5.3-codex");
 		assert_eq!(agent.days[0].models[0].cost_usd, None);
 	}
 
@@ -945,13 +1497,147 @@ mod tests {
 
 	#[test]
 	fn resolve_ccusage_bin_falls_back_to_env_then_default() {
-		// No other test in this crate touches AGHUB_CCUSAGE_BIN, so mutating it
-		// here is race-free.
-		std::env::remove_var("AGHUB_CCUSAGE_BIN");
-		assert_eq!(resolve_ccusage_bin(None), OsString::from("ccusage"));
-		std::env::set_var("AGHUB_CCUSAGE_BIN", "/from/env");
-		assert_eq!(resolve_ccusage_bin(None), OsString::from("/from/env"));
-		std::env::remove_var("AGHUB_CCUSAGE_BIN");
+		assert_eq!(
+			resolve_ccusage_bin_with_environment(None, None),
+			OsString::from("ccusage")
+		);
+		assert_eq!(
+			resolve_ccusage_bin_with_environment(
+				None,
+				Some(OsString::from("/from/env")),
+			),
+			OsString::from("/from/env")
+		);
+	}
+
+	#[test]
+	fn build_args_default_is_offline_daily_json() {
+		let args = build_ccusage_args("codex", &UsageQuery::default());
+		assert_eq!(args[0], "codex");
+		assert_eq!(args[1], "daily");
+		assert!(args.contains(&"--json".to_string()));
+		assert!(args.contains(&"--offline".to_string()));
+		assert!(!args.contains(&"--no-offline".to_string()));
+		assert!(!args.iter().any(|a| a == "--config"));
+		assert!(!args.iter().any(|a| a == "--since"));
+	}
+
+	#[test]
+	fn build_args_reflects_online_config_and_range() {
+		let query = UsageQuery {
+			since: Some("2026-06-01".to_string()),
+			until: Some("2026-06-30".to_string()),
+			timezone: Some("Asia/Shanghai".to_string()),
+			agents: None,
+			offline: false,
+			config: Some(PathBuf::from("/tmp/cc.json")),
+			timeout: Duration::from_secs(5),
+			extra_args: vec!["--breakdown".to_string()],
+		};
+		let args = build_ccusage_args("claude", &query);
+		assert!(args.contains(&"--no-offline".to_string()));
+		assert!(!args.contains(&"--offline".to_string()));
+		let ci = args.iter().position(|a| a == "--config").unwrap();
+		assert_eq!(args[ci + 1], "/tmp/cc.json");
+		let si = args.iter().position(|a| a == "--since").unwrap();
+		assert_eq!(args[si + 1], "2026-06-01");
+		assert!(args.contains(&"--timezone".to_string()));
+		assert!(args.contains(&"Asia/Shanghai".to_string()));
+		// Passthrough values retain their order.
+		assert_eq!(args.last().unwrap(), "--breakdown");
+	}
+
+	#[test]
+	fn generic_agent_normalization_matches_ccusage_opencode_json() {
+		let raw = json!({
+			"daily": [{
+				"date": "2026-01-02",
+				"inputTokens": 100,
+				"outputTokens": 50,
+				"cacheCreationTokens": 10,
+				"cacheReadTokens": 5,
+				"totalTokens": 172,
+				"totalCost": 0.25,
+				"credits": 1.5,
+				"messageCount": 3,
+				"modelsUsed": [
+					"gpt-5.2-codex",
+					"claude-sonnet-4-20250514"
+				],
+				"modelBreakdowns": [{
+					"modelName": "gpt-5.2-codex",
+					"inputTokens": 100,
+					"outputTokens": 50,
+					"cacheCreationTokens": 10,
+					"cacheReadTokens": 5,
+					"cost": 0.25
+				}]
+			}],
+			"totals": {
+				"inputTokens": 100,
+				"outputTokens": 50,
+				"cacheCreationTokens": 10,
+				"cacheReadTokens": 5,
+				"totalTokens": 172,
+				"totalCost": 0.25
+			}
+		});
+		let report: CcAgentReport = serde_json::from_value(raw).unwrap();
+		let agent = generic_to_agent("opencode", report);
+		assert_eq!(agent.agent, UsageAgent::new("opencode"));
+		assert_eq!(agent.totals.total_tokens, 172);
+		assert_eq!(agent.totals.cost_usd, Some(0.25));
+		assert_eq!(agent.totals.reasoning_tokens, 0);
+		assert_eq!(agent.days[0].models[0].model, "gpt-5.2-codex");
+		assert_eq!(agent.days[0].models[0].total_tokens, 165);
+	}
+
+	#[test]
+	fn generic_agent_rejects_missing_required_report_fields() {
+		let missing_totals =
+			serde_json::from_value::<CcAgentReport>(json!({ "daily": [] }));
+		assert!(missing_totals.is_err());
+
+		let missing_day_date = serde_json::from_value::<CcAgentReport>(json!({
+			"daily": [{
+				"inputTokens": 100,
+				"outputTokens": 50,
+				"cacheCreationTokens": 10,
+				"cacheReadTokens": 5,
+				"totalTokens": 165
+			}],
+			"totals": {
+				"inputTokens": 100,
+				"outputTokens": 50,
+				"cacheCreationTokens": 10,
+				"cacheReadTokens": 5,
+				"totalTokens": 165
+			}
+		}));
+		assert!(missing_day_date.is_err());
+
+		let missing_total_tokens =
+			serde_json::from_value::<CcAgentReport>(json!({
+				"daily": [],
+				"totals": {
+					"inputTokens": 100,
+					"outputTokens": 50,
+					"cacheCreationTokens": 10,
+					"cacheReadTokens": 5
+				}
+			}));
+		assert!(missing_total_tokens.is_err());
+	}
+
+	#[test]
+	fn generic_agent_tolerates_null_totals() {
+		// qwen with no data: `{ "daily": [], "totals": null }` must parse to an
+		// empty, zero-token agent (which the caller then skips) — not an error.
+		let report: CcAgentReport =
+			serde_json::from_value(json!({ "daily": [], "totals": null }))
+				.unwrap();
+		let agent = generic_to_agent("qwen", report);
+		assert_eq!(agent.totals.total_tokens, 0);
 	}
 
 	#[test]

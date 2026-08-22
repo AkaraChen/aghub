@@ -56,6 +56,25 @@ export {
 	getAcknowledgedSkillAssessments,
 	setAcknowledgedSkillAssessments,
 } from "./store/audit-acknowledgements";
+export {
+	agentSettings,
+	createDefaultUsageSettings,
+	DEFAULT_USAGE_SETTINGS,
+	getUsageSettings,
+	HOME_STAT_IDS,
+	HOME_WINDOW_IDS,
+	saveUsageSettings,
+	USAGE_ALERT_THRESHOLDS_PCT,
+	USAGE_QUOTA_AGENTS,
+	USAGE_REPORT_RANGE_MODES,
+} from "./store/usage";
+export type {
+	HomeStatId,
+	HomeWindowId,
+	UsageReportRangeMode,
+	UsageReportRangeSettings,
+	UsageSettings,
+} from "./store/usage";
 export type {
 	IntegrationPreferences,
 	OnboardingProgress,

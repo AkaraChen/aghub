@@ -95,6 +95,9 @@ jobs:
     e2e:
         name: Desktop E2E
         runs-on: ubuntu-latest
+        env:
+            SCCACHE_GHA_ENABLED: "true"
+            RUSTC_WRAPPER: "sccache"
         steps:
             - uses: actions/checkout@v7
 
@@ -103,8 +106,17 @@ jobs:
               with:
                   bun-version: latest
 
+            - name: Setup sccache
+              uses: mozilla-actions/sccache-action@v0.0.10
+
+            - name: Rust Cache
+              uses: Swatinem/rust-cache@v2
+
             - name: Install frontend dependencies
               run: cd crates/desktop && bun install
+
+            - name: Build E2E API
+              run: cargo build -p aghub-api --bin aghub-api
 
             - name: Install Playwright browsers
               run: cd crates/desktop && bunx playwright install --with-deps chromium

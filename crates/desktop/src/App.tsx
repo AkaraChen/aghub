@@ -1,5 +1,6 @@
 import { Spinner, Toast, toast } from "@heroui/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { isTauri } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
 	getCurrent as getCurrentDeepLinks,
@@ -32,6 +33,7 @@ import MCPServersPage from "./pages/settings/mcp-servers";
 import SkillsPage from "./pages/settings/skills";
 import SubAgentsPage from "./pages/settings/sub-agents";
 import SkillsSearchPage from "./pages/skills-sh/search";
+import UsagePage from "./pages/usage";
 import { AgentAvailabilityProvider } from "./providers/agent-availability";
 import { ServerProvider } from "./providers/server";
 import { ThemeProvider } from "./providers/theme";
@@ -81,11 +83,33 @@ function App() {
 	}, []);
 
 	useEffect(() => {
-		const unlisten = listen<string>("navigate", (event) => {
+		if (!isTauri()) {
+			return;
+		}
+
+		let isMounted = true;
+		let unlistenNavigate: (() => void) | null = null;
+
+		void listen<string>("navigate", (event) => {
 			setLocation(event.payload);
-		});
+		})
+			.then((unlisten) => {
+				if (isMounted) {
+					unlistenNavigate = unlisten;
+				} else {
+					unlisten();
+				}
+			})
+			.catch((error) => {
+				console.error(
+					"Failed to subscribe to navigation events:",
+					error,
+				);
+			});
+
 		return () => {
-			unlisten.then((fn) => fn());
+			isMounted = false;
+			unlistenNavigate?.();
 		};
 	}, [setLocation]);
 
@@ -182,6 +206,18 @@ function App() {
 													fallback={<PageSkeleton />}
 												>
 													<SearchResultsPage />
+												</Suspense>
+											</ErrorBoundary>
+										</MainLayout>
+									</Route>
+
+									<Route path="/usage">
+										<MainLayout>
+											<ErrorBoundary>
+												<Suspense
+													fallback={<PageSkeleton />}
+												>
+													<UsagePage />
 												</Suspense>
 											</ErrorBoundary>
 										</MainLayout>

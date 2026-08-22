@@ -24,10 +24,7 @@ export function AgentCard({ agent, isUpdating, onToggle }: AgentCardProps) {
 
 	return (
 		<Tooltip delay={500}>
-			<Card
-				className="bg-surface transition-all duration-200"
-				variant="secondary"
-			>
+			<Card variant="secondary">
 				<Card.Content className="flex flex-row items-center gap-3">
 					<AgentIcon id={agent.id} name={agent.display_name} />
 					<div className="min-w-0 flex-1">

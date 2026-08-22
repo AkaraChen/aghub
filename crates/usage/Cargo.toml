@@ -11,10 +11,35 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 ts-rs = { workspace = true }
 dirs = { workspace = true }
-tokio = { workspace = true, features = [ "process", "time", "macros" ] }
+tokio = { workspace = true, features = [
+	"io-util",
+	"process",
+	"sync",
+	"time",
+	"macros",
+] }
 reqwest = { workspace = true }
 chrono = { workspace = true }
 keyring = { workspace = true }
+futures = { workspace = true }
+base64 = { workspace = true }
+flate2 = { workspace = true }
+log = { workspace = true }
+libc = { workspace = true }
+semver = { workspace = true }
+sha2 = { workspace = true }
+tar = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+which = { workspace = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { workspace = true, features = [
+	"Win32_Foundation",
+	"Win32_Security",
+	"Win32_System_JobObjects",
+	"Win32_System_Threading",
+] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = [ "process", "time", "rt", "macros" ] }

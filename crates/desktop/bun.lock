@@ -9,6 +9,7 @@
         "@heroicons/react": "^2.2.0",
         "@heroui/react": "3.2.4",
         "@heroui/styles": "3.2.4",
+        "@internationalized/date": "3.12.2",
         "@lobehub/icons-static-svg": "^1.94.0",
         "@opentelemetry/api-logs": "^0.219.0",
         "@opentelemetry/exporter-logs-otlp-http": "^0.221.0",

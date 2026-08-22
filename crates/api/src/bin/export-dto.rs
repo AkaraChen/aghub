@@ -84,9 +84,11 @@ use aghub_api::dto::{
 	},
 };
 use aghub_usage::{
-	AgentLimitsDto, AgentUsageDto, LimitWindowDto, LimitWindowKind, UsageAgent,
-	UsageDayDto, UsageLimitsReportDto, UsageModelDto, UsageReportDto,
-	UsageTotalsDto,
+	AgentLimitsDto, AgentUsageDto, CcusageRuntimeCandidateDto,
+	CcusageRuntimeDto, CcusageRuntimeExecutableDto, CcusageRuntimeSource,
+	InstallCcusageRuntimeRequest, LimitWindowDto, LimitWindowKind,
+	SetCcusageRuntimeRequest, UsageAgent, UsageDayDto, UsageLimitsReportDto,
+	UsageModelDto, UsageReportDto, UsageStatusDto, UsageTotalsDto,
 };
 use ts_rs::{Config, TS};
 
@@ -299,6 +301,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<UsageTotalsDto>(&cfg)?;
 	export_type::<AgentUsageDto>(&cfg)?;
 	export_type::<UsageReportDto>(&cfg)?;
+	export_type::<UsageStatusDto>(&cfg)?;
+	export_type::<CcusageRuntimeSource>(&cfg)?;
+	export_type::<SetCcusageRuntimeRequest>(&cfg)?;
+	export_type::<InstallCcusageRuntimeRequest>(&cfg)?;
+	export_type::<CcusageRuntimeExecutableDto>(&cfg)?;
+	export_type::<CcusageRuntimeCandidateDto>(&cfg)?;
+	export_type::<CcusageRuntimeDto>(&cfg)?;
 
 	export_type::<LimitWindowKind>(&cfg)?;
 	export_type::<LimitWindowDto>(&cfg)?;

@@ -1,8 +1,14 @@
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 import type { Page } from "@playwright/test";
 import type {
+	CcusageRuntimeDto,
+	CcusageRuntimeSource,
 	GitSyncRequest,
+	InstallCcusageRuntimeRequest,
+	SetCcusageRuntimeRequest,
 	SkillCopyResolutionRequest,
 	SkillCopyStatusRequest,
 	SkillDiffRequest,
@@ -10,7 +16,12 @@ import type {
 	SkillResponse,
 } from "../src/generated/dto";
 
-const here = path.join(process.cwd(), "e2e");
+const here = path.dirname(fileURLToPath(import.meta.url));
+const apiPort = Number(process.env.AGHUB_E2E_API_PORT ?? "45999");
+
+export function e2eApiUrl(pathname: string): string {
+	return `http://localhost:${apiPort}/api/v1${pathname}`;
+}
 
 export const agentInfo = (
 	id: string,
@@ -71,6 +82,24 @@ const AVAILABILITY = [
 		has_cli: true,
 		is_available: true,
 	},
+];
+
+const USAGE_AGENTS = [
+	"claude",
+	"codex",
+	"opencode",
+	"amp",
+	"factory",
+	"codebuff",
+	"hermes",
+	"pi",
+	"goose",
+	"kilocode",
+	"copilot",
+	"gemini",
+	"kimi",
+	"qwen",
+	"openclaw",
 ];
 
 const skill = (name: string, agent = "claude"): SkillResponse => ({
@@ -185,13 +214,64 @@ const PLUGINS = {
 	],
 };
 
+const CCUSAGE_RUNTIME: CcusageRuntimeDto = {
+	preference: "auto",
+	active: {
+		source: "bundled",
+		path: "/Applications/aghub.app/Contents/Resources/ccusage",
+		version: "20.0.6",
+		can_update: true,
+	},
+	candidates: [
+		{
+			source: "path",
+			installed: false,
+			path: null,
+			version: null,
+			can_install: false,
+		},
+		{
+			source: "bun",
+			installed: false,
+			path: null,
+			version: null,
+			can_install: true,
+		},
+		{
+			source: "npm",
+			installed: false,
+			path: null,
+			version: null,
+			can_install: true,
+		},
+		{
+			source: "download",
+			installed: false,
+			path: null,
+			version: null,
+			can_install: true,
+		},
+		{
+			source: "bundled",
+			installed: true,
+			path: "/Applications/aghub.app/Contents/Resources/ccusage",
+			version: "20.0.6",
+			can_install: false,
+		},
+	],
+	latest_version: "20.0.17",
+	update_available: true,
+	error: null,
+};
+
 /**
  * Installs the Tauri IPC mock plus an HTTP mock for the desktop API
- * (baseUrl comes from the mocked start_server: port 45999).
+ * (baseUrl comes from the mocked start_server).
  */
 export async function installMocks(page: Page) {
+	const tauriMock = readFileSync(path.join(here, "tauri-mock.js"), "utf8");
 	await page.addInitScript({
-		path: path.join(here, "tauri-mock.js"),
+		content: `window.__AGHUB_E2E_API_PORT__ = ${apiPort};\n${tauriMock}`,
 	});
 
 	await page.route("**/ph/**", (route) => route.abort());
@@ -199,6 +279,8 @@ export async function installMocks(page: Page) {
 
 	// Per-test mutable copies so mutations (MCP PUT, skills reconcile,
 	// source install) are reflected by the next fetch.
+	const agents = structuredClone(AGENTS);
+	const availability = structuredClone(AVAILABILITY);
 	const mcps = MCPS.map((m) => ({ ...m }));
 	const skills = SKILLS.map((s) => ({ ...s }));
 	const globalLock = {
@@ -263,8 +345,9 @@ export async function installMocks(page: Page) {
 		}
 		return undefined;
 	};
+	let ccusageRuntime: CcusageRuntimeDto = structuredClone(CCUSAGE_RUNTIME);
 
-	await page.route("http://localhost:45999/api/v1/**", async (route) => {
+	await page.route(e2eApiUrl("/**"), async (route) => {
 		const url = new URL(route.request().url());
 		const p = url.pathname.replace("/api/v1", "");
 		const method = route.request().method();
@@ -281,8 +364,8 @@ export async function installMocks(page: Page) {
 				body: JSON.stringify({ code, error }),
 			});
 
-		if (p === "/agents") return json(AGENTS);
-		if (p === "/agents/availability") return json(AVAILABILITY);
+		if (p === "/agents") return json(agents);
+		if (p === "/agents/availability") return json(availability);
 		if (p === "/agents/all/skills") return json(skills);
 		if (p === "/agents/all/mcps") return json(mcps);
 		if (p === "/agents/all/sub-agents") return json(SUB_AGENTS);
@@ -331,6 +414,80 @@ export async function installMocks(page: Page) {
 			});
 		}
 		if (p === "/integrations/code-editors") return json([]);
+		if (p === "/usage/agents") return json(USAGE_AGENTS);
+		if (p === "/usage/runtime" && method === "GET") {
+			return json(ccusageRuntime);
+		}
+		if (p === "/usage/runtime" && method === "PUT") {
+			const body = JSON.parse(
+				route.request().postData() ?? "{}",
+			) as SetCcusageRuntimeRequest;
+			const candidate = ccusageRuntime.candidates.find(
+				(item) => item.source === body.source,
+			);
+			ccusageRuntime = {
+				...ccusageRuntime,
+				preference: body.source,
+				active:
+					body.source !== "auto" &&
+					candidate?.installed &&
+					candidate.version
+						? {
+								source: body.source,
+								path:
+									candidate.path ??
+									`/tmp/e2e/ccusage/${body.source}/ccusage`,
+								version: candidate.version,
+								can_update: false,
+							}
+						: ccusageRuntime.active,
+			};
+			return json(ccusageRuntime);
+		}
+		if (p === "/usage/runtime/refresh" && method === "POST") {
+			return json(ccusageRuntime);
+		}
+		if (
+			(p === "/usage/runtime/install" || p === "/usage/runtime/update") &&
+			method === "POST"
+		) {
+			const request =
+				p === "/usage/runtime/install"
+					? (JSON.parse(
+							route.request().postData() ?? "{}",
+						) as InstallCcusageRuntimeRequest)
+					: null;
+			const requestedSource =
+				request?.source ?? ccusageRuntime.active?.source ?? "auto";
+			const installedSource: CcusageRuntimeSource =
+				requestedSource === "auto" || requestedSource === "bundled"
+					? "bun"
+					: requestedSource;
+			const installedVersion = ccusageRuntime.latest_version ?? "20.0.17";
+			const installedPath = `/tmp/e2e/ccusage/installations/${installedSource}/${installedVersion}/ccusage`;
+			ccusageRuntime = {
+				...ccusageRuntime,
+				preference: request?.source ?? ccusageRuntime.preference,
+				active: {
+					source: installedSource,
+					path: installedPath,
+					version: installedVersion,
+					can_update: true,
+				},
+				candidates: ccusageRuntime.candidates.map((candidate) =>
+					candidate.source === installedSource
+						? {
+								...candidate,
+								installed: true,
+								path: installedPath,
+								version: installedVersion,
+							}
+						: candidate,
+				),
+				update_available: false,
+			};
+			return json(ccusageRuntime);
+		}
 
 		if (p === "/skills/audit" && method === "POST") {
 			const body = JSON.parse(route.request().postData() ?? "{}");
@@ -781,6 +938,19 @@ export async function installMocks(page: Page) {
 					source_path: sourcePath,
 					is_symlink: false,
 					source: item.source,
+				});
+			}
+		},
+		addAgent(id: string, displayName: string) {
+			if (!agents.some((agent) => agent.id === id)) {
+				agents.push(agentInfo(id, displayName));
+			}
+			if (!availability.some((agent) => agent.id === id)) {
+				availability.push({
+					id,
+					has_global_directory: true,
+					has_cli: true,
+					is_available: true,
 				});
 			}
 		},

@@ -9,7 +9,7 @@ use clap::Subcommand;
 
 #[derive(Subcommand)]
 pub enum UsageAction {
-	/// Daily token and cost usage for Claude and Codex from local ccusage data
+	/// Daily token and cost usage for known agents from local ccusage data
 	Summary {
 		/// Start date, YYYY-MM-DD (passed through to ccusage)
 		#[arg(long)]
@@ -41,8 +41,13 @@ async fn dispatch(action: UsageAction) -> Result<()> {
 			timezone,
 		} => {
 			let bin = aghub_usage::resolve_ccusage_bin(None);
-			let report =
-				aghub_usage::summary(&bin, since, until, timezone).await;
+			let query = aghub_usage::UsageQuery {
+				since,
+				until,
+				timezone,
+				..Default::default()
+			};
+			let report = aghub_usage::summary(&bin, &query).await;
 			println!("{}", serde_json::to_string_pretty(&report)?);
 		}
 		UsageAction::Limits => {

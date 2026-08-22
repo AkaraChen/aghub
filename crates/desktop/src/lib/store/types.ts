@@ -84,6 +84,7 @@ export function isSkillPreferences(value: unknown): value is SkillPreferences {
 export const SIDEBAR_ITEM_IDS = [
 	"home",
 	"market",
+	"usage",
 	"skills",
 	"mcp",
 	"subAgents",
@@ -98,7 +99,7 @@ export interface SidebarItemPreference {
 	visible: boolean;
 }
 
-export const CURRENT_VERSION = 13;
+export const CURRENT_VERSION = 14;
 
 export const DEFAULT_ONBOARDING_PROGRESS: OnboardingProgress = {
 	hasSeenWelcome: false,

@@ -3,33 +3,39 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
-import { AgentOverviewCard } from "../components/agent-overview-card";
+import {
+	AgentOverviewCard,
+	type AgentUsageDisplay,
+} from "../components/agent-overview-card";
 import type { AgentLimitsDto, AgentUsageDto } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
+import { useUsageSettings } from "../hooks/use-usage-settings";
 import { agentStatus } from "../lib/agent-status";
+import {
+	agentSettings,
+	DEFAULT_USAGE_SETTINGS,
+	USAGE_QUOTA_AGENTS,
+} from "../lib/store";
+import { buildUsageDateRange } from "../lib/usage-date-range";
 import { cn } from "../lib/utils";
 import { mcpListQueryOptions } from "../requests/mcps";
 import { skillListQueryOptions } from "../requests/skills";
 import {
+	usageAgentsQueryOptions,
 	usageLimitsQueryOptions,
 	usageSummaryQueryOptions,
 } from "../requests/usage";
-
-const USAGE_WINDOW_DAYS = 30;
-
-function toCompactYmd(date: Date): string {
-	const year = date.getFullYear();
-	const month = String(date.getMonth() + 1).padStart(2, "0");
-	const day = String(date.getDate()).padStart(2, "0");
-	return `${year}${month}${day}`;
-}
 
 export default function HomePage() {
 	const { t } = useTranslation();
 	const [, setLocation] = useLocation();
 	const api = useApi();
 	const { availableAgents } = useAgentAvailability();
+	const { data: usageSettings } = useUsageSettings();
+	const settings = usageSettings ?? DEFAULT_USAGE_SETTINGS;
+	const usageEnabled =
+		usageSettings !== undefined && settings.home.showUsageOnHome;
 
 	const { data: skills = [] } = useQuery(
 		skillListQueryOptions({ api, scope: "global" }),
@@ -38,25 +44,55 @@ export default function HomePage() {
 		mcpListQueryOptions({ api, scope: "global" }),
 	);
 
-	const usageRange = useMemo(() => {
-		const until = new Date();
-		const since = new Date(until);
-		since.setDate(since.getDate() - (USAGE_WINDOW_DAYS - 1));
-		return {
-			since: toCompactYmd(since),
-			until: toCompactYmd(until),
-			timezone: new Intl.DateTimeFormat().resolvedOptions().timeZone,
-		};
-	}, []);
+	const { windowDays } = settings.home;
+	const { timezone } = settings;
+	const usageRange = buildUsageDateRange(windowDays, timezone);
 
-	// Usage is best-effort: only Claude/Codex report it, and an agent that
-	// isn't logged in lands in the report's `warnings` with no entry. Cards
-	// without an entry simply omit the usage section.
-	const { data: usageReport, isLoading: isUsageLoading } = useQuery(
-		usageSummaryQueryOptions({ api, ...usageRange }),
+	const refetchInterval =
+		settings.pollIntervalMs > 0 ? settings.pollIntervalMs : false;
+	const usageAgentsQuery = useQuery(
+		usageAgentsQueryOptions({ api, enabled: usageEnabled }),
 	);
-	const { data: limitsReport, isLoading: isLimitsLoading } = useQuery(
-		usageLimitsQueryOptions({ api }),
+	const homeUsageAgentIds = useMemo(() => {
+		const supported = new Set(usageAgentsQuery.data ?? []);
+		const agentIds = availableAgents
+			.filter((agent) => agent.isUsable && supported.has(agent.id))
+			.map((agent) => agent.id);
+		return agentIds;
+	}, [availableAgents, usageAgentsQuery.data]);
+	const quotaAgentIds = useMemo(() => {
+		const enabledAgentIds = new Set(
+			availableAgents
+				.filter((agent) => agent.isUsable)
+				.map((agent) => agent.id),
+		);
+		return USAGE_QUOTA_AGENTS.filter((id) => enabledAgentIds.has(id));
+	}, [availableAgents]);
+
+	// Usage is best-effort: agents without local ccusage data land in the
+	// report's warnings with no entry. Cards without an entry omit the block.
+	const { data: usageReport } = useQuery(
+		usageSummaryQueryOptions({
+			api,
+			since: usageRange.since,
+			until: usageRange.until,
+			timezone: usageRange.timezone,
+			offline: settings.offlinePricing,
+			config: settings.ccusageConfigPath,
+			timeoutSecs: settings.requestTimeoutSecs,
+			args: settings.extraArgs,
+			agents: homeUsageAgentIds,
+			enabled: usageEnabled && usageAgentsQuery.isSuccess,
+			refetchInterval,
+		}),
+	);
+	const { data: limitsReport } = useQuery(
+		usageLimitsQueryOptions({
+			api,
+			agents: quotaAgentIds,
+			enabled: usageEnabled,
+			refetchInterval,
+		}),
 	);
 
 	// Show every agent and let agentStatus() classify it — pre-filtering by
@@ -102,7 +138,18 @@ export default function HomePage() {
 		return map;
 	}, [limitsReport]);
 
-	// Claude and Codex carry usage telemetry, so surface them first — stable,
+	const usageDisplayFor = (agentId: string): AgentUsageDisplay => {
+		const agent = agentSettings(settings, agentId);
+		const layout = settings.home.perAgent[agentId] ?? settings.home.default;
+		return {
+			alertThresholdPct:
+				agent.alertThresholdPct ?? settings.globalAlertThresholdPct,
+			windowSlots: layout.windowSlots,
+			statSlots: layout.statSlots,
+		};
+	};
+
+	// Claude and Codex carry quota telemetry, so surface them first — stable,
 	// regardless of whether ccusage has data yet. The rest follow by name.
 	// Each card decides its own height (a usage section spans two grid rows),
 	// so the dense grid still packs short cards into a tall card's column.
@@ -137,20 +184,23 @@ export default function HomePage() {
 				>
 					{sortedAgents.map((agent) => {
 						const counts = countsByAgent.get(agent.id);
-						const hasUsage =
-							agent.id === "claude" || agent.id === "codex";
 						return (
 							<AgentOverviewCard
 								key={agent.id}
 								agent={agent}
 								skillCount={counts?.skills ?? 0}
 								mcpCount={counts?.mcps ?? 0}
-								usage={usageByAgent.get(agent.id)}
-								limits={limitsByAgent.get(agent.id)}
-								isUsageLoading={
-									hasUsage &&
-									(isUsageLoading || isLimitsLoading)
+								usage={
+									usageEnabled
+										? usageByAgent.get(agent.id)
+										: undefined
 								}
+								limits={
+									usageEnabled
+										? limitsByAgent.get(agent.id)
+										: undefined
+								}
+								usageDisplay={usageDisplayFor(agent.id)}
 							/>
 						);
 					})}

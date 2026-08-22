@@ -1,0 +1,237 @@
+import { useDroppable } from "@dnd-kit/core";
+import { Card, Meter } from "@heroui/react";
+import type { HTMLAttributes, ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import { AgentIcon } from "../../lib/agent-icons";
+import { cn } from "../../lib/utils";
+import { layoutSlotId } from "./usage-layout-dnd";
+import { LayoutDraggableField } from "./usage-layout-draggable-field";
+import type { LayoutSlotType } from "./usage-layout-model";
+import type {
+	LayoutDragPreview,
+	LayoutField,
+	LayoutPreview,
+} from "./usage-layout-types";
+
+// A fixed midpoint fill shows the quota track without implying live usage.
+const PREVIEW_BAR_VALUE = 50;
+
+export function UsageLayoutCardPreview({
+	fieldById,
+	shownWindows,
+	shownStats,
+	drag,
+	isDisabled,
+	preview,
+	onNodeChange,
+}: {
+	fieldById: ReadonlyMap<string, LayoutField>;
+	shownWindows: string[];
+	shownStats: string[];
+	drag: LayoutDragPreview | null;
+	isDisabled?: boolean;
+	preview: LayoutPreview;
+	onNodeChange: (id: string, node: HTMLElement | null) => void;
+}) {
+	const { t } = useTranslation();
+	return (
+		<div className="mx-auto min-w-0 w-full max-w-[var(--usage-home-card-width)] lg:mx-0">
+			<Card
+				variant="tertiary"
+				data-testid="layout-card-replica"
+				className="h-[var(--usage-home-card-height)] w-full p-3 !rounded-lg"
+			>
+				<Card.Header className="flex flex-row items-center gap-2 p-0">
+					<AgentIcon
+						id={preview.agentId}
+						name={preview.agentName}
+						size="xs"
+					/>
+					<Card.Title className="text-sm font-medium">
+						{preview.agentName}
+					</Card.Title>
+				</Card.Header>
+				<Card.Content className="flex flex-1 flex-col p-0 pt-2">
+					<CardSection
+						type="window"
+						isDisabled={isDisabled}
+						className="flex min-h-8 flex-col gap-1.5 rounded-md"
+						data-testid="layout-window-section"
+					>
+						{shownWindows.map((id, index) => {
+							const field = fieldById.get(id);
+							if (!field) return null;
+							return (
+								<CardDropSlot
+									key={layoutSlotId("window", index)}
+									type="window"
+									index={index}
+									isDisabled={isDisabled}
+								>
+									<LayoutDraggableField
+										field={field}
+										type="window"
+										isDisabled={isDisabled}
+										isActive={
+											drag?.source === "card" &&
+											drag.activeId === field.id
+										}
+										onNodeChange={onNodeChange}
+										data-testid={`layout-card-item-${field.id}`}
+										className="flex items-center px-1.5 py-1"
+									>
+										<UsageLayoutCardFieldContent
+											field={field}
+											type="window"
+										/>
+									</LayoutDraggableField>
+								</CardDropSlot>
+							);
+						})}
+					</CardSection>
+
+					<CardSection
+						type="stat"
+						isDisabled={isDisabled}
+						className={cn(
+							"grid min-h-8 grid-cols-2 gap-x-3 gap-y-1 rounded-md",
+							shownWindows.length > 0 && "mt-2",
+						)}
+						data-testid="layout-stat-section"
+					>
+						{shownStats.map((id, index) => {
+							const field = fieldById.get(id);
+							if (!field) return null;
+							return (
+								<CardDropSlot
+									key={layoutSlotId("stat", index)}
+									type="stat"
+									index={index}
+									isDisabled={isDisabled}
+								>
+									<LayoutDraggableField
+										field={field}
+										type="stat"
+										isDisabled={isDisabled}
+										isActive={
+											drag?.source === "card" &&
+											drag.activeId === field.id
+										}
+										onNodeChange={onNodeChange}
+										data-testid={`layout-card-item-${field.id}`}
+										data-layout-type="stat"
+										className="flex min-w-0 items-center px-1.5 py-1 text-[11px]"
+									>
+										<UsageLayoutCardFieldContent
+											field={field}
+											type="stat"
+										/>
+									</LayoutDraggableField>
+								</CardDropSlot>
+							);
+						})}
+					</CardSection>
+
+					{shownWindows.length === 0 && shownStats.length === 0 && (
+						<p className="py-3 text-center text-[11px] text-muted">
+							{t("usageLayoutEmptyCard")}
+						</p>
+					)}
+				</Card.Content>
+			</Card>
+		</div>
+	);
+}
+
+export function UsageLayoutCardFieldContent({
+	field,
+	type,
+}: {
+	field: LayoutField;
+	type: LayoutSlotType;
+}) {
+	if (type === "window") {
+		return (
+			<div className="flex min-w-0 flex-1 flex-col gap-0.5">
+				<span className="truncate text-[11px] text-muted">
+					{field.label}
+				</span>
+				<Meter
+					aria-hidden
+					aria-label={field.label}
+					value={PREVIEW_BAR_VALUE}
+					size="sm"
+				>
+					<Meter.Track>
+						<Meter.Fill className="bg-foreground/25" />
+					</Meter.Track>
+				</Meter>
+			</div>
+		);
+	}
+	return (
+		<div className="flex min-w-0 flex-1 items-baseline">
+			<span className="truncate text-muted">{field.label}</span>
+		</div>
+	);
+}
+
+function CardSection({
+	type,
+	isDisabled,
+	className,
+	children,
+	...props
+}: {
+	type: LayoutSlotType;
+	isDisabled?: boolean;
+	className?: string;
+	children: ReactNode;
+} & HTMLAttributes<HTMLDivElement>) {
+	const { setNodeRef, isOver } = useDroppable({
+		id: `section:${type}`,
+		disabled: isDisabled,
+		data: { kind: "section", type },
+	});
+	return (
+		<div
+			{...props}
+			ref={setNodeRef}
+			className={cn(
+				className,
+				isOver && "bg-accent/5",
+				"transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)] motion-reduce:transition-none",
+			)}
+		>
+			{children}
+		</div>
+	);
+}
+
+function CardDropSlot({
+	type,
+	index,
+	isDisabled,
+	children,
+}: {
+	type: LayoutSlotType;
+	index: number;
+	isDisabled?: boolean;
+	children: ReactNode;
+}) {
+	const { setNodeRef } = useDroppable({
+		id: `slot:${type}:${index}`,
+		disabled: isDisabled,
+		data: { kind: "slot", type, index },
+	});
+	return (
+		<div
+			ref={setNodeRef}
+			data-testid={`layout-slot-${type}-${index}`}
+			data-layout-slot={`${type}:${index}`}
+			className="scroll-m-8"
+		>
+			{children}
+		</div>
+	);
+}

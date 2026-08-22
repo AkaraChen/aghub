@@ -1,5 +1,5 @@
 import { ArrowRightIcon, FolderOpenIcon } from "@heroicons/react/24/solid";
-import { Button, Card, Meter, Skeleton, toast, Tooltip } from "@heroui/react";
+import { Button, Card, Meter, toast, Tooltip } from "@heroui/react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
@@ -14,7 +14,18 @@ import { agentStatus } from "../lib/agent-status";
 import { AgentIcon } from "../lib/agent-icons";
 import { cn } from "../lib/utils";
 import { clampPct, meterColor, quotaWindowLabelKey } from "../lib/usage-format";
+import type { HomeStatId, HomeWindowId } from "../lib/store";
 import { buildUsage } from "./agent-overview-card-helpers";
+
+/** Home-card usage display preferences, resolved per agent by the home page. */
+export interface AgentUsageDisplay {
+	/** Effective warning level for this agent's quota bars (0–100). */
+	alertThresholdPct: number;
+	/** Fixed bar slots; `null` = empty slot. */
+	windowSlots: (HomeWindowId | null)[];
+	/** Fixed stat slots (2×2); `null` = empty slot. */
+	statSlots: (HomeStatId | null)[];
+}
 
 interface AgentOverviewCardProps {
 	agent: AvailableAgent;
@@ -24,7 +35,8 @@ interface AgentOverviewCardProps {
 	usage?: AgentUsageDto;
 	/** Remaining rate-limit windows for this agent, when available. */
 	limits?: AgentLimitsDto;
-	isUsageLoading?: boolean;
+	/** How to render the usage block. */
+	usageDisplay: AgentUsageDisplay;
 }
 
 export function AgentOverviewCard({
@@ -33,13 +45,25 @@ export function AgentOverviewCard({
 	mcpCount,
 	usage,
 	limits,
-	isUsageLoading,
+	usageDisplay,
 }: AgentOverviewCardProps) {
 	const { t } = useTranslation();
 	const [, setLocation] = useLocation();
 	const { data: configPath } = useAgentConfigPath(agent);
 	const status = agentStatus(agent);
-	const view = buildUsage({ usage, limits });
+	const view = buildUsage({
+		usage,
+		limits,
+		statSlots: usageDisplay.statSlots,
+		windowSlots: usageDisplay.windowSlots,
+	});
+	const showQuota = view.windows.length > 0;
+	const showStats = view.hasStatData;
+	// Stable per-slot keys so empty slots don't fall back to array-index keys.
+	const statCellList = view.statCells.map((cell, index) => ({
+		key: cell ? `stat-${cell.id}` : `stat-empty-${index}`,
+		cell,
+	}));
 
 	function openResource(resource: "skills" | "mcp") {
 		setLocation(`/${resource}?agent=${encodeURIComponent(agent.id)}`);
@@ -60,8 +84,7 @@ export function AgentOverviewCard({
 		}
 	}
 
-	const tall =
-		isUsageLoading || view.primaryWindow != null || view.tokens != null;
+	const tall = showQuota || showStats;
 
 	return (
 		<Card
@@ -77,20 +100,18 @@ export function AgentOverviewCard({
 				</Card.Title>
 				{configPath && (
 					<Tooltip>
-						<Tooltip.Trigger>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								className="size-7 text-muted transition-colors hover:bg-accent/10 hover:text-accent focus-visible:bg-accent/10 focus-visible:text-accent"
-								aria-label={t("openAgentConfigFolder", {
-									name: agent.display_name,
-								})}
-								onPress={handleOpenConfigFolder}
-							>
-								<FolderOpenIcon className="size-3.5" />
-							</Button>
-						</Tooltip.Trigger>
+						<Button
+							isIconOnly
+							variant="ghost"
+							size="sm"
+							className="size-7 text-muted transition-colors hover:bg-accent/10 hover:text-accent focus-visible:bg-accent/10 focus-visible:text-accent"
+							aria-label={t("openAgentConfigFolder", {
+								name: agent.display_name,
+							})}
+							onPress={handleOpenConfigFolder}
+						>
+							<FolderOpenIcon className="size-3.5" />
+						</Button>
 						<Tooltip.Content>
 							{t("openConfigFolder")}
 						</Tooltip.Content>
@@ -112,56 +133,40 @@ export function AgentOverviewCard({
 								onPress={() => openResource("mcp")}
 							/>
 						</div>
-						{(isUsageLoading ||
-							view.primaryWindow ||
-							view.tokens) && (
-							<div className="flex flex-col gap-2 pt-2">
-								{isUsageLoading ? (
-									<UsageSkeleton />
-								) : (
-									<>
-										{view.primaryWindow && (
-											<QuotaRow windows={view.windows} />
-										)}
-										{view.tokens && (
-											<div className="flex flex-col gap-1">
-												<div className="flex items-baseline justify-between text-xs">
-													<span>
-														<span className="text-foreground tabular-nums">
-															{view.tokens}
-														</span>{" "}
-														<span className="text-muted">
-															{t(
-																"usageTokensShort",
-															)}
-														</span>
+						{(showQuota || showStats) && (
+							<div className="flex flex-1 flex-col gap-1.5">
+								{showQuota && (
+									<QuotaRow
+										windows={view.windows}
+										alertThresholdPct={
+											usageDisplay.alertThresholdPct
+										}
+									/>
+								)}
+								{showStats && (
+									<div
+										data-testid="agent-usage-stat-grid"
+										className="mt-auto grid grid-cols-2 gap-x-3 gap-y-1"
+									>
+										{statCellList.map(({ key, cell }) =>
+											cell ? (
+												<div
+													key={key}
+													className="flex items-baseline justify-between gap-1 text-[11px]"
+												>
+													<span className="text-muted">
+														{t(cell.labelKey)}
 													</span>
-													{view.cost && (
-														<span className="text-foreground tabular-nums">
-															{view.cost}
-														</span>
-													)}
+													<span className="text-foreground tabular-nums">
+														{cell.value}
+													</span>
 												</div>
-												{(view.input ||
-													view.output) && (
-													<div className="flex items-baseline justify-between text-[11px] text-muted">
-														<span>
-															{t("usageInput")}{" "}
-															<span className="text-foreground tabular-nums">
-																{view.input}
-															</span>
-														</span>
-														<span>
-															{t("usageOutput")}{" "}
-															<span className="text-foreground tabular-nums">
-																{view.output}
-															</span>
-														</span>
-													</div>
-												)}
-											</div>
+											) : (
+												// Empty slot — hold the 2×2 position.
+												<div key={key} aria-hidden />
+											),
 										)}
-									</>
+									</div>
 								)}
 							</div>
 						)}
@@ -175,26 +180,6 @@ export function AgentOverviewCard({
 				)}
 			</Card.Content>
 		</Card>
-	);
-}
-
-function UsageSkeleton() {
-	return (
-		<div aria-hidden="true" className="flex flex-col gap-2">
-			{[0, 1].map((row) => (
-				<div key={row} className="flex flex-col gap-1">
-					<div className="flex items-baseline justify-between">
-						<Skeleton className="h-3 w-20 rounded" />
-						<Skeleton className="h-3 w-8 rounded" />
-					</div>
-					<Skeleton className="h-1.5 w-full rounded-full" />
-				</div>
-			))}
-			<div className="flex items-baseline justify-between">
-				<Skeleton className="h-3 w-24 rounded" />
-				<Skeleton className="h-3 w-10 rounded" />
-			</div>
-		</div>
 	);
 }
 
@@ -212,24 +197,33 @@ function ResourceTile({
 			type="button"
 			onClick={onPress}
 			className={cn(
-				"group/tile flex flex-1 items-center justify-center rounded-full border border-border px-3 py-2 transition-colors dark:border-foreground/15",
-				"hover:border-accent hover:bg-accent focus-visible:border-accent focus-visible:bg-accent focus-visible:outline-none",
+				"group/tile relative flex flex-1 items-center justify-center rounded-md border border-border py-2 pr-8 pl-3 transition-colors dark:border-foreground/15",
+				"hover:border-accent/40 hover:bg-accent/10 focus-visible:border-accent/40 focus-visible:bg-accent/10 focus-visible:outline-none",
 			)}
 		>
-			<span className="text-xs text-muted transition-colors group-hover/tile:text-accent-foreground group-focus-visible/tile:text-accent-foreground">
+			<span className="text-xs text-muted transition-colors group-hover/tile:text-foreground group-focus-visible/tile:text-foreground">
 				{label}
 			</span>
-			<span className="pl-1.5 text-sm font-medium text-foreground tabular-nums transition-colors group-hover/tile:text-accent-foreground group-focus-visible/tile:text-accent-foreground">
+			<span className="pl-1.5 text-sm font-medium text-foreground tabular-nums">
 				{value}
 			</span>
-			<span className="flex max-w-0 items-center gap-0.5 overflow-hidden pl-1.5 text-accent-foreground whitespace-nowrap opacity-0 transition-all duration-200 group-hover/tile:max-w-20 group-hover/tile:opacity-100 group-focus-visible/tile:max-w-20 group-focus-visible/tile:opacity-100">
+			<span
+				aria-hidden
+				className="pointer-events-none absolute right-2.5 flex size-4 translate-x-1 items-center justify-center text-accent opacity-0 transition-[opacity,transform] duration-[var(--dur-fast)] ease-[var(--ease-out)] group-hover/tile:translate-x-0 group-hover/tile:opacity-100 group-focus-visible/tile:translate-x-0 group-focus-visible/tile:opacity-100 motion-reduce:translate-x-0 motion-reduce:transition-none"
+			>
 				<ArrowRightIcon className="size-3.5" />
 			</span>
 		</button>
 	);
 }
 
-function QuotaRow({ windows }: { windows: LimitWindowDto[] }) {
+function QuotaRow({
+	windows,
+	alertThresholdPct,
+}: {
+	windows: LimitWindowDto[];
+	alertThresholdPct: number;
+}) {
 	const { t } = useTranslation();
 	return (
 		<div className="flex flex-col gap-1.5">
@@ -247,7 +241,7 @@ function QuotaRow({ windows }: { windows: LimitWindowDto[] }) {
 						<Meter
 							aria-label={label}
 							value={pct}
-							color={meterColor(pct)}
+							color={meterColor(pct, alertThresholdPct)}
 							size="sm"
 						>
 							<Meter.Track>

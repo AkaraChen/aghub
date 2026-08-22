@@ -8,6 +8,7 @@ import IntegrationsPanel from "./integrations-panel";
 import LogsPanel from "./logs-panel";
 import SecurityPanel from "./security-panel";
 import SkillPreferencesPanel from "./skill-preferences-panel";
+import UsagePanel from "./usage-panel";
 
 export default function SettingsPage() {
 	const { t } = useTranslation();
@@ -18,19 +19,23 @@ export default function SettingsPage() {
 
 	return (
 		<div className="h-full overflow-y-auto">
-			<div className="w-full p-4 sm:p-6">
+			<div
+				data-testid="settings-content"
+				className="mx-auto w-full max-w-5xl p-4 sm:p-6"
+			>
 				<Tabs
+					className="min-w-0"
 					selectedKey={activeTab}
 					onSelectionChange={(key) => {
 						setSelectedTab(key as string);
 					}}
 				>
-					<div className="mb-2 flex items-center justify-between">
+					<div className="mb-2 flex min-w-0 flex-col items-start gap-3 lg:flex-row lg:items-center lg:justify-between">
 						<h2 className="text-xl font-semibold">
 							{t("settings")}
 						</h2>
 
-						<Tabs.ListContainer>
+						<Tabs.ListContainer className="max-w-full">
 							<Tabs.List
 								aria-label="Settings sections"
 								className="inline-flex w-auto"
@@ -53,6 +58,10 @@ export default function SettingsPage() {
 								</Tabs.Tab>
 								<Tabs.Tab id="logs">
 									{t("logs")}
+									<Tabs.Indicator />
+								</Tabs.Tab>
+								<Tabs.Tab id="usage">
+									{t("usage")}
 									<Tabs.Indicator />
 								</Tabs.Tab>
 								<Tabs.Tab id="application">
@@ -108,6 +117,10 @@ export default function SettingsPage() {
 
 					<Tabs.Panel id="logs">
 						<LogsPanel />
+					</Tabs.Panel>
+
+					<Tabs.Panel id="usage">
+						<UsagePanel />
 					</Tabs.Panel>
 
 					<Tabs.Panel id="application">

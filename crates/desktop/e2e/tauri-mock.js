@@ -2,6 +2,7 @@
 // IPC surface so the renderer runs in a plain browser. Stores live in
 // an in-page Map, matching the tauri-plugin-store wire protocol.
 (() => {
+	const apiPort = window.__AGHUB_E2E_API_PORT__ ?? 45999;
 	const storeData = new Map(); // path -> Map<key, value>
 	const stores = new Map(); // rid -> Map<key, value>
 	const updateChecks = [];
@@ -85,7 +86,7 @@
 	function invoke(cmd, args = {}) {
 		switch (cmd) {
 			case "start_server":
-				return Promise.resolve({ port: 45999, token: "e2e-token" });
+				return Promise.resolve({ port: apiPort, token: "e2e-token" });
 			case "plugin:app|name":
 				return Promise.resolve("aghub");
 			case "plugin:app|version":
