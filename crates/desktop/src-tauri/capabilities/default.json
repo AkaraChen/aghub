@@ -19,6 +19,8 @@
 		"opener:allow-open-path",
 		"opener:allow-reveal-item-in-dir",
 		"dialog:default",
+		"fs:allow-read-text-file",
+		"fs:allow-write-text-file",
 		"log:default",
 		"store:default",
 		"updater:default",

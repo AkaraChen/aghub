@@ -42,6 +42,7 @@ Run a single test: `cargo test --package aghub-core test_name -- --exact`
 - **`crates/skills-sh`**: HTTP API client for skills.sh registry (`SKILLS_API_URL` env var overrides base URL)
 - **`crates/skills-ref`** (`skills-ref`): Parses SKILL.md files, validates `SkillProperties`, generates XML prompt blocks via `to_prompt()`
 - **`crates/skill`** (`skill`): Extends skills-ref with `.skill` zip format; `parse()` auto-detects directory/zip/SKILL.md. Called by `manager.add_skill_from_path()`
+- **`crates/prompt`** (`aghub-prompt`): Local prompt-library storage — `Prompt` model plus a JSON-file `PromptStore` (CRUD over `prompts.json` in the app data dir) and `{{variable}}` extraction
 - **`crates/api`**: Rocket-based HTTP API server exposing agent config operations over HTTP
 
 ### Key Design Patterns

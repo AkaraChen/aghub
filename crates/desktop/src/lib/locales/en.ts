@@ -28,6 +28,68 @@ export default {
 	subAgentDescriptionPlaceholder: "What does this sub-agent do?",
 	subAgentInstructionPlaceholder:
 		"System prompt / instruction for this sub-agent...",
+	prompts: "Prompts",
+	noPrompts: "No prompts yet",
+	noPromptsMatch: "No prompts match your search",
+	noPromptsDescription: "Create your first prompt to get started.",
+	searchPrompts: "Search prompts...",
+	createPrompt: "Create prompt",
+	editPrompt: "Edit prompt",
+	deletePrompt: "Delete prompt",
+	deletePromptConfirm: 'Delete "{{title}}"? This can\'t be undone.',
+	promptTitle: "Title",
+	promptDescription: "Description",
+	promptCategory: "Category",
+	promptContent: "Content",
+	promptTags: "Tags",
+	promptVariables: "Variables",
+	promptVariablesHint:
+		"Variables wrapped in double braces are detected automatically.",
+	promptTitlePlaceholder: "e.g. Code review",
+	promptDescriptionPlaceholder: "What is this prompt for?",
+	promptCategoryPlaceholder: "e.g. Development",
+	promptContentPlaceholder: "Write your prompt content here...",
+	promptTagsPlaceholder: "Type a tag and press Enter",
+	removePromptTag: "Remove tag {{tag}}",
+	promptCreated: "Prompt created",
+	promptUpdated: "Prompt updated",
+	promptDeleted: "Prompt deleted",
+	createPromptError: "Failed to create prompt",
+	updatePromptError: "Failed to update prompt",
+	deletePromptError: "Failed to delete prompt",
+	validationPromptTitleRequired: "Enter a prompt title.",
+	selectPrompt: "Select a prompt to view or edit it.",
+	promptContentCopied: "Prompt content copied",
+	promptContentCopyError: "Failed to copy prompt content",
+	filterPromptsByCategory: "Filter prompts by category",
+	allCategories: "All categories",
+	uncategorized: "Uncategorized",
+	promptLocalLibrary: "Local prompt library",
+	promptLocalLibraryDescription: "aghub stores this library on this device.",
+	promptStorageLocation: "Storage location",
+	promptCategories: "Categories",
+	promptCategoryUsage: "{{category}}, {{count}} prompts",
+	promptNoCategories: "No categories yet.",
+	promptDataFileUnavailable: "Path unavailable",
+	promptBackupAndRestore: "Backup and restore",
+	promptBackupDescription:
+		"Backups include prompt content, categories, and tags. Choose merge or replace before writing local data.",
+	exportPromptBackup: "Export backup",
+	importPromptBackup: "Import backup",
+	promptBackupExported: "Prompt backup exported",
+	promptBackupExportError: "Failed to export prompt backup",
+	promptBackupImportError: "Failed to import prompt backup",
+	promptBackupInvalid: "This file is not an aghub prompt backup.",
+	promptBackupContains: "This backup contains {{count}} prompts.",
+	promptBackupImportMode: "Import behavior",
+	mergePromptBackup: "Merge with local library",
+	mergePromptBackupDescription:
+		"Use the backup version for matching IDs and keep other local prompts.",
+	replacePromptLibrary: "Replace local library",
+	replacePromptLibraryDescription:
+		"Local prompts that are not in this backup will be removed.",
+	promptBackupImported:
+		"Import complete: {{added}} added, {{updated}} updated, {{removed}} removed, {{total}} in total.",
 	claudeCodePlugins: "Claude Code Plugins",
 	plugins: "Plugins",
 	pluginsDescription:
@@ -184,7 +246,7 @@ export default {
 	codexProviderSyncError: "Failed to update Codex provider",
 	codexBuiltInProvider: "Built-in provider",
 	codexBuiltInProviderInfo:
-		"No Aghub OpenAI Responses provider has the same API Base URL and API key. This was likely added directly in Codex.",
+		"No aghub OpenAI Responses provider has the same API Base URL and API key. This was likely added directly in Codex.",
 	codexProviderExternalTooltip:
 		"Defined in config.toml — remove it from the file to delete",
 	codexActiveProfile: "Active Profile",
@@ -198,7 +260,7 @@ export default {
 	codexLoginProviderInfo: "Uses Codex's own OpenAI login credentials.",
 	codexConfigProvider: "Config provider",
 	codexConfigProviderInfo:
-		"This provider comes from Codex config.toml and does not currently match an Aghub inference provider.",
+		"This provider comes from Codex config.toml and does not currently match an aghub inference provider.",
 	codexCustomProviders: "Custom Providers",
 	noCodexCustomProviders: "No custom Codex providers configured.",
 	codexNoProfiles: "No Codex profiles configured.",
@@ -586,7 +648,7 @@ export default {
 		"Replay the welcome screen or either guided tour any time.",
 
 	// Onboarding — Wizard
-	onboardingWizardTitle: "Welcome to Aghub",
+	onboardingWizardTitle: "Welcome to aghub",
 	onboardingWizardSubtitle:
 		"Manage AI agent configs, MCP servers, and skills from one place.",
 	onboardingStepMcpTitle: "MCP Servers",
@@ -616,7 +678,7 @@ export default {
 	settingsAutostartEnabled: "Startup launch enabled",
 	settingsAutostartDisabled: "Startup launch disabled",
 	settingsAutostartError: "Failed to update startup launch",
-	whatsNewWizardTitle: "What's New in Aghub",
+	whatsNewWizardTitle: "What's New in aghub",
 	whatsNewWizardSubtitle:
 		"A quick look at the changes included with this version.",
 	whatsNewSectionLabel: "What's new in {{version}}",
@@ -730,7 +792,7 @@ export default {
 	skillFilesDescription: "{{count}} items available in this skill bundle",
 	skillFilesUnavailable: "Files unavailable",
 	skillFilesUnavailableDescription:
-		"Aghub couldn't inspect this copy's files.",
+		"aghub couldn't inspect this copy's files.",
 	skillLinkBroken: "Target not found",
 	skillLinkOutsideRoot: "Target outside Skill",
 	skillLinkUnreadable: "Target unavailable",
@@ -1428,7 +1490,8 @@ export default {
 	usageWindowWeeklyOpus: "Weekly (Opus)",
 	usageWindowWeeklySonnet: "Weekly (Sonnet)",
 	usageWindowOther: "Usage limit",
-	globalSearchLabel: "Search agents, skills, MCP servers, and library",
+	globalSearchLabel:
+		"Search agents, skills, MCP servers, sub-agents, prompts, and library",
 	globalSearchPlaceholder: "Search…",
 	globalSearchNoResults: "No matches",
 	globalSearchLibraryLoading: "Searching library…",
@@ -1436,7 +1499,7 @@ export default {
 	searchResultsTitle: "Search results",
 	searchResultsSubtitle: '{{count}} results for "{{query}}"',
 	searchResultsEmptyHint:
-		"Type something to search across your agents, skills, MCP servers, sub-agents, and the library.",
+		"Type something to search across your agents, skills, MCP servers, sub-agents, prompts, and the library.",
 	searchResultsShowMore: "Show {{count}} more",
 	searchResultsShowLess: "Show less",
 

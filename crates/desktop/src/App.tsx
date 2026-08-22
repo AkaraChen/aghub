@@ -26,6 +26,7 @@ import InferenceProvidersPage from "./pages/inference-providers";
 import MarketPage from "./pages/market";
 import PluginsPage from "./pages/plugins";
 import ProjectDetailPage from "./pages/project/detail";
+import PromptsPage from "./pages/prompts";
 import SearchResultsPage from "./pages/search";
 import SettingsPage from "./pages/settings";
 import CustomAgentsPage from "./pages/settings/custom-agents";
@@ -303,6 +304,17 @@ function App() {
 													fallback={<PageSkeleton />}
 												>
 													<SubAgentsPage />
+												</Suspense>
+											</ErrorBoundary>
+										</MainLayout>
+									</Route>
+									<Route path="/prompts">
+										<MainLayout>
+											<ErrorBoundary>
+												<Suspense
+													fallback={<PageSkeleton />}
+												>
+													<PromptsPage />
 												</Suspense>
 											</ErrorBoundary>
 										</MainLayout>

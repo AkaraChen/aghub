@@ -2,6 +2,7 @@ import {
 	BookOpenIcon,
 	BuildingStorefrontIcon,
 	ChartBarIcon,
+	ChatBubbleBottomCenterTextIcon,
 	CpuChipIcon,
 	HomeIcon,
 	KeyIcon,
@@ -109,6 +110,13 @@ const SIDEBAR_ITEM_DEFINITIONS: Record<SidebarItemId, SidebarItemDefinition> = {
 		href: "/sub-agents",
 		icon: CpuChipIcon,
 		carriesAgentFilter: true,
+	},
+	prompts: {
+		id: "prompts",
+		section: "resources",
+		labelKey: "prompts",
+		href: "/prompts",
+		icon: ChatBubbleBottomCenterTextIcon,
 	},
 	ccPlugins: {
 		id: "ccPlugins",

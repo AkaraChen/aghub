@@ -1,5 +1,6 @@
 use aghub_inference::InferenceProviderStore;
 use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tempfile::TempDir;
@@ -112,6 +113,10 @@ impl GitCloneSessions {
 
 pub struct InferenceProviderState {
 	pub store: InferenceProviderStore,
+}
+
+pub struct PromptState {
+	pub app_data_dir: PathBuf,
 }
 
 pub struct UsageState {

@@ -14,7 +14,7 @@ test("closing before consent leaves the consent step for the next launch", async
 	page,
 }) => {
 	await page.goto(freshLaunchPath);
-	const wizard = page.getByRole("dialog", { name: "Welcome to Aghub" });
+	const wizard = page.getByRole("dialog", { name: "Welcome to aghub" });
 
 	await expect(wizard).toBeVisible();
 	await expect(
@@ -44,7 +44,7 @@ test("fresh launch keeps release notes out of onboarding and persists consent", 
 	page,
 }) => {
 	await page.goto(freshLaunchPath);
-	const wizard = page.getByRole("dialog", { name: "Welcome to Aghub" });
+	const wizard = page.getByRole("dialog", { name: "Welcome to aghub" });
 
 	await expect(wizard).toBeVisible();
 	await expect(wizard.getByText(/What's new in/)).toHaveCount(0);
@@ -75,7 +75,7 @@ test("upgrade notes are acknowledged after the user sees them", async ({
 	page,
 }) => {
 	await page.goto(upgradeLaunchPath);
-	const wizard = page.getByRole("dialog", { name: "What's New in Aghub" });
+	const wizard = page.getByRole("dialog", { name: "What's New in aghub" });
 
 	await expect(wizard).toBeVisible();
 	await expect(wizard.getByText("What's new in 1.9.0-beta.1")).toBeVisible();
@@ -98,7 +98,7 @@ test("manual welcome replay preserves the release-note watermark", async ({
 	await page.goto("/settings?tab=application");
 	await page.getByRole("button", { name: "Show Welcome" }).click();
 
-	const wizard = page.getByRole("dialog", { name: "Welcome to Aghub" });
+	const wizard = page.getByRole("dialog", { name: "Welcome to aghub" });
 	await expect(wizard).toBeVisible();
 	await wizard.getByRole("button", { name: "Close" }).click();
 	await expect(wizard).toBeHidden();

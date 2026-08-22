@@ -90,6 +90,12 @@ export const queryKeys = {
 			scope: "global" | "project" | "all",
 		) => ["sub-agents", "detail", name, agent, scope] as const,
 	},
+	prompts: {
+		all: () => ["prompts"] as const,
+		storage: () => ["prompts", "storage"] as const,
+		list: () => ["prompts", "list"] as const,
+		detail: (id: string) => ["prompts", "detail", id] as const,
+	},
 	credentials: {
 		all: () => ["credentials"] as const,
 		list: () => ["credentials", "list"] as const,

@@ -21,6 +21,7 @@ aghub-git = { path = "../git" }
 aghub-inference = { path = "../inference" }
 aghub-cc-plugins = { path = "../cc-plugins" }
 aghub-usage = { path = "../usage" }
+aghub-prompt = { path = "../prompt" }
 skill = { path = "../skill" }
 skill-audit = { path = "../skill-audit", features = [ "from-path" ] }
 skills-sh = { path = "../skills-sh" }

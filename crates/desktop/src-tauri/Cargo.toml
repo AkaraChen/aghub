@@ -27,6 +27,7 @@ base64 = { workspace = true }
 tauri = { workspace = true, features = [ "tray-icon" ] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"
 tauri-plugin-deep-link = "2.4.7"
 tauri-plugin-store = "2"
 tauri-plugin-single-instance = { version = "2.4.0", features = [ "deep-link" ] }

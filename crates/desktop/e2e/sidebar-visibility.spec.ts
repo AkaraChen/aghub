@@ -15,6 +15,18 @@ const STORED_ITEMS = [
 	{ id: "removed-item", visible: false },
 ] as unknown as SidebarItemPreference[];
 
+const CUSTOMIZABLE_SIDEBAR_ITEMS = [
+	"Home",
+	"Market",
+	"Usage",
+	"Skills",
+	"MCP Servers",
+	"Sub-agents",
+	"Prompts",
+	"Claude Code Plugins",
+	"Inference Providers",
+] as const;
+
 test("stored sidebar preferences preserve visibility but not order", () => {
 	const items = normalizeSidebarItems(STORED_ITEMS);
 
@@ -25,6 +37,7 @@ test("stored sidebar preferences preserve visibility but not order", () => {
 		{ id: "skills", visible: false },
 		{ id: "mcp", visible: true },
 		{ id: "subAgents", visible: true },
+		{ id: "prompts", visible: true },
 		{ id: "ccPlugins", visible: true },
 		{ id: "inferenceProviders", visible: true },
 	]);
@@ -37,7 +50,7 @@ test("stored sidebar preferences preserve visibility but not order", () => {
 		{ id: "primary", items: ["home", "market", "usage"] },
 		{
 			id: "resources",
-			items: ["skills", "mcp", "subAgents", "ccPlugins"],
+			items: ["skills", "mcp", "subAgents", "prompts", "ccPlugins"],
 		},
 		{ id: "providers", items: ["inferenceProviders"] },
 	]);
@@ -59,7 +72,12 @@ test("appearance controls update grouped sidebar visibility", async ({
 	const sidebar = page.getByRole("complementary");
 	const panel = page.getByRole("group", { name: "Sidebar" });
 
-	await expect(panel.getByRole("checkbox")).toHaveCount(8);
+	await expect(panel.getByRole("checkbox")).toHaveCount(
+		CUSTOMIZABLE_SIDEBAR_ITEMS.length,
+	);
+	for (const name of CUSTOMIZABLE_SIDEBAR_ITEMS) {
+		await expect(panel.getByRole("checkbox", { name })).toBeVisible();
+	}
 	await toggleSidebarItem(panel, "Market");
 	await expect(sidebar.getByRole("link", { name: "Market" })).toHaveCount(0);
 	await expect(sidebar.getByRole("link", { name: "Settings" })).toBeVisible();
@@ -83,6 +101,7 @@ test("appearance controls update grouped sidebar visibility", async ({
 		"Skills",
 		"MCP Servers",
 		"Sub-agents",
+		"Prompts",
 		"Claude Code Plugins",
 	]) {
 		await toggleSidebarItem(panel, name);

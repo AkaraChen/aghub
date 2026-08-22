@@ -62,6 +62,7 @@ dependencies = [
  "tauri-plugin-clipboard-manager",
  "tauri-plugin-deep-link",
  "tauri-plugin-dialog",
+ "tauri-plugin-fs",
  "tauri-plugin-log",
  "tauri-plugin-opener",
  "tauri-plugin-process",
@@ -101,6 +102,7 @@ dependencies = [
  "aghub-core",
  "aghub-git",
  "aghub-inference",
+ "aghub-prompt",
  "aghub-usage",
  "chrono",
  "dirs 6.0.0",
@@ -235,6 +237,17 @@ dependencies = [
  "serde",
  "serde_yaml",
  "thiserror 2.0.20",
+]
+
+[[package]]
+name = "aghub-prompt"
+version = "1.9.0-beta.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.20",
+ "uuid",
 ]
 
 [[package]]
