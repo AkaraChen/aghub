@@ -1,8 +1,4 @@
-import {
-	ArrowDownTrayIcon,
-	ArrowUpTrayIcon,
-	DocumentTextIcon,
-} from "@heroicons/react/24/solid";
+import { ArrowDownTrayIcon, ArrowUpTrayIcon } from "@heroicons/react/24/solid";
 import {
 	Button,
 	Card,
@@ -53,12 +49,6 @@ export default function PromptDataPanel() {
 	const uncategorizedCount = prompts.filter(
 		(prompt) => !prompt.category,
 	).length;
-	const tagCount = new Set(prompts.flatMap((prompt) => prompt.tags)).size;
-	const libraryStats = [
-		{ label: t("prompts"), value: prompts.length },
-		{ label: t("promptCategories"), value: categoryCounts.length },
-		{ label: t("promptTags"), value: tagCount },
-	];
 
 	const exportMutation = useMutation({
 		mutationFn: async () => {
@@ -114,155 +104,137 @@ export default function PromptDataPanel() {
 
 	return (
 		<>
-			<div
-				data-testid="prompt-data-panel"
-				className="mx-auto max-w-4xl space-y-4"
-			>
+			<div data-testid="prompt-data-panel" className="mx-auto max-w-4xl">
 				<Card className="p-0">
-					<Card.Header className="border-b border-separator p-4">
-						<div className="flex min-w-0 items-start gap-2">
-							<DocumentTextIcon className="size-4 shrink-0 text-muted" />
-							<div className="min-w-0 space-y-0.5">
-								<Card.Title>
-									{t("promptLocalLibrary")}
-								</Card.Title>
-								<Card.Description>
-									{t("promptLocalLibraryDescription")}
-								</Card.Description>
-							</div>
-						</div>
-					</Card.Header>
-					<Card.Content className="divide-y divide-separator p-0">
-						<section
-							aria-labelledby="prompt-library-overview-heading"
-							className="grid gap-3 p-4 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-center"
-						>
-							<h4
-								id="prompt-library-overview-heading"
-								className="text-sm font-medium text-foreground"
-							>
-								{t("promptLibraryOverview")}
-							</h4>
-							<dl className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
-								{libraryStats.map((stat) => (
-									<div
-										key={stat.label}
-										className="flex min-w-0 items-baseline gap-1.5"
-									>
-										<dt className="text-xs text-muted">
-											{stat.label}
-										</dt>
-										<dd className="text-sm font-medium tabular-nums text-foreground">
-											{stat.value}
-										</dd>
-									</div>
-								))}
-							</dl>
-						</section>
-
-						<section
-							aria-labelledby="prompt-storage-heading"
-							className="grid gap-2 p-4 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-baseline"
-						>
-							<h4
-								id="prompt-storage-heading"
-								className="text-sm font-medium text-foreground"
-							>
-								{t("promptStorageLocation")}
-							</h4>
-							<p className="break-all font-mono text-xs text-muted">
-								{storageQuery.isPending
-									? t("loading")
-									: storageQuery.isError
-										? t("promptDataFileUnavailable")
-										: storageQuery.data.file_path}
+					<Card.Content className="space-y-5 p-4">
+						<div className="space-y-0.5">
+							<h3 className="text-sm font-medium text-foreground">
+								{t("promptLocalLibrary")}
+							</h3>
+							<p className="text-xs text-muted">
+								{t("promptLocalLibraryDescription")}
 							</p>
-						</section>
+						</div>
 
-						<section
-							aria-labelledby="prompt-categories-heading"
-							className="grid gap-2 p-4 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-center"
-						>
-							<h4
-								id="prompt-categories-heading"
-								className="text-sm font-medium text-foreground"
+						<div className="space-y-4 border-t border-separator pt-4">
+							<section
+								aria-labelledby="prompt-storage-heading"
+								className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6"
 							>
-								{t("promptCategories")}
-							</h4>
-							{categoryCounts.length > 0 ||
-							uncategorizedCount > 0 ? (
-								<div className="flex flex-wrap gap-1.5">
-									{categoryCounts.map(([category, count]) => (
-										<Chip
-											key={category}
-											aria-label={t(
-												"promptCategoryUsage",
-												{
-													category,
-													count,
-												},
-											)}
-											size="sm"
-											variant="soft"
-										>
-											<span>{category}</span>
-											<span className="ml-1.5 tabular-nums text-muted">
-												{count}
-											</span>
-										</Chip>
-									))}
-									{uncategorizedCount > 0 && (
-										<Chip
-											aria-label={t(
-												"promptCategoryUsage",
-												{
-													category:
-														t("uncategorized"),
-													count: uncategorizedCount,
-												},
-											)}
-											size="sm"
-											variant="soft"
-										>
-											<span>{t("uncategorized")}</span>
-											<span className="ml-1.5 tabular-nums text-muted">
-												{uncategorizedCount}
-											</span>
-										</Chip>
-									)}
-								</div>
-							) : (
-								<p className="text-xs text-muted">
-									{t("promptNoCategories")}
+								<h4
+									id="prompt-storage-heading"
+									className="shrink-0 text-sm font-medium text-foreground"
+								>
+									{t("promptStorageLocation")}
+								</h4>
+								<p className="min-w-0 break-all font-mono text-xs text-muted sm:max-w-[75%] sm:text-right">
+									{storageQuery.isPending
+										? t("loading")
+										: storageQuery.isError
+											? t("promptDataFileUnavailable")
+											: storageQuery.data.file_path}
 								</p>
-							)}
-						</section>
-					</Card.Content>
-				</Card>
+							</section>
 
-				<Card className="p-0">
-					<Card.Header className="p-4">
-						<Card.Title>{t("promptBackupAndRestore")}</Card.Title>
-						<Card.Description>
-							{t("promptBackupDescription")}
-						</Card.Description>
-					</Card.Header>
-					<Card.Footer className="flex flex-wrap gap-2 border-t border-separator p-4">
-						<Button
-							variant="secondary"
-							onPress={() => void chooseBackup()}
-						>
-							<ArrowUpTrayIcon className="size-4" />
-							{t("importPromptBackup")}
-						</Button>
-						<Button
-							isPending={exportMutation.isPending}
-							onPress={() => exportMutation.mutate()}
-						>
-							<ArrowDownTrayIcon className="size-4" />
-							{t("exportPromptBackup")}
-						</Button>
-					</Card.Footer>
+							<section
+								aria-labelledby="prompt-categories-heading"
+								className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
+							>
+								<h4
+									id="prompt-categories-heading"
+									className="shrink-0 text-sm font-medium text-foreground"
+								>
+									{t("promptCategories")}
+								</h4>
+								{categoryCounts.length > 0 ||
+								uncategorizedCount > 0 ? (
+									<div className="flex flex-wrap gap-1.5 sm:justify-end">
+										{categoryCounts.map(
+											([category, count]) => (
+												<Chip
+													key={category}
+													aria-label={t(
+														"promptCategoryUsage",
+														{
+															category,
+															count,
+														},
+													)}
+													size="sm"
+													variant="soft"
+												>
+													<span>{category}</span>
+													<span className="ml-1.5 tabular-nums text-muted">
+														{count}
+													</span>
+												</Chip>
+											),
+										)}
+										{uncategorizedCount > 0 && (
+											<Chip
+												aria-label={t(
+													"promptCategoryUsage",
+													{
+														category:
+															t("uncategorized"),
+														count: uncategorizedCount,
+													},
+												)}
+												size="sm"
+												variant="soft"
+											>
+												<span>
+													{t("uncategorized")}
+												</span>
+												<span className="ml-1.5 tabular-nums text-muted">
+													{uncategorizedCount}
+												</span>
+											</Chip>
+										)}
+									</div>
+								) : (
+									<p className="text-xs text-muted">
+										{t("promptNoCategories")}
+									</p>
+								)}
+							</section>
+
+							<section
+								aria-labelledby="prompt-backup-heading"
+								className="flex flex-col gap-3 border-t border-separator pt-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
+							>
+								<div className="min-w-0 space-y-0.5">
+									<h4
+										id="prompt-backup-heading"
+										className="text-sm font-medium text-foreground"
+									>
+										{t("promptBackupAndRestore")}
+									</h4>
+									<p className="text-xs text-muted">
+										{t("promptBackupDescription")}
+									</p>
+								</div>
+								<div className="flex shrink-0 flex-wrap gap-2">
+									<Button
+										variant="secondary"
+										size="sm"
+										onPress={() => void chooseBackup()}
+									>
+										<ArrowUpTrayIcon className="size-4" />
+										{t("importPromptBackup")}
+									</Button>
+									<Button
+										size="sm"
+										isPending={exportMutation.isPending}
+										onPress={() => exportMutation.mutate()}
+									>
+										<ArrowDownTrayIcon className="size-4" />
+										{t("exportPromptBackup")}
+									</Button>
+								</div>
+							</section>
+						</div>
+					</Card.Content>
 				</Card>
 			</div>
 

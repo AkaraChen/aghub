@@ -66,7 +66,6 @@ export default {
 	uncategorized: "Uncategorized",
 	promptLocalLibrary: "Local prompt library",
 	promptLocalLibraryDescription: "aghub stores this library on this device.",
-	promptLibraryOverview: "Library overview",
 	promptStorageLocation: "Storage location",
 	promptCategories: "Categories",
 	promptCategoryUsage: "{{category}}, {{count}} prompts",

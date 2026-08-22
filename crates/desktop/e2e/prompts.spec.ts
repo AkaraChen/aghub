@@ -428,19 +428,9 @@ test("exports and merges a versioned prompt backup from settings", async ({
 	await expect(
 		page.getByText("aghub stores this library on this device."),
 	).toBeVisible();
-	const overview = page.getByRole("region", { name: "Library overview" });
-	await expect(overview).toBeVisible();
-	await expect(overview.getByText("Prompts", { exact: true })).toBeVisible();
 	await expect(
-		overview.getByText("Categories", { exact: true }),
-	).toBeVisible();
-	await expect(overview.getByText("Tags", { exact: true })).toBeVisible();
-	expect(await overview.locator("dd").allTextContents()).toEqual([
-		"1",
-		"1",
-		"1",
-	]);
-	await expect(overview.locator("dd").first()).toHaveCSS("font-size", "14px");
+		page.getByRole("region", { name: "Library overview" }),
+	).toHaveCount(0);
 	const storage = page.getByRole("region", { name: "Storage location" });
 	await expect(storage).toBeVisible();
 	await expect(page.getByText(WINDOWS_PROMPT_STORAGE_PATH)).toBeVisible();
@@ -467,17 +457,17 @@ test("exports and merges a versioned prompt backup from settings", async ({
 		page.getByRole("heading", { name: "Backup and restore" }),
 	).toBeVisible();
 	const dataPanel = page.getByTestId("prompt-data-panel");
-	const libraryCard = dataPanel.locator('[data-slot="card"]').nth(0);
-	const backupCard = dataPanel.locator('[data-slot="card"]').nth(1);
-	const [dataPanelBox, libraryCardBox, backupCardBox] = await Promise.all([
+	const libraryCard = dataPanel.locator('[data-slot="card"]');
+	await expect(libraryCard).toHaveCount(1);
+	await expect(
+		libraryCard.getByRole("heading", { name: "Backup and restore" }),
+	).toBeVisible();
+	const [dataPanelBox, libraryCardBox] = await Promise.all([
 		dataPanel.boundingBox(),
 		libraryCard.boundingBox(),
-		backupCard.boundingBox(),
 	]);
 	expect(dataPanelBox?.width).toBeLessThanOrEqual(896);
-	expect(backupCardBox?.y).toBeGreaterThan(
-		(libraryCardBox?.y ?? 0) + (libraryCardBox?.height ?? 0),
-	);
+	expect(libraryCardBox?.width).toBe(dataPanelBox?.width);
 
 	const downloadPromise = page.waitForEvent("download");
 	await page.getByRole("button", { name: "Export backup" }).click();

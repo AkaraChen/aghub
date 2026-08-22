@@ -64,7 +64,6 @@ export default {
 	uncategorized: "未分类",
 	promptLocalLibrary: "本地提示词库",
 	promptLocalLibraryDescription: "提示词保存在本机，由 aghub 直接读取。",
-	promptLibraryOverview: "数据概览",
 	promptStorageLocation: "存储位置",
 	promptCategories: "分类",
 	promptCategoryUsage: "{{category}}，{{count}} 条提示词",
