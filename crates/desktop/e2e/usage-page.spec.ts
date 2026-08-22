@@ -128,7 +128,9 @@ test("usage page shows summary, daily strip, and per-agent rows", async ({
 
 	// Version and update availability stay together as quiet, unboxed status
 	// text. Installation and update actions live in Settings.
-	const usageStatus = page.getByRole("status");
+	const usageStatus = page.getByRole("status").filter({
+		hasText: "v20.0.17 available",
+	});
 	const updateHint = usageStatus.getByText("v20.0.17 available", {
 		exact: true,
 	});
