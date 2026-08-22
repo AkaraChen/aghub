@@ -67,7 +67,7 @@ export default {
 	promptLibraryOverview: "資料概覽",
 	promptStorageLocation: "儲存位置",
 	promptCategories: "分類",
-	promptCategoryUsage: "{{category}} · {{count}}",
+	promptCategoryUsage: "{{category}}，{{count}} 條提示詞",
 	promptNoCategories: "暫無分類。",
 	promptDataFileUnavailable: "無法讀取路徑",
 	promptBackupAndRestore: "備份與還原",

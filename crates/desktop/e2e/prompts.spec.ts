@@ -440,14 +440,29 @@ test("exports and merges a versioned prompt backup from settings", async ({
 		"1",
 		"1",
 	]);
-	await expect(
-		page.getByRole("heading", { name: "Storage location" }),
-	).toBeVisible();
+	await expect(overview.locator("dd").first()).toHaveCSS("font-size", "14px");
+	const storage = page.getByRole("region", { name: "Storage location" });
+	await expect(storage).toBeVisible();
 	await expect(page.getByText(WINDOWS_PROMPT_STORAGE_PATH)).toBeVisible();
+	const categories = page.getByRole("region", { name: "Categories" });
+	await expect(categories).toBeVisible();
 	await expect(
-		page.getByRole("heading", { name: "Categories" }),
+		categories.getByText("Workflow", { exact: true }),
 	).toBeVisible();
-	await expect(page.getByText("Workflow · 1")).toBeVisible();
+	await expect(categories.getByText("1", { exact: true })).toBeVisible();
+	const [storageHeadingBox, storagePathBox, categoriesHeadingBox, chipBox] =
+		await Promise.all([
+			storage.getByRole("heading").boundingBox(),
+			storage.getByText(WINDOWS_PROMPT_STORAGE_PATH).boundingBox(),
+			categories.getByRole("heading").boundingBox(),
+			categories.locator('[data-slot="chip"]').boundingBox(),
+		]);
+	expect(
+		Math.abs((storageHeadingBox?.y ?? 0) - (storagePathBox?.y ?? 0)),
+	).toBeLessThanOrEqual(4);
+	expect(
+		Math.abs((categoriesHeadingBox?.y ?? 0) - (chipBox?.y ?? 0)),
+	).toBeLessThanOrEqual(4);
 	await expect(
 		page.getByRole("heading", { name: "Backup and restore" }),
 	).toBeVisible();

@@ -69,7 +69,7 @@ export default {
 	promptLibraryOverview: "Library overview",
 	promptStorageLocation: "Storage location",
 	promptCategories: "Categories",
-	promptCategoryUsage: "{{category}} · {{count}}",
+	promptCategoryUsage: "{{category}}, {{count}} prompts",
 	promptNoCategories: "No categories yet.",
 	promptDataFileUnavailable: "Path unavailable",
 	promptBackupAndRestore: "Backup and restore",

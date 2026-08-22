@@ -67,7 +67,7 @@ export default {
 	promptLibraryOverview: "数据概览",
 	promptStorageLocation: "存储位置",
 	promptCategories: "分类",
-	promptCategoryUsage: "{{category}} · {{count}}",
+	promptCategoryUsage: "{{category}}，{{count}} 条提示词",
 	promptNoCategories: "暂无分类。",
 	promptDataFileUnavailable: "无法读取路径",
 	promptBackupAndRestore: "备份与恢复",

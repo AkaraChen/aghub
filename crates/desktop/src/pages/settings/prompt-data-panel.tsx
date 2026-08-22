@@ -135,7 +135,7 @@ export default function PromptDataPanel() {
 					<Card.Content className="divide-y divide-separator p-0">
 						<section
 							aria-labelledby="prompt-library-overview-heading"
-							className="space-y-3 p-4"
+							className="grid gap-3 p-4 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-center"
 						>
 							<h4
 								id="prompt-library-overview-heading"
@@ -143,13 +143,16 @@ export default function PromptDataPanel() {
 							>
 								{t("promptLibraryOverview")}
 							</h4>
-							<dl className="grid grid-cols-3 gap-3">
+							<dl className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
 								{libraryStats.map((stat) => (
-									<div key={stat.label} className="min-w-0">
+									<div
+										key={stat.label}
+										className="flex min-w-0 items-baseline gap-1.5"
+									>
 										<dt className="text-xs text-muted">
 											{stat.label}
 										</dt>
-										<dd className="text-lg font-medium tabular-nums text-foreground">
+										<dd className="text-sm font-medium tabular-nums text-foreground">
 											{stat.value}
 										</dd>
 									</div>
@@ -159,7 +162,7 @@ export default function PromptDataPanel() {
 
 						<section
 							aria-labelledby="prompt-storage-heading"
-							className="space-y-2 p-4"
+							className="grid gap-2 p-4 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-baseline"
 						>
 							<h4
 								id="prompt-storage-heading"
@@ -178,7 +181,7 @@ export default function PromptDataPanel() {
 
 						<section
 							aria-labelledby="prompt-categories-heading"
-							className="space-y-2 p-4"
+							className="grid gap-2 p-4 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-center"
 						>
 							<h4
 								id="prompt-categories-heading"
@@ -188,25 +191,43 @@ export default function PromptDataPanel() {
 							</h4>
 							{categoryCounts.length > 0 ||
 							uncategorizedCount > 0 ? (
-								<div className="flex flex-wrap gap-2">
+								<div className="flex flex-wrap gap-1.5">
 									{categoryCounts.map(([category, count]) => (
 										<Chip
 											key={category}
+											aria-label={t(
+												"promptCategoryUsage",
+												{
+													category,
+													count,
+												},
+											)}
 											size="sm"
 											variant="soft"
 										>
-											{t("promptCategoryUsage", {
-												category,
-												count,
-											})}
+											<span>{category}</span>
+											<span className="ml-1.5 tabular-nums text-muted">
+												{count}
+											</span>
 										</Chip>
 									))}
 									{uncategorizedCount > 0 && (
-										<Chip size="sm" variant="soft">
-											{t("promptCategoryUsage", {
-												category: t("uncategorized"),
-												count: uncategorizedCount,
-											})}
+										<Chip
+											aria-label={t(
+												"promptCategoryUsage",
+												{
+													category:
+														t("uncategorized"),
+													count: uncategorizedCount,
+												},
+											)}
+											size="sm"
+											variant="soft"
+										>
+											<span>{t("uncategorized")}</span>
+											<span className="ml-1.5 tabular-nums text-muted">
+												{uncategorizedCount}
+											</span>
 										</Chip>
 									)}
 								</div>
