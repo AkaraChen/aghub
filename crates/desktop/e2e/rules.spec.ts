@@ -11,6 +11,33 @@ test.beforeEach(async ({ page }) => {
 	).toBeVisible();
 });
 
+test("rule editor fills its content area without native resizing", async ({
+	page,
+}) => {
+	await page.getByRole("option", { name: /CLAUDE\.md/ }).click();
+	const editor = page.getByRole("textbox", { name: "CLAUDE.md" });
+
+	const layout = await editor.evaluate((element) => {
+		const parent = element.parentElement;
+		if (!parent) throw new Error("Rule editor has no content container");
+
+		const parentStyle = getComputedStyle(parent);
+		return {
+			availableWidth:
+				parent.clientWidth -
+				Number.parseFloat(parentStyle.paddingLeft) -
+				Number.parseFloat(parentStyle.paddingRight),
+			editorWidth: element.getBoundingClientRect().width,
+			resize: getComputedStyle(element).resize,
+		};
+	});
+
+	expect(layout.editorWidth).toBeGreaterThanOrEqual(
+		layout.availableWidth - 1,
+	);
+	expect(layout.resize).toBe("none");
+});
+
 test("rule drafts survive file switches and persist after save", async ({
 	page,
 }) => {

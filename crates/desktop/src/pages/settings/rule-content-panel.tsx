@@ -179,7 +179,7 @@ function RuleEditor({
 				</Button>
 			</div>
 
-			<div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+			<div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4">
 				{!group.exists && (
 					<Alert status="accent">
 						<Alert.Indicator />
@@ -223,13 +223,14 @@ function RuleEditor({
 				)}
 
 				<TextArea
+					fullWidth
 					value={draft}
 					onChange={(event) =>
 						onDraftChange(group.path, event.target.value)
 					}
 					variant="secondary"
 					aria-label={group.fileName}
-					className="min-h-0 flex-1 font-mono text-sm"
+					className="min-h-0 flex-1 resize-none overflow-auto font-mono text-sm"
 				/>
 			</div>
 		</div>
