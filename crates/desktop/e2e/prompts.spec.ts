@@ -267,8 +267,11 @@ test("creates, searches, edits, and deletes a prompt", async ({ page }) => {
 	await page.getByRole("textbox", { name: "Category" }).fill(PROMPT.category);
 	await page.getByRole("textbox", { name: "Content" }).fill(PROMPT.content);
 	const tags = page.getByRole("textbox", { name: "Tags" });
+	const addTag = page.getByRole("button", { name: "Add", exact: true });
+	await expect(addTag).toBeDisabled();
 	await tags.fill("review");
-	await tags.press("Enter");
+	await expect(addTag).toBeEnabled();
+	await addTag.click();
 	await expect(
 		page.getByRole("button", { name: "Remove tag review" }),
 	).toBeVisible();

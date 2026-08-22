@@ -5,6 +5,7 @@ import {
 	Fieldset,
 	Form,
 	Input,
+	InputGroup,
 	Label,
 	Tag,
 	TagGroup,
@@ -51,6 +52,7 @@ interface PromptTagFieldProps {
 function PromptTagField({ value, onChange, onBlur }: PromptTagFieldProps) {
 	const { t } = useTranslation();
 	const [draft, setDraft] = useState("");
+	const canAddTag = draft.trim().length > 0;
 
 	const addTag = (input: string) => {
 		const tag = input.trim();
@@ -59,35 +61,55 @@ function PromptTagField({ value, onChange, onBlur }: PromptTagFieldProps) {
 	};
 
 	return (
-		<div className="flex max-w-md flex-col gap-2">
+		<div
+			className="flex max-w-md flex-col gap-2"
+			onBlur={(event) => {
+				if (
+					event.relatedTarget instanceof Node &&
+					event.currentTarget.contains(event.relatedTarget)
+				) {
+					return;
+				}
+				if (draft.trim()) addTag(draft);
+				onBlur();
+			}}
+		>
 			<TextField variant="secondary" validationBehavior="aria">
 				<Label>{t("promptTags")}</Label>
-				<Input
-					value={draft}
-					onChange={(event) => setDraft(event.target.value)}
-					onKeyDown={(event) => {
-						if (event.key === "Enter" || event.key === ",") {
-							event.preventDefault();
-							addTag(draft);
-							return;
-						}
-						if (
-							event.key === "Backspace" &&
-							draft.length === 0 &&
-							value.length > 0
-						) {
-							onChange(value.slice(0, -1));
-						}
-					}}
-					onBlur={() => {
-						if (draft.trim()) addTag(draft);
-						onBlur();
-					}}
-					placeholder={t("promptTagsPlaceholder")}
-					variant="secondary"
-					spellCheck={false}
-					autoCapitalize="none"
-				/>
+				<InputGroup fullWidth variant="secondary">
+					<InputGroup.Input
+						value={draft}
+						onChange={(event) => setDraft(event.target.value)}
+						onKeyDown={(event) => {
+							if (event.key === "Enter" || event.key === ",") {
+								event.preventDefault();
+								addTag(draft);
+								return;
+							}
+							if (
+								event.key === "Backspace" &&
+								draft.length === 0 &&
+								value.length > 0
+							) {
+								onChange(value.slice(0, -1));
+							}
+						}}
+						placeholder={t("promptTagsPlaceholder")}
+						spellCheck={false}
+						autoCapitalize="none"
+					/>
+					<InputGroup.Suffix className="px-1">
+						<Button
+							type="button"
+							size="sm"
+							variant="ghost"
+							isDisabled={!canAddTag}
+							onPress={() => addTag(draft)}
+						>
+							{t("add")}
+						</Button>
+					</InputGroup.Suffix>
+				</InputGroup>
 			</TextField>
 			{value.length > 0 && (
 				<TagGroup
