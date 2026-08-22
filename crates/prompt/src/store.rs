@@ -37,7 +37,8 @@ impl PromptStore {
 		}
 	}
 
-	fn file_path(&self) -> PathBuf {
+	/// Path to the JSON file read and written by this store.
+	pub fn file_path(&self) -> PathBuf {
 		self.dir.join(PROMPTS_FILE)
 	}
 

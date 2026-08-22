@@ -57,7 +57,7 @@ use aghub_api::dto::{
 	prompt::{
 		CreatePromptRequest, ImportPromptBackupRequest, PromptBackupDto,
 		PromptBackupItemDto, PromptImportModeDto, PromptImportResultResponse,
-		PromptResponse, UpdatePromptRequest,
+		PromptResponse, PromptStorageResponse, UpdatePromptRequest,
 	},
 	skill::{
 		CreateSkillRequest, DeleteSkillByPathRequest,
@@ -258,6 +258,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<UpdateSubAgentRequest>(&cfg)?;
 	export_type::<SubAgentResponse>(&cfg)?;
 	export_type::<PromptResponse>(&cfg)?;
+	export_type::<PromptStorageResponse>(&cfg)?;
 	export_type::<CreatePromptRequest>(&cfg)?;
 	export_type::<UpdatePromptRequest>(&cfg)?;
 	export_type::<PromptBackupItemDto>(&cfg)?;

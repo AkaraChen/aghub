@@ -106,6 +106,7 @@ export type { PromptBackupItemDto } from "./PromptBackupItemDto";
 export type { PromptImportModeDto } from "./PromptImportModeDto";
 export type { PromptImportResultResponse } from "./PromptImportResultResponse";
 export type { PromptResponse } from "./PromptResponse";
+export type { PromptStorageResponse } from "./PromptStorageResponse";
 export type { ReconcileRequest } from "./ReconcileRequest";
 export type { ResourceLocatorDto } from "./ResourceLocatorDto";
 export type { ScopeSupportDto } from "./ScopeSupportDto";

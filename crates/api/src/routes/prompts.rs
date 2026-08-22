@@ -8,7 +8,8 @@ use crate::{
 	auth::ApiAuth,
 	dto::prompt::{
 		CreatePromptRequest, ImportPromptBackupRequest, PromptBackupDto,
-		PromptImportResultResponse, PromptResponse, UpdatePromptRequest,
+		PromptImportResultResponse, PromptResponse, PromptStorageResponse,
+		UpdatePromptRequest,
 	},
 	error::{ApiCreated, ApiNoContent, ApiResult},
 	extractors::TrustedLocalOrigin,
@@ -17,6 +18,16 @@ use crate::{
 
 fn store(state: &State<PromptState>) -> PromptStore {
 	PromptStore::new(state.app_data_dir.clone())
+}
+
+#[get("/prompts/storage")]
+pub fn get_prompt_storage(
+	_auth: ApiAuth,
+	state: &State<PromptState>,
+) -> Json<PromptStorageResponse> {
+	Json(PromptStorageResponse {
+		file_path: store(state).file_path().to_string_lossy().into_owned(),
+	})
 }
 
 #[get("/prompts")]

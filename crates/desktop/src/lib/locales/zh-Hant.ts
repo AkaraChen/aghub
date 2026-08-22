@@ -65,6 +65,8 @@ export default {
 	promptLocalLibrary: "本機提示詞庫",
 	promptLocalLibraryDescription:
 		"本機儲存了 {{count}} 條提示詞。可在此匯出 JSON 備份或從備份還原。",
+	promptDataFile: "資料檔案",
+	promptDataFileUnavailable: "無法讀取路徑",
 	exportPromptBackup: "匯出備份",
 	importPromptBackup: "匯入備份",
 	promptBackupExported: "提示詞備份已匯出",

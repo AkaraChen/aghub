@@ -19,6 +19,10 @@ interface PromptListQueryParams {
 	staleTime?: number;
 }
 
+interface PromptStorageQueryParams {
+	api: ApiClient;
+}
+
 interface ImportPromptBackupMutationParams {
 	api: ApiClient;
 	queryClient: QueryClient;
@@ -53,6 +57,14 @@ export function promptListQueryOptions({
 		queryFn: () => api.prompts.list(),
 		enabled,
 		staleTime,
+	});
+}
+
+export function promptStorageQueryOptions({ api }: PromptStorageQueryParams) {
+	return queryOptions({
+		queryKey: queryKeys.prompts.storage(),
+		queryFn: () => api.prompts.storage(),
+		staleTime: Number.POSITIVE_INFINITY,
 	});
 }
 

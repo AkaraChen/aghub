@@ -92,6 +92,7 @@ export const queryKeys = {
 	},
 	prompts: {
 		all: () => ["prompts"] as const,
+		storage: () => ["prompts", "storage"] as const,
 		list: () => ["prompts", "list"] as const,
 		detail: (id: string) => ["prompts", "detail", id] as const,
 	},

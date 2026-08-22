@@ -58,6 +58,7 @@ import type {
 	PromptBackupDto,
 	PromptImportResultResponse,
 	PromptResponse,
+	PromptStorageResponse,
 	UpdatePromptRequest,
 	ReconcileRequest,
 	SkillResponse,
@@ -646,6 +647,9 @@ export function createApi(baseUrl: string, token: string) {
 			},
 		},
 		prompts: {
+			storage(): Promise<PromptStorageResponse> {
+				return client.get("prompts/storage").json();
+			},
 			list(): Promise<PromptResponse[]> {
 				return client.get("prompts").json();
 			},

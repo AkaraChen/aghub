@@ -24,6 +24,8 @@ const OLDER_PROMPT = {
 
 const GLOBAL_SEARCH_LABEL =
 	"Search agents, skills, MCP servers, sub-agents, prompts, and library";
+const WINDOWS_PROMPT_STORAGE_PATH =
+	"C:\\Users\\Ada\\AppData\\Roaming\\com.akrc.aghub\\prompts.json";
 
 test("selects a valid deep link or falls back to the newest prompt", async ({
 	page,
@@ -374,6 +376,15 @@ test("exports and merges a versioned prompt backup from settings", async ({
 		async (route) => {
 			const request = route.request();
 			const url = new URL(request.url());
+			if (url.pathname.endsWith("/storage")) {
+				return route.fulfill({
+					status: 200,
+					contentType: "application/json",
+					body: JSON.stringify({
+						file_path: WINDOWS_PROMPT_STORAGE_PATH,
+					}),
+				});
+			}
 			if (url.pathname.endsWith("/backup/import")) {
 				importBody = request.postDataJSON();
 				return route.fulfill({
@@ -414,6 +425,7 @@ test("exports and merges a versioned prompt backup from settings", async ({
 	await expect(
 		page.getByText("1 prompts are stored on this device."),
 	).toBeVisible();
+	await expect(page.getByText(WINDOWS_PROMPT_STORAGE_PATH)).toBeVisible();
 
 	const downloadPromise = page.waitForEvent("download");
 	await page.getByRole("button", { name: "Export backup" }).click();

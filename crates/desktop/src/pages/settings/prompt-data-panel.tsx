@@ -25,6 +25,7 @@ import {
 import {
 	importPromptBackupMutationOptions,
 	promptListQueryOptions,
+	promptStorageQueryOptions,
 } from "../../requests/prompts";
 
 export default function PromptDataPanel() {
@@ -34,6 +35,7 @@ export default function PromptDataPanel() {
 	const [backup, setBackup] = useState<PromptBackupDto | null>(null);
 	const [importMode, setImportMode] = useState<PromptImportModeDto>("merge");
 	const { data: prompts = [] } = useQuery(promptListQueryOptions({ api }));
+	const storageQuery = useQuery(promptStorageQueryOptions({ api }));
 
 	const exportMutation = useMutation({
 		mutationFn: async () => {
@@ -103,6 +105,18 @@ export default function PromptDataPanel() {
 								count: prompts.length,
 							})}
 						</p>
+						<dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2 text-xs">
+							<dt className="text-muted">
+								{t("promptDataFile")}
+							</dt>
+							<dd className="min-w-0 break-all font-mono text-foreground">
+								{storageQuery.isPending
+									? t("loading")
+									: storageQuery.isError
+										? t("promptDataFileUnavailable")
+										: storageQuery.data.file_path}
+							</dd>
+						</dl>
 					</div>
 					<div className="flex shrink-0 flex-wrap items-center gap-2">
 						<Button

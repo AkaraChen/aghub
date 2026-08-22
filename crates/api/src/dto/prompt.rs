@@ -7,6 +7,12 @@ use ts_rs::TS;
 
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
+pub struct PromptStorageResponse {
+	pub file_path: String,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct PromptResponse {
 	pub id: String,
 	pub title: String,

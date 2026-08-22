@@ -67,6 +67,8 @@ export default {
 	promptLocalLibrary: "Local prompt library",
 	promptLocalLibraryDescription:
 		"{{count}} prompts are stored on this device. Export a JSON backup or restore one here.",
+	promptDataFile: "Data file",
+	promptDataFileUnavailable: "Path unavailable",
 	exportPromptBackup: "Export backup",
 	importPromptBackup: "Import backup",
 	promptBackupExported: "Prompt backup exported",

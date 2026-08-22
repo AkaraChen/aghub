@@ -243,6 +243,7 @@ fn build_rocket(
 				routes::sub_agents::delete_sub_agent,
 				routes::sub_agents::transfer_sub_agent_route,
 				routes::sub_agents::reconcile_sub_agent_route,
+				routes::prompts::get_prompt_storage,
 				routes::prompts::list_prompts,
 				routes::prompts::export_prompt_backup,
 				routes::prompts::import_prompt_backup,
@@ -3037,6 +3038,24 @@ mod tests {
 		assert_eq!(response.status(), Status::Ok);
 		let body = response_json(response);
 		assert_eq!(body.as_array().expect("sub-agent list").len(), 0);
+	}
+
+	#[test]
+	fn route_prompt_storage_returns_resolved_file_path() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+		let response = get_auth(&client, "/api/v1/prompts/storage");
+
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(
+			body["file_path"],
+			app_data_dir
+				.path()
+				.join("prompts.json")
+				.to_string_lossy()
+				.as_ref()
+		);
 	}
 
 	#[test]
