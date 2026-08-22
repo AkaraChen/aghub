@@ -451,6 +451,18 @@ test("exports and merges a versioned prompt backup from settings", async ({
 	await expect(
 		page.getByRole("heading", { name: "Backup and restore" }),
 	).toBeVisible();
+	const dataPanel = page.getByTestId("prompt-data-panel");
+	const libraryCard = dataPanel.locator('[data-slot="card"]').nth(0);
+	const backupCard = dataPanel.locator('[data-slot="card"]').nth(1);
+	const [dataPanelBox, libraryCardBox, backupCardBox] = await Promise.all([
+		dataPanel.boundingBox(),
+		libraryCard.boundingBox(),
+		backupCard.boundingBox(),
+	]);
+	expect(dataPanelBox?.width).toBeLessThanOrEqual(896);
+	expect(backupCardBox?.y).toBeGreaterThan(
+		(libraryCardBox?.y ?? 0) + (libraryCardBox?.height ?? 0),
+	);
 
 	const downloadPromise = page.waitForEvent("download");
 	await page.getByRole("button", { name: "Export backup" }).click();

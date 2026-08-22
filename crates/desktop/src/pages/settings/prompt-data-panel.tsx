@@ -114,7 +114,10 @@ export default function PromptDataPanel() {
 
 	return (
 		<>
-			<div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]">
+			<div
+				data-testid="prompt-data-panel"
+				className="mx-auto max-w-4xl space-y-4"
+			>
 				<Card className="p-0">
 					<Card.Header className="border-b border-separator p-4">
 						<div className="flex min-w-0 items-start gap-2">
