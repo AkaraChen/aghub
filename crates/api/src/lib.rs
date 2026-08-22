@@ -244,6 +244,8 @@ fn build_rocket(
 				routes::sub_agents::transfer_sub_agent_route,
 				routes::sub_agents::reconcile_sub_agent_route,
 				routes::prompts::list_prompts,
+				routes::prompts::export_prompt_backup,
+				routes::prompts::import_prompt_backup,
 				routes::prompts::get_prompt,
 				routes::prompts::create_prompt,
 				routes::prompts::update_prompt,
@@ -3055,6 +3057,7 @@ mod tests {
 			json!({
 				"title": "Greeting",
 				"description": "  a greeting  ",
+				"category": "  Work  ",
 				"content": "Hello {{ name }}",
 				"tags": ["chat", " chat ", ""],
 			}),
@@ -3063,6 +3066,7 @@ mod tests {
 		let body = response_json(response);
 		assert_eq!(body["title"], "Greeting");
 		assert_eq!(body["description"], "a greeting");
+		assert_eq!(body["category"], "Work");
 		assert_eq!(body["tags"], json!(["chat"]));
 		assert_eq!(body["variables"], json!(["name"]));
 		let id = body["id"].as_str().expect("prompt id").to_string();
@@ -3092,6 +3096,32 @@ mod tests {
 		let response = get_auth(&client, "/api/v1/prompts");
 		let body = response_json(response);
 		assert_eq!(body.as_array().expect("prompt list").len(), 1);
+
+		let response = get_auth(&client, "/api/v1/prompts/backup");
+		assert_eq!(response.status(), Status::Ok);
+		let backup = response_json(response);
+		assert_eq!(backup["format"], "aghub-prompts");
+		assert_eq!(backup["version"], 1);
+		assert_eq!(backup["prompts"][0]["category"], "Work");
+
+		let response = put_json(
+			&client,
+			&item_uri,
+			json!({ "content": "Changed after backup" }),
+		);
+		assert_eq!(response.status(), Status::Ok);
+		let response = post_json(
+			&client,
+			"/api/v1/prompts/backup/import",
+			json!({ "backup": backup, "mode": "merge" }),
+		);
+		assert_eq!(response.status(), Status::Ok);
+		let import = response_json(response);
+		assert_eq!(import["updated"], 1);
+		assert_eq!(import["total"], 1);
+		let response = get_auth(&client, &item_uri);
+		let body = response_json(response);
+		assert_eq!(body["content"], "Bye {{ name }} and {{ team }}");
 
 		let response = delete_auth(&client, &item_uri);
 		assert_eq!(response.status(), Status::NoContent);

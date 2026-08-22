@@ -5,6 +5,8 @@ import {
 } from "@tanstack/react-query";
 import type {
 	CreatePromptRequest,
+	ImportPromptBackupRequest,
+	PromptImportResultResponse,
 	PromptResponse,
 	UpdatePromptRequest,
 } from "../generated/dto";
@@ -15,6 +17,30 @@ interface PromptListQueryParams {
 	api: ApiClient;
 	enabled?: boolean;
 	staleTime?: number;
+}
+
+interface ImportPromptBackupMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	onSuccess?: (
+		data: PromptImportResultResponse,
+		variables: ImportPromptBackupRequest,
+	) => void | Promise<void>;
+}
+
+export function importPromptBackupMutationOptions({
+	api,
+	queryClient,
+	onSuccess,
+}: ImportPromptBackupMutationParams) {
+	return mutationOptions({
+		mutationFn: (body: ImportPromptBackupRequest) =>
+			api.prompts.importBackup(body),
+		onSuccess: async (data, variables) => {
+			await invalidatePromptQueries(queryClient);
+			await onSuccess?.(data, variables);
+		},
+	});
 }
 
 export function promptListQueryOptions({

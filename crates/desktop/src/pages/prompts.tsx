@@ -1,5 +1,5 @@
 import { DocumentTextIcon, PlusIcon } from "@heroicons/react/24/solid";
-import { Button, toast } from "@heroui/react";
+import { Button, ListBox, Select, toast } from "@heroui/react";
 import {
 	useMutation,
 	useQueryClient,
@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useQueryState } from "nuqs";
+import type { Key } from "react-aria-components";
 import { useTranslation } from "react-i18next";
 import { PromptDetail } from "../components/prompts/prompt-detail";
 import { PromptForm } from "../components/prompts/prompt-form";
@@ -27,10 +28,14 @@ import {
 
 type Mode = "view" | "create" | "edit";
 
+const ALL_CATEGORIES = "__all__";
+const UNCATEGORIZED = "__uncategorized__";
+
 function matchesQuery(prompt: PromptResponse, query: string): boolean {
 	const haystack = [
 		prompt.title,
 		prompt.description ?? "",
+		prompt.category ?? "",
 		prompt.content,
 		...prompt.tags,
 	]
@@ -44,6 +49,7 @@ export default function PromptsPage() {
 	const api = useApi();
 	const queryClient = useQueryClient();
 	const [searchQuery, setSearchQuery] = useState("");
+	const [categoryFilter, setCategoryFilter] = useState(ALL_CATEGORIES);
 	const [selectedId, setSelectedId] = useQueryState("prompt");
 	const [mode, setMode] = useState<Mode>("view");
 
@@ -53,12 +59,29 @@ export default function PromptsPage() {
 		() => [...prompts].sort((a, b) => b.updated_at - a.updated_at),
 		[prompts],
 	);
+	const categories = useMemo(
+		() =>
+			[
+				...new Set(
+					prompts.flatMap((prompt) =>
+						prompt.category ? [prompt.category] : [],
+					),
+				),
+			].sort((a, b) => a.localeCompare(b)),
+		[prompts],
+	);
 
 	const filteredPrompts = useMemo(() => {
 		const q = searchQuery.trim().toLowerCase();
-		if (!q) return sortedPrompts;
-		return sortedPrompts.filter((prompt) => matchesQuery(prompt, q));
-	}, [sortedPrompts, searchQuery]);
+		return sortedPrompts.filter((prompt) => {
+			const categoryMatches =
+				categoryFilter === ALL_CATEGORIES ||
+				(categoryFilter === UNCATEGORIZED
+					? !prompt.category
+					: prompt.category === categoryFilter);
+			return categoryMatches && (!q || matchesQuery(prompt, q));
+		});
+	}, [sortedPrompts, searchQuery, categoryFilter]);
 
 	const selectedPrompt = useMemo(
 		() =>
@@ -140,6 +163,45 @@ export default function PromptsPage() {
 				searchPlaceholder={t("searchPrompts")}
 				searchAriaLabel={t("searchPrompts")}
 			>
+				<Select
+					aria-label={t("filterPromptsByCategory")}
+					selectedKey={categoryFilter}
+					onSelectionChange={(key: Key | null) => {
+						if (key) setCategoryFilter(String(key));
+					}}
+					variant="secondary"
+					className="w-40 shrink-0"
+				>
+					<Select.Trigger className="h-9 min-h-9">
+						<Select.Value />
+						<Select.Indicator />
+					</Select.Trigger>
+					<Select.Popover>
+						<ListBox>
+							<ListBox.Item
+								id={ALL_CATEGORIES}
+								textValue={t("allCategories")}
+							>
+								{t("allCategories")}
+							</ListBox.Item>
+							<ListBox.Item
+								id={UNCATEGORIZED}
+								textValue={t("uncategorized")}
+							>
+								{t("uncategorized")}
+							</ListBox.Item>
+							{categories.map((category) => (
+								<ListBox.Item
+									key={category}
+									id={category}
+									textValue={category}
+								>
+									{category}
+								</ListBox.Item>
+							))}
+						</ListBox>
+					</Select.Popover>
+				</Select>
 				<Button
 					isIconOnly
 					variant="ghost"
@@ -157,7 +219,10 @@ export default function PromptsPage() {
 						<PromptList
 							prompts={filteredPrompts}
 							selectedId={selectedPrompt?.id ?? null}
-							hasSearch={Boolean(searchQuery.trim())}
+							hasFilter={
+								Boolean(searchQuery.trim()) ||
+								categoryFilter !== ALL_CATEGORIES
+							}
 							onSelect={(id) => void handleSelect(id)}
 						/>
 					</div>
@@ -175,6 +240,7 @@ export default function PromptsPage() {
 								const body: CreatePromptRequest = {
 									title: values.title,
 									description: values.description,
+									category: values.category || null,
 									content: values.content,
 									tags: values.tags,
 								};
@@ -196,6 +262,7 @@ export default function PromptsPage() {
 								const body: UpdatePromptRequest = {
 									title: values.title,
 									description: values.description,
+									category: values.category,
 									content: values.content,
 									tags: values.tags,
 								};

@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { expect, test } from "@playwright/test";
 import { installMocks } from "./mocks";
 
@@ -5,6 +6,7 @@ const PROMPT = {
 	id: "prompt-1",
 	title: "Review changes",
 	description: "Check a patch before merging it.",
+	category: "Workflow",
 	content: "Review {{target}} and report concrete findings.",
 	tags: ["review"],
 	variables: ["target"],
@@ -180,6 +182,7 @@ test("creates, searches, edits, and deletes a prompt", async ({ page }) => {
 					id: "created-prompt",
 					title: body.title,
 					description: body.description,
+					category: body.category,
 					content: body.content,
 					tags: body.tags,
 					variables: ["target"],
@@ -216,11 +219,30 @@ test("creates, searches, edits, and deletes a prompt", async ({ page }) => {
 	await page
 		.getByRole("textbox", { name: "Description" })
 		.fill(PROMPT.description);
+	await page.getByRole("textbox", { name: "Category" }).fill(PROMPT.category);
 	await page.getByRole("textbox", { name: "Content" }).fill(PROMPT.content);
 	await page.getByRole("textbox", { name: "Tags" }).fill("review, merge");
 	await page.getByRole("button", { name: "Create", exact: true }).click();
 	await expect(
 		page.getByRole("heading", { name: PROMPT.title }),
+	).toBeVisible();
+	await expect(
+		page
+			.locator("section")
+			.filter({ has: page.getByRole("heading", { name: "Category" }) })
+			.getByText(PROMPT.category, { exact: true }),
+	).toBeVisible();
+	await page
+		.getByRole("button", { name: "Filter prompts by category" })
+		.click();
+	await page.getByRole("option", { name: "Uncategorized" }).click();
+	await expect(page.getByText("No prompts match your search")).toBeVisible();
+	await page
+		.getByRole("button", { name: "Filter prompts by category" })
+		.click();
+	await page.getByRole("option", { name: PROMPT.category }).click();
+	await expect(
+		page.getByRole("option", { name: new RegExp(PROMPT.title) }),
 	).toBeVisible();
 
 	const search = page.getByRole("searchbox", { name: "Search prompts..." });
@@ -265,4 +287,110 @@ test("creates, searches, edits, and deletes a prompt", async ({ page }) => {
 	await dialog.getByRole("button", { name: "Delete prompt" }).click();
 	await expect(dialog).toBeHidden();
 	await expect(page.getByText("No prompts yet")).toBeVisible();
+});
+
+test("exports and merges a versioned prompt backup from settings", async ({
+	page,
+}) => {
+	await installMocks(page);
+	const backup = {
+		format: "aghub-prompts",
+		version: 1,
+		exported_at: 10,
+		prompts: [
+			{
+				id: PROMPT.id,
+				title: PROMPT.title,
+				description: PROMPT.description,
+				category: PROMPT.category,
+				content: PROMPT.content,
+				tags: PROMPT.tags,
+				created_at: PROMPT.created_at,
+				updated_at: PROMPT.updated_at,
+			},
+		],
+	};
+	let importBody: unknown;
+
+	await page.route(
+		"http://localhost:45999/api/v1/prompts**",
+		async (route) => {
+			const request = route.request();
+			const url = new URL(request.url());
+			if (url.pathname.endsWith("/backup/import")) {
+				importBody = request.postDataJSON();
+				return route.fulfill({
+					status: 200,
+					contentType: "application/json",
+					body: JSON.stringify({
+						added: 0,
+						updated: 1,
+						unchanged: 0,
+						removed: 0,
+						total: 1,
+					}),
+				});
+			}
+			if (url.pathname.endsWith("/backup")) {
+				return route.fulfill({
+					status: 200,
+					contentType: "application/json",
+					body: JSON.stringify(backup),
+				});
+			}
+			return route.fulfill({
+				status: 200,
+				contentType: "application/json",
+				body: JSON.stringify([PROMPT]),
+			});
+		},
+	);
+
+	await page.goto("/settings?tab=prompts");
+	await expect(
+		page.getByText("1 prompts are stored on this device."),
+	).toBeVisible();
+
+	const downloadPromise = page.waitForEvent("download");
+	await page.getByRole("button", { name: "Export backup" }).click();
+	const download = await downloadPromise;
+	expect(download.suggestedFilename()).toMatch(/^aghub-prompts-.*\.json$/);
+
+	const chooserPromise = page.waitForEvent("filechooser");
+	await page.getByRole("button", { name: "Import backup" }).click();
+	const chooser = await chooserPromise;
+	await chooser.setFiles({
+		name: "prompt-backup.json",
+		mimeType: "application/json",
+		buffer: Buffer.from(JSON.stringify(backup)),
+	});
+
+	const dialog = page.getByRole("dialog", { name: "Import backup" });
+	await expect(
+		dialog.getByText("This backup contains 1 prompts."),
+	).toBeVisible();
+	await dialog.getByRole("button", { name: "Import backup" }).click();
+	await expect(
+		page.getByText(
+			"Import complete: 0 added, 1 updated, 0 removed, 1 in total.",
+		),
+	).toBeVisible();
+	await expect(dialog).toBeHidden();
+	expect(importBody).toEqual({ backup, mode: "merge" });
+
+	const replaceChooserPromise = page.waitForEvent("filechooser");
+	await page.getByRole("button", { name: "Import backup" }).click();
+	const replaceChooser = await replaceChooserPromise;
+	await replaceChooser.setFiles({
+		name: "prompt-backup.json",
+		mimeType: "application/json",
+		buffer: Buffer.from(JSON.stringify(backup)),
+	});
+	const replaceDialog = page.getByRole("dialog", { name: "Import backup" });
+	await replaceDialog
+		.getByText("Replace local library", { exact: true })
+		.click();
+	await replaceDialog.getByRole("button", { name: "Import backup" }).click();
+	await expect(replaceDialog).toBeHidden();
+	expect(importBody).toEqual({ backup, mode: "replace" });
 });

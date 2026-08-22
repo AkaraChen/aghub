@@ -35,6 +35,7 @@ import type {
 	GitSyncRequest,
 	GitSyncResponse,
 	GlobalSkillLockResponse,
+	ImportPromptBackupRequest,
 	ImportSkillRequest,
 	CCPluginInstallRequest,
 	CCPluginInstallResponse,
@@ -54,6 +55,8 @@ import type {
 	CCPluginResponse,
 	ProjectSkillLockResponse,
 	CreatePromptRequest,
+	PromptBackupDto,
+	PromptImportResultResponse,
 	PromptResponse,
 	UpdatePromptRequest,
 	ReconcileRequest,
@@ -660,6 +663,16 @@ export function createApi(baseUrl: string, token: string) {
 			},
 			delete(id: string): Promise<void> {
 				return client.delete(`prompts/${id}`).then(() => undefined);
+			},
+			exportBackup(): Promise<PromptBackupDto> {
+				return client.get("prompts/backup").json();
+			},
+			importBackup(
+				body: ImportPromptBackupRequest,
+			): Promise<PromptImportResultResponse> {
+				return client
+					.post("prompts/backup/import", { json: body })
+					.json();
 			},
 		},
 		market: {

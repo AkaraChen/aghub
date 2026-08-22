@@ -9,6 +9,8 @@ pub struct Prompt {
 	pub title: String,
 	#[serde(default)]
 	pub description: Option<String>,
+	#[serde(default)]
+	pub category: Option<String>,
 	pub content: String,
 	#[serde(default)]
 	pub tags: Vec<String>,
@@ -21,6 +23,7 @@ pub struct Prompt {
 pub struct NewPrompt {
 	pub title: String,
 	pub description: Option<String>,
+	pub category: Option<String>,
 	pub content: String,
 	pub tags: Vec<String>,
 }
@@ -30,6 +33,7 @@ pub struct NewPrompt {
 pub struct PromptUpdate {
 	pub title: Option<String>,
 	pub description: Option<String>,
+	pub category: Option<String>,
 	pub content: Option<String>,
 	pub tags: Option<Vec<String>>,
 }

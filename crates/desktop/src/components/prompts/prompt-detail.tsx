@@ -106,6 +106,20 @@ export function PromptDetail({
 						</Card.Header>
 
 						<Card.Content className="flex flex-col gap-6">
+							{prompt.category && (
+								<section className="space-y-3">
+									<h3 className="text-sm font-medium text-foreground">
+										{t("promptCategory")}
+									</h3>
+									<Chip
+										size="sm"
+										variant="soft"
+										color="accent"
+									>
+										{prompt.category}
+									</Chip>
+								</section>
+							)}
 							{prompt.tags.length > 0 && (
 								<section className="space-y-3">
 									<h3 className="text-sm font-medium text-foreground">

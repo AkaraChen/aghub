@@ -6,7 +6,10 @@ use rocket::State;
 
 use crate::{
 	auth::ApiAuth,
-	dto::prompt::{CreatePromptRequest, PromptResponse, UpdatePromptRequest},
+	dto::prompt::{
+		CreatePromptRequest, ImportPromptBackupRequest, PromptBackupDto,
+		PromptImportResultResponse, PromptResponse, UpdatePromptRequest,
+	},
 	error::{ApiCreated, ApiNoContent, ApiResult},
 	extractors::TrustedLocalOrigin,
 	state::PromptState,
@@ -25,6 +28,28 @@ pub fn list_prompts(
 	Ok(Json(
 		prompts.into_iter().map(PromptResponse::from).collect(),
 	))
+}
+
+#[get("/prompts/backup")]
+pub fn export_prompt_backup(
+	_auth: ApiAuth,
+	state: &State<PromptState>,
+) -> ApiResult<PromptBackupDto> {
+	let backup = store(state).export_backup()?;
+	Ok(Json(backup.into()))
+}
+
+#[post("/prompts/backup/import", format = "json", data = "<body>")]
+pub fn import_prompt_backup(
+	_auth: ApiAuth,
+	_origin: TrustedLocalOrigin,
+	state: &State<PromptState>,
+	body: Json<ImportPromptBackupRequest>,
+) -> ApiResult<PromptImportResultResponse> {
+	let request = body.into_inner();
+	let result = store(state)
+		.import_backup(request.backup.into(), request.mode.into())?;
+	Ok(Json(result.into()))
 }
 
 #[get("/prompts/<id>")]

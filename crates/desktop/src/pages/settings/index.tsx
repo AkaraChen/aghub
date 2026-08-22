@@ -6,6 +6,7 @@ import AppearancePanel from "./appearance-panel";
 import ApplicationPanel from "./application-panel";
 import IntegrationsPanel from "./integrations-panel";
 import LogsPanel from "./logs-panel";
+import PromptDataPanel from "./prompt-data-panel";
 import SecurityPanel from "./security-panel";
 import SkillPreferencesPanel from "./skill-preferences-panel";
 import UsagePanel from "./usage-panel";
@@ -54,6 +55,10 @@ export default function SettingsPage() {
 								</Tabs.Tab>
 								<Tabs.Tab id="skills">
 									{t("skills")}
+									<Tabs.Indicator />
+								</Tabs.Tab>
+								<Tabs.Tab id="prompts">
+									{t("prompts")}
 									<Tabs.Indicator />
 								</Tabs.Tab>
 								<Tabs.Tab id="logs">
@@ -113,6 +118,10 @@ export default function SettingsPage() {
 								</div>
 							</section>
 						</div>
+					</Tabs.Panel>
+
+					<Tabs.Panel id="prompts">
+						<PromptDataPanel />
 					</Tabs.Panel>
 
 					<Tabs.Panel id="logs">

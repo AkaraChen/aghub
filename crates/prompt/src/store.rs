@@ -3,6 +3,7 @@
 //! All prompts live in a single `prompts.json` array under the app data
 //! directory. Mutations rewrite the file atomically (temp file + rename).
 
+use std::collections::HashSet;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
@@ -10,6 +11,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::error::{PromptError, Result};
 use crate::model::{NewPrompt, Prompt, PromptUpdate};
+use crate::{
+	PromptBackup, PromptImportMode, PromptImportResult, PROMPT_BACKUP_FORMAT,
+	PROMPT_BACKUP_VERSION,
+};
 
 /// File name holding the prompt array under the app data directory.
 const PROMPTS_FILE: &str = "prompts.json";
@@ -60,6 +65,7 @@ impl PromptStore {
 			id: uuid::Uuid::new_v4().to_string(),
 			title: clean_title(&input.title)?,
 			description: clean_description(input.description),
+			category: clean_category(input.category),
 			content: input.content,
 			tags: clean_tags(input.tags),
 			created_at: now,
@@ -86,6 +92,9 @@ impl PromptStore {
 			if let Some(description) = input.description {
 				prompt.description = clean_description(Some(description));
 			}
+			if let Some(category) = input.category {
+				prompt.category = clean_category(Some(category));
+			}
 			if let Some(content) = input.content {
 				prompt.content = content;
 			}
@@ -106,6 +115,80 @@ impl PromptStore {
 				.position(|prompt| prompt.id == id)
 				.ok_or_else(|| PromptError::NotFound(id.to_string()))?;
 			Ok(prompts.remove(index))
+		})
+	}
+
+	pub fn export_backup(&self) -> Result<PromptBackup> {
+		Ok(PromptBackup {
+			format: PROMPT_BACKUP_FORMAT.to_string(),
+			version: PROMPT_BACKUP_VERSION,
+			exported_at: now_millis(),
+			prompts: self.list()?,
+		})
+	}
+
+	pub fn import_backup(
+		&self,
+		backup: PromptBackup,
+		mode: PromptImportMode,
+	) -> Result<PromptImportResult> {
+		let imported = validate_backup(backup)?;
+		self.mutate_prompts(|prompts| {
+			let original_ids = prompts
+				.iter()
+				.map(|prompt| prompt.id.as_str())
+				.collect::<HashSet<_>>();
+			let imported_ids = imported
+				.iter()
+				.map(|prompt| prompt.id.as_str())
+				.collect::<HashSet<_>>();
+			let removed = if mode == PromptImportMode::Replace {
+				original_ids.difference(&imported_ids).count()
+			} else {
+				0
+			};
+			let mut result = PromptImportResult {
+				added: 0,
+				updated: 0,
+				unchanged: 0,
+				removed,
+				total: 0,
+			};
+
+			if mode == PromptImportMode::Replace {
+				for prompt in &imported {
+					match prompts.iter().find(|current| current.id == prompt.id)
+					{
+						Some(current) if current == prompt => {
+							result.unchanged += 1
+						}
+						Some(_) => result.updated += 1,
+						None => result.added += 1,
+					}
+				}
+				*prompts = imported;
+			} else {
+				for prompt in imported {
+					match prompts
+						.iter()
+						.position(|current| current.id == prompt.id)
+					{
+						Some(index) if prompts[index] == prompt => {
+							result.unchanged += 1;
+						}
+						Some(index) => {
+							prompts[index] = prompt;
+							result.updated += 1;
+						}
+						None => {
+							prompts.push(prompt);
+							result.added += 1;
+						}
+					}
+				}
+			}
+			result.total = prompts.len();
+			Ok(result)
 		})
 	}
 
@@ -176,6 +259,10 @@ fn clean_description(description: Option<String>) -> Option<String> {
 	})
 }
 
+fn clean_category(category: Option<String>) -> Option<String> {
+	clean_description(category)
+}
+
 fn clean_tags(tags: Vec<String>) -> Vec<String> {
 	let mut clean = Vec::new();
 	for tag in tags {
@@ -187,10 +274,47 @@ fn clean_tags(tags: Vec<String>) -> Vec<String> {
 	clean
 }
 
+fn validate_backup(backup: PromptBackup) -> Result<Vec<Prompt>> {
+	if backup.format != PROMPT_BACKUP_FORMAT {
+		return Err(PromptError::InvalidBackup(format!(
+			"expected format '{PROMPT_BACKUP_FORMAT}'"
+		)));
+	}
+	if backup.version != PROMPT_BACKUP_VERSION {
+		return Err(PromptError::UnsupportedBackupVersion(backup.version));
+	}
+
+	let mut ids = HashSet::new();
+	let mut prompts = Vec::with_capacity(backup.prompts.len());
+	for mut prompt in backup.prompts {
+		prompt.id = prompt.id.trim().to_string();
+		if prompt.id.is_empty() {
+			return Err(PromptError::InvalidBackup(
+				"prompt id cannot be empty".to_string(),
+			));
+		}
+		if !ids.insert(prompt.id.clone()) {
+			return Err(PromptError::InvalidBackup(format!(
+				"duplicate prompt id '{}'",
+				prompt.id
+			)));
+		}
+		prompt.title = clean_title(&prompt.title)?;
+		prompt.description = clean_description(prompt.description);
+		prompt.category = clean_category(prompt.category);
+		prompt.tags = clean_tags(prompt.tags);
+		prompts.push(prompt);
+	}
+	Ok(prompts)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::model::{NewPrompt, PromptUpdate};
+	use crate::{
+		PromptImportMode, PROMPT_BACKUP_FORMAT, PROMPT_BACKUP_VERSION,
+	};
 
 	fn store() -> (tempfile::TempDir, PromptStore) {
 		let temp = tempfile::tempdir().unwrap();
@@ -202,6 +326,7 @@ mod tests {
 		NewPrompt {
 			title: title.to_string(),
 			description: Some("  desc  ".to_string()),
+			category: Some("  Work  ".to_string()),
 			content: "Hello {{ name }}".to_string(),
 			tags: vec!["a".to_string(), " a ".to_string(), "".to_string()],
 		}
@@ -220,9 +345,93 @@ mod tests {
 
 		assert_eq!(prompt.title, "Greeting");
 		assert_eq!(prompt.description.as_deref(), Some("desc"));
+		assert_eq!(prompt.category.as_deref(), Some("Work"));
 		assert_eq!(prompt.tags, vec!["a".to_string()]);
 		assert_eq!(store.get(&prompt.id).unwrap(), prompt);
 		assert_eq!(store.list().unwrap().len(), 1);
+	}
+
+	#[test]
+	fn exports_a_versioned_backup() {
+		let (_temp, store) = store();
+		store.create(new_prompt("Greeting")).unwrap();
+
+		let backup = store.export_backup().unwrap();
+
+		assert_eq!(backup.format, PROMPT_BACKUP_FORMAT);
+		assert_eq!(backup.version, PROMPT_BACKUP_VERSION);
+		assert_eq!(backup.prompts.len(), 1);
+	}
+
+	#[test]
+	fn merge_import_updates_matching_ids_and_keeps_local_prompts() {
+		let (_source_temp, source) = store();
+		let imported = source.create(new_prompt("Greeting")).unwrap();
+		let first_backup = source.export_backup().unwrap();
+
+		let (_target_temp, target) = store();
+		target
+			.import_backup(first_backup, PromptImportMode::Replace)
+			.unwrap();
+		let local = target.create(new_prompt("Local only")).unwrap();
+
+		source
+			.update(
+				&imported.id,
+				PromptUpdate {
+					content: Some("Updated backup content".to_string()),
+					..Default::default()
+				},
+			)
+			.unwrap();
+		let result = target
+			.import_backup(
+				source.export_backup().unwrap(),
+				PromptImportMode::Merge,
+			)
+			.unwrap();
+
+		assert_eq!(result.added, 0);
+		assert_eq!(result.updated, 1);
+		assert_eq!(result.total, 2);
+		assert_eq!(target.get(&local.id).unwrap(), local);
+		assert_eq!(
+			target.get(&imported.id).unwrap().content,
+			"Updated backup content"
+		);
+	}
+
+	#[test]
+	fn replace_import_removes_prompts_missing_from_backup() {
+		let (_source_temp, source) = store();
+		let imported = source.create(new_prompt("Imported")).unwrap();
+		let backup = source.export_backup().unwrap();
+
+		let (_target_temp, target) = store();
+		target.create(new_prompt("Local only")).unwrap();
+		let result = target
+			.import_backup(backup, PromptImportMode::Replace)
+			.unwrap();
+
+		assert_eq!(result.added, 1);
+		assert_eq!(result.removed, 1);
+		assert_eq!(result.total, 1);
+		assert_eq!(target.list().unwrap(), vec![imported]);
+	}
+
+	#[test]
+	fn invalid_backup_does_not_change_the_library() {
+		let (_temp, store) = store();
+		let local = store.create(new_prompt("Local")).unwrap();
+		let mut backup = store.export_backup().unwrap();
+		backup.prompts.push(local.clone());
+
+		let error = store
+			.import_backup(backup, PromptImportMode::Replace)
+			.unwrap_err();
+
+		assert!(matches!(error, PromptError::InvalidBackup(_)));
+		assert_eq!(store.list().unwrap(), vec![local]);
 	}
 
 	#[test]

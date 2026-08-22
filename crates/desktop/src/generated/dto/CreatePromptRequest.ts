@@ -3,6 +3,7 @@
 export type CreatePromptRequest = {
 	title: string;
 	description: string | null;
+	category: string | null;
 	content: string;
 	tags: Array<string> | null;
 };

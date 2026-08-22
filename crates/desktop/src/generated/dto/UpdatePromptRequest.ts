@@ -3,6 +3,7 @@
 export type UpdatePromptRequest = {
 	title: string | null;
 	description: string | null;
+	category: string | null;
 	content: string | null;
 	tags: Array<string> | null;
 };

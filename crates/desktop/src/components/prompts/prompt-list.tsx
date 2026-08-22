@@ -6,14 +6,14 @@ import type { PromptResponse } from "../../generated/dto";
 interface PromptListProps {
 	prompts: PromptResponse[];
 	selectedId: string | null;
-	hasSearch: boolean;
+	hasFilter: boolean;
 	onSelect: (id: string) => void;
 }
 
 export function PromptList({
 	prompts,
 	selectedId,
-	hasSearch,
+	hasFilter,
 	onSelect,
 }: PromptListProps) {
 	const { t } = useTranslation();
@@ -27,9 +27,9 @@ export function PromptList({
 			<div className="flex h-full flex-col items-center justify-center gap-3 p-6">
 				<DocumentTextIcon className="size-8 text-muted" />
 				<p className="text-center text-sm font-medium text-foreground">
-					{hasSearch ? t("noPromptsMatch") : t("noPrompts")}
+					{hasFilter ? t("noPromptsMatch") : t("noPrompts")}
 				</p>
-				{!hasSearch && (
+				{!hasFilter && (
 					<p className="text-center text-sm text-muted">
 						{t("noPromptsDescription")}
 					</p>
@@ -66,6 +66,16 @@ export function PromptList({
 							<p className="truncate text-xs text-muted">
 								{prompt.description}
 							</p>
+						)}
+						{prompt.category && (
+							<Chip
+								size="sm"
+								variant="soft"
+								color="accent"
+								className="w-fit"
+							>
+								{prompt.category}
+							</Chip>
 						)}
 						{prompt.tags.length > 0 && (
 							<div className="flex flex-wrap gap-1">

@@ -251,6 +251,12 @@ impl From<PromptError> for ApiError {
 				e.to_string(),
 				"INVALID_PARAM",
 			),
+			PromptError::InvalidBackup(_)
+			| PromptError::UnsupportedBackupVersion(_) => ApiError::new(
+				Status::BadRequest,
+				e.to_string(),
+				"INVALID_PROMPT_BACKUP",
+			),
 			PromptError::Io(_) | PromptError::Json(_) => ApiError::new(
 				Status::InternalServerError,
 				e.to_string(),

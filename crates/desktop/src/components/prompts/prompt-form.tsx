@@ -16,6 +16,7 @@ import type { PromptResponse } from "../../generated/dto";
 interface PromptFormValues {
 	title: string;
 	description: string;
+	category: string;
 	content: string;
 	tags: string[];
 }
@@ -23,6 +24,7 @@ interface PromptFormValues {
 interface PromptFormFields {
 	title: string;
 	description: string;
+	category: string;
 	content: string;
 	tags: string;
 }
@@ -64,6 +66,7 @@ export function PromptForm({
 		defaultValues: {
 			title: initial?.title ?? "",
 			description: initial?.description ?? "",
+			category: initial?.category ?? "",
 			content: initial?.content ?? "",
 			tags: initial ? initial.tags.join(", ") : "",
 		},
@@ -74,6 +77,7 @@ export function PromptForm({
 		onSubmit({
 			title: values.title.trim(),
 			description: values.description.trim(),
+			category: values.category.trim(),
 			content: values.content,
 			tags: parseTags(values.tags),
 		});
@@ -165,6 +169,32 @@ export function PromptForm({
 												onBlur={field.onBlur}
 												placeholder={t(
 													"promptDescriptionPlaceholder",
+												)}
+												variant="secondary"
+											/>
+										</TextField>
+									)}
+								/>
+								<Controller
+									name="category"
+									control={control}
+									render={({ field }) => (
+										<TextField
+											className="w-full"
+											variant="secondary"
+											validationBehavior="aria"
+										>
+											<Label>{t("promptCategory")}</Label>
+											<Input
+												value={field.value}
+												onChange={(event) =>
+													field.onChange(
+														event.target.value,
+													)
+												}
+												onBlur={field.onBlur}
+												placeholder={t(
+													"promptCategoryPlaceholder",
 												)}
 												variant="secondary"
 											/>
