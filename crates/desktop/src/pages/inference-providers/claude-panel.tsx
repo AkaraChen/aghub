@@ -25,7 +25,7 @@ import {
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type {
@@ -578,24 +578,18 @@ function ClaudeModelSettingsDialog({
 	onSave: (selection: ClaudeModelSelection) => void;
 }) {
 	const { t } = useTranslation();
-	const [selection, setSelection] = useState<ClaudeModelSelection>({});
-
-	const modelOptions = useMemo(() => {
-		if (!provider) return [];
-		return providerModelOptions(provider, activeModel, isActive);
-	}, [activeModel, isActive, provider]);
-
-	useEffect(() => {
-		if (!provider || !isOpen) return;
-		setSelection(
-			providerModelSelection(
-				provider,
-				modelOptions,
-				activeModel,
-				isActive,
-			),
+	const modelOptions = provider
+		? providerModelOptions(provider, activeModel, isActive)
+		: [];
+	const [selection, setSelection] = useState<ClaudeModelSelection>(() => {
+		if (!provider) return {};
+		return providerModelSelection(
+			provider,
+			modelOptions,
+			activeModel,
+			isActive,
 		);
-	}, [activeModel, isActive, isOpen, modelOptions, provider]);
+	});
 
 	const label =
 		provider?.matched_inference_provider?.display_name ??
@@ -1169,6 +1163,11 @@ export function ClaudeInferenceProviderPanel(_: {
 			/>
 
 			<ClaudeModelSettingsDialog
+				key={
+					modelSettingsTarget
+						? `model-settings:provider:${modelSettingsTarget.id}`
+						: "model-settings:closed"
+				}
 				provider={modelSettingsTarget}
 				isOpen={Boolean(modelSettingsTarget)}
 				activeModel={activeModel}

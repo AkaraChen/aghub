@@ -24,7 +24,7 @@ import {
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type {
@@ -368,25 +368,19 @@ function CodexModelSettingsDialog({
 	onSave: (model: string) => void;
 }) {
 	const { t } = useTranslation();
-	const [selectedModel, setSelectedModel] = useState("");
-
-	const modelOptions = useMemo(() => {
-		if (!provider) return [];
-		return codexModelOptionsWithSelected(
-			provider.models,
-			isActive ? activeModel : undefined,
+	const modelOptions = provider
+		? codexModelOptionsWithSelected(
+				provider.models,
+				isActive ? activeModel : undefined,
+			)
+		: [];
+	const [selectedModel, setSelectedModel] = useState(() => {
+		if (!provider) return "";
+		return selectCodexModel(
+			isActive ? activeModel : provider.models[0]?.id,
+			modelOptions,
 		);
-	}, [activeModel, isActive, provider]);
-
-	useEffect(() => {
-		if (!provider || !isOpen) return;
-		setSelectedModel(
-			selectCodexModel(
-				isActive ? activeModel : provider.models[0]?.id,
-				modelOptions,
-			),
-		);
-	}, [activeModel, isActive, isOpen, modelOptions, provider]);
+	});
 
 	const label =
 		provider?.matched_inference_provider?.display_name ??
@@ -979,6 +973,11 @@ export function CodexInferenceProviderPanel(_: {
 			/>
 
 			<CodexModelSettingsDialog
+				key={
+					modelSettingsTarget
+						? `model-settings:provider:${modelSettingsTarget.id}`
+						: "model-settings:closed"
+				}
 				provider={modelSettingsTarget}
 				isOpen={Boolean(modelSettingsTarget)}
 				activeModel={activeProfile?.model}
