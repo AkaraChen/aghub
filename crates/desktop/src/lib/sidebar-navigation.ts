@@ -4,6 +4,7 @@ import {
 	ChartBarIcon,
 	ChatBubbleBottomCenterTextIcon,
 	CpuChipIcon,
+	DocumentTextIcon,
 	HomeIcon,
 	KeyIcon,
 	PuzzlePieceIcon,
@@ -117,6 +118,13 @@ const SIDEBAR_ITEM_DEFINITIONS: Record<SidebarItemId, SidebarItemDefinition> = {
 		labelKey: "prompts",
 		href: "/prompts",
 		icon: ChatBubbleBottomCenterTextIcon,
+	},
+	rules: {
+		id: "rules",
+		section: "resources",
+		labelKey: "rules",
+		href: "/rules",
+		icon: DocumentTextIcon,
 	},
 	ccPlugins: {
 		id: "ccPlugins",

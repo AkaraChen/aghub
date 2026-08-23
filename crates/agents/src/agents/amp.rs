@@ -15,6 +15,17 @@ define_skill_paths! {
 	project: ".agents/skills",
 }
 
+fn global_rule_paths() -> Vec<std::path::PathBuf> {
+	home_dir()
+		.map(|home| {
+			vec![
+				home.join(".config/amp/AGENTS.md"),
+				home.join(".config/AGENTS.md"),
+			]
+		})
+		.unwrap_or_default()
+}
+
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "amp",
 	display_name: "Amp",
@@ -65,4 +76,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	validate_args: &["--version"],
 	project_markers: &[".amp"],
 	skills_cli_name: Some("amp"),
+	rule_paths: Some(RulePaths {
+		global: Some(global_rule_paths),
+		project: Some(project_agents_md),
+	}),
 };

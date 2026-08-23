@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { AgentIcon } from "../lib/agent-icons";
 import {
+	cn,
 	filterItemsByAgentIds,
 	formatAgentName,
 	sortAgents,
@@ -41,19 +42,25 @@ export function AgentIcons<T extends { agent?: string | null }>({
 
 	return (
 		<div className="flex shrink-0 items-center -space-x-1">
+			<span className="sr-only">
+				{agents.map(formatAgentName).join(", ")}
+			</span>
 			{agents.slice(0, 3).map((agentId, idx) => (
 				<Tooltip key={agentId} delay={0}>
-					<div
-						className="relative rounded-full bg-surface ring-1 ring-surface transition-transform hover:scale-110"
-						style={{ zIndex: 3 - idx }}
-					>
-						<AgentIcon
-							id={agentId}
-							name={formatAgentName(agentId)}
-							size="xs"
-							variant="ghost"
-						/>
-					</div>
+					<Tooltip.Trigger>
+						<div
+							aria-hidden
+							className="relative rounded-full bg-surface ring-1 ring-surface"
+							style={{ zIndex: 3 - idx }}
+						>
+							<AgentIcon
+								id={agentId}
+								name={formatAgentName(agentId)}
+								size="xs"
+								variant="ghost"
+							/>
+						</div>
+					</Tooltip.Trigger>
 					<Tooltip.Content>
 						{formatAgentName(agentId)}
 					</Tooltip.Content>
@@ -61,7 +68,13 @@ export function AgentIcons<T extends { agent?: string | null }>({
 			))}
 			{agents.length > 3 && (
 				<div
-					className={`relative z-0 flex size-5 items-center justify-center ${overflowVariant === "circle" ? "rounded-full" : "rounded-lg"} bg-default text-[10px] font-medium text-muted ring-1 ring-surface`}
+					aria-hidden
+					className={cn(
+						"relative z-0 flex size-5 items-center justify-center bg-default text-[10px] font-medium text-muted ring-1 ring-surface",
+						overflowVariant === "circle"
+							? "rounded-full"
+							: "rounded-lg",
+					)}
 				>
 					+{agents.length - 3}
 				</div>

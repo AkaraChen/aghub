@@ -7,6 +7,7 @@ import ApplicationPanel from "./application-panel";
 import IntegrationsPanel from "./integrations-panel";
 import LogsPanel from "./logs-panel";
 import PromptDataPanel from "./prompt-data-panel";
+import RuleVersionDataPanel from "./rule-version-data-panel";
 import SecurityPanel from "./security-panel";
 import SkillPreferencesPanel from "./skill-preferences-panel";
 import UsagePanel from "./usage-panel";
@@ -75,7 +76,7 @@ export default function SettingsPage() {
 									id="prompts"
 									className={settingsTabClassName}
 								>
-									{t("prompts")}
+									{t("promptsAndRules")}
 									<Tabs.Indicator />
 								</Tabs.Tab>
 								<Tabs.Tab
@@ -147,7 +148,10 @@ export default function SettingsPage() {
 					</Tabs.Panel>
 
 					<Tabs.Panel id="prompts">
-						<PromptDataPanel />
+						<div className="space-y-4">
+							<PromptDataPanel />
+							<RuleVersionDataPanel />
+						</div>
 					</Tabs.Panel>
 
 					<Tabs.Panel id="logs">

@@ -60,4 +60,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	validate_args: &["--version"],
 	project_markers: &[".vibe"],
 	skills_cli_name: Some("mistral-vibe"),
+	rule_paths: None,
 };

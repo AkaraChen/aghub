@@ -61,4 +61,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	validate_args: &["--version"],
 	project_markers: &[".kimi"],
 	skills_cli_name: Some("kimi-cli"),
+	rule_paths: None,
 };

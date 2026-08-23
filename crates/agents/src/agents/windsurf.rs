@@ -63,4 +63,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	validate_args: &["--version"],
 	project_markers: &[".windsurf"],
 	skills_cli_name: Some("windsurf"),
+	rule_paths: None,
 };

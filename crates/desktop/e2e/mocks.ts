@@ -193,6 +193,21 @@ const SUB_AGENTS = [
 	},
 ];
 
+const RULE_FILES = [
+	{
+		agent: "claude",
+		path: "~/.claude/CLAUDE.md",
+		source: "global",
+		exists: true,
+	},
+	{
+		agent: "gemini",
+		path: "~/.gemini/GEMINI.md",
+		source: "global",
+		exists: false,
+	},
+];
+
 const plugin = (id: string, name: string, enabled: boolean) => ({
 	id,
 	name,
@@ -283,6 +298,27 @@ export async function installMocks(page: Page) {
 	const availability = structuredClone(AVAILABILITY);
 	const mcps = MCPS.map((m) => ({ ...m }));
 	const skills = SKILLS.map((s) => ({ ...s }));
+	const ruleFiles = RULE_FILES.map((rule) => ({ ...rule }));
+	const ruleContent = new Map([
+		["~/.claude/CLAUDE.md", "# Existing rules\n"],
+	]);
+	const ruleVersions = new Map([
+		[
+			"~/.claude/CLAUDE.md",
+			[
+				{
+					content: "# Previous rules\n",
+					revision: "e2e:previous",
+					created_at: Date.UTC(2026, 6, 1, 8, 0),
+				},
+			],
+		],
+	]);
+	let ruleVersionPreferences = {
+		enabled: true,
+		max_versions_per_file: 20,
+	};
+	let clearedRuleVersionCount = 0;
 	const globalLock = {
 		...GLOBAL_LOCK,
 		skills: GLOBAL_LOCK.skills.map((entry) => ({ ...entry })),
@@ -351,9 +387,9 @@ export async function installMocks(page: Page) {
 		const url = new URL(route.request().url());
 		const p = url.pathname.replace("/api/v1", "");
 		const method = route.request().method();
-		const json = (body: unknown) =>
+		const json = (body: unknown, status = 200) =>
 			route.fulfill({
-				status: 200,
+				status,
 				contentType: "application/json",
 				body: JSON.stringify(body),
 			});
@@ -369,6 +405,113 @@ export async function installMocks(page: Page) {
 		if (p === "/agents/all/skills") return json(skills);
 		if (p === "/agents/all/mcps") return json(mcps);
 		if (p === "/agents/all/sub-agents") return json(SUB_AGENTS);
+		if (p === "/agents/all/rules") return json(ruleFiles);
+		if (p === "/prompts/storage") {
+			return json({
+				file_path:
+					"C:\\Users\\demo\\AppData\\Roaming\\aghub\\prompts.json",
+			});
+		}
+		if (p === "/prompts") return json([]);
+		if (p === "/rules/versions/storage" && method === "GET") {
+			return json({
+				file_path:
+					"C:\\Users\\demo\\AppData\\Roaming\\aghub\\rule-versions.json",
+			});
+		}
+		if (p === "/rules/versions/preferences" && method === "GET") {
+			return json({
+				...ruleVersionPreferences,
+				min_versions_per_file: 1,
+				max_supported_versions_per_file: 100,
+			});
+		}
+		if (p === "/rules/versions/preferences" && method === "PUT") {
+			const body = JSON.parse(route.request().postData() ?? "{}");
+			ruleVersionPreferences = {
+				enabled: Boolean(body.enabled),
+				max_versions_per_file: Number(body.max_versions_per_file),
+			};
+			for (const [path, versions] of ruleVersions) {
+				ruleVersions.set(
+					path,
+					versions.slice(
+						0,
+						ruleVersionPreferences.max_versions_per_file,
+					),
+				);
+			}
+			return json({
+				...ruleVersionPreferences,
+				min_versions_per_file: 1,
+				max_supported_versions_per_file: 100,
+			});
+		}
+		if (p === "/rules/versions" && method === "DELETE") {
+			ruleVersions.clear();
+			clearedRuleVersionCount += 1;
+			return route.fulfill({ status: 204 });
+		}
+		if (p === "/rules/content" && method === "GET") {
+			const path = url.searchParams.get("path") ?? "";
+			return json({
+				path,
+				content: ruleContent.get(path) ?? "",
+				exists: ruleContent.has(path),
+				revision: ruleRevision(ruleContent, path),
+			});
+		}
+		if (p === "/rules/versions" && method === "GET") {
+			const path = url.searchParams.get("path") ?? "";
+			return json(ruleVersions.get(path) ?? []);
+		}
+		if (p === "/rules/content" && method === "PUT") {
+			const body = JSON.parse(route.request().postData() ?? "{}");
+			const path = String(body.path ?? "");
+			const content = String(body.content ?? "");
+			if (
+				body.expected_revision !== null &&
+				body.expected_revision !== undefined &&
+				body.expected_revision !== ruleRevision(ruleContent, path)
+			) {
+				return json(
+					{
+						error: "Rule file changed after it was loaded",
+						code: "RULE_FILE_CHANGED",
+					},
+					409,
+				);
+			}
+			const currentContent = ruleContent.get(path);
+			if (
+				ruleVersionPreferences.enabled &&
+				currentContent !== undefined &&
+				currentContent !== content
+			) {
+				const versions = ruleVersions.get(path) ?? [];
+				versions.unshift({
+					content: currentContent,
+					revision: ruleRevision(ruleContent, path),
+					created_at: Date.now(),
+				});
+				ruleVersions.set(
+					path,
+					versions.slice(
+						0,
+						ruleVersionPreferences.max_versions_per_file,
+					),
+				);
+			}
+			ruleContent.set(path, content);
+			const rule = ruleFiles.find((item) => item.path === path);
+			if (rule) rule.exists = true;
+			return json({
+				path,
+				content,
+				exists: true,
+				revision: ruleRevision(ruleContent, path),
+			});
+		}
 		if (p === "/plugins") return json(PLUGINS);
 		if (p === "/skills/lock/global") return json(globalLock);
 		if (p === "/skills/lock/project")
@@ -954,5 +1097,26 @@ export async function installMocks(page: Page) {
 				});
 			}
 		},
+		setRuleContent(path: string, content: string) {
+			ruleContent.set(path, content);
+			const rule = ruleFiles.find((item) => item.path === path);
+			if (rule) rule.exists = true;
+		},
+		getRuleContent(path: string) {
+			return ruleContent.get(path);
+		},
+		getClearedRuleVersionCount() {
+			return clearedRuleVersionCount;
+		},
+		getRuleVersionPreferences() {
+			return { ...ruleVersionPreferences };
+		},
 	};
+}
+
+function ruleRevision(ruleContent: Map<string, string>, path: string) {
+	return JSON.stringify({
+		exists: ruleContent.has(path),
+		content: ruleContent.get(path) ?? "",
+	});
 }

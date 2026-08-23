@@ -59,6 +59,12 @@ use aghub_api::dto::{
 		PromptBackupItemDto, PromptImportModeDto, PromptImportResultResponse,
 		PromptResponse, PromptStorageResponse, UpdatePromptRequest,
 	},
+	rule::{
+		RuleContentQuery, RuleFileContentResponse, RuleFileResponse,
+		RuleVersionPreferencesResponse, RuleVersionResponse,
+		RuleVersionStorageResponse, UpdateRuleContentRequest,
+		UpdateRuleVersionPreferencesRequest,
+	},
 	skill::{
 		CreateSkillRequest, DeleteSkillByPathRequest,
 		DeleteSkillByPathResponse, GitInstallRequest, GitInstallResponse,
@@ -266,6 +272,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<PromptImportModeDto>(&cfg)?;
 	export_type::<ImportPromptBackupRequest>(&cfg)?;
 	export_type::<PromptImportResultResponse>(&cfg)?;
+	export_type::<RuleFileResponse>(&cfg)?;
+	export_type::<RuleContentQuery>(&cfg)?;
+	export_type::<RuleFileContentResponse>(&cfg)?;
+	export_type::<RuleVersionResponse>(&cfg)?;
+	export_type::<RuleVersionStorageResponse>(&cfg)?;
+	export_type::<RuleVersionPreferencesResponse>(&cfg)?;
+	export_type::<UpdateRuleVersionPreferencesRequest>(&cfg)?;
+	export_type::<UpdateRuleContentRequest>(&cfg)?;
 	export_type::<CCPluginResponse>(&cfg)?;
 	export_type::<CCPluginScopeResponse>(&cfg)?;
 	export_type::<CCPluginSourceInfoResponse>(&cfg)?;

@@ -198,6 +198,9 @@ fn build_rocket(
 			),
 		})
 		.manage(crate::state::PromptState {
+			app_data_dir: options.app_data_dir.clone(),
+		})
+		.manage(crate::state::RuleState {
 			app_data_dir: options.app_data_dir,
 		})
 		.manage(crate::state::UsageState {
@@ -251,6 +254,15 @@ fn build_rocket(
 				routes::prompts::create_prompt,
 				routes::prompts::update_prompt,
 				routes::prompts::delete_prompt,
+				routes::rules::list_all_rules,
+				routes::rules::list_rules,
+				routes::rules::get_rule_content,
+				routes::rules::get_rule_version_storage,
+				routes::rules::get_rule_version_preferences,
+				routes::rules::list_rule_versions,
+				routes::rules::clear_rule_versions,
+				routes::rules::update_rule_version_preferences,
+				routes::rules::update_rule_content,
 				routes::integrations::list_code_editors,
 				routes::integrations::open_with_editor,
 				routes::integrations::get_preferences,
@@ -3040,6 +3052,150 @@ mod tests {
 		assert_eq!(body.as_array().expect("sub-agent list").len(), 0);
 	}
 
+	fn rule_content_query(rule_path: &str, project_root: &Path) -> String {
+		let mut serializer =
+			url::form_urlencoded::Serializer::new(String::new());
+		serializer.append_pair("path", rule_path);
+		serializer.append_pair("scope", "project");
+		serializer.append_pair("project_root", &project_root.to_string_lossy());
+		serializer.finish()
+	}
+
+	#[test]
+	fn route_rules_list_read_write_persists_project_file() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let client = test_client(app_data_dir.path());
+		let query = project_query(project_dir.path());
+		let list_uri = format!("/api/v1/agents/claude/rules?{query}");
+
+		let response = get_auth(&client, &list_uri);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		let entry = body
+			.as_array()
+			.expect("rule list")
+			.iter()
+			.find(|file| {
+				file["path"]
+					.as_str()
+					.is_some_and(|path| path.ends_with("CLAUDE.md"))
+			})
+			.expect("CLAUDE.md entry")
+			.clone();
+		assert_eq!(entry["agent"], "claude");
+		assert_eq!(entry["exists"], false);
+		let rule_path = entry["path"].as_str().expect("rule path").to_string();
+
+		let content_query = rule_content_query(&rule_path, project_dir.path());
+		let content_uri = format!("/api/v1/rules/content?{content_query}");
+		let response = get_auth(&client, &content_uri);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["content"], "");
+		assert_eq!(body["exists"], false);
+		let initial_revision = body["revision"]
+			.as_str()
+			.expect("rule revision")
+			.to_string();
+
+		let response = put_json(
+			&client,
+			"/api/v1/rules/content",
+			json!({
+				"path": rule_path.clone(),
+				"content": "# Project rules\n",
+				"expected_revision": initial_revision,
+				"scope": "project",
+				"project_root": project_dir.path().to_string_lossy(),
+			}),
+		);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		let saved_revision = body["revision"]
+			.as_str()
+			.expect("saved rule revision")
+			.to_string();
+
+		let rule_file = project_dir.path().join("CLAUDE.md");
+		let persisted =
+			std::fs::read_to_string(&rule_file).expect("persisted rule file");
+		assert!(persisted.contains("# Project rules"));
+
+		let response = put_json(
+			&client,
+			"/api/v1/rules/content",
+			json!({
+				"path": rule_path.clone(),
+				"content": "# Updated project rules\n",
+				"expected_revision": saved_revision,
+				"scope": "project",
+				"project_root": project_dir.path().to_string_lossy(),
+			}),
+		);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		let saved_revision = body["revision"]
+			.as_str()
+			.expect("updated rule revision")
+			.to_string();
+
+		let versions_uri = format!("/api/v1/rules/versions?{content_query}");
+		let response = get_auth(&client, &versions_uri);
+		assert_eq!(response.status(), Status::Ok);
+		let versions = response_json(response);
+		assert_eq!(versions.as_array().expect("rule versions").len(), 1);
+		assert_eq!(versions[0]["content"], "# Project rules\n");
+
+		std::fs::write(&rule_file, "# External edit\n")
+			.expect("external rule edit");
+		let response = put_json(
+			&client,
+			"/api/v1/rules/content",
+			json!({
+				"path": rule_path,
+				"content": "# Stale draft\n",
+				"expected_revision": saved_revision,
+				"scope": "project",
+				"project_root": project_dir.path().to_string_lossy(),
+			}),
+		);
+		assert_json_error(response, Status::Conflict, "RULE_FILE_CHANGED");
+		assert_eq!(
+			std::fs::read_to_string(&rule_file).expect("external rule content"),
+			"# External edit\n"
+		);
+
+		let response = get_auth(&client, &list_uri);
+		let body = response_json(response);
+		let entry = body
+			.as_array()
+			.expect("rule list")
+			.iter()
+			.find(|file| {
+				file["path"]
+					.as_str()
+					.is_some_and(|path| path.ends_with("CLAUDE.md"))
+			})
+			.expect("CLAUDE.md entry")
+			.clone();
+		assert_eq!(entry["exists"], true);
+
+		let response = put_json(
+			&client,
+			"/api/v1/rules/content",
+			json!({
+				"path": project_dir.path().join("evil.txt").to_string_lossy(),
+				"content": "x",
+				"expected_revision": "sha256:unused",
+				"scope": "project",
+				"project_root": project_dir.path().to_string_lossy(),
+			}),
+		);
+		assert_eq!(response.status(), Status::Forbidden);
+		assert!(!project_dir.path().join("evil.txt").exists());
+	}
+
 	#[test]
 	fn route_prompt_storage_returns_resolved_file_path() {
 		let app_data_dir = tempfile::tempdir().expect("app data dir");
@@ -3151,6 +3307,168 @@ mod tests {
 		let response = get_auth(&client, "/api/v1/prompts");
 		let body = response_json(response);
 		assert_eq!(body.as_array().expect("prompt list").len(), 0);
+	}
+
+	#[test]
+	fn route_rule_write_requires_revision() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let client = test_client(app_data_dir.path());
+		let rule_file = project_dir.path().join("CLAUDE.md");
+
+		let response = put_json(
+			&client,
+			"/api/v1/rules/content",
+			json!({
+				"path": rule_file.to_string_lossy(),
+				"content": "# Project rules\n",
+				"scope": "project",
+				"project_root": project_dir.path().to_string_lossy(),
+			}),
+		);
+
+		assert_eq!(response.status(), Status::UnprocessableEntity);
+		assert!(!rule_file.exists());
+	}
+
+	#[test]
+	fn route_rule_write_survives_corrupted_version_history() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let client = test_client(app_data_dir.path());
+		let rule_file = project_dir.path().join("CLAUDE.md");
+		std::fs::write(&rule_file, "# Loaded rules\n").expect("initial rule");
+		let content_query = rule_content_query(
+			&rule_file.to_string_lossy(),
+			project_dir.path(),
+		);
+		let content_uri = format!("/api/v1/rules/content?{content_query}");
+		let response = get_auth(&client, &content_uri);
+		let body = response_json(response);
+		let revision = body["revision"]
+			.as_str()
+			.expect("rule revision")
+			.to_string();
+		std::fs::write(app_data_dir.path().join("rule-versions.json"), "{")
+			.expect("corrupted rule history");
+
+		let response = put_json(
+			&client,
+			"/api/v1/rules/content",
+			json!({
+				"path": rule_file.to_string_lossy(),
+				"content": "# Updated rules\n",
+				"expected_revision": revision,
+				"scope": "project",
+				"project_root": project_dir.path().to_string_lossy(),
+			}),
+		);
+
+		assert_eq!(response.status(), Status::Ok);
+		assert_eq!(
+			std::fs::read_to_string(rule_file).expect("updated rule"),
+			"# Updated rules\n"
+		);
+	}
+
+	#[test]
+	fn route_rule_version_storage_can_be_cleared() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+		std::fs::write(app_data_dir.path().join("rule-versions.json"), "{")
+			.expect("corrupted rule history");
+
+		let response = get_auth(&client, "/api/v1/rules/versions/storage");
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(
+			body["file_path"],
+			app_data_dir
+				.path()
+				.join("rule-versions.json")
+				.to_string_lossy()
+				.as_ref()
+		);
+
+		let response = delete_auth(&client, "/api/v1/rules/versions");
+		assert_eq!(response.status(), Status::NoContent);
+		let versions: serde_json::Value = serde_json::from_str(
+			&std::fs::read_to_string(
+				app_data_dir.path().join("rule-versions.json"),
+			)
+			.expect("cleared rule history"),
+		)
+		.expect("valid rule history");
+		assert_eq!(versions["versions"], json!([]));
+	}
+
+	#[test]
+	fn route_rule_version_preferences_are_validated_and_persisted() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+
+		let response = get_auth(&client, "/api/v1/rules/versions/preferences");
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["enabled"], true);
+		assert_eq!(body["max_versions_per_file"], 20);
+		assert_eq!(body["min_versions_per_file"], 1);
+		assert_eq!(body["max_supported_versions_per_file"], 100);
+
+		let invalid = put_json(
+			&client,
+			"/api/v1/rules/versions/preferences",
+			json!({
+				"enabled": true,
+				"max_versions_per_file": 0,
+			}),
+		);
+		assert_json_error(invalid, Status::BadRequest, "INVALID_PARAM");
+
+		let response = put_json(
+			&client,
+			"/api/v1/rules/versions/preferences",
+			json!({
+				"enabled": false,
+				"max_versions_per_file": 7,
+			}),
+		);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["enabled"], false);
+		assert_eq!(body["max_versions_per_file"], 7);
+
+		let response = get_auth(&client, "/api/v1/rules/versions/preferences");
+		let body = response_json(response);
+		assert_eq!(body["enabled"], false);
+		assert_eq!(body["max_versions_per_file"], 7);
+	}
+
+	#[test]
+	fn route_rule_write_rejects_remote_browser_origin() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let client = test_client(app_data_dir.path());
+		let rule_file = project_dir.path().join("CLAUDE.md");
+
+		let response = client
+			.put("/api/v1/rules/content")
+			.header(auth_header())
+			.header(Header::new("Origin", "https://evil.example"))
+			.header(ContentType::JSON)
+			.body(
+				json!({
+					"path": rule_file.to_string_lossy(),
+					"content": "# Project rules\n",
+					"scope": "project",
+					"project_root": project_dir.path().to_string_lossy(),
+				})
+				.to_string(),
+			)
+			.dispatch();
+
+		assert_eq!(response.status(), Status::Forbidden);
+		assert!(!rule_file.exists());
 	}
 
 	#[test]

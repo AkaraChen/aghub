@@ -36,6 +36,21 @@ fn project_skill_write_path(root: &Path) -> Option<PathBuf> {
 	None
 }
 
+fn global_rule_paths() -> Vec<PathBuf> {
+	home_dir()
+		.map(|home| {
+			vec![
+				home.join(".codex/AGENTS.override.md"),
+				home.join(".codex/AGENTS.md"),
+			]
+		})
+		.unwrap_or_default()
+}
+
+fn project_rule_paths(root: &Path) -> Vec<PathBuf> {
+	vec![root.join("AGENTS.override.md"), root.join("AGENTS.md")]
+}
+
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "codex",
 	display_name: "OpenAI Codex",
@@ -84,4 +99,30 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	validate_args: &["--version"],
 	project_markers: &[".codex"],
 	skills_cli_name: Some("codex"),
+	rule_paths: Some(RulePaths {
+		global: Some(global_rule_paths),
+		project: Some(project_rule_paths),
+	}),
 };
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn rule_paths_include_codex_overrides_before_base_files() {
+		let global_paths = DESCRIPTOR.global_rule_paths();
+		assert_eq!(global_paths.len(), 2);
+		assert!(global_paths[0].ends_with(".codex/AGENTS.override.md"));
+		assert!(global_paths[1].ends_with(".codex/AGENTS.md"));
+
+		let project_root = Path::new("/project");
+		assert_eq!(
+			DESCRIPTOR.project_rule_paths(project_root),
+			vec![
+				project_root.join("AGENTS.override.md"),
+				project_root.join("AGENTS.md"),
+			],
+		);
+	}
+}

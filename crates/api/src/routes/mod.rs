@@ -7,6 +7,7 @@ pub mod market;
 pub mod mcps;
 pub mod plugins;
 pub mod prompts;
+pub mod rules;
 pub mod skills;
 pub mod sub_agents;
 pub mod usage;

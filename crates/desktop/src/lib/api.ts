@@ -61,6 +61,13 @@ import type {
 	PromptStorageResponse,
 	UpdatePromptRequest,
 	ReconcileRequest,
+	RuleFileContentResponse,
+	RuleFileResponse,
+	RuleVersionPreferencesResponse,
+	RuleVersionResponse,
+	RuleVersionStorageResponse,
+	UpdateRuleContentRequest,
+	UpdateRuleVersionPreferencesRequest,
 	SkillResponse,
 	SkillCopyResolutionRequest,
 	SkillCopyResolutionResponse,
@@ -677,6 +684,78 @@ export function createApi(baseUrl: string, token: string) {
 				return client
 					.post("prompts/backup/import", { json: body })
 					.json();
+			},
+		},
+		rules: {
+			storage(): Promise<RuleVersionStorageResponse> {
+				return client.get("rules/versions/storage").json();
+			},
+			preferences(): Promise<RuleVersionPreferencesResponse> {
+				return client.get("rules/versions/preferences").json();
+			},
+			updatePreferences(
+				body: UpdateRuleVersionPreferencesRequest,
+			): Promise<RuleVersionPreferencesResponse> {
+				return client
+					.put("rules/versions/preferences", { json: body })
+					.json();
+			},
+			listAll(
+				scope: "global" | "project" | "all" = "global",
+				projectRoot?: string,
+			): Promise<RuleFileResponse[]> {
+				return client
+					.get("agents/all/rules", {
+						searchParams: {
+							scope,
+							...(projectRoot
+								? { project_root: projectRoot }
+								: {}),
+						},
+					})
+					.json();
+			},
+			getContent(
+				path: string,
+				scope: "global" | "project" | "all" = "global",
+				projectRoot?: string,
+			): Promise<RuleFileContentResponse> {
+				return client
+					.get("rules/content", {
+						searchParams: {
+							path,
+							scope,
+							...(projectRoot
+								? { project_root: projectRoot }
+								: {}),
+						},
+					})
+					.json();
+			},
+			updateContent(
+				body: UpdateRuleContentRequest,
+			): Promise<RuleFileContentResponse> {
+				return client.put("rules/content", { json: body }).json();
+			},
+			listVersions(
+				path: string,
+				scope: "global" | "project" | "all" = "global",
+				projectRoot?: string,
+			): Promise<RuleVersionResponse[]> {
+				return client
+					.get("rules/versions", {
+						searchParams: {
+							path,
+							scope,
+							...(projectRoot
+								? { project_root: projectRoot }
+								: {}),
+						},
+					})
+					.json();
+			},
+			clearVersions(): Promise<void> {
+				return client.delete("rules/versions").then(() => undefined);
 			},
 		},
 		market: {

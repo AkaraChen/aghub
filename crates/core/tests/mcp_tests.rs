@@ -105,6 +105,7 @@ static ADAPTER_TEST_DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	validate_args: &[],
 	project_markers: &[],
 	skills_cli_name: None,
+	rule_paths: None,
 };
 
 // ==================== Helpers ====================

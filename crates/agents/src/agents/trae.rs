@@ -92,4 +92,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	validate_args: &["--version"],
 	project_markers: &[".trae"],
 	skills_cli_name: Some("trae"),
+	rule_paths: None,
 };

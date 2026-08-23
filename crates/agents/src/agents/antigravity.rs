@@ -61,4 +61,5 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	validate_args: &["--version"],
 	project_markers: &[".gemini/antigravity"],
 	skills_cli_name: Some("antigravity"),
+	rule_paths: None,
 };

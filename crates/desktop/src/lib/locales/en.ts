@@ -29,6 +29,7 @@ export default {
 	subAgentInstructionPlaceholder:
 		"System prompt / instruction for this sub-agent...",
 	prompts: "Prompts",
+	promptsAndRules: "Prompts & Rules",
 	noPrompts: "No prompts yet",
 	noPromptsMatch: "No prompts match your search",
 	noPromptsDescription: "Create your first prompt to get started.",
@@ -90,6 +91,54 @@ export default {
 		"Local prompts that are not in this backup will be removed.",
 	promptBackupImported:
 		"Import complete: {{added}} added, {{updated}} updated, {{removed}} removed, {{total}} in total.",
+	rules: "Rules",
+	rulesEmptyTitle: "No rule files",
+	rulesEmptyDescription: "No managed rule files were found.",
+	rulesFileExists: "Exists",
+	rulesFileMissing: "Not created",
+	rulesSelectFile: "Select a rule file to view or edit it.",
+	rulesCreateOnSave:
+		"This file does not exist yet — it will be created on save.",
+	rulesSaved: "Rule file saved",
+	rulesSaveFailed: "Failed to save rule file",
+	rulesChangedOnDisk:
+		"This file changed outside AGHub. Reload it or overwrite it with your draft.",
+	rulesReloadFromDisk: "Reload from disk",
+	rulesOverwriteDisk: "Overwrite disk file",
+	rulesVersionHistory: "Version history",
+	rulesNoVersions:
+		"No previous versions yet. Saved content appears here after the next change.",
+	rulesLatestVersion: "Latest snapshot",
+	rulesVersionCount_one: "{{count}} version",
+	rulesVersionCount_other: "{{count}} versions",
+	rulesNoSavedVersions: "No saved versions",
+	rulesOpenVersionHistory: "View history",
+	rulesRestoreVersion: "Use this version",
+	searchRules: "Search rules...",
+	ruleVersionHistory: "Rule version history",
+	ruleVersionHistoryDescription:
+		"aghub keeps recent file contents so you can restore an earlier rule.",
+	ruleVersionStorageLocation: "Storage location",
+	ruleVersionAutomaticRecording: "Save previous versions automatically",
+	ruleVersionAutomaticRecordingDescription:
+		"Record the current file before aghub saves a change.",
+	ruleVersionRetention: "Versions per rule file",
+	ruleVersionRetentionDescription:
+		"The oldest versions are removed after this limit.",
+	ruleVersionRetentionError: "Enter a value from {{min}} to {{max}}.",
+	saveRuleVersionPreferences: "Save version settings",
+	ruleVersionPreferencesSaved: "Version settings saved",
+	ruleVersionPreferencesSaveFailed: "Failed to save version settings",
+	ruleVersionDataUnavailable: "Path unavailable",
+	clearRuleVersions: "Clear version history",
+	clearRuleVersionsDescription:
+		"Remove saved rule versions without changing the current rule files.",
+	clearRuleVersionsConfirmTitle: "Clear rule version history?",
+	clearRuleVersionsConfirmDescription:
+		"Saved versions will be removed. Current rule files will not change.",
+	clearRuleVersionsConfirmAction: "Clear history",
+	ruleVersionsCleared: "Rule version history cleared",
+	ruleVersionsClearFailed: "Failed to clear rule version history",
 	claudeCodePlugins: "Claude Code Plugins",
 	plugins: "Plugins",
 	pluginsDescription:
@@ -1491,7 +1540,7 @@ export default {
 	usageWindowWeeklySonnet: "Weekly (Sonnet)",
 	usageWindowOther: "Usage limit",
 	globalSearchLabel:
-		"Search agents, skills, MCP servers, sub-agents, prompts, and library",
+		"Search agents, skills, MCP servers, sub-agents, prompts, rules, and library",
 	globalSearchPlaceholder: "Search…",
 	globalSearchNoResults: "No matches",
 	globalSearchLibraryLoading: "Searching library…",
@@ -1499,7 +1548,7 @@ export default {
 	searchResultsTitle: "Search results",
 	searchResultsSubtitle: '{{count}} results for "{{query}}"',
 	searchResultsEmptyHint:
-		"Type something to search across your agents, skills, MCP servers, sub-agents, prompts, and the library.",
+		"Search your agents, skills, MCP servers, sub-agents, prompts, rules, and library.",
 	searchResultsShowMore: "Show {{count}} more",
 	searchResultsShowLess: "Show less",
 

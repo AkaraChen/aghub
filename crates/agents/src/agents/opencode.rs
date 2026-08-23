@@ -58,6 +58,12 @@ fn project_skill_write_path(root: &Path) -> Option<PathBuf> {
 	Some(root.join(".opencode/skills"))
 }
 
+fn global_rule_paths() -> Vec<PathBuf> {
+	home_dir()
+		.map(|home| vec![home.join(".config/opencode/AGENTS.md")])
+		.unwrap_or_default()
+}
+
 fn sub_agent_global_dir() -> Option<PathBuf> {
 	home_dir().map(|home| home.join(".config/opencode/agents"))
 }
@@ -140,4 +146,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	validate_args: &["--version"],
 	project_markers: &[".opencode"],
 	skills_cli_name: Some("opencode"),
+	rule_paths: Some(RulePaths {
+		global: Some(global_rule_paths),
+		project: Some(project_agents_md),
+	}),
 };
