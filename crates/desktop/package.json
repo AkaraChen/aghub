@@ -93,7 +93,7 @@
 		"eslint": "^10.7.0",
 		"eslint-plugin-better-tailwindcss": "^4.6.1",
 		"eslint-plugin-react-hooks": "^7.0.1",
-		"eslint-plugin-react-refresh": "^0.5.3",
+		"eslint-plugin-react-refresh": "^0.5.4",
 		"knip": "^6.31.0",
 		"nano-staged": "^1.0.0",
 		"prettier": "^3.9.6",
