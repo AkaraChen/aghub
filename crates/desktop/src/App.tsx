@@ -7,7 +7,7 @@ import {
 	onOpenUrl,
 } from "@tauri-apps/plugin-deep-link";
 import { NuqsAdapter } from "nuqs/adapters/react";
-import { Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useKeyBindings } from "rooks";
 import { Route, Router, Switch, useLocation } from "wouter";
@@ -21,25 +21,28 @@ import type { DeepLinkImportIntent } from "./lib/deep-link";
 import { parseDeepLink } from "./lib/deep-link";
 import { setupAppMenu } from "./lib/menu";
 import { initStore } from "./lib/store";
-import HomePage from "./pages/home";
-import InferenceProvidersPage from "./pages/inference-providers";
-import MarketPage from "./pages/market";
-import PluginsPage from "./pages/plugins";
-import ProjectDetailPage from "./pages/project/detail";
-import PromptsPage from "./pages/prompts";
-import SearchResultsPage from "./pages/search";
-import SettingsPage from "./pages/settings";
-import CustomAgentsPage from "./pages/settings/custom-agents";
-import MCPServersPage from "./pages/settings/mcp-servers";
-import RulesPage from "./pages/settings/rules";
-import SkillsPage from "./pages/settings/skills";
-import SubAgentsPage from "./pages/settings/sub-agents";
-import SkillsSearchPage from "./pages/skills-sh/search";
-import UsagePage from "./pages/usage";
 import { AgentAvailabilityProvider } from "./providers/agent-availability";
 import { ServerProvider } from "./providers/server";
 import { ThemeProvider } from "./providers/theme";
 import "./lib/i18n";
+
+const HomePage = lazy(() => import("./pages/home"));
+const InferenceProvidersPage = lazy(
+	() => import("./pages/inference-providers"),
+);
+const MarketPage = lazy(() => import("./pages/market"));
+const PluginsPage = lazy(() => import("./pages/plugins"));
+const ProjectDetailPage = lazy(() => import("./pages/project/detail"));
+const PromptsPage = lazy(() => import("./pages/prompts"));
+const SearchResultsPage = lazy(() => import("./pages/search"));
+const SettingsPage = lazy(() => import("./pages/settings"));
+const CustomAgentsPage = lazy(() => import("./pages/settings/custom-agents"));
+const MCPServersPage = lazy(() => import("./pages/settings/mcp-servers"));
+const RulesPage = lazy(() => import("./pages/settings/rules"));
+const SkillsPage = lazy(() => import("./pages/settings/skills"));
+const SubAgentsPage = lazy(() => import("./pages/settings/sub-agents"));
+const SkillsSearchPage = lazy(() => import("./pages/skills-sh/search"));
+const UsagePage = lazy(() => import("./pages/usage"));
 
 const queryClient = new QueryClient({
 	defaultOptions: {
@@ -334,7 +337,11 @@ function App() {
 									<Route path="/inference-providers">
 										<MainLayout>
 											<ErrorBoundary>
-												<InferenceProvidersPage />
+												<Suspense
+													fallback={<PageSkeleton />}
+												>
+													<InferenceProvidersPage />
+												</Suspense>
 											</ErrorBoundary>
 										</MainLayout>
 									</Route>
@@ -363,17 +370,29 @@ function App() {
 
 									<Route path="/settings">
 										<MainLayout>
-											<SettingsPage />
+											<Suspense
+												fallback={<PageSkeleton />}
+											>
+												<SettingsPage />
+											</Suspense>
 										</MainLayout>
 									</Route>
 									<Route path="/settings/custom-agents">
 										<MainLayout>
-											<CustomAgentsPage />
+											<Suspense
+												fallback={<PageSkeleton />}
+											>
+												<CustomAgentsPage />
+											</Suspense>
 										</MainLayout>
 									</Route>
 									<Route path="/projects/:id">
 										<MainLayout>
-											<ProjectDetailPage />
+											<Suspense
+												fallback={<PageSkeleton />}
+											>
+												<ProjectDetailPage />
+											</Suspense>
 										</MainLayout>
 									</Route>
 									<Route>

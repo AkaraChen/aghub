@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
-import { installMocks } from "./mocks";
+import { e2eApiUrl, installMocks } from "./mocks";
 
 let mockControl: Awaited<ReturnType<typeof installMocks>>;
 
@@ -1461,18 +1461,16 @@ test("the library agent matrix explains direct edits and reports success", async
 });
 
 test("the library agent matrix reports business failures", async ({ page }) => {
-	await page.route(
-		"http://localhost:45999/api/v1/skills/reconcile",
-		(route) =>
-			route.fulfill({
-				status: 200,
-				contentType: "application/json",
-				body: JSON.stringify({
-					success_count: 0,
-					failed_count: 1,
-					results: [],
-				}),
+	await page.route(e2eApiUrl("/skills/reconcile"), (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({
+				success_count: 0,
+				failed_count: 1,
+				results: [],
 			}),
+		}),
 	);
 	await page
 		.getByRole("button", {

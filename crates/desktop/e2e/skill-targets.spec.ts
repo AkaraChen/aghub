@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { agentInfo, installMocks } from "./mocks";
+import { agentInfo, e2eApiUrl, installMocks } from "./mocks";
 
 const importTargetAgents = [
 	agentInfo("claude", "Claude"),
@@ -57,12 +57,11 @@ async function expectSharedTargets(page: Page) {
 test.describe("GitHub import targets", () => {
 	test.beforeEach(async ({ page }) => {
 		await installMocks(page);
-		await page.route("http://localhost:45999/api/v1/agents", (route) =>
+		await page.route(e2eApiUrl("/agents"), (route) =>
 			route.fulfill({ json: importTargetAgents }),
 		);
-		await page.route(
-			"http://localhost:45999/api/v1/agents/availability",
-			(route) => route.fulfill({ json: importTargetAvailability }),
+		await page.route(e2eApiUrl("/agents/availability"), (route) =>
+			route.fulfill({ json: importTargetAvailability }),
 		);
 	});
 

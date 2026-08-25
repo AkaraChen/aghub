@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { SkillDirectoryDiffResponse } from "../src/generated/dto";
-import { agentInfo, installMocks } from "./mocks";
+import { agentInfo, e2eApiUrl, installMocks } from "./mocks";
 
 const modifiedSkillDiff: SkillDirectoryDiffResponse = {
 	identical: false,
@@ -864,7 +864,7 @@ test("matching copies use a compact source and relationship summary", async ({
 		["kimi", "Kimi"],
 		["antigravity", "Antigravity"],
 	] as const;
-	await page.route("http://localhost:45999/api/v1/agents", (route) =>
+	await page.route(e2eApiUrl("/agents"), (route) =>
 		route.fulfill({
 			status: 200,
 			contentType: "application/json",
@@ -873,21 +873,19 @@ test("matching copies use a compact source and relationship summary", async ({
 			),
 		}),
 	);
-	await page.route(
-		"http://localhost:45999/api/v1/agents/availability",
-		(route) =>
-			route.fulfill({
-				status: 200,
-				contentType: "application/json",
-				body: JSON.stringify(
-					agents.map(([id]) => ({
-						id,
-						has_global_directory: true,
-						has_cli: true,
-						is_available: true,
-					})),
-				),
-			}),
+	await page.route(e2eApiUrl("/agents/availability"), (route) =>
+		route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify(
+				agents.map(([id]) => ({
+					id,
+					has_global_directory: true,
+					has_cli: true,
+					is_available: true,
+				})),
+			),
+		}),
 	);
 	for (const [agent] of agents.slice(2)) {
 		mocks.addSkill("react-pro", agent);

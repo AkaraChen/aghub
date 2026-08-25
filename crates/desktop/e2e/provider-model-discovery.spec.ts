@@ -10,9 +10,9 @@ import type {
 	ClaudeProviderStateResponse,
 	CodexProviderStateResponse,
 } from "../src/generated/dto";
-import { installMocks } from "./mocks";
+import { e2eApiUrl, installMocks } from "./mocks";
 
-const INFERENCE_ROUTE = "http://localhost:45999/api/v1/inference/**";
+const INFERENCE_ROUTE = e2eApiUrl("/inference/**");
 
 async function installProviderDiscoveryMocks(
 	page: Page,
@@ -851,6 +851,12 @@ test("keeps a Codex model draft while provider state refreshes", async ({
 
 	await page.goto("/inference-providers");
 	await page.getByRole("option", { name: "Codex", exact: true }).click();
+	const codexPanel = page
+		.getByRole("heading", { name: "Codex", exact: true })
+		.locator('xpath=ancestor::*[@data-slot="card"][1]');
+	await expect(
+		codexPanel.locator('[data-slot="tooltip-trigger"] button'),
+	).toHaveCount(0);
 	await page.getByLabel("Model settings", { exact: true }).click();
 
 	const dialog = page.getByRole("dialog", {
@@ -935,6 +941,12 @@ test("keeps a Claude model draft while provider state refreshes", async ({
 
 	await page.goto("/inference-providers");
 	await page.getByRole("option", { name: "Claude", exact: true }).click();
+	const claudePanel = page
+		.getByRole("heading", { name: "Claude Code", exact: true })
+		.locator('xpath=ancestor::*[@data-slot="card"][1]');
+	await expect(
+		claudePanel.locator('[data-slot="tooltip-trigger"] button'),
+	).toHaveCount(0);
 	await page.getByLabel("Model settings", { exact: true }).click();
 
 	const dialog = page.getByRole("dialog", {

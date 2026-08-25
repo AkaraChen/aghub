@@ -10,6 +10,7 @@ import { useQueryState } from "nuqs";
 import { lazy, Suspense } from "react";
 import { useTranslation } from "react-i18next";
 import { useLocation } from "wouter";
+import { LazyImportGithubSkillPanel } from "../components/lazy-import-github-skill-panel";
 import { cn } from "../lib/utils";
 import SkillsShPage from "./skills-sh";
 
@@ -18,12 +19,6 @@ const PluginMarketContent = lazy(() =>
 		default: module.PluginMarketContent,
 	})),
 );
-const ImportGithubSkillPanel = lazy(() =>
-	import("../components/import-github-skill-panel").then((module) => ({
-		default: module.ImportGithubSkillPanel,
-	})),
-);
-
 function TabFallback() {
 	return (
 		<div className="flex h-full items-center justify-center">
@@ -358,9 +353,7 @@ export default function MarketPage() {
 					</Suspense>
 				)}
 				{activeTab === "github" && (
-					<Suspense fallback={<TabFallback />}>
-						<ImportGithubSkillPanel onDone={() => {}} />
-					</Suspense>
+					<LazyImportGithubSkillPanel onDone={() => {}} />
 				)}
 			</div>
 		</div>
