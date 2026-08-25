@@ -96,6 +96,9 @@ pub enum SkillProviderKindResponse {
 #[ts(export)]
 pub struct SkillProviderResponse {
 	pub kind: SkillProviderKindResponse,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub id: Option<String>,
 	pub qualified_name: String,
 	pub managed: bool,
 }

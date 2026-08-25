@@ -1691,12 +1691,14 @@ fn codex_skill_discovery_response(
 		.into_iter()
 		.filter(|skill| skill.enabled)
 		.filter_map(|skill| {
-			let kind = match skill.origin {
+			let (kind, provider_id) = match skill.origin {
 				CodexSkillOrigin::Standalone => return None,
-				CodexSkillOrigin::Plugin { .. } => {
-					SkillProviderKindResponse::Plugin
+				CodexSkillOrigin::Plugin { id } => {
+					(SkillProviderKindResponse::Plugin, Some(id))
 				}
-				CodexSkillOrigin::System => SkillProviderKindResponse::System,
+				CodexSkillOrigin::System => {
+					(SkillProviderKindResponse::System, None)
+				}
 			};
 			let source = match skill.scope {
 				CodexSkillScope::Repo => {
@@ -1709,6 +1711,7 @@ fn codex_skill_discovery_response(
 			let source_path = aghub_core::format_path_with_tilde(&skill.path)?;
 			let provider = SkillProviderResponse {
 				kind,
+				id: provider_id,
 				qualified_name: skill.qualified_name,
 				managed: true,
 			};
@@ -2762,7 +2765,6 @@ mod tests {
 					scope: CodexSkillScope::User,
 					enabled: true,
 					origin: CodexSkillOrigin::Standalone,
-					visible_from: vec!["/workspace".into()],
 				},
 				CodexSkillRecord {
 					qualified_name: "cloudflare:agents-sdk".to_string(),
@@ -2772,9 +2774,8 @@ mod tests {
 					scope: CodexSkillScope::User,
 					enabled: true,
 					origin: CodexSkillOrigin::Plugin {
-						namespace: "cloudflare".to_string(),
+						id: "cloudflare@openai-curated-remote".to_string(),
 					},
-					visible_from: vec!["/workspace".into()],
 				},
 				CodexSkillRecord {
 					qualified_name: "openai-docs".to_string(),
@@ -2784,7 +2785,6 @@ mod tests {
 					scope: CodexSkillScope::System,
 					enabled: true,
 					origin: CodexSkillOrigin::System,
-					visible_from: vec!["/workspace".into()],
 				},
 				CodexSkillRecord {
 					qualified_name: "cloudflare:disabled".to_string(),
@@ -2794,9 +2794,8 @@ mod tests {
 					scope: CodexSkillScope::User,
 					enabled: false,
 					origin: CodexSkillOrigin::Plugin {
-						namespace: "cloudflare".to_string(),
+						id: "cloudflare".to_string(),
 					},
-					visible_from: vec!["/workspace".into()],
 				},
 			],
 			errors: vec![CodexSkillLoadError {
@@ -2820,6 +2819,10 @@ mod tests {
 			.as_ref()
 			.unwrap();
 		assert_eq!(provider.qualified_name, "cloudflare:agents-sdk");
+		assert_eq!(
+			provider.id.as_deref(),
+			Some("cloudflare@openai-curated-remote")
+		);
 		assert!(provider.managed);
 		assert!(plugin.source_path.as_deref().unwrap().ends_with("SKILL.md"));
 		assert_eq!(response.errors[0].message, "invalid frontmatter");

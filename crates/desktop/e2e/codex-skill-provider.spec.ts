@@ -15,6 +15,7 @@ function codexProvidedSkill(
 	kind: SkillProviderKindResponse,
 	qualifiedName: string,
 	path: string,
+	id?: string,
 ): SkillResponse {
 	return {
 		name,
@@ -34,6 +35,7 @@ function codexProvidedSkill(
 				source: "global",
 				provider: {
 					kind,
+					id,
 					qualified_name: qualifiedName,
 					managed: true,
 				},
@@ -124,8 +126,9 @@ test("a plugin copy can be compared but is never a resolution target", async ({
 			codexProvidedSkill(
 				"react-pro",
 				"plugin",
-				"cloudflare:react-pro",
+				"react-pro",
 				pluginPath,
+				"cloudflare@openai-curated-remote",
 			),
 		]),
 	);
@@ -138,7 +141,7 @@ test("a plugin copy can be compared but is never a resolution target", async ({
 		.click();
 	const pluginVersion = page
 		.locator("[data-skill-version-choice]")
-		.filter({ hasText: "cloudflare:react-pro" });
+		.filter({ hasText: "cloudflare@openai-curated-remote" });
 	await expect(pluginVersion).toBeVisible();
 	await pluginVersion.click();
 	await page.getByRole("button", { name: /Use selected version/ }).click();

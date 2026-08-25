@@ -16,6 +16,8 @@ import { cn } from "../lib/utils";
 import {
 	getNodeChildren,
 	type LocationGroup,
+	skillProviderIdentity,
+	skillProviderSourceName,
 	summarizeSkillLinks,
 } from "./skill-detail-helpers";
 import { SkillHardLinkState } from "./skill-hard-link-state";
@@ -80,7 +82,9 @@ export function LocationRow({
 						installation.provider
 							? [
 									[
-										installation.provider.qualified_name,
+										skillProviderIdentity(
+											installation.provider,
+										),
 										installation.provider,
 									] as const,
 								]
@@ -131,7 +135,7 @@ export function LocationRow({
 					)}
 					{providerInstallations.map((provider) => (
 						<p
-							key={provider.qualified_name}
+							key={skillProviderIdentity(provider)}
 							className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted"
 						>
 							<span className="shrink-0">
@@ -144,9 +148,9 @@ export function LocationRow({
 							<span aria-hidden="true">·</span>
 							<code
 								className="min-w-0 truncate"
-								title={provider.qualified_name}
+								title={skillProviderSourceName(provider)}
 							>
-								{provider.qualified_name}
+								{skillProviderSourceName(provider)}
 							</code>
 						</p>
 					))}

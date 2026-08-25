@@ -43,6 +43,16 @@ export interface SkillLinkSummary {
 
 const SKILL_MARKDOWN_FILE = "SKILL.md";
 
+export function skillProviderIdentity(provider: SkillProviderResponse): string {
+	return `${provider.kind}:${provider.id ?? provider.qualified_name}`;
+}
+
+export function skillProviderSourceName(
+	provider: SkillProviderResponse,
+): string {
+	return provider.id ?? provider.qualified_name;
+}
+
 export function getNodeChildren(
 	node: SkillTreeNodeResponse,
 ): SkillTreeNodeResponse[] {
@@ -164,7 +174,7 @@ export function buildLocationGroups(
 		for (const location of locations) {
 			const existing = map.get(location.source_path);
 			const installation = {
-				id: `${item.agent}:${location.source}:${location.provider?.qualified_name ?? "installed"}`,
+				id: `${item.agent}:${location.source}:${location.provider ? skillProviderIdentity(location.provider) : "installed"}`,
 				agent: item.agent,
 				displayName: agentNames.get(item.agent) ?? item.agent,
 				source: location.source,

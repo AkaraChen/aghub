@@ -992,7 +992,7 @@ export default {
 		"Read Skills bundled with Codex or supplied by Codex plugins. Codex manages these files.",
 	codexSkillDiscoveryIncomplete: "Some Codex Skills were not read",
 	codexSkillDiscoveryUnavailable:
-		"AGHub could not read Skills from Codex. Other sources remain available.",
+		"aghub could not read Skills from Codex. Other sources remain available.",
 	codexSkillDiscoveryPartial_one:
 		"1 Skill could not be read. Other results remain available.",
 	codexSkillDiscoveryPartial_other:

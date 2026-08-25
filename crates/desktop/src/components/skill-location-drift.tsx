@@ -20,7 +20,10 @@ import {
 	skillDiffsContainLinks,
 	type SkillCopyVersion,
 } from "./skill-copy-versions";
-import type { LocationGroup } from "./skill-detail-helpers";
+import {
+	type LocationGroup,
+	skillProviderSourceName,
+} from "./skill-detail-helpers";
 import type { SkillVersionChoice } from "./skill-resolution-controls";
 import {
 	SkillComparisonUnavailableAlert,
@@ -466,7 +469,7 @@ function locationSource(location: LocationGroup, t: TFunction): string {
 					provider.kind === "plugin"
 						? "codexPluginSkill"
 						: "codexSystemSkill",
-				)} · ${provider.qualified_name}`;
+				)} · ${skillProviderSourceName(provider)}`;
 			}
 			return formatSkillTargetName(
 				t,

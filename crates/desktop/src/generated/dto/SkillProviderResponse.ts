@@ -3,6 +3,7 @@ import type { SkillProviderKindResponse } from "./SkillProviderKindResponse";
 
 export type SkillProviderResponse = {
 	kind: SkillProviderKindResponse;
+	id?: string;
 	qualified_name: string;
 	managed: boolean;
 };

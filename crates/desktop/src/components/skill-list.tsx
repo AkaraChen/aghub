@@ -159,7 +159,7 @@ interface SkillListProps {
 	seedKey?: string | null;
 	/** Comparison state for skill names with more than one physical copy. */
 	copyStatuses?: ReadonlyMap<string, SkillCopyListStatus>;
-	/** Skill names that Codex owns and AGHub must not modify. */
+	/** Skill names that Codex owns and aghub must not modify. */
 	readOnlyKeys?: ReadonlySet<string>;
 }
 

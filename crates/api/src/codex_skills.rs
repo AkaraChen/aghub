@@ -16,7 +16,7 @@ const SKILLS_REQUEST_ID: u64 = 2;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum CodexSkillOrigin {
 	Standalone,
-	Plugin { namespace: String },
+	Plugin { id: String },
 	System,
 }
 
@@ -38,7 +38,6 @@ pub(crate) struct CodexSkillRecord {
 	pub(crate) scope: CodexSkillScope,
 	pub(crate) enabled: bool,
 	pub(crate) origin: CodexSkillOrigin,
-	pub(crate) visible_from: Vec<PathBuf>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -144,7 +143,7 @@ where
 		serde_json::json!({
 			"clientInfo": {
 				"name": "aghub",
-				"title": "AGHub",
+				"title": "aghub",
 				"version": env!("CARGO_PKG_VERSION")
 			}
 		}),
@@ -279,6 +278,8 @@ struct SkillMetadata {
 	name: String,
 	description: String,
 	enabled: bool,
+	#[serde(default, rename = "pluginId")]
+	plugin_id: Option<String>,
 	path: PathBuf,
 	scope: CodexSkillScope,
 }
@@ -343,12 +344,14 @@ fn build_catalog(result: SkillsListResult) -> CodexSkillCatalog {
 	let mut errors = Vec::new();
 
 	for entry in result.data {
-		let cwd = PathBuf::from(&entry.cwd);
 		for skill in entry.skills {
 			let key = (skill.name.clone(), skill.path.clone());
-			let record = skills.entry(key).or_insert_with(|| {
-				let (base_name, origin) =
-					skill_identity(&skill.name, skill.scope);
+			skills.entry(key).or_insert_with(|| {
+				let (base_name, origin) = skill_identity(
+					&skill.name,
+					skill.scope,
+					skill.plugin_id.as_deref(),
+				);
 				CodexSkillRecord {
 					qualified_name: skill.name,
 					base_name,
@@ -357,12 +360,8 @@ fn build_catalog(result: SkillsListResult) -> CodexSkillCatalog {
 					scope: skill.scope,
 					enabled: skill.enabled,
 					origin,
-					visible_from: Vec::new(),
 				}
 			});
-			if !record.visible_from.contains(&cwd) {
-				record.visible_from.push(cwd.clone());
-			}
 		}
 		for error in entry.errors {
 			errors.push(CodexSkillLoadError {
@@ -382,12 +381,24 @@ fn build_catalog(result: SkillsListResult) -> CodexSkillCatalog {
 fn skill_identity(
 	qualified_name: &str,
 	scope: CodexSkillScope,
+	plugin_id: Option<&str>,
 ) -> (String, CodexSkillOrigin) {
+	if let Some(plugin_id) = plugin_id {
+		let base_name = qualified_name
+			.split_once(':')
+			.map_or(qualified_name, |(_, base_name)| base_name);
+		return (
+			base_name.to_string(),
+			CodexSkillOrigin::Plugin {
+				id: plugin_id.to_string(),
+			},
+		);
+	}
 	if let Some((namespace, base_name)) = qualified_name.split_once(':') {
 		return (
 			base_name.to_string(),
 			CodexSkillOrigin::Plugin {
-				namespace: namespace.to_string(),
+				id: namespace.to_string(),
 			},
 		);
 	}
@@ -477,10 +488,9 @@ mod tests {
 		assert_eq!(
 			plugin.origin,
 			CodexSkillOrigin::Plugin {
-				namespace: "cloudflare".to_string(),
+				id: "cloudflare".to_string(),
 			}
 		);
-		assert_eq!(plugin.visible_from.len(), 2);
 
 		let system = catalog
 			.skills
@@ -498,6 +508,38 @@ mod tests {
 		assert_eq!(catalog.errors.len(), 1);
 		assert_eq!(catalog.errors[0].cwd, "/workspace/one");
 		assert_eq!(catalog.errors[0].path, "/workspace/one/broken/SKILL.md");
+	}
+
+	#[test]
+	fn uses_explicit_plugin_id_without_a_qualified_name() {
+		let response = r#"{
+			"id": 2,
+			"result": {
+				"data": [{
+					"cwd": "/workspace",
+					"skills": [{
+						"name": "agents-sdk",
+						"description": "Plugin Skill",
+						"enabled": true,
+						"pluginId": "cloudflare@openai-curated-remote",
+						"path": "/home/user/.codex/plugins/cache/cloudflare/skills/agents-sdk/SKILL.md",
+						"scope": "user"
+					}],
+					"errors": []
+				}]
+			}
+		}"#;
+
+		let catalog =
+			parse_skills_response(response, 2).expect("skills response");
+
+		assert_eq!(catalog.skills[0].base_name, "agents-sdk");
+		assert_eq!(
+			catalog.skills[0].origin,
+			CodexSkillOrigin::Plugin {
+				id: "cloudflare@openai-curated-remote".to_string(),
+			}
+		);
 	}
 
 	#[tokio::test]

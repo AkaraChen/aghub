@@ -99,9 +99,11 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const { selectedEditor } = useCurrentCodeEditor();
 
 	const skill = group.items[0];
-	const isProviderManagedSkill = Boolean(
-		skill.locations?.length &&
-		skill.locations.every((location) => location.provider?.managed),
+	const isProviderManagedSkill = group.items.every(
+		(item) =>
+			Boolean(item.locations?.length) &&
+			item.locations?.every((location) => location.provider?.managed) ===
+				true,
 	);
 	const auditPaths = getInstalledSkillAuditPaths(group.items);
 	const primaryScope = skill.source ?? "global";
