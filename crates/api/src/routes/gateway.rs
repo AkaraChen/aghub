@@ -135,10 +135,10 @@ pub async fn list_gateway_instances(
 	state: &State<GatewayState>,
 ) -> ApiResult<Vec<GatewayInstanceDto>> {
 	let records = store(state).list().map_err(ApiError::from)?;
-	let mut instances = Vec::with_capacity(records.len());
-	for record in &records {
-		instances.push(instance_dto(state, record).await);
-	}
+	let instances = futures::future::join_all(
+		records.iter().map(|record| instance_dto(state, record)),
+	)
+	.await;
 	Ok(Json(instances))
 }
 
@@ -249,6 +249,7 @@ pub async fn update_gateway_instance(
 	request: Json<UpdateGatewayInstanceRequest>,
 ) -> ApiResult<GatewayInstanceDto> {
 	let mut record = store(state).get(id).map_err(ApiError::from)?;
+	let original = record.clone();
 	if request.auto_start.is_some() {
 		require_managed_instance(&record, "auto-start")?;
 	}
@@ -258,14 +259,38 @@ pub async fn update_gateway_instance(
 	if let Some(auto_start) = request.auto_start {
 		record.auto_start = auto_start;
 	}
+	let connection_changed = record.kind == GatewayInstanceKind::External
+		&& (request.base_url.is_some() || request.management_key.is_some());
+	let previous_key = if record.kind == GatewayInstanceKind::External {
+		state
+			.key_store
+			.get_key(gateway_projection::key_id(&record))?
+	} else {
+		None
+	};
+	let mut verified_client = None;
 	if record.kind == GatewayInstanceKind::External {
 		if let Some(base_url) = &request.base_url {
 			record.base_url = base_url.trim_end_matches('/').to_string();
 		}
-		if let Some(key) = &request.management_key {
-			state
-				.key_store
-				.set_key(gateway_projection::key_id(&record), key)?;
+		if connection_changed {
+			let key = request
+				.management_key
+				.as_deref()
+				.or(previous_key.as_deref())
+				.ok_or_else(|| {
+					ApiError::new(
+						Status::UnprocessableEntity,
+						format!(
+							"no management key stored for gateway '{}'",
+							record.name
+						),
+						"GATEWAY_KEY_MISSING",
+					)
+				})?;
+			let client = ManagementClient::new(&record.base_url, key)?;
+			client.ping().await.map_err(ApiError::from)?;
+			verified_client = Some(client);
 		}
 	} else if request.base_url.is_some() || request.management_key.is_some() {
 		return Err(ApiError::new(
@@ -275,12 +300,88 @@ pub async fn update_gateway_instance(
 			"INVALID_PARAM",
 		));
 	}
-	store(state)
-		.update(record.clone())
-		.map_err(ApiError::from)?;
-	// Keep the mirrored inventory entries in step when we can reach the
-	// instance; a rename alone should not fail on an offline gateway.
-	if let Ok(Some(client)) = management_client(state, &record) {
+	let key_changed = request.management_key.is_some();
+	if let Some(key) = &request.management_key {
+		state
+			.key_store
+			.set_key(gateway_projection::key_id(&record), key)?;
+	}
+	if let Err(error) = store(state).update(record.clone()) {
+		if key_changed {
+			let restore = match previous_key.as_deref() {
+				Some(key) => state
+					.key_store
+					.set_key(gateway_projection::key_id(&original), key),
+				None => state
+					.key_store
+					.delete_key(gateway_projection::key_id(&original)),
+			};
+			if let Err(cleanup) = restore {
+				log::error!(
+					"gateway '{}': failed to restore management key: {cleanup}",
+					original.name
+				);
+			}
+		}
+		return Err(ApiError::from(error));
+	}
+
+	if let Some(client) = verified_client {
+		if let Err(error) = gateway_projection::sync_gateway_providers(
+			&state.app_data_dir,
+			&record,
+			&client,
+		)
+		.await
+		{
+			if let Err(cleanup) = store(state).update(original.clone()) {
+				log::error!(
+					"gateway '{}': failed to restore instance record: {cleanup}",
+					original.name
+				);
+			}
+			if key_changed {
+				let restore = match previous_key.as_deref() {
+					Some(key) => state
+						.key_store
+						.set_key(gateway_projection::key_id(&original), key),
+					None => state
+						.key_store
+						.delete_key(gateway_projection::key_id(&original)),
+				};
+				if let Err(cleanup) = restore {
+					log::error!(
+						"gateway '{}': failed to restore management key: {cleanup}",
+						original.name
+					);
+				}
+			}
+			if let Some(key) = previous_key.as_deref() {
+				if let Ok(client) =
+					ManagementClient::new(&original.base_url, key)
+				{
+					if client.ping().await.is_ok() {
+						if let Err(cleanup) =
+							gateway_projection::sync_gateway_providers(
+								&state.app_data_dir,
+								&original,
+								&client,
+							)
+							.await
+						{
+							log::error!(
+								"gateway '{}': failed to restore provider projection: {}",
+								original.name,
+								cleanup
+							);
+						}
+					}
+				}
+			}
+			return Err(ApiError::from(error));
+		}
+	} else if let Ok(Some(client)) = management_client(state, &record) {
+		// A rename should still succeed while an existing gateway is offline.
 		if client.ping().await.is_ok() {
 			gateway_projection::sync_gateway_providers(
 				&state.app_data_dir,

@@ -43,3 +43,4 @@ log = { workspace = true }
 reqwest = { workspace = true }
 chrono = { workspace = true }
 url = { workspace = true }
+futures = { workspace = true }

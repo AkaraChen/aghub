@@ -3938,6 +3938,120 @@ mod tests {
 	}
 
 	#[test]
+	fn route_external_gateway_rejects_invalid_connection_update() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let key_store = MemoryGatewayKeyStore::default();
+		key_store
+			.keys
+			.lock()
+			.expect("keys")
+			.insert("external".to_string(), "original-key".to_string());
+		let record = aghub_cliproxy::GatewayInstanceRecord {
+			id: "external".to_string(),
+			name: "External".to_string(),
+			kind: aghub_cliproxy::GatewayInstanceKind::External,
+			base_url: "https://gateway.example".to_string(),
+			port: None,
+			auto_start: false,
+			created_at: "2026-07-24T00:00:00Z".to_string(),
+			provider_projection: Default::default(),
+		};
+		aghub_cliproxy::InstanceStore::new(app_data_dir.path())
+			.insert(record)
+			.expect("external instance");
+		let mut options = ApiOptions::new(0);
+		options.app_data_dir = Some(app_data_dir.path().to_path_buf());
+		options.auth_token = Some(TEST_AUTH_TOKEN.to_string());
+		options.gateway_key_store = Some(Box::new(key_store.clone()));
+		let client = Client::tracked(build_rocket(
+			rocket::Config::default(),
+			options.resolve(),
+		))
+		.expect("client");
+
+		let response = put_json(
+			&client,
+			"/api/v1/gateway/instances/external",
+			json!({
+				"base_url": "ftp://gateway.example",
+				"management_key": "replacement-key",
+			}),
+		);
+
+		assert_json_error(response, Status::BadRequest, "INVALID_PARAM");
+		let stored = aghub_cliproxy::InstanceStore::new(app_data_dir.path())
+			.get("external")
+			.expect("stored instance");
+		assert_eq!(stored.base_url, "https://gateway.example");
+		assert_eq!(
+			key_store
+				.keys
+				.lock()
+				.expect("keys")
+				.get("external")
+				.map(String::as_str),
+			Some("original-key")
+		);
+	}
+
+	#[test]
+	fn route_external_gateway_rolls_back_failed_connection_sync() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let key_store = MemoryGatewayKeyStore::default();
+		key_store
+			.keys
+			.lock()
+			.expect("keys")
+			.insert("external".to_string(), "original-key".to_string());
+		let record = aghub_cliproxy::GatewayInstanceRecord {
+			id: "external".to_string(),
+			name: "External".to_string(),
+			kind: aghub_cliproxy::GatewayInstanceKind::External,
+			base_url: "ftp://legacy.example".to_string(),
+			port: None,
+			auto_start: false,
+			created_at: "2026-07-24T00:00:00Z".to_string(),
+			provider_projection: Default::default(),
+		};
+		aghub_cliproxy::InstanceStore::new(app_data_dir.path())
+			.insert(record)
+			.expect("external instance");
+		let mut options = ApiOptions::new(0);
+		options.app_data_dir = Some(app_data_dir.path().to_path_buf());
+		options.auth_token = Some(TEST_AUTH_TOKEN.to_string());
+		options.gateway_key_store = Some(Box::new(key_store.clone()));
+		let client = Client::tracked(build_rocket(
+			rocket::Config::default(),
+			options.resolve(),
+		))
+		.expect("client");
+
+		let response = put_json(
+			&client,
+			"/api/v1/gateway/instances/external",
+			json!({
+				"base_url": gateway_with_invalid_api_keys(),
+				"management_key": "replacement-key",
+			}),
+		);
+
+		assert_eq!(response.status(), Status::InternalServerError);
+		let stored = aghub_cliproxy::InstanceStore::new(app_data_dir.path())
+			.get("external")
+			.expect("stored instance");
+		assert_eq!(stored.base_url, "ftp://legacy.example");
+		assert_eq!(
+			key_store
+				.keys
+				.lock()
+				.expect("keys")
+				.get("external")
+				.map(String::as_str),
+			Some("original-key")
+		);
+	}
+
+	#[test]
 	fn route_gateway_provision_status_defaults_to_idle() {
 		let app_data_dir = tempfile::tempdir().expect("app data dir");
 		let client = test_client(app_data_dir.path());

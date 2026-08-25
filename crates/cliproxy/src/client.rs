@@ -22,6 +22,18 @@ use crate::settings::{response_key, GatewaySettingSpec};
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
+fn is_loopback_url(url: &Url) -> bool {
+	match url.host() {
+		Some(url::Host::Ipv4(address)) => address.is_loopback(),
+		Some(url::Host::Ipv6(address)) => address.is_loopback(),
+		Some(url::Host::Domain(domain)) => {
+			domain.eq_ignore_ascii_case("localhost")
+				|| domain.eq_ignore_ascii_case("localhost.")
+		}
+		None => false,
+	}
+}
+
 pub struct ManagementClient {
 	http: reqwest::Client,
 	base_url: Url,
@@ -108,10 +120,26 @@ impl ManagementClient {
 				"invalid gateway base URL '{base_url}': {error}"
 			))
 		})?;
-		let http = reqwest::Client::builder()
+		if !matches!(base_url.scheme(), "http" | "https")
+			|| base_url.cannot_be_a_base()
+			|| base_url.host_str().is_none()
+			|| !base_url.username().is_empty()
+			|| base_url.password().is_some()
+			|| base_url.path() != "/"
+			|| base_url.query().is_some()
+			|| base_url.fragment().is_some()
+		{
+			return Err(GatewayError::Invalid(format!(
+				"invalid gateway base URL '{base_url}': expected an HTTP(S) origin"
+			)));
+		}
+		let mut http = reqwest::Client::builder()
 			.connect_timeout(CONNECT_TIMEOUT)
-			.timeout(REQUEST_TIMEOUT)
-			.build()?;
+			.timeout(REQUEST_TIMEOUT);
+		if is_loopback_url(&base_url) {
+			http = http.no_proxy();
+		}
+		let http = http.build()?;
 		Ok(Self {
 			http,
 			base_url,
@@ -361,7 +389,7 @@ impl ManagementClient {
 
 	pub async fn latest_version(&self) -> Result<String> {
 		let body = self.get_json("latest-version").await?;
-		// Release tags come back with their `v` prefix ("v7.2.81");
+		// Release tags come back with their `v` prefix ("v7.2.141");
 		// normalize so callers compare against the bare installed version.
 		Ok(body
 			.get("latest-version")
@@ -687,8 +715,45 @@ mod tests {
 	use super::*;
 	use crate::settings;
 	use std::io::{Read, Write};
-	use std::net::TcpListener;
+	use std::net::{TcpListener, TcpStream};
 	use std::sync::{Arc, Mutex};
+	use std::time::Duration;
+
+	fn read_request(stream: &mut TcpStream) -> String {
+		stream
+			.set_read_timeout(Some(Duration::from_secs(2)))
+			.expect("read timeout");
+		let mut request = Vec::new();
+		let mut expected_len = None;
+		loop {
+			let mut buffer = [0_u8; 1024];
+			let read = stream.read(&mut buffer).unwrap_or(0);
+			if read == 0 {
+				break;
+			}
+			request.extend_from_slice(&buffer[..read]);
+			if expected_len.is_none() {
+				let header_end =
+					request.windows(4).position(|window| window == b"\r\n\r\n");
+				if let Some(header_end) = header_end {
+					let headers =
+						String::from_utf8_lossy(&request[..header_end]);
+					let content_length = headers.lines().find_map(|line| {
+						let (name, value) = line.split_once(':')?;
+						name.eq_ignore_ascii_case("content-length")
+							.then(|| value.trim().parse::<usize>().ok())
+							.flatten()
+					});
+					expected_len =
+						Some(header_end + 4 + content_length.unwrap_or(0));
+				}
+			}
+			if expected_len.is_some_and(|length| request.len() >= length) {
+				break;
+			}
+		}
+		String::from_utf8_lossy(&request).to_string()
+	}
 
 	/// Minimal single-purpose HTTP responder: answers every connection with
 	/// the given status/body and records the last raw request.
@@ -703,10 +768,8 @@ mod tests {
 		std::thread::spawn(move || {
 			for stream in listener.incoming() {
 				let Ok(mut stream) = stream else { break };
-				let mut buffer = [0_u8; 8192];
-				let read = stream.read(&mut buffer).unwrap_or(0);
 				*recorded.lock().expect("mock lock") =
-					String::from_utf8_lossy(&buffer[..read]).to_string();
+					read_request(&mut stream);
 				let response = format!(
 					"HTTP/1.1 {status} X\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
 					body.len()
@@ -719,6 +782,20 @@ mod tests {
 
 	fn client(base: &str) -> ManagementClient {
 		ManagementClient::new(base, "test-key").expect("client")
+	}
+
+	#[test]
+	fn rejects_non_http_management_urls() {
+		for base_url in [
+			"ftp://gateway.example",
+			"https://gateway.example/management",
+			"https://user@gateway.example",
+		] {
+			assert!(matches!(
+				ManagementClient::new(base_url, "test-key"),
+				Err(GatewayError::Invalid(_))
+			));
+		}
 	}
 
 	#[tokio::test]
@@ -778,7 +855,10 @@ mod tests {
 		let base = format!("http://{}", listener.local_addr().expect("addr"));
 		drop(listener);
 		let error = client(&base).ping().await.expect_err("must fail");
-		assert!(matches!(error, GatewayError::Unreachable { .. }));
+		assert!(
+			matches!(error, GatewayError::Unreachable { .. }),
+			"unexpected error: {error:?}"
+		);
 	}
 
 	#[tokio::test]
