@@ -226,7 +226,9 @@ export default {
 	chineseSimplified: "簡體中文",
 	chineseTraditional: "繁體中文",
 	noAgentsDescription: "安裝 AI 程式碼代理以在此管理它們。",
+	searchAgentsLabel: "搜尋代理",
 	searchAgents: "搜尋代理...",
+	agentStatusFilterLabel: "按狀態篩選代理",
 	noAgentsMatch: "沒有符合的代理",
 	adjustFiltersDescription: "請嘗試調整搜尋或篩選條件。",
 
