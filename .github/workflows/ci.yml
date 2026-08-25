@@ -107,7 +107,7 @@ jobs:
                   bun-version: latest
 
             - name: Setup sccache
-              uses: mozilla-actions/sccache-action@v0.0.10
+              uses: mozilla-actions/sccache-action@v0.0.11
 
             - name: Rust Cache
               uses: Swatinem/rust-cache@v2
