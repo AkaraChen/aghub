@@ -161,7 +161,7 @@ export function createDefaultUsageSettings(): UsageSettings {
 			until: "",
 		},
 		home: {
-			showUsageOnHome: true,
+			showUsageOnHome: false,
 			windowDays: 30,
 			default: {
 				windowSlots: [...DEFAULT_WINDOW_SLOTS],

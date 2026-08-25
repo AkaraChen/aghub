@@ -2372,16 +2372,17 @@ test("usage settings restore the complete default state", async ({ page }) => {
 		page.getByText("Default settings", { exact: true }),
 	).toBeVisible();
 
-	const windowPicker = page.getByRole("button", { name: "Usage window" });
-	await windowPicker.click();
-	await page.getByRole("option", { name: "90 days" }).click();
 	const homeSwitch = page.getByRole("switch", {
 		name: "Show usage on home",
 	});
+	await expect(homeSwitch).not.toBeChecked();
 	await homeSwitch
 		.locator('xpath=ancestor::*[@data-slot="switch-content"]')
 		.click();
-	await expect(homeSwitch).not.toBeChecked();
+	await expect(homeSwitch).toBeChecked();
+	const windowPicker = page.getByRole("button", { name: "Usage window" });
+	await windowPicker.click();
+	await page.getByRole("option", { name: "90 days" }).click();
 	await page.getByRole("button", { name: "Editing layout for" }).click();
 	await page.getByRole("option", { name: "Codex" }).click();
 
@@ -2402,7 +2403,7 @@ test("usage settings restore the complete default state", async ({ page }) => {
 		page.getByRole("alertdialog", { name: "Restore usage defaults" }),
 	).toHaveCount(0);
 
-	await expect(homeSwitch).toBeChecked();
+	await expect(homeSwitch).not.toBeChecked();
 	await expect(windowPicker).toContainText("30 days");
 	await expect(
 		page.getByRole("button", { name: "Editing layout for" }),

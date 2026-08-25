@@ -54,7 +54,7 @@ crates/agents/src/
 - **Codex/Mistral**: TOML config format
 - **Copilot**: Shares `~/.claude/skills/` path with Claude
 - **SSE transport**: Deprecated in `models.rs` — use `StreamableHttp` instead (SSE identity lost on OpenCode roundtrip anyway)
-- **Universal skills** (amp, cline, codex, cursor, gemini, opencode, warp): also read `$XDG_CONFIG_HOME/agents/skills`
+- **Universal skills** (amp, cline, codex, cursor, gemini, opencode, warp): also read `~/.agents/skills`
 - **Registry fallback**: If agent ID unknown, returns Claude's descriptor silently
 
 ## ADDING AN AGENT
