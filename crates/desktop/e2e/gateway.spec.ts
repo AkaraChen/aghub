@@ -7,7 +7,7 @@ const instance = (status: "starting" | "running" | "stopped") => ({
 	kind: "managed",
 	base_url: "http://127.0.0.1:8317",
 	port: 8317,
-	version: "7.2.81",
+	version: "7.2.141",
 	auto_start: status === "stopped",
 	status,
 	created_at: "2026-07-22T00:00:00Z",
@@ -36,9 +36,9 @@ async function installGatewayPageRoutes(
 		}
 		if (path === "/gateway/instances/gateway-1/version") {
 			return json(route, {
-				installed: "7.2.81",
-				pinned: "7.2.81",
-				latest: "7.2.81",
+				installed: "7.2.141",
+				pinned: "7.2.141",
+				latest: "7.2.141",
 				bin_source: "downloaded",
 				system_bin: null,
 			});

@@ -22,15 +22,15 @@ use crate::error::{GatewayError, Result};
 /// The CLIProxyAPI release this aghub build was validated against.
 /// Upgrades are explicit: bump after re-running the management contract
 /// tests against the new release.
-pub const PINNED_VERSION: &str = "7.2.81";
+pub const PINNED_VERSION: &str = "7.2.141";
 
 const DEFAULT_DOWNLOAD_BASE: &str =
 	"https://github.com/router-for-me/CLIProxyAPI/releases/download";
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
-// v7.2.81's largest supported archive is 15,325,274 bytes. This leaves more
-// than four times that size for release growth without allowing unbounded data.
+// v7.2.141's largest supported archive is 21,426,201 bytes. This leaves room
+// for release growth without allowing unbounded data.
 const MAX_ARCHIVE_BYTES: u64 = 64 * 1024 * 1024;
-// v7.2.81 expands to less than 40 MiB and contains fewer than 20 entries.
+// Published archives contain one executable and a small set of support files.
 // These limits leave room for release growth while bounding decompression.
 const MAX_EXTRACTED_BYTES: u64 = 256 * 1024 * 1024;
 const MAX_ARCHIVE_ENTRIES: usize = 256;
@@ -93,23 +93,23 @@ fn expected_checksum(version: &str, asset: &str) -> Result<&'static str> {
 		)));
 	}
 	match asset {
-		"CLIProxyAPI_7.2.81_darwin_aarch64.tar.gz" => Ok(
-			"c48e80b51973f3102f7eac78c32be9bcfcde0dad48aa940d0bc2ee7052fa741a",
+		"CLIProxyAPI_7.2.141_darwin_aarch64.tar.gz" => Ok(
+			"728fb56a1a45dc3590ddb94ada247393ee2d464b089170562482cf584fa27bc2",
 		),
-		"CLIProxyAPI_7.2.81_darwin_amd64.tar.gz" => Ok(
-			"75af5e17e4d211422d1dadf37dbfe715c2c8acad5b9784afe25ed5394e238376",
+		"CLIProxyAPI_7.2.141_darwin_amd64.tar.gz" => Ok(
+			"fa88dbabf5000e04095ce7b2c1a7babbc579a58755c6ef3b94e6013c1daae50a",
 		),
-		"CLIProxyAPI_7.2.81_linux_aarch64.tar.gz" => Ok(
-			"861a8fd33f6f57945d29e632ab4cca826a69649bc37be1fbccfaef0fd019f889",
+		"CLIProxyAPI_7.2.141_linux_aarch64.tar.gz" => Ok(
+			"2881c0a6bcbc412c4bbdb2799ffbf1b4bcdd927475e1e42f621b68eae314ef3f",
 		),
-		"CLIProxyAPI_7.2.81_linux_amd64.tar.gz" => Ok(
-			"9a21b417e76c94267f747357bb83f87c8e9fccd5b15cbf8c3a8b3de1418a6472",
+		"CLIProxyAPI_7.2.141_linux_amd64.tar.gz" => Ok(
+			"a70015ee303502e24be64061dd0d5985b2b4600f0605a076b993322d3b7effb3",
 		),
-		"CLIProxyAPI_7.2.81_windows_aarch64.zip" => Ok(
-			"83e67f73ae622d1a1eb93655aca67521c68e6d1ba8e1713bdb36c8487819ad91",
+		"CLIProxyAPI_7.2.141_windows_aarch64.zip" => Ok(
+			"95825afc303bf7193b3cb022b3fe7a897f1c9ed82068b50bea23ab4dc1f3e9be",
 		),
-		"CLIProxyAPI_7.2.81_windows_amd64.zip" => Ok(
-			"46f1aeddc8eddaf6c4369e0e9c7307ca3348c6d846b59ad26f1d8d038e8fad6b",
+		"CLIProxyAPI_7.2.141_windows_amd64.zip" => Ok(
+			"d675c8a8548b6814c3b5184bc74fa0e54dfd32269cefc8e9b753fc5dce4001ce",
 		),
 		_ => Err(GatewayError::Download(format!(
 			"no trusted checksum is pinned for {asset}"
@@ -154,7 +154,7 @@ fn release_arch() -> Result<&'static str> {
 	}
 }
 
-/// e.g. `CLIProxyAPI_7.2.81_darwin_aarch64.tar.gz`
+/// e.g. `CLIProxyAPI_7.2.141_darwin_aarch64.tar.gz`
 pub fn asset_name(version: &str) -> Result<String> {
 	let extension = if std::env::consts::OS == "windows" {
 		"zip"
@@ -743,8 +743,8 @@ mod tests {
 
 	#[test]
 	fn asset_name_matches_release_convention() {
-		let name = asset_name("7.2.81").expect("asset name");
-		assert!(name.starts_with("CLIProxyAPI_7.2.81_"));
+		let name = asset_name(PINNED_VERSION).expect("asset name");
+		assert!(name.starts_with("CLIProxyAPI_7.2.141_"));
 		#[cfg(target_os = "macos")]
 		assert!(name.contains("_darwin_"));
 		#[cfg(not(target_os = "windows"))]
@@ -808,9 +808,9 @@ mod tests {
 		let install = committed_install(dir.path());
 		let current_asset = asset_name(PINNED_VERSION).expect("asset name");
 		let other_asset = if current_asset.contains("_linux_") {
-			"CLIProxyAPI_7.2.81_darwin_amd64.tar.gz"
+			"CLIProxyAPI_7.2.141_darwin_amd64.tar.gz"
 		} else {
-			"CLIProxyAPI_7.2.81_linux_amd64.tar.gz"
+			"CLIProxyAPI_7.2.141_linux_amd64.tar.gz"
 		};
 		let checksum =
 			expected_checksum(PINNED_VERSION, other_asset).expect("checksum");
