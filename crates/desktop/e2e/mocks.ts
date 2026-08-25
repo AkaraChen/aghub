@@ -1104,9 +1104,9 @@ export async function installMocks(page: Page) {
 				});
 			}
 		},
-		addAgent(id: string, displayName: string) {
+		addAgent(id: string, displayName: string, universal = false) {
 			if (!agents.some((agent) => agent.id === id)) {
-				agents.push(agentInfo(id, displayName));
+				agents.push(agentInfo(id, displayName, universal));
 			}
 			if (!availability.some((agent) => agent.id === id)) {
 				availability.push({
