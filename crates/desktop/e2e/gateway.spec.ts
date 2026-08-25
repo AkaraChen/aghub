@@ -1,5 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
-import { installMocks } from "./mocks";
+import { e2eApiUrl, installMocks } from "./mocks";
 
 const instance = (status: "starting" | "running" | "stopped") => ({
 	id: "gateway-1",
@@ -24,7 +24,7 @@ async function installGatewayPageRoutes(
 	page: Page,
 	status: "starting" | "running",
 ) {
-	await page.route("http://localhost:45999/api/v1/**", (route) => {
+	await page.route(e2eApiUrl("/**"), (route) => {
 		const url = new URL(route.request().url());
 		const path = url.pathname.replace("/api/v1", "");
 
@@ -78,7 +78,7 @@ test("auto-start retries discovery before starting an opted-in gateway", async (
 }) => {
 	let listRequests = 0;
 	let startRequests = 0;
-	await page.route("http://localhost:45999/api/v1/gateway/**", (route) => {
+	await page.route(e2eApiUrl("/gateway/**"), (route) => {
 		const url = new URL(route.request().url());
 		if (url.pathname.endsWith("/gateway/instances")) {
 			listRequests += 1;
@@ -134,7 +134,7 @@ test("external gateways do not query the managed binary version", async ({
 	const authFilesRequested = new Promise<void>((resolve) => {
 		resolveAuthFilesRequest = resolve;
 	});
-	await page.route("http://localhost:45999/api/v1/**", (route) => {
+	await page.route(e2eApiUrl("/**"), (route) => {
 		const url = new URL(route.request().url());
 		const path = url.pathname.replace("/api/v1", "");
 
