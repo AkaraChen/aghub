@@ -240,7 +240,9 @@ export default {
 	chineseSimplified: "简体中文",
 	chineseTraditional: "繁體中文",
 	noAgentsDescription: "Install AI coding agents to manage them here.",
+	searchAgentsLabel: "Search agents",
 	searchAgents: "Search agents...",
+	agentStatusFilterLabel: "Filter agents by status",
 	noAgentsMatch: "No agents match",
 	adjustFiltersDescription: "Try adjusting your search or filters.",
 

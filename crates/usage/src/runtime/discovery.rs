@@ -25,7 +25,10 @@ impl PackageRunner {
 		}
 	}
 
-	fn with_prefix(program: PathBuf, prefix_args: Vec<OsString>) -> Self {
+	pub(super) fn with_prefix(
+		program: PathBuf,
+		prefix_args: Vec<OsString>,
+	) -> Self {
 		Self {
 			program,
 			prefix_args,

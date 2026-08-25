@@ -23,7 +23,7 @@ import { matrixGroup } from "../../components/agent-coverage-matrix";
 import { BulkActionsPanel } from "../../components/bulk-actions-panel";
 import { BulkDeleteDialog } from "../../components/bulk-delete-dialog";
 import { CreateSkillPanel } from "../../components/create-skill-panel";
-import { ImportGithubSkillPanel } from "../../components/import-github-skill-panel";
+import { LazyImportGithubSkillPanel } from "../../components/lazy-import-github-skill-panel";
 import { ImportSkillPanel } from "../../components/import-skill-panel";
 import { ManageSkillAgentsDialog } from "../../components/manage-skill-agents-dialog";
 import { GroupNameDialog } from "../../components/resource-group-dialogs";
@@ -631,11 +631,11 @@ export default function SkillsPage() {
 									onDone={() => setPanelMode(null)}
 								/>
 							) : panelMode === "import-github" ? (
-								<ImportGithubSkillPanel
+								<LazyImportGithubSkillPanel
 									onDone={() => setPanelMode(null)}
 								/>
 							) : panelMode === "update-source" ? (
-								<ImportGithubSkillPanel
+								<LazyImportGithubSkillPanel
 									initialUrl={
 										focusedSourceInfo?.url ?? undefined
 									}

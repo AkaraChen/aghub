@@ -25,7 +25,7 @@ import {
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type {
@@ -45,6 +45,7 @@ import {
 	syncClaudeProviderMutationOptions,
 	updateClaudeProviderMutationOptions,
 } from "../../requests/inference-providers";
+import { ProviderActionButton } from "./provider-action-button";
 import { selectValidProviderId } from "./provider-selection";
 import { ProviderActiveBadge, ProviderRowShell } from "./provider-row";
 
@@ -578,24 +579,18 @@ function ClaudeModelSettingsDialog({
 	onSave: (selection: ClaudeModelSelection) => void;
 }) {
 	const { t } = useTranslation();
-	const [selection, setSelection] = useState<ClaudeModelSelection>({});
-
-	const modelOptions = useMemo(() => {
-		if (!provider) return [];
-		return providerModelOptions(provider, activeModel, isActive);
-	}, [activeModel, isActive, provider]);
-
-	useEffect(() => {
-		if (!provider || !isOpen) return;
-		setSelection(
-			providerModelSelection(
-				provider,
-				modelOptions,
-				activeModel,
-				isActive,
-			),
+	const modelOptions = provider
+		? providerModelOptions(provider, activeModel, isActive)
+		: [];
+	const [selection, setSelection] = useState<ClaudeModelSelection>(() => {
+		if (!provider) return {};
+		return providerModelSelection(
+			provider,
+			modelOptions,
+			activeModel,
+			isActive,
 		);
-	}, [activeModel, isActive, isOpen, modelOptions, provider]);
+	});
 
 	const label =
 		provider?.matched_inference_provider?.display_name ??
@@ -714,30 +709,18 @@ function ClaudeOfficialRow({
 			}
 			description={t("claudeOfficialDescription")}
 			actions={
-				<Tooltip delay={0}>
-					<Tooltip.Trigger>
-						<Button
-							isIconOnly
-							size="sm"
-							variant="ghost"
-							isPending={isPending}
-							isDisabled={isActive}
-							aria-label={
-								isActive
-									? t("claudeProviderAlreadyActive")
-									: t("enable")
-							}
-							onPress={onActivate}
-						>
-							<PlayIcon className="size-4" />
-						</Button>
-					</Tooltip.Trigger>
-					<Tooltip.Content>
-						{isActive
+				<ProviderActionButton
+					accessibleName={
+						isActive
 							? t("claudeProviderAlreadyActive")
-							: t("enable")}
-					</Tooltip.Content>
-				</Tooltip>
+							: t("enable")
+					}
+					isPending={isPending}
+					isDisabled={isActive}
+					onPress={onActivate}
+				>
+					<PlayIcon className="size-4" />
+				</ProviderActionButton>
 			}
 		/>
 	);
@@ -804,89 +787,55 @@ function ClaudeProviderRow({
 			actions={
 				<>
 					{modelOptions.length > 0 && (
-						<Tooltip delay={0}>
-							<Tooltip.Trigger>
-								<Button
-									isIconOnly
-									variant="ghost"
-									size="sm"
-									aria-label={t("claudeModelSettings")}
-									isDisabled={isBusy}
-									onPress={onEditModels}
-								>
-									<Cog6ToothIcon className="size-4" />
-								</Button>
-							</Tooltip.Trigger>
-							<Tooltip.Content>
-								{t("claudeModelSettings")}
-							</Tooltip.Content>
-						</Tooltip>
+						<ProviderActionButton
+							accessibleName={t("claudeModelSettings")}
+							isDisabled={isBusy}
+							onPress={onEditModels}
+						>
+							<Cog6ToothIcon className="size-4" />
+						</ProviderActionButton>
 					)}
 					{matchedProvider && (
-						<Tooltip delay={0}>
-							<Tooltip.Trigger>
-								<Button
-									isIconOnly
-									variant="ghost"
-									size="sm"
-									aria-label={t("syncClaudeProvider")}
-									isPending={isSyncing}
-									onPress={onSync}
-								>
-									<ArrowPathIcon className="size-4" />
-								</Button>
-							</Tooltip.Trigger>
-							<Tooltip.Content>
-								{t("syncClaudeProviderFromInferenceProvider", {
-									name: matchedProvider.display_name,
-								})}
-							</Tooltip.Content>
-						</Tooltip>
+						<ProviderActionButton
+							accessibleName={t("syncClaudeProvider")}
+							tooltip={t(
+								"syncClaudeProviderFromInferenceProvider",
+								{ name: matchedProvider.display_name },
+							)}
+							isPending={isSyncing}
+							onPress={onSync}
+						>
+							<ArrowPathIcon className="size-4" />
+						</ProviderActionButton>
 					)}
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								className="text-muted hover:text-danger"
-								aria-label={t("deleteClaudeProvider")}
-								isPending={isDeleting}
-								onPress={onDelete}
-							>
-								<TrashIcon className="size-4" />
-							</Button>
-						</Tooltip.Trigger>
-						<Tooltip.Content>{t("delete")}</Tooltip.Content>
-					</Tooltip>
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								isPending={isSelecting}
-								isDisabled={
-									isActive || !canSelect || !primaryModel
-								}
-								aria-label={
-									isActive
-										? t("claudeProviderAlreadyActive")
-										: t("enable")
-								}
-								onPress={() => onSelect(modelSelection)}
-							>
-								<PlayIcon className="size-4" />
-							</Button>
-						</Tooltip.Trigger>
-						<Tooltip.Content>
-							{isActive
+					<ProviderActionButton
+						accessibleName={t("deleteClaudeProvider")}
+						tooltip={t("delete")}
+						className="text-muted hover:text-danger"
+						isPending={isDeleting}
+						onPress={onDelete}
+					>
+						<TrashIcon className="size-4" />
+					</ProviderActionButton>
+					<ProviderActionButton
+						accessibleName={
+							isActive
+								? t("claudeProviderAlreadyActive")
+								: t("enable")
+						}
+						tooltip={
+							isActive
 								? t("claudeProviderAlreadyActive")
 								: !canSelect
 									? t("claudeNoProfiles")
-									: t("enable")}
-						</Tooltip.Content>
-					</Tooltip>
+									: t("enable")
+						}
+						isPending={isSelecting}
+						isDisabled={isActive || !canSelect || !primaryModel}
+						onPress={() => onSelect(modelSelection)}
+					>
+						<PlayIcon className="size-4" />
+					</ProviderActionButton>
 				</>
 			}
 			actionsClassName="flex-wrap gap-2"
@@ -1039,46 +988,24 @@ export function ClaudeInferenceProviderPanel(_: {
 								</div>
 							</div>
 							<div className="flex shrink-0 items-center gap-2">
-								<Tooltip delay={0}>
-									<Tooltip.Trigger>
-										<Button
-											isIconOnly
-											variant="ghost"
-											size="sm"
-											aria-label={t("showConfigFolder")}
-											onPress={handleShowFolder}
-										>
-											<FolderOpenIcon className="size-4" />
-										</Button>
-									</Tooltip.Trigger>
-									<Tooltip.Content>
-										{t("showConfigFolder")}
-									</Tooltip.Content>
-								</Tooltip>
-								<Tooltip delay={0}>
-									<Tooltip.Trigger>
-										<Button
-											isIconOnly
-											variant="ghost"
-											size="sm"
-											aria-label={t(
-												"refreshClaudeProviders",
-											)}
-											onPress={() => refetch()}
-										>
-											<ArrowPathIcon
-												className={cn(
-													"size-4",
-													isFetching &&
-														"animate-spin",
-												)}
-											/>
-										</Button>
-									</Tooltip.Trigger>
-									<Tooltip.Content>
-										{t("refresh")}
-									</Tooltip.Content>
-								</Tooltip>
+								<ProviderActionButton
+									accessibleName={t("showConfigFolder")}
+									onPress={handleShowFolder}
+								>
+									<FolderOpenIcon className="size-4" />
+								</ProviderActionButton>
+								<ProviderActionButton
+									accessibleName={t("refreshClaudeProviders")}
+									tooltip={t("refresh")}
+									onPress={() => refetch()}
+								>
+									<ArrowPathIcon
+										className={cn(
+											"size-4",
+											isFetching && "animate-spin",
+										)}
+									/>
+								</ProviderActionButton>
 								<Button
 									size="sm"
 									aria-label={t("createClaudeProvider")}
@@ -1169,6 +1096,11 @@ export function ClaudeInferenceProviderPanel(_: {
 			/>
 
 			<ClaudeModelSettingsDialog
+				key={
+					modelSettingsTarget
+						? `model-settings:provider:${modelSettingsTarget.id}`
+						: "model-settings:closed"
+				}
 				provider={modelSettingsTarget}
 				isOpen={Boolean(modelSettingsTarget)}
 				activeModel={activeModel}

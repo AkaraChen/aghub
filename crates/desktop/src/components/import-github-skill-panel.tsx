@@ -48,7 +48,7 @@ import { invalidateSkillQueries } from "../requests/skills";
 import { SkillAudit } from "./skill-audit";
 import { SkillTargetSelector } from "./skill-target-selector";
 
-interface ImportGithubSkillPanelProps {
+export interface ImportGithubSkillPanelProps {
 	onDone: () => void;
 	projectPath?: string;
 	/** Pre-fills the repository URL — used by a library's "update from

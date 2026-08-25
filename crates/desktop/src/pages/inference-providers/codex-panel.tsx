@@ -24,7 +24,7 @@ import {
 	toast,
 } from "@heroui/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import type {
@@ -43,6 +43,7 @@ import {
 	syncCodexProviderMutationOptions,
 	updateCodexProfileProviderMutationOptions,
 } from "../../requests/inference-providers";
+import { ProviderActionButton } from "./provider-action-button";
 import { selectValidProviderId } from "./provider-selection";
 import { ProviderActiveBadge, ProviderRowShell } from "./provider-row";
 
@@ -368,25 +369,19 @@ function CodexModelSettingsDialog({
 	onSave: (model: string) => void;
 }) {
 	const { t } = useTranslation();
-	const [selectedModel, setSelectedModel] = useState("");
-
-	const modelOptions = useMemo(() => {
-		if (!provider) return [];
-		return codexModelOptionsWithSelected(
-			provider.models,
-			isActive ? activeModel : undefined,
+	const modelOptions = provider
+		? codexModelOptionsWithSelected(
+				provider.models,
+				isActive ? activeModel : undefined,
+			)
+		: [];
+	const [selectedModel, setSelectedModel] = useState(() => {
+		if (!provider) return "";
+		return selectCodexModel(
+			isActive ? activeModel : provider.models[0]?.id,
+			modelOptions,
 		);
-	}, [activeModel, isActive, provider]);
-
-	useEffect(() => {
-		if (!provider || !isOpen) return;
-		setSelectedModel(
-			selectCodexModel(
-				isActive ? activeModel : provider.models[0]?.id,
-				modelOptions,
-			),
-		);
-	}, [activeModel, isActive, isOpen, modelOptions, provider]);
+	});
 
 	const label =
 		provider?.matched_inference_provider?.display_name ??
@@ -511,30 +506,16 @@ function CodexOfficialRow({
 			}
 			description={t("codexLoginProviderInfo")}
 			actions={
-				<Tooltip delay={0}>
-					<Tooltip.Trigger>
-						<Button
-							isIconOnly
-							size="sm"
-							variant="ghost"
-							isPending={isPending}
-							isDisabled={isActive}
-							aria-label={
-								isActive
-									? t("codexProviderAlreadyActive")
-									: t("enable")
-							}
-							onPress={onActivate}
-						>
-							<PlayIcon className="size-4" />
-						</Button>
-					</Tooltip.Trigger>
-					<Tooltip.Content>
-						{isActive
-							? t("codexProviderAlreadyActive")
-							: t("enable")}
-					</Tooltip.Content>
-				</Tooltip>
+				<ProviderActionButton
+					accessibleName={
+						isActive ? t("codexProviderAlreadyActive") : t("enable")
+					}
+					isPending={isPending}
+					isDisabled={isActive}
+					onPress={onActivate}
+				>
+					<PlayIcon className="size-4" />
+				</ProviderActionButton>
 			}
 		/>
 	);
@@ -603,105 +584,70 @@ function CodexProviderRow({
 			actions={
 				<>
 					{modelOptions.length > 0 && (
-						<Tooltip delay={0}>
-							<Tooltip.Trigger>
-								<Button
-									isIconOnly
-									variant="ghost"
-									size="sm"
-									aria-label={t("codexModelSettings")}
-									isDisabled={!canSelect || isBusy}
-									onPress={onEditModels}
-								>
-									<Cog6ToothIcon className="size-4" />
-								</Button>
-							</Tooltip.Trigger>
-							<Tooltip.Content>
-								{t("codexModelSettings")}
-							</Tooltip.Content>
-						</Tooltip>
+						<ProviderActionButton
+							accessibleName={t("codexModelSettings")}
+							isDisabled={!canSelect || isBusy}
+							onPress={onEditModels}
+						>
+							<Cog6ToothIcon className="size-4" />
+						</ProviderActionButton>
 					)}
 					{matchedProvider && !isExternal && (
-						<Tooltip delay={0}>
-							<Tooltip.Trigger>
-								<Button
-									isIconOnly
-									variant="ghost"
-									size="sm"
-									aria-label={t("syncCodexProvider")}
-									isPending={isSyncing}
-									onPress={onSync}
-								>
-									<ArrowPathIcon className="size-4" />
-								</Button>
-							</Tooltip.Trigger>
-							<Tooltip.Content>
-								{t("syncCodexProviderFromInferenceProvider", {
-									name: matchedProvider.display_name,
-								})}
-							</Tooltip.Content>
-						</Tooltip>
+						<ProviderActionButton
+							accessibleName={t("syncCodexProvider")}
+							tooltip={t(
+								"syncCodexProviderFromInferenceProvider",
+								{ name: matchedProvider.display_name },
+							)}
+							isPending={isSyncing}
+							onPress={onSync}
+						>
+							<ArrowPathIcon className="size-4" />
+						</ProviderActionButton>
 					)}
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								className="text-muted hover:text-danger"
-								aria-label={
-									isExternal
-										? t("codexProviderExternalTooltip")
-										: t("deleteCodexProvider")
-								}
-								isPending={isDeleting}
-								isDisabled={isExternal}
-								onPress={onDelete}
-							>
-								<TrashIcon className="size-4" />
-							</Button>
-						</Tooltip.Trigger>
-						<Tooltip.Content>
-							{isExternal
+					<ProviderActionButton
+						accessibleName={
+							isExternal
 								? t("codexProviderExternalTooltip")
-								: t("delete")}
-						</Tooltip.Content>
-					</Tooltip>
-					<Tooltip delay={0}>
-						<Tooltip.Trigger>
-							<Button
-								isIconOnly
-								variant="ghost"
-								size="sm"
-								isPending={isSelecting}
-								isDisabled={
-									isActive || !canSelect || !selectedModel
-								}
-								aria-label={
-									isActive
-										? t("codexProviderAlreadyActive")
-										: t("enable")
-								}
-								onPress={() =>
-									onSelect(
-										selectedModel &&
-											modelIds.has(selectedModel)
-											? selectedModel
-											: undefined,
-									)
-								}
-							>
-								<PlayIcon className="size-4" />
-							</Button>
-						</Tooltip.Trigger>
-						<Tooltip.Content>
-							{isActive
+								: t("deleteCodexProvider")
+						}
+						tooltip={
+							isExternal
+								? t("codexProviderExternalTooltip")
+								: t("delete")
+						}
+						className="text-muted hover:text-danger"
+						isPending={isDeleting}
+						isDisabled={isExternal}
+						onPress={onDelete}
+					>
+						<TrashIcon className="size-4" />
+					</ProviderActionButton>
+					<ProviderActionButton
+						accessibleName={
+							isActive
+								? t("codexProviderAlreadyActive")
+								: t("enable")
+						}
+						tooltip={
+							isActive
 								? t("codexProviderAlreadyActive")
 								: !canSelect
 									? t("codexNoProfiles")
-									: t("enable")}
-						</Tooltip.Content>
-					</Tooltip>
+									: t("enable")
+						}
+						isPending={isSelecting}
+						isDisabled={isActive || !canSelect || !selectedModel}
+						onPress={() =>
+							onSelect(
+								selectedModel && modelIds.has(selectedModel)
+									? selectedModel
+									: undefined,
+							)
+						}
+					>
+						<PlayIcon className="size-4" />
+					</ProviderActionButton>
 				</>
 			}
 			actionsClassName="flex-wrap gap-2"
@@ -851,46 +797,24 @@ export function CodexInferenceProviderPanel(_: {
 								</div>
 							</div>
 							<div className="flex shrink-0 items-center gap-2">
-								<Tooltip delay={0}>
-									<Tooltip.Trigger>
-										<Button
-											isIconOnly
-											variant="ghost"
-											size="sm"
-											aria-label={t("showConfigFolder")}
-											onPress={handleShowFolder}
-										>
-											<FolderOpenIcon className="size-4" />
-										</Button>
-									</Tooltip.Trigger>
-									<Tooltip.Content>
-										{t("showConfigFolder")}
-									</Tooltip.Content>
-								</Tooltip>
-								<Tooltip delay={0}>
-									<Tooltip.Trigger>
-										<Button
-											isIconOnly
-											variant="ghost"
-											size="sm"
-											aria-label={t(
-												"refreshCodexProviders",
-											)}
-											onPress={() => refetch()}
-										>
-											<ArrowPathIcon
-												className={cn(
-													"size-4",
-													isFetching &&
-														"animate-spin",
-												)}
-											/>
-										</Button>
-									</Tooltip.Trigger>
-									<Tooltip.Content>
-										{t("refresh")}
-									</Tooltip.Content>
-								</Tooltip>
+								<ProviderActionButton
+									accessibleName={t("showConfigFolder")}
+									onPress={handleShowFolder}
+								>
+									<FolderOpenIcon className="size-4" />
+								</ProviderActionButton>
+								<ProviderActionButton
+									accessibleName={t("refreshCodexProviders")}
+									tooltip={t("refresh")}
+									onPress={() => refetch()}
+								>
+									<ArrowPathIcon
+										className={cn(
+											"size-4",
+											isFetching && "animate-spin",
+										)}
+									/>
+								</ProviderActionButton>
 								<Button
 									size="sm"
 									aria-label={t("createCodexProvider")}
@@ -979,6 +903,11 @@ export function CodexInferenceProviderPanel(_: {
 			/>
 
 			<CodexModelSettingsDialog
+				key={
+					modelSettingsTarget
+						? `model-settings:provider:${modelSettingsTarget.id}`
+						: "model-settings:closed"
+				}
 				provider={modelSettingsTarget}
 				isOpen={Boolean(modelSettingsTarget)}
 				activeModel={activeProfile?.model}

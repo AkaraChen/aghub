@@ -10,7 +10,7 @@ import { CreateMcpPanel } from "../../components/create-mcp-panel";
 import { CreateSkillPanel } from "../../components/create-skill-panel";
 import { CreateSubAgentPanel } from "../../components/create-sub-agent-panel";
 import { EditMcpPanel } from "../../components/edit-mcp-panel";
-import { ImportGithubSkillPanel } from "../../components/import-github-skill-panel";
+import { LazyImportGithubSkillPanel } from "../../components/lazy-import-github-skill-panel";
 import { ImportMcpPanel } from "../../components/import-mcp-panel";
 import { ImportSkillPanel } from "../../components/import-skill-panel";
 import { ManageAgentsDialog } from "../../components/manage-agents-dialog";
@@ -449,7 +449,7 @@ export default function ProjectDetailPage() {
 					/>
 				)}
 				{panelMode === "import-github-skill" && (
-					<ImportGithubSkillPanel
+					<LazyImportGithubSkillPanel
 						onDone={() => setPanelMode(null)}
 						projectPath={project.path}
 					/>

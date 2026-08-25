@@ -5,9 +5,14 @@ import {
 	type Response,
 	type Route,
 } from "@playwright/test";
-import { installMocks } from "./mocks";
+import type {
+	AgentProviderResponse,
+	ClaudeProviderStateResponse,
+	CodexProviderStateResponse,
+} from "../src/generated/dto";
+import { e2eApiUrl, installMocks } from "./mocks";
 
-const INFERENCE_ROUTE = "http://localhost:45999/api/v1/inference/**";
+const INFERENCE_ROUTE = e2eApiUrl("/inference/**");
 
 async function installProviderDiscoveryMocks(
 	page: Page,
@@ -21,7 +26,7 @@ async function installProviderDiscoveryMocks(
 		onFetchModels: (route: Route) => Promise<void>;
 	},
 ) {
-	await installMocks(page);
+	const mocks = await installMocks(page);
 	await page.route(INFERENCE_ROUTE, async (route) => {
 		const request = route.request();
 		const path = new URL(request.url()).pathname.replace("/api/v1", "");
@@ -42,6 +47,7 @@ async function installProviderDiscoveryMocks(
 		}
 		await route.fallback();
 	});
+	return mocks;
 }
 
 function waitForModelListResponse(page: Page) {
@@ -785,6 +791,194 @@ test("keeps a model row cleared while discovery is pending", async ({
 	await expect(modelName).toHaveCount(2);
 	await expect(modelName.first()).toHaveValue("");
 	await expect(modelName.nth(1)).toHaveValue("fetched-model");
+});
+
+test("keeps a Codex model draft while provider state refreshes", async ({
+	page,
+}) => {
+	const provider: AgentProviderResponse = {
+		id: "custom-codex",
+		source_provider_id: null,
+		name: "Custom Codex",
+		format: "openai_responses",
+		api_base_url: "https://api.example.com/v1",
+		credential: { type: "none" },
+		models: [
+			{ id: "gpt-a", name: "GPT A" },
+			{ id: "gpt-b", name: "GPT B" },
+			{ id: "gpt-c", name: "GPT C" },
+		],
+		source: "custom",
+		matched_inference_provider: null,
+		model: null,
+		haiku_model: null,
+		sonnet_model: null,
+		opus_model: null,
+	};
+	let activeModel = "gpt-a";
+	const mocks = await installProviderDiscoveryMocks(page, {
+		onFetchModels: async (route) => {
+			await route.fulfill({ json: [] });
+		},
+	});
+	mocks.addAgent("codex", "Codex");
+	await page.route(INFERENCE_ROUTE, async (route) => {
+		const request = route.request();
+		const path = new URL(request.url()).pathname.replace("/api/v1", "");
+		if (
+			request.method() === "GET" &&
+			path === "/inference/agents/codex/state"
+		) {
+			const state: CodexProviderStateResponse = {
+				active_profile_id: "default",
+				profiles: [
+					{
+						id: "default",
+						name: "Default",
+						is_default: true,
+						is_active: true,
+						selected_provider_id: provider.id,
+						model: activeModel,
+					},
+				],
+				providers: [provider],
+			};
+			await route.fulfill({ json: state });
+			return;
+		}
+		await route.fallback();
+	});
+
+	await page.goto("/inference-providers");
+	await page.getByRole("option", { name: "Codex", exact: true }).click();
+	const codexPanel = page
+		.getByRole("heading", { name: "Codex", exact: true })
+		.locator('xpath=ancestor::*[@data-slot="card"][1]');
+	await expect(
+		codexPanel.locator('[data-slot="tooltip-trigger"] button'),
+	).toHaveCount(0);
+	await page.getByLabel("Model settings", { exact: true }).click();
+
+	const dialog = page.getByRole("dialog", {
+		name: "Custom Codex model settings",
+	});
+	const primaryModel = dialog.locator('[data-slot="select-trigger"]');
+	await primaryModel.click();
+	await page.getByRole("option", { name: "GPT C", exact: true }).click();
+	await expect(primaryModel).toContainText("GPT C");
+
+	activeModel = "gpt-b";
+	const refreshedState = page.waitForResponse((response) =>
+		new URL(response.url()).pathname.endsWith(
+			"/inference/agents/codex/state",
+		),
+	);
+	// A provider-state refresh can arrive while the modal owns pointer focus.
+	await page
+		.getByLabel("Refresh Codex providers", { exact: true })
+		.dispatchEvent("click");
+	await waitForRendererAfterResponse(page, refreshedState);
+
+	await expect(primaryModel).toContainText("GPT C");
+	await dialog.getByRole("button", { name: "Cancel" }).click();
+	await expect(dialog).toHaveCount(0);
+	await page.getByLabel("Model settings", { exact: true }).click();
+	await expect(
+		page
+			.getByRole("dialog", { name: "Custom Codex model settings" })
+			.locator('[data-slot="select-trigger"]'),
+	).toContainText("GPT B");
+});
+
+test("keeps a Claude model draft while provider state refreshes", async ({
+	page,
+}) => {
+	const provider: AgentProviderResponse = {
+		id: "custom-claude",
+		source_provider_id: null,
+		name: "Custom Claude",
+		format: "anthropic",
+		api_base_url: "https://api.example.com",
+		credential: { type: "none" },
+		models: [
+			{ id: "claude-a", name: "Claude A" },
+			{ id: "claude-b", name: "Claude B" },
+			{ id: "claude-c", name: "Claude C" },
+		],
+		source: "custom",
+		matched_inference_provider: null,
+		model: null,
+		haiku_model: null,
+		sonnet_model: null,
+		opus_model: null,
+	};
+	let activeModel = "claude-a";
+	await installProviderDiscoveryMocks(page, {
+		onFetchModels: async (route) => {
+			await route.fulfill({ json: [] });
+		},
+	});
+	await page.route(INFERENCE_ROUTE, async (route) => {
+		const request = route.request();
+		const path = new URL(request.url()).pathname.replace("/api/v1", "");
+		if (
+			request.method() === "GET" &&
+			path === "/inference/agents/claude/state"
+		) {
+			const state: ClaudeProviderStateResponse = {
+				providers: [provider],
+				active_provider_id: provider.id,
+				active_model: activeModel,
+				active_haiku_model: null,
+				active_sonnet_model: null,
+				active_opus_model: null,
+			};
+			await route.fulfill({ json: state });
+			return;
+		}
+		await route.fallback();
+	});
+
+	await page.goto("/inference-providers");
+	await page.getByRole("option", { name: "Claude", exact: true }).click();
+	const claudePanel = page
+		.getByRole("heading", { name: "Claude Code", exact: true })
+		.locator('xpath=ancestor::*[@data-slot="card"][1]');
+	await expect(
+		claudePanel.locator('[data-slot="tooltip-trigger"] button'),
+	).toHaveCount(0);
+	await page.getByLabel("Model settings", { exact: true }).click();
+
+	const dialog = page.getByRole("dialog", {
+		name: "Custom Claude model settings",
+	});
+	const primaryModel = dialog.locator('[data-slot="select-trigger"]').first();
+	await primaryModel.click();
+	await page.getByRole("option", { name: "Claude C", exact: true }).click();
+	await expect(primaryModel).toContainText("Claude C");
+
+	activeModel = "claude-b";
+	const refreshedState = page.waitForResponse((response) =>
+		new URL(response.url()).pathname.endsWith(
+			"/inference/agents/claude/state",
+		),
+	);
+	// A provider-state refresh can arrive while the modal owns pointer focus.
+	await page
+		.getByLabel("Refresh Claude Code providers", { exact: true })
+		.dispatchEvent("click");
+	await waitForRendererAfterResponse(page, refreshedState);
+
+	await expect(primaryModel).toContainText("Claude C");
+	await dialog.getByRole("button", { name: "Cancel" }).click();
+	await expect(dialog).toHaveCount(0);
+	await page.getByLabel("Model settings", { exact: true }).click();
+	await expect(
+		page
+			.getByRole("dialog", { name: "Custom Claude model settings" })
+			.locator('[data-slot="select-trigger"]')
+			.first(),
+	).toContainText("Claude B");
 });
 
 test("announces a discovery error and clears it after the scope changes", async ({

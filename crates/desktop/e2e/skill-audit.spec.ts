@@ -4,7 +4,7 @@ import type {
 	SkillCopyResolutionRequest,
 	SkillDirectoryDiffResponse,
 } from "../src/generated/dto";
-import { installMocks } from "./mocks";
+import { e2eApiUrl, installMocks } from "./mocks";
 
 const REVIEW_DIGEST = "a".repeat(64);
 const REVIEW_ASSESSMENT_DIGEST = "c".repeat(64);
@@ -93,24 +93,21 @@ test("a hidden warning returns when the skill assessment changes", async ({
 	await installMocks(page);
 	let contentDigest = "c".repeat(64);
 	const auditedDigests: string[] = [];
-	await page.route(
-		"http://localhost:45999/api/v1/skills/audit",
-		async (route) => {
-			const body = route.request().postDataJSON() as { paths?: string[] };
-			if (body.paths?.some((path) => path.includes("react-pro"))) {
-				auditedDigests.push(contentDigest);
-			}
-			await route.fulfill({
-				status: 200,
-				contentType: "application/json",
-				body: JSON.stringify({
-					...suspiciousAudit,
-					content_digest: contentDigest,
-					assessment_digest: contentDigest,
-				}),
-			});
-		},
-	);
+	await page.route(e2eApiUrl("/skills/audit"), async (route) => {
+		const body = route.request().postDataJSON() as { paths?: string[] };
+		if (body.paths?.some((path) => path.includes("react-pro"))) {
+			auditedDigests.push(contentDigest);
+		}
+		await route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({
+				...suspiciousAudit,
+				content_digest: contentDigest,
+				assessment_digest: contentDigest,
+			}),
+		});
+	});
 
 	await page.goto("/skills");
 	const acknowledgeButton = page.getByRole("button", {
@@ -143,35 +140,29 @@ test("a non-benign Git import confirms the audited content digest without nestin
 }) => {
 	await installMocks(page);
 	const requests: Array<Record<string, unknown>> = [];
-	await page.route(
-		"http://localhost:45999/api/v1/skills/git/install",
-		async (route) => {
-			const body = route.request().postDataJSON() as Record<
-				string,
-				unknown
-			>;
-			requests.push(body);
-			const auditOnly = body.audit_only === true;
-			await route.fulfill({
-				status: 200,
-				contentType: "application/json",
-				body: JSON.stringify({
-					results: auditOnly
-						? []
-						: [
-								{
-									name: "fresh-skill",
-									agent: "claude",
-									success: true,
-									error: null,
-								},
-							],
-					audit: suspiciousAudit,
-					audit_confirmation_required: auditOnly,
-				}),
-			});
-		},
-	);
+	await page.route(e2eApiUrl("/skills/git/install"), async (route) => {
+		const body = route.request().postDataJSON() as Record<string, unknown>;
+		requests.push(body);
+		const auditOnly = body.audit_only === true;
+		await route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({
+				results: auditOnly
+					? []
+					: [
+							{
+								name: "fresh-skill",
+								agent: "claude",
+								success: true,
+								error: null,
+							},
+						],
+				audit: suspiciousAudit,
+				audit_confirmation_required: auditOnly,
+			}),
+		});
+	});
 
 	await openAlphaPackUpdate(page);
 	await page.getByRole("button", { name: "Scan", exact: true }).click();
@@ -220,22 +211,19 @@ test("a non-benign Git import confirms the audited content digest without nestin
 test("a changed non-benign re-audit opens its findings", async ({ page }) => {
 	await installMocks(page);
 	let requestCount = 0;
-	await page.route(
-		"http://localhost:45999/api/v1/skills/git/install",
-		async (route) => {
-			requestCount += 1;
-			const changed = requestCount === 2;
-			await route.fulfill({
-				status: 200,
-				contentType: "application/json",
-				body: JSON.stringify({
-					results: [],
-					audit: changed ? suspiciousAudit : benignAudit,
-					audit_confirmation_required: changed,
-				}),
-			});
-		},
-	);
+	await page.route(e2eApiUrl("/skills/git/install"), async (route) => {
+		requestCount += 1;
+		const changed = requestCount === 2;
+		await route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({
+				results: [],
+				audit: changed ? suspiciousAudit : benignAudit,
+				audit_confirmation_required: changed,
+			}),
+		});
+	});
 
 	await openAlphaPackUpdate(page);
 	await page.getByRole("button", { name: "Scan", exact: true }).click();
@@ -265,43 +253,37 @@ test("an expired install session is re-audited before confirmation is retried", 
 		content_digest: "e".repeat(64),
 		assessment_digest: "f".repeat(64),
 	};
-	await page.route(
-		"http://localhost:45999/api/v1/skills/install",
-		async (route) => {
-			const body = route.request().postDataJSON() as Record<
-				string,
-				unknown
-			>;
-			requests.push(body);
-			if (requests.length === 2) {
-				await route.fulfill({
-					status: 404,
-					contentType: "application/json",
-					body: JSON.stringify({
-						error: "Session not found or expired",
-						code: "SESSION_NOT_FOUND",
-					}),
-				});
-				return;
-			}
-			const refreshed = requests.length >= 3;
+	await page.route(e2eApiUrl("/skills/install"), async (route) => {
+		const body = route.request().postDataJSON() as Record<string, unknown>;
+		requests.push(body);
+		if (requests.length === 2) {
 			await route.fulfill({
-				status: 200,
+				status: 404,
 				contentType: "application/json",
 				body: JSON.stringify({
-					success: requests.length === 4,
-					audit: refreshed ? refreshedAudit : suspiciousAudit,
-					audit_confirmation_required: true,
-					session_id:
-						requests.length === 4
-							? null
-							: refreshed
-								? "session-new"
-								: "session-old",
+					error: "Session not found or expired",
+					code: "SESSION_NOT_FOUND",
 				}),
 			});
-		},
-	);
+			return;
+		}
+		const refreshed = requests.length >= 3;
+		await route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({
+				success: requests.length === 4,
+				audit: refreshed ? refreshedAudit : suspiciousAudit,
+				audit_confirmation_required: true,
+				session_id:
+					requests.length === 4
+						? null
+						: refreshed
+							? "session-new"
+							: "session-old",
+			}),
+		});
+	});
 
 	const deepLink =
 		"aghub://import?type=skill&source=github%2FAkaraChen%2Falpha-pack&name=fresh-skill";
@@ -347,16 +329,13 @@ test("a suspicious allowed local audit does not ask for confirmation", async ({
 	page,
 }) => {
 	await installMocks(page);
-	await page.route(
-		"http://localhost:45999/api/v1/skills/audit",
-		async (route) => {
-			await route.fulfill({
-				status: 200,
-				contentType: "application/json",
-				body: JSON.stringify(allowedSuspiciousAudit),
-			});
-		},
-	);
+	await page.route(e2eApiUrl("/skills/audit"), async (route) => {
+		await route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify(allowedSuspiciousAudit),
+		});
+	});
 
 	await page.goto("/skills");
 	await page.evaluate(() => {
@@ -416,31 +395,28 @@ test("Git sync audits first and confirms the same content digest before writing"
 	);
 
 	const requests: SkillCopyResolutionRequest[] = [];
-	await page.route(
-		"http://localhost:45999/api/v1/skills/copies/resolve",
-		async (route) => {
-			const body = route
-				.request()
-				.postDataJSON() as SkillCopyResolutionRequest;
-			requests.push(body);
-			await route.fulfill({
-				status: 200,
-				contentType: "application/json",
-				body: JSON.stringify({
-					name: "react-pro",
-					reference_hash: body.expected_reference_hash,
-					results: body.audit_only
-						? []
-						: body.targets.map((target) => ({
-								source_path: target.source_path,
-								content_hash: body.expected_reference_hash,
-							})),
-					audit: suspiciousAudit,
-					audit_confirmation_required: true,
-				}),
-			});
-		},
-	);
+	await page.route(e2eApiUrl("/skills/copies/resolve"), async (route) => {
+		const body = route
+			.request()
+			.postDataJSON() as SkillCopyResolutionRequest;
+		requests.push(body);
+		await route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({
+				name: "react-pro",
+				reference_hash: body.expected_reference_hash,
+				results: body.audit_only
+					? []
+					: body.targets.map((target) => ({
+							source_path: target.source_path,
+							content_hash: body.expected_reference_hash,
+						})),
+				audit: suspiciousAudit,
+				audit_confirmation_required: true,
+			}),
+		});
+	});
 
 	await page.goto("/skills");
 	await expect(
@@ -511,31 +487,28 @@ test("resetting a Git scan discards its late response", async ({ page }) => {
 	const scanGate = new Promise<void>((resolve) => {
 		releaseScan = resolve;
 	});
-	await page.route(
-		"http://localhost:45999/api/v1/skills/git/scan",
-		async (route) => {
-			await scanGate;
-			await route.fulfill({
-				status: 200,
-				contentType: "application/json",
-				body: JSON.stringify({
-					session_id: "late-session",
-					branches: ["main"],
-					current_branch: "main",
-					skills: [
-						{
-							name: "late-skill",
-							description: "late scan result",
-							author: null,
-							version: null,
-							path: "skills/late-skill",
-							audit: benignAudit,
-						},
-					],
-				}),
-			});
-		},
-	);
+	await page.route(e2eApiUrl("/skills/git/scan"), async (route) => {
+		await scanGate;
+		await route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({
+				session_id: "late-session",
+				branches: ["main"],
+				current_branch: "main",
+				skills: [
+					{
+						name: "late-skill",
+						description: "late scan result",
+						author: null,
+						version: null,
+						path: "skills/late-skill",
+						audit: benignAudit,
+					},
+				],
+			}),
+		});
+	});
 
 	await openAlphaPackUpdate(page);
 	const scanRequest = page.waitForRequest((request) =>
@@ -570,26 +543,20 @@ test("leaving a Git import while auditing never starts the write phase", async (
 		releaseAudit = resolve;
 	});
 	const requests: Array<Record<string, unknown>> = [];
-	await page.route(
-		"http://localhost:45999/api/v1/skills/git/install",
-		async (route) => {
-			const body = route.request().postDataJSON() as Record<
-				string,
-				unknown
-			>;
-			requests.push(body);
-			if (body.audit_only === true) await auditGate;
-			await route.fulfill({
-				status: 200,
-				contentType: "application/json",
-				body: JSON.stringify({
-					results: [],
-					audit: benignAudit,
-					audit_confirmation_required: false,
-				}),
-			});
-		},
-	);
+	await page.route(e2eApiUrl("/skills/git/install"), async (route) => {
+		const body = route.request().postDataJSON() as Record<string, unknown>;
+		requests.push(body);
+		if (body.audit_only === true) await auditGate;
+		await route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({
+				results: [],
+				audit: benignAudit,
+				audit_confirmation_required: false,
+			}),
+		});
+	});
 
 	await openAlphaPackUpdate(page);
 	await page.getByRole("button", { name: "Scan", exact: true }).click();
@@ -624,71 +591,59 @@ test("switching branches discards the previous audit and session", async ({
 	page,
 }) => {
 	await installMocks(page);
-	await page.route(
-		"http://localhost:45999/api/v1/skills/git/scan",
-		async (route) => {
-			const body = route.request().postDataJSON() as {
-				branch?: string | null;
-			};
-			const branch = body.branch ?? "main";
-			await route.fulfill({
-				status: 200,
-				contentType: "application/json",
-				body: JSON.stringify({
-					session_id: `${branch}-session`,
-					branches: ["main", "next"],
-					current_branch: branch,
-					skills: [
-						{
-							name: `${branch}-skill`,
-							description: `${branch} branch skill`,
-							author: null,
-							version: null,
-							path: `skills/${branch}-skill`,
-							audit:
-								branch === "main"
-									? suspiciousAudit
-									: benignAudit,
-						},
-					],
-				}),
-			});
-		},
-	);
+	await page.route(e2eApiUrl("/skills/git/scan"), async (route) => {
+		const body = route.request().postDataJSON() as {
+			branch?: string | null;
+		};
+		const branch = body.branch ?? "main";
+		await route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({
+				session_id: `${branch}-session`,
+				branches: ["main", "next"],
+				current_branch: branch,
+				skills: [
+					{
+						name: `${branch}-skill`,
+						description: `${branch} branch skill`,
+						author: null,
+						version: null,
+						path: `skills/${branch}-skill`,
+						audit:
+							branch === "main" ? suspiciousAudit : benignAudit,
+					},
+				],
+			}),
+		});
+	});
 
 	const requests: Array<Record<string, unknown>> = [];
-	await page.route(
-		"http://localhost:45999/api/v1/skills/git/install",
-		async (route) => {
-			const body = route.request().postDataJSON() as Record<
-				string,
-				unknown
-			>;
-			requests.push(body);
-			const onMain = body.session_id === "main-session";
-			const audit = onMain ? suspiciousAudit : benignAudit;
-			await route.fulfill({
-				status: 200,
-				contentType: "application/json",
-				body: JSON.stringify({
-					results:
-						body.audit_only === true
-							? []
-							: [
-									{
-										name: "next-skill",
-										agent: "claude",
-										success: true,
-										error: null,
-									},
-								],
-					audit,
-					audit_confirmation_required:
-						onMain && body.audit_only === true,
-				}),
-			});
-		},
-	);
+	await page.route(e2eApiUrl("/skills/git/install"), async (route) => {
+		const body = route.request().postDataJSON() as Record<string, unknown>;
+		requests.push(body);
+		const onMain = body.session_id === "main-session";
+		const audit = onMain ? suspiciousAudit : benignAudit;
+		await route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({
+				results:
+					body.audit_only === true
+						? []
+						: [
+								{
+									name: "next-skill",
+									agent: "claude",
+									success: true,
+									error: null,
+								},
+							],
+				audit,
+				audit_confirmation_required: onMain && body.audit_only === true,
+			}),
+		});
+	});
 
 	await openAlphaPackUpdate(page);
 	await page.getByRole("button", { name: "Scan", exact: true }).click();
