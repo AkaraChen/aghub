@@ -332,6 +332,14 @@ mod tests {
 	use super::*;
 	use std::process::Stdio;
 
+	#[cfg(unix)]
+	fn shell_runner(script: PathBuf) -> PackageRunner {
+		PackageRunner::with_prefix(
+			PathBuf::from("/bin/sh"),
+			vec![script.into_os_string()],
+		)
+	}
+
 	#[test]
 	fn package_installs_are_local_and_disable_scripts() {
 		let stage = Path::new("/app data/ccusage/staging/one");
@@ -368,7 +376,7 @@ mod tests {
 	#[cfg(unix)]
 	#[tokio::test]
 	async fn recognizes_bun_global_installation() {
-		use std::os::unix::fs::{symlink, PermissionsExt};
+		use std::os::unix::fs::symlink;
 
 		let root = tempfile::tempdir().unwrap();
 		let bin = root.path().join("bun-bin");
@@ -383,12 +391,10 @@ mod tests {
 			format!("#!/bin/sh\nprintf '%s\\n' '{}'\n", bin.display()),
 		)
 		.unwrap();
-		fs::set_permissions(&runner, fs::Permissions::from_mode(0o755))
-			.unwrap();
 
 		assert!(runner_owns_global_install(
 			CcusageRuntimeSource::Bun,
-			&PackageRunner::direct(runner),
+			&shell_runner(runner),
 			&bin.join("ccusage"),
 		)
 		.await
@@ -398,8 +404,6 @@ mod tests {
 	#[cfg(unix)]
 	#[tokio::test]
 	async fn recognizes_bun_global_command_wrapper() {
-		use std::os::unix::fs::PermissionsExt;
-
 		let root = tempfile::tempdir().unwrap();
 		let bin = root.path().join("bun-bin");
 		let command = bin.join("ccusage.cmd");
@@ -411,12 +415,10 @@ mod tests {
 			format!("#!/bin/sh\nprintf '%s\\n' '{}'\n", bin.display()),
 		)
 		.unwrap();
-		fs::set_permissions(&runner, fs::Permissions::from_mode(0o755))
-			.unwrap();
 
 		assert!(runner_owns_global_install(
 			CcusageRuntimeSource::Bun,
-			&PackageRunner::direct(runner),
+			&shell_runner(runner),
 			&command,
 		)
 		.await
@@ -426,7 +428,7 @@ mod tests {
 	#[cfg(unix)]
 	#[tokio::test]
 	async fn recognizes_npm_global_installation() {
-		use std::os::unix::fs::{symlink, PermissionsExt};
+		use std::os::unix::fs::symlink;
 
 		let root = tempfile::tempdir().unwrap();
 		let prefix = root.path().join("npm-prefix");
@@ -443,12 +445,10 @@ mod tests {
 			format!("#!/bin/sh\nprintf '%s\\n' '{}'\n", prefix.display()),
 		)
 		.unwrap();
-		fs::set_permissions(&runner, fs::Permissions::from_mode(0o755))
-			.unwrap();
 
 		assert!(runner_owns_global_install(
 			CcusageRuntimeSource::Npm,
-			&PackageRunner::direct(runner),
+			&shell_runner(runner),
 			&executable,
 		)
 		.await
@@ -458,8 +458,6 @@ mod tests {
 	#[cfg(unix)]
 	#[tokio::test]
 	async fn recognizes_npm_global_command_wrapper() {
-		use std::os::unix::fs::PermissionsExt;
-
 		let root = tempfile::tempdir().unwrap();
 		let prefix = root.path().join("npm-prefix");
 		let command = prefix.join("bin/ccusage");
@@ -471,12 +469,10 @@ mod tests {
 			format!("#!/bin/sh\nprintf '%s\\n' '{}'\n", prefix.display()),
 		)
 		.unwrap();
-		fs::set_permissions(&runner, fs::Permissions::from_mode(0o755))
-			.unwrap();
 
 		assert!(runner_owns_global_install(
 			CcusageRuntimeSource::Npm,
-			&PackageRunner::direct(runner),
+			&shell_runner(runner),
 			&command,
 		)
 		.await
