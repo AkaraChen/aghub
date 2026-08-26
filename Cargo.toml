@@ -11,6 +11,7 @@ members = [
 	"crates/json",
 	"crates/markdown",
 	"crates/inference",
+	"crates/cliproxy",
 	"crates/cc-plugins",
 	"crates/usage",
 	"crates/prompt",

@@ -31,6 +31,7 @@ build/
 
 # ts-rs generated TypeScript bindings (build artifact)
 crates/api/bindings/
+crates/cliproxy/bindings/
 crates/usage/bindings/
 
 # ccusage sidecar binaries — fetched at build time by src-tauri/build.rs

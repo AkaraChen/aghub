@@ -94,6 +94,23 @@ use aghub_api::dto::{
 		TransferRequest,
 	},
 };
+use aghub_cliproxy::{
+	AddGatewayCompatProviderRequest, AddGatewayUpstreamKeyRequest,
+	CreateExternalGatewayRequest, CreateManagedGatewayRequest,
+	GatewayApiKeysDto, GatewayAuthFileDto, GatewayAuthPollDto,
+	GatewayAuthPollStatus, GatewayAuthUrlDto, GatewayBinSource,
+	GatewayCompatModelDto, GatewayCompatProviderDto, GatewayConfigFileDto,
+	GatewayInstanceDto, GatewayInstanceKind, GatewayInstanceStatus,
+	GatewayKeyUsageDto, GatewayLogsDto, GatewayOauthExcludedModelsDto,
+	GatewayOauthProvider, GatewayProvisionPhase, GatewayProvisionStatusDto,
+	GatewaySettingDto, GatewaySettingKind, GatewaySettingValue,
+	GatewaySettingsDto, GatewayUpstreamKeyDto, GatewayUpstreamKeysDto,
+	GatewayUpstreamProvider, GatewayUsageDto, GatewayVersionDto,
+	ImportGatewayVertexRequest, ResetGatewayQuotaRequest,
+	StartGatewayOauthRequest, StartGatewayProvisionRequest,
+	UpdateGatewayInstanceRequest, UpdateGatewaySettingRequest,
+	UploadGatewayAuthFileRequest,
+};
 use aghub_usage::{
 	AgentLimitsDto, AgentUsageDto, CcusageRuntimeCandidateDto,
 	CcusageRuntimeDto, CcusageRuntimeExecutableDto, CcusageRuntimeSource,
@@ -341,6 +358,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<LimitWindowDto>(&cfg)?;
 	export_type::<AgentLimitsDto>(&cfg)?;
 	export_type::<UsageLimitsReportDto>(&cfg)?;
+
+	export_type::<GatewayInstanceKind>(&cfg)?;
+	export_type::<GatewayInstanceStatus>(&cfg)?;
+	export_type::<GatewayInstanceDto>(&cfg)?;
+	export_type::<CreateManagedGatewayRequest>(&cfg)?;
+	export_type::<CreateExternalGatewayRequest>(&cfg)?;
+	export_type::<UpdateGatewayInstanceRequest>(&cfg)?;
+	export_type::<GatewayAuthFileDto>(&cfg)?;
+	export_type::<GatewayOauthProvider>(&cfg)?;
+	export_type::<StartGatewayOauthRequest>(&cfg)?;
+	export_type::<GatewayAuthUrlDto>(&cfg)?;
+	export_type::<GatewayAuthPollStatus>(&cfg)?;
+	export_type::<GatewayAuthPollDto>(&cfg)?;
+	export_type::<UploadGatewayAuthFileRequest>(&cfg)?;
+	export_type::<GatewaySettingKind>(&cfg)?;
+	export_type::<GatewaySettingValue>(&cfg)?;
+	export_type::<GatewaySettingDto>(&cfg)?;
+	export_type::<GatewaySettingsDto>(&cfg)?;
+	export_type::<UpdateGatewaySettingRequest>(&cfg)?;
+	export_type::<GatewayApiKeysDto>(&cfg)?;
+	export_type::<GatewayKeyUsageDto>(&cfg)?;
+	export_type::<GatewayUsageDto>(&cfg)?;
+	export_type::<GatewayProvisionPhase>(&cfg)?;
+	export_type::<GatewayProvisionStatusDto>(&cfg)?;
+	export_type::<StartGatewayProvisionRequest>(&cfg)?;
+	export_type::<GatewayUpstreamProvider>(&cfg)?;
+	export_type::<GatewayUpstreamKeyDto>(&cfg)?;
+	export_type::<GatewayUpstreamKeysDto>(&cfg)?;
+	export_type::<AddGatewayUpstreamKeyRequest>(&cfg)?;
+	export_type::<GatewayCompatModelDto>(&cfg)?;
+	export_type::<GatewayCompatProviderDto>(&cfg)?;
+	export_type::<AddGatewayCompatProviderRequest>(&cfg)?;
+	export_type::<ResetGatewayQuotaRequest>(&cfg)?;
+	export_type::<GatewayBinSource>(&cfg)?;
+	export_type::<GatewayLogsDto>(&cfg)?;
+	export_type::<GatewayOauthExcludedModelsDto>(&cfg)?;
+	export_type::<ImportGatewayVertexRequest>(&cfg)?;
+	export_type::<GatewayVersionDto>(&cfg)?;
+	export_type::<GatewayConfigFileDto>(&cfg)?;
 
 	write_index_file(&out_dir)?;
 

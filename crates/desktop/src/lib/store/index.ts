@@ -111,3 +111,28 @@ export async function setUpdateChannel(
 	await s.save();
 	return value;
 }
+
+const GATEWAY_MIRROR_KEY = "gatewayMirror";
+
+/**
+ * Optional release-host mirror for CLIProxyAPI binary downloads. `null`
+ * (the default) means GitHub; a mirror must expose the same
+ * `/releases/download` path layout as GitHub releases.
+ */
+export async function getGatewayMirror(): Promise<string | null> {
+	const s = await getStore();
+	const value = await s.get<string>(GATEWAY_MIRROR_KEY);
+	if (typeof value === "string" && value.trim()) return value.trim();
+	return null;
+}
+
+export async function setGatewayMirror(value: string | null): Promise<void> {
+	const s = await getStore();
+	const trimmed = value?.trim();
+	if (trimmed) {
+		await s.set(GATEWAY_MIRROR_KEY, trimmed);
+	} else {
+		await s.delete(GATEWAY_MIRROR_KEY);
+	}
+	await s.save();
+}

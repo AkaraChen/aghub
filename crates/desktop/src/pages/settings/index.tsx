@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import AgentsPanel from "./agents-panel";
 import AppearancePanel from "./appearance-panel";
 import ApplicationPanel from "./application-panel";
+import GatewayPanel from "./gateway-panel";
 import IntegrationsPanel from "./integrations-panel";
 import LogsPanel from "./logs-panel";
 import PromptDataPanel from "./prompt-data-panel";
@@ -59,6 +60,13 @@ export default function SettingsPage() {
 									<Tabs.Indicator />
 								</Tabs.Tab>
 								<Tabs.Tab
+									id="gateway"
+									className={settingsTabClassName}
+								>
+									{t("gateway")}
+									<Tabs.Indicator />
+								</Tabs.Tab>
+								<Tabs.Tab
 									id="integrations"
 									className={settingsTabClassName}
 								>
@@ -110,6 +118,10 @@ export default function SettingsPage() {
 
 					<Tabs.Panel id="agents">
 						<AgentsPanel />
+					</Tabs.Panel>
+
+					<Tabs.Panel id="gateway">
+						<GatewayPanel />
 					</Tabs.Panel>
 
 					<Tabs.Panel id="integrations">

@@ -44,6 +44,7 @@ Run a single test: `cargo test --package aghub-core test_name -- --exact`
 - **`crates/skill`** (`skill`): Extends skills-ref with `.skill` zip format; `parse()` auto-detects directory/zip/SKILL.md. Called by `manager.add_skill_from_path()`
 - **`crates/prompt`** (`aghub-prompt`): Local prompt-library storage — `Prompt` model plus a JSON-file `PromptStore` (CRUD over `prompts.json` in the app data dir) and `{{variable}}` extraction
 - **`crates/api`**: Rocket-based HTTP API server exposing agent config operations over HTTP
+- **`crates/cliproxy`** (`aghub-cliproxy`): CLIProxyAPI gateway integration — pinned-version binary provisioning, managed process lifecycle, typed management-API client, first-run config bootstrap. Instances mirror into the inference inventory (two entries per instance: anthropic + openai-responses wire)
 
 ### Key Design Patterns
 

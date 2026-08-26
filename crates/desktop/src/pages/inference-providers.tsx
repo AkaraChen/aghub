@@ -9,6 +9,7 @@ import {
 	PlusIcon,
 	QuestionMarkCircleIcon,
 	ServerIcon,
+	ServerStackIcon,
 	TrashIcon,
 } from "@heroicons/react/24/solid";
 import anthropicLogo from "@lobehub/icons-static-svg/icons/anthropic.svg?raw";
@@ -21,6 +22,7 @@ import {
 	Button,
 	Card,
 	Checkbox,
+	Chip,
 	Description,
 	ErrorMessage,
 	FieldError,
@@ -43,6 +45,12 @@ import { pinyin } from "pinyin-pro";
 import { type Key, useId, useMemo, useState } from "react";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { useTranslation } from "react-i18next";
+import { GatewayDetailPanel } from "../components/gateway/gateway-detail-panel";
+import {
+	GATEWAY_MANAGED_PRESET,
+	GATEWAY_STATUS_DISPLAY,
+} from "../components/gateway/gateway-helpers";
+import { GatewaySetupPanel } from "../components/gateway/gateway-setup-panel";
 import { ListSearchHeader } from "../components/list-search-header";
 import { ResourceSectionHeader } from "../components/resource-section-header";
 import type {
@@ -64,6 +72,7 @@ import {
 } from "./inference-providers/model-discovery";
 import { inferModelVendor } from "./inference-providers/model-vendors";
 import { OpenCodeInferenceProviderPanel } from "./inference-providers/opencode-panel";
+import { gatewayInstanceListQueryOptions } from "../requests/gateway";
 import {
 	createInferenceProviderMutationOptions,
 	deleteInferenceProviderMutationOptions,
@@ -86,7 +95,11 @@ type PanelMode =
 	| { type: "detail" }
 	| { type: "create" }
 	| { type: "edit"; provider: InferenceProviderResponse }
-	| { type: "agent"; agentId: CodingAgentId };
+	| { type: "agent"; agentId: CodingAgentId }
+	| { type: "gateway"; instanceId: string }
+	| { type: "gateway-setup" };
+
+const GATEWAY_SETUP_ITEM_ID = "gateway-setup";
 
 interface CodingAgentOption {
 	id: CodingAgentId;
@@ -2146,6 +2159,9 @@ function ProviderDetail({
 	const [revealedKey, setRevealedKey] = useState<string | null>(null);
 	const [isCopying, setIsCopying] = useState(false);
 	const previewKey = provider.masked_api_key || "••••••••••••••••••••••••";
+	// Mirrored from a gateway instance: local edits would be overwritten on
+	// the next gateway sync, so mutating actions are disabled.
+	const isGatewayManaged = provider.preset === GATEWAY_MANAGED_PRESET;
 
 	const passwordMutation = useMutation({
 		mutationFn: (name: string) => api.inferenceProviders.getPassword(name),
@@ -2252,13 +2268,16 @@ function ProviderDetail({
 											aria-label={t(
 												"editInferenceProvider",
 											)}
+											isDisabled={isGatewayManaged}
 											onPress={onEdit}
 										>
 											<PencilIcon className="size-4" />
 										</Button>
 									</Tooltip.Trigger>
 									<Tooltip.Content>
-										{t("edit")}
+										{isGatewayManaged
+											? t("gatewayManagedProviderTooltip")
+											: t("edit")}
 									</Tooltip.Content>
 								</Tooltip>
 								<Tooltip delay={0}>
@@ -2271,6 +2290,7 @@ function ProviderDetail({
 											aria-label={t(
 												"deleteInferenceProvider",
 											)}
+											isDisabled={isGatewayManaged}
 											onPress={() =>
 												setIsDeleteOpen(true)
 											}
@@ -2279,13 +2299,20 @@ function ProviderDetail({
 										</Button>
 									</Tooltip.Trigger>
 									<Tooltip.Content>
-										{t("delete")}
+										{isGatewayManaged
+											? t("gatewayManagedProviderTooltip")
+											: t("delete")}
 									</Tooltip.Content>
 								</Tooltip>
 							</div>
 						</Card.Header>
 
 						<Card.Content className="flex flex-col gap-4">
+							{isGatewayManaged && (
+								<p className="text-xs text-muted">
+									{t("gatewayManagedProviderNotice")}
+								</p>
+							)}
 							<div className="grid gap-1.5 py-1">
 								<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
 									{t("providerFormat")}
@@ -2439,6 +2466,9 @@ export default function InferenceProvidersPage() {
 	const { data: presets = [], isLoading: isPresetsLoading } = useQuery({
 		...inferenceProviderPresetsQueryOptions({ api }),
 	});
+	const { data: gatewayInstances = [] } = useQuery(
+		gatewayInstanceListQueryOptions({ api }),
+	);
 
 	const codingAgents = useMemo(
 		() =>
@@ -2516,10 +2546,11 @@ export default function InferenceProvidersPage() {
 	const hasCodingAgent = (agentId: CodingAgentId) =>
 		codingAgents.some((agent) => agent.id === agentId);
 
-	const resolvedPanel: PanelMode =
-		panel.type === "agent" && !hasCodingAgent(panel.agentId)
-			? { type: "detail" }
-			: panel;
+	const isStalePanel =
+		(panel.type === "agent" && !hasCodingAgent(panel.agentId)) ||
+		(panel.type === "gateway" &&
+			!gatewayInstances.some((item) => item.id === panel.instanceId));
+	const resolvedPanel: PanelMode = isStalePanel ? { type: "detail" } : panel;
 
 	const selectedAgentId =
 		resolvedPanel.type === "agent" ? resolvedPanel.agentId : null;
@@ -2535,6 +2566,26 @@ export default function InferenceProvidersPage() {
 			: new Set<string>();
 	}, [activeProvider, resolvedPanel.type]);
 
+	const selectedGatewayInstanceId =
+		resolvedPanel.type === "gateway" ? resolvedPanel.instanceId : null;
+	const isGatewaySetupSelected = resolvedPanel.type === "gateway-setup";
+
+	const gatewaySelectedKeys = useMemo(() => {
+		if (selectedGatewayInstanceId) {
+			return new Set([selectedGatewayInstanceId]);
+		}
+		if (isGatewaySetupSelected) {
+			return new Set([GATEWAY_SETUP_ITEM_ID]);
+		}
+		return new Set<string>();
+	}, [selectedGatewayInstanceId, isGatewaySetupSelected]);
+
+	const activeGatewayInstance = selectedGatewayInstanceId
+		? (gatewayInstances.find(
+				(item) => item.id === selectedGatewayInstanceId,
+			) ?? null)
+		: null;
+
 	const handleCreatedOrUpdated = (provider: InferenceProviderResponse) => {
 		setSelectedLatinName(provider.latin_name);
 		setPanel({ type: "detail" });
@@ -2549,6 +2600,15 @@ export default function InferenceProvidersPage() {
 	const handleProviderClick = (latinName: string) => {
 		setSelectedLatinName(latinName);
 		setPanel({ type: "detail" });
+	};
+
+	const handleGatewaySelect = (key: string) => {
+		setSelectedLatinName(null);
+		if (key === GATEWAY_SETUP_ITEM_ID) {
+			setPanel({ type: "gateway-setup" });
+		} else {
+			setPanel({ type: "gateway", instanceId: key });
+		}
 	};
 
 	const handleEditProviderByName = (latinName: string) => {
@@ -2615,6 +2675,79 @@ export default function InferenceProvidersPage() {
 				</ListSearchHeader>
 
 				<div className="flex-1 overflow-y-auto">
+					{!searchQuery.trim() && (
+						<>
+							<ResourceSectionHeader
+								title={t("gateway")}
+								count={0}
+								icon={<ServerStackIcon className="size-3.5" />}
+							/>
+							<ListBox
+								aria-label={t("gateway")}
+								selectionMode="single"
+								selectionBehavior="replace"
+								selectedKeys={gatewaySelectedKeys}
+								onSelectionChange={(keys) => {
+									if (keys === "all") return;
+									const key = [...keys][0];
+									if (!key) return;
+									handleGatewaySelect(String(key));
+								}}
+								className="p-2"
+							>
+								{gatewayInstances.length === 0 ? (
+									<ListBox.Item
+										id={GATEWAY_SETUP_ITEM_ID}
+										textValue={t("gatewayInstallLocal")}
+										className="data-selected:bg-surface"
+									>
+										<div className="flex min-w-0 items-center gap-2 text-accent">
+											<PlusIcon className="size-4 shrink-0" />
+											<Label className="block truncate text-accent">
+												{t("gatewayInstallLocal")}
+											</Label>
+										</div>
+									</ListBox.Item>
+								) : (
+									gatewayInstances.map((instance) => (
+										<ListBox.Item
+											key={instance.id}
+											id={instance.id}
+											textValue={instance.name}
+											className="data-selected:bg-surface"
+										>
+											<div className="flex min-w-0 flex-1 items-center gap-2">
+												<span
+													className={cn(
+														"size-2 shrink-0 rounded-full",
+														GATEWAY_STATUS_DISPLAY[
+															instance.status
+														].dotClass,
+													)}
+													aria-hidden
+												/>
+												<Label className="block min-w-0 flex-1 truncate">
+													{instance.name}
+												</Label>
+												{instance.kind ===
+													"external" && (
+													<Chip
+														size="sm"
+														variant="soft"
+													>
+														{t(
+															"gatewayKindExternal",
+														)}
+													</Chip>
+												)}
+											</div>
+										</ListBox.Item>
+									))
+								)}
+							</ListBox>
+						</>
+					)}
+
 					<ResourceSectionHeader
 						title={t("codingAgents")}
 						count={filteredCodingAgents.length}
@@ -2712,6 +2845,12 @@ export default function InferenceProvidersPage() {
 												{provider.display_name}
 											</Label>
 										</div>
+										{provider.preset ===
+											GATEWAY_MANAGED_PRESET && (
+											<Chip size="sm" variant="soft">
+												{t("gateway")}
+											</Chip>
+										)}
 									</div>
 								</ListBox.Item>
 							))}
@@ -2741,6 +2880,22 @@ export default function InferenceProvidersPage() {
 							onEditInferenceProvider={handleEditProviderByName}
 						/>
 					)}
+
+				{resolvedPanel.type === "gateway" && activeGatewayInstance && (
+					<GatewayDetailPanel
+						key={activeGatewayInstance.id}
+						instance={activeGatewayInstance}
+						instances={gatewayInstances}
+					/>
+				)}
+
+				{resolvedPanel.type === "gateway-setup" && (
+					<GatewaySetupPanel
+						onInstanceReady={(instanceId) =>
+							setPanel({ type: "gateway", instanceId })
+						}
+					/>
+				)}
 
 				{resolvedPanel.type === "create" && (
 					<ProviderForm
@@ -2783,19 +2938,31 @@ export default function InferenceProvidersPage() {
 					/>
 				)}
 
-				{resolvedPanel.type === "detail" && !activeProvider && (
-					<div className="flex h-full flex-col items-center justify-center gap-4">
-						<div className="text-center">
-							<p className="mb-2 text-sm text-muted">
-								{t("noInferenceProviders")}
-							</p>
+				{resolvedPanel.type === "detail" &&
+					!activeProvider &&
+					(gatewayInstances.length === 0 ? (
+						// Nothing set up at all: default the empty right
+						// pane to the gateway onboarding state.
+						<GatewaySetupPanel
+							onInstanceReady={(instanceId) =>
+								setPanel({ type: "gateway", instanceId })
+							}
+						/>
+					) : (
+						<div className="flex h-full flex-col items-center justify-center gap-4">
+							<div className="text-center">
+								<p className="mb-2 text-sm text-muted">
+									{t("noInferenceProviders")}
+								</p>
+							</div>
+							<Button
+								onPress={() => setPanel({ type: "create" })}
+							>
+								<PlusIcon className="mr-2 size-4" />
+								{t("createInferenceProvider")}
+							</Button>
 						</div>
-						<Button onPress={() => setPanel({ type: "create" })}>
-							<PlusIcon className="mr-2 size-4" />
-							{t("createInferenceProvider")}
-						</Button>
-					</div>
-				)}
+					))}
 			</div>
 		</div>
 	);

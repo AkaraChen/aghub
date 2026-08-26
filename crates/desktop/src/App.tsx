@@ -13,6 +13,7 @@ import { useKeyBindings } from "rooks";
 import { Route, Router, Switch, useLocation } from "wouter";
 import { AutoUpdateChecker } from "./components/auto-update-checker";
 import { DeepLinkImportModal } from "./components/deep-link-import-modal";
+import { GatewayAutoStart } from "./components/gateway-auto-start";
 import { OnboardingController } from "./components/onboarding-controller";
 import { Redirect } from "./components/redirect";
 import { ErrorBoundary } from "./components/ui/error-boundary";
@@ -191,6 +192,7 @@ function App() {
 							<Router>
 								<OnboardingController />
 								<AutoUpdateChecker />
+								<GatewayAutoStart />
 								<Switch>
 									<Route path="/">
 										<MainLayout>

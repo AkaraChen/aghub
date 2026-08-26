@@ -5,7 +5,7 @@ use std::path::PathBuf;
 
 use log::{debug, error, info, warn};
 use rocket::{
-	fairing::{Fairing, Info, Kind},
+	fairing::{AdHoc, Fairing, Info, Kind},
 	Data, Request, Response,
 };
 
@@ -15,6 +15,7 @@ pub mod dto;
 pub mod editor_detection;
 pub mod error;
 pub mod extractors;
+mod gateway_projection;
 pub mod routes;
 pub mod state;
 
@@ -29,6 +30,11 @@ pub struct ApiOptions {
 	pub auth_token: Option<String>,
 	pub allowed_origins: Vec<String>,
 	pub allowed_origin_regexes: Vec<String>,
+	/// Gateway management-key storage; `None` uses the OS keyring. Tests
+	/// inject an in-memory store so results never depend on the host
+	/// keychain.
+	pub gateway_key_store:
+		Option<Box<dyn aghub_cliproxy::GatewayKeyStore + Send + Sync>>,
 }
 
 impl ApiOptions {
@@ -40,6 +46,7 @@ impl ApiOptions {
 			auth_token: None,
 			allowed_origins: default_allowed_origins(),
 			allowed_origin_regexes: default_allowed_origin_regexes(),
+			gateway_key_store: None,
 		}
 	}
 
@@ -67,6 +74,9 @@ impl ApiOptions {
 			token_was_generated,
 			allowed_origins: self.allowed_origins,
 			allowed_origin_regexes: self.allowed_origin_regexes,
+			gateway_key_store: self.gateway_key_store.unwrap_or_else(|| {
+				Box::new(aghub_cliproxy::NativeGatewayKeyStore)
+			}),
 		}
 	}
 }
@@ -97,6 +107,7 @@ struct ResolvedApiOptions {
 	token_was_generated: bool,
 	allowed_origins: Vec<String>,
 	allowed_origin_regexes: Vec<String>,
+	gateway_key_store: Box<dyn aghub_cliproxy::GatewayKeyStore + Send + Sync>,
 }
 
 struct ApiLogFairing;
@@ -161,6 +172,16 @@ fn build_rocket(
 		options.app_data_dir.join("ccusage"),
 		options.ccusage_bundled_bin,
 	);
+	let cliproxy_root =
+		aghub_cliproxy::InstanceStore::new(&options.app_data_dir)
+			.root()
+			.to_path_buf();
+	if let Err(error) = aghub_cliproxy::provision::reconcile_installation(
+		&cliproxy_root,
+		aghub_cliproxy::provision::PINNED_VERSION,
+	) {
+		warn!("gateway install reconciliation failed: {error}");
+	}
 	let allowed_origins = rocket_cors::AllowedOrigins::some(
 		&options.allowed_origins,
 		&options.allowed_origin_regexes,
@@ -192,6 +213,12 @@ fn build_rocket(
 		.attach(ApiLogFairing)
 		.attach(cors)
 		.manage(crate::state::GitCloneSessions::default())
+		.manage(crate::state::GatewayState {
+			app_data_dir: options.app_data_dir.clone(),
+			runtime: aghub_cliproxy::lifecycle::GatewayRuntime::new(),
+			provision: std::sync::Arc::new(std::sync::Mutex::new(None)),
+			key_store: std::sync::Arc::from(options.gateway_key_store),
+		})
 		.manage(crate::state::InferenceProviderState {
 			store: aghub_inference::InferenceProviderStore::new(
 				options.app_data_dir.clone(),
@@ -209,6 +236,35 @@ fn build_rocket(
 		.manage(crate::auth::ApiAuthState {
 			token: options.auth_token,
 		})
+		.attach(AdHoc::on_liftoff(
+			"gateway projection reconciliation",
+			|rocket| {
+				Box::pin(async move {
+					let Some(state) =
+						rocket.state::<crate::state::GatewayState>()
+					else {
+						return;
+					};
+					let app_data_dir = state.app_data_dir.clone();
+					let key_store = std::sync::Arc::clone(&state.key_store);
+					tokio::spawn(async move {
+						let report = crate::gateway_projection::
+							reconcile_gateway_providers(
+								&app_data_dir,
+								key_store.as_ref(),
+							)
+							.await;
+						for failure in report.failures {
+							warn!(
+								"gateway '{}' projection reconciliation \
+								 failed: {}",
+								failure.instance_id, failure.message
+							);
+						}
+					});
+				})
+			},
+		))
 		.mount(
 			"/api/v1",
 			routes![
@@ -340,6 +396,41 @@ fn build_rocket(
 				routes::usage::install_ccusage_runtime,
 				routes::usage::update_ccusage_runtime,
 				routes::usage::refresh_ccusage_runtime,
+				routes::gateway::list_gateway_instances,
+				routes::gateway::create_managed_gateway,
+				routes::gateway::create_external_gateway,
+				routes::gateway::update_gateway_instance,
+				routes::gateway::delete_gateway_instance,
+				routes::gateway::start_gateway_instance,
+				routes::gateway::stop_gateway_instance,
+				routes::gateway::start_gateway_provision,
+				routes::gateway::gateway_provision_status,
+				routes::gateway::gateway_version,
+				routes::gateway::list_gateway_auth_files,
+				routes::gateway::upload_gateway_auth_file,
+				routes::gateway::download_gateway_auth_file,
+				routes::gateway::delete_gateway_auth_file,
+				routes::gateway::start_gateway_oauth,
+				routes::gateway::gateway_oauth_status,
+				routes::gateway::get_gateway_api_keys,
+				routes::gateway::put_gateway_api_keys,
+				routes::gateway::get_gateway_settings,
+				routes::gateway::put_gateway_setting,
+				routes::gateway::get_gateway_config_file,
+				routes::gateway::put_gateway_config_file,
+				routes::gateway::gateway_usage,
+				routes::gateway::list_gateway_upstream_keys,
+				routes::gateway::add_gateway_upstream_key,
+				routes::gateway::delete_gateway_upstream_key,
+				routes::gateway::list_gateway_compat_providers,
+				routes::gateway::add_gateway_compat_provider,
+				routes::gateway::delete_gateway_compat_provider,
+				routes::gateway::reset_gateway_account_quota,
+				routes::gateway::gateway_logs,
+				routes::gateway::clear_gateway_logs,
+				routes::gateway::get_gateway_oauth_excluded_models,
+				routes::gateway::put_gateway_oauth_excluded_models,
+				routes::gateway::import_gateway_vertex,
 			],
 		)
 		.register(
@@ -389,8 +480,10 @@ mod tests {
 	use rocket::local::blocking::{Client, LocalResponse};
 	use serde_json::{json, Value};
 	use std::ffi::OsString;
+	use std::io::{Read, Write};
+	use std::net::TcpListener;
 	use std::path::Path;
-	use std::sync::{Mutex, MutexGuard, OnceLock};
+	use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 
 	struct PathEnvGuard {
 		_lock: MutexGuard<'static, ()>,
@@ -423,10 +516,45 @@ mod tests {
 
 	const TEST_AUTH_TOKEN: &str = "test-auth-token";
 
+	/// In-memory gateway key store so tests never read or write the host
+	/// OS keyring (whose contents vary per machine).
+	#[derive(Clone, Default)]
+	struct MemoryGatewayKeyStore {
+		keys: Arc<Mutex<std::collections::HashMap<String, String>>>,
+	}
+
+	impl aghub_cliproxy::GatewayKeyStore for MemoryGatewayKeyStore {
+		fn get_key(
+			&self,
+			instance_id: &str,
+		) -> aghub_cliproxy::Result<Option<String>> {
+			Ok(self.keys.lock().expect("keys").get(instance_id).cloned())
+		}
+
+		fn set_key(
+			&self,
+			instance_id: &str,
+			key: &str,
+		) -> aghub_cliproxy::Result<()> {
+			self.keys
+				.lock()
+				.expect("keys")
+				.insert(instance_id.to_string(), key.to_string());
+			Ok(())
+		}
+
+		fn delete_key(&self, instance_id: &str) -> aghub_cliproxy::Result<()> {
+			self.keys.lock().expect("keys").remove(instance_id);
+			Ok(())
+		}
+	}
+
 	fn test_client(app_data_dir: &Path) -> Client {
 		let mut options = ApiOptions::new(0);
 		options.app_data_dir = Some(app_data_dir.to_path_buf());
 		options.auth_token = Some(TEST_AUTH_TOKEN.to_string());
+		options.gateway_key_store =
+			Some(Box::new(MemoryGatewayKeyStore::default()));
 		Client::tracked(build_rocket(
 			rocket::Config::default(),
 			options.resolve(),
@@ -505,6 +633,40 @@ mod tests {
 
 	fn delete_auth<'c>(client: &'c Client, uri: &'c str) -> LocalResponse<'c> {
 		client.delete(uri).header(auth_header()).dispatch()
+	}
+
+	fn gateway_with_invalid_api_keys() -> String {
+		let listener = TcpListener::bind("127.0.0.1:0").expect("bind gateway");
+		let address = listener.local_addr().expect("gateway address");
+		std::thread::spawn(move || loop {
+			let (mut stream, _) = listener.accept().expect("gateway request");
+			let mut buffer = [0_u8; 4096];
+			let size = stream.read(&mut buffer).expect("read request");
+			let request = String::from_utf8_lossy(&buffer[..size]);
+			let is_api_keys = request.contains(" /v0/management/api-keys ");
+			let body = if request.contains(" /v0/management/config ") {
+				r#"{"debug":false}"#
+			} else {
+				r#"{"status":"ok"}"#
+			};
+			let response = format!(
+				concat!(
+					"HTTP/1.1 200 OK\r\n",
+					"content-type: application/json\r\n",
+					"content-length: {}\r\n",
+					"connection: close\r\n\r\n{}"
+				),
+				body.len(),
+				body
+			);
+			stream
+				.write_all(response.as_bytes())
+				.expect("write response");
+			if is_api_keys {
+				break;
+			}
+		});
+		format!("http://{address}")
 	}
 
 	fn write_import_skill(dir: &Path, name: &str, body: &str) {
@@ -674,6 +836,95 @@ mod tests {
 			.dispatch();
 
 		assert_eq!(response.status(), Status::Forbidden);
+	}
+
+	#[test]
+	fn gateway_mutations_reject_remote_browser_origin() {
+		use rocket::http::Method;
+
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let mut options = ApiOptions::new(0);
+		options.app_data_dir = Some(app_data_dir.path().to_path_buf());
+		options.auth_token = Some(TEST_AUTH_TOKEN.to_string());
+		options.allowed_origins = vec!["https://evil.example".to_string()];
+		options.allowed_origin_regexes.clear();
+		options.gateway_key_store =
+			Some(Box::new(MemoryGatewayKeyStore::default()));
+		let client = Client::tracked(build_rocket(
+			rocket::Config::default(),
+			options.resolve(),
+		))
+		.expect("client");
+		let mutations = [
+			(Method::Post, "/api/v1/gateway/instances/managed"),
+			(Method::Post, "/api/v1/gateway/instances/external"),
+			(Method::Put, "/api/v1/gateway/instances/missing"),
+			(Method::Delete, "/api/v1/gateway/instances/missing"),
+			(Method::Post, "/api/v1/gateway/instances/missing/start"),
+			(Method::Post, "/api/v1/gateway/instances/missing/stop"),
+			(Method::Post, "/api/v1/gateway/provision"),
+			(
+				Method::Post,
+				"/api/v1/gateway/instances/missing/auth-files",
+			),
+			(
+				Method::Delete,
+				"/api/v1/gateway/instances/missing/auth-files?name=a.json",
+			),
+			(Method::Post, "/api/v1/gateway/instances/missing/oauth"),
+			(
+				Method::Put,
+				"/api/v1/gateway/instances/missing/api-keys",
+			),
+			(
+				Method::Put,
+				"/api/v1/gateway/instances/missing/settings/debug",
+			),
+			(
+				Method::Put,
+				"/api/v1/gateway/instances/missing/config-file",
+			),
+			(
+				Method::Post,
+				"/api/v1/gateway/instances/missing/upstream-keys",
+			),
+			(
+				Method::Delete,
+				"/api/v1/gateway/instances/missing/upstream-keys?provider=claude&api_key=k",
+			),
+			(
+				Method::Post,
+				"/api/v1/gateway/instances/missing/compat-providers",
+			),
+			(
+				Method::Delete,
+				"/api/v1/gateway/instances/missing/compat-providers?name=p",
+			),
+			(Method::Delete, "/api/v1/gateway/instances/missing/logs"),
+			(
+				Method::Put,
+				"/api/v1/gateway/instances/missing/oauth-excluded-models",
+			),
+			(
+				Method::Post,
+				"/api/v1/gateway/instances/missing/vertex-import",
+			),
+			(
+				Method::Post,
+				"/api/v1/gateway/instances/missing/accounts/reset-quota",
+			),
+		];
+
+		for (method, uri) in mutations {
+			let response = client
+				.req(method, uri)
+				.header(auth_header())
+				.header(Header::new("Origin", "https://evil.example"))
+				.header(ContentType::JSON)
+				.body("{}")
+				.dispatch();
+			assert_eq!(response.status(), Status::Forbidden, "{uri}");
+		}
 	}
 
 	#[test]
@@ -3490,5 +3741,324 @@ mod tests {
 		assert!(error.contains("global"));
 		assert!(error.contains("project"));
 		assert!(error.contains("all"));
+	}
+
+	// Covers the offline half of the gateway surface: instance records,
+	// validation, and the not-provisioned guard. Anything past a live
+	// management API (settings, auth files, OAuth) is exercised by
+	// crates/cliproxy's ignored live_smoke test instead.
+	#[test]
+	fn route_gateway_managed_instance_lifecycle() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+
+		let response = get_auth(&client, "/api/v1/gateway/instances");
+		assert_eq!(response.status(), Status::Ok);
+		assert_eq!(response_json(response), json!([]));
+
+		let response = post_json(
+			&client,
+			"/api/v1/gateway/instances/managed",
+			json!({ "name": null, "port": null }),
+		);
+		assert_eq!(response.status(), Status::Created);
+		let body = response_json(response);
+		assert_eq!(body["name"], "Local Gateway");
+		assert_eq!(body["kind"], "managed");
+		assert_eq!(body["status"], "not_provisioned");
+		assert_eq!(body["base_url"], "http://127.0.0.1:8317");
+		let id = body["id"].as_str().expect("instance id").to_string();
+
+		// Only one managed instance may exist.
+		let response = post_json(
+			&client,
+			"/api/v1/gateway/instances/managed",
+			json!({ "name": "second", "port": null }),
+		);
+		assert_json_error(response, Status::Conflict, "RESOURCE_EXISTS");
+
+		let item_uri = format!("/api/v1/gateway/instances/{id}");
+		let start_uri = format!("/api/v1/gateway/instances/{id}/start");
+		let auth_files_uri =
+			format!("/api/v1/gateway/instances/{id}/auth-files");
+
+		// Starting before the binary is downloaded is a clear 422.
+		let response = post_json(&client, &start_uri, json!({}));
+		assert_json_error(
+			response,
+			Status::UnprocessableEntity,
+			"GATEWAY_NOT_PROVISIONED",
+		);
+
+		let response = put_json(
+			&client,
+			&item_uri,
+			json!({ "name": "Renamed", "auto_start": true }),
+		);
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["name"], "Renamed");
+		assert_eq!(body["auto_start"], true);
+
+		// Managed instances own their address; only externals may edit it.
+		let response = put_json(
+			&client,
+			&item_uri,
+			json!({ "base_url": "http://10.0.0.1:8317" }),
+		);
+		assert_json_error(response, Status::BadRequest, "INVALID_PARAM");
+
+		// Instance-scoped resources require a stored management key.
+		let response = get_auth(&client, &auth_files_uri);
+		assert_json_error(
+			response,
+			Status::UnprocessableEntity,
+			"GATEWAY_KEY_MISSING",
+		);
+
+		let response = delete_auth(&client, &item_uri);
+		assert_eq!(response.status(), Status::NoContent);
+		let response = get_auth(&client, "/api/v1/gateway/instances");
+		assert_eq!(response_json(response), json!([]));
+
+		let response =
+			get_auth(&client, "/api/v1/gateway/instances/nope/auth-files");
+		assert_json_error(response, Status::NotFound, "RESOURCE_NOT_FOUND");
+	}
+
+	#[test]
+	fn route_external_gateway_rolls_back_failed_inventory_sync() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let key_store = MemoryGatewayKeyStore::default();
+		let mut options = ApiOptions::new(0);
+		options.app_data_dir = Some(app_data_dir.path().to_path_buf());
+		options.auth_token = Some(TEST_AUTH_TOKEN.to_string());
+		options.gateway_key_store = Some(Box::new(key_store.clone()));
+		let client = Client::tracked(build_rocket(
+			rocket::Config::default(),
+			options.resolve(),
+		))
+		.expect("client");
+
+		let response = post_json(
+			&client,
+			"/api/v1/gateway/instances/external",
+			json!({
+				"name": "Broken sync",
+				"base_url": gateway_with_invalid_api_keys(),
+				"management_key": "management-key",
+			}),
+		);
+
+		assert_eq!(response.status(), Status::InternalServerError);
+		let instances = aghub_cliproxy::InstanceStore::new(app_data_dir.path())
+			.list()
+			.expect("instances");
+		assert!(instances.is_empty());
+		assert!(key_store.keys.lock().expect("keys").is_empty());
+	}
+
+	#[test]
+	fn route_external_gateway_rejects_managed_only_operations() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let record = aghub_cliproxy::GatewayInstanceRecord {
+			id: "external".to_string(),
+			name: "External".to_string(),
+			kind: aghub_cliproxy::GatewayInstanceKind::External,
+			base_url: "http://127.0.0.1:8317".to_string(),
+			port: None,
+			auto_start: false,
+			created_at: "2026-07-24T00:00:00Z".to_string(),
+			provider_projection: Default::default(),
+		};
+		aghub_cliproxy::InstanceStore::new(app_data_dir.path())
+			.insert(record)
+			.expect("external instance");
+		let client = test_client(app_data_dir.path());
+		let item_uri = "/api/v1/gateway/instances/external";
+
+		let response =
+			put_json(&client, item_uri, json!({ "auto_start": true }));
+		assert_json_error(
+			response,
+			Status::UnprocessableEntity,
+			"GATEWAY_MANAGED_ONLY",
+		);
+		let response = post_json(
+			&client,
+			"/api/v1/gateway/instances/external/start",
+			json!({}),
+		);
+		assert_json_error(
+			response,
+			Status::UnprocessableEntity,
+			"GATEWAY_MANAGED_ONLY",
+		);
+		let response = post_json(
+			&client,
+			"/api/v1/gateway/instances/external/stop",
+			json!({}),
+		);
+		assert_json_error(
+			response,
+			Status::UnprocessableEntity,
+			"GATEWAY_MANAGED_ONLY",
+		);
+		let response =
+			get_auth(&client, "/api/v1/gateway/instances/external/version");
+		assert_json_error(
+			response,
+			Status::UnprocessableEntity,
+			"GATEWAY_MANAGED_ONLY",
+		);
+		let response = post_json(
+			&client,
+			"/api/v1/gateway/instances/external/oauth",
+			json!({ "provider": "codex" }),
+		);
+		assert_json_error(
+			response,
+			Status::UnprocessableEntity,
+			"GATEWAY_MANAGED_ONLY",
+		);
+		let response = get_auth(
+			&client,
+			"/api/v1/gateway/instances/external/oauth/status?oauth_state=test",
+		);
+		assert_json_error(
+			response,
+			Status::UnprocessableEntity,
+			"GATEWAY_MANAGED_ONLY",
+		);
+
+		let stored = aghub_cliproxy::InstanceStore::new(app_data_dir.path())
+			.get("external")
+			.expect("stored instance");
+		assert!(!stored.auto_start);
+	}
+
+	#[test]
+	fn route_external_gateway_rejects_invalid_connection_update() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let key_store = MemoryGatewayKeyStore::default();
+		key_store
+			.keys
+			.lock()
+			.expect("keys")
+			.insert("external".to_string(), "original-key".to_string());
+		let record = aghub_cliproxy::GatewayInstanceRecord {
+			id: "external".to_string(),
+			name: "External".to_string(),
+			kind: aghub_cliproxy::GatewayInstanceKind::External,
+			base_url: "https://gateway.example".to_string(),
+			port: None,
+			auto_start: false,
+			created_at: "2026-07-24T00:00:00Z".to_string(),
+			provider_projection: Default::default(),
+		};
+		aghub_cliproxy::InstanceStore::new(app_data_dir.path())
+			.insert(record)
+			.expect("external instance");
+		let mut options = ApiOptions::new(0);
+		options.app_data_dir = Some(app_data_dir.path().to_path_buf());
+		options.auth_token = Some(TEST_AUTH_TOKEN.to_string());
+		options.gateway_key_store = Some(Box::new(key_store.clone()));
+		let client = Client::tracked(build_rocket(
+			rocket::Config::default(),
+			options.resolve(),
+		))
+		.expect("client");
+
+		let response = put_json(
+			&client,
+			"/api/v1/gateway/instances/external",
+			json!({
+				"base_url": "ftp://gateway.example",
+				"management_key": "replacement-key",
+			}),
+		);
+
+		assert_json_error(response, Status::BadRequest, "INVALID_PARAM");
+		let stored = aghub_cliproxy::InstanceStore::new(app_data_dir.path())
+			.get("external")
+			.expect("stored instance");
+		assert_eq!(stored.base_url, "https://gateway.example");
+		assert_eq!(
+			key_store
+				.keys
+				.lock()
+				.expect("keys")
+				.get("external")
+				.map(String::as_str),
+			Some("original-key")
+		);
+	}
+
+	#[test]
+	fn route_external_gateway_rolls_back_failed_connection_sync() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let key_store = MemoryGatewayKeyStore::default();
+		key_store
+			.keys
+			.lock()
+			.expect("keys")
+			.insert("external".to_string(), "original-key".to_string());
+		let record = aghub_cliproxy::GatewayInstanceRecord {
+			id: "external".to_string(),
+			name: "External".to_string(),
+			kind: aghub_cliproxy::GatewayInstanceKind::External,
+			base_url: "ftp://legacy.example".to_string(),
+			port: None,
+			auto_start: false,
+			created_at: "2026-07-24T00:00:00Z".to_string(),
+			provider_projection: Default::default(),
+		};
+		aghub_cliproxy::InstanceStore::new(app_data_dir.path())
+			.insert(record)
+			.expect("external instance");
+		let mut options = ApiOptions::new(0);
+		options.app_data_dir = Some(app_data_dir.path().to_path_buf());
+		options.auth_token = Some(TEST_AUTH_TOKEN.to_string());
+		options.gateway_key_store = Some(Box::new(key_store.clone()));
+		let client = Client::tracked(build_rocket(
+			rocket::Config::default(),
+			options.resolve(),
+		))
+		.expect("client");
+
+		let response = put_json(
+			&client,
+			"/api/v1/gateway/instances/external",
+			json!({
+				"base_url": gateway_with_invalid_api_keys(),
+				"management_key": "replacement-key",
+			}),
+		);
+
+		assert_eq!(response.status(), Status::InternalServerError);
+		let stored = aghub_cliproxy::InstanceStore::new(app_data_dir.path())
+			.get("external")
+			.expect("stored instance");
+		assert_eq!(stored.base_url, "ftp://legacy.example");
+		assert_eq!(
+			key_store
+				.keys
+				.lock()
+				.expect("keys")
+				.get("external")
+				.map(String::as_str),
+			Some("original-key")
+		);
+	}
+
+	#[test]
+	fn route_gateway_provision_status_defaults_to_idle() {
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let client = test_client(app_data_dir.path());
+		let response = get_auth(&client, "/api/v1/gateway/provision/status");
+		assert_eq!(response.status(), Status::Ok);
+		let body = response_json(response);
+		assert_eq!(body["phase"], "idle");
+		assert!(body["version"].as_str().is_some());
 	}
 }

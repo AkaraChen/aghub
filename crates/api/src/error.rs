@@ -1,3 +1,4 @@
+use aghub_cliproxy::GatewayError;
 use aghub_core::errors::ConfigError;
 use aghub_inference::{InferenceProviderError, ModelDiscoveryError};
 use aghub_prompt::PromptError;
@@ -5,6 +6,8 @@ use rocket::http::{ContentType, Status};
 use rocket::response::{self, Responder};
 use rocket::serde::json::serde_json;
 use serde::Serialize;
+
+use crate::gateway_projection::GatewayProjectionError;
 
 #[derive(Serialize)]
 pub struct ErrorBody {
@@ -262,6 +265,75 @@ impl From<PromptError> for ApiError {
 				e.to_string(),
 				"PROMPT_STORE_ERROR",
 			),
+		}
+	}
+}
+
+impl From<GatewayError> for ApiError {
+	fn from(e: GatewayError) -> Self {
+		match e {
+			GatewayError::InstanceNotFound(_) => ApiError::new(
+				Status::NotFound,
+				e.to_string(),
+				"RESOURCE_NOT_FOUND",
+			),
+			GatewayError::InstanceExists(_) => ApiError::new(
+				Status::Conflict,
+				e.to_string(),
+				"RESOURCE_EXISTS",
+			),
+			GatewayError::Invalid(_) => ApiError::new(
+				Status::BadRequest,
+				e.to_string(),
+				"INVALID_PARAM",
+			),
+			GatewayError::Management { .. } => ApiError::new(
+				Status::BadGateway,
+				e.to_string(),
+				"GATEWAY_MANAGEMENT_ERROR",
+			),
+			GatewayError::Unreachable { .. } => ApiError::new(
+				Status::ServiceUnavailable,
+				e.to_string(),
+				"GATEWAY_UNREACHABLE",
+			),
+			GatewayError::NotProvisioned(_) => ApiError::new(
+				Status::UnprocessableEntity,
+				e.to_string(),
+				"GATEWAY_NOT_PROVISIONED",
+			),
+			GatewayError::Download(_) | GatewayError::ChecksumMismatch(_) => {
+				ApiError::new(
+					Status::BadGateway,
+					e.to_string(),
+					"GATEWAY_DOWNLOAD_ERROR",
+				)
+			}
+			GatewayError::HomeDirectoryUnavailable
+			| GatewayError::ConfigFile { .. } => ApiError::new(
+				Status::UnprocessableEntity,
+				e.to_string(),
+				"GATEWAY_CONFIG_ERROR",
+			),
+			GatewayError::Keyring(_) => ApiError::new(
+				Status::InternalServerError,
+				e.to_string(),
+				"KEYCHAIN_ERROR",
+			),
+			GatewayError::Extract(_)
+			| GatewayError::Process(_)
+			| GatewayError::Io(_)
+			| GatewayError::Json(_)
+			| GatewayError::Http(_) => ApiError::internal(e.to_string()),
+		}
+	}
+}
+
+impl From<GatewayProjectionError> for ApiError {
+	fn from(error: GatewayProjectionError) -> Self {
+		match error {
+			GatewayProjectionError::Gateway(error) => Self::from(error),
+			GatewayProjectionError::Inference(error) => Self::from(error),
 		}
 	}
 }
