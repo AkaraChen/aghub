@@ -1,6 +1,7 @@
 import { MagnifyingGlassIcon } from "@heroicons/react/24/solid";
-import { Button, Spinner } from "@heroui/react";
+import { Button, Spinner, toast } from "@heroui/react";
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { useQueryState } from "nuqs";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -23,6 +24,21 @@ import { useSkillInstall } from "./hooks/use-skill-install";
 const BATCH_SIZE = 20;
 const FETCH_SIZE = 100;
 const ROW_HEIGHT = 48;
+const SKILLS_SH_BASE_URL = "https://www.skills.sh";
+
+function splitUrlPath(path: string) {
+	return path.split("/").filter(Boolean);
+}
+
+function normalizeSkillsShPathParts(parts: string[]) {
+	return parts[0] === "github" ? parts.slice(1) : parts;
+}
+
+function formatSkillsShUrl(parts: string[]) {
+	const urlSegments = parts.map((part) => encodeURIComponent(part));
+
+	return `${SKILLS_SH_BASE_URL}/${urlSegments.join("/")}`;
+}
 
 const tableComponents: TableComponents<MarketSkill> = {
 	Table: ({ style, ...props }) => (
@@ -44,6 +60,38 @@ const tableComponents: TableComponents<MarketSkill> = {
 		/>
 	),
 };
+
+function buildSkillsShUrl(skill: MarketSkill) {
+	const slugParts = normalizeSkillsShPathParts(splitUrlPath(skill.slug));
+	if (slugParts.length > 1) {
+		return formatSkillsShUrl(slugParts);
+	}
+
+	const sourceParts = splitUrlPath(skill.source);
+	const pathParts = (() => {
+		if (sourceParts.length === 0) {
+			return [];
+		}
+
+		if (sourceParts[0] === "github") {
+			return sourceParts.slice(1);
+		}
+
+		if (sourceParts[0] === "site") {
+			return sourceParts;
+		}
+
+		if (sourceParts.length === 1 && sourceParts[0].includes(".")) {
+			return ["site", ...sourceParts];
+		}
+
+		return sourceParts;
+	})();
+	const skillParts =
+		slugParts.length > 0 ? slugParts : splitUrlPath(skill.name);
+
+	return formatSkillsShUrl([...pathParts, ...skillParts]);
+}
 
 export default function SkillsSearchPage() {
 	const { t, i18n } = useTranslation();
@@ -105,6 +153,21 @@ export default function SkillsSearchPage() {
 	);
 
 	const hasMore = visibleCount < searchResults.length;
+
+	const handleCopySkillsShUrl = useCallback(
+		async (skill: MarketSkill) => {
+			const skillsShUrl = buildSkillsShUrl(skill);
+
+			try {
+				await writeText(skillsShUrl);
+				toast.success(t("skillsShLinkCopied"));
+			} catch (error) {
+				console.error("Failed to copy skills.sh URL:", error);
+				toast.danger(t("skillsShLinkCopyFailed"));
+			}
+		},
+		[t],
+	);
 
 	const handleEndReached = useCallback(() => {
 		if (hasMore && !isFetching) {
@@ -173,38 +236,49 @@ export default function SkillsSearchPage() {
 						fixedItemHeight={ROW_HEIGHT}
 						style={{ height: "100%" }}
 						components={tableComponents}
-						itemContent={(_index, skill) => (
-							<>
-								<td className="p-2 align-middle">
-									<span className="font-medium">
-										{skill.name}
-									</span>
-								</td>
-								<td className="p-2 align-middle">
-									<span className="text-muted">
-										{compactFormatter.format(
-											skill.installs,
-										)}
-									</span>
-								</td>
-								<td className="p-2 align-middle">
-									<span className="text-muted text-sm">
-										{skill.source}
-									</span>
-								</td>
-								<td className="p-2 align-middle">
-									<Button
-										size="sm"
-										variant="tertiary"
-										onPress={() =>
-											handleInstallClick(skill)
-										}
-									>
-										{t("install")}
-									</Button>
-								</td>
-							</>
-						)}
+						itemContent={(_index, skill) => {
+							return (
+								<>
+									<td className="p-2 align-middle">
+										<span className="font-medium">
+											{skill.name}
+										</span>
+									</td>
+									<td className="p-2 align-middle">
+										<span className="text-muted">
+											{compactFormatter.format(
+												skill.installs,
+											)}
+										</span>
+									</td>
+									<td className="p-2 align-middle">
+										<button
+											type="button"
+											className="block max-w-full truncate text-left text-sm text-muted underline-offset-4 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+											aria-label={t("copySkillsShLink")}
+											onClick={() => {
+												void handleCopySkillsShUrl(
+													skill,
+												);
+											}}
+										>
+											{skill.source}
+										</button>
+									</td>
+									<td className="p-2 align-middle">
+										<Button
+											size="sm"
+											variant="tertiary"
+											onPress={() =>
+												handleInstallClick(skill)
+											}
+										>
+											{t("install")}
+										</Button>
+									</td>
+								</>
+							);
+						}}
 					>
 						<thead>
 							<tr>

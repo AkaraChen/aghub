@@ -1203,6 +1203,9 @@ export default {
 	searchToFindSkills: "Search to find skills from skills.sh",
 	poweredByVercel: "Powered by Vercel",
 	dataFromSkillsSh: "Data from skills.sh",
+	copySkillsShLink: "Copy skills.sh link",
+	skillsShLinkCopied: "skills.sh link copied",
+	skillsShLinkCopyFailed: "Failed to copy skills.sh link",
 
 	// MCP Detail
 	connection: "Connection",
