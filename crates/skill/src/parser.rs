@@ -4,9 +4,9 @@ use crate::error::{Result, SkillError};
 use crate::model::{Skill, SkillSource};
 use std::path::{Path, PathBuf};
 
-const MAX_SKILL_NAME_BYTES: usize = 64;
-const MAX_SKILL_DESCRIPTION_BYTES: usize = 1024;
-const MAX_SKILL_COMPATIBILITY_BYTES: usize = 500;
+const MAX_SKILL_NAME_CHARACTERS: usize = 64;
+const MAX_SKILL_DESCRIPTION_CHARACTERS: usize = 1024;
+const MAX_SKILL_COMPATIBILITY_CHARACTERS: usize = 500;
 const MAX_SKILL_METADATA_VALUE_BYTES: usize = 4096;
 
 /// Parse a .skill file (zip format).
@@ -140,9 +140,9 @@ pub fn parse_skill_md(content: &str) -> Result<Skill> {
 			.ok_or_else(|| {
 				SkillError::Parse("Missing required field: name".to_string())
 			})?;
-	if name.len() > MAX_SKILL_NAME_BYTES {
+	if name.chars().count() > MAX_SKILL_NAME_CHARACTERS {
 		return Err(SkillError::Validation(format!(
-			"Skill name exceeds the {MAX_SKILL_NAME_BYTES}-byte limit"
+			"Skill name exceeds the {MAX_SKILL_NAME_CHARACTERS}-character limit"
 		)));
 	}
 	if name.chars().any(is_unsafe_metadata_character) {
@@ -157,9 +157,9 @@ pub fn parse_skill_md(content: &str) -> Result<Skill> {
 		.ok_or_else(|| {
 			SkillError::Parse("Missing required field: description".to_string())
 		})?;
-	if description.len() > MAX_SKILL_DESCRIPTION_BYTES {
+	if description.chars().count() > MAX_SKILL_DESCRIPTION_CHARACTERS {
 		return Err(SkillError::Validation(format!(
-				"Skill description exceeds the {MAX_SKILL_DESCRIPTION_BYTES}-byte limit"
+				"Skill description exceeds the {MAX_SKILL_DESCRIPTION_CHARACTERS}-character limit"
 			)));
 	}
 
@@ -173,10 +173,10 @@ pub fn parse_skill_md(content: &str) -> Result<Skill> {
 		.get("compatibility")
 		.and_then(|v| v.as_str())
 		.map(String::from);
-	validate_optional_metadata_bytes(
+	validate_optional_metadata_characters(
 		"compatibility",
 		compatibility.as_deref(),
-		MAX_SKILL_COMPATIBILITY_BYTES,
+		MAX_SKILL_COMPATIBILITY_CHARACTERS,
 	)?;
 
 	let allowed_tools = metadata
@@ -309,6 +309,19 @@ fn validate_optional_metadata_bytes(
 	if value.is_some_and(|value| value.len() > max_bytes) {
 		return Err(SkillError::Validation(format!(
 			"Skill {field} exceeds the {max_bytes}-byte limit"
+		)));
+	}
+	Ok(())
+}
+
+fn validate_optional_metadata_characters(
+	field: &str,
+	value: Option<&str>,
+	max_characters: usize,
+) -> Result<()> {
+	if value.is_some_and(|value| value.chars().count() > max_characters) {
+		return Err(SkillError::Validation(format!(
+			"Skill {field} exceeds the {max_characters}-character limit"
 		)));
 	}
 	Ok(())
@@ -546,6 +559,69 @@ mod tests {
 		let content = format!(
 			"---\nname: {}\ndescription: A valid skill\n---\n",
 			"a".repeat(65)
+		);
+
+		assert!(matches!(
+			parse_skill_md(&content),
+			Err(SkillError::Validation(_))
+		));
+	}
+
+	#[test]
+	fn parse_skill_md_counts_name_limit_in_characters() {
+		let name = "技".repeat(64);
+		let content =
+			format!("---\nname: {name}\ndescription: A valid skill\n---\n");
+
+		let skill = parse_skill_md(&content).unwrap();
+
+		assert_eq!(skill.name.chars().count(), 64);
+		assert!(skill.name.len() > 64);
+	}
+
+	#[test]
+	fn parse_skill_md_counts_description_limit_in_characters() {
+		let description = "界".repeat(1024);
+		let content = format!(
+			"---\nname: multilingual-skill\ndescription: {description}\n---\n"
+		);
+
+		let skill = parse_skill_md(&content).unwrap();
+
+		assert_eq!(skill.description.chars().count(), 1024);
+		assert!(skill.description.len() > 1024);
+	}
+
+	#[test]
+	fn parse_skill_md_rejects_descriptions_over_spec_limit() {
+		let description = "界".repeat(1025);
+		let content = format!(
+			"---\nname: multilingual-skill\ndescription: {description}\n---\n"
+		);
+
+		assert!(matches!(
+			parse_skill_md(&content),
+			Err(SkillError::Validation(_))
+		));
+	}
+
+	#[test]
+	fn parse_skill_md_counts_compatibility_limit_in_characters() {
+		let compatibility = "界".repeat(500);
+		let content = format!(
+			"---\nname: multilingual-skill\ndescription: A valid skill\ncompatibility: {compatibility}\n---\n"
+		);
+
+		let skill = parse_skill_md(&content).unwrap();
+
+		assert_eq!(skill.compatibility.unwrap().chars().count(), 500);
+	}
+
+	#[test]
+	fn parse_skill_md_rejects_compatibility_over_spec_limit() {
+		let compatibility = "界".repeat(501);
+		let content = format!(
+			"---\nname: multilingual-skill\ndescription: A valid skill\ncompatibility: {compatibility}\n---\n"
 		);
 
 		assert!(matches!(
