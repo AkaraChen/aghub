@@ -122,8 +122,6 @@ export default function SkillsPage() {
 	);
 	const isFetching =
 		isInstalledSkillsFetching || codexProvidedSkillsQuery.isFetching;
-	const codexProviderLoadErrorCount =
-		codexProvidedSkillsQuery.data?.errors.length ?? 0;
 	const automaticallyCheckCopies =
 		skillPreferencesReady &&
 		skillPreferences.enabled &&
@@ -633,8 +631,7 @@ export default function SkillsPage() {
 				</ResourcePageToolbar>
 				{includeCodexProvidedSkills &&
 				codexCliAvailable &&
-				(codexProvidedSkillsQuery.isError ||
-					codexProviderLoadErrorCount > 0) ? (
+				codexProvidedSkillsQuery.isError ? (
 					<div className="shrink-0 px-3 pt-2">
 						<Alert status="warning">
 							<Alert.Indicator />
@@ -643,11 +640,7 @@ export default function SkillsPage() {
 									{t("codexSkillDiscoveryIncomplete")}
 								</Alert.Title>
 								<Alert.Description>
-									{codexProvidedSkillsQuery.isError
-										? t("codexSkillDiscoveryUnavailable")
-										: t("codexSkillDiscoveryPartial", {
-												count: codexProviderLoadErrorCount,
-											})}
+									{t("codexSkillDiscoveryUnavailable")}
 								</Alert.Description>
 							</Alert.Content>
 							<Button

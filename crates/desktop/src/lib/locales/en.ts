@@ -990,13 +990,9 @@ export default {
 	agentProvidedSkills: "Agent-provided Skills",
 	agentProvidedSkillsDescription:
 		"Read Skills bundled with Codex or supplied by Codex plugins. Codex manages these files.",
-	codexSkillDiscoveryIncomplete: "Some Codex Skills were not read",
+	codexSkillDiscoveryIncomplete: "Codex Skills could not be read",
 	codexSkillDiscoveryUnavailable:
 		"aghub could not read Skills from Codex. Other sources remain available.",
-	codexSkillDiscoveryPartial_one:
-		"1 Skill could not be read. Other results remain available.",
-	codexSkillDiscoveryPartial_other:
-		"{{count}} Skills could not be read. Other results remain available.",
 	codexPluginSkill: "Codex plugin",
 	codexSystemSkill: "Bundled with Codex",
 	embeddedRepositorySkills: "Skill collections",

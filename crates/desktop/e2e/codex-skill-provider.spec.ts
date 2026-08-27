@@ -165,7 +165,7 @@ test("a plugin copy can be compared but is never a resolution target", async ({
 	).toBe(false);
 });
 
-test("partial Codex discovery keeps Skills visible and uses one warning", async ({
+test("partial Codex discovery keeps readable Skills without a warning", async ({
 	page,
 }) => {
 	const mocks = await installMocks(page);
@@ -183,7 +183,8 @@ test("partial Codex discovery keeps Skills visible and uses one warning", async 
 				{
 					cwd: "/tmp/e2e",
 					path: "/tmp/e2e/broken/SKILL.md",
-					message: "invalid frontmatter",
+					message:
+						"invalid description: exceeds maximum length of 1024 characters",
 				},
 			],
 		),
@@ -193,11 +194,10 @@ test("partial Codex discovery keeps Skills visible and uses one warning", async 
 	await expect(
 		page.getByRole("option", { name: "openai-docs" }),
 	).toBeVisible();
-	const warning = page
-		.locator('[data-slot="alert-root"]')
-		.filter({ hasText: "Some Codex Skills were not read" });
-	await expect(warning).toHaveCount(1);
-	await expect(warning).toContainText("1 Skill could not be read");
+	await expect(page.locator('[data-slot="alert-root"]')).toHaveCount(0);
+	await expect(
+		page.getByText("invalid description: exceeds maximum length"),
+	).toHaveCount(0);
 });
 
 test("Agent-provided Skills can be excluded from discovery", async ({

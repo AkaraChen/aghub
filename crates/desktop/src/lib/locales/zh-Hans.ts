@@ -943,12 +943,9 @@ export default {
 	agentProvidedSkills: "Agent 提供的 Skill",
 	agentProvidedSkillsDescription:
 		"读取 Codex 自带或 Codex 插件提供的 Skill；这些内容由 Codex 管理。",
-	codexSkillDiscoveryIncomplete: "Codex Skill 未全部读取",
+	codexSkillDiscoveryIncomplete: "Codex Skill 无法读取",
 	codexSkillDiscoveryUnavailable:
 		"无法从 Codex 读取 Skill，其他来源仍可使用。",
-	codexSkillDiscoveryPartial_one: "1 个 Skill 无法读取，其他结果仍可使用。",
-	codexSkillDiscoveryPartial_other:
-		"{{count}} 个 Skill 无法读取，其他结果仍可使用。",
 	codexPluginSkill: "Codex 插件",
 	codexSystemSkill: "Codex 自带",
 	embeddedRepositorySkills: "Skill 集合",
