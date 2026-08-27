@@ -135,7 +135,7 @@ const SkillRowBody = memo(function SkillRowBody({
 					</span>
 				)}
 			</div>
-			<Label className="flex-1 truncate">{skillGroup.name}</Label>
+			<Label className="flex-1 truncate">{skillGroup.displayName}</Label>
 			<AgentIcons items={skillGroup.items} overflowVariant="square" />
 		</DraggableItemBody>
 	);
@@ -353,8 +353,8 @@ export const SkillList = memo(function SkillList({
 			return (
 				<ListBox.Item
 					id={skillGroup.name}
-					textValue={skillGroup.name}
-					aria-label={skillGroup.name}
+					textValue={`${skillGroup.displayName} ${skillGroup.name}`}
+					aria-label={skillGroup.displayName}
 					className="data-selected:bg-surface transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]"
 					style={{
 						viewTransitionName: viewTransitionName(

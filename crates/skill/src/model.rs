@@ -40,6 +40,10 @@ pub struct Skill {
 	/// Skill name from frontmatter (required).
 	pub name: String,
 
+	/// User-facing name from agents/openai.yaml (optional).
+	#[serde(skip)]
+	pub display_name: Option<String>,
+
 	/// Description from frontmatter (required).
 	pub description: String,
 
@@ -92,6 +96,7 @@ impl Skill {
 	) -> Self {
 		Self {
 			name: name.into(),
+			display_name: None,
 			description: description.into(),
 			license: None,
 			compatibility: None,

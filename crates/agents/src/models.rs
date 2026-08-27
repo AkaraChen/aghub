@@ -32,6 +32,8 @@ impl Default for AgentConfig {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Skill {
 	pub name: String,
+	#[serde(skip)]
+	pub display_name: Option<String>,
 	#[serde(default = "default_true")]
 	pub enabled: bool,
 	pub description: Option<String>,
@@ -58,6 +60,7 @@ impl Skill {
 	pub fn new(name: impl Into<String>) -> Self {
 		Self {
 			name: name.into(),
+			display_name: None,
 			enabled: true,
 			description: None,
 			author: None,

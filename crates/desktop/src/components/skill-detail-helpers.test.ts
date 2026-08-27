@@ -8,6 +8,7 @@ import {
 function skill(agent: string, path: string, managed: boolean): SkillResponse {
 	return {
 		name: "agents-sdk",
+		display_name: null,
 		enabled: true,
 		source_path: path,
 		is_symlink: false,

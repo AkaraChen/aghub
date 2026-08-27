@@ -31,6 +31,7 @@ impl From<CreateSkillRequest> for Skill {
 	fn from(req: CreateSkillRequest) -> Self {
 		Skill {
 			name: req.name,
+			display_name: None,
 			enabled: true,
 			description: req.description,
 			author: req.author,
@@ -60,6 +61,7 @@ impl UpdateSkillRequest {
 	pub fn apply_to(self, existing: Skill) -> Skill {
 		Skill {
 			name: self.name.unwrap_or(existing.name),
+			display_name: existing.display_name,
 			enabled: self.enabled.unwrap_or(existing.enabled),
 			description: self.description.or(existing.description),
 			author: self.author.or(existing.author),
@@ -122,6 +124,7 @@ pub struct CodexSkillDiscoveryResponse {
 #[ts(export)]
 pub struct SkillResponse {
 	pub name: String,
+	pub display_name: Option<String>,
 	pub enabled: bool,
 	pub source_path: Option<String>,
 	pub is_symlink: bool,
@@ -356,6 +359,7 @@ impl From<&Skill> for SkillResponse {
 	fn from(s: &Skill) -> Self {
 		SkillResponse {
 			name: s.name.clone(),
+			display_name: s.display_name.clone(),
 			enabled: s.enabled,
 			source_path: s.source_path.clone(),
 			is_symlink: s.canonical_path.is_some(),

@@ -346,6 +346,10 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		() => (skillTree ? hasSupplementarySkillFiles(skillTree) : false),
 		[skillTree],
 	);
+	const displayName =
+		group.items.find((item) => item.display_name?.trim())?.display_name ??
+		skill.name;
+	const showsSkillName = displayName !== skill.name;
 
 	return (
 		<>
@@ -354,10 +358,15 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 					<Card>
 						<Card.Header className="flex flex-row items-start justify-between gap-3">
 							<div className="min-w-0 flex-1 select-text">
-								<div className="flex items-center gap-1.5">
-									<h2 className="text-xl font-semibold text-foreground truncate">
-										{skill.name}
+								<div className="flex min-w-0 items-baseline gap-2">
+									<h2 className="min-w-0 truncate text-xl font-semibold text-foreground">
+										{displayName}
 									</h2>
+									{showsSkillName && (
+										<span className="shrink-0 font-mono text-xs text-muted">
+											{skill.name}
+										</span>
+									)}
 									{skillAudit &&
 										(isAuditAcknowledged ? (
 											<span

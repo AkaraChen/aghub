@@ -71,6 +71,7 @@ pub fn convert_skill(skill_pkg: skill::Skill) -> models::Skill {
 
 	models::Skill {
 		name: skill_pkg.name,
+		display_name: skill_pkg.display_name,
 		enabled: true,
 		description: Some(skill_pkg.description),
 		author: skill_pkg.author,

@@ -33,6 +33,7 @@ pub(crate) enum CodexSkillScope {
 pub(crate) struct CodexSkillRecord {
 	pub(crate) qualified_name: String,
 	pub(crate) base_name: String,
+	pub(crate) display_name: Option<String>,
 	pub(crate) description: String,
 	pub(crate) path: PathBuf,
 	pub(crate) scope: CodexSkillScope,
@@ -278,10 +279,18 @@ struct SkillMetadata {
 	name: String,
 	description: String,
 	enabled: bool,
+	#[serde(default)]
+	interface: Option<SkillInterface>,
 	#[serde(default, rename = "pluginId")]
 	plugin_id: Option<String>,
 	path: PathBuf,
 	scope: CodexSkillScope,
+}
+
+#[derive(Debug, Deserialize)]
+struct SkillInterface {
+	#[serde(default, rename = "displayName")]
+	display_name: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -347,6 +356,9 @@ fn build_catalog(result: SkillsListResult) -> CodexSkillCatalog {
 		for skill in entry.skills {
 			let key = (skill.name.clone(), skill.path.clone());
 			skills.entry(key).or_insert_with(|| {
+				let display_name = skill
+					.interface
+					.and_then(|interface| interface.display_name);
 				let (base_name, origin) = skill_identity(
 					&skill.name,
 					skill.scope,
@@ -355,6 +367,7 @@ fn build_catalog(result: SkillsListResult) -> CodexSkillCatalog {
 				CodexSkillRecord {
 					qualified_name: skill.name,
 					base_name,
+					display_name,
 					description: skill.description,
 					path: skill.path,
 					scope: skill.scope,
@@ -498,6 +511,32 @@ mod tests {
 			.find(|skill| skill.qualified_name == "openai-docs")
 			.expect("system skill");
 		assert_eq!(system.origin, CodexSkillOrigin::System);
+	}
+
+	#[test]
+	fn preserves_runtime_display_name() {
+		let response = r#"{
+			"id": 2,
+			"result": {
+				"data": [{
+					"cwd": "/workspace",
+					"skills": [{
+						"name": "boss-job-apply",
+						"description": "Job application workflow",
+						"enabled": true,
+						"path": "/home/user/.agents/skills/boss-job-apply/SKILL.md",
+						"scope": "user",
+						"interface": { "displayName": "求职辅助" }
+					}],
+					"errors": []
+				}]
+			}
+		}"#;
+
+		let catalog =
+			parse_skills_response(response, 2).expect("skills response");
+
+		assert_eq!(catalog.skills[0].display_name.as_deref(), Some("求职辅助"));
 	}
 
 	#[test]

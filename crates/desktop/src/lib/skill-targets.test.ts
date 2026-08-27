@@ -9,6 +9,7 @@ import {
 function skill(agent: string, paths: string[]): SkillResponse {
 	return {
 		name: "example",
+		display_name: null,
 		enabled: true,
 		source_path: paths[0] ?? null,
 		is_symlink: false,

@@ -51,6 +51,7 @@ fn create_test_mcp_streamable_http(name: &str) -> McpServer {
 fn create_test_skill(name: &str) -> Skill {
 	Skill {
 		name: name.to_string(),
+		display_name: None,
 		enabled: true,
 		description: Some(format!("Test skill: {}", name)),
 		author: Some("test-author".to_string()),

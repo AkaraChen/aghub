@@ -16,6 +16,7 @@ import { useSkillGroups } from "./use-resource-groups";
 
 export interface SkillGroup {
 	name: string;
+	displayName: string;
 	items: SkillResponse[];
 	description: string;
 }
@@ -81,7 +82,7 @@ function createSectionEntries(
 	const entryName = (entry: SkillSectionEntry) =>
 		entry.kind === "source"
 			? (entry.group.source.split("/").pop() ?? entry.group.source)
-			: entry.skill.name;
+			: entry.skill.displayName;
 	const entryStarred = (entry: SkillSectionEntry) =>
 		entry.kind === "source"
 			? entry.group.skills.some((skill) => isSkillStarred(skill.name))
@@ -160,6 +161,9 @@ export function useSkillSections({
 		}
 		return Array.from(map.entries()).map(([name, items]) => ({
 			name,
+			displayName:
+				items.find((skill) => skill.display_name?.trim())
+					?.display_name ?? name,
 			items,
 			description: items.find((s) => s.description)?.description ?? "",
 		}));
@@ -169,6 +173,7 @@ export function useSkillSections({
 		() =>
 			new Fuse(groupedByName, {
 				keys: [
+					{ name: "displayName", weight: 2 },
 					{ name: "name", weight: 2 },
 					{ name: "description", weight: 1 },
 				],
@@ -194,7 +199,7 @@ export function useSkillSections({
 			const bStarred = isSkillStarred(b.name);
 			if (aStarred && !bStarred) return -1;
 			if (!aStarred && bStarred) return 1;
-			return a.name.localeCompare(b.name);
+			return a.displayName.localeCompare(b.displayName);
 		},
 		[isSkillStarred],
 	);

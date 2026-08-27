@@ -1619,6 +1619,9 @@ pub(crate) async fn list_all_agents_skills(
 					continue;
 				}
 				let item: &mut SkillResponse = &mut items[index];
+				if item.display_name.is_none() {
+					item.display_name = skill.display_name.clone();
+				}
 				item.locations.get_or_insert_with(Vec::new).push(location);
 				continue;
 			}
@@ -1717,6 +1720,7 @@ fn codex_skill_discovery_response(
 			};
 			Some(SkillResponse {
 				name: skill.base_name,
+				display_name: skill.display_name,
 				enabled: skill.enabled,
 				source_path: Some(source_path.clone()),
 				is_symlink: false,
@@ -2760,6 +2764,7 @@ mod tests {
 				CodexSkillRecord {
 					qualified_name: "agents-sdk".to_string(),
 					base_name: "agents-sdk".to_string(),
+					display_name: None,
 					description: "Standalone".to_string(),
 					path: "/home/user/.agents/skills/agents-sdk/SKILL.md".into(),
 					scope: CodexSkillScope::User,
@@ -2769,6 +2774,7 @@ mod tests {
 				CodexSkillRecord {
 					qualified_name: "cloudflare:agents-sdk".to_string(),
 					base_name: "agents-sdk".to_string(),
+					display_name: Some("Cloudflare Agents SDK".to_string()),
 					description: "Plugin".to_string(),
 					path: "/home/user/.codex/plugins/cache/cloudflare/skills/agents-sdk/SKILL.md".into(),
 					scope: CodexSkillScope::User,
@@ -2780,6 +2786,7 @@ mod tests {
 				CodexSkillRecord {
 					qualified_name: "openai-docs".to_string(),
 					base_name: "openai-docs".to_string(),
+					display_name: None,
 					description: "System".to_string(),
 					path: "/app/system/skills/openai-docs/SKILL.md".into(),
 					scope: CodexSkillScope::System,
@@ -2789,6 +2796,7 @@ mod tests {
 				CodexSkillRecord {
 					qualified_name: "cloudflare:disabled".to_string(),
 					base_name: "disabled".to_string(),
+					display_name: None,
 					description: "Disabled plugin Skill".to_string(),
 					path: "/home/user/.codex/plugins/cache/cloudflare/skills/disabled/SKILL.md".into(),
 					scope: CodexSkillScope::User,
@@ -2824,6 +2832,10 @@ mod tests {
 			Some("cloudflare@openai-curated-remote")
 		);
 		assert!(provider.managed);
+		assert_eq!(
+			plugin.display_name.as_deref(),
+			Some("Cloudflare Agents SDK")
+		);
 		assert!(plugin.source_path.as_deref().unwrap().ends_with("SKILL.md"));
 		assert_eq!(response.errors[0].message, "invalid frontmatter");
 	}

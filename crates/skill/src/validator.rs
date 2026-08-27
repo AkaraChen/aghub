@@ -218,6 +218,7 @@ mod tests {
 		// which includes directory name matching
 		let skill = crate::model::Skill {
 			name: "bad name".to_string(),
+			display_name: None,
 			description: "A test skill with a bad name".to_string(),
 			license: None,
 			compatibility: None,
@@ -286,6 +287,7 @@ mod tests {
 	) -> crate::model::Skill {
 		crate::model::Skill {
 			name: "test-skill".to_string(),
+			display_name: None,
 			description: "A test skill".to_string(),
 			license: None,
 			compatibility: None,
