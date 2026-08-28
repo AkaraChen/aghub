@@ -11,6 +11,7 @@ import {
 } from "../../requests/preferences";
 import {
 	SkillContentPreferences,
+	SkillDisplayPreferences,
 	SkillRelationshipPreferences,
 } from "./skill-preference-sections";
 import { SkillDiscoveryPreferences } from "./skill-discovery-preferences";
@@ -29,8 +30,13 @@ export default function SkillPreferencesPanel() {
 
 	return (
 		<div className="grid min-w-0 items-start gap-4 xl:grid-cols-2">
-			<div className="min-w-0">
+			<div className="min-w-0 space-y-4">
 				<SkillContentPreferences
+					preferences={preferences}
+					isDisabled={isDisabled}
+					onChange={save}
+				/>
+				<SkillDisplayPreferences
 					preferences={preferences}
 					isDisabled={isDisabled}
 					onChange={save}

@@ -18,6 +18,7 @@ interface PreviousSkillPreferences extends LegacySkillCopyCheck {
 	groupIdenticalCopies?: boolean;
 	warnOnConflicts?: boolean;
 	defaultStorageMode?: SkillStorageMode;
+	showDisplayNames?: boolean;
 	discovery?: Partial<SkillDiscoveryPreferences>;
 }
 
@@ -57,6 +58,9 @@ export async function initializeSkillPreferences(
 		previous?.defaultStorageMode === "copy"
 			? { defaultStorageMode: previous.defaultStorageMode }
 			: {}),
+		...(typeof previous?.showDisplayNames === "boolean"
+			? { showDisplayNames: previous.showDisplayNames }
+			: {}),
 		discovery: {
 			...DEFAULT_SKILL_PREFERENCES.discovery,
 			...(typeof previous?.discovery?.projectSkills === "boolean"
@@ -67,6 +71,12 @@ export async function initializeSkillPreferences(
 				: {}),
 			...(typeof previous?.discovery?.dependencySkills === "boolean"
 				? { dependencySkills: previous.discovery.dependencySkills }
+				: {}),
+			...(typeof previous?.discovery?.agentProvidedSkills === "boolean"
+				? {
+						agentProvidedSkills:
+							previous.discovery.agentProvidedSkills,
+					}
 				: {}),
 		},
 	});

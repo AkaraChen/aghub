@@ -351,10 +351,11 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		() => (skillTree ? findContainedSkills(skillTree) : []),
 		[skillTree],
 	);
-	const displayName =
-		group.items
-			.find((item) => item.display_name?.trim())
-			?.display_name?.trim() ?? null;
+	const displayName = skillPreferences.showDisplayNames
+		? (group.items
+				.find((item) => item.display_name?.trim())
+				?.display_name?.trim() ?? null)
+		: null;
 	const showsDisplayName = displayName !== null && displayName !== skill.name;
 
 	return (
@@ -649,7 +650,8 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 													<span className="shrink-0 text-sm text-foreground">
 														{contained.name}
 													</span>
-													{contained.displayName &&
+													{skillPreferences.showDisplayNames &&
+														contained.displayName &&
 														contained.displayName !==
 															contained.name && (
 															<span className="min-w-0 truncate text-xs text-muted">

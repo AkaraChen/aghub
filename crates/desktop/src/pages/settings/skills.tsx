@@ -189,6 +189,7 @@ export default function SkillsPage() {
 		skills: filteredSkills,
 		searchQuery,
 		selectedKeys,
+		showDisplayNames: skillPreferences.showDisplayNames,
 	});
 	const groupedSkills = sections.groupedByName;
 	const allSkillGroups = useMemo(() => {

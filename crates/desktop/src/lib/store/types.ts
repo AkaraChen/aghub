@@ -50,6 +50,7 @@ export interface SkillPreferences extends SkillCopyCheckPreference {
 	groupIdenticalCopies: boolean;
 	warnOnConflicts: boolean;
 	defaultStorageMode: SkillStorageMode;
+	showDisplayNames: boolean;
 	discovery: SkillDiscoveryPreferences;
 }
 
@@ -58,6 +59,7 @@ export const DEFAULT_SKILL_PREFERENCES: SkillPreferences = {
 	groupIdenticalCopies: true,
 	warnOnConflicts: true,
 	defaultStorageMode: "preserve",
+	showDisplayNames: true,
 	discovery: {
 		projectSkills: true,
 		embeddedSkills: true,
@@ -76,6 +78,7 @@ export function isSkillPreferences(value: unknown): value is SkillPreferences {
 		typeof preference.warnOnConflicts === "boolean" &&
 		(preference.defaultStorageMode === "preserve" ||
 			preference.defaultStorageMode === "copy") &&
+		typeof preference.showDisplayNames === "boolean" &&
 		Boolean(preference.discovery) &&
 		typeof preference.discovery?.projectSkills === "boolean" &&
 		typeof preference.discovery?.embeddedSkills === "boolean" &&
@@ -104,7 +107,7 @@ export interface SidebarItemPreference {
 	visible: boolean;
 }
 
-export const CURRENT_VERSION = 14;
+export const CURRENT_VERSION = 15;
 
 export const DEFAULT_ONBOARDING_PROGRESS: OnboardingProgress = {
 	hasSeenWelcome: false,

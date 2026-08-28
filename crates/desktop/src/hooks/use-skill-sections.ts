@@ -102,6 +102,7 @@ interface UseSkillSectionsOptions {
 	/** Drives which source cluster starts expanded (seed visibility) */
 	selectedKeys: Set<string>;
 	projectPath?: string;
+	showDisplayNames: boolean;
 }
 
 /**
@@ -116,6 +117,7 @@ export function useSkillSections({
 	searchQuery,
 	selectedKeys,
 	projectPath,
+	showDisplayNames,
 }: UseSkillSectionsOptions) {
 	const api = useApi();
 	const { availableAgents } = useAgentAvailability();
@@ -161,13 +163,14 @@ export function useSkillSections({
 		}
 		return Array.from(map.entries()).map(([name, items]) => ({
 			name,
-			displayName:
-				items.find((skill) => skill.display_name?.trim())
-					?.display_name ?? name,
+			displayName: showDisplayNames
+				? (items.find((skill) => skill.display_name?.trim())
+						?.display_name ?? name)
+				: name,
 			items,
 			description: items.find((s) => s.description)?.description ?? "",
 		}));
-	}, [visibleSkills]);
+	}, [showDisplayNames, visibleSkills]);
 
 	const fuse = useMemo(
 		() =>

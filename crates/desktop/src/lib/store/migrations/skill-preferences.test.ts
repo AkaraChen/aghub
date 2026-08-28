@@ -83,10 +83,12 @@ describe("initializeSkillPreferences", () => {
 					groupIdenticalCopies: false,
 					warnOnConflicts: false,
 					defaultStorageMode: "copy",
+					showDisplayNames: false,
 					discovery: {
 						projectSkills: false,
 						embeddedSkills: true,
 						dependencySkills: true,
+						agentProvidedSkills: false,
 					},
 				},
 			],
@@ -100,11 +102,12 @@ describe("initializeSkillPreferences", () => {
 			groupIdenticalCopies: false,
 			warnOnConflicts: false,
 			defaultStorageMode: "copy",
+			showDisplayNames: false,
 			discovery: {
 				projectSkills: false,
 				embeddedSkills: true,
 				dependencySkills: true,
-				agentProvidedSkills: true,
+				agentProvidedSkills: false,
 			},
 		});
 	});

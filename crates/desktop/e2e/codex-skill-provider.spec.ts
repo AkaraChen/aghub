@@ -110,6 +110,46 @@ test("Skill names remain primary when display names are present", async ({
 	await expect(page.getByText("Zulu label", { exact: true })).toHaveCount(2);
 });
 
+test("display names can be hidden from Skill lists and details", async ({
+	page,
+}) => {
+	const mocks = await installMocks(page);
+	mocks.setCodexProvidedSkills(
+		discovery([
+			{
+				...codexProvidedSkill(
+					"alpha-command",
+					"system",
+					"alpha-command",
+					"/tmp/e2e/.codex/skills/.system/alpha-command/SKILL.md",
+				),
+				display_name: "Alpha label",
+			},
+		]),
+	);
+	await page.goto("/settings?tab=skills");
+
+	const displayNameSwitch = page.getByRole("switch", {
+		name: "Show display names",
+	});
+	await displayNameSwitch.press("Space");
+	await expect(displayNameSwitch).not.toBeChecked();
+	await page.reload();
+	await expect(
+		page.getByRole("switch", { name: "Show display names" }),
+	).not.toBeChecked();
+	await page.getByRole("link", { name: "Skills", exact: true }).click();
+
+	const row = page.getByRole("option", { name: "alpha-command" });
+	await expect(row).toBeVisible();
+	await expect(row).not.toContainText("Alpha label");
+	await row.click();
+	await expect(
+		page.getByRole("heading", { name: "alpha-command", exact: true }),
+	).toBeVisible();
+	await expect(page.getByText("Alpha label", { exact: true })).toHaveCount(0);
+});
+
 test("provider-only Skills expose their source without write actions", async ({
 	page,
 }) => {

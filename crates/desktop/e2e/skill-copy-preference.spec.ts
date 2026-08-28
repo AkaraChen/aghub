@@ -19,6 +19,7 @@ const DEFAULT_PREFERENCES = {
 	groupIdenticalCopies: true,
 	warnOnConflicts: true,
 	defaultStorageMode: "preserve",
+	showDisplayNames: true,
 	discovery: {
 		projectSkills: true,
 		embeddedSkills: true,
@@ -114,9 +115,8 @@ test("skill copy and discovery preferences are compact and stored", async ({
 		.filter({ hasText: "Project Skills" })
 		.click();
 	await page
-		.locator('[data-slot="checkbox-content"]')
-		.filter({ hasText: "Skills in dependencies" })
-		.click();
+		.getByRole("checkbox", { name: "List dependency Skills separately" })
+		.press("Space");
 
 	await expect
 		.poll(() => page.evaluate(storedPreferences))

@@ -64,11 +64,11 @@ export async function migrate(store: Store): Promise<void> {
 	}
 
 	if (version < 14) {
-		await initializeSkillPreferences(store);
+		await initializeUsageReportRange(store);
 	}
 
-	if (version < 14) {
-		await initializeUsageReportRange(store);
+	if (version < 15) {
+		await initializeSkillPreferences(store);
 	}
 
 	await store.set("version", CURRENT_VERSION);

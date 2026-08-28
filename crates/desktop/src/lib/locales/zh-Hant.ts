@@ -924,6 +924,12 @@ export default {
 	warnOnSkillConflicts: "標記內容衝突",
 	warnOnSkillConflictsDescription:
 		"在 Skill 清單標記內容不同或無法比較的副本。",
+	skillDisplay: "Skill 顯示",
+	skillDisplayDescription:
+		"選擇是否在內部名稱後顯示 Agent 中繼資料提供的名稱。",
+	showSkillDisplayNames: "顯示 display_name",
+	showSkillDisplayNamesDescription:
+		"在清單和詳情中顯示 agents/openai.yaml 或 Agent 執行階段提供的 display_name。",
 	skillFileRelationships: "統一方式",
 	skillFileRelationshipsDescription:
 		"選擇一個版本統一其他位置時，設定預設的檔案寫入方式。",

@@ -972,6 +972,12 @@ export default {
 	warnOnSkillConflicts: "Flag content conflicts",
 	warnOnSkillConflictsDescription:
 		"Mark copies with different or unavailable content in the Skill list.",
+	skillDisplay: "Skill display",
+	skillDisplayDescription:
+		"Choose whether Agent metadata names appear beside each Skill's internal name.",
+	showSkillDisplayNames: "Show display names",
+	showSkillDisplayNamesDescription:
+		"Show display_name from agents/openai.yaml or the Agent runtime in lists and details.",
 	skillFileRelationships: "Unification method",
 	skillFileRelationshipsDescription:
 		"Choose the default file-writing method when one version replaces the other locations.",

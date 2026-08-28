@@ -65,9 +65,9 @@ describe("migrate", () => {
 		expect(getSaveCount()).toBe(1);
 	});
 
-	it("adds Agent-provided Skill discovery at version 14", async () => {
+	it("adds Skill display and Agent-provided discovery preferences at version 15", async () => {
 		const { store, values, writes } = memoryStore([
-			["version", 13],
+			["version", 14],
 			[
 				"skillPreferences",
 				{
@@ -89,6 +89,7 @@ describe("migrate", () => {
 
 		expect(writes).toEqual(["skillPreferences", "version"]);
 		expect(values.get("skillPreferences")).toMatchObject({
+			showDisplayNames: true,
 			discovery: { agentProvidedSkills: true },
 		});
 	});

@@ -31,6 +31,7 @@ import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useListDnd } from "../hooks/use-list-dnd";
 import { useMcpSections } from "../hooks/use-mcp-sections";
 import type { ResourceActionIntents } from "../hooks/use-resource-actions";
+import { useSkillPreferences } from "../hooks/use-skill-preferences";
 import { useSkillSections } from "../hooks/use-skill-sections";
 import { DragPreview } from "./drop-board";
 import {
@@ -98,6 +99,7 @@ export function UnifiedResourceList({
 }: UnifiedResourceListProps) {
 	const { t } = useTranslation();
 	const { availableAgents } = useAgentAvailability();
+	const { skillPreferences } = useSkillPreferences();
 	const enabledAgentIds = useMemo(
 		() =>
 			new Set(
@@ -188,6 +190,7 @@ export function UnifiedResourceList({
 		searchQuery,
 		selectedKeys: selectedSkillKeys,
 		projectPath,
+		showDisplayNames: skillPreferences.showDisplayNames,
 	});
 	const mcpSections = useMcpSections({ mcps, searchQuery });
 
