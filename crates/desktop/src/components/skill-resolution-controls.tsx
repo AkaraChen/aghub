@@ -47,7 +47,7 @@ export function SkillResolutionControls({
 					{t("chooseVersionToKeep")}
 				</p>
 				<Table variant="secondary">
-					<Table.ScrollContainer className="max-h-72 rounded-lg border border-border">
+					<Table.ScrollContainer className="max-h-96 rounded-lg border border-border">
 						<Table.Content
 							aria-label={t("chooseVersionToKeep")}
 							selectionMode="single"
@@ -75,10 +75,7 @@ export function SkillResolutionControls({
 							className="w-full table-fixed"
 						>
 							<Table.Header>
-								<Table.Column isRowHeader className="w-24 px-2">
-									{t("skillVersionSource")}
-								</Table.Column>
-								<Table.Column>
+								<Table.Column isRowHeader>
 									{t("skillVersionLocation")}
 								</Table.Column>
 								<Table.Column className="w-10 px-2 text-center">
@@ -104,21 +101,21 @@ export function SkillResolutionControls({
 											)
 										}
 									>
-										<Table.Cell className="min-w-0 px-2">
+										<Table.Cell className="min-w-0 py-2">
 											<span className="sr-only">
 												{choice.ariaLabel}
 											</span>
-											<SkillVersionSources
-												locations={choice.locations}
-											/>
-										</Table.Cell>
-										<Table.Cell className="min-w-0">
+											<div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-2">
+												<SkillVersionSources
+													locations={choice.locations}
+												/>
+												<span className="text-[11px] text-muted">
+													{choice.status}
+												</span>
+											</div>
 											<SkillVersionLocations
 												locations={choice.locations}
 											/>
-											<span className="mt-0.5 block truncate text-[11px] text-muted">
-												{choice.status}
-											</span>
 										</Table.Cell>
 										<Table.Cell className="px-2 text-center">
 											{({ isSelected }) => (

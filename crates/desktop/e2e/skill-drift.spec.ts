@@ -87,11 +87,13 @@ test("different local copies show a file and line diff", async ({ page }) => {
 		skillVersionRow(page, "/tmp/e2e/.claude/skills/react-pro"),
 	).toBeVisible();
 	await expect(
-		page.getByRole("columnheader", { name: "Source" }),
-	).toBeVisible();
-	await expect(
 		page.getByRole("columnheader", { name: "Location and relationship" }),
 	).toBeVisible();
+	await expect(
+		skillVersionRow(page, "/tmp/e2e/.claude/skills/react-pro").locator(
+			"[data-skill-version-location]",
+		),
+	).toHaveCount(1);
 	await page.getByRole("button", { name: "Review file changes" }).click();
 	await expect(page.locator('[data-diff-kind="removed"]')).toContainText(
 		"old instruction",
@@ -849,7 +851,7 @@ test("large skill differences stay within the render budget", async ({
 	).toBeVisible();
 });
 
-test("matching copies use a compact source and relationship summary", async ({
+test("matching copies show every concrete path and relationship", async ({
 	page,
 }) => {
 	const mocks = await installMocks(page);
@@ -910,10 +912,22 @@ test("matching copies use a compact source and relationship summary", async ({
 	await expect(sharedVersion).toBeVisible();
 	await expect(sharedVersion).toHaveAccessibleName(/Keep version from/);
 	await expect(sharedVersion.getByText("+5", { exact: true })).toBeVisible();
-	await expect(sharedVersion).toContainText("8 independent copies");
-	const rowBox = await sharedVersion.boundingBox();
-	if (!rowBox) throw new Error("shared version row geometry missing");
-	expect(rowBox.height).toBeLessThan(96);
+	await expect(
+		sharedVersion.getByText("Independent copy", { exact: true }),
+	).toHaveCount(8);
+	await expect(
+		sharedVersion.locator("[data-skill-version-location]"),
+	).toHaveCount(8);
+	await expect(
+		sharedVersion.getByText("/tmp/e2e/.cursor/skills/react-pro", {
+			exact: true,
+		}),
+	).toBeVisible();
+	await expect(
+		sharedVersion.getByText("/tmp/e2e/.warp/skills/react-pro", {
+			exact: true,
+		}),
+	).toBeVisible();
 
 	const table = page.getByRole("grid", {
 		name: "Choose the version to keep",

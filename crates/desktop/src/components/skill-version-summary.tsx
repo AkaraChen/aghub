@@ -60,78 +60,48 @@ export function SkillVersionLocations({
 	locations: SkillVersionChoiceLocation[];
 }) {
 	const { t } = useTranslation();
-	if (locations.length > 1) {
-		const repositoryCount = locations.filter(
-			(location) => location.kind === "repository",
-		).length;
-		const symlinkCount = locations.filter(
-			(location) => location.kind === "symlink",
-		).length;
-		const copyCount = locations.filter(
-			(location) => location.kind === "copy",
-		).length;
-		const relationships = [
-			repositoryCount > 0
-				? t("skillVersionRepositoryCount", {
-						count: repositoryCount,
-					})
-				: null,
-			symlinkCount > 0
-				? t("skillVersionSymlinkCount", { count: symlinkCount })
-				: null,
-			copyCount > 0
-				? t("skillVersionCopyCount", { count: copyCount })
-				: null,
-		].filter((relationship): relationship is string =>
-			Boolean(relationship),
-		);
-
-		return (
-			<div className="min-w-0">
-				<span className="sr-only">
-					{locations.map((location) => location.path).join(", ")}
-				</span>
-				<span className="block truncate text-xs font-medium text-foreground">
-					{t("skillVersionLocationCount", {
-						count: locations.length,
-					})}
-				</span>
-				<span className="mt-0.5 block truncate text-[11px] text-muted">
-					{relationships.join(" · ")}
-				</span>
-			</div>
-		);
-	}
-
 	return (
-		<div className="space-y-2">
-			{locations.map((location) => (
-				<div
-					key={`${location.source}:${location.path}`}
-					className="min-w-0"
-				>
-					<code className="block truncate text-[11px] text-foreground">
-						{location.path}
-					</code>
-					<span className="mt-0.5 flex min-w-0 items-center gap-1 text-[11px] text-muted">
-						{location.kind === "symlink" ? (
-							<LinkIcon className="size-3 shrink-0" />
-						) : (
-							<DocumentDuplicateIcon className="size-3 shrink-0" />
-						)}
-						<span className="truncate">
-							{t(
-								location.kind === "repository"
-									? "skillVersionRepositorySource"
-									: location.kind === "symlink"
-										? "skillVersionSymlink"
-										: "skillVersionIndependentCopy",
-							)}
-							{location.target ? ` → ${location.target}` : ""}
-						</span>
-					</span>
-				</div>
-			))}
+		<div className="min-w-0 divide-y divide-separator/70 rounded-md border border-separator/70 bg-surface-secondary/40 px-3">
+			{locations.map((location) => {
+				const RelationshipIcon =
+					location.kind === "repository"
+						? CodeBracketIcon
+						: location.kind === "symlink"
+							? LinkIcon
+							: DocumentDuplicateIcon;
+				const relationship = t(
+					location.kind === "repository"
+						? "skillVersionRepositorySource"
+						: location.kind === "symlink"
+							? "skillVersionSymlink"
+							: "skillVersionIndependentCopy",
+				);
+
+				return (
+					<div
+						key={`${location.source}:${location.path}`}
+						data-skill-version-location=""
+						className="min-w-0 py-2"
+					>
+						<code className="block whitespace-normal break-all text-[11px] leading-5 text-foreground">
+							{location.path}
+						</code>
+						<div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted">
+							<span className="inline-flex shrink-0 items-center gap-1">
+								<RelationshipIcon className="size-3" />
+								{relationship}
+								{location.target ? ` → ${location.target}` : ""}
+							</span>
+							<span aria-hidden className="text-separator">
+								·
+							</span>
+							<span className="min-w-0 break-words">
+								{location.source}
+							</span>
+						</div>
+					</div>
+				);
+			})}
 		</div>
 	);
 }
