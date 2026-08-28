@@ -102,7 +102,7 @@ export default {
 	rulesSaved: "Rule file saved",
 	rulesSaveFailed: "Failed to save rule file",
 	rulesChangedOnDisk:
-		"This file changed outside AGHub. Reload it or overwrite it with your draft.",
+		"This file changed outside aghub. Reload it or overwrite it with your draft.",
 	rulesReloadFromDisk: "Reload from disk",
 	rulesOverwriteDisk: "Overwrite disk file",
 	rulesVersionHistory: "Version history",
