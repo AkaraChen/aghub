@@ -252,11 +252,11 @@ function RuleVersionPreferencesForm({
 					isInvalid={!isRetentionValid}
 					isDisabled={!enabled || isPending}
 					onChange={setRetention}
-					className="w-40 shrink-0"
+					className="shrink-0"
 				>
-					<NumberField.Group>
+					<NumberField.Group className="w-36">
 						<NumberField.DecrementButton />
-						<NumberField.Input />
+						<NumberField.Input className="text-center tabular-nums" />
 						<NumberField.IncrementButton />
 					</NumberField.Group>
 					<FieldError>
