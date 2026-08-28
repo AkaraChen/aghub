@@ -177,6 +177,13 @@ pub struct SkillHardLinkResponse {
 
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
+pub struct SkillTreeSkillResponse {
+	pub name: String,
+	pub display_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
 pub struct SkillTreeNodeResponse {
 	pub name: String,
 	pub path: String,
@@ -188,6 +195,9 @@ pub struct SkillTreeNodeResponse {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub hard_link: Option<SkillHardLinkResponse>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub skill: Option<SkillTreeSkillResponse>,
 }
 
 #[derive(Debug, Deserialize, TS)]

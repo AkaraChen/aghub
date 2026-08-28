@@ -84,8 +84,8 @@ use aghub_api::dto::{
 		SkillLocationResponse, SkillLockEntryResponse,
 		SkillProviderKindResponse, SkillProviderLoadErrorResponse,
 		SkillProviderResponse, SkillResponse, SkillTreeNodeKind,
-		SkillTreeNodeResponse, SkillTreeQuery, UpdateSkillRequest,
-		ValidationError,
+		SkillTreeNodeResponse, SkillTreeQuery, SkillTreeSkillResponse,
+		UpdateSkillRequest, ValidationError,
 	},
 	sub_agent::{
 		CreateSubAgentRequest, SubAgentResponse, UpdateSubAgentRequest,
@@ -222,6 +222,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<SkillLinkResponse>(&cfg)?;
 	export_type::<SkillHardLinkResponse>(&cfg)?;
 	export_type::<SkillTreeNodeKind>(&cfg)?;
+	export_type::<SkillTreeSkillResponse>(&cfg)?;
 	export_type::<SkillTreeNodeResponse>(&cfg)?;
 	export_type::<SkillDiffReferenceRequest>(&cfg)?;
 	export_type::<SkillDiffRequest>(&cfg)?;

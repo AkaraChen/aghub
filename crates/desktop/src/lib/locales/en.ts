@@ -841,6 +841,9 @@ export default {
 	editInEditor: "Edit in editor",
 	skillFiles: "Files",
 	skillFilesDescription: "{{count}} items available in this skill bundle",
+	containedSkills: "Contained Skills",
+	containedSkillsDescription:
+		"These Skills remain visible here even when they are not listed separately.",
 	skillFilesUnavailable: "Files unavailable",
 	skillFilesUnavailableDescription:
 		"aghub couldn't inspect this copy's files.",
@@ -998,9 +1001,9 @@ export default {
 	embeddedRepositorySkills: "Skill collections",
 	embeddedRepositorySkillsDescription:
 		"Continue into collection directories that are not Skills themselves.",
-	dependencyPackageSkills: "Skills in dependencies",
+	dependencyPackageSkills: "List dependency Skills separately",
 	dependencyPackageSkillsDescription:
-		"Continue into dependency package directories to find Skills. Disabled by default.",
+		"Add Skills from dependency packages to the main list. They remain visible in the parent Skill when disabled.",
 	skillPreferencesError: "Failed to update Skill settings",
 	automatic: "Automatic",
 	manual: "Manual",

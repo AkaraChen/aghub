@@ -41,6 +41,12 @@ export interface SkillLinkSummary {
 	problems: number;
 }
 
+export interface ContainedSkill {
+	name: string;
+	displayName: string | null;
+	relativePath: string;
+}
+
 const SKILL_MARKDOWN_FILE = "SKILL.md";
 
 export function skillProviderIdentity(provider: SkillProviderResponse): string {
@@ -57,6 +63,35 @@ export function getNodeChildren(
 	node: SkillTreeNodeResponse,
 ): SkillTreeNodeResponse[] {
 	return Array.isArray(node.children) ? node.children : [];
+}
+
+export function findContainedSkills(
+	root: SkillTreeNodeResponse,
+): ContainedSkill[] {
+	const contained: ContainedSkill[] = [];
+
+	function visit(node: SkillTreeNodeResponse, ancestors: string[]): void {
+		if (node.kind !== "directory") return;
+
+		const relativePath = [...ancestors, node.name];
+		if (node.skill) {
+			contained.push({
+				name: node.skill.name,
+				displayName: node.skill.display_name,
+				relativePath: relativePath.join("/"),
+			});
+		}
+
+		for (const child of getNodeChildren(node)) {
+			visit(child, relativePath);
+		}
+	}
+
+	for (const child of getNodeChildren(root)) {
+		visit(child, []);
+	}
+
+	return contained;
 }
 
 export function hasSupplementarySkillFiles(

@@ -801,6 +801,9 @@ export default {
 	editInEditor: "在編輯器中開啟",
 	skillFiles: "檔案",
 	skillFilesDescription: "此技能套件中共有 {{count}} 個項目",
+	containedSkills: "包含的 Skill",
+	containedSkillsDescription:
+		"即使沒有在主清單中單獨顯示，這些 Skill 仍會保留在此處。",
 	skillFilesUnavailable: "無法讀取檔案",
 	skillFilesUnavailableDescription: "aghub 無法讀取此副本的檔案。",
 	skillLinkBroken: "目標不存在",
@@ -950,9 +953,9 @@ export default {
 	embeddedRepositorySkills: "Skill 集合",
 	embeddedRepositorySkillsDescription:
 		"在本身不是 Skill 的集合目錄中繼續尋找子 Skill。",
-	dependencyPackageSkills: "相依套件中的 Skill",
+	dependencyPackageSkills: "單獨顯示相依 Skill",
 	dependencyPackageSkillsDescription:
-		"繼續尋找相依套件目錄中的 Skill；預設關閉。",
+		"將相依套件內的 Skill 加入主清單；關閉後仍可在所屬 Skill 的詳細資料中查看。",
 	skillPreferencesError: "無法更新 Skill 設定",
 	automatic: "自動",
 	manual: "手動",

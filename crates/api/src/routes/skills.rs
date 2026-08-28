@@ -47,7 +47,7 @@ use crate::{
 		SkillLockEntryResponse, SkillProviderKindResponse,
 		SkillProviderLoadErrorResponse, SkillProviderResponse, SkillResponse,
 		SkillTreeNodeKind, SkillTreeNodeResponse, SkillTreeQuery,
-		UpdateSkillRequest, ValidationError,
+		SkillTreeSkillResponse, UpdateSkillRequest, ValidationError,
 	},
 	dto::transfer::{
 		OperationBatchResponse, ReconcileRequest, TransferRequest,
@@ -1076,10 +1076,18 @@ fn build_skill_tree_node(
 			children: Vec::new(),
 			link: Some(link),
 			hard_link: None,
+			skill: None,
 		});
 	}
 
 	if metadata.is_dir() {
+		let parsed_skill =
+			skill::parser::parse_skill_dir(path).ok().map(|parsed| {
+				SkillTreeSkillResponse {
+					name: parsed.name,
+					display_name: parsed.display_name,
+				}
+			});
 		let mut entries: Vec<_> = std::fs::read_dir(path)
 			.map_err(|e| {
 				ApiError::new(
@@ -1119,6 +1127,7 @@ fn build_skill_tree_node(
 			children,
 			link: None,
 			hard_link: None,
+			skill: parsed_skill,
 		});
 	}
 	let relative_path = skill_tree_relative_path(root, path)?;
@@ -1146,6 +1155,7 @@ fn build_skill_tree_node(
 		children: Vec::new(),
 		link: None,
 		hard_link: None,
+		skill: None,
 	})
 }
 
@@ -2997,6 +3007,44 @@ mod tests {
 		));
 
 		assert_eq!(error.body.code, SKILL_PATH_OUTSIDE_ROOT);
+	}
+
+	#[test]
+	fn skill_tree_reports_nested_skill_metadata() {
+		let temp = tempdir().unwrap();
+		let project = temp.path().join("project");
+		let skill_dir = project.join(".claude/skills/repository");
+		let nested_dir = skill_dir.join("vendor/tooling");
+		write_test_skill(&skill_dir, "repository", "parent body");
+		write_test_skill(&nested_dir, "tooling-command", "nested body");
+		std::fs::create_dir_all(nested_dir.join("agents")).unwrap();
+		std::fs::write(
+			nested_dir.join("agents/openai.yaml"),
+			"interface:\n  display_name: Tooling\n",
+		)
+		.unwrap();
+
+		let tree = api_ok(get_skill_tree(
+			ApiAuth,
+			SkillTreeQuery {
+				path: skill_dir.display().to_string(),
+				scope: Some("project".to_string()),
+				project_root: Some(project.display().to_string()),
+			},
+		))
+		.into_inner();
+		let nested = tree
+			.children
+			.iter()
+			.find(|child| child.name == "vendor")
+			.and_then(|vendor| {
+				vendor.children.iter().find(|child| child.name == "tooling")
+			})
+			.and_then(|tooling| tooling.skill.as_ref())
+			.unwrap();
+
+		assert_eq!(nested.name, "tooling-command");
+		assert_eq!(nested.display_name.as_deref(), Some("Tooling"));
 	}
 
 	#[test]

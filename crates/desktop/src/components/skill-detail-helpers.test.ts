@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { SkillResponse } from "../generated/dto";
+import type { SkillResponse, SkillTreeNodeResponse } from "../generated/dto";
 import {
 	buildLocationGroups,
+	findContainedSkills,
 	uniqueSkillLocations,
 } from "./skill-detail-helpers";
 
@@ -66,6 +67,111 @@ describe("buildLocationGroups", () => {
 				sourcePath: "/home/skills/agents-sdk/SKILL.md",
 				isSymlink: false,
 				agents: ["claude"],
+			},
+		]);
+	});
+});
+
+describe("findContainedSkills", () => {
+	it("returns every nested Skill without treating the root as its own child", () => {
+		const tree: SkillTreeNodeResponse = {
+			name: "repository",
+			path: "/skills/repository",
+			kind: "directory",
+			skill: {
+				name: "repository",
+				display_name: "Repository",
+			},
+			children: [
+				{
+					name: "SKILL.md",
+					path: "/skills/repository/SKILL.md",
+					kind: "file",
+					children: [],
+				},
+				{
+					name: "direct-child",
+					path: "/skills/repository/direct-child",
+					kind: "directory",
+					skill: {
+						name: "direct-command",
+						display_name: "Direct Child",
+					},
+					children: [
+						{
+							name: "SKILL.md",
+							path: "/skills/repository/direct-child/SKILL.md",
+							kind: "file",
+							children: [],
+						},
+					],
+				},
+				{
+					name: "vendor",
+					path: "/skills/repository/vendor",
+					kind: "directory",
+					children: [
+						{
+							name: "tooling",
+							path: "/skills/repository/vendor/tooling",
+							kind: "directory",
+							skill: {
+								name: "tooling-command",
+								display_name: null,
+							},
+							children: [
+								{
+									name: "SKILL.md",
+									path: "/skills/repository/vendor/tooling/SKILL.md",
+									kind: "file",
+									children: [],
+								},
+								{
+									name: "skills",
+									path: "/skills/repository/vendor/tooling/skills",
+									kind: "directory",
+									children: [
+										{
+											name: "review",
+											path: "/skills/repository/vendor/tooling/skills/review",
+											kind: "directory",
+											skill: {
+												name: "review-command",
+												display_name: "Review",
+											},
+											children: [
+												{
+													name: "SKILL.md",
+													path: "/skills/repository/vendor/tooling/skills/review/SKILL.md",
+													kind: "file",
+													children: [],
+												},
+											],
+										},
+									],
+								},
+							],
+						},
+					],
+				},
+			],
+		};
+
+		expect(findContainedSkills(tree)).toEqual([
+			{
+				name: "direct-command",
+				displayName: "Direct Child",
+				relativePath: "direct-child",
+			},
+			{
+				name: "tooling-command",
+				displayName: null,
+				relativePath: "vendor/tooling",
+			},
+			{
+				name: "review-command",
+				displayName: "Review",
+				relativePath: "vendor/tooling/skills/review",
 			},
 		]);
 	});

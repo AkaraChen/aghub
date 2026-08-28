@@ -50,6 +50,7 @@ import {
 import {
 	buildLocationGroups,
 	countTreeFiles,
+	findContainedSkills,
 	getInstalledSkillAuditPaths,
 	hasSupplementarySkillFiles,
 	type LocationGroup,
@@ -346,6 +347,10 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		() => (skillTree ? hasSupplementarySkillFiles(skillTree) : false),
 		[skillTree],
 	);
+	const containedSkills = useMemo(
+		() => (skillTree ? findContainedSkills(skillTree) : []),
+		[skillTree],
+	);
 	const displayName =
 		group.items
 			.find((item) => item.display_name?.trim())
@@ -618,6 +623,54 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 										</button>
 									)}
 								</div>
+							)}
+
+							{containedSkills.length > 0 && (
+								<section
+									aria-label={t("containedSkills")}
+									className="space-y-3"
+								>
+									<div className="space-y-1">
+										<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+											{t("containedSkills")} (
+											{containedSkills.length})
+										</h3>
+										<p className="text-xs text-muted">
+											{t("containedSkillsDescription")}
+										</p>
+									</div>
+									<div className="max-h-64 divide-y divide-separator overflow-y-auto rounded-lg bg-surface-secondary px-3">
+										{containedSkills.map((contained) => (
+											<div
+												key={contained.relativePath}
+												className="flex min-w-0 items-center justify-between gap-3 py-2"
+											>
+												<div className="flex min-w-0 items-baseline gap-1.5">
+													<span className="shrink-0 text-sm text-foreground">
+														{contained.name}
+													</span>
+													{contained.displayName &&
+														contained.displayName !==
+															contained.name && (
+															<span className="min-w-0 truncate text-xs text-muted">
+																{
+																	contained.displayName
+																}
+															</span>
+														)}
+												</div>
+												<code
+													className="min-w-0 truncate text-xs text-muted"
+													title={
+														contained.relativePath
+													}
+												>
+													{contained.relativePath}
+												</code>
+											</div>
+										))}
+									</div>
+								</section>
 							)}
 
 							{currentSkillSource && (

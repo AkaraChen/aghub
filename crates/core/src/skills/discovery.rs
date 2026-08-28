@@ -177,6 +177,15 @@ fn collect_skills(
 				set_canonical_skill_path(&mut skill, &path);
 			}
 			skills.push(skill);
+			if options.include_nested {
+				collect_skills(
+					&path,
+					skills,
+					options,
+					linked_location,
+					visited,
+				);
+			}
 			continue;
 		}
 		if options.include_nested {
@@ -406,7 +415,7 @@ mod tests {
 	}
 
 	#[test]
-	fn parsed_skill_directory_is_a_discovery_boundary() {
+	fn nested_dependency_skills_are_discovered_when_enabled() {
 		let temp = tempfile::tempdir().unwrap();
 		let root = temp.path().join("skills");
 		let repository = root.join("repository");
@@ -422,6 +431,13 @@ mod tests {
 			.unwrap();
 		}
 
+		let without_dependencies = load_skills_from_dir_with_options(
+			&root,
+			SkillDiscoveryOptions {
+				include_nested: true,
+				include_dependencies: false,
+			},
+		);
 		let skills = load_skills_from_dir_with_options(
 			&root,
 			SkillDiscoveryOptions {
@@ -430,8 +446,14 @@ mod tests {
 			},
 		);
 
-		assert_eq!(skills.len(), 1);
-		assert_eq!(skills[0].name, "repository");
+		let names = skills
+			.iter()
+			.map(|skill| skill.name.as_str())
+			.collect::<Vec<_>>();
+
+		assert_eq!(without_dependencies.len(), 1);
+		assert_eq!(without_dependencies[0].name, "repository");
+		assert_eq!(names, ["repository", "tooling"]);
 	}
 	#[cfg(unix)]
 	#[test]

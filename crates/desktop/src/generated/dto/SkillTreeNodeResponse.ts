@@ -2,6 +2,7 @@
 import type { SkillHardLinkResponse } from "./SkillHardLinkResponse";
 import type { SkillLinkResponse } from "./SkillLinkResponse";
 import type { SkillTreeNodeKind } from "./SkillTreeNodeKind";
+import type { SkillTreeSkillResponse } from "./SkillTreeSkillResponse";
 
 export type SkillTreeNodeResponse = {
 	name: string;
@@ -10,4 +11,5 @@ export type SkillTreeNodeResponse = {
 	children: Array<SkillTreeNodeResponse>;
 	link?: SkillLinkResponse;
 	hard_link?: SkillHardLinkResponse;
+	skill?: SkillTreeSkillResponse;
 };
