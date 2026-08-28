@@ -133,14 +133,28 @@ pub struct CodexStandaloneSkillResponse {
 #[ts(export)]
 pub struct CodexVisibleCopyRequest {
 	pub name: String,
-	pub source_path: String,
+	pub mode: CodexVisibleCopyMode,
+	#[serde(default)]
+	#[ts(optional = nullable)]
+	pub source_path: Option<String>,
 }
 
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
 pub struct CodexVisibleCopyResponse {
 	pub name: String,
-	pub source_path: String,
+	pub mode: CodexVisibleCopyMode,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub source_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, rename_all = "snake_case")]
+pub enum CodexVisibleCopyMode {
+	All,
+	Single,
 }
 
 #[derive(Debug, Serialize, TS)]

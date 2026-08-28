@@ -55,6 +55,7 @@ export type { CodexProfileResponse } from "./CodexProfileResponse";
 export type { CodexProviderStateResponse } from "./CodexProviderStateResponse";
 export type { CodexSkillDiscoveryResponse } from "./CodexSkillDiscoveryResponse";
 export type { CodexStandaloneSkillResponse } from "./CodexStandaloneSkillResponse";
+export type { CodexVisibleCopyMode } from "./CodexVisibleCopyMode";
 export type { CodexVisibleCopyRequest } from "./CodexVisibleCopyRequest";
 export type { CodexVisibleCopyResponse } from "./CodexVisibleCopyResponse";
 export type { ConfidenceDto } from "./ConfidenceDto";

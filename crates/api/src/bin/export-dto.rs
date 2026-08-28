@@ -67,10 +67,11 @@ use aghub_api::dto::{
 	},
 	skill::{
 		CodexSkillDiscoveryResponse, CodexStandaloneSkillResponse,
-		CodexVisibleCopyRequest, CodexVisibleCopyResponse, CreateSkillRequest,
-		DeleteSkillByPathRequest, DeleteSkillByPathResponse, GitInstallRequest,
-		GitInstallResponse, GitInstallResultEntry, GitScanRequest,
-		GitScanResponse, GitScanSkillEntry, GitSyncRequest, GitSyncResponse,
+		CodexVisibleCopyMode, CodexVisibleCopyRequest,
+		CodexVisibleCopyResponse, CreateSkillRequest, DeleteSkillByPathRequest,
+		DeleteSkillByPathResponse, GitInstallRequest, GitInstallResponse,
+		GitInstallResultEntry, GitScanRequest, GitScanResponse,
+		GitScanSkillEntry, GitSyncRequest, GitSyncResponse,
 		GlobalSkillLockResponse, ImportSkillRequest, InstallSkillRequest,
 		InstallSkillResponse, LocalSkillLockEntryResponse, ProjectLockQuery,
 		ProjectSkillLockResponse, SkillContentQuery,
@@ -219,6 +220,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<SkillProviderLoadErrorResponse>(&cfg)?;
 	export_type::<CodexSkillDiscoveryResponse>(&cfg)?;
 	export_type::<CodexStandaloneSkillResponse>(&cfg)?;
+	export_type::<CodexVisibleCopyMode>(&cfg)?;
 	export_type::<CodexVisibleCopyRequest>(&cfg)?;
 	export_type::<CodexVisibleCopyResponse>(&cfg)?;
 	export_type::<SkillResponse>(&cfg)?;

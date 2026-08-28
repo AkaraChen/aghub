@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::{
@@ -536,10 +536,15 @@ fn skill_identity(
 	(qualified_name.to_string(), CodexSkillOrigin::Standalone)
 }
 
+pub(crate) enum CodexVisibleCopySelection {
+	All,
+	Single(PathBuf),
+}
+
 pub(crate) fn visible_copy_updates(
 	catalog: &CodexSkillCatalog,
 	name: &str,
-	selected_path: &Path,
+	selection: &CodexVisibleCopySelection,
 ) -> Result<Vec<(PathBuf, bool)>> {
 	let mut paths = catalog
 		.skills
@@ -550,21 +555,31 @@ pub(crate) fn visible_copy_updates(
 		.collect::<Vec<_>>();
 	paths.sort();
 	paths.dedup();
-	if !paths.iter().any(|path| path == selected_path) {
-		anyhow::bail!(
-			"Codex does not expose {name} from {}",
-			selected_path.display()
-		);
+	if paths.is_empty() {
+		anyhow::bail!("Codex does not expose a standalone Skill named {name}");
 	}
+	match selection {
+		CodexVisibleCopySelection::All => {
+			Ok(paths.into_iter().map(|path| (path, true)).collect())
+		}
+		CodexVisibleCopySelection::Single(selected_path) => {
+			if !paths.iter().any(|path| path == selected_path) {
+				anyhow::bail!(
+					"Codex does not expose {name} from {}",
+					selected_path.display()
+				);
+			}
 
-	let mut updates = vec![(selected_path.to_path_buf(), true)];
-	updates.extend(
-		paths
-			.into_iter()
-			.filter(|path| path != selected_path)
-			.map(|path| (path, false)),
-	);
-	Ok(updates)
+			let mut updates = vec![(selected_path.clone(), true)];
+			updates.extend(
+				paths
+					.into_iter()
+					.filter(|path| path != selected_path)
+					.map(|path| (path, false)),
+			);
+			Ok(updates)
+		}
+	}
 }
 
 #[cfg(test)]
@@ -771,15 +786,62 @@ mod tests {
 						id: "review".to_string(),
 					},
 				},
+				CodexSkillRecord {
+					qualified_name: "other-skill".to_string(),
+					base_name: "other-skill".to_string(),
+					display_name: None,
+					description: "Different standalone Skill".to_string(),
+					path: PathBuf::from(
+						"/home/user/.agents/skills/other-skill/SKILL.md",
+					),
+					scope: CodexSkillScope::User,
+					enabled: true,
+					origin: CodexSkillOrigin::Standalone,
+				},
 			],
 			errors: Vec::new(),
 		};
 
-		let updates =
-			visible_copy_updates(&catalog, "kill-ai-slop", selected.as_path())
-				.expect("selected standalone copy");
+		let updates = visible_copy_updates(
+			&catalog,
+			"kill-ai-slop",
+			&CodexVisibleCopySelection::Single(selected.clone()),
+		)
+		.expect("selected standalone copy");
 
-		assert_eq!(updates, vec![(selected, true), (duplicate, false)]);
+		assert_eq!(
+			updates,
+			vec![(selected.clone(), true), (duplicate.clone(), false)]
+		);
+
+		let updates = visible_copy_updates(
+			&catalog,
+			"kill-ai-slop",
+			&CodexVisibleCopySelection::All,
+		)
+		.expect("all standalone copies");
+
+		assert_eq!(updates, vec![(selected, true), (duplicate, true)]);
+
+		let missing =
+			PathBuf::from("/home/user/.codex/skills/kill-ai-slop/SKILL.md");
+		let error = visible_copy_updates(
+			&catalog,
+			"kill-ai-slop",
+			&CodexVisibleCopySelection::Single(missing.clone()),
+		)
+		.expect_err("unknown standalone copy");
+
+		assert!(error.to_string().contains(&missing.display().to_string()));
+
+		let error = visible_copy_updates(
+			&catalog,
+			"missing-skill",
+			&CodexVisibleCopySelection::All,
+		)
+		.expect_err("unknown standalone Skill");
+
+		assert!(error.to_string().contains("missing-skill"));
 	}
 
 	#[tokio::test]

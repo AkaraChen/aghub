@@ -346,6 +346,9 @@ test("Codex duplicate copies can be resolved when provider discovery is off", as
 	await expect(
 		page.getByRole("button", { name: /Copies shown in Codex/ }),
 	).toContainText("Codex currently shows 2 of 2 copies");
+	await expect(
+		page.getByRole("radio", { name: /Show all copies in Codex/ }),
+	).toBeChecked();
 	const visibleCopiesBody = page
 		.locator('[data-slot="accordion-body"]')
 		.filter({
@@ -375,10 +378,83 @@ test("Codex duplicate copies can be resolved when provider discovery is off", as
 		.toEqual([
 			{
 				name: "react-pro",
+				mode: "single",
 				source_path: "/tmp/e2e/.cursor/skills/react-pro/SKILL.md",
 			},
 		]);
 	await expect(
 		page.getByRole("button", { name: /Copies shown in Codex/ }),
 	).toContainText("Codex currently shows 1 of 2 copies");
+
+	await page
+		.locator('[data-slot="radio"]')
+		.filter({ hasText: "Show all copies in Codex" })
+		.click();
+	await page
+		.getByRole("button", { name: "Show all copies in Codex" })
+		.click();
+	await expect
+		.poll(() => mocks.getCodexVisibleCopyRequests())
+		.toEqual([
+			{
+				name: "react-pro",
+				mode: "single",
+				source_path: "/tmp/e2e/.cursor/skills/react-pro/SKILL.md",
+			},
+			{
+				name: "react-pro",
+				mode: "all",
+			},
+		]);
+	await expect(
+		page.getByRole("button", { name: /Copies shown in Codex/ }),
+	).toContainText("Codex currently shows 2 of 2 copies");
+});
+
+test("partial Codex copy state stays read-only until a mode is applied", async ({
+	page,
+}) => {
+	const mocks = await installMocks(page);
+	mocks.setCodexProvidedSkills(
+		discovery(
+			[],
+			[],
+			[
+				{
+					name: "react-pro",
+					source_path: "/tmp/e2e/.agents/skills/react-pro/SKILL.md",
+					enabled: true,
+				},
+				{
+					name: "react-pro",
+					source_path: "/tmp/e2e/.codex/skills/react-pro/SKILL.md",
+					enabled: true,
+				},
+				{
+					name: "react-pro",
+					source_path: "/workspace/vendor/react-pro/SKILL.md",
+					enabled: false,
+				},
+			],
+		),
+	);
+	await page.goto("/skills");
+	await page.getByRole("option", { name: "react-pro" }).click();
+
+	await expect(
+		page.getByRole("button", { name: /Copies shown in Codex/ }),
+	).toContainText("Codex currently shows 2 of 3 copies");
+	await expect(page.getByRole("radio", { checked: true })).toHaveCount(0);
+	expect(mocks.getCodexVisibleCopyRequests()).toEqual([]);
+
+	await page
+		.locator('[data-slot="radio"]')
+		.filter({ hasText: "Show all copies in Codex" })
+		.click();
+	await page
+		.getByRole("button", { name: "Show all copies in Codex" })
+		.click();
+	await expect
+		.poll(() => mocks.getCodexVisibleCopyRequests())
+		.toEqual([{ name: "react-pro", mode: "all" }]);
 });

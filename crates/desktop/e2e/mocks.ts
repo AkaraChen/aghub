@@ -424,6 +424,7 @@ export async function installMocks(page: Page) {
 							? {
 									...skill,
 									enabled:
+										body.mode === "all" ||
 										skill.source_path === body.source_path,
 								}
 							: skill,

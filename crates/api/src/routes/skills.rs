@@ -30,7 +30,7 @@ use crate::{
 	auth::ApiAuth,
 	codex_skills::{
 		visible_copy_updates, CodexSkillCatalog, CodexSkillOrigin,
-		CodexSkillScope, CodexSkillsClient,
+		CodexSkillScope, CodexSkillsClient, CodexVisibleCopySelection,
 	},
 	dto::audit::{AuditReportDto, AuditRequest},
 	dto::integrations::{
@@ -38,10 +38,11 @@ use crate::{
 	},
 	dto::skill::{
 		CodexSkillDiscoveryResponse, CodexStandaloneSkillResponse,
-		CodexVisibleCopyRequest, CodexVisibleCopyResponse, CreateSkillRequest,
-		DeleteSkillByPathRequest, DeleteSkillByPathResponse, GitInstallRequest,
-		GitInstallResponse, GitInstallResultEntry, GitScanRequest,
-		GitScanResponse, GitScanSkillEntry, GitSyncRequest, GitSyncResponse,
+		CodexVisibleCopyMode, CodexVisibleCopyRequest,
+		CodexVisibleCopyResponse, CreateSkillRequest, DeleteSkillByPathRequest,
+		DeleteSkillByPathResponse, GitInstallRequest, GitInstallResponse,
+		GitInstallResultEntry, GitScanRequest, GitScanResponse,
+		GitScanSkillEntry, GitSyncRequest, GitSyncResponse,
 		GlobalSkillLockResponse, InstallSkillRequest, InstallSkillResponse,
 		LocalSkillLockEntryResponse, ProjectLockQuery,
 		ProjectSkillLockResponse, SkillContentQuery, SkillHardLinkResponse,
@@ -1699,7 +1700,39 @@ pub(crate) async fn select_codex_visible_copy(
 			"INVALID_CODEX_SKILL_NAME",
 		));
 	}
-	let selected_path = expand_tilde_path(&request.source_path);
+	let (selection, source_path) = match request.mode {
+		CodexVisibleCopyMode::All => {
+			if request.source_path.is_some() {
+				return Err(ApiError::new(
+					Status::BadRequest,
+					"An all-copy Codex Skill selection cannot include a path",
+					"INVALID_CODEX_SKILL_PATH",
+				));
+			}
+			(CodexVisibleCopySelection::All, None)
+		}
+		CodexVisibleCopyMode::Single => {
+			let source_path = request
+				.source_path
+				.as_deref()
+				.map(str::trim)
+				.filter(|path| !path.is_empty())
+				.ok_or_else(|| {
+					ApiError::new(
+						Status::BadRequest,
+						"A single-copy Codex Skill selection requires a path",
+						"INVALID_CODEX_SKILL_PATH",
+					)
+				})?
+				.to_string();
+			(
+				CodexVisibleCopySelection::Single(expand_tilde_path(
+					&source_path,
+				)),
+				Some(source_path),
+			)
+		}
+	};
 	let client = CodexSkillsClient::new().map_err(|error| {
 		ApiError::new(
 			Status::ServiceUnavailable,
@@ -1717,8 +1750,8 @@ pub(crate) async fn select_codex_visible_copy(
 				"CODEX_SKILL_DISCOVERY_UNAVAILABLE",
 			)
 		})?;
-	let updates = visible_copy_updates(&catalog, name, &selected_path)
-		.map_err(|error| {
+	let updates =
+		visible_copy_updates(&catalog, name, &selection).map_err(|error| {
 			ApiError::new(
 				Status::BadRequest,
 				format!("Cannot select Codex Skill copy: {error}"),
@@ -1738,7 +1771,8 @@ pub(crate) async fn select_codex_visible_copy(
 
 	Ok(Json(CodexVisibleCopyResponse {
 		name: name.to_string(),
-		source_path: request.source_path,
+		mode: request.mode,
+		source_path,
 	}))
 }
 
