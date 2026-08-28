@@ -314,6 +314,7 @@ test("Agent-provided Skills can be excluded from discovery", async ({
 test("Codex duplicate copies can be resolved when provider discovery is off", async ({
 	page,
 }) => {
+	await page.setViewportSize({ width: 960, height: 720 });
 	const mocks = await installMocks(page);
 	mocks.setCodexProvidedSkills(
 		discovery(
@@ -322,7 +323,8 @@ test("Codex duplicate copies can be resolved when provider discovery is off", as
 			[
 				{
 					name: "react-pro",
-					source_path: "/tmp/e2e/.claude/skills/react-pro/SKILL.md",
+					source_path:
+						"/workspace/vendor/eric-way/skills/native-feel-cross-platform-desktop/SKILL.md",
 					enabled: true,
 				},
 				{
@@ -344,6 +346,20 @@ test("Codex duplicate copies can be resolved when provider discovery is off", as
 	await expect(
 		page.getByRole("button", { name: /Copies shown in Codex/ }),
 	).toContainText("Codex currently shows 2 of 2 copies");
+	const visibleCopiesBody = page
+		.locator('[data-slot="accordion-body"]')
+		.filter({
+			has: page.getByRole("radiogroup", {
+				name: "Copies shown in Codex",
+			}),
+		});
+	await expect
+		.poll(() =>
+			visibleCopiesBody.evaluate(
+				(element) => element.scrollWidth <= element.clientWidth,
+			),
+		)
+		.toBe(true);
 	await page
 		.locator('[data-slot="radio"]')
 		.filter({

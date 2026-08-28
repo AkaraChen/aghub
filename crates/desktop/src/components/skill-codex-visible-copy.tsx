@@ -94,9 +94,9 @@ export function SkillCodexVisibleCopy({
 									<Radio
 										key={copy.source_path}
 										value={copy.source_path}
-										className="rounded-xl border border-border bg-surface-secondary/60 p-3 transition-colors hover:bg-surface-secondary data-[selected=true]:border-accent/30 data-[selected=true]:bg-accent/5"
+										className="w-full min-w-0 max-w-full rounded-xl border border-border bg-surface-secondary/60 p-3 transition-colors hover:bg-surface-secondary data-[selected=true]:border-accent/30 data-[selected=true]:bg-accent/5"
 									>
-										<Radio.Content className="min-w-0 gap-3">
+										<Radio.Content className="w-full min-w-0 gap-3">
 											<Radio.Control className="shrink-0">
 												<Radio.Indicator />
 											</Radio.Control>
