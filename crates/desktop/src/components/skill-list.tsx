@@ -135,7 +135,14 @@ const SkillRowBody = memo(function SkillRowBody({
 					</span>
 				)}
 			</div>
-			<Label className="flex-1 truncate">{skillGroup.displayName}</Label>
+			<Label className="flex min-w-0 flex-1 items-baseline gap-2">
+				<span className="truncate">{skillGroup.name}</span>
+				{skillGroup.displayName !== skillGroup.name && (
+					<span className="truncate font-normal text-muted">
+						{skillGroup.displayName}
+					</span>
+				)}
+			</Label>
 			<AgentIcons items={skillGroup.items} overflowVariant="square" />
 		</DraggableItemBody>
 	);
@@ -350,11 +357,15 @@ export const SkillList = memo(function SkillList({
 	const renderSkillItem = useCallback(
 		(skillGroup: SkillGroup) => {
 			const copyStatus = copyStatuses?.get(skillGroup.name);
+			const accessibleName =
+				skillGroup.displayName === skillGroup.name
+					? skillGroup.name
+					: `${skillGroup.name} ${skillGroup.displayName}`;
 			return (
 				<ListBox.Item
 					id={skillGroup.name}
-					textValue={`${skillGroup.displayName} ${skillGroup.name}`}
-					aria-label={skillGroup.displayName}
+					textValue={accessibleName}
+					aria-label={accessibleName}
 					className="data-selected:bg-surface transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]"
 					style={{
 						viewTransitionName: viewTransitionName(

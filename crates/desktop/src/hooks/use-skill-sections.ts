@@ -82,7 +82,7 @@ function createSectionEntries(
 	const entryName = (entry: SkillSectionEntry) =>
 		entry.kind === "source"
 			? (entry.group.source.split("/").pop() ?? entry.group.source)
-			: entry.skill.displayName;
+			: entry.skill.name;
 	const entryStarred = (entry: SkillSectionEntry) =>
 		entry.kind === "source"
 			? entry.group.skills.some((skill) => isSkillStarred(skill.name))
@@ -199,7 +199,7 @@ export function useSkillSections({
 			const bStarred = isSkillStarred(b.name);
 			if (aStarred && !bStarred) return -1;
 			if (!aStarred && bStarred) return 1;
-			return a.displayName.localeCompare(b.displayName);
+			return a.name.localeCompare(b.name);
 		},
 		[isSkillStarred],
 	);

@@ -347,9 +347,10 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		[skillTree],
 	);
 	const displayName =
-		group.items.find((item) => item.display_name?.trim())?.display_name ??
-		skill.name;
-	const showsSkillName = displayName !== skill.name;
+		group.items
+			.find((item) => item.display_name?.trim())
+			?.display_name?.trim() ?? null;
+	const showsDisplayName = displayName !== null && displayName !== skill.name;
 
 	return (
 		<>
@@ -360,11 +361,11 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 							<div className="min-w-0 flex-1 select-text">
 								<div className="flex min-w-0 items-baseline gap-2">
 									<h2 className="min-w-0 truncate text-xl font-semibold text-foreground">
-										{displayName}
+										{skill.name}
 									</h2>
-									{showsSkillName && (
-										<span className="shrink-0 font-mono text-xs text-muted">
-											{skill.name}
+									{showsDisplayName && (
+										<span className="min-w-0 truncate text-sm text-muted">
+											{displayName}
 										</span>
 									)}
 									{skillAudit &&

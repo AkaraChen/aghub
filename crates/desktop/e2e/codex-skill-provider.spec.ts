@@ -19,6 +19,7 @@ function codexProvidedSkill(
 ): SkillResponse {
 	return {
 		name,
+		display_name: null,
 		enabled: true,
 		source_path: path,
 		is_symlink: false,
@@ -66,6 +67,48 @@ const changedPluginCopy: SkillDirectoryDiffResponse = {
 	],
 	files_omitted: 0,
 };
+
+test("Skill names remain primary when display names are present", async ({
+	page,
+}) => {
+	const mocks = await installMocks(page);
+	mocks.setCodexProvidedSkills(
+		discovery([
+			{
+				...codexProvidedSkill(
+					"alpha-command",
+					"system",
+					"alpha-command",
+					"/tmp/e2e/.codex/skills/.system/alpha-command/SKILL.md",
+				),
+				display_name: "Zulu label",
+			},
+			{
+				...codexProvidedSkill(
+					"zulu-command",
+					"system",
+					"zulu-command",
+					"/tmp/e2e/.codex/skills/.system/zulu-command/SKILL.md",
+				),
+				display_name: "Alpha label",
+			},
+		]),
+	);
+	await page.goto("/skills");
+
+	const rows = page.getByRole("option", { name: /-command/ });
+	await expect(rows).toHaveCount(2);
+	await expect(rows.nth(0)).toContainText("alpha-command");
+	await expect(rows.nth(0)).toContainText("Zulu label");
+	await expect(rows.nth(1)).toContainText("zulu-command");
+	await expect(rows.nth(1)).toContainText("Alpha label");
+
+	await rows.nth(0).click();
+	await expect(
+		page.getByRole("heading", { name: "alpha-command", exact: true }),
+	).toBeVisible();
+	await expect(page.getByText("Zulu label", { exact: true })).toHaveCount(2);
+});
 
 test("provider-only Skills expose their source without write actions", async ({
 	page,
