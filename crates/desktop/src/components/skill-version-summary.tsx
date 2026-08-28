@@ -90,8 +90,20 @@ export function SkillVersionLocations({
 							<span className="inline-flex shrink-0 items-center gap-1">
 								<RelationshipIcon className="size-3" />
 								{relationship}
-								{location.target ? ` → ${location.target}` : ""}
 							</span>
+							{location.target && (
+								<>
+									<span aria-hidden className="shrink-0">
+										→
+									</span>
+									<code
+										className="min-w-0 break-all"
+										title={location.target}
+									>
+										{location.target}
+									</code>
+								</>
+							)}
 							<span aria-hidden className="text-separator">
 								·
 							</span>

@@ -671,10 +671,32 @@ export async function installMocks(page: Page) {
 			const treePath = url.searchParams.get("path") ?? "";
 			skillTreeRequests.push(treePath);
 			const base = treePath.split("/").filter(Boolean).pop() ?? "skill";
+			const isSymlink = skills.some(
+				(item) =>
+					(item.is_symlink &&
+						(item.source_path === treePath ||
+							item.source_path?.startsWith(`${treePath}/`))) ||
+					item.locations?.some(
+						(location) =>
+							location.is_symlink &&
+							(location.source_path === treePath ||
+								location.source_path.startsWith(
+									`${treePath}/`,
+								)),
+					),
+			);
 			return json({
 				name: base,
 				path: treePath,
 				kind: "directory",
+				...(isSymlink
+					? {
+							link: {
+								target: "~/WorkSpace/Fldicoahkiin_Github/flacier-hype/vendor/eric-way/.agents/skills/react-pro",
+								status: "valid",
+							},
+						}
+					: {}),
 				children: [
 					{
 						name: "SKILL.md",

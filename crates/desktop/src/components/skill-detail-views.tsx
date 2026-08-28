@@ -218,15 +218,20 @@ export function LocationRow({
 							data-skill-location-link={
 								rootLink?.status ?? "valid"
 							}
-							className="flex min-w-0 items-center gap-1.5 text-xs text-muted"
+							className="flex min-w-0 items-start gap-1.5 text-xs text-muted"
 						>
-							<LinkIcon className="size-3.5 shrink-0" />
+							<LinkIcon className="mt-0.5 size-3.5 shrink-0" />
 							<span className="shrink-0">{t("symlink")}</span>
 							{rootLink?.target && (
 								<>
-									<span aria-hidden="true">·</span>
+									<span
+										aria-hidden="true"
+										className="shrink-0"
+									>
+										·
+									</span>
 									<code
-										className="min-w-0 truncate"
+										className="min-w-0 whitespace-normal break-all"
 										title={rootLink.target}
 									>
 										{rootLink.target}
