@@ -29,14 +29,16 @@ use crate::{
 	},
 	auth::ApiAuth,
 	codex_skills::{
-		CodexSkillCatalog, CodexSkillOrigin, CodexSkillScope, CodexSkillsClient,
+		visible_copy_updates, CodexSkillCatalog, CodexSkillOrigin,
+		CodexSkillScope, CodexSkillsClient,
 	},
 	dto::audit::{AuditReportDto, AuditRequest},
 	dto::integrations::{
 		CodeEditorType, EditSkillFolderRequest, OpenSkillFolderRequest,
 	},
 	dto::skill::{
-		CodexSkillDiscoveryResponse, CreateSkillRequest,
+		CodexSkillDiscoveryResponse, CodexStandaloneSkillResponse,
+		CodexVisibleCopyRequest, CodexVisibleCopyResponse, CreateSkillRequest,
 		DeleteSkillByPathRequest, DeleteSkillByPathResponse, GitInstallRequest,
 		GitInstallResponse, GitInstallResultEntry, GitScanRequest,
 		GitScanResponse, GitScanSkillEntry, GitSyncRequest, GitSyncResponse,
@@ -1654,26 +1656,7 @@ pub(crate) async fn list_codex_provider_skills(
 	_auth: ApiAuth,
 	project_root: Option<String>,
 ) -> ApiResult<CodexSkillDiscoveryResponse> {
-	let cwd = match project_root {
-		Some(path) => expand_tilde_path(&path),
-		None => dirs::home_dir().ok_or_else(|| {
-			ApiError::new(
-				Status::InternalServerError,
-				"Cannot determine the home directory for Codex Skill discovery",
-				"HOME_DIR_UNAVAILABLE",
-			)
-		})?,
-	};
-	if !cwd.is_dir() {
-		return Err(ApiError::new(
-			Status::BadRequest,
-			format!(
-				"Codex Skill discovery root is not a directory: {}",
-				cwd.display()
-			),
-			"INVALID_PROJECT_ROOT",
-		));
-	}
+	let cwd = codex_skill_discovery_root(project_root)?;
 
 	let client = CodexSkillsClient::new().map_err(|error| {
 		ApiError::new(
@@ -1696,9 +1679,110 @@ pub(crate) async fn list_codex_provider_skills(
 	Ok(Json(codex_skill_discovery_response(catalog)))
 }
 
+#[post(
+	"/skills/providers/codex/visible-copy?<project_root>",
+	format = "json",
+	data = "<body>"
+)]
+pub(crate) async fn select_codex_visible_copy(
+	_auth: ApiAuth,
+	project_root: Option<String>,
+	body: Json<CodexVisibleCopyRequest>,
+) -> ApiResult<CodexVisibleCopyResponse> {
+	let cwd = codex_skill_discovery_root(project_root)?;
+	let request = body.into_inner();
+	let name = request.name.trim();
+	if name.is_empty() {
+		return Err(ApiError::new(
+			Status::BadRequest,
+			"Codex Skill name cannot be empty",
+			"INVALID_CODEX_SKILL_NAME",
+		));
+	}
+	let selected_path = expand_tilde_path(&request.source_path);
+	let client = CodexSkillsClient::new().map_err(|error| {
+		ApiError::new(
+			Status::ServiceUnavailable,
+			format!("Cannot start Codex Skill discovery: {error}"),
+			"CODEX_SKILL_DISCOVERY_UNAVAILABLE",
+		)
+	})?;
+	let catalog = client
+		.list_skills(std::slice::from_ref(&cwd))
+		.await
+		.map_err(|error| {
+			ApiError::new(
+				Status::ServiceUnavailable,
+				format!("Cannot read Codex Skills: {error}"),
+				"CODEX_SKILL_DISCOVERY_UNAVAILABLE",
+			)
+		})?;
+	let updates = visible_copy_updates(&catalog, name, &selected_path)
+		.map_err(|error| {
+			ApiError::new(
+				Status::BadRequest,
+				format!("Cannot select Codex Skill copy: {error}"),
+				"CODEX_SKILL_COPY_NOT_FOUND",
+			)
+		})?;
+	client
+		.set_skill_visibility(&updates)
+		.await
+		.map_err(|error| {
+			ApiError::new(
+				Status::ServiceUnavailable,
+				format!("Cannot update Codex Skill visibility: {error}"),
+				"CODEX_SKILL_CONFIG_UNAVAILABLE",
+			)
+		})?;
+
+	Ok(Json(CodexVisibleCopyResponse {
+		name: name.to_string(),
+		source_path: request.source_path,
+	}))
+}
+
+fn codex_skill_discovery_root(
+	project_root: Option<String>,
+) -> Result<std::path::PathBuf, ApiError> {
+	let cwd = match project_root {
+		Some(path) => expand_tilde_path(&path),
+		None => dirs::home_dir().ok_or_else(|| {
+			ApiError::new(
+				Status::InternalServerError,
+				"Cannot determine the home directory for Codex Skill discovery",
+				"HOME_DIR_UNAVAILABLE",
+			)
+		})?,
+	};
+	if !cwd.is_dir() {
+		return Err(ApiError::new(
+			Status::BadRequest,
+			format!(
+				"Codex Skill discovery root is not a directory: {}",
+				cwd.display()
+			),
+			"INVALID_PROJECT_ROOT",
+		));
+	}
+	Ok(cwd)
+}
+
 fn codex_skill_discovery_response(
 	catalog: CodexSkillCatalog,
 ) -> CodexSkillDiscoveryResponse {
+	let standalone_skills = catalog
+		.skills
+		.iter()
+		.filter(|skill| skill.origin == CodexSkillOrigin::Standalone)
+		.filter_map(|skill| {
+			Some(CodexStandaloneSkillResponse {
+				name: skill.base_name.clone(),
+				source_path: aghub_core::format_path_with_tilde(&skill.path)?,
+				enabled: skill.enabled,
+			})
+		})
+		.collect();
 	let skills = catalog
 		.skills
 		.into_iter()
@@ -1758,7 +1842,11 @@ fn codex_skill_discovery_response(
 			message: error.message,
 		})
 		.collect();
-	CodexSkillDiscoveryResponse { skills, errors }
+	CodexSkillDiscoveryResponse {
+		skills,
+		standalone_skills,
+		errors,
+	}
 }
 
 #[post("/skills/install", data = "<body>")]
@@ -2826,6 +2914,12 @@ mod tests {
 		let response = codex_skill_discovery_response(catalog);
 
 		assert_eq!(response.skills.len(), 2);
+		assert_eq!(response.standalone_skills.len(), 1);
+		assert_eq!(response.standalone_skills[0].name, "agents-sdk");
+		assert!(response.standalone_skills[0].enabled);
+		assert!(response.standalone_skills[0]
+			.source_path
+			.ends_with(".agents/skills/agents-sdk/SKILL.md"));
 		assert_eq!(response.errors.len(), 1);
 		let plugin = response
 			.skills

@@ -955,6 +955,15 @@ export default {
 	codexSkillDiscoveryIncomplete: "Codex Skill 无法读取",
 	codexSkillDiscoveryUnavailable:
 		"无法从 Codex 读取 Skill，其他来源仍可使用。",
+	codexVisibleCopies: "Codex 中显示的副本",
+	codexVisibleCopiesDescription:
+		"Codex 当前显示 {{count}} / {{total}} 个同名副本。",
+	visibleInCodex: "Codex 中显示",
+	hiddenInCodex: "Codex 中停用",
+	codexVisibleCopyFileNotice: "只修改 Codex 可见性，不移动或删除文件。",
+	showOnlySelectedCopyInCodex: "仅在 Codex 中显示此项",
+	codexVisibleCopyUpdated: "Codex 已仅保留所选副本",
+	codexVisibleCopyUpdateFailed: "无法更新 Codex 中显示的副本：{{error}}",
 	codexPluginSkill: "Codex 插件",
 	codexSystemSkill: "Codex 自带",
 	embeddedRepositorySkills: "Skill 集合",

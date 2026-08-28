@@ -103,7 +103,7 @@ export default function SkillsPage() {
 	const codexProvidedSkillsQuery = useQuery(
 		codexProvidedSkillsQueryOptions({
 			api,
-			enabled: includeCodexProvidedSkills && codexCliAvailable,
+			enabled: codexCliAvailable,
 		}),
 	);
 	const skills = useMemo(
@@ -319,6 +319,15 @@ export default function SkillsPage() {
 			],
 		};
 	}, [allSkillGroupsByName, deferredSelectedKeys, groupedSkills]);
+	const activeCodexCopies = useMemo(
+		() =>
+			activeGroup
+				? (codexProvidedSkillsQuery.data?.standalone_skills.filter(
+						(copy) => copy.name === activeGroup.name,
+					) ?? [])
+				: [],
+		[activeGroup, codexProvidedSkillsQuery.data?.standalone_skills],
+	);
 
 	// 多选模式下被选中的所有 groups（用于批量删除）
 	const selectedGroups = useMemo(() => {
@@ -798,7 +807,10 @@ export default function SkillsPage() {
 									}
 								/>
 							) : activeGroup ? (
-								<SkillDetail group={activeGroup} />
+								<SkillDetail
+									group={activeGroup}
+									codexCopies={activeCodexCopies}
+								/>
 							) : (
 								<div className="flex h-full flex-col items-center justify-center gap-4">
 									<div className="text-center">

@@ -219,6 +219,7 @@ fn build_rocket(
 				routes::market::search_skill_market,
 				routes::skills::list_all_agents_skills,
 				routes::skills::list_codex_provider_skills,
+				routes::skills::select_codex_visible_copy,
 				routes::skills::list_skills,
 				routes::skills::create_skill,
 				routes::skills::import_skill,

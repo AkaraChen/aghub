@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import type {
 	CodexSkillDiscoveryResponse,
+	CodexStandaloneSkillResponse,
 	SkillDirectoryDiffResponse,
 	SkillProviderKindResponse,
 	SkillResponse,
@@ -48,8 +49,9 @@ function codexProvidedSkill(
 function discovery(
 	skills: SkillResponse[],
 	errors: CodexSkillDiscoveryResponse["errors"] = [],
+	standaloneSkills: CodexStandaloneSkillResponse[] = [],
 ): CodexSkillDiscoveryResponse {
-	return { skills, errors };
+	return { skills, standalone_skills: standaloneSkills, errors };
 }
 
 const changedPluginCopy: SkillDirectoryDiffResponse = {
@@ -307,4 +309,60 @@ test("Agent-provided Skills can be excluded from discovery", async ({
 	await expect(page.getByRole("option", { name: "openai-docs" })).toHaveCount(
 		0,
 	);
+});
+
+test("Codex duplicate copies can be resolved when provider discovery is off", async ({
+	page,
+}) => {
+	const mocks = await installMocks(page);
+	mocks.setCodexProvidedSkills(
+		discovery(
+			[],
+			[],
+			[
+				{
+					name: "react-pro",
+					source_path: "/tmp/e2e/.claude/skills/react-pro/SKILL.md",
+					enabled: true,
+				},
+				{
+					name: "react-pro",
+					source_path: "/tmp/e2e/.cursor/skills/react-pro/SKILL.md",
+					enabled: true,
+				},
+			],
+		),
+	);
+	await page.goto("/settings?tab=skills");
+	await page
+		.locator('[data-slot="checkbox-content"]')
+		.filter({ hasText: "Agent-provided Skills" })
+		.click();
+	await page.getByRole("link", { name: "Skills", exact: true }).click();
+
+	await page.getByRole("option", { name: "react-pro" }).click();
+	await expect(
+		page.getByRole("button", { name: /Copies shown in Codex/ }),
+	).toContainText("Codex currently shows 2 of 2 copies");
+	await page
+		.locator('[data-slot="radio"]')
+		.filter({
+			hasText: "/tmp/e2e/.cursor/skills/react-pro/SKILL.md",
+		})
+		.click();
+	await page
+		.getByRole("button", { name: "Show only this copy in Codex" })
+		.click();
+
+	await expect
+		.poll(() => mocks.getCodexVisibleCopyRequests())
+		.toEqual([
+			{
+				name: "react-pro",
+				source_path: "/tmp/e2e/.cursor/skills/react-pro/SKILL.md",
+			},
+		]);
+	await expect(
+		page.getByRole("button", { name: /Copies shown in Codex/ }),
+	).toContainText("Codex currently shows 1 of 2 copies");
 });

@@ -1,11 +1,12 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::{
-	AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader,
+	AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWrite, AsyncWriteExt,
+	BufReader,
 };
 use tokio::process::Command;
 
@@ -127,14 +128,131 @@ impl CodexSkillsClient {
 		})?;
 		parse_skills_value(skills_response, SKILLS_REQUEST_ID)
 	}
+
+	pub(crate) async fn set_skill_visibility(
+		&self,
+		updates: &[(PathBuf, bool)],
+	) -> Result<()> {
+		tokio::time::timeout(
+			APP_SERVER_TIMEOUT,
+			self.set_skill_visibility_inner(updates),
+		)
+		.await
+		.context("codex app-server skills/config/write timed out")?
+	}
+
+	async fn set_skill_visibility_inner(
+		&self,
+		updates: &[(PathBuf, bool)],
+	) -> Result<()> {
+		let mut command = Command::new(&self.binary);
+		command
+			.arg("app-server")
+			.stdin(Stdio::piped())
+			.stdout(Stdio::piped())
+			.stderr(Stdio::piped())
+			.kill_on_drop(true);
+		#[cfg(windows)]
+		command.creation_flags(crate::CREATE_NO_WINDOW);
+		let mut child = command
+			.spawn()
+			.context("failed to start codex app-server")?;
+		let mut stdin = child
+			.stdin
+			.take()
+			.context("codex app-server stdin is unavailable")?;
+		let stdout = child
+			.stdout
+			.take()
+			.context("codex app-server stdout is unavailable")?;
+		let mut stderr = child
+			.stderr
+			.take()
+			.context("codex app-server stderr is unavailable")?;
+		let stderr_task = tokio::spawn(async move {
+			let mut output = String::new();
+			stderr.read_to_string(&mut output).await.map(|_| output)
+		});
+
+		let mut lines = BufReader::new(stdout).lines();
+		let write_result =
+			request_skill_config_writes(&mut stdin, &mut lines, updates).await;
+		drop(stdin);
+		let _ = child.kill().await;
+		let _ = child.wait().await;
+		let diagnostics = stderr_task
+			.await
+			.context("failed to join codex app-server diagnostics")?
+			.context("failed to read codex app-server diagnostics")?;
+		write_result.with_context(|| {
+			let diagnostics = diagnostics.trim();
+			if diagnostics.is_empty() {
+				"codex app-server config request failed".to_string()
+			} else {
+				format!("codex app-server config request failed: {diagnostics}")
+			}
+		})
+	}
 }
 
-async fn request_skills<R>(
-	stdin: &mut tokio::process::ChildStdin,
+async fn request_skills<W, R>(
+	stdin: &mut W,
 	lines: &mut tokio::io::Lines<R>,
 	cwds: &[PathBuf],
 ) -> Result<serde_json::Value>
 where
+	W: AsyncWrite + Unpin,
+	R: AsyncBufRead + Unpin,
+{
+	initialize_app_server(stdin, lines).await?;
+	write_request(
+		stdin,
+		SKILLS_REQUEST_ID,
+		"skills/list",
+		serde_json::json!({
+			"cwds": cwds,
+			"forceReload": true
+		}),
+	)
+	.await?;
+	read_response(lines, SKILLS_REQUEST_ID).await
+}
+
+async fn request_skill_config_writes<W, R>(
+	stdin: &mut W,
+	lines: &mut tokio::io::Lines<R>,
+	updates: &[(PathBuf, bool)],
+) -> Result<()>
+where
+	W: AsyncWrite + Unpin,
+	R: AsyncBufRead + Unpin,
+{
+	initialize_app_server(stdin, lines).await?;
+	for (index, (path, enabled)) in updates.iter().enumerate() {
+		let request_id = SKILLS_REQUEST_ID + index as u64;
+		write_request(
+			stdin,
+			request_id,
+			"skills/config/write",
+			serde_json::json!({
+				"path": path,
+				"name": null,
+				"enabled": enabled
+			}),
+		)
+		.await?;
+		let response = read_response(lines, request_id).await?;
+		ensure_response_succeeded(&response, request_id)?;
+	}
+	Ok(())
+}
+
+async fn initialize_app_server<W, R>(
+	stdin: &mut W,
+	lines: &mut tokio::io::Lines<R>,
+) -> Result<()>
+where
+	W: AsyncWrite + Unpin,
 	R: AsyncBufRead + Unpin,
 {
 	write_request(
@@ -150,21 +268,9 @@ where
 		}),
 	)
 	.await?;
-	let initialize_response =
-		read_response(lines, INITIALIZE_REQUEST_ID).await?;
-	ensure_response_succeeded(&initialize_response, INITIALIZE_REQUEST_ID)?;
-	write_notification(stdin, "initialized", serde_json::json!({})).await?;
-	write_request(
-		stdin,
-		SKILLS_REQUEST_ID,
-		"skills/list",
-		serde_json::json!({
-			"cwds": cwds,
-			"forceReload": false
-		}),
-	)
-	.await?;
-	read_response(lines, SKILLS_REQUEST_ID).await
+	let response = read_response(lines, INITIALIZE_REQUEST_ID).await?;
+	ensure_response_succeeded(&response, INITIALIZE_REQUEST_ID)?;
+	write_notification(stdin, "initialized", serde_json::json!({})).await
 }
 
 async fn read_response<R>(
@@ -213,12 +319,15 @@ fn ensure_response_succeeded(
 	Ok(())
 }
 
-async fn write_request(
-	stdin: &mut tokio::process::ChildStdin,
+async fn write_request<W>(
+	stdin: &mut W,
 	id: u64,
 	method: &str,
 	params: serde_json::Value,
-) -> Result<()> {
+) -> Result<()>
+where
+	W: AsyncWrite + Unpin,
+{
 	write_message(
 		stdin,
 		&serde_json::json!({
@@ -230,11 +339,14 @@ async fn write_request(
 	.await
 }
 
-async fn write_notification(
-	stdin: &mut tokio::process::ChildStdin,
+async fn write_notification<W>(
+	stdin: &mut W,
 	method: &str,
 	params: serde_json::Value,
-) -> Result<()> {
+) -> Result<()>
+where
+	W: AsyncWrite + Unpin,
+{
 	write_message(
 		stdin,
 		&serde_json::json!({
@@ -245,10 +357,13 @@ async fn write_notification(
 	.await
 }
 
-async fn write_message(
-	stdin: &mut tokio::process::ChildStdin,
+async fn write_message<W>(
+	stdin: &mut W,
 	message: &serde_json::Value,
-) -> Result<()> {
+) -> Result<()>
+where
+	W: AsyncWrite + Unpin,
+{
 	let mut encoded = serde_json::to_vec(message)
 		.context("failed to encode codex app-server request")?;
 	encoded.push(b'\n');
@@ -421,6 +536,37 @@ fn skill_identity(
 	(qualified_name.to_string(), CodexSkillOrigin::Standalone)
 }
 
+pub(crate) fn visible_copy_updates(
+	catalog: &CodexSkillCatalog,
+	name: &str,
+	selected_path: &Path,
+) -> Result<Vec<(PathBuf, bool)>> {
+	let mut paths = catalog
+		.skills
+		.iter()
+		.filter(|skill| skill.origin == CodexSkillOrigin::Standalone)
+		.filter(|skill| skill.base_name == name)
+		.map(|skill| skill.path.clone())
+		.collect::<Vec<_>>();
+	paths.sort();
+	paths.dedup();
+	if !paths.iter().any(|path| path == selected_path) {
+		anyhow::bail!(
+			"Codex does not expose {name} from {}",
+			selected_path.display()
+		);
+	}
+
+	let mut updates = vec![(selected_path.to_path_buf(), true)];
+	updates.extend(
+		paths
+			.into_iter()
+			.filter(|path| path != selected_path)
+			.map(|path| (path, false)),
+	);
+	Ok(updates)
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -579,6 +725,144 @@ mod tests {
 				id: "cloudflare@openai-curated-remote".to_string(),
 			}
 		);
+	}
+
+	#[test]
+	fn visible_copy_updates_only_change_matching_standalone_paths() {
+		let selected =
+			PathBuf::from("/home/user/.agents/skills/kill-ai-slop/SKILL.md");
+		let duplicate = PathBuf::from(
+			"/home/user/work/flacier-hype/vendor/kill-ai-slop/skill/SKILL.md",
+		);
+		let plugin = PathBuf::from(
+			"/home/user/.codex/plugins/cache/review/skills/kill-ai-slop/SKILL.md",
+		);
+		let catalog = CodexSkillCatalog {
+			skills: vec![
+				CodexSkillRecord {
+					qualified_name: "kill-ai-slop".to_string(),
+					base_name: "kill-ai-slop".to_string(),
+					display_name: None,
+					description: "Direct install".to_string(),
+					path: selected.clone(),
+					scope: CodexSkillScope::User,
+					enabled: true,
+					origin: CodexSkillOrigin::Standalone,
+				},
+				CodexSkillRecord {
+					qualified_name: "kill-ai-slop".to_string(),
+					base_name: "kill-ai-slop".to_string(),
+					display_name: None,
+					description: "Vendored copy".to_string(),
+					path: duplicate.clone(),
+					scope: CodexSkillScope::User,
+					enabled: true,
+					origin: CodexSkillOrigin::Standalone,
+				},
+				CodexSkillRecord {
+					qualified_name: "review:kill-ai-slop".to_string(),
+					base_name: "kill-ai-slop".to_string(),
+					display_name: None,
+					description: "Plugin copy".to_string(),
+					path: plugin,
+					scope: CodexSkillScope::User,
+					enabled: true,
+					origin: CodexSkillOrigin::Plugin {
+						id: "review".to_string(),
+					},
+				},
+			],
+			errors: Vec::new(),
+		};
+
+		let updates =
+			visible_copy_updates(&catalog, "kill-ai-slop", selected.as_path())
+				.expect("selected standalone copy");
+
+		assert_eq!(updates, vec![(selected, true), (duplicate, false)]);
+	}
+
+	#[tokio::test]
+	async fn writes_path_specific_codex_skill_config() {
+		let selected =
+			PathBuf::from("/home/user/.agents/skills/kill-ai-slop/SKILL.md");
+		let duplicate = PathBuf::from(
+			"/home/user/work/flacier-hype/vendor/kill-ai-slop/skill/SKILL.md",
+		);
+		let (client, server) = tokio::io::duplex(8 * 1024);
+		let (client_read, mut client_write) = tokio::io::split(client);
+		let (server_read, mut server_write) = tokio::io::split(server);
+		let mut client_lines = BufReader::new(client_read).lines();
+		let server_task = tokio::spawn(async move {
+			let mut requests = BufReader::new(server_read).lines();
+			let initialize: serde_json::Value = serde_json::from_str(
+				&requests.next_line().await.unwrap().unwrap(),
+			)
+			.unwrap();
+			assert_eq!(initialize["method"], "initialize");
+			server_write
+				.write_all(b"{\"id\":1,\"result\":{}}\n")
+				.await
+				.unwrap();
+
+			let initialized: serde_json::Value = serde_json::from_str(
+				&requests.next_line().await.unwrap().unwrap(),
+			)
+			.unwrap();
+			assert_eq!(initialized["method"], "initialized");
+
+			for (request_id, expected_path, expected_enabled) in
+				[(2, selected, true), (3, duplicate, false)]
+			{
+				let request: serde_json::Value = serde_json::from_str(
+					&requests.next_line().await.unwrap().unwrap(),
+				)
+				.unwrap();
+				assert_eq!(request["id"], request_id);
+				assert_eq!(request["method"], "skills/config/write");
+				assert_eq!(request["params"]["name"], serde_json::Value::Null);
+				assert_eq!(
+					request["params"]["path"],
+					expected_path.to_string_lossy().as_ref()
+				);
+				assert_eq!(request["params"]["enabled"], expected_enabled);
+				server_write
+					.write_all(
+						b"{\"method\":\"skills/changed\",\"params\":{}}\n",
+					)
+					.await
+					.unwrap();
+				server_write
+					.write_all(
+						format!("{{\"id\":{request_id},\"result\":{{}}}}\n")
+							.as_bytes(),
+					)
+					.await
+					.unwrap();
+			}
+		});
+
+		request_skill_config_writes(
+			&mut client_write,
+			&mut client_lines,
+			&[
+				(
+					PathBuf::from(
+						"/home/user/.agents/skills/kill-ai-slop/SKILL.md",
+					),
+					true,
+				),
+				(
+					PathBuf::from(
+						"/home/user/work/flacier-hype/vendor/kill-ai-slop/skill/SKILL.md",
+					),
+					false,
+				),
+			],
+		)
+		.await
+		.expect("path-specific config writes");
+		server_task.await.expect("mock Codex app-server");
 	}
 
 	#[tokio::test]

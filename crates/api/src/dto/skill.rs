@@ -117,7 +117,30 @@ pub struct SkillProviderLoadErrorResponse {
 #[ts(export)]
 pub struct CodexSkillDiscoveryResponse {
 	pub skills: Vec<SkillResponse>,
+	pub standalone_skills: Vec<CodexStandaloneSkillResponse>,
 	pub errors: Vec<SkillProviderLoadErrorResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct CodexStandaloneSkillResponse {
+	pub name: String,
+	pub source_path: String,
+	pub enabled: bool,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct CodexVisibleCopyRequest {
+	pub name: String,
+	pub source_path: String,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct CodexVisibleCopyResponse {
+	pub name: String,
+	pub source_path: String,
 }
 
 #[derive(Debug, Serialize, TS)]

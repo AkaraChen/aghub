@@ -7,6 +7,7 @@ import type {
 	CcusageRuntimeDto,
 	CcusageRuntimeSource,
 	CodexSkillDiscoveryResponse,
+	CodexVisibleCopyRequest,
 	GitSyncRequest,
 	InstallCcusageRuntimeRequest,
 	SetCcusageRuntimeRequest,
@@ -322,8 +323,10 @@ export async function installMocks(page: Page) {
 	let clearedRuleVersionCount = 0;
 	let codexProvidedSkills: CodexSkillDiscoveryResponse = {
 		skills: [],
+		standalone_skills: [],
 		errors: [],
 	};
+	const codexVisibleCopyRequests: CodexVisibleCopyRequest[] = [];
 	const globalLock = {
 		...GLOBAL_LOCK,
 		skills: GLOBAL_LOCK.skills.map((entry) => ({ ...entry })),
@@ -408,6 +411,26 @@ export async function installMocks(page: Page) {
 		if (p === "/agents") return json(agents);
 		if (p === "/agents/availability") return json(availability);
 		if (p === "/agents/all/skills") return json(skills);
+		if (p === "/skills/providers/codex/visible-copy" && method === "POST") {
+			const body = JSON.parse(
+				route.request().postData() ?? "{}",
+			) as CodexVisibleCopyRequest;
+			codexVisibleCopyRequests.push(body);
+			codexProvidedSkills = {
+				...codexProvidedSkills,
+				standalone_skills: codexProvidedSkills.standalone_skills.map(
+					(skill) =>
+						skill.name === body.name
+							? {
+									...skill,
+									enabled:
+										skill.source_path === body.source_path,
+								}
+							: skill,
+				),
+			};
+			return json(body);
+		}
 		if (p === "/skills/providers/codex") return json(codexProvidedSkills);
 		if (p === "/agents/all/mcps") return json(mcps);
 		if (p === "/agents/all/sub-agents") return json(SUB_AGENTS);
@@ -1002,6 +1025,9 @@ export async function installMocks(page: Page) {
 					is_available: true,
 				});
 			}
+		},
+		getCodexVisibleCopyRequests() {
+			return [...codexVisibleCopyRequests];
 		},
 		getSkillTreeRequests() {
 			return [...skillTreeRequests];

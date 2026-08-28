@@ -66,7 +66,8 @@ use aghub_api::dto::{
 		UpdateRuleVersionPreferencesRequest,
 	},
 	skill::{
-		CodexSkillDiscoveryResponse, CreateSkillRequest,
+		CodexSkillDiscoveryResponse, CodexStandaloneSkillResponse,
+		CodexVisibleCopyRequest, CodexVisibleCopyResponse, CreateSkillRequest,
 		DeleteSkillByPathRequest, DeleteSkillByPathResponse, GitInstallRequest,
 		GitInstallResponse, GitInstallResultEntry, GitScanRequest,
 		GitScanResponse, GitScanSkillEntry, GitSyncRequest, GitSyncResponse,
@@ -217,6 +218,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<SkillProviderResponse>(&cfg)?;
 	export_type::<SkillProviderLoadErrorResponse>(&cfg)?;
 	export_type::<CodexSkillDiscoveryResponse>(&cfg)?;
+	export_type::<CodexStandaloneSkillResponse>(&cfg)?;
+	export_type::<CodexVisibleCopyRequest>(&cfg)?;
+	export_type::<CodexVisibleCopyResponse>(&cfg)?;
 	export_type::<SkillResponse>(&cfg)?;
 	export_type::<SkillLinkStatusResponse>(&cfg)?;
 	export_type::<SkillLinkResponse>(&cfg)?;

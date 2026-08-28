@@ -18,6 +18,7 @@ import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { CodexStandaloneSkillResponse } from "../generated/dto";
 import { siGithub } from "simple-icons";
 import { useLocation } from "wouter";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
@@ -43,6 +44,7 @@ import {
 } from "../requests/skills";
 import { ManageSkillAgentsDialog } from "./manage-skill-agents-dialog";
 import { SkillAudit, SkillAuditBadge } from "./skill-audit";
+import { SkillCodexVisibleCopy } from "./skill-codex-visible-copy";
 import {
 	DeleteSkillDialog,
 	DeleteSkillLocationDialog,
@@ -70,11 +72,16 @@ import { TransferDialog } from "./transfer-dialog";
 interface SkillDetailProps {
 	group: SkillGroup;
 	projectPath?: string;
+	codexCopies?: CodexStandaloneSkillResponse[];
 }
 
 const GITHUB_PREFIX_REGEX = /^github\//;
 
-export function SkillDetail({ group, projectPath }: SkillDetailProps) {
+export function SkillDetail({
+	group,
+	projectPath,
+	codexCopies = [],
+}: SkillDetailProps) {
 	const { t } = useTranslation();
 	const [, setLocation] = useLocation();
 	const { allAgents, availableAgents } = useAgentAvailability();
@@ -804,6 +811,17 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 							skillPreferences.groupIdenticalCopies
 						}
 						defaultStorageMode={skillPreferences.defaultStorageMode}
+					/>
+
+					<SkillCodexVisibleCopy
+						key={codexCopies
+							.map(
+								(copy) => `${copy.source_path}:${copy.enabled}`,
+							)
+							.join("\n")}
+						name={skill.name}
+						copies={codexCopies}
+						projectRoot={projectPath}
 					/>
 
 					{skillContent && (

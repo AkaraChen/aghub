@@ -5,6 +5,8 @@ import {
 } from "@tanstack/react-query";
 import type {
 	CreateSkillRequest,
+	CodexVisibleCopyRequest,
+	CodexVisibleCopyResponse,
 	DeleteSkillByPathRequest,
 	GitInstallRequest,
 	GitInstallResponse,
@@ -83,6 +85,34 @@ export function codexProvidedSkillsQueryOptions({
 		enabled,
 		staleTime,
 		retry: false,
+	});
+}
+
+interface SelectCodexVisibleCopyMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	projectRoot?: string;
+	onSuccess?: (
+		data: CodexVisibleCopyResponse,
+		variables: CodexVisibleCopyRequest,
+	) => void | Promise<void>;
+}
+
+export function selectCodexVisibleCopyMutationOptions({
+	api,
+	queryClient,
+	projectRoot,
+	onSuccess,
+}: SelectCodexVisibleCopyMutationParams) {
+	return mutationOptions({
+		mutationFn: (body: CodexVisibleCopyRequest) =>
+			api.skills.selectCodexVisibleCopy(body, projectRoot),
+		onSuccess: async (data, variables) => {
+			await queryClient.invalidateQueries({
+				queryKey: queryKeys.skills.providers.codex(projectRoot),
+			});
+			await onSuccess?.(data, variables);
+		},
 	});
 }
 

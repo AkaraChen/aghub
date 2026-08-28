@@ -1002,6 +1002,17 @@ export default {
 	codexSkillDiscoveryIncomplete: "Codex Skills could not be read",
 	codexSkillDiscoveryUnavailable:
 		"aghub could not read Skills from Codex. Other sources remain available.",
+	codexVisibleCopies: "Copies shown in Codex",
+	codexVisibleCopiesDescription:
+		"Codex currently shows {{count}} of {{total}} copies with this name.",
+	visibleInCodex: "Shown in Codex",
+	hiddenInCodex: "Not shown in Codex",
+	codexVisibleCopyFileNotice:
+		"This only changes Codex visibility. Files stay where they are.",
+	showOnlySelectedCopyInCodex: "Show only this copy in Codex",
+	codexVisibleCopyUpdated: "Codex now shows only the selected copy",
+	codexVisibleCopyUpdateFailed:
+		"Could not update the copies shown in Codex: {{error}}",
 	codexPluginSkill: "Codex plugin",
 	codexSystemSkill: "Bundled with Codex",
 	embeddedRepositorySkills: "Skill collections",

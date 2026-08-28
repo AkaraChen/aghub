@@ -17,6 +17,8 @@ import type {
 	CodeEditorType,
 	CodexProviderStateResponse,
 	CodexSkillDiscoveryResponse,
+	CodexVisibleCopyRequest,
+	CodexVisibleCopyResponse,
 	CreateAgentProviderRequest,
 	CreateCredentialRequest,
 	CreateInferenceProviderRequest,
@@ -246,6 +248,20 @@ export function createApi(baseUrl: string, token: string) {
 						searchParams: projectRoot
 							? { project_root: projectRoot }
 							: undefined,
+						timeout: 25_000,
+					})
+					.json();
+			},
+			selectCodexVisibleCopy(
+				data: CodexVisibleCopyRequest,
+				projectRoot?: string,
+			): Promise<CodexVisibleCopyResponse> {
+				return client
+					.post("skills/providers/codex/visible-copy", {
+						searchParams: projectRoot
+							? { project_root: projectRoot }
+							: undefined,
+						json: data,
 						timeout: 25_000,
 					})
 					.json();
