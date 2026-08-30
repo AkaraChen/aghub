@@ -57,14 +57,16 @@ function resolveValue(
 	value: MarketMcpValue,
 	values: Record<string, string>,
 ): string {
-	let resolved = value.template;
-	for (const [placeholder, inputId] of Object.entries(value.variables)) {
-		resolved = resolved.replaceAll(
-			`{${placeholder}}`,
-			values[inputId] ?? "",
-		);
-	}
-	return resolved;
+	return value.template.replace(
+		/\{([^{}]+)\}/g,
+		(placeholder, name: string) => {
+			if (!Object.hasOwn(value.variables, name)) return placeholder;
+			const inputId = value.variables[name];
+			return inputId === undefined
+				? placeholder
+				: (values[inputId] ?? "");
+		},
+	);
 }
 
 function collectKeyValues(

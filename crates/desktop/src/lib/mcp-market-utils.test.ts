@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type {
 	MarketMcpInstallMethod,
+	MarketMcpServer,
 	MarketMcpValue,
 	TransportDto,
 } from "../generated/dto";
-import { marketMcpMethodMatchesTransport } from "./mcp-market-utils";
+import {
+	buildMarketMcpRequest,
+	marketMcpMethodMatchesTransport,
+} from "./mcp-market-utils";
 
 const EMPTY_INPUTS: MarketMcpInstallMethod["inputs"] = [];
 
@@ -45,6 +49,53 @@ function npmMethod(
 		inputs: EMPTY_INPUTS,
 	};
 }
+
+describe("buildMarketMcpRequest", () => {
+	it.each(["token$&suffix", "$$-$`-$'", "{tenant}"])(
+		"preserves the literal input %s in headers",
+		(token) => {
+			const method = remoteMethod({
+				template: "https://example.test/mcp",
+				variables: {},
+			});
+			if (method.transport.type !== "streamable_http") {
+				throw new Error("expected a remote method");
+			}
+			method.transport.headers = [
+				{
+					name: "Authorization",
+					value: {
+						template: "Bearer {token}/{tenant}",
+						variables: {
+							token: "header.token",
+							tenant: "header.tenant",
+						},
+					},
+				},
+			];
+			const server: MarketMcpServer = {
+				name: "io.example/remote",
+				display_name: "Remote",
+				suggested_name: "remote",
+				publisher: "io.example",
+				description: "Remote MCP",
+				version: "1.0.0",
+				repository_url: null,
+				catalog_url: "https://registry.example.test/",
+				install_methods: [method],
+			};
+
+			expect(
+				buildMarketMcpRequest(server, method, {
+					"header.token": token,
+					"header.tenant": "acme",
+				}).transport,
+			).toMatchObject({
+				headers: { Authorization: `Bearer ${token}/acme` },
+			});
+		},
+	);
+});
 
 describe("marketMcpMethodMatchesTransport", () => {
 	it("does not identify an arbitrary URL from a variable-only template", () => {
