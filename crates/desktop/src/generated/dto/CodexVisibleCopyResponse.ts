@@ -5,4 +5,5 @@ export type CodexVisibleCopyResponse = {
 	name: string;
 	mode: CodexVisibleCopyMode;
 	source_path?: string;
+	source_paths?: Array<string>;
 };

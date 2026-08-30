@@ -811,11 +811,11 @@ export function SkillDetail({
 					/>
 
 					<SkillCodexVisibleCopy
-						key={codexCopies
-							.map(
-								(copy) => `${copy.source_path}:${copy.enabled}`,
-							)
-							.join("\n")}
+						key={JSON.stringify([
+							projectPath,
+							skill.name,
+							codexCopies.map((copy) => copy.source_path),
+						])}
 						name={skill.name}
 						copies={codexCopies}
 						projectRoot={projectPath}

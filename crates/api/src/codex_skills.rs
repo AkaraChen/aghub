@@ -580,6 +580,7 @@ fn skill_identity(
 pub(crate) enum CodexVisibleCopySelection {
 	All,
 	Single(PathBuf),
+	Selected(Vec<PathBuf>),
 }
 
 pub(crate) fn visible_copy_updates(
@@ -599,28 +600,25 @@ pub(crate) fn visible_copy_updates(
 	if paths.is_empty() {
 		anyhow::bail!("Codex does not expose a standalone Skill named {name}");
 	}
-	match selection {
-		CodexVisibleCopySelection::All => {
-			Ok(paths.into_iter().map(|path| (path, true)).collect())
-		}
-		CodexVisibleCopySelection::Single(selected_path) => {
-			if !paths.iter().any(|path| path == selected_path) {
-				anyhow::bail!(
-					"Codex does not expose {name} from {}",
-					selected_path.display()
-				);
-			}
-
-			let mut updates = vec![(selected_path.clone(), true)];
-			updates.extend(
-				paths
-					.into_iter()
-					.filter(|path| path != selected_path)
-					.map(|path| (path, false)),
+	let selected_paths = match selection {
+		CodexVisibleCopySelection::All => paths.as_slice(),
+		CodexVisibleCopySelection::Single(path) => std::slice::from_ref(path),
+		CodexVisibleCopySelection::Selected(paths) => paths.as_slice(),
+	};
+	for selected_path in selected_paths {
+		if !paths.contains(selected_path) {
+			anyhow::bail!(
+				"Codex does not expose {name} from {}",
+				selected_path.display()
 			);
-			Ok(updates)
 		}
 	}
+	let mut updates = paths
+		.iter()
+		.map(|path| (path.clone(), selected_paths.contains(path)))
+		.collect::<Vec<_>>();
+	updates.sort_by_key(|(_, enabled)| !enabled);
+	Ok(updates)
 }
 
 #[cfg(test)]
@@ -781,6 +779,83 @@ mod tests {
 				id: "cloudflare@openai-curated-remote".to_string(),
 			}
 		);
+	}
+
+	#[test]
+	fn visible_copy_request_accepts_an_explicit_path_set() {
+		for source_paths in [
+			vec!["/skills/one/SKILL.md", "/skills/two/SKILL.md"],
+			Vec::new(),
+		] {
+			let request = serde_json::from_value::<
+				crate::dto::skill::CodexVisibleCopyRequest,
+			>(serde_json::json!({
+				"name": "example",
+				"mode": "selected",
+				"source_paths": source_paths,
+			}));
+			assert!(request.is_ok(), "path selection rejected: {request:?}");
+		}
+	}
+
+	#[test]
+	fn visible_copy_updates_accept_subsets_and_empty_selections() {
+		let mut catalog =
+			parse_skills_response(SKILLS_RESPONSE, 2).expect("skills response");
+		let original = catalog
+			.skills
+			.iter()
+			.find(|skill| skill.origin == CodexSkillOrigin::Standalone)
+			.expect("standalone skill")
+			.clone();
+		let paths = vec![
+			original.path.clone(),
+			PathBuf::from("/home/user/.codex/skills/agents-sdk/SKILL.md"),
+			PathBuf::from("/workspace/vendor/agents-sdk/SKILL.md"),
+		];
+		for path in &paths[1..] {
+			catalog.skills.push(CodexSkillRecord {
+				path: path.clone(),
+				..original.clone()
+			});
+		}
+		catalog.skills.push(original);
+
+		for selected in [paths[1..].to_vec(), Vec::new(), paths.clone()] {
+			let updates = visible_copy_updates(
+				&catalog,
+				"agents-sdk",
+				&CodexVisibleCopySelection::Selected(selected.clone()),
+			)
+			.expect("selected standalone copies");
+
+			assert_eq!(updates.len(), paths.len());
+			for path in &paths {
+				assert!(
+					updates.contains(&(path.clone(), selected.contains(path)))
+				);
+			}
+			assert!(updates.windows(2).all(|pair| pair[0].1 || !pair[1].1));
+		}
+
+		let excluded_paths = catalog
+			.skills
+			.iter()
+			.filter(|skill| skill.origin != CodexSkillOrigin::Standalone)
+			.map(|skill| skill.path.clone())
+			.chain([PathBuf::from("/unknown/agents-sdk/SKILL.md")]);
+		for path in excluded_paths {
+			let error = visible_copy_updates(
+				&catalog,
+				"agents-sdk",
+				&CodexVisibleCopySelection::Selected(vec![
+					paths[0].clone(),
+					path.clone(),
+				]),
+			)
+			.expect_err("invalid selection must not produce partial updates");
+			assert!(error.to_string().contains(&path.display().to_string()));
+		}
 	}
 
 	#[test]

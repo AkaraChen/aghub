@@ -107,6 +107,10 @@ export function selectCodexVisibleCopyMutationOptions({
 	return mutationOptions({
 		mutationFn: (body: CodexVisibleCopyRequest) =>
 			api.skills.selectCodexVisibleCopy(body, projectRoot),
+		onError: () =>
+			queryClient.invalidateQueries({
+				queryKey: queryKeys.skills.providers.codex(projectRoot),
+			}),
 		onSuccess: async (data, variables) => {
 			await queryClient.invalidateQueries({
 				queryKey: queryKeys.skills.providers.codex(projectRoot),

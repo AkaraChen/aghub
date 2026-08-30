@@ -1703,6 +1703,15 @@ pub(crate) async fn select_codex_visible_copy(
 			"INVALID_CODEX_SKILL_NAME",
 		));
 	}
+	if !matches!(request.mode, CodexVisibleCopyMode::Selected)
+		&& request.source_paths.is_some()
+	{
+		return Err(ApiError::new(
+			Status::BadRequest,
+			"Only a selected-copy request can include multiple paths",
+			"INVALID_CODEX_SKILL_PATH",
+		));
+	}
 	let (selection, source_path) = match request.mode {
 		CodexVisibleCopyMode::All => {
 			if request.source_path.is_some() {
@@ -1733,6 +1742,30 @@ pub(crate) async fn select_codex_visible_copy(
 					&source_path,
 				)),
 				Some(source_path),
+			)
+		}
+		CodexVisibleCopyMode::Selected => {
+			let paths = request.source_paths.as_ref().ok_or_else(|| {
+				ApiError::new(
+					Status::BadRequest,
+					"A selected-copy request requires a path list",
+					"INVALID_CODEX_SKILL_PATH",
+				)
+			})?;
+			if request.source_path.is_some()
+				|| paths.iter().any(|path| path.trim().is_empty())
+			{
+				return Err(ApiError::new(
+					Status::BadRequest,
+					"A selected-copy request requires only non-empty paths",
+					"INVALID_CODEX_SKILL_PATH",
+				));
+			}
+			(
+				CodexVisibleCopySelection::Selected(
+					paths.iter().map(|path| expand_tilde_path(path)).collect(),
+				),
+				None,
 			)
 		}
 	};
@@ -1776,6 +1809,7 @@ pub(crate) async fn select_codex_visible_copy(
 		name: name.to_string(),
 		mode: request.mode,
 		source_path,
+		source_paths: request.source_paths,
 	}))
 }
 

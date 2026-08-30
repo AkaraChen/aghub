@@ -5,4 +5,5 @@ export type CodexVisibleCopyRequest = {
 	name: string;
 	mode: CodexVisibleCopyMode;
 	source_path?: string | null;
+	source_paths?: Array<string> | null;
 };
