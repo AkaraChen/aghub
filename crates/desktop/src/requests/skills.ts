@@ -5,6 +5,8 @@ import {
 } from "@tanstack/react-query";
 import type {
 	CreateSkillRequest,
+	CodexVisibleCopyRequest,
+	CodexVisibleCopyResponse,
 	DeleteSkillByPathRequest,
 	GitInstallRequest,
 	GitInstallResponse,
@@ -61,6 +63,56 @@ export function skillListQueryOptions({
 		},
 		enabled,
 		staleTime,
+	});
+}
+
+interface CodexProvidedSkillsQueryParams {
+	api: ApiClient;
+	projectRoot?: string;
+	enabled?: boolean;
+	staleTime?: number;
+}
+
+export function codexProvidedSkillsQueryOptions({
+	api,
+	projectRoot,
+	enabled = true,
+	staleTime = 60_000,
+}: CodexProvidedSkillsQueryParams) {
+	return queryOptions({
+		queryKey: queryKeys.skills.providers.codex(projectRoot),
+		queryFn: () => api.skills.listCodexProvided(projectRoot),
+		enabled,
+		staleTime,
+		retry: false,
+	});
+}
+
+interface SelectCodexVisibleCopyMutationParams {
+	api: ApiClient;
+	queryClient: QueryClient;
+	projectRoot?: string;
+	onSuccess?: (
+		data: CodexVisibleCopyResponse,
+		variables: CodexVisibleCopyRequest,
+	) => void | Promise<void>;
+}
+
+export function selectCodexVisibleCopyMutationOptions({
+	api,
+	queryClient,
+	projectRoot,
+	onSuccess,
+}: SelectCodexVisibleCopyMutationParams) {
+	return mutationOptions({
+		mutationFn: (body: CodexVisibleCopyRequest) =>
+			api.skills.selectCodexVisibleCopy(body, projectRoot),
+		onSuccess: async (data, variables) => {
+			await queryClient.invalidateQueries({
+				queryKey: queryKeys.skills.providers.codex(projectRoot),
+			});
+			await onSuccess?.(data, variables);
+		},
 	});
 }
 

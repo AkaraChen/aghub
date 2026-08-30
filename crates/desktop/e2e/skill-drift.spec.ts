@@ -83,16 +83,27 @@ test("different local copies show a file and line diff", async ({ page }) => {
 	await page
 		.getByRole("button", { name: /Compare and unify local copies/ })
 		.click();
+	const versionSelector = page.getByRole("radiogroup", {
+		name: "Choose the version to keep",
+	});
+	await expect(versionSelector).toBeVisible();
+	await expect(page.getByRole("columnheader")).toHaveCount(0);
 	await expect(
 		skillVersionRow(page, "/tmp/e2e/.claude/skills/react-pro"),
 	).toBeVisible();
 	await expect(
-		page.getByRole("columnheader", { name: "Source" }),
-	).toBeVisible();
+		skillVersionRow(page, "/tmp/e2e/.claude/skills/react-pro").locator(
+			"[data-skill-version-location]",
+		),
+	).toHaveCount(1);
+	const fileChanges = page.getByRole("button", {
+		name: "Review file changes",
+	});
+	await expect(fileChanges).toHaveAttribute("aria-expanded", "false");
+	await fileChanges.click();
 	await expect(
-		page.getByRole("columnheader", { name: "Location and relationship" }),
-	).toBeVisible();
-	await page.getByRole("button", { name: "Review file changes" }).click();
+		page.getByRole("button", { name: "Hide file changes" }),
+	).toHaveAttribute("aria-expanded", "true");
 	await expect(page.locator('[data-diff-kind="removed"]')).toContainText(
 		"old instruction",
 	);
@@ -315,6 +326,7 @@ test("copy mode materializes every location including its reference", async ({
 test("a linked local version can be retained and materialized as copies", async ({
 	page,
 }) => {
+	await page.setViewportSize({ width: 960, height: 720 });
 	const mocks = await installMocks(page);
 	const linkedPath = "/tmp/e2e/.claude/skills/react-pro/SKILL.md";
 	mocks.setSkillSymlink("react-pro", "claude");
@@ -338,6 +350,19 @@ test("a linked local version can be retained and materialized as copies", async 
 	);
 	await expect(linkedVersion).toContainText("Claude");
 	await expect(linkedVersion).toContainText("Symlink");
+	const linkedLocation = page.locator(
+		'[data-skill-location="/tmp/e2e/.claude/skills/react-pro/SKILL.md"]',
+	);
+	await expect(linkedLocation).toContainText(
+		"~/WorkSpace/Fldicoahkiin_Github/flacier-hype/vendor/eric-way/.agents/skills/react-pro",
+	);
+	await expect
+		.poll(() =>
+			linkedLocation.evaluate(
+				(element) => element.scrollWidth <= element.clientWidth,
+			),
+		)
+		.toBe(true);
 	await expect(page.locator("[data-skill-diff-file]")).toHaveCount(0);
 	await page.getByRole("button", { name: "Review file changes" }).click();
 	await expect(page.locator("[data-skill-diff-file]")).toHaveCount(1);
@@ -463,8 +488,10 @@ test("a changed local copy disables stale choices until comparison refreshes", a
 	await expect(
 		page.getByText(/A skill copy changed while you were reviewing it/),
 	).toBeVisible();
-	await expect(cursorChoice).toBeDisabled();
-	await expect(cursorChoice).toBeEnabled({ timeout: 5_000 });
+	await expect(cursorChoice.getByRole("radio")).toBeDisabled();
+	await expect(cursorChoice.getByRole("radio")).toBeEnabled({
+		timeout: 5_000,
+	});
 	await expect(
 		page.getByRole("button", {
 			name: "Use selected version in 2 locations",
@@ -724,8 +751,10 @@ test("a changed repository disables stale choices until comparison refreshes", a
 			name: /Compare repository and local versions/,
 		})
 		.click();
-	await expect(repositoryChoice).toBeDisabled();
-	await expect(repositoryChoice).toBeEnabled({ timeout: 5_000 });
+	await expect(repositoryChoice.getByRole("radio")).toBeDisabled();
+	await expect(repositoryChoice.getByRole("radio")).toBeEnabled({
+		timeout: 5_000,
+	});
 	await expect(page.getByText("Skill synced successfully")).toHaveCount(0);
 });
 
@@ -849,7 +878,7 @@ test("large skill differences stay within the render budget", async ({
 	).toBeVisible();
 });
 
-test("matching copies use a compact source and relationship summary", async ({
+test("matching copies show every concrete path and relationship", async ({
 	page,
 }) => {
 	const mocks = await installMocks(page);
@@ -908,30 +937,40 @@ test("matching copies use a compact source and relationship summary", async ({
 		.locator("[data-skill-version-choice]")
 		.filter({ hasText: "Used in 8 locations" });
 	await expect(sharedVersion).toBeVisible();
-	await expect(sharedVersion).toHaveAccessibleName(/Keep version from/);
+	await expect(sharedVersion.getByRole("radio")).toHaveAccessibleName(
+		/Keep version from/,
+	);
 	await expect(sharedVersion.getByText("+5", { exact: true })).toBeVisible();
-	await expect(sharedVersion).toContainText("8 independent copies");
-	const rowBox = await sharedVersion.boundingBox();
-	if (!rowBox) throw new Error("shared version row geometry missing");
-	expect(rowBox.height).toBeLessThan(96);
+	await expect(
+		sharedVersion.getByText("Independent copy", { exact: true }),
+	).toHaveCount(8);
+	await expect(
+		sharedVersion.locator("[data-skill-version-location]"),
+	).toHaveCount(8);
+	await expect(
+		sharedVersion.getByText("/tmp/e2e/.cursor/skills/react-pro", {
+			exact: true,
+		}),
+	).toBeVisible();
+	await expect(
+		sharedVersion.getByText("/tmp/e2e/.warp/skills/react-pro", {
+			exact: true,
+		}),
+	).toBeVisible();
 
-	const table = page.getByRole("grid", {
+	const versionSelector = page.getByRole("radiogroup", {
 		name: "Choose the version to keep",
 	});
-	const tableGeometry = await table.evaluate((element) => {
-		const scrollContainer = element.parentElement;
-		if (!scrollContainer) throw new Error("table scroll container missing");
+	const selectorGeometry = await versionSelector.evaluate((element) => {
 		return {
-			overflow: scrollContainer.scrollWidth - scrollContainer.clientWidth,
-			tableWidth: element.getBoundingClientRect().width,
-			containerWidth: scrollContainer.getBoundingClientRect().width,
-			tableClass: element.className,
-			containerClass: scrollContainer.className,
+			overflow: element.scrollWidth - element.clientWidth,
+			selectorWidth: element.getBoundingClientRect().width,
+			selectorClass: element.className,
 		};
 	});
-	if (tableGeometry.overflow > 1) {
+	if (selectorGeometry.overflow > 1) {
 		throw new Error(
-			`skill version table overflowed: ${JSON.stringify(tableGeometry)}`,
+			`skill version selector overflowed: ${JSON.stringify(selectorGeometry)}`,
 		);
 	}
 });

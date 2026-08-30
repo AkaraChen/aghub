@@ -349,7 +349,10 @@ impl ContentBudget {
 	}
 }
 
-fn read_regular_file(path: &Path, max_bytes: usize) -> Result<Vec<u8>> {
+pub(crate) fn read_regular_file(
+	path: &Path,
+	max_bytes: usize,
+) -> Result<Vec<u8>> {
 	let (file, metadata) = open_skill_content_file(path)?;
 	if metadata.len() > max_bytes as u64 {
 		return Err(byte_limit_error(path));

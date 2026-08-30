@@ -6,6 +6,8 @@ import type { Page } from "@playwright/test";
 import type {
 	CcusageRuntimeDto,
 	CcusageRuntimeSource,
+	CodexSkillDiscoveryResponse,
+	CodexVisibleCopyRequest,
 	GitSyncRequest,
 	InstallCcusageRuntimeRequest,
 	SetCcusageRuntimeRequest,
@@ -319,6 +321,12 @@ export async function installMocks(page: Page) {
 		max_versions_per_file: 20,
 	};
 	let clearedRuleVersionCount = 0;
+	let codexProvidedSkills: CodexSkillDiscoveryResponse = {
+		skills: [],
+		standalone_skills: [],
+		errors: [],
+	};
+	const codexVisibleCopyRequests: CodexVisibleCopyRequest[] = [];
 	const globalLock = {
 		...GLOBAL_LOCK,
 		skills: GLOBAL_LOCK.skills.map((entry) => ({ ...entry })),
@@ -403,6 +411,28 @@ export async function installMocks(page: Page) {
 		if (p === "/agents") return json(agents);
 		if (p === "/agents/availability") return json(availability);
 		if (p === "/agents/all/skills") return json(skills);
+		if (p === "/skills/providers/codex/visible-copy" && method === "POST") {
+			const body = JSON.parse(
+				route.request().postData() ?? "{}",
+			) as CodexVisibleCopyRequest;
+			codexVisibleCopyRequests.push(body);
+			codexProvidedSkills = {
+				...codexProvidedSkills,
+				standalone_skills: codexProvidedSkills.standalone_skills.map(
+					(skill) =>
+						skill.name === body.name
+							? {
+									...skill,
+									enabled:
+										body.mode === "all" ||
+										skill.source_path === body.source_path,
+								}
+							: skill,
+				),
+			};
+			return json(body);
+		}
+		if (p === "/skills/providers/codex") return json(codexProvidedSkills);
 		if (p === "/agents/all/mcps") return json(mcps);
 		if (p === "/agents/all/sub-agents") return json(SUB_AGENTS);
 		if (p === "/agents/all/rules") return json(ruleFiles);
@@ -641,10 +671,32 @@ export async function installMocks(page: Page) {
 			const treePath = url.searchParams.get("path") ?? "";
 			skillTreeRequests.push(treePath);
 			const base = treePath.split("/").filter(Boolean).pop() ?? "skill";
+			const isSymlink = skills.some(
+				(item) =>
+					(item.is_symlink &&
+						(item.source_path === treePath ||
+							item.source_path?.startsWith(`${treePath}/`))) ||
+					item.locations?.some(
+						(location) =>
+							location.is_symlink &&
+							(location.source_path === treePath ||
+								location.source_path.startsWith(
+									`${treePath}/`,
+								)),
+					),
+			);
 			return json({
 				name: base,
 				path: treePath,
 				kind: "directory",
+				...(isSymlink
+					? {
+							link: {
+								target: "~/WorkSpace/Fldicoahkiin_Github/flacier-hype/vendor/eric-way/.agents/skills/react-pro",
+								status: "valid",
+							},
+						}
+					: {}),
 				children: [
 					{
 						name: "SKILL.md",
@@ -983,6 +1035,23 @@ export async function installMocks(page: Page) {
 	// Control handle so specs can mutate the mock state mid-test (e.g.
 	// simulate reinstalling a deleted skill, made visible by a refetch).
 	return {
+		setCodexProvidedSkills(response: CodexSkillDiscoveryResponse) {
+			codexProvidedSkills = response;
+			if (!agents.some((item) => item.id === "codex")) {
+				agents.push(agentInfo("codex", "OpenAI Codex"));
+			}
+			if (!availability.some((item) => item.id === "codex")) {
+				availability.push({
+					id: "codex",
+					has_global_directory: true,
+					has_cli: true,
+					is_available: true,
+				});
+			}
+		},
+		getCodexVisibleCopyRequests() {
+			return [...codexVisibleCopyRequests];
+		},
 		getSkillTreeRequests() {
 			return [...skillTreeRequests];
 		},
@@ -1084,9 +1153,9 @@ export async function installMocks(page: Page) {
 				});
 			}
 		},
-		addAgent(id: string, displayName: string) {
+		addAgent(id: string, displayName: string, universal = false) {
 			if (!agents.some((agent) => agent.id === id)) {
-				agents.push(agentInfo(id, displayName));
+				agents.push(agentInfo(id, displayName, universal));
 			}
 			if (!availability.some((agent) => agent.id === id)) {
 				availability.push({

@@ -28,12 +28,19 @@ use crate::{
 		MAX_AUDIT_PATHS,
 	},
 	auth::ApiAuth,
+	codex_skills::{
+		visible_copy_updates, CodexSkillCatalog, CodexSkillOrigin,
+		CodexSkillReadRoots, CodexSkillScope, CodexSkillsClient,
+		CodexVisibleCopySelection,
+	},
 	dto::audit::{AuditReportDto, AuditRequest},
 	dto::integrations::{
 		CodeEditorType, EditSkillFolderRequest, OpenSkillFolderRequest,
 	},
 	dto::skill::{
-		CreateSkillRequest, DeleteSkillByPathRequest,
+		CodexSkillDiscoveryResponse, CodexStandaloneSkillResponse,
+		CodexVisibleCopyMode, CodexVisibleCopyRequest,
+		CodexVisibleCopyResponse, CreateSkillRequest, DeleteSkillByPathRequest,
 		DeleteSkillByPathResponse, GitInstallRequest, GitInstallResponse,
 		GitInstallResultEntry, GitScanRequest, GitScanResponse,
 		GitScanSkillEntry, GitSyncRequest, GitSyncResponse,
@@ -41,9 +48,10 @@ use crate::{
 		LocalSkillLockEntryResponse, ProjectLockQuery,
 		ProjectSkillLockResponse, SkillContentQuery, SkillHardLinkResponse,
 		SkillLinkResponse, SkillLinkStatusResponse, SkillLocationResponse,
-		SkillLockEntryResponse, SkillResponse, SkillTreeNodeKind,
-		SkillTreeNodeResponse, SkillTreeQuery, UpdateSkillRequest,
-		ValidationError,
+		SkillLockEntryResponse, SkillProviderKindResponse,
+		SkillProviderLoadErrorResponse, SkillProviderResponse, SkillResponse,
+		SkillTreeNodeKind, SkillTreeNodeResponse, SkillTreeQuery,
+		SkillTreeSkillResponse, UpdateSkillRequest, ValidationError,
 	},
 	dto::transfer::{
 		OperationBatchResponse, ReconcileRequest, TransferRequest,
@@ -57,6 +65,8 @@ use crate::{
 	},
 };
 
+#[cfg(test)]
+use crate::codex_skills::{CodexSkillLoadError, CodexSkillRecord};
 #[cfg(test)]
 use crate::dto::skill::{
 	SkillDirectoryDiffResponse, SkillFileDiffKindResponse,
@@ -1070,10 +1080,18 @@ fn build_skill_tree_node(
 			children: Vec::new(),
 			link: Some(link),
 			hard_link: None,
+			skill: None,
 		});
 	}
 
 	if metadata.is_dir() {
+		let parsed_skill =
+			skill::parser::parse_skill_dir(path).ok().map(|parsed| {
+				SkillTreeSkillResponse {
+					name: parsed.name,
+					display_name: parsed.display_name,
+				}
+			});
 		let mut entries: Vec<_> = std::fs::read_dir(path)
 			.map_err(|e| {
 				ApiError::new(
@@ -1113,6 +1131,7 @@ fn build_skill_tree_node(
 			children,
 			link: None,
 			hard_link: None,
+			skill: parsed_skill,
 		});
 	}
 	let relative_path = skill_tree_relative_path(root, path)?;
@@ -1140,6 +1159,7 @@ fn build_skill_tree_node(
 		children: Vec::new(),
 		link: None,
 		hard_link: None,
+		skill: None,
 	})
 }
 
@@ -1606,12 +1626,16 @@ pub(crate) async fn list_all_agents_skills(
 				source_path,
 				is_symlink: skill.canonical_path.is_some(),
 				source: source.into(),
+				provider: None,
 			};
 			if let Some(index) = item_indices.get(&skill.name).copied() {
 				if !include_managed && is_managed {
 					continue;
 				}
 				let item: &mut SkillResponse = &mut items[index];
+				if item.display_name.is_none() {
+					item.display_name = skill.display_name.clone();
+				}
 				item.locations.get_or_insert_with(Vec::new).push(location);
 				continue;
 			}
@@ -1627,6 +1651,239 @@ pub(crate) async fn list_all_agents_skills(
 		}
 	}
 	Ok(Json(items))
+}
+
+#[get("/skills/providers/codex?<project_root>")]
+pub(crate) async fn list_codex_provider_skills(
+	_auth: ApiAuth,
+	providers: &rocket::State<CodexSkillReadRoots>,
+	project_root: Option<String>,
+) -> ApiResult<CodexSkillDiscoveryResponse> {
+	let cwd = codex_skill_discovery_root(project_root)?;
+
+	let client = CodexSkillsClient::new().map_err(|error| {
+		ApiError::new(
+			Status::ServiceUnavailable,
+			format!("Cannot start Codex Skill discovery: {error}"),
+			"CODEX_SKILL_DISCOVERY_UNAVAILABLE",
+		)
+	})?;
+	let catalog = client
+		.list_skills(std::slice::from_ref(&cwd))
+		.await
+		.map_err(|error| {
+			ApiError::new(
+				Status::ServiceUnavailable,
+				format!("Cannot read Codex Skills: {error}"),
+				"CODEX_SKILL_DISCOVERY_UNAVAILABLE",
+			)
+		})?;
+
+	providers.replace(&cwd, &catalog);
+	Ok(Json(codex_skill_discovery_response(catalog)))
+}
+
+#[post(
+	"/skills/providers/codex/visible-copy?<project_root>",
+	format = "json",
+	data = "<body>"
+)]
+pub(crate) async fn select_codex_visible_copy(
+	_auth: ApiAuth,
+	project_root: Option<String>,
+	body: Json<CodexVisibleCopyRequest>,
+) -> ApiResult<CodexVisibleCopyResponse> {
+	let cwd = codex_skill_discovery_root(project_root)?;
+	let request = body.into_inner();
+	let name = request.name.trim();
+	if name.is_empty() {
+		return Err(ApiError::new(
+			Status::BadRequest,
+			"Codex Skill name cannot be empty",
+			"INVALID_CODEX_SKILL_NAME",
+		));
+	}
+	let (selection, source_path) = match request.mode {
+		CodexVisibleCopyMode::All => {
+			if request.source_path.is_some() {
+				return Err(ApiError::new(
+					Status::BadRequest,
+					"An all-copy Codex Skill selection cannot include a path",
+					"INVALID_CODEX_SKILL_PATH",
+				));
+			}
+			(CodexVisibleCopySelection::All, None)
+		}
+		CodexVisibleCopyMode::Single => {
+			let source_path = request
+				.source_path
+				.as_deref()
+				.map(str::trim)
+				.filter(|path| !path.is_empty())
+				.ok_or_else(|| {
+					ApiError::new(
+						Status::BadRequest,
+						"A single-copy Codex Skill selection requires a path",
+						"INVALID_CODEX_SKILL_PATH",
+					)
+				})?
+				.to_string();
+			(
+				CodexVisibleCopySelection::Single(expand_tilde_path(
+					&source_path,
+				)),
+				Some(source_path),
+			)
+		}
+	};
+	let client = CodexSkillsClient::new().map_err(|error| {
+		ApiError::new(
+			Status::ServiceUnavailable,
+			format!("Cannot start Codex Skill discovery: {error}"),
+			"CODEX_SKILL_DISCOVERY_UNAVAILABLE",
+		)
+	})?;
+	let catalog = client
+		.list_skills(std::slice::from_ref(&cwd))
+		.await
+		.map_err(|error| {
+			ApiError::new(
+				Status::ServiceUnavailable,
+				format!("Cannot read Codex Skills: {error}"),
+				"CODEX_SKILL_DISCOVERY_UNAVAILABLE",
+			)
+		})?;
+	let updates =
+		visible_copy_updates(&catalog, name, &selection).map_err(|error| {
+			ApiError::new(
+				Status::BadRequest,
+				format!("Cannot select Codex Skill copy: {error}"),
+				"CODEX_SKILL_COPY_NOT_FOUND",
+			)
+		})?;
+	client
+		.set_skill_visibility(&updates)
+		.await
+		.map_err(|error| {
+			ApiError::new(
+				Status::ServiceUnavailable,
+				format!("Cannot update Codex Skill visibility: {error}"),
+				"CODEX_SKILL_CONFIG_UNAVAILABLE",
+			)
+		})?;
+
+	Ok(Json(CodexVisibleCopyResponse {
+		name: name.to_string(),
+		mode: request.mode,
+		source_path,
+	}))
+}
+
+fn codex_skill_discovery_root(
+	project_root: Option<String>,
+) -> Result<std::path::PathBuf, ApiError> {
+	let cwd = match project_root {
+		Some(path) => expand_tilde_path(&path),
+		None => dirs::home_dir().ok_or_else(|| {
+			ApiError::new(
+				Status::InternalServerError,
+				"Cannot determine the home directory for Codex Skill discovery",
+				"HOME_DIR_UNAVAILABLE",
+			)
+		})?,
+	};
+	if !cwd.is_dir() {
+		return Err(ApiError::new(
+			Status::BadRequest,
+			format!(
+				"Codex Skill discovery root is not a directory: {}",
+				cwd.display()
+			),
+			"INVALID_PROJECT_ROOT",
+		));
+	}
+	canonical_existing(&cwd)
+}
+
+fn codex_skill_discovery_response(
+	catalog: CodexSkillCatalog,
+) -> CodexSkillDiscoveryResponse {
+	let standalone_skills = catalog
+		.skills
+		.iter()
+		.filter(|skill| skill.origin == CodexSkillOrigin::Standalone)
+		.filter_map(|skill| {
+			Some(CodexStandaloneSkillResponse {
+				name: skill.base_name.clone(),
+				source_path: aghub_core::format_path_with_tilde(&skill.path)?,
+				enabled: skill.enabled,
+			})
+		})
+		.collect();
+	let skills = catalog
+		.skills
+		.into_iter()
+		.filter(|skill| skill.enabled)
+		.filter_map(|skill| {
+			let (kind, provider_id) = match skill.origin {
+				CodexSkillOrigin::Standalone => return None,
+				CodexSkillOrigin::Plugin { id } => {
+					(SkillProviderKindResponse::Plugin, Some(id))
+				}
+				CodexSkillOrigin::System => {
+					(SkillProviderKindResponse::System, None)
+				}
+			};
+			let source = match skill.scope {
+				CodexSkillScope::Repo => {
+					crate::dto::common::ConfigSource::Project
+				}
+				CodexSkillScope::User
+				| CodexSkillScope::System
+				| CodexSkillScope::Admin => crate::dto::common::ConfigSource::Global,
+			};
+			let source_path = aghub_core::format_path_with_tilde(&skill.path)?;
+			let provider = SkillProviderResponse {
+				kind,
+				id: provider_id,
+				qualified_name: skill.qualified_name,
+				managed: true,
+			};
+			Some(SkillResponse {
+				name: skill.base_name,
+				display_name: skill.display_name,
+				enabled: skill.enabled,
+				source_path: Some(source_path.clone()),
+				is_symlink: false,
+				description: Some(skill.description),
+				author: None,
+				version: None,
+				tools: Vec::new(),
+				source: Some(source),
+				agent: Some("codex".to_string()),
+				locations: Some(vec![SkillLocationResponse {
+					source_path,
+					is_symlink: false,
+					source,
+					provider: Some(provider),
+				}]),
+			})
+		})
+		.collect();
+	let errors = catalog
+		.errors
+		.into_iter()
+		.map(|error| SkillProviderLoadErrorResponse {
+			cwd: error.cwd,
+			path: error.path,
+			message: error.message,
+		})
+		.collect();
+	CodexSkillDiscoveryResponse {
+		skills,
+		standalone_skills,
+		errors,
+	}
 }
 
 #[post("/skills/install", data = "<body>")]
@@ -1895,6 +2152,7 @@ pub async fn edit_skill_folder(
 #[get("/skills/content?<query..>")]
 pub fn get_skill_content(
 	_auth: ApiAuth,
+	providers: &rocket::State<CodexSkillReadRoots>,
 	query: SkillContentQuery,
 ) -> ApiResult<String> {
 	let resolved = ScopeParams {
@@ -1903,9 +2161,10 @@ pub fn get_skill_content(
 	}
 	.resolve()?;
 	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
-	let roots = canonical_skill_roots_for_registered_agents(
+	let roots = canonical_skill_read_roots(
 		resource_scope,
 		project_root.as_deref(),
+		providers,
 	)?;
 	let known = known_skill_paths(resource_scope, project_root.as_deref());
 
@@ -1966,6 +2225,7 @@ pub async fn audit_skill(
 #[get("/skills/tree?<query..>")]
 pub fn get_skill_tree(
 	_auth: ApiAuth,
+	providers: &rocket::State<CodexSkillReadRoots>,
 	query: SkillTreeQuery,
 ) -> ApiResult<SkillTreeNodeResponse> {
 	let resolved = ScopeParams {
@@ -1974,9 +2234,10 @@ pub fn get_skill_tree(
 	}
 	.resolve()?;
 	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
-	let roots = canonical_skill_roots_for_registered_agents(
+	let roots = canonical_skill_read_roots(
 		resource_scope,
 		project_root.as_deref(),
+		providers,
 	)?;
 	let known = known_skill_paths(resource_scope, project_root.as_deref());
 
@@ -2640,6 +2901,95 @@ mod tests {
 	}
 
 	#[test]
+	fn codex_provider_discovery_keeps_managed_origins_and_partial_errors() {
+		let catalog = CodexSkillCatalog {
+			skills: vec![
+				CodexSkillRecord {
+					qualified_name: "agents-sdk".to_string(),
+					base_name: "agents-sdk".to_string(),
+					display_name: None,
+					description: "Standalone".to_string(),
+					path: "/home/user/.agents/skills/agents-sdk/SKILL.md".into(),
+					scope: CodexSkillScope::User,
+					enabled: true,
+					origin: CodexSkillOrigin::Standalone,
+				},
+				CodexSkillRecord {
+					qualified_name: "cloudflare:agents-sdk".to_string(),
+					base_name: "agents-sdk".to_string(),
+					display_name: Some("Cloudflare Agents SDK".to_string()),
+					description: "Plugin".to_string(),
+					path: "/home/user/.codex/plugins/cache/cloudflare/skills/agents-sdk/SKILL.md".into(),
+					scope: CodexSkillScope::User,
+					enabled: true,
+					origin: CodexSkillOrigin::Plugin {
+						id: "cloudflare@openai-curated-remote".to_string(),
+					},
+				},
+				CodexSkillRecord {
+					qualified_name: "openai-docs".to_string(),
+					base_name: "openai-docs".to_string(),
+					display_name: None,
+					description: "System".to_string(),
+					path: "/app/system/skills/openai-docs/SKILL.md".into(),
+					scope: CodexSkillScope::System,
+					enabled: true,
+					origin: CodexSkillOrigin::System,
+				},
+				CodexSkillRecord {
+					qualified_name: "cloudflare:disabled".to_string(),
+					base_name: "disabled".to_string(),
+					display_name: None,
+					description: "Disabled plugin Skill".to_string(),
+					path: "/home/user/.codex/plugins/cache/cloudflare/skills/disabled/SKILL.md".into(),
+					scope: CodexSkillScope::User,
+					enabled: false,
+					origin: CodexSkillOrigin::Plugin {
+						id: "cloudflare".to_string(),
+					},
+				},
+			],
+			errors: vec![CodexSkillLoadError {
+				cwd: "/workspace".to_string(),
+				path: "/workspace/broken/SKILL.md".to_string(),
+				message: "invalid frontmatter".to_string(),
+			}],
+		};
+
+		let response = codex_skill_discovery_response(catalog);
+
+		assert_eq!(response.skills.len(), 2);
+		assert_eq!(response.standalone_skills.len(), 1);
+		assert_eq!(response.standalone_skills[0].name, "agents-sdk");
+		assert!(response.standalone_skills[0].enabled);
+		assert!(response.standalone_skills[0]
+			.source_path
+			.ends_with(".agents/skills/agents-sdk/SKILL.md"));
+		assert_eq!(response.errors.len(), 1);
+		let plugin = response
+			.skills
+			.iter()
+			.find(|skill| skill.name == "agents-sdk")
+			.unwrap();
+		let provider = plugin.locations.as_ref().unwrap()[0]
+			.provider
+			.as_ref()
+			.unwrap();
+		assert_eq!(provider.qualified_name, "cloudflare:agents-sdk");
+		assert_eq!(
+			provider.id.as_deref(),
+			Some("cloudflare@openai-curated-remote")
+		);
+		assert!(provider.managed);
+		assert_eq!(
+			plugin.display_name.as_deref(),
+			Some("Cloudflare Agents SDK")
+		);
+		assert!(plugin.source_path.as_deref().unwrap().ends_with("SKILL.md"));
+		assert_eq!(response.errors[0].message, "invalid frontmatter");
+	}
+
+	#[test]
 	fn skill_path_helpers_reject_sibling_prefix_and_resolve_dotdot() {
 		let temp = tempdir().unwrap();
 		let root = temp.path().join("root");
@@ -2747,6 +3097,7 @@ mod tests {
 
 		let content = api_ok(get_skill_content(
 			ApiAuth,
+			rocket::State::from(&CodexSkillReadRoots::default()),
 			SkillContentQuery {
 				path: skill_file.display().to_string(),
 				scope: Some("project".to_string()),
@@ -2768,6 +3119,7 @@ mod tests {
 
 		let error = api_err(get_skill_content(
 			ApiAuth,
+			rocket::State::from(&CodexSkillReadRoots::default()),
 			SkillContentQuery {
 				path: outside_file.display().to_string(),
 				scope: Some("project".to_string()),
@@ -2788,6 +3140,7 @@ mod tests {
 
 		let error = api_err(get_skill_tree(
 			ApiAuth,
+			rocket::State::from(&CodexSkillReadRoots::default()),
 			SkillTreeQuery {
 				path: outside_dir.display().to_string(),
 				scope: Some("project".to_string()),
@@ -2796,6 +3149,45 @@ mod tests {
 		));
 
 		assert_eq!(error.body.code, SKILL_PATH_OUTSIDE_ROOT);
+	}
+
+	#[test]
+	fn skill_tree_reports_nested_skill_metadata() {
+		let temp = tempdir().unwrap();
+		let project = temp.path().join("project");
+		let skill_dir = project.join(".claude/skills/repository");
+		let nested_dir = skill_dir.join("vendor/tooling");
+		write_test_skill(&skill_dir, "repository", "parent body");
+		write_test_skill(&nested_dir, "tooling-command", "nested body");
+		std::fs::create_dir_all(nested_dir.join("agents")).unwrap();
+		std::fs::write(
+			nested_dir.join("agents/openai.yaml"),
+			"interface:\n  display_name: Tooling\n",
+		)
+		.unwrap();
+
+		let tree = api_ok(get_skill_tree(
+			ApiAuth,
+			rocket::State::from(&CodexSkillReadRoots::default()),
+			SkillTreeQuery {
+				path: skill_dir.display().to_string(),
+				scope: Some("project".to_string()),
+				project_root: Some(project.display().to_string()),
+			},
+		))
+		.into_inner();
+		let nested = tree
+			.children
+			.iter()
+			.find(|child| child.name == "vendor")
+			.and_then(|vendor| {
+				vendor.children.iter().find(|child| child.name == "tooling")
+			})
+			.and_then(|tooling| tooling.skill.as_ref())
+			.unwrap();
+
+		assert_eq!(nested.name, "tooling-command");
+		assert_eq!(nested.display_name.as_deref(), Some("Tooling"));
 	}
 
 	#[test]
@@ -2810,6 +3202,7 @@ mod tests {
 
 		let tree = api_ok(get_skill_tree(
 			ApiAuth,
+			rocket::State::from(&CodexSkillReadRoots::default()),
 			SkillTreeQuery {
 				path: skill_dir.display().to_string(),
 				scope: Some("project".to_string()),
@@ -2845,6 +3238,7 @@ mod tests {
 
 		let tree = api_ok(get_skill_tree(
 			ApiAuth,
+			rocket::State::from(&CodexSkillReadRoots::default()),
 			SkillTreeQuery {
 				path: link.join("SKILL.md").display().to_string(),
 				scope: Some("project".to_string()),
@@ -2882,6 +3276,7 @@ mod tests {
 
 		let tree = api_ok(get_skill_tree(
 			ApiAuth,
+			rocket::State::from(&CodexSkillReadRoots::default()),
 			SkillTreeQuery {
 				path: native_root.join("demo/SKILL.md").display().to_string(),
 				scope: Some("project".to_string()),
@@ -2917,6 +3312,7 @@ mod tests {
 
 		let tree = api_ok(get_skill_tree(
 			ApiAuth,
+			rocket::State::from(&CodexSkillReadRoots::default()),
 			SkillTreeQuery {
 				path: skill_dir.display().to_string(),
 				scope: Some("project".to_string()),
@@ -2958,6 +3354,7 @@ mod tests {
 
 		let tree = api_ok(get_skill_tree(
 			ApiAuth,
+			rocket::State::from(&CodexSkillReadRoots::default()),
 			SkillTreeQuery {
 				path: skill_dir.display().to_string(),
 				scope: Some("project".to_string()),

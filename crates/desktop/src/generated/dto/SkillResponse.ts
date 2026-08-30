@@ -4,6 +4,7 @@ import type { SkillLocationResponse } from "./SkillLocationResponse";
 
 export type SkillResponse = {
 	name: string;
+	display_name: string | null;
 	enabled: boolean;
 	source_path: string | null;
 	is_symlink: boolean;

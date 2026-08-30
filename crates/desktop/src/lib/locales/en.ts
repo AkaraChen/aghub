@@ -841,6 +841,9 @@ export default {
 	editInEditor: "Edit in editor",
 	skillFiles: "Files",
 	skillFilesDescription: "{{count}} items available in this skill bundle",
+	containedSkills: "Contained Skills",
+	containedSkillsDescription:
+		"These Skills remain visible here even when they are not listed separately.",
 	skillFilesUnavailable: "Files unavailable",
 	skillFilesUnavailableDescription:
 		"aghub couldn't inspect this copy's files.",
@@ -969,6 +972,12 @@ export default {
 	warnOnSkillConflicts: "Flag content conflicts",
 	warnOnSkillConflictsDescription:
 		"Mark copies with different or unavailable content in the Skill list.",
+	skillDisplay: "Skill display",
+	skillDisplayDescription:
+		"Choose whether Agent metadata names appear beside each Skill's internal name.",
+	showSkillDisplayNames: "Show display names",
+	showSkillDisplayNamesDescription:
+		"Show display_name from agents/openai.yaml or the Agent runtime in lists and details.",
 	skillFileRelationships: "Unification method",
 	skillFileRelationshipsDescription:
 		"Choose the default file-writing method when one version replaces the other locations.",
@@ -987,12 +996,34 @@ export default {
 	projectSkillLocations: "Project Skills",
 	projectSkillLocationsDescription:
 		"Read .agents/skills and native agent directories at the project root.",
+	agentProvidedSkills: "Agent-provided Skills",
+	agentProvidedSkillsDescription:
+		"Read Skills bundled with Codex or supplied by Codex plugins. Codex manages these files.",
+	codexSkillDiscoveryIncomplete: "Codex Skills could not be read",
+	codexSkillDiscoveryUnavailable:
+		"aghub could not read Skills from Codex. Other sources remain available.",
+	codexVisibleCopies: "Copies shown in Codex",
+	codexVisibleCopiesDescription:
+		"Codex currently shows {{count}} of {{total}} copies with this name.",
+	showAllCopiesInCodex: "Show all copies in Codex",
+	showAllCopiesInCodexDescription:
+		"Keep all {{count}} standalone copies available in Codex.",
+	visibleInCodex: "Shown in Codex",
+	hiddenInCodex: "Not shown in Codex",
+	codexVisibleCopyFileNotice:
+		"This only changes Codex visibility. Files stay where they are.",
+	showOnlySelectedCopyInCodex: "Show only this copy in Codex",
+	codexVisibleCopyUpdated: "Codex Skill visibility updated",
+	codexVisibleCopyUpdateFailed:
+		"Could not update the copies shown in Codex: {{error}}",
+	codexPluginSkill: "Codex plugin",
+	codexSystemSkill: "Bundled with Codex",
 	embeddedRepositorySkills: "Skill collections",
 	embeddedRepositorySkillsDescription:
 		"Continue into collection directories that are not Skills themselves.",
-	dependencyPackageSkills: "Skills in dependencies",
+	dependencyPackageSkills: "List dependency Skills separately",
 	dependencyPackageSkillsDescription:
-		"Continue into dependency package directories to find Skills. Disabled by default.",
+		"Add Skills from dependency packages to the main list. They remain visible in the parent Skill when disabled.",
 	skillPreferencesError: "Failed to update Skill settings",
 	automatic: "Automatic",
 	manual: "Manual",
@@ -1278,19 +1309,10 @@ export default {
 		"{{versionCount}} versions across {{locationCount}} locations",
 	chooseVersionToKeep: "Choose the version to keep",
 	chooseVersionToCompare: "Choose a version to compare",
-	skillVersionSource: "Source",
 	skillVersionLocation: "Location and relationship",
 	skillVersionRepositorySource: "Repository source",
 	skillVersionSymlink: "Symlink",
 	skillVersionIndependentCopy: "Independent copy",
-	skillVersionLocationCount_one: "1 location",
-	skillVersionLocationCount_other: "{{count}} locations",
-	skillVersionRepositoryCount_one: "1 repository source",
-	skillVersionRepositoryCount_other: "{{count}} repository sources",
-	skillVersionSymlinkCount_one: "1 symlink",
-	skillVersionSymlinkCount_other: "{{count}} symlinks",
-	skillVersionCopyCount_one: "1 independent copy",
-	skillVersionCopyCount_other: "{{count}} independent copies",
 	skillVersionLocationUsage_one: "Used in 1 location",
 	skillVersionLocationUsage_other: "Used in {{count}} locations",
 	repositoryVersionState: "Remote version",

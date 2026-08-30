@@ -801,6 +801,9 @@ export default {
 	editInEditor: "在編輯器中開啟",
 	skillFiles: "檔案",
 	skillFilesDescription: "此技能套件中共有 {{count}} 個項目",
+	containedSkills: "包含的 Skill",
+	containedSkillsDescription:
+		"即使沒有在主清單中單獨顯示，這些 Skill 仍會保留在此處。",
 	skillFilesUnavailable: "無法讀取檔案",
 	skillFilesUnavailableDescription: "aghub 無法讀取此副本的檔案。",
 	skillLinkBroken: "目標不存在",
@@ -921,6 +924,12 @@ export default {
 	warnOnSkillConflicts: "標記內容衝突",
 	warnOnSkillConflictsDescription:
 		"在 Skill 清單標記內容不同或無法比較的副本。",
+	skillDisplay: "Skill 顯示",
+	skillDisplayDescription:
+		"選擇是否在內部名稱後顯示 Agent 中繼資料提供的名稱。",
+	showSkillDisplayNames: "顯示 display_name",
+	showSkillDisplayNamesDescription:
+		"在清單和詳情中顯示 agents/openai.yaml 或 Agent 執行階段提供的 display_name。",
 	skillFileRelationships: "統一方式",
 	skillFileRelationshipsDescription:
 		"選擇一個版本統一其他位置時，設定預設的檔案寫入方式。",
@@ -939,12 +948,32 @@ export default {
 	projectSkillLocations: "專案 Skill",
 	projectSkillLocationsDescription:
 		"讀取專案根目錄下的 .agents/skills 與 Agent 原生目錄。",
+	agentProvidedSkills: "Agent 提供的 Skill",
+	agentProvidedSkillsDescription:
+		"讀取 Codex 內建或 Codex 外掛提供的 Skill；這些內容由 Codex 管理。",
+	codexSkillDiscoveryIncomplete: "Codex Skill 無法讀取",
+	codexSkillDiscoveryUnavailable:
+		"無法從 Codex 讀取 Skill，其他來源仍可使用。",
+	codexVisibleCopies: "Codex 中顯示的副本",
+	codexVisibleCopiesDescription:
+		"Codex 目前顯示 {{count}} / {{total}} 個同名副本。",
+	showAllCopiesInCodex: "在 Codex 中顯示全部副本",
+	showAllCopiesInCodexDescription:
+		"讓 Codex 保持顯示全部 {{count}} 個獨立副本。",
+	visibleInCodex: "Codex 中顯示",
+	hiddenInCodex: "Codex 中停用",
+	codexVisibleCopyFileNotice: "只修改 Codex 可見性，不移動或刪除檔案。",
+	showOnlySelectedCopyInCodex: "僅在 Codex 中顯示此項",
+	codexVisibleCopyUpdated: "Codex Skill 可見性已更新",
+	codexVisibleCopyUpdateFailed: "無法更新 Codex 中顯示的副本：{{error}}",
+	codexPluginSkill: "Codex 外掛",
+	codexSystemSkill: "Codex 內建",
 	embeddedRepositorySkills: "Skill 集合",
 	embeddedRepositorySkillsDescription:
 		"在本身不是 Skill 的集合目錄中繼續尋找子 Skill。",
-	dependencyPackageSkills: "相依套件中的 Skill",
+	dependencyPackageSkills: "單獨顯示相依 Skill",
 	dependencyPackageSkillsDescription:
-		"繼續尋找相依套件目錄中的 Skill；預設關閉。",
+		"將相依套件內的 Skill 加入主清單；關閉後仍可在所屬 Skill 的詳細資料中查看。",
 	skillPreferencesError: "無法更新 Skill 設定",
 	automatic: "自動",
 	manual: "手動",
@@ -1273,15 +1302,10 @@ export default {
 		"{{versionCount}} 個版本 · {{locationCount}} 個位置",
 	chooseVersionToKeep: "選擇要保留的版本",
 	chooseVersionToCompare: "選擇要比較的版本",
-	skillVersionSource: "來源",
 	skillVersionLocation: "位置與關係",
 	skillVersionRepositorySource: "儲存庫來源",
 	skillVersionSymlink: "符號連結",
 	skillVersionIndependentCopy: "獨立副本",
-	skillVersionLocationCount: "{{count}} 個位置",
-	skillVersionRepositoryCount: "{{count}} 個儲存庫來源",
-	skillVersionSymlinkCount: "{{count}} 個符號連結",
-	skillVersionCopyCount: "{{count}} 個獨立副本",
 	skillVersionLocationUsage: "{{count}} 個位置使用此內容",
 	repositoryVersionState: "遠端版本",
 	reviewFileChanges: "查看檔案差異",

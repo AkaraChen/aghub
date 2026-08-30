@@ -4,7 +4,7 @@ import {
 	BookOpenIcon,
 	PlusIcon,
 } from "@heroicons/react/24/solid";
-import { Button, Dropdown, Kbd, Menu } from "@heroui/react";
+import { Alert, Button, Dropdown, Kbd, Menu } from "@heroui/react";
 import {
 	useQuery,
 	useQueryClient,
@@ -37,7 +37,10 @@ import { PanelTransition } from "../../components/panel-transition";
 import { useListDnd } from "../../hooks/use-list-dnd";
 import { useListKeyboard } from "../../hooks/use-list-keyboard";
 import { SkillDetail } from "../../components/skill-detail";
-import { uniqueSkillSourcePaths } from "../../components/skill-detail-helpers";
+import {
+	uniqueSkillLocations,
+	uniqueSkillSourcePaths,
+} from "../../components/skill-detail-helpers";
 import { SourceDetailPanel } from "../../components/source-detail-panel";
 import {
 	SkillList,
@@ -57,6 +60,7 @@ import {
 	UNIVERSAL_SKILL_TARGET_ID,
 } from "../../lib/skill-targets";
 import {
+	codexProvidedSkillsQueryOptions,
 	globalSkillLockQueryOptions,
 	invalidateSkillQueries,
 	skillCopyStatusQueryOptions,
@@ -69,10 +73,11 @@ export default function SkillsPage() {
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
-	const { allAgents } = useAgentAvailability();
-	const { data: skills, isFetching } = useSuspenseQuery({
-		...skillListQueryOptions({ api, scope: "global" }),
-	});
+	const { allAgents, availableAgents } = useAgentAvailability();
+	const { data: installedSkills, isFetching: isInstalledSkillsFetching } =
+		useSuspenseQuery({
+			...skillListQueryOptions({ api, scope: "global" }),
+		});
 	const [searchQuery, setSearchQuery] = useState("");
 	const [selectedName, setSelectedName] = useQueryState("skill");
 	const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
@@ -92,6 +97,34 @@ export default function SkillsPage() {
 		...globalSkillLockQueryOptions({ api, enabled: true }),
 	});
 	const { skillPreferences, skillPreferencesReady } = useSkillPreferences();
+	const includeCodexProvidedSkills =
+		skillPreferencesReady && skillPreferences.discovery.agentProvidedSkills;
+	const codexCliAvailable = Boolean(
+		availableAgents.find((agent) => agent.id === "codex")?.availability
+			.has_cli,
+	);
+	const codexProvidedSkillsQuery = useQuery(
+		codexProvidedSkillsQueryOptions({
+			api,
+			enabled: codexCliAvailable,
+		}),
+	);
+	const skills = useMemo(
+		() => [
+			...installedSkills,
+			...(includeCodexProvidedSkills && codexCliAvailable
+				? (codexProvidedSkillsQuery.data?.skills ?? [])
+				: []),
+		],
+		[
+			codexProvidedSkillsQuery.data?.skills,
+			codexCliAvailable,
+			includeCodexProvidedSkills,
+			installedSkills,
+		],
+	);
+	const isFetching =
+		isInstalledSkillsFetching || codexProvidedSkillsQuery.isFetching;
 	const automaticallyCheckCopies =
 		skillPreferencesReady &&
 		skillPreferences.enabled &&
@@ -159,6 +192,7 @@ export default function SkillsPage() {
 		skills: filteredSkills,
 		searchQuery,
 		selectedKeys,
+		showDisplayNames: skillPreferences.showDisplayNames,
 	});
 	const groupedSkills = sections.groupedByName;
 	const allSkillGroups = useMemo(() => {
@@ -174,6 +208,17 @@ export default function SkillsPage() {
 				items.find((item) => item.description)?.description ?? "",
 		}));
 	}, [skills]);
+	const providerManagedSkillNames = useMemo(
+		() =>
+			new Set(
+				allSkillGroups.flatMap((group) =>
+					uniqueSkillLocations(group.items).length === 0
+						? [group.name]
+						: [],
+				),
+			),
+		[allSkillGroups],
+	);
 	const allSkillGroupsByName = useMemo(
 		() => new Map(allSkillGroups.map((group) => [group.name, group])),
 		[allSkillGroups],
@@ -270,11 +315,23 @@ export default function SkillsPage() {
 			],
 		};
 	}, [allSkillGroupsByName, deferredSelectedKeys, groupedSkills]);
+	const activeCodexCopies = useMemo(
+		() =>
+			activeGroup
+				? (codexProvidedSkillsQuery.data?.standalone_skills.filter(
+						(copy) => copy.name === activeGroup.name,
+					) ?? [])
+				: [],
+		[activeGroup, codexProvidedSkillsQuery.data?.standalone_skills],
+	);
 
 	// 多选模式下被选中的所有 groups（用于批量删除）
 	const selectedGroups = useMemo(() => {
 		return groupedSkills.filter((g) => deferredSelectedKeys.has(g.name));
 	}, [deferredSelectedKeys, groupedSkills]);
+	const selectionCanWrite = [...selectedKeys].every(
+		(key) => !providerManagedSkillNames.has(key),
+	);
 
 	const handleSelectionChange = (keys: Set<string>) => {
 		setSelectedKeys(keys);
@@ -320,9 +377,15 @@ export default function SkillsPage() {
 	};
 
 	const actionIntents = {
-		onRequestDelete: () => setIsBulkDeleteDialogOpen(true),
-		onRequestAddToAgent: () => setIsManageDialogOpen(true),
-		onRequestTransfer: () => setIsTransferDialogOpen(true),
+		onRequestDelete: () => {
+			if (selectionCanWrite) setIsBulkDeleteDialogOpen(true);
+		},
+		onRequestAddToAgent: () => {
+			if (selectionCanWrite) setIsManageDialogOpen(true);
+		},
+		onRequestTransfer: () => {
+			if (selectionCanWrite) setIsTransferDialogOpen(true);
+		},
 		onRequestCreateGroup: () => setCreateGroupKeys([...selectedKeys]),
 	};
 
@@ -572,6 +635,32 @@ export default function SkillsPage() {
 						/>
 					</Button>
 				</ResourcePageToolbar>
+				{includeCodexProvidedSkills &&
+				codexCliAvailable &&
+				codexProvidedSkillsQuery.isError ? (
+					<div className="shrink-0 px-3 pt-2">
+						<Alert status="warning">
+							<Alert.Indicator />
+							<Alert.Content>
+								<Alert.Title>
+									{t("codexSkillDiscoveryIncomplete")}
+								</Alert.Title>
+								<Alert.Description>
+									{t("codexSkillDiscoveryUnavailable")}
+								</Alert.Description>
+							</Alert.Content>
+							<Button
+								size="sm"
+								variant="tertiary"
+								onPress={() =>
+									void codexProvidedSkillsQuery.refetch()
+								}
+							>
+								{t("retry")}
+							</Button>
+						</Alert>
+					</div>
+				) : null}
 				<div className="flex min-h-0 flex-1">
 					{/* Skills List Panel */}
 					<div
@@ -611,6 +700,7 @@ export default function SkillsPage() {
 							}}
 							seedKey={seedKey}
 							copyStatuses={copyStatuses}
+							readOnlyKeys={providerManagedSkillNames}
 						/>
 					</div>
 
@@ -652,6 +742,7 @@ export default function SkillsPage() {
 											sourceByName.get(g.name),
 									}))}
 									intents={actionIntents}
+									canWrite={selectionCanWrite}
 									sourceContext={sourceContext}
 									matrixGroups={selectedGroups.map((g) => ({
 										key: g.name,
@@ -712,7 +803,10 @@ export default function SkillsPage() {
 									}
 								/>
 							) : activeGroup ? (
-								<SkillDetail group={activeGroup} />
+								<SkillDetail
+									group={activeGroup}
+									codexCopies={activeCodexCopies}
+								/>
 							) : (
 								<div className="flex h-full flex-col items-center justify-center gap-4">
 									<div className="text-center">

@@ -4,10 +4,21 @@ use crate::error::{Result, SkillError};
 use crate::model::{Skill, SkillSource};
 use std::path::{Path, PathBuf};
 
-const MAX_SKILL_NAME_BYTES: usize = 64;
-const MAX_SKILL_DESCRIPTION_BYTES: usize = 1024;
-const MAX_SKILL_COMPATIBILITY_BYTES: usize = 500;
+const MAX_SKILL_NAME_CHARACTERS: usize = 64;
+const MAX_SKILL_DESCRIPTION_CHARACTERS: usize = 1024;
+const MAX_SKILL_COMPATIBILITY_CHARACTERS: usize = 500;
+const MAX_SKILL_DISPLAY_NAME_CHARACTERS: usize = 64;
 const MAX_SKILL_METADATA_VALUE_BYTES: usize = 4096;
+
+#[derive(serde::Deserialize)]
+struct OpenAiMetadata {
+	interface: Option<OpenAiInterface>,
+}
+
+#[derive(serde::Deserialize)]
+struct OpenAiInterface {
+	display_name: Option<String>,
+}
 
 /// Parse a .skill file (zip format).
 ///
@@ -25,8 +36,19 @@ pub fn parse_skill_file(path: &Path) -> Result<Skill> {
 	let mut package = crate::package::open_skill_archive(path)?;
 	let content = package.read_skill_md()?;
 	let resource_paths = package.skill_files();
+	let display_name = resource_paths
+		.iter()
+		.find(|(_, relative)| relative == "agents/openai.yaml")
+		.and_then(|(index, _)| {
+			package
+				.read_entry(*index, crate::MAX_SKILL_CONTENT_BYTES)
+				.ok()
+		})
+		.and_then(|bytes| String::from_utf8(bytes).ok())
+		.and_then(|content| parse_openai_display_name(&content));
 
 	let mut skill = parse_skill_md(&content)?;
+	skill.display_name = display_name;
 	skill.source = SkillSource::SkillFile(path.to_path_buf());
 	scan_archive_structure(&resource_paths, &mut skill);
 
@@ -86,6 +108,7 @@ pub fn parse_skill_dir(path: &Path) -> Result<Skill> {
 
 	let (content, _) = crate::content::read_directory_skill_md(path)?;
 	let mut skill = parse_skill_md(&content)?;
+	skill.display_name = read_openai_display_name(path);
 	skill.source = SkillSource::Directory(path.to_path_buf());
 
 	// Scan directory structure
@@ -140,9 +163,9 @@ pub fn parse_skill_md(content: &str) -> Result<Skill> {
 			.ok_or_else(|| {
 				SkillError::Parse("Missing required field: name".to_string())
 			})?;
-	if name.len() > MAX_SKILL_NAME_BYTES {
+	if name.chars().count() > MAX_SKILL_NAME_CHARACTERS {
 		return Err(SkillError::Validation(format!(
-			"Skill name exceeds the {MAX_SKILL_NAME_BYTES}-byte limit"
+			"Skill name exceeds the {MAX_SKILL_NAME_CHARACTERS}-character limit"
 		)));
 	}
 	if name.chars().any(is_unsafe_metadata_character) {
@@ -157,9 +180,9 @@ pub fn parse_skill_md(content: &str) -> Result<Skill> {
 		.ok_or_else(|| {
 			SkillError::Parse("Missing required field: description".to_string())
 		})?;
-	if description.len() > MAX_SKILL_DESCRIPTION_BYTES {
+	if description.chars().count() > MAX_SKILL_DESCRIPTION_CHARACTERS {
 		return Err(SkillError::Validation(format!(
-				"Skill description exceeds the {MAX_SKILL_DESCRIPTION_BYTES}-byte limit"
+				"Skill description exceeds the {MAX_SKILL_DESCRIPTION_CHARACTERS}-character limit"
 			)));
 	}
 
@@ -173,10 +196,10 @@ pub fn parse_skill_md(content: &str) -> Result<Skill> {
 		.get("compatibility")
 		.and_then(|v| v.as_str())
 		.map(String::from);
-	validate_optional_metadata_bytes(
+	validate_optional_metadata_characters(
 		"compatibility",
 		compatibility.as_deref(),
-		MAX_SKILL_COMPATIBILITY_BYTES,
+		MAX_SKILL_COMPATIBILITY_CHARACTERS,
 	)?;
 
 	let allowed_tools = metadata
@@ -223,6 +246,7 @@ pub fn parse_skill_md(content: &str) -> Result<Skill> {
 
 	Ok(Skill {
 		name: name.to_string(),
+		display_name: None,
 		description: description.to_string(),
 		license,
 		compatibility,
@@ -314,6 +338,19 @@ fn validate_optional_metadata_bytes(
 	Ok(())
 }
 
+fn validate_optional_metadata_characters(
+	field: &str,
+	value: Option<&str>,
+	max_characters: usize,
+) -> Result<()> {
+	if value.is_some_and(|value| value.chars().count() > max_characters) {
+		return Err(SkillError::Validation(format!(
+			"Skill {field} exceeds the {max_characters}-character limit"
+		)));
+	}
+	Ok(())
+}
+
 fn is_unsafe_metadata_character(character: char) -> bool {
 	character.is_control()
 		|| matches!(
@@ -359,6 +396,7 @@ pub fn parse(path: &Path) -> Result<Skill> {
 		// Parse as single SKILL.md file
 		let content = crate::content::read_standalone_skill_md(path)?;
 		let mut skill = parse_skill_md(&content)?;
+		skill.display_name = path.parent().and_then(read_openai_display_name);
 		skill.source = SkillSource::SkillMd(path.to_path_buf());
 		Ok(skill)
 	} else {
@@ -367,6 +405,29 @@ pub fn parse(path: &Path) -> Result<Skill> {
 			path.display()
 		)))
 	}
+}
+
+fn read_openai_display_name(skill_dir: &Path) -> Option<String> {
+	let path = skill_dir.join("agents").join("openai.yaml");
+	let content = crate::content::read_regular_file(
+		&path,
+		crate::MAX_SKILL_CONTENT_BYTES,
+	)
+	.ok()?;
+	let content = String::from_utf8(content).ok()?;
+	parse_openai_display_name(&content)
+}
+
+fn parse_openai_display_name(content: &str) -> Option<String> {
+	let metadata = serde_yaml::from_str::<OpenAiMetadata>(content).ok()?;
+	let display_name = metadata.interface?.display_name?;
+	let display_name = display_name
+		.split_whitespace()
+		.collect::<Vec<_>>()
+		.join(" ");
+	(!display_name.is_empty()
+		&& display_name.chars().count() <= MAX_SKILL_DISPLAY_NAME_CHARACTERS)
+		.then_some(display_name)
 }
 
 #[cfg(test)]
@@ -422,6 +483,63 @@ mod tests {
 		assert_eq!(skill.license, Some("MIT".to_string()));
 		assert_eq!(skill.scripts.len(), 1);
 		assert_eq!(skill.references.len(), 1);
+	}
+
+	#[test]
+	fn parse_skill_dir_reads_openai_display_name() {
+		let temp_dir = TempDir::new().unwrap();
+		let skill_dir = create_test_skill_dir(temp_dir.path());
+		let agents_dir = skill_dir.join("agents");
+		std::fs::create_dir(&agents_dir).unwrap();
+		std::fs::write(
+			agents_dir.join("openai.yaml"),
+			"interface:\n  display_name: \"  Test   Skill  \"\n",
+		)
+		.unwrap();
+
+		let skill = parse_skill_dir(&skill_dir).unwrap();
+
+		assert_eq!(skill.display_name.as_deref(), Some("Test Skill"));
+
+		let skill_file = temp_dir.path().join("test-skill.skill");
+		crate::package::pack(&skill_dir, &skill_file).unwrap();
+		let packaged = parse_skill_file(&skill_file).unwrap();
+		assert_eq!(packaged.display_name.as_deref(), Some("Test Skill"));
+	}
+
+	#[test]
+	fn parse_skill_dir_ignores_invalid_openai_metadata() {
+		let temp_dir = TempDir::new().unwrap();
+		let skill_dir = create_test_skill_dir(temp_dir.path());
+		let agents_dir = skill_dir.join("agents");
+		std::fs::create_dir(&agents_dir).unwrap();
+		std::fs::write(agents_dir.join("openai.yaml"), "interface: [").unwrap();
+
+		let skill = parse_skill_dir(&skill_dir).unwrap();
+
+		assert_eq!(skill.name, "test-skill");
+		assert!(skill.display_name.is_none());
+	}
+
+	#[test]
+	fn parse_skill_dir_ignores_overlong_openai_display_name() {
+		let temp_dir = TempDir::new().unwrap();
+		let skill_dir = create_test_skill_dir(temp_dir.path());
+		let agents_dir = skill_dir.join("agents");
+		std::fs::create_dir(&agents_dir).unwrap();
+		std::fs::write(
+			agents_dir.join("openai.yaml"),
+			format!(
+				"interface:\n  display_name: {}\n",
+				"a".repeat(MAX_SKILL_DISPLAY_NAME_CHARACTERS + 1)
+			),
+		)
+		.unwrap();
+
+		let skill = parse_skill_dir(&skill_dir).unwrap();
+
+		assert_eq!(skill.name, "test-skill");
+		assert!(skill.display_name.is_none());
 	}
 
 	#[test]
@@ -546,6 +664,69 @@ mod tests {
 		let content = format!(
 			"---\nname: {}\ndescription: A valid skill\n---\n",
 			"a".repeat(65)
+		);
+
+		assert!(matches!(
+			parse_skill_md(&content),
+			Err(SkillError::Validation(_))
+		));
+	}
+
+	#[test]
+	fn parse_skill_md_counts_name_limit_in_characters() {
+		let name = "技".repeat(64);
+		let content =
+			format!("---\nname: {name}\ndescription: A valid skill\n---\n");
+
+		let skill = parse_skill_md(&content).unwrap();
+
+		assert_eq!(skill.name.chars().count(), 64);
+		assert!(skill.name.len() > 64);
+	}
+
+	#[test]
+	fn parse_skill_md_counts_description_limit_in_characters() {
+		let description = "界".repeat(1024);
+		let content = format!(
+			"---\nname: multilingual-skill\ndescription: {description}\n---\n"
+		);
+
+		let skill = parse_skill_md(&content).unwrap();
+
+		assert_eq!(skill.description.chars().count(), 1024);
+		assert!(skill.description.len() > 1024);
+	}
+
+	#[test]
+	fn parse_skill_md_rejects_descriptions_over_spec_limit() {
+		let description = "界".repeat(1025);
+		let content = format!(
+			"---\nname: multilingual-skill\ndescription: {description}\n---\n"
+		);
+
+		assert!(matches!(
+			parse_skill_md(&content),
+			Err(SkillError::Validation(_))
+		));
+	}
+
+	#[test]
+	fn parse_skill_md_counts_compatibility_limit_in_characters() {
+		let compatibility = "界".repeat(500);
+		let content = format!(
+			"---\nname: multilingual-skill\ndescription: A valid skill\ncompatibility: {compatibility}\n---\n"
+		);
+
+		let skill = parse_skill_md(&content).unwrap();
+
+		assert_eq!(skill.compatibility.unwrap().chars().count(), 500);
+	}
+
+	#[test]
+	fn parse_skill_md_rejects_compatibility_over_spec_limit() {
+		let compatibility = "界".repeat(501);
+		let content = format!(
+			"---\nname: multilingual-skill\ndescription: A valid skill\ncompatibility: {compatibility}\n---\n"
 		);
 
 		assert!(matches!(

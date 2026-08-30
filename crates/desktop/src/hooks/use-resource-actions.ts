@@ -20,6 +20,8 @@ export interface ResourceActionIntents {
 export interface ResourceActionsModel {
 	/** Number of selected items the actions operate on */
 	count: number;
+	/** Whether file-backed actions may modify every selected item. */
+	canWrite: boolean;
 	/** True when every selected item is starred (drives label/behavior) */
 	allStarred: boolean;
 	toggleFavorite: () => Promise<void>;
@@ -47,8 +49,9 @@ export function useResourceActions(options: {
 	kind: ResourceKind;
 	selectedKeys: Set<string>;
 	intents: ResourceActionIntents;
+	canWrite?: boolean;
 }): ResourceActionsModel {
-	const { kind, selectedKeys, intents } = options;
+	const { kind, selectedKeys, intents, canWrite = true } = options;
 	const { starredSkills, starredMcps, setSkillsStarred, setMcpsStarred } =
 		useFavorites();
 	const skillGroups = useSkillGroups();
@@ -94,6 +97,7 @@ export function useResourceActions(options: {
 
 	return {
 		count: keys.length,
+		canWrite,
 		allStarred,
 		toggleFavorite,
 		groups: groupsModel.groups,

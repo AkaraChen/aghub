@@ -1,6 +1,6 @@
 import { EyeIcon } from "@heroicons/react/24/solid";
 import { Button, ToggleButton, ToggleButtonGroup } from "@heroui/react";
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type {
 	SkillCopyStorageModeRequest,
@@ -82,6 +82,7 @@ export function SkillVersionDiffReview({
 	reverse,
 }: SkillVersionDiffReviewProps) {
 	const { t } = useTranslation();
+	const fileChangesId = useId();
 
 	return (
 		<>
@@ -89,7 +90,10 @@ export function SkillVersionDiffReview({
 				<Button
 					variant="ghost"
 					size="sm"
-					className="px-0 text-foreground"
+					className="text-foreground"
+					aria-expanded={showFileChanges}
+					aria-controls={fileChangesId}
+					isDisabled={isDisabled}
 					onPress={() => onShowFileChangesChange(!showFileChanges)}
 				>
 					<EyeIcon className="size-4" />
@@ -102,7 +106,7 @@ export function SkillVersionDiffReview({
 			</div>
 
 			{showFileChanges && diff && (
-				<div className="space-y-3">
+				<div id={fileChangesId} className="space-y-3">
 					{showVersionPicker && comparisonVersions.length > 1 && (
 						<ToggleButtonGroup
 							aria-label={t("chooseVersionToCompare")}

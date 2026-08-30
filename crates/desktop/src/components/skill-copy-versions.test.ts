@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SkillDirectoryDiffResponse } from "../generated/dto";
 import {
+	buildSkillCopyResolutionTargets,
 	groupSkillCopyVersions,
 	skillDiffsContainLinks,
 } from "./skill-copy-versions";
@@ -65,5 +66,48 @@ describe("skillDiffsContainLinks", () => {
 		});
 
 		expect(skillDiffsContainLinks([changed])).toBe(true);
+	});
+});
+
+describe("buildSkillCopyResolutionTargets", () => {
+	it("never writes into Agent-managed provider locations", () => {
+		const targets = buildSkillCopyResolutionTargets(
+			[
+				{
+					id: "local",
+					hash: "local-hash",
+					copies: [
+						{
+							id: "local",
+							label: "Local",
+							source: "Codex",
+							sourcePath: "/home/user/.agents/skills/demo",
+						},
+					],
+				},
+				{
+					id: "plugin",
+					hash: "plugin-hash",
+					copies: [
+						{
+							id: "plugin",
+							label: "Plugin",
+							source: "Codex plugin",
+							sourcePath: "/cache/plugin/skills/demo",
+							isReadOnly: true,
+						},
+					],
+				},
+			],
+			"/home/user/.agents/skills/demo",
+			"copy",
+		);
+
+		expect(targets).toEqual([
+			{
+				source_path: "/home/user/.agents/skills/demo",
+				expected_hash: "local-hash",
+			},
+		]);
 	});
 });

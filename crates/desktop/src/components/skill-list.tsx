@@ -135,7 +135,14 @@ const SkillRowBody = memo(function SkillRowBody({
 					</span>
 				)}
 			</div>
-			<Label className="flex-1 truncate">{skillGroup.name}</Label>
+			<Label className="flex min-w-0 flex-1 items-baseline gap-2">
+				<span className="truncate">{skillGroup.name}</span>
+				{skillGroup.displayName !== skillGroup.name && (
+					<span className="truncate font-normal text-muted">
+						{skillGroup.displayName}
+					</span>
+				)}
+			</Label>
 			<AgentIcons items={skillGroup.items} overflowVariant="square" />
 		</DraggableItemBody>
 	);
@@ -159,6 +166,8 @@ interface SkillListProps {
 	seedKey?: string | null;
 	/** Comparison state for skill names with more than one physical copy. */
 	copyStatuses?: ReadonlyMap<string, SkillCopyListStatus>;
+	/** Skill names that Codex owns and aghub must not modify. */
+	readOnlyKeys?: ReadonlySet<string>;
 }
 
 export const SkillList = memo(function SkillList({
@@ -171,6 +180,7 @@ export const SkillList = memo(function SkillList({
 	onSourceFocus,
 	seedKey,
 	copyStatuses,
+	readOnlyKeys = new Set(),
 }: SkillListProps) {
 	const { t } = useTranslation();
 	const api = useApi();
@@ -274,6 +284,7 @@ export const SkillList = memo(function SkillList({
 		kind: "skill",
 		selectedKeys,
 		intents,
+		canWrite: [...selectedKeys].every((key) => !readOnlyKeys.has(key)),
 	});
 
 	// The header reflects its members: selected once every member is in
@@ -346,11 +357,15 @@ export const SkillList = memo(function SkillList({
 	const renderSkillItem = useCallback(
 		(skillGroup: SkillGroup) => {
 			const copyStatus = copyStatuses?.get(skillGroup.name);
+			const accessibleName =
+				skillGroup.displayName === skillGroup.name
+					? skillGroup.name
+					: `${skillGroup.name} ${skillGroup.displayName}`;
 			return (
 				<ListBox.Item
 					id={skillGroup.name}
-					textValue={skillGroup.name}
-					aria-label={skillGroup.name}
+					textValue={accessibleName}
+					aria-label={accessibleName}
 					className="data-selected:bg-surface transition-colors duration-[var(--dur-fast)] ease-[var(--ease-out)]"
 					style={{
 						viewTransitionName: viewTransitionName(
@@ -504,6 +519,10 @@ export const SkillList = memo(function SkillList({
 							onAddToAgent: intents.onRequestAddToAgent,
 							onFavoriteAll: (keys) =>
 								void setSkillsStarred(keys, true),
+							canWrite:
+								contextMenu.state.context.memberKeys.every(
+									(key) => !readOnlyKeys.has(key),
+								),
 							onRename: setRenameTarget,
 							onDelete: setDeleteTarget,
 						})

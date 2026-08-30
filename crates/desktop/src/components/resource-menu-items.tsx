@@ -59,26 +59,30 @@ export function resourceItemsMenu({
 					</span>
 				</div>
 			</Menu.Item>
-			<Menu.Item
-				id="add-to-agent"
-				textValue={t("addToAgent")}
-				onAction={actions.requestAddToAgent}
-			>
-				<div className="flex items-center gap-2">
-					<ACTION_ICONS.addToAgent className="size-4" />
-					<span>{t("addToAgent")}</span>
-				</div>
-			</Menu.Item>
-			<Menu.Item
-				id="transfer"
-				textValue={t("transfer")}
-				onAction={actions.requestTransfer}
-			>
-				<div className="flex items-center gap-2">
-					<ACTION_ICONS.transfer className="size-4" />
-					<span>{t("transfer")}</span>
-				</div>
-			</Menu.Item>
+			{actions.canWrite && (
+				<>
+					<Menu.Item
+						id="add-to-agent"
+						textValue={t("addToAgent")}
+						onAction={actions.requestAddToAgent}
+					>
+						<div className="flex items-center gap-2">
+							<ACTION_ICONS.addToAgent className="size-4" />
+							<span>{t("addToAgent")}</span>
+						</div>
+					</Menu.Item>
+					<Menu.Item
+						id="transfer"
+						textValue={t("transfer")}
+						onAction={actions.requestTransfer}
+					>
+						<div className="flex items-center gap-2">
+							<ACTION_ICONS.transfer className="size-4" />
+							<span>{t("transfer")}</span>
+						</div>
+					</Menu.Item>
+				</>
+			)}
 			{actions.groups.length > 0 ? (
 				<Menu.Section>
 					<Header className="px-2 py-1 text-xs font-medium text-muted">
@@ -138,18 +142,20 @@ export function resourceItemsMenu({
 					</div>
 				</Menu.Item>
 			)}
-			<Menu.Section>
-				<Menu.Item
-					id="delete"
-					textValue={t("delete")}
-					onAction={actions.requestDelete}
-				>
-					<div className="flex items-center gap-2 text-danger">
-						<ACTION_ICONS.delete className="size-4" />
-						<span>{t("delete")}</span>
-					</div>
-				</Menu.Item>
-			</Menu.Section>
+			{actions.canWrite && (
+				<Menu.Section>
+					<Menu.Item
+						id="delete"
+						textValue={t("delete")}
+						onAction={actions.requestDelete}
+					>
+						<div className="flex items-center gap-2 text-danger">
+							<ACTION_ICONS.delete className="size-4" />
+							<span>{t("delete")}</span>
+						</div>
+					</Menu.Item>
+				</Menu.Section>
+			)}
 		</>
 	);
 }
@@ -162,6 +168,7 @@ export function customGroupMenu({
 	onSelectMembers,
 	onAddToAgent,
 	onFavoriteAll,
+	canWrite = true,
 	onRename,
 	onDelete,
 }: {
@@ -171,6 +178,7 @@ export function customGroupMenu({
 	onSelectMembers: (memberKeys: string[]) => void;
 	onAddToAgent: () => void;
 	onFavoriteAll: (memberKeys: string[]) => void;
+	canWrite?: boolean;
 	onRename: (group: ResourceGroup) => void;
 	onDelete: (group: ResourceGroup) => void;
 }): ReactNode {
@@ -186,19 +194,21 @@ export function customGroupMenu({
 					<span>{t("selectAllInGroup", { name: group.name })}</span>
 				</div>
 			</Menu.Item>
-			<Menu.Item
-				id="group-add-to-agent"
-				textValue={t("addToAgent")}
-				onAction={() => {
-					onSelectMembers(memberKeys);
-					onAddToAgent();
-				}}
-			>
-				<div className="flex items-center gap-2">
-					<ACTION_ICONS.addToAgent className="size-4" />
-					<span>{t("addToAgent")}</span>
-				</div>
-			</Menu.Item>
+			{canWrite && (
+				<Menu.Item
+					id="group-add-to-agent"
+					textValue={t("addToAgent")}
+					onAction={() => {
+						onSelectMembers(memberKeys);
+						onAddToAgent();
+					}}
+				>
+					<div className="flex items-center gap-2">
+						<ACTION_ICONS.addToAgent className="size-4" />
+						<span>{t("addToAgent")}</span>
+					</div>
+				</Menu.Item>
+			)}
 			<Menu.Item
 				id="group-favorite-all"
 				textValue={t("favoriteAll")}

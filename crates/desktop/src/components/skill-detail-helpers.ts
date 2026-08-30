@@ -3,6 +3,7 @@ import type {
 	AgentInfo,
 	ConfigSource,
 	SkillLinkStatusResponse,
+	SkillProviderResponse,
 	SkillResponse,
 	SkillTreeNodeResponse,
 } from "../generated/dto";
@@ -13,6 +14,7 @@ export interface LocationInstallation {
 	agent: string;
 	displayName: string;
 	source: ConfigSource;
+	provider?: SkillProviderResponse;
 }
 
 export interface LocationGroup {
@@ -20,6 +22,7 @@ export interface LocationGroup {
 	sourcePath: string;
 	installations: LocationInstallation[];
 	isSymlink: boolean;
+	managed: boolean;
 }
 
 export interface SkillGroup {
@@ -38,12 +41,57 @@ export interface SkillLinkSummary {
 	problems: number;
 }
 
+export interface ContainedSkill {
+	name: string;
+	displayName: string | null;
+	relativePath: string;
+}
+
 const SKILL_MARKDOWN_FILE = "SKILL.md";
+
+export function skillProviderIdentity(provider: SkillProviderResponse): string {
+	return `${provider.kind}:${provider.id ?? provider.qualified_name}`;
+}
+
+export function skillProviderSourceName(
+	provider: SkillProviderResponse,
+): string {
+	return provider.id ?? provider.qualified_name;
+}
 
 export function getNodeChildren(
 	node: SkillTreeNodeResponse,
 ): SkillTreeNodeResponse[] {
 	return Array.isArray(node.children) ? node.children : [];
+}
+
+export function findContainedSkills(
+	root: SkillTreeNodeResponse,
+): ContainedSkill[] {
+	const contained: ContainedSkill[] = [];
+
+	function visit(node: SkillTreeNodeResponse, ancestors: string[]): void {
+		if (node.kind !== "directory") return;
+
+		const relativePath = [...ancestors, node.name];
+		if (node.skill) {
+			contained.push({
+				name: node.skill.name,
+				displayName: node.skill.display_name,
+				relativePath: relativePath.join("/"),
+			});
+		}
+
+		for (const child of getNodeChildren(node)) {
+			visit(child, relativePath);
+		}
+	}
+
+	for (const child of getNodeChildren(root)) {
+		visit(child, []);
+	}
+
+	return contained;
 }
 
 export function hasSupplementarySkillFiles(
@@ -161,10 +209,11 @@ export function buildLocationGroups(
 		for (const location of locations) {
 			const existing = map.get(location.source_path);
 			const installation = {
-				id: `${item.agent}:${location.source}`,
+				id: `${item.agent}:${location.source}:${location.provider ? skillProviderIdentity(location.provider) : "installed"}`,
 				agent: item.agent,
 				displayName: agentNames.get(item.agent) ?? item.agent,
 				source: location.source,
+				provider: location.provider,
 			};
 
 			if (existing) {
@@ -195,6 +244,9 @@ export function buildLocationGroups(
 				return a.source.localeCompare(b.source);
 			}),
 			isSymlink: data.isSymlink,
+			managed: data.installations.some(
+				(installation) => installation.provider?.managed,
+			),
 		}))
 		.sort((a, b) => a.sourcePath.localeCompare(b.sourcePath));
 }
@@ -225,6 +277,13 @@ export function uniqueSkillSourcePaths(items: SkillResponse[]): string[] {
 export function uniqueSkillLocations(
 	items: SkillResponse[],
 ): SkillSourceLocation[] {
+	const managedPaths = new Set(
+		items.flatMap((item) =>
+			(item.locations ?? [])
+				.filter((location) => location.provider?.managed)
+				.map((location) => location.source_path),
+		),
+	);
 	const locations = new Map<string, SkillSourceLocation>();
 	for (const item of items) {
 		const itemLocations =
@@ -235,10 +294,12 @@ export function uniqueSkillLocations(
 							{
 								source_path: item.source_path,
 								is_symlink: item.is_symlink,
+								provider: undefined,
 							},
 						]
 					: [];
 		for (const location of itemLocations) {
+			if (managedPaths.has(location.source_path)) continue;
 			const existing = locations.get(location.source_path);
 			if (existing) {
 				if (item.agent && !existing.agents.includes(item.agent)) {

@@ -81,6 +81,17 @@ test.beforeEach(async ({ page }) => {
 
 test("Usage settings panel and layout editor render", async ({ page }) => {
 	await page.goto("/settings?tab=usage");
+	await expect(
+		page.getByRole("switch", { name: "Show usage on home" }),
+	).not.toBeChecked();
+	await expect(
+		page.getByRole("button", { name: "Usage window" }),
+	).toBeDisabled();
+	await expect(
+		page.getByTestId("layout-hidden-drawer").getByRole("checkbox", {
+			name: "5-hour limit",
+		}),
+	).toBeDisabled();
 
 	// Runtime controls and the layout editor's inspector block.
 	await expect(page.getByRole("heading", { name: "ccusage" })).toBeVisible();
@@ -195,7 +206,7 @@ test("Usage settings panel and layout editor render", async ({ page }) => {
 test("card layout fields toggle immediately and the default can be restored", async ({
 	page,
 }) => {
-	await page.goto("/settings?tab=usage");
+	await openHomeUsageSettings(page);
 
 	const card = page.getByTestId("layout-card-replica");
 	const library = page.getByTestId("layout-hidden-drawer");
@@ -222,7 +233,7 @@ test("field library items toggle and drag from the whole tile", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 1600, height: 900 });
-	await page.goto("/settings?tab=usage");
+	await openHomeUsageSettings(page);
 
 	const card = page.getByTestId("layout-card-replica");
 	const library = page.getByTestId("layout-hidden-drawer");
@@ -1372,7 +1383,7 @@ test("layout editor uses the available settings width", async ({ page }) => {
 });
 
 test("usage window uses a finite desktop picker", async ({ page }) => {
-	await page.goto("/settings?tab=usage");
+	await openHomeUsageSettings(page);
 
 	const picker = page.getByRole("button", { name: "Usage window" });
 	await expect(picker).toContainText("30 days");
@@ -1430,7 +1441,7 @@ test("usage report range offers recent, all-time, and custom dates", async ({
 test("usage setting rows restore their surface hover feedback", async ({
 	page,
 }) => {
-	await page.goto("/settings?tab=usage");
+	await openHomeUsageSettings(page);
 
 	for (const testId of [
 		"usage-runtime-row",
@@ -1586,7 +1597,7 @@ test("usage settings clamp persisted ranges and reject invalid timezones", async
 });
 
 test("layout rows are the complete drag targets", async ({ page }) => {
-	await page.goto("/settings?tab=usage");
+	await openHomeUsageSettings(page);
 
 	const card = page.getByTestId("layout-card-replica");
 	const drawer = page.getByTestId("layout-hidden-drawer");
@@ -1630,7 +1641,7 @@ test("drag preview transitions between field library and card contexts", async (
 }) => {
 	await page.setViewportSize({ width: 1600, height: 900 });
 	await page.emulateMedia({ reducedMotion: "no-preference" });
-	await page.goto("/settings?tab=usage");
+	await openHomeUsageSettings(page);
 
 	const card = page.getByTestId("layout-card-replica");
 	const library = page.getByTestId("layout-hidden-drawer");
@@ -1739,7 +1750,7 @@ test("wide short layout editor auto-scrolls toward the card target", async ({
 	page,
 }) => {
 	await page.setViewportSize({ width: 1100, height: 420 });
-	await page.goto("/settings?tab=usage");
+	await openHomeUsageSettings(page);
 
 	const scroller = page.locator("main > div").first();
 	const card = page.getByTestId("layout-card-replica");
@@ -1795,7 +1806,7 @@ test("side-by-side horizontal dragging does not scroll the main pane early", asy
 	page,
 }) => {
 	await page.setViewportSize({ width: 1600, height: 900 });
-	await page.goto("/settings?tab=usage");
+	await openHomeUsageSettings(page);
 
 	const scroller = page.locator("main > div").first();
 	const card = page.getByTestId("layout-card-replica");
@@ -1886,7 +1897,7 @@ test("side-by-side horizontal dragging does not scroll the main pane early", asy
 test("keyboard dragging previews and cancels without losing focus", async ({
 	page,
 }) => {
-	await page.goto("/settings?tab=usage");
+	await openHomeUsageSettings(page);
 
 	const card = page.getByTestId("layout-card-replica");
 	const drawer = page.getByTestId("layout-hidden-drawer");
@@ -1911,7 +1922,7 @@ test("keyboard dragging reaches an offscreen card slot in a wide short window", 
 	page,
 }) => {
 	await page.setViewportSize({ width: 1100, height: 420 });
-	await page.goto("/settings?tab=usage");
+	await openHomeUsageSettings(page);
 
 	const scroller = page.locator("main > div").first();
 	const card = page.getByTestId("layout-card-replica");
@@ -1981,7 +1992,7 @@ test("keyboard dragging reaches an offscreen card slot in a wide short window", 
 });
 
 test("keyboard dragging follows the card grid", async ({ page }) => {
-	await page.goto("/settings?tab=usage");
+	await openHomeUsageSettings(page);
 
 	const stats = page
 		.getByTestId("layout-stat-section")
@@ -2024,7 +2035,7 @@ test("keyboard dragging follows the card grid", async ({ page }) => {
 test("layout editor inserts at a full right slot and previews overflow", async ({
 	page,
 }) => {
-	await page.goto("/settings?tab=usage");
+	await openHomeUsageSettings(page);
 
 	const card = page.getByTestId("layout-card-replica");
 	const drawer = page.getByTestId("layout-hidden-drawer");
@@ -2141,7 +2152,7 @@ test("layout editor inserts at a full right slot and previews overflow", async (
 test("field library does not shift when a draggable row is hovered", async ({
 	page,
 }) => {
-	await page.goto("/settings?tab=usage");
+	await openHomeUsageSettings(page);
 
 	const drawer = page.getByTestId("layout-hidden-drawer");
 	const row = drawer.getByTestId("layout-hidden-item-cacheRead");
@@ -2176,7 +2187,7 @@ test("field library does not shift when a draggable row is hovered", async ({
 });
 
 test("drawer uses a complete non-shifting drop outline", async ({ page }) => {
-	await page.goto("/settings?tab=usage");
+	await openHomeUsageSettings(page);
 
 	const card = page.getByTestId("layout-card-replica");
 	const drawer = page.getByTestId("layout-hidden-drawer");
@@ -2256,7 +2267,7 @@ test("drawer uses a complete non-shifting drop outline", async ({ page }) => {
 test("layout editor moves a field between the card and the drawer", async ({
 	page,
 }) => {
-	await page.goto("/settings?tab=usage");
+	await openHomeUsageSettings(page);
 
 	const card = page.getByTestId("layout-card-replica");
 	const drawer = page.getByTestId("layout-hidden-drawer");
@@ -2481,7 +2492,7 @@ test("usage defaults dialog stays open when runtime reset fails", async ({
 			body: JSON.stringify({ error: "Runtime reset rejected" }),
 		});
 	});
-	await page.goto("/settings?tab=usage");
+	await openHomeUsageSettings(page);
 	const windowPicker = page.getByRole("button", { name: "Usage window" });
 	await windowPicker.click();
 	await page.getByRole("option", { name: "90 days" }).click();
@@ -2546,7 +2557,8 @@ test("home does not animate optional usage before data exists", async ({
 	});
 
 	try {
-		await page.goto("/");
+		await openHomeUsageSettings(page);
+		await page.getByRole("link", { name: "Home", exact: true }).click();
 		const claudeCard = page
 			.getByText("Claude", { exact: true })
 			.locator('xpath=ancestor::*[@data-slot="card"]');
@@ -2563,7 +2575,8 @@ test("home does not animate optional usage before data exists", async ({
 test("home drops cached usage after show usage is turned off", async ({
 	page,
 }) => {
-	await page.goto("/");
+	await openHomeUsageSettings(page);
+	await page.getByRole("link", { name: "Home", exact: true }).click();
 	const claudeCard = () =>
 		page
 			.getByRole("region", { name: "Your agents" })
@@ -2588,7 +2601,8 @@ test("home drops cached usage after show usage is turned off", async ({
 });
 
 test("home agent card renders the customized usage block", async ({ page }) => {
-	await page.goto("/");
+	await openHomeUsageSettings(page);
+	await page.getByRole("link", { name: "Home", exact: true }).click();
 
 	const claudeTitle = page
 		.getByRole("region", { name: "Your agents" })
@@ -2650,6 +2664,17 @@ test("home resource tile keeps its hover arrow readable on accent tint", async (
 	]);
 	expect(arrowColor).toBe(accentColor);
 });
+
+async function openHomeUsageSettings(page: Page) {
+	await page.goto("/settings?tab=usage");
+	const homeSwitch = page.getByRole("switch", {
+		name: "Show usage on home",
+	});
+	await expect(homeSwitch).not.toBeChecked();
+	await homeSwitch.focus();
+	await homeSwitch.press("Space");
+	await expect(homeSwitch).toBeChecked();
+}
 
 async function nextBrowserPaint(page: Page) {
 	await page.evaluate(

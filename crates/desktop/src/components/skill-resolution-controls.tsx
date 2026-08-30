@@ -1,13 +1,8 @@
-import {
-	CheckCircleIcon,
-	DocumentDuplicateIcon,
-	LinkIcon,
-} from "@heroicons/react/24/solid";
-import { Radio, RadioGroup, Table } from "@heroui/react";
+import { DocumentDuplicateIcon, LinkIcon } from "@heroicons/react/24/solid";
+import { Radio, RadioGroup } from "@heroui/react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import type { SkillCopyStorageModeRequest } from "../generated/dto";
-import { cn } from "../lib/utils";
 import type { SkillVersionChoiceLocation } from "./skill-copy-versions";
 import {
 	SkillVersionLocations,
@@ -46,100 +41,43 @@ export function SkillResolutionControls({
 				<p className="text-xs font-medium text-muted">
 					{t("chooseVersionToKeep")}
 				</p>
-				<Table variant="secondary">
-					<Table.ScrollContainer className="max-h-72 rounded-lg border border-border">
-						<Table.Content
-							aria-label={t("chooseVersionToKeep")}
-							selectionMode="single"
-							selectionBehavior="replace"
-							disallowEmptySelection
-							selectedKeys={
-								selectedChoiceId
-									? new Set([selectedChoiceId])
-									: new Set<string>()
-							}
-							disabledKeys={
-								isDisabled
-									? new Set(
-											choices.map((choice) => choice.id),
-										)
-									: undefined
-							}
-							onSelectionChange={(keys) => {
-								if (keys === "all") return;
-								const selected = keys.values().next().value;
-								if (selected !== undefined) {
-									onChoiceChange(String(selected));
-								}
-							}}
-							className="w-full table-fixed"
+				<RadioGroup
+					aria-label={t("chooseVersionToKeep")}
+					variant="secondary"
+					value={selectedChoiceId ?? ""}
+					onChange={onChoiceChange}
+					isDisabled={isDisabled}
+					className="grid max-h-96 gap-2 overflow-y-auto rounded-lg border border-border p-2"
+				>
+					{choices.map((choice) => (
+						<Radio
+							key={choice.id}
+							value={choice.id}
+							aria-label={choice.ariaLabel}
+							data-skill-version-choice=""
+							className="w-full min-w-0"
 						>
-							<Table.Header>
-								<Table.Column isRowHeader className="w-24 px-2">
-									{t("skillVersionSource")}
-								</Table.Column>
-								<Table.Column>
-									{t("skillVersionLocation")}
-								</Table.Column>
-								<Table.Column className="w-10 px-2 text-center">
-									{t("keepThisVersion")}
-								</Table.Column>
-							</Table.Header>
-							<Table.Body items={choices}>
-								{(choice) => (
-									<Table.Row
-										id={choice.id}
-										aria-label={choice.ariaLabel}
-										data-skill-version-choice=""
-										className={({
-											isSelected,
-											isDisabled: rowDisabled,
-										}) =>
-											cn(
-												"cursor-pointer border-b border-separator/70 transition-colors last:border-b-0 hover:bg-default",
-												isSelected &&
-													"bg-accent/10 hover:bg-accent/15",
-												rowDisabled &&
-													"cursor-default opacity-50",
-											)
-										}
-									>
-										<Table.Cell className="min-w-0 px-2">
-											<span className="sr-only">
-												{choice.ariaLabel}
-											</span>
-											<SkillVersionSources
-												locations={choice.locations}
-											/>
-										</Table.Cell>
-										<Table.Cell className="min-w-0">
-											<SkillVersionLocations
-												locations={choice.locations}
-											/>
-											<span className="mt-0.5 block truncate text-[11px] text-muted">
-												{choice.status}
-											</span>
-										</Table.Cell>
-										<Table.Cell className="px-2 text-center">
-											{({ isSelected }) => (
-												<span
-													aria-hidden
-													className="mx-auto block size-4"
-												>
-													{isSelected ? (
-														<CheckCircleIcon className="size-4 text-accent" />
-													) : (
-														<span className="block size-4 rounded-full border border-separator" />
-													)}
-												</span>
-											)}
-										</Table.Cell>
-									</Table.Row>
-								)}
-							</Table.Body>
-						</Table.Content>
-					</Table.ScrollContainer>
-				</Table>
+							<Radio.Content className="w-full min-w-0 items-start gap-3 rounded-lg border border-transparent p-2 transition-colors data-[hovered=true]:bg-default data-[selected=true]:border-accent/20 data-[selected=true]:bg-accent/10">
+								<Radio.Control className="mt-0.5 shrink-0">
+									<Radio.Indicator />
+								</Radio.Control>
+								<span className="min-w-0 flex-1">
+									<span className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-2">
+										<SkillVersionSources
+											locations={choice.locations}
+										/>
+										<span className="text-[11px] text-muted">
+											{choice.status}
+										</span>
+									</span>
+									<SkillVersionLocations
+										locations={choice.locations}
+									/>
+								</span>
+							</Radio.Content>
+						</Radio>
+					))}
+				</RadioGroup>
 			</div>
 
 			{hasLinks && (

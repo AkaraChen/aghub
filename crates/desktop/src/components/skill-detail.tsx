@@ -18,6 +18,7 @@ import { useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { CodexStandaloneSkillResponse } from "../generated/dto";
 import { siGithub } from "simple-icons";
 import { useLocation } from "wouter";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
@@ -43,6 +44,7 @@ import {
 } from "../requests/skills";
 import { ManageSkillAgentsDialog } from "./manage-skill-agents-dialog";
 import { SkillAudit, SkillAuditBadge } from "./skill-audit";
+import { SkillCodexVisibleCopy } from "./skill-codex-visible-copy";
 import {
 	DeleteSkillDialog,
 	DeleteSkillLocationDialog,
@@ -50,6 +52,8 @@ import {
 import {
 	buildLocationGroups,
 	countTreeFiles,
+	findContainedSkills,
+	uniqueSkillLocations,
 	getInstalledSkillAuditPaths,
 	hasSupplementarySkillFiles,
 	type LocationGroup,
@@ -69,11 +73,16 @@ import { TransferDialog } from "./transfer-dialog";
 interface SkillDetailProps {
 	group: SkillGroup;
 	projectPath?: string;
+	codexCopies?: CodexStandaloneSkillResponse[];
 }
 
 const GITHUB_PREFIX_REGEX = /^github\//;
 
-export function SkillDetail({ group, projectPath }: SkillDetailProps) {
+export function SkillDetail({
+	group,
+	projectPath,
+	codexCopies = [],
+}: SkillDetailProps) {
 	const { t } = useTranslation();
 	const [, setLocation] = useLocation();
 	const { allAgents, availableAgents } = useAgentAvailability();
@@ -99,6 +108,8 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 	const { selectedEditor } = useCurrentCodeEditor();
 
 	const skill = group.items[0];
+	const isProviderManagedSkill =
+		uniqueSkillLocations(group.items).length === 0;
 	const auditPaths = getInstalledSkillAuditPaths(group.items);
 	const primaryScope = skill.source ?? "global";
 	const skillQueryScope =
@@ -340,6 +351,16 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 		() => (skillTree ? hasSupplementarySkillFiles(skillTree) : false),
 		[skillTree],
 	);
+	const containedSkills = useMemo(
+		() => (skillTree ? findContainedSkills(skillTree) : []),
+		[skillTree],
+	);
+	const displayName = skillPreferences.showDisplayNames
+		? (group.items
+				.find((item) => item.display_name?.trim())
+				?.display_name?.trim() ?? null)
+		: null;
+	const showsDisplayName = displayName !== null && displayName !== skill.name;
 
 	return (
 		<>
@@ -348,10 +369,15 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 					<Card>
 						<Card.Header className="flex flex-row items-start justify-between gap-3">
 							<div className="min-w-0 flex-1 select-text">
-								<div className="flex items-center gap-1.5">
-									<h2 className="text-xl font-semibold text-foreground truncate">
+								<div className="flex min-w-0 items-baseline gap-2">
+									<h2 className="min-w-0 truncate text-xl font-semibold text-foreground">
 										{skill.name}
 									</h2>
+									{showsDisplayName && (
+										<span className="min-w-0 truncate text-sm text-muted">
+											{displayName}
+										</span>
+									)}
 									{skillAudit &&
 										(isAuditAcknowledged ? (
 											<span
@@ -425,23 +451,25 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 											: t("starSkill")}
 									</Tooltip.Content>
 								</Tooltip>
-								<Tooltip delay={0}>
-									<Button
-										isIconOnly
-										variant="ghost"
-										size="md"
-										className="text-muted hover:text-danger min-w-[44px] min-h-[44px]"
-										aria-label={t("deleteSkill")}
-										onPress={() =>
-											setDeleteDialogOpen(true)
-										}
-									>
-										<TrashIcon className="size-4" />
-									</Button>
-									<Tooltip.Content>
-										{t("deleteSkill")}
-									</Tooltip.Content>
-								</Tooltip>
+								{!isProviderManagedSkill && (
+									<Tooltip delay={0}>
+										<Button
+											isIconOnly
+											variant="ghost"
+											size="md"
+											className="text-muted hover:text-danger min-w-[44px] min-h-[44px]"
+											aria-label={t("deleteSkill")}
+											onPress={() =>
+												setDeleteDialogOpen(true)
+											}
+										>
+											<TrashIcon className="size-4" />
+										</Button>
+										<Tooltip.Content>
+											{t("deleteSkill")}
+										</Tooltip.Content>
+									</Tooltip>
+								)}
 							</div>
 						</Card.Header>
 
@@ -602,6 +630,55 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 								</div>
 							)}
 
+							{containedSkills.length > 0 && (
+								<section
+									aria-label={t("containedSkills")}
+									className="space-y-3"
+								>
+									<div className="space-y-1">
+										<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
+											{t("containedSkills")} (
+											{containedSkills.length})
+										</h3>
+										<p className="text-xs text-muted">
+											{t("containedSkillsDescription")}
+										</p>
+									</div>
+									<div className="max-h-64 divide-y divide-separator overflow-y-auto rounded-lg bg-surface-secondary px-3">
+										{containedSkills.map((contained) => (
+											<div
+												key={contained.relativePath}
+												className="flex min-w-0 items-center justify-between gap-3 py-2"
+											>
+												<div className="flex min-w-0 items-baseline gap-1.5">
+													<span className="shrink-0 text-sm text-foreground">
+														{contained.name}
+													</span>
+													{skillPreferences.showDisplayNames &&
+														contained.displayName &&
+														contained.displayName !==
+															contained.name && (
+															<span className="min-w-0 truncate text-xs text-muted">
+																{
+																	contained.displayName
+																}
+															</span>
+														)}
+												</div>
+												<code
+													className="min-w-0 truncate text-xs text-muted"
+													title={
+														contained.relativePath
+													}
+												>
+													{contained.relativePath}
+												</code>
+											</div>
+										))}
+									</div>
+								</section>
+							)}
+
 							{currentSkillSource && (
 								<div className="space-y-3">
 									<h3 className="text-xs font-medium tracking-wider text-muted uppercase">
@@ -687,22 +764,28 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 								</div>
 							)}
 
-							<Card.Footer className="pt-4 border-t border-separator flex flex-wrap gap-3">
-								<Button
-									variant="secondary"
-									onPress={() => setTransferDialogOpen(true)}
-								>
-									<PlusIcon className="size-4" />
-									{t("transfer")}
-								</Button>
-								<Button
-									variant="primary"
-									onPress={() => setManageDialogOpen(true)}
-								>
-									<PlusIcon className="size-4" />
-									{t("addToAgent")}
-								</Button>
-							</Card.Footer>
+							{!isProviderManagedSkill && (
+								<Card.Footer className="pt-4 border-t border-separator flex flex-wrap gap-3">
+									<Button
+										variant="secondary"
+										onPress={() =>
+											setTransferDialogOpen(true)
+										}
+									>
+										<PlusIcon className="size-4" />
+										{t("transfer")}
+									</Button>
+									<Button
+										variant="primary"
+										onPress={() =>
+											setManageDialogOpen(true)
+										}
+									>
+										<PlusIcon className="size-4" />
+										{t("addToAgent")}
+									</Button>
+								</Card.Footer>
+							)}
 						</Card.Content>
 					</Card>
 
@@ -725,6 +808,17 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 							skillPreferences.groupIdenticalCopies
 						}
 						defaultStorageMode={skillPreferences.defaultStorageMode}
+					/>
+
+					<SkillCodexVisibleCopy
+						key={codexCopies
+							.map(
+								(copy) => `${copy.source_path}:${copy.enabled}`,
+							)
+							.join("\n")}
+						name={skill.name}
+						copies={codexCopies}
+						projectRoot={projectPath}
 					/>
 
 					{skillContent && (
@@ -801,25 +895,27 @@ export function SkillDetail({ group, projectPath }: SkillDetailProps) {
 													}}
 												/>
 											)}
-											{selectedEditor && skillTree && (
-												<div className="flex justify-start">
-													<Button
-														variant="ghost"
-														size="sm"
-														onPress={() =>
-															openInEditorMutation.mutate(
-																{
-																	path: skillTree.path,
-																	editor: selectedEditor!,
-																},
-															)
-														}
-													>
-														<CodeBracketIcon className="size-4" />
-														{t("editInEditor")}
-													</Button>
-												</div>
-											)}
+											{selectedEditor &&
+												!isProviderManagedSkill &&
+												skillTree && (
+													<div className="flex justify-start">
+														<Button
+															variant="ghost"
+															size="sm"
+															onPress={() =>
+																openInEditorMutation.mutate(
+																	{
+																		path: skillTree.path,
+																		editor: selectedEditor!,
+																	},
+																)
+															}
+														>
+															<CodeBracketIcon className="size-4" />
+															{t("editInEditor")}
+														</Button>
+													</div>
+												)}
 											{skillTree && (
 												<SkillTree root={skillTree} />
 											)}

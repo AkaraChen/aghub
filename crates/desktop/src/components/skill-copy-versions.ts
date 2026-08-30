@@ -20,6 +20,7 @@ export interface SkillVersionCopy {
 	agents?: string[];
 	sourcePath?: string;
 	isSymlink?: boolean;
+	isReadOnly?: boolean;
 }
 
 export interface SkillCopyVersion {
@@ -43,7 +44,7 @@ export function buildSkillCopyResolutionTargets(
 
 	return versions.flatMap((version) =>
 		version.copies.flatMap((copy) => {
-			if (!copy.sourcePath) return [];
+			if (!copy.sourcePath || copy.isReadOnly) return [];
 			const selectedPreservedLocation =
 				storageMode === "preserve" && copy.sourcePath === referencePath;
 			if (selectedPreservedLocation || seen.has(copy.sourcePath)) {

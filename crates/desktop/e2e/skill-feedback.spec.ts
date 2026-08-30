@@ -1,6 +1,66 @@
 import { expect, test } from "@playwright/test";
 import { installMocks } from "./mocks";
 
+test("nested Skills remain visible in the parent detail", async ({ page }) => {
+	await installMocks(page);
+
+	await page.route("**/api/v1/skills/tree**", (route) => {
+		const url = new URL(route.request().url());
+		const treePath = url.searchParams.get("path") ?? "";
+		if (!treePath.includes("solo-skill")) return route.fallback();
+
+		return route.fulfill({
+			status: 200,
+			contentType: "application/json",
+			body: JSON.stringify({
+				name: "solo-skill",
+				path: treePath,
+				kind: "directory",
+				children: [
+					{
+						name: "SKILL.md",
+						path: `${treePath}/SKILL.md`,
+						kind: "file",
+						children: [],
+					},
+					{
+						name: "vendor",
+						path: `${treePath}/vendor`,
+						kind: "directory",
+						children: [
+							{
+								name: "nested-tool",
+								path: `${treePath}/vendor/nested-tool`,
+								kind: "directory",
+								skill: {
+									name: "nested-command",
+									display_name: "Nested Tool",
+								},
+								children: [
+									{
+										name: "SKILL.md",
+										path: `${treePath}/vendor/nested-tool/SKILL.md`,
+										kind: "file",
+										children: [],
+									},
+								],
+							},
+						],
+					},
+				],
+			}),
+		});
+	});
+
+	await page.goto("/skills");
+	await page.getByRole("option", { name: "solo-skill" }).click();
+
+	const section = page.getByRole("region", { name: "Contained Skills" });
+	await expect(section).toContainText("nested-command");
+	await expect(section).toContainText("Nested Tool");
+	await expect(section).toContainText("vendor/nested-tool");
+});
+
 test("a skill tree client error is shown once and can be retried", async ({
 	page,
 }) => {

@@ -17,6 +17,10 @@ import {
 	DEFAULT_USAGE_SETTINGS,
 	USAGE_QUOTA_AGENTS,
 } from "../lib/store";
+import {
+	skillTargetIds,
+	UNIVERSAL_SKILL_TARGET_ID,
+} from "../lib/skill-targets";
 import { buildUsageDateRange } from "../lib/usage-date-range";
 import { cn } from "../lib/utils";
 import { mcpListQueryOptions } from "../requests/mcps";
@@ -113,8 +117,15 @@ export default function HomePage() {
 		const map = new Map<string, { skills: number; mcps: number }>();
 		for (const agent of availableAgents) {
 			map.set(agent.id, {
-				skills: skills.filter((s) => !s.agent || s.agent === agent.id)
-					.length,
+				skills: skills.filter((skill) => {
+					const targets = skillTargetIds(skill);
+					return (
+						targets.size === 0 ||
+						targets.has(agent.id) ||
+						(agent.capabilities.skills.universal &&
+							targets.has(UNIVERSAL_SKILL_TARGET_ID))
+					);
+				}).length,
 				mcps: mcps.filter((m) => !m.agent || m.agent === agent.id)
 					.length,
 			});

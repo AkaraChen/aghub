@@ -802,6 +802,9 @@ export default {
 	editInEditor: "在编辑器中打开",
 	skillFiles: "文件",
 	skillFilesDescription: "此技能包中共有 {{count}} 个项目",
+	containedSkills: "包含的 Skill",
+	containedSkillsDescription:
+		"即使没有在主列表中单独显示，这些 Skill 仍会保留在此处。",
 	skillFilesUnavailable: "无法读取文件",
 	skillFilesUnavailableDescription: "aghub 无法读取此副本的文件。",
 	skillLinkBroken: "目标不存在",
@@ -922,6 +925,12 @@ export default {
 	warnOnSkillConflicts: "标记内容冲突",
 	warnOnSkillConflictsDescription:
 		"在 Skill 列表标记内容不同或无法比较的副本。",
+	skillDisplay: "Skill 显示",
+	skillDisplayDescription:
+		"选择是否在内部名称后显示 Agent 元数据提供的名称。",
+	showSkillDisplayNames: "显示 display_name",
+	showSkillDisplayNamesDescription:
+		"在列表和详情中显示 agents/openai.yaml 或 Agent 运行时提供的 display_name。",
 	skillFileRelationships: "统一方式",
 	skillFileRelationshipsDescription:
 		"选择一个版本统一其他位置时，设置默认的文件写入方式。",
@@ -940,12 +949,32 @@ export default {
 	projectSkillLocations: "项目 Skill",
 	projectSkillLocationsDescription:
 		"读取项目根目录下的 .agents/skills 与 Agent 原生目录。",
+	agentProvidedSkills: "Agent 提供的 Skill",
+	agentProvidedSkillsDescription:
+		"读取 Codex 自带或 Codex 插件提供的 Skill；这些内容由 Codex 管理。",
+	codexSkillDiscoveryIncomplete: "Codex Skill 无法读取",
+	codexSkillDiscoveryUnavailable:
+		"无法从 Codex 读取 Skill，其他来源仍可使用。",
+	codexVisibleCopies: "Codex 中显示的副本",
+	codexVisibleCopiesDescription:
+		"Codex 当前显示 {{count}} / {{total}} 个同名副本。",
+	showAllCopiesInCodex: "在 Codex 中显示全部副本",
+	showAllCopiesInCodexDescription:
+		"让 Codex 保持显示全部 {{count}} 个独立副本。",
+	visibleInCodex: "Codex 中显示",
+	hiddenInCodex: "Codex 中停用",
+	codexVisibleCopyFileNotice: "只修改 Codex 可见性，不移动或删除文件。",
+	showOnlySelectedCopyInCodex: "仅在 Codex 中显示此项",
+	codexVisibleCopyUpdated: "Codex Skill 可见性已更新",
+	codexVisibleCopyUpdateFailed: "无法更新 Codex 中显示的副本：{{error}}",
+	codexPluginSkill: "Codex 插件",
+	codexSystemSkill: "Codex 自带",
 	embeddedRepositorySkills: "Skill 集合",
 	embeddedRepositorySkillsDescription:
 		"在本身不是 Skill 的集合目录中继续查找子 Skill。",
-	dependencyPackageSkills: "依赖包中的 Skill",
+	dependencyPackageSkills: "单独显示依赖 Skill",
 	dependencyPackageSkillsDescription:
-		"继续查找依赖包目录中的 Skill；默认关闭。",
+		"将依赖包内的 Skill 加入主列表；关闭后仍可在所属 Skill 的详情中查看。",
 	skillPreferencesError: "无法更新 Skill 设置",
 	automatic: "自动",
 	manual: "手动",
@@ -1279,15 +1308,10 @@ export default {
 		"{{versionCount}} 个版本 · {{locationCount}} 个位置",
 	chooseVersionToKeep: "选择要保留的版本",
 	chooseVersionToCompare: "选择要比较的版本",
-	skillVersionSource: "来源",
 	skillVersionLocation: "位置与关系",
 	skillVersionRepositorySource: "仓库来源",
 	skillVersionSymlink: "软链接",
 	skillVersionIndependentCopy: "独立副本",
-	skillVersionLocationCount: "{{count}} 个位置",
-	skillVersionRepositoryCount: "{{count}} 个仓库来源",
-	skillVersionSymlinkCount: "{{count}} 个软链接",
-	skillVersionCopyCount: "{{count}} 个独立副本",
 	skillVersionLocationUsage: "{{count}} 个位置使用此内容",
 	repositoryVersionState: "远端版本",
 	reviewFileChanges: "查看文件差异",

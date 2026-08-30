@@ -16,6 +16,8 @@ import { cn } from "../lib/utils";
 import {
 	getNodeChildren,
 	type LocationGroup,
+	skillProviderIdentity,
+	skillProviderSourceName,
 	summarizeSkillLinks,
 } from "./skill-detail-helpers";
 import { SkillHardLinkState } from "./skill-hard-link-state";
@@ -72,6 +74,45 @@ export function LocationRow({
 	const hasFileLinkStatus = Boolean(
 		treeUnavailable || (linkSummary && linkSummary.problems > 0),
 	);
+	const providerInstallations = useMemo(
+		() =>
+			Array.from(
+				new Map(
+					group.installations.flatMap((installation) =>
+						installation.provider
+							? [
+									[
+										skillProviderIdentity(
+											installation.provider,
+										),
+										installation.provider,
+									] as const,
+								]
+							: [],
+					),
+				).values(),
+			),
+		[group.installations],
+	);
+	const installedAgentNames = useMemo(
+		() =>
+			Array.from(
+				new Set(
+					group.installations.flatMap((installation) =>
+						installation.provider
+							? []
+							: [
+									formatSkillTargetName(
+										t,
+										installation.agent,
+										installation.displayName,
+									),
+								],
+					),
+				),
+			).join(", "),
+		[group.installations, t],
+	);
 
 	return (
 		<div
@@ -87,48 +128,67 @@ export function LocationRow({
 					>
 						{folderPath}
 					</p>
-					<p className="mt-0.5 text-[11px] text-muted">
-						{Array.from(
-							new Set(
-								group.installations.map((installation) =>
-									formatSkillTargetName(
-										t,
-										installation.agent,
-										installation.displayName,
-									),
-								),
-							),
-						).join(", ")}
-					</p>
+					{installedAgentNames && (
+						<p className="mt-0.5 text-[11px] text-muted">
+							{installedAgentNames}
+						</p>
+					)}
+					{providerInstallations.map((provider) => (
+						<p
+							key={skillProviderIdentity(provider)}
+							className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-muted"
+						>
+							<span className="shrink-0">
+								{t(
+									provider.kind === "plugin"
+										? "codexPluginSkill"
+										: "codexSystemSkill",
+								)}
+							</span>
+							<span aria-hidden="true">·</span>
+							<code
+								className="min-w-0 truncate"
+								title={skillProviderSourceName(provider)}
+							>
+								{skillProviderSourceName(provider)}
+							</code>
+						</p>
+					))}
 				</div>
 				<div className="flex shrink-0 items-center gap-1">
-					<Tooltip delay={0}>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							className="size-8 text-muted hover:text-danger"
-							aria-label={t("delete")}
-							onPress={onDelete}
-						>
-							<TrashIcon className="size-4" />
-						</Button>
-						<Tooltip.Content>{t("delete")}</Tooltip.Content>
-					</Tooltip>
-					<Tooltip delay={0}>
-						<Button
-							isIconOnly
-							variant="ghost"
-							size="sm"
-							className="size-8 text-muted"
-							aria-label={t("editInEditor")}
-							isDisabled={!editorAvailable}
-							onPress={onEditFolder}
-						>
-							<CodeBracketIcon className="size-4" />
-						</Button>
-						<Tooltip.Content>{t("editInEditor")}</Tooltip.Content>
-					</Tooltip>
+					{!group.managed && (
+						<>
+							<Tooltip delay={0}>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									className="size-8 text-muted hover:text-danger"
+									aria-label={t("delete")}
+									onPress={onDelete}
+								>
+									<TrashIcon className="size-4" />
+								</Button>
+								<Tooltip.Content>{t("delete")}</Tooltip.Content>
+							</Tooltip>
+							<Tooltip delay={0}>
+								<Button
+									isIconOnly
+									variant="ghost"
+									size="sm"
+									className="size-8 text-muted"
+									aria-label={t("editInEditor")}
+									isDisabled={!editorAvailable}
+									onPress={onEditFolder}
+								>
+									<CodeBracketIcon className="size-4" />
+								</Button>
+								<Tooltip.Content>
+									{t("editInEditor")}
+								</Tooltip.Content>
+							</Tooltip>
+						</>
+					)}
 					<Tooltip delay={0}>
 						<Button
 							isIconOnly
@@ -158,15 +218,20 @@ export function LocationRow({
 							data-skill-location-link={
 								rootLink?.status ?? "valid"
 							}
-							className="flex min-w-0 items-center gap-1.5 text-xs text-muted"
+							className="flex min-w-0 items-start gap-1.5 text-xs text-muted"
 						>
-							<LinkIcon className="size-3.5 shrink-0" />
+							<LinkIcon className="mt-0.5 size-3.5 shrink-0" />
 							<span className="shrink-0">{t("symlink")}</span>
 							{rootLink?.target && (
 								<>
-									<span aria-hidden="true">·</span>
+									<span
+										aria-hidden="true"
+										className="shrink-0"
+									>
+										·
+									</span>
 									<code
-										className="min-w-0 truncate"
+										className="min-w-0 whitespace-normal break-all"
 										title={rootLink.target}
 									>
 										{rootLink.target}

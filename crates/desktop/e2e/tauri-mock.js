@@ -31,6 +31,7 @@
 				groupIdenticalCopies: true,
 				warnOnConflicts: true,
 				defaultStorageMode: "preserve",
+				showDisplayNames: true,
 				discovery: {
 					projectSkills: true,
 					embeddedSkills: true,

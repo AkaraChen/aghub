@@ -312,6 +312,7 @@ mod tests {
 			)],
 			skills: vec![Skill {
 				name: "my-skill".to_string(),
+				display_name: None,
 				enabled: true,
 				description: Some("A test skill".to_string()),
 				author: Some("test".to_string()),

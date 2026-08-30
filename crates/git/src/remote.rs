@@ -404,13 +404,13 @@ done
 			script.as_os_str(),
 			"https://github.com/owner/repo.git",
 			None,
-			RemoteLimits::new(Duration::from_secs(2), 128, 128),
+			RemoteLimits::new(TEST_PROCESS_START_TIMEOUT, 128, 128),
 			&cancelled,
 		)
 		.unwrap_err();
+		assert!(matches!(error, GitError::RemoteOutputLimit), "{error:?}");
 		let pid = wait_for_pid(&root.path().join("pid"));
 
-		assert!(matches!(error, GitError::RemoteOutputLimit));
 		let result = unsafe { libc::kill(pid, 0) };
 		assert_eq!(result, -1);
 		assert_eq!(

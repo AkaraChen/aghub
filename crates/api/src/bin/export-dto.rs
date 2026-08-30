@@ -66,7 +66,9 @@ use aghub_api::dto::{
 		UpdateRuleVersionPreferencesRequest,
 	},
 	skill::{
-		CreateSkillRequest, DeleteSkillByPathRequest,
+		CodexSkillDiscoveryResponse, CodexStandaloneSkillResponse,
+		CodexVisibleCopyMode, CodexVisibleCopyRequest,
+		CodexVisibleCopyResponse, CreateSkillRequest, DeleteSkillByPathRequest,
 		DeleteSkillByPathResponse, GitInstallRequest, GitInstallResponse,
 		GitInstallResultEntry, GitScanRequest, GitScanResponse,
 		GitScanSkillEntry, GitSyncRequest, GitSyncResponse,
@@ -81,8 +83,10 @@ use aghub_api::dto::{
 		SkillDiffRequest, SkillDiffResponse, SkillDirectoryDiffResponse,
 		SkillFileDiffKindResponse, SkillFileDiffResponse,
 		SkillHardLinkResponse, SkillLinkResponse, SkillLinkStatusResponse,
-		SkillLocationResponse, SkillLockEntryResponse, SkillResponse,
-		SkillTreeNodeKind, SkillTreeNodeResponse, SkillTreeQuery,
+		SkillLocationResponse, SkillLockEntryResponse,
+		SkillProviderKindResponse, SkillProviderLoadErrorResponse,
+		SkillProviderResponse, SkillResponse, SkillTreeNodeKind,
+		SkillTreeNodeResponse, SkillTreeQuery, SkillTreeSkillResponse,
 		UpdateSkillRequest, ValidationError,
 	},
 	sub_agent::{
@@ -211,11 +215,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 	export_type::<ImportSkillRequest>(&cfg)?;
 	export_type::<UpdateSkillRequest>(&cfg)?;
 	export_type::<SkillLocationResponse>(&cfg)?;
+	export_type::<SkillProviderKindResponse>(&cfg)?;
+	export_type::<SkillProviderResponse>(&cfg)?;
+	export_type::<SkillProviderLoadErrorResponse>(&cfg)?;
+	export_type::<CodexSkillDiscoveryResponse>(&cfg)?;
+	export_type::<CodexStandaloneSkillResponse>(&cfg)?;
+	export_type::<CodexVisibleCopyMode>(&cfg)?;
+	export_type::<CodexVisibleCopyRequest>(&cfg)?;
+	export_type::<CodexVisibleCopyResponse>(&cfg)?;
 	export_type::<SkillResponse>(&cfg)?;
 	export_type::<SkillLinkStatusResponse>(&cfg)?;
 	export_type::<SkillLinkResponse>(&cfg)?;
 	export_type::<SkillHardLinkResponse>(&cfg)?;
 	export_type::<SkillTreeNodeKind>(&cfg)?;
+	export_type::<SkillTreeSkillResponse>(&cfg)?;
 	export_type::<SkillTreeNodeResponse>(&cfg)?;
 	export_type::<SkillDiffReferenceRequest>(&cfg)?;
 	export_type::<SkillDiffRequest>(&cfg)?;

@@ -123,6 +123,7 @@ pub fn parse(content: &str) -> Result<AgentConfig> {
 	for skill in list_config.skills {
 		config.skills.push(Skill {
 			name: skill.name,
+			display_name: None,
 			enabled: skill.enabled,
 			description: skill.description,
 			author: skill.author,
@@ -244,6 +245,7 @@ mod tests {
 			}],
 			skills: vec![Skill {
 				name: "disabled-skill".to_string(),
+				display_name: None,
 				enabled: false,
 				description: None,
 				author: None,

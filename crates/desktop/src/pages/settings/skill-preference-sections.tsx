@@ -152,3 +152,28 @@ export function SkillContentPreferences({
 		</SkillPreferenceSection>
 	);
 }
+
+export function SkillDisplayPreferences({
+	preferences,
+	isDisabled,
+	onChange,
+}: PreferenceSectionProps) {
+	const { t } = useTranslation();
+
+	return (
+		<SkillPreferenceSection
+			title={t("skillDisplay")}
+			description={t("skillDisplayDescription")}
+		>
+			<SkillPreferenceSwitch
+				label={t("showSkillDisplayNames")}
+				description={t("showSkillDisplayNamesDescription")}
+				selected={preferences.showDisplayNames}
+				disabled={isDisabled}
+				onChange={(showDisplayNames) =>
+					onChange({ ...preferences, showDisplayNames })
+				}
+			/>
+		</SkillPreferenceSection>
+	);
+}

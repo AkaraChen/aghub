@@ -196,6 +196,25 @@ test("settings keep prompt data and rule versions together", async ({
 		name: "Versions per rule file",
 	});
 	await expect(retention).toHaveValue("20");
+	const retentionGeometry = await retention.evaluate((input) => {
+		const group = input.parentElement;
+		if (!group) throw new Error("Retention input has no NumberField group");
+		const style = getComputedStyle(input);
+		return {
+			buttonCount: group.querySelectorAll("button").length,
+			groupWidth: group.getBoundingClientRect().width,
+			inputTextAlign: style.textAlign,
+			inputFontVariantNumeric: style.fontVariantNumeric,
+			overflows: group.scrollWidth > group.clientWidth,
+		};
+	});
+	expect(retentionGeometry).toMatchObject({
+		buttonCount: 2,
+		groupWidth: 144,
+		inputTextAlign: "center",
+		inputFontVariantNumeric: "tabular-nums",
+		overflows: false,
+	});
 	await retention.fill("7");
 	await page.getByRole("button", { name: "Save version settings" }).click();
 	await expect(page.getByText("Version settings saved")).toBeVisible();

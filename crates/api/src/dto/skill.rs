@@ -31,6 +31,7 @@ impl From<CreateSkillRequest> for Skill {
 	fn from(req: CreateSkillRequest) -> Self {
 		Skill {
 			name: req.name,
+			display_name: None,
 			enabled: true,
 			description: req.description,
 			author: req.author,
@@ -60,6 +61,7 @@ impl UpdateSkillRequest {
 	pub fn apply_to(self, existing: Skill) -> Skill {
 		Skill {
 			name: self.name.unwrap_or(existing.name),
+			display_name: existing.display_name,
 			enabled: self.enabled.unwrap_or(existing.enabled),
 			description: self.description.or(existing.description),
 			author: self.author.or(existing.author),
@@ -79,12 +81,87 @@ pub struct SkillLocationResponse {
 	pub source_path: String,
 	pub is_symlink: bool,
 	pub source: ConfigSource,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub provider: Option<SkillProviderResponse>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum SkillProviderKindResponse {
+	Plugin,
+	System,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct SkillProviderResponse {
+	pub kind: SkillProviderKindResponse,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub id: Option<String>,
+	pub qualified_name: String,
+	pub managed: bool,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct SkillProviderLoadErrorResponse {
+	pub cwd: String,
+	pub path: String,
+	pub message: String,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct CodexSkillDiscoveryResponse {
+	pub skills: Vec<SkillResponse>,
+	pub standalone_skills: Vec<CodexStandaloneSkillResponse>,
+	pub errors: Vec<SkillProviderLoadErrorResponse>,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
+pub struct CodexStandaloneSkillResponse {
+	pub name: String,
+	pub source_path: String,
+	pub enabled: bool,
+}
+
+#[derive(Debug, Deserialize, TS)]
+#[ts(export)]
+pub struct CodexVisibleCopyRequest {
+	pub name: String,
+	pub mode: CodexVisibleCopyMode,
+	#[serde(default)]
+	#[ts(optional = nullable)]
+	pub source_path: Option<String>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
+pub struct CodexVisibleCopyResponse {
+	pub name: String,
+	pub mode: CodexVisibleCopyMode,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub source_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, rename_all = "snake_case")]
+pub enum CodexVisibleCopyMode {
+	All,
+	Single,
 }
 
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
 pub struct SkillResponse {
 	pub name: String,
+	pub display_name: Option<String>,
 	pub enabled: bool,
 	pub source_path: Option<String>,
 	pub is_symlink: bool,
@@ -137,6 +214,13 @@ pub struct SkillHardLinkResponse {
 
 #[derive(Debug, Clone, Serialize, TS)]
 #[ts(export)]
+pub struct SkillTreeSkillResponse {
+	pub name: String,
+	pub display_name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, TS)]
+#[ts(export)]
 pub struct SkillTreeNodeResponse {
 	pub name: String,
 	pub path: String,
@@ -148,6 +232,9 @@ pub struct SkillTreeNodeResponse {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub hard_link: Option<SkillHardLinkResponse>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub skill: Option<SkillTreeSkillResponse>,
 }
 
 #[derive(Debug, Deserialize, TS)]
@@ -319,6 +406,7 @@ impl From<&Skill> for SkillResponse {
 	fn from(s: &Skill) -> Self {
 		SkillResponse {
 			name: s.name.clone(),
+			display_name: s.display_name.clone(),
 			enabled: s.enabled,
 			source_path: s.source_path.clone(),
 			is_symlink: s.canonical_path.is_some(),

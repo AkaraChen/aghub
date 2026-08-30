@@ -20,7 +20,10 @@ import {
 	skillDiffsContainLinks,
 	type SkillCopyVersion,
 } from "./skill-copy-versions";
-import type { LocationGroup } from "./skill-detail-helpers";
+import {
+	type LocationGroup,
+	skillProviderSourceName,
+} from "./skill-detail-helpers";
 import type { SkillVersionChoice } from "./skill-resolution-controls";
 import {
 	SkillComparisonUnavailableAlert,
@@ -95,6 +98,7 @@ function useSkillLocationVersions({
 							),
 							sourcePath: baseline.sourcePath,
 							isSymlink: baseline.isSymlink,
+							isReadOnly: baseline.managed,
 						},
 						targets.map((target) => ({
 							id: target.sourcePath,
@@ -106,6 +110,7 @@ function useSkillLocationVersions({
 							),
 							sourcePath: target.sourcePath,
 							isSymlink: target.isSymlink,
+							isReadOnly: target.managed,
 						})),
 						comparisonResults ?? [],
 						groupIdenticalCopies,
@@ -170,6 +175,23 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 			? selectedVersion
 			: activeVersion;
 	const reverseReviewedDiff = selectedVersion?.id === baselineVersion?.id;
+	const selectedSourcePath = selectedVersion?.copies.find(
+		(copy) => copy.sourcePath,
+	)?.sourcePath;
+	const resolutionTargets = useMemo(
+		() =>
+			selectedVersion && selectedSourcePath
+				? buildSkillCopyResolutionTargets(
+						versions,
+						selectedSourcePath,
+						storageMode,
+					)
+				: [],
+		[selectedSourcePath, selectedVersion, storageMode, versions],
+	);
+	const resolutionLocationCount = comparableLocations.filter(
+		(location) => !location.managed,
+	).length;
 	const resolution = useMutation(
 		resolveSkillCopiesMutationOptions({
 			api,
@@ -205,24 +227,17 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 	const handleResolve = () => {
 		if (!selectedVersion || unavailableCount > 0 || result.isFetching)
 			return;
-		const sourcePath = selectedVersion.copies.find(
-			(copy) => copy.sourcePath,
-		)?.sourcePath;
-		if (!sourcePath) return;
+		if (!selectedSourcePath || resolutionTargets.length === 0) return;
 
 		resolution.mutate(
 			{
 				reference: {
 					kind: "installed",
-					source_path: sourcePath,
+					source_path: selectedSourcePath,
 				},
 				expected_reference_hash: selectedVersion.hash,
 				storage_mode: storageMode,
-				targets: buildSkillCopyResolutionTargets(
-					versions,
-					sourcePath,
-					storageMode,
-				),
+				targets: resolutionTargets,
 				scope,
 				project_root: projectRoot ?? null,
 			},
@@ -401,7 +416,9 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 													isDisabled={
 														!selectedVersion ||
 														result.isFetching ||
-														unavailableCount > 0
+														unavailableCount > 0 ||
+														resolutionTargets.length ===
+															0
 													}
 													onPress={handleResolve}
 												>
@@ -412,7 +429,7 @@ export function SkillLocationDrift(props: SkillLocationDriftProps) {
 														: t(
 																"useSelectedSkillVersion",
 																{
-																	count: comparableLocations.length,
+																	count: resolutionLocationCount,
 																},
 															)}
 												</Button>
@@ -445,13 +462,21 @@ function versionChoice(
 
 function locationSource(location: LocationGroup, t: TFunction): string {
 	return location.installations
-		.map((installation) =>
-			formatSkillTargetName(
+		.map((installation) => {
+			const provider = installation.provider;
+			if (provider) {
+				return `${t(
+					provider.kind === "plugin"
+						? "codexPluginSkill"
+						: "codexSystemSkill",
+				)} · ${skillProviderSourceName(provider)}`;
+			}
+			return formatSkillTargetName(
 				t,
 				installation.agent,
 				installation.displayName,
-			),
-		)
+			);
+		})
 		.filter((agent, index, agents) => agents.indexOf(agent) === index)
 		.join(", ");
 }
