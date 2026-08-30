@@ -400,7 +400,7 @@ mkdir -p "$destination"
 				branch: Some("main"),
 				depth: std::num::NonZeroU32::new(1),
 				credentials: Some(&credentials),
-				limits: CloneLimits::new(Duration::from_secs(2), 100, 1024),
+				limits: CloneLimits::new(TEST_PROCESS_START_TIMEOUT, 100, 1024),
 			},
 			&cancelled,
 		)
@@ -448,7 +448,7 @@ mkdir -p "$destination"
 				branch: None,
 				depth: None,
 				credentials: None,
-				limits: CloneLimits::new(Duration::from_secs(2), 100, 1024),
+				limits: CloneLimits::new(TEST_PROCESS_START_TIMEOUT, 100, 1024),
 			},
 			&cancelled,
 		)
@@ -486,7 +486,11 @@ while :; do sleep 1; done
 					branch: None,
 					depth: None,
 					credentials: None,
-					limits: CloneLimits::new(Duration::from_secs(2), 100, 1024),
+					limits: CloneLimits::new(
+						TEST_PROCESS_START_TIMEOUT,
+						100,
+						1024,
+					),
 				},
 				&task_cancelled,
 			)
@@ -523,14 +527,17 @@ while :; do sleep 1; done
 				branch: None,
 				depth: None,
 				credentials: None,
-				limits: CloneLimits::new(Duration::from_secs(2), 100, 1024),
+				limits: CloneLimits::new(TEST_PROCESS_START_TIMEOUT, 100, 1024),
 			},
 			&cancelled,
 		)
 		.unwrap_err();
+		assert!(
+			matches!(error, GitError::CloneByteLimit { limit: 1024 }),
+			"{error:?}"
+		);
 		let pid = wait_for_pid(&root.path().join("pid"));
 
-		assert!(matches!(error, GitError::CloneByteLimit { limit: 1024 }));
 		assert_process_gone(pid);
 	}
 
@@ -559,14 +566,17 @@ while :; do sleep 1; done
 				branch: None,
 				depth: None,
 				credentials: None,
-				limits: CloneLimits::new(Duration::from_secs(2), 2, 1024),
+				limits: CloneLimits::new(TEST_PROCESS_START_TIMEOUT, 2, 1024),
 			},
 			&cancelled,
 		)
 		.unwrap_err();
+		assert!(
+			matches!(error, GitError::CloneEntryLimit { limit: 2 }),
+			"{error:?}"
+		);
 		let pid = wait_for_pid(&root.path().join("pid"));
 
-		assert!(matches!(error, GitError::CloneEntryLimit { limit: 2 }));
 		assert_process_gone(pid);
 	}
 
