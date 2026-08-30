@@ -1,4 +1,4 @@
-//! Aghub Plugin System
+//! aghub Plugin System
 //!
 //! Provides support for managing Claude Code Plugin System (v2)
 

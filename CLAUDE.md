@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Aghub is a CLI tool (`aghub-cli`) for managing AI coding agent configurations. It supports 22 agents (Claude, OpenCode, Cursor, Windsurf, Copilot, RooCode, Cline, Gemini, Codex, Zed, Warp, and more), handling MCP servers and skills through a unified interface. Full agent list: `crates/core/src/models.rs` or `aghub-cli --help`.
+aghub is a CLI tool (`aghub-cli`) for managing AI coding agent configurations. It supports 22 agents (Claude, OpenCode, Cursor, Windsurf, Copilot, RooCode, Cline, Gemini, Codex, Zed, Warp, and more), handling MCP servers and skills through a unified interface. Full agent list: `crates/core/src/models.rs` or `aghub-cli --help`.
 
 ## Common Commands
 
