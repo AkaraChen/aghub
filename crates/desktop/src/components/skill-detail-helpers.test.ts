@@ -39,7 +39,7 @@ function skill(agent: string, path: string, managed: boolean): SkillResponse {
 }
 
 describe("buildLocationGroups", () => {
-	it("marks provider-managed paths read-only without locking mixed paths", () => {
+	it("keeps a shared provider path read-only across Agent records", () => {
 		const managed = buildLocationGroups(
 			[skill("codex", "/plugins/agents-sdk/SKILL.md", true)],
 			[],
@@ -53,7 +53,13 @@ describe("buildLocationGroups", () => {
 		);
 
 		expect(managed[0]?.managed).toBe(true);
-		expect(mixed[0]?.managed).toBe(false);
+		expect(mixed[0]?.managed).toBe(true);
+		expect(
+			uniqueSkillLocations([
+				skill("claude", "/shared/agents-sdk/SKILL.md", false),
+				skill("codex", "/shared/agents-sdk/SKILL.md", true),
+			]),
+		).toEqual([]);
 	});
 
 	it("excludes Agent-managed paths from writable sync targets", () => {

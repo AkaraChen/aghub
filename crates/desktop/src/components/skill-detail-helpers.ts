@@ -244,11 +244,9 @@ export function buildLocationGroups(
 				return a.source.localeCompare(b.source);
 			}),
 			isSymlink: data.isSymlink,
-			managed:
-				data.installations.length > 0 &&
-				data.installations.every(
-					(installation) => installation.provider?.managed,
-				),
+			managed: data.installations.some(
+				(installation) => installation.provider?.managed,
+			),
 		}))
 		.sort((a, b) => a.sourcePath.localeCompare(b.sourcePath));
 }
@@ -279,6 +277,13 @@ export function uniqueSkillSourcePaths(items: SkillResponse[]): string[] {
 export function uniqueSkillLocations(
 	items: SkillResponse[],
 ): SkillSourceLocation[] {
+	const managedPaths = new Set(
+		items.flatMap((item) =>
+			(item.locations ?? [])
+				.filter((location) => location.provider?.managed)
+				.map((location) => location.source_path),
+		),
+	);
 	const locations = new Map<string, SkillSourceLocation>();
 	for (const item of items) {
 		const itemLocations =
@@ -294,7 +299,7 @@ export function uniqueSkillLocations(
 						]
 					: [];
 		for (const location of itemLocations) {
-			if (location.provider?.managed) continue;
+			if (managedPaths.has(location.source_path)) continue;
 			const existing = locations.get(location.source_path);
 			if (existing) {
 				if (item.agent && !existing.agents.includes(item.agent)) {

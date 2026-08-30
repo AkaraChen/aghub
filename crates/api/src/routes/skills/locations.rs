@@ -5,6 +5,7 @@ use aghub_core::{
 use rocket::http::Status;
 use std::path::{Component, Path, PathBuf};
 
+use crate::codex_skills::CodexSkillReadRoots;
 use crate::error::ApiError;
 
 use super::{
@@ -172,23 +173,16 @@ pub(super) fn canonical_skill_roots_for_registered_agents(
 pub(super) fn canonical_skill_read_roots(
 	resource_scope: ResourceScope,
 	project_root: Option<&Path>,
+	providers: &CodexSkillReadRoots,
 ) -> Result<Vec<PathBuf>, ApiError> {
 	let mut roots = canonical_skill_roots_for_registered_agents(
 		resource_scope,
 		project_root,
 	)?;
-	if let Some(home) = dirs::home_dir() {
-		append_existing_root(&mut roots, &home.join(".codex/plugins"));
-	}
+	roots.extend(providers.directories());
 	roots.sort();
 	roots.dedup();
 	Ok(roots)
-}
-
-fn append_existing_root(roots: &mut Vec<PathBuf>, path: &Path) {
-	if let Ok(root) = std::fs::canonicalize(path) {
-		roots.push(root);
-	}
 }
 
 pub(super) fn ensure_path_under_roots(
@@ -330,17 +324,115 @@ pub(super) fn ensure_skill_tree_allowed(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::codex_skills::{
+		CodexSkillCatalog, CodexSkillOrigin, CodexSkillRecord, CodexSkillScope,
+	};
 	use tempfile::tempdir;
 
 	#[test]
-	fn appends_existing_codex_plugin_cache_as_read_only_root() {
+	fn plugin_container_is_not_a_skill_read_root() {
 		let temp = tempdir().unwrap();
 		let plugins = temp.path().join(".codex/plugins");
 		std::fs::create_dir_all(&plugins).unwrap();
-		let mut roots = Vec::new();
+		let roots = canonical_skill_read_roots(
+			ResourceScope::ProjectOnly,
+			Some(temp.path()),
+			&CodexSkillReadRoots::default(),
+		)
+		.unwrap_or_else(|error| panic!("{}", error.body.error));
 
-		append_existing_root(&mut roots, &plugins);
+		assert!(ensure_skill_tree_allowed(
+			&std::fs::canonicalize(plugins).unwrap(),
+			&roots,
+			&[],
+		)
+		.is_err());
+	}
 
-		assert_eq!(roots, vec![std::fs::canonicalize(plugins).unwrap()]);
+	#[test]
+	fn provider_reads_are_limited_to_reported_directories_and_refresh() {
+		let temp = tempdir().unwrap();
+		let project = temp.path().join("project");
+		std::fs::create_dir(&project).unwrap();
+		let plugin = temp
+			.path()
+			.join("codex-home/plugins/cache/demo/skills/tool");
+		let system = temp.path().join("bundled/system/docs");
+		let standalone = temp.path().join("standalone");
+		let providers = CodexSkillReadRoots::default();
+		let mut catalog = CodexSkillCatalog::default();
+		for (directory, origin) in [
+			(&plugin, CodexSkillOrigin::Plugin { id: "demo".into() }),
+			(&system, CodexSkillOrigin::System),
+			(&standalone, CodexSkillOrigin::Standalone),
+		] {
+			std::fs::create_dir_all(directory).unwrap();
+			let file = directory.join("SKILL.md");
+			std::fs::write(
+				&file,
+				"---\nname: tool\ndescription: demo\n---\nbody",
+			)
+			.unwrap();
+			catalog.skills.push(CodexSkillRecord {
+				qualified_name: "tool".into(),
+				base_name: "tool".into(),
+				display_name: None,
+				description: "demo".into(),
+				path: file,
+				scope: CodexSkillScope::User,
+				enabled: true,
+				origin,
+			});
+		}
+		providers.replace(&project, &catalog);
+		let roots = canonical_skill_read_roots(
+			ResourceScope::ProjectOnly,
+			Some(&project),
+			&providers,
+		)
+		.unwrap_or_else(|error| panic!("{}", error.body.error));
+		for directory in [&plugin, &system] {
+			let directory = std::fs::canonicalize(directory).unwrap();
+			assert!(ensure_skill_tree_allowed(&directory, &roots, &[]).is_ok());
+			assert!(ensure_skill_file_allowed(
+				&directory.join("SKILL.md"),
+				&roots,
+				&[]
+			)
+			.is_ok());
+			assert!(ensure_skill_tree_allowed(
+				directory.parent().unwrap(),
+				&roots,
+				&[]
+			)
+			.is_err());
+			let writable = canonical_skill_roots_for_registered_agents(
+				ResourceScope::ProjectOnly,
+				Some(&project),
+			)
+			.unwrap_or_else(|error| panic!("{}", error.body.error));
+			assert!(
+				ensure_skill_tree_allowed(&directory, &writable, &[]).is_err()
+			);
+		}
+		assert!(ensure_skill_tree_allowed(
+			&std::fs::canonicalize(standalone).unwrap(),
+			&roots,
+			&[]
+		)
+		.is_err());
+		providers.replace(&project, &CodexSkillCatalog::default());
+		let roots = canonical_skill_read_roots(
+			ResourceScope::ProjectOnly,
+			Some(&project),
+			&providers,
+		)
+		.unwrap_or_else(|error| panic!("{}", error.body.error));
+		assert!(ensure_skill_tree_allowed(
+			&std::fs::canonicalize(plugin).unwrap(),
+			&roots,
+			&[]
+		)
+		.is_err());
 	}
 }

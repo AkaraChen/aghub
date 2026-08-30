@@ -8,6 +8,7 @@ use std::{
 
 use crate::{
 	auth::ApiAuth,
+	codex_skills::CodexSkillReadRoots,
 	dto::skill::{
 		SkillCopyResolutionRequest, SkillCopyResolutionResponse,
 		SkillCopyResolutionResult, SkillCopyStatusRequest,
@@ -45,6 +46,7 @@ use super::{
 #[post("/skills/diff", data = "<body>")]
 pub async fn diff_skill(
 	_auth: ApiAuth,
+	providers: &rocket::State<CodexSkillReadRoots>,
 	body: Json<SkillDiffRequest>,
 	sessions: &rocket::State<GitCloneSessions>,
 ) -> ApiResult<SkillDiffResponse> {
@@ -91,6 +93,7 @@ pub async fn diff_skill(
 		project_root: request.project_root,
 	};
 	let installed_paths = request.installed_paths;
+	let providers = providers.inner().clone();
 
 	let permit = SKILL_DIFF_PERMITS
 		.acquire()
@@ -101,9 +104,12 @@ pub async fn diff_skill(
 		let resolved = scope.resolve()?;
 		let (resource_scope, project_root) =
 			resolved_to_resource_scope(&resolved);
-		let roots =
-			canonical_skill_read_roots(resource_scope, project_root.as_deref())
-				.map_err(public_skill_diff_path_error)?;
+		let roots = canonical_skill_read_roots(
+			resource_scope,
+			project_root.as_deref(),
+			&providers,
+		)
+		.map_err(public_skill_diff_path_error)?;
 		let known = known_skill_paths(resource_scope, project_root.as_deref());
 		let reference_dir = match reference {
 			PreparedSkillDiffReference::Installed(source_path) => {
@@ -153,6 +159,7 @@ pub async fn diff_skill(
 #[post("/skills/copies/status", data = "<body>")]
 pub async fn get_skill_copy_status(
 	_auth: ApiAuth,
+	providers: &rocket::State<CodexSkillReadRoots>,
 	body: Json<SkillCopyStatusRequest>,
 ) -> ApiResult<SkillCopyStatusResponse> {
 	let request = body.into_inner();
@@ -200,6 +207,7 @@ pub async fn get_skill_copy_status(
 		project_root: request.project_root,
 	};
 	let groups = request.groups;
+	let providers = providers.inner().clone();
 	let permit = SKILL_DIFF_PERMITS
 		.acquire()
 		.await
@@ -213,6 +221,7 @@ pub async fn get_skill_copy_status(
 			let roots = canonical_skill_read_roots(
 				resource_scope,
 				project_root.as_deref(),
+				&providers,
 			)
 			.map_err(public_skill_diff_path_error)?;
 			let known =
@@ -276,6 +285,7 @@ pub async fn get_skill_copy_status(
 #[post("/skills/copies/resolve", data = "<body>")]
 pub async fn resolve_skill_copies(
 	_auth: ApiAuth,
+	providers: &rocket::State<CodexSkillReadRoots>,
 	body: Json<SkillCopyResolutionRequest>,
 	sessions: &rocket::State<GitCloneSessions>,
 ) -> ApiResult<SkillCopyResolutionResponse> {
@@ -338,6 +348,7 @@ pub async fn resolve_skill_copies(
 	let expected_content_digest = request.expected_content_digest;
 	let confirmed_assessment_digest = request.confirmed_assessment_digest;
 	let audit_only = request.audit_only.unwrap_or(false);
+	let providers = providers.inner().clone();
 
 	let permit = SKILL_COPY_RESOLUTION_PERMITS
 		.acquire()
@@ -356,9 +367,12 @@ pub async fn resolve_skill_copies(
 			project_root.as_deref(),
 		)
 		.map_err(public_skill_copy_path_error)?;
-		let readable_roots =
-			canonical_skill_read_roots(resource_scope, project_root.as_deref())
-				.map_err(public_skill_copy_path_error)?;
+		let readable_roots = canonical_skill_read_roots(
+			resource_scope,
+			project_root.as_deref(),
+			&providers,
+		)
+		.map_err(public_skill_copy_path_error)?;
 		let known = known_skill_paths(resource_scope, project_root.as_deref());
 		let (reference_dir, materialize_root, git_session_id) = match reference
 		{
@@ -413,6 +427,7 @@ pub async fn resolve_skill_copies(
 
 		let mut seen_source_paths = HashSet::new();
 		let mut prepared_targets = Vec::with_capacity(targets.len());
+		let provider_roots = providers.directories();
 		for (request_index, target) in targets.into_iter().enumerate() {
 			if !seen_source_paths.insert(target.source_path.clone()) {
 				return Err(ApiError::new(
@@ -429,6 +444,16 @@ pub async fn resolve_skill_copies(
 			.map_err(public_skill_copy_path_error)?;
 			let content_dir = canonical_existing(&requested_dir)
 				.map_err(public_skill_copy_path_error)?;
+			if provider_roots
+				.iter()
+				.any(|root| is_within(&content_dir, root))
+			{
+				return Err(ApiError::new(
+					Status::Forbidden,
+					"Provider-managed Skills cannot be copy resolution targets",
+					"SKILL_PROVIDER_READ_ONLY",
+				));
+			}
 			let entry_dir = existing_skill_entry_path(&requested_dir)
 				.map_err(public_skill_copy_path_error)?;
 			let entry_is_symlink = std::fs::symlink_metadata(&entry_dir)

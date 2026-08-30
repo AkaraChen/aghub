@@ -37,7 +37,10 @@ import { PanelTransition } from "../../components/panel-transition";
 import { useListDnd } from "../../hooks/use-list-dnd";
 import { useListKeyboard } from "../../hooks/use-list-keyboard";
 import { SkillDetail } from "../../components/skill-detail";
-import { uniqueSkillSourcePaths } from "../../components/skill-detail-helpers";
+import {
+	uniqueSkillLocations,
+	uniqueSkillSourcePaths,
+} from "../../components/skill-detail-helpers";
 import { SourceDetailPanel } from "../../components/source-detail-panel";
 import {
 	SkillList,
@@ -209,14 +212,7 @@ export default function SkillsPage() {
 		() =>
 			new Set(
 				allSkillGroups.flatMap((group) =>
-					group.items.length > 0 &&
-					group.items.every(
-						(item) =>
-							Boolean(item.locations?.length) &&
-							item.locations!.every(
-								(location) => location.provider?.managed,
-							),
-					)
+					uniqueSkillLocations(group.items).length === 0
 						? [group.name]
 						: [],
 				),

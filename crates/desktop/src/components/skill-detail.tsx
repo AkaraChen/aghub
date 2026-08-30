@@ -53,6 +53,7 @@ import {
 	buildLocationGroups,
 	countTreeFiles,
 	findContainedSkills,
+	uniqueSkillLocations,
 	getInstalledSkillAuditPaths,
 	hasSupplementarySkillFiles,
 	type LocationGroup,
@@ -107,12 +108,8 @@ export function SkillDetail({
 	const { selectedEditor } = useCurrentCodeEditor();
 
 	const skill = group.items[0];
-	const isProviderManagedSkill = group.items.every(
-		(item) =>
-			Boolean(item.locations?.length) &&
-			item.locations?.every((location) => location.provider?.managed) ===
-				true,
-	);
+	const isProviderManagedSkill =
+		uniqueSkillLocations(group.items).length === 0;
 	const auditPaths = getInstalledSkillAuditPaths(group.items);
 	const primaryScope = skill.source ?? "global";
 	const skillQueryScope =

@@ -193,6 +193,7 @@ fn build_rocket(
 		.attach(ApiLogFairing)
 		.attach(cors)
 		.manage(crate::state::GitCloneSessions::default())
+		.manage(crate::codex_skills::CodexSkillReadRoots::default())
 		.manage(crate::state::InferenceProviderState {
 			store: aghub_inference::InferenceProviderStore::new(
 				options.app_data_dir.clone(),
@@ -1414,67 +1415,108 @@ mod tests {
 	}
 
 	#[test]
-	fn route_skill_copy_resolution_replaces_project_location() {
-		let app_data_dir = tempfile::tempdir().expect("app data dir");
-		let project_dir = tempfile::tempdir().expect("project dir");
-		let reference = project_dir.path().join(".claude/skills/demo");
-		let target = project_dir.path().join(".cursor/skills/demo");
-		write_import_skill(&reference, "demo", "reference instruction");
-		write_import_skill(&target, "demo", "target instruction");
-		let client = test_client(app_data_dir.path());
+	fn route_skill_copy_resolution_respects_provider_ownership() {
+		for managed in [false, true] {
+			let app_data_dir = tempfile::tempdir().expect("app data dir");
+			let project_dir = tempfile::tempdir().expect("project dir");
+			let reference = project_dir.path().join(".claude/skills/demo");
+			let target = project_dir.path().join(".cursor/skills/demo");
+			write_import_skill(&reference, "demo", "reference instruction");
+			write_import_skill(&target, "demo", "target instruction");
+			let client = test_client(app_data_dir.path());
+			if managed {
+				use crate::codex_skills::{
+					CodexSkillCatalog, CodexSkillOrigin, CodexSkillReadRoots,
+					CodexSkillRecord, CodexSkillScope,
+				};
+				client
+					.rocket()
+					.state::<CodexSkillReadRoots>()
+					.unwrap()
+					.replace(
+						project_dir.path(),
+						&CodexSkillCatalog {
+							skills: vec![CodexSkillRecord {
+								qualified_name: "plugin:demo".into(),
+								base_name: "demo".into(),
+								display_name: None,
+								description: "demo".into(),
+								path: target.join("SKILL.md"),
+								scope: CodexSkillScope::User,
+								enabled: true,
+								origin: CodexSkillOrigin::Plugin {
+									id: "plugin".into(),
+								},
+							}],
+							errors: vec![],
+						},
+					);
+			}
 
-		let diff = response_json(post_json(
-			&client,
-			"/api/v1/skills/diff",
-			json!({
-				"reference": {
-					"kind": "installed",
-					"source_path": reference.join("SKILL.md"),
-				},
-				"installed_paths": [target.join("SKILL.md")],
-				"scope": "project",
-				"project_root": project_dir.path(),
-			}),
-		));
-		let reference_hash = diff["results"][0]["base_hash"]
-			.as_str()
-			.expect("reference hash");
-		let target_hash = diff["results"][0]["target_hash"]
-			.as_str()
-			.expect("target hash");
+			let diff = response_json(post_json(
+				&client,
+				"/api/v1/skills/diff",
+				json!({
+					"reference": {
+						"kind": "installed",
+						"source_path": reference.join("SKILL.md"),
+					},
+					"installed_paths": [target.join("SKILL.md")],
+					"scope": "project",
+					"project_root": project_dir.path(),
+				}),
+			));
+			let reference_hash = diff["results"][0]["base_hash"]
+				.as_str()
+				.expect("reference hash");
+			let target_hash = diff["results"][0]["target_hash"]
+				.as_str()
+				.expect("target hash");
 
-		let response = post_json(
-			&client,
-			"/api/v1/skills/copies/resolve",
-			json!({
-				"reference": {
-					"kind": "installed",
-					"source_path": reference.join("SKILL.md"),
-				},
-				"expected_reference_hash": reference_hash,
-				"targets": [{
-					"source_path": target.join("SKILL.md"),
-					"expected_hash": target_hash,
-				}],
-				"scope": "project",
-				"project_root": project_dir.path(),
-			}),
-		);
+			let response = post_json(
+				&client,
+				"/api/v1/skills/copies/resolve",
+				json!({
+					"reference": {
+						"kind": "installed",
+						"source_path": reference.join("SKILL.md"),
+					},
+					"expected_reference_hash": reference_hash,
+					"targets": [{
+						"source_path": target.join("SKILL.md"),
+						"expected_hash": target_hash,
+					}],
+					"scope": "project",
+					"project_root": project_dir.path(),
+				}),
+			);
 
-		assert_eq!(response.status(), Status::Ok);
-		let body = response_json(response);
-		assert_eq!(body["name"], "demo");
-		assert_eq!(body["reference_hash"], reference_hash);
-		assert_eq!(body["results"].as_array().expect("results").len(), 1);
-		assert_eq!(
-			body["results"][0]["source_path"],
-			target.join("SKILL.md").to_string_lossy().as_ref()
-		);
-		assert_eq!(body["results"][0]["content_hash"], reference_hash);
-		let content = std::fs::read_to_string(target.join("SKILL.md"))
-			.expect("resolved target");
-		assert!(content.contains("reference instruction"));
-		assert!(!content.contains("target instruction"));
+			if managed {
+				assert_eq!(response.status(), Status::Forbidden);
+				assert_eq!(
+					response_json(response)["code"],
+					"SKILL_PROVIDER_READ_ONLY"
+				);
+				assert!(std::fs::read_to_string(target.join("SKILL.md"))
+					.unwrap()
+					.contains("target instruction"));
+				continue;
+			}
+			assert_eq!(response.status(), Status::Ok);
+			let body = response_json(response);
+			assert_eq!(body["name"], "demo");
+			assert_eq!(body["reference_hash"], reference_hash);
+			assert_eq!(body["results"].as_array().expect("results").len(), 1);
+			assert_eq!(
+				body["results"][0]["source_path"],
+				target.join("SKILL.md").to_string_lossy().as_ref()
+			);
+			assert_eq!(body["results"][0]["content_hash"], reference_hash);
+			let content = std::fs::read_to_string(target.join("SKILL.md"))
+				.expect("resolved target");
+			assert!(content.contains("reference instruction"));
+			assert!(!content.contains("target instruction"));
+		}
 	}
 
 	#[test]

@@ -30,7 +30,8 @@ use crate::{
 	auth::ApiAuth,
 	codex_skills::{
 		visible_copy_updates, CodexSkillCatalog, CodexSkillOrigin,
-		CodexSkillScope, CodexSkillsClient, CodexVisibleCopySelection,
+		CodexSkillReadRoots, CodexSkillScope, CodexSkillsClient,
+		CodexVisibleCopySelection,
 	},
 	dto::audit::{AuditReportDto, AuditRequest},
 	dto::integrations::{
@@ -1655,6 +1656,7 @@ pub(crate) async fn list_all_agents_skills(
 #[get("/skills/providers/codex?<project_root>")]
 pub(crate) async fn list_codex_provider_skills(
 	_auth: ApiAuth,
+	providers: &rocket::State<CodexSkillReadRoots>,
 	project_root: Option<String>,
 ) -> ApiResult<CodexSkillDiscoveryResponse> {
 	let cwd = codex_skill_discovery_root(project_root)?;
@@ -1677,6 +1679,7 @@ pub(crate) async fn list_codex_provider_skills(
 			)
 		})?;
 
+	providers.replace(&cwd, &catalog);
 	Ok(Json(codex_skill_discovery_response(catalog)))
 }
 
@@ -1799,7 +1802,7 @@ fn codex_skill_discovery_root(
 			"INVALID_PROJECT_ROOT",
 		));
 	}
-	Ok(cwd)
+	canonical_existing(&cwd)
 }
 
 fn codex_skill_discovery_response(
@@ -2149,6 +2152,7 @@ pub async fn edit_skill_folder(
 #[get("/skills/content?<query..>")]
 pub fn get_skill_content(
 	_auth: ApiAuth,
+	providers: &rocket::State<CodexSkillReadRoots>,
 	query: SkillContentQuery,
 ) -> ApiResult<String> {
 	let resolved = ScopeParams {
@@ -2157,8 +2161,11 @@ pub fn get_skill_content(
 	}
 	.resolve()?;
 	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
-	let roots =
-		canonical_skill_read_roots(resource_scope, project_root.as_deref())?;
+	let roots = canonical_skill_read_roots(
+		resource_scope,
+		project_root.as_deref(),
+		providers,
+	)?;
 	let known = known_skill_paths(resource_scope, project_root.as_deref());
 
 	let path = expand_tilde_path(&query.path);
@@ -2218,6 +2225,7 @@ pub async fn audit_skill(
 #[get("/skills/tree?<query..>")]
 pub fn get_skill_tree(
 	_auth: ApiAuth,
+	providers: &rocket::State<CodexSkillReadRoots>,
 	query: SkillTreeQuery,
 ) -> ApiResult<SkillTreeNodeResponse> {
 	let resolved = ScopeParams {
@@ -2226,8 +2234,11 @@ pub fn get_skill_tree(
 	}
 	.resolve()?;
 	let (resource_scope, project_root) = resolved_to_resource_scope(&resolved);
-	let roots =
-		canonical_skill_read_roots(resource_scope, project_root.as_deref())?;
+	let roots = canonical_skill_read_roots(
+		resource_scope,
+		project_root.as_deref(),
+		providers,
+	)?;
 	let known = known_skill_paths(resource_scope, project_root.as_deref());
 
 	let path = expand_tilde_path(&query.path);
@@ -3086,6 +3097,7 @@ mod tests {
 
 		let content = api_ok(get_skill_content(
 			ApiAuth,
+			rocket::State::from(&CodexSkillReadRoots::default()),
 			SkillContentQuery {
 				path: skill_file.display().to_string(),
 				scope: Some("project".to_string()),
@@ -3107,6 +3119,7 @@ mod tests {
 
 		let error = api_err(get_skill_content(
 			ApiAuth,
+			rocket::State::from(&CodexSkillReadRoots::default()),
 			SkillContentQuery {
 				path: outside_file.display().to_string(),
 				scope: Some("project".to_string()),
@@ -3127,6 +3140,7 @@ mod tests {
 
 		let error = api_err(get_skill_tree(
 			ApiAuth,
+			rocket::State::from(&CodexSkillReadRoots::default()),
 			SkillTreeQuery {
 				path: outside_dir.display().to_string(),
 				scope: Some("project".to_string()),
@@ -3154,6 +3168,7 @@ mod tests {
 
 		let tree = api_ok(get_skill_tree(
 			ApiAuth,
+			rocket::State::from(&CodexSkillReadRoots::default()),
 			SkillTreeQuery {
 				path: skill_dir.display().to_string(),
 				scope: Some("project".to_string()),
@@ -3187,6 +3202,7 @@ mod tests {
 
 		let tree = api_ok(get_skill_tree(
 			ApiAuth,
+			rocket::State::from(&CodexSkillReadRoots::default()),
 			SkillTreeQuery {
 				path: skill_dir.display().to_string(),
 				scope: Some("project".to_string()),
@@ -3222,6 +3238,7 @@ mod tests {
 
 		let tree = api_ok(get_skill_tree(
 			ApiAuth,
+			rocket::State::from(&CodexSkillReadRoots::default()),
 			SkillTreeQuery {
 				path: link.join("SKILL.md").display().to_string(),
 				scope: Some("project".to_string()),
@@ -3259,6 +3276,7 @@ mod tests {
 
 		let tree = api_ok(get_skill_tree(
 			ApiAuth,
+			rocket::State::from(&CodexSkillReadRoots::default()),
 			SkillTreeQuery {
 				path: native_root.join("demo/SKILL.md").display().to_string(),
 				scope: Some("project".to_string()),
@@ -3294,6 +3312,7 @@ mod tests {
 
 		let tree = api_ok(get_skill_tree(
 			ApiAuth,
+			rocket::State::from(&CodexSkillReadRoots::default()),
 			SkillTreeQuery {
 				path: skill_dir.display().to_string(),
 				scope: Some("project".to_string()),
@@ -3335,6 +3354,7 @@ mod tests {
 
 		let tree = api_ok(get_skill_tree(
 			ApiAuth,
+			rocket::State::from(&CodexSkillReadRoots::default()),
 			SkillTreeQuery {
 				path: skill_dir.display().to_string(),
 				scope: Some("project".to_string()),

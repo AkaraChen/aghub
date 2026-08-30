@@ -250,6 +250,47 @@ test("a plugin copy can be compared but is never a resolution target", async ({
 	).toBe(false);
 });
 
+test("a path shared with a provider is excluded from copy write targets", async ({
+	page,
+}) => {
+	const mocks = await installMocks(page);
+	const sharedPath = "/tmp/e2e/.claude/skills/react-pro/SKILL.md";
+	const localPath = "/tmp/e2e/.cursor/skills/react-pro/SKILL.md";
+	mocks.setCodexProvidedSkills(
+		discovery([
+			codexProvidedSkill(
+				"react-pro",
+				"plugin",
+				"cloudflare:react-pro",
+				sharedPath,
+				"cloudflare",
+			),
+		]),
+	);
+	mocks.setSkillDiff(localPath, changedPluginCopy);
+	await page.goto("/skills");
+	await page.getByRole("option", { name: "react-pro" }).click();
+	await page
+		.getByRole("button", { name: /Compare and unify local copies/ })
+		.click();
+	await page
+		.locator("[data-skill-version-choice]")
+		.filter({ hasText: "cloudflare" })
+		.click();
+	await page.getByRole("button", { name: /Use selected version/ }).click();
+	await expect
+		.poll(() => mocks.getSkillCopyResolutionRequests().length)
+		.toBe(1);
+	const request = mocks.getSkillCopyResolutionRequests()[0];
+	expect(request?.reference).toEqual({
+		kind: "installed",
+		source_path: sharedPath,
+	});
+	expect(request?.targets.map((target) => target.source_path)).toEqual([
+		localPath,
+	]);
+});
+
 test("partial Codex discovery keeps readable Skills without a warning", async ({
 	page,
 }) => {

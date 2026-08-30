@@ -1,8 +1,9 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::{
 	AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWrite, AsyncWriteExt,
@@ -53,6 +54,46 @@ pub(crate) struct CodexSkillLoadError {
 pub(crate) struct CodexSkillCatalog {
 	pub(crate) skills: Vec<CodexSkillRecord>,
 	pub(crate) errors: Vec<CodexSkillLoadError>,
+}
+
+#[derive(Clone, Default)]
+pub struct CodexSkillReadRoots {
+	by_cwd: Arc<Mutex<BTreeMap<PathBuf, Vec<PathBuf>>>>,
+}
+
+impl CodexSkillReadRoots {
+	pub(crate) fn replace(&self, cwd: &Path, catalog: &CodexSkillCatalog) {
+		let mut roots = Vec::new();
+		for skill in &catalog.skills {
+			if skill.origin == CodexSkillOrigin::Standalone {
+				continue;
+			}
+			match std::fs::canonicalize(&skill.path) {
+				Ok(file) => {
+					if let Some(directory) = file.parent() {
+						roots.push(directory.to_path_buf());
+					}
+				}
+				Err(error) => log::warn!(
+					"Cannot authorize discovered Codex Skill '{}': {error}",
+					skill.path.display()
+				),
+			}
+		}
+		roots.sort();
+		roots.dedup();
+		self.by_cwd.lock().unwrap().insert(cwd.to_path_buf(), roots);
+	}
+
+	pub(crate) fn directories(&self) -> Vec<PathBuf> {
+		self.by_cwd
+			.lock()
+			.unwrap()
+			.values()
+			.flatten()
+			.cloned()
+			.collect()
+	}
 }
 
 pub(crate) struct CodexSkillsClient {
