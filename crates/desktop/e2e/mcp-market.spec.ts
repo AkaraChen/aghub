@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { installMocks } from "./mocks";
+import { e2eApiUrl, installMocks } from "./mocks";
 
 let mocks: Awaited<ReturnType<typeof installMocks>>;
 
@@ -118,6 +118,38 @@ test("switches between registry install methods", async ({ page }) => {
 	});
 });
 
+test("keeps the installation dialog open until writes finish", async ({
+	page,
+}) => {
+	const writeFinished = Promise.withResolvers<void>();
+	await page.route(e2eApiUrl("/agents/claude/mcps**"), async (route) => {
+		if (route.request().method() === "POST") await writeFinished.promise;
+		await route.fallback();
+	});
+	await page.getByRole("button", { name: "Add", exact: true }).click();
+	const dialog = page.getByRole("dialog", { name: "Install MCP server" });
+	await dialog.getByText("Claude", { exact: true }).click();
+	await dialog.getByRole("textbox", { name: /Tenant/ }).fill("tenant-a");
+	await dialog.getByLabel(/Authorization/).fill("Bearer test-secret");
+	await dialog.getByRole("button", { name: "Install", exact: true }).click();
+	try {
+		await expect(
+			dialog.getByRole("button", { name: "Go to MCP servers" }),
+		).toBeDisabled();
+		await expect(
+			dialog.getByRole("button", { name: "Done" }),
+		).toBeDisabled();
+		await page.keyboard.press("Escape");
+		await expect(dialog).toBeVisible();
+	} finally {
+		writeFinished.resolve();
+	}
+	await expect(dialog.getByText("Installed successfully")).toBeVisible();
+	await expect(dialog.getByRole("button", { name: "Done" })).toBeEnabled();
+	await dialog.getByRole("button", { name: "Go to MCP servers" }).click();
+	await expect(page).toHaveURL(/\/mcp$/);
+});
+
 test("manages the selected project installation", async ({ page }) => {
 	mocks.addMarketMcp("global");
 	mocks.addMarketMcp("project");
@@ -150,7 +182,13 @@ test("does not offer installation while the local MCP inventory failed", async (
 	page,
 }) => {
 	mocks.setMcpListError(true);
+	const inventoryFailure = page.waitForResponse(
+		(response) =>
+			response.url().includes("/agents/all/mcps") &&
+			response.status() === 500,
+	);
 	await page.reload();
+	await inventoryFailure;
 
 	await expect(
 		page.getByText("Couldn't check installed MCP servers."),

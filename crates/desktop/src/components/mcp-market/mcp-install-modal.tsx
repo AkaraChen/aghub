@@ -276,6 +276,7 @@ export function McpInstallModal({
 									<Button
 										type="button"
 										variant="secondary"
+										isDisabled={isInstalling}
 										onPress={() => {
 											onClose();
 											setLocation("/mcp");
@@ -283,7 +284,11 @@ export function McpInstallModal({
 									>
 										{t("marketMcpGoToPage")}
 									</Button>
-									<Button type="button" slot="close">
+									<Button
+										type="button"
+										slot="close"
+										isDisabled={isInstalling}
+									>
 										{t("done")}
 									</Button>
 								</>
