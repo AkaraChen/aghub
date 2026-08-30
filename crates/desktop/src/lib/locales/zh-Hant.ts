@@ -98,7 +98,7 @@ export default {
 	rulesSaved: "規則檔案已儲存",
 	rulesSaveFailed: "儲存規則檔案失敗",
 	rulesChangedOnDisk:
-		"該檔案已在 AGHub 外部更改。請重新載入磁碟內容，或用目前草稿覆蓋。",
+		"該檔案已在 aghub 外部更改。請重新載入磁碟內容，或用目前草稿覆蓋。",
 	rulesReloadFromDisk: "重新載入磁碟內容",
 	rulesOverwriteDisk: "用草稿覆蓋",
 	rulesVersionHistory: "版本記錄",

@@ -9,9 +9,9 @@ const manifestSource = `
 version: 1.9.0-beta.1
 channel: beta
 title:
-  en: Aghub 1.9 beta
-  zh-Hans: Aghub 1.9 测试版
-  zh-Hant: Aghub 1.9 測試版
+  en: aghub 1.9 beta
+  zh-Hans: aghub 1.9 测试版
+  zh-Hant: aghub 1.9 測試版
 summary:
   en: Preview the latest desktop changes.
   zh-Hans: 提前体验最新桌面端改动。
@@ -44,7 +44,7 @@ describe("release notes manifest", () => {
 
 	it("rejects a missing locale before publishing", () => {
 		const missingTraditionalChinese = manifestSource.replace(
-			"  zh-Hant: Aghub 1.9 測試版\n",
+			"  zh-Hant: aghub 1.9 測試版\n",
 			"",
 		);
 

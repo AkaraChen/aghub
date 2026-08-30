@@ -1,4 +1,4 @@
-# AGHUB KNOWLEDGE BASE
+# aghub KNOWLEDGE BASE
 
 **Project**: aghub — AI coding agent configuration management tool\
 **Stack**: Rust workspace + Tauri v2 desktop + React/TypeScript\
@@ -6,7 +6,7 @@
 
 ## OVERVIEW
 
-Aghub manages AGENTS.md, MCP configs, and skills for 25+ AI assistants through a unified CLI (`aghub-cli`) and desktop app. Stateless design—reads actual config files, tracks capability sources, enforces explicit opt-in for changes.
+aghub manages AGENTS.md, MCP configs, and skills for 25+ AI assistants through a unified CLI (`aghub-cli`) and desktop app. Stateless design—reads actual config files, tracks capability sources, enforces explicit opt-in for changes.
 
 ## STRUCTURE
 

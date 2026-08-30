@@ -3,7 +3,7 @@ name: project-form-patterns
 description: Form implementation guidance for the aghub desktop app. Use when building or refactoring forms in `crates/desktop/src`, especially HeroUI v3 + React forms, RHF integration, validation, custom editors, and error presentation. Triggers: MCP forms, settings dialogs, create/edit panels, `TextField`, `FieldError`, `Select`, `react-hook-form`, key-value editors, validation behavior.
 ---
 
-# AGHub Form Patterns
+# aghub Form Patterns
 
 Follow these rules when building forms in this project.
 
