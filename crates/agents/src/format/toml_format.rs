@@ -97,8 +97,11 @@ pub fn serialize(
 	let managed: std::collections::HashSet<String> =
 		config.mcps.iter().map(|m| m.name.clone()).collect();
 
-	// Remove servers that aghub no longer tracks.
-	servers.retain(|name, _| managed.contains(name));
+	// Only remove entries this parser can represent as stdio servers.
+	servers.retain(|name, entry| {
+		managed.contains(name)
+			|| entry.get("command").and_then(|v| v.as_str()).is_none()
+	});
 
 	// Upsert each server: merge aghub fields into existing entry.
 	for mcp in &config.mcps {
@@ -297,5 +300,47 @@ model = "gpt-5.4"
 "#;
 		let config = parse(content).unwrap();
 		assert!(config.mcps.is_empty());
+	}
+
+	#[test]
+	fn editing_stdio_preserves_unparsed_servers() {
+		let original = r#"
+[mcp_servers.remote]
+url = "https://mcp.example.test/mcp"
+bearer_token_env_var = "MCP_TOKEN"
+enabled = false
+
+[mcp_servers.remote.oauth]
+client_id = "example-client"
+
+[mcp_servers.unsupported]
+custom_transport = "future"
+
+[mcp_servers.local]
+command = "old-command"
+"#;
+		let mut config = parse(original).unwrap();
+		assert_eq!(config.mcps.len(), 1);
+		config.mcps.clear();
+		config.mcps.push(McpServer::new(
+			"replacement",
+			McpTransport::stdio("new-command", vec![]),
+		));
+		let output = serialize(&config, Some(original)).unwrap();
+		let before = parse_toml(original).unwrap();
+		let after = parse_toml(&output).unwrap();
+		assert_eq!(
+			after["mcp_servers"]["remote"],
+			before["mcp_servers"]["remote"]
+		);
+		assert_eq!(
+			after["mcp_servers"]["unsupported"],
+			before["mcp_servers"]["unsupported"]
+		);
+		assert!(after["mcp_servers"].get("local").is_none());
+		assert_eq!(
+			after["mcp_servers"]["replacement"]["command"].as_str(),
+			Some("new-command")
+		);
 	}
 }
