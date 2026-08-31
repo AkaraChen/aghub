@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { e2eApiUrl, installMocks } from "./mocks";
+import { agentInfo, e2eApiUrl, installMocks } from "./mocks";
 
 let mocks: Awaited<ReturnType<typeof installMocks>>;
 
@@ -42,10 +42,72 @@ test("uses the same card surface as the agent overview", async ({ page }) => {
 	await expect(card).toHaveClass(/card--default/);
 });
 
+test("offers Codex for Streamable HTTP installation", async ({ page }) => {
+	const codex = agentInfo("codex", "Codex");
+	codex.capabilities.mcp.sse = false;
+	await page.route(e2eApiUrl("/agents"), (route) =>
+		route.fulfill({ json: [codex] }),
+	);
+	await page.route(e2eApiUrl("/agents/availability"), (route) =>
+		route.fulfill({
+			json: [
+				{
+					id: "codex",
+					has_global_directory: true,
+					has_cli: true,
+					is_available: true,
+				},
+			],
+		}),
+	);
+	await page.reload();
+	await page.getByRole("button", { name: "Add", exact: true }).click();
+	const dialog = page.getByRole("dialog", { name: "Install MCP server" });
+	await dialog.getByText("Codex", { exact: true }).click();
+	await dialog.getByRole("textbox", { name: /Tenant/ }).fill("tenant-a");
+	await dialog.getByLabel(/Authorization/).fill("Bearer test-secret");
+	await dialog.getByRole("button", { name: "Install", exact: true }).click();
+	await expect(dialog.getByText("Installed successfully")).toBeVisible();
+	expect(mocks.mcpCreates[0]).toMatchObject({
+		agent: "codex",
+		body: { transport: { type: "streamable_http" } },
+	});
+});
+
+for (const width of [1280, 960]) {
+	test(`names the registry source without overflow at ${width}px`, async ({
+		page,
+	}, testInfo) => {
+		await page.setViewportSize({ width, height: 800 });
+		await page.emulateMedia({
+			colorScheme: "dark",
+			reducedMotion: "reduce",
+		});
+		await page.evaluate(() => localStorage.setItem("language", "zh-Hans"));
+		await page.reload();
+		const source = page.getByRole("button", { name: /MCP Registry/ });
+		await expect(source).toBeVisible();
+		await source.click();
+		await expect(
+			page.getByRole("option", { name: "MCP Registry", exact: true }),
+		).toBeVisible();
+		await expect(
+			page.getByText("官方 registry", { exact: true }),
+		).toBeHidden();
+		expect(
+			await page.evaluate(
+				() => document.documentElement.scrollWidth <= window.innerWidth,
+			),
+		).toBe(true);
+		await page.screenshot({
+			path: testInfo.outputPath("mcp-registry-zh.png"),
+			animations: "disabled",
+		});
+	});
+}
+
 test("adds and selects a public custom registry", async ({ page }) => {
-	await page
-		.getByRole("button", { name: "Official registry Source" })
-		.click();
+	await page.getByRole("button", { name: "MCP Registry Source" }).click();
 	await page.getByRole("option", { name: "Add custom source…" }).click();
 
 	const dialog = page.getByRole("dialog", {

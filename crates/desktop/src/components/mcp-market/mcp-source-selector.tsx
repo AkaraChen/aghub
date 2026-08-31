@@ -20,7 +20,7 @@ import {
 	removeMcpRegistryMutationOptions,
 } from "../../requests/mcp-registries";
 
-const OFFICIAL = "official";
+const MCP_REGISTRY = "mcp-registry";
 const ADD_ACTION = "__add__";
 
 function normalizeRegistryUrl(value: string): string | null {
@@ -35,7 +35,7 @@ function normalizeRegistryUrl(value: string): string | null {
 }
 
 interface McpSourceSelectorProps {
-	/** Called with the active registry URL, or null for the official registry. */
+	/** Called with the active registry URL, or null for MCP Registry. */
 	onChange: (registryUrl: string | null) => void;
 }
 
@@ -51,7 +51,7 @@ export function McpSourceSelector({ onChange }: McpSourceSelectorProps) {
 		removeMcpRegistryMutationOptions(queryClient),
 	);
 
-	const [selectedId, setSelectedId] = useState<string>(OFFICIAL);
+	const [selectedId, setSelectedId] = useState<string>(MCP_REGISTRY);
 	const [addOpen, setAddOpen] = useState(false);
 	const [name, setName] = useState("");
 	const [url, setUrl] = useState("");
@@ -60,7 +60,7 @@ export function McpSourceSelector({ onChange }: McpSourceSelectorProps) {
 
 	const selectSource = (id: string) => {
 		const registry = registries.find((r) => r.id === id);
-		setSelectedId(registry ? id : OFFICIAL);
+		setSelectedId(registry ? id : MCP_REGISTRY);
 		onChange(registry ? registry.url : null);
 	};
 
@@ -98,7 +98,7 @@ export function McpSourceSelector({ onChange }: McpSourceSelectorProps) {
 		if (!selectedCustom) return;
 		try {
 			await removeMutation.mutateAsync(selectedCustom.id);
-			setSelectedId(OFFICIAL);
+			setSelectedId(MCP_REGISTRY);
 			onChange(null);
 		} catch (err) {
 			toast.danger(err instanceof Error ? err.message : String(err));
@@ -121,10 +121,10 @@ export function McpSourceSelector({ onChange }: McpSourceSelectorProps) {
 				<Select.Popover>
 					<ListBox>
 						<ListBox.Item
-							id={OFFICIAL}
-							textValue={t("marketMcpSourceOfficial")}
+							id={MCP_REGISTRY}
+							textValue={t("marketMcpSourceRegistry")}
 						>
-							{t("marketMcpSourceOfficial")}
+							{t("marketMcpSourceRegistry")}
 						</ListBox.Item>
 						{registries.map((registry) => (
 							<ListBox.Item
