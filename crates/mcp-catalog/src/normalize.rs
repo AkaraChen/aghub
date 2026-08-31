@@ -82,6 +82,7 @@ fn stdio_install(package: &Package) -> Option<McpCatalogInstallMethod> {
 		args.push(McpCatalogArgument {
 			name: None,
 			value: literal_value((*value).to_string()),
+			requires_env: None,
 		});
 	}
 	for (index, argument) in package.runtime_arguments.iter().enumerate() {
@@ -100,9 +101,19 @@ fn stdio_install(package: &Package) -> Option<McpCatalogInstallMethod> {
 			args.push(argument);
 		}
 	}
+	if package.registry_type == "oci" {
+		for field in &package.environment_variables {
+			args.push(McpCatalogArgument {
+				name: Some("--env".to_string()),
+				value: literal_value(field.name.clone()),
+				requires_env: Some(field.name.clone()),
+			});
+		}
+	}
 	args.push(McpCatalogArgument {
 		name: None,
 		value: literal_value(package_reference(package)),
+		requires_env: None,
 	});
 	let package_args: Vec<_> = package
 		.package_arguments
@@ -121,6 +132,7 @@ fn stdio_install(package: &Package) -> Option<McpCatalogInstallMethod> {
 		args.push(McpCatalogArgument {
 			name: None,
 			value: literal_value("--".to_string()),
+			requires_env: None,
 		});
 	}
 	args.extend(package_args);
@@ -207,7 +219,11 @@ fn map_argument(
 	if value.template.is_empty() && value.variables.is_empty() {
 		return None;
 	}
-	Some(McpCatalogArgument { name, value })
+	Some(McpCatalogArgument {
+		name,
+		value,
+		requires_env: None,
+	})
 }
 
 fn package_command(package: &Package) -> Option<String> {

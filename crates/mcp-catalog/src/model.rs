@@ -55,6 +55,9 @@ pub enum McpCatalogTransport {
 pub struct McpCatalogArgument {
 	pub name: Option<String>,
 	pub value: McpCatalogValue,
+	/// Emit this argument only when the resolved environment contains this key.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub requires_env: Option<String>,
 }
 
 /// An environment variable or HTTP header in an install plan.

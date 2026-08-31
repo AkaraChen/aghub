@@ -200,6 +200,51 @@ fn keeps_runtime_defaults_with_declared_arguments() {
 }
 
 #[test]
+fn forwards_oci_environment_names_before_the_image() {
+	let servers = parse(
+		r#"{"servers":[{"server":{
+			"name":"io.example/container",
+			"packages":[{
+				"registryType":"oci",
+				"identifier":"ghcr.io/example/mcp:1.0.0",
+				"environmentVariables":[
+					{"name":"API_KEY","isSecret":true,"isRequired":true},
+					{"name":"REGION","default":"eu-west-1"},
+					{"name":"OPTIONAL_TOKEN","isSecret":true}
+				],
+				"packageArguments":[{"type":"positional","value":"serve"}]
+			}]
+		},"_meta":{}}]}"#,
+	);
+	let (command, args, env) = stdio(&servers[0]);
+	assert_eq!(command, "docker");
+	assert_eq!(
+		args.iter()
+			.map(|argument| (
+				argument.name.as_deref(),
+				argument.value.template.as_str(),
+			))
+			.collect::<Vec<_>>(),
+		vec![
+			(None, "run"),
+			(None, "-i"),
+			(None, "--rm"),
+			(Some("--env"), "API_KEY"),
+			(Some("--env"), "REGION"),
+			(Some("--env"), "OPTIONAL_TOKEN"),
+			(None, "ghcr.io/example/mcp:1.0.0"),
+			(None, "serve"),
+		],
+	);
+	for (argument, field) in args[3..6].iter().zip(env) {
+		let serialized = serde_json::to_value(argument).unwrap();
+		assert_eq!(serialized["requires_env"], field.name);
+		assert!(argument.value.variables.is_empty());
+	}
+	assert!(servers[0].install_methods[0].inputs[0].is_secret);
+}
+
+#[test]
 fn builds_versioned_nuget_invocation() {
 	let servers = parse(
 		r#"{"servers":[{"server":{

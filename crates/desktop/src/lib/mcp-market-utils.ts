@@ -46,7 +46,7 @@ export function redactedMcpFieldValues(
 ): Record<string, string> {
 	const redacted = { ...values };
 	for (const input of method.inputs) {
-		if (input.is_secret && redacted[input.id]) {
+		if (input.is_secret && redacted[input.id]?.trim()) {
 			redacted[input.id] = "••••••••";
 		}
 	}
@@ -87,7 +87,14 @@ function buildTransport(
 ): TransportDto {
 	const transport = method.transport;
 	if (transport.type === "stdio") {
+		const env = collectKeyValues(transport.env, values);
 		const args = transport.args.flatMap((argument) => {
+			if (
+				argument.requires_env &&
+				!Object.hasOwn(env ?? {}, argument.requires_env)
+			) {
+				return [];
+			}
 			const value = resolveValue(argument.value, values);
 			if (!value.trim()) return [];
 			return [argument.name ? `${argument.name}=${value}` : value];
@@ -96,7 +103,7 @@ function buildTransport(
 			type: "stdio",
 			command: transport.command,
 			args,
-			env: collectKeyValues(transport.env, values),
+			env,
 			timeout: null,
 		};
 	}
@@ -198,6 +205,7 @@ export function marketMcpMethodMatchesTransport(
 			return false;
 		}
 		const fixedArguments = market.args.flatMap((argument) => {
+			if (argument.requires_env) return [];
 			if (Object.keys(argument.value.variables).length > 0) return [];
 			const value = argument.value.template;
 			if (!value.trim()) return [];

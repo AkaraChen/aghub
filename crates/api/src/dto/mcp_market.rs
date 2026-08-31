@@ -56,6 +56,9 @@ pub enum MarketMcpTransport {
 pub struct MarketMcpArgument {
 	pub name: Option<String>,
 	pub value: MarketMcpValue,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub requires_env: Option<String>,
 }
 
 #[derive(Debug, Serialize, TS)]
@@ -144,6 +147,7 @@ impl From<McpCatalogArgument> for MarketMcpArgument {
 		Self {
 			name: argument.name,
 			value: argument.value.into(),
+			requires_env: argument.requires_env,
 		}
 	}
 }
