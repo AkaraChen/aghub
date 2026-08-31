@@ -50,7 +50,8 @@ pub struct SkillCapabilities {
 pub struct McpCapabilities {
 	pub scopes: ScopeSupport,
 	pub stdio: bool,
-	pub remote: bool,
+	pub sse: bool,
+	pub streamable_http: bool,
 	pub enable_disable: bool,
 }
 
@@ -348,7 +349,11 @@ pub fn save_mcps_to_file(
 		fs::create_dir_all(parent)?;
 	}
 
-	let original_content = fs::read_to_string(path).ok();
+	let original_content = match fs::read_to_string(path) {
+		Ok(content) => Some(content),
+		Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+		Err(error) => return Err(error.into()),
+	};
 	let mut config = AgentConfig::new();
 	config.mcps = mcps.to_vec();
 
@@ -418,9 +423,8 @@ pub fn supports_mcp_transport(
 ) -> bool {
 	match transport {
 		McpTransport::Stdio { .. } => capabilities.mcp.stdio,
-		McpTransport::Sse { .. } | McpTransport::StreamableHttp { .. } => {
-			capabilities.mcp.remote
-		}
+		McpTransport::Sse { .. } => capabilities.mcp.sse,
+		McpTransport::StreamableHttp { .. } => capabilities.mcp.streamable_http,
 	}
 }
 
@@ -493,7 +497,7 @@ pub mod mcp_strategy {
 		json_map::serialize(config, original, "context_servers")
 	}
 
-	// JsonMap with nested "amp.mcpServers" key (Amp)
+	// Amp uses a literal dotted key, not a nested object.
 	pub fn parse_json_map_nested_amp_mcp_servers(
 		content: &str,
 	) -> Result<AgentConfig> {

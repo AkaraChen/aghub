@@ -75,8 +75,9 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 				project: true,
 			},
 			stdio: true,
-			remote: false,
-			enable_disable: false,
+			sse: false,
+			streamable_http: true,
+			enable_disable: true,
 		},
 		sub_agents: SubAgentCapabilities {
 			scopes: ScopeSupport {

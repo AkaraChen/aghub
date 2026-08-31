@@ -6,7 +6,7 @@ use crate::{
 use log::info;
 
 impl ConfigManager {
-	pub fn add_mcp(&mut self, mcp: McpServer) -> Result<()> {
+	pub fn add_mcp(&mut self, mut mcp: McpServer) -> Result<()> {
 		if !self.adapter.supports_mcp_operations() {
 			return Err(ConfigError::unsupported_operation(
 				"add",
@@ -15,6 +15,14 @@ impl ConfigManager {
 			));
 		}
 		let agent_name = self.adapter.name().to_string();
+		if !self.adapter.mcp_supports_transport(&mcp.transport) {
+			return Err(ConfigError::unsupported_operation(
+				"add",
+				"MCP transport",
+				&agent_name,
+			));
+		}
+		mcp.source_name = None;
 		let config = self.config_mut()?;
 		if config.mcps.iter().any(|m| m.name == mcp.name) {
 			return Err(ConfigError::resource_exists("MCP server", &mcp.name));
@@ -28,7 +36,7 @@ impl ConfigManager {
 		self.config.as_ref()?.mcps.iter().find(|m| m.name == name)
 	}
 
-	pub fn update_mcp(&mut self, name: &str, mcp: McpServer) -> Result<()> {
+	pub fn update_mcp(&mut self, name: &str, mut mcp: McpServer) -> Result<()> {
 		if !self.adapter.supports_mcp_operations() {
 			return Err(ConfigError::unsupported_operation(
 				"update",
@@ -37,14 +45,35 @@ impl ConfigManager {
 			));
 		}
 		let agent_name = self.adapter.name().to_string();
+		if !self.adapter.mcp_supports_transport(&mcp.transport) {
+			return Err(ConfigError::unsupported_operation(
+				"update",
+				"MCP transport",
+				&agent_name,
+			));
+		}
 		let config = self.config_mut()?;
+		if mcp.name != name
+			&& config.mcps.iter().any(|item| item.name == mcp.name)
+		{
+			return Err(ConfigError::resource_exists("MCP server", &mcp.name));
+		}
 		let index =
 			config.mcps.iter().position(|m| m.name == name).ok_or_else(
 				|| ConfigError::resource_not_found("MCP server", name),
 			)?;
 		info!("updating MCP '{}' for agent '{}'", name, agent_name);
-		config.mcps[index] = mcp;
-		self.save_current()
+		mcp.source_name = config.mcps[index]
+			.source_name
+			.clone()
+			.or_else(|| Some(name.to_string()));
+		let mut updated = config.clone();
+		updated.mcps[index] = mcp;
+		self.save(&updated)?;
+		let mcp = &mut updated.mcps[index];
+		mcp.source_name = Some(mcp.name.clone());
+		self.config = Some(updated);
+		Ok(())
 	}
 
 	pub fn remove_mcp(&mut self, name: &str) -> Result<()> {

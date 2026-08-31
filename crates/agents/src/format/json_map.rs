@@ -2,218 +2,467 @@ use crate::{
 	errors::{ConfigError, Result},
 	models::{AgentConfig, McpServer, McpTransport},
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 
-/// Map-based MCP server configuration ({"mcpServers": {...}} style)
-#[derive(Debug, Serialize, Deserialize)]
-pub(crate) struct MapMcpServer {
-	#[serde(rename = "type", default)]
-	pub server_type: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub command: Option<String>,
-	#[serde(default, skip_serializing_if = "Vec::is_empty")]
-	pub args: Vec<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub env: Option<HashMap<String, String>>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub url: Option<String>,
-	#[serde(skip_serializing_if = "Option::is_none")]
-	pub headers: Option<HashMap<String, String>>,
+#[derive(Debug, Deserialize)]
+struct MapMcpServer {
+	#[serde(rename = "type")]
+	server_type: Option<String>,
+	command: Option<String>,
+	#[serde(default)]
+	args: Vec<String>,
+	env: Option<HashMap<String, String>>,
+	url: Option<String>,
+	#[serde(rename = "httpUrl")]
+	http_url: Option<String>,
+	#[serde(rename = "serverUrl")]
+	server_url: Option<String>,
+	headers: Option<HashMap<String, String>>,
+	enabled: Option<bool>,
+	disabled: Option<bool>,
 }
 
-fn get_nested<'a>(
-	root: &'a serde_json::Value,
-	path: &str,
-) -> Option<&'a serde_json::Value> {
-	path.split('.').try_fold(root, |curr, key| curr.get(key))
+#[derive(Clone, Copy)]
+enum JsonMcpDialect {
+	Standard,
+	Gemini,
 }
 
-fn set_nested(
-	root: &mut serde_json::Value,
-	path: &str,
-	value: serde_json::Value,
-) {
-	let keys: Vec<&str> = path.split('.').collect();
-	if keys.is_empty() {
-		return;
-	}
-	let mut curr = root;
-	for key in &keys[..keys.len() - 1] {
-		if let serde_json::Value::Object(ref mut obj) = curr {
-			curr = obj.entry(*key).or_insert_with(|| {
-				serde_json::Value::Object(serde_json::Map::new())
-			});
+fn parse_root(content: &str) -> Result<Map<String, Value>> {
+	aghub_json::parse_jsonc_opt(content)
+		.map(|root| root.unwrap_or_default())
+		.map_err(|error| ConfigError::InvalidConfig(error.to_string()))
+}
+
+fn server_map<'a>(
+	root: &'a Map<String, Value>,
+	key: &str,
+) -> Result<Option<&'a Map<String, Value>>> {
+	root.get(key)
+		.map(|value| {
+			value.as_object().ok_or_else(|| {
+				ConfigError::InvalidConfig(format!("{key} must be an object"))
+			})
+		})
+		.transpose()
+}
+
+fn parse_entry(
+	name: &str,
+	value: &Value,
+	dialect: JsonMcpDialect,
+) -> Result<Option<McpServer>> {
+	if let Some(kind) = value.get("type").and_then(Value::as_str) {
+		if !matches!(
+			kind,
+			"stdio" | "sse" | "http" | "streamable-http" | "streamableHttp"
+		) {
+			return Ok(None);
 		}
 	}
-	if let serde_json::Value::Object(ref mut obj) = curr {
-		obj.insert(keys[keys.len() - 1].to_string(), value);
+	let mcp: MapMcpServer =
+		serde_json::from_value(value.clone()).map_err(|error| {
+			ConfigError::InvalidConfig(format!("MCP '{name}': {error}"))
+		})?;
+	let transport = match mcp.server_type.as_deref() {
+		Some("stdio") => McpTransport::Stdio {
+			command: mcp.command.ok_or_else(|| {
+				ConfigError::InvalidConfig(format!(
+					"MCP '{name}' requires command"
+				))
+			})?,
+			args: mcp.args,
+			env: mcp.env,
+			timeout: None,
+		},
+		Some("sse" | "http" | "streamable-http" | "streamableHttp") => {
+			let url = mcp.url.or(mcp.http_url).or(mcp.server_url).ok_or_else(
+				|| {
+					ConfigError::InvalidConfig(format!(
+						"MCP '{name}' requires a URL"
+					))
+				},
+			)?;
+			if mcp.server_type.as_deref() == Some("sse") {
+				McpTransport::Sse {
+					url,
+					headers: mcp.headers,
+					timeout: None,
+				}
+			} else {
+				McpTransport::StreamableHttp {
+					url,
+					headers: mcp.headers,
+					timeout: None,
+				}
+			}
+		}
+		_ => {
+			if let Some(url) = mcp.http_url.or(mcp.server_url) {
+				McpTransport::StreamableHttp {
+					url,
+					headers: mcp.headers,
+					timeout: None,
+				}
+			} else if let Some(url) = mcp.url {
+				if matches!(dialect, JsonMcpDialect::Gemini) {
+					McpTransport::Sse {
+						url,
+						headers: mcp.headers,
+						timeout: None,
+					}
+				} else {
+					McpTransport::StreamableHttp {
+						url,
+						headers: mcp.headers,
+						timeout: None,
+					}
+				}
+			} else if let Some(command) = mcp.command {
+				McpTransport::Stdio {
+					command,
+					args: mcp.args,
+					env: mcp.env,
+					timeout: None,
+				}
+			} else {
+				return Ok(None);
+			}
+		}
+	};
+	let mut server = McpServer::new(name, transport);
+	server.source_name = Some(name.to_string());
+	server.enabled =
+		mcp.enabled.unwrap_or(true) && !mcp.disabled.unwrap_or(false);
+	Ok(Some(server))
+}
+
+fn parse_dialect(
+	content: &str,
+	server_key: &str,
+	dialect: JsonMcpDialect,
+) -> Result<AgentConfig> {
+	let root = parse_root(content)?;
+	let mut config = AgentConfig::new();
+	if let Some(servers) = server_map(&root, server_key)? {
+		for (name, value) in servers {
+			if let Some(server) = parse_entry(name, value, dialect)? {
+				config.mcps.push(server);
+			}
+		}
 	}
+	Ok(config)
 }
 
 pub fn parse(content: &str, server_key: &str) -> Result<AgentConfig> {
-	let root: serde_json::Value = serde_json::from_str(content)?;
-	let mut config = AgentConfig::new();
+	parse_dialect(content, server_key, JsonMcpDialect::Standard)
+}
 
-	let servers_map = if server_key.contains('.') {
-		get_nested(&root, server_key)
-	} else {
-		root.get(server_key)
-	}
-	.and_then(|v| v.as_object())
-	.cloned()
-	.unwrap_or_default();
+pub fn parse_gemini(content: &str) -> Result<AgentConfig> {
+	parse_dialect(content, "mcpServers", JsonMcpDialect::Gemini)
+}
 
-	for (name, mcp_val) in servers_map {
-		let mcp: MapMcpServer =
-			serde_json::from_value(mcp_val).unwrap_or_else(|_| MapMcpServer {
-				server_type: None,
-				command: None,
-				args: vec![],
-				env: None,
-				url: None,
-				headers: None,
-			});
-		let transport = match mcp.server_type.as_deref() {
-			Some("stdio") => McpTransport::Stdio {
-				command: mcp.command.unwrap_or_default(),
-				args: mcp.args,
-				env: mcp.env,
-				timeout: None,
-			},
-			Some("sse") => McpTransport::Sse {
-				url: mcp.url.unwrap_or_default(),
-				headers: mcp.headers,
-				timeout: None,
-			},
-			Some("http") => McpTransport::StreamableHttp {
-				url: mcp.url.unwrap_or_default(),
-				headers: mcp.headers,
-				timeout: None,
-			},
-			None | Some(_) => {
-				if let Some(command) = mcp.command {
-					McpTransport::Stdio {
-						command,
-						args: mcp.args,
-						env: mcp.env,
-						timeout: None,
-					}
-				} else if let Some(url) = mcp.url {
-					let is_sse = {
-						let path = url.split('?').next().unwrap_or(&url);
-						path.split('/')
-							.any(|seg| seg.eq_ignore_ascii_case("sse"))
-					};
-					if is_sse {
-						McpTransport::Sse {
-							url,
-							headers: mcp.headers,
-							timeout: None,
-						}
-					} else {
-						McpTransport::StreamableHttp {
-							url,
-							headers: mcp.headers,
-							timeout: None,
-						}
-					}
-				} else {
-					continue;
-				}
-			}
-		};
-		config.mcps.push(McpServer {
-			name,
-			enabled: true,
-			transport,
-			timeout: None,
-			config_source: None,
-		});
-	}
-
-	Ok(config)
+pub fn serialize_gemini(
+	config: &AgentConfig,
+	original: Option<&str>,
+) -> Result<String> {
+	serialize_dialect(config, original, "mcpServers", JsonMcpDialect::Gemini)
 }
 
 pub fn serialize(
 	config: &AgentConfig,
-	original_content: Option<&str>,
+	original: Option<&str>,
 	server_key: &str,
 ) -> Result<String> {
-	let mut root: serde_json::Value = if let Some(content) = original_content {
-		if content.trim().is_empty() {
-			serde_json::Value::Object(serde_json::Map::new())
-		} else {
-			serde_json::from_str(content).map_err(|e| {
-				ConfigError::InvalidConfig(format!(
-					"Failed to parse existing config: {e}"
-				))
-			})?
+	serialize_dialect(config, original, server_key, JsonMcpDialect::Standard)
+}
+
+fn serialize_dialect(
+	config: &AgentConfig,
+	original: Option<&str>,
+	server_key: &str,
+	dialect: JsonMcpDialect,
+) -> Result<String> {
+	let mut root = parse_root(original.unwrap_or(""))?;
+	let original_servers =
+		server_map(&root, server_key)?.cloned().unwrap_or_default();
+	let mut servers = original_servers.clone();
+	for (name, value) in &original_servers {
+		if parse_entry(name, value, dialect)?.is_some()
+			&& !config.mcps.iter().any(|mcp| mcp.name == *name)
+		{
+			servers.remove(name);
 		}
-	} else {
-		serde_json::Value::Object(serde_json::Map::new())
-	};
-
-	let mut servers_map = serde_json::Map::new();
-
+	}
 	for mcp in &config.mcps {
-		if !mcp.enabled {
+		let source_name = mcp.source_name.as_deref().unwrap_or(&mcp.name);
+		if let Some(existing) = original_servers.get(&mcp.name) {
+			if source_name != mcp.name
+				|| parse_entry(&mcp.name, existing, dialect)?.is_none()
+			{
+				return Err(ConfigError::resource_exists(
+					"MCP server",
+					&mcp.name,
+				));
+			}
+		}
+		let source = original_servers.get(source_name);
+		let previous = source
+			.map(|value| parse_entry(source_name, value, dialect))
+			.transpose()?
+			.flatten();
+		let mut entry = source
+			.and_then(Value::as_object)
+			.cloned()
+			.unwrap_or_default();
+		if !mcp.enabled
+			&& !entry.contains_key("disabled")
+			&& !entry.contains_key("enabled")
+		{
+			servers.remove(&mcp.name);
 			continue;
 		}
-		let map_mcp = match &mcp.transport {
-			McpTransport::Stdio {
-				command, args, env, ..
-			} => MapMcpServer {
-				server_type: Some("stdio".to_string()),
-				command: Some(command.clone()),
-				args: args.clone(),
-				env: env.clone(),
-				url: None,
-				headers: None,
-			},
-			McpTransport::Sse { url, headers, .. } => MapMcpServer {
-				server_type: Some("sse".to_string()),
-				command: None,
-				args: vec![],
-				env: None,
-				url: Some(url.clone()),
-				headers: headers.clone(),
-			},
-			McpTransport::StreamableHttp { url, headers, .. } => MapMcpServer {
-				server_type: Some("http".to_string()),
-				command: None,
-				args: vec![],
-				env: None,
-				url: Some(url.clone()),
-				headers: headers.clone(),
-			},
-		};
-		servers_map.insert(
-			mcp.name.clone(),
-			serde_json::to_value(map_mcp).map_err(ConfigError::Json)?,
-		);
+		if previous.as_ref().map(|server| &server.transport)
+			!= Some(&mcp.transport)
+		{
+			let same_transport = previous.as_ref().is_some_and(|server| {
+				std::mem::discriminant(&server.transport)
+					== std::mem::discriminant(&mcp.transport)
+			});
+			let native_type = entry.get("type").cloned();
+			let url_key = if matches!(dialect, JsonMcpDialect::Gemini) {
+				match mcp.transport {
+					McpTransport::StreamableHttp { .. } => "httpUrl",
+					_ => "url",
+				}
+			} else if entry.contains_key("serverUrl") {
+				"serverUrl"
+			} else if same_transport && entry.contains_key("httpUrl") {
+				"httpUrl"
+			} else {
+				"url"
+			};
+			for key in [
+				"type",
+				"command",
+				"args",
+				"env",
+				"url",
+				"httpUrl",
+				"serverUrl",
+				"headers",
+			] {
+				if key == "env"
+					&& same_transport
+					&& !matches!(mcp.transport, McpTransport::Stdio { .. })
+				{
+					continue;
+				}
+				entry.remove(key);
+			}
+			let kind = match &mcp.transport {
+				McpTransport::Stdio {
+					command, args, env, ..
+				} => {
+					entry.insert(
+						"command".into(),
+						Value::String(command.clone()),
+					);
+					if !args.is_empty() {
+						entry
+							.insert("args".into(), serde_json::to_value(args)?);
+					}
+					if let Some(env) = env {
+						entry.insert("env".into(), serde_json::to_value(env)?);
+					}
+					"stdio"
+				}
+				McpTransport::Sse { url, headers, .. }
+				| McpTransport::StreamableHttp { url, headers, .. } => {
+					entry.insert(url_key.into(), Value::String(url.clone()));
+					if let Some(headers) = headers {
+						entry.insert(
+							"headers".into(),
+							serde_json::to_value(headers)?,
+						);
+					}
+					if matches!(mcp.transport, McpTransport::Sse { .. }) {
+						"sse"
+					} else {
+						"http"
+					}
+				}
+			};
+			if matches!(dialect, JsonMcpDialect::Standard) {
+				if same_transport {
+					if let Some(native_type) = native_type {
+						entry.insert("type".into(), native_type);
+					}
+				} else {
+					entry.insert("type".into(), Value::String(kind.into()));
+				}
+			}
+		}
+		if entry.contains_key("disabled") {
+			entry.insert("disabled".into(), Value::Bool(!mcp.enabled));
+		}
+		if entry.contains_key("enabled") {
+			entry.insert("enabled".into(), Value::Bool(mcp.enabled));
+		}
+		servers.insert(mcp.name.clone(), Value::Object(entry));
 	}
-
-	if server_key.contains('.') {
-		set_nested(
-			&mut root,
-			server_key,
-			serde_json::Value::Object(servers_map),
-		);
-	} else if let serde_json::Value::Object(ref mut obj) = root {
-		obj.insert(
-			server_key.to_string(),
-			serde_json::Value::Object(servers_map),
-		);
-	}
-
-	serde_json::to_string_pretty(&root).map_err(ConfigError::Json)
+	root.insert(server_key.to_string(), Value::Object(servers));
+	aghub_json::patch_jsonc_object(original, &root)
+		.map_err(|error| ConfigError::InvalidConfig(error.to_string()))
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::models::{McpServer, McpTransport, Skill};
+
+	#[test]
+	fn url_edit_keeps_native_type_and_remote_environment() {
+		for kind in ["streamableHttp", "streamable-http"] {
+			let original = serde_json::json!({"mcpServers": {
+				"remote": {"type": kind, "url": "https://example.test/mcp", "env": {"ACCOUNT": "work"}}
+			}}).to_string();
+			let mut config = parse(&original, "mcpServers").unwrap();
+			config.mcps[0].transport =
+				McpTransport::streamable_http("https://example.test/updated");
+			let output =
+				serialize(&config, Some(&original), "mcpServers").unwrap();
+			let after: Value = serde_json::from_str(&output).unwrap();
+			assert_eq!(after["mcpServers"]["remote"]["type"], kind);
+			assert_eq!(after["mcpServers"]["remote"]["env"]["ACCOUNT"], "work");
+		}
+	}
+
+	#[test]
+	fn gemini_uses_native_transport_keys_and_keeps_auth() {
+		let original = r#"{
+			// Native request timeout is in milliseconds
+			"mcpServers": {
+				"http": {"httpUrl":"https://example.test/sse", "timeout":5000, "oauth":{"enabled":true,"scopes":["read"]}},
+				"events": {"url":"https://example.test/events"}
+			}
+		}"#;
+		let mut config = parse_gemini(original).unwrap();
+		let http = config
+			.mcps
+			.iter_mut()
+			.find(|mcp| mcp.name == "http")
+			.unwrap();
+		assert!(matches!(
+			http.transport,
+			McpTransport::StreamableHttp { .. }
+		));
+		http.transport =
+			McpTransport::streamable_http("https://example.test/updated");
+		assert!(matches!(
+			config
+				.mcps
+				.iter()
+				.find(|mcp| mcp.name == "events")
+				.unwrap()
+				.transport,
+			McpTransport::Sse { .. }
+		));
+		let output = serialize_gemini(&config, Some(original)).unwrap();
+		let after: Value =
+			aghub_json::parse_jsonc_opt(&output).unwrap().unwrap();
+		assert_eq!(
+			after["mcpServers"]["http"]["httpUrl"],
+			"https://example.test/updated"
+		);
+		assert!(after["mcpServers"]["http"].get("url").is_none());
+		assert!(after["mcpServers"]["http"].get("type").is_none());
+		assert_eq!(after["mcpServers"]["http"]["timeout"], 5000);
+		assert_eq!(after["mcpServers"]["http"]["oauth"]["enabled"], true);
+		assert!(output.contains("// Native request timeout"));
+	}
+
+	#[test]
+	fn amp_literal_key_is_read_and_written_without_moving_other_settings() {
+		let original = r#"{"amp.mcpServers":{"local":{"command":"node","cwd":"/project","custom":42}},"amp.mode":"smart"}"#;
+		let mut config = parse(original, "amp.mcpServers").unwrap();
+		assert_eq!(config.mcps.len(), 1);
+		config.mcps[0].name = "renamed".into();
+		let output =
+			serialize(&config, Some(original), "amp.mcpServers").unwrap();
+		let after: Value = serde_json::from_str(&output).unwrap();
+		assert_eq!(after["amp.mcpServers"]["renamed"]["cwd"], "/project");
+		assert_eq!(after["amp.mcpServers"]["renamed"]["custom"], 42);
+		assert!(after["amp.mcpServers"].get("local").is_none());
+		assert!(after.get("amp").is_none());
+		assert_eq!(after["amp.mode"], "smart");
+	}
+
+	#[test]
+	fn adding_cannot_replace_an_unrecognized_entry() {
+		let original = r#"{"mcpServers":{"socket":{"type":"ws","url":"ws://localhost:3000"}}}"#;
+		let mut config = parse(original, "mcpServers").unwrap();
+		config.mcps.push(McpServer::new(
+			"socket",
+			McpTransport::stdio("node", vec![]),
+		));
+		assert!(serialize(&config, Some(original), "mcpServers").is_err());
+	}
+
+	#[test]
+	fn editing_preserves_native_options_and_unknown_servers() {
+		let original = r#"{
+			"mcpServers": {
+				"remote": {
+					"type": "http", "url": "https://example.test/mcp",
+					"oauth": {"clientId": "public-client"},
+					"headersHelper": "get-headers", "disabledTools": ["delete"]
+				},
+				"socket": {"type": "ws", "url": "ws://localhost:3000"},
+				"future": {"customTransport": {"endpoint": "local"}}
+			}
+		}"#;
+		let mut config = parse(original, "mcpServers").unwrap();
+		assert_eq!(config.mcps.len(), 1);
+		config.mcps[0].transport =
+			McpTransport::streamable_http("https://example.test/updated");
+		let output = serialize(&config, Some(original), "mcpServers").unwrap();
+		let after: serde_json::Value = serde_json::from_str(&output).unwrap();
+		let before: serde_json::Value = serde_json::from_str(original).unwrap();
+		for name in ["socket", "future"] {
+			assert_eq!(after["mcpServers"][name], before["mcpServers"][name]);
+		}
+		for key in ["oauth", "headersHelper", "disabledTools"] {
+			assert_eq!(
+				after["mcpServers"]["remote"][key],
+				before["mcpServers"]["remote"][key]
+			);
+		}
+		assert_eq!(
+			after["mcpServers"]["remote"]["url"],
+			"https://example.test/updated"
+		);
+	}
+
+	#[test]
+	fn disabled_native_entry_survives_an_unrelated_save() {
+		let original = r#"{"mcpServers":{"local":{"command":"node","disabled":true,"autoApprove":["read"]}}}"#;
+		let config = parse(original, "mcpServers").unwrap();
+		assert!(!config.mcps[0].enabled);
+		let output = serialize(&config, Some(original), "mcpServers").unwrap();
+		let after: serde_json::Value = serde_json::from_str(&output).unwrap();
+		assert_eq!(after["mcpServers"]["local"]["disabled"], true);
+		assert_eq!(after["mcpServers"]["local"]["autoApprove"][0], "read");
+	}
+
+	#[test]
+	fn malformed_known_fields_cannot_be_silently_rewritten() {
+		let original =
+			r#"{"mcpServers":{"local":{"command":"node","env":{"TOKEN":42}}}}"#;
+		assert!(parse(original, "mcpServers").is_err());
+	}
 
 	#[test]
 	fn test_parse_stdio() {
@@ -260,7 +509,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_parse_infers_transport_from_url() {
+	fn url_path_does_not_select_legacy_sse() {
 		let json = r#"{
             "mcpServers": {
                 "inferred-http": {"url": "http://localhost:3000/mcp"},
@@ -285,13 +534,16 @@ mod tests {
 			.iter()
 			.find(|m| m.name == "inferred-sse")
 			.unwrap();
-		assert!(matches!(sse.transport, McpTransport::Sse { .. }));
+		assert!(matches!(sse.transport, McpTransport::StreamableHttp { .. }));
 		let sse_sub = config
 			.mcps
 			.iter()
 			.find(|m| m.name == "inferred-sse-sub")
 			.unwrap();
-		assert!(matches!(sse_sub.transport, McpTransport::Sse { .. }));
+		assert!(matches!(
+			sse_sub.transport,
+			McpTransport::StreamableHttp { .. }
+		));
 		let stream = config
 			.mcps
 			.iter()
@@ -338,6 +590,7 @@ mod tests {
 			mcps: vec![
 				McpServer {
 					name: "enabled".to_string(),
+					source_name: None,
 					enabled: true,
 					transport: McpTransport::stdio("echo", vec![]),
 					timeout: None,
@@ -345,6 +598,7 @@ mod tests {
 				},
 				McpServer {
 					name: "disabled".to_string(),
+					source_name: None,
 					enabled: false,
 					transport: McpTransport::stdio("echo", vec![]),
 					timeout: None,
@@ -419,6 +673,7 @@ mod tests {
 			"otherSetting": 42
 		}"#;
 		let mut config = parse(original, "amp.mcpServers").unwrap();
+		assert!(config.mcps.is_empty());
 		config.mcps = vec![McpServer::new(
 			"new",
 			McpTransport::stdio("new-cmd", vec![]),
@@ -430,7 +685,7 @@ mod tests {
 		assert_eq!(val["amp"]["mode"], "strict");
 		assert_eq!(val["amp"]["telemetry"]["enabled"], false);
 		assert_eq!(val["otherSetting"], 42);
-		assert!(val["amp"]["mcpServers"].get("new").is_some());
-		assert!(val["amp"]["mcpServers"].get("old").is_none());
+		assert!(val["amp.mcpServers"].get("new").is_some());
+		assert!(val["amp"]["mcpServers"].get("old").is_some());
 	}
 }

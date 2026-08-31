@@ -82,6 +82,7 @@ dependencies = [
 name = "aghub-agents"
 version = "1.9.0-beta.1"
 dependencies = [
+ "aghub-json",
  "aghub-markdown",
  "dirs 6.0.0",
  "libc",
@@ -91,6 +92,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.20",
  "toml 1.1.2+spec-1.1.0",
+ "toml_edit 0.25.12+spec-1.1.0",
  "which",
 ]
 

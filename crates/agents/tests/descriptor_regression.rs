@@ -322,7 +322,7 @@ fn test_mcp_project_paths() {
 		(AgentType::Pi, None),          // Pi has no MCP
 		(AgentType::AugmentCode, None), // CLI has no project MCP file
 		(AgentType::KiloCode, Some(".kilocode/mcp.json")),
-		(AgentType::Amp, Some(".amp/mcp.json")),
+		(AgentType::Amp, Some(".amp/settings.json")),
 		(AgentType::Warp, Some(".warp/mcp.json")),
 	];
 
@@ -482,7 +482,7 @@ fn test_mcp_capabilities_stdio() {
 fn test_mcp_capabilities_remote() {
 	let expected: [(AgentType, bool); 22] = [
 		(AgentType::Claude, true),
-		(AgentType::Codex, false), // Codex doesn't support remote MCP
+		(AgentType::Codex, true),
 		(AgentType::Openclaw, true),
 		(AgentType::OpenCode, true),
 		(AgentType::Gemini, true),
@@ -509,7 +509,9 @@ fn test_mcp_capabilities_remote() {
 		if let Some((_, val)) = expected.iter().find(|(t, _)| *t == agent_type)
 		{
 			assert_eq!(
-				desc.capabilities.mcp.remote, *val,
+				desc.capabilities.mcp.sse
+					|| desc.capabilities.mcp.streamable_http,
+				*val,
 				"mcp.remote mismatch for {:?}",
 				agent_type
 			);

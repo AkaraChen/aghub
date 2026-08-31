@@ -23,6 +23,8 @@ pub struct McpCapabilitiesDto {
 	pub scopes: ScopeSupportDto,
 	pub stdio: bool,
 	pub remote: bool,
+	pub sse: bool,
+	pub streamable_http: bool,
 	pub enable_disable: bool,
 }
 

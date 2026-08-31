@@ -113,6 +113,7 @@ pub fn parse(content: &str) -> Result<AgentConfig> {
 		};
 		config.mcps.push(McpServer {
 			name: mcp.name,
+			source_name: None,
 			enabled: mcp.enabled,
 			transport,
 			timeout,
@@ -238,6 +239,7 @@ mod tests {
 		let config = crate::models::AgentConfig {
 			mcps: vec![McpServer {
 				name: "disabled-mcp".to_string(),
+				source_name: None,
 				enabled: false,
 				transport: McpTransport::stdio("echo", vec![]),
 				timeout: None,

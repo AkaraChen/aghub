@@ -149,7 +149,8 @@ fn test_pi_has_no_mcp_capabilities() {
 		.find(|d| d.id == "pi")
 		.unwrap();
 	assert!(!descriptor.capabilities.mcp.stdio);
-	assert!(!descriptor.capabilities.mcp.remote);
+	assert!(!descriptor.capabilities.mcp.sse);
+	assert!(!descriptor.capabilities.mcp.streamable_http);
 }
 
 // ─── OpenClaw fallback path tests (openclaw-paths.test.ts) ──────────────────

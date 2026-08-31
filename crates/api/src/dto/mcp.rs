@@ -118,6 +118,7 @@ impl From<CreateMcpRequest> for McpServer {
 	fn from(req: CreateMcpRequest) -> Self {
 		McpServer {
 			name: req.name,
+			source_name: None,
 			enabled: true,
 			transport: req.transport.into(),
 			timeout: req.timeout,
@@ -139,6 +140,7 @@ impl UpdateMcpRequest {
 	pub fn apply_to(self, existing: McpServer) -> McpServer {
 		McpServer {
 			name: self.name.unwrap_or(existing.name),
+			source_name: existing.source_name,
 			enabled: self.enabled.unwrap_or(existing.enabled),
 			transport: self
 				.transport

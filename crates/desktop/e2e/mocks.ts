@@ -45,6 +45,8 @@ export const agentInfo = (
 			scopes: { global: true, project: true },
 			stdio: true,
 			remote: true,
+			sse: true,
+			streamable_http: true,
 			enable_disable: false,
 		},
 		sub_agents: { scopes: { global: false, project: false } },
@@ -61,6 +63,8 @@ export const agentInfo = (
 
 const gemini = agentInfo("gemini", "Gemini", true);
 gemini.capabilities.mcp.remote = false;
+gemini.capabilities.mcp.sse = false;
+gemini.capabilities.mcp.streamable_http = false;
 
 const AGENTS = [
 	agentInfo("claude", "Claude"),

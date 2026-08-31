@@ -41,7 +41,7 @@ crates/agents/src/
 
 **`AgentDescriptor`** (static per agent): holds id, display_name, fn pointers for load_mcps/save_mcps/mcp_parse_config/mcp_serialize_config, path fns, capabilities.
 
-**`Capabilities`**: `{ skills: SkillCapabilities, mcp: McpCapabilities }` — scopes (global/project), transport support (stdio/remote), enable/disable toggle.
+**`Capabilities`**: `{ skills: SkillCapabilities, mcp: McpCapabilities }` — scopes (global/project), transport support (stdio/SSE/Streamable HTTP), enable/disable toggle.
 
 **`AgentConfig`**: normalized `{ mcps: Vec<McpServer>, skills: Vec<Skill> }`.
 
@@ -49,7 +49,7 @@ crates/agents/src/
 
 ## AGENT-SPECIFIC GOTCHAS
 
-- **Claude**: Skills from `~/.claude/skills/` — NOT in JSON; URL-based MCPs silently skipped on serialize
+- **Claude**: Skills from `~/.claude/skills/` — NOT in JSON; MCP entries use `mcpServers` with stdio/SSE/HTTP transports
 - **OpenCode**: `mcp` object key (not `mcp_servers`); SSE/StreamableHttp unified as `"type": "remote"` — SSE identity lost on roundtrip
 - **Codex/Mistral**: TOML config format
 - **Copilot**: Shares `~/.claude/skills/` path with Claude

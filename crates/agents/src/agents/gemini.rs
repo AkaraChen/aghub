@@ -4,8 +4,8 @@ use crate::descriptor::*;
 
 define_mcp_paths! {
 	symmetric: ".gemini/settings.json",
-	strategy: mcp_strategy::parse_json_map_mcp_servers,
-			  mcp_strategy::serialize_json_map_mcp_servers,
+	strategy: crate::format::json_map::parse_gemini,
+			  crate::format::json_map::serialize_gemini,
 }
 
 define_skill_paths! {
@@ -26,8 +26,8 @@ fn project_rule_paths(root: &std::path::Path) -> Vec<std::path::PathBuf> {
 pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 	id: "gemini",
 	display_name: "Gemini CLI",
-	mcp_parse_config: Some(mcp_strategy::parse_json_map_mcp_servers),
-	mcp_serialize_config: Some(mcp_strategy::serialize_json_map_mcp_servers),
+	mcp_parse_config: Some(crate::format::json_map::parse_gemini),
+	mcp_serialize_config: Some(crate::format::json_map::serialize_gemini),
 	load_mcps,
 	save_mcps,
 	mcp_global_path: Some(mcp_global_path),
@@ -47,7 +47,8 @@ pub const DESCRIPTOR: AgentDescriptor = AgentDescriptor {
 				project: true,
 			},
 			stdio: true,
-			remote: true,
+			sse: true,
+			streamable_http: true,
 			enable_disable: false,
 		},
 		sub_agents: SubAgentCapabilities {

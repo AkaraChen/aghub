@@ -78,6 +78,9 @@ impl Skill {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct McpServer {
 	pub name: String,
+	/// Native entry name retained across edits, not across installations.
+	#[serde(skip)]
+	pub source_name: Option<String>,
 	#[serde(default = "default_true")]
 	pub enabled: bool,
 	pub transport: McpTransport,
@@ -92,6 +95,7 @@ impl McpServer {
 	pub fn new(name: impl Into<String>, transport: McpTransport) -> Self {
 		Self {
 			name: name.into(),
+			source_name: None,
 			enabled: true,
 			transport,
 			timeout: None,
@@ -480,6 +484,7 @@ mod tests {
 		};
 		let mcp = McpServer {
 			name: "test".to_string(),
+			source_name: None,
 			enabled: true,
 			transport,
 			timeout: Some(60),
