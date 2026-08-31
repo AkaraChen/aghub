@@ -63,7 +63,7 @@
 		"nuqs": "^2.9.5",
 		"pathe": "^2.0.3",
 		"pinyin-pro": "^3.28.2",
-		"posthog-js": "^1.417.1",
+		"posthog-js": "^1.422.5",
 		"react": "catalog:",
 		"react-aria": "3.51.0",
 		"react-aria-components": "1.20.0",
