@@ -11,6 +11,7 @@ import type {
 	CreateMcpRequest,
 	GitSyncRequest,
 	InstallCcusageRuntimeRequest,
+	MarketMcpServer,
 	McpResponse,
 	SetCcusageRuntimeRequest,
 	SkillCopyResolutionRequest,
@@ -193,7 +194,7 @@ const mcp = (name: string) => ({
 
 const MCPS: McpResponse[] = [mcp("alpha-mcp"), mcp("beta-mcp")];
 
-const MARKET_MCPS = [
+export const MARKET_MCPS: MarketMcpServer[] = [
 	{
 		name: "io.github.acme/remote-demo",
 		display_name: "Remote Demo",
@@ -201,6 +202,8 @@ const MARKET_MCPS = [
 		publisher: "io.github.acme",
 		description: "Remote registry fixture",
 		version: "1.0.0",
+		updated_at: "2026-08-31T10:00:00Z",
+		published_at: "2026-08-01T10:00:00Z",
 		repository_url: "https://github.com/acme/remote-demo",
 		catalog_url: "https://registry.modelcontextprotocol.io/",
 		install_methods: [
@@ -554,7 +557,8 @@ export async function installMocks(page: Page) {
 					: mcps,
 			);
 		}
-		if (p === "/mcp-market/search") return json(MARKET_MCPS);
+		if (p === "/mcp-market/search")
+			return json({ servers: MARKET_MCPS, next_cursor: null });
 		if (p === "/agents/all/sub-agents") return json(SUB_AGENTS);
 		if (p === "/agents/all/rules") return json(ruleFiles);
 		if (p === "/prompts/storage") {

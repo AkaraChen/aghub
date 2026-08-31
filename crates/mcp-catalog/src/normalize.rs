@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use crate::{
 	model::{
 		McpCatalogArgument, McpCatalogEntry, McpCatalogInput,
-		McpCatalogInstallMethod, McpCatalogKeyValue, McpCatalogTransport,
-		McpCatalogValue,
+		McpCatalogInstallMethod, McpCatalogKeyValue, McpCatalogPage,
+		McpCatalogTransport, McpCatalogValue,
 	},
 	registry::*,
 };
@@ -14,9 +14,19 @@ use crate::{
 const NPM_RUNTIME_ARGS: &[&str] = &["-y"];
 const OCI_RUNTIME_ARGS: &[&str] = &["run", "-i", "--rm"];
 
-/// Normalize a registry entry, or drop it if it has no install method we can
-/// construct.
-pub(crate) fn map_detail(detail: ServerDetail) -> Option<McpCatalogEntry> {
+pub(crate) fn map_page(response: ServerListResponse) -> McpCatalogPage {
+	McpCatalogPage {
+		servers: response.servers.into_iter().map(map_detail).collect(),
+		next_cursor: response
+			.metadata
+			.next_cursor
+			.filter(|cursor| !cursor.is_empty()),
+	}
+}
+
+/// Keep catalog metadata even when no supported install method is declared.
+pub(crate) fn map_detail(envelope: ServerEnvelope) -> McpCatalogEntry {
+	let detail = envelope.server;
 	let publisher = detail
 		.name
 		.split('/')
@@ -42,20 +52,18 @@ pub(crate) fn map_detail(detail: ServerDetail) -> Option<McpCatalogEntry> {
 		.extend(detail.remotes.into_iter().filter_map(remote_install));
 	let mut seen_ids = std::collections::HashSet::new();
 	install_methods.retain(|method| seen_ids.insert(method.id.clone()));
-	if install_methods.is_empty() {
-		return None;
-	}
-
-	Some(McpCatalogEntry {
+	McpCatalogEntry {
 		name: detail.name,
 		display_name,
 		suggested_name,
 		publisher,
 		description: detail.description,
 		version: detail.version,
+		updated_at: envelope.metadata.registry.updated_at,
+		published_at: envelope.metadata.registry.published_at,
 		repository_url,
 		install_methods,
-	})
+	}
 }
 
 /// Build a stdio invocation for a package, or `None` if it is not a stdio

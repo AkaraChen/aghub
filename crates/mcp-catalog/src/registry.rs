@@ -4,13 +4,35 @@ use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct ServerListResponse {
-	#[serde(default)]
 	pub(crate) servers: Vec<ServerEnvelope>,
+	#[serde(default)]
+	pub(crate) metadata: PageMetadata,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PageMetadata {
+	pub(crate) next_cursor: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct ServerEnvelope {
 	pub(crate) server: ServerDetail,
+	#[serde(rename = "_meta", default)]
+	pub(crate) metadata: ServerMetadata,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub(crate) struct ServerMetadata {
+	#[serde(rename = "io.modelcontextprotocol.registry/official", default)]
+	pub(crate) registry: PublicationMetadata,
+}
+
+#[derive(Debug, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PublicationMetadata {
+	pub(crate) updated_at: Option<String>,
+	pub(crate) published_at: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]

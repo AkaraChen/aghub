@@ -8,6 +8,8 @@ export type MarketMcpServer = {
 	publisher: string;
 	description: string;
 	version: string;
+	updated_at: string | null;
+	published_at: string | null;
 	repository_url: string | null;
 	/**
 	 * Registry base URL that supplied this entry.

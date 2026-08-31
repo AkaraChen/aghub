@@ -3,9 +3,9 @@ use std::{sync::LazyLock, time::Duration};
 use reqwest::{Client as HttpClient, Url};
 
 use crate::{
-	model::McpCatalogEntry,
+	model::McpCatalogPage,
 	network::{build_http_client, validate_registry_url},
-	normalize::map_detail,
+	normalize::map_page,
 	registry::ServerListResponse,
 };
 
@@ -20,7 +20,7 @@ static DEFAULT_HTTP_CLIENT: LazyLock<Result<HttpClient, String>> =
 		build_http_client(DEFAULT_TIMEOUT).map_err(|error| error.to_string())
 	});
 
-/// Official MCP Registry client.
+/// MCP Registry API client.
 #[derive(Debug, Clone)]
 pub struct Client {
 	http: HttpClient,
@@ -125,22 +125,14 @@ impl Client {
 		builder.build()
 	}
 
-	/// Search the registry. An empty `query` returns the latest servers.
+	/// Read latest versions in source order, optionally continuing a search.
 	pub async fn search(
 		&self,
 		query: &str,
 		limit: usize,
-	) -> Result<Vec<McpCatalogEntry>, ClientError> {
-		let mut url = self.base_url.join(SERVERS_PATH)?;
-		{
-			let mut pairs = url.query_pairs_mut();
-			pairs.append_pair("version", "latest");
-			pairs.append_pair("limit", &limit.to_string());
-			let trimmed = query.trim();
-			if !trimmed.is_empty() {
-				pairs.append_pair("search", trimmed);
-			}
-		}
+		cursor: Option<&str>,
+	) -> Result<McpCatalogPage, ClientError> {
+		let url = self.search_url(query, limit, cursor)?;
 
 		let mut response = self.http.get(url).send().await?;
 		if !response.status().is_success() {
@@ -152,11 +144,30 @@ impl Client {
 
 		let body = read_body(&mut response, MAX_RESPONSE_BYTES).await?;
 		let body: ServerListResponse = serde_json::from_slice(&body)?;
-		Ok(body
-			.servers
-			.into_iter()
-			.filter_map(|entry| map_detail(entry.server))
-			.collect())
+		Ok(map_page(body))
+	}
+
+	fn search_url(
+		&self,
+		query: &str,
+		limit: usize,
+		cursor: Option<&str>,
+	) -> Result<Url, ClientError> {
+		let mut url = self.base_url.join(SERVERS_PATH)?;
+		{
+			let mut pairs = url.query_pairs_mut();
+			pairs.append_pair("version", "latest");
+			pairs.append_pair("limit", &limit.to_string());
+			if let Some(cursor) = cursor {
+				pairs.append_pair("cursor", cursor);
+			}
+			let trimmed = query.trim();
+			if !trimmed.is_empty() {
+				pairs.append_pair("search", trimmed);
+			}
+		}
+
+		Ok(url)
 	}
 }
 
@@ -177,6 +188,21 @@ async fn read_body(
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn search_continues_with_cursor_without_losing_query_or_version() {
+		let client = Client::new().unwrap();
+		let cursor = "test/server:2.0+/=&?";
+		let url = client.search_url(" github ", 60, Some(cursor)).unwrap();
+		let pairs: std::collections::BTreeMap<_, _> =
+			url.query_pairs().collect();
+		assert_eq!(pairs["search"], "github");
+		assert_eq!(pairs["version"], "latest");
+		assert_eq!(pairs["limit"], "60");
+		assert_eq!(pairs["cursor"], cursor);
+		let first_page = client.search_url("", 60, None).unwrap();
+		assert!(!first_page.query_pairs().any(|(key, _)| key == "cursor"));
+	}
 
 	#[test]
 	fn builder_defaults_to_official_registry() {

@@ -136,6 +136,58 @@ download the image, start the container, or call its tools during installation.
   Authenticated and private-network registries are not supported. URL, DNS,
   redirect, response-size, and timeout restrictions still apply.
 
+### Catalog browsing
+
+The default client uses `https://registry.modelcontextprotocol.io/v0.1/servers`
+with `version=latest` and 60 entries per request. The API returns
+`MarketMcpPage { servers, next_cursor }`. The renderer follows the opaque cursor
+on **Load more**, retaining the source's order across pages. Installed state
+changes the action, not the position of a card. No global popularity metric is
+available from this source; aghub does not rank a fetched page as though it were
+the whole catalog.
+
+Each card displays its title, complete namespace/name, version, full description,
+and update date. When only a publication timestamp is supplied, it is labelled
+as publication rather than update. Missing dates stay absent. Long identifiers,
+versions and descriptions wrap within the card. Listing metadata remains visible
+when no supported install method can be constructed; the card explains that no
+supported method was provided and offers no install action.
+
+Transport filtering applies to loaded pages. An empty filtered page with a
+remaining cursor offers **Load more** and does not claim the whole source is
+empty. A failed next-page request retains existing results and offers retry;
+search and source changes use separate query keys and cursor chains. Malformed
+responses still fail instead of being converted to empty success results.
+
+The [Registry homepage](https://registry.modelcontextprotocol.io/) has two
+different views. Its normal list uses `version=latest` and cursor pagination.
+Its **Recently Updated** section requests `updated_since` for the preceding hour,
+with a limit of 96 and without `version=latest`. That section can show several
+versions of one server; it is neither a popularity ranking nor a global
+newest-first sort. aghub retains the normal latest-version catalog behavior.
+The [Registry API contract](https://github.com/modelcontextprotocol/registry/blob/main/docs/reference/api/generic-registry-api.md)
+defines cursor handling; publication dates come from the Registry envelope,
+not package release dates or a local refresh timestamp.
+
+Browser acceptance includes installed-first source order, full text containment
+at 1280 and 960 pixels in both themes, missing-date labels, unsupported listings,
+next-page failure/retry, and cursor reset on a changed query or source.
+
+### Other catalog sources evaluated on 2026-08-31
+
+| Source                                                                | Documented data access                                                                                                                                                                                                                                                                         | Order / additional data                                                                                                                                                             | Integration decision                                                                                                                                                                                                                                               |
+| --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [MCP Market](https://mcpmarket.com/zh)                                | The public site has categories and rankings. [Hub API-token documentation](https://docs.mcpmarket.com/docs/api-tokens/using-api-tokens) demonstrates authenticated account access at `app.mcpmarket.com/api/v1/me`; it does not establish a supported public directory/search export contract. | Its [Top 100](https://mcpmarket.com/leaderboards) ranks by GitHub stars, not installs. The site also lists Skills, clients and other agent tools; catalog entries need type checks. | Keep as a discovery reference. Confirm the directory API, reuse terms, pagination and install metadata before adding a source adapter; do not scrape the website or treat Hub account tokens as a catalog contract.                                                |
+| [Smithery](https://smithery.ai/docs/concepts/registry_search_servers) | Documented `GET https://api.smithery.ai/servers`, Bearer API key, page/pageSize pagination and search; not Registry-compatible.                                                                                                                                                                | `useCount`, search `score`, and a `seed` for consistent pagination. These are source-specific measurements, not MCP-wide popularity.                                                | A candidate for a separate adapter with explicit source credentials. Verify installation/detail metadata and ranking semantics before exposing a popularity control. Do not create hosted connections as a side effect of browsing.                                |
+| [Glama](https://glama.ai/mcp/reference)                               | Documented `GET https://glama.ai/api/mcp/v1/servers`, Bearer API key, `after`/`first` pagination. Separate `/v1/connectors` describes remote MCP endpoints.                                                                                                                                    | Servers are newest-first; metadata includes tools, license and quality score. API documentation requires visible source attribution and a link on each listing.                     | A candidate for local-server and remote-endpoint discovery after an adapter, credential configuration and attribution UI are implemented. Its remote MCP endpoints are not Claude/ChatGPT platform Apps. Hosting and gateway products remain outside this feature. |
+| [PulseMCP](https://www.pulsemcp.com/api/docs/v0.1)                    | Registry-compatible B2B sub-registry; requires `X-API-Key` and `X-Tenant-ID`.                                                                                                                                                                                                                  | Enriched metadata includes `visitorsEstimateLastFourWeeks`; this is an estimate of visitors, not authenticated tool use.                                                            | Closest wire format, but requires a partner agreement and source authentication. Not a drop-in public preset under the current network/auth policy.                                                                                                                |
+
+No additional source is enabled by this batch. The renderer remains
+source-neutral; a real second integration should add only the adapter and
+metadata it needs. Adding a provider URL alone must not advertise support for a
+different API. Catalog API credentials, remote MCP credentials and native-agent
+OAuth grants are distinct; none should be copied into the others.
+
 ### OCI environment forwarding
 
 The normalized OCI plan places `--env=NAME` before the image reference and marks
@@ -207,10 +259,9 @@ These are identified gaps, not completed support:
 2. Audit the remaining client contracts above and expose unknown transports as
    unsupported inventory rather than inventing a fallback configuration. Do not
    infer WebSocket or socket support from SSE or Streamable HTTP.
-3. Expose Registry pagination. The current search requests the first 60 latest
-   matches and does not consume `metadata.nextCursor`; it is not an exhaustive
-   catalog view. Methods without supported metadata are omitted, and a malformed
-   response fails the request rather than being reported as a partial success.
+3. Add catalog detail/ownership information and source-specific ranking only
+   when the source provides documented data. Pagination and complete card
+   metadata are implemented; the latest-version view is not version history.
 4. Distinguish native/plugin ownership and runtime/authentication observations
    from writable local installations before adding those sources to inventory.
 5. Add another catalog adapter only when a concrete second source is supported.

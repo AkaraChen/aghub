@@ -14,6 +14,6 @@ mod registry;
 pub use client::{Client, ClientBuilder, ClientError};
 pub use model::{
 	McpCatalogArgument, McpCatalogEntry, McpCatalogInput,
-	McpCatalogInstallMethod, McpCatalogKeyValue, McpCatalogTransport,
-	McpCatalogValue,
+	McpCatalogInstallMethod, McpCatalogKeyValue, McpCatalogPage,
+	McpCatalogTransport, McpCatalogValue,
 };

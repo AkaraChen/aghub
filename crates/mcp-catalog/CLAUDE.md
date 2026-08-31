@@ -30,13 +30,18 @@ crates/mcp-catalog/src/
 
 ```rust
 let client = mcp_catalog::Client::from_env()?;
-let entries = client.search("github", 60).await?; // empty query => latest servers
+let page = client.search("github", 60, None).await?;
+// Continue with page.next_cursor; keep the same query and page size.
 ```
 
 Today the only source is the official MCP Registry
 (`registry.modelcontextprotocol.io`, public/no-auth). Output is source-neutral
-(`McpCatalogEntry`) rather than exposing registry wire types. Override the
+(`McpCatalogPage` and `McpCatalogEntry`) rather than exposing registry wire types. Override the
 registry base URL via `MCP_REGISTRY_URL`.
+
+Search returns the latest version of each server in source order, not a
+popularity ranking. Cursors are opaque. Keep publication metadata and listings
+with no supported install method; the UI explains why they cannot be installed.
 
 ## ANTI-PATTERNS
 

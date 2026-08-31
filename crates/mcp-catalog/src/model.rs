@@ -2,6 +2,13 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
+/// One page in the source's order. The cursor is opaque to consumers.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpCatalogPage {
+	pub servers: Vec<McpCatalogEntry>,
+	pub next_cursor: Option<String>,
+}
+
 /// A normalized MCP catalog entry with every supported install method.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct McpCatalogEntry {
@@ -15,6 +22,8 @@ pub struct McpCatalogEntry {
 	pub publisher: String,
 	pub description: String,
 	pub version: String,
+	pub updated_at: Option<String>,
+	pub published_at: Option<String>,
 	pub repository_url: Option<String>,
 	pub install_methods: Vec<McpCatalogInstallMethod>,
 }

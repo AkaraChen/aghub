@@ -100,6 +100,7 @@ export type { MarketMcpArgument } from "./MarketMcpArgument";
 export type { MarketMcpInput } from "./MarketMcpInput";
 export type { MarketMcpInstallMethod } from "./MarketMcpInstallMethod";
 export type { MarketMcpKeyValue } from "./MarketMcpKeyValue";
+export type { MarketMcpPage } from "./MarketMcpPage";
 export type { MarketMcpServer } from "./MarketMcpServer";
 export type { MarketMcpTransport } from "./MarketMcpTransport";
 export type { MarketMcpValue } from "./MarketMcpValue";

@@ -1,18 +1,9 @@
-import { ArrowPathIcon, MagnifyingGlassIcon } from "@heroicons/react/24/solid";
-import {
-	Button,
-	ListBox,
-	SearchField,
-	Select,
-	Spinner,
-	toast,
-} from "@heroui/react";
-import { useQuery } from "@tanstack/react-query";
+import { MagnifyingGlassIcon } from "@heroicons/react/24/solid";
+import { Button, Spinner, toast } from "@heroui/react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { MarketMcpTransport } from "../../generated/dto";
 import { useApi } from "../../hooks/use-api";
-import { cn } from "../../lib/utils";
 import { mcpMarketSearchQueryOptions } from "../../requests/mcp-market";
 import { ManageAgentsDialog } from "../manage-agents-dialog";
 import {
@@ -25,32 +16,31 @@ import {
 import { McpInstallModal } from "./mcp-install-modal";
 import { McpInstalledLocationModal } from "./mcp-installed-location-modal";
 import { McpMarketCard } from "./mcp-market-card";
-import { McpSourceSelector } from "./mcp-source-selector";
-import { mcpTransportLabel } from "./mcp-transport";
 import { useMcpInstall } from "./use-mcp-install";
 
-const ALL_TYPES = "__all__";
-const TRANSPORT_TYPES: MarketMcpTransport["type"][] = [
-	"stdio",
-	"streamable_http",
-	"sse",
-];
-type TransportFilter = MarketMcpTransport["type"] | typeof ALL_TYPES;
+import {
+	ALL_TYPES,
+	McpMarketToolbar,
+	type TransportFilter,
+} from "./mcp-market-toolbar";
 
 export function McpMarketTab() {
 	const { t } = useTranslation();
 	const api = useApi();
-	const [input, setInput] = useState("");
 	const [committedQuery, setCommittedQuery] = useState("");
 	const [typeFilter, setTypeFilter] = useState<TransportFilter>(ALL_TYPES);
 	const [registryUrl, setRegistryUrl] = useState<string | null>(null);
 	const install = useMcpInstall();
 	const {
-		data: servers = [],
+		data,
 		isFetching,
 		isError,
+		isFetchNextPageError,
+		isFetchingNextPage,
+		hasNextPage,
+		fetchNextPage,
 		refetch,
-	} = useQuery(
+	} = useInfiniteQuery(
 		mcpMarketSearchQueryOptions({
 			api,
 			query: committedQuery,
@@ -58,6 +48,7 @@ export function McpMarketTab() {
 		}),
 	);
 
+	const servers = data?.pages.flatMap((page) => page.servers) ?? [];
 	const filteredServers =
 		typeFilter === ALL_TYPES
 			? servers
@@ -66,104 +57,42 @@ export function McpMarketTab() {
 						(method) => method.transport.type === typeFilter,
 					),
 				);
-	const visibleServers = filteredServers
-		.map((server) => ({
-			server,
-			installed: install.isInstalled(server),
-		}))
-		.sort((a, b) => Number(a.installed) - Number(b.installed));
+	const visibleServers = filteredServers.map((server) => ({
+		server,
+		installed: install.isInstalled(server),
+	}));
 	const showInitialSpinner =
-		(isFetching && servers.length === 0) || install.isInventoryPending;
+		(isFetching && !data) || install.isInventoryPending;
 
 	return (
 		<div className="flex flex-col gap-4">
-			<div className="flex flex-wrap items-center gap-2">
-				<McpSourceSelector onChange={setRegistryUrl} />
-				<SearchField
-					value={input}
-					onChange={(value) => {
-						setInput(value);
-						if (value === "") setCommittedQuery("");
-					}}
-					onSubmit={(value) => setCommittedQuery(value.trim())}
-					aria-label={t("marketMcpSearchLabel")}
-					variant="secondary"
-					className="min-w-0 flex-1"
-				>
-					<SearchField.Group>
-						<SearchField.SearchIcon />
-						<SearchField.Input
-							placeholder={t("marketMcpSearchPlaceholder")}
-						/>
-						<SearchField.ClearButton />
-					</SearchField.Group>
-				</SearchField>
-				<Select
-					variant="secondary"
-					aria-label={t("marketMcpTypeFilter")}
-					selectedKey={typeFilter}
-					onSelectionChange={(key) =>
-						setTypeFilter(String(key) as TransportFilter)
-					}
-					className="min-w-32 max-w-40 shrink-0"
-				>
-					<Select.Trigger>
-						<Select.Value>
-							<span className="truncate">
-								<span className="text-muted">
-									{t("marketMcpTypePrefix")}
-								</span>
-								{typeFilter === ALL_TYPES
-									? t("all")
-									: mcpTransportLabel(typeFilter)}
-							</span>
-						</Select.Value>
-						<Select.Indicator />
-					</Select.Trigger>
-					<Select.Popover>
-						<ListBox>
-							<ListBox.Item id={ALL_TYPES} textValue={t("all")}>
-								{t("all")}
-							</ListBox.Item>
-							{TRANSPORT_TYPES.map((transport) => (
-								<ListBox.Item
-									key={transport}
-									id={transport}
-									textValue={mcpTransportLabel(transport)}
-								>
-									{mcpTransportLabel(transport)}
-								</ListBox.Item>
-							))}
-						</ListBox>
-					</Select.Popover>
-				</Select>
-				<Button
-					isIconOnly
-					variant="ghost"
-					size="sm"
-					className="size-9 shrink-0"
-					aria-label={t("refresh")}
-					onPress={() => {
-						void refetch().then((result) => {
-							if (result.isError) {
-								toast.danger(t("marketMcpLoadError"));
-							} else {
-								toast.success(
-									t("marketMcpRefreshed", {
-										count: result.data?.length ?? 0,
-									}),
-								);
-							}
-						});
-					}}
-				>
-					<ArrowPathIcon
-						className={cn("size-4", isFetching && "animate-spin")}
-					/>
-				</Button>
-			</div>
+			<McpMarketToolbar
+				typeFilter={typeFilter}
+				isFetching={isFetching}
+				onSourceChange={setRegistryUrl}
+				onSearch={setCommittedQuery}
+				onTypeChange={setTypeFilter}
+				onRefresh={() => {
+					void refetch().then((result) => {
+						if (result.isError) {
+							toast.danger(t("marketMcpLoadError"));
+						} else {
+							toast.success(
+								t("marketMcpRefreshed", {
+									count:
+										result.data?.pages.reduce(
+											(count, page) =>
+												count + page.servers.length,
+											0,
+										) ?? 0,
+								}),
+							);
+						}
+					});
+				}}
+			/>
 
-			{isError ? (
+			{isError && !data ? (
 				<div className="flex flex-1 items-center justify-center py-12">
 					<Empty className="border-0">
 						<EmptyHeader>
@@ -217,7 +146,11 @@ export function McpMarketTab() {
 								<MagnifyingGlassIcon className="size-8 text-muted" />
 							</EmptyMedia>
 							<EmptyTitle className="text-sm font-normal text-muted">
-								{t("noResults")}
+								{t(
+									hasNextPage
+										? "marketMcpNoMatchesLoaded"
+										: "noResults",
+								)}
 							</EmptyTitle>
 						</EmptyHeader>
 					</Empty>
@@ -226,7 +159,7 @@ export function McpMarketTab() {
 				<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
 					{visibleServers.map(({ server, installed }) => (
 						<McpMarketCard
-							key={server.name}
+							key={`${server.name}:${server.version}`}
 							server={server}
 							installed={installed}
 							onAction={() =>
@@ -238,6 +171,43 @@ export function McpMarketTab() {
 					))}
 				</div>
 			)}
+
+			{data &&
+				!install.isInventoryPending &&
+				!install.isInventoryError && (
+					<div className="flex flex-wrap items-center justify-between gap-3">
+						<p className="text-xs text-muted" role="status">
+							{t("marketMcpSourceOrder", {
+								count: visibleServers.length,
+							})}
+						</p>
+						{hasNextPage && (
+							<Button
+								variant="secondary"
+								size="sm"
+								isPending={isFetchingNextPage}
+								isDisabled={isFetching && !isFetchingNextPage}
+								onPress={() => {
+									void fetchNextPage().then((result) => {
+										if (result.isFetchNextPageError)
+											toast.danger(
+												t("marketMcpLoadError"),
+											);
+									});
+								}}
+							>
+								{isFetchingNextPage && (
+									<Spinner size="sm" color="current" />
+								)}
+								{t(
+									isFetchNextPageError
+										? "marketMcpRetryPage"
+										: "marketMcpLoadMore",
+								)}
+							</Button>
+						)}
+					</div>
+				)}
 
 			<McpInstallModal
 				isOpen={install.installModalOpen}

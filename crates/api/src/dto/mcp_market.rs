@@ -10,6 +10,13 @@ use ts_rs::TS;
 
 #[derive(Debug, Serialize, TS)]
 #[ts(export)]
+pub struct MarketMcpPage {
+	pub servers: Vec<MarketMcpServer>,
+	pub next_cursor: Option<String>,
+}
+
+#[derive(Debug, Serialize, TS)]
+#[ts(export)]
 pub struct MarketMcpServer {
 	pub name: String,
 	pub display_name: String,
@@ -17,6 +24,8 @@ pub struct MarketMcpServer {
 	pub publisher: String,
 	pub description: String,
 	pub version: String,
+	pub updated_at: Option<String>,
+	pub published_at: Option<String>,
 	pub repository_url: Option<String>,
 	/// Registry base URL that supplied this entry.
 	pub catalog_url: String,
@@ -98,6 +107,8 @@ impl MarketMcpServer {
 			publisher: entry.publisher,
 			description: entry.description,
 			version: entry.version,
+			updated_at: entry.updated_at,
+			published_at: entry.published_at,
 			repository_url: entry.repository_url,
 			catalog_url,
 			install_methods: entry

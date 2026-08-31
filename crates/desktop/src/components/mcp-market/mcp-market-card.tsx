@@ -20,23 +20,26 @@ export function McpMarketCard({
 	installed,
 	onAction,
 }: McpMarketCardProps) {
-	const { t } = useTranslation();
+	const { t, i18n } = useTranslation();
 	const repositoryUrl = server.repository_url;
 	const firstMethod = server.install_methods[0];
+	const timestamp = server.updated_at ?? server.published_at;
+	const date = timestamp ? new Date(timestamp) : null;
+	const dateLabel =
+		date && !Number.isNaN(date.getTime())
+			? date.toLocaleDateString(i18n.language)
+			: timestamp;
 
 	return (
-		<Card className="flex h-full flex-col gap-0 overflow-hidden p-3 !rounded-lg">
-			<Card.Header className="flex flex-row items-center gap-2 p-0">
+		<Card className="flex h-full min-w-0 flex-col gap-0 p-3 !rounded-lg">
+			<Card.Header className="flex flex-row items-start gap-2 p-0">
 				<div className="flex size-7 shrink-0 items-center justify-center rounded-md bg-surface">
 					<ServerIcon className="size-4 text-muted" />
 				</div>
 				<div className="min-w-0 flex-1">
-					<Card.Title className="truncate text-sm font-medium">
+					<Card.Title className="text-sm font-medium [overflow-wrap:anywhere]">
 						{server.display_name}
 					</Card.Title>
-					<p className="truncate text-xs text-muted">
-						{server.publisher}
-					</p>
 				</div>
 				{repositoryUrl && (
 					<Button
@@ -56,10 +59,28 @@ export function McpMarketCard({
 				)}
 			</Card.Header>
 			<Card.Content className="flex flex-1 flex-col gap-2 p-0 pt-2">
-				<p className="line-clamp-2 text-xs text-muted">
+				<p className="text-xs text-muted [overflow-wrap:anywhere]">
+					{server.name}
+				</p>
+				<div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-xs text-muted [overflow-wrap:anywhere]">
+					{server.version && (
+						<span className="min-w-0">v{server.version}</span>
+					)}
+					{timestamp && (
+						<span>
+							{t(
+								server.updated_at
+									? "marketMcpUpdated"
+									: "marketMcpPublished",
+							)}{" "}
+							<time dateTime={timestamp}>{dateLabel}</time>
+						</span>
+					)}
+				</div>
+				<p className="whitespace-pre-line text-xs leading-relaxed text-muted [overflow-wrap:anywhere]">
 					{server.description}
 				</p>
-				<div className="mt-auto flex items-center justify-between gap-2 pt-1">
+				<div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-1">
 					<span className="text-xs text-muted">
 						{server.install_methods.length > 1
 							? t("marketMcpMethodCount", {
@@ -67,22 +88,24 @@ export function McpMarketCard({
 								})
 							: firstMethod
 								? mcpTransportLabel(firstMethod.transport.type)
-								: null}
+								: t("marketMcpNoSupportedMethod")}
 					</span>
-					<Button
-						variant={installed ? "secondary" : "tertiary"}
-						size="sm"
-						onPress={onAction}
-					>
-						{installed ? (
-							<span className="flex items-center gap-1">
-								<CheckCircleIcon className="size-3.5 text-success" />
-								{t("marketMcpInstalled")}
-							</span>
-						) : (
-							t("marketMcpAdd")
-						)}
-					</Button>
+					{firstMethod && (
+						<Button
+							variant={installed ? "secondary" : "tertiary"}
+							size="sm"
+							onPress={onAction}
+						>
+							{installed ? (
+								<span className="flex items-center gap-1">
+									<CheckCircleIcon className="size-3.5 text-success" />
+									{t("marketMcpInstalled")}
+								</span>
+							) : (
+								t("marketMcpAdd")
+							)}
+						</Button>
+					)}
 				</div>
 			</Card.Content>
 		</Card>

@@ -3,7 +3,7 @@ use rocket::http::Status;
 use rocket::serde::json::Json;
 
 use crate::auth::ApiAuth;
-use crate::dto::mcp_market::MarketMcpServer;
+use crate::dto::mcp_market::{MarketMcpPage, MarketMcpServer};
 use crate::error::ApiError;
 
 const DEFAULT_LIMIT: usize = 60;
@@ -27,16 +27,16 @@ fn custom_registry_client(url: &str) -> Result<Client, ApiError> {
 		})
 }
 
-/// Search an MCP registry. Defaults to the official registry; `registry_url`
-/// points at a public registry that implements the same API. An empty `q`
-/// returns the latest servers.
-#[get("/mcp-market/search?<q>&<limit>&<registry_url>")]
+/// Read latest server versions in source order from the MCP Registry or a
+/// public `registry_url` implementing the same API.
+#[get("/mcp-market/search?<q>&<limit>&<registry_url>&<cursor>")]
 pub async fn search_mcp_market(
 	_auth: ApiAuth,
 	q: Option<&str>,
 	limit: Option<usize>,
 	registry_url: Option<&str>,
-) -> Result<Json<Vec<MarketMcpServer>>, ApiError> {
+	cursor: Option<&str>,
+) -> Result<Json<MarketMcpPage>, ApiError> {
 	let custom = registry_url.map(str::trim).filter(|url| !url.is_empty());
 	let client = match custom {
 		Some(url) => custom_registry_client(url)?,
@@ -51,23 +51,28 @@ pub async fn search_mcp_market(
 
 	let limit = limit.unwrap_or(DEFAULT_LIMIT).clamp(1, MAX_LIMIT);
 
-	let entries = client.search(q.unwrap_or(""), limit).await.map_err(|e| {
-		ApiError::new(
-			Status::BadGateway,
-			e.to_string(),
-			"MCP_MARKET_SEARCH_ERROR",
-		)
-	})?;
+	let page = client
+		.search(q.unwrap_or(""), limit, cursor)
+		.await
+		.map_err(|e| {
+			ApiError::new(
+				Status::BadGateway,
+				e.to_string(),
+				"MCP_MARKET_SEARCH_ERROR",
+			)
+		})?;
 	let catalog_url = client.registry_url().to_string();
 
-	Ok(Json(
-		entries
+	Ok(Json(MarketMcpPage {
+		servers: page
+			.servers
 			.into_iter()
 			.map(|entry| {
 				MarketMcpServer::from_catalog(entry, catalog_url.clone())
 			})
 			.collect(),
-	))
+		next_cursor: page.next_cursor,
+	}))
 }
 
 #[cfg(test)]

@@ -48,7 +48,7 @@ import type {
 	InstallSkillRequest,
 	InstallSkillResponse,
 	CCPluginMarketResponse,
-	MarketMcpServer,
+	MarketMcpPage,
 	MarketSkill,
 	McpResponse,
 	OperationBatchResponse,
@@ -802,11 +802,13 @@ export function createApi(baseUrl: string, token: string) {
 				q: string,
 				limit?: number,
 				registryUrl?: string,
-			): Promise<MarketMcpServer[]> {
+				cursor?: string,
+			): Promise<MarketMcpPage> {
 				const searchParams: Record<string, string> = {};
 				if (q) searchParams.q = q;
 				if (limit) searchParams.limit = String(limit);
 				if (registryUrl) searchParams.registry_url = registryUrl;
+				if (cursor) searchParams.cursor = cursor;
 				return client
 					.get("mcp-market/search", {
 						searchParams,

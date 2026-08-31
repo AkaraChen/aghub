@@ -3,11 +3,7 @@ use super::*;
 fn parse(json: &str) -> Vec<McpCatalogEntry> {
 	let response: ServerListResponse =
 		serde_json::from_str(json).expect("valid registry json");
-	response
-		.servers
-		.into_iter()
-		.filter_map(|entry| map_detail(entry.server))
-		.collect()
+	map_page(response).servers
 }
 
 fn stdio(
@@ -381,7 +377,7 @@ fn keeps_all_supported_install_methods() {
 }
 
 #[test]
-fn drops_entries_without_installable_method() {
+fn retains_entries_without_installable_method() {
 	let servers = parse(
 		r#"{"servers":[{"server":{
 				"name":"io.github.acme/unknown",
@@ -391,7 +387,69 @@ fn drops_entries_without_installable_method() {
 			},"_meta":{}}]}"#,
 	);
 
-	assert!(servers.is_empty());
+	assert_eq!(servers.len(), 1);
+	assert_eq!(servers[0].name, "io.github.acme/unknown");
+	assert!(servers[0].install_methods.is_empty());
+}
+
+#[test]
+fn retains_registry_update_time() {
+	let servers = parse(
+		r#"{"servers":[{"server":{
+			"name":"io.github.acme/calendar", "version":"2.0.0",
+			"remotes":[{"type":"streamable-http","url":"https://example.test/mcp"}]
+		},"_meta":{"io.modelcontextprotocol.registry/official":{
+			"updatedAt":"2026-08-31T10:00:00Z"
+		}}}]}"#,
+	);
+	let serialized = serde_json::to_value(&servers[0]).unwrap();
+	assert_eq!(serialized["updated_at"], "2026-08-31T10:00:00Z");
+}
+
+#[test]
+fn retains_page_order_and_opaque_cursor() {
+	let response = serde_json::from_value(serde_json::json!({
+		"servers": [
+			{"server": {"name": "test/z", "version": "2"}},
+			{"server": {"name": "test/a", "version": "1"}}
+		],
+		"metadata": {"nextCursor": "test/a:1+/=&?"}
+	}))
+	.unwrap();
+	let page = map_page(response);
+	assert_eq!(page.servers[0].name, "test/z");
+	assert_eq!(page.servers[1].name, "test/a");
+	assert_eq!(page.next_cursor.as_deref(), Some("test/a:1+/=&?"));
+	assert!(page.servers[0].updated_at.is_none());
+	assert!(page.servers[0].published_at.is_none());
+}
+
+#[test]
+fn recognizes_last_page_and_empty_intermediate_page() {
+	for metadata in [
+		serde_json::json!({}),
+		serde_json::json!({"nextCursor": null}),
+		serde_json::json!({"nextCursor": ""}),
+	] {
+		let response = serde_json::from_value(serde_json::json!({
+			"servers": [], "metadata": metadata
+		}))
+		.unwrap();
+		assert!(map_page(response).next_cursor.is_none());
+	}
+	let response = serde_json::from_value(serde_json::json!({
+		"servers": [], "metadata": {"nextCursor": "next"}
+	}))
+	.unwrap();
+	assert_eq!(map_page(response).next_cursor.as_deref(), Some("next"));
+}
+
+#[test]
+fn rejects_a_response_without_a_server_list() {
+	assert!(serde_json::from_str::<ServerListResponse>(
+		r#"{"error":"catalog unavailable"}"#
+	)
+	.is_err());
 }
 
 #[test]

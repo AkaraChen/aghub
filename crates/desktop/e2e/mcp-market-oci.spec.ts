@@ -14,6 +14,8 @@ test("OCI installation forwards configured names and redacts its preview", async
 		publisher: "io.example",
 		description: "Container installation fixture",
 		version: "1.0.0",
+		updated_at: null,
+		published_at: null,
 		repository_url: null,
 		catalog_url: "https://registry.example.test/",
 		install_methods: [
@@ -64,7 +66,7 @@ test("OCI installation forwards configured names and redacts its preview", async
 		],
 	};
 	await page.route(e2eApiUrl("/mcp-market/search**"), (route) =>
-		route.fulfill({ json: [server] }),
+		route.fulfill({ json: { servers: [server], next_cursor: null } }),
 	);
 	await page.goto("/market?tab=mcp");
 	await page.getByRole("button", { name: "Add", exact: true }).click();
