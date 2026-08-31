@@ -137,6 +137,9 @@ pub struct CodexVisibleCopyRequest {
 	#[serde(default)]
 	#[ts(optional = nullable)]
 	pub source_path: Option<String>,
+	#[serde(default)]
+	#[ts(optional = nullable)]
+	pub source_paths: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, TS)]
@@ -147,6 +150,9 @@ pub struct CodexVisibleCopyResponse {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	#[ts(optional)]
 	pub source_path: Option<String>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	#[ts(optional)]
+	pub source_paths: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, TS)]
@@ -155,6 +161,7 @@ pub struct CodexVisibleCopyResponse {
 pub enum CodexVisibleCopyMode {
 	All,
 	Single,
+	Selected,
 }
 
 #[derive(Debug, Serialize, TS)]

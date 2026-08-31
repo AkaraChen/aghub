@@ -6,7 +6,7 @@ import type {
 	SkillProviderKindResponse,
 	SkillResponse,
 } from "../src/generated/dto";
-import { installMocks } from "./mocks";
+import { e2eApiUrl, installMocks } from "./mocks";
 
 const pluginPath =
 	"/tmp/e2e/.codex/plugins/cache/cloudflare/skills/react-pro/SKILL.md";
@@ -69,6 +69,138 @@ const changedPluginCopy: SkillDirectoryDiffResponse = {
 	],
 	files_omitted: 0,
 };
+
+test("Codex visibility supports arbitrary path selections", async ({
+	page,
+}, testInfo) => {
+	const mocks = await installMocks(page);
+	const paths = [
+		"/tmp/e2e/.agents/skills/react-pro/SKILL.md",
+		"/tmp/e2e/.codex/skills/react-pro/SKILL.md",
+		"/workspace/vendor/eric-way/skills/native-feel-cross-platform-desktop/SKILL.md",
+	];
+	mocks.setCodexProvidedSkills(
+		discovery(
+			[],
+			[],
+			paths.map((source_path, index) => ({
+				name: "react-pro",
+				source_path,
+				enabled: index < 2,
+			})),
+		),
+	);
+	await page.goto("/skills");
+	await page.getByRole("option", { name: "react-pro" }).click();
+	const group = page.getByRole("group", {
+		name: "Copies shown in Codex",
+		exact: true,
+	});
+	for (const viewport of [
+		{ width: 1280, height: 800 },
+		{ width: 960, height: 720 },
+	]) {
+		await page.setViewportSize(viewport);
+		for (const colorScheme of ["light", "dark"] as const) {
+			await page.emulateMedia({ colorScheme });
+			await expect(page.locator("html")).toHaveClass(
+				colorScheme === "dark" ? /\bdark\b/ : /^(?!.*\bdark\b)/,
+			);
+			await group.scrollIntoViewIfNeeded();
+			const layout = await group.evaluate((element) => {
+				const groupBounds = element.getBoundingClientRect();
+				return {
+					documentFits:
+						document.documentElement.scrollWidth <=
+						window.innerWidth,
+					rows: [
+						...element.querySelectorAll(
+							"[data-slot='checkbox-content']",
+						),
+					].map((row) => {
+						const bounds = row.getBoundingClientRect();
+						return {
+							fits: row.scrollWidth <= row.clientWidth,
+							contained:
+								bounds.left >= groupBounds.left &&
+								bounds.right <= groupBounds.right,
+						};
+					}),
+				};
+			});
+			expect(layout.documentFits).toBe(true);
+			expect(layout.rows).toEqual(
+				paths.map(() => ({ fits: true, contained: true })),
+			);
+			await group.locator("..").screenshot({
+				path: testInfo.outputPath(
+					`visibility-${viewport.width}-${colorScheme}.png`,
+				),
+			});
+		}
+	}
+	await expect(group.getByRole("checkbox")).toHaveCount(3);
+	await expect(group.getByRole("checkbox", { checked: true })).toHaveCount(2);
+	await expect(page.getByRole("radio")).toHaveCount(0);
+	await expect(
+		page.getByText("Show all copies in Codex", { exact: true }),
+	).toHaveCount(0);
+	const save = page.getByRole("button", { name: "Save", exact: true });
+	await expect(save).toBeDisabled();
+	const first = group.getByRole("checkbox", { name: paths[0], exact: true });
+	await first.focus();
+	await page.keyboard.press("Tab");
+	await expect(
+		group.getByRole("checkbox", { name: paths[1], exact: true }),
+	).toBeFocused();
+	await page.keyboard.press("Shift+Tab");
+	await expect(first).toBeFocused();
+	await expect(
+		group.locator('[data-slot="checkbox-content"]').first(),
+	).toHaveAttribute("data-focus-visible", "true");
+	await first.press("Space");
+	await expect(first).not.toBeChecked();
+	await group
+		.getByRole("checkbox", { name: paths[2], exact: true })
+		.press("Space");
+	expect(mocks.getCodexVisibleCopyRequests()).toEqual([]);
+	await save.click();
+	await expect
+		.poll(() => mocks.getCodexVisibleCopyRequests())
+		.toEqual([
+			{
+				name: "react-pro",
+				mode: "selected",
+				source_paths: paths.slice(1),
+			},
+		]);
+	await expect(save).toBeDisabled();
+	await page.reload();
+	await page.getByRole("option", { name: "react-pro" }).click();
+	await expect(first).not.toBeChecked();
+	await expect(group.getByRole("checkbox", { checked: true })).toHaveCount(2);
+	for (const path of paths.slice(1))
+		await group
+			.getByRole("checkbox", { name: path, exact: true })
+			.press("Space");
+	await save.click();
+	await expect
+		.poll(() => mocks.getCodexVisibleCopyRequests().at(-1))
+		.toEqual({ name: "react-pro", mode: "selected", source_paths: [] });
+	await expect(group.getByRole("checkbox", { checked: true })).toHaveCount(0);
+	await expect(
+		page.getByRole("button", { name: /Copies shown in Codex/ }),
+	).toContainText("Codex currently shows 0 of 3 copies");
+	for (const path of paths)
+		await group
+			.getByRole("checkbox", { name: path, exact: true })
+			.press("Space");
+	await save.click();
+	await expect
+		.poll(() => mocks.getCodexVisibleCopyRequests().at(-1))
+		.toEqual({ name: "react-pro", mode: "selected", source_paths: paths });
+	await expect(save).toBeDisabled();
+});
 
 test("Skill names remain primary when display names are present", async ({
 	page,
@@ -352,28 +484,23 @@ test("Agent-provided Skills can be excluded from discovery", async ({
 	);
 });
 
-test("Codex duplicate copies can be resolved when provider discovery is off", async ({
+test("Codex duplicate copies remain selectable when provider discovery is off", async ({
 	page,
 }) => {
-	await page.setViewportSize({ width: 960, height: 720 });
 	const mocks = await installMocks(page);
+	const paths = [
+		"/workspace/vendor/eric-way/skills/native-feel-cross-platform-desktop/SKILL.md",
+		"/tmp/e2e/.cursor/skills/react-pro/SKILL.md",
+	];
 	mocks.setCodexProvidedSkills(
 		discovery(
 			[],
 			[],
-			[
-				{
-					name: "react-pro",
-					source_path:
-						"/workspace/vendor/eric-way/skills/native-feel-cross-platform-desktop/SKILL.md",
-					enabled: true,
-				},
-				{
-					name: "react-pro",
-					source_path: "/tmp/e2e/.cursor/skills/react-pro/SKILL.md",
-					enabled: true,
-				},
-			],
+			paths.map((source_path) => ({
+				name: "react-pro",
+				source_path,
+				enabled: true,
+			})),
 		),
 	);
 	await page.goto("/settings?tab=skills");
@@ -382,120 +509,118 @@ test("Codex duplicate copies can be resolved when provider discovery is off", as
 		.filter({ hasText: "Agent-provided Skills" })
 		.click();
 	await page.getByRole("link", { name: "Skills", exact: true }).click();
-
 	await page.getByRole("option", { name: "react-pro" }).click();
-	await expect(
-		page.getByRole("button", { name: /Copies shown in Codex/ }),
-	).toContainText("Codex currently shows 2 of 2 copies");
-	await expect(
-		page.getByRole("radio", { name: /Show all copies in Codex/ }),
-	).toBeChecked();
-	const visibleCopiesBody = page
-		.locator('[data-slot="accordion-body"]')
-		.filter({
-			has: page.getByRole("radiogroup", {
-				name: "Copies shown in Codex",
-			}),
-		});
-	await expect
-		.poll(() =>
-			visibleCopiesBody.evaluate(
-				(element) => element.scrollWidth <= element.clientWidth,
-			),
-		)
-		.toBe(true);
-	await page
-		.locator('[data-slot="radio"]')
-		.filter({
-			hasText: "/tmp/e2e/.cursor/skills/react-pro/SKILL.md",
-		})
-		.click();
-	await page
-		.getByRole("button", { name: "Show only this copy in Codex" })
-		.click();
-
+	const group = page.getByRole("group", {
+		name: "Copies shown in Codex",
+		exact: true,
+	});
+	await expect(group.getByRole("checkbox", { checked: true })).toHaveCount(2);
+	await group
+		.getByRole("checkbox", { name: paths[0], exact: true })
+		.press("Space");
+	await page.getByRole("button", { name: "Save", exact: true }).click();
 	await expect
 		.poll(() => mocks.getCodexVisibleCopyRequests())
 		.toEqual([
-			{
-				name: "react-pro",
-				mode: "single",
-				source_path: "/tmp/e2e/.cursor/skills/react-pro/SKILL.md",
-			},
+			{ name: "react-pro", mode: "selected", source_paths: [paths[1]] },
 		]);
 	await expect(
 		page.getByRole("button", { name: /Copies shown in Codex/ }),
 	).toContainText("Codex currently shows 1 of 2 copies");
+});
 
-	await page
-		.locator('[data-slot="radio"]')
-		.filter({ hasText: "Show all copies in Codex" })
-		.click();
-	await page
-		.getByRole("button", { name: "Show all copies in Codex" })
-		.click();
+test("failed Codex visibility writes refresh observed state without discarding the selection", async ({
+	page,
+}) => {
+	const mocks = await installMocks(page);
+	const paths = [
+		"/tmp/e2e/.agents/skills/react-pro/SKILL.md",
+		"/tmp/e2e/.codex/skills/react-pro/SKILL.md",
+		"/workspace/vendor/react-pro/SKILL.md",
+	];
+	mocks.setCodexProvidedSkills(
+		discovery(
+			[],
+			[],
+			paths.map((source_path, index) => ({
+				name: "react-pro",
+				source_path,
+				enabled: index === 0,
+			})),
+		),
+	);
+	const pending = Promise.withResolvers<void>();
+	await page.route(
+		e2eApiUrl("/skills/providers/codex/visible-copy"),
+		async (route) => {
+			await pending.promise;
+			mocks.setCodexProvidedSkills(
+				discovery(
+					[],
+					[],
+					paths.map((source_path, index) => ({
+						name: "react-pro",
+						source_path,
+						enabled: index < 2,
+					})),
+				),
+			);
+			await route.fulfill({
+				status: 503,
+				contentType: "application/json",
+				body: JSON.stringify({
+					error: "Could not write the last path",
+					code: "CODEX_SKILL_CONFIG_UNAVAILABLE",
+				}),
+			});
+		},
+	);
+	await page.goto("/skills");
+	await page.getByRole("option", { name: "react-pro" }).click();
+	const group = page.getByRole("group", {
+		name: "Copies shown in Codex",
+		exact: true,
+	});
+	for (const path of paths)
+		await group
+			.getByRole("checkbox", { name: path, exact: true })
+			.press("Space");
+	const save = page.getByRole("button", { name: "Save", exact: true });
+	await save.click();
+	try {
+		for (const checkbox of await group.getByRole("checkbox").all())
+			await expect(checkbox).toBeDisabled();
+		await expect(save).toBeDisabled();
+	} finally {
+		pending.resolve();
+	}
+	await expect(
+		page.getByText(
+			"Could not update the copies shown in Codex: Could not write the last path",
+			{ exact: true },
+		),
+	).toBeVisible();
+	await expect(
+		page.getByRole("button", { name: /Copies shown in Codex/ }),
+	).toContainText("Codex currently shows 2 of 3 copies");
+	await expect(
+		group.getByRole("checkbox", { name: paths[0], exact: true }),
+	).not.toBeChecked();
+	for (const path of paths.slice(1))
+		await expect(
+			group.getByRole("checkbox", { name: path, exact: true }),
+		).toBeChecked();
+	await expect(save).toBeEnabled();
+	await page.unroute(e2eApiUrl("/skills/providers/codex/visible-copy"));
+	await save.click();
 	await expect
 		.poll(() => mocks.getCodexVisibleCopyRequests())
 		.toEqual([
 			{
 				name: "react-pro",
-				mode: "single",
-				source_path: "/tmp/e2e/.cursor/skills/react-pro/SKILL.md",
-			},
-			{
-				name: "react-pro",
-				mode: "all",
+				mode: "selected",
+				source_paths: paths.slice(1),
 			},
 		]);
-	await expect(
-		page.getByRole("button", { name: /Copies shown in Codex/ }),
-	).toContainText("Codex currently shows 2 of 2 copies");
-});
-
-test("partial Codex copy state stays read-only until a mode is applied", async ({
-	page,
-}) => {
-	const mocks = await installMocks(page);
-	mocks.setCodexProvidedSkills(
-		discovery(
-			[],
-			[],
-			[
-				{
-					name: "react-pro",
-					source_path: "/tmp/e2e/.agents/skills/react-pro/SKILL.md",
-					enabled: true,
-				},
-				{
-					name: "react-pro",
-					source_path: "/tmp/e2e/.codex/skills/react-pro/SKILL.md",
-					enabled: true,
-				},
-				{
-					name: "react-pro",
-					source_path: "/workspace/vendor/react-pro/SKILL.md",
-					enabled: false,
-				},
-			],
-		),
-	);
-	await page.goto("/skills");
-	await page.getByRole("option", { name: "react-pro" }).click();
-
-	await expect(
-		page.getByRole("button", { name: /Copies shown in Codex/ }),
-	).toContainText("Codex currently shows 2 of 3 copies");
-	await expect(page.getByRole("radio", { checked: true })).toHaveCount(0);
-	expect(mocks.getCodexVisibleCopyRequests()).toEqual([]);
-
-	await page
-		.locator('[data-slot="radio"]')
-		.filter({ hasText: "Show all copies in Codex" })
-		.click();
-	await page
-		.getByRole("button", { name: "Show all copies in Codex" })
-		.click();
-	await expect
-		.poll(() => mocks.getCodexVisibleCopyRequests())
-		.toEqual([{ name: "react-pro", mode: "all" }]);
+	await expect(save).toBeDisabled();
 });

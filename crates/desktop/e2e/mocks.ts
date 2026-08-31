@@ -425,7 +425,12 @@ export async function installMocks(page: Page) {
 									...skill,
 									enabled:
 										body.mode === "all" ||
-										skill.source_path === body.source_path,
+										(body.mode === "selected"
+											? (
+													body.source_paths ?? []
+												).includes(skill.source_path)
+											: skill.source_path ===
+												body.source_path),
 								}
 							: skill,
 				),

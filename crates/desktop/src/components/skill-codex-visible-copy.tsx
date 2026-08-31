@@ -1,5 +1,11 @@
 import { ChevronDownIcon } from "@heroicons/react/24/solid";
-import { Accordion, Button, Radio, RadioGroup, toast } from "@heroui/react";
+import {
+	Accordion,
+	Button,
+	Checkbox,
+	CheckboxGroup,
+	toast,
+} from "@heroui/react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -8,7 +14,6 @@ import { useApi } from "../hooks/use-api";
 import { selectCodexVisibleCopyMutationOptions } from "../requests/skills";
 
 const CODEX_VISIBLE_COPY_ID = "codex-visible-copy";
-const ALL_VISIBLE_COPIES = "all";
 
 interface SkillCodexVisibleCopyProps {
 	name: string;
@@ -24,32 +29,45 @@ export function SkillCodexVisibleCopy({
 	const { t } = useTranslation();
 	const api = useApi();
 	const queryClient = useQueryClient();
-	const enabledCopies = copies.filter((copy) => copy.enabled);
-	const currentSelection =
-		enabledCopies.length === copies.length
-			? ALL_VISIBLE_COPIES
-			: enabledCopies.length === 1
-				? (enabledCopies[0]?.source_path ?? "")
-				: "";
-	const [proposedSelection, setProposedSelection] = useState<string | null>(
-		null,
-	);
+	const currentPaths = copies
+		.filter((copy) => copy.enabled)
+		.map((copy) => copy.source_path);
+	const [proposedPaths, setProposedPaths] = useState<string[] | null>(null);
 	const [isExpanded, setIsExpanded] = useState(copies.length > 1);
-	const selectedValue = proposedSelection ?? currentSelection;
-	const selectionIsCurrent = selectedValue === currentSelection;
+	const selectedPaths = proposedPaths ?? currentPaths;
+	const selectionIsCurrent =
+		selectedPaths.length === currentPaths.length &&
+		selectedPaths.every((path) => currentPaths.includes(path));
 	const updateVisibility = useMutation(
 		selectCodexVisibleCopyMutationOptions({
 			api,
 			queryClient,
 			projectRoot,
 			onSuccess: () => {
-				setProposedSelection(null);
+				setProposedPaths(null);
 				toast.success(t("codexVisibleCopyUpdated"));
 			},
 		}),
 	);
 
 	if (copies.length <= 1) return null;
+
+	function handleSave() {
+		updateVisibility.mutate(
+			{ name, mode: "selected", source_paths: selectedPaths },
+			{
+				onError: (error) =>
+					toast.danger(
+						t("codexVisibleCopyUpdateFailed", {
+							error:
+								error instanceof Error
+									? error.message
+									: String(error),
+						}),
+					),
+			},
+		);
+	}
 
 	return (
 		<Accordion
@@ -68,9 +86,9 @@ export function SkillCodexVisibleCopy({
 					<Accordion.Trigger>
 						<div className="min-w-0 flex-1 text-left">
 							<p>{t("codexVisibleCopies")}</p>
-							<p className="truncate text-xs font-normal text-muted">
+							<p className="text-xs font-normal text-muted">
 								{t("codexVisibleCopiesDescription", {
-									count: enabledCopies.length,
+									count: currentPaths.length,
 									total: copies.length,
 								})}
 							</p>
@@ -83,60 +101,31 @@ export function SkillCodexVisibleCopy({
 				<Accordion.Panel>
 					<Accordion.Body>
 						<div className="space-y-4">
-							<RadioGroup
+							<CheckboxGroup
 								aria-label={t("codexVisibleCopies")}
-								value={selectedValue}
-								onChange={setProposedSelection}
-								className="grid gap-2"
+								value={selectedPaths}
+								onChange={setProposedPaths}
+								className="grid min-w-0 gap-2"
+								variant="secondary"
 								isDisabled={updateVisibility.isPending}
 							>
-								<Radio
-									value={ALL_VISIBLE_COPIES}
-									className="w-full min-w-0"
-								>
-									<Radio.Content className="w-full min-w-0 items-start gap-3 rounded-xl border border-border bg-surface-secondary/60 p-3 transition-colors data-[hovered=true]:bg-surface-secondary data-[selected=true]:border-accent/30 data-[selected=true]:bg-accent/5">
-										<Radio.Control className="mt-0.5 shrink-0">
-											<Radio.Indicator />
-										</Radio.Control>
-										<span className="min-w-0 flex-1">
-											<span className="block text-sm font-medium text-foreground">
-												{t("showAllCopiesInCodex")}
-											</span>
-											<span className="mt-1 block text-xs text-muted">
-												{t(
-													"showAllCopiesInCodexDescription",
-													{ count: copies.length },
-												)}
-											</span>
-										</span>
-									</Radio.Content>
-								</Radio>
 								{copies.map((copy) => (
-									<Radio
+									<Checkbox
 										key={copy.source_path}
 										value={copy.source_path}
 										className="w-full min-w-0"
 									>
-										<Radio.Content className="w-full min-w-0 items-start gap-3 rounded-xl border border-border bg-surface-secondary/60 p-3 transition-colors data-[hovered=true]:bg-surface-secondary data-[selected=true]:border-accent/30 data-[selected=true]:bg-accent/5">
-											<Radio.Control className="mt-0.5 shrink-0">
-												<Radio.Indicator />
-											</Radio.Control>
-											<span className="min-w-0 flex-1">
-												<span className="block break-all font-mono text-xs text-foreground">
-													{copy.source_path}
-												</span>
-												<span className="mt-1 block text-xs text-muted">
-													{t(
-														copy.enabled
-															? "visibleInCodex"
-															: "hiddenInCodex",
-													)}
-												</span>
+										<Checkbox.Content className="w-full min-w-0 items-start gap-3 rounded-xl border border-border bg-surface-secondary/60 p-3 transition-colors data-[hovered=true]:bg-surface-secondary data-[selected=true]:border-accent/30 data-[selected=true]:bg-accent/5">
+											<Checkbox.Control className="mt-0.5 shrink-0">
+												<Checkbox.Indicator />
+											</Checkbox.Control>
+											<span className="min-w-0 flex-1 break-all font-mono text-xs text-foreground">
+												{copy.source_path}
 											</span>
-										</Radio.Content>
-									</Radio>
+										</Checkbox.Content>
+									</Checkbox>
 								))}
-							</RadioGroup>
+							</CheckboxGroup>
 							<div className="flex flex-wrap items-center justify-between gap-3 border-t border-separator pt-4">
 								<p className="text-xs text-muted">
 									{t("codexVisibleCopyFileNotice")}
@@ -144,45 +133,10 @@ export function SkillCodexVisibleCopy({
 								<Button
 									variant="primary"
 									isPending={updateVisibility.isPending}
-									isDisabled={
-										!selectedValue || selectionIsCurrent
-									}
-									onPress={() => {
-										if (!selectedValue) return;
-										updateVisibility.mutate(
-											selectedValue === ALL_VISIBLE_COPIES
-												? { name, mode: "all" }
-												: {
-														name,
-														mode: "single",
-														source_path:
-															selectedValue,
-													},
-											{
-												onError: (error) =>
-													toast.danger(
-														t(
-															"codexVisibleCopyUpdateFailed",
-															{
-																error:
-																	error instanceof
-																	Error
-																		? error.message
-																		: String(
-																				error,
-																			),
-															},
-														),
-													),
-											},
-										);
-									}}
+									isDisabled={selectionIsCurrent}
+									onPress={handleSave}
 								>
-									{t(
-										selectedValue === ALL_VISIBLE_COPIES
-											? "showAllCopiesInCodex"
-											: "showOnlySelectedCopyInCodex",
-									)}
+									{t("save")}
 								</Button>
 							</div>
 						</div>

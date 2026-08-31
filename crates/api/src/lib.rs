@@ -881,6 +881,45 @@ mod tests {
 	}
 
 	#[test]
+	fn route_codex_visible_copy_rejects_invalid_path_selections() {
+		let _path_guard = hide_cli_path();
+		let app_data_dir = tempfile::tempdir().expect("app data dir");
+		let project_dir = tempfile::tempdir().expect("project dir");
+		let client = test_client(app_data_dir.path());
+		let mut query = url::form_urlencoded::Serializer::new(String::new());
+		query
+			.append_pair("project_root", &project_dir.path().to_string_lossy());
+		let uri = format!(
+			"/api/v1/skills/providers/codex/visible-copy?{}",
+			query.finish()
+		);
+		for selection in [
+			json!({ "mode": "selected" }),
+			json!({ "mode": "selected", "source_paths": null }),
+			json!({ "mode": "selected", "source_paths": [" "] }),
+			json!({
+				"mode": "selected",
+				"source_path": "/skills/example/SKILL.md",
+				"source_paths": [],
+			}),
+			json!({ "mode": "all", "source_paths": [] }),
+			json!({
+				"mode": "single",
+				"source_path": "/skills/example/SKILL.md",
+				"source_paths": [],
+			}),
+		] {
+			let mut body = selection;
+			body["name"] = json!("example");
+			assert_json_error(
+				post_json(&client, &uri, body),
+				Status::BadRequest,
+				"INVALID_CODEX_SKILL_PATH",
+			);
+		}
+	}
+
+	#[test]
 	fn route_skill_content_requires_auth() {
 		let app_data_dir = tempfile::tempdir().expect("app data dir");
 		let project_dir = tempfile::tempdir().expect("project dir");

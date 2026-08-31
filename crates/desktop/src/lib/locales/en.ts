@@ -1005,14 +1005,8 @@ export default {
 	codexVisibleCopies: "Copies shown in Codex",
 	codexVisibleCopiesDescription:
 		"Codex currently shows {{count}} of {{total}} copies with this name.",
-	showAllCopiesInCodex: "Show all copies in Codex",
-	showAllCopiesInCodexDescription:
-		"Keep all {{count}} standalone copies available in Codex.",
-	visibleInCodex: "Shown in Codex",
-	hiddenInCodex: "Not shown in Codex",
 	codexVisibleCopyFileNotice:
 		"This only changes Codex visibility. Files stay where they are.",
-	showOnlySelectedCopyInCodex: "Show only this copy in Codex",
 	codexVisibleCopyUpdated: "Codex Skill visibility updated",
 	codexVisibleCopyUpdateFailed:
 		"Could not update the copies shown in Codex: {{error}}",
