@@ -11,7 +11,6 @@ import type { AgentLimitsDto, AgentUsageDto } from "../generated/dto";
 import { useAgentAvailability } from "../hooks/use-agent-availability";
 import { useApi } from "../hooks/use-api";
 import { useUsageSettings } from "../hooks/use-usage-settings";
-import { agentStatus } from "../lib/agent-status";
 import {
 	agentSettings,
 	DEFAULT_USAGE_SETTINGS,
@@ -99,13 +98,6 @@ export default function HomePage() {
 		}),
 	);
 
-	// Show every agent and let agentStatus() classify it — pre-filtering by
-	// is_available here would make the "missing" state unreachable on the grid.
-	const readyCount = useMemo(
-		() => availableAgents.filter((a) => agentStatus(a) === "ready").length,
-		[availableAgents],
-	);
-
 	// Home mirrors the Settings → Agents enablement: only usable agents
 	// (installed and enabled) get a card; everything else is managed there.
 	const visibleAgents = useMemo(
@@ -181,12 +173,7 @@ export default function HomePage() {
 					<h1 className="text-2xl font-semibold tracking-tight">
 						{t("homeTitle")}
 					</h1>
-					<p className="text-sm text-muted">
-						{t("homeSubtitle", {
-							ready: readyCount,
-							total: availableAgents.length,
-						})}
-					</p>
+					<p className="text-sm text-muted">{t("homeSubtitle")}</p>
 				</header>
 
 				<section

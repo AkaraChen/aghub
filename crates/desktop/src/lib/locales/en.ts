@@ -1545,12 +1545,13 @@ export default {
 	sidebarShowMoreAgents: "Show {{count}} more",
 	sidebarShowLess: "Show less",
 	homeTitle: "Your Agent Hub",
-	homeSubtitle: "{{ready}} of {{total}} agents ready",
+	homeSubtitle:
+		"Manage models, skills, MCP servers, and usage across local agent harnesses.",
 	open: "Open",
 	manage: "Manage",
 	model: "Model",
-	addAgent: "Add agent",
-	addAgentHint: "Detect a new AI coding agent installed on your machine.",
+	addAgent: "Add agent harness",
+	addAgentHint: "Detect a new agent harness installed on your machine.",
 	browseLibrary: "Browse library",
 	quickActions: "Quick actions",
 	agentStatusReady: "Ready",
@@ -1558,9 +1559,9 @@ export default {
 	agentStatusDisabled: "Disabled",
 	agentScopeHint: "Manage skills, MCP servers, and model for {{name}}",
 	agentMissingHint:
-		"This agent isn't installed yet. Install its CLI to manage capabilities here.",
+		"This agent harness isn't installed yet. Install its CLI to manage capabilities here.",
 	agentDisabledHint:
-		"This agent is disabled. Re-enable it from settings to manage capabilities.",
+		"This agent harness is disabled. Re-enable it from settings to manage capabilities.",
 	modelNotConfigurableTitle: "Model managed by the agent",
 	modelNotConfigurableHint:
 		"{{name}} reads its model configuration from its own settings. There's nothing to manage here.",
